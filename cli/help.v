@@ -5,9 +5,13 @@ import global_state
 
 // Unlike the other action option structs, HelpOptions deliberately has no
 // help hook. Its --help flag is an ordinary parsed field.
-struct HelpOptions {
-mut:
+pub struct HelpOptions {
+pub mut:
 	help bool
+}
+
+pub fn (opts HelpOptions) deinit() {
+	_ = opts
 }
 
 // run_help translates cli/help.zig's action entry point.

@@ -7,6 +7,8 @@ import os
 import renderer
 import v.util.version as vversion
 
+pub struct VersionOptions {}
+
 // The version command displays the translated build metadata surface.
 pub fn run_version() !int {
 	print(version_output(os.is_atty(1) != 0))

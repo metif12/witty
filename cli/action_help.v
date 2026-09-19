@@ -9,22 +9,17 @@ pub fn generated_action_help_data() string {
 	return action_help_data
 }
 
-// request_action_help is the translated Action.help_error path shared by the
-// option declarations for Ghostty CLI actions.
-fn request_action_help(arg string) ! {
-	if arg == '--help' || arg == '-h' {
-		return error(action_help_requested_message)
-	}
+// action_options_help is the common body of each translated Options.help
+// method. The source returns Action.help_error from every action module.
+fn action_options_help() ! {
+	return error(action_help_requested_message)
 }
 
 // parse_action_options is the common cli.args.parse path used by Ghostty's
 // action option structs. Help is checked at the same point in argument order.
 fn parse_action_options[T](args []string) !T {
 	mut opts := T{}
-	for arg in args {
-		request_action_help(arg)!
-		cli_args.parse(mut opts, [arg])!
-	}
+	cli_args.parse(mut opts, args)!
 	return opts
 }
 

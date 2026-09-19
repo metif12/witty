@@ -36,6 +36,15 @@ pub mut:
 	color ColorScheme = .all
 }
 
+pub fn (opts Options) deinit() {
+	_ = opts
+}
+
+pub fn (opts Options) help() ! {
+	_ = opts
+	action_options_help()!
+}
+
 // ThemeListElement represents a single discovered theme.
 pub struct ThemeListElement {
 pub mut:
@@ -55,7 +64,7 @@ fn theme_list_less_than(a &ThemeListElement, b &ThemeListElement) int {
 pub fn (self &ThemeListElement) to_uri() string {
 	return urllib.URL{
 		scheme: 'file'
-		path: self.path
+		path:   self.path
 	}.str()
 }
 
@@ -99,7 +108,7 @@ mut:
 	current      int
 	window       int
 	hex          bool
-	mode         PreviewMode = .normal
+	mode         PreviewMode  = .normal
 	color_scheme vaxis.Scheme = .light
 	search_text  string
 	text_input   vaxis.TextInput
@@ -112,10 +121,10 @@ mut:
 // V owns both resources.
 pub fn Preview.init(themes []ThemeListElement, theme_filter ColorScheme) !Preview {
 	mut p := Preview{
-		themes: themes
+		themes:       themes
 		theme_filter: theme_filter
-		text_input: vaxis.TextInput.new()
-		winsize: vaxis.terminal_size()
+		text_input:   vaxis.TextInput.new()
+		winsize:      vaxis.terminal_size()
 		color_scheme: vaxis.detect_color_scheme()
 	}
 	p.update_filtered()!
@@ -154,7 +163,7 @@ fn (mut self Preview) update_filtered() ! {
 			}
 			r := zf.rank(theme.theme, tokens, zf.RankOptions{
 				to_lower: true
-				plain: true
+				plain:    true
 			})
 			if r != none {
 				theme.rank = r
@@ -283,8 +292,9 @@ pub fn (mut self Preview) update(event Event) ! {
 					}
 					if self.filtered.len > 0 && key.matches(u32(`c`), vaxis.Modifiers{}) {
 						vaxis.copy_to_system_clipboard(self.themes[self.filtered[self.current]].theme)
-					} else if self.filtered.len > 0
-						&& key.matches(u32(`c`), vaxis.Modifiers{ shift: true }) {
+					} else if self.filtered.len > 0 && key.matches(u32(`c`), vaxis.Modifiers{
+						shift: true
+					}) {
 						vaxis.copy_to_system_clipboard(self.themes[self.filtered[self.current]].path)
 					}
 					if key.matches(u32(`f`), vaxis.Modifiers{}) {
@@ -299,6 +309,7 @@ pub fn (mut self Preview) update(event Event) ! {
 								self.theme_filter = .all
 							}
 						}
+
 						self.update_filtered()!
 					}
 				}
@@ -368,16 +379,32 @@ pub fn (mut self Preview) update(event Event) ! {
 // ui_fg returns the foreground color for the UI based on color scheme.
 pub fn (self &Preview) ui_fg() vaxis.Color {
 	return match self.color_scheme {
-		.light { vaxis.Color{ rgb: [u8(0x00), 0x00, 0x00]! } }
-		.dark { vaxis.Color{ rgb: [u8(0xff), 0xff, 0xff]! } }
+		.light {
+			vaxis.Color{
+				rgb: [u8(0x00), 0x00, 0x00]!
+			}
+		}
+		.dark {
+			vaxis.Color{
+				rgb: [u8(0xff), 0xff, 0xff]!
+			}
+		}
 	}
 }
 
 // ui_bg returns the background color for the UI based on color scheme.
 pub fn (self &Preview) ui_bg() vaxis.Color {
 	return match self.color_scheme {
-		.light { vaxis.Color{ rgb: [u8(0xff), 0xff, 0xff]! } }
-		.dark { vaxis.Color{ rgb: [u8(0x00), 0x00, 0x00]! } }
+		.light {
+			vaxis.Color{
+				rgb: [u8(0xff), 0xff, 0xff]!
+			}
+		}
+		.dark {
+			vaxis.Color{
+				rgb: [u8(0x00), 0x00, 0x00]!
+			}
+		}
 	}
 }
 
@@ -392,8 +419,16 @@ pub fn (self &Preview) ui_standard() vaxis.Style {
 // ui_hover_bg returns the hover background color.
 pub fn (self &Preview) ui_hover_bg() vaxis.Color {
 	return match self.color_scheme {
-		.light { vaxis.Color{ rgb: [u8(0xbb), 0xbb, 0xbb]! } }
-		.dark { vaxis.Color{ rgb: [u8(0x22), 0x22, 0x22]! } }
+		.light {
+			vaxis.Color{
+				rgb: [u8(0xbb), 0xbb, 0xbb]!
+			}
+		}
+		.dark {
+			vaxis.Color{
+				rgb: [u8(0x22), 0x22, 0x22]!
+			}
+		}
 	}
 }
 
@@ -408,16 +443,32 @@ pub fn (self &Preview) ui_highlighted() vaxis.Style {
 // ui_selected_fg returns the foreground color for selected items.
 pub fn (self &Preview) ui_selected_fg() vaxis.Color {
 	return match self.color_scheme {
-		.light { vaxis.Color{ rgb: [u8(0x00), 0xaa, 0x00]! } }
-		.dark { vaxis.Color{ rgb: [u8(0x00), 0xaa, 0x00]! } }
+		.light {
+			vaxis.Color{
+				rgb: [u8(0x00), 0xaa, 0x00]!
+			}
+		}
+		.dark {
+			vaxis.Color{
+				rgb: [u8(0x00), 0xaa, 0x00]!
+			}
+		}
 	}
 }
 
 // ui_selected_bg returns the background color for selected items.
 pub fn (self &Preview) ui_selected_bg() vaxis.Color {
 	return match self.color_scheme {
-		.light { vaxis.Color{ rgb: [u8(0xaa), 0xaa, 0xaa]! } }
-		.dark { vaxis.Color{ rgb: [u8(0x33), 0x33, 0x33]! } }
+		.light {
+			vaxis.Color{
+				rgb: [u8(0xaa), 0xaa, 0xaa]!
+			}
+		}
+		.dark {
+			vaxis.Color{
+				rgb: [u8(0x33), 0x33, 0x33]!
+			}
+		}
 	}
 }
 
@@ -432,8 +483,16 @@ pub fn (self &Preview) ui_selected() vaxis.Style {
 // ui_err_fg returns the foreground color for error messages.
 pub fn (self &Preview) ui_err_fg() vaxis.Color {
 	return match self.color_scheme {
-		.light { vaxis.Color{ rgb: [u8(0xff), 0x00, 0x00]! } }
-		.dark { vaxis.Color{ rgb: [u8(0xff), 0x00, 0x00]! } }
+		.light {
+			vaxis.Color{
+				rgb: [u8(0xff), 0x00, 0x00]!
+			}
+		}
+		.dark {
+			vaxis.Color{
+				rgb: [u8(0xff), 0x00, 0x00]!
+			}
+		}
 	}
 }
 
@@ -480,6 +539,7 @@ pub fn (mut self Preview) run() ! {
 					}))!
 				}
 			}
+
 			handled_input = true
 			dirty = true
 		}
@@ -561,7 +621,8 @@ pub fn (mut self Preview) draw() string {
 			draw_box(mut out, x, y, modal_width, 3, standard)
 			text := '/ ${self.search_text}'
 			put_segment(mut out, y + 1, x + 2, x + modal_width - 1, text, standard)
-			out.write_string(vaxis.show_cursor(y + 1, min_int(x + 2 + text.runes().len, x + modal_width - 2)))
+			out.write_string(vaxis.show_cursor(y + 1, min_int(x + 2 + text.runes().len, x +
+				modal_width - 2)))
 		}
 		.save {
 			if self.filtered.len > 0 {
@@ -580,7 +641,8 @@ pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string 
 	mut out := strings.new_builder(width * height)
 	if self.filtered.len == 0 {
 		text := 'No theme found!'
-		put_segment(mut out, max_int(height / 2 - 1, 0), x_off + max_int((width - text.len) / 2, 0), x_off + width, text, self.ui_standard())
+		put_segment(mut out, max_int(height / 2 - 1, 0),
+			x_off + max_int((width - text.len) / 2, 0), x_off + width, text, self.ui_standard())
 		return out.str()
 	}
 
@@ -593,45 +655,56 @@ pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string 
 		}
 		middle := height / 2
 		text := 'Unable to open ${theme.theme} from:'
-		put_segment(mut out, max_int(middle - 1, 0), x_off + max_int((width - text.runes().len) / 2, 0), x_off + width, text, self.ui_err())
-		put_link(mut out, middle, x_off + max_int((width - theme.path.runes().len) / 2, 0), x_off + width, theme.path, theme.to_uri(), self.ui_err())
+		put_segment(mut out, max_int(middle - 1, 0), x_off + max_int((width -
+			text.runes().len) / 2, 0), x_off + width, text, self.ui_err())
+		put_link(mut out, middle, x_off + max_int((width - theme.path.runes().len) / 2, 0), x_off +
+			width, theme.path, theme.to_uri(), self.ui_err())
 		error_text := err.msg()
-		put_segment(mut out, min_int(middle + 1, max_int(height - 1, 0)), x_off + max_int((width - error_text.runes().len) / 2, 0), x_off + width, error_text, self.ui_err())
+		put_segment(mut out, min_int(middle + 1, max_int(height - 1, 0)), x_off + max_int((width -
+			error_text.runes().len) / 2, 0), x_off + width, error_text, self.ui_err())
 		return out.str()
 	}
-	fg := vaxis.Color{ rgb: [config.foreground.r, config.foreground.g, config.foreground.b]! }
-	bg := vaxis.Color{ rgb: [config.background.r, config.background.g, config.background.b]! }
+	fg := vaxis.Color{
+		rgb: [config.foreground.r, config.foreground.g, config.foreground.b]!
+	}
+	bg := vaxis.Color{
+		rgb: [config.background.r, config.background.g, config.background.b]!
+	}
 	standard := vaxis.Style{
 		fg: fg
 		bg: bg
 	}
 	bold := vaxis.Style{
-		fg: fg
-		bg: bg
+		fg:   fg
+		bg:   bg
 		bold: true
 	}
 	title_style := vaxis.Style{
-		fg: fg
-		bg: bg
-		bold: true
+		fg:     fg
+		bg:     bg
+		bold:   true
 		italic: true
 	}
 
 	for row in 0 .. height {
 		put_segment(mut out, row, x_off, x_off + width, ' '.repeat(width), standard)
 	}
-	put_link(mut out, 1, x_off + max_int((width - theme.theme.runes().len) / 2, 0), x_off + width, theme.theme, theme.to_uri(), title_style)
-	put_link(mut out, 2, x_off + max_int((width - theme.path.runes().len) / 2, 0), x_off + width, theme.path, theme.to_uri(), standard)
+	put_link(mut out, 1, x_off + max_int((width - theme.theme.runes().len) / 2, 0), x_off + width,
+		theme.theme, theme.to_uri(), title_style)
+	put_link(mut out, 2, x_off + max_int((width - theme.path.runes().len) / 2, 0), x_off + width,
+		theme.path, theme.to_uri(), standard)
 
 	mut next_row := 4
 	if config.diagnostics.len > 0 && next_row < height {
-		put_segment(mut out, next_row, x_off + 2, x_off + width, 'Problems were encountered trying to load the theme:', self.ui_err())
+		put_segment(mut out, next_row, x_off + 2, x_off + width,
+			'Problems were encountered trying to load the theme:', self.ui_err())
 		next_row++
 		for diagnostic in config.diagnostics {
 			if next_row >= height {
 				break
 			}
-			put_segment(mut out, next_row, x_off + 2, x_off + width, diagnostic.message, self.ui_err())
+			put_segment(mut out, next_row, x_off + 2, x_off + width, diagnostic.message,
+				self.ui_err())
 			next_row++
 		}
 	}
@@ -687,12 +760,35 @@ pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string 
 			break
 		}
 		style := match i {
-			0 { vaxis.Style{ fg: color_from_palette(config, 4), bg: bg } }
-			1, 2, 3, 21 { vaxis.Style{ fg: color_from_palette(config, 238), bg: bg } }
-			22 { vaxis.Style{ fg: color_from_palette(config, 6), bg: bg } }
-			23 { vaxis.Style{ fg: color_from_palette(config, 3), bg: bg } }
-			else { standard }
+			0 {
+				vaxis.Style{
+					fg: color_from_palette(config, 4)
+					bg: bg
+				}
+			}
+			1, 2, 3, 21 {
+				vaxis.Style{
+					fg: color_from_palette(config, 238)
+					bg: bg
+				}
+			}
+			22 {
+				vaxis.Style{
+					fg: color_from_palette(config, 6)
+					bg: bg
+				}
+			}
+			23 {
+				vaxis.Style{
+					fg: color_from_palette(config, 3)
+					bg: bg
+				}
+			}
+			else {
+				standard
+			}
 		}
+
 		put_segment(mut out, row, x_off + 2, x_off + width, line, style)
 	}
 	next_row += code_lines.len
@@ -713,17 +809,65 @@ pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string 
 			break
 		}
 		style := match word {
-			'ipsum' { vaxis.Style{ fg: color_from_palette(config, 2), bg: bg } }
-			'consectetur' { bold }
-			'reprehenderit' { vaxis.Style{ fg: fg, bg: bg, italic: true } }
-			'Praesent' { title_style }
-			'auctor' { vaxis.Style{ fg: fg, bg: bg, ul_style: .single } }
-			'dui' { vaxis.Style{ fg: fg, bg: bg, ul_style: .double_ } }
-			'erat' { vaxis.Style{ fg: fg, bg: bg, ul_style: .dashed } }
-			'enim' { vaxis.Style{ fg: fg, bg: bg, ul_style: .dotted } }
-			'odio' { vaxis.Style{ fg: fg, bg: bg, ul_style: .curly } }
-			else { standard }
+			'ipsum' {
+				vaxis.Style{
+					fg: color_from_palette(config, 2)
+					bg: bg
+				}
+			}
+			'consectetur' {
+				bold
+			}
+			'reprehenderit' {
+				vaxis.Style{
+					fg:     fg
+					bg:     bg
+					italic: true
+				}
+			}
+			'Praesent' {
+				title_style
+			}
+			'auctor' {
+				vaxis.Style{
+					fg:       fg
+					bg:       bg
+					ul_style: .single
+				}
+			}
+			'dui' {
+				vaxis.Style{
+					fg:       fg
+					bg:       bg
+					ul_style: .double_
+				}
+			}
+			'erat' {
+				vaxis.Style{
+					fg:       fg
+					bg:       bg
+					ul_style: .dashed
+				}
+			}
+			'enim' {
+				vaxis.Style{
+					fg:       fg
+					bg:       bg
+					ul_style: .dotted
+				}
+			}
+			'odio' {
+				vaxis.Style{
+					fg:       fg
+					bg:       bg
+					ul_style: .curly
+				}
+			}
+			else {
+				standard
+			}
 		}
+
 		put_segment(mut out, row, col, x_off + width, word, style)
 		col += word_width + 1
 	}
@@ -898,7 +1042,7 @@ pub fn should_include_theme(theme_filter ColorScheme, theme_config configpkg.Con
 	bf := f32(theme_config.background.b) / 255.0
 	luminance := 0.2126 * rf + 0.7152 * gf + 0.0722 * bf
 	is_dark := luminance < 0.5
-	return (theme_filter == .all) || (theme_filter == .dark && is_dark)
+	return theme_filter == .all || (theme_filter == .dark && is_dark)
 		|| (theme_filter == .light && !is_dark)
 }
 
@@ -968,9 +1112,9 @@ pub fn run_list_themes(args []string) !int {
 			}
 			count += 1
 			themes << ThemeListElement{
-				path: full_path
+				path:     full_path
 				location: loc.location
-				theme: entry
+				theme:    entry
 			}
 		}
 	}

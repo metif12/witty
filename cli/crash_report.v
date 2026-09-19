@@ -5,13 +5,24 @@ import crash
 import os
 import time
 
-struct CrashReportOptions {}
+pub struct CrashReportOptions {}
+
+pub fn (opts CrashReportOptions) deinit() {
+	_ = opts
+}
+
+pub fn (opts CrashReportOptions) help() ! {
+	_ = opts
+	action_options_help()!
+}
 
 // crash_report_output lists crash reports newest-first. An empty non-TTY
 // output stays silent for scripting, while an interactive terminal receives
 // Ghostty's friendly empty-state message.
 pub fn crash_report_output(path string, now_ns i64, is_tty bool) !string {
-	reports := crash.Dir{ path: path }.reports()!
+	reports := crash.Dir{
+		path: path
+	}.reports()!
 	return format_crash_reports(reports, now_ns, is_tty)
 }
 
@@ -28,7 +39,9 @@ fn format_crash_reports(reports []crash.Report, now_ns i64, is_tty bool) string 
 			'now'
 		} else {
 			rounded := u64(diff) / u64(1_000_000_000) * u64(1_000_000_000)
-			'${configpkg.Duration{ duration: rounded }.format()} ago'
+			'${configpkg.Duration{
+				duration: rounded
+			}.format()} ago'
 		}
 		lines << '${report.name} (${since})'
 	}

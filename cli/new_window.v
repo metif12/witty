@@ -5,10 +5,9 @@ import diagnostics
 
 pub struct NewWindowOptions {
 pub mut:
-	class          ?string
-	arguments      ?[]string @[cli_internal]
-	help_requested bool @[cli_internal]
-	diagnostics    diagnostics.DiagnosticList
+	class       ?string
+	arguments   ?[]string @[cli_internal]
+	diagnostics diagnostics.DiagnosticList
 }
 
 pub struct NewWindowResult {
@@ -19,29 +18,31 @@ pub:
 
 // parse_manually_hook mirrors Options.parseManuallyHook. Once -e is seen every
 // remaining argument is command input, including strings such as --help.
-fn (mut opts NewWindowOptions) parse_manually_hook(arg string) bool {
-	if mut arguments := opts.arguments {
-		arguments << arg
-		opts.arguments = arguments
+pub fn (mut opts NewWindowOptions) parse_manually_hook(arg string, iter &cli_args.SliceIterator) bool {
+	if arg != '-e' {
 		return true
 	}
-	if arg == '-e' {
-		opts.arguments = []string{}
-		return true
+	mut arguments := []string{}
+	mut remaining := unsafe { &cli_args.SliceIterator(iter) }
+	for {
+		arguments << remaining.next() or { break }
 	}
-	if arg == '--help' || arg == '-h' {
-		opts.help_requested = true
-		return true
-	}
+	opts.arguments = arguments
 	return false
+}
+
+pub fn (opts NewWindowOptions) deinit() {
+	_ = opts
+}
+
+pub fn (opts NewWindowOptions) help() ! {
+	_ = opts
+	action_options_help()!
 }
 
 fn parse_new_window_options(args []string) !NewWindowOptions {
 	mut opts := NewWindowOptions{}
 	cli_args.parse(mut opts, args)!
-	if opts.help_requested {
-		return error(action_help_requested_message)
-	}
 	return opts
 }
 
@@ -51,7 +52,7 @@ pub fn new_window_result(args []string) !NewWindowResult {
 			return err
 		}
 		return NewWindowResult{
-			code: 1
+			code:   1
 			errors: 'Error parsing args: ${err}\n'
 		}
 	}
@@ -63,14 +64,14 @@ pub fn new_window_result(args []string) !NewWindowResult {
 	}
 	if errors.len > 0 {
 		return NewWindowResult{
-			code: 1
+			code:   1
 			errors: errors.join('\n') + '\n'
 		}
 	}
 	if arguments := opts.arguments {
 		if arguments.len == 0 {
 			return NewWindowResult{
-				code: 1
+				code:   1
 				errors: 'The -e flag was specified on the command line, but no other arguments were found.\n'
 			}
 		}
@@ -79,10 +80,12 @@ pub fn new_window_result(args []string) !NewWindowResult {
 	performed := perform_new_window_ipc(opts) or {
 		if err.msg() == 'IPCFailed' {
 			// The platform IPC layer prints its more specific error itself.
-			return NewWindowResult{ code: 1 }
+			return NewWindowResult{
+				code: 1
+			}
 		}
 		return NewWindowResult{
-			code: 1
+			code:   1
 			errors: 'Sending the IPC failed: ${err}'
 		}
 	}
@@ -90,7 +93,7 @@ pub fn new_window_result(args []string) !NewWindowResult {
 		return NewWindowResult{}
 	}
 	return NewWindowResult{
-		code: 1
+		code:   1
 		errors: '+new-window is not supported on this platform.\n'
 	}
 }

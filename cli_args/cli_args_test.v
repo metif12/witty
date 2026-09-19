@@ -169,15 +169,19 @@ mut:
 	value ?OptionalEnumValue
 }
 
-fn (mut h HookTestData) parse_manually_hook(arg string) bool {
-	if arg == '-e' {
-		h.manual = arg
+fn (mut h HookTestData) parse_manually_hook(arg string, iter &SliceIterator) bool {
+	if arg != '-e' {
 		return true
+	}
+	h.manual = arg
+	mut remaining := unsafe { &SliceIterator(iter) }
+	for {
+		h.manual += ' ${remaining.next() or { break }}'
 	}
 	return false
 }
 
-fn (mut h HookTestData) help() {
+fn (mut h HookTestData) help() ! {
 	h.help_called = true
 }
 
@@ -431,8 +435,8 @@ fn test_parse_skips_actions_without_losing_diagnostic_position() {
 
 fn test_parse_manual_help_and_compatibility_hooks() {
 	mut manual := HookTestData{}
-	parse[HookTestData](mut manual, ['-e', '--old=yes'])!
-	assert manual.manual == '-e'
+	parse[HookTestData](mut manual, ['--old=yes', '-e', 'echo', '--old=no'])!
+	assert manual.manual == '-e echo --old=no'
 	assert manual.compat
 
 	mut help := HookTestData{}

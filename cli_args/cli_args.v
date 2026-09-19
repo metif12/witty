@@ -123,28 +123,30 @@ pub type CompatibilityHandler = fn (key string, value string) bool
 //
 // A destination may declare `compatibility(key, value) bool` to handle old
 // field names or values after normal parsing fails. It may also declare
-// `parse_manually_hook(arg) bool` and `help()`; these are discovered through
-// V's compile-time method reflection.
+// `parse_manually_hook(arg, mut iter) bool` and `help()`; these are discovered
+// through V's compile-time method reflection.
 //
 // Note: If the arena is already non-null, then it will be used. In this
 // case, in the case of an error some memory might be leaked into the arena.
 pub fn parse[T](mut dst T, args []string) ! {
-	for arg_index, arg in args {
+	mut iter := slice_iterator(args)
+	for {
+		arg := iter.next() or { break }
 		// Actions are detected before parsing, but remain in argv so diagnostic
 		// indexes retain their original command-line position.
 		if arg.len > 0 && arg[0] == `+` {
 			continue
 		}
-		// Do manual parsing when the destination declares the V equivalent
-		// `parse_manually_hook(arg) bool`. A true result consumes the arg.
-		mut manually_handled := false
+		// A manual hook returning false consumed the iterator and ends parsing.
+		// Returning true continues normal parsing of this same argument.
+		mut continue_parsing := true
 		$for method in T.methods {
 			$if method.name == 'parse_manually_hook' {
-				manually_handled = dst.$method(arg)
+				continue_parsing = dst.$method(arg, &iter)
 			}
 		}
-		if manually_handled {
-			continue
+		if !continue_parsing {
+			return
 		}
 
 		// Destinations with `help()` own --help/-h handling, just as the
@@ -153,7 +155,7 @@ pub fn parse[T](mut dst T, args []string) ! {
 			mut showed_help := false
 			$for method in T.methods {
 				$if method.name == 'help' {
-					dst.$method()
+					dst.$method() or { return error('ActionHelpRequested') }
 					showed_help = true
 				}
 			}
@@ -167,7 +169,7 @@ pub fn parse[T](mut dst T, args []string) ! {
 		// values set with spaces so this is an error.
 		if !arg.starts_with('--') {
 			if append_diagnostic[T](mut dst, arg, 'invalid field', diagnostics.CliLocation{
-				index: usize(arg_index + 1)
+				index: usize(iter.idx)
 			})
 			{
 				continue
@@ -207,7 +209,7 @@ pub fn parse[T](mut dst T, args []string) ! {
 				message = format_invalid_value[T](key, value)
 			}
 			if append_diagnostic[T](mut dst, key, message, diagnostics.CliLocation{
-				index: usize(arg_index + 1)
+				index: usize(iter.idx)
 			})
 			{
 				continue

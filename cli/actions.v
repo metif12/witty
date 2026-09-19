@@ -9,9 +9,18 @@ import terminal
 import tui
 import vaxis
 
-struct ListActionsOptions {
-mut:
+pub struct ListActionsOptions {
+pub mut:
 	docs bool
+}
+
+pub fn (opts ListActionsOptions) deinit() {
+	_ = opts
+}
+
+pub fn (opts ListActionsOptions) help() ! {
+	_ = opts
+	action_options_help()!
 }
 
 // list_actions_output lists every keybinding action, not the CLI actions.
@@ -27,9 +36,18 @@ pub fn run_list_actions(args []string) !int {
 	return 0
 }
 
-struct ListColorsOptions {
-mut:
+pub struct ListColorsOptions {
+pub mut:
 	plain bool
+}
+
+pub fn (opts ListColorsOptions) deinit() {
+	_ = opts
+}
+
+pub fn (opts ListColorsOptions) help() ! {
+	_ = opts
+	action_options_help()!
 }
 
 // list_colors_output is the deterministic plain form used for pipes and
@@ -70,11 +88,20 @@ pub fn run_list_colors(args []string) !int {
 // valid Ghostty configuration syntax. The source's docs lookup currently adds
 // only its documented separator lines; run_list_keybinds also selects the TTY
 // renderer when appropriate.
-struct ListKeybindsOptions {
-mut:
+pub struct ListKeybindsOptions {
+pub mut:
 	default_ bool
 	docs     bool
 	plain    bool
+}
+
+pub fn (opts ListKeybindsOptions) deinit() {
+	_ = opts
+}
+
+pub fn (opts ListKeybindsOptions) help() ! {
+	_ = opts
+	action_options_help()!
 }
 
 pub fn list_keybinds_output(args []string) !string {
@@ -109,6 +136,15 @@ pub mut:
 	style  ?string
 	bold   bool
 	italic bool
+}
+
+pub fn (opts FontListOptions) deinit() {
+	_ = opts
+}
+
+pub fn (opts FontListOptions) help() ! {
+	_ = opts
+	action_options_help()!
 }
 
 pub struct FontListEntry {
@@ -200,9 +236,18 @@ pub:
 	output string
 }
 
-struct ValidateConfigOptions {
-mut:
+pub struct ValidateConfigOptions {
+pub mut:
 	config_file ?string
+}
+
+pub fn (opts ValidateConfigOptions) deinit() {
+	_ = opts
+}
+
+pub fn (opts ValidateConfigOptions) help() ! {
+	_ = opts
+	action_options_help()!
 }
 
 // validate_config evaluates a specified file, or the normal default config
@@ -239,7 +284,16 @@ pub fn run_validate_config(args []string) !int {
 // edit_config_target performs the non-exec portion of `+edit-config`: load the
 // config once, resolve Ghostty's preferred user file, and make sure its parent
 // directory exists so an editor can create a first configuration.
-struct EditConfigOptions {}
+pub struct EditConfigOptions {}
+
+pub fn (opts EditConfigOptions) deinit() {
+	_ = opts
+}
+
+pub fn (opts EditConfigOptions) help() ! {
+	_ = opts
+	action_options_help()!
+}
 
 pub fn edit_config_target(args []string) !string {
 	_ := parse_action_options[EditConfigOptions](args)!
@@ -295,6 +349,15 @@ pub mut:
 	default_     bool
 	changes_only bool = true
 	docs         bool
+}
+
+pub fn (opts ShowConfigOptions) deinit() {
+	_ = opts
+}
+
+pub fn (opts ShowConfigOptions) help() ! {
+	_ = opts
+	action_options_help()!
 }
 
 pub fn show_config_output(args []string) !string {

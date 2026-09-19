@@ -27,8 +27,8 @@ pub fn SshCacheEntry.parse(line string) ?SshCacheEntry {
 	}
 	timestamp := parse_ssh_timestamp(parts[1]) or { return none }
 	return SshCacheEntry{
-		hostname: parts[0]
-		timestamp: timestamp
+		hostname:         parts[0]
+		timestamp:        timestamp
 		terminfo_version: if parts.len >= 3 { parts[2] } else { 'xterm-ghostty' }
 	}
 }
@@ -100,8 +100,8 @@ pub fn (cache SshDiskCache) add(hostname string) !SshCacheAddResult {
 		'xterm-ghostty'
 	}
 	entries[hostname] = SshCacheEntry{
-		hostname: hostname
-		timestamp: time.now().unix()
+		hostname:         hostname
+		timestamp:        time.now().unix()
 		terminfo_version: terminfo_version
 	}
 	cache.write_entries(entries, none)!
@@ -260,6 +260,15 @@ pub mut:
 	expire_days ?u32
 }
 
+pub fn (opts SshCacheOptions) deinit() {
+	_ = opts
+}
+
+pub fn (opts SshCacheOptions) help() ! {
+	_ = opts
+	action_options_help()!
+}
+
 pub struct SshCacheResult {
 pub:
 	code   int
@@ -285,7 +294,9 @@ fn run_inner_with_cache(cache SshDiskCache, opts SshCacheOptions) !SshCacheResul
 	_ = opts.expire_days
 	if opts.clear {
 		cache.clear()!
-		return SshCacheResult{ output: 'Cache cleared.\n' }
+		return SshCacheResult{
+			output: 'Cache cleared.\n'
+		}
 	}
 	if host := opts.add {
 		result := cache.add(host) or { return ssh_cache_operation_error('add', host, err) }
@@ -298,12 +309,14 @@ fn run_inner_with_cache(cache SshDiskCache, opts SshCacheOptions) !SshCacheResul
 	}
 	if host := opts.remove {
 		cache.remove(host) or { return ssh_cache_operation_error('remove', host, err) }
-		return SshCacheResult{ output: "Removed '${host}' from cache.\n" }
+		return SshCacheResult{
+			output: "Removed '${host}' from cache.\n"
+		}
 	}
 	if host := opts.host {
 		cached := cache.contains(host) or { return ssh_cache_operation_error('check', host, err) }
 		return SshCacheResult{
-			code: if cached { 0 } else { 1 }
+			code:   if cached { 0 } else { 1 }
 			output: if cached {
 				"'${host}' has Ghostty terminfo installed.\n"
 			} else {
@@ -312,7 +325,9 @@ fn run_inner_with_cache(cache SshDiskCache, opts SshCacheOptions) !SshCacheResul
 		}
 	}
 	entries := cache.list()!
-	return SshCacheResult{ output: format_ssh_cache_entries(entries, time.now().unix()) }
+	return SshCacheResult{
+		output: format_ssh_cache_entries(entries, time.now().unix())
+	}
 }
 
 pub fn run_ssh_cache(args []string) !int {
@@ -329,13 +344,13 @@ fn parse_ssh_cache_options(args []string) !SshCacheOptions {
 fn ssh_cache_operation_error(operation string, host string, err IError) SshCacheResult {
 	if err.msg() == 'hostname is invalid' {
 		return SshCacheResult{
-			code: 1
+			code:   1
 			errors: "Error: Invalid hostname format '${host}'\nExpected format: hostname or user@hostname\n"
 		}
 	}
 	if err.msg() == 'cache is locked' {
 		return SshCacheResult{
-			code: 1
+			code:   1
 			errors: 'Error: Cache is busy, try again\n'
 		}
 	}
@@ -344,8 +359,9 @@ fn ssh_cache_operation_error(operation string, host string, err IError) SshCache
 		'remove' { "remove '${host}' from cache" }
 		else { "check host '${host}' in cache" }
 	}
+
 	return SshCacheResult{
-		code: 1
+		code:   1
 		errors: 'Error: Unable to ${description}. Error: ${err}\n'
 	}
 }

@@ -10,7 +10,16 @@ const boo_frame_width = 100
 const boo_frame_height = 41
 const boo_frame_rate = 1000 / 30
 
-struct BooOptions {}
+pub struct BooOptions {}
+
+pub fn (opts BooOptions) deinit() {
+	_ = opts
+}
+
+pub fn (opts BooOptions) help() ! {
+	_ = opts
+	action_options_help()!
+}
 
 enum BooParseState as u8 {
 	normal
@@ -63,6 +72,7 @@ fn style_boo_line(line string) (string, int) {
 				continue
 			}
 		}
+
 		out.write_rune(codepoint)
 		visible++
 	}
