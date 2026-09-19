@@ -1,7 +1,7 @@
 module cli_args
 
 fn test_comma_splitter_basics() {
-	mut splitter := CommaSplitter.new('a,b,c')
+	mut splitter := CommaSplitter.init('a,b,c')
 	a := splitter.next()!
 	b := splitter.next()!
 	c := splitter.next()!
@@ -12,7 +12,7 @@ fn test_comma_splitter_basics() {
 }
 
 fn test_comma_splitter_quoted_and_escaped_values() {
-	mut splitter := CommaSplitter.new('"a,b",c\\x2ed')
+	mut splitter := CommaSplitter.init('"a,b",c\\x2ed')
 	a := splitter.next()!
 	b := splitter.next()!
 	assert a == '"a,b"'
@@ -21,7 +21,7 @@ fn test_comma_splitter_quoted_and_escaped_values() {
 }
 
 fn test_comma_splitter_rest() {
-	mut splitter := CommaSplitter.new('a,b,c')
+	mut splitter := CommaSplitter.init('a,b,c')
 	a := splitter.next()!
 	assert a == 'a'
 	assert splitter.rest() or { '' } == 'b,c'
@@ -29,21 +29,21 @@ fn test_comma_splitter_rest() {
 }
 
 fn test_comma_splitter_errors() {
-	mut unfinished := CommaSplitter.new('\\x5')
+	mut unfinished := CommaSplitter.init('\\x5')
 	if _ := unfinished.next() {
 		assert false, 'expected unfinished escape'
 	} else {
 		assert err.msg() == 'unfinished escape'
 	}
 
-	mut illegal := CommaSplitter.new('\\q')
+	mut illegal := CommaSplitter.init('\\q')
 	if _ := illegal.next() {
 		assert false, 'expected illegal escape'
 	} else {
 		assert err.msg() == 'illegal escape'
 	}
 
-	mut unclosed := CommaSplitter.new('"abc')
+	mut unclosed := CommaSplitter.init('"abc')
 	if _ := unclosed.next() {
 		assert false, 'expected unclosed quote'
 	} else {

@@ -5630,7 +5630,7 @@ pub fn (mut r RepeatableCommand) parse_cli(input ?string) ! {
 	mut action_text := ''
 	mut has_title := false
 	mut has_action := false
-	mut splitter := cli_args.CommaSplitter.new(input_value)
+	mut splitter := cli_args.CommaSplitter.init(input_value)
 	for splitter.has_next() {
 		entry := splitter.next() or { return error('invalid value') }
 		colon := entry.index_u8(`:`)
@@ -7348,7 +7348,21 @@ fn (mut self ReplayIterator) next() ?string {
 // load loads configuration using Ghostty's default-file order, command-line
 // arguments, recursively referenced files, and finalization order.
 pub fn Config.load() !Config {
-	return Config.load_argv(os.args)
+	$if linux || freebsd {
+		return Config.load_argv(os.args)
+	} $else $if windows {
+		return Config.load_args([])
+	} $else {
+		mut iter := cli_args.args_iterator()
+		defer {
+			iter.deinit()
+		}
+		mut args := []string{}
+		for {
+			args << iter.next() or { break }
+		}
+		return Config.load_args(args)
+	}
 }
 
 // load_argv loads configuration from a complete process argv, including the

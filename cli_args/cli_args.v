@@ -511,7 +511,7 @@ fn parse_enum_value[T](mut out T, raw string) ! {
 pub fn parse_auto_struct[T](value string, default_value T) !T {
 	mut result := default_value
 	mut fields_set := map[string]bool{}
-	mut splitter := CommaSplitter.new(value)
+	mut splitter := CommaSplitter.init(value)
 	for splitter.has_next() {
 		entry := splitter.next() or { return error('invalid value') }
 		colon := entry.index_u8(`:`)
@@ -730,16 +730,34 @@ pub fn parse_bool(v string) !bool {
 // This also ignores any argument that starts with `+`. It assumes that
 // actions were parsed out before this iterator was created.
 pub struct ArgsIterator {
+mut:
 	// The underlying args.
 	args []string
-mut:
 	// Our current index into the iterator. This is 1-indexed.
 	// The 0 value is used to indicate that we haven't read any
 	// values yet.
 	index usize
 }
 
+// deinit mirrors ArgsIterator.deinit. The wrapped strings are owned by V's
+// garbage collector, so there is no allocator state to release.
+pub fn (mut self ArgsIterator) deinit() {
+	self.args.clear()
+	self.index = 0
+}
+
 pub fn ArgsIterator.new(args []string) ArgsIterator {
+	return ArgsIterator{
+		args: args
+	}
+}
+
+// Create an args iterator for the process args. This skips argv0.
+pub fn args_iterator() ArgsIterator {
+	mut args := process_args_snapshot()
+	if args.len > 0 {
+		args.delete(0)
+	}
 	return ArgsIterator{
 		args: args
 	}
@@ -793,10 +811,15 @@ mut:
 // like 4 years and be wrong about this.
 pub const max_line_size = 4096
 
-pub fn LineIterator.new(data string) LineIterator {
+pub fn LineIterator.init(data string) LineIterator {
 	return LineIterator{
 		lines: data.split_into_lines()
 	}
+}
+
+// Compatibility alias for callers written against the earlier translation.
+pub fn LineIterator.new(data string) LineIterator {
+	return LineIterator.init(data)
 }
 
 pub fn LineIterator.new_with_path(data string, filepath string) LineIterator {

@@ -642,10 +642,18 @@ fn test_args_iterator() {
 	assert iter.next() == none
 }
 
+fn test_process_args_iterator_lifecycle() {
+	mut iter := args_iterator()
+	_ = iter.next()
+	iter.deinit()
+	assert iter.next() == none
+}
+
 // --- LineIterator ---
 
 fn test_line_iterator_basic() {
-	mut iter := LineIterator.new('A\nB=42\nC\n\n# A comment\nD\n\n  # An indented comment\n  E\n\n# A quoted string with whitespace\nF=  "value "')
+	mut iter :=
+		LineIterator.init('A\nB=42\nC\n\n# A comment\nD\n\n  # An indented comment\n  E\n\n# A quoted string with whitespace\nF=  "value "')
 	assert iter.next()? == '--A'
 	assert iter.next()? == '--B=42'
 	assert iter.next()? == '--C'
@@ -657,27 +665,27 @@ fn test_line_iterator_basic() {
 }
 
 fn test_line_iterator_end_in_newline() {
-	mut iter := LineIterator.new('A\n\n')
+	mut iter := LineIterator.init('A\n\n')
 	assert iter.next()? == '--A'
 	assert iter.next() == none
 	assert iter.next() == none
 }
 
 fn test_line_iterator_spaces_around_equals() {
-	mut iter := LineIterator.new('A = B\n\n')
+	mut iter := LineIterator.init('A = B\n\n')
 	assert iter.next()? == '--A=B'
 	assert iter.next() == none
 	assert iter.next() == none
 }
 
 fn test_line_iterator_no_value() {
-	mut iter := LineIterator.new('A = \n\n')
+	mut iter := LineIterator.init('A = \n\n')
 	assert iter.next()? == '--A='
 	assert iter.next() == none
 }
 
 fn test_line_iterator_crlf() {
-	mut iter := LineIterator.new('A\r\nB = C\r\n')
+	mut iter := LineIterator.init('A\r\nB = C\r\n')
 	assert iter.next()? == '--A'
 	assert iter.next()? == '--B=C'
 	assert iter.next() == none
@@ -702,7 +710,7 @@ fn test_line_iterator_location() {
 }
 
 fn test_line_iterator_no_filepath_no_location() {
-	mut iter := LineIterator.new('A\n')
+	mut iter := LineIterator.init('A\n')
 	_ := iter.next()?
 
 	loc := iter.location()
@@ -710,9 +718,9 @@ fn test_line_iterator_no_filepath_no_location() {
 }
 
 fn test_line_iterator_stops_at_maximum_buffer_size() {
-	mut accepted := LineIterator.new('a'.repeat(max_line_size - 2))
+	mut accepted := LineIterator.init('a'.repeat(max_line_size - 2))
 	assert (accepted.next() or { '' }).len == max_line_size
-	mut oversized := LineIterator.new('a'.repeat(max_line_size - 1) + '\nB')
+	mut oversized := LineIterator.init('a'.repeat(max_line_size - 1) + '\nB')
 	assert oversized.next() == none
 }
 

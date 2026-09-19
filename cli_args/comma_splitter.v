@@ -9,10 +9,15 @@ mut:
 	index int
 }
 
-pub fn CommaSplitter.new(value string) CommaSplitter {
+pub fn CommaSplitter.init(value string) CommaSplitter {
 	return CommaSplitter{
 		value: value
 	}
+}
+
+// Compatibility alias for callers written against the earlier translation.
+pub fn CommaSplitter.new(value string) CommaSplitter {
+	return CommaSplitter.init(value)
 }
 
 pub fn (s &CommaSplitter) has_next() bool {
@@ -86,9 +91,7 @@ pub fn (mut s CommaSplitter) next() !string {
 						s.index++
 						break
 					}
-					nibble := hex_value(s.value[s.index]) or {
-						return error('illegal escape')
-					}
+					nibble := hex_value(s.value[s.index]) or { return error('illegal escape') }
 					codepoint = (codepoint << 4) | nibble
 					if codepoint > 0x10ffff {
 						return error('illegal escape')
@@ -119,8 +122,7 @@ pub fn (mut s CommaSplitter) rest() ?string {
 }
 
 fn is_hex_digit(ch u8) bool {
-	return (ch >= `0` && ch <= `9`) || (ch >= `a` && ch <= `f`) || (ch >= `A`
-		&& ch <= `F`)
+	return (ch >= `0` && ch <= `9`) || (ch >= `a` && ch <= `f`) || (ch >= `A` && ch <= `F`)
 }
 
 fn hex_value(ch u8) ?u32 {
