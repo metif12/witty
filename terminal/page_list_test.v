@@ -728,12 +728,12 @@ fn test_page_list_pause_integrity_checks_is_nested() {
 	original_total := s.total_rows
 	s.total_rows += 1
 	assert (s.verify_integrity() or { panic('missing integrity violation') }) == .total_rows_mismatch
-	s.pause_integrity_checks_set(true)
-	s.pause_integrity_checks_set(true)
+	s.pause_integrity_checks(true)
+	s.pause_integrity_checks(true)
 	assert s.verify_integrity() == none
-	s.pause_integrity_checks_set(false)
+	s.pause_integrity_checks(false)
 	assert s.verify_integrity() == none
-	s.pause_integrity_checks_set(false)
+	s.pause_integrity_checks(false)
 	assert (s.verify_integrity() or { panic('missing integrity violation') }) == .total_rows_mismatch
 	s.total_rows = original_total
 }

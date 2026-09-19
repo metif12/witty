@@ -39,12 +39,12 @@ fn test_page_pause_integrity_checks_is_nested() {
 	}
 	page.size.rows = 0
 	assert page.verify_integrity() != none
-	page.pause_integrity_checks_set(true)
-	page.pause_integrity_checks_set(true)
+	page.pause_integrity_checks(true)
+	page.pause_integrity_checks(true)
 	assert page.verify_integrity() == none
-	page.pause_integrity_checks_set(false)
+	page.pause_integrity_checks(false)
 	assert page.verify_integrity() == none
-	page.pause_integrity_checks_set(false)
+	page.pause_integrity_checks(false)
 	assert page.verify_integrity() != none
 }
 

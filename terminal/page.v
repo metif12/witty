@@ -1517,7 +1517,7 @@ pub fn (self &Page) assert_integrity() {
 }
 
 // Temporarily pause or resume integrity checks around multi-step mutations.
-pub fn (mut self Page) pause_integrity_checks_set(pause bool) {
+pub fn (mut self Page) pause_integrity_checks(pause bool) {
 	if pause {
 		self.pause_integrity_checks += 1
 	} else {
@@ -1741,9 +1741,9 @@ fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx usize, sr
 	// Cloning updates row flags, managed maps, allocators, and cell markers in
 	// stages. Match Page.clonePartialRowFrom by suspending checks until every
 	// stage (including an error return) has left the page consistent.
-	self.pause_integrity_checks_set(true)
+	self.pause_integrity_checks(true)
 	defer {
-		self.pause_integrity_checks_set(false)
+		self.pause_integrity_checks(false)
 		self.assert_integrity()
 	}
 

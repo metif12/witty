@@ -5194,12 +5194,12 @@ fn (mut self ReflowCursor) increase_capacity(mut list PageList, adjustment ?Page
 	old_total_rows := self.total_rows
 
 	// During reflow the list's cached total is intentionally transient.
-	list.pause_integrity_checks_set(true)
+	list.pause_integrity_checks(true)
 	node := list.increase_capacity(self.node, adjustment) or {
-		list.pause_integrity_checks_set(false)
+		list.pause_integrity_checks(false)
 		return err
 	}
-	list.pause_integrity_checks_set(false)
+	list.pause_integrity_checks(false)
 
 	mut reloaded := ReflowCursor.init(node)
 	reloaded.cursor_absolute(old_x, old_y)
@@ -6820,7 +6820,7 @@ pub fn (self &PageList) verify_integrity() ?PageListIntegrityError {
 }
 
 // Temporarily pause or resume integrity checks around multi-step mutations.
-pub fn (mut self PageList) pause_integrity_checks_set(pause bool) {
+pub fn (mut self PageList) pause_integrity_checks(pause bool) {
 	$if prod {
 		return
 	}
