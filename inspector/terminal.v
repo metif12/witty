@@ -417,14 +417,14 @@ fn draw_terminal_palette(context cimgui.Context, label string, palette [256]term
 	for row in 0 .. 16 {
 		for col in 0 .. 16 {
 			index := row * 16 + col
-			color := palette[index]
+			palette_color := palette[index]
 			if col > 0 {
 				context.same_line()
 			}
 			context.push_id_int(index)
-			context.color_edit3('##color', cimgui_color(color), cimgui.color_edit_flags_no_inputs)
+			context.color_edit3('##color', cimgui_color(palette_color), cimgui.color_edit_flags_no_inputs)
 			if context.item_hovered_delay_short() {
-				context.tooltip('${index}: #${color.r:02X}${color.g:02X}${color.b:02X}')
+				context.tooltip('${index}: #${palette_color.r:02X}${palette_color.g:02X}${palette_color.b:02X}')
 			}
 			context.pop_id()
 		}

@@ -394,6 +394,11 @@ an item here does not mean its full module has been certified yet.
   import cycle. Restoring the exact surface requires moving the command and
   response type graph into a third cycle-free module plus a registered
   executor bridge; an opaque-pointer substitute would not be source faithful.
+- **Crash lifecycle spelling:** the translated `sentry=false` lifecycle uses
+  `crash.initialize`/`crash.shutdown` because V reserves a module-level `init`
+  function as a private, infallible automatic initializer. V rejects a public
+  or fallible `crash.init`, so Ghostty's exact public spelling cannot be
+  represented without changing the module boundary.
 - **Runtime bridge representation:** Ghostty selects the concrete apprt types at
   compile time. Witty's merged V module boundary instead adds callbacks to its
   runtime-neutral `apprt.RuntimeApp` and `apprt.RuntimeSurface` and uses a
