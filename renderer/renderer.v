@@ -745,7 +745,6 @@ module renderer
 // Reallocate
 //
 // --- Original Ghostty Comments End: src/renderer/generic.zig
-
 import terminal
 import font
 import input
@@ -1013,24 +1012,24 @@ fn Renderer.init_metal(opts RendererOpts) !Renderer {
 	}
 
 	mut result := Renderer{
-		backend:                .metal
-		draw_mutex:             sync.new_mutex()
-		surface_mailbox:        opts.surface_mailbox
-		metal:                  metal
-		images:                 ImageRenderState.empty()
-		shaders:                shaders
-		frames:                 frames
-		frame_sema:             sync.new_semaphore_init(u32(metal_swap_chain_count))
-		config:                 opts.config
-		grid_metrics:           metrics
-		size:                   opts.size
-		focused:                true
-		display_link:           display_link
-		scrollbar:              terminal.Scrollbar{}
-		scrollbar_dirty:        false
-		search_matches_dirty:   false
-		search_matches:         []highlight.FlattenedHighlight{}
-		search_selected_match:  none
+		backend:               .metal
+		draw_mutex:            sync.new_mutex()
+		surface_mailbox:       opts.surface_mailbox
+		metal:                 metal
+		images:                ImageRenderState.empty()
+		shaders:               shaders
+		frames:                frames
+		frame_sema:            sync.new_semaphore_init(u32(metal_swap_chain_count))
+		config:                opts.config
+		grid_metrics:          metrics
+		size:                  opts.size
+		focused:               true
+		display_link:          display_link
+		scrollbar:             terminal.Scrollbar{}
+		scrollbar_dirty:       false
+		search_matches_dirty:  false
+		search_matches:        []highlight.FlattenedHighlight{}
+		search_selected_match: none
 		// Render state
 		cells:                  CellContents{}
 		uniforms:               Uniforms{
@@ -1053,10 +1052,10 @@ fn Renderer.init_metal(opts RendererOpts) !Renderer {
 			focus: 1
 		}
 		// Fonts
-		font_grid:              opts.font_grid
-		font_shaper:            font_shaper
-		font_shaper_cache:      font.ShaperCache.init()
-		has_custom_shaders:     has_custom_shaders
+		font_grid:          opts.font_grid
+		font_shaper:        font_shaper
+		font_shaper_cache:  font.ShaperCache.init()
+		has_custom_shaders: has_custom_shaders
 	}
 
 	// Ensure our undefined values above are correctly initialized
@@ -1224,6 +1223,7 @@ pub fn (mut self Renderer) deinit() {
 			self.gl_shaders.deinit()
 		}
 	}
+
 	self.images.deinit()
 	if mut overlay := self.overlay {
 		overlay.deinit()
@@ -1249,6 +1249,7 @@ pub fn (mut self Renderer) deinit() {
 		.metal { self.metal.deinit() }
 		.opengl { self.opengl.deinit() }
 	}
+
 	if self.draw_mutex != unsafe { nil } {
 		self.draw_mutex.destroy()
 		self.draw_mutex = unsafe { nil }
@@ -1281,7 +1282,7 @@ pub fn (self &Renderer) has_vsync() bool {
 
 // set_macos_display_id moves the display link to the screen currently hosting
 // the window. Failure is non-fatal, matching Ghostty's renderer behavior.
-pub fn (mut self Renderer) set_macos_display_id(display_id u32) {
+pub fn (mut self Renderer) set_macos_display_id(display_id u32) ! {
 	if self.backend != .metal {
 		return
 	}
@@ -1440,7 +1441,8 @@ pub fn (mut self Renderer) update_frame(state &RenderState, cursor_blink_visible
 			})
 		}
 	}
-	self.config.links.render_cell_map(mut links, &self.terminal_state, state.mouse.point, state.mouse.mods)!
+	self.config.links.render_cell_map(mut links, &self.terminal_state, state.mouse.point,
+		state.mouse.mods)!
 
 	// Clear our highlight state and update. The order matters: selected
 	// highlights are appended first and therefore take visual priority.
@@ -1470,7 +1472,8 @@ pub fn (mut self Renderer) update_frame(state &RenderState, cursor_blink_visible
 			for match_ in self.search_matches {
 				converted << render_flattened_highlight(match_)
 			}
-			self.terminal_state.update_highlights_flattened(u8(HighlightTag.search_match), converted)
+			self.terminal_state.update_highlights_flattened(u8(HighlightTag.search_match),
+				converted)
 		}
 	}
 
@@ -1587,10 +1590,9 @@ pub fn (mut self Renderer) draw_frame(sync_ bool) ! {
 		}
 	}
 	defer {
-		if self.scrollbar_dirty
-			&& self.surface_mailbox.push(SurfaceEvent(ScrollbarEvent{
-				scrollbar: self.scrollbar
-			})) > 0 {
+		if self.scrollbar_dirty && self.surface_mailbox.push(SurfaceEvent(ScrollbarEvent{
+			scrollbar: self.scrollbar
+		})) > 0 {
 			self.scrollbar_dirty = false
 		}
 	}
@@ -1726,14 +1728,19 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 	if state := frame_state.custom_shader_state {
 		terminal_target = MetalRenderAttachmentTarget(state.back_texture)
 	}
-	mut pass := frame.render_pass([MetalRenderPassAttachment{
-		target:      terminal_target
-		clear_color: [f64(0), 0, 0, 0]!
-	}])
+	mut pass := frame.render_pass([
+		MetalRenderPassAttachment{
+			target:      terminal_target
+			clear_color: [f64(0), 0, 0, 0]!
+		},
+	])
 
 	if image := self.bg_image {
 		if image.state == .ready {
-			texture := image.metal_texture or { return error('ready Metal background image has no texture') }
+			texture := image.metal_texture or {
+				return error('ready Metal background image has no texture')
+			}
+
 			pass.step(MetalRenderStep{
 				pipeline: self.shaders.bg_image
 				uniforms: frame_state.uniforms
@@ -1792,10 +1799,12 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 			if index < self.shaders.post_pipelines.len - 1 {
 				output_texture = MetalRenderAttachmentTarget(state.front_texture)
 			}
-			mut post_pass := frame.render_pass([MetalRenderPassAttachment{
-				target:      output_texture
-				clear_color: [f64(0), 0, 0, 0]!
-			}])
+			mut post_pass := frame.render_pass([
+				MetalRenderPassAttachment{
+					target:      output_texture
+					clear_color: [f64(0), 0, 0, 0]!
+				},
+			])
 			post_pass.step(MetalRenderStep{
 				pipeline: pipeline
 				uniforms: state.uniforms
@@ -1995,14 +2004,16 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 	mut pass := GLRenderPass.begin([terminal_attachment])
 
 	if image := self.bg_image {
-		if image.state == .ready && image.texture_backend == .opengl
-			&& image.gl_texture.id != 0 {
+		if image.state == .ready && image.texture_backend == .opengl && image.gl_texture.id != 0 {
 			pass.step(GLRenderStep{
 				pipeline: self.gl_shaders.bg_image
 				uniforms: frame_state.uniforms
 				buffers:  [frame_state.bg_image_buffer]
 				textures: [image.gl_texture]
-				draw:     GLDraw{ primitive: .triangle, vertex_count: 3 }
+				draw:     GLDraw{
+					primitive:    .triangle
+					vertex_count: 3
+				}
 			})
 		}
 	} else {
@@ -2010,7 +2021,10 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 			pipeline: self.gl_shaders.bg_color
 			uniforms: frame_state.uniforms
 			buffers:  [GLBuffer{}, frame_state.cells_bg]
-			draw:     GLDraw{ primitive: .triangle, vertex_count: 3 }
+			draw:     GLDraw{
+				primitive:    .triangle
+				vertex_count: 3
+			}
 		})
 	}
 
@@ -2019,7 +2033,10 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 		pipeline: self.gl_shaders.cell_bg
 		uniforms: frame_state.uniforms
 		buffers:  [GLBuffer{}, frame_state.cells_bg]
-		draw:     GLDraw{ primitive: .triangle, vertex_count: 3 }
+		draw:     GLDraw{
+			primitive:    .triangle
+			vertex_count: 3
+		}
 	})
 	self.images.draw_opengl(&self.opengl, self.gl_shaders.image, mut pass, .kitty_below_text)
 	pass.step(GLRenderStep{
@@ -2057,7 +2074,10 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 				uniforms: state.uniforms
 				textures: [state.back_texture]
 				samplers: [state.sampler]
-				draw:     GLDraw{ primitive: .triangle, vertex_count: 3 }
+				draw:     GLDraw{
+					primitive:    .triangle
+					vertex_count: 3
+				}
 			})
 			post_pass.complete()
 			state.swap()
@@ -2075,7 +2095,8 @@ fn (self &Renderer) sync_gl_atlas_texture(atlas &font.Atlas, mut texture GLTextu
 		return error('BGR font atlases are unsupported by OpenGL')
 	}
 	if atlas.size > texture.width {
-		mut replacement := GLTexture.init(self.opengl.atlas_texture_options(atlas.format)!, atlas.size, atlas.size, none)!
+		mut replacement := GLTexture.init(self.opengl.atlas_texture_options(atlas.format)!,
+			atlas.size, atlas.size, none)!
 		texture.deinit()
 		texture = replacement
 	}
@@ -2108,6 +2129,7 @@ fn (mut self Renderer) prep_background_image() ! {
 			.unknown { file_type.guess_from_extension(os.file_ext(path_config.path)) }
 			else { detected_type }
 		}
+
 		match image_type {
 			.png, .jpeg {}
 			.unknown {
@@ -2119,11 +2141,10 @@ fn (mut self Renderer) prep_background_image() ! {
 				return
 			}
 		}
+
 		decoded := stbi.load_from_memory(contents.data, contents.len, stbi.LoadParams{
 			desired_channels: 4
-		}) or {
-			return error('unable to decode background image "${path_config.path}": ${err}')
-		}
+		}) or { return error('unable to decode background image "${path_config.path}": ${err}') }
 		defer {
 			decoded.free()
 		}
@@ -2169,6 +2190,7 @@ fn (mut self Renderer) upload_background_image() ! {
 				.metal { image.upload(&self.metal)! }
 				.opengl { image.upload_opengl(&self.opengl)! }
 			}
+
 			self.bg_image = image
 		}
 	}
@@ -2233,6 +2255,7 @@ pub fn (mut self Renderer) change_config(config &DerivedConfig) ! {
 				self.opengl.blending = config.blending
 			}
 		}
+
 		self.reinitialize_shaders = true
 		self.target_config_modified++
 	}
@@ -2264,15 +2287,13 @@ fn (mut self Renderer) update_screen_size_uniforms() {
 	terminal_size := self.size.terminal()
 
 	// Blank space around the grid
-	blank := self.size.screen.blank_padding(self.size.padding, self.cells.size, self.size.cell).add(self.size.padding)
+	blank :=
+		self.size.screen.blank_padding(self.size.padding, self.cells.size, self.size.cell).add(self.size.padding)
 
 	// Setup our uniforms
-	self.uniforms.projection_matrix = mathutil.ortho2d(
-		-1 * f32(self.size.padding.left),
-		f32(terminal_size.width + self.size.padding.right),
-		f32(terminal_size.height + self.size.padding.bottom),
-		-1 * f32(self.size.padding.top),
-	)
+	self.uniforms.projection_matrix = mathutil.ortho2d(-1 * f32(self.size.padding.left), f32(
+		terminal_size.width + self.size.padding.right), f32(terminal_size.height +
+		self.size.padding.bottom), -1 * f32(self.size.padding.top))
 	self.uniforms.grid_padding = [
 		f32(blank.top),
 		f32(blank.right),
@@ -2540,10 +2561,18 @@ fn resolve_terminal_color(tc configpkg.TerminalColor, inverse bool, fg_style ter
 			}
 		}
 		.cell_foreground {
-			if inverse { bg_style } else { fg_style }
+			if inverse {
+				bg_style
+			} else {
+				fg_style
+			}
 		}
 		.cell_background {
-			if inverse { fg_style } else { bg_style }
+			if inverse {
+				fg_style
+			} else {
+				bg_style
+			}
 		}
 	}
 }
@@ -2577,8 +2606,7 @@ fn (mut self Renderer) rebuild_cells(preedit ?RenderPreedit, cursor_style_ ?Styl
 		}
 	}
 
-	grid_size_diff := self.cells.size.rows != state.rows
-		|| self.cells.size.columns != state.cols
+	grid_size_diff := self.cells.size.rows != state.rows || self.cells.size.columns != state.cols
 
 	if grid_size_diff {
 		mut new_size := self.cells.size
@@ -2714,11 +2742,14 @@ fn (mut self Renderer) rebuild_cursor(preedit ?RenderPreedit, cursor_style_ ?Sty
 		// If we are a spacer tail of a wide cell, our cursor needs
 		// to move back one cell. Saturating subtraction avoids overflow.
 		cur_x := match wide {
-			.narrow, .spacer_head, .wide { cursor_vp.x }
+			.narrow, .spacer_head, .wide {
+				cursor_vp.x
+			}
 			.spacer_tail {
 				if cursor_vp.x > 0 { cursor_vp.x - 1 } else { u16(0) }
 			}
 		}
+
 		self.uniforms.cursor_pos = [cur_x, cursor_vp.y]!
 
 		self.uniforms.bools.cursor_wide = match wide {
@@ -2852,7 +2883,10 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 		for shaped_cell in shaped_cells {
 			x := int(u32(run.offset) + shaped_cell.x)
 			if x >= 0 && x < shaped.len {
-				shaped[x] << RowShapedGlyph{ cell: shaped_cell, font_index: run.font_index }
+				shaped[x] << RowShapedGlyph{
+					cell:       shaped_cell
+					font_index: run.font_index
+				}
 			}
 		}
 	}
@@ -2865,9 +2899,11 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 		// Apply heuristics for padding extension.
 		.extend {
 			if y == 0 {
-				self.uniforms.padding_extend.up = !never_extend_bg(row.raw, cells_raw, cells_style, state.colors.palette, state.colors.background)
+				self.uniforms.padding_extend.up = !never_extend_bg(row.raw, cells_raw, cells_style,
+					state.colors.palette, state.colors.background)
 			} else if u32(y) == self.cells.size.rows - 1 {
-				self.uniforms.padding_extend.down = !never_extend_bg(row.raw, cells_raw, cells_style, state.colors.palette, state.colors.background)
+				self.uniforms.padding_extend.down = !never_extend_bg(row.raw, cells_raw,
+					cells_style, state.colors.palette, state.colors.background)
 			}
 		}
 	}
@@ -2910,6 +2946,7 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 						.search_match { CellSelected.search }
 						.search_match_selected { CellSelected.search_selected }
 					}
+
 					break
 				}
 			}
@@ -2974,7 +3011,9 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 		}
 
 		for shaped_glyph in shaped[x] {
-			self.add_glyph(u16(x), y, fg, alpha, shaped_glyph.cell.glyph_index, shaped_glyph.font_index, shaped_glyph.cell.x_offset, shaped_glyph.cell.y_offset, u32(cell.grid_width()), cells_raw, x, cells_len)!
+			self.add_glyph(u16(x), y, fg, alpha, shaped_glyph.cell.glyph_index,
+				shaped_glyph.font_index, shaped_glyph.cell.x_offset, shaped_glyph.cell.y_offset,
+				u32(cell.grid_width()), cells_raw, x, cells_len)!
 		}
 
 		// Finally, draw a strikethrough if necessary.
@@ -3006,7 +3045,8 @@ fn (self &Renderer) compute_cell_bg(selected CellSelected, style terminal.CellSt
 			resolve_terminal_color(self.config.search_background, inverse, fg_style, bg_style)
 		}
 		.search_selected {
-			resolve_terminal_color(self.config.search_selected_background, inverse, fg_style, bg_style)
+			resolve_terminal_color(self.config.search_selected_background, inverse, fg_style,
+				bg_style)
 		}
 		.false_ {
 			// Two cases cause us to invert (use the fg color as the bg):
@@ -3044,10 +3084,15 @@ fn (self &Renderer) compute_cell_fg(selected CellSelected, style terminal.CellSt
 			resolve_terminal_color(self.config.search_foreground, inverse, fg_style, final_bg)
 		}
 		.search_selected {
-			resolve_terminal_color(self.config.search_selected_foreground, inverse, fg_style, final_bg)
+			resolve_terminal_color(self.config.search_selected_foreground, inverse, fg_style,
+				final_bg)
 		}
 		.false_ {
-			if inverse { final_bg } else { fg_style }
+			if inverse {
+				final_bg
+			} else {
+				fg_style
+			}
 		}
 	}
 }
@@ -3116,7 +3161,8 @@ fn (mut self Renderer) add_underline(x u16, y u16, style terminal.UnderlineStyle
 
 // Add an overline decoration to the specified cell.
 fn (mut self Renderer) add_overline(x u16, y u16, color terminal.RGB, alpha u8) ! {
-	render := self.font_grid.render_glyph(font.Index.init_special(.sprite), u32(font.Sprite.overline), font.RenderOptions{
+	render := self.font_grid.render_glyph(font.Index.init_special(.sprite),
+		u32(font.Sprite.overline), font.RenderOptions{
 		cell_width:   1
 		grid_metrics: self.grid_metrics
 	})!
@@ -3133,7 +3179,8 @@ fn (mut self Renderer) add_overline(x u16, y u16, color terminal.RGB, alpha u8) 
 
 // Add a strikethrough decoration to the specified cell.
 fn (mut self Renderer) add_strikethrough(x u16, y u16, color terminal.RGB, alpha u8) ! {
-	render := self.font_grid.render_glyph(font.Index.init_special(.sprite), u32(font.Sprite.strikethrough), font.RenderOptions{
+	render := self.font_grid.render_glyph(font.Index.init_special(.sprite),
+		u32(font.Sprite.strikethrough), font.RenderOptions{
 		cell_width:   1
 		grid_metrics: self.grid_metrics
 	})!
@@ -3152,7 +3199,13 @@ fn (mut self Renderer) add_strikethrough(x u16, y u16, color terminal.RGB, alpha
 fn (mut self Renderer) add_glyph(x u16, y u16, color terminal.RGB, alpha u8, glyph_index u32, font_index font.Index, x_offset i32, y_offset i32, cell_width u32, raw_cells []terminal.CellData, raw_x int, cols int) ! {
 	cp := raw_cells[raw_x].codepoint_val()
 	constraint := font.get_constraint(cp) or {
-		if is_symbol(cp) { font.Constraint{ size: .fit } } else { font.Constraint{} }
+		if is_symbol(cp) {
+			font.Constraint{
+				size: .fit
+			}
+		} else {
+			font.Constraint{}
+		}
 	}
 	render := self.font_grid.render_glyph(font_index, glyph_index, font.RenderOptions{
 		grid_metrics:     self.grid_metrics
@@ -3217,16 +3270,10 @@ fn (mut self Renderer) add_cursor(cursor_state &terminal.RenderCursor, cursor_st
 
 	// fallback for lock
 
-	render := self.font_grid.render_glyph(
-		font.Index.init_special(.sprite),
-		u32(sprite),
-		font.RenderOptions{
-			cell_width:   if wide { u32(2) } else { u32(1) }
-			grid_metrics: self.grid_metrics
-		},
-	) or {
-		return
-	}
+	render := self.font_grid.render_glyph(font.Index.init_special(.sprite), u32(sprite), font.RenderOptions{
+		cell_width:   if wide { u32(2) } else { u32(1) }
+		grid_metrics: self.grid_metrics
+	}) or { return }
 
 	self.cells.set_cursor(CellText{
 		atlas:      .grayscale
@@ -3243,9 +3290,7 @@ fn (mut self Renderer) add_cursor(cursor_state &terminal.RenderCursor, cursor_st
 fn (mut self Renderer) add_preedit_cell(cp PreeditCodepoint, coord terminal.ViewportPoint, screen_bg terminal.RGB, screen_fg terminal.RGB) ! {
 	render := self.font_grid.render_codepoint(cp.codepoint, .regular, .text, font.RenderOptions{
 		grid_metrics: self.grid_metrics
-	}) or {
-		return
-	}
+	}) or { return }
 
 	// Add our opaque background cell
 	self.cells.set_bg(coord.y, coord.x, CellBg([screen_bg.r, screen_bg.g, screen_bg.b, u8(255)]!))
@@ -3332,7 +3377,7 @@ pub fn (w Wakeup) notify() ! {
 }
 
 // Health status of the renderer.
-pub enum Health as int {
+pub enum Health {
 	healthy   = 0
 	unhealthy = 1
 }
@@ -3376,7 +3421,8 @@ pub fn (mut r Renderer) loop_enter(render_thread &RendererThread) ! {
 	if r.display_link == unsafe { nil } {
 		return
 	}
-	r.display_link.set_output_callback(voidptr(renderer_display_link_callback), voidptr(render_thread))!
+	r.display_link.set_output_callback(voidptr(renderer_display_link_callback),
+		voidptr(render_thread))!
 	r.display_link.start() or {}
 }
 

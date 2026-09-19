@@ -178,7 +178,6 @@ module renderer
 // https://github.com/ghostty-org/ghostty/issues/8003
 //
 // --- Original Ghostty Comments End: src/renderer/Thread.zig
-
 import configpkg
 import crash
 import internal_os
@@ -300,7 +299,7 @@ pub mut:
 	// Cross-thread event state. Wakeups coalesce, draw-now requests do not,
 	// matching the two separate xev.Async handles in Ghostty.
 	event              &sync.Semaphore = unsafe { nil }
-	event_mutex        &sync.Mutex = unsafe { nil }
+	event_mutex        &sync.Mutex     = unsafe { nil }
 	wakeup_requested   bool
 	draw_now_requested u32
 	stop_requested     bool
@@ -311,7 +310,7 @@ pub struct RendererMailbox {
 pub mut:
 	queue []RendererMessage
 	mutex &sync.Mutex = unsafe { nil }
-	space &sync.Cond = unsafe { nil }
+	space &sync.Cond  = unsafe { nil }
 }
 
 pub fn RendererMailbox.create() &RendererMailbox {
@@ -399,12 +398,12 @@ pub fn RendererThread.init(config &configpkg.Config, renderer_impl &Renderer, st
 	mut mailbox := RendererMailbox.create()
 
 	mut result := RendererThread{
-		config: ThreadDerivedConfig.init(config)
-		renderer: unsafe { renderer_impl }
-		state: unsafe { state }
-		mailbox: mailbox
-		app_redraw: app_redraw
-		event: sync.new_semaphore()
+		config:      ThreadDerivedConfig.init(config)
+		renderer:    unsafe { renderer_impl }
+		state:       unsafe { state }
+		mailbox:     mailbox
+		app_redraw:  app_redraw
+		event:       sync.new_semaphore()
 		event_mutex: sync.new_mutex()
 	}
 	$if linux {
@@ -458,7 +457,7 @@ fn (mut self RendererThread) thread_main_inner() ! {
 	}
 
 	crash.set_thread_state(crash.ThreadState{
-		kind: .renderer
+		kind:    .renderer
 		surface: self.renderer.surface_mailbox.user_data
 	})
 	defer {
@@ -600,7 +599,8 @@ fn (mut self RendererThread) drain_mailbox() ! {
 						if !self.cursor_blink_active {
 							self.flags.set_cursor_blink_visible(true)
 							self.cursor_blink_active = true
-							self.next_cursor_blink_at = time.sys_mono_now() + cursor_blink_interval()
+							self.next_cursor_blink_at = time.sys_mono_now() +
+								cursor_blink_interval()
 						}
 					}
 				}
@@ -644,7 +644,7 @@ fn (mut self RendererThread) drain_mailbox() ! {
 				self.flags.set_has_inspector(msg.active)
 			}
 			MacosDisplayIdMessage {
-				self.renderer.set_macos_display_id(msg.display_id)
+				self.renderer.set_macos_display_id(msg.display_id)!
 			}
 		}
 	}

@@ -16,11 +16,11 @@ fn test_to_kibi_bytes_matches_source_integer_conversion() {
 
 fn test_key_event_owns_data_and_formats_details() {
 	mut source := input.KeyEvent{
-		action: .press
-		key: .unidentified
-		mods: input.Mods.init(true, true, false, false, false, false, input.SideInfo{})
+		action:    .press
+		key:       .unidentified
+		mods:      input.Mods.init(true, true, false, false, false, false, input.SideInfo{})
 		composing: true
-		utf8: 'é'
+		utf8:      'é'
 	}
 	mut event := KeyEvent.init(source)
 	source.utf8 = 'changed'
@@ -45,7 +45,7 @@ fn test_inspector_key_stream_is_bounded_and_evicts_oldest() {
 	}
 	for index in 0 .. 75 {
 		assert value.record_key_event(KeyEvent.init(input.KeyEvent{
-			key: .key_a
+			key:  .key_a
 			utf8: index.str()
 		}))
 	}
@@ -68,6 +68,30 @@ fn test_renderer_overlay_features_preserve_activation_order() {
 	assert value.overlay_features() == [.highlight_hyperlinks]
 }
 
+fn test_inspector_public_renderer_info_and_pty_read_entry_points() {
+	mut term := terminal.Terminal.init(terminal.Options{
+		cols: 80
+		rows: 24
+	})!
+	defer {
+		term.deinit()
+	}
+	mut value := Inspector.init()!
+	defer {
+		value.deinit()
+	}
+
+	mut renderer_info := value.renderer_info()
+	renderer_info.set_feature(.semantic_prompts, true)
+	assert value.renderer.overlay_features() == [.semantic_prompts]
+
+	term.screens.active.cursor.x = 9
+	value.record_pty_read(&term, '\x1b[2C'.bytes())!
+	assert value.vt_stream.events.len == 1
+	assert value.vt_stream.events[0].raw_description == '2 C'
+	assert value.vt_stream.events[0].cursor.x == 9
+}
+
 fn test_inspector_renders_key_stream_into_real_imgui_frame() {
 	if !cimgui.available() {
 		return
@@ -84,9 +108,9 @@ fn test_inspector_renders_key_stream_into_real_imgui_frame() {
 	}
 	mut event := KeyEvent.init(input.KeyEvent{
 		action: .press
-		key: .key_a
-		mods: input.Mods.init(true, false, false, true, false, false, input.SideInfo{})
-		utf8: 'A'
+		key:    .key_a
+		mods:   input.Mods.init(true, false, false, true, false, false, input.SideInfo{})
+		utf8:   'A'
 	})
 	event.binding = [input.Action.new(.copy_to_clipboard)]
 	event.pty = [u8(`A`)]
@@ -102,22 +126,22 @@ fn test_inspector_renders_key_stream_into_real_imgui_frame() {
 
 	context.begin_frame(1.0 / 60.0)
 	value.render(context.handle, SurfaceInfo{
-		screen_width: 800
-		screen_height: 600
-		grid_columns: 80
-		grid_rows: 24
-		cell_width: 10
-		cell_height: 20
-		font_points: 13
-		font_pixels: 17.333
-		hover_grid_x: 4
-		hover_grid_y: 5
+		screen_width:     800
+		screen_height:    600
+		grid_columns:     80
+		grid_rows:        24
+		cell_width:       10
+		cell_height:      20
+		font_points:      13
+		font_pixels:      17.333
+		hover_grid_x:     4
+		hover_grid_y:     5
 		hover_terminal_x: 40
 		hover_terminal_y: 100
-		click_grid_x: 4
-		click_grid_y: 5
-		left_click_xpos: 40
-		left_click_ypos: 100
+		click_grid_x:     4
+		click_grid_y:     5
+		left_click_xpos:  40
+		left_click_ypos:  100
 	}, mut term)
 	dockspace_id := context.get_id('Main Dockspace')
 	assert context.dock_node_exists(dockspace_id)
@@ -141,7 +165,10 @@ fn test_flat_pagelist_inspector_projects_regions_and_style_usage() {
 	}
 	pages := &term.screens.active.pages
 	active_max := flat_max_coord(pages, .active) or { panic('active region must exist') }
-	assert active_max == terminal.Coordinate{ x: 2, y: 1 }
+	assert active_max == terminal.Coordinate{
+		x: 2
+		y: 1
+	}
 	assert flat_max_coord(pages, .history) == none
 	assert flat_page_bytes(pages) == usize(6) * sizeof(terminal.CellData)
 	term.screens.active.pages.grow()!
@@ -170,38 +197,38 @@ fn test_flat_pagelist_inspector_projects_regions_and_style_usage() {
 fn test_vt_event_encodings_match_pinned_ghostty() {
 	assert encode_vt_action(terminal.ParserAction{
 		action_type: .print_action
-		char: u32(`A`)
+		char:        u32(`A`)
 	}) == "'A' (U+41)"
 	assert encode_vt_action(terminal.ParserAction{
 		action_type: .execute_action
-		byte_val: 0x07
+		byte_val:    0x07
 	}) == 'BEL (0x7)'
 	assert encode_vt_action(terminal.ParserAction{
 		action_type: .execute_action
-		byte_val: 0x19
+		byte_val:    0x19
 	}) == '? (0x19)'
 	assert encode_vt_action(terminal.ParserAction{
 		action_type: .csi_dispatch_action
-		csi: terminal.CSIAction{
+		csi:         terminal.CSIAction{
 			intermediates: [u8(`?`)]
-			params: [u16(1), 4]
-			final_byte: u8(`h`)
+			params:        [u16(1), 4]
+			final_byte:    u8(`h`)
 		}
 	}) == '? 1;4 h'
 	assert encode_vt_action(terminal.ParserAction{
 		action_type: .esc_dispatch_action
-		esc: terminal.ESCAction{
+		esc:         terminal.ESCAction{
 			intermediates: [u8(`(`)]
-			final_byte: u8(`B`)
+			final_byte:    u8(`B`)
 		}
 	}) == '( B'
 	osc_action := terminal.ParserAction{
 		action_type: .osc_dispatch_action
-		osc: terminal.OscCommand{
-			cmd_type: .hyperlink_start
+		osc:         terminal.OscCommand{
+			cmd_type:  .hyperlink_start
 			hyperlink: osc.HyperlinkStart{
 				uri: 'https://example.com'
-				id: 'link-id'
+				id:  'link-id'
 			}
 		}
 	}
@@ -212,13 +239,13 @@ fn test_vt_event_encodings_match_pinned_ghostty() {
 	}
 	kitty_sizing := terminal.ParserAction{
 		action_type: .osc_dispatch_action
-		osc: terminal.OscCommand{
-			cmd_type: .kitty_text_sizing
+		osc:         terminal.OscCommand{
+			cmd_type:          .kitty_text_sizing
 			kitty_text_sizing: osc.KittyTextSizing{
-				scale: 2
-				width: 3
+				scale:  2
+				width:  3
 				valign: .bottom
-				text: 'hello'
+				text:   'hello'
 			}
 		}
 	}
@@ -249,14 +276,14 @@ fn test_vt_stream_filters_snapshots_and_sequence_gaps() {
 	// Print is excluded by default but still advances the sequence.
 	stream.record(terminal.ParserAction{
 		action_type: .print_action
-		char: u32(`x`)
+		char:        u32(`x`)
 	}, &term)
 	assert stream.events.len == 0
 	term.screens.active.cursor.x = 7
 	term.scrolling_region.top = 3
 	stream.record(terminal.ParserAction{
 		action_type: .execute_action
-		byte_val: 0x07
+		byte_val:    0x07
 	}, &term)
 	assert stream.events.len == 1
 	assert stream.events[0].seq == 2
@@ -270,18 +297,18 @@ fn test_vt_stream_filters_snapshots_and_sequence_gaps() {
 	stream.paused = true
 	stream.record(terminal.ParserAction{
 		action_type: .execute_action
-		byte_val: 0x08
+		byte_val:    0x08
 	}, &term)
 	stream.paused = false
 	stream.filter_text = 'does-not-match'
 	stream.record(terminal.ParserAction{
 		action_type: .execute_action
-		byte_val: 0x09
+		byte_val:    0x09
 	}, &term)
 	stream.filter_text = 'bel'
 	stream.record(terminal.ParserAction{
 		action_type: .execute_action
-		byte_val: 0x07
+		byte_val:    0x07
 	}, &term)
 	assert stream.events.len == 2
 	assert stream.events[1].seq == 5
@@ -328,7 +355,7 @@ fn test_vt_stream_is_bounded_and_navigation_matches_reverse_table() {
 	for _ in 0 .. 101 {
 		stream.record(terminal.ParserAction{
 			action_type: .execute_action
-			byte_val: 0x07
+			byte_val:    0x07
 		}, &term)
 	}
 	assert stream.events.len == max_vt_events

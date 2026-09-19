@@ -40,6 +40,7 @@ pub fn (event &KeyEvent) label() string {
 		.release { 'Release: ' }
 		.repeat { 'Repeat: ' }
 	}
+
 	if event.event.mods.shift() {
 		result += 'Shift+'
 	}
@@ -164,10 +165,10 @@ pub fn Inspector.init() !Inspector {
 	return Inspector{
 		renderer_bridge: renderer.InspectorOverlayBridge{
 			overlay_features_fn: inspector_overlay_features
-			record_pty_byte_fn: inspector_record_pty_byte
+			record_pty_byte_fn:  inspector_record_pty_byte
 		}
-		key_events: []KeyEvent{cap: 2}
-		vt_stream: VTStream.init()
+		key_events:      []KeyEvent{cap: 2}
+		vt_stream:       VTStream.init()
 	}
 }
 
@@ -200,6 +201,21 @@ pub fn (mut self Inspector) clear_key_events() {
 	self.key_events.clear()
 }
 
+// renderer_info returns the mutable renderer inspector panel, matching the
+// source convenience accessor.
+pub fn (mut self Inspector) renderer_info() &RendererInfo {
+	return &self.renderer
+}
+
+// record_pty_read advances the inspector's parallel parser for every byte in
+// the read before the real terminal parser mutates its state. V's translated
+// parser owns its event allocations, so no allocator argument is required.
+pub fn (mut self Inspector) record_pty_read(term &terminal.Terminal, data []u8) ! {
+	for byte in data {
+		self.vt_stream.record_pty_byte(byte, term)
+	}
+}
+
 // record_key_event appends to Ghostty's bounded 50-event stream, evicting and
 // deinitializing the oldest event after the limit is reached.
 pub fn (mut self Inspector) record_key_event(event KeyEvent) bool {
@@ -219,7 +235,9 @@ pub fn (mut self Inspector) render(context_handle voidptr, surface_info SurfaceI
 	if isnil(context_handle) {
 		return
 	}
-	context := cimgui.Context{ handle: context_handle }
+	context := cimgui.Context{
+		handle: context_handle
+	}
 	first_render := create_main_dockspace(context)
 
 	open_terminal := context.begin_window('Terminal')
@@ -325,7 +343,8 @@ fn draw_dimensions_table(context cimgui.Context, info SurfaceInfo) {
 	draw_info_row(context, 'Screen Size', '${info.screen_width}px x ${info.screen_height}px')
 	draw_info_row(context, 'Grid Size', '${info.grid_columns}c x ${info.grid_rows}r')
 	draw_info_row(context, 'Cell Size', '${info.cell_width}px x ${info.cell_height}px')
-	draw_info_row(context, 'Window Padding', 'T=${info.padding_top} B=${info.padding_bottom} L=${info.padding_left} R=${info.padding_right} px')
+	draw_info_row(context, 'Window Padding',
+		'T=${info.padding_top} B=${info.padding_bottom} L=${info.padding_left} R=${info.padding_right} px')
 }
 
 fn draw_font_table(context cimgui.Context, info SurfaceInfo) {
@@ -343,7 +362,8 @@ fn draw_mouse_table(context cimgui.Context, info SurfaceInfo) {
 		context.end_table()
 	}
 	draw_info_row(context, 'Hover Grid', 'row=${info.hover_grid_y}, col=${info.hover_grid_x}')
-	draw_info_row(context, 'Hover Point', '(${info.hover_terminal_x}px, ${info.hover_terminal_y}px)')
+	draw_info_row(context, 'Hover Point',
+		'(${info.hover_terminal_x}px, ${info.hover_terminal_y}px)')
 
 	context.table_next_row()
 	context.table_set_column(0)
@@ -369,7 +389,8 @@ fn draw_mouse_table(context cimgui.Context, info SurfaceInfo) {
 	}
 
 	draw_info_row(context, 'Click Grid', 'row=${info.click_grid_y}, col=${info.click_grid_x}')
-	draw_info_row(context, 'Click Point', '(${u32(info.left_click_xpos)}px, ${u32(info.left_click_ypos)}px)')
+	draw_info_row(context, 'Click Point',
+		'(${u32(info.left_click_xpos)}px, ${u32(info.left_click_ypos)}px)')
 }
 
 fn draw_info_row(context cimgui.Context, label string, value string) {
@@ -543,9 +564,27 @@ fn action_color(action input.KeyAction) u32 {
 
 fn action_text_color(action input.KeyAction) cimgui.Color {
 	return match action {
-		.press { cimgui.Color{ r: 0.4, g: 1.0, b: 0.4 } }
-		.release { cimgui.Color{ r: 0.6, g: 0.6, b: 1.0 } }
-		.repeat { cimgui.Color{ r: 1.0, g: 1.0, b: 0.4 } }
+		.press {
+			cimgui.Color{
+				r: 0.4
+				g: 1.0
+				b: 0.4
+			}
+		}
+		.release {
+			cimgui.Color{
+				r: 0.6
+				g: 0.6
+				b: 1.0
+			}
+		}
+		.repeat {
+			cimgui.Color{
+				r: 1.0
+				g: 1.0
+				b: 0.4
+			}
+		}
 	}
 }
 
@@ -595,6 +634,7 @@ fn hsv_to_rgba(h f32, s f32, v f32, a f32) u32 {
 			b = q
 		}
 	}
+
 	return (u32(a * 255.0) << 24) | (u32(b * 255.0) << 16) | (u32(g * 255.0) << 8) | u32(r * 255.0)
 }
 

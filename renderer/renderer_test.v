@@ -18,6 +18,7 @@ fn capture_surface_event(data voidptr, event SurfaceEvent) int {
 		RendererHealthEvent { capture.health_events << event.health }
 		ScrollbarEvent { capture.scrollbar_events << event.scrollbar }
 	}
+
 	return capture.health_events.len + capture.scrollbar_events.len
 }
 
@@ -43,7 +44,11 @@ fn test_renderer_emits_health_transitions_and_dirty_scrollbar() {
 	}
 	mut render := Renderer{
 		surface_mailbox: mailbox
-		scrollbar:       terminal.Scrollbar{ total: 20, offset: 3, len: 5 }
+		scrollbar:       terminal.Scrollbar{
+			total:  20
+			offset: 3
+			len:    5
+		}
 		scrollbar_dirty: true
 	}
 	render.frame_completed(.unhealthy)
@@ -111,7 +116,9 @@ fn test_derived_config_deinit() {
 		custom_shaders: configpkg.RepeatablePath{
 			items: [configpkg.Path{ path: '/tmp/shader.glsl' }]
 		}
-		bg_image:       configpkg.Path{ path: '/tmp/background.png' }
+		bg_image:       configpkg.Path{
+			path: '/tmp/background.png'
+		}
 	}
 	config.deinit()
 	assert config.font_features.len == 0
@@ -120,10 +127,13 @@ fn test_derived_config_deinit() {
 }
 
 fn test_prep_background_image_detects_magic_without_extension() ! {
-	path := os.join_path(os.dir(@FILE), '..', 'kitty', 'testdata', 'image-png-none-50x76-2147483647-raw.data')
+	path := os.join_path(os.dir(@FILE), '..', 'kitty', 'testdata',
+		'image-png-none-50x76-2147483647-raw.data')
 	mut render := Renderer{
 		config: DerivedConfig{
-			bg_image: configpkg.Path{ path: path }
+			bg_image: configpkg.Path{
+				path: path
+			}
 		}
 	}
 	render.prep_background_image()!
@@ -138,10 +148,14 @@ fn test_prep_background_image_detects_magic_without_extension() ! {
 
 fn test_derived_config_owns_shader_path_list() {
 	mut cfg := configpkg.Config.default_config()
-	cfg.custom_shader.items << configpkg.Path{ path: '/tmp/first.glsl' }
+	cfg.custom_shader.items << configpkg.Path{
+		path: '/tmp/first.glsl'
+	}
 	mut derived := DerivedConfig.init(&cfg)!
 	cfg.custom_shader.items[0].path = '/tmp/changed.glsl'
-	cfg.custom_shader.items << configpkg.Path{ path: '/tmp/second.glsl' }
+	cfg.custom_shader.items << configpkg.Path{
+		path: '/tmp/second.glsl'
+	}
 	assert derived.custom_shaders.items.len == 1
 	assert derived.custom_shaders.items[0].path == '/tmp/first.glsl'
 	derived.deinit()
@@ -161,17 +175,37 @@ fn test_derived_config_preserves_explicit_bold_color() {
 	mut derived := DerivedConfig.init(&cfg)!
 	bold := derived.bold_color or { panic('missing bold color') }
 	assert !bold.bright
-	assert bold.color == terminal.RGB{ r: 0x12, g: 0x34, b: 0x56 }
+	assert bold.color == terminal.RGB{
+		r: 0x12
+		g: 0x34
+		b: 0x56
+	}
 	derived.deinit()
 }
 
 fn test_terminal_color_resolves_explicit_and_cell_colors() {
-	fg := terminal.RGB{ r: 10, g: 20, b: 30 }
-	bg := terminal.RGB{ r: 40, g: 50, b: 60 }
-	explicit := configpkg.TerminalColor{
-		color: configpkg.ColorRGB{ r: 1, g: 2, b: 3 }
+	fg := terminal.RGB{
+		r: 10
+		g: 20
+		b: 30
 	}
-	assert resolve_terminal_color(explicit, false, fg, bg) == terminal.RGB{ r: 1, g: 2, b: 3 }
+	bg := terminal.RGB{
+		r: 40
+		g: 50
+		b: 60
+	}
+	explicit := configpkg.TerminalColor{
+		color: configpkg.ColorRGB{
+			r: 1
+			g: 2
+			b: 3
+		}
+	}
+	assert resolve_terminal_color(explicit, false, fg, bg) == terminal.RGB{
+		r: 1
+		g: 2
+		b: 3
+	}
 	assert resolve_terminal_color(configpkg.TerminalColor{ kind: .cell_foreground }, false, fg, bg) == fg
 	assert resolve_terminal_color(configpkg.TerminalColor{ kind: .cell_foreground }, true, fg, bg) == bg
 	assert resolve_terminal_color(configpkg.TerminalColor{ kind: .cell_background }, false, fg, bg) == bg
@@ -197,20 +231,38 @@ fn test_render_state_reads_features_from_opaque_inspector() {
 fn test_renderer_rebuilds_reuses_and_removes_inspector_overlay() ! {
 	mut render := Renderer{
 		size:           Size{
-			screen: ScreenSize{ width: 40, height: 10 }
-			cell:   CellSize{ width: 10, height: 10 }
+			screen: ScreenSize{
+				width:  40
+				height: 10
+			}
+			cell:   CellSize{
+				width:  10
+				height: 10
+			}
 		}
 		images:         ImageRenderState.empty()
 		terminal_state: terminal.RenderState{
-			row_data: [terminal.RenderRow{
-				raw:   terminal.RowData{ hyperlink: true }
-				cells: [
-					terminal.RenderCell{},
-					terminal.RenderCell{ raw: terminal.CellData{ has_hyperlink: true } },
-					terminal.RenderCell{ raw: terminal.CellData{ has_hyperlink: true } },
-					terminal.RenderCell{},
-				]
-			}]
+			row_data: [
+				terminal.RenderRow{
+					raw:   terminal.RowData{
+						hyperlink: true
+					}
+					cells: [
+						terminal.RenderCell{},
+						terminal.RenderCell{
+							raw: terminal.CellData{
+								has_hyperlink: true
+							}
+						},
+						terminal.RenderCell{
+							raw: terminal.CellData{
+								has_hyperlink: true
+							}
+						},
+						terminal.RenderCell{},
+					]
+				},
+			]
 		}
 	}
 
@@ -232,6 +284,11 @@ fn test_renderer_rebuilds_reuses_and_removes_inspector_overlay() ! {
 	render.images.overlay_update(render.overlay)
 	assert render.images.overlay_placements.len == 0
 	render.images.deinit()
+}
+
+fn test_renderer_set_macos_display_id_preserves_fallible_entry_point() {
+	mut render := Renderer{}
+	render.set_macos_display_id(1)!
 }
 
 // Test CellContents resize and reset.
@@ -352,9 +409,20 @@ fn test_uniforms_defaults() {
 // Test Size.terminal.
 fn test_size_terminal() {
 	s := Size{
-		screen:  ScreenSize{ width: 800, height: 600 }
-		cell:    CellSize{ width: 10, height: 20 }
-		padding: Padding{ top: 5, bottom: 5, left: 5, right: 5 }
+		screen:  ScreenSize{
+			width:  800
+			height: 600
+		}
+		cell:    CellSize{
+			width:  10
+			height: 20
+		}
+		padding: Padding{
+			top:    5
+			bottom: 5
+			left:   5
+			right:  5
+		}
 	}
 	ts := s.terminal()
 	// The terminal area is the screen with padding removed. It is not rounded
@@ -366,11 +434,25 @@ fn test_size_terminal() {
 // Test ScreenSize.blank_padding.
 fn test_screen_size_blank_padding() {
 	s := Size{
-		screen:  ScreenSize{ width: 800, height: 600 }
-		cell:    CellSize{ width: 10, height: 20 }
-		padding: Padding{ top: 0, bottom: 0, left: 0, right: 0 }
+		screen:  ScreenSize{
+			width:  800
+			height: 600
+		}
+		cell:    CellSize{
+			width:  10
+			height: 20
+		}
+		padding: Padding{
+			top:    0
+			bottom: 0
+			left:   0
+			right:  0
+		}
 	}
-	grid := GridSize{ columns: 80, rows: 30 }
+	grid := GridSize{
+		columns: 80
+		rows:    30
+	}
 	bp := s.screen.blank_padding(s.padding, grid, s.cell).add(s.padding)
 	// Screen 800x600, grid 80*10=800, 30*20=600 => no extra padding
 	assert bp.left == 0
@@ -381,9 +463,20 @@ fn test_screen_size_blank_padding() {
 
 fn test_screen_size_blank_padding_is_trailing_and_includes_explicit_padding() {
 	s := Size{
-		screen:  ScreenSize{ width: 108, height: 112 }
-		cell:    CellSize{ width: 10, height: 20 }
-		padding: Padding{ top: 2, bottom: 3, left: 1, right: 2 }
+		screen:  ScreenSize{
+			width:  108
+			height: 112
+		}
+		cell:    CellSize{
+			width:  10
+			height: 20
+		}
+		padding: Padding{
+			top:    2
+			bottom: 3
+			left:   1
+			right:  2
+		}
 	}
 	bp := s.screen.blank_padding(s.padding, GridSize{ columns: 10, rows: 5 }, s.cell).add(s.padding)
 	assert bp.left == 1
@@ -394,8 +487,18 @@ fn test_screen_size_blank_padding_is_trailing_and_includes_explicit_padding() {
 
 // Test Padding.add.
 fn test_padding_add() {
-	a := Padding{ top: 5, bottom: 5, left: 10, right: 10 }
-	b := Padding{ top: 3, bottom: 3, left: 7, right: 7 }
+	a := Padding{
+		top:    5
+		bottom: 5
+		left:   10
+		right:  10
+	}
+	b := Padding{
+		top:    3
+		bottom: 3
+		left:   7
+		right:  7
+	}
 	c := a.add(b)
 	assert c.top == 8
 	assert c.bottom == 8
@@ -406,9 +509,20 @@ fn test_padding_add() {
 // Test GridSize.
 fn test_grid_size() {
 	mut s := Size{
-		screen:  ScreenSize{ width: 800, height: 600 }
-		cell:    CellSize{ width: 10, height: 20 }
-		padding: Padding{ top: 0, bottom: 0, left: 0, right: 0 }
+		screen:  ScreenSize{
+			width:  800
+			height: 600
+		}
+		cell:    CellSize{
+			width:  10
+			height: 20
+		}
+		padding: Padding{
+			top:    0
+			bottom: 0
+			left:   0
+			right:  0
+		}
 	}
 	g := s.grid()
 	assert g.columns == 80
@@ -416,16 +530,28 @@ fn test_grid_size() {
 }
 
 fn test_grid_size_equals() {
-	a := GridSize{ columns: 80, rows: 24 }
+	a := GridSize{
+		columns: 80
+		rows:    24
+	}
 	assert a.equals(GridSize{ columns: 80, rows: 24 })
 	assert !a.equals(GridSize{ columns: 81, rows: 24 })
 }
 
 // Test ScreenSize.equals.
 fn test_screen_size_equals() {
-	a := ScreenSize{ width: 800, height: 600 }
-	b := ScreenSize{ width: 800, height: 600 }
-	c := ScreenSize{ width: 1024, height: 768 }
+	a := ScreenSize{
+		width:  800
+		height: 600
+	}
+	b := ScreenSize{
+		width:  800
+		height: 600
+	}
+	c := ScreenSize{
+		width:  1024
+		height: 768
+	}
 	assert a.equals(b)
 	assert !a.equals(c)
 }
@@ -449,8 +575,8 @@ fn test_cursor_style_enum() {
 // Test BgImageBuffer defaults.
 fn test_bg_image_buffer_defaults() {
 	buf := BgImageBuffer{}
-	assert $sizeof(BgImageInfo) == 1
-	assert $sizeof(BgImageBuffer) == 8
+	assert sizeof(BgImageInfo) == 1
+	assert sizeof(BgImageBuffer) == 8
 	assert __offsetof(BgImageBuffer, opacity) == 0
 	assert __offsetof(BgImageBuffer, info) == 4
 	assert buf.opacity == 1.0
@@ -466,7 +592,7 @@ fn test_custom_shader_uniforms_defaults() {
 	assert u.focus == 1
 	assert u.frame_rate == 60.0
 	assert u.time == 0.0
-	assert $sizeof(CustomShaderUniforms) == 4480
+	assert sizeof(CustomShaderUniforms) == 4480
 	assert __offsetof(CustomShaderUniforms, channel_time) == 32
 	assert __offsetof(CustomShaderUniforms, palette) == 288
 }
@@ -484,9 +610,18 @@ fn test_highlight_tag() {
 fn test_preedit_width() {
 	p := Preedit{
 		codepoints: [
-			PreeditCodepoint{ codepoint: 0x3042, wide: true }, // あ (wide)
-			PreeditCodepoint{ codepoint: 0x3044, wide: true }, // い (wide)
-			PreeditCodepoint{ codepoint: 0x61, wide: false }, // a (narrow)
+			PreeditCodepoint{
+				codepoint: 0x3042
+				wide:      true
+			}, // あ (wide)
+			PreeditCodepoint{
+				codepoint: 0x3044
+				wide:      true
+			}, // い (wide)
+			PreeditCodepoint{
+				codepoint: 0x61
+				wide:      false
+			}, // a (narrow)
 		]
 	}
 	assert p.width() == 5 // 2 + 2 + 1
@@ -495,8 +630,13 @@ fn test_preedit_width() {
 fn test_preedit_range_fits() {
 	p := RenderPreedit{
 		codepoints: [
-			RenderPreeditCodepoint{ codepoint: u32(`a`) },
-			RenderPreeditCodepoint{ codepoint: 0x3042, wide: true },
+			RenderPreeditCodepoint{
+				codepoint: u32(`a`)
+			},
+			RenderPreeditCodepoint{
+				codepoint: 0x3042
+				wide:      true
+			},
 		]
 	}
 	start, end, cp_offset := p.range(2, 9)
@@ -508,9 +648,16 @@ fn test_preedit_range_fits() {
 fn test_preedit_range_keeps_trailing_codepoints_when_clipped() {
 	p := RenderPreedit{
 		codepoints: [
-			RenderPreeditCodepoint{ codepoint: u32(`a`) },
-			RenderPreeditCodepoint{ codepoint: u32(`b`) },
-			RenderPreeditCodepoint{ codepoint: 0x3042, wide: true },
+			RenderPreeditCodepoint{
+				codepoint: u32(`a`)
+			},
+			RenderPreeditCodepoint{
+				codepoint: u32(`b`)
+			},
+			RenderPreeditCodepoint{
+				codepoint: 0x3042
+				wide:      true
+			},
 		]
 	}
 	start, end, cp_offset := p.range(8, 9)
@@ -582,7 +729,7 @@ fn test_multiple_fg_cells_per_row() ! {
 
 // Test set_bg / get_bg.
 fn test_bg_cell_set_get() ! {
-	assert $sizeof(CellBg) == 4
+	assert sizeof(CellBg) == 4
 
 	mut cells := CellContents{}
 	cells.resize(GridSize{ columns: 10, rows: 5 })!
@@ -601,7 +748,7 @@ fn test_bg_cell_set_get() ! {
 
 // Test AtlasKind enum.
 fn test_atlas_kind() {
-	assert $sizeof(AtlasKind) == 1
+	assert sizeof(AtlasKind) == 1
 	assert u8(AtlasKind.grayscale) == 0
 	assert u8(AtlasKind.color) == 1
 }
@@ -635,8 +782,14 @@ fn test_font_style_status() {
 // Test Size.balance_padding.
 fn test_balance_padding() {
 	mut s := Size{
-		screen:  ScreenSize{ width: 810, height: 610 }
-		cell:    CellSize{ width: 10, height: 20 }
+		screen:  ScreenSize{
+			width:  810
+			height: 610
+		}
+		cell:    CellSize{
+			width:  10
+			height: 20
+		}
 		padding: Padding{}
 	}
 	s.balance_padding(Padding{ top: 0, bottom: 0, left: 0, right: 0 })
@@ -648,8 +801,14 @@ fn test_balance_padding() {
 
 fn test_balance_padding_caps_top_and_moves_excess_to_bottom() {
 	mut s := Size{
-		screen:  ScreenSize{ width: 805, height: 639 }
-		cell:    CellSize{ width: 10, height: 20 }
+		screen:  ScreenSize{
+			width:  805
+			height: 639
+		}
+		cell:    CellSize{
+			width:  10
+			height: 20
+		}
 		padding: Padding{}
 	}
 	s.balance_padding(Padding{ top: 0, bottom: 0, left: 0, right: 0 })
@@ -690,7 +849,10 @@ fn test_rebuild_row_shapes_and_renders_text() ! {
 		font_grid: &grid
 		config:    DerivedConfig{}
 		size:      Size{
-			screen: ScreenSize{ width: 300, height: 100 }
+			screen: ScreenSize{
+				width:  300
+				height: 100
+			}
 			cell:   CellSize{
 				width:  grid.metrics.cell_width
 				height: grid.metrics.cell_height
@@ -718,9 +880,15 @@ fn test_rebuild_row_shapes_and_renders_text() ! {
 
 	row := terminal.RenderRow{
 		cells: [
-			terminal.RenderCell{ raw: terminal.CellData.init(u32(`A`)) },
-			terminal.RenderCell{ raw: terminal.CellData.init(u32(`B`)) },
-			terminal.RenderCell{ raw: terminal.CellData.init(u32(`C`)) },
+			terminal.RenderCell{
+				raw: terminal.CellData.init(u32(`A`))
+			},
+			terminal.RenderCell{
+				raw: terminal.CellData.init(u32(`B`))
+			},
+			terminal.RenderCell{
+				raw: terminal.CellData.init(u32(`C`))
+			},
 		]
 	}
 	links := terminal.CellSet{}
