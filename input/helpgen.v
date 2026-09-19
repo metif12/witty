@@ -12,16 +12,17 @@ pub fn generated_action_help_data() string {
 // It can generate documentation in different formats (plaintext for CLI,
 // markdown for website) while maintaining consistent content.
 
-// HelpFormat represents the output format for documentation.
-pub enum HelpFormat as u8 {
+// Format represents the output format for documentation.
+pub enum Format as u8 {
 	// Plain text output with indentation.
 	plaintext
 	// Markdown formatted output.
 	markdown
 }
 
-// generate_help generates keybind actions documentation.
-pub fn generate_help(format HelpFormat, show_docs bool) string {
+// generate generates keybind actions documentation. V returns the accumulated
+// text because its standard writer interface is not a shared module protocol.
+pub fn generate(format Format, show_docs bool) string {
 	entries := binding_action_help_entries()
 	mut out := strings.new_builder(entries.len * 64)
 	if format == .markdown {
@@ -99,7 +100,7 @@ fn binding_action_help_entries() []HelpEntry {
 	return entries
 }
 
-fn write_help_docs(mut out strings.Builder, format HelpFormat, docs []string) {
+fn write_help_docs(mut out strings.Builder, format Format, docs []string) {
 	for line in docs {
 		match format {
 			.plaintext { out.write_string('  ${line}\n') }

@@ -1,27 +1,27 @@
 module input
 
 fn test_help_format_source_layout_and_ordinals() {
-	assert sizeof(HelpFormat) == 1
-	assert [HelpFormat.plaintext, .markdown].map(u8(it)) == [u8(0), 1]
+	assert sizeof(Format) == 1
+	assert [Format.plaintext, .markdown].map(u8(it)) == [u8(0), 1]
 }
 
-fn test_generate_help_action_names() {
-	help := generate_help(.plaintext, false)
+fn test_generate_action_names() {
+	help := generate(.plaintext, false)
 	assert help.starts_with('ignore\nunbind\ncsi\n')
 	assert help.contains('toggle_command_palette\n')
 	assert help.ends_with('crash\n')
 }
 
-fn test_generate_help_plaintext_docs() {
-	help := generate_help(.plaintext, true)
+fn test_generate_plaintext_docs() {
+	help := generate(.plaintext, true)
 	assert help.starts_with('\nignore:\n  Ignore this key combination.\n  \n  Ghostty will not process')
 	assert help.contains('new_window:\n  Open a new window.\n  \n')
 	assert help.contains('toggle_readonly:\n  Toggle read-only mode for the current surface.\n  \n')
 	assert help.ends_with('    Crash on the render thread for the focused surface.\n  \n')
 }
 
-fn test_generate_help_markdown() {
-	help := generate_help(.markdown, true)
+fn test_generate_markdown() {
+	help := generate(.markdown, true)
 	assert help.starts_with('---\ntitle: Keybinding Action Reference\n')
 	assert help.contains('## `copy_to_clipboard`\nCopy the selected text to the clipboard.\n')
 }

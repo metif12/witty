@@ -19,7 +19,7 @@ mut:
 // the shared input help generator to include each action's documentation.
 pub fn list_actions_output(args []string) !string {
 	opts := parse_action_options[ListActionsOptions](args)!
-	return input.generate_help(.plaintext, opts.docs)
+	return input.generate(.plaintext, opts.docs)
 }
 
 pub fn run_list_actions(args []string) !int {
