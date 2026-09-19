@@ -6,6 +6,8 @@ import font
 import input
 import os
 import terminal
+import tui
+import vaxis
 
 struct ListActionsOptions {
 mut:
@@ -25,21 +27,27 @@ pub fn run_list_actions(args []string) !int {
 	return 0
 }
 
-// list_colors_output implements the deterministic plain output of
-// `+list-colors`. Pretty terminal rendering is only presentation; the source
-// data and ordering are identical to Ghostty's X.Org rgb.txt-backed command.
 struct ListColorsOptions {
 mut:
 	plain bool
 }
 
+// list_colors_output is the deterministic plain form used for pipes and
+// tests. run_list_colors selects the translated TTY renderer when appropriate.
 pub fn list_colors_output(args []string) !string {
-	opts := parse_action_options[ListColorsOptions](args)!
-	_ = opts.plain
+	_ := parse_action_options[ListColorsOptions](args)!
+	return list_colors_plain(sorted_color_entries())
+}
+
+fn sorted_color_entries() []terminal.NamedRGB {
 	mut entries := terminal.x11_color_entries()
 	entries.sort_with_compare(fn (a &terminal.NamedRGB, b &terminal.NamedRGB) int {
 		return ascii.order_ignore_case(a.name, b.name)
 	})
+	return entries
+}
+
+fn list_colors_plain(entries []terminal.NamedRGB) string {
 	mut lines := []string{cap: entries.len}
 	for entry in entries {
 		lines << '${entry.name} = #${entry.rgb.r:02x}${entry.rgb.g:02x}${entry.rgb.b:02x}'
@@ -48,13 +56,20 @@ pub fn list_colors_output(args []string) !string {
 }
 
 pub fn run_list_colors(args []string) !int {
-	print(list_colors_output(args)!)
+	opts := parse_action_options[ListColorsOptions](args)!
+	entries := sorted_color_entries()
+	if tui.can_pretty_print && !opts.plain && os.is_atty(1) > 0 {
+		print(list_colors_pretty_output(entries, int(vaxis.terminal_size().cols)))
+	} else {
+		print(list_colors_plain(entries))
+	}
 	return 0
 }
 
 // list_keybinds_output serializes either the default or loaded binding set in
-// valid Ghostty configuration syntax. `--docs` is accepted for parity; the
-// pinned Ghostty option documents that it currently has no effect.
+// valid Ghostty configuration syntax. The source's docs lookup currently adds
+// only its documented separator lines; run_list_keybinds also selects the TTY
+// renderer when appropriate.
 struct ListKeybindsOptions {
 mut:
 	default_ bool
@@ -65,17 +80,26 @@ mut:
 pub fn list_keybinds_output(args []string) !string {
 	opts := parse_action_options[ListKeybindsOptions](args)!
 	_ = opts.docs
-	_ = opts.plain
-	config := if opts.default_ {
+	config := load_keybind_config(opts)!
+	return output_lines(config.keybind.format_entry_docs(opts.docs))
+}
+
+fn load_keybind_config(opts ListKeybindsOptions) !configpkg.Config {
+	return if opts.default_ {
 		configpkg.Config.default_config()
 	} else {
 		configpkg.Config.load_args([])!
 	}
-	return output_lines(config.keybind.format_entries())
 }
 
 pub fn run_list_keybinds(args []string) !int {
-	print(list_keybinds_output(args)!)
+	opts := parse_action_options[ListKeybindsOptions](args)!
+	config := load_keybind_config(opts)!
+	if tui.can_pretty_print && !opts.plain && os.is_atty(1) > 0 {
+		print(list_keybinds_pretty_output(config.keybind))
+	} else {
+		print(output_lines(config.keybind.format_entry_docs(opts.docs)))
+	}
 	return 0
 }
 
@@ -103,10 +127,10 @@ pub fn list_fonts_output(args []string) !string {
 		discovery.deinit()
 	}
 	mut iterator := discovery.discover(font.Descriptor{
-		family: opts.family
-		style: opts.style
-		bold: opts.bold
-		italic: opts.italic
+		family:    opts.family
+		style:     opts.style
+		bold:      opts.bold
+		italic:    opts.italic
 		monospace: opts.family == none
 	})!
 	defer {
@@ -120,7 +144,7 @@ pub fn list_fonts_output(args []string) !string {
 		if family.len > 0 && name.len > 0 {
 			entries << FontListEntry{
 				family: family
-				name: name
+				name:   name
 			}
 		}
 		face.deinit()
@@ -201,7 +225,7 @@ pub fn validate_config(args []string) !ValidateResult {
 		lines << diagnostic.format()
 	}
 	return ValidateResult{
-		code: if lines.len > 0 { 1 } else { 0 }
+		code:   if lines.len > 0 { 1 } else { 0 }
 		output: output_lines(lines)
 	}
 }

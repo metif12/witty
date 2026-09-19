@@ -1,5 +1,6 @@
 module cli
 
+import configpkg
 import os
 
 fn test_list_actions_lists_keybinding_actions() {
@@ -56,6 +57,30 @@ fn test_list_colors_rejects_unknown_options() {
 	assert false
 }
 
+fn test_list_colors_pretty_uses_source_column_order_and_truecolor() {
+	entries := sorted_color_entries()
+	output := list_colors_pretty_output(entries, 120)
+	assert output.starts_with(unicode_mode_set)
+	assert output.ends_with(unicode_mode_reset)
+	assert output.contains('alice blue')
+	assert output.contains('\x1b[38;2;240;248;255m#f0f8ff\x1b[0m')
+	assert output.contains('\x1b[38;2;240;248;255;48;2;240;248;255m  \x1b[0m')
+	// The source fills columns top-to-bottom, so the second visible entry in
+	// the first row is one `step` into the sorted input rather than index 1.
+	mut max_name_len := 0
+	for entry in entries {
+		if entry.name.len > max_name_len {
+			max_name_len = entry.name.len
+		}
+	}
+	columns := (120 + 2) / (max_name_len + 15)
+	step := entries.len / columns + 1
+	first_row := output.all_after(unicode_mode_set).all_before('\n')
+	first_index := first_row.index(entries[0].name) or { -1 }
+	second_index := first_row.index(entries[step].name) or { -1 }
+	assert second_index > first_index
+}
+
 fn test_list_keybinds_default_is_valid_config_syntax() {
 	output := list_keybinds_output(['--default', '--plain'])!
 	assert output.len > 0
@@ -63,11 +88,44 @@ fn test_list_keybinds_default_is_valid_config_syntax() {
 	assert output.contains('=new_window\n')
 }
 
+fn test_list_keybinds_pretty_flattens_sorts_and_styles_bindings() {
+	mut keybinds := configpkg.Keybinds{}
+	keybinds.parse_cli('ctrl+a>shift+b=new_window')!
+	keybinds.parse_cli('ctrl+c=copy_to_clipboard')!
+	keybinds.parse_cli('ctrl+d=text:hello')!
+	keybinds.parse_cli('chain=copy_title_to_clipboard')!
+	keybinds.parse_cli('tools/alt+x=paste_from_clipboard')!
+
+	output := list_keybinds_pretty_output(keybinds)
+	assert output.starts_with(unicode_mode_set)
+	assert output.ends_with(unicode_mode_reset)
+	assert output.contains('\x1b[38;5;2mctrl \x1b[0m + a')
+	assert output.contains('\x1b[38;5;6;1m  >  \x1b[0m')
+	assert output.contains('\x1b[38;5;4mshift\x1b[0m + b')
+	assert output.contains('text\x1b[2m:\x1b[0m\x1b[38;5;5mhello\x1b[0m')
+	assert output.contains('\x1b[2m, \x1b[0mcopy_title_to_clipboard')
+	assert output.contains('\x1b[38;5;8mtools\x1b[0m\x1b[38;5;8m/\x1b[0m')
+	chord_index := output.index('new_window') or { -1 }
+	single_index := output.index('copy_to_clipboard') or { -1 }
+	table_index := output.index('tools') or { -1 }
+	assert chord_index < single_index
+	assert single_index < table_index
+}
+
 fn test_format_font_list_sorts_unfiltered_and_preserves_filtered_priority() {
 	entries := [
-		FontListEntry{ family: 'Zulu', name: 'Zulu Bold' },
-		FontListEntry{ family: 'Alpha', name: 'Alpha Italic' },
-		FontListEntry{ family: 'Alpha', name: 'Alpha Regular' },
+		FontListEntry{
+			family: 'Zulu'
+			name:   'Zulu Bold'
+		},
+		FontListEntry{
+			family: 'Alpha'
+			name:   'Alpha Italic'
+		},
+		FontListEntry{
+			family: 'Alpha'
+			name:   'Alpha Regular'
+		},
 	]
 	assert format_font_list(entries, true) == 'Alpha\n  Alpha Italic\n  Alpha Regular\n\nZulu\n  Zulu Bold\n\n'
 	assert format_font_list(entries, false) == 'Zulu\n  Zulu Bold\n\nAlpha\n  Alpha Italic\n  Alpha Regular\n\n'

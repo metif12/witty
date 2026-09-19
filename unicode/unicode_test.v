@@ -42,6 +42,7 @@ fn test_all_generated_property_values() {
 		properties_hash = (properties_hash ^ u64(props.value)) * u64(1099511628211)
 
 		symbol := is_symbol(cp)
+		assert symbol == is_symbol_uucode(cp), 'symbol predicate mismatch at U+${cp:06X}'
 		symbol_byte := if symbol { u8(1) } else { u8(0) }
 		symbols_hash = (symbols_hash ^ u64(symbol_byte)) * u64(1099511628211)
 		if symbol {
@@ -59,6 +60,10 @@ fn test_exact_generated_symbol_table() {
 	assert is_symbol(0x1f600)
 	assert !is_symbol(u32(`A`))
 	assert !is_symbol(0x110000)
+	assert is_symbol_uucode(0xe000)
+	assert is_symbol_uucode(0x10fffd)
+	assert !is_symbol_uucode(0x10fffe)
+	assert !is_symbol_uucode(0x110000)
 }
 
 fn test_grapheme_break_emoji_modifier_tailoring() {

@@ -76,8 +76,8 @@ enum ScreenCloneMode as u8 {
 struct ScreenCloneOptions {
 mut:
 	mode          ScreenCloneMode = .clone
-	terminal_rows u16 = 80
-	terminal_cols u16 = 120
+	terminal_rows u16             = 80
+	terminal_cols u16             = 120
 	data          ?string
 }
 
@@ -104,14 +104,14 @@ fn data_file(path ?string) !DataFile {
 	value := path or { return DataFile{} }
 	if value == '-' {
 		return DataFile{
-			file: os.stdin()
+			file:    os.stdin()
 			present: true
 		}
 	}
 	return DataFile{
-		file: os.open(value)!
+		file:    os.open(value)!
 		present: true
-		owned: true
+		owned:   true
 	}
 }
 
@@ -268,13 +268,20 @@ fn run_codepoint_width(args []string) ! {
 			}
 			if cp := result.codepoint {
 				value := match opts.mode {
-					.wcwidth { C.witty_benchmark_wcwidth(cp) }
-					.simd { int(simd.codepoint_width(cp)) }
+					.wcwidth {
+						C.witty_benchmark_wcwidth(cp)
+					}
+					.simd {
+						int(simd.codepoint_width(cp))
+					}
 					.table {
 						if cp <= 0xff { 1 } else { int(unicode.get(cp).width()) }
 					}
-					.noop { 0 }
+					.noop {
+						0
+					}
 				}
+
 				C.witty_benchmark_do_not_optimize_u64(u64(value))
 			}
 		}
@@ -342,10 +349,11 @@ fn run_is_symbol(args []string) ! {
 				return error('invalid UTF-8 stream')
 			}
 			if cp := result.codepoint {
-				// The translated generated table is the materialized result of
-				// Ghostty's pinned uucode is_symbol configuration, so both modes
-				// have the same exact property result in a non-uucode V build.
-				value := unicode.is_symbol(cp)
+				value := match opts.mode {
+					.uucode { unicode.is_symbol_uucode(cp) }
+					.table { unicode.is_symbol(cp) }
+				}
+
 				C.witty_benchmark_do_not_optimize_u64(u64(value))
 			}
 		}
@@ -468,7 +476,8 @@ fn run_screen_clone(args []string) ! {
 		}
 		.clone {
 			for _ in 0 .. 1000 {
-				copy := term.screens.active.clone(terminal.Point.new(.viewport, terminal.Coordinate{}), ?terminal.Point(none))!
+				copy := term.screens.active.clone(terminal.Point.new(.viewport, terminal.Coordinate{}),
+					?terminal.Point(none))!
 				C.witty_benchmark_do_not_optimize_ptr(&copy)
 			}
 		}

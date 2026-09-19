@@ -89,6 +89,7 @@ fn test_data_benchmarks_process_input() {
 	run_cli('grapheme-break', '--data=${quoted}')!
 	run_cli('terminal-parser', '--data=${quoted}')!
 	run_cli('terminal-stream', '--terminal-rows=5 --terminal-cols=10 --data=${quoted}')!
+	run_cli('is-symbol', '--mode=uucode --data=${quoted}')!
 	run_cli('is-symbol', '--mode=table --data=${quoted}')!
 	run_cli('screen-clone', '--mode=noop --terminal-rows=2 --terminal-cols=3 --data=${quoted}')!
 	run_cli('screen-clone', '--mode=clone --terminal-rows=2 --terminal-cols=3')!
@@ -111,14 +112,10 @@ fn test_osc_parser_benchmark_processes_length_prefixed_input() {
 
 fn test_invalid_benchmark_input_fails() {
 	mut failed := false
-	run_cli('unknown', '') or {
-		failed = true
-	}
+	run_cli('unknown', '') or { failed = true }
 	assert failed
 
 	failed = false
-	run_cli('codepoint-width', '--mode=unknown') or {
-		failed = true
-	}
+	run_cli('codepoint-width', '--mode=unknown') or { failed = true }
 	assert failed
 }

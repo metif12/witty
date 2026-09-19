@@ -105,3 +105,28 @@ pub fn is_symbol(cp u32) bool {
 	stage3 := table_u16(symbols_stage2_offset, u32(stage2) + low)
 	return table_data[symbols_stage3_offset + int(stage3)] != 0
 }
+
+// is_symbol_uucode translates Ghostty's pinned uucode_config.computeIsSymbol
+// predicate directly. This deliberately does not read the generated symbol
+// table: the benchmark compares this source predicate with the materialized
+// three-stage lookup above.
+@[inline]
+pub fn is_symbol_uucode(cp u32) bool {
+	if cp > 0x10ffff {
+		return false
+	}
+	// Unicode General_Category=Co (private use).
+	if (cp >= 0xe000 && cp <= 0xf8ff) || (cp >= 0xf0000 && cp <= 0xffffd)
+		|| (cp >= 0x100000 && cp <= 0x10fffd) {
+		return true
+	}
+	// The eight blocks selected by Ghostty's uucode build configuration.
+	return (cp >= 0x2190 && cp <= 0x21ff) // Arrows
+	 || (cp >= 0x2460 && cp <= 0x24ff) // Enclosed Alphanumerics
+	 || (cp >= 0x2600 && cp <= 0x26ff) // Miscellaneous Symbols
+	 || (cp >= 0x2700 && cp <= 0x27bf) // Dingbats
+	 || (cp >= 0x1f100 && cp <= 0x1f1ff) // Enclosed Alphanumeric Supplement
+	 || (cp >= 0x1f300 && cp <= 0x1f5ff) // Miscellaneous Symbols and Pictographs
+	 || (cp >= 0x1f600 && cp <= 0x1f64f) // Emoticons
+	 || (cp >= 0x1f680 && cp <= 0x1f6ff) // Transport and Map Symbols
+}
