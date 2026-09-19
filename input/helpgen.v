@@ -80,6 +80,12 @@ fn binding_action_help_entries() []HelpEntry {
 	for line in binding_action_help_data.split_into_lines() {
 		if line.starts_with('@@') {
 			if name.len > 0 {
+				// HelpStrings represents a trailing blank doc-comment line as a
+				// trailing newline. The source generator explicitly skips the
+				// final empty split field before buffering documentation.
+				if docs.len > 0 && docs.last().len == 0 {
+					docs.delete_last()
+				}
 				entries << HelpEntry{
 					name: name
 					docs: docs
@@ -92,6 +98,9 @@ fn binding_action_help_entries() []HelpEntry {
 		docs << line
 	}
 	if name.len > 0 && name != '__end' {
+		if docs.len > 0 && docs.last().len == 0 {
+			docs.delete_last()
+		}
 		entries << HelpEntry{
 			name: name
 			docs: docs

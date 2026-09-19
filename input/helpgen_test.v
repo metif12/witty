@@ -17,7 +17,7 @@ fn test_generate_plaintext_docs() {
 	assert help.starts_with('\nignore:\n  Ignore this key combination.\n  \n  Ghostty will not process')
 	assert help.contains('new_window:\n  Open a new window.\n  \n')
 	assert help.contains('toggle_readonly:\n  Toggle read-only mode for the current surface.\n  \n')
-	assert help.ends_with('    Crash on the render thread for the focused surface.\n  \n')
+	assert help.ends_with('    Crash on the render thread for the focused surface.\n')
 }
 
 fn test_generate_markdown() {
