@@ -187,33 +187,33 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			self.terminal.invoke_charset(event.payload.charset_bank, event.payload.charset_slot, event.payload.charset_locking)
 		}
 		.cursor_up {
-			self.terminal.cursor_up(int(event.payload.num))
+			self.terminal.cursor_up(event.payload.num)
 		}
 		.cursor_down {
-			self.terminal.cursor_down(int(event.payload.num))
+			self.terminal.cursor_down(event.payload.num)
 		}
 		.cursor_left {
-			self.terminal.cursor_left(int(event.payload.num))
+			self.terminal.cursor_left(event.payload.num)
 		}
 		.cursor_right {
-			self.terminal.cursor_right(int(event.payload.num))
+			self.terminal.cursor_right(event.payload.num)
 		}
 		.cursor_pos {
-			self.terminal.set_cursor_pos(int(event.payload.num), int(event.payload.num2))
+			self.terminal.set_cursor_pos(event.payload.num, event.payload.num2)
 		}
 		.cursor_col {
-			self.terminal.set_cursor_pos(int(self.terminal.screens.active.cursor.y) + 1, int(event.payload.num))
+			self.terminal.set_cursor_pos(usize(self.terminal.screens.active.cursor.y) + 1, event.payload.num)
 		}
 		.cursor_row {
-			self.terminal.set_cursor_pos(int(event.payload.num), int(self.terminal.screens.active.cursor.x) + 1)
+			self.terminal.set_cursor_pos(event.payload.num, usize(self.terminal.screens.active.cursor.x) + 1)
 		}
 		.cursor_col_relative {
-			col := int(self.terminal.screens.active.cursor.x) + 1 + int(event.payload.num)
-			self.terminal.set_cursor_pos(int(self.terminal.screens.active.cursor.y) + 1, col)
+			col := usize(self.terminal.screens.active.cursor.x) + 1 + event.payload.num
+			self.terminal.set_cursor_pos(usize(self.terminal.screens.active.cursor.y) + 1, col)
 		}
 		.cursor_row_relative {
-			row := int(self.terminal.screens.active.cursor.y) + 1 + int(event.payload.num)
-			self.terminal.set_cursor_pos(row, int(self.terminal.screens.active.cursor.x) + 1)
+			row := usize(self.terminal.screens.active.cursor.y) + 1 + event.payload.num
+			self.terminal.set_cursor_pos(row, usize(self.terminal.screens.active.cursor.x) + 1)
 		}
 		.cursor_style {
 			self.set_cursor_style(event.payload.cursor_style) or {}
@@ -314,10 +314,10 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) {
 			self.request_mode_unknown(event.payload.raw_mode, event.payload.raw_ansi)
 		}
 		.top_and_bottom_margin {
-			self.terminal.set_top_and_bottom_margin(int(event.payload.num), int(event.payload.num2))
+			self.terminal.set_top_and_bottom_margin(event.payload.num, event.payload.num2)
 		}
 		.left_and_right_margin {
-			self.terminal.set_left_and_right_margin(int(event.payload.num), int(event.payload.num2))
+			self.terminal.set_left_and_right_margin(event.payload.num, event.payload.num2)
 		}
 		.left_and_right_margin_ambiguous {
 			if self.terminal.modes.get(.enable_left_and_right_margin) {

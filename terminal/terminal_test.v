@@ -366,9 +366,9 @@ fn test_horizontal_tabs_starting_on_tabstop() {
 	}
 	defer { t.deinit() }
 
-	t.set_cursor_pos(int(t.screens.active.cursor.y), 9)
+	t.set_cursor_pos(usize(t.screens.active.cursor.y), 9)
 	t.print(u32(`X`)) or { assert false }
-	t.set_cursor_pos(int(t.screens.active.cursor.y), 9)
+	t.set_cursor_pos(usize(t.screens.active.cursor.y), 9)
 	t.horizontal_tab()
 	t.print(u32(`A`)) or { assert false }
 
@@ -388,7 +388,7 @@ fn test_horizontal_tabs_with_right_margin() {
 
 	t.scrolling_region.left = 2
 	t.scrolling_region.right = 5
-	t.set_cursor_pos(int(t.screens.active.cursor.y), 1)
+	t.set_cursor_pos(usize(t.screens.active.cursor.y), 1)
 	t.print(u32(`X`)) or { assert false }
 	t.horizontal_tab()
 	t.print(u32(`A`)) or { assert false }
@@ -408,7 +408,7 @@ fn test_horizontal_tabs_back() {
 	defer { t.deinit() }
 
 	// Edge of screen
-	t.set_cursor_pos(int(t.screens.active.cursor.y), 20)
+	t.set_cursor_pos(usize(t.screens.active.cursor.y), 20)
 
 	// HT back
 	t.horizontal_tab_back()
@@ -432,9 +432,9 @@ fn test_horizontal_tabs_back_starting_on_tabstop() {
 	}
 	defer { t.deinit() }
 
-	t.set_cursor_pos(int(t.screens.active.cursor.y), 9)
+	t.set_cursor_pos(usize(t.screens.active.cursor.y), 9)
 	t.print(u32(`X`)) or { assert false }
-	t.set_cursor_pos(int(t.screens.active.cursor.y), 9)
+	t.set_cursor_pos(usize(t.screens.active.cursor.y), 9)
 	t.horizontal_tab_back()
 	t.print(u32(`A`)) or { assert false }
 
@@ -1557,6 +1557,31 @@ fn test_cursor_left_unsets_pending_wrap_state() {
 	// In no-wrap mode (default for cursor_left without reverse wrap),
 	// pending_wrap is cleared and cursor moves left by 1 from x=4
 	assert t.screens.active.cursor.x == 3
+}
+
+fn test_cursor_operations_clamp_pointer_width_inputs_before_narrowing() {
+	mut t := create_test_terminal(5, 5) or {
+		assert false
+		return
+	}
+	defer { t.deinit() }
+
+	large := usize(65_536)
+	t.set_cursor_pos(3, 3)
+	t.cursor_up(large)
+	assert t.screens.active.cursor.y == 0
+	t.cursor_down(large)
+	assert t.screens.active.cursor.y == 4
+	t.cursor_right(large)
+	assert t.screens.active.cursor.x == 4
+	t.cursor_left(large)
+	assert t.screens.active.cursor.x == 0
+
+	// Positioning accepts the source's full usize domain and clamps before
+	// converting to the terminal's compact row/column representation.
+	t.set_cursor_pos(~usize(0), ~usize(0))
+	assert t.screens.active.cursor.x == 4
+	assert t.screens.active.cursor.y == 4
 }
 
 // ============================================================
@@ -4004,7 +4029,7 @@ fn test_set_cursor_pos_original() {
 	assert t.screens.active.cursor.y == 79
 
 	// Set the scroll region
-	t.set_top_and_bottom_margin(10, int(t.rows))
+	t.set_top_and_bottom_margin(10, usize(t.rows))
 	t.set_cursor_pos(0, 0)
 	assert t.screens.active.cursor.x == 0
 	assert t.screens.active.cursor.y == 9
@@ -4234,7 +4259,7 @@ fn test_cursor_left_extended_reverse_wrap_bottom_wraparound() {
 	t.carriage_return()
 	t.linefeed() or { assert false }
 	t.print(u32(`1`)) or { assert false }
-	t.cursor_left(1 + int(t.cols) + 1)
+	t.cursor_left(1 + usize(t.cols) + 1)
 	t.print(u32(`X`)) or { assert false }
 
 	str := t.plain_string() or {
@@ -4259,7 +4284,7 @@ fn test_cursor_left_extended_reverse_wrap_is_priority_if_both_set() {
 	t.carriage_return()
 	t.linefeed() or { assert false }
 	t.print(u32(`1`)) or { assert false }
-	t.cursor_left(1 + int(t.cols) + 1)
+	t.cursor_left(1 + usize(t.cols) + 1)
 	t.print(u32(`X`)) or { assert false }
 
 	str := t.plain_string() or {
@@ -6179,7 +6204,7 @@ fn test_delete_chars_split_wide_character_tail() {
 	}
 	defer { t.deinit() }
 
-	t.set_cursor_pos(1, int(t.cols) - 1)
+	t.set_cursor_pos(1, usize(t.cols) - 1)
 	t.print(0x6A4B) or { assert false }
 	t.carriage_return()
 	t.delete_chars(usize(t.cols) - 1)

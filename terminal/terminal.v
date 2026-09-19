@@ -2548,7 +2548,7 @@ pub fn (mut self Terminal) backspace() {
 // Move the cursor up amount lines. If amount is greater than the maximum
 // move distance then it is internally adjusted to the maximum. If amount is
 // 0, adjust it to 1.
-pub fn (mut self Terminal) cursor_up(count_req int) {
+pub fn (mut self Terminal) cursor_up(count_req usize) {
 	// Always resets pending wrap
 	self.screens.active.cursor.pending_wrap = false
 
@@ -2558,8 +2558,8 @@ pub fn (mut self Terminal) cursor_up(count_req int) {
 	} else {
 		self.screens.active.cursor.y
 	}
-	count_clamped := if count_req < 1 { u16(1) } else { u16(count_req) }
-	count := if max < count_clamped { max } else { count_clamped }
+	requested := if count_req < 1 { usize(1) } else { count_req }
+	count := if usize(max) < requested { max } else { u16(requested) }
 
 	if count > 0 {
 		self.screens.active.cursor_up(u32(count))
@@ -2569,7 +2569,7 @@ pub fn (mut self Terminal) cursor_up(count_req int) {
 // Move the cursor down amount lines. If amount is greater than the maximum
 // move distance then it is internally adjusted to the maximum. This sequence
 // will not scroll the screen or scroll region. If amount is 0, adjust it to 1.
-pub fn (mut self Terminal) cursor_down(count_req int) {
+pub fn (mut self Terminal) cursor_down(count_req usize) {
 	// Always resets pending wrap
 	self.screens.active.cursor.pending_wrap = false
 
@@ -2579,8 +2579,8 @@ pub fn (mut self Terminal) cursor_down(count_req int) {
 	} else {
 		u16(self.rows - self.screens.active.cursor.y - 1)
 	}
-	count_clamped := if count_req < 1 { u16(1) } else { u16(count_req) }
-	count := if max < count_clamped { max } else { count_clamped }
+	requested := if count_req < 1 { usize(1) } else { count_req }
+	count := if usize(max) < requested { max } else { u16(requested) }
 
 	if count > 0 {
 		self.screens.active.cursor_down(u32(count))
@@ -2591,7 +2591,7 @@ pub fn (mut self Terminal) cursor_down(count_req int) {
 // maximum move distance then it is internally adjusted to the maximum.
 // This sequence will not scroll the screen or scroll region. If amount is
 // 0, adjust it to 1.
-pub fn (mut self Terminal) cursor_right(count_req int) {
+pub fn (mut self Terminal) cursor_right(count_req usize) {
 	// Always resets pending wrap
 	self.screens.active.cursor.pending_wrap = false
 
@@ -2601,8 +2601,8 @@ pub fn (mut self Terminal) cursor_right(count_req int) {
 	} else {
 		u16(self.cols - self.screens.active.cursor.x - 1)
 	}
-	count_clamped := if count_req < 1 { u16(1) } else { u16(count_req) }
-	count := if max < count_clamped { max } else { count_clamped }
+	requested := if count_req < 1 { usize(1) } else { count_req }
+	count := if usize(max) < requested { max } else { u16(requested) }
 
 	if count > 0 {
 		self.screens.active.cursor_right(u32(count))
@@ -2610,7 +2610,7 @@ pub fn (mut self Terminal) cursor_right(count_req int) {
 }
 
 // Move the cursor to the left amount cells. If amount is 0, adjust it to 1.
-pub fn (mut self Terminal) cursor_left(count_req int) {
+pub fn (mut self Terminal) cursor_left(count_req usize) {
 	// Wrapping behavior depends on various terminal modes
 	wrap_mode := if !self.modes.get(.wraparound) {
 		WrapMode.none
@@ -2622,12 +2622,12 @@ pub fn (mut self Terminal) cursor_left(count_req int) {
 		WrapMode.none
 	}
 
-	mut count := if count_req < 1 { 1 } else { count_req }
+	mut count := if count_req < 1 { usize(1) } else { count_req }
 
 	// If we are in no wrap mode, then we move the cursor left and exit
 	// since this is the fastest and most typical path.
 	if wrap_mode == .none {
-		move_amt := if u16(count) < self.screens.active.cursor.x {
+		move_amt := if count < usize(self.screens.active.cursor.x) {
 			u32(count)
 		} else {
 			u32(self.screens.active.cursor.x)
@@ -2678,7 +2678,7 @@ pub fn (mut self Terminal) cursor_left(count_req int) {
 
 	for {
 		// We can move at most to the left margin.
-		max := int(self.screens.active.cursor.x) - int(left_margin)
+		max := usize(self.screens.active.cursor.x - left_margin)
 
 		// We want to move at most the number of columns we have left
 		// or our remaining count.
@@ -3019,7 +3019,7 @@ pub fn (mut self Terminal) reverse_index() {
 // If column is greater than the right-most column it is adjusted to
 // the right-most column. If row is 0, it is adjusted to 1. If row is
 // greater than the bottom-most row it is adjusted to the bottom-most row.
-pub fn (mut self Terminal) set_cursor_pos(row_req int, col_req int) {
+pub fn (mut self Terminal) set_cursor_pos(row_req usize, col_req usize) {
 	// If cursor origin mode is set the cursor row will be moved relative to
 	// the top margin row.
 	x_offset, y_offset, x_max, y_max := if self.modes.get(.origin) {
@@ -3035,12 +3035,30 @@ pub fn (mut self Terminal) set_cursor_pos(row_req int, col_req int) {
 	row := if row_req == 0 { 1 } else { row_req }
 	col := if col_req == 0 { 1 } else { col_req }
 
-	raw_x := int(col) + int(x_offset)
-	raw_y := int(row) + int(y_offset)
-	x := u16(if raw_x > int(x_max) { int(x_max) } else { raw_x }) - 1
-	y := u16(if raw_y > int(y_max) { int(y_max) } else { raw_y }) - 1
+	x_with_offset := if col > usize(x_max - x_offset) {
+		x_max
+	} else {
+		u16(col) + x_offset
+	}
+	y_with_offset := if row > usize(y_max - y_offset) {
+		y_max
+	} else {
+		u16(row) + y_offset
+	}
+	x := x_with_offset - 1
+	y := y_with_offset - 1
 
-	// Move cursor
+	// If the y is unchanged then this is fast pointer math.
+	if u32(y) == self.screens.active.cursor.y {
+		if u32(x) > self.screens.active.cursor.x {
+			self.screens.active.cursor_right(u32(x) - self.screens.active.cursor.x)
+		} else {
+			self.screens.active.cursor_left(self.screens.active.cursor.x - u32(x))
+		}
+		return
+	}
+
+	// If everything changed, perform an absolute change.
 	self.screens.active.cursor_absolute(u32(x), u32(y))
 }
 
@@ -3049,10 +3067,10 @@ pub fn (mut self Terminal) set_cursor_pos(row_req int, col_req int) {
 // ============================================================
 
 // Set Top and Bottom Margins. Top and bottom are 1-indexed.
-pub fn (mut self Terminal) set_top_and_bottom_margin(top_req int, bottom_req int) {
-	top := if top_req < 1 { 1 } else { top_req }
-	bottom_limit := if bottom_req == 0 { int(self.rows) } else { bottom_req }
-	bottom := if bottom_limit > int(self.rows) { int(self.rows) } else { bottom_limit }
+pub fn (mut self Terminal) set_top_and_bottom_margin(top_req usize, bottom_req usize) {
+	top := if top_req < 1 { usize(1) } else { top_req }
+	bottom_limit := if bottom_req == 0 { usize(self.rows) } else { bottom_req }
+	bottom := if bottom_limit > usize(self.rows) { usize(self.rows) } else { bottom_limit }
 	if top >= bottom {
 		return
 	}
@@ -3062,15 +3080,15 @@ pub fn (mut self Terminal) set_top_and_bottom_margin(top_req int, bottom_req int
 }
 
 // DECSLRM - Set Left and Right Margin
-pub fn (mut self Terminal) set_left_and_right_margin(left_req int, right_req int) {
+pub fn (mut self Terminal) set_left_and_right_margin(left_req usize, right_req usize) {
 	// We must have this mode enabled to do anything
 	if !self.modes.get(.enable_left_and_right_margin) {
 		return
 	}
 
-	left := if left_req < 1 { 1 } else { left_req }
-	right_limit := if right_req == 0 { int(self.cols) } else { right_req }
-	right := if right_limit > int(self.cols) { int(self.cols) } else { right_limit }
+	left := if left_req < 1 { usize(1) } else { left_req }
+	right_limit := if right_req == 0 { usize(self.cols) } else { right_req }
+	right := if right_limit > usize(self.cols) { usize(self.cols) } else { right_limit }
 	if left >= right {
 		return
 	}
