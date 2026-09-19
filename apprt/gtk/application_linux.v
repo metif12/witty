@@ -1271,12 +1271,19 @@ fn application_action_new_window_cb(action GSimpleAction, parameter GVariant, us
 }
 
 fn application_action_open_config_cb(action GSimpleAction, parameter GVariant, user_data voidptr) {
-	_ = action
-	_ = parameter
 	if isnil(user_data) {
 		return
 	}
-	self := unsafe { &Application(user_data) }
+	mut self := unsafe { &Application(user_data) }
+	self.action_open_config(action, parameter)
+}
+
+// action_open_config queues a request to open the configuration file. The
+// action and parameter are part of the GAction callback contract and are not
+// otherwise used by the pinned implementation.
+pub fn (mut self Application) action_open_config(action GSimpleAction, parameter GVariant) {
+	_ = action
+	_ = parameter
 	if isnil(self.core_app) {
 		return
 	}

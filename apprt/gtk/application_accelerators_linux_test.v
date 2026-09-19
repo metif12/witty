@@ -91,8 +91,10 @@ fn test_application_action_callbacks_queue_core_messages() {
 		core_app: core_app
 	}
 	application_action_new_window_cb(unsafe { nil }, unsafe { nil }, voidptr(&app))
-	application_action_open_config_cb(unsafe { nil }, unsafe { nil }, voidptr(&app))
+	app.action_open_config(unsafe { nil }, unsafe { nil })
 	assert core_app.pending_message_count() == 2
+	application_action_open_config_cb(unsafe { nil }, unsafe { nil }, voidptr(&app))
+	assert core_app.pending_message_count() == 3
 }
 
 fn test_application_dispatches_core_runtime_actions() ! {

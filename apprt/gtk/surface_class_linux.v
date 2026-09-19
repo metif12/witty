@@ -750,10 +750,10 @@ fn terminal_surface_set_property(obj voidptr, property_id u32, value voidptr, ps
 			self.set_is_split(C.g_value_get_boolean(value) != 0)
 		}
 		surface_prop_hadjustment {
-			self.set_hadjustment(GtkAdjustment(C.g_value_get_object(value)))
+			self.set_h_adjustment(GtkAdjustment(C.g_value_get_object(value)))
 		}
 		surface_prop_vadjustment {
-			self.set_vadjustment(GtkAdjustment(C.g_value_get_object(value)))
+			self.set_v_adjustment(GtkAdjustment(C.g_value_get_object(value)))
 		}
 		surface_prop_hscroll_policy {
 			self.hscroll_policy = unsafe { GtkScrollablePolicy(C.g_value_get_enum(value)) }
@@ -3271,6 +3271,11 @@ pub fn (self &SurfaceWidget) get_hadjustment() GtkAdjustment {
 	return self.hadj
 }
 
+// get_h_adjustment is the source-shaped `Surface.getHAdjustment` entry point.
+pub fn (self &SurfaceWidget) get_h_adjustment() GtkAdjustment {
+	return self.get_hadjustment()
+}
+
 // set_hadjustment sets the horizontal adjustment (reffed). Mirrors
 // `Surface.setHAdjustment`.
 pub fn (mut self SurfaceWidget) set_hadjustment(adj GtkAdjustment) {
@@ -3290,10 +3295,20 @@ pub fn (mut self SurfaceWidget) set_hadjustment(adj GtkAdjustment) {
 	self.hadj = adj
 }
 
+// set_h_adjustment is the source-shaped `Surface.setHAdjustment` entry point.
+pub fn (mut self SurfaceWidget) set_h_adjustment(adj GtkAdjustment) {
+	self.set_hadjustment(adj)
+}
+
 // get_vadjustment returns the vertical adjustment. Mirrors
 // `Surface.getVAdjustment`.
 pub fn (self &SurfaceWidget) get_vadjustment() GtkAdjustment {
 	return self.vadj
+}
+
+// get_v_adjustment is the source-shaped `Surface.getVAdjustment` entry point.
+pub fn (self &SurfaceWidget) get_v_adjustment() GtkAdjustment {
+	return self.get_vadjustment()
 }
 
 // set_vadjustment sets the vertical adjustment (reffed). Mirrors
@@ -3315,6 +3330,11 @@ pub fn (mut self SurfaceWidget) set_vadjustment(adj GtkAdjustment) {
 	object_ref(adj)
 	self.vadj = adj
 	self.update_vadjustment_signal_target()
+}
+
+// set_v_adjustment is the source-shaped `Surface.setVAdjustment` entry point.
+pub fn (mut self SurfaceWidget) set_v_adjustment(adj GtkAdjustment) {
+	self.set_vadjustment(adj)
 }
 
 fn (mut self SurfaceWidget) update_vadjustment_signal_target() {
