@@ -156,7 +156,7 @@ pub fn (sf &SpriteFace) render_glyph(mut atlas Atlas, glyph_index u32, opts Rend
 
 // default_fallback_adjustment is the size adjustment used for
 // fallback fonts discovered via font discovery.
-pub const default_fallback_adjustment = SizeAdjustment.none_
+pub const default_fallback_adjustment = SizeAdjustment.ic_width
 
 // is_emoji_presentation is generated from the Emoji_Presentation property in
 // the exact uucode/Unicode data revision pinned by the matching Ghostty

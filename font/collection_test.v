@@ -9,6 +9,7 @@ fn test_collection_tag_layouts_and_source_ordinals() {
 	assert sizeof(PresentationModeKind) == 1
 	assert [PresentationModeKind.explicit_, .default_, .any].map(u8(it)) == [u8(0), 1, 2]
 	assert sizeof(PresentationMode) == 2
+	assert default_fallback_adjustment == .ic_width
 }
 
 // Tests for Collection (translated from ghostty/src/font/Collection.zig).
