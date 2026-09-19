@@ -754,6 +754,8 @@ import file_type
 import highlight
 import stbi
 import macos
+import log
+import math
 import mathutil
 import os
 import sync
@@ -2689,7 +2691,9 @@ fn (mut self Renderer) rebuild_cells(preedit ?RenderPreedit, cursor_style_ ?Styl
 				}, terminal.ViewportPoint{
 					x: x
 					y: range.y
-				}, state.colors.background, state.colors.foreground) or {}
+				}, state.colors.background, state.colors.foreground) or {
+					log.warn('error building preedit cell, will be invalid x=${x} y=${range.y}, err=${err}')
+				}
 				x += if cp.wide { u16(2) } else { u16(1) }
 			}
 		}
@@ -3256,24 +3260,38 @@ fn (mut self Renderer) add_cursor(cursor_state &terminal.RenderCursor, cursor_st
 	alpha := if !self.focused {
 		u8(255)
 	} else {
-		u8(255 * self.config.cursor_opacity)
+		u8(math.ceil(255 * self.config.cursor_opacity))
 	}
 
-	// Map cursor style to sprite
-	sprite := match cursor_style {
-		.block { font.Sprite.cursor_rect }
-		.block_hollow { font.Sprite.cursor_hollow_rect }
-		.bar { font.Sprite.cursor_bar }
-		.underline { font.Sprite.cursor_underline }
-		.lock { font.Sprite.cursor_rect }
+	render := if cursor_style == .lock {
+		value := self.font_grid.render_codepoint(0xf023, .regular, .text, font.RenderOptions{
+			cell_width: if wide { u32(2) } else { u32(1) }
+			grid_metrics: self.grid_metrics
+		}) or {
+			log.warn('error rendering cursor glyph err=${err}')
+			return
+		}
+		if !value.has_value {
+			log.warn('failed to find lock symbol for cursor codepoint=0xF023')
+			return
+		}
+		value.render
+	} else {
+		sprite := match cursor_style {
+			.block { font.Sprite.cursor_rect }
+			.block_hollow { font.Sprite.cursor_hollow_rect }
+			.bar { font.Sprite.cursor_bar }
+			.underline { font.Sprite.cursor_underline }
+			.lock { panic('unreachable lock cursor') }
+		}
+		self.font_grid.render_glyph(font.Index.init_special(.sprite), u32(sprite), font.RenderOptions{
+			cell_width: if wide { u32(2) } else { u32(1) }
+			grid_metrics: self.grid_metrics
+		}) or {
+			log.warn('error rendering cursor glyph err=${err}')
+			return
+		}
 	}
-
-	// fallback for lock
-
-	render := self.font_grid.render_glyph(font.Index.init_special(.sprite), u32(sprite), font.RenderOptions{
-		cell_width:   if wide { u32(2) } else { u32(1) }
-		grid_metrics: self.grid_metrics
-	}) or { return }
 
 	self.cells.set_cursor(CellText{
 		atlas:      .grayscale
@@ -3288,9 +3306,17 @@ fn (mut self Renderer) add_cursor(cursor_state &terminal.RenderCursor, cursor_st
 
 // Add a preedit (IME composition) cell.
 fn (mut self Renderer) add_preedit_cell(cp PreeditCodepoint, coord terminal.ViewportPoint, screen_bg terminal.RGB, screen_fg terminal.RGB) ! {
-	render := self.font_grid.render_codepoint(cp.codepoint, .regular, .text, font.RenderOptions{
+	value := self.font_grid.render_codepoint(cp.codepoint, .regular, .text, font.RenderOptions{
 		grid_metrics: self.grid_metrics
-	}) or { return }
+	}) or {
+		log.warn('error rendering preedit glyph err=${err}')
+		return
+	}
+	if !value.has_value {
+		log.warn('failed to find font for preedit codepoint=${cp.codepoint:X}')
+		return
+	}
+	render := value.render
 
 	// Add our opaque background cell
 	self.cells.set_bg(coord.y, coord.x, CellBg([screen_bg.r, screen_bg.g, screen_bg.b, u8(255)]!))

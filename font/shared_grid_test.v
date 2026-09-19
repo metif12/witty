@@ -69,6 +69,72 @@ fn test_shared_grid_render_glyph_cache() {
 	assert grid.glyphs.len == count
 }
 
+fn test_shared_grid_render_codepoint() {
+	mut grid := make_grid('normal') or { panic(err) }
+	defer { grid.deinit() }
+	value := grid.render_codepoint(u32(`A`), .regular, none, RenderOptions{
+		grid_metrics: grid.metrics
+	}) or { panic(err) }
+	assert value.has_value
+	assert value.render.glyph.width > 0
+	missing := grid.render_codepoint(0x10ffff, .regular, none, RenderOptions{
+		grid_metrics: grid.metrics
+	}) or { panic(err) }
+	assert !missing.has_value
+}
+
+fn test_shared_grid_render_glyph_tripwire_rolls_back_cache() {
+	mut grid := make_grid('normal') or { panic(err) }
+	defer { grid.deinit() }
+	value := grid.get_index(u32(`A`), .regular, none) or { panic(err) }
+	face := grid.resolver.collection.get_face(value.index) or { panic(err) }
+	glyph_index := face.glyph_index(u32(`A`)) or { panic('missing A') }
+	opts := RenderOptions{ grid_metrics: grid.metrics }
+	key := GlyphKey{ value.index, glyph_index, opts }
+	hash := key.hash_key()
+	assert glyph_cache_get(grid.glyphs, hash, key) == none
+
+	mut tw := shared_grid_render_glyph_tripwire()
+	defer { tw.end(.reset) or {} }
+	tw.error_always(.get_presentation, error('tripwire render presentation'))
+	grid.render_glyph(value.index, glyph_index, opts) or {
+		assert err.msg() == 'tripwire render presentation'
+		assert glyph_cache_get(grid.glyphs, hash, key) == none
+		return
+	}
+	assert false, 'expected render tripwire failure'
+}
+
+fn test_shared_grid_init_tripwires_cleanup() {
+	for point in [SharedGridInitFailPoint.codepoints_capacity, .glyphs_capacity, .reload_metrics] {
+		mut lib := Library.init() or { panic(err) }
+		mut c := Collection.init()
+		c.load_options = LoadOptions{
+			library: lib
+			size: DesiredSize{ points: 12, xdpi: 96, ydpi: 96 }
+		}
+		load_opts := c.load_options or { panic('missing load options') }
+		c.add(Face.init_mem(load_opts.library, embedded_regular, load_opts.face_options()) or {
+			panic(err)
+		}, AddOptions{
+			style: .regular
+			size_adjustment: .none_
+		}) or { panic(err) }
+		mut resolver := CodepointResolver{ collection: c }
+
+		mut tw := shared_grid_init_tripwire()
+		tw.error_always(point, error('tripwire grid init'))
+		SharedGrid.init(resolver) or {
+			assert err.msg() == 'tripwire grid init'
+			tw.end(.reset) or { panic(err) }
+			resolver.deinit()
+			lib.deinit()
+			continue
+		}
+		assert false, 'expected init tripwire failure at ${point}'
+	}
+}
+
 fn test_shared_grid_cell_size() {
 	mut grid := make_grid('normal') or { panic(err) }
 	defer { grid.deinit() }

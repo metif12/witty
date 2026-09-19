@@ -2,6 +2,7 @@ module font
 
 import sync
 import internal_hash
+import tripwire
 
 // This structure represents the state required to render a terminal
 // grid using the font subsystem. It is "shared" because it is able to
@@ -61,6 +62,32 @@ pub mut:
 	lock &sync.RwMutex = unsafe { nil }
 }
 
+pub enum SharedGridInitFailPoint {
+	codepoints_capacity
+	glyphs_capacity
+	reload_metrics
+}
+
+pub enum SharedGridRenderGlyphFailPoint {
+	get_presentation
+}
+
+struct SharedGridTripwires {
+mut:
+	init         tripwire.TripwireModule[SharedGridInitFailPoint]
+	render_glyph tripwire.TripwireModule[SharedGridRenderGlyphFailPoint]
+}
+
+const shared_grid_tripwires = &SharedGridTripwires{}
+
+pub fn shared_grid_init_tripwire() &tripwire.TripwireModule[SharedGridInitFailPoint] {
+	return unsafe { &shared_grid_tripwires.init }
+}
+
+pub fn shared_grid_render_glyph_tripwire() &tripwire.TripwireModule[SharedGridRenderGlyphFailPoint] {
+	return unsafe { &shared_grid_tripwires.render_glyph }
+}
+
 // Initialize the grid.
 //
 // The resolver must have a collection that supports deferred loading
@@ -71,11 +98,15 @@ pub mut:
 // used with a terminal grid and therefore the sprite font is always
 // necessary for correct rendering.
 pub fn SharedGrid.init(resolver CodepointResolver) !SharedGrid {
+	mut tw := shared_grid_init_tripwire()
 	// We need to support loading options since we use the size data
 	assert resolver.collection.load_options != none
 
-	atlas_grayscale := Atlas.init(512, .grayscale)!
-	atlas_color := Atlas.init(512, .bgra)!
+	mut atlas_grayscale := Atlas.init(512, .grayscale)!
+	atlas_color := Atlas.init(512, .bgra) or {
+		atlas_grayscale.deinit()
+		return err
+	}
 
 	mut result := SharedGrid{
 		resolver: resolver
@@ -85,8 +116,31 @@ pub fn SharedGrid.init(resolver CodepointResolver) !SharedGrid {
 		lock: sync.new_rwmutex()
 	}
 
+	// These checks represent the source map-capacity allocations. V maps grow
+	// under GC and don't expose allocation errors, but the test-only tripwire
+	// retains the source failure boundaries.
+	tw.check(.codepoints_capacity) or {
+		result.atlas_grayscale.deinit()
+		result.atlas_color.deinit()
+		return err
+	}
+	tw.check(.glyphs_capacity) or {
+		result.atlas_grayscale.deinit()
+		result.atlas_color.deinit()
+		return err
+	}
+
 	// Initialize our metrics.
-	result.reload_metrics()!
+	tw.check(.reload_metrics) or {
+		result.atlas_grayscale.deinit()
+		result.atlas_color.deinit()
+		return err
+	}
+	result.reload_metrics() or {
+		result.atlas_grayscale.deinit()
+		result.atlas_color.deinit()
+		return err
+	}
 
 	return result
 }
@@ -210,16 +264,16 @@ pub fn (self &SharedGrid) has_codepoint(idx Index, cp u32, p ?Presentation) bool
 // Render a codepoint. This uses the first font index that has the codepoint
 // and matches the presentation requested. If the codepoint cannot be found
 // in any font, none is returned.
-pub fn (mut self SharedGrid) render_codepoint(cp u32, style Style, p ?Presentation, opts RenderOptions) ?RenderResult {
+pub fn (mut self SharedGrid) render_codepoint(cp u32, style Style, p ?Presentation, opts RenderOptions) !RenderValue {
 	// Note: we could optimize the below to use way less locking, but
 	// at the time of writing this codepath is only called for preedit
 	// text which is relatively rare and almost non-existent in multiple
 	// surfaces at the same time.
 
 	// Get the font that has the codepoint
-	cv := self.get_index(cp, style, p) or { return none }
+	cv := self.get_index(cp, style, p)!
 	if !cv.has_value {
-		return none
+		return RenderValue{}
 	}
 	index := cv.index
 
@@ -227,21 +281,25 @@ pub fn (mut self SharedGrid) render_codepoint(cp u32, style Style, p ?Presentati
 	self.lock.rlock()
 	face := self.resolver.collection.get_face(index) or {
 		self.lock.runlock()
-		return none
+		return err
 	}
 	glyph_index := face.glyph_index(cp) or {
 		self.lock.runlock()
-		return none
+		return RenderValue{}
 	}
 	self.lock.runlock()
 
 	// Render
-	return self.render_glyph(index, glyph_index, opts) or { return none }
+	return RenderValue{
+		has_value: true
+		render: self.render_glyph(index, glyph_index, opts)!
+	}
 }
 
 // Render a glyph index. This automatically determines the correct texture
 // atlas to use and caches the result.
 pub fn (mut self SharedGrid) render_glyph(index Index, glyph_index u32, opts RenderOptions) !RenderResult {
+	mut tw := shared_grid_render_glyph_tripwire()
 	key := GlyphKey{
 		index: index
 		glyph: glyph_index
@@ -268,6 +326,7 @@ pub fn (mut self SharedGrid) render_glyph(index Index, glyph_index u32, opts Ren
 	}
 
 	// Get the presentation to determine what atlas to use
+	tw.check(.get_presentation)!
 	p := self.resolver.get_presentation(index, glyph_index)!
 	mut atlas := match p {
 		.text { &self.atlas_grayscale }
@@ -412,6 +471,14 @@ pub struct CodepointValue {
 pub:
 	has_value bool
 	index     Index
+}
+
+// RenderValue is the V representation of Ghostty's error-union optional
+// render result. V cannot return !?RenderResult directly.
+pub struct RenderValue {
+pub:
+	has_value bool
+	render    RenderResult
 }
 
 // ============================================================
