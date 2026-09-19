@@ -636,12 +636,12 @@ pub fn (mut m Metrics) apply(mods MetricsModifierSet) {
 
 			// The cell baseline and face_y values are relative to the
 			// bottom of the cell so we add the bottom diff to them.
-			m.cell_baseline = add_float_to_int_u32(m.cell_baseline, diff_bottom)
+			add_float_to_int(mut &m.cell_baseline, diff_bottom)
 			m.face_y += diff_bottom
 
 			// These are all relative to the top of the cell.
-			m.underline_position = add_float_to_int_u32(m.underline_position, diff_top)
-			m.strikethrough_position = add_float_to_int_u32(m.strikethrough_position, diff_top)
+			add_float_to_int(mut &m.underline_position, diff_top)
+			add_float_to_int(mut &m.strikethrough_position, diff_top)
 			m.overline_position = saturating_add_i32(m.overline_position, i32(diff_top))
 		}
 	}
@@ -717,21 +717,21 @@ fn math_max_u32(a u32, b u32) u32 {
 	return if a > b { a } else { b }
 }
 
-// add_float_to_int_u32 performs saturating addition or subtraction of an f64
-// (asserted to be integer-valued) to a u32, returning the new value.
-fn add_float_to_int_u32(i u32, f f64) u32 {
-	// assert(math.floor(f) == f)
+// add_float_to_int performs saturating addition or subtraction of an f64
+// (asserted to be integer-valued) to a u32.
+fn add_float_to_int(mut value &u32, f f64) {
+	assert math.floor(f) == f
 	if f >= 0.0 {
 		add := u32(f)
-		// Saturating add.
-		if i > u32(0xFFFFFFFF) - add {
-			return u32(0xFFFFFFFF)
+		if *value > u32(0xFFFFFFFF) - add {
+			unsafe { *value = u32(0xFFFFFFFF) }
+			return
 		}
-		return i + add
+		unsafe { *value += add }
+		return
 	}
 	sub := u32(-f)
-	// Saturating subtract.
-	return if i > sub { i - sub } else { u32(0) }
+	unsafe { *value = if *value > sub { *value - sub } else { u32(0) } }
 }
 
 // saturating_add_i32 adds two i32 values, saturating at the i32 bounds.
