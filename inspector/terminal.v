@@ -12,6 +12,36 @@ mut:
 	window_first bool = true
 }
 
+// window_end closes a detached window begun by window.
+//
+// The explicit context is the V binding equivalent of Ghostty's process-wide
+// cimgui functions.
+pub fn (self &DetachableHeader) window_end(context cimgui.Context) {
+	_ = self
+	context.end_window()
+}
+
+// window begins the detached representation of this header. none means the
+// header is attached and no window was created; otherwise the returned value
+// reports whether the detached window's contents are visible.
+pub fn (mut self DetachableHeader) window(context cimgui.Context, label string) ?bool {
+	state, detached, first := context.detachable_window(label, self.detached, self.window_first,
+		self.dock)
+	self.detached = detached
+	self.window_first = first
+	if state < 0 {
+		return none
+	}
+	return state == 1
+}
+
+// header draws the attached collapsing header and updates the detach state.
+pub fn (mut self DetachableHeader) header(context cimgui.Context, label string) bool {
+	open, detached := context.detachable_header(label, self.detached)
+	self.detached = detached
+	return open
+}
+
 pub struct TerminalInfo {
 mut:
 	show_palette  bool
@@ -28,54 +58,39 @@ pub fn (mut self TerminalInfo) draw(context cimgui.Context, open bool, mut term 
 		self.draw_open(context, mut term)
 	}
 
-	mut state, mut detached, mut first := context.detachable_window('Terminal Misc', self.misc_header.detached, self.misc_header.window_first, self.misc_header.dock)
-	self.misc_header.detached = detached
-	self.misc_header.window_first = first
-	if state >= 0 {
-		if state == 1 {
+	if visible := self.misc_header.window(context, 'Terminal Misc') {
+		if visible {
 			draw_terminal_misc(context, term)
 		}
-		context.end_window()
+		self.misc_header.window_end(context)
 	}
 
-	state, detached, first = context.detachable_window('Terminal Layout', self.layout_header.detached, self.layout_header.window_first, self.layout_header.dock)
-	self.layout_header.detached = detached
-	self.layout_header.window_first = first
-	if state >= 0 {
-		if state == 1 {
+	if visible := self.layout_header.window(context, 'Terminal Layout') {
+		if visible {
 			draw_terminal_layout(context, mut term)
 		}
-		context.end_window()
+		self.layout_header.window_end(context)
 	}
 
-	state, detached, first = context.detachable_window('Terminal Mouse', self.mouse_header.detached, self.mouse_header.window_first, self.mouse_header.dock)
-	self.mouse_header.detached = detached
-	self.mouse_header.window_first = first
-	if state >= 0 {
-		if state == 1 {
+	if visible := self.mouse_header.window(context, 'Terminal Mouse') {
+		if visible {
 			draw_terminal_mouse(context, term)
 		}
-		context.end_window()
+		self.mouse_header.window_end(context)
 	}
 
-	state, detached, first = context.detachable_window('Terminal Color', self.color_header.detached, self.color_header.window_first, self.color_header.dock)
-	self.color_header.detached = detached
-	self.color_header.window_first = first
-	if state >= 0 {
-		if state == 1 {
+	if visible := self.color_header.window(context, 'Terminal Color') {
+		if visible {
 			self.show_palette = draw_terminal_color(context, term, self.show_palette)
 		}
-		context.end_window()
+		self.color_header.window_end(context)
 	}
 
-	state, detached, first = context.detachable_window('Terminal Modes', self.modes_header.detached, self.modes_header.window_first, self.modes_header.dock)
-	self.modes_header.detached = detached
-	self.modes_header.window_first = first
-	if state >= 0 {
-		if state == 1 {
+	if visible := self.modes_header.window(context, 'Terminal Modes') {
+		if visible {
 			draw_terminal_modes(context, term)
 		}
-		context.end_window()
+		self.modes_header.window_end(context)
 	}
 
 	if self.show_palette {
@@ -94,33 +109,23 @@ pub fn (mut self TerminalInfo) draw(context cimgui.Context, open bool, mut term 
 fn (mut self TerminalInfo) draw_open(context cimgui.Context, mut term terminal.Terminal) {
 	draw_terminal_screens(context, mut term, mut self.screens)
 
-	mut open, mut detached := context.detachable_header('Misc', self.misc_header.detached)
-	self.misc_header.detached = detached
-	if open {
+	if self.misc_header.header(context, 'Misc') {
 		draw_terminal_misc(context, term)
 	}
 
-	open, detached = context.detachable_header('Layout', self.layout_header.detached)
-	self.layout_header.detached = detached
-	if open {
+	if self.layout_header.header(context, 'Layout') {
 		draw_terminal_layout(context, mut term)
 	}
 
-	open, detached = context.detachable_header('Mouse', self.mouse_header.detached)
-	self.mouse_header.detached = detached
-	if open {
+	if self.mouse_header.header(context, 'Mouse') {
 		draw_terminal_mouse(context, term)
 	}
 
-	open, detached = context.detachable_header('Color', self.color_header.detached)
-	self.color_header.detached = detached
-	if open {
+	if self.color_header.header(context, 'Color') {
 		self.show_palette = draw_terminal_color(context, term, self.show_palette)
 	}
 
-	open, detached = context.detachable_header('Modes', self.modes_header.detached)
-	self.modes_header.detached = detached
-	if open {
+	if self.modes_header.header(context, 'Modes') {
 		draw_terminal_modes(context, term)
 	}
 }
@@ -136,7 +141,8 @@ fn (mut self TerminalInfo) draw_screen_window(context cimgui.Context, key termin
 	context.set_next_window_size_max(400, 300)
 	visible, still_open := context.begin_window_open('Screen: ${key}', true)
 	mut info := self.screens[key]
-	info.draw(context, visible, mut screen, key, term.screens.active_key, term.flags.modify_other_keys_2(), term.colors.palette.current)
+	info.draw(context, visible, mut screen, key, term.screens.active_key,
+		term.flags.modify_other_keys_2(), term.colors.palette.current)
 	context.end_window()
 	if still_open {
 		self.screens[key] = info
@@ -190,7 +196,8 @@ fn draw_terminal_misc(context cimgui.Context, term &terminal.Terminal) {
 		context.end_table()
 	}
 
-	draw_terminal_label(context, 'Working Directory', 'The current working directory reported by the shell.')
+	draw_terminal_label(context, 'Working Directory',
+		'The current working directory reported by the shell.')
 	context.table_set_column(1)
 	if term.pwd.len > 0 {
 		context.text(term.pwd)
@@ -202,7 +209,8 @@ fn draw_terminal_misc(context cimgui.Context, term &terminal.Terminal) {
 	context.table_set_column(1)
 	context.checkbox('##focused', term.flags.focused())
 
-	draw_terminal_label(context, 'Previous Char', 'The previously printed character, used only for the REP sequence.')
+	draw_terminal_label(context, 'Previous Char',
+		'The previously printed character, used only for the REP sequence.')
 	context.table_set_column(1)
 	if previous := term.previous_char {
 		context.text('U+${previous:04X}')
@@ -227,7 +235,8 @@ fn draw_terminal_layout(context cimgui.Context, mut term terminal.Terminal) {
 	context.table_set_column(1)
 	context.text('${term.width_px}w x ${term.height_px}h')
 
-	draw_terminal_label(context, 'Scroll Region', 'The scrolling region boundaries (top, bottom, left, right).')
+	draw_terminal_label(context, 'Scroll Region',
+		'The scrolling region boundaries (top, bottom, left, right).')
 	context.table_set_column(1)
 	context.push_item_width_for_text('00000')
 	defer {
@@ -288,7 +297,8 @@ fn draw_terminal_mouse(context cimgui.Context, term &terminal.Terminal) {
 		context.end_table()
 	}
 
-	draw_terminal_label(context, 'Event Mode', 'The mouse event reporting mode set by the application.')
+	draw_terminal_label(context, 'Event Mode',
+		'The mouse event reporting mode set by the application.')
 	context.table_set_column(1)
 	context.text(terminal_enum_name(term.flags.mouse_event().str()))
 
@@ -300,7 +310,8 @@ fn draw_terminal_mouse(context cimgui.Context, term &terminal.Terminal) {
 	context.table_set_column(1)
 	context.text(terminal_enum_name(term.mouse_shape.str()))
 
-	draw_terminal_label(context, 'Shift Capture', 'XTSHIFTESCAPE state for capturing shift in mouse protocol.')
+	draw_terminal_label(context, 'Shift Capture',
+		'XTSHIFTESCAPE state for capturing shift in mouse protocol.')
 	context.table_set_column(1)
 	if term.flags.mouse_shift_capture() == .null_ {
 		context.text_disabled('(unset)')
@@ -422,7 +433,8 @@ fn draw_terminal_palette(context cimgui.Context, label string, palette [256]term
 				context.same_line()
 			}
 			context.push_id_int(index)
-			context.color_edit3('##color', cimgui_color(palette_color), cimgui.color_edit_flags_no_inputs)
+			context.color_edit3('##color', cimgui_color(palette_color),
+				cimgui.color_edit_flags_no_inputs)
 			if context.item_hovered_delay_short() {
 				context.tooltip('${index}: #${palette_color.r:02X}${palette_color.g:02X}${palette_color.b:02X}')
 			}
