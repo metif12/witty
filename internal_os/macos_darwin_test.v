@@ -10,6 +10,7 @@ fn test_macos_qos_constants() {
 }
 
 fn test_macos_foundation_directories() {
+	assert is_at_least_version(10, 0, 0)
 	assert is_at_least_macos_version(10, 0, 0)
 	cache := cache_dir('test')!
 	assert cache.contains('Caches')

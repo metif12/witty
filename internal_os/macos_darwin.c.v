@@ -38,9 +38,15 @@ pub fn set_thread_name(name string) {
 	C.pthread_setname_np(name.str)
 }
 
-// is_at_least_macos_version checks the running OS version.
-pub fn is_at_least_macos_version(major i64, minor i64, patch i64) bool {
+// is_at_least_version checks the running OS version.
+pub fn is_at_least_version(major i64, minor i64, patch i64) bool {
 	return macos.is_at_least_version(major, minor, patch)
+}
+
+// is_at_least_macos_version is retained for compatibility with the earlier
+// flattened-module spelling.
+pub fn is_at_least_macos_version(major i64, minor i64, patch i64) bool {
+	return is_at_least_version(major, minor, patch)
 }
 
 // app_support_dir returns Ghostty's user Application Support path.

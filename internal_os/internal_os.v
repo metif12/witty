@@ -181,10 +181,17 @@ mut:
 	index usize
 }
 
-pub fn iterator() ArgIterator {
+// init_with_allocator is the V-owned counterpart of
+// ArgIterator.initWithAllocator. V strings and arrays are GC-owned, so there
+// is no allocator argument to retain.
+pub fn ArgIterator.init_with_allocator() ArgIterator {
 	return ArgIterator{
 		args: platform_args()
 	}
+}
+
+pub fn iterator() ArgIterator {
+	return ArgIterator.init_with_allocator()
 }
 
 pub fn (mut self ArgIterator) deinit() {

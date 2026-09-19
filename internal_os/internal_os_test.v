@@ -170,7 +170,7 @@ fn test_environment_path_composition_uses_platform_delimiter() {
 }
 
 fn test_argument_iterator_next_skip_and_deinit() {
-	mut iter := iterator()
+	mut iter := ArgIterator.init_with_allocator()
 	first := iter.next() or {
 		assert false, 'process must have argv[0]'
 		return

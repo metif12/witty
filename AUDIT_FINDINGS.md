@@ -53,6 +53,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | CLI action source mapping | The translated action enum retained its display-name mapping but omitted Ghostty's public compile-time `Action.file` helper. | Restore the runtime-equivalent `file` method and verify every action maps to its pinned `cli/<action>.zig` source path. |
 | inspector detachable-header API | `DetachableHeader.window`, `header`, and `windowEnd` were absent even though their cimgui behavior was open-coded throughout the terminal inspector. | Restore all three public methods (with the explicit V cimgui context) and route every attached and detached terminal panel through them. |
 | GTK application and scrollable entry points | Public `Application.actionOpenConfig` was folded into its private C callback, while the four `Surface` adjustment methods collapsed the `HAdjustment`/`VAdjustment` word boundaries. | Restore `action_open_config`, `get_h_adjustment`, `set_h_adjustment`, `get_v_adjustment`, and `set_v_adjustment`; route the callback and GObject property setters through the source-shaped methods. |
+| OS iterator and macOS version entry points | `ArgIterator.initWithAllocator` was folded into the module `iterator`, and `macos.isAtLeastVersion` was exposed only under the source-external `is_at_least_macos_version` name. | Restore `ArgIterator.init_with_allocator` (without an allocator under V ownership) and `is_at_least_version`; route the canonical iterator and direct tests through them while retaining the old macOS alias. |
 | C string slice contract | The translated `String` split `fromSlice` into string/byte constructors but left the ordinary byte form named `from_bytes`, omitted the source `deinit` method, and built `ghostty_config_open_path` through the sentinel string form. The returned C record therefore claimed its ordinary allocated path had a NUL sentinel. | Restore `from_slice` for non-sentinel bytes and `deinit`, route the exported free function through the method, and return the config path with `sentinel=false`; the V string constructor remains the explicit sentinel form because V types do not encode sentinel slices. |
 | SSH cache public lifecycle surface | Disk-cache `defaultPath` was a module-prefixed free function, `deinitEntries` was absent under GC ownership, and the action's public `runInner` entry point remained folded into a private cache-injection helper. | Restore type-scoped `default_path`/`deinit_entries` plus public `run_inner`, retain a private injected-cache helper for deterministic tests, and route the action through the public standard-path entry point. |
 | GTK command-palette jump accessor | `Command.getJumpSurface` was folded into a private presentation helper, removing the public caller-owned strong-reference API. | Restore `get_jump_surface`, including the weak-to-strong promotion and caller `unref` contract, and route presentation through it. |
@@ -385,6 +386,11 @@ an item here does not mean its full module has been certified yet.
   that state machine with a semaphore/mutex worker and an ordinary
   `stop_requested` boolean, so its scheduling, failure, and drain behavior is
   source-external.
+- **Flatpak asynchronous wait:** Ghostty's `FlatpakHostCommand.waitXev` stores a
+  completion on its libxev loop and guarantees that the callback runs through
+  that loop. Witty does not link libxev; its only live consumer uses a V worker
+  thread around the translated blocking `wait`. Adding a callback on that
+  worker would change the callback-thread contract rather than translate it.
 - **Source placement:** V module-cycle constraints keep the translated shaper
   run algorithm in `font/font.v` while `font/shaper/run.v` exposes aliases, and
   place the application URL kind, build release channel, and configuration font
