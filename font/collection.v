@@ -1230,20 +1230,20 @@ fn (self &Collection) scale_factor_for(adjustment SizeAdjustment, primary_metric
 			if !metric_is_valid(face_metrics.ic_width) {
 				return self.scale_factor_for(.ex_height, primary_metrics, face_metrics, primary_scale, face_scale)
 			}
-			return primary_metrics.ic_width_val() * primary_scale, face_metrics.ic_width_val() * face_scale
+			return primary_metrics.ic_width() * primary_scale, face_metrics.ic_width() * face_scale
 		}
 		.ex_height {
 			if !metric_is_valid(face_metrics.ex_height) {
 				return self.scale_factor_for(.cap_height, primary_metrics, face_metrics, primary_scale, face_scale)
 			}
-			return primary_metrics.ex_height_val() * primary_scale, face_metrics.ex_height_val() * face_scale
+			return primary_metrics.ex_height() * primary_scale, face_metrics.ex_height() * face_scale
 		}
 		.cap_height {
 			if !metric_is_valid(face_metrics.cap_height) {
 				// Fall through to line_height.
 				return primary_metrics.line_height() * primary_scale, face_metrics.line_height() * face_scale
 			}
-			return primary_metrics.cap_height_val() * primary_scale, face_metrics.cap_height_val() * face_scale
+			return primary_metrics.cap_height() * primary_scale, face_metrics.cap_height() * face_scale
 		}
 		.line_height {
 			return primary_metrics.line_height() * primary_scale, face_metrics.line_height() * face_scale

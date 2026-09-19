@@ -545,11 +545,11 @@ pub fn Metrics.calc(face FaceMetrics) Metrics {
 
 	// Get the other font metrics or their estimates. See doc comments
 	// in FaceMetrics for explanations of the estimation heuristics.
-	cap_height := face.cap_height_val()
-	underline_thickness := math.max(1.0, math.ceil(face.underline_thickness_val()))
-	strikethrough_thickness := math.max(1.0, math.ceil(face.strikethrough_thickness_val()))
-	underline_position := math.round(top_to_baseline - face.underline_position_val())
-	strikethrough_position := math.round(top_to_baseline - face.strikethrough_position_val())
+	cap_height := face.cap_height()
+	underline_thickness := math.max(1.0, math.ceil(face.underline_thickness()))
+	strikethrough_thickness := math.max(1.0, math.ceil(face.strikethrough_thickness()))
+	underline_position := math.round(top_to_baseline - face.underline_position())
+	strikethrough_position := math.round(top_to_baseline - face.strikethrough_position())
 
 	// Same heuristic as the font_patcher script. We store icon_height
 	// separately from face_height such that modifiers can apply to the former

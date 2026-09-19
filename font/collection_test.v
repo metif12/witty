@@ -217,17 +217,17 @@ fn test_adjusted_sizes() {
 		primary := collection_test_metrics(mut c, Index{})
 		fallback := collection_test_metrics(mut c, idx)
 		if adjustment == .ex_height {
-			assert_collection_close(primary.ex_height_val(), fallback.ex_height_val(), 0.5)
+			assert_collection_close(primary.ex_height(), fallback.ex_height(), 0.5)
 		} else {
-			assert_collection_close(primary.cap_height_val(), fallback.cap_height_val(), 0.5)
+			assert_collection_close(primary.cap_height(), fallback.cap_height(), 0.5)
 		}
 		c.set_collection_size(DesiredSize{ points: 37, xdpi: 96, ydpi: 96 }) or { panic(err) }
 		primary_resized := collection_test_metrics(mut c, Index{})
 		fallback_resized := collection_test_metrics(mut c, idx)
 		if adjustment == .ex_height {
-			assert_collection_close(primary_resized.ex_height_val(), fallback_resized.ex_height_val(), 0.5)
+			assert_collection_close(primary_resized.ex_height(), fallback_resized.ex_height(), 0.5)
 		} else {
-			assert_collection_close(primary_resized.cap_height_val(), fallback_resized.cap_height_val(), 0.5)
+			assert_collection_close(primary_resized.cap_height(), fallback_resized.cap_height(), 0.5)
 		}
 		c.set_collection_size(DesiredSize{ points: 12, xdpi: 96, ydpi: 96 }) or { panic(err) }
 	}
@@ -265,8 +265,8 @@ fn test_face_metrics() {
 		assert_collection_close(10.0, wide.cell_width, 0.001)
 	}
 	assert_collection_close(14.72, wide.ascent, 0.001)
-	assert narrow.ic_width_val() == 2 * narrow.cell_width
-	assert wide.ic_width_val() == wide.ascii_height_val()
+	assert narrow.ic_width() == 2 * narrow.cell_width
+	assert wide.ic_width() == wide.ascii_height()
 }
 
 fn test_index_special() {

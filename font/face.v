@@ -694,9 +694,9 @@ pub fn (m FaceMetrics) line_height() f64 {
 	return m.ascent - m.descent + m.line_gap
 }
 
-// cap_height_val returns the cap height. If this is not defined in the
+// cap_height returns the cap height. If this is not defined in the
 // font (or is non-positive), we estimate it as 75% of the ascent.
-pub fn (m FaceMetrics) cap_height_val() f64 {
+pub fn (m FaceMetrics) cap_height() f64 {
 	if v := m.cap_height {
 		if v > 0 {
 			return v
@@ -705,79 +705,79 @@ pub fn (m FaceMetrics) cap_height_val() f64 {
 	return 0.75 * m.ascent
 }
 
-// ex_height_val returns the ex height. If this is not defined in the
+// ex_height returns the ex height. If this is not defined in the
 // font (or is non-positive), we estimate it as 75% of the cap height.
-pub fn (m FaceMetrics) ex_height_val() f64 {
+pub fn (m FaceMetrics) ex_height() f64 {
 	if v := m.ex_height {
 		if v > 0 {
 			return v
 		}
 	}
-	return 0.75 * m.cap_height_val()
+	return 0.75 * m.cap_height()
 }
 
-// ascii_height_val returns the ASCII height. If we couldn't measure it,
+// ascii_height returns the ASCII height. If we couldn't measure it,
 // we use 1.5 * cap_height as our estimator, based on measurements across
 // programming fonts.
-pub fn (m FaceMetrics) ascii_height_val() f64 {
+pub fn (m FaceMetrics) ascii_height() f64 {
 	if v := m.ascii_height {
 		if v > 0 {
 			return v
 		}
 	}
-	return 1.5 * m.cap_height_val()
+	return 1.5 * m.cap_height()
 }
 
-// ic_width_val returns the ideograph width. If this is not defined in the
+// ic_width returns the ideograph width. If this is not defined in the
 // font, we estimate it as the minimum of the ascii height and two cell widths.
-pub fn (m FaceMetrics) ic_width_val() f64 {
+pub fn (m FaceMetrics) ic_width() f64 {
 	if v := m.ic_width {
 		if v > 0 {
 			return v
 		}
 	}
-	ah := m.ascii_height_val()
+	ah := m.ascii_height()
 	two_cell := 2.0 * m.cell_width
 	return if ah < two_cell { ah } else { two_cell }
 }
 
-// underline_thickness_val returns the underline thickness. If this is not
+// underline_thickness returns the underline thickness. If this is not
 // defined in the font, we estimate it as 15% of the ex height.
-pub fn (m FaceMetrics) underline_thickness_val() f64 {
+pub fn (m FaceMetrics) underline_thickness() f64 {
 	if v := m.underline_thickness {
 		if v > 0 {
 			return v
 		}
 	}
-	return 0.15 * m.ex_height_val()
+	return 0.15 * m.ex_height()
 }
 
-// strikethrough_thickness_val returns the strikethrough thickness. If this
+// strikethrough_thickness returns the strikethrough thickness. If this
 // is not defined in the font, we set it equal to the underline thickness.
-pub fn (m FaceMetrics) strikethrough_thickness_val() f64 {
+pub fn (m FaceMetrics) strikethrough_thickness() f64 {
 	if v := m.strikethrough_thickness {
 		if v > 0 {
 			return v
 		}
 	}
-	return m.underline_thickness_val()
+	return m.underline_thickness()
 }
 
 // NOTE: The getters below return positions, not sizes, so both positive and
 // negative values are valid, hence no sign validation.
 
-// underline_position_val returns the underline position. If this is not
+// underline_position returns the underline position. If this is not
 // defined in the font, we place it one underline thickness below the baseline.
-pub fn (m FaceMetrics) underline_position_val() f64 {
-	return m.underline_position or { -m.underline_thickness_val() }
+pub fn (m FaceMetrics) underline_position() f64 {
+	return m.underline_position or { -m.underline_thickness() }
 }
 
-// strikethrough_position_val returns the strikethrough position. If this is
+// strikethrough_position returns the strikethrough position. If this is
 // not defined in the font, we center it at half the ex height, so that it's
 // perfectly centered on lower case text.
-pub fn (m FaceMetrics) strikethrough_position_val() f64 {
+pub fn (m FaceMetrics) strikethrough_position() f64 {
 	return m.strikethrough_position or {
-		(m.ex_height_val() + m.strikethrough_thickness_val()) * 0.5
+		(m.ex_height() + m.strikethrough_thickness()) * 0.5
 	}
 }
 
