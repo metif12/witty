@@ -1,5 +1,7 @@
 module font
 
+import log
+
 // --- Original Ghostty Comments Start: src/font/Collection.zig
 //
 // Source: /Users/alexander/code/3rd/ghostty/src/font/Collection.zig
@@ -536,7 +538,7 @@ pub fn (mut self Entry) get_loaded() ?&Face {
 }
 
 // is_deferred returns true if this entry is not yet loaded.
-pub fn (self Entry) is_deferred() bool {
+fn (self Entry) is_deferred() bool {
 	return !self.is_loaded
 }
 
@@ -798,11 +800,6 @@ fn (self &Collection) face_count(style Style) int {
 	return self.faces_for(style).len
 }
 
-// face_at returns the EntryOrAlias at the given index for the given style.
-fn (self &Collection) face_at(style Style, idx int) &EntryOrAlias {
-	return self.faces_for(style)[idx]
-}
-
 // append_face appends a face to the given style's list.
 fn (mut self Collection) append_face(style Style, item &EntryOrAlias) {
 	match style {
@@ -926,7 +923,12 @@ fn (mut self Collection) get_face_from_entry(mut entry Entry) !&Face {
 	if entry.scale != 1.0 {
 		mut scaled_opts := lo
 		scaled_opts.size.points *= f32(entry.scale)
-		face.set_face_size(scaled_opts.face_options())!
+		face.set_face_size(scaled_opts.face_options()) or {
+			// Match the source's errdefer: the deferred descriptor remains
+			// owned by the entry, but the newly loaded face must be released.
+			face.deinit()
+			return err
+		}
 	}
 
 	// Deinit the deferred face now that we have loaded it.
@@ -948,7 +950,7 @@ fn (mut self Collection) get_face_from_entry(mut entry Entry) !&Face {
 pub fn (self &Collection) get_index(cp u32, style Style, p_mode PresentationMode) ?Index {
 	list := self.faces_for(style)
 	for i, item in list {
-		if item.get_entry().has_codepoint(cp, p_mode) {
+		if item.get_const_entry().has_codepoint(cp, p_mode) {
 			return Index.init(style, u16(i))
 		}
 	}
@@ -963,7 +965,7 @@ pub fn (self &Collection) has_codepoint(index Index, cp u32, p_mode Presentation
 	if int(index.idx()) >= list.len {
 		return false
 	}
-	return list[int(index.idx())].get_entry().has_codepoint(cp, p_mode)
+	return list[int(index.idx())].get_const_entry().has_codepoint(cp, p_mode)
 }
 
 // complete_styles ensures we have an option for all styles in the collection,
@@ -986,9 +988,12 @@ pub fn (mut self Collection) complete_styles(synthetic_config FontSyntheticStyle
 	}
 
 	mut regular_entry := &Entry(unsafe { nil })
-	for item in self.regular_faces {
+	for i, item in self.regular_faces {
 		mut entry := item.get_entry()
-		face := self.get_face_from_entry(mut entry) or { continue }
+		face := self.get_face_from_entry(mut entry) or {
+			log.warn('error loading regular entry=${i} err=${err}')
+			continue
+		}
 
 		// We want a normal text font (not color-only).
 		// For mixed color/non-color fonts, accept if it has basic ASCII.
@@ -1010,18 +1015,17 @@ pub fn (mut self Collection) complete_styles(synthetic_config FontSyntheticStyle
 	have_italic := self.italic_faces.len > 0
 	if !have_italic {
 		if !synthetic_config.italic() {
-			// italic style not available and synthetic italic disabled
+			log.info('italic style not available and synthetic italic disabled')
 			self.italic_faces << EntryOrAlias.new_alias(regular_entry)
 		} else if synthetic := self.synthetic_italic(regular_entry) {
-			// synthetic italic face created
+			log.info('synthetic italic face created')
 			self.italic_faces << EntryOrAlias.new_entry(Entry{
 				is_loaded: true
 				loaded_face: synthetic
 				fallback: false
 			})
 		} else {
-			// Failed to create synthetic italic; italic style will not be
-			// available, so fall back to aliasing the regular face.
+			log.warn('failed to create synthetic italic, italic style will not be available err=${err}')
 			self.italic_faces << EntryOrAlias.new_alias(regular_entry)
 		}
 	}
@@ -1031,18 +1035,17 @@ pub fn (mut self Collection) complete_styles(synthetic_config FontSyntheticStyle
 	have_bold := self.bold_faces.len > 0
 	if !have_bold {
 		if !synthetic_config.bold() {
-			// bold style not available and synthetic bold disabled
+			log.info('bold style not available and synthetic bold disabled')
 			self.bold_faces << EntryOrAlias.new_alias(regular_entry)
 		} else if synthetic := self.synthetic_bold(regular_entry) {
-			// synthetic bold face created
+			log.info('synthetic bold face created')
 			self.bold_faces << EntryOrAlias.new_entry(Entry{
 				is_loaded: true
 				loaded_face: synthetic
 				fallback: false
 			})
 		} else {
-			// Failed to create synthetic bold; bold style will not be
-			// available, so fall back to aliasing the regular face.
+			log.warn('failed to create synthetic bold, bold style will not be available err=${err}')
 			self.bold_faces << EntryOrAlias.new_alias(regular_entry)
 		}
 	}
@@ -1052,7 +1055,7 @@ pub fn (mut self Collection) complete_styles(synthetic_config FontSyntheticStyle
 	// of the italic font. If we can't do that, we'll use the italic font.
 	if self.bold_italic_faces.len == 0 {
 		if !synthetic_config.bold_italic() {
-			// bold italic style not available and synthetic bold italic disabled
+			log.info('bold italic style not available and synthetic bold italic disabled')
 			self.bold_italic_faces << EntryOrAlias.new_alias(regular_entry)
 			return
 		}
@@ -1062,7 +1065,7 @@ pub fn (mut self Collection) complete_styles(synthetic_config FontSyntheticStyle
 		if have_bold {
 			mut bold_base := self.bold_faces[0].get_entry()
 			if synthetic := self.synthetic_italic(bold_base) {
-				// synthetic bold italic face created from bold
+				log.info('synthetic bold italic face created from bold')
 				self.bold_italic_faces << EntryOrAlias.new_entry(Entry{
 					is_loaded: true
 					loaded_face: synthetic
@@ -1076,7 +1079,7 @@ pub fn (mut self Collection) complete_styles(synthetic_config FontSyntheticStyle
 
 		mut italic_base := self.italic_faces[0].get_entry()
 		if synthetic := self.synthetic_bold(italic_base) {
-			// synthetic bold italic face created from italic
+			log.info('synthetic bold italic face created from italic')
 			self.bold_italic_faces << EntryOrAlias.new_entry(Entry{
 				is_loaded: true
 				loaded_face: synthetic
@@ -1085,7 +1088,7 @@ pub fn (mut self Collection) complete_styles(synthetic_config FontSyntheticStyle
 			return
 		}
 
-		// bold italic style not available, using italic font
+		log.warn('bold italic style not available, using italic font')
 		self.bold_italic_faces << EntryOrAlias.new_alias(italic_base)
 	}
 }
@@ -1105,7 +1108,15 @@ fn (mut self Collection) synthetic_bold(entry &Entry) !Face {
 	// due to scaling adjustments.
 	mut face_opts := lo.face_options()
 	face_opts.size = regular.size
-	face := regular.synthetic_bold_face(face_opts)!
+	// The pinned source computes face_opts but passes opts.faceOptions().
+	// Preserve that effective behavior exactly.
+	_ = face_opts
+	face := regular.synthetic_bold_face(lo.face_options())!
+
+	mut buf := []u8{len: 256}
+	if name := face.name(mut buf) {
+		log.info('font synthetic bold created family=${name}')
+	}
 
 	return face
 }
@@ -1125,7 +1136,15 @@ fn (mut self Collection) synthetic_italic(entry &Entry) !Face {
 	// due to scaling adjustments.
 	mut face_opts := lo.face_options()
 	face_opts.size = regular.size
-	face := regular.synthetic_italic_face(face_opts)!
+	// The pinned source computes face_opts but passes opts.faceOptions().
+	// Preserve that effective behavior exactly.
+	_ = face_opts
+	face := regular.synthetic_italic_face(lo.face_options())!
+
+	mut buf := []u8{len: 256}
+	if name := face.name(mut buf) {
+		log.info('font synthetic italic created family=${name}')
+	}
 
 	return face
 }
@@ -1213,9 +1232,6 @@ fn (mut self Collection) scale_factor(face_metrics FaceMetrics, adjustment SizeA
 	// positive.
 	primary_metric, face_metric := self.scale_factor_for(adjustment, primary_metrics, face_metrics, primary_scale, face_scale)
 
-	if face_metric == 0.0 {
-		return 1.0
-	}
 	return primary_metric / face_metric
 }
 
