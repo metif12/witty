@@ -2,9 +2,9 @@ module internal_os
 
 import net.urllib
 
-// UriParseOptions extends the standard URI parser for the two cases Ghostty
+// ParseOptions extends the standard URI parser for the two cases Ghostty
 // needs when handling OSC 7 working-directory reports.
-pub struct UriParseOptions {
+pub struct ParseOptions {
 pub:
 	// Parse MAC addresses in the host component. Private Wi-Fi addresses on
 	// macOS can appear here as rotating colon-separated MAC addresses.
@@ -14,25 +14,17 @@ pub:
 	raw_path bool
 }
 
-// ParsedUri is the portion of a parsed URI used by Ghostty's OSC 7 handler.
-pub struct ParsedUri {
-pub:
-	scheme string
-	host   string
-	path   string
-}
-
-// parse_uri translates os/uri.zig's parse wrapper. V's standard URI parser
-// supplies validation and percent decoding; this function adds Ghostty's MAC
-// address repair and raw-path options.
-pub fn parse_uri(text string, options UriParseOptions) !ParsedUri {
-	uri := urllib.parse(text) or {
+// parse translates os/uri.zig's wrapper around the standard URI parser. The
+// complete standard-library URL value is retained so callers can observe the
+// port, query, fragment, user information, and raw path just as they can from
+// Ghostty's std.Uri return value.
+pub fn parse(text string, options ParseOptions) !urllib.URL {
+	mut uri := urllib.parse(text) or {
 		if options.mac_address {
 			return parse_mac_uri(text, options)
 		}
 		return err
 	}
-	mut host := uri.hostname()
 
 	authority_start := text.index('://') or { -1 }
 	mut path_start := text.len
@@ -49,12 +41,14 @@ pub fn parse_uri(text string, options UriParseOptions) !ParsedUri {
 				authority = authority[at + 1..]
 			}
 			if is_valid_mac_address(authority) {
-				host = authority
+				// urllib stores host and port in one string. Brackets preserve
+				// the source's repaired unbracketed MAC host through hostname().
+				uri.host = '[${authority}]'
 			} else if colon := authority.last_index(':') {
 				candidate := authority[..colon].clone()
 				port := authority[colon + 1..].clone()
 				if is_valid_mac_address(candidate) && valid_uri_port(port) {
-					host = candidate
+					uri.host = '[${candidate}]:${port}'
 				} else if authority.count(':') >= 5 && !authority.starts_with('[') {
 					return error('invalid MAC address')
 				}
@@ -62,28 +56,30 @@ pub fn parse_uri(text string, options UriParseOptions) !ParsedUri {
 		}
 	}
 
-	path := if options.raw_path && authority_start >= 0 {
-		text[path_start..]
-	} else if authority_start >= 0 {
-		decoded_uri_path(text, path_start)!
-	} else {
-		uri.path
+	if authority_start >= 0 {
+		if options.raw_path {
+			uri.path = text[path_start..]
+			uri.raw_path = ''
+			uri.force_query = false
+			uri.raw_query = ''
+			uri.fragment = ''
+		} else {
+			// V's pinned urllib treats a suffix ending in two question marks
+			// as a force-query path. std.Uri splits at the first question mark.
+			normalize_uri_tail(mut uri, text, path_start)!
+		}
 	}
-	return ParsedUri{
-		scheme: uri.scheme
-		host: host
-		path: path
-	}
+	return uri
 }
 
 // parse_mac_uri retries a URI whose unbracketed MAC host was rejected as an
 // invalid host/port combination. Replacing only the authority for the retry
 // keeps all scheme, path, query, fragment, and percent-decoding validation in
 // the standard parser.
-fn parse_mac_uri(text string, options UriParseOptions) !ParsedUri {
+fn parse_mac_uri(text string, options ParseOptions) !urllib.URL {
 	scheme_end := text.index('://') or { return error('invalid URI') }
 	authority_start := scheme_end + 3
-	path_start := authority_path_start(text, authority_start)
+	path_start := mac_authority_path_start(text, authority_start)
 
 	authority := text[authority_start..path_start]
 	mut host := authority
@@ -96,17 +92,34 @@ fn parse_mac_uri(text string, options UriParseOptions) !ParsedUri {
 	}
 
 	repaired := '${text[..authority_start]}localhost${text[path_start..]}'
-	uri := urllib.parse(repaired)!
-	path := if options.raw_path {
-		text[path_start..]
+	mut uri := urllib.parse(repaired)!
+	uri.host = if is_valid_mac_address(authority) {
+		'[${authority}]'
 	} else {
-		decoded_uri_path(text, path_start)!
+		colon := authority.last_index(':') or { return error('invalid MAC address') }
+		'[${authority[..colon]}]:${authority[colon + 1..]}'
 	}
-	return ParsedUri{
-		scheme: uri.scheme
-		host: host
-		path: path
+	if options.raw_path {
+		uri.path = text[path_start..]
+		uri.raw_path = ''
+		uri.force_query = false
+		uri.raw_query = ''
+		uri.fragment = ''
+	} else {
+		normalize_uri_tail(mut uri, text, path_start)!
 	}
+	return uri
+}
+
+// The source's invalid-port recovery finds the host end using only a slash.
+// Query and fragment delimiters are intentionally not accepted here.
+fn mac_authority_path_start(text string, start int) int {
+	for i in start .. text.len {
+		if text[i] == `/` {
+			return i
+		}
+	}
+	return text.len
 }
 
 // authority_path_start returns the first byte after an authority. A URI path
@@ -121,18 +134,33 @@ fn authority_path_start(text string, start int) int {
 	return text.len
 }
 
-fn decoded_uri_path(text string, path_start int) !string {
+fn normalize_uri_tail(mut uri urllib.URL, text string, path_start int) ! {
 	raw := text[path_start..]
 	mut end := raw.len
+	mut query_start := -1
 	if query := raw.index('?') {
 		end = query
+		query_start = query
 	}
+	mut fragment_start := -1
 	if fragment := raw.index('#') {
+		fragment_start = fragment
 		if fragment < end {
 			end = fragment
+			query_start = -1
 		}
 	}
-	return urllib.path_unescape(raw[..end])!
+	encoded_path := raw[..end]
+	uri.path = urllib.path_unescape(encoded_path)!
+	uri.raw_path = if uri.path == encoded_path { '' } else { encoded_path }
+	if query_start >= 0 {
+		query_end := if fragment_start >= 0 { fragment_start } else { raw.len }
+		uri.raw_query = raw[query_start + 1..query_end]
+		uri.force_query = uri.raw_query.len == 0
+	} else {
+		uri.raw_query = ''
+		uri.force_query = false
+	}
 }
 
 fn valid_uri_port(value string) bool {

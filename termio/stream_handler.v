@@ -1205,7 +1205,7 @@ fn (mut self StreamHandler) report_pwd(url string) ! {
 
 	// Attempt to parse this file-style URI using options appropriate for
 	// this OSC 7 context. kitty-shell-cwd expects the full, unencoded path.
-	uri := internal_os.parse_uri(url, internal_os.UriParseOptions{
+	uri := internal_os.parse(url, internal_os.ParseOptions{
 		mac_address: $if macos { false } $else { true }
 		raw_path: url.starts_with('kitty-shell-cwd://')
 	}) or {
@@ -1221,11 +1221,12 @@ fn (mut self StreamHandler) report_pwd(url string) ! {
 	// OSC 7 is a little sketchy because anyone can send any value from
 	// any host (such as an SSH session). The best practice terminals follow
 	// is to validate the hostname to be local.
-	if uri.host.len == 0 {
+	host := uri.hostname()
+	if host.len == 0 {
 		// OSC 7 uri must contain a hostname.
 		return
 	}
-	if !(internal_os.is_local(uri.host) or { false }) {
+	if !(internal_os.is_local(host) or { false }) {
 		// OSC 7 host must be local.
 		return
 	}
