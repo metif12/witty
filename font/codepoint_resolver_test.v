@@ -162,7 +162,7 @@ fn test_get_index_basic() {
 fn test_get_index_disabled_font_style() {
 	mut c := make_regular_collection() or { panic(err) }
 	lo := c.load_options or { panic('missing load options') }
-	for style in [FontStyle.bold, .italic] {
+	for style in [Style.bold, .italic] {
 		c.add(Face.init_mem(lo.library, embedded_regular, lo.face_options()) or { panic(err) }, AddOptions{
 			style: style
 			size_adjustment: .none_

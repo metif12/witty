@@ -677,7 +677,7 @@ fn (ct &CoreTextDiscovery) discover_codepoint(mut collection Collection, desc De
 
 	// The order matters: prefer an exact style, then progressively fall back
 	// to the primary regular face.
-	mut styles := []FontStyle{}
+	mut styles := []Style{}
 	if desc.bold && desc.italic {
 		styles << .bold_italic
 	}

@@ -447,7 +447,7 @@ pub enum Special as u16 {
 }
 
 // init packs a style and its face-list index into Ghostty's u16 layout.
-pub fn Index.init(style FontStyle, idx u16) Index {
+pub fn Index.init(style Style, idx u16) Index {
 	assert u8(style) <= 0x7
 	assert idx <= 0x1fff
 	return Index{
@@ -461,8 +461,8 @@ pub fn Index.init_special(v Special) Index {
 }
 
 // style returns the style stored in the low three bits.
-pub fn (i Index) style() FontStyle {
-	return unsafe { FontStyle(i.value & 0x7) }
+pub fn (i Index) style() Style {
+	return unsafe { Style(i.value & 0x7) }
 }
 
 // idx returns the 13-bit index within the style's face list.
@@ -674,7 +674,7 @@ pub fn (self &LoadOptions) face_options() FaceOptions {
 pub struct AddOptions {
 pub:
 	// What style this face is.
-	style FontStyle
+	style Style
 	// What size adjustment to use.
 	size_adjustment SizeAdjustment
 	// Whether this is a fallback face.
@@ -784,7 +784,7 @@ pub fn (mut self Collection) deinit() {
 }
 
 // faces_for returns the face list for the given style.
-fn (self &Collection) faces_for(style FontStyle) []&EntryOrAlias {
+fn (self &Collection) faces_for(style Style) []&EntryOrAlias {
 	return match style {
 		.regular { self.regular_faces }
 		.bold { self.bold_faces }
@@ -794,17 +794,17 @@ fn (self &Collection) faces_for(style FontStyle) []&EntryOrAlias {
 }
 
 // face_count returns the number of faces for a given style.
-fn (self &Collection) face_count(style FontStyle) int {
+fn (self &Collection) face_count(style Style) int {
 	return self.faces_for(style).len
 }
 
 // face_at returns the EntryOrAlias at the given index for the given style.
-fn (self &Collection) face_at(style FontStyle, idx int) &EntryOrAlias {
+fn (self &Collection) face_at(style Style, idx int) &EntryOrAlias {
 	return self.faces_for(style)[idx]
 }
 
 // append_face appends a face to the given style's list.
-fn (mut self Collection) append_face(style FontStyle, item &EntryOrAlias) {
+fn (mut self Collection) append_face(style Style, item &EntryOrAlias) {
 	match style {
 		.regular { self.regular_faces << item }
 		.bold { self.bold_faces << item }
@@ -945,7 +945,7 @@ fn (mut self Collection) get_face_from_entry(mut entry Entry) !&Face {
 //
 // This does not trigger font loading; deferred fonts can be
 // searched for codepoints.
-pub fn (self &Collection) get_index(cp u32, style FontStyle, p_mode PresentationMode) ?Index {
+pub fn (self &Collection) get_index(cp u32, style Style, p_mode PresentationMode) ?Index {
 	list := self.faces_for(style)
 	for i, item in list {
 		if item.get_entry().has_codepoint(cp, p_mode) {

@@ -10,7 +10,7 @@ pub struct ShowFaceOptions {
 pub mut:
 	cp           ?u32 @[cli_u21]
 	string_      ?string
-	style        font.FontStyle = .regular
+	style        font.Style = .regular
 	presentation ?font.Presentation
 	diagnostics  diagnostics.DiagnosticList
 }
@@ -189,7 +189,7 @@ fn derived_font_config(config &configpkg.Config) font.GridSetDerivedConfig {
 	}
 }
 
-fn show_face_lookup(mut grid font.SharedGrid, cp u32, style font.FontStyle, presentation ?font.Presentation, mut output []string) ?string {
+fn show_face_lookup(mut grid font.SharedGrid, cp u32, style font.Style, presentation ?font.Presentation, mut output []string) ?string {
 	value := grid.get_index(cp, style, presentation) or { return 'Unable to get face: ${err}' }
 	display := rune(cp).str()
 	if !value.has_value {

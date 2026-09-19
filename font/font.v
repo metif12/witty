@@ -1336,8 +1336,8 @@ pub enum Presentation as u8 {
 	emoji = 1
 }
 
-// FontStyle for codepoint rendering.
-pub enum FontStyle as u8 {
+// Style for codepoint rendering.
+pub enum Style as u8 {
 	regular     = 0
 	bold        = 1
 	italic      = 2
@@ -1849,13 +1849,13 @@ fn cell_style(cell terminal.RenderCell) terminal.CellStyle {
 	return if cell.raw.has_styling() { cell.style } else { terminal.CellStyle{} }
 }
 
-fn style_to_font_style(style terminal.CellStyle) FontStyle {
+fn style_to_font_style(style terminal.CellStyle) Style {
 	return if style.flags.bold() {
-		if style.flags.italic() { FontStyle.bold_italic } else { FontStyle.bold }
+		if style.flags.italic() { Style.bold_italic } else { Style.bold }
 	} else if style.flags.italic() {
-		FontStyle.italic
+		Style.italic
 	} else {
-		FontStyle.regular
+		Style.regular
 	}
 }
 
@@ -1869,7 +1869,7 @@ fn comparable_style(style terminal.CellStyle) terminal.CellStyle {
 	return result
 }
 
-fn index_for_render_cell(grid_ptr &SharedGrid, cell &terminal.RenderCell, style FontStyle, presentation ?Presentation) !CodepointValue {
+fn index_for_render_cell(grid_ptr &SharedGrid, cell &terminal.RenderCell, style Style, presentation ?Presentation) !CodepointValue {
 	if grid_ptr == unsafe { nil } {
 		return CodepointValue{}
 	}

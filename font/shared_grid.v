@@ -136,7 +136,7 @@ pub fn (self &SharedGrid) cell_size() CellSize {
 // Returns a CodepointValue where has_value indicates whether a font was found.
 // V cannot currently represent Zig's error union containing an optional, so
 // this wrapper preserves both states without discarding loading errors.
-pub fn (mut self SharedGrid) get_index(cp u32, style FontStyle, p ?Presentation) !CodepointValue {
+pub fn (mut self SharedGrid) get_index(cp u32, style Style, p ?Presentation) !CodepointValue {
 	key := CodepointKey{
 		style: style
 		codepoint: cp
@@ -210,7 +210,7 @@ pub fn (self &SharedGrid) has_codepoint(idx Index, cp u32, p ?Presentation) bool
 // Render a codepoint. This uses the first font index that has the codepoint
 // and matches the presentation requested. If the codepoint cannot be found
 // in any font, none is returned.
-pub fn (mut self SharedGrid) render_codepoint(cp u32, style FontStyle, p ?Presentation, opts RenderOptions) ?RenderResult {
+pub fn (mut self SharedGrid) render_codepoint(cp u32, style Style, p ?Presentation, opts RenderOptions) ?RenderResult {
 	// Note: we could optimize the below to use way less locking, but
 	// at the time of writing this codepath is only called for preedit
 	// text which is relatively rare and almost non-existent in multiple
@@ -319,7 +319,7 @@ pub fn (mut self SharedGrid) render_glyph(index Index, glyph_index u32, opts Ren
 
 // CodepointKey is the cache key for codepoint-to-index lookups.
 struct CodepointKey {
-	style        FontStyle
+	style        Style
 	codepoint    u32
 	presentation ?Presentation
 }

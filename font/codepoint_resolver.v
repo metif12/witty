@@ -35,7 +35,7 @@ pub fn StyleStatus.init_fill(val bool) StyleStatus {
 }
 
 // get returns whether the given style is enabled. Regular is always enabled.
-pub fn (s &StyleStatus) get(style FontStyle) bool {
+pub fn (s &StyleStatus) get(style Style) bool {
 	return match style {
 		.regular { true }
 		.bold { s.bold }
@@ -45,7 +45,7 @@ pub fn (s &StyleStatus) get(style FontStyle) bool {
 }
 
 // set enables or disables a specific style.
-pub fn (mut s StyleStatus) set(style FontStyle, val bool) {
+pub fn (mut s StyleStatus) set(style Style, val bool) {
 	match style {
 		.regular {} // Regular cannot be disabled
 		.bold {
@@ -260,7 +260,7 @@ pub fn (mut self CodepointResolver) deinit() {
 //      process with a regular font face satisfying ANY presentation for
 //      the codepoint. If this fails, we return null.
 //
-pub fn (mut self CodepointResolver) get_index(cp u32, style FontStyle, p ?Presentation) ?Index {
+pub fn (mut self CodepointResolver) get_index(cp u32, style Style, p ?Presentation) ?Index {
 	// If we've disabled a font style, then fall back to regular.
 	if style != .regular && !self.styles.get(style) {
 		return self.get_index(cp, .regular, p)

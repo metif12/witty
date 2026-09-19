@@ -1,9 +1,9 @@
 module font
 
 fn test_font_style_and_presentation_storage() {
-	assert $sizeof(FontStyle) == 1
-	assert u8(FontStyle.regular) == 0
-	assert u8(FontStyle.bold_italic) == 3
+	assert $sizeof(Style) == 1
+	assert u8(Style.regular) == 0
+	assert u8(Style.bold_italic) == 3
 	assert $sizeof(Presentation) == 1
 	assert u8(Presentation.text) == 0
 	assert u8(Presentation.emoji) == 1

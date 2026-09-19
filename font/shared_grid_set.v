@@ -151,7 +151,7 @@ fn (mut self SharedGridSet) collection(key &GridSetKey, size DesiredSize, config
 
 	// Search configured families in priority order for every style.
 	mut disco := self.discover()!
-	for style in [FontStyle.regular, .bold, .italic, .bold_italic] {
+	for style in [Style.regular, .bold, .italic, .bold_italic] {
 		for desc in key.descriptors_for_style(style) {
 			if face := discover_loaded_face(disco, desc, self.font_lib, load_options) {
 				c.add(face, AddOptions{
@@ -394,8 +394,8 @@ pub mut:
 
 	// These are the offsets into the descriptors array for
 	// each style. For example, bold is from
-	// offsets[int(FontStyle.bold) - 1] to
-	// offsets[int(FontStyle.bold)].
+	// offsets[int(Style.bold) - 1] to
+	// offsets[int(Style.bold)].
 	style_offsets [4]int
 
 	// The codepoint map configuration.
@@ -546,7 +546,7 @@ pub fn (mut self GridSetKey) deinit() {
 
 // Get the descriptors for the given font style that can be
 // used with discovery.
-pub fn (self &GridSetKey) descriptors_for_style(style FontStyle) []Descriptor {
+pub fn (self &GridSetKey) descriptors_for_style(style Style) []Descriptor {
 	idx := int(style)
 	start := if idx == 0 { 0 } else { self.style_offsets[idx - 1] }
 	end := self.style_offsets[idx]

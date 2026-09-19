@@ -25,7 +25,7 @@ fn collection_test_options(lib Library, points f32) LoadOptions {
 	}
 }
 
-fn collection_test_add(mut c Collection, data []u8, style FontStyle, adjustment SizeAdjustment) Index {
+fn collection_test_add(mut c Collection, data []u8, style Style, adjustment SizeAdjustment) Index {
 	load_options := c.load_options or { panic('missing collection load options') }
 	face := Face.init_mem(load_options.library, data, load_options.face_options()) or { panic(err) }
 	return c.add(face, AddOptions{
@@ -296,7 +296,7 @@ fn test_font_synthetic_style_packed_layout_matches_ghostty() {
 }
 
 fn test_index_packed_layout_matches_ghostty() {
-	for style in [FontStyle.regular, .bold, .italic, .bold_italic] {
+	for style in [Style.regular, .bold, .italic, .bold_italic] {
 		for face_index in [u16(0), 1, 42, 0x1ffe, 0x1fff] {
 			idx := Index.init(style, face_index)
 			packed := idx.int_val()
