@@ -123,6 +123,11 @@ pub fn (self &RendererInfo) overlay_features() []renderer.OverlayFeature {
 	return self.features.clone()
 }
 
+// deinit releases the renderer inspector's owned feature list.
+pub fn (mut self RendererInfo) deinit() {
+	self.features.clear()
+}
+
 fn (mut self RendererInfo) set_feature(feature renderer.OverlayFeature, enabled bool) {
 	index := self.features.index(feature)
 	if enabled {
@@ -191,7 +196,7 @@ fn inspector_record_pty_byte(ptr voidptr, byte u8, term &terminal.Terminal) {
 pub fn (mut self Inspector) deinit() {
 	self.clear_key_events()
 	self.vt_stream.deinit()
-	self.renderer.features.clear()
+	self.renderer.deinit()
 }
 
 pub fn (mut self Inspector) clear_key_events() {
@@ -211,9 +216,7 @@ pub fn (mut self Inspector) renderer_info() &RendererInfo {
 // the read before the real terminal parser mutates its state. V's translated
 // parser owns its event allocations, so no allocator argument is required.
 pub fn (mut self Inspector) record_pty_read(term &terminal.Terminal, data []u8) ! {
-	for byte in data {
-		self.vt_stream.record_pty_byte(byte, term)
-	}
+	self.vt_stream.record_pty_read(term, data)!
 }
 
 // record_key_event appends to Ghostty's bounded 50-event stream, evicting and
@@ -259,7 +262,7 @@ pub fn (mut self Inspector) render(context_handle voidptr, surface_info SurfaceI
 	context.end_window()
 
 	open_renderer := context.begin_window('Renderer')
-	self.draw_renderer_info(context, open_renderer)
+	self.renderer.draw(context, open_renderer)
 	context.end_window()
 
 	if first_render {
@@ -270,7 +273,8 @@ pub fn (mut self Inspector) render(context_handle voidptr, surface_info SurfaceI
 	}
 }
 
-fn (mut self Inspector) draw_renderer_info(context cimgui.Context, open bool) {
+// draw renders the source renderer-info widget.
+pub fn (mut self RendererInfo) draw(context cimgui.Context, open bool) {
 	if !open {
 		return
 	}
@@ -281,18 +285,18 @@ fn (mut self Inspector) draw_renderer_info(context cimgui.Context, open bool) {
 	}
 
 	context.separator_text('Hyperlinks')
-	mut hyperlinks := self.renderer.features.contains(.highlight_hyperlinks)
+	mut hyperlinks := self.features.contains(.highlight_hyperlinks)
 	_, hyperlinks = context.checkbox('Overlay Hyperlinks', hyperlinks)
 	context.same_line()
 	context.help_marker('When enabled, highlights OSC8 hyperlinks.')
-	self.renderer.set_feature(.highlight_hyperlinks, hyperlinks)
+	self.set_feature(.highlight_hyperlinks, hyperlinks)
 
 	context.separator_text('Semantic Prompts')
-	mut semantic_prompts := self.renderer.features.contains(.semantic_prompts)
+	mut semantic_prompts := self.features.contains(.semantic_prompts)
 	_, semantic_prompts = context.checkbox('Overlay Semantic Prompts', semantic_prompts)
 	context.same_line()
 	context.help_marker('When enabled, highlights OSC 133 semantic prompts.')
-	self.renderer.set_feature(.semantic_prompts, semantic_prompts)
+	self.set_feature(.semantic_prompts, semantic_prompts)
 
 	context.indent()
 	defer {

@@ -50,7 +50,7 @@ fn (mut self VTEvent) deinit() {
 // VTStream is Ghostty's bounded raw parser-action stream. Parser actions are
 // recorded before their semantic counterparts mutate the terminal, so every
 // event carries the cursor and scrolling-region state it observed on entry.
-struct VTStream {
+pub struct VTStream {
 mut:
 	events                  []VTEvent
 	parser_stream           terminal.Stream
@@ -63,7 +63,7 @@ mut:
 	is_keyboard_selection   bool
 }
 
-fn VTStream.init() VTStream {
+pub fn VTStream.init() VTStream {
 	mut parser_stream := terminal.Stream.init_alloc(voidptr(1))
 	parser_stream.capture_raw = true
 	mut result := VTStream{
@@ -74,7 +74,7 @@ fn VTStream.init() VTStream {
 	return result
 }
 
-fn (mut self VTStream) deinit() {
+pub fn (mut self VTStream) deinit() {
 	self.clear()
 	self.parser_stream.deinit()
 }
@@ -85,6 +85,14 @@ fn (mut self VTStream) record_pty_byte(byte u8, term &terminal.Terminal) {
 		self.record(action, term)
 	}
 	self.parser_stream.clear_events()
+}
+
+// record_pty_read advances the parallel parser across one complete PTY read.
+// Event snapshots are recorded before the real terminal consumes the bytes.
+pub fn (mut self VTStream) record_pty_read(term &terminal.Terminal, data []u8) ! {
+	for byte in data {
+		self.record_pty_byte(byte, term)
+	}
 }
 
 fn (mut self VTStream) clear() {
@@ -325,7 +333,7 @@ fn imgui_text_filter_pass(filter string, text string) bool {
 	return positive_count == 0
 }
 
-fn (mut self VTStream) draw(context cimgui.Context, palette [256]terminal.RGB) {
+pub fn (mut self VTStream) draw(context cimgui.Context, palette [256]terminal.RGB) {
 	pause_label := if self.paused { 'Resume##pause_play' } else { 'Pause##pause_play' }
 	if context.button(pause_label) {
 		self.paused = !self.paused
@@ -457,8 +465,8 @@ fn (mut self VTStream) navigate(action VTKeyAction) {
 }
 
 fn draw_vt_event_details(context cimgui.Context, event &VTEvent, palette [256]terminal.RGB) {
-	draw_screen_cursor(context, event.cursor)
-	draw_style(context, event.cursor.style, palette, true)
+	cursor_table(context, event.cursor)
+	cursor_style(context, event.cursor, palette)
 	if !context.begin_table('details', 2, 0) {
 		return
 	}

@@ -4,12 +4,12 @@ import cimgui
 import kitty
 import terminal
 
-struct ScreenInfo {
+pub struct ScreenInfo {
 mut:
 	cell_chooser CellChooser
 }
 
-fn (mut self ScreenInfo) draw(context cimgui.Context, open bool, mut screen terminal.Screen, key terminal.ScreenKey, active_key terminal.ScreenKey, modify_other_keys_2 bool, palette [256]terminal.RGB) {
+pub fn (mut self ScreenInfo) draw(context cimgui.Context, open bool, mut screen terminal.Screen, key terminal.ScreenKey, active_key terminal.ScreenKey, modify_other_keys_2 bool, palette [256]terminal.RGB) {
 	_ = self
 	dockspace_id := context.get_id('Screen Dockspace')
 	assert context.screen_dockspace(dockspace_id)
@@ -17,21 +17,21 @@ fn (mut self ScreenInfo) draw(context cimgui.Context, open bool, mut screen term
 	info_open := context.begin_window('Info')
 	if info_open {
 		if context.collapsing_header_default_open('Cursor') {
-			draw_screen_cursor(context, screen.cursor)
+			cursor_table(context, screen.cursor)
 			context.separator()
-			draw_style(context, screen.cursor.style, palette, true)
+			cursor_style(context, screen.cursor, palette)
 		}
 		if context.collapsing_header_default_open('Keyboard') {
 			draw_screen_keyboard(context, screen, modify_other_keys_2)
 		}
 		if context.collapsing_header_default_open('Semantic Prompt') {
-			draw_screen_semantic_prompt(context, screen.semantic_prompt)
+			semantic_prompt_table(context, screen.semantic_prompt)
 		}
 		if context.collapsing_header_default_open('Kitty Graphics') {
-			draw_screen_kitty_graphics(context, screen)
+			kitty_graphics_table(context, screen)
 		}
 		if context.collapsing_header_default_open('Other Screen State') {
-			draw_screen_internal_state(context, screen)
+			internal_state_table(context, screen)
 		}
 	}
 	context.end_window()
@@ -57,7 +57,8 @@ fn (mut self ScreenInfo) draw(context cimgui.Context, open bool, mut screen term
 	}
 }
 
-fn draw_screen_cursor(context cimgui.Context, cursor terminal.Cursor) {
+// cursor_table renders the source cursor-specific table.
+pub fn cursor_table(context cimgui.Context, cursor terminal.Cursor) {
 	if !context.begin_table('table_cursor', 2, 0) {
 		return
 	}
@@ -114,7 +115,8 @@ struct KittyFlagInfo {
 	mask u32
 }
 
-fn draw_screen_semantic_prompt(context cimgui.Context, prompt terminal.SemanticPrompt) {
+// semantic_prompt_table renders the source semantic-prompt table.
+pub fn semantic_prompt_table(context cimgui.Context, prompt terminal.SemanticPrompt) {
 	if !context.begin_table('##semantic_prompt', 2, 0) {
 		return
 	}
@@ -141,7 +143,9 @@ fn draw_screen_semantic_prompt(context cimgui.Context, prompt terminal.SemanticP
 	}
 }
 
-fn draw_screen_kitty_graphics(context cimgui.Context, screen &terminal.Screen) {
+// kitty_graphics_table renders the source Kitty graphics storage table. The
+// translated screen retains that storage opaquely to avoid an import cycle.
+pub fn kitty_graphics_table(context cimgui.Context, screen &terminal.Screen) {
 	storage := kitty.screen_storage(screen) or {
 		context.text_disabled('(Kitty graphics are disabled)')
 		return
@@ -163,7 +167,8 @@ fn draw_screen_kitty_graphics(context cimgui.Context, screen &terminal.Screen) {
 	draw_screen_row(context, 'Image Loading', (storage.loading != none).str())
 }
 
-fn draw_screen_internal_state(context cimgui.Context, screen &terminal.Screen) {
+// internal_state_table renders the source screen-memory state table.
+pub fn internal_state_table(context cimgui.Context, screen &terminal.Screen) {
 	if !context.begin_table('##terminal_state', 2, 0) {
 		return
 	}
@@ -177,19 +182,21 @@ fn draw_screen_internal_state(context cimgui.Context, screen &terminal.Screen) {
 	draw_screen_row(context, 'Viewport Location', screen.pages.viewport.str())
 }
 
-fn draw_style(context cimgui.Context, style terminal.CellStyle, palette [256]terminal.RGB, resolve_palette bool) {
+// table renders the source shared style table. The explicit context and
+// resolve flag replace Zig's process-global ImGui context and optional palette.
+pub fn table(context cimgui.Context, style terminal.CellStyle, palette [256]terminal.RGB, resolve_palette bool) {
 	if !context.begin_table('style', 2, 0) {
 		return
 	}
 	draw_terminal_label(context, 'Foreground', 'The foreground (text) color')
 	context.table_set_column(1)
-	draw_style_color(context, 'fg', style.fg_color, style.fg_palette, terminal.RGB{ r: style.fg_r, g: style.fg_g, b: style.fg_b }, palette, resolve_palette)
+	color(context, 'fg', style.fg_color, style.fg_palette, terminal.RGB{ r: style.fg_r, g: style.fg_g, b: style.fg_b }, palette, resolve_palette)
 	draw_terminal_label(context, 'Background', 'The background (cell) color')
 	context.table_set_column(1)
-	draw_style_color(context, 'bg', style.bg_color, style.bg_palette, terminal.RGB{ r: style.bg_r, g: style.bg_g, b: style.bg_b }, palette, resolve_palette)
+	color(context, 'bg', style.bg_color, style.bg_palette, terminal.RGB{ r: style.bg_r, g: style.bg_g, b: style.bg_b }, palette, resolve_palette)
 	draw_terminal_label(context, 'Underline', 'The underline color, if underlines are enabled.')
 	context.table_set_column(1)
-	draw_style_color(context, 'underline', style.underline_color_type, style.underline_palette, terminal.RGB{ r: style.underline_r, g: style.underline_g, b: style.underline_b }, palette, resolve_palette)
+	color(context, 'underline', style.underline_color_type, style.underline_palette, terminal.RGB{ r: style.underline_r, g: style.underline_g, b: style.underline_b }, palette, resolve_palette)
 
 	draw_style_flag(context, style.flags.bold(), 'bold', 'Text will be rendered with bold weight.')
 	draw_style_flag(context, style.flags.italic(), 'italic', 'Text will be rendered in italic style.')
@@ -202,6 +209,11 @@ fn draw_style(context cimgui.Context, style terminal.CellStyle, palette [256]ter
 	context.text_disabled('(Any styles not shown are not currently set)')
 }
 
+// cursor_style renders the cursor's style through the shared style table.
+pub fn cursor_style(context cimgui.Context, cursor terminal.Cursor, palette [256]terminal.RGB) {
+	table(context, cursor.style, palette, true)
+}
+
 fn draw_style_flag(context cimgui.Context, enabled bool, name string, help string) {
 	if !enabled {
 		return
@@ -211,7 +223,8 @@ fn draw_style_flag(context cimgui.Context, enabled bool, name string, help strin
 	context.text('true')
 }
 
-fn draw_style_color(context cimgui.Context, id string, kind terminal.ColorType, palette_index u8, rgb terminal.RGB, palette [256]terminal.RGB, resolve_palette bool) {
+// color renders one source style color row.
+pub fn color(context cimgui.Context, id string, kind terminal.ColorType, palette_index u8, rgb terminal.RGB, palette [256]terminal.RGB, resolve_palette bool) {
 	context.push_id_str(id)
 	defer {
 		context.pop_id()

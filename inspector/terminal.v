@@ -5,14 +5,14 @@ import terminal
 
 // DetachableHeader is the state from Ghostty's inspector/widgets.zig. Its
 // rendering is performed by cimgui so the native ImVec2 layout is preserved.
-struct DetachableHeader {
+pub struct DetachableHeader {
 mut:
 	detached     bool
 	dock         bool = true
 	window_first bool = true
 }
 
-struct TerminalInfo {
+pub struct TerminalInfo {
 mut:
 	show_palette  bool
 	misc_header   DetachableHeader
@@ -23,7 +23,7 @@ mut:
 	screens       map[terminal.ScreenKey]ScreenInfo
 }
 
-fn (mut self TerminalInfo) draw(context cimgui.Context, open bool, mut term terminal.Terminal) {
+pub fn (mut self TerminalInfo) draw(context cimgui.Context, open bool, mut term terminal.Terminal) {
 	if open {
 		self.draw_open(context, mut term)
 	}

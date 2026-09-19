@@ -3,13 +3,13 @@ module inspector
 import cimgui
 import terminal
 
-struct CellChooser {
+pub struct CellChooser {
 mut:
 	lookup_region terminal.PointTag = .viewport
 	lookup_coord  terminal.Coordinate
 }
 
-fn (mut self CellChooser) draw(context cimgui.Context, pages &terminal.Pages) {
+pub fn (mut self CellChooser) draw(context cimgui.Context, pages &terminal.Pages) {
 	context.text_wrapped('Inspect a cell by choosing a coordinate space and entering the X/Y position. The inspector resolves the point into the page list and displays the cell contents.')
 	context.separator_text('Cell Inspector')
 
@@ -81,7 +81,7 @@ fn (mut self CellChooser) draw(context cimgui.Context, pages &terminal.Pages) {
 
 	if cell.style_id != terminal.default_style_id {
 		context.separator_text('Style')
-		draw_style(context, cell.style, [256]terminal.RGB{}, false)
+		table(context, cell.style, [256]terminal.RGB{}, false)
 	}
 	if cell.has_hyperlink {
 		context.separator_text('Hyperlink')
@@ -515,7 +515,7 @@ fn draw_flat_styles(context cimgui.Context, pages &terminal.Pages) {
 		context.text(item.refs.str())
 		context.table_set_column(2)
 		if context.tree_node('Details') {
-			draw_style(context, item.style, [256]terminal.RGB{}, false)
+			table(context, item.style, [256]terminal.RGB{}, false)
 			context.tree_pop()
 		}
 		context.pop_id()
