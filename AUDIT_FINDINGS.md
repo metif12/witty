@@ -212,6 +212,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | synthetic OSC tags | The public 13-case valid-kind and two-case invalid-kind source enums used V's implicit 32-bit storage. | Give both inferred tags byte backing and exhaustively verify their source declaration order. |
 | benchmark action and mode tags | The retained benchmark action and four implementation-mode source enums used V's implicit 32-bit storage. | Give all five inferred tags byte backing and exhaustively verify their source declaration order. |
 | benchmark symbol implementations | The `is-symbol` benchmark accepted the source's `uucode` and `table` modes but sent both through the same generated lookup table, so it did not benchmark two implementations. | Translate the pinned `computeIsSymbol` predicate (the `Co` category plus eight selected Unicode blocks) as the uucode path, retain the generated three-stage table as the table path, and exhaustively prove they agree over V's complete `u21` domain. |
+| Valgrind runtime behavior | The renderer always used a 600 ms cursor blink interval because V has no built-in equivalent of `std.valgrind.runningOnValgrind()`. | Translate Zig 0.15.2's architecture-specific Valgrind client request into the native interop layer and retain Ghostty's fivefold (3,000 ms) interval whenever the runtime probe is nonzero. |
 | GTK tag and action contracts | Six native GTK/GLib values, the app-defined close-dialog target, and the KDE decoration mode relied on V's implicit signed enum representation, while six retained internal/union tags were widened. The tab redeclared the canonical C-backed close-tab mode, and window callbacks passed through a source-external ten-case tag only to rebuild canonical input actions. | Give C values signed 32-bit and the protocol value `u32` backing, byte-back inferred tags, alias the apprt close-tab type, and pass `input.Action` directly through the window helper. |
 | renderer Metal pixel-format ABI | The translated native `MTLPixelFormat` exposed only the six formats currently selected by the renderer instead of Ghostty's complete 139-case `enum(c_ulong)`, and its bytes-per-pixel helper omitted every other source-supported value. | Restore all 139 values in exact declaration order with unsigned-long-compatible backing, restore every source-supported byte-size group and panic branch, and exhaustively verify the ABI values. |
 | renderer auxiliary Metal enums | The native GPU-family wrapper exposed only two of Ghostty's fifteen values, while index type, purgeable state, barrier scope, and render stage were omitted entirely from the translated Metal API surface. | Restore all five unsigned-/signed-long-compatible enums with their complete declaration order and raw values. |
@@ -331,10 +332,6 @@ an item here does not mean its full module has been certified yet.
   `spirv-cross` executables through temporary files, whereas Ghostty links the
   shader compiler/cross-compiler libraries. This has different availability,
   process, filesystem, and error contracts.
-- **Valgrind runtime detection:** `renderer.Thread.cursorBlinkInterval` always
-  returns 600 ms in Witty. Ghostty detects Valgrind at runtime and returns
-  3,000 ms there; the available V toolchain exposes only a compile-time custom
-  define, not an equivalent runtime primitive.
 - **macOS CF release worker:** Ghostty uses xev async wake/stop completions and
   switches a packed drain flag only after an abnormal loop exit. Witty replaces
   that state machine with a semaphore/mutex worker and an ordinary

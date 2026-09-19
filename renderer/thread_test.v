@@ -3,6 +3,7 @@ module renderer
 import sync
 import time
 import configpkg
+import internal_os
 
 struct RedrawCapture {
 mut:
@@ -89,7 +90,10 @@ fn test_display_link_callback_queues_draw_now() {
 }
 
 fn test_renderer_thread_timer_deadlines() {
-	assert cursor_blink_interval() == 600 * u64(time.millisecond)
+	assert cursor_blink_interval_for_valgrind(0) == 600 * u64(time.millisecond)
+	assert cursor_blink_interval_for_valgrind(1) == 3_000 * u64(time.millisecond)
+	assert cursor_blink_interval_for_valgrind(2) == 3_000 * u64(time.millisecond)
+	assert cursor_blink_interval() == cursor_blink_interval_for_valgrind(internal_os.running_on_valgrind())
 	assert draw_interval_ns() == 8 * u64(time.millisecond)
 
 	render_thread := RendererThread{

@@ -813,7 +813,12 @@ fn (self &RendererThread) next_timer_timeout(now u64) i64 {
 
 // Returns the interval for the blinking cursor in nanoseconds.
 fn cursor_blink_interval() u64 {
-	return cursor_blink_interval_ms * u64(time.millisecond)
+	return cursor_blink_interval_for_valgrind(internal_os.running_on_valgrind())
+}
+
+fn cursor_blink_interval_for_valgrind(level usize) u64 {
+	multiplier := if level > 0 { u64(5) } else { u64(1) }
+	return cursor_blink_interval_ms * multiplier * u64(time.millisecond)
 }
 
 fn draw_interval_ns() u64 {
