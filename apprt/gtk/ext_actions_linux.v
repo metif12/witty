@@ -117,10 +117,10 @@ pub:
 	state          GVariant = unsafe { nil }
 }
 
-// new initializes a new action, checking that the name is valid. Mirrors
+// init initializes a new action, checking that the name is valid. Mirrors
 // `Action.init`. In Zig the name check is a comptime assert; here it panics at
 // call time on an invalid name (still a programming error).
-pub fn Action.new(name string, callback GCallback, parameter_type GVariantType) Action {
+pub fn Action.init(name string, callback GCallback, parameter_type GVariantType) Action {
 	if !action_name_is_valid(name) {
 		panic('invalid action name: ${name}')
 	}
@@ -131,8 +131,8 @@ pub fn Action.new(name string, callback GCallback, parameter_type GVariantType) 
 	}
 }
 
-// new_stateful initializes a new stateful action. Mirrors `Action.initStateful`.
-pub fn Action.new_stateful(name string, callback GCallback, parameter_type GVariantType, state GVariant) Action {
+// init_stateful initializes a new stateful action. Mirrors `Action.initStateful`.
+pub fn Action.init_stateful(name string, callback GCallback, parameter_type GVariantType, state GVariant) Action {
 	if !action_name_is_valid(name) {
 		panic('invalid action name: ${name}')
 	}

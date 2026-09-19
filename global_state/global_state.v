@@ -198,7 +198,7 @@ pub fn Action.detect_special_case(arg string) ?SpecialCase {
 // detect_args detects an action from the process argument iterator. V strings
 // are garbage-collected, so the source allocator parameter is absent.
 pub fn detect_args() !DetectActionResult {
-	mut iter := cli_args.SliceIterator.new(os.args)
+	mut iter := cli_args.slice_iterator(os.args)
 	return detect_iter[cli_args.SliceIterator](mut iter)
 }
 
@@ -249,7 +249,7 @@ pub fn detect_iter[T](mut iter T) !DetectActionResult {
 
 // detect_action is the explicit-slice convenience used by embedders and tests.
 pub fn detect_action(args []string) !DetectActionResult {
-	mut iter := cli_args.SliceIterator.new(args)
+	mut iter := cli_args.slice_iterator(args)
 	return detect_iter[cli_args.SliceIterator](mut iter)
 }
 

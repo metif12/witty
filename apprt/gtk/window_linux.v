@@ -1096,9 +1096,9 @@ fn (mut self Window) init_action_map() {
 	for name in ['about', 'close', 'new-tab', 'new-window', 'ring-bell', 'split-right', 'split-left',
 		'split-up', 'split-down', 'copy', 'paste', 'reset', 'clear', 'toggle-command-palette',
 		'toggle-inspector'] {
-		actions << Action.new(name, GCallback(voidptr(window_action_cb)), unsafe { nil })
+		actions << Action.init(name, GCallback(voidptr(window_action_cb)), unsafe { nil })
 	}
-	actions << Action.new('close-tab', GCallback(voidptr(window_action_cb)), string_type)
+	actions << Action.init('close-tab', GCallback(voidptr(window_action_cb)), string_type)
 	add_to_map(voidptr(self), GActionMap(self.obj), actions)
 	C.g_variant_type_free(string_type)
 }

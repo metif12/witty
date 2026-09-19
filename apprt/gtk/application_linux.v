@@ -1251,12 +1251,12 @@ fn (mut self Application) startup_action_map() {
 // application_action_descriptors is the exact pinned application action table.
 fn application_action_descriptors(string_array_type GVariantType, u64_type GVariantType) []Action {
 	return [
-		Action.new('new-window', GCallback(voidptr(application_action_new_window_cb)), unsafe { nil }),
-		Action.new('new-window-command', GCallback(voidptr(application_action_new_window_cb)), string_array_type),
-		Action.new('open-config', GCallback(voidptr(application_action_open_config_cb)), unsafe { nil }),
-		Action.new('present-surface', GCallback(voidptr(application_action_present_surface_cb)), u64_type),
-		Action.new('quit', GCallback(voidptr(application_action_quit_cb)), unsafe { nil }),
-		Action.new('reload-config', GCallback(voidptr(application_action_reload_config_cb)), unsafe { nil }),
+		Action.init('new-window', GCallback(voidptr(application_action_new_window_cb)), unsafe { nil }),
+		Action.init('new-window-command', GCallback(voidptr(application_action_new_window_cb)), string_array_type),
+		Action.init('open-config', GCallback(voidptr(application_action_open_config_cb)), unsafe { nil }),
+		Action.init('present-surface', GCallback(voidptr(application_action_present_surface_cb)), u64_type),
+		Action.init('quit', GCallback(voidptr(application_action_quit_cb)), unsafe { nil }),
+		Action.init('reload-config', GCallback(voidptr(application_action_reload_config_cb)), unsafe { nil }),
 	]
 }
 

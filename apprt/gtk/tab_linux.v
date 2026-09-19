@@ -319,10 +319,10 @@ fn tab_split_tree_notify_active_surface_cb(split_tree GtkWidget, pspec voidptr, 
 fn (mut self Tab) init_action_map() {
 	string_type := C.g_variant_type_new(c's')
 	actions := [
-		Action.new('close', GCallback(voidptr(tab_action_close_cb)), string_type),
-		Action.new('ring-bell', GCallback(voidptr(tab_action_ring_bell_cb)), unsafe { nil }),
-		Action.new('next-page', GCallback(voidptr(tab_action_next_page_cb)), unsafe { nil }),
-		Action.new('previous-page', GCallback(voidptr(tab_action_previous_page_cb)), unsafe { nil }),
+		Action.init('close', GCallback(voidptr(tab_action_close_cb)), string_type),
+		Action.init('ring-bell', GCallback(voidptr(tab_action_ring_bell_cb)), unsafe { nil }),
+		Action.init('next-page', GCallback(voidptr(tab_action_next_page_cb)), unsafe { nil }),
+		Action.init('previous-page', GCallback(voidptr(tab_action_previous_page_cb)), unsafe { nil }),
 	]
 	add_as_group(voidptr(self), self.widget, 'tab', actions)
 	C.g_variant_type_free(string_type)

@@ -719,7 +719,7 @@ fn test_line_iterator_stops_at_maximum_buffer_size() {
 // --- SliceIterator ---
 
 fn test_slice_iterator() {
-	mut iter := SliceIterator.new(['a', 'b', 'c'])
+	mut iter := slice_iterator(['a', 'b', 'c'])
 	assert iter.next()? == 'a'
 	assert iter.next()? == 'b'
 	assert iter.next()? == 'c'
@@ -728,6 +728,6 @@ fn test_slice_iterator() {
 }
 
 fn test_slice_iterator_empty() {
-	mut iter := SliceIterator.new([])
+	mut iter := slice_iterator([])
 	assert iter.next() == none
 }

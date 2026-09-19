@@ -335,9 +335,9 @@ pub fn new_split_tree_widget(window &Window, config &Config) &SplitTreeWidget {
 fn (mut self SplitTreeWidget) init_action_map() {
 	string_type := C.g_variant_type_new(c's')
 	actions := [
-		Action.new('new-split', GCallback(voidptr(split_tree_action_new_split_cb)), string_type),
-		Action.new('equalize', GCallback(voidptr(split_tree_action_equalize_cb)), unsafe { nil }),
-		Action.new('zoom', GCallback(voidptr(split_tree_action_zoom_cb)), unsafe { nil }),
+		Action.init('new-split', GCallback(voidptr(split_tree_action_new_split_cb)), string_type),
+		Action.init('equalize', GCallback(voidptr(split_tree_action_equalize_cb)), unsafe { nil }),
+		Action.init('zoom', GCallback(voidptr(split_tree_action_zoom_cb)), unsafe { nil }),
 	]
 	add_as_group(voidptr(self), self.widget, 'split-tree', actions)
 	C.g_variant_type_free(string_type)

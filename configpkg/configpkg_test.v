@@ -333,7 +333,7 @@ fn test_load_cli_args_diagnostic_lists_enum_values() {
 
 fn test_load_iter_uses_iterator_location_contract() {
 	mut without_location := Config.default_config()
-	mut slice_iter := cli_args.SliceIterator.new(['--font-size=nope'])
+	mut slice_iter := cli_args.slice_iterator(['--font-size=nope'])
 	without_location.load_iter(mut slice_iter)
 	assert without_location.diagnostics.len == 1
 	assert without_location.diagnostics[0].format() == 'font-size: invalid value "nope"'
@@ -347,7 +347,7 @@ fn test_load_iter_uses_iterator_location_contract() {
 
 fn test_load_iter_replay_keeps_exact_normalized_argument() {
 	mut cfg := Config.default_config()
-	mut iter := cli_args.SliceIterator.new(['--title=a=b'])
+	mut iter := cli_args.slice_iterator(['--title=a=b'])
 	cfg.load_iter(mut iter)
 	assert cfg.title or { '' } == 'a=b'
 	assert cfg.replay_steps.len == 1
@@ -357,14 +357,14 @@ fn test_load_iter_replay_keeps_exact_normalized_argument() {
 
 fn test_parse_manually_hook_records_args_and_consumes_command_tail() {
 	mut regular := Config.default_config()
-	mut empty := cli_args.SliceIterator.new([])
+	mut empty := cli_args.slice_iterator([])
 	assert regular.parse_manually_hook('--font-size=18', mut empty)
 	assert regular.replay_steps.len == 1
 	assert regular.replay_steps[0].kind == .arg
 	assert regular.replay_steps[0].value == '--font-size=18'
 
 	mut command := Config.default_config()
-	mut params := cli_args.SliceIterator.new(['echo', 'hello world'])
+	mut params := cli_args.slice_iterator(['echo', 'hello world'])
 	assert !command.parse_manually_hook('-e', mut params)
 	assert command.initial_command or { panic('missing command') }.string_val() == 'echo hello world'
 	assert command.replay_steps.len == 3

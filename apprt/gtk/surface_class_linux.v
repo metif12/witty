@@ -1278,8 +1278,8 @@ pub fn (mut self SurfaceWidget) prompt_title() {
 // Mirrors Surface.initActionMap.
 fn (mut self SurfaceWidget) init_action_map() {
 	actions := [
-		Action.new('prompt-title', GCallback(voidptr(surface_action_prompt_title_cb)), unsafe { nil }),
-		Action.new_stateful('notify-on-next-command-finish', GCallback(voidptr(surface_action_notify_on_next_command_finish_cb)), unsafe { nil }, C.g_variant_new_boolean(0)),
+		Action.init('prompt-title', GCallback(voidptr(surface_action_prompt_title_cb)), unsafe { nil }),
+		Action.init_stateful('notify-on-next-command-finish', GCallback(voidptr(surface_action_notify_on_next_command_finish_cb)), unsafe { nil }, C.g_variant_new_boolean(0)),
 	]
 	self.action_group = add_as_group(voidptr(self), self.widget, 'surface', actions)
 }

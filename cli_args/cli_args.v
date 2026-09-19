@@ -792,8 +792,8 @@ mut:
 	idx int
 }
 
-// Construct a SliceIterator from a slice.
-pub fn SliceIterator.new(slice []string) SliceIterator {
+// Construct a SliceIterator from a slice. Mirrors sliceIterator.
+pub fn slice_iterator(slice []string) SliceIterator {
 	return SliceIterator{
 		slice: slice
 	}
