@@ -67,8 +67,9 @@ fn create_shaper_with_font(font_req TestFont) !TestShaper {
 		monospace: false
 	})!
 	defer { iterator.deinit() }
-	if emoji := iterator.next() {
-		collection.add_deferred(emoji, font.AddOptions{
+	emoji_value := iterator.next()!
+	if emoji_value.has_value {
+		collection.add_deferred(emoji_value.face, font.AddOptions{
 			style: .regular
 			fallback: false
 			size_adjustment: .none_
@@ -109,7 +110,11 @@ fn create_shaper_with_discovered_font(font_req string) !TestShaper {
 		monospace: false
 	})!
 	defer { iterator.deinit() }
-	mut deferred := iterator.next() or { return error('font not found: ${font_req}') }
+	value := iterator.next()!
+	if !value.has_value {
+		return error('font not found: ${font_req}')
+	}
+	mut deferred := value.face
 	load_options := collection.load_options or { return error('missing load options') }
 	mut face := deferred.load(lib, load_options.face_options())!
 	mut name_buf := []u8{len: 512}

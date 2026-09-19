@@ -328,7 +328,14 @@ pub fn (mut self CodepointResolver) get_index(cp u32, style Style, p ?Presentati
 			if mut it := self.discover.discover_fallback(mut self.collection, desc) {
 				defer { it.deinit() }
 				for {
-					mut deferred := it.next() or { break }
+					value := it.next() or {
+						log.warn('fallback search failed with error err=${err}')
+						break
+					}
+					if !value.has_value {
+						break
+					}
+					mut deferred := value.face
 					face := Entry{
 						deferred_face: deferred
 						fallback: true
@@ -411,11 +418,13 @@ fn (mut self CodepointResolver) get_index_codepoint_override(cp u32) !IndexOverr
 	// Slow path: discover the requested descriptor and retain the first result.
 	mut it := self.discover.discover(desc)!
 	defer { it.deinit() }
-	deferred := it.next() or {
+	value := it.next()!
+	if !value.has_value {
 		log.warn('font lookup for codepoint map failed codepoint=${cp} err=FontNotFound')
 		self.descriptor_cache.put(desc, none)
 		return IndexOverrideResult{}
 	}
+	deferred := value.face
 
 	idx := self.collection.add_deferred(deferred, AddOptions{
 		style: .regular

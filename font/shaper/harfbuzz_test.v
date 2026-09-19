@@ -82,7 +82,11 @@ fn create_hb_shaper_with_discovered_font(font_req string) !HbTestShaper {
 		monospace: false
 	})!
 	defer { iterator.deinit() }
-	mut deferred := iterator.next() or { return error('font not found: ${font_req}') }
+	value := iterator.next()!
+	if !value.has_value {
+		return error('font not found: ${font_req}')
+	}
+	mut deferred := value.face
 	load_options := collection.load_options or { return error('missing load options') }
 	mut face := deferred.load(lib, load_options.face_options())!
 	mut name_buf := []u8{len: 512}

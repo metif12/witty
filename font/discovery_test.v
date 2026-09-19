@@ -11,18 +11,29 @@ fn test_discover_uses_the_target_backend_directly() {
 	$if macos {
 		mut it := discover.discover(Descriptor{ family: 'Menlo', size: 12 })!
 		defer { it.deinit() }
-		mut face := it.next() or { panic('CoreText returned no Menlo face') }
+		value := it.next()!
+		assert value.has_value, 'CoreText returned no Menlo face'
+		mut face := value.face
 		defer { face.deinit() }
-		assert face.path.len > 0
+		assert !isnil(face.coretext.ct_font)
 		assert face.has_codepoint(u32(`A`), none)
 	} $else {
 		mut it := discover.discover(Descriptor{ family: 'monospace', size: 12 })!
 		defer { it.deinit() }
-		mut face := it.next() or { panic('fontconfig returned no monospace font') }
+		value := it.next()!
+		assert value.has_value, 'fontconfig returned no monospace font'
+		mut face := value.face
 		defer { face.deinit() }
-		assert face.path.len > 0
+		assert (face.fontconfig_pattern.file() or { '' }).len > 0
 		assert face.has_codepoint(u32(`A`), none)
 	}
+}
+
+fn test_discovery_iterators_return_explicit_empty_value() {
+	mut fc := FcDiscoverIterator{}
+	assert !(fc.next()!).has_value
+	mut ct := CtDiscoverIterator{}
+	assert !(ct.next()!).has_value
 }
 
 // test_descriptor_hash tests that a default descriptor produces
@@ -63,13 +74,19 @@ fn test_fontconfig() {
 		return
 	}
 	defer { it.deinit() }
-	mut face := it.next() or {
-		assert false, 'fontconfig returned no monospace font'
+	value := it.next() or {
+		assert false, err.msg()
 		return
 	}
+	assert value.has_value, 'fontconfig returned no monospace font'
+	mut face := value.face
 	defer { face.deinit() }
-	assert face.path.len > 0
-	assert os.exists(face.path)
+	assert !isnil(face.fontconfig_pattern)
+	assert !isnil(face.fontconfig_charset)
+	assert !isnil(face.fontconfig_langset)
+	path := face.fontconfig_pattern.file() or { '' }
+	assert path.len > 0
+	assert os.exists(path)
 }
 
 // test_fontconfig_codepoint tests fontconfig discovery for a specific codepoint.
@@ -83,10 +100,12 @@ fn test_fontconfig_codepoint() {
 	defer { it.deinit() }
 
 	// The first result must carry the requested-codepoint coverage metadata.
-	mut face := it.next() or {
-		assert false, 'fontconfig returned no face for U+0041'
+	value := it.next() or {
+		assert false, err.msg()
 		return
 	}
+	assert value.has_value, 'fontconfig returned no face for U+0041'
+	mut face := value.face
 	defer { face.deinit() }
 	assert face.has_codepoint(u32(0x41), none)
 }
@@ -101,13 +120,14 @@ fn test_coretext() {
 			return
 		}
 		defer { it.deinit() }
-		mut face := it.next() or {
-			assert false, 'CoreText returned no Menlo face'
+		value := it.next() or {
+			assert false, err.msg()
 			return
 		}
+		assert value.has_value, 'CoreText returned no Menlo face'
+		mut face := value.face
 		defer { face.deinit() }
-		assert face.path.len > 0
-		assert os.exists(face.path)
+		assert face.has_codepoint(u32(`A`), none)
 	}
 }
 
@@ -122,10 +142,12 @@ fn test_coretext_codepoint() {
 		}
 		defer { it.deinit() }
 
-		mut face := it.next() or {
-			assert false, 'CoreText returned no face for U+0041'
+		value := it.next() or {
+			assert false, err.msg()
 			return
 		}
+		assert value.has_value, 'CoreText returned no face for U+0041'
+		mut face := value.face
 		defer { face.deinit() }
 		assert face.has_codepoint(u32(0x41), none)
 	}

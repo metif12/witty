@@ -761,8 +761,11 @@ pub fn (self CoreTextDeferredFace) has_codepoint(cp u32, p ?Presentation) bool {
 
 // family_name returns the family name of the deferred CoreText font.
 pub fn (self CoreTextDeferredFace) family_name(mut buf []u8) !string {
-	if buf.len == 0 || C.witty_coretext_copy_family_name(self.ct_font, &u8(buf.data), usize(buf.len)) == 0 {
+	if buf.len == 0 {
 		return error('CoreText: failed to copy family name')
+	}
+	if C.witty_coretext_copy_family_name(self.ct_font, &u8(buf.data), usize(buf.len)) == 0 {
+		return 'unknown'
 	}
 	return unsafe { cstring_to_vstring(&char(buf.data)) }
 }

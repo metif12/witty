@@ -250,13 +250,9 @@ fn C.witty_ascii_index_of_ignore_case(haystack &char, haystack_len usize, needle
 
 fn C.witty_ct_descriptor_drop_charset(desc voidptr) voidptr
 
-fn C.witty_ct_descriptor_path(desc voidptr, buf &u8, len usize) int
-
 fn C.witty_ct_font_from_descriptor(desc voidptr, size f64) voidptr
 
 fn C.witty_ct_font_for_string(orig_font voidptr, codepoint u32) voidptr
-
-fn C.witty_ct_descriptor_is_color(desc voidptr) int
 
 fn C.witty_coretext_release(ptr voidptr)
 
@@ -424,6 +420,14 @@ fn b2i(b bool) int {
 // FontconfigDiscovery
 // ============================================================
 
+// DeferredFaceValue is V's representation of Ghostty's fallible optional
+// discovery result (`!?DeferredFace`).
+pub struct DeferredFaceValue {
+pub:
+	has_value bool
+	face      DeferredFace
+}
+
 // FontconfigDiscovery discovers fonts using the fontconfig library (Linux).
 pub struct FontconfigDiscovery {
 pub mut:
@@ -456,6 +460,7 @@ pub fn (fd &FontconfigDiscovery) discover(desc Descriptor) !FcDiscoverIterator {
 	// Search
 	res := fd.fc_config.font_sort(pat, false, unsafe { nil })
 	if res.result != .match_ {
+		pat.destroy()
 		return error('fontconfig: font sort failed')
 	}
 
@@ -465,7 +470,6 @@ pub fn (fd &FontconfigDiscovery) discover(desc Descriptor) !FcDiscoverIterator {
 		set: res.fs
 		fonts: res.fs.fonts()
 		variations: desc.variations
-		codepoint: desc.codepoint
 		i: 0
 	}
 }
@@ -485,7 +489,6 @@ pub mut:
 	set        &fontconfig.FontSet = unsafe { nil }
 	fonts      []&fontconfig.Pattern
 	variations []Variation
-	codepoint  u32
 	i          int
 }
 
@@ -499,42 +502,31 @@ pub fn (mut it FcDiscoverIterator) deinit() {
 	}
 }
 
-// next returns the next deferred face, or none if exhausted.
-pub fn (mut it FcDiscoverIterator) next() ?DeferredFace {
-	for it.i < it.fonts.len {
-		candidate := it.fonts[it.i]
-		it.i++
-		font_pattern := it.config.font_render_prepare(it.pattern, candidate) or {
-			continue
-		}
-		path := font_pattern.file() or {
-			font_pattern.destroy()
-			continue
-		}
-		family := font_pattern.get(.family, 0) or { fontconfig.PatternValue{} }
-		full_name := font_pattern.get(.fullname, 0) or { fontconfig.PatternValue{} }
-		idx := font_pattern.index()
-		is_emoji := font_pattern.is_emoji()
-		has_requested := it.codepoint == 0 || font_pattern.has_char(it.codepoint)
-		charset := font_pattern.charset_copy()
+// next returns the next deferred face or an empty value when exhausted.
+pub fn (mut it FcDiscoverIterator) next() !DeferredFaceValue {
+	if it.i >= it.fonts.len {
+		return DeferredFaceValue{}
+	}
+	candidate := it.fonts[it.i]
+	font_pattern := it.config.font_render_prepare(it.pattern, candidate)!
+	it.i++
+	charset := font_pattern.get(.charset, 0) or {
 		font_pattern.destroy()
-
-		mut coverage := map[u32]bool{}
-		if it.codepoint > 0 {
-			coverage[it.codepoint] = has_requested
-		}
-		return DeferredFace{
-			fontconfig_charset: charset
-			family_name: family.string
-			full_name: if full_name.string.len > 0 { full_name.string } else { family.string }
-			path: path
-			face_index: i32(idx)
-			codepoints: coverage
-			presentation: if is_emoji { Presentation.emoji } else { Presentation.text }
+		return err
+	}
+	langset := font_pattern.get(.lang, 0) or {
+		font_pattern.destroy()
+		return err
+	}
+	return DeferredFaceValue{
+		has_value: true
+		face: DeferredFace{
+			fontconfig_pattern: font_pattern
+			fontconfig_charset: charset.char_set
+			fontconfig_langset: langset.lang_set
 			variations: it.variations.clone()
 		}
 	}
-	return none
 }
 
 // ============================================================
@@ -579,7 +571,6 @@ pub fn (ct &CoreTextDiscovery) discover(desc Descriptor) !CtDiscoverIterator {
 	return CtDiscoverIterator{
 		list: zig_list
 		variations: desc.variations
-		codepoint: desc.codepoint
 		i: 0
 	}
 }
@@ -638,7 +629,6 @@ pub fn (ct &CoreTextDiscovery) discover_fallback(mut collection Collection, desc
 			return CtDiscoverIterator{
 				list: [han]
 				variations: desc.variations
-				codepoint: desc.codepoint
 				i: 0
 			}
 		}
@@ -655,7 +645,6 @@ pub fn (ct &CoreTextDiscovery) discover_fallback(mut collection Collection, desc
 			return CtDiscoverIterator{
 				list: [ct_desc]
 				variations: desc.variations
-				codepoint: desc.codepoint
 				i: 0
 			}
 		}
@@ -716,7 +705,6 @@ pub struct CtDiscoverIterator {
 pub mut:
 	list       []voidptr // []&macos.CTFontDescriptor
 	variations []Variation
-	codepoint  u32
 	i          int
 }
 
@@ -730,62 +718,38 @@ pub fn (mut it CtDiscoverIterator) deinit() {
 	it.list = []voidptr{}
 }
 
-// next returns the next deferred face, or none if exhausted.
-pub fn (mut it CtDiscoverIterator) next() ?DeferredFace {
-	for it.i < it.list.len {
-		src := it.list[it.i]
-		it.i++
+// next returns the next deferred face or an empty value when exhausted.
+pub fn (mut it CtDiscoverIterator) next() !DeferredFaceValue {
+	if it.i >= it.list.len {
+		return DeferredFaceValue{}
+	}
+	src := it.list[it.i]
 
-		// Get our descriptor. We remove the character-set limitation because we
-		// may have used it to filter, but we don't want it anymore because it
-		// would restrict the characters available on the loaded font.
-		desc := C.witty_ct_descriptor_drop_charset(src)
-		if isnil(desc) {
-			continue
-		}
+	// Get our descriptor. We remove the character-set limitation because we
+	// may have used it to filter, but we don't want it anymore because it
+	// would restrict the characters available on the loaded font.
+	desc := C.witty_ct_descriptor_drop_charset(src)
+	if isnil(desc) {
+		return error('CoreText: failed to copy font descriptor')
+	}
+	defer { C.witty_ct_release(desc) }
 
-		// Ghostty stores the CTFont directly in the DeferredFace here. This V
-		// port's DeferredFace is file-path based, so we resolve the descriptor's
-		// font file path (and index defaults to 0 for CoreText descriptors).
-		mut buf := []u8{len: 1024}
-		if C.witty_ct_descriptor_path(desc, &u8(buf.data), usize(buf.len)) == 0 {
-			// No file path available for this descriptor; skip to the next.
-			C.witty_ct_release(desc)
-			continue
-		}
-		path := unsafe { cstring_to_vstring(&char(buf.data)) }
-		is_color := C.witty_ct_descriptor_is_color(desc) != 0
-		font_ptr := C.witty_ct_font_from_descriptor(desc, 12.0)
-		if isnil(font_ptr) {
-			C.witty_ct_release(desc)
-			continue
-		}
-		mut coretext := CoreTextDeferredFace{
+	// Retain the discovered CTFont. File lookup is deferred until a
+	// FreeType-backed render face is actually requested.
+	font_ptr := C.witty_ct_font_from_descriptor(desc, 12.0)
+	if isnil(font_ptr) {
+		return error('CoreText: failed to create font')
+	}
+	it.i++
+	return DeferredFaceValue{
+		has_value: true
+		face: DeferredFace{
+			coretext: CoreTextDeferredFace{
 			ct_font: font_ptr
 			variations: it.variations.clone()
-		}
-		mut name_buf := []u8{len: 1024}
-		family_name := coretext.family_name(mut name_buf) or { '' }
-		mut display_buf := []u8{len: 1024}
-		full_name := coretext.name(mut display_buf) or { family_name }
-		C.witty_ct_release(desc)
-
-		mut coverage := map[u32]bool{}
-		if it.codepoint > 0 {
-			coverage[it.codepoint] = true
-		}
-		return DeferredFace{
-			coretext: coretext
-			family_name: family_name
-			full_name: full_name
-			path: path
-			face_index: 0
-			codepoints: coverage
-			presentation: if is_color { Presentation.emoji } else { Presentation.text }
-			variations: it.variations.clone()
+			}
 		}
 	}
-	return none
 }
 
 // ============================================================

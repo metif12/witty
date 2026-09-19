@@ -791,14 +791,16 @@ pub fn (m FaceMetrics) strikethrough_position() f64 {
 // to search for fallback fonts without the overhead of full loading.
 pub struct DeferredFace {
 pub mut:
-	// Native discovery state. Fontconfig retains a copied character set;
+	// Native discovery state. Fontconfig retains the render-prepared pattern;
 	// CoreText retains the discovered CTFont. These preserve Ghostty's
-	// deferred coverage checks without loading the render face.
+	// deferred coverage and metadata without loading the render face.
+	fontconfig_pattern &fontconfig.Pattern = unsafe { nil }
 	fontconfig_charset &fontconfig.CharSet = unsafe { nil }
+	fontconfig_langset &fontconfig.LangSet = unsafe { nil }
 	coretext            CoreTextDeferredFace
-	// Names and file identity retained beside the native coverage state.
-	// Fontconfig exposes these as copied V values; CoreText naming reads the
-	// retained font through the source caller-buffer contract.
+	// Portable fallback metadata for file-backed deferred values constructed
+	// without native discovery. Native Fontconfig/CoreText paths above bypass
+	// these fields for metadata and coverage.
 	family_name string
 	full_name   string
 	// The path to the font file, if file-based.
@@ -820,6 +822,9 @@ pub mut:
 // family_name returns the family name advertised by discovery.
 // Fontconfig already owns the copied string; CoreText uses the caller buffer.
 pub fn (d DeferredFace) family_name(mut buf []u8) !string {
+	if !isnil(d.fontconfig_pattern) {
+		return d.fontconfig_pattern.get(.family, 0)!.string
+	}
 	if !isnil(d.coretext.ct_font) {
 		return d.coretext.family_name(mut buf)
 	}
@@ -829,6 +834,9 @@ pub fn (d DeferredFace) family_name(mut buf []u8) !string {
 
 // name returns the display/full name advertised by discovery.
 pub fn (d DeferredFace) name(mut buf []u8) !string {
+	if !isnil(d.fontconfig_pattern) {
+		return d.fontconfig_pattern.get(.fullname, 0)!.string
+	}
 	if !isnil(d.coretext.ct_font) {
 		return d.coretext.name(mut buf)
 	}
@@ -838,9 +846,11 @@ pub fn (d DeferredFace) name(mut buf []u8) !string {
 
 // deinit releases deferred face resources.
 pub fn (mut d DeferredFace) deinit() {
-	if !isnil(d.fontconfig_charset) {
-		d.fontconfig_charset.destroy()
+	if !isnil(d.fontconfig_pattern) {
+		d.fontconfig_pattern.destroy()
+		d.fontconfig_pattern = unsafe { nil }
 		d.fontconfig_charset = unsafe { nil }
+		d.fontconfig_langset = unsafe { nil }
 	}
 	d.coretext.deinit()
 	d.codepoints = map[u32]bool{}
@@ -849,6 +859,17 @@ pub fn (mut d DeferredFace) deinit() {
 
 // load fully loads this deferred face into a Face.
 pub fn (d DeferredFace) load(lib Library, opts FaceOptions) !Face {
+	if !isnil(d.fontconfig_pattern) {
+		path := d.fontconfig_pattern.file() or { return error('deferred face has no file path') }
+		mut face := Face.init_file(lib, path, i32(d.fontconfig_pattern.index()), opts)!
+		if d.variations.len > 0 {
+			face.set_variations(d.variations, opts) or {
+				face.deinit()
+				return err
+			}
+		}
+		return face
+	}
 	if !isnil(d.coretext.ct_font) {
 		return d.coretext.load_freetype(lib, opts)
 	}
@@ -875,19 +896,23 @@ pub fn (d DeferredFace) load(lib Library, opts FaceOptions) !Face {
 // coverage in this backend, matching the fact that our coverage map only
 // records presence.
 pub fn (d DeferredFace) has_codepoint(cp u32, presentation ?Presentation) bool {
-	if !isnil(d.coretext.ct_font) {
-		return d.coretext.has_codepoint(cp, presentation)
-	}
-	if !isnil(d.fontconfig_charset) {
-		if !d.fontconfig_charset.has_char(cp) {
+	if !isnil(d.fontconfig_pattern) {
+		if isnil(d.fontconfig_charset) || !d.fontconfig_charset.has_char(cp) {
 			return false
 		}
 		if expected := presentation {
-			if actual := d.presentation {
-				return expected == actual
+			actual := if !isnil(d.fontconfig_langset)
+				&& d.fontconfig_langset.has_lang('und-zsye') {
+				Presentation.emoji
+			} else {
+				Presentation.text
 			}
+			return expected == actual
 		}
 		return true
+	}
+	if !isnil(d.coretext.ct_font) {
+		return d.coretext.has_codepoint(cp, presentation)
 	}
 	// If we have coverage data, consult it. A codepoint is covered only
 	// if it is present in the map with a true value.

@@ -268,7 +268,9 @@ fn (mut self SharedGridSet) collection(key &Key, size DesiredSize, config &Deriv
 			size: size.points
 		})!
 		defer { emoji_it.deinit() }
-		if mut deferred := emoji_it.next() {
+		emoji_value := emoji_it.next()!
+		if emoji_value.has_value {
+			mut deferred := emoji_value.face
 			c.add_deferred(deferred, AddOptions{
 				style: .regular
 				fallback: true
@@ -310,7 +312,11 @@ fn (mut self SharedGridSet) discover() !&Discover {
 fn add_discovered_face(mut collection Collection, disco &Discover, desc Descriptor, opts AddOptions) !bool {
 	mut it := disco.discover(desc)!
 	defer { it.deinit() }
-	mut deferred := it.next() or { return false }
+	value := it.next()!
+	if !value.has_value {
+		return false
+	}
+	mut deferred := value.face
 	mut name_buf := []u8{len: 256}
 	name := deferred.name(mut name_buf) or {
 		deferred.deinit()

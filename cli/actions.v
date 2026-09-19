@@ -175,7 +175,11 @@ pub fn list_fonts_output(args []string) !string {
 	}
 	mut entries := []FontListEntry{}
 	for {
-		face := iterator.next() or { break }
+		value := iterator.next()!
+		if !value.has_value {
+			break
+		}
+		face := value.face
 		mut buf := []u8{len: 1024}
 		family := face.family_name(mut buf) or {
 			log.error('failed to get font family name: ${err}')

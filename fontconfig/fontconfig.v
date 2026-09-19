@@ -61,8 +61,6 @@ fn C.FcFontSetDestroy(fs voidptr)
 
 fn C.FcCharSetCreate() voidptr
 
-fn C.FcCharSetCopy(cs voidptr) voidptr
-
 fn C.FcCharSetDestroy(cs voidptr)
 
 fn C.FcCharSetAddChar(cs voidptr, ucs4 u32) int
@@ -201,7 +199,7 @@ pub fn (p &Pattern) default_substitute() {
 pub fn (p &Pattern) get(prop Property, idx int) !PatternValue {
 	object := prop.cval()
 	return match prop {
-		.family, .style, .fullname, .lang {
+		.family, .style, .fullname {
 			mut sptr := &char(unsafe { nil })
 			if C.FcPatternGetString(p.handle, &char(object.str), idx, &sptr) != fc_result_match {
 				return error('FcPatternGetString(${object}) failed')
@@ -210,13 +208,37 @@ pub fn (p &Pattern) get(prop Property, idx int) !PatternValue {
 				string: unsafe { cstring_to_vstring(sptr) }
 			}
 		}
-		.size, .weight, .slant, .spacing, .charset {
+		.size, .weight, .slant, .spacing {
 			mut ival := int(0)
 			if C.FcPatternGetInteger(p.handle, &char(object.str), idx, &ival) != fc_result_match {
 				return error('FcPatternGetInteger(${object}) failed')
 			}
 			PatternValue{
 				integer: ival
+			}
+		}
+		.charset {
+			mut charset := voidptr(unsafe { nil })
+			if C.FcPatternGetCharSet(p.handle, &char(object.str), idx, &charset) != fc_result_match
+				|| isnil(charset) {
+				return error('FcPatternGetCharSet(${object}) failed')
+			}
+			PatternValue{
+				char_set: &CharSet{
+					handle: charset
+				}
+			}
+		}
+		.lang {
+			mut langset := voidptr(unsafe { nil })
+			if C.FcPatternGetLangSet(p.handle, &char(object.str), idx, &langset) != fc_result_match
+				|| isnil(langset) {
+				return error('FcPatternGetLangSet(${object}) failed')
+			}
+			PatternValue{
+				lang_set: &LangSet{
+					handle: langset
+				}
 			}
 		}
 	}
@@ -241,47 +263,6 @@ pub fn (p &Pattern) index() int {
 		return 0
 	}
 	return ival
-}
-
-// has_char reports whether the pattern's character set contains cp.
-pub fn (p &Pattern) has_char(cp u32) bool {
-	mut charset := voidptr(unsafe { nil })
-	if C.FcPatternGetCharSet(p.handle, c'charset', 0, &charset) != fc_result_match
-		|| isnil(charset) {
-		return false
-	}
-	return C.FcCharSetHasChar(charset, cp) != 0
-}
-
-// charset_copy returns an owned copy of the pattern's character set. The
-// caller must destroy it. This lets deferred font faces retain discovery
-// coverage after the source pattern is released.
-pub fn (p &Pattern) charset_copy() &CharSet {
-	mut charset := voidptr(unsafe { nil })
-	if C.FcPatternGetCharSet(p.handle, c'charset', 0, &charset) != fc_result_match
-		|| isnil(charset) {
-		return unsafe { nil }
-	}
-	copy := C.FcCharSetCopy(charset)
-	if isnil(copy) {
-		return unsafe { nil }
-	}
-	return &CharSet{
-		handle: copy
-	}
-}
-
-// is_emoji reports whether Fontconfig marks this font with the emoji
-// presentation language (`und-zsye`).
-pub fn (p &Pattern) is_emoji() bool {
-	mut langset := voidptr(unsafe { nil })
-	if C.FcPatternGetLangSet(p.handle, c'lang', 0, &langset) != fc_result_match
-		|| isnil(langset) {
-		return false
-	}
-	// FcLangEqual (0) and FcLangDifferentCountry (1) are matches;
-	// FcLangDifferentLang is 2.
-	return C.FcLangSetHasLang(langset, c'und-zsye') < 2
 }
 
 // ============================================================
@@ -356,6 +337,12 @@ pub fn (cs &CharSet) has_char(cp u32) bool {
 // LangSet represents a set of languages.
 pub struct LangSet {
 	handle voidptr = unsafe { nil }
+}
+
+// has_lang reports Fontconfig's relationship to lang. Equal languages and
+// country variants are both matches, matching FcLangSetHasLang.
+pub fn (ls &LangSet) has_lang(lang string) bool {
+	return !isnil(ls) && !isnil(ls.handle) && C.FcLangSetHasLang(ls.handle, &char(lang.str)) < 2
 }
 
 // ============================================================
