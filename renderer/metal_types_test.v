@@ -509,6 +509,29 @@ fn test_metal_buffer_sync_from_array_lists_concatenates_rows() ! {
 	assert buffer.sync_from_array_lists([][]u8{})! == 0
 }
 
+fn test_metal_buffer_typed_growth_matches_source_expression() ! {
+	mut api := MetalAPI.init()!
+	defer {
+		api.deinit()
+	}
+
+	mut values_buffer := MetalBuffer.init(api.buffer_options(), usize($sizeof(u32)))!
+	defer {
+		values_buffer.deinit()
+	}
+	values_buffer.sync_values([u32(1), 2])!
+	// req_bytes (8) * 2 * sizeof(u32) (4), exactly as Buffer(u32).sync.
+	assert macos.metal_buffer_length(values_buffer.handle) == 64
+
+	mut lists_buffer := MetalBuffer.init(api.buffer_options(), usize($sizeof(u32)))!
+	defer {
+		lists_buffer.deinit()
+	}
+	assert lists_buffer.sync_from_array_lists([[u32(1)], [u32(2)]])! == 2
+	// syncFromArrayLists uses the same pinned growth expression.
+	assert macos.metal_buffer_length(lists_buffer.handle) == 64
+}
+
 fn test_metal_api_without_layer_cannot_present() ! {
 	// The off-screen API has no runtime surface, so the layer is absent and
 	// every layer-driven operation is either a no-op or reports unavailable.

@@ -79,7 +79,7 @@ pub fn (mut self MetalBuffer) sync(data []u8) ! {
 	if data.len > 0 {
 		ptr = voidptr(data.data)
 	}
-	self.sync_raw(ptr, usize(data.len))!
+	self.sync_raw(ptr, usize(data.len), 1)!
 }
 
 pub fn (mut self MetalBuffer) sync_values[T](values []T) ! {
@@ -87,7 +87,7 @@ pub fn (mut self MetalBuffer) sync_values[T](values []T) ! {
 	if values.len > 0 {
 		ptr = voidptr(values.data)
 	}
-	self.sync_raw(ptr, usize(values.len) * usize($sizeof(T)))!
+	self.sync_raw(ptr, usize(values.len) * usize($sizeof(T)), usize($sizeof(T)))!
 }
 
 // Like MetalBuffer.sync but takes data from an array of lists, rather than a
@@ -106,7 +106,10 @@ pub fn (mut self MetalBuffer) sync_from_array_lists[T](lists [][]T) !usize {
 		macos.metal_release(self.handle)
 
 		// Allocate a new buffer with enough to hold double what we require.
-		self.handle = macos.metal_new_buffer_length(self.opts.device, req_bytes * 2,
+		// Preserve the pinned Buffer(T) expression: it doubles the required byte
+		// count and multiplies by the element size a second time.
+		new_len := req_bytes * 2 * usize($sizeof(T))
+		self.handle = macos.metal_new_buffer_length(self.opts.device, new_len,
 			self.opts.resource_options.int_val())
 		if self.handle == unsafe { nil } {
 			return error('Metal buffer reallocation failed')
@@ -142,11 +145,13 @@ pub fn (mut self MetalBuffer) sync_from_array_lists[T](lists [][]T) !usize {
 	return total_len
 }
 
-fn (mut self MetalBuffer) sync_raw(data voidptr, req_bytes usize) ! {
+fn (mut self MetalBuffer) sync_raw(data voidptr, req_bytes usize, element_size usize) ! {
 	available_bytes := macos.metal_buffer_length(self.handle)
 	if req_bytes > available_bytes {
 		macos.metal_release(self.handle)
-		new_len := req_bytes * 2
+		// Preserve the pinned Buffer(T) expression, including its second
+		// multiplication by @sizeOf(T).
+		new_len := req_bytes * 2 * element_size
 		self.handle = macos.metal_new_buffer_length(self.opts.device, new_len, self.opts.resource_options.int_val())
 		if self.handle == unsafe { nil } {
 			return error('Metal buffer reallocation failed')
