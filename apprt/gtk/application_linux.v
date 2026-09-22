@@ -664,7 +664,7 @@ pub fn (mut self Application) run() ! {
 	}
 
 	// Tell systemd that we are ready.
-	internal_os.systemd_notify_ready()
+	internal_os.ready()
 
 	// log.debug("entering runloop")
 	self.running = true
@@ -1340,9 +1340,9 @@ fn application_action_reload_config_cb(action GSimpleAction, parameter GVariant,
 // A soft reload reapplies the current loaded config; a hard reload reads it
 // again from Ghostty's normal config sources.
 fn (mut self Application) reload_config(target apprt.Target, soft bool) ! {
-	internal_os.systemd_notify_reloading()
+	internal_os.reloading()
 	defer {
-		internal_os.systemd_notify_ready()
+		internal_os.ready()
 	}
 	config := if soft { self.config.clone() } else { configpkg.Config.load()! }
 	match target {

@@ -10,17 +10,18 @@ pub fn launched_by_systemd() bool {
 	}
 }
 
-// systemd_notify_ready tells systemd that startup or configuration reload has
-// completed. It is a no-op when systemd did not provide a notification socket.
-pub fn systemd_notify_ready() {
+// ready tells systemd that startup or configuration reload has completed. It
+// translates systemd.notify.ready; the nested source namespace is flattened
+// into V's internal_os module.
+pub fn ready() {
 	$if linux {
 		systemd_notify_send('READY=1')
 	}
 }
 
-// systemd_notify_reloading tells systemd that configuration reloading has
-// started and includes the current monotonic timestamp.
-pub fn systemd_notify_reloading() {
+// reloading tells systemd that configuration reloading has started and
+// includes the current monotonic timestamp.
+pub fn reloading() {
 	$if linux {
 		systemd_notify_reloading_linux()
 	}

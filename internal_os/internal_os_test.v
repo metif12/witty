@@ -445,6 +445,20 @@ fn test_systemd_detection_is_false_off_linux() {
 	}
 }
 
+fn test_systemd_notification_entry_points_without_socket() {
+	previous := os.getenv_opt('NOTIFY_SOCKET')
+	defer {
+		if value := previous {
+			os.setenv('NOTIFY_SOCKET', value, true)
+		} else {
+			os.unsetenv('NOTIFY_SOCKET')
+		}
+	}
+	os.unsetenv('NOTIFY_SOCKET')
+	ready()
+	reloading()
+}
+
 fn test_hostname_validation() {
 	for hostname in ['example', 'example.com', 'www.example.com', 'example.com.',
 		'host-name.example.com.', '123.example.com.', 'a-b.com', '127.0.0.1',
