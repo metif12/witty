@@ -104,7 +104,6 @@ pub struct DataFile {
 mut:
 	file    os.File
 	present bool
-	owned   bool
 }
 
 // data_file returns no handle for none, stdin for "-", or an owned file for
@@ -120,12 +119,11 @@ pub fn data_file(path ?string) !DataFile {
 	return DataFile{
 		file:    os.open(value)!
 		present: true
-		owned:   true
 	}
 }
 
 pub fn (mut self DataFile) close() {
-	if self.present && self.owned {
+	if self.present {
 		self.file.close()
 	}
 	self.present = false
@@ -226,7 +224,9 @@ pub fn (mut self CodepointWidth) destroy() {
 pub fn (mut self CodepointWidth) benchmark() Benchmark {
 	step_fn := match self.opts.mode {
 		.noop { codepoint_width_step_noop }
-		.wcwidth, .simd, .table { codepoint_width_step }
+		.wcwidth { codepoint_width_step_wcwidth }
+		.simd { codepoint_width_step_simd }
+		.table { codepoint_width_step_table }
 	}
 
 	return Benchmark.init(voidptr(self), VTable{
@@ -248,6 +248,7 @@ fn run_codepoint_width(args []string) ! {
 
 fn codepoint_width_setup(ptr voidptr) ! {
 	mut self := unsafe { &CodepointWidth(ptr) }
+	assert !self.data.present
 	self.data = data_file(self.opts.data)!
 }
 
@@ -260,7 +261,7 @@ fn codepoint_width_step_noop(ptr voidptr) ! {
 	_ = ptr
 }
 
-fn codepoint_width_step(ptr voidptr) ! {
+fn codepoint_width_step_wcwidth(ptr voidptr) ! {
 	mut self := unsafe { &CodepointWidth(ptr) }
 	if !self.data.present {
 		return
@@ -275,26 +276,56 @@ fn codepoint_width_step(ptr voidptr) ! {
 		}
 		for c in buf[..n] {
 			result := decoder.next(c)
-			if !result.consumed {
-				return error('invalid UTF-8 stream')
-			}
+			assert result.consumed
 			if cp := result.codepoint {
-				value := match self.opts.mode {
-					.wcwidth {
-						C.witty_benchmark_wcwidth(cp)
-					}
-					.simd {
-						int(simd.codepoint_width(cp))
-					}
-					.table {
-						if cp <= 0xff { 1 } else { int(unicode.get(cp).width()) }
-					}
-					.noop {
-						0
-					}
-				}
+				C.witty_benchmark_do_not_optimize_u64(u64(C.witty_benchmark_wcwidth(cp)))
+			}
+		}
+	}
+}
 
+fn codepoint_width_step_table(ptr voidptr) ! {
+	mut self := unsafe { &CodepointWidth(ptr) }
+	if !self.data.present {
+		return
+	}
+
+	mut decoder := terminal.UTF8Decoder{}
+	mut buf := []u8{len: 4096}
+	for {
+		n := self.data.read(mut buf)!
+		if n == 0 {
+			break
+		}
+		for c in buf[..n] {
+			result := decoder.next(c)
+			assert result.consumed
+			if cp := result.codepoint {
+				value := if cp <= 0xff { u8(1) } else { unicode.get(cp).width() }
 				C.witty_benchmark_do_not_optimize_u64(u64(value))
+			}
+		}
+	}
+}
+
+fn codepoint_width_step_simd(ptr voidptr) ! {
+	mut self := unsafe { &CodepointWidth(ptr) }
+	if !self.data.present {
+		return
+	}
+
+	mut decoder := terminal.UTF8Decoder{}
+	mut buf := []u8{len: 4096}
+	for {
+		n := self.data.read(mut buf)!
+		if n == 0 {
+			break
+		}
+		for c in buf[..n] {
+			result := decoder.next(c)
+			assert result.consumed
+			if cp := result.codepoint {
+				C.witty_benchmark_do_not_optimize_u64(u64(simd.codepoint_width(cp)))
 			}
 		}
 	}
@@ -343,6 +374,7 @@ fn run_grapheme_break(args []string) ! {
 
 fn grapheme_break_setup(ptr voidptr) ! {
 	mut self := unsafe { &GraphemeBreak(ptr) }
+	assert !self.data.present
 	self.data = data_file(self.opts.data)!
 }
 
@@ -386,9 +418,7 @@ fn grapheme_break_step_table(ptr voidptr) ! {
 		}
 		for c in buf[..n] {
 			result := decoder.next(c)
-			if !result.consumed {
-				return error('invalid UTF-8 stream')
-			}
+			assert result.consumed
 			if cp2 := result.codepoint {
 				is_break := unicode.grapheme_break(cp1, cp2, &state)
 				C.witty_benchmark_do_not_optimize_u64(u64(is_break))
@@ -417,8 +447,13 @@ pub fn (mut self IsSymbol) destroy() {
 }
 
 pub fn (mut self IsSymbol) benchmark() Benchmark {
+	step_fn := match self.opts.mode {
+		.uucode { is_symbol_step_uucode }
+		.table { is_symbol_step_table }
+	}
+
 	return Benchmark.init(voidptr(self), VTable{
-		step_fn:     is_symbol_step
+		step_fn:     step_fn
 		setup_fn:    is_symbol_setup
 		teardown_fn: is_symbol_teardown
 	})
@@ -436,6 +471,7 @@ fn run_is_symbol(args []string) ! {
 
 fn is_symbol_setup(ptr voidptr) ! {
 	mut self := unsafe { &IsSymbol(ptr) }
+	assert !self.data.present
 	self.data = data_file(self.opts.data)!
 }
 
@@ -444,7 +480,7 @@ fn is_symbol_teardown(ptr voidptr) {
 	self.data.close()
 }
 
-fn is_symbol_step(ptr voidptr) ! {
+fn is_symbol_step_uucode(ptr voidptr) ! {
 	mut self := unsafe { &IsSymbol(ptr) }
 	if !self.data.present {
 		return
@@ -459,16 +495,32 @@ fn is_symbol_step(ptr voidptr) ! {
 		}
 		for c in buf[..n] {
 			result := decoder.next(c)
-			if !result.consumed {
-				return error('invalid UTF-8 stream')
-			}
+			assert result.consumed
 			if cp := result.codepoint {
-				value := match self.opts.mode {
-					.uucode { unicode.is_symbol_uucode(cp) }
-					.table { unicode.is_symbol(cp) }
-				}
+				C.witty_benchmark_do_not_optimize_u64(u64(unicode.is_symbol_uucode(cp)))
+			}
+		}
+	}
+}
 
-				C.witty_benchmark_do_not_optimize_u64(u64(value))
+fn is_symbol_step_table(ptr voidptr) ! {
+	mut self := unsafe { &IsSymbol(ptr) }
+	if !self.data.present {
+		return
+	}
+
+	mut decoder := terminal.UTF8Decoder{}
+	mut buf := []u8{len: 4096}
+	for {
+		n := self.data.read(mut buf)!
+		if n == 0 {
+			break
+		}
+		for c in buf[..n] {
+			result := decoder.next(c)
+			assert result.consumed
+			if cp := result.codepoint {
+				C.witty_benchmark_do_not_optimize_u64(u64(unicode.is_symbol(cp)))
 			}
 		}
 	}
@@ -512,6 +564,7 @@ fn run_terminal_parser(args []string) ! {
 
 fn terminal_parser_setup(ptr voidptr) ! {
 	mut self := unsafe { &TerminalParser(ptr) }
+	assert !self.data.present
 	self.data = data_file(self.opts.data)!
 }
 
@@ -591,6 +644,7 @@ fn run_terminal_stream(args []string) ! {
 fn terminal_stream_setup(ptr voidptr) ! {
 	mut self := unsafe { &TerminalStream(ptr) }
 	self.terminal.full_reset()
+	assert !self.data.present
 	self.data = data_file(self.opts.data)!
 }
 
@@ -680,9 +734,6 @@ fn screen_clone_setup(ptr voidptr) ! {
 	setup_stream.deinit()
 
 	mut data := data_file(self.opts.data)!
-	defer {
-		data.close()
-	}
 	if data.present {
 		mut stream := self.terminal.vt_stream()
 		defer {
@@ -736,10 +787,7 @@ fn read_exact(mut data DataFile, mut buf []u8) !bool {
 	for offset < buf.len {
 		n := data.read(mut buf[offset..])!
 		if n == 0 {
-			if offset == 0 {
-				return false
-			}
-			return error('truncated data')
+			return false
 		}
 		offset += n
 	}
@@ -787,6 +835,7 @@ fn run_osc_parser(args []string) ! {
 
 fn osc_parser_setup(ptr voidptr) ! {
 	mut self := unsafe { &OscParser(ptr) }
+	assert !self.data.present
 	self.data = data_file(self.opts.data)!
 	self.parser.reset()
 }
@@ -816,7 +865,7 @@ fn osc_parser_step(ptr voidptr) ! {
 			return error('OSC payload exceeds buffer')
 		}
 		if !read_exact(mut self.data, mut osc_buf[..int(length)])! {
-			return error('truncated OSC payload')
+			return
 		}
 		for value in osc_buf[..int(length)] {
 			self.parser.next(value)

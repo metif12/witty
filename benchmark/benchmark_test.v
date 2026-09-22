@@ -170,9 +170,8 @@ fn test_data_file_preserves_optional_stdin_and_owned_file() {
 
 	mut stdin := data_file('-')!
 	assert stdin.present
-	assert !stdin.owned
-	stdin.close()
-	assert !stdin.present
+	// The source returns the actual stdin handle. Benchmark teardown owns the
+	// returned handle and closes it; leave it open here for the test process.
 
 	path := os.join_path(os.temp_dir(), 'witty-benchmark-data-file-${os.getpid()}')
 	os.write_file(path, 'abc')!
@@ -181,7 +180,6 @@ fn test_data_file_preserves_optional_stdin_and_owned_file() {
 	}
 	mut opened := data_file(path)!
 	assert opened.present
-	assert opened.owned
 	mut buf := []u8{len: 3}
 	assert opened.read(mut buf)! == 3
 	assert buf.bytestr() == 'abc'
@@ -214,8 +212,10 @@ fn test_data_benchmarks_process_input() {
 		os.rm(path) or {}
 	}
 	quoted := '"${path}"'
+	run_cli('codepoint-width', '--mode=wcwidth --data=${quoted}')!
 	run_cli('codepoint-width', '--mode=table --data=${quoted}')!
 	run_cli('codepoint-width', '--mode=simd --data=${quoted}')!
+	run_cli('grapheme-break', '--mode=noop --data=${quoted}')!
 	run_cli('grapheme-break', '--data=${quoted}')!
 	run_cli('terminal-parser', '--data=${quoted}')!
 	run_cli('terminal-stream', '--terminal-rows=5 --terminal-cols=10 --data=${quoted}')!
@@ -237,6 +237,25 @@ fn test_osc_parser_benchmark_processes_length_prefixed_input() {
 	defer {
 		os.rm(path) or {}
 	}
+	run_cli('osc-parser', '--data="${path}"')!
+}
+
+fn test_osc_parser_benchmark_treats_truncated_input_as_eof() {
+	path := os.join_path(os.temp_dir(), 'witty-benchmark-osc-truncated-${os.getpid()}')
+	defer {
+		os.rm(path) or {}
+	}
+
+	// Ghostty's buffered reader maps both a partial length prefix and a partial
+	// payload to EndOfStream, which ends the benchmark step without failure.
+	os.write_bytes(path, [u8(3)])!
+	run_cli('osc-parser', '--data="${path}"')!
+
+	mut data := []u8{len: int(sizeof(usize)) + 2}
+	data[0] = 3
+	data[int(sizeof(usize))] = `0`
+	data[int(sizeof(usize)) + 1] = `;`
+	os.write_bytes(path, data)!
 	run_cli('osc-parser', '--data="${path}"')!
 }
 
