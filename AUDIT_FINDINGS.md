@@ -333,6 +333,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | remaining Mach and C-SGR entry points | Tagged page mappings exposed their source `unmap` operation only as the translation-only `deinit`, while all four public SGR attribute projection/allocation helpers retained an extra `sgr_` prefix. The bodies existed, but the pinned callable names did not. | Restore `TaggedPageMemory.unmap`, `attribute_tag`, `attribute_value`, `wasm_alloc_attribute`, and `wasm_free_attribute`, and route direct coverage through those entry points. The owned mapping value replaces the source allocator's aligned slice, and the safe V SGR value replaces its C-union payload pointer. |
 | sprite, Mach, and Kitty color helper entry points | The complete fraction conversion/coordinate helpers, rounded box-corner, and legacy-computing circle implementations were exposed only as `fraction_val`, `to_min`, `to_max`, `to_float`, `box_arc`, and `draw_circle`. Tagged page memory duplicated `realloc` inside `resize`/`remap`, and Kitty color OSC omitted its deliberately void C projection. | Restore `Fraction.fraction`/`min`/`max`/`float`, sprite `arc`/`circle`, `TaggedPageMemory.realloc`, and `ColorOSC.cval`; route production helpers and direct tests through them. Zig's comptime `Triangle(T)`/`Quad(T)` type factories remain concrete V structs because V cannot return a type from a function. |
 | Atlas WebAssembly ownership API | The atlas implementation was complete, but none of its WebAssembly allocation, reservation, upload, growth, or clear entry points existed, leaving the already translated `config_*` exports as the only root Wasm API. | Restore `atlas_new`, `atlas_free`, `atlas_reserve`, `atlas_set`, `atlas_grow`, and `atlas_clear` in the font module, add exact root export symbols for wasm32, and exercise success, mutation, ownership, reserve failure, and grow failure directly. The browser-only debug-canvas export remains part of the WebAssembly platform divergence below. |
+| WebCanvas Wasm face/shaper entry points | The translated face and shaper ownership helpers retained `wasm_` prefixes and were not exported from the root module; the face constructor accepted an already materialized string and widened point size, while `shaper_new` ignored its capacity argument entirely. | Restore the source `face_new`/`face_free`/`face_render_glyph`/`face_debug_canvas` and `shaper_new`/`shaper_free` spellings and signatures, add their exact wasm32 export symbols, and allocate the requested shaping-result capacity. Direct tests cover both nullable destructors and the retained capacity; the browser bridge and `shaper_test` remain documented below. |
 
 ## Focused behavior reviewed
 
@@ -531,9 +532,9 @@ an item here does not mean its full module has been certified yet.
   object IDs. Witty's existing WebCanvas platform implementation is selected
   only by V's JavaScript backend; V's Wasm backend and wasm32 C target do not
   provide that `zig-js` bridge. The source-faithful Atlas ownership/data
-  exports are restored, but `atlas_debug_canvas` and the exact face/shaper
-  browser exports still require translating the bridge rather than inventing
-  a different host ABI.
+  exports and the face/shaper ownership symbols are restored, but
+  `atlas_debug_canvas`, `shaper_test`, and operational Canvas calls still
+  require translating the bridge rather than inventing a different host ABI.
 
 - **Native/platform coverage:** The complete FreeType/CoreText/web-canvas,
   discovery, Metal/OpenGL, shadertoy, regex,

@@ -44,3 +44,11 @@ fn test_web_canvas_deferred_presentation_fast_rejection() {
 	}
 	assert !deferred.has_codepoint(u32(`A`), Presentation.emoji)
 }
+
+fn test_web_canvas_face_wasm_free_accepts_none() {
+	face_free(none)
+	face := &WebCanvasFace{
+		font_str: 'owned face'
+	}
+	face_free(face)
+}

@@ -318,42 +318,37 @@ pub fn (self WebCanvasDeferredFace) load(opts FaceOptions) !WebCanvasFace {
 // The wasm-compatible API for WebCanvasFace.
 // These are exported functions that the browser can call.
 
-// wasm_face_new creates a new WebCanvasFace from a font string.
+// face_new creates a new WebCanvasFace from a font string.
 // Returns a pointer to the face, or null on error.
-pub fn wasm_face_new(font_str string, pts f32, presentation_val u16) ?&WebCanvasFace {
-	presentation := match presentation_val {
-		u16(Presentation.text) { Presentation.text }
-		u16(Presentation.emoji) { Presentation.emoji }
-		else {
-			return none
-		}
-	}
+pub fn face_new(ptr &u8, len usize, pts u16, presentation_val u16) ?&WebCanvasFace {
+	font_str := unsafe { tos(ptr, int(len)) }
+	presentation := unsafe { Presentation(presentation_val) }
 	face := WebCanvasFace.init_named(font_str, DesiredSize{
-		points: pts
+		points: f32(pts)
 	}, presentation) or { return none }
 	mut result := &WebCanvasFace{}
 	unsafe { *result = face }
 	return result
 }
 
-// wasm_face_free frees a WebCanvasFace created by wasm_face_new.
-pub fn wasm_face_free(face ?&WebCanvasFace) {
+// face_free frees a WebCanvasFace created by face_new.
+pub fn face_free(face ?&WebCanvasFace) {
 	if mut value := face {
 		value.deinit()
 		unsafe { free(value) }
 	}
 }
 
-// wasm_face_render_glyph renders a glyph and returns the result.
+// face_render_glyph renders a glyph and returns the result.
 // Resulting pointer must be freed using the global "free".
-pub fn wasm_face_render_glyph(face &WebCanvasFace, mut atlas Atlas, codepoint u32) ?&Glyph {
+pub fn face_render_glyph(face &WebCanvasFace, mut atlas Atlas, codepoint u32) ?&Glyph {
 	glyph := face.render_glyph(mut atlas, codepoint, RenderOptions{}) or { return none }
 	mut result := &Glyph{}
 	unsafe { *result = glyph }
 	return result
 }
 
-// wasm_face_debug_canvas appends the face's canvas to a debug element.
-pub fn wasm_face_debug_canvas(face &WebCanvasFace) {
+// face_debug_canvas appends the face's canvas to a debug element.
+pub fn face_debug_canvas(face &WebCanvasFace) {
 	web_canvas_platform_debug(face.canvas)
 }

@@ -67,3 +67,14 @@ fn test_web_canvas_shape_requires_face_for_grapheme() {
 		assert err.msg().contains('no face')
 	}
 }
+
+fn test_web_canvas_shaper_wasm_capacity_and_free() {
+	shaper := shaper_new(17) or {
+		assert false, 'shaper_new must allocate the requested cell buffer'
+		return
+	}
+	assert shaper.cell_buf.len == 0
+	assert shaper.cell_buf.cap >= 17
+	shaper_free(shaper)
+	shaper_free(none)
+}

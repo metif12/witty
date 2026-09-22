@@ -177,16 +177,17 @@ pub fn (self WebCanvasRunIteratorHook) finalize() {
 	// nothing to do
 }
 
-// wasm_shaper_new creates an owned shaper for browser hosts.
-pub fn wasm_shaper_new(_ usize) ?&WebCanvasShaper {
-	shaper := WebCanvasShaper.init(font.ShaperOptions{}) or { return none }
+// shaper_new creates an owned shaper for browser hosts.
+pub fn shaper_new(cap usize) ?&WebCanvasShaper {
+	mut shaper := WebCanvasShaper.init(font.ShaperOptions{}) or { return none }
+	shaper.cell_buf = []font.ShapeCell{cap: int(cap)}
 	mut result := &WebCanvasShaper{}
 	unsafe { *result = shaper }
 	return result
 }
 
-// wasm_shaper_free releases a shaper returned by wasm_shaper_new.
-pub fn wasm_shaper_free(shaper ?&WebCanvasShaper) {
+// shaper_free releases a shaper returned by shaper_new.
+pub fn shaper_free(shaper ?&WebCanvasShaper) {
 	if mut value := shaper {
 		value.deinit()
 		unsafe { free(value) }
