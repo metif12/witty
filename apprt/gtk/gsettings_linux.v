@@ -50,7 +50,8 @@ pub fn gtk_setting_enable_primary_paste() ?bool {
 	if isnil(settings) {
 		return none
 	}
-	value := C.g_value_init(new_gvalue(), g_type_int)
+	mut storage := GValueStorage{}
+	value := C.g_value_init(storage.ptr(), g_type_int)
 	defer {
 		C.g_value_unset(value)
 	}
@@ -64,7 +65,8 @@ pub fn gtk_setting_xft_dpi() ?int {
 	if isnil(settings) {
 		return none
 	}
-	value := C.g_value_init(new_gvalue(), g_type_int)
+	mut storage := GValueStorage{}
+	value := C.g_value_init(storage.ptr(), g_type_int)
 	defer {
 		C.g_value_unset(value)
 	}
@@ -80,7 +82,8 @@ pub fn gtk_setting_font_name() ?string {
 	if isnil(settings) {
 		return none
 	}
-	value := C.g_value_init(new_gvalue(), g_type_string)
+	mut storage := GValueStorage{}
+	value := C.g_value_init(storage.ptr(), g_type_string)
 	defer {
 		C.g_value_unset(value)
 	}
@@ -92,12 +95,18 @@ pub fn gtk_setting_font_name() ?string {
 	return unsafe { cstring_to_vstring(ptr) }
 }
 
-// new_gvalue allocates a zeroed GValue on the heap for use as an out-parameter.
-// A GValue is a small POD struct; GLib requires it be zeroed before g_value_init.
-fn new_gvalue() GValue {
-	// GValue is { GType g_type; union { ... } data[2]; } -> 8 + 16 = 24 bytes on
-	// 64-bit. Allocate a generously-sized zeroed block to be safe.
-	return GValue(unsafe { vcalloc(64) })
+// GValueStorage is the stack storage for GLib's GValue POD. Its largest union
+// members require eight-byte alignment and the structure occupies 24 bytes on
+// Ghostty's supported targets. Keeping the storage in the caller mirrors the
+// source's `var value = gobject.ext.Value.new(...)` and avoids a heap allocation
+// that `g_value_unset` does not free.
+struct GValueStorage {
+mut:
+	words [3]u64
+}
+
+fn (mut storage GValueStorage) ptr() GValue {
+	return GValue(&storage.words[0])
 }
 
 // --- GSettings (GNOME schema) bindings ------------------------------------

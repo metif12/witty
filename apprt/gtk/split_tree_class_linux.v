@@ -1157,14 +1157,16 @@ fn split_tree_split_idle_cb(data voidptr) int {
 }
 
 fn object_int_property(object voidptr, name &char) int {
-	value := C.g_value_init(new_gvalue(), g_type_int)
+	mut storage := GValueStorage{}
+	value := C.g_value_init(storage.ptr(), g_type_int)
 	defer { C.g_value_unset(value) }
 	C.g_object_get_property(GObject(object), name, value)
 	return C.g_value_get_int(value)
 }
 
 fn object_bool_property(object voidptr, name &char) bool {
-	value := C.g_value_init(new_gvalue(), g_type_boolean)
+	mut storage := GValueStorage{}
+	value := C.g_value_init(storage.ptr(), g_type_boolean)
 	defer { C.g_value_unset(value) }
 	C.g_object_get_property(GObject(object), name, value)
 	return C.g_value_get_boolean(value) != 0
