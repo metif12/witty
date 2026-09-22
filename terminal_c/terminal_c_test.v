@@ -1,9 +1,73 @@
 module terminal_c
 
 import input
+import lib_allocator
 
 // Tests for terminal_c.v
 // Translated from ghostty/src/terminal/c/ test cases.
+
+struct CApiAllocatorState {
+mut:
+	allocs int
+	frees  int
+}
+
+fn c_api_test_alloc(ctx voidptr, len usize, _ u8, _ usize) voidptr {
+	mut state := unsafe { &CApiAllocatorState(ctx) }
+	state.allocs++
+	return unsafe { malloc(if len == 0 { usize(1) } else { len }) }
+}
+
+fn c_api_test_resize(_ voidptr, _ voidptr, _ usize, _ u8, _ usize, _ usize) bool {
+	return false
+}
+
+fn c_api_test_remap(_ voidptr, _ voidptr, _ usize, _ u8, _ usize, _ usize) voidptr {
+	return unsafe { nil }
+}
+
+fn c_api_test_free(ctx voidptr, memory voidptr, _ usize, _ u8, _ usize) {
+	mut state := unsafe { &CApiAllocatorState(ctx) }
+	state.frees++
+	unsafe { free(memory) }
+}
+
+fn test_c_api_objects_use_supplied_allocator() {
+	mut state := CApiAllocatorState{}
+	vtable := lib_allocator.VTable{
+		alloc: c_api_test_alloc
+		resize: c_api_test_resize
+		remap: c_api_test_remap
+		free_fn: c_api_test_free
+	}
+	allocator := lib_allocator.Allocator{
+		ctx: &state
+		vtable: &vtable
+	}
+
+	event_status, mut event := key_event_new_alloc(&allocator)
+	assert event_status == .success
+	assert !isnil(event)
+	key_event_free(mut event)
+
+	encoder_status, mut encoder := key_encoder_new_alloc(&allocator)
+	assert encoder_status == .success
+	assert !isnil(encoder)
+	key_encoder_free(mut encoder)
+
+	osc_status, mut osc_parser := osc_new_alloc(&allocator)
+	assert osc_status == .success
+	assert !isnil(osc_parser)
+	osc_free_alloc(mut osc_parser)
+
+	sgr_status, mut sgr_parser := sgr_new_alloc(&allocator)
+	assert sgr_status == .success
+	assert !isnil(sgr_parser)
+	sgr_free(mut sgr_parser)
+
+	assert state.allocs == 4
+	assert state.frees == 4
+}
 
 // ============================================================
 // Result tests (from c/result.zig)

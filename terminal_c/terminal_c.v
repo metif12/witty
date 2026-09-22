@@ -18,8 +18,11 @@ module terminal_c
 //   - c/main.zig   → module aggregator (this file)
 
 import input
+import lib_allocator
 import osc
 import terminal
+
+const object_alignment = u8(3)
 
 // ============================================================
 // Result (from c/result.zig)
@@ -73,14 +76,41 @@ pub fn paste_is_safe(data string) bool {
 pub struct KeyEvent {
 pub mut:
 	event input.KeyEvent
+mut:
+	allocator lib_allocator.Allocator
+	allocated bool
 }
 
 pub fn key_event_new() &KeyEvent {
 	return &KeyEvent{}
 }
 
+// key_event_new_alloc is the allocator-aware constructor used by the C ABI.
+// It preserves Ghostty's Result + output-pointer allocation contract.
+pub fn key_event_new_alloc(allocator ?&lib_allocator.Allocator) (Result, &KeyEvent) {
+	selected := lib_allocator.default(allocator)
+	raw := selected.alloc_bytes(sizeof(KeyEvent), object_alignment, 0) or {
+		return Result.out_of_memory, unsafe { nil }
+	}
+	mut event := unsafe { &KeyEvent(raw) }
+	unsafe {
+		*event = KeyEvent{
+			allocator: selected
+			allocated: true
+		}
+	}
+	return Result.success, event
+}
+
 pub fn key_event_free(mut event KeyEvent) {
+	allocator := event.allocator
+	allocated := event.allocated
+	ptr := voidptr(&event)
 	event.event = input.KeyEvent{}
+	event.allocated = false
+	if allocated {
+		allocator.free_bytes(ptr, sizeof(KeyEvent), object_alignment, 0)
+	}
 }
 
 pub fn (mut self KeyEvent) set_action(action input.KeyAction) {
@@ -147,6 +177,9 @@ pub fn (self &KeyEvent) get_unshifted_codepoint() u32 {
 pub struct KeyEncoder {
 pub mut:
 	opts input.Options
+mut:
+	allocator lib_allocator.Allocator
+	allocated bool
 }
 
 pub enum KeyEncoderOption as i32 {
@@ -168,8 +201,30 @@ pub fn key_encoder_new() &KeyEncoder {
 	return &KeyEncoder{}
 }
 
+pub fn key_encoder_new_alloc(allocator ?&lib_allocator.Allocator) (Result, &KeyEncoder) {
+	selected := lib_allocator.default(allocator)
+	raw := selected.alloc_bytes(sizeof(KeyEncoder), object_alignment, 0) or {
+		return Result.out_of_memory, unsafe { nil }
+	}
+	mut encoder := unsafe { &KeyEncoder(raw) }
+	unsafe {
+		*encoder = KeyEncoder{
+			allocator: selected
+			allocated: true
+		}
+	}
+	return Result.success, encoder
+}
+
 pub fn key_encoder_free(mut encoder KeyEncoder) {
+	allocator := encoder.allocator
+	allocated := encoder.allocated
+	ptr := voidptr(&encoder)
 	encoder.opts = input.Options{}
+	encoder.allocated = false
+	if allocated {
+		allocator.free_bytes(ptr, sizeof(KeyEncoder), object_alignment, 0)
+	}
 }
 
 pub fn (mut self KeyEncoder) setopt(option KeyEncoderOption, value KeyEncoderOptionValue) {
@@ -226,9 +281,13 @@ pub fn (self &KeyEncoder) encode(event &KeyEvent, mut out []u8) (Result, usize) 
 // ============================================================
 
 // OscParser wraps the osc.Parser for C-compatible access.
+@[heap]
 pub struct OscParser {
 pub mut:
 	parser osc.Parser
+mut:
+	allocator lib_allocator.Allocator
+	allocated bool
 }
 
 // Create a new OSC parser.
@@ -238,8 +297,35 @@ pub fn osc_new() OscParser {
 	}
 }
 
+pub fn osc_new_alloc(allocator ?&lib_allocator.Allocator) (Result, &OscParser) {
+	selected := lib_allocator.default(allocator)
+	raw := selected.alloc_bytes(sizeof(OscParser), object_alignment, 0) or {
+		return Result.out_of_memory, unsafe { nil }
+	}
+	mut parser := unsafe { &OscParser(raw) }
+	unsafe {
+		*parser = OscParser{
+			parser: osc.Parser.init(voidptr(1))
+			allocator: selected
+			allocated: true
+		}
+	}
+	return Result.success, parser
+}
+
 pub fn osc_free(mut parser OscParser) {
 	parser.parser.deinit()
+}
+
+pub fn osc_free_alloc(mut parser OscParser) {
+	allocator := parser.allocator
+	allocated := parser.allocated
+	ptr := voidptr(&parser)
+	parser.parser.deinit()
+	parser.allocated = false
+	if allocated {
+		allocator.free_bytes(ptr, sizeof(OscParser), object_alignment, 0)
+	}
 }
 
 // Reset the OSC parser state.
@@ -296,16 +382,41 @@ pub fn command_data(cmd ?osc.Command, data CommandData) ?string {
 pub struct SgrParser {
 pub mut:
 	parser terminal.SgrParser
+mut:
+	allocator lib_allocator.Allocator
+	allocated bool
 }
 
 pub fn sgr_new() &SgrParser {
 	return &SgrParser{}
 }
 
+pub fn sgr_new_alloc(allocator ?&lib_allocator.Allocator) (Result, &SgrParser) {
+	selected := lib_allocator.default(allocator)
+	raw := selected.alloc_bytes(sizeof(SgrParser), object_alignment, 0) or {
+		return Result.out_of_memory, unsafe { nil }
+	}
+	mut parser := unsafe { &SgrParser(raw) }
+	unsafe {
+		*parser = SgrParser{
+			allocator: selected
+			allocated: true
+		}
+	}
+	return Result.success, parser
+}
+
 pub fn sgr_free(mut parser SgrParser) {
+	allocator := parser.allocator
+	allocated := parser.allocated
+	ptr := voidptr(&parser)
 	parser.parser.params = []u16{}
 	parser.parser.params_sep = terminal.SepList.init_empty()
 	parser.parser.idx = 0
+	parser.allocated = false
+	if allocated {
+		allocator.free_bytes(ptr, sizeof(SgrParser), object_alignment, 0)
+	}
 }
 
 pub fn (mut self SgrParser) reset() {
