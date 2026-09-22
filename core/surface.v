@@ -4120,8 +4120,8 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 	// Forward app-scoped actions to the app. Some app-scoped actions are
 	// special-cased here because they do some special things when performed
 	// from the surface. In ghostty this is `action.scoped(.app)`.
-	if action.scope() == .app {
-		match action.tag {
+	if app_action := action.scoped(.app) {
+		match app_action.tag {
 			.unbind {
 				panic('unbind action reached surface dispatch')
 			}
@@ -4159,7 +4159,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				// forwarded to the app.
 				self.rt_app.perform_action(
 					apprt.Target(apprt.AppTarget{}),
-					app_action_key(action.tag),
+					app_action_key(app_action.tag),
 					apprt.ActionValue{},
 				)!
 			}

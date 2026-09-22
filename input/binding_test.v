@@ -57,6 +57,21 @@ fn test_binding_source_tag_layouts_and_ordinals() {
 	assert [SetValueType.leader, .leaf, .leaf_chained].map(u8(it)) == [u8(0), 1, 2]
 }
 
+fn test_action_scoped_filters_scope_and_preserves_payload() {
+	app_action := Action.new(.new_window)
+	app_scoped := app_action.scoped(.app) or { panic('new_window must be app-scoped') }
+	assert app_scoped.equal(app_action)
+	assert app_action.scoped(.surface) == none
+
+	surface_action := Action.new_uint(.goto_tab, 42)
+	surface_scoped := surface_action.scoped(.surface) or {
+		panic('goto_tab must be surface-scoped')
+	}
+	assert surface_scoped.equal(surface_action)
+	assert surface_scoped.uint_param == 42
+	assert surface_action.scoped(.app) == none
+}
+
 // --- Flags tests ---
 
 fn test_flags_cval_default() {

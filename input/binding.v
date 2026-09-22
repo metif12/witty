@@ -2044,6 +2044,17 @@ pub fn (a Action) scope() ActionScope {
 	}
 }
 
+// scoped returns this action when it belongs to the requested scope, or none
+// otherwise. Ghostty narrows the returned tagged union at comptime; V cannot
+// construct that dependent type, so the translated boundary retains the
+// canonical Action value after performing the same scope check.
+pub fn (a Action) scoped(scope ActionScope) ?Action {
+	if a.scope() != scope {
+		return none
+	}
+	return a
+}
+
 // parse parses an action string like "ignore", "csi:A", "new_split:right".
 pub fn Action.parse(input_str string) !Action {
 	colon_idx := input_str.index_u8(`:`)
