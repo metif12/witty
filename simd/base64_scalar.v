@@ -19,10 +19,10 @@ fn base64_char_to_index(c u8) u8 {
 	}
 }
 
-// base64_scalar_calc_size_upper_bound returns the maximum decoded size for
-// Ghostty's unpadded scalar decoder. A remainder of one byte cannot form a
-// Base64 quantum.
-pub fn base64_scalar_calc_size_upper_bound(source_len usize) !usize {
+// calc_size_upper_bound returns the maximum decoded size for Ghostty's
+// unpadded scalar decoder. A remainder of one byte cannot form a Base64
+// quantum.
+pub fn calc_size_upper_bound(source_len usize) !usize {
 	mut result := source_len / 4 * 3
 	leftover := source_len % 4
 	if leftover == 1 {
@@ -32,11 +32,11 @@ pub fn base64_scalar_calc_size_upper_bound(source_len usize) !usize {
 	return result
 }
 
-// base64_scalar_calc_size_for_slice returns the exact decoded size. The
-// pinned scalar decoder has no padding character, so this equals its upper
-// bound; the public entry point is retained separately as in the source.
-pub fn base64_scalar_calc_size_for_slice(source []u8) !usize {
-	return base64_scalar_calc_size_upper_bound(usize(source.len))
+// calc_size_for_slice returns the exact decoded size. The pinned scalar
+// decoder has no padding character, so this equals its upper bound; the public
+// entry point is retained separately as in the source.
+pub fn calc_size_for_slice(source []u8) !usize {
+	return calc_size_upper_bound(usize(source.len))
 }
 
 // scalar_base64_decode decodes the standard alphabet. As in Ghostty's copied

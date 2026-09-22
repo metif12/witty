@@ -176,9 +176,9 @@ fn test_osc_change_window_title() {
 	parser.next(`;`)
 	parser.next(`a`)
 	cmd := parser.end(0)
-	assert osc_command_type(cmd) == .change_window_title
+	assert command_type(cmd) == .change_window_title
 	assert (command_data(cmd, .change_window_title_str) or { '' }) == 'a'
-	assert osc_command_type(none) == .invalid
+	assert command_type(none) == .invalid
 }
 
 fn test_osc_c_parser_is_allocation_enabled() {
@@ -188,7 +188,7 @@ fn test_osc_c_parser_is_allocation_enabled() {
 		parser.next(ch)
 	}
 	cmd := parser.end(0x1b)
-	assert osc_command_type(cmd) == .kitty_color_protocol
+	assert command_type(cmd) == .kitty_color_protocol
 }
 
 // ============================================================

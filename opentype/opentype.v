@@ -85,13 +85,14 @@ pub fn (f Fixed) int_part() i16 {
 	return i16(f.raw >> 16)
 }
 
-// to_f64 converts a Fixed value to f64.
-pub fn (f Fixed) to_f64() f64 {
+// to converts a Fixed value to f64. Ghostty's generic FloatType is
+// specialized to the only floating-point representation used by Witty.
+pub fn (f Fixed) to() f64 {
 	return f64(f.raw) / 65536.0
 }
 
-// fixed_from creates a Fixed value from a float.
-pub fn fixed_from(float f64) Fixed {
+// from creates a Fixed value from a float.
+pub fn Fixed.from(float f64) Fixed {
 	raw := i32(float * 65536.0 + if float >= 0 { 0.5 } else { -0.5 })
 	return Fixed{
 		raw: raw
@@ -134,13 +135,13 @@ pub fn (f F26Dot6) int_part() i32 {
 	return f.raw >> 6
 }
 
-// to_f64 converts an F26Dot6 value to f64.
-pub fn (f F26Dot6) to_f64() f64 {
+// to converts an F26Dot6 value to f64.
+pub fn (f F26Dot6) to() f64 {
 	return f64(f.raw) / 64.0
 }
 
-// f26dot6_from creates an F26Dot6 value from a float.
-pub fn f26dot6_from(float f64) F26Dot6 {
+// from creates an F26Dot6 value from a float.
+pub fn F26Dot6.from(float f64) F26Dot6 {
 	raw := i32(float * 64.0 + if float >= 0 { 0.5 } else { -0.5 })
 	return F26Dot6{
 		raw: raw
@@ -169,13 +170,13 @@ pub fn (f F2Dot14) int_part() i8 {
 	return i8(f.raw >> 14)
 }
 
-// to_f64 converts an F2Dot14 value to f64.
-pub fn (f F2Dot14) to_f64() f64 {
+// to converts an F2Dot14 value to f64.
+pub fn (f F2Dot14) to() f64 {
 	return f64(f.raw) / 16384.0
 }
 
-// f2dot14_from creates an F2Dot14 value from a float.
-pub fn f2dot14_from(float f64) F2Dot14 {
+// from creates an F2Dot14 value from a float.
+pub fn F2Dot14.from(float f64) F2Dot14 {
 	raw := i16(float * 16384.0 + if float >= 0 { 0.5 } else { -0.5 })
 	return F2Dot14{
 		raw: raw

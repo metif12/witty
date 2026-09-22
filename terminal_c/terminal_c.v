@@ -257,7 +257,7 @@ pub fn (mut self OscParser) end(terminator u8) ?osc.Command {
 	return self.parser.end(terminator)
 }
 
-pub fn osc_command_type(cmd ?osc.Command) osc.CommandType {
+pub fn command_type(cmd ?osc.Command) osc.CommandType {
 	command := cmd or { return .invalid }
 	return command.cmd_type
 }

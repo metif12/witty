@@ -5,12 +5,12 @@ fn test_base64_max_len() {
 }
 
 fn test_base64_scalar_source_size_entry_points() {
-	assert base64_scalar_calc_size_upper_bound(0)! == 0
-	assert base64_scalar_calc_size_upper_bound(2)! == 1
-	assert base64_scalar_calc_size_upper_bound(3)! == 2
-	assert base64_scalar_calc_size_upper_bound(4)! == 3
-	assert base64_scalar_calc_size_for_slice('aGVsbG8gd29ybGQ'.bytes())! == 11
-	base64_scalar_calc_size_upper_bound(1) or {
+	assert calc_size_upper_bound(0)! == 0
+	assert calc_size_upper_bound(2)! == 1
+	assert calc_size_upper_bound(3)! == 2
+	assert calc_size_upper_bound(4)! == 3
+	assert calc_size_for_slice('aGVsbG8gd29ybGQ'.bytes())! == 11
+	calc_size_upper_bound(1) or {
 		assert err.msg() == 'InvalidPadding'
 		return
 	}

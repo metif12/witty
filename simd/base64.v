@@ -18,7 +18,7 @@ fn base64_scalar_input(input []u8) []u8 {
 // length. This is Ghostty's maxLen entry point.
 pub fn max_len(input []u8) usize {
 	scalar := base64_scalar_input(input)
-	return base64_scalar_calc_size_for_slice(scalar) or { 0 }
+	return calc_size_for_slice(scalar) or { 0 }
 }
 
 // decode decodes input into caller-owned storage and returns the used prefix.

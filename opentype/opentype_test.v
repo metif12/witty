@@ -6,42 +6,42 @@ module opentype
 
 fn test_fixed_from_and_to_f64() {
 	// Test positive value
-	f := fixed_from(1.5)
+	f := Fixed.from(1.5)
 	assert sizeof(Fixed) == 4
 	assert f.int_part() == 1
 	assert f.frac() == 32768 // 0.5 * 65536
 
-	result := f.to_f64()
+	result := f.to()
 	assert result == 1.5
 
 	// Test zero
-	z := fixed_from(0.0)
+	z := Fixed.from(0.0)
 	assert z.int_part() == 0
 	assert z.frac() == 0
-	assert z.to_f64() == 0.0
+	assert z.to() == 0.0
 }
 
 fn test_fixed_negative() {
 	// Test negative value
-	f := fixed_from(-1.5)
-	result := f.to_f64()
+	f := Fixed.from(-1.5)
+	result := f.to()
 	assert result == -1.5
 }
 
 fn test_fixed_round() {
-	assert fixed_from(1.5).round() == 2
-	assert fixed_from(1.25).round() == 1
-	assert fixed_from(-1.5).round() == -1
-	assert fixed_from(-1.25).round() == -1
+	assert Fixed.from(1.5).round() == 2
+	assert Fixed.from(1.25).round() == 1
+	assert Fixed.from(-1.5).round() == -1
+	assert Fixed.from(-1.25).round() == -1
 }
 
 fn test_f26dot6_from_and_to_f64() {
 	// Test positive value: 26.6
-	p := f26dot6_from(26.6)
+	p := F26Dot6.from(26.6)
 	assert p.int_part() == 26
 	assert p.frac() == 38 // 0.6 * 64 ~ 38.4 -> rounded to 38
 
-	result := p.to_f64()
+	result := p.to()
 	// 26 + 38/64 = 26.59375
 	assert result == 26.59375
 
@@ -51,40 +51,40 @@ fn test_f26dot6_from_and_to_f64() {
 
 fn test_f26dot6_negative() {
 	// Test negative value: -26.6
-	n := f26dot6_from(-26.6)
-	result := n.to_f64()
+	n := F26Dot6.from(-26.6)
+	result := n.to()
 	assert result == -26.59375
 	assert n.round() == -27
 }
 
 fn test_f26dot6_round_half() {
 	// 0.5 should round to 1 (bit 5 set = 32 & 0x20 != 0)
-	half := f26dot6_from(0.5)
+	half := F26Dot6.from(0.5)
 	assert half.round() == 1
 
 	// 0.25 should round to 0 (bit 5 not set = 16 & 0x20 == 0)
-	quarter := f26dot6_from(0.25)
+	quarter := F26Dot6.from(0.25)
 	assert quarter.round() == 0
 }
 
 fn test_f2dot14_from_to_and_round() {
-	positive := f2dot14_from(1.5)
+	positive := F2Dot14.from(1.5)
 	assert sizeof(F2Dot14) == 2
 	assert positive.int_part() == 1
 	assert positive.frac() == 8192
-	assert positive.to_f64() == 1.5
+	assert positive.to() == 1.5
 	assert positive.round() == 2
 
-	negative := f2dot14_from(-1.5)
+	negative := F2Dot14.from(-1.5)
 	assert negative.int_part() == -2
 	assert negative.frac() == 8192
-	assert negative.to_f64() == -1.5
+	assert negative.to() == -1.5
 	assert negative.round() == -1
 
-	quarter := f2dot14_from(0.25)
+	quarter := F2Dot14.from(0.25)
 	assert quarter.int_part() == 0
 	assert quarter.frac() == 4096
-	assert quarter.to_f64() == 0.25
+	assert quarter.to() == 0.25
 	assert quarter.round() == 0
 }
 
@@ -915,7 +915,7 @@ fn test_post_parse() {
 
 	assert post.version.major() == 2
 	assert post.version.minor() == 0
-	assert post.italic_angle.to_f64() == 0.0
+	assert post.italic_angle.to() == 0.0
 	assert post.underline_position == -200
 	assert post.underline_thickness == 100
 	assert post.is_fixed_pitch == 1
@@ -944,7 +944,7 @@ fn test_post_italic_angle() {
 		assert false
 		return
 	}
-	assert post.italic_angle.to_f64() == -12.0
+	assert post.italic_angle.to() == -12.0
 }
 
 // ============================================================
