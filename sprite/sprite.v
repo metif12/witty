@@ -109,11 +109,11 @@ pub fn (c &Canvas) sfc_height() u32 {
 pub fn Canvas.init(w u32, h u32, pad_x u32, pad_y u32) Canvas {
 	total := (w + 2 * pad_x) * (h + 2 * pad_y)
 	return Canvas{
-		width: w
-		height: h
+		width:     w
+		height:    h
 		padding_x: pad_x
 		padding_y: pad_y
-		data: []u8{len: int(total)}
+		data:      []u8{len: int(total)}
 	}
 }
 
@@ -175,9 +175,9 @@ pub fn (mut c Canvas) box(x0 i32, y0 i32, x1 i32, y1 i32, color Color) {
 	br_x := if x0 > x1 { x0 } else { x1 }
 	br_y := if y0 > y1 { y0 } else { y1 }
 	c.rect(SpriteRect{
-		x: tl_x
-		y: tl_y
-		width: br_x - tl_x
+		x:      tl_x
+		y:      tl_y
+		width:  br_x - tl_x
 		height: br_y - tl_y
 	}, color)
 }
@@ -189,7 +189,7 @@ pub fn (mut c Canvas) line(l LineSegment, thickness f64, color Color) ! {
 	path.line_to(l.p1.x, l.p1.y)
 	c.stroke_path(path.wrapped_path, StrokeOptions{
 		line_cap_mode: .butt
-		line_width: thickness
+		line_width:    thickness
 	}, color)!
 }
 
@@ -220,14 +220,14 @@ pub fn (mut c Canvas) triangle(t Triangle, color Color) ! {
 pub fn (mut c Canvas) static_path(max_nodes int) StaticPath {
 	return StaticPath{
 		canvas: unsafe { &c }
-		nodes: []PathNode{cap: max_nodes}
+		nodes:  []PathNode{cap: max_nodes}
 	}
 }
 
 // get_context returns a drawing context for the canvas.
 pub fn (mut c Canvas) get_context() Context {
 	return Context{
-		canvas: unsafe { &c }
+		canvas:     unsafe { &c }
 		line_width: 2.0
 	}
 }
@@ -384,9 +384,33 @@ fn sat_add(a u32, b u32) u32 {
 	return if b > u32(0xffff_ffff) - a { u32(0xffff_ffff) } else { a + b }
 }
 
+// write_atlas trims this drawing, reserves its exact clipped size in a
+// grayscale atlas, and copies the retained rectangle into that reservation.
+// The atlas parameter is generic only to avoid a V module cycle; it is
+// instantiated with font.Atlas by the live sprite face, matching Ghostty's
+// Canvas.writeAtlas operation and ordering.
+pub fn (mut c Canvas) write_atlas[T](mut atlas T) !font.AtlasRegion {
+	assert atlas.format.depth() == 1
+	c.trim()
+
+	sfc_width := c.sfc_width()
+	sfc_height := c.sfc_height()
+	region_width := sat_sub(sat_sub(sfc_width, c.clip_left), c.clip_right)
+	region_height := sat_sub(sat_sub(sfc_height, c.clip_top), c.clip_bottom)
+	region := atlas.reserve(region_width, region_height)!
+
+	if region.width > 0 && region.height > 0 {
+		assert region.width == region_width
+		assert region.height == region_height
+		atlas.set_from_larger(region, c.data, sfc_width, c.clip_left, c.clip_top)
+	}
+
+	return region
+}
+
 // rasterize trims transparent margins and returns the owned alpha surface plus
-// the source rectangle containing the glyph. Atlas allocation remains in the
-// font module, which is the owner of that resource.
+// the source rectangle containing the glyph. This dependency-free projection
+// is retained for sprite tests and consumers that do not own an atlas.
 pub fn (mut c Canvas) rasterize() RasterizedGlyph {
 	c.trim()
 
@@ -399,12 +423,12 @@ pub fn (mut c Canvas) rasterize() RasterizedGlyph {
 	region_height := sat_sub(sat_sub(sfc_height, c.clip_top), c.clip_bottom)
 
 	return RasterizedGlyph{
-		data: c.data
+		data:       c.data
 		data_width: sfc_width
-		source_x: c.clip_left
-		source_y: c.clip_top
-		width: region_width
-		height: region_height
+		source_x:   c.clip_left
+		source_y:   c.clip_top
+		width:      region_width
+		height:     region_height
 	}
 }
 
@@ -457,7 +481,7 @@ pub enum LineCapMode as u8 {
 pub struct StrokeOptions {
 pub:
 	line_cap_mode LineCapMode = .butt
-	line_width    f64 = 2.0
+	line_width    f64         = 2.0
 }
 
 // StaticPath is a fixed-capacity path builder. It mirrors z2d's
@@ -496,8 +520,8 @@ pub fn (mut p StaticPath) move_to(x f64, y f64) {
 	}
 	p.nodes << PathNode{
 		kind: .move_to
-		x: point.x
-		y: point.y
+		x:    point.x
+		y:    point.y
 	}
 	p.initial_point = point
 	p.current_point = point
@@ -514,8 +538,8 @@ pub fn (mut p StaticPath) line_to(x f64, y f64) {
 	}
 	p.nodes << PathNode{
 		kind: .line_to
-		x: p.tx(x)
-		y: p.ty(y)
+		x:    p.tx(x)
+		y:    p.ty(y)
 	}
 	p.current_point = Point{ x: p.tx(x), y: p.ty(y) }
 	p.wrapped_path = Path{
@@ -531,12 +555,12 @@ pub fn (mut p StaticPath) curve_to(c1x f64, c1y f64, c2x f64, c2y f64, x f64, y 
 	}
 	p.nodes << PathNode{
 		kind: .curve_to
-		x: p.tx(x)
-		y: p.ty(y)
-		c1x: p.tx(c1x)
-		c1y: p.ty(c1y)
-		c2x: p.tx(c2x)
-		c2y: p.ty(c2y)
+		x:    p.tx(x)
+		y:    p.ty(y)
+		c1x:  p.tx(c1x)
+		c1y:  p.ty(c1y)
+		c2x:  p.tx(c2x)
+		c2y:  p.ty(c2y)
 	}
 	p.current_point = Point{ x: p.tx(x), y: p.ty(y) }
 	p.wrapped_path = Path{
@@ -556,8 +580,8 @@ pub fn (mut p StaticPath) close() {
 	initial := p.initial_point or { return }
 	p.nodes << PathNode{
 		kind: .move_to
-		x: initial.x
-		y: initial.y
+		x:    initial.x
+		y:    initial.y
 	}
 	p.wrapped_path = Path{
 		nodes: p.nodes
@@ -751,7 +775,7 @@ pub fn (mut c Canvas) inner_stroke_path(path Path, opts StrokeOptions, color Col
 	mut stroke_canvas := Canvas.init(c.width, c.height, c.padding_x, c.padding_y)
 	stroke_canvas.stroke_path(path, StrokeOptions{
 		line_cap_mode: opts.line_cap_mode
-		line_width: opts.line_width * 2.0
+		line_width:    opts.line_width * 2.0
 	}, color)!
 
 	for i in 0 .. c.data.len {
@@ -775,10 +799,10 @@ fn points_equal(a Point, b Point) bool {
 // padding transform is applied through the underlying StaticPath.
 pub struct Context {
 pub mut:
-	canvas        &Canvas = unsafe { nil }
-	line_width    f64 = 2.0
+	canvas        &Canvas     = unsafe { nil }
+	line_width    f64         = 2.0
 	line_cap_mode LineCapMode = .butt
-	color         Color = .on
+	color         Color       = .on
 	nodes         []PathNode
 	// Tracks the current point for relative operations like `arc`.
 	has_current bool
@@ -839,8 +863,8 @@ pub fn (mut ctx Context) move_to(x f64, y f64) {
 	}
 	ctx.nodes << PathNode{
 		kind: .move_to
-		x: point_x
-		y: point_y
+		x:    point_x
+		y:    point_y
 	}
 	ctx.cur_x = x
 	ctx.cur_y = y
@@ -857,8 +881,8 @@ pub fn (mut ctx Context) line_to(x f64, y f64) {
 	}
 	ctx.nodes << PathNode{
 		kind: .line_to
-		x: ctx.tx(x)
-		y: ctx.ty(y)
+		x:    ctx.tx(x)
+		y:    ctx.ty(y)
 	}
 	ctx.cur_x = x
 	ctx.cur_y = y
@@ -871,12 +895,12 @@ pub fn (mut ctx Context) curve_to(c1x f64, c1y f64, c2x f64, c2y f64, x f64, y f
 	}
 	ctx.nodes << PathNode{
 		kind: .curve_to
-		x: ctx.tx(x)
-		y: ctx.ty(y)
-		c1x: ctx.tx(c1x)
-		c1y: ctx.ty(c1y)
-		c2x: ctx.tx(c2x)
-		c2y: ctx.ty(c2y)
+		x:    ctx.tx(x)
+		y:    ctx.ty(y)
+		c1x:  ctx.tx(c1x)
+		c1y:  ctx.ty(c1y)
+		c2x:  ctx.tx(c2x)
+		c2y:  ctx.ty(c2y)
 	}
 	ctx.cur_x = x
 	ctx.cur_y = y
@@ -988,8 +1012,8 @@ pub fn (mut ctx Context) close_path() ! {
 	if ctx.has_start {
 		ctx.nodes << PathNode{
 			kind: .move_to
-			x: ctx.tx(ctx.start_x)
-			y: ctx.ty(ctx.start_y)
+			x:    ctx.tx(ctx.start_x)
+			y:    ctx.ty(ctx.start_y)
 		}
 	}
 }
@@ -1016,7 +1040,7 @@ pub fn (mut ctx Context) stroke() ! {
 	}
 	ctx.canvas.stroke_path(path, StrokeOptions{
 		line_cap_mode: ctx.line_cap_mode
-		line_width: ctx.line_width
+		line_width:    ctx.line_width
 	}, ctx.color)!
 }
 
@@ -1159,7 +1183,7 @@ pub enum VerticalAlignment as u8 {
 pub struct Alignment {
 pub:
 	horizontal HorizontalAlignment = .center
-	vertical   VerticalAlignment = .middle
+	vertical   VerticalAlignment   = .middle
 }
 
 // Named alignment constants.
@@ -1176,19 +1200,19 @@ pub const align_right = Alignment{
 	horizontal: .right
 }
 pub const align_upper_left = Alignment{
-	vertical: .top
+	vertical:   .top
 	horizontal: .left
 }
 pub const align_upper_right = Alignment{
-	vertical: .top
+	vertical:   .top
 	horizontal: .right
 }
 pub const align_lower_left = Alignment{
-	vertical: .bottom
+	vertical:   .bottom
 	horizontal: .left
 }
 pub const align_lower_right = Alignment{
-	vertical: .bottom
+	vertical:   .bottom
 	horizontal: .right
 }
 pub const align_center = Alignment{}
@@ -1433,9 +1457,9 @@ pub fn block_shade(metrics font.Metrics, mut canvas Canvas, alignment Alignment,
 	}
 
 	canvas.rect(SpriteRect{
-		x: i32(x)
-		y: i32(y)
-		width: i32(w)
+		x:      i32(x)
+		y:      i32(y)
+		width:  i32(w)
 		height: i32(h)
 	}, unsafe { Color(u8(shade)) })
 }

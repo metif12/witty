@@ -70,21 +70,6 @@ pub const embedded_spleen_otb = $embed_file('@VMODROOT/font/res/spleen-8x16.otb'
 // returns a dependency-neutral raster which this module inserts into the
 // font-owned atlas.
 
-// reserve_growing reserves a region in the atlas, growing it (doubling)
-// as necessary if the reservation fails because the atlas is full.
-fn reserve_growing(mut atlas Atlas, width u32, height u32) !AtlasRegion {
-	for {
-		if region := atlas.reserve(width, height) {
-			return region
-		} else {
-			// Atlas is full; grow and retry. We double the size, matching
-			// ghostty's SharedGrid growth strategy.
-			atlas.grow(atlas.size * 2)!
-		}
-	}
-	return AtlasRegion{}
-}
-
 // render_builtin_cell_glyph renders a built-in sprite glyph into the atlas.
 // Unsupported codepoints produce the empty glyph returned by SpriteFace.
 pub fn render_builtin_cell_glyph(mut atlas Atlas, cp u32, metrics Metrics) !Glyph {
@@ -106,40 +91,37 @@ pub fn sprite_face_render_glyph(mut atlas Atlas, cp u32, metrics Metrics, opts R
 	rendered := face.render_glyph(cp, spritepkg.RenderOptions{
 		cell_width: opts.cell_width
 	})!
-	raster := rendered.raster
-	region := reserve_growing(mut atlas, raster.width, raster.height)!
-	if region.width > 0 && region.height > 0 {
-		atlas.set_from_larger(region, raster.data, raster.data_width, raster.source_x, raster.source_y)
-	}
+	mut canvas := rendered.canvas
+	region := canvas.write_atlas(mut atlas)!
 
 	return Glyph{
-		width: region.width
-		height: region.height
+		width:    region.width
+		height:   region.height
 		offset_x: rendered.offset_x
 		offset_y: rendered.offset_y
-		atlas_x: region.x
-		atlas_y: region.y
+		atlas_x:  region.x
+		atlas_y:  region.y
 	}
 }
 
 fn sprite_metrics(metrics Metrics) sprite_types.Metrics {
 	return sprite_types.Metrics{
-		cell_width: metrics.cell_width
-		cell_height: metrics.cell_height
-		cell_baseline: metrics.cell_baseline
-		underline_position: metrics.underline_position
-		underline_thickness: metrics.underline_thickness
-		strikethrough_position: metrics.strikethrough_position
+		cell_width:              metrics.cell_width
+		cell_height:             metrics.cell_height
+		cell_baseline:           metrics.cell_baseline
+		underline_position:      metrics.underline_position
+		underline_thickness:     metrics.underline_thickness
+		strikethrough_position:  metrics.strikethrough_position
 		strikethrough_thickness: metrics.strikethrough_thickness
-		overline_position: metrics.overline_position
-		overline_thickness: metrics.overline_thickness
-		box_thickness: metrics.box_thickness
-		cursor_thickness: metrics.cursor_thickness
-		cursor_height: metrics.cursor_height
-		icon_height: metrics.icon_height
-		icon_height_single: metrics.icon_height_single
-		face_width: metrics.face_width
-		face_height: metrics.face_height
-		face_y: metrics.face_y
+		overline_position:       metrics.overline_position
+		overline_thickness:      metrics.overline_thickness
+		box_thickness:           metrics.box_thickness
+		cursor_thickness:        metrics.cursor_thickness
+		cursor_height:           metrics.cursor_height
+		icon_height:             metrics.icon_height
+		icon_height_single:      metrics.icon_height_single
+		face_width:              metrics.face_width
+		face_height:             metrics.face_height
+		face_y:                  metrics.face_y
 	}
 }

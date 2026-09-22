@@ -109,11 +109,11 @@ pub fn SharedGrid.init(resolver CodepointResolver) !SharedGrid {
 	}
 
 	mut result := SharedGrid{
-		resolver: resolver
+		resolver:        resolver
 		atlas_grayscale: atlas_grayscale
-		atlas_color: atlas_color
-		metrics: Metrics{} // Loaded below
-		lock: sync.new_rwmutex()
+		atlas_color:     atlas_color
+		metrics:         Metrics{} // Loaded below
+		lock:            sync.new_rwmutex()
 	}
 
 	// These checks represent the source map-capacity allocations. V maps grow
@@ -175,7 +175,7 @@ fn (mut self SharedGrid) reload_metrics() ! {
 // This is not thread safe.
 pub fn (self &SharedGrid) cell_size() CellSize {
 	return CellSize{
-		width: self.metrics.cell_width
+		width:  self.metrics.cell_width
 		height: self.metrics.cell_height
 	}
 }
@@ -192,8 +192,8 @@ pub fn (self &SharedGrid) cell_size() CellSize {
 // this wrapper preserves both states without discarding loading errors.
 pub fn (mut self SharedGrid) get_index(cp u32, style Style, p ?Presentation) !CodepointValue {
 	key := CodepointKey{
-		style: style
-		codepoint: cp
+		style:        style
+		codepoint:    cp
 		presentation: p
 	}
 	h := key.hash_key()
@@ -223,7 +223,7 @@ pub fn (mut self SharedGrid) get_index(cp u32, style Style, p ?Presentation) !Co
 	if idx := value {
 		result := CodepointValue{
 			has_value: true
-			index: idx
+			index:     idx
 		}
 		codepoint_cache_put(mut self.codepoints, h, key, result)
 
@@ -292,7 +292,7 @@ pub fn (mut self SharedGrid) render_codepoint(cp u32, style Style, p ?Presentati
 	// Render
 	return RenderValue{
 		has_value: true
-		render: self.render_glyph(index, glyph_index, opts)!
+		render:    self.render_glyph(index, glyph_index, opts)!
 	}
 }
 
@@ -303,7 +303,7 @@ pub fn (mut self SharedGrid) render_glyph(index Index, glyph_index u32, opts Ren
 	key := GlyphKey{
 		index: index
 		glyph: glyph_index
-		opts: opts
+		opts:  opts
 	}
 	h := key.hash_key()
 
@@ -340,20 +340,20 @@ pub fn (mut self SharedGrid) render_glyph(index Index, glyph_index u32, opts Ren
 		render_opts.constraint = Constraint{
 			// Scale emoji to be as large as possible
 			// while preserving their aspect ratio.
-			size: .cover
+			size:             .cover
 			// Center the emoji in its cells.
 			align_horizontal: .center
-			align_vertical: .center
+			align_vertical:   .center
 			// Add a small bit of padding so the emoji
 			// doesn't quite touch the edges of the cells.
-			pad_left: 0.025
-			pad_right: 0.025
+			pad_left:         0.025
+			pad_right:        0.025
 		}
 	}
 
 	// Render into the atlas
 	glyph := self.resolver.render_glyph(mut atlas, index, glyph_index, render_opts) or {
-		if err.msg() == 'atlas full' {
+		if err.msg() == 'AtlasFull' {
 			// If the atlas is full, we resize it
 			atlas.grow(atlas.size * 2)!
 			self.resolver.render_glyph(mut atlas, index, glyph_index, render_opts)!
@@ -364,7 +364,7 @@ pub fn (mut self SharedGrid) render_glyph(index Index, glyph_index u32, opts Ren
 
 	// Cache and return
 	result := RenderResult{
-		glyph: glyph
+		glyph:        glyph
 		presentation: p
 	}
 	glyph_cache_put(mut self.glyphs, h, key, result)

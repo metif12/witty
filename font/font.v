@@ -399,6 +399,7 @@ import fastmem
 import harfbuzz
 import io
 import math
+import sprite_types
 import sync.stdatomic
 import terminal
 import tripwire
@@ -475,23 +476,23 @@ const metrics_min_face_width = f64(1.0)
 // grid without a real font face. The icon height is set to the cell height.
 pub fn default_grid_metrics(cell_width u32, cell_height u32) Metrics {
 	return Metrics{
-		cell_width: cell_width
-		cell_height: cell_height
-		cell_baseline: 0
-		underline_position: cell_height
-		underline_thickness: 2
-		strikethrough_position: cell_height / 2
+		cell_width:              cell_width
+		cell_height:             cell_height
+		cell_baseline:           0
+		underline_position:      cell_height
+		underline_thickness:     2
+		strikethrough_position:  cell_height / 2
 		strikethrough_thickness: 1
-		overline_position: 0
-		overline_thickness: 1
-		box_thickness: 1
-		cursor_thickness: 1
-		cursor_height: cell_height
-		icon_height: f64(cell_height)
-		icon_height_single: f64(cell_height)
-		face_width: f64(cell_width)
-		face_height: f64(cell_height)
-		face_y: 0.0
+		overline_position:       0
+		overline_thickness:      1
+		box_thickness:           1
+		cursor_thickness:        1
+		cursor_height:           cell_height
+		icon_height:             f64(cell_height)
+		icon_height_single:      f64(cell_height)
+		face_width:              f64(cell_width)
+		face_height:             f64(cell_height)
+		face_y:                  0.0
 	}
 }
 
@@ -558,23 +559,23 @@ pub fn Metrics.calc(face FaceMetrics) Metrics {
 	icon_height_single := (2 * cap_height + face_height) / 3
 
 	mut result := Metrics{
-		cell_width: u32(cell_width)
-		cell_height: u32(cell_height)
-		cell_baseline: u32(cell_baseline)
-		underline_position: u32(underline_position)
-		underline_thickness: u32(underline_thickness)
-		strikethrough_position: u32(strikethrough_position)
+		cell_width:              u32(cell_width)
+		cell_height:             u32(cell_height)
+		cell_baseline:           u32(cell_baseline)
+		underline_position:      u32(underline_position)
+		underline_thickness:     u32(underline_thickness)
+		strikethrough_position:  u32(strikethrough_position)
 		strikethrough_thickness: u32(strikethrough_thickness)
-		overline_position: 0
-		overline_thickness: u32(underline_thickness)
-		box_thickness: u32(underline_thickness)
-		cursor_thickness: 1
-		cursor_height: u32(cell_height)
-		icon_height: icon_height
-		icon_height_single: icon_height_single
-		face_width: face_width
-		face_height: face_height
-		face_y: face_y
+		overline_position:       0
+		overline_thickness:      u32(underline_thickness)
+		box_thickness:           u32(underline_thickness)
+		cursor_thickness:        1
+		cursor_height:           u32(cell_height)
+		icon_height:             icon_height
+		icon_height_single:      icon_height_single
+		face_width:              face_width
+		face_height:             face_height
+		face_y:                  face_y
 	}
 
 	// Ensure all metrics are within their allowable range.
@@ -854,15 +855,9 @@ pub fn (f AtlasFormat) depth() u8 {
 	}
 }
 
-// AtlasRegion is a region within the texture atlas. These are acquired
-// using the "reserve" function. A region reservation is required to write data.
-pub struct AtlasRegion {
-pub mut:
-	x      u32
-	y      u32
-	width  u32
-	height u32
-}
+// AtlasRegion is declared in the cycle-free sprite_types module so both the
+// Atlas and Canvas.write_atlas use one canonical region value.
+pub type AtlasRegion = sprite_types.AtlasRegion
 
 // AtlasNode is a rectangle of available space in the atlas.
 struct AtlasNode {
@@ -933,10 +928,10 @@ pub fn Atlas.init(size u32, format AtlasFormat) !Atlas {
 	mut tw := atlas_init_tripwire()
 	tw.check(.alloc_data)!
 	mut a := Atlas{
-		size: size
+		size:   size
 		format: format
-		data: []u8{len: int(size * size * format.depth())}
-		nodes: []AtlasNode{cap: 64}
+		data:   []u8{len: int(size * size * format.depth())}
+		nodes:  []AtlasNode{cap: 64}
 	}
 	tw.check(.alloc_nodes)!
 	// This sets up our initial state.
@@ -957,9 +952,9 @@ pub fn (mut a Atlas) deinit() {
 pub fn (mut a Atlas) reserve(width u32, height u32) !AtlasRegion {
 	// x, y are populated within the best-index search below.
 	mut region := AtlasRegion{
-		x: 0
-		y: 0
-		width: width
+		x:      0
+		y:      0
+		width:  width
 		height: height
 	}
 
@@ -1000,8 +995,8 @@ pub fn (mut a Atlas) reserve(width u32, height u32) !AtlasRegion {
 	mut tw := atlas_reserve_tripwire()
 	tw.check(.insert_node)!
 	a.nodes.insert(best_idx, AtlasNode{
-		x: region.x
-		y: region.y + height
+		x:     region.x
+		y:     region.y + height
 		width: width
 	})
 
@@ -1151,16 +1146,16 @@ pub fn (mut a Atlas) grow(size_new u32) ! {
 	// We skip the first border row of the old data, since we copy it in
 	// starting at y=1 in the new atlas.
 	a.set(AtlasRegion{
-		x: 0 // don't bother skipping border so we can avoid strides
-		y: 1 // skip the first border row
-		width: size_old
+		x:      0 // don't bother skipping border so we can avoid strides
+		y:      1 // skip the first border row
+		width:  size_old
 		height: size_old - 2 // skip the last border row
 	}, data_old[int(size_old * depth)..])
 
 	// Add the new rectangle for our added righthand space.
 	a.nodes << AtlasNode{
-		x: size_old - 1
-		y: 1
+		x:     size_old - 1
+		y:     1
 		width: size_new - size_old
 	}
 
@@ -1181,8 +1176,8 @@ pub fn (mut a Atlas) clear() {
 	// and is the initial rectangle we fit our regions in. We keep a 1px border
 	// to avoid artifacting when sampling the texture.
 	a.nodes << AtlasNode{
-		x: 1
-		y: 1
+		x:     1
+		y:     1
 		width: a.size - 2
 	}
 }
@@ -1406,7 +1401,7 @@ pub fn Shaper.init(opts ShaperOptions) !Shaper {
 	}
 	return Shaper{
 		features: opts.features.clone()
-		hb_buf: harfbuzz.Buffer.create()!
+		hb_buf:   harfbuzz.Buffer.create()!
 		hb_feats: feats
 	}
 }
@@ -1475,10 +1470,10 @@ pub fn (mut s Shaper) shape(run TextRun) ![]ShapeCell {
 		}
 		pos := positions[i]
 		s.cell_buf << ShapeCell{
-			x: cell_cluster
+			x:           cell_cluster
 			glyph_index: info[i].codepoint
-			x_offset: run_x - cell_x + ((pos.x_offset + 32) >> 6)
-			y_offset: run_y + ((pos.y_offset + 32) >> 6)
+			x_offset:    run_x - cell_x + ((pos.x_offset + 32) >> 6)
+			y_offset:    run_y + ((pos.y_offset + 32) >> 6)
 		}
 		run_x += (pos.x_advance + 32) >> 6
 		run_y += (pos.y_advance + 32) >> 6
@@ -1606,9 +1601,9 @@ pub mut:
 	shaper_ptr  voidptr = unsafe { nil }
 	opts        RunOptions
 	i           int
-	prepare_fn  fn (voidptr) = unsafe { nil }
+	prepare_fn  fn (voidptr)                 = unsafe { nil }
 	add_fn      fn (voidptr, u32, u32) !void = unsafe { nil }
-	finalize_fn fn (voidptr) = unsafe { nil }
+	finalize_fn fn (voidptr)                 = unsafe { nil }
 }
 
 // RunIteratorHooks lets each shaping backend receive the run's codepoints
@@ -1616,25 +1611,25 @@ pub mut:
 // the V equivalent of Ghostty's comptime RunIteratorHook.
 pub struct RunIteratorHooks {
 pub:
-	prepare  fn (voidptr) = unsafe { nil }
+	prepare  fn (voidptr)                 = unsafe { nil }
 	add      fn (voidptr, u32, u32) !void = unsafe { nil }
-	finalize fn (voidptr) = unsafe { nil }
+	finalize fn (voidptr)                 = unsafe { nil }
 }
 
 // Create a new RunIterator with an opaque pointer to the shaper.
 pub fn RunIterator.new(shaper_ptr voidptr, opts ...RunOptions) RunIterator {
 	return RunIterator{
 		shaper_ptr: shaper_ptr
-		opts: if opts.len > 0 { opts[0] } else { RunOptions{} }
+		opts:       if opts.len > 0 { opts[0] } else { RunOptions{} }
 	}
 }
 
 pub fn RunIterator.new_with_hooks(shaper_ptr voidptr, opts RunOptions, hooks RunIteratorHooks) RunIterator {
 	return RunIterator{
-		shaper_ptr: shaper_ptr
-		opts: opts
-		prepare_fn: hooks.prepare
-		add_fn: hooks.add
+		shaper_ptr:  shaper_ptr
+		opts:        opts
+		prepare_fn:  hooks.prepare
+		add_fn:      hooks.add
 		finalize_fn: hooks.finalize
 	}
 }
@@ -1721,12 +1716,12 @@ fn (mut it RunIterator) next_bytes() !TextRunValue {
 	hasher.put_u16(0)
 	return TextRunValue{
 		has_value: true
-		value: TextRun{
-			hash: hasher.final()
+		value:     TextRun{
+			hash:       hasher.final()
 			font_index: Index{}
-			offset: u16(start)
-			cells: u16(it.i - start)
-			grid: it.opts.grid
+			offset:     u16(start)
+			cells:      u16(it.i - start)
+			grid:       it.opts.grid
 		}
 	}
 }
@@ -1843,12 +1838,12 @@ fn (mut it RunIterator) next_render_cells() !TextRunValue {
 	it.i = j
 	return TextRunValue{
 		has_value: true
-		value: TextRun{
-			hash: hasher.final()
+		value:     TextRun{
+			hash:       hasher.final()
 			font_index: current_font
-			offset: u16(start)
-			cells: u16(j - start)
-			grid: it.opts.grid
+			offset:     u16(start)
+			cells:      u16(j - start)
+			grid:       it.opts.grid
 		}
 	}
 }
@@ -1894,7 +1889,7 @@ fn index_for_render_cell(grid_ptr &SharedGrid, cell &terminal.RenderCell, style 
 	if cell.raw.content_tag != .codepoint_grapheme {
 		return CodepointValue{
 			has_value: true
-			index: primary
+			index:     primary
 		}
 	}
 	mut candidates := [primary]
@@ -1923,7 +1918,7 @@ fn index_for_render_cell(grid_ptr &SharedGrid, cell &terminal.RenderCell, style 
 		if all {
 			return CodepointValue{
 				has_value: true
-				index: idx
+				index:     idx
 			}
 		}
 	}

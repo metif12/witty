@@ -17,17 +17,17 @@ fn make_grid(mode string) !SharedGrid {
 	mut c := Collection.init()
 	c.load_options = LoadOptions{
 		library: Library.init()!
-		size: DesiredSize{
+		size:    DesiredSize{
 			points: 12
-			xdpi: 96
-			ydpi: 96
+			xdpi:   96
+			ydpi:   96
 		}
 	}
 
 	load_opts := c.load_options or { return error('missing load options') }
 	c.add(Face.init_mem(load_opts.library, embedded_regular, load_opts.face_options())!, AddOptions{
-		style: .regular
-		fallback: false
+		style:           .regular
+		fallback:        false
 		size_adjustment: .none_
 	})!
 
@@ -69,6 +69,21 @@ fn test_shared_grid_render_glyph_cache() {
 	assert grid.glyphs.len == count
 }
 
+fn test_shared_grid_grows_full_sprite_atlas() {
+	mut grid := make_grid('normal') or { panic(err) }
+	defer { grid.deinit() }
+	grid.atlas_grayscale.deinit()
+	grid.atlas_grayscale = Atlas.init(32, .grayscale)!
+	grid.atlas_grayscale.reserve(30, 30)!
+	original_size := grid.atlas_grayscale.size
+
+	result := grid.render_glyph(Index.init_special(.sprite), 0x2500, RenderOptions{
+		grid_metrics: grid.metrics
+	})!
+	assert result.glyph.width > 0
+	assert grid.atlas_grayscale.size == original_size * 2
+}
+
 fn test_shared_grid_render_codepoint() {
 	mut grid := make_grid('normal') or { panic(err) }
 	defer { grid.deinit() }
@@ -90,7 +105,7 @@ fn test_shared_grid_render_glyph_tripwire_rolls_back_cache() {
 	face := grid.resolver.collection.get_face(value.index) or { panic(err) }
 	glyph_index := face.glyph_index(u32(`A`)) or { panic('missing A') }
 	opts := RenderOptions{ grid_metrics: grid.metrics }
-	key := GlyphKey{ value.index, glyph_index, opts }
+	key := GlyphKey{value.index, glyph_index, opts}
 	hash := key.hash_key()
 	assert glyph_cache_get(grid.glyphs, hash, key) == none
 
@@ -111,13 +126,13 @@ fn test_shared_grid_init_tripwires_cleanup() {
 		mut c := Collection.init()
 		c.load_options = LoadOptions{
 			library: lib
-			size: DesiredSize{ points: 12, xdpi: 96, ydpi: 96 }
+			size:    DesiredSize{ points: 12, xdpi: 96, ydpi: 96 }
 		}
 		load_opts := c.load_options or { panic('missing load options') }
 		c.add(Face.init_mem(load_opts.library, embedded_regular, load_opts.face_options()) or {
 			panic(err)
 		}, AddOptions{
-			style: .regular
+			style:           .regular
 			size_adjustment: .none_
 		}) or { panic(err) }
 		mut resolver := CodepointResolver{ collection: c }
@@ -150,13 +165,13 @@ fn test_shared_grid_init_deinit() {
 
 fn test_codepoint_key_hash_matches_zig_source() {
 	assert CodepointKey{
-		style: .regular
-		codepoint: 65
+		style:        .regular
+		codepoint:    65
 		presentation: none
 	}.hash_key() == 0xfbefa49ea558c504
 	assert CodepointKey{
-		style: .bold
-		codepoint: 0x1f600
+		style:        .bold
+		codepoint:    0x1f600
 		presentation: Presentation.emoji
 	}.hash_key() == 0x8449aee88adf9900
 }
@@ -182,14 +197,14 @@ fn test_glyph_key_hash_matches_zig_source() {
 	assert GlyphKey{
 		index: index
 		glyph: 42
-		opts: RenderOptions{}
+		opts:  RenderOptions{}
 	}.hash_key() == 0x4b23988daedd316c
 	assert GlyphKey{
 		index: index
 		glyph: 42
-		opts: RenderOptions{
-			cell_width: 2
-			thicken: true
+		opts:  RenderOptions{
+			cell_width:       2
+			thicken:          true
 			thicken_strength: 17
 			constraint_width: 3
 		}

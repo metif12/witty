@@ -1,5 +1,7 @@
 module font
 
+import sprite
+
 fn test_atlas_format_contract() {
 	assert sizeof(AtlasFormat) == 1
 	assert u8(AtlasFormat.grayscale) == 0
@@ -294,6 +296,33 @@ fn test_atlas_set_and_grow_preserves_pixels() {
 	assert atlas.resized.load() == 1
 }
 
+fn test_sprite_canvas_write_atlas_trims_and_uploads() {
+	mut atlas := Atlas.init(16, .grayscale)!
+	mut canvas := sprite.Canvas.init(4, 4, 2, 2)
+	canvas.box(1, 1, 3, 3, .on)
+	region := canvas.write_atlas(mut atlas)!
+
+	assert region.width == 2
+	assert region.height == 2
+	for y in region.y .. region.y + region.height {
+		for x in region.x .. region.x + region.width {
+			assert atlas.data[int(y * atlas.size + x)] == 255
+		}
+	}
+}
+
+fn test_sprite_canvas_write_atlas_propagates_full() {
+	mut atlas := Atlas.init(4, .grayscale)!
+	atlas.reserve(2, 2)!
+	mut canvas := sprite.Canvas.init(1, 1, 0, 0)
+	canvas.pixel(0, 0, .on)
+	canvas.write_atlas(mut atlas) or {
+		assert err.msg() == 'AtlasFull'
+		return
+	}
+	assert false, 'expected Canvas.write_atlas to preserve AtlasFull'
+}
+
 fn test_builtin_glyph_render_ignores_unsupported_codepoint() {
 	mut atlas := Atlas.init(64, .grayscale)!
 	glyph := render_builtin_cell_glyph(mut atlas, u32(`A`), default_grid_metrics(8, 16))!
@@ -307,7 +336,7 @@ fn test_sprite_render_writes_cursor_atlas() {
 		metrics: default_grid_metrics(8, 16)
 	}
 	glyph := sf.render_glyph(mut atlas, u32(Sprite.cursor_rect), RenderOptions{
-		cell_width: 1
+		cell_width:   1
 		grid_metrics: default_grid_metrics(8, 16)
 	})!
 	assert glyph.width == 8
@@ -326,7 +355,7 @@ fn test_sprite_face_renders_unicode_sprite_codepoint_without_enum_cast() {
 		metrics: default_grid_metrics(8, 16)
 	}
 	glyph := sf.render_glyph(mut atlas, 0x2500, RenderOptions{
-		cell_width: 1
+		cell_width:   1
 		grid_metrics: default_grid_metrics(8, 16)
 	})!
 
