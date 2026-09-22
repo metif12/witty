@@ -345,19 +345,19 @@ pub fn sgr_unknown_partial(attr terminal.SgrAttribute) []u16 {
 	return attr.unknown_partial
 }
 
-pub fn sgr_attribute_tag(attr terminal.SgrAttribute) terminal.SgrAttributeKind {
+pub fn attribute_tag(attr terminal.SgrAttribute) terminal.SgrAttributeKind {
 	return attr.kind
 }
 
 // V does not need the C tagged-union projection: SgrAttribute is already a
 // value-safe representation of the tag and its payload.
-pub fn sgr_attribute_value(attr terminal.SgrAttribute) terminal.SgrAttribute {
+pub fn attribute_value(attr terminal.SgrAttribute) terminal.SgrAttribute {
 	return attr
 }
 
 // WebAssembly bindings cannot place an aggregate return value on their own
 // stack, so the source exposes matching allocation helpers for SGR attributes.
-pub fn sgr_wasm_alloc_attribute() &terminal.SgrAttribute {
+pub fn wasm_alloc_attribute() &terminal.SgrAttribute {
 	raw := unsafe { malloc(sizeof(terminal.SgrAttribute)) }
 	if isnil(raw) {
 		panic('out of memory')
@@ -369,7 +369,7 @@ pub fn sgr_wasm_alloc_attribute() &terminal.SgrAttribute {
 	return attr
 }
 
-pub fn sgr_wasm_free_attribute(attr &terminal.SgrAttribute) {
+pub fn wasm_free_attribute(attr &terminal.SgrAttribute) {
 	if isnil(attr) {
 		return
 	}

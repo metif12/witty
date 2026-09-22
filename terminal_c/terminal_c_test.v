@@ -203,8 +203,8 @@ fn test_sgr_parser_lifecycle_and_params() {
 		assert false, 'expected bold attribute'
 		return
 	}
-	assert sgr_attribute_tag(attr) == .bold
-	assert sgr_attribute_value(attr).kind == .bold
+	assert attribute_tag(attr) == .bold
+	assert attribute_value(attr).kind == .bold
 	assert parser.next() == none
 
 	parser.reset()
@@ -234,8 +234,8 @@ fn test_sgr_parser_rejects_invalid_separator_length() {
 }
 
 fn test_sgr_wasm_attribute_allocation_helpers() {
-	attr := sgr_wasm_alloc_attribute()
+	attr := wasm_alloc_attribute()
 	assert attr != unsafe { nil }
 	assert attr.kind == .unset
-	sgr_wasm_free_attribute(attr)
+	wasm_free_attribute(attr)
 }

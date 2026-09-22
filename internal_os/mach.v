@@ -104,7 +104,8 @@ pub fn (mut self TaggedPageMemory) remap(new_len usize) bool {
 	return true
 }
 
-pub fn (mut self TaggedPageMemory) deinit() {
+// unmap releases the complete page-rounded mapping.
+pub fn (mut self TaggedPageMemory) unmap() {
 	C.witty_tagged_page_unmap(self.ptr, self.mapped_len)
 	self.ptr = unsafe { nil }
 	self.len = 0

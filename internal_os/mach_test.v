@@ -28,6 +28,6 @@ fn test_tagged_page_allocator_alignment_zeroing_resize_and_free() {
 	unsafe {
 		assert (&u8(memory.ptr))[0] == 0x5a
 	}
-	memory.deinit()
+	memory.unmap()
 	assert isnil(memory.ptr)
 }
