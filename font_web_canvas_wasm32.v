@@ -5,6 +5,26 @@ module main
 import font
 import font.shaper
 
+@[export: 'deferred_face_new']
+fn deferred_face_new_wasm_export(ptr &u8, len usize, presentation u16) voidptr {
+	result := font.deferred_face_new(ptr, len, presentation) or { return unsafe { nil } }
+	return voidptr(result)
+}
+
+@[export: 'deferred_face_free']
+fn deferred_face_free_wasm_export(raw voidptr) {
+	if isnil(raw) {
+		font.deferred_face_free(none)
+		return
+	}
+	font.deferred_face_free(unsafe { &font.WebCanvasDeferredFace(raw) })
+}
+
+@[export: 'deferred_face_load']
+fn deferred_face_load_wasm_export(raw voidptr, pts f32) {
+	font.deferred_face_load(unsafe { &font.WebCanvasDeferredFace(raw) }, pts)
+}
+
 @[export: 'face_new']
 fn face_new_wasm_export(ptr &u8, len usize, pts u16, presentation u16) voidptr {
 	result := font.face_new(ptr, len, pts, presentation) or { return unsafe { nil } }
