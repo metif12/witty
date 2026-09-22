@@ -30,7 +30,7 @@ enum VTKind as u8 {
 	apc
 }
 
-struct VTEvent {
+pub struct VTEvent {
 mut:
 	seq              usize = 1
 	kind             VTKind
@@ -82,7 +82,7 @@ pub fn (mut self VTStream) deinit() {
 fn (mut self VTStream) record_pty_byte(byte u8, term &terminal.Terminal) {
 	self.parser_stream.next(byte)
 	for action in self.parser_stream.raw_events {
-		self.record(action, term)
+		self.vt_raw(action, term)
 	}
 	self.parser_stream.clear_events()
 }
@@ -110,15 +110,18 @@ fn (mut self VTStream) reset() {
 	self.current_seq = 1
 }
 
-fn (mut self VTStream) record(action terminal.ParserAction, term &terminal.Terminal) {
+// vt_raw records a parser action before its semantic handler mutates the
+// terminal. The return value tells the stream whether the raw action was
+// completely handled and its typed callback should be skipped.
+pub fn (mut self VTStream) vt_raw(action terminal.ParserAction, term &terminal.Terminal) bool {
 	seq := self.current_seq
 	self.current_seq++
 
 	if self.paused || action.action_type in [.dcs_put_action, .apc_put_action] {
-		return
+		return true
 	}
 	if self.filter_exclude[int(action.action_type)] {
-		return
+		return true
 	}
 
 	mut cursor := term.screens.active.cursor
@@ -135,7 +138,7 @@ fn (mut self VTStream) record(action terminal.ParserAction, term &terminal.Termi
 	}
 	if !event.pass_filter(self.filter_text) {
 		event.deinit()
-		return
+		return true
 	}
 
 	if self.events.len == max_vt_events {
@@ -144,6 +147,7 @@ fn (mut self VTStream) record(action terminal.ParserAction, term &terminal.Termi
 		self.events.delete(0)
 	}
 	self.events << event
+	return false
 }
 
 fn vt_kind(action_type terminal.ParserActionType) VTKind {
@@ -293,7 +297,7 @@ fn optional_bool_string(value ?bool) string {
 	return '(unset)'
 }
 
-fn (self &VTEvent) pass_filter(filter string) bool {
+pub fn (self &VTEvent) pass_filter(filter string) bool {
 	if imgui_text_filter_pass(filter, self.raw_description) {
 		return true
 	}
@@ -303,6 +307,34 @@ fn (self &VTEvent) pass_filter(filter string) bool {
 		}
 	}
 	return false
+}
+
+// event_table renders the source's standalone, read-only VT event table. The
+// live Stream widget currently uses its richer selectable table below, as does
+// Ghostty at the pinned revision.
+pub fn event_table(context cimgui.Context, events []VTEvent) {
+	if !context.begin_table('events', 3, cimgui.table_flags_borders_row_bg) {
+		return
+	}
+	defer {
+		context.end_table()
+	}
+	context.table_setup_column('Seq', cimgui.table_column_width_fixed, 0)
+	context.table_setup_column('Kind', cimgui.table_column_width_fixed, 0)
+	context.table_setup_column('Description', cimgui.table_column_width_stretch, 0)
+	for index := events.len - 1; index >= 0; index-- {
+		event := &events[index]
+		context.push_id(event)
+		context.table_next_row()
+		context.table_next_column()
+		context.same_line()
+		context.text(event.seq.str())
+		context.table_next_column()
+		context.text(event.kind.str())
+		context.table_next_column()
+		context.text(event.raw_description)
+		context.pop_id()
+	}
 }
 
 // This mirrors ImGuiTextFilter.PassFilter: comma-separated positive terms are

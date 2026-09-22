@@ -146,6 +146,7 @@ pub const table_column_width_stretch = 1 << 3
 pub const table_column_width_fixed = 1 << 4
 pub const table_column_no_resize = 1 << 5
 pub const table_column_prefer_sort_ascending = 1 << 14
+pub const table_flags_borders_row_bg = (1 << 6) | (1 << 7) | (1 << 8) | (1 << 9) | (1 << 10)
 pub const table_flags_borders_row_bg_sizing_fixed_fit = (1 << 6) | (1 << 7) | (1 << 8) | (1 << 9) | (1 << 10) | (1 << 13)
 pub const table_flags_row_bg_sizing_fixed_fit = (1 << 6) | (1 << 13)
 pub const table_flags_inner_v_row_bg_sizing_fixed_fit = (1 << 6) | (1 << 9) | (1 << 13)
