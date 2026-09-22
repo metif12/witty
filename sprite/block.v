@@ -769,14 +769,14 @@ pub fn draw_2500_257f(cp u32, mut canvas Canvas, width u32, height u32, metrics 
 		}
 
 		// '╭'
-		0x256d { box_arc(metrics, mut canvas, .br, .light)! }
+		0x256d { arc(metrics, mut canvas, .br, .light)! }
 		// '╮'
-		0x256e { box_arc(metrics, mut canvas, .bl, .light)! }
+		0x256e { arc(metrics, mut canvas, .bl, .light)! }
 		// '╯'
-		0x256f { box_arc(metrics, mut canvas, .tl, .light)! }
+		0x256f { arc(metrics, mut canvas, .tl, .light)! }
 
 		// '╰'
-		0x2570 { box_arc(metrics, mut canvas, .tr, .light)! }
+		0x2570 { arc(metrics, mut canvas, .tr, .light)! }
 		// '╱'
 		0x2571 { light_diagonal_upper_right_to_lower_left(metrics, mut canvas) }
 		// '╲'
@@ -988,9 +988,9 @@ pub fn light_diagonal_cross(metrics font.Metrics, mut canvas Canvas) {
 	light_diagonal_upper_left_to_lower_right(metrics, mut canvas)
 }
 
-// box_arc draws a rounded box-drawing corner (╭╮╯╰) using a Bezier arc.
+// arc draws a rounded box-drawing corner (╭╮╯╰) using a Bezier arc.
 // Translated from ghostty box.zig `arc`.
-pub fn box_arc(metrics font.Metrics, mut canvas Canvas, corner Corner, thickness Thickness) ! {
+pub fn arc(metrics font.Metrics, mut canvas Canvas, corner Corner, thickness Thickness) ! {
 	thick_px := thickness.height(metrics.box_thickness)
 	float_width := f64(metrics.cell_width)
 	float_height := f64(metrics.cell_height)

@@ -11,58 +11,58 @@ module sprite
 import sprite_types as font
 
 // ------------------------------------------------------------
-// Fraction.fraction_val -- exact float values per common.zig
+// Fraction.fraction -- exact float values per common.zig
 // ------------------------------------------------------------
 
 fn test_fraction_val_min_edge() {
 	// start/left/top/zero all map to 0.0
-	assert Fraction.start.fraction_val() == 0.0
-	assert Fraction.left.fraction_val() == 0.0
-	assert Fraction.top.fraction_val() == 0.0
-	assert Fraction.zero.fraction_val() == 0.0
+	assert Fraction.start.fraction() == 0.0
+	assert Fraction.left.fraction() == 0.0
+	assert Fraction.top.fraction() == 0.0
+	assert Fraction.zero.fraction() == 0.0
 }
 
 fn test_fraction_val_eighths() {
-	assert Fraction.one_eighth.fraction_val() == 0.125
-	assert Fraction.eighth.fraction_val() == 0.125
-	assert Fraction.two_eighths.fraction_val() == 0.25
-	assert Fraction.three_eighths.fraction_val() == 0.375
-	assert Fraction.four_eighths.fraction_val() == 0.5
-	assert Fraction.five_eighths.fraction_val() == 0.625
-	assert Fraction.six_eighths.fraction_val() == 0.75
-	assert Fraction.seven_eighths.fraction_val() == 0.875
+	assert Fraction.one_eighth.fraction() == 0.125
+	assert Fraction.eighth.fraction() == 0.125
+	assert Fraction.two_eighths.fraction() == 0.25
+	assert Fraction.three_eighths.fraction() == 0.375
+	assert Fraction.four_eighths.fraction() == 0.5
+	assert Fraction.five_eighths.fraction() == 0.625
+	assert Fraction.six_eighths.fraction() == 0.75
+	assert Fraction.seven_eighths.fraction() == 0.875
 }
 
 fn test_fraction_val_quarters() {
-	assert Fraction.one_quarter.fraction_val() == 0.25
-	assert Fraction.quarter.fraction_val() == 0.25
-	assert Fraction.two_quarters.fraction_val() == 0.5
-	assert Fraction.three_quarters.fraction_val() == 0.75
+	assert Fraction.one_quarter.fraction() == 0.25
+	assert Fraction.quarter.fraction() == 0.25
+	assert Fraction.two_quarters.fraction() == 0.5
+	assert Fraction.three_quarters.fraction() == 0.75
 }
 
 fn test_fraction_val_thirds() {
-	assert Fraction.one_third.fraction_val() == 1.0 / 3.0
-	assert Fraction.third.fraction_val() == 1.0 / 3.0
-	assert Fraction.two_thirds.fraction_val() == 2.0 / 3.0
+	assert Fraction.one_third.fraction() == 1.0 / 3.0
+	assert Fraction.third.fraction() == 1.0 / 3.0
+	assert Fraction.two_thirds.fraction() == 2.0 / 3.0
 }
 
 fn test_fraction_val_halves_and_center() {
-	assert Fraction.half_.fraction_val() == 0.5
-	assert Fraction.one_half.fraction_val() == 0.5
-	assert Fraction.center.fraction_val() == 0.5
-	assert Fraction.middle.fraction_val() == 0.5
+	assert Fraction.half_.fraction() == 0.5
+	assert Fraction.one_half.fraction() == 0.5
+	assert Fraction.center.fraction() == 0.5
+	assert Fraction.middle.fraction() == 0.5
 }
 
 fn test_fraction_val_max_edge() {
-	assert Fraction.end_.fraction_val() == 1.0
-	assert Fraction.right.fraction_val() == 1.0
-	assert Fraction.bottom.fraction_val() == 1.0
-	assert Fraction.one.fraction_val() == 1.0
-	assert Fraction.full.fraction_val() == 1.0
+	assert Fraction.end_.fraction() == 1.0
+	assert Fraction.right.fraction() == 1.0
+	assert Fraction.bottom.fraction() == 1.0
+	assert Fraction.one.fraction() == 1.0
+	assert Fraction.full.fraction() == 1.0
 }
 
 // ------------------------------------------------------------
-// Fraction.to_min / to_max -- worked example from common.zig
+// Fraction.min / max -- worked example from common.zig
 //
 // "if size is 7, and we're looking at the half line,
 //  size - round((1 - 0.5) * size) => 3; whereas the max
@@ -71,36 +71,36 @@ fn test_fraction_val_max_edge() {
 // ------------------------------------------------------------
 
 fn test_fraction_min_max_odd_size_half() {
-	assert Fraction.half_.to_min(7) == 3
-	assert Fraction.half_.to_max(7) == 4
+	assert Fraction.half_.min(7) == 3
+	assert Fraction.half_.max(7) == 4
 	// start -> half spans 0..4 (4px), half -> end spans 3..7 (4px)
-	assert Fraction.start.to_min(7) == 0
-	assert Fraction.end_.to_max(7) == 7
+	assert Fraction.start.min(7) == 0
+	assert Fraction.end_.max(7) == 7
 }
 
 fn test_fraction_min_max_edges() {
 	// The min edge fractions produce 0 as a min coord for any size.
-	assert Fraction.zero.to_min(10) == 0
-	assert Fraction.zero.to_min(8) == 0
+	assert Fraction.zero.min(10) == 0
+	assert Fraction.zero.min(8) == 0
 	// The max edge fractions produce `size` as a max coord.
-	assert Fraction.one.to_max(10) == 10
-	assert Fraction.full.to_max(8) == 8
+	assert Fraction.one.max(10) == 10
+	assert Fraction.full.max(8) == 8
 }
 
 fn test_fraction_min_max_even_size() {
 	// size 8, half -> min = 8 - round(0.5*8) = 8 - 4 = 4; max = round(4) = 4
-	assert Fraction.half_.to_min(8) == 4
-	assert Fraction.half_.to_max(8) == 4
+	assert Fraction.half_.min(8) == 4
+	assert Fraction.half_.max(8) == 4
 	// quarter of 8: min = 8 - round(0.75*8) = 8 - 6 = 2; max = round(0.25*8) = 2
-	assert Fraction.one_quarter.to_min(8) == 2
-	assert Fraction.one_quarter.to_max(8) == 2
+	assert Fraction.one_quarter.min(8) == 2
+	assert Fraction.one_quarter.max(8) == 2
 }
 
-fn test_fraction_to_float() {
-	assert Fraction.half_.to_float(10) == 5.0
-	assert Fraction.one_quarter.to_float(8) == 2.0
-	assert Fraction.one.to_float(16) == 16.0
-	assert Fraction.zero.to_float(16) == 0.0
+fn test_fraction_float() {
+	assert Fraction.half_.float(10) == 5.0
+	assert Fraction.one_quarter.float(8) == 2.0
+	assert Fraction.one.float(16) == 16.0
+	assert Fraction.zero.float(16) == 0.0
 }
 
 fn test_fraction_eighths_index_table() {
@@ -108,28 +108,28 @@ fn test_fraction_eighths_index_table() {
 	// each fraction() == i/8.
 	for i in 0 .. 9 {
 		f := fraction_eighths[i]
-		assert f.fraction_val() == f64(i) / 8.0
+		assert f.fraction() == f64(i) / 8.0
 	}
 }
 
 fn test_fraction_quarters_index_table() {
 	for i in 0 .. 5 {
 		f := fraction_quarters[i]
-		assert f.fraction_val() == f64(i) / 4.0
+		assert f.fraction() == f64(i) / 4.0
 	}
 }
 
 fn test_fraction_thirds_index_table() {
 	for i in 0 .. 4 {
 		f := fraction_thirds[i]
-		assert f.fraction_val() == f64(i) / 3.0
+		assert f.fraction() == f64(i) / 3.0
 	}
 }
 
 fn test_fraction_halves_index_table() {
 	for i in 0 .. 3 {
 		f := fraction_halves[i]
-		assert f.fraction_val() == f64(i) / 2.0
+		assert f.fraction() == f64(i) / 2.0
 	}
 }
 
@@ -487,7 +487,7 @@ fn test_branch_arc_glyph_uses_box_bezier_arc() {
 	draw_f5d0_f60d(0xf5d6, mut actual, 12, 20, metrics)!
 
 	mut expected := Canvas.init(12, 20, 0, 0)
-	box_arc(metrics, mut expected, .br, .light)!
+	arc(metrics, mut expected, .br, .light)!
 	assert actual.data == expected.data
 }
 
@@ -557,7 +557,7 @@ fn test_fill_upper_left_quadrant() {
 	mut c := Canvas.init(8, 8, 0, 0)
 	// Fill from left..half horizontally and top..half vertically.
 	fill(metrics, mut c, Fraction.left, Fraction.half_, Fraction.top, Fraction.half_)
-	// half.to_max(8) == 4, so the region is x in [0,4), y in [0,4).
+	// half.max(8) == 4, so the region is x in [0,4), y in [0,4).
 	for y in 0 .. 4 {
 		for x in 0 .. 4 {
 			assert data_at(&c, x, y) == 255

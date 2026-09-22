@@ -1267,7 +1267,7 @@ pub const fraction_thirds = [Fraction.zero, .one_third, .two_thirds, .one]
 pub const fraction_halves = [Fraction.zero, .one_half, .one]
 
 // Get a float for the fraction this represents.
-pub fn (f Fraction) fraction_val() f64 {
+pub fn (f Fraction) fraction() f64 {
 	return match f {
 		.start, .left, .top, .zero { 0.0 }
 		.eighth, .one_eighth { 0.125 }
@@ -1294,26 +1294,26 @@ pub fn (f Fraction) fraction_val() f64 {
 // whereas the max coordinate directly rounds, which means that
 // both start -> half and half -> end will be 4px, from
 // 0 -> 4 and 3 -> 7.
-pub fn (f Fraction) to_min(size u32) i32 {
+pub fn (f Fraction) min(size u32) i32 {
 	s := f64(size)
-	return int(s - math.round((1.0 - f.fraction_val()) * s))
+	return int(s - math.round((1.0 - f.fraction()) * s))
 }
 
 // Get the x position for this fraction across a particular
 // size (width or height), assuming it will be used as the
 // max (right/bottom) coordinate for a block.
-pub fn (f Fraction) to_max(size u32) i32 {
+pub fn (f Fraction) max(size u32) i32 {
 	s := f64(size)
-	return int(math.round(f.fraction_val() * s))
+	return int(math.round(f.fraction() * s))
 }
 
 // Get this fraction across a particular size (width/height).
-// If you need an integer, use to_min or to_max instead, since
+// If you need an integer, use min or max instead, since
 // they contain special logic for consistent alignment. This
 // is for when you're drawing with paths and don't care about
 // pixel alignment.
-pub fn (f Fraction) to_float(size u32) f64 {
-	return f.fraction_val() * f64(size)
+pub fn (f Fraction) float(size u32) f64 {
+	return f.fraction() * f64(size)
 }
 
 // ============================================================
@@ -1337,7 +1337,7 @@ pub const seven_eighths_f = f64(0.875)
 // Fill a section of the cell, specified by a
 // horizontal and vertical pair of fraction lines.
 pub fn fill(metrics font.Metrics, mut canvas Canvas, x0 Fraction, x1 Fraction, y0 Fraction, y1 Fraction) {
-	canvas.box(x0.to_min(metrics.cell_width), y0.to_min(metrics.cell_height), x1.to_max(metrics.cell_width), y1.to_max(metrics.cell_height), .on)
+	canvas.box(x0.min(metrics.cell_width), y0.min(metrics.cell_height), x1.max(metrics.cell_width), y1.max(metrics.cell_height), .on)
 }
 
 // ============================================================

@@ -282,11 +282,11 @@ pub fn draw_1fb3c_1fb67(cp u32, mut canvas Canvas, width u32, height u32, metric
 	}
 
 	top_ := f64(0.0)
-	upper := Fraction.one_third.to_float(metrics.cell_height)
-	lower := Fraction.two_thirds.to_float(metrics.cell_height)
+	upper := Fraction.one_third.float(metrics.cell_height)
+	lower := Fraction.two_thirds.float(metrics.cell_height)
 	bottom_ := f64(metrics.cell_height)
 	left_ := f64(0.0)
-	center_ := Fraction.half_.to_float(metrics.cell_width)
+	center_ := Fraction.half_.float(metrics.cell_width)
 	right_ := f64(metrics.cell_width)
 
 	mut path := canvas.static_path(12)
@@ -986,13 +986,13 @@ pub fn draw_1fbe0_1fbef(cp u32, mut canvas Canvas, width u32, height u32, metric
 
 	match cp {
 		// '🯠'
-		0x1fbe0 { draw_circle(metrics, mut canvas, align_top, false) }
+		0x1fbe0 { circle(metrics, mut canvas, align_top, false) }
 		// '🯡'
-		0x1fbe1 { draw_circle(metrics, mut canvas, align_right, false) }
+		0x1fbe1 { circle(metrics, mut canvas, align_right, false) }
 		// '🯢'
-		0x1fbe2 { draw_circle(metrics, mut canvas, align_bottom, false) }
+		0x1fbe2 { circle(metrics, mut canvas, align_bottom, false) }
 		// '🯣'
-		0x1fbe3 { draw_circle(metrics, mut canvas, align_left, false) }
+		0x1fbe3 { circle(metrics, mut canvas, align_left, false) }
 		// '🯤'
 		0x1fbe4 { block_fill(metrics, mut canvas, align_upper_center, 0.5, 0.5) }
 		// '🯥'
@@ -1002,21 +1002,21 @@ pub fn draw_1fbe0_1fbef(cp u32, mut canvas Canvas, width u32, height u32, metric
 		// '🯧'
 		0x1fbe7 { block_fill(metrics, mut canvas, align_middle_right, 0.5, 0.5) }
 		// '🯨'
-		0x1fbe8 { draw_circle(metrics, mut canvas, align_top, true) }
+		0x1fbe8 { circle(metrics, mut canvas, align_top, true) }
 		// '🯩'
-		0x1fbe9 { draw_circle(metrics, mut canvas, align_right, true) }
+		0x1fbe9 { circle(metrics, mut canvas, align_right, true) }
 		// '🯪'
-		0x1fbea { draw_circle(metrics, mut canvas, align_bottom, true) }
+		0x1fbea { circle(metrics, mut canvas, align_bottom, true) }
 		// '🯫'
-		0x1fbeb { draw_circle(metrics, mut canvas, align_left, true) }
+		0x1fbeb { circle(metrics, mut canvas, align_left, true) }
 		// '🯬'
-		0x1fbec { draw_circle(metrics, mut canvas, align_top_right, true) }
+		0x1fbec { circle(metrics, mut canvas, align_top_right, true) }
 		// '🯭'
-		0x1fbed { draw_circle(metrics, mut canvas, align_bottom_left, true) }
+		0x1fbed { circle(metrics, mut canvas, align_bottom_left, true) }
 		// '🯮'
-		0x1fbee { draw_circle(metrics, mut canvas, align_bottom_right, true) }
+		0x1fbee { circle(metrics, mut canvas, align_bottom_right, true) }
 		// '🯯'
-		0x1fbef { draw_circle(metrics, mut canvas, align_top_left, true) }
+		0x1fbef { circle(metrics, mut canvas, align_top_left, true) }
 		else { panic('unreachable') }
 	}
 }
@@ -1152,9 +1152,9 @@ fn checkerboard_fill(metrics font.Metrics, mut canvas Canvas, parity u32) {
 	}
 }
 
-// draw_circle draws a circle (or semicircle) at the given position.
+// circle draws a circle (or semicircle) at the given position.
 // If filled is true, the circle is solid; otherwise it's just an outline.
-pub fn draw_circle(metrics font.Metrics, mut canvas Canvas, position Alignment, filled bool) {
+pub fn circle(metrics font.Metrics, mut canvas Canvas, position Alignment, filled bool) {
 	// Set the clip so we don't include anything outside of the cell.
 	canvas.clip_left = canvas.padding_x
 	canvas.clip_right = canvas.padding_x

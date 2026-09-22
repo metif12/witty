@@ -78,23 +78,22 @@ pub fn (self TaggedPageAllocator) alloc(length usize, alignment usize) ?TaggedPa
 // pinned allocator, equal page-rounded sizes succeed and shrinking releases
 // trailing pages; growth fails on platforms without mremap.
 pub fn (mut self TaggedPageMemory) resize(new_len usize) bool {
-	mut mapped_len := usize(0)
-	ptr := C.witty_tagged_page_realloc(self.ptr, self.mapped_len, new_len, 0, &mapped_len)
-	if isnil(ptr) {
-		return false
-	}
-	self.ptr = ptr
-	self.len = new_len
-	self.mapped_len = mapped_len
-	return true
+	return self.realloc(new_len, false)
 }
 
 // remap permits the platform to move the allocation. Darwin has no mremap,
 // so its behavior is the same as resize; the separate method preserves the
 // source allocator contract.
 pub fn (mut self TaggedPageMemory) remap(new_len usize) bool {
+	return self.realloc(new_len, true)
+}
+
+// realloc changes the page-rounded mapping size, optionally permitting the
+// platform to move it. The owned V value retains the returned pointer in place.
+pub fn (mut self TaggedPageMemory) realloc(new_len usize, may_move bool) bool {
 	mut mapped_len := usize(0)
-	ptr := C.witty_tagged_page_realloc(self.ptr, self.mapped_len, new_len, 1, &mapped_len)
+	ptr := C.witty_tagged_page_realloc(self.ptr, self.mapped_len, new_len, int(may_move),
+		&mapped_len)
 	if isnil(ptr) {
 		return false
 	}

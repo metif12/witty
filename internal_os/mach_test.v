@@ -25,6 +25,9 @@ fn test_tagged_page_allocator_alignment_zeroing_resize_and_free() {
 	assert memory.resize(page_size + 1)
 	assert memory.len == page_size + 1
 	assert memory.mapped_len == page_size * 2
+	assert memory.realloc(page_size + 2, false)
+	assert memory.len == page_size + 2
+	assert memory.mapped_len == page_size * 2
 	unsafe {
 		assert (&u8(memory.ptr))[0] == 0x5a
 	}

@@ -89,3 +89,7 @@ fn test_kind_parse_matches_zig_digit_separator_rules() {
 		}
 	}
 }
+
+fn test_color_osc_void_c_projection() {
+	ColorOSC{}.cval()
+}

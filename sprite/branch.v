@@ -185,139 +185,139 @@ pub fn draw_f5d0_f60d(cp u32, mut canvas Canvas, width u32, height u32, metrics 
 		// ''
 		0x0f5d5 { fading_line(metrics, mut canvas, .top, .light) }
 		// ''
-		0x0f5d6 { box_arc(metrics, mut canvas, .br, .light)! }
+		0x0f5d6 { arc(metrics, mut canvas, .br, .light)! }
 		// ''
-		0x0f5d7 { box_arc(metrics, mut canvas, .bl, .light)! }
+		0x0f5d7 { arc(metrics, mut canvas, .bl, .light)! }
 		// ''
-		0x0f5d8 { box_arc(metrics, mut canvas, .tr, .light)! }
+		0x0f5d8 { arc(metrics, mut canvas, .tr, .light)! }
 		// ''
-		0x0f5d9 { box_arc(metrics, mut canvas, .tl, .light)! }
+		0x0f5d9 { arc(metrics, mut canvas, .tl, .light)! }
 		// ''
 		0x0f5da {
 			vline_middle(metrics, mut canvas, .light)
-			box_arc(metrics, mut canvas, .tr, .light)!
+			arc(metrics, mut canvas, .tr, .light)!
 		}
 
 		// ''
 		0x0f5db {
 			vline_middle(metrics, mut canvas, .light)
-			box_arc(metrics, mut canvas, .br, .light)!
+			arc(metrics, mut canvas, .br, .light)!
 		}
 
 		// ''
 		0x0f5dc {
-			box_arc(metrics, mut canvas, .tr, .light)!
-			box_arc(metrics, mut canvas, .br, .light)!
+			arc(metrics, mut canvas, .tr, .light)!
+			arc(metrics, mut canvas, .br, .light)!
 		}
 
 		// ''
 		0x0f5dd {
 			vline_middle(metrics, mut canvas, .light)
-			box_arc(metrics, mut canvas, .tl, .light)!
+			arc(metrics, mut canvas, .tl, .light)!
 		}
 
 		// ''
 		0x0f5de {
 			vline_middle(metrics, mut canvas, .light)
-			box_arc(metrics, mut canvas, .bl, .light)!
+			arc(metrics, mut canvas, .bl, .light)!
 		}
 
 		// ''
 		0x0f5df {
-			box_arc(metrics, mut canvas, .tl, .light)!
-			box_arc(metrics, mut canvas, .bl, .light)!
+			arc(metrics, mut canvas, .tl, .light)!
+			arc(metrics, mut canvas, .bl, .light)!
 		}
 
 		// ''
 		0x0f5e0 {
-			box_arc(metrics, mut canvas, .bl, .light)!
+			arc(metrics, mut canvas, .bl, .light)!
 			hline_middle(metrics, mut canvas, .light)
 		}
 
 		// ''
 		0x0f5e1 {
-			box_arc(metrics, mut canvas, .br, .light)!
+			arc(metrics, mut canvas, .br, .light)!
 			hline_middle(metrics, mut canvas, .light)
 		}
 
 		// ''
 		0x0f5e2 {
-			box_arc(metrics, mut canvas, .br, .light)!
-			box_arc(metrics, mut canvas, .bl, .light)!
+			arc(metrics, mut canvas, .br, .light)!
+			arc(metrics, mut canvas, .bl, .light)!
 		}
 
 		// ''
 		0x0f5e3 {
-			box_arc(metrics, mut canvas, .tl, .light)!
+			arc(metrics, mut canvas, .tl, .light)!
 			hline_middle(metrics, mut canvas, .light)
 		}
 
 		// ''
 		0x0f5e4 {
-			box_arc(metrics, mut canvas, .tr, .light)!
+			arc(metrics, mut canvas, .tr, .light)!
 			hline_middle(metrics, mut canvas, .light)
 		}
 
 		// ''
 		0x0f5e5 {
-			box_arc(metrics, mut canvas, .tr, .light)!
-			box_arc(metrics, mut canvas, .tl, .light)!
+			arc(metrics, mut canvas, .tr, .light)!
+			arc(metrics, mut canvas, .tl, .light)!
 		}
 
 		// ''
 		0x0f5e6 {
 			vline_middle(metrics, mut canvas, .light)
-			box_arc(metrics, mut canvas, .tl, .light)!
-			box_arc(metrics, mut canvas, .tr, .light)!
+			arc(metrics, mut canvas, .tl, .light)!
+			arc(metrics, mut canvas, .tr, .light)!
 		}
 
 		// ''
 		0x0f5e7 {
 			vline_middle(metrics, mut canvas, .light)
-			box_arc(metrics, mut canvas, .bl, .light)!
-			box_arc(metrics, mut canvas, .br, .light)!
+			arc(metrics, mut canvas, .bl, .light)!
+			arc(metrics, mut canvas, .br, .light)!
 		}
 
 		// ''
 		0x0f5e8 {
 			hline_middle(metrics, mut canvas, .light)
-			box_arc(metrics, mut canvas, .bl, .light)!
-			box_arc(metrics, mut canvas, .tl, .light)!
+			arc(metrics, mut canvas, .bl, .light)!
+			arc(metrics, mut canvas, .tl, .light)!
 		}
 
 		// ''
 		0x0f5e9 {
 			hline_middle(metrics, mut canvas, .light)
-			box_arc(metrics, mut canvas, .tr, .light)!
-			box_arc(metrics, mut canvas, .br, .light)!
+			arc(metrics, mut canvas, .tr, .light)!
+			arc(metrics, mut canvas, .br, .light)!
 		}
 
 		// ''
 		0x0f5ea {
 			vline_middle(metrics, mut canvas, .light)
-			box_arc(metrics, mut canvas, .tl, .light)!
-			box_arc(metrics, mut canvas, .br, .light)!
+			arc(metrics, mut canvas, .tl, .light)!
+			arc(metrics, mut canvas, .br, .light)!
 		}
 
 		// ''
 		0x0f5eb {
 			vline_middle(metrics, mut canvas, .light)
-			box_arc(metrics, mut canvas, .tr, .light)!
-			box_arc(metrics, mut canvas, .bl, .light)!
+			arc(metrics, mut canvas, .tr, .light)!
+			arc(metrics, mut canvas, .bl, .light)!
 		}
 
 		// ''
 		0x0f5ec {
 			hline_middle(metrics, mut canvas, .light)
-			box_arc(metrics, mut canvas, .tl, .light)!
-			box_arc(metrics, mut canvas, .br, .light)!
+			arc(metrics, mut canvas, .tl, .light)!
+			arc(metrics, mut canvas, .br, .light)!
 		}
 
 		// ''
 		0x0f5ed {
 			hline_middle(metrics, mut canvas, .light)
-			box_arc(metrics, mut canvas, .tr, .light)!
-			box_arc(metrics, mut canvas, .bl, .light)!
+			arc(metrics, mut canvas, .tr, .light)!
+			arc(metrics, mut canvas, .bl, .light)!
 		}
 
 		// ''

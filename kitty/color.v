@@ -157,3 +157,9 @@ pub mut:
 pub fn (mut self ColorOSC) deinit() {
 	self.list = []
 }
+
+// cval is the C projection for Kitty color requests. The pinned C type is
+// void because this command is not exposed through the C API.
+pub fn (self ColorOSC) cval() {
+	_ = self
+}

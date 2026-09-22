@@ -649,8 +649,8 @@ pub fn draw_1ce00(cp u32, mut canvas Canvas, width u32, height u32, metrics font
 	_ = cp
 	_ = width
 	_ = height
-	draw_circle(metrics, mut canvas, align_left, false)
-	draw_circle(metrics, mut canvas, align_right, false)
+	circle(metrics, mut canvas, align_left, false)
+	circle(metrics, mut canvas, align_right, false)
 }
 
 // LOWER HALF AND UPPER HALF WHITE CIRCLE
@@ -658,8 +658,8 @@ pub fn draw_1ce01(cp u32, mut canvas Canvas, width u32, height u32, metrics font
 	_ = cp
 	_ = width
 	_ = height
-	draw_circle(metrics, mut canvas, align_top, false)
-	draw_circle(metrics, mut canvas, align_bottom, false)
+	circle(metrics, mut canvas, align_top, false)
+	circle(metrics, mut canvas, align_bottom, false)
 }
 
 // LEFT HALF WHITE ELLIPSE
