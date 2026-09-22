@@ -2093,7 +2093,7 @@ fn set_gtk_env(config &configpkg.Config) {
 		// Needed to run on Wayland after GTK 4.14.
 		gdk_debug << 'gl-disable-gles'
 		gdk_debug << 'vulkan-disable'
-		if gtk_runtime_until(4, 17, 5) {
+		if runtime_until(4, 17, 5) {
 			// Removed at GTK v4.17.5.
 			gdk_debug << 'gl-no-fractional'
 		}

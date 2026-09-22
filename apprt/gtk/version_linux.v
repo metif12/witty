@@ -90,9 +90,9 @@ pub fn gtk_runtime_at_least(major u16, minor u16, patch u16) bool {
 	return rt.order(SemVer{ major: major, minor: minor, patch: patch }) != -1
 }
 
-// gtk_runtime_until returns true if the runtime GTK version is *older* than
-// the given version. Mirrors `gtk_version.runtimeUntil`.
-pub fn gtk_runtime_until(major u16, minor u16, patch u16) bool {
+// runtime_until returns true if the runtime GTK version is *older* than the
+// given version. Mirrors `gtk_version.runtimeUntil`.
+pub fn runtime_until(major u16, minor u16, patch u16) bool {
 	rt := gtk_runtime_version()
 	return rt.order(SemVer{ major: major, minor: minor, patch: patch }) == -1
 }

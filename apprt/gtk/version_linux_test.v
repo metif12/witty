@@ -19,3 +19,7 @@ fn test_adwaita_capability_helpers_match_their_version_boundaries() {
 	assert supports_toolbar_view() == adw_at_least(1, 4, 0)
 	assert supports_banner() == adw_at_least(1, 3, 0)
 }
+
+fn test_runtime_until_is_the_inverse_of_runtime_at_least() {
+	assert runtime_until(4, 17, 5) == !gtk_runtime_at_least(4, 17, 5)
+}
