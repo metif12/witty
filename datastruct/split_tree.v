@@ -24,8 +24,10 @@ import strings
 //
 //   - fn eql(self &T, other &T) bool - Check if two views are equal.
 //
+// Optionally, T may implement:
+//
 //   - fn split_tree_label(self &T) string - Return a label that is
-//     used for the debug view.
+//     used for the debug view. Without it, the node handle is used.
 pub struct SplitTree[T] {
 pub mut:
 	// All the nodes in the tree. Node at index 0 is always the root.
@@ -58,6 +60,107 @@ pub fn (handle Handle) offset(value usize) Handle {
 	return Handle(final)
 }
 
+// Float16 retains the exact IEEE-754 binary16 values used by Ghostty's split
+// ratios and spatial calculations. V has no f16 primitive, so arithmetic is
+// performed through an exact wider value and rounded back to binary16 after
+// every operation.
+pub type Float16 = u16
+
+pub fn Float16.from_f32(value f32) Float16 {
+	return Float16.from_f64(f64(value))
+}
+
+fn Float16.from_f64(value f64) Float16 {
+	bits := math.f64_bits(value)
+	sign := u16((bits >> 48) & 0x8000)
+	exponent := int((bits >> 52) & 0x7ff)
+	mantissa := bits & 0x000fffffffffffff
+
+	if exponent == 0x7ff {
+		if mantissa == 0 {
+			return Float16(sign | 0x7c00)
+		}
+		// Preserve the payload and ensure a NaN never rounds into infinity.
+		mut payload := u16(mantissa >> 42)
+		if payload == 0 {
+			payload = 1
+		}
+		return Float16(sign | 0x7c00 | payload)
+	}
+
+	half_exponent := exponent - 1023 + 15
+	if half_exponent >= 31 {
+		return Float16(sign | 0x7c00)
+	}
+	if half_exponent <= 0 {
+		if half_exponent < -10 {
+			return Float16(sign)
+		}
+		value_mantissa := mantissa | (u64(1) << 52)
+		shift := u32(43 - half_exponent)
+		mut half_mantissa := value_mantissa >> shift
+		remainder_mask := (u64(1) << shift) - 1
+		remainder := value_mantissa & remainder_mask
+		halfway := u64(1) << (shift - 1)
+		if remainder > halfway || (remainder == halfway && (half_mantissa & 1) != 0) {
+			half_mantissa++
+		}
+		return Float16(sign | u16(half_mantissa))
+	}
+
+	mut rounded := (u64(half_exponent) << 10) | (mantissa >> 42)
+	remainder := mantissa & ((u64(1) << 42) - 1)
+	halfway := u64(1) << 41
+	if remainder > halfway || (remainder == halfway && (rounded & 1) != 0) {
+		rounded++
+	}
+	return Float16(sign | u16(rounded))
+}
+
+pub fn (value Float16) f32() f32 {
+	bits := u16(value)
+	sign := u32(bits & 0x8000) << 16
+	exponent := u32((bits >> 10) & 0x1f)
+	mut mantissa := u32(bits & 0x03ff)
+
+	if exponent == 0 {
+		if mantissa == 0 {
+			return math.f32_from_bits(sign)
+		}
+		mut unbiased := -14
+		for (mantissa & 0x0400) == 0 {
+			mantissa <<= 1
+			unbiased--
+		}
+		mantissa &= 0x03ff
+		return math.f32_from_bits(sign | (u32(unbiased + 127) << 23) | (mantissa << 13))
+	}
+	if exponent == 0x1f {
+		return math.f32_from_bits(sign | 0x7f800000 | (mantissa << 13))
+	}
+	return math.f32_from_bits(sign | ((exponent + 112) << 23) | (mantissa << 13))
+}
+
+fn (left Float16) add(right Float16) Float16 {
+	return Float16.from_f64(f64(left.f32()) + f64(right.f32()))
+}
+
+fn (left Float16) sub(right Float16) Float16 {
+	return Float16.from_f64(f64(left.f32()) - f64(right.f32()))
+}
+
+fn (left Float16) mul(right Float16) Float16 {
+	return Float16.from_f64(f64(left.f32()) * f64(right.f32()))
+}
+
+fn (left Float16) div(right Float16) Float16 {
+	return Float16.from_f64(f64(left.f32()) / f64(right.f32()))
+}
+
+fn (value Float16) sqrt() Float16 {
+	return Float16.from_f64(math.sqrt(f64(value.f32())))
+}
+
 // Leaf node containing a view.
 pub struct Leaf[T] {
 pub mut:
@@ -70,7 +173,7 @@ pub:
 	// The layout direction of this split.
 	layout Layout
 	// The ratio of space given to the left/top child.
-	ratio f32
+	ratio Float16
 	// Handle (index) of the left/top child.
 	left Handle
 	// Handle (index) of the right/bottom child.
@@ -170,20 +273,20 @@ pub:
 // Slot represents the position and size of a node in spatial coordinates.
 pub struct Slot {
 pub mut:
-	x      f32
-	y      f32
-	width  f32
-	height f32
+	x      Float16
+	y      Float16
+	width  Float16
+	height Float16
 }
 
 // max_x returns the right edge of the slot.
-fn (s &Slot) max_x() f32 {
-	return s.x + s.width
+fn (s &Slot) max_x() Float16 {
+	return s.x.add(s.width)
 }
 
 // max_y returns the bottom edge of the slot.
-fn (s &Slot) max_y() f32 {
-	return s.y + s.height
+fn (s &Slot) max_y() Float16 {
+	return s.y.add(s.height)
 }
 
 // --- Internal types ---
@@ -203,8 +306,8 @@ struct BacktrackResult {
 }
 
 struct Dimensions {
-	width  int
-	height int
+	width  u16
+	height u16
 }
 
 // --- SplitTree methods ---
@@ -463,7 +566,7 @@ fn (self &SplitTree[T]) nearest(sp Spatial, from Handle, direction SpatialDirect
 	target := sp.slots[from.idx()]
 
 	mut best_handle := ?Handle(none)
-	mut best_distance := f32(0)
+	mut best_distance := Float16(0)
 
 	for handle in 0 .. sp.slots.len {
 		// Never match ourself
@@ -480,23 +583,23 @@ fn (self &SplitTree[T]) nearest(sp Spatial, from Handle, direction SpatialDirect
 
 		// Ensure it is in the proper direction
 		in_direction := match direction {
-			.left { slot.max_x() <= target.x }
-			.right { slot.x >= target.max_x() }
-			.up { slot.max_y() <= target.y }
-			.down { slot.y >= target.max_y() }
+			.left { slot.max_x().f32() <= target.x.f32() }
+			.right { slot.x.f32() >= target.max_x().f32() }
+			.up { slot.max_y().f32() <= target.y.f32() }
+			.down { slot.y.f32() >= target.max_y().f32() }
 		}
 		if !in_direction {
 			continue
 		}
 
 		// Track our distance
-		dx := slot.x - target.x
-		dy := slot.y - target.y
-		distance := f32(math.sqrt(f64(dx * dx + dy * dy)))
+		dx := slot.x.sub(target.x)
+		dy := slot.y.sub(target.y)
+		distance := dx.mul(dx).add(dy.mul(dy)).sqrt()
 
 		// If we have a nearest it must be closer.
 		if best_handle != none {
-			if distance >= best_distance {
+			if distance.f32() >= best_distance.f32() {
 				continue
 			}
 		}
@@ -519,10 +622,12 @@ pub fn (mut self SplitTree[T]) resize_in_place(at Handle, ratio f32) {
 	if node is Split {
 		self.nodes[at.idx()] = Node[T](Split{
 			layout: node.layout
-			ratio:  ratio
+			ratio:  Float16.from_f32(ratio)
 			left:   node.left
 			right:  node.right
 		})
+	} else {
+		panic('split-tree resize target must be a split')
 	}
 }
 
@@ -591,7 +696,7 @@ pub fn (self &SplitTree[T]) split_(at Handle, direction Direction, ratio f32, in
 	insert_root := Handle(self.nodes.len)
 	nodes[at.idx()] = Node[T](Split{
 		layout: layout
-		ratio:  ratio
+		ratio:  Float16.from_f32(ratio)
 		left:   if is_left { insert_root } else { last }
 		right:  if is_left { last } else { insert_root }
 	})
@@ -621,7 +726,7 @@ pub fn (self &SplitTree[T]) remove(at Handle) SplitTree[T] {
 	// Pre-allocate nodes with dummy values. We use a helper to construct
 	// the sum-type value because V's generics can't infer the element type
 	// when casting `Node[T](Split{})` directly inside the `init:` field.
-	mut new_nodes := []Node[T]{len: count, init: empty_node[T]()}
+	mut new_nodes := []Node[T]{len: int(count), init: empty_node[T]()}
 	mut result := SplitTree[T]{
 		nodes:  new_nodes
 		zoomed: none
@@ -637,7 +742,7 @@ pub fn (self &SplitTree[T]) remove(at Handle) SplitTree[T] {
 	return result
 }
 
-fn remove_node_impl[T](old &SplitTree[T], mut new_tree SplitTree[T], new_offset int, current Handle, target Handle) int {
+fn remove_node_impl[T](old &SplitTree[T], mut new_tree SplitTree[T], new_offset usize, current Handle, target Handle) usize {
 	assert(current != target)
 
 	// If we have a zoomed node and this is it then we migrate it.
@@ -666,7 +771,7 @@ fn remove_node_impl[T](old &SplitTree[T], mut new_tree SplitTree[T], new_offset 
 		right_count := remove_node_impl[T](old, mut new_tree, new_offset + left_count + 1, node.right,
 			target)
 		assert(right_count != 0)
-		new_tree.nodes[new_offset] = Node[T](Split{
+		new_tree.nodes[int(new_offset)] = Node[T](Split{
 			layout: node.layout
 			ratio:  node.ratio
 			left:   Handle(new_offset + 1)
@@ -677,7 +782,7 @@ fn remove_node_impl[T](old &SplitTree[T], mut new_tree SplitTree[T], new_offset 
 	if node is Leaf[T] {
 		// Leaf is simple, just copy it over. We don't ref anything
 		// yet because it'd make undo harder. We do that all at once later.
-		new_tree.nodes[new_offset] = Node[T](Leaf[T]{ view: node.view })
+		new_tree.nodes[int(new_offset)] = Node[T](Leaf[T]{ view: node.view })
 		return 1
 	}
 	return 0 // unreachable
@@ -685,7 +790,7 @@ fn remove_node_impl[T](old &SplitTree[T], mut new_tree SplitTree[T], new_offset 
 
 // count_after_removal returns the number of nodes that would be needed
 // to store the tree if the target node is removed.
-fn (self &SplitTree[T]) count_after_removal(current Handle, target Handle, acc int) int {
+fn (self &SplitTree[T]) count_after_removal(current Handle, target Handle, acc usize) usize {
 	assert(current != target)
 
 	node := self.nodes[current.idx()]
@@ -753,10 +858,11 @@ pub fn (self &SplitTree[T]) equalize() SplitTree[T] {
 			assert(weight_left > 0)
 			assert(weight_right > 0)
 			total_f := f32(weight_left + weight_right)
-			weight_left_f := f32(weight_left)
+			weight_left_f := Float16.from_f32(f32(weight_left))
+			total_f16 := Float16.from_f32(total_f)
 			nodes[i] = Node[T](Split{
 				layout: node.layout
-				ratio:  weight_left_f / total_f
+				ratio:  weight_left_f.div(total_f16)
 				left:   node.left
 				right:  node.right
 			})
@@ -772,7 +878,7 @@ pub fn (self &SplitTree[T]) equalize() SplitTree[T] {
 	}
 }
 
-fn (self &SplitTree[T]) weight(from Handle, layout Layout, acc int) int {
+fn (self &SplitTree[T]) weight(from Handle, layout Layout, acc usize) usize {
 	node := self.nodes[from.idx()]
 	if node is Leaf[T] {
 		return acc + 1
@@ -805,9 +911,11 @@ fn (self &SplitTree[T]) weight(from Handle, layout Layout, acc int) int {
 // If no matching split is found, this does nothing, but will always
 // still return a cloned tree.
 pub fn (self &SplitTree[T]) resize(from Handle, layout Layout, ratio f32) SplitTree[T] {
-	assert(ratio >= -1 && ratio <= 1)
-	assert(!math.is_nan(f64(ratio)))
-	assert(!math.is_inf(f64(ratio), 0))
+	ratio_f16 := Float16.from_f32(ratio)
+	ratio_value := ratio_f16.f32()
+	assert(ratio_value >= -1 && ratio_value <= 1)
+	assert(!math.is_nan(f64(ratio_value)))
+	assert(!math.is_inf(f64(ratio_value), 0))
 
 	// Fast path empty trees.
 	if self.is_empty() {
@@ -835,20 +943,20 @@ pub fn (self &SplitTree[T]) resize(from Handle, layout Layout, ratio f32) SplitT
 	// own but I'm trying to avoid that word: it's the ratio of
 	// our spatial width/height to the total.
 	scale := match layout {
-		.horizontal { sp.slots[parent_handle.idx()].width / sp.slots[0].width }
-		.vertical { sp.slots[parent_handle.idx()].height / sp.slots[0].height }
+		.horizontal { sp.slots[parent_handle.idx()].width.div(sp.slots[0].width) }
+		.vertical { sp.slots[parent_handle.idx()].height.div(sp.slots[0].height) }
 	}
 
 	parent_node := result.nodes[parent_handle.idx()]
 	current_ratio := if parent_node is Split {
 		parent_node.ratio
 	} else {
-		f32(0.5) // should not happen
+		Float16.from_f32(0.5) // should not happen
 	}
-	full_ratio := current_ratio * scale
+	full_ratio := current_ratio.mul(scale)
 
 	// Set the final new ratio, clamping it to [0, 1]
-	new_ratio := math.min(math.max(full_ratio + ratio, f32(0)), f32(1))
+	new_ratio := math.min(math.max(full_ratio.add(ratio_f16).f32(), f32(0)), f32(1))
 	result.resize_in_place(parent_handle, new_ratio)
 	return result
 }
@@ -902,26 +1010,28 @@ pub fn (self &SplitTree[T]) spatial() Spatial {
 	// Create our slots which will match our nodes exactly.
 	mut slots := []Slot{len: self.nodes.len}
 	slots[0] = Slot{
-		x:      0
-		y:      0
-		width:  f32(dim.width)
-		height: f32(dim.height)
+		x:      Float16.from_f32(0)
+		y:      Float16.from_f32(0)
+		width:  Float16.from_f32(f32(dim.width))
+		height: Float16.from_f32(f32(dim.height))
 	}
 	self.fill_spatial_slots(mut slots, handle_root)
 
 	// Normalize the dimensions to 1x1 grid.
 	for i in 0 .. slots.len {
-		slots[i].x /= f32(dim.width)
-		slots[i].y /= f32(dim.height)
-		slots[i].width /= f32(dim.width)
-		slots[i].height /= f32(dim.height)
+		width := Float16.from_f32(f32(dim.width))
+		height := Float16.from_f32(f32(dim.height))
+		slots[i].x = slots[i].x.div(width)
+		slots[i].y = slots[i].y.div(height)
+		slots[i].width = slots[i].width.div(width)
+		slots[i].height = slots[i].height.div(height)
 	}
 
 	return Spatial{ slots: slots }
 }
 
 fn (self &SplitTree[T]) fill_spatial_slots(mut slots []Slot, current Handle) {
-	assert(slots[current.idx()].width >= 0 && slots[current.idx()].height >= 0)
+	assert(slots[current.idx()].width.f32() >= 0 && slots[current.idx()].height.f32() >= 0)
 	node := self.nodes[current.idx()]
 	if node is Split {
 		current_idx := current.idx()
@@ -932,13 +1042,13 @@ fn (self &SplitTree[T]) fill_spatial_slots(mut slots []Slot, current Handle) {
 				slots[left_idx] = Slot{
 					x:      slots[current_idx].x
 					y:      slots[current_idx].y
-					width:  slots[current_idx].width * node.ratio
+					width:  slots[current_idx].width.mul(node.ratio)
 					height: slots[current_idx].height
 				}
 				slots[right_idx] = Slot{
-					x:      slots[current_idx].x + slots[current_idx].width * node.ratio
+					x:      slots[current_idx].x.add(slots[current_idx].width.mul(node.ratio))
 					y:      slots[current_idx].y
-					width:  slots[current_idx].width * (1 - node.ratio)
+					width:  slots[current_idx].width.mul(Float16.from_f32(1).sub(node.ratio))
 					height: slots[current_idx].height
 				}
 			}
@@ -947,13 +1057,13 @@ fn (self &SplitTree[T]) fill_spatial_slots(mut slots []Slot, current Handle) {
 					x:      slots[current_idx].x
 					y:      slots[current_idx].y
 					width:  slots[current_idx].width
-					height: slots[current_idx].height * node.ratio
+					height: slots[current_idx].height.mul(node.ratio)
 				}
 				slots[right_idx] = Slot{
 					x:      slots[current_idx].x
-					y:      slots[current_idx].y + slots[current_idx].height * node.ratio
+					y:      slots[current_idx].y.add(slots[current_idx].height.mul(node.ratio))
 					width:  slots[current_idx].width
-					height: slots[current_idx].height * (1 - node.ratio)
+					height: slots[current_idx].height.mul(Float16.from_f32(1).sub(node.ratio))
 				}
 			}
 		}
@@ -1013,7 +1123,7 @@ pub fn (self &SplitTree[T]) format_text() string {
 	return sb.str()
 }
 
-fn (self &SplitTree[T]) format_text_inner(mut sb strings.Builder, current Handle, depth int) {
+fn (self &SplitTree[T]) format_text_inner(mut sb strings.Builder, current Handle, depth usize) {
 	for _ in 0 .. depth {
 		sb.write_string('  ')
 	}
@@ -1030,11 +1140,11 @@ fn (self &SplitTree[T]) format_text_inner(mut sb strings.Builder, current Handle
 			.horizontal { 'horizontal' }
 			.vertical { 'vertical' }
 		}
-		sb.write_string('split (layout: ${layout_str}, ratio: ${node.ratio:.2f})\n')
+		sb.write_string('split (layout: ${layout_str}, ratio: ${node.ratio.f32():.2f})\n')
 		self.format_text_inner(mut sb, node.left, depth + 1)
 		self.format_text_inner(mut sb, node.right, depth + 1)
 	} else if node is Leaf[T] {
-		sb.write_string('leaf: ${node.view.split_tree_label()}\n')
+		sb.write_string('leaf: ${view_label[T](node.view, current)}\n')
 	}
 }
 
@@ -1048,34 +1158,34 @@ pub fn (self &SplitTree[T]) format_diagram() string {
 	sp := self.spatial()
 
 	// Scale our spatial representation to have minimum width/height 1.
-	mut min_w := f32(1)
-	mut min_h := f32(1)
+	mut min_w := Float16.from_f32(1)
+	mut min_h := Float16.from_f32(1)
 	for slot in sp.slots {
-		if slot.width > 0 {
-			min_w = math.min(min_w, slot.width)
+		if slot.width.f32() > 0 {
+			min_w = if min_w.f32() < slot.width.f32() { min_w } else { slot.width }
 		}
-		if slot.height > 0 {
-			min_h = math.min(min_h, slot.height)
+		if slot.height.f32() > 0 {
+			min_h = if min_h.f32() < slot.height.f32() { min_h } else { slot.height }
 		}
 	}
-	ratio_w := f32(1) / min_w
-	ratio_h := f32(1) / min_h
+	ratio_w := Float16.from_f32(1).div(min_w)
+	ratio_h := Float16.from_f32(1).div(min_h)
 
 	mut scaled_slots := []Slot{len: sp.slots.len}
 	for i in 0 .. sp.slots.len {
 		scaled_slots[i] = Slot{
-			x:      sp.slots[i].x * ratio_w
-			y:      sp.slots[i].y * ratio_h
-			width:  sp.slots[i].width * ratio_w
-			height: sp.slots[i].height * ratio_h
+			x:      sp.slots[i].x.mul(ratio_w)
+			y:      sp.slots[i].y.mul(ratio_h)
+			width:  sp.slots[i].width.mul(ratio_w)
+			height: sp.slots[i].height.mul(ratio_h)
 		}
 	}
 
 	// The width we need for the largest label.
 	mut max_label_width := 0
-	for node in self.nodes {
+	for handle, node in self.nodes {
 		if node is Leaf[T] {
-			label := node.view.split_tree_label()
+			label := view_label[T](node.view, Handle(handle))
 			if label.len > max_label_width {
 				max_label_width = label.len
 			}
@@ -1095,8 +1205,8 @@ pub fn (self &SplitTree[T]) format_diagram() string {
 	// Get our initial width/height. Each leaf is 1x1 in this.
 	// We round up for this because partial widths/heights should
 	// take up an extra cell.
-	grid_w := int(math.ceil(f64(scaled_slots[0].width))) * cell_width
-	grid_h := int(math.ceil(f64(scaled_slots[0].height))) * cell_height
+	grid_w := int(math.ceil(f64(scaled_slots[0].width.f32()))) * cell_width
+	grid_h := int(math.ceil(f64(scaled_slots[0].height.f32()))) * cell_height
 
 	// Create the grid filled with spaces, each row ending with newline.
 	mut grid := [][]u8{len: grid_h}
@@ -1115,14 +1225,14 @@ pub fn (self &SplitTree[T]) format_diagram() string {
 		slot := scaled_slots[handle]
 
 		// If our width/height is zero then we skip this.
-		if slot.width == 0 || slot.height == 0 {
+		if slot.width.f32() == 0 || slot.height.f32() == 0 {
 			continue
 		}
 
-		px := int(math.floor(f64(slot.x))) * cell_width
-		py := int(math.floor(f64(slot.y))) * cell_height
-		pw := int(math.max(math.floor(f64(slot.width)), 1)) * cell_width
-		ph := int(math.max(math.floor(f64(slot.height)), 1)) * cell_height
+		px := int(math.floor(f64(slot.x.f32()))) * cell_width
+		py := int(math.floor(f64(slot.y.f32()))) * cell_height
+		pw := int(math.max(math.floor(f64(slot.width.f32())), 1)) * cell_width
+		ph := int(math.max(math.floor(f64(slot.height.f32())), 1)) * cell_height
 
 		// Top border
 		grid[py][px] = u8(`+`)
@@ -1146,7 +1256,7 @@ pub fn (self &SplitTree[T]) format_diagram() string {
 
 		// Get our label text
 		label := if self.nodes[handle] is Leaf[T] {
-			(self.nodes[handle] as Leaf[T]).view.split_tree_label()
+			view_label[T]((self.nodes[handle] as Leaf[T]).view, Handle(handle))
 		} else {
 			'?'
 		}
@@ -1176,4 +1286,15 @@ pub fn (self &SplitTree[T]) format_diagram() string {
 		}
 	}
 	return sb.str()
+}
+
+// view_label mirrors Ghostty's optional splitTreeLabel declaration: views that
+// don't provide it are formatted with their compact node handle.
+fn view_label[T](view &T, handle Handle) string {
+	$for method in T.methods {
+		$if method.name == 'split_tree_label' {
+			return view.split_tree_label()
+		}
+	}
+	return handle.idx().str()
 }

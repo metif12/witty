@@ -1182,7 +1182,7 @@ pub fn (mut self SplitTreeSplit) on_idle(min int, max int, pos_set bool) {
 	}
 	node := self.split_tree.tree.nodes[self.handle.idx()]
 	desired_ratio := if node is datastruct.Split {
-		f64(node.ratio)
+		f64(node.ratio.f32())
 	} else {
 		return
 	}

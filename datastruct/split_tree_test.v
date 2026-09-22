@@ -6,6 +6,9 @@ fn test_split_tree_source_enum_layouts_and_ordinals() {
 	assert sizeof(datastruct.Handle) == 2
 	assert datastruct.handle_root.idx() == 0
 	assert datastruct.Handle(41).offset(1) == datastruct.Handle(42)
+	assert sizeof(datastruct.Float16) == 2
+	assert sizeof(datastruct.Split) == 8
+	assert sizeof(datastruct.Slot) == 8
 	assert sizeof(datastruct.Layout) == 1
 	assert u8(datastruct.Layout.horizontal) == 0
 	assert u8(datastruct.Layout.vertical) == 1
@@ -22,6 +25,27 @@ fn test_split_tree_source_enum_layouts_and_ordinals() {
 	assert u8(datastruct.SpatialDirection.right) == 1
 	assert u8(datastruct.SpatialDirection.down) == 2
 	assert u8(datastruct.SpatialDirection.up) == 3
+}
+
+fn test_split_tree_float16_rounding() {
+	assert u16(datastruct.Float16.from_f32(0.8)) == 0x3a66
+	assert datastruct.Float16.from_f32(0.8).f32() == f32(0.7998046875)
+	assert u16(datastruct.Float16.from_f32(0.3)) == 0x34cd
+	assert datastruct.Float16.from_f32(0.3).f32() == f32(0.300048828125)
+	// Round-to-nearest, ties-to-even in both directions.
+	assert u16(datastruct.Float16.from_f32(1.00048828125)) == 0x3c00
+	assert u16(datastruct.Float16.from_f32(1.00146484375)) == 0x3c02
+	assert u16(datastruct.Float16.from_f32(0.00000005960464477539063)) == 0x0001
+	assert u16(datastruct.Float16.from_f32(65504)) == 0x7bff
+	for raw in 0 .. 65536 {
+		value := datastruct.Float16(raw)
+		// NaN conversion is permitted to quiet the payload; all finite values
+		// and infinities must round-trip bit-for-bit.
+		if (raw & 0x7c00) == 0x7c00 && (raw & 0x03ff) != 0 {
+			continue
+		}
+		assert datastruct.Float16.from_f32(value.f32()) == value
+	}
 }
 
 // TestView is used in tests to implement the required view interface.
@@ -371,7 +395,7 @@ fn test_split_twice_remove_intermediary() {
 	// never crash. We don't test the result is correct, this just verifies
 	// we don't hit any assertion failures.
 	for i in 0 .. split2.nodes.len {
-		mut removed := split2.remove(i)
+		mut removed := split2.remove(datastruct.Handle(i))
 		removed.free()
 	}
 }
@@ -418,6 +442,8 @@ fn test_spatial_goto() {
 		split_bd.free()
 	}
 	split := &split_bd
+	expected_split := '+---++---+\n|   || B |\n|   |+---+\n|   |+---+\n| A ||   |\n|   ||   |\n|   ||   |\n|   || D |\n+---+|   |\n+---+|   |\n| C ||   |\n+---++---+\n'
+	assert split.format_diagram() == expected_split
 
 	// datastruct.Spatial C => right should be D
 	c_handle := find_handle(split, 'C')
