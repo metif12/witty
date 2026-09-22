@@ -12,8 +12,8 @@ module sprite
 import sprite_types as font
 import math
 
-// draw_underline draws a single underline decoration.
-pub fn draw_underline(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
+// underline draws a single underline decoration.
+pub fn underline(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
 	_ = cp
 
 	// We can go beyond the height of the cell a bit, but
@@ -34,8 +34,8 @@ pub fn draw_underline(cp u32, mut canvas Canvas, width u32, height u32, metrics 
 	}, .on)
 }
 
-// draw_underline_double draws a double underline decoration.
-pub fn draw_underline_double(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
+// underline_double draws a double underline decoration.
+pub fn underline_double(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
 	_ = cp
 
 	// We can go beyond the height of the cell a bit, but
@@ -66,8 +66,8 @@ pub fn draw_underline_double(cp u32, mut canvas Canvas, width u32, height u32, m
 	}, .on)
 }
 
-// draw_underline_dotted draws a dotted underline decoration.
-pub fn draw_underline_dotted(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
+// underline_dotted draws a dotted underline decoration.
+pub fn underline_dotted(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
 	_ = cp
 
 	mut ctx := canvas.get_context()
@@ -127,8 +127,8 @@ pub fn draw_underline_dotted(cp u32, mut canvas Canvas, width u32, height u32, m
 	ctx.fill() or {}
 }
 
-// draw_underline_dashed draws a dashed underline decoration.
-pub fn draw_underline_dashed(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
+// underline_dashed draws a dashed underline decoration.
+pub fn underline_dashed(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
 	_ = cp
 
 	// We can go beyond the height of the cell a bit, but
@@ -156,8 +156,8 @@ pub fn draw_underline_dashed(cp u32, mut canvas Canvas, width u32, height u32, m
 	}
 }
 
-// draw_underline_curly draws a curly (wavy) underline decoration.
-pub fn draw_underline_curly(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
+// underline_curly draws a curly (wavy) underline decoration.
+pub fn underline_curly(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
 	_ = cp
 
 	mut ctx := canvas.get_context()
@@ -209,8 +209,8 @@ pub fn draw_underline_curly(cp u32, mut canvas Canvas, width u32, height u32, me
 	ctx.stroke()!
 }
 
-// draw_strikethrough draws a strikethrough decoration.
-pub fn draw_strikethrough(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
+// strikethrough draws a strikethrough decoration.
+pub fn strikethrough(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
 	_ = cp
 	_ = height
 
@@ -222,8 +222,8 @@ pub fn draw_strikethrough(cp u32, mut canvas Canvas, width u32, height u32, metr
 	}, .on)
 }
 
-// draw_overline draws an overline decoration.
-pub fn draw_overline(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
+// overline draws an overline decoration.
+pub fn overline(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
 	_ = cp
 	_ = height
 
@@ -245,8 +245,8 @@ pub fn draw_overline(cp u32, mut canvas Canvas, width u32, height u32, metrics f
 	}, .on)
 }
 
-// draw_cursor_rect draws a filled rectangle cursor.
-pub fn draw_cursor_rect(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
+// cursor_rect draws a filled rectangle cursor.
+pub fn cursor_rect(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
 	_ = cp
 	_ = metrics
 
@@ -258,8 +258,8 @@ pub fn draw_cursor_rect(cp u32, mut canvas Canvas, width u32, height u32, metric
 	}, .on)
 }
 
-// draw_cursor_hollow_rect draws a hollow rectangle cursor.
-pub fn draw_cursor_hollow_rect(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
+// cursor_hollow_rect draws a hollow rectangle cursor.
+pub fn cursor_hollow_rect(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
 	_ = cp
 
 	// We fill the entire rect and then hollow out the inside, this isn't very
@@ -279,8 +279,8 @@ pub fn draw_cursor_hollow_rect(cp u32, mut canvas Canvas, width u32, height u32,
 	}, .off)
 }
 
-// draw_cursor_bar draws a bar (beam) cursor.
-pub fn draw_cursor_bar(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
+// cursor_bar draws a bar (beam) cursor.
+pub fn cursor_bar(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
 	_ = cp
 	_ = width
 
@@ -299,8 +299,8 @@ pub fn draw_cursor_bar(cp u32, mut canvas Canvas, width u32, height u32, metrics
 	}, .on)
 }
 
-// draw_cursor_underline draws an underline cursor.
-pub fn draw_cursor_underline(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
+// cursor_underline draws an underline cursor.
+pub fn cursor_underline(cp u32, mut canvas Canvas, width u32, height u32, metrics font.Metrics) ! {
 	_ = cp
 
 	cursor_thickness := metrics.cursor_thickness

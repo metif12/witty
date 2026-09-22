@@ -196,17 +196,17 @@ fn test_get_draw_fn_box_boundaries() {
 const special_start = u32(0x110000)
 
 fn test_get_draw_fn_special_sprites() {
-	assert get_draw_fn(special_start + 0) or { panic('') } == DrawFn(draw_underline)
-	assert get_draw_fn(special_start + 1) or { panic('') } == DrawFn(draw_underline_double)
-	assert get_draw_fn(special_start + 2) or { panic('') } == DrawFn(draw_underline_dotted)
-	assert get_draw_fn(special_start + 3) or { panic('') } == DrawFn(draw_underline_dashed)
-	assert get_draw_fn(special_start + 4) or { panic('') } == DrawFn(draw_underline_curly)
-	assert get_draw_fn(special_start + 5) or { panic('') } == DrawFn(draw_strikethrough)
-	assert get_draw_fn(special_start + 6) or { panic('') } == DrawFn(draw_overline)
-	assert get_draw_fn(special_start + 7) or { panic('') } == DrawFn(draw_cursor_rect)
-	assert get_draw_fn(special_start + 8) or { panic('') } == DrawFn(draw_cursor_hollow_rect)
-	assert get_draw_fn(special_start + 9) or { panic('') } == DrawFn(draw_cursor_bar)
-	assert get_draw_fn(special_start + 10) or { panic('') } == DrawFn(draw_cursor_underline)
+	assert get_draw_fn(special_start + 0) or { panic('') } == DrawFn(underline)
+	assert get_draw_fn(special_start + 1) or { panic('') } == DrawFn(underline_double)
+	assert get_draw_fn(special_start + 2) or { panic('') } == DrawFn(underline_dotted)
+	assert get_draw_fn(special_start + 3) or { panic('') } == DrawFn(underline_dashed)
+	assert get_draw_fn(special_start + 4) or { panic('') } == DrawFn(underline_curly)
+	assert get_draw_fn(special_start + 5) or { panic('') } == DrawFn(strikethrough)
+	assert get_draw_fn(special_start + 6) or { panic('') } == DrawFn(overline)
+	assert get_draw_fn(special_start + 7) or { panic('') } == DrawFn(cursor_rect)
+	assert get_draw_fn(special_start + 8) or { panic('') } == DrawFn(cursor_hollow_rect)
+	assert get_draw_fn(special_start + 9) or { panic('') } == DrawFn(cursor_bar)
+	assert get_draw_fn(special_start + 10) or { panic('') } == DrawFn(cursor_underline)
 }
 
 fn test_get_draw_fn_special_out_of_range() {

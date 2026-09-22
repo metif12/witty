@@ -513,7 +513,7 @@ fn test_cursor_uses_cursor_thickness_metric() {
 	mut metrics := font.default_grid_metrics(8, 8)
 	metrics.cursor_thickness = 2
 	mut c := Canvas.init(8, 8, 0, 0)
-	draw_cursor_hollow_rect(0, mut c, 8, 8, metrics)!
+	cursor_hollow_rect(0, mut c, 8, 8, metrics)!
 
 	assert data_at(&c, 1, 1) == 255
 	assert data_at(&c, 2, 2) == 0

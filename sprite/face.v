@@ -165,17 +165,17 @@ fn get_draw_fn(cp u32) ?DrawFn {
 		// Dispatch to special sprite drawing functions
 		idx := cp - sprite_start
 		return match idx {
-			0 { DrawFn(draw_underline) }
-			1 { DrawFn(draw_underline_double) }
-			2 { DrawFn(draw_underline_dotted) }
-			3 { DrawFn(draw_underline_dashed) }
-			4 { DrawFn(draw_underline_curly) }
-			5 { DrawFn(draw_strikethrough) }
-			6 { DrawFn(draw_overline) }
-			7 { DrawFn(draw_cursor_rect) }
-			8 { DrawFn(draw_cursor_hollow_rect) }
-			9 { DrawFn(draw_cursor_bar) }
-			10 { DrawFn(draw_cursor_underline) }
+			0 { DrawFn(underline) }
+			1 { DrawFn(underline_double) }
+			2 { DrawFn(underline_dotted) }
+			3 { DrawFn(underline_dashed) }
+			4 { DrawFn(underline_curly) }
+			5 { DrawFn(strikethrough) }
+			6 { DrawFn(overline) }
+			7 { DrawFn(cursor_rect) }
+			8 { DrawFn(cursor_hollow_rect) }
+			9 { DrawFn(cursor_bar) }
+			10 { DrawFn(cursor_underline) }
 			else { none }
 		}
 	}
