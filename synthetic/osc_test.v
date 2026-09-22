@@ -1,6 +1,7 @@
 module synthetic
 
 import osc
+import math
 import rand
 
 fn test_osc_kind_layout_and_source_order() {
@@ -108,4 +109,12 @@ fn test_osc_generator_reports_fixed_writer_overflow() {
 		return
 	}
 	assert false, 'expected the fixed OSC writer boundary to fail'
+}
+
+fn test_osc_validity_uses_source_comparison() {
+	mut rng := rand.new_default(seed_: [u32(11), 0])
+	defer { rng.free() }
+	mut generator := Osc.init(rng)
+	generator.p_valid = math.nan()
+	assert generator.choose_validity() == .valid
 }

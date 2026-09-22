@@ -24,14 +24,19 @@ pub enum OscInvalidKind as u8 {
 	good_prefix
 }
 
+enum Validity as u8 {
+	valid
+	invalid
+}
+
 // Osc generates random terminal OSC requests, including configurable invalid
 // traffic. Every result includes the ESC ] prefix and BEL terminator.
 pub struct Osc {
 pub mut:
 	rng            &rand.PRNG = unsafe { nil }
-	p_valid        f64 = 1.0
-	p_valid_kind   [13]f64 = [f64(1), 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]!
-	p_invalid_kind [2]f64 = [f64(1), 1]!
+	p_valid        f64        = 1.0
+	p_valid_kind   [13]f64    = [f64(1), 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]!
+	p_invalid_kind [2]f64     = [f64(1), 1]!
 }
 
 pub fn Osc.init(rng &rand.PRNG) Osc {
@@ -58,12 +63,16 @@ pub fn (mut self Osc) next(max_len usize) ![]u8 {
 }
 
 fn (mut self Osc) next_unwrapped(max_len usize) ![]u8 {
-	if self.rng.f64() <= self.p_valid {
-		idx := osc_weighted_index(mut self.rng, self.p_valid_kind[..])!
-		return self.next_unwrapped_valid_exact(unsafe { OscValidKind(idx) }, max_len)
+	return match self.choose_validity() {
+		.valid {
+			idx := osc_weighted_index(mut self.rng, self.p_valid_kind[..])!
+			self.next_unwrapped_valid_exact(unsafe { OscValidKind(idx) }, max_len)!
+		}
+		.invalid {
+			idx := osc_weighted_index(mut self.rng, self.p_invalid_kind[..])!
+			self.next_unwrapped_invalid_exact(unsafe { OscInvalidKind(idx) }, max_len)!
+		}
 	}
-	idx := osc_weighted_index(mut self.rng, self.p_invalid_kind[..])!
-	return self.next_unwrapped_invalid_exact(unsafe { OscInvalidKind(idx) }, max_len)
 }
 
 fn (mut self Osc) next_unwrapped_valid_exact(kind OscValidKind, max_len usize) ![]u8 {
@@ -235,14 +244,22 @@ fn (mut self Osc) random_bytes(max_len usize, alphabet []u8) ![]u8 {
 	if max_len < 1 {
 		return []u8{}
 	}
-	mut bytes := Bytes.init(self.rng)
+	mut bytes := self.bytes()
 	if alphabet.len > 0 {
 		bytes.alphabet = alphabet
-	} else {
-		bytes.alphabet = osc_alphabet
 	}
 	mut bounded := bytes.at_most(max_len)
 	return bounded.write()
+}
+
+fn (self &Osc) bytes() Bytes {
+	mut bytes := Bytes.init(self.rng)
+	bytes.alphabet = unsafe { osc_alphabet }
+	return bytes
+}
+
+fn (mut self Osc) choose_validity() Validity {
+	return if self.rng.f64() > self.p_valid { .invalid } else { .valid }
 }
 
 fn (mut self Osc) random_bool() bool {

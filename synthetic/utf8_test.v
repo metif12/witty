@@ -46,6 +46,28 @@ fn test_utf8_generator_uses_smaller_sequence_for_remaining_bytes() {
 	assert result.bytestr().runes().len == 2
 }
 
+fn test_utf8_generator_allows_zero_length_output() {
+	mut rng := rand.new_default(seed_: [u32(9), 0])
+	defer { rng.free() }
+	mut value := Utf8.init(rng)
+	assert value.next(0)! == []u8{}
+	value.min_len = 0
+	value.max_len = 0
+	assert value.next(32)! == []u8{}
+}
+
+fn test_utf8_generator_retains_source_pointer_semantics() {
+	mut rng := rand.new_default(seed_: [u32(10), 0])
+	defer { rng.free() }
+	mut value := Utf8.init(rng)
+	value.min_len = 1
+	value.max_len = 1
+	mut generator := value.generator()
+	value.min_len = 8
+	value.max_len = 8
+	assert generator.next(8)!.len == 8
+}
+
 fn test_utf8_generator_preserves_pointer_width_limits() {
 	mut rng := rand.new_default(seed_: [u32(8), 0])
 	defer { rng.free() }

@@ -63,6 +63,27 @@ fn test_bytes_generator_interface() {
 	assert generator.next(8)!.len == 8
 }
 
+fn test_bytes_format_uses_write_contract() {
+	mut rng := rand.new_default(seed_: [u32(1), 0])
+	defer { rng.free() }
+	mut bytes := Bytes.init(rng)
+	bytes.min_len = 8
+	bytes.max_len = 8
+	assert bytes.format()!.len == 8
+}
+
+fn test_bytes_generator_retains_source_pointer_semantics() {
+	mut rng := rand.new_default(seed_: [u32(1), 0])
+	defer { rng.free() }
+	mut bytes := Bytes.init(rng)
+	bytes.min_len = 1
+	bytes.max_len = 1
+	mut generator := bytes.generator()
+	bytes.min_len = 8
+	bytes.max_len = 8
+	assert generator.next(8)!.len == 8
+}
+
 fn test_bytes_generator_preserves_pointer_width_limits() {
 	mut rng := rand.new_default(seed_: [u32(2), 0])
 	defer { rng.free() }

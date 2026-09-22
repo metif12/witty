@@ -14,9 +14,9 @@ pub enum Utf8Len as u8 {
 pub struct Utf8 {
 pub mut:
 	rng      &rand.PRNG = unsafe { nil }
-	min_len  usize = 1
-	max_len  usize = ~usize(0)
-	p_length [4]f64 = [f64(1), 1, 1, 1]!
+	min_len  usize      = 1
+	max_len  usize      = ~usize(0)
+	p_length [4]f64     = [f64(1), 1, 1, 1]!
 }
 
 pub fn Utf8.init(rng &rand.PRNG) Utf8 {
@@ -31,7 +31,7 @@ pub fn (mut self Utf8) next(max_len usize) ![]u8 {
 	if isnil(self.rng) {
 		return error('random generator is not initialized')
 	}
-	if self.min_len < 1 || self.max_len < self.min_len || max_len < 1 {
+	if self.max_len < self.min_len {
 		return error('invalid UTF-8 length range')
 	}
 	random_len := synthetic_random_inclusive(mut self.rng, self.min_len, self.max_len)!
