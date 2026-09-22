@@ -162,6 +162,33 @@ fn test_parse_action_covers_every_pinned_action() {
 	assert parse_action('unknown') == none
 }
 
+fn test_data_file_preserves_optional_stdin_and_owned_file() {
+	mut absent := data_file(none)!
+	assert !absent.present
+	mut empty := []u8{len: 1}
+	assert absent.read(mut empty)! == 0
+
+	mut stdin := data_file('-')!
+	assert stdin.present
+	assert !stdin.owned
+	stdin.close()
+	assert !stdin.present
+
+	path := os.join_path(os.temp_dir(), 'witty-benchmark-data-file-${os.getpid()}')
+	os.write_file(path, 'abc')!
+	defer {
+		os.rm(path) or {}
+	}
+	mut opened := data_file(path)!
+	assert opened.present
+	assert opened.owned
+	mut buf := []u8{len: 3}
+	assert opened.read(mut buf)! == 3
+	assert buf.bytestr() == 'abc'
+	opened.close()
+	assert !opened.present
+}
+
 fn test_no_data_benchmarks_run_once() {
 	run_cli('codepoint-width', '')!
 	run_cli('grapheme-break', '')!

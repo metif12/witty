@@ -98,14 +98,18 @@ pub mut:
 	data ?string
 }
 
-struct DataFile {
+// DataFile preserves the source's optional file result in a V value. `present`
+// distinguishes no configured input from stdin, whose descriptor is zero.
+pub struct DataFile {
 mut:
 	file    os.File
 	present bool
 	owned   bool
 }
 
-fn data_file(path ?string) !DataFile {
+// data_file returns no handle for none, stdin for "-", or an owned file for
+// every other path, matching benchmark/options.zig dataFile.
+pub fn data_file(path ?string) !DataFile {
 	value := path or { return DataFile{} }
 	if value == '-' {
 		return DataFile{
@@ -120,14 +124,14 @@ fn data_file(path ?string) !DataFile {
 	}
 }
 
-fn (mut self DataFile) close() {
+pub fn (mut self DataFile) close() {
 	if self.present && self.owned {
 		self.file.close()
 	}
 	self.present = false
 }
 
-fn (mut self DataFile) read(mut buf []u8) !int {
+pub fn (mut self DataFile) read(mut buf []u8) !int {
 	if !self.present {
 		return 0
 	}
