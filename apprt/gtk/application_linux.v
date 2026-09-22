@@ -1714,11 +1714,11 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 		}
 		.open_config {
 			path := configpkg.open_path() or { return false }
-			internal_os.open_kind(.text, path) or { return false }
+			internal_os.open(.text, path) or { return false }
 			return true
 		}
 		.open_url {
-			internal_os.open_kind(data.open_url_.kind, data.open_url_.url) or { return false }
+			internal_os.open(data.open_url_.kind, data.open_url_.url) or { return false }
 			return true
 		}
 		.pwd {

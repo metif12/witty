@@ -8,6 +8,11 @@ fn test_desktop_environment_tag_layout_matches_source() {
 		3]
 }
 
+fn test_open_type_alias_matches_source_kind() {
+	assert sizeof(OpenType) == 4
+	assert [OpenType.unknown, .text, .html].map(i32(it)) == [i32(0), 1, 2]
+}
+
 fn test_pipe_returns_distinct_fds() {
 	fds := pipe() or { panic(err) }
 	defer {
@@ -392,6 +397,24 @@ fn test_i18n_supported_locales_match_pinned_source() {
 	assert supported_locales[22] == 'zh_TW.UTF-8'
 	assert supported_locales[24] == 'lt_LT.UTF-8'
 	assert static_locale('ru_RU.UTF-8') == 'ru_RU.UTF-8'
+}
+
+fn test_i18n_resource_parent_matches_source_path_semantics() {
+	assert i18n_share_dir('resources') == none
+	assert i18n_share_dir('resources/') == none
+	assert i18n_share_dir('/') == none
+	assert i18n_share_dir('/resources')? == '/'
+	assert i18n_share_dir('/usr/share/ghostty')? == '/usr/share'
+	assert i18n_share_dir('/usr/share/ghostty///')? == '/usr/share'
+	assert i18n_share_dir('./resources')? == '.'
+
+	$if !windows {
+		init('resources') or {
+			assert err.msg() == 'InvalidResourcesDir'
+			return
+		}
+		assert false, 'expected a basename-only resources path to fail'
+	}
 }
 
 fn test_systemd_detection_is_false_off_linux() {

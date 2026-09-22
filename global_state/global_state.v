@@ -313,7 +313,7 @@ pub fn (mut self GlobalState) init_args(args []string) ! {
 	// hereafter can use this cached value.
 	self.resources_dir = internal_os.resources_dir()
 	if resources_dir := self.resources_dir.app() {
-		internal_os.init_i18n(resources_dir) or {
+		internal_os.init(resources_dir) or {
 			eprintln('failed to initialize translations: ${err}')
 		}
 	}

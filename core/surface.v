@@ -5915,7 +5915,7 @@ fn (mut self Surface) open_url(action apprt.OpenUrl) ! {
 		apprt.ActionValue{ open_url_: action },
 	)!
 	if !handled && action.url.len > 0 {
-		internal_os.open_kind(action.kind, action.url)!
+		internal_os.open(action.kind, action.url)!
 	}
 }
 

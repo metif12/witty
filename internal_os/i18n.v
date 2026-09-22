@@ -60,25 +60,52 @@ fn get_i18n_state() &I18nState {
 	return unsafe { &i18n_state_singleton.state }
 }
 
-// init_i18n binds Ghostty's gettext domain to the locale directory adjacent
-// to the application resource directory. If gettext is unavailable the
-// application remains usable and translations fall back to their message IDs.
-pub fn init_i18n(resources_dir string) ! {
-	if resources_dir.len == 0 {
-		return error('invalid resources directory')
+// init binds Ghostty's gettext domain to the locale directory adjacent to the
+// application resource directory. If gettext is unavailable the application
+// remains usable and translations fall back to their message IDs.
+pub fn init(resources_dir string) ! {
+	$if windows {
+		return
 	}
+	share_dir := i18n_share_dir(resources_dir) or { return error('InvalidResourcesDir') }
 	load_gettext() or { return }
 	state := get_i18n_state()
 	if isnil(state.bind_symbol) {
 		return
 	}
-	locale_dir := os.join_path(os.dir(resources_dir), 'locale')
+	locale_dir := os.join_path(share_dir, 'locale')
 	unsafe {
 		bind := BindTextDomainFunction(state.bind_symbol)
 		if isnil(bind(&char(ghostty_gettext_domain.str), &char(locale_dir.str))) {
 			return error('unable to bind gettext domain')
 		}
 	}
+}
+
+// i18n_share_dir is std.fs.path.dirname's POSIX behavior. In particular, a
+// basename and a basename with trailing slashes have no directory component;
+// os.dir maps both to a usable string and would hide InvalidResourcesDir.
+fn i18n_share_dir(path string) ?string {
+	if path.len == 0 {
+		return none
+	}
+	mut end := path.len - 1
+	for path[end] == `/` {
+		if end == 0 {
+			return none
+		}
+		end--
+	}
+	for path[end] != `/` {
+		if end == 0 {
+			return none
+		}
+		end--
+	}
+	if end == 0 {
+		return if path[0] == `/` { '/' } else { none }
+	}
+	return path[..end]
 }
 
 // init_global_domain makes unqualified gettext calls use Ghostty's

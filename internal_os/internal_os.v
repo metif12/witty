@@ -7,6 +7,9 @@ import log
 import zig_fmt
 import openurl
 
+// OpenType is the source alias for the content hint consumed by open.
+pub type OpenType = openurl.Kind
+
 // C interop declarations for pipes and resource limits.
 #include <unistd.h>
 
@@ -64,13 +67,8 @@ fn open_command_for_os(os_name string, kind openurl.Kind, url string) !(string, 
 	}
 }
 
-// open opens a URL or file path using the most generic system handler.
-pub fn open(url string) ! {
-	open_kind(.unknown, url)!
-}
-
-// open_kind opens a URL or path with the source content-type hint.
-pub fn open_kind(kind openurl.Kind, url string) ! {
+// open opens a URL or path with the source content-type hint.
+pub fn open(kind OpenType, url string) ! {
 	os_name := $if macos { 'macos' } $else $if linux { 'linux' } $else $if freebsd { 'freebsd' } $else $if windows { 'windows' } $else { 'unsupported' }
 	executable, args := open_command_for_os(os_name, kind, url)!
 	mut process := os.new_process(executable)
