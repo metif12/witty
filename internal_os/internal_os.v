@@ -35,6 +35,8 @@ fn C.getuid() int
 
 fn C.getpwuid_r(uid int, pwd &C.passwd, buf &char, buflen usize, result &&C.passwd) int
 
+fn C.ReadFile(handle voidptr, buffer voidptr, bytes_to_read u32, bytes_read &u32, overlapped voidptr) bool
+
 struct C.passwd {
 	pw_name  &char
 	pw_dir   &char
@@ -86,8 +88,8 @@ pub fn open(kind OpenType, url string) ! {
 // The platform URL opener may block until the target application exits. Reap
 // it away from the caller so opening a link never stalls terminal input.
 fn reap_open_process(mut process os.Process) {
-	stdout_result := chan string{ cap: 1 }
-	stderr_result := chan string{ cap: 1 }
+	stdout_result := chan OpenProcessOutput{ cap: 1 }
+	stderr_result := chan OpenProcessOutput{ cap: 1 }
 	stdout_thread := spawn collect_open_stdout(mut process, stdout_result)
 	stderr_thread := spawn collect_open_stderr(mut process, stderr_result)
 	stdout := <-stdout_result
@@ -95,19 +97,89 @@ fn reap_open_process(mut process os.Process) {
 	stdout_thread.wait()
 	stderr_thread.wait()
 	process.wait()
-	// std.process.Child.collectOutput rejects either stream above 50 KiB.
-	if stdout.len <= 50 * 1024 && stderr.len > 0 && stderr.len <= 50 * 1024 {
-		log.warn('URL opener stderr: ${stderr}')
+	if !stdout.too_long && !stderr.too_long && stderr.data.len > 0 {
+		log.warn('URL opener stderr: ${stderr.data}')
 	}
 	process.close()
 }
 
-fn collect_open_stdout(mut process os.Process, result chan string) {
-	result <- process.stdout_slurp()
+const open_process_output_max = 50 * 1024
+
+struct OpenProcessOutput {
+	data     string
+	too_long bool
 }
 
-fn collect_open_stderr(mut process os.Process, result chan string) {
-	result <- process.stderr_slurp()
+struct OpenProcessOutputAccumulator {
+mut:
+	data     []u8
+	too_long bool
+}
+
+fn (mut self OpenProcessOutputAccumulator) add(chunk []u8) {
+	if self.data.len <= open_process_output_max {
+		remaining := open_process_output_max + 1 - self.data.len
+		keep := if chunk.len < remaining { chunk.len } else { remaining }
+		self.data << chunk[..keep]
+		if keep < chunk.len {
+			self.too_long = true
+		}
+	} else {
+		self.too_long = true
+	}
+}
+
+fn (mut self OpenProcessOutputAccumulator) finish() OpenProcessOutput {
+	if self.data.len > open_process_output_max {
+		self.too_long = true
+	}
+	return OpenProcessOutput{
+		data: if self.too_long { '' } else { self.data.bytestr() }
+		too_long: self.too_long
+	}
+}
+
+fn collect_open_stdout(mut process os.Process, result chan OpenProcessOutput) {
+	collect_open_output(mut process, .stdout, result)
+}
+
+fn collect_open_stderr(mut process os.Process, result chan OpenProcessOutput) {
+	collect_open_output(mut process, .stderr, result)
+}
+
+fn collect_open_output(mut process os.Process, kind os.ChildProcessPipeKind, result chan OpenProcessOutput) {
+	mut output := OpenProcessOutputAccumulator{
+		data: []u8{ cap: open_process_output_max + 1 }
+	}
+	$if windows {
+		wdata := unsafe { &os.WProcess(process.wdata) }
+		handle := match kind {
+			.stdout { voidptr(wdata.child_stdout_read) }
+			.stderr { voidptr(wdata.child_stderr_read) }
+			.stdin { unsafe { nil } }
+		}
+		if !isnil(handle) {
+			mut buffer := [4096]u8{}
+			for {
+				mut bytes_read := u32(0)
+				if !C.ReadFile(handle, &buffer[0], u32(buffer.len), &bytes_read, unsafe { nil })
+					|| bytes_read == 0 {
+					break
+				}
+				output.add(buffer[..int(bytes_read)])
+			}
+		}
+	} $else {
+		fd := process.stdio_fd[int(kind)]
+		for {
+			chunk, count := os.fd_read(fd, 4096)
+			if count <= 0 {
+				break
+			}
+			output.add(chunk.bytes())
+		}
+	}
+	result <- output.finish()
 }
 
 // TempDir manages a temporary directory for scratch files.

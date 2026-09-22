@@ -56,8 +56,8 @@ fn test_open_process_collects_stdout_and_stderr_concurrently() {
 		process.run()
 		assert process.status != .aborted
 
-		stdout_result := chan string{ cap: 1 }
-		stderr_result := chan string{ cap: 1 }
+		stdout_result := chan OpenProcessOutput{ cap: 1 }
+		stderr_result := chan OpenProcessOutput{ cap: 1 }
 		stdout_thread := spawn collect_open_stdout(mut process, stdout_result)
 		stderr_thread := spawn collect_open_stderr(mut process, stderr_result)
 		stdout := <-stdout_result
@@ -67,9 +67,31 @@ fn test_open_process_collects_stdout_and_stderr_concurrently() {
 		process.wait()
 		process.close()
 
-		assert stdout == 'stdout-complete'
-		assert stderr.len == 131072
+		assert stdout.data == 'stdout-complete'
+		assert !stdout.too_long
+		assert stderr.data.len == 0
+		assert stderr.too_long
 	}
+}
+
+fn test_open_process_output_source_limit() {
+	mut exact_accumulator := OpenProcessOutputAccumulator{
+		data: []u8{ cap: open_process_output_max + 1 }
+	}
+	exact_accumulator.add('x'.repeat(open_process_output_max).bytes())
+	exact := exact_accumulator.finish()
+	assert exact.data.len == open_process_output_max
+	assert !exact.too_long
+
+	mut oversized_accumulator := OpenProcessOutputAccumulator{
+		data: []u8{ cap: open_process_output_max + 1 }
+	}
+	oversized_accumulator.add('x'.repeat(open_process_output_max).bytes())
+	oversized_accumulator.add([u8(`x`)])
+	oversized_accumulator.add('discarded without allocation'.bytes())
+	oversized := oversized_accumulator.finish()
+	assert oversized.data.len == 0
+	assert oversized.too_long
 }
 
 fn test_temp_dir_is_unique_and_deletes_contents() {
