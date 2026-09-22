@@ -150,6 +150,7 @@ pub const table_flags_borders_row_bg = (1 << 6) | (1 << 7) | (1 << 8) | (1 << 9)
 pub const table_flags_borders_row_bg_sizing_fixed_fit = (1 << 6) | (1 << 7) | (1 << 8) | (1 << 9) | (1 << 10) | (1 << 13)
 pub const table_flags_row_bg_sizing_fixed_fit = (1 << 6) | (1 << 13)
 pub const table_flags_inner_v_row_bg_sizing_fixed_fit = (1 << 6) | (1 << 9) | (1 << 13)
+pub const tree_node_flags_page_header = (1 << 2) | (1 << 10) | (1 << 12)
 pub const color_edit_flags_none = 0
 pub const color_edit_flags_no_inputs = 1 << 5
 pub const color_edit_flags_style = (1 << 2) | (1 << 7) | (1 << 22)

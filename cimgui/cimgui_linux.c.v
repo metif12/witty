@@ -144,6 +144,18 @@ fn C.witty_cimgui_end_child(context voidptr)
 
 fn C.witty_cimgui_tree_node(context voidptr, label &char) bool
 
+fn C.witty_cimgui_tree_node_flags(context voidptr, label &char, flags int) bool
+
+fn C.witty_cimgui_item_rect_min_x(context voidptr) f32
+
+fn C.witty_cimgui_item_rect_min_y(context voidptr) f32
+
+fn C.witty_cimgui_item_rect_max_y(context voidptr) f32
+
+fn C.witty_cimgui_text_line_height(context voidptr) f32
+
+fn C.witty_cimgui_set_cursor_screen_pos(context voidptr, x f32, y f32)
+
 fn C.witty_cimgui_tree_pop(context voidptr)
 
 fn C.witty_cimgui_help_marker(context voidptr, value &char)
@@ -498,6 +510,26 @@ pub fn (ctx Context) end_child() {
 
 pub fn (ctx Context) tree_node(label string) bool {
 	return C.witty_cimgui_tree_node(ctx.handle, label.str)
+}
+
+pub fn (ctx Context) tree_node_flags(label string, flags int) bool {
+	return C.witty_cimgui_tree_node_flags(ctx.handle, label.str, flags)
+}
+
+pub fn (ctx Context) item_rect_min() (f32, f32) {
+	return C.witty_cimgui_item_rect_min_x(ctx.handle), C.witty_cimgui_item_rect_min_y(ctx.handle)
+}
+
+pub fn (ctx Context) item_rect_max_y() f32 {
+	return C.witty_cimgui_item_rect_max_y(ctx.handle)
+}
+
+pub fn (ctx Context) text_line_height() f32 {
+	return C.witty_cimgui_text_line_height(ctx.handle)
+}
+
+pub fn (ctx Context) set_cursor_screen_pos(x f32, y f32) {
+	C.witty_cimgui_set_cursor_screen_pos(ctx.handle, x, y)
 }
 
 pub fn (ctx Context) tree_pop() {

@@ -510,6 +510,44 @@ static inline bool witty_cimgui_tree_node(ImGuiContext* context, const char* lab
     return ImGui_TreeNodeEx(label, ImGuiTreeNodeFlags_None);
 }
 
+static inline bool witty_cimgui_tree_node_flags(
+    ImGuiContext* context,
+    const char* label,
+    int flags
+) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_TreeNodeEx(label, flags);
+}
+
+static inline float witty_cimgui_item_rect_min_x(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_GetItemRectMin().x;
+}
+
+static inline float witty_cimgui_item_rect_min_y(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_GetItemRectMin().y;
+}
+
+static inline float witty_cimgui_item_rect_max_y(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_GetItemRectMax().y;
+}
+
+static inline float witty_cimgui_text_line_height(ImGuiContext* context) {
+    ImGui_SetCurrentContext(context);
+    return ImGui_GetTextLineHeight();
+}
+
+static inline void witty_cimgui_set_cursor_screen_pos(
+    ImGuiContext* context,
+    float x,
+    float y
+) {
+    ImGui_SetCurrentContext(context);
+    ImGui_SetCursorScreenPos((ImVec2){x, y});
+}
+
 static inline void witty_cimgui_tree_pop(ImGuiContext* context) {
     ImGui_SetCurrentContext(context);
     ImGui_TreePop();

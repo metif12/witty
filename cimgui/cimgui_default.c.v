@@ -271,6 +271,29 @@ pub fn (ctx Context) tree_node(label string) bool {
 	return false
 }
 
+pub fn (ctx Context) tree_node_flags(label string, flags int) bool {
+	_ = label
+	_ = flags
+	return false
+}
+
+pub fn (ctx Context) item_rect_min() (f32, f32) {
+	return 0, 0
+}
+
+pub fn (ctx Context) item_rect_max_y() f32 {
+	return 0
+}
+
+pub fn (ctx Context) text_line_height() f32 {
+	return 0
+}
+
+pub fn (ctx Context) set_cursor_screen_pos(x f32, y f32) {
+	_ = x
+	_ = y
+}
+
 pub fn (ctx Context) tree_pop() {}
 
 pub fn (ctx Context) help_marker(value string) {
