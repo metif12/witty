@@ -551,9 +551,9 @@ fn test_ensure_locale_initializes_libc() {
 }
 
 fn test_xdg_directories_with_cached_home() {
-	assert xdg_config(XdgOptions{ home: '/Users/test' })! == '/Users/test/.config'
-	assert xdg_cache(XdgOptions{ home: '/Users/test', subdir: 'ghostty' })! == '/Users/test/.cache/ghostty'
-	assert xdg_state(XdgOptions{ home: '/Users/test', subdir: 'ghostty' })! == '/Users/test/.local/state/ghostty'
+	assert config(Options{ home: '/Users/test' })! == '/Users/test/.config'
+	assert cache(Options{ home: '/Users/test', subdir: 'ghostty' })! == '/Users/test/.cache/ghostty'
+	assert state(Options{ home: '/Users/test', subdir: 'ghostty' })! == '/Users/test/.local/state/ghostty'
 }
 
 fn test_xdg_empty_environment_falls_back_to_home() {
@@ -573,8 +573,8 @@ fn test_xdg_empty_environment_falls_back_to_home() {
 	}
 	os.setenv('HOME', '/tmp/witty-test-home', true)
 	os.setenv('XDG_CACHE_HOME', '', true)
-	assert xdg_cache(XdgOptions{})! == '/tmp/witty-test-home/.cache'
-	assert xdg_cache(XdgOptions{ subdir: 'ghostty' })! == '/tmp/witty-test-home/.cache/ghostty'
+	assert cache(Options{})! == '/tmp/witty-test-home/.cache'
+	assert cache(Options{ subdir: 'ghostty' })! == '/tmp/witty-test-home/.cache/ghostty'
 }
 
 fn test_parse_terminal_exec() {

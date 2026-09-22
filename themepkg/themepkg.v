@@ -20,7 +20,7 @@ pub enum Location as u8 {
 pub fn (l Location) dir() ?string {
 	match l {
 		.user {
-			return internal_os.xdg_config(internal_os.XdgOptions{
+			return internal_os.config(internal_os.Options{
 				subdir: os.join_path('ghostty', 'themes')
 			}) or { none }
 		}

@@ -10136,14 +10136,14 @@ fn ensure_editable_config_path(path string) ! {
 
 // default_xdg_path returns Ghostty's current XDG configuration path.
 pub fn default_xdg_path() !string {
-	return internal_os.xdg_config(internal_os.XdgOptions{
+	return internal_os.config(internal_os.Options{
 		subdir: os.join_path('ghostty', 'config.ghostty')
 	})
 }
 
 // legacy_default_xdg_path returns Ghostty's pre-1.3 XDG configuration path.
 pub fn legacy_default_xdg_path() !string {
-	return internal_os.xdg_config(internal_os.XdgOptions{
+	return internal_os.config(internal_os.Options{
 		subdir: os.join_path('ghostty', 'config')
 	})
 }

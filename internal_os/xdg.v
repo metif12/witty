@@ -2,27 +2,27 @@ module internal_os
 
 import os
 
-// XdgOptions controls the optional application subdirectory and permits a
+// Options controls the optional application subdirectory and permits a
 // caller to provide an already-cached home directory.
-pub struct XdgOptions {
+pub struct Options {
 pub:
 	subdir ?string
 	home   ?string
 }
 
-pub fn xdg_config(opts XdgOptions) !string {
+pub fn config(opts Options) !string {
 	return xdg_dir(opts, 'XDG_CONFIG_HOME', 'LOCALAPPDATA', '.config')
 }
 
-pub fn xdg_cache(opts XdgOptions) !string {
+pub fn cache(opts Options) !string {
 	return xdg_dir(opts, 'XDG_CACHE_HOME', 'LOCALAPPDATA', '.cache')
 }
 
-pub fn xdg_state(opts XdgOptions) !string {
+pub fn state(opts Options) !string {
 	return xdg_dir(opts, 'XDG_STATE_HOME', 'LOCALAPPDATA', '.local/state')
 }
 
-fn xdg_dir(opts XdgOptions, env_name string, windows_env_name string, default_subdir string) !string {
+fn xdg_dir(opts Options, env_name string, windows_env_name string, default_subdir string) !string {
 	if cached_home := opts.home {
 		return join_xdg(cached_home, default_subdir, opts.subdir)
 	}

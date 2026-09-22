@@ -61,7 +61,7 @@ pub:
 // default_path resolves `${XDG_STATE_HOME}/<program>/ssh_cache`
 // without creating the directory. Path creation belongs to cache mutation.
 pub fn SshDiskCache.default_path(program string) !string {
-	state_dir := internal_os.xdg_state(internal_os.XdgOptions{ subdir: program })!
+	state_dir := internal_os.state(internal_os.Options{ subdir: program })!
 	return os.join_path(state_dir, 'ssh_cache')
 }
 

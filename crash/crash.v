@@ -120,7 +120,7 @@ pub:
 // default_dir returns Ghostty's XDG state directory for crash reports.
 pub fn default_dir() !Dir {
 	return Dir{
-		path: internal_os.xdg_state(internal_os.XdgOptions{
+		path: internal_os.state(internal_os.Options{
 			subdir: 'ghostty/crash'
 		})!
 	}
