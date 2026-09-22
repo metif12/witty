@@ -6,7 +6,9 @@ The resulting V code has to be very simple, readable, but do the same thing.
 
 All tests go to a separate filename_test.v.
 
-If a function/method can't be translated due to missing dependencies etc, generate function body with a // XTODO
-body. For each function explain why its body couldn't be translated in the comment under // XTODO
+If a function or method cannot be translated because a required dependency or
+language feature is unavailable, do not add a placeholder body. Record the
+exact source contract and blocker in AUDIT_FINDINGS.md, and keep the missing
+entry point out of production code until it can be implemented faithfully.
 
 Once you're done with translating the files, finish. Print number of initial lines of code, and number of V lines.
