@@ -5,7 +5,8 @@ import terminal
 
 // SurfaceMouse is the key-driven mouse cursor state used by Surface.key_callback.
 // It is the canonical-type translation of Ghostty's surface_mouse.SurfaceMouse.
-struct SurfaceMouse {
+pub struct SurfaceMouse {
+pub:
 	physical_key input.Key
 	mouse_event  terminal.MouseEvents
 	mouse_shape  terminal.MouseShape
@@ -14,7 +15,7 @@ struct SurfaceMouse {
 	hidden       bool
 }
 
-fn (self SurfaceMouse) key_to_mouse_shape() ?terminal.MouseShape {
+pub fn (self SurfaceMouse) key_to_mouse_shape() ?terminal.MouseShape {
 	if !eligible_mouse_shape_key_event(self.physical_key) {
 		return none
 	}
