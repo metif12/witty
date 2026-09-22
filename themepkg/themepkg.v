@@ -8,7 +8,7 @@ import diagnostics
 // Location of possible themes. The order of this enum matters because it
 // defines the priority of theme search (from top to bottom).
 pub enum Location as u8 {
-	user // XDG config dir
+	user      // XDG config dir
 	resources // Ghostty resources dir
 }
 
@@ -49,7 +49,7 @@ pub:
 // order of priority.
 pub struct LocationIterator {
 mut:
-	i int
+	i usize
 }
 
 pub fn LocationIterator.new() LocationIterator {
@@ -58,13 +58,13 @@ pub fn LocationIterator.new() LocationIterator {
 
 pub fn (mut self LocationIterator) next() ?LocationEntry {
 	locations := [Location.user, Location.resources]
-	for self.i < locations.len {
-		loc := locations[self.i]
+	for self.i < usize(locations.len) {
+		loc := locations[int(self.i)]
 		self.i += 1
 		d := loc.dir() or { continue }
 		return LocationEntry{
 			location: loc
-			dir: d
+			dir:      d
 		}
 	}
 	return none
