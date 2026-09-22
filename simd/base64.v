@@ -14,18 +14,18 @@ fn base64_scalar_input(input []u8) []u8 {
 	return input[..end]
 }
 
-// base64_max_len returns the exact decoded length, or zero for an invalid
-// input length.
-pub fn base64_max_len(input []u8) usize {
+// max_len returns the exact decoded length, or zero for an invalid input
+// length. This is Ghostty's maxLen entry point.
+pub fn max_len(input []u8) usize {
 	scalar := base64_scalar_input(input)
 	return base64_scalar_calc_size_for_slice(scalar) or { 0 }
 }
 
-// base64_decode decodes input into caller-owned storage and returns the used
-// prefix. Invalid alphabet characters produce Base64Invalid.
-pub fn base64_decode(input []u8, mut output []u8) ![]u8 {
+// decode decodes input into caller-owned storage and returns the used prefix.
+// Invalid alphabet characters produce Base64Invalid.
+pub fn decode(input []u8, mut output []u8) ![]u8 {
 	scalar := base64_scalar_input(input)
-	size := base64_max_len(scalar)
+	size := max_len(scalar)
 	if size == 0 {
 		return output[..0]
 	}

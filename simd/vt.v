@@ -81,12 +81,12 @@ fn utf8_decode_sequence(bytes []u8) ?u32 {
 pub fn utf8_decode_until_control_seq(input []u8, mut output []u32) DecodeResult {
 	assert output.len >= input.len
 	escape_idx := index_of(input, 0x1b) or { usize(input.len) }
-	decode := input[..escape_idx]
+	decode_input := input[..escape_idx]
 
 	mut decode_offset := usize(0)
 	mut decode_count := usize(0)
-	for decode_offset < usize(decode.len) {
-		remaining := decode[int(decode_offset)..]
+	for decode_offset < usize(decode_input.len) {
+		remaining := decode_input[int(decode_offset)..]
 		cp_len := utf8_sequence_length(remaining[0]) or { break }
 		if usize(remaining.len) < cp_len {
 			break

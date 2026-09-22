@@ -210,10 +210,10 @@ fn (mut self Parser) decode_data() ![]u8 {
 		return []u8{}
 	}
 
-	max_len := simd.base64_max_len(self.data_buf)
+	max_len := simd.max_len(self.data_buf)
 	assert max_len <= self.data_buf.len
 	mut output := self.data_buf[..max_len]
-	decoded := simd.base64_decode(self.data_buf, mut output) or {
+	decoded := simd.decode(self.data_buf, mut output) or {
 		return error('InvalidData: failed to decode base64 payload')
 	}
 	self.data_buf = decoded
