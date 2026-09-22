@@ -91,7 +91,7 @@ fn dialog_class_init(klass voidptr, class_data voidptr) {
 // class/instance sizes.
 pub fn dialog_get_type() GType {
 	if g_dialog_type == GType(0) {
-		parent := if adw_supports_dialogs() {
+		parent := if supports_dialogs() {
 			C.adw_alert_dialog_get_type()
 		} else {
 			C.adw_message_dialog_get_type()
@@ -126,9 +126,9 @@ mut:
 // `Dialog.present`.
 //
 // The comptime `switch (Parent)` becomes a runtime branch on
-// `adw_supports_dialogs()`.
+// `supports_dialogs()`.
 pub fn (mut self Dialog) present(parent GtkWidget) {
-	if adw_supports_dialogs() {
+	if supports_dialogs() {
 		// AdwAlertDialog path: present directly against the parent widget.
 		C.adw_dialog_present(AdwDialog(self.obj), parent)
 		return
@@ -154,7 +154,7 @@ pub fn (mut self Dialog) present(parent GtkWidget) {
 
 // close closes the dialog. Mirrors `Dialog.close`.
 pub fn (mut self Dialog) close() {
-	if adw_supports_dialogs() {
+	if supports_dialogs() {
 		C.adw_dialog_force_close(AdwDialog(self.obj))
 	} else {
 		C.gtk_window_close(GtkWindow(self.obj))
@@ -165,7 +165,7 @@ pub fn (mut self Dialog) close() {
 // AlertDialog/MessageDialog parent. This mirrors the `self.as(Dialog.Parent)
 // .setHeading(...)` calls that subclasses make in ghostty.
 pub fn (mut self Dialog) set_heading(heading &char) {
-	if adw_supports_dialogs() {
+	if supports_dialogs() {
 		C.adw_alert_dialog_set_heading(AdwAlertDialog(self.obj), heading)
 	} else {
 		C.adw_message_dialog_set_heading(AdwMessageDialog(self.obj), heading)
@@ -175,7 +175,7 @@ pub fn (mut self Dialog) set_heading(heading &char) {
 // set_body sets the dialog body text, abstracting over the parent. Mirrors
 // `self.as(Dialog.Parent).setBody(...)`.
 pub fn (mut self Dialog) set_body(body &char) {
-	if adw_supports_dialogs() {
+	if supports_dialogs() {
 		C.adw_alert_dialog_set_body(AdwAlertDialog(self.obj), body)
 	} else {
 		C.adw_message_dialog_set_body(AdwMessageDialog(self.obj), body)

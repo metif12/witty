@@ -144,28 +144,28 @@ pub fn adw_runtime_at_least(major u16, minor u16, patch u16) bool {
 // --- libadwaita feature detection helpers ---------------------------------
 // Translated from the `supports*` helpers in adw_version.zig.
 
-// adw_supports_dialogs reports whether AdwDialog/AdwAlertDialog are available
+// supports_dialogs reports whether AdwDialog/AdwAlertDialog are available
 // (libadwaita 1.5+).
-pub fn adw_supports_dialogs() bool {
+pub fn supports_dialogs() bool {
 	return adw_at_least(1, 5, 0)
 }
 
-// adw_supports_tab_overview reports whether AdwTabOverview is available (1.4+).
-pub fn adw_supports_tab_overview() bool {
+// supports_tab_overview reports whether AdwTabOverview is available (1.4+).
+pub fn supports_tab_overview() bool {
 	return adw_at_least(1, 4, 0)
 }
 
-// adw_supports_switch_row reports whether AdwSwitchRow is available (1.4+).
-pub fn adw_supports_switch_row() bool {
+// supports_switch_row reports whether AdwSwitchRow is available (1.4+).
+pub fn supports_switch_row() bool {
 	return adw_at_least(1, 4, 0)
 }
 
-// adw_supports_toolbar_view reports whether AdwToolbarView is available (1.4+).
-pub fn adw_supports_toolbar_view() bool {
+// supports_toolbar_view reports whether AdwToolbarView is available (1.4+).
+pub fn supports_toolbar_view() bool {
 	return adw_at_least(1, 4, 0)
 }
 
-// adw_supports_banner reports whether AdwBanner is available (1.3+).
-pub fn adw_supports_banner() bool {
+// supports_banner reports whether AdwBanner is available (1.3+).
+pub fn supports_banner() bool {
 	return adw_at_least(1, 3, 0)
 }

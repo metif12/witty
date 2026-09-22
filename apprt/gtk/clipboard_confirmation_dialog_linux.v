@@ -27,7 +27,7 @@ module gtk
 // plain V struct with no boxed GType, so the `request` property is installed
 // against `G_TYPE_POINTER`; `clipboard-contents` is installed against
 // `G_TYPE_OBJECT`. The 1.4 blueprint (with the AdwSwitchRow remember switch) is
-// used — the newest — matching `adw_supports_switch_row()` at runtime.
+// used — the newest — matching `supports_switch_row()` at runtime.
 
 import apprt
 
@@ -333,7 +333,7 @@ fn clipboard_confirmation_dialog_class_init(klass voidptr, class_data voidptr) {
 	C.gtk_widget_class_bind_template_child_full(klass, c'text_view', 0, off + int(__offsetof(C.GhosttyClipboardConfirmationDialogPrivate, text_view)))
 	C.gtk_widget_class_bind_template_child_full(klass, c'hide_button', 0, off + int(__offsetof(C.GhosttyClipboardConfirmationDialogPrivate, hide_button)))
 	C.gtk_widget_class_bind_template_child_full(klass, c'reveal_button', 0, off + int(__offsetof(C.GhosttyClipboardConfirmationDialogPrivate, reveal_button)))
-	if adw_supports_switch_row() {
+	if supports_switch_row() {
 		C.gtk_widget_class_bind_template_child_full(klass, c'remember_choice', 0, off + int(__offsetof(C.GhosttyClipboardConfirmationDialogPrivate, remember_choice)))
 	}
 
@@ -352,7 +352,7 @@ fn clipboard_confirmation_dialog_class_init(klass voidptr, class_data voidptr) {
 	C.witty_gobject_class_set_set_property(klass, voidptr(clipboard_confirmation_dialog_set_property))
 	C.witty_gobject_class_set_dispose(klass, voidptr(clipboard_confirmation_dialog_dispose))
 	C.witty_gobject_class_set_finalize(klass, voidptr(clipboard_confirmation_dialog_finalize))
-	C.witty_dialog_class_set_response(klass, b2i(adw_supports_dialogs()), voidptr(clipboard_confirmation_native_response_cb))
+	C.witty_dialog_class_set_response(klass, b2i(supports_dialogs()), voidptr(clipboard_confirmation_native_response_cb))
 	C.g_object_class_install_property(klass, clipboard_prop_blur, blur_pspec)
 	C.g_object_class_install_property(klass, clipboard_prop_can_remember, can_remember_pspec)
 	C.g_object_class_install_property(klass, clipboard_prop_clipboard_contents, contents_pspec)
@@ -437,7 +437,7 @@ pub fn clipboard_confirmation_dialog_new() &ClipboardConfirmationDialog {
 		dialog: Dialog{
 			obj: obj
 		}
-		can_remember: adw_supports_switch_row()
+		can_remember: supports_switch_row()
 		text_view_scroll: priv.text_view_scroll
 		text_view: priv.text_view
 		reveal_button: priv.reveal_button

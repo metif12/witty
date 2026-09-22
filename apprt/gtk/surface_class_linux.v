@@ -3471,7 +3471,7 @@ pub fn (mut self SurfaceWidget) key_table_action(value apprt.KeyTable) {
 pub fn (mut self SurfaceWidget) child_exited(data apprt.ChildExited) bool {
 	self.child_exited = true
 	self.notify_property(g_surface_pspec_child_exited)
-	if !adw_supports_banner() || isnil(self.child_exited_overlay) {
+	if !supports_banner() || isnil(self.child_exited_overlay) {
 		return false
 	}
 	self.child_exited_overlay.set_data(data)

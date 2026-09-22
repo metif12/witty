@@ -146,7 +146,7 @@ fn close_confirmation_dialog_class_init(klass voidptr, class_data voidptr) {
 	C.witty_gobject_class_set_get_property(klass, voidptr(close_confirmation_dialog_get_property))
 	C.witty_gobject_class_set_set_property(klass, voidptr(close_confirmation_dialog_set_property))
 	C.witty_gobject_class_set_dispose(klass, voidptr(close_confirmation_dialog_dispose))
-	C.witty_dialog_class_set_response(klass, b2i(adw_supports_dialogs()), voidptr(close_confirmation_native_response_cb))
+	C.witty_dialog_class_set_response(klass, b2i(supports_dialogs()), voidptr(close_confirmation_native_response_cb))
 	C.g_object_class_install_property(klass, close_confirmation_prop_target, pspec)
 
 	// Signals: close-request, cancel (both void, no params).

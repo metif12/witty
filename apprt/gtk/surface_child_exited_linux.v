@@ -82,7 +82,7 @@ pub fn (mut self SurfaceChildExited) set_data(data ?apprt.ChildExited) {
 	if isnil(self.widget) {
 		return
 	}
-	if !adw_supports_banner() {
+	if !supports_banner() {
 		C.g_signal_emit_by_name(self.widget, c'close-request')
 		return
 	}
@@ -260,7 +260,7 @@ fn surface_child_exited_clicked_cb(banner voidptr, instance voidptr) {
 // surface_child_exited_dispose disposes the template and chains up. Mirrors
 // `dispose`.
 fn surface_child_exited_dispose(obj voidptr) {
-	if adw_supports_banner() {
+	if supports_banner() {
 		C.gtk_widget_dispose_template(obj, g_surface_child_exited_type)
 	}
 	C.witty_gobject_call_parent_dispose(obj)
@@ -285,7 +285,7 @@ fn surface_child_exited_class_init(klass voidptr, class_data voidptr) {
 	C.witty_gobject_class_set_dispose(klass, voidptr(surface_child_exited_dispose))
 	C.witty_gobject_class_set_finalize(klass, voidptr(surface_child_exited_finalize))
 
-	if adw_supports_banner() {
+	if supports_banner() {
 		bytes := C.g_bytes_new_static(surface_child_exited_ui.str, usize(surface_child_exited_ui.len))
 		C.gtk_widget_class_set_template(klass, bytes)
 
@@ -309,7 +309,7 @@ fn surface_child_exited_class_init(klass voidptr, class_data voidptr) {
 }
 
 fn surface_child_exited_instance_init(instance voidptr, klass voidptr) {
-	if adw_supports_banner() {
+	if supports_banner() {
 		C.gtk_widget_init_template(instance)
 	}
 }
@@ -318,7 +318,7 @@ fn surface_child_exited_instance_init(instance voidptr, klass voidptr) {
 // GObject type, parented to AdwBin, with instance-private data.
 pub fn surface_child_exited_get_type() GType {
 	if g_surface_child_exited_type == GType(0) {
-		parent := if adw_supports_banner() { C.adw_bin_get_type() } else { C.gtk_widget_get_type() }
+		parent := if supports_banner() { C.adw_bin_get_type() } else { C.gtk_widget_get_type() }
 		mut query := C.GTypeQuery{}
 		C.g_type_query(parent, &query)
 		info := C.GTypeInfo{

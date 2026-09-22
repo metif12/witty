@@ -51,7 +51,7 @@ const debug_warning_ui_label = '<?xml version="1.0" encoding="UTF-8"?>
 // classInit installs the blueprint template on the widget class. Mirrors the
 // Zig `Class.init` which calls setTemplateFromResource.
 fn debug_warning_class_init(klass voidptr, class_data voidptr) {
-	ui := if adw_supports_banner() { debug_warning_ui_banner } else { debug_warning_ui_label }
+	ui := if supports_banner() { debug_warning_ui_banner } else { debug_warning_ui_label }
 	bytes := C.g_bytes_new_static(ui.str, usize(ui.len))
 	C.gtk_widget_class_set_template(klass, bytes)
 }
@@ -68,7 +68,7 @@ fn debug_warning_instance_init(instance voidptr, klass voidptr) {
 // class_init/instance_init are our functions above.
 pub fn debug_warning_get_type() GType {
 	if g_debug_warning_type == GType(0) {
-		parent := if adw_supports_banner() { C.adw_bin_get_type() } else { C.gtk_box_get_type() }
+		parent := if supports_banner() { C.adw_bin_get_type() } else { C.gtk_box_get_type() }
 		mut query := C.GTypeQuery{}
 		C.g_type_query(parent, &query)
 		info := C.GTypeInfo{
