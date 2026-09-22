@@ -337,11 +337,11 @@ pub fn (mut self SgrParser) next() ?terminal.SgrAttribute {
 	return self.parser.next()
 }
 
-pub fn sgr_unknown_full(attr terminal.SgrAttribute) []u16 {
+pub fn unknown_full(attr terminal.SgrAttribute) []u16 {
 	return attr.unknown_full
 }
 
-pub fn sgr_unknown_partial(attr terminal.SgrAttribute) []u16 {
+pub fn unknown_partial(attr terminal.SgrAttribute) []u16 {
 	return attr.unknown_partial
 }
 

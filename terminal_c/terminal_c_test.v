@@ -223,8 +223,8 @@ fn test_sgr_parser_colons_and_unknown_payload() {
 
 	assert parser.set_params([u16(38), 7, 1], none) == .success
 	unknown := parser.next() or { return }
-	assert sgr_unknown_full(unknown) == [u16(38), 7, 1]
-	assert sgr_unknown_partial(unknown) == [u16(38), 7, 1]
+	assert unknown_full(unknown) == [u16(38), 7, 1]
+	assert unknown_partial(unknown) == [u16(38), 7, 1]
 }
 
 fn test_sgr_parser_rejects_invalid_separator_length() {
