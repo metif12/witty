@@ -84,6 +84,27 @@ fn test_envelope_attachment_json_string_escapes() {
 	}
 }
 
+fn test_attachment_public_encode_contract() {
+	mut headers := ObjectMapUnmanaged{}
+	headers.set_raw('extra', 'true')!
+	mut attachment := Attachment{
+		filename:      'report.dmp'
+		typ:           'event.attachment'
+		headers_extra: headers
+		payload:       'data'.bytes()
+	}
+	encoded := attachment.encode()!
+	assert encoded.typ == .attachment
+	assert encoded.payload == 'data'.bytes()
+	assert encoded.headers.get_string('filename')! == 'report.dmp'
+	assert encoded.headers.get_string('attachment_type')! == 'event.attachment'
+	assert encoded.headers.get_raw('extra')? == 'true'
+
+	attachment.typ = none
+	encoded_without_type := attachment.encode()!
+	assert encoded_without_type.headers.get_raw('attachment_type') == none
+}
+
 fn test_envelope_rejects_malformed_json_headers() {
 	for data in ['[]', '{"nested":[1,]}', '{"bad":"\\uD800"}'] {
 		if _ := Envelope.parse(data.bytes()) {

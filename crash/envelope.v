@@ -21,6 +21,11 @@ pub mut:
 	fields []EnvelopeHeader
 }
 
+// ObjectMapUnmanaged is the source name for attachment-owned headers. V's
+// garbage-collected representation uses the same ordered header value as the
+// envelope itself rather than a separately allocated unmanaged hash map.
+pub type ObjectMapUnmanaged = EnvelopeHeaders
+
 pub fn (self EnvelopeHeaders) get_raw(key string) ?string {
 	for field in self.fields {
 		if field.key == key {
@@ -44,7 +49,7 @@ pub fn (mut self EnvelopeHeaders) set_raw(key string, value string) ! {
 		}
 	}
 	self.fields << EnvelopeHeader{
-		key: key
+		key:   key
 		value: minified
 	}
 }
@@ -58,7 +63,7 @@ pub fn (mut self EnvelopeHeaders) set_string(key string, value string) {
 		}
 	}
 	self.fields << EnvelopeHeader{
-		key: key
+		key:   key
 		value: encoded
 	}
 }
@@ -164,7 +169,7 @@ pub fn Envelope.parse(data []u8) !Envelope {
 	}
 	return Envelope{
 		headers: headers
-		items: items
+		items:   items
 	}
 }
 
@@ -223,7 +228,7 @@ pub fn (mut self Item) encode() !EncodedItem {
 			return self
 		}
 		Attachment {
-			encoded := self.encode_attachment()!
+			encoded := self.encode()!
 			self = Item(encoded)
 			return encoded
 		}
@@ -244,14 +249,14 @@ pub fn Attachment.decode(item EncodedItem) !Attachment {
 		}
 	}
 	return Attachment{
-		filename: filename
-		typ: attachment_type
+		filename:      filename
+		typ:           attachment_type
 		headers_extra: item.headers.clone()
-		payload: item.payload
+		payload:       item.payload
 	}
 }
 
-fn (mut self Attachment) encode_attachment() !EncodedItem {
+pub fn (mut self Attachment) encode() !EncodedItem {
 	self.headers_extra.set_string('filename', self.filename)
 	if value := self.typ {
 		self.headers_extra.set_string('attachment_type', value)
@@ -260,7 +265,7 @@ fn (mut self Attachment) encode_attachment() !EncodedItem {
 	}
 	return EncodedItem{
 		headers: self.headers_extra
-		typ: .attachment
+		typ:     .attachment
 		payload: self.payload
 	}
 }
@@ -305,7 +310,7 @@ fn parse_envelope_item(mut reader EnvelopeReader) !Item {
 	}
 	return Item(EncodedItem{
 		headers: headers
-		typ: typ
+		typ:     typ
 		payload: payload
 	})
 }
