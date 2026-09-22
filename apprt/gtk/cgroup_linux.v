@@ -64,46 +64,46 @@ pub enum CgroupError {
 //   0::/user.slice/user-1000.slice/session-1.scope
 // The cgroup path is the field after the last ':'.
 pub fn cgroup_current(pid int) !internal_os.CgroupCurrentResult {
-	return internal_os.cgroup_current(pid)
+	return internal_os.current(pid)
 }
 
 // cgroup_create creates a new cgroup. If `move` is set (>= 0), the given pid is
 // moved into the created cgroup. Mirrors `os.cgroup.create`.
 pub fn cgroup_create(cgroup string, child string, move int) ! {
 	pid := if move >= 0 { ?int(move) } else { none }
-	internal_os.cgroup_create(cgroup, child, pid)!
+	internal_os.create(cgroup, child, pid)!
 }
 
 // cgroup_remove removes a cgroup. This only succeeds if the cgroup is empty.
 // The path must be '/'-prefixed. Mirrors `os.cgroup.remove`.
 pub fn cgroup_remove(cgroup string) ! {
-	internal_os.cgroup_remove(cgroup)!
+	internal_os.remove(cgroup)!
 }
 
 // cgroup_move_into moves the given PID into the given cgroup. Mirrors
 // `os.cgroup.moveInto`.
 pub fn cgroup_move_into(cgroup string, pid int) ! {
-	internal_os.cgroup_move_into(cgroup, pid)!
+	internal_os.move_into(cgroup, pid)!
 }
 
 // cgroup_controllers returns the raw space-separated list of available
 // controllers for the given ('/'-prefixed) cgroup. Mirrors
 // `os.cgroup.controllers`.
 pub fn cgroup_controllers(cgroup string) !string {
-	return internal_os.cgroup_controllers(cgroup)
+	return internal_os.controllers(cgroup)
 }
 
 // cgroup_configure_controllers writes `v` (a valid cgroup.subtree_control
 // value) to the cgroup's cgroup.subtree_control. Mirrors
 // `os.cgroup.configureControllers`.
 pub fn cgroup_configure_controllers(cgroup string, v string) ! {
-	internal_os.cgroup_configure_controllers(cgroup, v)!
+	internal_os.configure_controllers(cgroup, v)!
 }
 
 // cgroup_configure_memory_high writes a memory.high (soft) limit in bytes.
 // Mirrors `os.cgroup.configureLimit(.{ .memory_high = ... })`.
 pub fn cgroup_configure_memory_high(cgroup string, size usize) ! {
-	internal_os.cgroup_configure_limit(cgroup, internal_os.CgroupLimit{
+	internal_os.configure_limit(cgroup, internal_os.CgroupLimit{
 		kind: .memory_high
 		value: size
 	})!
@@ -112,7 +112,7 @@ pub fn cgroup_configure_memory_high(cgroup string, size usize) ! {
 // cgroup_configure_pids_max writes a pids.max (hard) limit. Mirrors
 // `os.cgroup.configureLimit(.{ .pids_max = ... })`.
 pub fn cgroup_configure_pids_max(cgroup string, size usize) ! {
-	internal_os.cgroup_configure_limit(cgroup, internal_os.CgroupLimit{
+	internal_os.configure_limit(cgroup, internal_os.CgroupLimit{
 		kind: .pids_max
 		value: size
 	})!

@@ -358,7 +358,7 @@ fn (mut self Command) start_posix() ! {
 	// Fork. IMPORTANT: do all allocation prior to the fork().
 	// It is undefined behavior to malloc between fork and exec.
 	pid := $if linux { if cgroup := self.linux_cgroup {
-		internal_os.cgroup_clone_into(cgroup)!
+		internal_os.clone_into(cgroup)!
 	} else {
 		C.fork()
 	} } $else { C.fork() }
