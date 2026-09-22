@@ -15,7 +15,6 @@ mut:
 }
 
 pub fn SegmentedPool.init[T](prealloc usize) SegmentedPool[T] {
-	assert prealloc > 0
 	mut values := []&T{cap: int(prealloc)}
 	for _ in 0 .. int(prealloc) {
 		values << $new(T)

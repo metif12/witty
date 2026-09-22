@@ -50,9 +50,17 @@ pub fn deep_equal[T](old T, new T) bool {
 				return old.$method(new)
 			}
 		}
-		// V's sum-type equality first compares the active tag and then the
-		// payload, which is the same recursive union behavior used upstream.
-		return old == new
+		$for variant in T.variants {
+			if old is variant {
+				if new is variant {
+					old_value := old
+					new_value := new
+					return deep_equal(old_value, new_value)
+				}
+				return false
+			}
+		}
+		return false
 	} $else {
 		return old == new
 	}

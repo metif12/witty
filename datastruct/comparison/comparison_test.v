@@ -41,6 +41,8 @@ type TestNestedValue = ApproxMetrics | []f32
 
 type TestEqualValue = int | string
 
+type TestPayloadValue = TestCustom | string
+
 fn (self TestEqualValue) equal(other TestEqualValue) bool {
 	if self is int && other is int {
 		return self % 10 == (other as int) % 10
@@ -103,6 +105,12 @@ fn test_deep_equal_sumtype() {
 	assert deep_equal(TestEqualValue(int(5)), TestEqualValue(int(25)))
 	assert !deep_equal(TestEqualValue(int(5)), TestEqualValue(int(6)))
 	assert deep_equal(TestEqualValue('abc'), TestEqualValue('xyz'))
+	assert deep_equal(TestPayloadValue(TestCustom{ value: 5 }), TestPayloadValue(TestCustom{
+		value: 15
+	}))
+	assert !deep_equal(TestPayloadValue(TestCustom{ value: 5 }), TestPayloadValue(TestCustom{
+		value: 6
+	}))
 }
 
 fn test_expect_approx_equal_floats_arrays_and_structs() ! {
