@@ -89,7 +89,8 @@ pub fn key_event_new() &KeyEvent {
 // It preserves Ghostty's Result + output-pointer allocation contract.
 pub fn key_event_new_alloc(allocator ?&lib_allocator.Allocator) (Result, &KeyEvent) {
 	selected := lib_allocator.default(allocator)
-	raw := selected.alloc_bytes(sizeof(KeyEvent), object_alignment, 0) or {
+	raw := selected.alloc_bytes(sizeof(KeyEvent), object_alignment, 0)
+	if isnil(raw) {
 		return Result.out_of_memory, unsafe { nil }
 	}
 	mut event := unsafe { &KeyEvent(raw) }
@@ -203,7 +204,8 @@ pub fn key_encoder_new() &KeyEncoder {
 
 pub fn key_encoder_new_alloc(allocator ?&lib_allocator.Allocator) (Result, &KeyEncoder) {
 	selected := lib_allocator.default(allocator)
-	raw := selected.alloc_bytes(sizeof(KeyEncoder), object_alignment, 0) or {
+	raw := selected.alloc_bytes(sizeof(KeyEncoder), object_alignment, 0)
+	if isnil(raw) {
 		return Result.out_of_memory, unsafe { nil }
 	}
 	mut encoder := unsafe { &KeyEncoder(raw) }
@@ -299,7 +301,8 @@ pub fn osc_new() OscParser {
 
 pub fn osc_new_alloc(allocator ?&lib_allocator.Allocator) (Result, &OscParser) {
 	selected := lib_allocator.default(allocator)
-	raw := selected.alloc_bytes(sizeof(OscParser), object_alignment, 0) or {
+	raw := selected.alloc_bytes(sizeof(OscParser), object_alignment, 0)
+	if isnil(raw) {
 		return Result.out_of_memory, unsafe { nil }
 	}
 	mut parser := unsafe { &OscParser(raw) }
@@ -343,6 +346,13 @@ pub fn (mut self OscParser) end(terminator u8) ?osc.Command {
 	return self.parser.end(terminator)
 }
 
+// end_ptr returns the parser-owned command storage used by the C ABI. Its
+// lifetime ends at the next operation on this parser, matching Ghostty.
+pub fn (mut self OscParser) end_ptr(terminator u8) ?&osc.Command {
+	_ := self.parser.end(terminator) or { return none }
+	return &self.parser.command
+}
+
 pub fn command_type(cmd ?osc.Command) osc.CommandType {
 	command := cmd or { return .invalid }
 	return command.cmd_type
@@ -383,17 +393,22 @@ pub struct SgrParser {
 pub mut:
 	parser terminal.SgrParser
 mut:
-	allocator lib_allocator.Allocator
-	allocated bool
+	allocator  lib_allocator.Allocator
+	allocated  bool
+	params_ptr voidptr
+	params_len usize
 }
 
 pub fn sgr_new() &SgrParser {
-	return &SgrParser{}
+	return &SgrParser{
+		allocator: lib_allocator.c_allocator_value()
+	}
 }
 
 pub fn sgr_new_alloc(allocator ?&lib_allocator.Allocator) (Result, &SgrParser) {
 	selected := lib_allocator.default(allocator)
-	raw := selected.alloc_bytes(sizeof(SgrParser), object_alignment, 0) or {
+	raw := selected.alloc_bytes(sizeof(SgrParser), object_alignment, 0)
+	if isnil(raw) {
 		return Result.out_of_memory, unsafe { nil }
 	}
 	mut parser := unsafe { &SgrParser(raw) }
@@ -410,9 +425,14 @@ pub fn sgr_free(mut parser SgrParser) {
 	allocator := parser.allocator
 	allocated := parser.allocated
 	ptr := voidptr(&parser)
+	if !isnil(parser.params_ptr) && parser.params_len > 0 {
+		allocator.free_bytes(parser.params_ptr, parser.params_len * sizeof(u16), 1, 0)
+	}
 	parser.parser.params = []u16{}
 	parser.parser.params_sep = terminal.SepList.init_empty()
 	parser.parser.idx = 0
+	parser.params_ptr = unsafe { nil }
+	parser.params_len = 0
 	parser.allocated = false
 	if allocated {
 		allocator.free_bytes(ptr, sizeof(SgrParser), object_alignment, 0)
@@ -423,25 +443,80 @@ pub fn (mut self SgrParser) reset() {
 	self.parser.idx = 0
 }
 
-// set_params copies the caller's parameters and separator bytes. A colon byte
-// marks the separator after the corresponding parameter; every other byte is
-// treated as a semicolon, matching the C API.
-pub fn (mut self SgrParser) set_params(params []u16, separators ?[]u8) Result {
-	mut sep_list := terminal.SepList.init_empty()
-	if seps := separators {
-		if seps.len > 64 || seps.len < params.len {
+fn u16_array_view(data voidptr, len usize) []u16 {
+	mut result := []u16{}
+	unsafe {
+		mut header := &array(&result)
+		header.data = data
+		header.offset = 0
+		header.len = int(len)
+		header.cap = int(len)
+		header.flags = .nogrow | .nofree
+	}
+	return result
+}
+
+// set_params_raw is the C-facing implementation. Like Ghostty, it copies the
+// parameter list through the allocator retained by the parser, releases the
+// previous list only after the new allocation succeeds, and then parses from
+// that owned storage.
+pub fn (mut self SgrParser) set_params_raw(params &u16, separators &u8, len usize) Result {
+	if len > usize(max_int) || len > ~usize(0) / sizeof(u16) {
+		return .out_of_memory
+	}
+
+	mut next_ptr := voidptr(unsafe { nil })
+	if len > 0 {
+		if isnil(params) {
 			return .invalid_value
 		}
-		for i, sep in seps[..params.len] {
-			if sep == `:` {
-				sep_list.set(usize(i))
+		next_ptr = self.allocator.alloc_bytes(len * sizeof(u16), 1, 0)
+		if isnil(next_ptr) {
+			return .out_of_memory
+		}
+		unsafe {
+			vmemcpy(next_ptr, params, len * sizeof(u16))
+		}
+	}
+
+	if !isnil(self.params_ptr) && self.params_len > 0 {
+		self.allocator.free_bytes(self.params_ptr, self.params_len * sizeof(u16), 1,
+			0)
+	}
+	self.params_ptr = next_ptr
+	self.params_len = len
+	self.parser.params = if len == 0 { []u16{} } else { u16_array_view(next_ptr, len) }
+
+	// The source replaces the parameter list and clears separators before
+	// reporting an overlong separator list. Preserve that observable ordering.
+	self.parser.params_sep = terminal.SepList.init_empty()
+	if !isnil(separators) {
+		if len > usize(terminal.max_params) {
+			return .invalid_value
+		}
+		for i in 0 .. int(len) {
+			if unsafe { separators[i] } == `:` {
+				self.parser.params_sep.set(usize(i))
 			}
 		}
 	}
-	self.parser.params = params.clone()
-	self.parser.params_sep = sep_list
 	self.parser.idx = 0
 	return .success
+}
+
+// set_params is the typed V convenience entry point over the same allocator-
+// owned implementation. A colon byte marks the separator after the
+// corresponding parameter; every other byte is treated as a semicolon.
+pub fn (mut self SgrParser) set_params(params []u16, separators ?[]u8) Result {
+	params_ptr := if params.len == 0 { &u16(unsafe { nil }) } else { &params[0] }
+	if seps := separators {
+		if seps.len < params.len {
+			return .invalid_value
+		}
+		seps_ptr := if seps.len == 0 { &u8(unsafe { nil }) } else { &seps[0] }
+		return self.set_params_raw(params_ptr, seps_ptr, usize(params.len))
+	}
+	return self.set_params_raw(params_ptr, &u8(unsafe { nil }), usize(params.len))
 }
 
 pub fn (mut self SgrParser) next() ?terminal.SgrAttribute {
@@ -460,27 +535,100 @@ pub fn attribute_tag(attr terminal.SgrAttribute) terminal.SgrAttributeKind {
 	return attr.kind
 }
 
-// V does not need the C tagged-union projection: SgrAttribute is already a
-// value-safe representation of the tag and its payload.
+// V callers can use the value-safe internal representation directly.
 pub fn attribute_value(attr terminal.SgrAttribute) terminal.SgrAttribute {
 	return attr
 }
 
+// SgrUnknownC is GhosttySgrUnknown.
+pub struct SgrUnknownC {
+pub mut:
+	full_ptr    &u16 = unsafe { nil }
+	full_len    usize
+	partial_ptr &u16 = unsafe { nil }
+	partial_len usize
+}
+
+// SgrAttributeValueC is the fixed 64-byte C union storage. The active member
+// is selected by SgrAttributeC.tag.
+pub struct SgrAttributeValueC {
+pub mut:
+	words [8]u64
+}
+
+// SgrAttributeC is the exact GhosttySgrAttribute C layout. The explicit
+// padding places the 8-byte-aligned union at offset 8 on 64-bit targets.
+pub struct SgrAttributeC {
+pub mut:
+	tag     terminal.SgrAttributeKind
+	padding u32
+	value   SgrAttributeValueC
+}
+
+// sgr_attribute_cval projects the internal safe value into Ghostty's tagged
+// C union. Fields smaller than the union occupy its leading bytes.
+pub fn sgr_attribute_cval(attr terminal.SgrAttribute) SgrAttributeC {
+	mut result := SgrAttributeC{
+		tag: attr.kind
+	}
+	unsafe {
+		value := &u8(&result.value)
+		match attr.kind {
+			.unknown {
+				mut unknown := &SgrUnknownC(value)
+				unknown.full_ptr = if attr.unknown_full.len == 0 {
+					&u16(nil)
+				} else {
+					&attr.unknown_full[0]
+				}
+				unknown.full_len = usize(attr.unknown_full.len)
+				unknown.partial_ptr = if attr.unknown_partial.len == 0 {
+					&u16(nil)
+				} else {
+					&attr.unknown_partial[0]
+				}
+				unknown.partial_len = usize(attr.unknown_partial.len)
+			}
+			.underline_set {
+				*(&i32(value)) = i32(attr.underline)
+			}
+			.underline_color, .direct_color_fg, .direct_color_bg {
+				value[0] = attr.r
+				value[1] = attr.g
+				value[2] = attr.b
+			}
+			.underline_color_256, .bg_8, .fg_8, .bright_bg_8, .bright_fg_8, .bg_256, .fg_256 {
+				value[0] = attr.index
+			}
+			else {}
+		}
+	}
+	return result
+}
+
+pub fn sgr_unknown_full(unknown SgrUnknownC) (&u16, usize) {
+	return unknown.full_ptr, unknown.full_len
+}
+
+pub fn sgr_unknown_partial(unknown SgrUnknownC) (&u16, usize) {
+	return unknown.partial_ptr, unknown.partial_len
+}
+
 // WebAssembly bindings cannot place an aggregate return value on their own
 // stack, so the source exposes matching allocation helpers for SGR attributes.
-pub fn wasm_alloc_attribute() &terminal.SgrAttribute {
-	raw := unsafe { malloc(sizeof(terminal.SgrAttribute)) }
+pub fn wasm_alloc_attribute() &SgrAttributeC {
+	raw := unsafe { malloc(sizeof(SgrAttributeC)) }
 	if isnil(raw) {
 		panic('out of memory')
 	}
-	mut attr := unsafe { &terminal.SgrAttribute(raw) }
+	mut attr := unsafe { &SgrAttributeC(raw) }
 	unsafe {
-		*attr = terminal.SgrAttribute{}
+		*attr = SgrAttributeC{}
 	}
 	return attr
 }
 
-pub fn wasm_free_attribute(attr &terminal.SgrAttribute) {
+pub fn wasm_free_attribute(attr &SgrAttributeC) {
 	if isnil(attr) {
 		return
 	}

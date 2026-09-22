@@ -51,13 +51,13 @@ pub fn (self &Allocator) zig() Allocator {
 }
 
 // alloc_bytes allocates len bytes or returns none on allocation failure.
-pub fn (self &Allocator) alloc_bytes(len usize, alignment u8, ret_addr usize) ?voidptr {
+pub fn (self &Allocator) alloc_bytes(len usize, alignment u8, ret_addr usize) voidptr {
 	if isnil(self.vtable) {
-		return none
+		return unsafe { nil }
 	}
 	ptr := self.vtable.alloc(self.ctx, len, alignment, ret_addr)
 	if isnil(ptr) {
-		return none
+		return unsafe { nil }
 	}
 	return ptr
 }
@@ -71,13 +71,13 @@ pub fn (self &Allocator) resize_bytes(memory voidptr, memory_len usize, alignmen
 }
 
 // remap_bytes attempts to resize an allocation and may relocate it.
-pub fn (self &Allocator) remap_bytes(memory voidptr, memory_len usize, alignment u8, new_len usize, ret_addr usize) ?voidptr {
+pub fn (self &Allocator) remap_bytes(memory voidptr, memory_len usize, alignment u8, new_len usize, ret_addr usize) voidptr {
 	if isnil(self.vtable) || isnil(memory) || new_len == 0 {
-		return none
+		return unsafe { nil }
 	}
 	ptr := self.vtable.remap(self.ctx, memory, memory_len, alignment, new_len, ret_addr)
 	if isnil(ptr) {
-		return none
+		return unsafe { nil }
 	}
 	return ptr
 }

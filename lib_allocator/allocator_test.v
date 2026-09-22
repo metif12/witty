@@ -51,12 +51,14 @@ fn test_custom_allocator_round_trip_and_operations() {
 	c_side := Allocator.from_zig(&original)
 	allocator := c_side.zig()
 
-	ptr := allocator.alloc_bytes(8, 1, 0) or { panic('allocation failed') }
+	ptr := allocator.alloc_bytes(8, 1, 0)
+	assert !isnil(ptr)
 	assert state.allocs == 1
 	assert state.last_len == 8
 	assert allocator.resize_bytes(ptr, 8, 1, 4, 0)
 	assert !allocator.resize_bytes(ptr, 4, 1, 16, 0)
-	remapped := allocator.remap_bytes(ptr, 4, 1, 16, 0) or { panic('remap failed') }
+	remapped := allocator.remap_bytes(ptr, 4, 1, 16, 0)
+	assert !isnil(remapped)
 	assert state.remaps == 1
 	allocator.free_bytes(remapped, 16, 1, 0)
 	assert state.frees == 1
@@ -64,7 +66,8 @@ fn test_custom_allocator_round_trip_and_operations() {
 
 fn test_default_allocator_and_nullable_boundaries() {
 	allocator := default(none)
-	ptr := allocator.alloc_bytes(10, 1, 0) or { panic('default allocation failed') }
+	ptr := allocator.alloc_bytes(10, 1, 0)
+	assert !isnil(ptr)
 	unsafe {
 		(&u8(ptr))[0] = 0xA5
 		assert (&u8(ptr))[0] == 0xA5

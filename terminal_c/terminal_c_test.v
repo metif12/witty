@@ -2,6 +2,7 @@ module terminal_c
 
 import input
 import lib_allocator
+import terminal
 
 // Tests for terminal_c.v
 // Translated from ghostty/src/terminal/c/ test cases.
@@ -63,10 +64,16 @@ fn test_c_api_objects_use_supplied_allocator() {
 	sgr_status, mut sgr_parser := sgr_new_alloc(&allocator)
 	assert sgr_status == .success
 	assert !isnil(sgr_parser)
+	assert sgr_parser.set_params([u16(1)], none) == .success
+	assert sgr_parser.set_params([u16(38), 7, 1], none) == .success
+	unknown := sgr_parser.next() or { panic('expected unknown SGR attribute') }
+	assert unknown.unknown_full == [u16(38), 7, 1]
 	sgr_free(mut sgr_parser)
 
-	assert state.allocs == 4
-	assert state.frees == 4
+	// Four wrapper objects plus both SGR parameter copies. Replacing the first
+	// parameter list frees it immediately; destruction frees the second.
+	assert state.allocs == 6
+	assert state.frees == 6
 }
 
 // ============================================================
@@ -81,6 +88,50 @@ fn test_result_values() {
 	assert i32(Result.success) == 0
 	assert i32(Result.out_of_memory) == -1
 	assert i32(Result.invalid_value) == -2
+}
+
+fn test_sgr_c_projection_layout_and_payloads() {
+	assert sizeof(SgrUnknownC) == sizeof(voidptr) * 4
+	assert sizeof(SgrAttributeValueC) == 64
+	assert sizeof(SgrAttributeC) == 72
+
+	underline := sgr_attribute_cval(terminal.SgrAttribute{
+		kind: .underline_set
+		underline: .curly
+	})
+	assert underline.tag == .underline_set
+	unsafe {
+		assert *(&i32(&underline.value)) == i32(terminal.UnderlineStyle.curly)
+	}
+
+	color := sgr_attribute_cval(terminal.SgrAttribute{
+		kind: .direct_color_fg
+		r: 0x12
+		g: 0x34
+		b: 0x56
+	})
+	unsafe {
+		bytes := &u8(&color.value)
+		assert bytes[0] == 0x12
+		assert bytes[1] == 0x34
+		assert bytes[2] == 0x56
+	}
+
+	params := [u16(38), 7, 1]
+	unknown_attr := sgr_attribute_cval(terminal.SgrAttribute{
+		kind: .unknown
+		unknown_full: params
+		unknown_partial: params[1..]
+	})
+	unsafe {
+		unknown := &SgrUnknownC(&unknown_attr.value)
+		full, full_len := sgr_unknown_full(*unknown)
+		partial, partial_len := sgr_unknown_partial(*unknown)
+		assert full_len == 3
+		assert partial_len == 2
+		assert full[0] == 38
+		assert partial[0] == 7
+	}
 }
 
 fn test_osc_command_data_c_layout_and_ordinals() {
@@ -300,6 +351,6 @@ fn test_sgr_parser_rejects_invalid_separator_length() {
 fn test_sgr_wasm_attribute_allocation_helpers() {
 	attr := wasm_alloc_attribute()
 	assert attr != unsafe { nil }
-	assert attr.kind == .unset
+	assert attr.tag == .unset
 	wasm_free_attribute(attr)
 }

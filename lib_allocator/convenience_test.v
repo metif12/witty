@@ -1,33 +1,38 @@
 module lib_allocator
 
 fn test_scalar_convenience_allocations_are_writable_and_nullable_on_free() {
-	opaque := alloc_opaque() or { panic('opaque allocation failed') }
+	assert sizeof(Opaque) == sizeof(voidptr)
+	opaque := alloc_opaque()
+	assert !isnil(opaque)
 	unsafe {
-		*opaque = voidptr(usize(0x1234))
-		assert usize(*opaque) == usize(0x1234)
+		opaque.value = voidptr(usize(0x1234))
+		assert usize(opaque.value) == usize(0x1234)
 	}
 	free_opaque(opaque)
-	free_opaque(none)
+	free_opaque(unsafe { nil })
 
-	byte := alloc_u8() or { panic('u8 allocation failed') }
+	byte := alloc_u8()
+	assert !isnil(byte)
 	unsafe {
 		*byte = 0xAB
 		assert *byte == 0xAB
 	}
 	free_u8(byte)
-	free_u8(none)
+	free_u8(unsafe { nil })
 
-	word := alloc_usize() or { panic('usize allocation failed') }
+	word := alloc_usize()
+	assert !isnil(word)
 	unsafe {
 		*word = usize(0x12345678)
 		assert *word == usize(0x12345678)
 	}
 	free_usize(word)
-	free_usize(none)
+	free_usize(unsafe { nil })
 }
 
 fn test_array_convenience_allocations_preserve_element_width() {
-	bytes := alloc_u8_array(3) or { panic('u8 array allocation failed') }
+	bytes := alloc_u8_array(3)
+	assert !isnil(bytes)
 	unsafe {
 		bytes[0] = 1
 		bytes[1] = 2
@@ -38,7 +43,8 @@ fn test_array_convenience_allocations_preserve_element_width() {
 	}
 	free_u8_array(bytes, 3)
 
-	words := alloc_u16_array(2) or { panic('u16 array allocation failed') }
+	words := alloc_u16_array(2)
+	assert !isnil(words)
 	unsafe {
 		words[0] = 0x1234
 		words[1] = 0xABCD
@@ -47,9 +53,11 @@ fn test_array_convenience_allocations_preserve_element_width() {
 	}
 	free_u16_array(words, 2)
 
-	zero_bytes := alloc_u8_array(0) or { panic('zero-length u8 allocation failed') }
+	zero_bytes := alloc_u8_array(0)
+	assert !isnil(zero_bytes)
 	free_u8_array(zero_bytes, 0)
-	zero_words := alloc_u16_array(0) or { panic('zero-length u16 allocation failed') }
+	zero_words := alloc_u16_array(0)
+	assert !isnil(zero_words)
 	free_u16_array(zero_words, 0)
-	assert alloc_u16_array(allocator_max_usize) == none
+	assert isnil(alloc_u16_array(allocator_max_usize))
 }
