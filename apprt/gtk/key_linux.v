@@ -491,6 +491,44 @@ pub fn translate_mods(state u32) input.Mods {
 	return input.Mods.init((state & gdk_shift_mask) != 0, (state & gdk_control_mask) != 0, (state & gdk_alt_mask) != 0, (state & gdk_super_mask) != 0, (state & gdk_lock_mask) != 0, false, input.SideInfo{})
 }
 
+fn C.gdk_key_event_get_layout(event GdkEvent) u32
+
+pub struct C.GdkKeymapKey {
+pub mut:
+	keycode u32
+	group   int
+	level   int
+}
+
+fn C.gdk_display_map_keycode(display GdkDisplay, keycode u32, keys &&C.GdkKeymapKey, keyvals &&u32, n_entries &int) bool
+
+// keyval_unicode_unshifted finds the level-zero keyval for the event's active
+// keyboard layout. This is used by the Kitty keyboard protocol.
+pub fn keyval_unicode_unshifted(widget GtkWidget, event GdkEvent, keycode u32) u32 {
+	display := widget_get_display(widget)
+	if isnil(display) {
+		return 0
+	}
+	layout := C.gdk_key_event_get_layout(event)
+	mut keys := unsafe { &C.GdkKeymapKey(nil) }
+	mut keyvals := unsafe { &u32(nil) }
+	mut n_entries := 0
+	if !C.gdk_display_map_keycode(display, keycode, &keys, &keyvals, &n_entries) {
+		return 0
+	}
+	defer {
+		g_free_mem(keys)
+		g_free_mem(keyvals)
+	}
+	for i in 0 .. n_entries {
+		key := unsafe { keys[i] }
+		if key.group == int(layout) && key.level == 0 {
+			return keyval_unicode(unsafe { keyvals[i] })
+		}
+	}
+	return 0
+}
+
 // --- GDK keyval helpers (string wrappers) ---------------------------------
 
 // keyval_name_string returns the GDK name for a keyval as a V string, or none

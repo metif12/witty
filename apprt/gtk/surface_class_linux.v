@@ -284,17 +284,6 @@ fn C.gdk_device_get_num_lock_state(device GdkDevice) bool
 
 fn C.gdk_key_event_get_consumed_modifiers(event GdkEvent) u32
 
-fn C.gdk_key_event_get_layout(event GdkEvent) u32
-
-pub struct C.GdkKeymapKey {
-pub mut:
-	keycode u32
-	group   int
-	level   int
-}
-
-fn C.gdk_display_map_keycode(display GdkDisplay, keycode u32, keys &&C.GdkKeymapKey, keyvals &&u32, n_entries &int) bool
-
 // GdkClipboard
 fn C.gdk_clipboard_set_text(clipboard GdkClipboard, text &char)
 
@@ -1946,7 +1935,7 @@ pub fn (mut self SurfaceWidget) key_event(action input.KeyAction, event GdkEvent
 	self.apply_sided_mods(mut mods, physical_key, action)
 
 	consumed_mods := translate_mods(C.gdk_key_event_get_consumed_modifiers(event))
-	unshifted_codepoint := self.keyval_unicode_unshifted(event, keycode)
+	unshifted_codepoint := keyval_unicode_unshifted(GtkWidget(self.gl_area), event, keycode)
 
 	// If we have no UTF-8 text, try to convert the keyval to a text value.
 	// GTK won't process e.g. Ctrl+Shift+1 as "Ctrl+!" but the keyval is set
@@ -2011,34 +2000,6 @@ pub fn (mut self SurfaceWidget) key_event(action input.KeyAction, event GdkEvent
 	}
 
 	return false
-}
-
-// keyval_unicode_unshifted finds the level-zero keyval for the event's active
-// keyboard layout. This is the pinned GTK implementation used by the Kitty
-// keyboard protocol.
-fn (self &SurfaceWidget) keyval_unicode_unshifted(event GdkEvent, keycode u32) u32 {
-	display := C.gtk_widget_get_display(self.gl_area)
-	if isnil(display) {
-		return 0
-	}
-	layout := C.gdk_key_event_get_layout(event)
-	mut keys := unsafe { &C.GdkKeymapKey(nil) }
-	mut keyvals := unsafe { &u32(nil) }
-	mut n_entries := 0
-	if !C.gdk_display_map_keycode(display, keycode, &keys, &keyvals, &n_entries) {
-		return 0
-	}
-	defer {
-		C.g_free(keys)
-		C.g_free(keyvals)
-	}
-	for i in 0 .. n_entries {
-		key := unsafe { keys[i] }
-		if key.group == int(layout) && key.level == 0 {
-			return keyval_unicode(unsafe { keyvals[i] })
-		}
-	}
-	return 0
 }
 
 // apply_sided_mods applies the sided-modifier fixups for modifier keys
