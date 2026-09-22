@@ -49,17 +49,17 @@ fn test_encode() {
 
 // The translated entry must keep the source's names, ordering and size.
 fn test_ghostty_terminfo_entry_matches_source() {
-	assert ghostty_terminfo.names == ['xterm-ghostty', 'ghostty', 'Ghostty']
-	assert ghostty_terminfo.capabilities.len == 268
+	assert ghostty.names == ['xterm-ghostty', 'ghostty', 'Ghostty']
+	assert ghostty.capabilities.len == 268
 
 	// Spot-check one of each value kind, in source order.
-	assert ghostty_terminfo.capabilities[0].name == 'am'
-	assert ghostty_terminfo.capabilities[0].value.tag == .boolean
+	assert ghostty.capabilities[0].name == 'am'
+	assert ghostty.capabilities[0].value.tag == .boolean
 
 	mut numeric_count := 0
 	mut string_count := 0
 	mut boolean_count := 0
-	for cap in ghostty_terminfo.capabilities {
+	for cap in ghostty.capabilities {
 		match cap.value.tag {
 			.numeric { numeric_count++ }
 			.string { string_count++ }
@@ -72,7 +72,7 @@ fn test_ghostty_terminfo_entry_matches_source() {
 	assert string_count == 248
 
 	// The encoded entry starts with the name line and the first capability.
-	encoded := ghostty_terminfo.encode()
+	encoded := ghostty.encode()
 	assert encoded.starts_with('xterm-ghostty|ghostty|Ghostty,\n\tam,\n')
 	assert encoded.ends_with(',\n')
 }

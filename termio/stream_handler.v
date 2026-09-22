@@ -545,7 +545,7 @@ fn (mut self StreamHandler) dcs_command(mut cmd terminal.DcsCommand) ! {
 // V has no comptime map, so it is built once at startup from the same entry.
 // Keys are upper-case hex, so a lower-case request goes unanswered exactly as
 // it does in the source.
-const xtgettcap_map = terminfo.ghostty_terminfo.xtgettcap_map()
+const xtgettcap_map = terminfo.ghostty.xtgettcap_map()
 
 // dcs_xtgettcap handles XTGETTCAP requests by iterating over requested
 // terminfo capability names and sending responses. Each found capability is

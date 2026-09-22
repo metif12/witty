@@ -71,6 +71,6 @@ pub fn generate_build_data(action BuildDataAction) string {
 		.vim_ftdetect { extra.ftdetect }
 		.vim_ftplugin { extra.ftplugin }
 		.vim_compiler { extra.compiler }
-		.terminfo { terminfo.ghostty_terminfo.encode() }
+		.terminfo { terminfo.ghostty.encode() }
 	}
 }

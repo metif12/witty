@@ -4,8 +4,8 @@
 // commentary are carried over verbatim and in source order.
 module terminfo
 
-// ghostty_terminfo is Ghostty's terminfo entry.
-pub const ghostty_terminfo = Source{
+// ghostty is Ghostty's terminfo entry.
+pub const ghostty = Source{
 	names: [
 		'xterm-ghostty',
 		'ghostty',
