@@ -57,6 +57,12 @@ pub fn (a Properties) eql(b Properties) bool {
 	return a.value == b.value
 }
 
+// zig_format is the V equivalent of Properties.format and is consumed by the
+// translated generic LUT writer when regenerating Ghostty's Zig tables.
+pub fn (props Properties) zig_format() string {
+	return '.{\n    .width= ${props.width()},\n    .grapheme_break= .${props.grapheme_break()},\n    .emoji_vs_base= ${props.emoji_vs_base()},\n}'
+}
+
 const table_data = $embed_file('@VMODROOT/unicode/tables.bin').to_bytes()
 
 const props_stage1_offset = 0
