@@ -3,6 +3,9 @@ module main
 import datastruct
 
 fn test_split_tree_source_enum_layouts_and_ordinals() {
+	assert sizeof(datastruct.Handle) == 2
+	assert datastruct.handle_root.idx() == 0
+	assert datastruct.Handle(41).offset(1) == datastruct.Handle(42)
 	assert sizeof(datastruct.Layout) == 1
 	assert u8(datastruct.Layout.horizontal) == 0
 	assert u8(datastruct.Layout.vertical) == 1
@@ -45,7 +48,7 @@ pub fn (self &TestView) split_tree_label() string {
 }
 
 // helper: find a view handle by label
-fn find_handle(tree &datastruct.SplitTree[TestView], label string) int {
+fn find_handle(tree &datastruct.SplitTree[TestView], label string) datastruct.Handle {
 	mut it := tree.iterator()
 	for {
 		entry := it.next() or { break }
@@ -156,9 +159,10 @@ fn test_split_horizontal() {
 	mut current := u8(`D`)
 	for current != u8(`A`) {
 		handle := find_handle(&t5, [current].bytestr())
-		prev_handle := t5.goto_(handle, datastruct.GotoPrevious{})
-		assert prev_handle >= 0
-		prev_entry := t5.nodes[prev_handle]
+		prev_handle := t5.goto_(handle, datastruct.GotoPrevious{}) or {
+			panic('expected a previous split-tree view')
+		}
+		prev_entry := t5.nodes[prev_handle.idx()]
 		if prev_entry is datastruct.Leaf[TestView] {
 			assert prev_entry.view.label == [current - 1].bytestr()
 		}
@@ -167,15 +171,16 @@ fn test_split_horizontal() {
 
 	// A has no previous
 	a_handle := find_handle(&t5, 'A')
-	assert t5.goto_(a_handle, datastruct.GotoPrevious{}) == -1
+	assert t5.goto_(a_handle, datastruct.GotoPrevious{}) == none
 
 	// Find "next" from A forward.
 	current = u8(`A`)
 	for current != u8(`D`) {
 		handle := find_handle(&t5, [current].bytestr())
-		next_handle := t5.goto_(handle, datastruct.GotoNext{})
-		assert next_handle >= 0
-		next_entry := t5.nodes[next_handle]
+		next_handle := t5.goto_(handle, datastruct.GotoNext{}) or {
+			panic('expected a next split-tree view')
+		}
+		next_entry := t5.nodes[next_handle.idx()]
 		if next_entry is datastruct.Leaf[TestView] {
 			assert next_entry.view.label == [current + 1].bytestr()
 		}
@@ -184,7 +189,7 @@ fn test_split_horizontal() {
 
 	// D has no next
 	d_handle := find_handle(&t5, 'D')
-	assert t5.goto_(d_handle, datastruct.GotoNext{}) == -1
+	assert t5.goto_(d_handle, datastruct.GotoNext{}) == none
 }
 
 fn test_split_vertical() {
@@ -416,9 +421,10 @@ fn test_spatial_goto() {
 
 	// datastruct.Spatial C => right should be D
 	c_handle := find_handle(split, 'C')
-	target := split.goto_(c_handle, datastruct.GotoSpatial{ direction: .right })
-	assert target >= 0
-	target_node := split.nodes[target]
+	target := split.goto_(c_handle, datastruct.GotoSpatial{ direction: .right }) or {
+		panic('expected a split-tree view to the right')
+	}
+	target_node := split.nodes[target.idx()]
 	if target_node is datastruct.Leaf[TestView] {
 		assert target_node.view.label == 'D'
 	} else {
@@ -427,9 +433,10 @@ fn test_spatial_goto() {
 
 	// datastruct.Spatial D => left should be A
 	d_handle := find_handle(split, 'D')
-	target2 := split.goto_(d_handle, datastruct.GotoSpatial{ direction: .left })
-	assert target2 >= 0
-	target_node2 := split.nodes[target2]
+	target2 := split.goto_(d_handle, datastruct.GotoSpatial{ direction: .left }) or {
+		panic('expected a split-tree view to the left')
+	}
+	target_node2 := split.nodes[target2.idx()]
 	if target_node2 is datastruct.Leaf[TestView] {
 		assert target_node2.view.label == 'A'
 	} else {
@@ -582,7 +589,7 @@ fn test_remove_and_zoom() {
 	defer {
 		removed_a.free()
 	}
-	assert removed_a.zoomed == -1
+	assert removed_a.zoomed == none
 	assert removed_a.format_text() == 'leaf: B\n'
 
 	// Remove B, should keep zoom on A

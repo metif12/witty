@@ -298,8 +298,8 @@ pub mut:
 	// tree has no surfaces with parents. See prop_tree for details.
 	rebuild_pending bool
 
-	// State about a pending surface close for the close dialog. -1 means none.
-	pending_close int = -1
+	// State about a pending surface close for the close dialog.
+	pending_close ?datastruct.Handle
 
 	// Keep wrapper state alive for the GObjects referenced by tree nodes.
 	surfaces         []&SurfaceWidget
@@ -325,7 +325,7 @@ pub fn new_split_tree_widget(window &Window, config &Config) &SplitTreeWidget {
 	}
 	mut priv := split_tree_priv(voidptr(widget))
 	priv.wrapper = voidptr(w)
-	w.pending_close = -1
+	w.pending_close = none
 	w.init_action_map()
 	return w
 }
@@ -478,7 +478,7 @@ pub fn (self &SplitTreeWidget) get_is_zoomed() bool {
 	if !self.has_tree {
 		return false
 	}
-	return self.tree.zoomed >= 0
+	return self.tree.zoomed != none
 }
 
 // get_is_split returns whether the root node is a split. Mirrors `getIsSplit`.
@@ -518,7 +518,7 @@ pub fn (mut self SplitTreeWidget) get_active_surface() ?&SurfaceWidget {
 		return none
 	}
 	handle := self.get_active_surface_handle() or { return none }
-	node := self.tree.nodes[handle]
+	node := self.tree.nodes[handle.idx()]
 	if node is datastruct.Leaf[SurfaceWidget] {
 		return node.view
 	}
@@ -528,7 +528,7 @@ pub fn (mut self SplitTreeWidget) get_active_surface() ?&SurfaceWidget {
 // get_active_surface_handle returns the tree handle (node index) of the active
 // surface, or `none`. The active surface is the focused surface, falling back
 // to the last-focused surface. Mirrors `getActiveSurfaceHandle`.
-fn (mut self SplitTreeWidget) get_active_surface_handle() ?int {
+fn (mut self SplitTreeWidget) get_active_surface_handle() ?datastruct.Handle {
 	if !self.has_tree {
 		return none
 	}
@@ -678,10 +678,7 @@ pub fn (mut self SplitTreeWidget) goto_(to datastruct.Goto) bool {
 	}
 	active := self.get_active_surface_handle() or { return false }
 
-	target := self.tree.goto_(active, to)
-	if target < 0 {
-		return false
-	}
+	target := self.tree.goto_(active, to) or { return false }
 
 	// If we aren't changing targets then we did nothing.
 	if active == target {
@@ -689,7 +686,7 @@ pub fn (mut self SplitTreeWidget) goto_(to datastruct.Goto) bool {
 	}
 
 	// Grab focus on the target surface.
-	node := self.tree.nodes[target]
+	node := self.tree.nodes[target.idx()]
 	mut surface := &SurfaceWidget(unsafe { nil })
 	if node is datastruct.Leaf[SurfaceWidget] {
 		surface = node.view
@@ -704,8 +701,8 @@ pub fn (mut self SplitTreeWidget) goto_(to datastruct.Goto) bool {
 	// Handle zoom preservation on navigation. Witty's pinned configuration
 	// currently has no split-preserve-zoom field, so it has Ghostty's default
 	// behavior and clears zoom when navigating.
-	if self.tree.zoomed >= 0 {
-		self.tree.zoom(-1)
+	if self.tree.zoomed != none {
+		self.tree.zoom(none)
 		self.notify_property(g_split_tree_pspec_tree)
 		self.prop_tree()
 		self.notify_property(g_split_tree_pspec_is_zoomed)
@@ -803,13 +800,10 @@ pub fn (mut self SplitTreeWidget) action_zoom() {
 	if !self.has_tree {
 		return
 	}
-	if self.tree.zoomed >= 0 {
-		self.tree.zoom(-1)
+	if self.tree.zoomed != none {
+		self.tree.zoom(none)
 	} else {
 		active := self.get_active_surface_handle() or { return }
-		if self.tree.zoomed == active {
-			return
-		}
 		self.tree.zoom(active)
 	}
 	self.notify_property(g_split_tree_pspec_tree)
@@ -823,14 +817,14 @@ pub fn (mut self SplitTreeWidget) action_zoom() {
 // immediately or shows a confirmation dialog.
 pub fn (mut self SplitTreeWidget) surface_close_request(surface &SurfaceWidget) {
 	// Reset pending close.
-	self.pending_close = -1
+	self.pending_close = none
 
 	if !self.has_tree {
 		return
 	}
 
 	// Find the surface in the tree.
-	mut found := -1
+	mut found := ?datastruct.Handle(none)
 	mut it := self.tree.iterator()
 	for {
 		entry := it.next() or { break }
@@ -840,7 +834,7 @@ pub fn (mut self SplitTreeWidget) surface_close_request(surface &SurfaceWidget) 
 			break
 		}
 	}
-	if found < 0 {
+	if found == none {
 		return
 	}
 	self.pending_close = found
@@ -875,16 +869,13 @@ fn split_tree_close_confirmed_cb(dialog GObject, data voidptr) {
 // next focus target (previous, else next), removes the surface from the tree,
 // and sets the new last-focused. Mirrors `closeConfirmationClose`.
 pub fn (mut self SplitTreeWidget) close_confirmation_close() {
-	handle := self.pending_close
-	self.pending_close = -1
-	if handle < 0 {
-		return
-	}
+	handle := self.pending_close or { return }
+	self.pending_close = none
 	if !self.has_tree {
 		return
 	}
 	mut closing := &SurfaceWidget(unsafe { nil })
-	closing_node := self.tree.nodes[handle]
+	closing_node := self.tree.nodes[handle.idx()]
 	if closing_node is datastruct.Leaf[SurfaceWidget] {
 		closing = closing_node.view
 	}
@@ -893,13 +884,15 @@ pub fn (mut self SplitTreeWidget) close_confirmation_close() {
 	// the leftmost, then the "next".
 	mut next_focus := &SurfaceWidget(unsafe { nil })
 	mut next_handle := self.tree.goto_(handle, datastruct.Goto(datastruct.GotoPrevious{}))
-	if next_handle < 0 {
+	if next_handle == none {
 		next_handle = self.tree.goto_(handle, datastruct.Goto(datastruct.GotoNext{}))
 	}
-	if next_handle >= 0 && next_handle != handle {
-		node := self.tree.nodes[next_handle]
-		if node is datastruct.Leaf[SurfaceWidget] {
-			next_focus = node.view
+	if target := next_handle {
+		if target != handle {
+			node := self.tree.nodes[target.idx()]
+			if node is datastruct.Leaf[SurfaceWidget] {
+				next_focus = node.view
+			}
 		}
 	}
 
@@ -1037,7 +1030,7 @@ pub fn (mut self SplitTreeWidget) on_rebuild() {
 	}
 
 	if self.has_tree && !self.tree.is_empty() {
-		root := if self.tree.zoomed >= 0 { self.tree.zoomed } else { datastruct.handle_root }
+		root := self.tree.zoomed or { datastruct.handle_root }
 		child := self.build_tree(root)
 		if !isnil(self.tree_bin) {
 			C.adw_bin_set_child(self.tree_bin, child)
@@ -1056,8 +1049,8 @@ pub fn (mut self SplitTreeWidget) on_rebuild() {
 // build_tree builds the widget subtree for the node at `current`. Leaves become
 // a SurfaceScrolledWindow around the surface; splits become a SplitTreeSplit
 // (GtkPaned wrapper) with recursively-built children. Mirrors `buildTree`.
-fn (mut self SplitTreeWidget) build_tree(current int) GtkWidget {
-	node := self.tree.nodes[current]
+fn (mut self SplitTreeWidget) build_tree(current datastruct.Handle) GtkWidget {
+	node := self.tree.nodes[current.idx()]
 	if node is datastruct.Leaf[SurfaceWidget] {
 		mut scrolled := new_surface_scrolled_window()
 		scrolled.set_surface(node.view)
@@ -1089,7 +1082,7 @@ pub mut:
 	widget GtkWidget = unsafe { nil }
 
 	// The handle of the node in the tree that this split represents.
-	handle     int
+	handle     datastruct.Handle
 	split_tree &SplitTreeWidget = unsafe { nil }
 
 	// Source to reposition the split when properties change. 0 means none.
@@ -1101,7 +1094,7 @@ pub mut:
 
 // new_split_tree_split creates a new SplitTreeSplit for the given node handle,
 // layout, and child widgets. Mirrors `SplitTreeSplit.new`.
-pub fn new_split_tree_split(split_tree &SplitTreeWidget, handle int, layout datastruct.Layout, start_child GtkWidget, end_child GtkWidget) &SplitTreeSplit {
+pub fn new_split_tree_split(split_tree &SplitTreeWidget, handle datastruct.Handle, layout datastruct.Layout, start_child GtkWidget, end_child GtkWidget) &SplitTreeSplit {
 	orientation := match layout {
 		.horizontal { GtkOrientation(0) }
 		.vertical { GtkOrientation(1) }
@@ -1184,10 +1177,10 @@ pub fn (mut self SplitTreeSplit) on_idle(min int, max int, pos_set bool) {
 	self.idle = 0
 
 	if isnil(self.split_tree) || !self.split_tree.has_tree
-		|| self.handle < 0 || self.handle >= self.split_tree.tree.nodes.len {
+		|| self.handle.idx() >= self.split_tree.tree.nodes.len {
 		return
 	}
-	node := self.split_tree.tree.nodes[self.handle]
+	node := self.split_tree.tree.nodes[self.handle.idx()]
 	desired_ratio := if node is datastruct.Split {
 		f64(node.ratio)
 	} else {

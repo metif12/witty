@@ -33,15 +33,30 @@ pub mut:
 	// The handle of the zoomed node. A "zoomed" node is one that is
 	// expected to be made the full size of the split tree. Various
 	// operations may unzoom (e.g. resize).
-	zoomed int = -1 // -1 means no zoom
+	zoomed ?Handle
 }
 
 // Node is either a leaf (containing a view) or a split (dividing space).
 pub type Node[T] = Leaf[T] | Split
 
-// A handle into the nodes array. We use plain int indices.
+// Handle is a compact index into the nodes array. Ghostty deliberately keeps
+// split-tree references at 16 bits rather than widening them to pointer-sized
+// integers.
+pub type Handle = u16
+
 // handle_root is the handle for the root node (index 0).
-pub const handle_root = 0
+pub const handle_root = Handle(0)
+
+pub fn (handle Handle) idx() int {
+	return int(u16(handle))
+}
+
+// offset advances a handle while retaining Ghostty's reserved maximum value.
+pub fn (handle Handle) offset(value usize) Handle {
+	final := usize(u16(handle)) + value
+	assert final < usize(65535)
+	return Handle(final)
+}
 
 // Leaf node containing a view.
 pub struct Leaf[T] {
@@ -57,9 +72,9 @@ pub:
 	// The ratio of space given to the left/top child.
 	ratio f32
 	// Handle (index) of the left/top child.
-	left int
+	left Handle
 	// Handle (index) of the right/bottom child.
-	right int
+	right Handle
 }
 
 // Layout direction for a split.
@@ -93,10 +108,10 @@ pub enum SpatialDirection as u8 {
 // Goto specifies how to navigate from a node.
 pub type Goto = GotoPrevious | GotoNext | GotoPreviousWrapped | GotoNextWrapped | GotoSpatial
 
-// GotoPrevious - previous view, -1 if we're the first view.
+// GotoPrevious - previous view, none if we're the first view.
 pub struct GotoPrevious {}
 
-// GotoNext - next view, -1 if we're the last view.
+// GotoNext - next view, none if we're the last view.
 pub struct GotoNext {}
 
 // GotoPreviousWrapped - previous view, but wrapped around to the last view.
@@ -118,14 +133,14 @@ pub:
 // ViewEntry pairs a handle with its view.
 pub struct ViewEntry[T] {
 pub:
-	handle int
+	handle Handle
 	view   &T
 }
 
 // SplitTreeIterator iterates over all the views in the tree.
 pub struct SplitTreeIterator[T] {
 mut:
-	i int
+	i Handle
 pub:
 	nodes []Node[T]
 }
@@ -184,7 +199,7 @@ struct BacktrackDeadend {}
 struct BacktrackBacktrack {}
 
 struct BacktrackResult {
-	handle int
+	handle Handle
 }
 
 struct Dimensions {
@@ -208,7 +223,8 @@ pub fn SplitTree.new[T](view &T) SplitTree[T] {
 		view: reffed
 	}
 	return SplitTree[T]{
-		nodes: nodes
+		nodes:  nodes
+		zoomed: none
 	}
 }
 
@@ -225,7 +241,7 @@ pub fn (mut self SplitTree[T]) free() {
 		}
 	}
 	self.nodes = []Node[T]{}
-	self.zoomed = -1
+	self.zoomed = none
 }
 
 // clone returns a new tree with the same nodes and incremented view references.
@@ -268,7 +284,7 @@ pub fn (self &SplitTree[T]) is_split() bool {
 // iterator returns an iterator over all the views in the tree.
 pub fn (self &SplitTree[T]) iterator() SplitTreeIterator[T] {
 	return SplitTreeIterator[T]{
-		i:     0
+		i:     handle_root
 		nodes: self.nodes
 	}
 }
@@ -276,10 +292,12 @@ pub fn (self &SplitTree[T]) iterator() SplitTreeIterator[T] {
 // next returns the next ViewEntry from the iterator, or none.
 pub fn (mut self SplitTreeIterator[T]) next() ?ViewEntry[T] {
 	// Skip split nodes, only return leaves.
-	for self.i < self.nodes.len {
+	for self.i.idx() < self.nodes.len {
 		handle := self.i
-		node := self.nodes[self.i]
-		self.i++
+		node := self.nodes[self.i.idx()]
+		// The iterator is allowed to advance to the reserved maximum value as
+		// its end sentinel; Handle.offset intentionally rejects that value.
+		self.i = Handle(u16(self.i) + 1)
 		if node is Leaf[T] {
 			return ViewEntry[T]{
 				handle: handle
@@ -290,20 +308,20 @@ pub fn (mut self SplitTreeIterator[T]) next() ?ViewEntry[T] {
 	return none
 }
 
-// zoom changes the zoomed state to the given node handle.
-// Pass -1 to unzoom. Assumes the handle is valid.
-pub fn (mut self SplitTree[T]) zoom(handle int) {
-	if handle >= 0 {
-		assert(handle < self.nodes.len)
+// zoom changes the zoomed state to the given node handle. None unzooms.
+// Assumes a present handle is valid.
+pub fn (mut self SplitTree[T]) zoom(handle ?Handle) {
+	if value := handle {
+		assert value.idx() < self.nodes.len
 	}
 	self.zoomed = handle
 }
 
-// goto_ navigates from a node in the split tree. Returns -1
-// if the direction results in no visitable view.
+// goto_ navigates from a node in the split tree. Returns none if the direction
+// results in no visitable view.
 //
 // The name uses trailing underscore to avoid conflict with V keyword.
-pub fn (self &SplitTree[T]) goto_(from int, to Goto) int {
+pub fn (self &SplitTree[T]) goto_(from Handle, to Goto) ?Handle {
 	match to {
 		GotoPrevious {
 			return self.previous(from)
@@ -312,16 +330,14 @@ pub fn (self &SplitTree[T]) goto_(from int, to Goto) int {
 			return self.next_node(from)
 		}
 		GotoPreviousWrapped {
-			prev := self.previous(from)
-			if prev >= 0 {
+			if prev := self.previous(from) {
 				return prev
 			}
 			return self.deepest(.right, handle_root)
 		}
 		GotoNextWrapped {
-			nxt := self.next_node(from)
-			if nxt >= 0 {
-				return nxt
+			if next := self.next_node(from) {
+				return next
 			}
 			return self.deepest(.left, handle_root)
 		}
@@ -336,10 +352,10 @@ pub fn (self &SplitTree[T]) goto_(from int, to Goto) int {
 // deepest returns the deepest view in the tree in the given direction.
 // This can be used to find the leftmost/rightmost surface within
 // a given split structure.
-pub fn (self &SplitTree[T]) deepest(side Side, from int) int {
+pub fn (self &SplitTree[T]) deepest(side Side, from Handle) Handle {
 	mut current := from
 	for {
-		node := self.nodes[current]
+		node := self.nodes[current.idx()]
 		if node is Split {
 			current = match side {
 				.left { node.left }
@@ -353,36 +369,36 @@ pub fn (self &SplitTree[T]) deepest(side Side, from int) int {
 }
 
 // previous returns the previous view from the given node handle.
-// Returns -1 if there is no previous (this is the first view).
+// Returns none if there is no previous (this is the first view).
 //
 // "Previous" is defined as the previous node in an in-order
 // traversal of the tree.
-fn (self &SplitTree[T]) previous(from int) int {
+fn (self &SplitTree[T]) previous(from Handle) ?Handle {
 	result := self.previous_backtrack(from, handle_root)
 	if result is BacktrackResult {
 		return result.handle
 	}
-	return -1
+	return none
 }
 
 // next_node returns the next view from the given node handle.
-// Returns -1 if there is no next (this is the last view).
-fn (self &SplitTree[T]) next_node(from int) int {
+// Returns none if there is no next (this is the last view).
+fn (self &SplitTree[T]) next_node(from Handle) ?Handle {
 	result := self.next_backtrack(from, handle_root)
 	if result is BacktrackResult {
 		return result.handle
 	}
-	return -1
+	return none
 }
 
-fn (self &SplitTree[T]) previous_backtrack(from int, current int) Backtrack {
+fn (self &SplitTree[T]) previous_backtrack(from Handle, current Handle) Backtrack {
 	// If we reached the point that we're trying to find the previous
 	// value of, then we need to backtrack from here.
 	if from == current {
 		return BacktrackBacktrack{}
 	}
 
-	node := self.nodes[current]
+	node := self.nodes[current.idx()]
 	if node is Split {
 		left_result := self.previous_backtrack(from, node.left)
 		if left_result is BacktrackResult {
@@ -415,11 +431,11 @@ fn (self &SplitTree[T]) previous_backtrack(from int, current int) Backtrack {
 }
 
 // See previous_backtrack for detailed comments. This is a mirror of that.
-fn (self &SplitTree[T]) next_backtrack(from int, current int) Backtrack {
+fn (self &SplitTree[T]) next_backtrack(from Handle, current Handle) Backtrack {
 	if from == current {
 		return BacktrackBacktrack{}
 	}
-	node := self.nodes[current]
+	node := self.nodes[current.idx()]
 	if node is Split {
 		right_result := self.next_backtrack(from, node.right)
 		if right_result is BacktrackResult {
@@ -443,15 +459,16 @@ fn (self &SplitTree[T]) next_backtrack(from int, current int) Backtrack {
 }
 
 // nearest returns the nearest leaf node (view) in the given direction.
-fn (self &SplitTree[T]) nearest(sp Spatial, from int, direction SpatialDirection) int {
-	target := sp.slots[from]
+fn (self &SplitTree[T]) nearest(sp Spatial, from Handle, direction SpatialDirection) ?Handle {
+	target := sp.slots[from.idx()]
 
-	mut best_handle := -1
+	mut best_handle := ?Handle(none)
 	mut best_distance := f32(0)
 
 	for handle in 0 .. sp.slots.len {
 		// Never match ourself
-		if handle == from {
+		candidate := Handle(handle)
+		if candidate == from {
 			continue
 		}
 		// Only match leaves
@@ -478,12 +495,12 @@ fn (self &SplitTree[T]) nearest(sp Spatial, from int, direction SpatialDirection
 		distance := f32(math.sqrt(f64(dx * dx + dy * dy)))
 
 		// If we have a nearest it must be closer.
-		if best_handle >= 0 {
+		if best_handle != none {
 			if distance >= best_distance {
 				continue
 			}
 		}
-		best_handle = handle
+		best_handle = candidate
 		best_distance = distance
 	}
 
@@ -497,10 +514,10 @@ fn (self &SplitTree[T]) nearest(sp Spatial, from int, direction SpatialDirection
 // and performance reasons where it's very important for GUIs to
 // update the ratio during a live resize than to redraw the entire
 // widget tree.
-pub fn (mut self SplitTree[T]) resize_in_place(at int, ratio f32) {
-	node := self.nodes[at]
+pub fn (mut self SplitTree[T]) resize_in_place(at Handle, ratio f32) {
+	node := self.nodes[at.idx()]
 	if node is Split {
-		self.nodes[at] = Node[T](Split{
+		self.nodes[at.idx()] = Node[T](Split{
 			layout: node.layout
 			ratio:  ratio
 			left:   node.left
@@ -516,7 +533,7 @@ pub fn (mut self SplitTree[T]) resize_in_place(at int, ratio f32) {
 //
 // The previous trees will not be freed, but reference counts
 // for the views will be increased accordingly for the new tree.
-pub fn (self &SplitTree[T]) split_(at int, direction Direction, ratio f32, insert &SplitTree[T]) SplitTree[T] {
+pub fn (self &SplitTree[T]) split_(at Handle, direction Direction, ratio f32, insert &SplitTree[T]) SplitTree[T] {
 	// We need sum total of nodes between the two trees plus one for the new split node.
 	total := self.nodes.len + insert.nodes.len + 1
 	assert(total <= 65535) // fits in u16
@@ -537,8 +554,8 @@ pub fn (self &SplitTree[T]) split_(at int, direction Direction, ratio f32, inser
 			nodes << Node[T](Split{
 				layout: node.layout
 				ratio:  node.ratio
-				left:   node.left + self.nodes.len
-				right:  node.right + self.nodes.len
+				left:   node.left.offset(usize(self.nodes.len))
+				right:  node.right.offset(usize(self.nodes.len))
 			})
 		} else {
 			nodes << node
@@ -569,13 +586,14 @@ pub fn (self &SplitTree[T]) split_(at int, direction Direction, ratio f32, inser
 
 	// Copy our previous value to the end of the nodes list and
 	// create our new split node.
-	nodes << nodes[at]
-	last_idx := nodes.len - 1
-	nodes[at] = Node[T](Split{
+	nodes << nodes[at.idx()]
+	last := Handle(nodes.len - 1)
+	insert_root := Handle(self.nodes.len)
+	nodes[at.idx()] = Node[T](Split{
 		layout: layout
 		ratio:  ratio
-		left:   if is_left { self.nodes.len } else { last_idx }
-		right:  if is_left { last_idx } else { self.nodes.len }
+		left:   if is_left { insert_root } else { last }
+		right:  if is_left { last } else { insert_root }
 	})
 
 	// We need to increase the reference count of all the nodes.
@@ -584,13 +602,13 @@ pub fn (self &SplitTree[T]) split_(at int, direction Direction, ratio f32, inser
 	return SplitTree[T]{
 		nodes: nodes
 		// Splitting always resets zoom state.
-		zoomed: -1
+		zoomed: none
 	}
 }
 
 // remove removes a node from the tree.
-pub fn (self &SplitTree[T]) remove(at int) SplitTree[T] {
-	assert(at < self.nodes.len)
+pub fn (self &SplitTree[T]) remove(at Handle) SplitTree[T] {
+	assert at.idx() < self.nodes.len
 
 	// If we're removing node zero then we're clearing the tree.
 	if at == handle_root {
@@ -606,7 +624,7 @@ pub fn (self &SplitTree[T]) remove(at int) SplitTree[T] {
 	mut new_nodes := []Node[T]{len: count, init: empty_node[T]()}
 	mut result := SplitTree[T]{
 		nodes:  new_nodes
-		zoomed: -1
+		zoomed: none
 	}
 
 	// Traverse the tree and copy all our nodes into place.
@@ -619,16 +637,18 @@ pub fn (self &SplitTree[T]) remove(at int) SplitTree[T] {
 	return result
 }
 
-fn remove_node_impl[T](old &SplitTree[T], mut new_tree SplitTree[T], new_offset int, current int, target int) int {
+fn remove_node_impl[T](old &SplitTree[T], mut new_tree SplitTree[T], new_offset int, current Handle, target Handle) int {
 	assert(current != target)
 
 	// If we have a zoomed node and this is it then we migrate it.
-	if old.zoomed >= 0 && old.zoomed == current {
-		assert(new_tree.zoomed == -1)
-		new_tree.zoomed = new_offset
+	if zoomed := old.zoomed {
+		if zoomed == current {
+			assert new_tree.zoomed == none
+			new_tree.zoomed = Handle(new_offset)
+		}
 	}
 
-	node := old.nodes[current]
+	node := old.nodes[current.idx()]
 	if node is Split {
 		// If we're removing one of the split node sides then
 		// we remove the split node itself as well and only add
@@ -649,8 +669,8 @@ fn remove_node_impl[T](old &SplitTree[T], mut new_tree SplitTree[T], new_offset 
 		new_tree.nodes[new_offset] = Node[T](Split{
 			layout: node.layout
 			ratio:  node.ratio
-			left:   new_offset + 1
-			right:  new_offset + 1 + left_count
+			left:   Handle(new_offset + 1)
+			right:  Handle(new_offset + 1 + left_count)
 		})
 		return left_count + right_count + 1
 	}
@@ -665,10 +685,10 @@ fn remove_node_impl[T](old &SplitTree[T], mut new_tree SplitTree[T], new_offset 
 
 // count_after_removal returns the number of nodes that would be needed
 // to store the tree if the target node is removed.
-fn (self &SplitTree[T]) count_after_removal(current int, target int, acc int) int {
+fn (self &SplitTree[T]) count_after_removal(current Handle, target Handle, acc int) int {
 	assert(current != target)
 
-	node := self.nodes[current]
+	node := self.nodes[current.idx()]
 	if node is Leaf[T] {
 		// Leaf is simple, always takes one node.
 		return acc + 1
@@ -752,8 +772,8 @@ pub fn (self &SplitTree[T]) equalize() SplitTree[T] {
 	}
 }
 
-fn (self &SplitTree[T]) weight(from int, layout Layout, acc int) int {
-	node := self.nodes[from]
+fn (self &SplitTree[T]) weight(from Handle, layout Layout, acc int) int {
+	node := self.nodes[from.idx()]
 	if node is Leaf[T] {
 		return acc + 1
 	}
@@ -784,7 +804,7 @@ fn (self &SplitTree[T]) weight(from int, layout Layout, acc int) int {
 //
 // If no matching split is found, this does nothing, but will always
 // still return a cloned tree.
-pub fn (self &SplitTree[T]) resize(from int, layout Layout, ratio f32) SplitTree[T] {
+pub fn (self &SplitTree[T]) resize(from Handle, layout Layout, ratio f32) SplitTree[T] {
 	assert(ratio >= -1 && ratio <= 1)
 	assert(!math.is_nan(f64(ratio)))
 	assert(!math.is_inf(f64(ratio), 0))
@@ -815,11 +835,11 @@ pub fn (self &SplitTree[T]) resize(from int, layout Layout, ratio f32) SplitTree
 	// own but I'm trying to avoid that word: it's the ratio of
 	// our spatial width/height to the total.
 	scale := match layout {
-		.horizontal { sp.slots[parent_handle].width / sp.slots[0].width }
-		.vertical { sp.slots[parent_handle].height / sp.slots[0].height }
+		.horizontal { sp.slots[parent_handle.idx()].width / sp.slots[0].width }
+		.vertical { sp.slots[parent_handle.idx()].height / sp.slots[0].height }
 	}
 
-	parent_node := result.nodes[parent_handle]
+	parent_node := result.nodes[parent_handle.idx()]
 	current_ratio := if parent_node is Split {
 		parent_node.ratio
 	} else {
@@ -833,11 +853,11 @@ pub fn (self &SplitTree[T]) resize(from int, layout Layout, ratio f32) SplitTree
 	return result
 }
 
-fn (self &SplitTree[T]) find_parent_split(layout Layout, from int, current int) Backtrack {
+fn (self &SplitTree[T]) find_parent_split(layout Layout, from Handle, current Handle) Backtrack {
 	if from == current {
 		return BacktrackBacktrack{}
 	}
-	node := self.nodes[current]
+	node := self.nodes[current.idx()]
 	if node is Split {
 		left_result := self.find_parent_split(layout, from, node.left)
 		if left_result is BacktrackResult {
@@ -900,37 +920,40 @@ pub fn (self &SplitTree[T]) spatial() Spatial {
 	return Spatial{ slots: slots }
 }
 
-fn (self &SplitTree[T]) fill_spatial_slots(mut slots []Slot, current int) {
-	assert(slots[current].width >= 0 && slots[current].height >= 0)
-	node := self.nodes[current]
+fn (self &SplitTree[T]) fill_spatial_slots(mut slots []Slot, current Handle) {
+	assert(slots[current.idx()].width >= 0 && slots[current.idx()].height >= 0)
+	node := self.nodes[current.idx()]
 	if node is Split {
+		current_idx := current.idx()
+		left_idx := node.left.idx()
+		right_idx := node.right.idx()
 		match node.layout {
 			.horizontal {
-				slots[node.left] = Slot{
-					x:      slots[current].x
-					y:      slots[current].y
-					width:  slots[current].width * node.ratio
-					height: slots[current].height
+				slots[left_idx] = Slot{
+					x:      slots[current_idx].x
+					y:      slots[current_idx].y
+					width:  slots[current_idx].width * node.ratio
+					height: slots[current_idx].height
 				}
-				slots[node.right] = Slot{
-					x:      slots[current].x + slots[current].width * node.ratio
-					y:      slots[current].y
-					width:  slots[current].width * (1 - node.ratio)
-					height: slots[current].height
+				slots[right_idx] = Slot{
+					x:      slots[current_idx].x + slots[current_idx].width * node.ratio
+					y:      slots[current_idx].y
+					width:  slots[current_idx].width * (1 - node.ratio)
+					height: slots[current_idx].height
 				}
 			}
 			.vertical {
-				slots[node.left] = Slot{
-					x:      slots[current].x
-					y:      slots[current].y
-					width:  slots[current].width
-					height: slots[current].height * node.ratio
+				slots[left_idx] = Slot{
+					x:      slots[current_idx].x
+					y:      slots[current_idx].y
+					width:  slots[current_idx].width
+					height: slots[current_idx].height * node.ratio
 				}
-				slots[node.right] = Slot{
-					x:      slots[current].x
-					y:      slots[current].y + slots[current].height * node.ratio
-					width:  slots[current].width
-					height: slots[current].height * (1 - node.ratio)
+				slots[right_idx] = Slot{
+					x:      slots[current_idx].x
+					y:      slots[current_idx].y + slots[current_idx].height * node.ratio
+					width:  slots[current_idx].width
+					height: slots[current_idx].height * (1 - node.ratio)
 				}
 			}
 		}
@@ -944,8 +967,8 @@ fn (self &SplitTree[T]) fill_spatial_slots(mut slots []Slot, current int) {
 //
 // This creates relative dimensions (see Spatial) by assuming each
 // leaf is exactly 1x1 unit in size.
-fn (self &SplitTree[T]) dimensions(current int) Dimensions {
-	node := self.nodes[current]
+fn (self &SplitTree[T]) dimensions(current Handle) Dimensions {
+	node := self.nodes[current.idx()]
 	if node is Split {
 		left := self.dimensions(node.left)
 		right := self.dimensions(node.right)
@@ -990,16 +1013,18 @@ pub fn (self &SplitTree[T]) format_text() string {
 	return sb.str()
 }
 
-fn (self &SplitTree[T]) format_text_inner(mut sb strings.Builder, current int, depth int) {
+fn (self &SplitTree[T]) format_text_inner(mut sb strings.Builder, current Handle, depth int) {
 	for _ in 0 .. depth {
 		sb.write_string('  ')
 	}
 
-	if self.zoomed >= 0 && self.zoomed == current {
-		sb.write_string('(zoomed) ')
+	if zoomed := self.zoomed {
+		if zoomed == current {
+			sb.write_string('(zoomed) ')
+		}
 	}
 
-	node := self.nodes[current]
+	node := self.nodes[current.idx()]
 	if node is Split {
 		layout_str := match node.layout {
 			.horizontal { 'horizontal' }
