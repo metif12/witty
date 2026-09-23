@@ -341,3 +341,11 @@ fn test_process_exit_watcher_ignores_child_reaped_by_shutdown() {
 	assert child.code == 0
 	process_exit_watcher(pid, 0, unsafe { nil })
 }
+
+fn test_subprocess_getpgid_ignores_missing_process() {
+	mut child := os.new_process('/usr/bin/true')
+	child.run()
+	pid := child.pid
+	child.wait()
+	assert subprocess_getpgid(pid) == none
+}

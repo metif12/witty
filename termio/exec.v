@@ -686,58 +686,114 @@ pub fn (mut self Subprocess) stop() {
 
 	if !isnil(self.flatpak_command) {
 		mut command := unsafe { self.flatpak_command }
-		command.signal(sig_hup, true) or {
-			eprintln('error sending SIGHUP to Flatpak host command: ${err}')
+		kill_command_flatpak(mut command) or {
+			eprintln('error sending SIGHUP to command, may hang: ${err}')
 		}
-		self.running = false
-		return
+		_ = command.wait() or {
+			eprintln('error waiting for command to exit: ${err}')
+			u8(0)
+		}
+	} else if process := self.process {
+		// Note: this will also wait for the command to exit, so
+		// DO NOT call cmd.wait
+		kill_command(process) or { eprintln('error sending SIGHUP to command, may hang: ${err}') }
 	}
 
-	if process := self.process {
-		pid := process.pid or {
-			self.process = none
-			self.running = false
-			return
-		}
-		// Get the process group ID. Before the child calls setsid
-		// the pgid will be ours because we forked it. We spin until
-		// the child has its own pgid.
-		my_pgid := C.getpgid(0)
-		mut pgid := -1
-		for {
-			pgid = C.getpgid(pid)
-			if pgid < 0 {
-				// Process doesn't exist anymore, we're done.
-				break
-			}
-			if pgid != my_pgid {
-				break
-			}
-			// pgid is still ours; the child hasn't called setsid yet.
-			time.sleep(10 * time.millisecond)
-		}
-
-		if pgid > 0 {
-			// Send SIGHUP to the entire process group so that
-			// grandchildren are also signaled.
-			for {
-				C.killpg(pgid, sig_hup)
-
-				// Wait with WNOHANG so we don't block. If the child
-				// is still alive, loop and kill again.
-				mut status := 0
-				res := C.waitpid(pid, &status, wnohang)
-				if res != 0 {
-					break
-				}
-				time.sleep(10 * time.millisecond)
-			}
-		}
-
-		self.process = none
-	}
-
+	self.process = none
 	self.running = false
+}
+
+// Kill the underlying subprocess. This sends a SIGHUP to the child
+// process. This also waits for the command to exit and will return the
+// exit code.
+fn kill_command(command commandpkg.Command) ! {
+	if pid := command.pid {
+		kill_pid(pid)!
+	}
+}
+
+fn kill_pid(pid int) ! {
+	pgid := subprocess_getpgid(pid) or { return }
+
+	// It is possible to send a killpg between the time that
+	// our child process calls setsid but before or simultaneous
+	// to calling execve. In this case, the direct child dies
+	// but grandchildren survive. To work around this, we loop
+	// and repeatedly kill the process group until all
+	// descendents are well and truly dead. We will not rest
+	// until the entire family tree is obliterated.
+	for {
+		if C.killpg(pgid, sig_hup) != 0 {
+			errno := C.errno
+			mut ignore := false
+			$if macos {
+				// killpg failed with EPERM, expected on Darwin and ignoring
+				ignore = errno == C.EPERM
+			}
+			if !ignore {
+				eprintln('error killing process group pgid=${pgid} err=${errno}')
+				return error('KillFailed')
+			}
+		}
+
+		// See Command.zig wait for why we specify WNOHANG.
+		// The gist is that it lets us detect when children
+		// are still alive without blocking so that we can
+		// kill them again.
+		mut status := 0
+		res := C.waitpid(pid, &status, wnohang)
+		if res != 0 {
+			break
+		}
+		time.sleep(10 * time.millisecond)
+	}
+}
+
+fn subprocess_getpgid(pid int) ?int {
+	// Get our process group ID. Before the child pid calls setsid
+	// the pgid will be ours because we forked it. Its possible that
+	// we may be calling this before setsid if we are killing a surface
+	// VERY quickly after starting it.
+	my_pgid := C.getpgid(0)
+
+	// We loop while pgid == my_pgid. The expectation if we have a valid
+	// pid is that setsid will eventually be called because it is the
+	// FIRST thing the child process does and as far as I can tell,
+	// setsid cannot fail. I'm sure that's not true, but I'd rather
+	// have a bug reported than defensively program against it now.
+	for {
+		pgid := C.getpgid(pid)
+		if pgid == my_pgid {
+			eprintln('pgid is our own, retrying')
+			time.sleep(10 * time.millisecond)
+			continue
+		}
+
+		// Don't know why it would be zero but its not a valid pid
+		if pgid == 0 {
+			return none
+		}
+
+		// If the pid doesn't exist then... we're done!
+		if pgid == C.ESRCH {
+			return none
+		}
+
+		// If we have an error we're done.
+		if pgid < 0 {
+			eprintln('error getting pgid for kill')
+			return none
+		}
+
+		return pgid
+	}
+	return none
+}
+
+// Kill the underlying process started via Flatpak host command.
+// This sends a signal via the Flatpak API.
+fn kill_command_flatpak(mut command internal_os.FlatpakHostCommand) ! {
+	command.signal(sig_hup, true)!
 }
 
 // This runs in the forked child after Command has redirected the standard
