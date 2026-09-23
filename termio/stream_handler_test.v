@@ -19,7 +19,7 @@ mut:
 	t              terminal.Terminal
 	mailbox        Mailbox
 	rstate         renderer.State
-	rmailbox       renderer.Mailbox
+	rmailbox       &renderer.Mailbox = unsafe { nil }
 	rsize          renderer.Size
 	messages       []apprt.SurfaceMessage
 	timeouts       []datastruct.BlockingQueueTimeoutKind
@@ -44,13 +44,14 @@ fn make_test_handler() (&StreamHandler, &TestContext) {
 			cols: 80
 			rows: 24
 		}) or { panic('failed to init terminal') }
+		rmailbox: renderer.Mailbox.create() or { panic(err) }
 	}
 
 	mut handler := &StreamHandler{
 		terminal: &ctx.t
 		termio_mailbox: &ctx.mailbox
 		renderer_state: &ctx.rstate
-		renderer_mailbox: &ctx.rmailbox
+		renderer_mailbox: ctx.rmailbox
 		surface_mailbox: apprt.SurfaceMailbox{
 			surface: ctx
 			push_fn: collect_surface_message

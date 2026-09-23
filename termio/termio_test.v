@@ -6,6 +6,7 @@ import datastruct
 import os
 import pty
 import renderer
+import sync
 import terminal
 import time
 
@@ -31,6 +32,10 @@ fn make_termio_opts() TermioOpts {
 			screen: renderer.ScreenSize{ width: 640, height: 384 }
 			cell: renderer.CellSize{ width: 8, height: 16 }
 		}
+		renderer_state: &renderer.State{
+			mutex: sync.new_mutex()
+		}
+		renderer_mailbox: renderer.Mailbox.create() or { panic(err) }
 	}
 }
 
@@ -202,7 +207,7 @@ fn test_termio_clones_and_decodes_startup_input() {
 
 	mut tio := Termio{}
 	tio.init(TermioOpts{
-		size: make_termio_opts().size
+		...make_termio_opts()
 		full_config: &config
 	})!
 	defer {
@@ -411,7 +416,7 @@ fn test_thread_selection_scroll_timer_reports_final_stop() {
 	mut probe := SelectionScrollProbe{}
 	mut tio := Termio{}
 	tio.init(TermioOpts{
-		size: make_termio_opts().size
+		...make_termio_opts()
 		surface_mailbox: apprt.SurfaceMailbox{
 			surface: &probe
 			push_fn: selection_scroll_probe_push
@@ -462,7 +467,7 @@ fn test_thread_termios_mode_reports_password_input_transitions() {
 	mut probe := PasswordInputProbe{}
 	mut tio := Termio{}
 	tio.init(TermioOpts{
-		size: make_termio_opts().size
+		...make_termio_opts()
 		surface_mailbox: apprt.SurfaceMailbox{
 			surface: &probe
 			push_fn: password_input_probe_push
@@ -532,7 +537,7 @@ fn test_process_output_notifies_callback_renderer_wakeup() {
 	mut probe := TermioWakeupProbe{}
 	mut tio := Termio{}
 	tio.init(TermioOpts{
-		size: make_termio_opts().size
+		...make_termio_opts()
 		renderer_wakeup: renderer.Wakeup{
 			user_data: &probe
 			notify_fn: termio_wakeup_probe

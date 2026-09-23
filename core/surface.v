@@ -1729,9 +1729,10 @@ fn surface_search_event(event searchpkg.Event, userdata voidptr) {
 			for match_ in event.viewport_matches {
 				matches << match_.clone()
 			}
-			surface.queue_renderer_message(rendererpkg.RendererMessage(rendererpkg.SearchViewportMatchesMessage{
+			_ = surface.renderer_thread.mailbox.push(rendererpkg.RendererMessage(rendererpkg.SearchViewportMatchesMessage{
 				matches: matches
-			})) or {}
+			}), datastruct.blocking_queue_forever)
+			surface.renderer_thread.wakeup()
 		}
 		.selected_match {
 			selected := if value := event.selected { ?usize(value.idx) } else { none }
@@ -1740,13 +1741,14 @@ fn surface_search_event(event searchpkg.Event, userdata voidptr) {
 			} else {
 				none
 			}
-			surface.queue_renderer_message(rendererpkg.RendererMessage(rendererpkg.SearchSelectedMatchMessage{
+			_ = surface.renderer_thread.mailbox.push(rendererpkg.RendererMessage(rendererpkg.SearchSelectedMatchMessage{
 				match_: match_
-			})) or {}
+			}), datastruct.blocking_queue_forever)
 			surface.surface_mailbox().push(apprt.SurfaceMessage{
 				kind: .search_selected
 				search_selected: selected
 			}, datastruct.blocking_queue_forever)
+			surface.renderer_thread.wakeup()
 		}
 		.total_matches {
 			surface.surface_mailbox().push(apprt.SurfaceMessage{
@@ -1755,12 +1757,13 @@ fn surface_search_event(event searchpkg.Event, userdata voidptr) {
 			}, datastruct.blocking_queue_forever)
 		}
 		.quit {
-			surface.queue_renderer_message(rendererpkg.RendererMessage(rendererpkg.SearchSelectedMatchMessage{
+			_ = surface.renderer_thread.mailbox.push(rendererpkg.RendererMessage(rendererpkg.SearchSelectedMatchMessage{
 				match_: none
-			})) or {}
-			surface.queue_renderer_message(rendererpkg.RendererMessage(rendererpkg.SearchViewportMatchesMessage{
+			}), datastruct.blocking_queue_forever)
+			_ = surface.renderer_thread.mailbox.push(rendererpkg.RendererMessage(rendererpkg.SearchViewportMatchesMessage{
 				matches: []highlight.Flattened{}
-			})) or {}
+			}), datastruct.blocking_queue_forever)
+			surface.renderer_thread.wakeup()
 			mailbox := surface.surface_mailbox()
 			mailbox.push(apprt.SurfaceMessage{
 				kind: .search_total
@@ -2612,9 +2615,9 @@ pub fn (mut self Surface) activate_inspector() ! {
 	self.renderer_state.inspector = voidptr(insp)
 
 	// Notify components that inspector is active
-	self.queue_renderer_message(rendererpkg.RendererMessage(rendererpkg.InspectorMessage{
+	_ = self.renderer_thread.mailbox.push(rendererpkg.RendererMessage(rendererpkg.InspectorMessage{
 		active: true
-	}))!
+	}), datastruct.blocking_queue_forever)
 	self.queue_io(termiopkg.Message.inspector_msg(true))
 }
 
@@ -2626,9 +2629,9 @@ pub fn (mut self Surface) deactivate_inspector() {
 	self.renderer_state.inspector = unsafe { nil }
 
 	// Notify components
-	self.queue_renderer_message(rendererpkg.RendererMessage(rendererpkg.InspectorMessage{
+	_ = self.renderer_thread.mailbox.push(rendererpkg.RendererMessage(rendererpkg.InspectorMessage{
 		active: false
-	})) or {}
+	}), datastruct.blocking_queue_forever)
 	self.queue_io(termiopkg.Message.inspector_msg(false))
 
 	// Cleanup
@@ -2751,8 +2754,13 @@ pub fn (mut self Surface) update_config(config &Config) ! {
 
 	// Notify renderer and IO of config change
 	renderer_message := rendererpkg.RendererMessage.init_change_config(&resolved)!
-	self.queue_renderer_message(renderer_message)!
+	_ = self.renderer_thread.mailbox.push(renderer_message, datastruct.blocking_queue_forever)
 	self.queue_io(termiopkg.Message.change_config_msg(&termio_config))
+
+	// With mailbox messages sent, we have to wake them up so they process it.
+	self.queue_render() or {
+		eprintln('failed to notify renderer of config change err=${err}')
+	}
 
 	// Notify runtime of config change
 	if _ := self.config.title {
@@ -2887,47 +2895,29 @@ pub fn (mut self Surface) set_font_size(size DesiredSize) ! {
 		height: font_cell_size.height
 	})!
 
-	// Notify renderer of new font grid
-	if self.renderer_thread.mailbox != unsafe { nil } {
-		self.queue_renderer_message(rendererpkg.RendererMessage(rendererpkg.FontGridMessage{
-			grid: font_grid
-			set: &self.app.font_grid_set
-			new_key: font_grid_key
-			old_key: self.font_grid_key
-		}))!
-	}
+	// Notify our render thread of the new font stack. The renderer
+	// MUST accept the new font grid and deref the old.
+	_ = self.renderer_thread.mailbox.push(rendererpkg.RendererMessage(rendererpkg.FontGridMessage{
+		grid: font_grid
+		set: &self.app.font_grid_set
+		old_key: self.font_grid_key
+		new_key: font_grid_key
+	}), datastruct.blocking_queue_forever)
 
-	// Swap our font grid key
-	old_key := self.font_grid_key
+	// Once we've sent the key we can replace our key
 	self.font_grid_key = font_grid_key
 	self.font_grid = font_grid
 	self.font_metrics = font_grid.metrics
 
-	// The renderer thread dereferences the old grid after atomically adopting
-	// the replacement. Zero-initialized test surfaces have no renderer worker.
-	if self.renderer_thread.mailbox == unsafe { nil } {
-		self.app.font_grid_set.deref(old_key)
-	}
-
-	// Schedule render
+	// Schedule render which also drains our mailbox
 	self.queue_render()!
 }
 
-// queue_render queues a render operation with the renderer thread.
+// This queues a render operation with the renderer thread. The render
+// isn't guaranteed to happen immediately but it will happen as soon as
+// practical.
 fn (mut self Surface) queue_render() ! {
-	if self.renderer_thread.event_mutex == unsafe { nil }
-		|| self.renderer_thread.event == unsafe { nil } {
-		return
-	}
 	self.renderer_thread.wakeup()
-}
-
-fn (mut self Surface) queue_renderer_message(msg rendererpkg.RendererMessage) ! {
-	if self.renderer_thread.mailbox == unsafe { nil } {
-		msg.deinit()
-		return
-	}
-	self.renderer_thread.send_wait(msg)
 }
 
 // size_callback is called when the surface size changes.
@@ -3267,9 +3257,9 @@ pub fn (mut self Surface) occlusion_callback(visible bool) ! {
 		crash.clear_thread_state()
 	}
 
-	self.queue_renderer_message(rendererpkg.RendererMessage(rendererpkg.VisibleMessage{
+	_ = self.renderer_thread.mailbox.push(rendererpkg.RendererMessage(rendererpkg.VisibleMessage{
 		visible: visible
-	}))!
+	}), datastruct.blocking_queue_forever)
 	self.queue_render()!
 }
 
@@ -3285,10 +3275,10 @@ pub fn (mut self Surface) focus_callback(focused bool) ! {
 	}
 	self.focused = focused
 
-	// Notify renderer of focus state
-	self.queue_renderer_message(rendererpkg.RendererMessage(rendererpkg.FocusMessage{
+	// Notify our render thread of the new state
+	_ = self.renderer_thread.mailbox.push(rendererpkg.RendererMessage(rendererpkg.FocusMessage{
 		focused: focused
-	}))!
+	}), datastruct.blocking_queue_forever)
 
 	if focused {
 		// On focus gain, notify app.
@@ -4775,7 +4765,12 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			match unsafe { input.CrashThread(action.enum_param) } {
 				.main_thread { panic('crash binding action, crashing intentionally') }
 				.render {
-					self.queue_renderer_message(rendererpkg.RendererMessage(rendererpkg.CrashMessage{})) or {}
+					_ = self.renderer_thread.mailbox.push(rendererpkg.RendererMessage(rendererpkg.CrashMessage{}),
+						datastruct.blocking_queue_forever)
+					self.queue_render() or {
+						// Not a big deal if this fails.
+						eprintln('failed to notify renderer of crash message err=${err}')
+					}
 				}
 				.io { self.queue_io(termiopkg.Message{ kind: .crash }) }
 			}

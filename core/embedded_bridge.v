@@ -10,6 +10,7 @@ module core
 
 import apprt
 import configpkg
+import datastruct
 import font
 import input
 import renderer
@@ -645,9 +646,10 @@ fn bridge_surface_key_binding(ptr voidptr, event &input.KeyEvent) ?voidptr {
 
 fn bridge_surface_display_id(ptr voidptr, display_id u32) {
 	mut self := unsafe { &EmbeddedSurfaceCore(ptr) }
-	self.surface.queue_renderer_message(renderer.RendererMessage(renderer.MacosDisplayIdMessage{
+	_ = self.surface.renderer_thread.mailbox.push(renderer.RendererMessage(renderer.MacosDisplayIdMessage{
 		display_id: display_id
-	})) or {}
+	}), datastruct.blocking_queue_forever)
+	self.surface.renderer_thread.wakeup()
 }
 
 fn bridge_surface_quicklook_font(ptr voidptr) voidptr {

@@ -269,24 +269,11 @@ pub fn (mut t Termio) init(opts TermioOpts) ! {
 	mut backend := Exec.init(opts.backend_config)!
 	backend.init_terminal(mut term)
 
-	mut renderer_state := opts.renderer_state
-	if renderer_state == unsafe { nil } {
-		renderer_state = &renderer.State{
-			mutex: sync.new_mutex()
-		}
-	} else if renderer_state.mutex == unsafe { nil } {
-		renderer_state.mutex = sync.new_mutex()
-	}
-	mut renderer_mailbox := opts.renderer_mailbox
-	if renderer_mailbox == unsafe { nil } {
-		renderer_mailbox = renderer.RendererMailbox.create()
-	}
-
 	t.config = opts.config
 	t.terminal = term
-	t.renderer_state = renderer_state
+	t.renderer_state = opts.renderer_state
 	t.renderer_wakeup = opts.renderer_wakeup
-	t.renderer_mailbox = renderer_mailbox
+	t.renderer_mailbox = opts.renderer_mailbox
 	t.surface_mailbox = opts.surface_mailbox
 	t.size = size
 	t.mailbox = Mailbox.init_spsc()!
@@ -596,9 +583,9 @@ pub fn (mut t Termio) resize(size renderer.Size) ! {
 	}
 
 	// Mail the renderer so that it can update the GPU and re-render.
-	t.renderer_mailbox.push(renderer.RendererMessage(renderer.ResizeMessage{
+	_ = t.renderer_mailbox.push(renderer.RendererMessage(renderer.ResizeMessage{
 		size: t.size
-	}))
+	}), datastruct.blocking_queue_forever)
 	t.renderer_wakeup.notify() or {}
 }
 
@@ -755,7 +742,8 @@ fn (mut t Termio) process_output_locked(buf []u8) {
 	now := i64(time.sys_mono_now())
 	if t.last_cursor_reset < 0 || (now - t.last_cursor_reset) > (500 * i64(time.millisecond)) {
 		t.last_cursor_reset = now
-		t.renderer_mailbox.push(renderer.RendererMessage(renderer.ResetCursorBlinkMessage{}))
+		_ = t.renderer_mailbox.push(renderer.RendererMessage(renderer.ResetCursorBlinkMessage{}),
+			datastruct.blocking_queue_instant)
 	}
 
 	// If the inspector is active, use Ghostty's slow path: process a byte at a

@@ -180,6 +180,7 @@ module renderer
 // --- Original Ghostty Comments End: src/renderer/Thread.zig
 import configpkg
 import crash
+import datastruct
 import internal_os
 import sync
 import time
@@ -188,6 +189,17 @@ import time
 const draw_interval = 8 // 120 FPS (milliseconds)
 const cursor_blink_interval_ms = 600 // milliseconds
 const renderer_mailbox_capacity = 64
+
+// The type used for sending messages to the IO thread. For now this is
+// hardcoded with a capacity. We can make this a comptime parameter in
+// the future if we want it configurable.
+pub type Mailbox = datastruct.BlockingQueue[RendererMessage]
+
+// create allocates the mailbox with its fixed source capacity. V generics have
+// no integer parameters, so the capacity is supplied here instead of the type.
+pub fn Mailbox.create() !&Mailbox {
+	return datastruct.BlockingQueue.create[RendererMessage](renderer_mailbox_capacity)!
+}
 
 // ThreadDerivedConfig holds configuration derived from the main config
 // that is needed by the renderer thread.
@@ -263,8 +275,9 @@ pub mut:
 	// Pointer to the shared state that is used to generate the final render.
 	state &RenderState = unsafe { nil }
 
-	// The mailbox that can be used to send this thread messages.
-	mailbox &RendererMailbox = unsafe { nil }
+	// The mailbox that can be used to send this thread messages. Note
+	// this is a blocking queue so if it is full you will get errors (or block).
+	mailbox &Mailbox = unsafe { nil }
 
 	// GTK requires GPU work on the application thread. This callback is the
 	// translated App.Mailbox redraw_surface message boundary used there.
@@ -305,97 +318,11 @@ pub mut:
 	stop_requested     bool
 }
 
-// The type used for sending messages to the renderer thread.
-pub struct RendererMailbox {
-pub mut:
-	queue []RendererMessage
-	mutex &sync.Mutex = unsafe { nil }
-	space &sync.Cond  = unsafe { nil }
-}
-
-pub fn RendererMailbox.create() &RendererMailbox {
-	mutex := sync.new_mutex()
-	return &RendererMailbox{
-		queue: []RendererMessage{cap: renderer_mailbox_capacity}
-		mutex: mutex
-		space: sync.new_cond(mutex)
-	}
-}
-
-pub fn (mut self RendererMailbox) destroy() {
-	if self.mutex == unsafe { nil } {
-		for msg in self.queue {
-			msg.deinit()
-		}
-		self.queue.clear()
-		return
-	}
-	self.mutex.lock()
-	for msg in self.queue {
-		msg.deinit()
-	}
-	self.queue.clear()
-	self.mutex.unlock()
-	self.mutex.destroy()
-}
-
-// Push a message to the mailbox.
-pub fn (mut self RendererMailbox) push(msg RendererMessage) int {
-	if self.mutex == unsafe { nil } {
-		self.mutex = sync.new_mutex()
-	}
-	self.mutex.lock()
-	defer {
-		self.mutex.unlock()
-	}
-	if self.queue.len >= renderer_mailbox_capacity {
-		return 0
-	}
-	self.queue << msg
-	return 1
-}
-
-// Pop a message from the mailbox.
-pub fn (mut self RendererMailbox) pop() ?RendererMessage {
-	if self.mutex == unsafe { nil } {
-		self.mutex = sync.new_mutex()
-	}
-	self.mutex.lock()
-	defer {
-		self.mutex.unlock()
-	}
-	if self.queue.len == 0 {
-		return none
-	}
-	msg := self.queue[0]
-	self.queue.delete(0)
-	if self.space != unsafe { nil } {
-		self.space.signal()
-	}
-	return msg
-}
-
-// Push a message, waiting until the renderer consumes queue space. Surface
-// control messages use Ghostty's forever timeout and therefore cannot drop.
-pub fn (mut self RendererMailbox) push_wait(msg RendererMessage) {
-	if self.mutex == unsafe { nil } {
-		self.mutex = sync.new_mutex()
-		self.space = sync.new_cond(self.mutex)
-	}
-	self.mutex.lock()
-	defer {
-		self.mutex.unlock()
-	}
-	for self.queue.len >= renderer_mailbox_capacity {
-		self.space.wait()
-	}
-	self.queue << msg
-}
-
 // Initialize the thread. This does not START the thread. This only sets
 // up all the internal state necessary prior to starting the thread.
 pub fn RendererThread.init(config &configpkg.Config, renderer_impl &Renderer, state &RenderState, app_redraw Wakeup) !RendererThread {
-	mut mailbox := RendererMailbox.create()
+	// The mailbox for messaging this thread
+	mut mailbox := Mailbox.create()!
 
 	mut result := RendererThread{
 		config:      ThreadDerivedConfig.init(config)
@@ -733,23 +660,6 @@ fn (mut self RendererThread) draw_timer_callback() {
 		self.draw_timer_armed = true
 		self.next_draw_at = time.sys_mono_now() + draw_interval_ns()
 	}
-}
-
-// send publishes a mailbox message and wakes the render loop. A full mailbox
-// is reported to the producer, matching Ghostty's bounded BlockingQueue.
-pub fn (mut self RendererThread) send(msg RendererMessage) bool {
-	if self.mailbox.push(msg) == 0 {
-		return false
-	}
-	self.request_wakeup()
-	return true
-}
-
-// send_wait publishes an undroppable surface-control message and wakes the
-// render loop after it has been enqueued.
-pub fn (mut self RendererThread) send_wait(msg RendererMessage) {
-	self.mailbox.push_wait(msg)
-	self.request_wakeup()
 }
 
 // wakeup coalesces frame rebuilds until the render loop observes the request.

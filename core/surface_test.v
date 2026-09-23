@@ -89,7 +89,22 @@ fn make_test_surface() Surface {
 		renderer_state: RendererState{
 			terminal_: &t
 		}
+		renderer_thread: make_test_renderer_thread()
 	}
+}
+
+// make_test_renderer_thread provides the mailbox and wakeup state a surface
+// sends to, without starting the renderer worker.
+fn make_test_renderer_thread() rendererpkg.RendererThread {
+	return rendererpkg.RendererThread{
+		mailbox: rendererpkg.Mailbox.create() or { panic(err) }
+		event: sync.new_semaphore()
+		event_mutex: sync.new_mutex()
+	}
+}
+
+fn pop_renderer_message(mut surface Surface) rendererpkg.RendererMessage {
+	return surface.renderer_thread.mailbox.pop() or { panic('missing renderer message') }
 }
 
 fn pop_surface_core_message(mut app App) SurfaceCoreMsg {
@@ -113,6 +128,7 @@ fn test_search_callback_routes_owned_results_and_ui_state() {
 	}
 	mut surface := Surface{
 		app: &app
+		renderer_thread: make_test_renderer_thread()
 	}
 
 	surface_search_event(searchpkg.Event{
@@ -120,6 +136,11 @@ fn test_search_callback_routes_owned_results_and_ui_state() {
 		viewport_matches: [highlight.Flattened.empty()]
 	}, voidptr(&surface))
 	assert app.mailbox.len() == 0
+	viewport := pop_renderer_message(mut surface)
+	assert viewport is rendererpkg.SearchViewportMatchesMessage
+	if viewport is rendererpkg.SearchViewportMatchesMessage {
+		assert viewport.matches.len == 1
+	}
 
 	surface_search_event(searchpkg.Event{
 		kind: .selected_match
@@ -128,6 +149,11 @@ fn test_search_callback_routes_owned_results_and_ui_state() {
 			highlight: highlight.Flattened.empty()
 		}
 	}, voidptr(&surface))
+	selected_render := pop_renderer_message(mut surface)
+	assert selected_render is rendererpkg.SearchSelectedMatchMessage
+	if selected_render is rendererpkg.SearchSelectedMatchMessage {
+		assert selected_render.match_ != none
+	}
 	selected := pop_surface_core_message(mut app)
 	assert voidptr(selected.surface) == voidptr(&surface)
 	assert selected.message.kind == .search_selected
@@ -142,6 +168,17 @@ fn test_search_callback_routes_owned_results_and_ui_state() {
 	assert total.message.search_total? == 9
 
 	surface_search_event(searchpkg.Event{ kind: .quit }, voidptr(&surface))
+	cleared_match := pop_renderer_message(mut surface)
+	assert cleared_match is rendererpkg.SearchSelectedMatchMessage
+	if cleared_match is rendererpkg.SearchSelectedMatchMessage {
+		assert cleared_match.match_ == none
+	}
+	cleared_viewport := pop_renderer_message(mut surface)
+	assert cleared_viewport is rendererpkg.SearchViewportMatchesMessage
+	if cleared_viewport is rendererpkg.SearchViewportMatchesMessage {
+		assert cleared_viewport.matches.len == 0
+	}
+	assert surface.renderer_thread.mailbox.pop() == none
 	cleared_total := pop_surface_core_message(mut app)
 	cleared_selected := pop_surface_core_message(mut app)
 	assert cleared_total.message.kind == .search_total

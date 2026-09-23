@@ -3359,11 +3359,8 @@ pub:
 }
 
 // Compatibility names retained for translated termio callers. These point at
-// the actual shared render state and bounded renderer mailbox rather than a
-// second, inert implementation.
+// the actual shared render state rather than a second, inert implementation.
 pub type State = RenderState
-
-pub type Mailbox = RendererMailbox
 
 pub type Message = RendererMessage
 

@@ -3,6 +3,7 @@ module renderer
 import sync
 import time
 import configpkg
+import datastruct
 import internal_os
 
 struct RedrawCapture {
@@ -16,19 +17,20 @@ fn capture_redraw(data voidptr) {
 }
 
 fn test_renderer_mailbox_is_bounded_and_fifo() {
-	mut mailbox := RendererMailbox.create()
+	mut mailbox := Mailbox.create()!
 	defer {
 		mailbox.destroy()
 	}
 
+	assert renderer_mailbox_capacity == 64
 	for i in 0 .. renderer_mailbox_capacity {
 		assert mailbox.push(RendererMessage(InspectorMessage{
 			active: i % 2 == 0
-		})) == 1
+		}), datastruct.blocking_queue_instant) == u32(i + 1)
 	}
 	assert mailbox.push(RendererMessage(InspectorMessage{
 		active: true
-	})) == 0
+	}), datastruct.blocking_queue_instant) == 0
 
 	for i in 0 .. renderer_mailbox_capacity {
 		msg := mailbox.pop() or {

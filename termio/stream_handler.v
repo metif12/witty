@@ -139,7 +139,7 @@ fn (mut self StreamHandler) renderer_message_writer(msg renderer.RendererMessage
 	// See termio.Mailbox.send for more details on how this works.
 
 	// Try instant first. If it works then we can return.
-	if self.renderer_mailbox.push(msg) > 0 {
+	if self.renderer_mailbox.push(msg, datastruct.blocking_queue_instant) > 0 {
 		return
 	}
 
@@ -148,8 +148,13 @@ fn (mut self StreamHandler) renderer_message_writer(msg renderer.RendererMessage
 	// and then try again.
 	self.renderer_state.mutex.unlock()
 	defer { self.renderer_state.mutex.lock() }
-	self.renderer_wakeup.notify() or {}
-	self.renderer_mailbox.push(msg)
+	self.renderer_wakeup.notify() or {
+		// This is an EXTREMELY unlikely case. We still don't return
+		// and attempt to send the message because its most likely
+		// that everything is fine, but log in case a freeze happens.
+		eprintln('failed to notify renderer, may deadlock err=${err}')
+	}
+	_ = self.renderer_mailbox.push(msg, datastruct.blocking_queue_forever)
 }
 
 // vt dispatches a single stream event from the VT parser to the
