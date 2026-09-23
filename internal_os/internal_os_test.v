@@ -299,7 +299,7 @@ fn test_home_preserves_environment_value_and_expand_home_rules() {
 	}
 	os.setenv('HOME', '/home/witty-test/', true)
 
-	assert (home() or { '' }) == '/home/witty-test/'
+	assert (home() or { panic(err) }).value? == '/home/witty-test/'
 	assert expand_home('~/Downloads/shader.glsl')! == '/home/witty-test//Downloads/shader.glsl'
 	assert expand_home('~')! == '~'
 	assert expand_home('~abc/')! == '~abc/'
@@ -638,5 +638,18 @@ fn test_cgroup_write_existing_does_not_create_files() {
 			assert false, 'write-only cgroup paths must already exist'
 		}
 		assert !os.exists(missing)
+	}
+}
+
+fn test_home_uses_file_manager_without_home_on_macos() ! {
+	$if macos {
+		previous := os.getenv_opt('HOME')
+		defer {
+			if value := previous {
+				os.setenv('HOME', value, true)
+			}
+		}
+		os.unsetenv('HOME')
+		assert home()!.value? == home_macos()?
 	}
 }

@@ -213,7 +213,10 @@ fn setup_bash(command configpkg.Command, resource_dir string, mut env map[string
 	// In POSIX mode, HISTFILE defaults to ~/.sh_history, so unless we're
 	// staying in POSIX mode (--posix), change it back to ~/.bash_history.
 	if 'HISTFILE' !in env {
-		if h := internal_os.home() {
+		// Ghostty propagates a home lookup failure from setupBash; this
+		// optional-only setup contract reports it as no integration.
+		home_result := internal_os.home() or { return none }
+		if h := home_result.value {
 			env['HISTFILE'] = '${h}/.bash_history'
 			env['GHOSTTY_BASH_UNEXPORT_HISTFILE'] = '1'
 		}

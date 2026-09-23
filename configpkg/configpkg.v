@@ -9875,10 +9875,11 @@ pub fn (mut c Config) finalize() ! {
 
 			$if windows {
 				if c.command == none {
+					eprintln('no default shell found, will default to using cmd')
 					c.command = Command(ShellCmd{ shell: 'cmd.exe' })
 				}
 				if wd_home {
-					if home := internal_os.home() {
+					if home := internal_os.home()!.value {
 						c.working_directory = home
 					}
 				}

@@ -40,8 +40,12 @@ fn xdg_dir(opts Options, env_name string, windows_env_name string, default_subdi
 		return env_dir.clone()
 	}
 
-	home_dir := home() or { return error('no home directory') }
-	return join_xdg(home_dir, default_subdir, opts.subdir)
+	// Get our home dir
+	if home_dir := home()!.value {
+		return join_xdg(home_dir, default_subdir, opts.subdir)
+	}
+
+	return error('NoHomeDir')
 }
 
 fn join_xdg(home_dir string, default_subdir string, subdir ?string) string {

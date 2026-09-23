@@ -376,56 +376,94 @@ pub fn is_flatpak() bool {
 	return os.exists('/.flatpak-info')
 }
 
-// home returns the user's home directory.
-pub fn home() ?string {
+// HomeResult preserves Ghostty's error-union-of-optional `home` result.
+pub struct HomeResult {
+pub:
+	value ?string
+}
+
+// Determine the home directory for the currently executing user. This
+// is generally an expensive process so the value should be cached.
+pub fn home() !HomeResult {
 	$if windows {
-		drive := getenv('HOMEDRIVE') or { return none }
-		path := getenv('HOMEPATH') or { return none }
-		return drive + path
+		return home_windows()
 	} $else $if ios {
-		return none
+		// iOS doesn't have a user-writable home directory
+		return HomeResult{}
 	} $else {
-
-		// HOME wins exactly as supplied, including an empty value or trailing
-		// separator. This is observable in expand_home.
-		if value := getenv('HOME') {
-			return value
-		}
-
-		$if macos {
-			// Multi-user macOS setups require NSFileManager rather than passwd.
-			if value := home_macos() {
-				return value
-			}
-		}
-
-		// getpwuid_r is the portable fallback on every supported Unix host.
-		entry := get_passwd() or { PasswdEntry{} }
-		if value := entry.home {
-			return value
-		}
-
-		// Last resort: ask the login shell to change to its home directory.
-		result := os.execute('/bin/sh -c "cd && pwd"')
-		if result.exit_code == 0 {
-			return result.output.trim(' \n\t')
-		}
-		return none
+		return home_unix()!
 	}
 }
 
-// expand_home expands only paths beginning with "~/". A lone tilde and
-// named-user forms such as "~root/" are deliberately left untouched.
+fn home_unix() !HomeResult {
+	// First: if we have a HOME env var, then we use that.
+	if result := getenv('HOME') {
+		return HomeResult{
+			value: result
+		}
+	}
+
+	// On macOS: [NSFileManager defaultManager].homeDirectoryForCurrentUser.path
+	$if macos {
+		return HomeResult{
+			value: home_macos()
+		}
+	}
+
+	// We try passwd. This doesn't work on multi-user mac but we try it anyways.
+	pw := get_passwd()!
+	if result := pw.home {
+		return HomeResult{
+			value: result
+		}
+	}
+
+	// If all else fails, have the shell tell us...
+	run := os.execute('/bin/sh -c "cd && pwd"')
+	if run.exit_code == -1 {
+		return error(run.output)
+	}
+	if run.exit_code == 0 {
+		return HomeResult{
+			value: trim_space(run.output)
+		}
+	}
+
+	return HomeResult{}
+}
+
+fn home_windows() HomeResult {
+	drive := getenv('HOMEDRIVE') or { return HomeResult{} }
+	homepath := getenv('HOMEPATH') or { return HomeResult{} }
+	return HomeResult{
+		value: drive + homepath
+	}
+}
+
+fn trim_space(input string) string {
+	return input.trim(' \n\t')
+}
+
+// Expands a path that starts with a tilde (~) to the home directory of
+// the current user.
+//
+// Errors if `home` fails.
 pub fn expand_home(path string) !string {
 	$if ios {
 		return path
 	} $else {
-		if !path.starts_with('~/') {
-			return path
-		}
-		home_dir := home() or { return error('home detection failed') }
-		return home_dir + path[1..]
+		return expand_home_unix(path)!
 	}
+}
+
+fn expand_home_unix(path string) !string {
+	if !path.starts_with('~/') {
+		return path
+	}
+	home_result := home() or { return error('HomeDetectionFailed') }
+	home_dir := home_result.value or { return error('HomeDetectionFailed') }
+	rest := path[1..] // Skip the ~
+	return home_dir + rest
 }
 
 // PathExpandResult preserves Ghostty's error-union-of-optional return in V,
@@ -513,7 +551,7 @@ pub fn get_passwd() !PasswdEntry {
 		h := home() or { return PasswdEntry{ name: name } }
 		return PasswdEntry{
 			name: name
-			home: h
+			home: h.value
 		}
 	}
 
