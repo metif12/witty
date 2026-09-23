@@ -2338,10 +2338,7 @@ pub fn (mut self Surface) deinit() {
 	self.io_thread.deinit()
 	self.io.deinit()
 	self.renderer_state.terminal_ = unsafe { nil }
-	if self.renderer_state.mutex != unsafe { nil } {
-		self.renderer_state.mutex.destroy()
-		self.renderer_state.mutex = unsafe { nil }
-	}
+	self.renderer_state.mutex.destroy()
 
 	// Clean up inspector
 	if mut insp := self.inspector {
@@ -2628,10 +2625,7 @@ pub fn (mut self Surface) render_inspector(context_handle voidptr) {
 		return
 	}
 	mut insp := self.inspector or { return }
-	locked := self.renderer_state.mutex != unsafe { nil }
-	if locked {
-		self.renderer_state.mutex.lock()
-	}
+	self.renderer_state.mutex.lock()
 
 	mut hover_grid_x := u32(0)
 	mut hover_grid_y := u32(0)
@@ -2683,9 +2677,7 @@ pub fn (mut self Surface) render_inspector(context_handle voidptr) {
 		left_click_xpos: self.mouse.left_click_xpos
 		left_click_ypos: self.mouse.left_click_ypos
 	}, mut term)
-	if locked {
-		self.renderer_state.mutex.unlock()
-	}
+	self.renderer_state.mutex.unlock()
 	self.queue_render() or {}
 }
 
@@ -2761,28 +2753,18 @@ pub fn (mut self Surface) update_config(config &Config) ! {
 
 // has_selection returns true if the terminal has a selection.
 pub fn (self &Surface) has_selection() bool {
-	locked := self.renderer_state.mutex != unsafe { nil }
-	if locked {
-		self.renderer_state.mutex.lock()
-	}
+	self.renderer_state.mutex.lock()
 	defer {
-		if locked {
-			self.renderer_state.mutex.unlock()
-		}
+		self.renderer_state.mutex.unlock()
 	}
 	return self.renderer_state.terminal_.screens.active.selection != none
 }
 
 // selection_string returns the selected text.
 pub fn (self &Surface) selection_string() ?string {
-	locked := self.renderer_state.mutex != unsafe { nil }
-	if locked {
-		self.renderer_state.mutex.lock()
-	}
+	self.renderer_state.mutex.lock()
 	defer {
-		if locked {
-			self.renderer_state.mutex.unlock()
-		}
+		self.renderer_state.mutex.unlock()
 	}
 	sel := self.renderer_state.terminal_.screens.active.selection or { return none }
 	text := self.renderer_state.terminal_.screens.active.selection_string(terminal.SelectionString{
@@ -2796,14 +2778,9 @@ pub fn (self &Surface) selection_string() ?string {
 
 // pwd returns the current working directory of the terminal.
 pub fn (self &Surface) pwd() ?string {
-	locked := self.renderer_state.mutex != unsafe { nil }
-	if locked {
-		self.renderer_state.mutex.lock()
-	}
+	self.renderer_state.mutex.lock()
 	defer {
-		if locked {
-			self.renderer_state.mutex.unlock()
-		}
+		self.renderer_state.mutex.unlock()
 	}
 	pwd := self.renderer_state.terminal_.get_pwd() or { return none }
 	// Termio can replace the terminal-owned value immediately after the lock is
@@ -2813,19 +2790,14 @@ pub fn (self &Surface) pwd() ?string {
 
 // ime_point returns the x/y coordinate of where the IME keyboard should be rendered.
 pub fn (self &Surface) ime_point() apprt.IMEPos {
-	locked := self.renderer_state.mutex != unsafe { nil }
-	if locked {
-		self.renderer_state.mutex.lock()
-	}
+	self.renderer_state.mutex.lock()
 	cursor := self.renderer_state.terminal_.screens.active.cursor
 	preedit_width := if p := self.renderer_state.preedit {
 		u32(p.width())
 	} else {
 		u32(0)
 	}
-	if locked {
-		self.renderer_state.mutex.unlock()
-	}
+	self.renderer_state.mutex.unlock()
 
 	content_scale := self.rt_surface.get_content_scale() or {
 		apprt.ContentScale{ x: 1.0, y: 1.0 }
@@ -2954,14 +2926,9 @@ pub fn (mut self Surface) preedit_callback(preedit ?string) ! {
 		crash.clear_thread_state()
 	}
 
-	locked := self.renderer_state.mutex != unsafe { nil }
-	if locked {
-		self.renderer_state.mutex.lock()
-	}
+	self.renderer_state.mutex.lock()
 	defer {
-		if locked {
-			self.renderer_state.mutex.unlock()
-		}
+		self.renderer_state.mutex.unlock()
 	}
 
 	// Clear selection when preedit changes (if configured)
@@ -3081,14 +3048,9 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 
 	// Check if KAM (keyboard action mode) is enabled
 	if self.config.vt_kam_allowed {
-		locked := self.renderer_state.mutex != unsafe { nil }
-		if locked {
-			self.renderer_state.mutex.lock()
-		}
+		self.renderer_state.mutex.lock()
 		disabled := self.renderer_state.terminal_.modes.get(.disable_keyboard)
-		if locked {
-			self.renderer_state.mutex.unlock()
-		}
+		self.renderer_state.mutex.unlock()
 		if disabled {
 			return .consumed
 		}
@@ -3107,14 +3069,9 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 		if self.renderer_state.terminal_.flags.mouse_event() == .none
 			|| (self.mouse.mods.shift() && !self.mouse_shift_capture(false)) {
 			if pos := self.rt_surface.get_cursor_pos() {
-				locked := self.renderer_state.mutex != unsafe { nil }
-				if locked {
-					self.renderer_state.mutex.lock()
-				}
+				self.renderer_state.mutex.lock()
 				self.mouse_refresh_links(pos, self.pos_to_viewport(f64(pos.x), f64(pos.y)), self.mouse.over_link) or {}
-				if locked {
-					self.renderer_state.mutex.unlock()
-				}
+				self.renderer_state.mutex.unlock()
 			}
 		} else if !self.mouse.mods.shift() {
 			self.rt_app.perform_action(
@@ -3186,35 +3143,24 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 
 	// For non-modifier keys: clear selection and scroll to bottom
 	if !key_is_modifier(event.key) {
-		locked := self.renderer_state.mutex != unsafe { nil }
-		if locked {
-			self.renderer_state.mutex.lock()
-		}
+		self.renderer_state.mutex.lock()
 		if self.config.selection_clear_on_typing || event.key == .escape {
 			self.set_selection(none) or {
-				if locked {
-					self.renderer_state.mutex.unlock()
-				}
+				self.renderer_state.mutex.unlock()
 				return err
 			}
 		}
 		if self.config.scroll_to_bottom_keystroke {
 			self.renderer_state.terminal_.scroll_viewport(terminal.scroll_viewport_bottom) or {
-				if locked {
-					self.renderer_state.mutex.unlock()
-				}
+				self.renderer_state.mutex.unlock()
 				return err
 			}
 		}
 		self.queue_render() or {
-			if locked {
-				self.renderer_state.mutex.unlock()
-			}
+			self.renderer_state.mutex.unlock()
 			return err
 		}
-		if locked {
-			self.renderer_state.mutex.unlock()
-		}
+		self.renderer_state.mutex.unlock()
 	}
 
 	return .consumed
@@ -3308,14 +3254,9 @@ pub fn (mut self Surface) focus_callback(focused bool) ! {
 	self.show_mouse()
 
 	// Update terminal focus flag
-	locked := self.renderer_state.mutex != unsafe { nil }
-	if locked {
-		self.renderer_state.mutex.lock()
-	}
+	self.renderer_state.mutex.lock()
 	self.renderer_state.terminal_.flags.set_focused(focused)
-	if locked {
-		self.renderer_state.mutex.unlock()
-	}
+	self.renderer_state.mutex.unlock()
 
 	// Notify IO thread
 	self.queue_io(termiopkg.Message.focused_msg(focused))
@@ -3393,14 +3334,9 @@ pub fn (mut self Surface) scroll_callback(xoff f64, yoff f64, scroll_mods input.
 	}
 
 	{
-		locked := self.renderer_state.mutex != unsafe { nil }
-		if locked {
-			self.renderer_state.mutex.lock()
-		}
+		self.renderer_state.mutex.lock()
 		defer {
-			if locked {
-				self.renderer_state.mutex.unlock()
-			}
+			self.renderer_state.mutex.unlock()
 		}
 
 		if self.is_mouse_reporting() {
@@ -3545,22 +3481,15 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 			// when the left button is released. This avoids the clipboard
 			// being updated on every mouse move which would be noisy.
 			if self.config.copy_on_select != .false_ {
-				locked := self.renderer_state.mutex != unsafe { nil }
-				if locked {
-					self.renderer_state.mutex.lock()
-				}
+				self.renderer_state.mutex.lock()
 				if sel := self.renderer_state.terminal_.screens.active.selection {
 					copy := terminal.Selection.init(sel.start(), sel.end(), sel.rectangle)
 					self.set_selection(copy) or {
-						if locked {
-							self.renderer_state.mutex.unlock()
-						}
+						self.renderer_state.mutex.unlock()
 						return err
 					}
 				}
-				if locked {
-					self.renderer_state.mutex.unlock()
-				}
+				self.renderer_state.mutex.unlock()
 			}
 
 			// Handle link clicking. We do this before mouse reporting or any
@@ -3568,19 +3497,12 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 			// swallow the event.
 			if self.mouse.over_link {
 				pos := self.rt_surface.get_cursor_pos()!
-				locked := self.renderer_state.mutex != unsafe { nil }
-				if locked {
-					self.renderer_state.mutex.lock()
-				}
+				self.renderer_state.mutex.lock()
 				processed := self.process_links(pos) or {
-					if locked {
-						self.renderer_state.mutex.unlock()
-					}
+					self.renderer_state.mutex.unlock()
 					false
 				}
-				if locked {
-					self.renderer_state.mutex.unlock()
-				}
+				self.renderer_state.mutex.unlock()
 				if processed {
 					return true
 				}
@@ -3601,14 +3523,9 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 	// Report mouse events if enabled. Mouse-report state and selection share
 	// the renderer mutex with the IO and renderer threads.
 	{
-		locked := self.renderer_state.mutex != unsafe { nil }
-		if locked {
-			self.renderer_state.mutex.lock()
-		}
+		self.renderer_state.mutex.lock()
 		defer {
-			if locked {
-				self.renderer_state.mutex.unlock()
-			}
+			self.renderer_state.mutex.unlock()
 		}
 		if self.is_mouse_reporting() {
 			// If shift is pressed and we aren't allowed to capture it, then we
@@ -3641,14 +3558,9 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 
 	// For left button clicks we always record info for selection/highlight.
 	if button == .left && is_press {
-		locked := self.renderer_state.mutex != unsafe { nil }
-		if locked {
-			self.renderer_state.mutex.lock()
-		}
+		self.renderer_state.mutex.lock()
 		defer {
-			if locked {
-				self.renderer_state.mutex.unlock()
-			}
+			self.renderer_state.mutex.unlock()
 		}
 		mut screen := self.renderer_state.terminal_.screens.active
 		pos := self.rt_surface.get_cursor_pos()!
@@ -3742,15 +3654,10 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 	// or link selection but deliberately leaves the event unconsumed so the
 	// application runtime can present its native menu.
 	if button == .right && is_press {
-		locked := self.renderer_state.mutex != unsafe { nil }
-		if locked {
-			self.renderer_state.mutex.lock()
-		}
+		self.renderer_state.mutex.lock()
 		mut screen := self.renderer_state.terminal_.screens.active
 		pos := self.rt_surface.get_cursor_pos() or {
-			if locked {
-				self.renderer_state.mutex.unlock()
-			}
+			self.renderer_state.mutex.unlock()
 			return err
 		}
 		vp := self.pos_to_viewport(f64(pos.x), f64(pos.y))
@@ -3759,102 +3666,72 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 			x: vp.x
 			y: vp.y
 		}) or {
-			if locked {
-				self.renderer_state.mutex.unlock()
-			}
+			self.renderer_state.mutex.unlock()
 			return false
 		}
 
 		match self.config.right_click_action {
 			.ignore {
-				if locked {
-					self.renderer_state.mutex.unlock()
-				}
+				self.renderer_state.mutex.unlock()
 				return true
 			}
 			.context_menu {
 				if prev := screen.selection {
 					if prev.contains(screen, pin) {
-						if locked {
-							self.renderer_state.mutex.unlock()
-						}
+						self.renderer_state.mutex.unlock()
 						return false
 					}
 				}
 				if link := self.link_at_pos(pos) {
 					selection := terminal.Selection.init(link.selection.start(), link.selection.end(), link.selection.rectangle)
 					self.set_selection(selection) or {
-						if locked {
-							self.renderer_state.mutex.unlock()
-						}
+						self.renderer_state.mutex.unlock()
 						return err
 					}
 				} else if sel := screen.select_word(pin, self.config.selection_word_chars) {
 					selection := terminal.Selection.init(sel.start(), sel.end(), sel.rectangle)
 					self.set_selection(selection) or {
-						if locked {
-							self.renderer_state.mutex.unlock()
-						}
+						self.renderer_state.mutex.unlock()
 						return err
 					}
 				}
 				self.queue_render() or {
-					if locked {
-						self.renderer_state.mutex.unlock()
-					}
+					self.renderer_state.mutex.unlock()
 					return err
 				}
-				if locked {
-					self.renderer_state.mutex.unlock()
-				}
+				self.renderer_state.mutex.unlock()
 				return false
 			}
 			.copy, .copy_or_paste {
 				if sel := screen.selection {
 					self.copy_selection_to_clipboards(sel, [.standard], .mixed) or {
-						if locked {
-							self.renderer_state.mutex.unlock()
-						}
+						self.renderer_state.mutex.unlock()
 						return err
 					}
 					self.set_selection(none) or {
-						if locked {
-							self.renderer_state.mutex.unlock()
-						}
+						self.renderer_state.mutex.unlock()
 						return err
 					}
 					self.queue_render() or {
-						if locked {
-							self.renderer_state.mutex.unlock()
-						}
+						self.renderer_state.mutex.unlock()
 						return err
 					}
-					if locked {
-						self.renderer_state.mutex.unlock()
-					}
+					self.renderer_state.mutex.unlock()
 					return true
 				}
 				if self.config.right_click_action == .copy {
 					self.set_selection(none) or {
-						if locked {
-							self.renderer_state.mutex.unlock()
-						}
+						self.renderer_state.mutex.unlock()
 						return err
 					}
 					self.queue_render() or {
-						if locked {
-							self.renderer_state.mutex.unlock()
-						}
+						self.renderer_state.mutex.unlock()
 						return err
 					}
-					if locked {
-						self.renderer_state.mutex.unlock()
-					}
+					self.renderer_state.mutex.unlock()
 					return true
 				}
-				if locked {
-					self.renderer_state.mutex.unlock()
-				}
+				self.renderer_state.mutex.unlock()
 				self.start_clipboard_request(.standard, apprt.ClipboardRequest{
 					kind: .paste
 					clipboard: .standard
@@ -3863,20 +3740,14 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 			}
 			.paste {
 				self.set_selection(none) or {
-					if locked {
-						self.renderer_state.mutex.unlock()
-					}
+					self.renderer_state.mutex.unlock()
 					return err
 				}
 				self.queue_render() or {
-					if locked {
-						self.renderer_state.mutex.unlock()
-					}
+					self.renderer_state.mutex.unlock()
 					return err
 				}
-				if locked {
-					self.renderer_state.mutex.unlock()
-				}
+				self.renderer_state.mutex.unlock()
 				self.start_clipboard_request(.standard, apprt.ClipboardRequest{
 					kind: .paste
 					clipboard: .standard
@@ -3927,14 +3798,9 @@ pub fn (mut self Surface) cursor_pos_callback(pos apprt.CursorPos, mods ?input.M
 
 	over_link := self.mouse.over_link
 	self.mouse.over_link = false
-	locked := self.renderer_state.mutex != unsafe { nil }
-	if locked {
-		self.renderer_state.mutex.lock()
-	}
+	self.renderer_state.mutex.lock()
 	defer {
-		if locked {
-			self.renderer_state.mutex.unlock()
-		}
+		self.renderer_state.mutex.unlock()
 	}
 
 	if pos.y >= 1 && self.selection_scroll_active {
@@ -4029,14 +3895,9 @@ pub fn (mut self Surface) mouse_pressure_callback(stage input.PressureStage, pre
 
 	// On deep press with left mouse button, select word under cursor
 	if stage == .deep && self.mouse.click_state[int(input.MouseButton.left)] == .press {
-		locked := self.renderer_state.mutex != unsafe { nil }
-		if locked {
-			self.renderer_state.mutex.lock()
-		}
+		self.renderer_state.mutex.lock()
 		defer {
-			if locked {
-				self.renderer_state.mutex.unlock()
-			}
+			self.renderer_state.mutex.unlock()
 		}
 		pin := self.mouse.left_click_pin or { return }
 		if sel := self.renderer_state.terminal_.screens.active.select_word(pin, self.config.selection_word_chars) {
@@ -4153,14 +4014,9 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			self.queue_write_request(full_data)
 
 			// CSI/ESC triggers a scroll.
-			locked := self.renderer_state.mutex != unsafe { nil }
-			if locked {
-				self.renderer_state.mutex.lock()
-			}
+			self.renderer_state.mutex.lock()
 			self.scroll_to_bottom() or {}
-			if locked {
-				self.renderer_state.mutex.unlock()
-			}
+			self.renderer_state.mutex.unlock()
 		}
 		.text {
 			// Text actions use Zig string literal escapes, matching the config
@@ -4169,38 +4025,23 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			self.queue_write_request(parsed.bytes())
 
 			// Text triggers a scroll.
-			locked := self.renderer_state.mutex != unsafe { nil }
-			if locked {
-				self.renderer_state.mutex.lock()
-			}
+			self.renderer_state.mutex.lock()
 			self.scroll_to_bottom() or {}
-			if locked {
-				self.renderer_state.mutex.unlock()
-			}
+			self.renderer_state.mutex.unlock()
 		}
 		.cursor_key {
 			// DECCKM selects between the normal and application sequences.
-			locked := self.renderer_state.mutex != unsafe { nil }
-			if locked {
-				self.renderer_state.mutex.lock()
-			}
+			self.renderer_state.mutex.lock()
 			normal := !self.renderer_state.terminal_.modes.get(.cursor_keys)
 			self.scroll_to_bottom() or {}
-			if locked {
-				self.renderer_state.mutex.unlock()
-			}
+			self.renderer_state.mutex.unlock()
 			data := if normal { action.cursor_key.normal } else { action.cursor_key.application }
 			self.queue_io(termiopkg.Message.write_stable_msg(data))
 		}
 		.reset {
-			locked := self.renderer_state.mutex != unsafe { nil }
-			if locked {
-				self.renderer_state.mutex.lock()
-			}
+			self.renderer_state.mutex.lock()
 			defer {
-				if locked {
-					self.renderer_state.mutex.unlock()
-				}
+				self.renderer_state.mutex.unlock()
 			}
 			self.renderer_state.terminal_.full_reset()
 		}
@@ -4269,14 +4110,9 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			}
 		}
 		.copy_to_clipboard {
-			locked := self.renderer_state.mutex != unsafe { nil }
-			if locked {
-				self.renderer_state.mutex.lock()
-			}
+			self.renderer_state.mutex.lock()
 			defer {
-				if locked {
-					self.renderer_state.mutex.unlock()
-				}
+				self.renderer_state.mutex.unlock()
 			}
 			if sel := self.renderer_state.terminal_.screens.active.selection {
 				self.copy_selection_to_clipboards(sel, [.standard], unsafe {
@@ -4297,14 +4133,9 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				return false
 			}
 			pos := self.rt_surface.get_cursor_pos()!
-			locked := self.renderer_state.mutex != unsafe { nil }
-			if locked {
-				self.renderer_state.mutex.lock()
-			}
+			self.renderer_state.mutex.lock()
 			defer {
-				if locked {
-					self.renderer_state.mutex.unlock()
-				}
+				self.renderer_state.mutex.unlock()
 			}
 			link_info := self.link_at_pos(pos) or { return false }
 			url_text := match link_info.action {
@@ -4401,14 +4232,9 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 		.clear_screen {
 			// If the active screen is the alternate screen then clear screen
 			// does nothing, so we return false so the keybind is unconsumed.
-			locked := self.renderer_state.mutex != unsafe { nil }
-			if locked {
-				self.renderer_state.mutex.lock()
-			}
+			self.renderer_state.mutex.lock()
 			alternate := self.renderer_state.terminal_.screens.active_key == .alternate
-			if locked {
-				self.renderer_state.mutex.unlock()
-			}
+			self.renderer_state.mutex.unlock()
 			if alternate {
 				return false
 			}
@@ -4421,25 +4247,15 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			self.queue_io(termiopkg.Message.scroll_viewport_msg(terminal.scroll_viewport_bottom))
 		}
 		.scroll_to_row {
-			locked := self.renderer_state.mutex != unsafe { nil }
-			if locked {
-				self.renderer_state.mutex.lock()
-			}
+			self.renderer_state.mutex.lock()
 			self.renderer_state.terminal_.screens.active.scroll_to_row(usize(action.uint_param))
-			if locked {
-				self.renderer_state.mutex.unlock()
-			}
+			self.renderer_state.mutex.unlock()
 			self.queue_render()!
 		}
 		.scroll_to_selection {
-			locked := self.renderer_state.mutex != unsafe { nil }
-			if locked {
-				self.renderer_state.mutex.lock()
-			}
+			self.renderer_state.mutex.lock()
 			defer {
-				if locked {
-					self.renderer_state.mutex.unlock()
-				}
+				self.renderer_state.mutex.unlock()
 			}
 			sel := self.renderer_state.terminal_.screens.active.selection or { return false }
 			self.renderer_state.terminal_.screens.active.scroll_to_row(usize(sel.top_left(self.renderer_state.terminal_.screens.active).y))
@@ -4646,14 +4462,9 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			)!
 		}
 		.select_all {
-			locked := self.renderer_state.mutex != unsafe { nil }
-			if locked {
-				self.renderer_state.mutex.lock()
-			}
+			self.renderer_state.mutex.lock()
 			defer {
-				if locked {
-					self.renderer_state.mutex.unlock()
-				}
+				self.renderer_state.mutex.unlock()
 			}
 			if sel := self.renderer_state.terminal_.screens.active.select_all() {
 				self.set_selection(sel)!
@@ -4710,14 +4521,9 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			self.end_key_sequence(.flush, .retain)
 		}
 		.adjust_selection {
-			locked := self.renderer_state.mutex != unsafe { nil }
-			if locked {
-				self.renderer_state.mutex.lock()
-			}
+			self.renderer_state.mutex.lock()
 			defer {
-				if locked {
-					self.renderer_state.mutex.unlock()
-				}
+				self.renderer_state.mutex.unlock()
 			}
 			mut screen := self.renderer_state.terminal_.screens.active
 			mut sel := screen.selection or { return false }
@@ -4937,17 +4743,12 @@ fn (mut self Surface) mods_changed(mods input.Mods) {
 	self.mouse.mods = mods.binding()
 
 	// Update renderer mouse mods for link highlighting
-	locked := self.renderer_state.mutex != unsafe { nil }
-	if locked {
-		self.renderer_state.mutex.lock()
-	}
+	self.renderer_state.mutex.lock()
 	self.renderer_state.mouse.mods = self.mouse_mods_with_capture(self.mouse.mods)
 
 	// Force screen rebuild to update link highlight state
 	self.renderer_state.terminal_.flags.set_dirty_clear(true)
-	if locked {
-		self.renderer_state.mutex.unlock()
-	}
+	self.renderer_state.mutex.unlock()
 
 	self.queue_render() or {}
 }
@@ -5230,12 +5031,11 @@ fn (self &Surface) mouse_shift_capture(do_lock bool) bool {
 		.false_, .true_ {}
 	}
 
-	locked := do_lock && self.renderer_state.mutex != unsafe { nil }
-	if locked {
+	if do_lock {
 		self.renderer_state.mutex.lock()
 	}
 	defer {
-		if locked {
+		if do_lock {
 			self.renderer_state.mutex.unlock()
 		}
 	}
@@ -5255,14 +5055,9 @@ fn (self &Surface) mouse_shift_capture(do_lock bool) bool {
 }
 
 pub fn (mut self Surface) mouse_captured() bool {
-	locked := self.renderer_state.mutex != unsafe { nil }
-	if locked {
-		self.renderer_state.mutex.lock()
-	}
+	self.renderer_state.mutex.lock()
 	defer {
-		if locked {
-			self.renderer_state.mutex.unlock()
-		}
+		self.renderer_state.mutex.unlock()
 	}
 	return self.renderer_state.terminal_.flags.mouse_event() != .none
 }
@@ -5446,10 +5241,7 @@ fn (mut self Surface) child_exited_handler(runtime_ms u32, exit_code u32) {
 		false
 	}
 	if !shown {
-		locked := self.renderer_state.mutex != unsafe { nil }
-		if locked {
-			self.renderer_state.mutex.lock()
-		}
+		self.renderer_state.mutex.lock()
 		mut t := self.renderer_state.terminal_
 		if !isnil(t) {
 			t.carriage_return()
@@ -5459,9 +5251,7 @@ fn (mut self Surface) child_exited_handler(runtime_ms u32, exit_code u32) {
 			t.modes.set(.disable_keyboard, false)
 			t.screens.active.kitty_keyboard.set(.set_, terminal.key_flags_disabled)
 		}
-		if locked {
-			self.renderer_state.mutex.unlock()
-		}
+		self.renderer_state.mutex.unlock()
 	}
 
 	if !self.config.wait_after_command {
@@ -5472,14 +5262,9 @@ fn (mut self Surface) child_exited_handler(runtime_ms u32, exit_code u32) {
 // child_exited_abnormally writes Ghostty's detailed launch-failure report into
 // the terminal when the application runtime cannot show a native banner.
 fn (mut self Surface) child_exited_abnormally(info apprt.ChildExited) ! {
-	locked := self.renderer_state.mutex != unsafe { nil }
-	if locked {
-		self.renderer_state.mutex.lock()
-	}
+	self.renderer_state.mutex.lock()
 	defer {
-		if locked {
-			self.renderer_state.mutex.unlock()
-		}
+		self.renderer_state.mutex.unlock()
 	}
 	mut t := self.renderer_state.terminal_
 	if isnil(t) {
@@ -5531,21 +5316,14 @@ fn (mut self Surface) child_exited_abnormally(info apprt.ChildExited) ! {
 }
 
 fn (mut self Surface) password_input(v bool) ! {
-	locked := self.renderer_state.mutex != unsafe { nil }
-	if locked {
-		self.renderer_state.mutex.lock()
-	}
+	self.renderer_state.mutex.lock()
 	// Check if state actually changed
 	if self.renderer_state.terminal_.flags.password_input() == v {
-		if locked {
-			self.renderer_state.mutex.unlock()
-		}
+		self.renderer_state.mutex.unlock()
 		return
 	}
 	self.renderer_state.terminal_.flags.set_password_input(v)
-	if locked {
-		self.renderer_state.mutex.unlock()
-	}
+	self.renderer_state.mutex.unlock()
 
 	// Notify runtime for secure input handling (e.g. macOS SecureInput)
 	self.rt_app.perform_action(
@@ -5788,14 +5566,9 @@ fn (mut self Surface) encode_key(event KeyEvent) ?termiopkg.WriteReq {
 }
 
 fn (mut self Surface) encode_key_opts() input.Options {
-	locked := self.renderer_state.mutex != unsafe { nil }
-	if locked {
-		self.renderer_state.mutex.lock()
-	}
+	self.renderer_state.mutex.lock()
 	defer {
-		if locked {
-			self.renderer_state.mutex.unlock()
-		}
+		self.renderer_state.mutex.unlock()
 	}
 	t := self.renderer_state.terminal_
 	mut opts := input.Options.from_terminal(t)
@@ -5822,14 +5595,9 @@ fn (mut self Surface) selection_scroll_tick() ! {
 	pos := self.rt_surface.get_cursor_pos()!
 	pos_vp := self.pos_to_viewport(f64(pos.x), f64(pos.y))
 	delta := if pos.y < 0 { isize(-1) } else { isize(1) }
-	locked := self.renderer_state.mutex != unsafe { nil }
-	if locked {
-		self.renderer_state.mutex.lock()
-	}
+	self.renderer_state.mutex.lock()
 	defer {
-		if locked {
-			self.renderer_state.mutex.unlock()
-		}
+		self.renderer_state.mutex.unlock()
 	}
 
 	// A stored click pin belongs to the screen it was created for. Stop the
@@ -5907,10 +5675,7 @@ fn (self &Surface) osc8_uri(pin Pin) ?string {
 }
 
 fn (mut self Surface) write_screen_file(loc WriteScreenLoc, write_screen input.WriteScreen) ! {
-	locked := self.renderer_state.mutex != unsafe { nil }
-	if locked {
-		self.renderer_state.mutex.lock()
-	}
+	self.renderer_state.mutex.lock()
 	screen := self.renderer_state.terminal_.screens.active
 	pages := &screen.pages
 	sel := match loc {
@@ -5918,32 +5683,24 @@ fn (mut self Surface) write_screen_file(loc WriteScreenLoc, write_screen input.W
 			// We do not support this for alternate screens because they
 			// don't have scrollback anyways.
 			if self.renderer_state.terminal_.screens.active_key == .alternate {
-				if locked {
-					self.renderer_state.mutex.unlock()
-				}
+				self.renderer_state.mutex.unlock()
 				return
 			}
 			terminal.Selection.init(pages.get_top_left(.history), pages.get_bottom_right(.history) or {
-				if locked {
-					self.renderer_state.mutex.unlock()
-				}
+				self.renderer_state.mutex.unlock()
 				return
 			}, false)
 		}
 		.screen {
 			terminal.Selection.init(pages.get_top_left(.screen), pages.get_bottom_right(.screen) or {
-				if locked {
-					self.renderer_state.mutex.unlock()
-				}
+				self.renderer_state.mutex.unlock()
 				return
 			}, false)
 		}
 		.selection {
 			self.renderer_state.terminal_.screens.active.selection or {
 				// If we have no selection we have no data, do nothing.
-				if locked {
-					self.renderer_state.mutex.unlock()
-				}
+				self.renderer_state.mutex.unlock()
 				return
 			}
 		}
@@ -5973,9 +5730,7 @@ fn (mut self Surface) write_screen_file(loc WriteScreenLoc, write_screen input.W
 		sel: sel.ordered(screen, .forward)
 	})
 	content := formatter.format()
-	if locked {
-		self.renderer_state.mutex.unlock()
-	}
+	self.renderer_state.mutex.unlock()
 	os.write_file(tmp_path, content)!
 
 	// Act on the written file per the action.
@@ -6004,10 +5759,7 @@ fn (mut self Surface) complete_clipboard_paste(data string, allow_unsafe bool) !
 		return
 	}
 
-	locked := self.renderer_state.mutex != unsafe { nil }
-	if locked {
-		self.renderer_state.mutex.lock()
-	}
+	self.renderer_state.mutex.lock()
 	paste_opts := input.PasteOptions.from_terminal(self.renderer_state.terminal_)
 	if self.config.clipboard_paste_protection && !allow_unsafe {
 		unsafe_paste := if paste_opts.bracketed {
@@ -6017,18 +5769,14 @@ fn (mut self Surface) complete_clipboard_paste(data string, allow_unsafe bool) !
 			!input.is_safe(data)
 		}
 		if unsafe_paste {
-			if locked {
-				self.renderer_state.mutex.unlock()
-			}
+			self.renderer_state.mutex.unlock()
 			return error('UnsafePaste')
 		}
 	}
 
 	// Scroll to bottom before pasting
 	self.scroll_to_bottom() or {}
-	if locked {
-		self.renderer_state.mutex.unlock()
-	}
+	self.renderer_state.mutex.unlock()
 
 	mut encoded := input.PasteEncodeResult{}
 	if result := input.paste_encode(data, paste_opts) {
@@ -6271,14 +6019,9 @@ fn (mut self Surface) maybe_prompt_click() !bool {
 	if !self.config.cursor_click_to_move {
 		return false
 	}
-	locked := self.renderer_state.mutex != unsafe { nil }
-	if locked {
-		self.renderer_state.mutex.lock()
-	}
+	self.renderer_state.mutex.lock()
 	defer {
-		if locked {
-			self.renderer_state.mutex.unlock()
-		}
+		self.renderer_state.mutex.unlock()
 	}
 	t := self.renderer_state.terminal_
 	screen := t.screens.active
@@ -6381,14 +6124,9 @@ fn (self &Surface) resolve_path_for_opening(path string) ?string {
 }
 
 pub fn (mut self Surface) dump_text(sel TermSelection) !Text {
-	locked := self.renderer_state.mutex != unsafe { nil }
-	if locked {
-		self.renderer_state.mutex.lock()
-	}
+	self.renderer_state.mutex.lock()
 	defer {
-		if locked {
-			self.renderer_state.mutex.unlock()
-		}
+		self.renderer_state.mutex.unlock()
 	}
 	return self.dump_text_locked(sel)
 }

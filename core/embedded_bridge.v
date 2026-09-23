@@ -568,16 +568,12 @@ fn bridge_surface_resolve_selection(ptr voidptr, tl_tag int, tl_coord_tag int, t
 
 fn bridge_surface_lock(ptr voidptr) {
 	self := unsafe { &EmbeddedSurfaceCore(ptr) }
-	if self.surface.renderer_state.mutex != unsafe { nil } {
-		self.surface.renderer_state.mutex.lock()
-	}
+	self.surface.renderer_state.mutex.lock()
 }
 
 fn bridge_surface_unlock(ptr voidptr) {
 	self := unsafe { &EmbeddedSurfaceCore(ptr) }
-	if self.surface.renderer_state.mutex != unsafe { nil } {
-		self.surface.renderer_state.mutex.unlock()
-	}
+	self.surface.renderer_state.mutex.unlock()
 }
 
 fn bridge_surface_mouse_captured(ptr voidptr) bool {

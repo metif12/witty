@@ -87,6 +87,7 @@ fn make_test_surface() Surface {
 	mut t := terminal.Terminal.init(terminal.Options{ cols: 80, rows: 24 }) or { panic(err) }
 	return Surface{
 		renderer_state: RendererState{
+			mutex:     sync.new_mutex()
 			terminal_: &t
 		}
 		renderer_thread: make_test_renderer_thread()
