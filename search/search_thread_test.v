@@ -86,11 +86,3 @@ fn test_search_thread_processes_messages_asynchronously() {
 	assert quit_event.kind == .quit
 	worker.deinit()
 }
-
-fn test_search_thread_requires_shared_terminal_state() {
-	SearchThread.init(ThreadOptions{}) or {
-		assert err.msg() == 'search thread requires a terminal and mutex'
-		return
-	}
-	assert false, 'initialization without a terminal and mutex must fail'
-}

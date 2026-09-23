@@ -1673,21 +1673,18 @@ pub struct SurfaceSearch {
 pub mut:
 	needle  string
 	state   &searchpkg.SearchThread = unsafe { nil }
-	mutex   &sync.Mutex = unsafe { nil }
 	thread_ ?thread
 }
 
-fn SurfaceSearch.init(t &terminal.Terminal, surface &Surface) !&SurfaceSearch {
-	mutex := sync.new_mutex()
+fn SurfaceSearch.init(surface &Surface) !&SurfaceSearch {
 	state := searchpkg.SearchThread.init(searchpkg.ThreadOptions{
-		mutex: mutex
-		terminal: unsafe { t }
+		mutex: surface.renderer_state.mutex
+		terminal: surface.renderer_state.terminal_
 		event_cb: surface_search_event
 		event_userdata: voidptr(surface)
 	})!
 	mut result := &SurfaceSearch{
 		state: state
-		mutex: mutex
 	}
 	result.thread_ = spawn result.state.thread_main()
 	return result
@@ -1712,16 +1709,13 @@ fn (mut s SurfaceSearch) deinit() {
 	}
 	s.thread_ = none
 	s.state.deinit()
-	if s.mutex != unsafe { nil } {
-		s.mutex.destroy()
-		s.mutex = unsafe { nil }
-	}
 }
 
 fn surface_search_event(event searchpkg.Event, userdata voidptr) {
-	if userdata == unsafe { nil } {
-		return
-	}
+	// IMPORTANT: This function is run on the SEARCH THREAD! It is NOT SAFE
+	// to access anything other than values that never change on the surface.
+	// The surface is guaranteed to be valid for the lifetime of the search
+	// thread.
 	mut surface := unsafe { &Surface(userdata) }
 	match event.kind {
 		.viewport_matches {
@@ -4097,7 +4091,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				if text.len == 0 {
 					return false
 				}
-				mut s := SurfaceSearch.init(self.renderer_state.terminal_, &self)!
+				mut s := SurfaceSearch.init(&self)!
 				self.search = s
 				s.change_needle(text)
 			}

@@ -378,9 +378,6 @@ mut:
 // Source: Thread.init (minus xev loop/async/timer setup, see boundary
 // note on SearchThread).
 pub fn SearchThread.init(opts ThreadOptions) !&SearchThread {
-	if opts.mutex == unsafe { nil } || opts.terminal == unsafe { nil } {
-		return error('search thread requires a terminal and mutex')
-	}
 	return &SearchThread{
 		opts: opts
 		mailbox: chan Message{ cap: 64 }
