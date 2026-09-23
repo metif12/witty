@@ -497,7 +497,7 @@ pub fn Subprocess.init(cfg ExecConfig) !Subprocess {
 	// used by both automatic and manual shell integrations.
 	setup_features(mut env, cfg.shell_integration_features)
 
-	shell_command := setup_shell_command(cfg.shell_integration, cfg.resources_dir, default_shell_command, mut env)
+	shell_command := setup_shell_command(cfg.shell_integration, cfg.resources_dir, default_shell_command, mut env)!
 
 	// Add the environment variables that override any others.
 	mut it := cfg.env_override.iterator()
@@ -987,14 +987,17 @@ fn process_exit_common(start_ns u64, exit_code u32, io &Termio) {
 
 // setup_shell_command handles the shell integration dispatch based on the
 // configured shell integration mode and resources directory.
-fn setup_shell_command(integration configpkg.ShellIntegration, resources_dir ?string, default_cmd configpkg.Command, mut env map[string]string) configpkg.Command {
+fn setup_shell_command(integration configpkg.ShellIntegration, resources_dir ?string, default_cmd configpkg.Command, mut env map[string]string) !configpkg.Command {
 	if integration == .none_ {
-		// Shell integration disabled by configuration
+		// This is a source of confusion for users despite being
+		// opt-in since it results in some Ghostty features not
+		// working. We always want to log it.
+		eprintln('shell integration disabled by configuration')
 		return default_cmd
 	}
 
 	dir := resources_dir or {
-		// No resources dir, can't do shell integration
+		eprintln('no resources dir set, shell integration disabled')
 		return default_cmd
 	}
 
@@ -1010,11 +1013,13 @@ fn setup_shell_command(integration configpkg.ShellIntegration, resources_dir ?st
 		}
 	}
 
-	result := setup(dir, default_cmd, mut env, force)
-	if r := result {
-		return r.command
+	integration_result := setup(dir, default_cmd, mut env, force)!
+	result := integration_result.value or {
+		eprintln('shell could not be detected, no automatic shell integration will be injected')
+		return default_cmd
 	}
-	return default_cmd
+
+	return result.command
 }
 
 // Builds the argv array for the process we should exec for the

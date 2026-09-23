@@ -28,30 +28,46 @@ pub:
 // integrated shell integration and return a ShellIntegration
 // describing the integration. If integration fails
 // (shell type couldn't be detected, etc.), this will return none.
-pub fn setup(resource_dir string, command configpkg.Command, mut env map[string]string, force_shell ?Shell) ?ShellIntegration {
-	shell := force_shell or { detect_shell(command) or { return none } }
+// ShellIntegrationResult preserves Ghostty's error-union-of-optional `setup`
+// result.
+pub struct ShellIntegrationResult {
+pub:
+	value ?ShellIntegration
+}
+
+// ShellCommandResult preserves the error-union-of-optional command result of
+// the shell-specific setup functions whose failures V can observe.
+pub struct ShellCommandResult {
+pub:
+	value ?configpkg.Command
+}
+
+pub fn setup(resource_dir string, command configpkg.Command, mut env map[string]string, force_shell ?Shell) !ShellIntegrationResult {
+	shell := force_shell or { detect_shell(command) or { return ShellIntegrationResult{} } }
 
 	new_command := match shell {
 		.bash {
-			setup_bash(command, resource_dir, mut env) or { return none }
+			setup_bash(command, resource_dir, mut env)!.value or { return ShellIntegrationResult{} }
 		}
 		.nushell {
-			setup_nushell(command, resource_dir, mut env) or { return none }
+			setup_nushell(command, resource_dir, mut env) or { return ShellIntegrationResult{} }
 		}
 		.zsh {
-			setup_zsh(command, resource_dir, mut env) or { return none }
+			setup_zsh(command, resource_dir, mut env) or { return ShellIntegrationResult{} }
 		}
 		.elvish, .fish {
 			if !setup_xdg_data_dirs(resource_dir, mut env) {
-				return none
+				return ShellIntegrationResult{}
 			}
 			command.clone()
 		}
 	}
 
-	return ShellIntegration{
-		shell: shell
-		command: new_command
+	return ShellIntegrationResult{
+		value: ShellIntegration{
+			shell: shell
+			command: new_command
+		}
 	}
 }
 
@@ -134,14 +150,14 @@ pub fn setup_features(mut env map[string]string, features configpkg.ShellIntegra
 //
 // This returns a new shell command string that
 // enables the integration or none if integration failed.
-fn setup_bash(command configpkg.Command, resource_dir string, mut env map[string]string) ?configpkg.Command {
+fn setup_bash(command configpkg.Command, resource_dir string, mut env map[string]string) !ShellCommandResult {
 	mut cmd := internal_os.ShellCommandBuilder.init()
 
 	// Iterator that yields each argument in the original command line.
 	mut iter := command.arg_iterator()
 
 	// Start accumulating arguments with the executable and initial flags.
-	exe := iter.next() or { return none }
+	exe := iter.next() or { return ShellCommandResult{} }
 	cmd.append_arg(exe)
 	cmd.append_arg('--posix')
 
@@ -164,7 +180,7 @@ fn setup_bash(command configpkg.Command, resource_dir string, mut env map[string
 	for {
 		arg := iter.next() or { break }
 		if arg == '--posix' {
-			return none
+			return ShellCommandResult{}
 		} else if arg == '--norc' {
 			inject_parts << '--norc'
 		} else if arg == '--noprofile' {
@@ -174,7 +190,7 @@ fn setup_bash(command configpkg.Command, resource_dir string, mut env map[string
 		} else if arg.len > 1 && arg[0] == `-` && arg[1] != `-` {
 			// '-c command' is always non-interactive
 			if arg.contains('c') {
-				return none
+				return ShellCommandResult{}
 			}
 			cmd.append_arg(arg)
 		} else if arg == '-' || arg == '--' {
@@ -202,7 +218,7 @@ fn setup_bash(command configpkg.Command, resource_dir string, mut env map[string
 		env['ENV'] = script_path
 	} else {
 		env.delete('GHOSTTY_BASH_ENV')
-		return none
+		return ShellCommandResult{}
 	}
 
 	env['GHOSTTY_BASH_INJECT'] = inject_parts.join(' ')
@@ -213,17 +229,18 @@ fn setup_bash(command configpkg.Command, resource_dir string, mut env map[string
 	// In POSIX mode, HISTFILE defaults to ~/.sh_history, so unless we're
 	// staying in POSIX mode (--posix), change it back to ~/.bash_history.
 	if 'HISTFILE' !in env {
-		// Ghostty propagates a home lookup failure from setupBash; this
-		// optional-only setup contract reports it as no integration.
-		home_result := internal_os.home() or { return none }
-		if h := home_result.value {
+		if h := internal_os.home()!.value {
 			env['HISTFILE'] = '${h}/.bash_history'
 			env['GHOSTTY_BASH_UNEXPORT_HISTFILE'] = '1'
 		}
 	}
 
 	// Return a copy of our modified command line to use as the shell command.
-	return configpkg.ShellCmd{ shell: cmd.to_owned_slice() }
+	return ShellCommandResult{
+		value: configpkg.ShellCmd{
+			shell: cmd.to_owned_slice()
+		}
+	}
 }
 
 // Setup automatic shell integration for shells that include

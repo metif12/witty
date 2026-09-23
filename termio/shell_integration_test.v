@@ -170,7 +170,7 @@ fn test_bash_basic() {
 
 	mut env := map[string]string{}
 
-	cmd := setup_bash(configpkg.ShellCmd{ shell: 'bash' }, res.path, mut env) or {
+	cmd := (setup_bash(configpkg.ShellCmd{ shell: 'bash' }, res.path, mut env) or { panic(err) }).value or {
 		assert false, 'setup_bash should succeed'
 		return
 	}
@@ -190,7 +190,7 @@ fn test_bash_unsupported_posix() {
 	}
 
 	mut env := map[string]string{}
-	assert setup_bash(configpkg.ShellCmd{ shell: 'bash --posix' }, res.path, mut env) == none
+	assert (setup_bash(configpkg.ShellCmd{ shell: 'bash --posix' }, res.path, mut env) or { panic(err) }).value == none
 	assert env.len == 0
 }
 
@@ -201,7 +201,7 @@ fn test_bash_unsupported_c_flag() {
 	}
 
 	mut env := map[string]string{}
-	assert setup_bash(configpkg.ShellCmd{ shell: 'bash -c script.sh' }, res.path, mut env) == none
+	assert (setup_bash(configpkg.ShellCmd{ shell: 'bash -c script.sh' }, res.path, mut env) or { panic(err) }).value == none
 	assert env.len == 0
 }
 
@@ -212,7 +212,7 @@ fn test_bash_unsupported_ic_flag() {
 	}
 
 	mut env := map[string]string{}
-	assert setup_bash(configpkg.ShellCmd{ shell: 'bash -ic script.sh' }, res.path, mut env) == none
+	assert (setup_bash(configpkg.ShellCmd{ shell: 'bash -ic script.sh' }, res.path, mut env) or { panic(err) }).value == none
 	assert env.len == 0
 }
 
@@ -223,7 +223,7 @@ fn test_bash_inject_norc() {
 	}
 
 	mut env := map[string]string{}
-	cmd := setup_bash(configpkg.ShellCmd{ shell: 'bash --norc' }, res.path, mut env) or {
+	cmd := (setup_bash(configpkg.ShellCmd{ shell: 'bash --norc' }, res.path, mut env) or { panic(err) }).value or {
 		assert false, 'should succeed'
 		return
 	}
@@ -240,7 +240,7 @@ fn test_bash_inject_noprofile() {
 	}
 
 	mut env := map[string]string{}
-	cmd := setup_bash(configpkg.ShellCmd{ shell: 'bash --noprofile' }, res.path, mut env) or {
+	cmd := (setup_bash(configpkg.ShellCmd{ shell: 'bash --noprofile' }, res.path, mut env) or { panic(err) }).value or {
 		assert false, 'should succeed'
 		return
 	}
@@ -259,7 +259,7 @@ fn test_bash_rcfile() {
 	mut env := map[string]string{}
 
 	// bash --rcfile
-	cmd := setup_bash(configpkg.ShellCmd{ shell: 'bash --rcfile profile.sh' }, res.path, mut env) or {
+	cmd := (setup_bash(configpkg.ShellCmd{ shell: 'bash --rcfile profile.sh' }, res.path, mut env) or { panic(err) }).value or {
 		assert false, 'should succeed'
 		return
 	}
@@ -278,7 +278,7 @@ fn test_bash_init_file() {
 	mut env := map[string]string{}
 
 	// bash --init-file
-	cmd := setup_bash(configpkg.ShellCmd{ shell: 'bash --init-file profile.sh' }, res.path, mut env) or {
+	cmd := (setup_bash(configpkg.ShellCmd{ shell: 'bash --init-file profile.sh' }, res.path, mut env) or { panic(err) }).value or {
 		assert false, 'should succeed'
 		return
 	}
@@ -295,7 +295,7 @@ fn test_bash_histfile_unset() {
 	}
 
 	mut env := map[string]string{}
-	_ := setup_bash(configpkg.ShellCmd{ shell: 'bash' }, res.path, mut env) or { return }
+	_ := (setup_bash(configpkg.ShellCmd{ shell: 'bash' }, res.path, mut env) or { panic(err) }).value or { return }
 	histfile := env['HISTFILE'] or { '' }
 	assert histfile.ends_with('.bash_history')
 	assert env['GHOSTTY_BASH_UNEXPORT_HISTFILE'] == '1'
@@ -310,7 +310,7 @@ fn test_bash_histfile_set() {
 	mut env := map[string]string{}
 	env['HISTFILE'] = 'my_history'
 
-	_ := setup_bash(configpkg.ShellCmd{ shell: 'bash' }, res.path, mut env) or { return }
+	_ := (setup_bash(configpkg.ShellCmd{ shell: 'bash' }, res.path, mut env) or { panic(err) }).value or { return }
 	assert env['HISTFILE'] == 'my_history'
 	assert 'GHOSTTY_BASH_UNEXPORT_HISTFILE' !in env
 }
@@ -324,7 +324,7 @@ fn test_bash_env_preserved() {
 	mut env := map[string]string{}
 	env['ENV'] = 'env.sh'
 
-	_ := setup_bash(configpkg.ShellCmd{ shell: 'bash' }, res.path, mut env) or { return }
+	_ := (setup_bash(configpkg.ShellCmd{ shell: 'bash' }, res.path, mut env) or { panic(err) }).value or { return }
 	assert env['GHOSTTY_BASH_ENV'] == 'env.sh'
 	assert env['ENV'] == '${res.shell_path}/ghostty.bash'
 }
@@ -338,7 +338,7 @@ fn test_bash_empty_env_preserved() {
 	mut env := map[string]string{}
 	env['ENV'] = ''
 
-	_ := setup_bash(configpkg.ShellCmd{ shell: 'bash' }, res.path, mut env) or { return }
+	_ := (setup_bash(configpkg.ShellCmd{ shell: 'bash' }, res.path, mut env) or { panic(err) }).value or { return }
 	assert 'GHOSTTY_BASH_ENV' in env
 	assert env['GHOSTTY_BASH_ENV'] == ''
 	assert env['ENV'] == '${res.shell_path}/ghostty.bash'
@@ -353,7 +353,7 @@ fn test_bash_additional_args_dash() {
 	mut env := map[string]string{}
 
 	// "-" argument separator
-	cmd := setup_bash(configpkg.ShellCmd{ shell: 'bash - --arg file1 file2' }, res.path, mut env) or {
+	cmd := (setup_bash(configpkg.ShellCmd{ shell: 'bash - --arg file1 file2' }, res.path, mut env) or { panic(err) }).value or {
 		assert false, 'should succeed'
 		return
 	}
@@ -371,7 +371,7 @@ fn test_bash_additional_args_double_dash() {
 	mut env := map[string]string{}
 
 	// "--" argument separator
-	cmd := setup_bash(configpkg.ShellCmd{ shell: 'bash -- --arg file1 file2' }, res.path, mut env) or {
+	cmd := (setup_bash(configpkg.ShellCmd{ shell: 'bash -- --arg file1 file2' }, res.path, mut env) or { panic(err) }).value or {
 		assert false, 'should succeed'
 		return
 	}
@@ -388,7 +388,7 @@ fn test_bash_missing_resources() {
 	}
 
 	mut env := map[string]string{}
-	assert setup_bash(configpkg.ShellCmd{ shell: 'bash' }, tmp_path, mut env) == none
+	assert (setup_bash(configpkg.ShellCmd{ shell: 'bash' }, tmp_path, mut env) or { panic(err) }).value == none
 	assert env.len == 0
 }
 
@@ -589,7 +589,7 @@ fn test_force_shell_bash() {
 	}
 
 	mut env := map[string]string{}
-	result := setup(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut env, Shell.bash)
+	result := setup(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut env, Shell.bash) or { panic(err) }.value
 	if r := result {
 		assert r.shell == .bash
 	} else {
@@ -604,7 +604,7 @@ fn test_force_shell_zsh() {
 	}
 
 	mut env := map[string]string{}
-	result := setup(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut env, Shell.zsh)
+	result := setup(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut env, Shell.zsh) or { panic(err) }.value
 	if r := result {
 		assert r.shell == .zsh
 	} else {
@@ -619,7 +619,7 @@ fn test_force_shell_fish() {
 	}
 
 	mut env := map[string]string{}
-	result := setup(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut env, Shell.fish)
+	result := setup(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut env, Shell.fish) or { panic(err) }.value
 	if r := result {
 		assert r.shell == .fish
 	} else {
@@ -634,7 +634,7 @@ fn test_force_shell_elvish() {
 	}
 
 	mut env := map[string]string{}
-	result := setup(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut env, Shell.elvish)
+	result := setup(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut env, Shell.elvish) or { panic(err) }.value
 	if r := result {
 		assert r.shell == .elvish
 	} else {
@@ -649,7 +649,7 @@ fn test_force_shell_nushell() {
 	}
 
 	mut env := map[string]string{}
-	result := setup(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut env, Shell.nushell)
+	result := setup(res.path, configpkg.ShellCmd{ shell: 'sh' }, mut env, Shell.nushell) or { panic(err) }.value
 	if r := result {
 		assert r.shell == .nushell
 	} else {
@@ -659,7 +659,7 @@ fn test_force_shell_nushell() {
 
 fn test_shell_integration_failure() {
 	mut env := map[string]string{}
-	result := setup('/nonexistent', configpkg.ShellCmd{ shell: 'sh' }, mut env, none)
+	result := setup('/nonexistent', configpkg.ShellCmd{ shell: 'sh' }, mut env, none) or { panic(err) }.value
 	assert result == none
 	assert env.len == 0
 }
