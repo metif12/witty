@@ -886,6 +886,15 @@ fn (mut self ThreadFlags) set(mask u8, enabled bool) {
 	}
 }
 
+// The minimum amount of time to wait between resize events.
+const coalesce_min_ms = 25
+
+// The number of milliseconds before we reset the synchronized output flag
+const sync_reset_ms = 1000
+
+// The number of milliseconds between selection scroll ticks.
+const selection_scroll_ms = 15
+
 // Thread manages the IO thread.
 pub struct Thread {
 pub mut:
@@ -937,7 +946,12 @@ pub fn (mut t Thread) thread_main(mut io Termio) {
 	}
 
 	for !t.stop.is_notified() {
-		mut did_work := t.drain_mailbox(mut io)
+		// When we wake up, we check the mailbox. Mailbox producers should
+		// wake up our thread after publishing.
+		mut did_work := t.drain_mailbox(mut io) or {
+			eprintln('error draining mailbox err=${err}')
+			true
+		}
 		if t.run_timers(mut io, i64(time.sys_mono_now())) {
 			did_work = true
 		}
@@ -961,7 +975,7 @@ fn (mut t Thread) run_timers(mut io Termio, now i64) bool {
 	mut did_work := false
 	if resize := t.pending_resize {
 		if now >= t.resize_deadline {
-			io.resize(resize) or {}
+			io.resize(resize) or { eprintln('error during resize err=${err}') }
 			t.pending_resize = none
 			t.resize_deadline = 0
 			did_work = true
@@ -980,7 +994,7 @@ fn (mut t Thread) run_timers(mut io Termio, now i64) bool {
 			selection_scroll_tick: t.scroll_active
 		}, datastruct.blocking_queue_instant)
 		if t.scroll_active {
-			t.scroll_deadline = now + 15 * i64(time.millisecond)
+			t.scroll_deadline = now + selection_scroll_ms * i64(time.millisecond)
 		} else {
 			t.scroll_deadline = 0
 		}
@@ -1041,7 +1055,10 @@ fn (mut t Thread) apply_termios_mode(mut io Termio, mode pty.Mode) {
 
 // drain_mailbox dispatches every currently queued writer message. Returning
 // true tells the caller that a renderer wakeup was requested.
-fn (mut t Thread) drain_mailbox(mut io Termio) bool {
+// drain_mailbox handles every queued message. As in Ghostty, the first handler
+// failure stops the drain before the redraw notification. The returned value
+// reports whether messages were handled, for Witty's polling loop.
+fn (mut t Thread) drain_mailbox(mut io Termio) !bool {
 	mut redraw := false
 	for {
 		msg := io.mailbox.pop() or { break }
@@ -1050,29 +1067,29 @@ fn (mut t Thread) drain_mailbox(mut io Termio) bool {
 		}
 		redraw = true
 		match msg.kind {
-			.color_scheme_report { io.color_scheme_report(msg.force_val) or {} }
+			.color_scheme_report { io.color_scheme_report(msg.force_val)! }
 			.crash { panic('crash request, crashing intentionally') }
-			.change_config { io.change_config(&msg.config_val) or {} }
+			.change_config { io.change_config(&msg.config_val)! }
 			.inspector {
 				t.flags.set_has_inspector(msg.flag_val)
 			}
 			.resize {
 				t.pending_resize = msg.resize_val
 				if t.resize_deadline == 0 {
-					t.resize_deadline = i64(time.sys_mono_now()) + 25 * i64(time.millisecond)
+					t.resize_deadline = i64(time.sys_mono_now()) + coalesce_min_ms * i64(time.millisecond)
 				}
 			}
-			.size_report { io.size_report(msg.size_report_val) or {} }
-			.clear_screen { io.clear_screen(msg.flag_val) or {} }
+			.size_report { io.size_report(msg.size_report_val)! }
+			.clear_screen { io.clear_screen(msg.flag_val)! }
 			.scroll_viewport {
-				io.scroll_viewport(msg.scroll_viewport_val) or {}
+				io.scroll_viewport(msg.scroll_viewport_val)!
 			}
 			.selection_scroll {
 				if msg.flag_val {
 					t.scroll_active = true
 					// An already armed timer is not restarted.
 					if t.scroll_deadline == 0 {
-						t.scroll_deadline = i64(time.sys_mono_now()) + 15 * i64(time.millisecond)
+						t.scroll_deadline = i64(time.sys_mono_now()) + selection_scroll_ms * i64(time.millisecond)
 					}
 				} else {
 					// stopScrollTimer only changes the active flag. The armed
@@ -1080,27 +1097,29 @@ fn (mut t Thread) drain_mailbox(mut io Termio) bool {
 					t.scroll_active = false
 				}
 			}
-			.jump_to_prompt { io.jump_to_prompt(msg.prompt_delta) or {} }
+			.jump_to_prompt { io.jump_to_prompt(msg.prompt_delta)! }
 			.start_synchronized_output {
-				t.sync_deadline = i64(time.sys_mono_now()) + 1000 * i64(time.millisecond)
+				t.sync_deadline = i64(time.sys_mono_now()) + sync_reset_ms * i64(time.millisecond)
 			}
 			.linefeed_mode {
 				t.flags.set_linefeed_mode(msg.flag_val)
 			}
-			.focused { io.focus_gained(msg.flag_val) or {} }
+			.focused { io.focus_gained(msg.flag_val)! }
 			.write_small {
-				io.queue_write(msg.write_small_data.slice(), t.flags.linefeed_mode()) or {}
+				io.queue_write(msg.write_small_data.slice(), t.flags.linefeed_mode())!
 			}
 			.write_stable {
-				io.queue_write(msg.write_stable_data.bytes(), t.flags.linefeed_mode()) or {}
+				io.queue_write(msg.write_stable_data.bytes(), t.flags.linefeed_mode())!
 			}
 			.write_alloc {
-				io.queue_write(msg.write_alloc_data.bytes(), t.flags.linefeed_mode()) or {}
+				io.queue_write(msg.write_alloc_data.bytes(), t.flags.linefeed_mode())!
 			}
 		}
 	}
+	// Trigger a redraw after we've drained so we don't waste cyces
+	// messaging a redraw.
 	if redraw {
-		io.renderer_wakeup.notify() or {}
+		io.renderer_wakeup.notify()!
 	}
 	return redraw
 }

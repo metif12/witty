@@ -388,7 +388,7 @@ fn test_thread_drain_mailbox_updates_writer_state() {
 	tio.mailbox.push(Message{ kind: .start_synchronized_output })
 	tio.mailbox.push(Message.resize_msg(resize))
 
-	assert writer.drain_mailbox(mut tio)
+	assert writer.drain_mailbox(mut tio)!
 	assert writer.flags.has_inspector()
 	assert writer.flags.linefeed_mode()
 	assert sizeof(ThreadFlags) == 1
@@ -430,19 +430,19 @@ fn test_thread_selection_scroll_timer_reports_final_stop() {
 	defer { writer.deinit() }
 
 	tio.mailbox.push(Message.selection_scroll_msg(true))
-	assert writer.drain_mailbox(mut tio)
+	assert writer.drain_mailbox(mut tio)!
 	deadline := writer.scroll_deadline
 	assert deadline > 0
 
 	// Repeated starts leave the currently armed completion untouched.
 	tio.mailbox.push(Message.selection_scroll_msg(true))
-	assert writer.drain_mailbox(mut tio)
+	assert writer.drain_mailbox(mut tio)!
 	assert writer.scroll_deadline == deadline
 
 	// Stopping does not cancel the completion. It fires once with false and
 	// then disarms, matching selectionScrollCallback.
 	tio.mailbox.push(Message.selection_scroll_msg(false))
-	assert writer.drain_mailbox(mut tio)
+	assert writer.drain_mailbox(mut tio)!
 	assert !writer.scroll_active
 	assert writer.scroll_deadline == deadline
 	assert writer.run_timers(mut tio, deadline)
