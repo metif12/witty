@@ -182,6 +182,7 @@ import configpkg
 import crash
 import datastruct
 import internal_os
+import macos
 import sync
 import time
 
@@ -483,6 +484,20 @@ fn (mut self RendererThread) sync_draw_timer() {
 
 // Drain the mailbox.
 fn (mut self RendererThread) drain_mailbox() ! {
+	// There's probably a more elegant way to do this...
+	//
+	// This is effectively an @autoreleasepool{} block, which we need in
+	// order to ensure that autoreleased objects are properly released.
+	mut pool := ?macos.AutoreleasePool(none)
+	$if macos {
+		pool = macos.AutoreleasePool.init()
+	}
+	defer {
+		if mut active_pool := pool {
+			active_pool.deinit()
+		}
+	}
+
 	for {
 		msg := self.mailbox.pop() or { break }
 		match msg {
@@ -540,10 +555,8 @@ fn (mut self RendererThread) drain_mailbox() ! {
 			}
 			FontGridMessage {
 				self.renderer.set_font_grid(msg.grid)
-				if msg.set != unsafe { nil } {
-					mut set := unsafe { msg.set }
-					set.deref(msg.old_key)
-				}
+				mut set := unsafe { msg.set }
+				set.deref(msg.old_key)
 			}
 			ResizeMessage {
 				self.renderer.set_screen_size(msg.size)
