@@ -2242,7 +2242,9 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &apprt.Runtim
 	self.io_os_thread = spawn writer.thread_main(mut termio)
 
 	// Compute initial window size if configured
-	self.recompute_initial_size() or {}
+	self.recompute_initial_size() or {
+		eprintln('unable to set initial window size: ${err}')
+	}
 
 	// Set the configured title, the complete xdg-terminal-exec command, or the
 	// argv[0] of a directly supplied command, in that priority order.
@@ -2313,13 +2315,17 @@ pub fn (mut self Surface) deinit() {
 		self.renderer_thread.stop()
 		worker.wait()
 		self.renderer_os_thread = none
-		self.renderer.thread_enter() or {}
+
+		// We need to become the active rendering thread again
+		self.renderer.thread_enter() or { panic(err) }
 	}
 
 	// Stop the IO event loop, which shuts down and joins its PTY reader and
 	// process watcher, before releasing any shared terminal state.
 	if self.io_thread.running {
-		self.io_thread.impl.stop.notify() or {}
+		self.io_thread.impl.stop.notify() or {
+			eprintln('error notifying io thread to stop, may stall err=${err}')
+		}
 		if worker := self.io_os_thread {
 			worker.wait()
 		}
@@ -2463,7 +2469,7 @@ pub fn (mut self Surface) handle_message(msg SurfaceMessage) ! {
 			self.update_renderer_health(msg.renderer_health)
 		}
 		.scrollbar {
-			self.update_scrollbar_value(msg.scrollbar)
+			self.update_scrollbar(msg.scrollbar)
 		}
 		.present_surface {
 			self.present_surface()!
@@ -2484,14 +2490,18 @@ pub fn (mut self Surface) handle_message(msg SurfaceMessage) ! {
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.ring_bell,
 				apprt.ActionValue{},
-			) or {}
+			) or {
+				eprintln('apprt failed to ring bell=${err}')
+			}
 		}
 		.progress_report {
 			self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.progress_report,
 				apprt.ActionValue{ progress_report_: msg.progress_report },
-			) or {}
+			) or {
+				eprintln('apprt failed to report progress err=${err}')
+			}
 		}
 		.selection_scroll_tick {
 			self.selection_scroll_active = msg.selection_scroll_tick
@@ -2706,7 +2716,9 @@ pub fn (mut self Surface) update_config(config &Config) ! {
 	self.end_key_sequence(.drop, .free)
 
 	// Deactivate all key tables (pointers may be stale after config change)
-	self.deactivate_all_key_tables() or {}
+	self.deactivate_all_key_tables() or {
+		eprintln('failed to deactivate key tables err=${err}')
+	}
 
 	// Update font size (preserving manual adjustments)
 	font_size := if self.font_size_adjusted {
@@ -3064,7 +3076,9 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 			|| (self.mouse.mods.shift() && !self.mouse_shift_capture(false)) {
 			if pos := self.rt_surface.get_cursor_pos() {
 				self.renderer_state.mutex.lock()
-				self.mouse_refresh_links(pos, self.pos_to_viewport(f64(pos.x), f64(pos.y)), self.mouse.over_link) or {}
+				self.mouse_refresh_links(pos, self.pos_to_viewport(f64(pos.x), f64(pos.y)), self.mouse.over_link) or {
+					eprintln('failed to refresh links err=${err}')
+				}
 				self.renderer_state.mutex.unlock()
 			}
 		} else if !self.mouse.mods.shift() {
@@ -4009,7 +4023,9 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 
 			// CSI/ESC triggers a scroll.
 			self.renderer_state.mutex.lock()
-			self.scroll_to_bottom() or {}
+			self.scroll_to_bottom() or {
+				eprintln('error scrolling to bottom err=${err}')
+			}
 			self.renderer_state.mutex.unlock()
 		}
 		.text {
@@ -4020,14 +4036,18 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 
 			// Text triggers a scroll.
 			self.renderer_state.mutex.lock()
-			self.scroll_to_bottom() or {}
+			self.scroll_to_bottom() or {
+				eprintln('error scrolling to bottom err=${err}')
+			}
 			self.renderer_state.mutex.unlock()
 		}
 		.cursor_key {
 			// DECCKM selects between the normal and application sequences.
 			self.renderer_state.mutex.lock()
 			normal := !self.renderer_state.terminal_.modes.get(.cursor_keys)
-			self.scroll_to_bottom() or {}
+			self.scroll_to_bottom() or {
+				eprintln('error scrolling to bottom err=${err}')
+			}
 			self.renderer_state.mutex.unlock()
 			data := if normal { action.cursor_key.normal } else { action.cursor_key.application }
 			self.queue_io(termiopkg.Message.write_stable_msg(data))
@@ -4504,7 +4524,9 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.key_table,
 				apprt.ActionValue{ key_table_: apprt.KeyTable{ tag: .deactivate } },
-			) or {}
+			) or {
+				eprintln('failed to notify app of key table err=${err}')
+			}
 		}
 		.deactivate_all_key_tables {
 			return self.deactivate_all_key_tables()!
@@ -4723,7 +4745,9 @@ fn (mut self Surface) activate_key_table(name string, once bool) !bool {
 				name: name
 			}
 		},
-	) or {}
+	) or {
+		eprintln('failed to notify app of key table err=${err}')
+	}
 
 	return true
 }
@@ -4744,7 +4768,9 @@ fn (mut self Surface) mods_changed(mods input.Mods) {
 	self.renderer_state.terminal_.flags.set_dirty_clear(true)
 	self.renderer_state.mutex.unlock()
 
-	self.queue_render() or {}
+	self.queue_render() or {
+		eprintln('failed to notify renderer of mods change err=${err}')
+	}
 }
 
 fn (mut self Surface) mouse_refresh_links(pos apprt.CursorPos, pos_vp Coordinate, over_link bool) ! {
@@ -5106,7 +5132,9 @@ fn (mut self Surface) set_cell_size(size rendererpkg.CellSize) ! {
 	self.queue_io(termiopkg.Message.resize_msg(self.size))
 
 	// Recompute initial window size if configured
-	self.recompute_initial_size() or {}
+	self.recompute_initial_size() or {
+		eprintln('unable to recompute initial window size: ${err}')
+	}
 
 	// Notify runtime of cell size change
 	self.rt_app.perform_action(
@@ -5174,7 +5202,9 @@ fn (mut self Surface) hide_mouse() {
 		apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 		.mouse_visibility,
 		apprt.ActionValue{ mouse_visibility_: .hidden },
-	) or {}
+	) or {
+		eprintln('apprt failed to set mouse visibility err=${err}')
+	}
 }
 
 fn (mut self Surface) show_mouse() {
@@ -5186,7 +5216,9 @@ fn (mut self Surface) show_mouse() {
 		apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 		.mouse_visibility,
 		apprt.ActionValue{ mouse_visibility_: .visible },
-	) or {}
+	) or {
+		eprintln('apprt failed to set mouse visibility err=${err}')
+	}
 }
 
 // child_exited_handler is Ghostty's `childExited`. V does not allow this
@@ -5360,25 +5392,32 @@ fn (mut self Surface) password_input(v bool) ! {
 		apprt.ActionValue{
 			secure_input_: if v { apprt.SecureInput.on } else { apprt.SecureInput.off }
 		},
-	) or {}
+	) or {
+		eprintln('apprt failed to set secure input state err=${err}')
+	}
 
 	self.queue_render()!
 }
 
 fn (mut self Surface) update_renderer_health(health rendererpkg.Health) {
+	eprintln('renderer health status change status=${health}')
 	self.rt_app.perform_action(
 		apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 		.renderer_health,
 		apprt.ActionValue{ renderer_health_: health },
-	) or {}
+	) or {
+		eprintln('failed to notify app of renderer health change err=${err}')
+	}
 }
 
-fn (mut self Surface) update_scrollbar_value(scrollbar terminal.Scrollbar) {
+fn (mut self Surface) update_scrollbar(scrollbar terminal.Scrollbar) {
 	self.rt_app.perform_action(
 		apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 		.scrollbar,
 		apprt.ActionValue{ scrollbar_: scrollbar },
-	) or {}
+	) or {
+		eprintln('failed to notify app of scrollbar change err=${err}')
+	}
 }
 
 fn (mut self Surface) notify_config_conditional_state() {
@@ -5386,7 +5425,9 @@ fn (mut self Surface) notify_config_conditional_state() {
 		apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 		.reload_config,
 		apprt.ActionValue{ reload_config_: apprt.ReloadConfig{ soft: true } },
-	) or {}
+	) or {
+		eprintln('failed to notify app of config state change err=${err}')
+	}
 }
 
 fn (self &Surface) crash_thread_state() crash.ThreadState {
@@ -5405,14 +5446,18 @@ fn (mut self Surface) present_surface() ! {
 }
 
 fn (mut self Surface) end_key_sequence(action KeySequenceQueued, mem KeySequenceMemory) {
-	self.keyboard.sequence_set = none
-
-	// Notify runtime that key sequence ended
+	// Notify apprt key sequence ended
 	self.rt_app.perform_action(
 		apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 		.key_sequence,
 		apprt.ActionValue{ key_sequence_: apprt.KeySequence{ active: false } },
-	) or {}
+	) or {
+		eprintln('failed to notify app of key sequence end err=${err}')
+	}
+
+	// No matter what we clear our current sequence set. This restores
+	// the set we look at to the root set.
+	self.keyboard.sequence_set = none
 
 	if self.keyboard.sequence_queued.len == 0 {
 		return
@@ -5447,12 +5492,15 @@ fn (mut self Surface) deactivate_all_key_tables() !bool {
 	}
 	self.keyboard.table_stack.clear()
 
-	// Notify runtime
+	// Notify the UI.
 	self.rt_app.perform_action(
 		apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 		.key_table,
 		apprt.ActionValue{ key_table_: apprt.KeyTable{ tag: .deactivate_all } },
-	)!
+	) or {
+		eprintln('failed to notify app of key table err=${err}')
+	}
+
 	return true
 }
 
@@ -5540,7 +5588,9 @@ fn (mut self Surface) handle_binding_entry(event KeyEvent, entry &input.SetEntry
 					trigger: entry.trigger
 				}
 			},
-		) or {}
+		) or {
+			eprintln('failed to notify app of key sequence err=${err}')
+		}
 		return .consumed
 	}
 
@@ -5803,7 +5853,9 @@ fn (mut self Surface) complete_clipboard_paste(data string, allow_unsafe bool) !
 	}
 
 	// Scroll to bottom before pasting
-	self.scroll_to_bottom() or {}
+	self.scroll_to_bottom() or {
+		eprintln('error scrolling to bottom err=${err}')
+	}
 	self.renderer_state.mutex.unlock()
 
 	mut encoded := input.PasteEncodeResult{}
@@ -5910,40 +5962,62 @@ fn (mut self Surface) copy_selection_to_clipboards(sel TermSelection, clipboards
 		palette: self.renderer_state.terminal_.colors.palette.current[..]
 	}
 	mut contents := []apprt.ClipboardContent{}
-	if format in [.plain, .mixed] {
-		mut formatter := terminal.ScreenFormatter.init(screen, base_opts)
-		formatter.content = terminal.ScreenContent(terminal.ScreenContentSelection{ sel: sel })
-		contents << apprt.ClipboardContent{ mime: 'text/plain', data: formatter.format() }
-	}
-	if format == .vt {
-		mut formatter := terminal.ScreenFormatter.init(screen, terminal.FormatOptions{
-			...base_opts
-			emit: .vt
-		})
-		formatter.content = terminal.ScreenContent(terminal.ScreenContentSelection{ sel: sel })
-		contents << apprt.ClipboardContent{ mime: 'text/plain', data: formatter.format() }
-	}
-	if format in [.html, .mixed] {
-		mut opts := terminal.FormatOptions{
-			...base_opts
-			emit: .html
+	match format {
+		.plain {
+			mut formatter := terminal.ScreenFormatter.init(screen, base_opts)
+			formatter.content = terminal.ScreenContent(terminal.ScreenContentSelection{ sel: sel })
+			contents << apprt.ClipboardContent{ mime: 'text/plain', data: formatter.format() }
 		}
-		if format == .mixed {
-			opts = terminal.FormatOptions{
-				...opts
+		.vt {
+			mut formatter := terminal.ScreenFormatter.init(screen, terminal.FormatOptions{
+				...base_opts
+				emit: .vt
+			})
+			formatter.content = terminal.ScreenContent(terminal.ScreenContentSelection{ sel: sel })
+
+			// Note: We don't apply codepoint mappings to VT format since it contains
+			// escape sequences that should be preserved as-is
+			contents << apprt.ClipboardContent{ mime: 'text/plain', data: formatter.format() }
+		}
+		.html {
+			mut formatter := terminal.ScreenFormatter.init(screen, terminal.FormatOptions{
+				...base_opts
+				emit: .html
+			})
+			formatter.content = terminal.ScreenContent(terminal.ScreenContentSelection{ sel: sel })
+
+			// Note: We don't apply codepoint mappings to HTML format since HTML
+			// has its own character encoding and entity system
+			contents << apprt.ClipboardContent{ mime: 'text/html', data: formatter.format() }
+		}
+		.mixed {
+			// First, generate plain text with codepoint mappings applied
+			mut formatter := terminal.ScreenFormatter.init(screen, base_opts)
+			formatter.content = terminal.ScreenContent(terminal.ScreenContentSelection{ sel: sel })
+			contents << apprt.ClipboardContent{ mime: 'text/plain', data: formatter.format() }
+
+			// Second, generate HTML without codepoint mappings
+			formatter = terminal.ScreenFormatter.init(screen, terminal.FormatOptions{
+				...base_opts
+				emit: .html
+				// We purposely don't emit background/foreground for mixed
+				// mode because the HTML contents is often used for rich text
+				// input and with trimmed spaces it looks pretty bad.
 				background: none
 				foreground: none
-			}
+			})
+			formatter.content = terminal.ScreenContent(terminal.ScreenContentSelection{ sel: sel })
+
+			// Note: We don't apply codepoint mappings to HTML format
+			contents << apprt.ClipboardContent{ mime: 'text/html', data: formatter.format() }
 		}
-		mut formatter := terminal.ScreenFormatter.init(screen, opts)
-		formatter.content = terminal.ScreenContent(terminal.ScreenContentSelection{ sel: sel })
-		contents << apprt.ClipboardContent{ mime: 'text/html', data: formatter.format() }
 	}
-	if contents.len == 0 {
-		return
-	}
+
+	assert contents.len > 0
 	for loc in clipboards {
-		self.rt_surface.set_clipboard(loc, contents, false) or {}
+		self.rt_surface.set_clipboard(loc, contents, false) or {
+			eprintln('error setting clipboard string clipboard=${loc} err=${err}')
+		}
 	}
 }
 
