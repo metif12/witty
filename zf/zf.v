@@ -100,7 +100,8 @@ fn ascii_lower(byte u8) u8 {
 fn index_of(str string, start_index int, value u8, case_sensitive bool) ?int {
 	mut i := start_index
 	for i < str.len {
-		if if case_sensitive { str[i] == value } else { ascii_lower(str[i]) == value } {
+		matches := if case_sensitive { str[i] == value } else { ascii_lower(str[i]) == value }
+		if matches {
 			return i
 		}
 		i++
