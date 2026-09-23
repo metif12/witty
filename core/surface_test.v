@@ -107,10 +107,10 @@ fn pop_renderer_message(mut surface Surface) rendererpkg.RendererMessage {
 	return surface.renderer_thread.mailbox.pop() or { panic('missing renderer message') }
 }
 
-fn pop_surface_core_message(mut app App) SurfaceCoreMsg {
+fn pop_surface_core_message(mut app App) SurfaceMessageMsg {
 	message := app.mailbox.pop() or { panic('missing surface message') }
 	match message {
-		SurfaceCoreMsg {
+		SurfaceMessageMsg {
 			return message
 		}
 		else {
@@ -121,10 +121,10 @@ fn pop_surface_core_message(mut app App) SurfaceCoreMsg {
 
 fn test_search_callback_routes_owned_results_and_ui_state() {
 	mut app := App{
-		mailbox: Mailbox.init()
+		mailbox: MailboxQueue.create() or { panic(err) }
 	}
 	defer {
-		app.mailbox.deinit()
+		app.mailbox.destroy()
 	}
 	mut surface := Surface{
 		app: &app

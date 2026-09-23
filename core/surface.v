@@ -1958,20 +1958,19 @@ pub type SurfaceMessage = apprt.SurfaceMessage
 
 pub type SurfaceMessageKind = apprt.SurfaceMessageKind
 
+// termio_surface_message_push implements apprt.SurfaceMailbox.push for a core
+// surface by rewrapping the message for the app thread.
 fn termio_surface_message_push(app_ptr voidptr, surface_ptr voidptr, msg apprt.SurfaceMessage, timeout datastruct.BlockingQueueTimeout) u32 {
-	if isnil(app_ptr) || isnil(surface_ptr) {
-		return 0
-	}
-	mut app := unsafe { &App(app_ptr) }
+	app := unsafe { &App(app_ptr) }
 	surface := unsafe { &Surface(surface_ptr) }
-	result := app.mailbox.push_timeout(Message(SurfaceCoreMsg{
+	app_mailbox := Mailbox{
+		rt_app:  surface.rt_app
+		mailbox: app.mailbox
+	}
+	return app_mailbox.push(Message(SurfaceMessageMsg{
 		surface: surface
 		message: msg
 	}), timeout)
-	if surface.rt_app != unsafe { nil } {
-		surface.rt_app.wakeup()
-	}
-	return result
 }
 
 fn (self &Surface) surface_mailbox() apprt.SurfaceMailbox {
@@ -1982,31 +1981,20 @@ fn (self &Surface) surface_mailbox() apprt.SurfaceMailbox {
 	}
 }
 
+// surface_renderer_wakeup is the renderer thread's App.Mailbox redraw push.
 fn surface_renderer_wakeup(surface_ptr voidptr) {
-	if isnil(surface_ptr) {
-		return
+	surface := unsafe { &Surface(surface_ptr) }
+	app_mailbox := Mailbox{
+		rt_app:  surface.rt_app
+		mailbox: surface.app.mailbox
 	}
-	mut surface := unsafe { &Surface(surface_ptr) }
-	if isnil(surface.app) {
-		return
-	}
-	mut app := unsafe { surface.app }
-	app.mailbox.try_push(Message(RedrawSurfaceMsg{
-		core_surface: surface
-	}))
-	if surface.rt_app != unsafe { nil } {
-		surface.rt_app.wakeup()
-	}
+	_ = app_mailbox.push(Message(RedrawSurfaceMsg{
+		surface: surface
+	}), datastruct.blocking_queue_instant)
 }
 
-fn renderer_surface_event_push(surface_ptr voidptr, event rendererpkg.SurfaceEvent) int {
-	if isnil(surface_ptr) {
-		return 0
-	}
+fn renderer_surface_event_push(surface_ptr voidptr, event rendererpkg.SurfaceEvent, timeout datastruct.BlockingQueueTimeout) u32 {
 	surface := unsafe { &Surface(surface_ptr) }
-	if isnil(surface.app) {
-		return 0
-	}
 	message := match event {
 		rendererpkg.RendererHealthEvent {
 			apprt.SurfaceMessage{
@@ -2021,15 +2009,7 @@ fn renderer_surface_event_push(surface_ptr voidptr, event rendererpkg.SurfaceEve
 			}
 		}
 	}
-	mut app := unsafe { surface.app }
-	result := app.mailbox.push(Message(SurfaceCoreMsg{
-		surface: surface
-		message: message
-	}))
-	if surface.rt_app != unsafe { nil } {
-		surface.rt_app.wakeup()
-	}
-	return result
+	return surface.surface_mailbox().push(message, timeout)
 }
 
 pub type KeyEvent = input.KeyEvent
@@ -3282,7 +3262,7 @@ pub fn (mut self Surface) focus_callback(focused bool) ! {
 
 	if focused {
 		// On focus gain, notify app.
-		self.app.focus_core_surface(self)
+		self.app.focus_surface(self)
 	} else {
 		// A focus loss may be the last event we receive for a pressed key.
 		// Synthesize its release, followed by releases for both sides of every

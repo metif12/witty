@@ -3,23 +3,32 @@ module renderer
 import font
 import terminal
 import configpkg
+import datastruct
 import os
 import sync
 
 struct SurfaceEventCapture {
 mut:
-	health_events    []Health
-	scrollbar_events []terminal.Scrollbar
+	health_events      []Health
+	health_timeouts    []datastruct.BlockingQueueTimeoutKind
+	scrollbar_events   []terminal.Scrollbar
+	scrollbar_timeouts []datastruct.BlockingQueueTimeoutKind
 }
 
-fn capture_surface_event(data voidptr, event SurfaceEvent) int {
+fn capture_surface_event(data voidptr, event SurfaceEvent, timeout datastruct.BlockingQueueTimeout) u32 {
 	mut capture := unsafe { &SurfaceEventCapture(data) }
 	match event {
-		RendererHealthEvent { capture.health_events << event.health }
-		ScrollbarEvent { capture.scrollbar_events << event.scrollbar }
+		RendererHealthEvent {
+			capture.health_events << event.health
+			capture.health_timeouts << timeout.kind
+		}
+		ScrollbarEvent {
+			capture.scrollbar_events << event.scrollbar
+			capture.scrollbar_timeouts << timeout.kind
+		}
 	}
 
-	return capture.health_events.len + capture.scrollbar_events.len
+	return u32(capture.health_events.len + capture.scrollbar_events.len)
 }
 
 // ============================================================
@@ -55,12 +64,14 @@ fn test_renderer_emits_health_transitions_and_dirty_scrollbar() {
 	render.frame_completed(.unhealthy)
 	render.frame_completed(.healthy)
 	assert capture.health_events == [.unhealthy, .healthy]
+	assert capture.health_timeouts == [.forever, .forever]
 
 	// A zero-sized renderer exits before GPU work, but the source renderer's
 	// deferred scrollbar delivery still runs for that draw attempt.
 	render.draw_frame(false)!
 	assert capture.scrollbar_events.len == 1
 	assert capture.scrollbar_events[0].eql(render.scrollbar)
+	assert capture.scrollbar_timeouts == [.instant]
 	assert !render.scrollbar_dirty
 }
 

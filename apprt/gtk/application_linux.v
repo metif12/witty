@@ -1261,19 +1261,29 @@ fn application_action_descriptors(string_array_type GVariantType, u64_type GVari
 }
 
 fn application_action_new_window_cb(action GSimpleAction, parameter GVariant, user_data voidptr) {
-	_ = action
-	_ = parameter // The pinned implementation validates/logs command argv only.
-	if isnil(user_data) {
-		return
-	}
 	mut self := unsafe { &Application(user_data) }
-	self.activate()
+	self.action_new_window(action, parameter)
+}
+
+// action_new_window queues a new window. The `new-window-command` variant's
+// string-array parameter is only validated and logged by the pinned source.
+pub fn (mut self Application) action_new_window(action GSimpleAction, parameter GVariant) {
+	_ = action
+	if !isnil(parameter) {
+		as_variant_type := C.g_variant_type_new(c'as')
+		// ensure that the supplied parameter is an array of strings
+		if !C.g_variant_is_of_type(parameter, as_variant_type) {
+			type_string := unsafe { cstring_to_vstring(C.g_variant_get_type_string(parameter)) }
+			eprintln('[warn] gtk: parameter is of type ${type_string}')
+		}
+		C.g_variant_type_free(as_variant_type)
+	}
+
+	mut mailbox := self.core().mailbox
+	_ = mailbox.push(core.Message(core.NewWindowMsg{}), datastruct.blocking_queue_forever)
 }
 
 fn application_action_open_config_cb(action GSimpleAction, parameter GVariant, user_data voidptr) {
-	if isnil(user_data) {
-		return
-	}
 	mut self := unsafe { &Application(user_data) }
 	self.action_open_config(action, parameter)
 }
@@ -1284,34 +1294,46 @@ fn application_action_open_config_cb(action GSimpleAction, parameter GVariant, u
 pub fn (mut self Application) action_open_config(action GSimpleAction, parameter GVariant) {
 	_ = action
 	_ = parameter
-	if isnil(self.core_app) {
-		return
-	}
-	mut core_app := unsafe { self.core_app }
-	core_app.request_open_config()
+	mut mailbox := self.core().mailbox
+	_ = mailbox.push(core.Message(core.OpenConfigMsg{}), datastruct.blocking_queue_forever)
 }
 
 fn application_action_present_surface_cb(action GSimpleAction, parameter GVariant, user_data voidptr) {
 	_ = action
-	if isnil(user_data) || isnil(parameter) {
+	if isnil(parameter) {
 		return
 	}
 	type_ := C.g_variant_type_new(c't')
 	is_u64 := C.g_variant_is_of_type(parameter, type_)
 	C.g_variant_type_free(type_)
+
+	// Make sure that we've receiived a u64 from the system.
 	if !is_u64 {
 		return
 	}
-	address := C.g_variant_get_uint64(parameter)
-	if address == 0 {
+
+	// Convert that u64 to pointer to a core surface. A value of zero
+	// means that there was no target surface for the notification so
+	// we don't focus any surface.
+	ptr_int := C.g_variant_get_uint64(parameter)
+	if ptr_int == 0 {
 		return
 	}
+	surface := unsafe { &core.Surface(voidptr(usize(ptr_int))) }
+
+	// Send a message through the core app mailbox rather than presenting the
+	// surface directly so that it can validate that the surface pointer is
+	// valid. We could get an invalid pointer if a desktop notification outlives
+	// a Ghostty instance and a new one starts up, or there are multiple Ghostty
+	// instances running.
 	self := unsafe { &Application(user_data) }
-	if isnil(self.core_app) {
-		return
-	}
-	mut core_app := unsafe { self.core_app }
-	core_app.request_present_surface(address)
+	mut mailbox := self.core().mailbox
+	_ = mailbox.push(core.Message(core.SurfaceMessageMsg{
+		surface: surface
+		message: apprt.SurfaceMessage{
+			kind: .present_surface
+		}
+	}), datastruct.blocking_queue_forever)
 }
 
 fn application_action_quit_cb(action GSimpleAction, parameter GVariant, user_data voidptr) {
@@ -1455,11 +1477,9 @@ fn cgroup_isolation_enabled(mode configpkg.LinuxCgroup, app_flags int) bool {
 // activate handles the GApplication "activate" signal: queue a new window.
 // Mirrors the `activate` vfunc.
 fn (mut self Application) activate() {
-	if isnil(self.core_app) {
-		return
-	}
-	mut core_app := unsafe { self.core_app }
-	core_app.request_new_window(none)
+	// Queue a new window
+	mut mailbox := self.core().mailbox
+	_ = mailbox.push(core.Message(core.NewWindowMsg{}), datastruct.blocking_queue_forever)
 }
 
 // dispose releases the config errors dialog and signal source. Mirrors the

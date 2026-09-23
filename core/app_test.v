@@ -15,9 +15,32 @@ fn app_wakeup_probe(data voidptr) {
 	probe.count++
 }
 
-fn app_mailbox_push_forever_for_test(mailbox_ptr voidptr, done chan bool) {
-	mut mailbox := unsafe { &Mailbox(mailbox_ptr) }
-	assert mailbox.push(Message(PresentSurfaceMsg{ address: 999 })) == app_mailbox_capacity
+fn make_test_app() App {
+	return App{
+		mailbox: MailboxQueue.create() or { panic(err) }
+	}
+}
+
+// fake_surface returns a distinct surface identity for queue-order tests. The
+// app mailbox stores the pointer without dereferencing it.
+fn fake_surface(id int) &Surface {
+	return unsafe { &Surface(voidptr(usize(id + 1))) }
+}
+
+fn redraw_target(msg Message) &Surface {
+	match msg {
+		RedrawSurfaceMsg {
+			return msg.surface
+		}
+		else {
+			panic('unexpected app mailbox message')
+		}
+	}
+}
+
+fn app_mailbox_push_forever_for_test(queue_ptr voidptr, done chan bool) {
+	mut queue := unsafe { &MailboxQueue(queue_ptr) }
+	assert queue.push(Message(RedrawSurfaceMsg{ surface: fake_surface(999) }), datastruct.blocking_queue_forever) == app_mailbox_capacity
 	done <- true
 }
 
@@ -43,12 +66,32 @@ fn test_app_initialized_font_grid_set_is_empty_at_teardown() ! {
 }
 
 fn test_app_mailbox_dispatches_open_config() ! {
-	mut app := App{}
+	mut app := make_test_app()
 	mut runtime := apprt.RuntimeApp{}
-	app.request_open_config()
+	_ = app.mailbox.push(Message(OpenConfigMsg{}), datastruct.blocking_queue_forever)
 	app.tick(mut runtime)!
 	assert runtime.actions.len == 1
 	assert runtime.actions[0].action == .open_config
+}
+
+fn test_app_mailbox_push_wakes_runtime() {
+	mut probe := AppWakeupProbe{}
+	mut runtime := apprt.RuntimeApp{
+		user_data: &probe
+		wakeup_fn: app_wakeup_probe
+	}
+	mut queue := MailboxQueue.create() or { panic(err) }
+	defer {
+		queue.destroy()
+	}
+	app_mailbox := Mailbox{
+		rt_app:  &runtime
+		mailbox: queue
+	}
+	assert app_mailbox.push(Message(QuitMsg{}), datastruct.blocking_queue_instant) == 1
+	assert probe.count == 1
+	assert app_mailbox.push(Message(QuitMsg{}), datastruct.blocking_queue_instant) == 2
+	assert probe.count == 2
 }
 
 fn test_app_color_scheme_change_requests_soft_reload() ! {
@@ -64,112 +107,91 @@ fn test_app_color_scheme_change_requests_soft_reload() ! {
 }
 
 fn test_app_mailbox_is_bounded_fifo_and_reusable() {
-	mut mailbox := Mailbox.init()
+	mut queue := MailboxQueue.create() or { panic(err) }
 	defer {
-		mailbox.deinit()
+		queue.destroy()
 	}
 
-	assert mailbox.pop() == none
+	assert queue.pop() == none
 	for i in 0 .. app_mailbox_capacity {
-		assert mailbox.try_push(Message(PresentSurfaceMsg{ address: u64(i) })) == i + 1
+		assert queue.push(Message(RedrawSurfaceMsg{ surface: fake_surface(i) }), datastruct.blocking_queue_instant) == u32(i + 1)
 	}
-	assert mailbox.try_push(Message(PresentSurfaceMsg{ address: 999 })) == 0
-	assert mailbox.len() == app_mailbox_capacity
+	assert queue.push(Message(RedrawSurfaceMsg{ surface: fake_surface(999) }), datastruct.blocking_queue_instant) == 0
+	assert queue.len() == app_mailbox_capacity
 
 	for i in 0 .. app_mailbox_capacity {
-		msg := mailbox.pop() or {
+		msg := queue.pop() or {
 			assert false, 'message ${i} missing'
 			return
 		}
-		match msg {
-			PresentSurfaceMsg {
-				assert msg.address == u64(i)
-			}
-			else {
-				assert false, 'unexpected app mailbox message'
-			}
-		}
+		assert voidptr(redraw_target(msg)) == voidptr(fake_surface(i))
 	}
-	assert mailbox.pop() == none
-	assert mailbox.try_push(Message(PresentSurfaceMsg{ address: 64 })) == 1
-	msg := mailbox.pop() or {
+	assert queue.pop() == none
+	assert queue.push(Message(RedrawSurfaceMsg{ surface: fake_surface(64) }), datastruct.blocking_queue_instant) == 1
+	msg := queue.pop() or {
 		assert false
 		return
 	}
-	match msg {
-		PresentSurfaceMsg {
-			assert msg.address == 64
-		}
-		else {
-			assert false
-		}
-	}
+	assert voidptr(redraw_target(msg)) == voidptr(fake_surface(64))
 }
 
 fn test_app_mailbox_blocking_push_waits_for_capacity() {
-	mut mailbox := Mailbox.init()
+	mut queue := MailboxQueue.create() or { panic(err) }
 	defer {
-		mailbox.deinit()
+		queue.destroy()
 	}
 	for i in 0 .. app_mailbox_capacity {
-		assert mailbox.try_push(Message(PresentSurfaceMsg{ address: u64(i) })) == i + 1
+		assert queue.push(Message(RedrawSurfaceMsg{ surface: fake_surface(i) }), datastruct.blocking_queue_instant) == u32(i + 1)
 	}
 
-	done := chan bool{ cap: 1 }
-	worker := spawn app_mailbox_push_forever_for_test(voidptr(&mailbox), done)
-	first := mailbox.pop() or {
+	done := chan bool{cap: 1}
+	worker := spawn app_mailbox_push_forever_for_test(voidptr(queue), done)
+	first := queue.pop() or {
 		assert false
 		return
 	}
-	match first {
-		PresentSurfaceMsg {
-			assert first.address == 0
-		}
-		else {
-			assert false
-		}
-	}
+	assert voidptr(redraw_target(first)) == voidptr(fake_surface(0))
 	worker.wait()
 	assert <-done
-	assert mailbox.len() == app_mailbox_capacity
+	assert queue.len() == app_mailbox_capacity
 	for _ in 1 .. app_mailbox_capacity {
-		_ = mailbox.pop() or {
+		_ = queue.pop() or {
 			assert false
 			return
 		}
 	}
-	last := mailbox.pop() or {
+	last := queue.pop() or {
 		assert false
 		return
 	}
-	match last {
-		PresentSurfaceMsg {
-			assert last.address == 999
-		}
-		else {
-			assert false
-		}
-	}
+	assert voidptr(redraw_target(last)) == voidptr(fake_surface(999))
 }
 
-fn test_app_present_surface_request_ignores_stale_address() ! {
-	mut app := App{}
+fn test_app_present_surface_message_ignores_stale_pointer() ! {
+	mut app := make_test_app()
 	mut runtime := apprt.RuntimeApp{}
-	app.request_present_surface(0xdeadbeef)
-	assert app.pending_message_count() == 1
+	stale := unsafe { &Surface(voidptr(usize(0xdeadbeef))) }
+	_ = app.mailbox.push(Message(SurfaceMessageMsg{
+		surface: stale
+		message: SurfaceMessage{
+			kind: .present_surface
+		}
+	}), datastruct.blocking_queue_forever)
+	assert app.mailbox.len() == 1
 	app.tick(mut runtime)!
-	assert app.pending_message_count() == 0
+	assert app.mailbox.len() == 0
+	assert runtime.actions.len == 0
 }
 
 fn test_renderer_wakeup_routes_core_pointer_to_runtime_render() ! {
-	mut app := App{}
+	mut app := make_test_app()
 	mut runtime := apprt.RuntimeApp{}
 	mut core_surface := Surface{ app: &app }
 	mut surface := &SurfaceRef{ core_surface: &core_surface }
 	app.surfaces = SurfaceList([surface])
 
 	surface_renderer_wakeup(voidptr(&core_surface))
-	assert app.pending_message_count() == 1
+	assert app.mailbox.len() == 1
 	app.tick(mut runtime)!
 	assert runtime.actions.len == 1
 	assert runtime.actions[0].action == .render
@@ -185,7 +207,7 @@ fn test_renderer_wakeup_routes_core_pointer_to_runtime_render() ! {
 }
 
 fn test_renderer_wakeup_ignores_stale_core_pointer() ! {
-	mut app := App{}
+	mut app := make_test_app()
 	mut runtime := apprt.RuntimeApp{}
 	mut stale_surface := Surface{ app: &app }
 	surface_renderer_wakeup(voidptr(&stale_surface))
@@ -194,7 +216,7 @@ fn test_renderer_wakeup_ignores_stale_core_pointer() ! {
 }
 
 fn test_termio_surface_message_routes_core_pointer_to_live_surface() ! {
-	mut app := App{}
+	mut app := make_test_app()
 	mut apprt_runtime := apprt.RuntimeApp{}
 	mut probe := AppWakeupProbe{}
 	mut core_runtime := apprt.RuntimeApp{
@@ -217,21 +239,21 @@ fn test_termio_surface_message_routes_core_pointer_to_live_surface() ! {
 }
 
 fn test_termio_surface_message_ignores_closed_surface() ! {
-	mut app := App{}
+	mut app := make_test_app()
 	mut apprt_runtime := apprt.RuntimeApp{}
 	mut stale_surface := Surface{}
 	assert termio_surface_message_push(voidptr(&app), voidptr(&stale_surface), apprt.SurfaceMessage{
 		kind: .ring_bell
 	}, datastruct.blocking_queue_forever) == 1
 	app.tick(mut apprt_runtime)!
-	assert app.pending_message_count() == 0
+	assert app.mailbox.len() == 0
 }
 
 fn test_termio_surface_message_preserves_instant_timeout() {
-	mut app := App{}
-	defer { app.mailbox.deinit() }
+	mut app := make_test_app()
+	defer { app.mailbox.destroy() }
 	for i in 0 .. app_mailbox_capacity {
-		assert app.mailbox.try_push(Message(PresentSurfaceMsg{ address: u64(i) })) == i + 1
+		assert app.mailbox.push(Message(RedrawSurfaceMsg{ surface: fake_surface(i) }), datastruct.blocking_queue_instant) == u32(i + 1)
 	}
 	mut surface := Surface{}
 	assert termio_surface_message_push(voidptr(&app), voidptr(&surface), apprt.SurfaceMessage{
@@ -291,7 +313,7 @@ fn test_app_new_window_targets_valid_parent() ! {
 	app.add_surface(surface)
 	// Ignore the quit-timer stop generated by add_surface.
 	runtime.actions.clear()
-	app.new_window(mut runtime, NewWindowMsg{ parent: surface })!
+	app.new_window(mut runtime, NewWindowMsg{ parent: &core_surface })!
 	assert runtime.actions.len == 1
 	assert runtime.actions[0].action == .new_window
 	target := runtime.actions[0].target
@@ -332,7 +354,7 @@ fn test_app_delete_surface_uses_swap_remove() {
 	assert voidptr(app.surfaces[1]) == voidptr(second)
 }
 
-fn test_app_focus_core_surface_resolves_runtime_wrapper() {
+fn test_app_focus_surface_requires_known_core_surface() {
 	mut app := App{}
 	mut first_core := Surface{}
 	mut second_core := Surface{}
@@ -340,14 +362,19 @@ fn test_app_focus_core_surface_resolves_runtime_wrapper() {
 	mut second := &SurfaceRef{ core_surface: &second_core }
 	app.surfaces = SurfaceList([first, second])
 
-	app.focus_core_surface(&second_core)
+	app.focus_surface(&second_core)
 	focused := app.focused_surface() or {
 		assert false, 'expected a focused surface'
 		return
 	}
-	assert voidptr(focused) == voidptr(second)
+	assert voidptr(focused) == voidptr(&second_core)
 
 	mut unknown := Surface{}
-	app.focus_core_surface(&unknown)
-	assert voidptr(app.focused_surface()?) == voidptr(second)
+	app.focus_surface(&unknown)
+	assert voidptr(app.focused_surface()?) == voidptr(&second_core)
+
+	// Deleting the runtime surface clears focus even if the address is reused.
+	app.delete_surface(second)
+	assert app.focused_surface() == none
+	assert app.last_focused_surface == none
 }

@@ -1,5 +1,6 @@
 module renderer
 
+import datastruct
 import font
 import terminal
 
@@ -18,7 +19,7 @@ pub:
 	scrollbar terminal.Scrollbar
 }
 
-pub type SurfaceEventPushFn = fn (voidptr, SurfaceEvent) int
+pub type SurfaceEventPushFn = fn (voidptr, SurfaceEvent, datastruct.BlockingQueueTimeout) u32
 
 pub struct SurfaceMailbox {
 pub:
@@ -26,11 +27,8 @@ pub:
 	push_fn   SurfaceEventPushFn = unsafe { nil }
 }
 
-pub fn (m SurfaceMailbox) push(event SurfaceEvent) int {
-	if m.push_fn == unsafe { nil } {
-		return 0
-	}
-	return m.push_fn(m.user_data, event)
+pub fn (m SurfaceMailbox) push(event SurfaceEvent, timeout datastruct.BlockingQueueTimeout) u32 {
+	return m.push_fn(m.user_data, event, timeout)
 }
 
 // The options that are used to configure a renderer.

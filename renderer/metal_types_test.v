@@ -1,5 +1,6 @@
 module renderer
 
+import datastruct
 import font
 import macos
 
@@ -18,15 +19,30 @@ fn metal_frame_test_completion(renderer_ptr voidptr, target_ptr voidptr, status 
 	capture.sync_ = sync_
 }
 
+fn capture_metal_health_event(data voidptr, event SurfaceEvent, timeout datastruct.BlockingQueueTimeout) u32 {
+	assert timeout.kind == .forever
+	mut events := unsafe { &[]Health(data) }
+	if event is RendererHealthEvent {
+		events << event.health
+	}
+	return u32(events.len)
+}
+
 fn test_renderer_metal_completion_callback_reports_buffer_health() {
+	mut health_events := []Health{}
 	mut render := Renderer{
 		health: .unhealthy
+		surface_mailbox: SurfaceMailbox{
+			user_data: voidptr(&health_events)
+			push_fn:   capture_metal_health_event
+		}
 	}
 	mut target := MetalTarget{}
 	renderer_metal_frame_completed_callback(voidptr(&render), voidptr(&target), 4, false)
 	assert render.health == .healthy
 	renderer_metal_frame_completed_callback(voidptr(&render), voidptr(&target), 5, true)
 	assert render.health == .unhealthy
+	assert health_events == [.healthy, .unhealthy]
 }
 
 fn test_metal_render_step_counts_retain_source_pointer_width() {

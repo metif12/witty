@@ -57,13 +57,15 @@ fn test_application_cgroup_mode_gate() {
 }
 
 fn test_application_activate_queues_new_window() {
-	mut core_app := &core.App{}
+	mut core_app := &core.App{
+		mailbox: core.MailboxQueue.create() or { panic(err) }
+	}
 	mut app := Application{
 		core_app: core_app
 	}
-	assert core_app.pending_message_count() == 0
+	assert core_app.mailbox.len() == 0
 	app.activate()
-	assert core_app.pending_message_count() == 1
+	assert core_app.mailbox.len() == 1
 }
 
 fn test_application_action_table_matches_ghostty() {
@@ -86,15 +88,17 @@ fn test_application_action_table_matches_ghostty() {
 }
 
 fn test_application_action_callbacks_queue_core_messages() {
-	mut core_app := &core.App{}
+	mut core_app := &core.App{
+		mailbox: core.MailboxQueue.create() or { panic(err) }
+	}
 	mut app := Application{
 		core_app: core_app
 	}
 	application_action_new_window_cb(unsafe { nil }, unsafe { nil }, voidptr(&app))
 	app.action_open_config(unsafe { nil }, unsafe { nil })
-	assert core_app.pending_message_count() == 2
+	assert core_app.mailbox.len() == 2
 	application_action_open_config_cb(unsafe { nil }, unsafe { nil }, voidptr(&app))
-	assert core_app.pending_message_count() == 3
+	assert core_app.mailbox.len() == 3
 }
 
 fn test_application_dispatches_core_runtime_actions() ! {

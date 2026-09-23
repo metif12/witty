@@ -750,6 +750,7 @@ import font
 import input
 import time
 import configpkg
+import datastruct
 import file_type
 import highlight
 import macos
@@ -1595,7 +1596,7 @@ pub fn (mut self Renderer) draw_frame(sync_ bool) ! {
 	defer {
 		if self.scrollbar_dirty && self.surface_mailbox.push(SurfaceEvent(ScrollbarEvent{
 			scrollbar: self.scrollbar
-		})) > 0 {
+		}), datastruct.blocking_queue_instant) > 0 {
 			self.scrollbar_dirty = false
 		}
 	}
@@ -2111,9 +2112,9 @@ pub fn (mut self Renderer) frame_completed(health Health) {
 	// If our health value hasn't changed, then we do nothing.
 	if self.health != health {
 		self.health = health
-		self.surface_mailbox.push(SurfaceEvent(RendererHealthEvent{
+		_ = self.surface_mailbox.push(SurfaceEvent(RendererHealthEvent{
 			health: health
-		}))
+		}), datastruct.blocking_queue_forever)
 	}
 
 	// Always release our semaphore, including when health is unchanged.

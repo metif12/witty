@@ -250,25 +250,6 @@ pub fn (s &SurfaceRef) needs_confirm_quit() bool {
 	return s.core_surface.needs_confirm_quit()
 }
 
-// close requests the surface to close. Delegates to the core surface.
-pub fn (s &SurfaceRef) close() {
-	if isnil(s.core_surface) {
-		return
-	}
-	mut cs := s.core_surface
-	cs.close()
-}
-
-// handle_message handles a message sent to this surface. Delegates to the
-// core surface.
-pub fn (s &SurfaceRef) handle_message(msg SurfaceMessage) ! {
-	if isnil(s.core_surface) {
-		return
-	}
-	mut cs := s.core_surface
-	cs.handle_message(msg)!
-}
-
 // perform_binding_action performs a surface-scoped binding action on this
 // surface. Returns true if the action was performed. Delegates to the real
 // core.Surface, which switches on input.ActionTag (see Surface.perform_binding_action).
@@ -311,12 +292,13 @@ pub mut:
 	focused bool = true
 
 	// The last focused surface. This surface may not be valid;
-	// you must always call has_surface to validate it.
-	last_focused_surface ?&SurfaceRef
+	// you must always call has_surface to validate it. V does not allow this
+	// field to share the `focused_surface` accessor's name.
+	last_focused_surface ?&Surface
 
 	// The mailbox that can be used to send this thread messages. Note
 	// this is a blocking queue so if it is full you will get errors (or block).
-	mailbox Mailbox
+	mailbox &MailboxQueue = unsafe { nil }
 
 	// The set of font GroupCache instances shared by surfaces with the
 	// same font configuration.
@@ -357,7 +339,7 @@ pub fn App.create() !&App {
 pub fn (mut self App) init() ! {
 	self.font_grid_set = font.SharedGridSet.init() or { return err }
 	self.surfaces = SurfaceList([]&SurfaceRef{})
-	self.mailbox = Mailbox.init()
+	self.mailbox = MailboxQueue.create()!
 	self.config_conditional_state = configpkg.ConditionalState{}
 	self.focused = true
 	self.first = true
@@ -370,7 +352,7 @@ pub fn (mut self App) deinit() {
 		surface.deinit()
 	}
 	self.surfaces = SurfaceList([]&SurfaceRef{})
-	self.mailbox.deinit()
+	self.mailbox.destroy()
 
 	// Clean up our font group cache.
 	// We should have zero items in the grid set at this point because
@@ -403,7 +385,8 @@ pub fn (mut self App) update_config(mut rt_app apprt.RuntimeApp, config &configp
 	// derives its own config from the change_config message, applying its
 	// own conditional state.
 	for surface in self.surfaces {
-		surface.handle_message(unsafe {
+		mut core_surface := surface.core()
+		core_surface.handle_message(unsafe {
 			SurfaceMessage{ kind: .change_config, config: config }
 		})!
 	}
@@ -460,7 +443,7 @@ pub fn (mut self App) delete_surface(surface &SurfaceRef) {
 	// just let focused surface be but the allocator was reusing addresses
 	// after free and giving false positives, so we must clear it.
 	if focused := self.last_focused_surface {
-		if voidptr(focused) == voidptr(surface) {
+		if voidptr(focused) == voidptr(surface.core()) {
 			self.last_focused_surface = none
 		}
 	}
@@ -489,7 +472,7 @@ pub fn (mut self App) delete_surface(surface &SurfaceRef) {
 // focused_surface returns the last focused surface if it is still
 // a valid (known) surface. Returns none if no valid focused surface exists.
 // This is only valid while on the main thread before tick is called.
-pub fn (self &App) focused_surface() ?&SurfaceRef {
+pub fn (self &App) focused_surface() ?&Surface {
 	surface := self.last_focused_surface or { return none }
 	if !self.has_surface(surface) {
 		return none
@@ -511,101 +494,66 @@ pub fn (self &App) needs_confirm_quit() bool {
 // drain_mailbox processes all pending messages in the mailbox.
 fn (mut self App) drain_mailbox(mut rt_app apprt.RuntimeApp) ! {
 	for {
-		msg := self.mailbox.pop() or { break }
-		match msg {
+		message := self.mailbox.pop() or { break }
+		match message {
 			OpenConfigMsg {
 				self.perform_action(mut rt_app, input.Action.new(.open_config))!
 			}
 			NewWindowMsg {
-				self.new_window(mut rt_app, msg)!
+				self.new_window(mut rt_app, message)!
 			}
 			CloseMsg {
-				self.close_surface(msg.surface)
+				self.close_surface(message.surface)
 			}
-			QuitMsg {
-				// If we're quitting, then we stop draining the mailbox
-				// immediately. This lets us defer mailbox processing to
-				// the next tick so that the apprt can try to quit as
-				// quickly as possible.
-				rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .quit, apprt.ActionValue{})!
-				return
+			SurfaceMessageMsg {
+				self.surface_message(message.surface, message.message)!
 			}
 			RedrawSurfaceMsg {
-				if surface := msg.surface {
-					if self.has_surface(surface) {
-						rt_app.perform_action(apprt.Target(apprt.SurfaceTarget{
-							surface: surface.core_surface
-						}), .render, apprt.ActionValue{})!
-					}
-				} else if core_surface := msg.core_surface {
-					for surface in self.surfaces {
-						if voidptr(surface.core_surface) == voidptr(core_surface) {
-							rt_app.perform_action(apprt.Target(apprt.SurfaceTarget{
-								surface: surface.core_surface
-							}), .render, apprt.ActionValue{})!
-							break
-						}
-					}
-				}
+				self.redraw_surface(mut rt_app, message.surface)!
 			}
-			SurfaceAppMsg {
-				self.surface_message(msg.surface, msg.message)!
-			}
-			SurfaceCoreMsg {
-				for surface in self.surfaces {
-					if voidptr(surface.core_surface) == voidptr(msg.surface) {
-						self.surface_message(surface, msg.message)!
-						break
-					}
-				}
-			}
-			PresentSurfaceMsg {
-				for surface in self.surfaces {
-					if u64(usize(voidptr(surface.core_surface))) == msg.address {
-						self.surface_message(surface, SurfaceMessage{
-							kind: .present_surface
-						})!
-						break
-					}
-				}
+			// If we're quitting, then we set the quit flag and stop
+			// draining the mailbox immediately. This lets us defer
+			// mailbox processing to the next tick so that the apprt
+			// can try to quit as quickly as possible.
+			QuitMsg {
+				self.perform_action(mut rt_app, input.Action.new(.quit))!
+				return
 			}
 		}
 	}
 }
 
-// close_surface requests a surface to close, if it is still known.
-pub fn (mut self App) close_surface(surface &SurfaceRef) {
+pub fn (mut self App) close_surface(surface &Surface) {
 	if !self.has_surface(surface) {
 		return
 	}
-	surface.close()
+	mut core_surface := unsafe { surface }
+	core_surface.close()
 }
 
-// focus_surface sets the given surface as the focused surface,
-// if it is a known surface.
-pub fn (mut self App) focus_surface(surface &SurfaceRef) {
+pub fn (mut self App) focus_surface(surface &Surface) {
 	if !self.has_surface(surface) {
 		return
 	}
-	self.last_focused_surface = surface
+	self.last_focused_surface = unsafe { surface }
 }
 
-// focus_core_surface records focus for the runtime wrapper that owns a core
-// surface. V keeps the runtime boundary opaque, so this pointer lookup is the
-// equivalent of Ghostty passing `self.rt_surface` to App.focusSurface.
-pub fn (mut self App) focus_core_surface(surface &Surface) {
-	for candidate in self.surfaces {
-		if voidptr(candidate.core_surface) == voidptr(surface) {
-			self.focus_surface(candidate)
-			return
-		}
+// redraw_surface asks single-threaded runtimes to draw a surface. Ghostty
+// identifies the target by its runtime surface; Witty's renderer callback only
+// carries the core surface, which maps one-to-one to its runtime surface.
+fn (mut self App) redraw_surface(mut rt_app apprt.RuntimeApp, surface &Surface) ! {
+	if !self.has_surface(surface) {
+		return
 	}
+	rt_app.perform_action(apprt.Target(apprt.SurfaceTarget{ surface: surface }), .render,
+		apprt.ActionValue{})!
 }
 
+// Create a new window
 pub fn (mut self App) new_window(mut rt_app apprt.RuntimeApp, msg NewWindowMsg) ! {
 	target := if parent := msg.parent {
 		if self.has_surface(parent) {
-			apprt.Target(apprt.SurfaceTarget{ surface: parent.core_surface })
+			apprt.Target(apprt.SurfaceTarget{ surface: parent })
 		} else {
 			apprt.Target(apprt.AppTarget{})
 		}
@@ -613,36 +561,6 @@ pub fn (mut self App) new_window(mut rt_app apprt.RuntimeApp, msg NewWindowMsg) 
 		apprt.Target(apprt.AppTarget{})
 	}
 	rt_app.perform_action(target, .new_window, apprt.ActionValue{})!
-}
-
-// request_new_window queues creation of a new window on the core mailbox.
-// This is the public runtime-facing half of the same mailbox push Ghostty's
-// GTK Application.activate performs.
-pub fn (mut self App) request_new_window(parent ?&SurfaceRef) {
-	self.mailbox.push(NewWindowMsg{
-		parent: parent
-	})
-}
-
-// request_open_config queues the same core mailbox message used by Ghostty's
-// app.open-config GAction.
-pub fn (mut self App) request_open_config() {
-	self.mailbox.push(OpenConfigMsg{})
-}
-
-// request_present_surface queues an address for validation on the app thread
-// before the present-surface message is delivered. Desktop notifications may
-// outlive their originating surface, so dereferencing here would be unsafe.
-pub fn (mut self App) request_present_surface(address u64) {
-	self.mailbox.push(PresentSurfaceMsg{
-		address: address
-	})
-}
-
-// pending_message_count exposes the bounded mailbox occupancy for runtime
-// integration and tests. It does not consume or otherwise mutate messages.
-pub fn (mut self App) pending_message_count() int {
-	return self.mailbox.len()
 }
 
 // focus_event handles an app-level focus event. This should be called
@@ -874,18 +792,19 @@ pub fn (mut self App) perform_all_surface_action(action input.Action) {
 // surface_message handles a message routed to a specific surface. We first
 // ensure the surface is still active (a simple linear search) since messages
 // are rare and windows are few.
-fn (mut self App) surface_message(surface &SurfaceRef, msg SurfaceMessage) ! {
+fn (mut self App) surface_message(surface &Surface, msg SurfaceMessage) ! {
 	if self.has_surface(surface) {
-		surface.handle_message(msg)!
+		mut core_surface := unsafe { surface }
+		core_surface.handle_message(msg)!
 	}
 	// If the surface was not found it probably quit before we handled the
 	// message. That is not a problem.
 }
 
 // has_surface returns true if the given surface is in our known surface list.
-fn (self &App) has_surface(surface &SurfaceRef) bool {
-	for s in self.surfaces {
-		if voidptr(s) == voidptr(surface) {
+fn (self &App) has_surface(surface &Surface) bool {
+	for v in self.surfaces {
+		if voidptr(v.core()) == voidptr(surface) {
 			return true
 		}
 	}
@@ -897,125 +816,71 @@ pub type Message = OpenConfigMsg
 	| NewWindowMsg
 	| CloseMsg
 	| QuitMsg
+	| SurfaceMessageMsg
 	| RedrawSurfaceMsg
-	| SurfaceAppMsg
-	| SurfaceCoreMsg
-	| PresentSurfaceMsg
 
-// OpenConfigMsg requests the configuration file to be opened.
+// Open the configuration file
 pub struct OpenConfigMsg {}
 
-// NewWindowMsg requests creation of a new terminal window.
+// Create a new terminal window.
 pub struct NewWindowMsg {
 pub:
-	// The parent surface, if any. If set, the new window may inherit
-	// properties from the parent (like working directory).
-	parent ?&SurfaceRef
+	// The parent surface
+	parent ?&Surface
 }
 
-// CloseMsg requests a surface to be closed. This notifies the runtime
-// that a surface should close.
+// Close a surface. This notifies the runtime that a surface
+// should close.
 pub struct CloseMsg {
 pub:
-	surface &SurfaceRef
+	surface &Surface
 }
 
-// QuitMsg requests the application to quit.
+// Quit
 pub struct QuitMsg {}
 
-// RedrawSurfaceMsg requests a surface to be redrawn. This only has an
-// effect for runtimes that use single-threaded draws. To redraw a surface
-// for all runtimes, wake up the renderer thread. The renderer thread will
-// send this message if it needs to.
-pub struct RedrawSurfaceMsg {
-pub:
-	surface      ?&SurfaceRef
-	core_surface ?&Surface
-}
-
-pub struct SurfaceAppMsg {
-pub:
-	surface &SurfaceRef
-	message SurfaceMessage
-}
-
-// SurfaceCoreMsg is the cross-thread form used by termio. The app thread
-// resolves the stable core pointer back to its live runtime surface before
-// dispatching, so messages for a surface that already closed are ignored.
-pub struct SurfaceCoreMsg {
+// A message for a specific surface.
+pub struct SurfaceMessageMsg {
 pub:
 	surface &Surface
 	message SurfaceMessage
 }
 
-// PresentSurfaceMsg retains the integer pointer carried by the GTK action
-// until the core mailbox can validate it against the live surface list.
-pub struct PresentSurfaceMsg {
+// Redraw a surface. This only has an effect for runtimes that
+// use single-threaded draws. To redraw a surface for all runtimes,
+// wake up the renderer thread. The renderer thread will send this
+// message if it needs to.
+pub struct RedrawSurfaceMsg {
 pub:
-	address u64
+	surface &Surface
 }
 
 // Mailbox is the way that other threads send the app thread messages.
-// It is a bounded queue that can be used to send messages to the app
-// from any thread.
 pub struct Mailbox {
-mut:
-	queue &datastruct.BlockingQueue[Message] = unsafe { nil }
+pub mut:
+	rt_app  &apprt.RuntimeApp = unsafe { nil }
+	mailbox &MailboxQueue     = unsafe { nil }
 }
 
 const app_mailbox_capacity = 64
 
-pub fn Mailbox.init() Mailbox {
-	return Mailbox{
-		queue: datastruct.BlockingQueue.create[Message](app_mailbox_capacity) or {
-			panic(err)
-		}
-	}
+// The type used for sending messages to the app thread.
+pub type MailboxQueue = datastruct.BlockingQueue[Message]
+
+// create allocates the queue with its fixed source capacity. V generics have
+// no integer parameters, so the capacity is supplied here instead of the type.
+pub fn MailboxQueue.create() !&MailboxQueue {
+	return datastruct.BlockingQueue.create[Message](app_mailbox_capacity)!
 }
 
-pub fn (mut self Mailbox) deinit() {
-	if self.queue != unsafe { nil } {
-		self.queue.destroy()
-		self.queue = unsafe { nil }
-	}
-}
+// Send a message to the surface.
+pub fn (self Mailbox) push(msg Message, timeout datastruct.BlockingQueueTimeout) u32 {
+	mut queue := unsafe { self.mailbox }
+	result := queue.push(msg, timeout)
 
-fn (mut self Mailbox) ensure_queue() &datastruct.BlockingQueue[Message] {
-	if self.queue == unsafe { nil } {
-		self.queue = datastruct.BlockingQueue.create[Message](app_mailbox_capacity) or {
-			panic(err)
-		}
-	}
-	return self.queue
-}
+	// Wake up our app loop
+	mut rt_app := unsafe { self.rt_app }
+	rt_app.wakeup()
 
-// try_push adds a message without blocking and returns the queue occupancy, or
-// zero when the fixed-capacity queue is full.
-pub fn (mut self Mailbox) try_push(msg Message) int {
-	return int(self.push_timeout(msg, datastruct.blocking_queue_instant))
-}
-
-// push adds a message, waiting for the consumer if the queue is full. App
-// requests use Ghostty's `.forever` queue timeout, so no message is dropped.
-pub fn (mut self Mailbox) push(msg Message) int {
-	return int(self.push_timeout(msg, datastruct.blocking_queue_forever))
-}
-
-// push_timeout preserves the source BlockingQueue timeout contract for
-// adapters such as the per-surface mailbox.
-pub fn (mut self Mailbox) push_timeout(msg Message, timeout datastruct.BlockingQueueTimeout) u32 {
-	mut queue := self.ensure_queue()
-	return queue.push(msg, timeout)
-}
-
-// pop removes and returns the next message from the queue.
-// Returns none if the queue is empty.
-pub fn (mut self Mailbox) pop() ?Message {
-	mut queue := self.ensure_queue()
-	return queue.pop()
-}
-
-pub fn (mut self Mailbox) len() int {
-	mut queue := self.ensure_queue()
-	return queue.len()
+	return result
 }
