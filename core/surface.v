@@ -2451,7 +2451,7 @@ pub fn (mut self Surface) handle_message(msg SurfaceMessage) ! {
 			self.close()
 		}
 		.child_exited {
-			self.child_exited_handler(u32(msg.child_exited.runtime_ms), msg.child_exited.exit_code)
+			self.child_exited_handler(msg.child_exited)
 		}
 		.desktop_notification {
 			if !self.config.desktop_notifications {
@@ -5189,23 +5189,57 @@ fn (mut self Surface) show_mouse() {
 	) or {}
 }
 
-fn (mut self Surface) child_exited_handler(runtime_ms u32, exit_code u32) {
+// child_exited_handler is Ghostty's `childExited`. V does not allow this
+// method to share the `child_exited` field's name.
+fn (mut self Surface) child_exited_handler(info apprt.ChildExited) {
+	// Mark our flag that we exited immediately
 	self.child_exited = true
-	info := apprt.ChildExited{
-		exit_code: exit_code
-		runtime_ms: runtime_ms
-	}
 
-	// If our runtime was below the threshold then assume this was an abnormal
-	// exit. On non-Darwin platforms a successful exit remains a normal exit.
-	mut abnormal := runtime_ms <= self.config.abnormal_command_exit_runtime_ms
-	$if !macos {
-		if exit_code == 0 {
-			abnormal = false
+	// If our runtime was below some threshold then we assume that this
+	// was an abnormal exit and we show an error message.
+	if info.runtime_ms <= self.config.abnormal_command_exit_runtime_ms {
+		// On macOS, our exit code detection doesn't work, possibly
+		// because of our `login` wrapper. More investigation required.
+		mut good_exit := false
+		$if !macos {
+			// If the exit code is 0 then it was a good exit.
+			good_exit = info.exit_code == 0
+		}
+		if !good_exit {
+			eprintln('abnormal process exit detected, showing error message')
+
+			// Try and show a GUI message. If it returns true, don't do anything else.
+			shown := self.rt_app.perform_action(
+				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
+				.show_child_exited,
+				apprt.ActionValue{ show_child_exited_: info },
+			) or {
+				eprintln('error trying to show native child exited GUI err=${err}')
+				false
+			}
+			if shown {
+				return
+			}
+
+			// If a native GUI notification was not shown, update our terminal to
+			// note the abnormal exit.
+			self.child_exited_abnormally(info) or {
+				eprintln('error handling abnormal child exit err=${err}')
+				return
+			}
+
+			return
 		}
 	}
-	if abnormal {
-		eprintln('abnormal process exit detected, showing error message')
+
+	// We output a message so that the user knows what's going on and
+	// doesn't think their terminal just froze. We show this unconditionally
+	// on close even if `wait_after_command` is false and the surface closes
+	// immediately because if a user does an `undo` to restore a closed
+	// surface then they will see this message and know the process has
+	// completed. The single-pass loop is the source's labeled block.
+	for {
+		// First try and show a native GUI message.
 		shown := self.rt_app.perform_action(
 			apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 			.show_child_exited,
@@ -5215,42 +5249,42 @@ fn (mut self Surface) child_exited_handler(runtime_ms u32, exit_code u32) {
 			false
 		}
 		if shown {
-			return
+			break
 		}
-		self.child_exited_abnormally(info) or {
-			eprintln('error handling abnormal child exit err=${err}')
+
+		// If the native GUI can't be shown, display a text message in the
+		// terminal.
+		self.renderer_state.mutex.lock()
+		mut t := self.renderer_state.terminal_
+		t.carriage_return()
+		t.linefeed() or {
+			self.renderer_state.mutex.unlock()
+			break
 		}
+		t.print_string('Process exited. Press any key to close the terminal.') or {
+			self.renderer_state.mutex.unlock()
+			break
+		}
+		t.modes.set(.cursor_visible, false)
+
+		// We also want to ensure that normal keyboard encoding is on
+		// so that we can close the terminal. We close the terminal on
+		// any key press that encodes a character.
+		t.modes.set(.disable_keyboard, false)
+		t.screens.active.kitty_keyboard.set(.set_, terminal.key_flags_disabled)
+		self.renderer_state.mutex.unlock()
+		break
+	}
+
+	// Waiting after command we stop here. The terminal is updated, our
+	// state is updated, and now its up to the user to decide what to do.
+	if self.config.wait_after_command {
 		return
 	}
 
-	// Prefer the native GUI notification. When unavailable, leave the same
-	// explanatory text in the terminal so an immediately closed surface can be
-	// understood if restored through undo.
-	shown := self.rt_app.perform_action(
-		apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
-		.show_child_exited,
-		apprt.ActionValue{ show_child_exited_: info },
-	) or {
-		eprintln('error trying to show native child exited GUI err=${err}')
-		false
-	}
-	if !shown {
-		self.renderer_state.mutex.lock()
-		mut t := self.renderer_state.terminal_
-		if !isnil(t) {
-			t.carriage_return()
-			t.linefeed() or {}
-			t.print_string('Process exited. Press any key to close the terminal.') or {}
-			t.modes.set(.cursor_visible, false)
-			t.modes.set(.disable_keyboard, false)
-			t.screens.active.kitty_keyboard.set(.set_, terminal.key_flags_disabled)
-		}
-		self.renderer_state.mutex.unlock()
-	}
-
-	if !self.config.wait_after_command {
-		self.close()
-	}
+	// If we aren't waiting after the command, then we exit immediately
+	// with no confirmation.
+	self.close()
 }
 
 // child_exited_abnormally writes Ghostty's detailed launch-failure report into
@@ -5261,11 +5295,11 @@ fn (mut self Surface) child_exited_abnormally(info apprt.ChildExited) ! {
 		self.renderer_state.mutex.unlock()
 	}
 	mut t := self.renderer_state.terminal_
-	if isnil(t) {
-		return
-	}
 
+	// No matter what move the cursor back to the column 0.
 	t.carriage_return()
+
+	// Reset styles
 	t.set_attribute(terminal.SgrAttribute{ kind: .unset })!
 	viewport := t.plain_string()!
 	if viewport.len > 0 {

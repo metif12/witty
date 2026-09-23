@@ -1028,7 +1028,7 @@ fn test_child_exited_no_wait() {
 		abnormal_command_exit_runtime_ms: 500
 	}
 	assert surf.child_exited == false
-	surf.child_exited_handler(1000, 0)
+	surf.child_exited_handler(apprt.ChildExited{ runtime_ms: 1000, exit_code: 0 })
 	assert surf.child_exited == true
 	assert app_runtime.actions.len == 1
 	assert app_runtime.actions[0].action == .show_child_exited
@@ -1047,7 +1047,7 @@ fn test_child_exited_abnormal_native_banner_stops_fallback() {
 		wait_after_command: false
 		abnormal_command_exit_runtime_ms: 500
 	}
-	surf.child_exited_handler(100, 127)
+	surf.child_exited_handler(apprt.ChildExited{ runtime_ms: 100, exit_code: 127 })
 	assert app_runtime.actions.len == 1
 	assert app_runtime.actions[0].data.show_child_exited_ == apprt.ChildExited{
 		exit_code: 127
@@ -1066,7 +1066,7 @@ fn test_child_exited_abnormal_terminal_fallback() {
 		abnormal_command_exit_runtime_ms: 500
 	}
 	surf.io.impl.backend.subprocess.args = ['missing-command', '--flag']
-	surf.child_exited_handler(100, 127)
+	surf.child_exited_handler(apprt.ChildExited{ runtime_ms: 100, exit_code: 127 })
 	mut terminal_state := surf.renderer_state.terminal_
 	text := terminal_state.plain_string() or { panic(err) }
 	assert text.contains('Ghostty failed to launch the requested command:')
@@ -1076,6 +1076,33 @@ fn test_child_exited_abnormal_terminal_fallback() {
 		assert text.contains('Exit Code: 127')
 	}
 	assert text.contains('Press any key to close the window.')
+	assert !terminal_state.modes.get(.cursor_visible)
+	assert !surface_runtime.closed
+}
+
+fn test_child_exited_retains_u64_runtime() ! {
+	mut app_runtime := apprt.RuntimeApp{}
+	mut surface_runtime := apprt.RuntimeSurface{}
+	mut surf := make_test_surface()
+	surf.rt_app = &app_runtime
+	surf.rt_surface = &surface_runtime
+	surf.config = DerivedConfig{
+		wait_after_command: true
+		abnormal_command_exit_runtime_ms: 500
+	}
+	// Truncating this runtime to 32 bits would make it look like a 100 ms
+	// abnormal exit.
+	surf.handle_message(SurfaceMessage{
+		kind: .child_exited
+		child_exited: apprt.ChildExited{
+			runtime_ms: (u64(1) << 32) + 100
+			exit_code: 127
+		}
+	})!
+	mut terminal_state := surf.renderer_state.terminal_
+	text := terminal_state.plain_string() or { panic(err) }
+	assert text.contains('Process exited. Press any key to close the terminal.')
+	assert !text.contains('Ghostty failed to launch the requested command:')
 	assert !terminal_state.modes.get(.cursor_visible)
 	assert !surface_runtime.closed
 }
