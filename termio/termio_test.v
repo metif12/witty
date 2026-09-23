@@ -32,6 +32,9 @@ fn make_termio_opts() TermioOpts {
 			screen: renderer.ScreenSize{ width: 640, height: 384 }
 			cell: renderer.CellSize{ width: 8, height: 16 }
 		}
+		full_config: &configpkg.Config{}
+		backend: Exec.init(ExecConfig{}) or { panic(err) }
+		mailbox: Mailbox.init_spsc() or { panic(err) }
 		renderer_state: &renderer.State{
 			mutex: sync.new_mutex()
 		}

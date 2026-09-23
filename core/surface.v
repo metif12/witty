@@ -2235,24 +2235,39 @@ pub fn (mut self Surface) init(config_original &Config, mut app App, rt_app &app
 	// don't leak GHOSTTY_LOG to any subprocesses
 	env.delete('GHOSTTY_LOG')
 
-	termio_config := termiopkg.DerivedConfig.init(config)!
-	self.io.impl.init(termiopkg.TermioOpts{
-		config: termio_config
-		full_config: unsafe { config }
-		size: self.size
-		max_scrollback: usize(config.scrollback_limit)
-		grapheme_cluster: config.grapheme_width_method == .unicode
-		backend_config: termiopkg.ExecConfig{
-			command: command
-			env: env
-			env_override: config.env
-			shell_integration: config.shell_integration
-			shell_integration_features: config.shell_integration_features
-			working_directory: config.working_directory
-			resources_dir: global_state.get_state().resources_dir.host()
-			term: config.term
-			linux_cgroup: rt_surface.linux_cgroup
+	// Initialize our IO backend
+	mut io_exec := termiopkg.Exec.init(termiopkg.ExecConfig{
+		command: command
+		env: env
+		env_override: config.env
+		shell_integration: config.shell_integration
+		shell_integration_features: config.shell_integration_features
+		working_directory: config.working_directory
+		resources_dir: global_state.get_state().resources_dir.host()
+		term: config.term
+		linux_cgroup: rt_surface.linux_cgroup
+	})!
+	mut io_owned := false
+	defer {
+		if !io_owned {
+			io_exec.deinit()
 		}
+	}
+
+	// Initialize our IO mailbox
+	mut io_mailbox := termiopkg.Mailbox.init_spsc()!
+	defer {
+		if !io_owned {
+			io_mailbox.deinit()
+		}
+	}
+
+	self.io.impl.init(termiopkg.TermioOpts{
+		size: self.size
+		full_config: unsafe { config }
+		config: termiopkg.DerivedConfig.init(config)!
+		backend: io_exec
+		mailbox: io_mailbox
 		renderer_state: &self.renderer_state
 		renderer_wakeup: rendererpkg.Wakeup{
 			thread: &self.renderer_thread
@@ -2265,6 +2280,7 @@ pub fn (mut self Surface) init(config_original &Config, mut app App, rt_app &app
 		}
 	})!
 	self.io.live = true
+	io_owned = true
 
 	// Outside the block, IO has now taken ownership of our temporary state
 	// so we can just defer this and not the subcomponents.

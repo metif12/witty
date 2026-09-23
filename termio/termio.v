@@ -246,7 +246,7 @@ pub fn (mut t Termio) init(opts TermioOpts) ! {
 	mut term := terminal.Terminal.init(terminal.Options{
 		cols: u16(grid.columns)
 		rows: u16(grid.rows)
-		max_scrollback: opts.max_scrollback
+		max_scrollback: usize(opts.full_config.scrollback_limit)
 		colors: terminal.Colors{
 			background: terminal.DynamicRGB.init(opts.config.background)
 			foreground: terminal.DynamicRGB.init(opts.config.foreground)
@@ -258,7 +258,8 @@ pub fn (mut t Termio) init(opts TermioOpts) ! {
 			palette: terminal.DynamicPalette.init(opts.config.palette)
 		}
 	})!
-	term.modes.set(.grapheme_cluster, opts.grapheme_cluster)
+	// Setup our initial grapheme cluster support if enabled.
+	term.modes.set(.grapheme_cluster, opts.full_config.grapheme_width_method == .unicode)
 	term.modes.set(.cursor_blinking, opts.config.cursor_blink or { true })
 	term.modes.default = term.modes.values
 	term.screens.active.cursor.cursor_style = opts.config.cursor_style
@@ -266,7 +267,8 @@ pub fn (mut t Termio) init(opts TermioOpts) ! {
 	term.height_px = u32(grid.rows) * size.cell.height
 	term.kitty_image_limit = usize(opts.config.image_storage_limit)
 
-	mut backend := Exec.init(opts.backend_config)!
+	// Setup our backend.
+	mut backend := opts.backend
 	backend.init_terminal(mut term)
 
 	t.config = opts.config
@@ -276,10 +278,10 @@ pub fn (mut t Termio) init(opts TermioOpts) ! {
 	t.renderer_mailbox = opts.renderer_mailbox
 	t.surface_mailbox = opts.surface_mailbox
 	t.size = size
-	t.mailbox = Mailbox.init_spsc()!
+	t.mailbox = opts.mailbox
 	t.terminal_stream = terminal.Stream.init_alloc(voidptr(1))
 	t.backend = backend
-	if opts.full_config != unsafe { nil } && opts.full_config.input.items.len > 0 {
+	if opts.full_config.input.items.len > 0 {
 		t.thread_enter_input = opts.full_config.input.clone_parsed()!.items
 	} else {
 		t.thread_enter_input = []
@@ -333,18 +335,42 @@ pub fn (mut t Termio) queue_write(data []u8, linefeed bool) ! {
 	t.backend.queue_write(data, linefeed)!
 }
 
+// The options that are used to configure a terminal IO implementation.
 pub struct TermioOpts {
 pub:
-	config           DerivedConfig
-	full_config      &configpkg.Config = unsafe { nil }
-	size             renderer.Size
-	max_scrollback   usize = 10_000_000
-	grapheme_cluster bool = true
-	backend_config   ExecConfig
-	renderer_state   &renderer.State = unsafe { nil }
-	renderer_wakeup  renderer.Wakeup
+	// All size metrics for the terminal.
+	size renderer.Size
+
+	// The full app configuration. This is only available during initialization.
+	// The memory it points to is NOT stable after the init call so any values
+	// in here must be copied.
+	full_config &configpkg.Config = unsafe { nil }
+
+	// The derived configuration for this termio implementation.
+	config DerivedConfig
+
+	// The backend for termio that implements where reads/writes are sourced.
+	backend Exec
+
+	// The mailbox for the terminal. This is how messages are delivered.
+	// If you're using termio.Thread this MUST be "mailbox".
+	mailbox Mailbox
+
+	// The render state. The IO implementation can modify anything here. The
+	// surface thread will setup the initial "terminal" pointer but the IO impl
+	// is free to change that if that is useful (i.e. doing some sort of dual
+	// terminal implementation.)
+	renderer_state &renderer.State = unsafe { nil }
+
+	// A handle to wake up the renderer. This hints to the renderer that that
+	// a repaint should happen.
+	renderer_wakeup renderer.Wakeup
+
+	// The mailbox for renderer messages.
 	renderer_mailbox &renderer.Mailbox = unsafe { nil }
-	surface_mailbox  apprt.SurfaceMailbox
+
+	// The mailbox for sending the surface messages.
+	surface_mailbox apprt.SurfaceMailbox
 }
 
 // DerivedConfig holds configuration derived from the main config
