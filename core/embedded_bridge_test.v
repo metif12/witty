@@ -223,10 +223,47 @@ fn test_embedded_bridge_app_destroy_deinitializes_live_surfaces() {
 		platform: apprt.PlatformC{ nsview: view }
 	}) or { panic('embedded surface initialization failed') }
 	backend := unsafe { &EmbeddedSurfaceCore(surface.core_surface.backend) }
-	assert backend.surface.initialized
+	assert backend.surface.renderer_os_thread != none
 
 	apprt.ghostty_app_free(mut app)
 	assert isnil(surface.core_surface.backend)
-	assert !backend.surface.initialized
+	assert backend.surface.renderer_os_thread == none
 	release_embedded_bridge_test_view(view)
+}
+
+fn test_embedded_bridge_surface_init_applies_app_conditional_state() ! {
+	install_embedded_bridge()
+	theme_dir := os.join_path(os.temp_dir(), 'witty-surface-init-theme-${os.getpid()}')
+	os.rmdir_all(theme_dir) or {}
+	os.mkdir_all(theme_dir)!
+	defer {
+		os.rmdir_all(theme_dir) or {}
+	}
+	light_theme := os.join_path(theme_dir, 'light')
+	dark_theme := os.join_path(theme_dir, 'dark')
+	os.write_file(light_theme, 'font-size = 17\n')!
+	os.write_file(dark_theme, 'font-size = 19\n')!
+	mut config := configpkg.Config.default_config()
+	config.load_string('theme = light:${light_theme},dark:${dark_theme}\n')
+	config.finalize()!
+	mut app := apprt.ghostty_app_new(&apprt.AppOptions{}, &config) or {
+		panic('embedded app initialization failed')
+	}
+	apprt.ghostty_app_set_color_scheme(mut app, int(apprt.ColorScheme.dark))
+	view := embedded_bridge_test_view()
+	mut surface := apprt.ghostty_surface_new(mut app, &apprt.SurfaceOptions{
+		platform_tag: int(apprt.PlatformTag.macos)
+		platform: apprt.PlatformC{ nsview: view }
+	}) or { panic('embedded surface initialization failed') }
+	defer {
+		apprt.ghostty_surface_free(mut surface)
+		apprt.ghostty_app_free(mut app)
+		release_embedded_bridge_test_view(view)
+	}
+
+	// A new surface starts from the app's conditional state, so it uses the
+	// dark theme without waiting for a later configuration reload.
+	backend := unsafe { &EmbeddedSurfaceCore(surface.core_surface.backend) }
+	assert backend.surface.config_conditional_state.theme == .dark
+	assert backend.surface.config.original_font_size == 19
 }

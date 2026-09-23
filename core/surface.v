@@ -2021,9 +2021,6 @@ fn closing_action(action input.Action) bool {
 
 pub struct Surface {
 pub mut:
-	// True only after init has completed and this value owns its resources.
-	initialized bool
-
 	app        &App = unsafe { nil }
 	rt_app     &apprt.RuntimeApp = unsafe { nil }
 	rt_surface &apprt.RuntimeSurface = unsafe { nil }
@@ -2077,7 +2074,41 @@ fn (self &Surface) has_terminal() bool {
 // ---- Surface methods ----
 
 // init creates a new surface. This must be called from the main thread.
-pub fn (mut self Surface) init(config &Config, mut app App, rt_app &apprt.RuntimeApp, rt_surface &apprt.RuntimeSurface) ! {
+pub fn (mut self Surface) init(config_original &Config, mut app App, rt_app &apprt.RuntimeApp, rt_surface &apprt.RuntimeSurface) ! {
+	// V has no errdefer. Each source errdefer is a reached defer that runs
+	// only while this flag is false, i.e. when initialization fails.
+	mut init_ok := false
+
+	// Apply our conditional state. If we fail to apply the conditional state
+	// then we log and attempt to move forward with the old config.
+	conditional_result := config_original.change_conditional_state(app.config_conditional_state) or {
+		eprintln('failed to apply conditional state to config err=${err}')
+		configpkg.ConfigChangeResult{}
+	}
+	mut config_ := &Config(unsafe { nil })
+	if c := conditional_result.value {
+		config_ = &Config{
+			...c
+		}
+	}
+	defer {
+		if !isnil(config_) {
+			config_.deinit()
+		}
+	}
+
+	// We want a config pointer for everything so we get that either
+	// based on our conditional state or the original config.
+	config := if !isnil(config_) {
+		// We want to preserve our original working directory. We
+		// don't need to dupe memory here because termio will derive
+		// it. We preserve this so directory inheritance works.
+		config_.working_directory = config_original.working_directory
+		config_
+	} else {
+		config_original
+	}
+
 	unsafe {
 		self.app = app
 		self.rt_app = rt_app
@@ -2088,32 +2119,39 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &apprt.Runtim
 	// regular command. This selection is shared by termio and initial titles.
 	command := surface_command(config, app.first)
 
-	// Derive our config
+	// Get our configuration
 	mut derived_config := DerivedConfig.from_config(config)!
 	derived_config.command = if value := command { value.string_val().clone() } else { '' }
+	defer {
+		if !init_ok {
+			derived_config.deinit()
+		}
+	}
 
-	// Initialize the graphics API while the runtime surface's context is current.
+	// Initialize our renderer with our initialized surface.
 	rendererpkg.surface_init()!
 
-	// Get content scale for DPI
+	// Determine our DPI configurations so we can properly configure
+	// font points to pixels and handle other high-DPI scaling factors.
 	content_scale := rt_surface.get_content_scale()!
 	x_dpi := content_scale.x * default_dpi
 	y_dpi := content_scale.y * default_dpi
 
-	// Determine font size with DPI
+	// The font size we desire along with the DPI determined for the surface
 	self.font_size = DesiredSize{
 		points: derived_config.original_font_size
 		xdpi: u16(x_dpi)
 		ydpi: u16(y_dpi)
 	}
 
-	// Get font grid (shared across surfaces with same config)
+	// Setup our font group. This will reuse an existing font group if
+	// it was already loaded.
 	font_grid_key, font_grid := app.font_grid_set.ref(&derived_config.font, self.font_size)!
 	self.font_grid_key = font_grid_key
 	self.font_grid = font_grid
 	self.font_metrics = font_grid.metrics
 
-	// Build our size struct with screen size, cell size, and padding
+	// Build our size struct which has all the sizes we need.
 	surface_size := rt_surface.get_size()!
 	font_cell_size := font_grid.cell_size()
 	self.size = rendererpkg.Size{
@@ -2126,8 +2164,6 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &apprt.Runtim
 			height: font_cell_size.height
 		}
 	}
-
-	// Apply padding
 	explicit := derived_config.scaled_padding(x_dpi, y_dpi)
 	if derived_config.window_padding_balance {
 		self.size.balance_padding(explicit)
@@ -2135,15 +2171,7 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &apprt.Runtim
 		self.size.padding = explicit
 	}
 
-	// Store derived config
-	self.config = derived_config
-	self.config_conditional_state = app.config_conditional_state
-
-	// Create the renderer and its shared state before termio so the renderer
-	// mailbox/wakeup passed to termio are the ones owned by the live thread.
-	self.renderer_state = RendererState{
-		mutex: sync.new_mutex()
-	}
+	// Create our terminal grid with the initial size
 	renderer_config := rendererpkg.DerivedConfig.init(config)!
 	self.renderer = Renderer.init(rendererpkg.RendererOpts{
 		metal_view: rt_surface.renderer_view
@@ -2156,15 +2184,57 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &apprt.Runtim
 			push_fn: renderer_surface_event_push
 		}
 	})!
+	defer {
+		if !init_ok {
+			self.renderer.deinit()
+		}
+	}
+
+	// The mutex used to protect our renderer state.
+	self.renderer_state = RendererState{
+		mutex: sync.new_mutex()
+	}
+	defer {
+		if !init_ok {
+			self.renderer_state.mutex.destroy()
+		}
+	}
+
+	// Create the renderer thread
 	self.renderer_thread = RendererThread.init(config, &self.renderer, &self.renderer_state, rendererpkg.Wakeup{
 		user_data: voidptr(&self)
 		notify_fn: surface_renderer_wakeup
 	})!
+	defer {
+		if !init_ok {
+			self.renderer_thread.deinit()
+		}
+	}
 
-	// Initialize the real termio implementation in its stable Surface storage.
-	// Termio publishes its terminal pointer into renderer_state and owns the PTY
-	// subprocess, stream parser, and writer mailbox from this point onward.
-	env := rt_surface.default_termio_env()!
+	// Create the IO thread
+	self.io_thread.impl = termiopkg.Thread.init()!
+	defer {
+		if !init_ok {
+			self.io_thread.deinit()
+		}
+	}
+
+	self.config = derived_config
+
+	// Our conditional state is initialized to the app state. This
+	// lets us get the most likely correct color theme and so on.
+	self.config_conditional_state = app.config_conditional_state
+
+	// Start our IO implementation
+	mut env := rt_surface.default_termio_env() or {
+		// If an error occurs, we don't want to block surface startup.
+		eprintln('error getting env map for surface err=${err}')
+		internal_os.get_env_map() or { map[string]string{} }
+	}
+
+	// don't leak GHOSTTY_LOG to any subprocesses
+	env.delete('GHOSTTY_LOG')
+
 	termio_config := termiopkg.DerivedConfig.init(config)!
 	self.io.impl.init(termiopkg.TermioOpts{
 		config: termio_config
@@ -2195,9 +2265,16 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &apprt.Runtim
 		}
 	})!
 	self.io.live = true
-	self.io_thread.impl = termiopkg.Thread.init()!
 
-	// Report initial cell size
+	// Outside the block, IO has now taken ownership of our temporary state
+	// so we can just defer this and not the subcomponents.
+	defer {
+		if !init_ok {
+			self.io.deinit()
+		}
+	}
+
+	// Report initial cell size on surface creation
 	self.rt_app.perform_action(
 		apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 		.cell_size,
@@ -2209,7 +2286,6 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &apprt.Runtim
 		},
 	)!
 
-	// Report size limits
 	self.rt_app.perform_action(
 		apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 		.size_limit,
@@ -2221,24 +2297,29 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &apprt.Runtim
 		},
 	)!
 
-	// Call resize to finalize setup
+	// Call our size callback which handles all our retina setup
 	self.resize(self.size.screen)!
 
-	// Give the renderer its final main-thread initialization opportunity before
-	// the renderer worker begins touching it.
+	// Give the renderer one more opportunity to finalize any surface
+	// setup on the main thread prior to spinning up the rendering thread.
 	self.renderer.finalize_surface_init()!
+
+	// Start our renderer thread
 	mut render_thread := unsafe { &self.renderer_thread }
 	self.renderer_os_thread = spawn render_thread.thread_main()
 
-	// Start the PTY writer loop only after every pointer retained by Termio is
-	// stable and the initial resize has been queued.
+	// Start our IO thread
 	self.io_thread.running = true
 	mut writer := unsafe { &self.io_thread.impl }
 	mut termio := unsafe { &self.io.impl }
 	self.io_os_thread = spawn writer.thread_main(mut termio)
 
-	// Compute initial window size if configured
+	// Determine our initial window size if configured. We need to do this
+	// quite late in the process because our height/width are in grid dimensions,
+	// so we need to know our cell sizes first.
 	self.recompute_initial_size() or {
+		// We don't treat this as a fatal error because not setting
+		// an initial size shouldn't stop our terminal from working.
 		eprintln('unable to set initial window size: ${err}')
 	}
 
@@ -2252,8 +2333,9 @@ pub fn (mut self Surface) init(config &Config, mut app App, rt_app &apprt.Runtim
 		)!
 	}
 
+	// We are no longer the first surface
 	app.first = false
-	self.initialized = true
+	init_ok = true
 }
 
 fn surface_command(config &Config, first bool) ?configpkg.Command {
@@ -2294,39 +2376,28 @@ fn surface_initial_title(config &Config, command ?configpkg.Command) ?string {
 
 // deinit cleans up the surface and all its resources.
 pub fn (mut self Surface) deinit() {
-	if !self.initialized {
-		return
-	}
-	self.initialized = false
-
 	// Stop search before either consumer of terminal state is torn down.
 	if mut search := self.search {
 		search.deinit()
 		self.search = none
 	}
 
-	// Stop and join the renderer worker. The app thread becomes the active
-	// rendering thread again before GPU resources are released.
-	if worker := self.renderer_os_thread {
-		self.renderer_thread.stop()
-		worker.wait()
-		self.renderer_os_thread = none
+	// Stop rendering thread
+	self.renderer_thread.stop()
+	renderer_thr := self.renderer_os_thread or { panic('renderer thread was never started') }
+	renderer_thr.wait()
+	self.renderer_os_thread = none
 
-		// We need to become the active rendering thread again
-		self.renderer.thread_enter() or { panic(err) }
-	}
+	// We need to become the active rendering thread again
+	self.renderer.thread_enter() or { panic(err) }
 
-	// Stop the IO event loop, which shuts down and joins its PTY reader and
-	// process watcher, before releasing any shared terminal state.
-	if self.io_thread.running {
-		self.io_thread.impl.stop.notify() or {
-			eprintln('error notifying io thread to stop, may stall err=${err}')
-		}
-		if worker := self.io_os_thread {
-			worker.wait()
-		}
-		self.io_os_thread = none
+	// Stop our IO thread
+	self.io_thread.impl.stop.notify() or {
+		eprintln('error notifying io thread to stop, may stall err=${err}')
 	}
+	io_thr := self.io_os_thread or { panic('io thread was never started') }
+	io_thr.wait()
+	self.io_os_thread = none
 
 	// No thread can access shared renderer/terminal state after both joins.
 	self.renderer_thread.deinit()

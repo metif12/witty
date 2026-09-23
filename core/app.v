@@ -230,13 +230,8 @@ pub fn (s &SurfaceRef) core() &Surface {
 }
 
 // deinit releases the core state owned by this runtime surface reference.
-// A zero-valued Surface is permitted in lightweight runtime tests, so only a
-// surface whose initialization completed owns resources to release.
 pub fn (mut s SurfaceRef) deinit() {
-	if isnil(s.core_surface) || !s.core_surface.initialized {
-		return
-	}
-	mut core_surface := s.core_surface
+	mut core_surface := s.core()
 	core_surface.deinit()
 }
 
