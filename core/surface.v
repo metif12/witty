@@ -2010,10 +2010,6 @@ pub type KeyEvent = input.KeyEvent
 
 pub type KeyAction = input.KeyAction
 
-fn key_is_modifier(k input.Key) bool {
-	return k.modifier()
-}
-
 // closing_action returns true if performing the given action results in
 // closing the surface. This is used to determine if our self pointer is still
 // valid after performing some binding action.
@@ -3048,7 +3044,7 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 	}
 
 	// Handle keybindings first (press, repeat, release all checked)
-	if v := self.maybe_handle_binding(event, inspecting, mut inspector_event) {
+	if v := self.maybe_handle_binding(event, inspecting, mut inspector_event)!.value {
 		return v
 	}
 
@@ -3133,10 +3129,7 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 	self.pressed_key = next_pressed
 
 	// Encode and send the key to the terminal
-	if write_req := self.encode_key(event) {
-		if inspecting {
-			inspector_event.pty = write_req.slice().clone()
-		}
+	if write_req := self.encode_key(event, inspecting, mut inspector_event) {
 		// If process exited and we got an encoded key, close surface
 		if self.child_exited {
 			self.close()
@@ -3150,7 +3143,7 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 	}
 
 	// For non-modifier keys: clear selection and scroll to bottom
-	if !key_is_modifier(event.key) {
+	if !event.key.modifier() {
 		self.renderer_state.mutex.lock()
 		if self.config.selection_clear_on_typing || event.key == .escape {
 			self.set_selection(none) or {
@@ -5525,60 +5518,109 @@ fn binding_entry_has_ignore(entry &input.SetEntry) bool {
 	}
 }
 
-fn (mut self Surface) maybe_handle_binding(event KeyEvent, inspecting bool, mut inspector_event inspectorpkg.KeyEvent) ?apprt.InputEffect {
-	// Release events: check if we consumed the corresponding press
-	if event.action == .release {
-		if last := self.keyboard.last_trigger {
-			if last == event.binding_hash() {
-				return .consumed
-			}
-		}
-		return none
-	}
-
-	// Check for key sequence
-	if seq_set := self.keyboard.sequence_set {
-		entry := seq_set.get_event(event) or {
-			// Not in sequence; for modifiers, allow passthrough
-			if key_is_modifier(event.key) {
-				return none
-			}
-
-			// Check if catch-all says ignore
-			if self.catch_all_is_ignore() {
-				self.end_key_sequence(.drop, .retain)
-				return .ignored
-			}
-
-			// Flush queued keys and continue normal processing
-			self.end_key_sequence(.flush, .retain)
-			return none
-		}
-		return self.handle_binding_entry(event, entry, inspecting, mut inspector_event)
-	}
-
-	// Check key tables (inner to outer)
-	for i := self.keyboard.table_stack.len - 1; i >= 0; i-- {
-		table := self.keyboard.table_stack[i]
-		if entry := table.set.get_event(event) {
-			// Found in table; if one-shot and topmost, deactivate
-			if table.once && i == self.keyboard.table_stack.len - 1 {
-				self.perform_binding_action(input.Action.new(.deactivate_key_table)) or {}
-			}
-			return self.handle_binding_entry(event, entry, inspecting, mut inspector_event)
-		}
-	}
-
-	entry := self.config.keybind.set.get_event(event) or { return none }
-	return self.handle_binding_entry(event, entry, inspecting, mut inspector_event)
+// MaybeHandleBindingResult preserves Ghostty's error-union-of-optional result.
+struct MaybeHandleBindingResult {
+	value ?apprt.InputEffect
 }
 
-fn (mut self Surface) handle_binding_entry(event KeyEvent, entry &input.SetEntry, inspecting bool, mut inspector_event inspectorpkg.KeyEvent) ?apprt.InputEffect {
+// Maybe handles a binding for a given event and if so returns the effect.
+// Returns none if the event is not handled in any way and processing should
+// continue.
+fn (mut self Surface) maybe_handle_binding(event KeyEvent, inspecting bool, mut inspector_event inspectorpkg.KeyEvent) !MaybeHandleBindingResult {
+	match event.action {
+		// Release events never trigger a binding but we need to check if
+		// we consumed the press event so we don't encode the release.
+		.release {
+			if last := self.keyboard.last_trigger {
+				if last == event.binding_hash() {
+					// We don't reset the last trigger on release because
+					// an apprt may send multiple release events for a single
+					// press event.
+					return MaybeHandleBindingResult{
+						value: .consumed
+					}
+				}
+			}
+
+			return MaybeHandleBindingResult{}
+		}
+		// Carry on processing.
+		.press, .repeat {}
+	}
+
+	// Find an entry in the keybind set that matches our event.
+	mut entry := &input.SetEntry(unsafe { nil })
+	if set := self.keyboard.sequence_set {
+		// Handle key sequences first. Get our entry from the set for the
+		// given event.
+		entry = set.get_event(event) or {
+			// No entry found. We need to encode everything up to this
+			// point and send to the pty since we're in a sequence.
+
+			// We ignore modifiers so that nested sequences such as
+			// ctrl+a>ctrl+b>c work.
+			if event.key.modifier() {
+				return MaybeHandleBindingResult{}
+			}
+
+			// If we have a catch-all of ignore, then we special case our
+			// invalid sequence handling to ignore it.
+			if self.catch_all_is_ignore() {
+				self.end_key_sequence(.drop, .retain)
+				return MaybeHandleBindingResult{
+					value: .ignored
+				}
+			}
+
+			// Encode everything up to this point
+			self.end_key_sequence(.flush, .retain)
+
+			return MaybeHandleBindingResult{}
+		}
+	} else {
+		// No currently active sequence, move on to tables. For tables,
+		// we search inner-most table to outer-most. The table stack does
+		// NOT include the root set.
+		table_items := self.keyboard.table_stack
+		for i in 0 .. table_items.len {
+			rev_i := table_items.len - 1 - i
+			table := table_items[rev_i]
+			if v := table.set.get_event(event) {
+				// If this is a one-shot activation AND its the currently
+				// active table, then we deactivate it after this.
+				// Note: we may want to change the semantics here to
+				// remove this table no matter where it is in the stack,
+				// maybe.
+				if table.once && i == 0 {
+					_ = self.perform_binding_action(input.Action.new(.deactivate_key_table))!
+				}
+
+				entry = v
+				break
+			}
+		}
+
+		// No table, use our default set
+		if isnil(entry) {
+			entry = self.config.keybind.set.get_event(event) or {
+				return MaybeHandleBindingResult{}
+			}
+		}
+	}
+
+	// Determine if this entry has an action or if its a leader key.
 	if entry.value.typ == .leader {
+		// Setup the next set we'll look at.
 		self.keyboard.sequence_set = *entry.value.leader
-		if req := self.encode_key(event) {
+
+		// Store this event so that we can drain and encode on invalid.
+		// We don't need to cap this because it is naturally capped by
+		// the config validation.
+		if req := self.encode_key(event, inspecting, mut inspector_event) {
 			self.keyboard.sequence_queued << req
 		}
+
+		// Start or continue our key sequence
 		self.rt_app.perform_action(
 			apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 			.key_sequence,
@@ -5591,56 +5633,130 @@ fn (mut self Surface) handle_binding_entry(event KeyEvent, entry &input.SetEntry
 		) or {
 			eprintln('failed to notify app of key sequence err=${err}')
 		}
-		return .consumed
-	}
 
-	leaf := entry.value.generic() or { return none }
-	flags := leaf.flags
-	actions := leaf.actions_slice()
-	if inspecting {
-		inspector_event.binding = actions.clone()
+		return MaybeHandleBindingResult{
+			value: .consumed
+		}
 	}
-	consumed := flags.consumed() || flags.global() || flags.all()
+	leaf := entry.value.generic() or { panic('binding entry is neither a leader nor a leaf') }
+
+	// consumed determines if the input is consumed or if we continue
+	// encoding the key (if we have a key to encode). If the consumed flag
+	// is explicitly set, or the global or all flag is set, we always consume.
+	consumed := leaf.flags.consumed() || leaf.flags.global() || leaf.flags.all()
+
+	// We have an action, so at this point we're handling SOMETHING so
+	// we reset the last trigger to none. We only set this if we actually
+	// perform an action (below)
 	self.keyboard.last_trigger = none
+
+	// An action also always resets the sequence set.
 	self.keyboard.sequence_set = none
 
+	// Setup our actions
+	actions := leaf.actions_slice()
+
+	// Attempt to perform the action
 	mut performed := false
-	for action in actions {
-		if self.perform_binding_action(action) or { false } {
-			performed = true
+	if leaf.flags.global() || leaf.flags.all() {
+		// If this is a global or all action, then we perform it on
+		// the app and it applies to every surface.
+		mut rt_app := self.rt_app
+		self.app.perform_all_chained_action(mut rt_app, actions)
+
+		// "All" actions are always performed since they are global.
+		performed = true
+	} else {
+		// Perform each action. We are performed if ANY of the chained
+		// actions perform.
+		for action in actions {
+			if v := self.perform_binding_action(action) {
+				performed = performed || v
+			} else {
+				eprintln('key binding action failed action=${action.tag} err=${err}')
+			}
 		}
 	}
 
 	if performed {
+		// If we performed an action and it was a closing action,
+		// our "self" pointer is not safe to use anymore so we need to
+		// just exit immediately.
 		for action in actions {
 			if closing_action(action) {
-				return .closed
+				return MaybeHandleBindingResult{
+					value: .closed
+				}
 			}
+		}
+
+		// If our action was "ignore" then we return the special input
+		// effect of "ignored".
+		for action in actions {
 			if action.tag == .ignore {
-				return .ignored
+				return MaybeHandleBindingResult{
+					value: .ignored
+				}
 			}
 		}
 	}
-	if flags.performable() && !performed {
+
+	// If we have the performable flag and the action was not performed,
+	// then we act as though a binding didn't exist.
+	if leaf.flags.performable() && !performed {
+		// If we're in a sequence, we treat this as if we pressed a key
+		// that doesn't exist in the sequence. Reset our sequence and flush
+		// any queued events.
 		self.end_key_sequence(.flush, .retain)
-		return none
+
+		return MaybeHandleBindingResult{}
 	}
+
+	// If we consume this event, then we are done. If we don't consume
+	// it, we processed the action but we still want to process our
+	// encodings, too.
 	if consumed {
+		// If we had queued events, we deinit them since we consumed
 		self.end_key_sequence(.drop, .retain)
+
+		// Store our last trigger so we don't encode the release event
 		self.keyboard.last_trigger = event.binding_hash()
-		return .consumed
+
+		if inspecting {
+			inspector_event.binding = actions.clone()
+		}
+		return MaybeHandleBindingResult{
+			value: .consumed
+		}
 	}
+
+	// If we didn't perform OR we didn't consume, then we want to
+	// encode any queued events for a sequence.
 	self.end_key_sequence(.flush, .retain)
-	return none
+
+	return MaybeHandleBindingResult{}
 }
 
-fn (mut self Surface) encode_key(event KeyEvent) ?termiopkg.WriteReq {
+
+fn (mut self Surface) encode_key(event KeyEvent, inspecting bool, mut inspector_event inspectorpkg.KeyEvent) ?termiopkg.WriteReq {
+	// Build our encoding options, which requires the lock.
 	opts := self.encode_key_opts()
 	encoded := input.encode(event, opts)
+
+	// Special-case: we did nothing.
 	if encoded.len == 0 {
 		return none
 	}
-	return termiopkg.WriteReq.init(encoded.bytes())
+	write_req := termiopkg.WriteReq.init(encoded.bytes())
+
+	// Copy the encoded data into the inspector event if we have one.
+	// We do this before the mailbox because the IO thread could
+	// release the memory before we get a chance to copy it.
+	if inspecting {
+		inspector_event.pty = write_req.slice().clone()
+	}
+
+	return write_req
 }
 
 fn (mut self Surface) encode_key_opts() input.Options {

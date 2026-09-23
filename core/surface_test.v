@@ -1,6 +1,7 @@
 module core
 
 import input
+import inspector as inspectorpkg
 import apprt
 import terminal
 import configpkg
@@ -360,25 +361,59 @@ fn test_surface_inspector_records_owned_key_and_pty_data() {
 	surf.deactivate_inspector()
 }
 
-fn test_surface_inspector_records_triggered_binding() {
+fn test_all_binding_performs_on_every_surface() ! {
+	mut app := App{
+		mailbox: MailboxQueue.create()!
+	}
+	mut runtime_a := apprt.RuntimeApp{
+		actions_handled: true
+	}
+	mut runtime_b := apprt.RuntimeApp{
+		actions_handled: true
+	}
+	mut a := make_test_surface()
+	a.app = &app
+	a.rt_app = &runtime_a
+	mut b := make_test_surface()
+	b.app = &app
+	b.rt_app = &runtime_b
+	app.surfaces = SurfaceList([&SurfaceRef{
+		core_surface: &a
+	}, &SurfaceRef{
+		core_surface: &b
+	}])
+	a.config.keybind.set.parse_and_put('all:f3=toggle_fullscreen')!
+
+	assert a.key_callback(input.KeyEvent{ action: .press, key: .f3 })! == .consumed
+	assert runtime_a.actions.any(it.action == .toggle_fullscreen)
+	assert runtime_b.actions.any(it.action == .toggle_fullscreen)
+}
+
+fn test_surface_inspector_records_consumed_binding() {
 	mut surf := make_test_surface()
 	surf.config.keybind.set.put(input.Trigger{
 		key: input.TriggerKey.new_physical(.f1)
+	}, input.Action.new(.scroll_to_top))
+	surf.config.keybind.set.put(input.Trigger{
+		key: input.TriggerKey.new_physical(.f2)
 	}, input.Action.new(.ignore))
 	surf.activate_inspector()!
 	defer {
 		surf.deactivate_inspector()
 	}
 
-	assert surf.key_callback(input.KeyEvent{ action: .press, key: .f1 })! == .ignored
+	assert surf.key_callback(input.KeyEvent{ action: .press, key: .f1 })! == .consumed
+	// Ghostty returns the ignored effect before recording a consumed binding.
+	assert surf.key_callback(input.KeyEvent{ action: .press, key: .f2 })! == .ignored
 	insp := surf.inspector or {
 		assert false, 'inspector unexpectedly inactive'
 		return
 	}
-	assert insp.key_events.len == 1
+	assert insp.key_events.len == 2
 	assert insp.key_events[0].binding.len == 1
-	assert insp.key_events[0].binding[0].tag == .ignore
+	assert insp.key_events[0].binding[0].tag == .scroll_to_top
 	assert insp.key_events[0].pty.len == 0
+	assert insp.key_events[1].binding.len == 0
 }
 
 fn test_surface_inspector_records_mouse_position() {
@@ -779,20 +814,6 @@ fn test_preedit_callback_uses_unicode_width_table() {
 	assert !preedit.codepoints[0].wide
 	assert preedit.codepoints[1].codepoint == 0x4e16
 	assert preedit.codepoints[1].wide
-}
-
-fn test_key_is_modifier() {
-	assert key_is_modifier(.shift_left) == true
-	assert key_is_modifier(.shift_right) == true
-	assert key_is_modifier(.control_left) == true
-	assert key_is_modifier(.control_right) == true
-	assert key_is_modifier(.alt_left) == true
-	assert key_is_modifier(.alt_right) == true
-	assert key_is_modifier(.meta_left) == true
-	assert key_is_modifier(.meta_right) == true
-	assert key_is_modifier(.key_a) == false
-	assert key_is_modifier(.escape) == false
-	assert key_is_modifier(.space) == false
 }
 
 fn test_hide_show_mouse() {
@@ -1386,6 +1407,25 @@ fn test_mouse_selection_same_point() {
 	assert sel == none
 }
 
+fn encode_test_key(mut surf Surface, ev KeyEvent) ?termiopkg.WriteReq {
+	mut inspector_event := inspectorpkg.KeyEvent{}
+	return surf.encode_key(ev, false, mut inspector_event)
+}
+
+fn test_encode_key_copies_pty_data_to_inspector_event() {
+	mut surf := make_test_surface()
+	mut inspector_event := inspectorpkg.KeyEvent{}
+	req := surf.encode_key(KeyEvent{
+		key: .key_a
+		action: .press
+		utf8: 'a'
+	}, true, mut inspector_event) or {
+		assert false, 'expected write req'
+		return
+	}
+	assert inspector_event.pty == req.slice()
+}
+
 fn test_encode_key_text() {
 	mut surf := make_test_surface()
 	ev := KeyEvent{
@@ -1393,7 +1433,7 @@ fn test_encode_key_text() {
 		action: .press
 		utf8: 'a'
 	}
-	req := surf.encode_key(ev) or {
+	req := encode_test_key(mut surf, ev) or {
 		assert false, 'expected write req'
 		return
 	}
@@ -1408,7 +1448,7 @@ fn test_encode_key_escape() {
 		action: .press
 		utf8: ''
 	}
-	req := surf.encode_key(ev) or {
+	req := encode_test_key(mut surf, ev) or {
 		assert false, 'expected write req'
 		return
 	}
@@ -1423,7 +1463,7 @@ fn test_encode_key_no_output() {
 		action: .press
 		utf8: ''
 	}
-	req := surf.encode_key(ev)
+	req := encode_test_key(mut surf, ev)
 	assert req == none
 }
 
@@ -1431,7 +1471,7 @@ fn test_encode_key_honors_ignore_keypad_with_numlock_mode() {
 	mut surf := make_test_surface()
 	surf.renderer_state.terminal_.modes.set(.keypad_keys, true)
 	surf.renderer_state.terminal_.modes.set(.ignore_keypad_with_numlock, true)
-	req := surf.encode_key(KeyEvent{
+	req := encode_test_key(mut surf, KeyEvent{
 		key: .numpad_1
 		utf8: '1'
 	}) or {
