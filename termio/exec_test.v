@@ -330,3 +330,14 @@ fn test_arg_iterator_direct() {
 		assert false, 'expected none'
 	}
 }
+
+fn test_process_exit_watcher_ignores_child_reaped_by_shutdown() {
+	// Subprocess.stop may reap the child before the watcher's wait completes.
+	// The watcher must then behave like a libxev completion that never fires.
+	mut child := os.new_process('/usr/bin/true')
+	child.run()
+	pid := child.pid
+	child.wait()
+	assert child.code == 0
+	process_exit_watcher(pid, 0, unsafe { nil })
+}

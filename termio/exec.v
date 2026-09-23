@@ -923,6 +923,13 @@ fn process_exit_watcher(pid int, start_ns u64, io &Termio) {
 	// Blocking wait for the child to exit.
 	mut status := 0
 	if C.witty_waitpid_retry(pid, &status) != pid {
+		// Subprocess.stop reaps the child during shutdown. libxev reports an
+		// exit only while the termio loop runs, so a child that shutdown
+		// already reaped is a watcher that never fires, not a failure.
+		if C.errno == C.ECHILD {
+			return
+		}
+
 		// Exec.processExit treats a watcher failure as unreachable.
 		panic('process wait failed')
 	}
