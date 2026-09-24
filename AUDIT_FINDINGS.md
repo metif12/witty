@@ -391,6 +391,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | search thread transport | The search worker used V channels and a timed `select` instead of Ghostty's xev loop, wakeup and stop asyncs, and refresh timer. Surface producers called helper methods rather than pushing to the mailbox and notifying the wakeup. | Port the thread onto `xev` with the source's interleaved tick/`run(.no_wait)` loop, the `BlockingQueue` mailbox, and the refresh timer, and split the surface callback into `searchCallback`/`searchCallback_` so wakeup failures propagate as in Ghostty. |
 | CoreText CF release thread | Ghostty's `os/cf_release_thread.zig` runs an xev loop with wakeup and stop asyncs and a drain flag for abnormal exits. Witty used a semaphore/mutex worker with a `stop_requested` boolean, placed it in `macos`, and joined it inside `deinit`. | Translate the thread into `internal_os` on `xev`, and have the CoreText shaper spawn it, notify `stop`, and join it as the source does. |
 | libxev backend reporting and selection | `+version` printed libxev as unavailable, global initialization did not run `xev.detect()`, and GTK ignored `async-backend`. | Report `xev.backend()`, detect the Linux backend during global initialization, and restore `startupXev`'s `prefer` call and logs. `backend` is an accessor because V module globals cannot be read from other modules. |
+| Flatpak host command | Ghostty's `os/flatpak.zig` host command (GIO DBus calls on a dedicated GLib thread, a mutex/condition state machine, and `waitXev` delivering the exit through the termio loop) was replaced by a hand-written C bridge without `waitXev`, so the exec backend waited on a separate thread and reported the exit off the termio loop. The Flatpak cwd probe also required a zero exit status, where Ghostty accepts the cwd whenever the probe spawns, and it swallowed `/dev/null` and wait errors that Ghostty propagates. | Translate `FlatpakHostCommand` into V over GIO (GVariants built with typed constructors instead of format varargs), including `waitXev`, restore Exec's `flatpakExit` completion, and restore the source cwd probe. The C bridge is removed. |
 
 ## Focused behavior reviewed
 
@@ -516,11 +517,6 @@ an item here does not mean its full module has been certified yet.
   `spirv-cross` executables through temporary files, whereas Ghostty links the
   shader compiler/cross-compiler libraries. This has different availability,
   process, filesystem, and error contracts.
-- **Flatpak asynchronous wait:** Ghostty's `FlatpakHostCommand.waitXev` stores a
-  completion on the termio loop and guarantees that the callback runs through
-  that loop. Witty's Flatpak host command is a C bridge without that
-  completion hook, so the exec backend still runs the blocking `wait` on a
-  watcher thread that reports the exit off the termio loop.
 - **Source placement:** V module-cycle constraints keep the translated shaper
   run algorithm in `font/font.v` while `font/shaper/run.v` exposes aliases, and
   place the application URL kind, build release channel, and configuration font

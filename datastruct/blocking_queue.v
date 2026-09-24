@@ -27,29 +27,30 @@ pub fn blocking_queue_timeout(ns u64) BlockingQueueTimeout {
 }
 
 // Condition translates the Zig std.Thread.Condition operations used by the
-// queue. V's sync.Cond has no timed wait, so each waiter parks on its own
-// one-slot channel, as sync.Cond does. A signal wakes at most one registered
-// waiter and is lost when none is registered. A timed waiter that was already
-// selected by a signal consumes it instead of timing out, matching Zig.
-struct Condition {
+// queue and by internal_os.FlatpakHostCommand. V's sync.Cond has no timed
+// wait, so each waiter parks on its own one-slot channel, as sync.Cond does.
+// A signal wakes at most one registered waiter and is lost when none is
+// registered. A timed waiter that was already selected by a signal consumes
+// it instead of timing out, matching Zig.
+pub struct Condition {
 mut:
 	lock    &sync.Mutex
 	waiters []chan bool
 }
 
-fn Condition.init() Condition {
+pub fn Condition.init() Condition {
 	return Condition{
 		lock: sync.new_mutex()
 	}
 }
 
-fn (mut self Condition) deinit() {
+pub fn (mut self Condition) deinit() {
 	self.lock.destroy()
 	self.waiters = []chan bool{}
 }
 
 // wait atomically releases mutex, blocks until signaled, and reacquires it.
-fn (mut self Condition) wait(mut mutex sync.Mutex) {
+pub fn (mut self Condition) wait(mut mutex sync.Mutex) {
 	waiter := chan bool{cap: 1}
 	defer {
 		waiter.close()
@@ -65,7 +66,7 @@ fn (mut self Condition) wait(mut mutex sync.Mutex) {
 
 // timed_wait is wait with a nanosecond timeout. It returns an error when the
 // timeout expires before this waiter is signaled.
-fn (mut self Condition) timed_wait(mut mutex sync.Mutex, timeout_ns u64) ! {
+pub fn (mut self Condition) timed_wait(mut mutex sync.Mutex, timeout_ns u64) ! {
 	waiter := chan bool{cap: 1}
 	defer {
 		waiter.close()
@@ -106,7 +107,7 @@ fn (mut self Condition) timed_wait(mut mutex sync.Mutex, timeout_ns u64) ! {
 }
 
 // signal wakes one waiting thread, if any.
-fn (mut self Condition) signal() {
+pub fn (mut self Condition) signal() {
 	self.lock.lock()
 	defer {
 		self.lock.unlock()
@@ -116,6 +117,18 @@ fn (mut self Condition) signal() {
 		self.waiters.delete(0)
 		waiter <- true
 	}
+}
+
+// broadcast wakes all waiting threads.
+pub fn (mut self Condition) broadcast() {
+	self.lock.lock()
+	defer {
+		self.lock.unlock()
+	}
+	for waiter in self.waiters {
+		waiter <- true
+	}
+	self.waiters.clear()
 }
 
 // BlockingQueue is Ghostty's fixed-size, non-blocking-pop queue. Pushes may

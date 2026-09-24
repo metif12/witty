@@ -232,10 +232,8 @@ pub fn (mut self Exec) thread_enter(mut io Termio, mut td ThreadData) ! {
 	} else if !isnil(self.subprocess.flatpak_command) {
 		// If we're in flatpak and we have a flatpak command
 		// then we can run the special flatpak logic for watching.
-		// FlatpakHostCommand.waitXev is not translated yet; its blocking wait
-		// runs on a watcher thread instead (see AUDIT_FINDINGS.md).
-		command := self.subprocess.flatpak_command
-		td.backend.flatpak_wait_thread = spawn flatpak_process_exit_watcher(command, td)
+		mut command := self.subprocess.flatpak_command
+		command.wait_xev(mut td.loop, &td.backend.flatpak_wait_c, td, exec_flatpak_exit)
 	}
 
 	// Start our termios timer. We don't support this on Windows.
@@ -269,9 +267,6 @@ pub fn (mut self Exec) thread_exit(mut td ThreadData) {
 	}
 
 	if t := exec.read_thread {
-		t.wait()
-	}
-	if t := exec.flatpak_wait_thread {
 		t.wait()
 	}
 }
@@ -523,8 +518,8 @@ pub mut:
 	// subsequently to wait for the data_stream to close.
 	process_wait_c xev.Completion
 
-	// Stands in for the Flatpak completion until waitXev is translated.
-	flatpak_wait_thread ?thread
+	// The completion specific to Flatpak process waiting.
+	flatpak_wait_c internal_os.FlatpakCompletion
 
 	// Reader thread state
 	read_thread      ?thread
@@ -752,14 +747,7 @@ pub fn (mut self Subprocess) deinit() {
 	if mut p := self.pty_ {
 		p.deinit()
 	}
-	if !isnil(self.flatpak_command) {
-		mut command := unsafe { self.flatpak_command }
-		command.deinit()
-		unsafe {
-			free(command)
-		}
-		self.flatpak_command = unsafe { nil }
-	}
+	self.flatpak_command = unsafe { nil }
 	self.env = none
 }
 
@@ -786,7 +774,7 @@ pub fn (mut self Subprocess) start() !PtyFds {
 	cwd := if c := self.cwd {
 		$if linux {
 			if internal_os.is_flatpak() {
-				if flatpak_cwd_accessible(c) { c } else { '' }
+				if flatpak_cwd_accessible(c)! { c } else { '' }
 			} else {
 				if os.is_dir(c) { c } else { '' }
 			}
@@ -818,10 +806,6 @@ pub fn (mut self Subprocess) start() !PtyFds {
 				stderr: p.slave
 			}
 			_ = command.spawn() or {
-				command.deinit()
-				unsafe {
-					free(command)
-				}
 				p.close_slave()
 				p.deinit()
 				self.pty_ = none
@@ -1179,32 +1163,38 @@ pub fn thread_main_posix(fd int, quit int, io &Termio) {
 	}
 }
 
-// flatpak_process_exit_watcher stands in for FlatpakHostCommand.waitXev and
-// flatpakExit: it runs the blocking wait on its own thread.
-fn flatpak_process_exit_watcher(command &internal_os.FlatpakHostCommand, td &ThreadData) {
-	mut host_command := unsafe { command }
-	exit_code := host_command.wait() or { panic('unreachable') }
-	mut thread_data := unsafe { td }
-	exec_process_exit_common(mut thread_data, u32(exit_code))
+fn exec_flatpak_exit(td_ voidptr, _ &xev.Loop, _ &internal_os.FlatpakCompletion, r ?IError, exit_code u8) {
+	if _ := r {
+		panic('unreachable')
+	}
+	mut td := unsafe { &ThreadData(td_) }
+	exec_process_exit_common(mut td, u32(exit_code))
 }
 
-fn flatpak_cwd_accessible(cwd string) bool {
-	mut dev_null := os.open_file('/dev/null', 'rw') or { return false }
+// Flatpak sandboxing prevents access to certain reserved paths
+// regardless of configured permissions. Perform a test spawn
+// to get around this problem
+//
+// https://docs.flatpak.org/en/latest/sandbox-permissions.html#reserved-paths
+fn flatpak_cwd_accessible(cwd string) !bool {
+	mut dev_null := os.open_file('/dev/null', 'r+')!
 	defer {
 		dev_null.close()
 	}
 	mut command := internal_os.FlatpakHostCommand{
-		argv: ['/bin/sh', '-c', ':']
-		cwd: cwd
-		stdin: dev_null.fd
+		argv:   ['/bin/sh', '-c', ':']
+		cwd:    cwd
+		stdin:  dev_null.fd
 		stdout: dev_null.fd
 		stderr: dev_null.fd
 	}
-	defer {
-		command.deinit()
+	command.spawn() or {
+		eprintln('cannot spawn command at cwd, ignoring: ${err}')
+		return false
 	}
-	command.spawn() or { return false }
-	return command.wait() or { return false } == 0
+	_ = command.wait()!
+
+	return true
 }
 
 // setup_shell_command handles the shell integration dispatch based on the
