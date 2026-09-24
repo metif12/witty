@@ -126,6 +126,8 @@ pub enum ErrorKind {
 	locked_memory_limit_exceeded
 	out_of_memory
 	mapping_already_exists
+	// libxev dynamic API
+	no_available_backends
 }
 
 // zig_name returns the Zig error name, as printed by Zig's `{}` formatting of
