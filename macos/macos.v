@@ -1,8 +1,5 @@
 module macos
 
-import datastruct
-import sync
-
 // Translated from:
 // - ghostty/pkg/macos/foundation/base.zig
 // - ghostty/pkg/macos/foundation/type.zig
@@ -1517,112 +1514,6 @@ pub fn (a &CFArray) release() {
 pub type Array = CFArray
 
 pub type MutableArray = CFMutableArray
-
-// ============================================================
-// CFReleaseThread — dedicated thread for releasing CF objects
-// ============================================================
-
-const cf_release_mailbox_capacity = 64
-
-struct CFReleaseMessage {
-	refs []voidptr
-}
-
-@[heap]
-pub struct CFReleaseThread {
-mut:
-	mailbox        &datastruct.BlockingQueue[CFReleaseMessage] = unsafe { nil }
-	event          &sync.Semaphore = unsafe { nil }
-	mutex          &sync.Mutex = unsafe { nil }
-	stop_requested bool
-	thread_        ?thread
-}
-
-pub fn CFReleaseThread.init() !&CFReleaseThread {
-	mut result := &CFReleaseThread{
-		mailbox: datastruct.BlockingQueue.create[CFReleaseMessage](cf_release_mailbox_capacity)!
-		event: sync.new_semaphore()
-		mutex: sync.new_mutex()
-	}
-	result.thread_ = spawn result.thread_main()
-	return result
-}
-
-// Clean up the thread. This is only safe after all producers have stopped.
-pub fn (mut t CFReleaseThread) deinit() {
-	t.stop()
-	if worker := t.thread_ {
-		worker.wait()
-		t.thread_ = none
-	}
-	t.drain_mailbox()
-	if t.mailbox != unsafe { nil } {
-		t.mailbox.destroy()
-		t.mailbox = unsafe { nil }
-	}
-	if t.event != unsafe { nil } {
-		t.event.destroy()
-		t.event = unsafe { nil }
-	}
-	if t.mutex != unsafe { nil } {
-		t.mutex.destroy()
-		t.mutex = unsafe { nil }
-	}
-}
-
-pub fn (mut t CFReleaseThread) stop() {
-	if t.mutex == unsafe { nil } || t.event == unsafe { nil } {
-		return
-	}
-	t.mutex.lock()
-	already_stopped := t.stop_requested
-	t.stop_requested = true
-	t.mutex.unlock()
-	if !already_stopped {
-		t.event.post()
-	}
-}
-
-// Push a batch of objects to release. Ghostty uses a forever timeout for this
-// bounded mailbox, so a producer waits rather than dropping CF references.
-pub fn (mut t CFReleaseThread) push(refs []voidptr) bool {
-	if t.mailbox == unsafe { nil } {
-		return false
-	}
-	return t.mailbox.push(CFReleaseMessage{ refs: refs }, datastruct.blocking_queue_forever) > 0
-}
-
-// Notify the release thread to wake up and process.
-pub fn (mut t CFReleaseThread) notify_wakeup() {
-	if t.event != unsafe { nil } {
-		t.event.post()
-	}
-}
-
-fn (mut t CFReleaseThread) thread_main() {
-	for {
-		t.event.wait()
-		t.drain_mailbox()
-		t.mutex.lock()
-		stop := t.stop_requested
-		t.mutex.unlock()
-		if stop {
-			return
-		}
-	}
-}
-
-fn (mut t CFReleaseThread) drain_mailbox() {
-	if t.mailbox == unsafe { nil } {
-		return
-	}
-	for {
-		message := t.mailbox.pop() or { return }
-		for ref in message.refs {
-			cf_release(ref)
-		}
-	}
-}
 
 // ============================================================
 // text.stylized_strings

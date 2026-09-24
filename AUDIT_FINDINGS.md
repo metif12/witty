@@ -389,6 +389,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | renderer thread event loop | The renderer thread waited on a semaphore and polled timer deadlines instead of running Ghostty's xev loop with wakeup, stop, and draw-now asyncs and render, draw, and cursor timers. Losing focus never cancelled the cursor-blink timer, `reset_cursor_blink` restarted a separate deadline instead of resetting the timer completion, and the display link called into the thread object instead of notifying `draw_now`. | Port `renderer/Thread.zig` onto `xev`: the loop, handles, completions, and callbacks, cursor cancellation through `cursor_c_cancel`, the display link notifying `&thread.draw_now`, and termio and the surface notifying the renderer through the `xev.Async` handles. |
 | termio writer thread and exec backend | The IO thread polled its mailbox every millisecond, and resize coalescing, synchronized-output reset, selection scrolling, and termios polling were deadlines on that loop. Exec wrote to the pty with blocking `write` calls and watched the child on a dedicated `waitpid` thread (the source of the earlier shutdown `ECHILD` race). The termio mailbox recorded a wakeup flag instead of owning an `xev.Async`, and the handlers read backend state from `Exec` instead of the thread's `ThreadData`. | Port `termio/Thread.zig`, the SPSC `Mailbox`, and Exec's thread side: `ThreadData` (loop, backend state) threaded through every handler, coalesce, sync-reset, and scroll timers, the pidfd/kqueue `xev.Process` exit watcher, the termios timer, and queued non-blocking writes through `xev.Stream.queueWrite` with pooled requests and buffers. |
 | search thread transport | The search worker used V channels and a timed `select` instead of Ghostty's xev loop, wakeup and stop asyncs, and refresh timer. Surface producers called helper methods rather than pushing to the mailbox and notifying the wakeup. | Port the thread onto `xev` with the source's interleaved tick/`run(.no_wait)` loop, the `BlockingQueue` mailbox, and the refresh timer, and split the surface callback into `searchCallback`/`searchCallback_` so wakeup failures propagate as in Ghostty. |
+| CoreText CF release thread | Ghostty's `os/cf_release_thread.zig` runs an xev loop with wakeup and stop asyncs and a drain flag for abnormal exits. Witty used a semaphore/mutex worker with a `stop_requested` boolean, placed it in `macos`, and joined it inside `deinit`. | Translate the thread into `internal_os` on `xev`, and have the CoreText shaper spawn it, notify `stop`, and join it as the source does. |
 
 ## Focused behavior reviewed
 
@@ -518,11 +519,6 @@ an item here does not mean its full module has been certified yet.
   `spirv-cross` executables through temporary files, whereas Ghostty links the
   shader compiler/cross-compiler libraries. This has different availability,
   process, filesystem, and error contracts.
-- **macOS CF release worker:** Ghostty uses xev async wake/stop completions and
-  switches a packed drain flag only after an abnormal loop exit. Witty replaces
-  that state machine with a semaphore/mutex worker and an ordinary
-  `stop_requested` boolean, so its scheduling, failure, and drain behavior is
-  source-external.
 - **Flatpak asynchronous wait:** Ghostty's `FlatpakHostCommand.waitXev` stores a
   completion on the termio loop and guarantees that the callback runs through
   that loop. Witty's Flatpak host command is a C bridge without that

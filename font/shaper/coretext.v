@@ -1,6 +1,8 @@
 module shaper
 
+import datastruct
 import font
+import internal_os
 import macos
 import math
 
@@ -47,7 +49,8 @@ pub mut:
 	// Dedicated thread for releasing CoreFoundation objects. Some objects,
 	// such as those produced by CoreText, have excessively slow release
 	// callback logic.
-	cf_release_thread &macos.CFReleaseThread = unsafe { nil }
+	cf_release_thread &internal_os.CFReleaseThread = unsafe { nil }
+	cf_release_thr    ?thread
 	// User-specified font features.
 	feature_strings []string
 }
@@ -195,7 +198,13 @@ pub fn Shaper.init(opts font.ShaperOptions) !Shaper {
 	typesetter_attr_dict := macos.CFDictionary.create(ts_keys, ts_vals)!
 
 	// Create the CF release thread.
-	cf_release_thread := macos.CFReleaseThread.init()!
+	mut cf_release_thread := &internal_os.CFReleaseThread{}
+	unsafe {
+		*cf_release_thread = internal_os.CFReleaseThread.init()!
+	}
+
+	// Start the CF release thread.
+	cf_release_thr := spawn cf_release_thread.thread_main()
 
 	return Shaper{
 		run_state: run_state
@@ -207,6 +216,7 @@ pub fn Shaper.init(opts font.ShaperOptions) !Shaper {
 		cached_font_grid: 0
 		cf_release_pool: []voidptr{}
 		cf_release_thread: cf_release_thread
+		cf_release_thr: cf_release_thr
 		feature_strings: opts.features.clone()
 	}
 }
@@ -235,11 +245,25 @@ pub fn (mut self Shaper) deinit() {
 		for ref in self.cf_release_pool {
 			macos.cf_release(ref)
 		}
+
+		// For tests this logic is normal because we don't want to
+		// wait for a release thread. But in production this is a bug
+		// and we should warn.
+		$if !test {
+			eprintln('BUG: CFRelease pool was not empty, releasing remaining objects')
+		}
 	}
 	self.cf_release_pool = []
 
-	// Stop and join the CF release thread before releasing its mailbox.
+	// Stop the CF release thread
 	if self.cf_release_thread != unsafe { nil } {
+		self.cf_release_thread.stop.notify() or {
+			eprintln('error notifying cf release thread to stop, may stall err=${err}')
+		}
+		if thr := self.cf_release_thr {
+			thr.wait()
+		}
+		self.cf_release_thr = none
 		self.cf_release_thread.deinit()
 		self.cf_release_thread = unsafe { nil }
 	}
@@ -260,8 +284,12 @@ pub fn (mut self Shaper) end_frame() {
 	// Send the items. If the send succeeds then we wake up the
 	// thread to process the items. If the send fails then do a manual
 	// cleanup.
-	if self.cf_release_thread.push(items) {
-		self.cf_release_thread.notify_wakeup()
+	if self.cf_release_thread.mailbox.push(internal_os.CFReleaseMessage{
+		refs: items
+	}, datastruct.blocking_queue_forever) != 0 {
+		self.cf_release_thread.wakeup.notify() or {
+			eprintln('error notifying cf release thread to wake up, may stall err=${err}')
+		}
 		return
 	}
 
