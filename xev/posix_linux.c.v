@@ -295,3 +295,50 @@ pub fn linux_timerfd_settime(fd i32, flags LinuxTfdTimer, new_value &C.itimerspe
 	}
 	return linux_syscall_result(rc)
 }
+
+// Translations of the Zig 0.15.2 std.posix mmap wrappers that libxev's
+// io_uring backend uses.
+
+#include <sys/mman.h>
+
+// Translation of std.posix.mmap. libc is linked, so the libc branch
+// (MAP_FAILED and errno) is used. The returned slice aliases the mapping.
+pub fn posix_mmap(ptr voidptr, length usize, prot u32, flags u32, fd int, offset u64) ![]u8 {
+	rc := unsafe { C.mmap(ptr, length, int(prot), int(flags), fd, isize(offset)) }
+	if rc != C.MAP_FAILED {
+		return unsafe { (&u8(rc)).vbytes(int(length)) }
+	}
+	err := C.errno
+	match err {
+		0 { posix_unreachable() }
+		C.ETXTBSY { return new_error(.access_denied) }
+		C.EACCES { return new_error(.access_denied) }
+		C.EPERM { return new_error(.permission_denied) }
+		C.EAGAIN { return new_error(.locked_memory_limit_exceeded) }
+		C.EBADF { posix_unreachable() } // Always a race condition.
+		C.EOVERFLOW { posix_unreachable() } // The number of pages used for length + offset would overflow.
+		C.ENODEV { return new_error(.memory_mapping_not_supported) }
+		C.EINVAL { posix_unreachable() } // Invalid parameters to mmap()
+		C.EMFILE { return new_error(.process_fd_quota_exceeded) }
+		C.ENFILE { return new_error(.system_fd_quota_exceeded) }
+		C.ENOMEM { return new_error(.out_of_memory) }
+		C.EEXIST { return new_error(.mapping_already_exists) }
+		else { return unexpected_errno(err) }
+	}
+}
+
+// Translation of std.posix.munmap.
+// Deletes the mappings for the specified address range, causing
+// further references to addresses within the range to generate invalid memory references.
+// Note that while POSIX allows unmapping a region in the middle of an existing mapping,
+// Zig's munmap function does not, for two reasons:
+// * It violates the Zig principle that resource deallocation must succeed.
+// * The Windows function, VirtualFree, has this restriction.
+pub fn posix_munmap(memory []u8) {
+	match posix_errno(unsafe { C.munmap(memory.data, usize(memory.len)) }) {
+		0 { return }
+		C.EINVAL { posix_unreachable() } // Invalid parameters.
+		C.ENOMEM { posix_unreachable() } // Attempted to unmap a region in the middle of an existing mapping.
+		else { posix_unreachable() }
+	}
+}

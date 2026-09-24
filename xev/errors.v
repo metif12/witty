@@ -98,6 +98,34 @@ pub enum ErrorKind {
 	file_descriptor_not_registered
 	user_resource_limit_reached
 	file_descriptor_incompatible_with_epoll
+	// libxev io_uring backend and its watchers
+	too_many_entries
+	again
+	expiration_in_progress
+	host_unreachable
+	timed_out
+	// std.os.linux.IoUring init/init_params
+	entries_zero
+	entries_not_power_of_two
+	params_outside_accessible_address_space
+	arguments_invalid
+	system_outdated
+	// std.os.linux.IoUring enter
+	file_descriptor_invalid
+	file_descriptor_in_bad_state
+	completion_queue_overcommitted
+	submission_queue_entry_invalid
+	buffer_invalid
+	ring_shutting_down
+	opcode_not_supported
+	signal_interrupt
+	// std.os.linux.IoUring get_sqe
+	submission_queue_full
+	// std.posix.MMapError
+	memory_mapping_not_supported
+	locked_memory_limit_exceeded
+	out_of_memory
+	mapping_already_exists
 }
 
 // zig_name returns the Zig error name, as printed by Zig's `{}` formatting of
