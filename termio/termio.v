@@ -178,7 +178,6 @@ import datastruct
 import internal_os
 import kitty
 import os
-import pty
 import renderer
 import sync
 import terminal
@@ -330,10 +329,15 @@ pub fn (mut t Termio) queue_message(msg Message, mutex_state MutexState) {
 	t.mailbox.notify()
 }
 
-// Queue a write directly to the pty. If linefeed is true, carriage returns
-// are converted to CRLF.
-pub fn (mut t Termio) queue_write(data []u8, linefeed bool) ! {
-	t.backend.queue_write(data, linefeed)!
+// Queue a write directly to the pty.
+//
+// If you're using termio.Thread, this must ONLY be called from the
+// mailbox thread. If you're not on the thread, use queueMessage with
+// mailbox messages instead.
+//
+// If you're not using termio.Thread, this is not threadsafe.
+pub fn (mut t Termio) queue_write(mut td ThreadData, data []u8, linefeed bool) ! {
+	t.backend.queue_write(mut td, data, linefeed)!
 }
 
 // The options that are used to configure a terminal IO implementation.
@@ -429,39 +433,59 @@ pub fn (d DerivedConfig) deinit() {}
 // Termio methods (translated from Termio.zig)
 // ============================================================
 
-// thread_enter is called when the IO thread starts. It sets up the backend
-// (starting the subprocess and read thread). The backend needs a pointer to
-// this Termio so its read thread can forward pty data to process_output.
-pub fn (mut t Termio) thread_enter() ! {
+pub fn (mut t Termio) thread_enter(mut thr Thread, mut data ThreadData) ! {
+	// Always free our thread enter state when we're done.
 	defer {
 		// Exec only starts once, so startup input is never retained afterward.
 		t.thread_enter_input = []
 	}
 
-	// Open every configured path before starting the command. If any source is
-	// missing, no subprocess starts and therefore none of the input is sent.
+	// If we have thread enter state then we're going to validate
+	// and set that all up now so that we can error before we actually
+	// start the command and pty.
 	mut inputs := t.prepare_input()!
 	defer {
 		close_prepared_inputs(mut inputs)
 	}
 
-	// Setup our backend. The backend's read thread will feed process_output.
-	t.backend.thread_enter_io(t)!
+	data.loop = &thr.loop
+	data.renderer_state = t.renderer_state
+	data.surface_mailbox = t.surface_mailbox
+	data.mailbox = &t.mailbox
+	// Backend must replace data.backend on threadEnter.
+
+	// Setup our backend
+	t.backend.thread_enter(mut t, mut data)!
+	// Zig's errdefer is emulated by a reached defer that runs until setup succeeds.
+	mut ok := false
+	defer {
+		if !ok {
+			t.backend.thread_exit(mut data)
+		}
+	}
+
+	// If we have inputs, then queue them all up.
 	for mut item in inputs {
-		data := match item.kind {
-			.string { item.data }
+		match item.kind {
+			.string {
+				t.queue_write(mut data, item.data, false) or {
+					eprintln('failed to queue input string err=${err}')
+					return error('input failed')
+				}
+			}
 			.file {
-				read_initial_input_file(mut item.file) or {
-					t.backend.thread_exit()
+				bytes := read_initial_input_file(mut item.file) or {
+					eprintln('failed to read input file err=${err}')
+					return error('input failed')
+				}
+				t.queue_write(mut data, bytes, false) or {
+					eprintln('failed to queue input file err=${err}')
 					return error('input failed')
 				}
 			}
 		}
-		t.queue_write(data, false) or {
-			t.backend.thread_exit()
-			return error('input failed')
-		}
 	}
+	ok = true
 }
 
 const initial_input_max_bytes = 10 * 1024 * 1024
@@ -533,13 +557,12 @@ fn close_prepared_inputs(mut inputs []PreparedInput) {
 	}
 }
 
-// thread_exit is called when the IO thread exits.
-pub fn (mut t Termio) thread_exit() {
-	t.backend.thread_exit()
+pub fn (mut t Termio) thread_exit(mut data ThreadData) {
+	t.backend.thread_exit(mut data)
 }
 
 // change_config updates the configuration.
-pub fn (mut t Termio) change_config(config &DerivedConfig) ! {
+pub fn (mut t Termio) change_config(mut td ThreadData, config &DerivedConfig) ! {
 	// The remainder of this function is modifying terminal state or the read
 	// thread data, all of which requires holding the renderer state lock.
 	t.renderer_state.mutex.lock()
@@ -555,7 +578,7 @@ pub fn (mut t Termio) change_config(config &DerivedConfig) ! {
 	// Update our stream handler. The stream handler uses the same renderer
 	// mutex so this is safe to do despite being executed from another thread.
 	t.stream_handler.change_config(&t.config)
-	t.backend.thread_data.change_config(&t.config)
+	td.backend.change_config(&t.config)
 
 	// Update the configuration that we know about.
 	//
@@ -578,7 +601,7 @@ pub fn (mut t Termio) change_config(config &DerivedConfig) ! {
 }
 
 // resize resizes the terminal.
-pub fn (mut t Termio) resize(size renderer.Size) ! {
+pub fn (mut t Termio) resize(mut td ThreadData, size renderer.Size) ! {
 	t.size = size
 	grid_size := size.grid()
 
@@ -605,7 +628,7 @@ pub fn (mut t Termio) resize(size renderer.Size) ! {
 
 		// If we have size reporting enabled we need to send a report.
 		if t.terminal.modes.get(.in_band_size_reports) {
-			t.size_report_locked(.mode_2048)!
+			t.size_report_locked(mut td, .mode_2048)!
 		}
 	}
 
@@ -617,15 +640,15 @@ pub fn (mut t Termio) resize(size renderer.Size) ! {
 }
 
 // size_report makes a size report of the given style.
-pub fn (mut t Termio) size_report(style SizeReportKind) ! {
+pub fn (mut t Termio) size_report(mut td ThreadData, style SizeReportKind) ! {
 	t.renderer_state.mutex.lock()
 	defer {
 		t.renderer_state.mutex.unlock()
 	}
-	t.size_report_locked(style)!
+	t.size_report_locked(mut td, style)!
 }
 
-fn (mut t Termio) size_report_locked(style SizeReportKind) ! {
+fn (mut t Termio) size_report_locked(mut td ThreadData, style SizeReportKind) ! {
 	grid_size := t.size.grid()
 
 	// Build the size report message. Reports in columns and pixels.
@@ -644,7 +667,7 @@ fn (mut t Termio) size_report_locked(style SizeReportKind) ! {
 		}
 	}
 
-	t.queue_write(message.bytes(), false)!
+	t.queue_write(mut td, message.bytes(), false)!
 }
 
 // reset_synchronized_output resets the synchronized output mode. This is
@@ -660,7 +683,7 @@ pub fn (mut t Termio) reset_synchronized_output() {
 
 // clear_screen clears the screen. If history is true, the scrollback is
 // also cleared.
-pub fn (mut t Termio) clear_screen(history bool) ! {
+pub fn (mut t Termio) clear_screen(mut td ThreadData, history bool) ! {
 	{
 		t.renderer_state.mutex.lock()
 		defer {
@@ -701,7 +724,7 @@ pub fn (mut t Termio) clear_screen(history bool) ! {
 	}
 
 	// If we reached here it means we're at a prompt, so we send a form-feed.
-	t.queue_write([u8(0x0C)], false)!
+	t.queue_write(mut td, [u8(0x0C)], false)!
 }
 
 // scroll_viewport scrolls the viewport.
@@ -728,7 +751,7 @@ pub fn (mut t Termio) jump_to_prompt(delta isize) ! {
 
 // focus_gained is called when focus is gained or lost (when focus events
 // are enabled).
-pub fn (mut t Termio) focus_gained(focused bool) ! {
+pub fn (mut t Termio) focus_gained(mut td ThreadData, focused bool) ! {
 	t.renderer_state.mutex.lock()
 	focus_event := t.terminal.modes.get(.focus_event)
 	t.renderer_state.mutex.unlock()
@@ -736,11 +759,11 @@ pub fn (mut t Termio) focus_gained(focused bool) ! {
 	// If we have focus events enabled, we send the focus event.
 	if focus_event {
 		seq := if focused { '\x1b[I' } else { '\x1b[O' }
-		t.queue_write(seq.bytes(), false)!
+		t.queue_write(mut td, seq.bytes(), false)!
 	}
 
 	// We always notify our backend of focus changes.
-	t.backend.focus_gained(focused)!
+	t.backend.focus_gained(mut td, focused)!
 }
 
 // process_output processes output from the pty. This is the manual API that
@@ -809,15 +832,15 @@ fn (mut t Termio) process_output_locked(buf []u8) {
 
 // color_scheme_report sends a DSR response for the current color scheme to
 // the pty.
-pub fn (mut t Termio) color_scheme_report(force bool) ! {
+pub fn (mut t Termio) color_scheme_report(mut td ThreadData, force bool) ! {
 	t.renderer_state.mutex.lock()
 	defer {
 		t.renderer_state.mutex.unlock()
 	}
-	t.color_scheme_report_locked(force)!
+	t.color_scheme_report_locked(mut td, force)!
 }
 
-pub fn (mut t Termio) color_scheme_report_locked(force bool) ! {
+pub fn (mut t Termio) color_scheme_report_locked(mut td ThreadData, force bool) ! {
 	if !force && !t.terminal.modes.get(.report_color_scheme) {
 		return
 	}
@@ -825,7 +848,7 @@ pub fn (mut t Termio) color_scheme_report_locked(force bool) ! {
 		.light { '\x1b[?997;2n' }
 		.dark { '\x1b[?997;1n' }
 	}
-	t.queue_write(output.bytes(), false)!
+	t.queue_write(mut td, output.bytes(), false)!
 }
 
 // ThreadData is the data created and stored in the termio thread when the
@@ -835,17 +858,24 @@ pub fn (mut t Termio) color_scheme_report_locked(force bool) ! {
 // thread. As such, a lock is not necessary.
 pub struct ThreadData {
 pub mut:
-	// The shared render state.
+	// The event loop associated with this thread. This is owned by
+	// the Thread but we have a pointer so we can queue new work to it.
+	loop &xev.Loop = unsafe { nil }
+
+	// The shared render state
 	renderer_state &renderer.State = unsafe { nil }
 
-	// Mailbox for the surface.
+	// Mailboxes for different threads
 	surface_mailbox apprt.SurfaceMailbox
 
-	// The termio mailbox.
+	// Data associated with the backend implementation (i.e. pty/exec state)
+	backend ExecThreadData
 	mailbox &Mailbox = unsafe { nil }
 }
 
-pub fn (mut self ThreadData) deinit() {}
+pub fn (mut self ThreadData) deinit() {
+	self.backend.deinit()
+}
 
 // CursorStyle: use terminal.CursorStyle directly.
 
@@ -887,249 +917,454 @@ fn (mut self ThreadFlags) set(mask u8, enabled bool) {
 	}
 }
 
-// The minimum amount of time to wait between resize events.
+// This stores the information that is coalesced.
+struct Coalesce {
+mut:
+	resize ?renderer.Size
+}
+
+// The number of milliseconds to coalesce certain messages like resize for.
+// Not all message types are coalesced.
 const coalesce_min_ms = 25
 
 // The number of milliseconds before we reset the synchronized output flag
+// if the running program hasn't already.
 const sync_reset_ms = 1000
 
-// The number of milliseconds between selection scroll ticks.
+// The number of milliseconds between each movement during selection scrolling.
 const selection_scroll_ms = 15
 
-// Thread manages the IO thread.
+// Represents the "writer" thread for terminal IO. The reader side is
+// handled by the Termio struct itself and dependent on the underlying
+// implementation (i.e. if its a pty, manual, etc.).
+//
+// The writer thread does handle writing bytes to the pty but also handles
+// different events such as starting synchronized output, changing some
+// modes (like linefeed), etc. The goal is to offload as much from the
+// reader thread as possible since it is the hot path in parsing VT
+// sequences and updating terminal state.
+//
+// This thread state can only be used by one thread at a time.
 pub struct Thread {
 pub mut:
-	stop          Stopwatch
-	flags         ThreadFlags
+	// The main event loop for the thread. The user data of this loop
+	// is always the allocator used to create the loop. This is a convenience
+	// so that users of the loop always have an allocator.
+	loop xev.Loop
+
+	// The completion to use for the wakeup async handle that is present
+	// on the termio.Writer.
+	wakeup_c xev.Completion
+
+	// This can be used to stop the thread on the next loop iteration.
+	stop   xev.Async
+	stop_c xev.Completion
+
+	// This is used for timer-based selection scrolling.
+	scroll        xev.Timer
+	scroll_c      xev.Completion
 	scroll_active bool
-	// Timer/coalescing state. Deadlines use time.sys_mono_now nanoseconds.
-	pending_resize  ?renderer.Size
-	resize_deadline i64
-	sync_deadline   i64
-	scroll_deadline i64
+
+	// This is used to coalesce resize events.
+	coalesce          xev.Timer
+	coalesce_c        xev.Completion
+	coalesce_cancel_c xev.Completion
+	coalesce_data     Coalesce
+
+	// This timer is used to reset synchronized output modes so that
+	// the terminal doesn't freeze with a bad actor.
+	sync_reset          xev.Timer
+	sync_reset_c        xev.Completion
+	sync_reset_cancel_c xev.Completion
+
+	flags ThreadFlags
 }
 
+// Initialize the thread. This does not START the thread. This only sets
+// up all the internal state necessary prior to starting the thread. It
+// is up to the caller to start the thread with the threadMain entrypoint.
 pub fn Thread.init() !Thread {
+	// Zig's errdefers are emulated by reached defers that run until init succeeds.
+	mut init_ok := false
+
+	// Create our event loop.
+	mut loop := xev.Loop.init(xev.Options{})!
+	defer {
+		if !init_ok {
+			loop.deinit()
+		}
+	}
+
+	// This async handle is used to stop the loop and force the thread to end.
+	mut stop_h := xev.Async.init()!
+	defer {
+		if !init_ok {
+			stop_h.deinit()
+		}
+	}
+
+	// This timer is used for selection scrolling.
+	scroll_h := xev.Timer.init()!
+	defer {
+		if !init_ok {
+			scroll_h.deinit()
+		}
+	}
+
+	// This timer is used to coalesce resize events.
+	coalesce_h := xev.Timer.init()!
+	defer {
+		if !init_ok {
+			coalesce_h.deinit()
+		}
+	}
+
+	// This timer is used to reset synchronized output modes.
+	sync_reset_h := xev.Timer.init()!
+	defer {
+		if !init_ok {
+			sync_reset_h.deinit()
+		}
+	}
+
+	init_ok = true
 	return Thread{
-		stop: Stopwatch.init()
+		loop:       loop
+		stop:       stop_h
+		scroll:     scroll_h
+		coalesce:   coalesce_h
+		sync_reset: sync_reset_h
 	}
 }
 
-pub fn (mut t Thread) deinit() {
-	t.stop.deinit()
+// Clean up the thread. This is only safe to call once the thread
+// completes executing; the caller must join prior to this.
+pub fn (mut self Thread) deinit() {
+	self.scroll.deinit()
+	self.coalesce.deinit()
+	self.sync_reset.deinit()
+	self.stop.deinit()
+	self.loop.deinit()
 }
 
-// thread_main is the writer-thread entry point. Ghostty drives the same state
-// machine with libxev; V's implementation uses a short monotonic polling wait
-// so mailbox and timer behavior remains identical without tying Termio to a
-// particular event-loop implementation.
-pub fn (mut t Thread) thread_main(mut io Termio) {
+// The main entrypoint for the thread.
+pub fn (mut self Thread) thread_main(mut io Termio) {
+	// Call child function so we can use errors...
+	self.thread_main_(mut io) or {
+		eprintln('error in io thread err=${err}')
+
+		// If there is an error, we replace our terminal screen with
+		// the error message. It might be better in the future to send
+		// the error to the surface thread and let the apprt deal with it
+		// in some way but this works for now. Without this, the user would
+		// just see a blank terminal window.
+		self.show_start_error(mut io, err.msg())
+	}
+
+	// If our loop is not stopped, then we need to keep running so that
+	// messages are drained and we can wait for the surface to send a stop
+	// message.
+	if !self.loop.stopped() {
+		eprintln('abrupt io thread exit detected, starting xev to drain mailbox')
+		self.flags.set_drain(true)
+		self.loop.run(.until_done) or {
+			eprintln('failed to start xev loop for draining err=${err}')
+		}
+	}
+}
+
+fn (mut self Thread) thread_main_(mut io Termio) ! {
+	// Right now, on Darwin, `std.Thread.setName` can only name the current
+	// thread, and we have no way to get the current thread from within it,
+	// so instead we use this code to name the thread instead.
 	$if macos {
 		internal_os.set_thread_name('io')
 	}
 
+	// Setup our crash metadata
 	crash.set_thread_state(crash.ThreadState{
-		kind: .io
+		kind:    .io
 		surface: io.surface_mailbox.surface
 	})
 	defer {
 		crash.clear_thread_state()
 	}
 
-	io.thread_enter() or {
-		t.show_start_error(mut io, err.msg())
-		t.flags.set_drain(true)
+	// Get the mailbox. This must be an SPSC mailbox for threading.
+	mut mailbox := &io.mailbox
+
+	// This is the data sent to xev callbacks. We want a pointer to both
+	// ourselves and the thread data so we can thread that through (pun intended).
+	mut cb := &CallbackData{
+		self_: self
+		io:    io
+	}
+
+	// Run our thread start/end callbacks. This allows the implementation
+	// to hook into the event loop as needed. The thread data is created
+	// on the stack here so that it has a stable pointer throughout the
+	// lifetime of the thread.
+	io.thread_enter(mut self, mut cb.data)!
+	defer {
+		cb.data.deinit()
 	}
 	defer {
-		if !t.flags.drain() {
-			io.thread_exit()
-		}
+		io.thread_exit(mut cb.data)
 	}
 
-	for !t.stop.is_notified() {
-		// When we wake up, we check the mailbox. Mailbox producers should
-		// wake up our thread after publishing.
-		mut did_work := t.drain_mailbox(mut io) or {
-			eprintln('error draining mailbox err=${err}')
-			true
-		}
-		if t.run_timers(mut io, i64(time.sys_mono_now())) {
-			did_work = true
-		}
+	// Start the async handlers.
+	mailbox.wakeup.wait(mut self.loop, &self.wakeup_c, cb, termio_thread_wakeup_callback)
+	self.stop.wait(mut self.loop, &self.stop_c, cb, termio_thread_stop_callback)
 
-		if !did_work {
-			time.sleep(time.millisecond)
-		}
-	}
-
-	// Match the abnormal-exit behavior: after startup failure, continue
-	// accepting and discarding messages until the owner requests shutdown.
-	if t.flags.drain() {
-		for io.mailbox.pop() != none {
-		}
-	}
+	// Run
+	self.loop.run(.until_done)!
 }
 
-// Run callbacks whose deadlines have expired. This is the polling-loop
-// equivalent of Ghostty's libxev timer callbacks.
-fn (mut t Thread) run_timers(mut io Termio, now i64) bool {
-	mut did_work := false
-	if resize := t.pending_resize {
-		if now >= t.resize_deadline {
-			io.resize(resize) or { eprintln('error during resize err=${err}') }
-			t.pending_resize = none
-			t.resize_deadline = 0
-			did_work = true
-		}
-	}
-	if t.sync_deadline > 0 && now >= t.sync_deadline {
-		io.reset_synchronized_output()
-		t.sync_deadline = 0
-		did_work = true
-	}
-	if t.scroll_deadline > 0 && now >= t.scroll_deadline {
-		// A stopped timer still completes once and reports false. The surface
-		// uses that final callback to stop selection scrolling immediately.
-		io.surface_mailbox.push(apprt.SurfaceMessage{
-			kind: .selection_scroll_tick
-			selection_scroll_tick: t.scroll_active
-		}, datastruct.blocking_queue_instant)
-		if t.scroll_active {
-			t.scroll_deadline = now + selection_scroll_ms * i64(time.millisecond)
-		} else {
-			t.scroll_deadline = 0
-		}
-		did_work = true
-	}
-	if t.run_termios_timer(mut io, now) {
-		did_work = true
-	}
-	return did_work
+// This is the data passed to xev callbacks on the thread.
+@[heap]
+struct CallbackData {
+mut:
+	self_ &Thread = unsafe { nil }
+	io    &Termio = unsafe { nil }
+	data  ThreadData
 }
 
-// Poll the pty mode while the surface is focused. Canonical input with echo
-// disabled is Ghostty's password-entry heuristic; mode transitions are sent
-// to the surface so it can disable unsafe conveniences while a password is
-// being entered.
-fn (mut t Thread) run_termios_timer(mut io Termio, now i64) bool {
-	deadline := io.backend.thread_data.termios_deadline
-	if deadline <= 0 || now < deadline {
-		return false
-	}
-	io.backend.thread_data.termios_deadline = 0
+// Drain the mailbox, handling all the messages in our terminal implementation.
+fn (mut self Thread) drain_mailbox(mut cb CallbackData) ! {
+	// We assert when starting the thread that this is the state
+	mut mailbox := cb.io.mailbox.queue
+	mut io := cb.io
+	mut data := &cb.data
 
-	$if !windows {
-		// The read descriptor is the pty master. Rebuild the lightweight Pty
-		// view exactly as Ghostty does so polling remains valid for the full
-		// backend-thread lifetime.
-		mode := pty.Pty{ master: io.backend.thread_data.read_thread_fd }.get_mode() or {
-			pty.Mode{}
+	// If we're draining, we just drain the mailbox and return.
+	if self.flags.drain() {
+		for {
+			mailbox.pop() or { break }
 		}
-		t.apply_termios_mode(mut io, mode)
-	}
-
-	if io.backend.thread_data.termios_timer_running {
-		io.backend.thread_data.termios_deadline = now + termios_poll_ms * i64(time.millisecond)
-	}
-	return true
-}
-
-fn (mut t Thread) apply_termios_mode(mut io Termio, mode pty.Mode) {
-	if mode == io.backend.thread_data.termios_mode {
-		return
-	}
-	io.backend.thread_data.termios_mode = mode
-	password_input := mode.canonical() && !mode.echo()
-
-	io.renderer_state.mutex.lock()
-	unchanged := io.terminal.flags.password_input() == password_input
-	io.renderer_state.mutex.unlock()
-	if unchanged {
 		return
 	}
 
-	io.surface_mailbox.push(apprt.SurfaceMessage{
-		kind: .password_input
-		password_input: password_input
-	}, datastruct.blocking_queue_forever)
-}
-
-// drain_mailbox dispatches every currently queued writer message. Returning
-// true tells the caller that a renderer wakeup was requested.
-// drain_mailbox handles every queued message. As in Ghostty, the first handler
-// failure stops the drain before the redraw notification. The returned value
-// reports whether messages were handled, for Witty's polling loop.
-fn (mut t Thread) drain_mailbox(mut io Termio) !bool {
+	// This holds the mailbox lock for the duration of the drain. The
+	// expectation is that all our message handlers will be non-blocking
+	// ENOUGH to not mess up throughput on producers.
 	mut redraw := false
 	for {
-		msg := io.mailbox.pop() or { break }
-		if t.flags.drain() {
-			continue
-		}
+		message := mailbox.pop() or { break }
+		// If we have a message we always redraw
 		redraw = true
-		match msg.kind {
-			.color_scheme_report { io.color_scheme_report(msg.force_val)! }
-			.crash { panic('crash request, crashing intentionally') }
-			.change_config { io.change_config(&msg.config_val)! }
+
+		match message.kind {
+			.color_scheme_report {
+				io.color_scheme_report(mut data, message.force_val)!
+			}
+			.crash {
+				panic('crash request, crashing intentionally')
+			}
+			.change_config {
+				io.change_config(mut data, &message.config_val)!
+			}
 			.inspector {
-				t.flags.set_has_inspector(msg.flag_val)
+				self.flags.set_has_inspector(message.flag_val)
 			}
 			.resize {
-				t.pending_resize = msg.resize_val
-				if t.resize_deadline == 0 {
-					t.resize_deadline = i64(time.sys_mono_now()) + coalesce_min_ms * i64(time.millisecond)
-				}
+				self.handle_resize(mut cb, message.resize_val)
 			}
-			.size_report { io.size_report(msg.size_report_val)! }
-			.clear_screen { io.clear_screen(msg.flag_val)! }
+			.size_report {
+				io.size_report(mut data, message.size_report_val)!
+			}
+			.clear_screen {
+				io.clear_screen(mut data, message.flag_val)!
+			}
 			.scroll_viewport {
-				io.scroll_viewport(msg.scroll_viewport_val)!
+				io.scroll_viewport(message.scroll_viewport_val)!
 			}
 			.selection_scroll {
-				if msg.flag_val {
-					t.scroll_active = true
-					// An already armed timer is not restarted.
-					if t.scroll_deadline == 0 {
-						t.scroll_deadline = i64(time.sys_mono_now()) + selection_scroll_ms * i64(time.millisecond)
-					}
+				if message.flag_val {
+					self.start_scroll_timer(mut cb)
 				} else {
-					// stopScrollTimer only changes the active flag. The armed
-					// callback is allowed to fire once with a false value.
-					t.scroll_active = false
+					self.stop_scroll_timer()
 				}
 			}
-			.jump_to_prompt { io.jump_to_prompt(msg.prompt_delta)! }
+			.jump_to_prompt {
+				io.jump_to_prompt(message.prompt_delta)!
+			}
 			.start_synchronized_output {
-				t.sync_deadline = i64(time.sys_mono_now()) + sync_reset_ms * i64(time.millisecond)
+				self.start_synchronized_output(mut cb)
 			}
 			.linefeed_mode {
-				t.flags.set_linefeed_mode(msg.flag_val)
+				self.flags.set_linefeed_mode(message.flag_val)
 			}
-			.focused { io.focus_gained(msg.flag_val)! }
+			.focused {
+				io.focus_gained(mut data, message.flag_val)!
+			}
 			.write_small {
-				io.queue_write(msg.write_small_data.slice(), t.flags.linefeed_mode())!
+				io.queue_write(mut data, message.write_small_data.slice(), self.flags.linefeed_mode())!
 			}
 			.write_stable {
-				io.queue_write(msg.write_stable_data.bytes(), t.flags.linefeed_mode())!
+				io.queue_write(mut data, message.write_stable_data.bytes(), self.flags.linefeed_mode())!
 			}
 			.write_alloc {
-				io.queue_write(msg.write_alloc_data.bytes(), t.flags.linefeed_mode())!
+				io.queue_write(mut data, message.write_alloc_data.bytes(), self.flags.linefeed_mode())!
 			}
 		}
 	}
+
 	// Trigger a redraw after we've drained so we don't waste cyces
 	// messaging a redraw.
 	if redraw {
 		io.renderer_wakeup.notify()!
 	}
-	return redraw
 }
 
-fn (t &Thread) show_start_error(mut io Termio, message string) {
+fn (mut self Thread) start_synchronized_output(mut cb CallbackData) {
+	self.sync_reset.reset(mut self.loop, &self.sync_reset_c, &self.sync_reset_cancel_c,
+		sync_reset_ms, cb, termio_thread_sync_reset_callback)
+}
+
+fn (mut self Thread) handle_resize(mut cb CallbackData, resize renderer.Size) {
+	self.coalesce_data.resize = resize
+
+	// If the timer is already active we just return. In the future we want
+	// to reset the timer up to a maximum wait time but for now this ensures
+	// relatively smooth resizing.
+	if self.coalesce_c.state() == .active {
+		return
+	}
+
+	self.coalesce.reset(mut self.loop, &self.coalesce_c, &self.coalesce_cancel_c, coalesce_min_ms,
+		cb, termio_thread_coalesce_callback)
+}
+
+fn termio_thread_sync_reset_callback(cb_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorKind) xev.CallbackAction {
+	if err := r {
+		match err {
+			.canceled {}
+			else {
+				eprintln('error during sync reset callback err=${err}')
+				return .disarm
+			}
+		}
+	}
+
+	if cb_ == unsafe { nil } {
+		return .disarm
+	}
+	mut cb := unsafe { &CallbackData(cb_) }
+	cb.io.reset_synchronized_output()
+	return .disarm
+}
+
+fn termio_thread_coalesce_callback(cb_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorKind) xev.CallbackAction {
+	if err := r {
+		match err {
+			.canceled {}
+			else {
+				eprintln('error during coalesce callback err=${err}')
+				return .disarm
+			}
+		}
+	}
+
+	if cb_ == unsafe { nil } {
+		return .disarm
+	}
+	mut cb := unsafe { &CallbackData(cb_) }
+
+	if v := cb.self_.coalesce_data.resize {
+		cb.self_.coalesce_data.resize = none
+		cb.io.resize(mut cb.data, v) or { eprintln('error during resize err=${err}') }
+	}
+
+	return .disarm
+}
+
+fn termio_thread_wakeup_callback(cb_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorKind) xev.CallbackAction {
+	if err := r {
+		eprintln('error in wakeup err=${err}')
+		return .rearm
+	}
+
+	// When we wake up, we check the mailbox. Mailbox producers should
+	// wake up our thread after publishing.
+	if cb_ == unsafe { nil } {
+		return .rearm
+	}
+	mut cb := unsafe { &CallbackData(cb_) }
+	cb.self_.drain_mailbox(mut cb) or { eprintln('error draining mailbox err=${err}') }
+
+	return .rearm
+}
+
+fn termio_thread_stop_callback(cb_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorKind) xev.CallbackAction {
+	if _ := r {
+		panic('unreachable')
+	}
+	mut cb := unsafe { &CallbackData(cb_) }
+	cb.self_.loop.stop()
+	return .disarm
+}
+
+fn (mut self Thread) start_scroll_timer(mut cb CallbackData) {
+	self.scroll_active = true
+
+	match self.scroll_c.state() {
+		// If it is already active, e.g. startScrollTimer is called multiple
+		// times, then we just return. We can't simply check `scroll_active`
+		// because its possible that `stopScrollTimer` was called but there
+		// was no loop tick between then and now to halt out completion.
+		.active {
+			return
+		}
+		// If the completion is not active then we need to start it.
+		.dead {
+			self.scroll.run(mut self.loop, &self.scroll_c, selection_scroll_ms, cb, termio_thread_selection_scroll_callback)
+		}
+	}
+}
+
+fn (mut self Thread) stop_scroll_timer() {
+	// This will stop the scrolling on the next iteration.
+	self.scroll_active = false
+}
+
+fn termio_thread_selection_scroll_callback(cb_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorKind) xev.CallbackAction {
+	if err := r {
+		match err {
+			.canceled {}
+			else {
+				eprintln('error during selection scroll callback err=${err}')
+				return .disarm
+			}
+		}
+	}
+
+	if cb_ == unsafe { nil } {
+		return .disarm
+	}
+	mut cb := unsafe { &CallbackData(cb_) }
+	mut self := cb.self_
+
+	// Send the tick to the main surface
+	cb.io.surface_mailbox.push(apprt.SurfaceMessage{
+		kind:                  .selection_scroll_tick
+		selection_scroll_tick: self.scroll_active
+	}, datastruct.blocking_queue_instant)
+
+	if self.scroll_active {
+		self.scroll.run(mut self.loop, &self.scroll_c, selection_scroll_ms, cb, termio_thread_selection_scroll_callback)
+	}
+
+	return .disarm
+}
+
+fn (self &Thread) show_start_error(mut io Termio, message string) {
 	io.renderer_state.mutex.lock()
 	defer { io.renderer_state.mutex.unlock() }
-	io.terminal.modes.set(.cursor_visible, false)
-	io.terminal.erase_display(.complete, false)
+	mut t := io.renderer_state.terminal_
+
+	// Hide the cursor
+	t.modes.set(.cursor_visible, false)
+
 	text := match message {
 		'openpty failed' {
 			'Your system cannot allocate any more pty devices.\n\nGhostty requires a pty device to launch a new terminal.\nThis error is usually due to having too many terminal\nwindows open or having another program that is using too\nmany pty devices.\n\nPlease free up some pty devices and try again.'
@@ -1141,62 +1376,8 @@ fn (t &Thread) show_start_error(mut io Termio, message string) {
 			'error starting IO thread: ${message}\n\nThe underlying shell or command was unable to be started.\nThis error is usually due to exhausting a system resource.\nIf this looks like a bug, please report it.\n\nThis terminal is non-functional. Please close it and try again.'
 		}
 	}
-	io.terminal.print_string(text) or {}
-}
-
-// Stopwatch is a cross-thread wakeup/stop signal. In ghostty this is backed
-// by an xev.Async which lets one thread notify another's event loop. Here we
-// model the notification state directly: notify() records that a signal was
-// raised so the consuming thread can observe it.
-pub struct Stopwatch {
-pub mut:
-	// Whether a notification has been raised on this stopwatch.
-	notified bool
-	mutex    &sync.Mutex = unsafe { nil }
-}
-
-pub fn Stopwatch.init() Stopwatch {
-	return Stopwatch{
-		mutex: sync.new_mutex()
-	}
-}
-
-fn (mut s Stopwatch) ensure_mutex() &sync.Mutex {
-	if s.mutex == unsafe { nil } {
-		s.mutex = sync.new_mutex()
-	}
-	return s.mutex
-}
-
-// notify raises the wakeup/stop signal. In ghostty this wakes the target
-// event loop; here we record that the signal was raised.
-pub fn (mut s Stopwatch) notify() ! {
-	mtx := s.ensure_mutex()
-	mtx.lock()
-	defer { mtx.unlock() }
-	s.notified = true
-}
-
-pub fn (mut s Stopwatch) is_notified() bool {
-	mtx := s.ensure_mutex()
-	mtx.lock()
-	defer { mtx.unlock() }
-	return s.notified
-}
-
-// reset clears the notification state.
-pub fn (mut s Stopwatch) reset() {
-	mtx := s.ensure_mutex()
-	mtx.lock()
-	defer { mtx.unlock() }
-	s.notified = false
-}
-
-pub fn (mut s Stopwatch) deinit() {
-	if s.mutex != unsafe { nil } {
-		s.mutex.destroy()
-		s.mutex = unsafe { nil }
-	}
+	t.erase_display(.complete, false)
+	t.print_string(text) or {}
 }
 
 // ============================================================
@@ -1439,75 +1620,78 @@ pub enum MutexState as u8 {
 // Ghostty usage.
 const mailbox_capacity = 64
 
-// Mailbox is the queue used for storing messages that is periodically drained.
-// Typically used by a multi-threaded application (the surface/stream handler
-// producer side and the termio thread consumer side).
-//
-// This is a translation of ghostty's termio.Mailbox, which wraps a
-// BlockingQueue(termio.Message, 64) plus a wakeup async. The queue is a bounded
-// SPSC ring buffer; here we model it with an inline fixed-size ring buffer so
-// that a zero-valued Mailbox{} is immediately usable.
+// A queue used for storing messages that is periodically drained.
+// Typically used by a multi-threaded application. The capacity is
+// hardcoded to a value that empirically has made sense for Ghostty usage
+// but I'm open to changing it with good arguments.
+pub type MailboxQueue = datastruct.BlockingQueue[Message]
+
+// The location to where write-related messages are sent. Ghostty's union has
+// the single SPSC variant (its unbounded variant is commented out), so the
+// SPSC payload is stored directly.
 pub struct Mailbox {
-mut:
-	queue &datastruct.BlockingQueue[Message] = unsafe { nil }
-	// Whether the wakeup signal has been raised for the consuming thread.
-	notified bool
+pub mut:
+	// Write messages to a SPSC queue for multi-threaded applications.
+	queue  &MailboxQueue = unsafe { nil }
+	wakeup xev.Async
 }
 
-// init_spsc creates the bounded single-producer/single-consumer mailbox.
-// The underlying mutex is allocated here.
+// Init the SPSC writer.
 pub fn Mailbox.init_spsc() !Mailbox {
+	mut queue := datastruct.BlockingQueue.create[Message](mailbox_capacity)!
+	// Zig's errdefer is emulated by a reached defer that runs until init succeeds.
+	mut ok := false
+	defer {
+		if !ok {
+			queue.destroy()
+		}
+	}
+
+	wakeup := xev.Async.init()!
+
+	ok = true
 	return Mailbox{
-		queue: datastruct.BlockingQueue.create[Message](mailbox_capacity)!
+		queue:  queue
+		wakeup: wakeup
 	}
 }
 
 pub fn (mut m Mailbox) deinit() {
-	if m.queue != unsafe { nil } {
-		m.queue.destroy()
-		m.queue = unsafe { nil }
-	}
+	m.queue.destroy()
+	m.wakeup.deinit()
 }
 
-// ensure_queue lazily allocates the queue so a zero-valued Mailbox{}
-// (e.g. an embedded field that wasn't built via Mailbox.init_spsc) is usable.
-fn (mut m Mailbox) ensure_queue() &datastruct.BlockingQueue[Message] {
-	if m.queue == unsafe { nil } {
-		m.queue = datastruct.BlockingQueue.create[Message](mailbox_capacity) or {
-			panic(err)
-		}
-	}
-	return m.queue
-}
-
-// len returns the number of unread messages in the mailbox.
-pub fn (mut m Mailbox) len() int {
-	mut queue := m.ensure_queue()
-	return queue.len()
-}
-
-// send pushes the given message without notifying that there are messages.
+// Sends the given message without notifying there are messages.
 //
-// If the optional mutex is given, it must already be LOCKED. If the send would
-// block (the queue is full), we raise the wakeup, unlock this mutex so the
-// consuming thread can drain, retry the push, and lock it again. This handles
-// the edge case where the queue is full.
+// If the optional mutex is given, it must already be LOCKED. If the
+// send would block, we'll unlock this mutex, resend the message, and
+// lock it again. This handles an edge case where queues are full.
+// This may not apply to all writer types.
 pub fn (mut m Mailbox) send(msg Message, mtx &sync.Mutex) {
-	// Try to write to the queue. This is the fast path because we can queue
-	// without unlocking the renderer state.
-	mut queue := m.ensure_queue()
-	if queue.push(msg, datastruct.blocking_queue_instant) > 0 {
+	// Try to write to the queue with an instant timeout. This is the
+	// fast path because we can queue without a lock.
+	if m.queue.push(msg, datastruct.blocking_queue_instant) > 0 {
 		return
 	}
 
-	// If we reach here, the queue is full. Wake up the writer thread so that it
-	// can process messages to clear up space. However, the writer thread may
-	// require the renderer lock so we need to unlock.
-	m.notify()
+	// If we enter this conditional, the queue is full. We wake up
+	// the writer thread so that it can process messages to clear up
+	// space. However, the writer thread may require the renderer
+	// lock so we need to unlock.
+	m.wakeup.notify() or {
+		eprintln('failed to wake up writer, data will be dropped err=${err}')
+		return
+	}
 
-	// Unlock the renderer state (if provided) so the writer thread can acquire
-	// it, then retry queueing our message before continuing. This is a very
-	// slow path that only triggers in pathological cases.
+	// Unlock the renderer state so the writer thread can acquire it.
+	// Then try to queue our message before continuing. This is a very
+	// slow path because we are having a lot of contention for data.
+	// But this only gets triggered in certain pathological cases.
+	//
+	// Note that writes themselves don't require a lock, but there
+	// are other messages in the writer queue (resize, focus) that
+	// could acquire the lock. This is why we have to release our lock
+	// here.
 	if mtx != unsafe { nil } {
 		mtx.unlock()
 	}
@@ -1516,26 +1700,11 @@ pub fn (mut m Mailbox) send(msg Message, mtx &sync.Mutex) {
 			mtx.lock()
 		}
 	}
-	_ = queue.push(msg, datastruct.blocking_queue_forever)
+	_ = m.queue.push(msg, datastruct.blocking_queue_forever)
 }
 
-// push attempts to push a message onto the queue without blocking. Returns the
-// number of items pushed (1 on success, 0 if the queue is full).
-pub fn (mut m Mailbox) push(msg Message) int {
-	mut queue := m.ensure_queue()
-	return if queue.push(msg, datastruct.blocking_queue_instant) > 0 { 1 } else { 0 }
-}
-
-// pop removes and returns the next message from the queue without blocking.
-// Returns none if the queue is empty.
-pub fn (mut m Mailbox) pop() ?Message {
-	mut queue := m.ensure_queue()
-	return queue.pop()
-}
-
-// notify wakes up the termio thread so it processes any queued messages. This
-// records that a wakeup signal was raised. In ghostty this notifies the
-// wakeup async tied to the consuming thread's event loop.
+// Notify that there are new messages. This may be a noop depending
+// on the writer type.
 pub fn (mut m Mailbox) notify() {
-	m.notified = true
+	m.wakeup.notify() or { eprintln('failed to notify writer, data will be dropped err=${err}') }
 }

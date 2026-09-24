@@ -226,37 +226,6 @@ static inline int witty_read_error_kind(void) {
     return 0;
 }
 
-/* Match libxev's process watcher, including its EINTR handling. */
-static inline pid_t witty_waitpid_retry(pid_t pid, int *status) {
-    pid_t result;
-    do {
-        result = waitpid(pid, status, 0);
-    } while (result < 0 && errno == EINTR);
-    return result;
-}
-
-/*
- * Ghostty receives its status from libxev rather than directly from waitpid.
- * libxev reports a terminating signal on Linux, a normal exit status (and zero
- * for a signal) on Darwin, and zero on FreeBSD where NOTE_EXITSTATUS is absent.
- */
-static inline uint32_t witty_process_exit_code(int status) {
-#if defined(__linux__)
-    if (WIFEXITED(status)) return (uint32_t)WEXITSTATUS(status);
-    if (WIFSIGNALED(status)) return (uint32_t)WTERMSIG(status);
-    return 0;
-#elif defined(__APPLE__)
-    if (WIFEXITED(status)) return (uint32_t)WEXITSTATUS(status);
-    return 0;
-#elif defined(__FreeBSD__)
-    (void)status;
-    return 0;
-#else
-    if (WIFEXITED(status)) return (uint32_t)WEXITSTATUS(status);
-    return 0;
-#endif
-}
-
 /*
  * POSIX only standardizes execvp (PATH search with the process environment)
  * and execve (an explicit environment without PATH search). Ghostty needs both

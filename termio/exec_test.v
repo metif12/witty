@@ -265,17 +265,6 @@ fn test_read_error_classifies_closed_pty() {
 	assert C.witty_read_error_kind() == 2
 }
 
-fn test_process_exit_code_matches_libxev() {
-	assert C.witty_process_exit_code(42 << 8) == 42
-
-	// A wait status with only its low signal bits set represents SIGTERM.
-	$if linux {
-		assert C.witty_process_exit_code(15) == 15
-	} $else {
-		assert C.witty_process_exit_code(15) == 0
-	}
-}
-
 // ============================================================
 // ArgIterator tests (from configpkg.Command)
 // ============================================================
@@ -329,17 +318,6 @@ fn test_arg_iterator_direct() {
 	if _ := iter.next() {
 		assert false, 'expected none'
 	}
-}
-
-fn test_process_exit_watcher_ignores_child_reaped_by_shutdown() {
-	// Subprocess.stop may reap the child before the watcher's wait completes.
-	// The watcher must then behave like a libxev completion that never fires.
-	mut child := os.new_process('/usr/bin/true')
-	child.run()
-	pid := child.pid
-	child.wait()
-	assert child.code == 0
-	process_exit_watcher(pid, 0, unsafe { nil })
 }
 
 fn test_subprocess_getpgid_ignores_missing_process() {

@@ -16,6 +16,7 @@ import pty
 import renderer
 import terminal
 import time
+import xev
 
 #include "@VMODROOT/command_exec.h"
 
@@ -37,10 +38,6 @@ fn C.close(fd int) int
 fn C.witty_read_retry(fd int, buf voidptr, count usize) int
 
 fn C.witty_read_error_kind() int
-
-fn C.witty_waitpid_retry(pid int, status &int) int
-
-fn C.witty_process_exit_code(status int) u32
 
 fn C.write(fd int, buf voidptr, count usize) int
 
@@ -98,12 +95,6 @@ pub struct Exec {
 pub mut:
 	// The subprocess state for our exec backend.
 	subprocess Subprocess
-	// Thread-local data for the exec implementation.
-	thread_data ExecThreadData
-	// The read thread handle (V thread).
-	read_thread ?thread
-	// The process-exit watcher thread handle (V thread).
-	exit_thread ?thread
 }
 
 // Initialize the exec state. This will NOT start it, this only sets
@@ -142,122 +133,171 @@ pub fn (mut self Exec) init_terminal(mut term terminal.Terminal) {
 	}) or {}
 }
 
-// thread_enter is called when the IO thread starts.
-// Starts the subprocess, creates a quit pipe, and spawns the read thread.
-// This variant does NOT forward data to a Termio; use thread_enter_io to
-// wire the read thread to a Termio instance.
-pub fn (mut self Exec) thread_enter() ! {
-	self.thread_enter_common(unsafe { nil })!
-}
-
-// thread_enter_io is called when the IO thread starts. It starts the
-// subprocess, spawns the read thread (which forwards pty data to the given
-// Termio), and starts the process-exit watcher.
-pub fn (mut self Exec) thread_enter_io(io &Termio) ! {
-	self.thread_enter_common(io)!
-}
-
-fn (mut self Exec) thread_enter_common(io &Termio) ! {
+pub fn (mut self Exec) thread_enter(mut io Termio, mut td ThreadData) ! {
 	// Start our subprocess
 	pty_fds := self.subprocess.start() or {
-		if commandpkg.is_exec_failed_in_child(err) {
-			C._exit(1)
+		// If we specifically got this error then we are in the forked
+		// process and our child failed to execute. If we DIDN'T
+		// get this specific error then we're in the parent and
+		// we need to bubble it up.
+		if !commandpkg.is_exec_failed_in_child(err) {
+			return err
 		}
+
+		// We're in the child. Nothing more we can do but abnormal exit.
+		// The Command will output some additional information.
+		C._exit(1)
 		return err
 	}
-
-	// Create pipe for quit signaling.
-	// pipe_fds[0] is the read end, pipe_fds[1] is the write end.
-	mut pipe_fds := [2]int{}
-	if C.pipe(&pipe_fds[0]) != 0 {
-		// The subprocess is already running at this point. Ghostty installs an
-		// errdefer immediately after start so every later setup failure stops it.
-		self.subprocess.stop()
-		if !isnil(self.subprocess.flatpak_command) {
-			mut command := unsafe { self.subprocess.flatpak_command }
-			command.wait() or {}
+	// Zig's errdefers are emulated by reached defers that run until setup succeeds.
+	mut ok := false
+	defer {
+		if !ok {
+			self.subprocess.stop()
 		}
-		return error('failed to create quit pipe')
 	}
 
-	// Track our process start time
-	start_ns := u64(time.sys_mono_now())
-
-	// Store thread data
-	self.thread_data = ExecThreadData{
-		start_ns: start_ns
-		read_thread_pipe: pipe_fds[1] // write end - we write to signal quit
-		read_thread_fd: pty_fds.read
-		termios_deadline: i64(time.sys_mono_now()) + termios_poll_ms * i64(time.millisecond)
-	}
-
-	// Spawn the read thread. The read thread gets the pty read fd, the read
-	// end of the quit pipe, and (optionally) the Termio to forward data to.
-	read_fd := pty_fds.read
-	quit_fd := pipe_fds[0] // read end - the thread reads to detect quit
-	self.read_thread = spawn thread_main_posix(read_fd, quit_fd, io)
-
-	// Start our process-exit watcher. This waits for the child to exit and
-	// notifies the surface. This replaces ghostty's xev.Process watcher.
+	// Watcher to detect subprocess exit
+	mut process := ?xev.Process(none)
 	if !isnil(self.subprocess.flatpak_command) {
-		command := self.subprocess.flatpak_command
-		self.exit_thread = spawn flatpak_process_exit_watcher(command, start_ns, io)
-	} else if process := self.subprocess.process {
-		if pid := process.pid {
-			self.exit_thread = spawn process_exit_watcher(pid, start_ns, io)
+		// If we're executing via Flatpak then we can't do
+		// traditional process watching (its implemented
+		// as a special case in os/flatpak.zig) since the
+		// command is on the host.
+	} else if cmd := self.subprocess.process {
+		pid := cmd.pid or { return error('ProcessNoPid') }
+		process = xev.Process.init(pid)!
+	} else {
+		return error('ProcessNotStarted')
+	}
+	defer {
+		if !ok {
+			if mut p := process {
+				p.deinit()
+			}
 		}
+	}
+
+	// Track our process start time for abnormal exits
+	process_start := time.sys_mono_now()
+
+	// Create our pipe that we'll use to kill our read thread.
+	// pipe[0] is the read end, pipe[1] is the write end.
+	pipe := internal_os.pipe()!
+	defer {
+		if !ok {
+			C.close(pipe[0])
+			C.close(pipe[1])
+		}
+	}
+
+	// Setup our stream so that we can write.
+	stream := xev.Stream.init_fd(pty_fds.write)
+	defer {
+		if !ok {
+			stream.deinit()
+		}
+	}
+
+	// Start our timer to read termios state changes. This is used
+	// to detect things such as when password input is being done
+	// so we can render the terminal in a different way.
+	termios_timer := xev.Timer.init()!
+	defer {
+		if !ok {
+			termios_timer.deinit()
+		}
+	}
+
+	// Start our read thread
+	read_thread := spawn thread_main_posix(pty_fds.read, pipe[0], io)
+	ok = true
+
+	// Setup our threadata backend state to be our own
+	td.backend = ExecThreadData{
+		start:            process_start
+		write_stream:     stream
+		process:          process
+		write_req_pool:   datastruct.SegmentedPool.init[xev.WriteRequest](exec_write_req_prealloc)
+		write_buf_pool:   datastruct.SegmentedPool.init[ExecWriteBuf](exec_write_req_prealloc)
+		read_thread:      read_thread
+		read_thread_pipe: pipe[1]
+		read_thread_fd:   pty_fds.read
+		termios_timer:    termios_timer
+	}
+
+	// Start our process watcher. If we have an xev.Process use it.
+	if p := td.backend.process {
+		p.wait(mut td.loop, &td.backend.process_wait_c, td, exec_process_exit)
+	} else if !isnil(self.subprocess.flatpak_command) {
+		// If we're in flatpak and we have a flatpak command
+		// then we can run the special flatpak logic for watching.
+		// FlatpakHostCommand.waitXev is not translated yet; its blocking wait
+		// runs on a watcher thread instead (see AUDIT_FINDINGS.md).
+		command := self.subprocess.flatpak_command
+		td.backend.flatpak_wait_thread = spawn flatpak_process_exit_watcher(command, td)
+	}
+
+	// Start our termios timer. We don't support this on Windows.
+	// Fundamentally, we could support this on Windows so we're just
+	// waiting for someone to implement it.
+	$if !windows {
+		td.backend.termios_timer.run(mut td.loop, &td.backend.termios_timer_c, termios_poll_ms,
+			td, exec_termios_timer)
 	}
 }
 
-// thread_exit is called when the IO thread exits.
-// Signals the read thread to quit, joins it, and stops the subprocess.
-pub fn (mut self Exec) thread_exit() {
-	if self.thread_data.exited {
+pub fn (mut self Exec) thread_exit(mut td ThreadData) {
+	mut exec := &td.backend
+
+	if exec.exited {
 		self.subprocess.external_exit()
 	}
 	self.subprocess.stop()
 
-	// Signal the read thread to quit by writing to the quit pipe.
-	// The read thread polls on the read end and will exit when it
-	// sees data. We then close the write end.
-	quit_byte := [u8(0x78)] // 'x'
-	C.write(self.thread_data.read_thread_pipe, quit_byte.data, 1)
+	// Quit our read thread after exiting the subprocess so that
+	// we don't get stuck waiting for data to stop flowing if it is
+	// a particularly noisy process.
+	quit_byte := [u8(`x`)]
+	if C.write(exec.read_thread_pipe, quit_byte.data, 1) < 0 {
+		// BrokenPipe means that our read thread is closed already,
+		// which is completely fine since that is what we were trying
+		// to achieve.
+		if C.errno != C.EPIPE {
+			eprintln('error writing to read thread quit pipe err=${os.posix_get_error_msg(C.errno)}')
+		}
+	}
 
-	// Join the read thread to wait for it to finish.
-	if t := self.read_thread {
+	if t := exec.read_thread {
 		t.wait()
 	}
-	self.read_thread = none
-
-	// Join the process-exit watcher thread if we spawned one.
-	if t := self.exit_thread {
+	if t := exec.flatpak_wait_thread {
 		t.wait()
 	}
-	self.exit_thread = none
-
-	// Clean up thread data
-	self.thread_data.deinit()
 }
 
-// focus_gained notifies the exec backend about focus changes.
-// This is used to start/stop the termios polling timer.
-// When we lose focus, we flag the timer to stop on the next tick.
-// When we gain focus, we restart the timer if needed.
-pub fn (mut self Exec) focus_gained(focused bool) ! {
+pub fn (mut self Exec) focus_gained(mut td ThreadData, focused bool) ! {
+	_ = self
+
+	mut execdata := &td.backend
+
 	if !focused {
 		// Flag the timer to end on the next iteration. This is
 		// a lot cheaper than doing full timer cancellation.
-		self.thread_data.termios_timer_running = false
+		execdata.termios_timer_running = false
 	} else {
 		// Always set this to true. There is a race condition if we lose
 		// focus and regain focus before the termios timer ticks where
 		// if we don't set this unconditionally the timer will end on
 		// the next iteration.
-		self.thread_data.termios_timer_running = true
-		// If the prior timer already stopped, trigger an immediate mode check.
-		// The polling thread will arm the next interval after processing it.
-		if self.thread_data.termios_deadline == 0 {
-			self.thread_data.termios_deadline = 1
+		execdata.termios_timer_running = true
+
+		// If we're focused, we want to start our termios timer. We
+		// only do this if it isn't already running. We use the termios
+		// callback because that'll trigger an immediate state check AND
+		// start the timer.
+		if execdata.termios_timer_c.state() != .active {
+			_ = exec_termios_timer(td, unsafe { nil }, unsafe { nil }, none)
 		}
 	}
 }
@@ -267,77 +307,234 @@ pub fn (mut self Exec) resize(grid_size renderer.GridSize, screen_size renderer.
 	self.subprocess.resize(grid_size, screen_size)!
 }
 
-// queue_write writes data to the pty. If linefeed is true, carriage
-// returns (\r) are replaced with CRLF (\r\n) sequences.
-pub fn (mut self Exec) queue_write(data []u8, linefeed bool) ! {
-	// If our process has exited then we don't send any more writes.
-	if self.thread_data.exited {
+fn exec_process_exit_common(mut td ThreadData, exit_code u32) {
+	mut execdata := &td.backend
+	execdata.exited = true
+
+	// Determine how long the process was running for.
+	runtime_ns := time.sys_mono_now() - execdata.start
+	runtime_ms := runtime_ns / u64(time.millisecond)
+
+	// We always notify the surface immediately that the child has
+	// exited and some metadata about the exit.
+	td.surface_mailbox.push(apprt.SurfaceMessage{
+		kind:         .child_exited
+		child_exited: apprt.ChildExited{
+			exit_code:  exit_code
+			runtime_ms: runtime_ms
+		}
+	}, datastruct.blocking_queue_forever)
+}
+
+fn exec_process_exit(td_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorKind, exit_code u32) xev.CallbackAction {
+	if _ := r {
+		panic('unreachable')
+	}
+	mut td := unsafe { &ThreadData(td_) }
+	exec_process_exit_common(mut td, exit_code)
+	return .disarm
+}
+
+fn exec_termios_timer(td_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorKind) xev.CallbackAction {
+	// log.debug("termios timer fired", .{});
+
+	// This should never happen because we guard starting our
+	// timer on windows but we want this assertion to fire if
+	// we ever do start the timer on windows.
+	// TODO: support on windows
+	$if windows {
+		panic('termios timer not implemented on Windows')
+	}
+
+	if err := r {
+		match err {
+			// This is sent when our timer is canceled. That's fine.
+			.canceled {
+				return .disarm
+			}
+			else {
+				eprintln('error in termios timer callback err=${err}')
+				panic('crash in termios timer callback')
+			}
+		}
+	}
+
+	mut td := unsafe { &ThreadData(td_) }
+	mut exec := &td.backend
+
+	$if !windows {
+		// This is kind of hacky but we rebuild a Pty struct to get the
+		// termios data.
+		mode := pty.Pty{
+			master: exec.read_thread_fd
+		}.get_mode() or {
+			eprintln('error getting termios mode err=${err}')
+
+			// If we have an error we return the default mode values
+			// which are the likely values.
+			pty.Mode{}
+		}
+
+		// If the mode changed, then we process it.
+		if mode != exec.termios_mode {
+			exec.termios_mode = mode
+
+			// We assume we're in some sort of password input if we're
+			// in canonical mode and not echoing. This is a heuristic.
+			password_input := mode.canonical() && !mode.echo()
+
+			// If our password input state changed on the terminal then
+			// we notify the surface.
+			td.renderer_state.mutex.lock()
+			t := td.renderer_state.terminal_
+			unchanged := t.flags.password_input() == password_input
+			td.renderer_state.mutex.unlock()
+
+			if !unchanged {
+				// We have to notify the surface that we're in password input.
+				// We must block on this because the balanced true/false state
+				// of this is critical to apprt behavior.
+				td.surface_mailbox.push(apprt.SurfaceMessage{
+					kind:           .password_input
+					password_input: password_input
+				}, datastruct.blocking_queue_forever)
+			}
+		}
+	}
+
+	// Repeat the timer
+	if exec.termios_timer_running {
+		exec.termios_timer.run(mut td.loop, &exec.termios_timer_c, termios_poll_ms, td,
+			exec_termios_timer)
+	}
+
+	return .disarm
+}
+
+pub fn (mut self Exec) queue_write(mut td ThreadData, data []u8, linefeed bool) ! {
+	_ = self
+	mut exec := &td.backend
+
+	// If our process is exited then we don't send any more writes.
+	if exec.exited {
 		return
 	}
 
-	// Get the pty master fd to write to.
-	p := self.subprocess.pty_ or { return error('no pty available for writing') }
-	fd := p.master
-	if fd < 0 {
-		return error('pty master fd is invalid')
-	}
+	// We go through and chunk the data if necessary to fit into
+	// our cached buffers that we can queue to the stream.
+	mut i := 0
+	for i < data.len {
+		req := exec.write_req_pool.get_grow()!
+		mut buf := exec.write_buf_pool.get_grow()!
+		mut slice := []u8{}
+		if !linefeed {
+			// The maximum end index is either the end of our data or
+			// the end of our buffer, whichever is smaller.
+			max := if data.len < i + exec_write_buf_len { data.len } else { i + exec_write_buf_len }
 
-	if !linefeed {
-		// Fast path: write data directly, chunking as needed.
-		mut offset := 0
-		for offset < data.len {
-			n := C.write(fd, unsafe { voidptr(usize(data.data) + usize(offset)) }, usize(data.len - offset))
-			if n < 0 {
-				return error('write to pty failed')
-			}
-			offset += int(n)
-		}
-	} else {
-		// Slow path: replace \r with \r\n.
-		mut buf := []u8{cap: 128}
-		for i := 0; i < data.len; i++ {
-			ch := data[i]
-			if ch == `\r` {
-				buf << `\r`
-				buf << `\n`
-			} else {
-				buf << ch
-			}
+			// Fast
+			len := max - i
+			unsafe { vmemcpy(&buf.bytes[0], &data[i], len) }
+			i = max
+			slice = unsafe { (&u8(&buf.bytes[0])).vbytes(len) }
+		} else {
+			// Slow, have to replace \r with \r\n
+			mut buf_i := 0
+			for i < data.len && buf_i < exec_write_buf_len - 1 {
+				ch := data[i]
+				i += 1
 
-			// Flush when buffer is getting full.
-			if buf.len >= 126 || i == data.len - 1 {
-				mut written := 0
-				for written < buf.len {
-					n := C.write(fd, unsafe { voidptr(usize(buf.data) + usize(written)) }, usize(buf.len - written))
-					if n < 0 {
-						return error('write to pty failed')
-					}
-					written += int(n)
+				if ch != `\r` {
+					buf.bytes[buf_i] = ch
+					buf_i += 1
+					continue
 				}
-				buf.clear()
+
+				// CRLF
+				buf.bytes[buf_i] = `\r`
+				buf.bytes[buf_i + 1] = `\n`
+				buf_i += 2
 			}
+
+			slice = unsafe { (&u8(&buf.bytes[0])).vbytes(buf_i) }
 		}
+
+		//for (slice) |b| log.warn("write: {x}", .{b});
+
+		exec.write_stream.queue_write(mut td.loop, &exec.write_queue, req, xev.WriteBuffer{
+			kind:  .slice
+			slice: slice
+		}, exec, exec_tty_write)
 	}
 }
 
-// ExecThreadData is the thread local data for the exec implementation.
+fn exec_tty_write(td_ voidptr, _ &xev.Loop, _ &xev.Completion, _ xev.Stream, _ xev.WriteBuffer, r ?xev.ErrorKind, n usize) xev.CallbackAction {
+	mut td := unsafe { &ExecThreadData(td_) }
+	td.write_req_pool.put()
+	td.write_buf_pool.put()
+
+	if err := r {
+		eprintln('write error: ${err}')
+		return .disarm
+	}
+	_ = n
+	//log.info("WROTE: {d}", .{d});
+
+	return .disarm
+}
+
+// The preallocation size for the write request pool. This should be big
+// enough to satisfy most write requests. It must be a power of 2.
+const exec_write_req_prealloc = 32
+
+// The size of each pooled pty write buffer.
+const exec_write_buf_len = 64
+
+// A pooled pty write buffer (Zig's [64]u8 pool element).
+pub struct ExecWriteBuf {
+pub mut:
+	bytes [64]u8
+}
+
+// The thread local data for the exec implementation.
 pub struct ExecThreadData {
 pub mut:
-	// Process start time (monotonic nanoseconds) and boolean of whether
-	// its already exited.
-	start_ns u64
-	exited   bool
+	// Process start time and boolean of whether its already exited.
+	start  u64
+	exited bool
 
-	// Reader thread state.
-	// read_thread_pipe is the write end of the quit pipe.
-	// read_thread_fd is the pty master fd used for reading.
+	// The data stream is the main IO for the pty.
+	write_stream xev.Stream
+
+	// The process watcher
+	process ?xev.Process
+
+	// This is the pool of available (unused) write requests. If you grab
+	// one from the pool, you must put it back when you're done!
+	write_req_pool datastruct.SegmentedPool[xev.WriteRequest]
+
+	// The pool of available buffers for writing to the pty.
+	write_buf_pool datastruct.SegmentedPool[ExecWriteBuf]
+
+	// The write queue for the data stream.
+	write_queue xev.WriteQueue
+
+	// This is used for both waiting for the process to exit and then
+	// subsequently to wait for the data_stream to close.
+	process_wait_c xev.Completion
+
+	// Stands in for the Flatpak completion until waitXev is translated.
+	flatpak_wait_thread ?thread
+
+	// Reader thread state
+	read_thread      ?thread
 	read_thread_pipe int = -1
 	read_thread_fd   int = -1
 
-	// Whether the termios polling timer is running.
-	// When focus is lost, this is set to false to stop polling.
+	// The timer to detect termios state changes.
+	termios_timer         xev.Timer
+	termios_timer_c       xev.Completion
 	termios_timer_running bool = true
-	termios_deadline      i64
 
 	// The last known termios mode. Used for change detection
 	// to prevent unnecessary locking of expensive mutexes.
@@ -345,12 +542,24 @@ pub mut:
 }
 
 pub fn (mut self ExecThreadData) deinit() {
-	// Close the write end of the read thread quit pipe.
-	if self.read_thread_pipe >= 0 {
-		C.close(self.read_thread_pipe)
-		self.read_thread_pipe = -1
+	C.close(self.read_thread_pipe)
+
+	// Clear our write pools. We know we aren't ever going to do
+	// any more IO since we stop our data stream below so we can just
+	// drop this.
+	self.write_req_pool.deinit()
+	self.write_buf_pool.deinit()
+
+	// Stop our process watcher
+	if mut p := self.process {
+		p.deinit()
 	}
-	self.read_thread_fd = -1
+
+	// Stop our write stream
+	self.write_stream.deinit()
+
+	// Stop our termios timer
+	self.termios_timer.deinit()
 }
 
 // change_config mirrors backend.ThreadData.changeConfig. The pinned exec
@@ -970,35 +1179,13 @@ pub fn thread_main_posix(fd int, quit int, io &Termio) {
 	}
 }
 
-// process_exit_watcher waits (blocking) for the child process to exit and
-// then notifies the surface via process_exit_common. This replaces
-// ghostty's xev.Process watcher which asynchronously waits for exit.
-//
-// io may be null in which case only the exited flag on the backend is set.
-fn process_exit_watcher(pid int, start_ns u64, io &Termio) {
-	// Blocking wait for the child to exit.
-	mut status := 0
-	if C.witty_waitpid_retry(pid, &status) != pid {
-		// Subprocess.stop reaps the child during shutdown. libxev reports an
-		// exit only while the termio loop runs, so a child that shutdown
-		// already reaped is a watcher that never fires, not a failure.
-		if C.errno == C.ECHILD {
-			return
-		}
-
-		// Exec.processExit treats a watcher failure as unreachable.
-		panic('process wait failed')
-	}
-
-	process_exit_common(start_ns, C.witty_process_exit_code(status), io)
-}
-
-// flatpak_process_exit_watcher mirrors the asynchronous Flatpak wait in the
-// source using Witty's dedicated process watcher thread.
-fn flatpak_process_exit_watcher(command &internal_os.FlatpakHostCommand, start_ns u64, io &Termio) {
+// flatpak_process_exit_watcher stands in for FlatpakHostCommand.waitXev and
+// flatpakExit: it runs the blocking wait on its own thread.
+fn flatpak_process_exit_watcher(command &internal_os.FlatpakHostCommand, td &ThreadData) {
 	mut host_command := unsafe { command }
-	exit_code := host_command.wait() or { panic('flatpak process wait failed') }
-	process_exit_common(start_ns, u32(exit_code), io)
+	exit_code := host_command.wait() or { panic('unreachable') }
+	mut thread_data := unsafe { td }
+	exec_process_exit_common(mut thread_data, u32(exit_code))
 }
 
 fn flatpak_cwd_accessible(cwd string) bool {
@@ -1018,34 +1205,6 @@ fn flatpak_cwd_accessible(cwd string) bool {
 	}
 	command.spawn() or { return false }
 	return command.wait() or { return false } == 0
-}
-
-// process_exit_common is called when the child process exits. It records
-// the exit on the backend thread data and notifies the surface with the
-// exit metadata. Faithful to Exec.zig processExitCommon.
-fn process_exit_common(start_ns u64, exit_code u32, io &Termio) {
-	if io != unsafe { nil } {
-		mut tio := unsafe { io }
-		tio.backend.thread_data.exited = true
-
-		// Determine how long the process was running for.
-		now := u64(time.sys_mono_now())
-		runtime_ms := if now > start_ns {
-			(now - start_ns) / u64(time.millisecond)
-		} else {
-			u64(0)
-		}
-
-		// We always notify the surface immediately that the child has
-		// exited and some metadata about the exit.
-		tio.surface_mailbox.push(apprt.SurfaceMessage{
-			kind: .child_exited
-			child_exited: apprt.ChildExited{
-				exit_code: exit_code
-				runtime_ms: runtime_ms
-			}
-		}, datastruct.blocking_queue_forever)
-	}
 }
 
 // setup_shell_command handles the shell integration dispatch based on the

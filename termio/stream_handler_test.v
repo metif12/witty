@@ -44,6 +44,7 @@ fn make_test_handler() (&StreamHandler, &TestContext) {
 			cols: 80
 			rows: 24
 		}) or { panic('failed to init terminal') }
+		mailbox: Mailbox.init_spsc() or { panic(err) }
 		rmailbox: renderer.Mailbox.create() or { panic(err) }
 	}
 
@@ -162,7 +163,7 @@ fn test_stream_handler_tmux_viewer_lifecycle_and_commands() ! {
 		notification: tmux.Notification(tmux.NotifBlockEnd{})
 	})
 	handler.dcs_command(mut startup_done)!
-	assert ctx.mailbox.len() == 0
+	assert ctx.mailbox.queue.len() == 0
 
 	mut session := terminal.DcsCommand(terminal.DcsCommandTmux{
 		notification: tmux.Notification(tmux.NotifSessionChanged{
@@ -172,7 +173,7 @@ fn test_stream_handler_tmux_viewer_lifecycle_and_commands() ! {
 	})
 	handler.dcs_command(mut session)!
 	assert handler.termio_messaged
-	msg := ctx.mailbox.pop() or { panic('expected tmux command') }
+	msg := ctx.mailbox.queue.pop() or { panic('expected tmux command') }
 	assert msg.kind == .write_small
 	assert msg.write_small_data.slice().bytestr().starts_with('display-message')
 
@@ -206,16 +207,16 @@ fn test_stream_handler_xtgettcap_omits_unknown_and_formats_boolean() ! {
 		data: '616D;756E6B6E6F776E;636F6C6F7273'.bytes()
 	}
 	handler.dcs_xtgettcap(mut query)
-	assert ctx.mailbox.len() == 2
+	assert ctx.mailbox.queue.len() == 2
 
-	boolean_msg := ctx.mailbox.pop() or {
+	boolean_msg := ctx.mailbox.queue.pop() or {
 		assert false
 		return
 	}
 	assert boolean_msg.kind == .write_small
 	assert boolean_msg.write_small_data.slice().bytestr() == '\x1bP1+r616D\x1b\\'
 
-	numeric_msg := ctx.mailbox.pop() or {
+	numeric_msg := ctx.mailbox.queue.pop() or {
 		assert false
 		return
 	}
@@ -229,8 +230,8 @@ fn test_stream_handler_xtversion_uses_build_version() ! {
 
 	handler.report_xtversion()!
 
-	assert ctx.mailbox.len() == 1
-	msg := ctx.mailbox.pop() or { panic('expected XTVERSION response') }
+	assert ctx.mailbox.queue.len() == 1
+	msg := ctx.mailbox.queue.pop() or { panic('expected XTVERSION response') }
 	assert msg.kind == .write_small
 	assert msg.write_small_data.slice().bytestr() == '\x1bP>|ghostty ${build_meta.version_string}\x1b\\'
 }
@@ -241,7 +242,7 @@ fn test_stream_handler_request_mode_uses_dec_protocol_value() ! {
 
 	handler.request_mode(.cursor_visible)!
 
-	msg := ctx.mailbox.pop() or { panic('expected DECRQM response') }
+	msg := ctx.mailbox.queue.pop() or { panic('expected DECRQM response') }
 	assert msg.kind == .write_small
 	assert msg.write_small_data.slice().bytestr() == '\x1b[?25;1\$y'
 }
@@ -252,7 +253,7 @@ fn test_stream_handler_request_mode_uses_ansi_protocol_value() ! {
 
 	handler.request_mode(.insert)!
 
-	msg := ctx.mailbox.pop() or { panic('expected DECRQM response') }
+	msg := ctx.mailbox.queue.pop() or { panic('expected DECRQM response') }
 	assert msg.kind == .write_small
 	assert msg.write_small_data.slice().bytestr() == '\x1b[4;2\$y'
 }
@@ -262,12 +263,12 @@ fn test_stream_handler_decrqss_requires_declrmm_for_horizontal_margins() ! {
 	defer { ctx.t.deinit() }
 
 	handler.dcs_decrqss(.decslrm)
-	disabled := ctx.mailbox.pop() or { panic('expected invalid DECRPSS response') }
+	disabled := ctx.mailbox.queue.pop() or { panic('expected invalid DECRPSS response') }
 	assert disabled.write_small_data.slice().bytestr() == '\x1bP0\$r\x1b\\'
 
 	handler.terminal.modes.set(.enable_left_and_right_margin, true)
 	handler.dcs_decrqss(.decslrm)
-	enabled := ctx.mailbox.pop() or { panic('expected valid DECRPSS response') }
+	enabled := ctx.mailbox.queue.pop() or { panic('expected valid DECRPSS response') }
 	assert enabled.write_small_data.slice().bytestr() == '\x1bP1\$r1;80s\x1b\\'
 }
 
@@ -278,12 +279,12 @@ fn test_stream_handler_decrqss_hollow_cursor_uses_blink_mode() ! {
 
 	handler.terminal.modes.set(.cursor_blinking, true)
 	handler.dcs_decrqss(.decscusr)
-	blinking := ctx.mailbox.pop() or { panic('expected blinking cursor DECRPSS response') }
+	blinking := ctx.mailbox.queue.pop() or { panic('expected blinking cursor DECRPSS response') }
 	assert blinking.write_small_data.slice().bytestr() == '\x1bP1\$r1 q\x1b\\'
 
 	handler.terminal.modes.set(.cursor_blinking, false)
 	handler.dcs_decrqss(.decscusr)
-	steady := ctx.mailbox.pop() or { panic('expected steady cursor DECRPSS response') }
+	steady := ctx.mailbox.queue.pop() or { panic('expected steady cursor DECRPSS response') }
 	assert steady.write_small_data.slice().bytestr() == '\x1bP1\$r2 q\x1b\\'
 }
 
@@ -297,7 +298,7 @@ fn test_stream_handler_decrqss_uses_terminal_sgr_serialization() ! {
 	handler.terminal.set_attribute(terminal.SgrAttribute{ kind: .overline })!
 
 	handler.dcs_decrqss(.sgr)
-	msg := ctx.mailbox.pop() or { panic('expected SGR DECRPSS response') }
+	msg := ctx.mailbox.queue.pop() or { panic('expected SGR DECRPSS response') }
 	assert msg.write_small_data.slice().bytestr() == '\x1bP1\$r0;4m\x1b\\'
 }
 
@@ -806,7 +807,7 @@ fn test_color_query_response_mirrors_osc_terminator() ! {
 			})]
 		}
 	})!
-	bel := ctx.mailbox.pop() or { panic('expected BEL-terminated color response') }
+	bel := ctx.mailbox.queue.pop() or { panic('expected BEL-terminated color response') }
 	assert bel.kind == .write_small
 	assert bel.write_small_data.slice().bytestr().ends_with('\a')
 
@@ -822,7 +823,7 @@ fn test_color_query_response_mirrors_osc_terminator() ! {
 			})]
 		}
 	})!
-	st := ctx.mailbox.pop() or { panic('expected ST-terminated color response') }
+	st := ctx.mailbox.queue.pop() or { panic('expected ST-terminated color response') }
 	assert st.kind == .write_small
 	assert st.write_small_data.slice().bytestr().ends_with('\x1b\\')
 }
@@ -844,7 +845,7 @@ fn test_kitty_color_query_response_mirrors_osc_terminator() ! {
 			}]
 		}
 	})!
-	msg := ctx.mailbox.pop() or { panic('expected Kitty color response') }
+	msg := ctx.mailbox.queue.pop() or { panic('expected Kitty color response') }
 	assert msg.kind == .write_small
 	response := msg.write_small_data.slice().bytestr()
 	assert response.starts_with('\x1b]21;1=rgb:')

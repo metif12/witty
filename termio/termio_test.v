@@ -8,7 +8,7 @@ import pty
 import renderer
 import sync
 import terminal
-import time
+import term.termios
 import xev
 
 fn mailbox_send_forever_for_test(mailbox_ptr voidptr, done chan bool) {
@@ -54,21 +54,21 @@ fn test_mailbox_push_pop_fifo() {
 		mailbox.deinit()
 	}
 
-	assert mailbox.push(Message.write_stable_msg('one')) == 1
-	assert mailbox.push(Message.write_stable_msg('two')) == 1
-	assert mailbox.len() == 2
+	assert mailbox.queue.push(Message.write_stable_msg('one'), datastruct.blocking_queue_instant) > 0
+	assert mailbox.queue.push(Message.write_stable_msg('two'), datastruct.blocking_queue_instant) > 0
+	assert mailbox.queue.len() == 2
 
-	first := mailbox.pop() or {
+	first := mailbox.queue.pop() or {
 		assert false, 'expected first message'
 		return
 	}
-	second := mailbox.pop() or {
+	second := mailbox.queue.pop() or {
 		assert false, 'expected second message'
 		return
 	}
 	assert first.write_stable_data == 'one'
 	assert second.write_stable_data == 'two'
-	assert mailbox.pop() == none
+	assert mailbox.queue.pop() == none
 }
 
 fn test_derived_config_converts_only_explicit_cursor_color() {
@@ -170,9 +170,8 @@ fn test_termio_queue_message_uses_mailbox() {
 
 	tio.queue_message(Message.focused_msg(true), .unlocked)
 
-	assert tio.mailbox.len() == 1
-	assert tio.mailbox.notified
-	msg := tio.mailbox.pop() or {
+	assert tio.mailbox.queue.len() == 1
+	msg := tio.mailbox.queue.pop() or {
 		assert false, 'expected queued message'
 		return
 	}
@@ -188,7 +187,8 @@ fn test_color_scheme_report_locked_honors_disabled_mode() {
 	}
 
 	assert !tio.terminal.modes.get(.report_color_scheme)
-	tio.color_scheme_report_locked(false)!
+	mut td := ThreadData{}
+	tio.color_scheme_report_locked(mut td, false)!
 }
 
 fn test_termio_clear_screen_preserves_and_moves_cursor_row() {
@@ -202,7 +202,8 @@ fn test_termio_clear_screen_preserves_and_moves_cursor_row() {
 	assert tio.terminal.screens.active.cursor.x == 4
 	assert tio.terminal.screens.active.cursor.y == 2
 
-	tio.clear_screen(false)!
+	mut td := ThreadData{}
+	tio.clear_screen(mut td, false)!
 
 	assert tio.terminal.plain_string()! == 'keep'
 	assert tio.terminal.screens.active.cursor.x == 4
@@ -267,13 +268,6 @@ fn test_prepare_input_opens_all_sources_before_start() {
 	assert false, 'expected a missing startup input error'
 }
 
-fn test_stopwatch_notify_records_signal() {
-	mut s := Stopwatch{}
-	s.notify()!
-
-	assert s.notified
-}
-
 // Translated from ghostty datastruct/blocking_queue.zig "basic push and pop".
 // The Mailbox wraps a bounded ring buffer (BlockingQueue(Message, 64)); this
 // exercises filling to capacity, the full-queue drop, FIFO drain, and reuse.
@@ -284,32 +278,32 @@ fn test_mailbox_fill_drain_reuse() {
 	}
 
 	// Should have no values.
-	assert mailbox.pop() == none
-	assert mailbox.len() == 0
+	assert mailbox.queue.pop() == none
+	assert mailbox.queue.len() == 0
 
 	// Push until we're full. Each push succeeds (returns 1) until capacity.
 	for i in 0 .. mailbox_capacity {
-		assert mailbox.push(Message.write_stable_msg('m${i}')) == 1
+		assert mailbox.queue.push(Message.write_stable_msg('m${i}'), datastruct.blocking_queue_instant) > 0
 	}
-	assert mailbox.len() == mailbox_capacity
+	assert mailbox.queue.len() == mailbox_capacity
 
 	// The next push fails because the queue is full.
-	assert mailbox.push(Message.write_stable_msg('overflow')) == 0
+	assert mailbox.queue.push(Message.write_stable_msg('overflow'), datastruct.blocking_queue_instant) == 0
 
 	// Pop everything back out in FIFO order.
 	for i in 0 .. mailbox_capacity {
-		msg := mailbox.pop() or {
+		msg := mailbox.queue.pop() or {
 			assert false, 'expected message ${i}'
 			return
 		}
 		assert msg.write_stable_data == 'm${i}'
 	}
-	assert mailbox.pop() == none
-	assert mailbox.len() == 0
+	assert mailbox.queue.pop() == none
+	assert mailbox.queue.len() == 0
 
 	// Verify we can still push after fully draining (ring buffer wraps).
-	assert mailbox.push(Message.write_stable_msg('again')) == 1
-	assert mailbox.len() == 1
+	assert mailbox.queue.push(Message.write_stable_msg('again'), datastruct.blocking_queue_instant) > 0
+	assert mailbox.queue.len() == 1
 }
 
 // send() enqueues into the same underlying queue as push(). When no mutex is
@@ -321,9 +315,9 @@ fn test_mailbox_send_enqueues() {
 	}
 
 	mailbox.send(Message.focused_msg(true), unsafe { nil })
-	assert mailbox.len() == 1
+	assert mailbox.queue.len() == 1
 
-	msg := mailbox.pop() or {
+	msg := mailbox.queue.pop() or {
 		assert false, 'expected sent message'
 		return
 	}
@@ -331,16 +325,25 @@ fn test_mailbox_send_enqueues() {
 	assert msg.flag_val
 }
 
-// notify() records that a wakeup signal was raised for the consuming thread.
-fn test_mailbox_notify_sets_flag() {
+// notify() wakes the consuming thread's loop through the wakeup async.
+fn test_mailbox_notify_wakes_writer_loop() ! {
 	mut mailbox := Mailbox.init_spsc()!
 	defer {
 		mailbox.deinit()
 	}
+	mut probe := TermioWakeupProbe{}
+	mut loop := xev.Loop.init(xev.Options{})!
+	defer {
+		loop.deinit()
+	}
+	c := &xev.Completion{}
+	mailbox.wakeup.wait(mut loop, c, &probe, termio_wakeup_probe)
 
-	assert !mailbox.notified
+	loop.run(.no_wait)!
+	assert probe.count == 0
 	mailbox.notify()
-	assert mailbox.notified
+	loop.run(.no_wait)!
+	assert probe.count == 1
 }
 
 fn test_mailbox_send_waits_for_space_without_dropping_message() {
@@ -349,61 +352,82 @@ fn test_mailbox_send_waits_for_space_without_dropping_message() {
 		mailbox.deinit()
 	}
 	for i in 0 .. mailbox_capacity {
-		assert mailbox.push(Message.write_stable_msg('m${i}')) == 1
+		assert mailbox.queue.push(Message.write_stable_msg('m${i}'), datastruct.blocking_queue_instant) > 0
 	}
 
 	done := chan bool{ cap: 1 }
 	worker := spawn mailbox_send_forever_for_test(voidptr(&mailbox), done)
-	first := mailbox.pop() or { panic('full mailbox unexpectedly empty') }
+	first := mailbox.queue.pop() or { panic('full mailbox unexpectedly empty') }
 	assert first.write_stable_data == 'm0'
 	worker.wait()
 	assert <-done
-	assert mailbox.len() == mailbox_capacity
+	assert mailbox.queue.len() == mailbox_capacity
 
 	for i in 1 .. mailbox_capacity {
-		msg := mailbox.pop() or { panic('missing queued message ${i}') }
+		msg := mailbox.queue.pop() or { panic('missing queued message ${i}') }
 		assert msg.write_stable_data == 'm${i}'
 	}
-	last := mailbox.pop() or { panic('blocked message was dropped') }
+	last := mailbox.queue.pop() or { panic('blocked message was dropped') }
 	assert last.write_stable_data == 'overflow'
 }
 
-// stopwatch reset clears the notification state.
-fn test_stopwatch_reset_clears() {
-	mut s := Stopwatch{}
-	s.notify()!
-	assert s.notified
-	s.reset()
-	assert !s.notified
+// termio_test_callback_data mirrors threadMain_'s stack CallbackData for a
+// thread whose loop is driven by the test.
+fn termio_test_callback_data(mut writer Thread, mut tio Termio) &CallbackData {
+	mut cb := &CallbackData{
+		self_: writer
+		io:    tio
+	}
+	cb.data.loop = &writer.loop
+	cb.data.renderer_state = tio.renderer_state
+	cb.data.surface_mailbox = tio.surface_mailbox
+	cb.data.mailbox = &tio.mailbox
+	return cb
 }
 
-fn test_thread_drain_mailbox_updates_writer_state() {
+fn test_thread_drain_mailbox_updates_writer_state() ! {
 	mut tio := Termio{}
 	tio.init(make_termio_opts())!
 	defer { tio.deinit() }
 	mut writer := Thread.init()!
 	defer { writer.deinit() }
+	mut cb := termio_test_callback_data(mut writer, mut tio)
 
 	resize := renderer.Size{
 		screen: renderer.ScreenSize{ width: 800, height: 600 }
 		cell: renderer.CellSize{ width: 10, height: 20 }
 	}
-	tio.mailbox.push(Message.inspector_msg(true))
-	tio.mailbox.push(Message{ kind: .linefeed_mode, flag_val: true })
-	tio.mailbox.push(Message.selection_scroll_msg(true))
-	tio.mailbox.push(Message{ kind: .start_synchronized_output })
-	tio.mailbox.push(Message.resize_msg(resize))
+	tio.mailbox.queue.push(Message.inspector_msg(true), datastruct.blocking_queue_instant)
+	tio.mailbox.queue.push(Message{ kind: .linefeed_mode, flag_val: true }, datastruct.blocking_queue_instant)
+	tio.mailbox.queue.push(Message.selection_scroll_msg(true), datastruct.blocking_queue_instant)
+	tio.mailbox.queue.push(Message{ kind: .start_synchronized_output }, datastruct.blocking_queue_instant)
+	tio.mailbox.queue.push(Message.resize_msg(resize), datastruct.blocking_queue_instant)
 
-	assert writer.drain_mailbox(mut tio)!
+	writer.drain_mailbox(mut cb)!
 	assert writer.flags.has_inspector()
 	assert writer.flags.linefeed_mode()
 	assert sizeof(ThreadFlags) == 1
 	assert writer.scroll_active
-	assert writer.scroll_deadline > 0
-	assert writer.sync_deadline > 0
-	assert writer.pending_resize or { panic('missing coalesced resize') } == resize
-	assert writer.resize_deadline > 0
-	assert tio.mailbox.len() == 0
+	assert writer.scroll_c.state() == .active
+	assert writer.sync_reset_c.state() == .active
+	assert writer.coalesce_data.resize or { panic('missing coalesced resize') } == resize
+	assert writer.coalesce_c.state() == .active
+	assert tio.mailbox.queue.len() == 0
+}
+
+fn test_thread_drain_mailbox_discards_messages_while_draining() ! {
+	mut tio := Termio{}
+	tio.init(make_termio_opts())!
+	defer { tio.deinit() }
+	mut writer := Thread.init()!
+	defer { writer.deinit() }
+	mut cb := termio_test_callback_data(mut writer, mut tio)
+
+	writer.flags.set_drain(true)
+	tio.mailbox.queue.push(Message.inspector_msg(true), datastruct.blocking_queue_instant)
+	writer.drain_mailbox(mut cb)!
+	assert !writer.flags.has_inspector()
+	assert tio.mailbox.queue.len() == 0
 }
 
 struct SelectionScrollProbe {
@@ -421,7 +445,7 @@ fn selection_scroll_probe_push(_ voidptr, surface voidptr, msg apprt.SurfaceMess
 	return 1
 }
 
-fn test_thread_selection_scroll_timer_reports_final_stop() {
+fn test_thread_selection_scroll_timer_reports_final_stop() ! {
 	mut probe := SelectionScrollProbe{}
 	mut tio := Termio{}
 	tio.init(TermioOpts{
@@ -434,27 +458,27 @@ fn test_thread_selection_scroll_timer_reports_final_stop() {
 	defer { tio.deinit() }
 	mut writer := Thread.init()!
 	defer { writer.deinit() }
+	mut cb := termio_test_callback_data(mut writer, mut tio)
 
-	tio.mailbox.push(Message.selection_scroll_msg(true))
-	assert writer.drain_mailbox(mut tio)!
-	deadline := writer.scroll_deadline
-	assert deadline > 0
+	tio.mailbox.queue.push(Message.selection_scroll_msg(true), datastruct.blocking_queue_instant)
+	writer.drain_mailbox(mut cb)!
+	assert writer.scroll_c.state() == .active
 
 	// Repeated starts leave the currently armed completion untouched.
-	tio.mailbox.push(Message.selection_scroll_msg(true))
-	assert writer.drain_mailbox(mut tio)!
-	assert writer.scroll_deadline == deadline
+	tio.mailbox.queue.push(Message.selection_scroll_msg(true), datastruct.blocking_queue_instant)
+	writer.drain_mailbox(mut cb)!
+	assert writer.scroll_c.state() == .active
 
 	// Stopping does not cancel the completion. It fires once with false and
 	// then disarms, matching selectionScrollCallback.
-	tio.mailbox.push(Message.selection_scroll_msg(false))
-	assert writer.drain_mailbox(mut tio)!
+	tio.mailbox.queue.push(Message.selection_scroll_msg(false), datastruct.blocking_queue_instant)
+	writer.drain_mailbox(mut cb)!
 	assert !writer.scroll_active
-	assert writer.scroll_deadline == deadline
-	assert writer.run_timers(mut tio, deadline)
+	assert writer.scroll_c.state() == .active
+	writer.loop.run(.until_done)!
 	assert probe.values == [false]
 	assert probe.timeouts == [.instant]
-	assert writer.scroll_deadline == 0
+	assert writer.scroll_c.state() == .dead
 }
 
 struct PasswordInputProbe {
@@ -472,7 +496,21 @@ fn password_input_probe_push(_ voidptr, surface voidptr, msg apprt.SurfaceMessag
 	return 1
 }
 
-fn test_thread_termios_mode_reports_password_input_transitions() {
+// termio_test_exec_thread_data is the exec backend state threadEnter builds,
+// reading termios state from the given pty.
+fn termio_test_exec_thread_data(mut writer Thread, tio &Termio, p pty.Pty) !ThreadData {
+	return ThreadData{
+		loop:            &writer.loop
+		renderer_state:  tio.renderer_state
+		surface_mailbox: tio.surface_mailbox
+		backend:         ExecThreadData{
+			read_thread_fd: p.master
+			termios_timer:  xev.Timer.init()!
+		}
+	}
+}
+
+fn test_exec_termios_timer_reports_password_input_transitions() ! {
 	mut probe := PasswordInputProbe{}
 	mut tio := Termio{}
 	tio.init(TermioOpts{
@@ -485,34 +523,57 @@ fn test_thread_termios_mode_reports_password_input_transitions() {
 	defer { tio.deinit() }
 	mut writer := Thread.init()!
 	defer { writer.deinit() }
+	mut p := pty.Pty.open(pty.Winsize{ ws_row: 24, ws_col: 80 })!
+	defer { p.deinit() }
+	mut td := termio_test_exec_thread_data(mut writer, &tio, p)!
+	td.backend.termios_timer_running = false
 
-	writer.apply_termios_mode(mut tio, pty.Mode.init(true, false))
+	// Canonical input with echo disabled is the password-entry heuristic.
+	mut attrs := termios.Termios{}
+	assert termios.tcgetattr(p.slave, mut attrs) == 0
+	attrs.disable_echo()
+	assert termios.tcsetattr(p.slave, C.TCSANOW, mut attrs) == 0
+	_ = exec_termios_timer(&td, unsafe { nil }, unsafe { nil }, none)
 	assert probe.values == [true]
 
 	// The surface owns the shared password-input flag after consuming the
 	// notification. Moving back to normal canonical+echo mode reports false.
 	tio.terminal.flags.set_password_input(true)
-	writer.apply_termios_mode(mut tio, pty.Mode{})
+	attrs.c_lflag |= termios.flag(int(C.ECHO))
+	assert termios.tcsetattr(p.slave, C.TCSANOW, mut attrs) == 0
+	_ = exec_termios_timer(&td, unsafe { nil }, unsafe { nil }, none)
 	assert probe.values == [true, false]
 	assert probe.timeouts == [.forever, .forever]
+
+	// A stopped timer is not rearmed.
+	assert td.backend.termios_timer_c.state() == .dead
 }
 
-fn test_thread_termios_timer_stops_unfocused_and_restarts_on_focus() {
+fn test_exec_termios_timer_stops_unfocused_and_restarts_on_focus() ! {
 	mut tio := Termio{}
 	tio.init(make_termio_opts())!
 	defer { tio.deinit() }
 	mut writer := Thread.init()!
 	defer { writer.deinit() }
+	mut p := pty.Pty.open(pty.Winsize{ ws_row: 24, ws_col: 80 })!
+	defer { p.deinit() }
+	mut td := termio_test_exec_thread_data(mut writer, &tio, p)!
 
-	tio.backend.thread_data.termios_deadline = 1
-	tio.backend.focus_gained(false)!
-	assert writer.run_termios_timer(mut tio, 1)
-	assert tio.backend.thread_data.termios_deadline == 0
+	// Focusing with no armed timer checks the mode immediately and arms it.
+	tio.backend.focus_gained(mut td, true)!
+	assert td.backend.termios_timer_running
+	assert td.backend.termios_timer_c.state() == .active
 
-	tio.backend.focus_gained(true)!
-	assert tio.backend.thread_data.termios_deadline == 1
-	assert writer.run_termios_timer(mut tio, 1)
-	assert tio.backend.thread_data.termios_deadline == 1 + termios_poll_ms * i64(time.millisecond)
+	// Losing focus only flags the armed timer to end on its next tick.
+	tio.backend.focus_gained(mut td, false)!
+	assert !td.backend.termios_timer_running
+	assert td.backend.termios_timer_c.state() == .active
+	writer.loop.run(.until_done)!
+	assert td.backend.termios_timer_c.state() == .dead
+
+	// Regaining focus restarts it.
+	tio.backend.focus_gained(mut td, true)!
+	assert td.backend.termios_timer_c.state() == .active
 }
 
 fn test_thread_start_error_explains_pty_exhaustion() {
