@@ -1016,8 +1016,8 @@ pub mut:
 pub struct IoUringAcceptOp {
 pub mut:
 	socket    int
-	addr      C.sockaddr
-	addr_size u32 = u32(sizeof(C.sockaddr))
+	addr      SockAddr
+	addr_size u32 = u32(sizeof(SockAddr))
 	flags     u32 = sock_cloexec
 }
 

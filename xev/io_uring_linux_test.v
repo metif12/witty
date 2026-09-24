@@ -323,7 +323,7 @@ fn test_io_uring_socket_accept_connect_send_recv_close() ! {
 
 	// Create a TCP server socket
 	address := NetAddress.init_ip4([u8(127), 0, 0, 1]!, 3131)
-	family := unsafe { u32((&C.sockaddr(address.any())).sa_family) }
+	family := u32(unsafe { address.any_.family })
 	kernel_backlog := u32(1)
 	mut ln := posix_socket(family, u32(C.SOCK_STREAM) | sock_cloexec, 0)!
 	mut one := int(1)
@@ -516,7 +516,7 @@ fn test_io_uring_sendmsg_recvmsg() ! {
 
 	// Create a TCP server socket
 	address := NetAddress.init_ip4([u8(127), 0, 0, 1]!, 3131)
-	family := unsafe { u32((&C.sockaddr(address.any())).sa_family) }
+	family := u32(unsafe { address.any_.family })
 	server := posix_socket(family, u32(C.SOCK_DGRAM), 0)!
 	defer {
 		posix_close(server)
@@ -622,7 +622,7 @@ fn test_io_uring_socket_read_cancellation() ! {
 
 	// Create a UDP server socket
 	address := NetAddress.init_ip4([u8(127), 0, 0, 1]!, 3131)
-	family := unsafe { u32((&C.sockaddr(address.any())).sa_family) }
+	family := u32(unsafe { address.any_.family })
 	socket := posix_socket(family, u32(C.SOCK_DGRAM) | sock_cloexec, 0)!
 	mut one := int(1)
 	posix_setsockopt(socket, C.SOL_SOCKET, u32(C.SO_REUSEADDR), unsafe { (&u8(&one)).vbytes(int(sizeof(int))) }) or {
