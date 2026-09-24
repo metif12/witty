@@ -5,6 +5,7 @@ import build_meta
 import font
 import renderer
 import v.util.version as vversion
+import xev
 
 fn test_version_output_reports_translated_build_metadata() {
 	output := version_output(false)
@@ -15,7 +16,7 @@ fn test_version_output_reports_translated_build_metadata() {
 	assert output.contains('  - app runtime   : ${runtime_name(apprt.Runtime.default())}\n')
 	assert output.contains('  - font engine   : ${font.Backend.default_()}\n')
 	assert output.contains('  - renderer      : ${renderer.Backend.default_()}\n')
-	assert output.contains('  - libxev        : unavailable\n')
+	assert output.contains('  - libxev        : ${xev.backend()}\n')
 	assert !output.contains(@VEXE)
 }
 

@@ -6,6 +6,7 @@ import font
 import os
 import renderer
 import v.util.version as vversion
+import xev
 
 pub struct VersionOptions {}
 
@@ -33,7 +34,7 @@ fn version_output(tty bool) string {
 	output << '  - app runtime   : ${runtime_name(apprt.Runtime.default())}'
 	output << '  - font engine   : ${font.Backend.default_()}'
 	output << '  - renderer      : ${renderer.Backend.default_()}'
-	output << '  - libxev        : unavailable'
+	output << '  - libxev        : ${xev.backend()}'
 	output << platform_version_lines()
 	return header + output.join('\n') + '\n'
 }

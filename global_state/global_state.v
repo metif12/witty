@@ -5,6 +5,7 @@ import internal_os
 import cli_args
 import crash
 import oniguruma
+import xev
 
 // Global process state. This is initialized in main() for exe artifacts
 // and by ghostty_init() for lib artifacts. This should ONLY be used by
@@ -294,6 +295,14 @@ pub fn (mut self GlobalState) init_args(args []string) ! {
 
 	// Setup our signal handlers before logging
 	init_signals()
+
+	// Setup our Xev backend if we're dynamic. The dynamic API exists only on
+	// Linux, the one platform with more than one candidate backend.
+	$if linux {
+		xev.detect() or {
+			eprintln('failed to detect xev backend, falling back to most compatible backend err=${err}')
+		}
+	}
 
 	// As early as possible, initialize our resource limits.
 	self.rlimits = ResourceLimits.new()

@@ -9,6 +9,7 @@ import input
 import global_state
 import internal_os
 import os
+import xev
 
 // application_linux.v - The primary GTK application (AdwApplication subclass).
 //
@@ -1159,17 +1160,27 @@ fn (mut self Application) startup() {
 	self.show_config_errors_dialog()
 }
 
-// startup_xev configures libxev to use a specific backend. Mirrors
-// `Application.startupXev`.
+// Configure libxev to use a specific backend.
+//
+// This must be called before any other xev APIs are used.
 fn (mut self Application) startup_xev() {
-	// Witty's V semaphore/channel event loops are a statically selected native
-	// backend, equivalent to Ghostty's `xev.dynamic == false` build. In that
-	// source branch an explicit preference cannot be applied and startup warns
-	// before retaining the compiled-in default.
+	// If our backend is auto then we have no setup to do.
 	if self.config.async_backend == .auto {
 		return
 	}
-	eprintln('[warn] gtk: libxev manual backend failed, using default=native')
+
+	// Setup our event loop backend to the preferred method
+	result := match self.config.async_backend {
+		.auto { panic('unreachable') }
+		.epoll { xev.prefer(.epoll) }
+		.io_uring { xev.prefer(.io_uring) }
+	}
+
+	if result {
+		eprintln('[info] gtk: libxev manual backend=${xev.backend()}')
+	} else {
+		eprintln('[warn] gtk: libxev manual backend failed, using default=${xev.backend()}')
+	}
 }
 
 // startup_style_manager sets up the initial light/dark mode from config and

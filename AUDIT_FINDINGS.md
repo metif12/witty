@@ -390,6 +390,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | termio writer thread and exec backend | The IO thread polled its mailbox every millisecond, and resize coalescing, synchronized-output reset, selection scrolling, and termios polling were deadlines on that loop. Exec wrote to the pty with blocking `write` calls and watched the child on a dedicated `waitpid` thread (the source of the earlier shutdown `ECHILD` race). The termio mailbox recorded a wakeup flag instead of owning an `xev.Async`, and the handlers read backend state from `Exec` instead of the thread's `ThreadData`. | Port `termio/Thread.zig`, the SPSC `Mailbox`, and Exec's thread side: `ThreadData` (loop, backend state) threaded through every handler, coalesce, sync-reset, and scroll timers, the pidfd/kqueue `xev.Process` exit watcher, the termios timer, and queued non-blocking writes through `xev.Stream.queueWrite` with pooled requests and buffers. |
 | search thread transport | The search worker used V channels and a timed `select` instead of Ghostty's xev loop, wakeup and stop asyncs, and refresh timer. Surface producers called helper methods rather than pushing to the mailbox and notifying the wakeup. | Port the thread onto `xev` with the source's interleaved tick/`run(.no_wait)` loop, the `BlockingQueue` mailbox, and the refresh timer, and split the surface callback into `searchCallback`/`searchCallback_` so wakeup failures propagate as in Ghostty. |
 | CoreText CF release thread | Ghostty's `os/cf_release_thread.zig` runs an xev loop with wakeup and stop asyncs and a drain flag for abnormal exits. Witty used a semaphore/mutex worker with a `stop_requested` boolean, placed it in `macos`, and joined it inside `deinit`. | Translate the thread into `internal_os` on `xev`, and have the CoreText shaper spawn it, notify `stop`, and join it as the source does. |
+| libxev backend reporting and selection | `+version` printed libxev as unavailable, global initialization did not run `xev.detect()`, and GTK ignored `async-backend`. | Report `xev.backend()`, detect the Linux backend during global initialization, and restore `startupXev`'s `prefer` call and logs. `backend` is an accessor because V module globals cannot be read from other modules. |
 
 ## Focused behavior reviewed
 
@@ -482,10 +483,6 @@ an item here does not mean its full module has been certified yet.
   byte-for-byte checked against the pinned source generator. Its build does
   not yet regenerate those embedded records by parsing the translated
   declarations as Ghostty's Zig build steps do.
-- **Version action metadata:** Witty now reports its real compiler version,
-  application runtime, font engine, renderer, GTK build/runtime features, and
-  the pinned Git-derived version and commit hyperlink, but it does not link
-  libxev and therefore reports that field as unavailable.
 - **Allocator and memory representation:** `Page`, typed `Offset(T)` slices,
   allocator failure paths, and generic `RefCountedSet` storage are adapted to
   V GC arrays/specializations. Their reviewed observable behavior is close,
