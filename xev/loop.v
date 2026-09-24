@@ -72,3 +72,10 @@ pub enum CompletionState as i32 {
 	// on or in the process of being registered.
 	active = 1
 }
+
+// The tag of every backend's `ReadBuffer` and `WriteBuffer` union(enum).
+// The V buffer records keep the tag in a `kind` field next to the payloads.
+pub enum BufferKind {
+	slice
+	array
+}

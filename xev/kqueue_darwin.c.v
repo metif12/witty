@@ -23,8 +23,6 @@ mut:
 
 fn C.kqueue() int
 fn C.kevent64(kq int, changelist &C.kevent64_s, nchanges int, eventlist &C.kevent64_s, nevents int, flags u32, timeout &C.timespec) int
-fn C.shutdown(socket int, how int) int
-fn C.connect(socket int, address voidptr, address_len u32) int
 
 // Kevent is either kevent_s or kevent64_s depending on the target platform.
 // This lets us support both Mac and non-Mac platforms.
@@ -1643,12 +1641,6 @@ pub mut:
 	fd int
 }
 
-pub enum ShutdownHow {
-	recv
-	send
-	both
-}
-
 pub struct KqueueShutdownOp {
 pub mut:
 	socket int
@@ -1679,11 +1671,6 @@ pub enum KqueueTimerTrigger {
 	expiration
 	// Timer was canceled.
 	cancel
-}
-
-pub enum BufferKind {
-	slice
-	array
 }
 
 // ReadBuffer are the various options for reading.

@@ -85,6 +85,19 @@ pub enum ErrorKind {
 	invalid_protocol_option
 	// std.posix.BindError
 	read_only_file_system
+	// libxev epoll backend and watchers
+	dup_failed
+	unknown
+	not_found
+	invalid_child
+	// libxev linux/timerfd.zig
+	unknown_error
+	// std.posix.EpollCtlError
+	file_descriptor_already_present_in_set
+	operation_causes_circular_loop
+	file_descriptor_not_registered
+	user_resource_limit_reached
+	file_descriptor_incompatible_with_epoll
 }
 
 // zig_name returns the Zig error name, as printed by Zig's `{}` formatting of

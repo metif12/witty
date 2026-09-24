@@ -480,6 +480,127 @@ pub fn posix_listen(sock int, backlog u32) ! {
 	}
 }
 
+fn C.connect(socket int, address voidptr, address_len u32) int
+fn C.shutdown(socket int, how int) int
+fn C.dup(fd int) int
+fn C.sendmsg(sockfd int, msg voidptr, flags int) isize
+
+// Translation of std.posix.connect (non-Windows branch).
+// Initiate a connection on a socket.
+// If `sockfd` is opened in non blocking mode, the function will
+// return error.WouldBlock when EAGAIN or EINPROGRESS is received.
+pub fn posix_connect(sock int, sock_addr voidptr, len u32) ! {
+	for {
+		rc := C.connect(sock, sock_addr, len)
+		match posix_errno(rc) {
+			0 { return }
+			C.EACCES { return new_error(.access_denied) }
+			C.EPERM { return new_error(.permission_denied) }
+			C.EADDRINUSE { return new_error(.address_in_use) }
+			C.EADDRNOTAVAIL { return new_error(.address_not_available) }
+			C.EAFNOSUPPORT { return new_error(.address_family_not_supported) }
+			C.EAGAIN, C.EINPROGRESS { return new_error(.would_block) }
+			C.EALREADY { return new_error(.connection_pending) }
+			C.EBADF { posix_unreachable() } // sockfd is not a valid open file descriptor.
+			C.ECONNREFUSED { return new_error(.connection_refused) }
+			C.ECONNRESET { return new_error(.connection_reset_by_peer) }
+			C.EFAULT { posix_unreachable() } // The socket structure address is outside the user's address space.
+			C.EINTR { continue }
+			C.EISCONN { posix_unreachable() } // The socket is already connected.
+			C.EHOSTUNREACH { return new_error(.network_unreachable) }
+			C.ENETUNREACH { return new_error(.network_unreachable) }
+			C.ENOTSOCK { posix_unreachable() } // The file descriptor sockfd does not refer to a socket.
+			C.EPROTOTYPE { posix_unreachable() } // The socket type does not support the requested communications protocol.
+			C.ETIMEDOUT { return new_error(.connection_timed_out) }
+			C.ENOENT { return new_error(.file_not_found) } // Returned when socket is AF.UNIX and the given path does not exist.
+			C.ECONNABORTED { posix_unreachable() } // Tried to reuse socket that previously received error.ConnectionRefused.
+			else { return unexpected_errno(posix_errno(rc)) }
+		}
+	}
+}
+
+// Translation of std.posix.ShutdownHow.
+pub enum ShutdownHow {
+	recv
+	send
+	both
+}
+
+// Translation of std.posix.shutdown (non-Windows branch).
+// Shutdown socket send/receive operations
+pub fn posix_shutdown(sock int, how ShutdownHow) ! {
+	how_c := match how {
+		.recv { C.SHUT_RD }
+		.send { C.SHUT_WR }
+		.both { C.SHUT_RDWR }
+	}
+	rc := C.shutdown(sock, how_c)
+	match posix_errno(rc) {
+		0 { return }
+		C.EBADF { posix_unreachable() }
+		C.EINVAL { posix_unreachable() }
+		C.ENOTCONN { return new_error(.socket_not_connected) }
+		C.ENOTSOCK { posix_unreachable() }
+		C.ENOBUFS { return new_error(.system_resources) }
+		else { return unexpected_errno(posix_errno(rc)) }
+	}
+}
+
+// Translation of std.posix.dup.
+pub fn posix_dup(old_fd int) !int {
+	rc := C.dup(old_fd)
+	match posix_errno(rc) {
+		0 { return rc }
+		C.EMFILE { return new_error(.process_fd_quota_exceeded) }
+		C.EBADF { posix_unreachable() } // invalid file descriptor
+		else { return unexpected_errno(posix_errno(rc)) }
+	}
+}
+
+// std.posix.msghdr and std.posix.msghdr_const. libxev only passes pointers
+// to them through to the system calls, so their fields are not declared.
+pub struct C.msghdr {}
+
+// std.posix.iovec_const.
+pub struct C.iovec {}
+
+// Translation of std.posix.sendmsg (non-Windows branch).
+pub fn posix_sendmsg(sockfd int, msg &C.msghdr, flags u32) !usize {
+	for {
+		rc := C.sendmsg(sockfd, msg, int(flags))
+		match posix_errno(rc) {
+			0 { return usize(rc) }
+			C.EACCES { return new_error(.access_denied) }
+			C.EAGAIN { return new_error(.would_block) }
+			C.EALREADY { return new_error(.fast_open_already_in_progress) }
+			C.EBADF { posix_unreachable() } // always a race condition
+			C.ECONNRESET { return new_error(.connection_reset_by_peer) }
+			C.EDESTADDRREQ { posix_unreachable() } // The socket is not connection-mode, and no peer address is set.
+			C.EFAULT { posix_unreachable() } // An invalid user space address was specified for an argument.
+			C.EINTR { continue }
+			C.EINVAL { posix_unreachable() } // Invalid argument passed.
+			C.EISCONN { posix_unreachable() } // connection-mode socket was connected already but a recipient was specified
+			C.EMSGSIZE { return new_error(.message_too_big) }
+			C.ENOBUFS { return new_error(.system_resources) }
+			C.ENOMEM { return new_error(.system_resources) }
+			C.ENOTSOCK { posix_unreachable() } // The file descriptor sockfd does not refer to a socket.
+			C.EOPNOTSUPP { posix_unreachable() } // Some bit in the flags argument is inappropriate for the socket type.
+			C.EPIPE { return new_error(.broken_pipe) }
+			C.EAFNOSUPPORT { return new_error(.address_family_not_supported) }
+			C.ELOOP { return new_error(.sym_link_loop) }
+			C.ENAMETOOLONG { return new_error(.name_too_long) }
+			C.ENOENT { return new_error(.file_not_found) }
+			C.ENOTDIR { return new_error(.not_dir) }
+			C.EHOSTUNREACH { return new_error(.network_unreachable) }
+			C.ENETUNREACH { return new_error(.network_unreachable) }
+			C.ENOTCONN { return new_error(.socket_not_connected) }
+			C.ENETDOWN { return new_error(.network_subsystem_failed) }
+			else { return unexpected_errno(posix_errno(rc)) }
+		}
+	}
+	return 0
+}
+
 fn C.waitpid(pid int, status &int, options int) int
 
 pub struct WaitPidResult {
