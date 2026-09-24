@@ -11,6 +11,7 @@ import renderer
 import terminal
 import terminfo
 import tmux
+import xev
 
 // Whether tmux control mode is present in this build. Ghostty exposes this on
 // StreamHandler from the synthesized terminal options.
@@ -39,7 +40,7 @@ pub mut:
 
 	// A handle to wake up the renderer. This hints to the renderer that
 	// a repaint should happen.
-	renderer_wakeup renderer.Wakeup
+	renderer_wakeup xev.Async
 
 	// The default cursor state. This is used with CSI q. This is
 	// set to true when we're currently in the default cursor state.

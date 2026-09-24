@@ -1717,6 +1717,12 @@ fn surface_search_event(event searchpkg.Event, userdata voidptr) {
 	// The surface is guaranteed to be valid for the lifetime of the search
 	// thread.
 	mut surface := unsafe { &Surface(userdata) }
+	surface.search_callback_(event) or { eprintln('error in search callback err=${err}') }
+}
+
+fn (mut surface Surface) search_callback_(event searchpkg.Event) ! {
+	// NOTE: This runs on the search thread.
+
 	match event.kind {
 		.viewport_matches {
 			mut matches := []highlight.Flattened{cap: event.viewport_matches.len}
@@ -1726,7 +1732,7 @@ fn surface_search_event(event searchpkg.Event, userdata voidptr) {
 			_ = surface.renderer_thread.mailbox.push(rendererpkg.RendererMessage(rendererpkg.SearchViewportMatchesMessage{
 				matches: matches
 			}), datastruct.blocking_queue_forever)
-			surface.renderer_thread.wakeup()
+			surface.renderer_thread.wakeup.notify()!
 		}
 		.selected_match {
 			selected := if value := event.selected { ?usize(value.idx) } else { none }
@@ -1742,7 +1748,7 @@ fn surface_search_event(event searchpkg.Event, userdata voidptr) {
 				kind: .search_selected
 				search_selected: selected
 			}, datastruct.blocking_queue_forever)
-			surface.renderer_thread.wakeup()
+			surface.renderer_thread.wakeup.notify()!
 		}
 		.total_matches {
 			surface.surface_mailbox().push(apprt.SurfaceMessage{
@@ -1757,7 +1763,7 @@ fn surface_search_event(event searchpkg.Event, userdata voidptr) {
 			_ = surface.renderer_thread.mailbox.push(rendererpkg.RendererMessage(rendererpkg.SearchViewportMatchesMessage{
 				matches: []highlight.Flattened{}
 			}), datastruct.blocking_queue_forever)
-			surface.renderer_thread.wakeup()
+			surface.renderer_thread.wakeup.notify()!
 			mailbox := surface.surface_mailbox()
 			mailbox.push(apprt.SurfaceMessage{
 				kind: .search_total
@@ -2269,9 +2275,7 @@ pub fn (mut self Surface) init(config_original &Config, mut app App, rt_app &app
 		backend: io_exec
 		mailbox: io_mailbox
 		renderer_state: &self.renderer_state
-		renderer_wakeup: rendererpkg.Wakeup{
-			thread: &self.renderer_thread
-		}
+		renderer_wakeup: self.renderer_thread.wakeup
 		renderer_mailbox: self.renderer_thread.mailbox
 		surface_mailbox: apprt.SurfaceMailbox{
 			surface: voidptr(&self)
@@ -2399,7 +2403,9 @@ pub fn (mut self Surface) deinit() {
 	}
 
 	// Stop rendering thread
-	self.renderer_thread.stop()
+	self.renderer_thread.stop.notify() or {
+		eprintln('error notifying renderer thread to stop, may stall err=${err}')
+	}
 	renderer_thr := self.renderer_os_thread or { panic('renderer thread was never started') }
 	renderer_thr.wait()
 	self.renderer_os_thread = none
@@ -2958,7 +2964,7 @@ pub fn (mut self Surface) set_font_size(size DesiredSize) ! {
 // isn't guaranteed to happen immediately but it will happen as soon as
 // practical.
 fn (mut self Surface) queue_render() ! {
-	self.renderer_thread.wakeup()
+	self.renderer_thread.wakeup.notify()!
 }
 
 // size_callback is called when the surface size changes.

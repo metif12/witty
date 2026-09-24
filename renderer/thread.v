@@ -183,12 +183,10 @@ import crash
 import datastruct
 import internal_os
 import macos
-import sync
-import time
+import xev
 
-// Constants for renderer thread timing.
-const draw_interval = 8 // 120 FPS (milliseconds)
-const cursor_blink_interval_ms = 600 // milliseconds
+const draw_interval = 8 // 120 FPS
+const cursor_blink_interval_ms = 600
 const renderer_mailbox_capacity = 64
 
 // The type used for sending messages to the IO thread. For now this is
@@ -270,6 +268,41 @@ fn (mut self ThreadFlags) set(mask u8, enabled bool) {
 // is able to be woken up to render.
 pub struct RendererThread {
 pub mut:
+	// The main event loop for the application. The user data of this loop
+	// is always the allocator used to create the loop. This is a convenience
+	// so that users of the loop always have an allocator.
+	loop xev.Loop
+
+	// This can be used to wake up the renderer and force a render safely from
+	// any thread.
+	wakeup   xev.Async
+	wakeup_c xev.Completion
+
+	// This can be used to stop the renderer on the next loop iteration.
+	stop   xev.Async
+	stop_c xev.Completion
+
+	// The timer used for rendering
+	render_h xev.Timer
+	render_c xev.Completion
+
+	// The timer used for draw calls. Draw calls don't update from the
+	// terminal state so they're much cheaper. They're used for animation
+	// and are paused when the terminal is not focused.
+	draw_h      xev.Timer
+	draw_c      xev.Completion
+	draw_active bool
+
+	// This async is used to force a draw immediately. This does not
+	// coalesce like the wakeup does.
+	draw_now   xev.Async
+	draw_now_c xev.Completion
+
+	// The timer used for cursor blinking
+	cursor_h        xev.Timer
+	cursor_c        xev.Completion
+	cursor_c_cancel xev.Completion
+
 	// The underlying renderer implementation.
 	renderer &Renderer = unsafe { nil }
 
@@ -280,8 +313,9 @@ pub mut:
 	// this is a blocking queue so if it is full you will get errors (or block).
 	mailbox &Mailbox = unsafe { nil }
 
-	// GTK requires GPU work on the application thread. This callback is the
-	// translated App.Mailbox redraw_surface message boundary used there.
+	// Mailbox to send messages to the app thread. GTK requires GPU work on the
+	// application thread; this callback is the translated App.Mailbox
+	// redraw_surface push used there (must_draw_from_app_thread).
 	app_redraw           Wakeup
 	draw_from_app_thread bool
 
@@ -290,57 +324,100 @@ pub mut:
 
 	// Thread state flags.
 	flags ThreadFlags
-
-	// Whether the draw timer is currently active.
-	draw_active bool
-	// Whether the draw completion is armed. This remains true for one pending
-	// callback after draw_active is disabled.
-	draw_timer_armed bool
-
-	// Whether the cursor blink timer is currently active. This mirrors
-	// the state of the `cursor_c` completion in Ghostty (whether the
-	// blink timer is running). The actual xev timer is a boundary, so
-	// we track the logical active state here to faithfully reproduce the
-	// focus-handler start/stop logic.
-	cursor_blink_active bool
-
-	// Monotonic deadlines for the two periodic xev timers used by Ghostty.
-	// V doesn't provide xev, so the event semaphore below drives an equivalent
-	// single-threaded loop and these fields preserve the timer semantics.
-	next_draw_at         u64
-	next_cursor_blink_at u64
-
-	// Cross-thread event state. Wakeups coalesce, draw-now requests do not,
-	// matching the two separate xev.Async handles in Ghostty.
-	event              &sync.Semaphore = unsafe { nil }
-	event_mutex        &sync.Mutex     = unsafe { nil }
-	wakeup_requested   bool
-	draw_now_requested u32
-	stop_requested     bool
 }
 
 // Initialize the thread. This does not START the thread. This only sets
-// up all the internal state necessary prior to starting the thread.
+// up all the internal state necessary prior to starting the thread. It
+// is up to the caller to start the thread with the threadMain entrypoint.
 pub fn RendererThread.init(config &configpkg.Config, renderer_impl &Renderer, state &RenderState, app_redraw Wakeup) !RendererThread {
+	// Zig's errdefers are emulated by reached defers that run until init succeeds.
+	mut init_ok := false
+
+	// Create our event loop.
+	mut loop := xev.Loop.init(xev.Options{})!
+	defer {
+		if !init_ok {
+			loop.deinit()
+		}
+	}
+
+	// This async handle is used to "wake up" the renderer and force a render.
+	mut wakeup_h := xev.Async.init()!
+	defer {
+		if !init_ok {
+			wakeup_h.deinit()
+		}
+	}
+
+	// This async handle is used to stop the loop and force the thread to end.
+	mut stop_h := xev.Async.init()!
+	defer {
+		if !init_ok {
+			stop_h.deinit()
+		}
+	}
+
+	// The primary timer for rendering.
+	render_h := xev.Timer.init()!
+	defer {
+		if !init_ok {
+			render_h.deinit()
+		}
+	}
+
+	// Draw timer, see comments.
+	draw_h := xev.Timer.init()!
+	defer {
+		if !init_ok {
+			draw_h.deinit()
+		}
+	}
+
+	// Draw now async, see comments.
+	mut draw_now := xev.Async.init()!
+	defer {
+		if !init_ok {
+			draw_now.deinit()
+		}
+	}
+
+	// Setup a timer for blinking the cursor
+	cursor_timer := xev.Timer.init()!
+	defer {
+		if !init_ok {
+			cursor_timer.deinit()
+		}
+	}
+
 	// The mailbox for messaging this thread
 	mut mailbox := Mailbox.create()!
+	defer {
+		if !init_ok {
+			mailbox.destroy()
+		}
+	}
 
 	mut result := RendererThread{
-		config:      ThreadDerivedConfig.init(config)
-		renderer:    unsafe { renderer_impl }
-		state:       unsafe { state }
-		mailbox:     mailbox
-		app_redraw:  app_redraw
-		event:       sync.new_semaphore()
-		event_mutex: sync.new_mutex()
+		config:     ThreadDerivedConfig.init(config)
+		loop:       loop
+		wakeup:     wakeup_h
+		stop:       stop_h
+		render_h:   render_h
+		draw_h:     draw_h
+		draw_now:   draw_now
+		cursor_h:   cursor_timer
+		renderer:   unsafe { renderer_impl }
+		state:      unsafe { state }
+		mailbox:    mailbox
+		app_redraw: app_redraw
 	}
 	$if linux {
 		result.draw_from_app_thread = true
 	}
+	init_ok = true
 	return result
 }
 
-// Clean up the thread.
 // Release the font grid references still held by undelivered mailbox messages.
 //
 // A font grid handoff transfers ownership of the old grid's reference to this
@@ -363,27 +440,43 @@ fn (mut self RendererThread) release_pending_font_grids() {
 	}
 }
 
+// Clean up the thread. This is only safe to call once the thread
+// completes executing; the caller must join prior to this.
 pub fn (mut self RendererThread) deinit() {
+	self.stop.deinit()
+	self.wakeup.deinit()
+	self.render_h.deinit()
+	self.draw_h.deinit()
+	self.draw_now.deinit()
+	self.cursor_h.deinit()
+	self.loop.deinit()
+
 	// Nothing can possibly access the mailbox anymore, so hand back anything
 	// it still owns before destroying it.
 	self.release_pending_font_grids()
 	unsafe {
 		self.mailbox.destroy()
-		self.event.destroy()
-		self.event_mutex.destroy()
 	}
 }
 
 // The main entrypoint for the thread.
 pub fn (mut self RendererThread) thread_main() {
-	self.thread_main_inner() or {}
+	// Call child function so we can use errors...
+	self.thread_main_() or {
+		// In the future, we should expose this on the thread struct.
+		eprintln('error in renderer err=${err}')
+	}
 }
 
-fn (mut self RendererThread) thread_main_inner() ! {
+fn (mut self RendererThread) thread_main_() ! {
+	// Right now, on Darwin, `std.Thread.setName` can only name the current
+	// thread, and we have no way to get the current thread from within it,
+	// so instead we use this code to name the thread instead.
 	$if macos {
 		internal_os.set_thread_name('renderer')
 	}
 
+	// Setup our crash metadata
 	crash.set_thread_state(crash.ThreadState{
 		kind:    .renderer
 		surface: self.renderer.surface_mailbox.user_data
@@ -392,94 +485,108 @@ fn (mut self RendererThread) thread_main_inner() ! {
 		crash.clear_thread_state()
 	}
 
+	// Setup our thread QoS
 	self.set_qos_class()
 
-	// Run the renderer lifecycle hooks on the renderer thread. The loop hook
-	// installs platform event sources such as macOS CVDisplayLink.
+	// Run our loop start/end callbacks if the renderer cares.
 	self.renderer.loop_enter(self)!
 	defer {
 		self.renderer.loop_exit()
 	}
+
+	// Run our thread start/end callbacks. This is important because some
+	// renderers have to do per-thread setup. For example, OpenGL has to set
+	// some thread-local state since that is how it works.
 	self.renderer.thread_enter()!
 	defer {
 		self.renderer.thread_exit()
 	}
 
-	// Start blinking the cursor and arm the animation timer exactly as the
-	// xev-backed renderer thread does.
-	now := time.sys_mono_now()
-	self.cursor_blink_active = true
-	self.next_cursor_blink_at = now + cursor_blink_interval()
+	// Start the async handlers
+	self.wakeup.wait(mut self.loop, &self.wakeup_c, self, renderer_thread_wakeup_callback)
+	self.stop.wait(mut self.loop, &self.stop_c, self, renderer_thread_stop_callback)
+	self.draw_now.wait(mut self.loop, &self.draw_now_c, self, renderer_thread_draw_now_callback)
 
+	// Send an initial wakeup message so that we render right away.
+	self.wakeup.notify()!
+
+	// Start blinking the cursor.
+	self.cursor_h.run(mut self.loop, &self.cursor_c, cursor_blink_interval(), self,
+		renderer_thread_cursor_timer_callback)
+
+	// Start the draw timer
 	self.sync_draw_timer()
 
-	// Ghostty queues an initial async wakeup so the first iteration drains
-	// messages and renders immediately.
-	self.request_wakeup()
-
-	for {
-		timeout := self.next_timer_timeout(time.sys_mono_now())
-		if timeout < 0 {
-			self.event.wait()
-		} else if timeout > 0 {
-			_ = self.event.timed_wait(timeout)
-		}
-
-		stop, wakeup, draw_now_count := self.take_pending_events()
-		if stop {
-			break
-		}
-		if wakeup {
-			self.drain_mailbox()!
-			self.render_callback()
-		}
-		for _ in 0 .. draw_now_count {
-			self.draw_frame(true)
-		}
-
-		current := time.sys_mono_now()
-		if self.cursor_blink_active && current >= self.next_cursor_blink_at {
-			self.next_cursor_blink_at = current + cursor_blink_interval()
-			self.cursor_timer_callback()
-		}
-		if self.draw_timer_armed && current >= self.next_draw_at {
-			self.draw_timer_callback()
-		}
-	}
-
-	self.draw_active = false
-	self.draw_timer_armed = false
-	self.cursor_blink_active = false
+	// Run
+	self.loop.run(.until_done)!
 }
 
-// Sync the draw timer state based on configuration and focus.
-fn (mut self RendererThread) sync_draw_timer() {
-	mut active := false
+fn (self &RendererThread) set_qos_class() {
+	// Thread QoS classes are only relevant on macOS.
+	$if macos {
+		class := if !self.flags.visible() {
+			// If we aren't visible (our view is fully occluded) then we
+			// always drop our rendering priority down because it's just
+			// mostly wasted work.
+			//
+			// The renderer itself should be doing this as well (for example
+			// Metal will stop our DisplayLink) but this also helps with
+			// general forced updates and CPU usage i.e. a rebuild cells call.
+			internal_os.QosClass.utility
+		} else if !self.flags.focused() {
+			// If we're not focused, but we're visible, then we set a higher
+			// than default priority because framerates still matter but it isn't
+			// as important as when we're focused.
+			internal_os.QosClass.user_initiated
+		} else {
+			// We are focused and visible, we are the definition of user interactive.
+			internal_os.QosClass.user_interactive
+		}
 
-	// If our renderer supports animations and has them, then we
-	// always have a draw timer.
-	if self.renderer.has_animations() {
-		active = true
+		internal_os.set_qos_class(class) or { eprintln('error setting QoS class err=${err}') }
 	}
+}
 
-	// If our config says to always animate, we do so.
-	if !active {
+fn (mut self RendererThread) sync_draw_timer() {
+	skip: for {
+		// If our renderer supports animations and has them, then we
+		// always have a draw timer.
+		if self.renderer.has_animations() {
+			break skip
+		}
+
+		// If our config says to always animate, we do so.
 		match self.config.custom_shader_animation {
+			// Always animate
 			.always {
-				active = true
+				break skip
 			}
+			// Only when focused
 			.true_ {
-				active = self.flags.focused()
+				if self.flags.focused() {
+					break skip
+				}
 			}
+			// Never animate
 			.false_ {}
 		}
+
+		// We're skipping the draw timer. Stop it on the next iteration.
+		self.draw_active = false
+		return
 	}
 
-	self.draw_active = active
-	if active && !self.draw_timer_armed {
-		self.draw_timer_armed = true
-		self.next_draw_at = time.sys_mono_now() + draw_interval_ns()
+	// Set our active state so it knows we're running. We set this before
+	// even checking the active state in case we have a pending shutdown.
+	self.draw_active = true
+
+	// If our draw timer is already active, then we don't have to do anything.
+	if self.draw_c.state() == .active {
+		return
 	}
+
+	// Start the timer which loops
+	self.draw_h.run(mut self.loop, &self.draw_c, draw_interval, self, renderer_thread_draw_callback)
 }
 
 // Drain the mailbox.
@@ -505,15 +612,30 @@ fn (mut self RendererThread) drain_mailbox() ! {
 				panic('crash request, crashing intentionally')
 			}
 			VisibleMessage {
+				// If our state didn't change we do nothing.
 				if self.flags.visible() != msg.visible {
+					// Set our visible state
 					self.flags.set_visible(msg.visible)
-					$if macos {
-						self.set_qos_class()
-					}
+
+					// Visibility affects our QoS class
+					self.set_qos_class()
+
+					// If we became visible then we immediately trigger a draw.
+					// We don't need to update frame data because that should
+					// still be happening.
 					if msg.visible {
 						self.draw_frame(false)
 					}
+
+					// Notify the renderer so it can update any state.
 					self.renderer.set_visible(msg.visible)
+
+					// Note that we're explicitly today not stopping any
+					// cursor timers, draw timers, etc. These things have very
+					// little resource cost and properly maintaining their active
+					// state across different transitions is going to be bug-prone,
+					// so its easier to just let them keep firing and have them
+					// check the visible state themselves to control their behavior.
 				}
 			}
 			FocusMessage {
@@ -521,9 +643,9 @@ fn (mut self RendererThread) drain_mailbox() ! {
 				if self.flags.focused() != msg.focused {
 					// Set our state
 					self.flags.set_focused(msg.focused)
-					$if macos {
-						self.set_qos_class()
-					}
+
+					// Focus affects our QoS class
+					self.set_qos_class()
 
 					// Set it on the renderer
 					self.renderer.set_focus(msg.focused)!
@@ -532,25 +654,27 @@ fn (mut self RendererThread) drain_mailbox() ! {
 					self.sync_draw_timer()
 
 					if !msg.focused {
-						if self.cursor_blink_active {
-							self.cursor_blink_active = false
+						// If we're not focused, then we stop the cursor blink
+						if self.cursor_c.state() == .active && self.cursor_c_cancel.state() == .dead {
+							self.cursor_h.cancel(mut self.loop, &self.cursor_c, &self.cursor_c_cancel,
+								unsafe { nil }, renderer_thread_cursor_cancel_callback)
 						}
 					} else {
 						// If we're focused, we immediately show the cursor again
 						// and then restart the timer.
-						if !self.cursor_blink_active {
+						if self.cursor_c.state() != .active {
 							self.flags.set_cursor_blink_visible(true)
-							self.cursor_blink_active = true
-							self.next_cursor_blink_at = time.sys_mono_now() +
-								cursor_blink_interval()
+							self.cursor_h.run(mut self.loop, &self.cursor_c, cursor_blink_interval(),
+								self, renderer_thread_cursor_timer_callback)
 						}
 					}
 				}
 			}
 			ResetCursorBlinkMessage {
 				self.flags.set_cursor_blink_visible(true)
-				if self.cursor_blink_active {
-					self.next_cursor_blink_at = time.sys_mono_now() + cursor_blink_interval()
+				if self.cursor_c.state() == .active {
+					self.cursor_h.reset(mut self.loop, &self.cursor_c, &self.cursor_c_cancel,
+						cursor_blink_interval(), self, renderer_thread_cursor_timer_callback)
 				}
 			}
 			FontGridMessage {
@@ -562,11 +686,16 @@ fn (mut self RendererThread) drain_mailbox() ! {
 				self.renderer.set_screen_size(msg.size)
 			}
 			ChangeConfigMessage {
-				self.change_config(msg.thread_config)
+				self.change_config(msg.thread_config)!
 				self.renderer.change_config(msg.renderer_config)!
+
+				// Stop and start the draw timer to capture the new
+				// hasAnimations value.
 				self.sync_draw_timer()
 			}
 			SearchViewportMatchesMessage {
+				// Note we don't free the new value because we expect our
+				// allocators to match.
 				for mut old in self.renderer.search_matches {
 					old.deinit()
 				}
@@ -574,6 +703,8 @@ fn (mut self RendererThread) drain_mailbox() ! {
 				self.renderer.search_matches_dirty = true
 			}
 			SearchSelectedMatchMessage {
+				// Note we don't free the new value because we expect our
+				// allocators to match.
 				if mut old := self.renderer.search_selected_match {
 					old.deinit()
 				}
@@ -590,22 +721,7 @@ fn (mut self RendererThread) drain_mailbox() ! {
 	}
 }
 
-// Apply the same visibility/focus priority policy as Ghostty's renderer
-// thread. This only exists on Darwin at compile time.
-fn (self &RendererThread) set_qos_class() {
-	$if macos {
-		class := if !self.flags.visible() {
-			internal_os.QosClass.utility
-		} else if !self.flags.focused() {
-			internal_os.QosClass.user_initiated
-		} else {
-			internal_os.QosClass.user_interactive
-		}
-		internal_os.set_qos_class(class) or {}
-	}
-}
-
-fn (mut self RendererThread) change_config(config &ThreadDerivedConfig) {
+fn (mut self RendererThread) change_config(config &ThreadDerivedConfig) ! {
 	self.config = *config
 }
 
@@ -626,124 +742,174 @@ fn (mut self RendererThread) draw_frame(now bool) {
 	if self.draw_from_app_thread {
 		self.app_redraw.notify() or {}
 	} else {
-		self.renderer.draw_frame(false) or {}
+		self.renderer.draw_frame(false) or { eprintln('error drawing err=${err}') }
 	}
 }
 
-// Render callback - updates frame data and draws.
-fn (mut self RendererThread) render_callback() {
-	if self.state == unsafe { nil } || self.state.terminal_ == unsafe { nil } {
-		return
+fn renderer_thread_wakeup_callback(self_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorKind) xev.CallbackAction {
+	if err := r {
+		eprintln('error in wakeup err=${err}')
+		return .rearm
 	}
-	// Terminal state is shared with termio. Keep the same critical section as
-	// Ghostty while rebuilding the renderer's immutable frame snapshot.
-	if self.state.mutex != unsafe { nil } {
-		self.state.mutex.lock()
-		self.renderer.update_frame(self.state, self.flags.cursor_blink_visible()) or {}
-		self.state.mutex.unlock()
-	} else {
-		self.renderer.update_frame(self.state, self.flags.cursor_blink_visible()) or {}
+
+	mut t := unsafe { &RendererThread(self_) }
+
+	// When we wake up, we check the mailbox. Mailbox producers should
+	// wake up our thread after publishing.
+	t.drain_mailbox() or { eprintln('error draining mailbox err=${err}') }
+
+	// Render immediately
+	_ = renderer_thread_render_callback(t, unsafe { nil }, unsafe { nil }, none)
+
+	// The below is not used anymore but if we ever want to introduce
+	// a configuration to introduce a delay to coalesce renders, we can
+	// use this.
+	//
+	// // If the timer is already active then we don't have to do anything.
+	// if (t.render_c.state() == .active) return .rearm;
+	//
+	// // Timer is not active, let's start it
+	// t.render_h.run(
+	//     &t.loop,
+	//     &t.render_c,
+	//     10,
+	//     Thread,
+	//     t,
+	//     renderCallback,
+	// );
+
+	return .rearm
+}
+
+fn renderer_thread_draw_now_callback(self_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorKind) xev.CallbackAction {
+	if err := r {
+		eprintln('error in draw now err=${err}')
+		return .rearm
+	}
+
+	// Draw immediately
+	mut t := unsafe { &RendererThread(self_) }
+	t.draw_frame(true)
+
+	return .rearm
+}
+
+fn renderer_thread_draw_callback(self_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorKind) xev.CallbackAction {
+	if _ := r {
+		panic('unreachable')
+	}
+	if self_ == unsafe { nil } {
+		// This shouldn't happen so we log it.
+		eprintln('render callback fired without data set')
+		return .disarm
+	}
+	mut t := unsafe { &RendererThread(self_) }
+
+	// Draw
+	t.draw_frame(false)
+
+	// Only continue if we're still active
+	if t.draw_active {
+		t.draw_h.run(mut t.loop, &t.draw_c, draw_interval, t, renderer_thread_draw_callback)
+	}
+
+	return .disarm
+}
+
+fn renderer_thread_render_callback(self_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorKind) xev.CallbackAction {
+	if _ := r {
+		panic('unreachable')
+	}
+	if self_ == unsafe { nil } {
+		// This shouldn't happen so we log it.
+		eprintln('render callback fired without data set')
+		return .disarm
+	}
+	mut t := unsafe { &RendererThread(self_) }
+
+	// Update our frame data
+	t.renderer.update_frame(t.state, t.flags.cursor_blink_visible()) or {
+		eprintln('error rendering err=${err}')
 	}
 
 	// Draw
-	self.draw_frame(false)
+	t.draw_frame(false)
+
+	return .disarm
 }
 
-// Cursor blink timer callback. This is fired by the blink timer on each
-// interval. It toggles the cursor's visibility and wakes up the renderer.
-fn (mut self RendererThread) cursor_timer_callback() {
-	// If the blink timer isn't active (e.g. we lost focus), do nothing.
-	if !self.cursor_blink_active {
-		return
+fn renderer_thread_cursor_timer_callback(self_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorKind) xev.CallbackAction {
+	if err := r {
+		match err {
+			// This is sent when our timer is canceled. That's fine.
+			.canceled {
+				return .disarm
+			}
+			else {
+				eprintln('error in cursor timer callback err=${err}')
+				panic('unreachable')
+			}
+		}
 	}
 
-	// Toggle the cursor visibility state.
-	self.flags.toggle_cursor_blink_visible()
-
-	// Wake up the renderer so it can redraw with the new blink state.
-	self.request_wakeup()
-}
-
-// Draw once for an armed timer completion and rearm only when animation is
-// still active. A disabled timer therefore fires its already-pending callback.
-fn (mut self RendererThread) draw_timer_callback() {
-	self.draw_timer_armed = false
-	self.draw_frame(false)
-	if self.draw_active {
-		self.draw_timer_armed = true
-		self.next_draw_at = time.sys_mono_now() + draw_interval_ns()
+	if self_ == unsafe { nil } {
+		// This shouldn't happen so we log it.
+		eprintln('render callback fired without data set')
+		return .disarm
 	}
+	mut t := unsafe { &RendererThread(self_) }
+
+	t.flags.toggle_cursor_blink_visible()
+	t.wakeup.notify() or {}
+
+	t.cursor_h.run(mut t.loop, &t.cursor_c, cursor_blink_interval(), t, renderer_thread_cursor_timer_callback)
+	return .disarm
 }
 
-// wakeup coalesces frame rebuilds until the render loop observes the request.
-pub fn (mut self RendererThread) wakeup() {
-	self.request_wakeup()
-}
-
-// draw_now queues a draw that does not rebuild terminal frame data.
-pub fn (mut self RendererThread) draw_now() {
-	self.event_mutex.lock()
-	self.draw_now_requested++
-	self.event_mutex.unlock()
-	self.event.post()
-}
-
-// stop ends the render loop on its next iteration.
-pub fn (mut self RendererThread) stop() {
-	self.event_mutex.lock()
-	self.stop_requested = true
-	self.event_mutex.unlock()
-	self.event.post()
-}
-
-fn (mut self RendererThread) request_wakeup() {
-	self.event_mutex.lock()
-	should_post := !self.wakeup_requested
-	self.wakeup_requested = true
-	self.event_mutex.unlock()
-	if should_post {
-		self.event.post()
+fn renderer_thread_cursor_cancel_callback(_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorKind) xev.CallbackAction {
+	// This makes it easier to work across platforms where different platforms
+	// support different sets of errors, so we just unify it.
+	if err := r {
+		match err {
+			.canceled {} // success
+			.not_found {} // completed before it could cancel
+			else {
+				eprintln('error in cursor cancel callback err=${err}')
+				panic('unreachable')
+			}
+		}
 	}
+
+	return .disarm
 }
 
-fn (mut self RendererThread) take_pending_events() (bool, bool, u32) {
-	self.event_mutex.lock()
-	stop := self.stop_requested
-	wakeup := self.wakeup_requested
-	draw_now_count := self.draw_now_requested
-	self.wakeup_requested = false
-	self.draw_now_requested = 0
-	self.event_mutex.unlock()
-	return stop, wakeup, draw_now_count
+// fn prepFrameCallback(h: *libuv.Prepare) void {
+//     _ = h;
+//
+//     tracy.frameMark();
+// }
+
+fn renderer_thread_stop_callback(self_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorKind) xev.CallbackAction {
+	if _ := r {
+		panic('unreachable')
+	}
+	mut t := unsafe { &RendererThread(self_) }
+	t.loop.stop()
+	return .disarm
 }
 
-fn (self &RendererThread) next_timer_timeout(now u64) i64 {
-	mut deadline := u64(0)
-	if self.cursor_blink_active {
-		deadline = self.next_cursor_blink_at
-	}
-	if self.draw_timer_armed && (deadline == 0 || self.next_draw_at < deadline) {
-		deadline = self.next_draw_at
-	}
-	if deadline == 0 {
-		return -1
-	}
-	if deadline <= now {
-		return 0
-	}
-	return i64(deadline - now)
-}
-
-// Returns the interval for the blinking cursor in nanoseconds.
+// Returns the interval for the blinking cursor in milliseconds.
 fn cursor_blink_interval() u64 {
-	return cursor_blink_interval_for_valgrind(internal_os.running_on_valgrind())
-}
+	if internal_os.running_on_valgrind() > 0 {
+		// If we're running under Valgrind, the cursor blink adds enough
+		// churn that it makes some stalls annoying unless you're on a
+		// super powerful computer, so we delay it.
+		//
+		// This is a hack, we should change some of our cursor timer
+		// logic to be more efficient:
+		// https://github.com/ghostty-org/ghostty/issues/8003
+		return cursor_blink_interval_ms * 5
+	}
 
-fn cursor_blink_interval_for_valgrind(level usize) u64 {
-	multiplier := if level > 0 { u64(5) } else { u64(1) }
-	return cursor_blink_interval_ms * multiplier * u64(time.millisecond)
-}
-
-fn draw_interval_ns() u64 {
-	return draw_interval * u64(time.millisecond)
+	return cursor_blink_interval_ms
 }

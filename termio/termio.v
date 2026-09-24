@@ -183,6 +183,7 @@ import renderer
 import sync
 import terminal
 import time
+import xev
 
 const log_tag_termio = 'io_exec'
 
@@ -205,7 +206,7 @@ pub mut:
 	renderer_state &renderer.State = unsafe { nil }
 
 	// A handle to wake up the renderer.
-	renderer_wakeup renderer.Wakeup
+	renderer_wakeup xev.Async
 
 	// The mailbox for notifying the renderer of things.
 	renderer_mailbox &renderer.Mailbox = unsafe { nil }
@@ -364,7 +365,7 @@ pub:
 
 	// A handle to wake up the renderer. This hints to the renderer that that
 	// a repaint should happen.
-	renderer_wakeup renderer.Wakeup
+	renderer_wakeup xev.Async
 
 	// The mailbox for renderer messages.
 	renderer_mailbox &renderer.Mailbox = unsafe { nil }

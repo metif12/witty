@@ -875,14 +875,7 @@ fn test_rebuild_row_shapes_and_renders_text() ! {
 	// The renderer loop owns CVDisplayLink lifecycle. Its callback only queues
 	// draw-now work onto the renderer thread; it never renders on CoreVideo's
 	// callback thread.
-	mut render_thread := RendererThread{
-		event:       sync.new_semaphore()
-		event_mutex: sync.new_mutex()
-	}
-	defer {
-		render_thread.event.destroy()
-		render_thread.event_mutex.destroy()
-	}
+	mut render_thread := RendererThread{}
 	render.loop_enter(&render_thread)!
 	assert render.has_vsync()
 	render.loop_exit()

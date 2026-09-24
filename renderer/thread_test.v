@@ -1,10 +1,9 @@
 module renderer
 
-import sync
-import time
 import configpkg
 import datastruct
 import internal_os
+import xev
 
 struct RedrawCapture {
 mut:
@@ -49,64 +48,77 @@ fn test_renderer_mailbox_is_bounded_and_fifo() {
 	assert mailbox.pop() == none
 }
 
-fn test_renderer_thread_async_event_semantics() {
-	mut render_thread := RendererThread{
-		event: sync.new_semaphore()
-		event_mutex: sync.new_mutex()
+// renderer_test_thread builds a thread with live xev handles and no OS
+// thread, so tests can drive the loop directly.
+fn renderer_test_thread(render &Renderer, config ThreadDerivedConfig, flags ThreadFlags) !RendererThread {
+	return RendererThread{
+		loop:     xev.Loop.init(xev.Options{})!
+		wakeup:   xev.Async.init()!
+		stop:     xev.Async.init()!
+		render_h: xev.Timer.init()!
+		draw_h:   xev.Timer.init()!
+		draw_now: xev.Async.init()!
+		cursor_h: xev.Timer.init()!
+		renderer: unsafe { render }
+		mailbox:  Mailbox.create()!
+		config:   config
+		flags:    flags
 	}
-	defer {
-		render_thread.event.destroy()
-		render_thread.event_mutex.destroy()
-	}
-
-	render_thread.wakeup()
-	render_thread.wakeup()
-	render_thread.draw_now()
-	render_thread.draw_now()
-	render_thread.stop()
-
-	stop, wakeup, draws := render_thread.take_pending_events()
-	assert stop
-	assert wakeup
-	assert draws == 2
-
-	_, wakeup_again, draws_again := render_thread.take_pending_events()
-	assert !wakeup_again
-	assert draws_again == 0
 }
 
-fn test_display_link_callback_queues_draw_now() {
-	mut render_thread := RendererThread{
-		event: sync.new_semaphore()
-		event_mutex: sync.new_mutex()
+struct RendererTestAsyncCount {
+mut:
+	count int
+}
+
+fn renderer_test_count_async(ud voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorKind) xev.CallbackAction {
+	if _ := r {
+		panic('unreachable')
 	}
+	mut counter := unsafe { &RendererTestAsyncCount(ud) }
+	counter.count++
+	return .rearm
+}
+
+fn test_display_link_callback_notifies_draw_now() ! {
+	mut render := Renderer{}
+	mut render_thread := renderer_test_thread(&render, ThreadDerivedConfig{}, ThreadFlags{})!
 	defer {
-		render_thread.event.destroy()
-		render_thread.event_mutex.destroy()
+		render_thread.deinit()
 	}
+	mut counter := RendererTestAsyncCount{}
+	render_thread.draw_now.wait(mut render_thread.loop, &render_thread.draw_now_c, &counter,
+		renderer_test_count_async)
+	render_thread.loop.run(.no_wait)!
+	assert counter.count == 0
 
 	mut flags_out := u64(0)
-	assert renderer_display_link_callback(unsafe { nil }, unsafe { nil }, unsafe { nil }, 0, &flags_out, voidptr(&render_thread)) == 0
-	_, _, draws := render_thread.take_pending_events()
-	assert draws == 1
+	assert renderer_display_link_callback(unsafe { nil }, unsafe { nil }, unsafe { nil }, 0, &flags_out, voidptr(&render_thread.draw_now)) == 0
+	render_thread.loop.run(.no_wait)!
+	assert counter.count == 1
 }
 
-fn test_renderer_thread_timer_deadlines() {
-	assert cursor_blink_interval_for_valgrind(0) == 600 * u64(time.millisecond)
-	assert cursor_blink_interval_for_valgrind(1) == 3_000 * u64(time.millisecond)
-	assert cursor_blink_interval_for_valgrind(2) == 3_000 * u64(time.millisecond)
-	assert cursor_blink_interval() == cursor_blink_interval_for_valgrind(internal_os.running_on_valgrind())
-	assert draw_interval_ns() == 8 * u64(time.millisecond)
-
-	render_thread := RendererThread{
-		cursor_blink_active: true
-		next_cursor_blink_at: 2_000
-		draw_active: true
-		draw_timer_armed: true
-		next_draw_at: 1_000
+fn test_renderer_thread_stop_callback_ends_loop() ! {
+	mut render := Renderer{}
+	mut render_thread := renderer_test_thread(&render, ThreadDerivedConfig{}, ThreadFlags{})!
+	defer {
+		render_thread.deinit()
 	}
-	assert render_thread.next_timer_timeout(500) == 500
-	assert render_thread.next_timer_timeout(1_000) == 0
+	render_thread.stop.wait(mut render_thread.loop, &render_thread.stop_c, &render_thread,
+		renderer_thread_stop_callback)
+	render_thread.stop.notify()!
+	render_thread.loop.run(.until_done)!
+	assert render_thread.loop.stopped()
+}
+
+fn test_renderer_thread_cursor_blink_interval() {
+	assert cursor_blink_interval_ms == 600
+	assert draw_interval == 8
+	if internal_os.running_on_valgrind() > 0 {
+		assert cursor_blink_interval() == 3_000
+	} else {
+		assert cursor_blink_interval() == 600
+	}
 }
 
 fn test_renderer_thread_flags_match_source_defaults() {
@@ -127,47 +139,48 @@ fn test_renderer_thread_derived_config_retains_shader_animation_type() {
 	}
 }
 
-fn test_renderer_thread_disabled_draw_keeps_armed_completion() {
+fn test_renderer_thread_disabled_draw_keeps_armed_completion() ! {
 	mut render := Renderer{}
 	mut flags := ThreadFlags{}
 	flags.set_visible(false)
-	mut render_thread := RendererThread{
-		renderer: &render
-		config: ThreadDerivedConfig{
-			custom_shader_animation: .false_
-		}
-		flags: flags
-		draw_active: true
-		draw_timer_armed: true
-		next_draw_at: 123
+	mut render_thread := renderer_test_thread(&render, ThreadDerivedConfig{
+		custom_shader_animation: .always
+	}, flags)!
+	defer {
+		render_thread.deinit()
 	}
 	render_thread.sync_draw_timer()
-	assert !render_thread.draw_active
-	assert render_thread.draw_timer_armed
-	assert render_thread.next_draw_at == 123
+	assert render_thread.draw_active
+	assert render_thread.draw_c.state() == .active
 
-	render_thread.draw_timer_callback()
-	assert !render_thread.draw_timer_armed
+	// Disabling the animation stops the timer only on its next iteration.
+	render_thread.config.custom_shader_animation = .false_
+	render_thread.sync_draw_timer()
+	assert !render_thread.draw_active
+	assert render_thread.draw_c.state() == .active
+
+	render_thread.loop.run(.until_done)!
+	assert render_thread.draw_c.state() == .dead
 }
 
-fn test_renderer_thread_active_draw_rearms_completion() {
+fn test_renderer_thread_active_draw_rearms_completion() ! {
 	mut render := Renderer{}
 	mut flags := ThreadFlags{}
 	flags.set_visible(false)
-	mut render_thread := RendererThread{
-		renderer: &render
-		config: ThreadDerivedConfig{
-			custom_shader_animation: .always
-		}
-		flags: flags
-		draw_active: true
-		draw_timer_armed: true
-		next_draw_at: 123
+	mut render_thread := renderer_test_thread(&render, ThreadDerivedConfig{
+		custom_shader_animation: .always
+	}, flags)!
+	defer {
+		render_thread.deinit()
 	}
-	before := time.sys_mono_now()
-	render_thread.draw_timer_callback()
-	assert render_thread.draw_timer_armed
-	assert render_thread.next_draw_at >= before + draw_interval_ns()
+	render_thread.sync_draw_timer()
+	// An already active draw timer is not started twice.
+	render_thread.sync_draw_timer()
+	assert render_thread.draw_c.state() == .active
+
+	// The callback rearms while the animation stays active.
+	render_thread.loop.run(.once)!
+	assert render_thread.draw_c.state() == .active
 }
 
 fn test_renderer_thread_routes_app_thread_draws_through_redraw_callback() {

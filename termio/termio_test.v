@@ -9,6 +9,7 @@ import renderer
 import sync
 import terminal
 import time
+import xev
 
 fn mailbox_send_forever_for_test(mailbox_ptr voidptr, done chan bool) {
 	mut mailbox := unsafe { &Mailbox(mailbox_ptr) }
@@ -21,9 +22,13 @@ mut:
 	count int
 }
 
-fn termio_wakeup_probe(data voidptr) {
-	mut probe := unsafe { &TermioWakeupProbe(data) }
+fn termio_wakeup_probe(ud voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorKind) xev.CallbackAction {
+	if _ := r {
+		panic('unreachable')
+	}
+	mut probe := unsafe { &TermioWakeupProbe(ud) }
 	probe.count++
+	return .rearm
 }
 
 fn make_termio_opts() TermioOpts {
@@ -38,6 +43,7 @@ fn make_termio_opts() TermioOpts {
 		renderer_state: &renderer.State{
 			mutex: sync.new_mutex()
 		}
+		renderer_wakeup: xev.Async.init() or { panic(err) }
 		renderer_mailbox: renderer.Mailbox.create() or { panic(err) }
 	}
 }
@@ -536,18 +542,27 @@ fn test_thread_start_error_explains_invalid_input() {
 	assert text.contains('ensure that all the path values exist and are readable.')
 }
 
-fn test_process_output_notifies_callback_renderer_wakeup() {
+fn test_process_output_notifies_renderer_wakeup() ! {
 	mut probe := TermioWakeupProbe{}
+	mut loop := xev.Loop.init(xev.Options{})!
+	defer {
+		loop.deinit()
+	}
+	mut wakeup := xev.Async.init()!
+	defer {
+		wakeup.deinit()
+	}
+	c := &xev.Completion{}
+	wakeup.wait(mut loop, c, &probe, termio_wakeup_probe)
+
 	mut tio := Termio{}
 	tio.init(TermioOpts{
 		...make_termio_opts()
-		renderer_wakeup: renderer.Wakeup{
-			user_data: &probe
-			notify_fn: termio_wakeup_probe
-		}
+		renderer_wakeup: wakeup
 	})!
 	defer { tio.deinit() }
 
 	tio.process_output('hello'.bytes())
+	loop.run(.no_wait)!
 	assert probe.count == 1
 }

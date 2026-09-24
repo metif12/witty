@@ -14,6 +14,7 @@ import osc
 import crash
 import oniguruma
 import renderer as rendererpkg
+import xev
 
 fn test_surface_private_source_tag_layouts_and_ordinals() {
 	assert sizeof(MouseReportAction) == 1
@@ -100,8 +101,7 @@ fn make_test_surface() Surface {
 fn make_test_renderer_thread() rendererpkg.RendererThread {
 	return rendererpkg.RendererThread{
 		mailbox: rendererpkg.Mailbox.create() or { panic(err) }
-		event: sync.new_semaphore()
-		event_mutex: sync.new_mutex()
+		wakeup:  xev.Async.init() or { panic(err) }
 	}
 }
 

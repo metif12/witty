@@ -761,6 +761,7 @@ import os
 import sync
 import wuffs.jpeg as wuffs_jpeg
 import wuffs.png as wuffs_png
+import xev
 
 fn C.GC_get_stack_base(stack_base voidptr) int
 
@@ -3373,23 +3374,18 @@ pub type Preedit = RenderPreedit
 
 pub type PreeditCodepoint = RenderPreeditCodepoint
 
-// Wakeup is the producer-side handle Ghostty passes to termio. It targets the
-// real renderer thread and preserves wakeup coalescing there.
+// Wakeup is the renderer thread's App.Mailbox redraw_surface push used when
+// the apprt must draw from the app thread (GTK). The renderer module cannot
+// import the core App, so the surface supplies the push as a callback.
 pub type WakeupFn = fn (voidptr)
 
 pub struct Wakeup {
 pub:
-	thread    &RendererThread = unsafe { nil }
-	user_data voidptr         = unsafe { nil }
-	notify_fn WakeupFn        = unsafe { nil }
+	user_data voidptr  = unsafe { nil }
+	notify_fn WakeupFn = unsafe { nil }
 }
 
 pub fn (w Wakeup) notify() ! {
-	if w.thread != unsafe { nil } {
-		mut render_thread := unsafe { w.thread }
-		render_thread.wakeup()
-		return
-	}
 	if w.notify_fn != unsafe { nil } {
 		w.notify_fn(w.user_data)
 	}
@@ -3441,7 +3437,7 @@ pub fn (mut r Renderer) loop_enter(render_thread &RendererThread) ! {
 		return
 	}
 	r.display_link.set_output_callback(voidptr(renderer_display_link_callback),
-		voidptr(render_thread))!
+		voidptr(&render_thread.draw_now))!
 	r.display_link.start() or {}
 }
 
@@ -3525,7 +3521,7 @@ fn renderer_display_link_callback(display_link voidptr, now voidptr, output_time
 	if context == unsafe { nil } {
 		return 0
 	}
-	mut render_thread := unsafe { &RendererThread(context) }
-	render_thread.draw_now()
+	draw_now := unsafe { &xev.Async(context) }
+	draw_now.notify() or { eprintln('error notifying draw_now err=${err}') }
 	return 0
 }

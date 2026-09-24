@@ -645,7 +645,7 @@ fn bridge_surface_display_id(ptr voidptr, display_id u32) {
 	_ = self.surface.renderer_thread.mailbox.push(renderer.RendererMessage(renderer.MacosDisplayIdMessage{
 		display_id: display_id
 	}), datastruct.blocking_queue_forever)
-	self.surface.renderer_thread.wakeup()
+	self.surface.renderer_thread.wakeup.notify() or {}
 }
 
 fn bridge_surface_quicklook_font(ptr voidptr) voidptr {
