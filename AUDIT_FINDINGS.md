@@ -388,6 +388,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | libxev dependency | Ghostty's renderer, IO, search, and CoreText release threads run on libxev, but Witty did not translate libxev and emulated each loop by hand (semaphores with monotonic deadlines, a 1 ms polling loop, V channels with a timed `select`). | Translate libxev (pinned 34fa508) into the `xev` module: the kqueue, epoll, and io_uring backends (with Zig's `std.os.linux.IoUring` and the `std.posix` wrappers they call), the thread pool, intrusive queues and heap, the Async/Timer/Process/Stream watchers for each backend, the Darwin default API, and the Linux dynamic API, with the upstream tests on macOS and Linux. File/TCP/UDP and the WASI/IOCP backends are not translated because Ghostty does not use them. |
 | renderer thread event loop | The renderer thread waited on a semaphore and polled timer deadlines instead of running Ghostty's xev loop with wakeup, stop, and draw-now asyncs and render, draw, and cursor timers. Losing focus never cancelled the cursor-blink timer, `reset_cursor_blink` restarted a separate deadline instead of resetting the timer completion, and the display link called into the thread object instead of notifying `draw_now`. | Port `renderer/Thread.zig` onto `xev`: the loop, handles, completions, and callbacks, cursor cancellation through `cursor_c_cancel`, the display link notifying `&thread.draw_now`, and termio and the surface notifying the renderer through the `xev.Async` handles. |
 | termio writer thread and exec backend | The IO thread polled its mailbox every millisecond, and resize coalescing, synchronized-output reset, selection scrolling, and termios polling were deadlines on that loop. Exec wrote to the pty with blocking `write` calls and watched the child on a dedicated `waitpid` thread (the source of the earlier shutdown `ECHILD` race). The termio mailbox recorded a wakeup flag instead of owning an `xev.Async`, and the handlers read backend state from `Exec` instead of the thread's `ThreadData`. | Port `termio/Thread.zig`, the SPSC `Mailbox`, and Exec's thread side: `ThreadData` (loop, backend state) threaded through every handler, coalesce, sync-reset, and scroll timers, the pidfd/kqueue `xev.Process` exit watcher, the termios timer, and queued non-blocking writes through `xev.Stream.queueWrite` with pooled requests and buffers. |
+| search thread transport | The search worker used V channels and a timed `select` instead of Ghostty's xev loop, wakeup and stop asyncs, and refresh timer. Surface producers called helper methods rather than pushing to the mailbox and notifying the wakeup. | Port the thread onto `xev` with the source's interleaved tick/`run(.no_wait)` loop, the `BlockingQueue` mailbox, and the refresh timer, and split the surface callback into `searchCallback`/`searchCallback_` so wakeup failures propagate as in Ghostty. |
 
 ## Focused behavior reviewed
 
@@ -469,11 +470,6 @@ an item here does not mean its full module has been certified yet.
   fallible only through allocation, which V does not surface, so Witty
   keeps them optional or infallible. `setup` and `setupBash`, whose home
   lookup can fail, keep the source's fallible optional result.
-- **Search-thread transport:** Ghostty's search worker is driven by xev async
-  handles/timers and exchanges tagged `Message` and `Event` unions. Witty uses
-  V channels, a timed `select`, and flat payload records with corrected compact
-  tags, so scheduling, backpressure, representation, and invalid-state space
-  remain source-external.
 - **Reduced terminal feature structure:** Witty now synthesizes
   `kitty_graphics`/`tmux_control_mode` from the Oniguruma selection and gates
   both live protocol entry points. Unlike Zig, V cannot change a sum type's

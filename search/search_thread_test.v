@@ -1,5 +1,6 @@
 module search
 
+import datastruct
 import sync
 import terminal
 import time
@@ -35,7 +36,7 @@ fn search_thread_test_callback(event Event, userdata voidptr) {
 	state.events <- event
 }
 
-fn test_search_thread_processes_messages_asynchronously() {
+fn test_search_thread_processes_messages_asynchronously() ! {
 	mut term := terminal.Terminal.init(terminal.Options{
 		cols: 20
 		rows: 2
@@ -56,7 +57,8 @@ fn test_search_thread_processes_messages_asynchronously() {
 	})!
 	thread_ := spawn worker.thread_main()
 
-	worker.push(Message.change_needle('world'.bytes()))
+	_ = worker.mailbox.push(Message.change_needle('world'.bytes()), datastruct.blocking_queue_forever)
+	worker.wakeup.notify()!
 	mut total := usize(0)
 	mut complete := false
 	for !complete {
@@ -80,7 +82,7 @@ fn test_search_thread_processes_messages_asynchronously() {
 	}
 
 	assert total == 1
-	worker.request_stop()
+	worker.stop.notify()!
 	thread_.wait()
 	quit_event := <-events.events
 	assert quit_event.kind == .quit

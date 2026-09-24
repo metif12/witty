@@ -1671,43 +1671,21 @@ pub type BindingSet = input.Set
 @[heap]
 pub struct SurfaceSearch {
 pub mut:
-	needle  string
 	state   &searchpkg.SearchThread = unsafe { nil }
 	thread_ ?thread
 }
 
-fn SurfaceSearch.init(surface &Surface) !&SurfaceSearch {
-	state := searchpkg.SearchThread.init(searchpkg.ThreadOptions{
-		mutex: surface.renderer_state.mutex
-		terminal: surface.renderer_state.terminal_
-		event_cb: surface_search_event
-		event_userdata: voidptr(surface)
-	})!
-	mut result := &SurfaceSearch{
-		state: state
-	}
-	result.thread_ = spawn result.state.thread_main()
-	return result
-}
-
-fn (mut s SurfaceSearch) change_needle(needle string) {
-	s.needle = needle
-	s.state.push(searchpkg.Message.change_needle(needle.bytes()))
-}
-
-fn (mut s SurfaceSearch) navigate(nav input.NavigateSearch) {
-	s.state.push(searchpkg.Message{
-		kind: .select_result
-		select: if nav == .next { .next } else { .prev }
-	})
-}
-
 fn (mut s SurfaceSearch) deinit() {
-	s.state.request_stop()
+	// Notify the thread to stop
+	s.state.stop.notify() or { eprintln('error notifying search thread to stop, may stall err=${err}') }
+
+	// Wait for the OS thread to quit
 	if worker := s.thread_ {
 		worker.wait()
 	}
 	s.thread_ = none
+
+	// Now it is safe to deinit the state
 	s.state.deinit()
 }
 
@@ -4183,31 +4161,47 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 		}
 		.search {
 			text := action.str_param
-			if mut s := self.search {
-				if text.len == 0 {
-					// Zero-length text means stop searching.
-					s.deinit()
-					self.search = none
-				} else {
-					s.change_needle(text)
-				}
-			} else {
-				// If we're stopping the search and had no prior search, do
-				// nothing.
+			mut s := self.search or {
+				// If we're stopping the search and we had no prior search,
+				// then there is nothing to do.
 				if text.len == 0 {
 					return false
 				}
-				mut s := SurfaceSearch.init(&self)!
-				self.search = s
-				s.change_needle(text)
+
+				// We need to assign directly to self.search because we need
+				// a stable pointer back to the thread state.
+				mut state := searchpkg.SearchThread.init(searchpkg.ThreadOptions{
+					mutex:          self.renderer_state.mutex
+					terminal:       self.renderer_state.terminal_
+					event_cb:       surface_search_event
+					event_userdata: voidptr(&self)
+				})!
+				mut init_s := &SurfaceSearch{
+					state: state
+				}
+				init_s.thread_ = spawn state.thread_main()
+				self.search = init_s
+				init_s
+			}
+
+			// Zero-length text means stop searching.
+			if text.len == 0 {
+				s.deinit()
+				self.search = none
+			} else {
+				_ = s.state.mailbox.push(searchpkg.Message.change_needle(text.bytes()),
+					datastruct.blocking_queue_forever)
+				s.state.wakeup.notify() or {}
 			}
 		}
 		.navigate_search {
-			if mut s := self.search {
-				s.navigate(unsafe { input.NavigateSearch(action.enum_param) })
-			} else {
-				return false
-			}
+			mut s := self.search or { return false }
+			nav := unsafe { input.NavigateSearch(action.enum_param) }
+			_ = s.state.mailbox.push(searchpkg.Message{
+				kind:   .select_result
+				select: if nav == .next { .next } else { .prev }
+			}, datastruct.blocking_queue_forever)
+			s.state.wakeup.notify() or {}
 		}
 		.copy_to_clipboard {
 			self.renderer_state.mutex.lock()
