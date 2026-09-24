@@ -18,7 +18,12 @@ pub const dynamic = false
 // The backend that this is. This is supplied at comptime so
 // it is up to the caller to say the right thing. This lets custom
 // implementations also "quack" like an implementation.
-pub const backend = Backend.kqueue
+//
+// An accessor because the Linux dynamic API's `backend` is a variable, and V
+// module globals cannot be read from other modules.
+pub fn backend() Backend {
+	return .kqueue
+}
 
 // A function to test if this API is available on the
 // current system.

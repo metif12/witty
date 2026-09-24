@@ -21,7 +21,7 @@ fn main_test_timer_set(ud voidptr, _ &Loop, _ &Completion, r ?ErrorKind) Callbac
 // The forwarded declarations are the kqueue backend's (api.zig's refAllDecls).
 fn test_default_api_forwards_kqueue() ! {
 	assert !dynamic
-	assert backend == .kqueue
+	assert backend() == .kqueue
 	assert available()
 
 	mut loop := Loop.init(Options{})!
