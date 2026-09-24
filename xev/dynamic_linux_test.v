@@ -15,6 +15,9 @@ fn test_dynamic_ref_all_decls() {
 	_ = sizeof(WriteBuffer)
 	_ = sizeof(WriteQueue)
 	_ = sizeof(WriteRequest)
+	_ = sizeof(Async)
+	_ = sizeof(Process)
+	_ = sizeof(Timer)
 	_ = backend()
 
 	// EnumSubset keeps the integer values of the full enum; the source builds

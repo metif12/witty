@@ -34,6 +34,11 @@ pub type WriteBuffer = DynamicWriteBuffer
 pub type WriteQueue = DynamicWriteQueue
 pub type WriteRequest = DynamicWriteRequest
 
+// Core types
+pub type Async = DynamicAsync
+pub type Process = DynamicProcess
+pub type Timer = DynamicTimer
+
 pub type Loop = DynamicLoop
 
 // Backend becomes the subset of the full xev.Backend that
