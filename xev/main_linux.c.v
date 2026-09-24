@@ -37,6 +37,7 @@ pub type WriteRequest = DynamicWriteRequest
 // Core types
 pub type Async = DynamicAsync
 pub type Process = DynamicProcess
+pub type Stream = DynamicStream
 pub type Timer = DynamicTimer
 
 pub type Loop = DynamicLoop

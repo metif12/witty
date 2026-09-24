@@ -17,6 +17,7 @@ fn test_dynamic_ref_all_decls() {
 	_ = sizeof(WriteRequest)
 	_ = sizeof(Async)
 	_ = sizeof(Process)
+	_ = sizeof(Stream)
 	_ = sizeof(Timer)
 	_ = backend()
 
