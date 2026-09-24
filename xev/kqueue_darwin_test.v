@@ -324,7 +324,7 @@ fn kqueue_test_close_zero(ud voidptr, _ &KqueueLoop, _ &KqueueCompletion, r Kque
 
 fn kqueue_test_listener(address NetAddress) !int {
 	kernel_backlog := u32(1)
-	family := unsafe { u32((&C.sockaddr(address.any())).sa_family) }
+	family := u32(unsafe { address.any_.family })
 	ln := posix_socket(family, u32(C.SOCK_STREAM) | sock_cloexec, 0)!
 	mut one := int(1)
 	posix_setsockopt(ln, C.SOL_SOCKET, u32(C.SO_REUSEADDR), unsafe { (&u8(&one)).vbytes(int(sizeof(int))) }) or {
@@ -353,7 +353,7 @@ fn test_kqueue_socket_accept_connect_send_recv_close() ! {
 	mut ln := kqueue_test_listener(address)!
 
 	// Create a TCP client socket
-	family := unsafe { u32((&C.sockaddr(address.any())).sa_family) }
+	family := u32(unsafe { address.any_.family })
 	mut client_conn := posix_socket(family, sock_nonblock | u32(C.SOCK_STREAM) | sock_cloexec,
 		0) or {
 		posix_close(ln)

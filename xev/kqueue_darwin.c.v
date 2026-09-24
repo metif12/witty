@@ -1583,8 +1583,8 @@ pub mut:
 pub struct KqueueAcceptOp {
 pub mut:
 	socket    int
-	addr      C.sockaddr
-	addr_size u32 = u32(sizeof(C.sockaddr))
+	addr      SockAddr
+	addr_size u32 = u32(sizeof(SockAddr))
 	flags     u32 = sock_cloexec
 }
 
@@ -1634,8 +1634,8 @@ pub struct KqueueRecvFromOp {
 pub mut:
 	fd        int
 	buffer    KqueueReadBuffer
-	addr      C.sockaddr
-	addr_size u32 = u32(sizeof(C.sockaddr))
+	addr      SockAddr
+	addr_size u32 = u32(sizeof(SockAddr))
 }
 
 pub struct KqueueCloseOp {

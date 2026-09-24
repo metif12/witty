@@ -17,8 +17,10 @@ module xev
 
 fn C.pread(fd int, buf voidptr, count usize, offset i64) isize
 fn C.pwrite(fd int, buf voidptr, count usize, offset i64) isize
-fn C.recvfrom(sockfd int, buf voidptr, len usize, flags int, src_addr voidptr, addrlen &u32) isize
-fn C.sendto(sockfd int, buf voidptr, len usize, flags int, dest_addr voidptr, addrlen u32) isize
+// vlib net declares recvfrom/sendto with an int result and V keeps one
+// declaration per C function, so these match it (ssize_t fits: buffers < 2 GiB).
+fn C.recvfrom(sockfd int, buf voidptr, len usize, flags int, src_addr voidptr, addrlen &u32) int
+fn C.sendto(sockfd int, buf voidptr, len usize, flags int, dest_addr voidptr, addrlen u32) int
 fn C.accept(sockfd int, addr voidptr, addrlen &u32) int
 fn C.getsockopt(sockfd int, level int, optname int, optval voidptr, optlen &u32) int
 fn C.fcntl(fd int, cmd int, arg ...voidptr) int

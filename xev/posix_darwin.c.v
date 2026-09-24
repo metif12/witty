@@ -13,18 +13,40 @@ fn posix_accept_syscall(sock int, addr voidptr, addr_size &u32, flags u32) int {
 	return C.accept(sock, addr, addr_size)
 }
 
-pub struct C.sockaddr_in {
-mut:
-	sin_len    u8
-	sin_family u8
-	sin_port   u16
-	sin_addr   C.in_addr
+// Translation of std.c.sockaddr and its in/in6/un variants for Darwin. Zig
+// declares these extern structs itself instead of importing the C headers.
+pub struct SockAddr {
+pub mut:
+	len    u8
+	family u8
+	data   [14]u8
 }
 
-// Darwin socket address structures start with their length.
-@[inline]
-fn sockaddr_in_init_len(mut sa C.sockaddr_in) {
-	sa.sin_len = u8(sizeof(C.sockaddr_in))
+pub struct SockAddrIn {
+pub mut:
+	len    u8 = u8(sizeof(SockAddrIn))
+	family u8 = u8(int(C.AF_INET))
+	port   u16
+	addr   u32
+	zero   [8]u8
+}
+
+pub struct SockAddrIn6 {
+pub mut:
+	len      u8 = u8(sizeof(SockAddrIn6))
+	family   u8 = u8(int(C.AF_INET6))
+	port     u16
+	flowinfo u32
+	addr     [16]u8
+	scope_id u32
+}
+
+// UNIX domain socket
+pub struct SockAddrUn {
+pub mut:
+	len    u8 = u8(sizeof(SockAddrUn))
+	family u8 = u8(int(C.AF_UNIX))
+	path   [104]u8
 }
 
 // Translation of std.c.W.EXITSTATUS for Darwin.
