@@ -29,7 +29,9 @@ import configpkg
 
 #flag linux -lwayland-client
 
-#flag linux -lgtk4-layer-shell
+#pkgconfig gtk4-layer-shell-0
+
+#include <gtk4-layer-shell.h>
 
 #include <wayland-client.h>
 
