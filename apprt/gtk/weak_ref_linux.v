@@ -24,14 +24,12 @@ module gtk
 // --- GObject weak-ref C bindings ------------------------------------------
 //
 // `GWeakRef` is an opaque-ish public GLib struct whose only documented use is
-// via the g_weak_ref_* API. We treat it as a fixed-size byte blob so we never
-// need to spell out its internal layout; GLib only ever touches it through the
-// functions below. It is two pointers wide in practice; we over-allocate a
-// little to stay safe across GLib versions.
+// via the g_weak_ref_* API. Its layout (a private one-pointer union) comes from
+// gobject.h, and GLib only ever touches it through the functions below, so it
+// is declared without fields: V takes its size from the C header, and a V
+// field would have to match the anonymous union for the generated `str()`.
 @[typedef]
-struct C.GWeakRef {
-	priv [2]voidptr
-}
+struct C.GWeakRef {}
 
 fn C.g_weak_ref_init(weak_ref &C.GWeakRef, object GObject)
 fn C.g_weak_ref_clear(weak_ref &C.GWeakRef)
