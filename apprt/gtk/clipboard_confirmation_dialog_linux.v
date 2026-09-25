@@ -355,8 +355,8 @@ fn clipboard_confirmation_dialog_class_init(klass voidptr, class_data voidptr) {
 
 	// Signals: confirm, deny (each carrying a bool "remember" param).
 	mut bool_param := g_type_boolean
-	C.g_signal_new(c'confirm', g_clipboard_confirmation_dialog_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(0), 1, bool_param)
-	C.g_signal_new(c'deny', g_clipboard_confirmation_dialog_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(0), 1, bool_param)
+	C.g_signal_new(c'confirm', g_clipboard_confirmation_dialog_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, g_type_none, 1, bool_param)
+	C.g_signal_new(c'deny', g_clipboard_confirmation_dialog_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, g_type_none, 1, bool_param)
 }
 
 fn clipboard_confirmation_dialog_instance_init(instance voidptr, klass voidptr) {

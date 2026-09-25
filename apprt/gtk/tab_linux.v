@@ -216,7 +216,7 @@ fn tab_class_init(klass voidptr, class_data voidptr) {
 	C.g_object_class_install_property(klass, tab_prop_surface_tree, g_tab_pspec_surface_tree)
 	C.g_object_class_install_property(klass, tab_prop_title, g_tab_pspec_title)
 	C.g_object_class_install_property(klass, tab_prop_tooltip, g_tab_pspec_tooltip)
-	C.g_signal_new(c'close-request', g_tab_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(4), 0)
+	C.g_signal_new(c'close-request', g_tab_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, g_type_none, 0)
 }
 
 fn tab_instance_init(instance voidptr, klass voidptr) {

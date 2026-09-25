@@ -139,7 +139,7 @@ fn config_errors_dialog_class_init(klass voidptr, class_data voidptr) {
 	C.witty_gobject_class_set_dispose(klass, voidptr(config_errors_dialog_dispose))
 	C.g_object_class_install_property(klass, config_errors_prop_config, pspec)
 
-	C.g_signal_new(c'reload-config', g_config_errors_dialog_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(0), 0)
+	C.g_signal_new(c'reload-config', g_config_errors_dialog_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, g_type_none, 0)
 }
 
 fn config_errors_dialog_instance_init(instance voidptr, klass voidptr) {

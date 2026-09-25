@@ -689,11 +689,11 @@ fn search_overlay_class_init(klass voidptr, class_data voidptr) {
 	// Signals: stop-search / next-match / previous-match (void), search-changed
 	// (one string param).
 	self_type := g_search_overlay_type
-	C.g_signal_new(c'stop-search', self_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(0), 0)
+	C.g_signal_new(c'stop-search', self_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, g_type_none, 0)
 	mut string_param := g_type_string
-	C.g_signal_new(c'search-changed', self_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(0), 1, string_param)
-	C.g_signal_new(c'next-match', self_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(0), 0)
-	C.g_signal_new(c'previous-match', self_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(0), 0)
+	C.g_signal_new(c'search-changed', self_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, g_type_none, 1, string_param)
+	C.g_signal_new(c'next-match', self_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, g_type_none, 0)
+	C.g_signal_new(c'previous-match', self_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, g_type_none, 0)
 }
 
 fn search_overlay_instance_init(instance voidptr, klass voidptr) {

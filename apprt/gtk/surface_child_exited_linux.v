@@ -307,7 +307,7 @@ fn surface_child_exited_class_init(klass voidptr, class_data voidptr) {
 	}
 
 	// Signal: close-request (void).
-	C.g_signal_new(c'close-request', g_surface_child_exited_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(0), 0)
+	C.g_signal_new(c'close-request', g_surface_child_exited_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, g_type_none, 0)
 }
 
 fn surface_child_exited_instance_init(instance voidptr, klass voidptr) {

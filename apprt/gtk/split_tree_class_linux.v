@@ -240,7 +240,7 @@ fn split_tree_class_init(klass voidptr, class_data voidptr) {
 	C.g_object_class_install_property(klass, split_tree_prop_is_zoomed, g_split_tree_pspec_is_zoomed)
 	C.g_object_class_install_property(klass, split_tree_prop_tree, g_split_tree_pspec_tree)
 	C.g_object_class_install_property(klass, split_tree_prop_is_split, g_split_tree_pspec_is_split)
-	C.g_signal_new(c'changed', g_split_tree_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(4), 2, tree_type, tree_type)
+	C.g_signal_new(c'changed', g_split_tree_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, g_type_none, 2, tree_type, tree_type)
 }
 
 fn split_tree_instance_init(instance voidptr, klass voidptr) {

@@ -171,6 +171,9 @@ const gdk_action_copy = u32(1)
 // G_TYPE_INVALID.
 const g_type_invalid = GType(0)
 
+// G_TYPE_NONE, the return type of every void signal.
+const g_type_none = GType(1 << 2)
+
 fn C.gtk_widget_set_halign(widget GtkWidget, align int)
 
 fn C.gtk_widget_set_valign(widget GtkWidget, align int)
@@ -908,11 +911,11 @@ fn terminal_surface_class_init(klass voidptr, class_data voidptr) {
 	g_surface_pspec_vscroll_policy = C.g_object_class_find_property(klass, c'vscroll-policy')
 	for name in ['bell', 'close-request', 'clipboard-read', 'init', 'menu', 'present-request',
 		'toggle-fullscreen', 'toggle-maximize'] {
-		C.g_signal_new(&char(name.str), g_terminal_surface_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(4), 0)
+		C.g_signal_new(&char(name.str), g_terminal_surface_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, g_type_none, 0)
 	}
 	mut clipboard_type := g_type_int
 	mut clipboard_text := g_type_string
-	C.g_signal_new(c'clipboard-write', g_terminal_surface_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(4), 2, clipboard_type, clipboard_text)
+	C.g_signal_new(c'clipboard-write', g_terminal_surface_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, g_type_none, 2, clipboard_type, clipboard_text)
 }
 
 fn terminal_surface_instance_init(instance voidptr, klass voidptr) {

@@ -153,8 +153,8 @@ fn close_confirmation_dialog_class_init(klass voidptr, class_data voidptr) {
 
 	// Signals: close-request, cancel (both void, no params).
 	self_type := g_close_confirmation_dialog_type
-	C.g_signal_new(c'close-request', self_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(0), 0)
-	C.g_signal_new(c'cancel', self_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(0), 0)
+	C.g_signal_new(c'close-request', self_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, g_type_none, 0)
+	C.g_signal_new(c'cancel', self_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, g_type_none, 0)
 }
 
 // close_confirmation_dialog_instance_init builds the template. Mirrors the

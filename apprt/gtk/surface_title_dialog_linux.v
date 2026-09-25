@@ -153,7 +153,7 @@ fn surface_title_dialog_class_init(klass voidptr, class_data voidptr) {
 
 	// Signal: set (one [*:0]const u8 / string param, void return).
 	mut set_param_type := g_type_string
-	C.g_signal_new(c'set', g_surface_title_dialog_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(0), 1, set_param_type)
+	C.g_signal_new(c'set', g_surface_title_dialog_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, g_type_none, 1, set_param_type)
 
 	// Binding: entry template child into the private struct.
 	entry_offset := g_surface_title_dialog_priv_offset + int(__offsetof(C.GhosttySurfaceTitleDialogPrivate, entry))

@@ -242,7 +242,7 @@ fn global_shortcuts_class_init(klass voidptr, class_data voidptr) {
 	g_global_shortcuts_pspec_dbus_connection = C.g_param_spec_object(c'dbus-connection', nil_str, nil_str, C.g_dbus_connection_get_type(), readwrite)
 	C.g_object_class_install_property(klass, global_shortcuts_prop_config, g_global_shortcuts_pspec_config)
 	C.g_object_class_install_property(klass, global_shortcuts_prop_dbus_connection, g_global_shortcuts_pspec_dbus_connection)
-	C.g_signal_new(c'trigger', g_global_shortcuts_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, GType(4), 1, g_type_pointer)
+	C.g_signal_new(c'trigger', g_global_shortcuts_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, g_type_none, 1, g_type_pointer)
 }
 
 fn global_shortcuts_instance_init(instance voidptr, klass voidptr) {
