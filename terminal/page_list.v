@@ -1,5 +1,6 @@
 module terminal
 
+import fastmem
 import strings
 
 // --- Original Ghostty Comments Start: src/terminal/PageList.zig
@@ -3644,6 +3645,7 @@ fn prepare_page_list_snapshot_styles(mut dst Page, rows []RowData, cols u32) {
 fn clone_row_for_page_list(mut dst Page, dst_y int, src &RowData, cols u32) {
 	dst.rows[dst_y] = RowData{
 		cells: []CellData{len: int(cols)}
+		cells_offset: dst.rows[dst_y].cells_offset
 		wrap: src.wrap
 		wrap_continuation: src.wrap_continuation
 		grapheme: src.grapheme
@@ -4779,65 +4781,81 @@ fn (mut self PageList) viewport_row_offset() usize {
 // Erase a single row, shifting subsequent rows up.
 pub fn (mut self PageList) erase_row(point Point) ! {
 	defer { self.assert_integrity() }
-	p := self.pin(point) or { panic('erase row point is outside the page list') }
-	mut node := p.node
-	mut page := &node.data
-	y := int(p.y)
-	page.clear_cells(p.y, 0, page.size.cols)
-	mut vacated_row := page.rows[y]
+	pn := self.pin(point) or { panic('erase row point is outside the page list') }
 
-	// Shift rows up within the page. Use Page's managed clone path rather
-	// than copying RowData directly so grapheme/style/hyperlink ownership and
-	// coordinate-indexed maps move with the cells.
-	for i in y .. int(page.size.rows) - 1 {
-		page.clone_row_from(page, u16(i), u16(i + 1))!
-	}
+	mut node := pn.node
 
-	// Pins below the erased row in the first page move up one row.
-	for mut tp in self.tracked_pins_storage {
-		if voidptr(tp.node) == voidptr(node) && tp.y > p.y {
-			tp.y -= 1
+	// In order to move the following rows up we rotate the rows array by 1.
+	// The rotate operation turns e.g. [ 0 1 2 3 ] in to [ 1 2 3 0 ], which
+	// works perfectly to move all of our elements where they belong.
+	mut rows := unsafe { node.data.rows[int(pn.y)..int(node.data.size.rows)] }
+	fastmem.rotate_once(mut rows)
+
+	// We adjust the tracked pins in this page, moving up any that were below
+	// the removed row.
+	for mut p in self.tracked_pins_storage {
+		if voidptr(p.node) == voidptr(node) && p.y > pn.y {
+			p.y -= 1
 		}
 	}
-	self.fixup_viewport(1)
-	page.dirty = true
 
-	// Pull the first row of every following page into the previous page, then
-	// shift that following page. Pins on its first row cross the page boundary;
-	// all other pins move up in place.
+	// If we have a pinned viewport, we need to adjust for active area.
+	self.fixup_viewport(1)
+
+	// Mark the whole page as dirty.
+	//
+	// Technically we only need to mark rows from the erased row to the end
+	// of the page as dirty, but that's slower and this is a hot function.
+	node.data.dirty = true
+
+	// We iterate through all of the following pages in order to move their
+	// rows up by 1 as well.
 	for {
 		mut next := node.next or { break }
-		mut next_page := &next.data
-		page.clone_row_from(next_page, page.size.rows - 1, 0)!
+
+		// We take the top row of the page and clone it in to the bottom
+		// row of the previous page, which gets rid of the top row that was
+		// rotated down in the previous page, and accounts for the row in
+		// this page that will be rotated down as well.
+		//
+		//  rotate -> clone --> rotate -> result
+		//    0 -.      1         1         1
+		//    1  |      2         2         2
+		//    2  |      3         3         3
+		//    3 <'      0 <.      4         4
+		//   ---       --- |     ---       ---  <- page boundary
+		//    4         4 -'      4 -.      5
+		//    5         5         5  |      6
+		//    6         6         6  |      7
+		//    7         7         7 <'      4
+		node.data.clone_row_from(&next.data, node.data.size.rows - 1, 0)!
 
 		node = next
-		page = next_page
-		page.clear_cells(0, 0, page.size.cols)
-		vacated_row = page.rows[0]
-		for i in 0 .. int(page.size.rows) - 1 {
-			page.clone_row_from(page, u16(i), u16(i + 1))!
-		}
-		page.dirty = true
 
-		for mut tp in self.tracked_pins_storage {
-			if voidptr(tp.node) != voidptr(node) {
+		mut next_rows := unsafe { node.data.rows[..int(node.data.size.rows)] }
+		fastmem.rotate_once(mut next_rows)
+
+		// Mark the whole page as dirty.
+		node.data.dirty = true
+
+		// Our tracked pins for this page need to be updated.
+		// If the pin is in row 0 that means the corresponding row has
+		// been moved to the previous page. Otherwise, move it up by 1.
+		for mut p in self.tracked_pins_storage {
+			if voidptr(p.node) != voidptr(node) {
 				continue
 			}
-			if tp.y == 0 {
-				tp.node = node.prev or { node }
-				tp.y = tp.node.data.size.rows - 1
-			} else {
-				tp.y -= 1
+			if p.y == 0 {
+				p.node = node.prev or { panic('page after the erased row has no previous page') }
+				p.y = p.node.data.size.rows - 1
+				continue
 			}
+			p.y -= 1
 		}
 	}
 
-	// The final row is the duplicate left by the shift.
-	last_idx := int(page.size.rows) - 1
-	last_cells := page.rows[last_idx].cells
-	page.clear_cells(page.size.rows - 1, 0, page.size.cols)
-	page.rows[last_idx] = vacated_row
-	page.rows[last_idx].cells = last_cells
+	// Clear the final row which was rotated from the top of the page.
+	node.data.clear_cells(node.data.size.rows - 1, 0, node.data.size.cols)
 }
 
 // ============================================================
@@ -4872,19 +4890,21 @@ pub fn (mut self PageList) erase_rows(tl Point, bl ?Point) {
 			continue
 		}
 
-		// The chunk is not a full page so we need to move the rows.
+		// We are modifying our chunk so make sure it is in a good state.
 		assert chunk.start == 0
 		mut page := &chunk.node.data
 		end := int(chunk.end)
 		scroll_amount := int(page.size.rows) - end
 
-		// Move surviving rows to the front. Ghostty swaps row cell offsets;
-		// Witty's rows own their cell arrays and its managed maps use row/column
-		// keys, so Page's managed clone is the equivalent operation here.
+		// The chunk is not a full page so we need to move the rows.
+		// This is a cheap operation because we're just moving cell offsets,
+		// not the actual cell contents.
 		for i in 0 .. scroll_amount {
-			page.clone_row_from(page, u16(i), u16(i + end)) or {
-				panic('same-page row erase shift failed: ${err}')
-			}
+			old_dst := page.rows[i]
+			page.rows[i] = page.rows[i + end]
+			page.rows[i + end] = old_dst
+
+			// Mark the moved row as dirty.
 			page.rows[i].dirty = true
 		}
 
@@ -5135,7 +5155,7 @@ fn (mut self ReflowCursor) cursor_scroll() {
 	// Increase our page size, ensuring a row slot exists.
 	mut page := &self.node.data
 	for page.rows.len <= int(page.size.rows) {
-		page.rows << RowData.init(u32(page.capacity.cols))
+		page.append_row()
 	}
 	page.size.rows += 1
 	self.pending_wrap = false
@@ -5899,7 +5919,7 @@ pub fn (mut self PageList) compact(node &PageNode) ?&PageNode {
 	new_page.dirty = page.dirty
 	// Ensure enough row slots.
 	for new_page.rows.len < int(page.size.rows) {
-		new_page.rows << RowData.init(u32(req_cap.cols))
+		new_page.append_row()
 	}
 	new_page.clone_from(page, 0, page.size.rows) or {
 		// The requested capacity was computed from this exact content. Preserve
@@ -5930,171 +5950,185 @@ pub fn (mut self PageList) compact(node &PageNode) ?&PageNode {
 // row and shift the row below into its position, leaving a blank row below.
 pub fn (mut self PageList) erase_row_bounded(point Point, limit usize) ! {
 	defer { self.assert_integrity() }
-	p := self.pin(point) or { panic('bounded erase row point is outside the page list') }
-	mut node := p.node
-	mut page := &node.data
-	y := int(p.y)
+
+	// This function has a lot of repeated code in it because it is a hot path.
+	//
+	// To get a better idea of what's happening, read eraseRow first for more
+	// in-depth explanatory comments. To avoid repetition, the only comments for
+	// this function are for where it differs from eraseRow.
+
+	pn := self.pin(point) or { panic('erase row point is outside the page list') }
+
+	mut node := pn.node
 
 	// If the row limit is less than the remaining rows before the end of the
 	// page, then we clear the row, rotate it to the end of the boundary limit
 	// and update our pins.
-	if int(page.size.rows) - y > int(limit) {
-		page.clear_cells(p.y, 0, page.size.cols)
-		vacated_row := page.rows[y]
+	if usize(node.data.size.rows - pn.y) > limit {
+		node.data.clear_cells(pn.y, 0, node.data.size.cols)
+		mut rows := unsafe { node.data.rows[int(pn.y)..int(pn.y) + int(limit) + 1] }
+		fastmem.rotate_once(mut rows)
 
-		// Shift within the page over the bounded region.
-		for i in 0 .. int(limit) {
-			page.clone_row_from(page, u16(y + i), u16(y + i + 1))!
-		}
-		vacated_idx := y + int(limit)
-		vacated_cells := page.rows[vacated_idx].cells
-		page.clear_cells(u16(vacated_idx), 0, page.size.cols)
-		page.rows[vacated_idx] = vacated_row
-		page.rows[vacated_idx].cells = vacated_cells
+		// Mark the whole page as dirty.
+		//
+		// Technically we only need to mark from the erased row to the
+		// limit but this is a hot function, so we want to minimize work.
+		node.data.dirty = true
 
 		// If our viewport is a pin and our pin is within the erased
-		// region we need to maybe shift our cache up.
+		// region we need to maybe shift our cache up. We do this here instead
+		// of in the pin loop below because its unlikely to be true and we
+		// don't want to run the conditional N times.
 		if self.viewport == .pin {
 			if v := self.viewport_pin_row_offset {
 				vp := self.viewport_pin
-				if voidptr(vp.node) == voidptr(node) && vp.y >= p.y
-					&& int(vp.y) <= y + int(limit) && vp.y != 0 {
+				if !(voidptr(vp.node) != voidptr(node) || vp.y < pn.y
+					|| usize(vp.y) > usize(pn.y) + limit || vp.y == 0) {
 					self.viewport_pin_row_offset = v - 1
 				}
 			}
 		}
 
 		// Update pins in the shifted region.
-		for mut tp in self.tracked_pins_storage {
-			if voidptr(tp.node) == voidptr(node) && tp.y >= p.y
-				&& int(tp.y) <= y + int(limit) {
-				if tp.y == 0 {
-					tp.x = 0
+		for mut p in self.tracked_pins_storage {
+			if voidptr(p.node) == voidptr(node) && p.y >= pn.y && usize(p.y) <= usize(pn.y) + limit {
+				if p.y == 0 {
+					p.x = 0
 				} else {
-					tp.y -= 1
+					p.y -= 1
 				}
 			}
 		}
-		page.dirty = true
+
 		return
 	}
 
-	// The limit extends beyond this page. We shift the remaining rows in this
-	// page up and continue into following pages, tracking how many we shifted.
-	// ghostty rotates rows[pn.y..size.rows] which processes size.rows - pn.y
-	// rows, leaving the bottom slot to be filled by the next page's top row.
-	page.clear_cells(p.y, 0, page.size.cols)
-	mut vacated_row := page.rows[y]
-	for i in y .. int(page.size.rows) - 1 {
-		page.clone_row_from(page, u16(i), u16(i + 1))!
-	}
-	mut shifted := usize(int(page.size.rows) - y)
+	mut rows := unsafe { node.data.rows[int(pn.y)..int(node.data.size.rows)] }
+	fastmem.rotate_once(mut rows)
 
-	if self.viewport == .pin {
-		if v := self.viewport_pin_row_offset {
-			vp := self.viewport_pin
-			if voidptr(vp.node) == voidptr(node) && vp.y >= p.y && vp.y != 0 {
-				self.viewport_pin_row_offset = v - 1
+	// Mark the whole page as dirty.
+	//
+	// Technically we only need to mark rows from the erased row to the end
+	// of the page as dirty, but that's slower and this is a hot function.
+	node.data.dirty = true
+
+	// We need to keep track of how many rows we've shifted so that we can
+	// determine at what point we need to do a partial shift on subsequent
+	// pages.
+	mut shifted := usize(node.data.size.rows - pn.y)
+
+	// Update tracked pins.
+	{
+		// See the other places we do something similar in this function
+		// for a detailed explanation.
+		if self.viewport == .pin {
+			if v := self.viewport_pin_row_offset {
+				vp := self.viewport_pin
+				if !(voidptr(vp.node) != voidptr(node) || vp.y < pn.y || vp.y == 0) {
+					self.viewport_pin_row_offset = v - 1
+				}
+			}
+		}
+
+		for mut p in self.tracked_pins_storage {
+			if voidptr(p.node) == voidptr(node) && p.y >= pn.y {
+				if p.y == 0 {
+					p.x = 0
+				} else {
+					p.y -= 1
+				}
 			}
 		}
 	}
-
-	for mut tp in self.tracked_pins_storage {
-		if voidptr(tp.node) == voidptr(node) && tp.y >= p.y {
-			if tp.y == 0 {
-				tp.x = 0
-			} else {
-				tp.y -= 1
-			}
-		}
-	}
-	page.dirty = true
 
 	for {
-		mut next := node.next or {
-			// We reached the end before the limit, so clear the duplicate left
-			// in the final row by the managed shift above.
-			last_idx := int(page.size.rows) - 1
-			last_cells := page.rows[last_idx].cells
-			page.clear_cells(page.size.rows - 1, 0, page.size.cols)
-			page.rows[last_idx] = vacated_row
-			page.rows[last_idx].cells = last_cells
-			return
-		}
-		mut next_page := &next.data
+		mut next := node.next or { break }
 
-		// Bring the top row of this page up into the previous page.
-		page.clone_row_from(next_page, page.size.rows - 1, 0)!
+		node.data.clone_row_from(&next.data, node.data.size.rows - 1, 0)!
+
 		node = next
-		page = next_page
 
-		// If we can satisfy the limit within this page, do a partial shift.
+		// We check to see if this page contains enough rows to satisfy the
+		// specified limit, accounting for rows we've already shifted in prior
+		// pages.
+		//
+		// The logic here is very similar to the one before the loop.
 		shifted_limit := limit - shifted
-		page.clear_cells(0, 0, page.size.cols)
-		vacated_row = page.rows[0]
-		if usize(page.size.rows) > shifted_limit {
-			for i in 0 .. shifted_limit {
-				page.clone_row_from(page, u16(i), u16(i + 1))!
-			}
-			vacated_idx := int(shifted_limit)
-			vacated_cells := page.rows[vacated_idx].cells
-			page.clear_cells(u16(shifted_limit), 0, page.size.cols)
-			page.rows[vacated_idx] = vacated_row
-			page.rows[vacated_idx].cells = vacated_cells
-			page.dirty = true
+		if usize(node.data.size.rows) > shifted_limit {
+			node.data.clear_cells(0, 0, node.data.size.cols)
+			mut next_rows := unsafe { node.data.rows[..int(shifted_limit) + 1] }
+			fastmem.rotate_once(mut next_rows)
 
+			// Mark the whole page as dirty.
+			//
+			// Technically we only need to mark from the erased row to the
+			// limit but this is a hot function, so we want to minimize work.
+			node.data.dirty = true
+
+			// See the other places we do something similar in this function
+			// for a detailed explanation.
 			if self.viewport == .pin {
 				if v := self.viewport_pin_row_offset {
 					vp := self.viewport_pin
-					if voidptr(vp.node) == voidptr(node) && usize(vp.y) <= shifted_limit {
+					if !(voidptr(vp.node) != voidptr(node) || usize(vp.y) > shifted_limit) {
 						self.viewport_pin_row_offset = v - 1
 					}
 				}
 			}
 
 			// Update pins in the shifted region.
-			for mut tp in self.tracked_pins_storage {
-				if voidptr(tp.node) != voidptr(node) || usize(tp.y) > shifted_limit {
+			for mut p in self.tracked_pins_storage {
+				if voidptr(p.node) != voidptr(node) || usize(p.y) > shifted_limit {
 					continue
 				}
-				if tp.y == 0 {
-					tp.node = node.prev or { node }
-					tp.y = tp.node.data.size.rows - 1
+				if p.y == 0 {
+					p.node = node.prev or { panic('page after the erased row has no previous page') }
+					p.y = p.node.data.size.rows - 1
 					continue
 				}
-				tp.y -= 1
+				p.y -= 1
 			}
+
 			return
 		}
 
-		// Otherwise shift the whole page up and continue.
-		for i in 0 .. int(page.size.rows) - 1 {
-			page.clone_row_from(page, u16(i), u16(i + 1))!
-		}
+		mut next_rows := unsafe { node.data.rows[..int(node.data.size.rows)] }
+		fastmem.rotate_once(mut next_rows)
 
+		// Mark the whole page as dirty.
+		node.data.dirty = true
+
+		// Account for the rows shifted in this node.
+		shifted += usize(node.data.size.rows)
+
+		// See the other places we do something similar in this function
+		// for a detailed explanation.
 		if self.viewport == .pin {
 			if v := self.viewport_pin_row_offset {
-				if voidptr(self.viewport_pin.node) == voidptr(node) {
+				vp := self.viewport_pin
+				if voidptr(vp.node) == voidptr(node) {
 					self.viewport_pin_row_offset = v - 1
 				}
 			}
 		}
 
-		// Update tracked pins for the full-page shift.
-		for mut tp in self.tracked_pins_storage {
-			if voidptr(tp.node) != voidptr(node) {
+		// Update tracked pins.
+		for mut p in self.tracked_pins_storage {
+			if voidptr(p.node) != voidptr(node) {
 				continue
 			}
-			if tp.y == 0 {
-				tp.node = node.prev or { node }
-				tp.y = tp.node.data.size.rows - 1
+			if p.y == 0 {
+				p.node = node.prev or { panic('page after the erased row has no previous page') }
+				p.y = p.node.data.size.rows - 1
 				continue
 			}
-			tp.y -= 1
+			p.y -= 1
 		}
-		page.dirty = true
-		shifted += usize(page.size.rows)
 	}
+
+	// We reached the end of the page list before the limit, so we clear
+	// the final row since it was rotated down from the top of this page.
+	node.data.clear_cells(node.data.size.rows - 1, 0, node.data.size.cols)
 }
 
 // ============================================================
@@ -6553,7 +6587,7 @@ fn (mut self PageList) resize_without_reflow_grow_cols(cols u16, chunk PageChunk
 				dst_idx := prev_page.size.rows
 				// Ensure prev page has the row slot.
 				for prev_page.rows.len <= int(dst_idx) {
-					prev_page.rows << RowData.init(u32(prev_page.capacity.cols))
+					prev_page.append_row()
 				}
 				prev_page.size.rows += 1
 				prev_page.clone_row_from(page, dst_idx, u16(i)) or {
@@ -6593,7 +6627,7 @@ fn (mut self PageList) resize_without_reflow_grow_cols(cols u16, chunk PageChunk
 		for i in 0 .. int(len) {
 			// Ensure the destination row slot exists.
 			for new_page.rows.len <= i {
-				new_page.rows << RowData.init(u32(cap.cols))
+				new_page.append_row()
 			}
 			new_page.size.rows += 1
 			new_page.clone_row_from(page, u16(i), u16(int(y_start) + i)) or {

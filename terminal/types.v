@@ -180,6 +180,12 @@ pub enum SemanticPromptType as u8 {
 pub struct RowData {
 pub mut:
 	cells []CellData
+	// The row's cell block within its page. Ghostty's Row holds an offset to
+	// its cells in page memory, so moving a row within the page moves its
+	// cells and their grapheme and hyperlink entries with it. V keeps each
+	// row's cells in their own array; this is the equivalent handle, and the
+	// page keys its managed-memory maps by it rather than by row index.
+	cells_offset u32
 	// True if this row is soft-wrapped. The first cell of the next
 	// row is a continuation of this row.
 	wrap bool
