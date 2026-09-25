@@ -1431,6 +1431,18 @@ fn test_page_exact_row_capacity_grapheme_bytes_larger_than_chunk() {
 	assert cloned_cap == cap
 }
 
+// The pinned Zig reference values below were emitted on arm64 macOS, where
+// `std.heap.page_size_min` is 16 KiB. Elsewhere it is 4 KiB, so the page's
+// total size (and everything derived from it) is the same end offset aligned
+// to 4 KiB instead.
+fn page_size_min_reference(darwin_arm64 usize, other usize) usize {
+	$if macos && arm64 {
+		return darwin_arm64
+	} $else {
+		return other
+	}
+}
+
 // Reference values emitted by the pinned Zig implementation. These make the
 // logical V layout auditable byte-for-byte even though V uses GC-owned arrays.
 fn test_page_capacity_defaults_and_layout_reference() {
@@ -1444,7 +1456,7 @@ fn test_page_capacity_defaults_and_layout_reference() {
 	assert cap.string_bytes == 2048
 
 	l := Page.layout(cap)
-	assert l.total_size == 475136
+	assert l.total_size == page_size_min_reference(475136, 462848)
 	assert l.rows_start == 0
 	assert l.rows_size == 1720
 	assert l.cells_start == 1720
@@ -1481,7 +1493,7 @@ fn test_page_layout_small_and_zero_metadata_reference() {
 		rows: 128
 		styles: 16
 	})
-	assert l.total_size == 180224
+	assert l.total_size == page_size_min_reference(180224, 167936)
 	assert l.rows_size == 1024
 	assert l.cells_start == 1024
 	assert l.cells_size == 81920
@@ -1501,7 +1513,7 @@ fn test_page_layout_small_and_zero_metadata_reference() {
 		grapheme_bytes: 0
 		string_bytes: 0
 	})
-	assert zero.total_size == 16384
+	assert zero.total_size == page_size_min_reference(16384, 4096)
 	assert zero.rows_size == 80
 	assert zero.cells_start == 80
 	assert zero.cells_size == 800
@@ -1517,7 +1529,7 @@ fn test_page_layout_small_and_zero_metadata_reference() {
 
 fn test_standard_page_layout_and_capacity_adjust_reference() {
 	l := Page.layout(std_capacity)
-	assert l.total_size == 589824
+	assert l.total_size == page_size_min_reference(589824, 585728)
 	assert l.grapheme_alloc_start == 375520
 	assert l.grapheme_alloc_layout.total_size == 131136
 	assert l.grapheme_alloc_layout.bitmap_count == 8
@@ -1530,18 +1542,18 @@ fn test_standard_page_layout_and_capacity_adjust_reference() {
 		assert false, 'maxCols returned none'
 		return
 	}
-	assert max_cols == u16(47219)
+	assert max_cols == u16(page_size_min_reference(47219, 46707))
 
 	cap80 := std_capacity.adjust(PageCapacityAdjustment{ cols: 80 }) or {
 		assert false, 'capacity adjustment failed'
 		return
 	}
-	assert cap80.rows == 582
+	assert cap80.rows == u16(page_size_min_reference(582, 576))
 	cap500 := std_capacity.adjust(PageCapacityAdjustment{ cols: 500 }) or {
 		assert false, 'capacity adjustment failed'
 		return
 	}
-	assert cap500.rows == 94
+	assert cap500.rows == u16(page_size_min_reference(94, 93))
 }
 
 fn test_page_managed_map_capacities_follow_layout() {

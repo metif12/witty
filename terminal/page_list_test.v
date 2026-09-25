@@ -748,14 +748,27 @@ fn test_page_list_init_rows_across_two_pages() {
 	assert s.total_pages() >= 2
 }
 
+// The pinned Zig reference values below were emitted on arm64 macOS, where
+// `std.heap.page_size_min` is 16 KiB. Elsewhere it is 4 KiB, so the page's
+// total size (and everything derived from it) is the same end offset aligned
+// to 4 KiB instead.
+fn page_list_page_size_min_reference(darwin_arm64 usize, other usize) usize {
+	$if macos && arm64 {
+		return darwin_arm64
+	} $else {
+		return other
+	}
+}
+
 fn test_page_list_uses_pinned_standard_page_byte_accounting() {
 	mut s := PageList.init(80, 24, none)
 	defer { s.deinit() }
 
-	assert initial_capacity(80).rows == 582
-	assert standard_page_size() == 589824
-	assert s.page_size == 589824
-	assert s.min_max_size == 2 * 589824
+	std_size := page_list_page_size_min_reference(589824, 585728)
+	assert initial_capacity(80).rows == u16(page_list_page_size_min_reference(582, 576))
+	assert standard_page_size() == std_size
+	assert s.page_size == std_size
+	assert s.min_max_size == 2 * std_size
 }
 
 fn test_page_list_init_more_than_max_cols() {

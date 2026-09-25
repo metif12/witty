@@ -1072,8 +1072,11 @@ fn page_align_backward(value usize, alignment usize) usize {
 	return value & ~(alignment - 1)
 }
 
+// page_memory_alignment is Zig's `std.heap.page_size_min`: 16 KiB on arm64
+// Darwin and 4 KiB on the other targets Witty builds for (x86_64 Darwin,
+// Linux).
 fn page_memory_alignment() usize {
-	$if macos {
+	$if macos && arm64 {
 		return 16384
 	} $else {
 		return 4096
