@@ -191,9 +191,12 @@ fn test_edit_config_target_creates_parent_directory() {
 	assert os.is_dir(os.dir(path))
 }
 
+// Ghostty's `font-size` default is 13 on macOS and 12 elsewhere.
+const default_font_size_line = $if macos { 'font-size = 13.0\n' } $else { 'font-size = 12.0\n' }
+
 fn test_show_config_changes_only_and_full_default() {
 	full := show_config_output(['--default'])!
-	assert full.contains('font-size = 13.0\n')
+	assert full.contains(default_font_size_line)
 	assert full.contains('background = #282c34\n')
 	assert full.contains('palette = 255=#eeeeee\n')
 	assert full.contains('keybind = ')
@@ -205,7 +208,7 @@ fn test_show_config_changes_only_and_full_default() {
 
 fn test_show_config_changes_only_false_outputs_every_field() {
 	output := show_config_output(['--changes-only=false'])!
-	assert output.contains('font-size = 13.0\n')
+	assert output.contains(default_font_size_line)
 	assert output.contains('config-default-files = true\n')
 }
 
@@ -221,5 +224,5 @@ fn test_show_config_docs_comments_documented_fields() {
 	output := show_config_output(['--default', '--docs'])!
 	assert output.starts_with('# The font families to use.\n')
 	assert output.contains('# Font size in points. This value can be a non-integer')
-	assert output.contains('\nfont-size = 13.0\n\n')
+	assert output.contains('\n' + default_font_size_line + '\n')
 }

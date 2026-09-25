@@ -266,18 +266,28 @@ fn test_mods_without_locks() {
 }
 
 fn test_mods_ctrl_or_super() {
-	// On macOS, ctrl_or_super checks super
-	m := Mods.init(false, false, false, true, false, false, SideInfo{})
-	assert m.ctrl_or_super()
-
-	m2 := Mods.init(false, true, false, false, false, false, SideInfo{})
-	assert !m2.ctrl_or_super()
+	// Darwin checks super; every other platform checks ctrl.
+	sup := Mods.init(false, false, false, true, false, false, SideInfo{})
+	ctrl := Mods.init(false, true, false, false, false, false, SideInfo{})
+	$if darwin {
+		assert sup.ctrl_or_super()
+		assert !ctrl.ctrl_or_super()
+	} $else {
+		assert ctrl.ctrl_or_super()
+		assert !sup.ctrl_or_super()
+	}
 }
 
 fn test_ctrl_or_super_mods_fn() {
 	m := ctrl_or_super_mods(Mods{})
-	// On macOS, should set super
-	assert m.super_()
+	// Darwin sets super; every other platform sets ctrl.
+	$if darwin {
+		assert m.super_()
+		assert !m.ctrl()
+	} $else {
+		assert m.ctrl()
+		assert !m.super_()
+	}
 }
 
 fn test_mods_keys_int() {

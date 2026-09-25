@@ -832,6 +832,12 @@ fn test_balance_padding_caps_top_and_moves_excess_to_bottom() {
 // Verify the production row path shapes codepoints, rasterizes their glyphs,
 // and emits foreground cells backed by the shared font atlases.
 fn test_rebuild_row_shapes_and_renders_text() ! {
+	// The OpenGL renderer creates its frame buffers and shaders during init,
+	// so it needs a current GL context, which only GtkGLArea supplies. Metal
+	// needs no context, so this test runs on macOS only.
+	$if !macos {
+		return
+	}
 	mut library := font.Library.init()!
 	defer { library.deinit() }
 

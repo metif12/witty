@@ -3798,9 +3798,12 @@ fn test_keybinds_format_entry_docs_matches_pinned_source_lookup() {
 	]
 }
 
+// Ghostty's `font-size` default is 13 on macOS and 12 elsewhere.
+const default_font_size_line = $if macos { 'font-size = 13.0\n' } $else { 'font-size = 12.0\n' }
+
 fn test_format_config_default_formats_all_supported_values() {
 	formatted := Config.default_config().format_config(false)
-	assert formatted.contains('font-size = 13.0\n')
+	assert formatted.contains(default_font_size_line)
 	assert formatted.contains('background = #282c34\n')
 	assert formatted.contains('clipboard-codepoint-map = \n')
 	assert formatted.contains('keybind = ')
