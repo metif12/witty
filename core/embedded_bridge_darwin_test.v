@@ -7,6 +7,14 @@ import input
 import macos
 import os
 
+// Zig's start code ignores SIGPIPE in every program, tests included, and
+// Ghostty's global init does the same for the app. These surfaces run the real
+// exec read thread, which closes its quit pipe once the pty hangs up, so
+// stopping it later writes to a pipe with no reader.
+fn testsuite_begin() {
+	os.signal_ignore(.pipe)
+}
+
 fn embedded_bridge_test_view() voidptr {
 	$if macos {
 		return macos.create_offscreen_terminal_view(800, 600)
