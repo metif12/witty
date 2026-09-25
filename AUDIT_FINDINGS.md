@@ -624,9 +624,17 @@ how the `SplitTree.new` defect stayed hidden. `v -os linux -check .` and
 `v -os linux -o out.c .` both cover them without needing GTK headers, since
 they stop before the C compiler. This was validated by reintroducing the
 `SplitTree.new` defect and confirming the check reports it. Both now pass with
-zero errors, as do all ten `*_linux_test.v` files individually. The one
-remaining uncovered Linux stage is C compilation and linking against the real
-GTK headers.
+zero errors, as do all ten `*_linux_test.v` files individually.
+
+Beyond the checker, Witty now compiles and links on Linux (aarch64 Ubuntu
+24.04, GTK 4.14.5, libadwaita 1.5, clang, the pinned fallback V). The GTK app
+had never run before that: its first runs aborted in GObject class setup (the
+private-data, signal, template, and tab-bar rows above). It now starts under
+Xvfb, draws the grid with the OpenGL renderer, and runs its pty child. The full
+suite on Linux gives 259 passed, 13 skipped (Darwin-only files), and the known
+`font/atlas_wasm_test.v` failure. Not yet exercised on Linux: Wayland
+(including the layer-shell quick terminal), real keyboard and mouse input,
+the Flatpak portal path, and GTK widgets beyond the default window.
 
 Repository-wide test state, for honesty about what the gates actually cover:
 
