@@ -13,6 +13,8 @@ module stb
 // independent.
 #flag -I @VMODROOT/stb
 #flag @VMODROOT/stb/stb_bridge.c
+// stb_image calls libm (`pow`), which glibc keeps in a separate library.
+#flag linux -lm
 #include "stb_bridge.h"
 
 fn C.witty_stbi_load_from_memory(buffer &u8, len int, x &int, y &int, channels_in_file &int, desired_channels int) &u8

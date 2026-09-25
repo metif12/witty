@@ -18,6 +18,9 @@ module cimgui
 
 #flag -ldl
 
+// Dear ImGui calls libm, which glibc keeps in a separate library.
+#flag -lm
+
 #include "bridge.h"
 
 fn C.witty_cimgui_context_create(font_data voidptr, font_len int) voidptr
