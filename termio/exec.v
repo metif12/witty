@@ -56,19 +56,19 @@ fn C.waitpid(pid int, status &int, options int) int
 fn C._exit(status int)
 
 // Signal constants
-const sig_hup = 1
+const sig_hup = int(C.SIGHUP)
 
 // fcntl constants
-const f_getfl = 3
-const f_setfl = 4
-const o_nonblock = 0x0004 // macOS value
+const f_getfl = int(C.F_GETFL)
+const f_setfl = int(C.F_SETFL)
+const o_nonblock = int(C.O_NONBLOCK)
 
 // poll event flags
-const pollin = i16(0x0001)
-const pollhup = i16(0x0004)
+const pollin = i16(int(C.POLLIN))
+const pollhup = i16(int(C.POLLHUP))
 
 // waitpid options
-const wnohang = 1
+const wnohang = int(C.WNOHANG)
 
 // pollfd struct for C.poll()
 struct PollFd {
@@ -986,7 +986,7 @@ fn subprocess_getpgid(pid int) ?int {
 // Kill the underlying process started via Flatpak host command.
 // This sends a signal via the Flatpak API.
 fn kill_command_flatpak(mut command internal_os.FlatpakHostCommand) ! {
-	command.signal(sig_hup, true)!
+	command.signal(u8(sig_hup), true)!
 }
 
 // This runs in the forked child after Command has redirected the standard
