@@ -147,6 +147,7 @@ fn C.gtk_widget_add_controller(widget GtkWidget, controller voidptr)
 pub type GtkDropTarget = voidptr
 
 // GSList is a glib.SList*, the singly linked list gdk.FileList hands back.
+@[typedef]
 struct C.GSList {
 	data voidptr
 	next &C.GSList = unsafe { nil }
@@ -244,6 +245,7 @@ fn C.gtk_im_context_set_client_widget(context GtkIMContext, widget GtkWidget)
 
 fn C.gtk_im_context_get_preedit_string(context GtkIMContext, str &&char, attrs voidptr, cursor_pos voidptr)
 
+@[typedef]
 pub struct C.GdkRectangle {
 pub mut:
 	x      int
@@ -711,25 +713,25 @@ fn terminal_surface_set_property(obj voidptr, property_id u32, value voidptr, ps
 		surface_prop_mouse_hover_url {
 			text := C.g_value_get_string(value)
 			self.set_mouse_hover_url(if isnil(text) {
-				none
+				?string(none)
 			} else {
-				unsafe { cstring_to_vstring(text) }
+				?string(unsafe { cstring_to_vstring(text) })
 			})
 		}
 		surface_prop_pwd {
 			text := C.g_value_get_string(value)
-			self.set_pwd(if isnil(text) { none } else { cstring_to_vstring(text) })
+			self.set_pwd(if isnil(text) { ?string(none) } else { ?string(unsafe { cstring_to_vstring(text) }) })
 		}
 		surface_prop_title {
 			text := C.g_value_get_string(value)
-			self.set_title(if isnil(text) { none } else { cstring_to_vstring(text) })
+			self.set_title(if isnil(text) { ?string(none) } else { ?string(unsafe { cstring_to_vstring(text) }) })
 		}
 		surface_prop_title_override {
 			text := C.g_value_get_string(value)
 			self.set_title_override(if isnil(text) {
-				none
+				?string(none)
 			} else {
-				unsafe { cstring_to_vstring(text) }
+				?string(unsafe { cstring_to_vstring(text) })
 			})
 		}
 		surface_prop_zoom {
@@ -1326,7 +1328,7 @@ fn surface_title_dialog_set_cb(dialog GObject, title_ptr &char, data voidptr) {
 	}
 	mut self := unsafe { &SurfaceWidget(data) }
 	title := unsafe { cstring_to_vstring(title_ptr) }
-	self.set_title_override(if title.len == 0 { none } else { title })
+	self.set_title_override(if title.len == 0 { ?string(none) } else { ?string(title) })
 }
 
 // get_pwd returns the pwd, if any. Mirrors `Surface.getPwd`.
@@ -2826,7 +2828,7 @@ fn surface_core_action_cb(data voidptr, action apprt.RuntimeAction) !bool {
 		}
 		.mouse_over_link {
 			url := action.data.mouse_over_link_.url
-			self.set_mouse_hover_url(if url.len > 0 { url } else { none })
+			self.set_mouse_hover_url(if url.len > 0 { ?string(url) } else { ?string(none) })
 			return true
 		}
 		.scrollbar {

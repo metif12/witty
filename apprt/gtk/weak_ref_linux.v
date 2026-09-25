@@ -28,6 +28,7 @@ module gtk
 // need to spell out its internal layout; GLib only ever touches it through the
 // functions below. It is two pointers wide in practice; we over-allocate a
 // little to stay safe across GLib versions.
+@[typedef]
 struct C.GWeakRef {
 	priv [2]voidptr
 }

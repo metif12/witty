@@ -12,6 +12,7 @@ import pty
 // GLib/GIO declarations, typed as the GTK runtime declares them (V keeps one
 // declaration per C function). GVariants are built with the typed
 // constructors instead of g_variant_new's format varargs.
+@[typedef]
 struct C.GError {
 	domain  u32
 	code    int

@@ -1669,9 +1669,9 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 		.mouse_over_link {
 			if mut surface := surface_from_target(target) {
 				surface.set_mouse_hover_url(if data.mouse_over_link_.url.len > 0 {
-					data.mouse_over_link_.url
+					?string(data.mouse_over_link_.url)
 				} else {
-					none
+					?string(none)
 				})
 			}
 			return true

@@ -155,11 +155,11 @@ fn tab_set_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) 
 		}
 		tab_prop_title {
 			text := C.g_value_get_string(value)
-			self.set_title(if isnil(text) { none } else { unsafe { cstring_to_vstring(text) } })
+			self.set_title(if isnil(text) { ?string(none) } else { ?string(unsafe { cstring_to_vstring(text) }) })
 		}
 		tab_prop_tooltip {
 			text := C.g_value_get_string(value)
-			self.set_tooltip(if isnil(text) { none } else { unsafe { cstring_to_vstring(text) } })
+			self.set_tooltip(if isnil(text) { ?string(none) } else { ?string(unsafe { cstring_to_vstring(text) }) })
 		}
 		else {}
 	}

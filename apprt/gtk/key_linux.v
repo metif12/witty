@@ -493,6 +493,7 @@ pub fn translate_mods(state u32) input.Mods {
 
 fn C.gdk_key_event_get_layout(event GdkEvent) u32
 
+@[typedef]
 pub struct C.GdkKeymapKey {
 pub mut:
 	keycode u32

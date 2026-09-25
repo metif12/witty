@@ -102,6 +102,7 @@ fn C.g_error_free(err GError)
 // the human-readable `message` field for diagnostics. Layout: `{ GQuark domain;
 // gint code; gchar *message; }`. GQuark is a 32-bit int and `code` is a 32-bit
 // int, so on all our targets `message` is the third pointer-aligned word.
+@[typedef]
 struct C.GError {
 	domain  u32
 	code    int

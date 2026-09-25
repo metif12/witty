@@ -33,6 +33,8 @@ import configpkg
 
 #include <wayland-client.h>
 
+#include <gdk/wayland/gdkwayland.h>
+
 #include "wayland_shims.h"
 
 // --- Opaque Wayland handle aliases -----------------------------------------

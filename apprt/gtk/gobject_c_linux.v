@@ -22,6 +22,7 @@ pub type GObjectClass = voidptr
 
 // Opaque GObject property metadata. The concrete definition is supplied by
 // <glib-object.h>; declaring it here gives V one canonical pointer type.
+@[typedef]
 pub struct C.GParamSpec {}
 
 // GClassInitFunc:    fn (gpointer klass, gpointer class_data)
@@ -30,6 +31,7 @@ pub struct C.GParamSpec {}
 
 // GTypeInfo mirrors the C struct used by g_type_register_static. Field names
 // match <gobject/gtype.h> so V's codegen assigns into the real struct.
+@[typedef]
 pub struct C.GTypeInfo {
 pub mut:
 	class_size     u16
@@ -45,6 +47,7 @@ pub mut:
 }
 
 // GInterfaceInfo describes an interface implementation attached to a type.
+@[typedef]
 pub struct C.GInterfaceInfo {
 pub mut:
 	interface_init     voidptr
@@ -53,6 +56,7 @@ pub mut:
 }
 
 // GTypeQuery mirrors the C struct filled by g_type_query.
+@[typedef]
 pub struct C.GTypeQuery {
 pub mut:
 	type          GType
@@ -84,6 +88,7 @@ fn C.g_boxed_type_register_static(type_name &char, boxed_copy voidptr, boxed_fre
 // GEnumValue and g_enum_register_static back hand-expanded enum GTypes such
 // as GhosttyMouseShape. The values array passed to GLib is static storage and
 // ends with an entry whose name and nick are null.
+@[typedef]
 pub struct C.GEnumValue {
 pub mut:
 	value      int

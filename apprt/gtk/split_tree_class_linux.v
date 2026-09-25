@@ -834,10 +834,8 @@ pub fn (mut self SplitTreeWidget) surface_close_request(surface &SurfaceWidget) 
 			break
 		}
 	}
-	if found == none {
-		return
-	}
-	self.pending_close = found
+	handle := found or { return }
+	self.pending_close = handle
 
 	// If we don't need to confirm, close immediately.
 	if surface.has_core() {
