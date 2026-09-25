@@ -149,7 +149,7 @@ pub fn new_inspector_window(mut surface SurfaceWidget) !&InspectorWindow {
 	C.gtk_widget_set_hexpand(content, 1)
 	C.gtk_widget_set_vexpand(content, 1)
 	debug_warning := GtkWidget(C.g_object_new(debug_warning_get_type(), &char(unsafe { nil })))
-	C.gtk_widget_set_visible(debug_warning, $if !prod { 1 } $else { 0 })
+	C.gtk_widget_set_visible(debug_warning, $if debug { 1 } $else { 0 })
 	C.gtk_box_append(content, debug_warning)
 	C.gtk_box_append(content, inspector.imgui.as_widget())
 	C.adw_toolbar_view_set_content(toolbar, content)

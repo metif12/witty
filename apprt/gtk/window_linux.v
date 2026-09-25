@@ -282,7 +282,7 @@ fn window_get_property(obj voidptr, property_id u32, value voidptr, pspec voidpt
 			})
 		}
 		window_prop_debug {
-			C.g_value_set_boolean(value, $if !prod { 1 } $else { 0 })
+			C.g_value_set_boolean(value, $if debug { 1 } $else { 0 })
 		}
 		window_prop_headerbar_visible {
 			C.g_value_set_boolean(value, b2i(self.get_headerbar_visible()))
@@ -372,7 +372,7 @@ fn window_class_init(klass voidptr, class_data voidptr) {
 	nil_str := &char(unsafe { nil })
 	g_window_pspec_active_surface = C.g_param_spec_object(c'active-surface', nil_str, nil_str, terminal_surface_get_type(), readable)
 	g_window_pspec_config = C.g_param_spec_object(c'config', nil_str, nil_str, config_get_type(), readwrite)
-	g_window_pspec_debug = C.g_param_spec_boolean(c'debug', nil_str, nil_str, $if !prod { 1 } $else { 0 }, readable)
+	g_window_pspec_debug = C.g_param_spec_boolean(c'debug', nil_str, nil_str, $if debug { 1 } $else { 0 }, readable)
 	g_window_pspec_headerbar_visible = C.g_param_spec_boolean(c'headerbar-visible', nil_str, nil_str, 1, readable)
 	g_window_pspec_quick_terminal = C.g_param_spec_boolean(c'quick-terminal', nil_str, nil_str, 1, readwrite)
 	g_window_pspec_tabs_autohide = C.g_param_spec_boolean(c'tabs-autohide', nil_str, nil_str, 1, readable)
@@ -684,7 +684,7 @@ pub fn Window.new(app &Application) &Window {
 	// Terminal body and debug-build warning.
 	content := C.gtk_box_new(1, 0)
 	debug_warning := GtkWidget(C.g_object_new(debug_warning_get_type(), &char(unsafe { nil })))
-	C.gtk_widget_set_visible(debug_warning, $if !prod { 1 } $else { 0 })
+	C.gtk_widget_set_visible(debug_warning, $if debug { 1 } $else { 0 })
 	C.gtk_box_append(content, debug_warning)
 	C.gtk_box_append(content, GtkWidget(toast_overlay))
 	C.adw_toolbar_view_set_content(toolbar, content)
@@ -738,7 +738,7 @@ fn (mut self Window) init(app &Application) {
 	}
 
 	// Add our dev CSS class if we're in debug mode.
-	$if !prod {
+	$if debug {
 		self.add_css_class('devel')
 	}
 
