@@ -257,7 +257,11 @@ fn test_face_metrics() {
 		// The native CoreText backend uses unhinted advances.
 		assert_collection_close(7.3828125, narrow.cell_width, 0.001)
 	} $else {
-		assert_collection_close(8.0, narrow.cell_width, 0.001)
+		// Ghostty lists 8.0 for FreeType, but its test never runs: the guard
+		// `backend != .web_canvas` skips every native backend. FreeType 2.13.2
+		// (Ghostty's pinned build and the system library alike) rounds Cozette's
+		// 7.39 px advance to 7 under the default light hinting target.
+		assert_collection_close(7.0, narrow.cell_width, 0.001)
 	}
 	assert_collection_close(12.3046875, narrow.ascent, 0.001)
 	$if macos {
