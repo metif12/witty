@@ -629,6 +629,10 @@ pub fn Window.new(app &Application) &Window {
 	C.adw_toast_overlay_set_child(toast_overlay, GtkWidget(tab_view))
 	toolbar := C.adw_toolbar_view_new()
 	tab_bar := C.adw_tab_bar_new()
+	// `tab_bar` is a bound template child in Ghostty, and gtk_widget_init_template
+	// keeps a reference to every bound child until dispose. syncAppearance relies
+	// on it: removing the tab bar from the toolbar would otherwise finalize it.
+	C.g_object_ref_sink(GObject(tab_bar))
 	C.adw_tab_bar_set_view(tab_bar, tab_view)
 	tab_overview := C.adw_tab_overview_new()
 	C.adw_tab_overview_set_view(tab_overview, tab_view)
@@ -2214,6 +2218,12 @@ fn (mut self Window) dispose_resources() {
 	}
 	self.tabs.clear()
 	self.pending_close_page = unsafe { nil }
+	// Drop the template-child reference taken in init, as GTK's template
+	// dispose does.
+	if !isnil(self.tab_bar) {
+		object_unref(GObject(self.tab_bar))
+		self.tab_bar = unsafe { nil }
+	}
 	if !isnil(self.command_palette) {
 		mut palette := self.command_palette
 		palette.dispose()
