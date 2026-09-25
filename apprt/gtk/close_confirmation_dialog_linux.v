@@ -54,18 +54,19 @@ pub fn (t CloseTarget) body() string {
 // `GhosttyCloseConfirmationDialog`: a `.ui` template, a `target` enum property,
 // `close-request`/`cancel` signals, private data, and a dispose vfunc.
 
-// The blueprint (ui/1.2/close-confirmation-dialog.blp) translated to a
-// GtkBuilder .ui XML string. `responses [...]` become the AdwAlertDialog
-// <responses>/<response> element; `_("x")` become translatable="yes";
-// `destructive` becomes appearance="destructive".
+// Ghostty's ui/1.2/close-confirmation-dialog.blp as blueprint-compiler 0.16.0 emits it
+// (without the generated-file header). Ghostty compiles it into its
+// gresource and loads it with setTemplateFromResource; we load the same
+// bytes directly with gtk_widget_class_set_template.
 const close_confirmation_dialog_ui = '<?xml version="1.0" encoding="UTF-8"?>
 <interface>
+  <requires lib="gtk" version="4.0"/>
   <template class="GhosttyCloseConfirmationDialog" parent="GhosttyDialog">
-    <property name="close-response">cancel</property>
     <responses>
       <response id="cancel" translatable="yes">Cancel</response>
       <response id="close" translatable="yes" appearance="destructive">Close</response>
     </responses>
+    <property name="close-response">cancel</property>
   </template>
 </interface>
 '

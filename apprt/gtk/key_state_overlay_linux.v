@@ -232,33 +232,31 @@ pub fn (mut self KeyStateOverlay) unref() {
 // `GhosttyKeyStateOverlay` (parent adw.Bin): a `.ui` template with five
 // template callbacks, five properties, and dispose/finalize vfuncs.
 
-// The blueprint (ui/1.2/key-state-overlay.blp) translated to a GtkBuilder .ui
-// XML string. `visible: bind $has_state(...) as <bool>` and the other bound
-// values become <binding> elements with <closure type="..." function="...">;
-// `drag-end => $on_drag_end()` becomes a <signal>; `styles [...]` become
-// <style>; `_("x")` would become translatable="yes" (none here).
+// Ghostty's ui/1.2/key-state-overlay.blp as blueprint-compiler 0.16.0 emits it
+// (without the generated-file header). Ghostty compiles it into its
+// gresource and loads it with setTemplateFromResource; we load the same
+// bytes directly with gtk_widget_class_set_template.
 const key_state_overlay_ui = '<?xml version="1.0" encoding="UTF-8"?>
 <interface>
+  <requires lib="gtk" version="4.0"/>
   <template class="GhosttyKeyStateOverlay" parent="AdwBin">
-    <property name="visible">
-      <binding>
-        <closure type="gboolean" function="has_state">
-          <lookup name="has-tables">GhosttyKeyStateOverlay</lookup>
-          <lookup name="has-sequence">GhosttyKeyStateOverlay</lookup>
-        </closure>
-      </binding>
-    </property>
+    <binding name="visible">
+      <closure function="has_state" type="gboolean">
+        <lookup name="has-tables" type="GhosttyKeyStateOverlay">
+          <constant>GhosttyKeyStateOverlay</constant>
+        </lookup>
+        <lookup name="has-sequence" type="GhosttyKeyStateOverlay">
+          <constant>GhosttyKeyStateOverlay</constant>
+        </lookup>
+      </closure>
+    </binding>
     <property name="valign-target">end</property>
-    <property name="halign">center</property>
-    <property name="valign">
-      <binding>
-        <lookup name="valign-target">GhosttyKeyStateOverlay</lookup>
-      </binding>
-    </property>
+    <property name="halign">3</property>
+    <property name="valign" bind-source="GhosttyKeyStateOverlay" bind-property="valign-target" bind-flags="sync-create"/>
     <child>
       <object class="GtkGestureDrag">
         <property name="button">1</property>
-        <property name="propagation-phase">capture</property>
+        <property name="propagation-phase">1</property>
         <signal name="drag-end" handler="on_drag_end"/>
       </object>
     </child>
@@ -270,7 +268,7 @@ const key_state_overlay_ui = '<?xml version="1.0" encoding="UTF-8"?>
               <class name="background"/>
               <class name="key-state-overlay"/>
             </style>
-            <property name="orientation">horizontal</property>
+            <property name="orientation">0</property>
             <property name="spacing">6</property>
             <child>
               <object class="GtkImage">
@@ -280,31 +278,29 @@ const key_state_overlay_ui = '<?xml version="1.0" encoding="UTF-8"?>
             </child>
             <child>
               <object class="GtkLabel" id="tables_label">
-                <property name="visible">
-                  <binding>
-                    <lookup name="has-tables">GhosttyKeyStateOverlay</lookup>
-                  </binding>
-                </property>
-                <property name="label">
-                  <binding>
-                    <closure type="gchararray" function="tables_text">
-                      <lookup name="tables">GhosttyKeyStateOverlay</lookup>
-                    </closure>
-                  </binding>
-                </property>
-                <property name="xalign">0.0</property>
+                <property name="visible" bind-source="GhosttyKeyStateOverlay" bind-property="has-tables" bind-flags="sync-create"/>
+                <binding name="label">
+                  <closure function="tables_text" type="gchararray">
+                    <lookup name="tables" type="GhosttyKeyStateOverlay">
+                      <constant>GhosttyKeyStateOverlay</constant>
+                    </lookup>
+                  </closure>
+                </binding>
+                <property name="xalign">0</property>
               </object>
             </child>
             <child>
               <object class="GtkLabel" id="chevron_label">
-                <property name="visible">
-                  <binding>
-                    <closure type="gboolean" function="show_chevron">
-                      <lookup name="has-tables">GhosttyKeyStateOverlay</lookup>
-                      <lookup name="has-sequence">GhosttyKeyStateOverlay</lookup>
-                    </closure>
-                  </binding>
-                </property>
+                <binding name="visible">
+                  <closure function="show_chevron" type="gboolean">
+                    <lookup name="has-tables" type="GhosttyKeyStateOverlay">
+                      <constant>GhosttyKeyStateOverlay</constant>
+                    </lookup>
+                    <lookup name="has-sequence" type="GhosttyKeyStateOverlay">
+                      <constant>GhosttyKeyStateOverlay</constant>
+                    </lookup>
+                  </closure>
+                </binding>
                 <property name="label">›</property>
                 <style>
                   <class name="dim-label"/>
@@ -313,33 +309,21 @@ const key_state_overlay_ui = '<?xml version="1.0" encoding="UTF-8"?>
             </child>
             <child>
               <object class="GtkLabel" id="sequence_label">
-                <property name="visible">
-                  <binding>
-                    <lookup name="has-sequence">GhosttyKeyStateOverlay</lookup>
-                  </binding>
-                </property>
-                <property name="label">
-                  <binding>
-                    <closure type="gchararray" function="sequence_text">
-                      <lookup name="sequence">GhosttyKeyStateOverlay</lookup>
-                    </closure>
-                  </binding>
-                </property>
-                <property name="xalign">0.0</property>
+                <property name="visible" bind-source="GhosttyKeyStateOverlay" bind-property="has-sequence" bind-flags="sync-create"/>
+                <binding name="label">
+                  <closure function="sequence_text" type="gchararray">
+                    <lookup name="sequence" type="GhosttyKeyStateOverlay">
+                      <constant>GhosttyKeyStateOverlay</constant>
+                    </lookup>
+                  </closure>
+                </binding>
+                <property name="xalign">0</property>
               </object>
             </child>
             <child>
               <object class="GtkSpinner" id="pending_spinner">
-                <property name="visible">
-                  <binding>
-                    <lookup name="has-sequence">GhosttyKeyStateOverlay</lookup>
-                  </binding>
-                </property>
-                <property name="spinning">
-                  <binding>
-                    <lookup name="has-sequence">GhosttyKeyStateOverlay</lookup>
-                  </binding>
-                </property>
+                <property name="visible" bind-source="GhosttyKeyStateOverlay" bind-property="has-sequence" bind-flags="sync-create"/>
+                <property name="spinning" bind-source="GhosttyKeyStateOverlay" bind-property="has-sequence" bind-flags="sync-create"/>
               </object>
             </child>
           </object>

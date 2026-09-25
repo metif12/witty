@@ -54,13 +54,13 @@ fn C.adw_alert_dialog_choose_finish(dialog AdwAlertDialog, result GAsyncResult) 
 // `g_type_string` const declared in gsettings_linux.v — reused here for the
 // `set` signal's string parameter, NOT redeclared.
 
-// The blueprint (ui/1.5/surface-title-dialog.blp) translated to a GtkBuilder
-// .ui XML string. `_("x")` -> translatable="yes"; `responses [...]` -> the
-// AdwAlertDialog <responses>/<response> element (`suggested` ->
-// appearance="suggested"); `default-response`/`focus-widget` -> properties;
-// `extra-child: Entry entry {...}` -> the named `entry` child object.
+// Ghostty's ui/1.5/surface-title-dialog.blp as blueprint-compiler 0.16.0 emits it
+// (without the generated-file header). Ghostty compiles it into its
+// gresource and loads it with setTemplateFromResource; we load the same
+// bytes directly with gtk_widget_class_set_template.
 const surface_title_dialog_ui = '<?xml version="1.0" encoding="UTF-8"?>
 <interface>
+  <requires lib="gtk" version="4.0"/>
   <template class="GhosttySurfaceTitleDialog" parent="AdwAlertDialog">
     <property name="heading" translatable="yes">Change Terminal Title</property>
     <property name="body" translatable="yes">Leave blank to restore the default title.</property>

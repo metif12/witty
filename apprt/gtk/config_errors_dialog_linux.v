@@ -26,14 +26,13 @@ module gtk
 // `GhosttyConfigErrorsDialog`: a `.ui` template, a `config` object property,
 // a `reload-config` signal, private data, and a dispose vfunc.
 
-// The blueprint (ui/1.2/config-errors-dialog.blp) translated to a GtkBuilder
-// .ui XML string. `_("x")` -> translatable="yes"; `responses [...]` -> the
-// AdwAlertDialog <responses>/<response> element (`suggested` ->
-// appearance="suggested"); `extra-child: X` -> a <property name="extra-child">
-// wrapping the object; the `bind (template.config as <$GhosttyConfig>)
-// .diagnostics-buffer` expression is translated faithfully.
+// Ghostty's ui/1.2/config-errors-dialog.blp as blueprint-compiler 0.16.0 emits it
+// (without the generated-file header). Ghostty compiles it into its
+// gresource and loads it with setTemplateFromResource; we load the same
+// bytes directly with gtk_widget_class_set_template.
 const config_errors_dialog_ui = '<?xml version="1.0" encoding="UTF-8"?>
 <interface>
+  <requires lib="gtk" version="4.0"/>
   <template class="GhosttyConfigErrorsDialog" parent="GhosttyDialog">
     <property name="heading" translatable="yes">Configuration Errors</property>
     <property name="body" translatable="yes">One or more configuration errors were found. Please review the errors below, and either reload your configuration or ignore these errors.</property>
@@ -55,7 +54,9 @@ const config_errors_dialog_ui = '<?xml version="1.0" encoding="UTF-8"?>
             <property name="right-margin">8</property>
             <binding name="buffer">
               <lookup name="diagnostics-buffer" type="GhosttyConfig">
-                <lookup name="config">GhosttyConfigErrorsDialog</lookup>
+                <lookup name="config" type="GhosttyConfigErrorsDialog">
+                  <constant>GhosttyConfigErrorsDialog</constant>
+                </lookup>
               </lookup>
             </binding>
           </object>

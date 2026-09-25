@@ -205,13 +205,13 @@ fn on_resize_delay_timer(ud voidptr) int {
 // `GhosttyResizeOverlay` (parent adw.Bin): a `.ui` template with a bound
 // `label` child, five properties, and dispose/finalize vfuncs.
 
-// The blueprint (ui/1.2/resize-overlay.blp) translated to a GtkBuilder .ui XML
-// string. `visible: false` and the duration/first-delay/overlay-*align
-// template properties become <property> elements; `styles [...]` become
-// <style><class .../></style>; `halign/valign: bind template.overlay-*align`
-// become <binding>/<lookup name="overlay-*align">GhosttyResizeOverlay</lookup>.
+// Ghostty's ui/1.2/resize-overlay.blp as blueprint-compiler 0.16.0 emits it
+// (without the generated-file header). Ghostty compiles it into its
+// gresource and loads it with setTemplateFromResource; we load the same
+// bytes directly with gtk_widget_class_set_template.
 const resize_overlay_ui = '<?xml version="1.0" encoding="UTF-8"?>
 <interface>
+  <requires lib="gtk" version="4.0"/>
   <template class="GhosttyResizeOverlay" parent="AdwBin">
     <property name="visible">false</property>
     <property name="duration">750</property>
@@ -228,18 +228,10 @@ const resize_overlay_ui = '<?xml version="1.0" encoding="UTF-8"?>
             </style>
             <property name="focusable">false</property>
             <property name="focus-on-click">false</property>
-            <property name="justify">center</property>
+            <property name="justify">2</property>
             <property name="selectable">false</property>
-            <property name="halign">
-              <binding>
-                <lookup name="overlay-halign">GhosttyResizeOverlay</lookup>
-              </binding>
-            </property>
-            <property name="valign">
-              <binding>
-                <lookup name="overlay-valign">GhosttyResizeOverlay</lookup>
-              </binding>
-            </property>
+            <property name="halign" bind-source="GhosttyResizeOverlay" bind-property="overlay-halign" bind-flags="sync-create"/>
+            <property name="valign" bind-source="GhosttyResizeOverlay" bind-property="overlay-valign" bind-flags="sync-create"/>
           </object>
         </child>
       </object>

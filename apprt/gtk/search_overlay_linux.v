@@ -312,37 +312,23 @@ pub fn (mut self SearchOverlay) on_drag_end(offset_x f64, offset_y f64) {
 // `search_entry` child + seven callbacks, seven properties, four signals, and
 // dispose/finalize vfuncs.
 
-// The blueprint (ui/1.2/search-overlay.blp) translated to a GtkBuilder .ui XML
-// string. `visible/halign/valign: bind template.X` become <binding>/<lookup>;
-// `drag-end/stop-search/search-changed/... => $handler()` become <signal>;
-// `_("x")` become translatable="yes"; `styles [...]` become <style>;
-// `cursor: Gdk.Cursor { name: "pointer"; }` becomes a <property name="cursor">
-// with an inline GdkCursor object; the match label's
-// `bind $match_label_closure(...) as <string>` becomes a <closure>.
+// Ghostty's ui/1.2/search-overlay.blp as blueprint-compiler 0.16.0 emits it
+// (without the generated-file header). Ghostty compiles it into its
+// gresource and loads it with setTemplateFromResource; we load the same
+// bytes directly with gtk_widget_class_set_template.
 const search_overlay_ui = '<?xml version="1.0" encoding="UTF-8"?>
 <interface>
+  <requires lib="gtk" version="4.0"/>
   <template class="GhosttySearchOverlay" parent="AdwBin">
-    <property name="visible">
-      <binding>
-        <lookup name="active">GhosttySearchOverlay</lookup>
-      </binding>
-    </property>
+    <property name="visible" bind-source="GhosttySearchOverlay" bind-property="active" bind-flags="sync-create"/>
     <property name="halign-target">end</property>
     <property name="valign-target">start</property>
-    <property name="halign">
-      <binding>
-        <lookup name="halign-target">GhosttySearchOverlay</lookup>
-      </binding>
-    </property>
-    <property name="valign">
-      <binding>
-        <lookup name="valign-target">GhosttySearchOverlay</lookup>
-      </binding>
-    </property>
+    <property name="halign" bind-source="GhosttySearchOverlay" bind-property="halign-target" bind-flags="sync-create"/>
+    <property name="valign" bind-source="GhosttySearchOverlay" bind-property="valign-target" bind-flags="sync-create"/>
     <child>
       <object class="GtkGestureDrag">
         <property name="button">1</property>
-        <property name="propagation-phase">capture</property>
+        <property name="propagation-phase">1</property>
         <signal name="drag-end" handler="on_drag_end"/>
       </object>
     </child>
@@ -354,7 +340,7 @@ const search_overlay_ui = '<?xml version="1.0" encoding="UTF-8"?>
               <class name="background"/>
               <class name="search-overlay"/>
             </style>
-            <property name="orientation">horizontal</property>
+            <property name="orientation">0</property>
             <property name="spacing">6</property>
             <child>
               <object class="GtkSearchEntry" id="search_entry">
@@ -367,7 +353,7 @@ const search_overlay_ui = '<?xml version="1.0" encoding="UTF-8"?>
                 <signal name="previous-match" handler="previous_match"/>
                 <child>
                   <object class="GtkEventControllerKey">
-                    <property name="propagation-phase">capture</property>
+                    <property name="propagation-phase">1</property>
                     <signal name="key-pressed" handler="search_entry_key_pressed"/>
                   </object>
                 </child>
@@ -378,23 +364,29 @@ const search_overlay_ui = '<?xml version="1.0" encoding="UTF-8"?>
                 <style>
                   <class name="dim-label"/>
                 </style>
-                <property name="label">
-                  <binding>
-                    <closure type="gchararray" function="match_label_closure">
-                      <lookup name="has-search-selected">GhosttySearchOverlay</lookup>
-                      <lookup name="search-selected">GhosttySearchOverlay</lookup>
-                      <lookup name="has-search-total">GhosttySearchOverlay</lookup>
-                      <lookup name="search-total">GhosttySearchOverlay</lookup>
-                    </closure>
-                  </binding>
-                </property>
+                <binding name="label">
+                  <closure function="match_label_closure" type="gchararray">
+                    <lookup name="has-search-selected" type="GhosttySearchOverlay">
+                      <constant>GhosttySearchOverlay</constant>
+                    </lookup>
+                    <lookup name="search-selected" type="GhosttySearchOverlay">
+                      <constant>GhosttySearchOverlay</constant>
+                    </lookup>
+                    <lookup name="has-search-total" type="GhosttySearchOverlay">
+                      <constant>GhosttySearchOverlay</constant>
+                    </lookup>
+                    <lookup name="search-total" type="GhosttySearchOverlay">
+                      <constant>GhosttySearchOverlay</constant>
+                    </lookup>
+                  </closure>
+                </binding>
                 <property name="width-chars">6</property>
-                <property name="xalign">1.0</property>
+                <property name="xalign">1</property>
               </object>
             </child>
             <child>
               <object class="GtkBox" id="button_box">
-                <property name="orientation">horizontal</property>
+                <property name="orientation">0</property>
                 <property name="spacing">1</property>
                 <style>
                   <class name="linked"/>

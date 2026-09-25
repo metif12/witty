@@ -197,24 +197,25 @@ fn C.g_object_thaw_notify(object voidptr)
 // the scrollbar_policy closure's return type.
 fn C.gtk_policy_type_get_type() GType
 
-// The blueprint (ui/1.5/surface-scrolled-window.blp) translated to a GtkBuilder
-// .ui XML string. `notify::surface => $notify_surface()` becomes a <signal>;
-// `hscrollbar-policy: never` becomes a <property>; `vscrollbar-policy: bind
-// $scrollbar_policy(template.config) as <Gtk.PolicyType>` becomes a <closure>.
+// Ghostty's ui/1.5/surface-scrolled-window.blp as blueprint-compiler 0.16.0 emits it
+// (without the generated-file header). Ghostty compiles it into its
+// gresource and loads it with setTemplateFromResource; we load the same
+// bytes directly with gtk_widget_class_set_template.
 const surface_scrolled_window_ui = '<?xml version="1.0" encoding="UTF-8"?>
 <interface>
+  <requires lib="gtk" version="4.0"/>
   <template class="GhostttySurfaceScrolledWindow" parent="AdwBin">
     <signal name="notify::surface" handler="notify_surface"/>
     <child>
       <object class="GtkScrolledWindow">
-        <property name="hscrollbar-policy">never</property>
-        <property name="vscrollbar-policy">
-          <binding>
-            <closure type="GtkPolicyType" function="scrollbar_policy">
-              <lookup name="config">GhostttySurfaceScrolledWindow</lookup>
-            </closure>
-          </binding>
-        </property>
+        <property name="hscrollbar-policy">2</property>
+        <binding name="vscrollbar-policy">
+          <closure function="scrollbar_policy" type="GtkPolicyType">
+            <lookup name="config" type="GhostttySurfaceScrolledWindow">
+              <constant>GhostttySurfaceScrolledWindow</constant>
+            </lookup>
+          </closure>
+        </binding>
       </object>
     </child>
   </template>

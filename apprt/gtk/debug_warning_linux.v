@@ -17,16 +17,19 @@ pub type AdwBin = voidptr
 // defineClass's generated getGObjectType does).
 __global g_debug_warning_type = GType(0)
 
-// The blueprint templates, translated to GtkBuilder .ui. ghostty compiles
-// its .blp to a gresource and loads it with setTemplateFromResource; we load
-// the equivalent bytes directly with gtk_widget_class_set_template.
+// Ghostty's ui/1.3/debug-warning.blp (with the AdwBanner) and
+// ui/1.2/debug-warning.blp, as blueprint-compiler 0.16.0 emits them
+// (without the generated-file header). Ghostty compiles these into its
+// gresource and loads one with setTemplateFromResource; we load the same
+// bytes directly with gtk_widget_class_set_template.
 const debug_warning_ui_banner = '<?xml version="1.0" encoding="UTF-8"?>
 <interface>
+  <requires lib="gtk" version="4.0"/>
   <template class="GhosttyDebugWarning" parent="AdwBin">
     <child>
       <object class="AdwBanner">
-        <property name="title" translatable="yes">Debug build. Performance will be degraded.</property>
-        <property name="revealed">True</property>
+        <property name="title" translatable="yes">⚠️ You\'re running a debug build of Ghostty! Performance will be degraded.</property>
+        <property name="revealed">true</property>
       </object>
     </child>
   </template>
@@ -35,11 +38,12 @@ const debug_warning_ui_banner = '<?xml version="1.0" encoding="UTF-8"?>
 
 const debug_warning_ui_label = '<?xml version="1.0" encoding="UTF-8"?>
 <interface>
+  <requires lib="gtk" version="4.0"/>
   <template class="GhosttyDebugWarning" parent="GtkBox">
-    <property name="orientation">vertical</property>
+    <property name="orientation">1</property>
     <child>
       <object class="GtkLabel">
-        <property name="label" translatable="yes">Debug build. Performance will be degraded.</property>
+        <property name="label" translatable="yes">⚠️ You\'re running a debug build of Ghostty! Performance will be degraded.</property>
         <property name="margin-top">10</property>
         <property name="margin-bottom">10</property>
       </object>

@@ -80,16 +80,13 @@ fn C.g_param_spec_pointer(name &char, nick &char, blurb &char, flags int) &C.GPa
 const g_type_boolean = GType(5 << 2)
 const g_type_pointer = GType(17 << 2)
 
-// The blueprint (ui/1.4/clipboard-confirmation-dialog.blp, the newest — with
-// the AdwSwitchRow remember switch) translated to a GtkBuilder .ui XML string.
-// `styles [...]` -> <style><class .../></style>; `_("x")` -> translatable="yes"
-// (`suggested`/`destructive` -> appearance="..."); `notify::blur =>
-// $notify_blur()` -> <signal name="notify::blur" handler="notify_blur"/>;
-// `clicked => $reveal_clicked()` -> <signal name="clicked"
-// handler="reveal_clicked"/>; `[overlay]` children -> <child type="overlay">;
-// `bind template.X` -> <binding>/<lookup name="X">Self</lookup></binding>.
+// Ghostty's ui/1.4/clipboard-confirmation-dialog.blp as blueprint-compiler 0.16.0 emits it
+// (without the generated-file header). Ghostty compiles it into its
+// gresource and loads it with setTemplateFromResource; we load the same
+// bytes directly with gtk_widget_class_set_template.
 const clipboard_confirmation_dialog_ui = '<?xml version="1.0" encoding="UTF-8"?>
 <interface>
+  <requires lib="gtk" version="4.0"/>
   <template class="GhosttyClipboardConfirmationDialog" parent="GhosttyDialog">
     <style>
       <class name="clipboard-confirmation-dialog"/>
@@ -106,7 +103,7 @@ const clipboard_confirmation_dialog_ui = '<?xml version="1.0" encoding="UTF-8"?>
     <property name="close-response">cancel</property>
     <property name="extra-child">
       <object class="GtkListBox">
-        <property name="selection-mode">none</property>
+        <property name="selection-mode">0</property>
         <child>
           <object class="GtkOverlay">
             <style>
@@ -129,9 +126,7 @@ const clipboard_confirmation_dialog_ui = '<?xml version="1.0" encoding="UTF-8"?>
                     <property name="left-margin">8</property>
                     <property name="bottom-margin">8</property>
                     <property name="right-margin">8</property>
-                    <binding name="buffer">
-                      <lookup name="clipboard-contents">GhosttyClipboardConfirmationDialog</lookup>
-                    </binding>
+                    <property name="buffer" bind-source="GhosttyClipboardConfirmationDialog" bind-property="clipboard-contents" bind-flags="sync-create"/>
                   </object>
                 </child>
               </object>
@@ -140,8 +135,8 @@ const clipboard_confirmation_dialog_ui = '<?xml version="1.0" encoding="UTF-8"?>
               <object class="GtkButton" id="reveal_button">
                 <signal name="clicked" handler="reveal_clicked"/>
                 <property name="visible">false</property>
-                <property name="halign">end</property>
-                <property name="valign">start</property>
+                <property name="halign">2</property>
+                <property name="valign">1</property>
                 <property name="margin-end">12</property>
                 <property name="margin-top">12</property>
                 <child>
@@ -155,8 +150,8 @@ const clipboard_confirmation_dialog_ui = '<?xml version="1.0" encoding="UTF-8"?>
               <object class="GtkButton" id="hide_button">
                 <signal name="clicked" handler="hide_clicked"/>
                 <property name="visible">false</property>
-                <property name="halign">end</property>
-                <property name="valign">start</property>
+                <property name="halign">2</property>
+                <property name="valign">1</property>
                 <property name="margin-end">12</property>
                 <property name="margin-top">12</property>
                 <style>
@@ -176,12 +171,11 @@ const clipboard_confirmation_dialog_ui = '<?xml version="1.0" encoding="UTF-8"?>
             <style>
               <class name="card"/>
             </style>
-            <binding name="visible">
-              <lookup name="can-remember">GhosttyClipboardConfirmationDialog</lookup>
-            </binding>
+            <property name="visible" bind-source="GhosttyClipboardConfirmationDialog" bind-property="can-remember" bind-flags="sync-create"/>
             <property name="title" translatable="yes">Remember choice for this split</property>
             <property name="subtitle" translatable="yes">Reload configuration to show this prompt again</property>
           </object>
+        </child>
       </object>
     </property>
   </template>

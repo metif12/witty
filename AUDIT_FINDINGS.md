@@ -395,6 +395,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | compile-time renderer and platform selection | Ghostty builds exactly one graphics API into its renderer (`GenericRenderer(Metal)` on Apple platforms, `GenericRenderer(OpenGL)` on Linux) and only compiles `pkg/macos`, CoreText discovery, and the CoreText shaper for Darwin. Witty kept Metal and OpenGL fields, shaders, frame states, and image textures side by side behind a runtime `backend` switch, and compiled the macOS bindings, Metal renderer, and CoreText code into every build, so Linux builds type-checked but could never compile to C (CoreFoundation and Objective-C headers, CoreVideo constants). | Select the graphics API, shaders, frame state, texture, display link, and autorelease pool per platform with compile-time aliases, keep one `api`/`shaders`/`frames` set as the source does, move the backend-specialized renderer and image code into Darwin- and Linux-only files, make the `macos` module, Metal, CoreText discovery/shaping, and the CF release thread Darwin-only, and gate the remaining CoreText state behind `$if macos`. |
 | exec read-thread POSIX constants | Ghostty's exec read thread uses `posix.O.NONBLOCK`, `posix.POLL.IN`, and `posix.POLL.HUP` from the target's headers. Witty hardcoded them as literals: `O_NONBLOCK` as the macOS `0x0004`, which is not `O_NONBLOCK` on Linux (`0x800`), so the pty read stayed blocking and `exec_test` hung, and `POLLHUP` as `0x0004`, which is `POLLOUT` on both platforms, so the read thread never saw the hangup it polls for. The signal, `fcntl`, and `waitpid` constants were literals too. | Read `SIGHUP`, `F_GETFL`, `F_SETFL`, `O_NONBLOCK`, `POLLIN`, `POLLHUP`, and `WNOHANG` from the C headers; `exec_test` now passes on macOS and Linux. |
 | GTK instance-private data | zig-gobject's `defineClass` stores the size returned by `g_type_add_instance_private`, calls `g_type_class_adjust_private_offset` first thing in `class_init`, and reads private data at the adjusted offset. Witty's 16 GObject classes kept or discarded that size but never adjusted the offset, so GLib reserved no private area and `g_type_instance_get_private` returned the instance itself. Every private write, starting with `priv.wrapper`, overwrote the GObject header, and template-child offsets pointed past the instance. The GTK app aborted during startup on its first Linux run. | Store the offset per class, adjust it at the start of each `class_init`, and read private data through `instance_private(obj, offset)`, as zig-gobject's `getPrivate` does. |
+| GTK blueprint templates | Ghostty compiles its `.blp` files with blueprint-compiler into the gresource. Witty's 11 hand-written `.ui` strings nested `<binding>` elements inside `<property>`, which GtkBuilder rejects (the search, key-state, and resize overlays failed to build), turned `bind template.x` into expression bindings instead of `bind-source`/`bind-property` object bindings, left the clipboard dialog's XML unbalanced, reordered the close dialog's `close-response`, and replaced the debug-warning text. | Embed blueprint-compiler 0.16.0's output (Ghostty's required version) for each pinned `.blp` verbatim, without its generated-file header. All 11 are now structurally identical to the compiled files. |
 
 ## Focused behavior reviewed
 
@@ -566,10 +567,12 @@ an item here does not mean its full module has been certified yet.
   Blueprint files (about 1,400 lines of `.blp`), which `build/blueprint.zig`
   compiles to GTK `.ui` XML and `build/gresource.zig` embeds through
   `glib-compile-resources`; the classes then call `gtk_widget_init_template`.
-  Witty has no `.blp` or `.ui` files and neither build helper, and instead
-  constructs every widget tree programmatically in V. The resulting widget
-  graphs are intended to match, but the UI is not a translation of the
-  Blueprint sources and cannot be diffed against them.
+  Witty has neither build helper. The dialog and overlay classes embed
+  blueprint-compiler's output for their `.blp` files verbatim (diffed against
+  the compiled files), but the surface, window, tab, split-tree, command
+  palette, and inspector widget trees are still constructed programmatically
+  in V. Those graphs are intended to match, but they are not a translation of
+  their Blueprint sources and cannot be diffed against them.
 
 - **GTK class Common mixin:** `class.zig` exposes a `Common(Self, Private)`
   generic supplying each GObject class its upcast, ref/refSink/unref, and

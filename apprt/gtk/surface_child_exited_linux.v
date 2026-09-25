@@ -136,12 +136,13 @@ pub fn (self &SurfaceChildExited) close_button_clicked() {
 // pre-1.3 variant registers only `close-request`; `set_data` immediately emits
 // it so libghostty falls back to its text exit message.
 
-// The blueprint (ui/1.3/surface-child-exited.blp) translated to a GtkBuilder
-// .ui XML string. `styles [...]` become <style>; `notify::data =>
-// $notify_data()` and `button-clicked => $clicked()` become <signal>; `_("x")`
-// becomes translatable="yes".
+// Ghostty's ui/1.3/surface-child-exited.blp as blueprint-compiler 0.16.0 emits it
+// (without the generated-file header). Ghostty compiles it into its
+// gresource and loads it with setTemplateFromResource; we load the same
+// bytes directly with gtk_widget_class_set_template.
 const surface_child_exited_ui = '<?xml version="1.0" encoding="UTF-8"?>
 <interface>
+  <requires lib="gtk" version="4.0"/>
   <template class="GhosttySurfaceChildExited" parent="AdwBin">
     <style>
       <class name="child-exited"/>
@@ -155,8 +156,8 @@ const surface_child_exited_ui = '<?xml version="1.0" encoding="UTF-8"?>
             <property name="revealed">true</property>
             <property name="title">This is a bug in Ghostty. Please report it.</property>
             <property name="button-label" translatable="yes">Close</property>
-            <property name="halign">fill</property>
-            <property name="valign">end</property>
+            <property name="halign">0</property>
+            <property name="valign">2</property>
           </object>
         </child>
       </object>
