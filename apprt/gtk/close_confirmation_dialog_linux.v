@@ -90,7 +90,7 @@ const close_confirmation_prop_target = u32(1)
 
 // close_confirmation_dialog_priv returns the instance private data pointer.
 fn close_confirmation_dialog_priv(obj voidptr) &C.GhosttyCloseConfirmationDialogPrivate {
-	return &C.GhosttyCloseConfirmationDialogPrivate(C.g_type_instance_get_private(obj, g_close_confirmation_dialog_type))
+	return &C.GhosttyCloseConfirmationDialogPrivate(instance_private(obj, g_close_confirmation_dialog_priv_offset))
 }
 
 // close_confirmation_dialog_get_property implements the GObjectClass
@@ -134,6 +134,7 @@ fn close_confirmation_dialog_dispose(obj voidptr) {
 // property, the signals, and overrides the get/set/dispose vfuncs. Mirrors the
 // ghostty `Class.init`.
 fn close_confirmation_dialog_class_init(klass voidptr, class_data voidptr) {
+	C.g_type_class_adjust_private_offset(klass, &g_close_confirmation_dialog_priv_offset)
 	// Ensure the parent Dialog type is registered (ghostty's ensureType).
 	dialog_get_type()
 

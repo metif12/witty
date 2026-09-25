@@ -214,7 +214,7 @@ const clipboard_prop_clipboard_contents = u32(3)
 const clipboard_prop_request = u32(4)
 
 fn clipboard_confirmation_dialog_priv(obj voidptr) &C.GhosttyClipboardConfirmationDialogPrivate {
-	return &C.GhosttyClipboardConfirmationDialogPrivate(C.g_type_instance_get_private(obj, g_clipboard_confirmation_dialog_type))
+	return &C.GhosttyClipboardConfirmationDialogPrivate(instance_private(obj, g_clipboard_confirmation_dialog_priv_offset))
 }
 
 // clipboard_confirmation_dialog_get_property implements get_property for all
@@ -324,6 +324,7 @@ fn clipboard_confirmation_hide_clicked_cb(button voidptr, obj voidptr) {
 // template children + callbacks, installs the four properties, registers the
 // confirm/deny signals, and overrides the get/set/dispose/finalize vfuncs.
 fn clipboard_confirmation_dialog_class_init(klass voidptr, class_data voidptr) {
+	C.g_type_class_adjust_private_offset(klass, &g_clipboard_confirmation_dialog_priv_offset)
 	bytes := C.g_bytes_new_static(clipboard_confirmation_dialog_ui.str, usize(clipboard_confirmation_dialog_ui.len))
 	C.gtk_widget_class_set_template(klass, bytes)
 

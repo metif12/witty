@@ -282,7 +282,7 @@ const resize_overlay_prop_halign = u32(4)
 const resize_overlay_prop_valign = u32(5)
 
 fn resize_overlay_priv(obj voidptr) &C.GhosttyResizeOverlayPrivate {
-	return &C.GhosttyResizeOverlayPrivate(C.g_type_instance_get_private(obj, g_resize_overlay_type))
+	return &C.GhosttyResizeOverlayPrivate(instance_private(obj, g_resize_overlay_priv_offset))
 }
 
 // resize_overlay_get_property implements the GObjectClass get_property vfunc.
@@ -365,6 +365,7 @@ fn resize_overlay_finalize(obj voidptr) {
 // registers the five properties, and overrides the get/set/dispose/finalize
 // vfuncs. Mirrors the ghostty `Class.init`.
 fn resize_overlay_class_init(klass voidptr, class_data voidptr) {
+	C.g_type_class_adjust_private_offset(klass, &g_resize_overlay_priv_offset)
 	bytes := C.g_bytes_new_static(resize_overlay_ui.str, usize(resize_overlay_ui.len))
 	C.gtk_widget_class_set_template(klass, bytes)
 

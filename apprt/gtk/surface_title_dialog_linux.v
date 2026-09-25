@@ -101,7 +101,7 @@ __global g_surface_title_dialog_priv_offset = int(0)
 const surface_title_prop_initial_value = u32(1)
 
 fn surface_title_dialog_priv(obj voidptr) &C.GhosttySurfaceTitleDialogPrivate {
-	return &C.GhosttySurfaceTitleDialogPrivate(C.g_type_instance_get_private(obj, g_surface_title_dialog_type))
+	return &C.GhosttySurfaceTitleDialogPrivate(instance_private(obj, g_surface_title_dialog_priv_offset))
 }
 
 // surface_title_dialog_get_property implements get_property for `initial-value`.
@@ -147,6 +147,7 @@ fn surface_title_dialog_finalize(obj voidptr) {
 // overrides the get/set/dispose/finalize vfuncs. Mirrors the ghostty
 // `Class.init`.
 fn surface_title_dialog_class_init(klass voidptr, class_data voidptr) {
+	C.g_type_class_adjust_private_offset(klass, &g_surface_title_dialog_priv_offset)
 	bytes := C.g_bytes_new_static(surface_title_dialog_ui.str, usize(surface_title_dialog_ui.len))
 	C.gtk_widget_class_set_template(klass, bytes)
 

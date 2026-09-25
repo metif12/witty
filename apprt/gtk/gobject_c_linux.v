@@ -77,7 +77,14 @@ fn C.g_type_add_interface_static(instance_type GType, interface_type GType, info
 
 fn C.g_type_class_peek_parent(g_class voidptr) voidptr
 
-fn C.g_type_instance_get_private(instance voidptr, private_type GType) voidptr
+fn C.g_type_class_adjust_private_offset(g_class voidptr, private_size_or_offset &int)
+
+// instance_private returns the private data at `private_offset` bytes from
+// `instance`, as zig-gobject's `getPrivate` (G_STRUCT_MEMBER_P) does. The offset
+// is only valid once class_init has run g_type_class_adjust_private_offset.
+fn instance_private(instance voidptr, private_offset int) voidptr {
+	return unsafe { voidptr(&u8(instance) + private_offset) }
+}
 
 fn C.g_type_check_instance_cast(instance voidptr, iface_type GType) voidptr
 

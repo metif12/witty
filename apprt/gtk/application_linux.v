@@ -236,13 +236,17 @@ mut:
 }
 
 __global g_ghostty_application_type = GType(0)
+
+// The instance-private offset: the size until class_init adjusts it, then
+// the (negative) offset from the instance. Mirrors zig-gobject's `Private.offset`.
+__global g_ghostty_application_priv_offset = int(0)
 __global g_ghostty_application_pspec_config = &C.GParamSpec(unsafe { nil })
 
 const ghostty_application_prop_config = u32(1)
 const ghostty_application_param_static_strings = int(32 | 64 | 128)
 
 fn ghostty_application_priv(obj voidptr) &C.GhosttyApplicationPrivate {
-	return &C.GhosttyApplicationPrivate(C.g_type_instance_get_private(obj, g_ghostty_application_type))
+	return &C.GhosttyApplicationPrivate(instance_private(obj, g_ghostty_application_priv_offset))
 }
 
 fn ghostty_application_get_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
@@ -298,6 +302,7 @@ fn ghostty_application_finalize(obj voidptr) {
 }
 
 fn ghostty_application_class_init(klass voidptr, class_data voidptr) {
+	C.g_type_class_adjust_private_offset(klass, &g_ghostty_application_priv_offset)
 	_ = class_data
 	_ = config_get_type()
 	C.witty_gobject_class_set_get_property(klass, voidptr(ghostty_application_get_property))
@@ -329,7 +334,7 @@ pub fn ghostty_application_get_type() GType {
 			instance_init: voidptr(ghostty_application_instance_init)
 		}
 		g_ghostty_application_type = C.g_type_register_static(parent, c'GhosttyApplication', &info, 0)
-		_ = C.g_type_add_instance_private(g_ghostty_application_type, sizeof(C.GhosttyApplicationPrivate))
+		g_ghostty_application_priv_offset = C.g_type_add_instance_private(g_ghostty_application_type, sizeof(C.GhosttyApplicationPrivate))
 	}
 	return g_ghostty_application_type
 }

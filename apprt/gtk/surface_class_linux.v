@@ -379,6 +379,10 @@ const gdk_scroll_unit_surface = int(1)
 const gdk_gl_api_gl = int(1)
 
 __global g_terminal_surface_type = GType(0)
+
+// The instance-private offset: the size until class_init adjusts it, then
+// the (negative) offset from the instance. Mirrors zig-gobject's `Private.offset`.
+__global g_terminal_surface_priv_offset = int(0)
 __global g_surface_size_type = GType(0)
 __global g_font_desired_size_type = GType(0)
 __global g_mouse_shape_type = GType(0)
@@ -532,7 +536,7 @@ fn mouse_shape_get_type() GType {
 }
 
 fn terminal_surface_priv(obj voidptr) &C.GhosttySurfacePrivate {
-	return &C.GhosttySurfacePrivate(C.g_type_instance_get_private(obj, g_terminal_surface_type))
+	return &C.GhosttySurfacePrivate(instance_private(obj, g_terminal_surface_priv_offset))
 }
 
 fn terminal_surface_get_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
@@ -847,6 +851,7 @@ fn terminal_surface_finalize(obj voidptr) {
 }
 
 fn terminal_surface_class_init(klass voidptr, class_data voidptr) {
+	C.g_type_class_adjust_private_offset(klass, &g_terminal_surface_priv_offset)
 	_ = class_data
 	C.witty_gobject_class_set_get_property(klass, voidptr(terminal_surface_get_property))
 	C.witty_gobject_class_set_set_property(klass, voidptr(terminal_surface_set_property))
@@ -927,7 +932,7 @@ pub fn terminal_surface_get_type() GType {
 			instance_init: voidptr(terminal_surface_instance_init)
 		}
 		g_terminal_surface_type = C.g_type_register_static(parent, c'GhosttySurface', &info, 0)
-		_ = C.g_type_add_instance_private(g_terminal_surface_type, sizeof(C.GhosttySurfacePrivate))
+		g_terminal_surface_priv_offset = C.g_type_add_instance_private(g_terminal_surface_type, sizeof(C.GhosttySurfacePrivate))
 		interface_info := C.GInterfaceInfo{
 			interface_init: voidptr(terminal_surface_scrollable_init)
 		}

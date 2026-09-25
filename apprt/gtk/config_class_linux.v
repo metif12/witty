@@ -40,6 +40,10 @@ mut:
 }
 
 __global g_config_type = GType(0)
+
+// The instance-private offset: the size until class_init adjusts it, then
+// the (negative) offset from the instance. Mirrors zig-gobject's `Private.offset`.
+__global g_config_priv_offset = int(0)
 __global g_config_pspec_diagnostics_buffer = &C.GParamSpec(unsafe { nil })
 __global g_config_pspec_has_diagnostics = &C.GParamSpec(unsafe { nil })
 
@@ -47,7 +51,7 @@ const config_prop_diagnostics_buffer = u32(1)
 const config_prop_has_diagnostics = u32(2)
 
 fn config_priv(obj voidptr) &C.GhosttyConfigPrivate {
-	return &C.GhosttyConfigPrivate(C.g_type_instance_get_private(obj, g_config_type))
+	return &C.GhosttyConfigPrivate(instance_private(obj, g_config_priv_offset))
 }
 
 fn config_get_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
@@ -89,6 +93,7 @@ fn config_finalize_object(obj voidptr) {
 }
 
 fn config_class_init(klass voidptr, class_data voidptr) {
+	C.g_type_class_adjust_private_offset(klass, &g_config_priv_offset)
 	_ = class_data
 	g_config_pspec_diagnostics_buffer = C.g_param_spec_object(c'diagnostics-buffer', c'diagnostics-buffer', c'The formatted configuration diagnostics', C.gtk_text_buffer_get_type(), g_param_readable)
 	g_config_pspec_has_diagnostics = C.g_param_spec_boolean(c'has-diagnostics', c'has-diagnostics', c'Whether configuration diagnostics exist', 0, g_param_readable)
@@ -109,7 +114,7 @@ pub fn config_get_type() GType {
 			class_init: voidptr(config_class_init)
 		}
 		g_config_type = C.g_type_register_static(parent, c'GhosttyConfig', &info, 0)
-		C.g_type_add_instance_private(g_config_type, sizeof(C.GhosttyConfigPrivate))
+		g_config_priv_offset = C.g_type_add_instance_private(g_config_type, sizeof(C.GhosttyConfigPrivate))
 	}
 	return g_config_type
 }

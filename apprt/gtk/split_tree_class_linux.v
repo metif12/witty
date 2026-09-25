@@ -66,6 +66,10 @@ pub type SurfaceTree = datastruct.SplitTree[SurfaceWidget]
 // --- GObject class and boxed tree registration ----------------------------
 
 __global g_split_tree_type = GType(0)
+
+// The instance-private offset: the size until class_init adjusts it, then
+// the (negative) offset from the instance. Mirrors zig-gobject's `Private.offset`.
+__global g_split_tree_priv_offset = int(0)
 __global g_surface_tree_boxed_type = GType(0)
 __global g_split_tree_pspec_active_surface = &C.GParamSpec(unsafe { nil })
 __global g_split_tree_pspec_has_surfaces = &C.GParamSpec(unsafe { nil })
@@ -88,7 +92,7 @@ const split_tree_prop_is_split = u32(5)
 const split_tree_param_static_strings = int(32 | 64 | 128)
 
 fn split_tree_priv(obj voidptr) &C.GhosttySplitTreePrivate {
-	return &C.GhosttySplitTreePrivate(C.g_type_instance_get_private(obj, g_split_tree_type))
+	return &C.GhosttySplitTreePrivate(instance_private(obj, g_split_tree_priv_offset))
 }
 
 // surface_tree_boxed_copy/free mirror Surface.Tree.getGObjectType's custom
@@ -215,6 +219,7 @@ fn split_tree_finalize(obj voidptr) {
 }
 
 fn split_tree_class_init(klass voidptr, class_data voidptr) {
+	C.g_type_class_adjust_private_offset(klass, &g_split_tree_priv_offset)
 	_ = class_data
 	_ = terminal_surface_get_type()
 	tree_type := surface_tree_get_type()
@@ -257,7 +262,7 @@ pub fn split_tree_get_type() GType {
 			instance_init: voidptr(split_tree_instance_init)
 		}
 		g_split_tree_type = C.g_type_register_static(parent, c'GhosttySplitTree', &info, 0)
-		_ = C.g_type_add_instance_private(g_split_tree_type, sizeof(C.GhosttySplitTreePrivate))
+		g_split_tree_priv_offset = C.g_type_add_instance_private(g_split_tree_type, sizeof(C.GhosttySplitTreePrivate))
 	}
 	return g_split_tree_type
 }

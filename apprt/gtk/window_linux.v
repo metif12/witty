@@ -210,6 +210,10 @@ pub enum AdwToolbarStyle as i32 {
 }
 
 __global g_window_type = GType(0)
+
+// The instance-private offset: the size until class_init adjusts it, then
+// the (negative) offset from the instance. Mirrors zig-gobject's `Private.offset`.
+__global g_window_priv_offset = int(0)
 __global g_window_titlebar_style_type = GType(0)
 __global g_window_titlebar_style_values [3]C.GEnumValue
 __global g_window_pspec_active_surface = &C.GParamSpec(unsafe { nil })
@@ -252,7 +256,7 @@ fn window_titlebar_style_get_type() GType {
 }
 
 fn window_priv(obj voidptr) &C.GhosttyWindowPrivate {
-	return &C.GhosttyWindowPrivate(C.g_type_instance_get_private(obj, g_window_type))
+	return &C.GhosttyWindowPrivate(instance_private(obj, g_window_priv_offset))
 }
 
 fn window_get_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
@@ -355,6 +359,7 @@ fn window_finalize_object(obj voidptr) {
 }
 
 fn window_class_init(klass voidptr, class_data voidptr) {
+	C.g_type_class_adjust_private_offset(klass, &g_window_priv_offset)
 	_ = class_data
 	_ = terminal_surface_get_type()
 	_ = config_get_type()
@@ -404,7 +409,7 @@ pub fn window_get_type() GType {
 			instance_init: voidptr(window_instance_init)
 		}
 		g_window_type = C.g_type_register_static(parent, c'GhosttyWindow', &info, 0)
-		_ = C.g_type_add_instance_private(g_window_type, sizeof(C.GhosttyWindowPrivate))
+		g_window_priv_offset = C.g_type_add_instance_private(g_window_type, sizeof(C.GhosttyWindowPrivate))
 	}
 	return g_window_type
 }

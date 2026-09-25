@@ -81,7 +81,7 @@ __global g_config_errors_dialog_priv_offset = int(0)
 const config_errors_prop_config = u32(1)
 
 fn config_errors_dialog_priv(obj voidptr) &C.GhosttyConfigErrorsDialogPrivate {
-	return &C.GhosttyConfigErrorsDialogPrivate(C.g_type_instance_get_private(obj, g_config_errors_dialog_type))
+	return &C.GhosttyConfigErrorsDialogPrivate(instance_private(obj, g_config_errors_dialog_priv_offset))
 }
 
 // config_errors_dialog_get_property implements get_property for `config`.
@@ -126,6 +126,7 @@ fn config_errors_dialog_dispose(obj voidptr) {
 // config_errors_dialog_class_init installs the template, the `config` property,
 // the `reload-config` signal, and overrides the get/set/dispose vfuncs.
 fn config_errors_dialog_class_init(klass voidptr, class_data voidptr) {
+	C.g_type_class_adjust_private_offset(klass, &g_config_errors_dialog_priv_offset)
 	dialog_get_type()
 
 	bytes := C.g_bytes_new_static(config_errors_dialog_ui.str, usize(config_errors_dialog_ui.len))

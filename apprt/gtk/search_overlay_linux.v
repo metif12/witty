@@ -483,7 +483,7 @@ const search_prop_halign_target = u32(6)
 const search_prop_valign_target = u32(7)
 
 fn search_overlay_priv(obj voidptr) &C.GhosttySearchOverlayPrivate {
-	return &C.GhosttySearchOverlayPrivate(C.g_type_instance_get_private(obj, g_search_overlay_type))
+	return &C.GhosttySearchOverlayPrivate(instance_private(obj, g_search_overlay_priv_offset))
 }
 
 // search_overlay_get_property implements the GObjectClass get_property vfunc.
@@ -653,6 +653,7 @@ fn search_on_drag_end_cb(gesture voidptr, offset_x f64, offset_y f64, instance v
 // signals, and overrides the get/set/dispose/finalize vfuncs. Mirrors the
 // ghostty `Class.init`.
 fn search_overlay_class_init(klass voidptr, class_data voidptr) {
+	C.g_type_class_adjust_private_offset(klass, &g_search_overlay_priv_offset)
 	bytes := C.g_bytes_new_static(search_overlay_ui.str, usize(search_overlay_ui.len))
 	C.gtk_widget_class_set_template(klass, bytes)
 

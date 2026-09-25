@@ -130,6 +130,10 @@ struct VariantStringEntry {
 // --- GObject class registration ------------------------------------------
 
 __global g_global_shortcuts_type = GType(0)
+
+// The instance-private offset: the size until class_init adjusts it, then
+// the (negative) offset from the instance. Mirrors zig-gobject's `Private.offset`.
+__global g_global_shortcuts_priv_offset = int(0)
 __global g_global_shortcuts_pspec_config = &C.GParamSpec(unsafe { nil })
 __global g_global_shortcuts_pspec_dbus_connection = &C.GParamSpec(unsafe { nil })
 
@@ -143,7 +147,7 @@ const global_shortcuts_prop_dbus_connection = u32(2)
 const global_shortcuts_param_static_strings = int(32 | 64 | 128)
 
 fn global_shortcuts_priv(obj voidptr) &C.GhosttyGlobalShortcutsPrivate {
-	return &C.GhosttyGlobalShortcutsPrivate(C.g_type_instance_get_private(obj, g_global_shortcuts_type))
+	return &C.GhosttyGlobalShortcutsPrivate(instance_private(obj, g_global_shortcuts_priv_offset))
 }
 
 fn global_shortcuts_get_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
@@ -225,6 +229,7 @@ fn global_shortcuts_finalize_object(obj voidptr) {
 }
 
 fn global_shortcuts_class_init(klass voidptr, class_data voidptr) {
+	C.g_type_class_adjust_private_offset(klass, &g_global_shortcuts_priv_offset)
 	_ = class_data
 	_ = config_get_type()
 	C.witty_gobject_class_set_get_property(klass, voidptr(global_shortcuts_get_property))
@@ -257,7 +262,7 @@ pub fn global_shortcuts_get_type() GType {
 			instance_init: voidptr(global_shortcuts_instance_init)
 		}
 		g_global_shortcuts_type = C.g_type_register_static(parent, c'GhosttyGlobalShortcuts', &info, 0)
-		_ = C.g_type_add_instance_private(g_global_shortcuts_type, sizeof(C.GhosttyGlobalShortcutsPrivate))
+		g_global_shortcuts_priv_offset = C.g_type_add_instance_private(g_global_shortcuts_type, sizeof(C.GhosttyGlobalShortcutsPrivate))
 	}
 	return g_global_shortcuts_type
 }

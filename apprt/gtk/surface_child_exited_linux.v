@@ -187,7 +187,7 @@ __global g_surface_child_exited_pspec_data = &C.GParamSpec(unsafe { nil })
 const surface_child_exited_prop_data = u32(1)
 
 fn surface_child_exited_priv(obj voidptr) &C.GhosttySurfaceChildExitedPrivate {
-	return &C.GhosttySurfaceChildExitedPrivate(C.g_type_instance_get_private(obj, g_surface_child_exited_type))
+	return &C.GhosttySurfaceChildExitedPrivate(instance_private(obj, g_surface_child_exited_priv_offset))
 }
 
 fn child_exited_boxed_copy(value voidptr) voidptr {
@@ -282,6 +282,7 @@ fn surface_child_exited_finalize(obj voidptr) {
 // and `close-request` signal, and overrides the get/set/dispose/finalize
 // vfuncs. Mirrors the ghostty `Class.init`.
 fn surface_child_exited_class_init(klass voidptr, class_data voidptr) {
+	C.g_type_class_adjust_private_offset(klass, &g_surface_child_exited_priv_offset)
 	C.witty_gobject_class_set_dispose(klass, voidptr(surface_child_exited_dispose))
 	C.witty_gobject_class_set_finalize(klass, voidptr(surface_child_exited_finalize))
 

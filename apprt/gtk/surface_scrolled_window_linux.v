@@ -241,7 +241,7 @@ const surface_scrolled_window_prop_config = u32(1)
 const surface_scrolled_window_prop_surface = u32(2)
 
 fn surface_scrolled_window_priv(obj voidptr) &C.GhostttySurfaceScrolledWindowPrivate {
-	return &C.GhostttySurfaceScrolledWindowPrivate(C.g_type_instance_get_private(obj, g_surface_scrolled_window_type))
+	return &C.GhostttySurfaceScrolledWindowPrivate(instance_private(obj, g_surface_scrolled_window_priv_offset))
 }
 
 // surface_scrolled_window_get_property implements get_property for config/surface.
@@ -372,6 +372,7 @@ fn surface_scrolled_window_finalize(obj voidptr) {
 // properties, and overrides the get/set/dispose/finalize vfuncs. Mirrors the
 // ghostty `Class.init`.
 fn surface_scrolled_window_class_init(klass voidptr, class_data voidptr) {
+	C.g_type_class_adjust_private_offset(klass, &g_surface_scrolled_window_priv_offset)
 	bytes := C.g_bytes_new_static(surface_scrolled_window_ui.str, usize(surface_scrolled_window_ui.len))
 	C.gtk_widget_class_set_template(klass, bytes)
 

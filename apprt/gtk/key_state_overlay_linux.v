@@ -427,7 +427,7 @@ fn key_state_sequence_text_cb(self voidptr, sequence voidptr) &char {
 }
 
 fn key_state_priv(obj voidptr) &C.GhosttyKeyStateOverlayPrivate {
-	return &C.GhosttyKeyStateOverlayPrivate(C.g_type_instance_get_private(obj, g_key_state_overlay_type))
+	return &C.GhosttyKeyStateOverlayPrivate(instance_private(obj, g_key_state_overlay_priv_offset))
 }
 
 // key_state_overlay_get_property implements the GObjectClass get_property vfunc.
@@ -520,6 +520,7 @@ fn key_state_overlay_finalize(obj voidptr) {
 // callbacks, registers the five properties, and overrides the
 // get/set/dispose/finalize vfuncs. Mirrors the ghostty `Class.init`.
 fn key_state_overlay_class_init(klass voidptr, class_data voidptr) {
+	C.g_type_class_adjust_private_offset(klass, &g_key_state_overlay_priv_offset)
 	bytes := C.g_bytes_new_static(key_state_overlay_ui.str, usize(key_state_overlay_ui.len))
 	C.gtk_widget_class_set_template(klass, bytes)
 

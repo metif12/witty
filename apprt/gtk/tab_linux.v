@@ -54,6 +54,10 @@ fn C.gtk_widget_set_vexpand(widget GtkWidget, expand int)
 fn C.gtk_orientable_set_orientation(orientable voidptr, orientation int)
 
 __global g_tab_type = GType(0)
+
+// The instance-private offset: the size until class_init adjusts it, then
+// the (negative) offset from the instance. Mirrors zig-gobject's `Private.offset`.
+__global g_tab_priv_offset = int(0)
 __global g_tab_pspec_active_surface = &C.GParamSpec(unsafe { nil })
 __global g_tab_pspec_config = &C.GParamSpec(unsafe { nil })
 __global g_tab_pspec_split_tree = &C.GParamSpec(unsafe { nil })
@@ -75,7 +79,7 @@ const tab_prop_tooltip = u32(6)
 const tab_param_static_strings = int(32 | 64 | 128)
 
 fn tab_priv(obj voidptr) &C.GhosttyTabPrivate {
-	return &C.GhosttyTabPrivate(C.g_type_instance_get_private(obj, g_tab_type))
+	return &C.GhosttyTabPrivate(instance_private(obj, g_tab_priv_offset))
 }
 
 fn tab_get_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) {
@@ -188,6 +192,7 @@ fn tab_finalize(obj voidptr) {
 }
 
 fn tab_class_init(klass voidptr, class_data voidptr) {
+	C.g_type_class_adjust_private_offset(klass, &g_tab_priv_offset)
 	_ = class_data
 	_ = split_tree_get_type()
 	_ = terminal_surface_get_type()
@@ -233,7 +238,7 @@ pub fn tab_get_type() GType {
 			instance_init: voidptr(tab_instance_init)
 		}
 		g_tab_type = C.g_type_register_static(parent, c'GhosttyTab', &info, 0)
-		_ = C.g_type_add_instance_private(g_tab_type, sizeof(C.GhosttyTabPrivate))
+		g_tab_priv_offset = C.g_type_add_instance_private(g_tab_type, sizeof(C.GhosttyTabPrivate))
 	}
 	return g_tab_type
 }
