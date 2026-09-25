@@ -1074,9 +1074,11 @@ pub fn (mut self Face) deinit() {
 		self.face.deinit()
 	}
 	self.hb_font.destroy()
-	if !isnil(self.ct_font) {
-		macos.cf_release(self.ct_font)
-		self.ct_font = unsafe { nil }
+	$if macos {
+		if !isnil(self.ct_font) {
+			macos.cf_release(self.ct_font)
+			self.ct_font = unsafe { nil }
+		}
 	}
 }
 
@@ -1150,8 +1152,10 @@ pub fn (self &Face) synthetic_bold_face(opts FaceOptions) !Face {
 	self.face.ref()
 	mut ft_face := self.face
 	mut f := init_freetype_face(self.lib, mut ft_face, opts)!
-	if !isnil(self.ct_font) {
-		f.ct_font = macos.cf_retain(self.ct_font)
+	$if macos {
+		if !isnil(self.ct_font) {
+			f.ct_font = macos.cf_retain(self.ct_font)
+		}
 	}
 	f.synthetic = self.synthetic
 	f.synthetic.set_bold(true)
@@ -1164,8 +1168,10 @@ pub fn (self &Face) synthetic_italic_face(opts FaceOptions) !Face {
 	self.face.ref()
 	mut ft_face := self.face
 	mut f := init_freetype_face(self.lib, mut ft_face, opts)!
-	if !isnil(self.ct_font) {
-		f.ct_font = macos.cf_retain(self.ct_font)
+	$if macos {
+		if !isnil(self.ct_font) {
+			f.ct_font = macos.cf_retain(self.ct_font)
+		}
 	}
 	f.synthetic = self.synthetic
 	f.synthetic.set_italic(true)
@@ -1176,11 +1182,13 @@ pub fn (self &Face) synthetic_italic_face(opts FaceOptions) !Face {
 // is responsible for clearing any glyph caches, font atlas data, etc.
 pub fn (mut self Face) set_face_size(opts FaceOptions) ! {
 	set_freetype_size(self.face, opts.size)!
-	if !isnil(self.ct_font) {
-		mut resized := CoreTextFace.init_font_copy(self.ct_font, opts)!
-		macos.cf_release(self.ct_font)
-		self.ct_font = resized.ct_font
-		resized.ct_font = unsafe { nil }
+	$if macos {
+		if !isnil(self.ct_font) {
+			mut resized := CoreTextFace.init_font_copy(self.ct_font, opts)!
+			macos.cf_release(self.ct_font)
+			self.ct_font = resized.ct_font
+			resized.ct_font = unsafe { nil }
+		}
 	}
 	self.size = opts.size
 }

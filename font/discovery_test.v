@@ -32,8 +32,10 @@ fn test_discover_uses_the_target_backend_directly() {
 fn test_discovery_iterators_return_explicit_empty_value() {
 	mut fc := FcDiscoverIterator{}
 	assert !(fc.next()!).has_value
-	mut ct := CtDiscoverIterator{}
-	assert !(ct.next()!).has_value
+	$if macos {
+		mut ct := CtDiscoverIterator{}
+		assert !(ct.next()!).has_value
+	}
 }
 
 // test_descriptor_hash tests that a default descriptor produces

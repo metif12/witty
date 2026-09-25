@@ -595,13 +595,15 @@ fn (mut self RendererThread) drain_mailbox() ! {
 	//
 	// This is effectively an @autoreleasepool{} block, which we need in
 	// order to ensure that autoreleased objects are properly released.
-	mut pool := ?macos.AutoreleasePool(none)
+	mut pool := ?AutoreleasePool(none)
 	$if macos {
 		pool = macos.AutoreleasePool.init()
 	}
 	defer {
-		if mut active_pool := pool {
-			active_pool.deinit()
+		$if macos {
+			if mut active_pool := pool {
+				active_pool.deinit()
+			}
 		}
 	}
 

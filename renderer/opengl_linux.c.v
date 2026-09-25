@@ -256,12 +256,13 @@ pub fn (self &OpenGLAPI) sampler_options() GLSamplerOptions {
 
 // ImageTextureFormat is the CPU pixel layout used for uploaded images.
 //
-// Both backends declare this enum in the source; V has one namespace per
-// module, so the two identical declarations are flattened into this one and
-// each backend keeps its own pixel format conversion.
+// Pixel format for image texture options.
 pub enum ImageTextureFormat as u8 {
+	// 1 byte per pixel grayscale.
 	gray
+	// 4 bytes per pixel RGBA.
 	rgba
+	// 4 bytes per pixel BGRA.
 	bgra
 }
 

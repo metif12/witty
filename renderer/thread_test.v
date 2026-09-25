@@ -92,10 +92,13 @@ fn test_display_link_callback_notifies_draw_now() ! {
 	render_thread.loop.run(.no_wait)!
 	assert counter.count == 0
 
-	mut flags_out := u64(0)
-	assert renderer_display_link_callback(unsafe { nil }, unsafe { nil }, unsafe { nil }, 0, &flags_out, voidptr(&render_thread.draw_now)) == 0
-	render_thread.loop.run(.no_wait)!
-	assert counter.count == 1
+	// The display link only exists on macOS.
+	$if macos {
+		mut flags_out := u64(0)
+		assert renderer_display_link_callback(unsafe { nil }, unsafe { nil }, unsafe { nil }, 0, &flags_out, voidptr(&render_thread.draw_now)) == 0
+		render_thread.loop.run(.no_wait)!
+		assert counter.count == 1
+	}
 }
 
 fn test_renderer_thread_stop_callback_ends_loop() ! {

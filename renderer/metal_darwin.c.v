@@ -219,6 +219,16 @@ pub fn (self &MetalAPI) buffer_options() MetalBufferOptions {
 	}
 }
 
+// Pixel format for image texture options.
+pub enum ImageTextureFormat as u8 {
+	// 1 byte per pixel grayscale.
+	gray
+	// 4 bytes per pixel RGBA.
+	rgba
+	// 4 bytes per pixel BGRA.
+	bgra
+}
+
 // metal_pixel_format translates an image pixel layout to its Metal format.
 fn (format ImageTextureFormat) metal_pixel_format(srgb bool) MetalPixelFormat {
 	return match format {
