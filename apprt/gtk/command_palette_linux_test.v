@@ -81,9 +81,22 @@ fn test_command_palette_filter_matches_title_or_action_key() {
 	assert palette.filter('missing').len == 0
 }
 
+fn C.gtk_init_check() bool
+
 fn test_command_palette_uses_configured_entries() {
+	// The palette builds real Adwaita widgets, which need GTK initialized
+	// against a display. A headless test run has none, so skip there.
+	if !C.gtk_init_check() {
+		eprintln('skipping: GTK could not open a display')
+		return
+	}
+	C.adw_init()
 	mut inner := configpkg.Config.default_config()
-	inner.load_string('command-palette-entry =\ncommand-palette-entry = title:Only Entry,description:Configured,action:ignore')
+	// Start from an empty list. `command-palette-entry =` would not do it: as in
+	// Ghostty's cli/args.zig, an empty value resets a field with an `init` to
+	// that `init`, which reloads the default entries.
+	inner.command_palette_entry = configpkg.RepeatableCommand{}
+	inner.load_string('command-palette-entry = title:Only Entry,description:Configured,action:ignore')
 	mut cfg := config_new(inner)
 	mut palette := new_command_palette()
 	palette.config = cfg
