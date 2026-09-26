@@ -255,11 +255,8 @@ pub fn (mut self EpollLoop) timer(c &EpollCompletion, next_ms u64, userdata void
 	mut completion := unsafe { c }
 	unsafe {
 		*completion = EpollCompletion{
-			op:       EpollOperation{
-				tag:   .timer
-				timer: EpollHeapTimer{
-					next: self.timer_next(next_ms)
-				}
+			op:       EpollHeapTimer{
+				next: self.timer_next(next_ms)
 			}
 			userdata: userdata
 			callback: cb
@@ -281,7 +278,11 @@ pub fn (mut self EpollLoop) timer_reset(c &EpollCompletion, c_cancel &EpollCompl
 		// Adding state we can just modify the metadata and return
 		// since the timer isn't in the heap yet.
 		.adding {
-			completion.op.timer.next = self.timer_next(next_ms)
+			if mut completion.op is EpollHeapTimer {
+				completion.op.next = self.timer_next(next_ms)
+			} else {
+				panic('completion: completion is not a timer operation')
+			}
 			completion.userdata = userdata
 			completion.callback = cb
 			return
@@ -289,7 +290,11 @@ pub fn (mut self EpollLoop) timer_reset(c &EpollCompletion, c_cancel &EpollCompl
 		.active {
 			// Update the reset time for the timer to the desired time
 			// along with all the callbacks.
-			completion.op.timer.reset = self.timer_next(next_ms)
+			if mut completion.op is EpollHeapTimer {
+				completion.op.reset = self.timer_next(next_ms)
+			} else {
+				panic('completion: completion is not a timer operation')
+			}
 			completion.userdata = userdata
 			completion.callback = cb
 
@@ -301,11 +306,8 @@ pub fn (mut self EpollLoop) timer_reset(c &EpollCompletion, c_cancel &EpollCompl
 			assert cancel.state() == .dead && completion.state() == .active
 			unsafe {
 				*cancel = EpollCompletion{
-					op: EpollOperation{
-						tag:    .cancel
-						cancel: EpollCancelOp{
-							c: completion
-						}
+					op: EpollCancelOp{
+						c: completion
 					}
 				}
 			}
@@ -386,10 +388,10 @@ pub fn (mut self EpollLoop) tick(wait u32) ! {
 
 		// These operations happen synchronously. Ensure they are
 		// decremented from wait_rem.
-		match c.op.tag {
+		match mut c.op {
 			// should noop be counted?
 			// .noop,
-			.cancel, .shutdown, .timer {
+			EpollCancelOp, EpollShutdownOp, EpollHeapTimer {
 				wait_rem = sat_sub(wait_rem, 1)
 			}
 			else {}
@@ -442,8 +444,7 @@ pub fn (mut self EpollLoop) tick(wait u32) ! {
 			wait_rem = sat_sub(wait_rem, 1)
 
 			// Invoke
-			action := c.callback(c.userdata, self, c, EpollResult{
-				tag:   .timer
+			action := c.callback(c.userdata, self, c, EpollTimerResult{
 				timer: .expiration
 			})
 			match action {
@@ -612,12 +613,12 @@ fn (mut self EpollLoop) wakeup() ! {
 
 fn (mut self EpollLoop) start(mut completion EpollCompletion) {
 	mut res_ := ?EpollResult(none)
-	match completion.op.tag {
-		.noop {
+	match mut completion.op {
+		EpollNoopOp {
 			completion.flags.set_state(.dead)
 			return
 		}
-		.cancel {
+		EpollCancelOp {
 			if completion.flags.threadpool() {
 				res_ = epoll_result_kind(.cancel, .thread_pool_unsupported)
 			} else {
@@ -625,20 +626,18 @@ fn (mut self EpollLoop) start(mut completion EpollCompletion) {
 				// "adding" state because cancellation or any other action
 				// means we're complete already.
 				if completion.flags.state() == .adding {
-					mut target := completion.op.cancel.c
-					if target.op.tag == .cancel {
+					mut target := completion.op.c
+					if target.op.tag() == .cancel {
 						panic('cannot cancel a cancellation')
 					}
 					self.stop_completion(mut target)
 				}
 
 				// We always run timers
-				res_ = EpollResult{
-					tag: .cancel
-				}
+				res_ = EpollCancelResult{}
 			}
 		}
-		.accept {
+		EpollAcceptOp {
 			mut ev := epoll_event_init(epoll_in, &completion)
 
 			if fd := completion.fd_maybe_dup() {
@@ -649,11 +648,11 @@ fn (mut self EpollLoop) start(mut completion EpollCompletion) {
 				res_ = epoll_result_err(.accept, err)
 			}
 		}
-		.connect {
+		EpollConnectOp {
 			if fd := completion.fd_maybe_dup() {
 				mut connected := true
 				mut would_block := false
-				posix_connect(fd, completion.op.connect.addr.any(), completion.op.connect.addr.get_os_sock_len()) or {
+				posix_connect(fd, completion.op.addr.any(), completion.op.addr.get_os_sock_len()) or {
 					connected = false
 					match error_kind(err) {
 						// If we would block then we register with epoll
@@ -668,9 +667,7 @@ fn (mut self EpollLoop) start(mut completion EpollCompletion) {
 				}
 
 				if connected {
-					res_ = EpollResult{
-						tag: .connect
-					}
+					res_ = EpollConnectResult{}
 				} else if would_block {
 					// If connect returns WouldBlock then we register for OUT events
 					// and are notified of connection completion that way.
@@ -684,10 +681,12 @@ fn (mut self EpollLoop) start(mut completion EpollCompletion) {
 				res_ = epoll_result_err(.connect, err)
 			}
 		}
-		.read {
+		EpollReadOp {
 			if completion.flags.threadpool() {
 				self.thread_schedule(mut completion) or { res_ = epoll_result_err(.read, err) }
-				if res_ == none {
+				// V miscompiles `res_ == none` after the `or` block assigns it.
+				if _ := res_ {
+				} else {
 					return
 				}
 			} else {
@@ -703,10 +702,11 @@ fn (mut self EpollLoop) start(mut completion EpollCompletion) {
 			}
 		}
 		// The source reports pread failures through the `.read` result.
-		.pread {
+		EpollPReadOp {
 			if completion.flags.threadpool() {
 				self.thread_schedule(mut completion) or { res_ = epoll_result_err(.read, err) }
-				if res_ == none {
+				if _ := res_ {
+				} else {
 					return
 				}
 			} else {
@@ -721,10 +721,11 @@ fn (mut self EpollLoop) start(mut completion EpollCompletion) {
 				}
 			}
 		}
-		.write {
+		EpollWriteOp {
 			if completion.flags.threadpool() {
 				self.thread_schedule(mut completion) or { res_ = epoll_result_err(.write, err) }
-				if res_ == none {
+				if _ := res_ {
+				} else {
 					return
 				}
 			} else {
@@ -740,10 +741,11 @@ fn (mut self EpollLoop) start(mut completion EpollCompletion) {
 			}
 		}
 		// The source reports pwrite failures through the `.write` result.
-		.pwrite {
+		EpollPWriteOp {
 			if completion.flags.threadpool() {
 				self.thread_schedule(mut completion) or { res_ = epoll_result_err(.write, err) }
-				if res_ == none {
+				if _ := res_ {
+				} else {
 					return
 				}
 			} else {
@@ -758,7 +760,7 @@ fn (mut self EpollLoop) start(mut completion EpollCompletion) {
 				}
 			}
 		}
-		.send {
+		EpollSendOp {
 			mut ev := epoll_event_init(epoll_out, &completion)
 
 			if fd := completion.fd_maybe_dup() {
@@ -769,7 +771,7 @@ fn (mut self EpollLoop) start(mut completion EpollCompletion) {
 				res_ = epoll_result_err(.send, err)
 			}
 		}
-		.recv {
+		EpollRecvOp {
 			mut ev := epoll_event_init(epoll_in | epoll_rdhup, &completion)
 
 			if fd := completion.fd_maybe_dup() {
@@ -780,8 +782,8 @@ fn (mut self EpollLoop) start(mut completion EpollCompletion) {
 				res_ = epoll_result_err(.recv, err)
 			}
 		}
-		.sendmsg {
-			if _ := completion.op.sendmsg.buffer {
+		EpollSendMsgOp {
+			if _ := completion.op.buffer {
 				panic('TODO: sendmsg with buffer')
 			}
 
@@ -795,7 +797,7 @@ fn (mut self EpollLoop) start(mut completion EpollCompletion) {
 				res_ = epoll_result_err(.sendmsg, err)
 			}
 		}
-		.recvmsg {
+		EpollRecvMsgOp {
 			mut ev := epoll_event_init(epoll_in | epoll_rdhup, &completion)
 
 			if fd := completion.fd_maybe_dup() {
@@ -806,39 +808,36 @@ fn (mut self EpollLoop) start(mut completion EpollCompletion) {
 				res_ = epoll_result_err(.recvmsg, err)
 			}
 		}
-		.close {
+		EpollCloseOp {
 			if completion.flags.threadpool() {
 				self.thread_schedule(mut completion) or { res_ = epoll_result_err(.close, err) }
-				if res_ == none {
+				if _ := res_ {
+				} else {
 					return
 				}
 			} else {
-				posix_close(completion.op.close.fd)
-				res_ = EpollResult{
-					tag: .close
-				}
+				posix_close(completion.op.fd)
+				res_ = EpollCloseResult{}
 			}
 		}
-		.shutdown {
-			res_ = EpollResult{
-				tag: .shutdown
-			}
-			posix_shutdown(completion.op.shutdown.socket, completion.op.shutdown.how) or {
+		EpollShutdownOp {
+			res_ = EpollShutdownResult{}
+			posix_shutdown(completion.op.socket, completion.op.how) or {
 				res_ = epoll_result_err(.shutdown, err)
 			}
 		}
-		.timer {
+		EpollHeapTimer {
 			// Point back to completion since we need this. In the future
 			// we want to use @fieldParentPtr but https://github.com/ziglang/zig/issues/6611
-			completion.op.timer.c = unsafe { &completion }
+			completion.op.c = unsafe { &completion }
 
 			// Insert the timer into our heap.
-			self.timers.insert(&completion.op.timer)
+			self.timers.insert(&completion.op)
 
 			// We always run timers
 		}
-		.poll {
-			mut ev := epoll_event_init(completion.op.poll.events, &completion)
+		EpollPollOp {
+			mut ev := epoll_event_init(completion.op.events, &completion)
 
 			if fd := completion.fd_maybe_dup() {
 				posix_epoll_ctl(self.fd, epoll_ctl_add, fd, &ev) or {
@@ -890,9 +889,9 @@ fn (mut self EpollLoop) stop_completion(mut completion EpollCompletion) {
 	if fd := maybe_fd {
 		posix_epoll_ctl(self.fd, epoll_ctl_del, fd, unsafe { nil }) or { panic('unreachable') }
 	} else {
-		match completion.op.tag {
-			.timer {
-				mut v := unsafe { &completion.op.timer }
+		match mut completion.op {
+			EpollHeapTimer {
+				mut v := unsafe { &completion.op }
 				mut c := v.c
 
 				if c.flags.state() == .active {
@@ -914,8 +913,7 @@ fn (mut self EpollLoop) stop_completion(mut completion EpollCompletion) {
 						return
 					}
 
-					action := c.callback(c.userdata, self, c, EpollResult{
-						tag:   .timer
+					action := c.callback(c.userdata, self, c, EpollTimerResult{
 						timer: .cancel
 					})
 					match action {
@@ -1023,7 +1021,7 @@ pub struct EpollCompletion {
 pub mut:
 	// Operation to execute. This is only safe to read BEFORE the completion
 	// is queued. After being queued (with "add"), the operation may change.
-	op EpollOperation
+	op EpollOperation = EpollNoopOp{}
 
 	// Userdata and callback for when the completion is finished.
 	userdata voidptr       = unsafe { nil }
@@ -1069,71 +1067,66 @@ pub fn (self &EpollCompletion) state() CompletionState {
 // Perform the operation associated with this completion. This will
 // perform the full blocking operation for the completion.
 fn (mut self EpollCompletion) perform() EpollResult {
-	match self.op.tag {
+	match mut self.op {
 		// This should never happen because we always do these synchronously
 		// or in another location.
-		.cancel, .noop, .shutdown, .timer {
+		EpollCancelOp, EpollNoopOp, EpollShutdownOp, EpollHeapTimer {
 			panic('unreachable')
 		}
-		.accept {
-			v := posix_accept(self.op.accept.socket, &self.op.accept.addr, &self.op.accept.addr_size,
-				self.op.accept.flags) or { return epoll_result_kind(.accept, .unknown) }
-			return EpollResult{
-				tag:    .accept
+		EpollAcceptOp {
+			v := posix_accept(self.op.socket, &self.op.addr, &self.op.addr_size,
+				self.op.flags) or { return epoll_result_kind(.accept, .unknown) }
+			return EpollAcceptResult{
 				socket: v
 			}
 		}
-		.connect {
-			posix_getsockopt_error(self.op.connect.socket) or {
+		EpollConnectOp {
+			posix_getsockopt_error(self.op.socket) or {
 				return epoll_result_err(.connect, err)
 			}
-			return EpollResult{
-				tag: .connect
-			}
+			return EpollConnectResult{}
 		}
-		.poll {
-			return EpollResult{
-				tag: .poll
-			}
+		EpollPollOp {
+			return EpollPollResult{}
 		}
-		.read {
-			n := posix_read(self.op.read.fd, self.op.read.buffer.slice_ptr()) or {
+		EpollReadOp {
+			n := posix_read(self.op.fd, self.op.buffer.slice_ptr()) or {
 				return epoll_result_err(.read, err)
 			}
 			return epoll_read_result(.read, n)
 		}
-		.pread {
-			n := posix_pread(self.op.pread.fd, self.op.pread.buffer.slice_ptr(), self.op.pread.offset) or {
+		EpollPReadOp {
+			n := posix_pread(self.op.fd, self.op.buffer.slice_ptr(), self.op.offset) or {
 				return epoll_result_err(.pread, err)
 			}
 			return epoll_read_result(.pread, n)
 		}
-		.write {
-			n := posix_write(self.op.write.fd, self.op.write.buffer.bytes()) or {
+		EpollWriteOp {
+			n := posix_write(self.op.fd, self.op.buffer.bytes()) or {
 				return epoll_result_err(.write, err)
 			}
 			return epoll_result_n(.write, n)
 		}
-		.pwrite {
-			n := posix_pwrite(self.op.pwrite.fd, self.op.pwrite.buffer.bytes(), self.op.pwrite.offset) or {
+		EpollPWriteOp {
+			n := posix_pwrite(self.op.fd, self.op.buffer.bytes(), self.op.offset) or {
 				return epoll_result_err(.pwrite, err)
 			}
 			return epoll_result_n(.pwrite, n)
 		}
-		.send {
-			n := posix_send(self.op.send.fd, self.op.send.buffer.bytes(), 0) or {
+		EpollSendOp {
+			n := posix_send(self.op.fd, self.op.buffer.bytes(), 0) or {
 				return epoll_result_err(.send, err)
 			}
 			return epoll_result_n(.send, n)
 		}
-		.sendmsg {
-			n := posix_sendmsg(self.op.sendmsg.fd, self.op.sendmsg.msghdr, 0) or {
+		EpollSendMsgOp {
+			n := posix_sendmsg(self.op.fd, self.op.msghdr, 0) or {
 				return epoll_result_err(.sendmsg, err)
 			}
 			return epoll_result_n(.sendmsg, n)
 		}
-		.recvmsg {
-			res := linux_recvmsg(self.op.recvmsg.fd, self.op.recvmsg.msghdr, 0)
+		EpollRecvMsgOp {
+			res := linux_recvmsg(self.op.fd, self.op.msghdr, 0)
 			// Like the source, this tests the raw usize result, so every
 			// non-zero result (including a negated errno) is a byte count.
 			if res == 0 {
@@ -1144,17 +1137,15 @@ fn (mut self EpollCompletion) perform() EpollResult {
 				return epoll_result_err(.recvmsg, unexpected_errno(linux_errno(res)))
 			}
 		}
-		.recv {
-			n := posix_recv(self.op.recv.fd, self.op.recv.buffer.slice_ptr(), 0) or {
+		EpollRecvOp {
+			n := posix_recv(self.op.fd, self.op.buffer.slice_ptr(), 0) or {
 				return epoll_result_err(.recv, err)
 			}
 			return epoll_read_result(.recv, n)
 		}
-		.close {
-			posix_close(self.op.close.fd)
-			return EpollResult{
-				tag: .close
-			}
+		EpollCloseOp {
+			posix_close(self.op.fd)
+			return EpollCloseResult{}
 		}
 	}
 }
@@ -1176,22 +1167,22 @@ fn (mut self EpollCompletion) fd_maybe_dup() !int {
 
 // Returns the fd associated with the completion (if any).
 fn (self &EpollCompletion) fd() ?int {
-	match self.op.tag {
-		.accept { return self.op.accept.socket }
-		.connect { return self.op.connect.socket }
-		.poll { return self.op.poll.fd }
-		.read { return self.op.read.fd }
-		.pread { return self.op.pread.fd }
-		.recv { return self.op.recv.fd }
-		.write { return self.op.write.fd }
-		.pwrite { return self.op.pwrite.fd }
-		.send { return self.op.send.fd }
-		.sendmsg { return self.op.sendmsg.fd }
-		.recvmsg { return self.op.recvmsg.fd }
-		.close { return self.op.close.fd }
-		.shutdown { return self.op.shutdown.socket }
-		.cancel, .timer { return none }
-		.noop { panic('unreachable') }
+	match self.op {
+		EpollAcceptOp { return self.op.socket }
+		EpollConnectOp { return self.op.socket }
+		EpollPollOp { return self.op.fd }
+		EpollReadOp { return self.op.fd }
+		EpollPReadOp { return self.op.fd }
+		EpollRecvOp { return self.op.fd }
+		EpollWriteOp { return self.op.fd }
+		EpollPWriteOp { return self.op.fd }
+		EpollSendOp { return self.op.fd }
+		EpollSendMsgOp { return self.op.fd }
+		EpollRecvMsgOp { return self.op.fd }
+		EpollCloseOp { return self.op.fd }
+		EpollShutdownOp { return self.op.socket }
+		EpollCancelOp, EpollHeapTimer { return none }
+		EpollNoopOp { panic('unreachable') }
 	}
 }
 
@@ -1214,82 +1205,345 @@ pub enum EpollOperationType {
 	timer
 }
 
-// The result type based on the operation type. For a callback, the
-// result tag will ALWAYS match the operation tag.
-//
-// The Zig Result union carries each operation's error union. The flat record
-// keeps the failing Zig error name in `err`, or the success payload in the
-// field the operation uses.
-pub struct EpollResult {
+// The result type based on the operation type: the source's `Result`
+// tagged union. For a callback, the result tag will ALWAYS match the
+// operation tag. Each variant carries the operation's error union as the
+// failing error name in `err`, or its success payload.
+pub type EpollResult = EpollAcceptResult
+	| EpollCancelResult
+	| EpollCloseResult
+	| EpollConnectResult
+	| EpollNoopResult
+	| EpollPReadResult
+	| EpollPWriteResult
+	| EpollPollResult
+	| EpollReadResult
+	| EpollRecvMsgResult
+	| EpollRecvResult
+	| EpollSendMsgResult
+	| EpollSendResult
+	| EpollShutdownResult
+	| EpollTimerResult
+	| EpollWriteResult
+
+pub struct EpollNoopResult {
 pub mut:
-	tag EpollOperationType
 	err ?ErrorKind
-	// accept: the accepted socket
+}
+
+pub struct EpollCancelResult {
+pub mut:
+	err ?ErrorKind
+}
+
+pub struct EpollAcceptResult {
+pub mut:
+	err ?ErrorKind
 	socket int
-	// read, pread, write, pwrite, send, recv, sendmsg, recvmsg: byte count
+}
+
+pub struct EpollConnectResult {
+pub mut:
+	err ?ErrorKind
+}
+
+pub struct EpollPollResult {
+pub mut:
+	err ?ErrorKind
+}
+
+pub struct EpollReadResult {
+pub mut:
+	err ?ErrorKind
 	n usize
-	// timer
+}
+
+pub struct EpollPReadResult {
+pub mut:
+	err ?ErrorKind
+	n usize
+}
+
+pub struct EpollWriteResult {
+pub mut:
+	err ?ErrorKind
+	n usize
+}
+
+pub struct EpollPWriteResult {
+pub mut:
+	err ?ErrorKind
+	n usize
+}
+
+pub struct EpollSendResult {
+pub mut:
+	err ?ErrorKind
+	n usize
+}
+
+pub struct EpollRecvResult {
+pub mut:
+	err ?ErrorKind
+	n usize
+}
+
+pub struct EpollSendMsgResult {
+pub mut:
+	err ?ErrorKind
+	n usize
+}
+
+pub struct EpollRecvMsgResult {
+pub mut:
+	err ?ErrorKind
+	n usize
+}
+
+pub struct EpollCloseResult {
+pub mut:
+	err ?ErrorKind
+}
+
+pub struct EpollShutdownResult {
+pub mut:
+	err ?ErrorKind
+}
+
+pub struct EpollTimerResult {
+pub mut:
+	err ?ErrorKind
 	timer EpollTimerTrigger
 }
 
+// The tag of the active result variant.
+pub fn (self EpollResult) tag() EpollOperationType {
+	return match self {
+		EpollNoopResult { .noop }
+		EpollCancelResult { .cancel }
+		EpollAcceptResult { .accept }
+		EpollConnectResult { .connect }
+		EpollPollResult { .poll }
+		EpollReadResult { .read }
+		EpollPReadResult { .pread }
+		EpollWriteResult { .write }
+		EpollPWriteResult { .pwrite }
+		EpollSendResult { .send }
+		EpollRecvResult { .recv }
+		EpollSendMsgResult { .sendmsg }
+		EpollRecvMsgResult { .recvmsg }
+		EpollCloseResult { .close }
+		EpollShutdownResult { .shutdown }
+		EpollTimerResult { .timer }
+	}
+}
+
+// epoll_result_kind builds the `tag` result variant carrying an error.
 fn epoll_result_kind(tag EpollOperationType, kind ErrorKind) EpollResult {
-	return EpollResult{
-		tag: tag
-		err: kind
+	match tag {
+		.noop {
+			return EpollNoopResult{
+				err: kind
+			}
+		}
+		.cancel {
+			return EpollCancelResult{
+				err: kind
+			}
+		}
+		.accept {
+			return EpollAcceptResult{
+				err: kind
+			}
+		}
+		.connect {
+			return EpollConnectResult{
+				err: kind
+			}
+		}
+		.poll {
+			return EpollPollResult{
+				err: kind
+			}
+		}
+		.read {
+			return EpollReadResult{
+				err: kind
+			}
+		}
+		.pread {
+			return EpollPReadResult{
+				err: kind
+			}
+		}
+		.write {
+			return EpollWriteResult{
+				err: kind
+			}
+		}
+		.pwrite {
+			return EpollPWriteResult{
+				err: kind
+			}
+		}
+		.send {
+			return EpollSendResult{
+				err: kind
+			}
+		}
+		.recv {
+			return EpollRecvResult{
+				err: kind
+			}
+		}
+		.sendmsg {
+			return EpollSendMsgResult{
+				err: kind
+			}
+		}
+		.recvmsg {
+			return EpollRecvMsgResult{
+				err: kind
+			}
+		}
+		.close {
+			return EpollCloseResult{
+				err: kind
+			}
+		}
+		.shutdown {
+			return EpollShutdownResult{
+				err: kind
+			}
+		}
+		.timer {
+			return EpollTimerResult{
+				err: kind
+			}
+		}
 	}
 }
 
 fn epoll_result_err(tag EpollOperationType, err IError) EpollResult {
-	return EpollResult{
-		tag: tag
-		err: error_kind(err)
+	return epoll_result_kind(tag, error_kind(err))
+}
+
+// epoll_result_n builds the byte-count result variant for `tag`.
+fn epoll_result_n(tag EpollOperationType, n usize) EpollResult {
+	match tag {
+		.read {
+			return EpollReadResult{
+				n: n
+			}
+		}
+		.pread {
+			return EpollPReadResult{
+				n: n
+			}
+		}
+		.write {
+			return EpollWriteResult{
+				n: n
+			}
+		}
+		.pwrite {
+			return EpollPWriteResult{
+				n: n
+			}
+		}
+		.send {
+			return EpollSendResult{
+				n: n
+			}
+		}
+		.recv {
+			return EpollRecvResult{
+				n: n
+			}
+		}
+		.sendmsg {
+			return EpollSendMsgResult{
+				n: n
+			}
+		}
+		.recvmsg {
+			return EpollRecvMsgResult{
+				n: n
+			}
+		}
+		else {
+			panic('epoll_result_n: ${tag} has no byte count')
+		}
 	}
 }
 
-fn epoll_result_n(tag EpollOperationType, n usize) EpollResult {
-	return EpollResult{
-		tag: tag
-		n:   n
+// epoll_result_bytes returns the byte count of a read or write result.
+fn epoll_result_bytes(r EpollResult) usize {
+	return match r {
+		EpollReadResult { r.n }
+		EpollPReadResult { r.n }
+		EpollWriteResult { r.n }
+		EpollPWriteResult { r.n }
+		EpollSendResult { r.n }
+		EpollRecvResult { r.n }
+		EpollSendMsgResult { r.n }
+		EpollRecvMsgResult { r.n }
+		else { panic('epoll_result_bytes: ${r.tag()} has no byte count') }
 	}
 }
 
 // Reads return EOF for a zero byte count.
 fn epoll_read_result(tag EpollOperationType, n usize) EpollResult {
 	if n == 0 {
-		return EpollResult{
-			tag: tag
-			err: .eof
-		}
+		return epoll_result_kind(tag, .eof)
 	}
-	return EpollResult{
-		tag: tag
-		n:   n
-	}
+	return epoll_result_n(tag, n)
 }
 
 // All the supported operations of this event loop. These are always
 // backend-specific and therefore the structure and types change depending
 // on the underlying system in use. The high level operations are
 // done by initializing the request handles.
-pub struct EpollOperation {
-pub mut:
-	tag      EpollOperationType
-	cancel   EpollCancelOp
-	accept   EpollAcceptOp
-	connect  EpollConnectOp
-	poll     EpollPollOp
-	read     EpollReadOp
-	pread    EpollPReadOp
-	write    EpollWriteOp
-	pwrite   EpollPWriteOp
-	send     EpollWriteOp
-	recv     EpollReadOp
-	sendmsg  EpollSendMsgOp
-	recvmsg  EpollRecvMsgOp
-	close    EpollCloseOp
-	shutdown EpollShutdownOp
-	timer    EpollHeapTimer
+pub type EpollOperation = EpollAcceptOp
+	| EpollCancelOp
+	| EpollCloseOp
+	| EpollConnectOp
+	| EpollHeapTimer
+	| EpollNoopOp
+	| EpollPReadOp
+	| EpollPWriteOp
+	| EpollPollOp
+	| EpollReadOp
+	| EpollRecvMsgOp
+	| EpollRecvOp
+	| EpollSendMsgOp
+	| EpollSendOp
+	| EpollShutdownOp
+	| EpollWriteOp
+
+// The tag of the active operation variant.
+pub fn (self EpollOperation) tag() EpollOperationType {
+	return match self {
+		EpollNoopOp { .noop }
+		EpollCancelOp { .cancel }
+		EpollAcceptOp { .accept }
+		EpollConnectOp { .connect }
+		EpollPollOp { .poll }
+		EpollReadOp { .read }
+		EpollPReadOp { .pread }
+		EpollWriteOp { .write }
+		EpollPWriteOp { .pwrite }
+		EpollSendOp { .send }
+		EpollRecvOp { .recv }
+		EpollSendMsgOp { .sendmsg }
+		EpollRecvMsgOp { .recvmsg }
+		EpollCloseOp { .close }
+		EpollShutdownOp { .shutdown }
+		EpollHeapTimer { .timer }
+	}
 }
+
+pub struct EpollNoopOp {}
 
 pub struct EpollCancelOp {
 pub mut:
@@ -1335,6 +1589,18 @@ pub struct EpollWriteOp {
 pub mut:
 	fd     int
 	buffer EpollWriteBuffer
+}
+
+pub struct EpollSendOp {
+pub mut:
+	fd     int
+	buffer EpollWriteBuffer
+}
+
+pub struct EpollRecvOp {
+pub mut:
+	fd     int
+	buffer EpollReadBuffer
 }
 
 pub struct EpollPWriteOp {

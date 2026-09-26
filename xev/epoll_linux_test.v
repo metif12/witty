@@ -20,7 +20,7 @@ fn epoll_test_record_trigger(ud voidptr, _ &EpollLoop, _ &EpollCompletion, r Epo
 	if _ := r.err {
 		panic('unreachable')
 	}
-	v.value = r.timer
+	v.value = (r as EpollTimerResult).timer
 	return .disarm
 }
 
@@ -38,9 +38,10 @@ fn epoll_test_cancel_done(ud voidptr, _ &EpollLoop, _ &EpollCompletion, r EpollR
 fn test_epoll_completion_size() {
 	// Just so we are aware when we change the size
 	//
-	// The Zig Completion is 208 bytes. The V completion flattens the
-	// Operation and Result unions into records, so its own size is tracked.
-	assert usize(1096) == sizeof(EpollCompletion)
+	// The Zig Completion is 208 bytes with its Operation and Result unions
+	// inline. V sum types store the active payload out of line, so the V
+	// completion's own size is tracked.
+	assert usize(104) == sizeof(EpollCompletion)
 }
 
 fn test_epoll_default_completion() ! {
@@ -241,13 +242,10 @@ fn test_epoll_timerfd() ! {
 	// Add the timer
 	mut called := false
 	c := &EpollCompletion{
-		op:       EpollOperation{
-			tag:  .read
-			read: EpollReadOp{
-				fd:     t.fd
-				buffer: EpollReadBuffer{
-					kind: .array
-				}
+		op:       EpollReadOp{
+			fd:     t.fd
+			buffer: EpollReadBuffer{
+				kind: .array
 			}
 		}
 		userdata: &called
@@ -266,7 +264,7 @@ fn epoll_test_accept(ud voidptr, _ &EpollLoop, _ &EpollCompletion, r EpollResult
 		panic('unreachable')
 	}
 	unsafe {
-		*conn = r.socket
+		*conn = (r as EpollAcceptResult).socket
 	}
 	return .disarm
 }
@@ -295,7 +293,7 @@ fn epoll_test_recv(ud voidptr, _ &EpollLoop, _ &EpollCompletion, r EpollResult) 
 	}
 	mut ptr := unsafe { &usize(ud) }
 	unsafe {
-		*ptr = r.n
+		*ptr = (r as EpollRecvResult).n
 	}
 	return .disarm
 }
@@ -363,11 +361,8 @@ fn test_epoll_socket_accept_connect_send_recv_close() ! {
 	// Accept
 	mut server_conn := int(0)
 	c_accept := &EpollCompletion{
-		op:       EpollOperation{
-			tag:    .accept
-			accept: EpollAcceptOp{
-				socket: ln
-			}
+		op:       EpollAcceptOp{
+			socket: ln
 		}
 		userdata: &server_conn
 		callback: epoll_test_accept
@@ -377,12 +372,9 @@ fn test_epoll_socket_accept_connect_send_recv_close() ! {
 	// Connect
 	mut connected := false
 	c_connect := &EpollCompletion{
-		op:       EpollOperation{
-			tag:     .connect
-			connect: EpollConnectOp{
-				socket: client_conn
-				addr:   address
-			}
+		op:       EpollConnectOp{
+			socket: client_conn
+			addr:   address
 		}
 		userdata: &connected
 		callback: epoll_test_ok_set_bool
@@ -396,14 +388,11 @@ fn test_epoll_socket_accept_connect_send_recv_close() ! {
 
 	// Send
 	c_send := &EpollCompletion{
-		op:       EpollOperation{
-			tag:  .send
-			send: EpollWriteOp{
-				fd:     client_conn
-				buffer: EpollWriteBuffer{
-					kind:  .slice
-					slice: [u8(1), 1, 2, 3, 5, 8, 13]
-				}
+		op:       EpollSendOp{
+			fd:     client_conn
+			buffer: EpollWriteBuffer{
+				kind:  .slice
+				slice: [u8(1), 1, 2, 3, 5, 8, 13]
 			}
 		}
 		callback: epoll_test_send
@@ -414,14 +403,11 @@ fn test_epoll_socket_accept_connect_send_recv_close() ! {
 	mut recv_buf := []u8{len: 128}
 	mut recv_len := usize(0)
 	mut c_recv := &EpollCompletion{
-		op:       EpollOperation{
-			tag:  .recv
-			recv: EpollReadOp{
-				fd:     server_conn
-				buffer: EpollReadBuffer{
-					kind:  .slice
-					slice: recv_buf
-				}
+		op:       EpollRecvOp{
+			fd:     server_conn
+			buffer: EpollReadBuffer{
+				kind:  .slice
+				slice: recv_buf
 			}
 		}
 		userdata: &recv_len
@@ -431,16 +417,13 @@ fn test_epoll_socket_accept_connect_send_recv_close() ! {
 
 	// Wait for the send/receive
 	loop.run(.until_done)!
-	assert c_send.op.send.buffer.slice == recv_buf[..int(recv_len)]
+	assert (c_send.op as EpollSendOp).buffer.slice == recv_buf[..int(recv_len)]
 
 	// Shutdown
 	mut shutdown := false
 	c_client_shutdown := &EpollCompletion{
-		op:       EpollOperation{
-			tag:      .shutdown
-			shutdown: EpollShutdownOp{
-				socket: client_conn
-			}
+		op:       EpollShutdownOp{
+			socket: client_conn
 		}
 		userdata: &shutdown
 		callback: epoll_test_ok_set_bool
@@ -453,14 +436,11 @@ fn test_epoll_socket_accept_connect_send_recv_close() ! {
 	mut eof := EpollTestEof{}
 	unsafe {
 		*c_recv = EpollCompletion{
-			op:       EpollOperation{
-				tag:  .recv
-				recv: EpollReadOp{
-					fd:     server_conn
-					buffer: EpollReadBuffer{
-						kind:  .slice
-						slice: recv_buf
-					}
+			op:       EpollRecvOp{
+				fd:     server_conn
+				buffer: EpollReadBuffer{
+					kind:  .slice
+					slice: recv_buf
 				}
 			}
 			userdata: &eof
@@ -474,11 +454,8 @@ fn test_epoll_socket_accept_connect_send_recv_close() ! {
 
 	// Close
 	c_client_close := &EpollCompletion{
-		op:       EpollOperation{
-			tag:   .close
-			close: EpollCloseOp{
-				fd: client_conn
-			}
+		op:       EpollCloseOp{
+			fd: client_conn
 		}
 		userdata: &client_conn
 		callback: epoll_test_close_zero
@@ -486,11 +463,8 @@ fn test_epoll_socket_accept_connect_send_recv_close() ! {
 	loop.add(c_client_close)
 
 	c_server_close := &EpollCompletion{
-		op:       EpollOperation{
-			tag:   .close
-			close: EpollCloseOp{
-				fd: ln
-			}
+		op:       EpollCloseOp{
+			fd: ln
 		}
 		userdata: &ln
 		callback: epoll_test_close_zero
@@ -521,11 +495,8 @@ fn test_epoll_timer_cancellation() ! {
 	// Cancel the timer
 	mut called := false
 	c_cancel := &EpollCompletion{
-		op:       EpollOperation{
-			tag:    .cancel
-			cancel: EpollCancelOp{
-				c: c1
-			}
+		op:       EpollCancelOp{
+			c: c1
 		}
 		userdata: &called
 		callback: epoll_test_cancel_done
@@ -556,11 +527,8 @@ fn test_epoll_canceling_a_completed_operation() ! {
 	// Cancel the timer
 	mut called := false
 	c_cancel := &EpollCompletion{
-		op:       EpollOperation{
-			tag:    .cancel
-			cancel: EpollCancelOp{
-				c: c1
-			}
+		op:       EpollCancelOp{
+			c: c1
 		}
 		userdata: &called
 		callback: epoll_test_cancel_done

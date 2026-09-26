@@ -106,7 +106,7 @@ fn test_command_palette_uses_configured_entries() {
 	mut command := palette.commands[0]
 	assert command.prop_get_title() or { '' } == 'Only Entry'
 	assert command.prop_get_description() or { '' } == 'Configured'
-	assert command.get_action() or { input.Action{} } == input.Action(input.ActionIgnore{})
+	assert command.get_action() or { panic('missing command action') } == input.Action(input.ActionIgnore{})
 
 	palette.dispose()
 	cfg.unref()

@@ -19,7 +19,7 @@ fn test_global_shortcuts_refreshes_map_from_config_bindings() {
 	assert shortcuts.map.len == 1
 	assert shortcuts.map[0].id == 'SHIFT+CTRL+a'
 	assert shortcuts.map[0].action == input.Action(input.ActionNewWindow{})
-	assert shortcuts.action_for_id('SHIFT+CTRL+a') or { input.Action{} } == input.Action(input.ActionNewWindow{})
+	assert shortcuts.action_for_id('SHIFT+CTRL+a') or { panic('missing shortcut action') } == input.Action(input.ActionNewWindow{})
 	assert shortcuts.action_for_id('CTRL+x') == none
 
 	shortcuts.dispose()

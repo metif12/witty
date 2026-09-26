@@ -24,10 +24,11 @@ pub fn (self &EpollTimer) deinit() {
 
 // Convert the loop's timer result into the watcher's RunError!void.
 fn epoll_timer_run_error(r EpollResult) ?ErrorKind {
-	if err := r.err {
+	timer := r as EpollTimerResult
+	if err := timer.err {
 		return err
 	}
-	return match r.timer {
+	return match timer.timer {
 		.request, .expiration { none }
 		.cancel { ErrorKind.canceled }
 	}
@@ -90,11 +91,8 @@ pub fn (self &EpollTimer) cancel(mut loop EpollLoop, c_timer &EpollCompletion, c
 	mut completion := unsafe { c_cancel }
 	unsafe {
 		*completion = EpollCompletion{
-			op:       EpollOperation{
-				tag:    .cancel
-				cancel: EpollCancelOp{
-					c: c_timer
-				}
+			op:       EpollCancelOp{
+				c: c_timer
 			}
 			userdata: userdata
 			callback: fn [cb] (ud voidptr, l_inner &EpollLoop, c_inner &EpollCompletion, r EpollResult) CallbackAction {

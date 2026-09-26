@@ -62,7 +62,7 @@ pub fn (self &EpollAsync) wait(mut loop EpollLoop, c &EpollCompletion, userdata 
 			// We ignore errors here because we expect the
 			// read to succeed given we just polled it.
 			mut buf := [8]u8{}
-			_ := posix_read(c_inner.op.poll.fd, unsafe { (&buf[0]).vbytes(buf.len) }) or { 0 }
+			_ := posix_read((c_inner.op as EpollPollOp).fd, unsafe { (&buf[0]).vbytes(buf.len) }) or { 0 }
 		} else {
 			// We'll call the callback with the error later.
 		}
@@ -73,16 +73,13 @@ pub fn (self &EpollAsync) wait(mut loop EpollLoop, c &EpollCompletion, userdata 
 	mut completion := unsafe { c }
 	unsafe {
 		*completion = EpollCompletion{
-			op:       EpollOperation{
-				// We use a poll operation instead of a read operation
-				// because in Kernel 6.15.4, read was regressed for
-				// io_uring on eventfd/timerfd and would block forever.
-				// However, poll works fine.
-				tag:  .poll
-				poll: EpollPollOp{
-					fd:     self.fd
-					events: u32(int(C.POLLIN))
-				}
+			// We use a poll operation instead of a read operation
+			// because in Kernel 6.15.4, read was regressed for
+			// io_uring on eventfd/timerfd and would block forever.
+			// However, poll works fine.
+			op:       EpollPollOp{
+				fd:     self.fd
+				events: u32(int(C.POLLIN))
 			}
 			userdata: userdata
 			callback: callback

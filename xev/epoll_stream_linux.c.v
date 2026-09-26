@@ -46,7 +46,7 @@ fn epoll_poll_event_from_result(c &EpollCompletion, result EpollResult) (?ErrorK
 	if err := result.err {
 		return err, EpollPollEvent.read
 	}
-	return none, unsafe { EpollPollEvent(c.op.poll.events) }
+	return none, unsafe { EpollPollEvent((c.op as EpollPollOp).events) }
 }
 
 // The callback of Stream.close. The error is a CloseError.
@@ -93,15 +93,12 @@ pub fn (self EpollStream) close(mut loop EpollLoop, c &EpollCompletion, userdata
 	mut completion := unsafe { c }
 	unsafe {
 		*completion = EpollCompletion{
-			op:       EpollOperation{
-				tag:   .close
-				close: EpollCloseOp{
-					fd: self.fd
-				}
+			op:       EpollCloseOp{
+				fd: self.fd
 			}
 			userdata: userdata
 			callback: fn [cb] (ud voidptr, l_inner &EpollLoop, c_inner &EpollCompletion, r EpollResult) CallbackAction {
-				fd := EpollStream.init_fd(c_inner.op.close.fd)
+				fd := EpollStream.init_fd((c_inner.op as EpollCloseOp).fd)
 				return cb(ud, l_inner, c_inner, fd, r.err)
 			}
 		}
@@ -121,18 +118,15 @@ pub fn (self EpollStream) poll(mut loop EpollLoop, c &EpollCompletion, event Epo
 	mut completion := unsafe { c }
 	unsafe {
 		*completion = EpollCompletion{
-			op:       EpollOperation{
-				tag:  .poll
-				poll: EpollPollOp{
-					fd:     self.fd
-					events: match event {
-						.read { epoll_in }
-					}
+			op:       EpollPollOp{
+				fd:     self.fd
+				events: match event {
+					.read { epoll_in }
 				}
 			}
 			userdata: userdata
 			callback: fn [cb] (ud voidptr, l_inner &EpollLoop, c_inner &EpollCompletion, r EpollResult) CallbackAction {
-				fd := EpollStream.init_fd(c_inner.op.poll.fd)
+				fd := EpollStream.init_fd((c_inner.op as EpollPollOp).fd)
 				err, poll_event := epoll_poll_event_from_result(c_inner, r)
 				return cb(ud, l_inner, c_inner, fd, err, poll_event)
 			}
@@ -150,17 +144,14 @@ pub fn (self EpollStream) read(mut loop EpollLoop, c &EpollCompletion, buf Epoll
 	mut completion := unsafe { c }
 	unsafe {
 		*completion = EpollCompletion{
-			op:       EpollOperation{
-				tag:  .read
-				read: EpollReadOp{
-					fd:     self.fd
-					buffer: buf
-				}
+			op:       EpollReadOp{
+				fd:     self.fd
+				buffer: buf
 			}
 			userdata: userdata
 			callback: fn [cb] (ud voidptr, l_inner &EpollLoop, c_inner &EpollCompletion, r EpollResult) CallbackAction {
-				return cb(ud, l_inner, c_inner, EpollStream.init_fd(c_inner.op.read.fd), c_inner.op.read.buffer,
-					r.err, r.n)
+				return cb(ud, l_inner, c_inner, EpollStream.init_fd((c_inner.op as EpollReadOp).fd), (c_inner.op as EpollReadOp).buffer,
+					r.err, epoll_result_bytes(r))
 			}
 		}
 	}
@@ -305,7 +296,7 @@ pub fn (self EpollStream) write(mut loop EpollLoop, c &EpollCompletion, buf Epol
 // Extracts the result from a completion for a write callback.
 @[inline]
 fn epoll_stream_write_result(c &EpollCompletion, r EpollResult) (EpollStream, EpollWriteBuffer, ?ErrorKind, usize) {
-	return EpollStream.init_fd(c.op.write.fd), c.op.write.buffer, r.err, r.n
+	return EpollStream.init_fd((c.op as EpollWriteOp).fd), (c.op as EpollWriteOp).buffer, r.err, epoll_result_bytes(r)
 }
 
 // Initialize the completion c for a write. This does NOT set
@@ -314,12 +305,9 @@ pub fn (self EpollStream) write_init(c &EpollCompletion, buf EpollWriteBuffer) {
 	mut completion := unsafe { c }
 	unsafe {
 		*completion = EpollCompletion{
-			op: EpollOperation{
-				tag:   .write
-				write: EpollWriteOp{
-					fd:     self.fd
-					buffer: buf
-				}
+			op: EpollWriteOp{
+				fd:     self.fd
+				buffer: buf
 			}
 		}
 	}

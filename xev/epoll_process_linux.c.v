@@ -65,12 +65,9 @@ pub fn (self &EpollProcess) wait(mut loop EpollLoop, c &EpollCompletion, userdat
 	mut completion := unsafe { c }
 	unsafe {
 		*completion = EpollCompletion{
-			op:       EpollOperation{
-				tag:  .poll
-				poll: EpollPollOp{
-					fd:     self.fd
-					events: events
-				}
+			op:       EpollPollOp{
+				fd:     self.fd
+				events: events
 			}
 			userdata: userdata
 			callback: fn [cb] (ud voidptr, l_inner &EpollLoop, c_inner &EpollCompletion, r EpollResult) CallbackAction {
@@ -81,7 +78,7 @@ pub fn (self &EpollProcess) wait(mut loop EpollLoop, c &EpollCompletion, userdat
 					arg_err = err
 				} else {
 					// We need to wait on the pidfd because it is noted as ready
-					fd := c_inner.op.poll.fd
+					fd := (c_inner.op as EpollPollOp).fd
 					mut info := C.siginfo_t{}
 					res := linux_waitid(.pidfd, fd, &info, u32(int(C.WEXITED)))
 
