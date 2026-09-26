@@ -157,7 +157,7 @@ fn test_core_app_key_event_dispatches_app_binding() {
 		key: input.TriggerKey.new_physical(.f25)
 		mods: input.Mods.init(false, true, true, false, false, false, input.SideInfo{})
 	}
-	config.keybind.set.put(trigger, input.Action.new(.open_config))
+	config.keybind.set.put(trigger, input.ActionOpenConfig{})
 	mut core_app := CoreApp{}
 	mut app := App{
 		core_app: &core_app
@@ -213,8 +213,8 @@ fn test_core_app_focus_limits_non_global_bindings() {
 	global_trigger := input.Trigger{
 		key: input.TriggerKey.new_physical(.f25)
 	}
-	config.keybind.set.put(local_trigger, input.Action.new(.open_config))
-	config.keybind.set.put_flags(global_trigger, input.Action.new(.open_config), input.Flags.init(true, false, true, false))
+	config.keybind.set.put(local_trigger, input.ActionOpenConfig{})
+	config.keybind.set.put_flags(global_trigger, input.ActionOpenConfig{}, input.Flags.init(true, false, true, false))
 	mut core_app := CoreApp{}
 	mut app := App{
 		core_app: &core_app
@@ -800,7 +800,7 @@ fn test_has_global_keybinds_ignores_global_leaf_under_leader() {
 	// Global trigger sequences are invalid, so construct the otherwise-valid
 	// nested shape directly to verify parity with Ghostty's top-level scan.
 	mut leader := input.Set{}
-	leader.put_flags(input.Trigger.parse('b')!, input.Action.new(.new_window), input.Flags.init(true, false, true, false))
+	leader.put_flags(input.Trigger.parse('b')!, input.ActionNewWindow{}, input.Flags.init(true, false, true, false))
 	app.config.keybind.set.bindings << input.SetEntry{
 		trigger: input.Trigger.parse('ctrl+a')!
 		value: input.SetValue{

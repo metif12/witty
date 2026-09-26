@@ -18,8 +18,8 @@ fn test_global_shortcuts_refreshes_map_from_config_bindings() {
 
 	assert shortcuts.map.len == 1
 	assert shortcuts.map[0].id == 'SHIFT+CTRL+a'
-	assert shortcuts.map[0].action == input.Action.new(.new_window)
-	assert shortcuts.action_for_id('SHIFT+CTRL+a') or { input.Action{} } == input.Action.new(.new_window)
+	assert shortcuts.map[0].action == input.Action(input.ActionNewWindow{})
+	assert shortcuts.action_for_id('SHIFT+CTRL+a') or { input.Action{} } == input.Action(input.ActionNewWindow{})
 	assert shortcuts.action_for_id('CTRL+x') == none
 
 	shortcuts.dispose()
@@ -79,14 +79,14 @@ fn record_global_shortcut(action input.Action, user_data voidptr) {
 }
 
 fn test_global_shortcut_trigger_handler_receives_action() {
-	mut received := input.Action{}
+	mut received := input.Action(input.ActionIgnore{})
 	mut shortcuts := GlobalShortcuts{
 		map: [ShortcutMapEntry{
 			id: 'CTRL+n'
-			action: input.Action.new(.new_window)
+			action: input.ActionNewWindow{}
 		}]
 	}
 	shortcuts.set_trigger_handler(record_global_shortcut, voidptr(&received))
 	shortcuts.shortcut_activated('CTRL+n')
-	assert received == input.Action.new(.new_window)
+	assert received == input.Action(input.ActionNewWindow{})
 }

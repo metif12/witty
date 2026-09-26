@@ -458,8 +458,10 @@ fn (mut self CommandPalette) collect_jump_commands() {
 // is_action_supported_on_gtk reports whether an action makes sense / is
 // implemented on GTK. Mirrors `isActionSupportedOnGtk`.
 fn is_action_supported_on_gtk(action input.Action) bool {
-	return match action.tag {
-		.close_all_windows, .toggle_secure_input, .check_for_updates, .redo, .undo, .reset_window_size, .toggle_window_float_on_top {
+	return match action {
+		input.ActionCloseAllWindows, input.ActionToggleSecureInput, input.ActionCheckForUpdates,
+		input.ActionRedo, input.ActionUndo, input.ActionResetWindowSize,
+		input.ActionToggleWindowFloatOnTop {
 			false
 		}
 		else {

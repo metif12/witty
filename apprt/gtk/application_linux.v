@@ -848,31 +848,31 @@ fn (mut self Application) stop_quit_timer() {
 // sync_action_accelerators syncs all GTK menu accelerators from the keybind
 // config. Mirrors `Application.syncActionAccelerators`.
 fn (mut self Application) sync_action_accelerators() {
-	self.sync_action_accelerator('app.quit', input.Action.new(.quit))
-	self.sync_action_accelerator('app.open-config', input.Action.new(.open_config))
-	self.sync_action_accelerator('app.reload-config', input.Action.new(.reload_config))
-	self.sync_action_accelerator('win.toggle-inspector', input.Action.new_enum(.inspector, i32(input.InspectorMode.toggle)))
-	self.sync_action_accelerator('app.show-gtk-inspector', input.Action.new(.show_gtk_inspector))
-	self.sync_action_accelerator('win.toggle-command-palette', input.Action.new(.toggle_command_palette))
-	self.sync_action_accelerator('win.close', input.Action.new(.close_window))
-	self.sync_action_accelerator('win.new-window', input.Action.new(.new_window))
-	self.sync_action_accelerator('win.new-tab', input.Action.new(.new_tab))
-	close_this := input.Action.new_enum(.close_tab, i32(input.CloseTabMode.this))
+	self.sync_action_accelerator('app.quit', input.ActionQuit{})
+	self.sync_action_accelerator('app.open-config', input.ActionOpenConfig{})
+	self.sync_action_accelerator('app.reload-config', input.ActionReloadConfig{})
+	self.sync_action_accelerator('win.toggle-inspector', input.ActionInspector{ value: .toggle })
+	self.sync_action_accelerator('app.show-gtk-inspector', input.ActionShowGtkInspector{})
+	self.sync_action_accelerator('win.toggle-command-palette', input.ActionToggleCommandPalette{})
+	self.sync_action_accelerator('win.close', input.ActionCloseWindow{})
+	self.sync_action_accelerator('win.new-window', input.ActionNewWindow{})
+	self.sync_action_accelerator('win.new-tab', input.ActionNewTab{})
+	close_this := input.ActionCloseTab{ value: .this }
 	self.sync_action_accelerator('win.close-tab::this', close_this)
 	self.sync_action_accelerator('tab.close::this', close_this)
-	self.sync_action_accelerator('win.split-right', input.Action.new_enum(.new_split, i32(input.SplitDirection.right)))
-	self.sync_action_accelerator('win.split-down', input.Action.new_enum(.new_split, i32(input.SplitDirection.down)))
-	self.sync_action_accelerator('win.split-left', input.Action.new_enum(.new_split, i32(input.SplitDirection.left)))
-	self.sync_action_accelerator('win.split-up', input.Action.new_enum(.new_split, i32(input.SplitDirection.up)))
-	self.sync_action_accelerator('win.copy', input.Action.new_enum(.copy_to_clipboard, i32(input.CopyToClipboard.mixed)))
-	self.sync_action_accelerator('win.paste', input.Action.new(.paste_from_clipboard))
-	self.sync_action_accelerator('win.reset', input.Action.new(.reset))
-	self.sync_action_accelerator('win.clear', input.Action.new(.clear_screen))
-	self.sync_action_accelerator('win.prompt-title', input.Action.new(.prompt_surface_title))
-	self.sync_action_accelerator('split-tree.new-split::left', input.Action.new_enum(.new_split, i32(input.SplitDirection.left)))
-	self.sync_action_accelerator('split-tree.new-split::right', input.Action.new_enum(.new_split, i32(input.SplitDirection.right)))
-	self.sync_action_accelerator('split-tree.new-split::up', input.Action.new_enum(.new_split, i32(input.SplitDirection.up)))
-	self.sync_action_accelerator('split-tree.new-split::down', input.Action.new_enum(.new_split, i32(input.SplitDirection.down)))
+	self.sync_action_accelerator('win.split-right', input.ActionNewSplit{ value: .right })
+	self.sync_action_accelerator('win.split-down', input.ActionNewSplit{ value: .down })
+	self.sync_action_accelerator('win.split-left', input.ActionNewSplit{ value: .left })
+	self.sync_action_accelerator('win.split-up', input.ActionNewSplit{ value: .up })
+	self.sync_action_accelerator('win.copy', input.ActionCopyToClipboard{ value: .mixed })
+	self.sync_action_accelerator('win.paste', input.ActionPasteFromClipboard{})
+	self.sync_action_accelerator('win.reset', input.ActionReset{})
+	self.sync_action_accelerator('win.clear', input.ActionClearScreen{})
+	self.sync_action_accelerator('win.prompt-title', input.ActionPromptSurfaceTitle{})
+	self.sync_action_accelerator('split-tree.new-split::left', input.ActionNewSplit{ value: .left })
+	self.sync_action_accelerator('split-tree.new-split::right', input.ActionNewSplit{ value: .right })
+	self.sync_action_accelerator('split-tree.new-split::up', input.ActionNewSplit{ value: .up })
+	self.sync_action_accelerator('split-tree.new-split::down', input.ActionNewSplit{ value: .down })
 }
 
 // sync_action_accelerator clears the GTK accelerator for one detailed action,
@@ -1242,7 +1242,7 @@ fn application_sigusr2_cb(user_data voidptr) int {
 		return 1
 	}
 	mut core_app := unsafe { self.core_app }
-	core_app.perform_action(mut self.runtime_bridge, input.Action.new(.reload_config)) or {
+	core_app.perform_action(mut self.runtime_bridge, input.ActionReloadConfig{}) or {
 		eprintln('error reloading config after SIGUSR2: ${err}')
 		return 1
 	}

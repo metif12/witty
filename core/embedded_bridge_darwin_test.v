@@ -114,12 +114,12 @@ fn test_embedded_bridge_uses_canonical_core_surface() {
 	backend.surface.color_scheme_callback(.dark)!
 	assert capture.reload_soft.len == 1
 	assert capture.reload_soft[0]
-	assert backend.surface.perform_binding_action(input.Action.new(.toggle_secure_input))!
+	assert backend.surface.perform_binding_action(input.ActionToggleSecureInput{})!
 	assert capture.secure_input.last() == .toggle
-	assert backend.surface.perform_binding_action(input.Action.new(.open_config))!
+	assert backend.surface.perform_binding_action(input.ActionOpenConfig{})!
 	assert capture.actions.last() == .open_config
 	assert !capture.surface_targets.last()
-	assert backend.surface.perform_binding_action(input.Action.new(.new_window))!
+	assert backend.surface.perform_binding_action(input.ActionNewWindow{})!
 	assert capture.actions.last() == .new_window
 	assert capture.surface_targets.last()
 

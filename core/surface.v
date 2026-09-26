@@ -1980,7 +1980,10 @@ pub type KeyAction = input.KeyAction
 // closing the surface. This is used to determine if our self pointer is still
 // valid after performing some binding action.
 fn closing_action(action input.Action) bool {
-	return action.tag in [.close_surface, .close_window, .close_tab]
+	return match action {
+		input.ActionCloseSurface, input.ActionCloseWindow, input.ActionCloseTab { true }
+		else { false }
+	}
 }
 
 // ---- Surface struct ----
@@ -4005,19 +4008,17 @@ pub fn (self &Surface) pos_to_viewport(xpos f64, ypos f64) Coordinate {
 
 // perform_binding_action performs a binding action from a keybinding.
 // This is a faithful translation of ghostty's Surface.performBindingAction.
-// It switches on input.ActionTag and reads parameters from the input.Action
-// fields (str_param/float_param/int_param/uint_param/enum_param/enum_param2).
 pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 	// Forward app-scoped actions to the app. Some app-scoped actions are
 	// special-cased here because they do some special things when performed
 	// from the surface. In ghostty this is `action.scoped(.app)`.
 	if app_action := action.scoped(.app) {
-		match app_action.tag {
-			.unbind {
+		match app_action {
+			input.ActionUnbind {
 				panic('unbind action reached surface dispatch')
 			}
-			.ignore {}
-			.new_window {
+			input.ActionIgnore {}
+			input.ActionNewWindow {
 				// ghostty: self.app.newWindow(self.rt_app, .{ .parent = self }).
 				self.rt_app.perform_action(
 					apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
@@ -4029,14 +4030,14 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			// Undo and redo both support both surface and app targeting.
 			// If we are triggering on a surface then we perform the action
 			// with the surface target.
-			.undo {
+			input.ActionUndo {
 				return self.rt_app.perform_action(
 					apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 					.undo,
 					apprt.ActionVoid{},
 				)!
 			}
-			.redo {
+			input.ActionRedo {
 				return self.rt_app.perform_action(
 					apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 					.redo,
@@ -4050,7 +4051,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				// forwarded to the app.
 				self.rt_app.perform_action(
 					apprt.Target(apprt.AppTarget{}),
-					app_action_key(app_action.tag),
+					app_action_key(app_action.tag()),
 					apprt.ActionVoid{},
 				)!
 			}
@@ -4058,13 +4059,13 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 		return true
 	}
 
-	match action.tag {
-		.csi, .esc {
+	match action {
+		input.ActionCsi, input.ActionEsc {
 			// We need to send the CSI/ESC sequence as a single write request.
 			// If you split it across two then the shell can interpret it
 			// as two literals.
-			prefix := if action.tag == .csi { '\x1b[' } else { '\x1b' }
-			full_data := (prefix + action.str_param).bytes()
+			prefix := if action is input.ActionCsi { '\x1b[' } else { '\x1b' }
+			full_data := (prefix + action.value).bytes()
 			// Ghostty formats these into a fixed 128-byte buffer before it
 			// constructs the write request. Do not silently truncate it in the
 			// small-message representation.
@@ -4080,10 +4081,10 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			}
 			self.renderer_state.mutex.unlock()
 		}
-		.text {
+		input.ActionText {
 			// Text actions use Zig string literal escapes, matching the config
 			// representation used by Ghostty.
-			parsed := configpkg.parse_zig_string(action.str_param) or { return true }
+			parsed := configpkg.parse_zig_string(action.value) or { return true }
 			self.queue_io(termiopkg.Message.write_req(parsed.bytes().bytestr()), .unlocked)
 
 			// Text triggers a scroll.
@@ -4093,7 +4094,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			}
 			self.renderer_state.mutex.unlock()
 		}
-		.cursor_key {
+		input.ActionCursorKey {
 			// DECCKM selects between the normal and application sequences.
 			self.renderer_state.mutex.lock()
 			normal := !self.renderer_state.terminal_.modes.get(.cursor_keys)
@@ -4101,17 +4102,17 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				eprintln('error scrolling to bottom err=${err}')
 			}
 			self.renderer_state.mutex.unlock()
-			data := if normal { action.cursor_key.normal } else { action.cursor_key.application }
+			data := if normal { action.value.normal } else { action.value.application }
 			self.queue_io(termiopkg.MessageWriteStable{ data: data }, .unlocked)
 		}
-		.reset {
+		input.ActionReset {
 			self.renderer_state.mutex.lock()
 			defer {
 				self.renderer_state.mutex.unlock()
 			}
 			self.renderer_state.terminal_.full_reset()
 		}
-		.start_search {
+		input.ActionStartSearch {
 			// To save resources, we don't actually start a search here, we
 			// just notify the apprt. The real thread starts on the first
 			// needle.
@@ -4121,7 +4122,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				apprt.ActionValue(apprt.StartSearch{}),
 			)!
 		}
-		.search_selection {
+		input.ActionSearchSelection {
 			selection := self.selection_string() or { return false }
 			return self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
@@ -4129,7 +4130,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				apprt.ActionValue(apprt.StartSearch{ needle: selection }),
 			)!
 		}
-		.end_search {
+		input.ActionEndSearch {
 			// We only return that this was performed if we actually stopped a
 			// search, but we also send the apprt end_search so GUIs can clean
 			// up stale state.
@@ -4145,8 +4146,8 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			)!
 			return performed
 		}
-		.search {
-			text := action.str_param
+		input.ActionSearch {
+			text := action.value
 			mut s := self.search or {
 				// If we're stopping the search and we had no prior search,
 				// then there is nothing to do.
@@ -4181,23 +4182,21 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				s.state.wakeup.notify() or {}
 			}
 		}
-		.navigate_search {
+		input.ActionNavigateSearch {
 			mut s := self.search or { return false }
-			nav := unsafe { input.NavigateSearch(action.enum_param) }
+			nav := action.value
 			_ = s.state.mailbox.push(searchpkg.MessageSelect{
 				select: if nav == .next { .next } else { .prev }
 			}, datastruct.blocking_queue_forever)
 			s.state.wakeup.notify() or {}
 		}
-		.copy_to_clipboard {
+		input.ActionCopyToClipboard {
 			self.renderer_state.mutex.lock()
 			defer {
 				self.renderer_state.mutex.unlock()
 			}
 			if sel := self.renderer_state.terminal_.screens.active.selection {
-				self.copy_selection_to_clipboards(sel, [.standard], unsafe {
-					input.CopyToClipboard(action.enum_param)
-				})!
+				self.copy_selection_to_clipboards(sel, [.standard], action.value)!
 				// Clear the selection if configured to do so.
 				if self.config.selection_clear_on_copy {
 					self.set_selection(none)!
@@ -4207,7 +4206,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			}
 			return false
 		}
-		.copy_url_to_clipboard {
+		input.ActionCopyUrlToClipboard {
 			// If the mouse isn't over a link, nothing we can do.
 			if !self.mouse.over_link {
 				return false
@@ -4237,7 +4236,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			}], false) or { return false }
 			return true
 		}
-		.copy_title_to_clipboard {
+		input.ActionCopyTitleToClipboard {
 			title := self.rt_surface.get_title() or { return false }
 			if title.len == 0 {
 				return false
@@ -4248,43 +4247,43 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			}], false) or { return true }
 			return true
 		}
-		.paste_from_clipboard {
+		input.ActionPasteFromClipboard {
 			return self.start_clipboard_request(.standard, apprt.ClipboardRequest{
 				kind: .paste
 				clipboard: .standard
 			})!
 		}
-		.paste_from_selection {
+		input.ActionPasteFromSelection {
 			return self.start_clipboard_request(.selection, apprt.ClipboardRequest{
 				kind: .paste
 				clipboard: .selection
 			})!
 		}
-		.increase_font_size {
+		input.ActionIncreaseFontSize {
 			// Max delta is somewhat arbitrary.
-			clamped_delta := math.max(f32(0), math.min(f32(255), action.float_param))
+			clamped_delta := math.max(f32(0), math.min(f32(255), action.value))
 			mut size := self.font_size
 			// Max point size is somewhat arbitrary.
 			size.points = math.min(size.points + clamped_delta, f32(255))
 			self.set_font_size(size)!
 			self.font_size_adjusted = true
 		}
-		.decrease_font_size {
-			clamped_delta := math.max(f32(0), math.min(f32(255), action.float_param))
+		input.ActionDecreaseFontSize {
+			clamped_delta := math.max(f32(0), math.min(f32(255), action.value))
 			mut size := self.font_size
 			size.points = math.max(f32(1), size.points - clamped_delta)
 			self.set_font_size(size)!
 			self.font_size_adjusted = true
 		}
-		.reset_font_size {
+		input.ActionResetFontSize {
 			mut size := self.font_size
 			size.points = self.config.original_font_size
 			self.set_font_size(size)!
 			self.font_size_adjusted = false
 		}
-		.set_font_size {
+		input.ActionSetFontSize {
 			mut size := self.font_size
-			points := action.float_param
+			points := action.value
 			size.points = if points < 1.0 {
 				f32(1.0)
 			} else if points > 255.0 {
@@ -4295,21 +4294,21 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			self.set_font_size(size)!
 			self.font_size_adjusted = true
 		}
-		.prompt_surface_title {
+		input.ActionPromptSurfaceTitle {
 			return self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.prompt_title,
 				apprt.ActionValue(apprt.PromptTitle.surface),
 			)!
 		}
-		.prompt_tab_title {
+		input.ActionPromptTabTitle {
 			return self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.prompt_title,
 				apprt.ActionValue(apprt.PromptTitle.tab),
 			)!
 		}
-		.clear_screen {
+		input.ActionClearScreen {
 			// If the active screen is the alternate screen then clear screen
 			// does nothing, so we return false so the keybind is unconsumed.
 			self.renderer_state.mutex.lock()
@@ -4320,21 +4319,21 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			}
 			self.queue_io(termiopkg.MessageClearScreen{ history: false }, .unlocked)
 		}
-		.scroll_to_top {
+		input.ActionScrollToTop {
 			self.queue_io(termiopkg.MessageScrollViewport{ scroll: terminal.scroll_viewport_top }, .unlocked)
 		}
-		.scroll_to_bottom {
+		input.ActionScrollToBottom {
 			self.queue_io(termiopkg.MessageScrollViewport{ scroll: terminal.scroll_viewport_bottom }, .unlocked)
 		}
-		.scroll_to_row {
+		input.ActionScrollToRow {
 			self.renderer_state.mutex.lock()
 			self.renderer_state.terminal_.screens.active.scroll(terminal.ScrollRow{
-				n: usize(action.uint_param)
+				n: usize(action.value)
 			})
 			self.renderer_state.mutex.unlock()
 			self.queue_render()!
 		}
-		.scroll_to_selection {
+		input.ActionScrollToSelection {
 			self.renderer_state.mutex.lock()
 			defer {
 				self.renderer_state.mutex.unlock()
@@ -4346,113 +4345,113 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			})
 			self.queue_render()!
 		}
-		.scroll_page_up {
+		input.ActionScrollPageUp {
 			rows := isize(self.size.grid().rows)
 			self.queue_io(termiopkg.MessageScrollViewport{ scroll: terminal.ScrollViewport.from_delta(-rows) }, .unlocked)
 		}
-		.scroll_page_down {
+		input.ActionScrollPageDown {
 			rows := isize(self.size.grid().rows)
 			self.queue_io(termiopkg.MessageScrollViewport{ scroll: terminal.ScrollViewport.from_delta(rows) }, .unlocked)
 		}
-		.scroll_page_fractional {
+		input.ActionScrollPageFractional {
 			rows := f32(self.size.grid().rows)
-			delta := isize(action.float_param * rows)
+			delta := isize(action.value * rows)
 			self.queue_io(termiopkg.MessageScrollViewport{ scroll: terminal.ScrollViewport.from_delta(delta) }, .unlocked)
 		}
-		.scroll_page_lines {
-			self.queue_io(termiopkg.MessageScrollViewport{ scroll: terminal.ScrollViewport.from_delta(isize(action.int_param)) }, .unlocked)
+		input.ActionScrollPageLines {
+			self.queue_io(termiopkg.MessageScrollViewport{ scroll: terminal.ScrollViewport.from_delta(isize(action.value)) }, .unlocked)
 		}
-		.jump_to_prompt {
-			self.queue_io(termiopkg.MessageJumpToPrompt{ delta: isize(action.int_param) }, .unlocked)
+		input.ActionJumpToPrompt {
+			self.queue_io(termiopkg.MessageJumpToPrompt{ delta: isize(action.value) }, .unlocked)
 		}
-		.write_screen_file {
-			self.write_screen_file(.screen, write_screen_from_input(action))!
+		input.ActionWriteScreenFile {
+			self.write_screen_file(.screen, action.value)!
 		}
-		.write_scrollback_file {
-			self.write_screen_file(.history, write_screen_from_input(action))!
+		input.ActionWriteScrollbackFile {
+			self.write_screen_file(.history, action.value)!
 		}
-		.write_selection_file {
-			self.write_screen_file(.selection, write_screen_from_input(action))!
+		input.ActionWriteSelectionFile {
+			self.write_screen_file(.selection, action.value)!
 		}
-		.new_tab {
+		input.ActionNewTab {
 			return self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.new_tab,
 				apprt.ActionVoid{},
 			)!
 		}
-		.close_tab {
+		input.ActionCloseTab {
 			return self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.close_tab,
-				apprt.ActionValue(close_tab_mode_from_input(action.enum_param)),
+				apprt.ActionValue(close_tab_mode_from_input(action.value)),
 			)!
 		}
-		.previous_tab {
+		input.ActionPreviousTab {
 			return self.goto_tab_action(.previous)!
 		}
-		.next_tab {
+		input.ActionNextTab {
 			return self.goto_tab_action(.next)!
 		}
-		.last_tab {
+		input.ActionLastTab {
 			return self.goto_tab_action(.last)!
 		}
-		.goto_tab {
-			return self.goto_tab_action(unsafe { apprt.GotoTab(int(action.uint_param)) })!
+		input.ActionGotoTab {
+			return self.goto_tab_action(unsafe { apprt.GotoTab(int(action.value)) })!
 		}
-		.move_tab {
+		input.ActionMoveTab {
 			return self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.move_tab,
-				apprt.ActionValue(apprt.MoveTab{ amount: isize(action.int_param) }),
+				apprt.ActionValue(apprt.MoveTab{ amount: isize(action.value) }),
 			)!
 		}
-		.new_split {
+		input.ActionNewSplit {
 			return self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.new_split,
-				apprt.ActionValue(split_dir_from_input(action.enum_param, self.size.screen)),
+				apprt.ActionValue(split_dir_from_input(action.value, self.size.screen)),
 			)!
 		}
-		.goto_split {
+		input.ActionGotoSplit {
 			return self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.goto_split,
-				apprt.ActionValue(goto_split_from_input(action.enum_param)),
+				apprt.ActionValue(goto_split_from_input(action.value)),
 			)!
 		}
-		.goto_window {
+		input.ActionGotoWindow {
 			return self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.goto_window,
-				apprt.ActionValue(goto_window_from_input(action.enum_param)),
+				apprt.ActionValue(goto_window_from_input(action.value)),
 			)!
 		}
-		.resize_split {
+		input.ActionResizeSplit {
 			return self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.resize_split,
 				apprt.ActionValue(apprt.ResizeSplit{
-						direction: resize_dir_from_input(action.enum_param)
-						amount: u16(action.enum_param2)
+						direction: resize_dir_from_input(action.value.direction)
+						amount: action.value.amount
 					}),
 			)!
 		}
-		.equalize_splits {
+		input.ActionEqualizeSplits {
 			return self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.equalize_splits,
 				apprt.ActionVoid{},
 			)!
 		}
-		.toggle_split_zoom {
+		input.ActionToggleSplitZoom {
 			return self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.toggle_split_zoom,
 				apprt.ActionVoid{},
 			)!
 		}
-		.toggle_readonly {
+		input.ActionToggleReadonly {
 			self.readonly = !self.readonly
 			self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
@@ -4461,21 +4460,21 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			)!
 			return true
 		}
-		.reset_window_size {
+		input.ActionResetWindowSize {
 			return self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.reset_window_size,
 				apprt.ActionVoid{},
 			)!
 		}
-		.toggle_maximize {
+		input.ActionToggleMaximize {
 			return self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.toggle_maximize,
 				apprt.ActionVoid{},
 			)!
 		}
-		.toggle_fullscreen {
+		input.ActionToggleFullscreen {
 			mode := match self.config.macos_non_native_fullscreen {
 				.false_ { apprt.Fullscreen.native }
 				.true_ { apprt.Fullscreen.macos_non_native }
@@ -4488,59 +4487,59 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				apprt.ActionValue(mode),
 			)!
 		}
-		.toggle_window_decorations {
+		input.ActionToggleWindowDecorations {
 			return self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.toggle_window_decorations,
 				apprt.ActionVoid{},
 			)!
 		}
-		.toggle_tab_overview {
+		input.ActionToggleTabOverview {
 			return self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.toggle_tab_overview,
 				apprt.ActionVoid{},
 			)!
 		}
-		.toggle_window_float_on_top {
+		input.ActionToggleWindowFloatOnTop {
 			return self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.float_window,
 				apprt.ActionValue(apprt.FloatWindow.toggle),
 			)!
 		}
-		.toggle_secure_input {
+		input.ActionToggleSecureInput {
 			return self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.secure_input,
 				apprt.ActionValue(apprt.SecureInput.toggle),
 			)!
 		}
-		.toggle_mouse_reporting {
+		input.ActionToggleMouseReporting {
 			self.config.mouse_reporting = !self.config.mouse_reporting
 		}
-		.toggle_command_palette {
+		input.ActionToggleCommandPalette {
 			return self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.toggle_command_palette,
 				apprt.ActionVoid{},
 			)!
 		}
-		.toggle_background_opacity {
+		input.ActionToggleBackgroundOpacity {
 			return self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.toggle_background_opacity,
 				apprt.ActionVoid{},
 			)!
 		}
-		.show_on_screen_keyboard {
+		input.ActionShowOnScreenKeyboard {
 			return self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.show_on_screen_keyboard,
 				apprt.ActionVoid{},
 			)!
 		}
-		.select_all {
+		input.ActionSelectAll {
 			self.renderer_state.mutex.lock()
 			defer {
 				self.renderer_state.mutex.unlock()
@@ -4550,27 +4549,27 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				self.queue_render()!
 			}
 		}
-		.inspector {
+		input.ActionInspector {
 			return self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.inspector,
-				apprt.ActionValue(inspector_mode_from_input(action.enum_param)),
+				apprt.ActionValue(inspector_mode_from_input(action.value)),
 			)!
 		}
-		.close_surface {
+		input.ActionCloseSurface {
 			self.close()
 		}
-		.close_window {
+		input.ActionCloseWindow {
 			return self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.close_window,
 				apprt.ActionVoid{},
 			)!
 		}
-		.activate_key_table, .activate_key_table_once {
-			return self.activate_key_table(action.str_param, action.tag == .activate_key_table_once)!
+		input.ActionActivateKeyTable, input.ActionActivateKeyTableOnce {
+			return self.activate_key_table(action.value, action is input.ActionActivateKeyTableOnce)!
 		}
-		.deactivate_key_table {
+		input.ActionDeactivateKeyTable {
 			match self.keyboard.table_stack.len {
 				0 {
 					// No key table active. This does nothing.
@@ -4593,22 +4592,22 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				eprintln('failed to notify app of key table err=${err}')
 			}
 		}
-		.deactivate_all_key_tables {
+		input.ActionDeactivateAllKeyTables {
 			return self.deactivate_all_key_tables()!
 		}
-		.end_key_sequence {
+		input.ActionEndKeySequence {
 			// End the key sequence and flush queued keys to the terminal,
 			// but don't encode the key that triggered this action.
 			self.end_key_sequence(.flush, .retain)
 		}
-		.adjust_selection {
+		input.ActionAdjustSelection {
 			self.renderer_state.mutex.lock()
 			defer {
 				self.renderer_state.mutex.unlock()
 			}
 			mut screen := self.renderer_state.terminal_.screens.active
 			mut sel := screen.selection or { return false }
-			sel.adjust(screen, selection_adjustment_from_input(action.enum_param))
+			sel.adjust(screen, selection_adjustment_from_input(action.value))
 			screen.selection = sel
 
 			// If the selection endpoint is outside of the current viewpoint,
@@ -4637,8 +4636,8 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			screen.dirty.set_selection(true)
 			self.queue_render()!
 		}
-		.crash {
-			match unsafe { input.CrashThread(action.enum_param) } {
+		input.ActionCrash {
+			match action.value {
 				.main_thread { panic('crash binding action, crashing intentionally') }
 				.render {
 					_ = self.renderer_thread.mailbox.push(rendererpkg.RendererMessage(rendererpkg.CrashMessage{}),
@@ -4678,10 +4677,10 @@ fn app_action_key(tag input.ActionTag) apprt.ActionKey {
 	}
 }
 
-// split_dir_from_input converts an input.SplitDirection (stored as enum_param)
+// split_dir_from_input converts an input.SplitDirection
 // into the runtime direction, resolving the input-only auto case.
-fn split_dir_from_input(e i32, size rendererpkg.ScreenSize) apprt.SplitDirection {
-	return match unsafe { input.SplitDirection(e) } {
+fn split_dir_from_input(e input.SplitDirection, size rendererpkg.ScreenSize) apprt.SplitDirection {
+	return match e {
 		.right { .right }
 		.down { .down }
 		.left { .left }
@@ -4696,10 +4695,9 @@ fn split_dir_from_input(e i32, size rendererpkg.ScreenSize) apprt.SplitDirection
 	}
 }
 
-// goto_split_from_input converts an input.SplitFocusDirection (stored as
-// enum_param) into the runtime direction.
-fn goto_split_from_input(e i32) apprt.GotoSplit {
-	return match unsafe { input.SplitFocusDirection(e) } {
+// goto_split_from_input converts an input.SplitFocusDirection into the runtime direction.
+fn goto_split_from_input(e input.SplitFocusDirection) apprt.GotoSplit {
+	return match e {
 		.previous { .previous }
 		.next { .next }
 		.up { .up }
@@ -4709,19 +4707,18 @@ fn goto_split_from_input(e i32) apprt.GotoSplit {
 	}
 }
 
-// goto_window_from_input converts an input.GotoWindow (stored as enum_param)
+// goto_window_from_input converts an input.GotoWindow
 // into the runtime direction.
-fn goto_window_from_input(e i32) apprt.GotoWindow {
-	return match unsafe { input.GotoWindow(e) } {
+fn goto_window_from_input(e input.GotoWindow) apprt.GotoWindow {
+	return match e {
 		.previous { .previous }
 		.next { .next }
 	}
 }
 
-// resize_dir_from_input converts an input.SplitResizeDirection (stored as
-// enum_param) into the runtime direction.
-fn resize_dir_from_input(e i32) apprt.ResizeSplitDirection {
-	return match unsafe { input.SplitResizeDirection(e) } {
+// resize_dir_from_input converts an input.SplitResizeDirection into the runtime direction.
+fn resize_dir_from_input(e input.SplitResizeDirection) apprt.ResizeSplitDirection {
+	return match e {
 		.up { .up }
 		.down { .down }
 		.left { .left }
@@ -4729,28 +4726,26 @@ fn resize_dir_from_input(e i32) apprt.ResizeSplitDirection {
 	}
 }
 
-// close_tab_mode_from_input converts an input.CloseTabMode (stored as
-// enum_param) into the runtime close mode.
-fn close_tab_mode_from_input(e i32) apprt.CloseTabMode {
-	return match unsafe { input.CloseTabMode(e) } {
+// close_tab_mode_from_input converts an input.CloseTabMode into the runtime close mode.
+fn close_tab_mode_from_input(e input.CloseTabMode) apprt.CloseTabMode {
+	return match e {
 		.this { .this }
 		.other { .other }
 		.right { .right }
 	}
 }
 
-// inspector_mode_from_input converts an input.InspectorMode (stored as
-// enum_param) into the runtime inspector action.
-fn inspector_mode_from_input(e i32) apprt.InspectorAction {
-	return match unsafe { input.InspectorMode(e) } {
+// inspector_mode_from_input converts an input.InspectorMode into the runtime inspector action.
+fn inspector_mode_from_input(e input.InspectorMode) apprt.InspectorAction {
+	return match e {
 		.toggle { .toggle }
 		.show { .show }
 		.hide { .hide }
 	}
 }
 
-fn selection_adjustment_from_input(e i32) terminal.SelectionAdjustment {
-	return match unsafe { input.AdjustSelection(e) } {
+fn selection_adjustment_from_input(e input.AdjustSelection) terminal.SelectionAdjustment {
+	return match e {
 		.left { .left }
 		.right { .right }
 		.up { .up }
@@ -4761,16 +4756,6 @@ fn selection_adjustment_from_input(e i32) terminal.SelectionAdjustment {
 		.end_ { .end_ }
 		.beginning_of_line { .beginning_of_line }
 		.end_of_line { .end_of_line }
-	}
-}
-
-// write_screen_from_input rebuilds the tagged input.WriteScreen payload from an
-// input.Action's write_*_file parameters (enum_param = action, enum_param2 =
-// format).
-fn write_screen_from_input(action input.Action) input.WriteScreen {
-	return input.WriteScreen{
-		action: unsafe { input.WriteScreenAction(action.enum_param) }
-		emit: unsafe { input.WriteScreenFormat(action.enum_param2) }
 	}
 }
 
@@ -5578,8 +5563,8 @@ fn (self &Surface) catch_all_is_ignore() bool {
 fn binding_entry_has_ignore(entry &input.SetEntry) bool {
 	return match entry.value.typ {
 		.leader { false }
-		.leaf { entry.value.leaf_action.tag == .ignore }
-		.leaf_chained { entry.value.chain_actions.any(it.tag == .ignore) }
+		.leaf { entry.value.leaf_action is input.ActionIgnore }
+		.leaf_chained { entry.value.chain_actions.any(it is input.ActionIgnore) }
 	}
 }
 
@@ -5657,7 +5642,7 @@ fn (mut self Surface) maybe_handle_binding(event KeyEvent, inspecting bool, mut 
 				// remove this table no matter where it is in the stack,
 				// maybe.
 				if table.once && i == 0 {
-					_ = self.perform_binding_action(input.Action.new(.deactivate_key_table))!
+					_ = self.perform_binding_action(input.ActionDeactivateKeyTable{})!
 				}
 
 				entry = v
@@ -5733,7 +5718,7 @@ fn (mut self Surface) maybe_handle_binding(event KeyEvent, inspecting bool, mut 
 			if v := self.perform_binding_action(action) {
 				performed = performed || v
 			} else {
-				eprintln('key binding action failed action=${action.tag} err=${err}')
+				eprintln('key binding action failed action=${action.tag()} err=${err}')
 			}
 		}
 	}
@@ -5753,7 +5738,7 @@ fn (mut self Surface) maybe_handle_binding(event KeyEvent, inspecting bool, mut 
 		// If our action was "ignore" then we return the special input
 		// effect of "ignored".
 		for action in actions {
-			if action.tag == .ignore {
+			if action is input.ActionIgnore {
 				return MaybeHandleBindingResult{
 					value: .ignored
 				}

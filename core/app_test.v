@@ -254,7 +254,7 @@ fn test_app_key_event_uses_runtime_config_binding() {
 	cfg.keybind.set.put(input.Trigger{
 		key: input.TriggerKey.new_unicode(u32(`q`))
 		mods: input.Mods.init(false, false, false, true, false, false, input.SideInfo{})
-	}, input.Action.new(.quit))
+	}, input.ActionQuit{})
 	mut runtime := apprt.RuntimeApp{
 		config: cfg
 	}

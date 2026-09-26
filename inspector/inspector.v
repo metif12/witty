@@ -497,7 +497,7 @@ fn (mut self Inspector) draw_key_stream(context cimgui.Context, open bool) {
 		if event.binding.len == 0 {
 			context.text_disabled('-')
 		} else {
-			context.text(event.binding.map(it.tag.str()).join(', '))
+			context.text(event.binding.map(it.tag().str()).join(', '))
 		}
 
 		row_max_y := context.cursor_screen_y()

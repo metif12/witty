@@ -486,7 +486,7 @@ fn (mut self App) drain_mailbox(mut rt_app apprt.RuntimeApp) ! {
 		message := self.mailbox.pop() or { break }
 		match message {
 			OpenConfigMsg {
-				self.perform_action(mut rt_app, input.Action.new(.open_config))!
+				self.perform_action(mut rt_app, input.ActionOpenConfig{})!
 			}
 			NewWindowMsg {
 				self.new_window(mut rt_app, message)!
@@ -505,7 +505,7 @@ fn (mut self App) drain_mailbox(mut rt_app apprt.RuntimeApp) ! {
 			// mailbox processing to the next tick so that the apprt
 			// can try to quit as quickly as possible.
 			QuitMsg {
-				self.perform_action(mut rt_app, input.Action.new(.quit))!
+				self.perform_action(mut rt_app, input.ActionQuit{})!
 				return
 			}
 		}
@@ -684,42 +684,42 @@ pub fn (mut self App) key_event(mut rt_app apprt.RuntimeApp, event input.KeyEven
 // surfaces.
 pub fn (mut self App) perform_action(mut rt_app apprt.RuntimeApp, action input.Action) ! {
 	app_target := apprt.Target(apprt.AppTarget{})
-	match action.tag {
-		.unbind {
+	match action {
+		input.ActionUnbind {
 			panic('unbind action reached app dispatch')
 		}
-		.ignore {}
-		.quit {
+		input.ActionIgnore {}
+		input.ActionQuit {
 			rt_app.perform_action(app_target, .quit, apprt.ActionVoid{})!
 		}
-		.new_window {
+		input.ActionNewWindow {
 			self.new_window(mut rt_app, NewWindowMsg{ parent: none })!
 		}
-		.open_config {
+		input.ActionOpenConfig {
 			rt_app.perform_action(app_target, .open_config, apprt.ActionVoid{})!
 		}
-		.reload_config {
+		input.ActionReloadConfig {
 			rt_app.perform_action(app_target, .reload_config, apprt.ActionVoid{})!
 		}
-		.close_all_windows {
+		input.ActionCloseAllWindows {
 			rt_app.perform_action(app_target, .close_all_windows, apprt.ActionVoid{})!
 		}
-		.toggle_quick_terminal {
+		input.ActionToggleQuickTerminal {
 			rt_app.perform_action(app_target, .toggle_quick_terminal, apprt.ActionVoid{})!
 		}
-		.toggle_visibility {
+		input.ActionToggleVisibility {
 			rt_app.perform_action(app_target, .toggle_visibility, apprt.ActionVoid{})!
 		}
-		.check_for_updates {
+		input.ActionCheckForUpdates {
 			rt_app.perform_action(app_target, .check_for_updates, apprt.ActionVoid{})!
 		}
-		.show_gtk_inspector {
+		input.ActionShowGtkInspector {
 			rt_app.perform_action(app_target, .show_gtk_inspector, apprt.ActionVoid{})!
 		}
-		.undo {
+		input.ActionUndo {
 			rt_app.perform_action(app_target, .undo, apprt.ActionVoid{})!
 		}
-		.redo {
+		input.ActionRedo {
 			rt_app.perform_action(app_target, .redo, apprt.ActionVoid{})!
 		}
 		else {

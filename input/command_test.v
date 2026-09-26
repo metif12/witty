@@ -18,14 +18,14 @@ fn test_command_defaults() {
 
 fn test_command_equal_compares_source_fields() {
 	base := Command{
-		action: Action.new(.reset)
+		action: ActionReset{}
 		title: 'Reset Terminal'
 		description: 'Reset the terminal to a clean state.'
 	}
 	assert base.equal(base.clone())
 	assert !base.equal(Command{
 		...base
-		action: Action.new(.quit)
+		action: ActionQuit{}
 	})
 	assert !base.equal(Command{
 		...base
@@ -39,13 +39,13 @@ fn test_command_equal_compares_source_fields() {
 
 fn test_command_clone_duplicates_owned_payloads() {
 	original := Command{
-		action: Action.new_str(.text, 'payload'.clone())
+		action: ActionText{ value: 'payload'.clone() }
 		title: 'Title'.clone()
 		description: 'Description'.clone()
 	}
 	cloned := original.clone()
 	assert cloned.equal(original)
-	assert cloned.action.str_param.str != original.action.str_param.str
+	assert (cloned.action as ActionText).value.str != (original.action as ActionText).value.str
 	assert cloned.title.str != original.title.str
 	assert cloned.description.str != original.description.str
 }
@@ -55,8 +55,8 @@ fn test_command_defaults_preserve_signed_move_tab_offsets() {
 	right := command_defaults.filter(it.title == 'Move Tab Right')
 	assert left.len == 1
 	assert right.len == 1
-	assert left[0].action.int_param == -1
-	assert right[0].action.int_param == 1
+	assert (left[0].action as ActionMoveTab).value == -1
+	assert (right[0].action as ActionMoveTab).value == 1
 	assert left[0].action.format() == 'move_tab:-1'
 	assert right[0].action.format() == 'move_tab:1'
 }

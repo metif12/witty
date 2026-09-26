@@ -1136,11 +1136,11 @@ fn test_repeatable_command_parse_clear_clone_and_format() {
 	commands.parse_cli('title:"Bar, Baz",description:"line\\ntext",action:"text:hello, world"')!
 	assert commands.items.len == 2
 	assert commands.items[0].title == 'Foo'
-	assert commands.items[0].action.tag == .ignore
+	assert commands.items[0].action.tag() == .ignore
 	assert commands.items[1].title == 'Bar, Baz'
 	assert commands.items[1].description == 'line\ntext'
-	assert commands.items[1].action.tag == .text
-	assert commands.items[1].action.str_param == 'hello, world'
+	assert commands.items[1].action.tag() == .text
+	assert (commands.items[1].action as input.ActionText).value == 'hello, world'
 
 	clone := commands.clone()
 	assert clone.equal(commands)
@@ -2289,10 +2289,10 @@ keybind = ctrl+b=new_tab
 	assert cfg.config_file.items == [Path{ path: os.join_path(dir, 'ignored.conf') }]
 	assert cfg.keybind.set.get(input.Trigger.parse('ctrl+a')!) or {
 		panic('theme keybind was not retained')
-	}.value.leaf_action.tag == .new_window
+	}.value.leaf_action.tag() == .new_window
 	assert cfg.keybind.set.get(input.Trigger.parse('ctrl+b')!) or {
 		panic('user keybind was not retained')
-	}.value.leaf_action.tag == .new_tab
+	}.value.leaf_action.tag() == .new_tab
 	assert cfg.diagnostics.len == 0
 }
 
@@ -2863,19 +2863,19 @@ fn test_default_config_initializes_complete_darwin_keybinds() {
 			key: input.TriggerKey.new_unicode(u32(`q`))
 			mods: input.Mods.init(false, false, false, true, false, false, input.SideInfo{})
 		}) or { panic('missing default quit binding') }
-		assert quit.value.leaf_action.tag == .quit
+		assert quit.value.leaf_action.tag() == .quit
 
 		resize := cfg.keybind.set.get(input.Trigger{
 			key: input.TriggerKey.new_physical(.arrow_left)
 			mods: input.Mods.init(false, true, false, true, false, false, input.SideInfo{})
 		}) or { panic('missing default split resize binding') }
-		assert resize.value.leaf_action == input.Action.new_enum2(.resize_split, i32(input.SplitResizeDirection.left), 10)
+		assert resize.value.leaf_action == input.Action(input.ActionResizeSplit{ value: input.SplitResizeParameter{ direction: .left, amount: 10 } })
 
 		natural := cfg.keybind.set.get(input.Trigger{
 			key: input.TriggerKey.new_physical(.arrow_right)
 			mods: input.Mods.init(false, false, true, false, false, false, input.SideInfo{})
 		}) or { panic('missing natural text editing binding') }
-		assert natural.value.leaf_action == input.Action.new_str(.esc, 'f')
+		assert natural.value.leaf_action == input.Action(input.ActionEsc{ value: 'f' })
 	} $else {
 		assert cfg.keybind.set.bindings.len > 60
 	}
@@ -3884,5 +3884,5 @@ fn test_format_config_changes_only_round_trips_supported_values() {
 	assert parsed.auto_update_channel == original.auto_update_channel
 	// Ghostty's binding formatter intentionally serializes triggers and
 	// actions but not the in-memory performable/consumed flags.
-	assert parsed.keybind.set.get_trigger(input.Action{ tag: .new_window }) != none
+	assert parsed.keybind.set.get_trigger(input.ActionNewWindow{}) != none
 }

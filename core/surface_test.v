@@ -274,7 +274,7 @@ fn test_toggle_fullscreen_uses_configured_macos_mode() {
 	mut surf := make_test_surface()
 	surf.rt_app = &runtime
 	surf.config.macos_non_native_fullscreen = .padded_notch
-	assert surf.perform_binding_action(input.Action.new(.toggle_fullscreen))!
+	assert surf.perform_binding_action(input.ActionToggleFullscreen{})!
 	assert runtime.actions.len == 1
 	assert runtime.actions[0].action == .toggle_fullscreen
 	match runtime.actions[0].target {
@@ -294,26 +294,26 @@ fn test_binding_actions_use_canonical_runtime_payloads() {
 	surf.rt_app = &runtime
 	surf.size.screen = rendererpkg.ScreenSize{ width: 800, height: 600 }
 
-	assert surf.perform_binding_action(input.Action.new_enum(.new_split, i32(input.SplitDirection.auto_)))!
+	assert surf.perform_binding_action(input.ActionNewSplit{ value: .auto_ })!
 	assert action_value[apprt.SplitDirection](runtime.actions.last().data) == apprt.SplitDirection.right
 	surf.size.screen = rendererpkg.ScreenSize{ width: 600, height: 800 }
-	assert surf.perform_binding_action(input.Action.new_enum(.new_split, i32(input.SplitDirection.auto_)))!
+	assert surf.perform_binding_action(input.ActionNewSplit{ value: .auto_ })!
 	assert action_value[apprt.SplitDirection](runtime.actions.last().data) == apprt.SplitDirection.down
 
-	assert surf.perform_binding_action(input.Action.new_enum(.close_tab, i32(input.CloseTabMode.other)))!
+	assert surf.perform_binding_action(input.ActionCloseTab{ value: .other })!
 	assert action_value[apprt.CloseTabMode](runtime.actions.last().data) == apprt.CloseTabMode.other
-	assert surf.perform_binding_action(input.Action.new_enum(.goto_split, i32(input.SplitFocusDirection.left)))!
+	assert surf.perform_binding_action(input.ActionGotoSplit{ value: .left })!
 	assert action_value[apprt.GotoSplit](runtime.actions.last().data) == apprt.GotoSplit.left
-	assert surf.perform_binding_action(input.Action.new_enum(.goto_window, i32(input.GotoWindow.next)))!
+	assert surf.perform_binding_action(input.ActionGotoWindow{ value: .next })!
 	assert action_value[apprt.GotoWindow](runtime.actions.last().data) == apprt.GotoWindow.next
-	assert surf.perform_binding_action(input.Action.new_enum2(.resize_split, i32(input.SplitResizeDirection.right), 7))!
+	assert surf.perform_binding_action(input.ActionResizeSplit{ value: input.SplitResizeParameter{ direction: .right, amount: 7 } })!
 	assert action_value[apprt.ResizeSplit](runtime.actions.last().data).direction == apprt.ResizeSplitDirection.right
 	assert action_value[apprt.ResizeSplit](runtime.actions.last().data).amount == 7
-	assert surf.perform_binding_action(input.Action.new_enum(.inspector, i32(input.InspectorMode.show)))!
+	assert surf.perform_binding_action(input.ActionInspector{ value: .show })!
 	assert action_value[apprt.InspectorAction](runtime.actions.last().data) == apprt.InspectorAction.show
-	assert surf.perform_binding_action(input.Action.new(.previous_tab))!
+	assert surf.perform_binding_action(input.ActionPreviousTab{})!
 	assert action_value[apprt.GotoTab](runtime.actions.last().data) == apprt.GotoTab.previous
-	assert surf.perform_binding_action(input.Action.new_uint(.goto_tab, 7))!
+	assert surf.perform_binding_action(input.ActionGotoTab{ value: 7 })!
 	assert int(action_value[apprt.GotoTab](runtime.actions.last().data)) == 7
 }
 
@@ -323,7 +323,7 @@ fn test_surface_key_binding_applies_modifier_remap() {
 	cfg.keybind.set.put(input.Trigger{
 		key: input.TriggerKey.new_unicode(u32(`q`))
 		mods: input.Mods.init(false, false, false, true, false, false, input.SideInfo{})
-	}, input.Action.new(.quit))
+	}, input.ActionQuit{})
 	cfg.key_remap.parse('ctrl=super')!
 	cfg.key_remap.finalize()
 
@@ -397,10 +397,10 @@ fn test_surface_inspector_records_consumed_binding() {
 	mut surf := make_test_surface()
 	surf.config.keybind.set.put(input.Trigger{
 		key: input.TriggerKey.new_physical(.f1)
-	}, input.Action.new(.scroll_to_top))
+	}, input.ActionScrollToTop{})
 	surf.config.keybind.set.put(input.Trigger{
 		key: input.TriggerKey.new_physical(.f2)
-	}, input.Action.new(.ignore))
+	}, input.ActionIgnore{})
 	surf.activate_inspector()!
 	defer {
 		surf.deactivate_inspector()
@@ -415,7 +415,7 @@ fn test_surface_inspector_records_consumed_binding() {
 	}
 	assert insp.key_events.len == 2
 	assert insp.key_events[0].binding.len == 1
-	assert insp.key_events[0].binding[0].tag == .scroll_to_top
+	assert insp.key_events[0].binding[0].tag() == .scroll_to_top
 	assert insp.key_events[0].pty.len == 0
 	assert insp.key_events[1].binding.len == 0
 }
@@ -555,7 +555,7 @@ fn test_surface_pwd_returns_an_owned_copy() {
 
 fn test_text_binding_decodes_zig_escapes_before_writing() {
 	mut surf := make_test_surface()
-	assert surf.perform_binding_action(input.Action.new_str(.text, 'line\\n\\x41'))!
+	assert surf.perform_binding_action(input.ActionText{ value: 'line\\n\\x41' })!
 	assert surf.io.messages.len == 1
 	assert surf.io.messages[0].kind() == .write_small
 	assert surf.io.messages[0].write_slice().bytestr() == 'line\nA'
@@ -564,7 +564,7 @@ fn test_text_binding_decodes_zig_escapes_before_writing() {
 fn test_long_text_binding_uses_allocated_write() {
 	mut surf := make_test_surface()
 	text := 'x'.repeat(129)
-	assert surf.perform_binding_action(input.Action.new_str(.text, text))!
+	assert surf.perform_binding_action(input.ActionText{ value: text })!
 	assert surf.io.messages.len == 1
 	assert surf.io.messages[0].kind() == .write_alloc
 	assert surf.io.messages[0].write_slice().bytestr() == text
@@ -572,7 +572,7 @@ fn test_long_text_binding_uses_allocated_write() {
 
 fn test_oversized_csi_binding_is_rejected_without_truncation() {
 	mut surf := make_test_surface()
-	action := input.Action.new_str(.csi, 'x'.repeat(127))
+	action := input.ActionCsi{ value: 'x'.repeat(127) }
 	surf.perform_binding_action(action) or {
 		assert err.msg() == 'binding sequence exceeds 128 bytes'
 		assert surf.io.messages.len == 0
@@ -583,7 +583,7 @@ fn test_oversized_csi_binding_is_rejected_without_truncation() {
 
 fn test_csi_binding_accepts_exact_fixed_buffer_size_without_truncation() {
 	mut surf := make_test_surface()
-	action := input.Action.new_str(.csi, 'x'.repeat(126))
+	action := input.ActionCsi{ value: 'x'.repeat(126) }
 	assert surf.perform_binding_action(action)!
 	assert surf.io.messages.len == 1
 	assert surf.io.messages[0].kind() == .write_alloc
@@ -592,13 +592,13 @@ fn test_csi_binding_accepts_exact_fixed_buffer_size_without_truncation() {
 
 fn test_invalid_text_binding_is_handled_without_writing() {
 	mut surf := make_test_surface()
-	assert surf.perform_binding_action(input.Action.new_str(.text, '\\q'))!
+	assert surf.perform_binding_action(input.ActionText{ value: '\\q' })!
 	assert surf.io.messages.len == 0
 }
 
 fn test_cursor_key_binding_selects_sequence_from_terminal_mode() {
 	mut surf := make_test_surface()
-	action := input.Action.new_cursor_key('\x1b[A', '\x1bOA')
+	action := input.ActionCursorKey{ value: input.CursorKey{ normal: '\x1b[A', application: '\x1bOA' } }
 	assert surf.perform_binding_action(action)!
 	assert surf.io.messages.last().write_slice().bytestr() == '\x1b[A'
 
@@ -1027,7 +1027,7 @@ fn test_secure_input_actions_preserve_on_off_and_toggle() ! {
 	mut surf := make_test_surface()
 	surf.rt_app = &runtime
 
-	assert surf.perform_binding_action(input.Action.new(.toggle_secure_input))!
+	assert surf.perform_binding_action(input.ActionToggleSecureInput{})!
 	assert action_value[apprt.SecureInput](runtime.actions.last().data) == .toggle
 	runtime.actions.clear()
 
@@ -1286,7 +1286,7 @@ fn test_deactivate_key_table_action_payload() ! {
 	mut runtime := apprt.RuntimeApp{ actions_handled: true }
 	mut surf := Surface{ rt_app: &runtime }
 	surf.keyboard.table_stack << KeyTableEntry{ name: 'copy-mode' }
-	assert surf.perform_binding_action(input.Action.new(.deactivate_key_table))!
+	assert surf.perform_binding_action(input.ActionDeactivateKeyTable{})!
 	assert surf.keyboard.table_stack.len == 0
 	assert runtime.actions.len == 1
 	assert runtime.actions[0].action == .key_table
@@ -1346,11 +1346,11 @@ fn test_terminal_selection_eql() {
 }
 
 fn test_closing_action() {
-	assert closing_action(input.Action.new(.close_surface)) == true
-	assert closing_action(input.Action.new(.close_window)) == true
-	assert closing_action(input.Action.new(.close_tab)) == true
-	assert closing_action(input.Action.new(.ignore)) == false
-	assert closing_action(input.Action.new(.reset)) == false
+	assert closing_action(input.ActionCloseSurface{}) == true
+	assert closing_action(input.ActionCloseWindow{}) == true
+	assert closing_action(input.ActionCloseTab{}) == true
+	assert closing_action(input.ActionIgnore{}) == false
+	assert closing_action(input.ActionReset{}) == false
 }
 
 fn test_has_selection() {
@@ -1705,7 +1705,7 @@ fn test_copy_url_to_clipboard_uses_configured_trailing_space_policy() ! {
 	mut stream := surf.renderer_state.terminal_.vt_stream()
 	stream.next_slice('http://a   '.bytes())!
 
-	assert surf.perform_binding_action(input.Action.new(.copy_url_to_clipboard))!
+	assert surf.perform_binding_action(input.ActionCopyUrlToClipboard{})!
 	contents := runtime.clipboards[.standard]
 	assert contents.len == 1
 	assert contents[0].data == 'http://a   '

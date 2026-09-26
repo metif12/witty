@@ -77,7 +77,7 @@ fn test_link_non_mod_highlight_has_no_mod_payload() {
 
 fn test_command_cval_matches_command() {
 	command := Command{
-		action: Action.new_str(.text, 'hello')
+		action: ActionText{ value: 'hello' }
 		title: 'Title'
 		description: 'Description'
 	}

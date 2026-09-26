@@ -1296,7 +1296,7 @@ pub fn action_prompt_title(action GSimpleAction, parameter GVariant, data voidpt
 		return
 	}
 	mut surface := self.core_surface
-	surface.perform_binding_action(input.Action.new(.prompt_surface_title)) or {
+	surface.perform_binding_action(input.ActionPromptSurfaceTitle{}) or {
 		eprintln('unable to perform prompt title action err=${err}')
 	}
 }
@@ -3402,7 +3402,7 @@ fn surface_vadjustment_changed_cb(adj GtkAdjustment, data voidptr) {
 	value := C.gtk_adjustment_get_value(adj)
 	row := if value <= 0 { u64(0) } else { u64(value + 0.5) }
 	mut surface := self.core_surface
-	surface.perform_binding_action(input.Action.new_uint(.scroll_to_row, row)) or {
+	surface.perform_binding_action(input.ActionScrollToRow{ value: usize(row) }) or {
 		eprintln('error performing scroll_to_row action err=${err}')
 	}
 }
@@ -3541,7 +3541,7 @@ fn surface_search_stop_cb(overlay GtkWidget, data voidptr) {
 		return
 	}
 	mut surface := self.core_surface
-	surface.perform_binding_action(input.Action.new(.end_search)) or {
+	surface.perform_binding_action(input.ActionEndSearch{}) or {
 		eprintln('unable to perform end_search action err=${err}')
 	}
 	C.gtk_widget_grab_focus(GtkWidget(self.gl_area))
@@ -3563,7 +3563,7 @@ fn surface_search_changed_cb(overlay GtkWidget, needle_ptr &char, data voidptr) 
 		}
 	}
 	mut surface := self.core_surface
-	surface.perform_binding_action(input.Action.new_str(.search, needle)) or {
+	surface.perform_binding_action(input.ActionSearch{ value: needle }) or {
 		eprintln('unable to perform search action err=${err}')
 	}
 }
@@ -3587,7 +3587,7 @@ fn surface_search_navigate(data voidptr, direction input.NavigateSearch) {
 		return
 	}
 	mut surface := self.core_surface
-	surface.perform_binding_action(input.Action.new_enum(.navigate_search, i32(direction))) or {
+	surface.perform_binding_action(input.ActionNavigateSearch{ value: direction }) or {
 		eprintln('unable to perform navigate_search action err=${err}')
 	}
 }

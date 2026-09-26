@@ -8,7 +8,7 @@ fn test_command_palette_action_accelerator_from_config_keybind() {
 	inner.keybind.parse_cli('ctrl+shift+a=new_window')!
 	mut cfg := config_new(inner)
 	mut command := Command.new(cfg, input.Command{
-		action: input.Action.new(.new_window)
+		action: input.ActionNewWindow{}
 		title: 'New Window'
 	})
 
@@ -23,7 +23,7 @@ fn test_command_palette_action_accelerator_from_config_keybind() {
 fn test_command_palette_action_without_keybind_is_none() {
 	mut cfg := config_new(configpkg.Config{})
 	mut command := Command.new(cfg, input.Command{
-		action: input.Action.new(.new_window)
+		action: input.ActionNewWindow{}
 		title: 'New Window'
 	})
 
@@ -36,7 +36,7 @@ fn test_command_palette_action_without_keybind_is_none() {
 fn test_regular_command_has_no_jump_surface() {
 	mut cfg := config_new(configpkg.Config{})
 	mut command := Command.new(cfg, input.Command{
-		action: input.Action.new(.new_window)
+		action: input.ActionNewWindow{}
 		title: 'New Window'
 	})
 
@@ -49,7 +49,7 @@ fn test_regular_command_has_no_jump_surface() {
 fn test_command_palette_action_key_uses_full_action_format() {
 	mut cfg := config_new(configpkg.Config{})
 	mut command := Command.new(cfg, input.Command{
-		action: input.Action.new_str(.text, 'hello world')
+		action: input.ActionText{ value: 'hello world' }
 		title: 'Type Text'
 	})
 
@@ -64,13 +64,13 @@ fn test_command_palette_filter_matches_title_or_action_key() {
 	palette.commands = [
 		&Command{
 			command: input.Command{
-				action: input.Action.new(.new_window)
+				action: input.ActionNewWindow{}
 				title: 'Open a Window'
 			}
 		},
 		&Command{
 			command: input.Command{
-				action: input.Action.new(.copy_to_clipboard)
+				action: input.ActionCopyToClipboard{}
 				title: 'Copy Selection'
 			}
 		},
@@ -106,7 +106,7 @@ fn test_command_palette_uses_configured_entries() {
 	mut command := palette.commands[0]
 	assert command.prop_get_title() or { '' } == 'Only Entry'
 	assert command.prop_get_description() or { '' } == 'Configured'
-	assert command.get_action() or { input.Action{} } == input.Action.new(.ignore)
+	assert command.get_action() or { input.Action{} } == input.Action(input.ActionIgnore{})
 
 	palette.dispose()
 	cfg.unref()

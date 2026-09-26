@@ -1464,437 +1464,833 @@ pub fn Trigger.parse(input_str string) !Trigger {
 
 // --- Action ---
 
-// ActionTag enumerates all the possible binding action types.
+// Ignore this key combination.
+pub struct ActionIgnore {}
+
+// Unbind a previously bound key binding.
+pub struct ActionUnbind {}
+
+// Send a CSI sequence.
+pub struct ActionCsi {
+pub:
+	value string
+}
+
+// Send an ESC sequence.
+pub struct ActionEsc {
+pub:
+	value string
+}
+
+// Send the specified text.
+pub struct ActionText {
+pub:
+	value string
+}
+
+// Send data to the pty depending on whether cursor key mode is enabled
+// (application) or disabled (normal).
+pub struct ActionCursorKey {
+pub:
+	value CursorKey
+}
+
+// Reset the terminal.
+pub struct ActionReset {}
+
+// Copy the selected text to the clipboard.
+pub struct ActionCopyToClipboard {
+pub:
+	value CopyToClipboard
+}
+
+// Paste the contents of the default clipboard.
+pub struct ActionPasteFromClipboard {}
+
+// Paste the contents of the selection clipboard.
+pub struct ActionPasteFromSelection {}
+
+// If there is a URL under the cursor, copy it to the default clipboard.
+pub struct ActionCopyUrlToClipboard {}
+
+// Copy the terminal title to the clipboard.
+pub struct ActionCopyTitleToClipboard {}
+
+// Increase the font size by the specified amount in points.
+pub struct ActionIncreaseFontSize {
+pub:
+	value f32
+}
+
+// Decrease the font size by the specified amount in points.
+pub struct ActionDecreaseFontSize {
+pub:
+	value f32
+}
+
+// Reset the font size to the original configured size.
+pub struct ActionResetFontSize {}
+
+// Set the font size to the specified size in points.
+pub struct ActionSetFontSize {
+pub:
+	value f32
+}
+
+// Start a search for the given text.
+pub struct ActionSearch {
+pub:
+	value string
+}
+
+// Start a search for the current text selection.
+pub struct ActionSearchSelection {}
+
+// Navigate the search results.
+pub struct ActionNavigateSearch {
+pub:
+	value NavigateSearch
+}
+
+// Start a search if it isn't started already.
+pub struct ActionStartSearch {}
+
+// End the current search if any and hide any GUI elements.
+pub struct ActionEndSearch {}
+
+// Clear the screen and all scrollback.
+pub struct ActionClearScreen {}
+
+// Select all text on the screen.
+pub struct ActionSelectAll {}
+
+// Scroll to the top of the screen.
+pub struct ActionScrollToTop {}
+
+// Scroll to the bottom of the screen.
+pub struct ActionScrollToBottom {}
+
+// Scroll to the selected text.
+pub struct ActionScrollToSelection {}
+
+// Scroll to the given absolute row.
+pub struct ActionScrollToRow {
+pub:
+	value usize
+}
+
+// Scroll the screen up by one page.
+pub struct ActionScrollPageUp {}
+
+// Scroll the screen down by one page.
+pub struct ActionScrollPageDown {}
+
+// Scroll the screen by the specified fraction of a page.
+pub struct ActionScrollPageFractional {
+pub:
+	value f32
+}
+
+// Scroll the screen by the specified amount of lines.
+pub struct ActionScrollPageLines {
+pub:
+	value i16
+}
+
+// Adjust the current selection.
+pub struct ActionAdjustSelection {
+pub:
+	value AdjustSelection
+}
+
+// Jump the viewport forward or back by the given number of prompts.
+pub struct ActionJumpToPrompt {
+pub:
+	value i16
+}
+
+// Write the entire scrollback into a temporary file with the specified action.
+pub struct ActionWriteScrollbackFile {
+pub:
+	value WriteScreen
+}
+
+// Write the contents of the screen into a temporary file.
+pub struct ActionWriteScreenFile {
+pub:
+	value WriteScreen
+}
+
+// Write the currently selected text into a temporary file.
+pub struct ActionWriteSelectionFile {
+pub:
+	value WriteScreen
+}
+
+// Open a new window.
+pub struct ActionNewWindow {}
+
+// Open a new tab.
+pub struct ActionNewTab {}
+
+// Go to the previous tab.
+pub struct ActionPreviousTab {}
+
+// Go to the next tab.
+pub struct ActionNextTab {}
+
+// Go to the last tab.
+pub struct ActionLastTab {}
+
+// Go to the tab with the specific index.
+pub struct ActionGotoTab {
+pub:
+	value usize
+}
+
+// Moves a tab by a relative offset.
+pub struct ActionMoveTab {
+pub:
+	value isize
+}
+
+// Toggle the tab overview.
+pub struct ActionToggleTabOverview {}
+
+// Change the title of the current focused surface via a pop-up prompt.
+pub struct ActionPromptSurfaceTitle {}
+
+// Change the title of the current tab/window via a pop-up prompt.
+pub struct ActionPromptTabTitle {}
+
+// Create a new split in the specified direction.
+pub struct ActionNewSplit {
+pub:
+	value SplitDirection
+}
+
+// Focus on a split.
+pub struct ActionGotoSplit {
+pub:
+	value SplitFocusDirection
+}
+
+// Focus on a window.
+pub struct ActionGotoWindow {
+pub:
+	value GotoWindow
+}
+
+// Zoom in or out of the current split.
+pub struct ActionToggleSplitZoom {}
+
+// Toggle read-only mode for the current surface.
+pub struct ActionToggleReadonly {}
+
+// Resize the current split.
+pub struct ActionResizeSplit {
+pub:
+	value SplitResizeParameter
+}
+
+// Equalize the size of all splits.
+pub struct ActionEqualizeSplits {}
+
+// Reset the window to the default size.
+pub struct ActionResetWindowSize {}
+
+// Control the visibility of the terminal inspector.
+pub struct ActionInspector {
+pub:
+	value InspectorMode
+}
+
+// Show the GTK inspector.
+pub struct ActionShowGtkInspector {}
+
+// Show the on-screen keyboard.
+pub struct ActionShowOnScreenKeyboard {}
+
+// Open the configuration file.
+pub struct ActionOpenConfig {}
+
+// Reload the configuration.
+pub struct ActionReloadConfig {}
+
+// Close the current surface.
+pub struct ActionCloseSurface {}
+
+// Close the current tab.
+pub struct ActionCloseTab {
+pub:
+	value CloseTabMode
+}
+
+// Close the current window.
+pub struct ActionCloseWindow {}
+
+// Close all windows.
+pub struct ActionCloseAllWindows {}
+
+// Maximize or unmaximize the current window.
+pub struct ActionToggleMaximize {}
+
+// Fullscreen or unfullscreen the current window.
+pub struct ActionToggleFullscreen {}
+
+// Toggle window decorations.
+pub struct ActionToggleWindowDecorations {}
+
+// Toggle whether the window should float on top.
+pub struct ActionToggleWindowFloatOnTop {}
+
+// Toggle secure input mode.
+pub struct ActionToggleSecureInput {}
+
+// Toggle mouse reporting.
+pub struct ActionToggleMouseReporting {}
+
+// Toggle the command palette.
+pub struct ActionToggleCommandPalette {}
+
+// Toggle the quick terminal.
+pub struct ActionToggleQuickTerminal {}
+
+// Show or hide all windows.
+pub struct ActionToggleVisibility {}
+
+// Toggle background opacity.
+pub struct ActionToggleBackgroundOpacity {}
+
+// Check for updates.
+pub struct ActionCheckForUpdates {}
+
+// Undo the last undoable action.
+pub struct ActionUndo {}
+
+// Redo the last undoable action.
+pub struct ActionRedo {}
+
+// End the currently active key sequence.
+pub struct ActionEndKeySequence {}
+
+// Activate a named key table.
+pub struct ActionActivateKeyTable {
+pub:
+	value string
+}
+
+// Same as activate_key_table, but only for one use.
+pub struct ActionActivateKeyTableOnce {
+pub:
+	value string
+}
+
+// Deactivate the currently active key table.
+pub struct ActionDeactivateKeyTable {}
+
+// Deactivate all active key tables.
+pub struct ActionDeactivateAllKeyTables {}
+
+// Quit the application.
+pub struct ActionQuit {}
+
+// Crash the application for testing.
+pub struct ActionCrash {
+pub:
+	value CrashThread
+}
+
+pub type Action = ActionActivateKeyTable
+	| ActionActivateKeyTableOnce
+	| ActionAdjustSelection
+	| ActionCheckForUpdates
+	| ActionClearScreen
+	| ActionCloseAllWindows
+	| ActionCloseSurface
+	| ActionCloseTab
+	| ActionCloseWindow
+	| ActionCopyTitleToClipboard
+	| ActionCopyToClipboard
+	| ActionCopyUrlToClipboard
+	| ActionCrash
+	| ActionCsi
+	| ActionCursorKey
+	| ActionDeactivateAllKeyTables
+	| ActionDeactivateKeyTable
+	| ActionDecreaseFontSize
+	| ActionEndKeySequence
+	| ActionEndSearch
+	| ActionEqualizeSplits
+	| ActionEsc
+	| ActionGotoSplit
+	| ActionGotoTab
+	| ActionGotoWindow
+	| ActionIgnore
+	| ActionIncreaseFontSize
+	| ActionInspector
+	| ActionJumpToPrompt
+	| ActionLastTab
+	| ActionMoveTab
+	| ActionNavigateSearch
+	| ActionNewSplit
+	| ActionNewTab
+	| ActionNewWindow
+	| ActionNextTab
+	| ActionOpenConfig
+	| ActionPasteFromClipboard
+	| ActionPasteFromSelection
+	| ActionPreviousTab
+	| ActionPromptSurfaceTitle
+	| ActionPromptTabTitle
+	| ActionQuit
+	| ActionRedo
+	| ActionReloadConfig
+	| ActionReset
+	| ActionResetFontSize
+	| ActionResetWindowSize
+	| ActionResizeSplit
+	| ActionScrollPageDown
+	| ActionScrollPageFractional
+	| ActionScrollPageLines
+	| ActionScrollPageUp
+	| ActionScrollToBottom
+	| ActionScrollToRow
+	| ActionScrollToSelection
+	| ActionScrollToTop
+	| ActionSearch
+	| ActionSearchSelection
+	| ActionSelectAll
+	| ActionSetFontSize
+	| ActionShowGtkInspector
+	| ActionShowOnScreenKeyboard
+	| ActionStartSearch
+	| ActionText
+	| ActionToggleBackgroundOpacity
+	| ActionToggleCommandPalette
+	| ActionToggleFullscreen
+	| ActionToggleMaximize
+	| ActionToggleMouseReporting
+	| ActionToggleQuickTerminal
+	| ActionToggleReadonly
+	| ActionToggleSecureInput
+	| ActionToggleSplitZoom
+	| ActionToggleTabOverview
+	| ActionToggleVisibility
+	| ActionToggleWindowDecorations
+	| ActionToggleWindowFloatOnTop
+	| ActionUnbind
+	| ActionUndo
+	| ActionWriteScreenFile
+	| ActionWriteScrollbackFile
+	| ActionWriteSelectionFile
+
+// ActionTag is the tag of the Action union.
 pub enum ActionTag as u8 {
-	// Ignore this key combination.
 	ignore
-	// Unbind a previously bound key binding.
 	unbind
-	// Send a CSI sequence.
 	csi
-	// Send an ESC sequence.
 	esc
-	// Send the specified text.
 	text
-	// Send data to the pty depending on whether cursor key mode is enabled
-	// (application) or disabled (normal).
 	cursor_key
-	// Reset the terminal.
 	reset
-	// Copy the selected text to the clipboard.
 	copy_to_clipboard
-	// Paste the contents of the default clipboard.
 	paste_from_clipboard
-	// Paste the contents of the selection clipboard.
 	paste_from_selection
-	// If there is a URL under the cursor, copy it to the default clipboard.
 	copy_url_to_clipboard
-	// Copy the terminal title to the clipboard.
 	copy_title_to_clipboard
-	// Increase the font size by the specified amount in points.
 	increase_font_size
-	// Decrease the font size by the specified amount in points.
 	decrease_font_size
-	// Reset the font size to the original configured size.
 	reset_font_size
-	// Set the font size to the specified size in points.
 	set_font_size
-	// Start a search for the given text.
 	search
-	// Start a search for the current text selection.
 	search_selection
-	// Navigate the search results.
 	navigate_search
-	// Start a search if it isn't started already.
 	start_search
-	// End the current search if any and hide any GUI elements.
 	end_search
-	// Clear the screen and all scrollback.
 	clear_screen
-	// Select all text on the screen.
 	select_all
-	// Scroll to the top of the screen.
 	scroll_to_top
-	// Scroll to the bottom of the screen.
 	scroll_to_bottom
-	// Scroll to the selected text.
 	scroll_to_selection
-	// Scroll to the given absolute row.
 	scroll_to_row
-	// Scroll the screen up by one page.
 	scroll_page_up
-	// Scroll the screen down by one page.
 	scroll_page_down
-	// Scroll the screen by the specified fraction of a page.
 	scroll_page_fractional
-	// Scroll the screen by the specified amount of lines.
 	scroll_page_lines
-	// Adjust the current selection.
 	adjust_selection
-	// Jump the viewport forward or back by the given number of prompts.
 	jump_to_prompt
-	// Write the entire scrollback into a temporary file with the specified action.
 	write_scrollback_file
-	// Write the contents of the screen into a temporary file.
 	write_screen_file
-	// Write the currently selected text into a temporary file.
 	write_selection_file
-	// Open a new window.
 	new_window
-	// Open a new tab.
 	new_tab
-	// Go to the previous tab.
 	previous_tab
-	// Go to the next tab.
 	next_tab
-	// Go to the last tab.
 	last_tab
-	// Go to the tab with the specific index.
 	goto_tab
-	// Moves a tab by a relative offset.
 	move_tab
-	// Toggle the tab overview.
 	toggle_tab_overview
-	// Change the title of the current focused surface via a pop-up prompt.
 	prompt_surface_title
-	// Change the title of the current tab/window via a pop-up prompt.
 	prompt_tab_title
-	// Create a new split in the specified direction.
 	new_split
-	// Focus on a split.
 	goto_split
-	// Focus on a window.
 	goto_window
-	// Zoom in or out of the current split.
 	toggle_split_zoom
-	// Toggle read-only mode for the current surface.
 	toggle_readonly
-	// Resize the current split.
 	resize_split
-	// Equalize the size of all splits.
 	equalize_splits
-	// Reset the window to the default size.
 	reset_window_size
-	// Control the visibility of the terminal inspector.
 	inspector
-	// Show the GTK inspector.
 	show_gtk_inspector
-	// Show the on-screen keyboard.
 	show_on_screen_keyboard
-	// Open the configuration file.
 	open_config
-	// Reload the configuration.
 	reload_config
-	// Close the current surface.
 	close_surface
-	// Close the current tab.
 	close_tab
-	// Close the current window.
 	close_window
-	// Close all windows.
 	close_all_windows
-	// Maximize or unmaximize the current window.
 	toggle_maximize
-	// Fullscreen or unfullscreen the current window.
 	toggle_fullscreen
-	// Toggle window decorations.
 	toggle_window_decorations
-	// Toggle whether the window should float on top.
 	toggle_window_float_on_top
-	// Toggle secure input mode.
 	toggle_secure_input
-	// Toggle mouse reporting.
 	toggle_mouse_reporting
-	// Toggle the command palette.
 	toggle_command_palette
-	// Toggle the quick terminal.
 	toggle_quick_terminal
-	// Show or hide all windows.
 	toggle_visibility
-	// Toggle background opacity.
 	toggle_background_opacity
-	// Check for updates.
 	check_for_updates
-	// Undo the last undoable action.
 	undo
-	// Redo the last undoable action.
 	redo
-	// End the currently active key sequence.
 	end_key_sequence
-	// Activate a named key table.
 	activate_key_table
-	// Same as activate_key_table, but only for one use.
 	activate_key_table_once
-	// Deactivate the currently active key table.
 	deactivate_key_table
-	// Deactivate all active key tables.
 	deactivate_all_key_tables
-	// Quit the application.
 	quit
-	// Crash the application for testing.
 	crash
 }
 
-// Action holds a binding action along with its parameter value.
+// The tag of the active action variant.
+pub fn (a Action) tag() ActionTag {
+	return match a {
+		ActionIgnore { .ignore }
+		ActionUnbind { .unbind }
+		ActionCsi { .csi }
+		ActionEsc { .esc }
+		ActionText { .text }
+		ActionCursorKey { .cursor_key }
+		ActionReset { .reset }
+		ActionCopyToClipboard { .copy_to_clipboard }
+		ActionPasteFromClipboard { .paste_from_clipboard }
+		ActionPasteFromSelection { .paste_from_selection }
+		ActionCopyUrlToClipboard { .copy_url_to_clipboard }
+		ActionCopyTitleToClipboard { .copy_title_to_clipboard }
+		ActionIncreaseFontSize { .increase_font_size }
+		ActionDecreaseFontSize { .decrease_font_size }
+		ActionResetFontSize { .reset_font_size }
+		ActionSetFontSize { .set_font_size }
+		ActionSearch { .search }
+		ActionSearchSelection { .search_selection }
+		ActionNavigateSearch { .navigate_search }
+		ActionStartSearch { .start_search }
+		ActionEndSearch { .end_search }
+		ActionClearScreen { .clear_screen }
+		ActionSelectAll { .select_all }
+		ActionScrollToTop { .scroll_to_top }
+		ActionScrollToBottom { .scroll_to_bottom }
+		ActionScrollToSelection { .scroll_to_selection }
+		ActionScrollToRow { .scroll_to_row }
+		ActionScrollPageUp { .scroll_page_up }
+		ActionScrollPageDown { .scroll_page_down }
+		ActionScrollPageFractional { .scroll_page_fractional }
+		ActionScrollPageLines { .scroll_page_lines }
+		ActionAdjustSelection { .adjust_selection }
+		ActionJumpToPrompt { .jump_to_prompt }
+		ActionWriteScrollbackFile { .write_scrollback_file }
+		ActionWriteScreenFile { .write_screen_file }
+		ActionWriteSelectionFile { .write_selection_file }
+		ActionNewWindow { .new_window }
+		ActionNewTab { .new_tab }
+		ActionPreviousTab { .previous_tab }
+		ActionNextTab { .next_tab }
+		ActionLastTab { .last_tab }
+		ActionGotoTab { .goto_tab }
+		ActionMoveTab { .move_tab }
+		ActionToggleTabOverview { .toggle_tab_overview }
+		ActionPromptSurfaceTitle { .prompt_surface_title }
+		ActionPromptTabTitle { .prompt_tab_title }
+		ActionNewSplit { .new_split }
+		ActionGotoSplit { .goto_split }
+		ActionGotoWindow { .goto_window }
+		ActionToggleSplitZoom { .toggle_split_zoom }
+		ActionToggleReadonly { .toggle_readonly }
+		ActionResizeSplit { .resize_split }
+		ActionEqualizeSplits { .equalize_splits }
+		ActionResetWindowSize { .reset_window_size }
+		ActionInspector { .inspector }
+		ActionShowGtkInspector { .show_gtk_inspector }
+		ActionShowOnScreenKeyboard { .show_on_screen_keyboard }
+		ActionOpenConfig { .open_config }
+		ActionReloadConfig { .reload_config }
+		ActionCloseSurface { .close_surface }
+		ActionCloseTab { .close_tab }
+		ActionCloseWindow { .close_window }
+		ActionCloseAllWindows { .close_all_windows }
+		ActionToggleMaximize { .toggle_maximize }
+		ActionToggleFullscreen { .toggle_fullscreen }
+		ActionToggleWindowDecorations { .toggle_window_decorations }
+		ActionToggleWindowFloatOnTop { .toggle_window_float_on_top }
+		ActionToggleSecureInput { .toggle_secure_input }
+		ActionToggleMouseReporting { .toggle_mouse_reporting }
+		ActionToggleCommandPalette { .toggle_command_palette }
+		ActionToggleQuickTerminal { .toggle_quick_terminal }
+		ActionToggleVisibility { .toggle_visibility }
+		ActionToggleBackgroundOpacity { .toggle_background_opacity }
+		ActionCheckForUpdates { .check_for_updates }
+		ActionUndo { .undo }
+		ActionRedo { .redo }
+		ActionEndKeySequence { .end_key_sequence }
+		ActionActivateKeyTable { .activate_key_table }
+		ActionActivateKeyTableOnce { .activate_key_table_once }
+		ActionDeactivateKeyTable { .deactivate_key_table }
+		ActionDeactivateAllKeyTables { .deactivate_all_key_tables }
+		ActionQuit { .quit }
+		ActionCrash { .crash }
+	}
+}
+
+// CursorKey is the pair of sequences a cursor-key binding sends, selected
+// by the terminal's cursor-key mode.
 pub struct CursorKey {
 pub:
 	normal      string
 	application string
 }
 
-pub struct Action {
+// SplitResizeParameter is the source's `struct { SplitResizeDirection, u16 }`
+// tuple.
+pub struct SplitResizeParameter {
 pub:
-	tag ActionTag
-	// String parameter for csi, esc, text, search, activate_key_table, activate_key_table_once.
-	str_param string
-	// Float parameter for increase_font_size, decrease_font_size, set_font_size, scroll_page_fractional.
-	float_param f32
-	// Signed parameter for jump_to_prompt, scroll_page_lines, and move_tab.
-	int_param i64
-	// Unsigned int parameter for scroll_to_row and goto_tab.
-	uint_param u64
-	// Enum parameters stored as ints.
-	enum_param i32
-	// Second parameter for tuple types (e.g. resize_split).
-	enum_param2 i32
-	// Cursor-key sequences selected by the terminal's DECCKM mode.
-	cursor_key CursorKey
+	direction SplitResizeDirection
+	amount    u16
 }
 
-pub fn (a Action) == (b Action) bool {
-	return a.equal(b)
-}
-
-// equal returns true if two actions are equal.
+// equal compares two actions for equality.
 pub fn (a Action) equal(b Action) bool {
-	if a.tag != b.tag {
-		return false
-	}
-	return match a.tag {
-		.cursor_key {
-			a.cursor_key.normal == b.cursor_key.normal
-				&& a.cursor_key.application == b.cursor_key.application
-		}
-		.csi, .esc, .text, .search, .activate_key_table, .activate_key_table_once {
-			a.str_param == b.str_param
-		}
-		.increase_font_size, .decrease_font_size, .set_font_size, .scroll_page_fractional {
-			a.float_param == b.float_param
-		}
-		.jump_to_prompt, .scroll_page_lines, .move_tab {
-			a.int_param == b.int_param
-		}
-		.scroll_to_row, .goto_tab {
-			a.uint_param == b.uint_param
-		}
-		.new_split, .goto_split, .goto_window, .navigate_search, .adjust_selection, .copy_to_clipboard, .inspector, .close_tab, .crash {
-			a.enum_param == b.enum_param
-		}
-		.write_scrollback_file, .write_screen_file, .write_selection_file {
-			a.enum_param == b.enum_param && a.enum_param2 == b.enum_param2
-		}
-		.resize_split {
-			a.enum_param == b.enum_param && a.enum_param2 == b.enum_param2
-		}
-		else {
-			// Void actions (ignore, unbind, reset, paste_from_clipboard, etc.) are equal if tags match.
-			true
-		}
-	}
+	return a == b
 }
 
 // clone duplicates the active action payload. Strings are the only owned
-// payloads in the translated representation; numeric, enum, and void payloads
-// are values.
+// payloads; numeric, enum, and void payloads are values.
 pub fn (a Action) clone() Action {
-	return match a.tag {
-		.cursor_key {
-			Action{
-				...a
-				cursor_key: CursorKey{
-					normal: a.cursor_key.normal.clone()
-					application: a.cursor_key.application.clone()
+	match a {
+		ActionCsi {
+			return ActionCsi{
+				value: a.value.clone()
+			}
+		}
+		ActionEsc {
+			return ActionEsc{
+				value: a.value.clone()
+			}
+		}
+		ActionText {
+			return ActionText{
+				value: a.value.clone()
+			}
+		}
+		ActionSearch {
+			return ActionSearch{
+				value: a.value.clone()
+			}
+		}
+		ActionActivateKeyTable {
+			return ActionActivateKeyTable{
+				value: a.value.clone()
+			}
+		}
+		ActionActivateKeyTableOnce {
+			return ActionActivateKeyTableOnce{
+				value: a.value.clone()
+			}
+		}
+		ActionCursorKey {
+			return ActionCursorKey{
+				value: CursorKey{
+					normal:      a.value.normal.clone()
+					application: a.value.application.clone()
 				}
 			}
 		}
-		.csi, .esc, .text, .search, .activate_key_table, .activate_key_table_once {
-			Action{
-				...a
-				str_param: a.str_param.clone()
-			}
-		}
 		else {
-			a
+			return a
 		}
 	}
 }
 
-// hash returns a hash code for the action.
+// hash returns a hash code that can be used to uniquely identify this
+// action.
 pub fn (a Action) hash() u64 {
 	mut hasher := SourceHash{}
-	// Action's inferred tag type is u7 at the pinned source revision.
-	hasher.put_u8(u8(a.tag))
-	match a.tag {
-		.cursor_key {
-			hasher.put_deep_string(a.cursor_key.normal)
-			hasher.put_deep_string(a.cursor_key.application)
+	// Always has the active tag. Action's inferred tag type is u7 at the
+	// pinned source revision.
+	hasher.put_u8(u8(a.tag()))
+
+	// Hash the value of the field.
+	match a {
+		ActionCursorKey {
+			hasher.put_deep_string(a.value.normal)
+			hasher.put_deep_string(a.value.application)
 		}
-		.csi, .esc, .text, .search, .activate_key_table, .activate_key_table_once {
-			hasher.put_deep_string(a.str_param)
+		ActionCsi {
+			hasher.put_deep_string(a.value)
 		}
-		.increase_font_size, .decrease_font_size, .set_font_size, .scroll_page_fractional {
-			hasher.put_f32(a.float_param)
+		ActionEsc {
+			hasher.put_deep_string(a.value)
 		}
-		.jump_to_prompt, .scroll_page_lines {
-			hasher.put_i16(i16(a.int_param))
+		ActionText {
+			hasher.put_deep_string(a.value)
 		}
-		.move_tab {
+		ActionSearch {
+			hasher.put_deep_string(a.value)
+		}
+		ActionActivateKeyTable {
+			hasher.put_deep_string(a.value)
+		}
+		ActionActivateKeyTableOnce {
+			hasher.put_deep_string(a.value)
+		}
+		// Floats are hashed by their bits.
+		ActionIncreaseFontSize {
+			hasher.put_f32(a.value)
+		}
+		ActionDecreaseFontSize {
+			hasher.put_f32(a.value)
+		}
+		ActionSetFontSize {
+			hasher.put_f32(a.value)
+		}
+		ActionScrollPageFractional {
+			hasher.put_f32(a.value)
+		}
+		ActionJumpToPrompt {
+			hasher.put_i16(a.value)
+		}
+		ActionScrollPageLines {
+			hasher.put_i16(a.value)
+		}
+		ActionMoveTab {
 			// isize is eight bytes on Ghostty's supported 64-bit targets.
-			hasher.put_i64(a.int_param)
+			hasher.put_i64(i64(a.value))
 		}
-		.scroll_to_row, .goto_tab {
+		ActionScrollToRow {
 			// usize is eight bytes on Ghostty's supported 64-bit targets.
-			hasher.put_u64(a.uint_param)
+			hasher.put_u64(u64(a.value))
 		}
-		.new_split, .goto_split, .goto_window, .navigate_search, .adjust_selection, .copy_to_clipboard, .inspector, .close_tab, .crash {
-			hasher.put_u8(u8(a.enum_param))
+		ActionGotoTab {
+			hasher.put_u64(u64(a.value))
 		}
-		.write_scrollback_file, .write_screen_file, .write_selection_file {
-			hasher.put_u8(u8(a.enum_param))
-			hasher.put_u8(u8(a.enum_param2))
+		ActionNewSplit {
+			hasher.put_u8(u8(a.value))
 		}
-		.resize_split {
-			hasher.put_u8(u8(a.enum_param))
-			hasher.put_u16(u16(a.enum_param2))
+		ActionGotoSplit {
+			hasher.put_u8(u8(a.value))
 		}
-		else {}
+		ActionGotoWindow {
+			hasher.put_u8(u8(a.value))
+		}
+		ActionNavigateSearch {
+			hasher.put_u8(u8(a.value))
+		}
+		ActionAdjustSelection {
+			hasher.put_u8(u8(a.value))
+		}
+		ActionCopyToClipboard {
+			hasher.put_u8(u8(a.value))
+		}
+		ActionInspector {
+			hasher.put_u8(u8(a.value))
+		}
+		ActionCloseTab {
+			hasher.put_u8(u8(a.value))
+		}
+		ActionCrash {
+			hasher.put_u8(u8(a.value))
+		}
+		ActionWriteScrollbackFile {
+			hasher.put_u8(u8(a.value.action))
+			hasher.put_u8(u8(a.value.emit))
+		}
+		ActionWriteScreenFile {
+			hasher.put_u8(u8(a.value.action))
+			hasher.put_u8(u8(a.value.emit))
+		}
+		ActionWriteSelectionFile {
+			hasher.put_u8(u8(a.value.action))
+			hasher.put_u8(u8(a.value.emit))
+		}
+		ActionResizeSplit {
+			hasher.put_u8(u8(a.value.direction))
+			hasher.put_u16(a.value.amount)
+		}
+		else {
+			// Do nothing for void
+		}
 	}
 	return hasher.final()
-}
-
-// Convenience constructors for common actions.
-pub fn Action.new(tag ActionTag) Action {
-	return Action{
-		tag: tag
-	}
-}
-
-pub fn Action.new_str(tag ActionTag, s string) Action {
-	return Action{
-		tag: tag
-		str_param: s
-	}
-}
-
-pub fn Action.new_cursor_key(normal string, application string) Action {
-	return Action{
-		tag: .cursor_key
-		cursor_key: CursorKey{
-			normal: normal
-			application: application
-		}
-	}
-}
-
-pub fn Action.new_float(tag ActionTag, f f32) Action {
-	return Action{
-		tag: tag
-		float_param: f
-	}
-}
-
-pub fn Action.new_int(tag ActionTag, i i64) Action {
-	return Action{
-		tag: tag
-		int_param: i
-	}
-}
-
-pub fn Action.new_uint(tag ActionTag, u u64) Action {
-	return Action{
-		tag: tag
-		uint_param: u
-	}
-}
-
-pub fn Action.new_enum(tag ActionTag, e i32) Action {
-	return Action{
-		tag: tag
-		enum_param: e
-	}
-}
-
-pub fn Action.new_enum2(tag ActionTag, e1 i32, e2 i32) Action {
-	return Action{
-		tag: tag
-		enum_param: e1
-		enum_param2: e2
-	}
 }
 
 // format returns the action in the same syntax accepted by Action.parse.
 // Ghostty uses std.zig.stringEscape for string payloads so that arbitrary
 // bytes, including UTF-8, can safely round-trip through a config file.
 pub fn (a Action) format() string {
-	name := a.tag.str()
-	return match a.tag {
-		.csi, .esc, .text, .search, .activate_key_table, .activate_key_table_once {
-			'${name}:${zig_escape(a.str_param)}'
-		}
-		.increase_font_size, .decrease_font_size, .set_font_size, .scroll_page_fractional {
-			'${name}:${a.float_param}'
-		}
-		.jump_to_prompt, .scroll_page_lines, .move_tab { '${name}:${a.int_param}' }
-		.scroll_to_row, .goto_tab { '${name}:${a.uint_param}' }
-		.new_split { '${name}:${split_direction_name(a.enum_param)}' }
-		.goto_split { '${name}:${split_focus_direction_name(a.enum_param)}' }
-		.goto_window { '${name}:${enum_name[GotoWindow](a.enum_param)}' }
-		.navigate_search { '${name}:${enum_name[NavigateSearch](a.enum_param)}' }
-		.adjust_selection { '${name}:${adjust_selection_name(a.enum_param)}' }
-		.copy_to_clipboard { '${name}:${enum_name[CopyToClipboard](a.enum_param)}' }
-		.inspector { '${name}:${enum_name[InspectorMode](a.enum_param)}' }
-		.close_tab { '${name}:${enum_name[CloseTabMode](a.enum_param)}' }
-		.crash { '${name}:${crash_thread_name(a.enum_param)}' }
-		.resize_split {
-			'${name}:${enum_name[SplitResizeDirection](a.enum_param)},${a.enum_param2}'
-		}
-		.write_scrollback_file, .write_screen_file, .write_selection_file {
-			'${name}:${enum_name[WriteScreenAction](a.enum_param)},${enum_name[WriteScreenFormat](a.enum_param2)}'
-		}
+	// All actions start with the tag.
+	name := a.tag().str()
+	return match a {
+		ActionCsi { '${name}:${zig_escape(a.value)}' }
+		ActionEsc { '${name}:${zig_escape(a.value)}' }
+		ActionText { '${name}:${zig_escape(a.value)}' }
+		ActionSearch { '${name}:${zig_escape(a.value)}' }
+		ActionActivateKeyTable { '${name}:${zig_escape(a.value)}' }
+		ActionActivateKeyTableOnce { '${name}:${zig_escape(a.value)}' }
+		ActionIncreaseFontSize { '${name}:${a.value}' }
+		ActionDecreaseFontSize { '${name}:${a.value}' }
+		ActionSetFontSize { '${name}:${a.value}' }
+		ActionScrollPageFractional { '${name}:${a.value}' }
+		ActionJumpToPrompt { '${name}:${a.value}' }
+		ActionScrollPageLines { '${name}:${a.value}' }
+		ActionMoveTab { '${name}:${a.value}' }
+		ActionScrollToRow { '${name}:${a.value}' }
+		ActionGotoTab { '${name}:${a.value}' }
+		ActionNewSplit { '${name}:${split_direction_name(a.value)}' }
+		ActionGotoSplit { '${name}:${a.value}' }
+		ActionGotoWindow { '${name}:${a.value}' }
+		ActionNavigateSearch { '${name}:${a.value}' }
+		ActionAdjustSelection { '${name}:${adjust_selection_name(a.value)}' }
+		ActionCopyToClipboard { '${name}:${a.value}' }
+		ActionInspector { '${name}:${a.value}' }
+		ActionCloseTab { '${name}:${a.value}' }
+		ActionCrash { '${name}:${crash_thread_name(a.value)}' }
+		ActionResizeSplit { '${name}:${a.value.direction},${a.value.amount}' }
+		ActionWriteScrollbackFile { '${name}:${a.value.format()}' }
+		ActionWriteScreenFile { '${name}:${a.value.format()}' }
+		ActionWriteSelectionFile { '${name}:${a.value.format()}' }
 		else { name }
 	}
 }
 
-fn enum_name[T](value i32) string {
-	return unsafe { T(value).str() }
+fn split_direction_name(value SplitDirection) string {
+	return if value == .auto_ { 'auto' } else { value.str() }
 }
 
-fn split_direction_name(value i32) string {
-	return if unsafe { SplitDirection(value) } == .auto_ {
-		'auto'
-	} else {
-		enum_name[SplitDirection](value)
-	}
+fn adjust_selection_name(value AdjustSelection) string {
+	return if value == .end_ { 'end' } else { value.str() }
 }
 
-fn split_focus_direction_name(value i32) string {
-	return enum_name[SplitFocusDirection](value)
-}
-
-fn adjust_selection_name(value i32) string {
-	return if unsafe { AdjustSelection(value) } == .end_ {
-		'end'
-	} else {
-		enum_name[AdjustSelection](value)
-	}
-}
-
-fn crash_thread_name(value i32) string {
-	return if unsafe { CrashThread(value) } == .main_thread {
-		'main'
-	} else {
-		enum_name[CrashThread](value)
-	}
+fn crash_thread_name(value CrashThread) string {
+	return if value == .main_thread { 'main' } else { value.str() }
 }
 
 pub fn zig_escape(value string) string {
@@ -2008,6 +2404,27 @@ pub:
 	emit   WriteScreenFormat
 }
 
+pub fn WriteScreen.parse(param string) !WriteScreen {
+	// If we don't have a `,`, default to the plain format. This is
+	// also very important for backwards compatibility before Ghostty
+	// 1.3 which didn't support output formats.
+	idx := param.index_u8(`,`)
+	if idx < 0 {
+		return WriteScreen{
+			action: parse_write_screen_action(param)!
+			emit:   .plain
+		}
+	}
+	return WriteScreen{
+		action: parse_write_screen_action(param[..idx])!
+		emit:   parse_write_screen_format(param[idx + 1..])!
+	}
+}
+
+pub fn (self WriteScreen) format() string {
+	return '${self.action},${self.emit}'
+}
+
 pub enum InspectorMode as u8 {
 	toggle
 	show
@@ -2034,7 +2451,7 @@ pub enum ActionScope as u8 {
 
 // scope returns the scope of an action.
 pub fn (a Action) scope() ActionScope {
-	return match a.tag {
+	return match a.tag() {
 		.ignore, .unbind { .app }
 		.open_config, .reload_config, .close_all_windows, .quit, .toggle_quick_terminal, .toggle_visibility, .check_for_updates, .show_gtk_inspector {
 			.app
@@ -2055,540 +2472,405 @@ pub fn (a Action) scoped(scope ActionScope) ?Action {
 	return a
 }
 
-// parse parses an action string like "ignore", "csi:A", "new_split:right".
+// parse parses an action in the format of "key=value" where key is the
+// action name and value is the action parameter. The parameter is optional
+// depending on the action.
 pub fn Action.parse(input_str string) !Action {
+	// Split our action by colon. A colon may not exist for some
+	// actions so it is optional. The part preceding the colon is the
+	// action name.
 	colon_idx := input_str.index_u8(`:`)
 	action_name := if colon_idx >= 0 { input_str[..colon_idx] } else { input_str }
 
+	// An action name is always required
 	if action_name.len == 0 {
 		return error('InvalidFormat')
 	}
 
-	param := if colon_idx >= 0 { input_str[colon_idx + 1..] } else { '' }
-	has_param := colon_idx >= 0
+	tag := action_tag_by_name(action_name) or { return error('InvalidAction') }
 
-	// Match action name to tag. For void actions, no parameter is allowed.
-	// For parameterized actions, parse the parameter.
-	return match action_name {
-		// Void actions (no parameter)
-		'ignore' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.ignore)
+	// If the field type is void we expect no value
+	if void_value := void_action(tag) {
+		if colon_idx >= 0 {
+			return error('InvalidFormat')
 		}
-		'unbind' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.unbind)
-		}
-		'reset' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.reset)
-		}
-		'paste_from_clipboard' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.paste_from_clipboard)
-		}
-		'paste_from_selection' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.paste_from_selection)
-		}
-		'copy_url_to_clipboard' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.copy_url_to_clipboard)
-		}
-		'copy_title_to_clipboard' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.copy_title_to_clipboard)
-		}
-		'reset_font_size' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.reset_font_size)
-		}
-		'search_selection' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.search_selection)
-		}
-		'start_search' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.start_search)
-		}
-		'end_search' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.end_search)
-		}
-		'clear_screen' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.clear_screen)
-		}
-		'select_all' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.select_all)
-		}
-		'scroll_to_top' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.scroll_to_top)
-		}
-		'scroll_to_bottom' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.scroll_to_bottom)
-		}
-		'scroll_to_selection' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.scroll_to_selection)
-		}
-		'scroll_page_up' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.scroll_page_up)
-		}
-		'scroll_page_down' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.scroll_page_down)
-		}
-		'new_window' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.new_window)
-		}
-		'new_tab' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.new_tab)
-		}
-		'previous_tab' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.previous_tab)
-		}
-		'next_tab' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.next_tab)
-		}
-		'last_tab' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.last_tab)
-		}
-		'toggle_tab_overview' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.toggle_tab_overview)
-		}
-		'prompt_surface_title' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.prompt_surface_title)
-		}
-		'prompt_tab_title' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.prompt_tab_title)
-		}
-		'toggle_split_zoom' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.toggle_split_zoom)
-		}
-		'toggle_readonly' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.toggle_readonly)
-		}
-		'equalize_splits' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.equalize_splits)
-		}
-		'reset_window_size' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.reset_window_size)
-		}
-		'show_gtk_inspector' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.show_gtk_inspector)
-		}
-		'show_on_screen_keyboard' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.show_on_screen_keyboard)
-		}
-		'open_config' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.open_config)
-		}
-		'reload_config' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.reload_config)
-		}
-		'close_surface' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.close_surface)
-		}
-		'close_window' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.close_window)
-		}
-		'close_all_windows' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.close_all_windows)
-		}
-		'toggle_maximize' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.toggle_maximize)
-		}
-		'toggle_fullscreen' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.toggle_fullscreen)
-		}
-		'toggle_window_decorations' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.toggle_window_decorations)
-		}
-		'toggle_window_float_on_top' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.toggle_window_float_on_top)
-		}
-		'toggle_secure_input' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.toggle_secure_input)
-		}
-		'toggle_mouse_reporting' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.toggle_mouse_reporting)
-		}
-		'toggle_command_palette' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.toggle_command_palette)
-		}
-		'toggle_quick_terminal' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.toggle_quick_terminal)
-		}
-		'toggle_visibility' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.toggle_visibility)
-		}
-		'toggle_background_opacity' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.toggle_background_opacity)
-		}
-		'check_for_updates' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.check_for_updates)
-		}
-		'undo' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.undo)
-		}
-		'redo' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.redo)
-		}
-		'end_key_sequence' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.end_key_sequence)
-		}
-		'deactivate_key_table' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.deactivate_key_table)
-		}
-		'deactivate_all_key_tables' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.deactivate_all_key_tables)
-		}
-		'quit' {
-			if has_param {
-				return error('InvalidFormat')
-			}
-			Action.new(.quit)
-		}
+		return void_value
+	}
 
-		// String actions
-		'csi' {
-			if !has_param {
+	match tag {
+		.csi, .esc, .text, .search, .activate_key_table, .activate_key_table_once {
+			if colon_idx < 0 {
 				return error('InvalidFormat')
 			}
-			Action.new_str(.csi, param)
+			return string_action(tag, input_str[colon_idx + 1..])
 		}
-		'esc' {
-			if !has_param {
-				return error('InvalidFormat')
-			}
-			Action.new_str(.esc, param)
-		}
-		'text' {
-			if !has_param {
-				return error('InvalidFormat')
-			}
-			Action.new_str(.text, param)
-		}
-		'search' {
-			if !has_param {
-				return error('InvalidFormat')
-			}
-			Action.new_str(.search, param)
-		}
-		'activate_key_table' {
-			if !has_param {
-				return error('InvalidFormat')
-			}
-			Action.new_str(.activate_key_table, param)
-		}
-		'activate_key_table_once' {
-			if !has_param {
-				return error('InvalidFormat')
-			}
-			Action.new_str(.activate_key_table_once, param)
-		}
-
-		// Float actions
-		'increase_font_size' {
-			if !has_param {
-				return error('InvalidFormat')
-			}
-			Action.new_float(.increase_font_size, parse_float(param)!)
-		}
-		'decrease_font_size' {
-			if !has_param {
-				return error('InvalidFormat')
-			}
-			Action.new_float(.decrease_font_size, parse_float(param)!)
-		}
-		'set_font_size' {
-			if !has_param {
-				return error('InvalidFormat')
-			}
-			Action.new_float(.set_font_size, parse_float(param)!)
-		}
-		'scroll_page_fractional' {
-			if !has_param {
-				return error('InvalidFormat')
-			}
-			Action.new_float(.scroll_page_fractional, parse_float(param)!)
-		}
-
-		// Int actions
-		'jump_to_prompt' {
-			if !has_param {
-				return error('InvalidFormat')
-			}
-			Action.new_int(.jump_to_prompt, strconv_parse_i16(param)!)
-		}
-		'scroll_page_lines' {
-			if !has_param {
-				return error('InvalidFormat')
-			}
-			Action.new_int(.scroll_page_lines, strconv_parse_i16(param)!)
-		}
-
-		// Unsigned int actions
-		'scroll_to_row' {
-			if !has_param {
-				return error('InvalidFormat')
-			}
-			Action.new_uint(.scroll_to_row, strconv_parse_usize(param)!)
-		}
-		'goto_tab' {
-			if !has_param {
-				return error('InvalidFormat')
-			}
-			Action.new_uint(.goto_tab, strconv_parse_usize(param)!)
-		}
-		'move_tab' {
-			if !has_param {
-				return error('InvalidFormat')
-			}
-			Action.new_int(.move_tab, strconv_parse_isize(param)!)
-		}
-
-		// Enum actions with defaults
-		'copy_to_clipboard' {
-			if !has_param {
-				Action.new_enum(.copy_to_clipboard, i32(CopyToClipboard.mixed))
-			} else {
-				Action.new_enum(.copy_to_clipboard, i32(parse_copy_to_clipboard(param)!))
-			}
-		}
-		'new_split' {
-			if !has_param {
-				Action.new_enum(.new_split, i32(SplitDirection.auto_))
-			} else {
-				Action.new_enum(.new_split, i32(parse_split_direction(param)!))
-			}
-		}
-		'close_tab' {
-			if !has_param {
-				Action.new_enum(.close_tab, i32(CloseTabMode.this))
-			} else {
-				Action.new_enum(.close_tab, i32(parse_close_tab_mode(param)!))
-			}
-		}
-
-		// Enum actions (required parameter)
-		'navigate_search' {
-			if !has_param {
-				return error('InvalidFormat')
-			}
-			Action.new_enum(.navigate_search, i32(parse_navigate_search(param)!))
-		}
-		'adjust_selection' {
-			if !has_param {
-				return error('InvalidFormat')
-			}
-			Action.new_enum(.adjust_selection, i32(parse_adjust_selection(param)!))
-		}
-		'goto_split' {
-			if !has_param {
-				return error('InvalidFormat')
-			}
-			Action.new_enum(.goto_split, i32(parse_split_focus_direction(param)!))
-		}
-		'goto_window' {
-			if !has_param {
-				return error('InvalidFormat')
-			}
-			Action.new_enum(.goto_window, i32(parse_goto_window(param)!))
-		}
-		'inspector' {
-			if !has_param {
-				return error('InvalidFormat')
-			}
-			Action.new_enum(.inspector, i32(parse_inspector_mode(param)!))
-		}
-		'crash' {
-			if !has_param {
-				return error('InvalidFormat')
-			}
-			Action.new_enum(.crash, i32(parse_crash_thread(param)!))
-		}
-
-		// Tuple actions (resize_split: direction,amount)
-		'resize_split' {
-			if !has_param {
-				return error('InvalidFormat')
-			}
-			parse_resize_split(param)!
-		}
-
-		// WriteScreen actions
-		'write_scrollback_file' {
-			if !has_param {
-				return error('InvalidFormat')
-			}
-			parse_write_screen(.write_scrollback_file, param)!
-		}
-		'write_screen_file' {
-			if !has_param {
-				return error('InvalidFormat')
-			}
-			parse_write_screen(.write_screen_file, param)!
-		}
-		'write_selection_file' {
-			if !has_param {
-				return error('InvalidFormat')
-			}
-			parse_write_screen(.write_selection_file, param)!
-		}
-
-		// cursor_key can't be set currently
-		'cursor_key' {
+		// Cursor keys can't be set currently
+		.cursor_key {
 			return error('InvalidAction')
+		}
+		else {}
+	}
+
+	// Get the parameter after the colon. The parameter can be optional
+	// for action types that can have a "default" decl.
+	if colon_idx < 0 {
+		match tag {
+			.copy_to_clipboard {
+				return ActionCopyToClipboard{
+					value: .mixed
+				}
+			}
+			.new_split {
+				return ActionNewSplit{
+					value: .auto_
+				}
+			}
+			.close_tab {
+				return ActionCloseTab{
+					value: .this
+				}
+			}
+			else {
+				return error('InvalidFormat')
+			}
+		}
+	}
+
+	param := input_str[colon_idx + 1..]
+	match tag {
+		.copy_to_clipboard {
+			return ActionCopyToClipboard{
+				value: parse_copy_to_clipboard(param)!
+			}
+		}
+		.increase_font_size {
+			return ActionIncreaseFontSize{
+				value: parse_float(param)!
+			}
+		}
+		.decrease_font_size {
+			return ActionDecreaseFontSize{
+				value: parse_float(param)!
+			}
+		}
+		.set_font_size {
+			return ActionSetFontSize{
+				value: parse_float(param)!
+			}
+		}
+		.navigate_search {
+			return ActionNavigateSearch{
+				value: parse_navigate_search(param)!
+			}
+		}
+		.scroll_to_row {
+			return ActionScrollToRow{
+				value: usize(strconv_parse_usize(param)!)
+			}
+		}
+		.scroll_page_fractional {
+			return ActionScrollPageFractional{
+				value: parse_float(param)!
+			}
+		}
+		.scroll_page_lines {
+			return ActionScrollPageLines{
+				value: i16(strconv_parse_i16(param)!)
+			}
+		}
+		.adjust_selection {
+			return ActionAdjustSelection{
+				value: parse_adjust_selection(param)!
+			}
+		}
+		.jump_to_prompt {
+			return ActionJumpToPrompt{
+				value: i16(strconv_parse_i16(param)!)
+			}
+		}
+		.write_scrollback_file {
+			return ActionWriteScrollbackFile{
+				value: WriteScreen.parse(param)!
+			}
+		}
+		.write_screen_file {
+			return ActionWriteScreenFile{
+				value: WriteScreen.parse(param)!
+			}
+		}
+		.write_selection_file {
+			return ActionWriteSelectionFile{
+				value: WriteScreen.parse(param)!
+			}
+		}
+		.goto_tab {
+			return ActionGotoTab{
+				value: usize(strconv_parse_usize(param)!)
+			}
+		}
+		.move_tab {
+			return ActionMoveTab{
+				value: isize(strconv_parse_isize(param)!)
+			}
+		}
+		.new_split {
+			return ActionNewSplit{
+				value: parse_split_direction(param)!
+			}
+		}
+		.goto_split {
+			return ActionGotoSplit{
+				value: parse_split_focus_direction(param)!
+			}
+		}
+		.goto_window {
+			return ActionGotoWindow{
+				value: parse_goto_window(param)!
+			}
+		}
+		.resize_split {
+			return ActionResizeSplit{
+				value: parse_resize_split(param)!
+			}
+		}
+		.inspector {
+			return ActionInspector{
+				value: parse_inspector_mode(param)!
+			}
+		}
+		.close_tab {
+			return ActionCloseTab{
+				value: parse_close_tab_mode(param)!
+			}
+		}
+		.crash {
+			return ActionCrash{
+				value: parse_crash_thread(param)!
+			}
 		}
 		else {
 			return error('InvalidAction')
+		}
+	}
+}
+
+// action_tag_by_name finds the union field with the given name, standing in
+// for the source's `inline for` over the union's fields.
+fn action_tag_by_name(name string) ?ActionTag {
+	$for tag in ActionTag.values {
+		if tag.name == name {
+			return tag.value
+		}
+	}
+	return none
+}
+
+// void_action returns the payload-free variant for tag, or none when the
+// variant carries a value.
+fn void_action(tag ActionTag) ?Action {
+	match tag {
+		.ignore {
+			return ActionIgnore{}
+		}
+		.unbind {
+			return ActionUnbind{}
+		}
+		.reset {
+			return ActionReset{}
+		}
+		.paste_from_clipboard {
+			return ActionPasteFromClipboard{}
+		}
+		.paste_from_selection {
+			return ActionPasteFromSelection{}
+		}
+		.copy_url_to_clipboard {
+			return ActionCopyUrlToClipboard{}
+		}
+		.copy_title_to_clipboard {
+			return ActionCopyTitleToClipboard{}
+		}
+		.reset_font_size {
+			return ActionResetFontSize{}
+		}
+		.search_selection {
+			return ActionSearchSelection{}
+		}
+		.start_search {
+			return ActionStartSearch{}
+		}
+		.end_search {
+			return ActionEndSearch{}
+		}
+		.clear_screen {
+			return ActionClearScreen{}
+		}
+		.select_all {
+			return ActionSelectAll{}
+		}
+		.scroll_to_top {
+			return ActionScrollToTop{}
+		}
+		.scroll_to_bottom {
+			return ActionScrollToBottom{}
+		}
+		.scroll_to_selection {
+			return ActionScrollToSelection{}
+		}
+		.scroll_page_up {
+			return ActionScrollPageUp{}
+		}
+		.scroll_page_down {
+			return ActionScrollPageDown{}
+		}
+		.new_window {
+			return ActionNewWindow{}
+		}
+		.new_tab {
+			return ActionNewTab{}
+		}
+		.previous_tab {
+			return ActionPreviousTab{}
+		}
+		.next_tab {
+			return ActionNextTab{}
+		}
+		.last_tab {
+			return ActionLastTab{}
+		}
+		.toggle_tab_overview {
+			return ActionToggleTabOverview{}
+		}
+		.prompt_surface_title {
+			return ActionPromptSurfaceTitle{}
+		}
+		.prompt_tab_title {
+			return ActionPromptTabTitle{}
+		}
+		.toggle_split_zoom {
+			return ActionToggleSplitZoom{}
+		}
+		.toggle_readonly {
+			return ActionToggleReadonly{}
+		}
+		.equalize_splits {
+			return ActionEqualizeSplits{}
+		}
+		.reset_window_size {
+			return ActionResetWindowSize{}
+		}
+		.show_gtk_inspector {
+			return ActionShowGtkInspector{}
+		}
+		.show_on_screen_keyboard {
+			return ActionShowOnScreenKeyboard{}
+		}
+		.open_config {
+			return ActionOpenConfig{}
+		}
+		.reload_config {
+			return ActionReloadConfig{}
+		}
+		.close_surface {
+			return ActionCloseSurface{}
+		}
+		.close_window {
+			return ActionCloseWindow{}
+		}
+		.close_all_windows {
+			return ActionCloseAllWindows{}
+		}
+		.toggle_maximize {
+			return ActionToggleMaximize{}
+		}
+		.toggle_fullscreen {
+			return ActionToggleFullscreen{}
+		}
+		.toggle_window_decorations {
+			return ActionToggleWindowDecorations{}
+		}
+		.toggle_window_float_on_top {
+			return ActionToggleWindowFloatOnTop{}
+		}
+		.toggle_secure_input {
+			return ActionToggleSecureInput{}
+		}
+		.toggle_mouse_reporting {
+			return ActionToggleMouseReporting{}
+		}
+		.toggle_command_palette {
+			return ActionToggleCommandPalette{}
+		}
+		.toggle_quick_terminal {
+			return ActionToggleQuickTerminal{}
+		}
+		.toggle_visibility {
+			return ActionToggleVisibility{}
+		}
+		.toggle_background_opacity {
+			return ActionToggleBackgroundOpacity{}
+		}
+		.check_for_updates {
+			return ActionCheckForUpdates{}
+		}
+		.undo {
+			return ActionUndo{}
+		}
+		.redo {
+			return ActionRedo{}
+		}
+		.end_key_sequence {
+			return ActionEndKeySequence{}
+		}
+		.deactivate_key_table {
+			return ActionDeactivateKeyTable{}
+		}
+		.deactivate_all_key_tables {
+			return ActionDeactivateAllKeyTables{}
+		}
+		.quit {
+			return ActionQuit{}
+		}
+		else {}
+	}
+	return none
+}
+
+// string_action builds the `[]const u8` variant named by tag.
+fn string_action(tag ActionTag, value string) Action {
+	match tag {
+		.csi {
+			return ActionCsi{
+				value: value
+			}
+		}
+		.esc {
+			return ActionEsc{
+				value: value
+			}
+		}
+		.text {
+			return ActionText{
+				value: value
+			}
+		}
+		.search {
+			return ActionSearch{
+				value: value
+			}
+		}
+		.activate_key_table {
+			return ActionActivateKeyTable{
+				value: value
+			}
+		}
+		.activate_key_table_once {
+			return ActionActivateKeyTableOnce{
+				value: value
+			}
+		}
+		else {
+			panic('string_action: ${tag} does not carry a string')
 		}
 	}
 }
@@ -2675,7 +2957,7 @@ fn parse_crash_thread(s string) !CrashThread {
 	}
 }
 
-fn parse_resize_split(s string) !Action {
+fn parse_resize_split(s string) !SplitResizeParameter {
 	comma_idx := s.index_u8(`,`)
 	if comma_idx < 0 {
 		return error('InvalidFormat')
@@ -2685,7 +2967,7 @@ fn parse_resize_split(s string) !Action {
 	if amount_str.len == 0 {
 		return error('InvalidFormat')
 	}
-	// Check for extra commas
+	// If we have extra parameters it is an error
 	if amount_str.index_u8(`,`) >= 0 {
 		return error('InvalidFormat')
 	}
@@ -2698,53 +2980,28 @@ fn parse_resize_split(s string) !Action {
 			return error('InvalidFormat')
 		}
 	}
-	amount := parse_unsigned_decimal(amount_str, 65535)!
-	return Action.new_enum2(.resize_split, i32(dir), i32(amount))
+	return SplitResizeParameter{
+		direction: dir
+		amount:    u16(parse_unsigned_decimal(amount_str, 65535)!)
+	}
 }
 
-fn parse_write_screen(tag ActionTag, s string) !Action {
-	if s.len == 0 {
-		return error('InvalidFormat')
-	}
-	comma_idx := s.index_u8(`,`)
-	if comma_idx < 0 {
-		// No comma: just action, default to plain format
-		action_e := match s {
-			'copy' { WriteScreenAction.copy }
-			'paste' { WriteScreenAction.paste }
-			'open' { WriteScreenAction.open }
-			else {
-				return error('InvalidFormat')
-			}
-		}
-		return Action.new_enum2(tag, i32(action_e), i32(WriteScreenFormat.plain))
-	}
-	action_str := s[..comma_idx]
-	format_str := s[comma_idx + 1..]
-	if action_str.len == 0 || format_str.len == 0 {
-		return error('InvalidFormat')
-	}
-	// Check for extra commas
-	if format_str.index_u8(`,`) >= 0 {
-		return error('InvalidFormat')
-	}
-	action_e := match action_str {
+fn parse_write_screen_action(s string) !WriteScreenAction {
+	return match s {
 		'copy' { WriteScreenAction.copy }
 		'paste' { WriteScreenAction.paste }
 		'open' { WriteScreenAction.open }
-		else {
-			return error('InvalidFormat')
-		}
+		else { error('InvalidFormat') }
 	}
-	format_e := match format_str {
+}
+
+fn parse_write_screen_format(s string) !WriteScreenFormat {
+	return match s {
 		'plain' { WriteScreenFormat.plain }
 		'vt' { WriteScreenFormat.vt }
 		'html' { WriteScreenFormat.html }
-		else {
-			return error('InvalidFormat')
-		}
+		else { error('InvalidFormat') }
 	}
-	return Action.new_enum2(tag, i32(action_e), i32(format_e))
 }
 
 // --- String/number parsers ---
@@ -3566,7 +3823,7 @@ fn (mut s Set) parse_and_put_recurse(mut root Set, mut it Parser) !RecurseResult
 		}
 		.binding {
 			b := elem.binding
-			if b.action.tag == .unbind {
+			if b.action is ActionUnbind {
 				s.remove(b.trigger)
 				return error('SequenceUnbind')
 			}
@@ -3579,7 +3836,7 @@ fn (mut s Set) parse_and_put_recurse(mut root Set, mut it Parser) !RecurseResult
 			// Chains can only happen on the root.
 			action := elem.action
 			// Unbind is not valid for chains.
-			if action.tag == .unbind {
+			if action is ActionUnbind {
 				return error('InvalidChainAction')
 			}
 			s.append_chain(action)!

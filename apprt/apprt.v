@@ -469,22 +469,22 @@ fn core_app_binding_leaf(entry &input.SetEntry) ?([]input.Action, input.Flags) {
 // runtime action boundary. This is the same switch as CoreApp.performAction.
 fn (mut c CoreApp) perform_app_action(mut app App, action input.Action) ! {
 	target := Target(AppTarget{})
-	match action.tag {
-		.unbind { panic('unbind action reached app dispatch') }
-		.ignore {}
-		.quit { app.perform_action(target, .quit, ActionVoid{})! }
-		.new_window { app.perform_action(target, .new_window, ActionVoid{})! }
-		.open_config { app.perform_action(target, .open_config, ActionVoid{})! }
-		.reload_config { app.perform_action(target, .reload_config, ActionVoid{})! }
-		.close_all_windows { app.perform_action(target, .close_all_windows, ActionVoid{})! }
-		.toggle_quick_terminal {
+	match action {
+		input.ActionUnbind { panic('unbind action reached app dispatch') }
+		input.ActionIgnore {}
+		input.ActionQuit { app.perform_action(target, .quit, ActionVoid{})! }
+		input.ActionNewWindow { app.perform_action(target, .new_window, ActionVoid{})! }
+		input.ActionOpenConfig { app.perform_action(target, .open_config, ActionVoid{})! }
+		input.ActionReloadConfig { app.perform_action(target, .reload_config, ActionVoid{})! }
+		input.ActionCloseAllWindows { app.perform_action(target, .close_all_windows, ActionVoid{})! }
+		input.ActionToggleQuickTerminal {
 			app.perform_action(target, .toggle_quick_terminal, ActionVoid{})!
 		}
-		.toggle_visibility { app.perform_action(target, .toggle_visibility, ActionVoid{})! }
-		.check_for_updates { app.perform_action(target, .check_for_updates, ActionVoid{})! }
-		.show_gtk_inspector { app.perform_action(target, .show_gtk_inspector, ActionVoid{})! }
-		.undo { app.perform_action(target, .undo, ActionVoid{})! }
-		.redo { app.perform_action(target, .redo, ActionVoid{})! }
+		input.ActionToggleVisibility { app.perform_action(target, .toggle_visibility, ActionVoid{})! }
+		input.ActionCheckForUpdates { app.perform_action(target, .check_for_updates, ActionVoid{})! }
+		input.ActionShowGtkInspector { app.perform_action(target, .show_gtk_inspector, ActionVoid{})! }
+		input.ActionUndo { app.perform_action(target, .undo, ActionVoid{})! }
+		input.ActionRedo { app.perform_action(target, .redo, ActionVoid{})! }
 		else {}
 	}
 }

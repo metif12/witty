@@ -1030,7 +1030,7 @@ fn window_new_tab_button_cb(button GtkWidget, user_data voidptr) {
 	_ = button
 	if !isnil(user_data) {
 		mut self := unsafe { &Window(user_data) }
-		self.perform_binding_action(input.Action.new(.new_tab))
+		self.perform_binding_action(input.ActionNewTab{})
 	}
 }
 
@@ -1136,13 +1136,13 @@ fn window_action_cb(action GSimpleAction, parameter GVariant, data voidptr) {
 			}
 			match unsafe { cstring_to_vstring(value) } {
 				'this' {
-					self.perform_binding_action(input.Action.new_enum(.close_tab, i32(input.CloseTabMode.this)))
+					self.perform_binding_action(input.ActionCloseTab{ value: .this })
 				}
 				'other' {
-					self.perform_binding_action(input.Action.new_enum(.close_tab, i32(input.CloseTabMode.other)))
+					self.perform_binding_action(input.ActionCloseTab{ value: .other })
 				}
 				'right' {
-					self.perform_binding_action(input.Action.new_enum(.close_tab, i32(input.CloseTabMode.right)))
+					self.perform_binding_action(input.ActionCloseTab{ value: .right })
 				}
 				else {}
 			}
@@ -2124,7 +2124,7 @@ pub fn (mut self Window) action_about() {
 }
 
 pub fn (mut self Window) toggle_inspector() {
-	self.perform_binding_action(input.Action.new_enum(.inspector, i32(input.InspectorMode.toggle)))
+	self.perform_binding_action(input.ActionInspector{ value: .toggle })
 }
 
 pub fn (mut self Window) action_close() {
@@ -2132,43 +2132,43 @@ pub fn (mut self Window) action_close() {
 }
 
 pub fn (mut self Window) action_new_tab() {
-	self.perform_binding_action(input.Action.new(.new_tab))
+	self.perform_binding_action(input.ActionNewTab{})
 }
 
 pub fn (mut self Window) action_new_window() {
-	self.perform_binding_action(input.Action.new(.new_window))
+	self.perform_binding_action(input.ActionNewWindow{})
 }
 
 pub fn (mut self Window) action_split_right() {
-	self.perform_binding_action(input.Action.new_enum(.new_split, i32(input.SplitDirection.right)))
+	self.perform_binding_action(input.ActionNewSplit{ value: .right })
 }
 
 pub fn (mut self Window) action_split_left() {
-	self.perform_binding_action(input.Action.new_enum(.new_split, i32(input.SplitDirection.left)))
+	self.perform_binding_action(input.ActionNewSplit{ value: .left })
 }
 
 pub fn (mut self Window) action_split_up() {
-	self.perform_binding_action(input.Action.new_enum(.new_split, i32(input.SplitDirection.up)))
+	self.perform_binding_action(input.ActionNewSplit{ value: .up })
 }
 
 pub fn (mut self Window) action_split_down() {
-	self.perform_binding_action(input.Action.new_enum(.new_split, i32(input.SplitDirection.down)))
+	self.perform_binding_action(input.ActionNewSplit{ value: .down })
 }
 
 pub fn (mut self Window) action_copy() {
-	self.perform_binding_action(input.Action.new_enum(.copy_to_clipboard, i32(input.CopyToClipboard.mixed)))
+	self.perform_binding_action(input.ActionCopyToClipboard{ value: .mixed })
 }
 
 pub fn (mut self Window) action_paste() {
-	self.perform_binding_action(input.Action.new(.paste_from_clipboard))
+	self.perform_binding_action(input.ActionPasteFromClipboard{})
 }
 
 pub fn (mut self Window) action_reset() {
-	self.perform_binding_action(input.Action.new(.reset))
+	self.perform_binding_action(input.ActionReset{})
 }
 
 pub fn (mut self Window) action_clear() {
-	self.perform_binding_action(input.Action.new(.clear_screen))
+	self.perform_binding_action(input.ActionClearScreen{})
 }
 
 pub fn (mut self Window) action_ring_bell() {

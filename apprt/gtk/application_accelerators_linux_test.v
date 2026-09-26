@@ -11,10 +11,10 @@ fn test_application_accelerator_uses_reverse_keybind_lookup() {
 	app := Application{
 		config: cfg
 	}
-	action := input.Action.new_enum(.new_split, i32(input.SplitDirection.left))
+	action := input.ActionNewSplit{ value: .left }
 
 	assert app.accelerator_for_action(action) or { '' } == '<Shift><Ctrl>a'
-	assert app.accelerator_for_action(input.Action.new_enum(.new_split, i32(input.SplitDirection.right))) == none
+	assert app.accelerator_for_action(input.ActionNewSplit{ value: .right }) == none
 }
 
 fn test_application_accelerator_ignores_chained_binding() {
@@ -25,8 +25,8 @@ fn test_application_accelerator_ignores_chained_binding() {
 		config: cfg
 	}
 
-	assert app.accelerator_for_action(input.Action.new(.ignore)) == none
-	assert app.accelerator_for_action(input.Action.new(.new_window)) == none
+	assert app.accelerator_for_action(input.ActionIgnore{}) == none
+	assert app.accelerator_for_action(input.ActionNewWindow{}) == none
 }
 
 fn test_application_quit_timer_without_delay_expires_immediately() {

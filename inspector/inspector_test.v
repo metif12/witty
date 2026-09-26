@@ -24,7 +24,7 @@ fn test_key_event_owns_data_and_formats_details() {
 	}
 	mut event := KeyEvent.init(source)
 	source.utf8 = 'changed'
-	event.binding = [input.Action.new(.copy_to_clipboard)]
+	event.binding = [input.ActionCopyToClipboard{}]
 	event.pty = [u8(0x1b), `a`, u8(0), u8(0x20), u8(0x7f)]
 
 	assert event.event.utf8 == 'é'
@@ -112,7 +112,7 @@ fn test_inspector_renders_key_stream_into_real_imgui_frame() {
 		mods:   input.Mods.init(true, false, false, true, false, false, input.SideInfo{})
 		utf8:   'A'
 	})
-	event.binding = [input.Action.new(.copy_to_clipboard)]
+	event.binding = [input.ActionCopyToClipboard{}]
 	event.pty = [u8(`A`)]
 	value.record_key_event(event)
 	mut term := terminal.Terminal.init(terminal.Options{

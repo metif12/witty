@@ -61,6 +61,10 @@ pub fn deep_equal[T](old T, new T) bool {
 			}
 		}
 		return false
+	} $else $if T is $interface {
+		// The sum type arm's variant loop instantiates this for every type
+		// V reaches through `is`, including IError; interfaces have no `==`.
+		panic('deep_equal: interfaces are not comparable')
 	} $else {
 		return old == new
 	}
