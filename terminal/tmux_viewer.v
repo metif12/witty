@@ -517,7 +517,7 @@ fn (mut self TmuxViewer) received_pane_history(screen_key ScreenKey, id usize, c
 	terminal_.switch_screen(screen_key)!
 	mut stream := terminal_.vt_stream()
 	defer { stream.deinit() }
-	stream.next_slice(content)!
+	stream.next_slice(content.bytes())!
 	terminal_.carriage_return()
 	for _ in 0 .. int(terminal_.rows) {
 		terminal_.index()!
@@ -533,14 +533,14 @@ fn (mut self TmuxViewer) received_pane_visible(screen_key ScreenKey, id usize, c
 	terminal_.set_cursor_pos(1, 1)
 	mut stream := terminal_.vt_stream()
 	defer { stream.deinit() }
-	stream.next_slice(content)!
+	stream.next_slice(content.bytes())!
 }
 
 fn (mut self TmuxViewer) received_output(id usize, data string) ! {
 	mut pane := self.panes[u64(id)] or { return }
 	mut stream := pane.terminal.vt_stream()
 	defer { stream.deinit() }
-	stream.next_slice(data)!
+	stream.next_slice(data.bytes())!
 }
 
 fn (mut self TmuxViewer) enter_command_queue(commands []TmuxViewerCommand) ![]TmuxViewerAction {

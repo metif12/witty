@@ -107,10 +107,7 @@ fn test_desktop_notification_forwards_typed_payload() ! {
 	defer {
 		ctx.t.deinit()
 	}
-	handler.show_desktop_notification(osc.DesktopNotification{
-		title: 'Compiler'
-		body: 'Build failed'
-	})!
+	handler.show_desktop_notification('Compiler', 'Build failed')!
 	assert ctx.messages.len == 1
 	assert ctx.messages[0].kind == .desktop_notification
 	assert ctx.messages[0].notification_title[..8].bytestr() == 'Compiler'
@@ -124,10 +121,7 @@ fn test_desktop_notification_preserves_full_sentinel_array_payloads() ! {
 	}
 	title := 't'.repeat(63)
 	body := 'b'.repeat(255)
-	handler.show_desktop_notification(osc.DesktopNotification{
-		title: title
-		body: body
-	})!
+	handler.show_desktop_notification(title, body)!
 
 	assert ctx.messages.len == 1
 	assert ctx.messages[0].notification_title[..63].bytestr() == title
@@ -306,19 +300,14 @@ fn test_stream_handler_decrqss_uses_terminal_sgr_serialization() ! {
 fn test_stream_handler_bell() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
-	handler.vt(terminal.StreamEvent{
-		key: .bell
-	})!
+	handler.vt(.bell, terminal.ActionVoid{})!
 }
 
 // Test horizontal tab.
 fn test_stream_handler_horizontal_tab() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
-	handler.vt(terminal.StreamEvent{
-		key: .horizontal_tab
-		payload: terminal.ActionPayload{ num: 1 }
-	})!
+	handler.vt(.horizontal_tab, u16(1))!
 	// The cursor should have moved to the first tabstop
 	assert handler.terminal.screens.active.cursor.x == 8
 }
@@ -331,9 +320,7 @@ fn test_stream_handler_carriage_return() ! {
 	handler.terminal.cursor_right(5)
 	assert handler.terminal.screens.active.cursor.x == 5
 	// Carriage return
-	handler.vt(terminal.StreamEvent{
-		key: .carriage_return
-	})!
+	handler.vt(.carriage_return, terminal.ActionVoid{})!
 	assert handler.terminal.screens.active.cursor.x == 0
 }
 
@@ -343,31 +330,19 @@ fn test_stream_handler_cursor_movement() ! {
 	defer { ctx.t.deinit() }
 
 	// cursor_right
-	handler.vt(terminal.StreamEvent{
-		key: .cursor_right
-		payload: terminal.ActionPayload{ num: 3 }
-	})!
+	handler.vt(.cursor_right, terminal.ActionCursorMovement{ value: 3 })!
 	assert handler.terminal.screens.active.cursor.x == 3
 
 	// cursor_down
-	handler.vt(terminal.StreamEvent{
-		key: .cursor_down
-		payload: terminal.ActionPayload{ num: 2 }
-	})!
+	handler.vt(.cursor_down, terminal.ActionCursorMovement{ value: 2 })!
 	assert handler.terminal.screens.active.cursor.y == 2
 
 	// cursor_left
-	handler.vt(terminal.StreamEvent{
-		key: .cursor_left
-		payload: terminal.ActionPayload{ num: 1 }
-	})!
+	handler.vt(.cursor_left, terminal.ActionCursorMovement{ value: 1 })!
 	assert handler.terminal.screens.active.cursor.x == 2
 
 	// cursor_up
-	handler.vt(terminal.StreamEvent{
-		key: .cursor_up
-		payload: terminal.ActionPayload{ num: 1 }
-	})!
+	handler.vt(.cursor_up, terminal.ActionCursorMovement{ value: 1 })!
 	assert handler.terminal.screens.active.cursor.y == 1
 }
 
@@ -375,10 +350,7 @@ fn test_stream_handler_cursor_movement() ! {
 fn test_stream_handler_cursor_pos() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
-	handler.vt(terminal.StreamEvent{
-		key: .cursor_pos
-		payload: terminal.ActionPayload{ num: 5, num2: 10 }
-	})!
+	handler.vt(.cursor_pos, terminal.ActionCursorPos{ row: 5, col: 10 })!
 	assert handler.terminal.screens.active.cursor.y == 4 // 0-based
 	assert handler.terminal.screens.active.cursor.x == 9 // 0-based
 }
@@ -389,18 +361,12 @@ fn test_stream_handler_cursor_style() ! {
 	defer { ctx.t.deinit() }
 
 	// Set to steady underline
-	handler.vt(terminal.StreamEvent{
-		key: .cursor_style
-		payload: terminal.ActionPayload{ cursor_style: .steady_underline }
-	})!
+	handler.vt(.cursor_style, terminal.AnsiCursorStyle.steady_underline)!
 	assert handler.terminal.screens.active.cursor.cursor_style == .underline
 	assert !handler.default_cursor
 
 	// Set to default
-	handler.vt(terminal.StreamEvent{
-		key: .cursor_style
-		payload: terminal.ActionPayload{ cursor_style: .default_ }
-	})!
+	handler.vt(.cursor_style, terminal.AnsiCursorStyle.default_)!
 	assert handler.default_cursor
 	assert handler.terminal.screens.active.cursor.cursor_style == .block
 }
@@ -415,10 +381,7 @@ fn test_stream_handler_set_mode_origin() ! {
 	assert handler.terminal.screens.active.cursor.y == 4
 
 	// Setting origin mode resets cursor to (1,1)
-	handler.vt(terminal.StreamEvent{
-		key: .set_mode
-		payload: terminal.ActionPayload{ mode: .origin }
-	})!
+	handler.vt(.set_mode, terminal.ActionMode{ mode: .origin })!
 	assert handler.terminal.screens.active.cursor.y == 0
 	assert handler.terminal.screens.active.cursor.x == 0
 }
@@ -427,10 +390,7 @@ fn test_stream_handler_set_mode_origin() ! {
 fn test_stream_handler_print() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
-	handler.vt(terminal.StreamEvent{
-		key: .print
-		payload: terminal.ActionPayload{ cp: u32(`A`) }
-	})!
+	handler.vt(.print, terminal.ActionPrint{ cp: u32(`A`) })!
 	assert handler.terminal.screens.active.cursor.x == 1
 }
 
@@ -444,9 +404,7 @@ fn test_stream_handler_full_reset() ! {
 	handler.terminal.modes.set(.origin, true)
 
 	// Full reset
-	handler.vt(terminal.StreamEvent{
-		key: .full_reset
-	})!
+	handler.vt(.full_reset, terminal.ActionVoid{})!
 
 	assert !handler.terminal.modes.get(.origin)
 	assert handler.terminal.screens.active.cursor.x == 0
@@ -464,18 +422,14 @@ fn test_stream_handler_save_restore_cursor() ! {
 	assert handler.terminal.screens.active.cursor.x == 9
 
 	// Save cursor
-	handler.vt(terminal.StreamEvent{
-		key: .save_cursor
-	})!
+	handler.vt(.save_cursor, terminal.ActionVoid{})!
 
 	// Move cursor elsewhere
 	handler.terminal.set_cursor_pos(1, 1)
 	assert handler.terminal.screens.active.cursor.y == 0
 
 	// Restore cursor
-	handler.vt(terminal.StreamEvent{
-		key: .restore_cursor
-	})!
+	handler.vt(.restore_cursor, terminal.ActionVoid{})!
 	assert handler.terminal.screens.active.cursor.y == 4
 	assert handler.terminal.screens.active.cursor.x == 9
 }
@@ -487,16 +441,10 @@ fn test_stream_handler_modify_key_format() ! {
 
 	assert !handler.terminal.flags.modify_other_keys_2()
 
-	handler.vt(terminal.StreamEvent{
-		key: .modify_key_format
-		payload: terminal.ActionPayload{ modify_key_format: .other_keys_numeric }
-	})!
+	handler.vt(.modify_key_format, terminal.ModifyKeyFormat.other_keys_numeric)!
 	assert handler.terminal.flags.modify_other_keys_2()
 
-	handler.vt(terminal.StreamEvent{
-		key: .modify_key_format
-		payload: terminal.ActionPayload{ modify_key_format: .legacy }
-	})!
+	handler.vt(.modify_key_format, terminal.ModifyKeyFormat.legacy)!
 	assert !handler.terminal.flags.modify_other_keys_2()
 }
 
@@ -504,9 +452,7 @@ fn test_stream_handler_modify_key_format() ! {
 fn test_stream_handler_linefeed() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
-	handler.vt(terminal.StreamEvent{
-		key: .linefeed
-	})!
+	handler.vt(.linefeed, terminal.ActionVoid{})!
 	assert handler.terminal.screens.active.cursor.y == 1
 }
 
@@ -515,14 +461,10 @@ fn test_stream_handler_protected_mode() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
 
-	handler.vt(terminal.StreamEvent{
-		key: .protected_mode_dec
-	})!
+	handler.vt(.protected_mode_dec, terminal.ActionVoid{})!
 	assert handler.terminal.screens.active.cursor.is_protected
 
-	handler.vt(terminal.StreamEvent{
-		key: .protected_mode_off
-	})!
+	handler.vt(.protected_mode_off, terminal.ActionVoid{})!
 	assert !handler.terminal.screens.active.cursor.is_protected
 }
 
@@ -532,9 +474,7 @@ fn test_stream_handler_backspace() ! {
 	defer { ctx.t.deinit() }
 	handler.terminal.cursor_right(3)
 	assert handler.terminal.screens.active.cursor.x == 3
-	handler.vt(terminal.StreamEvent{
-		key: .backspace
-	})!
+	handler.vt(.backspace, terminal.ActionVoid{})!
 	assert handler.terminal.screens.active.cursor.x == 2
 }
 
@@ -545,10 +485,7 @@ fn test_stream_handler_erase_display() ! {
 	// Print something
 	handler.terminal.print(u32(`X`)) or {}
 	// Erase complete
-	handler.vt(terminal.StreamEvent{
-		key: .erase_display_complete
-		payload: terminal.ActionPayload{ flag: false }
-	})!
+	handler.vt(.erase_display_complete, false)!
 	// Verify cursor x didn't change (erase doesn't move cursor)
 }
 
@@ -556,10 +493,7 @@ fn test_stream_handler_erase_display() ! {
 fn test_stream_handler_scroll_up() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
-	handler.vt(terminal.StreamEvent{
-		key: .scroll_up
-		payload: terminal.ActionPayload{ count: 1 }
-	})!
+	handler.vt(.scroll_up, usize(1))!
 	// Should not crash
 }
 
@@ -567,68 +501,45 @@ fn test_stream_handler_scroll_up() ! {
 fn test_stream_handler_erase_chars() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
-	handler.vt(terminal.StreamEvent{
-		key: .erase_chars
-		payload: terminal.ActionPayload{ count: 5 }
-	})!
+	handler.vt(.erase_chars, usize(5))!
 }
 
 // Test insert_lines dispatching.
 fn test_stream_handler_insert_lines() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
-	handler.vt(terminal.StreamEvent{
-		key: .insert_lines
-		payload: terminal.ActionPayload{ count: 2 }
-	})!
+	handler.vt(.insert_lines, usize(2))!
 }
 
 // Test delete_lines dispatching.
 fn test_stream_handler_delete_lines() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
-	handler.vt(terminal.StreamEvent{
-		key: .delete_lines
-		payload: terminal.ActionPayload{ count: 1 }
-	})!
+	handler.vt(.delete_lines, usize(1))!
 }
 
 // Test insert_blanks dispatching.
 fn test_stream_handler_insert_blanks() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
-	handler.vt(terminal.StreamEvent{
-		key: .insert_blanks
-		payload: terminal.ActionPayload{ count: 3 }
-	})!
+	handler.vt(.insert_blanks, usize(3))!
 }
 
 // Test delete_chars dispatching.
 fn test_stream_handler_delete_chars() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
-	handler.vt(terminal.StreamEvent{
-		key: .delete_chars
-		payload: terminal.ActionPayload{ count: 2 }
-	})!
+	handler.vt(.delete_chars, usize(2))!
 }
 
 // Test tab_set and tab_clear_current dispatching.
 fn test_stream_handler_tab_operations() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
-	handler.vt(terminal.StreamEvent{
-		key: .tab_set
-	})!
-	handler.vt(terminal.StreamEvent{
-		key: .tab_clear_current
-	})!
-	handler.vt(terminal.StreamEvent{
-		key: .tab_clear_all
-	})!
-	handler.vt(terminal.StreamEvent{
-		key: .tab_reset
-	})!
+	handler.vt(.tab_set, terminal.ActionVoid{})!
+	handler.vt(.tab_clear_current, terminal.ActionVoid{})!
+	handler.vt(.tab_clear_all, terminal.ActionVoid{})!
+	handler.vt(.tab_reset, terminal.ActionVoid{})!
 }
 
 // Test kitty keyboard push/pop dispatching.
@@ -637,27 +548,18 @@ fn test_stream_handler_kitty_keyboard() ! {
 	defer { ctx.t.deinit() }
 
 	// Push
-	handler.vt(terminal.StreamEvent{
-		key: .kitty_keyboard_push
-		payload: terminal.ActionPayload{ kitty_flags: 5 }
-	})!
+	handler.vt(.kitty_keyboard_push, terminal.ActionKittyKeyboardFlags{ flags: terminal.KeyFlags.from_int(5) })!
 	assert handler.terminal.screens.active.kitty_keyboard.current().int() == 5
 
 	// Pop
-	handler.vt(terminal.StreamEvent{
-		key: .kitty_keyboard_pop
-		payload: terminal.ActionPayload{ num: 1 }
-	})!
+	handler.vt(.kitty_keyboard_pop, u16(1))!
 	assert handler.terminal.screens.active.kitty_keyboard.current() == terminal.key_flags_disabled
 
 	// The full u16 count must reach FlagStack.pop; narrowing to u8 would
 	// turn 256 into zero instead of resetting the stack.
 	handler.terminal.screens.active.kitty_keyboard.set(.set_, terminal.KeyFlags.from_int(3))
 	handler.terminal.screens.active.kitty_keyboard.push(terminal.KeyFlags.from_int(5))
-	handler.vt(terminal.StreamEvent{
-		key: .kitty_keyboard_pop
-		payload: terminal.ActionPayload{ num: 256 }
-	})!
+	handler.vt(.kitty_keyboard_pop, u16(256))!
 	assert handler.terminal.screens.active.kitty_keyboard.current() == terminal.key_flags_disabled
 }
 
@@ -695,28 +597,14 @@ fn test_stream_handler_dcs_apc() ! {
 	defer { ctx.t.deinit() }
 
 	// APC start/put/end
-	handler.vt(terminal.StreamEvent{
-		key: .apc_start
-	})!
-	handler.vt(terminal.StreamEvent{
-		key: .apc_put
-		payload: terminal.ActionPayload{ byte_val: u8(`G`) }
-	})!
-	handler.vt(terminal.StreamEvent{
-		key: .apc_end
-	})!
+	handler.vt(.apc_start, terminal.ActionVoid{})!
+	handler.vt(.apc_put, u8(u8(`G`)))!
+	handler.vt(.apc_end, terminal.ActionVoid{})!
 
 	// DCS hook/put/unhook
-	handler.vt(terminal.StreamEvent{
-		key: .dcs_hook
-	})!
-	handler.vt(terminal.StreamEvent{
-		key: .dcs_put
-		payload: terminal.ActionPayload{ byte_val: u8(`x`) }
-	})!
-	handler.vt(terminal.StreamEvent{
-		key: .dcs_unhook
-	})!
+	handler.vt(.dcs_hook, terminal.DCSAction{})!
+	handler.vt(.dcs_put, u8(`x`))!
+	handler.vt(.dcs_unhook, terminal.ActionVoid{})!
 }
 
 fn test_apc_handler_rejects_unknown_and_invalid_commands() ! {
@@ -795,37 +683,27 @@ fn test_color_query_response_mirrors_osc_terminator() ! {
 	defer { ctx.t.deinit() }
 	handler.osc_color_report_format = .format_8_bit
 
-	handler.vt(terminal.StreamEvent{
-		key: .color_operation
-		payload: terminal.ActionPayload{
-			color_operation: osc.ColorOperationCommand{
-				op:         .osc_4
-				requests:   [osc.ColorRequest(osc.ColorRequestQuery{
-					target: osc.ColorTarget(osc.ColorTargetPalette{
-						index: 1
-					})
-				})]
-				terminator: .bel
-			}
-		}
+	handler.vt(.color_operation, terminal.ActionColorOperation{
+		op:         .osc_4
+		requests:   [osc.ColorRequest(osc.ColorRequestQuery{
+			target: osc.ColorTarget(osc.ColorTargetPalette{
+				index: 1
+			})
+		})]
+		terminator: .bel
 	})!
 	bel := ctx.mailbox.queue.pop() or { panic('expected BEL-terminated color response') }
 	assert bel.kind == .write_small
 	assert bel.write_small_data.slice().bytestr().ends_with('\a')
 
-	handler.vt(terminal.StreamEvent{
-		key: .color_operation
-		payload: terminal.ActionPayload{
-			color_operation: osc.ColorOperationCommand{
-				op:         .osc_4
-				requests:   [osc.ColorRequest(osc.ColorRequestQuery{
-					target: osc.ColorTarget(osc.ColorTargetPalette{
-						index: 1
-					})
-				})]
-				terminator: .st
-			}
-		}
+	handler.vt(.color_operation, terminal.ActionColorOperation{
+		op:         .osc_4
+		requests:   [osc.ColorRequest(osc.ColorRequestQuery{
+			target: osc.ColorTarget(osc.ColorTargetPalette{
+				index: 1
+			})
+		})]
+		terminator: .st
 	})!
 	st := ctx.mailbox.queue.pop() or { panic('expected ST-terminated color response') }
 	assert st.kind == .write_small
@@ -836,16 +714,11 @@ fn test_kitty_color_query_response_mirrors_osc_terminator() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
 
-	handler.vt(terminal.StreamEvent{
-		key: .kitty_color_report
-		payload: terminal.ActionPayload{
-			kitty_color: osc.KittyColorOSC{
-				list:       [osc.KittyColorRequest(osc.KittyColorQuery{
-					key: u8(1)
-				})]
-				terminator: .bel
-			}
-		}
+	handler.vt(.kitty_color_report, osc.KittyColorOSC{
+		list:       [osc.KittyColorRequest(osc.KittyColorQuery{
+			key: u8(1)
+		})]
+		terminator: .bel
 	})!
 	msg := ctx.mailbox.queue.pop() or { panic('expected Kitty color response') }
 	assert msg.kind == .write_small
@@ -951,4 +824,17 @@ fn test_stream_handler_window_title() ! {
 	defer { ctx.t.deinit() }
 	handler.window_title('My Terminal')!
 	assert handler.seen_title
+}
+
+// A CSI 6 n parsed by the stream reaches deviceStatusReport with its request
+// and is answered with the 1-based cursor position.
+fn test_stream_handler_device_status_cursor_position_report() ! {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+	handler.vt(.cursor_pos, terminal.ActionCursorPos{ row: 3, col: 5 })!
+	mut s := terminal.Stream.init[StreamHandler](handler)
+	s.next_slice('\x1b[6n'.bytes())!
+	msg := ctx.mailbox.queue.pop() or { panic('expected a cursor position report') }
+	assert msg.kind == .write_small
+	assert msg.write_small_data.slice().bytestr() == '\x1b[3;5R'
 }

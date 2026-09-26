@@ -6,7 +6,7 @@ import terminal
 fn link_test_state() !terminal.RenderState {
 	mut term := terminal.Terminal.init(terminal.Options{ cols: 5, rows: 3 })!
 	mut stream := term.vt_stream()
-	stream.next_slice('1ABCD2EFGH\r\n3IJKL')!
+	stream.next_slice('1ABCD2EFGH\r\n3IJKL'.bytes())!
 	stream.deinit()
 	mut state := terminal.RenderState.empty()
 	state.update(mut term)

@@ -309,8 +309,8 @@ fn test_vt_stream_parallel_parser_records_complete_actions() {
 	}
 
 	term.screens.active.cursor.x = 9
-	for byte in '\x1b[2C'.bytes() {
-		stream.record_pty_byte(byte, &term)
+	for i, _ in '\x1b[2C'.bytes() {
+		stream.record_pty_read(&term, '\x1b[2C'.bytes()[i..i + 1]) or { panic(err) }
 	}
 	assert stream.events.len == 1
 	assert stream.events[0].kind == .csi

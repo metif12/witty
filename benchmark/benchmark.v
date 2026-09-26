@@ -602,24 +602,28 @@ pub:
 	opts TerminalStreamOptions
 mut:
 	terminal terminal.Terminal
-	stream   terminal.Stream
+	stream   terminal.Stream[TerminalStreamHandler]
 	data     DataFile
 }
 
 pub fn TerminalStream.create(opts TerminalStreamOptions) !&TerminalStream {
-	return &TerminalStream{
+	mut ptr := &TerminalStream{
 		opts:     opts
 		terminal: terminal.Terminal.init(terminal.Options{
 			rows: opts.terminal_rows
 			cols: opts.terminal_cols
 		})!
-		stream:   terminal.Stream.init()
 	}
+	// The source's stream holds a pointer to the handler stored beside it;
+	// the V stream stores the handler value, which holds the same pointer.
+	ptr.stream = terminal.Stream.init[TerminalStreamHandler](TerminalStreamHandler{
+		t: &ptr.terminal
+	})
+	return ptr
 }
 
 pub fn (mut self TerminalStream) destroy() {
 	self.data.close()
-	self.stream.deinit()
 	self.terminal.deinit()
 }
 
@@ -665,15 +669,33 @@ fn terminal_stream_step(ptr voidptr) ! {
 		if n == 0 {
 			break
 		}
-		self.stream.next_slice(buf[..n])
-		for event in self.stream.events {
-			if event.key == .print {
-				self.terminal.print(event.payload.cp)!
-			}
+		self.stream.next_slice(buf[..n]) or {
+			// error processing data file chunk
+			return error('BenchmarkFailed')
 		}
-		self.stream.clear_events()
 	}
 }
+
+// Implements the handler interface for the terminal.Stream.
+// We should expand this to include more operations to make
+// our benchmark more realistic.
+struct TerminalStreamHandler {
+mut:
+	t &terminal.Terminal = unsafe { nil }
+}
+
+pub fn (mut self TerminalStreamHandler) vt(action terminal.ActionKey, value terminal.ActionValue) ! {
+	match action {
+		.print {
+			if value is terminal.ActionPrint {
+				self.t.print(value.cp)!
+			}
+		}
+		else {}
+	}
+}
+
+pub fn (mut self TerminalStreamHandler) deinit() {}
 
 @[heap]
 pub struct ScreenClone {
@@ -726,11 +748,11 @@ fn screen_clone_setup(ptr voidptr) ! {
 	self.terminal.full_reset()
 
 	mut setup_stream := self.terminal.vt_stream()
-	setup_stream.next_slice('\x1b[48;2;20;40;60m')!
+	setup_stream.next_slice('\x1b[48;2;20;40;60m'.bytes())!
 	for _ in 0 .. int(self.terminal.rows) - 1 {
-		setup_stream.next_slice('hello\r\n')!
+		setup_stream.next_slice('hello\r\n'.bytes())!
 	}
-	setup_stream.next_slice('hello')!
+	setup_stream.next_slice('hello'.bytes())!
 	setup_stream.deinit()
 
 	mut data := data_file(self.opts.data)!
@@ -745,7 +767,7 @@ fn screen_clone_setup(ptr voidptr) ! {
 			if n == 0 {
 				break
 			}
-			stream.next_slice(buf[..n].bytestr())!
+			stream.next_slice(buf[..n])!
 		}
 	}
 }

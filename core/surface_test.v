@@ -956,7 +956,7 @@ fn test_modifier_key_refreshes_link_hover() ! {
 	}]
 	defer { surf.config.links[0].regex.deinit() }
 	mut stream := surf.renderer_state.terminal_.vt_stream()
-	stream.next_slice('http://a')!
+	stream.next_slice('http://a'.bytes())!
 
 	mods := input.ctrl_or_super_mods(input.Mods{})
 	key := if mods.super_() { input.Key.meta_left } else { input.Key.control_left }
@@ -1380,7 +1380,7 @@ fn test_surface_dump_text_public_wrapper_and_text_lifecycle() {
 	}
 
 	mut stream := surf.renderer_state.terminal_.vt_stream()
-	stream.next_slice('hello')!
+	stream.next_slice('hello'.bytes())!
 	mut dumped := surf.dump_text(TermSelection.init(surface_active_pin(&surf, 0, 0), surface_active_pin(&surf,
 		4, 0), false))!
 	assert dumped.text == 'hello'
@@ -1709,7 +1709,7 @@ fn test_copy_url_to_clipboard_uses_configured_trailing_space_policy() ! {
 	}
 	surf.rt_surface = &runtime
 	mut stream := surf.renderer_state.terminal_.vt_stream()
-	stream.next_slice('http://a   ')!
+	stream.next_slice('http://a   '.bytes())!
 
 	assert surf.perform_binding_action(input.Action.new(.copy_url_to_clipboard))!
 	contents := runtime.clipboards[.standard]
@@ -1730,7 +1730,7 @@ fn test_mouse_link_preview_forwards_untrimmed_url() ! {
 	mut runtime := apprt.RuntimeApp{}
 	surf.rt_app = &runtime
 	mut stream := surf.renderer_state.terminal_.vt_stream()
-	stream.next_slice('http://a   ')!
+	stream.next_slice('http://a   '.bytes())!
 
 	surf.mouse_refresh_links(apprt.CursorPos{ x: 6, y: 6 }, Coordinate{ x: 0, y: 0 }, false)!
 	assert surf.mouse.over_link

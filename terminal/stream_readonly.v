@@ -108,56 +108,9 @@ import osc
 //
 // Source: stream_readonly.zig
 
-// ReadonlyStream combines a byte-level Stream parser with a
-// ReadonlyHandler that applies parsed actions to a Terminal.
-pub struct ReadonlyStream {
-pub mut:
-	handler ReadonlyHandler
-	stream  Stream
-}
-
-pub fn ReadonlyStream.init(mut term Terminal) ReadonlyStream {
-	return ReadonlyStream{
-		handler: ReadonlyHandler.init(mut term)
-		stream: Stream.init_alloc(voidptr(1))
-	}
-}
-
-pub fn (mut self ReadonlyStream) deinit() {
-	self.stream.deinit()
-	self.handler.deinit()
-}
-
-// Process a string of bytes through the stream and apply to the terminal.
-pub fn (mut self ReadonlyStream) next_slice(input_ string) ! {
-	self.stream.next_slice(input_.bytes())
-	self.apply_events()!
-}
-
-// Process one byte through the stream and apply its actions to the terminal.
-pub fn (mut self ReadonlyStream) next(c u8) ! {
-	self.stream.next(c)
-	self.apply_events()!
-}
-
-// Apply a decoded codepoint directly through the readonly handler.
-pub fn (mut self ReadonlyStream) print(c u32) ! {
-	self.stream.print(c)
-	self.apply_events()!
-}
-
-// Apply a C0 or C1 control directly through the readonly handler.
-pub fn (mut self ReadonlyStream) execute(c u8) ! {
-	self.stream.execute(c)
-	self.apply_events()!
-}
-
-fn (mut self ReadonlyStream) apply_events() ! {
-	defer { self.stream.clear_events() }
-	for event in self.stream.events {
-		self.handler.vt(event)!
-	}
-}
+// This is a Stream implementation that processes actions against
+// a Terminal and updates the Terminal state.
+pub type ReadonlyStream = Stream[ReadonlyHandler]
 
 // ============================================================
 // ReadonlyHandler
@@ -185,14 +138,17 @@ pub fn (mut self ReadonlyHandler) deinit() {
 	// call this.
 }
 
-// Process a single stream event and apply it to the terminal.
-pub fn (mut self ReadonlyHandler) vt(event StreamEvent) ! {
-	match event.key {
+pub fn (mut self ReadonlyHandler) vt(action ActionKey, value ActionValue) ! {
+	match action {
 		.print {
-			self.terminal.print(event.payload.cp)!
+			if value is ActionPrint {
+				self.terminal.print(value.cp)!
+			}
 		}
 		.print_repeat {
-			self.terminal.print_repeat(event.payload.count)!
+			if value is usize {
+				self.terminal.print_repeat(value)!
+			}
 		}
 		.backspace {
 			self.terminal.backspace()
@@ -214,104 +170,160 @@ pub fn (mut self ReadonlyHandler) vt(event StreamEvent) ! {
 			self.terminal.reverse_index()
 		}
 		.cursor_up {
-			self.terminal.cursor_up(event.payload.num)
+			if value is ActionCursorMovement {
+				self.terminal.cursor_up(value.value)
+			}
 		}
 		.cursor_down {
-			self.terminal.cursor_down(event.payload.num)
+			if value is ActionCursorMovement {
+				self.terminal.cursor_down(value.value)
+			}
 		}
 		.cursor_left {
-			self.terminal.cursor_left(event.payload.num)
+			if value is ActionCursorMovement {
+				self.terminal.cursor_left(value.value)
+			}
 		}
 		.cursor_right {
-			self.terminal.cursor_right(event.payload.num)
+			if value is ActionCursorMovement {
+				self.terminal.cursor_right(value.value)
+			}
 		}
 		.cursor_pos {
-			self.terminal.set_cursor_pos(event.payload.num, event.payload.num2)
+			if value is ActionCursorPos {
+				self.terminal.set_cursor_pos(value.row, value.col)
+			}
 		}
 		.cursor_col {
-			self.terminal.set_cursor_pos(usize(self.terminal.screens.active.cursor.y) + 1, event.payload.num)
+			if value is ActionCursorMovement {
+				self.terminal.set_cursor_pos(usize(self.terminal.screens.active.cursor.y) + 1, value.value)
+			}
 		}
 		.cursor_row {
-			self.terminal.set_cursor_pos(event.payload.num, usize(self.terminal.screens.active.cursor.x) + 1)
+			if value is ActionCursorMovement {
+				self.terminal.set_cursor_pos(value.value, usize(self.terminal.screens.active.cursor.x) + 1)
+			}
 		}
 		.cursor_col_relative {
-			self.terminal.set_cursor_pos(
-				usize(self.terminal.screens.active.cursor.y) + 1,
-				usize(self.terminal.screens.active.cursor.x) + 1 + event.payload.num,
-			)
+			if value is ActionCursorMovement {
+				self.terminal.set_cursor_pos(
+					usize(self.terminal.screens.active.cursor.y) + 1,
+					usize(self.terminal.screens.active.cursor.x) + 1 + value.value,
+				)
+			}
 		}
 		.cursor_row_relative {
-			self.terminal.set_cursor_pos(
-				usize(self.terminal.screens.active.cursor.y) + 1 + event.payload.num,
-				usize(self.terminal.screens.active.cursor.x) + 1,
-			)
+			if value is ActionCursorMovement {
+				self.terminal.set_cursor_pos(
+					usize(self.terminal.screens.active.cursor.y) + 1 + value.value,
+					usize(self.terminal.screens.active.cursor.x) + 1,
+				)
+			}
 		}
 		.cursor_style {
-			blink := match event.payload.cursor_style {
-				.default_, .steady_block, .steady_bar, .steady_underline { false }
-				.blinking_block, .blinking_bar, .blinking_underline { true }
+			if value is AnsiCursorStyle {
+				blink := match value {
+					.default_, .steady_block, .steady_bar, .steady_underline { false }
+					.blinking_block, .blinking_bar, .blinking_underline { true }
+				}
+				style := match value {
+					.default_, .blinking_block, .steady_block { CursorStyle.block }
+					.blinking_bar, .steady_bar { CursorStyle.bar }
+					.blinking_underline, .steady_underline { CursorStyle.underline }
+				}
+				self.terminal.modes.set(.cursor_blinking, blink)
+				self.terminal.screens.active.cursor.cursor_style = style
 			}
-			style := match event.payload.cursor_style {
-				.default_, .blinking_block, .steady_block { CursorStyle.block }
-				.blinking_bar, .steady_bar { CursorStyle.bar }
-				.blinking_underline, .steady_underline { CursorStyle.underline }
-			}
-			self.terminal.modes.set(.cursor_blinking, blink)
-			self.terminal.screens.active.cursor.cursor_style = style
 		}
 		.erase_display_below {
-			self.terminal.erase_display(.below, event.payload.flag)
+			if value is bool {
+				self.terminal.erase_display(.below, value)
+			}
 		}
 		.erase_display_above {
-			self.terminal.erase_display(.above, event.payload.flag)
+			if value is bool {
+				self.terminal.erase_display(.above, value)
+			}
 		}
 		.erase_display_complete {
-			self.terminal.erase_display(.complete, event.payload.flag)
+			if value is bool {
+				self.terminal.erase_display(.complete, value)
+			}
 		}
 		.erase_display_scrollback {
-			self.terminal.erase_display(.scrollback, event.payload.flag)
+			if value is bool {
+				self.terminal.erase_display(.scrollback, value)
+			}
 		}
 		.erase_display_scroll_complete {
-			self.terminal.erase_display(.scroll_complete, event.payload.flag)
+			if value is bool {
+				self.terminal.erase_display(.scroll_complete, value)
+			}
 		}
 		.erase_line_right {
-			self.terminal.erase_line(.right, event.payload.flag)
+			if value is bool {
+				self.terminal.erase_line(.right, value)
+			}
 		}
 		.erase_line_left {
-			self.terminal.erase_line(.left, event.payload.flag)
+			if value is bool {
+				self.terminal.erase_line(.left, value)
+			}
 		}
 		.erase_line_complete {
-			self.terminal.erase_line(.complete, event.payload.flag)
+			if value is bool {
+				self.terminal.erase_line(.complete, value)
+			}
 		}
 		.erase_line_right_unless_pending_wrap {
-			self.terminal.erase_line(.right_unless_pending_wrap, event.payload.flag)
+			if value is bool {
+				self.terminal.erase_line(.right_unless_pending_wrap, value)
+			}
 		}
 		.delete_chars {
-			self.terminal.delete_chars(event.payload.count)
+			if value is usize {
+				self.terminal.delete_chars(value)
+			}
 		}
 		.erase_chars {
-			self.terminal.erase_chars(event.payload.count)
+			if value is usize {
+				self.terminal.erase_chars(value)
+			}
 		}
 		.insert_lines {
-			self.terminal.insert_lines(event.payload.count)
+			if value is usize {
+				self.terminal.insert_lines(value)
+			}
 		}
 		.insert_blanks {
-			self.terminal.insert_blanks(event.payload.count)
+			if value is usize {
+				self.terminal.insert_blanks(value)
+			}
 		}
 		.delete_lines {
-			self.terminal.delete_lines(event.payload.count)
+			if value is usize {
+				self.terminal.delete_lines(value)
+			}
 		}
 		.scroll_up {
-			self.terminal.scroll_up(event.payload.count)!
+			if value is usize {
+				self.terminal.scroll_up(value)!
+			}
 		}
 		.scroll_down {
-			self.terminal.scroll_down(event.payload.count)
+			if value is usize {
+				self.terminal.scroll_down(value)
+			}
 		}
 		.horizontal_tab {
-			self.horizontal_tab(event.payload.num)
+			if value is u16 {
+				self.horizontal_tab(value)
+			}
 		}
 		.horizontal_tab_back {
-			self.horizontal_tab_back(event.payload.num)
+			if value is u16 {
+				self.horizontal_tab_back(value)
+			}
 		}
 		.tab_clear_current {
 			self.terminal.tab_clear(.current)
@@ -326,23 +338,35 @@ pub fn (mut self ReadonlyHandler) vt(event StreamEvent) ! {
 			self.terminal.tab_reset()
 		}
 		.set_mode {
-			self.set_mode(event.payload.mode, true)!
+			if value is ActionMode {
+				self.set_mode(value.mode, true)!
+			}
 		}
 		.reset_mode {
-			self.set_mode(event.payload.mode, false)!
+			if value is ActionMode {
+				self.set_mode(value.mode, false)!
+			}
 		}
 		.save_mode {
-			self.terminal.modes.save(event.payload.mode)
+			if value is ActionMode {
+				self.terminal.modes.save(value.mode)
+			}
 		}
 		.restore_mode {
-			v := self.terminal.modes.restore(event.payload.mode)
-			self.set_mode(event.payload.mode, v)!
+			if value is ActionMode {
+				v := self.terminal.modes.restore(value.mode)
+				self.set_mode(value.mode, v)!
+			}
 		}
 		.top_and_bottom_margin {
-			self.terminal.set_top_and_bottom_margin(event.payload.num, event.payload.num2)
+			if value is ActionMargin {
+				self.terminal.set_top_and_bottom_margin(value.top_left, value.bottom_right)
+			}
 		}
 		.left_and_right_margin {
-			self.terminal.set_left_and_right_margin(event.payload.num, event.payload.num2)
+			if value is ActionMargin {
+				self.terminal.set_left_and_right_margin(value.top_left, value.bottom_right)
+			}
 		}
 		.left_and_right_margin_ambiguous {
 			if self.terminal.modes.get(.enable_left_and_right_margin) {
@@ -358,14 +382,20 @@ pub fn (mut self ReadonlyHandler) vt(event StreamEvent) ! {
 			self.terminal.restore_cursor()
 		}
 		.invoke_charset {
-			self.terminal.invoke_charset(event.payload.charset_bank, event.payload.charset_slot, event.payload.charset_locking)
+			if value is ActionInvokeCharset {
+				self.terminal.invoke_charset(value.bank, value.charset, value.locking)
+			}
 		}
 		.configure_charset {
-			self.terminal.configure_charset(event.payload.charset_slot, event.payload.charset_val)
+			if value is ActionConfigureCharset {
+				self.terminal.configure_charset(value.slot, value.charset)
+			}
 		}
 		.set_attribute {
-			if event.payload.sgr.kind != .unknown {
-				self.terminal.set_attribute(event.payload.sgr) or {}
+			if value is SgrAttribute {
+				if value.kind != .unknown {
+					self.terminal.set_attribute(value) or {}
+				}
 			}
 		}
 		.protected_mode_off {
@@ -378,38 +408,54 @@ pub fn (mut self ReadonlyHandler) vt(event StreamEvent) ! {
 			self.terminal.set_protected_mode(.dec)
 		}
 		.mouse_shift_capture {
-			self.terminal.flags.set_mouse_shift_capture(if event.payload.flag {
-				MouseShiftCaptureState.true_
-			} else {
-				MouseShiftCaptureState.false_
-			})
+			if value is bool {
+				self.terminal.flags.set_mouse_shift_capture(if value {
+					MouseShiftCaptureState.true_
+				} else {
+					MouseShiftCaptureState.false_
+				})
+			}
 		}
 		.kitty_keyboard_push {
-			self.terminal.screens.active.kitty_keyboard.push(KeyFlags.from_int(event.payload.kitty_flags))
+			if value is ActionKittyKeyboardFlags {
+				self.terminal.screens.active.kitty_keyboard.push(value.flags)
+			}
 		}
 		.kitty_keyboard_pop {
-			self.terminal.screens.active.kitty_keyboard.pop(usize(event.payload.num))
+			if value is u16 {
+				self.terminal.screens.active.kitty_keyboard.pop(usize(value))
+			}
 		}
 		.kitty_keyboard_set {
-			self.terminal.screens.active.kitty_keyboard.set(.set_, KeyFlags.from_int(event.payload.kitty_flags))
+			if value is ActionKittyKeyboardFlags {
+				self.terminal.screens.active.kitty_keyboard.set(.set_, value.flags)
+			}
 		}
 		.kitty_keyboard_set_or {
-			self.terminal.screens.active.kitty_keyboard.set(.or_, KeyFlags.from_int(event.payload.kitty_flags))
+			if value is ActionKittyKeyboardFlags {
+				self.terminal.screens.active.kitty_keyboard.set(.or_, value.flags)
+			}
 		}
 		.kitty_keyboard_set_not {
-			self.terminal.screens.active.kitty_keyboard.set(.not_, KeyFlags.from_int(event.payload.kitty_flags))
+			if value is ActionKittyKeyboardFlags {
+				self.terminal.screens.active.kitty_keyboard.set(.not_, value.flags)
+			}
 		}
 		.modify_key_format {
-			self.terminal.flags.set_modify_other_keys_2(false)
-			match event.payload.modify_key_format {
-				.other_keys_numeric {
-					self.terminal.flags.set_modify_other_keys_2(true)
+			if value is ModifyKeyFormat {
+				self.terminal.flags.set_modify_other_keys_2(false)
+				match value {
+					.other_keys_numeric {
+						self.terminal.flags.set_modify_other_keys_2(true)
+					}
+					else {}
 				}
-				else {}
 			}
 		}
 		.active_status_display {
-			self.terminal.status_display = event.payload.status_display
+			if value is StatusDisplay {
+				self.terminal.status_display = value
+			}
 		}
 		.decaln {
 			self.terminal.decaln()!
@@ -418,22 +464,32 @@ pub fn (mut self ReadonlyHandler) vt(event StreamEvent) ! {
 			self.terminal.full_reset()
 		}
 		.start_hyperlink {
-			self.terminal.screens.active.start_hyperlink(event.payload.hyperlink.uri, event.payload.hyperlink.id)!
+			if value is ActionStartHyperlink {
+				self.terminal.screens.active.start_hyperlink(value.uri, value.id)!
+			}
 		}
 		.end_hyperlink {
 			self.terminal.screens.active.end_hyperlink()
 		}
 		.semantic_prompt {
-			self.terminal.semantic_prompt(event.payload.semantic_prompt)
+			if value is osc.SemanticPrompt {
+				self.terminal.semantic_prompt(value)
+			}
 		}
 		.mouse_shape {
-			self.terminal.mouse_shape = event.payload.mouse_shape_val
+			if value is MouseShape {
+				self.terminal.mouse_shape = value
+			}
 		}
 		.color_operation {
-			self.color_operation(event.payload.color_operation.op, event.payload.color_operation.requests)
+			if value is ActionColorOperation {
+				self.color_operation(value.op, value.requests)
+			}
 		}
 		.kitty_color_report {
-			self.kitty_color_operation(event.payload.kitty_color)
+			if value is osc.KittyColorOSC {
+				self.kitty_color_operation(value)
+			}
 		}
 
 		// No supported DCS commands have any terminal-modifying effects,

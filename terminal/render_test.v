@@ -54,7 +54,7 @@ fn test_render_state_basic_text() {
 	defer {
 		s.deinit()
 	}
-	s.next_slice('ABCD')!
+	s.next_slice('ABCD'.bytes())!
 
 	mut state := RenderState.empty()
 	defer {
@@ -92,9 +92,9 @@ fn test_render_state_styled_text() {
 	defer {
 		s.deinit()
 	}
-	s.next_slice('\x1b[1mA')! // Bold
-	s.next_slice('\x1b[0;3mB')! // Italic
-	s.next_slice('\x1b[0;4mC')! // Underline
+	s.next_slice('\x1b[1mA'.bytes())! // Bold
+	s.next_slice('\x1b[0;3mB'.bytes())! // Italic
+	s.next_slice('\x1b[0;4mC'.bytes())! // Underline
 
 	mut state := RenderState.empty()
 	defer {
@@ -135,8 +135,8 @@ fn test_render_state_grapheme() {
 	defer {
 		s.deinit()
 	}
-	s.next_slice('A')!
-	s.next_slice('👨‍')! // this has a ZWJ
+	s.next_slice('A'.bytes())!
+	s.next_slice('👨‍'.bytes())! // this has a ZWJ
 
 	mut state := RenderState.empty()
 	defer {
@@ -174,7 +174,7 @@ fn test_render_state_cursor_in_viewport() {
 	defer {
 		s.deinit()
 	}
-	s.next_slice('A\x1b[H')!
+	s.next_slice('A\x1b[H'.bytes())!
 
 	mut state := RenderState.empty()
 	defer {
@@ -191,14 +191,14 @@ fn test_render_state_cursor_in_viewport() {
 	assert state.cursor.style.default()
 
 	// Set a style on the cursor
-	s.next_slice('\x1b[1m')! // Bold
+	s.next_slice('\x1b[1m'.bytes())! // Bold
 	state.update(mut t)
 	assert !state.cursor.style.default()
 	assert state.cursor.style.flags.bold()
-	s.next_slice('\x1b[0m')! // Reset style
+	s.next_slice('\x1b[0m'.bytes())! // Reset style
 
 	// Move cursor to 2,1
-	s.next_slice('\x1b[2;3H')!
+	s.next_slice('\x1b[2;3H'.bytes())!
 	state.update(mut t)
 	assert state.cursor.active.x == 2
 	assert state.cursor.active.y == 1
@@ -220,7 +220,7 @@ fn test_render_state_cursor_out_of_viewport() {
 	defer {
 		s.deinit()
 	}
-	s.next_slice('A\r\nB\r\nC\r\nD\r\n')!
+	s.next_slice('A\r\nB\r\nC\r\nD\r\n'.bytes())!
 
 	mut state := RenderState.empty()
 	defer {
@@ -245,7 +245,7 @@ fn test_render_state_cursor_out_of_viewport() {
 
 	// The active cursor cell is still refreshed even though it has no viewport
 	// coordinate while scrollback is being viewed.
-	s.next_slice('Z\r')!
+	s.next_slice('Z\r'.bytes())!
 	state.update(mut t)
 	assert state.cursor.viewport == none
 	assert state.cursor.cell.codepoint() == u32(`Z`)
@@ -289,7 +289,7 @@ fn test_render_state_dirty() {
 	}
 
 	// Write to first line
-	s.next_slice('A')!
+	s.next_slice('A'.bytes())!
 	state.update(mut t)
 	assert state.dirty == .partial
 	assert state.row_data[0].dirty // First row dirty
@@ -320,7 +320,7 @@ fn test_render_state_colors() {
 	state.update(mut t)
 
 	// Change cursor color
-	s.next_slice('\x1b]12;#FF0000\a')!
+	s.next_slice('\x1b]12;#FF0000\a'.bytes())!
 	state.update(mut t)
 
 	c := state.colors.cursor or { panic('nil cursor color') }
@@ -329,7 +329,7 @@ fn test_render_state_colors() {
 	assert c.b == 0
 
 	// Change palette color 0 to White
-	s.next_slice('\x1b]4;0;#FFFFFF\a')!
+	s.next_slice('\x1b]4;0;#FFFFFF\a'.bytes())!
 	state.update(mut t)
 	p0 := state.colors.palette[0]
 	assert p0.r == 0xFF
@@ -441,7 +441,7 @@ fn test_render_state_link_cells() {
 	}
 
 	// Create a hyperlink
-	s.next_slice('\x1b]8;;http://example.com\x1b\\LINK\x1b]8;;\x1b\\')!
+	s.next_slice('\x1b]8;;http://example.com\x1b\\LINK\x1b]8;;\x1b\\'.bytes())!
 	state.update(mut t)
 
 	// Query link at 0,0
@@ -471,7 +471,7 @@ fn test_render_state_string() {
 	defer {
 		s.deinit()
 	}
-	s.next_slice('AB')!
+	s.next_slice('AB'.bytes())!
 
 	mut state := RenderState.empty()
 	defer {
@@ -496,7 +496,7 @@ fn test_render_state_string_map() {
 	defer {
 		s.deinit()
 	}
-	s.next_slice('\u00e9')!
+	s.next_slice('\u00e9'.bytes())!
 
 	mut state := RenderState.empty()
 	defer {
@@ -555,14 +555,14 @@ fn test_render_state_link_cells_with_scrollback_spanning_pages() {
 
 	// Fill first page
 	for _ in 0 .. int(first_page_cap) - 1 {
-		s.next_slice('\r\n')!
+		s.next_slice('\r\n'.bytes())!
 	}
 
 	// Create second page with hyperlink
-	s.next_slice('\r\n')!
-	s.next_slice('\x1b]8;;http://example.com\x1b\\LINK\x1b]8;;\x1b\\')!
+	s.next_slice('\r\n'.bytes())!
+	s.next_slice('\x1b]8;;http://example.com\x1b\\LINK\x1b]8;;\x1b\\'.bytes())!
 	for _ in 0 .. int(tail_rows) - 1 {
-		s.next_slice('\r\n')!
+		s.next_slice('\r\n'.bytes())!
 	}
 
 	mut state := RenderState.empty()
@@ -620,7 +620,7 @@ fn test_render_state_dirty_row_resets_highlights() {
 	defer {
 		s.deinit()
 	}
-	s.next_slice('ABC')!
+	s.next_slice('ABC'.bytes())!
 
 	mut state := RenderState.empty()
 	defer {
@@ -644,8 +644,8 @@ fn test_render_state_dirty_row_resets_highlights() {
 	assert state.row_data[0].highlights.len == 1
 
 	// Write to row 0 to make it dirty
-	s.next_slice('\x1b[H')! // Move to home
-	s.next_slice('X')!
+	s.next_slice('\x1b[H'.bytes())! // Move to home
+	s.next_slice('X'.bytes())!
 	state.update(mut t)
 
 	// Verify the highlight was reset on the dirty row

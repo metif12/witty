@@ -56,7 +56,7 @@ fn test_page_plain_single_line() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello, world')!
+	s.next_slice('hello, world'.bytes())!
 
 	// Verify we have only a single page
 	pages := &t.screens.active.pages
@@ -101,7 +101,7 @@ fn test_page_plain_single_line_soft_wrapped_unwrapped() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello!')!
+	s.next_slice('hello!'.bytes())!
 
 	// Verify we have only a single page
 	pages := &t.screens.active.pages
@@ -165,7 +165,7 @@ fn test_page_plain_single_wide_char() ! {
 		s.deinit()
 	}
 
-	s.next_slice('1A⚡')!
+	s.next_slice('1A⚡'.bytes())!
 
 	// Verify we have only a single page
 	pages := &t.screens.active.pages
@@ -257,7 +257,7 @@ fn test_page_plain_single_wide_char_soft_wrapped_unwrapped() ! {
 		s.deinit()
 	}
 
-	s.next_slice('1A⚡')!
+	s.next_slice('1A⚡'.bytes())!
 
 	// Verify we have only a single page
 	pages := &t.screens.active.pages
@@ -373,7 +373,7 @@ fn test_page_plain_multiline() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello\r\nworld')!
+	s.next_slice('hello\r\nworld'.bytes())!
 
 	// Verify we have only a single page
 	pages := &t.screens.active.pages
@@ -427,7 +427,7 @@ fn test_page_plain_multiline_rectangle() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello\r\nworld')!
+	s.next_slice('hello\r\nworld'.bytes())!
 
 	// Verify we have only a single page
 	pages := &t.screens.active.pages
@@ -484,7 +484,7 @@ fn test_page_plain_multi_blank_lines() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello\r\n\r\n\r\nworld')!
+	s.next_slice('hello\r\n\r\n\r\nworld'.bytes())!
 
 	// Verify we have only a single page
 	pages := &t.screens.active.pages
@@ -546,7 +546,7 @@ fn test_page_plain_trailing_blank_lines() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello\r\nworld\r\n\r\n')!
+	s.next_slice('hello\r\nworld\r\n\r\n'.bytes())!
 
 	// Verify we have only a single page
 	pages := &t.screens.active.pages
@@ -602,7 +602,7 @@ fn test_page_plain_trailing_whitespace() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello   \r\nworld   ')!
+	s.next_slice('hello   \r\nworld   '.bytes())!
 
 	// Verify we have only a single page
 	pages := &t.screens.active.pages
@@ -658,7 +658,7 @@ fn test_page_plain_trailing_whitespace_no_trim() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello   \r\nworld  ')!
+	s.next_slice('hello   \r\nworld  '.bytes())!
 
 	// Verify we have only a single page
 	pages := &t.screens.active.pages
@@ -717,7 +717,7 @@ fn test_page_plain_with_prior_trailing_state_rows() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello')!
+	s.next_slice('hello'.bytes())!
 
 	pages := &t.screens.active.pages
 	assert pages.pages.first != none
@@ -770,7 +770,7 @@ fn test_page_plain_with_prior_trailing_state_cells_no_wrapped_line() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello')!
+	s.next_slice('hello'.bytes())!
 
 	pages := &t.screens.active.pages
 	assert pages.pages.first != none
@@ -816,7 +816,7 @@ fn test_page_plain_with_prior_trailing_state_cells_with_wrap_continuation() ! {
 		s.deinit()
 	}
 
-	s.next_slice('world')!
+	s.next_slice('world'.bytes())!
 
 	pages := &t.screens.active.pages
 	assert pages.pages.first != none
@@ -883,7 +883,7 @@ fn test_page_plain_soft_wrapped_without_unwrap() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello world test')!
+	s.next_slice('hello world test'.bytes())!
 
 	pages := &t.screens.active.pages
 	assert pages.pages.first != none
@@ -935,7 +935,7 @@ fn test_page_plain_soft_wrapped_with_unwrap() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello world test')!
+	s.next_slice('hello world test'.bytes())!
 
 	pages := &t.screens.active.pages
 	assert pages.pages.first != none
@@ -986,7 +986,7 @@ fn test_page_plain_soft_wrapped_3_lines_without_unwrap() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello world this is a test')!
+	s.next_slice('hello world this is a test'.bytes())!
 
 	pages := &t.screens.active.pages
 	assert pages.pages.first != none
@@ -1048,7 +1048,7 @@ fn test_page_plain_soft_wrapped_3_lines_with_unwrap() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello world this is a test')!
+	s.next_slice('hello world this is a test'.bytes())!
 
 	pages := &t.screens.active.pages
 	assert pages.pages.first != none
@@ -1105,7 +1105,7 @@ fn test_page_plain_start_y_subset() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello\r\nworld\r\ntest')!
+	s.next_slice('hello\r\nworld\r\ntest'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -1155,7 +1155,7 @@ fn test_page_plain_end_y_subset() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello\r\nworld\r\ntest')!
+	s.next_slice('hello\r\nworld\r\ntest'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -1205,7 +1205,7 @@ fn test_page_plain_start_y_and_end_y_range() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello\r\nworld\r\ntest\r\nfoo')!
+	s.next_slice('hello\r\nworld\r\ntest\r\nfoo'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -1256,7 +1256,7 @@ fn test_page_plain_start_y_out_of_bounds() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello')!
+	s.next_slice('hello'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -1290,7 +1290,7 @@ fn test_page_plain_end_y_greater_than_rows() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello')!
+	s.next_slice('hello'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -1331,7 +1331,7 @@ fn test_page_plain_end_y_less_than_start_y() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello')!
+	s.next_slice('hello'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -1366,7 +1366,7 @@ fn test_page_plain_start_x_on_first_row_only() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello world')!
+	s.next_slice('hello world'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -1406,7 +1406,7 @@ fn test_page_plain_end_x_on_last_row_only() ! {
 		s.deinit()
 	}
 
-	s.next_slice('first line\r\nsecond line\r\nthird line')!
+	s.next_slice('first line\r\nsecond line\r\nthird line'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -1467,7 +1467,7 @@ fn test_page_plain_start_x_and_end_x_multiline() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello world\r\ntest case\r\nfoo bar')!
+	s.next_slice('hello world\r\ntest case\r\nfoo bar'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -1532,7 +1532,7 @@ fn test_page_plain_start_x_out_of_bounds() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello')!
+	s.next_slice('hello'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -1566,7 +1566,7 @@ fn test_page_plain_end_x_greater_than_cols() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello')!
+	s.next_slice('hello'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -1606,7 +1606,7 @@ fn test_page_plain_end_x_less_than_start_x_single_row() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello')!
+	s.next_slice('hello'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -1642,7 +1642,7 @@ fn test_page_plain_start_y_non_zero_ignores_trailing_state() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello\r\nworld')!
+	s.next_slice('hello\r\nworld'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -1687,7 +1687,7 @@ fn test_page_plain_start_x_non_zero_ignores_trailing_state() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello world')!
+	s.next_slice('hello world'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -1732,7 +1732,7 @@ fn test_page_plain_start_y_and_start_x_zero_uses_trailing_state() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello')!
+	s.next_slice('hello'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -1786,7 +1786,7 @@ fn test_page_plain_single_line_with_styling() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello, \x1b[1mworld\x1b[0m')!
+	s.next_slice('hello, \x1b[1mworld\x1b[0m'.bytes())!
 
 	// Verify we have only a single page
 	pages := &t.screens.active.pages
@@ -1830,7 +1830,7 @@ fn test_page_vt_single_line_plain_text() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello')!
+	s.next_slice('hello'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -1865,7 +1865,7 @@ fn test_page_vt_single_line_with_bold() ! {
 		s.deinit()
 	}
 
-	s.next_slice('\x1b[1mhello\x1b[0m')!
+	s.next_slice('\x1b[1mhello\x1b[0m'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -1909,7 +1909,7 @@ fn test_page_vt_multiple_styles() ! {
 		s.deinit()
 	}
 
-	s.next_slice('\x1b[1mhello \x1b[3mworld\x1b[0m')!
+	s.next_slice('\x1b[1mhello \x1b[3mworld\x1b[0m'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -1938,7 +1938,7 @@ fn test_page_vt_with_foreground_color() ! {
 		s.deinit()
 	}
 
-	s.next_slice('\x1b[31mred\x1b[0m')!
+	s.next_slice('\x1b[31mred\x1b[0m'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -1982,7 +1982,7 @@ fn test_page_vt_with_background_and_foreground_colors() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello')!
+	s.next_slice('hello'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -2019,7 +2019,7 @@ fn test_page_vt_multi_line_with_styles() ! {
 		s.deinit()
 	}
 
-	s.next_slice('\x1b[1mfirst\x1b[0m\r\n\x1b[3msecond\x1b[0m')!
+	s.next_slice('\x1b[1mfirst\x1b[0m\r\n\x1b[3msecond\x1b[0m'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -2050,7 +2050,7 @@ fn test_page_vt_duplicate_style_not_emitted_twice() ! {
 		s.deinit()
 	}
 
-	s.next_slice('\x1b[1mhel\x1b[1mlo\x1b[0m')!
+	s.next_slice('\x1b[1mhel\x1b[1mlo\x1b[0m'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -2079,7 +2079,7 @@ fn test_page_list_plain_single_line() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello, world')!
+	s.next_slice('hello, world'.bytes())!
 
 	mut pin_map := PinMap{}
 
@@ -2112,19 +2112,19 @@ fn test_page_list_plain_spanning_two_pages() ! {
 
 	// Fill the first page almost completely
 	for _ in 0 .. int(first_page_rows) - 1 {
-		s.next_slice('\r\n')!
+		s.next_slice('\r\n'.bytes())!
 	}
-	s.next_slice('page one')!
+	s.next_slice('page one'.bytes())!
 
 	// Verify we're still on one page
 	assert formatter_single_page(pages)
 
 	// Add one more newline to push content to a second page
-	s.next_slice('\r\n')!
+	s.next_slice('\r\n'.bytes())!
 	assert !formatter_single_page(pages)
 
 	// Write content on the second page
-	s.next_slice('page two')!
+	s.next_slice('page two'.bytes())!
 
 	// Format the entire PageList
 	mut pin_map := PinMap{}
@@ -2180,9 +2180,9 @@ fn test_page_list_soft_wrapped_line_spanning_two_pages_without_unwrap() ! {
 
 	// Fill the first page with soft-wrapped content
 	for _ in 0 .. int(first_page_rows) - 1 {
-		s.next_slice('\r\n')!
+		s.next_slice('\r\n'.bytes())!
 	}
-	s.next_slice('hello world test')!
+	s.next_slice('hello world test'.bytes())!
 
 	// Verify we're on two pages due to wrapping
 	assert !formatter_single_page(pages)
@@ -2239,9 +2239,9 @@ fn test_page_list_soft_wrapped_line_spanning_two_pages_with_unwrap() ! {
 
 	// Fill the first page with soft-wrapped content
 	for _ in 0 .. int(first_page_rows) - 1 {
-		s.next_slice('\r\n')!
+		s.next_slice('\r\n'.bytes())!
 	}
-	s.next_slice('hello world test')!
+	s.next_slice('hello world test'.bytes())!
 
 	// Verify we're on two pages due to wrapping
 	assert !formatter_single_page(pages)
@@ -2298,19 +2298,19 @@ fn test_page_list_vt_spanning_two_pages() ! {
 
 	// Fill the first page almost completely
 	for _ in 0 .. int(first_page_rows) - 1 {
-		s.next_slice('\r\n')!
+		s.next_slice('\r\n'.bytes())!
 	}
-	s.next_slice('\x1b[1mpage one')!
+	s.next_slice('\x1b[1mpage one'.bytes())!
 
 	// Verify we're still on one page
 	assert formatter_single_page(pages)
 
 	// Add one more newline to push content to a second page
-	s.next_slice('\r\n')!
+	s.next_slice('\r\n'.bytes())!
 	assert !formatter_single_page(pages)
 
 	// New content is still styled
-	s.next_slice('page two')!
+	s.next_slice('page two'.bytes())!
 
 	// Format the entire PageList with VT
 	mut pin_map := PinMap{}
@@ -2352,7 +2352,7 @@ fn test_page_list_plain_with_x_offset_on_single_page() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello world\r\ntest case\r\nfoo bar')!
+	s.next_slice('hello world\r\ntest case\r\nfoo bar'.bytes())!
 
 	pages := &t.screens.active.pages
 	node := formatter_first_node(pages)
@@ -2404,18 +2404,18 @@ fn test_page_list_plain_with_x_offset_spanning_two_pages() ! {
 
 	// Fill first page almost completely
 	for _ in 0 .. int(first_page_rows) - 1 {
-		s.next_slice('\r\n')!
+		s.next_slice('\r\n'.bytes())!
 	}
-	s.next_slice('hello world')!
+	s.next_slice('hello world'.bytes())!
 
 	// Verify we're still on one page
 	assert formatter_single_page(pages)
 
 	// Push to second page
-	s.next_slice('\r\n')!
+	s.next_slice('\r\n'.bytes())!
 	assert !formatter_single_page(pages)
 
-	s.next_slice('foo bar test')!
+	s.next_slice('foo bar test'.bytes())!
 
 	first_node := formatter_first_node(pages)
 	last_node := formatter_last_node(pages)
@@ -2472,7 +2472,7 @@ fn test_page_list_plain_with_start_x_only() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello world')!
+	s.next_slice('hello world'.bytes())!
 
 	pages := &t.screens.active.pages
 	node := formatter_first_node(pages)
@@ -2510,7 +2510,7 @@ fn test_page_list_plain_with_end_x_only() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello world\r\ntest')!
+	s.next_slice('hello world\r\ntest'.bytes())!
 
 	pages := &t.screens.active.pages
 	node := formatter_first_node(pages)
@@ -2560,11 +2560,11 @@ fn test_page_list_plain_rectangle_basic() ! {
 		s.deinit()
 	}
 
-	s.next_slice('Lorem ipsum dolor\r\n')!
-	s.next_slice('sit amet, consectetur\r\n')!
-	s.next_slice('adipiscing elit, sed do\r\n')!
-	s.next_slice('eiusmod tempor incididunt\r\n')!
-	s.next_slice('ut labore et dolore')!
+	s.next_slice('Lorem ipsum dolor\r\n'.bytes())!
+	s.next_slice('sit amet, consectetur\r\n'.bytes())!
+	s.next_slice('adipiscing elit, sed do\r\n'.bytes())!
+	s.next_slice('eiusmod tempor incididunt\r\n'.bytes())!
+	s.next_slice('ut labore et dolore'.bytes())!
 
 	pages := &t.screens.active.pages
 
@@ -2590,11 +2590,11 @@ fn test_page_list_plain_rectangle_with_eol() ! {
 		s.deinit()
 	}
 
-	s.next_slice('Lorem ipsum dolor\r\n')!
-	s.next_slice('sit amet, consectetur\r\n')!
-	s.next_slice('adipiscing elit, sed do\r\n')!
-	s.next_slice('eiusmod tempor incididunt\r\n')!
-	s.next_slice('ut labore et dolore')!
+	s.next_slice('Lorem ipsum dolor\r\n'.bytes())!
+	s.next_slice('sit amet, consectetur\r\n'.bytes())!
+	s.next_slice('adipiscing elit, sed do\r\n'.bytes())!
+	s.next_slice('eiusmod tempor incididunt\r\n'.bytes())!
+	s.next_slice('ut labore et dolore'.bytes())!
 
 	pages := &t.screens.active.pages
 
@@ -2620,14 +2620,14 @@ fn test_page_list_plain_rectangle_more_complex_with_breaks() ! {
 		s.deinit()
 	}
 
-	s.next_slice('Lorem ipsum dolor\r\n')!
-	s.next_slice('sit amet, consectetur\r\n')!
-	s.next_slice('adipiscing elit, sed do\r\n')!
-	s.next_slice('eiusmod tempor incididunt\r\n')!
-	s.next_slice('ut labore et dolore\r\n')!
-	s.next_slice('\r\n')!
-	s.next_slice('magna aliqua. Ut enim\r\n')!
-	s.next_slice('ad minim veniam, quis')!
+	s.next_slice('Lorem ipsum dolor\r\n'.bytes())!
+	s.next_slice('sit amet, consectetur\r\n'.bytes())!
+	s.next_slice('adipiscing elit, sed do\r\n'.bytes())!
+	s.next_slice('eiusmod tempor incididunt\r\n'.bytes())!
+	s.next_slice('ut labore et dolore\r\n'.bytes())!
+	s.next_slice('\r\n'.bytes())!
+	s.next_slice('magna aliqua. Ut enim\r\n'.bytes())!
+	s.next_slice('ad minim veniam, quis'.bytes())!
 
 	pages := &t.screens.active.pages
 
@@ -2653,7 +2653,7 @@ fn test_terminal_formatter_plain_no_selection() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello\r\nworld')!
+	s.next_slice('hello\r\nworld'.bytes())!
 
 	formatter := TerminalFormatter.init(&t, format_plain)
 
@@ -2672,10 +2672,10 @@ fn test_terminal_formatter_vt_with_palette() ! {
 	}
 
 	// Modify some palette colors using VT sequences
-	s.next_slice('\x1b]4;0;rgb:12/34/56\x1b\\')!
-	s.next_slice('\x1b]4;1;rgb:ab/cd/ef\x1b\\')!
-	s.next_slice('\x1b]4;255;rgb:ff/00/ff\x1b\\')!
-	s.next_slice('test')!
+	s.next_slice('\x1b]4;0;rgb:12/34/56\x1b\\'.bytes())!
+	s.next_slice('\x1b]4;1;rgb:ab/cd/ef\x1b\\'.bytes())!
+	s.next_slice('\x1b]4;255;rgb:ff/00/ff\x1b\\'.bytes())!
+	s.next_slice('test'.bytes())!
 
 	formatter := TerminalFormatter.init(&t, format_vt)
 
@@ -2692,7 +2692,7 @@ fn test_terminal_formatter_vt_with_palette() ! {
 		s2.deinit()
 	}
 
-	s2.next_slice(output)!
+	s2.next_slice(output.bytes())!
 
 	// Verify the palettes match
 	assert t.colors.palette.current[0] == t2.colors.palette.current[0]
@@ -2711,7 +2711,7 @@ fn test_terminal_formatter_with_selection() ! {
 		s.deinit()
 	}
 
-	s.next_slice('line1\r\nline2\r\nline3')!
+	s.next_slice('line1\r\nline2\r\nline3'.bytes())!
 
 	mut formatter := TerminalFormatter.init(&t, format_plain)
 	formatter.content = ScreenContent(ScreenContentSelection{
@@ -2733,7 +2733,7 @@ fn test_terminal_formatter_plain_with_pin_map() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello, world')!
+	s.next_slice('hello, world'.bytes())!
 
 	mut pin_map := PinMap{}
 
@@ -2762,7 +2762,7 @@ fn test_terminal_formatter_plain_multiline_with_pin_map() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello\r\nworld')!
+	s.next_slice('hello\r\nworld'.bytes())!
 
 	mut pin_map := PinMap{}
 
@@ -2804,8 +2804,8 @@ fn test_terminal_formatter_vt_with_palette_and_pin_map() ! {
 	}
 
 	// Modify some palette colors using VT sequences
-	s.next_slice('\x1b]4;0;rgb:12/34/56\x1b\\')!
-	s.next_slice('test')!
+	s.next_slice('\x1b]4;0;rgb:12/34/56\x1b\\'.bytes())!
+	s.next_slice('test'.bytes())!
 
 	mut pin_map := PinMap{}
 
@@ -2833,7 +2833,7 @@ fn test_terminal_formatter_with_selection_and_pin_map() ! {
 		s.deinit()
 	}
 
-	s.next_slice('line1\r\nline2\r\nline3')!
+	s.next_slice('line1\r\nline2\r\nline3'.bytes())!
 
 	mut pin_map := PinMap{}
 
@@ -2869,7 +2869,7 @@ fn test_screen_plain_single_line() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello, world')!
+	s.next_slice('hello, world'.bytes())!
 
 	mut pin_map := PinMap{}
 
@@ -2898,7 +2898,7 @@ fn test_screen_plain_multiline() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello\r\nworld')!
+	s.next_slice('hello\r\nworld'.bytes())!
 
 	mut pin_map := PinMap{}
 
@@ -2939,7 +2939,7 @@ fn test_screen_plain_with_selection() ! {
 		s.deinit()
 	}
 
-	s.next_slice('line1\r\nline2\r\nline3')!
+	s.next_slice('line1\r\nline2\r\nline3'.bytes())!
 
 	mut pin_map := PinMap{}
 
@@ -2976,7 +2976,7 @@ fn test_screen_vt_with_cursor_position() ! {
 	}
 
 	// Position cursor at a specific location
-	s.next_slice('hello\r\nworld')!
+	s.next_slice('hello\r\nworld'.bytes())!
 
 	mut pin_map := PinMap{}
 
@@ -2997,7 +2997,7 @@ fn test_screen_vt_with_cursor_position() ! {
 		s2.deinit()
 	}
 
-	s2.next_slice(output)!
+	s2.next_slice(output.bytes())!
 
 	// Verify cursor positions match
 	assert t.screens.active.cursor.x == t2.screens.active.cursor.x
@@ -3029,7 +3029,7 @@ fn test_screen_vt_with_style() ! {
 	}
 
 	// Set some style attributes
-	s.next_slice('\x1b[1;31mhello')!
+	s.next_slice('\x1b[1;31mhello'.bytes())!
 
 	mut pin_map := PinMap{}
 
@@ -3050,7 +3050,7 @@ fn test_screen_vt_with_style() ! {
 		s2.deinit()
 	}
 
-	s2.next_slice(output)!
+	s2.next_slice(output.bytes())!
 
 	// Verify styles match
 	assert t.screens.active.cursor.style.eql(&t2.screens.active.cursor.style)
@@ -3075,7 +3075,7 @@ fn test_screen_vt_with_hyperlink() ! {
 	}
 
 	// Set a hyperlink
-	s.next_slice('\x1b]8;;http://example.com\x1b\\hello')!
+	s.next_slice('\x1b]8;;http://example.com\x1b\\hello'.bytes())!
 
 	mut pin_map := PinMap{}
 
@@ -3096,7 +3096,7 @@ fn test_screen_vt_with_hyperlink() ! {
 		s2.deinit()
 	}
 
-	s2.next_slice(output)!
+	s2.next_slice(output.bytes())!
 
 	// Verify hyperlinks match
 	has_link1 := formatter_cursor_has_hyperlink(t.screens.active)
@@ -3129,7 +3129,7 @@ fn test_screen_vt_with_protection() ! {
 	}
 
 	// Enable protection mode
-	s.next_slice('\x1b[1"qhello')!
+	s.next_slice('\x1b[1"qhello'.bytes())!
 
 	mut pin_map := PinMap{}
 
@@ -3150,7 +3150,7 @@ fn test_screen_vt_with_protection() ! {
 		s2.deinit()
 	}
 
-	s2.next_slice(output)!
+	s2.next_slice(output.bytes())!
 
 	// Verify protection state matches
 	assert t.screens.active.cursor.is_protected == t2.screens.active.cursor.is_protected
@@ -3175,7 +3175,7 @@ fn test_screen_vt_with_kitty_keyboard() ! {
 	}
 
 	// Set kitty keyboard flags (disambiguate + report_events = 3)
-	s.next_slice('\x1b[=3;1uhello')!
+	s.next_slice('\x1b[=3;1uhello'.bytes())!
 
 	mut pin_map := PinMap{}
 
@@ -3196,7 +3196,7 @@ fn test_screen_vt_with_kitty_keyboard() ! {
 		s2.deinit()
 	}
 
-	s2.next_slice(output)!
+	s2.next_slice(output.bytes())!
 
 	// Verify kitty keyboard state matches
 	flags1 := t.screens.active.kitty_keyboard.current().int()
@@ -3223,7 +3223,7 @@ fn test_screen_vt_with_charsets() ! {
 	}
 
 	// Set G0 to DEC special and shift to G1
-	s.next_slice('\x1b(0\x0ehello')!
+	s.next_slice('\x1b(0\x0ehello'.bytes())!
 
 	mut pin_map := PinMap{}
 
@@ -3244,7 +3244,7 @@ fn test_screen_vt_with_charsets() ! {
 		s2.deinit()
 	}
 
-	s2.next_slice(output)!
+	s2.next_slice(output.bytes())!
 
 	// Verify charset state matches
 	assert t.screens.active.charset.gl == t2.screens.active.charset.gl
@@ -3271,7 +3271,7 @@ fn test_terminal_vt_with_scrolling_region() ! {
 	}
 
 	// Set scrolling region: top=5, bottom=20
-	s.next_slice('\x1b[6;21rhello')!
+	s.next_slice('\x1b[6;21rhello'.bytes())!
 
 	mut formatter := TerminalFormatter.init(&t, format_vt)
 	formatter.extra.set_scrolling_region(true)
@@ -3289,7 +3289,7 @@ fn test_terminal_vt_with_scrolling_region() ! {
 		s2.deinit()
 	}
 
-	s2.next_slice(output)!
+	s2.next_slice(output.bytes())!
 
 	// Verify scrolling regions match
 	assert t.scrolling_region.top == t2.scrolling_region.top
@@ -3310,10 +3310,10 @@ fn test_terminal_vt_with_modes() ! {
 	}
 
 	// Enable some modes that differ from defaults
-	s.next_slice('\x1b[?2004h')! // Bracketed paste
-	s.next_slice('\x1b[?1000h')! // Mouse event normal
-	s.next_slice('\x1b[?7l')! // Disable wraparound (default is true)
-	s.next_slice('hello')!
+	s.next_slice('\x1b[?2004h'.bytes())! // Bracketed paste
+	s.next_slice('\x1b[?1000h'.bytes())! // Mouse event normal
+	s.next_slice('\x1b[?7l'.bytes())! // Disable wraparound (default is true)
+	s.next_slice('hello'.bytes())!
 
 	mut formatter := TerminalFormatter.init(&t, format_vt)
 	formatter.extra.set_modes(true)
@@ -3331,7 +3331,7 @@ fn test_terminal_vt_with_modes() ! {
 		s2.deinit()
 	}
 
-	s2.next_slice(output)!
+	s2.next_slice(output.bytes())!
 
 	// Verify modes match
 	assert t.modes.get(.bracketed_paste) == t2.modes.get(.bracketed_paste)
@@ -3351,11 +3351,11 @@ fn test_terminal_vt_with_tabstops() ! {
 	}
 
 	// Clear all tabs and set custom tabstops
-	s.next_slice('\x1b[3g')! // Clear all tabs
-	s.next_slice('\x1b[5G\x1bH')! // Set tab at column 5
-	s.next_slice('\x1b[15G\x1bH')! // Set tab at column 15
-	s.next_slice('\x1b[30G\x1bH')! // Set tab at column 30
-	s.next_slice('hello')!
+	s.next_slice('\x1b[3g'.bytes())! // Clear all tabs
+	s.next_slice('\x1b[5G\x1bH'.bytes())! // Set tab at column 5
+	s.next_slice('\x1b[15G\x1bH'.bytes())! // Set tab at column 15
+	s.next_slice('\x1b[30G\x1bH'.bytes())! // Set tab at column 30
+	s.next_slice('hello'.bytes())!
 
 	mut formatter := TerminalFormatter.init(&t, format_vt)
 	formatter.extra.set_tabstops(true)
@@ -3373,7 +3373,7 @@ fn test_terminal_vt_with_tabstops() ! {
 		s2.deinit()
 	}
 
-	s2.next_slice(output)!
+	s2.next_slice(output.bytes())!
 
 	// Verify tabstops match (columns are 0-indexed in the API)
 	assert t.tabstops.get(4) == t2.tabstops.get(4)
@@ -3397,8 +3397,8 @@ fn test_terminal_vt_with_keyboard_modes() ! {
 	}
 
 	// Set modify other keys mode 2
-	s.next_slice('\x1b[>4;2m')!
-	s.next_slice('hello')!
+	s.next_slice('\x1b[>4;2m'.bytes())!
+	s.next_slice('hello'.bytes())!
 
 	mut formatter := TerminalFormatter.init(&t, format_vt)
 	formatter.extra.set_keyboard(true)
@@ -3416,7 +3416,7 @@ fn test_terminal_vt_with_keyboard_modes() ! {
 		s2.deinit()
 	}
 
-	s2.next_slice(output)!
+	s2.next_slice(output.bytes())!
 
 	// Verify keyboard mode matches
 	assert t.flags.modify_other_keys_2() == t2.flags.modify_other_keys_2()
@@ -3435,7 +3435,7 @@ fn test_terminal_vt_with_pwd() ! {
 	}
 
 	// Set pwd using OSC 7
-	s.next_slice('\x1b]7;file://host/home/user\x1b\\hello')!
+	s.next_slice('\x1b]7;file://host/home/user\x1b\\hello'.bytes())!
 
 	mut formatter := TerminalFormatter.init(&t, format_vt)
 	formatter.extra.set_pwd(true)
@@ -3453,7 +3453,7 @@ fn test_terminal_vt_with_pwd() ! {
 		s2.deinit()
 	}
 
-	s2.next_slice(output)!
+	s2.next_slice(output.bytes())!
 
 	// Verify pwd matches
 	assert t.pwd == t2.pwd
@@ -3471,7 +3471,7 @@ fn test_page_html_with_multiple_styles() ! {
 	}
 
 	// Set bold, then italic, then reset
-	s.next_slice('\x1b[1mbold\x1b[3mitalic\x1b[0mnormal')!
+	s.next_slice('\x1b[1mbold\x1b[3mitalic\x1b[0mnormal'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -3497,7 +3497,7 @@ fn test_page_html_plain_text() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello, world')!
+	s.next_slice('hello, world'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -3522,7 +3522,7 @@ fn test_page_html_with_colors() ! {
 	}
 
 	// Set red foreground, blue background
-	s.next_slice('\x1b[31;44mcolored')!
+	s.next_slice('\x1b[31;44mcolored'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -3548,10 +3548,10 @@ fn test_terminal_formatter_html_with_palette() ! {
 	}
 
 	// Modify some palette colors
-	s.next_slice('\x1b]4;0;rgb:12/34/56\x1b\\')!
-	s.next_slice('\x1b]4;1;rgb:ab/cd/ef\x1b\\')!
-	s.next_slice('\x1b]4;255;rgb:ff/00/ff\x1b\\')!
-	s.next_slice('test')!
+	s.next_slice('\x1b]4;0;rgb:12/34/56\x1b\\'.bytes())!
+	s.next_slice('\x1b]4;1;rgb:ab/cd/ef\x1b\\'.bytes())!
+	s.next_slice('\x1b]4;255;rgb:ff/00/ff\x1b\\'.bytes())!
+	s.next_slice('test'.bytes())!
 
 	mut formatter := TerminalFormatter.init(&t, FormatOptions{ emit: .html })
 	formatter.extra.set_palette(true)
@@ -3578,7 +3578,7 @@ fn test_page_html_with_background_and_foreground_colors() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello')!
+	s.next_slice('hello'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -3613,7 +3613,7 @@ fn test_page_html_with_escaping() ! {
 		s.deinit()
 	}
 
-	s.next_slice('<tag>&"\'text')!
+	s.next_slice('<tag>&"\'text'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -3726,7 +3726,7 @@ fn test_page_html_with_unicode_as_numeric_entities() ! {
 	}
 
 	// Box drawing characters that caused issue #9426
-	s.next_slice('╰─ ❯')!
+	s.next_slice('╰─ ❯'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -3751,7 +3751,7 @@ fn test_page_html_ascii_characters_unchanged() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello world')!
+	s.next_slice('hello world'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -3775,7 +3775,7 @@ fn test_page_html_mixed_ascii_and_unicode() ! {
 		s.deinit()
 	}
 
-	s.next_slice('test ╰─❯ ok')!
+	s.next_slice('test ╰─❯ ok'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -3800,8 +3800,8 @@ fn test_page_vt_with_palette_option_emits_rgb() ! {
 	}
 
 	// Set a custom palette color and use it
-	s.next_slice('\x1b]4;1;rgb:ab/cd/ef\x1b\\')!
-	s.next_slice('\x1b[31mred')!
+	s.next_slice('\x1b]4;1;rgb:ab/cd/ef\x1b\\'.bytes())!
+	s.next_slice('\x1b[31mred'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -3838,8 +3838,8 @@ fn test_page_html_with_palette_option_emits_rgb() ! {
 	}
 
 	// Set a custom palette color and use it
-	s.next_slice('\x1b]4;1;rgb:ab/cd/ef\x1b\\')!
-	s.next_slice('\x1b[31mred')!
+	s.next_slice('\x1b]4;1;rgb:ab/cd/ef\x1b\\'.bytes())!
+	s.next_slice('\x1b[31mred'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -3878,7 +3878,7 @@ fn test_page_vt_style_reset_properly_closes_styles() ! {
 	}
 
 	// Set bold, then reset with SGR 0
-	s.next_slice('\x1b[1mbold\x1b[0mnormal')!
+	s.next_slice('\x1b[1mbold\x1b[0mnormal'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -3902,7 +3902,7 @@ fn test_page_codepoint_map_single_replacement() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello world')!
+	s.next_slice('hello world'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -3953,7 +3953,7 @@ fn test_page_codepoint_map_conflicting_replacement_prefers_last() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello')!
+	s.next_slice('hello'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -3994,7 +3994,7 @@ fn test_page_codepoint_map_replace_with_string() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello')!
+	s.next_slice('hello'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -4068,7 +4068,7 @@ fn test_page_codepoint_map_range_replacement() ! {
 		s.deinit()
 	}
 
-	s.next_slice('abcdefg')!
+	s.next_slice('abcdefg'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -4104,7 +4104,7 @@ fn test_page_codepoint_map_multiple_ranges() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello world')!
+	s.next_slice('hello world'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -4147,7 +4147,7 @@ fn test_page_codepoint_map_unicode_replacement() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello ⚡ world')!
+	s.next_slice('hello ⚡ world'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -4215,7 +4215,7 @@ fn test_page_codepoint_map_with_styled_formats() ! {
 		s.deinit()
 	}
 
-	s.next_slice('\x1b[31mred text\x1b[0m')!
+	s.next_slice('\x1b[31mred text\x1b[0m'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -4254,7 +4254,7 @@ fn test_page_codepoint_map_empty_map() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello world')!
+	s.next_slice('hello world'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -4290,9 +4290,9 @@ fn test_page_vt_background_color_on_trailing_blank_cells() ! {
 	// Simulate a TUI row: "CPU:" with text, then trailing cells with red background
 	// to end of line (no text after the colored region).
 	// \x1b[41m sets red background, then EL fills rest of row with that bg.
-	s.next_slice('CPU:\x1b[41m\x1b[K')!
+	s.next_slice('CPU:\x1b[41m\x1b[K'.bytes())!
 	// Reset colors and move to next line with different content
-	s.next_slice('\x1b[0m\r\nline2')!
+	s.next_slice('\x1b[0m\r\nline2'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -4464,7 +4464,7 @@ fn test_page_vt_multiline_crlf() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello\r\nworld')!
+	s.next_slice('hello\r\nworld'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -4485,7 +4485,7 @@ fn test_page_vt_underline_color_change_emits_new_style() ! {
 		s.deinit()
 	}
 
-	s.next_slice('\x1b[4;58;5;1mA\x1b[58;5;2mB\x1b[0m')!
+	s.next_slice('\x1b[4;58;5;1mA\x1b[58;5;2mB\x1b[0m'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -4507,7 +4507,7 @@ fn test_page_point_map_replacement_and_newline() ! {
 		s.deinit()
 	}
 
-	s.next_slice('hello\r\nz')!
+	s.next_slice('hello\r\nz'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -4565,7 +4565,7 @@ fn test_page_point_map_accumulated_blank_cells_match_source_order() ! {
 		s.deinit()
 	}
 
-	s.next_slice('a  b')!
+	s.next_slice('a  b'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)
@@ -4607,7 +4607,7 @@ fn test_page_point_map_style_close_uses_previous_cell() ! {
 		s.deinit()
 	}
 
-	s.next_slice('\x1b[1mA\x1b[0mB')!
+	s.next_slice('\x1b[1mA\x1b[0mB'.bytes())!
 
 	pages := &t.screens.active.pages
 	last := formatter_last_node(pages)

@@ -154,7 +154,7 @@ fn ct_render_row(input string, cols u16, graphemes bool) ![]terminal.RenderCell 
 	term.modes.set(.grapheme_cluster, graphemes)
 	mut stream := term.vt_stream()
 	defer { stream.deinit() }
-	stream.next_slice(input)!
+	stream.next_slice(input.bytes())!
 	mut state := terminal.RenderState.empty()
 	defer { state.deinit() }
 	state.update(mut term)

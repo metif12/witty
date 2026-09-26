@@ -6,7 +6,7 @@ import input
 
 pub type InspectorOverlayFeaturesFn = fn (voidptr) []OverlayFeature
 
-pub type InspectorRecordPtyByteFn = fn (voidptr, u8, &terminal.Terminal)
+pub type InspectorRecordPtyReadFn = fn (voidptr, &terminal.Terminal, []u8) !
 
 // InspectorOverlayBridge is the renderer-visible prefix of Inspector. Keeping
 // it as Inspector's first field lets RenderState retain Ghostty's opaque
@@ -14,18 +14,18 @@ pub type InspectorRecordPtyByteFn = fn (voidptr, u8, &terminal.Terminal)
 pub struct InspectorOverlayBridge {
 pub:
 	overlay_features_fn InspectorOverlayFeaturesFn = unsafe { nil }
-	record_pty_byte_fn  InspectorRecordPtyByteFn = unsafe { nil }
+	record_pty_read_fn  InspectorRecordPtyReadFn = unsafe { nil }
 }
 
-// record_inspector_pty_byte advances the inspector's parallel parser before
-// the terminal parser mutates state, matching Ghostty's inspector slow path.
-pub fn (self &RenderState) record_inspector_pty_byte(byte u8) {
+// record_inspector_pty_read records a pty read with the inspector before the
+// terminal parser mutates state: Ghostty's `insp.recordPtyRead` call.
+pub fn (self &RenderState) record_inspector_pty_read(data []u8) ! {
 	if isnil(self.inspector) {
 		return
 	}
 	bridge := unsafe { &InspectorOverlayBridge(self.inspector) }
-	if bridge.record_pty_byte_fn != unsafe { nil } {
-		bridge.record_pty_byte_fn(self.inspector, byte, self.terminal_)
+	if bridge.record_pty_read_fn != unsafe { nil } {
+		bridge.record_pty_read_fn(self.inspector, self.terminal_, data)!
 	}
 }
 

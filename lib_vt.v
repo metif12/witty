@@ -70,7 +70,8 @@ pub type StringMap = terminal.StringMap
 
 pub type Style = terminal.Style
 
-pub type Stream = terminal.Stream
+// `Stream` is the generic `terminal.Stream[H]`. V does not implement generic
+// type aliases, so consumers name `terminal.Stream[H]` directly.
 
 pub type StreamAction = terminal.StreamAction
 

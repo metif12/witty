@@ -158,15 +158,30 @@ fn (mut self StreamHandler) renderer_message_writer(msg renderer.RendererMessage
 	_ = self.renderer_mailbox.push(msg, datastruct.blocking_queue_forever)
 }
 
-// vt dispatches a single stream event from the VT parser to the
-// appropriate handler.
-pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) ! {
-	match event.key {
+pub fn (mut self StreamHandler) vt(action terminal.ActionKey, value terminal.ActionValue) ! {
+	// The branch hints here are based on real world data
+	// which indicates that the most common actions are:
+	//
+	// 1. print
+	// 2. set_attribute
+	// 3. carriage_return
+	// 4. line_feed
+	// 5. cursor_pos
+	//
+	// Together, these 5 actions make up nearly 98% of
+	// all actions encountered in real world scenarios.
+	//
+	// ref: https://github.com/qwerasd205/asciinema-stats
+	match action {
 		.print {
-			self.terminal.print(event.payload.cp)!
+			if value is terminal.ActionPrint {
+				self.terminal.print(value.cp)!
+			}
 		}
 		.print_repeat {
-			self.terminal.print_repeat(event.payload.count)!
+			if value is usize {
+				self.terminal.print_repeat(value)!
+			}
 		}
 		.bell {
 			self.bell()
@@ -175,10 +190,14 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) ! {
 			self.terminal.backspace()
 		}
 		.horizontal_tab {
-			self.horizontal_tab(event.payload.num)
+			if value is u16 {
+				self.horizontal_tab(value)
+			}
 		}
 		.horizontal_tab_back {
-			self.horizontal_tab_back(event.payload.num)
+			if value is u16 {
+				self.horizontal_tab_back(value)
+			}
 		}
 		.linefeed {
 			self.linefeed()!
@@ -190,88 +209,142 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) ! {
 			self.enquiry()!
 		}
 		.invoke_charset {
-			self.terminal.invoke_charset(event.payload.charset_bank, event.payload.charset_slot, event.payload.charset_locking)
+			if value is terminal.ActionInvokeCharset {
+				self.terminal.invoke_charset(value.bank, value.charset, value.locking)
+			}
 		}
 		.cursor_up {
-			self.terminal.cursor_up(event.payload.num)
+			if value is terminal.ActionCursorMovement {
+				self.terminal.cursor_up(value.value)
+			}
 		}
 		.cursor_down {
-			self.terminal.cursor_down(event.payload.num)
+			if value is terminal.ActionCursorMovement {
+				self.terminal.cursor_down(value.value)
+			}
 		}
 		.cursor_left {
-			self.terminal.cursor_left(event.payload.num)
+			if value is terminal.ActionCursorMovement {
+				self.terminal.cursor_left(value.value)
+			}
 		}
 		.cursor_right {
-			self.terminal.cursor_right(event.payload.num)
+			if value is terminal.ActionCursorMovement {
+				self.terminal.cursor_right(value.value)
+			}
 		}
 		.cursor_pos {
-			self.terminal.set_cursor_pos(event.payload.num, event.payload.num2)
+			if value is terminal.ActionCursorPos {
+				self.terminal.set_cursor_pos(value.row, value.col)
+			}
 		}
 		.cursor_col {
-			self.terminal.set_cursor_pos(usize(self.terminal.screens.active.cursor.y) + 1, event.payload.num)
+			if value is terminal.ActionCursorMovement {
+				self.terminal.set_cursor_pos(usize(self.terminal.screens.active.cursor.y) + 1, value.value)
+			}
 		}
 		.cursor_row {
-			self.terminal.set_cursor_pos(event.payload.num, usize(self.terminal.screens.active.cursor.x) + 1)
+			if value is terminal.ActionCursorMovement {
+				self.terminal.set_cursor_pos(value.value, usize(self.terminal.screens.active.cursor.x) + 1)
+			}
 		}
 		.cursor_col_relative {
-			col := usize(self.terminal.screens.active.cursor.x) + 1 + event.payload.num
-			self.terminal.set_cursor_pos(usize(self.terminal.screens.active.cursor.y) + 1, col)
+			if value is terminal.ActionCursorMovement {
+				col := usize(self.terminal.screens.active.cursor.x) + 1 + value.value
+				self.terminal.set_cursor_pos(usize(self.terminal.screens.active.cursor.y) + 1, col)
+			}
 		}
 		.cursor_row_relative {
-			row := usize(self.terminal.screens.active.cursor.y) + 1 + event.payload.num
-			self.terminal.set_cursor_pos(row, usize(self.terminal.screens.active.cursor.x) + 1)
+			if value is terminal.ActionCursorMovement {
+				row := usize(self.terminal.screens.active.cursor.y) + 1 + value.value
+				self.terminal.set_cursor_pos(row, usize(self.terminal.screens.active.cursor.x) + 1)
+			}
 		}
 		.cursor_style {
-			self.set_cursor_style(event.payload.cursor_style)!
+			if value is terminal.AnsiCursorStyle {
+				self.set_cursor_style(value)!
+			}
 		}
 		.erase_display_below {
-			self.terminal.erase_display(.below, event.payload.flag)
+			if value is bool {
+				self.terminal.erase_display(.below, value)
+			}
 		}
 		.erase_display_above {
-			self.terminal.erase_display(.above, event.payload.flag)
+			if value is bool {
+				self.terminal.erase_display(.above, value)
+			}
 		}
 		.erase_display_complete {
-			self.terminal.scroll_viewport(terminal.scroll_viewport_bottom)!
-			self.terminal.erase_display(.complete, event.payload.flag)
+			if value is bool {
+				self.terminal.scroll_viewport(terminal.scroll_viewport_bottom)!
+				self.terminal.erase_display(.complete, value)
+			}
 		}
 		.erase_display_scrollback {
-			self.terminal.erase_display(.scrollback, event.payload.flag)
+			if value is bool {
+				self.terminal.erase_display(.scrollback, value)
+			}
 		}
 		.erase_display_scroll_complete {
-			self.terminal.erase_display(.scroll_complete, event.payload.flag)
+			if value is bool {
+				self.terminal.erase_display(.scroll_complete, value)
+			}
 		}
 		.erase_line_right {
-			self.terminal.erase_line(.right, event.payload.flag)
+			if value is bool {
+				self.terminal.erase_line(.right, value)
+			}
 		}
 		.erase_line_left {
-			self.terminal.erase_line(.left, event.payload.flag)
+			if value is bool {
+				self.terminal.erase_line(.left, value)
+			}
 		}
 		.erase_line_complete {
-			self.terminal.erase_line(.complete, event.payload.flag)
+			if value is bool {
+				self.terminal.erase_line(.complete, value)
+			}
 		}
 		.erase_line_right_unless_pending_wrap {
-			self.terminal.erase_line(.right_unless_pending_wrap, event.payload.flag)
+			if value is bool {
+				self.terminal.erase_line(.right_unless_pending_wrap, value)
+			}
 		}
 		.delete_chars {
-			self.terminal.delete_chars(event.payload.count)
+			if value is usize {
+				self.terminal.delete_chars(value)
+			}
 		}
 		.erase_chars {
-			self.terminal.erase_chars(event.payload.count)
+			if value is usize {
+				self.terminal.erase_chars(value)
+			}
 		}
 		.insert_lines {
-			self.terminal.insert_lines(event.payload.count)
+			if value is usize {
+				self.terminal.insert_lines(value)
+			}
 		}
 		.insert_blanks {
-			self.terminal.insert_blanks(event.payload.count)
+			if value is usize {
+				self.terminal.insert_blanks(value)
+			}
 		}
 		.delete_lines {
-			self.terminal.delete_lines(event.payload.count)
+			if value is usize {
+				self.terminal.delete_lines(value)
+			}
 		}
 		.scroll_up {
-			self.terminal.scroll_up(event.payload.count)!
+			if value is usize {
+				self.terminal.scroll_up(value)!
+			}
 		}
 		.scroll_down {
-			self.terminal.scroll_down(event.payload.count)
+			if value is usize {
+				self.terminal.scroll_down(value)
+			}
 		}
 		.tab_clear_current {
 			self.terminal.tab_clear(.current)
@@ -298,32 +371,48 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) ! {
 			self.full_reset()!
 		}
 		.set_mode {
-			self.set_mode(event.payload.mode, true)!
+			if value is terminal.ActionMode {
+				self.set_mode(value.mode, true)!
+			}
 		}
 		.reset_mode {
-			self.set_mode(event.payload.mode, false)!
+			if value is terminal.ActionMode {
+				self.set_mode(value.mode, false)!
+			}
 		}
 		.save_mode {
-			self.terminal.modes.save(event.payload.mode)
+			if value is terminal.ActionMode {
+				self.terminal.modes.save(value.mode)
+			}
 		}
 		.restore_mode {
-			// For restore mode we have to restore but if we set it, we
-			// always have to call set_mode because setting some modes have
-			// side effects and we want to make sure we process those.
-			v := self.terminal.modes.restore(event.payload.mode)
-			self.set_mode(event.payload.mode, v)!
+			if value is terminal.ActionMode {
+				// For restore mode we have to restore but if we set it, we
+				// always have to call set_mode because setting some modes have
+				// side effects and we want to make sure we process those.
+				v := self.terminal.modes.restore(value.mode)
+				self.set_mode(value.mode, v)!
+			}
 		}
 		.request_mode {
-			self.request_mode(event.payload.mode)!
+			if value is terminal.ActionMode {
+				self.request_mode(value.mode)!
+			}
 		}
 		.request_mode_unknown {
-			self.request_mode_unknown(event.payload.raw_mode, event.payload.raw_ansi)!
+			if value is terminal.ActionRawMode {
+				self.request_mode_unknown(value.mode, value.ansi)!
+			}
 		}
 		.top_and_bottom_margin {
-			self.terminal.set_top_and_bottom_margin(event.payload.num, event.payload.num2)
+			if value is terminal.ActionMargin {
+				self.terminal.set_top_and_bottom_margin(value.top_left, value.bottom_right)
+			}
 		}
 		.left_and_right_margin {
-			self.terminal.set_left_and_right_margin(event.payload.num, event.payload.num2)
+			if value is terminal.ActionMargin {
+				self.terminal.set_left_and_right_margin(value.top_left, value.bottom_right)
+			}
 		}
 		.left_and_right_margin_ambiguous {
 			if self.terminal.modes.get(.enable_left_and_right_margin) {
@@ -339,7 +428,9 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) ! {
 			self.restore_cursor()!
 		}
 		.modify_key_format {
-			self.set_modify_key_format(event.payload.modify_key_format)!
+			if value is terminal.ModifyKeyFormat {
+				self.set_modify_key_format(value)!
+			}
 		}
 		.protected_mode_off {
 			self.terminal.set_protected_mode(.off)
@@ -351,104 +442,148 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) ! {
 			self.terminal.set_protected_mode(.dec)
 		}
 		.mouse_shift_capture {
-			self.terminal.flags.set_mouse_shift_capture(if event.payload.flag {
-				.true_
-			} else {
-				.false_
-			})
+			if value is bool {
+				self.terminal.flags.set_mouse_shift_capture(if value {
+					.true_
+				} else {
+					.false_
+				})
+			}
 		}
 		.size_report {
-			self.send_size_report(event.payload.size_report_style)
+			if value is terminal.SizeReportStyle {
+				self.send_size_report(value)
+			}
 		}
 		.xtversion {
 			self.report_xtversion()!
 		}
 		.device_attributes {
-			self.device_attributes(event.payload.device_attr)!
+			if value is terminal.DeviceAttributeReq {
+				self.device_attributes(value)!
+			}
 		}
 		.device_status {
-			// The stream dispatches with num=param and flag=question.
-			// Convert back to a DeviceStatusRequest and call device_status_report().
-			if req := terminal.req_from_int(event.payload.num, event.payload.flag) {
-				self.device_status_report(req)!
+			if value is terminal.ActionDeviceStatus {
+				self.device_status_report(value.request)!
 			}
 		}
 		.kitty_keyboard_query {
 			self.query_kitty_keyboard()!
 		}
 		.kitty_keyboard_push {
-			self.terminal.screens.active.kitty_keyboard.push(terminal.KeyFlags.from_int(event.payload.kitty_flags))
+			if value is terminal.ActionKittyKeyboardFlags {
+				self.terminal.screens.active.kitty_keyboard.push(value.flags)
+			}
 		}
 		.kitty_keyboard_pop {
-			self.terminal.screens.active.kitty_keyboard.pop(usize(event.payload.num))
+			if value is u16 {
+				self.terminal.screens.active.kitty_keyboard.pop(usize(value))
+			}
 		}
 		.kitty_keyboard_set {
-			self.terminal.screens.active.kitty_keyboard.set(.set_, terminal.KeyFlags.from_int(event.payload.kitty_flags))
+			if value is terminal.ActionKittyKeyboardFlags {
+				self.terminal.screens.active.kitty_keyboard.set(.set_, value.flags)
+			}
 		}
 		.kitty_keyboard_set_or {
-			self.terminal.screens.active.kitty_keyboard.set(.or_, terminal.KeyFlags.from_int(event.payload.kitty_flags))
+			if value is terminal.ActionKittyKeyboardFlags {
+				self.terminal.screens.active.kitty_keyboard.set(.or_, value.flags)
+			}
 		}
 		.kitty_keyboard_set_not {
-			self.terminal.screens.active.kitty_keyboard.set(.not_, terminal.KeyFlags.from_int(event.payload.kitty_flags))
+			if value is terminal.ActionKittyKeyboardFlags {
+				self.terminal.screens.active.kitty_keyboard.set(.not_, value.flags)
+			}
 		}
 		.kitty_color_report {
-			// Kitty color protocol: query/set/reset colors (OSC 21).
-			self.kitty_color_report(event.payload.kitty_color)!
+			if value is osc.KittyColorOSC {
+				// Kitty color protocol: query/set/reset colors (OSC 21).
+				self.kitty_color_report(value)!
+			}
 		}
 		.color_operation {
-			// OSC color operations: set/query/reset palette and dynamic colors.
-			self.color_operation(event.payload.color_operation.op, event.payload.color_operation.requests,
-				event.payload.color_operation.terminator)!
+			if value is terminal.ActionColorOperation {
+				// OSC color operations: set/query/reset palette and dynamic colors.
+				self.color_operation(value.op, value.requests,
+					value.terminator)!
+			}
 		}
 		.end_hyperlink {
 			self.end_hyperlink()!
 		}
 		.active_status_display {
-			self.terminal.status_display = event.payload.status_display
+			if value is terminal.StatusDisplay {
+				self.terminal.status_display = value
+			}
 		}
 		.decaln {
 			self.decaln()!
 		}
 		.window_title {
-			self.window_title(event.payload.str1)!
+			if value is terminal.ActionWindowTitle {
+				self.window_title(value.title)!
+			}
 		}
 		.report_pwd {
-			self.report_pwd(event.payload.str1)!
+			if value is terminal.ActionReportPwd {
+				self.report_pwd(value.url)!
+			}
 		}
 		.show_desktop_notification {
-			self.show_desktop_notification(event.payload.desktop_notification)!
+			if value is terminal.ActionShowDesktopNotification {
+				self.show_desktop_notification(value.title, value.body)!
+			}
 		}
 		.progress_report {
-			self.progress_report(event.payload.progress_report)
+			if value is osc.ProgressReport {
+				self.progress_report(value)
+			}
 		}
 		.start_hyperlink {
-			self.start_hyperlink(event.payload.hyperlink.uri, event.payload.hyperlink.id)!
+			if value is terminal.ActionStartHyperlink {
+				self.start_hyperlink(value.uri, value.id)!
+			}
 		}
 		.clipboard_contents {
-			self.clipboard_contents(event.payload.clipboard.kind, event.payload.clipboard.data)!
+			if value is terminal.ActionClipboardContents {
+				self.clipboard_contents(value.kind, value.data)!
+			}
 		}
 		.semantic_prompt {
-			self.semantic_prompt(event.payload.semantic_prompt)!
+			if value is osc.SemanticPrompt {
+				self.semantic_prompt(value)!
+			}
 		}
 		.mouse_shape {
-			self.set_mouse_shape(event.payload.mouse_shape_val)!
+			if value is terminal.MouseShape {
+				self.set_mouse_shape(value)!
+			}
 		}
 		.configure_charset {
-			self.terminal.configure_charset(event.payload.charset_slot, event.payload.charset_val)
+			if value is terminal.ActionConfigureCharset {
+				self.terminal.configure_charset(value.slot, value.charset)
+			}
 		}
 		.set_attribute {
-			sgr := event.payload.sgr
-			if sgr.kind == .unknown {
-				// Unknown/invalid SGR attributes aren't common in the wild
-			} else {
-				self.terminal.set_attribute(sgr) or {}
+			if value is terminal.SgrAttribute {
+				sgr := value
+				if sgr.kind == .unknown {
+					// Unknown/invalid SGR attributes aren't common in the wild
+				} else {
+					self.terminal.set_attribute(sgr) or {}
+				}
 			}
 		}
 		.dcs_hook {
-			self.dcs_hook(event.payload)!
+			if value is terminal.DCSAction {
+				self.dcs_hook(value)!
+			}
 		}
 		.dcs_put {
-			self.dcs_put(event.payload.byte_val)!
+			if value is u8 {
+				self.dcs_put(value)!
+			}
 		}
 		.dcs_unhook {
 			self.dcs_unhook()!
@@ -460,7 +595,9 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) ! {
 			self.apc_end()!
 		}
 		.apc_put {
-			self.apc.feed(event.payload.byte_val)
+			if value is u8 {
+				self.apc.feed(value)
+			}
 		}
 
 		// Unimplemented
@@ -472,11 +609,11 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) ! {
 // DCS handlers
 // ============================================================
 
-pub fn (mut self StreamHandler) dcs_hook(payload terminal.ActionPayload) ! {
+pub fn (mut self StreamHandler) dcs_hook(dcs terminal.DCSAction) ! {
 	mut cmd := self.dcs.hook(terminal.DcsParams{
-		intermediates: payload.dcs_intermediates.bytestr()
-		params: payload.dcs_params.clone()
-		final_byte: payload.dcs_final
+		intermediates: dcs.intermediates.bytestr()
+		params: dcs.params.clone()
+		final_byte: dcs.final_byte
 	}) or { return }
 	defer { cmd.deinit() }
 	self.dcs_command(mut cmd)!
@@ -1551,28 +1688,28 @@ fn hex4(v u8) string {
 	return '${digits[int((scaled >> 12) & 0x0F)]:c}${digits[int((scaled >> 8) & 0x0F)]:c}${digits[int((scaled >> 4) & 0x0F)]:c}${digits[int(scaled & 0x0F)]:c}'
 }
 
-fn (mut self StreamHandler) show_desktop_notification(notification osc.DesktopNotification) ! {
+fn (mut self StreamHandler) show_desktop_notification(title string, body string) ! {
 	mut msg := apprt.SurfaceMessage{
 		kind: .desktop_notification
 	}
 
-	title_len := if notification.title.len < msg.notification_title.len {
-		notification.title.len
+	title_len := if title.len < msg.notification_title.len {
+		title.len
 	} else {
 		msg.notification_title.len - 1
 	}
 	for i in 0 .. title_len {
-		msg.notification_title[i] = notification.title[i]
+		msg.notification_title[i] = title[i]
 	}
 	msg.notification_title[title_len] = 0
 
-	body_len := if notification.body.len < msg.notification_body.len {
-		notification.body.len
+	body_len := if body.len < msg.notification_body.len {
+		body.len
 	} else {
 		msg.notification_body.len - 1
 	}
 	for i in 0 .. body_len {
-		msg.notification_body[i] = notification.body[i]
+		msg.notification_body[i] = body[i]
 	}
 	msg.notification_body[body_len] = 0
 

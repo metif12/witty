@@ -2,6 +2,1151 @@ module terminal
 
 import osc
 
+// Tests for the Stream VT escape sequence processor.
+// Translated from Ghostty's src/terminal/stream.zig test suite. Each source
+// test declares its own handler struct `H`; V has no function-local types,
+// so each one is declared right before its test.
+
+struct StreamPrintH {
+mut:
+	c ?u32 = 0
+}
+
+pub fn (mut self StreamPrintH) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.print {
+			if value is ActionPrint {
+				self.c = value.cp
+			}
+		}
+		else {}
+	}
+}
+
+pub fn (mut self StreamPrintH) deinit() {}
+
+fn test_stream_print() ! {
+	mut s := Stream.init[StreamPrintH](StreamPrintH{})
+	s.next(`x`)!
+	assert s.handler.c? == u32(`x`)
+}
+
+struct SimdPrintInvalidUtf8H {
+mut:
+	c ?u32 = 0
+}
+
+pub fn (mut self SimdPrintInvalidUtf8H) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.print {
+			if value is ActionPrint {
+				self.c = value.cp
+			}
+		}
+		else {}
+	}
+}
+
+pub fn (mut self SimdPrintInvalidUtf8H) deinit() {}
+
+fn test_simd_print_invalid_utf_8() ! {
+	mut s := Stream.init[SimdPrintInvalidUtf8H](SimdPrintInvalidUtf8H{})
+	s.next_slice([u8(0xFF)])!
+	assert s.handler.c? == u32(0xFFFD)
+}
+
+struct SimdCompleteIncompleteUtf8H {
+mut:
+	c ?u32
+}
+
+pub fn (mut self SimdCompleteIncompleteUtf8H) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.print {
+			if value is ActionPrint {
+				self.c = value.cp
+			}
+		}
+		else {}
+	}
+}
+
+pub fn (mut self SimdCompleteIncompleteUtf8H) deinit() {}
+
+fn test_simd_complete_incomplete_utf_8() ! {
+	mut s := Stream.init[SimdCompleteIncompleteUtf8H](SimdCompleteIncompleteUtf8H{})
+	s.next_slice([u8(0xE0)])! // 3 byte
+	assert s.handler.c == none
+	s.next_slice([u8(0xA0)])! // still incomplete
+	assert s.handler.c == none
+	s.next_slice([u8(0x80)])!
+	assert s.handler.c? == u32(0x800)
+}
+
+struct StreamCursorRightH {
+mut:
+	amount u16
+}
+
+pub fn (mut self StreamCursorRightH) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.cursor_right {
+			if value is ActionCursorMovement {
+				self.amount = value.value
+			}
+		}
+		else {}
+	}
+}
+
+pub fn (mut self StreamCursorRightH) deinit() {}
+
+fn test_stream_cursor_right_cuf() ! {
+	mut s := Stream.init[StreamCursorRightH](StreamCursorRightH{})
+	s.next_slice('\x1b[C'.bytes())!
+	assert s.handler.amount == u16(1)
+
+	s.next_slice('\x1b[5C'.bytes())!
+	assert s.handler.amount == u16(5)
+
+	s.handler.amount = 0
+	s.next_slice('\x1b[5;4C'.bytes())!
+	assert s.handler.amount == u16(0)
+
+	s.handler.amount = 0
+	s.next_slice('\x1b[?3C'.bytes())!
+	assert s.handler.amount == u16(0)
+}
+
+struct StreamDecSetModeH {
+mut:
+	mode Mode = unsafe { Mode(1) }
+}
+
+pub fn (mut self StreamDecSetModeH) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.set_mode {
+			if value is ActionMode {
+				self.mode = value.mode
+			}
+		}
+		.reset_mode {
+			self.mode = unsafe { Mode(1) }
+		}
+		else {}
+	}
+}
+
+pub fn (mut self StreamDecSetModeH) deinit() {}
+
+fn test_stream_dec_set_mode_sm_and_reset_mode_rm() ! {
+	mut s := Stream.init[StreamDecSetModeH](StreamDecSetModeH{})
+	s.next_slice('\x1b[?6h'.bytes())!
+	assert s.handler.mode == Mode.origin
+
+	s.next_slice('\x1b[?6l'.bytes())!
+	assert s.handler.mode == unsafe { Mode(1) }
+
+	s.handler.mode = unsafe { Mode(1) }
+	s.next_slice('\x1b[6 h'.bytes())!
+	assert s.handler.mode == unsafe { Mode(1) }
+}
+
+struct StreamAnsiSetModeH {
+mut:
+	mode ?Mode
+}
+
+pub fn (mut self StreamAnsiSetModeH) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.set_mode {
+			if value is ActionMode {
+				self.mode = value.mode
+			}
+		}
+		.reset_mode {
+			self.mode = none
+		}
+		else {}
+	}
+}
+
+pub fn (mut self StreamAnsiSetModeH) deinit() {}
+
+fn test_stream_ansi_set_mode_sm_and_reset_mode_rm() ! {
+	mut s := Stream.init[StreamAnsiSetModeH](StreamAnsiSetModeH{})
+	s.next_slice('\x1b[4h'.bytes())!
+	assert s.handler.mode? == Mode.insert
+
+	s.next_slice('\x1b[4l'.bytes())!
+	assert s.handler.mode == none
+
+	s.handler.mode = none
+	s.next_slice('\x1b[>5h'.bytes())!
+	assert s.handler.mode == none
+}
+
+struct StreamAnsiSetModeUnknownH {
+mut:
+	mode ?Mode
+}
+
+pub fn (mut self StreamAnsiSetModeUnknownH) set_mode(mode Mode, v bool) ! {
+	self.mode = none
+	if v {
+		self.mode = mode
+	}
+}
+
+pub fn (mut self StreamAnsiSetModeUnknownH) vt(action ActionKey, value ActionValue) ! {
+}
+
+pub fn (mut self StreamAnsiSetModeUnknownH) deinit() {}
+
+fn test_stream_ansi_set_mode_sm_and_reset_mode_rm_with_unknown_value() ! {
+	mut s := Stream.init[StreamAnsiSetModeUnknownH](StreamAnsiSetModeUnknownH{})
+	s.next_slice('\x1b[6h'.bytes())!
+	assert s.handler.mode == none
+
+	s.next_slice('\x1b[6l'.bytes())!
+	assert s.handler.mode == none
+}
+
+struct StreamRestoreModeH {
+mut:
+	called bool
+}
+
+pub fn (mut self StreamRestoreModeH) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.top_and_bottom_margin {
+			self.called = true
+		}
+		else {}
+	}
+}
+
+pub fn (mut self StreamRestoreModeH) deinit() {}
+
+fn test_stream_restore_mode() ! {
+	mut s := Stream.init[StreamRestoreModeH](StreamRestoreModeH{})
+	for c in '\x1b[?42r' {
+		s.next(c)!
+	}
+	assert !s.handler.called
+}
+
+struct StreamPopKittyKeyboardH {
+mut:
+	n u16
+}
+
+pub fn (mut self StreamPopKittyKeyboardH) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.kitty_keyboard_pop {
+			if value is u16 {
+				self.n = value
+			}
+		}
+		else {}
+	}
+}
+
+pub fn (mut self StreamPopKittyKeyboardH) deinit() {}
+
+fn test_stream_pop_kitty_keyboard_with_no_params_defaults_to_1() ! {
+	mut s := Stream.init[StreamPopKittyKeyboardH](StreamPopKittyKeyboardH{})
+	for c in '\x1b[<u' {
+		s.next(c)!
+	}
+	assert s.handler.n == u16(1)
+}
+
+struct StreamDecscaH {
+mut:
+	v ?ProtectedMode
+}
+
+pub fn (mut self StreamDecscaH) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.protected_mode_off {
+			self.v = ProtectedMode.off
+		}
+		.protected_mode_iso {
+			self.v = ProtectedMode.iso
+		}
+		.protected_mode_dec {
+			self.v = ProtectedMode.dec
+		}
+		else {}
+	}
+}
+
+pub fn (mut self StreamDecscaH) deinit() {}
+
+fn test_stream_decsca() ! {
+	mut s := Stream.init[StreamDecscaH](StreamDecscaH{})
+	{
+		for c in '\x1b["q' {
+			s.next(c)!
+		}
+		assert s.handler.v? == ProtectedMode.off
+	}
+	{
+		for c in '\x1b[0"q' {
+			s.next(c)!
+		}
+		assert s.handler.v? == ProtectedMode.off
+	}
+	{
+		for c in '\x1b[2"q' {
+			s.next(c)!
+		}
+		assert s.handler.v? == ProtectedMode.off
+	}
+	{
+		for c in '\x1b[1"q' {
+			s.next(c)!
+		}
+		assert s.handler.v? == ProtectedMode.dec
+	}
+}
+
+struct StreamDecedDecsedH {
+mut:
+	mode      ?EraseDisplay
+	protected ?bool
+}
+
+pub fn (mut self StreamDecedDecsedH) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.erase_display_below {
+			self.mode = EraseDisplay.below
+			if value is bool {
+				self.protected = value
+			}
+		}
+		.erase_display_above {
+			self.mode = EraseDisplay.above
+			if value is bool {
+				self.protected = value
+			}
+		}
+		.erase_display_complete {
+			self.mode = EraseDisplay.complete
+			if value is bool {
+				self.protected = value
+			}
+		}
+		.erase_display_scrollback {
+			self.mode = EraseDisplay.scrollback
+			if value is bool {
+				self.protected = value
+			}
+		}
+		.erase_display_scroll_complete {
+			self.mode = EraseDisplay.scroll_complete
+			if value is bool {
+				self.protected = value
+			}
+		}
+		else {}
+	}
+}
+
+pub fn (mut self StreamDecedDecsedH) deinit() {}
+
+fn test_stream_deced_decsed() ! {
+	mut s := Stream.init[StreamDecedDecsedH](StreamDecedDecsedH{})
+	{
+		for c in '\x1b[?J' {
+			s.next(c)!
+		}
+		assert s.handler.mode? == EraseDisplay.below
+		assert s.handler.protected?
+	}
+	{
+		for c in '\x1b[?0J' {
+			s.next(c)!
+		}
+		assert s.handler.mode? == EraseDisplay.below
+		assert s.handler.protected?
+	}
+	{
+		for c in '\x1b[?1J' {
+			s.next(c)!
+		}
+		assert s.handler.mode? == EraseDisplay.above
+		assert s.handler.protected?
+	}
+	{
+		for c in '\x1b[?2J' {
+			s.next(c)!
+		}
+		assert s.handler.mode? == EraseDisplay.complete
+		assert s.handler.protected?
+	}
+	{
+		for c in '\x1b[?3J' {
+			s.next(c)!
+		}
+		assert s.handler.mode? == EraseDisplay.scrollback
+		assert s.handler.protected?
+	}
+
+	{
+		for c in '\x1b[J' {
+			s.next(c)!
+		}
+		assert s.handler.mode? == EraseDisplay.below
+		assert !s.handler.protected?
+	}
+	{
+		for c in '\x1b[0J' {
+			s.next(c)!
+		}
+		assert s.handler.mode? == EraseDisplay.below
+		assert !s.handler.protected?
+	}
+	{
+		for c in '\x1b[1J' {
+			s.next(c)!
+		}
+		assert s.handler.mode? == EraseDisplay.above
+		assert !s.handler.protected?
+	}
+	{
+		for c in '\x1b[2J' {
+			s.next(c)!
+		}
+		assert s.handler.mode? == EraseDisplay.complete
+		assert !s.handler.protected?
+	}
+	{
+		for c in '\x1b[3J' {
+			s.next(c)!
+		}
+		assert s.handler.mode? == EraseDisplay.scrollback
+		assert !s.handler.protected?
+	}
+	{
+		// Invalid and ignored by the handler
+		for c in '\x1b[>0J' {
+			s.next(c)!
+		}
+		assert s.handler.mode? == EraseDisplay.scrollback
+		assert !s.handler.protected?
+	}
+}
+
+struct StreamDecelDecselH {
+mut:
+	mode      ?EraseLine
+	protected ?bool
+}
+
+pub fn (mut self StreamDecelDecselH) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.erase_line_right {
+			self.mode = EraseLine.right
+			if value is bool {
+				self.protected = value
+			}
+		}
+		.erase_line_left {
+			self.mode = EraseLine.left
+			if value is bool {
+				self.protected = value
+			}
+		}
+		.erase_line_complete {
+			self.mode = EraseLine.complete
+			if value is bool {
+				self.protected = value
+			}
+		}
+		.erase_line_right_unless_pending_wrap {
+			self.mode = EraseLine.right_unless_pending_wrap
+			if value is bool {
+				self.protected = value
+			}
+		}
+		else {}
+	}
+}
+
+pub fn (mut self StreamDecelDecselH) deinit() {}
+
+fn test_stream_decel_decsel() ! {
+	mut s := Stream.init[StreamDecelDecselH](StreamDecelDecselH{})
+	{
+		for c in '\x1b[?K' {
+			s.next(c)!
+		}
+		assert s.handler.mode? == EraseLine.right
+		assert s.handler.protected?
+	}
+	{
+		for c in '\x1b[?0K' {
+			s.next(c)!
+		}
+		assert s.handler.mode? == EraseLine.right
+		assert s.handler.protected?
+	}
+	{
+		for c in '\x1b[?1K' {
+			s.next(c)!
+		}
+		assert s.handler.mode? == EraseLine.left
+		assert s.handler.protected?
+	}
+	{
+		for c in '\x1b[?2K' {
+			s.next(c)!
+		}
+		assert s.handler.mode? == EraseLine.complete
+		assert s.handler.protected?
+	}
+
+	{
+		for c in '\x1b[K' {
+			s.next(c)!
+		}
+		assert s.handler.mode? == EraseLine.right
+		assert !s.handler.protected?
+	}
+	{
+		for c in '\x1b[0K' {
+			s.next(c)!
+		}
+		assert s.handler.mode? == EraseLine.right
+		assert !s.handler.protected?
+	}
+	{
+		for c in '\x1b[1K' {
+			s.next(c)!
+		}
+		assert s.handler.mode? == EraseLine.left
+		assert !s.handler.protected?
+	}
+	{
+		for c in '\x1b[2K' {
+			s.next(c)!
+		}
+		assert s.handler.mode? == EraseLine.complete
+		assert !s.handler.protected?
+	}
+	{
+		// Invalid and ignored by the handler
+		for c in '\x1b[<1K' {
+			s.next(c)!
+		}
+		assert s.handler.mode? == EraseLine.complete
+		assert !s.handler.protected?
+	}
+}
+
+struct StreamDecscusrH {
+mut:
+	style ?AnsiCursorStyle
+}
+
+pub fn (mut self StreamDecscusrH) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.cursor_style {
+			if value is AnsiCursorStyle {
+				self.style = value
+			}
+		}
+		else {}
+	}
+}
+
+pub fn (mut self StreamDecscusrH) deinit() {}
+
+fn test_stream_decscusr() ! {
+	mut s := Stream.init[StreamDecscusrH](StreamDecscusrH{})
+	s.next_slice('\x1b[ q'.bytes())!
+	assert s.handler.style? == .default_
+
+	s.next_slice('\x1b[1 q'.bytes())!
+	assert s.handler.style? == .blinking_block
+
+	// Invalid and ignored by the handler
+	s.next_slice('\x1b[?0 q'.bytes())!
+	assert s.handler.style? == .blinking_block
+}
+
+struct StreamDecscusrWithoutSpaceH {
+mut:
+	style ?AnsiCursorStyle
+}
+
+pub fn (mut self StreamDecscusrWithoutSpaceH) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.cursor_style {
+			if value is AnsiCursorStyle {
+				self.style = value
+			}
+		}
+		else {}
+	}
+}
+
+pub fn (mut self StreamDecscusrWithoutSpaceH) deinit() {}
+
+fn test_stream_decscusr_without_space() ! {
+	mut s := Stream.init[StreamDecscusrWithoutSpaceH](StreamDecscusrWithoutSpaceH{})
+	s.next_slice('\x1b[q'.bytes())!
+	assert s.handler.style == none
+
+	s.next_slice('\x1b[1q'.bytes())!
+	assert s.handler.style == none
+}
+
+struct StreamXtshiftescapeH {
+mut:
+	escape ?bool
+}
+
+pub fn (mut self StreamXtshiftescapeH) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.mouse_shift_capture {
+			if value is bool {
+				self.escape = value
+			}
+		}
+		else {}
+	}
+}
+
+pub fn (mut self StreamXtshiftescapeH) deinit() {}
+
+fn test_stream_xtshiftescape() ! {
+	mut s := Stream.init[StreamXtshiftescapeH](StreamXtshiftescapeH{})
+	s.next_slice('\x1b[>2s'.bytes())!
+	assert s.handler.escape == none
+
+	s.next_slice('\x1b[>s'.bytes())!
+	assert s.handler.escape? == false
+
+	s.next_slice('\x1b[>0s'.bytes())!
+	assert s.handler.escape? == false
+
+	s.next_slice('\x1b[>1s'.bytes())!
+	assert s.handler.escape? == true
+
+	// Invalid and ignored by the handler
+	s.next_slice('\x1b[1 s'.bytes())!
+	assert s.handler.escape? == true
+}
+
+struct StreamChangeWindowTitleH {
+mut:
+	seen bool
+}
+
+pub fn (mut self StreamChangeWindowTitleH) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.window_title {
+			self.seen = true
+		}
+		else {}
+	}
+}
+
+pub fn (mut self StreamChangeWindowTitleH) deinit() {}
+
+fn test_stream_change_window_title_with_invalid_utf_8() ! {
+	{
+		mut s := Stream.init[StreamChangeWindowTitleH](StreamChangeWindowTitleH{})
+		s.next_slice('\x1b]2;abc\x1b\\'.bytes())!
+		assert s.handler.seen
+	}
+
+	{
+		mut s := Stream.init[StreamChangeWindowTitleH](StreamChangeWindowTitleH{})
+		s.next_slice('\x1b]2;abc\xc0\x1b\\'.bytes())!
+		assert !s.handler.seen
+	}
+}
+
+struct StreamInsertCharactersH {
+mut:
+	called bool
+}
+
+pub fn (mut self StreamInsertCharactersH) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.insert_blanks {
+			self.called = true
+		}
+		else {}
+	}
+}
+
+pub fn (mut self StreamInsertCharactersH) deinit() {}
+
+fn test_stream_insert_characters() ! {
+	mut s := Stream.init[StreamInsertCharactersH](StreamInsertCharactersH{})
+	for c in '\x1b[42@' {
+		s.next(c)!
+	}
+	assert s.handler.called
+
+	s.handler.called = false
+	for c in '\x1b[?42@' {
+		s.next(c)!
+	}
+	assert !s.handler.called
+}
+
+struct StreamScoscH {
+mut:
+	called bool
+}
+
+pub fn (mut self StreamScoscH) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.left_and_right_margin {
+			panic('bad')
+		}
+		.left_and_right_margin_ambiguous {
+			self.called = true
+		}
+		else {}
+	}
+}
+
+pub fn (mut self StreamScoscH) deinit() {}
+
+fn test_stream_scosc() ! {
+	mut s := Stream.init[StreamScoscH](StreamScoscH{})
+	for c in '\x1b[s' {
+		s.next(c)!
+	}
+	assert s.handler.called
+}
+
+struct StreamScorcH {
+mut:
+	called bool
+}
+
+pub fn (mut self StreamScorcH) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.restore_cursor {
+			self.called = true
+		}
+		else {}
+	}
+}
+
+pub fn (mut self StreamScorcH) deinit() {}
+
+fn test_stream_scorc() ! {
+	mut s := Stream.init[StreamScorcH](StreamScorcH{})
+	for c in '\x1b[u' {
+		s.next(c)!
+	}
+	assert s.handler.called
+}
+
+struct StreamTooManyCsiParamsH {}
+
+pub fn (mut self StreamTooManyCsiParamsH) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.cursor_right {
+			panic('unreachable')
+		}
+		else {}
+	}
+}
+
+pub fn (mut self StreamTooManyCsiParamsH) deinit() {}
+
+fn test_stream_too_many_csi_params() ! {
+	mut s := Stream.init[StreamTooManyCsiParamsH](StreamTooManyCsiParamsH{})
+	s.next_slice('\x1b[1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1C'.bytes())!
+}
+
+struct StreamCsiParamTooLongH {}
+
+pub fn (mut self StreamCsiParamTooLongH) vt(action ActionKey, value ActionValue) ! {
+}
+
+pub fn (mut self StreamCsiParamTooLongH) deinit() {}
+
+fn test_stream_csi_param_too_long() ! {
+	mut s := Stream.init[StreamCsiParamTooLongH](StreamCsiParamTooLongH{})
+	s.next_slice('\x1b[1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111C'.bytes())!
+}
+
+struct StreamSendReportCsiTH {
+mut:
+	style ?SizeReportStyle
+}
+
+pub fn (mut self StreamSendReportCsiTH) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.size_report {
+			if value is SizeReportStyle {
+				self.style = value
+			}
+		}
+		else {}
+	}
+}
+
+pub fn (mut self StreamSendReportCsiTH) deinit() {}
+
+fn test_stream_send_report_with_csi_t() ! {
+	mut s := Stream.init[StreamSendReportCsiTH](StreamSendReportCsiTH{})
+
+	s.next_slice('\x1b[14t'.bytes())!
+	assert s.handler.style? == SizeReportStyle.csi_14_t
+
+	s.next_slice('\x1b[16t'.bytes())!
+	assert s.handler.style? == SizeReportStyle.csi_16_t
+
+	s.next_slice('\x1b[18t'.bytes())!
+	assert s.handler.style? == SizeReportStyle.csi_18_t
+
+	s.next_slice('\x1b[21t'.bytes())!
+	assert s.handler.style? == SizeReportStyle.csi_21_t
+}
+
+struct StreamInvalidCsiTH {
+mut:
+	style ?SizeReportStyle
+}
+
+pub fn (mut self StreamInvalidCsiTH) send_size_report(style SizeReportStyle) {
+	self.style = style
+}
+
+pub fn (mut self StreamInvalidCsiTH) vt(action ActionKey, value ActionValue) ! {
+}
+
+pub fn (mut self StreamInvalidCsiTH) deinit() {}
+
+fn test_stream_invalid_csi_t() ! {
+	mut s := Stream.init[StreamInvalidCsiTH](StreamInvalidCsiTH{})
+
+	s.next_slice('\x1b[19t'.bytes())!
+	assert s.handler.style == none
+}
+
+struct StreamCsiTPushTitleH {
+mut:
+	index ?u16
+}
+
+pub fn (mut self StreamCsiTPushTitleH) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.title_push {
+			if value is u16 {
+				self.index = value
+			}
+		}
+		else {}
+	}
+}
+
+pub fn (mut self StreamCsiTPushTitleH) deinit() {}
+
+fn test_stream_csi_t_push_title() ! {
+	mut s := Stream.init[StreamCsiTPushTitleH](StreamCsiTPushTitleH{})
+
+	s.next_slice('\x1b[22;0t'.bytes())!
+	assert s.handler.index? == u16(0)
+}
+
+struct StreamCsiTPushTitleWithExplicitWindowH {
+mut:
+	index ?u16
+}
+
+pub fn (mut self StreamCsiTPushTitleWithExplicitWindowH) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.title_push {
+			if value is u16 {
+				self.index = value
+			}
+		}
+		else {}
+	}
+}
+
+pub fn (mut self StreamCsiTPushTitleWithExplicitWindowH) deinit() {}
+
+fn test_stream_csi_t_push_title_with_explicit_window() ! {
+	mut s := Stream.init[StreamCsiTPushTitleWithExplicitWindowH](StreamCsiTPushTitleWithExplicitWindowH{})
+
+	s.next_slice('\x1b[22;2t'.bytes())!
+	assert s.handler.index? == u16(0)
+}
+
+struct StreamCsiTPushTitleWithExplicitIconH {
+mut:
+	index ?u16
+}
+
+pub fn (mut self StreamCsiTPushTitleWithExplicitIconH) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.title_push {
+			if value is u16 {
+				self.index = value
+			}
+		}
+		else {}
+	}
+}
+
+pub fn (mut self StreamCsiTPushTitleWithExplicitIconH) deinit() {}
+
+fn test_stream_csi_t_push_title_with_explicit_icon() ! {
+	mut s := Stream.init[StreamCsiTPushTitleWithExplicitIconH](StreamCsiTPushTitleWithExplicitIconH{})
+
+	s.next_slice('\x1b[22;1t'.bytes())!
+	assert s.handler.index == none
+}
+
+struct StreamCsiTPushTitleWithIndexH {
+mut:
+	index ?u16
+}
+
+pub fn (mut self StreamCsiTPushTitleWithIndexH) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.title_push {
+			if value is u16 {
+				self.index = value
+			}
+		}
+		else {}
+	}
+}
+
+pub fn (mut self StreamCsiTPushTitleWithIndexH) deinit() {}
+
+fn test_stream_csi_t_push_title_with_index() ! {
+	mut s := Stream.init[StreamCsiTPushTitleWithIndexH](StreamCsiTPushTitleWithIndexH{})
+
+	s.next_slice('\x1b[22;0;5t'.bytes())!
+	assert s.handler.index? == u16(5)
+}
+
+struct StreamCsiTPopTitleH {
+mut:
+	index ?u16
+}
+
+pub fn (mut self StreamCsiTPopTitleH) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.title_pop {
+			if value is u16 {
+				self.index = value
+			}
+		}
+		else {}
+	}
+}
+
+pub fn (mut self StreamCsiTPopTitleH) deinit() {}
+
+fn test_stream_csi_t_pop_title() ! {
+	mut s := Stream.init[StreamCsiTPopTitleH](StreamCsiTPopTitleH{})
+
+	s.next_slice('\x1b[23;0t'.bytes())!
+	assert s.handler.index? == u16(0)
+}
+
+struct StreamCsiTPopTitleWithExplicitWindowH {
+mut:
+	index ?u16
+}
+
+pub fn (mut self StreamCsiTPopTitleWithExplicitWindowH) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.title_pop {
+			if value is u16 {
+				self.index = value
+			}
+		}
+		else {}
+	}
+}
+
+pub fn (mut self StreamCsiTPopTitleWithExplicitWindowH) deinit() {}
+
+fn test_stream_csi_t_pop_title_with_explicit_window() ! {
+	mut s := Stream.init[StreamCsiTPopTitleWithExplicitWindowH](StreamCsiTPopTitleWithExplicitWindowH{})
+
+	s.next_slice('\x1b[23;2t'.bytes())!
+	assert s.handler.index? == u16(0)
+}
+
+struct StreamCsiTPopTitleWithExplicitIconH {
+mut:
+	index ?u16
+}
+
+pub fn (mut self StreamCsiTPopTitleWithExplicitIconH) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.title_pop {
+			if value is u16 {
+				self.index = value
+			}
+		}
+		else {}
+	}
+}
+
+pub fn (mut self StreamCsiTPopTitleWithExplicitIconH) deinit() {}
+
+fn test_stream_csi_t_pop_title_with_explicit_icon() ! {
+	mut s := Stream.init[StreamCsiTPopTitleWithExplicitIconH](StreamCsiTPopTitleWithExplicitIconH{})
+
+	s.next_slice('\x1b[23;1t'.bytes())!
+	assert s.handler.index == none
+}
+
+struct StreamCsiTPopTitleWithIndexH {
+mut:
+	index ?u16
+}
+
+pub fn (mut self StreamCsiTPopTitleWithIndexH) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.title_pop {
+			if value is u16 {
+				self.index = value
+			}
+		}
+		else {}
+	}
+}
+
+pub fn (mut self StreamCsiTPopTitleWithIndexH) deinit() {}
+
+fn test_stream_csi_t_pop_title_with_index() ! {
+	mut s := Stream.init[StreamCsiTPopTitleWithIndexH](StreamCsiTPopTitleWithIndexH{})
+
+	s.next_slice('\x1b[23;0;5t'.bytes())!
+	assert s.handler.index? == u16(5)
+}
+
+struct StreamCsiWClearTabStopsH {
+mut:
+	action ?ActionKey
+}
+
+pub fn (mut self StreamCsiWClearTabStopsH) vt(action ActionKey, value ActionValue) ! {
+	self.action = action
+}
+
+pub fn (mut self StreamCsiWClearTabStopsH) deinit() {}
+
+fn test_stream_csi_w_clear_tab_stops() ! {
+	mut s := Stream.init[StreamCsiWClearTabStopsH](StreamCsiWClearTabStopsH{})
+
+	s.next_slice('\x1b[2W'.bytes())!
+	assert s.handler.action? == ActionKey.tab_clear_current
+
+	s.next_slice('\x1b[5W'.bytes())!
+	assert s.handler.action? == ActionKey.tab_clear_all
+}
+
+struct StreamCsiWTabSetH {
+mut:
+	action ?ActionKey
+}
+
+pub fn (mut self StreamCsiWTabSetH) vt(action ActionKey, value ActionValue) ! {
+	self.action = action
+}
+
+pub fn (mut self StreamCsiWTabSetH) deinit() {}
+
+fn test_stream_csi_w_tab_set() ! {
+	mut s := Stream.init[StreamCsiWTabSetH](StreamCsiWTabSetH{})
+
+	s.next_slice('\x1b[W'.bytes())!
+	assert s.handler.action? == ActionKey.tab_set
+
+	s.handler.action = none
+	s.next_slice('\x1b[0W'.bytes())!
+	assert s.handler.action? == ActionKey.tab_set
+
+	s.handler.action = none
+	s.next_slice('\x1b[>W'.bytes())!
+	assert s.handler.action == none
+
+	s.handler.action = none
+	s.next_slice('\x1b[99W'.bytes())!
+	assert s.handler.action == none
+}
+
+struct StreamCsiWResetTabStopsH {
+mut:
+	action ?ActionKey
+}
+
+pub fn (mut self StreamCsiWResetTabStopsH) vt(action ActionKey, value ActionValue) ! {
+	self.action = action
+}
+
+pub fn (mut self StreamCsiWResetTabStopsH) deinit() {}
+
+fn test_stream_csi_w_reset_tab_stops() ! {
+	mut s := Stream.init[StreamCsiWResetTabStopsH](StreamCsiWResetTabStopsH{})
+
+	s.next_slice('\x1b[?2W'.bytes())!
+	assert s.handler.action == none
+
+	s.next_slice('\x1b[?5W'.bytes())!
+	assert s.handler.action? == ActionKey.tab_reset
+
+	// Invalid and ignored by the handler
+	s.handler.action = none
+	s.next_slice('\x1b[?1;2;3W'.bytes())!
+	assert s.handler.action == none
+}
+
+struct StreamSgrUnderlineColorH {
+mut:
+	attrs  ?SgrAttribute
+	called bool
+}
+
+pub fn (mut self StreamSgrUnderlineColorH) vt(action ActionKey, value ActionValue) ! {
+	match action {
+		.set_attribute {
+			if value is SgrAttribute {
+				self.attrs = value
+			}
+			self.called = true
+		}
+		else {}
+	}
+}
+
+pub fn (mut self StreamSgrUnderlineColorH) deinit() {}
+
+fn test_stream_sgr_with_17_parameters_for_underline_color() ! {
+	mut s := Stream.init[StreamSgrUnderlineColorH](StreamSgrUnderlineColorH{})
+
+	// Kakoune-style SGR with underline color as 17th parameter
+	// This tests the fix where param 17 was being dropped
+	s.next_slice('\x1b[4:3;38;2;51;51;51;48;2;170;170;170;58;2;255;97;136;0m'.bytes())!
+	assert s.handler.called
+}
+
+// ============================================================
+// Witty-only tests
+// ============================================================
+
 fn test_stream_action_key_c_abi_layout_and_ordinals() {
 	assert sizeof(ActionKey) == 4
 	mut action_count := 0
@@ -14,861 +1159,325 @@ fn test_stream_action_key_c_abi_layout_and_ordinals() {
 	assert i32(ActionKey.semantic_prompt) == 92
 }
 
-// Tests for the Stream VT escape sequence processor.
-// Translated from Ghostty's stream.zig test suite.
+// ActionRecorder records every action the stream dispatches, in order.
+// Values that view parser storage are only valid until the next input.
+struct ActionRecorder {
+mut:
+	actions []Action
+}
 
-// ============================================================
-// Test helpers
-// ============================================================
+pub fn (mut self ActionRecorder) vt(action ActionKey, value ActionValue) ! {
+	self.actions << Action{
+		key:   action
+		value: value
+	}
+}
 
-// has_event checks if any event with the given key exists.
-fn has_event(events []StreamEvent, key ActionKey) bool {
-	for e in events {
-		if e.key == key {
+pub fn (mut self ActionRecorder) deinit() {}
+
+fn (self ActionRecorder) has(key ActionKey) bool {
+	for a in self.actions {
+		if a.key == key {
 			return true
 		}
 	}
 	return false
 }
 
-// get_last_event returns the last event with the given key.
-// Caller should check has_event() first.
-fn get_last_event(events []StreamEvent, key ActionKey) StreamEvent {
-	mut result := StreamEvent{}
-	for e in events {
-		if e.key == key {
-			result = e
+// last returns the value of the last recorded action with the given key.
+fn (self ActionRecorder) last(key ActionKey) ?ActionValue {
+	for i := self.actions.len - 1; i >= 0; i-- {
+		if self.actions[i].key == key {
+			return self.actions[i].value
 		}
 	}
-	return result
+	return none
 }
 
-fn test_action_payload_preserves_source_usize_counts() {
-	count := usize(70_000)
-	payload := ActionPayload{ count: count }
-	assert payload.count == count
-}
+// The source's Action.print_repeat field is a usize count, which is a
+// different ActionValue variant than the u16 counts of other actions.
+fn test_stream_print_repeat_carries_source_usize_count() ! {
+	mut s := Stream.init[ActionRecorder](ActionRecorder{})
+	defer { s.deinit() }
 
-// ============================================================
-// Tests
-// ============================================================
-
-// Test that a simple ASCII character produces a print event.
-fn test_stream_print() {
-	mut s := Stream.init()
-	s.next_slice('x'.bytes())
-	assert s.events.len == 1
-	assert s.events[0].key == .print
-	assert s.events[0].payload.cp == u32(`x`)
-	assert s.raw_events.len == 0
-}
-
-// The inspector slow path consumes every parser action alongside the semantic
-// stream, including actions whose terminal handlers intentionally do nothing.
-fn test_stream_collects_raw_parser_actions() {
-	mut s := Stream.init()
-	s.capture_raw = true
-	defer {
-		s.deinit()
+	s.next_slice('x\x1b[65535b'.bytes())!
+	count := s.handler.last(.print_repeat)?
+	assert count is usize
+	if count is usize {
+		assert count == usize(65535)
 	}
-
-	s.next_slice('x\a\x1b[5C\x1b]0;title\a'.bytes())
-	assert s.raw_events.len == 4
-	assert s.raw_events[0].action_type == .print_action
-	assert s.raw_events[0].char == u32(`x`)
-	assert s.raw_events[1].action_type == .execute_action
-	assert s.raw_events[1].byte_val == 0x07
-	assert s.raw_events[2].action_type == .csi_dispatch_action
-	assert s.raw_events[2].csi.params == [u16(5)]
-	assert s.raw_events[2].csi.final_byte == u8(`C`)
-	assert s.raw_events[3].action_type == .osc_dispatch_action
-	title := s.raw_events[3].osc
-	assert title is osc.ChangeWindowTitle
-	assert (title as osc.ChangeWindowTitle).value == 'title'
-	s.clear_events()
-	assert s.events.len == 0
-	assert s.raw_events.len == 0
 }
 
-fn test_stream_retains_parser_backed_raw_action_views() {
-	mut s := Stream.init()
-	s.capture_raw = true
-	defer { s.deinit() }
-
-	s.next_slice('\x1b[1C\x1b[2;3H'.bytes())
-	assert s.raw_events.len == 2
-	assert s.raw_events[0].csi.params == [u16(1)]
-	assert s.raw_events[1].csi.params == [u16(2), 3]
-	assert s.raw_events[0].csi.params.data != s.parser.params.data
-	assert s.raw_events[1].csi.params.data != s.parser.params.data
+// RawActionRecorder observes parser actions through the source's optional
+// vtRaw hook. The actions view the parser's buffers, so it copies what it
+// keeps.
+struct RawActionRecorder {
+mut:
+	raw        []ParserActionType
+	csi_params [][]u16
+	csi_finals []u8
+	osc_titles []string
+	keys       []ActionKey
+	skip_csi   bool
 }
 
-fn test_stream_preserves_osc_terminator_for_color_responses() {
-	mut s := Stream.init_alloc(voidptr(1))
+pub fn (mut self RawActionRecorder) vt_raw(action ParserAction) !bool {
+	self.raw << action.action_type
+	if action.action_type == .csi_dispatch_action {
+		self.csi_params << action.csi.params.clone()
+		self.csi_finals << action.csi.final_byte
+		return self.skip_csi
+	}
+	if action.action_type == .osc_dispatch_action {
+		cmd := action.osc
+		if cmd is osc.ChangeWindowTitle {
+			self.osc_titles << cmd.value.clone()
+		}
+	}
+	return false
+}
+
+pub fn (mut self RawActionRecorder) vt(action ActionKey, value ActionValue) ! {
+	self.keys << action
+}
+
+pub fn (mut self RawActionRecorder) deinit() {}
+
+// The inspector slow path consumes parser actions through vt_raw before the
+// stream interprets them. Ground-state printing and C0 execution bypass the
+// parser, as in the source, so they only reach vt.
+fn test_stream_vt_raw_receives_parser_actions() ! {
+	mut s := Stream.init[RawActionRecorder](RawActionRecorder{})
 	defer { s.deinit() }
 
-	s.next_slice('\x1b]10;?\a'.bytes())
-	color := get_last_event(s.events, .color_operation)
-	assert color.payload.color_operation.terminator == .bel
-	assert color.payload.color_operation.op == .osc_10
-	assert color.payload.color_operation.requests.len == 1
-	request := color.payload.color_operation.requests[0]
-	assert request is osc.ColorRequestQuery
-	if request is osc.ColorRequestQuery {
-		assert request.target is osc.ColorTargetDynamic
-		if request.target is osc.ColorTargetDynamic {
-			assert request.target.color == .foreground
+	s.next_slice('x\a\x1b[5C\x1b]0;title\a'.bytes())!
+	assert s.handler.raw == [ParserActionType.csi_dispatch_action, .osc_dispatch_action]
+	assert s.handler.csi_params == [[u16(5)]]
+	assert s.handler.csi_finals == [u8(`C`)]
+	assert s.handler.osc_titles == ['title']
+	assert s.handler.keys == [ActionKey.print, .bell, .cursor_right, .window_title]
+
+	// Returning true from vt_raw skips the stream's own processing.
+	s.handler = RawActionRecorder{
+		skip_csi: true
+	}
+	s.next_slice('\x1b[5C'.bytes())!
+	assert s.handler.raw == [ParserActionType.csi_dispatch_action]
+	assert s.handler.keys.len == 0
+}
+
+fn test_stream_preserves_osc_terminator_for_color_responses() ! {
+	mut s := Stream.init_alloc[ActionRecorder](voidptr(1), ActionRecorder{})
+	defer { s.deinit() }
+
+	s.next_slice('\x1b]10;?\a'.bytes())!
+	color := s.handler.last(.color_operation)?
+	assert color is ActionColorOperation
+	if color is ActionColorOperation {
+		assert color.terminator == .bel
+		assert color.op == .osc_10
+		assert color.requests.len == 1
+		request := color.requests[0]
+		assert request is osc.ColorRequestQuery
+		if request is osc.ColorRequestQuery {
+			assert request.target is osc.ColorTargetDynamic
+			if request.target is osc.ColorTargetDynamic {
+				assert request.target.color == .foreground
+			}
 		}
 	}
 
-	s.clear_events()
-	s.next_slice('\x1b]21;foreground=?\x1b\\'.bytes())
-	kitty := get_last_event(s.events, .kitty_color_report)
-	assert kitty.payload.kitty_color.terminator == .st
-	assert kitty.payload.kitty_color.list.len == 1
-	item := kitty.payload.kitty_color.list[0]
-	assert item is osc.KittyColorQuery
-	assert (item as osc.KittyColorQuery).key == osc.KittyColorKind(osc.KittyColorSpecial.foreground)
-}
-
-fn test_stream_carries_typed_semantic_and_progress_actions() {
-	mut s := Stream.init()
-	defer { s.deinit() }
-
-	s.next_slice('\x1b]133;D;err=23\a'.bytes())
-	semantic := get_last_event(s.events, .semantic_prompt)
-	assert semantic.payload.semantic_prompt.action == .end_command
-	assert semantic.payload.semantic_prompt.options_unvalidated == 'err=23'
-
-	s.clear_events()
-	s.next_slice('\x1b]9;4;1;900\a'.bytes())
-	progress := get_last_event(s.events, .progress_report)
-	assert progress.payload.progress_report.state == .set
-	assert progress.payload.progress_report.progress? == 100
-}
-
-fn test_stream_carries_typed_desktop_notifications() {
-	mut s := Stream.init()
-	defer { s.deinit() }
-
-	s.next_slice('\x1b]9;Build complete\a'.bytes())
-	iterm := get_last_event(s.events, .show_desktop_notification)
-	assert iterm.payload.desktop_notification.title == ''
-	assert iterm.payload.desktop_notification.body == 'Build complete'
-
-	s.clear_events()
-	s.next_slice('\x1b]777;notify;Compiler;Build failed\x1b\\'.bytes())
-	rxvt := get_last_event(s.events, .show_desktop_notification)
-	assert rxvt.payload.desktop_notification.title == 'Compiler'
-	assert rxvt.payload.desktop_notification.body == 'Build failed'
-}
-
-fn test_stream_carries_typed_clipboard_and_hyperlink_actions() {
-	mut s := Stream.init()
-	defer { s.deinit() }
-
-	s.next_slice('\x1b]52;s;?\a'.bytes())
-	clipboard := get_last_event(s.events, .clipboard_contents)
-	assert clipboard.payload.clipboard.kind == `s`
-	assert clipboard.payload.clipboard.data == '?'
-
-	s.clear_events()
-	s.next_slice('\x1b]8;id=build;https://example.com\x1b\\'.bytes())
-	hyperlink := get_last_event(s.events, .start_hyperlink)
-	assert hyperlink.payload.hyperlink.uri == 'https://example.com'
-	assert hyperlink.payload.hyperlink.id? == 'build'
-
-	s.clear_events()
-	s.next_slice('\x1b]8;;https://example.com\x1b\\'.bytes())
-	without_id := get_last_event(s.events, .start_hyperlink)
-	assert without_id.payload.hyperlink.id == none
-}
-
-// Test that invalid UTF-8 byte 0xFF produces replacement character U+FFFD.
-fn test_simd_print_invalid_utf8() {
-	mut s := Stream.init()
-	s.next_slice([u8(0xFF)])
-	assert has_event(s.events, .print)
-	ev := get_last_event(s.events, .print)
-	assert ev.payload.cp == 0xFFFD
-}
-
-fn test_ground_scalar_control_boundaries_match_source() {
-	mut s := Stream.init()
-	defer { s.deinit() }
-
-	s.next(0x0f)
-	assert has_event(s.events, .invoke_charset)
-
-	s.clear_events()
-	s.next(0x10)
-	assert s.events.len == 1
-	assert s.events[0].key == .print
-	assert s.events[0].payload.cp == 0x10
-
-	s.clear_events()
-	s.next(0x7f)
-	assert s.events.len == 1
-	assert s.events[0].key == .print
-	assert s.events[0].payload.cp == 0x7f
-}
-
-// Test that an incomplete multi-byte UTF-8 sequence completes
-// when the remaining bytes arrive in subsequent calls.
-fn test_simd_complete_incomplete_utf8() {
-	mut s := Stream.init()
-	// 3-byte sequence for U+0800: 0xE0 0xA0 0x80
-	s.next_slice([u8(0xE0)])
-	assert !has_event(s.events, .print)
-
-	s.next_slice([u8(0xA0)])
-	assert !has_event(s.events, .print)
-
-	s.next_slice([u8(0x80)])
-	assert has_event(s.events, .print)
-	ev := get_last_event(s.events, .print)
-	assert ev.payload.cp == 0x800
-}
-
-fn test_simd_next_slice_crosses_internal_chunk_boundary() {
-	mut s := Stream.init()
-	input := 'x'.repeat(5000).bytes()
-	s.next_slice(input)
-	assert s.events.len == 5000
-	assert s.events[0].key == .print
-	assert s.events.last().payload.cp == u32(`x`)
-}
-
-fn test_simd_escape_sequence_crosses_internal_chunk_boundary() {
-	mut s := Stream.init()
-	input := ('x'.repeat(4095) + '\x1b[5C').bytes()
-	s.next_slice(input)
-	assert s.events.len == 4096
-	assert s.events.last().key == .cursor_right
-	assert s.events.last().payload.num == 5
-}
-
-fn test_simd_utf8_sequence_crosses_internal_chunk_boundary() {
-	mut s := Stream.init()
-	input := ('x'.repeat(4095) + '€y').bytes()
-	s.next_slice(input)
-	assert s.events.len == 4097
-	assert s.events[4095].payload.cp == 0x20ac
-	assert s.events[4096].payload.cp == u32(`y`)
-}
-
-// Test CUF (Cursor Forward/Right) CSI sequence.
-fn test_stream_cursor_right() {
-	mut s := Stream.init()
-
-	// Default parameter is 1
-	s.next_slice('\x1b[C'.bytes())
-	assert has_event(s.events, .cursor_right)
-	ev1 := get_last_event(s.events, .cursor_right)
-	assert ev1.payload.num == 1
-
-	// Explicit parameter
-	s.clear_events()
-	s.next_slice('\x1b[5C'.bytes())
-	assert has_event(s.events, .cursor_right)
-	ev2 := get_last_event(s.events, .cursor_right)
-	assert ev2.payload.num == 5
-
-	// Two parameters - too many for cursor_right, should not dispatch
-	s.clear_events()
-	s.next_slice('\x1b[5;4C'.bytes())
-	assert !has_event(s.events, .cursor_right)
-
-	// Private marker ? - should not dispatch cursor_right
-	s.clear_events()
-	s.next_slice('\x1b[?3C'.bytes())
-	assert !has_event(s.events, .cursor_right)
-}
-
-// Test DEC private set mode (SM) and reset mode (RM).
-fn test_stream_dec_set_reset_mode() {
-	mut s := Stream.init()
-
-	// CSI ?6h → set_mode origin
-	s.next_slice('\x1b[?6h'.bytes())
-	assert has_event(s.events, .set_mode)
-	ev1 := get_last_event(s.events, .set_mode)
-	assert ev1.payload.mode == .origin
-
-	// CSI ?6l → reset_mode
-	s.clear_events()
-	s.next_slice('\x1b[?6l'.bytes())
-	assert has_event(s.events, .reset_mode)
-
-	// CSI 6 SP h → has space intermediate, should not dispatch
-	s.clear_events()
-	s.next_slice('\x1b[6 h'.bytes())
-	assert !has_event(s.events, .set_mode)
-}
-
-// Test ANSI set mode (SM) and reset mode (RM).
-fn test_stream_ansi_set_reset_mode() {
-	mut s := Stream.init()
-
-	// CSI 4h → set_mode insert
-	s.next_slice('\x1b[4h'.bytes())
-	assert has_event(s.events, .set_mode)
-	ev1 := get_last_event(s.events, .set_mode)
-	assert ev1.payload.mode == .insert
-
-	// CSI 4l → reset_mode
-	s.clear_events()
-	s.next_slice('\x1b[4l'.bytes())
-	assert has_event(s.events, .reset_mode)
-
-	// CSI >5h → has > intermediate, should not dispatch
-	s.clear_events()
-	s.next_slice('\x1b[>5h'.bytes())
-	assert !has_event(s.events, .set_mode)
-}
-
-// Test that unknown ANSI mode values don't dispatch.
-fn test_stream_ansi_set_mode_unknown() {
-	mut s := Stream.init()
-
-	// Mode 6 is not a valid ANSI mode (only valid as DEC private mode)
-	s.next_slice('\x1b[6h'.bytes())
-	assert !has_event(s.events, .set_mode)
-
-	s.next_slice('\x1b[6l'.bytes())
-	assert !has_event(s.events, .reset_mode)
-}
-
-// Test CSI ?42r does NOT trigger top_and_bottom_margin.
-// It would be restore_mode but mode 42 is not recognized.
-fn test_stream_restore_mode() {
-	mut s := Stream.init()
-	s.next_slice('\x1b[?42r'.bytes())
-	assert !has_event(s.events, .top_and_bottom_margin)
-}
-
-// Test CSI <u (pop kitty keyboard) defaults to 1.
-fn test_stream_pop_kitty_keyboard() {
-	mut s := Stream.init()
-	s.next_slice('\x1b[<u'.bytes())
-	assert has_event(s.events, .kitty_keyboard_pop)
-	ev := get_last_event(s.events, .kitty_keyboard_pop)
-	assert ev.payload.num == 1
-}
-
-// Test DECSCA (Select Character Protection Attribute).
-fn test_stream_decsca() {
-	mut s := Stream.init()
-
-	// CSI "q (no params) → protected_mode_off
-	s.next_slice('\x1b["q'.bytes())
-	assert has_event(s.events, .protected_mode_off)
-
-	// CSI 0"q → protected_mode_off
-	s.clear_events()
-	s.next_slice('\x1b[0"q'.bytes())
-	assert has_event(s.events, .protected_mode_off)
-
-	// CSI 2"q → protected_mode_off
-	s.clear_events()
-	s.next_slice('\x1b[2"q'.bytes())
-	assert has_event(s.events, .protected_mode_off)
-
-	// CSI 1"q → protected_mode_dec
-	s.clear_events()
-	s.next_slice('\x1b[1"q'.bytes())
-	assert has_event(s.events, .protected_mode_dec)
-}
-
-// Test DECED/DECSED (Erase Display) with and without protected mode.
-fn test_stream_erase_display() {
-	mut s := Stream.init()
-
-	// Protected mode (? prefix)
-	// CSI ?J → erase_display_below, protected=true
-	s.next_slice('\x1b[?J'.bytes())
-	assert has_event(s.events, .erase_display_below)
-	ev1 := get_last_event(s.events, .erase_display_below)
-	assert ev1.payload.flag == true
-
-	// CSI ?0J → erase_display_below, protected=true
-	s.clear_events()
-	s.next_slice('\x1b[?0J'.bytes())
-	assert has_event(s.events, .erase_display_below)
-	ev2 := get_last_event(s.events, .erase_display_below)
-	assert ev2.payload.flag == true
-
-	// CSI ?1J → erase_display_above, protected=true
-	s.clear_events()
-	s.next_slice('\x1b[?1J'.bytes())
-	assert has_event(s.events, .erase_display_above)
-	ev3 := get_last_event(s.events, .erase_display_above)
-	assert ev3.payload.flag == true
-
-	// CSI ?2J → erase_display_complete, protected=true
-	s.clear_events()
-	s.next_slice('\x1b[?2J'.bytes())
-	assert has_event(s.events, .erase_display_complete)
-	ev4 := get_last_event(s.events, .erase_display_complete)
-	assert ev4.payload.flag == true
-
-	// CSI ?3J → erase_display_scrollback, protected=true
-	s.clear_events()
-	s.next_slice('\x1b[?3J'.bytes())
-	assert has_event(s.events, .erase_display_scrollback)
-	ev5 := get_last_event(s.events, .erase_display_scrollback)
-	assert ev5.payload.flag == true
-
-	// Normal mode (no ? prefix)
-	// CSI J → erase_display_below, protected=false
-	s.clear_events()
-	s.next_slice('\x1b[J'.bytes())
-	assert has_event(s.events, .erase_display_below)
-	ev6 := get_last_event(s.events, .erase_display_below)
-	assert ev6.payload.flag == false
-
-	// CSI 0J → erase_display_below, protected=false
-	s.clear_events()
-	s.next_slice('\x1b[0J'.bytes())
-	assert has_event(s.events, .erase_display_below)
-	ev7 := get_last_event(s.events, .erase_display_below)
-	assert ev7.payload.flag == false
-
-	// CSI 1J → erase_display_above, protected=false
-	s.clear_events()
-	s.next_slice('\x1b[1J'.bytes())
-	assert has_event(s.events, .erase_display_above)
-	ev8 := get_last_event(s.events, .erase_display_above)
-	assert ev8.payload.flag == false
-
-	// CSI 2J → erase_display_complete, protected=false
-	s.clear_events()
-	s.next_slice('\x1b[2J'.bytes())
-	assert has_event(s.events, .erase_display_complete)
-	ev9 := get_last_event(s.events, .erase_display_complete)
-	assert ev9.payload.flag == false
-
-	// CSI 3J → erase_display_scrollback, protected=false
-	s.clear_events()
-	s.next_slice('\x1b[3J'.bytes())
-	assert has_event(s.events, .erase_display_scrollback)
-	ev10 := get_last_event(s.events, .erase_display_scrollback)
-	assert ev10.payload.flag == false
-
-	// CSI 22J → Kitty erase display scroll-complete extension.
-	s.clear_events()
-	s.next_slice('\x1b[22J'.bytes())
-	assert has_event(s.events, .erase_display_scroll_complete)
-	ev11 := get_last_event(s.events, .erase_display_scroll_complete)
-	assert ev11.payload.flag == false
-
-	// Parameter 4 is not the scroll-complete wire value.
-	s.clear_events()
-	s.next_slice('\x1b[4J'.bytes())
-	assert !has_event(s.events, .erase_display_scroll_complete)
-
-	// CSI >0J → invalid intermediate, ignored
-	s.clear_events()
-	s.next_slice('\x1b[>0J'.bytes())
-	assert !has_event(s.events, .erase_display_below)
-	assert !has_event(s.events, .erase_display_above)
-	assert !has_event(s.events, .erase_display_complete)
-	assert !has_event(s.events, .erase_display_scrollback)
-}
-
-fn test_stream_decrqm_rejects_malformed_two_intermediate_ansi_form() {
-	mut s := Stream.init()
-	defer { s.deinit() }
-
-	s.next_slice('\x1b[4$$p'.bytes())
-	assert !has_event(s.events, .request_mode)
-	assert !has_event(s.events, .request_mode_unknown)
-
-	s.next_slice('\x1b[?25$p'.bytes())
-	assert has_event(s.events, .request_mode)
-}
-
-// Test DECEL/DECSEL (Erase Line) with and without protected mode.
-fn test_stream_erase_line() {
-	mut s := Stream.init()
-
-	// Protected mode
-	s.next_slice('\x1b[?K'.bytes())
-	assert has_event(s.events, .erase_line_right)
-	ev1 := get_last_event(s.events, .erase_line_right)
-	assert ev1.payload.flag == true
-
-	s.clear_events()
-	s.next_slice('\x1b[?0K'.bytes())
-	assert has_event(s.events, .erase_line_right)
-	ev2 := get_last_event(s.events, .erase_line_right)
-	assert ev2.payload.flag == true
-
-	s.clear_events()
-	s.next_slice('\x1b[?1K'.bytes())
-	assert has_event(s.events, .erase_line_left)
-	ev3 := get_last_event(s.events, .erase_line_left)
-	assert ev3.payload.flag == true
-
-	s.clear_events()
-	s.next_slice('\x1b[?2K'.bytes())
-	assert has_event(s.events, .erase_line_complete)
-	ev4 := get_last_event(s.events, .erase_line_complete)
-	assert ev4.payload.flag == true
-
-	// Normal mode
-	s.clear_events()
-	s.next_slice('\x1b[K'.bytes())
-	assert has_event(s.events, .erase_line_right)
-	ev5 := get_last_event(s.events, .erase_line_right)
-	assert ev5.payload.flag == false
-
-	s.clear_events()
-	s.next_slice('\x1b[0K'.bytes())
-	assert has_event(s.events, .erase_line_right)
-	ev6 := get_last_event(s.events, .erase_line_right)
-	assert ev6.payload.flag == false
-
-	s.clear_events()
-	s.next_slice('\x1b[1K'.bytes())
-	assert has_event(s.events, .erase_line_left)
-	ev7 := get_last_event(s.events, .erase_line_left)
-	assert ev7.payload.flag == false
-
-	s.clear_events()
-	s.next_slice('\x1b[2K'.bytes())
-	assert has_event(s.events, .erase_line_complete)
-	ev8 := get_last_event(s.events, .erase_line_complete)
-	assert ev8.payload.flag == false
-
-	// Invalid intermediate
-	s.clear_events()
-	s.next_slice('\x1b[<1K'.bytes())
-	assert !has_event(s.events, .erase_line_right)
-	assert !has_event(s.events, .erase_line_left)
-	assert !has_event(s.events, .erase_line_complete)
-}
-
-// Test DECSCUSR (Set Cursor Style) with space intermediate.
-fn test_stream_decscusr() {
-	mut s := Stream.init()
-
-	// CSI SP q → default cursor style
-	s.next_slice('\x1b[ q'.bytes())
-	assert has_event(s.events, .cursor_style)
-	ev1 := get_last_event(s.events, .cursor_style)
-	assert ev1.payload.cursor_style == .default_
-
-	// CSI 1 SP q → blinking block
-	s.clear_events()
-	s.next_slice('\x1b[1 q'.bytes())
-	assert has_event(s.events, .cursor_style)
-	ev2 := get_last_event(s.events, .cursor_style)
-	assert ev2.payload.cursor_style == .blinking_block
-
-	// CSI ?0 SP q → has ? intermediate, should not dispatch
-	s.clear_events()
-	s.next_slice('\x1b[?0 q'.bytes())
-	assert !has_event(s.events, .cursor_style)
-}
-
-// Test DECSCUSR without the space intermediate does NOT trigger cursor_style.
-fn test_stream_decscusr_without_space() {
-	mut s := Stream.init()
-
-	// CSI q → no intermediate, csi_q returns early
-	s.next_slice('\x1b[q'.bytes())
-	assert !has_event(s.events, .cursor_style)
-
-	// CSI 1q → no intermediate, csi_q returns early
-	s.next_slice('\x1b[1q'.bytes())
-	assert !has_event(s.events, .cursor_style)
-}
-
-// Test XTSHIFTESCAPE (CSI > Ps s).
-fn test_stream_xtshiftescape() {
-	mut s := Stream.init()
-
-	// CSI >2s → invalid (param 2 not recognized), no dispatch
-	s.next_slice('\x1b[>2s'.bytes())
-	assert !has_event(s.events, .mouse_shift_capture)
-
-	// CSI >s → mouse_shift_capture false (default)
-	s.clear_events()
-	s.next_slice('\x1b[>s'.bytes())
-	assert has_event(s.events, .mouse_shift_capture)
-	ev1 := get_last_event(s.events, .mouse_shift_capture)
-	assert ev1.payload.flag == false
-
-	// CSI >0s → mouse_shift_capture false
-	s.clear_events()
-	s.next_slice('\x1b[>0s'.bytes())
-	assert has_event(s.events, .mouse_shift_capture)
-	ev2 := get_last_event(s.events, .mouse_shift_capture)
-	assert ev2.payload.flag == false
-
-	// CSI >1s → mouse_shift_capture true
-	s.clear_events()
-	s.next_slice('\x1b[>1s'.bytes())
-	assert has_event(s.events, .mouse_shift_capture)
-	ev3 := get_last_event(s.events, .mouse_shift_capture)
-	assert ev3.payload.flag == true
-
-	// CSI 1 SP s → has space intermediate, not dispatched
-	s.clear_events()
-	s.next_slice('\x1b[1 s'.bytes())
-	assert !has_event(s.events, .mouse_shift_capture)
-}
-
-// Test that window title with invalid UTF-8 is rejected.
-fn test_stream_change_window_title_invalid_utf8() {
-	// Valid UTF-8 title
-	mut s1 := Stream.init()
-	s1.next_slice('\x1b]2;abc\x1b\\'.bytes())
-	assert has_event(s1.events, .window_title)
-
-	// Invalid UTF-8 in title (0xC0 without continuation)
-	mut s2 := Stream.init()
-	mut invalid := '\x1b]2;abc'.bytes()
-	invalid << u8(0xc0)
-	invalid << '\x1b\\'.bytes()
-	s2.next_slice(invalid)
-	assert !has_event(s2.events, .window_title)
-}
-
-// Test ICH (Insert Character / Insert Blanks).
-fn test_stream_insert_characters() {
-	mut s := Stream.init()
-
-	// CSI 42@ → insert_blanks
-	s.next_slice('\x1b[42@'.bytes())
-	assert has_event(s.events, .insert_blanks)
-
-	// CSI ?42@ → has ? intermediate, should not dispatch
-	s.clear_events()
-	s.next_slice('\x1b[?42@'.bytes())
-	assert !has_event(s.events, .insert_blanks)
-}
-
-// Test SCOSC (Save Cursor, no params CSI s).
-fn test_stream_scosc() {
-	mut s := Stream.init()
-	s.next_slice('\x1b[s'.bytes())
-	// CSI s with no params dispatches left_and_right_margin_ambiguous
-	assert has_event(s.events, .left_and_right_margin_ambiguous)
-	// It should NOT dispatch left_and_right_margin
-	assert !has_event(s.events, .left_and_right_margin)
-}
-
-// Test SCORC (Restore Cursor, CSI u).
-fn test_stream_scorc() {
-	mut s := Stream.init()
-	s.next_slice('\x1b[u'.bytes())
-	assert has_event(s.events, .restore_cursor)
-}
-
-// Test that too many CSI params does not dispatch cursor_right.
-fn test_stream_too_many_csi_params() {
-	mut s := Stream.init()
-	// 17 params separated by semicolons (exceeds single param requirement)
-	s.next_slice('\x1b[1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1C'.bytes())
-	assert !has_event(s.events, .cursor_right)
-}
-
-// Test that extremely long CSI param digits don't crash.
-fn test_stream_csi_param_too_long() {
-	mut s := Stream.init()
-	// Very long parameter digit string (should saturate to 65535)
-	mut seq := []u8{}
-	seq << u8(0x1b)
-	seq << u8(`[`)
-	for _ in 0 .. 256 {
-		seq << u8(`1`)
+	s.handler.actions.clear()
+	s.next_slice('\x1b]21;foreground=?\x1b\\'.bytes())!
+	kitty := s.handler.last(.kitty_color_report)?
+	assert kitty is osc.KittyColorOSC
+	if kitty is osc.KittyColorOSC {
+		assert kitty.terminator == .st
+		assert kitty.list.len == 1
+		item := kitty.list[0]
+		assert item is osc.KittyColorQuery
+		if item is osc.KittyColorQuery {
+			assert item.key == osc.KittyColorKind(osc.KittyColorSpecial.foreground)
+		}
 	}
-	seq << u8(`C`)
-	s.next_slice(seq)
-	// Should not crash; cursor_right dispatches with saturated value
 }
 
-// Test CSI t size reports.
-fn test_stream_csi_t_size_report() {
-	mut s := Stream.init()
+fn test_stream_carries_typed_semantic_and_progress_actions() ! {
+	mut s := Stream.init[ActionRecorder](ActionRecorder{})
+	defer { s.deinit() }
 
-	// CSI 14t → csi_14_t
-	s.next_slice('\x1b[14t'.bytes())
-	assert has_event(s.events, .size_report)
-	ev1 := get_last_event(s.events, .size_report)
-	assert ev1.payload.size_report_style == .csi_14_t
+	s.next_slice('\x1b]133;D;err=23\a'.bytes())!
+	semantic := s.handler.last(.semantic_prompt)?
+	assert semantic is osc.SemanticPrompt
+	if semantic is osc.SemanticPrompt {
+		assert semantic.action == .end_command
+		assert semantic.options_unvalidated == 'err=23'
+	}
 
-	// CSI 16t → csi_16_t
-	s.clear_events()
-	s.next_slice('\x1b[16t'.bytes())
-	assert has_event(s.events, .size_report)
-	ev2 := get_last_event(s.events, .size_report)
-	assert ev2.payload.size_report_style == .csi_16_t
-
-	// CSI 18t → csi_18_t
-	s.clear_events()
-	s.next_slice('\x1b[18t'.bytes())
-	assert has_event(s.events, .size_report)
-	ev3 := get_last_event(s.events, .size_report)
-	assert ev3.payload.size_report_style == .csi_18_t
-
-	// CSI 21t → csi_21_t
-	s.clear_events()
-	s.next_slice('\x1b[21t'.bytes())
-	assert has_event(s.events, .size_report)
-	ev4 := get_last_event(s.events, .size_report)
-	assert ev4.payload.size_report_style == .csi_21_t
+	s.handler.actions.clear()
+	s.next_slice('\x1b]9;4;1;900\a'.bytes())!
+	progress := s.handler.last(.progress_report)?
+	assert progress is osc.ProgressReport
+	if progress is osc.ProgressReport {
+		assert progress.state == .set
+		assert progress.progress? == 100
+	}
 }
 
-// Test invalid CSI t value does not dispatch.
-fn test_stream_invalid_csi_t() {
-	mut s := Stream.init()
-	s.next_slice('\x1b[19t'.bytes())
-	assert !has_event(s.events, .size_report)
+fn test_stream_carries_typed_desktop_notifications() ! {
+	mut s := Stream.init[ActionRecorder](ActionRecorder{})
+	defer { s.deinit() }
+
+	s.next_slice('\x1b]9;Build complete\a'.bytes())!
+	iterm := s.handler.last(.show_desktop_notification)?
+	assert iterm is ActionShowDesktopNotification
+	if iterm is ActionShowDesktopNotification {
+		assert iterm.title == ''
+		assert iterm.body == 'Build complete'
+	}
+
+	s.handler.actions.clear()
+	s.next_slice('\x1b]777;notify;Compiler;Build failed\x1b\\'.bytes())!
+	rxvt := s.handler.last(.show_desktop_notification)?
+	assert rxvt is ActionShowDesktopNotification
+	if rxvt is ActionShowDesktopNotification {
+		assert rxvt.title == 'Compiler'
+		assert rxvt.body == 'Build failed'
+	}
 }
 
-// Test CSI t push title.
-fn test_stream_csi_t_push_title() {
-	mut s := Stream.init()
-	// CSI 22;0t → title_push with index 0
-	s.next_slice('\x1b[22;0t'.bytes())
-	assert has_event(s.events, .title_push)
-	ev := get_last_event(s.events, .title_push)
-	assert ev.payload.num == 0
+fn test_stream_carries_typed_clipboard_and_hyperlink_actions() ! {
+	mut s := Stream.init_alloc[ActionRecorder](voidptr(1), ActionRecorder{})
+	defer { s.deinit() }
+
+	s.next_slice('\x1b]52;s;?\a'.bytes())!
+	clipboard := s.handler.last(.clipboard_contents)?
+	assert clipboard is ActionClipboardContents
+	if clipboard is ActionClipboardContents {
+		assert clipboard.kind == `s`
+		assert clipboard.data == '?'
+	}
+
+	s.handler.actions.clear()
+	s.next_slice('\x1b]8;id=build;https://example.com\x1b\\'.bytes())!
+	hyperlink := s.handler.last(.start_hyperlink)?
+	assert hyperlink is ActionStartHyperlink
+	if hyperlink is ActionStartHyperlink {
+		assert hyperlink.uri == 'https://example.com'
+		assert hyperlink.id? == 'build'
+	}
+
+	s.handler.actions.clear()
+	s.next_slice('\x1b]8;;https://example.com\x1b\\'.bytes())!
+	without_id := s.handler.last(.start_hyperlink)?
+	assert without_id is ActionStartHyperlink
+	if without_id is ActionStartHyperlink {
+		assert without_id.id == none
+	}
 }
 
-// Test CSI t push title with explicit window param (22;2t).
-fn test_stream_csi_t_push_title_explicit_window() {
-	mut s := Stream.init()
-	s.next_slice('\x1b[22;2t'.bytes())
-	assert has_event(s.events, .title_push)
-	ev := get_last_event(s.events, .title_push)
-	assert ev.payload.num == 0
+fn test_ground_scalar_control_boundaries_match_source() ! {
+	mut s := Stream.init[ActionRecorder](ActionRecorder{})
+	defer { s.deinit() }
+
+	s.next(0x0f)!
+	assert s.handler.has(.invoke_charset)
+
+	s.handler.actions.clear()
+	s.next(0x10)!
+	assert s.handler.actions.len == 1
+	assert s.handler.actions[0].key == .print
+	cp_10 := s.handler.actions[0].value
+	assert cp_10 is ActionPrint
+	if cp_10 is ActionPrint {
+		assert cp_10.cp == 0x10
+	}
+
+	s.handler.actions.clear()
+	s.next(0x7f)!
+	assert s.handler.actions.len == 1
+	assert s.handler.actions[0].key == .print
+	cp_7f := s.handler.actions[0].value
+	assert cp_7f is ActionPrint
+	if cp_7f is ActionPrint {
+		assert cp_7f.cp == 0x7f
+	}
 }
 
-// Test CSI t push title with explicit icon param (22;1t) - not supported.
-fn test_stream_csi_t_push_title_explicit_icon() {
-	mut s := Stream.init()
-	s.next_slice('\x1b[22;1t'.bytes())
-	// Icon title (param 1) is not supported, should not dispatch
-	assert !has_event(s.events, .title_push)
+// next_slice decodes at most 4096 codepoints per internal chunk; input that
+// spans chunks must behave as if it arrived in one piece.
+fn test_simd_next_slice_crosses_internal_chunk_boundary() ! {
+	mut s := Stream.init[ActionRecorder](ActionRecorder{})
+	defer { s.deinit() }
+
+	s.next_slice('x'.repeat(5000).bytes())!
+	assert s.handler.actions.len == 5000
+	assert s.handler.actions[0].key == .print
+	last := s.handler.actions.last().value
+	assert last is ActionPrint
+	if last is ActionPrint {
+		assert last.cp == u32(`x`)
+	}
 }
 
-// Test CSI t push title with explicit index.
-fn test_stream_csi_t_push_title_with_index() {
-	mut s := Stream.init()
-	s.next_slice('\x1b[22;0;5t'.bytes())
-	assert has_event(s.events, .title_push)
-	ev := get_last_event(s.events, .title_push)
-	assert ev.payload.num == 5
+fn test_simd_escape_sequence_crosses_internal_chunk_boundary() ! {
+	mut s := Stream.init[ActionRecorder](ActionRecorder{})
+	defer { s.deinit() }
+
+	s.next_slice(('x'.repeat(4095) + '\x1b[5C').bytes())!
+	assert s.handler.actions.len == 4096
+	assert s.handler.actions.last().key == .cursor_right
+	last := s.handler.actions.last().value
+	assert last is ActionCursorMovement
+	if last is ActionCursorMovement {
+		assert last.value == 5
+	}
 }
 
-// Test CSI t pop title.
-fn test_stream_csi_t_pop_title() {
-	mut s := Stream.init()
-	s.next_slice('\x1b[23;0t'.bytes())
-	assert has_event(s.events, .title_pop)
-	ev := get_last_event(s.events, .title_pop)
-	assert ev.payload.num == 0
+fn test_simd_utf8_sequence_crosses_internal_chunk_boundary() ! {
+	mut s := Stream.init[ActionRecorder](ActionRecorder{})
+	defer { s.deinit() }
+
+	s.next_slice(('x'.repeat(4095) + '€y').bytes())!
+	assert s.handler.actions.len == 4097
+	euro := s.handler.actions[4095].value
+	assert euro is ActionPrint
+	if euro is ActionPrint {
+		assert euro.cp == 0x20ac
+	}
+	y := s.handler.actions[4096].value
+	assert y is ActionPrint
+	if y is ActionPrint {
+		assert y.cp == u32(`y`)
+	}
 }
 
-// Test CSI t pop title with explicit window.
-fn test_stream_csi_t_pop_title_explicit_window() {
-	mut s := Stream.init()
-	s.next_slice('\x1b[23;2t'.bytes())
-	assert has_event(s.events, .title_pop)
-	ev := get_last_event(s.events, .title_pop)
-	assert ev.payload.num == 0
+// Kitty's CSI 22 J extension erases the display after scrolling it into the
+// scrollback; 4 is not its wire value.
+fn test_stream_erase_display_scroll_complete() ! {
+	mut s := Stream.init[ActionRecorder](ActionRecorder{})
+	defer { s.deinit() }
+
+	s.next_slice('\x1b[22J'.bytes())!
+	protected := s.handler.last(.erase_display_scroll_complete)?
+	assert protected is bool
+	if protected is bool {
+		assert protected == false
+	}
+
+	s.handler.actions.clear()
+	s.next_slice('\x1b[4J'.bytes())!
+	assert s.handler.actions.len == 0
 }
 
-// Test CSI t pop title with explicit icon - not supported.
-fn test_stream_csi_t_pop_title_explicit_icon() {
-	mut s := Stream.init()
-	s.next_slice('\x1b[23;1t'.bytes())
-	assert !has_event(s.events, .title_pop)
-}
+fn test_stream_decrqm_rejects_malformed_two_intermediate_ansi_form() ! {
+	mut s := Stream.init[ActionRecorder](ActionRecorder{})
+	defer { s.deinit() }
 
-// Test CSI t pop title with index.
-fn test_stream_csi_t_pop_title_with_index() {
-	mut s := Stream.init()
-	s.next_slice('\x1b[23;0;5t'.bytes())
-	assert has_event(s.events, .title_pop)
-	ev := get_last_event(s.events, .title_pop)
-	assert ev.payload.num == 5
-}
+	s.next_slice('\x1b[4$$p'.bytes())!
+	assert !s.handler.has(.request_mode)
+	assert !s.handler.has(.request_mode_unknown)
 
-// Test CSI W for tab clear.
-fn test_stream_csi_w_clear_tab_stops() {
-	mut s := Stream.init()
-
-	// CSI 2W → tab_clear_current
-	s.next_slice('\x1b[2W'.bytes())
-	assert has_event(s.events, .tab_clear_current)
-
-	// CSI 5W → tab_clear_all
-	s.clear_events()
-	s.next_slice('\x1b[5W'.bytes())
-	assert has_event(s.events, .tab_clear_all)
-}
-
-// Test CSI W for tab set.
-fn test_stream_csi_w_tab_set() {
-	mut s := Stream.init()
-
-	// CSI W → tab_set (no params)
-	s.next_slice('\x1b[W'.bytes())
-	assert has_event(s.events, .tab_set)
-
-	// CSI 0W → tab_set
-	s.clear_events()
-	s.next_slice('\x1b[0W'.bytes())
-	assert has_event(s.events, .tab_set)
-
-	// CSI >W → has > intermediate, not dispatched
-	s.clear_events()
-	s.next_slice('\x1b[>W'.bytes())
-	assert !has_event(s.events, .tab_set)
-
-	// CSI 99W → unknown param, not dispatched
-	s.clear_events()
-	s.next_slice('\x1b[99W'.bytes())
-	assert !has_event(s.events, .tab_set)
-	assert !has_event(s.events, .tab_clear_current)
-	assert !has_event(s.events, .tab_clear_all)
-}
-
-// Test CSI ?W for tab reset.
-fn test_stream_csi_question_w_reset_tab_stops() {
-	mut s := Stream.init()
-
-	// CSI ?2W → not recognized, not dispatched
-	s.next_slice('\x1b[?2W'.bytes())
-	assert !has_event(s.events, .tab_reset)
-
-	// CSI ?5W → tab_reset
-	s.clear_events()
-	s.next_slice('\x1b[?5W'.bytes())
-	assert has_event(s.events, .tab_reset)
-
-	// CSI ?1;2;3W → multiple params, not dispatched
-	s.clear_events()
-	s.next_slice('\x1b[?1;2;3W'.bytes())
-	assert !has_event(s.events, .tab_reset)
-}
-
-// Test SGR with 17+ parameters for underline color.
-// This tests that all parameters are correctly parsed even with many params.
-fn test_stream_sgr_17_plus_params() {
-	mut s := Stream.init()
-
-	// Kakoune-style SGR with underline color as 17th+ parameter:
-	// 4:3 → curly underline
-	// 38;2;51;51;51 → direct fg color
-	// 48;2;170;170;170 → direct bg color
-	// 58;2;255;97;136 → underline color
-	// 0 → reset
-	s.next_slice('\x1b[4:3;38;2;51;51;51;48;2;170;170;170;58;2;255;97;136;0m'.bytes())
-	assert has_event(s.events, .set_attribute)
+	s.next_slice('\x1b[?25$p'.bytes())!
+	assert s.handler.has(.request_mode)
 }

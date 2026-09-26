@@ -127,7 +127,7 @@ fn test_embedded_bridge_uses_canonical_core_surface() {
 	// as the IO thread does.
 	backend.surface.renderer_state.mutex.lock()
 	mut stream := backend.surface.renderer_state.terminal_.vt_stream()
-	stream.next_slice('hello') or { panic(err) }
+	stream.next_slice('hello'.bytes()) or { panic(err) }
 	backend.surface.renderer_state.mutex.unlock()
 	apprt.ghostty_surface_mouse_pos(mut surface, 1, 1, 0)
 	mut word := apprt.CAPIText{}

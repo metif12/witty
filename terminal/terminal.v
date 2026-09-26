@@ -1952,7 +1952,7 @@ pub fn (mut self Terminal) deinit() {
 // vt_stream creates a ReadonlyStream that wraps this terminal.
 // The stream parses VT sequences and applies them to the terminal.
 pub fn (mut self Terminal) vt_stream() ReadonlyStream {
-	return ReadonlyStream.init(mut self)
+	return Stream.init_alloc[ReadonlyHandler](voidptr(1), self.vt_handler())
 }
 
 // vt_handler creates just the handler portion (without stream parser).

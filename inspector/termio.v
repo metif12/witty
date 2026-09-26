@@ -54,7 +54,7 @@ fn (mut self VTEvent) deinit() {
 pub struct VTStream {
 mut:
 	events                  []VTEvent
-	parser_stream           terminal.Stream
+	parser_stream           terminal.Stream[VTHandler]
 	paused                  bool
 	current_seq             usize = 1
 	filter_exclude          [11]bool
@@ -65,11 +65,9 @@ mut:
 }
 
 pub fn VTStream.init() VTStream {
-	mut parser_stream := terminal.Stream.init_alloc(voidptr(1))
-	parser_stream.capture_raw = true
 	mut result := VTStream{
-		events: []VTEvent{cap: 2}
-		parser_stream: parser_stream
+		events:        []VTEvent{cap: 2}
+		parser_stream: terminal.Stream.init_alloc[VTHandler](voidptr(1), VTHandler{})
 	}
 	result.filter_exclude[int(terminal.ParserActionType.print_action)] = true
 	return result
@@ -80,20 +78,46 @@ pub fn (mut self VTStream) deinit() {
 	self.parser_stream.deinit()
 }
 
-fn (mut self VTStream) record_pty_byte(byte u8, term &terminal.Terminal) {
-	self.parser_stream.next(byte)
-	for action in self.parser_stream.raw_events {
-		self.vt_raw(action, term)
+// record_pty_read advances the parallel parser across one PTY read. Event
+// snapshots are recorded before the real terminal consumes the bytes.
+pub fn (mut self VTStream) record_pty_read(t &terminal.Terminal, data []u8) ! {
+	self.parser_stream.handler.state = VTHandlerState{
+		terminal: unsafe { t }
+		stream:   unsafe { &self }
 	}
-	self.parser_stream.clear_events()
+	defer {
+		self.parser_stream.handler.state = none
+	}
+	self.parser_stream.next_slice(data)!
 }
 
-// record_pty_read advances the parallel parser across one complete PTY read.
-// Event snapshots are recorded before the real terminal consumes the bytes.
-pub fn (mut self VTStream) record_pty_read(term &terminal.Terminal, data []u8) ! {
-	for byte in data {
-		self.record_pty_byte(byte, term)
-	}
+// The capture state of a VTHandler.
+struct VTHandlerState {
+	terminal &terminal.Terminal = unsafe { nil }
+	stream   &VTStream          = unsafe { nil }
+}
+
+// VTHandler is the parser stream handler that records raw parser actions.
+// The recording fields stay on VTStream; only the stream interface lives here.
+struct VTHandler {
+mut:
+	// The capture state, must be set before use. If none, then
+	// events are dropped.
+	state ?VTHandlerState
+}
+
+pub fn (mut self VTHandler) deinit() {
+	// Required for the parser stream interface
+}
+
+pub fn (mut self VTHandler) vt(action terminal.ActionKey, value terminal.ActionValue) ! {
+}
+
+// This is called with every single terminal action.
+pub fn (mut self VTHandler) vt_raw(action terminal.ParserAction) !bool {
+	state := self.state or { return true }
+	mut stream := state.stream
+	return stream.vt_raw(action, state.terminal)
 }
 
 fn (mut self VTStream) clear() {

@@ -220,13 +220,8 @@ pub mut:
 	mailbox Mailbox
 
 	// The stream parser. This parses the stream of escape codes and so on
-	// from the child process and collects events which are then dispatched
-	// to the stream handler.
-	terminal_stream terminal.Stream
-
-	// The stream handler. This mutates terminal state and sends messages
-	// to the renderer/surface/termio mailboxes in response to stream events.
-	stream_handler StreamHandler
+	// from the child process and calls callbacks in the stream handler.
+	terminal_stream terminal.Stream[StreamHandler]
 
 	// The backend implementation responsible for io (i.e. the pty/exec state).
 	backend Exec
@@ -279,7 +274,6 @@ pub fn (mut t Termio) init(opts TermioOpts) ! {
 	t.surface_mailbox = opts.surface_mailbox
 	t.size = size
 	t.mailbox = opts.mailbox
-	t.terminal_stream = terminal.Stream.init_alloc(voidptr(1))
 	t.backend = backend
 	if opts.full_config.input.items.len > 0 {
 		t.thread_enter_input = opts.full_config.input.clone_parsed()!.items
@@ -287,7 +281,7 @@ pub fn (mut t Termio) init(opts TermioOpts) ! {
 		t.thread_enter_input = []
 	}
 	t.renderer_state.terminal_ = &t.terminal
-	t.stream_handler = StreamHandler{
+	handler := StreamHandler{
 		size: &t.size
 		terminal: &t.terminal
 		termio_mailbox: &t.mailbox
@@ -301,6 +295,7 @@ pub fn (mut t Termio) init(opts TermioOpts) ! {
 		default_cursor_style: t.config.cursor_style
 		default_cursor_blink: t.config.cursor_blink
 	}
+	t.terminal_stream = terminal.Stream.init_alloc[StreamHandler](voidptr(1), handler)
 }
 
 pub fn (mut t Termio) deinit() {
@@ -309,8 +304,8 @@ pub fn (mut t Termio) deinit() {
 	t.terminal.deinit()
 	t.config.deinit()
 	t.mailbox.deinit()
+	// Clear any StreamHandler state
 	t.terminal_stream.deinit()
-	t.stream_handler.deinit()
 	t.thread_enter_input = []
 }
 
@@ -577,7 +572,7 @@ pub fn (mut t Termio) change_config(mut td ThreadData, config &DerivedConfig) ! 
 
 	// Update our stream handler. The stream handler uses the same renderer
 	// mutex so this is safe to do despite being executed from another thread.
-	t.stream_handler.change_config(&t.config)
+	t.terminal_stream.handler.change_config(&t.config)
 	td.backend.change_config(&t.config)
 
 	// Update the configuration that we know about.
@@ -785,7 +780,7 @@ pub fn (mut t Termio) process_output(buf []u8) {
 // already held.
 fn (mut t Termio) process_output_locked(buf []u8) {
 	// Schedule a render. We can call this first because we have the lock.
-	t.stream_handler.queue_render() or {}
+	t.terminal_stream.handler.queue_render() or {}
 
 	// Whenever a character is typed, we ensure the cursor is in the
 	// non-blink state so it is rendered if visible. If we're under HEAVY
@@ -802,32 +797,21 @@ fn (mut t Termio) process_output_locked(buf []u8) {
 	// time, record each raw action with pre-dispatch terminal state, and then
 	// apply the semantic actions. Normal operation retains the bulk fast path.
 	if !isnil(t.renderer_state.inspector) {
-		for byte in buf {
-			t.renderer_state.record_inspector_pty_byte(byte)
-			t.terminal_stream.next(byte)
-			for event in t.terminal_stream.events {
-				t.stream_handler.vt(event) or {
-					eprintln('error processing terminal data: ${err}')
-					break
-				}
+		for i, byte in buf {
+			t.renderer_state.record_inspector_pty_read(buf[i..i + 1]) or {
+				eprintln('error recording pty read in inspector err=${err}')
 			}
-			t.terminal_stream.clear_events()
+
+			t.terminal_stream.next(byte) or { eprintln('error processing terminal data: ${err}') }
 		}
 	} else {
-		t.terminal_stream.next_slice(buf)
-		for event in t.terminal_stream.events {
-			t.stream_handler.vt(event) or {
-				eprintln('error processing terminal data: ${err}')
-				break
-			}
-		}
-		t.terminal_stream.clear_events()
+		t.terminal_stream.next_slice(buf) or { eprintln('error processing terminal data: ${err}') }
 	}
 
 	// If our stream handling caused messages to be sent to the mailbox
 	// thread, then we need to wake it up so that it processes them.
-	if t.stream_handler.termio_messaged {
-		t.stream_handler.termio_messaged = false
+	if t.terminal_stream.handler.termio_messaged {
+		t.terminal_stream.handler.termio_messaged = false
 		t.mailbox.notify()
 	}
 }

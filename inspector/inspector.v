@@ -170,7 +170,7 @@ pub fn Inspector.init() !Inspector {
 	return Inspector{
 		renderer_bridge: renderer.InspectorOverlayBridge{
 			overlay_features_fn: inspector_overlay_features
-			record_pty_byte_fn:  inspector_record_pty_byte
+			record_pty_read_fn:  inspector_record_pty_read
 		}
 		key_events:      []KeyEvent{cap: 2}
 		vt_stream:       VTStream.init()
@@ -185,12 +185,12 @@ fn inspector_overlay_features(ptr voidptr) []renderer.OverlayFeature {
 	return insp.renderer.overlay_features()
 }
 
-fn inspector_record_pty_byte(ptr voidptr, byte u8, term &terminal.Terminal) {
+fn inspector_record_pty_read(ptr voidptr, t &terminal.Terminal, data []u8) ! {
 	if isnil(ptr) {
 		return
 	}
 	mut insp := unsafe { &Inspector(ptr) }
-	insp.vt_stream.record_pty_byte(byte, term)
+	insp.vt_stream.record_pty_read(t, data)!
 }
 
 pub fn (mut self Inspector) deinit() {

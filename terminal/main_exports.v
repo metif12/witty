@@ -132,7 +132,7 @@ pub type DCS = DCSAction
 
 pub type Style = CellStyle
 
-pub type StreamAction = StreamEvent
+pub type StreamAction = Action
 
 pub type CursorStyleReq = AnsiCursorStyle
 
