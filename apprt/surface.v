@@ -36,76 +36,173 @@ pub fn (mut self WriteReq) deinit() {
 	self.payload.deinit()
 }
 
-// SurfaceMessage represents the message types that can be sent to a single surface.
-pub struct SurfaceMessage {
+// Set the title of the surface.
+// TODO: we should change this to a "WriteReq" style structure in
+// the termio message so that we can more efficiently send strings
+// of any length
+pub struct SurfaceMessageSetTitle {
 pub mut:
-	kind SurfaceMessageKind
+	title [256]u8
+}
 
-	// For set_title: null-terminated title buffer
-	// TODO: we should change this to a "WriteReq" style structure in
-	// the termio message so that we can more efficiently send strings
-	// of any length
-	title_buf [256]u8
+// Report the window title back to the terminal
+pub struct SurfaceMessageReportTitle {
+pub:
+	style ReportTitleStyle
+}
 
-	// For report_title
-	report_style ReportTitleStyle
+// Set the mouse shape.
+pub struct SurfaceMessageSetMouseShape {
+pub:
+	shape terminal.MouseShape
+}
 
-	// For set_mouse_shape
-	mouse_shape terminal.MouseShape
+// Read the clipboard and write to the pty.
+pub struct SurfaceMessageClipboardRead {
+pub:
+	clipboard Clipboard
+}
 
-	// For clipboard_read
+// Write the clipboard contents.
+pub struct SurfaceMessageClipboardWrite {
+pub:
 	clipboard_type Clipboard
+	req            WriteReq
+}
 
-	// For clipboard_write
-	clipboard_write_type Clipboard
-	clipboard_write_req  WriteReq
-
-	// For change_config: pointer to the new configuration. The pointer is
-	// not valid after receiving this message so any config must be used
-	// and derived immediately.
+// Change the configuration to the given configuration. The pointer is
+// not valid after receiving this message so any config must be used
+// and derived immediately.
+pub struct SurfaceMessageChangeConfig {
+pub:
 	config &configpkg.Config = unsafe { nil }
+}
 
-	// For child_exited
-	child_exited ChildExited
+// Close the surface. This will only close the current surface that
+// receives this, not the full application.
+pub struct SurfaceMessageClose {}
 
-	// For desktop_notification
+// Show a desktop notification.
+pub struct SurfaceMessageDesktopNotification {
+pub mut:
 	// Desktop notification title.
-	notification_title [64]u8
+	title [64]u8
 	// Desktop notification body.
-	notification_body [256]u8
+	body [256]u8
+}
 
-	// For renderer_health
-	renderer_health renderer.Health
+// Health status change for the renderer.
+pub struct SurfaceMessageRendererHealth {
+pub:
+	health renderer.Health
+}
 
-	// For password_input: notifies the surface that password input has
-	// started within the terminal. This should always be followed by a
-	// false value unless the surface exits.
-	password_input bool
+// Tell the surface to present itself to the user. This may require raising
+// a window and switching tabs.
+pub struct SurfaceMessagePresentSurface {}
 
-	// For color_change: a terminal color was changed using OSC sequences.
-	color_change osc.ColoredTarget
+// Notifies the surface that password input has started within
+// the terminal. This should always be followed by a false value
+// unless the surface exits.
+pub struct SurfaceMessagePasswordInput {
+pub:
+	value bool
+}
 
-	// For selection_scroll_tick: notifies the surface that a tick of the
-	// timer that is timing out selection scrolling has occurred.
-	selection_scroll_tick bool
+// Notifies the surface that a tick of the timer that is timing
+// out selection scrolling has occurred. "selection scrolling"
+// is when the user has clicked and dragged the mouse outside
+// the viewport of the terminal and the terminal is scrolling
+// the viewport to follow the mouse cursor.
+pub struct SurfaceMessageSelectionScrollTick {
+pub:
+	value bool
+}
 
-	// For pwd_change: the terminal has reported a change in the working directory.
-	pwd_change WriteReq
+// The terminal has reported a change in the working directory.
+pub struct SurfaceMessagePwdChange {
+pub:
+	req WriteReq
+}
 
-	// For progress_report: report the progress of an action using a GUI element.
-	progress_report osc.ProgressReport
+// The terminal encountered a bell character.
+pub struct SurfaceMessageRingBell {}
 
-	// For stop_command: the optional exit code of the command.
-	stop_command_exit_code ?u8
+// A command has started in the shell, start a timer.
+pub struct SurfaceMessageStartCommand {}
 
-	// For scrollbar: the scrollbar state changed.
-	scrollbar terminal.Scrollbar
+// A command has finished in the shell, stop the timer and send out
+// notifications as appropriate. The optional u8 is the exit code
+// of the command.
+pub struct SurfaceMessageStopCommand {
+pub:
+	exit_code ?u8
+}
 
-	// For search_total: search progress update.
-	search_total ?usize
+// Search progress update
+pub struct SurfaceMessageSearchTotal {
+pub:
+	total ?usize
+}
 
-	// For search_selected: selected search index change.
-	search_selected ?usize
+// Selected search index change
+pub struct SurfaceMessageSearchSelected {
+pub:
+	selected ?usize
+}
+
+// The message types that can be sent to a single surface: the source's
+// tagged `Message` union. `child_exited`, `color_change`, `progress_report`
+// and `scrollbar` carry their payload types directly.
+pub type SurfaceMessage = ChildExited
+	| SurfaceMessageChangeConfig
+	| SurfaceMessageClipboardRead
+	| SurfaceMessageClipboardWrite
+	| SurfaceMessageClose
+	| SurfaceMessageDesktopNotification
+	| SurfaceMessagePasswordInput
+	| SurfaceMessagePresentSurface
+	| SurfaceMessagePwdChange
+	| SurfaceMessageRendererHealth
+	| SurfaceMessageReportTitle
+	| SurfaceMessageRingBell
+	| SurfaceMessageSearchSelected
+	| SurfaceMessageSearchTotal
+	| SurfaceMessageSelectionScrollTick
+	| SurfaceMessageSetMouseShape
+	| SurfaceMessageSetTitle
+	| SurfaceMessageStartCommand
+	| SurfaceMessageStopCommand
+	| osc.ColoredTarget
+	| osc.ProgressReport
+	| terminal.Scrollbar
+
+// The tag of the active message variant.
+pub fn (self SurfaceMessage) kind() SurfaceMessageKind {
+	return match self {
+		SurfaceMessageSetTitle { .set_title }
+		SurfaceMessageReportTitle { .report_title }
+		SurfaceMessageSetMouseShape { .set_mouse_shape }
+		SurfaceMessageClipboardRead { .clipboard_read }
+		SurfaceMessageClipboardWrite { .clipboard_write }
+		SurfaceMessageChangeConfig { .change_config }
+		SurfaceMessageClose { .close }
+		ChildExited { .child_exited }
+		SurfaceMessageDesktopNotification { .desktop_notification }
+		SurfaceMessageRendererHealth { .renderer_health }
+		SurfaceMessagePresentSurface { .present_surface }
+		SurfaceMessagePasswordInput { .password_input }
+		osc.ColoredTarget { .color_change }
+		SurfaceMessageSelectionScrollTick { .selection_scroll_tick }
+		SurfaceMessagePwdChange { .pwd_change }
+		SurfaceMessageRingBell { .ring_bell }
+		osc.ProgressReport { .progress_report }
+		SurfaceMessageStartCommand { .start_command }
+		SurfaceMessageStopCommand { .stop_command }
+		terminal.Scrollbar { .scrollbar }
+		SurfaceMessageSearchTotal { .search_total }
+		SurfaceMessageSearchSelected { .search_selected }
+	}
 }
 
 // SurfaceMessageKind identifies the type of surface message.

@@ -1139,58 +1139,58 @@ fn (mut self Thread) drain_mailbox(mut cb CallbackData) ! {
 		// If we have a message we always redraw
 		redraw = true
 
-		match message.kind {
-			.color_scheme_report {
-				io.color_scheme_report(mut data, message.force_val)!
+		match message {
+			MessageColorSchemeReport {
+				io.color_scheme_report(mut data, message.force)!
 			}
-			.crash {
+			MessageCrash {
 				panic('crash request, crashing intentionally')
 			}
-			.change_config {
-				io.change_config(mut data, &message.config_val)!
+			MessageChangeConfig {
+				io.change_config(mut data, &message.config)!
 			}
-			.inspector {
-				self.flags.set_has_inspector(message.flag_val)
+			MessageInspector {
+				self.flags.set_has_inspector(message.value)
 			}
-			.resize {
-				self.handle_resize(mut cb, message.resize_val)
+			renderer.Size {
+				self.handle_resize(mut cb, message)
 			}
-			.size_report {
-				io.size_report(mut data, message.size_report_val)!
+			MessageSizeReport {
+				io.size_report(mut data, message.style)!
 			}
-			.clear_screen {
-				io.clear_screen(mut data, message.flag_val)!
+			MessageClearScreen {
+				io.clear_screen(mut data, message.history)!
 			}
-			.scroll_viewport {
-				io.scroll_viewport(message.scroll_viewport_val)!
+			MessageScrollViewport {
+				io.scroll_viewport(message.scroll)!
 			}
-			.selection_scroll {
-				if message.flag_val {
+			MessageSelectionScroll {
+				if message.value {
 					self.start_scroll_timer(mut cb)
 				} else {
 					self.stop_scroll_timer()
 				}
 			}
-			.jump_to_prompt {
-				io.jump_to_prompt(message.prompt_delta)!
+			MessageJumpToPrompt {
+				io.jump_to_prompt(message.delta)!
 			}
-			.start_synchronized_output {
+			MessageStartSynchronizedOutput {
 				self.start_synchronized_output(mut cb)
 			}
-			.linefeed_mode {
-				self.flags.set_linefeed_mode(message.flag_val)
+			MessageLinefeedMode {
+				self.flags.set_linefeed_mode(message.value)
 			}
-			.focused {
-				io.focus_gained(mut data, message.flag_val)!
+			MessageFocused {
+				io.focus_gained(mut data, message.value)!
 			}
-			.write_small {
-				io.queue_write(mut data, message.write_small_data.slice(), self.flags.linefeed_mode())!
+			WriteSmall {
+				io.queue_write(mut data, message.slice(), self.flags.linefeed_mode())!
 			}
-			.write_stable {
-				io.queue_write(mut data, message.write_stable_data.bytes(), self.flags.linefeed_mode())!
+			MessageWriteStable {
+				io.queue_write(mut data, message.data.bytes(), self.flags.linefeed_mode())!
 			}
-			.write_alloc {
-				io.queue_write(mut data, message.write_alloc_data.bytes(), self.flags.linefeed_mode())!
+			MessageWriteAlloc {
+				io.queue_write(mut data, message.data.bytes(), self.flags.linefeed_mode())!
 			}
 		}
 	}
@@ -1331,10 +1331,7 @@ fn termio_thread_selection_scroll_callback(cb_ voidptr, _ &xev.Loop, _ &xev.Comp
 	mut self := cb.self_
 
 	// Send the tick to the main surface
-	cb.io.surface_mailbox.push(apprt.SurfaceMessage{
-		kind:                  .selection_scroll_tick
-		selection_scroll_tick: self.scroll_active
-	}, datastruct.blocking_queue_instant)
+	cb.io.surface_mailbox.push(apprt.SurfaceMessageSelectionScrollTick{ value: self.scroll_active }, datastruct.blocking_queue_instant)
 
 	if self.scroll_active {
 		self.scroll.run(mut self.loop, &self.scroll_c, selection_scroll_ms, cb, termio_thread_selection_scroll_callback)
@@ -1370,22 +1367,136 @@ fn (self &Thread) show_start_error(mut io Termio, message string) {
 // Message: represents an IO message to send to the terminal.
 // ============================================================
 
-// Message represents an IO message to send to the terminal.
-// We use a tagged union approach via a kind enum and associated data.
-pub struct Message {
-pub mut:
-	kind MessageKind
-	// Data fields — only the one matching `kind` is meaningful.
-	write_small_data  WriteSmall
-	write_stable_data string
-	write_alloc_data  string
-	flag_val          bool
-	force_val         bool
-	size_report_val   SizeReportKind
-	resize_val        renderer.Size
-	config_val        DerivedConfig
-	scroll_viewport_val terminal.ScrollViewport
-	prompt_delta      isize
+// Request a color scheme report is sent to the pty.
+pub struct MessageColorSchemeReport {
+pub:
+	// Force write the current color scheme
+	force bool
+}
+
+// Purposely crash the renderer. This is used for testing and debugging.
+// See the "crash" binding action.
+pub struct MessageCrash {}
+
+// The derived configuration to update the implementation with. The source
+// allocates the config and frees it on receipt; the V message carries the
+// GC-managed value.
+pub struct MessageChangeConfig {
+pub:
+	config DerivedConfig
+}
+
+// Activate or deactivate the inspector.
+pub struct MessageInspector {
+pub:
+	value bool
+}
+
+// Request a size report is sent to the pty ([in-band
+// size report, mode 2048](https://gist.github.com/rockorager/e695fb2924d36b2bcf1fff4a3704bd83) and
+// [XTWINOPS](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h4-Functions-using-CSI-_-ordered-by-the-final-character-lparen-s-rparen:CSI-Ps;Ps;Ps-t.1EB0)).
+pub struct MessageSizeReport {
+pub:
+	style SizeReportKind
+}
+
+// Clear the screen.
+pub struct MessageClearScreen {
+pub:
+	// Include clearing the history
+	history bool
+}
+
+// Scroll the viewport
+pub struct MessageScrollViewport {
+pub:
+	scroll terminal.ScrollViewport
+}
+
+// Selection scrolling. If this is set to true then the termio
+// thread starts a timer that will trigger a `selection_scroll_tick`
+// message back to the surface. This ping/pong is because the
+// surface thread doesn't have access to an event loop from libghostty.
+pub struct MessageSelectionScroll {
+pub:
+	value bool
+}
+
+// Jump forward/backward n prompts.
+pub struct MessageJumpToPrompt {
+pub:
+	delta isize
+}
+
+// Send this when a synchronized output mode is started. This will
+// start the timer so that the output mode is disabled after a
+// period of time so that a bad actor can't hang the terminal.
+pub struct MessageStartSynchronizedOutput {}
+
+// Enable or disable linefeed mode (mode 20).
+pub struct MessageLinefeedMode {
+pub:
+	value bool
+}
+
+// The surface gained or lost focus.
+pub struct MessageFocused {
+pub:
+	value bool
+}
+
+// Write where the data pointer is stable.
+pub struct MessageWriteStable {
+pub:
+	data string
+}
+
+// Write where the data is allocated and must be freed.
+pub struct MessageWriteAlloc {
+pub:
+	data string
+}
+
+// Message represents an IO message to send to the terminal: the source's
+// tagged union. `resize` and `write_small` carry their payload types
+// directly.
+pub type Message = MessageChangeConfig
+	| MessageClearScreen
+	| MessageColorSchemeReport
+	| MessageCrash
+	| MessageFocused
+	| MessageInspector
+	| MessageJumpToPrompt
+	| MessageLinefeedMode
+	| MessageScrollViewport
+	| MessageSelectionScroll
+	| MessageSizeReport
+	| MessageStartSynchronizedOutput
+	| MessageWriteAlloc
+	| MessageWriteStable
+	| WriteSmall
+	| renderer.Size
+
+// The tag of the active message variant.
+pub fn (self Message) kind() MessageKind {
+	return match self {
+		MessageColorSchemeReport { .color_scheme_report }
+		MessageCrash { .crash }
+		MessageChangeConfig { .change_config }
+		MessageInspector { .inspector }
+		renderer.Size { .resize }
+		MessageSizeReport { .size_report }
+		MessageClearScreen { .clear_screen }
+		MessageScrollViewport { .scroll_viewport }
+		MessageSelectionScroll { .selection_scroll }
+		MessageJumpToPrompt { .jump_to_prompt }
+		MessageStartSynchronizedOutput { .start_synchronized_output }
+		MessageLinefeedMode { .linefeed_mode }
+		MessageFocused { .focused }
+		WriteSmall { .write_small }
+		MessageWriteStable { .write_stable }
+		MessageWriteAlloc { .write_alloc }
+	}
 }
 
 pub enum MessageKind as u8 {
@@ -1448,9 +1559,9 @@ pub fn (req &WriteReq) slice() []u8 {
 pub fn (req &WriteReq) message() Message {
 	data := req.payload.slice()
 	return match req.payload.kind {
-		.small { Message.write_small_msg(data) }
-		.stable { Message.write_stable_msg(data.bytestr()) }
-		.alloc { Message.write_alloc_msg(data.bytestr()) }
+		.small { Message(WriteSmall.from_slice(data)) }
+		.stable { Message(MessageWriteStable{ data: data.bytestr() }) }
+		.alloc { Message(MessageWriteAlloc{ data: data.bytestr() }) }
 	}
 }
 
@@ -1476,123 +1587,27 @@ pub fn (w &WriteSmall) slice() []u8 {
 	return result
 }
 
-// write_req creates a Message containing a write request from a
-// dynamically sized slice. The data is copied.
+// Return a write request for the given data. This will use
+// write_small if it fits or write_alloc otherwise. This should NOT
+// be used for stable pointers which can be manually set to write_stable.
 pub fn Message.write_req(data string) Message {
 	// If the data fits in a small write, use that
 	if data.len <= 38 {
-		mut msg := Message{
-			kind: .write_small
-		}
-		for i in 0 .. data.len {
-			msg.write_small_data.data[i] = data[i]
-		}
-		msg.write_small_data.len = u8(data.len)
-		return msg
+		return WriteSmall.from_slice(data.bytes())
 	}
 	// Otherwise use an allocated write
-	return Message{
-		kind: .write_alloc
-		write_alloc_data: data.clone()
-	}
-}
-
-pub fn Message.write_small_msg(data []u8) Message {
-	mut msg := Message{
-		kind: .write_small
-	}
-	length := if data.len < 38 { u8(data.len) } else { u8(38) }
-	for i in 0 .. int(length) {
-		msg.write_small_data.data[i] = data[i]
-	}
-	msg.write_small_data.len = length
-	return msg
-}
-
-pub fn Message.write_stable_msg(data string) Message {
-	return Message{
-		kind: .write_stable
-		write_stable_data: data
-	}
-}
-
-pub fn Message.write_alloc_msg(data string) Message {
-	return Message{
-		kind: .write_alloc
-		write_alloc_data: data.clone()
+	return MessageWriteAlloc{
+		data: data.clone()
 	}
 }
 
 // write_slice returns the byte payload for any write message.
 pub fn (msg &Message) write_slice() []u8 {
-	return match msg.kind {
-		.write_small { msg.write_small_data.slice() }
-		.write_stable { msg.write_stable_data.bytes() }
-		.write_alloc { msg.write_alloc_data.bytes() }
+	return match msg {
+		WriteSmall { msg.slice() }
+		MessageWriteStable { msg.data.bytes() }
+		MessageWriteAlloc { msg.data.bytes() }
 		else { []u8{} }
-	}
-}
-
-pub fn Message.resize_msg(size renderer.Size) Message {
-	return Message{
-		kind: .resize
-		resize_val: size
-	}
-}
-
-pub fn Message.inspector_msg(active bool) Message {
-	return Message{
-		kind: .inspector
-		flag_val: active
-	}
-}
-
-pub fn Message.focused_msg(focused bool) Message {
-	return Message{
-		kind: .focused
-		flag_val: focused
-	}
-}
-
-pub fn Message.color_scheme_report_msg(force bool) Message {
-	return Message{
-		kind: .color_scheme_report
-		force_val: force
-	}
-}
-
-pub fn Message.selection_scroll_msg(active bool) Message {
-	return Message{
-		kind: .selection_scroll
-		flag_val: active
-	}
-}
-
-pub fn Message.change_config_msg(cfg &DerivedConfig) Message {
-	return Message{
-		kind: .change_config
-		config_val: *cfg
-	}
-}
-
-pub fn Message.clear_screen_msg(history bool) Message {
-	return Message{
-		kind: .clear_screen
-		flag_val: history
-	}
-}
-
-pub fn Message.scroll_viewport_msg(scroll terminal.ScrollViewport) Message {
-	return Message{
-		kind: .scroll_viewport
-		scroll_viewport_val: scroll
-	}
-}
-
-pub fn Message.jump_to_prompt_msg(delta isize) Message {
-	return Message{
-		kind: .jump_to_prompt
-		prompt_delta: delta
 	}
 }
 

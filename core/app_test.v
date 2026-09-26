@@ -173,9 +173,7 @@ fn test_app_present_surface_message_ignores_stale_pointer() ! {
 	stale := unsafe { &Surface(voidptr(usize(0xdeadbeef))) }
 	_ = app.mailbox.push(Message(SurfaceMessageMsg{
 		surface: stale
-		message: SurfaceMessage{
-			kind: .present_surface
-		}
+		message: apprt.SurfaceMessagePresentSurface{}
 	}), datastruct.blocking_queue_forever)
 	assert app.mailbox.len() == 1
 	app.tick(mut runtime)!
@@ -227,10 +225,7 @@ fn test_termio_surface_message_routes_core_pointer_to_live_surface() ! {
 	mut core_surface := Surface{ rt_app: &core_runtime }
 	mut surface := &SurfaceRef{ core_surface: &core_surface }
 	app.surfaces = SurfaceList([surface])
-	assert termio_surface_message_push(voidptr(&app), voidptr(&core_surface), apprt.SurfaceMessage{
-		kind: .set_mouse_shape
-		mouse_shape: .pointer
-	}, datastruct.blocking_queue_forever) == 1
+	assert termio_surface_message_push(voidptr(&app), voidptr(&core_surface), apprt.SurfaceMessageSetMouseShape{ shape: .pointer }, datastruct.blocking_queue_forever) == 1
 	assert probe.count == 1
 	app.tick(mut apprt_runtime)!
 	assert core_runtime.actions.len == 1
@@ -242,9 +237,7 @@ fn test_termio_surface_message_ignores_closed_surface() ! {
 	mut app := make_test_app()
 	mut apprt_runtime := apprt.RuntimeApp{}
 	mut stale_surface := Surface{}
-	assert termio_surface_message_push(voidptr(&app), voidptr(&stale_surface), apprt.SurfaceMessage{
-		kind: .ring_bell
-	}, datastruct.blocking_queue_forever) == 1
+	assert termio_surface_message_push(voidptr(&app), voidptr(&stale_surface), apprt.SurfaceMessageRingBell{}, datastruct.blocking_queue_forever) == 1
 	app.tick(mut apprt_runtime)!
 	assert app.mailbox.len() == 0
 }
@@ -256,9 +249,7 @@ fn test_termio_surface_message_preserves_instant_timeout() {
 		assert app.mailbox.push(Message(RedrawSurfaceMsg{ surface: fake_surface(i) }), datastruct.blocking_queue_instant) == u32(i + 1)
 	}
 	mut surface := Surface{}
-	assert termio_surface_message_push(voidptr(&app), voidptr(&surface), apprt.SurfaceMessage{
-		kind: .ring_bell
-	}, datastruct.blocking_queue_instant) == 0
+	assert termio_surface_message_push(voidptr(&app), voidptr(&surface), apprt.SurfaceMessageRingBell{}, datastruct.blocking_queue_instant) == 0
 }
 
 fn test_app_key_event_uses_runtime_config_binding() {

@@ -114,7 +114,7 @@ pub fn (mut self StreamHandler) change_config(config &DerivedConfig) {
 	}
 
 	// The config could have changed any of our colors so update mode 2031
-	self.message_writer(Message.color_scheme_report_msg(false))
+	self.message_writer(MessageColorSchemeReport{ force: false })
 }
 
 fn (mut self StreamHandler) surface_message_writer(msg apprt.SurfaceMessage) {
@@ -789,9 +789,7 @@ pub fn (mut self StreamHandler) apc_end() ! {
 // ============================================================
 
 fn (mut self StreamHandler) bell() {
-	self.surface_message_writer(apprt.SurfaceMessage{
-		kind: .ring_bell
-	})
+	self.surface_message_writer(apprt.SurfaceMessageRingBell{})
 }
 
 fn (mut self StreamHandler) horizontal_tab(count u16) {
@@ -971,28 +969,20 @@ pub fn (mut self StreamHandler) set_mode(mode terminal.Mode, enabled bool) ! {
 		// forever.
 		.synchronized_output {
 			if enabled {
-				self.message_writer(Message{
-					kind: .start_synchronized_output
-				})
+				self.message_writer(MessageStartSynchronizedOutput{})
 			}
 		}
 		.linefeed {
-			self.message_writer(Message{
-				kind: .linefeed_mode
-				flag_val: enabled
-			})
+			self.message_writer(MessageLinefeedMode{ value: enabled })
 		}
 		.in_band_size_reports {
 			if enabled {
-				self.message_writer(Message{
-					kind: .size_report
-					size_report_val: .mode_2048
-				})
+				self.message_writer(MessageSizeReport{ style: .mode_2048 })
 			}
 		}
 		.focus_event {
 			if enabled {
-				self.message_writer(Message.focused_msg(self.terminal.flags.focused()))
+				self.message_writer(MessageFocused{ value: self.terminal.flags.focused() })
 			}
 		}
 		.mouse_event_x10 {
@@ -1076,10 +1066,10 @@ pub fn (mut self StreamHandler) device_attributes(req terminal.DeviceAttributeRe
 			} else {
 				'\x1b[?62;22c'
 			}
-			self.message_writer(Message.write_stable_msg(resp))
+			self.message_writer(MessageWriteStable{ data: resp })
 		}
 		.secondary {
-			self.message_writer(Message.write_stable_msg('\x1b[>1;10;0c'))
+			self.message_writer(MessageWriteStable{ data: '\x1b[>1;10;0c' })
 		}
 		.tertiary {}
 	}
@@ -1092,7 +1082,7 @@ pub fn (mut self StreamHandler) device_attributes(req terminal.DeviceAttributeRe
 pub fn (mut self StreamHandler) device_status_report(req terminal.DeviceStatusRequest) ! {
 	match req {
 		.operating_status {
-			self.message_writer(Message.write_stable_msg('\x1b[0n'))
+			self.message_writer(MessageWriteStable{ data: '\x1b[0n' })
 		}
 		.cursor_position {
 			mut pos_x := int(self.terminal.screens.active.cursor.x)
@@ -1115,7 +1105,7 @@ pub fn (mut self StreamHandler) device_status_report(req terminal.DeviceStatusRe
 			self.message_writer(Message.write_req(resp))
 		}
 		.color_scheme {
-			self.message_writer(Message.color_scheme_report_msg(true))
+			self.message_writer(MessageColorSchemeReport{ force: true })
 		}
 	}
 }
@@ -1190,12 +1180,10 @@ pub fn (mut self StreamHandler) full_reset() ! {
 	self.set_mouse_shape(.text)!
 
 	// Reset resets our palette so we report it for mode 2031.
-	self.message_writer(Message.color_scheme_report_msg(false))
+	self.message_writer(MessageColorSchemeReport{ force: false })
 
 	// Clear the progress bar
-	self.surface_message_writer(apprt.SurfaceMessage{
-		kind: .progress_report
-	})
+	self.surface_message_writer(apprt.SurfaceMessage(osc.ProgressReport{ state: .remove }))
 }
 
 // ============================================================
@@ -1247,21 +1235,13 @@ fn (mut self StreamHandler) window_title(title string) ! {
 			buf[pwd.len] = 0
 		}
 
-		mut msg := apprt.SurfaceMessage{
-			kind: .set_title
-		}
-		msg.title_buf = buf
-		self.surface_message_writer(msg)
+		self.surface_message_writer(apprt.SurfaceMessageSetTitle{ title: buf })
 		self.seen_title = false
 		return
 	}
 
 	self.seen_title = true
-	mut msg := apprt.SurfaceMessage{
-		kind: .set_title
-	}
-	msg.title_buf = buf
-	self.surface_message_writer(msg)
+	self.surface_message_writer(apprt.SurfaceMessageSetTitle{ title: buf })
 }
 
 fn (mut self StreamHandler) set_mouse_shape(shape terminal.MouseShape) ! {
@@ -1272,10 +1252,7 @@ fn (mut self StreamHandler) set_mouse_shape(shape terminal.MouseShape) ! {
 	}
 
 	self.terminal.mouse_shape = shape
-	self.surface_message_writer(apprt.SurfaceMessage{
-		kind: .set_mouse_shape
-		mouse_shape: shape
-	})
+	self.surface_message_writer(apprt.SurfaceMessageSetMouseShape{ shape: shape })
 }
 
 fn (mut self StreamHandler) clipboard_contents(kind u8, data string) ! {
@@ -1292,33 +1269,26 @@ fn (mut self StreamHandler) clipboard_contents(kind u8, data string) ! {
 
 	// Get clipboard contents
 	if data.len == 1 && data[0] == `?` {
-		self.surface_message_writer(apprt.SurfaceMessage{
-			kind: .clipboard_read
-			clipboard_type: clipboard_type
-		})
+		self.surface_message_writer(apprt.SurfaceMessageClipboardRead{ clipboard: clipboard_type })
 		return
 	}
 
 	// Write clipboard contents
-	self.surface_message_writer(apprt.SurfaceMessage{
-		kind: .clipboard_write
-		clipboard_write_type: clipboard_type
-		clipboard_write_req: apprt.WriteReq.init(data.bytes())
+	self.surface_message_writer(apprt.SurfaceMessageClipboardWrite{
+		clipboard_type: clipboard_type
+		req: apprt.WriteReq.init(data.bytes())
 	})
 }
 
 fn (mut self StreamHandler) semantic_prompt(cmd osc.SemanticPrompt) ! {
 	match cmd.action {
 		.end_input_start_output {
-			self.surface_message_writer(apprt.SurfaceMessage{ kind: .start_command })
+			self.surface_message_writer(apprt.SurfaceMessageStartCommand{})
 		}
 		.end_command {
 			raw := osc.read_exit_code(cmd.options_unvalidated) or { i32(0) }
 			code := if raw >= 0 && raw <= 255 { u8(raw) } else { u8(1) }
-			self.surface_message_writer(apprt.SurfaceMessage{
-				kind: .stop_command
-				stop_command_exit_code: code
-			})
+			self.surface_message_writer(apprt.SurfaceMessageStopCommand{ exit_code: code })
 		}
 		else {}
 	}
@@ -1342,10 +1312,7 @@ fn (mut self StreamHandler) report_pwd(url string) ! {
 		}
 
 		// Report the change.
-		self.surface_message_writer(apprt.SurfaceMessage{
-			kind: .pwd_change
-			pwd_change: apprt.WriteReq.stable([]u8{})
-		})
+		self.surface_message_writer(apprt.SurfaceMessagePwdChange{ req: apprt.WriteReq.stable([]u8{}) })
 		return
 	}
 
@@ -1380,10 +1347,7 @@ fn (mut self StreamHandler) report_pwd(url string) ! {
 	self.terminal.set_pwd(uri.path)!
 
 	// Report it to the surface.
-	self.surface_message_writer(apprt.SurfaceMessage{
-		kind: .pwd_change
-		pwd_change: apprt.WriteReq.init(uri.path.bytes())
-	})
+	self.surface_message_writer(apprt.SurfaceMessagePwdChange{ req: apprt.WriteReq.init(uri.path.bytes()) })
 
 	// If we haven't seen a title, use our pwd as the title.
 	if !self.seen_title {
@@ -1549,17 +1513,14 @@ fn (self &StreamHandler) dynamic_color_query_value(color osc.DynamicColor) ?term
 
 // notify_color_change forwards an OSC color mutation to the surface.
 fn (mut self StreamHandler) notify_color_change(target osc.ColorTarget, color terminal.RGB) {
-	self.surface_message_writer(apprt.SurfaceMessage{
-		kind: .color_change
-		color_change: osc.ColoredTarget{
+	self.surface_message_writer(apprt.SurfaceMessage(osc.ColoredTarget{
 			target: target
 			color: osc.RGB{
 				r: color.r
 				g: color.g
 				b: color.b
 			}
-		}
-	})
+		}))
 }
 
 // ============================================================
@@ -1689,29 +1650,27 @@ fn hex4(v u8) string {
 }
 
 fn (mut self StreamHandler) show_desktop_notification(title string, body string) ! {
-	mut msg := apprt.SurfaceMessage{
-		kind: .desktop_notification
-	}
+	mut msg := apprt.SurfaceMessageDesktopNotification{}
 
-	title_len := if title.len < msg.notification_title.len {
+	title_len := if title.len < msg.title.len {
 		title.len
 	} else {
-		msg.notification_title.len - 1
+		msg.title.len - 1
 	}
 	for i in 0 .. title_len {
-		msg.notification_title[i] = title[i]
+		msg.title[i] = title[i]
 	}
-	msg.notification_title[title_len] = 0
+	msg.title[title_len] = 0
 
-	body_len := if body.len < msg.notification_body.len {
+	body_len := if body.len < msg.body.len {
 		body.len
 	} else {
-		msg.notification_body.len - 1
+		msg.body.len - 1
 	}
 	for i in 0 .. body_len {
-		msg.notification_body[i] = body[i]
+		msg.body[i] = body[i]
 	}
-	msg.notification_body[body_len] = 0
+	msg.body[body_len] = 0
 
 	self.surface_message_writer(msg)
 }
@@ -1720,38 +1679,23 @@ fn (mut self StreamHandler) show_desktop_notification(title string, body string)
 pub fn (mut self StreamHandler) send_size_report(style terminal.SizeReportStyle) {
 	match style {
 		.csi_14_t {
-			self.message_writer(Message{
-				kind: .size_report
-				size_report_val: .csi_14_t
-			})
+			self.message_writer(MessageSizeReport{ style: .csi_14_t })
 		}
 		.csi_16_t {
-			self.message_writer(Message{
-				kind: .size_report
-				size_report_val: .csi_16_t
-			})
+			self.message_writer(MessageSizeReport{ style: .csi_16_t })
 		}
 		.csi_18_t {
-			self.message_writer(Message{
-				kind: .size_report
-				size_report_val: .csi_18_t
-			})
+			self.message_writer(MessageSizeReport{ style: .csi_18_t })
 		}
 		.csi_21_t {
-			self.surface_message_writer(apprt.SurfaceMessage{
-				kind: .report_title
-				report_style: .csi_21_t
-			})
+			self.surface_message_writer(apprt.SurfaceMessageReportTitle{ style: .csi_21_t })
 		}
 	}
 }
 
 // Display a GUI progress report.
 fn (mut self StreamHandler) progress_report(report osc.ProgressReport) {
-	self.surface_message_writer(apprt.SurfaceMessage{
-		kind: .progress_report
-		progress_report: report
-	})
+	self.surface_message_writer(apprt.SurfaceMessage(report))
 }
 
 // ============================================================

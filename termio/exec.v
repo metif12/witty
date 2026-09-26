@@ -312,13 +312,10 @@ fn exec_process_exit_common(mut td ThreadData, exit_code u32) {
 
 	// We always notify the surface immediately that the child has
 	// exited and some metadata about the exit.
-	td.surface_mailbox.push(apprt.SurfaceMessage{
-		kind:         .child_exited
-		child_exited: apprt.ChildExited{
+	td.surface_mailbox.push(apprt.SurfaceMessage(apprt.ChildExited{
 			exit_code:  exit_code
 			runtime_ms: runtime_ms
-		}
-	}, datastruct.blocking_queue_forever)
+		}), datastruct.blocking_queue_forever)
 }
 
 fn exec_process_exit(td_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorKind, exit_code u32) xev.CallbackAction {
@@ -389,10 +386,7 @@ fn exec_termios_timer(td_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorK
 				// We have to notify the surface that we're in password input.
 				// We must block on this because the balanced true/false state
 				// of this is critical to apprt behavior.
-				td.surface_mailbox.push(apprt.SurfaceMessage{
-					kind:           .password_input
-					password_input: password_input
-				}, datastruct.blocking_queue_forever)
+				td.surface_mailbox.push(apprt.SurfaceMessagePasswordInput{ value: password_input }, datastruct.blocking_queue_forever)
 			}
 		}
 	}

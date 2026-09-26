@@ -165,16 +165,16 @@ fn test_search_callback_routes_owned_results_and_ui_state() {
 	}
 	selected := pop_surface_core_message(mut app)
 	assert voidptr(selected.surface) == voidptr(&surface)
-	assert selected.message.kind == .search_selected
-	assert selected.message.search_selected? == 4
+	assert selected.message.kind() == .search_selected
+	assert (selected.message as apprt.SurfaceMessageSearchSelected).selected? == 4
 
 	surface_search_event(searchpkg.Event{
 		kind: .total_matches
 		total: 9
 	}, voidptr(&surface))
 	total := pop_surface_core_message(mut app)
-	assert total.message.kind == .search_total
-	assert total.message.search_total? == 9
+	assert total.message.kind() == .search_total
+	assert (total.message as apprt.SurfaceMessageSearchTotal).total? == 9
 
 	surface_search_event(searchpkg.Event{ kind: .quit }, voidptr(&surface))
 	cleared_match := pop_renderer_message(mut surface)
@@ -190,10 +190,10 @@ fn test_search_callback_routes_owned_results_and_ui_state() {
 	assert surface.renderer_thread.mailbox.pop() == none
 	cleared_total := pop_surface_core_message(mut app)
 	cleared_selected := pop_surface_core_message(mut app)
-	assert cleared_total.message.kind == .search_total
-	assert cleared_total.message.search_total == none
-	assert cleared_selected.message.kind == .search_selected
-	assert cleared_selected.message.search_selected == none
+	assert cleared_total.message.kind() == .search_total
+	assert (cleared_total.message as apprt.SurfaceMessageSearchTotal).total == none
+	assert cleared_selected.message.kind() == .search_selected
+	assert (cleared_selected.message as apprt.SurfaceMessageSearchSelected).selected == none
 }
 
 fn test_derived_config_uses_selection_and_clipboard_maps() {
@@ -560,7 +560,7 @@ fn test_text_binding_decodes_zig_escapes_before_writing() {
 	mut surf := make_test_surface()
 	assert surf.perform_binding_action(input.Action.new_str(.text, 'line\\n\\x41'))!
 	assert surf.io.messages.len == 1
-	assert surf.io.messages[0].kind == .write_small
+	assert surf.io.messages[0].kind() == .write_small
 	assert surf.io.messages[0].write_slice().bytestr() == 'line\nA'
 }
 
@@ -569,7 +569,7 @@ fn test_long_text_binding_uses_allocated_write() {
 	text := 'x'.repeat(129)
 	assert surf.perform_binding_action(input.Action.new_str(.text, text))!
 	assert surf.io.messages.len == 1
-	assert surf.io.messages[0].kind == .write_alloc
+	assert surf.io.messages[0].kind() == .write_alloc
 	assert surf.io.messages[0].write_slice().bytestr() == text
 }
 
@@ -589,7 +589,7 @@ fn test_csi_binding_accepts_exact_fixed_buffer_size_without_truncation() {
 	action := input.Action.new_str(.csi, 'x'.repeat(126))
 	assert surf.perform_binding_action(action)!
 	assert surf.io.messages.len == 1
-	assert surf.io.messages[0].kind == .write_alloc
+	assert surf.io.messages[0].kind() == .write_alloc
 	assert surf.io.messages[0].write_slice().len == 128
 }
 
@@ -1115,12 +1115,9 @@ fn test_child_exited_retains_u64_runtime() ! {
 	}
 	// Truncating this runtime to 32 bits would make it look like a 100 ms
 	// abnormal exit.
-	surf.handle_message(SurfaceMessage{
-		kind: .child_exited
-		child_exited: apprt.ChildExited{
-			runtime_ms: (u64(1) << 32) + 100
-			exit_code: 127
-		}
+	surf.handle_message(apprt.ChildExited{
+		runtime_ms: (u64(1) << 32) + 100
+		exit_code:  127
 	})!
 	mut terminal_state := surf.renderer_state.terminal_
 	text := terminal_state.plain_string() or { panic(err) }
@@ -1158,8 +1155,8 @@ fn test_selection_scroll_stops_after_screen_switch() ! {
 
 	surf.selection_scroll_tick()!
 	assert surf.io.messages.len == 1
-	assert surf.io.messages[0].kind == .selection_scroll
-	assert !surf.io.messages[0].flag_val
+	assert surf.io.messages[0].kind() == .selection_scroll
+	assert !(surf.io.messages[0] as termiopkg.MessageSelectionScroll).value
 }
 
 fn test_complete_clipboard_paste_empty() ! {
@@ -1172,7 +1169,7 @@ fn test_complete_clipboard_paste_encodes_non_bracketed_newlines() ! {
 	mut surf := make_test_surface()
 	surf.complete_clipboard_paste('one\ntwo', true)!
 	assert surf.io.messages.len == 1
-	assert surf.io.messages[0].kind == .write_alloc
+	assert surf.io.messages[0].kind() == .write_alloc
 	assert surf.io.messages[0].write_slice().bytestr() == 'one\rtwo'
 }
 
@@ -1266,7 +1263,7 @@ fn test_end_key_sequence_flush_preserves_allocated_write() {
 
 	assert surf.keyboard.sequence_queued.len == 0
 	assert surf.io.messages.len == 1
-	assert surf.io.messages[0].kind == .write_alloc
+	assert surf.io.messages[0].kind() == .write_alloc
 	assert surf.io.messages[0].write_slice().bytestr() == data
 }
 
@@ -1636,7 +1633,7 @@ fn test_scroll_callback_alternate_screen_emits_cursor_sequences() {
 	surf.scroll_callback(0, 0.1, input.ScrollMods{})!
 	assert surf.io.messages.len == 3
 	for msg in surf.io.messages {
-		assert msg.kind == .write_stable
+		assert msg.kind() == .write_stable
 		assert msg.write_slice().bytestr() == '\x1bOA'
 	}
 }
@@ -1651,7 +1648,7 @@ fn test_scroll_callback_reports_horizontal_wheel_buttons() {
 	surf.scroll_callback(2, 0, input.ScrollMods{})!
 	assert surf.io.messages.len == 2
 	for msg in surf.io.messages {
-		assert msg.kind in [.write_small, .write_alloc]
+		assert msg.kind() in [.write_small, .write_alloc]
 		assert msg.write_slice().len > 0
 	}
 }
@@ -1767,12 +1764,9 @@ fn test_surface_best_effort_notifications_ignore_runtime_errors() {
 		rt_app: &runtime
 	}
 	mut failed := false
-	surf.handle_message(SurfaceMessage{ kind: .ring_bell }) or { failed = true }
+	surf.handle_message(apprt.SurfaceMessageRingBell{}) or { failed = true }
 	assert !failed
-	surf.handle_message(SurfaceMessage{
-		kind: .progress_report
-		progress_report: osc.ProgressReport{}
-	}) or { failed = true }
+	surf.handle_message(osc.ProgressReport{}) or { failed = true }
 	assert !failed
 }
 
@@ -1781,12 +1775,12 @@ fn test_surface_ring_bell_uses_monotonic_rate_limit() ! {
 	mut surf := Surface{
 		rt_app: &runtime
 	}
-	surf.handle_message(SurfaceMessage{ kind: .ring_bell })!
+	surf.handle_message(apprt.SurfaceMessageRingBell{})!
 	first := surf.last_bell_time or {
 		assert false, 'bell did not store a timestamp'
 		return
 	}
-	surf.handle_message(SurfaceMessage{ kind: .ring_bell })!
+	surf.handle_message(apprt.SurfaceMessageRingBell{})!
 	assert surf.last_bell_time? >= first
 	assert runtime.actions.len == 1
 }
@@ -1875,10 +1869,7 @@ fn test_command_finished_preserves_duration_and_exit_code() ! {
 	mut surf := make_test_surface()
 	surf.rt_app = &runtime
 	surf.command_timer = time.sys_mono_now() - 1_234_567
-	surf.handle_message(apprt.SurfaceMessage{
-		kind: .stop_command
-		stop_command_exit_code: u8(7)
-	})!
+	surf.handle_message(apprt.SurfaceMessageStopCommand{ exit_code: u8(7) })!
 
 	assert surf.command_timer == none
 	assert runtime.actions.len == 1

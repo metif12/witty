@@ -382,7 +382,7 @@ pub fn (mut self App) update_config(mut rt_app apprt.RuntimeApp, config &configp
 	for surface in self.surfaces {
 		mut core_surface := surface.core()
 		core_surface.handle_message(unsafe {
-			SurfaceMessage{ kind: .change_config, config: config }
+			apprt.SurfaceMessageChangeConfig{ config: config }
 		})!
 	}
 
@@ -787,7 +787,7 @@ pub fn (mut self App) perform_all_surface_action(action input.Action) {
 // surface_message handles a message routed to a specific surface. We first
 // ensure the surface is still active (a simple linear search) since messages
 // are rare and windows are few.
-fn (mut self App) surface_message(surface &Surface, msg SurfaceMessage) ! {
+fn (mut self App) surface_message(surface &Surface, msg apprt.SurfaceMessage) ! {
 	if self.has_surface(surface) {
 		mut core_surface := unsafe { surface }
 		core_surface.handle_message(msg)!
@@ -838,7 +838,7 @@ pub struct QuitMsg {}
 pub struct SurfaceMessageMsg {
 pub:
 	surface &Surface
-	message SurfaceMessage
+	message apprt.SurfaceMessage
 }
 
 // Redraw a surface. This only has an effect for runtimes that

@@ -71,12 +71,12 @@ fn test_surface_message_writer_retries_without_renderer_lock_after_full_queue() 
 	ctx.reject_instant = true
 	ctx.rstate.mutex = sync.new_mutex()
 	ctx.rstate.mutex.lock()
-	handler.surface_message_writer(apprt.SurfaceMessage{ kind: .ring_bell })
+	handler.surface_message_writer(apprt.SurfaceMessageRingBell{})
 	ctx.rstate.mutex.unlock()
 	ctx.rstate.mutex.destroy()
 	ctx.rstate.mutex = unsafe { nil }
 	assert ctx.messages.len == 1
-	assert ctx.messages[0].kind == .ring_bell
+	assert ctx.messages[0].kind() == .ring_bell
 	assert ctx.timeouts == [.instant, .forever]
 }
 
@@ -90,16 +90,16 @@ fn test_progress_report_forwards_payload() ! {
 		progress: 42
 	})
 	assert ctx.messages.len == 1
-	assert ctx.messages[0].kind == .progress_report
-	assert ctx.messages[0].progress_report.state == osc.ProgressState.set
-	assert ctx.messages[0].progress_report.progress or { 0 } == 42
+	assert ctx.messages[0].kind() == .progress_report
+	assert (ctx.messages[0] as osc.ProgressReport).state == osc.ProgressState.set
+	assert (ctx.messages[0] as osc.ProgressReport).progress or { 0 } == 42
 
 	handler.progress_report(osc.ProgressReport{
 		state: .indeterminate
 	})
 	assert ctx.messages.len == 2
-	assert ctx.messages[1].progress_report.state == .indeterminate
-	assert ctx.messages[1].progress_report.progress == none
+	assert (ctx.messages[1] as osc.ProgressReport).state == .indeterminate
+	assert (ctx.messages[1] as osc.ProgressReport).progress == none
 }
 
 fn test_desktop_notification_forwards_typed_payload() ! {
@@ -109,9 +109,9 @@ fn test_desktop_notification_forwards_typed_payload() ! {
 	}
 	handler.show_desktop_notification('Compiler', 'Build failed')!
 	assert ctx.messages.len == 1
-	assert ctx.messages[0].kind == .desktop_notification
-	assert ctx.messages[0].notification_title[..8].bytestr() == 'Compiler'
-	assert ctx.messages[0].notification_body[..12].bytestr() == 'Build failed'
+	assert ctx.messages[0].kind() == .desktop_notification
+	assert (ctx.messages[0] as apprt.SurfaceMessageDesktopNotification).title[..8].bytestr() == 'Compiler'
+	assert (ctx.messages[0] as apprt.SurfaceMessageDesktopNotification).body[..12].bytestr() == 'Build failed'
 }
 
 fn test_desktop_notification_preserves_full_sentinel_array_payloads() ! {
@@ -124,10 +124,10 @@ fn test_desktop_notification_preserves_full_sentinel_array_payloads() ! {
 	handler.show_desktop_notification(title, body)!
 
 	assert ctx.messages.len == 1
-	assert ctx.messages[0].notification_title[..63].bytestr() == title
-	assert ctx.messages[0].notification_title[63] == 0
-	assert ctx.messages[0].notification_body[..255].bytestr() == body
-	assert ctx.messages[0].notification_body[255] == 0
+	assert (ctx.messages[0] as apprt.SurfaceMessageDesktopNotification).title[..63].bytestr() == title
+	assert (ctx.messages[0] as apprt.SurfaceMessageDesktopNotification).title[63] == 0
+	assert (ctx.messages[0] as apprt.SurfaceMessageDesktopNotification).body[..255].bytestr() == body
+	assert (ctx.messages[0] as apprt.SurfaceMessageDesktopNotification).body[255] == 0
 }
 
 // Test that the StreamHandler can be created and deinitialized.
@@ -168,8 +168,8 @@ fn test_stream_handler_tmux_viewer_lifecycle_and_commands() ! {
 	handler.dcs_command(mut session)!
 	assert handler.termio_messaged
 	msg := ctx.mailbox.queue.pop() or { panic('expected tmux command') }
-	assert msg.kind == .write_small
-	assert msg.write_small_data.slice().bytestr().starts_with('display-message')
+	assert msg.kind() == .write_small
+	assert (msg as WriteSmall).slice().bytestr().starts_with('display-message')
 
 	mut exit := terminal.DcsCommand(terminal.DcsCommandTmux{
 		notification: tmux.Notification(tmux.NotifExit{})
@@ -207,15 +207,15 @@ fn test_stream_handler_xtgettcap_omits_unknown_and_formats_boolean() ! {
 		assert false
 		return
 	}
-	assert boolean_msg.kind == .write_small
-	assert boolean_msg.write_small_data.slice().bytestr() == '\x1bP1+r616D\x1b\\'
+	assert boolean_msg.kind() == .write_small
+	assert (boolean_msg as WriteSmall).slice().bytestr() == '\x1bP1+r616D\x1b\\'
 
 	numeric_msg := ctx.mailbox.queue.pop() or {
 		assert false
 		return
 	}
-	assert numeric_msg.kind == .write_small
-	assert numeric_msg.write_small_data.slice().bytestr() == '\x1bP1+r636F6C6F7273=323536\x1b\\'
+	assert numeric_msg.kind() == .write_small
+	assert (numeric_msg as WriteSmall).slice().bytestr() == '\x1bP1+r636F6C6F7273=323536\x1b\\'
 }
 
 fn test_stream_handler_xtversion_uses_build_version() ! {
@@ -226,8 +226,8 @@ fn test_stream_handler_xtversion_uses_build_version() ! {
 
 	assert ctx.mailbox.queue.len() == 1
 	msg := ctx.mailbox.queue.pop() or { panic('expected XTVERSION response') }
-	assert msg.kind == .write_small
-	assert msg.write_small_data.slice().bytestr() == '\x1bP>|ghostty ${build_meta.version_string}\x1b\\'
+	assert msg.kind() == .write_small
+	assert (msg as WriteSmall).slice().bytestr() == '\x1bP>|ghostty ${build_meta.version_string}\x1b\\'
 }
 
 fn test_stream_handler_request_mode_uses_dec_protocol_value() ! {
@@ -237,8 +237,8 @@ fn test_stream_handler_request_mode_uses_dec_protocol_value() ! {
 	handler.request_mode(.cursor_visible)!
 
 	msg := ctx.mailbox.queue.pop() or { panic('expected DECRQM response') }
-	assert msg.kind == .write_small
-	assert msg.write_small_data.slice().bytestr() == '\x1b[?25;1\$y'
+	assert msg.kind() == .write_small
+	assert (msg as WriteSmall).slice().bytestr() == '\x1b[?25;1\$y'
 }
 
 fn test_stream_handler_request_mode_uses_ansi_protocol_value() ! {
@@ -248,8 +248,8 @@ fn test_stream_handler_request_mode_uses_ansi_protocol_value() ! {
 	handler.request_mode(.insert)!
 
 	msg := ctx.mailbox.queue.pop() or { panic('expected DECRQM response') }
-	assert msg.kind == .write_small
-	assert msg.write_small_data.slice().bytestr() == '\x1b[4;2\$y'
+	assert msg.kind() == .write_small
+	assert (msg as WriteSmall).slice().bytestr() == '\x1b[4;2\$y'
 }
 
 fn test_stream_handler_decrqss_requires_declrmm_for_horizontal_margins() ! {
@@ -258,12 +258,12 @@ fn test_stream_handler_decrqss_requires_declrmm_for_horizontal_margins() ! {
 
 	handler.dcs_decrqss(.decslrm)
 	disabled := ctx.mailbox.queue.pop() or { panic('expected invalid DECRPSS response') }
-	assert disabled.write_small_data.slice().bytestr() == '\x1bP0\$r\x1b\\'
+	assert (disabled as WriteSmall).slice().bytestr() == '\x1bP0\$r\x1b\\'
 
 	handler.terminal.modes.set(.enable_left_and_right_margin, true)
 	handler.dcs_decrqss(.decslrm)
 	enabled := ctx.mailbox.queue.pop() or { panic('expected valid DECRPSS response') }
-	assert enabled.write_small_data.slice().bytestr() == '\x1bP1\$r1;80s\x1b\\'
+	assert (enabled as WriteSmall).slice().bytestr() == '\x1bP1\$r1;80s\x1b\\'
 }
 
 fn test_stream_handler_decrqss_hollow_cursor_uses_blink_mode() ! {
@@ -274,12 +274,12 @@ fn test_stream_handler_decrqss_hollow_cursor_uses_blink_mode() ! {
 	handler.terminal.modes.set(.cursor_blinking, true)
 	handler.dcs_decrqss(.decscusr)
 	blinking := ctx.mailbox.queue.pop() or { panic('expected blinking cursor DECRPSS response') }
-	assert blinking.write_small_data.slice().bytestr() == '\x1bP1\$r1 q\x1b\\'
+	assert (blinking as WriteSmall).slice().bytestr() == '\x1bP1\$r1 q\x1b\\'
 
 	handler.terminal.modes.set(.cursor_blinking, false)
 	handler.dcs_decrqss(.decscusr)
 	steady := ctx.mailbox.queue.pop() or { panic('expected steady cursor DECRPSS response') }
-	assert steady.write_small_data.slice().bytestr() == '\x1bP1\$r2 q\x1b\\'
+	assert (steady as WriteSmall).slice().bytestr() == '\x1bP1\$r2 q\x1b\\'
 }
 
 fn test_stream_handler_decrqss_uses_terminal_sgr_serialization() ! {
@@ -293,7 +293,7 @@ fn test_stream_handler_decrqss_uses_terminal_sgr_serialization() ! {
 
 	handler.dcs_decrqss(.sgr)
 	msg := ctx.mailbox.queue.pop() or { panic('expected SGR DECRPSS response') }
-	assert msg.write_small_data.slice().bytestr() == '\x1bP1\$r0;4m\x1b\\'
+	assert (msg as WriteSmall).slice().bytestr() == '\x1bP1\$r0;4m\x1b\\'
 }
 
 // Test bell dispatches without crashing.
@@ -693,8 +693,8 @@ fn test_color_query_response_mirrors_osc_terminator() ! {
 		terminator: .bel
 	})!
 	bel := ctx.mailbox.queue.pop() or { panic('expected BEL-terminated color response') }
-	assert bel.kind == .write_small
-	assert bel.write_small_data.slice().bytestr().ends_with('\a')
+	assert bel.kind() == .write_small
+	assert (bel as WriteSmall).slice().bytestr().ends_with('\a')
 
 	handler.vt(.color_operation, terminal.ActionColorOperation{
 		op:         .osc_4
@@ -706,8 +706,8 @@ fn test_color_query_response_mirrors_osc_terminator() ! {
 		terminator: .st
 	})!
 	st := ctx.mailbox.queue.pop() or { panic('expected ST-terminated color response') }
-	assert st.kind == .write_small
-	assert st.write_small_data.slice().bytestr().ends_with('\x1b\\')
+	assert st.kind() == .write_small
+	assert (st as WriteSmall).slice().bytestr().ends_with('\x1b\\')
 }
 
 fn test_kitty_color_query_response_mirrors_osc_terminator() ! {
@@ -721,8 +721,8 @@ fn test_kitty_color_query_response_mirrors_osc_terminator() ! {
 		terminator: .bel
 	})!
 	msg := ctx.mailbox.queue.pop() or { panic('expected Kitty color response') }
-	assert msg.kind == .write_small
-	response := msg.write_small_data.slice().bytestr()
+	assert msg.kind() == .write_small
+	response := (msg as WriteSmall).slice().bytestr()
 	assert response.starts_with('\x1b]21;1=rgb:')
 	assert response.ends_with('\a')
 }
@@ -747,9 +747,9 @@ fn test_stream_handler_report_pwd_empty() ! {
 	defer { ctx.t.deinit() }
 	handler.report_pwd('')!
 	assert ctx.messages.len == 2
-	assert ctx.messages[0].kind == .set_title
-	assert ctx.messages[1].kind == .pwd_change
-	assert ctx.messages[1].pwd_change.slice().bytestr() == ''
+	assert ctx.messages[0].kind() == .set_title
+	assert ctx.messages[1].kind() == .pwd_change
+	assert (ctx.messages[1] as apprt.SurfaceMessagePwdChange).req.slice().bytestr() == ''
 }
 
 fn test_stream_handler_clipboard_read_forwards_clipboard_type() ! {
@@ -759,8 +759,8 @@ fn test_stream_handler_clipboard_read_forwards_clipboard_type() ! {
 	handler.clipboard_contents(`p`, '?')!
 
 	assert ctx.messages.len == 1
-	assert ctx.messages[0].kind == .clipboard_read
-	assert ctx.messages[0].clipboard_type == .primary
+	assert ctx.messages[0].kind() == .clipboard_read
+	assert (ctx.messages[0] as apprt.SurfaceMessageClipboardRead).clipboard == .primary
 }
 
 fn test_stream_handler_clipboard_write_forwards_contents_and_type() ! {
@@ -770,9 +770,9 @@ fn test_stream_handler_clipboard_write_forwards_contents_and_type() ! {
 	handler.clipboard_contents(`s`, 'translated clipboard data')!
 
 	assert ctx.messages.len == 1
-	assert ctx.messages[0].kind == .clipboard_write
-	assert ctx.messages[0].clipboard_write_type == .selection
-	assert ctx.messages[0].clipboard_write_req.slice().bytestr() == 'translated clipboard data'
+	assert ctx.messages[0].kind() == .clipboard_write
+	assert (ctx.messages[0] as apprt.SurfaceMessageClipboardWrite).clipboard_type == .selection
+	assert (ctx.messages[0] as apprt.SurfaceMessageClipboardWrite).req.slice().bytestr() == 'translated clipboard data'
 }
 
 fn test_stream_handler_clipboard_write_owns_contents() ! {
@@ -783,7 +783,7 @@ fn test_stream_handler_clipboard_write_owns_contents() ! {
 	handler.clipboard_contents(`c`, data.bytestr())!
 	data[0] = `X`
 
-	assert ctx.messages[0].clipboard_write_req.slice().bytestr() == 'owned clipboard data'
+	assert (ctx.messages[0] as apprt.SurfaceMessageClipboardWrite).req.slice().bytestr() == 'owned clipboard data'
 }
 
 fn test_stream_handler_report_pwd_forwards_decoded_path() ! {
@@ -793,9 +793,9 @@ fn test_stream_handler_report_pwd_forwards_decoded_path() ! {
 	handler.report_pwd('file://localhost/tmp/translated%20path')!
 
 	assert ctx.messages.len == 2
-	assert ctx.messages[0].kind == .pwd_change
-	assert ctx.messages[0].pwd_change.slice().bytestr() == '/tmp/translated path'
-	assert ctx.messages[1].kind == .set_title
+	assert ctx.messages[0].kind() == .pwd_change
+	assert (ctx.messages[0] as apprt.SurfaceMessagePwdChange).req.slice().bytestr() == '/tmp/translated path'
+	assert ctx.messages[1].kind() == .set_title
 }
 
 fn test_stream_handler_report_pwd_preserves_kitty_raw_path() ! {
@@ -805,9 +805,9 @@ fn test_stream_handler_report_pwd_preserves_kitty_raw_path() ! {
 	handler.report_pwd('kitty-shell-cwd://localhost/tmp/raw%20path??#fragment')!
 
 	assert ctx.messages.len == 2
-	assert ctx.messages[0].kind == .pwd_change
-	assert ctx.messages[0].pwd_change.slice().bytestr() == '/tmp/raw%20path??#fragment'
-	assert ctx.messages[1].kind == .set_title
+	assert ctx.messages[0].kind() == .pwd_change
+	assert (ctx.messages[0] as apprt.SurfaceMessagePwdChange).req.slice().bytestr() == '/tmp/raw%20path??#fragment'
+	assert ctx.messages[1].kind() == .set_title
 }
 
 // Test window_title with empty title.
@@ -835,6 +835,6 @@ fn test_stream_handler_device_status_cursor_position_report() ! {
 	mut s := terminal.Stream.init[StreamHandler](handler)
 	s.next_slice('\x1b[6n'.bytes())!
 	msg := ctx.mailbox.queue.pop() or { panic('expected a cursor position report') }
-	assert msg.kind == .write_small
-	assert msg.write_small_data.slice().bytestr() == '\x1b[3;5R'
+	assert msg.kind() == .write_small
+	assert (msg as WriteSmall).slice().bytestr() == '\x1b[3;5R'
 }

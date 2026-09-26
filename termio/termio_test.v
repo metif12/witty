@@ -13,7 +13,7 @@ import xev
 
 fn mailbox_send_forever_for_test(mailbox_ptr voidptr, done chan bool) {
 	mut mailbox := unsafe { &Mailbox(mailbox_ptr) }
-	mailbox.send(Message.write_stable_msg('overflow'), unsafe { nil })
+	mailbox.send(MessageWriteStable{ data: 'overflow' }, unsafe { nil })
 	done <- true
 }
 
@@ -54,8 +54,8 @@ fn test_mailbox_push_pop_fifo() {
 		mailbox.deinit()
 	}
 
-	assert mailbox.queue.push(Message.write_stable_msg('one'), datastruct.blocking_queue_instant) > 0
-	assert mailbox.queue.push(Message.write_stable_msg('two'), datastruct.blocking_queue_instant) > 0
+	assert mailbox.queue.push(MessageWriteStable{ data: 'one' }, datastruct.blocking_queue_instant) > 0
+	assert mailbox.queue.push(MessageWriteStable{ data: 'two' }, datastruct.blocking_queue_instant) > 0
 	assert mailbox.queue.len() == 2
 
 	first := mailbox.queue.pop() or {
@@ -66,8 +66,8 @@ fn test_mailbox_push_pop_fifo() {
 		assert false, 'expected second message'
 		return
 	}
-	assert first.write_stable_data == 'one'
-	assert second.write_stable_data == 'two'
+	assert (first as MessageWriteStable).data == 'one'
+	assert (second as MessageWriteStable).data == 'two'
 	assert mailbox.queue.pop() == none
 }
 
@@ -100,26 +100,26 @@ fn test_derived_config_carries_raw_palette() {
 fn test_message_write_req_uses_pinned_inline_capacity() {
 	inline_data := 'x'.repeat(38)
 	inline_msg := Message.write_req(inline_data)
-	assert inline_msg.kind == .write_small
-	assert inline_msg.write_small_data.slice().bytestr() == inline_data
+	assert inline_msg.kind() == .write_small
+	assert (inline_msg as WriteSmall).slice().bytestr() == inline_data
 
 	allocated_data := 'x'.repeat(39)
 	allocated_msg := Message.write_req(allocated_data)
-	assert allocated_msg.kind == .write_alloc
-	assert allocated_msg.write_alloc_data == allocated_data
+	assert allocated_msg.kind() == .write_alloc
+	assert (allocated_msg as MessageWriteAlloc).data == allocated_data
 }
 
 fn test_write_req_preserves_storage_kind_and_full_payload() {
 	inline_data := 'x'.repeat(38)
 	inline_req := WriteReq.init(inline_data.bytes())
 	inline_msg := inline_req.message()
-	assert inline_msg.kind == .write_small
+	assert inline_msg.kind() == .write_small
 	assert inline_msg.write_slice().bytestr() == inline_data
 
 	allocated_data := 'y'.repeat(39)
 	allocated_req := WriteReq.init(allocated_data.bytes())
 	allocated_msg := allocated_req.message()
-	assert allocated_msg.kind == .write_alloc
+	assert allocated_msg.kind() == .write_alloc
 	assert allocated_msg.write_slice().bytestr() == allocated_data
 }
 
@@ -155,10 +155,10 @@ fn test_message_discriminants_match_source_declaration_order() {
 
 fn test_scroll_viewport_message_preserves_source_payload() {
 	wide_delta := isize(1_099_511_627_776)
-	msg := Message.scroll_viewport_msg(terminal.ScrollViewport.from_delta(wide_delta))
-	assert msg.kind == .scroll_viewport
-	assert msg.scroll_viewport_val.tag == .delta
-	assert msg.scroll_viewport_val.delta == wide_delta
+	msg := Message(MessageScrollViewport{ scroll: terminal.ScrollViewport.from_delta(wide_delta) })
+	assert msg.kind() == .scroll_viewport
+	assert (msg as MessageScrollViewport).scroll.tag == .delta
+	assert (msg as MessageScrollViewport).scroll.delta == wide_delta
 }
 
 fn test_termio_queue_message_uses_mailbox() {
@@ -168,15 +168,15 @@ fn test_termio_queue_message_uses_mailbox() {
 		tio.deinit()
 	}
 
-	tio.queue_message(Message.focused_msg(true), .unlocked)
+	tio.queue_message(MessageFocused{ value: true }, .unlocked)
 
 	assert tio.mailbox.queue.len() == 1
 	msg := tio.mailbox.queue.pop() or {
 		assert false, 'expected queued message'
 		return
 	}
-	assert msg.kind == .focused
-	assert msg.flag_val
+	assert msg.kind() == .focused
+	assert (msg as MessageFocused).value
 }
 
 fn test_color_scheme_report_locked_honors_disabled_mode() {
@@ -283,12 +283,12 @@ fn test_mailbox_fill_drain_reuse() {
 
 	// Push until we're full. Each push succeeds (returns 1) until capacity.
 	for i in 0 .. mailbox_capacity {
-		assert mailbox.queue.push(Message.write_stable_msg('m${i}'), datastruct.blocking_queue_instant) > 0
+		assert mailbox.queue.push(MessageWriteStable{ data: 'm${i}' }, datastruct.blocking_queue_instant) > 0
 	}
 	assert mailbox.queue.len() == mailbox_capacity
 
 	// The next push fails because the queue is full.
-	assert mailbox.queue.push(Message.write_stable_msg('overflow'), datastruct.blocking_queue_instant) == 0
+	assert mailbox.queue.push(MessageWriteStable{ data: 'overflow' }, datastruct.blocking_queue_instant) == 0
 
 	// Pop everything back out in FIFO order.
 	for i in 0 .. mailbox_capacity {
@@ -296,13 +296,13 @@ fn test_mailbox_fill_drain_reuse() {
 			assert false, 'expected message ${i}'
 			return
 		}
-		assert msg.write_stable_data == 'm${i}'
+		assert (msg as MessageWriteStable).data == 'm${i}'
 	}
 	assert mailbox.queue.pop() == none
 	assert mailbox.queue.len() == 0
 
 	// Verify we can still push after fully draining (ring buffer wraps).
-	assert mailbox.queue.push(Message.write_stable_msg('again'), datastruct.blocking_queue_instant) > 0
+	assert mailbox.queue.push(MessageWriteStable{ data: 'again' }, datastruct.blocking_queue_instant) > 0
 	assert mailbox.queue.len() == 1
 }
 
@@ -314,15 +314,15 @@ fn test_mailbox_send_enqueues() {
 		mailbox.deinit()
 	}
 
-	mailbox.send(Message.focused_msg(true), unsafe { nil })
+	mailbox.send(MessageFocused{ value: true }, unsafe { nil })
 	assert mailbox.queue.len() == 1
 
 	msg := mailbox.queue.pop() or {
 		assert false, 'expected sent message'
 		return
 	}
-	assert msg.kind == .focused
-	assert msg.flag_val
+	assert msg.kind() == .focused
+	assert (msg as MessageFocused).value
 }
 
 // notify() wakes the consuming thread's loop through the wakeup async.
@@ -352,23 +352,23 @@ fn test_mailbox_send_waits_for_space_without_dropping_message() {
 		mailbox.deinit()
 	}
 	for i in 0 .. mailbox_capacity {
-		assert mailbox.queue.push(Message.write_stable_msg('m${i}'), datastruct.blocking_queue_instant) > 0
+		assert mailbox.queue.push(MessageWriteStable{ data: 'm${i}' }, datastruct.blocking_queue_instant) > 0
 	}
 
 	done := chan bool{ cap: 1 }
 	worker := spawn mailbox_send_forever_for_test(voidptr(&mailbox), done)
 	first := mailbox.queue.pop() or { panic('full mailbox unexpectedly empty') }
-	assert first.write_stable_data == 'm0'
+	assert (first as MessageWriteStable).data == 'm0'
 	worker.wait()
 	assert <-done
 	assert mailbox.queue.len() == mailbox_capacity
 
 	for i in 1 .. mailbox_capacity {
 		msg := mailbox.queue.pop() or { panic('missing queued message ${i}') }
-		assert msg.write_stable_data == 'm${i}'
+		assert (msg as MessageWriteStable).data == 'm${i}'
 	}
 	last := mailbox.queue.pop() or { panic('blocked message was dropped') }
-	assert last.write_stable_data == 'overflow'
+	assert (last as MessageWriteStable).data == 'overflow'
 }
 
 // termio_test_callback_data mirrors threadMain_'s stack CallbackData for a
@@ -397,11 +397,11 @@ fn test_thread_drain_mailbox_updates_writer_state() ! {
 		screen: renderer.ScreenSize{ width: 800, height: 600 }
 		cell: renderer.CellSize{ width: 10, height: 20 }
 	}
-	tio.mailbox.queue.push(Message.inspector_msg(true), datastruct.blocking_queue_instant)
-	tio.mailbox.queue.push(Message{ kind: .linefeed_mode, flag_val: true }, datastruct.blocking_queue_instant)
-	tio.mailbox.queue.push(Message.selection_scroll_msg(true), datastruct.blocking_queue_instant)
-	tio.mailbox.queue.push(Message{ kind: .start_synchronized_output }, datastruct.blocking_queue_instant)
-	tio.mailbox.queue.push(Message.resize_msg(resize), datastruct.blocking_queue_instant)
+	tio.mailbox.queue.push(MessageInspector{ value: true }, datastruct.blocking_queue_instant)
+	tio.mailbox.queue.push(MessageLinefeedMode{ value: true }, datastruct.blocking_queue_instant)
+	tio.mailbox.queue.push(MessageSelectionScroll{ value: true }, datastruct.blocking_queue_instant)
+	tio.mailbox.queue.push(MessageStartSynchronizedOutput{}, datastruct.blocking_queue_instant)
+	tio.mailbox.queue.push(Message(resize), datastruct.blocking_queue_instant)
 
 	writer.drain_mailbox(mut cb)!
 	assert writer.flags.has_inspector()
@@ -424,7 +424,7 @@ fn test_thread_drain_mailbox_discards_messages_while_draining() ! {
 	mut cb := termio_test_callback_data(mut writer, mut tio)
 
 	writer.flags.set_drain(true)
-	tio.mailbox.queue.push(Message.inspector_msg(true), datastruct.blocking_queue_instant)
+	tio.mailbox.queue.push(MessageInspector{ value: true }, datastruct.blocking_queue_instant)
 	writer.drain_mailbox(mut cb)!
 	assert !writer.flags.has_inspector()
 	assert tio.mailbox.queue.len() == 0
@@ -437,9 +437,9 @@ mut:
 }
 
 fn selection_scroll_probe_push(_ voidptr, surface voidptr, msg apprt.SurfaceMessage, timeout datastruct.BlockingQueueTimeout) u32 {
-	if msg.kind == .selection_scroll_tick {
+	if msg.kind() == .selection_scroll_tick {
 		mut probe := unsafe { &SelectionScrollProbe(surface) }
-		probe.values << msg.selection_scroll_tick
+		probe.values << (msg as apprt.SurfaceMessageSelectionScrollTick).value
 		probe.timeouts << timeout.kind
 	}
 	return 1
@@ -460,18 +460,18 @@ fn test_thread_selection_scroll_timer_reports_final_stop() ! {
 	defer { writer.deinit() }
 	mut cb := termio_test_callback_data(mut writer, mut tio)
 
-	tio.mailbox.queue.push(Message.selection_scroll_msg(true), datastruct.blocking_queue_instant)
+	tio.mailbox.queue.push(MessageSelectionScroll{ value: true }, datastruct.blocking_queue_instant)
 	writer.drain_mailbox(mut cb)!
 	assert writer.scroll_c.state() == .active
 
 	// Repeated starts leave the currently armed completion untouched.
-	tio.mailbox.queue.push(Message.selection_scroll_msg(true), datastruct.blocking_queue_instant)
+	tio.mailbox.queue.push(MessageSelectionScroll{ value: true }, datastruct.blocking_queue_instant)
 	writer.drain_mailbox(mut cb)!
 	assert writer.scroll_c.state() == .active
 
 	// Stopping does not cancel the completion. It fires once with false and
 	// then disarms, matching selectionScrollCallback.
-	tio.mailbox.queue.push(Message.selection_scroll_msg(false), datastruct.blocking_queue_instant)
+	tio.mailbox.queue.push(MessageSelectionScroll{ value: false }, datastruct.blocking_queue_instant)
 	writer.drain_mailbox(mut cb)!
 	assert !writer.scroll_active
 	assert writer.scroll_c.state() == .active
@@ -488,9 +488,9 @@ mut:
 }
 
 fn password_input_probe_push(_ voidptr, surface voidptr, msg apprt.SurfaceMessage, timeout datastruct.BlockingQueueTimeout) u32 {
-	if msg.kind == .password_input {
+	if msg.kind() == .password_input {
 		mut probe := unsafe { &PasswordInputProbe(surface) }
-		probe.values << msg.password_input
+		probe.values << (msg as apprt.SurfaceMessagePasswordInput).value
 		probe.timeouts << timeout.kind
 	}
 	return 1

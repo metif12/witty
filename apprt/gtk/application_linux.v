@@ -1346,9 +1346,7 @@ fn application_action_present_surface_cb(action GSimpleAction, parameter GVarian
 	mut mailbox := self.core().mailbox
 	_ = mailbox.push(core.Message(core.SurfaceMessageMsg{
 		surface: surface
-		message: apprt.SurfaceMessage{
-			kind: .present_surface
-		}
+		message: apprt.SurfaceMessagePresentSurface{}
 	}), datastruct.blocking_queue_forever)
 }
 
