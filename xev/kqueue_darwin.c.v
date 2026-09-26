@@ -190,7 +190,7 @@ pub fn (mut self KqueueLoop) add(completion &KqueueCompletion) {
 
 	// If this is a cancellation, we special case it and add it to
 	// a separate queue so we can handle them first.
-	if c.op.tag == .cancel {
+	if c.op is KqueueCancelOp {
 		mut unused := Kevent{}
 		assert !self.start(mut c, mut unused)
 		return
@@ -321,7 +321,7 @@ pub fn (mut self KqueueLoop) submit() ! {
 fn (mut self KqueueLoop) process_cancellations() {
 	for {
 		mut c := self.cancellations.pop() or { break }
-		mut target := c.op.cancel.c
+		mut target := (c.op as KqueueCancelOp).c
 		match target.flags.state() {
 			// If the target is dead already we do nothing.
 			.dead {}
@@ -340,9 +340,7 @@ fn (mut self KqueueLoop) process_cancellations() {
 		}
 
 		// We completed the cancellation.
-		c.result = KqueueResult{
-			tag: .cancel
-		}
+		c.result = KqueueCancelResult{}
 		self.completions.push(c)
 	}
 }
@@ -469,8 +467,7 @@ pub fn (mut self KqueueLoop) tick(wait u32) ! {
 			wait_rem = sat_sub(wait_rem, 1)
 
 			// Invoke
-			action := c.callback(c.userdata, self, c, KqueueResult{
-				tag: .timer
+			action := c.callback(c.userdata, self, c, KqueueTimerResult{
 				timer: .expiration
 			})
 			match action {
@@ -707,11 +704,8 @@ pub fn (mut self KqueueLoop) timer(c &KqueueCompletion, next_ms u64, userdata vo
 	mut completion := unsafe { c }
 	unsafe {
 		*completion = KqueueCompletion{
-			op: KqueueOperation{
-				tag: .timer
-				timer: KqueueHeapTimer{
-					next: self.timer_next(next_ms)
-				}
+			op: KqueueHeapTimer{
+				next: self.timer_next(next_ms)
 			}
 			userdata: userdata
 			callback: cb
@@ -733,7 +727,11 @@ pub fn (mut self KqueueLoop) timer_reset(c &KqueueCompletion, c_cancel &KqueueCo
 		// Adding state we can just modify the metadata and return
 		// since the timer isn't in the heap yet.
 		.adding {
-			completion.op.timer.next = self.timer_next(next_ms)
+			if mut completion.op is KqueueHeapTimer {
+				completion.op.next = self.timer_next(next_ms)
+			} else {
+				panic('timer_reset: completion is not a timer')
+			}
 			completion.userdata = userdata
 			completion.callback = cb
 			return
@@ -741,7 +739,11 @@ pub fn (mut self KqueueLoop) timer_reset(c &KqueueCompletion, c_cancel &KqueueCo
 		.active {
 			// Update the reset time for the timer to the desired time
 			// along with all the callbacks.
-			completion.op.timer.reset = self.timer_next(next_ms)
+			if mut completion.op is KqueueHeapTimer {
+				completion.op.reset = self.timer_next(next_ms)
+			} else {
+				panic('timer_reset: completion is not a timer')
+			}
 			completion.userdata = userdata
 			completion.callback = cb
 
@@ -753,11 +755,8 @@ pub fn (mut self KqueueLoop) timer_reset(c &KqueueCompletion, c_cancel &KqueueCo
 			assert cancel.state() == .dead && completion.state() == .active
 			unsafe {
 				*cancel = KqueueCompletion{
-					op: KqueueOperation{
-						tag: .cancel
-						cancel: KqueueCancelOp{
-							c: completion
-						}
+					op: KqueueCancelOp{
+						c: completion
 					}
 				}
 			}
@@ -809,23 +808,23 @@ fn (mut self KqueueLoop) start(mut c KqueueCompletion, mut ev Kevent) bool {
 	action := if c.flags.threadpool() {
 		KqueueStartAction.threadpool
 	} else {
-		match c.op.tag {
-			.noop {
+		match mut c.op {
+			KqueueNoopOp {
 				c.flags.set_state(.dead)
 				return false
 			}
-			.cancel {
+			KqueueCancelOp {
 				// Queue the cancel
 				KqueueStartAction.cancel
 			}
-			.accept {
+			KqueueAcceptOp {
 				ev = c.kevent() or { panic('unreachable') }
 				KqueueStartAction.kevent
 			}
-			.connect {
+			KqueueConnectOp {
 				mut connect_action := KqueueStartAction.result
 				for {
-					rc := C.connect(c.op.connect.socket, c.op.connect.addr.any(), c.op.connect.addr.get_os_sock_len())
+					rc := C.connect(c.op.socket, c.op.addr.any(), c.op.addr.get_os_sock_len())
 					match posix_errno(rc) {
 						// Interrupt, try again
 						C.EINTR {
@@ -850,32 +849,33 @@ fn (mut self KqueueLoop) start(mut c KqueueCompletion, mut ev Kevent) bool {
 				}
 				connect_action
 			}
-			.write, .pwrite, .read, .pread, .send, .recv, .sendto, .recvfrom, .machport, .proc {
+			KqueueWriteOp, KqueuePWriteOp, KqueueReadOp, KqueuePReadOp, KqueueSendOp, KqueueRecvOp,
+			KqueueSendToOp, KqueueRecvFromOp, KqueueMachPortOp, KqueueProcOp {
 				ev = c.kevent() or { panic('unreachable') }
 				KqueueStartAction.kevent
 			}
-			.shutdown {
-				how := match c.op.shutdown.how {
+			KqueueShutdownOp {
+				how := match c.op.how {
 					.recv { C.SHUT_RD }
 					.send { C.SHUT_WR }
 					.both { C.SHUT_RDWR }
 				}
 				// Like the source, the libc return code is the result.
-				result = i32(C.shutdown(c.op.shutdown.socket, how))
+				result = i32(C.shutdown(c.op.socket, how))
 				KqueueStartAction.result
 			}
-			.close {
-				posix_close(c.op.close.fd)
+			KqueueCloseOp {
+				posix_close(c.op.fd)
 				result = 0
 				KqueueStartAction.result
 			}
-			.timer {
+			KqueueHeapTimer {
 				// Point back to completion since we need this. In the future
 				// we want to use @fieldParentPtr but https://github.com/ziglang/zig/issues/6611
-				c.op.timer.c = unsafe { &c }
+				c.op.c = unsafe { &c }
 
 				// Insert the timer into our heap.
-				self.timers.insert(&c.op.timer)
+				self.timers.insert(&c.op)
 
 				// We always run timers
 				KqueueStartAction.timer
@@ -969,18 +969,18 @@ fn (mut self KqueueLoop) stop_completion(mut c KqueueCompletion) {
 
 	// Inspect other operations. WARNING: the state can be ANYTHING
 	// here so per op be sure to check the state flag.
-	match c.op.tag {
-		.timer {
+	match mut c.op {
+		KqueueHeapTimer {
 			if c.flags.state() == .active {
 				// Remove from the heap so it never fires...
-				self.timers.remove(&c.op.timer)
+				self.timers.remove(&c.op)
 
 				// If we have reset set AND we got a cancellation result,
 				// that means that we were canceled so that we can update
 				// our expiration time.
-				if r := c.op.timer.reset {
-					c.op.timer.next = r
-					c.op.timer.reset = none
+				if r := c.op.reset {
+					c.op.next = r
+					c.op.reset = none
 					self.active -= 1
 					self.add(c)
 					return
@@ -988,8 +988,7 @@ fn (mut self KqueueLoop) stop_completion(mut c KqueueCompletion) {
 			}
 
 			// Add to our completions so we trigger the callback.
-			c.result = KqueueResult{
-				tag: .timer
+			c.result = KqueueTimerResult{
 				timer: .cancel
 			}
 			self.completions.push(c)
@@ -1073,7 +1072,7 @@ pub fn (mut f KqueueCompletionFlags) set_threadpool(v bool) {
 pub struct KqueueCompletion {
 pub mut:
 	// Operation to execute.
-	op KqueueOperation
+	op KqueueOperation = KqueueNoopOp{}
 
 	// Userdata and callback for when the completion is finished.
 	userdata voidptr        = unsafe { nil }
@@ -1123,28 +1122,28 @@ pub fn (self &KqueueCompletion) state() CompletionState {
 // "connect" requires you to initiate the connection first.
 fn (self &KqueueCompletion) kevent() ?Kevent {
 	udata := u64(usize(voidptr(self)))
-	return match self.op.tag {
-		.noop {
+	match self.op {
+		KqueueNoopOp {
 			panic('unreachable')
 		}
-		.cancel, .close, .timer, .shutdown {
-			none
+		KqueueCancelOp, KqueueCloseOp, KqueueHeapTimer, KqueueShutdownOp {
+			return none
 		}
-		.accept {
-			kevent_init(u64(self.op.accept.socket), i16(C.EVFILT_READ), u16(C.EV_ADD | C.EV_ENABLE),
+		KqueueAcceptOp {
+			return kevent_init(u64(self.op.socket), i16(C.EVFILT_READ), u16(C.EV_ADD | C.EV_ENABLE),
 				0, udata)
 		}
-		.connect {
-			kevent_init(u64(self.op.connect.socket), i16(C.EVFILT_WRITE), u16(C.EV_ADD | C.EV_ENABLE),
+		KqueueConnectOp {
+			return kevent_init(u64(self.op.socket), i16(C.EVFILT_WRITE), u16(C.EV_ADD | C.EV_ENABLE),
 				0, udata)
 		}
-		.machport {
+		KqueueMachPortOp {
 			// The kevent below waits for a machport to have a message
 			// available AND automatically reads the message into the
 			// buffer since MACH_RCV_MSG is set.
-			slice := self.op.machport.buffer.slice_ptr()
-			Kevent{
-				ident: u64(self.op.machport.port)
+			slice := self.op.buffer.slice_ptr()
+			return Kevent{
+				ident: u64(self.op.port)
 				filter: i16(C.EVFILT_MACHPORT)
 				flags: u16(C.EV_ADD | C.EV_ENABLE)
 				fflags: mach_rcv_msg
@@ -1153,40 +1152,40 @@ fn (self &KqueueCompletion) kevent() ?Kevent {
 				ext: [u64(usize(slice.data)), u64(slice.len)]!
 			}
 		}
-		.proc {
-			kevent_init(u64(self.op.proc.pid), i16(C.EVFILT_PROC), u16(C.EV_ADD | C.EV_ENABLE),
-				self.op.proc.flags, udata)
+		KqueueProcOp {
+			return kevent_init(u64(self.op.pid), i16(C.EVFILT_PROC), u16(C.EV_ADD | C.EV_ENABLE),
+				self.op.flags, udata)
 		}
-		.write {
-			kevent_init(u64(self.op.write.fd), i16(C.EVFILT_WRITE), u16(C.EV_ADD | C.EV_ENABLE),
+		KqueueWriteOp {
+			return kevent_init(u64(self.op.fd), i16(C.EVFILT_WRITE), u16(C.EV_ADD | C.EV_ENABLE),
 				0, udata)
 		}
-		.pwrite {
-			kevent_init(u64(self.op.pwrite.fd), i16(C.EVFILT_WRITE), u16(C.EV_ADD | C.EV_ENABLE),
+		KqueuePWriteOp {
+			return kevent_init(u64(self.op.fd), i16(C.EVFILT_WRITE), u16(C.EV_ADD | C.EV_ENABLE),
 				0, udata)
 		}
-		.send {
-			kevent_init(u64(self.op.send.fd), i16(C.EVFILT_WRITE), u16(C.EV_ADD | C.EV_ENABLE),
+		KqueueSendOp {
+			return kevent_init(u64(self.op.fd), i16(C.EVFILT_WRITE), u16(C.EV_ADD | C.EV_ENABLE),
 				0, udata)
 		}
-		.sendto {
-			kevent_init(u64(self.op.sendto.fd), i16(C.EVFILT_WRITE), u16(C.EV_ADD | C.EV_ENABLE),
+		KqueueSendToOp {
+			return kevent_init(u64(self.op.fd), i16(C.EVFILT_WRITE), u16(C.EV_ADD | C.EV_ENABLE),
 				0, udata)
 		}
-		.read {
-			kevent_init(u64(self.op.read.fd), i16(C.EVFILT_READ), u16(C.EV_ADD | C.EV_ENABLE),
+		KqueueReadOp {
+			return kevent_init(u64(self.op.fd), i16(C.EVFILT_READ), u16(C.EV_ADD | C.EV_ENABLE),
 				0, udata)
 		}
-		.pread {
-			kevent_init(u64(self.op.pread.fd), i16(C.EVFILT_READ), u16(C.EV_ADD | C.EV_ENABLE),
+		KqueuePReadOp {
+			return kevent_init(u64(self.op.fd), i16(C.EVFILT_READ), u16(C.EV_ADD | C.EV_ENABLE),
 				0, udata)
 		}
-		.recv {
-			kevent_init(u64(self.op.recv.fd), i16(C.EVFILT_READ), u16(C.EV_ADD | C.EV_ENABLE),
+		KqueueRecvOp {
+			return kevent_init(u64(self.op.fd), i16(C.EVFILT_READ), u16(C.EV_ADD | C.EV_ENABLE),
 				0, udata)
 		}
-		.recvfrom {
-			kevent_init(u64(self.op.recvfrom.fd), i16(C.EVFILT_READ), u16(C.EV_ADD | C.EV_ENABLE),
+		KqueueRecvFromOp {
+			return kevent_init(u64(self.op.fd), i16(C.EVFILT_READ), u16(C.EV_ADD | C.EV_ENABLE),
 				0, udata)
 		}
 	}
@@ -1195,64 +1194,62 @@ fn (self &KqueueCompletion) kevent() ?Kevent {
 // Perform the operation associated with this completion. This will
 // perform the full blocking operation for the completion.
 fn (mut self KqueueCompletion) perform(ev_ &Kevent) KqueueResult {
-	match self.op.tag {
-		.cancel, .noop, .timer, .shutdown {
-			eprintln('libxev_kqueue: perform op=${self.op.tag}')
+	op_tag := self.op.tag()
+	match mut self.op {
+		KqueueCancelOp, KqueueNoopOp, KqueueHeapTimer, KqueueShutdownOp {
+			eprintln('libxev_kqueue: perform op=${op_tag}')
 			panic('unreachable')
 		}
-		.accept {
-			v := posix_accept(self.op.accept.socket, &self.op.accept.addr, &self.op.accept.addr_size,
-				self.op.accept.flags) or { return kqueue_result_err(.accept, err) }
-			return KqueueResult{
-				tag: .accept
+		KqueueAcceptOp {
+			v := posix_accept(self.op.socket, &self.op.addr, &self.op.addr_size,
+				self.op.flags) or { return kqueue_result_err(.accept, err) }
+			return KqueueAcceptResult{
 				socket: v
 			}
 		}
-		.connect {
-			posix_getsockopt_error(self.op.connect.socket) or {
+		KqueueConnectOp {
+			posix_getsockopt_error(self.op.socket) or {
 				return kqueue_result_err(.connect, err)
 			}
-			return KqueueResult{
-				tag: .connect
-			}
+			return KqueueConnectResult{}
 		}
-		.write {
-			n := posix_write(self.op.write.fd, self.op.write.buffer.bytes()) or {
+		KqueueWriteOp {
+			n := posix_write(self.op.fd, self.op.buffer.bytes()) or {
 				return kqueue_result_err(.write, err)
 			}
 			return kqueue_result_n(.write, n)
 		}
-		.pwrite {
-			n := posix_pwrite(self.op.pwrite.fd, self.op.pwrite.buffer.bytes(), self.op.pwrite.offset) or {
+		KqueuePWriteOp {
+			n := posix_pwrite(self.op.fd, self.op.buffer.bytes(), self.op.offset) or {
 				return kqueue_result_err(.pwrite, err)
 			}
 			return kqueue_result_n(.pwrite, n)
 		}
-		.send {
-			n := posix_send(self.op.send.fd, self.op.send.buffer.bytes(), 0) or {
+		KqueueSendOp {
+			n := posix_send(self.op.fd, self.op.buffer.bytes(), 0) or {
 				return kqueue_result_err(.send, err)
 			}
 			return kqueue_result_n(.send, n)
 		}
-		.sendto {
-			n := posix_sendto(self.op.sendto.fd, self.op.sendto.buffer.bytes(), 0, self.op.sendto.addr.any(),
-				self.op.sendto.addr.get_os_sock_len()) or { return kqueue_result_err(.sendto, err) }
+		KqueueSendToOp {
+			n := posix_sendto(self.op.fd, self.op.buffer.bytes(), 0, self.op.addr.any(),
+				self.op.addr.get_os_sock_len()) or { return kqueue_result_err(.sendto, err) }
 			return kqueue_result_n(.sendto, n)
 		}
-		.read {
-			if self.op.read.buffer.is_empty_slice() {
+		KqueueReadOp {
+			if self.op.buffer.is_empty_slice() {
 				if isnil(ev_) {
 					return kqueue_result_kind(.read, .missing_kevent)
 				}
 				return kqueue_read_result(.read, usize(ev_.data))
 			}
-			n := posix_read(self.op.read.fd, self.op.read.buffer.slice_ptr()) or {
+			n := posix_read(self.op.fd, self.op.buffer.slice_ptr()) or {
 				return kqueue_result_err(.read, err)
 			}
 			return kqueue_read_result(.read, n)
 		}
-		.pread {
-			if self.op.pread.buffer.is_empty_slice() {
+		KqueuePReadOp {
+			if self.op.buffer.is_empty_slice() {
 				// The source reports the missing kevent through the `.read`
 				// result field for every read-like operation.
 				if isnil(ev_) {
@@ -1260,32 +1257,32 @@ fn (mut self KqueueCompletion) perform(ev_ &Kevent) KqueueResult {
 				}
 				return kqueue_read_result(.pread, usize(ev_.data))
 			}
-			n := posix_pread(self.op.pread.fd, self.op.pread.buffer.slice_ptr(), self.op.pread.offset) or {
+			n := posix_pread(self.op.fd, self.op.buffer.slice_ptr(), self.op.offset) or {
 				return kqueue_result_err(.pread, err)
 			}
 			return kqueue_read_result(.pread, n)
 		}
-		.recv {
-			if self.op.recv.buffer.is_empty_slice() {
+		KqueueRecvOp {
+			if self.op.buffer.is_empty_slice() {
 				if isnil(ev_) {
 					return kqueue_result_kind(.read, .missing_kevent)
 				}
 				return kqueue_read_result(.recv, usize(ev_.data))
 			}
-			n := posix_recv(self.op.recv.fd, self.op.recv.buffer.slice_ptr(), 0) or {
+			n := posix_recv(self.op.fd, self.op.buffer.slice_ptr(), 0) or {
 				return kqueue_result_err(.recv, err)
 			}
 			return kqueue_read_result(.recv, n)
 		}
-		.recvfrom {
-			if self.op.recvfrom.buffer.is_empty_slice() {
+		KqueueRecvFromOp {
+			if self.op.buffer.is_empty_slice() {
 				if isnil(ev_) {
 					return kqueue_result_kind(.read, .missing_kevent)
 				}
 				return kqueue_read_result(.recvfrom, usize(ev_.data))
 			}
-			n := posix_recvfrom(self.op.recvfrom.fd, self.op.recvfrom.buffer.slice_ptr(), 0,
-				&self.op.recvfrom.addr, &self.op.recvfrom.addr_size) or {
+			n := posix_recvfrom(self.op.fd, self.op.buffer.slice_ptr(), 0,
+				&self.op.addr, &self.op.addr_size) or {
 				return kqueue_result_err(.recvfrom, err)
 			}
 			return kqueue_read_result(.recvfrom, n)
@@ -1293,13 +1290,11 @@ fn (mut self KqueueCompletion) perform(ev_ &Kevent) KqueueResult {
 		// Our machport operation ALWAYS has MACH_RCV set so there
 		// is no operation to perform. kqueue automatically reads in
 		// the mach message into the read buffer.
-		.machport {
-			return KqueueResult{
-				tag: .machport
-			}
+		KqueueMachPortOp {
+			return KqueueMachPortResult{}
 		}
 		// For proc watching, it is identical to the syscall result.
-		.proc {
+		KqueueProcOp {
 			if isnil(ev_) {
 				return kqueue_result_kind(.proc, .missing_kevent)
 			}
@@ -1308,22 +1303,17 @@ fn (mut self KqueueCompletion) perform(ev_ &Kevent) KqueueResult {
 			if ev_.fflags & kqueue_note_exit_flags > 0 {
 				data := u32(ev_.data)
 				if wait_ifexited(data) {
-					return KqueueResult{
-						tag: .proc
+					return KqueueProcResult{
 						exit_code: wait_exitstatus(data)
 					}
 				}
 			}
 
-			return KqueueResult{
-				tag: .proc
-			}
+			return KqueueProcResult{}
 		}
-		.close {
-			posix_close(self.op.close.fd)
-			return KqueueResult{
-				tag: .close
-			}
+		KqueueCloseOp {
+			posix_close(self.op.fd)
+			return KqueueCloseResult{}
 		}
 	}
 }
@@ -1333,101 +1323,153 @@ fn (mut self KqueueCompletion) perform(ev_ &Kevent) KqueueResult {
 // a raw syscall fails.
 fn (self &KqueueCompletion) syscall_result(r i32) KqueueResult {
 	errno := if r >= 0 { 0 } else { int(-r) }
-	tag := self.op.tag
-	return match tag {
+	tag := self.op.tag()
+	match tag {
 		.noop {
 			panic('unreachable')
 		}
 		.accept {
 			match errno {
-				0 { KqueueResult{
-						tag: tag
+				0 {
+					return KqueueAcceptResult{
 						socket: int(r)
-					} }
-				C.ECANCELED { kqueue_result_kind(tag, .canceled) }
-				else { kqueue_result_err(tag, unexpected_errno(errno)) }
+					}
+				}
+				C.ECANCELED {
+					return kqueue_result_kind(tag, .canceled)
+				}
+				else {
+					return kqueue_result_err(tag, unexpected_errno(errno))
+				}
 			}
 		}
 		.connect, .machport, .shutdown {
 			match errno {
-				0 { KqueueResult{
-						tag: tag
-					} }
-				C.ECANCELED { kqueue_result_kind(tag, .canceled) }
-				else { kqueue_result_err(tag, unexpected_errno(errno)) }
+				0 {
+					return kqueue_result_ok(tag)
+				}
+				C.ECANCELED {
+					return kqueue_result_kind(tag, .canceled)
+				}
+				else {
+					return kqueue_result_err(tag, unexpected_errno(errno))
+				}
 			}
 		}
 		.write {
 			match errno {
-				0 { KqueueResult{
-						tag: tag
-						n: usize(r)
-					} }
-				C.ECANCELED { kqueue_result_kind(tag, .canceled) }
-				C.EPERM { kqueue_result_kind(tag, .permission_denied) }
-				else { kqueue_result_err(tag, unexpected_errno(errno)) }
+				0 {
+					return kqueue_result_n(tag, usize(r))
+				}
+				C.ECANCELED {
+					return kqueue_result_kind(tag, .canceled)
+				}
+				C.EPERM {
+					return kqueue_result_kind(tag, .permission_denied)
+				}
+				else {
+					return kqueue_result_err(tag, unexpected_errno(errno))
+				}
 			}
 		}
 		.pwrite, .send, .sendto, .recvfrom {
 			match errno {
-				0 { KqueueResult{
-						tag: tag
-						n: usize(r)
-					} }
-				C.ECANCELED { kqueue_result_kind(tag, .canceled) }
-				else { kqueue_result_err(tag, unexpected_errno(errno)) }
+				0 {
+					return kqueue_result_n(tag, usize(r))
+				}
+				C.ECANCELED {
+					return kqueue_result_kind(tag, .canceled)
+				}
+				else {
+					return kqueue_result_err(tag, unexpected_errno(errno))
+				}
 			}
 		}
 		.read {
 			match errno {
-				0 { kqueue_read_result(tag, usize(r)) }
-				C.ECANCELED { kqueue_result_kind(tag, .canceled) }
-				C.EPERM { kqueue_result_kind(tag, .permission_denied) }
-				else { kqueue_result_err(tag, unexpected_errno(errno)) }
+				0 {
+					return kqueue_read_result(tag, usize(r))
+				}
+				C.ECANCELED {
+					return kqueue_result_kind(tag, .canceled)
+				}
+				C.EPERM {
+					return kqueue_result_kind(tag, .permission_denied)
+				}
+				else {
+					return kqueue_result_err(tag, unexpected_errno(errno))
+				}
 			}
 		}
 		.pread, .recv {
 			match errno {
-				0 { kqueue_read_result(tag, usize(r)) }
-				C.ECANCELED { kqueue_result_kind(tag, .canceled) }
-				else { kqueue_result_err(tag, unexpected_errno(errno)) }
+				0 {
+					return kqueue_read_result(tag, usize(r))
+				}
+				C.ECANCELED {
+					return kqueue_result_kind(tag, .canceled)
+				}
+				else {
+					return kqueue_result_err(tag, unexpected_errno(errno))
+				}
 			}
 		}
 		.proc {
 			match errno {
-				0 { KqueueResult{
-						tag: tag
+				0 {
+					return KqueueProcResult{
 						exit_code: u32(r)
-					} }
-				C.ECANCELED { kqueue_result_kind(tag, .canceled) }
-				C.ESRCH { kqueue_result_kind(tag, .no_such_process) }
-				else { kqueue_result_err(tag, unexpected_errno(errno)) }
+					}
+				}
+				C.ECANCELED {
+					return kqueue_result_kind(tag, .canceled)
+				}
+				C.ESRCH {
+					return kqueue_result_kind(tag, .no_such_process)
+				}
+				else {
+					return kqueue_result_err(tag, unexpected_errno(errno))
+				}
 			}
 		}
 		.close {
 			match errno {
-				0 { KqueueResult{
-						tag: tag
-					} }
-				C.ECANCELED { kqueue_result_kind(tag, .canceled) }
-				C.EPERM { kqueue_result_kind(tag, .thread_pool_required) }
-				else { kqueue_result_err(tag, unexpected_errno(errno)) }
+				0 {
+					return kqueue_result_ok(tag)
+				}
+				C.ECANCELED {
+					return kqueue_result_kind(tag, .canceled)
+				}
+				C.EPERM {
+					return kqueue_result_kind(tag, .thread_pool_required)
+				}
+				else {
+					return kqueue_result_err(tag, unexpected_errno(errno))
+				}
 			}
 		}
 		.timer {
 			match errno {
 				// Success is impossible because timers don't execute syscalls.
-				0 { panic('unreachable') }
-				C.ECANCELED { kqueue_result_kind(tag, .canceled) }
-				else { kqueue_result_err(tag, unexpected_errno(errno)) }
+				0 {
+					panic('unreachable')
+				}
+				C.ECANCELED {
+					return kqueue_result_kind(tag, .canceled)
+				}
+				else {
+					return kqueue_result_err(tag, unexpected_errno(errno))
+				}
 			}
 		}
 		.cancel {
 			match errno {
-				0 { KqueueResult{
-						tag: tag
-					} }
-				C.ECANCELED { kqueue_result_kind(tag, .canceled) }
+				0 {
+					return kqueue_result_ok(tag)
+				}
+				C.ECANCELED {
+					return kqueue_result_kind(tag, .canceled)
+				}
 				// Syscall errors should not be possible since cancel
 				// doesn't run any syscalls.
 				else {
@@ -1439,55 +1481,334 @@ fn (self &KqueueCompletion) syscall_result(r i32) KqueueResult {
 	}
 }
 
-// The Zig Result union carries each operation's error union. The flat record
-// keeps the failing Zig error name in `err`, or the success payload in the
-// field the operation uses.
-pub struct KqueueResult {
+// The result of an operation: the source's `Result` tagged union. Each
+// variant carries the operation's error union as the failing error name in
+// `err`, or its success payload.
+pub type KqueueResult = KqueueAcceptResult
+	| KqueueCancelResult
+	| KqueueCloseResult
+	| KqueueConnectResult
+	| KqueueMachPortResult
+	| KqueueNoopResult
+	| KqueuePReadResult
+	| KqueuePWriteResult
+	| KqueueProcResult
+	| KqueueReadResult
+	| KqueueRecvFromResult
+	| KqueueRecvResult
+	| KqueueSendResult
+	| KqueueSendToResult
+	| KqueueShutdownResult
+	| KqueueTimerResult
+	| KqueueWriteResult
+
+pub struct KqueueNoopResult {
 pub mut:
-	tag KqueueOperationType
 	err ?ErrorKind
-	// accept: the accepted socket
+}
+
+pub struct KqueueAcceptResult {
+pub mut:
+	err ?ErrorKind
 	socket int
-	// read, write, pread, pwrite, send, recv, sendto, recvfrom: byte count
+}
+
+pub struct KqueueConnectResult {
+pub mut:
+	err ?ErrorKind
+}
+
+pub struct KqueueReadResult {
+pub mut:
+	err ?ErrorKind
 	n usize
-	// timer
+}
+
+pub struct KqueueWriteResult {
+pub mut:
+	err ?ErrorKind
+	n usize
+}
+
+pub struct KqueuePReadResult {
+pub mut:
+	err ?ErrorKind
+	n usize
+}
+
+pub struct KqueuePWriteResult {
+pub mut:
+	err ?ErrorKind
+	n usize
+}
+
+pub struct KqueueSendResult {
+pub mut:
+	err ?ErrorKind
+	n usize
+}
+
+pub struct KqueueRecvResult {
+pub mut:
+	err ?ErrorKind
+	n usize
+}
+
+pub struct KqueueSendToResult {
+pub mut:
+	err ?ErrorKind
+	n usize
+}
+
+pub struct KqueueRecvFromResult {
+pub mut:
+	err ?ErrorKind
+	n usize
+}
+
+pub struct KqueueCloseResult {
+pub mut:
+	err ?ErrorKind
+}
+
+pub struct KqueueShutdownResult {
+pub mut:
+	err ?ErrorKind
+}
+
+pub struct KqueueTimerResult {
+pub mut:
+	err ?ErrorKind
 	timer KqueueTimerTrigger
-	// proc: exit code
+}
+
+pub struct KqueueCancelResult {
+pub mut:
+	err ?ErrorKind
+}
+
+pub struct KqueueMachPortResult {
+pub mut:
+	err ?ErrorKind
+}
+
+pub struct KqueueProcResult {
+pub mut:
+	err ?ErrorKind
 	exit_code u32
 }
 
+// The tag of the active result variant.
+pub fn (self KqueueResult) tag() KqueueOperationType {
+	return match self {
+		KqueueNoopResult { .noop }
+		KqueueAcceptResult { .accept }
+		KqueueConnectResult { .connect }
+		KqueueReadResult { .read }
+		KqueueWriteResult { .write }
+		KqueuePReadResult { .pread }
+		KqueuePWriteResult { .pwrite }
+		KqueueSendResult { .send }
+		KqueueRecvResult { .recv }
+		KqueueSendToResult { .sendto }
+		KqueueRecvFromResult { .recvfrom }
+		KqueueCloseResult { .close }
+		KqueueShutdownResult { .shutdown }
+		KqueueTimerResult { .timer }
+		KqueueCancelResult { .cancel }
+		KqueueMachPortResult { .machport }
+		KqueueProcResult { .proc }
+	}
+}
+
+// kqueue_result_kind builds the `tag` result variant carrying an error.
 fn kqueue_result_kind(tag KqueueOperationType, kind ErrorKind) KqueueResult {
-	return KqueueResult{
-		tag: tag
-		err: kind
+	match tag {
+		.noop {
+			return KqueueNoopResult{
+				err: kind
+			}
+		}
+		.accept {
+			return KqueueAcceptResult{
+				err: kind
+			}
+		}
+		.connect {
+			return KqueueConnectResult{
+				err: kind
+			}
+		}
+		.read {
+			return KqueueReadResult{
+				err: kind
+			}
+		}
+		.write {
+			return KqueueWriteResult{
+				err: kind
+			}
+		}
+		.pread {
+			return KqueuePReadResult{
+				err: kind
+			}
+		}
+		.pwrite {
+			return KqueuePWriteResult{
+				err: kind
+			}
+		}
+		.send {
+			return KqueueSendResult{
+				err: kind
+			}
+		}
+		.recv {
+			return KqueueRecvResult{
+				err: kind
+			}
+		}
+		.sendto {
+			return KqueueSendToResult{
+				err: kind
+			}
+		}
+		.recvfrom {
+			return KqueueRecvFromResult{
+				err: kind
+			}
+		}
+		.close {
+			return KqueueCloseResult{
+				err: kind
+			}
+		}
+		.shutdown {
+			return KqueueShutdownResult{
+				err: kind
+			}
+		}
+		.timer {
+			return KqueueTimerResult{
+				err: kind
+			}
+		}
+		.cancel {
+			return KqueueCancelResult{
+				err: kind
+			}
+		}
+		.machport {
+			return KqueueMachPortResult{
+				err: kind
+			}
+		}
+		.proc {
+			return KqueueProcResult{
+				err: kind
+			}
+		}
+	}
+}
+
+// kqueue_result_ok builds the successful `tag` variant of a void result.
+fn kqueue_result_ok(tag KqueueOperationType) KqueueResult {
+	match tag {
+		.connect {
+			return KqueueConnectResult{}
+		}
+		.machport {
+			return KqueueMachPortResult{}
+		}
+		.shutdown {
+			return KqueueShutdownResult{}
+		}
+		.close {
+			return KqueueCloseResult{}
+		}
+		.cancel {
+			return KqueueCancelResult{}
+		}
+		else {
+			panic('kqueue_result_ok: ${tag} carries a payload')
+		}
 	}
 }
 
 fn kqueue_result_err(tag KqueueOperationType, err IError) KqueueResult {
-	return KqueueResult{
-		tag: tag
-		err: error_kind(err)
-	}
+	return kqueue_result_kind(tag, error_kind(err))
 }
 
+// kqueue_result_n builds the byte-count result variant for `tag`.
 fn kqueue_result_n(tag KqueueOperationType, n usize) KqueueResult {
-	return KqueueResult{
-		tag: tag
-		n: n
+	match tag {
+		.read {
+			return KqueueReadResult{
+				n: n
+			}
+		}
+		.write {
+			return KqueueWriteResult{
+				n: n
+			}
+		}
+		.pread {
+			return KqueuePReadResult{
+				n: n
+			}
+		}
+		.pwrite {
+			return KqueuePWriteResult{
+				n: n
+			}
+		}
+		.send {
+			return KqueueSendResult{
+				n: n
+			}
+		}
+		.recv {
+			return KqueueRecvResult{
+				n: n
+			}
+		}
+		.sendto {
+			return KqueueSendToResult{
+				n: n
+			}
+		}
+		.recvfrom {
+			return KqueueRecvFromResult{
+				n: n
+			}
+		}
+		else {
+			panic('kqueue_result_n: ${tag} has no byte count')
+		}
 	}
 }
 
 // The zero-length read path returns EOF for a zero byte count.
 fn kqueue_read_result(tag KqueueOperationType, n usize) KqueueResult {
 	if n == 0 {
-		return KqueueResult{
-			tag: tag
-			err: .eof
-		}
+		return kqueue_result_kind(tag, .eof)
 	}
-	return KqueueResult{
-		tag: tag
-		n: n
+	return kqueue_result_n(tag, n)
+}
+
+// kqueue_result_bytes returns the byte count of a read or write result.
+fn kqueue_result_bytes(r KqueueResult) usize {
+	return match r {
+		KqueueReadResult { r.n }
+		KqueueWriteResult { r.n }
+		KqueuePReadResult { r.n }
+		KqueuePWriteResult { r.n }
+		KqueueSendResult { r.n }
+		KqueueRecvResult { r.n }
+		KqueueSendToResult { r.n }
+		KqueueRecvFromResult { r.n }
+		else { panic('kqueue_result_bytes: ${r.tag()} has no byte count') }
 	}
 }
 
@@ -1557,26 +1878,48 @@ pub enum KqueueOperationType {
 // backend-specific and therefore the structure and types change depending
 // on the underlying system in use. The high level operations are
 // done by initializing the request handles.
-pub struct KqueueOperation {
-pub mut:
-	tag      KqueueOperationType
-	accept   KqueueAcceptOp
-	connect  KqueueConnectOp
-	read     KqueueReadOp
-	write    KqueueWriteOp
-	pread    KqueuePReadOp
-	pwrite   KqueuePWriteOp
-	send     KqueueWriteOp
-	recv     KqueueReadOp
-	sendto   KqueueSendToOp
-	recvfrom KqueueRecvFromOp
-	close    KqueueCloseOp
-	shutdown KqueueShutdownOp
-	timer    KqueueHeapTimer
-	cancel   KqueueCancelOp
-	machport KqueueMachPortOp
-	proc     KqueueProcOp
+pub type KqueueOperation = KqueueAcceptOp
+	| KqueueCancelOp
+	| KqueueCloseOp
+	| KqueueConnectOp
+	| KqueueHeapTimer
+	| KqueueMachPortOp
+	| KqueueNoopOp
+	| KqueuePReadOp
+	| KqueuePWriteOp
+	| KqueueProcOp
+	| KqueueReadOp
+	| KqueueRecvFromOp
+	| KqueueRecvOp
+	| KqueueSendOp
+	| KqueueSendToOp
+	| KqueueShutdownOp
+	| KqueueWriteOp
+
+// The tag of the active operation variant.
+pub fn (self KqueueOperation) tag() KqueueOperationType {
+	return match self {
+		KqueueNoopOp { .noop }
+		KqueueAcceptOp { .accept }
+		KqueueConnectOp { .connect }
+		KqueueReadOp { .read }
+		KqueueWriteOp { .write }
+		KqueuePReadOp { .pread }
+		KqueuePWriteOp { .pwrite }
+		KqueueSendOp { .send }
+		KqueueRecvOp { .recv }
+		KqueueSendToOp { .sendto }
+		KqueueRecvFromOp { .recvfrom }
+		KqueueCloseOp { .close }
+		KqueueShutdownOp { .shutdown }
+		KqueueHeapTimer { .timer }
+		KqueueCancelOp { .cancel }
+		KqueueMachPortOp { .machport }
+		KqueueProcOp { .proc }
+	}
 }
+
+pub struct KqueueNoopOp {}
 
 pub struct KqueueAcceptOp {
 pub mut:
@@ -1609,6 +1952,18 @@ pub mut:
 	fd     int
 	buffer KqueueReadBuffer
 	offset u64
+}
+
+pub struct KqueueSendOp {
+pub mut:
+	fd     int
+	buffer KqueueWriteBuffer
+}
+
+pub struct KqueueRecvOp {
+pub mut:
+	fd     int
+	buffer KqueueReadBuffer
 }
 
 pub struct KqueuePWriteOp {

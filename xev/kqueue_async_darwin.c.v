@@ -101,20 +101,17 @@ pub fn (self &KqueueAsync) wait(mut loop KqueueLoop, c &KqueueCompletion, userda
 	mut completion := unsafe { c }
 	unsafe {
 		*completion = KqueueCompletion{
-			op: KqueueOperation{
-				tag: .machport
-				machport: KqueueMachPortOp{
-					port: self.port
-					buffer: KqueueReadBuffer{
-						kind: .array
-					}
+			op: KqueueMachPortOp{
+				port: self.port
+				buffer: KqueueReadBuffer{
+					kind: .array
 				}
 			}
 			userdata: userdata
 			callback: fn [cb] (ud voidptr, l_inner &KqueueLoop, c_inner &KqueueCompletion, r KqueueResult) CallbackAction {
 				// Drain the mach port so that we only fire one
 				// notification even if many are queued.
-				kqueue_async_drain(c_inner.op.machport.port)
+				kqueue_async_drain((c_inner.op as KqueueMachPortOp).port)
 
 				return cb(ud, l_inner, c_inner, r.err)
 			}

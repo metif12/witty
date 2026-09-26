@@ -22,7 +22,7 @@ fn kqueue_test_record_trigger(ud voidptr, _ &KqueueLoop, _ &KqueueCompletion, r 
 	if _ := r.err {
 		panic('unreachable')
 	}
-	v.value = r.timer
+	v.value = (r as KqueueTimerResult).timer
 	return .disarm
 }
 
@@ -206,11 +206,8 @@ fn test_kqueue_timer_cancellation() ! {
 	// Cancel the timer
 	mut called := false
 	mut c_cancel := &KqueueCompletion{
-		op: KqueueOperation{
-			tag: .cancel
-			cancel: KqueueCancelOp{
-				c: c1
-			}
+		op: KqueueCancelOp{
+			c: c1
 		}
 		userdata: &called
 		callback: kqueue_test_cancel_done
@@ -241,11 +238,8 @@ fn test_kqueue_canceling_a_completed_operation() ! {
 	// Cancel the timer
 	mut called := false
 	mut c_cancel := &KqueueCompletion{
-		op: KqueueOperation{
-			tag: .cancel
-			cancel: KqueueCancelOp{
-				c: c1
-			}
+		op: KqueueCancelOp{
+			c: c1
 		}
 		userdata: &called
 		callback: kqueue_test_cancel_done
@@ -266,7 +260,7 @@ fn kqueue_test_accept(ud voidptr, _ &KqueueLoop, _ &KqueueCompletion, r KqueueRe
 		panic('unreachable')
 	}
 	unsafe {
-		*conn = r.socket
+		*conn = (r as KqueueAcceptResult).socket
 	}
 	return .disarm
 }
@@ -295,7 +289,18 @@ fn kqueue_test_recv(ud voidptr, _ &KqueueLoop, _ &KqueueCompletion, r KqueueResu
 	}
 	mut ptr := unsafe { &usize(ud) }
 	unsafe {
-		*ptr = r.n
+		*ptr = (r as KqueueRecvResult).n
+	}
+	return .disarm
+}
+
+fn kqueue_test_read(ud voidptr, _ &KqueueLoop, _ &KqueueCompletion, r KqueueResult) CallbackAction {
+	if _ := r.err {
+		panic('unreachable')
+	}
+	mut ptr := unsafe { &usize(ud) }
+	unsafe {
+		*ptr = (r as KqueueReadResult).n
 	}
 	return .disarm
 }
@@ -363,11 +368,8 @@ fn test_kqueue_socket_accept_connect_send_recv_close() ! {
 	// Accept
 	mut server_conn := int(0)
 	mut c_accept := &KqueueCompletion{
-		op: KqueueOperation{
-			tag: .accept
-			accept: KqueueAcceptOp{
-				socket: ln
-			}
+		op: KqueueAcceptOp{
+			socket: ln
 		}
 		userdata: &server_conn
 		callback: kqueue_test_accept
@@ -377,12 +379,9 @@ fn test_kqueue_socket_accept_connect_send_recv_close() ! {
 	// Connect
 	mut connected := false
 	mut c_connect := &KqueueCompletion{
-		op: KqueueOperation{
-			tag: .connect
-			connect: KqueueConnectOp{
-				socket: client_conn
-				addr: address
-			}
+		op: KqueueConnectOp{
+			socket: client_conn
+			addr: address
 		}
 		userdata: &connected
 		callback: kqueue_test_ok_set_bool
@@ -396,14 +395,11 @@ fn test_kqueue_socket_accept_connect_send_recv_close() ! {
 
 	// Send
 	mut c_send := &KqueueCompletion{
-		op: KqueueOperation{
-			tag: .send
-			send: KqueueWriteOp{
-				fd: client_conn
-				buffer: KqueueWriteBuffer{
-					kind: .slice
-					slice: [u8(1), 1, 2, 3, 5, 8, 13]
-				}
+		op: KqueueSendOp{
+			fd: client_conn
+			buffer: KqueueWriteBuffer{
+				kind: .slice
+				slice: [u8(1), 1, 2, 3, 5, 8, 13]
 			}
 		}
 		callback: kqueue_test_send
@@ -414,14 +410,11 @@ fn test_kqueue_socket_accept_connect_send_recv_close() ! {
 	mut recv_buf := []u8{len: 128}
 	mut recv_len := usize(0)
 	mut c_recv := &KqueueCompletion{
-		op: KqueueOperation{
-			tag: .recv
-			recv: KqueueReadOp{
-				fd: server_conn
-				buffer: KqueueReadBuffer{
-					kind: .slice
-					slice: recv_buf
-				}
+		op: KqueueRecvOp{
+			fd: server_conn
+			buffer: KqueueReadBuffer{
+				kind: .slice
+				slice: recv_buf
 			}
 		}
 		userdata: &recv_len
@@ -431,16 +424,13 @@ fn test_kqueue_socket_accept_connect_send_recv_close() ! {
 
 	// Wait for the send/receive
 	loop.run(.until_done)!
-	assert c_send.op.send.buffer.slice == recv_buf[..int(recv_len)]
+	assert (c_send.op as KqueueSendOp).buffer.slice == recv_buf[..int(recv_len)]
 
 	// Shutdown
 	mut shutdown := false
 	mut c_client_shutdown := &KqueueCompletion{
-		op: KqueueOperation{
-			tag: .shutdown
-			shutdown: KqueueShutdownOp{
-				socket: client_conn
-			}
+		op: KqueueShutdownOp{
+			socket: client_conn
 		}
 		userdata: &shutdown
 		callback: kqueue_test_ok_set_bool
@@ -453,14 +443,11 @@ fn test_kqueue_socket_accept_connect_send_recv_close() ! {
 	mut eof := KqueueTestEof{}
 	unsafe {
 		*c_recv = KqueueCompletion{
-			op: KqueueOperation{
-				tag: .recv
-				recv: KqueueReadOp{
-					fd: server_conn
-					buffer: KqueueReadBuffer{
-						kind: .slice
-						slice: recv_buf
-					}
+			op: KqueueRecvOp{
+				fd: server_conn
+				buffer: KqueueReadBuffer{
+					kind: .slice
+					slice: recv_buf
 				}
 			}
 			userdata: &eof
@@ -474,11 +461,8 @@ fn test_kqueue_socket_accept_connect_send_recv_close() ! {
 
 	// Close
 	mut c_client_close := &KqueueCompletion{
-		op: KqueueOperation{
-			tag: .close
-			close: KqueueCloseOp{
-				fd: client_conn
-			}
+		op: KqueueCloseOp{
+			fd: client_conn
 		}
 		userdata: &client_conn
 		callback: kqueue_test_close_zero
@@ -486,11 +470,8 @@ fn test_kqueue_socket_accept_connect_send_recv_close() ! {
 	loop.add(c_client_close)
 
 	mut c_server_close := &KqueueCompletion{
-		op: KqueueOperation{
-			tag: .close
-			close: KqueueCloseOp{
-				fd: ln
-			}
+		op: KqueueCloseOp{
+			fd: ln
 		}
 		userdata: &ln
 		callback: kqueue_test_close_zero
@@ -531,14 +512,11 @@ fn test_kqueue_file_io_on_thread_pool() ! {
 	// Perform a write and then a read
 	write_buf := [u8(1), 1, 2, 3, 5, 8, 13]
 	mut c_write := &KqueueCompletion{
-		op: KqueueOperation{
-			tag: .write
-			write: KqueueWriteOp{
-				fd: f.fd
-				buffer: KqueueWriteBuffer{
-					kind: .slice
-					slice: write_buf
-				}
+		op: KqueueWriteOp{
+			fd: f.fd
+			buffer: KqueueWriteBuffer{
+				kind: .slice
+				slice: write_buf
 			}
 		}
 		callback: kqueue_test_send
@@ -561,18 +539,15 @@ fn test_kqueue_file_io_on_thread_pool() ! {
 	mut read_buf := []u8{len: 128}
 	mut read_len := usize(0)
 	mut c_read := &KqueueCompletion{
-		op: KqueueOperation{
-			tag: .read
-			read: KqueueReadOp{
-				fd: f2.fd
-				buffer: KqueueReadBuffer{
-					kind: .slice
-					slice: read_buf
-				}
+		op: KqueueReadOp{
+			fd: f2.fd
+			buffer: KqueueReadBuffer{
+				kind: .slice
+				slice: read_buf
 			}
 		}
 		userdata: &read_len
-		callback: kqueue_test_recv
+		callback: kqueue_test_read
 	}
 	c_read.flags.set_threadpool(true)
 	loop.add(c_read)
@@ -606,13 +581,10 @@ fn test_kqueue_mach_port() ! {
 	// Add the waiter
 	mut called := false
 	mut c_wait := &KqueueCompletion{
-		op: KqueueOperation{
-			tag: .machport
-			machport: KqueueMachPortOp{
-				port: mach_port
-				buffer: KqueueReadBuffer{
-					kind: .array
-				}
+		op: KqueueMachPortOp{
+			port: mach_port
+			buffer: KqueueReadBuffer{
+				kind: .array
 			}
 		}
 		userdata: &called
@@ -669,11 +641,8 @@ fn test_kqueue_socket_accept_cancel_cancellation_should_decrease_active_count() 
 	// Accept
 	mut server_conn := int(0)
 	mut c_accept := &KqueueCompletion{
-		op: KqueueOperation{
-			tag: .accept
-			accept: KqueueAcceptOp{
-				socket: ln
-			}
+		op: KqueueAcceptOp{
+			socket: ln
 		}
 		userdata: &server_conn
 		callback: kqueue_test_accept_canceled
@@ -684,11 +653,8 @@ fn test_kqueue_socket_accept_cancel_cancellation_should_decrease_active_count() 
 
 	mut cancel_called := false
 	mut c_cancel := &KqueueCompletion{
-		op: KqueueOperation{
-			tag: .cancel
-			cancel: KqueueCancelOp{
-				c: c_accept
-			}
+		op: KqueueCancelOp{
+			c: c_accept
 		}
 		userdata: &cancel_called
 		callback: kqueue_test_cancel_done
@@ -703,11 +669,8 @@ fn test_kqueue_socket_accept_cancel_cancellation_should_decrease_active_count() 
 	assert usize(0) == loop.active
 
 	mut c_server_close := &KqueueCompletion{
-		op: KqueueOperation{
-			tag: .close
-			close: KqueueCloseOp{
-				fd: ln
-			}
+		op: KqueueCloseOp{
+			fd: ln
 		}
 		userdata: &ln
 		callback: kqueue_test_close_zero

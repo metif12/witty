@@ -24,10 +24,11 @@ pub fn (self &KqueueTimer) deinit() {
 
 // Convert the loop's timer result into the watcher's RunError!void.
 fn kqueue_timer_run_error(r KqueueResult) ?ErrorKind {
-	if err := r.err {
+	timer := r as KqueueTimerResult
+	if err := timer.err {
 		return err
 	}
-	return match r.timer {
+	return match timer.timer {
 		.request, .expiration { none }
 		.cancel { ErrorKind.canceled }
 	}
@@ -90,11 +91,8 @@ pub fn (self &KqueueTimer) cancel(mut loop KqueueLoop, c_timer &KqueueCompletion
 	mut completion := unsafe { c_cancel }
 	unsafe {
 		*completion = KqueueCompletion{
-			op: KqueueOperation{
-				tag: .cancel
-				cancel: KqueueCancelOp{
-					c: c_timer
-				}
+			op: KqueueCancelOp{
+				c: c_timer
 			}
 			userdata: userdata
 			callback: fn [cb] (ud voidptr, l_inner &KqueueLoop, c_inner &KqueueCompletion, r KqueueResult) CallbackAction {

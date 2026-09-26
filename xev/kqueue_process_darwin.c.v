@@ -33,12 +33,9 @@ pub fn (self &KqueueProcess) wait(mut loop KqueueLoop, c &KqueueCompletion, user
 	mut completion := unsafe { c }
 	unsafe {
 		*completion = KqueueCompletion{
-			op: KqueueOperation{
-				tag: .proc
-				proc: KqueueProcOp{
-					pid: self.pid
-					flags: kqueue_note_exit_flags
-				}
+			op: KqueueProcOp{
+				pid: self.pid
+				flags: kqueue_note_exit_flags
 			}
 			userdata: userdata
 			callback: fn [cb] (ud voidptr, l_inner &KqueueLoop, c_inner &KqueueCompletion, r KqueueResult) CallbackAction {
@@ -47,10 +44,10 @@ pub fn (self &KqueueProcess) wait(mut loop KqueueLoop, c &KqueueCompletion, user
 				// `wait` on a process. The Linux side (pidfd) does this
 				// automatically since the `waitid` syscall is used.
 				if r.err == none {
-					_ = posix_waitpid(c_inner.op.proc.pid, 0)
+					_ = posix_waitpid((c_inner.op as KqueueProcOp).pid, 0)
 				}
 
-				return cb(ud, l_inner, c_inner, r.err, r.exit_code)
+				return cb(ud, l_inner, c_inner, r.err, (r as KqueueProcResult).exit_code)
 			}
 		}
 	}

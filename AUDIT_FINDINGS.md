@@ -425,6 +425,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | binding trigger key union | Ghostty's `Trigger.Key` is `union(C.Tag) { physical: key.Key, unicode: u21, catch_all }`. Witty stored `TriggerKey` as a struct with a `typ` tag beside `physical` and `unicode` fields, compared it with an operator overload, and built keys through `TriggerKey.new_*` helpers and tagged struct literals. | Make `TriggerKey` a sum type of `TriggerKeyPhysical`, `TriggerKeyUnicode`, and `TriggerKeyCatchAll` with `tag()` returning the C tag enum, match on the variants in `Trigger`'s equality, folded equality, hash, format, and unset check and in the C, GTK, and `+list-keybinds` projections, and construct the variants directly, including the backwards-compatible key-name table. |
 | fontconfig value union | Ghostty's fontconfig binding defines `Value` as `union(Type)` over void, integer, double, string, bool, matrix, char set, FreeType face, language set, and range payloads, with `init` and `cval` converting to and from `FcValue`, and the font code reads payloads directly (`.string`, `.integer`, `.char_set`, `.lang_set`). Witty stored one struct with a `tag` beside every payload field, built values through `Value.from_*` helpers, and kept a `PatternValue` alias. | Make `Value` a sum type of per-type variants with `tag()`, translate `init` and `cval` over the variants, construct the variants directly, and read payloads with checked `as` casts in the deferred face and discovery code. |
 | z2d path node union | z2d 0.10's `PathNode` is `union(PathNodeTag)` of `move_to: PathMoveTo`, `line_to: PathLineTo`, `curve_to: PathCurveTo` (three control points), and `close_path: PathClose`. Witty's sprite renderer stored one struct with a `kind` beside `x`, `y`, and curve control coordinates, and named the close tag `close`. | Make `PathNode` a sum type of the four node structs with `tag()` returning `PathNodeTag` (the `close_path` name restored), build the variants in the static path and context builders, and match on them in closed-subpath detection, the inner-stroke mask, and the fill and stroke plotters. |
+| kqueue operation and result unions | libxev's kqueue backend defines `Operation` as `union(OperationType)` with a distinct payload struct per operation (including separate `send` and `recv` structs and the heap `Timer`) and `Result` as a union of per-operation error unions; the loop switches on the active payload, and the watchers read `c.op.<op>` and `r.<op>` directly. Witty stored `KqueueOperation` as a struct with a `tag` beside all seventeen payloads (reusing the write and read payloads for send and recv) and `KqueueResult` as one record with `err`, `socket`, `n`, `timer`, and `exit_code`. | Make `KqueueOperation` a sum type of the per-operation structs (adding `KqueueSendOp` and `KqueueRecvOp`) and `KqueueResult` a sum type of per-operation result structs carrying the error name and payload, both with `tag()`; switch on the variants in `add`, `start`, `stop_completion`, `kevent`, `perform`, and `syscall_result` (the heap still stores a pointer into the timer payload), build results through tag-directed helpers, and read payloads with checked casts in the async, process, timer, and stream watchers and the backend tests. |
 
 ## Focused behavior reviewed
 
@@ -488,10 +489,11 @@ an item here does not mean its full module has been certified yet.
   parameters, so `Stream[H]` passes a runtime `ActionKey` with an `ActionValue`
   sum type and handlers smart-cast the value. `lib_vt` cannot re-export the
   generic `Stream` because V does not implement generic type aliases.
-- **Flattened tagged unions:** libxev's per-backend `Operation` and `Result`
-  tagged unions are stored in Witty as one struct holding a tag beside every
-  variant's payload fields, so inactive payloads exist and invalid combinations
-  are representable.
+- **Flattened tagged unions:** these libxev tagged unions are stored in Witty
+  as one struct holding a tag beside every variant's payload fields, so
+  inactive payloads exist and invalid combinations are representable:
+  - the epoll and io_uring backends' `Operation` and `Result`;
+  - every backend's `ReadBuffer` and `WriteBuffer` (`slice` or `array`).
 - **Surface termio wrapper:** Ghostty's Surface stores `termio.Termio`
   directly. Witty wraps it in a `TermIO` value whose `live` flag and message
   buffer exist for zero-initialized test surfaces.

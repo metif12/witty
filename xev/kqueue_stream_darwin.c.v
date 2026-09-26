@@ -42,7 +42,7 @@ pub enum KqueuePollEvent as u32 {
 
 // Errors that can be returned from polling are ReadErrors for kqueue.
 fn kqueue_poll_event_from_result(c &KqueueCompletion, result KqueueResult) (?ErrorKind, KqueuePollEvent) {
-	return match c.op.tag {
+	return match c.op.tag() {
 		.read, .recv { result.err, KqueuePollEvent.read }
 		else { panic('unreachable') }
 	}
@@ -91,15 +91,12 @@ pub fn (self KqueueStream) close(mut loop KqueueLoop, c &KqueueCompletion, userd
 	mut completion := unsafe { c }
 	unsafe {
 		*completion = KqueueCompletion{
-			op: KqueueOperation{
-				tag: .close
-				close: KqueueCloseOp{
-					fd: self.fd
-				}
+			op: KqueueCloseOp{
+				fd: self.fd
 			}
 			userdata: userdata
 			callback: fn [cb] (ud voidptr, l_inner &KqueueLoop, c_inner &KqueueCompletion, r KqueueResult) CallbackAction {
-				fd := KqueueStream.init_fd(c_inner.op.close.fd)
+				fd := KqueueStream.init_fd((c_inner.op as KqueueCloseOp).fd)
 				return cb(ud, l_inner, c_inner, fd, r.err)
 			}
 		}
@@ -120,19 +117,16 @@ pub fn (self KqueueStream) poll(mut loop KqueueLoop, c &KqueueCompletion, event 
 	mut completion := unsafe { c }
 	unsafe {
 		*completion = KqueueCompletion{
-			op: KqueueOperation{
-				tag: .read
-				read: KqueueReadOp{
-					fd: self.fd
-					buffer: KqueueReadBuffer{
-						kind: .slice
-						slice: []u8{}
-					}
+			op: KqueueReadOp{
+				fd: self.fd
+				buffer: KqueueReadBuffer{
+					kind: .slice
+					slice: []u8{}
 				}
 			}
 			userdata: userdata
 			callback: fn [cb] (ud voidptr, l_inner &KqueueLoop, c_inner &KqueueCompletion, r KqueueResult) CallbackAction {
-				fd := KqueueStream.init_fd(c_inner.op.read.fd)
+				fd := KqueueStream.init_fd((c_inner.op as KqueueReadOp).fd)
 				err, poll_event := kqueue_poll_event_from_result(c_inner, r)
 				return cb(ud, l_inner, c_inner, fd, err, poll_event)
 			}
@@ -150,17 +144,14 @@ pub fn (self KqueueStream) read(mut loop KqueueLoop, c &KqueueCompletion, buf Kq
 	mut completion := unsafe { c }
 	unsafe {
 		*completion = KqueueCompletion{
-			op: KqueueOperation{
-				tag: .read
-				read: KqueueReadOp{
-					fd: self.fd
-					buffer: buf
-				}
+			op: KqueueReadOp{
+				fd: self.fd
+				buffer: buf
 			}
 			userdata: userdata
 			callback: fn [cb] (ud voidptr, l_inner &KqueueLoop, c_inner &KqueueCompletion, r KqueueResult) CallbackAction {
-				return cb(ud, l_inner, c_inner, KqueueStream.init_fd(c_inner.op.read.fd), c_inner.op.read.buffer,
-					r.err, r.n)
+				return cb(ud, l_inner, c_inner, KqueueStream.init_fd((c_inner.op as KqueueReadOp).fd), (c_inner.op as KqueueReadOp).buffer,
+					r.err, kqueue_result_bytes(r))
 			}
 		}
 	}
@@ -305,7 +296,7 @@ pub fn (self KqueueStream) write(mut loop KqueueLoop, c &KqueueCompletion, buf K
 // Extracts the result from a completion for a write callback.
 @[inline]
 fn kqueue_stream_write_result(c &KqueueCompletion, r KqueueResult) (KqueueStream, KqueueWriteBuffer, ?ErrorKind, usize) {
-	return KqueueStream.init_fd(c.op.write.fd), c.op.write.buffer, r.err, r.n
+	return KqueueStream.init_fd((c.op as KqueueWriteOp).fd), (c.op as KqueueWriteOp).buffer, r.err, kqueue_result_bytes(r)
 }
 
 // Initialize the completion c for a write. This does NOT set
@@ -314,12 +305,9 @@ pub fn (self KqueueStream) write_init(c &KqueueCompletion, buf KqueueWriteBuffer
 	mut completion := unsafe { c }
 	unsafe {
 		*completion = KqueueCompletion{
-			op: KqueueOperation{
-				tag: .write
-				write: KqueueWriteOp{
-					fd: self.fd
-					buffer: buf
-				}
+			op: KqueueWriteOp{
+				fd: self.fd
+				buffer: buf
 			}
 		}
 	}
