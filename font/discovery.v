@@ -350,35 +350,35 @@ pub fn (d &Descriptor) to_fc_pattern() &fontconfig.Pattern {
 	// Build the fontconfig pattern from our descriptor fields.
 	pat := fontconfig.Pattern.create()
 	if f := d.family {
-		pat.add(.family, fontconfig.Value.from_string(f), false)
+		pat.add(.family, fontconfig.ValueString{ value: f }, false)
 	}
 	if s := d.style {
-		pat.add(.style, fontconfig.Value.from_string(s), false)
+		pat.add(.style, fontconfig.ValueString{ value: s }, false)
 	}
 	if d.codepoint > 0 {
 		cs := fontconfig.CharSet.create()
 		defer { cs.destroy() }
 		cs.add_char(d.codepoint)
-		pat.add(.charset, fontconfig.Value.from_char_set(cs), false)
+		pat.add(.charset, fontconfig.ValueCharSet{ value: cs }, false)
 	}
 	if d.size > 0 {
 		pat.add(
 			.size,
-			fontconfig.Value.from_integer(i32(math.round(d.size))),
+			fontconfig.ValueInteger{ value: i32(math.round(d.size)) },
 			false,
 		)
 	}
 	if d.bold {
 		pat.add(
 			.weight,
-			fontconfig.Value.from_integer(i32(fontconfig.Weight.bold)),
+			fontconfig.ValueInteger{ value: i32(fontconfig.Weight.bold) },
 			false,
 		)
 	}
 	if d.italic {
 		pat.add(
 			.slant,
-			fontconfig.Value.from_integer(i32(fontconfig.Slant.italic)),
+			fontconfig.ValueInteger{ value: i32(fontconfig.Slant.italic) },
 			false,
 		)
 	}
@@ -388,7 +388,7 @@ pub fn (d &Descriptor) to_fc_pattern() &fontconfig.Pattern {
 	// exclude non-monospace but helps prefer it.
 	pat.add(
 		.spacing,
-		fontconfig.Value.from_integer(i32(fontconfig.Spacing.mono)),
+		fontconfig.ValueInteger{ value: i32(fontconfig.Spacing.mono) },
 		false,
 	)
 
@@ -506,8 +506,8 @@ pub fn (mut it FcDiscoverIterator) next() !DeferredFaceValue {
 		has_value: true
 		face: DeferredFace{
 			fontconfig_pattern: font_pattern
-			fontconfig_charset: charset.char_set
-			fontconfig_langset: langset.lang_set
+			fontconfig_charset: (charset as fontconfig.ValueCharSet).value
+			fontconfig_langset: (langset as fontconfig.ValueLangSet).value
 			variations: it.variations.clone()
 		}
 	}

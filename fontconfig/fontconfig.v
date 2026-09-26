@@ -239,7 +239,7 @@ pub fn (p &Pattern) cval() voidptr {
 // add adds a typed value to the pattern.
 pub fn (p &Pattern) add(prop Property, val Value, append bool) bool {
 	object := prop.cval()
-	raw := val.raw()
+	raw := val.cval()
 	return C.vt_fontconfig_pattern_add(p.handle, &char(object.str), voidptr(&raw), if append {
 		1
 	} else {
@@ -260,7 +260,7 @@ pub fn (p &Pattern) get(prop Property, idx int) !Value {
 	if result != fc_result_match {
 		return result_error(result, 'FcPatternGet(${object})')
 	}
-	return value_from_raw(raw)
+	return Value.init(&raw)
 }
 
 // delete removes every value for prop from the pattern.
@@ -362,7 +362,7 @@ pub fn (mut it PatternValueIterator) next() ?PatternValueEntry {
 	it.id++
 	return PatternValueEntry{
 		result:  unsafe { MatchResult(result) }
-		value:   value_from_raw(raw)
+		value:   Value.init(&raw)
 		binding: unsafe { ValueBinding(binding) }
 	}
 }
@@ -613,8 +613,7 @@ pub fn (p Property) cval() string {
 	return p.str().replace('_', '')
 }
 
-// Type is the tag of Fontconfig's FcValue union. V represents the union as the
-// flattened Value below.
+// Type is the tag of Fontconfig's FcValue union.
 pub enum Type as i32 {
 	unknown = -1
 	void_
@@ -630,91 +629,81 @@ pub enum Type as i32 {
 }
 
 // Value is the translated FcValue tagged union.
-pub struct Value {
+pub type Value = ValueBool
+	| ValueCharSet
+	| ValueDouble
+	| ValueFtFace
+	| ValueInteger
+	| ValueLangSet
+	| ValueMatrix
+	| ValueRange
+	| ValueString
+	| ValueUnknown
+	| ValueVoid
+
+pub struct ValueUnknown {}
+
+pub struct ValueVoid {}
+
+pub struct ValueInteger {
 pub:
-	tag          Type @[required]
-	integer      i32
-	double_value f64
-	string       string
-	boolean      bool
-	matrix       &Matrix  = unsafe { nil }
-	char_set     &CharSet = unsafe { nil }
-	ft_face      voidptr  = unsafe { nil }
-	lang_set     &LangSet = unsafe { nil }
-	range        &Range   = unsafe { nil }
+	value i32
 }
 
-// PatternValue preserves the earlier Witty name while Value matches Ghostty.
-pub type PatternValue = Value
-
-pub fn Value.unknown() Value {
-	return Value{ tag: .unknown }
+pub struct ValueDouble {
+pub:
+	value f64
 }
 
-pub fn Value.void_value() Value {
-	return Value{ tag: .void_ }
+pub struct ValueString {
+pub:
+	value string
 }
 
-pub fn Value.from_integer(value i32) Value {
-	return Value{
-		tag:     .integer
-		integer: value
-	}
+pub struct ValueBool {
+pub:
+	value bool
 }
 
-pub fn Value.from_double(value f64) Value {
-	return Value{
-		tag:          .double_
-		double_value: value
-	}
+pub struct ValueMatrix {
+pub:
+	value &Matrix = unsafe { nil }
 }
 
-pub fn Value.from_string(value string) Value {
-	return Value{
-		tag:    .string_
-		string: value
-	}
+pub struct ValueCharSet {
+pub:
+	value &CharSet = unsafe { nil }
 }
 
-pub fn Value.from_bool(value bool) Value {
-	return Value{
-		tag:     .bool_
-		boolean: value
-	}
+pub struct ValueFtFace {
+pub:
+	value voidptr = unsafe { nil }
 }
 
-pub fn Value.from_matrix(value &Matrix) Value {
-	return Value{
-		tag:    .matrix
-		matrix: unsafe { value }
-	}
+pub struct ValueLangSet {
+pub:
+	value &LangSet = unsafe { nil }
 }
 
-pub fn Value.from_char_set(value &CharSet) Value {
-	return Value{
-		tag:      .char_set
-		char_set: unsafe { value }
-	}
+pub struct ValueRange {
+pub:
+	value &Range = unsafe { nil }
 }
 
-pub fn Value.from_ft_face(value voidptr) Value {
-	return Value{
-		tag:     .ft_face
-		ft_face: value
-	}
-}
-
-pub fn Value.from_lang_set(value &LangSet) Value {
-	return Value{
-		tag:      .lang_set
-		lang_set: unsafe { value }
-	}
-}
-
-pub fn Value.from_range(value &Range) Value {
-	return Value{
-		tag:   .range
-		range: unsafe { value }
+// The tag of the active value variant.
+pub fn (self Value) tag() Type {
+	return match self {
+		ValueUnknown { .unknown }
+		ValueVoid { .void_ }
+		ValueInteger { .integer }
+		ValueDouble { .double_ }
+		ValueString { .string_ }
+		ValueBool { .bool_ }
+		ValueMatrix { .matrix }
+		ValueCharSet { .char_set }
+		ValueFtFace { .ft_face }
+		ValueLangSet { .lang_set }
+		ValueRange { .range }
 	}
 }
 
@@ -728,68 +717,102 @@ mut:
 	pointer_value voidptr = unsafe { nil }
 }
 
-fn (value Value) raw() RawValue {
+// cval converts the value to the FcValue shim layout.
+fn (self Value) cval() RawValue {
 	mut result := RawValue{
-		typ:           int(value.tag)
-		integer_value: int(value.integer)
-		double_value:  value.double_value
-		bool_value:    if value.boolean { 1 } else { 0 }
+		typ: int(self.tag())
 	}
-	match value.tag {
-		.string_ { result.string_value = &char(value.string.str) }
-		.matrix { result.pointer_value = voidptr(value.matrix) }
-		.char_set {
-			if !isnil(value.char_set) {
-				result.pointer_value = value.char_set.handle
+	match self {
+		ValueUnknown, ValueVoid {}
+		ValueInteger { result.integer_value = int(self.value) }
+		ValueDouble { result.double_value = self.value }
+		ValueString { result.string_value = &char(self.value.str) }
+		ValueBool { result.bool_value = if self.value { 1 } else { 0 } }
+		ValueMatrix { result.pointer_value = voidptr(self.value) }
+		ValueCharSet {
+			if !isnil(self.value) {
+				result.pointer_value = self.value.handle
 			}
 		}
-		.ft_face { result.pointer_value = value.ft_face }
-		.lang_set {
-			if !isnil(value.lang_set) {
-				result.pointer_value = value.lang_set.handle
+		ValueFtFace { result.pointer_value = self.value }
+		ValueLangSet {
+			if !isnil(self.value) {
+				result.pointer_value = self.value.handle
 			}
 		}
-		.range {
-			if !isnil(value.range) {
-				result.pointer_value = value.range.handle
+		ValueRange {
+			if !isnil(self.value) {
+				result.pointer_value = self.value.handle
 			}
 		}
-		else {}
 	}
 	return result
 }
 
-fn value_from_raw(raw RawValue) Value {
-	tag := unsafe { Type(raw.typ) }
-	return match tag {
-		.unknown { Value.unknown() }
-		.void_ { Value.void_value() }
-		.integer { Value.from_integer(i32(raw.integer_value)) }
-		.double_ { Value.from_double(raw.double_value) }
+// Value.init converts an FcValue shim value into the tagged union.
+fn Value.init(cvalue &RawValue) Value {
+	tag := unsafe { Type(cvalue.typ) }
+	match tag {
+		.unknown {
+			return ValueUnknown{}
+		}
+		.void_ {
+			return ValueVoid{}
+		}
 		.string_ {
-			Value.from_string(if isnil(raw.string_value) {
-				''
-			} else {
-				unsafe { cstring_to_vstring(raw.string_value) }
-			})
+			return ValueString{
+				value: if isnil(cvalue.string_value) {
+					''
+				} else {
+					unsafe { cstring_to_vstring(cvalue.string_value) }
+				}
+			}
 		}
-		.bool_ { Value.from_bool(raw.bool_value != 0) }
-		.matrix { Value.from_matrix(unsafe { &Matrix(raw.pointer_value) }) }
+		.integer {
+			return ValueInteger{
+				value: i32(cvalue.integer_value)
+			}
+		}
+		.double_ {
+			return ValueDouble{
+				value: cvalue.double_value
+			}
+		}
+		.bool_ {
+			return ValueBool{
+				value: cvalue.bool_value != 0
+			}
+		}
+		.matrix {
+			return ValueMatrix{
+				value: unsafe { &Matrix(cvalue.pointer_value) }
+			}
+		}
 		.char_set {
-			Value.from_char_set(&CharSet{
-				handle: raw.pointer_value
-			})
+			return ValueCharSet{
+				value: &CharSet{
+					handle: cvalue.pointer_value
+				}
+			}
 		}
-		.ft_face { Value.from_ft_face(raw.pointer_value) }
+		.ft_face {
+			return ValueFtFace{
+				value: cvalue.pointer_value
+			}
+		}
 		.lang_set {
-			Value.from_lang_set(&LangSet{
-				handle: raw.pointer_value
-			})
+			return ValueLangSet{
+				value: &LangSet{
+					handle: cvalue.pointer_value
+				}
+			}
 		}
 		.range {
-			Value.from_range(&Range{
-				handle: raw.pointer_value
-			})
+			return ValueRange{
+				value: &Range{
+					handle: cvalue.pointer_value
+				}
+			}
 		}
 	}
 }

@@ -823,7 +823,7 @@ pub mut:
 // Fontconfig already owns the copied string; CoreText uses the caller buffer.
 pub fn (d DeferredFace) family_name(mut buf []u8) !string {
 	if !isnil(d.fontconfig_pattern) {
-		return d.fontconfig_pattern.get(.family, 0)!.string
+		return (d.fontconfig_pattern.get(.family, 0)! as fontconfig.ValueString).value
 	}
 	if !isnil(d.coretext.ct_font) {
 		return d.coretext.family_name(mut buf)
@@ -835,7 +835,7 @@ pub fn (d DeferredFace) family_name(mut buf []u8) !string {
 // name returns the display/full name advertised by discovery.
 pub fn (d DeferredFace) name(mut buf []u8) !string {
 	if !isnil(d.fontconfig_pattern) {
-		return d.fontconfig_pattern.get(.fullname, 0)!.string
+		return (d.fontconfig_pattern.get(.fullname, 0)! as fontconfig.ValueString).value
 	}
 	if !isnil(d.coretext.ct_font) {
 		return d.coretext.name(mut buf)
@@ -860,8 +860,8 @@ pub fn (mut d DeferredFace) deinit() {
 // load fully loads this deferred face into a Face.
 pub fn (d DeferredFace) load(lib Library, opts FaceOptions) !Face {
 	if !isnil(d.fontconfig_pattern) {
-		path := d.fontconfig_pattern.get(.file, 0)!.string
-		face_index := d.fontconfig_pattern.get(.index, 0)!.integer
+		path := (d.fontconfig_pattern.get(.file, 0)! as fontconfig.ValueString).value
+		face_index := (d.fontconfig_pattern.get(.index, 0)! as fontconfig.ValueInteger).value
 		mut face := Face.init_file(lib, path, face_index, opts)!
 		if d.variations.len > 0 {
 			face.set_variations(d.variations, opts) or {

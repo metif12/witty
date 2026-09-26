@@ -36,30 +36,30 @@ fn test_lang_set_exact_match() {
 fn test_pattern_typed_values_delete_and_filter() {
 	pattern := Pattern.create()
 	defer { pattern.destroy() }
-	assert pattern.add(.family, Value.from_string('monospace'), false)
-	assert pattern.add(.weight, Value.from_integer(i32(Weight.bold)), false)
-	assert pattern.add(.dpi, Value.from_double(96.5), false)
-	assert pattern.add(.antialias, Value.from_bool(true), false)
+	assert pattern.add(.family, ValueString{ value: 'monospace' }, false)
+	assert pattern.add(.weight, ValueInteger{ value: i32(Weight.bold) }, false)
+	assert pattern.add(.dpi, ValueDouble{ value: 96.5 }, false)
+	assert pattern.add(.antialias, ValueBool{ value: true }, false)
 
 	family := pattern.get(.family, 0)!
-	assert family.tag == .string_
-	assert family.string == 'monospace'
+	assert family.tag() == .string_
+	assert (family as ValueString).value == 'monospace'
 	weight := pattern.get(.weight, 0)!
-	assert weight.tag == .integer
-	assert weight.integer == i32(Weight.bold)
+	assert weight.tag() == .integer
+	assert (weight as ValueInteger).value == i32(Weight.bold)
 	dpi := pattern.get(.dpi, 0)!
-	assert dpi.tag == .double_
-	assert dpi.double_value == 96.5
+	assert dpi.tag() == .double_
+	assert (dpi as ValueDouble).value == 96.5
 	antialias := pattern.get(.antialias, 0)!
-	assert antialias.tag == .bool_
-	assert antialias.boolean
+	assert antialias.tag() == .bool_
+	assert (antialias as ValueBool).value
 
 	objects := ObjectSet.create()
 	defer { objects.destroy() }
 	assert objects.add(.family)
 	filtered := pattern.filter(objects)
 	defer { filtered.destroy() }
-	assert filtered.get(.family, 0)!.string == 'monospace'
+	assert (filtered.get(.family, 0)! as ValueString).value == 'monospace'
 	if _ := filtered.get(.weight, 0) {
 		assert false
 	}
@@ -100,7 +100,7 @@ fn test_font_list_and_pattern_iteration() {
 		return
 	}
 	assert entry.result == .match_
-	assert entry.value.tag != .unknown
+	assert entry.value.tag() != .unknown
 }
 
 fn test_font_set_create() {
