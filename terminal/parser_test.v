@@ -27,7 +27,7 @@ fn test_parser_next_preserves_exit_transition_entry_slots() {
 	p.state = .dcs_passthrough
 	actions := p.next(0x1b)
 	exit_action := actions.exit_action or { panic('missing exit action') }
-	assert exit_action.action_type == .dcs_unhook_action
+	assert exit_action.tag() == .dcs_unhook_action
 	assert actions.transition_action == none
 	assert actions.entry_action == none
 
@@ -35,8 +35,8 @@ fn test_parser_next_preserves_exit_transition_entry_slots() {
 	actions_with_transition := p.next(0x18)
 	exit_with_transition := actions_with_transition.exit_action or { panic('missing exit action') }
 	transition := actions_with_transition.transition_action or { panic('missing transition action') }
-	assert exit_with_transition.action_type == .apc_end_action
-	assert transition.action_type == .execute_action
+	assert exit_with_transition.tag() == .apc_end_action
+	assert transition.tag() == .execute_action
 	assert actions_with_transition.entry_action == none
 }
 
@@ -113,16 +113,16 @@ fn test_c1_sos_st_print_execute() {
 		a := dispatch_actions(p.next(u8(`a`)))
 		assert p.state == .ground
 		assert a.len == 1
-		assert a[0].action_type == .print_action
-		assert a[0].char == u32(`a`)
+		assert a[0].tag() == .print_action
+		assert (a[0] as ParserPrint).cp == u32(`a`)
 	}
 
 	{
 		a := dispatch_actions(p.next(0x19))
 		assert p.state == .ground
 		assert a.len == 1
-		assert a[0].action_type == .execute_action
-		assert a[0].byte_val == 0x19
+		assert a[0].tag() == .execute_action
+		assert (a[0] as ParserExecute).code == 0x19
 	}
 }
 
@@ -137,8 +137,8 @@ fn test_esc_paren_b() {
 	a := dispatch_actions(p.next(u8(`B`)))
 	assert p.state == .ground
 	assert a.len == 1
-	assert a[0].action_type == .esc_dispatch_action
-	d := a[0].esc
+	assert a[0].tag() == .esc_dispatch_action
+	d := (a[0] as ESCAction)
 	assert d.final_byte == u8(`B`)
 	assert d.intermediates.len == 1
 	assert d.intermediates[0] == u8(`(`)
@@ -155,8 +155,8 @@ fn test_csi_esc_bracket_h() {
 	a := dispatch_actions(p.next(0x48))
 	assert p.state == .ground
 	assert a.len == 1
-	assert a[0].action_type == .csi_dispatch_action
-	d := a[0].csi
+	assert a[0].tag() == .csi_dispatch_action
+	d := (a[0] as CSIAction)
 	assert d.final_byte == 0x48
 	assert d.params.len == 0
 }
@@ -175,8 +175,8 @@ fn test_csi_esc_bracket_1_4_h() {
 	a := dispatch_actions(p.next(0x48)) // H
 	assert p.state == .ground
 	assert a.len == 1
-	assert a[0].action_type == .csi_dispatch_action
-	d := a[0].csi
+	assert a[0].tag() == .csi_dispatch_action
+	d := (a[0] as CSIAction)
 	assert d.final_byte == u8(`H`)
 	assert d.params.len == 2
 	assert d.params[0] == u16(1)
@@ -199,8 +199,8 @@ fn test_csi_sgr_38_colon_2_m() {
 	a := dispatch_actions(p.next(u8(`m`)))
 	assert p.state == .ground
 	assert a.len == 1
-	assert a[0].action_type == .csi_dispatch_action
-	d := a[0].csi
+	assert a[0].tag() == .csi_dispatch_action
+	d := (a[0] as CSIAction)
 	assert d.final_byte == u8(`m`)
 	assert d.params.len == 2
 	assert d.params[0] == u16(38)
@@ -224,7 +224,7 @@ fn test_csi_sgr_colon_then_semicolon() {
 		a := dispatch_actions(p.next(u8(`m`)))
 		assert p.state == .ground
 		assert a.len == 1
-		assert a[0].action_type == .csi_dispatch_action
+		assert a[0].tag() == .csi_dispatch_action
 	}
 
 	p.next(0x1B)
@@ -233,7 +233,7 @@ fn test_csi_sgr_colon_then_semicolon() {
 		a := dispatch_actions(p.next(u8(`H`)))
 		assert p.state == .ground
 		assert a.len == 1
-		assert a[0].action_type == .csi_dispatch_action
+		assert a[0].tag() == .csi_dispatch_action
 	}
 }
 
@@ -251,7 +251,7 @@ fn test_csi_sgr_mixed_colon_semicolon() {
 	a := dispatch_actions(p.next(u8(`m`)))
 	assert p.state == .ground
 	assert a.len == 1
-	assert a[0].action_type == .csi_dispatch_action
+	assert a[0].tag() == .csi_dispatch_action
 }
 
 // ============================================================
@@ -268,8 +268,8 @@ fn test_csi_sgr_48_colon_full() {
 	a := dispatch_actions(p.next(u8(`m`)))
 	assert p.state == .ground
 	assert a.len == 1
-	assert a[0].action_type == .csi_dispatch_action
-	d := a[0].csi
+	assert a[0].tag() == .csi_dispatch_action
+	d := (a[0] as CSIAction)
 	assert d.final_byte == u8(`m`)
 	assert d.params.len == 5
 	assert d.params[0] == u16(48)
@@ -298,8 +298,8 @@ fn test_csi_sgr_4_colon_3_m() {
 	a := dispatch_actions(p.next(u8(`m`)))
 	assert p.state == .ground
 	assert a.len == 1
-	assert a[0].action_type == .csi_dispatch_action
-	d := a[0].csi
+	assert a[0].tag() == .csi_dispatch_action
+	d := (a[0] as CSIAction)
 	assert d.final_byte == u8(`m`)
 	assert d.params.len == 2
 	assert d.params[0] == u16(4)
@@ -322,8 +322,8 @@ fn test_csi_sgr_many_blank_and_colon() {
 	a := dispatch_actions(p.next(u8(`m`)))
 	assert p.state == .ground
 	assert a.len == 1
-	assert a[0].action_type == .csi_dispatch_action
-	d := a[0].csi
+	assert a[0].tag() == .csi_dispatch_action
+	d := (a[0] as CSIAction)
 	assert d.final_byte == u8(`m`)
 	assert d.params.len == 6
 	assert d.params[0] == u16(58)
@@ -355,8 +355,8 @@ fn test_csi_sgr_mixed_with_blank() {
 	a := dispatch_actions(p.next(u8(`m`)))
 	assert p.state == .ground
 	assert a.len == 1
-	assert a[0].action_type == .csi_dispatch_action
-	d := a[0].csi
+	assert a[0].tag() == .csi_dispatch_action
+	d := (a[0] as CSIAction)
 	assert d.final_byte == u8(`m`)
 	assert d.params.len == 14
 	assert d.params[0] == u16(0)
@@ -404,8 +404,8 @@ fn test_csi_sgr_mixed_underline_bg_fg() {
 	a := dispatch_actions(p.next(u8(`m`)))
 	assert p.state == .ground
 	assert a.len == 1
-	assert a[0].action_type == .csi_dispatch_action
-	d := a[0].csi
+	assert a[0].tag() == .csi_dispatch_action
+	d := (a[0] as CSIAction)
 	assert d.final_byte == u8(`m`)
 	assert d.params.len == 17
 	assert d.params[0] == u16(4)
@@ -472,8 +472,8 @@ fn test_csi_request_mode_decrqm() {
 	a := dispatch_actions(p.next(u8(`p`)))
 	assert p.state == .ground
 	assert a.len == 1
-	assert a[0].action_type == .csi_dispatch_action
-	d := a[0].csi
+	assert a[0].tag() == .csi_dispatch_action
+	d := (a[0] as CSIAction)
 	assert d.final_byte == u8(`p`)
 	assert d.intermediates.len == 2
 	assert d.params.len == 1
@@ -496,8 +496,8 @@ fn test_csi_change_cursor() {
 	a := dispatch_actions(p.next(u8(`q`)))
 	assert p.state == .ground
 	assert a.len == 1
-	assert a[0].action_type == .csi_dispatch_action
-	d := a[0].csi
+	assert a[0].tag() == .csi_dispatch_action
+	d := (a[0] as CSIAction)
 	assert d.final_byte == u8(`q`)
 	assert d.intermediates.len == 1
 	assert d.params.len == 1
@@ -521,8 +521,8 @@ fn test_osc_change_window_title() {
 	a := dispatch_actions(p.next(0x07)) // BEL
 	assert p.state == .ground
 	assert a.len == 1
-	assert a[0].action_type == .osc_dispatch_action
-	cmd := a[0].osc
+	assert a[0].tag() == .osc_dispatch_action
+	cmd := (a[0] as osc.Command)
 	assert cmd is osc.ChangeWindowTitle
 	assert (cmd as osc.ChangeWindowTitle).value == 'abc'
 }
@@ -544,8 +544,8 @@ fn test_osc_change_window_title_end_in_esc() {
 	p.next(u8(`\\`))
 	assert p.state == .ground
 	assert a.len == 1
-	assert a[0].action_type == .osc_dispatch_action
-	cmd := a[0].osc
+	assert a[0].tag() == .osc_dispatch_action
+	cmd := (a[0] as osc.Command)
 	assert cmd is osc.ChangeWindowTitle
 	assert (cmd as osc.ChangeWindowTitle).value == 'abc'
 }
@@ -571,7 +571,7 @@ fn test_parser_param_digit_counter_matches_source_overflow() {
 	assert p.param_acc_idx == 0
 	a := dispatch_actions(p.next(u8(`m`)))
 	assert a.len == 1
-	assert a[0].csi.params.len == 0
+	assert (a[0] as CSIAction).params.len == 0
 }
 
 fn test_osc_color_operation_preserves_bel_terminator() {
@@ -582,8 +582,8 @@ fn test_osc_color_operation_preserves_bel_terminator() {
 	}
 	a := dispatch_actions(p.next(0x07))
 	assert a.len == 1
-	assert a[0].osc is osc.ColorOperationCommand
-	assert (a[0].osc as osc.ColorOperationCommand).terminator == .bel
+	assert (a[0] as osc.Command) is osc.ColorOperationCommand
+	assert ((a[0] as osc.Command) as osc.ColorOperationCommand).terminator == .bel
 }
 
 fn test_osc_kitty_color_preserves_st_terminator() {
@@ -595,8 +595,8 @@ fn test_osc_kitty_color_preserves_st_terminator() {
 	a := dispatch_actions(p.next(0x1b))
 	p.next(u8(`\\`))
 	assert a.len == 1
-	assert a[0].osc is osc.KittyColorOSC
-	assert (a[0].osc as osc.KittyColorOSC).terminator == .st
+	assert (a[0] as osc.Command) is osc.KittyColorOSC
+	assert ((a[0] as osc.Command) as osc.KittyColorOSC).terminator == .st
 }
 
 fn test_osc_raw_action_preserves_ignored_typed_payload() {
@@ -606,9 +606,9 @@ fn test_osc_raw_action_preserves_ignored_typed_payload() {
 	}
 	a := dispatch_actions(p.next(0x07))
 	assert a.len == 1
-	assert a[0].osc is osc.KittyTextSizing
-	assert (a[0].osc as osc.KittyTextSizing).scale == 2
-	assert (a[0].osc as osc.KittyTextSizing).text == 'hello'
+	assert (a[0] as osc.Command) is osc.KittyTextSizing
+	assert ((a[0] as osc.Command) as osc.KittyTextSizing).scale == 2
+	assert ((a[0] as osc.Command) as osc.KittyTextSizing).text == 'hello'
 }
 
 // ============================================================
@@ -647,8 +647,8 @@ fn test_csi_sgr_up_to_max_params() {
 		a := dispatch_actions(p.next(u8(`H`)))
 		assert p.state == .ground
 		assert a.len == 1
-		assert a[0].action_type == .csi_dispatch_action
-		csi := a[0].csi
+		assert a[0].tag() == .csi_dispatch_action
+		csi := (a[0] as CSIAction)
 		assert csi.params.len == max
 		assert csi.params[max - 1] == u16(2)
 	}
@@ -689,8 +689,8 @@ fn test_dcs_xtgettcap() {
 	a := dispatch_actions(p.next(u8(`q`)))
 	assert p.state == .dcs_passthrough
 	assert a.len == 1
-	assert a[0].action_type == .dcs_hook_action
-	hook := a[0].dcs
+	assert a[0].tag() == .dcs_hook_action
+	hook := (a[0] as DCSAction)
 	assert hook.intermediates == [u8(`+`)]
 	assert hook.params.len == 0
 	assert hook.final_byte == u8(`q`)
@@ -710,8 +710,8 @@ fn test_dcs_params() {
 	a := dispatch_actions(p.next(u8(`p`)))
 	assert p.state == .dcs_passthrough
 	assert a.len == 1
-	assert a[0].action_type == .dcs_hook_action
-	hook := a[0].dcs
+	assert a[0].tag() == .dcs_hook_action
+	hook := (a[0] as DCSAction)
 	assert hook.params == [u16(1000)]
 	assert hook.final_byte == u8(`p`)
 }

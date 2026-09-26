@@ -182,54 +182,33 @@ fn test_pagelist_inspector_max_coord_tracks_regions() {
 }
 
 fn test_vt_event_encodings_match_pinned_ghostty() {
-	assert encode_vt_action(terminal.ParserAction{
-		action_type: .print_action
-		char:        u32(`A`)
-	}) == "'A' (U+41)"
-	assert encode_vt_action(terminal.ParserAction{
-		action_type: .execute_action
-		byte_val:    0x07
-	}) == 'BEL (0x7)'
-	assert encode_vt_action(terminal.ParserAction{
-		action_type: .execute_action
-		byte_val:    0x19
-	}) == '? (0x19)'
-	assert encode_vt_action(terminal.ParserAction{
-		action_type: .csi_dispatch_action
-		csi:         terminal.CSIAction{
+	assert encode_vt_action(terminal.ParserAction(terminal.ParserPrint{ cp: u32(`A`) })) == "'A' (U+41)"
+	assert encode_vt_action(terminal.ParserAction(terminal.ParserExecute{ code: 0x07 })) == 'BEL (0x7)'
+	assert encode_vt_action(terminal.ParserAction(terminal.ParserExecute{ code: 0x19 })) == '? (0x19)'
+	assert encode_vt_action(terminal.ParserAction(terminal.CSIAction{
 			intermediates: [u8(`?`)]
 			params:        [u16(1), 4]
 			final_byte:    u8(`h`)
-		}
-	}) == '? 1;4 h'
-	assert encode_vt_action(terminal.ParserAction{
-		action_type: .esc_dispatch_action
-		esc:         terminal.ESCAction{
+		})) == '? 1;4 h'
+	assert encode_vt_action(terminal.ParserAction(terminal.ESCAction{
 			intermediates: [u8(`(`)]
 			final_byte:    u8(`B`)
-		}
-	}) == '( B'
-	osc_action := terminal.ParserAction{
-		action_type: .osc_dispatch_action
-		osc:         osc.Command(osc.HyperlinkStart{
+		})) == '( B'
+	osc_action := terminal.ParserAction(osc.Command(osc.HyperlinkStart{
 			uri: 'https://example.com'
 			id:  'link-id'
-		})
-	}
+		}))
 	assert encode_vt_action(osc_action) == 'hyperlink_start '
 	assert vt_action_metadata(osc_action) == {
 		'id':  'link-id'
 		'uri': 'https://example.com'
 	}
-	kitty_sizing := terminal.ParserAction{
-		action_type: .osc_dispatch_action
-		osc:         osc.Command(osc.KittyTextSizing{
+	kitty_sizing := terminal.ParserAction(osc.Command(osc.KittyTextSizing{
 			scale:  2
 			width:  3
 			valign: .bottom
 			text:   'hello'
-		})
-	}
+		}))
 	assert vt_action_metadata(kitty_sizing) == {
 		'scale':       '2'
 		'width':       '3'
@@ -255,17 +234,11 @@ fn test_vt_stream_filters_snapshots_and_sequence_gaps() {
 	}
 
 	// Print is excluded by default but still advances the sequence.
-	assert stream.vt_raw(terminal.ParserAction{
-		action_type: .print_action
-		char:        u32(`x`)
-	}, &term)
+	assert stream.vt_raw(terminal.ParserAction(terminal.ParserPrint{ cp: u32(`x`) }), &term)
 	assert stream.events.len == 0
 	term.screens.active.cursor.x = 7
 	term.scrolling_region.top = 3
-	assert !stream.vt_raw(terminal.ParserAction{
-		action_type: .execute_action
-		byte_val:    0x07
-	}, &term)
+	assert !stream.vt_raw(terminal.ParserAction(terminal.ParserExecute{ code: 0x07 }), &term)
 	assert stream.events.len == 1
 	assert stream.events[0].seq == 2
 	assert stream.events[0].cursor.x == 7
@@ -276,21 +249,12 @@ fn test_vt_stream_filters_snapshots_and_sequence_gaps() {
 	assert stream.events[0].scrolling_region.top == 3
 
 	stream.paused = true
-	assert stream.vt_raw(terminal.ParserAction{
-		action_type: .execute_action
-		byte_val:    0x08
-	}, &term)
+	assert stream.vt_raw(terminal.ParserAction(terminal.ParserExecute{ code: 0x08 }), &term)
 	stream.paused = false
 	stream.filter_text = 'does-not-match'
-	assert stream.vt_raw(terminal.ParserAction{
-		action_type: .execute_action
-		byte_val:    0x09
-	}, &term)
+	assert stream.vt_raw(terminal.ParserAction(terminal.ParserExecute{ code: 0x09 }), &term)
 	stream.filter_text = 'bel'
-	assert !stream.vt_raw(terminal.ParserAction{
-		action_type: .execute_action
-		byte_val:    0x07
-	}, &term)
+	assert !stream.vt_raw(terminal.ParserAction(terminal.ParserExecute{ code: 0x07 }), &term)
 	assert stream.events.len == 2
 	assert stream.events[1].seq == 5
 }
@@ -334,10 +298,7 @@ fn test_vt_stream_is_bounded_and_navigation_matches_reverse_table() {
 		stream.deinit()
 	}
 	for _ in 0 .. 101 {
-		assert !stream.vt_raw(terminal.ParserAction{
-			action_type: .execute_action
-			byte_val:    0x07
-		}, &term)
+		assert !stream.vt_raw(terminal.ParserAction(terminal.ParserExecute{ code: 0x07 }), &term)
 	}
 	assert stream.events.len == max_vt_events
 	assert stream.events[0].seq == 2

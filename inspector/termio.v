@@ -142,10 +142,10 @@ pub fn (mut self VTStream) vt_raw(action terminal.ParserAction, term &terminal.T
 	seq := self.current_seq
 	self.current_seq++
 
-	if self.paused || action.action_type in [.dcs_put_action, .apc_put_action] {
+	if self.paused || action.tag() in [.dcs_put_action, .apc_put_action] {
 		return true
 	}
-	if self.filter_exclude[int(action.action_type)] {
+	if self.filter_exclude[int(action.tag())] {
 		return true
 	}
 
@@ -155,7 +155,7 @@ pub fn (mut self VTStream) vt_raw(action terminal.ParserAction, term &terminal.T
 	}
 	mut event := VTEvent{
 		seq: seq
-		kind: vt_kind(action.action_type)
+		kind: vt_kind(action.tag())
 		raw_description: encode_vt_action(action)
 		cursor: cursor
 		scrolling_region: term.scrolling_region
@@ -188,13 +188,13 @@ fn vt_kind(action_type terminal.ParserActionType) VTKind {
 }
 
 fn encode_vt_action(action terminal.ParserAction) string {
-	return match action.action_type {
-		.print_action { "'${rune(action.char)}' (U+${action.char:X})" }
-		.execute_action { '${execute_name(action.byte_val)} (0x${action.byte_val:X})' }
-		.csi_dispatch_action { encode_csi_action(action.csi) }
-		.esc_dispatch_action { encode_esc_action(action.esc) }
-		.osc_dispatch_action { '${action.osc.key()} ' }
-		else { action.action_type.str() }
+	return match action {
+		terminal.ParserPrint { "'${rune(action.cp)}' (U+${action.cp:X})" }
+		terminal.ParserExecute { '${execute_name(action.code)} (0x${action.code:X})' }
+		terminal.CSIAction { encode_csi_action(action) }
+		terminal.ESCAction { encode_esc_action(action) }
+		osc.Command { '${action.key()} ' }
+		else { action.tag().str() }
 	}
 }
 
@@ -249,10 +249,10 @@ fn encode_esc_action(action terminal.ESCAction) string {
 
 fn vt_action_metadata(action terminal.ParserAction) map[string]string {
 	mut result := map[string]string{}
-	if action.action_type != .osc_dispatch_action {
+	if action !is osc.Command {
 		return result
 	}
-	cmd := action.osc
+	cmd := action as osc.Command
 	match cmd {
 		osc.ChangeWindowTitle, osc.ChangeWindowIcon, osc.ReportPwd, osc.MouseShape,
 		osc.ConEmuShowMessageBox, osc.ConEmuGuiMacro, osc.ConEmuRunProcess,

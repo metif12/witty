@@ -1222,14 +1222,14 @@ mut:
 }
 
 pub fn (mut self RawActionRecorder) vt_raw(action ParserAction) !bool {
-	self.raw << action.action_type
-	if action.action_type == .csi_dispatch_action {
-		self.csi_params << action.csi.params.clone()
-		self.csi_finals << action.csi.final_byte
+	self.raw << action.tag()
+	if action.tag() == .csi_dispatch_action {
+		self.csi_params << (action as CSIAction).params.clone()
+		self.csi_finals << (action as CSIAction).final_byte
 		return self.skip_csi
 	}
-	if action.action_type == .osc_dispatch_action {
-		cmd := action.osc
+	if action.tag() == .osc_dispatch_action {
+		cmd := (action as osc.Command)
 		if cmd is osc.ChangeWindowTitle {
 			self.osc_titles << cmd.value.clone()
 		}

@@ -906,38 +906,38 @@ fn (mut self Stream[H]) handle_action(action ParserAction) ! {
 		return
 	}
 
-	match action.action_type {
-		.print_action {
-			self.print(action.char)!
+	match action {
+		ParserPrint {
+			self.print(action.cp)!
 		}
-		.execute_action {
-			self.execute(action.byte_val)!
+		ParserExecute {
+			self.execute(action.code)!
 		}
-		.csi_dispatch_action {
-			self.csi_dispatch(action.csi)!
+		CSIAction {
+			self.csi_dispatch(action)!
 		}
-		.esc_dispatch_action {
-			self.esc_dispatch(action.esc)!
+		ESCAction {
+			self.esc_dispatch(action)!
 		}
-		.osc_dispatch_action {
-			self.osc_dispatch(action.osc)!
+		osc.Command {
+			self.osc_dispatch(action)!
 		}
-		.dcs_hook_action {
-			self.handler.vt(.dcs_hook, action.dcs)!
+		DCSAction {
+			self.handler.vt(.dcs_hook, action)!
 		}
-		.dcs_put_action {
-			self.handler.vt(.dcs_put, action.byte_val)!
+		ParserDcsPut {
+			self.handler.vt(.dcs_put, action.code)!
 		}
-		.dcs_unhook_action {
+		ParserDcsUnhook {
 			self.handler.vt(.dcs_unhook, ActionVoid{})!
 		}
-		.apc_start_action {
+		ParserApcStart {
 			self.handler.vt(.apc_start, ActionVoid{})!
 		}
-		.apc_put_action {
-			self.handler.vt(.apc_put, action.byte_val)!
+		ParserApcPut {
+			self.handler.vt(.apc_put, action.code)!
 		}
-		.apc_end_action {
+		ParserApcEnd {
 			self.handler.vt(.apc_end, ActionVoid{})!
 		}
 	}

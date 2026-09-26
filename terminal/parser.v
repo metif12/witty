@@ -222,17 +222,68 @@ pub enum ParserActionType as u8 {
 	apc_end_action
 }
 
-// ParserAction represents an action produced by the VT parser.
-pub struct ParserAction {
+// Draw character to the screen. This is a unicode codepoint.
+pub struct ParserPrint {
 pub:
-	action_type ParserActionType
-	char        u32 // for print
-	byte_val    u8 // for execute, dcs_put, apc_put
-	csi         CSIAction // for csi_dispatch
-	esc         ESCAction // for esc_dispatch
-	osc         osc.Command = osc.InvalidCommand{} // for osc_dispatch
-	dcs         DCSAction // for dcs_hook
+	cp u32
 }
+
+// Execute the C0 or C1 function.
+pub struct ParserExecute {
+pub:
+	code u8
+}
+
+// DCS-related events.
+pub struct ParserDcsPut {
+pub:
+	code u8
+}
+
+pub struct ParserDcsUnhook {}
+
+// APC data
+pub struct ParserApcStart {}
+
+pub struct ParserApcPut {
+pub:
+	code u8
+}
+
+pub struct ParserApcEnd {}
+
+// ParserAction represents an action produced by the VT parser: the source's
+// `Action` union. The CSI, ESC, OSC, and DCS variants carry their payload
+// types directly.
+pub type ParserAction = CSIAction
+	| DCSAction
+	| ESCAction
+	| ParserApcEnd
+	| ParserApcPut
+	| ParserApcStart
+	| ParserDcsPut
+	| ParserDcsUnhook
+	| ParserExecute
+	| ParserPrint
+	| osc.Command
+
+// The tag of the active action variant.
+pub fn (self ParserAction) tag() ParserActionType {
+	return match self {
+		ParserPrint { .print_action }
+		ParserExecute { .execute_action }
+		CSIAction { .csi_dispatch_action }
+		ESCAction { .esc_dispatch_action }
+		osc.Command { .osc_dispatch_action }
+		DCSAction { .dcs_hook_action }
+		ParserDcsPut { .dcs_put_action }
+		ParserDcsUnhook { .dcs_unhook_action }
+		ParserApcStart { .apc_start_action }
+		ParserApcPut { .apc_put_action }
+		ParserApcEnd { .apc_end_action }
+	}
+}
+
 
 // ParserActions preserves the three ordered action positions returned by
 // Parser.next. The pinned V compiler emits invalid C for a returned
@@ -313,21 +364,14 @@ pub fn (mut self Parser) next(c u8) ParserActions {
 		match self.state {
 			.osc_string {
 				if cmd := self.osc_parser.end(c) {
-					actions.exit_action = ParserAction{
-						action_type: .osc_dispatch_action
-						osc: cmd
-					}
+					actions.exit_action = ParserAction(cmd)
 				}
 			}
 			.dcs_passthrough {
-				actions.exit_action = ParserAction{
-					action_type: .dcs_unhook_action
-				}
+				actions.exit_action = ParserDcsUnhook{}
 			}
 			.sos_pm_apc_string {
-				actions.exit_action = ParserAction{
-					action_type: .apc_end_action
-				}
+				actions.exit_action = ParserApcEnd{}
 			}
 			else {}
 		}
@@ -353,9 +397,7 @@ pub fn (mut self Parser) next(c u8) ParserActions {
 				actions.entry_action = self.build_dcs_hook_action(c)
 			}
 			.sos_pm_apc_string {
-				actions.entry_action = ParserAction{
-					action_type: .apc_start_action
-				}
+				actions.entry_action = ParserApcStart{}
 			}
 			else {}
 		}
@@ -373,15 +415,13 @@ fn (mut self Parser) do_action(action TransitionAction, c u8) ?ParserAction {
 			return none
 		}
 		.ta_print {
-			return ParserAction{
-				action_type: .print_action
-				char: u32(c)
+			return ParserPrint{
+				cp: u32(c)
 			}
 		}
 		.ta_execute {
-			return ParserAction{
-				action_type: .execute_action
-				byte_val: c
+			return ParserExecute{
+				code: c
 			}
 		}
 		.ta_collect {
@@ -403,15 +443,13 @@ fn (mut self Parser) do_action(action TransitionAction, c u8) ?ParserAction {
 			return self.build_esc_action(c)
 		}
 		.ta_put {
-			return ParserAction{
-				action_type: .dcs_put_action
-				byte_val: c
+			return ParserDcsPut{
+				code: c
 			}
 		}
 		.ta_apc_put {
-			return ParserAction{
-				action_type: .apc_put_action
-				byte_val: c
+			return ParserApcPut{
+				code: c
 			}
 		}
 	}
@@ -476,26 +514,20 @@ fn (mut self Parser) build_csi_action(final_byte u8) ?ParserAction {
 		return none
 	}
 
-	return ParserAction{
-		action_type: .csi_dispatch_action
-		csi: CSIAction{
+	return CSIAction{
 			intermediates: self.intermediates[..int(self.intermediates_idx)]
 			params: self.params[..int(self.params_idx)]
 			params_sep: self.params_sep
 			final_byte: final_byte
 		}
-	}
 }
 
 // build_esc_action creates an ESC dispatch action from the current parser state.
 fn (mut self Parser) build_esc_action(final_byte u8) ParserAction {
-	return ParserAction{
-		action_type: .esc_dispatch_action
-		esc: ESCAction{
+	return ESCAction{
 			intermediates: self.intermediates[..int(self.intermediates_idx)]
 			final_byte: final_byte
 		}
-	}
 }
 
 // build_dcs_hook_action creates a DCS hook action from the current parser state.
@@ -505,12 +537,9 @@ fn (mut self Parser) build_dcs_hook_action(final_byte u8) ParserAction {
 		self.params_idx += 1
 	}
 
-	return ParserAction{
-		action_type: .dcs_hook_action
-		dcs: DCSAction{
+	return DCSAction{
 			intermediates: self.intermediates[..int(self.intermediates_idx)]
 			params: self.params[..int(self.params_idx)]
 			final_byte: final_byte
 		}
-	}
 }
