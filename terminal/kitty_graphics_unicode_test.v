@@ -1,10 +1,9 @@
-module kitty
+module terminal
 
 // Tests for Kitty graphics protocol unicode placement feature.
 //
 // Source: graphics_unicode.zig tests
 
-import terminal
 
 fn test_unicode_diacritic_sorted() {
 	// diacritics must be sorted since we use a binary search.
@@ -20,7 +19,7 @@ fn test_unicode_diacritic() {
 }
 
 fn test_unicode_placement_none() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 5, cols: 5 })!
+	mut t := Terminal.init(Options{ rows: 5, cols: 5 })!
 	defer {
 		t.deinit()
 	}
@@ -36,7 +35,7 @@ fn test_unicode_placement_none() ! {
 }
 
 fn test_unicode_placement_single_row_col() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 5, cols: 5 })!
+	mut t := Terminal.init(Options{ rows: 5, cols: 5 })!
 	defer {
 		t.deinit()
 	}
@@ -61,7 +60,7 @@ fn test_unicode_placement_single_row_col() ! {
 }
 
 fn test_unicode_placement_continuation_break() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 5, cols: 10 })!
+	mut t := Terminal.init(Options{ rows: 5, cols: 10 })!
 	defer {
 		t.deinit()
 	}
@@ -96,7 +95,7 @@ fn test_unicode_placement_continuation_break() ! {
 }
 
 fn test_unicode_placement_continuation_with_diacritics_set() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 5, cols: 10 })!
+	mut t := Terminal.init(Options{ rows: 5, cols: 10 })!
 	defer {
 		t.deinit()
 	}
@@ -124,7 +123,7 @@ fn test_unicode_placement_continuation_with_diacritics_set() ! {
 }
 
 fn test_unicode_placement_continuation_with_no_col() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 5, cols: 10 })!
+	mut t := Terminal.init(Options{ rows: 5, cols: 10 })!
 	defer {
 		t.deinit()
 	}
@@ -152,7 +151,7 @@ fn test_unicode_placement_continuation_with_no_col() ! {
 }
 
 fn test_unicode_placement_continuation_with_no_diacritics() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 5, cols: 10 })!
+	mut t := Terminal.init(Options{ rows: 5, cols: 10 })!
 	defer {
 		t.deinit()
 	}
@@ -180,7 +179,7 @@ fn test_unicode_placement_continuation_with_no_diacritics() ! {
 }
 
 fn test_unicode_placement_run_ending() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 5, cols: 10 })!
+	mut t := Terminal.init(Options{ rows: 5, cols: 10 })!
 	defer {
 		t.deinit()
 	}
@@ -208,7 +207,7 @@ fn test_unicode_placement_run_ending() ! {
 }
 
 fn test_unicode_placement_run_starting_in_the_middle() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 5, cols: 10 })!
+	mut t := Terminal.init(Options{ rows: 5, cols: 10 })!
 	defer {
 		t.deinit()
 	}
@@ -236,14 +235,14 @@ fn test_unicode_placement_run_starting_in_the_middle() ! {
 }
 
 fn test_unicode_placement_specifying_image_id_as_palette() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 5, cols: 5 })!
+	mut t := Terminal.init(Options{ rows: 5, cols: 5 })!
 	defer {
 		t.deinit()
 	}
 	t.modes.set(.grapheme_cluster, true)
 
 	// Single cell
-	t.set_attribute(terminal.SgrFg256{ idx: 42 })!
+	t.set_attribute(SgrFg256{ idx: 42 })!
 	t.print_string('\U0010EEEE̅̅')!
 
 	// Get our top left pin
@@ -262,14 +261,14 @@ fn test_unicode_placement_specifying_image_id_as_palette() ! {
 }
 
 fn test_unicode_placement_specifying_image_id_with_high_bits() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 5, cols: 5 })!
+	mut t := Terminal.init(Options{ rows: 5, cols: 5 })!
 	defer {
 		t.deinit()
 	}
 	t.modes.set(.grapheme_cluster, true)
 
 	// Single cell
-	t.set_attribute(terminal.SgrFg256{ idx: 42 })!
+	t.set_attribute(SgrFg256{ idx: 42 })!
 	t.print_string('\U0010EEEE̅̅̎')!
 
 	// Get our top left pin
@@ -288,15 +287,15 @@ fn test_unicode_placement_specifying_image_id_with_high_bits() ! {
 }
 
 fn test_unicode_placement_specifying_placement_id_as_palette() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 5, cols: 5 })!
+	mut t := Terminal.init(Options{ rows: 5, cols: 5 })!
 	defer {
 		t.deinit()
 	}
 	t.modes.set(.grapheme_cluster, true)
 
 	// Single cell
-	t.set_attribute(terminal.SgrFg256{ idx: 42 })!
-	t.set_attribute(terminal.SgrUnderlineColor256{ idx: 21 })!
+	t.set_attribute(SgrFg256{ idx: 42 })!
+	t.set_attribute(SgrUnderlineColor256{ idx: 21 })!
 	t.print_string('\U0010EEEE̅̅')!
 
 	// Get our top left pin
@@ -316,15 +315,15 @@ fn test_unicode_placement_specifying_placement_id_as_palette() ! {
 
 // Witty-only: covers the rgb branch of colorToId for the placement ID.
 fn test_unicode_placement_specifying_placement_id_as_rgb() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 5, cols: 5 })!
+	mut t := Terminal.init(Options{ rows: 5, cols: 5 })!
 	defer {
 		t.deinit()
 	}
 	t.modes.set(.grapheme_cluster, true)
 
 	// Single cell
-	t.set_attribute(terminal.SgrFg256{ idx: 42 })!
-	t.set_attribute(terminal.SgrUnderlineColor{ rgb: terminal.RGB{ r: 0x12, g: 0x34, b: 0x56 } })!
+	t.set_attribute(SgrFg256{ idx: 42 })!
+	t.set_attribute(SgrUnderlineColor{ rgb: RGB{ r: 0x12, g: 0x34, b: 0x56 } })!
 	t.print_string('\U0010EEEE̅̅')!
 
 	// Get our top left pin
@@ -351,7 +350,7 @@ fn test_unicode_render_placement_dog_4x2() ! {
 	cell_width := u32(36)
 	cell_height := u32(80)
 
-	mut t := terminal.Terminal.init(terminal.Options{ cols: 100, rows: 100 })!
+	mut t := Terminal.init(Options{ cols: 100, rows: 100 })!
 	defer {
 		t.deinit()
 	}
@@ -425,7 +424,7 @@ fn test_unicode_render_placement_dog_2x2_with_blank_cells() ! {
 	cell_width := u32(36)
 	cell_height := u32(80)
 
-	mut t := terminal.Terminal.init(terminal.Options{ cols: 100, rows: 100 })!
+	mut t := Terminal.init(Options{ cols: 100, rows: 100 })!
 	defer {
 		t.deinit()
 	}
@@ -498,7 +497,7 @@ fn test_unicode_render_placement_dog_1x1() ! {
 	cell_width := u32(36)
 	cell_height := u32(80)
 
-	mut t := terminal.Terminal.init(terminal.Options{ cols: 100, rows: 100 })!
+	mut t := Terminal.init(Options{ cols: 100, rows: 100 })!
 	defer {
 		t.deinit()
 	}
@@ -593,7 +592,7 @@ fn test_incomplete_placement_cannot_append_discontinuous_col() {
 
 fn test_incomplete_placement_complete() {
 	ip := IncompletePlacement{
-		pin:           terminal.Pin{
+		pin:           Pin{
 			x: 3
 			y: 5
 		}

@@ -1,4 +1,4 @@
-module kitty
+module terminal
 
 // Kitty graphics protocol unicode placeholder / virtual placement feature.
 //
@@ -8,10 +8,7 @@ module kitty
 // Kitty graphics protocol unicode placeholder, virtual placement feature.
 
 import math
-import terminal
 
-// Codepoint for the unicode placeholder character.
-pub const placeholder = terminal.kitty_unicode_placeholder
 
 // ============================================================
 // VirtualPlacement - a virtual placement in the terminal
@@ -23,7 +20,7 @@ pub struct VirtualPlacement {
 pub:
 	// The top-left pin of the placement. This can be used to get the
 	// screen x/y.
-	pin terminal.Pin
+	pin Pin
 
 	// The image ID and placement ID for this virtual placement. The
 	// image ID is encoded in the fg color (plus optional a 8-bit high
@@ -241,7 +238,7 @@ fn (self &VirtualPlacement) grid(storage &ImageStorage, image &Image, cell_width
 struct IncompletePlacement {
 mut:
 	// The pin of the cell that created this incomplete placement.
-	pin terminal.Pin
+	pin Pin
 
 	// Lower 24 bits of the image ID. This is specified in the fg color
 	// and is always required.
@@ -266,8 +263,8 @@ mut:
 }
 
 // Parse the incomplete placement information from a row and cell.
-fn IncompletePlacement.init(row &terminal.Pin, cell &terminal.CellData) IncompletePlacement {
-	assert cell.codepoint() == kitty.placeholder
+fn IncompletePlacement.init(row &Pin, cell &CellData) IncompletePlacement {
+	assert cell.codepoint() == kitty_unicode_placeholder
 	style := row.style(cell)
 
 	mut result := IncompletePlacement{
@@ -371,7 +368,7 @@ fn (self &IncompletePlacement) complete() VirtualPlacement {
 // Convert a style color to a Kitty image protocol ID. This works by
 // taking the 24 most significant bits of the color, which lets it work
 // for both palette and rgb-based colors.
-fn color_to_id(ct terminal.ColorType, palette u8, r u8, g u8, b u8) u32 {
+fn color_to_id(ct ColorType, palette u8, r u8, g u8, b u8) u32 {
 	return match ct {
 		.none { u32(0) }
 		.palette { u32(palette) }
@@ -385,7 +382,7 @@ fn color_to_id(ct terminal.ColorType, palette u8, r u8, g u8, b u8) u32 {
 }
 
 // Get placement ID from underline color (if set).
-fn fn_placement_id(style terminal.CellStyle) ?u32 {
+fn fn_placement_id(style CellStyle) ?u32 {
 	id := color_to_id(style.underline_color_type, style.underline_palette, style.underline_r, style.underline_g, style.underline_b)
 	if id != 0 {
 		return id
@@ -401,7 +398,7 @@ fn fn_placement_id(style terminal.CellStyle) ?u32 {
 // in the given pin. If `limit` is provided, the iterator will stop
 // when it reaches that pin (inclusive). If `limit` is not provided,
 // the iterator will continue until the end of the page list.
-pub fn placement_iterator(pin terminal.Pin, limit ?terminal.Pin) PlacementIterator {
+pub fn placement_iterator(pin Pin, limit ?Pin) PlacementIterator {
 	mut row_it := pin.row_iterator(.right_down, limit)
 	row := row_it.next()
 	return PlacementIterator{
@@ -413,8 +410,8 @@ pub fn placement_iterator(pin terminal.Pin, limit ?terminal.Pin) PlacementIterat
 // Iterator over unicode virtual placements.
 pub struct PlacementIterator {
 mut:
-	row_it terminal.RowIterator
-	row    ?terminal.Pin
+	row_it RowIterator
+	row    ?Pin
 }
 
 pub fn (mut self PlacementIterator) next() ?VirtualPlacement {
@@ -447,7 +444,7 @@ pub fn (mut self PlacementIterator) next() ?VirtualPlacement {
 			// If this cell doesn't have the placeholder, then we
 			// complete the run if we have it otherwise we just move
 			// on and keep searching.
-			if cell.codepoint() != kitty.placeholder {
+			if cell.codepoint() != kitty_unicode_placeholder {
 				if prev := run {
 					return prev.complete()
 				}

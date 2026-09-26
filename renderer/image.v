@@ -204,7 +204,6 @@ module renderer
 // --- Original Ghostty Comments End: src/renderer/image.zig
 
 import terminal
-import kitty
 import math
 import time
 import wuffs.swizzle
@@ -559,10 +558,9 @@ fn pending_to_rgba(pending PendingImage) ![]u8 {
 // This does not read/write state used by drawing.
 //
 pub fn (self &ImageRenderState) kitty_requires_update(t &terminal.Terminal) bool {
-	if storage := kitty.terminal_storage(t) {
-		if storage.dirty {
-			return true
-		}
+	// If the terminal kitty image state is dirty, we must update.
+	if t.screens.active.kitty_images.dirty {
+		return true
 	}
 
 	// If we have any virtual references, we must also rebuild our
@@ -577,7 +575,7 @@ pub fn (self &ImageRenderState) kitty_requires_update(t &terminal.Terminal) bool
 // Storage-aware variant of kitty_requires_update that has direct access
 // to the Kitty image storage. This is a faithful translation of Ghostty's
 // State.kittyRequiresUpdate.
-pub fn (self &ImageRenderState) kitty_requires_update_storage(storage &kitty.ImageStorage) bool {
+pub fn (self &ImageRenderState) kitty_requires_update_storage(storage &terminal.ImageStorage) bool {
 	// If the terminal kitty image state is dirty, we must update.
 	if storage.dirty {
 		return true
@@ -599,13 +597,7 @@ pub fn (self &ImageRenderState) kitty_requires_update_storage(storage &kitty.Ima
 // This reads/writes state used by drawing.
 //
 pub fn (mut self ImageRenderState) kitty_update(t &terminal.Terminal, cell_size CellSize) {
-	mut storage := kitty.terminal_storage(t) or {
-		self.kitty_placements.clear()
-		self.kitty_virtual = false
-		self.kitty_bg_end = 0
-		self.kitty_text_end = 0
-		return
-	}
+	mut storage := unsafe { &terminal.ImageStorage(&t.screens.active.kitty_images) }
 
 	// The top-left and bottom-right corners of our viewport in screen
 	// points. This lets us determine offsets and containment of placements.
@@ -618,22 +610,22 @@ pub fn (mut self ImageRenderState) kitty_update(t &terminal.Terminal, cell_size 
 	mut has_virtual := false
 	for entry in storage.placements {
 		match entry.value.location {
-			kitty.PlacementPin {
+			terminal.PlacementPin {
 				image := storage.image_by_id(entry.key.image_id) or { continue }
 				pinned << KittyPinnedPlacement{
 					image: image
 					placement: entry.value
 				}
 			}
-			kitty.PlacementVirtual {
+			terminal.PlacementVirtual {
 				has_virtual = true
 			}
 		}
 	}
 
-	mut virtuals := []kitty.VirtualPlacement{}
+	mut virtuals := []terminal.VirtualPlacement{}
 	if has_virtual {
-		mut it := kitty.placement_iterator(top, bot)
+		mut it := terminal.placement_iterator(top, bot)
 		for {
 			placement := it.next() or { break }
 			virtuals << placement
@@ -653,8 +645,8 @@ pub fn (mut self ImageRenderState) kitty_update(t &terminal.Terminal, cell_size 
 // handing them to the shared CPU-side update routine.
 pub struct KittyPinnedPlacement {
 pub:
-	image     kitty.Image
-	placement kitty.Placement
+	image     terminal.Image
+	placement terminal.Placement
 }
 
 // Update the Kitty graphics state from the terminal, given the already
@@ -668,7 +660,7 @@ pub:
 // `top_y` and `bot_y` are the screen-space Y coordinates of the top-left
 // and bottom-right corners of the viewport, computed by the caller (in
 // Ghostty via `pages.pointFromPin(.screen, ...)`).
-pub fn (mut self ImageRenderState) kitty_update_storage(mut storage kitty.ImageStorage, t &terminal.Terminal, top_y u32, bot_y u32, cell_size CellSize, pinned []KittyPinnedPlacement, virtuals []kitty.VirtualPlacement) {
+pub fn (mut self ImageRenderState) kitty_update_storage(mut storage terminal.ImageStorage, t &terminal.Terminal, top_y u32, bot_y u32, cell_size CellSize, pinned []KittyPinnedPlacement, virtuals []terminal.VirtualPlacement) {
 	// The terminal storage's dirty flag is consumed by this update.
 	defer {
 		storage.dirty = false
@@ -773,7 +765,7 @@ fn (mut self ImageRenderState) kitty_sort_and_index() {
 
 // Get the viewport-relative position for this placement and add it to
 // the placements list. Faithful translation of prepKittyPlacement.
-fn (mut self ImageRenderState) prep_kitty_placement(t &terminal.Terminal, top_y u32, bot_y u32, image kitty.Image, p kitty.Placement) ! {
+fn (mut self ImageRenderState) prep_kitty_placement(t &terminal.Terminal, top_y u32, bot_y u32, image terminal.Image, p terminal.Placement) ! {
 	// Get the rect for the placement. If this placement doesn't have
 	// a rect then its virtual or something so skip it.
 	rect := p.rect(image, t) or { return }
@@ -843,7 +835,7 @@ fn (mut self ImageRenderState) prep_kitty_placement(t &terminal.Terminal, top_y 
 
 // Prepare a virtual (unicode placeholder) placement. Faithful translation
 // of prepKittyVirtualPlacement.
-fn (mut self ImageRenderState) prep_kitty_virtual_placement(mut storage kitty.ImageStorage, t &terminal.Terminal, p kitty.VirtualPlacement, cell_size CellSize) ! {
+fn (mut self ImageRenderState) prep_kitty_virtual_placement(mut storage terminal.ImageStorage, t &terminal.Terminal, p terminal.VirtualPlacement, cell_size CellSize) ! {
 	image := storage.image_by_id(p.image_id) or {
 		// missing image for virtual placement, ignoring
 		return
@@ -894,7 +886,7 @@ fn (mut self ImageRenderState) prep_kitty_virtual_placement(mut storage kitty.Im
 //
 // BOUNDARY: The actual GPU texture upload happens in `upload`. Here we
 // only prepare the CPU-side pending image state.
-fn (mut self ImageRenderState) prep_kitty_image(image kitty.Image) ! {
+fn (mut self ImageRenderState) prep_kitty_image(image terminal.Image) ! {
 	id := kitty_image_key(image.id)
 	transmit_time := image.transmit_time
 

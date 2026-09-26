@@ -1,12 +1,12 @@
-module kitty
+module terminal
 
 fn test_graphics_command_source_tag_layouts_and_ordinals() {
-	assert sizeof(ParserState) == 1
-	assert u8(ParserState.control_key) == 0
-	assert u8(ParserState.control_key_ignore) == 1
-	assert u8(ParserState.control_value) == 2
-	assert u8(ParserState.control_value_ignore) == 3
-	assert u8(ParserState.data) == 4
+	assert sizeof(CommandParserState) == 1
+	assert u8(CommandParserState.control_key) == 0
+	assert u8(CommandParserState.control_key_ignore) == 1
+	assert u8(CommandParserState.control_value) == 2
+	assert u8(CommandParserState.control_value_ignore) == 3
+	assert u8(CommandParserState.data) == 4
 	assert sizeof(CommandAction) == 1
 	assert u8(CommandAction.query) == 0
 	assert u8(CommandAction.transmit) == 1
@@ -61,7 +61,7 @@ fn test_graphics_command_source_tag_layouts_and_ordinals() {
 
 fn test_transmission_command() {
 	input := 'f=24,s=10,v=20'
-	command := Parser.parse_string(input) or { panic(err) }
+	command := CommandParser.parse_string(input) or { panic(err) }
 
 	assert command.control is Transmission
 	v := command.control as Transmission
@@ -73,7 +73,7 @@ fn test_transmission_command() {
 
 fn test_transmission_ignores_m_if_medium_is_not_direct() {
 	input := 'a=t,t=t,m=1'
-	command := Parser.parse_string(input) or { panic(err) }
+	command := CommandParser.parse_string(input) or { panic(err) }
 
 	assert command.control is Transmission
 	v := command.control as Transmission
@@ -83,7 +83,7 @@ fn test_transmission_ignores_m_if_medium_is_not_direct() {
 
 fn test_transmission_respects_m_if_medium_is_direct() {
 	input := 'a=t,t=d,m=1'
-	command := Parser.parse_string(input) or { panic(err) }
+	command := CommandParser.parse_string(input) or { panic(err) }
 
 	assert command.control is Transmission
 	v := command.control as Transmission
@@ -93,7 +93,7 @@ fn test_transmission_respects_m_if_medium_is_direct() {
 
 fn test_query_command() {
 	input := 'i=31,s=1,v=1,a=q,t=d,f=24;QUFBQQ'
-	command := Parser.parse_string(input) or { panic(err) }
+	command := CommandParser.parse_string(input) or { panic(err) }
 
 	assert command.control is Transmission
 	v := command.control as Transmission
@@ -107,7 +107,7 @@ fn test_query_command() {
 
 fn test_display_command() {
 	input := 'a=p,U=1,i=31,c=80,r=120'
-	command := Parser.parse_string(input) or { panic(err) }
+	command := CommandParser.parse_string(input) or { panic(err) }
 
 	assert command.control is Display
 	v := command.control as Display
@@ -118,7 +118,7 @@ fn test_display_command() {
 
 fn test_delete_command() {
 	input := 'a=d,d=p,x=3,y=4'
-	command := Parser.parse_string(input) or { panic(err) }
+	command := CommandParser.parse_string(input) or { panic(err) }
 
 	assert command.control is FullDelete
 	fd := command.control as FullDelete
@@ -132,14 +132,14 @@ fn test_delete_command() {
 
 fn test_no_control_data() {
 	input := ';QUFBQQ'
-	command := Parser.parse_string(input) or { panic(err) }
+	command := CommandParser.parse_string(input) or { panic(err) }
 
 	assert command.control is Transmission
 	assert command.data == 'AAAA'.bytes()
 }
 
 fn test_invalid_base64_payload() {
-	Parser.parse_string(';AA!A') or {
+	CommandParser.parse_string(';AA!A') or {
 		assert err.msg().contains('InvalidData')
 		return
 	}
@@ -147,21 +147,21 @@ fn test_invalid_base64_payload() {
 }
 
 fn test_command_to_owned_data_clears_command_data() {
-	mut command := Parser.parse_string(';QUFBQQ') or { panic(err) }
+	mut command := CommandParser.parse_string(';QUFBQQ') or { panic(err) }
 	data := command.to_owned_data()
 	assert data == 'AAAA'.bytes()
 	assert command.data.len == 0
 }
 
 fn test_command_deinit_clears_data() {
-	mut command := Parser.parse_string(';QUFBQQ') or { panic(err) }
+	mut command := CommandParser.parse_string(';QUFBQQ') or { panic(err) }
 	command.deinit()
 	assert command.data.len == 0
 }
 
 fn test_ignore_unknown_keys_long() {
 	input := 'f=24,s=10,v=20,hello=world'
-	command := Parser.parse_string(input) or { panic(err) }
+	command := CommandParser.parse_string(input) or { panic(err) }
 
 	assert command.control is Transmission
 	v := command.control as Transmission
@@ -173,7 +173,7 @@ fn test_ignore_unknown_keys_long() {
 fn test_ignore_very_long_values() {
 	// Very long value should overflow and be treated as 0
 	input := 'f=24,s=10,v=2000000000000000000000000000000000000000'
-	command := Parser.parse_string(input) or { panic(err) }
+	command := CommandParser.parse_string(input) or { panic(err) }
 
 	assert command.control is Transmission
 	v := command.control as Transmission
@@ -205,7 +205,7 @@ fn test_response_encode_with_image_id_and_number() {
 
 fn test_delete_range_command_1() {
 	input := 'a=d,d=r,x=3,y=4'
-	command := Parser.parse_string(input) or { panic(err) }
+	command := CommandParser.parse_string(input) or { panic(err) }
 
 	assert command.control is FullDelete
 	fd := command.control as FullDelete
@@ -219,7 +219,7 @@ fn test_delete_range_command_1() {
 
 fn test_delete_range_command_2() {
 	input := 'a=d,d=R,x=5,y=11'
-	command := Parser.parse_string(input) or { panic(err) }
+	command := CommandParser.parse_string(input) or { panic(err) }
 
 	assert command.control is FullDelete
 	fd := command.control as FullDelete
@@ -234,27 +234,27 @@ fn test_delete_range_command_2() {
 fn test_delete_range_command_3() {
 	// x > y should fail
 	input := 'a=d,d=R,x=5,y=4'
-	Parser.parse_string(input) or { return }
+	CommandParser.parse_string(input) or { return }
 	assert false, 'expected error'
 }
 
 fn test_delete_range_command_4() {
 	// Missing y should fail
 	input := 'a=d,d=R,x=5'
-	Parser.parse_string(input) or { return }
+	CommandParser.parse_string(input) or { return }
 	assert false, 'expected error'
 }
 
 fn test_delete_range_command_5() {
 	// Missing x should fail
 	input := 'a=d,d=R,y=5'
-	Parser.parse_string(input) or { return }
+	CommandParser.parse_string(input) or { return }
 	assert false, 'expected error'
 }
 
 fn test_ensure_large_negative_values() {
 	input := 'a=p,i=1,z=-2000000000'
-	command := Parser.parse_string(input) or { panic(err) }
+	command := CommandParser.parse_string(input) or { panic(err) }
 
 	assert command.control is Display
 	v := command.control as Display
@@ -264,7 +264,7 @@ fn test_ensure_large_negative_values() {
 
 fn test_animation_frame_background_retains_packed_rgba_word() {
 	assert sizeof(AnimBackground) == 4
-	command := Parser.parse_string('a=f,Y=1144201745') or { panic(err) }
+	command := CommandParser.parse_string('a=f,Y=1144201745') or { panic(err) }
 	assert command.control is AnimationFrameLoading
 	frame := command.control as AnimationFrameLoading
 	assert frame.background.int() == u32(0x44332211)
@@ -275,7 +275,7 @@ fn test_animation_frame_background_retains_packed_rgba_word() {
 }
 
 fn test_integer_fields_match_zig_parse_int_grammar() {
-	command := Parser.parse_string('a=p,i=4__2,z=-2__0,H=+3,V=-0') or { panic(err) }
+	command := CommandParser.parse_string('a=p,i=4__2,z=-2__0,H=+3,V=-0') or { panic(err) }
 	assert command.control is Display
 	display := command.control as Display
 	assert display.image_id == 42
@@ -286,7 +286,7 @@ fn test_integer_fields_match_zig_parse_int_grammar() {
 
 fn test_ensure_proper_overflow_error_for_u32() {
 	input := 'a=p,i=10000000000'
-	Parser.parse_string(input) or {
+	CommandParser.parse_string(input) or {
 		assert err.msg().contains('Overflow')
 		return
 	}
@@ -295,7 +295,7 @@ fn test_ensure_proper_overflow_error_for_u32() {
 
 fn test_ensure_u32_overflow_with_ten_digits_is_rejected() {
 	input := 'a=p,i=4294967296'
-	Parser.parse_string(input) or {
+	CommandParser.parse_string(input) or {
 		assert err.msg().contains('Overflow')
 		return
 	}
@@ -304,7 +304,7 @@ fn test_ensure_u32_overflow_with_ten_digits_is_rejected() {
 
 fn test_ensure_invalid_u32_is_rejected() {
 	input := 'a=p,i=12x'
-	Parser.parse_string(input) or {
+	CommandParser.parse_string(input) or {
 		assert err.msg().contains('InvalidCharacter')
 		return
 	}
@@ -313,7 +313,7 @@ fn test_ensure_invalid_u32_is_rejected() {
 
 fn test_ensure_empty_u32_is_rejected() {
 	input := 'a=p,i='
-	Parser.parse_string(input) or {
+	CommandParser.parse_string(input) or {
 		assert err.msg().contains('InvalidCharacter')
 		return
 	}
@@ -322,7 +322,7 @@ fn test_ensure_empty_u32_is_rejected() {
 
 fn test_ensure_proper_overflow_error_for_i32() {
 	input := 'a=p,i=1,z=-9999999999'
-	Parser.parse_string(input) or {
+	CommandParser.parse_string(input) or {
 		assert err.msg().contains('Overflow')
 		return
 	}
@@ -331,7 +331,7 @@ fn test_ensure_proper_overflow_error_for_i32() {
 
 fn test_ensure_i32_overflow_at_boundary_is_rejected() {
 	input := 'a=p,i=1,z=2147483648'
-	Parser.parse_string(input) or {
+	CommandParser.parse_string(input) or {
 		assert err.msg().contains('Overflow')
 		return
 	}
@@ -341,7 +341,7 @@ fn test_ensure_i32_overflow_at_boundary_is_rejected() {
 fn test_all_i32_values_z() {
 	// 'z' (usually z-axis values)
 	input := 'a=p,i=1,z=-1'
-	command := Parser.parse_string(input) or { panic(err) }
+	command := CommandParser.parse_string(input) or { panic(err) }
 
 	assert command.control is Display
 	v := command.control as Display
@@ -352,7 +352,7 @@ fn test_all_i32_values_z() {
 fn test_all_i32_values_h() {
 	// 'H' (relative placement, horizontal offset)
 	input := 'a=p,i=1,H=-1'
-	command := Parser.parse_string(input) or { panic(err) }
+	command := CommandParser.parse_string(input) or { panic(err) }
 
 	assert command.control is Display
 	v := command.control as Display
@@ -363,7 +363,7 @@ fn test_all_i32_values_h() {
 fn test_all_i32_values_v() {
 	// 'V' (relative placement, vertical offset)
 	input := 'a=p,i=1,V=-1'
-	command := Parser.parse_string(input) or { panic(err) }
+	command := CommandParser.parse_string(input) or { panic(err) }
 
 	assert command.control is Display
 	v := command.control as Display

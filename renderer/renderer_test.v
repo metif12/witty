@@ -140,7 +140,7 @@ fn test_derived_config_deinit() {
 }
 
 fn test_prep_background_image_detects_magic_without_extension() ! {
-	path := os.join_path(os.dir(@FILE), '..', 'kitty', 'testdata',
+	path := os.join_path(os.dir(@FILE), '..', 'terminal', 'kitty_testdata',
 		'image-png-none-50x76-2147483647-raw.data')
 	mut render := Renderer{
 		config: DerivedConfig{

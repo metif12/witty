@@ -1,4 +1,4 @@
-module kitty
+module terminal
 
 // Kitty graphics protocol command parser and types.
 //
@@ -12,11 +12,11 @@ import simd
 import zig_fmt
 
 // ============================================================
-// Parser
+// CommandParser
 // ============================================================
 
-// Parser state for the key-value pair parsing state machine.
-enum ParserState as u8 {
+// CommandParser state for the key-value pair parsing state machine.
+enum CommandParserState as u8 {
 	// Parsing k/v pairs. The "ignore" variants are in that state
 	// but ignore any data because we know they're invalid.
 	control_key
@@ -28,7 +28,7 @@ enum ParserState as u8 {
 }
 
 // Command parser parses the Kitty graphics protocol escape sequence.
-pub struct Parser {
+pub struct CommandParser {
 mut:
 	// This is the list of KV pairs that we're building up.
 	kv map[u8]u32
@@ -45,17 +45,17 @@ mut:
 	// here instead of a fixed buffer so that we can too.
 	data_buf []u8
 	// Internal state for parsing.
-	state ParserState = .control_key
+	state CommandParserState = .control_key
 }
 
 // Initialize the parser.
-pub fn Parser.init() Parser {
-	return Parser{}
+pub fn CommandParser.init() CommandParser {
+	return CommandParser{}
 }
 
 // Parse a complete command string.
-pub fn Parser.parse_string(data string) !Command {
-	mut parser := Parser.init()
+pub fn CommandParser.parse_string(data string) !Command {
+	mut parser := CommandParser.init()
 	for c in data.bytes() {
 		parser.feed(c)!
 	}
@@ -67,7 +67,7 @@ pub fn Parser.parse_string(data string) !Command {
 // The first byte to start parsing should be the byte immediately following
 // the "G" in the APC sequence, i.e. "\x1b_G123" the first byte should
 // be "1".
-pub fn (mut self Parser) feed(c u8) ! {
+pub fn (mut self CommandParser) feed(c u8) ! {
 	match self.state {
 		.control_key {
 			match c {
@@ -132,7 +132,7 @@ pub fn (mut self Parser) feed(c u8) ! {
 
 // Complete the parsing. This must be called after all the
 // bytes have been fed to the parser.
-pub fn (mut self Parser) complete() !Command {
+pub fn (mut self CommandParser) complete() !Command {
 	match self.state {
 		// We can't ever end in the control key state and be valid.
 		// This means the command looked something like "a=1,b"
@@ -205,7 +205,7 @@ pub fn (mut self Parser) complete() !Command {
 // Decodes the payload data from base64 and returns it as a slice.
 // This function destroys the contents of data_buf and must only be used after
 // all payload bytes have been collected.
-fn (mut self Parser) decode_data() ![]u8 {
+fn (mut self CommandParser) decode_data() ![]u8 {
 	if self.data_buf.len == 0 {
 		return []u8{}
 	}
@@ -220,7 +220,7 @@ fn (mut self Parser) decode_data() ![]u8 {
 	return self.data_buf
 }
 
-fn (mut self Parser) accumulate_value(c u8, overflow_state ParserState) ! {
+fn (mut self CommandParser) accumulate_value(c u8, overflow_state CommandParserState) ! {
 	idx := self.kv_temp_len
 	self.kv_temp_len += 1
 	if self.kv_temp_len > 11 {
@@ -231,7 +231,7 @@ fn (mut self Parser) accumulate_value(c u8, overflow_state ParserState) ! {
 	self.kv_temp[idx] = c
 }
 
-fn (mut self Parser) finish_value(next_state ParserState) ! {
+fn (mut self CommandParser) finish_value(next_state CommandParserState) ! {
 	// We can move states right away, we don't use it.
 	self.state = next_state
 

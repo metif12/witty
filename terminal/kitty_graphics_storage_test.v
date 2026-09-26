@@ -1,10 +1,9 @@
-module kitty
+module terminal
 
 // Tests for Kitty graphics protocol image storage.
 //
 // Source: graphics_storage.zig tests
 
-import terminal
 
 // Witty-only: Ghostty's PlacementId is a packed(u33) struct; Witty stores it
 // in a u64 with the same bit layout.
@@ -23,16 +22,16 @@ fn test_placement_id_packed_layout_matches_ghostty() {
 
 // A placement anchored on a tracked pin at the given active coordinate,
 // like Ghostty's `.{ .location = .{ .pin = try trackPin(&t, pt) } }`.
-fn pin_placement(mut t terminal.Terminal, x u16, y u32) Placement {
+fn pin_placement(mut t Terminal, x u16, y u32) Placement {
 	return Placement{
 		location: PlacementPin{
-			pin: track_pin(mut t, terminal.Coordinate{ x: x, y: y })
+			pin: track_pin(mut t, Coordinate{ x: x, y: y })
 		}
 	}
 }
 
 fn test_storage_add_placement_with_zero_placement_id() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ cols: 100, rows: 100 })!
+	mut t := Terminal.init(Options{ cols: 100, rows: 100 })!
 	defer {
 		t.deinit()
 	}
@@ -63,7 +62,7 @@ fn test_storage_add_placement_with_zero_placement_id() ! {
 }
 
 fn test_storage_delete_all_placements_and_images() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 3, cols: 3 })!
+	mut t := Terminal.init(Options{ rows: 3, cols: 3 })!
 	defer {
 		t.deinit()
 	}
@@ -88,7 +87,7 @@ fn test_storage_delete_all_placements_and_images() ! {
 }
 
 fn test_storage_delete_all_placements_and_images_preserves_limit() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 3, cols: 3 })!
+	mut t := Terminal.init(Options{ rows: 3, cols: 3 })!
 	defer {
 		t.deinit()
 	}
@@ -115,7 +114,7 @@ fn test_storage_delete_all_placements_and_images_preserves_limit() ! {
 }
 
 fn test_storage_delete_all_placements() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 3, cols: 3 })!
+	mut t := Terminal.init(Options{ rows: 3, cols: 3 })!
 	defer {
 		t.deinit()
 	}
@@ -140,7 +139,7 @@ fn test_storage_delete_all_placements() ! {
 }
 
 fn test_storage_delete_all_placements_by_image_id() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 3, cols: 3 })!
+	mut t := Terminal.init(Options{ rows: 3, cols: 3 })!
 	defer {
 		t.deinit()
 	}
@@ -165,7 +164,7 @@ fn test_storage_delete_all_placements_by_image_id() ! {
 }
 
 fn test_storage_delete_all_placements_by_image_id_and_unused_images() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 3, cols: 3 })!
+	mut t := Terminal.init(Options{ rows: 3, cols: 3 })!
 	defer {
 		t.deinit()
 	}
@@ -196,7 +195,7 @@ fn test_storage_delete_all_placements_by_image_id_and_unused_images() ! {
 }
 
 fn test_storage_delete_placement_by_specific_id() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 3, cols: 3 })!
+	mut t := Terminal.init(Options{ rows: 3, cols: 3 })!
 	defer {
 		t.deinit()
 	}
@@ -229,7 +228,7 @@ fn test_storage_delete_placement_by_specific_id() ! {
 }
 
 fn test_storage_delete_intersecting_cursor() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 100, cols: 100 })!
+	mut t := Terminal.init(Options{ rows: 100, cols: 100 })!
 	defer {
 		t.deinit()
 	}
@@ -263,7 +262,7 @@ fn test_storage_delete_intersecting_cursor() ! {
 }
 
 fn test_storage_delete_intersecting_cursor_plus_unused() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 100, cols: 100 })!
+	mut t := Terminal.init(Options{ rows: 100, cols: 100 })!
 	defer {
 		t.deinit()
 	}
@@ -297,7 +296,7 @@ fn test_storage_delete_intersecting_cursor_plus_unused() ! {
 }
 
 fn test_storage_delete_intersecting_cursor_hits_multiple() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 100, cols: 100 })!
+	mut t := Terminal.init(Options{ rows: 100, cols: 100 })!
 	defer {
 		t.deinit()
 	}
@@ -325,7 +324,7 @@ fn test_storage_delete_intersecting_cursor_hits_multiple() ! {
 }
 
 fn test_storage_delete_by_column() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 100, cols: 100 })!
+	mut t := Terminal.init(Options{ rows: 100, cols: 100 })!
 	defer {
 		t.deinit()
 	}
@@ -363,7 +362,7 @@ fn test_storage_delete_by_column() ! {
 }
 
 fn test_storage_delete_by_column_1x1() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 100, cols: 100 })!
+	mut t := Terminal.init(Options{ rows: 100, cols: 100 })!
 	defer {
 		t.deinit()
 	}
@@ -401,7 +400,7 @@ fn test_storage_delete_by_column_1x1() ! {
 }
 
 fn test_storage_delete_by_row() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 100, cols: 100 })!
+	mut t := Terminal.init(Options{ rows: 100, cols: 100 })!
 	defer {
 		t.deinit()
 	}
@@ -439,7 +438,7 @@ fn test_storage_delete_by_row() ! {
 }
 
 fn test_storage_delete_by_row_1x1() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 100, cols: 100 })!
+	mut t := Terminal.init(Options{ rows: 100, cols: 100 })!
 	defer {
 		t.deinit()
 	}
@@ -477,7 +476,7 @@ fn test_storage_delete_by_row_1x1() ! {
 }
 
 fn test_storage_delete_images_by_range_1() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 3, cols: 3 })!
+	mut t := Terminal.init(Options{ rows: 3, cols: 3 })!
 	defer {
 		t.deinit()
 	}
@@ -511,7 +510,7 @@ fn test_storage_delete_images_by_range_1() ! {
 }
 
 fn test_storage_delete_images_by_range_2() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 3, cols: 3 })!
+	mut t := Terminal.init(Options{ rows: 3, cols: 3 })!
 	defer {
 		t.deinit()
 	}
@@ -545,7 +544,7 @@ fn test_storage_delete_images_by_range_2() ! {
 }
 
 fn test_storage_delete_images_by_range_3() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 3, cols: 3 })!
+	mut t := Terminal.init(Options{ rows: 3, cols: 3 })!
 	defer {
 		t.deinit()
 	}
@@ -579,7 +578,7 @@ fn test_storage_delete_images_by_range_3() ! {
 }
 
 fn test_storage_delete_images_by_range_4() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ rows: 3, cols: 3 })!
+	mut t := Terminal.init(Options{ rows: 3, cols: 3 })!
 	defer {
 		t.deinit()
 	}
@@ -613,7 +612,7 @@ fn test_storage_delete_images_by_range_4() ! {
 }
 
 fn test_storage_aspect_ratio_calculation_when_only_columns_or_rows_specified() ! {
-	mut t := terminal.Terminal.init(terminal.Options{ cols: 100, rows: 100 })!
+	mut t := Terminal.init(Options{ cols: 100, rows: 100 })!
 	defer {
 		t.deinit()
 	}

@@ -5,7 +5,6 @@ import build_meta
 import configpkg
 import datastruct
 import internal_os
-import kitty
 import osc
 import renderer
 import terminal
@@ -779,7 +778,7 @@ fn (self &StreamHandler) format_decscusr() int {
 
 pub fn (mut self StreamHandler) apc_end() ! {
 	cmd := self.apc.end() or { return }
-	if response := kitty.execute(mut self.terminal, &cmd) {
+	if response := self.terminal.kitty_graphics(&cmd) {
 		encoded := response.encode()
 		if encoded.len > 0 {
 			self.message_writer(Message.write_req(encoded))
@@ -1710,17 +1709,17 @@ fn (mut self StreamHandler) progress_report(report osc.ProgressReport) {
 pub struct ApcHandler {
 mut:
 	state  ApcHandlerState
-	parser kitty.Parser
+	parser terminal.CommandParser
 }
 
 pub fn (mut self ApcHandler) deinit() {
 	self.state = .inactive
-	self.parser = kitty.Parser.init()
+	self.parser = terminal.CommandParser.init()
 }
 
 pub fn (mut self ApcHandler) start() {
 	self.state = .identify
-	self.parser = kitty.Parser.init()
+	self.parser = terminal.CommandParser.init()
 }
 
 pub fn (mut self ApcHandler) feed(byte_val u8) {
@@ -1738,10 +1737,10 @@ pub fn (mut self ApcHandler) feed(byte_val u8) {
 	}
 }
 
-pub fn (mut self ApcHandler) end() ?kitty.Command {
+pub fn (mut self ApcHandler) end() ?terminal.Command {
 	defer {
 		self.state = .inactive
-		self.parser = kitty.Parser.init()
+		self.parser = terminal.CommandParser.init()
 	}
 
 	if self.state == .inactive {

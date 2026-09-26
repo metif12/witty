@@ -1545,9 +1545,6 @@ pub mut:
 	// The size of the screen in pixels. This is used for pty events and images.
 	width_px  u32
 	height_px u32
-	// Configured Kitty image storage limit. ImageStorage itself remains in
-	// the kitty module behind Screen.kitty_images to avoid an import cycle.
-	kitty_image_limit usize = 320 * 1000 * 1000
 
 	// The current scrolling region.
 	scrolling_region ScrollingRegion
@@ -2965,7 +2962,7 @@ pub fn (mut self Terminal) index() ! {
 		&& screen.cursor.x >= self.scrolling_region.left
 		&& screen.cursor.x <= self.scrolling_region.right {
 		// Scrolling dirties the images because it updates their placements pins.
-		screen.mark_kitty_images_dirty()
+		screen.kitty_images.dirty = true
 
 		// If our scrolling region is at the top, we create scrollback.
 		if self.scrolling_region.top == 0 && self.scrolling_region.left == 0
@@ -3319,7 +3316,7 @@ pub fn (mut self Terminal) insert_lines(count usize) {
 	}
 
 	// Scrolling dirties the images because it updates their placements pins.
-	self.screens.active.mark_kitty_images_dirty()
+	self.screens.active.kitty_images.dirty = true
 
 	// At the end we need to return the cursor to the row it started on.
 	start_y := self.screens.active.cursor.y
@@ -3485,7 +3482,7 @@ pub fn (mut self Terminal) delete_lines(count usize) {
 	}
 
 	// Scrolling dirties the images because it updates their placements pins.
-	self.screens.active.mark_kitty_images_dirty()
+	self.screens.active.kitty_images.dirty = true
 
 	// At the end we need to return the cursor to the row it started on.
 	start_y := self.screens.active.cursor.y
@@ -3843,7 +3840,13 @@ pub fn (mut self Terminal) erase_display(mode EraseDisplay, protected_req bool) 
 			}
 			// Unsets pending wrap state
 			self.screens.active.cursor.pending_wrap = false
-			self.screens.active.clear_kitty_images()
+			// Clear all Kitty graphics state for this screen
+			self.screens.active.kitty_images.delete(mut self, FullDelete{
+				kind: .all
+				data: DeleteData(DeleteAll{
+					delete: true
+				})
+			})
 		}
 		.complete {
 			// If we're on the primary screen and our last non-empty row is
@@ -3859,7 +3862,13 @@ pub fn (mut self Terminal) erase_display(mode EraseDisplay, protected_req bool) 
 			// All active area
 			self.screens.active.clear_rows(Point.new(.active, Coordinate{}), ?Point(none), is_protected)
 			self.screens.active.cursor.pending_wrap = false
-			self.screens.active.clear_kitty_images()
+			// Clear all Kitty graphics state for this screen
+			self.screens.active.kitty_images.delete(mut self, FullDelete{
+				kind: .all
+				data: DeleteData(DeleteAll{
+					delete: true
+				})
+			})
 			self.flags.set_dirty_clear(true)
 		}
 		.below {
@@ -3997,6 +4006,17 @@ pub fn (mut self Terminal) decaln() ! {
 // ============================================================
 
 // Set a style attribute.
+// Execute a kitty graphics command. The buf is used to populate with
+// the response that should be sent as an APC sequence. The response will
+// be a full, valid APC sequence.
+//
+// If an error occurs, the caller should response to the pty that a
+// an error occurred otherwise the behavior of the graphics protocol is
+// undefined.
+pub fn (mut self Terminal) kitty_graphics(cmd &Command) ?Response {
+	return kitty_graphics_execute(mut self, cmd)
+}
+
 pub fn (mut self Terminal) set_attribute(attr SgrAttribute) ! {
 	self.screens.active.set_attribute(attr)!
 }
@@ -4202,6 +4222,11 @@ pub fn (mut self Terminal) switch_screen(key ScreenKey) !SwitchScreenResult {
 			} else {
 				0
 			}
+			// Inherit our Kitty image storage limit from the primary
+			// screen if we have to initialize.
+			kitty_image_storage_limit: (self.screens.get(.primary) or {
+				panic('primary screen must be initialized')
+			}).kitty_images.total_limit
 		})!
 	}
 
@@ -4213,7 +4238,7 @@ pub fn (mut self Terminal) switch_screen(key ScreenKey) !SwitchScreenResult {
 
 	// Clear selection and redraw Kitty images on the new screen.
 	new.clear_selection()
-	new.mark_kitty_images_dirty()
+	new.kitty_images.dirty = true
 
 	// Mark terminal as dirty.
 	self.flags.set_dirty_clear(true)

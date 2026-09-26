@@ -1,4 +1,4 @@
-module kitty
+module terminal
 
 import os
 
@@ -6,7 +6,7 @@ import os
 
 // Directory holding the binary test fixtures shared with the Ghostty
 // test suite (copied from ghostty's src/terminal/kitty/testdata).
-const testdata_dir = os.join_path(os.dir(@FILE), 'testdata')
+const testdata_dir = os.join_path(os.dir(@FILE), 'kitty_testdata')
 
 fn testdata_path(name string) string {
 	return os.join_path(testdata_dir, name)

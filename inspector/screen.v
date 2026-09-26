@@ -1,7 +1,6 @@
 module inspector
 
 import cimgui
-import kitty
 import terminal
 
 pub struct ScreenInfo {
@@ -143,13 +142,9 @@ pub fn semantic_prompt_table(context cimgui.Context, prompt terminal.SemanticPro
 	}
 }
 
-// kitty_graphics_table renders the source Kitty graphics storage table. The
-// translated screen retains that storage opaquely to avoid an import cycle.
+// kitty_graphics_table renders the source Kitty graphics storage table.
 pub fn kitty_graphics_table(context cimgui.Context, screen &terminal.Screen) {
-	storage := kitty.screen_storage(screen) or {
-		context.text_disabled('(Kitty graphics are disabled)')
-		return
-	}
+	storage := &screen.kitty_images
 	if !storage.enabled() {
 		context.text_disabled('(Kitty graphics are disabled)')
 		return

@@ -1,6 +1,5 @@
 module renderer
 
-import kitty
 import terminal
 
 // ============================================================
@@ -232,14 +231,13 @@ fn test_kitty_update_reads_terminal_storage() ! {
 	t.width_px = 50
 	t.height_px = 100
 	defer {
-		kitty.deinit_terminal_storage(mut t)
 		t.deinit()
 	}
 
-	transmit := kitty.Parser.parse_string('a=t,f=24,t=d,i=7,s=1,v=1;////')!
-	assert (kitty.execute(mut t, &transmit) or { panic('expected transmit response') }).ok()
-	display := kitty.Parser.parse_string('a=p,i=7,p=9,c=1,r=1,C=1')!
-	assert (kitty.execute(mut t, &display) or { panic('expected display response') }).ok()
+	transmit := terminal.CommandParser.parse_string('a=t,f=24,t=d,i=7,s=1,v=1;////')!
+	assert (t.kitty_graphics(&transmit) or { panic('expected transmit response') }).ok()
+	display := terminal.CommandParser.parse_string('a=p,i=7,p=9,c=1,r=1,C=1')!
+	assert (t.kitty_graphics(&display) or { panic('expected display response') }).ok()
 
 	mut state := ImageRenderState.empty()
 	defer {
@@ -251,7 +249,7 @@ fn test_kitty_update_reads_terminal_storage() ! {
 		height: 20
 	})
 
-	storage := kitty.terminal_storage(&t) or { panic('expected image storage') }
+	storage := &t.screens.active.kitty_images
 	assert !storage.dirty
 	assert kitty_image_key(7) in state.images
 	entry := state.images[kitty_image_key(7)] or { panic('expected prepared image') }
@@ -275,14 +273,13 @@ fn test_kitty_virtual_placement_keeps_renderer_updates_active_without_placeholde
 	t.width_px = 50
 	t.height_px = 100
 	defer {
-		kitty.deinit_terminal_storage(mut t)
 		t.deinit()
 	}
 
-	transmit := kitty.Parser.parse_string('a=t,f=24,t=d,i=7,s=1,v=1;////')!
-	assert (kitty.execute(mut t, &transmit) or { panic('expected transmit response') }).ok()
-	virtual_display := kitty.Parser.parse_string('a=p,i=7,p=9,c=1,r=1,U=1,C=1')!
-	assert (kitty.execute(mut t, &virtual_display) or { panic('expected display response') }).ok()
+	transmit := terminal.CommandParser.parse_string('a=t,f=24,t=d,i=7,s=1,v=1;////')!
+	assert (t.kitty_graphics(&transmit) or { panic('expected transmit response') }).ok()
+	virtual_display := terminal.CommandParser.parse_string('a=p,i=7,p=9,c=1,r=1,U=1,C=1')!
+	assert (t.kitty_graphics(&virtual_display) or { panic('expected display response') }).ok()
 
 	mut state := ImageRenderState.empty()
 	defer {
@@ -318,15 +315,15 @@ fn test_kitty_virtual_placement_uses_viewport_relative_row() ! {
 		y: 4
 	})) or { panic('placeholder pin is off screen') }
 
-	mut storage := kitty.ImageStorage{}
-	storage.add_image(kitty.Image{
+	mut storage := terminal.ImageStorage{}
+	storage.add_image(terminal.Image{
 		id: 7
 		width: 1
 		height: 1
 		data: [u8(255), 255, 255]
 	})!
-	storage.add_placement(7, 9, kitty.Placement{
-		location: kitty.PlacementVirtual{}
+	storage.add_placement(7, 9, terminal.Placement{
+		location: terminal.PlacementVirtual{}
 		columns: 1
 		rows: 1
 	})
@@ -341,7 +338,7 @@ fn test_kitty_virtual_placement_uses_viewport_relative_row() ! {
 	state.kitty_update_storage(mut storage, &t, top_y, top_y + 4, CellSize{
 		width: 10
 		height: 20
-	}, []KittyPinnedPlacement{}, [kitty.VirtualPlacement{
+	}, []KittyPinnedPlacement{}, [terminal.VirtualPlacement{
 		pin: pin
 		image_id: 7
 		placement_id: 9

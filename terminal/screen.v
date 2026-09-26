@@ -1964,6 +1964,9 @@ pub:
 	// The maximum size of scrollback in bytes. Zero means unlimited. Any
 	// other value will be clamped to support a minimum of the active area.
 	max_scrollback usize
+	// The total storage limit for Kitty images in bytes for this
+	// screen. Kitty image storage is per-screen.
+	kitty_image_storage_limit usize = 320 * 1000 * 1000 // 320MB
 }
 
 // Options for scrolling the viewport of the terminal grid. The reason
@@ -2078,7 +2081,6 @@ pub const prompt_click_move_zero = PromptClickMove{
 // The terminal package owns screen lifecycle while the kitty package owns the
 // concrete storage type. Operation-specific hooks preserve the direct source
 // calls without introducing a terminal -> kitty -> terminal import cycle.
-pub type KittyImagesLifecycleFn = fn (voidptr, mut Screen)
 
 // ============================================================
 // Screen struct
@@ -2112,15 +2114,8 @@ pub mut:
 	protected_mode ProtectedMode = .off
 	// The kitty keyboard settings.
 	kitty_keyboard KeyFlagStack
-	// Kitty graphics protocol state. The storage is an opaque pointer to
-	// kitty.ImageStorage; keeping it behind an opaque module boundary avoids a
-	// terminal -> kitty -> terminal import cycle while still giving every
-	// screen independent persistent state.
-	kitty_images        voidptr
-	kitty_images_reset  KittyImagesLifecycleFn = unsafe { nil }
-	kitty_images_deinit KittyImagesLifecycleFn = unsafe { nil }
-	kitty_images_dirty  KittyImagesLifecycleFn = unsafe { nil }
-	kitty_images_clear  KittyImagesLifecycleFn = unsafe { nil }
+	// Kitty graphics protocol state.
+	kitty_images ImageStorage
 	// Semantic prompt (OSC133) state.
 	semantic_prompt SemanticPrompt
 	// Dirty flags for the renderer.
@@ -2160,17 +2155,9 @@ pub fn Screen.init(cols u32, rows u32, max_scrollback usize) Screen {
 }
 
 pub fn (mut self Screen) deinit() {
-	if self.kitty_images != unsafe { nil } && self.kitty_images_deinit != unsafe { nil } {
-		deinit := self.kitty_images_deinit
-		deinit(self.kitty_images, mut self)
-	}
+	self.kitty_images.deinit(mut self)
 	self.cursor.deinit()
 	self.pages.deinit()
-	self.kitty_images = unsafe { nil }
-	self.kitty_images_reset = unsafe { nil }
-	self.kitty_images_deinit = unsafe { nil }
-	self.kitty_images_dirty = unsafe { nil }
-	self.kitty_images_clear = unsafe { nil }
 }
 
 // Assert that the screen is in a consistent state. This doesn't check
@@ -2225,9 +2212,9 @@ pub fn (mut self Screen) reset() {
 	}
 
 	// Reset kitty graphics storage
-	if self.kitty_images != unsafe { nil } && self.kitty_images_reset != unsafe { nil } {
-		reset := self.kitty_images_reset
-		reset(self.kitty_images, mut self)
+	self.kitty_images.deinit(mut self)
+	self.kitty_images = ImageStorage{
+		dirty: true
 	}
 
 	// Reset our basic state
@@ -2237,22 +2224,6 @@ pub fn (mut self Screen) reset() {
 	self.protected_mode = .off
 	self.semantic_prompt = semantic_prompt_disabled
 	self.clear_selection()
-}
-
-// Mark Kitty placements dirty after operations such as switching screens.
-pub fn (mut self Screen) mark_kitty_images_dirty() {
-	if self.kitty_images != unsafe { nil } && self.kitty_images_dirty != unsafe { nil } {
-		dirty := self.kitty_images_dirty
-		dirty(self.kitty_images, mut self)
-	}
-}
-
-// Clear all non-virtual placements and their now-unused images.
-pub fn (mut self Screen) clear_kitty_images() {
-	if self.kitty_images != unsafe { nil } && self.kitty_images_clear != unsafe { nil } {
-		clear := self.kitty_images_clear
-		clear(self.kitty_images, mut self)
-	}
 }
 
 // Clone the screen.
@@ -2630,7 +2601,7 @@ pub fn (mut self Screen) cursor_down_scroll() ! {
 	defer { self.assert_integrity() }
 
 	// Scrolling dirties the images because it updates their placements pins.
-	self.mark_kitty_images_dirty()
+	self.kitty_images.dirty = true
 
 	// If we have no scrollback, then we shift all our rows instead.
 	if self.no_scrollback {
@@ -3095,7 +3066,7 @@ pub fn (mut self Screen) scroll(behavior Scroll) {
 	// No matter what, scrolling marks our image state as dirty since
 	// it could move placements. If there are no placements or no images
 	// this is still a very cheap operation.
-	self.mark_kitty_images_dirty()
+	self.kitty_images.dirty = true
 
 	match behavior {
 		ScrollActive { self.pages.scroll(PageScrollActive{}) }
@@ -3118,7 +3089,7 @@ pub fn (mut self Screen) scroll_clear() ! {
 	// No matter what, scrolling marks our image state as dirty since
 	// it could move placements. If there are no placements or no images
 	// this is still a very cheap operation.
-	self.mark_kitty_images_dirty()
+	self.kitty_images.dirty = true
 }
 
 // Returns true if the viewport is scrolled to the bottom of the screen.
@@ -3453,7 +3424,7 @@ pub fn (mut self Screen) resize(opts ScreenResize) ! {
 	defer { self.assert_integrity() }
 
 	// No matter what we mark our image state as dirty
-	self.mark_kitty_images_dirty()
+	self.kitty_images.dirty = true
 
 	// Release the cursor style while resizing just
 	// in case the cursor ends up on a different page.

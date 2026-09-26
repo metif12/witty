@@ -1,6 +1,6 @@
 module stb
 
-const test_png = $embed_file('@VMODROOT/kitty/testdata/image-png-none-50x76-2147483647-raw.data').to_bytes()
+const test_png = $embed_file('@VMODROOT/terminal/kitty_testdata/image-png-none-50x76-2147483647-raw.data').to_bytes()
 
 fn test_load_png_from_memory_and_free() {
 	mut width := 0

@@ -1,4 +1,4 @@
-module kitty
+module terminal
 
 // --- Original Ghostty Comments Start: src/terminal/kitty/graphics_exec.zig
 //
@@ -57,7 +57,7 @@ module kitty
 // don't want this one to move with the cursor.
 // Add the placement
 // Apply cursor movement setting. This only applies to pin placements.
-// We use terminal.index to properly handle scroll regions.
+// We use index to properly handle scroll regions.
 // Display a previously transmitted image.
 // Delete never responds on success
 // Determine our image. This also handles chunking and early exit.
@@ -101,122 +101,6 @@ module kitty
 // handles query, transmit, display, and delete operations, and manages
 // the quiet settings for controlling responses.
 //
-import terminal
-
-fn storage_mark_dirty(storage_ptr voidptr, mut _ terminal.Screen) {
-	mut storage := unsafe { &ImageStorage(storage_ptr) }
-	storage.dirty = true
-}
-
-fn storage_reset(storage_ptr voidptr, mut screen terminal.Screen) {
-	mut storage := unsafe { &ImageStorage(storage_ptr) }
-	limit := storage.total_limit
-	storage.deinit(mut screen)
-	fresh := ImageStorage{
-		total_limit: limit
-		dirty: true
-	}
-	unsafe {
-		*storage = fresh
-	}
-}
-
-fn storage_deinit(storage_ptr voidptr, mut screen terminal.Screen) {
-	mut storage := unsafe { &ImageStorage(storage_ptr) }
-	storage.deinit(mut screen)
-}
-
-fn storage_clear(storage_ptr voidptr, mut screen terminal.Screen) {
-	mut storage := unsafe { &ImageStorage(storage_ptr) }
-	storage.clear_screen_images(mut screen)
-}
-
-// terminal.Screen keeps this value opaque to avoid a terminal -> kitty ->
-// terminal import cycle. The actual value and all of its behavior remain the
-// canonical ImageStorage implementation in this module.
-fn active_storage(mut t terminal.Terminal) &ImageStorage {
-	if t.screens.active.kitty_images == unsafe { nil } {
-		storage := &ImageStorage{
-			total_limit: t.kitty_image_limit
-		}
-		t.screens.active.kitty_images = voidptr(storage)
-		t.screens.active.kitty_images_reset = storage_reset
-		t.screens.active.kitty_images_deinit = storage_deinit
-		t.screens.active.kitty_images_dirty = storage_mark_dirty
-		t.screens.active.kitty_images_clear = storage_clear
-	}
-	return unsafe { &ImageStorage(t.screens.active.kitty_images) }
-}
-
-// terminal_storage exposes the active screen's storage to the renderer.
-pub fn terminal_storage(t &terminal.Terminal) ?&ImageStorage {
-	if t.screens.active.kitty_images == unsafe { nil } {
-		return none
-	}
-	return unsafe { &ImageStorage(t.screens.active.kitty_images) }
-}
-
-// screen_storage exposes one screen's opaque storage to inspector and
-// renderer code without introducing terminal's intentional kitty import cycle.
-pub fn screen_storage(screen &terminal.Screen) ?&ImageStorage {
-	if screen.kitty_images == unsafe { nil } {
-		return none
-	}
-	return unsafe { &ImageStorage(screen.kitty_images) }
-}
-
-fn deinit_screen_storage(mut screen terminal.Screen) {
-	if screen.kitty_images == unsafe { nil } {
-		return
-	}
-	mut storage := unsafe { &ImageStorage(screen.kitty_images) }
-	storage.deinit(mut screen)
-	screen.kitty_images = unsafe { nil }
-	screen.kitty_images_reset = unsafe { nil }
-	screen.kitty_images_deinit = unsafe { nil }
-	screen.kitty_images_dirty = unsafe { nil }
-	screen.kitty_images_clear = unsafe { nil }
-}
-
-// deinit_terminal_storage releases both primary and alternate screen state.
-// Call this before terminal.Terminal.deinit clears the opaque pointers.
-pub fn deinit_terminal_storage(mut t terminal.Terminal) {
-	if mut primary := t.screens.get(.primary) {
-		deinit_screen_storage(mut primary)
-	}
-	if mut alternate := t.screens.get(.alternate) {
-		deinit_screen_storage(mut alternate)
-	}
-}
-
-// set_terminal_storage_limit updates the configured limit and all storage
-// instances that have already been materialized.
-pub fn set_terminal_storage_limit(mut t terminal.Terminal, limit usize) {
-	t.kitty_image_limit = limit
-	if mut primary := t.screens.get(.primary) {
-		if primary.kitty_images != unsafe { nil } {
-			mut storage := unsafe { &ImageStorage(primary.kitty_images) }
-			storage.set_limit(mut primary, limit)
-		}
-	}
-	if mut alternate := t.screens.get(.alternate) {
-		if alternate.kitty_images != unsafe { nil } {
-			mut storage := unsafe { &ImageStorage(alternate.kitty_images) }
-			storage.set_limit(mut alternate, limit)
-		}
-	}
-}
-
-// clear_active_images implements the emulator-level clear used by Cmd+K.
-pub fn clear_active_images(mut t terminal.Terminal) {
-	mut storage := active_storage(mut t)
-	storage.delete(mut t, FullDelete{
-		kind: .all
-		data: DeleteData(DeleteAll{
-			delete: true
-		})
-	})
-}
 
 // Execute a Kitty graphics command against the given terminal. This
 // will never fail, but the response may indicate an error and the
@@ -225,8 +109,8 @@ pub fn clear_active_images(mut t terminal.Terminal) {
 //
 // The allocator must be the same allocator that was used to build
 // the command.
-pub fn execute(mut t terminal.Terminal, cmd &Command) ?Response {
-	mut storage := active_storage(mut t)
+pub fn kitty_graphics_execute(mut t Terminal, cmd &Command) ?Response {
+	mut storage := &t.screens.active.kitty_images
 	if !storage.enabled() {
 		return none
 	}
@@ -349,7 +233,7 @@ fn exec_query(cmd &Command) Response {
 // This loads the image, validates it, and puts it into the terminal
 // screen storage. It does not display the image (unless the command
 // is transmit_and_display).
-fn exec_transmit(mut t terminal.Terminal, cmd &Command) Response {
+fn exec_transmit(mut t Terminal, cmd &Command) Response {
 	t_data := cmd.transmission() or {
 		return Response{ message: 'EINVAL: no transmission data' }
 	}
@@ -411,7 +295,7 @@ fn exec_transmit(mut t terminal.Terminal, cmd &Command) Response {
 //
 // Looks up the image in storage by ID or number, creates a Placement,
 // adds it to storage, and optionally moves the cursor.
-fn exec_display(mut t terminal.Terminal, cmd &Command) Response {
+fn exec_display(mut t Terminal, cmd &Command) Response {
 	d := cmd.display() or {
 		return Response{ message: 'EINVAL: no display data' }
 	}
@@ -428,7 +312,7 @@ fn exec_display(mut t terminal.Terminal, cmd &Command) Response {
 		return result
 	}
 
-	mut storage := active_storage(mut t)
+	mut storage := &t.screens.active.kitty_images
 	img_opt := if d.image_id != 0 {
 		storage.image_by_id(d.image_id)
 	} else {
@@ -451,7 +335,7 @@ fn exec_display(mut t terminal.Terminal, cmd &Command) Response {
 		PlacementLocation(PlacementVirtual{})
 	} else {
 		PlacementLocation(PlacementPin{
-			pin: track_pin(mut t, terminal.Coordinate{
+			pin: track_pin(mut t, Coordinate{
 				x: u16(t.screens.active.cursor.x)
 				y: t.screens.active.cursor.y
 			})
@@ -491,7 +375,7 @@ fn exec_display(mut t terminal.Terminal, cmd &Command) Response {
 //
 // Delegates to ImageStorage.delete() which handles all delete modes
 // (by ID, by number, all, intersecting cursor, by z-index, etc.).
-fn exec_delete(mut t terminal.Terminal, cmd &Command) Response {
+fn exec_delete(mut t Terminal, cmd &Command) Response {
 	del := match cmd.control {
 		FullDelete {
 			cmd.control as FullDelete
@@ -501,7 +385,7 @@ fn exec_delete(mut t terminal.Terminal, cmd &Command) Response {
 		}
 	}
 
-	mut storage := active_storage(mut t)
+	mut storage := &t.screens.active.kitty_images
 	storage.delete(mut t, del)
 
 	// Delete never responds on success.
@@ -520,9 +404,9 @@ struct LoadResult {
 // Handles both single-shot and chunked loading. For chunked transfers,
 // the first chunk creates a LoadingImage and subsequent chunks add data
 // until the final chunk completes it.
-fn load_and_add_image(mut t terminal.Terminal, cmd &Command) !LoadResult {
+fn load_and_add_image(mut t Terminal, cmd &Command) !LoadResult {
 	t_data := cmd.transmission() or { return error('no transmission in command') }
-	mut storage := active_storage(mut t)
+	mut storage := &t.screens.active.kitty_images
 
 	if mut loading_ptr := storage.loading {
 		loading_ptr.add_data(cmd.data)!

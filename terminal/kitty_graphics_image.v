@@ -1,4 +1,4 @@
-module kitty
+module terminal
 
 // --- Original Ghostty Comments Start: src/terminal/kitty/graphics_image.zig
 //
@@ -115,7 +115,6 @@ module kitty
 import os
 import time
 import compress.zlib
-import terminal
 import wuffs.png as wuffs_png
 
 // POSIX shared-memory / mmap bindings, required for the shared_memory
@@ -588,8 +587,8 @@ fn is_path_in_temp_dir(path string) bool {
 // in grid cells (rounded up to nearest grid cell).
 pub struct Rect {
 pub:
-	top_left     terminal.Pin
-	bottom_right terminal.Pin
+	top_left     Pin
+	bottom_right Pin
 }
 
 // ============================================================
@@ -601,7 +600,7 @@ pub:
 pub struct RenderPlacement {
 pub mut:
 	// Top-left corner of the image in grid coordinates.
-	top_left terminal.Pin
+	top_left Pin
 	// Horizontal offset in pixels from the top-left corner of the grid cell.
 	offset_x u32
 	// Vertical offset in pixels from the top-left corner of the grid cell.

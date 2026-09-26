@@ -176,7 +176,6 @@ import configpkg
 import crash
 import datastruct
 import internal_os
-import kitty
 import os
 import renderer
 import sync
@@ -260,7 +259,12 @@ pub fn (mut t Termio) init(opts TermioOpts) ! {
 	term.screens.active.cursor.cursor_style = opts.config.cursor_style
 	term.width_px = u32(grid.columns) * size.cell.width
 	term.height_px = u32(grid.rows) * size.cell.height
-	term.kitty_image_limit = usize(opts.config.image_storage_limit)
+	// Set the image size limits
+	for key in [terminal.ScreenKey.primary, .alternate] {
+		if mut screen := term.screens.get(key) {
+			screen.kitty_images.set_limit(mut screen, usize(opts.config.image_storage_limit))
+		}
+	}
 
 	// Setup our backend.
 	mut backend := opts.backend
@@ -300,7 +304,6 @@ pub fn (mut t Termio) init(opts TermioOpts) ! {
 
 pub fn (mut t Termio) deinit() {
 	t.backend.deinit()
-	kitty.deinit_terminal_storage(mut t.terminal)
 	t.terminal.deinit()
 	t.config.deinit()
 	t.mailbox.deinit()
@@ -590,9 +593,12 @@ pub fn (mut t Termio) change_config(mut td ThreadData, config &DerivedConfig) ! 
 	t.terminal.colors.foreground.default_color = config.foreground
 	t.terminal.colors.cursor.default_color = config.cursor_color
 
-	// Set image limits on both existing screens; future alternate screens use
-	// Terminal.kitty_image_limit when their storage is first materialized.
-	kitty.set_terminal_storage_limit(mut t.terminal, usize(config.image_storage_limit))
+	// Set the image size limits
+	for key in [terminal.ScreenKey.primary, .alternate] {
+		if mut screen := t.terminal.screens.get(key) {
+			screen.kitty_images.set_limit(mut screen, usize(config.image_storage_limit))
+		}
+	}
 }
 
 // resize resizes the terminal.
@@ -708,7 +714,12 @@ pub fn (mut t Termio) clear_screen(mut td ThreadData, history bool) ! {
 					y: t.terminal.screens.active.cursor.y - 1
 				}))
 			}
-			kitty.clear_active_images(mut t.terminal)
+			t.terminal.screens.active.kitty_images.delete(mut t.terminal, terminal.FullDelete{
+				kind: .all
+				data: terminal.DeleteData(terminal.DeleteAll{
+					delete: true
+				})
+			})
 			return
 		}
 
