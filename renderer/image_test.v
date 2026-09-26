@@ -308,6 +308,16 @@ fn test_kitty_virtual_placement_uses_viewport_relative_row() ! {
 		t.deinit()
 	}
 
+	// Push three rows into history so the viewport starts at screen row 3.
+	t.print_string('a\nb\nc\nd\ne\nf\ng\nh')!
+	top := t.screens.active.pages.get_top_left(.viewport)
+	top_y := (t.screens.active.pages.point_from_pin(.screen, top) or { panic('viewport top is off screen') }).coordinate.y
+	assert top_y == 3
+	pin := t.screens.active.pages.pin(terminal.Point.new(.screen, terminal.Coordinate{
+		x: 2
+		y: 4
+	})) or { panic('placeholder pin is off screen') }
+
 	mut storage := kitty.ImageStorage{}
 	storage.add_image(kitty.Image{
 		id: 7
@@ -321,21 +331,18 @@ fn test_kitty_virtual_placement_uses_viewport_relative_row() ! {
 		rows: 1
 	})
 	defer {
-		storage.deinit(t.screens.active)
+		storage.deinit(mut t.screens.active)
 	}
 
 	mut state := ImageRenderState.empty()
 	defer {
 		state.deinit()
 	}
-	state.kitty_update_storage(mut storage, &t, 3, 7, CellSize{
+	state.kitty_update_storage(mut storage, &t, top_y, top_y + 4, CellSize{
 		width: 10
 		height: 20
 	}, []KittyPinnedPlacement{}, [kitty.VirtualPlacement{
-		pin: terminal.Pin{
-			x: 2
-			y: 4
-		}
+		pin: pin
 		image_id: 7
 		placement_id: 9
 		width: 1

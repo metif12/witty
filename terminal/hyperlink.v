@@ -360,6 +360,18 @@ pub fn (self &HyperlinkSet) ref_count(id HyperlinkId) u16 {
 	return self.entries[int(id)].ref_count
 }
 
+// live_ids returns the IDs of every hyperlink entry with a nonzero ref
+// count, in ID order. The inspector uses this to walk the page's table.
+pub fn (self &HyperlinkSet) live_ids() []HyperlinkId {
+	mut ids := []HyperlinkId{}
+	for id in 1 .. self.entries.len {
+		if self.entries[id].ref_count > 0 {
+			ids << HyperlinkId(id)
+		}
+	}
+	return ids
+}
+
 pub fn (self &HyperlinkSet) count() usize {
 	return self.living
 }

@@ -19,11 +19,11 @@ fn test_flattened_highlight_init_spans_pages() {
 	}
 	assert voidptr(start_node) != voidptr(end_node)
 
-	result := Flattened.init(terminal.PagePin{
+	result := Flattened.init(terminal.Pin{
 		node: start_node
 		x: 3
 		y: 2
-	}, terminal.PagePin{
+	}, terminal.Pin{
 		node: end_node
 		x: 5
 		y: 1

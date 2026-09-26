@@ -607,8 +607,12 @@ pub fn (mut self ImageRenderState) kitty_update(t &terminal.Terminal, cell_size 
 		return
 	}
 
+	// The top-left and bottom-right corners of our viewport in screen
+	// points. This lets us determine offsets and containment of placements.
 	top := t.screens.active.pages.get_top_left(.viewport)
-	bot := t.screens.active.pages.get_bottom_right(.viewport) or { top }
+	bot := t.screens.active.pages.get_bottom_right(.viewport) or { panic('viewport has no bottom-right') }
+	top_y := (t.screens.active.pages.point_from_pin(.screen, top) or { panic('viewport top is off screen') }).coordinate.y
+	bot_y := (t.screens.active.pages.point_from_pin(.screen, bot) or { panic('viewport bottom is off screen') }).coordinate.y
 
 	mut pinned := []KittyPinnedPlacement{}
 	mut has_virtual := false
@@ -629,14 +633,14 @@ pub fn (mut self ImageRenderState) kitty_update(t &terminal.Terminal, cell_size 
 
 	mut virtuals := []kitty.VirtualPlacement{}
 	if has_virtual {
-		mut it := kitty.placement_iterator(&t.screens.active.pages, top.y, bot.y + 1)
+		mut it := kitty.placement_iterator(top, bot)
 		for {
 			placement := it.next() or { break }
 			virtuals << placement
 		}
 	}
 
-	self.kitty_update_storage(mut storage, t, top.y, bot.y, cell_size, pinned, virtuals)
+	self.kitty_update_storage(mut storage, t, top_y, bot_y, cell_size, pinned, virtuals)
 	// A virtual placement keeps this state hot even when the current viewport
 	// contains no matching Unicode placeholder cells.
 	if has_virtual {
@@ -713,7 +717,7 @@ pub fn (mut self ImageRenderState) kitty_update_storage(mut storage kitty.ImageS
 		for virtual_p in virtuals {
 			// For errors we log and continue. We try to place
 			// other placements even if one fails.
-			self.prep_kitty_virtual_placement(mut storage, virtual_p, top_y, cell_size) or {
+			self.prep_kitty_virtual_placement(mut storage, t, virtual_p, cell_size) or {
 				continue
 			}
 		}
@@ -774,10 +778,13 @@ fn (mut self ImageRenderState) prep_kitty_placement(t &terminal.Terminal, top_y 
 	// a rect then its virtual or something so skip it.
 	rect := p.rect(image, t) or { return }
 
-	// This is expensive but necessary. In the V simplified model, pins
-	// carry an absolute screen-space Y directly.
-	img_top_y := rect.top_left.y
-	img_bot_y := rect.bottom_right.y
+	// This is expensive but necessary.
+	img_top_y := (t.screens.active.pages.point_from_pin(.screen, rect.top_left) or {
+		panic('placement top-left is off screen')
+	}).coordinate.y
+	img_bot_y := (t.screens.active.pages.point_from_pin(.screen, rect.bottom_right) or {
+		panic('placement bottom-right is off screen')
+	}).coordinate.y
 
 	// If the selection isn't within our viewport then skip it.
 	if img_top_y > bot_y {
@@ -836,7 +843,7 @@ fn (mut self ImageRenderState) prep_kitty_placement(t &terminal.Terminal, top_y 
 
 // Prepare a virtual (unicode placeholder) placement. Faithful translation
 // of prepKittyVirtualPlacement.
-fn (mut self ImageRenderState) prep_kitty_virtual_placement(mut storage kitty.ImageStorage, p kitty.VirtualPlacement, viewport_top_y u32, cell_size CellSize) ! {
+fn (mut self ImageRenderState) prep_kitty_virtual_placement(mut storage kitty.ImageStorage, t &terminal.Terminal, p kitty.VirtualPlacement, cell_size CellSize) ! {
 	image := storage.image_by_id(p.image_id) or {
 		// missing image for virtual placement, ignoring
 		return
@@ -852,10 +859,14 @@ fn (mut self ImageRenderState) prep_kitty_virtual_placement(mut storage kitty.Im
 		return
 	}
 
-	// placement_iterator only produces virtual placements inside the
-	// viewport, so this subtraction is the flat-Pages equivalent of
-	// pages.pointFromPin(.viewport, rp.top_left).viewport.y.
-	viewport_y := rp.top_left.y - viewport_top_y
+	viewport := t.screens.active.pages.point_from_pin(.viewport, rp.top_left) or {
+		// This is unreachable with virtual placements because we should
+		// only ever be looking at virtual placements that are in our
+		// viewport in the renderer and virtual placements only ever take
+		// up one row.
+		panic('virtual placement is outside the viewport')
+	}
+	viewport_y := viewport.coordinate.y
 
 	// Prepare the image for the GPU and store the placement.
 	self.prep_kitty_image(image)!

@@ -378,16 +378,12 @@ fn test_page_clone_preserves_inline_managed_values() {
 		content_tag: .codepoint
 		codepoint: u32(`x`)
 		style_id: style_id
-		style: style
-		hyperlink: link.dupe()
 	}
 	page.set_hyperlink(0, 0, link_id) or { panic(err) }
 
 	mut cloned := page.clone()
 	defer { cloned.deinit() }
 	cell := cloned.rows[0].cells[0]
-	assert cell.style.eql(&style)
-	assert cell.hyperlink.eql(&link)
 	assert cloned.styles.get(cell.style_id).eql(&style)
 	cloned_link_id := cloned.lookup_hyperlink_at(0, 0) or {
 		assert false, 'cloned hyperlink has no mapping'
@@ -2059,8 +2055,6 @@ fn test_page_swap_cells_swaps_grapheme_and_hyperlink_mappings() {
 	id_b := page.insert_hyperlink(link_b) or { panic(err) }
 	page.set_hyperlink(0, 0, id_a) or { panic(err) }
 	page.set_hyperlink(0, 1, id_b) or { panic(err) }
-	page.rows[0].cells[0].hyperlink = link_a.dupe()
-	page.rows[0].cells[1].hyperlink = link_b.dupe()
 
 	page.swap_cells(0, 0, 1)
 
@@ -2168,7 +2162,6 @@ fn test_page_clone_row_from_partial_hyperlink_in_same_page_copy() {
 		}
 
 		// Hyperlink in a single cell.
-		page.rows[0].cells[7].hyperlink = link.dupe()
 		page.set_hyperlink(0, 7, hyperlink_id) or { panic(err) }
 	}
 	assert page.hyperlink_count() == 1
@@ -2187,7 +2180,6 @@ fn test_page_clone_row_from_partial_hyperlink_in_same_page_copy() {
 			rac := page.get_row_and_cell(7, 1)
 			assert rac.row.hyperlink
 			assert rac.cell.has_hyperlink
-			assert rac.cell.hyperlink.eql(&link)
 		}
 	}
 	assert page.hyperlink_count() == 2
@@ -2377,7 +2369,6 @@ fn test_page_clone_partial_row_deduplicates_hyperlink_before_allocating_strings(
 	defer { src.deinit() }
 	src_id := src.insert_hyperlink(link) or { panic(err) }
 	src.set_hyperlink(0, 1, src_id) or { panic(err) }
-	src.rows[0].cells[1].hyperlink = link.dupe()
 
 	mut dst := Page.init(PageCapacity{
 		cols: 2
@@ -2389,7 +2380,6 @@ fn test_page_clone_partial_row_deduplicates_hyperlink_before_allocating_strings(
 	defer { dst.deinit() }
 	dst_id := dst.insert_hyperlink(link) or { panic(err) }
 	dst.set_hyperlink(0, 0, dst_id) or { panic(err) }
-	dst.rows[0].cells[0].hyperlink = link.dupe()
 	assert dst.hyperlink_set.string_used() == 64
 
 	dst.clone_partial_row_from(&src, 0, 0, 1, 2) or { panic(err) }

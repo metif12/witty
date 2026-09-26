@@ -19,7 +19,7 @@ pub mut:
 
 	// Tracked pin to the current search position in the page list.
 	// This is tracked so it auto-updates if pages are modified.
-	pin &terminal.PagePin = unsafe { nil }
+	pin &terminal.Pin = unsafe { nil }
 }
 
 // Initialize a new page list search starting from the given node.
@@ -27,7 +27,7 @@ pub mut:
 pub fn PageListSearch.init(needle []u8, list &terminal.PageList, start &terminal.PageNode) PageListSearch {
 	// Create a tracked pin at the start node pointing to the last row.
 	mut mutable_list := unsafe { &terminal.PageList(list) }
-	pin := mutable_list.track_pin(terminal.PagePin{
+	pin := mutable_list.track_pin(terminal.Pin{
 		node: unsafe { &terminal.PageNode(start) }
 		y: u16(start.data.size.rows - 1)
 		x: u16(start.data.size.cols - 1)

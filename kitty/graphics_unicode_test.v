@@ -15,353 +15,373 @@ fn test_unicode_diacritic_sorted() {
 
 fn test_unicode_diacritic() {
 	// Some spot checks based on Kitty behavior
-	idx1 := get_index(0x483) or {
-		assert false, 'expected diacritic 0x483 to be found'
-		return
-	}
-	assert idx1 == 30
-
-	idx2 := get_index(0x1d242) or {
-		assert false, 'expected diacritic 0x1d242 to be found'
-		return
-	}
-	assert idx2 == 294
+	assert get_index(0x483) or { panic('expected diacritic 0x483') } == 30
+	assert get_index(0x1d242) or { panic('expected diacritic 0x1d242') } == 294
 }
 
-// ============================================================
-// PlacementIterator tests
-//
-// Ghostty drives these via a full Terminal + printString + grapheme_cluster
-// mode. The witty terminal model stores each cell's resolved style directly
-// on the CellData and marks placeholder rows with kitty_virtual_placeholder,
-// so we build the Pages/RowData/CellData grid directly and exercise the same
-// placement_iterator logic. A ghostty printString("\u{10EEEE}<d1><d2>...")
-// produces a single cell whose codepoint is the placeholder and whose
-// graphemes slice holds the trailing diacritics.
-// ============================================================
-
-// Build a placeholder cell carrying the given diacritics and (optional) style.
-fn placeholder_cell(diacritics []u32, style terminal.CellStyle) terminal.CellData {
-	return terminal.CellData{
-		codepoint: placeholder
-		content_tag: if diacritics.len > 0 { .codepoint_grapheme } else { .codepoint }
-		graphemes: diacritics
-		style: style
+fn test_unicode_placement_none() ! {
+	mut t := terminal.Terminal.init(terminal.Options{ rows: 5, cols: 5 })!
+	defer {
+		t.deinit()
 	}
-}
+	t.modes.set(.grapheme_cluster, true)
 
-// Build a plain text cell (no placeholder).
-fn text_cell(cp rune) terminal.CellData {
-	return terminal.CellData{
-		codepoint: u32(cp)
-		content_tag: .codepoint
-	}
-}
+	// Single cell
+	t.print_string('hello\nworld\n1\n2')!
 
-fn test_unicode_placement_none() {
-	// A grid with ordinary text ("hello\nworld\n1\n2") but no virtual
-	// placeholders: no rows have kitty_virtual_placeholder set, so there
-	// are no placements.
-	mut pages := terminal.Pages.init(5, 5, 0)
-	pages.screen_rows[0].cells[0] = text_cell(`h`)
-	pages.screen_rows[1].cells[0] = text_cell(`w`)
-	pages.screen_rows[2].cells[0] = text_cell(`1`)
-	pages.screen_rows[3].cells[0] = text_cell(`2`)
-
-	mut it := placement_iterator(&pages, 0, 5)
+	// No placements
+	pin := t.screens.active.pages.get_top_left(.viewport)
+	mut it := placement_iterator(pin, none)
 	assert it.next() == none
 }
 
-fn test_unicode_placement_single_row_col() {
-	mut pages := terminal.Pages.init(5, 5, 0)
-	// \u{10EEEE}\u{0305}\u{0305}
-	pages.screen_rows[0].cells[0] = placeholder_cell([u32(0x0305), 0x0305], terminal.CellStyle{})
-	pages.screen_rows[0].kitty_virtual_placeholder = true
-
-	mut it := placement_iterator(&pages, 0, 5)
-	p := it.next() or {
-		assert false, 'expected one placement'
-		return
+fn test_unicode_placement_single_row_col() ! {
+	mut t := terminal.Terminal.init(terminal.Options{ rows: 5, cols: 5 })!
+	defer {
+		t.deinit()
 	}
-	assert p.image_id == 0
-	assert p.placement_id == 0
-	assert p.row == 0
-	assert p.col == 0
+	t.modes.set(.grapheme_cluster, true)
+
+	// Single cell
+	t.print_string('\U0010EEEE̅̅')!
+
+	// Get our top left pin
+	pin := t.screens.active.pages.get_top_left(.viewport)
+
+	// Should have exactly one placement
+	mut it := placement_iterator(pin, none)
+	{
+		p := it.next() or { panic('expected placement') }
+		assert p.image_id == 0
+		assert p.placement_id == 0
+		assert p.row == 0
+		assert p.col == 0
+	}
 	assert it.next() == none
 }
 
-fn test_unicode_placement_continuation_break() {
-	mut pages := terminal.Pages.init(10, 5, 0)
-	// Two runs because it jumps cols (col 0 then col 2).
-	pages.screen_rows[0].cells[0] = placeholder_cell([u32(0x0305), 0x0305], terminal.CellStyle{}) // row 0, col 0
-	pages.screen_rows[0].cells[1] = placeholder_cell([u32(0x0305), 0x030E], terminal.CellStyle{}) // row 0, col 2
-	pages.screen_rows[0].kitty_virtual_placeholder = true
-
-	mut it := placement_iterator(&pages, 0, 5)
-	p1 := it.next() or {
-		assert false, 'expected first placement'
-		return
+fn test_unicode_placement_continuation_break() ! {
+	mut t := terminal.Terminal.init(terminal.Options{ rows: 5, cols: 10 })!
+	defer {
+		t.deinit()
 	}
-	assert p1.image_id == 0
-	assert p1.placement_id == 0
-	assert p1.row == 0
-	assert p1.col == 0
-	assert p1.width == 1
+	t.modes.set(.grapheme_cluster, true)
 
-	p2 := it.next() or {
-		assert false, 'expected second placement'
-		return
+	// Two runs because it jumps cols
+	t.print_string('\U0010EEEE̅̅')!
+	t.print_string('\U0010EEEE̅̎')!
+
+	// Get our top left pin
+	pin := t.screens.active.pages.get_top_left(.viewport)
+
+	// Should have exactly one placement
+	mut it := placement_iterator(pin, none)
+	{
+		p := it.next() or { panic('expected first placement') }
+		assert p.image_id == 0
+		assert p.placement_id == 0
+		assert p.row == 0
+		assert p.col == 0
+		assert p.width == 1
 	}
-	assert p2.image_id == 0
-	assert p2.placement_id == 0
-	assert p2.row == 0
-	assert p2.col == 2
-	assert p2.width == 1
-
+	{
+		p := it.next() or { panic('expected second placement') }
+		assert p.image_id == 0
+		assert p.placement_id == 0
+		assert p.row == 0
+		assert p.col == 2
+		assert p.width == 1
+	}
 	assert it.next() == none
 }
 
-fn test_unicode_placement_continuation_with_diacritics_set() {
-	mut pages := terminal.Pages.init(10, 5, 0)
-	// Three cells that continue even though they're explicit.
-	pages.screen_rows[0].cells[0] = placeholder_cell([u32(0x0305), 0x0305], terminal.CellStyle{}) // col 0
-	pages.screen_rows[0].cells[1] = placeholder_cell([u32(0x0305), 0x030D], terminal.CellStyle{}) // col 1
-	pages.screen_rows[0].cells[2] = placeholder_cell([u32(0x0305), 0x030E], terminal.CellStyle{}) // col 2
-	pages.screen_rows[0].kitty_virtual_placeholder = true
-
-	mut it := placement_iterator(&pages, 0, 5)
-	p := it.next() or {
-		assert false, 'expected placement'
-		return
+fn test_unicode_placement_continuation_with_diacritics_set() ! {
+	mut t := terminal.Terminal.init(terminal.Options{ rows: 5, cols: 10 })!
+	defer {
+		t.deinit()
 	}
-	assert p.image_id == 0
-	assert p.placement_id == 0
-	assert p.row == 0
-	assert p.col == 0
-	assert p.width == 3
+	t.modes.set(.grapheme_cluster, true)
+
+	// Three cells. They'll continue even though they're explicit
+	t.print_string('\U0010EEEE̅̅')!
+	t.print_string('\U0010EEEE̅̍')!
+	t.print_string('\U0010EEEE̅̎')!
+
+	// Get our top left pin
+	pin := t.screens.active.pages.get_top_left(.viewport)
+
+	// Should have exactly one placement
+	mut it := placement_iterator(pin, none)
+	{
+		p := it.next() or { panic('expected placement') }
+		assert p.image_id == 0
+		assert p.placement_id == 0
+		assert p.row == 0
+		assert p.col == 0
+		assert p.width == 3
+	}
 	assert it.next() == none
 }
 
-fn test_unicode_placement_continuation_with_no_col() {
-	mut pages := terminal.Pages.init(10, 5, 0)
-	// First cell fully specified, the rest have no col diacritic.
-	pages.screen_rows[0].cells[0] = placeholder_cell([u32(0x0305), 0x0305], terminal.CellStyle{})
-	pages.screen_rows[0].cells[1] = placeholder_cell([u32(0x0305)], terminal.CellStyle{})
-	pages.screen_rows[0].cells[2] = placeholder_cell([u32(0x0305)], terminal.CellStyle{})
-	pages.screen_rows[0].kitty_virtual_placeholder = true
-
-	mut it := placement_iterator(&pages, 0, 5)
-	p := it.next() or {
-		assert false, 'expected placement'
-		return
+fn test_unicode_placement_continuation_with_no_col() ! {
+	mut t := terminal.Terminal.init(terminal.Options{ rows: 5, cols: 10 })!
+	defer {
+		t.deinit()
 	}
-	assert p.image_id == 0
-	assert p.placement_id == 0
-	assert p.row == 0
-	assert p.col == 0
-	assert p.width == 3
+	t.modes.set(.grapheme_cluster, true)
+
+	// Three cells. They'll continue even though they're explicit
+	t.print_string('\U0010EEEE̅̅')!
+	t.print_string('\U0010EEEE̅')!
+	t.print_string('\U0010EEEE̅')!
+
+	// Get our top left pin
+	pin := t.screens.active.pages.get_top_left(.viewport)
+
+	// Should have exactly one placement
+	mut it := placement_iterator(pin, none)
+	{
+		p := it.next() or { panic('expected placement') }
+		assert p.image_id == 0
+		assert p.placement_id == 0
+		assert p.row == 0
+		assert p.col == 0
+		assert p.width == 3
+	}
 	assert it.next() == none
 }
 
-fn test_unicode_placement_continuation_with_no_diacritics() {
-	mut pages := terminal.Pages.init(10, 5, 0)
-	// Bare placeholder cells with no diacritics at all.
-	pages.screen_rows[0].cells[0] = placeholder_cell([]u32{}, terminal.CellStyle{})
-	pages.screen_rows[0].cells[1] = placeholder_cell([]u32{}, terminal.CellStyle{})
-	pages.screen_rows[0].cells[2] = placeholder_cell([]u32{}, terminal.CellStyle{})
-	pages.screen_rows[0].kitty_virtual_placeholder = true
-
-	mut it := placement_iterator(&pages, 0, 5)
-	p := it.next() or {
-		assert false, 'expected placement'
-		return
+fn test_unicode_placement_continuation_with_no_diacritics() ! {
+	mut t := terminal.Terminal.init(terminal.Options{ rows: 5, cols: 10 })!
+	defer {
+		t.deinit()
 	}
-	assert p.image_id == 0
-	assert p.placement_id == 0
-	assert p.row == 0
-	assert p.col == 0
-	assert p.width == 3
+	t.modes.set(.grapheme_cluster, true)
+
+	// Three cells. They'll continue even though they're explicit
+	t.print_string('\U0010EEEE')!
+	t.print_string('\U0010EEEE')!
+	t.print_string('\U0010EEEE')!
+
+	// Get our top left pin
+	pin := t.screens.active.pages.get_top_left(.viewport)
+
+	// Should have exactly one placement
+	mut it := placement_iterator(pin, none)
+	{
+		p := it.next() or { panic('expected placement') }
+		assert p.image_id == 0
+		assert p.placement_id == 0
+		assert p.row == 0
+		assert p.col == 0
+		assert p.width == 3
+	}
 	assert it.next() == none
 }
 
-fn test_unicode_placement_run_ending() {
-	mut pages := terminal.Pages.init(10, 5, 0)
-	// Two placeholders then normal text "ABC".
-	pages.screen_rows[0].cells[0] = placeholder_cell([u32(0x0305), 0x0305], terminal.CellStyle{})
-	pages.screen_rows[0].cells[1] = placeholder_cell([u32(0x0305), 0x030D], terminal.CellStyle{})
-	pages.screen_rows[0].cells[2] = text_cell(`A`)
-	pages.screen_rows[0].cells[3] = text_cell(`B`)
-	pages.screen_rows[0].cells[4] = text_cell(`C`)
-	pages.screen_rows[0].kitty_virtual_placeholder = true
-
-	mut it := placement_iterator(&pages, 0, 5)
-	p := it.next() or {
-		assert false, 'expected placement'
-		return
+fn test_unicode_placement_run_ending() ! {
+	mut t := terminal.Terminal.init(terminal.Options{ rows: 5, cols: 10 })!
+	defer {
+		t.deinit()
 	}
-	assert p.image_id == 0
-	assert p.placement_id == 0
-	assert p.row == 0
-	assert p.col == 0
-	assert p.width == 2
+	t.modes.set(.grapheme_cluster, true)
+
+	// Three cells. They'll continue even though they're explicit
+	t.print_string('\U0010EEEE̅̅')!
+	t.print_string('\U0010EEEE̅̍')!
+	t.print_string('ABC')!
+
+	// Get our top left pin
+	pin := t.screens.active.pages.get_top_left(.viewport)
+
+	// Should have exactly one placement
+	mut it := placement_iterator(pin, none)
+	{
+		p := it.next() or { panic('expected placement') }
+		assert p.image_id == 0
+		assert p.placement_id == 0
+		assert p.row == 0
+		assert p.col == 0
+		assert p.width == 2
+	}
 	assert it.next() == none
 }
 
-fn test_unicode_placement_run_starting_in_the_middle() {
-	mut pages := terminal.Pages.init(10, 5, 0)
-	// Normal text "ABC" then two placeholders.
-	pages.screen_rows[0].cells[0] = text_cell(`A`)
-	pages.screen_rows[0].cells[1] = text_cell(`B`)
-	pages.screen_rows[0].cells[2] = text_cell(`C`)
-	pages.screen_rows[0].cells[3] = placeholder_cell([u32(0x0305), 0x0305], terminal.CellStyle{})
-	pages.screen_rows[0].cells[4] = placeholder_cell([u32(0x0305), 0x030D], terminal.CellStyle{})
-	pages.screen_rows[0].kitty_virtual_placeholder = true
-
-	mut it := placement_iterator(&pages, 0, 5)
-	p := it.next() or {
-		assert false, 'expected placement'
-		return
+fn test_unicode_placement_run_starting_in_the_middle() ! {
+	mut t := terminal.Terminal.init(terminal.Options{ rows: 5, cols: 10 })!
+	defer {
+		t.deinit()
 	}
-	assert p.image_id == 0
-	assert p.placement_id == 0
-	assert p.row == 0
-	assert p.col == 0
-	assert p.width == 2
+	t.modes.set(.grapheme_cluster, true)
+
+	// Three cells. They'll continue even though they're explicit
+	t.print_string('ABC')!
+	t.print_string('\U0010EEEE̅̅')!
+	t.print_string('\U0010EEEE̅̍')!
+
+	// Get our top left pin
+	pin := t.screens.active.pages.get_top_left(.viewport)
+
+	// Should have exactly one placement
+	mut it := placement_iterator(pin, none)
+	{
+		p := it.next() or { panic('expected placement') }
+		assert p.image_id == 0
+		assert p.placement_id == 0
+		assert p.row == 0
+		assert p.col == 0
+		assert p.width == 2
+	}
 	assert it.next() == none
 }
 
-fn test_unicode_placement_specifying_image_id_as_palette() {
-	mut pages := terminal.Pages.init(5, 5, 0)
-	// setAttribute 256_fg = 42, then a single placeholder cell.
-	style := terminal.CellStyle{
-		fg_color: .palette
-		fg_palette: 42
+fn test_unicode_placement_specifying_image_id_as_palette() ! {
+	mut t := terminal.Terminal.init(terminal.Options{ rows: 5, cols: 5 })!
+	defer {
+		t.deinit()
 	}
-	pages.screen_rows[0].cells[0] = placeholder_cell([u32(0x0305), 0x0305], style)
-	pages.screen_rows[0].kitty_virtual_placeholder = true
+	t.modes.set(.grapheme_cluster, true)
 
-	mut it := placement_iterator(&pages, 0, 5)
-	p := it.next() or {
-		assert false, 'expected placement'
-		return
+	// Single cell
+	t.set_attribute(terminal.SgrAttribute{ kind: .fg_256, index: 42 })!
+	t.print_string('\U0010EEEE̅̅')!
+
+	// Get our top left pin
+	pin := t.screens.active.pages.get_top_left(.viewport)
+
+	// Should have exactly one placement
+	mut it := placement_iterator(pin, none)
+	{
+		p := it.next() or { panic('expected placement') }
+		assert p.image_id == 42
+		assert p.placement_id == 0
+		assert p.row == 0
+		assert p.col == 0
 	}
-	assert p.image_id == 42
-	assert p.placement_id == 0
-	assert p.row == 0
-	assert p.col == 0
 	assert it.next() == none
 }
 
-fn test_unicode_placement_specifying_image_id_with_high_bits() {
-	mut pages := terminal.Pages.init(5, 5, 0)
-	// 256_fg = 42 plus a 3rd diacritic (0x030E -> index 2) sets the high bits.
-	style := terminal.CellStyle{
-		fg_color: .palette
-		fg_palette: 42
+fn test_unicode_placement_specifying_image_id_with_high_bits() ! {
+	mut t := terminal.Terminal.init(terminal.Options{ rows: 5, cols: 5 })!
+	defer {
+		t.deinit()
 	}
-	pages.screen_rows[0].cells[0] = placeholder_cell([u32(0x0305), 0x0305, 0x030E], style)
-	pages.screen_rows[0].kitty_virtual_placeholder = true
+	t.modes.set(.grapheme_cluster, true)
 
-	mut it := placement_iterator(&pages, 0, 5)
-	p := it.next() or {
-		assert false, 'expected placement'
-		return
+	// Single cell
+	t.set_attribute(terminal.SgrAttribute{ kind: .fg_256, index: 42 })!
+	t.print_string('\U0010EEEE̅̅̎')!
+
+	// Get our top left pin
+	pin := t.screens.active.pages.get_top_left(.viewport)
+
+	// Should have exactly one placement
+	mut it := placement_iterator(pin, none)
+	{
+		p := it.next() or { panic('expected placement') }
+		assert p.image_id == 33554474
+		assert p.placement_id == 0
+		assert p.row == 0
+		assert p.col == 0
 	}
-	// 42 | (2 << 24) == 33554474
-	assert p.image_id == 33554474
-	assert p.placement_id == 0
-	assert p.row == 0
-	assert p.col == 0
 	assert it.next() == none
 }
 
-fn test_unicode_placement_specifying_placement_id_as_palette() {
-	mut pages := terminal.Pages.init(5, 5, 0)
-	style := terminal.CellStyle{
-		fg_color: .palette
-		fg_palette: 42
-		underline_color_type: .palette
-		underline_palette: 21
+fn test_unicode_placement_specifying_placement_id_as_palette() ! {
+	mut t := terminal.Terminal.init(terminal.Options{ rows: 5, cols: 5 })!
+	defer {
+		t.deinit()
 	}
-	pages.screen_rows[0].cells[0] = placeholder_cell([u32(0x0305), 0x0305], style)
-	pages.screen_rows[0].kitty_virtual_placeholder = true
+	t.modes.set(.grapheme_cluster, true)
 
-	mut it := placement_iterator(&pages, 0, 5)
-	p := it.next() or {
-		assert false, 'expected placement'
-		return
+	// Single cell
+	t.set_attribute(terminal.SgrAttribute{ kind: .fg_256, index: 42 })!
+	t.set_attribute(terminal.SgrAttribute{ kind: .underline_color_256, index: 21 })!
+	t.print_string('\U0010EEEE̅̅')!
+
+	// Get our top left pin
+	pin := t.screens.active.pages.get_top_left(.viewport)
+
+	// Should have exactly one placement
+	mut it := placement_iterator(pin, none)
+	{
+		p := it.next() or { panic('expected placement') }
+		assert p.image_id == 42
+		assert p.placement_id == 21
+		assert p.row == 0
+		assert p.col == 0
 	}
-	assert p.image_id == 42
-	assert p.placement_id == 21
-	assert p.row == 0
-	assert p.col == 0
 	assert it.next() == none
 }
 
-fn test_unicode_placement_specifying_placement_id_as_rgb() {
-	mut pages := terminal.Pages.init(5, 5, 0)
-	style := terminal.CellStyle{
-		fg_color: .palette
-		fg_palette: 42
-		underline_color_type: .rgb
-		underline_r: 0x12
-		underline_g: 0x34
-		underline_b: 0x56
+// Witty-only: covers the rgb branch of colorToId for the placement ID.
+fn test_unicode_placement_specifying_placement_id_as_rgb() ! {
+	mut t := terminal.Terminal.init(terminal.Options{ rows: 5, cols: 5 })!
+	defer {
+		t.deinit()
 	}
-	pages.screen_rows[0].cells[0] = placeholder_cell([u32(0x0305), 0x0305], style)
-	pages.screen_rows[0].kitty_virtual_placeholder = true
+	t.modes.set(.grapheme_cluster, true)
 
-	mut it := placement_iterator(&pages, 0, 5)
-	p := it.next() or {
-		assert false, 'expected placement'
-		return
+	// Single cell
+	t.set_attribute(terminal.SgrAttribute{ kind: .fg_256, index: 42 })!
+	t.set_attribute(terminal.SgrAttribute{ kind: .underline_color, r: 0x12, g: 0x34, b: 0x56 })!
+	t.print_string('\U0010EEEE̅̅')!
+
+	// Get our top left pin
+	pin := t.screens.active.pages.get_top_left(.viewport)
+
+	// Should have exactly one placement
+	mut it := placement_iterator(pin, none)
+	{
+		p := it.next() or { panic('expected placement') }
+		assert p.image_id == 42
+		assert p.placement_id == 0x123456
+		assert p.row == 0
+		assert p.col == 0
 	}
-	assert p.image_id == 42
-	assert p.placement_id == 0x123456
-	assert p.row == 0
-	assert p.col == 0
 	assert it.next() == none
 }
 
-// fn test_unicode_render_placement_dog_4x2() {
-//     // Requires full terminal with VirtualPlacement.render_placement test
-// }
-
-// fn test_unicode_render_placement_dog_2x2_with_blank_cells() {
-//     // Requires full terminal with VirtualPlacement.render_placement test
-// }
-
-// fn test_unicode_render_placement_dog_1x1() {
-//     // Requires full terminal with VirtualPlacement.render_placement test
-// }
-
-fn test_unicode_render_placement_dog_4x2_direct() ! {
-	// Direct test of VirtualPlacement.render_placement without full terminal.
-	// Fish:
-	// printf "\033_Gf=100,i=1,t=f,q=2;$(printf dog.png | base64)\033\\"
-	// printf "\033_Ga=p,i=1,U=1,q=2,c=4,r=2\033\\"
+// Fish:
+// printf "\033_Gf=100,i=1,t=f,q=2;$(printf dog.png | base64)\033\\"
+// printf "\e[38;5;1m\U10EEEE\U0305\U0305\U10EEEE\U0305\U030D\U10EEEE\U0305\U030E\U10EEEE\U0305\U0310\e[39m\n"
+// printf "\e[38;5;1m\U10EEEE\U030D\U0305\U10EEEE\U030D\U030D\U10EEEE\U030D\U030E\U10EEEE\U030D\U0310\e[39m\n"
+// printf "\033_Ga=p,i=1,U=1,q=2,c=4,r=2\033\\"
+fn test_unicode_render_placement_dog_4x2() ! {
 	cell_width := u32(36)
 	cell_height := u32(80)
 
+	mut t := terminal.Terminal.init(terminal.Options{ cols: 100, rows: 100 })!
+	defer {
+		t.deinit()
+	}
 	mut s := ImageStorage{}
-	image := Image{ id: 1, width: 500, height: 306 }
+	defer {
+		s.deinit(mut t.screens.active)
+	}
+
+	image := Image{
+		id:     1
+		width:  500
+		height: 306
+	}
 	s.add_image(image)!
 	s.add_placement(1, 0, Placement{
-		location: PlacementLocation(PlacementVirtual{})
-		columns: 4
-		rows: 2
+		location: PlacementVirtual{}
+		columns:  4
+		rows:     2
 	})
 
 	// Row 1
 	{
 		p := VirtualPlacement{
-			pin: terminal.Pin{ x: 0, y: 0 }
-			image_id: 1
+			pin:          *t.screens.active.cursor.page_pin
+			image_id:     1
 			placement_id: 0
-			col: 0
-			row: 0
-			width: 4
-			height: 1
+			col:          0
+			row:          0
+			width:        4
+			height:       1
 		}
 		rp := p.render_placement(&s, &image, cell_width, cell_height)!
 		assert rp.offset_x == 0
@@ -376,13 +396,13 @@ fn test_unicode_render_placement_dog_4x2_direct() ! {
 	// Row 2
 	{
 		p := VirtualPlacement{
-			pin: terminal.Pin{ x: 0, y: 1 }
-			image_id: 1
+			pin:          *t.screens.active.cursor.page_pin
+			image_id:     1
 			placement_id: 0
-			col: 0
-			row: 1
-			width: 4
-			height: 1
+			col:          0
+			row:          1
+			width:        4
+			height:       1
 		}
 		rp := p.render_placement(&s, &image, cell_width, cell_height)!
 		assert rp.offset_x == 0
@@ -396,31 +416,46 @@ fn test_unicode_render_placement_dog_4x2_direct() ! {
 	}
 }
 
-fn test_unicode_render_placement_dog_2x2_with_blank_cells_direct() ! {
-	// Fish:
-	// printf "\033_Ga=p,i=1,U=1,q=2,c=2,r=2\033\\"
+// Fish:
+// printf "\033_Gf=100,i=1,t=f,q=2;$(printf dog.png | base64)\033\\"
+// printf "\e[38;5;1m\U10EEEE\U0305\U0305\U10EEEE\U0305\U030D\U10EEEE\U0305\U030E\U10EEEE\U0305\U0310\e[39m\n"
+// printf "\e[38;5;1m\U10EEEE\U030D\U0305\U10EEEE\U030D\U030D\U10EEEE\U030D\U030E\U10EEEE\U030D\U0310\e[39m\n"
+// printf "\033_Ga=p,i=1,U=1,q=2,c=2,r=2\033\\"
+fn test_unicode_render_placement_dog_2x2_with_blank_cells() ! {
 	cell_width := u32(36)
 	cell_height := u32(80)
 
+	mut t := terminal.Terminal.init(terminal.Options{ cols: 100, rows: 100 })!
+	defer {
+		t.deinit()
+	}
 	mut s := ImageStorage{}
-	image := Image{ id: 1, width: 500, height: 306 }
+	defer {
+		s.deinit(mut t.screens.active)
+	}
+
+	image := Image{
+		id:     1
+		width:  500
+		height: 306
+	}
 	s.add_image(image)!
 	s.add_placement(1, 0, Placement{
-		location: PlacementLocation(PlacementVirtual{})
-		columns: 2
-		rows: 2
+		location: PlacementVirtual{}
+		columns:  2
+		rows:     2
 	})
 
 	// Row 1
 	{
 		p := VirtualPlacement{
-			pin: terminal.Pin{ x: 0, y: 0 }
-			image_id: 1
+			pin:          *t.screens.active.cursor.page_pin
+			image_id:     1
 			placement_id: 0
-			col: 0
-			row: 0
-			width: 4
-			height: 1
+			col:          0
+			row:          0
+			width:        4
+			height:       1
 		}
 		rp := p.render_placement(&s, &image, cell_width, cell_height)!
 		assert rp.offset_x == 0
@@ -435,13 +470,13 @@ fn test_unicode_render_placement_dog_2x2_with_blank_cells_direct() ! {
 	// Row 2
 	{
 		p := VirtualPlacement{
-			pin: terminal.Pin{ x: 0, y: 1 }
-			image_id: 1
+			pin:          *t.screens.active.cursor.page_pin
+			image_id:     1
 			placement_id: 0
-			col: 0
-			row: 1
-			width: 4
-			height: 1
+			col:          0
+			row:          1
+			width:        4
+			height:       1
 		}
 		rp := p.render_placement(&s, &image, cell_width, cell_height)!
 		assert rp.offset_x == 0
@@ -455,31 +490,45 @@ fn test_unicode_render_placement_dog_2x2_with_blank_cells_direct() ! {
 	}
 }
 
-fn test_unicode_render_placement_dog_1x1_direct() ! {
-	// Fish:
-	// printf "\033_Ga=p,i=1,U=1,q=2,c=1,r=1\033\\"
+// Fish:
+// printf "\033_Gf=100,i=1,t=f,q=2;$(printf dog.png | base64)\033\\"
+// printf "\e[38;5;1m\U10EEEE\U0305\U0305\U10EEEE\U0305\U030D\U10EEEE\U0305\U030E\U10EEEE\U0305\U0310\e[39m\n"
+// printf "\033_Ga=p,i=1,U=1,q=2,c=1,r=1\033\\"
+fn test_unicode_render_placement_dog_1x1() ! {
 	cell_width := u32(36)
 	cell_height := u32(80)
 
+	mut t := terminal.Terminal.init(terminal.Options{ cols: 100, rows: 100 })!
+	defer {
+		t.deinit()
+	}
 	mut s := ImageStorage{}
-	image := Image{ id: 1, width: 500, height: 306 }
+	defer {
+		s.deinit(mut t.screens.active)
+	}
+
+	image := Image{
+		id:     1
+		width:  500
+		height: 306
+	}
 	s.add_image(image)!
 	s.add_placement(1, 0, Placement{
-		location: PlacementLocation(PlacementVirtual{})
-		columns: 1
-		rows: 1
+		location: PlacementVirtual{}
+		columns:  1
+		rows:     1
 	})
 
 	// Row 1
 	{
 		p := VirtualPlacement{
-			pin: terminal.Pin{ x: 0, y: 0 }
-			image_id: 1
+			pin:          *t.screens.active.cursor.page_pin
+			image_id:     1
 			placement_id: 0
-			col: 0
-			row: 0
-			width: 4
-			height: 1
+			col:          0
+			row:          0
+			width:        4
+			height:       1
 		}
 		rp := p.render_placement(&s, &image, cell_width, cell_height)!
 		assert rp.offset_x == 0
@@ -493,69 +542,67 @@ fn test_unicode_render_placement_dog_1x1_direct() ! {
 	}
 }
 
+// Witty-only: direct unit coverage of IncompletePlacement run merging.
 fn test_incomplete_placement_can_append_same_image() {
 	a := IncompletePlacement{
-		pin: terminal.Pin{ x: 0, y: 0 }
 		image_id_low: 42
-		row: 0
-		col: 0
-		width: 1
+		row:          0
+		col:          0
+		width:        1
 	}
 	b := IncompletePlacement{
-		pin: terminal.Pin{ x: 1, y: 0 }
 		image_id_low: 42
-		row: 0
-		col: 1
-		width: 1
+		row:          0
+		col:          1
+		width:        1
 	}
 	assert a.can_append(&b)
 }
 
 fn test_incomplete_placement_cannot_append_different_image() {
 	a := IncompletePlacement{
-		pin: terminal.Pin{ x: 0, y: 0 }
 		image_id_low: 42
-		row: 0
-		col: 0
-		width: 1
+		row:          0
+		col:          0
+		width:        1
 	}
 	b := IncompletePlacement{
-		pin: terminal.Pin{ x: 1, y: 0 }
 		image_id_low: 99
-		row: 0
-		col: 1
-		width: 1
+		row:          0
+		col:          1
+		width:        1
 	}
 	assert !a.can_append(&b)
 }
 
 fn test_incomplete_placement_cannot_append_discontinuous_col() {
 	a := IncompletePlacement{
-		pin: terminal.Pin{ x: 0, y: 0 }
 		image_id_low: 42
-		row: 0
-		col: 0
-		width: 1
+		row:          0
+		col:          0
+		width:        1
 	}
 	b := IncompletePlacement{
-		pin: terminal.Pin{ x: 1, y: 0 }
 		image_id_low: 42
-		row: 0
-		col: 2 // should be 1 (col + width)
-		width: 1
+		row:          0
+		col:          2 // should be 1 (col + width)
+		width:        1
 	}
 	assert !a.can_append(&b)
 }
 
 fn test_incomplete_placement_complete() {
 	ip := IncompletePlacement{
-		pin: terminal.Pin{ x: 3, y: 5 }
-		image_id_low: 0x123456
+		pin:           terminal.Pin{
+			x: 3
+			y: 5
+		}
+		image_id_low:  0x123456
 		image_id_high: 0xAB
-		placement_id: 42
-		row: 7
-		col: 2
-		width: 3
+		placement_id:  42
+		row:           7
+		col:           2
+		width:         3
 	}
 	vp := ip.complete()
 	assert vp.pin.x == 3

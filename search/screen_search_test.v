@@ -3,136 +3,468 @@ module search
 import highlight
 import terminal
 
-fn write_screen_search_text(mut screen terminal.Screen, absolute_y int, x int, text string) {
-	for i, ch in text.runes() {
-		screen.pages.screen_rows[absolute_y].cells[x + i] = terminal.CellData{
-			content_tag: .codepoint
-			codepoint: u32(ch)
+const screen_search_test_max_scrollback = usize(0xffffffffffffffff)
+
+fn screen_pt(x u16, y u32) terminal.Point {
+	return terminal.Point.new(.screen, terminal.Coordinate{ x: x, y: y })
+}
+
+fn active_pt(x u16, y u32) terminal.Point {
+	return terminal.Point.new(.active, terminal.Coordinate{ x: x, y: y })
+}
+
+fn point_of(t &terminal.Terminal, tag terminal.PointTag, p terminal.Pin) terminal.Point {
+	return t.screens.active.pages.point_from_pin(tag, p) or {
+		panic('search result pin is not in the page list')
+	}
+}
+
+fn selected_untracked(searcher &ScreenSearch) highlight.Untracked {
+	selected := searcher.selected_match() or { panic('missing selected match') }
+	return selected.untracked()
+}
+
+// Feed newlines until the page list has `pages` pages and then scroll a
+// full screen, like the `while (list.totalPages() < n)` setup loops in the
+// upstream tests.
+fn grow_to_pages(mut t terminal.Terminal, mut s terminal.ReadonlyStream, pages usize) ! {
+	for t.screens.active.pages.total_pages() < pages {
+		s.next_slice('\r\n')!
+	}
+	for _ in 0 .. t.screens.active.pages.rows {
+		s.next_slice('\r\n')!
+	}
+}
+
+fn test_simple_search() ! {
+	mut t := terminal.Terminal.init(terminal.Options{ cols: 10, rows: 2 })!
+	defer { t.deinit() }
+
+	mut s := t.vt_stream()
+	defer { s.deinit() }
+	s.next_slice('Fizz\r\nBuzz\r\nFizz\r\nBang')!
+
+	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())
+	defer { searcher.deinit() }
+	searcher.search_all()
+	assert searcher.active_results.len == 2
+	// We don't test history results since there is overlap
+
+	// Get all matches
+	matches := searcher.matches()
+	assert matches.len == 2
+
+	{
+		sel := matches[0].untracked()
+		assert point_of(&t, .screen, sel.start) == screen_pt(0, 2)
+		assert point_of(&t, .screen, sel.end) == screen_pt(3, 2)
+	}
+	{
+		sel := matches[1].untracked()
+		assert point_of(&t, .screen, sel.start) == screen_pt(0, 0)
+		assert point_of(&t, .screen, sel.end) == screen_pt(3, 0)
+	}
+}
+
+fn test_simple_search_with_history() ! {
+	mut t := terminal.Terminal.init(terminal.Options{
+		cols:           10
+		rows:           2
+		max_scrollback: screen_search_test_max_scrollback
+	})!
+	defer { t.deinit() }
+
+	mut s := t.vt_stream()
+	defer { s.deinit() }
+
+	s.next_slice('Fizz\r\n')!
+	grow_to_pages(mut t, mut s, 3)!
+	s.next_slice('hello.')!
+
+	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())
+	defer { searcher.deinit() }
+	searcher.search_all()
+	assert searcher.active_results.len == 0
+
+	// Get all matches
+	matches := searcher.matches()
+	assert matches.len == 1
+
+	{
+		sel := matches[0].untracked()
+		assert point_of(&t, .screen, sel.start) == screen_pt(0, 0)
+		assert point_of(&t, .screen, sel.end) == screen_pt(3, 0)
+	}
+}
+
+fn test_reload_active_with_history_change() ! {
+	mut t := terminal.Terminal.init(terminal.Options{
+		cols:           10
+		rows:           2
+		max_scrollback: screen_search_test_max_scrollback
+	})!
+	defer { t.deinit() }
+
+	mut s := t.vt_stream()
+	defer { s.deinit() }
+	s.next_slice('Fizz\r\n')!
+
+	// Start up our search which will populate our initial active area.
+	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())
+	defer { searcher.deinit() }
+	searcher.search_all()
+	{
+		matches := searcher.matches()
+		assert matches.len == 1
+	}
+
+	// Grow into two pages so our history pin will move.
+	grow_to_pages(mut t, mut s, 2)!
+	s.next_slice('2Fizz')!
+
+	// Active area changed so reload
+	searcher.reload_active()
+	searcher.search_all()
+
+	// Get all matches
+	{
+		matches := searcher.matches()
+		assert matches.len == 2
+		{
+			sel := matches[1].untracked()
+			assert point_of(&t, .screen, sel.start) == screen_pt(0, 0)
+			assert point_of(&t, .screen, sel.end) == screen_pt(3, 0)
+		}
+		{
+			sel := matches[0].untracked()
+			assert point_of(&t, .active, sel.start) == active_pt(1, 1)
+			assert point_of(&t, .active, sel.end) == active_pt(4, 1)
+		}
+	}
+
+	// Reset the screen which will make our pin garbage.
+	t.full_reset()
+	s.next_slice('WeFizzing')!
+	searcher.reload_active()
+	searcher.search_all()
+
+	{
+		matches := searcher.matches()
+		assert matches.len == 1
+		{
+			sel := matches[0].untracked()
+			assert point_of(&t, .active, sel.start) == active_pt(2, 0)
+			assert point_of(&t, .active, sel.end) == active_pt(5, 0)
 		}
 	}
 }
 
-fn clear_screen_search_row(mut screen terminal.Screen, absolute_y int) {
-	screen.pages.screen_rows[absolute_y] = terminal.RowData.init(screen.pages.cols)
-}
+fn test_active_change_contents() ! {
+	mut t := terminal.Terminal.init(terminal.Options{ cols: 10, rows: 5 })!
+	defer { t.deinit() }
 
-fn screen_search_point(searcher &ScreenSearch, hl highlight.Flattened) terminal.Pin {
-	point := searcher.pages.point_from_pin(.screen, hl.start_pin()) or {
-		assert false, 'search result pin is not in the snapshot'
-		return terminal.Pin{}
+	mut s := t.vt_stream()
+	defer { s.deinit() }
+	s.next_slice('Fuzz\r\nBuzz\r\nFizz\r\nBang')!
+
+	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())
+	defer { searcher.deinit() }
+	searcher.search_all()
+	assert searcher.active_results.len == 1
+
+	// Erase the screen, move our cursor to the top, and change contents.
+	s.next_slice('\x1b[2J\x1b[H')! // Clear screen and move home
+	s.next_slice('Bang\r\nFizz\r\nHello!')!
+
+	searcher.reload_active()
+	searcher.search_all()
+	assert searcher.active_results.len == 1
+
+	// Get all matches
+	matches := searcher.matches()
+	assert matches.len == 1
+
+	{
+		sel := matches[0].untracked()
+		assert point_of(&t, .screen, sel.start) == screen_pt(0, 1)
+		assert point_of(&t, .screen, sel.end) == screen_pt(3, 1)
 	}
-	return terminal.Pin{
-		x: point.coord().x
-		y: point.coord().y
+}
+
+fn test_select_next() ! {
+	mut t := terminal.Terminal.init(terminal.Options{ cols: 10, rows: 2 })!
+	defer { t.deinit() }
+
+	mut s := t.vt_stream()
+	defer { s.deinit() }
+	s.next_slice('Fizz\r\nBuzz\r\nFizz\r\nBang')!
+
+	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())
+	defer { searcher.deinit() }
+
+	// Initially no selection
+	assert searcher.selected_match() == none
+
+	// Select our next match (first)
+	searcher.search_all()
+	_ = searcher.do_select(.next)
+	{
+		sel := selected_untracked(&searcher)
+		assert point_of(&t, .screen, sel.start) == screen_pt(0, 2)
+		assert point_of(&t, .screen, sel.end) == screen_pt(3, 2)
+	}
+
+	// Next match
+	_ = searcher.do_select(.next)
+	{
+		sel := selected_untracked(&searcher)
+		assert point_of(&t, .screen, sel.start) == screen_pt(0, 0)
+		assert point_of(&t, .screen, sel.end) == screen_pt(3, 0)
+	}
+
+	// Next match (no wrap)
+	_ = searcher.do_select(.next)
+	{
+		sel := selected_untracked(&searcher)
+		assert point_of(&t, .screen, sel.start) == screen_pt(0, 0)
+		assert point_of(&t, .screen, sel.end) == screen_pt(3, 0)
 	}
 }
 
-fn test_screen_search_finds_active_matches_newest_first() {
-	mut screen := terminal.Screen.init(10, 5, 100)
-	defer { screen.deinit() }
-	write_screen_search_text(mut screen, 0, 0, 'Fizz')
-	write_screen_search_text(mut screen, 2, 0, 'Fizz')
+fn test_select_in_active_changes_contents_completely() ! {
+	mut t := terminal.Terminal.init(terminal.Options{ cols: 10, rows: 5 })!
+	defer { t.deinit() }
 
-	mut finder := ScreenSearch.init(mut screen, 'Fizz'.bytes())
-	defer { finder.deinit() }
-	finder.search_all()
-	assert finder.state == .complete
-	assert finder.matches_len() == 2
+	mut s := t.vt_stream()
+	defer { s.deinit() }
+	s.next_slice('Fizz\r\nBuzz\r\nFizz\r\nBang')!
 
-	matches := finder.matches()
-	assert matches[0].chunks.data == finder.active_results[finder.active_results.len - 1].chunks.data
-	assert screen_search_point(&finder, matches[0]).y == 2
-	assert screen_search_point(&finder, matches[1]).y == 0
-}
-
-fn test_screen_search_finds_scrollback_beyond_first_page() {
-	mut screen := terminal.Screen.init(10, 4, 200)
-	defer { screen.deinit() }
-	for _ in 0 .. 80 {
-		screen.pages.screen_rows << terminal.RowData.init(screen.pages.cols)
+	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())
+	defer { searcher.deinit() }
+	searcher.search_all()
+	_ = searcher.do_select(.next)
+	_ = searcher.do_select(.next)
+	{
+		// Initial selection is the first fizz
+		sel := selected_untracked(&searcher)
+		assert point_of(&t, .screen, sel.start) == screen_pt(0, 0)
+		assert point_of(&t, .screen, sel.end) == screen_pt(3, 0)
 	}
-	screen.pages.active_start = 80
-	write_screen_search_text(mut screen, 3, 1, 'Fizz')
-	write_screen_search_text(mut screen, 79, 2, 'Fizz')
-	write_screen_search_text(mut screen, 82, 0, 'Fizz')
 
-	mut finder := ScreenSearch.init(mut screen, 'Fizz'.bytes())
-	defer { finder.deinit() }
-	finder.search_all()
-	assert finder.matches_len() == 3
+	// Erase the screen, move our cursor to the top, and change contents.
+	s.next_slice('\x1b[2J\x1b[H')! // Clear screen and move home
+	s.next_slice('Fuzz\r\nFizz\r\nHello!')!
 
-	matches := finder.matches()
-	assert screen_search_point(&finder, matches[0]).y == 82
-	assert screen_search_point(&finder, matches[1]).y == 79
-	assert screen_search_point(&finder, matches[2]).y == 3
+	searcher.reload_active()
+	{
+		// Our selection should move to the first
+		sel := selected_untracked(&searcher)
+		assert point_of(&t, .screen, sel.start) == screen_pt(0, 1)
+		assert point_of(&t, .screen, sel.end) == screen_pt(3, 1)
+	}
+
+	// Erase the screen, redraw with same contents.
+	s.next_slice('\x1b[2J\x1b[H')! // Clear screen and move home
+	s.next_slice('Fuzz\r\nFizz\r\nFizz')!
+
+	searcher.reload_active()
+	{
+		// Our selection should not move to the first
+		sel := selected_untracked(&searcher)
+		assert point_of(&t, .screen, sel.start) == screen_pt(0, 1)
+		assert point_of(&t, .screen, sel.end) == screen_pt(3, 1)
+	}
 }
 
-fn test_screen_search_select_next_and_prev_do_not_wrap() {
-	mut screen := terminal.Screen.init(10, 5, 100)
-	defer { screen.deinit() }
-	write_screen_search_text(mut screen, 0, 0, 'Fizz')
-	write_screen_search_text(mut screen, 2, 0, 'Fizz')
+fn test_select_into_history() ! {
+	mut t := terminal.Terminal.init(terminal.Options{
+		cols:           10
+		rows:           2
+		max_scrollback: screen_search_test_max_scrollback
+	})!
+	defer { t.deinit() }
 
-	mut finder := ScreenSearch.init(mut screen, 'Fizz'.bytes())
-	defer { finder.deinit() }
-	finder.search_all()
-	assert finder.do_select(.next)
-	assert finder.selected or { panic('missing selected match') }.idx == 0
-	selected_newest := finder.selected_match() or { panic('missing newest match') }
-	assert screen_search_point(&finder, selected_newest).y == 2
-	assert finder.do_select(.next)
-	assert finder.selected or { panic('missing selected match') }.idx == 1
-	assert !finder.do_select(.next)
-	assert finder.do_select(.prev)
-	assert finder.selected or { panic('missing selected match') }.idx == 0
-	assert !finder.do_select(.prev)
+	mut s := t.vt_stream()
+	defer { s.deinit() }
+
+	s.next_slice('Fizz\r\n')!
+	grow_to_pages(mut t, mut s, 3)!
+	s.next_slice('hello.')!
+
+	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())
+	defer { searcher.deinit() }
+	searcher.search_all()
+
+	// Get all matches
+	_ = searcher.do_select(.next)
+	{
+		sel := selected_untracked(&searcher)
+		assert point_of(&t, .screen, sel.start) == screen_pt(0, 0)
+		assert point_of(&t, .screen, sel.end) == screen_pt(3, 0)
+	}
+
+	// Erase the screen, redraw with same contents.
+	s.next_slice('\x1b[2J\x1b[H')! // Clear screen and move home
+	s.next_slice('yo yo')!
+
+	searcher.reload_active()
+	{
+		// Our selection should not move since the history is still active.
+		sel := selected_untracked(&searcher)
+		assert point_of(&t, .screen, sel.start) == screen_pt(0, 0)
+		assert point_of(&t, .screen, sel.end) == screen_pt(3, 0)
+	}
+
+	// Create some new history by adding more lines.
+	s.next_slice('\r\nfizz\r\nfizz\r\nfizz')! // Clear screen and move home
+	searcher.reload_active()
+	{
+		// Our selection should not move since the history is still not
+		// pruned.
+		sel := selected_untracked(&searcher)
+		assert point_of(&t, .screen, sel.start) == screen_pt(0, 0)
+		assert point_of(&t, .screen, sel.end) == screen_pt(3, 0)
+	}
 }
 
-fn test_screen_search_reload_researches_changed_active_area() {
-	mut screen := terminal.Screen.init(10, 5, 100)
-	defer { screen.deinit() }
-	write_screen_search_text(mut screen, 0, 0, 'Fizz')
-	write_screen_search_text(mut screen, 2, 0, 'Fizz')
+fn test_select_prev() ! {
+	mut t := terminal.Terminal.init(terminal.Options{ cols: 10, rows: 2 })!
+	defer { t.deinit() }
 
-	mut finder := ScreenSearch.init(mut screen, 'Fizz'.bytes())
-	defer { finder.deinit() }
-	finder.search_all()
-	clear_screen_search_row(mut screen, 0)
-	clear_screen_search_row(mut screen, 2)
-	write_screen_search_text(mut screen, 1, 3, 'Fizz')
-	finder.reload_active()
-	assert finder.state == .complete
-	assert finder.matches_len() == 1
-	matches := finder.matches()
-	point := screen_search_point(&finder, matches[0])
-	assert point.x == 3
-	assert point.y == 1
+	mut s := t.vt_stream()
+	defer { s.deinit() }
+	s.next_slice('Fizz\r\nBuzz\r\nFizz\r\nBang')!
+
+	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())
+	defer { searcher.deinit() }
+
+	// Initially no selection
+	assert searcher.selected_match() == none
+
+	// Select prev (oldest first)
+	searcher.search_all()
+	_ = searcher.do_select(.prev)
+	{
+		sel := selected_untracked(&searcher)
+		assert point_of(&t, .screen, sel.start) == screen_pt(0, 0)
+		assert point_of(&t, .screen, sel.end) == screen_pt(3, 0)
+	}
+
+	// Prev match (towards newest)
+	_ = searcher.do_select(.prev)
+	{
+		sel := selected_untracked(&searcher)
+		assert point_of(&t, .screen, sel.start) == screen_pt(0, 2)
+		assert point_of(&t, .screen, sel.end) == screen_pt(3, 2)
+	}
+
+	// Prev match (no wrap, stays at newest)
+	_ = searcher.do_select(.prev)
+	{
+		sel := selected_untracked(&searcher)
+		assert point_of(&t, .screen, sel.start) == screen_pt(0, 2)
+		assert point_of(&t, .screen, sel.end) == screen_pt(3, 2)
+	}
 }
 
-fn test_screen_search_reload_preserves_selection_at_same_coordinates() {
-	mut screen := terminal.Screen.init(10, 5, 100)
-	defer { screen.deinit() }
-	write_screen_search_text(mut screen, 2, 0, 'Fizz')
+fn test_select_prev_then_next() ! {
+	mut t := terminal.Terminal.init(terminal.Options{ cols: 10, rows: 2 })!
+	defer { t.deinit() }
 
-	mut finder := ScreenSearch.init(mut screen, 'Fizz'.bytes())
-	defer { finder.deinit() }
-	finder.search_all()
-	assert finder.do_select(.next)
-	// Change unrelated text so the snapshot must be rebuilt.
-	write_screen_search_text(mut screen, 4, 0, 'Buzz')
-	finder.reload_active()
-	selected := finder.selected_match() or { panic('selection was lost') }
-	assert screen_search_point(&finder, selected).y == 2
+	mut s := t.vt_stream()
+	defer { s.deinit() }
+	s.next_slice('Fizz\r\nBuzz\r\nFizz\r\nBang')!
+
+	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())
+	defer { searcher.deinit() }
+	searcher.search_all()
+
+	// Select next (newest first)
+	_ = searcher.do_select(.next)
+	{
+		sel := selected_untracked(&searcher)
+		assert point_of(&t, .screen, sel.start) == screen_pt(0, 2)
+	}
+
+	// Select next (older)
+	_ = searcher.do_select(.next)
+	{
+		sel := selected_untracked(&searcher)
+		assert point_of(&t, .screen, sel.start) == screen_pt(0, 0)
+	}
+
+	// Select prev (back to newer)
+	_ = searcher.do_select(.prev)
+	{
+		sel := selected_untracked(&searcher)
+		assert point_of(&t, .screen, sel.start) == screen_pt(0, 2)
+	}
 }
 
-fn test_screen_search_no_scrollback_has_no_history_search() {
-	mut screen := terminal.Screen.init(10, 3, 0)
-	defer { screen.deinit() }
-	write_screen_search_text(mut screen, 1, 0, 'Fizz')
+fn test_select_prev_with_history() ! {
+	mut t := terminal.Terminal.init(terminal.Options{
+		cols:           10
+		rows:           2
+		max_scrollback: screen_search_test_max_scrollback
+	})!
+	defer { t.deinit() }
 
-	mut finder := ScreenSearch.init(mut screen, 'Fizz'.bytes())
-	defer { finder.deinit() }
-	finder.search_all()
-	assert finder.matches_len() == 1
-	assert finder.history_search == none
+	mut s := t.vt_stream()
+	defer { s.deinit() }
+
+	s.next_slice('Fizz\r\n')!
+	grow_to_pages(mut t, mut s, 3)!
+	s.next_slice('Fizz.')!
+
+	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())
+	defer { searcher.deinit() }
+	searcher.search_all()
+
+	// Select prev (oldest first, should be in history)
+	_ = searcher.do_select(.prev)
+	{
+		sel := selected_untracked(&searcher)
+		assert point_of(&t, .screen, sel.start) == screen_pt(0, 0)
+		assert point_of(&t, .screen, sel.end) == screen_pt(3, 0)
+	}
+
+	// Select prev (towards newer, should move to active area)
+	_ = searcher.do_select(.prev)
+	{
+		sel := selected_untracked(&searcher)
+		assert point_of(&t, .active, sel.start) == active_pt(0, 1)
+		assert point_of(&t, .active, sel.end) == active_pt(3, 1)
+	}
+}
+
+fn test_screen_search_no_scrollback_has_no_history() ! {
+	mut t := terminal.Terminal.init(terminal.Options{
+		cols:           10
+		rows:           2
+		max_scrollback: 0
+	})!
+	defer { t.deinit() }
+
+	// Alt screen has no scrollback
+	_ = t.switch_screen(.alternate)!
+
+	mut s := t.vt_stream()
+	defer { s.deinit() }
+
+	// This will probably stop working at some point and we'll have
+	// no way to test it using public APIs, but at the time of writing
+	// this test, CSI 22 J (scroll complete) pushes into scrollback
+	// with alt screen.
+	s.next_slice('Fizz\r\n')!
+	s.next_slice('\x1b[22J')!
+	s.next_slice('hello.')!
+
+	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())
+	defer { searcher.deinit() }
+	searcher.search_all()
+	assert searcher.active_results.len == 0
+
+	// Get all matches
+	matches := searcher.matches()
+	assert matches.len == 0
 }

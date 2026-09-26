@@ -9,11 +9,11 @@ mut:
 	lookup_coord  terminal.Coordinate
 }
 
-pub fn (mut self CellChooser) draw(context cimgui.Context, pages &terminal.Pages) {
+pub fn (mut self CellChooser) draw(context cimgui.Context, pages &terminal.PageList) {
 	context.text_wrapped('Inspect a cell by choosing a coordinate space and entering the X/Y position. The inspector resolves the point into the page list and displays the cell contents.')
 	context.separator_text('Cell Inspector')
 
-	region_max := flat_max_coord(pages, self.lookup_region)
+	region_max := max_coord(pages, self.lookup_region)
 	if maximum := region_max {
 		if self.lookup_coord.x > maximum.x {
 			self.lookup_coord.x = maximum.x
@@ -67,44 +67,34 @@ pub fn (mut self CellChooser) draw(context cimgui.Context, pages &terminal.Pages
 		return
 	}
 	context.text_disabled('Range: x 0..${maximum.x}, y 0..${maximum.y}')
-	pin := pages.pin(terminal.PinOpts{
-		tag: self.lookup_region
-		x: self.lookup_coord.x
-		y: self.lookup_coord.y
+	pin := pages.pin(terminal.Point{
+		tag:        self.lookup_region
+		coordinate: self.lookup_coord
 	}) or {
 		context.text_disabled('(cell out of range)')
 		return
 	}
-	row := pages.screen_rows[int(pin.y)]
-	cell := row.cells[int(pin.x)]
-	draw_cell_info(context, cell, row, self.lookup_coord, pin)
+	rac := pin.row_and_cell()
+	cell := *rac.cell
+	draw_cell_info(context, cell, *rac.row, self.lookup_coord, pin)
 
 	if cell.style_id != terminal.default_style_id {
 		context.separator_text('Style')
-		table(context, cell.style, [256]terminal.RGB{}, false)
+		table(context, pin.style(rac.cell), [256]terminal.RGB{}, false)
 	}
 	if cell.has_hyperlink {
 		context.separator_text('Hyperlink')
-		draw_cell_hyperlink(context, cell, pages)
+		draw_cell_hyperlink(context, pin, rac.cell)
 	}
 	if cell.has_grapheme() {
 		context.separator_text('Grapheme')
-		draw_cell_grapheme(context, cell.graphemes)
+		draw_cell_grapheme(context, pin.grapheme(rac.cell) or { []u32{} })
 	}
 }
 
-fn flat_max_coord(pages &terminal.Pages, tag terminal.PointTag) ?terminal.Coordinate {
+fn max_coord(pages &terminal.PageList, tag terminal.PointTag) ?terminal.Coordinate {
 	bottom_right := pages.get_bottom_right(tag) or { return none }
-	return flat_coord_from_pin(pages, tag, bottom_right)
-}
-
-fn flat_coord_from_pin(pages &terminal.Pages, tag terminal.PointTag, pin terminal.Pin) terminal.Coordinate {
-	y := match tag {
-		.active { pin.y - u32(pages.active_start) }
-		.viewport { pin.y - u32(pages.viewport_start) }
-		.screen, .history { pin.y }
-	}
-	return terminal.Coordinate{ x: u16(pin.x), y: y }
+	return (pages.point_from_pin(tag, bottom_right) or { return none }).coordinate
 }
 
 fn draw_cell_info(context cimgui.Context, cell terminal.CellData, row terminal.RowData, coord terminal.Coordinate, pin terminal.Pin) {
@@ -137,7 +127,7 @@ fn draw_cell_info(context cimgui.Context, cell terminal.CellData, row terminal.R
 		context.table_set_column(1)
 		context.help_marker('Extra codepoints that combine with the primary codepoint to form the grapheme cluster.')
 		context.table_set_column(2)
-		draw_codepoint_list(context, '##cell_grapheme', cell.graphemes)
+		draw_codepoint_list(context, '##cell_grapheme', pin.grapheme(&cell) or { []u32{} })
 	}
 	draw_cell_info_row(context, 'Width Property', 'Character width property (narrow, wide, spacer, etc.).', cell.wide.str())
 
@@ -155,14 +145,9 @@ fn draw_cell_info(context cimgui.Context, cell terminal.CellData, row terminal.R
 		'(see below)'
 	})
 	if cell.has_hyperlink {
-		draw_cell_info_row(context, 'Hyperlink', 'OSC8 hyperlink ID associated with this cell.', 'id=${flat_hyperlink_id(cell.hyperlink)}')
-	}
-}
-
-fn flat_hyperlink_id(link terminal.Hyperlink) string {
-	return match link.id {
-		terminal.HyperlinkImplicitId { link.id.offset.str() }
-		terminal.HyperlinkExplicitId { link.id.value }
+		mut page := &pin.node.data
+		link_id := page.lookup_hyperlink(pin.row_and_cell().cell) or { terminal.HyperlinkId(0) }
+		draw_cell_info_row(context, 'Hyperlink', 'OSC8 hyperlink ID associated with this cell.', 'id=${link_id}')
 	}
 }
 
@@ -200,7 +185,13 @@ fn draw_inline_flag(context cimgui.Context, enabled bool, label string, color ci
 	context.same_line()
 }
 
-fn draw_cell_hyperlink(context cimgui.Context, cell terminal.CellData, pages &terminal.Pages) {
+fn draw_cell_hyperlink(context cimgui.Context, pin terminal.Pin, cell &terminal.CellData) {
+	mut page := &pin.node.data
+	link_id := page.lookup_hyperlink(cell) or {
+		context.text_disabled('(missing link data)')
+		return
+	}
+	entry := page.hyperlink_set.get(link_id)
 	if !context.begin_table('cell_hyperlink', 2, 0) {
 		return
 	}
@@ -208,29 +199,21 @@ fn draw_cell_hyperlink(context cimgui.Context, cell terminal.CellData, pages &te
 		context.end_table()
 	}
 	mut id := ''
-	match cell.hyperlink.id {
+	match entry.id {
 		terminal.HyperlinkImplicitId {
-			id = 'implicit ${cell.hyperlink.id.offset}'
+			id = 'implicit ${entry.id.offset}'
 		}
 		terminal.HyperlinkExplicitId {
-			id = if cell.hyperlink.id.value.len == 0 { '(empty)' } else { cell.hyperlink.id.value }
+			id = if entry.id.value.len == 0 { '(empty)' } else { entry.id.value }
 		}
 	}
 	draw_screen_row(context, 'ID', id)
-	draw_screen_row(context, 'URI', if cell.hyperlink.uri.len == 0 {
+	draw_screen_row(context, 'URI', if entry.uri.len == 0 {
 		'(empty)'
 	} else {
-		cell.hyperlink.uri
+		entry.uri
 	})
-	mut refs := 0
-	for row in pages.screen_rows {
-		for candidate in row.cells {
-			if candidate.has_hyperlink && candidate.hyperlink.eql(&cell.hyperlink) {
-				refs++
-			}
-		}
-	}
-	draw_screen_row(context, 'Ref Count', refs.str())
+	draw_screen_row(context, 'Ref Count', page.hyperlink_set.ref_count(link_id).str())
 }
 
 fn draw_cell_grapheme(context cimgui.Context, codepoints []u32) {
@@ -263,7 +246,7 @@ fn draw_codepoint_list(context cimgui.Context, label string, codepoints []u32) {
 	}
 }
 
-fn draw_pagelist_inspector(context cimgui.Context, mut pages terminal.Pages) {
+fn draw_pagelist_inspector(context cimgui.Context, mut pages terminal.PageList) {
 	context.text_wrapped('PageList manages the backing pages that hold scrollback and the active terminal grid. Each page is a contiguous memory buffer with its own rows, cells, style set, grapheme map, and hyperlink storage.')
 	if context.collapsing_header_default_open('Overview') {
 		draw_pagelist_summary(context, pages)
@@ -275,20 +258,44 @@ fn draw_pagelist_inspector(context cimgui.Context, mut pages terminal.Pages) {
 		draw_pagelist_regions(context, pages)
 	}
 	if context.collapsing_header_default_open('Tracked Pins') {
-		context.text_disabled('(no tracked pins)')
+		draw_tracked_pins(context, pages)
 	}
 	if context.collapsing_header_default_open('Pages') {
 		context.help_marker('Pages are shown most-recent first. Each page holds a grid of rows/cells plus metadata tables for styles, graphemes, strings, and hyperlinks.')
-		context.push_id_int(0)
-		if context.tree_node('Page 0') {
-			draw_flat_page_inspector(context, pages)
-			context.tree_pop()
+
+		active_pin := pages.get_top_left(.active)
+		viewport_pin := pages.get_top_left(.viewport)
+
+		mut row_offset := pages.total_rows
+		mut index := pages.total_pages()
+		mut node := pages.pages.last
+		for {
+			page_node := node or { break }
+			node = page_node.prev
+			page := &page_node.data
+			row_offset -= usize(page.size.rows)
+			index -= 1
+
+			// We use our location as the ID so that even if reallocations
+			// happen we remain open if we're open already.
+			context.push_id_int(int(index))
+			mut label := 'Page ${index} (rows ${row_offset}..${row_offset + usize(page.size.rows) - 1})'
+			if voidptr(page_node) == voidptr(active_pin.node) {
+				label += ' active'
+			}
+			if voidptr(page_node) == voidptr(viewport_pin.node) {
+				label += ' viewport'
+			}
+			if context.tree_node(label) {
+				draw_page_inspector(context, page)
+				context.tree_pop()
+			}
+			context.pop_id()
 		}
-		context.pop_id()
 	}
 }
 
-fn draw_pagelist_summary(context cimgui.Context, pages &terminal.Pages) {
+fn draw_pagelist_summary(context cimgui.Context, pages &terminal.PageList) {
 	if !context.begin_table('pagelist_summary', 3, cimgui.table_flags_inner_v_row_bg_sizing_fixed_fit) {
 		return
 	}
@@ -296,22 +303,22 @@ fn draw_pagelist_summary(context cimgui.Context, pages &terminal.Pages) {
 		context.end_table()
 	}
 	draw_pagelist_info_row(context, 'Active Grid', 'Active viewport size in columns x rows.', '${pages.cols}c x ${pages.rows}r')
-	draw_pagelist_info_row(context, 'Pages', 'Total number of pages in the linked list.', '1')
-	draw_pagelist_info_row(context, 'Total Rows', 'Total rows represented by scrollback + active area.', pages.screen_rows.len.str())
-	page_bytes := flat_page_bytes(pages)
-	draw_pagelist_info_row(context, 'Page Bytes', 'Total bytes allocated for active pages.', '${to_kibi_bytes(page_bytes)} KiB')
-	max_bytes := flat_page_max_bytes(pages)
-	draw_pagelist_info_row(context, 'Max Size', 'Maximum bytes before pages must be evicted. The next allocation that would exceed this limit evicts rows from the front to free space.', '${to_kibi_bytes(max_bytes)} KiB')
+	draw_pagelist_info_row(context, 'Pages', 'Total number of pages in the linked list.', pages.total_pages().str())
+	draw_pagelist_info_row(context, 'Total Rows', 'Total rows represented by scrollback + active area.', pages.total_rows.str())
+	draw_pagelist_info_row(context, 'Page Bytes', 'Total bytes allocated for active pages.', '${to_kibi_bytes(pages.page_size)} KiB')
+	draw_pagelist_info_row(context, 'Max Size', 'Maximum bytes before pages must be evicted. The next allocation that would exceed this limit evicts rows from the front to free space.', '${to_kibi_bytes(pages.max_size())} KiB')
 	draw_pagelist_info_row(context, 'Viewport', 'Current viewport anchoring mode.', pages.viewport.str())
-	draw_pagelist_info_row(context, 'Tracked Pins', 'Number of pins tracked for automatic updates.', '0')
+	draw_pagelist_info_row(context, 'Tracked Pins', 'Number of pins tracked for automatic updates.', pages.count_tracked_pins().str())
 }
 
-fn draw_pagelist_scrollbar(context cimgui.Context, mut pages terminal.Pages) {
+fn draw_pagelist_scrollbar(context cimgui.Context, mut pages terminal.PageList) {
 	scrollbar := pages.scrollbar()
 	if scrollbar.total > 0 {
 		delta := context.pagelist_scrollbar(scrollbar.total, scrollbar.offset, scrollbar.len)
 		if delta != 0 {
-			pages.scroll_delta(int(delta))
+			pages.scroll(terminal.PageScrollDeltaRow{
+				delta: isize(delta)
+			})
 		}
 	}
 	if !context.begin_table('scrollbar_info', 3, cimgui.table_flags_inner_v_row_bg_sizing_fixed_fit) {
@@ -325,7 +332,7 @@ fn draw_pagelist_scrollbar(context cimgui.Context, mut pages terminal.Pages) {
 	draw_pagelist_info_row(context, 'Length', 'Number of rows visible in the viewport.', scrollbar.len.str())
 }
 
-fn draw_pagelist_regions(context cimgui.Context, pages &terminal.Pages) {
+fn draw_pagelist_regions(context cimgui.Context, pages &terminal.PageList) {
 	if !context.begin_table('pagelist_regions', 4, cimgui.table_flags_inner_v_row_bg_sizing_fixed_fit) {
 		return
 	}
@@ -342,7 +349,7 @@ fn draw_pagelist_regions(context cimgui.Context, pages &terminal.Pages) {
 	}
 }
 
-fn draw_pagelist_region(context cimgui.Context, pages &terminal.Pages, tag terminal.PointTag) {
+fn draw_pagelist_region(context cimgui.Context, pages &terminal.PageList, tag terminal.PointTag) {
 	top_left := pages.get_top_left(tag)
 	bottom_right := pages.get_bottom_right(tag)
 	context.table_next_row()
@@ -351,14 +358,53 @@ fn draw_pagelist_region(context cimgui.Context, pages &terminal.Pages, tag termi
 	context.table_set_column(1)
 	context.help_marker(region_help_text(tag))
 	context.table_set_column(2)
-	top_left_coord := flat_coord_from_pin(pages, tag, top_left)
-	context.text('(${top_left_coord.x}, ${top_left_coord.y})')
-	context.table_set_column(3)
-	if bottom := bottom_right {
-		bottom_coord := flat_coord_from_pin(pages, tag, bottom)
-		context.text('(${bottom_coord.x}, ${bottom_coord.y})')
+	if top_left_point := pages.point_from_pin(tag, top_left) {
+		context.text('(${top_left_point.coordinate.x}, ${top_left_point.coordinate.y})')
 	} else {
 		context.text_disabled('(empty)')
+	}
+	context.table_set_column(3)
+	if bottom := bottom_right {
+		if bottom_point := pages.point_from_pin(tag, bottom) {
+			context.text('(${bottom_point.coordinate.x}, ${bottom_point.coordinate.y})')
+			return
+		}
+	}
+	context.text_disabled('(empty)')
+}
+
+fn draw_tracked_pins(context cimgui.Context, pages &terminal.PageList) {
+	pins := pages.tracked_pins()
+	if pins.len == 0 {
+		context.text_disabled('(no tracked pins)')
+		return
+	}
+	if !context.begin_table('tracked_pins', 3, cimgui.table_flags_inner_v_row_bg_sizing_fixed_fit) {
+		return
+	}
+	defer {
+		context.end_table()
+	}
+	context.table_setup_column('Pin', cimgui.table_column_width_fixed, 0)
+	context.table_setup_column('Screen', cimgui.table_column_width_fixed, 0)
+	context.table_setup_column('State', cimgui.table_column_width_stretch, 0)
+	context.table_headers_row()
+	for index, pin in pins {
+		context.table_next_row()
+		context.table_set_column(0)
+		context.text(index.str())
+		context.table_set_column(1)
+		if point := pages.point_from_pin(.screen, *pin) {
+			context.text('(${point.coordinate.x}, ${point.coordinate.y})')
+		} else {
+			context.text_disabled('(none)')
+		}
+		context.table_set_column(2)
+		if pin.garbage {
+			context.text_disabled('garbage')
+		} else {
+			context.text('live')
+		}
 	}
 }
 
@@ -389,40 +435,22 @@ fn draw_pagelist_info_row(context cimgui.Context, label string, help string, val
 	context.text(value)
 }
 
-fn draw_flat_page_inspector(context cimgui.Context, pages &terminal.Pages) {
+fn draw_page_inspector(context cimgui.Context, page &terminal.Page) {
 	context.separator_text('Managed Memory')
-	draw_flat_page_memory(context, pages)
+	draw_page_memory(context, page)
 	context.separator_text('Styles')
-	draw_flat_styles(context, pages)
+	draw_page_styles(context, page)
 	context.separator_text('Hyperlinks')
-	draw_flat_hyperlinks(context, pages)
+	draw_page_hyperlinks(context, page)
 	context.separator_text('Rows')
-	draw_flat_rows(context, pages)
+	draw_page_rows(context, page)
 }
 
-fn draw_flat_page_memory(context cimgui.Context, pages &terminal.Pages) {
+fn draw_page_memory(context cimgui.Context, page &terminal.Page) {
+	layout := terminal.Page.layout(page.capacity)
 	if context.begin_table('##overview', 3, cimgui.table_flags_inner_v_row_bg_sizing_fixed_fit) {
-		draw_pagelist_info_row(context, 'Memory Size', 'Memory allocated for this page. Note the backing memory may be a larger allocation from which this page uses a portion.', '${to_kibi_bytes(flat_page_bytes(pages))} KiB')
+		draw_pagelist_info_row(context, 'Memory Size', 'Memory allocated for this page. Note the backing memory may be a larger allocation from which this page uses a portion.', '${to_kibi_bytes(layout.total_size)} KiB')
 		context.end_table()
-	}
-	styles := flat_style_usages(pages)
-	links := flat_hyperlink_usages(pages)
-	mut graphemes := 0
-	mut grapheme_capacity := 0
-	mut string_bytes := 0
-	mut hyperlink_cells := 0
-	for row in pages.screen_rows {
-		for cell in row.cells {
-			graphemes += cell.graphemes.len
-			grapheme_capacity += cell.graphemes.cap
-			if cell.has_hyperlink {
-				hyperlink_cells++
-				string_bytes += cell.hyperlink.uri.len
-				if cell.hyperlink.id is terminal.HyperlinkExplicitId {
-					string_bytes += cell.hyperlink.id.value.len
-				}
-			}
-		}
 	}
 	if !context.begin_table('##managed', 4, cimgui.table_flags_inner_v_row_bg_sizing_fixed_fit) {
 		return
@@ -434,13 +462,13 @@ fn draw_flat_page_memory(context cimgui.Context, pages &terminal.Pages) {
 		context.table_setup_column(label, cimgui.table_column_width_fixed, 0)
 	}
 	context.table_headers_row()
-	draw_managed_row(context, 'Columns', 'Number of columns in the terminal grid.', pages.cols, pages.cols)
-	draw_managed_row(context, 'Rows', 'Number of rows in this page.', u32(pages.screen_rows.len), u32(pages.screen_rows.cap))
-	draw_managed_row(context, 'Styles', 'Unique text styles (colors, attributes) currently in use.', u32(styles.len), u32(styles.cap))
-	draw_managed_row(context, 'Graphemes', 'Extended grapheme clusters for multi-codepoint characters.', u32(graphemes), u32(grapheme_capacity))
-	draw_managed_row(context, 'Strings (bytes)', 'String storage for hyperlink URIs and other text data.', u32(string_bytes), u32(string_bytes))
-	draw_managed_row(context, 'Hyperlink Map', 'Maps cell positions to hyperlink IDs.', u32(hyperlink_cells), u32(hyperlink_cells))
-	draw_managed_row(context, 'Hyperlink IDs', 'Unique hyperlink definitions (URI + optional ID).', u32(links.len), u32(links.cap))
+	draw_managed_row(context, 'Columns', 'Number of columns in the terminal grid.', u32(page.size.cols), u32(page.capacity.cols))
+	draw_managed_row(context, 'Rows', 'Number of rows in this page.', u32(page.size.rows), u32(page.capacity.rows))
+	draw_managed_row(context, 'Styles', 'Unique text styles (colors, attributes) currently in use.', u32(page.styles.count()), u32(page.capacity.styles))
+	draw_managed_row(context, 'Graphemes', 'Extended grapheme clusters for multi-codepoint characters.', u32(page.grapheme_count()), u32(page.grapheme_capacity()))
+	draw_managed_row(context, 'Strings (bytes)', 'String storage for hyperlink URIs and other text data.', u32(page.hyperlink_set.string_used()), u32(page.hyperlink_set.string_capacity()))
+	draw_managed_row(context, 'Hyperlink Map', 'Maps cell positions to hyperlink IDs.', u32(page.hyperlink_count()), u32(page.hyperlink_capacity()))
+	draw_managed_row(context, 'Hyperlink IDs', 'Unique hyperlink definitions (URI + optional ID).', u32(page.hyperlink_set.count()), u32(page.hyperlink_set.capacity()))
 }
 
 fn draw_managed_row(context cimgui.Context, label string, help string, used u32, capacity u32) {
@@ -455,42 +483,13 @@ fn draw_managed_row(context cimgui.Context, label string, help string, used u32,
 	context.text(capacity.str())
 }
 
-struct FlatStyleUsage {
-	style terminal.CellStyle
-mut:
-	refs int
-}
-
-fn flat_style_usages(pages &terminal.Pages) []FlatStyleUsage {
-	mut result := []FlatStyleUsage{}
-	for row in pages.screen_rows {
-		for cell in row.cells {
-			if cell.style_id == terminal.default_style_id {
-				continue
-			}
-			mut found := false
-			for mut item in result {
-				if item.style.eql(&cell.style) {
-					item.refs++
-					found = true
-					break
-				}
-			}
-			if !found {
-				result << FlatStyleUsage{ style: cell.style, refs: 1 }
-			}
-		}
-	}
-	return result
-}
-
-fn draw_flat_styles(context cimgui.Context, pages &terminal.Pages) {
-	styles := flat_style_usages(pages)
-	if styles.len == 0 {
+fn draw_page_styles(context cimgui.Context, page &terminal.Page) {
+	ids := page.styles.live_ids()
+	if ids.len == 0 {
 		context.text_disabled('(no styles in use)')
 		return
 	}
-	visible_rows := u32(if styles.len < 8 { styles.len } else { 8 })
+	visible_rows := u32(if ids.len < 8 { ids.len } else { 8 })
 	visible := context.begin_rows_child('##page_styles', visible_rows)
 	defer {
 		context.end_child()
@@ -506,58 +505,29 @@ fn draw_flat_styles(context cimgui.Context, pages &terminal.Pages) {
 	context.table_setup_column('Refs', cimgui.table_column_width_fixed, 0)
 	context.table_setup_column('Style', cimgui.table_column_width_stretch, 0)
 	context.table_headers_row()
-	for index, item in styles {
+	for id in ids {
 		context.table_next_row()
-		context.push_id_int(index)
+		context.push_id_int(int(id))
 		context.table_set_column(0)
-		context.text('${index + 1}')
+		context.text(id.str())
 		context.table_set_column(1)
-		context.text(item.refs.str())
+		context.text(page.styles.ref_count(id).str())
 		context.table_set_column(2)
 		if context.tree_node('Details') {
-			table(context, item.style, [256]terminal.RGB{}, false)
+			table(context, page.styles.get(id), [256]terminal.RGB{}, false)
 			context.tree_pop()
 		}
 		context.pop_id()
 	}
 }
 
-struct FlatHyperlinkUsage {
-	link terminal.Hyperlink
-mut:
-	refs int
-}
-
-fn flat_hyperlink_usages(pages &terminal.Pages) []FlatHyperlinkUsage {
-	mut result := []FlatHyperlinkUsage{}
-	for row in pages.screen_rows {
-		for cell in row.cells {
-			if !cell.has_hyperlink {
-				continue
-			}
-			mut found := false
-			for mut item in result {
-				if item.link.eql(&cell.hyperlink) {
-					item.refs++
-					found = true
-					break
-				}
-			}
-			if !found {
-				result << FlatHyperlinkUsage{ link: cell.hyperlink, refs: 1 }
-			}
-		}
-	}
-	return result
-}
-
-fn draw_flat_hyperlinks(context cimgui.Context, pages &terminal.Pages) {
-	links := flat_hyperlink_usages(pages)
-	if links.len == 0 {
+fn draw_page_hyperlinks(context cimgui.Context, page &terminal.Page) {
+	ids := page.hyperlink_set.live_ids()
+	if ids.len == 0 {
 		context.text_disabled('(no hyperlinks in use)')
 		return
 	}
-	visible_rows := u32(if links.len < 8 { links.len } else { 8 })
+	visible_rows := u32(if ids.len < 8 { ids.len } else { 8 })
 	visible := context.begin_rows_child('##page_hyperlinks', visible_rows)
 	defer {
 		context.end_child()
@@ -574,24 +544,25 @@ fn draw_flat_hyperlinks(context cimgui.Context, pages &terminal.Pages) {
 	context.table_setup_column('Explicit ID', cimgui.table_column_width_fixed, 0)
 	context.table_setup_column('URI', cimgui.table_column_width_stretch, 0)
 	context.table_headers_row()
-	for index, item in links {
+	for id in ids {
+		link := page.hyperlink_set.get(id)
 		context.table_next_row()
 		context.table_set_column(0)
-		context.text('${index + 1}')
+		context.text(id.str())
 		context.table_set_column(1)
-		context.text(item.refs.str())
+		context.text(page.hyperlink_set.ref_count(id).str())
 		context.table_set_column(2)
-		match item.link.id {
-			terminal.HyperlinkExplicitId { context.text(item.link.id.value) }
+		match link.id {
+			terminal.HyperlinkExplicitId { context.text(link.id.value) }
 			terminal.HyperlinkImplicitId { context.text_disabled('-') }
 		}
 		context.table_set_column(3)
-		context.text(item.link.uri)
+		context.text(link.uri)
 	}
 }
 
-fn draw_flat_rows(context cimgui.Context, pages &terminal.Pages) {
-	visible_rows := u32(if pages.screen_rows.len < 12 { pages.screen_rows.len } else { 12 })
+fn draw_page_rows(context cimgui.Context, page &terminal.Page) {
+	visible_rows := u32(if page.size.rows < 12 { page.size.rows } else { 12 })
 	visible := context.begin_rows_child('##page_rows', visible_rows)
 	defer {
 		context.end_child()
@@ -608,9 +579,10 @@ fn draw_flat_rows(context cimgui.Context, pages &terminal.Pages) {
 		context.table_setup_column(label, cimgui.table_column_width_fixed, 0)
 	}
 	context.table_headers_row()
-	for index, row in pages.screen_rows {
+	for index in 0 .. int(page.size.rows) {
+		row := page.rows[index]
 		mut text_cells := 0
-		for cell in row.cells {
+		for cell in row.cells[..int(page.size.cols)] {
 			if cell.has_text() {
 				text_cells++
 			}
@@ -649,12 +621,4 @@ fn draw_flag_cell(context cimgui.Context, value bool) {
 	} else {
 		context.text_disabled('-')
 	}
-}
-
-fn flat_page_bytes(pages &terminal.Pages) usize {
-	return usize(pages.screen_rows.len) * usize(pages.cols) * sizeof(terminal.CellData)
-}
-
-fn flat_page_max_bytes(pages &terminal.Pages) usize {
-	return usize(pages.rows + pages.max_scrollback) * usize(pages.cols) * sizeof(terminal.CellData)
 }

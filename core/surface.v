@@ -1546,7 +1546,7 @@ pub mut:
 	mods input.Mods
 
 	// Pin at which the left mouse click happened.
-	left_click_pin ?Pin
+	left_click_pin ?&Pin
 	// Screen that owns left_click_pin. Selection scrolling stops if the active
 	// screen changes while a drag is in progress.
 	left_click_screen terminal.ScreenKey
@@ -2702,20 +2702,18 @@ pub fn (mut self Surface) render_inspector(context_handle voidptr) {
 	mut hover_grid_y := u32(0)
 	pages := &self.renderer_state.terminal_.screens.active.pages
 	if point := insp.mouse.last_point {
-		active_y := int(point.y) - pages.active_start
-		if active_y >= 0 && active_y < int(pages.rows) {
-			hover_grid_x = point.x
-			hover_grid_y = u32(active_y)
+		if pt := pages.point_from_pin(.active, point) {
+			hover_grid_x = u32(pt.coordinate.x)
+			hover_grid_y = pt.coordinate.y
 		}
 	}
 
 	mut click_grid_x := u32(0)
 	mut click_grid_y := u32(0)
 	if point := self.mouse.left_click_pin {
-		active_y := int(point.y) - pages.active_start
-		if active_y >= 0 && active_y < int(pages.rows) {
-			click_grid_x = point.x
-			click_grid_y = u32(active_y)
+		if pt := pages.point_from_pin(.active, *point) {
+			click_grid_x = u32(pt.coordinate.x)
+			click_grid_y = pt.coordinate.y
 		}
 	}
 
@@ -3637,10 +3635,12 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 		mut screen := self.renderer_state.terminal_.screens.active
 		pos := self.rt_surface.get_cursor_pos()!
 		vp := self.pos_to_viewport(f64(pos.x), f64(pos.y))
-		if pin := screen.pages.pin(terminal.PinOpts{
-			tag: .viewport
-			x: vp.x
-			y: vp.y
+		if pin := screen.pages.pin(terminal.Point{
+			tag:        .viewport
+			coordinate: terminal.Coordinate{
+				x: u16(vp.x)
+				y: u32(vp.y)
+			}
 		}) {
 			// If we move our cursor too much between clicks then we reset the
 			// multi-click state.
@@ -3654,8 +3654,15 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 				}
 			}
 
-			// Store our click state.
-			self.mouse.left_click_pin = pin
+			if prev := self.mouse.left_click_pin {
+				if mut pin_screen := self.renderer_state.terminal_.screens.get(self.mouse.left_click_screen) {
+					pin_screen.pages.untrack_pin(prev)
+				}
+				self.mouse.left_click_pin = none
+			}
+
+			// Store it
+			self.mouse.left_click_pin = screen.pages.track_pin(pin)
 			self.mouse.left_click_screen = self.renderer_state.terminal_.screens.active_key
 			self.mouse.left_click_xpos = pos.x
 			self.mouse.left_click_ypos = pos.y
@@ -3733,10 +3740,12 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 			return err
 		}
 		vp := self.pos_to_viewport(f64(pos.x), f64(pos.y))
-		pin := screen.pages.pin(terminal.PinOpts{
-			tag: .viewport
-			x: vp.x
-			y: vp.y
+		pin := screen.pages.pin(terminal.Point{
+			tag:        .viewport
+			coordinate: terminal.Coordinate{
+				x: u16(vp.x)
+				y: u32(vp.y)
+			}
 		}) or {
 			self.renderer_state.mutex.unlock()
 			return false
@@ -3888,10 +3897,12 @@ pub fn (mut self Surface) cursor_pos_callback(pos apprt.CursorPos, mods ?input.M
 	if mut insp := self.inspector {
 		insp.mouse.last_xpos = f64(pos.x)
 		insp.mouse.last_ypos = f64(pos.y)
-		insp.mouse.last_point = self.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
-			tag: .viewport
-			x: pos_vp.x
-			y: pos_vp.y
+		insp.mouse.last_point = self.renderer_state.terminal_.screens.active.pages.pin(terminal.Point{
+			tag:        .viewport
+			coordinate: terminal.Coordinate{
+				x: u16(pos_vp.x)
+				y: u32(pos_vp.y)
+			}
 		})
 		self.queue_render()!
 	}
@@ -3939,10 +3950,12 @@ pub fn (mut self Surface) cursor_pos_callback(pos apprt.CursorPos, mods ?input.M
 		if (pos.y <= 1 || pos.y > max_y - 1) && !self.selection_scroll_active {
 			self.queue_io(termiopkg.Message.selection_scroll_msg(true), .locked)
 		}
-		if pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
-			tag: .viewport
-			x: pos_vp.x
-			y: pos_vp.y
+		if pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.Point{
+			tag:        .viewport
+			coordinate: terminal.Coordinate{
+				x: u16(pos_vp.x)
+				y: u32(pos_vp.y)
+			}
 		}) {
 			match self.mouse.left_click_count {
 				1 { self.drag_left_click_single(pin, f64(pos.x))! }
@@ -4342,7 +4355,9 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 		}
 		.scroll_to_row {
 			self.renderer_state.mutex.lock()
-			self.renderer_state.terminal_.screens.active.scroll_to_row(usize(action.uint_param))
+			self.renderer_state.terminal_.screens.active.scroll(terminal.ScrollRow{
+				n: usize(action.uint_param)
+			})
 			self.renderer_state.mutex.unlock()
 			self.queue_render()!
 		}
@@ -4352,7 +4367,10 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				self.renderer_state.mutex.unlock()
 			}
 			sel := self.renderer_state.terminal_.screens.active.selection or { return false }
-			self.renderer_state.terminal_.screens.active.scroll_to_row(usize(sel.top_left(self.renderer_state.terminal_.screens.active).y))
+			tl := sel.top_left(self.renderer_state.terminal_.screens.active)
+			self.renderer_state.terminal_.screens.active.scroll(terminal.ScrollPin{
+				pin: tl
+			})
 			self.queue_render()!
 		}
 		.scroll_page_up {
@@ -4625,21 +4643,30 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			mut sel := screen.selection or { return false }
 			sel.adjust(screen, selection_adjustment_from_input(action.enum_param))
 			screen.selection = sel
+
+			// If the selection endpoint is outside of the current viewpoint,
+			// scroll it in to view. Note we always specifically use sel.end
+			// because that is what adjust modifies.
 			viewport_tl := screen.pages.get_top_left(.viewport)
-			viewport_br := screen.pages.get_bottom_right(.viewport) or { return false }
-			end_pin := sel.end()
-			end_in_viewport := (end_pin.eql(viewport_tl) || viewport_tl.before(end_pin))
-				&& (end_pin.eql(viewport_br) || end_pin.before(viewport_br))
-			if !end_in_viewport {
-				target_row := if sel.end().before(viewport_tl) {
-					usize(sel.end().y)
-				} else if sel.end().y >= screen.pages.rows - 1 {
-					usize(sel.end().y - (screen.pages.rows - 1))
-				} else {
-					usize(0)
-				}
-				screen.scroll_to_row(target_row)
+			viewport_br := screen.pages.get_bottom_right(.viewport) or {
+				panic('viewport has no bottom-right')
 			}
+			if !sel.end().is_between(viewport_tl, viewport_br) {
+				// Our end point is not within the viewport. If the end
+				// point is after the br then we need to adjust the end so
+				// that it is at the bottom right of the viewport.
+				target := if sel.end().before(viewport_tl) {
+					sel.end()
+				} else {
+					sel.end().up(usize(screen.pages.rows) - 1) or { sel.end() }
+				}
+
+				screen.scroll(terminal.ScrollPin{
+					pin: target
+				})
+			}
+
+			// Queue a render so its shown
 			screen.dirty.set_selection(true)
 			self.queue_render()!
 		}
@@ -5888,10 +5915,12 @@ fn (mut self Surface) selection_scroll_tick() ! {
 	self.renderer_state.terminal_.scroll_viewport(terminal.ScrollViewport.from_delta(delta))!
 
 	// Continue drag selection
-	if pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
-		tag: .viewport
-		x: pos_vp.x
-		y: pos_vp.y
+	if pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.Point{
+		tag:        .viewport
+		coordinate: terminal.Coordinate{
+			x: u16(pos_vp.x)
+			y: u32(pos_vp.y)
+		}
 	}) {
 		self.drag_left_click_single(pin, f64(pos.x))!
 	}
@@ -5938,16 +5967,14 @@ fn (mut self Surface) open_url(action apprt.OpenUrl) ! {
 	}
 }
 
+// Return the URI for an OSC8 hyperlink at the given position or null
+// if there is no hyperlink.
 fn (self &Surface) osc8_uri(pin Pin) ?string {
-	rows := self.renderer_state.terminal_.screens.active.pages.screen_rows
-	if int(pin.y) >= rows.len || int(pin.x) >= rows[int(pin.y)].cells.len {
-		return none
-	}
-	cell := rows[int(pin.y)].cells[int(pin.x)]
-	if !cell.has_hyperlink || cell.hyperlink.uri.len == 0 {
-		return none
-	}
-	return cell.hyperlink.uri
+	mut page := &pin.node.data
+	cell := pin.row_and_cell().cell
+	link_id := page.lookup_hyperlink(cell) or { return none }
+	entry := page.hyperlink_set.get(link_id)
+	return entry.uri
 }
 
 fn (mut self Surface) write_screen_file(loc WriteScreenLoc, write_screen input.WriteScreen) ! {
@@ -6243,10 +6270,12 @@ fn (self &Surface) link_at_pos(pos apprt.CursorPos) ?Link {
 	}
 
 	pos_vp := self.pos_to_viewport(f64(pos.x), f64(pos.y))
-	pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
-		tag: .viewport
-		x: pos_vp.x
-		y: pos_vp.y
+	pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.Point{
+		tag:        .viewport
+		coordinate: terminal.Coordinate{
+			x: u16(pos_vp.x)
+			y: u32(pos_vp.y)
+		}
 	}) or { return none }
 	mouse_mods := self.mouse_mods_with_capture(self.mouse.mods)
 
@@ -6331,24 +6360,27 @@ fn (mut self Surface) maybe_prompt_click() !bool {
 	}
 	pos := self.rt_surface.get_cursor_pos()!
 	pos_vp := self.pos_to_viewport(f64(pos.x), f64(pos.y))
-	click_pin := screen.pages.pin(terminal.PinOpts{
-		tag: .viewport
-		x: pos_vp.x
-		y: pos_vp.y
+	click_pin := screen.pages.pin(terminal.Point{
+		tag:        .viewport
+		coordinate: terminal.Coordinate{
+			x: u16(pos_vp.x)
+			y: u32(pos_vp.y)
+		}
 	}) or { return false }
 
-	cursor_row := screen.pages.active_start + int(screen.cursor.y)
-	mut prompt_row := -1
-	for y := cursor_row; y >= 0; y-- {
-		if screen.pages.screen_rows[y].semantic_prompt == .prompt {
-			prompt_row = y
-			break
-		}
-	}
-	if prompt_row < 0 {
+	// Get our cursor's most current prompt.
+	mut prompt_it := screen.cursor.page_pin.prompt_iterator(.left_up, none)
+	prompt_pin := prompt_it.next() or {
+		// This shouldn't be possible because we asserted we're at
+		// a prompt above, so we MUST find some prompt in a left_up search.
+		// log.warn: cursor is at prompt but no prompt found
 		return false
 	}
-	prompt_pin := Pin{ x: 0, y: u32(prompt_row) }
+
+	// If our mouse click is before the prompt, we don't move.
+	// We DO ALLOW clicks AFTER the prompt, specifically with Kitty's
+	// click_events=1 since we rely on the shell to validate out of
+	// bounds clicks. This matches Kitty's logic as best I can tell.
 	if click_pin.before(prompt_pin) {
 		return false
 	}
@@ -6376,39 +6408,75 @@ fn (mut self Surface) maybe_prompt_click() !bool {
 	return true
 }
 
-fn (mut self Surface) drag_left_click_single(pin Pin, drag_x f64) ! {
-	click_pin := self.mouse.left_click_pin or { return }
-	// Compute selection between click pin and drag pin
-	if sel := mouse_selection(click_pin, pin, u32(self.mouse.left_click_xpos), u32(drag_x), self.mouse.mods, self.size) {
-		self.renderer_state.terminal_.screens.active.select(sel)!
-	}
-}
-
-fn (mut self Surface) drag_left_click_double(pin Pin) ! {
-	// Word-level drag selection
-	click_pin := self.mouse.left_click_pin or { return }
-	if sel := self.renderer_state.terminal_.screens.active.select_word_between(click_pin, pin, self.config.selection_word_chars) {
-		self.renderer_state.terminal_.screens.active.select(sel)!
-	}
-}
-
-fn (mut self Surface) drag_left_click_triple(pin Pin) ! {
+// Double-click dragging moves the selection one "word" at a time.
+fn (mut self Surface) drag_left_click_double(drag_pin Pin) ! {
 	mut screen := self.renderer_state.terminal_.screens.active
-	click_pin := self.mouse.left_click_pin or { return }
+	click_pin := *(self.mouse.left_click_pin or { return })
+
+	// Get the word closest to our starting click.
+	word_start := screen.select_word_between(click_pin, drag_pin, self.config.selection_word_chars) or {
+		self.set_selection(none)!
+		return
+	}
+
+	// Get the word closest to our current point.
+	word_current := screen.select_word_between(drag_pin, click_pin, self.config.selection_word_chars) or {
+		self.set_selection(none)!
+		return
+	}
+
+	// If our current mouse position is before the starting position,
+	// then the selection start is the word nearest our current position.
+	if drag_pin.before(click_pin) {
+		screen.select(TermSelection.init(word_current.start(), word_start.end(), false))!
+	} else {
+		screen.select(TermSelection.init(word_start.start(), word_current.end(), false))!
+	}
+}
+
+// Triple-click dragging moves the selection one "line" at a time.
+fn (mut self Surface) drag_left_click_triple(drag_pin Pin) ! {
+	mut screen := self.renderer_state.terminal_.screens.active
+	click_pin := *(self.mouse.left_click_pin or { return })
+
+	// Get the line selection under our current drag point. If there isn't a
+	// line, do nothing.
 	line := screen.select_line(terminal.SelectLine{
-		pin: pin
+		pin: drag_pin
 	}) or { return }
+
+	// Get the selection under our click point. We first try to trim
+	// whitespace if we've selected a word. But if no word exists then
+	// we select the blank line.
 	mut sel := screen.select_line(terminal.SelectLine{
 		pin: click_pin
 	}) or {
-		screen.select_line(terminal.SelectLine{ pin: click_pin, whitespace: none }) or { return }
+		screen.select_line(terminal.SelectLine{
+			pin:        click_pin
+			whitespace: none
+		}) or { return }
 	}
-	if pin.before(click_pin) {
-		sel.start_pin = line.start()
+
+	if drag_pin.before(click_pin) {
+		mut start := sel.start_ptr()
+		unsafe {
+			*start = line.start()
+		}
 	} else {
-		sel.end_pin = line.end()
+		mut end := sel.end_ptr()
+		unsafe {
+			*end = line.end()
+		}
 	}
 	screen.select(sel)!
+}
+
+fn (mut self Surface) drag_left_click_single(drag_pin Pin, drag_x f64) ! {
+	click_pin := *(self.mouse.left_click_pin or { return })
+	// This logic is in a separate function so that it can be unit tested.
+	self.renderer_state.terminal_.screens.active.select(mouse_selection(click_pin, drag_pin,
+		u32(math.max(0.0, self.mouse.left_click_xpos)), u32(math.max(0.0, drag_x)), self.mouse.mods,
+		self.size))!
 }
 
 fn (self &Surface) resolve_path_for_opening(path string) ?string {
@@ -6432,36 +6500,103 @@ pub fn (mut self Surface) dump_text(sel TermSelection) !Text {
 }
 
 pub fn (mut self Surface) dump_text_locked(sel TermSelection) !Text {
+	// Read out the text
 	text := self.renderer_state.terminal_.screens.active.selection_string(terminal.SelectionString{
-		sel: sel
+		sel:  sel
+		trim: false
 	})!
 
-	// Calculate viewport info for the selection
-	content_scale := self.rt_surface.get_content_scale() or {
-		apprt.ContentScale{ x: 1.0, y: 1.0 }
+	return Text{
+		text:     text
+		viewport: self.dump_text_viewport(sel)
+	}
+}
+
+// The `viewport:` block of dumpTextLocked: calculate our viewport info if
+// we can.
+fn (self &Surface) dump_text_viewport(sel TermSelection) ?TextViewport {
+	screen := self.renderer_state.terminal_.screens.active
+
+	// If our bottom right pin is before the viewport, then we can't
+	// possibly have this text be within the viewport.
+	vp_tl_pin := screen.pages.get_top_left(.viewport)
+	br_pin := sel.bottom_right(screen)
+	if br_pin.before(vp_tl_pin) {
+		return none
 	}
 
-	tl := sel.top_left(self.renderer_state.terminal_.screens.active)
-	mut x := f64(tl.x * self.size.cell.width + self.size.padding.left)
+	// If our top-left pin is after the viewport, then we can't possibly
+	// have this text be within the viewport.
+	vp_br_pin := screen.pages.get_bottom_right(.viewport) or {
+		// I don't think this is possible but I don't want to crash on
+		// that assertion so let's just break out...
+		// log.warn: viewport bottom-right pin not found, bug?
+		return none
+	}
+	tl_pin := sel.top_left(screen)
+	if vp_br_pin.before(tl_pin) {
+		return none
+	}
+
+	// We established that our top-left somewhere before the viewport
+	// bottom-right and that our bottom-right is somewhere after
+	// the top-left. This means that at least some portion of our
+	// selection is within the viewport.
+
+	// Our top-left point. If it doesn't exist in the viewport it must
+	// be before and we can return (0,0).
+	tl_pt := screen.pages.point_from_pin(.viewport, tl_pin) or {
+		terminal.Point{
+			tag: .viewport
+		}
+	}
+
+	// Our bottom-right point. If it doesn't exist in the viewport
+	// it must be the bottom-right of the viewport.
+	br_pt := screen.pages.point_from_pin(.viewport, br_pin) or {
+		screen.pages.point_from_pin(.viewport, vp_br_pin) or { return none }
+	}
+
+	tl_coord := tl_pt.coord()
+	br_coord := br_pt.coord()
+
+	// Our sizes are all scaled so we need to send the unscaled values back.
+	content_scale := self.rt_surface.get_content_scale() or { apprt.ContentScale{
+		x: 1.0
+		y: 1.0
+	} }
+
+	// Simple x * cell width gives the left
+	mut x := f64(u32(tl_coord.x) * self.size.cell.width)
+
+	// Add padding
+	x += f64(self.size.padding.left)
+
+	// Scale
 	x /= content_scale.x
 
-	mut y := f64(tl.y * self.size.cell.height + self.size.padding.top)
+	// Simple y * cell height gives the top
+	mut y := f64(tl_coord.y * self.size.cell.height)
+
+	// We want the text baseline
 	y += f64(self.size.cell.height)
 	y -= f64(self.font_metrics.cell_baseline)
+
+	// Add padding
+	y += f64(self.size.padding.top)
+
+	// Scale
 	y /= content_scale.y
 
-	br := sel.bottom_right(self.renderer_state.terminal_.screens.active)
-	start := tl.y * self.renderer_state.terminal_.cols + tl.x
-	end_val := br.y * self.renderer_state.terminal_.cols + br.x
+	// Utilize viewport sizing to convert to offsets
+	start := tl_coord.y * u32(screen.pages.cols) + u32(tl_coord.x)
+	end := br_coord.y * u32(screen.pages.cols) + u32(br_coord.x)
 
-	return Text{
-		text: text
-		viewport: TextViewport{
-			tl_px_x: x
-			tl_px_y: y
-			offset_start: start
-			offset_len: end_val - start
-		}
+	return TextViewport{
+		tl_px_x:      x
+		tl_px_y:      y
+		offset_start: start
+		offset_len:   end - start
 	}
 }
 
@@ -6496,24 +6631,28 @@ fn mouse_selection(click_pin Pin, drag_pin Pin, click_x u32, drag_x u32, mods in
 	} else {
 		drag_x_frac >= threshold
 	}
-	cols := size.grid().columns
+	// If the click cell should be included in the selection then it's the
+	// start, otherwise we get the previous or next cell to it depending on
+	// the type and direction of the selection.
 	start_pin := if include_click {
 		click_pin
 	} else if end_before_start {
-		if rectangle { pin_left_clamp(click_pin) } else { pin_left_wrap(click_pin, cols) }
+		if rectangle { click_pin.left_clamp(1) } else { click_pin.left_wrap(1) or { click_pin } }
 	} else if rectangle {
-		pin_right_clamp(click_pin, cols)
+		click_pin.right_clamp(1)
 	} else {
-		pin_right_wrap(click_pin, cols)
+		click_pin.right_wrap(1) or { click_pin }
 	}
+
+	// Likewise for the end pin with the drag cell.
 	end_pin := if include_drag {
 		drag_pin
 	} else if end_before_start {
-		if rectangle { pin_right_clamp(drag_pin, cols) } else { pin_right_wrap(drag_pin, cols) }
+		if rectangle { drag_pin.right_clamp(1) } else { drag_pin.right_wrap(1) or { drag_pin } }
 	} else if rectangle {
-		pin_left_clamp(drag_pin)
+		drag_pin.left_clamp(1)
 	} else {
-		pin_left_wrap(drag_pin, cols)
+		drag_pin.left_wrap(1) or { drag_pin }
 	}
 	if (!include_click && same_pin)
 		|| (!include_click && rectangle && click_pin.x == drag_pin.x)
@@ -6524,29 +6663,4 @@ fn mouse_selection(click_pin Pin, drag_pin Pin, click_x u32, drag_x u32, mods in
 		return none
 	}
 	return TermSelection.init(start_pin, end_pin, rectangle)
-}
-
-fn pin_left_clamp(pin Pin) Pin {
-	return Pin{ x: if pin.x > 0 { pin.x - 1 } else { u32(0) }, y: pin.y }
-}
-
-fn pin_right_clamp(pin Pin, cols u32) Pin {
-	return Pin{ x: math.min(pin.x + 1, cols - 1), y: pin.y }
-}
-
-fn pin_left_wrap(pin Pin, cols u32) Pin {
-	if pin.x > 0 {
-		return Pin{ x: pin.x - 1, y: pin.y }
-	}
-	if pin.y > 0 {
-		return Pin{ x: cols - 1, y: pin.y - 1 }
-	}
-	return pin
-}
-
-fn pin_right_wrap(pin Pin, cols u32) Pin {
-	if pin.x + 1 < cols {
-		return Pin{ x: pin.x + 1, y: pin.y }
-	}
-	return Pin{ x: 0, y: pin.y + 1 }
 }

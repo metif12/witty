@@ -787,12 +787,6 @@ pub const format_plain = FormatOptions{ emit: .plain }
 pub const format_vt = FormatOptions{ emit: .vt }
 pub const format_html = FormatOptions{ emit: .html }
 
-// Maps every output byte to its source position in the flat screen storage.
-pub struct PinMap {
-pub mut:
-	pins []Pin
-}
-
 // Maps every output byte to its source coordinate within a page.
 pub struct PointMap {
 pub mut:
@@ -810,23 +804,6 @@ fn append_point_bytes(mapping &PointMap, point Coordinate, count int) {
 	}
 }
 
-fn append_pin_bytes(mapping &PinMap, pin Pin, count int) {
-	if mapping == unsafe { nil } || count <= 0 {
-		return
-	}
-	unsafe {
-		for _ in 0 .. count {
-			mapping.pins << pin
-		}
-	}
-}
-
-fn last_pin_or_origin(mapping &PinMap) Pin {
-	if mapping != unsafe { nil } && mapping.pins.len > 0 {
-		return mapping.pins[mapping.pins.len - 1]
-	}
-	return Pin{}
-}
 
 // Terminal formatter formats the active terminal screen.
 //
@@ -973,7 +950,7 @@ pub fn (self TerminalFormatter) format() string {
 				sb.write_string('}</style>')
 			}
 		}
-		append_pin_bytes(self.pin_map, Pin{}, sb.len - before)
+		append_page_pin_bytes(self.pin_map, self.terminal.screens.active.pages.get_top_left(.screen), sb.len - before)
 	}
 
 	// Emit terminal modes that differ from defaults.
@@ -992,7 +969,7 @@ pub fn (self TerminalFormatter) format() string {
 			suffix := if current { 'h' } else { 'l' }
 			sb.write_string('\x1b[${prefix}${tag.value()}${suffix}')
 		}
-		append_pin_bytes(self.pin_map, Pin{}, sb.len - before)
+		append_page_pin_bytes(self.pin_map, self.terminal.screens.active.pages.get_top_left(.screen), sb.len - before)
 	}
 
 	// Format the active screen content
@@ -1005,7 +982,11 @@ pub fn (self TerminalFormatter) format() string {
 	// Extra terminal state to emit after the screen contents
 	if self.opts.emit == .vt {
 		before := sb.len
-		prior_pin := last_pin_or_origin(self.pin_map)
+		prior_pin := if self.pin_map != unsafe { nil } && self.pin_map.pins.len > 0 {
+			self.pin_map.pins[self.pin_map.pins.len - 1]
+		} else {
+			self.terminal.screens.active.pages.get_top_left(.screen)
+		}
 		// Emit scrolling region using DECSTBM and DECSLRM
 		if self.extra.scrolling_region() {
 			region := self.terminal.scrolling_region
@@ -1050,7 +1031,7 @@ pub fn (self TerminalFormatter) format() string {
 				sb.write_string('\x1b]7;${self.terminal.pwd}\x1b\\')
 			}
 		}
-		append_pin_bytes(self.pin_map, prior_pin, sb.len - before)
+		append_page_pin_bytes(self.pin_map, prior_pin, sb.len - before)
 	}
 
 	return sb.str()
@@ -1069,6 +1050,13 @@ pub mut:
 	// Extra stuff to emit, such as cursor, style, hyperlinks, etc.
 	// This information is ONLY emitted when the format is "vt".
 	extra   ScreenExtra = screen_extra_none
+	// If non-nil, then `pins` will contain the Pin of every byte written,
+	// offset by the byte index.
+	//
+	// Note that some emitted bytes may not correspond to any Pin, such as
+	// the extra data around screen state. For these, we map it to the
+	// most previous pin so there is some continuity but its an arbitrary
+	// choice.
 	pin_map &PinMap = unsafe { nil }
 }
 
@@ -1192,18 +1180,29 @@ pub:
 	opts FormatOptions
 pub mut:
 	// Inclusive ordered bounds. If absent, the complete page list is used.
-	top_left     ?PagePin
-	bottom_right ?PagePin
+	top_left     ?Pin
+	bottom_right ?Pin
 	// Apply the X bounds to every row rather than only the first and last.
 	rectangle bool
 	// Optional mapping from every output byte to its linked-page pin.
-	pin_map &PagePinMap = unsafe { nil }
+	pin_map &PinMap = unsafe { nil }
 }
 
-// PagePinMap maps every output byte to its source position in a PageList.
-pub struct PagePinMap {
+// PinMap maps every output byte to its source position in a PageList.
+pub struct PinMap {
 pub mut:
-	pins []PagePin
+	pins []Pin
+}
+
+fn append_page_pin_bytes(mapping &PinMap, pin Pin, count int) {
+	if mapping == unsafe { nil } || count <= 0 {
+		return
+	}
+	unsafe {
+		for _ in 0 .. count {
+			mapping.pins << pin
+		}
+	}
 }
 
 pub fn PageListFormatter.init(list &PageList, opts FormatOptions) PageListFormatter {
@@ -1228,17 +1227,7 @@ pub fn (self PageListFormatter) format() string {
 		assert chunk.start < chunk.end
 		assert chunk.end > 0
 
-		// PageFormatter is shared with the flat Screen representation. A linked
-		// Page already uses the same RowData/CellData values, so this is a
-		// read-only view over the current node rather than a data conversion.
-		page := &chunk.node.data
-		view := Pages{
-			screen_rows: page.rows[..int(page.size.rows)]
-			cols: u32(page.size.cols)
-			rows: u32(page.size.rows)
-		}
-		mut formatter := PageFormatter.init(&view, self.opts)
-		formatter.linked_page = page
+		mut formatter := PageFormatter.init(&chunk.node.data, self.opts)
 		formatter.start_y = u32(chunk.start)
 		formatter.end_y = u32(chunk.end - 1)
 		formatter.trailing_state = trailing
@@ -1268,7 +1257,7 @@ pub fn (self PageListFormatter) format() string {
 		if self.pin_map != unsafe { nil } {
 			unsafe {
 				for point in point_map.points {
-					self.pin_map.pins << PagePin{
+					self.pin_map.pins << Pin{
 						node: chunk.node
 						x: u16(point.x)
 						y: u16(point.y)
@@ -1286,32 +1275,15 @@ pub fn (self ScreenFormatter) format() string {
 	match self.content {
 		ScreenContentNone {}
 		ScreenContentSelection {
-			// Emit our page content according to our selection.
-			mut page_fmt := PageFormatter.init(&self.screen.pages, self.opts)
-			mut point_map := PointMap{}
-			if self.pin_map != unsafe { nil } {
-				page_fmt.point_map = &point_map
-			}
+			// Emit our pagelist contents according to our selection.
+			mut list_formatter := PageListFormatter.init(&self.screen.pages, self.opts)
+			list_formatter.pin_map = self.pin_map
 			if sel := self.content.sel {
-				// Order the selection for formatting (start before end)
-				s := if sel.start_pin.before(sel.end_pin) { sel.start_pin } else { sel.end_pin }
-				e := if sel.start_pin.before(sel.end_pin) { sel.end_pin } else { sel.start_pin }
-				page_fmt.start_x = s.x
-				page_fmt.start_y = s.y
-				page_fmt.end_x = e.x
-				page_fmt.end_y = e.y
-				page_fmt.rectangle = sel.rectangle
+				list_formatter.top_left = sel.top_left(self.screen)
+				list_formatter.bottom_right = sel.bottom_right(self.screen)
+				list_formatter.rectangle = sel.rectangle
 			}
-			result := page_fmt.format_with_state()
-			sb.write_string(result.output)
-			if self.pin_map != unsafe { nil } {
-				for point in point_map.points {
-					append_pin_bytes(self.pin_map, Pin{
-						x: point.x
-						y: point.y
-					}, 1)
-				}
-			}
+			sb.write_string(list_formatter.format())
 		}
 	}
 
@@ -1332,9 +1304,10 @@ pub fn (self ScreenFormatter) format() string {
 		}
 	}
 
-	// State emitted after content is mapped to the most recent content pin.
+	// If we have a pin_map, we need to count how many bytes the extras
+	// will emit so we can map them all to the same pin: the most recent
+	// content pin, or the screen's top-left if there is none.
 	extras_start := sb.len
-	prior_pin := last_pin_or_origin(self.pin_map)
 
 	// Emit current SGR style state
 	if self.extra.style() {
@@ -1433,12 +1406,23 @@ pub fn (self ScreenFormatter) format() string {
 		// CUP is 1-indexed
 		sb.write_string('\x1b[${cursor.y + 1};${cursor.x + 1}H')
 	}
-	append_pin_bytes(self.pin_map, prior_pin, sb.len - extras_start)
+	if self.pin_map != unsafe { nil } {
+		prior_pin := if self.pin_map.pins.len > 0 {
+			self.pin_map.pins[self.pin_map.pins.len - 1]
+		} else {
+			self.screen.pages.get_top_left(.screen)
+		}
+		unsafe {
+			for _ in 0 .. sb.len - extras_start {
+				self.pin_map.pins << prior_pin
+			}
+		}
+	}
 
 	return sb.str()
 }
 
-// Page formatter formats a single page (i.e., the Pages data).
+// Page formatter.
 //
 // For styled formatting such as VT, this will emit references for palette
 // colors. If you want to capture the palette as-is at the time of formatting,
@@ -1446,8 +1430,8 @@ pub fn (self ScreenFormatter) format() string {
 // this formatting.
 pub struct PageFormatter {
 pub:
-	// The page data to format.
-	pages &Pages
+	// The page to format.
+	page &Page
 pub mut:
 	// The common options
 	opts FormatOptions
@@ -1462,9 +1446,6 @@ pub mut:
 	// The previous trailing state from the prior page.
 	trailing_state ?TrailingState
 	point_map      &PointMap = unsafe { nil }
-	// The owning linked Page, when formatting through PageListFormatter. Its
-	// style table is authoritative; flat Screen pages store styles inline.
-	linked_page &Page = unsafe { nil }
 }
 
 // Trailing state for cross-page continuation.
@@ -1483,9 +1464,9 @@ pub:
 	state  TrailingState
 }
 
-pub fn PageFormatter.init(pages &Pages, opts FormatOptions) PageFormatter {
+pub fn PageFormatter.init(page &Page, opts FormatOptions) PageFormatter {
 	return PageFormatter{
-		pages: unsafe { pages }
+		page: unsafe { page }
 		opts: opts
 		start_x: 0
 		start_y: 0
@@ -1515,8 +1496,8 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 		}
 	}
 
-	page_cols := self.pages.cols
-	page_rows := u32(self.pages.screen_rows.len)
+	page_cols := u32(self.page.size.cols)
+	page_rows := u32(self.page.size.rows)
 
 	// Setup our starting column and perform some validation for overflows.
 	start_x := self.start_x
@@ -1549,7 +1530,7 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 	// Edge case: if our end x/y falls on a spacer head AND we're unwrapping,
 	// then we move the x/y to the start of the next row (if available).
 	if self.opts.unwrap && !self.rectangle {
-		final_row := self.pages.screen_rows[int(end_y)]
+		final_row := self.page.rows[int(end_y)]
 		if int(end_x) < final_row.cells.len {
 			if final_row.cells[int(end_x)].wide == .spacer_head {
 				if end_y < page_rows - 1 {
@@ -1604,7 +1585,7 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 
 	for y_int in int(start_y) .. int(end_y) + 1 {
 		y := u32(y_int)
-		row := self.pages.screen_rows[y_int]
+		row := self.page.rows[y_int]
 		cells := row.cells
 
 		// Determine the x range for this row
@@ -1901,10 +1882,8 @@ fn (self PageFormatter) cell_style(cell CellData) CellStyle {
 		.codepoint, .codepoint_grapheme {
 			if !cell.has_styling() {
 				CellStyle{}
-			} else if self.linked_page != unsafe { nil } {
-				self.linked_page.styles.get(cell.style_id)
 			} else {
-				cell.style
+				self.page.styles.get(cell.style_id)
 			}
 		}
 		.bg_color_palette {

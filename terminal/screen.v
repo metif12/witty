@@ -1,5 +1,6 @@
 module terminal
 
+import fastmem
 import osc
 import unicode
 
@@ -1730,6 +1731,8 @@ import unicode
 // and cell data. Translated from ghostty's Screen.zig.
 
 // ScreenDirty tracks what parts of the screen need redrawing.
+//
+// See Terminal.Dirty. This behaves the same way.
 pub struct ScreenDirty {
 mut:
 	value u8
@@ -1741,6 +1744,8 @@ pub fn ScreenDirty.init(selection bool, hyperlink_hover bool) ScreenDirty {
 	}
 }
 
+// Set when the selection is set or unset, regardless of if the
+// selection is changed or not.
 pub fn (self ScreenDirty) selection() bool {
 	return self.value & 0b01 != 0
 }
@@ -1749,6 +1754,8 @@ pub fn (mut self ScreenDirty) set_selection(value bool) {
 	self.set_bit(0b01, value)
 }
 
+// When an OSC8 hyperlink is hovered, we set the full screen as dirty
+// because links can span multiple lines.
 pub fn (self ScreenDirty) hyperlink_hover() bool {
 	return self.value & 0b10 != 0
 }
@@ -1769,10 +1776,18 @@ fn (mut self ScreenDirty) set_bit(mask u8, enabled bool) {
 	}
 }
 
-// SemanticPrompt tracks OSC 133 semantic prompt state.
 pub struct SemanticPrompt {
 pub mut:
-	seen  bool
+	// This is flipped to true when any sort of semantic content is
+	// seen. In particular, this is set to true only when a `prompt` type
+	// is ever set on our cursor.
+	//
+	// This is used to optimize away semantic content operations if we know
+	// we've never seen them.
+	seen bool
+	// This is set on any `cl` or `click_events` option set on the
+	// most recent OSC 133 commands to specify how click handling in a
+	// prompt is handling.
 	click SemanticClick
 }
 
@@ -1801,37 +1816,71 @@ pub:
 }
 
 pub const semantic_click_none = SemanticClick{}
-pub const semantic_click_click_events = SemanticClick{ tag: .click_events }
+pub const semantic_click_click_events = SemanticClick{
+	tag: .click_events
+}
 
 pub fn SemanticClick.from_cl(cl SemanticClickCl) SemanticClick {
 	return SemanticClick{
 		tag: .cl
-		cl: cl
+		cl:  cl
 	}
 }
 
-// Cursor holds the cursor position and associated state.
+// The cursor position and style.
 pub struct Cursor {
 pub mut:
-	x                          u32
-	y                          u32
-	cursor_style               CursorStyle = .block
-	pending_wrap               bool
-	is_protected               bool
-	style                      CellStyle
-	style_id                   u32
-	hyperlink_id               u32
-	hyperlink_implicit_id      u32
-	hyperlink_state            ?Hyperlink
+	// The x/y position within the active area.
+	x u32
+	y u32
+	// The visual style of the cursor. This defaults to block because
+	// it has to default to something, but users of this struct are
+	// encouraged to set their own default.
+	cursor_style CursorStyle = .block
+	// The "last column flag (LCF)" as its called. If this is set then the
+	// next character print will force a soft-wrap.
+	pending_wrap bool
+	// The protected mode state of the cursor. If this is true then
+	// all new characters printed will have the protected state set.
+	is_protected bool
+	// The currently active style. This is the concrete style value
+	// that should be kept up to date. The style ID to use for cell writing
+	// is below.
+	style CellStyle
+	// The currently active style ID. The style is page-specific so when
+	// we change pages we need to ensure that we update that page with
+	// our style when used.
+	style_id u32 = default_style_id
+	// The hyperlink ID that is currently active for the cursor. A value
+	// of zero means no hyperlink is active. (Implements OSC8, saying that
+	// so code search can find it.).
+	hyperlink_id u32
+	// This is the implicit ID to use for hyperlinks that don't specify
+	// an ID. We do an overflowing add to this so repeats can technically
+	// happen with carefully crafted inputs but for real workloads its
+	// highly unlikely -- and the fix is for the TUI program to use explicit
+	// IDs.
+	hyperlink_implicit_id u32
+	// The hyperlink state so that we can recreate it when the cursor page
+	// pin changes. We can't get it from the old screen state because the
+	// page may be cleared. Ghostty heap-allocates this because it is most
+	// likely null; V stores the optional value directly.
+	hyperlink_state ?Hyperlink
+	// The current semantic content type for the cursor that will be
+	// applied to any newly written cells.
 	semantic_content           SemanticContent = .output
 	semantic_content_clear_eol bool
+	// The pointers into the page list where the cursor is currently
+	// located. This makes it faster to move the cursor.
+	page_pin  &Pin  = unsafe { nil }
+	page_row  &RowData  = unsafe { nil }
+	page_cell &CellData = unsafe { nil }
 }
 
 // Release cursor-owned state. Ghostty frees the heap-allocated pending
 // hyperlink here; V owns that memory through GC, so dropping the retained
 // value is the equivalent lifecycle operation.
 pub fn (mut self Cursor) deinit() {
-	self.hyperlink_id = 0
 	self.hyperlink_state = none
 }
 
@@ -1839,12 +1888,12 @@ pub fn (mut self Cursor) deinit() {
 // cursor is copied between screens.
 pub struct CursorCopyOptions {
 pub:
-	// Copy the hyperlink from the other cursor. When false, any current
-	// hyperlink is cleared and the source hyperlink is not activated.
+	// Copy the hyperlink from the other cursor. If not set, this will
+	// clear our current hyperlink.
 	hyperlink bool = true
 }
 
-// SavedCursor holds saved cursor state for save/restore operations.
+// Saved cursor state.
 pub struct SavedCursor {
 pub mut:
 	x            u32
@@ -1856,16 +1905,24 @@ pub mut:
 	charset      CharsetState
 }
 
-// CharsetState holds the charset mapping state.
+// State required for all charset operations.
 pub struct CharsetState {
 pub mut:
-	charsets     CharsetArray
-	gl           CharsetSlot = .g0
-	gr           CharsetSlot = .g2
+	// The list of graphical charsets by slot
+	charsets CharsetArray
+	// GL is the slot to use when using a 7-bit printable char (up to 127)
+	// GR used for 8-bit printable chars.
+	gl CharsetSlot = .g0
+	gr CharsetSlot = .g2
+	// Single shift where a slot is used for exactly one char.
 	single_shift ?CharsetSlot
 }
 
-// CharsetArray maps charset slots to charset tables.
+// An array to map a charset slot to a lookup table.
+//
+// We use this bespoke struct instead of `std.EnumArray` because
+// accessing these slots is very performance critical since it's
+// done for every single print. This benchmarks faster.
 pub struct CharsetArray {
 pub mut:
 	g0 Charset = .utf8
@@ -1900,15 +1957,18 @@ pub fn (mut self CharsetArray) set(slot CharsetSlot, charset Charset) {
 	}
 }
 
-// Options for creating a new Screen.
 pub struct ScreenOptions {
 pub:
-	cols           u32 = 80
-	rows           u32 = 24
+	cols u32 = 80
+	rows u32 = 24
+	// The maximum size of scrollback in bytes. Zero means unlimited. Any
+	// other value will be clamped to support a minimum of the active area.
 	max_scrollback usize
 }
 
-// Scroll controls viewport scrolling behavior.
+// Options for scrolling the viewport of the terminal grid. The reason
+// we have this in addition to PageList.Scroll is because we have additional
+// scroll behaviors that are not part of the PageList.Scroll enum.
 pub struct ScrollActive {}
 
 pub struct ScrollTop {}
@@ -1933,6 +1993,7 @@ pub:
 	delta isize
 }
 
+// For all of these, see PageList.Scroll.
 pub type Scroll = ScrollActive
 	| ScrollTop
 	| ScrollPin
@@ -1940,34 +2001,48 @@ pub type Scroll = ScrollActive
 	| ScrollDeltaRow
 	| ScrollDeltaPrompt
 
-// Resize options for resizing the screen.
 pub struct ScreenResize {
 pub:
-	cols          u32
-	rows          u32
-	reflow        bool = true
+	// The new size to resize to
+	cols u32
+	rows u32
+	// Whether to reflow soft-wrapped text.
+	//
+	// This will reflow soft-wrapped text. If the screen size is getting
+	// smaller and the maximum scrollback size is exceeded, data will be
+	// lost from the top of the scrollback.
+	reflow bool = true
+	// Set this to enable prompt redraw on resize. This signals
+	// that the running program can redraw the prompt if the cursor is
+	// currently at a prompt. This detects OSC133 prompts lines and clears
+	// them. If set to `.last`, only the most recent prompt line is cleared.
 	prompt_redraw osc.Redraw = .redraw_false
 }
 
-// SelectionString options for converting selection to string.
 pub struct SelectionString {
 pub:
-	sel  Selection
+	// The selection to convert to a string.
+	sel Selection
+	// If true, trim whitespace around the selection.
 	trim bool = true
-	// When non-nil, receives one screen pin for every byte in the returned
-	// UTF-8 string. This is used to map regex match offsets back to cells.
+	// If non-nil, a stringmap will be written here. The string will be
+	// duplicated here and in the return value.
 	map &StringMap = unsafe { nil }
 }
 
-// SelectLine options for selecting a line.
 pub struct SelectLine {
 pub:
-	pin                      Pin
-	whitespace               ?[]u32 = [u32(0), u32(` `), u32(`\t`)]
+	// The pin of some part of the line to select.
+	pin Pin
+	// These are the codepoints to consider whitespace to trim
+	// from the ends of the selection.
+	whitespace ?[]u32 = [u32(0), u32(` `), u32(`\t`)]
+	// If true, line selection will consider semantic prompt
+	// state changing a boundary. State changing is ANY state
+	// change.
 	semantic_prompt_boundary bool = true
 }
 
-// LineIterator iterates over soft-wrapped lines.
 pub struct LineIterator {
 pub mut:
 	screen  &Screen = unsafe { nil }
@@ -1975,38 +2050,35 @@ pub mut:
 }
 
 pub fn (mut self LineIterator) next() ?Selection {
-	cur := self.current or { return none }
+	current := self.current or { return none }
 	result := self.screen.select_line(SelectLine{
-		pin: cur
-		whitespace: none
+		pin:                      current
+		whitespace:               none
 		semantic_prompt_boundary: false
 	}) or {
-		// An invalid or otherwise unselectable pin exhausts the iterator.
-		// Ghostty clears `current` on this path so later calls remain a cheap,
-		// stable end-of-iteration result.
 		self.current = none
 		return none
 	}
+
 	self.current = result.end().down(1)
 	return result
 }
 
-// PromptClickMove describes cursor movement needed for a click in a prompt.
 pub struct PromptClickMove {
 pub:
-	left  int
-	right int
+	left  usize
+	right usize
 }
 
 pub const prompt_click_move_zero = PromptClickMove{
-	left: 0
+	left:  0
 	right: 0
 }
 
 // The terminal package owns screen lifecycle while the kitty package owns the
 // concrete storage type. Operation-specific hooks preserve the direct source
 // calls without introducing a terminal -> kitty -> terminal import cycle.
-pub type KittyImagesLifecycleFn = fn (voidptr, &Screen)
+pub type KittyImagesLifecycleFn = fn (voidptr, mut Screen)
 
 // ============================================================
 // Screen struct
@@ -2015,44 +2087,82 @@ pub type KittyImagesLifecycleFn = fn (voidptr, &Screen)
 @[heap]
 pub struct Screen {
 pub mut:
-	pages          Pages
-	no_scrollback  bool
-	cursor         Cursor
-	saved_cursor   ?SavedCursor
-	selection      ?Selection
-	charset        CharsetState
+	// The list of pages in the screen.
+	pages PageList
+	// Special-case where we want no scrollback whatsoever. We have to flag
+	// this because max_size 0 in PageList gets rounded up to two pages so
+	// we can always have an active screen.
+	no_scrollback bool
+	// The current cursor position
+	cursor Cursor
+	// The saved cursor
+	saved_cursor ?SavedCursor
+	// The selection for this screen (if any). This MUST be a tracked selection
+	// otherwise the selection will become invalid. Instead of accessing this
+	// directly to set it, use the `select` function which will assert and
+	// automatically setup tracking.
+	selection ?Selection
+	// The charset state
+	charset CharsetState
+	// The current or most recent protected mode. Once a protection mode is
+	// set, this will never become "off" again until the screen is reset.
+	// The current state of whether protection attributes should be set is
+	// set on the Cell pen; this is only used to determine the most recent
+	// protection mode since some sequences such as ECH depend on this.
 	protected_mode ProtectedMode = .off
+	// The kitty keyboard settings.
 	kitty_keyboard KeyFlagStack
-	// Opaque pointer to kitty.ImageStorage. Keeping the storage behind an
-	// opaque module boundary avoids a terminal -> kitty -> terminal import
-	// cycle while still giving every screen independent persistent state.
+	// Kitty graphics protocol state. The storage is an opaque pointer to
+	// kitty.ImageStorage; keeping it behind an opaque module boundary avoids a
+	// terminal -> kitty -> terminal import cycle while still giving every
+	// screen independent persistent state.
 	kitty_images        voidptr
 	kitty_images_reset  KittyImagesLifecycleFn = unsafe { nil }
 	kitty_images_deinit KittyImagesLifecycleFn = unsafe { nil }
 	kitty_images_dirty  KittyImagesLifecycleFn = unsafe { nil }
 	kitty_images_clear  KittyImagesLifecycleFn = unsafe { nil }
-	semantic_prompt        SemanticPrompt
-	dirty                  ScreenDirty
+	// Semantic prompt (OSC133) state.
+	semantic_prompt SemanticPrompt
+	// Dirty flags for the renderer.
+	dirty ScreenDirty
 }
 
-// Initialize a new screen with the given dimensions and scrollback.
+// Initialize a new screen.
+//
+// max_scrollback is the amount of scrollback to keep in bytes. This
+// will be rounded UP to the nearest page size because our minimum allocation
+// size is that anyways.
+//
+// If max scrollback is 0, then no scrollback is kept at all.
 pub fn Screen.init(cols u32, rows u32, max_scrollback usize) Screen {
+	// Initialize our backing pages.
+	mut pages := PageList.init(u16(cols), u16(rows), max_scrollback)
+
+	// Create our tracked pin for the cursor.
+	first := pages.pages.first or { panic('page list has no pages') }
+	page_pin := pages.track_pin(Pin{
+		node: first
+	})
+	page_rac := page_pin.row_and_cell()
+
 	return Screen{
-		pages: Pages.init(cols, rows, max_scrollback)
-		no_scrollback: max_scrollback == 0
-		cursor: Cursor{
-			x: 0
-			y: 0
+		pages:           pages
+		no_scrollback:   max_scrollback == 0
+		cursor:          Cursor{
+			x:         0
+			y:         0
+			page_pin:  page_pin
+			page_row:  page_rac.row
+			page_cell: page_rac.cell
 		}
-		semantic_prompt: terminal.semantic_prompt_disabled
+		semantic_prompt: semantic_prompt_disabled
 	}
 }
 
-// Clean up screen resources.
 pub fn (mut self Screen) deinit() {
 	if self.kitty_images != unsafe { nil } && self.kitty_images_deinit != unsafe { nil } {
 		deinit := self.kitty_images_deinit
-		deinit(self.kitty_images, self)
+		deinit(self.kitty_images, mut self)
 	}
 	self.cursor.deinit()
 	self.pages.deinit()
@@ -2061,360 +2171,736 @@ pub fn (mut self Screen) deinit() {
 	self.kitty_images_deinit = unsafe { nil }
 	self.kitty_images_dirty = unsafe { nil }
 	self.kitty_images_clear = unsafe { nil }
-	self.selection = none
-	self.saved_cursor = none
 }
 
-// Assert screen state integrity (simplified for V).
+// Assert that the screen is in a consistent state. This doesn't check
+// all pages in the page list because that is SO SLOW even just for
+// tests. This only asserts the screen specific data so callers should
+// ensure they're also calling page integrity checks if necessary.
 pub fn (self &Screen) assert_integrity() {
 	$if !prod {
-		assert self.cursor.x < self.pages.cols, 'cursor x ${self.cursor.x} >= cols ${self.pages.cols}'
-		assert self.cursor.y < self.pages.rows, 'cursor y ${self.cursor.y} >= rows ${self.pages.rows}'
+		assert self.cursor.x < u32(self.pages.cols)
+		assert self.cursor.y < u32(self.pages.rows)
+
+		// Our cursor x/y should always match the pin. If this doesn't
+		// match then it indicates that the tracked pin moved and we didn't
+		// account for it by either calling cursorReload or manually
+		// adjusting.
+		pt := self.pages.point_from_pin(.active, *self.cursor.page_pin) or {
+			panic('cursor pin is outside the active area')
+		}
+		assert self.cursor.x == u32(pt.coordinate.x)
+		assert self.cursor.y == pt.coordinate.y
 	}
 }
 
-// ============================================================
-// Reset
-// ============================================================
-
-// Reset the screen: clear content, move cursor to top-left, reset state.
+// Reset the screen according to the logic of a DEC RIS sequence.
+//
+// - Clears the screen and attempts to reclaim memory.
+// - Moves the cursor to the top-left.
+// - Clears any cursor state: style, hyperlink, etc.
+// - Resets the charset
+// - Clears the selection
+// - Deletes all Kitty graphics
+// - Resets Kitty Keyboard settings
+// - Disables protection mode
+//
 pub fn (mut self Screen) reset() {
+	// Reset our pages
 	self.pages.reset()
-	if self.kitty_images != unsafe { nil } && self.kitty_images_reset != unsafe { nil } {
-		reset := self.kitty_images_reset
-		reset(self.kitty_images, self)
-	}
+
+	// The above reset preserves tracked pins so we can still use
+	// our cursor pin, which should be at the top-left already.
+	cursor_pin := self.cursor.page_pin
+	first := self.pages.pages.first or { panic('page list has no pages') }
+	assert voidptr(cursor_pin.node) == voidptr(first)
+	assert cursor_pin.x == 0
+	assert cursor_pin.y == 0
+	cursor_rac := cursor_pin.row_and_cell()
 	self.cursor.deinit()
 	self.cursor = Cursor{
-		x: 0
-		y: 0
+		page_pin:  cursor_pin
+		page_row:  cursor_rac.row
+		page_cell: cursor_rac.cell
 	}
+
+	// Reset kitty graphics storage
+	if self.kitty_images != unsafe { nil } && self.kitty_images_reset != unsafe { nil } {
+		reset := self.kitty_images_reset
+		reset(self.kitty_images, mut self)
+	}
+
+	// Reset our basic state
 	self.saved_cursor = none
 	self.charset = CharsetState{}
 	self.kitty_keyboard = KeyFlagStack{}
 	self.protected_mode = .off
-	self.semantic_prompt = terminal.semantic_prompt_disabled
+	self.semantic_prompt = semantic_prompt_disabled
 	self.clear_selection()
 }
 
 // Mark Kitty placements dirty after operations such as switching screens.
-pub fn (self &Screen) mark_kitty_images_dirty() {
+pub fn (mut self Screen) mark_kitty_images_dirty() {
 	if self.kitty_images != unsafe { nil } && self.kitty_images_dirty != unsafe { nil } {
 		dirty := self.kitty_images_dirty
-		dirty(self.kitty_images, self)
+		dirty(self.kitty_images, mut self)
 	}
 }
 
 // Clear all non-virtual placements and their now-unused images.
-pub fn (self &Screen) clear_kitty_images() {
+pub fn (mut self Screen) clear_kitty_images() {
 	if self.kitty_images != unsafe { nil } && self.kitty_images_clear != unsafe { nil } {
 		clear := self.kitty_images_clear
-		clear(self.kitty_images, self)
+		clear(self.kitty_images, mut self)
 	}
 }
-
-// ============================================================
-// Clone
-// ============================================================
 
 // Clone the screen.
 //
-// This copies the screen dimensions and the cell data for the region
-// specified by [top, bot] (inclusive, by row). It does NOT copy Kitty
-// images, live hyperlink cursor state, or other data that isn't needed
-// for read-only operations.
+// This will copy:
 //
-// Ghostty uses PageList.clone with a tracked pin remapper so that the
-// cursor and selection pins are relocated into the cloned page list. In
-// this port, rows are a flat array so "remapping" is arithmetic: we clone
-// the requested absolute row range and shift the cursor/selection y values
-// by the top of that range.
+//   - Screen dimensions
+//   - Screen data (cell state, etc.) for the region
+//
+// Anything not mentioned above is NOT copied. Some of this is for
+// very good reason:
+//
+//   - Kitty images have a LOT of data. This is not efficient to copy.
+//     Use a lock and access the image data. The dirty bit is there for
+//     a reason.
+//   - Cursor location can be expensive to calculate with respect to the
+//     specified region. It is faster to grab the cursor from the old
+//     screen and then move it to the new screen.
+//   - Current hyperlink cursor state has heap allocations. Since clone
+//     is only for read-only operations, it is better to not have any
+//     hyperlink state. Note that already-written hyperlinks are cloned.
+//
+// If not mentioned above, then there isn't a specific reason right now
+// to not copy some data other than we probably didn't need it and it
+// isn't necessary for screen coherency.
+//
+// Other notes:
+//
+//   - The viewport will always be set to the active area of the new
+//     screen. This is the bottom "rows" rows.
+//   - If the clone region is smaller than a viewport area, blanks will
+//     be filled in at the bottom.
+//
 pub fn (self &Screen) clone(top Point, bot ?Point) !Screen {
-	// Resolve the absolute row range [top_y, bot_y] we are cloning. Clone
-	// always copies whole rows, so the point x coordinates are ignored.
-	top_row := Point.new(top.tag, Coordinate{ y: top.coord().y })
-	tl := self.pages.pin_point(top_row) or { return error('UnknownPoint') }
-	top_y := int(tl.y)
-	mut bot_y := top_y - 1
-	if bottom := bot {
-		if bottom.tag != top.tag {
-			return error('Point tags must match')
-		}
-		bottom_row := Point.new(bottom.tag, Coordinate{ y: bottom.coord().y })
-		br := self.pages.pin_point(bottom_row) or { return error('UnknownPoint') }
-		bot_y = int(br.y)
-	} else if br := self.pages.get_bottom_right(top.tag) {
-		bot_y = int(br.y)
-	}
-	if bot_y >= top_y && bot_y >= self.pages.screen_rows.len {
-		return error('UnknownPoint')
-	}
-	row_count := if bot_y >= top_y { bot_y - top_y + 1 } else { 0 }
+	// Create a tracked pin remapper for our selection and cursor. Note
+	// that we may want to expose this generally in the future but at the
+	// time of doing this we don't need to.
+	mut pin_remap := PageTrackedPinsRemap{}
 
-	mut new_screen := Screen.init(self.pages.cols, self.pages.rows, self.pages.max_scrollback)
-	new_screen.no_scrollback = self.no_scrollback
-	new_screen.dirty = self.dirty
+	mut pages := self.pages.clone(PageCloneOpts{
+		top:          top
+		bot:          bot
+		tracked_pins: &pin_remap
+	})!
 
-	// Build the cloned row array. The viewport is always set to the active
-	// area of the new screen (the bottom "rows" rows). If the clone region
-	// is smaller than a viewport area, blanks are filled in at the bottom.
-	mut cloned := []RowData{cap: row_count}
-	for i in 0 .. row_count {
-		src_idx := top_y + i
-		if src_idx < 0 || src_idx >= self.pages.screen_rows.len {
-			cloned << RowData.init(self.pages.cols)
-			continue
-		}
-		src := self.pages.screen_rows[src_idx]
-		mut dst := RowData.init(self.pages.cols)
-		limit := if src.cells.len < dst.cells.len { src.cells.len } else { dst.cells.len }
-		for x in 0 .. limit {
-			mut cell := src.cells[x]
-			cell.graphemes = src.cells[x].graphemes.clone()
-			if src.cells[x].has_hyperlink {
-				cell.hyperlink = src.cells[x].hyperlink.dupe()
+	// Find our cursor. If the cursor isn't in the cloned area, we move it
+	// to the top-left arbitrarily because a screen must have SOME cursor.
+	mut cursor := Cursor{}
+	mut found_cursor := false
+	if remapped := pin_remap.get(self.cursor.page_pin) {
+		mut p := unsafe { remapped }
+		page_rac := p.row_and_cell()
+		if pt := pages.point_from_pin(.active, *p) {
+			cursor = Cursor{
+				x:         u32(pt.coordinate.x)
+				y:         pt.coordinate.y
+				page_pin:  p
+				page_row:  page_rac.row
+				page_cell: page_rac.cell
 			}
-			dst.cells[x] = cell
+			found_cursor = true
 		}
-		dst.wrap = src.wrap
-		dst.wrap_continuation = src.wrap_continuation
-		dst.styled = src.styled
-		dst.grapheme = src.grapheme
-		dst.hyperlink = src.hyperlink
-		dst.dirty = src.dirty
-		dst.semantic_prompt = src.semantic_prompt
-		dst.kitty_virtual_placeholder = src.kitty_virtual_placeholder
-		cloned << dst
 	}
-
-	// Ensure we have at least a full active area; pad blanks at the bottom.
-	for cloned.len < int(self.pages.rows) {
-		cloned << RowData.init(self.pages.cols)
-	}
-
-	new_screen.pages.screen_rows = cloned
-	// The active area is the bottom "rows" rows of the cloned region.
-	new_screen.pages.active_start = cloned.len - int(self.pages.rows)
-	if new_screen.pages.active_start < 0 {
-		new_screen.pages.active_start = 0
-	}
-	new_screen.pages.viewport = .active
-	new_screen.pages.viewport_start = new_screen.pages.active_start
-
-	// Remap our cursor. If the cursor isn't in the cloned area, move it to
-	// the top-left arbitrarily because a screen must have SOME cursor.
-	cursor_abs := self.pages.active_start + int(self.cursor.y)
-	new_screen.cursor = Cursor{
-		x: self.cursor.x
-		y: 0
-	}
-	if cursor_abs >= top_y && cursor_abs <= bot_y {
-		new_active := cursor_abs - top_y - new_screen.pages.active_start
-		if new_active >= 0 && new_active < int(new_screen.pages.rows) {
-			new_screen.cursor.y = u32(new_active)
-		} else {
-			new_screen.cursor.x = 0
-			new_screen.cursor.y = 0
-		}
-	} else {
-		new_screen.cursor.x = 0
-		new_screen.cursor.y = 0
-	}
-	if new_screen.cursor.x >= new_screen.pages.cols {
-		new_screen.cursor.x = 0
-	}
-
-	// Preserve our selection if we have one and it intersects the clone.
-	if sel := self.selection {
-		// Ghostty orders the tracked selection vertically before remapping it.
-		// Mirrored rectangle selections keep their horizontal orientation.
-		ordered := match sel.order(self) {
-			.forward, .mirrored_forward { sel }
-			.reverse, .mirrored_reverse {
-				Selection.init(sel.end_pin, sel.start_pin, sel.rectangle)
-			}
-		}
-		start_y := int(ordered.start_pin.y)
-		end_y := int(ordered.end_pin.y)
-		if end_y < top_y || start_y > bot_y {
-			new_screen.selection = none
-		} else {
-			start_pin := if start_y < top_y {
-				Pin{
-					x: if ordered.rectangle { ordered.start_pin.x } else { 0 }
-					y: 0
-				}
-			} else {
-				Pin{
-					x: ordered.start_pin.x
-					y: u32(start_y - top_y)
-				}
-			}
-			end_pin := if end_y > bot_y {
-				Pin{
-					x: if ordered.rectangle {
-						ordered.end_pin.x
-					} else {
-						self.pages.cols - 1
-					}
-					y: u32(cloned.len - 1)
-				}
-			} else {
-				Pin{
-					x: ordered.end_pin.x
-					y: u32(end_y - top_y)
-				}
-			}
-			new_screen.selection = Selection.init(start_pin, end_pin, ordered.rectangle)
+	if !found_cursor {
+		first := pages.pages.first or { panic('cloned page list has no pages') }
+		mut page_pin := pages.track_pin(Pin{
+			node: first
+		})
+		page_rac := page_pin.row_and_cell()
+		cursor = Cursor{
+			x:         0
+			y:         0
+			page_pin:  page_pin
+			page_row:  page_rac.row
+			page_cell: page_rac.cell
 		}
 	}
 
-	return new_screen
+	// Preserve our selection if we have one.
+	mut sel := ?Selection(none)
+	if existing := self.selection {
+		sel = self.clone_selection(existing, top, mut pages, pin_remap)
+	}
+
+	result := Screen{
+		pages:         pages
+		no_scrollback: self.no_scrollback
+		cursor:        cursor
+		selection:     sel
+		dirty:         self.dirty
+	}
+	result.assert_integrity()
+	return result
 }
 
-// ============================================================
-// Cursor movement
-// ============================================================
+// Remap a tracked selection into a cloned page list. This is the selection
+// block of Ghostty's Screen.clone, split out because V has no labeled
+// block expressions.
+fn (self &Screen) clone_selection(sel Selection, top Point, mut pages PageList, pin_remap &PageTrackedPinsRemap) ?Selection {
+	assert sel.tracked()
+	bounds := sel.bounds as SelectionTrackedBounds
 
-// Returns the cell n positions to the right of the cursor.
+	tl, br := match sel.order(self) {
+		.forward, .mirrored_forward { bounds.start, bounds.end }
+		.reverse, .mirrored_reverse { bounds.end, bounds.start }
+	}
+
+	start_pin := pin_remap.get(tl) or {
+		// No start means it is outside the cloned area.
+
+		// If we have no end pin then either
+		// (1) our whole selection is outside the cloned area or
+		// (2) our cloned area is within the selection
+		if pin_remap.get(br) == none {
+			// We check if the selection bottom right pin is above
+			// the cloned area or if the top left pin is below the
+			// cloned area, in either of these cases it means that
+			// the selection is fully out of bounds, so we have no
+			// selection in the cloned area and break out now.
+			clone_top := self.pages.pin(top) or { return none }
+			clone_top_y := (self.pages.point_from_pin(.screen, clone_top) or { return none }).coordinate.y
+			br_y := (self.pages.point_from_pin(.screen, *br) or { return none }).coordinate.y
+			if br_y < clone_top_y {
+				return none
+			}
+			tl_y := (self.pages.point_from_pin(.screen, *tl) or { return none }).coordinate.y
+			if tl_y > clone_top_y {
+				return none
+			}
+		}
+
+		// We move the top pin back in bounds to the top row.
+		first := pages.pages.first or { panic('cloned page list has no pages') }
+		pages.track_pin(Pin{
+			node: first
+			x:    if sel.rectangle { tl.x } else { 0 }
+		})
+	}
+
+	// If we got to this point it means that the selection is not
+	// fully out of bounds, so we move the bottom right pin back
+	// in bounds if it isn't already.
+	end_pin := pin_remap.get(br) or {
+		last := pages.pages.last or { panic('cloned page list has no pages') }
+		pages.track_pin(Pin{
+			node: last
+			x:    if sel.rectangle { br.x } else { pages.cols - 1 }
+			y:    last.data.size.rows - 1
+		})
+	}
+
+	return Selection{
+		bounds:    SelectionTrackedBounds{
+			start: start_pin
+			end:   end_pin
+		}
+		rectangle: sel.rectangle
+	}
+}
+
+pub fn (mut self Screen) increase_capacity(node &PageNode, adjustment ?IncreaseCapacity) !&PageNode {
+	// If the page being modified isn't our cursor page then
+	// this is a quick operation because we have no additional
+	// accounting. We have to do this check here BEFORE calling
+	// increaseCapacity because increaseCapacity will update all
+	// our tracked pins (including our cursor).
+	if voidptr(node) != voidptr(self.cursor.page_pin.node) {
+		return self.pages.increase_capacity(node, adjustment)!
+	}
+
+	// We're modifying the cursor page. When we increase the
+	// capacity below it will be short the ref count on our
+	// current style and hyperlink, so we need to init those.
+	new_node := self.pages.increase_capacity(node, adjustment)!
+	mut new_page := &new_node.data
+
+	// Re-add the style, if the page somehow doesn't have enough
+	// memory to add it, we emit a warning and gracefully degrade
+	// to the default style for the cursor.
+	if self.cursor.style_id != default_style_id {
+		self.cursor.style_id = new_page.styles.add(self.cursor.style) or {
+			// TODO: Should we increase the capacity further in this case?
+			// log.warn: failed to add cursor style back to page
+
+			// Reset the cursor style.
+			self.cursor.style = CellStyle{}
+			default_style_id
+		}
+	}
+
+	// Re-add the hyperlink, if the page somehow doesn't have enough
+	// memory to add it, we emit a warning and gracefully degrade to
+	// no hyperlink.
+	if link := self.cursor.hyperlink_state {
+		// So we don't attempt to free any memory in the replaced page.
+		self.cursor.hyperlink_id = 0
+		self.cursor.hyperlink_state = none
+
+		// Re-add
+		self.start_hyperlink_once(link) or {
+			// TODO: Should we increase the capacity further in this case?
+			// log.warn: failed to add cursor hyperlink back to page
+		}
+	}
+
+	// Reload the cursor information because the pin changed.
+	// So our page row/cell and so on are all off.
+	self.cursor_reload()
+
+	return new_node
+}
+
 pub fn (mut self Screen) cursor_cell_right(n u32) &CellData {
-	assert self.cursor.x + n < self.pages.cols
-	row_idx := self.pages.active_start + int(self.cursor.y)
-	return unsafe { &self.pages.screen_rows[row_idx].cells[int(self.cursor.x + n)] }
+	assert self.cursor.x + n < u32(self.pages.cols)
+	return unsafe { self.cursor.page_cell + n }
 }
 
-// Returns the cell n positions to the left of the cursor.
 pub fn (mut self Screen) cursor_cell_left(n u32) &CellData {
 	assert self.cursor.x >= n
-	row_idx := self.pages.active_start + int(self.cursor.y)
-	return unsafe { &self.pages.screen_rows[row_idx].cells[int(self.cursor.x - n)] }
+	return unsafe { self.cursor.page_cell - n }
 }
 
-// Move the cursor right by n positions.
+pub fn (mut self Screen) cursor_cell_end_of_prev() &CellData {
+	assert self.cursor.y > 0
+
+	mut page_pin := self.cursor.page_pin.up(1) or { panic('cursor has no previous row') }
+	page_pin.x = self.pages.cols - 1
+	page_rac := page_pin.row_and_cell()
+	return page_rac.cell
+}
+
+// Move the cursor right. This is a specialized function that is very fast
+// if the caller can guarantee we have space to move right (no wrapping).
 pub fn (mut self Screen) cursor_right(n u32) {
-	assert self.cursor.x + n < self.pages.cols
+	assert self.cursor.x + n < u32(self.pages.cols)
 	defer { self.assert_integrity() }
+
+	self.cursor.page_cell = unsafe { self.cursor.page_cell + n }
+	self.cursor.page_pin.x += u16(n)
 	self.cursor.x += n
 }
 
-// Move the cursor left by n positions.
+// Move the cursor left.
 pub fn (mut self Screen) cursor_left(n u32) {
 	assert self.cursor.x >= n
 	defer { self.assert_integrity() }
+
+	self.cursor.page_cell = unsafe { self.cursor.page_cell - n }
+	self.cursor.page_pin.x -= u16(n)
 	self.cursor.x -= n
 }
 
-// Move the cursor up by n rows.
+// Move the cursor up.
+//
+// Precondition: The cursor is not at the top of the screen.
 pub fn (mut self Screen) cursor_up(n u32) {
 	assert self.cursor.y >= n
 	defer { self.assert_integrity() }
-	if n == 0 {
-		return
-	}
-	// cursorChangePin marks both sides of a move because cursor placement
-	// changes where text runs split. Flat storage has no page-local state to
-	// migrate, but it retains the same dirty-row contract.
-	self.cursor_mark_dirty()
-	self.cursor.y -= n
-	self.cursor_mark_dirty()
+
+	self.cursor.y -= n // Must be set before cursorChangePin
+	self.cursor_change_pin(self.cursor.page_pin.up(n) or { panic('cursor up is outside the page list') })
+	page_rac := self.cursor.page_pin.row_and_cell()
+	self.cursor.page_row = page_rac.row
+	self.cursor.page_cell = page_rac.cell
 }
 
-// Move the cursor down by n rows.
-pub fn (mut self Screen) cursor_down(n u32) {
-	assert self.cursor.y + n < self.pages.rows
-	defer { self.assert_integrity() }
-	if n == 0 {
-		return
-	}
-	self.cursor_mark_dirty()
-	self.cursor.y += n
-	self.cursor_mark_dirty()
-}
-
-// Move the cursor to the given absolute column.
-pub fn (mut self Screen) cursor_horizontal_absolute(x u32) {
-	assert x < self.pages.cols
-	defer { self.assert_integrity() }
-	self.cursor.x = x
-}
-
-// Move the cursor to the given absolute position.
-pub fn (mut self Screen) cursor_absolute(x u32, y u32) {
-	assert x < self.pages.cols
-	assert y < self.pages.rows
-	defer { self.assert_integrity() }
-	if self.cursor.x == x && self.cursor.y == y {
-		return
-	}
-	self.cursor_mark_dirty()
-	self.cursor.x = x
-	self.cursor.y = y
-	self.cursor_mark_dirty()
-}
-
-// Reloads the cursor pointer information into the screen. This is expensive
-// so it should only be done in cases where the pointers are invalidated in
-// such a way that its difficult to recover otherwise.
-//
-// In Ghostty, the tracked pin is always accurate, so the active point is
-// derived from the pin (falling back to the top-left if the pin is outside
-// the active area) and the page row/cell pointers are refreshed. In this
-// port the cursor x/y ARE the source of truth (there are no separate cached
-// pointers), so we clamp them to the active area (top-left on overflow) and
-// then re-ensure our style is consistent, mirroring the tail of cursorReload.
-pub fn (mut self Screen) cursor_reload() {
-	defer { self.assert_integrity() }
-	// Our x/y should always be within the active area. If they are not,
-	// reset the cursor to the top-left (this mirrors the pin fallback).
-	if self.cursor.x >= self.pages.cols || self.cursor.y >= self.pages.rows {
-		self.cursor.x = 0
-		self.cursor.y = 0
-	}
-
-	// If we have a style, we need to ensure it is consistent because this
-	// method may also be called after a page change. This should never
-	// fail because manual_style_update handles everything; if it does, we
-	// degrade gracefully back to the default style.
-	self.manual_style_update() or {
-		self.cursor.style = CellStyle{}
-		self.cursor.style_id = default_style_id
-	}
-}
-
-// Mark the cursor row as dirty for rendering.
-pub fn (mut self Screen) cursor_mark_dirty() {
-	idx := self.pages.active_start + int(self.cursor.y)
-	unsafe {
-		mut row := &self.pages.screen_rows[idx]
-		row.dirty = true
-	}
-}
-
-// Returns the last cell of the row directly above the cursor row.
-//
-// Precondition: The cursor is not at the top of the screen.
-pub fn (mut self Screen) cursor_cell_end_of_prev() &CellData {
-	assert self.cursor.y > 0
-	prev_idx := self.pages.active_start + int(self.cursor.y) - 1
-	last := int(self.pages.cols) - 1
-	return unsafe { &self.pages.screen_rows[prev_idx].cells[last] }
-}
-
-// Returns the row n rows above the cursor row.
-//
-// Precondition: cursor.y >= n
 pub fn (mut self Screen) cursor_row_up(n u32) &RowData {
 	assert self.cursor.y >= n
 	defer { self.assert_integrity() }
-	idx := self.pages.active_start + int(self.cursor.y) - int(n)
-	return unsafe { &self.pages.screen_rows[idx] }
+
+	page_pin := self.cursor.page_pin.up(n) or { panic('cursor row up is outside the page list') }
+	page_rac := page_pin.row_and_cell()
+	return page_rac.row
 }
 
-// Copy another cursor's state into this screen. The cursor can be on any
-// screen but the x/y must be within our screen bounds.
+// Move the cursor down.
+//
+// Precondition: The cursor is not at the bottom of the screen.
+pub fn (mut self Screen) cursor_down(n u32) {
+	assert self.cursor.y + n < u32(self.pages.rows)
+	defer { self.assert_integrity() }
+
+	self.cursor.y += n // Must be set before cursorChangePin
+
+	// We move the offset into our page list to the next row and then
+	// get the pointers to the row/cell and set all the cursor state up.
+	self.cursor_change_pin(self.cursor.page_pin.down(n) or {
+		panic('cursor down is outside the page list')
+	})
+	page_rac := self.cursor.page_pin.row_and_cell()
+	self.cursor.page_row = page_rac.row
+	self.cursor.page_cell = page_rac.cell
+}
+
+// Move the cursor to some absolute horizontal position.
+pub fn (mut self Screen) cursor_horizontal_absolute(x u32) {
+	assert x < u32(self.pages.cols)
+	defer { self.assert_integrity() }
+
+	self.cursor.page_pin.x = u16(x)
+	page_rac := self.cursor.page_pin.row_and_cell()
+	self.cursor.page_cell = page_rac.cell
+	self.cursor.x = x
+}
+
+// Move the cursor to some absolute position.
+pub fn (mut self Screen) cursor_absolute(x u32, y u32) {
+	assert x < u32(self.pages.cols)
+	assert y < u32(self.pages.rows)
+	defer { self.assert_integrity() }
+
+	mut page_pin := if y < self.cursor.y {
+		self.cursor.page_pin.up(self.cursor.y - y) or { panic('cursor absolute is outside the page list') }
+	} else if y > self.cursor.y {
+		self.cursor.page_pin.down(y - self.cursor.y) or {
+			panic('cursor absolute is outside the page list')
+		}
+	} else {
+		*self.cursor.page_pin
+	}
+	page_pin.x = u16(x)
+	self.cursor.x = x // Must be set before cursorChangePin
+	self.cursor.y = y
+	self.cursor_change_pin(page_pin)
+	page_rac := self.cursor.page_pin.row_and_cell()
+	self.cursor.page_row = page_rac.row
+	self.cursor.page_cell = page_rac.cell
+}
+
+// Reloads the cursor pointer information into the screen. This is expensive
+// so it should only be done in cases where the pointers are invalidated
+// in such a way that its difficult to recover otherwise.
+pub fn (mut self Screen) cursor_reload() {
+	defer { self.assert_integrity() }
+
+	// Our tracked pin is ALWAYS accurate, so we derive the active
+	// point from the pin. If this returns null it means our pin
+	// points outside the active area. In that case, we update the
+	// pin to be the top-left.
+	pt := self.pages.point_from_pin(.active, *self.cursor.page_pin) or {
+		pin := self.pages.pin(Point{
+			tag: .active
+		}) or { panic('page list has no active area') }
+		unsafe {
+			*self.cursor.page_pin = pin
+		}
+		self.pages.point_from_pin(.active, pin) or { panic('active pin is not active') }
+	}
+
+	self.cursor.x = u32(pt.coordinate.x)
+	self.cursor.y = pt.coordinate.y
+	page_rac := self.cursor.page_pin.row_and_cell()
+	self.cursor.page_row = page_rac.row
+	self.cursor.page_cell = page_rac.cell
+
+	// If we have a style, we need to ensure it is in the page because this
+	// method may also be called after a page change.
+	if self.cursor.style_id != default_style_id {
+		self.manual_style_update() or {
+			// This failure should not happen because manualStyleUpdate
+			// handles page splitting, overflow, and more. This should only
+			// happen if we're out of RAM. In this case, we'll just degrade
+			// gracefully back to the default style.
+			// log.err: failed to update style on cursor reload
+			self.cursor.style = CellStyle{}
+			self.cursor.style_id = 0
+		}
+	}
+}
+
+// Scroll the active area and keep the cursor at the bottom of the screen.
+// This is a very specialized function but it keeps it fast.
+pub fn (mut self Screen) cursor_down_scroll() ! {
+	assert self.cursor.y == u32(self.pages.rows) - 1
+	defer { self.assert_integrity() }
+
+	// Scrolling dirties the images because it updates their placements pins.
+	self.mark_kitty_images_dirty()
+
+	// If we have no scrollback, then we shift all our rows instead.
+	if self.no_scrollback {
+		// If we have a single-row screen, we have no rows to shift
+		// so our cursor is in the correct place we just have to clear
+		// the cells.
+		if self.pages.rows == 1 {
+			mut page := &self.cursor.page_pin.node.data
+			mut cells := page.get_cells(self.cursor.page_row)
+			self.clear_cells(mut page, mut self.cursor.page_row, mut cells)
+			self.cursor_mark_dirty()
+		} else {
+			// The call to `eraseRow` will move the tracked cursor pin up by one
+			// row, but we don't actually want that, so we keep the old pin and
+			// put it back after calling `eraseRow`.
+			old_pin := *self.cursor.page_pin
+
+			// eraseRow will shift everything below it up.
+			self.pages.erase_row(Point{
+				tag: .active
+			})!
+
+			// Note we don't need to mark anything dirty in this branch
+			// because eraseRow will mark all the rotated rows as dirty
+			// in the entire page.
+
+			// We don't use `cursorChangePin` here because we aren't
+			// actually changing the pin, we're keeping it the same.
+			unsafe {
+				*self.cursor.page_pin = old_pin
+			}
+
+			// We do, however, need to refresh the cached page row
+			// and cell, because `eraseRow` will have moved the row.
+			page_rac := self.cursor.page_pin.row_and_cell()
+			self.cursor.page_row = page_rac.row
+			self.cursor.page_cell = page_rac.cell
+		}
+	} else {
+		old_pin := *self.cursor.page_pin
+
+		// Grow our pages by one row. The PageList will handle if we need to
+		// allocate, prune scrollback, whatever.
+		_ = self.pages.grow()
+
+		// If our pin page change it means that the page that the pin
+		// was on was pruned. In this case, grow() moves the pin to
+		// the top-left of the new page. This effectively moves it by
+		// one already, we just need to fix up the x value.
+		page_pin := if voidptr(old_pin.node) == voidptr(self.cursor.page_pin.node) {
+			self.cursor.page_pin.down(1) or { panic('grown page list has no row below the cursor') }
+		} else {
+			mut pin := *self.cursor.page_pin
+			pin.x = u16(self.cursor.x)
+			pin
+		}
+
+		// These assertions help catch some pagelist math errors. Our
+		// x/y should be unchanged after the grow.
+		$if !prod {
+			active := self.pages.point_from_pin(.active, page_pin) or {
+				panic('grown cursor pin is not active')
+			}
+			assert u32(active.coordinate.x) == self.cursor.x
+			assert active.coordinate.y == self.cursor.y
+		}
+
+		self.cursor_change_pin(page_pin)
+		page_rac := self.cursor.page_pin.row_and_cell()
+		self.cursor.page_row = page_rac.row
+		self.cursor.page_cell = page_rac.cell
+
+		// Our new row is always dirty
+		self.cursor_mark_dirty()
+
+		// Clear the new row so it gets our bg color. We only do this
+		// if we have a bg color at all.
+		if self.cursor.style.bg_color != .none {
+			mut page := &self.cursor.page_pin.node.data
+			mut cells := page.get_cells(self.cursor.page_row)
+			self.clear_cells(mut page, mut self.cursor.page_row, mut cells)
+		}
+	}
+
+	if self.cursor.style_id != default_style_id {
+		// The newly created line needs to be styled according to
+		// the bg color if it is set.
+		if blank_cell := self.cursor.style.bg_cell() {
+			self.cursor_row_memset(blank_cell)
+		}
+	}
+}
+
+// @memset(cells[0..cols], blank_cell) over the cursor row, starting from
+// the cursor cell minus the cursor x as the source does.
+fn (mut self Screen) cursor_row_memset(blank_cell CellData) {
+	cells := unsafe { self.cursor.page_cell - self.cursor.x }
+	for x in 0 .. u32(self.pages.cols) {
+		unsafe {
+			*(cells + x) = blank_cell
+		}
+	}
+}
+
+// This scrolls the active area at and above the cursor.
+// The lines below the cursor are not scrolled.
+pub fn (mut self Screen) cursor_scroll_above() ! {
+	// We unconditionally mark the cursor row as dirty here because
+	// the cursor always changes page rows inside this function, and
+	// when that happens it can mean the text in the old row needs to
+	// be re-shaped because the cursor splits runs to break ligatures.
+	self.cursor_mark_dirty()
+
+	// If the cursor is on the bottom of the screen, its faster to use
+	// our specialized function for that case.
+	if self.cursor.y == u32(self.pages.rows) - 1 {
+		return self.cursor_down_scroll()
+	}
+
+	defer { self.assert_integrity() }
+
+	// Logic below assumes we always have at least one row that isn't moving
+	assert self.cursor.y < u32(self.pages.rows) - 1
+
+	// Explanation:
+	//  We don't actually move everything that's at or above the cursor row,
+	//  since this would require us to shift up our ENTIRE scrollback, which
+	//  would be ridiculously expensive. Instead, we insert a new row at the
+	//  end of the pagelist (`grow()`), and move everything BELOW the cursor
+	//  DOWN by one row. This has the same practical result but it's a whole
+	//  lot cheaper in 99% of cases.
+
+	old_pin := *self.cursor.page_pin
+	if _ := self.pages.grow() {
+		self.cursor_scroll_above_rotate()!
+	} else {
+		// In this case, it means grow() didn't allocate a new page.
+
+		last := self.pages.pages.last or { panic('page list has no pages') }
+		if voidptr(self.cursor.page_pin.node) == voidptr(last) {
+			// If we're on the last page we can do a very fast path because
+			// all the rows we need to move around are within a single page.
+
+			// Note: we don't need to call cursorChangePin here because
+			// the pin page is the same so there is no accounting to do
+			// for styles or any of that.
+			assert voidptr(old_pin.node) == voidptr(self.cursor.page_pin.node)
+			unsafe {
+				*self.cursor.page_pin = self.cursor.page_pin.down(1) or {
+					panic('grown page has no row below the cursor')
+				}
+			}
+
+			pin := self.cursor.page_pin
+			mut page := &self.cursor.page_pin.node.data
+
+			// Rotate the rows so that the newly created empty row is at the
+			// beginning. e.g. [ 0 1 2 3 ] in to [ 3 0 1 2 ].
+			mut rows := unsafe { page.rows[int(pin.y)..int(page.size.rows)] }
+			fastmem.rotate_once_r(mut rows)
+
+			// Mark the whole page as dirty.
+			//
+			// Technically we only need to mark from the cursor row to the
+			// end but this is a hot function, so we want to minimize work.
+			page.dirty = true
+
+			// Setup our cursor caches after the rotation so it points to the
+			// correct data
+			page_rac := self.cursor.page_pin.row_and_cell()
+			self.cursor.page_row = page_rac.row
+			self.cursor.page_cell = page_rac.cell
+		} else {
+			// We didn't grow pages but our cursor isn't on the last page.
+			// In this case we need to do more work because we need to copy
+			// elements between pages.
+			//
+			// An example scenario of this is shown below:
+			//
+			//      +----------+ = PAGE 0
+			//  ... :          :
+			//     +-------------+ ACTIVE
+			// 4302 |1A00000000| | 0
+			// 4303 |2B00000000| | 1
+			//      :^         : : = PIN 0
+			// 4304 |3C00000000| | 2
+			//      +----------+ :
+			//      +----------+ : = PAGE 1
+			//    0 |4D00000000| | 3
+			//    1 |5E00000000| | 4
+			//      +----------+ :
+			//     +-------------+
+			self.cursor_scroll_above_rotate()!
+		}
+	}
+
+	if self.cursor.style_id != default_style_id {
+		// The newly created line needs to be styled according to
+		// the bg color if it is set.
+		if blank_cell := self.cursor.style.bg_cell() {
+			self.cursor_row_memset(blank_cell)
+		}
+	}
+}
+
+fn (mut self Screen) cursor_scroll_above_rotate() ! {
+	self.cursor_change_pin(self.cursor.page_pin.down(1) or {
+		panic('page list has no row below the cursor')
+	})
+
+	// Go through each of the pages following our pin, shift all rows
+	// down by one, and copy the last row of the previous page.
+	mut current := self.pages.pages.last or { panic('page list has no pages') }
+	for voidptr(current) != voidptr(self.cursor.page_pin.node) {
+		mut prev := current.prev or { panic('page before the cursor page is missing') }
+		mut prev_page := &prev.data
+		mut cur_page := &current.data
+
+		// Rotate the pages down: [ 0 1 2 3 ] => [ 3 0 1 2 ]
+		mut cur_rows := unsafe { cur_page.rows[..int(cur_page.size.rows)] }
+		fastmem.rotate_once_r(mut cur_rows)
+
+		// Copy the last row of the previous page to the top of current.
+		cur_page.clone_row_from(prev_page, 0, prev_page.size.rows - 1)!
+
+		// Mark dirty on the page, since we are dirtying all rows with this.
+		cur_page.dirty = true
+
+		current = prev
+	}
+
+	// Our current is our cursor page, we need to rotate down from
+	// our cursor and clear our row.
+	assert voidptr(current) == voidptr(self.cursor.page_pin.node)
+	mut cur_page := &current.data
+	y := int(self.cursor.page_pin.y)
+	mut cur_rows := unsafe { cur_page.rows[y..int(cur_page.size.rows)] }
+	fastmem.rotate_once_r(mut cur_rows)
+	mut row := unsafe { &cur_page.rows[y] }
+	mut cells := cur_page.get_cells(row)
+	self.clear_cells(mut cur_page, mut row, mut cells)
+
+	// Mark the whole page as dirty.
+	//
+	// Technically we only need to mark from the cursor row to the
+	// end but this is a hot function, so we want to minimize work.
+	cur_page.dirty = true
+
+	// Setup cursor cache data after all the rotations so our
+	// row is valid.
+	page_rac := self.cursor.page_pin.row_and_cell()
+	self.cursor.page_row = page_rac.row
+	self.cursor.page_cell = page_rac.cell
+}
+
+// Move the cursor down if we're not at the bottom of the screen. Otherwise
+// scroll. Currently only used for testing.
+fn (mut self Screen) cursor_down_or_scroll() ! {
+	if self.cursor.y + 1 < u32(self.pages.rows) {
+		self.cursor_down(1)
+	} else {
+		self.cursor_down_scroll()!
+	}
+}
+
+// Copy another cursor. The cursor can be on any screen but the x/y
+// must be within our screen bounds.
 pub fn (mut self Screen) cursor_copy(other Cursor, opts CursorCopyOptions) ! {
-	assert other.x < self.pages.cols
-	assert other.y < self.pages.rows
+	assert other.x < u32(self.pages.cols)
+	assert other.y < u32(self.pages.rows)
 
 	// End any currently active hyperlink on our cursor.
 	self.end_hyperlink()
@@ -2425,569 +2911,528 @@ pub fn (mut self Screen) cursor_copy(other Cursor, opts CursorCopyOptions) ! {
 	// Keep our old style ID so it can be properly cleaned up below.
 	self.cursor.style_id = old.style_id
 
-	// Hyperlinks are managed separately (and cleared here).
+	// Hyperlinks will be managed separately below.
 	self.cursor.hyperlink_id = 0
 	self.cursor.hyperlink_state = none
 
-	// Keep our old X/Y because the new position navigated to by
-	// cursor_absolute needs to be in our own screen.
+	// Keep our old page pin and X/Y because:
+	// 1. The old style will need to be cleaned up from the page it's from.
+	// 2. The new position navigated to by `cursorAbsolute` needs to be in our
+	//    own screen.
+	self.cursor.page_pin = old.page_pin
 	self.cursor.x = old.x
 	self.cursor.y = old.y
 
-	// Call manual style update in order to clean up our old style, if we
-	// have one, and also to load the style from the other cursor.
-	self.manual_style_update()!
+	// Call manual style update in order to clean up our old style, if we have
+	// one, and also to load the style from the other cursor, if it had one.
+	self.manual_style_update() or {
+		self.cursor = old
+		return err
+	}
 
 	// Move to the correct location to match the other cursor.
 	self.cursor_absolute(other.x, other.y)
 
-	// If the other cursor had a hyperlink, add it to ours. Ghostty resolves
-	// the source page-table entry here; the flat Pages model already keeps the
-	// resolved hyperlink on the cursor. Explicit IDs are preserved, while an
-	// implicit link intentionally receives a fresh destination-screen ID.
+	// If the other cursor had a hyperlink, add it to ours.
 	if opts.hyperlink && other.hyperlink_id != 0 {
-		if link := other.hyperlink_state {
-			id_ := match link.id {
-				HyperlinkExplicitId { ?string(link.id.value) }
-				HyperlinkImplicitId { ?string(none) }
-			}
-			self.start_hyperlink(link.uri, id_)!
+		// Get the hyperlink from the other cursor's page.
+		other_page := &other.page_pin.node.data
+		other_link := other_page.hyperlink_set.get(other.hyperlink_id)
+
+		uri := other_link.uri
+		id_ := match other_link.id {
+			HyperlinkExplicitId { ?string(other_link.id.value) }
+			HyperlinkImplicitId { ?string(none) }
+		}
+
+		// And it to our cursor.
+		self.start_hyperlink(uri, id_) or {
+			// This shouldn't happen because startHyperlink should handle
+			// resizing. This only happens if we're truly out of RAM. Degrade
+			// to forgetting the hyperlink.
+			// log.err: failed to update hyperlink on cursor change
 		}
 	}
 }
 
-// Reset the wrap state of the cursor row.
-pub fn (mut self Screen) cursor_reset_wrap() {
-	self.cursor.pending_wrap = false
-	idx := self.pages.active_start + int(self.cursor.y)
-	if !self.pages.screen_rows[idx].wrap {
+// Always use this to write to cursor.page_pin.*.
+//
+// This specifically handles the case when the new pin is on a different
+// page than the old AND we have a style or hyperlink set. In that case,
+// we must release our old one and insert the new one, since styles are
+// stored per-page.
+//
+// Note that this can change the cursor pin AGAIN if the process of
+// setting up our cursor forces a capacity adjustment of the underlying
+// cursor page, so any references to the page pin should be re-read
+// from `self.cursor.page_pin` after calling this.
+fn (mut self Screen) cursor_change_pin(new Pin) {
+	// Moving the cursor affects text run splitting (ligatures) so
+	// we must mark the old and new page dirty. We do this as long
+	// as the pins are not equal
+	if !self.cursor.page_pin.eql(new) {
+		self.cursor_mark_dirty()
+		mut new_pin := new
+		new_pin.mark_dirty()
+	}
+
+	// If our pin is on the same page, then we can just update the pin.
+	// We don't need to migrate any state.
+	if voidptr(self.cursor.page_pin.node) == voidptr(new.node) {
+		unsafe {
+			*self.cursor.page_pin = new
+		}
 		return
 	}
 
-	self.pages.screen_rows[idx].wrap = false
-	// Also reset next row's wrap_continuation.
-	next_idx := idx + 1
-	if next_idx < self.pages.screen_rows.len {
-		self.pages.screen_rows[next_idx].wrap_continuation = false
+	// If we have an old style then we need to release it from the old page.
+	old_style_ := if self.cursor.style_id == default_style_id {
+		?CellStyle(none)
+	} else {
+		?CellStyle(self.cursor.style)
+	}
+	if old_style_ != none {
+		// Release the style directly from the old page instead of going through
+		// manualStyleUpdate, because the cursor position may have already been
+		// updated but the pin has not, which would fail integrity checks.
+		mut old_page := &self.cursor.page_pin.node.data
+		old_page.styles.release(self.cursor.style_id)
+		self.cursor.style = CellStyle{}
+		self.cursor.style_id = default_style_id
 	}
 
-	// A wide character that did not fit at the end of this wrapped row leaves
-	// a spacer head in the final cell. Once the wrap is removed, that spacer
-	// no longer has meaning and must be cleared with the current blank style.
-	last := int(self.pages.cols) - 1
-	if self.pages.screen_rows[idx].cells[last].wide == .spacer_head {
-		self.clear_cells(idx, last, last + 1)
+	// If we have a hyperlink then we need to release it from the old page.
+	if self.cursor.hyperlink_state != none {
+		mut old_page := &self.cursor.page_pin.node.data
+		old_page.hyperlink_set.release(self.cursor.hyperlink_id)
+	}
+
+	// Update our pin to the new page
+	unsafe {
+		*self.cursor.page_pin = new
+	}
+
+	// On the new page, we need to migrate our style
+	if old_style := old_style_ {
+		self.cursor.style = old_style
+		self.manual_style_update() or {
+			// This failure should not happen because manualStyleUpdate
+			// handles page splitting, overflow, and more. This should only
+			// happen if we're out of RAM. In this case, we'll just degrade
+			// gracefully back to the default style.
+			// log.err: failed to update style on cursor change
+			self.cursor.style = CellStyle{}
+			self.cursor.style_id = 0
+		}
+	}
+
+	// On the new page, we need to migrate our hyperlink
+	if link := self.cursor.hyperlink_state {
+		// So we don't attempt to free any memory in the replaced page.
+		self.cursor.hyperlink_id = 0
+		self.cursor.hyperlink_state = none
+
+		// Re-add
+		self.start_hyperlink(link.uri, match link.id {
+			HyperlinkExplicitId { ?string(link.id.value) }
+			HyperlinkImplicitId { ?string(none) }
+		}) or {
+			// This shouldn't happen because startHyperlink should handle
+			// resizing. This only happens if we're truly out of RAM. Degrade
+			// to forgetting the hyperlink.
+			// log.err: failed to update hyperlink on cursor change
+		}
 	}
 }
 
-// ============================================================
-// Scrolling
-// ============================================================
+// Mark the cursor position as dirty.
+// TODO: test
+pub fn (mut self Screen) cursor_mark_dirty() {
+	self.cursor.page_row.dirty = true
+}
 
-// Scroll the viewport.
+// Reset the cursor row's soft-wrap state and the cursor's pending wrap.
+// Also handles clearing the spacer head on the cursor row and resetting
+// the wrap_continuation flag on the next row if necessary.
+//
+// NOTE(qwerasd): This method is not scrolling region aware, and cannot be
+// since it's on Screen not Terminal. This needs to be addressed down the
+// line. Not an extremely urgent issue since it's an edge case of an edge
+// case, but not ideal.
+pub fn (mut self Screen) cursor_reset_wrap() {
+	// Reset the cursor's pending wrap state
+	self.cursor.pending_wrap = false
+
+	mut page_row := self.cursor.page_row
+
+	if !page_row.wrap {
+		return
+	}
+
+	// This row does not wrap and the next row is not wrapped to
+	page_row.wrap = false
+
+	if next_row := self.cursor.page_pin.down(1) {
+		mut row := next_row.row_and_cell().row
+		row.wrap_continuation = false
+	}
+
+	// If the last cell in the row is a spacer head we need to clear it.
+	mut cells := self.cursor.page_pin.cells(.all)
+	cols := int(self.cursor.page_pin.node.data.size.cols)
+	cell := cells[cols - 1]
+	if cell.wide == .spacer_head {
+		mut page := &self.cursor.page_pin.node.data
+		mut last := unsafe { cells[cols - 1..cols] }
+		self.clear_cells(mut page, mut page_row, mut last)
+	}
+}
+
+// Scroll the viewport of the terminal grid.
 pub fn (mut self Screen) scroll(behavior Scroll) {
 	defer { self.assert_integrity() }
+
+	// No matter what, scrolling marks our image state as dirty since
+	// it could move placements. If there are no placements or no images
+	// this is still a very cheap operation.
 	self.mark_kitty_images_dirty()
-	if self.no_scrollback {
-		self.pages.scroll(.active)
-		return
-	}
+
 	match behavior {
-		ScrollActive {
-			self.pages.scroll(.active)
-		}
-		ScrollTop {
-			self.pages.scroll(.top)
-		}
-		ScrollPin {
-			self.scroll_to_absolute_row(int(behavior.pin.y))
-		}
-		ScrollRow {
-			self.scroll_to_absolute_row(int(behavior.n))
-		}
-		ScrollDeltaRow {
-			self.pages.scroll_delta(behavior.delta)
-		}
-		ScrollDeltaPrompt {
-			self.scroll_prompts(behavior.delta)
-		}
+		ScrollActive { self.pages.scroll(PageScrollActive{}) }
+		ScrollTop { self.pages.scroll(PageScrollTop{}) }
+		ScrollPin { self.pages.scroll(PageScrollPin{ pin: behavior.pin }) }
+		ScrollRow { self.pages.scroll(PageScrollRow{ n: behavior.n }) }
+		ScrollDeltaRow { self.pages.scroll(PageScrollDeltaRow{ delta: behavior.delta }) }
+		ScrollDeltaPrompt { self.pages.scroll(PageScrollDeltaPrompt{ delta: behavior.delta }) }
 	}
 }
 
-pub fn (mut self Screen) scroll_delta_rows(delta isize) {
-	self.scroll(ScrollDeltaRow{ delta: delta })
-}
-
-pub fn (mut self Screen) scroll_to_row(row usize) {
-	self.scroll(ScrollRow{ n: row })
-}
-
-fn (mut self Screen) scroll_to_absolute_row(row int) {
-	self.pages.viewport_start = clamp_int(row, 0, self.pages.active_start)
-	self.pages.viewport = if self.pages.viewport_start == 0 {
-		.top
-	} else if self.pages.viewport_start == self.pages.active_start {
-		.active
-	} else {
-		.pin
-	}
-}
-
-pub fn (mut self Screen) scroll_delta_prompts(delta isize) {
-	self.scroll(ScrollDeltaPrompt{ delta: delta })
-}
-
-fn (mut self Screen) scroll_prompts(delta isize) {
-	if delta == 0 {
-		return
-	}
-	mut remaining := if delta < 0 { -delta } else { delta }
-	current := match self.pages.viewport {
-		.active { self.pages.active_start }
-		.top { 0 }
-		.pin { self.pages.viewport_start }
-	}
-	mut y := current + if delta > 0 { 1 } else { -1 }
-	mut prompt_y := ?int(none)
-	for y >= 0 && y < self.pages.screen_rows.len {
-		if self.pages.screen_rows[y].semantic_prompt == .prompt {
-			prompt_y = y
-			remaining -= 1
-			if remaining == 0 {
-				break
-			}
-		}
-		y += if delta > 0 { 1 } else { -1 }
-	}
-	if target := prompt_y {
-		self.scroll_to_absolute_row(target)
-	}
-}
-
-// Scroll and clear the screen, moving content to scrollback.
+// See PageList.scrollClear. In addition to that, we reset the cursor
+// to be on top.
 pub fn (mut self Screen) scroll_clear() ! {
 	defer { self.assert_integrity() }
-	self.mark_kitty_images_dirty()
-	pruned := self.pages.scroll_clear()!
-	self.shift_selection_after_top_prune(pruned)
+
+	self.pages.scroll_clear()!
 	self.cursor_reload()
-}
 
-// PageList tracked pins move upward when whole rows are pruned from the top.
-// Selection pins are the only persistent absolute pins in the flat storage
-// representation, so apply the same adjustment explicitly.
-fn (mut self Screen) shift_selection_after_top_prune(pruned int) {
-	if pruned <= 0 {
-		return
-	}
-	if mut sel := self.selection {
-		sel.start_pin.y = if int(sel.start_pin.y) >= pruned {
-			sel.start_pin.y - u32(pruned)
-		} else {
-			0
-		}
-		sel.end_pin.y = if int(sel.end_pin.y) >= pruned {
-			sel.end_pin.y - u32(pruned)
-		} else {
-			0
-		}
-		self.selection = sel
-	}
-}
-
-// Scroll down when cursor is at the bottom of the screen.
-pub fn (mut self Screen) cursor_down_scroll() ! {
-	assert self.cursor.y == self.pages.rows - 1
-	defer { self.assert_integrity() }
+	// No matter what, scrolling marks our image state as dirty since
+	// it could move placements. If there are no placements or no images
+	// this is still a very cheap operation.
 	self.mark_kitty_images_dirty()
-
-	if self.no_scrollback {
-		if self.pages.rows == 1 {
-			// Single-row: just clear the row
-			self.clear_active_row(0)
-			self.cursor_mark_dirty()
-		} else {
-			// Shift everything up: remove first active row, add blank at bottom
-			self.pages.erase_row(PinOpts{ tag: .active, x: 0, y: 0 })!
-			self.shift_selection_after_top_prune(1)
-			// The newly-vacated bottom row must preserve the current bg SGR,
-			// matching Ghostty's cursorDownScroll which memsets the new row
-			// with blankCell() when a background color is active.
-			self.fill_active_row_blank(self.pages.rows - 1)
-		}
-	} else {
-		// With scrollback: grow by one row, moving old top row to scrollback
-		pruned := self.pages.grow()!
-		self.shift_selection_after_top_prune(pruned)
-		self.pages.active_start += 1
-		if self.pages.viewport == .active {
-			self.pages.viewport_start = self.pages.active_start
-		}
-		// Ensure we have a row at the new bottom
-		active_end := self.pages.active_start + int(self.pages.rows)
-		for self.pages.screen_rows.len < active_end {
-			self.pages.screen_rows << RowData.init(self.pages.cols)
-		}
-		// Clear the new bottom row
-		self.clear_active_row(self.pages.rows - 1)
-		self.cursor_mark_dirty()
-	}
 }
 
-// Scroll the active area at and above the cursor. The lines below the cursor
-// are not scrolled. This is a translation of Ghostty's Screen.cursorScrollAbove.
-//
-// The net effect: everything at and above the cursor row scrolls up (the
-// top-most active row moves into scrollback), a blank line appears at the
-// cursor row, and the rows below the cursor shift down by one.
-pub fn (mut self Screen) cursor_scroll_above() ! {
-	self.mark_kitty_images_dirty()
-	// We unconditionally mark the cursor row as dirty here because the cursor
-	// always changes rows inside this function.
-	self.cursor_mark_dirty()
-
-	// If the cursor is on the bottom of the screen, it's faster to use our
-	// specialized function for that case.
-	if self.cursor.y == self.pages.rows - 1 {
-		return self.cursor_down_scroll()
-	}
-	defer { self.assert_integrity() }
-	assert self.cursor.y < self.pages.rows - 1
-
-	if self.no_scrollback {
-		// Without scrollback we can't push a row into history, so we drop the
-		// top-most active row and rotate a fresh blank row in at the cursor.
-		// This shifts everything above the cursor up by one and everything
-		// at/below the cursor down by one relative to the moved window.
-		if self.pages.active_start < self.pages.screen_rows.len {
-			self.pages.screen_rows.delete(self.pages.active_start)
-			self.shift_selection_after_top_prune(1)
-		}
-		// A new active window starts one row earlier now; append a blank row
-		// at the bottom so the window keeps its size.
-		self.pages.screen_rows << RowData.init(self.pages.cols)
-	} else {
-		// With scrollback: grow by one row (moving the old top active row into
-		// scrollback) and slide the active window down by one.
-		pruned := self.pages.grow()!
-		self.shift_selection_after_top_prune(pruned)
-		self.pages.active_start += 1
-		if self.pages.viewport == .active {
-			self.pages.viewport_start = self.pages.active_start
-		}
-		active_end := self.pages.active_start + int(self.pages.rows)
-		for self.pages.screen_rows.len < active_end {
-			self.pages.screen_rows << RowData.init(self.pages.cols)
-		}
-	}
-
-	self.cursor_scroll_above_rotate()
-}
-
-// Rotate all rows below the cursor down by one and clear the cursor row.
-// This is the flat-storage translation of Ghostty's
-// Screen.cursorScrollAboveRotate; page-boundary copies collapse into one
-// contiguous rotation because Pages stores the same logical rows in one slice.
-fn (mut self Screen) cursor_scroll_above_rotate() {
-	new_cursor_abs := self.pages.active_start + int(self.cursor.y)
-	new_active_end := self.pages.active_start + int(self.pages.rows)
-	if new_cursor_abs < new_active_end && new_active_end <= self.pages.screen_rows.len {
-		last := self.pages.screen_rows[new_active_end - 1]
-		for i := new_active_end - 1; i > new_cursor_abs; i-- {
-			self.pages.screen_rows[i] = self.pages.screen_rows[i - 1]
-		}
-		self.pages.screen_rows[new_cursor_abs] = last
-	}
-
-	// The newly created line at the cursor must be blank and preserve the
-	// current bg SGR, matching Ghostty's memset of the new row with blankCell().
-	if new_cursor_abs < self.pages.screen_rows.len {
-		unsafe {
-			mut row := &self.pages.screen_rows[new_cursor_abs]
-			blank := self.blank_cell()
-			for i in 0 .. row.cells.len {
-				row.cells[i] = blank
-			}
-			row.wrap = false
-			row.wrap_continuation = false
-			// blank_cell encodes a background directly on the cell and never uses
-			// a ref-counted style ID, so this row has no managed styles.
-			row.styled = false
-			row.grapheme = false
-			row.hyperlink = false
-		}
-	}
-
-	// Mark the affected rows dirty.
-	for i in new_cursor_abs .. new_active_end {
-		if i < self.pages.screen_rows.len {
-			unsafe {
-				mut row := &self.pages.screen_rows[i]
-				row.dirty = true
-			}
-		}
-	}
-}
-
-// Fill an active-area row entirely with the current cursor's blank cell.
-// This preserves the active background SGR when new rows are exposed by
-// scrolling, mirroring Ghostty's @memset(cells, blankCell()).
-fn (mut self Screen) fill_active_row_blank(y u32) {
-	if self.cursor.style_id == default_style_id {
-		return
-	}
-	idx := self.pages.active_start + int(y)
-	if idx >= self.pages.screen_rows.len {
-		return
-	}
-	blank := self.blank_cell()
-	unsafe {
-		mut row := &self.pages.screen_rows[idx]
-		for i in 0 .. row.cells.len {
-			row.cells[i] = blank
-		}
-		row.dirty = true
-	}
-}
-
-// Move cursor down or scroll if at the bottom.
-fn (mut self Screen) cursor_down_or_scroll() ! {
-	if self.cursor.y + 1 < self.pages.rows {
-		self.cursor_down(1)
-	} else {
-		self.cursor_down_scroll()!
-	}
-}
-
-// Returns true if the viewport is at the bottom.
+// Returns true if the viewport is scrolled to the bottom of the screen.
 pub fn (self &Screen) viewport_is_bottom() bool {
 	return self.pages.viewport == .active
 }
 
-// ============================================================
-// Row/Cell management
-// ============================================================
-
-// Clear a row in the active area, filling with blank cells. The blank cell
-// carries the current cursor background SGR so newly-vacated rows preserve
-// the active background color, matching Ghostty's use of clearCells/blankCell.
-fn (mut self Screen) clear_active_row(y u32) {
-	idx := self.pages.active_start + int(y)
-	if idx < self.pages.screen_rows.len {
-		blank := self.blank_cell()
-		unsafe {
-			mut row := &self.pages.screen_rows[idx]
-			for i in 0 .. int(self.pages.cols) {
-				if i < row.cells.len {
-					row.cells[i] = blank
-				}
-			}
-			row.dirty = true
-			row.styled = false
-			row.grapheme = false
-			row.hyperlink = false
-		}
-	}
-}
-
-// Erase rows physically (reclaim memory).
+// Erase the region specified by tl and br, inclusive. This will physically
+// erase the rows meaning the memory will be reclaimed (if the underlying
+// page is empty) and other rows will be shifted up.
 pub fn (mut self Screen) erase_rows(tl Point, bl ?Point) {
 	defer { self.assert_integrity() }
-	top := self.pages.pin_point(tl) or { return }
-	bottom := if point := bl {
-		self.pages.pin_point(point) or { return }
-	} else {
-		self.pages.get_bottom_right(tl.tag) or { return }
-	}
-	if top.y > bottom.y {
-		return
-	}
 
-	// PageList keeps the cursor and selection as tracked pins,
-	// so eraseRows moves them with the surviving rows and collapses pins in an
-	// erased row to the first erased row. Reproduce that tracking around the
-	// flat row-array mutation.
-	mut cursor_pin := Pin{
-		x: self.cursor.x
-		y: u32(self.pages.active_start) + self.cursor.y
-	}
-	mut selection := self.selection
-
-	cursor_pin = pin_after_row_erase(cursor_pin, top, bottom)
-	if mut value := selection {
-		value.start_pin = pin_after_row_erase(value.start_pin, top, bottom)
-		value.end_pin = pin_after_row_erase(value.end_pin, top, bottom)
-		selection = value
-	}
-
+	// Erase the rows
 	self.pages.erase_rows(tl, bl)
-	active_start := u32(self.pages.active_start)
-	self.cursor.x = if cursor_pin.x < self.pages.cols { cursor_pin.x } else { self.pages.cols - 1 }
-	self.cursor.y = if cursor_pin.y >= active_start {
-		cursor_pin.y - active_start
-	} else {
-		u32(0)
-	}
-	self.selection = selection
+
+	// Just to be safe, reset our cursor since it is possible depending
+	// on the points that our active area shifted so our pointers are
+	// invalid.
 	self.cursor_reload()
 }
 
-fn pin_after_row_erase(pin Pin, top Pin, bottom Pin) Pin {
-	if pin.y > bottom.y {
-		return Pin{
-			...pin
-			y: pin.y - (bottom.y - top.y + 1)
-		}
-	}
-	if pin.y >= top.y {
-		return Pin{
-			x: 0
-			y: top.y
-		}
-	}
-	return pin
-}
-
-// Clear rows (set to blank, preserving the row slots).
+// Clear the region specified by tl and bl, inclusive. Cleared cells are
+// colored with the current style background color. This will clear all
+// cells in the rows.
+//
+// If protected is true, the protected flag will be respected and only
+// unprotected cells will be cleared. Otherwise, all cells will be cleared.
 pub fn (mut self Screen) clear_rows(tl Point, bl ?Point, protected bool) {
 	defer { self.assert_integrity() }
-	tl_pin := self.pages.pin_point(tl) or { return }
-	bl_pin := if point := bl {
-		self.pages.pin_point(point) or { return }
-	} else {
-		self.pages.get_bottom_right(tl.tag) or { return }
-	}
-	if tl_pin.y > bl_pin.y {
-		return
-	}
 
-	for y in int(tl_pin.y) .. int(bl_pin.y) + 1 {
-		if y >= self.pages.screen_rows.len {
-			continue
-		}
-		if protected {
-			// Ghostty clears each unprotected run through clearCells so managed
-			// row flags are updated while protected cells retain their metadata.
-			self.clear_unprotected_cells(y, 0, int(self.pages.cols))
-		} else {
-			self.clear_cells(y, 0, int(self.pages.cols))
-			unsafe {
-				mut row := &self.pages.screen_rows[y]
-				row.wrap = false
-				row.wrap_continuation = false
-				row.styled = false
-				row.grapheme = false
-				row.hyperlink = false
-				row.semantic_prompt = .unknown
-				row.kitty_virtual_placeholder = false
+	mut it := self.pages.page_iterator(.right_down, tl, bl)
+	for {
+		chunk := it.next() or { break }
+		mut page := &chunk.node.data
+		for y in int(chunk.start) .. int(chunk.end) {
+			mut row := unsafe { &page.rows[y] }
+			cells_offset := row.cells_offset
+			row_cells := row.cells
+			mut cells := unsafe { row.cells[..int(self.pages.cols)] }
+
+			// Clear all cells
+			if protected {
+				self.clear_unprotected_cells(mut page, mut row, mut cells)
+				// We need to preserve other row attributes since we only
+				// cleared unprotected cells.
+				row.cells = row_cells
+				row.cells_offset = cells_offset
+			} else {
+				self.clear_cells(mut page, mut row, mut cells)
+				unsafe {
+					*row = RowData{
+						cells:        row_cells
+						cells_offset: cells_offset
+					}
+				}
 			}
+
+			row.dirty = true
 		}
-		self.pages.screen_rows[y].dirty = true
 	}
 }
 
-// Clear specific cells in a row.
-pub fn (mut self Screen) clear_cells(row_idx int, start int, end int) {
-	defer { self.assert_integrity() }
-	if row_idx < 0 || row_idx >= self.pages.screen_rows.len {
+// Clear the cells with the blank cell.
+//
+// This takes care to handle cleaning up graphemes and styles.
+pub fn (mut self Screen) clear_cells(mut page Page, mut row RowData, mut cells []CellData) {
+	// This whole operation does unsafe things, so we just want to assert
+	// the end state.
+	page.pause_integrity_checks(true)
+	defer {
+		page.pause_integrity_checks(false)
+		page.assert_integrity()
+		self.assert_integrity()
+	}
+
+	if cells.len == 0 {
 		return
 	}
-	// Cleared cells are filled with the current cursor's blank cell so that
-	// erasing while a background SGR is active preserves that background,
-	// matching Ghostty's Screen.clearCells which @memsets with blankCell().
+
+	row_idx := page.row_index(row)
+	left := cell_index(row, unsafe { &cells[0] })
+
+	$if !prod {
+		// Our row and cells should be within the page.
+		assert row_idx < usize(page.size.rows)
+		assert left + usize(cells.len) <= usize(page.get_cells(row).len)
+	}
+
+	// If we have managed memory (styles, graphemes, or hyperlinks)
+	// in this row then we go cell by cell and clear them if present.
+	if row.grapheme {
+		for i, cell in cells {
+			if cell.has_grapheme() {
+				page.clear_grapheme(row_idx, left + usize(i))
+			}
+		}
+
+		// If we have no left/right scroll region we can be sure
+		// that we've cleared all the graphemes, so we clear the
+		// flag, otherwise we ask the page to update the flag.
+		if cells.len == int(self.pages.cols) {
+			row.grapheme = false
+		} else {
+			page.update_row_grapheme_flag(row)
+		}
+	}
+
+	if row.hyperlink {
+		for i, cell in cells {
+			if cell.has_hyperlink {
+				page.clear_hyperlink(row_idx, left + usize(i))
+			}
+		}
+
+		// If we have no left/right scroll region we can be sure
+		// that we've cleared all the hyperlinks, so we clear the
+		// flag, otherwise we ask the page to update the flag.
+		if cells.len == int(self.pages.cols) {
+			row.hyperlink = false
+		} else {
+			page.update_row_hyperlink_flag(row)
+		}
+	}
+
+	if row.styled {
+		for cell in cells {
+			if cell.has_styling() {
+				page.styles.release(cell.style_id)
+			}
+		}
+
+		// If we have no left/right scroll region we can be sure
+		// that we've cleared all the styles, so we clear the
+		// flag, otherwise we ask the page to update the flag.
+		if cells.len == int(self.pages.cols) {
+			row.styled = false
+		} else {
+			page.update_row_styled_flag(row)
+		}
+	}
+
+	if row.kitty_virtual_placeholder && cells.len == int(self.pages.cols) {
+		mut found := false
+		for c in cells {
+			if c.codepoint() == kitty_unicode_placeholder {
+				found = true
+				break
+			}
+		}
+		if !found {
+			row.kitty_virtual_placeholder = false
+		}
+	}
+
 	blank := self.blank_cell()
-	unsafe {
-		mut row := &self.pages.screen_rows[row_idx]
-		lo := if start > 0 { start } else { 0 }
-		hi := if end < row.cells.len { end } else { row.cells.len }
-		if lo >= hi {
+	for i in 0 .. cells.len {
+		cells[i] = blank
+	}
+}
+
+// Clear cells but only if they are not protected.
+pub fn (mut self Screen) clear_unprotected_cells(mut page Page, mut row RowData, mut cells []CellData) {
+	mut x0 := 0
+	mut x1 := 0
+
+	for x0 < cells.len {
+		for cells[x0].is_protected {
+			x0 += 1
+			if x0 >= cells.len {
+				break
+			}
+		}
+		if x0 >= cells.len {
+			break
+		}
+		x1 = x0 + 1
+		for x1 < cells.len && !cells[x1].is_protected {
+			x1 += 1
+		}
+		mut range := unsafe { cells[x0..x1] }
+		self.clear_cells(mut page, mut row, mut range)
+		x0 = x1
+	}
+
+	page.assert_integrity()
+	self.assert_integrity()
+}
+
+// Clean up boundary conditions where a cell will become discontiguous with
+// a neighboring cell because either one of them will be moved and/or cleared.
+//
+// For performance reasons this is specialized to operate on the cursor row.
+//
+// Handles the boundary between the cell at `x` and the cell at `x - 1`.
+//
+// So, for example, when moving a region of cells [a, b] (inclusive), call this
+// function with `x = a` and `x = b + 1`. It is okay if `x` is out of bounds by
+// 1, this will be interpreted correctly.
+//
+// DOES NOT MODIFY ROW WRAP STATE! See `cursorResetWrap` for that.
+//
+// The following boundary conditions are handled:
+//
+// - `x - 1` is a wide character and `x` is a spacer tail:
+//   o Both cells will be cleared.
+//   o If `x - 1` is the start of the row and was wrapped from a previous row
+//     then the previous row is checked for a spacer head, which is cleared if
+//     present.
+//
+// - `x == 0` and is a wide character:
+//   o If the row is a wrap continuation then the previous row will be checked
+//     for a spacer head, which is cleared if present.
+//
+// - `x == cols` and `x - 1` is a spacer head:
+//   o `x - 1` will be cleared.
+//
+// NOTE(qwerasd): This method is not scrolling region aware, and cannot be
+// since it's on Screen not Terminal. This needs to be addressed down the
+// line. Not an extremely urgent issue since it's an edge case of an edge
+// case, but not ideal.
+pub fn (mut self Screen) split_cell_boundary(x u32) {
+	mut page := &self.cursor.page_pin.node.data
+
+	page.pause_integrity_checks(true)
+	defer { page.pause_integrity_checks(false) }
+
+	cols := u32(self.cursor.page_pin.node.data.size.cols)
+
+	// `x` may be up to an INCLUDING `cols`, since that signifies splitting
+	// the boundary to the right of the final cell in the row.
+	assert x <= cols
+
+	// [ A B C D E F|]
+	//              ^ Boundary between final cell and row end.
+	if x == cols {
+		if !self.cursor.page_row.wrap {
 			return
 		}
 
-		had_grapheme := row.grapheme
-		had_hyperlink := row.hyperlink
-		had_style := row.styled
-		if row.kitty_virtual_placeholder && hi - lo == int(self.pages.cols) {
-			mut has_placeholder := false
-			for cell in row.cells[lo..hi] {
-				if cell.codepoint() == kitty_unicode_placeholder {
-					has_placeholder = true
-					break
-				}
-			}
-			if !has_placeholder {
-				row.kitty_virtual_placeholder = false
-			}
+		mut cells := self.cursor.page_pin.cells(.all)
+
+		// Spacer head at end of wrapped row.
+		if cells[cols - 1].wide == .spacer_head {
+			mut last := unsafe { cells[int(cols) - 1..int(cols)] }
+			self.clear_cells(mut page, mut self.cursor.page_row, mut last)
 		}
 
-		for i in lo .. hi {
-			row.cells[i] = blank
-		}
-
-		// Ghostty's Page update helpers rescan the row after a partial clear.
-		// Flat Pages stores the managed values inline, but must maintain the
-		// same aggregate flags because later fast paths depend on them.
-		if had_grapheme {
-			row.grapheme = false
-			for cell in row.cells {
-				if cell.has_grapheme() {
-					row.grapheme = true
-					break
-				}
-			}
-		}
-		if had_hyperlink {
-			row.hyperlink = false
-			for cell in row.cells {
-				if cell.has_hyperlink {
-					row.hyperlink = true
-					break
-				}
-			}
-		}
-		if had_style {
-			row.styled = false
-			for cell in row.cells {
-				if cell.has_styling() {
-					row.styled = true
-					break
-				}
-			}
-		}
-		row.dirty = true
-	}
-}
-
-// Clear cells in a row but only if they are not protected. This works by
-// finding contiguous runs of unprotected cells within [start, end) and
-// clearing each run, matching Ghostty's clearUnprotectedCells.
-pub fn (mut self Screen) clear_unprotected_cells(row_idx int, start int, end int) {
-	defer { self.assert_integrity() }
-	if row_idx < 0 || row_idx >= self.pages.screen_rows.len {
 		return
 	}
-	cells_len := self.pages.screen_rows[row_idx].cells.len
-	hi := if end < cells_len { end } else { cells_len }
-	mut x0 := if start < 0 { 0 } else { start }
-	for x0 < hi {
-		// Skip protected cells.
-		for x0 < hi && self.pages.screen_rows[row_idx].cells[x0].is_protected {
-			x0++
+
+	// [|A B C D E F ]
+	//  ^ Boundary between first cell and row start.
+	//
+	//  OR
+	//
+	// [ A|B C D E F ]
+	//    ^ Boundary between first cell and second cell.
+	//
+	// First cell may be a wrapped wide cell with a spacer
+	// head on the previous row that needs to be cleared.
+	if (x == 0 || x == 1) && self.cursor.page_row.wrap_continuation {
+		cells := self.cursor.page_pin.cells(.all)
+
+		// If the first cell in a row is wide the previous row
+		// may have a spacer head which needs to be cleared.
+		if cells[0].wide == .wide {
+			if p_row := self.cursor.page_pin.up(1) {
+				p_rac := p_row.row_and_cell()
+				mut p_cells := p_row.cells(.all)
+				p_cols := int(p_row.node.data.size.cols)
+				p_cell := p_cells[p_cols - 1]
+				if p_cell.wide == .spacer_head {
+					mut p_page := &p_row.node.data
+					mut p_row_data := p_rac.row
+					mut last := unsafe { p_cells[p_cols - 1..p_cols] }
+					self.clear_cells(mut p_page, mut p_row_data, mut last)
+				}
+			}
 		}
-		if x0 >= hi {
-			break
+	}
+
+	// If x is 0 then we're done.
+	if x == 0 {
+		return
+	}
+
+	// [ ... X|Y ... ]
+	//        ^ Boundary between two cells in the middle of the row.
+	{
+		assert x > 0
+		assert x < cols
+
+		mut cells := self.cursor.page_pin.cells(.all)
+
+		left := cells[x - 1]
+		match left.wide {
+			// There should not be spacer heads in the middle of the row.
+			.spacer_head {
+				panic('spacer head in the middle of a row')
+			}
+			// We don't need to do anything for narrow cells or spacer tails.
+			.narrow, .spacer_tail {}
+			// A wide char would be split, so must be cleared.
+			.wide {
+				mut pair := unsafe { cells[int(x) - 1..int(x) + 1] }
+				self.clear_cells(mut page, mut self.cursor.page_row, mut pair)
+			}
 		}
-		// Find the end of this unprotected run.
-		mut x1 := x0 + 1
-		for x1 < hi && !self.pages.screen_rows[row_idx].cells[x1].is_protected {
-			x1++
-		}
-		self.clear_cells(row_idx, x0, x1)
-		x0 = x1
 	}
 }
 
-// Returns a blank cell with the current cursor background color.
+// Returns the blank cell to use when doing terminal operations that
+// require preserving the bg color.
 pub fn (self &Screen) blank_cell() CellData {
 	if self.cursor.style_id == default_style_id {
 		return CellData{}
@@ -2995,187 +3440,208 @@ pub fn (self &Screen) blank_cell() CellData {
 	return self.cursor.style.bg_cell() or { CellData{} }
 }
 
-// ============================================================
-// Resize
-// ============================================================
-
 // Resize the screen. The rows or cols can be bigger or smaller.
 //
-// The soft-wrap reflow of cell content itself is delegated to Pages.resize.
-// The surrounding logic translated here from Ghostty's Screen.resize:
-//   - release/restore the cursor style around the resize (in case the cursor
-//     ends up "on a different page")
-//   - track the saved cursor position so we can remap it after resize
-//   - clear prompt/input lines when prompt_redraw is requested
-//   - reload the cursor and fix up the saved cursor's pending wrap
+// If this returns an error, the screen is left in a likely garbage state.
+// It is very hard to undo this operation without blowing up our memory
+// usage. The only way to recover is to reset the screen. The only way
+// this really fails is if page allocation is required and fails, which
+// probably means the system is in trouble anyways. I'd like to improve this
+// in the future but it is not a priority particularly because this scenario
+// (resize) is difficult.
 pub fn (mut self Screen) resize(opts ScreenResize) ! {
 	defer { self.assert_integrity() }
+
+	// No matter what we mark our image state as dirty
 	self.mark_kitty_images_dirty()
-	mut cursor_pin := Pin{
-		x: self.cursor.x
-		y: u32(self.pages.active_start) + self.cursor.y
-	}
-	mut tracked_pins := []&Pin{cap: 4}
-	tracked_pins << &cursor_pin
-	// Release the cursor style while resizing just in case the cursor ends
-	// up on a different page. We restore it at the end.
+
+	// Release the cursor style while resizing just
+	// in case the cursor ends up on a different page.
 	cursor_style := self.cursor.style
 	self.cursor.style = CellStyle{}
-	self.manual_style_update() or {}
-
-	// The saved cursor and selection are permanently tracked PageList pins in
-	// Ghostty. Build their flat absolute-pin equivalents so every resize
-	// operation can update them together.
-	mut has_saved_pin := false
-	mut saved_pin := Pin{}
-	if sc := self.saved_cursor {
-		if sc.x < self.pages.cols && sc.y < self.pages.rows {
-			has_saved_pin = true
-			saved_pin = Pin{
-				x: sc.x
-				y: u32(self.pages.active_start) + sc.y
-			}
-			tracked_pins << &saved_pin
+	self.manual_style_update() or { panic('releasing the cursor style cannot fail') }
+	defer {
+		// Restore the cursor style.
+		self.cursor.style = cursor_style
+		self.manual_style_update() or {
+			// This failure should not happen because manualStyleUpdate
+			// handles page splitting, overflow, and more. This should only
+			// happen if we're out of RAM. In this case, we'll just degrade
+			// gracefully back to the default style.
+			// log.err: failed to update style on cursor reload
+			self.cursor.style = CellStyle{}
+			self.cursor.style_id = 0
 		}
 	}
-	mut has_selection_pins := false
-	mut selection_start_pin := Pin{}
-	mut selection_end_pin := Pin{}
-	if sel := self.selection {
-		has_selection_pins = true
-		selection_start_pin = sel.start_pin
-		selection_end_pin = sel.end_pin
-		tracked_pins << &selection_start_pin
-		tracked_pins << &selection_end_pin
+
+	// If we have a hyperlink, release it from the old page
+	// and then we need to re-add it to the new page. This needs
+	// to happen because resize below typically reallocates a
+	// new page so the old hyperlink is invalid.
+	hyperlink_ := self.cursor.hyperlink_state
+	if self.cursor.hyperlink_id != 0 {
+		// Note we do NOT use endHyperlink because we want to keep
+		// our allocated self.cursor.hyperlink valid.
+		mut page := &self.cursor.page_pin.node.data
+		page.hyperlink_set.release(self.cursor.hyperlink_id)
+		self.cursor.hyperlink_id = 0
+		self.cursor.hyperlink_state = none
+	}
+
+	// We need to insert a tracked pin for our saved cursor so we can
+	// modify its X/Y for reflow.
+	mut saved_cursor_pin := &Pin(unsafe { nil })
+	if sc := self.saved_cursor {
+		if pin := self.pages.pin(Point{
+			tag:        .active
+			coordinate: Coordinate{
+				x: u16(sc.x)
+				y: sc.y
+			}
+		})
+		{
+			saved_cursor_pin = self.pages.track_pin(pin)
+		}
+	}
+	defer {
+		if !isnil(saved_cursor_pin) {
+			self.pages.untrack_pin(saved_cursor_pin)
+		}
 	}
 
 	// If our cursor is on a prompt or input line, clear it so the shell can
-	// redraw it. This works with OSC 133 semantic prompts. We check
-	// cursor.semantic_content rather than the row's semantic_prompt because
-	// some shells mark input areas but don't mark continuation lines.
+	// redraw it. This works with OSC 133 semantic prompts.
+	//
+	// We check cursor.semantic_content rather than page_row.semantic_prompt
+	// because some shells (e.g., Nu) mark input areas with OSC 133 B but don't
+	// mark continuation lines with k=s. If the input spans multiple lines and
+	// continuation lines are unmarked, checking only page_row.semantic_prompt
+	// would miss them. By checking semantic_content, we assume that if the
+	// cursor is on anything other than command output, we're at a prompt/input
+	// line and should clear from there.
 	if opts.prompt_redraw != .redraw_false && self.cursor.semantic_content != .output {
-		cur_idx := self.pages.active_start + int(self.cursor.y)
-		match opts.prompt_redraw {
-			.redraw_false {}
-			.last {
-				// Only clear the current line where the cursor is.
-				self.clear_cells(cur_idx, 0, int(self.pages.cols))
-			}
-			.redraw_true {
-				mut prompt_it := self.pages.prompt_iterator(Pin{
-					x: self.cursor.x
-					y: u32(cur_idx)
-				}, .left_up, none)
-				if start := prompt_it.next() {
-					for y := int(start.y); y <= cur_idx; y++ {
-						if y >= 0 && y < self.pages.screen_rows.len {
-							self.clear_cells(y, 0, int(self.pages.cols))
-						}
-					}
-				}
-			}
-		}
+		self.resize_clear_prompt(opts.prompt_redraw)
 	}
 
-	// Perform the resize operation (handles reflow in Pages.resize).
-	self.pages.resize(ResizeOpts{
-		cols: opts.cols
-		rows: opts.rows
+	// Perform the resize operation.
+	self.pages.resize(PageResizeOpts{
+		rows:   u16(opts.rows)
+		cols:   u16(opts.cols)
 		reflow: opts.reflow
-		cursor: struct {
-			x: self.cursor.x
-			y: self.cursor.y
+		cursor: PageResizeCursor{
+			x: u16(self.cursor.x)
+			y: u16(self.cursor.y)
 		}
-		tracked_pins: tracked_pins
 	})!
 
 	// If we have no scrollback and we shrunk our rows, we must explicitly
-	// erase our history. PageList always keeps at least a page of history.
+	// erase our history. This is because PageList always keeps at least
+	// a page size of history.
 	if self.no_scrollback {
-		erased := self.pages.active_start
-		self.pages.erase_rows(Point.new(.history, Coordinate{}), ?Point(none))
-		// eraseRows updates all PageList tracked pins. Mirror its behavior:
-		// surviving pins shift up, while pins in erased history move to the
-		// first remaining cell.
-		if erased > 0 {
-			for mut pin in tracked_pins {
-				if int(pin.y) >= erased {
-					pin.y -= u32(erased)
-				} else {
-					pin.x = 0
-					pin.y = 0
-				}
-			}
-		}
-	}
-
-	// Reload the live cursor from its tracked pin. If it moved outside the
-	// active area, PageList's pointFromPin fallback places it at top-left.
-	cursor_y := int(cursor_pin.y) - self.pages.active_start
-	if cursor_y >= 0 && cursor_y < int(self.pages.rows) {
-		self.cursor.x = cursor_pin.x
-		self.cursor.y = u32(cursor_y)
-	} else {
-		self.cursor.x = 0
-		self.cursor.y = 0
-	}
-	if self.pages.reflow_did_reflow {
-		self.cursor.pending_wrap = false
+		self.pages.erase_rows(Point{
+			tag: .history
+		}, none)
 	}
 
 	// If our cursor was updated, we do a full reload so all our cursor
 	// state is correct.
 	self.cursor_reload()
 
-	// Update the saved cursor from its tracked pin.
-	if has_saved_pin {
-		if mut sc := self.saved_cursor {
-			new_active := int(saved_pin.y) - self.pages.active_start
-			if new_active >= 0 && new_active < int(self.pages.rows) {
-				sc.x = saved_pin.x
-				sc.y = u32(new_active)
-				// If we had pending wrap set and we're no longer at the end
-				// of the line, we unset the pending wrap and move the cursor
-				// to reflect the correct next position.
-				if sc.pending_wrap && sc.x != opts.cols - 1 {
-					sc.pending_wrap = false
-					sc.x += 1
-				}
-			} else {
-				// The saved cursor moved outside the active area. There's no
-				// reasonable thing to do so we move it to the top-left.
-				sc.x = 0
-				sc.y = 0
+	// If we reflowed a saved cursor, update it.
+	if !isnil(saved_cursor_pin) {
+		// This should never fail because a non-null saved_cursor_pin
+		// implies a non-null saved_cursor.
+		mut sc := self.saved_cursor or { panic('saved cursor pin without a saved cursor') }
+		if pt := self.pages.point_from_pin(.active, *saved_cursor_pin) {
+			sc.x = u32(pt.coordinate.x)
+			sc.y = pt.coordinate.y
+
+			// If we had pending wrap set and we're no longer at the end of
+			// the line, we unset the pending wrap and move the cursor to
+			// reflect the correct next position.
+			if sc.pending_wrap && sc.x != opts.cols - 1 {
 				sc.pending_wrap = false
+				sc.x += 1
 			}
-			self.saved_cursor = sc
+		} else {
+			// I think this can happen if the screen is resized to be
+			// less rows or less cols and our saved cursor moves outside
+			// the active area. In this case, there isn't anything really
+			// reasonable we can do so we just move the cursor to the
+			// top-left. It may be reasonable to also move the cursor to
+			// match the primary cursor. Any behavior is fine since this is
+			// totally unspecified.
+			sc.x = 0
+			sc.y = 0
+			sc.pending_wrap = false
 		}
+		self.saved_cursor = sc
 	}
 
-	// Selection endpoints are tracked screen pins, so retain their original
-	// orientation while replacing both endpoints with their remapped values.
-	if has_selection_pins {
-		if mut sel := self.selection {
-			sel.start_pin = selection_start_pin
-			sel.end_pin = selection_end_pin
-			self.selection = sel
+	// Fix up our hyperlink if we had one.
+	if link := hyperlink_ {
+		self.start_hyperlink(link.uri, match link.id {
+			HyperlinkExplicitId { ?string(link.id.value) }
+			HyperlinkImplicitId { ?string(none) }
+		}) or {
+			// This shouldn't happen because startHyperlink should handle
+			// resizing. This only happens if we're truly out of RAM. Degrade
+			// to forgetting the hyperlink.
+			// log.err: failed to update hyperlink on resize
 		}
-	}
-
-	// Restore the cursor style. This should not fail; degrade gracefully.
-	self.cursor.style = cursor_style
-	self.manual_style_update() or {
-		self.cursor.style = CellStyle{}
-		self.cursor.style_id = default_style_id
 	}
 }
 
-// ============================================================
-// Style management (SGR attributes)
-// ============================================================
+// The prompt-clearing block of Screen.resize. V has no labeled blocks, so
+// the `break :prompt` exit becomes a return from this helper.
+fn (mut self Screen) resize_clear_prompt(redraw osc.Redraw) {
+	match redraw {
+		.redraw_false {
+			panic('prompt redraw is disabled')
+		}
+		// For `.last`, only clear the current line where the cursor is.
+		// For `.true`, clear all prompt lines starting from the beginning.
+		.last {
+			mut page := &self.cursor.page_pin.node.data
+			mut row := self.cursor.page_row
+			mut cells := page.get_cells(row)
+			self.clear_cells(mut page, mut row, mut cells)
+		}
+		.redraw_true {
+			mut prompt_it := self.cursor.page_pin.prompt_iterator(.left_up, none)
+			start := prompt_it.next() or {
+				// This should never happen because promptIterator should always
+				// find a prompt if we already verified our row is some kind of
+				// prompt.
+				// log.warn: cursor on prompt line but promptIterator found no prompt
+				return
+			}
 
-// Set a style attribute on the current cursor.
+			// Clear cells from our start down. We replace it with spaces,
+			// and do not physically erase the rows (eraseRows) because the
+			// shell is going to expect this space to be available.
+			mut it := start.row_iterator(.right_down, none)
+			for {
+				pin := it.next() or { break }
+				mut page := &pin.node.data
+				mut row := pin.row_and_cell().row
+				mut cells := page.get_cells(row)
+				self.clear_cells(mut page, mut row, mut cells)
+			}
+		}
+	}
+}
+
+// Set a style attribute for the current cursor.
+//
+// If the style can't be set due to any internal errors (memory-related),
+// then this will revert back to the existing style and return an error.
 pub fn (mut self Screen) set_attribute(attr SgrAttribute) ! {
+	// If we fail to set our style for any reason, we should revert
+	// back to the old style. If we fail to do that, we revert back to
+	// the default style.
+	old_style := self.cursor.style
+
 	match attr.kind {
 		.unset {
 			self.cursor.style = CellStyle{}
@@ -3184,6 +3650,7 @@ pub fn (mut self Screen) set_attribute(attr SgrAttribute) ! {
 			self.cursor.style.flags.set_bold(true)
 		}
 		.reset_bold {
+			// Bold and faint share the same SGR code for this
 			self.cursor.style.flags.set_bold(false)
 			self.cursor.style.flags.set_faint(false)
 		}
@@ -3198,6 +3665,19 @@ pub fn (mut self Screen) set_attribute(attr SgrAttribute) ! {
 		}
 		.underline_set {
 			self.cursor.style.flags.set_underline(attr.underline)
+		}
+		.underline_color {
+			self.cursor.style.underline_color_type = .rgb
+			self.cursor.style.underline_r = attr.r
+			self.cursor.style.underline_g = attr.g
+			self.cursor.style.underline_b = attr.b
+		}
+		.underline_color_256 {
+			self.cursor.style.underline_color_type = .palette
+			self.cursor.style.underline_palette = attr.index
+		}
+		.reset_underline_color {
+			self.cursor.style.underline_color_type = .none
 		}
 		.overline {
 			self.cursor.style.flags.set_overline(true)
@@ -3245,17 +3725,9 @@ pub fn (mut self Screen) set_attribute(attr SgrAttribute) ! {
 			self.cursor.style.fg_color = .palette
 			self.cursor.style.fg_palette = attr.index
 		}
-		.bright_fg_8 {
-			self.cursor.style.fg_color = .palette
-			self.cursor.style.fg_palette = attr.index + 8
-		}
 		.bg_8, .bg_256 {
 			self.cursor.style.bg_color = .palette
 			self.cursor.style.bg_palette = attr.index
-		}
-		.bright_bg_8 {
-			self.cursor.style.bg_color = .palette
-			self.cursor.style.bg_palette = attr.index + 8
 		}
 		.reset_fg {
 			self.cursor.style.fg_color = .none
@@ -3263,121 +3735,363 @@ pub fn (mut self Screen) set_attribute(attr SgrAttribute) ! {
 		.reset_bg {
 			self.cursor.style.bg_color = .none
 		}
-		.underline_color {
-			self.cursor.style.underline_color_type = .rgb
-			self.cursor.style.underline_r = attr.r
-			self.cursor.style.underline_g = attr.g
-			self.cursor.style.underline_b = attr.b
+		.bright_fg_8 {
+			self.cursor.style.fg_color = .palette
+			self.cursor.style.fg_palette = attr.index + 8
 		}
-		.underline_color_256 {
-			self.cursor.style.underline_color_type = .palette
-			self.cursor.style.underline_palette = attr.index
-		}
-		.reset_underline_color {
-			self.cursor.style.underline_color_type = .none
+		.bright_bg_8 {
+			self.cursor.style.bg_color = .palette
+			self.cursor.style.bg_palette = attr.index + 8
 		}
 		.unknown {
 			return
 		}
 	}
-	self.manual_style_update()!
-}
 
-// Call this whenever you manually change the cursor style.
-//
-// This function can NOT fail if the cursor style is changing to the default
-// style.
-//
-// In Ghostty this maps the cursor's concrete style value to a page-local
-// ref-counted style ID (Page.styles.add), splitting/growing the page as
-// needed. In this port, the concrete style is stored inline on each cell
-// (CellData.style), so style_id is only used as a "has non-default style"
-// discriminator: default_style_id for the default style, and a non-default
-// (non-zero) ID otherwise. We still clear the ID first so that print writes
-// the correct discriminator regardless of intermediate state.
-pub fn (mut self Screen) manual_style_update() ! {
-	defer { self.assert_integrity() }
-	// Clear the cursor style ID to prevent weird things from happening.
-	// This also ensures that if the style is default we fall back to
-	// clearing our style.
-	self.cursor.style_id = default_style_id
-
-	// If our new style is the default, just reset to that.
-	if self.cursor.style.default() {
-		return
-	}
-
-	// After setting the style, we update our style discriminator.
-	self.cursor.style_id = 1
-}
-
-// ============================================================
-// Hyperlink management
-// ============================================================
-
-fn (mut self Screen) start_hyperlink_once(source Hyperlink) ! {
-	// End any prior hyperlink before installing the duplicated pending state.
-	self.end_hyperlink()
-	link := source.dupe()
-	self.cursor.hyperlink_state = link
-	// Flat Pages does not yet expose Page's ref-counted ID. Preserve the same
-	// nonzero active-state invariant while retaining the exact hyperlink value.
-	self.cursor.hyperlink_id = match link.id {
-		HyperlinkImplicitId { link.id.offset + 1 }
-		HyperlinkExplicitId { self.cursor.hyperlink_implicit_id + 1 }
-	}
-}
-
-// Start a hyperlink on the cursor.
-pub fn (mut self Screen) start_hyperlink(uri string, id_ ?string) ! {
-	link_id := if explicit := id_ {
-		HyperlinkIdKind(HyperlinkExplicitId{
-			value: explicit.clone()
-		})
-	} else {
-		offset := self.cursor.hyperlink_implicit_id
-		self.cursor.hyperlink_implicit_id += 1
-		HyperlinkIdKind(HyperlinkImplicitId{
-			offset: offset
-		})
-	}
-	self.start_hyperlink_once(Hyperlink{
-		id: link_id
-		uri: uri.clone()
-	}) or {
-		if id_ == none {
-			self.cursor.hyperlink_implicit_id -= 1
+	self.manual_style_update() or {
+		self.cursor.style = old_style
+		self.manual_style_update() or {
+			// log.warn: setAttribute error restoring old style after failure
+			self.cursor.style = CellStyle{}
+			self.manual_style_update() or { panic('the default style cannot fail') }
 		}
 		return err
 	}
 }
 
-// End the current hyperlink.
+// Call this whenever you manually change the cursor style.
+//
+// This function can NOT fail if the cursor style is changing to the
+// default style.
+//
+// If this returns an error, the style change did not take effect and
+// the cursor style is reverted back to the default. The only scenario
+// this returns an error is if there is a physical memory allocation failure
+// or if there is no possible way to increase style capacity to store
+// the style.
+//
+// This function WILL split pages as necessary to accommodate the new style.
+// So if OutOfSpace is returned, it means that even after splitting the page
+// there was still no room for the new style.
+pub fn (mut self Screen) manual_style_update() ! {
+	defer { self.assert_integrity() }
+	mut page := &self.cursor.page_pin.node.data
+
+	// Release our previous style if it was not default.
+	if self.cursor.style_id != default_style_id {
+		page.styles.release(self.cursor.style_id)
+	}
+
+	// If our new style is the default, just reset to that
+	if self.cursor.style.default() {
+		self.cursor.style_id = default_style_id
+		return
+	}
+
+	// Clear the cursor style ID to prevent weird things from happening
+	// if the page capacity has to be adjusted which would end up calling
+	// manualStyleUpdate again.
+	//
+	// This also ensures that if anything fails below, we fall back to
+	// clearing our style.
+	self.cursor.style_id = default_style_id
+
+	// After setting the style, we need to update our style map.
+	// Note that we COULD lazily do this in print. We should look into
+	// if that makes a meaningful difference. Our priority is to keep print
+	// fast because setting a ton of styles that do nothing is uncommon
+	// and weird.
+	id := page.styles.add(self.cursor.style) or {
+		// Our style map is full or needs to be rehashed, so we need to
+		// increase style capacity (or rehash).
+		mut adjustment := ?IncreaseCapacity(none)
+		if err.msg() != 'needs rehash' {
+			adjustment = .styles
+		}
+		node := self.increase_capacity(self.cursor.page_pin.node, adjustment) or {
+			if err.msg() != 'OutOfSpace' {
+				return err
+			}
+			// Out of space, we need to split the page. Split wherever
+			// is using less capacity and hope that works. If it doesn't
+			// work, we tried.
+			self.split_for_capacity(*self.cursor.page_pin)!
+			self.cursor.page_pin.node
+		}
+
+		page = &node.data
+		page.styles.add(self.cursor.style) or {
+			if err.msg() == 'needs rehash' {
+				// This should be impossible because we rehash above
+				// and rehashing should never result in a duplicate. But
+				// we don't want to simply hard crash so log it and
+				// clear our style.
+				// log.err: style rehash resulted in needs rehash
+				return
+			}
+			// This shouldn't happen because increaseCapacity is
+			// guaranteed to increase our capacity by at least one and
+			// we only need one space, but again, I don't want to crash
+			// here so let's log loudly and reset.
+			// log.err: style addition failed after capacity increase
+			return error('OutOfMemory')
+		}
+	}
+
+	self.cursor.style_id = id
+}
+
+// Split at the given pin so that the pinned row moves to the page
+// with less used capacity after the split.
+//
+// The primary use case for this is to handle IncreaseCapacityError
+// OutOfSpace conditions where we need to split the page in order
+// to make room for more managed memory.
+//
+// If the caller cares about where the pin moves to, they should
+// setup a tracked pin before calling this and then check that.
+// In many calling cases, the input pin is tracked (e.g. the cursor
+// pin).
+//
+// If this returns OOM then its a system OOM. If this returns OutOfSpace
+// then it means the page can't be split further.
+fn (mut self Screen) split_for_capacity(pin Pin) ! {
+	// Get our capacities. We include our target row because its
+	// capacity will be preserved.
+	bytes_above := Page.layout(pin.node.data.exact_row_capacity(0, usize(pin.y) + 1)).total_size
+	bytes_below := Page.layout(pin.node.data.exact_row_capacity(usize(pin.y), usize(pin.node.data.size.rows))).total_size
+
+	// We need to track the old cursor pin because if our split
+	// moves the cursor pin we need to update our accounting.
+	old_cursor := *self.cursor.page_pin
+
+	// If our bytes above are less than bytes below, we move the pin
+	// to split down one since splitting includes the pinned row in
+	// the new node.
+	mut split_pin := pin
+	if bytes_above < bytes_below {
+		split_pin = pin.down(1) or { pin }
+	}
+	self.pages.split(split_pin)!
+
+	// Cursor didn't change nodes, we're done.
+	if voidptr(self.cursor.page_pin.node) == voidptr(old_cursor.node) {
+		return
+	}
+
+	// Cursor changed, we need to restore the old pin then use
+	// cursorChangePin to move to the new pin. The old node is guaranteed
+	// to still exist, just not the row.
+	//
+	// Note that page_row and all that will be invalid, it points to the
+	// new node, but at the time of writing this we don't need any of that
+	// to be right in cursorChangePin.
+	new_cursor := *self.cursor.page_pin
+	unsafe {
+		*self.cursor.page_pin = old_cursor
+	}
+	self.cursor_change_pin(new_cursor)
+}
+
+// Append a grapheme to the given cell within the current cursor row.
+pub fn (mut self Screen) append_grapheme(cell &CellData, cp u32) ! {
+	defer { self.cursor.page_pin.node.data.assert_integrity() }
+	row_idx := self.cursor.page_pin.node.data.row_index(self.cursor.page_row)
+	col_idx := cell_index(self.cursor.page_row, cell)
+	self.cursor.page_pin.node.data.append_grapheme(row_idx, col_idx, cp) or {
+		// We need to determine the actual cell index of the cell so
+		// that after we adjust the capacity we can reload the cell.
+		cell_idx := col_idx
+
+		// Adjust our capacity. This will update our cursor page pin and
+		// force us to reload.
+		_ = self.increase_capacity(self.cursor.page_pin.node, .grapheme_bytes)!
+
+		// The cell pointer is now invalid, so we need to get it from
+		// the reloaded cursor pointers.
+		reloaded_cell := if cell_idx == usize(self.cursor.x) {
+			self.cursor.page_cell
+		} else if cell_idx < usize(self.cursor.x) {
+			self.cursor_cell_left(self.cursor.x - u32(cell_idx))
+		} else {
+			self.cursor_cell_right(u32(cell_idx) - self.cursor.x)
+		}
+
+		reloaded_row := self.cursor.page_pin.node.data.row_index(self.cursor.page_row)
+		self.cursor.page_pin.node.data.append_grapheme(reloaded_row, cell_index(self.cursor.page_row,
+			reloaded_cell), cp) or {
+			// This should never happen because we just increased capacity.
+			// Log loudly but still return an error so we don't just
+			// crash.
+			// log.err: grapheme append failed after capacity increase
+			return err
+		}
+	}
+}
+
+// Start the hyperlink state. Future cells will be marked as hyperlinks with
+// this state. Note that various terminal operations may clear the hyperlink
+// state, such as switching screens (alt screen).
+pub fn (mut self Screen) start_hyperlink(uri string, id_ ?string) ! {
+	// Create our pending entry.
+	mut implicit := false
+	link := Hyperlink{
+		uri: uri
+		id:  if id := id_ {
+			HyperlinkIdKind(HyperlinkExplicitId{
+				value: id
+			})
+		} else {
+			implicit = true
+			offset := self.cursor.hyperlink_implicit_id
+			self.cursor.hyperlink_implicit_id += 1
+			HyperlinkIdKind(HyperlinkImplicitId{
+				offset: offset
+			})
+		}
+	}
+
+	// Loop until we have enough page memory to add the hyperlink
+	for {
+		self.start_hyperlink_once(link) or {
+			match err.msg() {
+				// strings table is out of memory, adjust it up
+				'strings out of memory' {
+					self.increase_capacity(self.cursor.page_pin.node, .string_bytes) or {
+						if implicit {
+							self.cursor.hyperlink_implicit_id -= 1
+						}
+						return err
+					}
+				}
+				// hyperlink set is out of memory, adjust it up
+				'set out of memory' {
+					self.increase_capacity(self.cursor.page_pin.node, .hyperlink_bytes) or {
+						if implicit {
+							self.cursor.hyperlink_implicit_id -= 1
+						}
+						return err
+					}
+				}
+				// hyperlink set is too full, rehash it
+				'set needs rehash' {
+					self.increase_capacity(self.cursor.page_pin.node, none) or {
+						if implicit {
+							self.cursor.hyperlink_implicit_id -= 1
+						}
+						return err
+					}
+				}
+				// An actual self.alloc OOM is a fatal error.
+				else {
+					if implicit {
+						self.cursor.hyperlink_implicit_id -= 1
+					}
+					return err
+				}
+			}
+
+			self.assert_integrity()
+			continue
+		}
+		return
+	}
+}
+
+// This is like startHyperlink but if we have to adjust page capacities
+// this returns error.PageAdjusted. This is useful so that we unwind
+// all the previous state and try again.
+fn (mut self Screen) start_hyperlink_once(source Hyperlink) ! {
+	// End any prior hyperlink
+	self.end_hyperlink()
+
+	// Allocate our new Hyperlink entry in non-page memory. This
+	// lets us quickly get access to URI, ID.
+	link := source.dupe()
+
+	// Insert the hyperlink into page memory
+	mut page := &self.cursor.page_pin.node.data
+	id := page.insert_hyperlink(link)!
+
+	// Save it all
+	self.cursor.hyperlink_state = link
+	self.cursor.hyperlink_id = id
+}
+
+// End the hyperlink state so that future cells aren't part of the
+// current hyperlink (if any). This is safe to call multiple times.
 pub fn (mut self Screen) end_hyperlink() {
+	// If we have no hyperlink state then do nothing
 	if self.cursor.hyperlink_id == 0 {
 		assert self.cursor.hyperlink_state == none
 		return
 	}
+
+	// Release the old hyperlink state. If there are cells using the
+	// hyperlink this will work because the creation creates a reference
+	// and all additional cells create a new reference. This release will
+	// just release our initial reference.
+	//
+	// If the ref count reaches zero the set will not delete the item
+	// immediately; it is kept around in case it is used again (this is
+	// how RefCountedSet works). This causes some memory fragmentation but
+	// is fine because if it is ever pruned the context deleted callback
+	// will be called.
+	mut page := &self.cursor.page_pin.node.data
+	page.hyperlink_set.release(self.cursor.hyperlink_id)
 	self.cursor.hyperlink_id = 0
 	self.cursor.hyperlink_state = none
 }
 
-// Set the hyperlink on the current cell.
+// Set the current hyperlink state on the current cell.
 pub fn (mut self Screen) cursor_set_hyperlink() ! {
 	assert self.cursor.hyperlink_id != 0
-	link := self.cursor.hyperlink_state or { panic('active hyperlink has no value') }
-	idx := self.pages.active_start + int(self.cursor.y)
-	unsafe {
-		mut row := &self.pages.screen_rows[idx]
-		row.cells[int(self.cursor.x)].has_hyperlink = true
-		row.cells[int(self.cursor.x)].hyperlink = link.dupe()
-		row.hyperlink = true
-	}
-}
 
-// ============================================================
-// Semantic content
-// ============================================================
+	mut page := &self.cursor.page_pin.node.data
+	row_idx := page.row_index(self.cursor.page_row)
+	col_idx := cell_index(self.cursor.page_row, self.cursor.page_cell)
+	page.set_hyperlink(row_idx, col_idx, self.cursor.hyperlink_id) or {
+		if err.msg() != 'HyperlinkMapOutOfMemory' {
+			return err
+		}
+		// hyperlink_map is out of space, realloc the page to be larger
+
+		// Attempt to allocate the space that would be required to
+		// insert a new copy of the cursor hyperlink uri in to the
+		// string alloc, since right now increaseCapacity always just
+		// adds an extra copy even if one already exists in the page.
+		// If this alloc fails then we know we also need to grow our
+		// string bytes.
+		//
+		// FIXME: increaseCapacity should not do this.
+		for {
+			link := self.cursor.hyperlink_state or { break }
+			if page.hyperlink_set.can_allocate_string_bytes(usize(link.uri.len)) {
+				break
+			}
+
+			// We didn't have enough room, let's increase string bytes
+			new_node := self.increase_capacity(self.cursor.page_pin.node, .string_bytes)!
+			assert voidptr(new_node) == voidptr(self.cursor.page_pin.node)
+			page = &new_node.data
+		}
+
+		_ = self.increase_capacity(self.cursor.page_pin.node, .hyperlink_bytes)!
+
+		// Retry
+		//
+		// We check that the cursor hyperlink hasn't been destroyed
+		// by the capacity adjustment first though- since despite the
+		// terrible code above, that can still apparently happen ._.
+		if self.cursor.hyperlink_id > 0 {
+			return self.cursor_set_hyperlink()
+		}
+		return
+	}
+
+	// Success, increase the refcount for the hyperlink.
+	page.hyperlink_set.use_link(self.cursor.hyperlink_id)
+}
 
 pub enum SemanticInputClear as u8 {
 	clear_explicit
@@ -3398,481 +4112,541 @@ pub:
 
 pub type CursorSemanticContent = CursorSemanticInput | CursorSemanticOutput | CursorSemanticPrompt
 
-// Set the semantic content type of the cursor.
-pub fn (mut self Screen) cursor_set_semantic_content(value CursorSemanticContent) {
-	match value {
+// Modify the semantic content type of the cursor. This should
+// be preferred over setting it manually since it handles all the
+// proper accounting.
+pub fn (mut self Screen) cursor_set_semantic_content(t CursorSemanticContent) {
+	match t {
 		CursorSemanticOutput {
 			self.cursor.semantic_content = .output
 			self.cursor.semantic_content_clear_eol = false
 		}
 		CursorSemanticInput {
 			self.cursor.semantic_content = .input
-			self.cursor.semantic_content_clear_eol = value.clear == .clear_eol
+			self.cursor.semantic_content_clear_eol = match t.clear {
+				.clear_explicit { false }
+				.clear_eol { true }
+			}
 		}
 		CursorSemanticPrompt {
 			self.semantic_prompt.seen = true
 			self.cursor.semantic_content = .prompt
 			self.cursor.semantic_content_clear_eol = false
-			idx := self.pages.active_start + int(self.cursor.y)
-			unsafe {
-				mut row := &self.pages.screen_rows[idx]
-				row.semantic_prompt = match value.kind {
-					.initial, .right { SemanticPromptType.prompt }
-					.continuation, .secondary { SemanticPromptType.prompt_continuation }
-				}
+			self.cursor.page_row.semantic_prompt = match t.kind {
+				.initial, .right { SemanticPromptType.prompt }
+				.continuation, .secondary { SemanticPromptType.prompt_continuation }
 			}
 		}
 	}
 }
 
-pub fn (mut self Screen) cursor_set_semantic_content_prompt(kind PromptKind) {
-	self.cursor_set_semantic_content(CursorSemanticPrompt{ kind: kind })
-}
+// Set the selection to the given selection. If this is a tracked selection
+// then the screen will take ownership of the selection. If this is untracked
+// then the screen will convert it to tracked internally. This will automatically
+// untrack the prior selection (if any).
+//
+// Set the selection to null to clear any previous selection.
+//
+// This is always recommended over setting `selection` directly. Beyond
+// managing memory for you, it also performs safety checks that the selection
+// is always tracked.
+pub fn (mut self Screen) select(sel_ ?Selection) ! {
+	sel := sel_ or {
+		self.clear_selection()
+		return
+	}
 
-pub fn (mut self Screen) cursor_set_semantic_content_output() {
-	self.cursor_set_semantic_content(CursorSemanticOutput{})
-}
+	// If this selection is untracked then we track it.
+	tracked_sel := if sel.tracked() { sel } else { sel.track(mut self) }
 
-pub fn (mut self Screen) cursor_set_semantic_content_input(clear_eol bool) {
-	self.cursor_set_semantic_content(CursorSemanticInput{
-		clear: if clear_eol { .clear_eol } else { .clear_explicit }
-	})
-}
-
-// ============================================================
-// Selection
-// ============================================================
-
-// Set the selection, replacing any previous selection.
-pub fn (mut self Screen) select(sel ?Selection) ! {
-	self.selection = sel
+	// Untrack prior selection
+	if old := self.selection {
+		old.deinit(mut self)
+	}
+	self.selection = tracked_sel
 	self.dirty.set_selection(true)
 }
 
-// Clear the current selection.
+// Same as select(null) but can't fail.
 pub fn (mut self Screen) clear_selection() {
-	if self.selection != none {
+	if sel := self.selection {
+		sel.deinit(mut self)
 		self.dirty.set_selection(true)
 	}
 	self.selection = none
 }
 
-// Get the string for a selection.
-pub fn (self &Screen) selection_string(opts SelectionString) !string {
+// Returns the raw text associated with a selection. This will unwrap
+// soft-wrapped edges. The returned slice is owned by the caller and allocated
+// using alloc, not the allocator associated with the screen (unless they match).
+//
+// For more flexibility, use a ScreenFormatter directly.
+pub fn (mut self Screen) selection_string(opts SelectionString) !string {
+	// Create a formatter and use that to emit our text.
 	mut formatter := ScreenFormatter.init(self, FormatOptions{
-		emit: .plain
+		emit:   .plain
 		unwrap: true
-		trim: opts.trim
+		trim:   opts.trim
 	})
-	formatter.content = ScreenContent(ScreenContentSelection{
+	formatter.content = ScreenContentSelection{
 		sel: opts.sel
-	})
-	mut pin_map := PinMap{}
-	if !isnil(opts.map) {
-		formatter.pin_map = &pin_map
 	}
 
-	result := formatter.format()
-	if !isnil(opts.map) {
+	// If we have a string map, we need to set that up.
+	mut pins := PinMap{}
+	if opts.map != unsafe { nil } {
+		formatter.pin_map = &pins
+	}
+
+	// Emit.
+	text := formatter.format()
+
+	// Build our final text and if we have a string map set that up.
+	if opts.map != unsafe { nil } {
+		mut map_out := opts.map
 		unsafe {
-			mut output_map := opts.map
-			output_map.string = result
-			output_map.map = pin_map.pins.clone()
+			*map_out = StringMap{
+				string: text.clone()
+				map:    pins.pins
+			}
 		}
 	}
-	return result
+
+	return text
 }
 
-// Select a line around the given pin.
+// Select the line under the given point. This will select across soft-wrapped
+// lines and will omit the leading and trailing whitespace. If the point is
+// over whitespace but the line has non-whitespace characters elsewhere, the
+// line will be selected.
 pub fn (self &Screen) select_line(opts SelectLine) ?Selection {
-	if int(opts.pin.y) >= self.pages.screen_rows.len || opts.pin.x >= self.pages.cols {
-		return none
-	}
-
-	semantic_state := self.pages.screen_rows[int(opts.pin.y)].cells[int(opts.pin.x)].semantic_content
-
-	mut start_pin := Pin{ x: 0, y: opts.pin.y }
-	mut found_start_boundary := false
+	// Get the current point semantic prompt state since that determines
+	// boundary conditions too. This makes it so that line selection can
+	// only happen within the same prompt state. For example, if you triple
+	// click output, but the shell uses spaces to soft-wrap to the prompt
+	// then the selection will stop prior to the prompt. See issue #1329.
+	mut semantic_prompt_state := ?SemanticContent(none)
 	if opts.semantic_prompt_boundary {
-		cells := self.pages.screen_rows[int(opts.pin.y)].cells
-		for offset in u32(0) .. opts.pin.x + 1 {
-			x := opts.pin.x - offset
-			if cells[int(x)].semantic_content != semantic_state {
-				start_pin = Pin{ x: x + 1, y: opts.pin.y }
-				found_start_boundary = true
-				break
-			}
-		}
+		rac := opts.pin.row_and_cell()
+		semantic_prompt_state = rac.cell.semantic_content
 	}
 
-	if !found_start_boundary {
-		mut prior_y := int(opts.pin.y) - 1
-		mut previous := Pin{ x: 0, y: opts.pin.y }
-		for prior_y >= 0 {
-			row := self.pages.screen_rows[prior_y]
-			if !row.wrap {
-				previous.x = 0
-				start_pin = previous
-				found_start_boundary = true
-				break
-			}
+	// The real start of the row is the first row in the soft-wrap.
+	start_pin := select_line_start_pin(opts, semantic_prompt_state)
 
-			if opts.semantic_prompt_boundary {
-				mut semantic_boundary := false
-				for reverse_x := int(self.pages.cols) - 1; reverse_x >= 0; reverse_x-- {
-					if row.cells[reverse_x].semantic_content != semantic_state {
-						semantic_boundary = true
-						break
-					}
-					previous = Pin{ x: u32(reverse_x), y: u32(prior_y) }
-				}
-				if semantic_boundary {
-					start_pin = previous
-					found_start_boundary = true
-					break
-				}
-			} else {
-				previous = Pin{ x: 0, y: u32(prior_y) }
-			}
-			prior_y--
-		}
-		if !found_start_boundary {
-			previous.x = 0
-			start_pin = previous
-		}
-	}
+	// The real end of the row is the final row in the soft-wrap.
+	end_pin := select_line_end_pin(opts, semantic_prompt_state)?
 
-	mut end_pin := Pin{}
-	mut found_end_boundary := false
-	mut y := int(opts.pin.y)
-	for y < self.pages.screen_rows.len {
-		row := self.pages.screen_rows[y]
-		if opts.semantic_prompt_boundary {
-			start_x := if y == int(opts.pin.y) { int(opts.pin.x) } else { 0 }
-			if start_x == 0 && row.cells[0].semantic_content != semantic_state {
-				if y == 0 {
-					return none
-				}
-				end_pin = Pin{ x: self.pages.cols - 1, y: u32(y - 1) }
-				found_end_boundary = true
-				break
-			}
-			for x in start_x .. int(self.pages.cols) {
-				if row.cells[x].semantic_content != semantic_state {
-					end_pin = Pin{ x: u32(x - 1), y: u32(y) }
-					found_end_boundary = true
-					break
-				}
-			}
-			if found_end_boundary {
-				break
-			}
-		}
-		if !row.wrap {
-			end_pin = Pin{ x: self.pages.cols - 1, y: u32(y) }
-			found_end_boundary = true
-			break
-		}
-		y++
-	}
-	if !found_end_boundary {
-		return none
-	}
-
-	// Trim whitespace if requested
-	if ws := opts.whitespace {
-		mut start_it := self.pages.cell_iterator(start_pin, .right_down, end_pin)
-		mut trimmed_start := ?Pin(none)
-		for {
-			pin := start_it.next() or { break }
-			cell := self.pages.screen_rows[int(pin.y)].cells[int(pin.x)]
-			if cell.has_text() && !is_codepoint_in(cell.codepoint(), ws) {
-				trimmed_start = pin
-				break
-			}
-		}
-
-		mut end_it := self.pages.cell_iterator(end_pin, .left_up, start_pin)
-		mut trimmed_end := ?Pin(none)
-		for {
-			pin := end_it.next() or { break }
-			cell := self.pages.screen_rows[int(pin.y)].cells[int(pin.x)]
-			if cell.has_text() && !is_codepoint_in(cell.codepoint(), ws) {
-				trimmed_end = pin
-				break
-			}
-		}
-
-		return Selection.init(trimmed_start or { return none }, trimmed_end or { return none }, false)
-	}
-
-	return Selection.init(start_pin, end_pin, false)
-}
-
-fn is_codepoint_in(cp u32, list []u32) bool {
-	for v in list {
-		if cp == v {
-			return true
-		}
-	}
-	return false
-}
-
-// Select all content on the screen, trimming surrounding whitespace.
-pub fn (mut self Screen) select_all() ?Selection {
-	whitespace := [u32(0), u32(` `), u32(`\t`)]
-
-	// Find start (first non-whitespace)
-	mut start := ?Pin(none)
-	for y in 0 .. self.pages.screen_rows.len {
-		row := self.pages.screen_rows[y]
-		for x in 0 .. int(self.pages.cols) {
-			if x < row.cells.len {
-				cp := row.cells[x].codepoint
-				if cp != 0 && !is_codepoint_in(cp, whitespace) {
-					start = Pin{ x: u32(x), y: u32(y) }
-					break
-				}
-			}
-		}
-		if start != none {
-			break
-		}
-	}
-
-	s := start or { return none }
-
-	// Find end (last non-whitespace)
-	mut end := ?Pin(none)
-	for rev_y := self.pages.screen_rows.len - 1; rev_y >= 0; rev_y-- {
-		row := self.pages.screen_rows[rev_y]
-		for rev_x := int(self.pages.cols) - 1; rev_x >= 0; rev_x-- {
-			if rev_x < row.cells.len {
-				cp := row.cells[rev_x].codepoint
-				if cp != 0 && !is_codepoint_in(cp, whitespace) {
-					end = Pin{ x: u32(rev_x), y: u32(rev_y) }
-					break
-				}
-			}
-		}
-		if end != none {
-			break
-		}
-	}
-
-	e := end or { return none }
-	return Selection.init(s, e, false)
-}
-
-// Select a word near start that is between start and end.
-pub fn (self &Screen) select_word_between(start Pin, end_p Pin, boundary_codepoints []u32) ?Selection {
-	if start.before(end_p) {
-		// Iterate right_down from start to end
-		mut pin := start
-		for pin.y <= end_p.y {
-			if pin.y == end_p.y && pin.x > end_p.x {
-				break
-			}
-			if sel := self.select_word(pin, boundary_codepoints) {
-				return sel
-			}
-			// Move to next cell
-			pin.x += 1
-			if pin.x >= self.pages.cols {
-				pin.x = 0
-				pin.y += 1
-			}
-		}
+	// Go forward from the start to find the first non-whitespace character.
+	start := if whitespace := opts.whitespace {
+		first_non_whitespace(start_pin, .right_down, end_pin, whitespace)?
 	} else {
-		// Iterate left_up from start to end
-		mut pin := start
-		for {
-			if sel := self.select_word(pin, boundary_codepoints) {
-				return sel
-			}
-			if pin.eql(end_p) || pin.before(end_p) {
-				break
-			}
-			if pin.x > 0 {
-				pin.x -= 1
-			} else if pin.y > 0 {
-				pin.y -= 1
-				pin.x = self.pages.cols - 1
-			} else {
-				break
-			}
-		}
-	}
-	return none
-}
-
-// Select the word under the given pin.
-pub fn (self &Screen) select_word(pin Pin, boundary_codepoints []u32) ?Selection {
-	if int(pin.y) >= self.pages.screen_rows.len {
-		return none
+		start_pin
 	}
 
-	row := self.pages.screen_rows[int(pin.y)]
-	if int(pin.x) >= row.cells.len {
-		return none
-	}
-	start_cell := row.cells[int(pin.x)]
-	if !start_cell.has_text() {
-		return none
-	}
-
-	expect_boundary := is_codepoint_in(start_cell.codepoint, boundary_codepoints)
-
-	// Go forwards to find end
-	mut end := pin
-	mut fx := int(pin.x) + 1
-	mut fy := int(pin.y)
-	for {
-		if fy >= self.pages.screen_rows.len {
-			break
-		}
-		cur_row := self.pages.screen_rows[fy]
-		if fx >= int(self.pages.cols) {
-			if !cur_row.wrap {
-				break
-			}
-			fx = 0
-			fy += 1
-			continue
-		}
-		if fx >= cur_row.cells.len {
-			break
-		}
-		cell := cur_row.cells[fx]
-		if !cell.has_text() {
-			break
-		}
-		this_boundary := is_codepoint_in(cell.codepoint, boundary_codepoints)
-		if this_boundary != expect_boundary {
-			break
-		}
-		end = Pin{ x: u32(fx), y: u32(fy) }
-		fx += 1
-	}
-
-	// Go backwards to find start
-	mut start := pin
-	mut bx := int(pin.x) - 1
-	mut by := int(pin.y)
-	for {
-		if by < 0 {
-			break
-		}
-		if bx < 0 {
-			if by == 0 {
-				break
-			}
-			prev_row := self.pages.screen_rows[by - 1]
-			if !prev_row.wrap {
-				break
-			}
-			by -= 1
-			bx = int(self.pages.cols) - 1
-			continue
-		}
-		if by >= self.pages.screen_rows.len {
-			break
-		}
-		cur_row := self.pages.screen_rows[by]
-		if bx >= cur_row.cells.len {
-			break
-		}
-		cell := cur_row.cells[bx]
-		if !cell.has_text() {
-			break
-		}
-		this_boundary := is_codepoint_in(cell.codepoint, boundary_codepoints)
-		if this_boundary != expect_boundary {
-			break
-		}
-		start = Pin{ x: u32(bx), y: u32(by) }
-		bx -= 1
+	// Go backward from the end to find the first non-whitespace character.
+	end := if whitespace := opts.whitespace {
+		first_non_whitespace(end_pin, .left_up, start_pin, whitespace)?
+	} else {
+		end_pin
 	}
 
 	return Selection.init(start, end, false)
 }
 
-// Select command output around the given pin.
-pub fn (mut self Screen) select_output(pin Pin) ?Selection {
-	if int(pin.y) >= self.pages.screen_rows.len {
-		return none
+// The `start_pin` block of selectLine.
+fn select_line_start_pin(opts SelectLine, semantic_prompt_state ?SemanticContent) Pin {
+	mut it := opts.pin.row_iterator(.left_up, none)
+	mut it_prev := it.next() or { panic('row iterator yields its own row') } // skip self
+
+	// First, check the current row for semantic boundaries before the clicked position.
+	if v := semantic_prompt_state {
+		row := it_prev.row_and_cell().row
+		cells := it_prev.node.data.get_cells(row)
+		// Scan backwards from clicked position to find where our content starts
+		for i in 0 .. int(opts.pin.x) + 1 {
+			x_rev := int(opts.pin.x) - i
+			if cells[x_rev].semantic_content != v {
+				mut copy := it_prev
+				copy.x = u16(x_rev + 1)
+				return copy
+			}
+		}
+
+		// No boundary found before clicked position on current row.
+		// If row doesn't wrap from above, start is at column 0.
+		// Otherwise, continue checking previous rows.
 	}
-	row := self.pages.screen_rows[int(pin.y)]
-	if int(pin.x) >= row.cells.len {
-		return none
+
+	for {
+		p := it.next() or { break }
+		row := p.row_and_cell().row
+
+		if !row.wrap {
+			mut copy := it_prev
+			copy.x = 0
+			return copy
+		}
+
+		if v := semantic_prompt_state {
+			// We need to check every cell in this row in reverse
+			// order since we're going up and back.
+			cells := p.node.data.get_cells(row)
+			for x in 0 .. cells.len {
+				x_rev := cells.len - 1 - x
+				cell := cells[x_rev]
+				if cell.semantic_content != v {
+					return it_prev
+				}
+				it_prev = p
+				it_prev.x = u16(x_rev)
+			}
+
+			continue
+		}
+
+		it_prev = p
 	}
-	cell := row.cells[int(pin.x)]
-	if cell.semantic_content != .output {
+
+	mut copy := it_prev
+	copy.x = 0
+	return copy
+}
+
+// The `end_pin` block of selectLine.
+fn select_line_end_pin(opts SelectLine, semantic_prompt_state ?SemanticContent) ?Pin {
+	mut it := opts.pin.row_iterator(.right_down, none)
+	for {
+		p := it.next() or { break }
+		row := p.row_and_cell().row
+
+		if v := semantic_prompt_state {
+			// We need to check every cell in this row
+			cells := p.node.data.get_cells(row)
+
+			// If this is our pin row we can start from our x because
+			// the start_pin logic already found the real start.
+			start_offset := if voidptr(p.node) == voidptr(opts.pin.node) && p.y == opts.pin.y {
+				int(opts.pin.x)
+			} else {
+				0
+			}
+
+			// Handle the zero case specially because if the first
+			// col doesn't match then we end at the end of the prior
+			// row. But if this is the first row, we can't go back,
+			// so we scan forward to find where our content ends.
+			if start_offset == 0 && cells[0].semantic_content != v {
+				mut prev := p.up(1) or { panic('selected row has no previous row') }
+				prev.x = p.node.data.size.cols - 1
+				return prev
+			}
+
+			// For every other case, we end at the prior cell.
+			for x in start_offset .. cells.len {
+				if cells[x].semantic_content != v {
+					mut copy := p
+					copy.x = u16(x - 1)
+					return copy
+				}
+			}
+		}
+
+		if !row.wrap {
+			mut copy := p
+			copy.x = p.node.data.size.cols - 1
+			return copy
+		}
+	}
+
+	return none
+}
+
+// Iterate cells from `from` towards `limit` and return the first one whose
+// text is not in `whitespace`. Shared by selectLine, selectAll, and friends.
+fn first_non_whitespace(from Pin, direction IterDirection, limit ?Pin, whitespace []u32) ?Pin {
+	mut it := from.cell_iterator(direction, limit)
+	for {
+		p := it.next() or { break }
+		cell := p.row_and_cell().cell
+		if !cell.has_text() {
+			continue
+		}
+
+		// Non-empty means we found it.
+		this_whitespace := cell.codepoint in whitespace
+		if this_whitespace {
+			continue
+		}
+
+		return p
+	}
+
+	return none
+}
+
+// Return the selection for all contents on the screen. Surrounding
+// whitespace is omitted. If there is no selection, this returns null.
+pub fn (mut self Screen) select_all() ?Selection {
+	whitespace := [u32(0), u32(` `), u32(`\t`)]
+
+	start := first_non_whitespace_in(self.pages.cell_iterator(.right_down, Point{
+		tag: .screen
+	}, none), whitespace)?
+
+	end := first_non_whitespace_in(self.pages.cell_iterator(.left_up, Point{
+		tag: .screen
+	}, none), whitespace)?
+
+	return Selection.init(start, end, false)
+}
+
+fn first_non_whitespace_in(iterator CellIterator, whitespace []u32) ?Pin {
+	mut it := iterator
+	for {
+		p := it.next() or { break }
+		cell := p.row_and_cell().cell
+		if !cell.has_text() {
+			continue
+		}
+
+		// Non-empty means we found it.
+		this_whitespace := cell.codepoint in whitespace
+		if this_whitespace {
+			continue
+		}
+
+		return p
+	}
+
+	return none
+}
+
+// Select the nearest word to start point that is between start_pt and
+// end_pt (inclusive). Because it selects "nearest" to start point, start
+// point can be before or after end point.
+//
+// The boundary_codepoints parameter should be a slice of u21 codepoints that
+// mark word boundaries, passed through to selectWord.
+//
+// TODO: test this
+pub fn (mut self Screen) select_word_between(start Pin, end Pin, boundary_codepoints []u32) ?Selection {
+	dir := if start.before(end) { IterDirection.right_down } else { IterDirection.left_up }
+	mut it := start.cell_iterator(dir, end)
+	for {
+		pin := it.next() or { break }
+		// Boundary conditions
+		match dir {
+			.right_down {
+				if end.before(pin) {
+					return none
+				}
+			}
+			.left_up {
+				if pin.before(end) {
+					return none
+				}
+			}
+		}
+
+		// If we found a word, then return it
+		if sel := self.select_word(pin, boundary_codepoints) {
+			return sel
+		}
+	}
+
+	return none
+}
+
+// Select the word under the given point. A word is any consecutive series
+// of characters that are exclusively whitespace or exclusively non-whitespace.
+// A selection can span multiple physical lines if they are soft-wrapped.
+//
+// This will return null if a selection is impossible. The only scenario
+// this happens is if the point pt is outside of the written screen space.
+//
+// The boundary_codepoints parameter should be a slice of u21 codepoints that
+// mark word boundaries. This is expected to be pre-parsed from the config.
+pub fn (self &Screen) select_word(pin Pin, boundary_codepoints []u32) ?Selection {
+	// If our cell is empty we can't select a word, because we can't select
+	// areas where the screen is not yet written.
+	start_cell := pin.row_and_cell().cell
+	if !start_cell.has_text() {
 		return none
 	}
 
-	mut prior_it := self.pages.prompt_iterator(pin, .left_up, none)
-	prompt_pin := prior_it.next() or {
-		mut next_it := self.pages.prompt_iterator(pin, .right_down, none)
-		next := next_it.next() or { return none }
-		mut end_pin := next.up(1) or { return none }
-		end_pin.x = self.pages.cols - 1
+	// Determine if we are a boundary or not to determine what our boundary is.
+	expect_boundary := start_cell.codepoint in boundary_codepoints
+
+	// Go forwards to find our end boundary
+	end := select_word_end(pin, boundary_codepoints, expect_boundary)
+
+	// Go backwards to find our start boundary
+	start := select_word_start(pin, boundary_codepoints, expect_boundary)
+
+	return Selection.init(start, end, false)
+}
+
+// The `end` block of selectWord.
+fn select_word_end(pin Pin, boundary_codepoints []u32, expect_boundary bool) Pin {
+	mut it := pin.cell_iterator(.right_down, none)
+	mut prev := it.next() or { panic('cell iterator yields its own cell') } // Consume one, our start
+	for {
+		p := it.next() or { break }
+		rac := p.row_and_cell()
+		cell := rac.cell
+
+		// If we reached an empty cell its always a boundary
+		if !cell.has_text() {
+			return prev
+		}
+
+		// If we do not match our expected set, we hit a boundary
+		this_boundary := cell.codepoint in boundary_codepoints
+		if this_boundary != expect_boundary {
+			return prev
+		}
+
+		// If we are going to the next row and it isn't wrapped, we
+		// return the previous.
+		if p.x == p.node.data.size.cols - 1 && !rac.row.wrap {
+			return p
+		}
+
+		prev = p
+	}
+
+	return prev
+}
+
+// The `start` block of selectWord.
+fn select_word_start(pin Pin, boundary_codepoints []u32, expect_boundary bool) Pin {
+	mut it := pin.cell_iterator(.left_up, none)
+	mut prev := it.next() or { panic('cell iterator yields its own cell') } // Consume one, our start
+	for {
+		p := it.next() or { break }
+		rac := p.row_and_cell()
+		cell := rac.cell
+
+		// If we are going to the next row and it isn't wrapped, we
+		// return the previous.
+		if p.x == p.node.data.size.cols - 1 && !rac.row.wrap {
+			return prev
+		}
+
+		// If we reached an empty cell its always a boundary
+		if !cell.has_text() {
+			return prev
+		}
+
+		// If we do not match our expected set, we hit a boundary
+		this_boundary := cell.codepoint in boundary_codepoints
+		if this_boundary != expect_boundary {
+			return prev
+		}
+
+		prev = p
+	}
+
+	return prev
+}
+
+// Select the command output under the given point. The limits of the output
+// are determined by semantic prompt information provided by shell integration.
+// A selection can span multiple physical lines if they are soft-wrapped.
+//
+// This will return null if a selection is impossible:
+//  - the point pt is outside of the written screen space.
+//  - the point pt is on a prompt / input line.
+pub fn (mut self Screen) select_output(pin Pin) ?Selection {
+	// If our pin right now is not on output, then we return nothing.
+	if pin.row_and_cell().cell.semantic_content != .output {
+		return none
+	}
+
+	// Get the post prior prompt from this pin. This is the prompt whose
+	// output we'll be capturing.
+	mut prompt_it := pin.prompt_iterator(.left_up, none)
+
+	// If we have a prompt above this point (including this point),
+	// then thats the prompt we want to capture output from.
+	prompt_pin := prompt_it.next() or {
+		// If we don't have a prompt, then we assume that we're
+		// capturing all the output up to the next prompt.
+		prompt_it = pin.prompt_iterator(.right_down, none)
+		next := prompt_it.next() or { return none }
+
+		// We'll capture from the start of the screen to just above
+		// the prompt and will trim the trailing whitespace.
 		start_pin := self.pages.get_top_left(.screen)
-		mut cell_it := self.pages.cell_iterator(end_pin, .left_up, start_pin)
+		mut end_pin := next.up(1) or { return none }
+		end_pin.x = end_pin.node.data.size.cols - 1
+		mut cell_it := end_pin.cell_iterator(.left_up, start_pin)
 		for {
 			p := cell_it.next() or { break }
+			cell := p.row_and_cell().cell
 			end_pin = p
-			if self.pages.screen_rows[int(p.y)].cells[int(p.x)].has_text() {
+			if cell.has_text() {
 				break
 			}
 		}
+
 		return Selection.init(start_pin, end_pin, false)
 	}
 
-	mut semantic := self.pages.highlight_semantic_content(prompt_pin, .output) or {
-		return none
-	}
-	mut cell_it := self.pages.cell_iterator(semantic.end, .left_up, semantic.start)
+	// Grab our content
+	mut hl := self.pages.highlight_semantic_content(prompt_pin, .output) or { return none }
+
+	// Trim our trailing whitespace
+	mut cell_it := hl.end.cell_iterator(.left_up, hl.start)
 	for {
 		p := cell_it.next() or { break }
-		semantic.end = p
-		if self.pages.screen_rows[int(p.y)].cells[int(p.x)].has_text() {
+		cell := p.row_and_cell().cell
+		hl.end = p
+		if cell.has_text() {
 			break
 		}
 	}
-	return Selection.init(semantic.start, semantic.end, false)
+
+	return Selection.init(hl.start, hl.end, false)
 }
 
-// Returns a line iterator starting from the given pin.
+// Returns an iterator to move through the soft-wrapped lines starting
+// from pin.
 pub fn (self &Screen) line_iterator(start Pin) LineIterator {
 	return LineIterator{
-		screen: self
+		screen:  unsafe { self }
 		current: start
 	}
 }
 
-// ============================================================
-// Prompt click movement
-// ============================================================
-
-// Determine cursor movement needed to move to a click location in a prompt.
-pub fn (self &Screen) prompt_click_move(click_pin Pin) PromptClickMove {
-	// The pen may have moved on to a different semantic state while the
-	// cursor still rests on previously written input. Either state makes
-	// prompt navigation possible.
-	cursor_y := self.pages.active_start + int(self.cursor.y)
-	cursor_cell_is_input := cursor_y >= 0 && cursor_y < self.pages.screen_rows.len
-		&& int(self.cursor.x) < self.pages.screen_rows[cursor_y].cells.len
-		&& self.pages.screen_rows[cursor_y].cells[int(self.cursor.x)].semantic_content == .input
-	if self.cursor.semantic_content != .input && !cursor_cell_is_input {
+// Determine the inputs necessary to move the cursor to the given
+// click location within a prompt input area.
+//
+// If the cursor isn't currently at a prompt input location, this
+// returns no movement.
+//
+// This feature depends on well-behaved OSC133 shell integration. Specifically,
+// this only moves over designated input areas (OSC 133 B). It is assumed
+// that the shell will only move the cursor to input cells, so prompt cells
+// and other blank cells are ignored as part of the movement calculation.
+pub fn (mut self Screen) prompt_click_move(click_pin Pin) PromptClickMove {
+	// If we're not at an input cell with our cursor, no movement will
+	// ever be possible.
+	if self.cursor.semantic_content != .input && self.cursor.page_cell.semantic_content != .input {
 		return prompt_click_move_zero
 	}
-	match self.semantic_prompt.click.tag {
+
+	return match self.semantic_prompt.click.tag {
+		// None doesn't support movement and click_events must use a
+		// different mechanism (SGR mouse events) that callers must handle.
 		.none, .click_events {
-			return prompt_click_move_zero
+			prompt_click_move_zero
 		}
 		.cl {
-			return match self.semantic_prompt.click.cl {
+			match self.semantic_prompt.click.cl {
+				// All of these currently use dumb line-based navigation.
+				// But eventually we'll support more.
 				.line, .multiple, .conservative_vertical, .smart_vertical {
 					self.prompt_click_line(click_pin)
 				}
@@ -3881,346 +4655,272 @@ pub fn (self &Screen) prompt_click_move(click_pin Pin) PromptClickMove {
 	}
 }
 
-fn (self &Screen) prompt_click_line(click_pin Pin) PromptClickMove {
-	cursor_pin := Pin{ x: self.cursor.x, y: u32(self.pages.active_start) + self.cursor.y }
+// Determine the inputs required to move from the cursor to the given
+// click location. If the cursor isn't currently at a prompt input
+// location, this will return zero.
+//
+// This currently only supports moving a single line.
+fn (mut self Screen) prompt_click_line(click_pin Pin) PromptClickMove {
+	// If our click pin is our cursor pin, no movement is needed.
+	// Do this early so we can assume later that they are different.
+	cursor_pin := *self.cursor.page_pin
 	if cursor_pin.eql(click_pin) {
 		return prompt_click_move_zero
 	}
 
-	// The cursor cell's semantic content, used to decide whether to add a
-	// trailing empty input cell to move to at the end (editor behavior).
-	cursor_cell_input := if int(cursor_pin.y) < self.pages.screen_rows.len
-		&& int(cursor_pin.x) < self.pages.screen_rows[int(cursor_pin.y)].cells.len {
-		self.pages.screen_rows[int(cursor_pin.y)].cells[int(cursor_pin.x)].semantic_content == .input
-	} else {
-		false
-	}
-
+	// If our cursor is before our click, we're only emitting right inputs.
 	if cursor_pin.before(click_pin) {
-		// Moving right
-		mut count := 0
-		mut y := int(cursor_pin.y)
-		for y <= int(click_pin.y) && y < self.pages.screen_rows.len {
-			row := self.pages.screen_rows[y]
-			is_cursor_row := u32(y) == cursor_pin.y
+		mut count := usize(0)
+
+		// We go row-by-row because soft-wrapped rows are still a single
+		// line to a shell, so we can't just look at our page row.
+		mut row_it := cursor_pin.row_iterator(.right_down, click_pin)
+		row_loop: for {
+			row_pin := row_it.next() or { break }
+			rac := row_pin.row_and_cell()
+			cells := row_pin.node.data.get_cells(rac.row)
+
+			// Determine if this row is our cursor.
+			is_cursor_row := voidptr(row_pin.node) == voidptr(cursor_pin.node)
+				&& row_pin.y == cursor_pin.y
+
 			// If this is not the cursor row, verify it's still part of the
 			// continuation of our starting prompt.
-			if !is_cursor_row && row.semantic_prompt != .prompt_continuation {
+			if !is_cursor_row && rac.row.semantic_prompt != .prompt_continuation {
 				break
 			}
-			// Determine where our input starts. On the cursor row we start
-			// after the cursor. Otherwise we start at the first input cell.
-			mut start_x := 0
-			if is_cursor_row {
-				start_x = int(cursor_pin.x) + 1
-			} else {
-				start_x = int(self.pages.cols)
-				for x in 0 .. int(self.pages.cols) {
-					if x < row.cells.len && row.cells[x].semantic_content == .input {
-						start_x = x
-						break
-					}
+
+			// Determine where our input starts.
+			start_x := prompt_input_start_x(is_cursor_row, cursor_pin, cells)
+
+			// Iterate over the input cells and assume arrow keys only
+			// jump to input cells.
+			for x in start_x .. cells.len {
+				cell := cells[x]
+				// Ignore non-input cells, but allow breaks. We assume
+				// the shell will translate arrow keys to only input
+				// areas.
+				if cell.semantic_content != .input {
+					continue
+				}
+
+				// Increment our input count
+				count += 1
+
+				// If this is our target, we're done.
+				if voidptr(row_pin.node) == voidptr(click_pin.node) && row_pin.y == click_pin.y
+					&& x == int(click_pin.x) {
+					break row_loop
 				}
 			}
-			for x in start_x .. int(self.pages.cols) {
-				if x < row.cells.len && row.cells[x].semantic_content == .input {
-					count += 1
-					if u32(y) == click_pin.y && u32(x) == click_pin.x {
-						return PromptClickMove{ left: 0, right: count }
-					}
-				}
-			}
-			if !row.wrap {
-				// If we never found our pin, we clicked further right/beyond
-				// it. If we're already on a non-empty input cell then we add
-				// one so we can move to the newest, empty cell at the end,
-				// matching typical editor behavior.
-				if cursor_cell_input {
+
+			// If this row isn't soft-wrapped, we need to break out
+			// because line based moving only handles single lines.
+			// We're done!
+			if !rac.row.wrap {
+				// If we never found our pin, that means we clicked further
+				// right/beyond it. If we're already on a non-empty input cell
+				// then we add one so we can move to the newest, empty cell
+				// at the end, matching typical editor behavior.
+				if self.cursor.page_cell.semantic_content == .input {
 					count += 1
 				}
+
 				break
 			}
-			y += 1
 		}
-		return PromptClickMove{ left: 0, right: count }
-	} else {
-		// Moving left
-		mut count := 0
-		mut y := int(cursor_pin.y)
-		for y >= int(click_pin.y) && y >= 0 {
-			if y >= self.pages.screen_rows.len {
-				y -= 1
+
+		return PromptClickMove{
+			left:  0
+			right: count
+		}
+	}
+
+	// Otherwise, cursor is after click, so we're emitting left inputs.
+	mut count := usize(0)
+
+	// We go row-by-row because soft-wrapped rows are still a single
+	// line to a shell, so we can't just look at our page row.
+	mut row_it := cursor_pin.row_iterator(.left_up, click_pin)
+	row_loop_left: for {
+		row_pin := row_it.next() or { break }
+		rac := row_pin.row_and_cell()
+		cells := row_pin.node.data.get_cells(rac.row)
+
+		// Determine the length of the cells we look at in this row.
+		end_len := if voidptr(row_pin.node) == voidptr(cursor_pin.node) && row_pin.y == cursor_pin.y {
+			// If this is our cursor row then we end before the cursor.
+			int(cursor_pin.x)
+		} else {
+			// Otherwise, we end at the last cell in the row.
+			cells.len
+		}
+
+		// Iterate backwards over the input cells.
+		for rev_x in 0 .. end_len {
+			x := end_len - 1 - rev_x
+			cell := cells[x]
+
+			// Ignore non-input cells.
+			if cell.semantic_content != .input {
 				continue
 			}
-			row := self.pages.screen_rows[y]
-			is_cursor_row := u32(y) == cursor_pin.y
-			end_x := if is_cursor_row { int(cursor_pin.x) } else { int(self.pages.cols) }
-			for rev_x := end_x - 1; rev_x >= 0; rev_x-- {
-				if rev_x < row.cells.len && row.cells[rev_x].semantic_content == .input {
-					count += 1
-					if u32(y) == click_pin.y && u32(rev_x) == click_pin.x {
-						return PromptClickMove{ left: count, right: 0 }
-					}
-				}
+
+			// Increment our input count
+			count += 1
+
+			// If this is our target, we're done.
+			if voidptr(row_pin.node) == voidptr(click_pin.node) && row_pin.y == click_pin.y
+				&& x == int(click_pin.x) {
+				break row_loop_left
 			}
-			if !row.wrap_continuation {
-				break
-			}
-			y -= 1
 		}
-		return PromptClickMove{ left: count, right: 0 }
+
+		// If this row is not a wrap continuation, then break out
+		if !rac.row.wrap_continuation {
+			break
+		}
+	}
+
+	return PromptClickMove{
+		left:  count
+		right: 0
 	}
 }
 
-// ============================================================
-// Dump / Format
-// ============================================================
+// The `start_x` block of promptClickLine.
+fn prompt_input_start_x(is_cursor_row bool, cursor_pin Pin, cells []CellData) int {
+	// If this is our cursor row then we start after the cursor.
+	if is_cursor_row {
+		return int(cursor_pin.x) + 1
+	}
+
+	// Otherwise, we start at the first input cell, because
+	// we expect the shell to properly translate arrows across
+	// lines to the start of the input. Some shells indent
+	// where input starts on subsequent lines so we must do
+	// this.
+	for x, cell in cells {
+		if cell.semantic_content == .input {
+			return x
+		}
+	}
+
+	// We never found an input cell, so we need to move to the
+	// next row.
+	return cells.len
+}
 
 // Options for dumping an inclusive screen region.
 pub struct DumpStringOptions {
 pub:
-	tl     Pin
-	br     ?Pin
+	// The start and end points of the dump, both inclusive. The x will
+	// be ignored and the full row will always be dumped.
+	tl Pin
+	br ?Pin
+	// If true, this will unwrap soft-wrapped lines. If false, this will
+	// dump the screen as it is visually seen in a rendered window.
 	unwrap bool = true
 }
 
-// Dump the screen through the shared formatter. The supplied pins are
-// absolute flat-storage pins; when br is omitted the screen's final written
-// cell is used. This is the writer-independent V equivalent of Ghostty's
-// Screen.dumpString.
+// Dump the screen to a string.
 pub fn (self &Screen) dump_string(opts DumpStringOptions) !string {
-	if int(opts.tl.y) >= self.pages.screen_rows.len || opts.tl.x >= self.pages.cols {
-		return error('UnknownPoint')
-	}
-	br := opts.br or { self.pages.get_bottom_right(.screen) or { return error('UnknownPoint') } }
-	if int(br.y) >= self.pages.screen_rows.len || br.x >= self.pages.cols {
-		return error('UnknownPoint')
-	}
-	mut formatter := PageFormatter.init(&self.pages, FormatOptions{
-		emit: .plain
+	// Create a formatter and use that to emit our text.
+	mut formatter := ScreenFormatter.init(self, FormatOptions{
+		emit:   .plain
 		unwrap: opts.unwrap
-		trim: false
+		trim:   false
 	})
-	formatter.start_x = opts.tl.x
-	formatter.start_y = opts.tl.y
-	formatter.end_x = br.x
-	formatter.end_y = br.y
+
+	// Set up the selection based on the pins
+	tl := opts.tl
+	br := opts.br or {
+		self.pages.get_bottom_right(.screen) or { return error('UnknownPoint') }
+	}
+
+	formatter.content = ScreenContentSelection{
+		sel: Selection.init(tl, br, false) // not rectangle
+	}
+
+	// Emit
 	return formatter.format()
 }
 
-// Dump screen contents to an allocated string without joining soft wraps.
-pub fn (self &Screen) dump_string_alloc(tag PointTag) !string {
-	tl := self.pages.get_top_left(tag)
-	br := self.pages.get_bottom_right(tag) or { return error('UnknownPoint') }
+// You should use dumpString, this is a restricted version mostly for
+// legacy and convenience reasons for unit tests.
+pub fn (self &Screen) dump_string_alloc(tl PointTag) !string {
 	return self.dump_string(DumpStringOptions{
-		tl: tl
-		br: br
+		tl:     self.pages.get_top_left(tl)
+		br:     self.pages.get_bottom_right(tl) or { return error('UnknownPoint') }
 		unwrap: false
 	})
 }
 
-// Dump unwrapped (soft-wraps joined) contents to a string.
-pub fn (self &Screen) dump_string_alloc_unwrapped(tag PointTag) !string {
-	tl := self.pages.get_top_left(tag)
-	br := self.pages.get_bottom_right(tag) or { return error('UnknownPoint') }
+// You should use dumpString, this is a restricted version mostly for
+// legacy and convenience reasons for unit tests.
+pub fn (self &Screen) dump_string_alloc_unwrapped(tl PointTag) !string {
 	return self.dump_string(DumpStringOptions{
-		tl: tl
-		br: br
+		tl:     self.pages.get_top_left(tl)
+		br:     self.pages.get_bottom_right(tl) or { return error('UnknownPoint') }
 		unwrap: true
 	})
 }
 
-// ============================================================
-// Grapheme support
-// ============================================================
-
-// Append a grapheme codepoint to a cell.
-// Append a grapheme codepoint to the given cell within the current cursor
-// row. The first codepoint stays on the cell; additional codepoints are
-// stored in the cell's graphemes slice and the content tag is switched to
-// codepoint_grapheme.
-pub fn (mut self Screen) append_grapheme(cell_x u32, cp u32) ! {
-	assert cell_x < self.pages.cols
-	idx := self.pages.active_start + int(self.cursor.y)
-	unsafe {
-		mut row := &self.pages.screen_rows[idx]
-		mut cell := &row.cells[int(cell_x)]
-		cell.graphemes << cp
-		cell.content_tag = .codepoint_grapheme
-		row.grapheme = true
-	}
-}
-
-// Clean up boundary conditions where a cell will become discontiguous with
-// a neighboring cell because either one of them will be moved and/or cleared.
-//
-// For performance reasons this is specialized to operate on the cursor row.
-//
-// Handles the boundary between the cell at `x` and the cell at `x - 1`.
-//
-// So, for example, when moving a region of cells [a, b] (inclusive), call this
-// function with `x = a` and `x = b + 1`. It is okay if `x` is out of bounds by
-// 1, this will be interpreted correctly.
-//
-// DOES NOT MODIFY ROW WRAP STATE! See cursor_reset_wrap for that.
-//
-// The following boundary conditions are handled:
-//
-// - `x - 1` is a wide character and `x` is a spacer tail:
-//   o Both cells will be cleared.
-//   o If `x - 1` is the start of the row and was wrapped from a previous row
-//     then the previous row is checked for a spacer head, which is cleared if
-//     present.
-//
-// - `x == 0` and is a wide character:
-//   o If the row is a wrap continuation then the previous row will be checked
-//     for a spacer head, which is cleared if present.
-//
-// - `x == cols` and `x - 1` is a spacer head:
-//   o `x - 1` will be cleared.
-pub fn (mut self Screen) split_cell_boundary(x u32) {
-	cols := self.pages.cols
-	// `x` may be up to and INCLUDING `cols`, since that signifies splitting
-	// the boundary to the right of the final cell in the row.
-	assert x <= cols
-
-	row_idx := self.pages.active_start + int(self.cursor.y)
-
-	// [ A B C D E F|]
-	//              ^ Boundary between final cell and row end.
-	if x == cols {
-		is_wrap := self.pages.screen_rows[row_idx].wrap
-		if !is_wrap {
-			return
-		}
-		// Spacer head at end of wrapped row.
-		last := int(cols) - 1
-		if self.pages.screen_rows[row_idx].cells[last].wide == .spacer_head {
-			self.clear_cells(row_idx, last, last + 1)
-		}
-		return
-	}
-
-	// [|A B C D E F ]
-	//  ^ Boundary between first cell and row start.
-	//
-	//  OR
-	//
-	// [ A|B C D E F ]
-	//    ^ Boundary between first cell and second cell.
-	//
-	// First cell may be a wrapped wide cell with a spacer head on the
-	// previous row that needs to be cleared.
-	if (x == 0 || x == 1) && self.pages.screen_rows[row_idx].wrap_continuation {
-		if self.pages.screen_rows[row_idx].cells[0].wide == .wide {
-			prev_idx := row_idx - 1
-			if prev_idx >= 0 {
-				last := int(cols) - 1
-				if self.pages.screen_rows[prev_idx].cells[last].wide == .spacer_head {
-					self.clear_cells(prev_idx, last, last + 1)
-				}
-			}
-		}
-	}
-
-	// If x is 0 then we're done.
-	if x == 0 {
-		return
-	}
-
-	// [ ... X|Y ... ]
-	//        ^ Boundary between two cells in the middle of the row.
-	xi := int(x)
-	assert x > 0
-	assert x < cols
-	left := self.pages.screen_rows[row_idx].cells[xi - 1]
-	match left.wide {
-		// There should not be spacer heads in the middle of the row.
-		.spacer_head { panic('unreachable spacer head in middle of row') }
-		// We don't need to do anything for narrow cells or spacer tails.
-		.narrow, .spacer_tail {}
-		// A wide char would be split, so must be cleared.
-		.wide {
-			self.clear_cells(row_idx, xi - 1, xi + 1)
-		}
-	}
-}
-
-// ============================================================
-// Test helper: write string to screen
-// ============================================================
-
-// Write a string to the screen at the cursor position.
-// This mirrors Ghostty's Screen.testWriteString test helper, including
-// Unicode cell widths, grapheme attachment, wide-cell spacers, styling,
-// hyperlinks, wrapping, and semantic prompt continuation state.
+// This is basically a really jank version of Terminal.printString. We
+// have to reimplement it here because we want a way to print to the screen
+// to test it but don't want all the features of Terminal.
 pub fn (mut self Screen) test_write_string(text string) ! {
-	runes := text.runes()
-	for c in runes {
-		// Explicit newline
-		if c == `\n` {
+	for c in text.runes() {
+		cp := u32(c)
+		// Explicit newline forces a new row
+		if cp == `\n` {
 			self.cursor_down_or_scroll()!
 			self.cursor_horizontal_absolute(0)
 			self.cursor.pending_wrap = false
 			if self.cursor.semantic_content_clear_eol {
-				self.cursor_set_semantic_content_output()
+				self.cursor_set_semantic_content(CursorSemanticOutput{})
 			} else {
 				match self.cursor.semantic_content {
 					.output {}
 					.prompt, .input {
-						idx := self.pages.active_start + int(self.cursor.y)
-						unsafe {
-							mut row := &self.pages.screen_rows[idx]
-							row.semantic_prompt = .prompt_continuation
-						}
+						self.cursor.page_row.semantic_prompt = .prompt_continuation
 					}
 				}
 			}
 			continue
 		}
 
-		width := if c <= 0xff { u32(1) } else { u32(unicode.get(u32(c)).width()) }
+		width := if cp <= 0xFF { 1 } else { int(unicode.get(cp).width()) }
 		if width == 0 {
-			assert self.cursor.x > 0
-			mut cell_x := self.cursor.x - 1
-			idx := self.pages.active_start + int(self.cursor.y)
-			match self.pages.screen_rows[idx].cells[int(cell_x)].wide {
-				.narrow, .wide {}
-				.spacer_head { panic('unreachable spacer head before zero-width codepoint') }
+			mut cell := self.cursor_cell_left(1)
+			match cell.wide {
+				.narrow {}
+				.wide {}
+				.spacer_head {
+					panic('spacer head before a zero-width codepoint')
+				}
 				.spacer_tail {
-					assert cell_x > 0
-					cell_x--
+					cell = self.cursor_cell_left(2)
 				}
 			}
-			self.append_grapheme(cell_x, u32(c))!
+
+			row_idx := self.cursor.page_pin.node.data.row_index(self.cursor.page_row)
+			self.cursor.page_pin.node.data.append_grapheme(row_idx, cell_index(self.cursor.page_row,
+				cell), cp)!
 			continue
 		}
 
 		if self.cursor.pending_wrap {
-			assert self.cursor.x == self.pages.cols - 1
+			assert self.cursor.x == u32(self.pages.cols) - 1
 			self.cursor.pending_wrap = false
-			// Mark current row as wrapped
-			cur_idx := self.pages.active_start + int(self.cursor.y)
-			unsafe {
-				mut row := &self.pages.screen_rows[cur_idx]
-				row.wrap = true
-			}
+			self.cursor.page_row.wrap = true
 			self.cursor_down_or_scroll()!
 			self.cursor_horizontal_absolute(0)
-			// Mark new row as continuation
-			new_idx := self.pages.active_start + int(self.cursor.y)
-			unsafe {
-				mut row := &self.pages.screen_rows[new_idx]
-				row.wrap_continuation = true
-			}
+			self.cursor.page_row.wrap_continuation = true
 			match self.cursor.semantic_content {
 				.output {}
 				.input, .prompt {
-					idx2 := self.pages.active_start + int(self.cursor.y)
-					unsafe {
-						mut row := &self.pages.screen_rows[idx2]
-						row.semantic_prompt = .prompt_continuation
-					}
+					self.cursor.page_row.semantic_prompt = .prompt_continuation
 				}
 			}
 		}
@@ -4228,91 +4928,100 @@ pub fn (mut self Screen) test_write_string(text string) ! {
 		assert width == 1 || width == 2
 		match width {
 			1 {
-				row_idx := self.pages.active_start + int(self.cursor.y)
 				unsafe {
-					mut row := &self.pages.screen_rows[row_idx]
-					row.cells[int(self.cursor.x)] = CellData{
-						codepoint: u32(c)
-						content_tag: .codepoint
-						style_id: self.cursor.style_id
-						is_protected: self.cursor.is_protected
+					*self.cursor.page_cell = CellData{
+						content_tag:      .codepoint
+						codepoint:        cp
+						style_id:         self.cursor.style_id
+						is_protected:     self.cursor.is_protected
 						semantic_content: self.cursor.semantic_content
-						style: self.cursor.style
-					}
-					if self.cursor.style_id != default_style_id {
-						row.styled = true
 					}
 				}
+
+				// If we have a ref-counted style, increase.
+				if self.cursor.style_id != default_style_id {
+					mut page := &self.cursor.page_pin.node.data
+					page.styles.use_style(self.cursor.style_id)
+					self.cursor.page_row.styled = true
+				}
+
+				// If we have a hyperlink, add it to the cell.
 				if self.cursor.hyperlink_id > 0 {
 					self.cursor_set_hyperlink()!
 				}
 			}
 			2 {
-				// A wide character at the last column first writes the spacer
-				// head and wraps. The character and its tail are then written on
-				// the following row.
-				if self.cursor.x == self.pages.cols - 1 {
-					row_idx := self.pages.active_start + int(self.cursor.y)
+				// Need a wide spacer head
+				if self.cursor.x == u32(self.pages.cols) - 1 {
 					unsafe {
-						mut row := &self.pages.screen_rows[row_idx]
-						row.cells[int(self.cursor.x)] = CellData{
-							content_tag: .codepoint
-							wide: .spacer_head
-							is_protected: self.cursor.is_protected
+						*self.cursor.page_cell = CellData{
+							content_tag:      .codepoint
+							codepoint:        0
+							wide:             .spacer_head
+							is_protected:     self.cursor.is_protected
 							semantic_content: self.cursor.semantic_content
 						}
-						row.wrap = true
 					}
+
+					// If we have a hyperlink, add it to the cell.
 					if self.cursor.hyperlink_id > 0 {
 						self.cursor_set_hyperlink()!
 					}
+
+					self.cursor.page_row.wrap = true
 					self.cursor_down_or_scroll()!
 					self.cursor_horizontal_absolute(0)
-					new_idx := self.pages.active_start + int(self.cursor.y)
-					unsafe {
-						mut row := &self.pages.screen_rows[new_idx]
-						row.wrap_continuation = true
+					self.cursor.page_row.wrap_continuation = true
+				}
+
+				// Write our wide char
+				unsafe {
+					*self.cursor.page_cell = CellData{
+						content_tag:      .codepoint
+						codepoint:        cp
+						style_id:         self.cursor.style_id
+						wide:             .wide
+						is_protected:     self.cursor.is_protected
+						semantic_content: self.cursor.semantic_content
 					}
 				}
 
-				row_idx := self.pages.active_start + int(self.cursor.y)
-				unsafe {
-					mut row := &self.pages.screen_rows[row_idx]
-					row.cells[int(self.cursor.x)] = CellData{
-						codepoint: u32(c)
-						content_tag: .codepoint
-						style_id: self.cursor.style_id
-						wide: .wide
-						is_protected: self.cursor.is_protected
-						semantic_content: self.cursor.semantic_content
-						style: self.cursor.style
-					}
-					if self.cursor.style_id != default_style_id {
-						row.styled = true
-					}
-				}
+				// If we have a hyperlink, add it to the cell.
 				if self.cursor.hyperlink_id > 0 {
 					self.cursor_set_hyperlink()!
 				}
 
+				// Write our tail
 				self.cursor_right(1)
 				unsafe {
-					mut row := &self.pages.screen_rows[row_idx]
-					row.cells[int(self.cursor.x)] = CellData{
-						content_tag: .codepoint
-						wide: .spacer_tail
-						is_protected: self.cursor.is_protected
+					*self.cursor.page_cell = CellData{
+						content_tag:      .codepoint
+						codepoint:        0
+						wide:             .spacer_tail
+						is_protected:     self.cursor.is_protected
 						semantic_content: self.cursor.semantic_content
 					}
 				}
+
+				// If we have a hyperlink, add it to the cell.
 				if self.cursor.hyperlink_id > 0 {
 					self.cursor_set_hyperlink()!
 				}
+
+				// If we have a ref-counted style, increase twice.
+				if self.cursor.style_id != default_style_id {
+					mut page := &self.cursor.page_pin.node.data
+					page.styles.use_style(self.cursor.style_id)
+					page.styles.use_style(self.cursor.style_id)
+					self.cursor.page_row.styled = true
+				}
 			}
-			else { panic('invalid Unicode cell width') }
+			else {
+				panic('unsupported codepoint width')
+			}
 		}
 
-		if self.cursor.x + 1 < self.pages.cols {
+		if self.cursor.x + 1 < u32(self.pages.cols) {
 			self.cursor_right(1)
 		} else {
 			self.cursor.pending_wrap = true

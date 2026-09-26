@@ -8,6 +8,7 @@ import configpkg
 import highlight
 import search as searchpkg
 import termio as termiopkg
+import math
 import time
 import sync
 import osc
@@ -94,6 +95,12 @@ fn make_test_surface() Surface {
 		}
 		renderer_thread: make_test_renderer_thread()
 	}
+}
+
+// surface_active_pin resolves an active-area point on the surface's screen.
+fn surface_active_pin(surf &Surface, x u16, y u32) Pin {
+	return surf.renderer_state.terminal_.screens.active.pages.pin(terminal.Point.new(.active,
+		terminal.Coordinate{ x: x, y: y })) or { panic('no active pin') }
 }
 
 // make_test_renderer_thread provides the mailbox and wakeup state a surface
@@ -471,10 +478,8 @@ fn test_left_click_uses_source_multi_click_selection_state_machine() {
 		assert false, 'double click did not select a word'
 		return
 	}
-	assert selection.contains(surf.renderer_state.terminal_.screens.active, terminal.Pin{
-		x: 1
-		y: 0
-	})
+	assert selection.contains(surf.renderer_state.terminal_.screens.active, surface_active_pin(&surf,
+		1, 0))
 	surf.mouse_button_callback(.release, .left, input.Mods{})!
 
 	assert !surf.mouse_button_callback(.press, .left, input.Mods{})!
@@ -500,10 +505,8 @@ fn test_right_click_context_menu_selects_word_without_consuming() {
 		assert false, 'right click did not select a word'
 		return
 	}
-	assert selection.contains(surf.renderer_state.terminal_.screens.active, terminal.Pin{
-		x: 1
-		y: 0
-	})
+	assert selection.contains(surf.renderer_state.terminal_.screens.active, surface_active_pin(&surf,
+		1, 0))
 }
 
 fn test_right_click_copy_or_paste_requests_paste_without_selection() {
@@ -853,11 +856,10 @@ fn test_mouse_pressure_callback_change() ! {
 fn test_mouse_pressure_deep_selects_word_at_original_click_pin() ! {
 	mut surf := make_test_surface()
 	surf.config.selection_word_chars = [u32(` `)]
-	for i, cp in 'left right'.runes() {
-		surf.renderer_state.terminal_.screens.active.pages.screen_rows[0].cells[i] = terminal.CellData.init(u32(cp))
-	}
+	surf.renderer_state.terminal_.print_string('left right') or { panic(err) }
 	surf.mouse.click_state[int(input.MouseButton.left)] = .press
-	surf.mouse.left_click_pin = terminal.Pin{ x: 1, y: 0 }
+	surf.mouse.left_click_pin = surf.renderer_state.terminal_.screens.active.pages.track_pin(surface_active_pin(&surf,
+		1, 0))
 
 	surf.mouse_pressure_callback(.deep, 0.9)!
 	selection := surf.renderer_state.terminal_.screens.active.selection or {
@@ -1342,18 +1344,9 @@ fn test_pin_before() {
 }
 
 fn test_terminal_selection_eql() {
-	s1 := TermSelection{
-		start_pin: Pin{ x: 0, y: 0 }
-		end_pin: Pin{ x: 5, y: 2 }
-	}
-	s2 := TermSelection{
-		start_pin: Pin{ x: 0, y: 0 }
-		end_pin: Pin{ x: 5, y: 2 }
-	}
-	s3 := TermSelection{
-		start_pin: Pin{ x: 0, y: 0 }
-		end_pin: Pin{ x: 5, y: 3 }
-	}
+	s1 := TermSelection.init(Pin{ x: 0, y: 0 }, Pin{ x: 5, y: 2 }, false)
+	s2 := TermSelection.init(Pin{ x: 0, y: 0 }, Pin{ x: 5, y: 2 }, false)
+	s3 := TermSelection.init(Pin{ x: 0, y: 0 }, Pin{ x: 5, y: 3 }, false)
 	assert s1.eql(s2) == true
 	assert s1.eql(s3) == false
 }
@@ -1370,10 +1363,8 @@ fn test_has_selection() {
 	mut surf := make_test_surface()
 	assert surf.has_selection() == false
 
-	surf.renderer_state.terminal_.screens.active.selection = TermSelection{
-		start_pin: Pin{ x: 0, y: 0 }
-		end_pin: Pin{ x: 5, y: 0 }
-	}
+	surf.renderer_state.terminal_.screens.active.select(TermSelection.init(surface_active_pin(&surf,
+		0, 0), surface_active_pin(&surf, 5, 0), false)) or { panic(err) }
 	assert surf.has_selection() == true
 }
 
@@ -1390,21 +1381,163 @@ fn test_surface_dump_text_public_wrapper_and_text_lifecycle() {
 
 	mut stream := surf.renderer_state.terminal_.vt_stream()
 	stream.next_slice('hello')!
-	mut dumped := surf.dump_text(TermSelection{
-		start_pin: Pin{ x: 0, y: 0 }
-		end_pin: Pin{ x: 4, y: 0 }
-	})!
+	mut dumped := surf.dump_text(TermSelection.init(surface_active_pin(&surf, 0, 0), surface_active_pin(&surf,
+		4, 0), false))!
 	assert dumped.text == 'hello'
 	dumped.deinit()
 	assert dumped.text == ''
 	assert dumped.viewport == none
 }
 
-fn test_mouse_selection_same_point() {
-	pin := Pin{ x: 5, y: 3 }
+// Our screen size is 10x5 cells that are 10x20 px, with 5px padding on
+// all sides. Returns the click and drag pins with their pixel x positions.
+fn mouse_selection_test_input(screen &terminal.Screen, click_x f64, click_y u32, drag_x f64, drag_y u32) (Pin, Pin, u32, u32) {
 	size := make_test_size()
-	sel := mouse_selection(pin, pin, 55, 55, input.Mods{}, size)
-	assert sel == none
+	click_pin := screen.pages.pin(terminal.Point.new(.viewport, terminal.Coordinate{
+		x: u16(math.floor(click_x))
+		y: click_y
+	})) or { panic('unreachable') }
+	drag_pin := screen.pages.pin(terminal.Point.new(.viewport, terminal.Coordinate{
+		x: u16(math.floor(drag_x))
+		y: drag_y
+	})) or { panic('unreachable') }
+
+	cell_width_f64 := f64(size.cell.width)
+	click_x_pos := u32(math.floor(click_x * cell_width_f64)) + size.padding.left
+	drag_x_pos := u32(math.floor(drag_x * cell_width_f64)) + size.padding.left
+	return click_pin, drag_pin, click_x_pos, drag_x_pos
+}
+
+// We hold both ctrl and alt for rectangular select so that this test is
+// platform agnostic.
+fn mouse_selection_test_mods(rect bool) input.Mods {
+	mods := input.Mods.init(false, rect, rect, false, false, false, input.SideInfo{})
+	assert rect == is_rectangle_select_state(mods)
+	return mods
+}
+
+fn check_mouse_selection(click_x f64, click_y u32, drag_x f64, drag_y u32, start_x u16, start_y u32, end_x u16, end_y u32, rect bool) {
+	mut screen := terminal.Screen.init(10, 5, 0)
+	defer { screen.deinit() }
+	mods := mouse_selection_test_mods(rect)
+	click_pin, drag_pin, click_x_pos, drag_x_pos := mouse_selection_test_input(&screen,
+		click_x, click_y, drag_x, drag_y)
+
+	start_pin := screen.pages.pin(terminal.Point.new(.viewport, terminal.Coordinate{
+		x: start_x
+		y: start_y
+	})) or { panic('unreachable') }
+	end_pin := screen.pages.pin(terminal.Point.new(.viewport, terminal.Coordinate{
+		x: end_x
+		y: end_y
+	})) or { panic('unreachable') }
+
+	sel := mouse_selection(click_pin, drag_pin, click_x_pos, drag_x_pos, mods, make_test_size()) or {
+		assert false, 'expected a selection'
+		return
+	}
+	assert !sel.tracked()
+	assert sel.rectangle == rect
+	assert sel.start().eql(start_pin)
+	assert sel.end().eql(end_pin)
+}
+
+// Like `check_mouse_selection` but checks that the resulting selection is none.
+fn mouse_selection_is_null(click_x f64, click_y u32, drag_x f64, drag_y u32, rect bool) {
+	mut screen := terminal.Screen.init(10, 5, 0)
+	defer { screen.deinit() }
+	mods := mouse_selection_test_mods(rect)
+	click_pin, drag_pin, click_x_pos, drag_x_pos := mouse_selection_test_input(&screen,
+		click_x, click_y, drag_x, drag_y)
+	assert mouse_selection(click_pin, drag_pin, click_x_pos, drag_x_pos, mods, make_test_size()) == none
+}
+
+fn test_surface_selection_logic() {
+	// -- LTR
+	// single cell selection
+	check_mouse_selection(3.0, 3, 3.9, 3, 3, 3, 3, 3, false)
+	// including click and drag pin cells
+	check_mouse_selection(3.0, 3, 5.9, 3, 3, 3, 5, 3, false)
+	// including click pin cell but not drag pin cell
+	check_mouse_selection(3.0, 3, 5.0, 3, 3, 3, 4, 3, false)
+	// including drag pin cell but not click pin cell
+	check_mouse_selection(3.9, 3, 5.9, 3, 4, 3, 5, 3, false)
+	// including neither click nor drag pin cells
+	check_mouse_selection(3.9, 3, 5.0, 3, 4, 3, 4, 3, false)
+	// empty selection (single cell on only left half)
+	mouse_selection_is_null(3.0, 3, 3.1, 3, false)
+	// empty selection (single cell on only right half)
+	mouse_selection_is_null(3.8, 3, 3.9, 3, false)
+	// empty selection (between two cells, not crossing threshold)
+	mouse_selection_is_null(3.9, 3, 4.0, 3, false)
+
+	// -- RTL
+	// single cell selection
+	check_mouse_selection(3.9, 3, 3.0, 3, 3, 3, 3, 3, false)
+	// including click and drag pin cells
+	check_mouse_selection(5.9, 3, 3.0, 3, 5, 3, 3, 3, false)
+	// including click pin cell but not drag pin cell
+	check_mouse_selection(5.9, 3, 3.9, 3, 5, 3, 4, 3, false)
+	// including drag pin cell but not click pin cell
+	check_mouse_selection(5.0, 3, 3.0, 3, 4, 3, 3, 3, false)
+	// including neither click nor drag pin cells
+	check_mouse_selection(5.0, 3, 3.9, 3, 4, 3, 4, 3, false)
+	// empty selection (single cell on only left half)
+	mouse_selection_is_null(3.1, 3, 3.0, 3, false)
+	// empty selection (single cell on only right half)
+	mouse_selection_is_null(3.9, 3, 3.8, 3, false)
+	// empty selection (between two cells, not crossing threshold)
+	mouse_selection_is_null(4.0, 3, 3.9, 3, false)
+
+	// -- Wrapping
+	// LTR, wrap excluded cells
+	check_mouse_selection(9.9, 2, 0.0, 4, 0, 3, 9, 3, false)
+	// RTL, wrap excluded cells
+	check_mouse_selection(0.0, 4, 9.9, 2, 9, 3, 0, 3, false)
+}
+
+fn test_surface_rectangle_selection_logic() {
+	// -- LTR
+	// single column selection
+	check_mouse_selection(3.0, 2, 3.9, 4, 3, 2, 3, 4, true)
+	// including click and drag pin columns
+	check_mouse_selection(3.0, 2, 5.9, 4, 3, 2, 5, 4, true)
+	// including click pin column but not drag pin column
+	check_mouse_selection(3.0, 2, 5.0, 4, 3, 2, 4, 4, true)
+	// including drag pin column but not click pin column
+	check_mouse_selection(3.9, 2, 5.9, 4, 4, 2, 5, 4, true)
+	// including neither click nor drag pin columns
+	check_mouse_selection(3.9, 2, 5.0, 4, 4, 2, 4, 4, true)
+	// empty selection (single column on only left half)
+	mouse_selection_is_null(3.0, 2, 3.1, 4, true)
+	// empty selection (single column on only right half)
+	mouse_selection_is_null(3.8, 2, 3.9, 4, true)
+	// empty selection (between two columns, not crossing threshold)
+	mouse_selection_is_null(3.9, 2, 4.0, 4, true)
+
+	// -- RTL
+	// single column selection
+	check_mouse_selection(3.9, 2, 3.0, 4, 3, 2, 3, 4, true)
+	// including click and drag pin columns
+	check_mouse_selection(5.9, 2, 3.0, 4, 5, 2, 3, 4, true)
+	// including click pin column but not drag pin column
+	check_mouse_selection(5.9, 2, 3.9, 4, 5, 2, 4, 4, true)
+	// including drag pin column but not click pin column
+	check_mouse_selection(5.0, 2, 3.0, 4, 4, 2, 3, 4, true)
+	// including neither click nor drag pin columns
+	check_mouse_selection(5.0, 2, 3.9, 4, 4, 2, 4, 4, true)
+	// empty selection (single column on only left half)
+	mouse_selection_is_null(3.1, 2, 3.0, 4, true)
+	// empty selection (single column on only right half)
+	mouse_selection_is_null(3.9, 2, 3.8, 4, true)
+	// empty selection (between two columns, not crossing threshold)
+	mouse_selection_is_null(4.0, 2, 3.9, 4, true)
+
+	// -- Wrapping
+	// LTR, do not wrap
+	check_mouse_selection(9.9, 2, 0.0, 4, 9, 2, 0, 4, true)
+	// RTL, do not wrap
+	check_mouse_selection(0.0, 4, 9.9, 2, 0, 4, 9, 2, true)
 }
 
 fn encode_test_key(mut surf Surface, ev KeyEvent) ?termiopkg.WriteReq {
@@ -1527,19 +1660,9 @@ fn test_copy_selection_to_standard_clipboard() ! {
 	mut surf := make_test_surface()
 	mut runtime := apprt.RuntimeSurface{}
 	surf.rt_surface = &runtime
-	for i, cp in 'hello'.runes() {
-		surf.renderer_state.terminal_.screens.active.pages.screen_rows[0].cells[i] = terminal.CellData.init(u32(cp))
-	}
-	start := surf.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
-		tag: .active
-		x: 0
-		y: 0
-	}) or { panic('no start pin') }
-	end := surf.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
-		tag: .active
-		x: 4
-		y: 0
-	}) or { panic('no end pin') }
+	surf.renderer_state.terminal_.print_string('hello') or { panic(err) }
+	start := surface_active_pin(&surf, 0, 0)
+	end := surface_active_pin(&surf, 4, 0)
 	surf.copy_selection_to_clipboards(terminal.Selection.init(start, end, false), [
 		.standard,
 	], .plain)!
@@ -1553,19 +1676,9 @@ fn test_copy_selection_mixed_to_requested_clipboards() ! {
 	mut surf := make_test_surface()
 	mut runtime := apprt.RuntimeSurface{}
 	surf.rt_surface = &runtime
-	for i, cp in 'hello'.runes() {
-		surf.renderer_state.terminal_.screens.active.pages.screen_rows[0].cells[i] = terminal.CellData.init(u32(cp))
-	}
-	start := surf.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
-		tag: .active
-		x: 0
-		y: 0
-	}) or { panic('no start pin') }
-	end := surf.renderer_state.terminal_.screens.active.pages.pin(terminal.PinOpts{
-		tag: .active
-		x: 4
-		y: 0
-	}) or { panic('no end pin') }
+	surf.renderer_state.terminal_.print_string('hello') or { panic(err) }
+	start := surface_active_pin(&surf, 0, 0)
+	end := surface_active_pin(&surf, 4, 0)
 	surf.copy_selection_to_clipboards(terminal.Selection.init(start, end, false), [
 		.standard,
 		.selection,

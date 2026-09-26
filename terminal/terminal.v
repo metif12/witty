@@ -2009,115 +2009,8 @@ pub fn (mut self Terminal) print(c u32) ! {
 	// purposely ordered in least-likely to most-likely so we can drop out
 	// as quickly as possible.
 	if c > 255 && self.modes.get(.grapheme_cluster) && self.screens.active.cursor.x > 0 {
-		// We need the previous cell to determine if we're at a grapheme
-		// break or not. If we are NOT, then we are still combining the
-		// same grapheme. Otherwise, we can stay in this cell.
-		//
-		mut left := u32(1)
-		// If we have wraparound, then we always use the prev col.
-		// If we do not have wraparound, the logic is trickier. If
-		// we're not on the last column, then we just use the previous
-		// column. Otherwise, we need to check if there is text to
-		// figure out if we're attaching to the prev or current.
-		if !self.modes.get(.wraparound) && self.screens.active.cursor.x == right_limit - 1 {
-			cur := self.cursor_cell_ref(0)
-			left = if cur.codepoint() == 0 { u32(1) } else { u32(0) }
-		}
-
-		// If the previous cell is a wide spacer tail, then we actually
-		// want to use the cell before that because that has the actual
-		// content.
-		mut prev_left := left
-		mut prev := self.cursor_cell_ref(left)
-		if prev.wide == .spacer_tail {
-			prev_left = left + 1
-			prev = self.cursor_cell_ref(left + 1)
-		}
-
-		// The absolute column of the prev cell. We compute this now BECAUSE
-		// the cursor may move during VS16/VS15 handling below, and the
-		// grapheme must always attach to this specific cell (ghostty keeps
-		// a pointer; we keep the column). This is on the cursor's row.
-		base_col := int(self.screens.active.cursor.x) - int(prev_left)
-
-		// If our cell has no content, then this is a new cell and
-		// necessarily a grapheme break.
-		if prev.codepoint() == 0 {
-			// break out of grapheme handling; fall through to width path
-		} else {
-			brk := grapheme_break_cell(prev, c)
-
-			// If we can NOT break, this means that "c" is part of a
-			// grapheme with the previous char.
-			if !brk {
-				// If this is an emoji variation selector then we need to
-				// modify the cell width accordingly. VS16 makes the
-				// character wide and VS15 makes it narrow.
-				if c == 0xFE0F || c == 0xFE0E {
-					// Check if it is a valid variation sequence in
-					// emoji-variation-sequences.txt, and if not, ignore the char.
-					if !unicode.get(prev.codepoint).emoji_vs_base() {
-						return
-					}
-
-					if c == 0xFE0F {
-						// VS16: make wide, unless already wide.
-						if prev.wide != .wide {
-							// Move our cursor back to the previous.
-							self.screens.active.cursor_left(prev_left)
-
-							// If we don't have space for the wide char, we need
-							// to insert spacers and wrap.
-							if self.screens.active.cursor.x == right_limit - 1 {
-								if !self.modes.get(.wraparound) {
-									return
-								}
-								spacer := if right_limit == self.cols {
-									CellWide.spacer_head
-								} else {
-									CellWide.narrow
-								}
-								self.print_cell(0, spacer)
-								self.print_wrap()!
-							}
-
-							base := prev.codepoint
-							self.print_cell(base, .wide)
-
-							// Write our spacer
-							self.screens.active.cursor_right(1)
-							self.print_cell(0, .spacer_tail)
-
-							// Move the cursor again so we're beyond our spacer
-							if self.screens.active.cursor.x == right_limit - 1 {
-								self.screens.active.cursor.pending_wrap = true
-							} else {
-								self.screens.active.cursor_right(1)
-							}
-						}
-					} else {
-						// VS15 (0xFE0E): make narrow.
-						if prev.wide == .wide {
-							// Prev cell is no longer wide (absolute column).
-							self.cell_set_wide_abs(base_col, .narrow)
-							// Remove the wide spacer tail (cell just after prev)
-							self.cell_set_wide_abs(base_col + 1, .narrow)
-
-							// Back track the cursor so that we don't end up
-							// with an extra space after the character.
-							if self.screens.active.cursor.x == right_limit - 1 {
-								self.screens.active.cursor.pending_wrap = false
-							} else {
-								self.screens.active.cursor_left(1)
-							}
-						}
-					}
-				}
-
-				self.screens.active.cursor_mark_dirty()
-				self.append_grapheme_abs(base_col, c)!
-				return
-			}
+		if self.print_grapheme_cluster(c, right_limit)! {
+			return
 		}
 	}
 
@@ -2125,7 +2018,7 @@ pub fn (mut self Terminal) print(c u32) ! {
 	// non-single-width characters properly. We have a fast-path for
 	// byte-sized characters since they're so common. We can ignore
 	// control characters because they're always filtered prior.
-	width := if c <= 0xFF { u16(1) } else { u16(unicode.get(c).width()) }
+	width := if c <= 0xFF { u32(1) } else { u32(unicode.get(c).width()) }
 
 	// Note: it is possible to have a width of "3" and a width of "-1" from
 	// uucode.x's wcwidth. We should look into those cases and handle them
@@ -2142,34 +2035,38 @@ pub fn (mut self Terminal) print(c u32) ! {
 		}
 
 		// If we're at cell zero, then this is malformed data and we don't
-		// print anything or even store this. Zero-width characters are
-		// ALWAYS attached to some other non-zero-width character at the
-		// time of writing.
+		// print anything or even store this. Zero-width characters are ALWAYS
+		// attached to some other non-zero-width character at the time of
+		// writing.
 		if self.screens.active.cursor.x == 0 {
+			// log.warn: zero-width character with no prior character, ignoring
 			return
 		}
 
-		// Find our previous cell (skipping a wide spacer tail).
-		mut prev_left := u32(1)
-		mut prev := self.cursor_cell_ref(1)
-		if prev.wide == .spacer_tail {
-			prev_left = 2
-			prev = self.cursor_cell_ref(2)
+		// Find our previous cell
+		immediate := self.screens.active.cursor_cell_left(1)
+		prev := if immediate.wide != .spacer_tail {
+			immediate
+		} else {
+			self.screens.active.cursor_cell_left(2)
 		}
 
-		// If our previous cell has no text, ignore the zero-width char.
+		// If our previous cell has no text, just ignore the zero-width character
 		if !prev.has_text() {
+			// log.warn: zero-width character with no prior character, ignoring
 			return
 		}
 
-		// If this is a emoji variation selector, prev must be an emoji.
+		// If this is a emoji variation selector, prev must be an emoji
 		if c == 0xFE0F || c == 0xFE0E {
-			if unicode.get(prev.codepoint).grapheme_break() != .extended_pictographic {
+			prev_props := unicode.get(prev.codepoint)
+			emoji := prev_props.grapheme_break() == .extended_pictographic
+			if !emoji {
 				return
 			}
 		}
 
-		self.append_grapheme_at(prev_left, c)!
+		self.screens.active.append_grapheme(prev, c)!
 		return
 	}
 
@@ -2187,42 +2084,53 @@ pub fn (mut self Terminal) print(c u32) ! {
 		self.insert_blanks(usize(width))
 	}
 
-	if width == 1 {
+	match width {
 		// Single cell is very easy: just write in the cell
-		self.screens.active.cursor_mark_dirty()
-		self.print_cell(c, .narrow)
-	} else if width == 2 {
-		if (right_limit - self.scrolling_region.left) > 1 {
-			// Wide character requires a spacer. We print this by
-			// using two cells: the first is flagged "wide" and has the
-			// wide char. The second is guaranteed to be a spacer if
-			// we're not at the end of the line.
-			if self.screens.active.cursor.x == right_limit - 1 {
-				// If we don't have wraparound enabled then we don't print
-				// this character at all and don't move the cursor.
-				if !self.modes.get(.wraparound) {
-					return
+		1 {
+			self.screens.active.cursor_mark_dirty()
+			self.print_cell(c, .narrow)
+		}
+		// Wide character requires a spacer. We print this by
+		// using two cells: the first is flagged "wide" and has the
+		// wide char. The second is guaranteed to be a spacer if
+		// we're not at the end of the line.
+		2 {
+			if (right_limit - self.scrolling_region.left) > 1 {
+				// If we don't have space for the wide char, we need
+				// to insert spacers and wrap. Then we just print the wide
+				// char as normal.
+				if self.screens.active.cursor.x == right_limit - 1 {
+					// If we don't have wraparound enabled then we don't print
+					// this character at all and don't move the cursor. This is
+					// how xterm behaves.
+					if !self.modes.get(.wraparound) {
+						return
+					}
+
+					// We only create a spacer head if we're at the real edge
+					// of the screen. Otherwise, we clear the space with a narrow.
+					// This allows soft wrapping to work correctly.
+					self.print_cell(0, if right_limit == self.cols {
+						CellWide.spacer_head
+					} else {
+						CellWide.narrow
+					})
+					self.print_wrap()!
 				}
 
-				// We only create a spacer head if we're at the real edge
-				// of the screen.
-				spacer_wide := if right_limit == self.cols {
-					CellWide.spacer_head
-				} else {
-					CellWide.narrow
-				}
-				self.print_cell(0, spacer_wide)
-				self.print_wrap()!
+				self.screens.active.cursor_mark_dirty()
+				self.print_cell(c, .wide)
+				self.screens.active.cursor_right(1)
+				self.print_cell(0, .spacer_tail)
+			} else {
+				// This is pretty broken, terminals should never be only 1-wide.
+				// We should prevent this downstream.
+				self.screens.active.cursor_mark_dirty()
+				self.print_cell(0, .narrow)
 			}
-
-			self.screens.active.cursor_mark_dirty()
-			self.print_cell(c, .wide)
-			self.screens.active.cursor_right(1)
-			self.print_cell(0, .spacer_tail)
-		} else {
-			// This is pretty broken, terminals should never be only 1-wide.
-			self.screens.active.cursor_mark_dirty()
-			self.print_cell(0, .narrow)
+		}
+		else {
+			panic('unreachable character width')
 		}
 	}
 
@@ -2237,136 +2145,315 @@ pub fn (mut self Terminal) print(c u32) ! {
 	self.screens.active.cursor_right(1)
 }
 
+// The `grapheme:` block of Terminal.print. Returns true when `c` was
+// consumed by the previous grapheme, which ends print; false breaks out of
+// the block and continues with the normal width path.
+fn (mut self Terminal) print_grapheme_cluster(c u32, right_limit u32) !bool {
+	// We need the previous cell to determine if we're at a grapheme
+	// break or not. If we are NOT, then we are still combining the
+	// same grapheme. Otherwise, we can stay in this cell.
+	//
+	// If we have wraparound, then we always use the prev col.
+	// If we do not have wraparound, the logic is trickier. If
+	// we're not on the last column, then we just use the previous
+	// column. Otherwise, we need to check if there is text to
+	// figure out if we're attaching to the prev or current.
+	left := if self.modes.get(.wraparound) {
+		u32(1)
+	} else if self.screens.active.cursor.x != right_limit - 1 {
+		u32(1)
+	} else {
+		u32(self.screens.active.cursor.page_cell.codepoint() == 0)
+	}
+
+	// If the previous cell is a wide spacer tail, then we actually
+	// want to use the cell before that because that has the actual
+	// content.
+	immediate := self.screens.active.cursor_cell_left(left)
+	mut prev_cell := unsafe { immediate }
+	mut prev_left := left
+	if immediate.wide == .spacer_tail {
+		prev_cell = self.screens.active.cursor_cell_left(left + 1)
+		prev_left = left + 1
+	}
+
+	// If our cell has no content, then this is a new cell and
+	// necessarily a grapheme break.
+	if prev_cell.codepoint() == 0 {
+		return false
+	}
+
+	grapheme_break := grapheme_break_after(&self.screens.active.cursor.page_pin.node.data,
+		prev_cell, c)
+
+	// If we can NOT break, this means that "c" is part of a grapheme
+	// with the previous char.
+	if grapheme_break {
+		return false
+	}
+
+	// If this is an emoji variation selector then we need to modify
+	// the cell width accordingly. VS16 makes the character wide and
+	// VS15 makes it narrow.
+	if c == 0xFE0F || c == 0xFE0E {
+		prev_props := unicode.get(prev_cell.codepoint)
+		// Check if it is a valid variation sequence in
+		// emoji-variation-sequences.txt, and if not, ignore the char.
+		if !prev_props.emoji_vs_base() {
+			return true
+		}
+
+		match c {
+			0xFE0F {
+				if prev_cell.wide != .wide {
+					// Move our cursor back to the previous. We'll move
+					// the cursor within this block to the proper location.
+					self.screens.active.cursor_left(prev_left)
+
+					// If we don't have space for the wide char, we need
+					// to insert spacers and wrap. Then we just print the wide
+					// char as normal.
+					if self.screens.active.cursor.x == right_limit - 1 {
+						if !self.modes.get(.wraparound) {
+							return true
+						}
+						self.print_cell(0, if right_limit == self.cols {
+							CellWide.spacer_head
+						} else {
+							CellWide.narrow
+						})
+						self.print_wrap()!
+					}
+
+					self.print_cell(prev_cell.codepoint, .wide)
+
+					// Write our spacer
+					self.screens.active.cursor_right(1)
+					self.print_cell(0, .spacer_tail)
+
+					// Move the cursor again so we're beyond our spacer
+					if self.screens.active.cursor.x == right_limit - 1 {
+						self.screens.active.cursor.pending_wrap = true
+					} else {
+						self.screens.active.cursor_right(1)
+					}
+				}
+			}
+			0xFE0E {
+				// Prev cell is no longer wide
+				if prev_cell.wide == .wide {
+					mut prev_mut := unsafe { prev_cell }
+					prev_mut.wide = .narrow
+
+					// Remove the wide spacer tail
+					mut cell := self.screens.active.cursor_cell_left(prev_left - 1)
+					cell.wide = .narrow
+
+					// Back track the cursor so that we don't end up with
+					// an extra space after the character. Since xterm is
+					// not VS aware, it cannot be used as a reference for
+					// this behavior; but it does follow the principle of
+					// least surprise, and also matches the behavior that
+					// can be observed in Kitty, which is one of the only
+					// other VS aware terminals.
+					if self.screens.active.cursor.x == right_limit - 1 {
+						// If we're already at the right edge, we stay
+						// here and set the pending wrap to false since
+						// when we pend a wrap, we only move our cursor once
+						// even for wide chars (tests verify).
+						self.screens.active.cursor.pending_wrap = false
+					} else {
+						// Otherwise, move back.
+						self.screens.active.cursor_left(1)
+					}
+				}
+			}
+			else {
+				panic('unreachable variation selector')
+			}
+		}
+	}
+
+	// log.debug: grapheme attach to left
+	self.screens.active.cursor_mark_dirty()
+	self.screens.active.append_grapheme(prev_cell, c)!
+	return true
+}
+
+// The `grapheme_break:` block of Terminal.print: replay the cell's
+// existing grapheme to rebuild the break state, then test `cp`.
+fn grapheme_break_after(page &Page, prev &CellData, cp u32) bool {
+	mut state := unicode.BreakState.default
+	mut cp1 := prev.codepoint
+	if prev.has_grapheme() {
+		cps := page.lookup_grapheme(prev) or { panic('grapheme cell has no grapheme data') }
+		for cp2 in cps {
+			// log.debug: cp1 cp2
+			assert !unicode.grapheme_break(cp1, cp2, &state)
+			cp1 = cp2
+		}
+	}
+
+	// log.debug: cp1 cp2 end
+	return unicode.grapheme_break(cp1, cp, &state)
+}
+
 fn (mut self Terminal) print_cell(unmapped_c u32, wide CellWide) {
 	defer { self.screens.active.assert_integrity() }
 
-	// Map through charset
+	// TODO: spacers should use a bgcolor only cell
+
 	c := self.map_charset(unmapped_c)
 
-	row_idx := self.screens.active.pages.active_start + int(self.screens.active.cursor.y)
-	if row_idx >= self.screens.active.pages.screen_rows.len {
-		return
+	mut cell := self.screens.active.cursor.page_cell
+
+	// If the wide property of this cell is the same, then we don't
+	// need to do the special handling here because the structure will
+	// be the same. If it is NOT the same, then we may need to clear some
+	// cells.
+	if cell.wide != wide {
+		match cell.wide {
+			// Previous cell was narrow. Do nothing.
+			.narrow {}
+			// Previous cell was wide. We need to clear the tail and head.
+			.wide {
+				if self.screens.active.cursor.x < self.cols - 1 {
+					spacer_cell := self.screens.active.cursor_cell_right(1)
+					mut page := &self.screens.active.cursor.page_pin.node.data
+					mut spacer := row_cells_at(self.screens.active.cursor.page_row, spacer_cell, 1)
+					self.screens.active.clear_cells(mut page, mut self.screens.active.cursor.page_row, mut
+						spacer)
+					if self.screens.active.cursor.y > 0 && self.screens.active.cursor.x <= 1 {
+						mut head_cell := self.screens.active.cursor_cell_end_of_prev()
+						head_cell.wide = .narrow
+					}
+				}
+			}
+			.spacer_tail {
+				assert self.screens.active.cursor.x > 0
+
+				// So integrity checks pass. We fix this up later so we don't
+				// need to do this without safety checks.
+				$if !prod {
+					cell.wide = .narrow
+				}
+
+				wide_cell := self.screens.active.cursor_cell_left(1)
+				mut page := &self.screens.active.cursor.page_pin.node.data
+				mut wide_cells := row_cells_at(self.screens.active.cursor.page_row, wide_cell, 1)
+				self.screens.active.clear_cells(mut page, mut self.screens.active.cursor.page_row, mut
+					wide_cells)
+				if self.screens.active.cursor.y > 0 && self.screens.active.cursor.x <= 1 {
+					mut head_cell := self.screens.active.cursor_cell_end_of_prev()
+					head_cell.wide = .narrow
+				}
+			}
+			// TODO: this case was not handled in the old terminal implementation
+			// but it feels like we should do something. investigate other
+			// terminals (xterm mainly) and see what's up.
+			.spacer_head {}
+		}
 	}
 
-	cell_x := int(self.screens.active.cursor.x)
+	// If the prior value had graphemes, clear those
+	if cell.has_grapheme() {
+		mut page := &self.screens.active.cursor.page_pin.node.data
+		row_idx := page.row_index(self.screens.active.cursor.page_row)
+		page.clear_grapheme(row_idx, cell_index(self.screens.active.cursor.page_row, cell))
+		page.update_row_grapheme_flag(self.screens.active.cursor.page_row)
+	}
+
+	// We don't need to update the style refs unless the
+	// cell's new style will be different after writing.
+	style_changed := cell.style_id != self.screens.active.cursor.style_id
+	if style_changed {
+		mut page := &self.screens.active.cursor.page_pin.node.data
+
+		// Release the old style.
+		if cell.style_id != default_style_id {
+			assert self.screens.active.cursor.page_row.styled
+			page.styles.release(cell.style_id)
+		}
+	}
+
+	// Keep track if we had a hyperlink so we can unset it.
+	had_hyperlink := cell.has_hyperlink
+
+	// Write
 	unsafe {
-		mut row := &self.screens.active.pages.screen_rows[row_idx]
-		if cell_x >= row.cells.len {
-			return
-		}
-
-		old_cell := row.cells[cell_x]
-
-		// If the wide property of this cell is different, we may need to
-		// clear some cells.
-		if old_cell.wide != wide {
-			match old_cell.wide {
-				.narrow {} // Do nothing
-				.wide {
-					// Previous cell was wide. Clear the tail.
-					if cell_x + 1 < row.cells.len {
-						row.cells[cell_x + 1] = CellData{}
-					}
-					// A wide character wrapped from the preceding row has a
-					// spacer head at the end of that row. It is no longer part
-					// of a valid wide-cell sequence after this overwrite.
-					if self.screens.active.cursor.y > 0 && cell_x <= 1 {
-						prev_row_idx := row_idx - 1
-						if prev_row_idx >= 0 {
-							mut prev_row := &self.screens.active.pages.screen_rows[prev_row_idx]
-							if prev_row.cells.len > 0 {
-								prev_row.cells[prev_row.cells.len - 1].wide = .narrow
-							}
-						}
-					}
-				}
-				.spacer_tail {
-					// Previous cell was spacer_tail. Clear the wide cell before it.
-					if cell_x > 0 {
-						row.cells[cell_x - 1] = CellData{}
-					}
-					if self.screens.active.cursor.y > 0 && cell_x <= 1 {
-						prev_row_idx := row_idx - 1
-						if prev_row_idx >= 0 {
-							mut prev_row := &self.screens.active.pages.screen_rows[prev_row_idx]
-							if prev_row.cells.len > 0 {
-								prev_row.cells[prev_row.cells.len - 1].wide = .narrow
-							}
-						}
-					}
-				}
-				.spacer_head {}
-			}
-			// TODO: investigate
-		}
-
-		// If the prior value had graphemes, clear those
-		if old_cell.has_grapheme() {
-			row.cells[cell_x].graphemes = []
-			row.cells[cell_x].content_tag = .codepoint
-			// Update row grapheme flag
-			mut has_any := false
-			for cell in row.cells {
-				if cell.has_grapheme() {
-					has_any = true
-					break
-				}
-			}
-			row.grapheme = has_any
-		}
-
-		// Write the cell
-		row.cells[cell_x] = CellData{
-			codepoint: u32(c)
-			content_tag: .codepoint
-			style_id: self.screens.active.cursor.style_id
-			wide: wide
-			is_protected: self.screens.active.cursor.is_protected
+		*cell = CellData{
+			content_tag:      .codepoint
+			codepoint:        c
+			style_id:         self.screens.active.cursor.style_id
+			wide:             wide
+			is_protected:     self.screens.active.cursor.is_protected
 			semantic_content: self.screens.active.cursor.semantic_content
-			style: self.screens.active.cursor.style
+			// The page's hyperlink map still holds the prior link until
+			// it is replaced or cleared below.
+			has_hyperlink: had_hyperlink
 		}
+	}
 
-		// Update row flags
-		if self.screens.active.cursor.style_id != terminal.default_style_id {
-			row.styled = true
-		}
-		if c == kitty_unicode_placeholder {
-			row.kitty_virtual_placeholder = true
-		}
+	if style_changed {
+		mut page := &self.screens.active.cursor.page_pin.node.data
 
-		// Handle hyperlink
-		if self.screens.active.cursor.hyperlink_id > 0 {
-			self.screens.active.cursor_set_hyperlink() or {}
-		} else if old_cell.has_hyperlink {
-			row.cells[cell_x].has_hyperlink = false
-			// Update row hyperlink flag
-			mut has_hl := false
-			for cell in row.cells {
-				if cell.has_hyperlink {
-					has_hl = true
-					break
-				}
-			}
-			row.hyperlink = has_hl
+		// Use the new style.
+		if cell.style_id != default_style_id {
+			page.styles.use_style(cell.style_id)
+			self.screens.active.cursor.page_row.styled = true
 		}
+	}
+
+	// If this is a Kitty unicode placeholder then we need to mark the
+	// row so that the renderer can lookup rows with these much faster.
+	if c == kitty_unicode_placeholder {
+		self.screens.active.cursor.page_row.kitty_virtual_placeholder = true
+	}
+
+	// We check for an active hyperlink first because setHyperlink
+	// handles clearing the old hyperlink and an optimization if we're
+	// overwriting the same hyperlink.
+	if self.screens.active.cursor.hyperlink_id > 0 {
+		self.screens.active.cursor_set_hyperlink() or {
+			// log.warn: error reallocating for more hyperlink space, ignoring hyperlink
+			assert !cell.has_hyperlink
+		}
+	} else if had_hyperlink {
+		// If the previous cell had a hyperlink then we need to clear it.
+		mut page := &self.screens.active.cursor.page_pin.node.data
+		row_idx := page.row_index(self.screens.active.cursor.page_row)
+		page.clear_hyperlink(row_idx, cell_index(self.screens.active.cursor.page_row, cell))
+		page.update_row_hyperlink_flag(self.screens.active.cursor.page_row)
 	}
 }
 
+// The `c:` block of Terminal.printCell: map the codepoint through the
+// active charset.
 fn (mut self Terminal) map_charset(unmapped_c u32) u32 {
-	// A single shift applies to exactly one printed character.
-	slot := if once := self.screens.active.charset.single_shift {
+	// TODO: non-utf8 handling, gr
+
+	// If we're single shifting, then we use the key exactly once.
+	key := if key_once := self.screens.active.charset.single_shift {
 		self.screens.active.charset.single_shift = none
-		once
+		key_once
 	} else {
 		self.screens.active.charset.gl
 	}
-	set := self.screens.active.charset.charsets.get(slot)
+
+	set := self.screens.active.charset.charsets.get(key)
+
+	// UTF-8 or ASCII is used as-is
 	if set == .utf8 || set == .ascii {
 		return unmapped_c
 	}
+
+	// If we're outside of ASCII range this is an invalid value in
+	// this table so we just return space.
 	if unmapped_c > 0xff {
 		return u32(` `)
 	}
+
+	// Get our lookup table and map it
 	return u32(charset_table(set)[int(unmapped_c)])
 }
 
@@ -2374,21 +2461,16 @@ fn (mut self Terminal) print_wrap() ! {
 	// We only mark that we soft-wrapped if we're at the edge of our
 	// full screen. We don't mark the row as wrapped if we're in the
 	// middle due to a right margin.
-	cursor := &self.screens.active.cursor
-	mark_wrap := cursor.x == self.cols - 1
+	mark_wrap := self.screens.active.cursor.x == self.cols - 1
 	if mark_wrap {
-		row_idx := self.screens.active.pages.active_start + int(cursor.y)
-		if row_idx < self.screens.active.pages.screen_rows.len {
-			unsafe {
-				mut row := &self.screens.active.pages.screen_rows[row_idx]
-				row.wrap = true
-			}
-		}
+		self.screens.active.cursor.page_row.wrap = true
 	}
 
-	// Get the old semantic prompt so we can extend it to the next line.
-	old_semantic := cursor.semantic_content
-	old_semantic_clear := cursor.semantic_content_clear_eol
+	// Get the old semantic prompt so we can extend it to the next
+	// line. We need to do this before we index() because we may
+	// modify memory.
+	old_semantic := self.screens.active.cursor.semantic_content
+	old_semantic_clear := self.screens.active.cursor.semantic_content_clear_eol
 
 	// Move to the next line
 	self.index()!
@@ -2400,95 +2482,19 @@ fn (mut self Terminal) print_wrap() ! {
 	match old_semantic {
 		.output, .input {}
 		.prompt {
-			idx := self.screens.active.pages.active_start + int(self.screens.active.cursor.y)
-			if idx < self.screens.active.pages.screen_rows.len {
-				unsafe {
-					mut row := &self.screens.active.pages.screen_rows[idx]
-					row.semantic_prompt = .prompt_continuation
-				}
-			}
+			self.screens.active.cursor.page_row.semantic_prompt = .prompt_continuation
 		}
 	}
 
 	if mark_wrap {
-		idx := self.screens.active.pages.active_start + int(self.screens.active.cursor.y)
-		if idx < self.screens.active.pages.screen_rows.len {
-			unsafe {
-				mut row := &self.screens.active.pages.screen_rows[idx]
-				// Always mark the row as a continuation
-				row.wrap_continuation = true
-			}
-		}
+		mut row := self.screens.active.cursor.page_row
+		// Always mark the row as a continuation
+		row.wrap_continuation = true
 	}
 
 	// Assure that our screen is consistent
 	self.screens.active.assert_integrity()
 }
-
-// ============================================================
-// print helpers
-// ============================================================
-
-// Get a copy of the cell that is `left` columns to the left of the cursor
-// on the cursor's row. left==0 returns the cursor cell itself. If out of
-// range, returns a blank cell.
-fn (mut self Terminal) cursor_cell_ref(left u32) CellData {
-	if left > self.screens.active.cursor.x {
-		return CellData{}
-	}
-	return *self.screens.active.cursor_cell_left(left)
-}
-
-// Set the wide property of the cell `left` columns to the left of the cursor.
-fn (mut self Terminal) cursor_cell_set_wide(left u32, wide CellWide) {
-	if left > self.screens.active.cursor.x {
-		return
-	}
-	mut cell := self.screens.active.cursor_cell_left(left)
-	cell.wide = wide
-}
-
-// Append a grapheme codepoint to the cell `left` columns to the left of the
-// cursor on the cursor's row.
-fn (mut self Terminal) append_grapheme_at(left u32, cp u32) ! {
-	cx := int(self.screens.active.cursor.x) - int(left)
-	if cx < 0 {
-		return
-	}
-	self.screens.active.append_grapheme(u32(cx), cp)!
-}
-
-// Append a grapheme codepoint to the cell at absolute column `col` on the
-// cursor's row. Used when the cursor may have moved from the base cell (e.g.
-// VS16 widening) but the grapheme must attach to the original base column.
-fn (mut self Terminal) append_grapheme_abs(col int, cp u32) ! {
-	if col < 0 {
-		return
-	}
-	self.screens.active.append_grapheme(u32(col), cp)!
-}
-
-// Set the wide property of the cell at absolute column `col` on the cursor's
-// row.
-fn (mut self Terminal) cell_set_wide_abs(col int, wide CellWide) {
-	if col < 0 {
-		return
-	}
-	row_idx := self.screens.active.pages.active_start + int(self.screens.active.cursor.y)
-	if row_idx < 0 || row_idx >= self.screens.active.pages.screen_rows.len {
-		return
-	}
-	unsafe {
-		mut row := &self.screens.active.pages.screen_rows[row_idx]
-		if col < row.cells.len {
-			row.cells[col].wide = wide
-		}
-	}
-}
-
-// ============================================================
-// Charset functions
-// ============================================================
 
 // Set the charset into the given slot.
 pub fn (mut self Terminal) configure_charset(slot CharsetSlot, set Charset) {
@@ -2710,12 +2716,9 @@ pub fn (mut self Terminal) cursor_left(count_req usize) {
 
 		// If our previous line is not wrapped then we are done.
 		if wrap_mode != .reverse_extended {
-			prev_idx := self.screens.active.pages.active_start + int(self.screens.active.cursor.y) - 1
-			if prev_idx >= 0 && prev_idx < self.screens.active.pages.screen_rows.len {
-				prev_row := self.screens.active.pages.screen_rows[prev_idx]
-				if !prev_row.wrap {
-					break
-				}
+			prev_row := self.screens.active.cursor_row_up(1)
+			if !prev_row.wrap {
+				break
 			}
 		}
 
@@ -2823,12 +2826,9 @@ pub fn (self &Terminal) cursor_is_at_prompt() bool {
 	}
 
 	// If our page row is a prompt then we're always at a prompt
-	row_idx := self.screens.active.pages.active_start + int(self.screens.active.cursor.y)
-	if row_idx < self.screens.active.pages.screen_rows.len {
-		row := self.screens.active.pages.screen_rows[row_idx]
-		if row.semantic_prompt != .unknown {
-			return true
-		}
+	cursor := &self.screens.active.cursor
+	if cursor.page_row.semantic_prompt != .unknown {
+		return true
 	}
 
 	// Otherwise, determine our cursor state
@@ -2918,43 +2918,43 @@ pub fn (mut self Terminal) index() ! {
 	// Unset pending wrap state
 	screen.cursor.pending_wrap = false
 
-	// We handle our cursor semantic prompt state AFTER doing the scrolling,
-	// because we may need to apply it to new rows. This mirrors ghostty's
-	// `defer` in Terminal.index: whenever the cursor's semantic content isn't
-	// `.output` (i.e. `.prompt` or `.input`), the new row is marked as a
-	// prompt continuation. This works around shells that don't send OSC 133
-	// k=s sequences for continuations.
+	// We handle our cursor semantic prompt state AFTER doing the
+	// scrolling, because we may need to apply to new rows.
 	defer {
 		if screen.cursor.semantic_content != .output {
-			// Always reset any semantic content clear-eol state. If we aren't
-			// clearing at EOL and we're not output, then we mark the new row as
-			// a prompt continuation.
+			// Always reset any semantic content clear-eol state.
+			//
+			// The specification is not clear what "end-of-line" means. If we
+			// discover that there are more scenarios we should be unsetting
+			// this we should document and test it.
 			if screen.cursor.semantic_content_clear_eol {
 				screen.cursor.semantic_content = .output
 				screen.cursor.semantic_content_clear_eol = false
 			} else {
-				idx := screen.pages.active_start + int(screen.cursor.y)
-				if idx < screen.pages.screen_rows.len {
-					unsafe {
-						mut row := &screen.pages.screen_rows[idx]
-						row.semantic_prompt = .prompt_continuation
-					}
-				}
+				// If we aren't clearing our state at EOL and we're not output,
+				// then we mark the new row as a prompt continuation. This is
+				// to work around shells that don't send OSC 133 k=s sequences
+				// for continuations.
+				//
+				// This can be a false positive if the shell changes content
+				// type later and outputs something. We handle that in the
+				// semanticPrompt function.
+				screen.cursor.page_row.semantic_prompt = .prompt_continuation
 			}
+		} else {
+			// This should never be set in the output mode.
+			assert !screen.cursor.semantic_content_clear_eol
 		}
 	}
 
 	// Outside of the scroll region we move the cursor one line down.
-	if screen.cursor.y < self.scrolling_region.top
-		|| screen.cursor.y > self.scrolling_region.bottom {
-		// We only move down if we're not already at the bottom of the screen.
+	if screen.cursor.y < self.scrolling_region.top || screen.cursor.y > self.scrolling_region.bottom {
+		// We only move down if we're not already at the bottom of
+		// the screen.
 		if screen.cursor.y < self.rows - 1 {
-			// Ghostty's cursor move (cursorChangePin) marks both the old and
-			// new row dirty. Our screen cursor_down only marks the new row,
-			// so mark the old row dirty here to match.
-			screen.cursor_mark_dirty()
 			screen.cursor_down(1)
 		}
+
 		return
 	}
 
@@ -2964,6 +2964,9 @@ pub fn (mut self Terminal) index() ! {
 	if screen.cursor.y == self.scrolling_region.bottom
 		&& screen.cursor.x >= self.scrolling_region.left
 		&& screen.cursor.x <= self.scrolling_region.right {
+		// Scrolling dirties the images because it updates their placements pins.
+		screen.mark_kitty_images_dirty()
+
 		// If our scrolling region is at the top, we create scrollback.
 		if self.scrolling_region.top == 0 && self.scrolling_region.left == 0
 			&& self.scrolling_region.right == self.cols - 1 {
@@ -2972,21 +2975,54 @@ pub fn (mut self Terminal) index() ! {
 		}
 
 		// Slow path for left and right scrolling region margins.
-		if self.scrolling_region.left != 0 || self.scrolling_region.right != self.cols - 1 {
+		if self.scrolling_region.left != 0 || self.scrolling_region.right != self.cols - 1
+			// PERF(mitchellh): If we have an SGR background set then
+			// we need to preserve that background in our erased rows.
+			// scrollUp does that but eraseRowBounded below does not.
+			// However, scrollUp is WAY slower. We should optimize this
+			// case to work in the eraseRowBounded codepath and remove
+			// this check.
+			 || !screen.blank_cell().is_zero() {
 			self.scroll_up(1)!
 			return
 		}
 
-		// Use eraseRowBounded equivalent
-		screen.cursor_scroll_above()!
+		// Otherwise use a fast path function from PageList to efficiently
+		// scroll the contents of the scrolling region.
+
+		// Preserve old cursor just for assertions
+		old_cursor := screen.cursor
+
+		screen.pages.erase_row_bounded(Point{
+			tag:        .active
+			coordinate: Coordinate{
+				y: self.scrolling_region.top
+			}
+		}, usize(self.scrolling_region.bottom - self.scrolling_region.top))!
+
+		// eraseRow and eraseRowBounded will end up moving the cursor pin
+		// up by 1, so we need to move it back down. A `cursorReload`
+		// would be better option but this is more efficient and this is
+		// a super hot path so we do this instead.
+		assert screen.cursor.x == old_cursor.x
+		assert screen.cursor.y == old_cursor.y
+		screen.cursor.y -= 1
+		screen.cursor_down(1)
+
+		// The operations above can prune our cursor style so we need to
+		// update. This should never fail because the above can only FREE
+		// memory.
+		screen.manual_style_update() or {
+			// log.warn: deleteLines manualStyleUpdate
+			screen.cursor.style = CellStyle{}
+			screen.manual_style_update() or { panic('the default style cannot fail') }
+		}
+
 		return
 	}
 
 	// Increase cursor by 1, maximum to bottom of scroll region
 	if screen.cursor.y < self.scrolling_region.bottom {
-		// Mark the old row dirty too (see note above) to match Ghostty's
-		// cursorChangePin marking both old and new rows dirty.
-		screen.cursor_mark_dirty()
 		screen.cursor_down(1)
 	}
 }
@@ -3165,7 +3201,9 @@ pub fn (mut self Terminal) scroll_viewport(behavior ScrollViewport) ! {
 		.top { self.screens.active.scroll(ScrollTop{}) }
 		.bottom { self.screens.active.scroll(ScrollActive{}) }
 		.delta {
-			self.screens.active.scroll_delta_rows(behavior.delta)
+			self.screens.active.scroll(ScrollDeltaRow{
+				delta: behavior.delta
+			})
 		}
 	}
 }
@@ -3178,84 +3216,92 @@ pub fn (mut self Terminal) scroll_viewport(behavior ScrollViewport) ! {
 //
 // Takes care of boundary conditions such as potentially split wide chars
 // across scrolling region boundaries and orphaned spacer heads at line ends.
-fn (mut self Terminal) row_will_be_shifted(row_idx int) {
-	if row_idx < 0 || row_idx >= self.screens.active.pages.screen_rows.len {
-		return
+fn (mut self Terminal) row_will_be_shifted(mut page Page, mut row RowData) {
+	mut cells := unsafe { row.cells }
+
+	// If our scrolling region includes the rightmost column then we
+	// need to turn any spacer heads in to normal empty cells, since
+	// once we move them they no longer correspond with soft-wrapped
+	// wide characters.
+	//
+	// If it contains either of the 2 leftmost columns, then the wide
+	// characters in the first column which may be associated with a
+	// spacer head will be either moved or cleared, so we also need
+	// to turn the spacer heads in to empty cells in that case.
+	if self.scrolling_region.right == self.cols - 1 || self.scrolling_region.left < 2 {
+		end := int(page.size.cols) - 1
+		if cells[end].wide == .spacer_head {
+			cells[end].wide = .narrow
+		}
 	}
-	sr := self.scrolling_region
-	unsafe {
-		mut row := &self.screens.active.pages.screen_rows[row_idx]
-		cols := int(self.screens.active.pages.cols)
-		mut cleared_grapheme := false
 
-		// If our scrolling region includes the rightmost column then we
-		// need to turn any spacer heads in to normal empty cells, since
-		// once we move them they no longer correspond with soft-wrapped
-		// wide characters.
-		//
-		// If it contains either of the 2 leftmost columns, then the wide
-		// characters in the first column which may be associated with a
-		// spacer head will be either moved or cleared, so we also need
-		// to turn the spacer heads in to empty cells in that case.
-		if sr.right == self.cols - 1 || sr.left < 2 {
-			end_idx := cols - 1
-			if end_idx >= 0 && end_idx < row.cells.len {
-				if row.cells[end_idx].wide == .spacer_head {
-					row.cells[end_idx].wide = .narrow
-				}
-			}
+	// If the leftmost or rightmost cells of our scrolling region
+	// are parts of wide chars, we need to clear the cells' contents
+	// since they'd be split by the move.
+	left := int(self.scrolling_region.left)
+	right := int(self.scrolling_region.right)
+
+	if cells[left].wide == .spacer_tail {
+		wide := left - 1
+		if cells[wide].has_grapheme() {
+			page.clear_grapheme(page.row_index(row), usize(wide))
+			page.update_row_grapheme_flag(row)
 		}
+		cells[wide].codepoint = 0
+		cells[wide].wide = .narrow
+		cells[left].wide = .narrow
+	}
 
-		// If the leftmost or rightmost cells of our scrolling region
-		// are parts of wide chars, we need to clear the cells' contents
-		// since they'd be split by the move.
-		left_i := int(sr.left)
-		right_i := int(sr.right)
-
-		if left_i < row.cells.len && row.cells[left_i].wide == .spacer_tail {
-			wide_i := left_i - 1
-			if wide_i >= 0 && wide_i < row.cells.len {
-				cleared_grapheme = row.cells[wide_i].has_grapheme()
-				row.cells[wide_i].graphemes = []
-				row.cells[wide_i].content_tag = .codepoint
-				row.cells[wide_i].codepoint = 0
-				row.cells[wide_i].wide = .narrow
-			}
-			row.cells[left_i].wide = .narrow
+	if cells[right].wide == .wide {
+		tail := right + 1
+		if cells[right].has_grapheme() {
+			page.clear_grapheme(page.row_index(row), usize(right))
+			page.update_row_grapheme_flag(row)
 		}
-
-		if right_i < row.cells.len && row.cells[right_i].wide == .wide {
-			tail_i := right_i + 1
-			cleared_grapheme = cleared_grapheme || row.cells[right_i].has_grapheme()
-			row.cells[right_i].graphemes = []
-			row.cells[right_i].content_tag = .codepoint
-			row.cells[right_i].codepoint = 0
-			row.cells[right_i].wide = .narrow
-			if tail_i < row.cells.len {
-				row.cells[tail_i].wide = .narrow
-			}
-		}
-
-		// Page.clearGrapheme updates this aggregate after removing a boundary
-		// grapheme. Flat row storage must perform the same scan explicitly.
-		if cleared_grapheme {
-			row.grapheme = false
-			for cell in row.cells {
-				if cell.has_grapheme() {
-					row.grapheme = true
-					break
-				}
-			}
-		}
+		cells[right].codepoint = 0
+		cells[right].wide = .narrow
+		cells[tail].wide = .narrow
 	}
 }
 
+// Map a failed partial-row clone to the capacity that must grow, as the
+// error switch in insertLines and deleteLines does.
+fn clone_error_capacity(err PageCloneError) ?IncreaseCapacity {
+	return match err {
+		// Rehash the sets
+		.hyperlink_set_needs_rehash { none }
+		// Increase style memory
+		.style_set_out_of_memory { .styles }
+		// Increase string memory
+		.string_alloc_out_of_memory { .string_bytes }
+		// Increase hyperlink memory
+		.hyperlink_set_out_of_memory, .hyperlink_map_out_of_memory { .hyperlink_bytes }
+		// Increase grapheme memory
+		.grapheme_map_out_of_memory, .grapheme_alloc_out_of_memory { .grapheme_bytes }
+	}
+}
+
+// TODO(qwerasd): `insertLines` and `deleteLines` are 99% identical,
+// the majority of their logic can (and should) be abstracted in to
+// a single shared helper function, probably on `Screen` not here.
+// I'm just too lazy to do that rn :p
+
 // Insert amount lines at the current cursor row. The contents of the line
 // at the current cursor row and below (to the bottom-most line in the
-// scrolling region) are shifted down by amount lines.
+// scrolling region) are shifted down by amount lines. The contents of the
+// amount bottom-most lines in the scroll region are lost.
 //
 // This unsets the pending wrap state without wrapping. If the current cursor
 // position is outside of the current scroll region it does nothing.
+//
+// If amount is greater than the remaining number of lines in the scrolling
+// region it is adjusted down (still allowing for scrolling out every remaining
+// line in the scrolling region)
+//
+// In left and right margin mode the margins are respected; lines are only
+// scrolled in the scroll region.
+//
+// All cleared space is colored according to the current SGR state.
 //
 // Moves the cursor to the left margin.
 pub fn (mut self Terminal) insert_lines(count usize) {
@@ -3271,98 +3317,157 @@ pub fn (mut self Terminal) insert_lines(count usize) {
 		|| self.screens.active.cursor.x > self.scrolling_region.right {
 		return
 	}
+
+	// Scrolling dirties the images because it updates their placements pins.
 	self.screens.active.mark_kitty_images_dirty()
 
+	// At the end we need to return the cursor to the row it started on.
 	start_y := self.screens.active.cursor.y
+	defer {
+		self.screens.active.cursor_absolute(self.scrolling_region.left, start_y)
 
-	// Remaining rows from our cursor to the bottom of the scroll region.
-	rem := int(self.scrolling_region.bottom) - int(self.screens.active.cursor.y) + 1
-	adjusted_count := if count < usize(rem) { int(count) } else { rem }
+		// Always unset pending wrap
+		self.screens.active.cursor.pending_wrap = false
+	}
 
-	// Check if we have left/right scroll margins
+	// We have a slower path if we have left or right scroll margins.
 	left_right := self.scrolling_region.left > 0 || self.scrolling_region.right < self.cols - 1
 
-	// Shift rows down
-	active_start := self.screens.active.pages.active_start
-	for y := int(self.scrolling_region.bottom); y >= int(start_y) + adjusted_count; y-- {
-		src_y := y - adjusted_count
-		src_idx := active_start + src_y
-		dst_idx := active_start + y
+	// Remaining rows from our cursor to the bottom of the scroll region.
+	rem := usize(self.scrolling_region.bottom - self.screens.active.cursor.y + 1)
 
-		// Handle boundary conditions (split wide chars / orphaned spacer
-		// heads) on both rows before shifting them.
-		self.row_will_be_shifted(dst_idx)
-		self.row_will_be_shifted(src_idx)
+	// We can only insert lines up to our remaining lines in the scroll
+	// region. So we take whichever is smaller.
+	adjusted_count := if count < rem { count } else { rem }
 
-		if src_idx < self.screens.active.pages.screen_rows.len
-			&& dst_idx < self.screens.active.pages.screen_rows.len {
+	// Create a new tracked pin which we'll use to navigate the page list
+	// so that if we need to adjust capacity it will be properly tracked.
+	mut cur_p := self.screens.active.pages.track_pin(self.screens.active.cursor.page_pin.down(rem - 1) or {
+		panic('insertLines region extends past the page list')
+	})
+	defer { self.screens.active.pages.untrack_pin(cur_p) }
+
+	// Our current y position relative to the cursor
+	mut y := rem
+
+	// Traverse from the bottom up
+	for y > 0 {
+		cur_rac := cur_p.row_and_cell()
+		mut cur_row := cur_rac.row
+
+		// If this is one of the lines we need to shift, do so
+		if y > adjusted_count {
+			off_p := cur_p.up(adjusted_count) or { panic('insertLines source row is missing') }
+			off_rac := off_p.row_and_cell()
+			mut off_row := off_rac.row
+
+			mut cur_page := &cur_p.node.data
+			mut off_page := &off_p.node.data
+			self.row_will_be_shifted(mut cur_page, mut cur_row)
+			self.row_will_be_shifted(mut off_page, mut off_row)
+
+			// If our scrolling region is full width, then we unset wrap.
 			if !left_right {
-				unsafe {
-					// Full row swap. If our scrolling region is full width,
-					// then we unset wrap/wrap_continuation on both the source and
-					// destination rows (matches Ghostty's insertLines).
-					mut dst_row := &self.screens.active.pages.screen_rows[dst_idx]
-					mut src_row := &self.screens.active.pages.screen_rows[src_idx]
-					src_row.wrap = false
-					src_row.wrap_continuation = false
-					dst_row.cells = src_row.cells.clone()
-					dst_row.wrap = false
-					dst_row.wrap_continuation = false
-					dst_row.styled = src_row.styled
-					dst_row.grapheme = src_row.grapheme
-					dst_row.hyperlink = src_row.hyperlink
-					dst_row.semantic_prompt = src_row.semantic_prompt
-					dst_row.kitty_virtual_placeholder = src_row.kitty_virtual_placeholder
-					dst_row.dirty = true
-				}
-			} else {
-				// Left/right margins: only copy cells within the margin range
-				unsafe {
-					mut dst_row := &self.screens.active.pages.screen_rows[dst_idx]
-					src_row := self.screens.active.pages.screen_rows[src_idx]
-					for x in int(self.scrolling_region.left) .. int(self.scrolling_region.right) + 1 {
-						if x < src_row.cells.len && x < dst_row.cells.len {
-							dst_row.cells[x] = src_row.cells[x]
-							if src_row.cells[x].has_grapheme() {
-								dst_row.grapheme = true
-							}
-							if src_row.cells[x].has_hyperlink {
-								dst_row.hyperlink = true
-							}
-							if src_row.cells[x].style_id != default_style_id {
-								dst_row.styled = true
-							}
-							if src_row.cells[x].codepoint() == kitty_unicode_placeholder {
-								dst_row.kitty_virtual_placeholder = true
-							}
-						}
-					}
-					dst_row.dirty = true
-				}
+				off_row.wrap = false
+				cur_row.wrap = false
+				off_row.wrap_continuation = false
+				cur_row.wrap_continuation = false
+			}
+
+			if !self.shift_row(off_p, off_row, *cur_p, cur_row, left_right) {
+				// Continue the loop to try handling this row again.
+				continue
+			}
+		} else {
+			// Clear the cells for this row, it has been shifted.
+			mut page := &cur_p.node.data
+			mut cells := unsafe { page.get_cells(cur_row)[int(self.scrolling_region.left)..int(self.scrolling_region.right) + 1] }
+			self.screens.active.clear_cells(mut page, mut cur_row, mut cells)
+		}
+
+		// Mark the row as dirty
+		cur_p.mark_dirty()
+
+		// We have successfully processed a line.
+		y -= 1
+		// Move our pin up to the next row.
+		if p := cur_p.up(1) {
+			unsafe {
+				*cur_p = p
 			}
 		}
 	}
+}
 
-	// Clear the inserted rows
-	for y in int(start_y) .. int(start_y) + adjusted_count {
-		idx := active_start + y
-		if idx < self.screens.active.pages.screen_rows.len {
-			if !left_right {
-				self.screens.active.clear_active_row(u32(y))
-			} else {
-				self.screens.active.clear_cells(idx, int(self.scrolling_region.left), int(self.scrolling_region.right) + 1)
+// Move one shifted row from src to dst, the part of insertLines and
+// deleteLines after the rows are prepared. Returns false when the
+// destination page had to grow, meaning the caller retries this row.
+fn (mut self Terminal) shift_row(src_p Pin, src_row &RowData, dst_p Pin, dst_row &RowData, left_right bool) bool {
+	// If our page doesn't match, then we need to do a copy from
+	// one page to another. This is the slow path.
+	if voidptr(src_p.node) != voidptr(dst_p.node) {
+		mut dst_page := &dst_p.node.data
+		src_page := &src_p.node.data
+		if err := dst_page.try_clone_partial_row_from(src_page, dst_page.row_index(dst_row),
+			src_page.row_index(src_row), usize(self.scrolling_region.left), usize(self.scrolling_region.right) + 1)
+		{
+			// Adjust our page capacity to make
+			// room for we didn't have space for
+			self.screens.active.increase_capacity(dst_p.node, clone_error_capacity(err)) or {
+				// System OOM. We have no way to recover from this
+				// currently. We should probably change insertLines
+				// to raise an error here.
+				//
+				// Or the page can't accommodate the managed memory required
+				// for this operation. We previously just corrupted
+				// memory here so a crash is better. The right long
+				// term solution is to allocate a new page here
+				// move this row to the new page, and start over.
+				panic('increaseCapacity ${err}')
 			}
+			return false
 		}
+		return true
 	}
 
-	// Return cursor to the left margin
-	self.screens.active.cursor_absolute(u32(self.scrolling_region.left), u32(start_y))
-	self.screens.active.cursor.pending_wrap = false
+	if !left_right {
+		// Swap the src/dst cells. This ensures that our dst gets the
+		// proper shifted rows and src gets non-garbage cell data that
+		// we can clear.
+		mut dst_mut := unsafe { dst_row }
+		mut src_mut := unsafe { src_row }
+		dst := *dst_row
+		unsafe {
+			*dst_mut = *src_row
+			*src_mut = dst
+		}
+
+		// Ensure what we did didn't corrupt the page
+		dst_p.node.data.assert_integrity()
+	} else {
+		// Left/right scroll margins we have to
+		// copy cells, which is much slower...
+		mut page := &dst_p.node.data
+		page.move_cells(page.row_index(src_row), usize(self.scrolling_region.left), page.row_index(dst_row),
+			usize(self.scrolling_region.left), usize(self.scrolling_region.right - self.scrolling_region.left) + 1)
+	}
+	return true
 }
 
 // Removes amount lines from the current cursor row down. The remaining lines
 // to the bottom margin are shifted up and space from the bottom margin up is
 // filled with empty lines.
+//
+// If the current cursor position is outside of the current scroll region it
+// does nothing. If amount is greater than the remaining number of lines in the
+// scrolling region it is adjusted down.
+//
+// In left and right margin mode the margins are respected; lines are only
+// scrolled in the scroll region.
+//
+// If the cell movement splits a multi cell character that character cleared,
+// by replacing it by spaces, keeping its current attributes. All other
+// cleared space is colored according to the current SGR state.
 //
 // Moves the cursor to the left margin.
 pub fn (mut self Terminal) delete_lines(count usize) {
@@ -3378,92 +3483,83 @@ pub fn (mut self Terminal) delete_lines(count usize) {
 		|| self.screens.active.cursor.x > self.scrolling_region.right {
 		return
 	}
+
+	// Scrolling dirties the images because it updates their placements pins.
 	self.screens.active.mark_kitty_images_dirty()
 
+	// At the end we need to return the cursor to the row it started on.
 	start_y := self.screens.active.cursor.y
+	defer {
+		self.screens.active.cursor_absolute(self.scrolling_region.left, start_y)
+		// Always unset pending wrap
+		self.screens.active.cursor.pending_wrap = false
+	}
 
-	// Remaining rows from our cursor to the bottom of the scroll region.
-	rem := int(self.scrolling_region.bottom) - int(self.screens.active.cursor.y) + 1
-	adjusted_count := if count < usize(rem) { int(count) } else { rem }
-
-	// Check if we have left/right scroll margins
+	// We have a slower path if we have left or right scroll margins.
 	left_right := self.scrolling_region.left > 0 || self.scrolling_region.right < self.cols - 1
 
-	active_start := self.screens.active.pages.active_start
+	// Remaining rows from our cursor to the bottom of the scroll region.
+	rem := usize(self.scrolling_region.bottom - self.screens.active.cursor.y + 1)
 
-	// Shift rows up
-	for y in int(start_y) .. int(self.scrolling_region.bottom) - adjusted_count + 1 {
-		src_y := y + adjusted_count
-		src_idx := active_start + src_y
-		dst_idx := active_start + y
+	// We can only insert lines up to our remaining lines in the scroll
+	// region. So we take whichever is smaller.
+	adjusted_count := if count < rem { count } else { rem }
 
-		// Handle boundary conditions (split wide chars / orphaned spacer
-		// heads) on both rows before shifting them.
-		self.row_will_be_shifted(dst_idx)
-		self.row_will_be_shifted(src_idx)
+	// Create a new tracked pin which we'll use to navigate the page list
+	// so that if we need to adjust capacity it will be properly tracked.
+	mut cur_p := self.screens.active.pages.track_pin(*self.screens.active.cursor.page_pin)
+	defer { self.screens.active.pages.untrack_pin(cur_p) }
 
-		if src_idx < self.screens.active.pages.screen_rows.len
-			&& dst_idx < self.screens.active.pages.screen_rows.len {
+	// Our current y position relative to the cursor
+	mut y := usize(0)
+
+	// Traverse from the top down
+	for y < rem {
+		cur_rac := cur_p.row_and_cell()
+		mut cur_row := cur_rac.row
+
+		// If this is one of the lines we need to shift, do so
+		if y < rem - adjusted_count {
+			off_p := cur_p.down(adjusted_count) or { panic('deleteLines source row is missing') }
+			off_rac := off_p.row_and_cell()
+			mut off_row := off_rac.row
+
+			mut cur_page := &cur_p.node.data
+			mut off_page := &off_p.node.data
+			self.row_will_be_shifted(mut cur_page, mut cur_row)
+			self.row_will_be_shifted(mut off_page, mut off_row)
+
+			// If our scrolling region is full width, then we unset wrap.
 			if !left_right {
-				unsafe {
-					mut dst_row := &self.screens.active.pages.screen_rows[dst_idx]
-					mut src_row := &self.screens.active.pages.screen_rows[src_idx]
-					// Full-width line movement breaks soft-wrap relationships on
-					// both sides of the move.
-					src_row.wrap = false
-					src_row.wrap_continuation = false
-					dst_row.cells = src_row.cells.clone()
-					dst_row.wrap = false
-					dst_row.wrap_continuation = false
-					dst_row.styled = src_row.styled
-					dst_row.grapheme = src_row.grapheme
-					dst_row.hyperlink = src_row.hyperlink
-					dst_row.semantic_prompt = src_row.semantic_prompt
-					dst_row.kitty_virtual_placeholder = src_row.kitty_virtual_placeholder
-					dst_row.dirty = true
-				}
-			} else {
-				unsafe {
-					mut dst_row := &self.screens.active.pages.screen_rows[dst_idx]
-					src_row := self.screens.active.pages.screen_rows[src_idx]
-					for x in int(self.scrolling_region.left) .. int(self.scrolling_region.right) + 1 {
-						if x < src_row.cells.len && x < dst_row.cells.len {
-							dst_row.cells[x] = src_row.cells[x]
-							if src_row.cells[x].has_grapheme() {
-								dst_row.grapheme = true
-							}
-							if src_row.cells[x].has_hyperlink {
-								dst_row.hyperlink = true
-							}
-							if src_row.cells[x].style_id != default_style_id {
-								dst_row.styled = true
-							}
-							if src_row.cells[x].codepoint() == kitty_unicode_placeholder {
-								dst_row.kitty_virtual_placeholder = true
-							}
-						}
-					}
-					dst_row.dirty = true
-				}
+				off_row.wrap = false
+				cur_row.wrap = false
+				off_row.wrap_continuation = false
+				cur_row.wrap_continuation = false
+			}
+
+			if !self.shift_row(off_p, off_row, *cur_p, cur_row, left_right) {
+				// Continue the loop to try handling this row again.
+				continue
+			}
+		} else {
+			// Clear the cells for this row, it's from out of bounds.
+			mut page := &cur_p.node.data
+			mut cells := unsafe { page.get_cells(cur_row)[int(self.scrolling_region.left)..int(self.scrolling_region.right) + 1] }
+			self.screens.active.clear_cells(mut page, mut cur_row, mut cells)
+		}
+
+		// Mark the row as dirty
+		cur_p.mark_dirty()
+
+		// We have successfully processed a line.
+		y += 1
+		// Move our pin down to the next row.
+		if p := cur_p.down(1) {
+			unsafe {
+				*cur_p = p
 			}
 		}
 	}
-
-	// Clear the vacated rows at the bottom
-	for y in int(self.scrolling_region.bottom) - adjusted_count + 1 .. int(self.scrolling_region.bottom) + 1 {
-		idx := active_start + y
-		if idx < self.screens.active.pages.screen_rows.len {
-			if !left_right {
-				self.screens.active.clear_active_row(u32(y))
-			} else {
-				self.screens.active.clear_cells(idx, int(self.scrolling_region.left), int(self.scrolling_region.right) + 1)
-			}
-		}
-	}
-
-	// Return cursor to the left margin
-	self.screens.active.cursor_absolute(u32(self.scrolling_region.left), u32(start_y))
-	self.screens.active.cursor.pending_wrap = false
 }
 
 // ============================================================
@@ -3475,71 +3571,89 @@ pub fn (mut self Terminal) delete_lines(count usize) {
 // region are lost. The cursor position is not changed.
 //
 // This unsets the pending wrap state without wrapping.
+//
+// The inserted cells are colored according to the current SGR state.
 pub fn (mut self Terminal) insert_blanks(count usize) {
-	// Unset pending wrap state without wrapping.
+	// Unset pending wrap state without wrapping. Note: this purposely
+	// happens BEFORE the scroll region check below, because that's what
+	// xterm does.
 	self.screens.active.cursor.pending_wrap = false
 
-	// If our cursor is outside the margins then do nothing.
+	// If our cursor is outside the margins then do nothing. We DO reset
+	// wrap state still so this must remain below the above logic.
 	if self.screens.active.cursor.x < self.scrolling_region.left
 		|| self.screens.active.cursor.x > self.scrolling_region.right {
 		return
 	}
 
-	row_idx := self.screens.active.pages.active_start + int(self.screens.active.cursor.y)
-	if row_idx >= self.screens.active.pages.screen_rows.len {
-		return
-	}
+	// If our count is larger than the remaining amount, we just erase right.
+	// We only do this if we can erase the entire line (no right margin).
+	// if (right_limit == self.cols and
+	//     count > right_limit - self.screens.active.cursor.x)
+	// {
+	//     self.eraseLine(.right, false);
+	//     return;
+	// }
 
-	cursor_x := int(self.screens.active.cursor.x)
+	// left is just the cursor position but as a multi-pointer
+	left := int(self.screens.active.cursor.x)
+	mut page := &self.screens.active.cursor.page_pin.node.data
+	mut row := self.screens.active.cursor.page_row
+	row_idx := page.row_index(row)
 
-	// If our X is a wide spacer tail then we need to erase the previous cell
-	// too so we don't split a multi-cell character.
-	if cursor_x < self.screens.active.pages.screen_rows[row_idx].cells.len
-		&& self.screens.active.pages.screen_rows[row_idx].cells[cursor_x].wide == .spacer_tail {
-		self.screens.active.clear_cells(row_idx, cursor_x - 1, cursor_x + 1)
+	// If our X is a wide spacer tail then we need to erase the
+	// previous cell too so we don't split a multi-cell character.
+	if self.screens.active.cursor.page_cell.wide == .spacer_tail {
+		assert self.screens.active.cursor.x > 0
+		mut pair := unsafe { row.cells[left - 1..left + 1] }
+		self.screens.active.clear_cells(mut page, mut row, mut pair)
 	}
 
 	// Remaining cols from our cursor to the right margin.
-	rem := int(self.scrolling_region.right) - int(self.screens.active.cursor.x) + 1
-	adjusted_count := if count < usize(rem) { int(count) } else { rem }
-	scroll_amount := rem - adjusted_count
+	rem := usize(self.scrolling_region.right - self.screens.active.cursor.x + 1)
 
+	// We can only insert blanks up to our remaining cols
+	adjusted_count := if count < rem { count } else { rem }
+
+	// This is the amount of space at the right of the scroll region
+	// that will NOT be blank, so we need to shift the correct cols right.
+	// "scroll_amount" is the number of such cols.
+	scroll_amount := rem - adjusted_count
 	if scroll_amount > 0 {
+		page.pause_integrity_checks(true)
+		defer { page.pause_integrity_checks(false) }
+
+		mut x := left + int(scroll_amount) - 1
+
 		// If our last cell we're shifting is wide, then we need to clear
 		// it to be empty so we don't split the multi-cell char.
-		end := cursor_x + scroll_amount - 1
-		if end < self.screens.active.pages.screen_rows[row_idx].cells.len
-			&& self.screens.active.pages.screen_rows[row_idx].cells[end].wide == .wide {
-			self.screens.active.clear_cells(row_idx, end, end + 2)
+		if row.cells[x].wide == .wide {
+			assert row.cells[x + 1].wide == .spacer_tail
+			mut end_pair := unsafe { row.cells[x..x + 2] }
+			self.screens.active.clear_cells(mut page, mut row, mut end_pair)
+		}
+
+		// We work backwards so we don't overwrite data.
+		for x >= left {
+			page.swap_cells(row_idx, usize(x), usize(x) + adjusted_count)
+			x -= 1
 		}
 	}
 
-	unsafe {
-		mut row := &self.screens.active.pages.screen_rows[row_idx]
+	// Insert blanks. The blanks preserve the background color.
+	mut blanks := unsafe { row.cells[left..left + int(adjusted_count)] }
+	self.screens.active.clear_cells(mut page, mut row, mut blanks)
 
-		// Shift cells right. We work backwards so we don't overwrite data.
-		if scroll_amount > 0 {
-			for x := cursor_x + scroll_amount - 1; x >= cursor_x; x-- {
-				src_x := x
-				dst_x := x + adjusted_count
-				if src_x < row.cells.len && dst_x < row.cells.len {
-					row.cells[dst_x] = row.cells[src_x]
-				}
-			}
-		}
-
-		row.dirty = true
-	}
-
-	// Insert blanks through the managed clearing path. Besides preserving the
-	// background color, this releases/recomputes grapheme, style, and hyperlink
-	// state just like Ghostty's clearCells after its cell swaps.
-	self.screens.active.clear_cells(row_idx, cursor_x, cursor_x + adjusted_count)
+	// Our row is always dirty
+	self.screens.active.cursor_mark_dirty()
 }
 
 // Removes amount characters from the current cursor position to the right.
 // The remaining characters are shifted to the left and space from the right
 // margin is filled with spaces.
+//
+// If amount is greater than the remaining number of characters in the
+// scrolling region, it is adjusted down.
 //
 // Does not change the cursor position.
 pub fn (mut self Terminal) delete_chars(count_req usize) {
@@ -3547,160 +3661,172 @@ pub fn (mut self Terminal) delete_chars(count_req usize) {
 		return
 	}
 
-	// If our cursor is outside the margins then do nothing.
+	// If our cursor is outside the margins then do nothing. We DO reset
+	// wrap state still so this must remain below the above logic.
 	if self.screens.active.cursor.x < self.scrolling_region.left
 		|| self.screens.active.cursor.x > self.scrolling_region.right {
 		return
 	}
 
-	// Remaining cols from our cursor to the right margin.
-	rem := int(self.scrolling_region.right) - int(self.screens.active.cursor.x) + 1
-	count := if count_req < usize(rem) { int(count_req) } else { rem }
+	// left is just the cursor position but as a multi-pointer
+	left := int(self.screens.active.cursor.x)
+	mut page := &self.screens.active.cursor.page_pin.node.data
+	mut row := self.screens.active.cursor.page_row
+	row_idx := page.row_index(row)
 
-	// Handle any boundary conditions where the region being moved would
-	// split a multi-cell character.
+	// Remaining cols from our cursor to the right margin.
+	rem := usize(self.scrolling_region.right - self.screens.active.cursor.x + 1)
+
+	// We can only insert blanks up to our remaining cols
+	count := if count_req < rem { count_req } else { rem }
+
 	self.screens.active.split_cell_boundary(self.screens.active.cursor.x)
 	self.screens.active.split_cell_boundary(self.screens.active.cursor.x + u32(count))
 	self.screens.active.split_cell_boundary(self.scrolling_region.right + 1)
 
-	row_idx := self.screens.active.pages.active_start + int(self.screens.active.cursor.y)
-	if row_idx >= self.screens.active.pages.screen_rows.len {
-		return
-	}
-
-	cursor_x := int(self.screens.active.cursor.x)
+	// This is the amount of space at the right of the scroll region
+	// that will NOT be blank, so we need to shift the correct cols right.
+	// "scroll_amount" is the number of such cols.
 	scroll_amount := rem - count
-	unsafe {
-		mut row := &self.screens.active.pages.screen_rows[row_idx]
+	mut x := left
+	if scroll_amount > 0 {
+		page.pause_integrity_checks(true)
+		defer { page.pause_integrity_checks(false) }
 
-		// Shift cells left
-		if scroll_amount > 0 {
-			for x in cursor_x .. cursor_x + scroll_amount {
-				src_x := x + count
-				if x < row.cells.len && src_x < row.cells.len {
-					row.cells[x] = row.cells[src_x]
-				}
-			}
+		right := left + int(scroll_amount) - 1
+
+		for x <= right {
+			page.swap_cells(row_idx, usize(x) + count, usize(x))
+			x += 1
 		}
-
-		row.dirty = true
 	}
 
-	// Clear the vacated cells through the same managed-memory path as the
-	// source so row aggregate flags cannot retain values shifted off the line.
-	self.screens.active.clear_cells(row_idx, cursor_x + scroll_amount, cursor_x + rem)
+	// Insert blanks. The blanks preserve the background color.
+	mut blanks := unsafe { row.cells[x..x + int(rem - scroll_amount)] }
+	self.screens.active.clear_cells(mut page, mut row, mut blanks)
 
-	// Reset both the row's soft-wrap metadata and pending-wrap cursor state.
+	// Our row's soft-wrap is always reset.
 	self.screens.active.cursor_reset_wrap()
+
+	// Our row is always dirty
+	self.screens.active.cursor_mark_dirty()
 }
 
-// Erase characters at the cursor position.
 pub fn (mut self Terminal) erase_chars(count_req usize) {
-	remaining := int(self.cols) - int(self.screens.active.cursor.x)
-	count_min := if count_req < 1 { usize(1) } else { count_req }
-	count := if count_min < usize(remaining) { int(count_min) } else { remaining }
+	remaining := usize(self.cols - self.screens.active.cursor.x)
+	mut count := if remaining < count_req { remaining } else { count_req }
+	if count < 1 {
+		count = if remaining < 1 { remaining } else { 1 }
+	}
+
+	// If our last cell is a wide char then we need to also clear the
+	// cell beyond it since we can't just split a wide char.
+	if count != remaining {
+		last := self.screens.active.cursor_cell_right(u32(count) - 1)
+		if last.wide == .wide {
+			count += 1
+		}
+	}
 
 	// Handle any boundary conditions on the edges of the erased area.
 	//
 	// TODO(qwerasd): This isn't actually correct if you take in to account
-	// protected modes. We need to figure out how to make clear_cells or at
-	// least clear_unprotected_cells handle boundary conditions...
+	// protected modes. We need to figure out how to make `clearCells` or at
+	// least `clearUnprotectedCells` handle boundary conditions...
 	self.screens.active.split_cell_boundary(self.screens.active.cursor.x)
 	self.screens.active.split_cell_boundary(self.screens.active.cursor.x + u32(count))
 
 	// Reset our row's soft-wrap.
 	self.screens.active.cursor_reset_wrap()
+
+	// Mark our cursor row as dirty
 	self.screens.active.cursor_mark_dirty()
 
-	row_idx := self.screens.active.pages.active_start + int(self.screens.active.cursor.y)
-	cursor_x := int(self.screens.active.cursor.x)
+	// Clear the cells
+	mut page := &self.screens.active.cursor.page_pin.node.data
+	mut row := self.screens.active.cursor.page_row
+	mut cells := row_cells_at(row, self.screens.active.cursor.page_cell, int(count))
 
-	if row_idx >= self.screens.active.pages.screen_rows.len {
-		return
-	}
-
-	// If we never had a protection mode, then we can assume no cells are
-	// protected and go with the fast path. If the last protection mode was
-	// not ISO we also always ignore protection attributes.
+	// If we never had a protection mode, then we can assume no cells
+	// are protected and go with the fast path. If the last protection
+	// mode was not ISO we also always ignore protection attributes.
 	if self.screens.active.protected_mode != .iso {
-		self.screens.active.clear_cells(row_idx, cursor_x, cursor_x + count)
+		self.screens.active.clear_cells(mut page, mut row, mut cells)
 		return
 	}
 
-	self.screens.active.clear_unprotected_cells(row_idx, cursor_x, cursor_x + count)
+	self.screens.active.clear_unprotected_cells(mut page, mut row, mut cells)
 }
-
-// ============================================================
-// Erase line / display
-// ============================================================
 
 // Erase the line.
 pub fn (mut self Terminal) erase_line(mode EraseLine, protected_req bool) {
-	row_idx := self.screens.active.pages.active_start + int(self.screens.active.cursor.y)
-	cursor_x := int(self.screens.active.cursor.x)
-
-	// Get the cursor cell's wide property so we can handle boundary
-	// conditions where a multi-cell character would be split.
-	cursor_wide := if row_idx >= 0 && row_idx < self.screens.active.pages.screen_rows.len
-		&& cursor_x < self.screens.active.pages.screen_rows[row_idx].cells.len {
-		self.screens.active.pages.screen_rows[row_idx].cells[cursor_x].wide
-	} else {
-		CellWide.narrow
-	}
-
-	start, end := match mode {
+	// Get our start/end positions depending on mode.
+	mut start := u32(0)
+	mut end := u32(0)
+	match mode {
 		.right {
+			mut x := self.screens.active.cursor.x
+
 			// If our X is a wide spacer tail then we need to erase the
 			// previous cell too so we don't split a multi-cell character.
-			mut x := cursor_x
-			if x > 0 && cursor_wide == .spacer_tail {
+			if x > 0 && self.screens.active.cursor.page_cell.wide == .spacer_tail {
 				x -= 1
 			}
+
 			// Reset our row's soft-wrap.
 			self.screens.active.cursor_reset_wrap()
-			x, int(self.cols)
-		}
-		.right_unless_pending_wrap {
-			// Like .right, but only if there's no pending wrap.
-			if self.screens.active.cursor.pending_wrap {
-				return
-			}
-			mut x := cursor_x
-			if x > 0 && cursor_wide == .spacer_tail {
-				x -= 1
-			}
-			self.screens.active.cursor_reset_wrap()
-			x, int(self.cols)
+
+			start = x
+			end = self.cols
 		}
 		.left {
+			mut x := self.screens.active.cursor.x
+
 			// If our x is a wide char we need to delete the tail too.
-			mut x := cursor_x
-			if cursor_wide == .wide {
+			if self.screens.active.cursor.page_cell.wide == .wide {
 				x += 1
 			}
-			0, x + 1
+
+			start = 0
+			end = x + 1
 		}
+		// Note that it seems like complete should reset the soft-wrap
+		// state of the line but in xterm it does not.
 		.complete {
-			// Note that it seems like complete should reset the soft-wrap
-			// state of the line but in xterm it does not.
-			0, int(self.cols)
+			start = 0
+			end = self.cols
+		}
+		else {
+			// log.err: unimplemented erase line mode
+			return
 		}
 	}
 
-	// All modes will clear the pending wrap state
+	// All modes will clear the pending wrap state and we know we have
+	// a valid mode at this point.
 	self.screens.active.cursor.pending_wrap = false
+
+	// We always mark our row as dirty
 	self.screens.active.cursor_mark_dirty()
 
-	// We respect protected attributes if explicitly requested or if our
-	// last protected mode was ISO.
-	is_protected := self.screens.active.protected_mode == .iso || protected_req
+	// Start of our cells
+	mut page := &self.screens.active.cursor.page_pin.node.data
+	mut row := self.screens.active.cursor.page_row
+	mut cells := unsafe { row.cells[int(start)..int(end)] }
 
-	if !is_protected {
-		self.screens.active.clear_cells(row_idx, start, end)
+	// We respect protected attributes if explicitly requested (probably
+	// a DECSEL sequence) or if our last protected mode was ISO even if its
+	// not currently set.
+	protected := self.screens.active.protected_mode == .iso || protected_req
+
+	// If we're not respecting protected attributes, we can use a fast-path
+	// to fill the entire line.
+	if !protected {
+		self.screens.active.clear_cells(mut page, mut row, mut cells)
 		return
 	}
 
-	self.screens.active.clear_unprotected_cells(row_idx, start, end)
+	self.screens.active.clear_unprotected_cells(mut page, mut row, mut cells)
 }
 
 // Erase the display.
@@ -3762,19 +3888,21 @@ pub fn (mut self Terminal) erase_display(mode EraseDisplay, protected_req bool) 
 	}
 }
 
+// The `at_prompt:` block of eraseDisplay's complete mode: go from the bottom
+// of the active area up and see if we're at a prompt.
 fn (self &Terminal) check_at_prompt_for_clear() bool {
-	// Go from the bottom of the active up and see if we're at a prompt.
-	active_start := self.screens.active.pages.active_start
-	for y := int(self.rows) - 1; y >= 0; y-- {
-		idx := active_start + y
-		if idx >= self.screens.active.pages.screen_rows.len {
-			continue
-		}
-		row := self.screens.active.pages.screen_rows[idx]
+	active_br := self.screens.active.pages.get_bottom_right(.active) or { return false }
+	mut it := active_br.row_iterator(.left_up, self.screens.active.pages.get_top_left(.active))
+	for {
+		p := it.next() or { break }
+		row := p.row_and_cell().row
 		match row.semantic_prompt {
+			// If we're at a prompt or input area, then we are at a prompt.
 			.prompt, .prompt_continuation {
 				return true
 			}
+			// If we have command output, then we're most certainly not
+			// at a prompt.
 			.unknown {
 				return false
 			}
@@ -3825,37 +3953,39 @@ pub fn (mut self Terminal) decaln() ! {
 	// Move our cursor to the top-left
 	self.set_cursor_pos(1, 1)
 
-	// Clear first rather than overwriting the cells directly. DECALN ignores
-	// protected attributes, and clearing releases all managed cell state and
-	// resets row metadata before the alignment pattern is installed.
+	// Use clearRows instead of eraseDisplay because we must NOT respect
+	// protected attributes here.
 	self.screens.active.clear_rows(Point.new(.active, Coordinate{}), none, false)
 
-	// Fill with Es. The flat Pages representation stores the concrete style on
-	// each cell in addition to its style discriminator.
-	active_start := self.screens.active.pages.active_start
-	for y in 0 .. int(self.rows) {
-		idx := active_start + y
-		if idx < self.screens.active.pages.screen_rows.len {
-			unsafe {
-				mut row := &self.screens.active.pages.screen_rows[idx]
-				for x in 0 .. int(self.cols) {
-					if x < row.cells.len {
-						row.cells[x] = CellData{
-							codepoint: u32(`E`)
-							content_tag: .codepoint
-							style_id: self.screens.active.cursor.style_id
-							style: self.screens.active.cursor.style
-							// DECALN does not respect protected state. Verified with xterm.
-							is_protected: false
-						}
-					}
-				}
-				if self.screens.active.cursor.style_id != terminal.default_style_id {
-					row.styled = true
-				}
-				row.dirty = true
+	// Fill with Es by moving the cursor but reset it after.
+	for {
+		mut page := &self.screens.active.cursor.page_pin.node.data
+		mut row := self.screens.active.cursor.page_row
+		cols := int(page.size.cols)
+		for x in 0 .. cols {
+			row.cells[x] = CellData{
+				content_tag: .codepoint
+				codepoint:   u32(`E`)
+				style_id:    self.screens.active.cursor.style_id
+				// DECALN does not respect protected state. Verified with xterm.
+				is_protected: false
 			}
 		}
+
+		// If we have a ref-counted style, increase
+		if self.screens.active.cursor.style_id != default_style_id {
+			page.styles.use_multiple(self.screens.active.cursor.style_id, u16(cols))
+			row.styled = true
+		}
+
+		// We messed with the page so assert its integrity here.
+		page.assert_integrity()
+
+		self.screens.active.cursor_mark_dirty()
+		if self.screens.active.cursor.y == self.rows - 1 {
+			break
+		}
+		self.screens.active.cursor_down(1)
 	}
 
 	// Reset the cursor to the top-left
@@ -4068,7 +4198,7 @@ pub fn (mut self Terminal) switch_screen(key ScreenKey) !SwitchScreenResult {
 				primary := self.screens.get(.primary) or {
 					panic('primary screen must be initialized')
 				}
-				primary.pages.max_scrollback
+				primary.pages.explicit_max_size
 			} else {
 				0
 			}
@@ -4227,7 +4357,9 @@ pub fn (mut self Terminal) semantic_prompt_options(action osc.SemanticAction, op
 		}
 		.fresh_line_new_prompt {
 			self.semantic_prompt_fresh_line()
-			self.screens.active.cursor_set_semantic_content_prompt(prompt_kind_from_osc(options))
+			self.screens.active.cursor_set_semantic_content(CursorSemanticPrompt{
+				kind: prompt_kind_from_osc(options)
+			})
 
 			if redraw := osc.read_redraw(options) {
 				self.flags.set_shell_redraws_prompt(redraw)
@@ -4252,16 +4384,22 @@ pub fn (mut self Terminal) semantic_prompt_options(action osc.SemanticAction, op
 			self.semantic_prompt_options(.fresh_line_new_prompt, options)
 		}
 		.prompt_start {
-			self.screens.active.cursor_set_semantic_content_prompt(prompt_kind_from_osc(options))
+			self.screens.active.cursor_set_semantic_content(CursorSemanticPrompt{
+				kind: prompt_kind_from_osc(options)
+			})
 		}
 		.end_prompt_start_input {
-			self.screens.active.cursor_set_semantic_content_input(false)
+			self.screens.active.cursor_set_semantic_content(CursorSemanticInput{
+				clear: .clear_explicit
+			})
 		}
 		.end_prompt_start_input_terminate_eol {
-			self.screens.active.cursor_set_semantic_content_input(true)
+			self.screens.active.cursor_set_semantic_content(CursorSemanticInput{
+				clear: .clear_eol
+			})
 		}
 		.end_input_start_output {
-			self.screens.active.cursor_set_semantic_content_output()
+			self.screens.active.cursor_set_semantic_content(CursorSemanticOutput{})
 
 			// If our current row is marked as a prompt and we're at column
 			// zero then we assume we're un-prompting. This is a heuristic to
@@ -4270,19 +4408,13 @@ pub fn (mut self Terminal) semantic_prompt_options(action osc.SemanticAction, op
 			// when we get a newline with a prompt cursor that the new line is
 			// also a prompt. But fish changes to output on the newline, so if
 			// we're at col 0 we just assume we're overwriting the prompt.
-			idx := self.screens.active.pages.active_start + int(self.screens.active.cursor.y)
-			if self.screens.active.cursor.x == 0
-				&& idx >= 0 && idx < self.screens.active.pages.screen_rows.len {
-				unsafe {
-					mut row := &self.screens.active.pages.screen_rows[idx]
-					if row.semantic_prompt != .unknown {
-						row.semantic_prompt = .unknown
-					}
-				}
+			if self.screens.active.cursor.page_row.semantic_prompt != .unknown
+				&& self.screens.active.cursor.x == 0 {
+				self.screens.active.cursor.page_row.semantic_prompt = .unknown
 			}
 		}
 		.end_command {
-			self.screens.active.cursor_set_semantic_content_output()
+			self.screens.active.cursor_set_semantic_content(CursorSemanticOutput{})
 		}
 	}
 }
@@ -4323,35 +4455,12 @@ fn (mut self Terminal) semantic_prompt_fresh_line() {
 // ============================================================
 
 // Returns true if the point is dirty, used for testing.
-pub fn (self &Terminal) is_dirty(x u32, y u32) bool {
-	idx := self.screens.active.pages.active_start + int(y)
-	if idx < self.screens.active.pages.screen_rows.len {
-		row := self.screens.active.pages.screen_rows[idx]
-		return row.dirty
-	}
-	return false
+pub fn (self &Terminal) is_dirty(pt Point) bool {
+	cell := self.screens.active.pages.get_cell(pt) or { panic('dirty point is outside the page list') }
+	return cell.is_dirty()
 }
 
 // Clear all dirty bits. Testing only.
 pub fn (mut self Terminal) clear_dirty() {
-	for mut row in self.screens.active.pages.screen_rows {
-		row.dirty = false
-	}
-}
-
-// ============================================================
-// Unicode grapheme break helper
-// ============================================================
-
-// Replays the existing cell grapheme to reconstruct uucode's BreakState, then
-// determines whether appending cp starts a new grapheme. This is the same
-// state reconstruction performed by Ghostty's Terminal.print.
-fn grapheme_break_cell(prev CellData, cp u32) bool {
-	mut state := unicode.BreakState.default
-	mut cp1 := prev.codepoint
-	for cp2 in prev.graphemes {
-		assert !unicode.grapheme_break(cp1, cp2, &state)
-		cp1 = cp2
-	}
-	return unicode.grapheme_break(cp1, cp, &state)
+	self.screens.active.pages.clear_dirty()
 }

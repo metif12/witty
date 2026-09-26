@@ -401,6 +401,13 @@ below exist. Earlier versions of this document overstated the completed review.
 | GTK debug-build indicators | Ghostty's window `debug` property, `devel` style class, and the window and inspector debug-warning banners follow `build_config.is_debug`, which Witty translates as `$if debug` (and `+version` reports). The GTK code used `$if !prod` instead, so a plain build reported ReleaseFast in `+version` while showing the debug banner. | Use `$if debug` at all five sites. |
 | page memory alignment | Ghostty aligns page layouts to `std.heap.page_size_min`: 16 KiB on arm64 Darwin, 4 KiB on x86_64 Darwin and on Linux. Witty used 16 KiB for every macOS build, so Intel Macs laid out larger pages than Ghostty does. The page reference tests also encoded only the arm64 macOS totals and failed on Linux. | Use 16 KiB only on arm64 macOS, and give the reference tests each target's total size and the capacities derived from it (for example `initial_capacity(80).rows` is 582 with 16 KiB pages and 576 with 4 KiB pages). |
 | page row cell offsets and erase rotation | A Ghostty `Row` holds an offset to its cells in page memory, and the page's grapheme and hyperlink maps are keyed by cell offset, so `eraseRow`, `eraseRowBounded`, and `eraseRows` rotate or swap `Row` values and the managed memory travels with them. Witty keyed those maps by row index, so its PageList could not move rows: it re-cloned every following row cell by cell (O(rows x cols) per erased row) instead of rotating. | Give each `RowData` a `cells_offset` handle to its cell block, key the page maps by it, and translate the three erase functions with the source's `rotateOnce` and row swaps. |
+| Screen and Terminal on PageList | Ghostty's `Screen` is built on `PageList`: the cursor holds a tracked page pin plus row and cell pointers, styles, hyperlinks, and graphemes live in each page's ref-counted sets, and `Terminal` edits rows through those pointers. Witty ran `Screen` and `Terminal` on an invented flat `Pages` row array whose cells carried inline copies of their style and hyperlink, while the translated `PageList` was exercised only by its own tests and the formatter. | Re-translate `Screen.zig` on `PageList` (cursor pins and reloads, `cursorDownScroll`, `cursorScrollAbove` with row rotation, `clearCells`, `splitCellBoundary`, resize, styles and hyperlinks, selection and word/line/output selection, prompt clicks, `dumpString`) and re-translate `Terminal`'s print, wrap, index, line and character insertion/deletion, erase, and DECALN paths against page rows. Delete the flat `Pages` model and the inline `style`/`hyperlink` cell fields; every reader now resolves them through the page sets. |
+| index with a top margin | Ghostty's `index` at the bottom margin creates scrollback only when the region spans the full screen, uses `scrollUp` for left/right margins or a non-zero blank cell, and otherwise rotates the region with `eraseRowBounded`. Witty called `cursorScrollAbove` for a full-width region with a top margin, pushing the rows above the region into history, and never checked the blank cell. | Restore the three branches and the `eraseRowBounded` fast path. |
+| tracked selections | Ghostty's `Selection` holds tracked pins owned by the screen, so it moves with scrolling, resize, and erasure; its methods take the `Screen`. Witty's live selection stored flat coordinates that the screen remapped by hand after each mutation, while a separate `PageSelection` held the faithful code unused. | Make `selection.v` the translation of `Selection.zig` (tracked/untracked bounds, `track`, `deinit`, `topLeft`, `bottomRight`, `order`, `ordered`, `contains`, `containedRow`, `adjust`) and remove both flat selection types. |
+| render state on PageList | `RenderState.update` iterates the viewport's page rows, clears the last dirty page's flag, reads styles and graphemes from the page, and resolves `linkCells` through the page hyperlink set. Witty adapted the flat rows instead, so cross-page viewports and page dirty tracking never reached the renderer. | Re-translate `update`, `linkCells`, and the flattened-highlight update against `PageList`, and add the upstream "linkCells with scrollback spanning pages" test. |
+| mouse selection, word drag, and text dump | Ghostty's `left_click_pin` is a tracked pin; `dragLeftClickDouble` selects from the word under the click to the word under the drag point (clearing the selection when either is missing); `dumpTextLocked` formats with `trim = false`. Witty kept flat click coordinates, selected only the word under the click, and trimmed dumped text. | Track the click pin (untracking the previous one), translate the double- and triple-click drags and `mouseSelection`'s pin moves, format dumped text untrimmed, and add the upstream "selection logic" and "rectangle selection logic" tests. |
+| screen search on the live page list | Ghostty's `ScreenSearch` searches the screen's own `PageList` and tracks its result pins; the search thread scrolls to a selected match with a pin scroll when it is outside the viewport. Witty searched a snapshot copy of the flat rows, rebuilt whenever a fingerprint changed, and scrolled by flat row. | Search `screen.pages` directly, remove the snapshot and fingerprint layer, restore the viewport page-overlap check and `ScrollPin` scroll, and translate the upstream search tests. |
+| Kitty placement pins | Ghostty anchors Kitty placements to tracked pins, deletes intersecting placements with `Pin.isBetween`, untracks pins when placements are removed, and resolves virtual placeholders by iterating page rows. Witty stored flat coordinates, so placements did not follow scrolling and resize. | Store `PlacementPin{pin: &Pin}` from `track_pin`, untrack in `Placement.deinit`, merge the two intersect deletes into the source's `deleteIntersecting`, iterate placeholders with a `RowIterator`, and translate the upstream storage and Unicode placeholder tests with their tracked-pin counts. |
 | page row metadata on clone | `clonePartialRowFrom` copies every `Row` field from the source and, for a partial copy, restores only the destination's wrap, wrap-continuation, grapheme, hyperlink, and styled flags and ORs `dirty`. Witty left the destination's semantic prompt and Kitty placeholder flags on partial copies, so growing columns without reflow (which copies fewer cells than the new width) dropped prompt marks. | Copy the source row and restore the same five flags plus `dirty`, keeping the destination's cell block. |
 | page integrity checks | `Page.assertIntegrity` and `getCells`' ownership check run only under `slow_runtime_safety`, and `getCells` compares pointer bounds. Witty ran the full page integrity scan in every build and `get_cells` scanned all rows to find the row, both on the live print and render paths. | Skip both in production builds, like `PageList.assert_integrity`, and compare pointer bounds in `get_cells`. |
 | formatter option mutability | Zig struct fields are mutable, and the upstream formatter tests set `formatter.opts.unwrap` and `.trim` after `PageFormatter.init`. Witty declared `PageFormatter.opts` and every `FormatOptions` field immutable. | Make them mutable and translate those tests as written. |
@@ -452,13 +459,6 @@ none, browser, action, ipc.
 These are confirmed structural boundaries or larger refactors. The absence of
 an item here does not mean its full module has been certified yet.
 
-- **Architectural:** `Screen`/`Terminal` use the flat `Pages` model, not the
-  faithful `PageList` linked-list (which is exercised only by its own tests +
-  the PageList formatter). Both exist; they are parallel. The corresponding
-  faithful tracked/untracked selection implementation likewise exists as
-  `PageSelection`, while the live flat screen retains coordinate selections
-  and manually remaps them during mutations; migrating `Screen` is required
-  before `Selection.track` can have its source lifetime contract.
 - **Fixed-array type aliases:** the pinned V compiler accepts a public alias
   declaration for Ghostty's `[256]RGB` `color.Palette` but emits invalid C as
   soon as that alias is used as a field or parameter type. Witty therefore
@@ -505,6 +505,10 @@ an item here does not mean its full module has been certified yet.
   entry points have no faithful operation on the GC-array representation and
   remain unrepresentable rather than being replaced with source-external copy
   semantics.
+  Each page row owns its own `cells` array, identified by a `cells_offset`
+  handle in place of an offset into one page buffer, and grapheme codepoints
+  are stored on the cell (`CellData.graphemes`) while the page's grapheme
+  allocator only accounts for their bytes.
 - **Deferred-face backend representation:** Ghostty's canonical `DeferredFace`
   conditionally owns native Fontconfig, CoreText, or WebCanvas state and loads
   through backend-specific private functions. Witty's canonical live face now
@@ -523,9 +527,6 @@ an item here does not mean its full module has been certified yet.
   so its lifecycle follows Ghostty's `sentry=false` branch. The translated
   transport can filter and persist serialized event envelopes locally, but no
   native crash handler currently supplies those envelopes.
-- **Render-state integration:** the production render path adapts the flat
-  `Pages` screen rather than traversing Ghostty's active `PageList`; therefore
-  PageList cross-node behavior is not exercised through the live renderer.
 - **Shadertoy toolchain:** Witty invokes external `glslangValidator` and
   `spirv-cross` executables through temporary files, whereas Ghostty links the
   shader compiler/cross-compiler libraries. This has different availability,

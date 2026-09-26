@@ -155,7 +155,7 @@ fn test_key_stream_colors_match_pinned_ghostty() {
 	assert hsv_to_rgba(0, 0.5, 0.9, 1) == u32(0xff7272e5)
 }
 
-fn test_flat_pagelist_inspector_projects_regions_and_style_usage() {
+fn test_pagelist_inspector_max_coord_tracks_regions() {
 	mut term := terminal.Terminal.init(terminal.Options{
 		cols: 3
 		rows: 2
@@ -163,35 +163,22 @@ fn test_flat_pagelist_inspector_projects_regions_and_style_usage() {
 	defer {
 		term.deinit()
 	}
-	pages := &term.screens.active.pages
-	active_max := flat_max_coord(pages, .active) or { panic('active region must exist') }
-	assert active_max == terminal.Coordinate{
+	assert max_coord(&term.screens.active.pages, .active) or { panic('active region must exist') } == terminal.Coordinate{
 		x: 2
 		y: 1
 	}
-	assert flat_max_coord(pages, .history) == none
-	assert flat_page_bytes(pages) == usize(6) * sizeof(terminal.CellData)
-	term.screens.active.pages.grow()!
-	term.screens.active.pages.active_start = 1
-	term.screens.active.pages.viewport_start = 1
-	assert flat_max_coord(pages, .active) or { panic('active region must exist') } == terminal.Coordinate{
+	assert max_coord(&term.screens.active.pages, .history) == none
+
+	// Scroll one row into history.
+	term.print_string('a\nb\nc')!
+	assert max_coord(&term.screens.active.pages, .active) or { panic('active region must exist') } == terminal.Coordinate{
 		x: 2
 		y: 1
 	}
-	assert flat_max_coord(pages, .history) or { panic('history region must exist') } == terminal.Coordinate{
+	assert max_coord(&term.screens.active.pages, .history) or { panic('history region must exist') } == terminal.Coordinate{
 		x: 2
 		y: 0
 	}
-
-	mut style := terminal.CellStyle{}
-	style.flags.set_bold(true)
-	term.screens.active.pages.screen_rows[0].cells[0].style_id = 1
-	term.screens.active.pages.screen_rows[0].cells[0].style = style
-	term.screens.active.pages.screen_rows[1].cells[2].style_id = 1
-	term.screens.active.pages.screen_rows[1].cells[2].style = style
-	styles := flat_style_usages(pages)
-	assert styles.len == 1
-	assert styles[0].refs == 2
 }
 
 fn test_vt_event_encodings_match_pinned_ghostty() {

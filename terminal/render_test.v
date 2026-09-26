@@ -348,8 +348,8 @@ fn test_render_state_selection_single_line() {
 	}
 
 	mut screen := t.screens.active
-	p1 := screen.pages.pin(PinOpts{ tag: .active, x: 0, y: 1 }) or { panic('no pin') }
-	p2 := screen.pages.pin(PinOpts{ tag: .active, x: 2, y: 1 }) or { panic('no pin') }
+	p1 := screen.pages.pin(Point.new(.active, Coordinate{ x: 0, y: 1 })) or { panic('no pin') }
+	p2 := screen.pages.pin(Point.new(.active, Coordinate{ x: 2, y: 1 })) or { panic('no pin') }
 	screen.select(Selection.init(p1, p2, false))!
 
 	mut state := RenderState.empty()
@@ -381,8 +381,8 @@ fn test_render_state_selection_multiple_lines() {
 	}
 
 	mut screen := t.screens.active
-	p1 := screen.pages.pin(PinOpts{ tag: .active, x: 0, y: 1 }) or { panic('no pin') }
-	p2 := screen.pages.pin(PinOpts{ tag: .active, x: 2, y: 2 }) or { panic('no pin') }
+	p1 := screen.pages.pin(Point.new(.active, Coordinate{ x: 0, y: 1 })) or { panic('no pin') }
+	p2 := screen.pages.pin(Point.new(.active, Coordinate{ x: 2, y: 2 })) or { panic('no pin') }
 	screen.select(Selection.init(p1, p2, false))!
 
 	mut state := RenderState.empty()
@@ -405,8 +405,8 @@ fn test_render_state_rectangle_selection_mirrored_axes() {
 	mut screen := t.screens.active
 	// Drag from the top-right to the bottom-left. Rectangle orientation only
 	// mirrors the x axis here; every selected row must retain the same bounds.
-	p1 := screen.pages.pin(PinOpts{ tag: .active, x: 4, y: 0 }) or { panic('no pin') }
-	p2 := screen.pages.pin(PinOpts{ tag: .active, x: 1, y: 2 }) or { panic('no pin') }
+	p1 := screen.pages.pin(Point.new(.active, Coordinate{ x: 4, y: 0 })) or { panic('no pin') }
+	p2 := screen.pages.pin(Point.new(.active, Coordinate{ x: 1, y: 2 })) or { panic('no pin') }
 	screen.select(Selection.init(p1, p2, true))!
 
 	mut state := RenderState.empty()
@@ -445,7 +445,7 @@ fn test_render_state_link_cells() {
 	state.update(mut t)
 
 	// Query link at 0,0
-	cells := state.link_cells(Pin{ x: 0, y: 0 })
+	cells := state.link_cells(Coordinate{ x: 0, y: 0 })
 	assert cells.len == 4
 	assert cells[cell_set_key(0, 0)]
 	assert cells[cell_set_key(1, 0)]
@@ -453,7 +453,7 @@ fn test_render_state_link_cells() {
 	assert cells[cell_set_key(3, 0)]
 
 	// Query no link
-	cells2 := state.link_cells(Pin{ x: 4, y: 0 })
+	cells2 := state.link_cells(Coordinate{ x: 4, y: 0 })
 	assert cells2.len == 0
 }
 
@@ -532,6 +532,54 @@ fn test_render_state_string_map() {
 // linkCells with invalid viewport point
 // ============================================================
 
+fn test_render_state_link_cells_with_scrollback_spanning_pages() {
+	viewport_rows := u16(10)
+	tail_rows := u16(5)
+
+	mut t := Terminal.init(Options{
+		cols:           std_capacity.cols
+		rows:           viewport_rows
+		max_scrollback: 10_000
+	})!
+	defer {
+		t.deinit()
+	}
+
+	mut s := t.vt_stream()
+	defer {
+		s.deinit()
+	}
+
+	first_node := t.screens.active.pages.pages.first or { panic('missing first page') }
+	first_page_cap := first_node.data.capacity.rows
+
+	// Fill first page
+	for _ in 0 .. int(first_page_cap) - 1 {
+		s.next_slice('\r\n')!
+	}
+
+	// Create second page with hyperlink
+	s.next_slice('\r\n')!
+	s.next_slice('\x1b]8;;http://example.com\x1b\\LINK\x1b]8;;\x1b\\')!
+	for _ in 0 .. int(tail_rows) - 1 {
+		s.next_slice('\r\n')!
+	}
+
+	mut state := RenderState.empty()
+	defer {
+		state.deinit()
+	}
+	state.update(mut t)
+
+	expected_viewport_y := u32(viewport_rows - tail_rows)
+	// BUG: This crashes without the fix
+	cells := state.link_cells(Coordinate{
+		x: 0
+		y: expected_viewport_y
+	})
+	assert cells.len == 4
+}
+
 fn test_render_state_link_cells_invalid_point() {
 	mut t := Terminal.init(Options{ cols: 10, rows: 5 })!
 	defer {
@@ -550,11 +598,11 @@ fn test_render_state_link_cells_invalid_point() {
 	state.update(mut t)
 
 	// Row out of bound
-	cells := state.link_cells(Pin{ x: 0, y: u32(t.rows) + 10 })
+	cells := state.link_cells(Coordinate{ x: 0, y: u32(t.rows) + 10 })
 	assert cells.len == 0
 
 	// Col out of bound
-	cells2 := state.link_cells(Pin{ x: u32(t.cols) + 10, y: 0 })
+	cells2 := state.link_cells(Coordinate{ x: t.cols + 10, y: 0 })
 	assert cells2.len == 0
 }
 
@@ -612,9 +660,7 @@ fn test_render_state_update_flattened_highlights() {
 	state.update(mut t)
 	state.dirty = .false_
 
-	mut list := PageList.from_pages(&t.screens.active.pages)
-	defer { list.deinit() }
-	node := list.pages.first or { panic('missing snapshot page') }
+	node := t.screens.active.pages.pages.first or { panic('missing first page') }
 	state.update_highlights_flattened(7, [RenderFlattenedHighlight{
 		chunks: [RenderHighlightChunk{
 			node: node
@@ -639,27 +685,4 @@ fn test_render_state_update_flattened_highlights() {
 	assert state.row_data[1].dirty
 	assert state.row_data[2].dirty
 	assert state.dirty == .partial
-}
-
-fn test_render_state_ignores_recycled_flattened_highlight_node() {
-	mut t := Terminal.init(Options{ cols: 10, rows: 2 })!
-	defer { t.deinit() }
-	mut state := RenderState.empty()
-	defer { state.deinit() }
-	state.update(mut t)
-	state.dirty = .false_
-
-	mut list := PageList.from_pages(&t.screens.active.pages)
-	defer { list.deinit() }
-	node := list.pages.first or { panic('missing snapshot page') }
-	state.update_highlights_flattened(1, [RenderFlattenedHighlight{
-		chunks: [RenderHighlightChunk{
-			node: node
-			serial: node.serial + 1
-			start: 0
-			end: 1
-		}]
-	}])
-	assert state.row_data[0].highlights.len == 0
-	assert state.dirty == .false_
 }

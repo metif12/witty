@@ -1325,9 +1325,9 @@ fn (mut self Renderer) update_frame_critical(state &RenderState) ?UpdateFrameCri
 	if vp := state.mouse.point {
 		// If the right mods aren't pressed, then we can't match.
 		if state.mouse.mods.equal(input.ctrl_or_super_mods(input.Mods{})) {
-			links = self.terminal_state.link_cells(terminal.Pin{
-				x: vp.x
-				y: vp.y
+			links = self.terminal_state.link_cells(terminal.Coordinate{
+				x: u16(vp.x)
+				y: u32(vp.y)
 			})
 		}
 	}
@@ -2013,7 +2013,7 @@ fn (mut self Renderer) rebuild_cursor(preedit ?RenderPreedit, cursor_style_ ?Sty
 	cursor_cell_style := if int(cursor_vp.y) < state.row_data.len
 		&& int(cursor_vp.x) < state.row_data[int(cursor_vp.y)].cells.len
 		&& state.row_data[int(cursor_vp.y)].cells[int(cursor_vp.x)].raw.has_styling() {
-		state.row_data[int(cursor_vp.y)].cells[int(cursor_vp.x)].raw.style
+		state.row_data[int(cursor_vp.y)].cells[int(cursor_vp.x)].style
 	} else {
 		terminal.CellStyle{}
 	}
@@ -2141,7 +2141,7 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 	mut cells_style := []terminal.CellStyle{cap: row.cells.len}
 	for c in row.cells {
 		cells_raw << c.raw
-		cells_style << c.raw.style
+		cells_style << c.style
 	}
 
 	// Shape the row into glyphs before emitting individual cell layers. Runs
@@ -2220,7 +2220,7 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 		}
 
 		wide := cell.wide
-		cell_style := if cell.has_styling() { cell.style } else { terminal.CellStyle{} }
+		cell_style := if cell.has_styling() { row.cells[x].style } else { terminal.CellStyle{} }
 
 		// True if this cell is selected. Order below matters for precedence.
 		// x_compare handles spacer tails by comparing against the base cell.

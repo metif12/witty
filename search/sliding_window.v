@@ -428,23 +428,12 @@ fn (mut self SlidingWindow) build_highlight(start_offset int, length int) highli
 pub fn (mut self SlidingWindow) append(node &terminal.PageNode) int {
 	page := &node.data
 
-	// PageFormatter is the canonical terminal-text encoder. A lightweight
-	// Pages view lets the V port reuse it for PageList nodes without copying
-	// any row or cell data.
-	pages_view := terminal.Pages{
-		screen_rows: page.rows
-		cols: page.size.cols
-		rows: page.size.rows
-	}
 	mut point_map := terminal.PointMap{}
-	formatter := terminal.PageFormatter{
-		pages: &pages_view
-		opts: terminal.FormatOptions{
-			emit: .plain
-			unwrap: true
-		}
-		point_map: &point_map
-	}
+	mut formatter := terminal.PageFormatter.init(page, terminal.FormatOptions{
+		emit:   .plain
+		unwrap: true
+	})
+	formatter.point_map = &point_map
 	mut encoded := formatter.format().bytes()
 	mut cell_map := []terminal.Coordinate{cap: point_map.points.len + 1}
 	for point in point_map.points {

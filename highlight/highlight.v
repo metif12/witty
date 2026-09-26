@@ -72,7 +72,7 @@ pub fn (self &Flattened) clone() Flattened {
 
 // Initialize a flattened highlight from start and end pins by collecting
 // every page chunk between them.
-pub fn Flattened.init(start terminal.PagePin, end terminal.PagePin) Flattened {
+pub fn Flattened.init(start terminal.Pin, end terminal.Pin) Flattened {
 	mut chunks := []Chunk{}
 	mut iterator := start.page_iterator(.right_down, end)
 	for {
@@ -92,9 +92,9 @@ pub fn Flattened.init(start terminal.PagePin, end terminal.PagePin) Flattened {
 }
 
 // Get the start pin (top-left position) of this highlight.
-pub fn (self &Flattened) start_pin() terminal.PagePin {
+pub fn (self &Flattened) start_pin() terminal.Pin {
 	first := self.chunks[0]
-	return terminal.PagePin{
+	return terminal.Pin{
 		node: first.node
 		y: first.start
 		x: self.top_x
@@ -102,9 +102,9 @@ pub fn (self &Flattened) start_pin() terminal.PagePin {
 }
 
 // Get the end pin (bottom-right position) of this highlight.
-pub fn (self &Flattened) end_pin() terminal.PagePin {
+pub fn (self &Flattened) end_pin() terminal.Pin {
 	last := self.chunks[self.chunks.len - 1]
-	return terminal.PagePin{
+	return terminal.Pin{
 		node: last.node
 		y: last.end - 1
 		x: self.bot_x
@@ -116,12 +116,12 @@ pub fn (self &Flattened) untracked() Untracked {
 	first := self.chunks[0]
 	last := self.chunks[self.chunks.len - 1]
 	return Untracked{
-		start: terminal.PagePin{
+		start: terminal.Pin{
 			node: first.node
 			x: self.top_x
 			y: first.start
 		}
-		end: terminal.PagePin{
+		end: terminal.Pin{
 			node: last.node
 			x: self.bot_x
 			y: last.end - 1
@@ -138,8 +138,8 @@ pub fn (self &Flattened) untracked() Untracked {
 // may become invalid.
 pub struct Untracked {
 pub mut:
-	start terminal.PagePin
-	end   terminal.PagePin
+	start terminal.Pin
+	end   terminal.Pin
 }
 
 pub fn (self Untracked) eql(other Untracked) bool {
@@ -152,7 +152,7 @@ pub fn (self &Untracked) track(mut list terminal.PageList) Tracked {
 }
 
 // Initialize a tracked highlight by registering both pins with the page list.
-pub fn Tracked.init(mut list terminal.PageList, start terminal.PagePin, end terminal.PagePin) Tracked {
+pub fn Tracked.init(mut list terminal.PageList, start terminal.Pin, end terminal.Pin) Tracked {
 	start_pin := list.track_pin(start)
 	end_pin := list.track_pin(end)
 	return Tracked{
@@ -163,7 +163,7 @@ pub fn Tracked.init(mut list terminal.PageList, start terminal.PagePin, end term
 
 // Initialize from pins that are already tracked.
 // Do not call deinit on highlights created with this function.
-pub fn Tracked.init_assume(start &terminal.PagePin, end &terminal.PagePin) Tracked {
+pub fn Tracked.init_assume(start &terminal.Pin, end &terminal.Pin) Tracked {
 	return Tracked{
 		start: start
 		end: end
@@ -180,9 +180,9 @@ pub fn Tracked.init_assume(start &terminal.PagePin, end &terminal.PagePin) Track
 pub struct Tracked {
 pub mut:
 	// Tracked start pin. Auto-updates on page modifications.
-	start &terminal.PagePin = unsafe { nil }
+	start &terminal.Pin = unsafe { nil }
 	// Tracked end pin. Auto-updates on page modifications.
-	end &terminal.PagePin = unsafe { nil }
+	end &terminal.Pin = unsafe { nil }
 }
 
 // Free tracked resources by untracking the pins.

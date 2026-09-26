@@ -914,6 +914,11 @@ pub fn (mut self StyleSet) use_style(id u32) {
 	self.set.use_item(u16(id))
 }
 
+// Increment the ref count for a style by n.
+pub fn (mut self StyleSet) use_multiple(id u32, n u16) {
+	self.set.use_multiple(u16(id), n)
+}
+
 // Decrement the ref count for a style. If ref count hits 0, the
 // slot is freed.
 pub fn (mut self StyleSet) release(id u32) {
@@ -923,6 +928,23 @@ pub fn (mut self StyleSet) release(id u32) {
 // Get a style by ID.
 pub fn (self &StyleSet) get(id u32) CellStyle {
 	return *self.set.get(u16(id))
+}
+
+// Get the number of live styles in the set.
+pub fn (self &StyleSet) count() usize {
+	return self.set.count()
+}
+
+// live_ids returns the IDs of every style with a nonzero ref count, in ID
+// order. The inspector uses this to walk the page's style table.
+pub fn (self &StyleSet) live_ids() []u32 {
+	mut ids := []u32{}
+	for id in 1 .. self.set.items.len {
+		if self.set.items[id].meta.ref_count > 0 {
+			ids << u32(id)
+		}
+	}
+	return ids
 }
 
 // Get the ref count for a style.
@@ -1560,13 +1582,9 @@ pub fn (self &Page) clone() Page {
 				color_rgb_r: cell.color_rgb_r
 				color_rgb_g: cell.color_rgb_g
 				color_rgb_b: cell.color_rgb_b
-				style: cell.style
 			}
 			if cell.graphemes.len > 0 {
 				new_cell.graphemes = cell.graphemes.clone()
-			}
-			if cell.has_hyperlink {
-				new_cell.hyperlink = cell.hyperlink.dupe()
 			}
 			new_cells << new_cell
 		}
@@ -1825,7 +1843,6 @@ fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx usize, sr
 			color_rgb_r: src_cell.color_rgb_r
 			color_rgb_g: src_cell.color_rgb_g
 			color_rgb_b: src_cell.color_rgb_b
-			style: src_cell.style
 		}
 
 		// Copy graphemes.
@@ -1889,7 +1906,6 @@ fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx usize, sr
 				}
 				self.hyperlink_map[dst_key] = hl_id
 				dst_row.cells[xi].has_hyperlink = true
-				dst_row.cells[xi].hyperlink = src_cell.hyperlink.dupe()
 				dst_row.hyperlink = true
 			} else {
 				panic('hyperlinked source cell is missing its page mapping')
@@ -2541,6 +2557,27 @@ fn cell_key(cells_offset usize, col_idx usize, max_cols usize) u64 {
 // row moves within the page.
 fn (self &Page) cell_key_at(row_idx usize, col_idx usize) u64 {
 	return cell_key(usize(self.rows[row_idx].cells_offset), col_idx, usize(self.capacity.cols))
+}
+
+// row_index returns the index of a row pointer within this page. Ghostty
+// addresses rows and cells by pointer and derives offsets from them; V's
+// page APIs take indices, so this recovers the index the same way.
+pub fn (self &Page) row_index(row &RowData) usize {
+	base := usize(voidptr(unsafe { &self.rows[0] }))
+	return (usize(voidptr(row)) - base) / usize(sizeof(RowData))
+}
+
+// cell_index returns the column of a cell pointer within its row.
+pub fn cell_index(row &RowData, cell &CellData) usize {
+	base := usize(voidptr(unsafe { &row.cells[0] }))
+	return (usize(voidptr(cell)) - base) / usize(sizeof(CellData))
+}
+
+// row_cells_at is Ghostty's `cell[0..n]` pointer-to-many slice over a
+// row's cells: it aliases the row storage starting at `cell`.
+pub fn row_cells_at(row &RowData, cell &CellData, n int) []CellData {
+	x := int(cell_index(row, cell))
+	return unsafe { row.cells[x..x + n] }
 }
 
 // append_row adds a row slot backed by the next unused cell block.

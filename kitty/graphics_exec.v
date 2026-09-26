@@ -103,15 +103,15 @@ module kitty
 //
 import terminal
 
-fn storage_mark_dirty(storage_ptr voidptr, _ &terminal.Screen) {
+fn storage_mark_dirty(storage_ptr voidptr, mut _ terminal.Screen) {
 	mut storage := unsafe { &ImageStorage(storage_ptr) }
 	storage.dirty = true
 }
 
-fn storage_reset(storage_ptr voidptr, screen &terminal.Screen) {
+fn storage_reset(storage_ptr voidptr, mut screen terminal.Screen) {
 	mut storage := unsafe { &ImageStorage(storage_ptr) }
 	limit := storage.total_limit
-	storage.deinit(screen)
+	storage.deinit(mut screen)
 	fresh := ImageStorage{
 		total_limit: limit
 		dirty: true
@@ -121,14 +121,14 @@ fn storage_reset(storage_ptr voidptr, screen &terminal.Screen) {
 	}
 }
 
-fn storage_deinit(storage_ptr voidptr, screen &terminal.Screen) {
+fn storage_deinit(storage_ptr voidptr, mut screen terminal.Screen) {
 	mut storage := unsafe { &ImageStorage(storage_ptr) }
-	storage.deinit(screen)
+	storage.deinit(mut screen)
 }
 
-fn storage_clear(storage_ptr voidptr, screen &terminal.Screen) {
+fn storage_clear(storage_ptr voidptr, mut screen terminal.Screen) {
 	mut storage := unsafe { &ImageStorage(storage_ptr) }
-	storage.clear_screen_images(screen)
+	storage.clear_screen_images(mut screen)
 }
 
 // terminal.Screen keeps this value opaque to avoid a terminal -> kitty ->
@@ -170,7 +170,7 @@ fn deinit_screen_storage(mut screen terminal.Screen) {
 		return
 	}
 	mut storage := unsafe { &ImageStorage(screen.kitty_images) }
-	storage.deinit(&screen)
+	storage.deinit(mut screen)
 	screen.kitty_images = unsafe { nil }
 	screen.kitty_images_reset = unsafe { nil }
 	screen.kitty_images_deinit = unsafe { nil }
@@ -196,13 +196,13 @@ pub fn set_terminal_storage_limit(mut t terminal.Terminal, limit usize) {
 	if mut primary := t.screens.get(.primary) {
 		if primary.kitty_images != unsafe { nil } {
 			mut storage := unsafe { &ImageStorage(primary.kitty_images) }
-			storage.set_limit(primary, limit)
+			storage.set_limit(mut primary, limit)
 		}
 	}
 	if mut alternate := t.screens.get(.alternate) {
 		if alternate.kitty_images != unsafe { nil } {
 			mut storage := unsafe { &ImageStorage(alternate.kitty_images) }
-			storage.set_limit(alternate, limit)
+			storage.set_limit(mut alternate, limit)
 		}
 	}
 }
@@ -210,7 +210,7 @@ pub fn set_terminal_storage_limit(mut t terminal.Terminal, limit usize) {
 // clear_active_images implements the emulator-level clear used by Cmd+K.
 pub fn clear_active_images(mut t terminal.Terminal) {
 	mut storage := active_storage(mut t)
-	storage.delete(&t, FullDelete{
+	storage.delete(mut t, FullDelete{
 		kind: .all
 		data: DeleteData(DeleteAll{
 			delete: true
@@ -450,15 +450,11 @@ fn exec_display(mut t terminal.Terminal, cmd &Command) Response {
 		}
 		PlacementLocation(PlacementVirtual{})
 	} else {
-		// Pin at the current cursor position. In Zig a *new* pin is tracked
-		// here (separate from the cursor's own tracked pin) so it doesn't
-		// move with the cursor; the flat Pin model captures the position by
-		// value which has the same effect.
 		PlacementLocation(PlacementPin{
-			pin: terminal.Pin{
-				x: t.screens.active.cursor.x
-				y: u32(t.screens.active.pages.active_start) + t.screens.active.cursor.y
-			}
+			pin: track_pin(mut t, terminal.Coordinate{
+				x: u16(t.screens.active.cursor.x)
+				y: t.screens.active.cursor.y
+			})
 		})
 	}
 
@@ -506,7 +502,7 @@ fn exec_delete(mut t terminal.Terminal, cmd &Command) Response {
 	}
 
 	mut storage := active_storage(mut t)
-	storage.delete(&t, del)
+	storage.delete(mut t, del)
 
 	// Delete never responds on success.
 	return Response{}

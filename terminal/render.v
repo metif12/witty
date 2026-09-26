@@ -91,7 +91,7 @@ pub mut:
 pub struct RenderCursor {
 pub mut:
 	// The x/y position of the cursor within the active area.
-	active Pin
+	active Coordinate
 
 	// The x/y position of the cursor within the viewport. This
 	// may be null if the cursor is not visible within the viewport.
@@ -233,7 +233,7 @@ pub fn RenderState.empty() RenderState {
 			cursor: none
 		}
 		cursor: RenderCursor{
-			active: Pin{ x: 0, y: 0 }
+			active: Coordinate{}
 			viewport: none
 			cell: CellData{}
 			style: CellStyle{}
@@ -258,83 +258,37 @@ pub fn (mut self RenderState) deinit() {
 // This will reset the terminal dirty state since it is consumed
 // by this render state update.
 pub fn (mut self RenderState) update(mut t Terminal) {
-	// This is a translation of Ghostty's render.zig RenderState.update with
-	// row-level dirty tracking. The simplified Pages model uses a flat row
-	// array (screen_rows) with an active_start offset, so we iterate the
-	// active viewport rows directly instead of a PageList row iterator.
-	// Style is stored inline on cells so no page style map lookups are
-	// needed, and there is no per-row arena.
 	mut s := t.screens.active
+	viewport_pin := s.pages.get_top_left(.viewport)
+	redraw := self.update_redraw(t, viewport_pin)
 
-	// Compute the absolute row index of the top of the viewport. The
-	// simplified Pages model keeps a flat row array (screen_rows). The
-	// active area starts at `active_start`, but the viewport can be
-	// scrolled independently (e.g. to the top of scrollback). We resolve
-	// the viewport top based on the current viewport state so that a
-	// scrolled viewport renders scrollback rows and the cursor (which is
-	// always in the active area) can correctly fall out of view.
-	viewport_top := match s.pages.viewport {
-		.active { s.pages.active_start }
-		.top { 0 }
-		.pin { s.pages.viewport_start }
-	}
-
-	// The absolute cursor row within screen_rows.
-	cursor_abs_y := u32(s.pages.active_start) + s.cursor.y
-
-	// The viewport pin: top-left of the viewport, in absolute rows.
-	viewport_pin := Pin{ x: 0, y: u32(viewport_top) }
-
-	// Determine if we need a full redraw.
-	//
-	//   - screen key changed (render state is viewport-specific)
-	//   - the terminal is dirty at all (full-terminal dirty tracker)
-	//   - the screen is dirty at all (full-screen dirty tracker)
-	//   - our dimensions changed
-	//   - our viewport pin changed
-	mut redraw := false
-	if t.screens.active_key != self.screen {
-		redraw = true
-	} else if t.flags.dirty().clear() || t.flags.dirty().palette()
-		|| t.flags.dirty().reverse_colors() || t.flags.dirty().preedit() {
-		redraw = true
-	} else if s.dirty.selection() || s.dirty.hyperlink_hover() {
-		redraw = true
-	} else if self.rows != u16(s.pages.rows) || self.cols != u16(s.pages.cols) {
-		redraw = true
-	} else if old := self.viewport_pin {
-		if !old.eql(viewport_pin) {
-			redraw = true
-		}
-	}
-
-	// Always set our cheap fields.
-	self.rows = u16(s.pages.rows)
-	self.cols = u16(s.pages.cols)
+	// Always set our cheap fields, its more expensive to compare
+	self.rows = s.pages.rows
+	self.cols = s.pages.cols
 	self.viewport_pin = viewport_pin
-	self.cursor.active = Pin{ x: s.cursor.x, y: s.cursor.y }
-	// The cursor cell is always the cell in the active area, even when the
-	// viewport is scrolled far enough that the cursor is not visible. The
-	// viewport coordinate below remains optional, but this snapshot does not.
-	self.cursor.cell = CellData{}
-	if int(cursor_abs_y) < s.pages.screen_rows.len {
-		cursor_row := s.pages.screen_rows[int(cursor_abs_y)]
-		if int(s.cursor.x) < cursor_row.cells.len {
-			self.cursor.cell = cursor_row.cells[int(s.cursor.x)]
-		}
+	self.cursor.active = Coordinate{
+		x: u16(s.cursor.x)
+		y: s.cursor.y
 	}
+	self.cursor.cell = *s.cursor.page_cell
 	self.cursor.style = s.cursor.style
 	self.cursor.visual_style = s.cursor.cursor_style
 	self.cursor.password_input = t.flags.password_input()
 	self.cursor.visible = t.modes.get(.cursor_visible)
 	self.cursor.blinking = t.modes.get(.cursor_blinking)
 
-	// Always reset the cursor viewport position; recomputed below.
+	// Always reset the cursor viewport position. In the future we can
+	// probably cache this by comparing the cursor pin and viewport pin
+	// but may not be worth it.
 	self.cursor.viewport = none
 
 	// Colors.
 	self.colors.cursor = t.colors.cursor.get()
 	self.colors.palette = t.colors.palette.current
+	// Background/foreground can be unset initially which would
+	// depend on "default" background/foreground. The expected use
+	// case of Terminal is that the caller set their own configured
+	// defaults on load so this doesn't happen.
 	if bg := t.colors.background.get() {
 		if fg := t.colors.foreground.get() {
 			if t.modes.get(.reverse_colors) {
@@ -347,18 +301,16 @@ pub fn (mut self RenderState) update(mut t Terminal) {
 		}
 	}
 
-	// Ensure our row_data length is exactly our height. Newly added rows are
-	// marked dirty so they get rebuilt below.
+	// Ensure our row length is exactly our height, freeing or allocating
+	// data as necessary. In most cases we'll have a perfectly matching
+	// size.
 	if self.row_data.len != int(self.rows) {
 		if self.row_data.len < int(self.rows) {
+			// Resize our rows to the desired length, marking any added
+			// values undefined.
 			for _ in self.row_data.len .. int(self.rows) {
 				self.row_data << RenderRow{
-					pin: Pin{ x: 0, y: 0 }
-					raw: RowData{}
-					cells: []
 					dirty: true
-					selection: none
-					highlights: []
 				}
 			}
 		} else {
@@ -366,143 +318,274 @@ pub fn (mut self RenderState) update(mut t Terminal) {
 		}
 	}
 
-	// Go through and setup our rows, only rebuilding dirty ones.
-	mut any_dirty := false
-	for y in 0 .. int(self.rows) {
-		abs_y := viewport_top + y
-		if abs_y < 0 || abs_y >= s.pages.screen_rows.len {
-			continue
-		}
+	// Track the last page that we know was dirty. This lets us
+	// more quickly do the full-page dirty check.
+	mut last_dirty_page := &Page(unsafe { nil })
 
-		// Find our cursor if we haven't found it yet. We do this even if the
-		// row is not dirty because the cursor is unrelated to row dirtiness.
-		// We compare against the cursor's absolute row so that a scrolled
-		// viewport correctly reports the cursor as out of view (none).
-		if self.cursor.viewport == none && u32(abs_y) == cursor_abs_y {
-			row := s.pages.screen_rows[abs_y]
-			mut wide_tail := false
-			if s.cursor.x > 0 {
-				lx := int(s.cursor.x) - 1
-				if lx < row.cells.len && row.cells[lx].wide == .wide {
-					wide_tail = true
-				}
-			}
+	// Go through and setup our rows.
+	mut row_it := s.pages.row_iterator(.right_down, Point{
+		tag: .viewport
+	}, none)
+	mut next_y := 0
+	mut any_dirty := false
+	for {
+		row_pin := row_it.next() or { break }
+		// Zig's `defer y += 1` is block scoped; V's defer is function
+		// scoped, so advance the row index up front instead.
+		y := next_y
+		next_y += 1
+
+		// Find our cursor if we haven't found it yet. We do this even
+		// if the row is not dirty because the cursor is unrelated.
+		if self.cursor.viewport == none && voidptr(row_pin.node) == voidptr(s.cursor.page_pin.node)
+			&& row_pin.y == s.cursor.page_pin.y {
 			self.cursor.viewport = ViewportPoint{
 				y: u16(y)
 				x: u16(s.cursor.x)
-				wide_tail: wide_tail
+				// Future: we should use our own state here to look this
+				// up rather than calling this.
+				wide_tail: if s.cursor.x > 0 {
+					s.cursor_cell_left(1).wide == .wide
+				} else {
+					false
+				}
 			}
 		}
 
-		// Store our pin. We store this even if we're not dirty because it
-		// lets us remap cells back to the correct render row.
-		self.row_data[y].pin = Pin{ x: 0, y: u32(abs_y) }
+		// Store our pin. We have to store these even if we're not dirty
+		// because dirty is only a renderer optimization. It doesn't
+		// apply to memory movement. This will let us remap any cell
+		// pins back to an exact entry in our RenderState.
+		self.row_data[y].pin = row_pin
 
-		// Determine if this row is dirty. If we're redrawing, everything is
-		// dirty; otherwise consult the row's dirty flag.
-		row_dirty := redraw || s.pages.screen_rows[abs_y].dirty
-		if !row_dirty {
+		// Get all our cells in the page.
+		mut p := &row_pin.node.data
+		page_rac := row_pin.row_and_cell()
+
+		// If we're redrawing then we're definitely dirty. If our page is
+		// the same as last time then its dirty. If this page is dirty then
+		// clear the dirty flag of the last page and then store this one.
+		// This benchmarks faster than iterating pages again later. If our
+		// row is dirty then we're dirty.
+		mut dirty := redraw || voidptr(p) == voidptr(last_dirty_page)
+		if !dirty && p.dirty {
+			if !isnil(last_dirty_page) {
+				last_dirty_page.dirty = false
+			}
+			last_dirty_page = p
+			dirty = true
+		}
+		if !dirty && page_rac.row.dirty {
+			dirty = true
+		}
+
+		// Not dirty!
+		if !dirty {
 			continue
 		}
 
+		// Set that at least one row was dirty.
 		any_dirty = true
 
-		// Clear the source row dirty flag now that we're rebuilding it.
-		unsafe {
-			mut src_row := &s.pages.screen_rows[abs_y]
-			src_row.dirty = false
-		}
+		// Clear our row dirty, we'll clear our page dirty later.
+		// We can't clear it now because we have more rows to go through.
+		mut row := page_rac.row
+		row.dirty = false
 
-		src := s.pages.screen_rows[abs_y]
-
-		// Rebuild the cells for this row.
-		mut cells := []RenderCell{cap: int(self.cols)}
-		for x in 0 .. int(self.cols) {
-			if x < src.cells.len {
-				pc := src.cells[x]
-				mut rc := RenderCell{
-					raw: pc
-					grapheme: []
-					style: pc.style
-				}
-				// If we have a multi-codepoint grapheme, copy the codepoints.
-				if pc.content_tag == .codepoint_grapheme && pc.graphemes.len > 0 {
-					rc.grapheme = pc.graphemes.clone()
-				}
-				cells << rc
-			} else {
-				cells << RenderCell{
-					raw: CellData{}
-					grapheme: []
-					style: CellStyle{}
-				}
-			}
-		}
-
-		self.row_data[y].raw = src
-		self.row_data[y].cells = cells
-		self.row_data[y].dirty = true
+		// Reset our cells if we're rebuilding this row.
 		self.row_data[y].selection = none
 		self.row_data[y].highlights = []
+		self.row_data[y].dirty = true
+
+		// Get all our cells in the page.
+		page_cells := p.get_cells(row)
+		assert page_cells.len == int(self.cols)
+
+		// Copy our raw row data
+		self.row_data[y].raw = *row
+
+		// We always copy our raw cell data. In the case we have no
+		// managed memory, we can skip setting any other fields.
+		//
+		// This is an important optimization. For plain-text screens
+		// this ends up being something around 300% faster based on
+		// the `screen-clone` benchmark.
+		mut cells := []RenderCell{len: int(self.cols)}
+		for x, page_cell in page_cells {
+			cells[x].raw = page_cell
+		}
+		self.row_data[y].cells = cells
+		if !row.managed_memory() {
+			continue
+		}
+
+		for x in 0 .. page_cells.len {
+			page_cell := unsafe { &page_cells[x] }
+			// Append assuming its a single-codepoint, styled cell
+			// (most common by far).
+			if page_cell.style_id > 0 {
+				self.row_data[y].cells[x].style = p.styles.get(page_cell.style_id)
+			}
+
+			// Switch on our content tag to handle less likely cases.
+			match page_cell.content_tag {
+				.codepoint {
+					// Primary codepoint goes into `raw` field.
+				}
+				// If we have a multi-codepoint grapheme, look it up and
+				// set our content type.
+				.codepoint_grapheme {
+					self.row_data[y].cells[x].grapheme = (p.lookup_grapheme(page_cell) or { []u32{} }).clone()
+				}
+				.bg_color_rgb {
+					self.row_data[y].cells[x].style = CellStyle{
+						bg_color: .rgb
+						bg_r:     page_cell.color_rgb_r
+						bg_g:     page_cell.color_rgb_g
+						bg_b:     page_cell.color_rgb_b
+					}
+				}
+				.bg_color_palette {
+					self.row_data[y].cells[x].style = CellStyle{
+						bg_color:   .palette
+						bg_palette: page_cell.color_palette
+					}
+				}
+			}
+		}
 	}
+	assert next_y == int(self.rows)
 
-	// If our screen has a selection, mark the rows within it. We do this
-	// outside the loop above because a selection is unlikely and its
-	// current representation is inefficient.
+	// If our screen has a selection, then mark the rows with the
+	// selection. We do this outside of the loop above because its unlikely
+	// a selection exists and because the way our selections are structured
+	// today is very inefficient.
+	//
+	// NOTE: To improve the performance of the block below, we'll need
+	// to rethink how we model selections in general.
+	//
+	// There are performance improvements that can be made here, though.
+	// For example, `containedRow` recalculates a bunch of information
+	// we can cache.
 	if sel := s.selection {
-		// Populate the same cache Ghostty uses so repeated row containment
-		// checks do not recalculate selection orientation. Rectangle selections
-		// need top_left/bottom_right rather than a plain pin ordering because
-		// either axis may be mirrored independently.
-		mut cache := RenderSelectionCache{}
-		mut cache_valid := false
-		mut mark_rows := true
-		if prior := self.selection_cache {
-			if !redraw && prior.selection.eql(sel) {
-				if !any_dirty {
-					mark_rows = false
-				} else {
-					cache = prior
-					cache_valid = true
-				}
-			}
-		}
-
-		if mark_rows {
-			if !cache_valid {
-				tl_pin := sel.top_left(s)
-				br_pin := sel.bottom_right(s)
-				cache = RenderSelectionCache{
-					selection: Selection.init(tl_pin, br_pin, sel.rectangle)
-					tl_pin: tl_pin
-					br_pin: br_pin
-				}
-				self.selection_cache = cache
-			}
-
-			for y in 0 .. int(self.rows) {
-				pin := self.row_data[y].pin
-				row_sel := sel.contained_row_cached(s, cache.tl_pin, cache.br_pin, pin, cache.tl_pin, cache.br_pin, pin) or { continue }
-				start := row_sel.start_pin
-				end := row_sel.end_pin
-				assert start.y == end.y
-				assert start.x <= end.x
-				self.row_data[y].selection = [u16(start.x), u16(end.x)]!
-			}
-		}
+		self.update_selection(s, sel, redraw, any_dirty)
 	}
 
 	// Handle dirty state.
 	if redraw {
+		// Fully redraw resets some other state.
 		self.screen = t.screens.active_key
 		self.dirty = .full
+
+		// Note: we don't clear any row_data here because our rebuild
+		// above did this.
 	} else if any_dirty && self.dirty == .false_ {
 		self.dirty = .partial
 	}
 
-	// Clear our terminal/screen dirty flags now that they're consumed.
+	// Finalize our final dirty page
+	if !isnil(last_dirty_page) {
+		last_dirty_page.dirty = false
+	}
+
+	// Clear our dirty flags
 	t.flags.set_dirty(Dirty{})
 	s.dirty = ScreenDirty{}
+}
+
+// The `redraw:` block of RenderState.update.
+fn (self &RenderState) update_redraw(t &Terminal, viewport_pin Pin) bool {
+	s := t.screens.active
+
+	// If our screen key changed, we need to do a full rebuild
+	// because our render state is viewport-specific.
+	if t.screens.active_key != self.screen {
+		return true
+	}
+
+	// If our terminal is dirty at all, we do a full rebuild. These
+	// dirty values are full-terminal dirty values.
+	if t.flags.dirty().int() > 0 {
+		return true
+	}
+
+	// If our screen is dirty at all, we do a full rebuild. This is
+	// a full screen dirty tracker.
+	if s.dirty.int() > 0 {
+		return true
+	}
+
+	// If our dimensions changed, we do a full rebuild.
+	if self.rows != s.pages.rows || self.cols != s.pages.cols {
+		return true
+	}
+
+	// If our viewport pin changed, we do a full rebuild.
+	if old := self.viewport_pin {
+		if !old.eql(viewport_pin) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// The `selection:` block of RenderState.update.
+fn (mut self RenderState) update_selection(s &Screen, sel Selection, redraw bool, any_dirty bool) {
+	// Populate our selection cache to avoid some expensive
+	// recalculation.
+	mut cache := RenderSelectionCache{}
+	mut cached := false
+	if c := self.selection_cache {
+		// If we're redrawing, we recalculate the cache just to
+		// be safe.
+		//
+		// If our selection isn't equal, we aren't cached!
+		if !redraw && c.selection.eql(sel) {
+			// If we have no dirty rows, we can not recalculate.
+			if !any_dirty {
+				return
+			}
+
+			// We have dirty rows, we can utilize the cache.
+			cache = c
+			cached = true
+		}
+	}
+	if !cached {
+		// Create a new cache
+		tl_pin := sel.top_left(s)
+		br_pin := sel.bottom_right(s)
+		cache = RenderSelectionCache{
+			selection: Selection.init(tl_pin, br_pin, sel.rectangle)
+			tl_pin:    tl_pin
+			br_pin:    br_pin
+		}
+		self.selection_cache = cache
+	}
+
+	// Grab the inefficient data we need from the selection. At
+	// least we can cache it.
+	tl := (s.pages.point_from_pin(.screen, cache.tl_pin) or { panic('selection top-left is off screen') }).coordinate
+	br := (s.pages.point_from_pin(.screen, cache.br_pin) or { panic('selection bottom-right is off screen') }).coordinate
+
+	// We need to determine if our selection is within the viewport.
+	// The viewport is generally very small so the efficient way to
+	// do this is to traverse the viewport pages and check for the
+	// matching selection pages.
+	for mut row in self.row_data {
+		pin := row.pin
+		p := (s.pages.point_from_pin(.screen, pin) or { panic('render row pin is off screen') }).coordinate
+		row_sel := sel.contained_row_cached(s, cache.tl_pin, cache.br_pin, pin, tl, br, p) or {
+			continue
+		}
+		start := row_sel.start()
+		end := row_sel.end()
+		assert voidptr(start.node) == voidptr(end.node)
+		assert start.x <= end.x
+		assert start.y == end.y
+		row.selection = [start.x, end.x]!
+	}
 }
 
 // Update the highlights in the render state from the given flattened
@@ -513,58 +596,55 @@ pub fn (mut self RenderState) update(mut t Terminal) {
 // This will not clear any previous highlights, so the caller must
 // manually clear them if desired.
 pub fn (mut self RenderState) update_highlights_flattened(tag u8, hls []RenderFlattenedHighlight) {
+	// Fast path, we have no highlights!
 	if hls.len == 0 {
 		return
 	}
 
+	// This is, admittedly, horrendous. This is some low hanging fruit
+	// to optimize. In my defense, screens are usually small, the number
+	// of highlights is usually small, and this only happens on the
+	// viewport outside of a locked area. Still, I'd love to see this
+	// improved someday.
+
+	// We need to track whether any row had a match so we can mark
+	// the dirty state.
 	mut any_dirty := false
+
 	for mut row in self.row_data {
+		row_pin := row.pin
 		for hl in hls {
 			for i, chunk in hl.chunks {
-				// Reject recycled nodes before dereferencing their page data.
-				if chunk.node == unsafe { nil } || chunk.node.serial != chunk.serial {
-					continue
-				}
-				node_y := page_node_screen_y(chunk.node)
-				row_start := node_y + u32(chunk.start)
-				row_end := node_y + u32(chunk.end)
-				if row.pin.y < row_start || row.pin.y >= row_end {
+				// If this node doesn't match or we're not within
+				// the row range, skip it.
+				if voidptr(chunk.node) != voidptr(row_pin.node) || row_pin.y < chunk.start
+					|| row_pin.y >= chunk.end {
 					continue
 				}
 
-				local_y := u16(row.pin.y - node_y)
-				start_x := if i == 0 && local_y == chunk.start { hl.top_x } else { u16(0) }
-				end_x := if i == hl.chunks.len - 1 && local_y == chunk.end - 1 {
-					hl.bot_x
-				} else {
-					self.cols - 1
-				}
+				// We're a match!
 				row.highlights << RenderHighlight{
-					tag: tag
-					range: [start_x, end_x]!
+					tag:   tag
+					range: [
+						if i == 0 && row_pin.y == hl.chunks[0].start { hl.top_x } else { u16(0) },
+						if i == hl.chunks.len - 1 && row_pin.y == hl.chunks[hl.chunks.len - 1].end - 1 {
+							hl.bot_x
+						} else {
+							self.cols - 1
+						},
+					]!
 				}
+
 				row.dirty = true
 				any_dirty = true
 			}
 		}
 	}
 
+	// Mark our dirty state.
 	if any_dirty && self.dirty == .false_ {
 		self.dirty = .partial
 	}
-}
-
-// Return the absolute row of a PageList node without requiring access to the
-// PageList owner. Flattened highlights retain the linked nodes themselves.
-fn page_node_screen_y(node &PageNode) u32 {
-	mut y := u32(0)
-	mut prev := node.prev
-	for {
-		current := prev or { break }
-		y += u32(current.data.size.rows)
-		prev = current.prev
-	}
-	return y
 }
 
 // A set of coordinates representing cells.
@@ -584,27 +664,43 @@ fn cell_set_key(x u32, y u32) u64 {
 //
 // For example, you may want to hold a lock for the duration of the
 // update and hyperlink lookup to ensure no updates happen in between.
-pub fn (self &RenderState) link_cells(viewport_point Pin) CellSet {
+pub fn (self &RenderState) link_cells(viewport_point Coordinate) CellSet {
 	mut result := CellSet{}
 
 	// Our viewport point is sent in by the caller and can't be trusted.
 	// If it is outside the valid area then just return empty because
 	// we can't possibly have a link there.
-	if viewport_point.x >= u32(self.cols) || viewport_point.y >= u32(self.row_data.len) {
+	if viewport_point.x >= self.cols || viewport_point.y >= u32(self.row_data.len) {
 		return result
 	}
 
-	// Check if the cell has a hyperlink
-	row := self.row_data[int(viewport_point.y)]
-	if int(viewport_point.x) < row.cells.len {
-		cell := row.cells[int(viewport_point.x)]
-		if cell.raw.has_hyperlink {
-			for ry, r in self.row_data {
-				for rx, c in r.cells {
-					if c.raw.has_hyperlink && cell.raw.hyperlink.eql(&c.raw.hyperlink) {
-						result[cell_set_key(u32(rx), u32(ry))] = true
-					}
-				}
+	// Grab our link ID
+	link_pin := self.row_data[int(viewport_point.y)].pin
+	mut link_page := &link_pin.node.data
+	rac := link_page.get_row_and_cell(usize(viewport_point.x), usize(link_pin.y))
+
+	// The likely scenario is that our mouse isn't even over a link.
+	if !rac.cell.has_hyperlink {
+		return result
+	}
+
+	link_id := link_page.lookup_hyperlink(rac.cell) or { return result }
+	link := link_page.hyperlink_set.get(link_id)
+
+	for y, row in self.row_data {
+		pin := row.pin
+		for x, cell in row.cells {
+			if !cell.raw.has_hyperlink {
+				continue
+			}
+
+			mut other_page := &pin.node.data
+			other_rac := other_page.get_row_and_cell(usize(x), usize(pin.y))
+			other_id := other_page.lookup_hyperlink(other_rac.cell) or { continue }
+			other := other_page.hyperlink_set.get(other_id)
+
+			if link.eql(&other) {
+				result[cell_set_key(u32(x), u32(y))] = true
 			}
 		}
 	}

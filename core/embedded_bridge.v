@@ -545,10 +545,12 @@ fn bridge_surface_pin(screen &terminal.Screen, tag_value int, coord_tag int, x u
 	clamped_y := if screen.pages.rows > 0 { min_u32(y, screen.pages.rows - 1) } else { u32(0) }
 	return match coord_tag {
 		0 {
-			screen.pages.pin(terminal.PinOpts{
-				tag: tag
-				x: clamped_x
-				y: clamped_y
+			screen.pages.pin(terminal.Point{
+				tag:        tag
+				coordinate: terminal.Coordinate{
+					x: u16(clamped_x)
+					y: clamped_y
+				}
 			})
 		}
 		1 { screen.pages.get_top_left(tag) }
@@ -674,10 +676,12 @@ fn bridge_surface_quicklook_selection(ptr voidptr, x f64, y f64) ?voidptr {
 	mut self := unsafe { &EmbeddedSurfaceCore(ptr) }
 	screen := self.surface.renderer_state.terminal_.screens.active
 	point := self.surface.pos_to_viewport(x, y)
-	pin := screen.pages.pin(terminal.PinOpts{
-		tag: .viewport
-		x: point.x
-		y: point.y
+	pin := screen.pages.pin(terminal.Point{
+		tag:        .viewport
+		coordinate: terminal.Coordinate{
+			x: u16(point.x)
+			y: u32(point.y)
+		}
 	}) or { return none }
 	self.selection = self.surface.io.impl.terminal.screens.active.select_word(pin, self.surface.config.selection_word_chars) or { return none }
 	return voidptr(&self.selection)

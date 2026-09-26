@@ -11,10 +11,10 @@ fn test_page_list_internal_tag_layouts_match_source() {
 	assert u8(PageViewport.active) == 0
 	assert u8(PageViewport.top) == 1
 	assert u8(PageViewport.pin) == 2
-	assert sizeof(PagePinCellSubset) == 1
-	assert u8(PagePinCellSubset.all) == 0
-	assert u8(PagePinCellSubset.left) == 1
-	assert u8(PagePinCellSubset.right) == 2
+	assert sizeof(PinCellSubset) == 1
+	assert u8(PinCellSubset.all) == 0
+	assert u8(PinCellSubset.left) == 1
+	assert u8(PinCellSubset.right) == 2
 	assert sizeof(PageReflowWriteResult) == 1
 	assert u8(PageReflowWriteResult.success) == 0
 	assert u8(PageReflowWriteResult.repeat) == 1
@@ -181,7 +181,7 @@ fn test_page_list_increase_capacity_rehashes_without_growing() {
 		return
 	}
 	old_capacity := first.data.capacity
-	tracked := s.track_pin(PagePin{ node: first, y: 1, x: 1 })
+	tracked := s.track_pin(Pin{ node: first, y: 1, x: 1 })
 	new_node := s.increase_capacity(first, none) or {
 		assert false, err.msg()
 		return
@@ -500,7 +500,7 @@ fn test_page_list_compact_oversized_page() {
 			first.data.rows[y].cells[x].codepoint = u32(x + y * int(s.cols))
 		}
 	}
-	tracked := s.track_pin(PagePin{
+	tracked := s.track_pin(Pin{
 		node: first
 		x: 5
 		y: 10
@@ -781,85 +781,6 @@ fn test_page_list_init_more_than_max_cols() {
 	assert s.total_rows == 24
 }
 
-fn test_page_list_from_pages_translates_managed_cells() {
-	mut src := Pages.init(4, 2, 0)
-	defer { src.deinit() }
-
-	style_a := CellStyle{
-		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
-	}
-	style_b := CellStyle{
-		flags: StyleFlags.init(false, true, false, false, false, false, false, false, .none)
-	}
-	link := Hyperlink{
-		id: HyperlinkExplicitId{
-			value: 'snapshot-link'
-		}
-		uri: 'https://example.com/snapshot'
-	}
-
-	src.screen_rows[0].styled = true
-	src.screen_rows[0].hyperlink = true
-	src.screen_rows[0].grapheme = true
-	src.screen_rows[0].cells[0] = CellData{
-		content_tag: .codepoint_grapheme
-		codepoint: u32(`a`)
-		graphemes: [u32(0x0301)]
-		style_id: 1
-		style: style_a
-		has_hyperlink: true
-		hyperlink: link.dupe()
-	}
-	src.screen_rows[0].cells[1] = CellData{
-		content_tag: .codepoint
-		codepoint: u32(`b`)
-		style_id: 1
-		style: style_a
-		has_hyperlink: true
-		hyperlink: link.dupe()
-	}
-	src.screen_rows[0].cells[2] = CellData{
-		content_tag: .codepoint
-		codepoint: u32(`c`)
-		style_id: 1
-		style: style_b
-	}
-
-	mut list := PageList.from_pages(&src)
-	defer { list.deinit() }
-	node := list.pages.first or {
-		assert false, 'snapshot has no page'
-		return
-	}
-	page := &node.data
-	row := page.rows[0]
-
-	assert row.cells[0].graphemes == [u32(0x0301)]
-	assert row.cells[0].style_id != default_style_id
-	assert row.cells[0].style_id == row.cells[1].style_id
-	assert row.cells[2].style_id != row.cells[0].style_id
-	assert page.styles.get(row.cells[0].style_id).eql(&style_a)
-	assert page.styles.get(row.cells[2].style_id).eql(&style_b)
-	assert page.styles.ref_count(row.cells[0].style_id) == 2
-	assert page.styles.ref_count(row.cells[2].style_id) == 1
-
-	first_link_id := page.lookup_hyperlink_at(0, 0) or {
-		assert false, 'first snapshot hyperlink has no mapping'
-		return
-	}
-	second_link_id := page.lookup_hyperlink_at(0, 1) or {
-		assert false, 'second snapshot hyperlink has no mapping'
-		return
-	}
-	assert first_link_id == second_link_id
-	assert page.hyperlink_set.get(first_link_id).eql(&link)
-	assert page.hyperlink_set.ref_count(first_link_id) == 2
-
-	if integrity_error := page.verify_integrity() {
-		assert false, 'snapshot page failed integrity: ${integrity_error}'
-	}
-}
-
 fn test_page_list_reflow_grows_style_capacity_without_losing_styles() {
 	mut list := PageList.init(60, 2, usize(0x7FFFFFFFFFFFFFFF))
 	defer { list.deinit() }
@@ -867,7 +788,7 @@ fn test_page_list_reflow_grows_style_capacity_without_losing_styles() {
 		assert false, 'missing first page'
 		return
 	}
-	list.split(PagePin{ node: first, y: 1 }) or {
+	list.split(Pin{ node: first, y: 1 }) or {
 		assert false, 'failed to split source pages'
 		return
 	}
@@ -893,7 +814,6 @@ fn test_page_list_reflow_grows_style_capacity_without_losing_styles() {
 				content_tag: .codepoint
 				codepoint: u32(`a`) + u32(page_index)
 				style_id: id
-				style: style
 			}
 		}
 	}
@@ -933,7 +853,7 @@ fn test_page_list_erase_row_propagates_style_capacity_error_across_pages() {
 		assert false, 'missing first page'
 		return
 	}
-	list.split(PagePin{ node: first, y: 2 }) or {
+	list.split(Pin{ node: first, y: 2 }) or {
 		assert false, 'failed to split source pages'
 		return
 	}
@@ -943,8 +863,8 @@ fn test_page_list_erase_row_propagates_style_capacity_error_across_pages() {
 	}
 
 	for page_index, row_ref in [
-		PagePin{ node: first, y: 1 },
-		PagePin{ node: second, y: 0 },
+		Pin{ node: first, y: 1 },
+		Pin{ node: second, y: 0 },
 	] {
 		mut page := &row_ref.node.data
 		page.rows[int(row_ref.y)].styled = true
@@ -962,7 +882,6 @@ fn test_page_list_erase_row_propagates_style_capacity_error_across_pages() {
 				content_tag: .codepoint
 				codepoint: u32(`a`) + u32(page_index)
 				style_id: id
-				style: style
 			}
 		}
 	}
@@ -1238,7 +1157,7 @@ fn test_page_list_grow_reuses_non_standard_page_without_leak() {
 	last := s.pages.last or { return }
 	assert last.data.size.rows == last.data.capacity.rows
 
-	tracked := s.track_pin(PagePin{ node: first_page })
+	tracked := s.track_pin(Pin{ node: first_page })
 	s.grow() or {}
 	assert voidptr(s.pages.first or { return }) != voidptr(first_page)
 	assert voidptr(s.pages.last or { return }) != voidptr(first_page)
@@ -1763,7 +1682,7 @@ fn test_page_list_pin_is_valid() {
 	// validity is bounded by the owning page rather than the list target width.
 	mut node := p.node
 	node.data.size.cols = 1
-	assert !s.pin_is_valid(PagePin{
+	assert !s.pin_is_valid(Pin{
 		node: node
 		y: 0
 		x: 1
@@ -2072,7 +1991,7 @@ fn test_page_list_erase_row_moves_managed_cell_and_pin_across_page_boundary() {
 		assert false, 'no first page'
 		return
 	}
-	s.split(PagePin{ node: first, y: 2, x: 0 }) or {
+	s.split(Pin{ node: first, y: 2, x: 0 }) or {
 		assert false, 'split failed'
 		return
 	}
@@ -2092,7 +2011,7 @@ fn test_page_list_erase_row_moves_managed_cell_and_pin_across_page_boundary() {
 		uri: 'https://example.com/boundary'
 	}) or { panic(err) }
 	second_page.set_hyperlink(0, 1, hyperlink_id) or { panic(err) }
-	tracked := s.track_pin(PagePin{ node: second, y: 0, x: 1 })
+	tracked := s.track_pin(Pin{ node: second, y: 0, x: 1 })
 
 	s.erase_row(Point.new(.active, Coordinate{ y: 1 })) or { panic(err) }
 
@@ -2131,7 +2050,7 @@ fn test_page_list_split_at_middle_row() {
 		return
 	}
 
-	split_pin := PagePin{
+	split_pin := Pin{
 		node: first
 		y: 5
 		x: 0
@@ -2164,7 +2083,7 @@ fn test_page_list_split_at_row_0_noop() {
 		return
 	}
 
-	split_pin := PagePin{
+	split_pin := Pin{
 		node: first
 		y: 0
 		x: 0
@@ -2187,7 +2106,7 @@ fn test_page_list_split_at_last_row() {
 		return
 	}
 
-	split_pin := PagePin{
+	split_pin := Pin{
 		node: first
 		y: 9
 		x: 0
@@ -2224,7 +2143,7 @@ fn test_page_list_split_moves_tracked_pins() {
 		return
 	}
 
-	split_pin := PagePin{
+	split_pin := Pin{
 		node: first
 		y: 5
 		x: 0
@@ -2262,7 +2181,7 @@ fn test_page_list_split_tracked_pin_before_split_unchanged() {
 		return
 	}
 
-	split_pin := PagePin{
+	split_pin := Pin{
 		node: first
 		y: 5
 		x: 0
@@ -2296,7 +2215,7 @@ fn test_page_list_split_tracked_pin_at_split_point() {
 		return
 	}
 
-	split_pin := PagePin{
+	split_pin := Pin{
 		node: first
 		y: 5
 		x: 0
@@ -2333,7 +2252,7 @@ fn test_page_list_split_preserves_wrap_flags() {
 	page.rows[7].wrap = true
 	page.rows[7].wrap_continuation = true
 
-	split_pin := PagePin{
+	split_pin := Pin{
 		node: first
 		y: 5
 		x: 0
@@ -2371,7 +2290,7 @@ fn test_page_list_split_middle_page_preserves_order() {
 	}
 
 	// Split to create 2 pages (at row 4)
-	split1 := PagePin{
+	split1 := Pin{
 		node: first
 		y: 4
 		x: 0
@@ -2387,7 +2306,7 @@ fn test_page_list_split_middle_page_preserves_order() {
 		assert false, 'no second page'
 		return
 	}
-	split2 := PagePin{
+	split2 := Pin{
 		node: second
 		y: 4
 		x: 0
@@ -3144,15 +3063,15 @@ fn test_page_list_cell_iterator_preserves_starting_column() {
 		return
 	}
 	mut forward := start.cell_iterator(.right_down, limit)
-	assert (forward.next() or { PagePin{} }).x == 3
-	assert (forward.next() or { PagePin{} }).x == 4
+	assert (forward.next() or { Pin{} }).x == 3
+	assert (forward.next() or { Pin{} }).x == 4
 	assert forward.next() == none
 
 	mut reverse := start.cell_iterator(.left_up, s.pin(Point.new(.screen, Coordinate{ x: 0, y: 0 })))
-	assert (reverse.next() or { PagePin{} }).x == 3
-	assert (reverse.next() or { PagePin{} }).x == 2
-	assert (reverse.next() or { PagePin{} }).x == 1
-	assert (reverse.next() or { PagePin{} }).x == 0
+	assert (reverse.next() or { Pin{} }).x == 3
+	assert (reverse.next() or { Pin{} }).x == 2
+	assert (reverse.next() or { Pin{} }).x == 1
+	assert (reverse.next() or { Pin{} }).x == 0
 	assert reverse.next() == none
 }
 
@@ -3683,7 +3602,7 @@ fn test_page_list_highlight_semantic_content_output_skips_empty_cells() {
 }
 
 // ============================================================
-// PagePin movement tests
+// Pin movement tests
 // ============================================================
 
 fn test_page_pin_left_right() {
@@ -3731,7 +3650,7 @@ fn test_page_pin_horizontal_movement_preserves_garbage() {
 		assert false, 'pin failed'
 		return
 	}
-	p := PagePin{
+	p := Pin{
 		node: base.node
 		y: base.y
 		x: base.x
@@ -4257,7 +4176,7 @@ fn test_page_list_point_from_pin_active_from_prior_page() {
 	}
 
 	// Pin in the active (last) page.
-	pt := s.point_from_pin(.active, PagePin{ node: last, y: 0, x: 2 }) or {
+	pt := s.point_from_pin(.active, Pin{ node: last, y: 0, x: 2 }) or {
 		assert false, 'point_from_pin failed'
 		return
 	}
@@ -4265,7 +4184,7 @@ fn test_page_list_point_from_pin_active_from_prior_page() {
 	assert pt.coord().y == 0
 
 	// A pin in a prior (first) page is not in the active area.
-	if _ := s.point_from_pin(.active, PagePin{ node: first, y: 0, x: 0 }) {
+	if _ := s.point_from_pin(.active, Pin{ node: first, y: 0, x: 0 }) {
 		assert false, 'expected point_from_pin to return none for prior page'
 	}
 }
@@ -4580,7 +4499,7 @@ fn test_page_list_erase_row_bounded_exact_page_boundary() {
 		assert false, 'no first page'
 		return
 	}
-	s.split(PagePin{ node: first, y: 2, x: 0 }) or {
+	s.split(Pin{ node: first, y: 2, x: 0 }) or {
 		assert false, 'split failed'
 		return
 	}
@@ -4600,7 +4519,7 @@ fn test_page_list_erase_row_bounded_exact_page_boundary() {
 		uri: 'https://example.com/exact-boundary'
 	}) or { panic(err) }
 	second_page.set_hyperlink(0, 2, hyperlink_id) or { panic(err) }
-	tracked := s.track_pin(PagePin{ node: second, y: 0, x: 2 })
+	tracked := s.track_pin(Pin{ node: second, y: 0, x: 2 })
 
 	// One row remains in the first page. A limit of one must pull the next
 	// page's first row across the boundary, then blank that source row.
@@ -4822,7 +4741,7 @@ fn test_page_list_resize_no_reflow_less_rows_cursor_on_bottom() {
 	assert s.total_rows == 10
 
 	// Our cursor should move since it's in the scrollback.
-	cursor := s.point_from_pin(.active, PagePin{ node: p.node, y: p.y, x: p.x }) or {
+	cursor := s.point_from_pin(.active, Pin{ node: p.node, y: p.y, x: p.x }) or {
 		assert false, 'point_from_pin failed'
 		return
 	}
@@ -4867,10 +4786,10 @@ fn test_page_list_resize_no_reflow_less_rows_cursor_in_scrollback() {
 	assert s.total_rows == 10
 
 	// Our cursor should now be in scrollback (not active).
-	if _ := s.point_from_pin(.active, PagePin{ node: p.node, y: p.y, x: p.x }) {
+	if _ := s.point_from_pin(.active, Pin{ node: p.node, y: p.y, x: p.x }) {
 		assert false, 'expected pin to be outside active'
 	}
-	sp_pin := s.point_from_pin(.screen, PagePin{ node: p.node, y: p.y, x: p.x }) or {
+	sp_pin := s.point_from_pin(.screen, Pin{ node: p.node, y: p.y, x: p.x }) or {
 		assert false, 'point_from_pin screen failed'
 		return
 	}
@@ -4976,7 +4895,7 @@ fn test_page_list_resize_no_reflow_less_rows_trims_blank_lines() {
 	assert s.total_rows == 2
 
 	// Cursor should not move since we trimmed.
-	cursor := s.point_from_pin(.active, PagePin{ node: p.node, y: p.y, x: p.x }) or {
+	cursor := s.point_from_pin(.active, Pin{ node: p.node, y: p.y, x: p.x }) or {
 		assert false, 'point_from_pin failed'
 		return
 	}
@@ -5042,14 +4961,12 @@ fn test_page_list_resize_no_reflow_preserves_hyperlink_key_stride() {
 	page.rows[1].cells[1] = CellData{
 		content_tag: .codepoint
 		codepoint: u32(`a`)
-		hyperlink: link.dupe()
 	}
 	page.set_hyperlink(1, 1, link_id) or { panic(err) }
 	page.hyperlink_set.use_link(link_id)
 	page.rows[1].cells[3] = CellData{
 		content_tag: .codepoint
 		codepoint: u32(`b`)
-		hyperlink: link.dupe()
 	}
 	page.set_hyperlink(1, 3, link_id) or { panic(err) }
 
@@ -5113,7 +5030,7 @@ fn test_page_list_resize_no_reflow_less_rows_trims_blank_lines_cursor_in_blank_l
 	assert s.total_rows == 4
 
 	// Our cursor should not move since we trimmed.
-	cursor := s.point_from_pin(.active, PagePin{ node: p.node, y: p.y, x: p.x }) or {
+	cursor := s.point_from_pin(.active, Pin{ node: p.node, y: p.y, x: p.x }) or {
 		assert false, 'point_from_pin failed'
 		return
 	}
@@ -5316,7 +5233,7 @@ fn test_page_list_resize_no_reflow_more_cols_remaps_pins_in_backfill_path() {
 
 	// Track row zero of the second page. Backfill copies this row into the
 	// first page, so the tracked pin must move before the old page is destroyed.
-	tracked := s.track_pin(PagePin{
+	tracked := s.track_pin(Pin{
 		node: second_page
 		x: 0
 		y: 0
@@ -5378,7 +5295,7 @@ fn test_page_list_resize_no_reflow_more_rows_adds_blank_rows_if_cursor_at_bottom
 		assert false, 'get_pin failed'
 		return
 	})
-	original_cursor := s.point_from_pin(.active, PagePin{ node: p.node, y: p.y, x: p.x }) or {
+	original_cursor := s.point_from_pin(.active, Pin{ node: p.node, y: p.y, x: p.x }) or {
 		assert false, 'point_from_pin failed'
 		return
 	}
@@ -5396,7 +5313,7 @@ fn test_page_list_resize_no_reflow_more_rows_adds_blank_rows_if_cursor_at_bottom
 	assert s.rows == 10
 
 	// Our cursor should not change.
-	new_cursor := s.point_from_pin(.active, PagePin{ node: p.node, y: p.y, x: p.x }) or {
+	new_cursor := s.point_from_pin(.active, Pin{ node: p.node, y: p.y, x: p.x }) or {
 		assert false, 'point_from_pin failed'
 		return
 	}
@@ -5829,7 +5746,7 @@ fn test_page_list_resize_reflow_more_cols_cursor_in_wrapped_row() {
 	assert s.total_rows == 4
 
 	// Cursor should move to the first row (unwrapped).
-	cursor := s.point_from_pin(.active, PagePin{ node: p.node, y: p.y, x: p.x }) or {
+	cursor := s.point_from_pin(.active, Pin{ node: p.node, y: p.y, x: p.x }) or {
 		assert false, 'point_from_pin failed'
 		return
 	}
@@ -5872,7 +5789,7 @@ fn test_page_list_resize_reflow_more_cols_cursor_in_not_wrapped_row() {
 	assert s.cols == 4
 	assert s.total_rows == 4
 
-	cursor := s.point_from_pin(.active, PagePin{ node: p.node, y: p.y, x: p.x }) or {
+	cursor := s.point_from_pin(.active, Pin{ node: p.node, y: p.y, x: p.x }) or {
 		assert false, 'point_from_pin failed'
 		return
 	}
@@ -5926,7 +5843,7 @@ fn test_page_list_resize_reflow_more_cols_cursor_in_wrapped_row_that_isnt_unwrap
 	assert s.cols == 4
 	assert s.total_rows == 4
 
-	cursor := s.point_from_pin(.active, PagePin{ node: p.node, y: p.y, x: p.x }) or {
+	cursor := s.point_from_pin(.active, Pin{ node: p.node, y: p.y, x: p.x }) or {
 		assert false, 'point_from_pin failed'
 		return
 	}
@@ -6199,7 +6116,7 @@ fn test_page_list_resize_reflow_preserves_hyperlinks_across_source_pages() {
 		assert false, 'no first page'
 		return
 	}
-	s.split(PagePin{ node: first, y: 2, x: 0 }) or {
+	s.split(Pin{ node: first, y: 2, x: 0 }) or {
 		assert false, 'split failed'
 		return
 	}
@@ -6338,7 +6255,6 @@ fn test_page_list_resize_reflow_exceeds_style_memory_forcing_capacity_increase()
 			content_tag: .codepoint
 			codepoint: u32(`X`)
 			style_id: id
-			style: style
 		}
 	}
 
@@ -6358,7 +6274,6 @@ fn test_page_list_resize_reflow_exceeds_style_memory_forcing_capacity_increase()
 			content_tag: .codepoint
 			codepoint: u32(`X`)
 			style_id: id
-			style: style
 		}
 	}
 
@@ -6393,7 +6308,7 @@ fn test_page_list_resize_reflow_less_cols_cursor_in_wrapped_row() {
 	assert s.cols == 2
 	assert s.total_rows == 4
 
-	cursor := s.point_from_pin(.active, PagePin{ node: p.node, y: p.y, x: p.x }) or {
+	cursor := s.point_from_pin(.active, Pin{ node: p.node, y: p.y, x: p.x }) or {
 		assert false, 'point_from_pin failed'
 		return
 	}
@@ -6424,7 +6339,7 @@ fn reflow_cursor_cell_helper(init_cols u16, new_cols u16, pin_x u16, exp_x u32, 
 	assert s.cols == new_cols
 	assert s.total_rows == 2
 
-	cursor := s.point_from_pin(.active, PagePin{ node: p.node, y: p.y, x: p.x }) or {
+	cursor := s.point_from_pin(.active, Pin{ node: p.node, y: p.y, x: p.x }) or {
 		assert false, 'point_from_pin failed'
 		return
 	}
@@ -6572,7 +6487,7 @@ fn test_page_list_resize_reflow_less_cols_cursor_goes_to_scrollback() {
 	assert s.total_rows == 4
 
 	// Our cursor should now be in scrollback (outside active).
-	if _ := s.point_from_pin(.active, PagePin{ node: p.node, y: p.y, x: p.x }) {
+	if _ := s.point_from_pin(.active, Pin{ node: p.node, y: p.y, x: p.x }) {
 		assert false, 'expected pin outside active'
 	}
 
@@ -7124,7 +7039,7 @@ fn test_page_list_resize_reflow_less_cols_cursor_not_on_last_line_preserves_loca
 	assert s.cols == 4
 	assert s.total_rows == 10
 
-	cursor := s.point_from_pin(.active, PagePin{ node: p.node, y: p.y, x: p.x }) or {
+	cursor := s.point_from_pin(.active, Pin{ node: p.node, y: p.y, x: p.x }) or {
 		assert false, 'point_from_pin failed'
 		return
 	}
@@ -7714,7 +7629,7 @@ fn test_page_list_split_single_row_page_returns_out_of_space() {
 		assert false, 'no first page'
 		return
 	}
-	split_pin := PagePin{ node: first, y: 0, x: 0 }
+	split_pin := Pin{ node: first, y: 0, x: 0 }
 	// Splitting a single-row page is impossible.
 	mut error_message := ''
 	s.split(split_pin) or { error_message = err.msg() }
@@ -7734,12 +7649,12 @@ fn test_page_list_split_multiple_tracked_pins_across_regions() {
 		return
 	}
 
-	pin_before := s.track_pin(PagePin{ node: original, y: 1, x: 0 })
-	pin_at_split := s.track_pin(PagePin{ node: original, y: 5, x: 2 })
-	pin_after1 := s.track_pin(PagePin{ node: original, y: 7, x: 3 })
-	pin_after2 := s.track_pin(PagePin{ node: original, y: 9, x: 8 })
+	pin_before := s.track_pin(Pin{ node: original, y: 1, x: 0 })
+	pin_at_split := s.track_pin(Pin{ node: original, y: 5, x: 2 })
+	pin_after1 := s.track_pin(Pin{ node: original, y: 7, x: 3 })
+	pin_after2 := s.track_pin(Pin{ node: original, y: 9, x: 8 })
 
-	s.split(PagePin{ node: original, y: 5, x: 0 }) or {
+	s.split(Pin{ node: original, y: 5, x: 0 }) or {
 		assert false, 'split failed: ${err}'
 		return
 	}
@@ -7792,7 +7707,7 @@ fn test_page_list_split_tracked_viewport_pin_in_split_region_moves_correctly() {
 	s.viewport_pin.y = 7
 	s.viewport_pin.x = 6
 
-	s.split(PagePin{ node: original, y: 5, x: 0 }) or {
+	s.split(Pin{ node: original, y: 5, x: 0 }) or {
 		assert false, 'split failed: ${err}'
 		return
 	}
@@ -7814,7 +7729,7 @@ fn test_page_list_split_last_page_makes_new_page_the_last() {
 		assert false, 'no first page'
 		return
 	}
-	s.split(PagePin{ node: first_node, y: 5, x: 0 }) or {
+	s.split(Pin{ node: first_node, y: 5, x: 0 }) or {
 		assert false, 'split failed'
 		return
 	}
@@ -7825,7 +7740,7 @@ fn test_page_list_split_last_page_makes_new_page_the_last() {
 	}
 	assert last_before.data.size.rows == 5
 
-	s.split(PagePin{ node: last_before, y: 2, x: 0 }) or {
+	s.split(Pin{ node: last_before, y: 2, x: 0 }) or {
 		assert false, 'split failed'
 		return
 	}
@@ -7854,13 +7769,13 @@ fn test_page_list_split_first_page_keeps_original_as_first() {
 		assert false, 'no first page'
 		return
 	}
-	s.split(PagePin{ node: original_first, y: 5, x: 0 }) or {
+	s.split(Pin{ node: original_first, y: 5, x: 0 }) or {
 		assert false, 'split failed'
 		return
 	}
 
 	// Split the first page again.
-	s.split(PagePin{ node: original_first, y: 2, x: 0 }) or {
+	s.split(Pin{ node: original_first, y: 2, x: 0 }) or {
 		assert false, 'split failed'
 		return
 	}
@@ -7906,7 +7821,7 @@ fn test_page_list_split_preserves_styled_cells() {
 	// Release the extra ref from add.
 	page.styles.release(style_id)
 
-	s.split(PagePin{ node: first, y: 5, x: 0 }) or {
+	s.split(Pin{ node: first, y: 5, x: 0 }) or {
 		assert false, 'split failed'
 		return
 	}
@@ -7948,7 +7863,7 @@ fn test_page_list_split_preserves_grapheme_clusters() {
 
 	assert page.grapheme_count() == 1
 
-	s.split(PagePin{ node: first, y: 5, x: 0 }) or {
+	s.split(Pin{ node: first, y: 5, x: 0 }) or {
 		assert false, 'split failed'
 		return
 	}
@@ -7999,7 +7914,7 @@ fn test_page_list_split_preserves_hyperlinks() {
 	}
 	page.set_hyperlink(7, 0, hyperlink_id) or { panic(err) }
 
-	s.split(PagePin{ node: first, y: 5, x: 0 }) or {
+	s.split(Pin{ node: first, y: 5, x: 0 }) or {
 		assert false, 'split failed'
 		return
 	}

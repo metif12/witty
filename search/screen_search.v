@@ -349,7 +349,7 @@ mut:
 	// We use this when the active area changes to find the diff between
 	// the top of the new active area and the previous start point
 	// to determine if we need to search more history.
-	start_pin &terminal.PagePin = unsafe { nil }
+	start_pin &terminal.Pin = unsafe { nil }
 }
 
 fn (mut self HistorySearch) deinit(mut list terminal.PageList) {
@@ -408,12 +408,6 @@ pub mut:
 	// The screen being searched.
 	screen &terminal.Screen = unsafe { nil }
 
-	// Stable PageList snapshot searched without holding the terminal lock.
-	pages &terminal.PageList = unsafe { nil }
-
-	// Fingerprint of the flat screen rows used to build pages.
-	source_fingerprint u64
-
 	// The active area search state.
 	active_search ActiveSearch
 
@@ -448,13 +442,10 @@ pub mut:
 // and then calls reload_active() to populate the initial active-area
 // state (and set up history if the screen has scrollback).
 pub fn ScreenSearch.init(mut screen terminal.Screen, needle []u8) ScreenSearch {
-	mut pages := terminal.PageList.from_pages(&screen.pages)
 	mut result := ScreenSearch{
 		screen: &screen
-		pages: pages
-		source_fingerprint: pages_fingerprint(&screen.pages)
-		rows: u16(screen.pages.rows)
-		cols: u16(screen.pages.cols)
+		rows: screen.pages.rows
+		cols: screen.pages.cols
 		active_search: ActiveSearch.init(needle)
 		history_search: none
 		state: .active
@@ -470,10 +461,10 @@ pub fn ScreenSearch.init(mut screen terminal.Screen, needle []u8) ScreenSearch {
 pub fn (mut self ScreenSearch) deinit() {
 	self.active_search.deinit()
 	if mut h := self.history_search {
-		h.deinit(mut self.pages)
+		h.deinit(mut self.screen.pages)
 	}
 	if mut m := self.selected {
-		m.deinit(mut self.pages)
+		m.deinit(mut self.screen.pages)
 	}
 	for mut hl in self.active_results {
 		hl.deinit()
@@ -483,10 +474,6 @@ pub fn (mut self ScreenSearch) deinit() {
 		hl.deinit()
 	}
 	self.history_results = []
-	if self.pages != unsafe { nil } {
-		self.pages.deinit()
-		self.pages = unsafe { nil }
-	}
 }
 
 // The needle that this search is using.
@@ -634,7 +621,7 @@ pub fn (mut self ScreenSearch) feed() {
 // Source: ScreenSearch.pruneHistory
 fn (mut self ScreenSearch) prune_history() {
 	// The minimum valid page serial lives on our stable PageList snapshot.
-	serial_min := self.pages.page_serial_min
+	serial_min := self.screen.pages.page_serial_min
 
 	for i in 0 .. self.history_results.len {
 		hl := self.history_results[i]
@@ -719,24 +706,14 @@ fn (mut self ScreenSearch) tick_history() {
 //     surfaced), so the errdefer OOM/tripwire branches are unreachable
 //     and are folded away; the deferred select_prev/select-fixup logic is
 //     translated as explicit steps at the end of the function.
-//   - A stable PageList snapshot is synchronized from Screen's flat Pages
-//     before this translated state machine runs.
 pub fn (mut self ScreenSearch) reload_active() {
-	// The live Screen uses flat Pages. If it changed, rebuild the immutable
-	// PageList snapshot and restart the translated search state over it.
-	fingerprint := pages_fingerprint(&self.screen.pages)
-	if fingerprint != self.source_fingerprint {
-		self.restart_from_screen(fingerprint)
-		return
-	}
-
 	// If our selection pin became garbage it means we scrolled off
 	// the end. Clear our selection and on exit of this function,
 	// try to select the last match.
 	mut select_prev := false
 	if mut m := self.selected {
 		if m.highlight.start.garbage || m.highlight.end.garbage {
-			m.deinit(mut self.pages)
+			m.deinit(mut self.screen.pages)
 			self.selected = none
 			select_prev = true
 		}
@@ -745,7 +722,7 @@ pub fn (mut self ScreenSearch) reload_active() {
 	// active.update() reports the first node of the overlap between the
 	// old and new active areas (the previous active-area start node) so
 	// we can diff new history, or none if there is no history.
-	history_node := self.active_search.update(self.pages)
+	history_node := self.active_search.update(&self.screen.pages)
 
 	if node := history_node {
 		// We need to account for any active area growth that would
@@ -762,7 +739,7 @@ pub fn (mut self ScreenSearch) reload_active() {
 	} else {
 		// No history node means we have no history.
 		if mut h := self.history_search {
-			h.deinit(mut self.pages)
+			h.deinit(mut self.screen.pages)
 			self.history_search = none
 			for mut hl in self.history_results {
 				hl.deinit()
@@ -775,7 +752,7 @@ pub fn (mut self ScreenSearch) reload_active() {
 		if mut m := self.selected {
 			active_len := self.active_results.len
 			if m.idx >= usize(active_len) {
-				m.deinit(mut self.pages)
+				m.deinit(mut self.screen.pages)
 				self.selected = none
 				self.select_prev()
 			}
@@ -849,7 +826,7 @@ pub fn (mut self ScreenSearch) reload_active() {
 				}
 				if !found {
 					// No match, just go back to the first match.
-					m.deinit(mut self.pages)
+					m.deinit(mut self.screen.pages)
 					self.selected = none
 					self.select_next()
 				}
@@ -864,99 +841,6 @@ pub fn (mut self ScreenSearch) reload_active() {
 	}
 }
 
-// Rebuild the immutable PageList snapshot after the live flat screen changes.
-// Ghostty updates one PageList in place; Witty's Screen currently uses flat
-// rows, so rebuilding at this boundary is the equivalent synchronization
-// point. Search itself remains entirely PageList-based.
-fn (mut self ScreenSearch) restart_from_screen(fingerprint u64) {
-	needle := self.needle().clone()
-
-	// Remember the selected coordinates before invalidating the old snapshot.
-	// This retains a selection when an active-area redraw leaves the match in
-	// the same place. If its page was effectively pruned, Ghostty falls back to
-	// selecting the oldest remaining result, which we do below as well.
-	mut old_start := ?terminal.Point(none)
-	mut old_end := ?terminal.Point(none)
-	had_selection := self.selected != none
-	if selected := self.selected_match() {
-		old_start = self.pages.point_from_pin(.screen, selected.start_pin())
-		old_end = self.pages.point_from_pin(.screen, selected.end_pin())
-	}
-
-	mut screen := self.screen
-	self.deinit()
-	self = ScreenSearch.init(mut screen, needle)
-	self.source_fingerprint = fingerprint
-	self.search_all()
-
-	if start := old_start {
-		if end := old_end {
-			if self.select_coordinates(start, end) {
-				return
-			}
-		}
-	}
-	if had_selection {
-		self.select_prev()
-	}
-}
-
-// Select the result occupying the given absolute screen coordinates.
-fn (mut self ScreenSearch) select_coordinates(start terminal.Point, end terminal.Point) bool {
-	active_len := self.active_results.len
-	total := active_len + self.history_results.len
-	for idx in 0 .. total {
-		hl := if idx < active_len {
-			self.active_results[active_len - 1 - idx]
-		} else {
-			self.history_results[idx - active_len]
-		}
-		new_start := self.pages.point_from_pin(.screen, hl.start_pin()) or { continue }
-		new_end := self.pages.point_from_pin(.screen, hl.end_pin()) or { continue }
-		if new_start == start && new_end == end {
-			self.selected = SelectedMatch{
-				idx: usize(idx)
-				highlight: hl.untracked().track(mut self.pages)
-			}
-			return true
-		}
-	}
-	return false
-}
-
-// FNV-1a over the screen content that affects plain-text search and viewport
-// selection. This avoids rebuilding the PageList snapshot when select() calls
-// reload_active without an intervening terminal mutation.
-fn pages_fingerprint(pages &terminal.Pages) u64 {
-	mut hash := u64(14695981039346656037)
-	hash = fingerprint_mix(hash, u64(pages.cols))
-	hash = fingerprint_mix(hash, u64(pages.rows))
-	hash = fingerprint_mix(hash, u64(pages.active_start))
-	hash = fingerprint_mix(hash, u64(pages.viewport_start))
-	hash = fingerprint_mix(hash, u64(pages.viewport))
-	limit := pages.active_start + int(pages.rows)
-	for y in 0 .. limit {
-		row := pages.screen_rows[y]
-		hash = fingerprint_mix(hash, u64(row.wrap))
-		hash = fingerprint_mix(hash, u64(row.wrap_continuation))
-		for cell in row.cells {
-			hash = fingerprint_mix(hash, u64(cell.codepoint))
-			hash = fingerprint_mix(hash, u64(cell.content_tag))
-			hash = fingerprint_mix(hash, u64(cell.wide))
-			for cp in cell.graphemes {
-				hash = fingerprint_mix(hash, u64(cp))
-			}
-			hash = fingerprint_mix(hash, u64(cell.graphemes.len))
-		}
-	}
-	return hash
-}
-
-@[inline]
-fn fingerprint_mix(hash u64, value u64) u64 {
-	return (hash ^ value) * u64(1099511628211)
-}
-
 // Handle the history-diffing branch of reload_active when active.update
 // reports that the active-area start node moved (history grew).
 //
@@ -967,7 +851,7 @@ fn (mut self ScreenSearch) reload_active_history(history_node &terminal.PageNode
 	mut have_history := false
 	if mut h := self.history_search {
 		if h.start_pin != unsafe { nil } && h.start_pin.garbage {
-			h.deinit(mut self.pages)
+			h.deinit(mut self.screen.pages)
 			self.history_search = none
 			for mut hl in self.history_results {
 				hl.deinit()
@@ -989,9 +873,9 @@ fn (mut self ScreenSearch) reload_active_history(history_node &terminal.PageNode
 			self.history_search = h
 			return
 		}
-		mut mutable_list := self.pages
+		mut mutable_list := &self.screen.pages
 		mut searcher := PageListSearch.init(self.needle(), mutable_list, history_node)
-		pin := mutable_list.track_pin(terminal.PagePin{
+		pin := mutable_list.track_pin(terminal.Pin{
 			node: unsafe { &terminal.PageNode(history_node) }
 		})
 		self.history_search = HistorySearch{
@@ -1077,7 +961,7 @@ fn (mut self ScreenSearch) reload_active_history(history_node &terminal.PageNode
 //
 // Source: ScreenSearch.reloadActive (the `active_prune:` block)
 //
-// The active-area top-left PagePin comes from the synchronized PageList.
+// The active-area top-left Pin comes from the synchronized PageList.
 fn (mut self ScreenSearch) reload_active_prune_no_scrollback() {
 	tl_opt := self.active_top_left()
 	tl := tl_opt or { return }
@@ -1109,9 +993,9 @@ fn (mut self ScreenSearch) reload_active_prune_no_scrollback() {
 	}
 }
 
-// Return the active-area top-left PagePin in the synchronized snapshot.
-fn (self &ScreenSearch) active_top_left() ?terminal.PagePin {
-	return self.pages.get_top_left(.active)
+// Return the active-area top-left Pin in the synchronized snapshot.
+fn (self &ScreenSearch) active_top_left() ?terminal.Pin {
+	return self.screen.pages.get_top_left(.active)
 }
 
 // Return the selected match.
@@ -1162,10 +1046,10 @@ fn (mut self ScreenSearch) select_next() bool {
 		}
 
 		// Pin it so we can track any movement.
-		tracked := hl.untracked().track(mut self.pages)
+		tracked := hl.untracked().track(mut self.screen.pages)
 
 		// Free our previous match and setup our new selection.
-		prev.deinit(mut self.pages)
+		prev.deinit(mut self.screen.pages)
 		self.selected = SelectedMatch{
 			idx: next_idx
 			highlight: tracked
@@ -1185,7 +1069,7 @@ fn (mut self ScreenSearch) select_next() bool {
 		}
 
 		// Pin it so we can track any movement.
-		tracked := hl.untracked().track(mut self.pages)
+		tracked := hl.untracked().track(mut self.screen.pages)
 
 		// Our selection is index zero since we just started.
 		self.selected = SelectedMatch{
@@ -1215,10 +1099,10 @@ fn (mut self ScreenSearch) select_prev() bool {
 		}
 
 		// Pin it so we can track any movement.
-		tracked := hl.untracked().track(mut self.pages)
+		tracked := hl.untracked().track(mut self.screen.pages)
 
 		// Free our previous match and setup our new selection.
-		prev.deinit(mut self.pages)
+		prev.deinit(mut self.screen.pages)
 		self.selected = SelectedMatch{
 			idx: next_idx
 			highlight: tracked
@@ -1240,7 +1124,7 @@ fn (mut self ScreenSearch) select_prev() bool {
 		}
 
 		// Pin it so we can track any movement.
-		tracked := hl.untracked().track(mut self.pages)
+		tracked := hl.untracked().track(mut self.screen.pages)
 
 		// Our selection is the last index since we started from oldest.
 		self.selected = SelectedMatch{

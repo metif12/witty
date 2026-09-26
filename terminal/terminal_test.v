@@ -72,35 +72,62 @@ fn create_test_terminal(cols u16, rows u16) !Terminal {
 	return t
 }
 
+// Helper: an active-area point, like ghostty's `.{ .active = .{ .x = x, .y = y } }`.
+fn active_point(x int, y int) Point {
+	return Point{
+		tag: .active
+		coordinate: Coordinate{
+			x: u16(x)
+			y: u32(y)
+		}
+	}
+}
+
+// Helper: look up an active-area cell like ghostty's
+// `t.screens.active.pages.getCell(.{ .active = .{ .x = x, .y = y } }).?`.
+fn active_cell(t &Terminal, x int, y int) PageCell {
+	return t.screens.active.pages.get_cell(active_point(x, y)) or {
+		panic('active cell is outside the page list')
+	}
+}
+
+// Helper: look up an active-area row like ghostty's
+// `t.screens.active.pages.getCell(.{ .active = .{ .y = y } }).?.row`.
+fn active_row(t &Terminal, y int) &RowData {
+	return active_cell(t, 0, y).row
+}
+
 // Helper: read a cell at active-area coordinates (x, y).
 fn cell_at(t &Terminal, x int, y int) CellData {
-	idx := t.screens.active.pages.active_start + y
-	if idx < 0 || idx >= t.screens.active.pages.screen_rows.len {
-		return CellData{}
-	}
-	row := t.screens.active.pages.screen_rows[idx]
-	if x < 0 || x >= row.cells.len {
-		return CellData{}
-	}
-	return row.cells[x]
+	list_cell := t.screens.active.pages.get_cell(active_point(x, y)) or { return CellData{} }
+	return *list_cell.cell
+}
+
+// Helper: read the page style of the cell at active-area coordinates (x, y).
+fn cell_style_at(t &Terminal, x int, y int) CellStyle {
+	return active_cell(t, x, y).style()
+}
+
+// Helper: read the page hyperlink of the cell at active-area coordinates
+// (x, y), like ghostty's `page.lookupHyperlink(cell)` plus
+// `page.hyperlink_set.get(page.memory, id)`.
+fn cell_hyperlink_at(t &Terminal, x int, y int) ?Hyperlink {
+	list_cell := active_cell(t, x, y)
+	page := &list_cell.node.data
+	id := page.lookup_hyperlink(list_cell.cell) or { return none }
+	return page.hyperlink_set.get(id)
 }
 
 // Helper: read whether a row (active-area y) is soft-wrapped.
 fn row_wrap_at(t &Terminal, y int) bool {
-	idx := t.screens.active.pages.active_start + y
-	if idx < 0 || idx >= t.screens.active.pages.screen_rows.len {
-		return false
-	}
-	return t.screens.active.pages.screen_rows[idx].wrap
+	list_cell := t.screens.active.pages.get_cell(active_point(0, y)) or { return false }
+	return list_cell.row.wrap
 }
 
 // Helper: read a row's (active-area y) semantic prompt type.
 fn row_semantic_prompt_at(t &Terminal, y int) SemanticPromptType {
-	idx := t.screens.active.pages.active_start + y
-	if idx < 0 || idx >= t.screens.active.pages.screen_rows.len {
-		return .unknown
-	}
-	return t.screens.active.pages.screen_rows[idx].semantic_prompt
+	list_cell := t.screens.active.pages.get_cell(active_point(0, y)) or { return .unknown }
+	return list_cell.row.semantic_prompt
 }
 
 // ============================================================
@@ -125,8 +152,8 @@ fn test_input_with_no_control_characters() {
 	assert str == 'hello'
 
 	// The first row should be dirty
-	assert t.is_dirty(5, 0)
-	assert !t.is_dirty(5, 1)
+	assert t.is_dirty(active_point(5, 0))
+	assert !t.is_dirty(active_point(5, 1))
 }
 
 fn test_input_with_basic_wraparound() {
@@ -156,12 +183,12 @@ fn test_input_with_basic_wraparound_dirty() {
 	defer { t.deinit() }
 
 	t.print_string('hello') or { assert false }
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 	t.clear_dirty()
 	t.print(u32(`w`)) or { assert false }
 
 	// The new row where 'w' was written should be dirty
-	assert t.is_dirty(0, 1)
+	assert t.is_dirty(active_point(0, 1))
 }
 
 fn test_input_that_forces_scroll() {
@@ -859,7 +886,7 @@ fn test_delete_lines_resets_soft_wrap_rows() {
 
 	assert (t.plain_string() or { '' }) == 'XBC\n\nDEF'
 	for y in 0 .. int(t.rows) {
-		row := t.screens.active.pages.get_active_row(y)
+		row := active_row(&t, y)
 		assert !row.wrap
 		if y < 2 {
 			assert !row.wrap_continuation
@@ -1158,34 +1185,31 @@ fn test_protected_erases_update_managed_row_flags() {
 	}
 	defer { t.deinit() }
 
+	t.modes.set(.grapheme_cluster, true)
+	t.screens.active.start_hyperlink('http://example.com', none) or { assert false }
 	for y in 0 .. 2 {
-		mut row := &t.screens.active.pages.screen_rows[y]
-		row.grapheme = true
-		row.styled = true
-		row.hyperlink = true
-		row.cells[0] = CellData{
-			content_tag: .codepoint_grapheme
-			codepoint: u32(`x`)
-			graphemes: [u32(0x0301)]
-			style_id: 1
-			has_hyperlink: true
-		}
+		t.set_cursor_pos(y + 1, 1)
+		t.print(u32(`x`)) or { assert false }
+		t.print(0x0301) or { assert false }
+		row := active_row(&t, y)
+		assert row.grapheme
+		assert row.hyperlink
 	}
+	t.screens.active.end_hyperlink()
+	t.set_cursor_pos(1, 1)
 
 	// ISO is the most recent protection mode, but these cells themselves are
 	// unprotected, so both erases must clear them through clearUnprotectedCells.
 	t.screens.active.protected_mode = .iso
 	t.erase_chars(1)
-	row0 := &t.screens.active.pages.screen_rows[0]
+	row0 := active_row(&t, 0)
 	assert !row0.grapheme
-	assert !row0.styled
 	assert !row0.hyperlink
 
 	t.set_cursor_pos(2, 1)
 	t.erase_line(.right, false)
-	row1 := &t.screens.active.pages.screen_rows[1]
+	row1 := active_row(&t, 1)
 	assert !row1.grapheme
-	assert !row1.styled
 	assert !row1.hyperlink
 }
 
@@ -1780,7 +1804,7 @@ fn test_decaln_resets_graphemes_with_protected_mode() {
 	for cp in [u32(0x1f468), 0x200d, 0x1f469, 0x200d, 0x1f467] {
 		t.print(cp) or { assert false }
 	}
-	assert t.screens.active.pages.screen_rows[0].grapheme
+	assert active_row(&t, 0).grapheme
 
 	t.decaln() or { assert false }
 
@@ -1789,7 +1813,7 @@ fn test_decaln_resets_graphemes_with_protected_mode() {
 	assert t.screens.active.cursor.is_protected
 	assert t.screens.active.protected_mode == .iso
 	for y in 0 .. int(t.rows) {
-		row := t.screens.active.pages.screen_rows[t.screens.active.pages.active_start + y]
+		row := active_row(&t, y)
 		assert row.dirty
 		assert !row.grapheme
 		for cell in row.cells {
@@ -1819,13 +1843,13 @@ fn test_decaln_clears_non_color_attributes() {
 
 	assert !t.screens.active.cursor.style.flags.bold()
 	assert t.screens.active.cursor.style.flags.underline() == .none
-	cell := cell_at(&t, 0, 0)
-	assert cell.style.fg_color == .rgb
-	assert cell.style.fg_r == 0x12
-	assert cell.style.fg_g == 0x34
-	assert cell.style.fg_b == 0x56
-	assert !cell.style.flags.bold()
-	assert cell.style.flags.underline() == .none
+	style := cell_style_at(&t, 0, 0)
+	assert style.fg_color == .rgb
+	assert style.fg_r == 0x12
+	assert style.fg_g == 0x34
+	assert style.fg_b == 0x56
+	assert !style.flags.bold()
+	assert style.flags.underline() == .none
 }
 
 // ============================================================
@@ -2035,9 +2059,9 @@ fn test_resize_clears_redrawable_prompt_on_primary_screen() {
 
 	t.print_string('ABCDE\n') or { assert false }
 	mut primary := t.screens.get(.primary) or { panic('primary screen must be initialized') }
-	primary.cursor_set_semantic_content_prompt(.initial)
+	primary.cursor_set_semantic_content(CursorSemanticPrompt{ kind: .initial })
 	t.print_string('> ') or { assert false }
-	primary.cursor_set_semantic_content_input(true)
+	primary.cursor_set_semantic_content(CursorSemanticInput{ clear: .clear_eol })
 	t.print_string('echo') or { assert false }
 	assert t.plain_string() or { '' } == 'ABCDE\n> echo'
 
@@ -2058,9 +2082,9 @@ fn test_resize_clears_redrawable_prompt_on_inactive_primary_screen() {
 
 	t.print_string('ABCDE\n') or { assert false }
 	mut primary := t.screens.get(.primary) or { panic('primary screen must be initialized') }
-	primary.cursor_set_semantic_content_prompt(.initial)
+	primary.cursor_set_semantic_content(CursorSemanticPrompt{ kind: .initial })
 	t.print_string('> ') or { assert false }
-	primary.cursor_set_semantic_content_input(true)
+	primary.cursor_set_semantic_content(CursorSemanticInput{ clear: .clear_eol })
 	t.print_string('echo') or { assert false }
 	assert t.plain_string() or { '' } == 'ABCDE\n> echo'
 
@@ -2130,7 +2154,7 @@ fn test_resize_less_cols_wraps_wide_char() {
 
 	assert (t.plain_string() or { '' }) == 'x\n😀'
 	assert cell_at(&t, 1, 0).wide == .spacer_head
-	assert t.screens.active.pages.get_active_row(0).wrap
+	assert active_row(&t, 0).wrap
 	assert cell_at(&t, 0, 1).wide == .wide
 	assert cell_at(&t, 1, 1).wide == .spacer_tail
 }
@@ -2201,12 +2225,12 @@ fn test_resize_reflow_preserves_kitty_unicode_placeholder_row_flag() {
 	t.modes.set(.wraparound, true)
 	t.print(kitty_unicode_placeholder) or { assert false }
 	t.print_string('ab') or { assert false }
-	assert t.screens.active.pages.screen_rows[0].kitty_virtual_placeholder
+	assert active_row(&t, 0).kitty_virtual_placeholder
 
 	t.resize(2, 2) or { assert false }
 
 	assert cell_at(&t, 0, 0).codepoint == kitty_unicode_placeholder
-	assert t.screens.active.pages.get_active_row(0).kitty_virtual_placeholder
+	assert active_row(&t, 0).kitty_virtual_placeholder
 }
 
 // https://github.com/mitchellh/ghostty/issues/723
@@ -2756,9 +2780,9 @@ fn test_is_dirty_and_clear() {
 	defer { t.deinit() }
 
 	t.print_string('Hello') or { assert false }
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 	t.clear_dirty()
-	assert !t.is_dirty(0, 0)
+	assert !t.is_dirty(active_point(0, 0))
 }
 
 // ============================================================
@@ -3041,7 +3065,7 @@ fn test_print_wide_char() {
 	c1 := cell_at(&t, 1, 0)
 	assert c1.wide == .spacer_tail
 
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 }
 
 fn test_print_wide_char_in_single_width_terminal() {
@@ -3060,7 +3084,7 @@ fn test_print_wide_char_in_single_width_terminal() {
 	assert c0.codepoint == 0
 	assert c0.wide == .narrow
 
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 }
 
 fn test_print_kitty_unicode_placeholder_marks_row() {
@@ -3074,8 +3098,8 @@ fn test_print_kitty_unicode_placeholder_marks_row() {
 	assert t.screens.active.cursor.y == 0
 	assert t.screens.active.cursor.x == 1
 	assert cell_at(&t, 0, 0).codepoint == kitty_unicode_placeholder
-	assert t.screens.active.pages.screen_rows[0].kitty_virtual_placeholder
-	assert t.is_dirty(0, 0)
+	assert active_row(&t, 0).kitty_virtual_placeholder
+	assert t.is_dirty(active_point(0, 0))
 }
 
 fn test_print_over_wrapped_wide_char_clears_previous_spacer_head() {
@@ -3135,8 +3159,8 @@ fn test_print_over_wide_char_at_0_0() {
 	assert c1.codepoint == 0
 	assert c1.wide == .narrow
 
-	assert t.is_dirty(0, 0)
-	assert !t.is_dirty(0, 1)
+	assert t.is_dirty(active_point(0, 0))
+	assert !t.is_dirty(active_point(0, 1))
 }
 
 fn test_print_over_wide_spacer_tail() {
@@ -3163,7 +3187,7 @@ fn test_print_over_wide_spacer_tail() {
 	}
 	assert str == ' X'
 
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 }
 
 // Helper: count cells in the active area that carry grapheme data. Used to
@@ -3172,9 +3196,8 @@ fn test_print_over_wide_spacer_tail() {
 // cells with has_grapheme set.
 fn active_grapheme_count(t &Terminal) int {
 	mut n := 0
-	start := t.screens.active.pages.active_start
-	for y in start .. t.screens.active.pages.screen_rows.len {
-		row := t.screens.active.pages.screen_rows[y]
+	for y in 0 .. int(t.rows) {
+		row := active_row(t, y)
 		for cell in row.cells {
 			if cell.has_grapheme() {
 				n++
@@ -3204,7 +3227,7 @@ fn test_zero_width_character_at_start() {
 	assert t.screens.active.cursor.x == 0
 
 	// Should not be dirty since we changed nothing.
-	assert !t.is_dirty(0, 0)
+	assert !t.is_dirty(active_point(0, 0))
 }
 
 fn test_print_wide_char_at_edge_creates_spacer_head() {
@@ -3227,8 +3250,8 @@ fn test_print_wide_char_at_edge_creates_spacer_head() {
 	c_tail := cell_at(&t, 1, 1)
 	assert c_tail.wide == .spacer_tail
 
-	assert t.is_dirty(0, 0)
-	assert t.is_dirty(0, 1)
+	assert t.is_dirty(active_point(0, 0))
+	assert t.is_dirty(active_point(0, 1))
 }
 
 fn test_print_wide_char_with_1_column_width() {
@@ -3241,7 +3264,7 @@ fn test_print_wide_char_with_1_column_width() {
 	t.print(0x1F600) or { assert false }
 
 	// This prints a space so we should be dirty.
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 }
 
 fn test_print_multicodepoint_grapheme_disabled_mode_2027() {
@@ -3292,7 +3315,7 @@ fn test_print_multicodepoint_grapheme_disabled_mode_2027() {
 	assert !c5.has_grapheme()
 	assert c5.wide == .spacer_tail
 
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 }
 
 fn test_vs16_doesnt_make_character_with_2027_disabled() {
@@ -3322,11 +3345,11 @@ fn test_ignored_vs16_doesnt_mark_dirty() {
 	defer { t.deinit() }
 
 	t.print(0x2764) or { assert false } // Heart
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 
 	t.clear_dirty()
 	t.print(0xFE0F) or { assert false } // VS16 to make wide
-	assert !t.is_dirty(0, 0)
+	assert !t.is_dirty(active_point(0, 0))
 }
 
 fn test_print_invalid_vs16_non_grapheme() {
@@ -3360,11 +3383,11 @@ fn test_invalid_vs16_doesnt_mark_dirty() {
 	defer { t.deinit() }
 
 	t.print(u32(`x`)) or { assert false }
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 
 	t.clear_dirty()
 	t.print(0xFE0F) or { assert false } // VS16 to make wide
-	assert !t.is_dirty(0, 0)
+	assert !t.is_dirty(active_point(0, 0))
 }
 
 fn test_print_multicodepoint_grapheme_mode_2027() {
@@ -3387,7 +3410,7 @@ fn test_print_multicodepoint_grapheme_mode_2027() {
 	assert t.screens.active.cursor.y == 0
 	assert t.screens.active.cursor.x == 2
 
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 
 	c0 := cell_at(&t, 0, 0)
 	assert c0.codepoint == 0x1F468
@@ -3423,7 +3446,7 @@ fn test_keypad_sequence_vs15() {
 	assert t.screens.active.cursor.y == 0
 	assert t.screens.active.cursor.x == 1
 
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 
 	c0 := cell_at(&t, 0, 0)
 	assert c0.codepoint == 0x23
@@ -3448,7 +3471,7 @@ fn test_keypad_sequence_vs16() {
 	assert t.screens.active.cursor.y == 0
 	assert t.screens.active.cursor.x == 2
 
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 
 	c0 := cell_at(&t, 0, 0)
 	assert c0.codepoint == 0x23
@@ -3475,7 +3498,7 @@ fn test_fitzpatrick_skin_tone_next_valid_base() {
 	assert t.screens.active.cursor.y == 0
 	assert t.screens.active.cursor.x == 2
 
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 
 	c0 := cell_at(&t, 0, 0)
 	assert c0.codepoint == 0x1F44B
@@ -3501,7 +3524,7 @@ fn test_fitzpatrick_skin_tone_next_to_non_base() {
 	assert t.screens.active.cursor.y == 0
 	assert t.screens.active.cursor.x == 4
 
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 
 	c0 := cell_at(&t, 0, 0)
 	assert c0.codepoint == 0x22
@@ -3527,19 +3550,19 @@ fn test_multicodepoint_grapheme_marks_dirty_on_every_codepoint() {
 	t.modes.set(.grapheme_cluster, true)
 
 	t.print(0x1F468) or { assert false }
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 	t.clear_dirty()
 	t.print(0x200D) or { assert false }
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 	t.clear_dirty()
 	t.print(0x1F469) or { assert false }
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 	t.clear_dirty()
 	t.print(0x200D) or { assert false }
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 	t.clear_dirty()
 	t.print(0x1F467) or { assert false }
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 
 	assert t.screens.active.cursor.y == 0
 	assert t.screens.active.cursor.x == 2
@@ -3555,7 +3578,7 @@ fn test_vs15_to_make_narrow_character() {
 	t.modes.set(.grapheme_cluster, true)
 
 	t.print(0x2614) or { assert false } // Umbrella with rain drops, width=2
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 	t.clear_dirty()
 
 	// We should have 2 cells taken up (wide).
@@ -3563,7 +3586,7 @@ fn test_vs15_to_make_narrow_character() {
 	assert t.screens.active.cursor.x == 2
 
 	t.print(0xFE0E) or { assert false } // VS15 to make narrow
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 	t.clear_dirty()
 
 	// VS15 should send us back a cell since our char is no longer wide.
@@ -3590,10 +3613,10 @@ fn test_vs15_on_already_narrow_emoji() {
 	t.modes.set(.grapheme_cluster, true)
 
 	t.print(0x26C8) or { assert false } // Thunder cloud and rain, width=1
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 	t.clear_dirty()
 	t.print(0xFE0E) or { assert false } // VS15 to make narrow
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 	t.clear_dirty()
 
 	// Character takes up one cell.
@@ -3673,7 +3696,7 @@ fn test_vs15_to_make_narrow_character_with_pending_wrap() {
 	t.modes.set(.grapheme_cluster, true)
 
 	t.print(0x2614) or { assert false } // Umbrella, width=2
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 	t.clear_dirty()
 
 	// We only move one because we're in a pending wrap state.
@@ -3682,7 +3705,7 @@ fn test_vs15_to_make_narrow_character_with_pending_wrap() {
 	assert t.screens.active.cursor.pending_wrap
 
 	t.print(0xFE0E) or { assert false } // VS15 to make narrow
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 	t.clear_dirty()
 
 	// VS15 should clear the pending wrap state.
@@ -3707,10 +3730,10 @@ fn test_vs16_to_make_wide_character_with_mode_2027() {
 	t.modes.set(.grapheme_cluster, true)
 
 	t.print(0x2764) or { assert false } // Heart
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 	t.clear_dirty()
 	t.print(0xFE0F) or { assert false } // VS16 to make wide
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 	t.clear_dirty()
 
 	c0 := cell_at(&t, 0, 0)
@@ -3736,7 +3759,7 @@ fn test_vs16_repeated_with_mode_2027() {
 	t.print(0x2764) or { assert false } // Heart
 	t.print(0xFE0F) or { assert false } // VS16 to make wide
 
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 
 	c0 := cell_at(&t, 0, 0)
 	assert c0.codepoint == 0x2764
@@ -3843,12 +3866,12 @@ fn test_overwrite_grapheme_should_clear_grapheme_data() {
 
 	t.print(0x26C8) or { assert false } // Thunder cloud and rain
 	t.print(0xFE0E) or { assert false } // VS15 to make narrow
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 	t.clear_dirty()
 
 	t.set_cursor_pos(1, 1)
 	t.print(u32(`A`)) or { assert false }
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 
 	str := t.plain_string() or {
 		assert false
@@ -3889,7 +3912,7 @@ fn test_overwrite_multicodepoint_grapheme_clears_grapheme_data() {
 	t.set_cursor_pos(1, 1)
 	t.clear_dirty()
 	t.print(u32(`X`)) or { assert false }
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 
 	assert t.screens.active.cursor.y == 0
 	assert t.screens.active.cursor.x == 1
@@ -4548,7 +4571,7 @@ fn test_index_from_the_bottom_outside_of_scroll_region() {
 	t.clear_dirty()
 	t.index() or { assert false }
 	t.print(u32(`B`)) or { assert false }
-	assert t.is_dirty(0, 4)
+	assert t.is_dirty(active_point(0, 4))
 
 	str := t.plain_string() or {
 		assert false
@@ -4569,8 +4592,8 @@ fn test_index_no_scroll_region_top_of_screen() {
 	t.index() or { assert false }
 	t.print(u32(`X`)) or { assert false }
 
-	assert t.is_dirty(0, 0)
-	assert t.is_dirty(0, 1)
+	assert t.is_dirty(active_point(0, 0))
+	assert t.is_dirty(active_point(0, 1))
 
 	str := t.plain_string() or {
 		assert false
@@ -4592,8 +4615,8 @@ fn test_index_bottom_of_primary_screen() {
 	t.index() or { assert false }
 	t.print(u32(`X`)) or { assert false }
 
-	assert t.is_dirty(0, 3)
-	assert t.is_dirty(0, 4)
+	assert t.is_dirty(active_point(0, 3))
+	assert t.is_dirty(active_point(0, 4))
 
 	str := t.plain_string() or {
 		assert false
@@ -4615,8 +4638,8 @@ fn test_index_inside_scroll_region() {
 	t.index() or { assert false }
 	t.print(u32(`X`)) or { assert false }
 
-	assert t.is_dirty(0, 0)
-	assert t.is_dirty(0, 1)
+	assert t.is_dirty(active_point(0, 0))
+	assert t.is_dirty(active_point(0, 1))
 
 	str := t.plain_string() or {
 		assert false
@@ -4688,10 +4711,10 @@ fn test_delete_lines_with_scroll_region_legacy() {
 	t.clear_dirty()
 	t.delete_lines(1)
 
-	assert t.is_dirty(0, 0)
-	assert t.is_dirty(0, 1)
-	assert t.is_dirty(0, 2)
-	assert !t.is_dirty(0, 3)
+	assert t.is_dirty(active_point(0, 0))
+	assert t.is_dirty(active_point(0, 1))
+	assert t.is_dirty(active_point(0, 2))
+	assert !t.is_dirty(active_point(0, 3))
 
 	t.print(u32(`E`)) or { assert false }
 	t.carriage_return()
@@ -4868,8 +4891,8 @@ fn test_set_left_and_right_margin_simple() {
 	t.clear_dirty()
 	t.erase_chars(1)
 
-	assert t.is_dirty(0, 0)
-	assert !t.is_dirty(0, 1)
+	assert t.is_dirty(active_point(0, 0))
+	assert !t.is_dirty(active_point(0, 1))
 
 	str := t.plain_string() or {
 		assert false
@@ -5008,9 +5031,9 @@ fn test_insert_lines_outside_of_scroll_region() {
 	t.clear_dirty()
 	t.insert_lines(1)
 
-	assert !t.is_dirty(0, 0)
-	assert !t.is_dirty(0, 1)
-	assert !t.is_dirty(0, 2)
+	assert !t.is_dirty(active_point(0, 0))
+	assert !t.is_dirty(active_point(0, 1))
+	assert !t.is_dirty(active_point(0, 2))
 
 	str := t.plain_string() or {
 		assert false
@@ -5105,9 +5128,9 @@ fn test_insert_lines_with_scroll_region_legacy() {
 	t.clear_dirty()
 	t.insert_lines(1)
 
-	assert t.is_dirty(0, 0)
-	assert t.is_dirty(0, 1)
-	assert !t.is_dirty(0, 2)
+	assert t.is_dirty(active_point(0, 0))
+	assert t.is_dirty(active_point(0, 1))
+	assert !t.is_dirty(active_point(0, 2))
 
 	t.print(u32(`X`)) or { assert false }
 
@@ -5192,9 +5215,9 @@ fn test_scroll_up_top_bottom_scroll_region() {
 	t.clear_dirty()
 	t.scroll_up(1) or { assert false }
 
-	assert t.is_dirty(0, 0)
-	assert t.is_dirty(0, 1)
-	assert t.is_dirty(0, 2)
+	assert t.is_dirty(active_point(0, 0))
+	assert t.is_dirty(active_point(0, 1))
+	assert t.is_dirty(active_point(0, 2))
 
 	str := t.plain_string() or {
 		assert false
@@ -5256,11 +5279,12 @@ fn test_scroll_up_left_right_region_preserves_hyperlink_flags() {
 	t.scroll_up(1) or { assert false }
 
 	assert (t.plain_string() or { '' }) == 'AEF423\nDHI756\nG   89'
-	row0 := t.screens.active.pages.get_active_row(0)
+	row0 := active_row(&t, 0)
 	assert row0.hyperlink
 	for x in 1 .. 4 {
 		assert row0.cells[x].has_hyperlink
-		assert row0.cells[x].hyperlink.uri == 'http://example.com'
+		link := cell_hyperlink_at(&t, x, 0) or { panic('cell hyperlink is missing') }
+		assert link.uri == 'http://example.com'
 	}
 }
 
@@ -5273,25 +5297,25 @@ fn test_insert_delete_lines_preserve_full_row_metadata() {
 
 	// Put managed and semantic state on the row that will move.
 	t.set_cursor_pos(2, 1)
-	t.screens.active.cursor_set_semantic_content_prompt(.initial)
+	t.screens.active.cursor_set_semantic_content(CursorSemanticPrompt{ kind: .initial })
 	t.screens.active.start_hyperlink('http://example.com', none) or { assert false }
 	t.print(kitty_unicode_placeholder) or { assert false }
 	t.screens.active.end_hyperlink()
-	source := t.screens.active.pages.get_active_row(1)
+	source := active_row(&t, 1)
 	assert source.semantic_prompt == .prompt
 	assert source.hyperlink
 	assert source.kitty_virtual_placeholder
 
 	t.set_cursor_pos(1, 1)
 	t.insert_lines(1)
-	moved_down := t.screens.active.pages.get_active_row(2)
+	moved_down := active_row(&t, 2)
 	assert moved_down.semantic_prompt == .prompt
 	assert moved_down.hyperlink
 	assert moved_down.kitty_virtual_placeholder
 
 	t.set_cursor_pos(2, 1)
 	t.delete_lines(1)
-	moved_up := t.screens.active.pages.get_active_row(1)
+	moved_up := active_row(&t, 1)
 	assert moved_up.semantic_prompt == .prompt
 	assert moved_up.hyperlink
 	assert moved_up.kitty_virtual_placeholder
@@ -5309,7 +5333,7 @@ fn test_line_shift_recomputes_grapheme_flag_after_wide_boundary_split() {
 	t.print(0x1f468) or { assert false }
 	t.print(0x200d) or { assert false }
 	t.print(0x1f469) or { assert false }
-	row_before := t.screens.active.pages.get_active_row(0)
+	row_before := active_row(&t, 0)
 	assert row_before.cells[2].wide == .wide
 	assert row_before.cells[2].has_grapheme()
 	assert row_before.cells[3].wide == .spacer_tail
@@ -5321,7 +5345,7 @@ fn test_line_shift_recomputes_grapheme_flag_after_wide_boundary_split() {
 	t.screens.active.cursor_absolute(3, 0)
 	t.delete_lines(1)
 
-	row_after := t.screens.active.pages.get_active_row(0)
+	row_after := active_row(&t, 0)
 	assert !row_after.cells[2].has_grapheme()
 	assert row_after.cells[2].wide == .narrow
 	assert row_after.cells[3].wide == .narrow
@@ -5366,8 +5390,8 @@ fn test_scroll_up_full_top_bottom_region() {
 	t.clear_dirty()
 	t.scroll_up(4) or { assert false }
 
-	assert t.is_dirty(0, 0)
-	assert t.is_dirty(0, 1)
+	assert t.is_dirty(active_point(0, 0))
+	assert t.is_dirty(active_point(0, 1))
 
 	str := t.plain_string() or {
 		assert false
@@ -5404,10 +5428,10 @@ fn test_scroll_down_outside_of_scroll_region() {
 	assert t.screens.active.cursor.x == cx
 	assert t.screens.active.cursor.y == cy
 
-	assert !t.is_dirty(0, 0)
-	assert t.is_dirty(0, 1)
-	assert t.is_dirty(0, 2)
-	assert t.is_dirty(0, 3)
+	assert !t.is_dirty(active_point(0, 0))
+	assert t.is_dirty(active_point(0, 1))
+	assert t.is_dirty(active_point(0, 2))
+	assert t.is_dirty(active_point(0, 3))
 
 	str := t.plain_string() or {
 		assert false
@@ -5517,7 +5541,7 @@ fn test_insert_blanks_no_scroll_region_fits() {
 
 	t.clear_dirty()
 	t.insert_blanks(2)
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 
 	str := t.plain_string() or {
 		assert false
@@ -5537,7 +5561,7 @@ fn test_insert_blanks_shift_off_screen() {
 	t.set_cursor_pos(1, 3)
 	t.clear_dirty()
 	t.insert_blanks(2)
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 	t.print(u32(`X`)) or { assert false }
 
 	str := t.plain_string() or {
@@ -5562,7 +5586,7 @@ fn test_insert_blanks_inside_left_right_scroll_region() {
 
 	t.clear_dirty()
 	t.insert_blanks(2)
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 	t.print(u32(`X`)) or { assert false }
 
 	str := t.plain_string() or {
@@ -5586,7 +5610,7 @@ fn test_insert_blanks_outside_left_right_scroll_region() {
 	assert t.screens.active.cursor.pending_wrap
 	t.clear_dirty()
 	t.insert_blanks(2)
-	assert !t.is_dirty(0, 0)
+	assert !t.is_dirty(active_point(0, 0))
 	assert !t.screens.active.cursor.pending_wrap
 	t.print(u32(`X`)) or { assert false }
 
@@ -5610,7 +5634,7 @@ fn test_insert_blanks_left_right_scroll_region_large_count() {
 	t.set_cursor_pos(1, 1)
 	t.clear_dirty()
 	t.insert_blanks(140)
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 	t.print(u32(`X`)) or { assert false }
 
 	str := t.plain_string() or {
@@ -5636,7 +5660,7 @@ fn test_delete_chars_more_than_half() {
 
 	t.clear_dirty()
 	t.delete_chars(3)
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 
 	str := t.plain_string() or {
 		assert false
@@ -5657,7 +5681,7 @@ fn test_delete_chars_should_shift_left() {
 
 	t.clear_dirty()
 	t.delete_chars(1)
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 
 	str := t.plain_string() or {
 		assert false
@@ -5699,7 +5723,7 @@ fn test_delete_chars_simple_operation() {
 
 	t.clear_dirty()
 	t.delete_chars(2)
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 
 	str := t.plain_string() or {
 		assert false
@@ -5721,7 +5745,7 @@ fn test_delete_chars_outside_scroll_region() {
 	assert t.screens.active.cursor.pending_wrap
 	t.clear_dirty()
 	t.delete_chars(2)
-	assert !t.is_dirty(0, 0)
+	assert !t.is_dirty(active_point(0, 0))
 	assert t.screens.active.cursor.pending_wrap
 
 	str := t.plain_string() or {
@@ -5745,7 +5769,7 @@ fn test_delete_chars_inside_scroll_region() {
 
 	t.clear_dirty()
 	t.delete_chars(1)
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 
 	str := t.plain_string() or {
 		assert false
@@ -5852,7 +5876,7 @@ fn test_erase_line_left_resets_wrap() {
 	assert t.screens.active.cursor.pending_wrap
 	t.clear_dirty()
 	t.erase_line(.left, false)
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 	assert !t.screens.active.cursor.pending_wrap
 	t.print(u32(`B`)) or { assert false }
 
@@ -5875,7 +5899,7 @@ fn test_erase_line_right_protected_attributes_respected_with_iso() {
 	t.set_cursor_pos(1, 1)
 	t.clear_dirty()
 	t.erase_line(.right, false)
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 
 	str := t.plain_string() or {
 		assert false
@@ -5896,7 +5920,7 @@ fn test_erase_line_right_protected_attributes_ignored_with_dec_set() {
 	t.set_cursor_pos(1, 2)
 	t.clear_dirty()
 	t.erase_line(.right, false)
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 
 	str := t.plain_string() or {
 		assert false
@@ -6129,7 +6153,7 @@ fn test_erase_line_left_wide_character() {
 	t.set_cursor_pos(1, 3)
 	t.clear_dirty()
 	t.erase_line(.left, false)
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 
 	str := t.plain_string() or {
 		assert false
@@ -6212,7 +6236,7 @@ fn test_delete_chars_with_a_spacer_head_at_the_end() {
 
 	t.print_string('0123橋123') or { assert false }
 	assert cell_at(&t, 4, 0).wide == .spacer_head
-	assert t.screens.active.pages.screen_rows[0].wrap
+	assert active_row(&t, 0).wrap
 
 	t.set_cursor_pos(1, 1)
 	t.delete_chars(1)
@@ -6411,7 +6435,7 @@ fn test_insert_blanks_split_multi_cell_character() {
 	t.set_cursor_pos(1, 1)
 	t.clear_dirty()
 	t.insert_blanks(1)
-	assert t.is_dirty(0, 0)
+	assert t.is_dirty(active_point(0, 0))
 
 	str := t.plain_string() or {
 		assert false
@@ -6432,12 +6456,12 @@ fn test_insert_blanks_deleting_graphemes() {
 	for cp in [u32(0x1F468), 0x200D, 0x1F469, 0x200D, 0x1F467] {
 		t.print(cp) or { assert false }
 	}
-	assert t.screens.active.pages.get_active_row(0).grapheme
+	assert active_row(&t, 0).grapheme
 
 	t.set_cursor_pos(1, 1)
 	t.insert_blanks(4)
 	assert t.plain_string() or { '' } == '    A'
-	row := t.screens.active.pages.get_active_row(0)
+	row := active_row(&t, 0)
 	assert !row.grapheme
 	for cell in row.cells {
 		assert !cell.has_grapheme()
@@ -6460,7 +6484,7 @@ fn test_insert_blanks_shifts_graphemes() {
 	t.insert_blanks(1)
 
 	assert t.plain_string() or { '' } == ' A👨‍👩‍👧'
-	row := t.screens.active.pages.get_active_row(0)
+	row := active_row(&t, 0)
 	assert row.grapheme
 	assert row.cells[2].has_grapheme()
 }
@@ -6491,14 +6515,15 @@ fn test_insert_blanks_shifts_hyperlinks() {
 	t.insert_blanks(2)
 	assert t.plain_string() or { '' } == '  ABC'
 
-	row := t.screens.active.pages.get_active_row(0)
+	row := active_row(&t, 0)
 	assert row.hyperlink
 	for x in 0 .. 2 {
 		assert !row.cells[x].has_hyperlink
 	}
 	for x in 2 .. 5 {
 		assert row.cells[x].has_hyperlink
-		assert row.cells[x].hyperlink.uri == 'http://example.com'
+		link := cell_hyperlink_at(&t, x, 0) or { panic('cell hyperlink is missing') }
+		assert link.uri == 'http://example.com'
 	}
 }
 
@@ -6515,7 +6540,7 @@ fn test_insert_blanks_pushes_hyperlink_off_end_completely() {
 	t.insert_blanks(3)
 	assert t.plain_string() or { 'not empty' } == ''
 
-	row := t.screens.active.pages.get_active_row(0)
+	row := active_row(&t, 0)
 	assert !row.hyperlink
 	for cell in row.cells {
 		assert !cell.has_hyperlink
@@ -6876,7 +6901,7 @@ fn test_disabled_wraparound_rejects_wide_char_with_one_space() {
 	cell := cell_at(&t, 4, 0)
 	assert cell.codepoint == 0
 	assert cell.wide == .narrow
-	assert !t.is_dirty(0, 0)
+	assert !t.is_dirty(active_point(0, 0))
 }
 
 fn test_disabled_wraparound_rejects_wide_char_with_no_space() {
@@ -6897,7 +6922,7 @@ fn test_disabled_wraparound_rejects_wide_char_with_no_space() {
 	cell := cell_at(&t, 4, 0)
 	assert cell.codepoint == `A`
 	assert cell.wide == .narrow
-	assert !t.is_dirty(0, 0)
+	assert !t.is_dirty(active_point(0, 0))
 }
 
 fn test_disabled_wraparound_rejects_wide_grapheme_with_half_space() {
@@ -6920,7 +6945,7 @@ fn test_disabled_wraparound_rejects_wide_grapheme_with_half_space() {
 	cell := cell_at(&t, 4, 0)
 	assert cell.codepoint == 0x2764
 	assert cell.wide == .narrow
-	assert !t.is_dirty(0, 0)
+	assert !t.is_dirty(active_point(0, 0))
 }
 
 fn test_print_wraps_at_right_margin() {
@@ -6937,7 +6962,7 @@ fn test_print_wraps_at_right_margin() {
 	t.print_string('XY') or { assert false }
 
 	assert (t.plain_string() or { '' }) == '1234X6789\n  Y'
-	assert !t.screens.active.pages.get_active_row(0).wrap
+	assert !active_row(&t, 0).wrap
 }
 
 fn test_print_right_margin_wrap_dirty_tracking() {
@@ -6953,13 +6978,13 @@ fn test_print_right_margin_wrap_dirty_tracking() {
 	t.set_cursor_pos(1, 5)
 	t.clear_dirty()
 	t.print(u32(`X`)) or { assert false }
-	assert t.is_dirty(4, 0)
-	assert !t.is_dirty(2, 1)
+	assert t.is_dirty(active_point(4, 0))
+	assert !t.is_dirty(active_point(2, 1))
 
 	t.clear_dirty()
 	t.print(u32(`Y`)) or { assert false }
-	assert t.is_dirty(4, 0)
-	assert t.is_dirty(2, 1)
+	assert t.is_dirty(active_point(4, 0))
+	assert t.is_dirty(active_point(2, 1))
 	assert (t.plain_string() or { '' }) == '1234X6789\n  Y'
 }
 
@@ -6978,7 +7003,7 @@ fn test_print_outside_right_margin() {
 	t.print_string('XY') or { assert false }
 
 	assert (t.plain_string() or { '' }) == '12345XY89'
-	assert t.is_dirty(5, 0)
+	assert t.is_dirty(active_point(5, 0))
 }
 
 fn test_print_outside_right_margin_wraps_to_left_margin() {
@@ -7011,12 +7036,12 @@ fn test_print_wide_char_at_right_margin_has_no_spacer_head() {
 
 	assert t.screens.active.cursor.y == 1
 	assert t.screens.active.cursor.x == 4
-	assert t.is_dirty(4, 0)
-	assert t.is_dirty(4, 1)
+	assert t.is_dirty(active_point(4, 0))
+	assert t.is_dirty(active_point(4, 1))
 	old_margin := cell_at(&t, 4, 0)
 	assert old_margin.codepoint == 0
 	assert old_margin.wide == .narrow
-	assert !t.screens.active.pages.get_active_row(0).wrap
+	assert !active_row(&t, 0).wrap
 	wide := cell_at(&t, 2, 1)
 	assert wide.codepoint == 0x1f600
 	assert wide.wide == .wide
@@ -7043,7 +7068,7 @@ fn test_print_writes_to_active_bottom_while_viewport_is_scrolled() {
 	t.print(u32(`A`)) or { assert false }
 	t.screens.active.scroll(ScrollActive{})
 	assert (t.plain_string() or { '' }) == '\nA'
-	assert t.is_dirty(u32(t.screens.active.cursor.x), u32(t.screens.active.cursor.y))
+	assert t.is_dirty(active_point(int(t.screens.active.cursor.x), int(t.screens.active.cursor.y)))
 }
 
 fn test_print_with_hyperlink() {
@@ -7055,13 +7080,14 @@ fn test_print_with_hyperlink() {
 
 	t.screens.active.start_hyperlink('http://example.com', none) or { assert false }
 	t.print_string('123456') or { assert false }
-	row := t.screens.active.pages.get_active_row(0)
+	row := active_row(&t, 0)
 	assert row.hyperlink
 	for x in 0 .. 6 {
 		assert row.cells[x].has_hyperlink
-		assert row.cells[x].hyperlink.uri == 'http://example.com'
-		assert row.cells[x].hyperlink.id is HyperlinkImplicitId
-		assert (row.cells[x].hyperlink.id as HyperlinkImplicitId).offset == 0
+		link := cell_hyperlink_at(&t, x, 0) or { panic('cell hyperlink is missing') }
+		assert link.uri == 'http://example.com'
+		assert link.id is HyperlinkImplicitId
+		assert (link.id as HyperlinkImplicitId).offset == 0
 	}
 }
 
@@ -7076,12 +7102,13 @@ fn test_print_over_cell_with_same_hyperlink() {
 	t.print_string('123456') or { assert false }
 	t.set_cursor_pos(1, 1)
 	t.print_string('123456') or { assert false }
-	row := t.screens.active.pages.get_active_row(0)
+	row := active_row(&t, 0)
 	assert row.hyperlink
 	for x in 0 .. 6 {
 		assert row.cells[x].has_hyperlink
-		assert row.cells[x].hyperlink.uri == 'http://example.com'
-		assert (row.cells[x].hyperlink.id as HyperlinkImplicitId).offset == 0
+		link := cell_hyperlink_at(&t, x, 0) or { panic('cell hyperlink is missing') }
+		assert link.uri == 'http://example.com'
+		assert (link.id as HyperlinkImplicitId).offset == 0
 	}
 }
 
@@ -7096,11 +7123,12 @@ fn test_print_and_end_hyperlink() {
 	t.print_string('123') or { assert false }
 	t.screens.active.end_hyperlink()
 	t.print_string('456') or { assert false }
-	row := t.screens.active.pages.get_active_row(0)
+	row := active_row(&t, 0)
 	assert row.hyperlink
 	for x in 0 .. 3 {
 		assert row.cells[x].has_hyperlink
-		assert row.cells[x].hyperlink.uri == 'http://example.com'
+		link := cell_hyperlink_at(&t, x, 0) or { panic('cell hyperlink is missing') }
+		assert link.uri == 'http://example.com'
 	}
 	for x in 3 .. 6 {
 		assert !row.cells[x].has_hyperlink
@@ -7118,16 +7146,18 @@ fn test_print_and_change_hyperlink() {
 	t.print_string('123') or { assert false }
 	t.screens.active.start_hyperlink('http://two.example.com', none) or { assert false }
 	t.print_string('456') or { assert false }
-	row := t.screens.active.pages.get_active_row(0)
+	row := active_row(&t, 0)
 	for x in 0 .. 3 {
 		assert row.cells[x].has_hyperlink
-		assert row.cells[x].hyperlink.uri == 'http://one.example.com'
-		assert (row.cells[x].hyperlink.id as HyperlinkImplicitId).offset == 0
+		link := cell_hyperlink_at(&t, x, 0) or { panic('cell hyperlink is missing') }
+		assert link.uri == 'http://one.example.com'
+		assert (link.id as HyperlinkImplicitId).offset == 0
 	}
 	for x in 3 .. 6 {
 		assert row.cells[x].has_hyperlink
-		assert row.cells[x].hyperlink.uri == 'http://two.example.com'
-		assert (row.cells[x].hyperlink.id as HyperlinkImplicitId).offset == 1
+		link := cell_hyperlink_at(&t, x, 0) or { panic('cell hyperlink is missing') }
+		assert link.uri == 'http://two.example.com'
+		assert (link.id as HyperlinkImplicitId).offset == 1
 	}
 }
 
@@ -7143,7 +7173,7 @@ fn test_overwrite_hyperlink_clears_row_flag() {
 	t.set_cursor_pos(1, 1)
 	t.screens.active.end_hyperlink()
 	t.print_string('456') or { assert false }
-	row := t.screens.active.pages.get_active_row(0)
+	row := active_row(&t, 0)
 	assert !row.hyperlink
 	for x in 0 .. 3 {
 		assert !row.cells[x].has_hyperlink

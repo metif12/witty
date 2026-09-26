@@ -588,9 +588,7 @@ fn (mut self SearchThread) drain_mailbox() ! {
 
 // Select a search result and scroll it into view when necessary.
 //
-// Source: Thread.select. The canonical code checks overlapping PageList
-// chunks; at the flat Screen boundary the equivalent check uses absolute row
-// coordinates obtained from the search snapshot.
+// Source: Thread.select.
 fn (mut self SearchThread) do_select(sel Select) {
 	mut s := self.search or { return }
 	key := s.last_screen.key
@@ -611,30 +609,40 @@ fn (mut self SearchThread) do_select(sel Select) {
 		// it can be notified the screen scrolled.
 		s.last_screen.selected = none
 
-		mut live_screen := self.opts.terminal.screens.get(key) or {
+		// Grab the current screen and see if this match is visible within
+		// the viewport already. If it is, we do nothing.
+		mut screen := self.opts.terminal.screens.get(key) or {
 			self.opts.mutex.unlock()
 			self.search = s
 			return
 		}
-		start := screen_search.pages.point_from_pin(.screen, flattened.start_pin()) or {
-			self.opts.mutex.unlock()
-			self.search = s
-			return
-		}
-		end := screen_search.pages.point_from_pin(.screen, flattened.end_pin()) or {
-			self.opts.mutex.unlock()
-			self.search = s
-			return
-		}
-		viewport_top := live_screen.pages.viewport_start
-		viewport_bot := viewport_top + int(live_screen.pages.rows) - 1
-		if int(end.coord().y) < viewport_top || int(start.coord().y) > viewport_bot {
-			target := if int(start.coord().y) > live_screen.pages.active_start {
-				live_screen.pages.active_start
-			} else {
-				int(start.coord().y)
+
+		// Grab the viewport. Viewports and selections are usually small
+		// so this check isn't very expensive, despite appearing O(N^2),
+		// both Ns are usually equal to 1.
+		mut it := screen.pages.page_iterator(.right_down, terminal.Point{
+			tag: .viewport
+		}, none)
+		mut visible := false
+		outer: for {
+			chunk := it.next() or { break }
+			for hl_chunk in flattened.chunks {
+				if chunk.overlaps(terminal.PageChunk{
+					node:  hl_chunk.node
+					start: hl_chunk.start
+					end:   hl_chunk.end
+				})
+				{
+					visible = true
+					break outer
+				}
 			}
-			live_screen.pages.scroll_delta(target - viewport_top)
+		}
+
+		if !visible {
+			screen.scroll(terminal.ScrollPin{
+				pin: flattened.start_pin()
+			})
 		}
 	}
 	self.opts.mutex.unlock()
@@ -938,12 +946,9 @@ pub fn (mut self Search) feed(mut t terminal.Terminal) {
 		}
 	}
 
-	// Check our viewport for changes against the same stable PageList
-	// snapshot used by the active screen searcher.
-	if active_search := self.screens[t.screens.active_key] {
-		if self.viewport.update(active_search.pages) {
-			self.stale_viewport_matches = true
-		}
+	// Check our viewport for changes.
+	if self.viewport.update(&t.screens.active.pages) {
+		self.stale_viewport_matches = true
 	}
 
 	// Feed data to each screen search that needs it.

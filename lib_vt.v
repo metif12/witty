@@ -58,7 +58,7 @@ pub type DCS = terminal.DCS
 
 pub type Parser = terminal.Parser
 
-pub type Pin = terminal.PagePin
+pub type Pin = terminal.Pin
 
 pub type Point = terminal.Point
 

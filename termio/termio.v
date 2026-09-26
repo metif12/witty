@@ -743,7 +743,9 @@ pub fn (mut t Termio) jump_to_prompt(delta isize) ! {
 		defer {
 			t.renderer_state.mutex.unlock()
 		}
-		t.terminal.screens.active.scroll_delta_prompts(delta)
+		t.terminal.screens.active.scroll(terminal.ScrollDeltaPrompt{
+			delta: delta
+		})
 	}
 
 	t.renderer_wakeup.notify()!

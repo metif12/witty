@@ -38,7 +38,7 @@ pub fn (mut self ScreenInfo) draw(context cimgui.Context, open bool, mut screen 
 
 	cell_open := context.begin_window('Cell')
 	if cell_open {
-		self.cell_chooser.draw(context, screen.pages)
+		self.cell_chooser.draw(context, &screen.pages)
 	}
 	context.end_window()
 
@@ -175,8 +175,8 @@ pub fn internal_state_table(context cimgui.Context, screen &terminal.Screen) {
 	defer {
 		context.end_table()
 	}
-	page_bytes := usize(screen.pages.screen_rows.len) * usize(screen.pages.cols) * sizeof(terminal.CellData)
-	max_bytes := usize(screen.pages.rows + screen.pages.max_scrollback) * usize(screen.pages.cols) * sizeof(terminal.CellData)
+	page_bytes := screen.pages.page_size
+	max_bytes := screen.pages.max_size()
 	draw_screen_row(context, 'Memory Usage', '${page_bytes} bytes (${to_kibi_bytes(page_bytes)} KiB)')
 	draw_screen_row(context, 'Memory Limit', '${max_bytes} bytes (${to_kibi_bytes(max_bytes)} KiB)')
 	draw_screen_row(context, 'Viewport Location', screen.pages.viewport.str())

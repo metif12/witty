@@ -53,42 +53,171 @@ pub enum SelectionAdjustment as u8 {
 	end_of_line
 }
 
-// ============================================================
-// Selection methods
-// ============================================================
+pub struct SelectionUntrackedBounds {
+pub mut:
+	start Pin
+	end   Pin
+}
+
+pub struct SelectionTrackedBounds {
+pub mut:
+	start &Pin = unsafe { nil }
+	end   &Pin = unsafe { nil }
+}
+
+pub type SelectionBounds = SelectionTrackedBounds | SelectionUntrackedBounds
+
+pub struct Selection {
+pub mut:
+	bounds    SelectionBounds
+	rectangle bool
+}
+
+// Initialize a new selection with the given untracked bounds.
+pub fn Selection.init(start_pin Pin, end_pin Pin, rectangle bool) Selection {
+	return Selection{
+		bounds: SelectionUntrackedBounds{
+			start: start_pin
+			end: end_pin
+		}
+		rectangle: rectangle
+	}
+}
+
+pub fn (self Selection) deinit(mut s Screen) {
+	match self.bounds {
+		SelectionTrackedBounds {
+			s.pages.untrack_pin(self.bounds.start)
+			s.pages.untrack_pin(self.bounds.end)
+		}
+		SelectionUntrackedBounds {}
+	}
+}
 
 // Returns true if this selection is equal to another selection.
-pub fn (self &Selection) eql(other Selection) bool {
-	return self.start_pin.eql(other.start_pin)
-		&& self.end_pin.eql(other.end_pin)
+pub fn (self Selection) eql(other Selection) bool {
+	return self.start().eql(other.start()) && self.end().eql(other.end())
 		&& self.rectangle == other.rectangle
 }
 
+// The starting pin of the selection. This is NOT ordered.
+pub fn (mut self Selection) start_ptr() &Pin {
+	match mut self.bounds {
+		SelectionUntrackedBounds {
+			return &self.bounds.start
+		}
+		SelectionTrackedBounds {
+			return self.bounds.start
+		}
+	}
+}
+
+// The ending pin of the selection. This is NOT ordered.
+pub fn (mut self Selection) end_ptr() &Pin {
+	match mut self.bounds {
+		SelectionUntrackedBounds {
+			return &self.bounds.end
+		}
+		SelectionTrackedBounds {
+			return self.bounds.end
+		}
+	}
+}
+
+// The starting pin of the selection. This is NOT ordered.
+pub fn (self Selection) start() Pin {
+	return match self.bounds {
+		SelectionUntrackedBounds { self.bounds.start }
+		SelectionTrackedBounds { *self.bounds.start }
+	}
+}
+
+// The ending pin of the selection. This is NOT ordered.
+pub fn (self Selection) end() Pin {
+	return match self.bounds {
+		SelectionUntrackedBounds { self.bounds.end }
+		SelectionTrackedBounds { *self.bounds.end }
+	}
+}
+
+// Returns true if this is a tracked selection.
+pub fn (self &Selection) tracked() bool {
+	return self.bounds is SelectionTrackedBounds
+}
+
+// Convert this selection to a tracked selection. The receiver must be an
+// untracked selection.
+pub fn (self &Selection) track(mut s Screen) Selection {
+	assert !self.tracked()
+	tracked_start := s.pages.track_pin(self.start())
+	tracked_end := s.pages.track_pin(self.end())
+	return Selection{
+		bounds: SelectionTrackedBounds{
+			start: tracked_start
+			end: tracked_end
+		}
+		rectangle: self.rectangle
+	}
+}
+
+// Returns the top-left pin of the selection.
+pub fn (self Selection) top_left(s &Screen) Pin {
+	return match self.order(s) {
+		.forward { self.start() }
+		.reverse { self.end() }
+		.mirrored_forward {
+			mut p := self.start()
+			p.x = self.end().x
+			p
+		}
+		.mirrored_reverse {
+			mut p := self.end()
+			p.x = self.start().x
+			p
+		}
+	}
+}
+
+// Returns the bottom-right pin of the selection.
+pub fn (self Selection) bottom_right(s &Screen) Pin {
+	return match self.order(s) {
+		.forward { self.end() }
+		.reverse { self.start() }
+		.mirrored_forward {
+			mut p := self.end()
+			p.x = self.start().x
+			p
+		}
+		.mirrored_reverse {
+			mut p := self.start()
+			p.x = self.end().x
+			p
+		}
+	}
+}
+
 // Determine the order of the selection.
-pub fn (self &Selection) order(s &Screen) SelectionOrder {
-	start_pt := self.start_pin
-	end_pt := self.end_pin
+pub fn (self Selection) order(s &Screen) SelectionOrder {
+	start_pt := (s.pages.point_from_pin(.screen, self.start()) or {
+		panic('selection start is outside the page list')
+	}).coord()
+	end_pt := (s.pages.point_from_pin(.screen, self.end()) or {
+		panic('selection end is outside the page list')
+	}).coord()
 
 	if self.rectangle {
-		// Reverse (also handles single-column)
 		if start_pt.y > end_pt.y && start_pt.x >= end_pt.x {
 			return .reverse
 		}
 		if start_pt.y >= end_pt.y && start_pt.x > end_pt.x {
 			return .reverse
 		}
-
-		// Mirror, bottom-left to top-right
 		if start_pt.y > end_pt.y && start_pt.x < end_pt.x {
 			return .mirrored_reverse
 		}
-
-		// Mirror, top-right to bottom-left
 		if start_pt.y < end_pt.y && start_pt.x > end_pt.x {
 			return .mirrored_forward
 		}
-
-		// Forward
 		return .forward
 	}
 
@@ -104,63 +233,11 @@ pub fn (self &Selection) order(s &Screen) SelectionOrder {
 	return .reverse
 }
 
-// Returns the top left point of the selection.
-pub fn (self &Selection) top_left(s &Screen) Pin {
-	return match self.order(s) {
-		.forward {
-			self.start_pin
-		}
-		.reverse {
-			self.end_pin
-		}
-		.mirrored_forward {
-			Pin{
-				x: self.end_pin.x
-				y: self.start_pin.y
-			}
-		}
-		.mirrored_reverse {
-			Pin{
-				x: self.start_pin.x
-				y: self.end_pin.y
-			}
-		}
-	}
-}
-
-// Returns the bottom right point of the selection.
-pub fn (self &Selection) bottom_right(s &Screen) Pin {
-	return match self.order(s) {
-		.forward {
-			self.end_pin
-		}
-		.reverse {
-			self.start_pin
-		}
-		.mirrored_forward {
-			Pin{
-				x: self.start_pin.x
-				y: self.end_pin.y
-			}
-		}
-		.mirrored_reverse {
-			Pin{
-				x: self.end_pin.x
-				y: self.start_pin.y
-			}
-		}
-	}
-}
-
-// Returns the selection in the given order.
-//
-// The returned selection is always a new untracked selection.
-//
-// Note that only forward and reverse are useful desired orders for this
-// function. All other orders act as if forward order was desired.
-pub fn (self &Selection) ordered(s &Screen, desired SelectionOrder) Selection {
+// Returns the selection in the requested order. The returned selection is
+// always untracked.
+pub fn (self Selection) ordered(s &Screen, desired SelectionOrder) Selection {
 	if self.order(s) == desired {
-		return Selection.init(self.start_pin, self.end_pin, self.rectangle)
+		return Selection.init(self.start(), self.end(), self.rectangle)
 	}
 
 	tl := self.top_left(s)
@@ -172,227 +249,179 @@ pub fn (self &Selection) ordered(s &Screen, desired SelectionOrder) Selection {
 	}
 }
 
-// Returns true if the selection contains the given point.
-//
-// This recalculates top left and bottom right each call. If you have
-// many points to check, it is cheaper to do the containment logic
-// yourself and cache the topleft/bottomright.
-pub fn (self &Selection) contains(s &Screen, pin Pin) bool {
-	tl := self.top_left(s)
-	br := self.bottom_right(s)
-	p := pin
+// Returns true if the selection contains the given pin.
+pub fn (self Selection) contains(s &Screen, pin Pin) bool {
+	tl_pin := self.top_left(s)
+	br_pin := self.bottom_right(s)
+	tl := (s.pages.point_from_pin(.screen, tl_pin) or {
+		panic('selection top-left is outside the page list')
+	}).coord()
+	br := (s.pages.point_from_pin(.screen, br_pin) or {
+		panic('selection bottom-right is outside the page list')
+	}).coord()
+	p := (s.pages.point_from_pin(.screen, pin) or {
+		panic('selection test pin is outside the page list')
+	}).coord()
 
-	// If we're in rectangle select, we can short-circuit with an easy check
-	// here
 	if self.rectangle {
 		return p.y >= tl.y && p.y <= br.y && p.x >= tl.x && p.x <= br.x
 	}
-
-	// If tl/br are same line
 	if tl.y == br.y {
 		return p.y == tl.y && p.x >= tl.x && p.x <= br.x
 	}
-
-	// If on top line, just has to be left of X
 	if p.y == tl.y {
 		return p.x >= tl.x
 	}
-
-	// If on bottom line, just has to be right of X
 	if p.y == br.y {
 		return p.x <= br.x
 	}
-
-	// If between the top/bottom, always good.
 	return p.y > tl.y && p.y < br.y
 }
 
-// Get a selection for a single row in the screen. This will return null
-// if the row is not included in the selection.
-//
-// This is a very expensive operation. It has to traverse the linked list
-// of pages for the top-left, bottom-right, and the given pin to find
-// the coordinates. If you are calling this repeatedly, prefer
-// `contained_row_cached`.
-pub fn (self &Selection) contained_row(s &Screen, pin Pin) ?Selection {
+// Get the part of this selection contained by a single row.
+pub fn (self Selection) contained_row(s &Screen, pin Pin) ?Selection {
 	tl_pin := self.top_left(s)
 	br_pin := self.bottom_right(s)
-	tl := tl_pin
-	br := br_pin
-	p := pin
-
+	tl := (s.pages.point_from_pin(.screen, tl_pin) or {
+		panic('selection top-left is outside the page list')
+	}).coord()
+	br := (s.pages.point_from_pin(.screen, br_pin) or {
+		panic('selection bottom-right is outside the page list')
+	}).coord()
+	p := (s.pages.point_from_pin(.screen, pin) or {
+		panic('selection row pin is outside the page list')
+	}).coord()
 	return self.contained_row_cached(s, tl_pin, br_pin, pin, tl, br, p)
 }
 
-// Same as contained_row but useful if you're calling it repeatedly
-// so that the pins can be cached across calls. Advanced.
-pub fn (self &Selection) contained_row_cached(s &Screen, tl_pin Pin, br_pin Pin, pin Pin, tl Pin, br Pin, p Pin) ?Selection {
+// Same as contained_row, but accepts cached point coordinates for callers
+// iterating over many rows.
+pub fn (self Selection) contained_row_cached(s &Screen, tl_pin Pin, br_pin Pin, pin Pin, tl Coordinate, br Coordinate, p Coordinate) ?Selection {
 	if p.y < tl.y || p.y > br.y {
 		return none
 	}
 
-	// Rectangle case: we can return early as the x range will always be the
-	// same. We've already validated that the row is in the selection.
 	if self.rectangle {
-		return Selection.init(Pin{ x: tl.x, y: pin.y }, Pin{ x: br.x, y: pin.y }, true)
+		mut start := pin
+		start.x = tl.x
+		mut end := pin
+		end.x = br.x
+		return Selection.init(start, end, true)
 	}
 
 	if p.y == tl.y {
-		// If the selection is JUST this line, return it as-is.
 		if p.y == br.y {
 			return Selection.init(tl_pin, br_pin, false)
 		}
-
-		// Selection top-left line matches only.
-		return Selection.init(tl_pin, Pin{ x: s.pages.cols - 1, y: pin.y }, false)
+		mut end := pin
+		end.x = s.pages.cols - 1
+		return Selection.init(tl_pin, end, false)
 	}
 
-	// Row is our bottom selection, so we return the selection from the
-	// beginning of the line to the br. We know our selection is more than
-	// one line (due to conditionals above)
 	if p.y == br.y {
 		assert p.y != tl.y
-		return Selection.init(Pin{ x: 0, y: pin.y }, br_pin, false)
+		mut start := pin
+		start.x = 0
+		return Selection.init(start, br_pin, false)
 	}
 
-	// Row is somewhere between our selection lines so we return the full line.
-	return Selection.init(Pin{ x: 0, y: pin.y }, Pin{ x: s.pages.cols - 1, y: pin.y }, false)
+	mut start := pin
+	start.x = 0
+	mut end := pin
+	end.x = s.pages.cols - 1
+	return Selection.init(start, end, false)
 }
 
-// Adjust the selection by some given adjustment. An adjustment allows
-// a selection to be expanded slightly left, right, up, down, etc.
+// Adjust the selection by one logical movement.
 pub fn (mut self Selection) adjust(s &Screen, adjustment SelectionAdjustment) {
-	// Note that we always adjust "end" because end always represents
-	// the last point of the selection by mouse, not necessarily the
-	// top/bottom visually. So this results in the correct behavior
-	// whether the user drags up or down.
+	mut end_pin := self.end_ptr()
 	match adjustment {
 		.up {
-			if new_end := self.end_pin.up(1) {
-				self.end_pin = new_end
+			if new_end := end_pin.up(1) {
+				unsafe { *end_pin = new_end }
 			} else {
 				self.adjust(s, .beginning_of_line)
 			}
 		}
 		.down {
-			// Find the next non-blank row
-			mut current := self.end_pin
+			mut current := *end_pin
 			mut found := false
 			for {
 				next := current.down(1) or { break }
-				if int(next.y) >= s.pages.screen_rows.len {
-					break
-				}
-				row := s.pages.screen_rows[int(next.y)]
-				if has_text_any(row.cells) {
-					self.end_pin = next
+				rac := next.row_and_cell()
+				cells := next.node.data.get_cells(rac.row)
+				if has_text_any(cells) {
+					unsafe { *end_pin = next }
 					found = true
 					break
 				}
 				current = next
 			}
 			if !found {
-				// If we're at the bottom, just go to the end of the line
 				self.adjust(s, .end_of_line)
 			}
 		}
 		.left {
-			// Step left, wrapping to the previous row at the end of each line,
-			// until we find a non-empty cell.
-			mut cx := int(self.end_pin.x) - 1
-			mut cy := int(self.end_pin.y)
+			mut it := end_pin.cell_iterator(.left_up, none)
+			_ = it.next()
 			for {
-				if cx < 0 {
-					cy -= 1
-					if cy < 0 {
-						break
-					}
-					cx = int(s.pages.cols) - 1
+				next := it.next() or { break }
+				if next.row_and_cell().cell.has_text() {
+					unsafe { *end_pin = next }
+					break
 				}
-				if cy < s.pages.screen_rows.len {
-					row := s.pages.screen_rows[cy]
-					if cx < row.cells.len {
-						cell := row.cells[cx]
-						if cell.has_text() {
-							self.end_pin = Pin{
-								x: u32(cx)
-								y: u32(cy)
-							}
-							break
-						}
-					}
-				}
-				cx -= 1
 			}
 		}
 		.right {
-			// Step right, wrapping to the next row down at the start of each new line,
-			// until we find a non-empty cell.
-			mut cx := int(self.end_pin.x) + 1
-			mut cy := int(self.end_pin.y)
-			mut found := false
+			mut it := end_pin.cell_iterator(.right_down, none)
+			_ = it.next()
 			for {
-				if cx >= int(s.pages.cols) {
-					cy += 1
-					cx = 0
-				}
-				if cy >= s.pages.screen_rows.len {
+				next := it.next() or { break }
+				if next.row_and_cell().cell.has_text() {
+					unsafe { *end_pin = next }
 					break
 				}
-				row := s.pages.screen_rows[cy]
-				if cx < row.cells.len {
-					cell := row.cells[cx]
-					if cell.has_text() {
-						self.end_pin = Pin{
-							x: u32(cx)
-							y: u32(cy)
-						}
-						found = true
-						break
-					}
-				}
-				cx += 1
 			}
-			// If we didn't find anything, don't move
-			_ = found
 		}
 		.page_up {
-			if new_end := self.end_pin.up(s.pages.rows) {
-				self.end_pin = new_end
+			if new_end := end_pin.up(usize(s.pages.rows)) {
+				unsafe { *end_pin = new_end }
 			} else {
 				self.adjust(s, .home)
 			}
 		}
 		.page_down {
-			if new_end := self.end_pin.down(s.pages.rows) {
-				self.end_pin = new_end
+			if new_end := end_pin.down(usize(s.pages.rows)) {
+				unsafe { *end_pin = new_end }
 			} else {
 				self.adjust(s, .end_)
 			}
 		}
 		.home {
-			self.end_pin = Pin{ x: 0, y: 0 }
+			new_end := s.pages.pin(Point{
+				tag: .screen
+				coordinate: Coordinate{}
+			}) or { panic('page list has no home pin') }
+			unsafe { *end_pin = new_end }
 		}
 		.end_ {
-			// Find the last row with text content, scanning from the bottom
-			mut cy := s.pages.screen_rows.len - 1
-			for cy >= 0 {
-				row := s.pages.screen_rows[cy]
-				if has_text_any(row.cells) {
-					self.end_pin = Pin{
-						x: u32(row.cells.len - 1)
-						y: u32(cy)
-					}
+			mut it := s.pages.row_iterator(.left_up, Point{ tag: .screen }, none)
+			for {
+				next := it.next() or { break }
+				rac := next.row_and_cell()
+				cells := next.node.data.get_cells(rac.row)
+				if has_text_any(cells) {
+					unsafe { *end_pin = next }
+					end_pin.x = u16(cells.len - 1)
 					break
 				}
-				cy -= 1
 			}
 		}
 		.beginning_of_line {
-			self.end_pin.x = 0
+			end_pin.x = 0
 		}
 		.end_of_line {
-			self.end_pin.x = s.pages.cols - 1
+			end_pin.x = end_pin.node.data.size.cols - 1
 		}
 	}
 }

@@ -24,7 +24,7 @@ module terminal
 //   PageNode          - A node in the page linked list
 //   PageNodeList      - Doubly-linked list of page nodes
 //   PageList          - Full page list with iterators
-//   PagePin           - A position pin within the page list
+//   Pin           - A position pin within the page list
 //
 // == Selection (from selection.v) ==
 //   Selection         - Text selection with ordering and containment

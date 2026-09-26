@@ -92,37 +92,16 @@ pub type PlacementLocation = PlacementPin | PlacementVirtual
 // Exactly placed on a screen pin.
 pub struct PlacementPin {
 pub:
-	pin terminal.Pin
+	pin &terminal.Pin = unsafe { nil }
 }
 
 // Virtual placement (U=1) for unicode placeholders.
 pub struct PlacementVirtual {}
 
-// Deinitialize the placement, untracking the pin if necessary.
-//
-// In Zig this is:
-//   switch (self.location) {
-//       .pin => |p| s.pages.untrackPin(p),
-//       .virtual => {},
-//   }
-// where `p` is a *PageList.Pin, i.e. a heap-allocated pin registered in
-// the page list's tracked-pin set.
-pub fn (self &Placement) deinit(s &terminal.Screen) {
+pub fn (self &Placement) deinit(mut s terminal.Screen) {
 	match self.location {
-		PlacementPin {
-			// Untrack the pin so the page list stops keeping it up to date
-			// across scroll/resize. NOTE: in this witty terminal model a
-			// PlacementPin holds a flat `terminal.Pin` *value* rather than a
-			// pointer into the page list's tracked-pin registry, so there is
-			// no per-pin tracking node to remove here. This branch exists to
-			// mirror the Zig structure and is the single place that must be
-			// updated to call `s.pages.untrack_pin(...)` if/when placements
-			// migrate to tracked PagePins.
-			_ = s
-		}
-		PlacementVirtual {
-			// Virtual placements are never tracked.
-		}
+		PlacementPin { s.pages.untrack_pin(self.location.pin) }
+		PlacementVirtual {}
 	}
 }
 
@@ -214,38 +193,24 @@ pub fn (self &Placement) rect(image Image, t &terminal.Terminal) ?Rect {
 	grid_cols, grid_rows := self.grid_size(image, t)
 
 	pin := match self.location {
-		PlacementPin {
-			self.location.pin
-		}
-		PlacementVirtual {
-			return none
-		}
+		PlacementPin { self.location.pin }
+		PlacementVirtual { return none }
 	}
 
-	// Calculate the bottom-right pin. In Zig this is done with
-	// `pin.downOverflow(rows - 1)`: moving down `rows-1` rows and, if that
-	// would run past the end of the page list, clamping to the very last
-	// row (the `.overflow => v.end` branch). Here the flat Pin model uses
-	// `pages.screen_rows` as the row backing store, so overflow means
-	// clamping `br_y` to the index of the last existing row.
-	last_row := u32(t.screens.active.pages.screen_rows.len)
-	mut br_y := pin.y + grid_rows - 1
-	if last_row > 0 && br_y > last_row - 1 {
-		// downOverflow: clamp to the last available row.
-		br_y = last_row - 1
+	overflow := pin.down_overflow(usize(grid_rows) - 1)
+	mut br := match overflow {
+		terminal.DownOverflowOffset { overflow.pin }
+		terminal.DownOverflowOverflow { overflow.end }
 	}
-
-	// We need to sub one here because the x value is one width already. So
-	// if the image is width "1" then we add zero to X because X itself is
-	// width 1.
-	br_x := math.min(pin.x + grid_cols - 1, u32(t.cols) - 1)
+	br.x = u16(math.min(
+		// We need to sub one here because the x value is
+		// one width already. So if the image is width "1"
+		// then we add zero to X because X itself is width 1.
+		u32(pin.x) + (grid_cols - 1), u32(t.cols) - 1))
 
 	return Rect{
-		top_left: pin
-		bottom_right: terminal.Pin{
-			x: br_x
-			y: br_y
-		}
+		top_left:     *pin
+		bottom_right: br
 	}
 }
 
@@ -301,7 +266,7 @@ pub mut:
 }
 
 // Deinitialize the storage, freeing all images and placements.
-pub fn (mut self ImageStorage) deinit(s &terminal.Screen) {
+pub fn (mut self ImageStorage) deinit(mut s terminal.Screen) {
 	if mut loading := self.loading {
 		loading.destroy()
 	}
@@ -311,7 +276,7 @@ pub fn (mut self ImageStorage) deinit(s &terminal.Screen) {
 	}
 	self.images = map[u32]Image{}
 
-	self.clear_placements(s)
+	self.clear_placements(mut s)
 	self.placements = []
 }
 
@@ -324,10 +289,10 @@ pub fn (self &ImageStorage) enabled() bool {
 // can be loaded. If this limit is lower, this will do an eviction
 // if necessary. If the value is zero, then Kitty image protocol will
 // be disabled.
-pub fn (mut self ImageStorage) set_limit(s &terminal.Screen, limit usize) {
+pub fn (mut self ImageStorage) set_limit(mut s terminal.Screen, limit usize) {
 	// Special case disabling by quickly deleting all
 	if limit == 0 {
-		self.deinit(s)
+		self.deinit(mut s)
 		self.images = map[u32]Image{}
 		self.placements = []
 		self.loading = none
@@ -415,16 +380,16 @@ pub fn (mut self ImageStorage) add_placement(image_id u32, placement_id u32, p P
 	self.dirty = true
 }
 
-fn (mut self ImageStorage) clear_placements(s &terminal.Screen) {
+fn (mut self ImageStorage) clear_placements(mut s terminal.Screen) {
 	for entry in self.placements {
-		entry.value.deinit(s)
+		entry.value.deinit(mut s)
 	}
 	self.placements.clear()
 }
 
 // Clear all pin-anchored placements. Virtual placements remain until they are
 // explicitly deleted, matching Kitty's delete-all semantics.
-pub fn (mut self ImageStorage) clear_screen_images(s &terminal.Screen) {
+pub fn (mut self ImageStorage) clear_screen_images(mut s terminal.Screen) {
 	mut i := 0
 	for i < self.placements.len {
 		entry := self.placements[i]
@@ -434,7 +399,7 @@ pub fn (mut self ImageStorage) clear_screen_images(s &terminal.Screen) {
 		}
 
 		image_id := entry.key.image_id
-		entry.value.deinit(s)
+		entry.value.deinit(mut s)
 		self.placements.delete(i)
 		self.delete_if_unused(image_id)
 	}
@@ -475,7 +440,7 @@ pub fn (self &ImageStorage) image_by_number(image_number u32) ?Image {
 }
 
 // Delete placements, images.
-pub fn (mut self ImageStorage) delete(t &terminal.Terminal, cmd FullDelete) {
+pub fn (mut self ImageStorage) delete(mut t terminal.Terminal, cmd FullDelete) {
 	match cmd.kind {
 		.all {
 			delete_images := match cmd.data {
@@ -488,7 +453,7 @@ pub fn (mut self ImageStorage) delete(t &terminal.Terminal, cmd FullDelete) {
 			}
 
 			if delete_images {
-				self.clear_screen_images(t.screens.active)
+				self.clear_screen_images(mut t.screens.active)
 			} else {
 				// Iterate placements, removing non-virtual ones.
 				mut i := 0
@@ -498,7 +463,7 @@ pub fn (mut self ImageStorage) delete(t &terminal.Terminal, cmd FullDelete) {
 						i++
 						continue
 					}
-					entry.value.deinit(t.screens.active)
+					entry.value.deinit(mut t.screens.active)
 					self.placements.delete(i)
 				}
 				self.dirty = true
@@ -506,12 +471,12 @@ pub fn (mut self ImageStorage) delete(t &terminal.Terminal, cmd FullDelete) {
 		}
 		.id {
 			v := cmd.data as DeleteById
-			self.delete_by_id(t.screens.active, v.image_id, v.placement_id, v.delete)
+			self.delete_by_id(mut t.screens.active, v.image_id, v.placement_id, v.delete)
 		}
 		.newest {
 			v := cmd.data as DeleteByNewest
 			img := self.image_by_number(v.image_number) or { return }
-			self.delete_by_id(t.screens.active, img.id, v.placement_id, v.delete)
+			self.delete_by_id(mut t.screens.active, img.id, v.placement_id, v.delete)
 		}
 		.intersect_cursor {
 			delete_images_flag := match cmd.data {
@@ -522,34 +487,45 @@ pub fn (mut self ImageStorage) delete(t &terminal.Terminal, cmd FullDelete) {
 					false
 				}
 			}
-			self.delete_intersecting(t, terminal.Pin{
-				x: t.screens.active.cursor.x
-				y: u32(t.screens.active.pages.active_start) + t.screens.active.cursor.y
-			}, delete_images_flag)
+			self.delete_intersecting(mut t, terminal.Point{
+				tag:        .active
+				coordinate: terminal.Coordinate{
+					x: u16(t.screens.active.cursor.x)
+					y: t.screens.active.cursor.y
+				}
+			}, delete_images_flag, none)
 		}
 		.intersect_cell {
 			v := cmd.data as DeleteIntersectCell
 			if v.x <= 0 || v.y <= 0 {
 				return
 			}
-			pin := t.screens.active.pages.pin(terminal.PinOpts{
-				tag: .active
-				x: v.x - 1
-				y: v.y - 1
-			}) or { return }
-			self.delete_intersecting(t, pin, v.delete)
+			if v.x - 1 > max_u16 || v.y - 1 > max_u16 {
+				return
+			}
+			self.delete_intersecting(mut t, terminal.Point{
+				tag:        .active
+				coordinate: terminal.Coordinate{
+					x: u16(v.x - 1)
+					y: v.y - 1
+				}
+			}, v.delete, none)
 		}
 		.intersect_cell_z {
 			v := cmd.data as DeleteIntersectCellZ
 			if v.x <= 0 || v.y <= 0 {
 				return
 			}
-			pin := t.screens.active.pages.pin(terminal.PinOpts{
-				tag: .active
-				x: v.x - 1
-				y: v.y - 1
-			}) or { return }
-			self.delete_intersecting_z(t, pin, v.delete, v.z)
+			if v.x - 1 > max_u16 || v.y - 1 > max_u16 {
+				return
+			}
+			self.delete_intersecting(mut t, terminal.Point{
+				tag:        .active
+				coordinate: terminal.Coordinate{
+					x: u16(v.x - 1)
+					y: v.y - 1
+				}
+			}, v.delete, v.z)
 		}
 		.column {
 			v := cmd.data as DeleteColumn
@@ -569,7 +545,7 @@ pub fn (mut self ImageStorage) delete(t &terminal.Terminal, cmd FullDelete) {
 					continue
 				}
 				if r.top_left.x <= x && r.bottom_right.x >= x {
-					entry.value.deinit(t.screens.active)
+					entry.value.deinit(mut t.screens.active)
 					self.placements.delete(i)
 					if v.delete {
 						self.delete_if_unused(img.id)
@@ -585,9 +561,16 @@ pub fn (mut self ImageStorage) delete(t &terminal.Terminal, cmd FullDelete) {
 			if v.y <= 0 {
 				return
 			}
-			target_pin := t.screens.active.pages.pin(terminal.PinOpts{
-				tag: .active
-				y: v.y - 1
+			// v.y is in active coords so we want to convert it to a pin
+			// so we can compare by page offsets.
+			if v.y - 1 > max_u16 {
+				return
+			}
+			target_pin := t.screens.active.pages.pin(terminal.Point{
+				tag:        .active
+				coordinate: terminal.Coordinate{
+					y: v.y - 1
+				}
 			}) or { return }
 
 			mut i := 0
@@ -601,13 +584,12 @@ pub fn (mut self ImageStorage) delete(t &terminal.Terminal, cmd FullDelete) {
 					i++
 					continue
 				}
-				// Check if the target row falls within the placement rect
-				check_pin := terminal.Pin{
-					x: r.top_left.x
-					y: target_pin.y
-				}
-				if is_pin_between(check_pin, r.top_left, r.bottom_right) {
-					entry.value.deinit(t.screens.active)
+				// We need to copy our pin to ensure we are at least at
+				// the top-left x.
+				mut target_pin_copy := target_pin
+				target_pin_copy.x = r.top_left.x
+				if target_pin_copy.is_between(r.top_left, r.bottom_right) {
+					entry.value.deinit(mut t.screens.active)
 					self.placements.delete(i)
 					if v.delete {
 						self.delete_if_unused(img.id)
@@ -630,7 +612,7 @@ pub fn (mut self ImageStorage) delete(t &terminal.Terminal, cmd FullDelete) {
 				}
 				if entry.value.z == v.z {
 					image_id := entry.key.image_id
-					entry.value.deinit(t.screens.active)
+					entry.value.deinit(mut t.screens.active)
 					self.placements.delete(i)
 					if v.delete {
 						self.delete_if_unused(image_id)
@@ -654,7 +636,7 @@ pub fn (mut self ImageStorage) delete(t &terminal.Terminal, cmd FullDelete) {
 				entry := self.placements[i]
 				if entry.key.image_id >= v.first || entry.key.image_id <= v.last {
 					image_id := entry.key.image_id
-					entry.value.deinit(t.screens.active)
+					entry.value.deinit(mut t.screens.active)
 					self.placements.delete(i)
 					if v.delete {
 						self.delete_if_unused(image_id)
@@ -671,14 +653,14 @@ pub fn (mut self ImageStorage) delete(t &terminal.Terminal, cmd FullDelete) {
 	}
 }
 
-fn (mut self ImageStorage) delete_by_id(s &terminal.Screen, image_id u32, placement_id u32, delete_unused bool) {
+fn (mut self ImageStorage) delete_by_id(mut s terminal.Screen, image_id u32, placement_id u32, delete_unused bool) {
 	// If no placement, we delete all placements with the ID
 	if placement_id == 0 {
 		mut i := 0
 		for i < self.placements.len {
 			entry := self.placements[i]
 			if entry.key.image_id == image_id {
-				entry.value.deinit(s)
+				entry.value.deinit(mut s)
 				self.placements.delete(i)
 			} else {
 				i++
@@ -692,7 +674,7 @@ fn (mut self ImageStorage) delete_by_id(s &terminal.Screen, image_id u32, placem
 		mut i := 0
 		for i < self.placements.len {
 			if self.placements[i].key == target_key {
-				self.placements[i].value.deinit(s)
+				self.placements[i].value.deinit(mut s)
 				self.placements.delete(i)
 			} else {
 				i++
@@ -728,8 +710,13 @@ fn (mut self ImageStorage) delete_if_unused(image_id u32) {
 	}
 }
 
-// Deletes all placements intersecting a screen point.
-fn (mut self ImageStorage) delete_intersecting(t &terminal.Terminal, target_pin terminal.Pin, delete_unused bool) {
+// Deletes all placements intersecting a screen point. `z` is the
+// intersect_cell_z filter context: when set, only placements at that
+// z-index are deleted.
+fn (mut self ImageStorage) delete_intersecting(mut t terminal.Terminal, p terminal.Point, delete_unused bool, z ?i32) {
+	// Convert our target point to a pin for comparison.
+	target_pin := t.screens.active.pages.pin(p) or { return }
+
 	mut i := 0
 	for i < self.placements.len {
 		entry := self.placements[i]
@@ -741,8 +728,14 @@ fn (mut self ImageStorage) delete_intersecting(t &terminal.Terminal, target_pin 
 			i++
 			continue
 		}
-		if is_pin_between(target_pin, r.top_left, r.bottom_right) {
-			entry.value.deinit(t.screens.active)
+		if target_pin.is_between(r.top_left, r.bottom_right) {
+			if filter_z := z {
+				if entry.value.z != filter_z {
+					i++
+					continue
+				}
+			}
+			entry.value.deinit(mut t.screens.active)
 			self.placements.delete(i)
 			if delete_unused {
 				self.delete_if_unused(img.id)
@@ -751,36 +744,8 @@ fn (mut self ImageStorage) delete_intersecting(t &terminal.Terminal, target_pin 
 			i++
 		}
 	}
-	self.dirty = true
-}
 
-// Deletes all placements intersecting a screen point with a specific z-index.
-fn (mut self ImageStorage) delete_intersecting_z(t &terminal.Terminal, target_pin terminal.Pin, delete_unused bool, z i32) {
-	mut i := 0
-	for i < self.placements.len {
-		entry := self.placements[i]
-		img := self.image_by_id(entry.key.image_id) or {
-			i++
-			continue
-		}
-		r := entry.value.rect(img, t) or {
-			i++
-			continue
-		}
-		if is_pin_between(target_pin, r.top_left, r.bottom_right) {
-			if entry.value.z == z {
-				entry.value.deinit(t.screens.active)
-				self.placements.delete(i)
-				if delete_unused {
-					self.delete_if_unused(img.id)
-				}
-			} else {
-				i++
-			}
-		} else {
-			i++
-		}
-	}
+	// Mark dirty to force redraw
 	self.dirty = true
 }
 
@@ -899,18 +864,10 @@ struct EvictCandidate {
 // Helpers
 // ============================================================
 
-// Check if a pin is between two other pins (inclusive).
-// For the simplified Pin model (y-based ordering).
-fn is_pin_between(p terminal.Pin, top terminal.Pin, bottom terminal.Pin) bool {
-	// p must be >= top and <= bottom
-	if p.y < top.y || p.y > bottom.y {
-		return false
-	}
-	if p.y == top.y && p.x < top.x {
-		return false
-	}
-	if p.y == bottom.y && p.x > bottom.x {
-		return false
-	}
-	return true
+// Our pin for the placement
+fn track_pin(mut t terminal.Terminal, pt terminal.Coordinate) &terminal.Pin {
+	return t.screens.active.pages.track_pin(t.screens.active.pages.pin(terminal.Point{
+		tag:        .active
+		coordinate: pt
+	}) or { panic('placement point is outside the active area') })
 }
