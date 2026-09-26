@@ -1119,13 +1119,33 @@ pub fn new_split_tree_split(split_tree &SplitTreeWidget, handle datastruct.Handl
 	C.g_signal_connect_data(self.paned, c'notify::position', GCallback(voidptr(split_tree_split_changed_cb)), voidptr(self), unsafe { nil }, 0)
 	C.g_signal_connect_data(self.paned, c'notify::max-position', GCallback(voidptr(split_tree_split_changed_cb)), voidptr(self), unsafe { nil }, 0)
 	C.g_signal_connect_data(self.paned, c'notify::min-position', GCallback(voidptr(split_tree_split_changed_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.widget, c'destroy', GCallback(voidptr(split_tree_split_destroy_cb)), voidptr(self), unsafe { nil }, 0)
 	self.refresh()
 
 	return self
 }
 
+// The split's widget is disposed when a rebuild replaces it. The source's
+// `dispose` removes any pending idle source here so `onIdle` never runs
+// against the torn-down paned; GTK emits `destroy` from the widget's dispose.
+fn split_tree_split_destroy_cb(widget voidptr, data voidptr) {
+	if isnil(data) {
+		return
+	}
+	mut self := unsafe { &SplitTreeSplit(data) }
+	if self.idle != 0 {
+		C.g_source_remove(self.idle)
+		self.idle = 0
+	}
+	self.paned = unsafe { nil }
+}
+
 // refresh schedules an idle reposition of the split. Mirrors `refresh`.
 fn (mut self SplitTreeSplit) refresh() {
+	// Disposed: the paned is gone and no reposition is needed.
+	if isnil(self.paned) {
+		return
+	}
 	if self.idle == 0 {
 		self.idle = C.g_idle_add(voidptr(split_tree_split_idle_cb), self)
 	}
