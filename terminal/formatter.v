@@ -757,7 +757,7 @@ pub:
 
 // Common encoding options regardless of what exact formatter is used.
 pub struct FormatOptions {
-pub:
+pub mut:
 	// The format to emit.
 	emit Format = .plain
 	// Whether to unwrap soft-wrapped lines. If false, this will emit the
@@ -1448,9 +1448,9 @@ pub struct PageFormatter {
 pub:
 	// The page data to format.
 	pages &Pages
+pub mut:
 	// The common options
 	opts FormatOptions
-pub mut:
 	// Start and end points within the page to format.
 	// Start and end are both inclusive.
 	start_x u32
