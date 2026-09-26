@@ -147,10 +147,10 @@ fn binding_modifier_count(binding PrettyBinding) int {
 }
 
 fn trigger_key_order(trigger input.Trigger) int {
-	return match trigger.key.typ {
-		.physical { int(trigger.key.physical) }
-		.unicode { int(trigger.key.unicode) }
-		.catch_all { 0x7fffffff }
+	return match trigger.key {
+		input.TriggerKeyPhysical { int(trigger.key.key) }
+		input.TriggerKeyUnicode { int(trigger.key.codepoint) }
+		input.TriggerKeyCatchAll { 0x7fffffff }
 	}
 }
 
@@ -197,10 +197,10 @@ fn pretty_binding_compare(lhs &PrettyBinding, rhs &PrettyBinding) int {
 }
 
 fn trigger_key_text(trigger input.Trigger) string {
-	return match trigger.key.typ {
-		.physical { trigger.key.physical.key_name() }
-		.unicode { rune(trigger.key.unicode).str() }
-		.catch_all { 'catch_all' }
+	return match trigger.key {
+		input.TriggerKeyPhysical { trigger.key.key.key_name() }
+		input.TriggerKeyUnicode { rune(trigger.key.codepoint).str() }
+		input.TriggerKeyCatchAll { 'catch_all' }
 	}
 }
 

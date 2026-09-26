@@ -5550,7 +5550,7 @@ fn (mut self Surface) deactivate_all_key_tables() !bool {
 
 fn (self &Surface) catch_all_is_ignore() bool {
 	trigger := input.Trigger{
-		key: input.TriggerKey.new_catch_all()
+		key: input.TriggerKeyCatchAll{}
 	}
 	for i := self.keyboard.table_stack.len - 1; i >= 0; i-- {
 		if entry := self.keyboard.table_stack[i].set.get(trigger) {

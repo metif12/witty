@@ -1152,123 +1152,346 @@ const key_name_map = {
 }
 
 // backwards_compatible_key looks up old key names (Ghostty <= 1.1.x) and returns TriggerKey values.
-// Unicode variants map to TriggerKey.unicode, physical variants to TriggerKey.physical.
+// Unicode variants map to TriggerKeyUnicode, physical variants to TriggerKeyPhysical.
 fn backwards_compatible_key(part string) ?TriggerKey {
-	return match part {
-		'zero' { TriggerKey{ typ: .unicode, unicode: u32(`0`) } }
-		'one' { TriggerKey{ typ: .unicode, unicode: u32(`1`) } }
-		'two' { TriggerKey{ typ: .unicode, unicode: u32(`2`) } }
-		'three' { TriggerKey{ typ: .unicode, unicode: u32(`3`) } }
-		'four' { TriggerKey{ typ: .unicode, unicode: u32(`4`) } }
-		'five' { TriggerKey{ typ: .unicode, unicode: u32(`5`) } }
-		'six' { TriggerKey{ typ: .unicode, unicode: u32(`6`) } }
-		'seven' { TriggerKey{ typ: .unicode, unicode: u32(`7`) } }
-		'eight' { TriggerKey{ typ: .unicode, unicode: u32(`8`) } }
-		'nine' { TriggerKey{ typ: .unicode, unicode: u32(`9`) } }
-		'plus' { TriggerKey{ typ: .unicode, unicode: u32(`+`) } }
-		'apostrophe' { TriggerKey{ typ: .unicode, unicode: u32(`'`) } }
-		'grave_accent' { TriggerKey{ typ: .physical, physical: .backquote } }
-		'left_bracket' { TriggerKey{ typ: .physical, physical: .bracket_left } }
-		'right_bracket' { TriggerKey{ typ: .physical, physical: .bracket_right } }
-		'up' { TriggerKey{ typ: .physical, physical: .arrow_up } }
-		'down' { TriggerKey{ typ: .physical, physical: .arrow_down } }
-		'left' { TriggerKey{ typ: .physical, physical: .arrow_left } }
-		'right' { TriggerKey{ typ: .physical, physical: .arrow_right } }
-		'kp_0' { TriggerKey{ typ: .physical, physical: .numpad_0 } }
-		'kp_1' { TriggerKey{ typ: .physical, physical: .numpad_1 } }
-		'kp_2' { TriggerKey{ typ: .physical, physical: .numpad_2 } }
-		'kp_3' { TriggerKey{ typ: .physical, physical: .numpad_3 } }
-		'kp_4' { TriggerKey{ typ: .physical, physical: .numpad_4 } }
-		'kp_5' { TriggerKey{ typ: .physical, physical: .numpad_5 } }
-		'kp_6' { TriggerKey{ typ: .physical, physical: .numpad_6 } }
-		'kp_7' { TriggerKey{ typ: .physical, physical: .numpad_7 } }
-		'kp_8' { TriggerKey{ typ: .physical, physical: .numpad_8 } }
-		'kp_9' { TriggerKey{ typ: .physical, physical: .numpad_9 } }
-		'kp_add' { TriggerKey{ typ: .physical, physical: .numpad_add } }
-		'kp_subtract' { TriggerKey{ typ: .physical, physical: .numpad_subtract } }
-		'kp_multiply' { TriggerKey{ typ: .physical, physical: .numpad_multiply } }
-		'kp_divide' { TriggerKey{ typ: .physical, physical: .numpad_divide } }
-		'kp_decimal' { TriggerKey{ typ: .physical, physical: .numpad_decimal } }
-		'kp_enter' { TriggerKey{ typ: .physical, physical: .numpad_enter } }
-		'kp_equal' { TriggerKey{ typ: .physical, physical: .numpad_equal } }
-		'kp_separator' { TriggerKey{ typ: .physical, physical: .numpad_separator } }
-		'kp_left' { TriggerKey{ typ: .physical, physical: .numpad_left } }
-		'kp_right' { TriggerKey{ typ: .physical, physical: .numpad_right } }
-		'kp_up' { TriggerKey{ typ: .physical, physical: .numpad_up } }
-		'kp_down' { TriggerKey{ typ: .physical, physical: .numpad_down } }
-		'kp_page_up' { TriggerKey{ typ: .physical, physical: .numpad_page_up } }
-		'kp_page_down' { TriggerKey{ typ: .physical, physical: .numpad_page_down } }
-		'kp_home' { TriggerKey{ typ: .physical, physical: .numpad_home } }
-		'kp_end' { TriggerKey{ typ: .physical, physical: .numpad_end } }
-		'kp_insert' { TriggerKey{ typ: .physical, physical: .numpad_insert } }
-		'kp_delete' { TriggerKey{ typ: .physical, physical: .numpad_delete } }
-		'kp_begin' { TriggerKey{ typ: .physical, physical: .numpad_begin } }
-		'left_shift' { TriggerKey{ typ: .physical, physical: .shift_left } }
-		'right_shift' { TriggerKey{ typ: .physical, physical: .shift_right } }
-		'left_control' { TriggerKey{ typ: .physical, physical: .control_left } }
-		'right_control' { TriggerKey{ typ: .physical, physical: .control_right } }
-		'left_alt' { TriggerKey{ typ: .physical, physical: .alt_left } }
-		'right_alt' { TriggerKey{ typ: .physical, physical: .alt_right } }
-		'left_super' { TriggerKey{ typ: .physical, physical: .meta_left } }
-		'right_super' { TriggerKey{ typ: .physical, physical: .meta_right } }
+	match part {
+		'zero' {
+			return TriggerKeyUnicode{ codepoint: u32(`0`) }
+		}
+		'one' {
+			return TriggerKeyUnicode{ codepoint: u32(`1`) }
+		}
+		'two' {
+			return TriggerKeyUnicode{ codepoint: u32(`2`) }
+		}
+		'three' {
+			return TriggerKeyUnicode{ codepoint: u32(`3`) }
+		}
+		'four' {
+			return TriggerKeyUnicode{ codepoint: u32(`4`) }
+		}
+		'five' {
+			return TriggerKeyUnicode{ codepoint: u32(`5`) }
+		}
+		'six' {
+			return TriggerKeyUnicode{ codepoint: u32(`6`) }
+		}
+		'seven' {
+			return TriggerKeyUnicode{ codepoint: u32(`7`) }
+		}
+		'eight' {
+			return TriggerKeyUnicode{ codepoint: u32(`8`) }
+		}
+		'nine' {
+			return TriggerKeyUnicode{ codepoint: u32(`9`) }
+		}
+		'plus' {
+			return TriggerKeyUnicode{ codepoint: u32(`+`) }
+		}
+		'apostrophe' {
+			return TriggerKeyUnicode{ codepoint: u32(`'`) }
+		}
+		'grave_accent' {
+			return TriggerKeyPhysical{ key: .backquote }
+		}
+		'left_bracket' {
+			return TriggerKeyPhysical{ key: .bracket_left }
+		}
+		'right_bracket' {
+			return TriggerKeyPhysical{ key: .bracket_right }
+		}
+		'up' {
+			return TriggerKeyPhysical{ key: .arrow_up }
+		}
+		'down' {
+			return TriggerKeyPhysical{ key: .arrow_down }
+		}
+		'left' {
+			return TriggerKeyPhysical{ key: .arrow_left }
+		}
+		'right' {
+			return TriggerKeyPhysical{ key: .arrow_right }
+		}
+		'kp_0' {
+			return TriggerKeyPhysical{ key: .numpad_0 }
+		}
+		'kp_1' {
+			return TriggerKeyPhysical{ key: .numpad_1 }
+		}
+		'kp_2' {
+			return TriggerKeyPhysical{ key: .numpad_2 }
+		}
+		'kp_3' {
+			return TriggerKeyPhysical{ key: .numpad_3 }
+		}
+		'kp_4' {
+			return TriggerKeyPhysical{ key: .numpad_4 }
+		}
+		'kp_5' {
+			return TriggerKeyPhysical{ key: .numpad_5 }
+		}
+		'kp_6' {
+			return TriggerKeyPhysical{ key: .numpad_6 }
+		}
+		'kp_7' {
+			return TriggerKeyPhysical{ key: .numpad_7 }
+		}
+		'kp_8' {
+			return TriggerKeyPhysical{ key: .numpad_8 }
+		}
+		'kp_9' {
+			return TriggerKeyPhysical{ key: .numpad_9 }
+		}
+		'kp_add' {
+			return TriggerKeyPhysical{ key: .numpad_add }
+		}
+		'kp_subtract' {
+			return TriggerKeyPhysical{ key: .numpad_subtract }
+		}
+		'kp_multiply' {
+			return TriggerKeyPhysical{ key: .numpad_multiply }
+		}
+		'kp_divide' {
+			return TriggerKeyPhysical{ key: .numpad_divide }
+		}
+		'kp_decimal' {
+			return TriggerKeyPhysical{ key: .numpad_decimal }
+		}
+		'kp_enter' {
+			return TriggerKeyPhysical{ key: .numpad_enter }
+		}
+		'kp_equal' {
+			return TriggerKeyPhysical{ key: .numpad_equal }
+		}
+		'kp_separator' {
+			return TriggerKeyPhysical{ key: .numpad_separator }
+		}
+		'kp_left' {
+			return TriggerKeyPhysical{ key: .numpad_left }
+		}
+		'kp_right' {
+			return TriggerKeyPhysical{ key: .numpad_right }
+		}
+		'kp_up' {
+			return TriggerKeyPhysical{ key: .numpad_up }
+		}
+		'kp_down' {
+			return TriggerKeyPhysical{ key: .numpad_down }
+		}
+		'kp_page_up' {
+			return TriggerKeyPhysical{ key: .numpad_page_up }
+		}
+		'kp_page_down' {
+			return TriggerKeyPhysical{ key: .numpad_page_down }
+		}
+		'kp_home' {
+			return TriggerKeyPhysical{ key: .numpad_home }
+		}
+		'kp_end' {
+			return TriggerKeyPhysical{ key: .numpad_end }
+		}
+		'kp_insert' {
+			return TriggerKeyPhysical{ key: .numpad_insert }
+		}
+		'kp_delete' {
+			return TriggerKeyPhysical{ key: .numpad_delete }
+		}
+		'kp_begin' {
+			return TriggerKeyPhysical{ key: .numpad_begin }
+		}
+		'left_shift' {
+			return TriggerKeyPhysical{ key: .shift_left }
+		}
+		'right_shift' {
+			return TriggerKeyPhysical{ key: .shift_right }
+		}
+		'left_control' {
+			return TriggerKeyPhysical{ key: .control_left }
+		}
+		'right_control' {
+			return TriggerKeyPhysical{ key: .control_right }
+		}
+		'left_alt' {
+			return TriggerKeyPhysical{ key: .alt_left }
+		}
+		'right_alt' {
+			return TriggerKeyPhysical{ key: .alt_right }
+		}
+		'left_super' {
+			return TriggerKeyPhysical{ key: .meta_left }
+		}
+		'right_super' {
+			return TriggerKeyPhysical{ key: .meta_right }
+		}
 		// Physical variants
-		'physical:zero' { TriggerKey{ typ: .physical, physical: .digit_0 } }
-		'physical:one' { TriggerKey{ typ: .physical, physical: .digit_1 } }
-		'physical:two' { TriggerKey{ typ: .physical, physical: .digit_2 } }
-		'physical:three' { TriggerKey{ typ: .physical, physical: .digit_3 } }
-		'physical:four' { TriggerKey{ typ: .physical, physical: .digit_4 } }
-		'physical:five' { TriggerKey{ typ: .physical, physical: .digit_5 } }
-		'physical:six' { TriggerKey{ typ: .physical, physical: .digit_6 } }
-		'physical:seven' { TriggerKey{ typ: .physical, physical: .digit_7 } }
-		'physical:eight' { TriggerKey{ typ: .physical, physical: .digit_8 } }
-		'physical:nine' { TriggerKey{ typ: .physical, physical: .digit_9 } }
-		'physical:apostrophe' { TriggerKey{ typ: .physical, physical: .quote } }
-		'physical:grave_accent' { TriggerKey{ typ: .physical, physical: .backquote } }
-		'physical:left_bracket' { TriggerKey{ typ: .physical, physical: .bracket_left } }
-		'physical:right_bracket' { TriggerKey{ typ: .physical, physical: .bracket_right } }
-		'physical:up' { TriggerKey{ typ: .physical, physical: .arrow_up } }
-		'physical:down' { TriggerKey{ typ: .physical, physical: .arrow_down } }
-		'physical:left' { TriggerKey{ typ: .physical, physical: .arrow_left } }
-		'physical:right' { TriggerKey{ typ: .physical, physical: .arrow_right } }
-		'physical:kp_0' { TriggerKey{ typ: .physical, physical: .numpad_0 } }
-		'physical:kp_1' { TriggerKey{ typ: .physical, physical: .numpad_1 } }
-		'physical:kp_2' { TriggerKey{ typ: .physical, physical: .numpad_2 } }
-		'physical:kp_3' { TriggerKey{ typ: .physical, physical: .numpad_3 } }
-		'physical:kp_4' { TriggerKey{ typ: .physical, physical: .numpad_4 } }
-		'physical:kp_5' { TriggerKey{ typ: .physical, physical: .numpad_5 } }
-		'physical:kp_6' { TriggerKey{ typ: .physical, physical: .numpad_6 } }
-		'physical:kp_7' { TriggerKey{ typ: .physical, physical: .numpad_7 } }
-		'physical:kp_8' { TriggerKey{ typ: .physical, physical: .numpad_8 } }
-		'physical:kp_9' { TriggerKey{ typ: .physical, physical: .numpad_9 } }
-		'physical:kp_add' { TriggerKey{ typ: .physical, physical: .numpad_add } }
-		'physical:kp_subtract' { TriggerKey{ typ: .physical, physical: .numpad_subtract } }
-		'physical:kp_multiply' { TriggerKey{ typ: .physical, physical: .numpad_multiply } }
-		'physical:kp_divide' { TriggerKey{ typ: .physical, physical: .numpad_divide } }
-		'physical:kp_decimal' { TriggerKey{ typ: .physical, physical: .numpad_decimal } }
-		'physical:kp_enter' { TriggerKey{ typ: .physical, physical: .numpad_enter } }
-		'physical:kp_equal' { TriggerKey{ typ: .physical, physical: .numpad_equal } }
-		'physical:kp_separator' { TriggerKey{ typ: .physical, physical: .numpad_separator } }
-		'physical:kp_left' { TriggerKey{ typ: .physical, physical: .numpad_left } }
-		'physical:kp_right' { TriggerKey{ typ: .physical, physical: .numpad_right } }
-		'physical:kp_up' { TriggerKey{ typ: .physical, physical: .numpad_up } }
-		'physical:kp_down' { TriggerKey{ typ: .physical, physical: .numpad_down } }
-		'physical:kp_page_up' { TriggerKey{ typ: .physical, physical: .numpad_page_up } }
-		'physical:kp_page_down' { TriggerKey{ typ: .physical, physical: .numpad_page_down } }
-		'physical:kp_home' { TriggerKey{ typ: .physical, physical: .numpad_home } }
-		'physical:kp_end' { TriggerKey{ typ: .physical, physical: .numpad_end } }
-		'physical:kp_insert' { TriggerKey{ typ: .physical, physical: .numpad_insert } }
-		'physical:kp_delete' { TriggerKey{ typ: .physical, physical: .numpad_delete } }
-		'physical:kp_begin' { TriggerKey{ typ: .physical, physical: .numpad_begin } }
-		'physical:left_shift' { TriggerKey{ typ: .physical, physical: .shift_left } }
-		'physical:right_shift' { TriggerKey{ typ: .physical, physical: .shift_right } }
-		'physical:left_control' { TriggerKey{ typ: .physical, physical: .control_left } }
-		'physical:right_control' { TriggerKey{ typ: .physical, physical: .control_right } }
-		'physical:left_alt' { TriggerKey{ typ: .physical, physical: .alt_left } }
-		'physical:right_alt' { TriggerKey{ typ: .physical, physical: .alt_right } }
-		'physical:left_super' { TriggerKey{ typ: .physical, physical: .meta_left } }
-		'physical:right_super' { TriggerKey{ typ: .physical, physical: .meta_right } }
-		else { none }
+		'physical:zero' {
+			return TriggerKeyPhysical{ key: .digit_0 }
+		}
+		'physical:one' {
+			return TriggerKeyPhysical{ key: .digit_1 }
+		}
+		'physical:two' {
+			return TriggerKeyPhysical{ key: .digit_2 }
+		}
+		'physical:three' {
+			return TriggerKeyPhysical{ key: .digit_3 }
+		}
+		'physical:four' {
+			return TriggerKeyPhysical{ key: .digit_4 }
+		}
+		'physical:five' {
+			return TriggerKeyPhysical{ key: .digit_5 }
+		}
+		'physical:six' {
+			return TriggerKeyPhysical{ key: .digit_6 }
+		}
+		'physical:seven' {
+			return TriggerKeyPhysical{ key: .digit_7 }
+		}
+		'physical:eight' {
+			return TriggerKeyPhysical{ key: .digit_8 }
+		}
+		'physical:nine' {
+			return TriggerKeyPhysical{ key: .digit_9 }
+		}
+		'physical:apostrophe' {
+			return TriggerKeyPhysical{ key: .quote }
+		}
+		'physical:grave_accent' {
+			return TriggerKeyPhysical{ key: .backquote }
+		}
+		'physical:left_bracket' {
+			return TriggerKeyPhysical{ key: .bracket_left }
+		}
+		'physical:right_bracket' {
+			return TriggerKeyPhysical{ key: .bracket_right }
+		}
+		'physical:up' {
+			return TriggerKeyPhysical{ key: .arrow_up }
+		}
+		'physical:down' {
+			return TriggerKeyPhysical{ key: .arrow_down }
+		}
+		'physical:left' {
+			return TriggerKeyPhysical{ key: .arrow_left }
+		}
+		'physical:right' {
+			return TriggerKeyPhysical{ key: .arrow_right }
+		}
+		'physical:kp_0' {
+			return TriggerKeyPhysical{ key: .numpad_0 }
+		}
+		'physical:kp_1' {
+			return TriggerKeyPhysical{ key: .numpad_1 }
+		}
+		'physical:kp_2' {
+			return TriggerKeyPhysical{ key: .numpad_2 }
+		}
+		'physical:kp_3' {
+			return TriggerKeyPhysical{ key: .numpad_3 }
+		}
+		'physical:kp_4' {
+			return TriggerKeyPhysical{ key: .numpad_4 }
+		}
+		'physical:kp_5' {
+			return TriggerKeyPhysical{ key: .numpad_5 }
+		}
+		'physical:kp_6' {
+			return TriggerKeyPhysical{ key: .numpad_6 }
+		}
+		'physical:kp_7' {
+			return TriggerKeyPhysical{ key: .numpad_7 }
+		}
+		'physical:kp_8' {
+			return TriggerKeyPhysical{ key: .numpad_8 }
+		}
+		'physical:kp_9' {
+			return TriggerKeyPhysical{ key: .numpad_9 }
+		}
+		'physical:kp_add' {
+			return TriggerKeyPhysical{ key: .numpad_add }
+		}
+		'physical:kp_subtract' {
+			return TriggerKeyPhysical{ key: .numpad_subtract }
+		}
+		'physical:kp_multiply' {
+			return TriggerKeyPhysical{ key: .numpad_multiply }
+		}
+		'physical:kp_divide' {
+			return TriggerKeyPhysical{ key: .numpad_divide }
+		}
+		'physical:kp_decimal' {
+			return TriggerKeyPhysical{ key: .numpad_decimal }
+		}
+		'physical:kp_enter' {
+			return TriggerKeyPhysical{ key: .numpad_enter }
+		}
+		'physical:kp_equal' {
+			return TriggerKeyPhysical{ key: .numpad_equal }
+		}
+		'physical:kp_separator' {
+			return TriggerKeyPhysical{ key: .numpad_separator }
+		}
+		'physical:kp_left' {
+			return TriggerKeyPhysical{ key: .numpad_left }
+		}
+		'physical:kp_right' {
+			return TriggerKeyPhysical{ key: .numpad_right }
+		}
+		'physical:kp_up' {
+			return TriggerKeyPhysical{ key: .numpad_up }
+		}
+		'physical:kp_down' {
+			return TriggerKeyPhysical{ key: .numpad_down }
+		}
+		'physical:kp_page_up' {
+			return TriggerKeyPhysical{ key: .numpad_page_up }
+		}
+		'physical:kp_page_down' {
+			return TriggerKeyPhysical{ key: .numpad_page_down }
+		}
+		'physical:kp_home' {
+			return TriggerKeyPhysical{ key: .numpad_home }
+		}
+		'physical:kp_end' {
+			return TriggerKeyPhysical{ key: .numpad_end }
+		}
+		'physical:kp_insert' {
+			return TriggerKeyPhysical{ key: .numpad_insert }
+		}
+		'physical:kp_delete' {
+			return TriggerKeyPhysical{ key: .numpad_delete }
+		}
+		'physical:kp_begin' {
+			return TriggerKeyPhysical{ key: .numpad_begin }
+		}
+		'physical:left_shift' {
+			return TriggerKeyPhysical{ key: .shift_left }
+		}
+		'physical:right_shift' {
+			return TriggerKeyPhysical{ key: .shift_right }
+		}
+		'physical:left_control' {
+			return TriggerKeyPhysical{ key: .control_left }
+		}
+		'physical:right_control' {
+			return TriggerKeyPhysical{ key: .control_right }
+		}
+		'physical:left_alt' {
+			return TriggerKeyPhysical{ key: .alt_left }
+		}
+		'physical:right_alt' {
+			return TriggerKeyPhysical{ key: .alt_right }
+		}
+		'physical:left_super' {
+			return TriggerKeyPhysical{ key: .meta_left }
+		}
+		'physical:right_super' {
+			return TriggerKeyPhysical{ key: .meta_right }
+		}
+		else {}
 	}
+	return none
 }
 
 // mod_alias returns the canonical modifier name for an alias.

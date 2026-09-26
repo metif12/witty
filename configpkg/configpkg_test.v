@@ -2860,19 +2860,19 @@ fn test_default_config_initializes_complete_darwin_keybinds() {
 		assert cfg.keybind.set.bindings.len == 93
 
 		quit := cfg.keybind.set.get(input.Trigger{
-			key: input.TriggerKey.new_unicode(u32(`q`))
+			key: input.TriggerKeyUnicode{ codepoint: u32(`q`) }
 			mods: input.Mods.init(false, false, false, true, false, false, input.SideInfo{})
 		}) or { panic('missing default quit binding') }
 		assert (quit.value as input.Leaf).action.tag() == .quit
 
 		resize := cfg.keybind.set.get(input.Trigger{
-			key: input.TriggerKey.new_physical(.arrow_left)
+			key: input.TriggerKeyPhysical{ key: .arrow_left }
 			mods: input.Mods.init(false, true, false, true, false, false, input.SideInfo{})
 		}) or { panic('missing default split resize binding') }
 		assert (resize.value as input.Leaf).action == input.Action(input.ActionResizeSplit{ value: input.SplitResizeParameter{ direction: .left, amount: 10 } })
 
 		natural := cfg.keybind.set.get(input.Trigger{
-			key: input.TriggerKey.new_physical(.arrow_right)
+			key: input.TriggerKeyPhysical{ key: .arrow_right }
 			mods: input.Mods.init(false, false, true, false, false, false, input.SideInfo{})
 		}) or { panic('missing natural text editing binding') }
 		assert (natural.value as input.Leaf).action == input.Action(input.ActionEsc{ value: 'f' })

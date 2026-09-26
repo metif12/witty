@@ -101,13 +101,13 @@ pub fn ghostty_config_get(mut config configpkg.Config, ptr voidptr, key string) 
 pub fn ghostty_config_trigger(config &configpkg.Config, action_text string) InputTrigger {
 	action := input.Action.parse(action_text) or { return InputTrigger{} }
 	trigger := config.keybind.set.get_trigger(action) or { return InputTrigger{} }
-	key := match trigger.key.typ {
-		.physical { u32(trigger.key.physical) }
-		.unicode { trigger.key.unicode }
-		.catch_all { u32(0) }
+	key := match trigger.key {
+		input.TriggerKeyPhysical { u32(trigger.key.key) }
+		input.TriggerKeyUnicode { trigger.key.codepoint }
+		input.TriggerKeyCatchAll { u32(0) }
 	}
 	return InputTrigger{
-		tag: int(trigger.key.typ)
+		tag: int(trigger.key.tag())
 		key: key
 		mods: u32(trigger.mods.int())
 	}

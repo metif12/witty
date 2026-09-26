@@ -252,7 +252,7 @@ fn test_termio_surface_message_preserves_instant_timeout() {
 fn test_app_key_event_uses_runtime_config_binding() {
 	mut cfg := configpkg.Config.default_config()
 	cfg.keybind.set.put(input.Trigger{
-		key: input.TriggerKey.new_unicode(u32(`q`))
+		key: input.TriggerKeyUnicode{ codepoint: u32(`q`) }
 		mods: input.Mods.init(false, false, false, true, false, false, input.SideInfo{})
 	}, input.ActionQuit{})
 	mut runtime := apprt.RuntimeApp{

@@ -337,13 +337,13 @@ fn capi_action_payload[T](tag int, value T) CAPIAction {
 }
 
 fn trigger_capi(trigger input.Trigger) CAPIInputTrigger {
-	key := match trigger.key.typ {
-		.physical { u32(trigger.key.physical) }
-		.unicode { trigger.key.unicode }
-		.catch_all { u32(0) }
+	key := match trigger.key {
+		input.TriggerKeyPhysical { u32(trigger.key.key) }
+		input.TriggerKeyUnicode { trigger.key.codepoint }
+		input.TriggerKeyCatchAll { u32(0) }
 	}
 	return CAPIInputTrigger{
-		tag: int(trigger.key.typ)
+		tag: int(trigger.key.tag())
 		key: key
 		mods: u32(trigger.mods.int())
 	}

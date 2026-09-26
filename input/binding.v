@@ -1127,49 +1127,45 @@ pub fn (f Flags) cval() u8 {
 	return f.value
 }
 
-// TriggerKey represents the key part of a trigger. It can be either a
-// physical key or a unicode codepoint, or a catch-all.
-pub struct TriggerKey {
+// TriggerKey is the key part of a trigger: the source's `Trigger.Key`
+// tagged union.
+pub type TriggerKey = TriggerKeyCatchAll | TriggerKeyPhysical | TriggerKeyUnicode
+
+// key is the "physical" version. This is the same as mapped for
+// standard US keyboard layouts. For non-US keyboard layouts, this
+// is used to bind to a physical key location rather than a translated
+// key.
+pub struct TriggerKeyPhysical {
 pub:
-	typ      TriggerKeyType
-	physical Key // used when typ == .physical
-	unicode  u32 // used when typ == .unicode
+	key Key
 }
 
-pub enum TriggerKeyType as i32 {
+// This is used for binding to keys that produce a certain unicode
+// codepoint. This is useful for binding to keys that don't have a
+// registered keycode with Ghostty.
+pub struct TriggerKeyUnicode {
+pub:
+	// The source stores a u21.
+	codepoint u32
+}
+
+// A catch-all key that matches any key press that is otherwise
+// unbound.
+pub struct TriggerKeyCatchAll {}
+
+// TriggerKeyTag is the source's `Trigger.C.Tag`, an `enum(c_int)`.
+pub enum TriggerKeyTag as i32 {
 	physical
 	unicode
 	catch_all
 }
 
-pub fn TriggerKey.new_physical(k Key) TriggerKey {
-	return TriggerKey{
-		typ: .physical
-		physical: k
-	}
-}
-
-pub fn TriggerKey.new_unicode(cp u32) TriggerKey {
-	return TriggerKey{
-		typ: .unicode
-		unicode: cp
-	}
-}
-
-pub fn TriggerKey.new_catch_all() TriggerKey {
-	return TriggerKey{
-		typ: .catch_all
-	}
-}
-
-pub fn (a TriggerKey) == (b TriggerKey) bool {
-	if a.typ != b.typ {
-		return false
-	}
-	return match a.typ {
-		.physical { a.physical == b.physical }
-		.unicode { a.unicode == b.unicode }
-		.catch_all { true }
+// The tag of the active key variant.
+pub fn (self TriggerKey) tag() TriggerKeyTag {
+	return match self {
+		TriggerKeyPhysical { .physical }
+		TriggerKeyUnicode { .unicode }
+		TriggerKeyCatchAll { .catch_all }
 	}
 }
 
@@ -1177,7 +1173,9 @@ pub fn (a TriggerKey) == (b TriggerKey) bool {
 pub struct Trigger {
 pub:
 	// The key that has to be pressed for a binding to take action.
-	key TriggerKey = TriggerKey.new_physical(.unidentified)
+	key TriggerKey = TriggerKeyPhysical{
+		key: .unidentified
+	}
 	// The key modifiers that must be active for this to match.
 	mods Mods
 }
@@ -1188,9 +1186,9 @@ pub fn (a Trigger) == (b Trigger) bool {
 
 // Returns true if this trigger has no key set.
 pub fn (t Trigger) is_key_unset() bool {
-	return match t.key.typ {
-		.physical { t.key.physical == .unidentified }
-		.unicode, .catch_all { false }
+	return match t.key {
+		TriggerKeyPhysical { t.key.key == .unidentified }
+		TriggerKeyUnicode, TriggerKeyCatchAll { false }
 	}
 }
 
@@ -1199,7 +1197,14 @@ pub fn (self Trigger) equal(other Trigger) bool {
 	if self.mods != other.mods {
 		return false
 	}
-	return self.key == other.key
+	if self.key.tag() != other.key.tag() {
+		return false
+	}
+	return match self.key {
+		TriggerKeyPhysical { self.key.key == (other.key as TriggerKeyPhysical).key }
+		TriggerKeyUnicode { self.key.codepoint == (other.key as TriggerKeyUnicode).codepoint }
+		TriggerKeyCatchAll { true }
+	}
 }
 
 // Returns true if two triggers are equal using folded codepoints
@@ -1208,15 +1213,15 @@ pub fn (self Trigger) folded_equal(other Trigger) bool {
 	if self.mods != other.mods {
 		return false
 	}
-	if self.key.typ != other.key.typ {
+	if self.key.tag() != other.key.tag() {
 		return false
 	}
-	return match self.key.typ {
-		.physical { self.key.physical == other.key.physical }
-		.unicode {
-			folded_codepoint(self.key.unicode) == folded_codepoint(other.key.unicode)
+	return match self.key {
+		TriggerKeyPhysical { self.key.key == (other.key as TriggerKeyPhysical).key }
+		TriggerKeyUnicode {
+			folded_codepoint(self.key.codepoint) == folded_codepoint((other.key as TriggerKeyUnicode).codepoint)
 		}
-		.catch_all { true }
+		TriggerKeyCatchAll { true }
 	}
 }
 
@@ -1233,18 +1238,18 @@ fn folded_codepoint(cp u32) [3]u32 {
 pub fn (t Trigger) hash() u64 {
 	mut hasher := SourceHash{}
 	// Trigger.Key is union(C.Tag), and C.Tag is enum(c_int).
-	hasher.put_i32(i32(t.key.typ))
-	match t.key.typ {
-		.physical {
+	hasher.put_i32(i32(t.key.tag()))
+	match t.key {
+		TriggerKeyPhysical {
 			// input.Key is also enum(c_int).
-			hasher.put_i32(i32(t.key.physical))
+			hasher.put_i32(i32(t.key.key))
 		}
-		.unicode {
-			for cp in folded_codepoint(t.key.unicode) {
+		TriggerKeyUnicode {
+			for cp in folded_codepoint(t.key.codepoint) {
 				hasher.put_u21(cp)
 			}
 		}
-		.catch_all {}
+		TriggerKeyCatchAll {}
 	}
 	hasher.put_u16(t.mods.binding().int())
 	return hasher.final()
@@ -1265,19 +1270,19 @@ pub fn (t Trigger) format() string {
 	if t.mods.shift() {
 		parts << 'shift'
 	}
-	match t.key.typ {
-		.physical {
-			parts << t.key.physical.key_name()
+	match t.key {
+		TriggerKeyPhysical {
+			parts << t.key.key.key_name()
 		}
-		.unicode {
-			if t.key.unicode < 128 {
-				parts << [u8(t.key.unicode)].bytestr()
+		TriggerKeyUnicode {
+			if t.key.codepoint < 128 {
+				parts << [u8(t.key.codepoint)].bytestr()
 			} else {
 				// encode as utf-8
-				parts << rune(t.key.unicode).str()
+				parts << rune(t.key.codepoint).str()
 			}
 		}
-		.catch_all {
+		TriggerKeyCatchAll {
 			parts << 'catch_all'
 		}
 	}
@@ -1400,7 +1405,7 @@ pub fn Trigger.parse(input_str string) !Trigger {
 		if part.len == 0 {
 			result = Trigger{
 				...result
-				key: TriggerKey.new_unicode(u32(`+`))
+				key: TriggerKeyUnicode{ codepoint: u32(`+`) }
 			}
 			continue
 		}
@@ -1410,7 +1415,7 @@ pub fn Trigger.parse(input_str string) !Trigger {
 			if k != .unidentified {
 				result = Trigger{
 					...result
-					key: TriggerKey.new_physical(k)
+					key: TriggerKeyPhysical{ key: k }
 				}
 				continue
 			}
@@ -1422,7 +1427,7 @@ pub fn Trigger.parse(input_str string) !Trigger {
 			if runes.len == 1 {
 				result = Trigger{
 					...result
-					key: TriggerKey.new_unicode(u32(runes[0]))
+					key: TriggerKeyUnicode{ codepoint: u32(runes[0]) }
 				}
 				continue
 			}
@@ -1432,7 +1437,7 @@ pub fn Trigger.parse(input_str string) !Trigger {
 		if w3c_key := Key.from_w3c(part) {
 			result = Trigger{
 				...result
-				key: TriggerKey.new_physical(w3c_key)
+				key: TriggerKeyPhysical{ key: w3c_key }
 			}
 			continue
 		}
@@ -1441,7 +1446,7 @@ pub fn Trigger.parse(input_str string) !Trigger {
 		if part == 'catch_all' {
 			result = Trigger{
 				...result
-				key: TriggerKey.new_catch_all()
+				key: TriggerKeyCatchAll{}
 			}
 			continue
 		}
@@ -3286,10 +3291,10 @@ fn mods_int(m Mods) int {
 }
 
 fn trigger_key_int(k TriggerKey) int {
-	return match k.typ {
-		.physical { int(k.physical) }
-		.unicode { int(k.unicode) }
-		.catch_all { -1 }
+	return match k {
+		TriggerKeyPhysical { int(k.key) }
+		TriggerKeyUnicode { int(k.codepoint) }
+		TriggerKeyCatchAll { -1 }
 	}
 }
 
@@ -3888,7 +3893,7 @@ fn (mut root Set) parse_and_put_recurse2(mut child Set, mut it Parser) !RecurseR
 pub fn (s &Set) get_event(event KeyEvent) ?&SetEntry {
 	mut trigger := Trigger{
 		mods: event.mods.binding()
-		key: TriggerKey.new_physical(event.key)
+		key: TriggerKeyPhysical{ key: event.key }
 	}
 	if v := s.get(trigger) {
 		return v
@@ -3900,7 +3905,7 @@ pub fn (s &Set) get_event(event KeyEvent) ?&SetEntry {
 		if runes.len == 1 {
 			trigger = Trigger{
 				...trigger
-				key: TriggerKey.new_unicode(u32(runes[0]))
+				key: TriggerKeyUnicode{ codepoint: u32(runes[0]) }
 			}
 			if v := s.get(trigger) {
 				return v
@@ -3912,7 +3917,7 @@ pub fn (s &Set) get_event(event KeyEvent) ?&SetEntry {
 	if event.unshifted_codepoint > 0 {
 		trigger = Trigger{
 			...trigger
-			key: TriggerKey.new_unicode(event.unshifted_codepoint)
+			key: TriggerKeyUnicode{ codepoint: event.unshifted_codepoint }
 		}
 		if v := s.get(trigger) {
 			return v
@@ -3922,14 +3927,14 @@ pub fn (s &Set) get_event(event KeyEvent) ?&SetEntry {
 	// Fallback to catch_all with modifiers, then without
 	trigger = Trigger{
 		...trigger
-		key: TriggerKey.new_catch_all()
+		key: TriggerKeyCatchAll{}
 	}
 	if v := s.get(trigger) {
 		return v
 	}
 	if !trigger.mods.empty() {
 		trigger = Trigger{
-			key: TriggerKey.new_catch_all()
+			key: TriggerKeyCatchAll{}
 		}
 		if v := s.get(trigger) {
 			return v

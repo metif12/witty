@@ -392,19 +392,19 @@ pub fn xdg_shortcut_from_trigger(trigger input.Trigger) ?string {
 // (or unicode char), or none if the trigger cannot be represented.
 // Mirrors `writeTriggerKey`.
 fn write_trigger_key(trigger input.Trigger) ?string {
-	match trigger.key.typ {
-		.physical {
-			keyval := keyval_from_key(trigger.key.physical) or { return none }
+	match trigger.key {
+		input.TriggerKeyPhysical {
+			keyval := keyval_from_key(trigger.key.key) or { return none }
 			return keyval_name_string(keyval) or { return none }
 		}
-		.unicode {
-			cp := trigger.key.unicode
+		input.TriggerKeyUnicode {
+			cp := trigger.key.codepoint
 			if name := keyval_name_string(cp) {
 				return name
 			}
 			return utf32_to_string(cp)
 		}
-		.catch_all {
+		input.TriggerKeyCatchAll {
 			return none
 		}
 	}
@@ -441,20 +441,20 @@ pub fn label_from_trigger(trigger input.Trigger) ?string {
 // human-readable format (capitalizing the first letter). Mirrors
 // `writeTriggerKeyLabel`.
 fn write_trigger_key_label(trigger input.Trigger) ?string {
-	match trigger.key.typ {
-		.physical {
-			keyval := keyval_from_key(trigger.key.physical) or { return none }
+	match trigger.key {
+		input.TriggerKeyPhysical {
+			keyval := keyval_from_key(trigger.key.key) or { return none }
 			name := keyval_name_string(keyval) or { return none }
 			return capitalize_first(name)
 		}
-		.unicode {
-			cp := trigger.key.unicode
+		input.TriggerKeyUnicode {
+			cp := trigger.key.codepoint
 			if name := keyval_name_string(cp) {
 				return capitalize_first(name)
 			}
 			return utf32_to_string(cp)
 		}
-		.catch_all {
+		input.TriggerKeyCatchAll {
 			return none
 		}
 	}

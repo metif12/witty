@@ -321,7 +321,7 @@ fn test_surface_key_binding_applies_modifier_remap() {
 	mut cfg := configpkg.Config.default_config()
 	cfg.keybind.set = input.Set{}
 	cfg.keybind.set.put(input.Trigger{
-		key: input.TriggerKey.new_unicode(u32(`q`))
+		key: input.TriggerKeyUnicode{ codepoint: u32(`q`) }
 		mods: input.Mods.init(false, false, false, true, false, false, input.SideInfo{})
 	}, input.ActionQuit{})
 	cfg.key_remap.parse('ctrl=super')!
@@ -396,10 +396,10 @@ fn test_all_binding_performs_on_every_surface() ! {
 fn test_surface_inspector_records_consumed_binding() {
 	mut surf := make_test_surface()
 	surf.config.keybind.set.put(input.Trigger{
-		key: input.TriggerKey.new_physical(.f1)
+		key: input.TriggerKeyPhysical{ key: .f1 }
 	}, input.ActionScrollToTop{})
 	surf.config.keybind.set.put(input.Trigger{
-		key: input.TriggerKey.new_physical(.f2)
+		key: input.TriggerKeyPhysical{ key: .f2 }
 	}, input.ActionIgnore{})
 	surf.activate_inspector()!
 	defer {

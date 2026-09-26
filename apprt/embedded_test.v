@@ -154,7 +154,7 @@ fn test_core_app_key_event_dispatches_app_binding() {
 	mut capture := EmbeddedActionCapture{}
 	mut config := configpkg.Config.default_config()
 	trigger := input.Trigger{
-		key: input.TriggerKey.new_physical(.f25)
+		key: input.TriggerKeyPhysical{ key: .f25 }
 		mods: input.Mods.init(false, true, true, false, false, false, input.SideInfo{})
 	}
 	config.keybind.set.put(trigger, input.ActionOpenConfig{})
@@ -208,10 +208,10 @@ fn test_core_app_focus_limits_non_global_bindings() {
 	mut capture := EmbeddedActionCapture{}
 	mut config := configpkg.Config.default_config()
 	local_trigger := input.Trigger{
-		key: input.TriggerKey.new_physical(.f24)
+		key: input.TriggerKeyPhysical{ key: .f24 }
 	}
 	global_trigger := input.Trigger{
-		key: input.TriggerKey.new_physical(.f25)
+		key: input.TriggerKeyPhysical{ key: .f25 }
 	}
 	config.keybind.set.put(local_trigger, input.ActionOpenConfig{})
 	config.keybind.set.put_flags(global_trigger, input.ActionOpenConfig{}, input.Flags.init(true, false, true, false))
