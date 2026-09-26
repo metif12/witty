@@ -50,12 +50,9 @@ pub fn (self &IoUringProcess) wait(mut loop IoUringLoop, c &IoUringCompletion, u
 	mut completion := unsafe { c }
 	unsafe {
 		*completion = IoUringCompletion{
-			op: IoUringOperation{
-				tag: .poll
-				poll: IoUringPollOp{
-					fd: self.fd
-					events: events
-				}
+			op: IoUringPollOp{
+				fd: self.fd
+				events: events
 			}
 			userdata: userdata
 			callback: fn [cb] (ud voidptr, l_inner &IoUringLoop, c_inner &IoUringCompletion, r IoUringResult) CallbackAction {
@@ -66,7 +63,7 @@ pub fn (self &IoUringProcess) wait(mut loop IoUringLoop, c &IoUringCompletion, u
 					arg_err = err
 				} else {
 					// We need to wait on the pidfd because it is noted as ready
-					fd := c_inner.op.poll.fd
+					fd := (c_inner.op as IoUringPollOp).fd
 					mut info := C.siginfo_t{}
 					res := linux_waitid(.pidfd, fd, &info, u32(int(C.WEXITED)))
 

@@ -317,11 +317,8 @@ pub fn (mut self IoUringLoop) timer(c &IoUringCompletion, next_ms u64, userdata 
 	next := self.timer_next(next_ms)
 	unsafe {
 		*completion = IoUringCompletion{
-			op: IoUringOperation{
-				tag: .timer
-				timer: IoUringTimerOp{
-					next: next
-				}
+			op: IoUringTimerOp{
+				next: next
 			}
 			userdata: userdata
 			callback: cb
@@ -360,7 +357,11 @@ pub fn (mut self IoUringLoop) timer_reset(c &IoUringCompletion, c_cancel &IoUrin
 
 	// Update the reset time for the timer to the desired time
 	// along with all the callbacks.
-	completion.op.timer.reset = self.timer_next(next_ms)
+	if mut completion.op is IoUringTimerOp {
+		completion.op.reset = self.timer_next(next_ms)
+	} else {
+		panic('completion: completion is not a timer operation')
+	}
 	completion.userdata = userdata
 	completion.callback = cb
 
@@ -380,11 +381,8 @@ pub fn (mut self IoUringLoop) timer_reset(c &IoUringCompletion, c_cancel &IoUrin
 
 	unsafe {
 		*cancel = IoUringCompletion{
-			op: IoUringOperation{
-				tag: .timer_remove
-				timer_remove: IoUringTimerRemoveOp{
-					timer: completion
-				}
+			op: IoUringTimerRemoveOp{
+				timer: completion
 			}
 		}
 	}
@@ -462,123 +460,123 @@ fn (mut self IoUringLoop) add_(completion &IoUringCompletion, try_submit bool) {
 	self.active += 1
 
 	// Setup the submission depending on the operation
-	match c.op.tag {
+	match mut c.op {
 		// Do nothing with noop completions.
-		.noop {
+		IoUringNoopOp {
 			c.flags.set_state(.dead)
 			self.active -= 1
 			return
 		}
-		.accept {
-			sqe.prep_accept(c.op.accept.socket, &c.op.accept.addr, &c.op.accept.addr_size,
-				c.op.accept.flags)
+		IoUringAcceptOp {
+			sqe.prep_accept(c.op.socket, &c.op.addr, &c.op.addr_size,
+				c.op.flags)
 		}
-		.close {
-			sqe.prep_close(c.op.close.fd)
+		IoUringCloseOp {
+			sqe.prep_close(c.op.fd)
 		}
-		.connect {
-			sqe.prep_connect(c.op.connect.socket, c.op.connect.addr.any(), c.op.connect.addr.get_os_sock_len())
+		IoUringConnectOp {
+			sqe.prep_connect(c.op.socket, c.op.addr.any(), c.op.addr.get_os_sock_len())
 		}
-		.poll {
-			sqe.prep_poll_add(c.op.poll.fd, c.op.poll.events)
+		IoUringPollOp {
+			sqe.prep_poll_add(c.op.fd, c.op.events)
 		}
-		.read {
-			match c.op.read.buffer.kind {
+		IoUringReadOp {
+			match c.op.buffer.kind {
 				.array {
-					sqe.prep_read(c.op.read.fd, c.op.read.buffer.slice_ptr(),
+					sqe.prep_read(c.op.fd, c.op.buffer.slice_ptr(),
 						// offset is a u64 but if the value is -1 then it uses
 						// the offset in the fd.
 						u64(i64(-1)))
 				}
 				.slice {
-					sqe.prep_read(c.op.read.fd, c.op.read.buffer.slice,
+					sqe.prep_read(c.op.fd, c.op.buffer.slice,
 						// offset is a u64 but if the value is -1 then it uses
 						// the offset in the fd.
 						u64(i64(-1)))
 				}
 			}
 		}
-		.pread {
-			match c.op.pread.buffer.kind {
+		IoUringPReadOp {
+			match c.op.buffer.kind {
 				.array {
-					sqe.prep_read(c.op.pread.fd, c.op.pread.buffer.slice_ptr(), c.op.pread.offset)
+					sqe.prep_read(c.op.fd, c.op.buffer.slice_ptr(), c.op.offset)
 				}
 				.slice {
-					sqe.prep_read(c.op.pread.fd, c.op.pread.buffer.slice, c.op.pread.offset)
+					sqe.prep_read(c.op.fd, c.op.buffer.slice, c.op.offset)
 				}
 			}
 		}
-		.recv {
-			match c.op.recv.buffer.kind {
+		IoUringRecvOp {
+			match c.op.buffer.kind {
 				.array {
-					sqe.prep_recv(c.op.recv.fd, c.op.recv.buffer.slice_ptr(), 0)
+					sqe.prep_recv(c.op.fd, c.op.buffer.slice_ptr(), 0)
 				}
 				.slice {
-					sqe.prep_recv(c.op.recv.fd, c.op.recv.buffer.slice, 0)
+					sqe.prep_recv(c.op.fd, c.op.buffer.slice, 0)
 				}
 			}
 		}
-		.recvmsg {
-			sqe.prep_recvmsg(c.op.recvmsg.fd, c.op.recvmsg.msghdr, 0)
+		IoUringRecvMsgOp {
+			sqe.prep_recvmsg(c.op.fd, c.op.msghdr, 0)
 		}
-		.send {
-			match c.op.send.buffer.kind {
+		IoUringSendOp {
+			match c.op.buffer.kind {
 				.array {
-					sqe.prep_send(c.op.send.fd, c.op.send.buffer.bytes(), 0)
+					sqe.prep_send(c.op.fd, c.op.buffer.bytes(), 0)
 				}
 				.slice {
-					sqe.prep_send(c.op.send.fd, c.op.send.buffer.slice, 0)
+					sqe.prep_send(c.op.fd, c.op.buffer.slice, 0)
 				}
 			}
 		}
-		.sendmsg {
-			if _ := c.op.sendmsg.buffer {
+		IoUringSendMsgOp {
+			if _ := c.op.buffer {
 				panic('TODO: sendmsg with buffer')
 			}
 
-			sqe.prep_sendmsg(c.op.sendmsg.fd, c.op.sendmsg.msghdr, 0)
+			sqe.prep_sendmsg(c.op.fd, c.op.msghdr, 0)
 		}
-		.shutdown {
-			sqe.prep_shutdown(c.op.shutdown.socket, match c.op.shutdown.how {
+		IoUringShutdownOp {
+			sqe.prep_shutdown(c.op.socket, match c.op.how {
 				.both { u32(int(C.SHUT_RDWR)) }
 				.send { u32(int(C.SHUT_WR)) }
 				.recv { u32(int(C.SHUT_RD)) }
 			})
 		}
-		.timer {
-			sqe.prep_timeout(&c.op.timer.next, 0, ioring_timeout_abs)
+		IoUringTimerOp {
+			sqe.prep_timeout(&c.op.next, 0, ioring_timeout_abs)
 		}
-		.timer_remove {
-			sqe.prep_timeout_remove(u64(usize(voidptr(c.op.timer_remove.timer))), 0)
+		IoUringTimerRemoveOp {
+			sqe.prep_timeout_remove(u64(usize(voidptr(c.op.timer))), 0)
 		}
-		.write {
-			match c.op.write.buffer.kind {
+		IoUringWriteOp {
+			match c.op.buffer.kind {
 				.array {
-					sqe.prep_write(c.op.write.fd, c.op.write.buffer.bytes(),
+					sqe.prep_write(c.op.fd, c.op.buffer.bytes(),
 						// offset is a u64 but if the value is -1 then it uses
 						// the offset in the fd.
 						u64(i64(-1)))
 				}
 				.slice {
-					sqe.prep_write(c.op.write.fd, c.op.write.buffer.slice,
+					sqe.prep_write(c.op.fd, c.op.buffer.slice,
 						// offset is a u64 but if the value is -1 then it uses
 						// the offset in the fd.
 						u64(i64(-1)))
 				}
 			}
 		}
-		.pwrite {
-			match c.op.pwrite.buffer.kind {
+		IoUringPWriteOp {
+			match c.op.buffer.kind {
 				.array {
-					sqe.prep_write(c.op.pwrite.fd, c.op.pwrite.buffer.bytes(), c.op.pwrite.offset)
+					sqe.prep_write(c.op.fd, c.op.buffer.bytes(), c.op.offset)
 				}
 				.slice {
-					sqe.prep_write(c.op.pwrite.fd, c.op.pwrite.buffer.slice, c.op.pwrite.offset)
+					sqe.prep_write(c.op.fd, c.op.buffer.slice, c.op.offset)
 				}
 			}
 		}
-		.cancel {
-			sqe.prep_cancel(u64(usize(voidptr(c.op.cancel.c))), 0)
+		IoUringCancelOp {
+			sqe.prep_cancel(u64(usize(voidptr(c.op.c))), 0)
 		}
 	}
 
@@ -595,11 +593,8 @@ pub fn (mut self IoUringLoop) cancel(c &IoUringCompletion, c_cancel &IoUringComp
 	mut completion := unsafe { c_cancel }
 	unsafe {
 		*completion = IoUringCompletion{
-			op: IoUringOperation{
-				tag: .cancel
-				cancel: IoUringCancelOp{
-					c: c
-				}
+			op: IoUringCancelOp{
+				c: c
 			}
 			userdata: userdata
 			callback: fn [cb] (ud voidptr, l_inner &IoUringLoop, c_inner &IoUringCompletion, r IoUringResult) CallbackAction {
@@ -644,7 +639,7 @@ pub struct IoUringCompletion {
 pub mut:
 	// Operation to execute. This is only safe to read BEFORE the completion
 	// is queued. After being queued (with "add"), the operation may change.
-	op IoUringOperation
+	op IoUringOperation = IoUringNoopOp{}
 
 	// Userdata and callback for when the completion is finished.
 	userdata voidptr         = unsafe { nil }
@@ -680,19 +675,16 @@ pub fn (self &IoUringCompletion) state() CompletionState {
 fn (mut self IoUringCompletion) invoke(mut loop IoUringLoop, res i32) CallbackAction {
 	// The errno matches are statements: V's checker would otherwise type the
 	// C errno constants from the expected result type.
-	tag := self.op.tag
+	tag := self.op.tag()
 	errno := int(-res)
-	mut result := IoUringResult{
-		tag: tag
-	}
+	mut result := io_uring_result_ok(tag)
 	match tag {
 		.noop {
 			panic('unreachable')
 		}
 		.accept {
 			if res >= 0 {
-				result = IoUringResult{
-					tag: tag
+				result = IoUringAcceptResult{
 					socket: int(res)
 				}
 			} else {
@@ -759,18 +751,30 @@ fn (mut self IoUringCompletion) invoke(mut loop IoUringLoop, res i32) CallbackAc
 		.timer {
 			// If we have reset set, that means that we were canceled so
 			// that we can update our expiration time.
-			if r := self.op.timer.reset {
-				self.op.timer.next = r
-				self.op.timer.reset = none
-				return .rearm
+			if mut self.op is IoUringTimerOp {
+				if r := self.op.reset {
+					self.op.next = r
+					self.op.reset = none
+					return .rearm
+				}
 			}
 
 			if res >= 0 {
-				result.timer = .request
+				result = IoUringTimerResult{
+					timer: .request
+				}
 			} else {
 				match errno {
-					C.ETIME { result.timer = .expiration }
-					C.ECANCELED { result.timer = .cancel }
+					C.ETIME {
+						result = IoUringTimerResult{
+							timer: .expiration
+						}
+					}
+					C.ECANCELED {
+						result = IoUringTimerResult{
+							timer: .cancel
+						}
+					}
 					else { result = io_uring_result_err(tag, unexpected_errno(errno)) }
 				}
 			}
@@ -850,9 +854,9 @@ fn (self &IoUringCompletion) read_result(op IoUringOperationType, res i32) IoUri
 		// has no buffer.
 		mut buffer := IoUringReadBuffer{}
 		match op {
-			.read { buffer = self.op.read.buffer }
-			.pread { buffer = self.op.pread.buffer }
-			.recv { buffer = self.op.recv.buffer }
+			.read { buffer = (self.op as IoUringReadOp).buffer }
+			.pread { buffer = (self.op as IoUringPReadOp).buffer }
+			.recv { buffer = (self.op as IoUringRecvOp).buffer }
 			else { return io_uring_result_kind(op, .eof) }
 		}
 
@@ -936,55 +940,360 @@ pub enum IoUringOperationType {
 	cancel
 }
 
-// The result type based on the operation type. For a callback, the
-// result tag will ALWAYS match the operation tag.
-//
-// The Zig Result union carries each operation's error union. The flat record
-// keeps the failing Zig error name in `err`, or the success payload in the
-// field the operation uses. The error sets are:
-//   accept: AcceptError (Canceled, Again, Unexpected)
-//   close: CloseError (Canceled, Unexpected)
-//   connect: ConnectError (Canceled, Unexpected, ConnectionRefused,
-//     HostUnreachable, TimedOut)
-//   poll: PollError (Canceled, Unexpected)
-//   read, pread, recv, recvmsg: ReadError (EOF, Canceled, Unexpected,
-//     ConnectionResetByPeer)
-//   send, sendmsg, pwrite, write: WriteError (Canceled, BrokenPipe,
-//     ConnectionResetByPeer, Unexpected)
-//   shutdown: ShutdownError (Canceled, Unexpected)
-//   timer: TimerError (Unexpected)
-//   timer_remove: TimerRemoveError (NotFound, ExpirationInProgress, Unexpected)
-//   cancel: CancelError (NotFound, ExpirationInProgress, Unexpected)
-pub struct IoUringResult {
+// The result type based on the operation type: the source's `Result`
+// tagged union. For a callback, the result tag will ALWAYS match the
+// operation tag. Each variant carries the operation's error union as the
+// failing error name in `err`, or its success payload.
+pub type IoUringResult = IoUringAcceptResult
+	| IoUringCancelResult
+	| IoUringCloseResult
+	| IoUringConnectResult
+	| IoUringNoopResult
+	| IoUringPReadResult
+	| IoUringPWriteResult
+	| IoUringPollResult
+	| IoUringReadResult
+	| IoUringRecvMsgResult
+	| IoUringRecvResult
+	| IoUringSendMsgResult
+	| IoUringSendResult
+	| IoUringShutdownResult
+	| IoUringTimerRemoveResult
+	| IoUringTimerResult
+	| IoUringWriteResult
+
+pub struct IoUringNoopResult {
 pub mut:
-	tag IoUringOperationType
 	err ?ErrorKind
-	// accept: the accepted socket
+}
+
+pub struct IoUringAcceptResult {
+pub mut:
+	err ?ErrorKind
 	socket int
-	// read, pread, recv, recvmsg, send, sendmsg, pwrite, write: byte count
+}
+
+pub struct IoUringCloseResult {
+pub mut:
+	err ?ErrorKind
+}
+
+pub struct IoUringConnectResult {
+pub mut:
+	err ?ErrorKind
+}
+
+pub struct IoUringPollResult {
+pub mut:
+	err ?ErrorKind
+}
+
+pub struct IoUringReadResult {
+pub mut:
+	err ?ErrorKind
 	n usize
-	// timer
+}
+
+pub struct IoUringPReadResult {
+pub mut:
+	err ?ErrorKind
+	n usize
+}
+
+pub struct IoUringRecvResult {
+pub mut:
+	err ?ErrorKind
+	n usize
+}
+
+pub struct IoUringSendResult {
+pub mut:
+	err ?ErrorKind
+	n usize
+}
+
+pub struct IoUringSendMsgResult {
+pub mut:
+	err ?ErrorKind
+	n usize
+}
+
+pub struct IoUringRecvMsgResult {
+pub mut:
+	err ?ErrorKind
+	n usize
+}
+
+pub struct IoUringShutdownResult {
+pub mut:
+	err ?ErrorKind
+}
+
+pub struct IoUringPWriteResult {
+pub mut:
+	err ?ErrorKind
+	n usize
+}
+
+pub struct IoUringWriteResult {
+pub mut:
+	err ?ErrorKind
+	n usize
+}
+
+pub struct IoUringTimerResult {
+pub mut:
+	err ?ErrorKind
 	timer IoUringTimerTrigger
 }
 
+pub struct IoUringTimerRemoveResult {
+pub mut:
+	err ?ErrorKind
+}
+
+pub struct IoUringCancelResult {
+pub mut:
+	err ?ErrorKind
+}
+
+// The tag of the active result variant.
+pub fn (self IoUringResult) tag() IoUringOperationType {
+	return match self {
+		IoUringNoopResult { .noop }
+		IoUringAcceptResult { .accept }
+		IoUringCloseResult { .close }
+		IoUringConnectResult { .connect }
+		IoUringPollResult { .poll }
+		IoUringReadResult { .read }
+		IoUringPReadResult { .pread }
+		IoUringRecvResult { .recv }
+		IoUringSendResult { .send }
+		IoUringSendMsgResult { .sendmsg }
+		IoUringRecvMsgResult { .recvmsg }
+		IoUringShutdownResult { .shutdown }
+		IoUringPWriteResult { .pwrite }
+		IoUringWriteResult { .write }
+		IoUringTimerResult { .timer }
+		IoUringTimerRemoveResult { .timer_remove }
+		IoUringCancelResult { .cancel }
+	}
+}
+
+// io_uring_result_kind builds the `tag` result variant carrying an error.
 fn io_uring_result_kind(tag IoUringOperationType, kind ErrorKind) IoUringResult {
-	return IoUringResult{
-		tag: tag
-		err: kind
+	match tag {
+		.noop {
+			return IoUringNoopResult{
+				err: kind
+			}
+		}
+		.accept {
+			return IoUringAcceptResult{
+				err: kind
+			}
+		}
+		.close {
+			return IoUringCloseResult{
+				err: kind
+			}
+		}
+		.connect {
+			return IoUringConnectResult{
+				err: kind
+			}
+		}
+		.poll {
+			return IoUringPollResult{
+				err: kind
+			}
+		}
+		.read {
+			return IoUringReadResult{
+				err: kind
+			}
+		}
+		.pread {
+			return IoUringPReadResult{
+				err: kind
+			}
+		}
+		.recv {
+			return IoUringRecvResult{
+				err: kind
+			}
+		}
+		.send {
+			return IoUringSendResult{
+				err: kind
+			}
+		}
+		.sendmsg {
+			return IoUringSendMsgResult{
+				err: kind
+			}
+		}
+		.recvmsg {
+			return IoUringRecvMsgResult{
+				err: kind
+			}
+		}
+		.shutdown {
+			return IoUringShutdownResult{
+				err: kind
+			}
+		}
+		.pwrite {
+			return IoUringPWriteResult{
+				err: kind
+			}
+		}
+		.write {
+			return IoUringWriteResult{
+				err: kind
+			}
+		}
+		.timer {
+			return IoUringTimerResult{
+				err: kind
+			}
+		}
+		.timer_remove {
+			return IoUringTimerRemoveResult{
+				err: kind
+			}
+		}
+		.cancel {
+			return IoUringCancelResult{
+				err: kind
+			}
+		}
+	}
+}
+
+// io_uring_result_ok builds the successful `tag` variant with an empty
+// payload, which the completion handler then fills in.
+fn io_uring_result_ok(tag IoUringOperationType) IoUringResult {
+	match tag {
+		.noop {
+			return IoUringNoopResult{}
+		}
+		.accept {
+			return IoUringAcceptResult{}
+		}
+		.close {
+			return IoUringCloseResult{}
+		}
+		.connect {
+			return IoUringConnectResult{}
+		}
+		.poll {
+			return IoUringPollResult{}
+		}
+		.read {
+			return IoUringReadResult{}
+		}
+		.pread {
+			return IoUringPReadResult{}
+		}
+		.recv {
+			return IoUringRecvResult{}
+		}
+		.send {
+			return IoUringSendResult{}
+		}
+		.sendmsg {
+			return IoUringSendMsgResult{}
+		}
+		.recvmsg {
+			return IoUringRecvMsgResult{}
+		}
+		.shutdown {
+			return IoUringShutdownResult{}
+		}
+		.pwrite {
+			return IoUringPWriteResult{}
+		}
+		.write {
+			return IoUringWriteResult{}
+		}
+		.timer {
+			return IoUringTimerResult{}
+		}
+		.timer_remove {
+			return IoUringTimerRemoveResult{}
+		}
+		.cancel {
+			return IoUringCancelResult{}
+		}
 	}
 }
 
 fn io_uring_result_err(tag IoUringOperationType, err IError) IoUringResult {
-	return IoUringResult{
-		tag: tag
-		err: error_kind(err)
+	return io_uring_result_kind(tag, error_kind(err))
+}
+
+// io_uring_result_n builds the byte-count result variant for `tag`.
+fn io_uring_result_n(tag IoUringOperationType, n usize) IoUringResult {
+	match tag {
+		.read {
+			return IoUringReadResult{
+				n: n
+			}
+		}
+		.pread {
+			return IoUringPReadResult{
+				n: n
+			}
+		}
+		.recv {
+			return IoUringRecvResult{
+				n: n
+			}
+		}
+		.send {
+			return IoUringSendResult{
+				n: n
+			}
+		}
+		.sendmsg {
+			return IoUringSendMsgResult{
+				n: n
+			}
+		}
+		.recvmsg {
+			return IoUringRecvMsgResult{
+				n: n
+			}
+		}
+		.pwrite {
+			return IoUringPWriteResult{
+				n: n
+			}
+		}
+		.write {
+			return IoUringWriteResult{
+				n: n
+			}
+		}
+		else {
+			panic('io_uring_result_n: ${tag} has no byte count')
+		}
 	}
 }
 
-fn io_uring_result_n(tag IoUringOperationType, n usize) IoUringResult {
-	return IoUringResult{
-		tag: tag
-		n: n
+// io_uring_result_bytes returns the byte count of a read or write result.
+fn io_uring_result_bytes(r IoUringResult) usize {
+	return match r {
+		IoUringReadResult { r.n }
+		IoUringPReadResult { r.n }
+		IoUringRecvResult { r.n }
+		IoUringSendResult { r.n }
+		IoUringSendMsgResult { r.n }
+		IoUringRecvMsgResult { r.n }
+		IoUringPWriteResult { r.n }
+		IoUringWriteResult { r.n }
+		else { panic('io_uring_result_bytes: ${r.tag()} has no byte count') }
 	}
 }
 
@@ -992,26 +1301,48 @@ fn io_uring_result_n(tag IoUringOperationType, n usize) IoUringResult {
 // backend-specific and therefore the structure and types change depending
 // on the underlying system in use. The high level operations are
 // done by initializing the request handles.
-pub struct IoUringOperation {
-pub mut:
-	tag          IoUringOperationType
-	accept       IoUringAcceptOp
-	close        IoUringCloseOp
-	connect      IoUringConnectOp
-	poll         IoUringPollOp
-	read         IoUringReadOp
-	pread        IoUringPReadOp
-	recv         IoUringReadOp
-	send         IoUringWriteOp
-	sendmsg      IoUringSendMsgOp
-	recvmsg      IoUringRecvMsgOp
-	shutdown     IoUringShutdownOp
-	pwrite       IoUringPWriteOp
-	write        IoUringWriteOp
-	timer        IoUringTimerOp
-	timer_remove IoUringTimerRemoveOp
-	cancel       IoUringCancelOp
+pub type IoUringOperation = IoUringAcceptOp
+	| IoUringCancelOp
+	| IoUringCloseOp
+	| IoUringConnectOp
+	| IoUringNoopOp
+	| IoUringPReadOp
+	| IoUringPWriteOp
+	| IoUringPollOp
+	| IoUringReadOp
+	| IoUringRecvMsgOp
+	| IoUringRecvOp
+	| IoUringSendMsgOp
+	| IoUringSendOp
+	| IoUringShutdownOp
+	| IoUringTimerOp
+	| IoUringTimerRemoveOp
+	| IoUringWriteOp
+
+// The tag of the active operation variant.
+pub fn (self IoUringOperation) tag() IoUringOperationType {
+	return match self {
+		IoUringNoopOp { .noop }
+		IoUringAcceptOp { .accept }
+		IoUringCloseOp { .close }
+		IoUringConnectOp { .connect }
+		IoUringPollOp { .poll }
+		IoUringReadOp { .read }
+		IoUringPReadOp { .pread }
+		IoUringRecvOp { .recv }
+		IoUringSendOp { .send }
+		IoUringSendMsgOp { .sendmsg }
+		IoUringRecvMsgOp { .recvmsg }
+		IoUringShutdownOp { .shutdown }
+		IoUringPWriteOp { .pwrite }
+		IoUringWriteOp { .write }
+		IoUringTimerOp { .timer }
+		IoUringTimerRemoveOp { .timer_remove }
+		IoUringCancelOp { .cancel }
+	}
 }
+
+pub struct IoUringNoopOp {}
 
 pub struct IoUringAcceptOp {
 pub mut:
@@ -1082,6 +1413,18 @@ pub struct IoUringShutdownOp {
 pub mut:
 	socket int
 	how    ShutdownHow = .both
+}
+
+pub struct IoUringRecvOp {
+pub mut:
+	fd     int
+	buffer IoUringReadBuffer
+}
+
+pub struct IoUringSendOp {
+pub mut:
+	fd     int
+	buffer IoUringWriteBuffer
 }
 
 pub struct IoUringPWriteOp {

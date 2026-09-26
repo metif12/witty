@@ -47,16 +47,13 @@ pub fn (self &IoUringAsync) wait(mut loop IoUringLoop, c &IoUringCompletion, use
 	mut completion := unsafe { c }
 	unsafe {
 		*completion = IoUringCompletion{
-			op: IoUringOperation{
-				// We use a poll operation instead of a read operation
-				// because in Kernel 6.15.4, read was regressed for
-				// io_uring on eventfd/timerfd and would block forever.
-				// However, poll works fine.
-				tag: .poll
-				poll: IoUringPollOp{
-					fd: self.fd
-					events: linux_poll_in
-				}
+			// We use a poll operation instead of a read operation
+			// because in Kernel 6.15.4, read was regressed for
+			// io_uring on eventfd/timerfd and would block forever.
+			// However, poll works fine.
+			op: IoUringPollOp{
+				fd: self.fd
+				events: linux_poll_in
 			}
 			userdata: userdata
 		}
@@ -69,7 +66,7 @@ pub fn (self &IoUringAsync) wait(mut loop IoUringLoop, c &IoUringCompletion, use
 			// We ignore errors here because we expect the
 			// read to succeed given we just polled it.
 			mut buf := [8]u8{}
-			posix_read(c_inner.op.poll.fd, unsafe { (&buf[0]).vbytes(buf.len) }) or {}
+			posix_read((c_inner.op as IoUringPollOp).fd, unsafe { (&buf[0]).vbytes(buf.len) }) or {}
 		} else {
 			// We'll call the callback with the error later.
 		}

@@ -24,7 +24,7 @@ fn io_uring_test_record_trigger(ud voidptr, _ &IoUringLoop, _ &IoUringCompletion
 	if _ := r.err {
 		panic('unreachable')
 	}
-	v.value = r.timer
+	v.value = (r as IoUringTimerResult).timer
 	return .disarm
 }
 
@@ -96,15 +96,12 @@ fn test_io_uring_timerfd() ! {
 	// Add the timer
 	mut called := false
 	mut c := &IoUringCompletion{
-		op: IoUringOperation{
-			// Note: we should be able to use `read` here but on
-			// Kernel 6.15.4 there is a bug that prevents the read
-			// from ever firing with io_uring. I don't know why. I changed
-			// this to a poll so tests pass, which should also be fine!
-			tag: .poll
-			poll: IoUringPollOp{
-				fd: int(t.fd)
-			}
+		// Note: we should be able to use `read` here but on
+		// Kernel 6.15.4 there is a bug that prevents the read
+		// from ever firing with io_uring. I don't know why. I changed
+		// this to a poll so tests pass, which should also be fine!
+		op: IoUringPollOp{
+			fd: int(t.fd)
 		}
 		userdata: &called
 		callback: io_uring_test_set_bool
@@ -237,11 +234,8 @@ fn test_io_uring_timer_remove() ! {
 
 	// Remove it
 	mut c_remove := &IoUringCompletion{
-		op: IoUringOperation{
-			tag: .timer_remove
-			timer_remove: IoUringTimerRemoveOp{
-				timer: c1
-			}
+		op: IoUringTimerRemoveOp{
+			timer: c1
 		}
 		userdata: unsafe { nil }
 		callback: io_uring_test_timer_remove_done
@@ -259,7 +253,7 @@ fn io_uring_test_accept(ud voidptr, _ &IoUringLoop, _ &IoUringCompletion, r IoUr
 		panic('unreachable')
 	}
 	unsafe {
-		*conn = r.socket
+		*conn = (r as IoUringAcceptResult).socket
 	}
 	return .disarm
 }
@@ -288,7 +282,18 @@ fn io_uring_test_recv(ud voidptr, _ &IoUringLoop, _ &IoUringCompletion, r IoUrin
 	}
 	mut ptr := unsafe { &usize(ud) }
 	unsafe {
-		*ptr = r.n
+		*ptr = (r as IoUringRecvResult).n
+	}
+	return .disarm
+}
+
+fn io_uring_test_recvmsg(ud voidptr, _ &IoUringLoop, _ &IoUringCompletion, r IoUringResult) CallbackAction {
+	if _ := r.err {
+		panic('unreachable')
+	}
+	mut ptr := unsafe { &usize(ud) }
+	unsafe {
+		*ptr = (r as IoUringRecvMsgResult).n
 	}
 	return .disarm
 }
@@ -349,11 +354,8 @@ fn test_io_uring_socket_accept_connect_send_recv_close() ! {
 	// Accept
 	mut server_conn := int(0)
 	mut c_accept := &IoUringCompletion{
-		op: IoUringOperation{
-			tag: .accept
-			accept: IoUringAcceptOp{
-				socket: ln
-			}
+		op: IoUringAcceptOp{
+			socket: ln
 		}
 		userdata: &server_conn
 		callback: io_uring_test_accept
@@ -363,12 +365,9 @@ fn test_io_uring_socket_accept_connect_send_recv_close() ! {
 	// Connect
 	mut connected := false
 	mut c_connect := &IoUringCompletion{
-		op: IoUringOperation{
-			tag: .connect
-			connect: IoUringConnectOp{
-				socket: client_conn
-				addr: address
-			}
+		op: IoUringConnectOp{
+			socket: client_conn
+			addr: address
 		}
 		userdata: &connected
 		callback: io_uring_test_ok_set_bool
@@ -382,14 +381,11 @@ fn test_io_uring_socket_accept_connect_send_recv_close() ! {
 
 	// Send
 	mut c_send := &IoUringCompletion{
-		op: IoUringOperation{
-			tag: .send
-			send: IoUringWriteOp{
-				fd: client_conn
-				buffer: IoUringWriteBuffer{
-					kind: .slice
-					slice: [u8(1), 1, 2, 3, 5, 8, 13]
-				}
+		op: IoUringSendOp{
+			fd: client_conn
+			buffer: IoUringWriteBuffer{
+				kind: .slice
+				slice: [u8(1), 1, 2, 3, 5, 8, 13]
 			}
 		}
 		callback: io_uring_test_ok
@@ -400,14 +396,11 @@ fn test_io_uring_socket_accept_connect_send_recv_close() ! {
 	mut recv_buf := []u8{len: 128}
 	mut recv_len := usize(0)
 	mut c_recv := &IoUringCompletion{
-		op: IoUringOperation{
-			tag: .recv
-			recv: IoUringReadOp{
-				fd: server_conn
-				buffer: IoUringReadBuffer{
-					kind: .slice
-					slice: recv_buf
-				}
+		op: IoUringRecvOp{
+			fd: server_conn
+			buffer: IoUringReadBuffer{
+				kind: .slice
+				slice: recv_buf
 			}
 		}
 		userdata: &recv_len
@@ -417,16 +410,13 @@ fn test_io_uring_socket_accept_connect_send_recv_close() ! {
 
 	// Wait for the send/receive
 	loop.run(.until_done)!
-	assert c_send.op.send.buffer.slice == recv_buf[..int(recv_len)]
+	assert (c_send.op as IoUringSendOp).buffer.slice == recv_buf[..int(recv_len)]
 
 	// Shutdown
 	mut shutdown := false
 	mut c_client_shutdown := &IoUringCompletion{
-		op: IoUringOperation{
-			tag: .shutdown
-			shutdown: IoUringShutdownOp{
-				socket: client_conn
-			}
+		op: IoUringShutdownOp{
+			socket: client_conn
 		}
 		userdata: &shutdown
 		callback: io_uring_test_ok_set_bool
@@ -439,14 +429,11 @@ fn test_io_uring_socket_accept_connect_send_recv_close() ! {
 	mut eof := IoUringTestEof{}
 	unsafe {
 		*c_recv = IoUringCompletion{
-			op: IoUringOperation{
-				tag: .recv
-				recv: IoUringReadOp{
-					fd: server_conn
-					buffer: IoUringReadBuffer{
-						kind: .slice
-						slice: recv_buf
-					}
+			op: IoUringRecvOp{
+				fd: server_conn
+				buffer: IoUringReadBuffer{
+					kind: .slice
+					slice: recv_buf
 				}
 			}
 			userdata: &eof
@@ -460,11 +447,8 @@ fn test_io_uring_socket_accept_connect_send_recv_close() ! {
 
 	// Close
 	mut c_client_close := &IoUringCompletion{
-		op: IoUringOperation{
-			tag: .close
-			close: IoUringCloseOp{
-				fd: client_conn
-			}
+		op: IoUringCloseOp{
+			fd: client_conn
 		}
 		userdata: &client_conn
 		callback: io_uring_test_close_zero
@@ -472,11 +456,8 @@ fn test_io_uring_socket_accept_connect_send_recv_close() ! {
 	loop.add(c_client_close)
 
 	mut c_server_close := &IoUringCompletion{
-		op: IoUringOperation{
-			tag: .close
-			close: IoUringCloseOp{
-				fd: ln
-			}
+		op: IoUringCloseOp{
+			fd: ln
 		}
 		userdata: &ln
 		callback: io_uring_test_close_zero
@@ -549,12 +530,9 @@ fn test_io_uring_sendmsg_recvmsg() ! {
 		flags: 0
 	}
 	mut c_sendmsg := &IoUringCompletion{
-		op: IoUringOperation{
-			tag: .sendmsg
-			sendmsg: IoUringSendMsgOp{
-				fd: client
-				msghdr: unsafe { &C.msghdr(&msg_send) }
-			}
+		op: IoUringSendMsgOp{
+			fd: client
+			msghdr: unsafe { &C.msghdr(&msg_send) }
 		}
 		callback: io_uring_test_ok
 	}
@@ -581,15 +559,12 @@ fn test_io_uring_sendmsg_recvmsg() ! {
 	}
 	mut recv_size := usize(0)
 	mut c_recvmsg := &IoUringCompletion{
-		op: IoUringOperation{
-			tag: .recvmsg
-			recvmsg: IoUringRecvMsgOp{
-				fd: server
-				msghdr: unsafe { &C.msghdr(&msg_recv) }
-			}
+		op: IoUringRecvMsgOp{
+			fd: server
+			msghdr: unsafe { &C.msghdr(&msg_recv) }
 		}
 		userdata: &recv_size
-		callback: io_uring_test_recv
+		callback: io_uring_test_recvmsg
 	}
 	loop.add(c_recvmsg)
 
@@ -635,15 +610,12 @@ fn test_io_uring_socket_read_cancellation() ! {
 	}
 
 	// Read
-	mut read_result := IoUringResult{}
+	mut read_result := IoUringResult(IoUringReadResult{})
 	mut c_read := &IoUringCompletion{
-		op: IoUringOperation{
-			tag: .read
-			read: IoUringReadOp{
-				fd: socket
-				buffer: IoUringReadBuffer{
-					kind: .array
-				}
+		op: IoUringReadOp{
+			fd: socket
+			buffer: IoUringReadBuffer{
+				kind: .array
 			}
 		}
 		userdata: &read_result
@@ -658,6 +630,6 @@ fn test_io_uring_socket_read_cancellation() ! {
 
 	// Wait for the read to be cancelled
 	loop.run(.until_done)!
-	assert IoUringOperationType.read == read_result.tag
+	assert IoUringOperationType.read == read_result.tag()
 	assert read_result.err? == .canceled
 }

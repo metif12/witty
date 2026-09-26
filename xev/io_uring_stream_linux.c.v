@@ -47,7 +47,7 @@ fn io_uring_poll_event_from_result(c &IoUringCompletion, result IoUringResult) (
 	if err := result.err {
 		return err, IoUringPollEvent.read
 	}
-	return none, unsafe { IoUringPollEvent(c.op.poll.events) }
+	return none, unsafe { IoUringPollEvent((c.op as IoUringPollOp).events) }
 }
 
 // The callback of Stream.close. The error is a CloseError.
@@ -93,15 +93,12 @@ pub fn (self IoUringStream) close(mut loop IoUringLoop, c &IoUringCompletion, us
 	mut completion := unsafe { c }
 	unsafe {
 		*completion = IoUringCompletion{
-			op: IoUringOperation{
-				tag: .close
-				close: IoUringCloseOp{
-					fd: self.fd
-				}
+			op: IoUringCloseOp{
+				fd: self.fd
 			}
 			userdata: userdata
 			callback: fn [cb] (ud voidptr, l_inner &IoUringLoop, c_inner &IoUringCompletion, r IoUringResult) CallbackAction {
-				fd := IoUringStream.init_fd(c_inner.op.close.fd)
+				fd := IoUringStream.init_fd((c_inner.op as IoUringCloseOp).fd)
 				return cb(ud, l_inner, c_inner, fd, r.err)
 			}
 		}
@@ -121,18 +118,15 @@ pub fn (self IoUringStream) poll(mut loop IoUringLoop, c &IoUringCompletion, eve
 	mut completion := unsafe { c }
 	unsafe {
 		*completion = IoUringCompletion{
-			op: IoUringOperation{
-				tag: .poll
-				poll: IoUringPollOp{
-					fd: self.fd
-					events: match event {
-						.read { linux_poll_in }
-					}
+			op: IoUringPollOp{
+				fd: self.fd
+				events: match event {
+					.read { linux_poll_in }
 				}
 			}
 			userdata: userdata
 			callback: fn [cb] (ud voidptr, l_inner &IoUringLoop, c_inner &IoUringCompletion, r IoUringResult) CallbackAction {
-				fd := IoUringStream.init_fd(c_inner.op.poll.fd)
+				fd := IoUringStream.init_fd((c_inner.op as IoUringPollOp).fd)
 				err, poll_event := io_uring_poll_event_from_result(c_inner, r)
 				return cb(ud, l_inner, c_inner, fd, err, poll_event)
 			}
@@ -150,17 +144,14 @@ pub fn (self IoUringStream) read(mut loop IoUringLoop, c &IoUringCompletion, buf
 	mut completion := unsafe { c }
 	unsafe {
 		*completion = IoUringCompletion{
-			op: IoUringOperation{
-				tag: .read
-				read: IoUringReadOp{
-					fd: self.fd
-					buffer: buf
-				}
+			op: IoUringReadOp{
+				fd: self.fd
+				buffer: buf
 			}
 			userdata: userdata
 			callback: fn [cb] (ud voidptr, l_inner &IoUringLoop, c_inner &IoUringCompletion, r IoUringResult) CallbackAction {
-				return cb(ud, l_inner, c_inner, IoUringStream.init_fd(c_inner.op.read.fd),
-					c_inner.op.read.buffer, r.err, r.n)
+				return cb(ud, l_inner, c_inner, IoUringStream.init_fd((c_inner.op as IoUringReadOp).fd),
+					(c_inner.op as IoUringReadOp).buffer, r.err, io_uring_result_bytes(r))
 			}
 		}
 	}
@@ -304,7 +295,7 @@ pub fn (self IoUringStream) write(mut loop IoUringLoop, c &IoUringCompletion, bu
 // Extracts the result from a completion for a write callback.
 @[inline]
 fn io_uring_stream_write_result(c &IoUringCompletion, r IoUringResult) (IoUringStream, IoUringWriteBuffer, ?ErrorKind, usize) {
-	return IoUringStream.init_fd(c.op.write.fd), c.op.write.buffer, r.err, r.n
+	return IoUringStream.init_fd((c.op as IoUringWriteOp).fd), (c.op as IoUringWriteOp).buffer, r.err, io_uring_result_bytes(r)
 }
 
 // Initialize the completion c for a write. This does NOT set
@@ -313,12 +304,9 @@ pub fn (self IoUringStream) write_init(c &IoUringCompletion, buf IoUringWriteBuf
 	mut completion := unsafe { c }
 	unsafe {
 		*completion = IoUringCompletion{
-			op: IoUringOperation{
-				tag: .write
-				write: IoUringWriteOp{
-					fd: self.fd
-					buffer: buf
-				}
+			op: IoUringWriteOp{
+				fd: self.fd
+				buffer: buf
 			}
 		}
 	}

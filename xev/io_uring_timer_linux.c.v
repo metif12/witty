@@ -25,10 +25,11 @@ pub fn (self &IoUringTimer) deinit() {
 
 // Convert the loop's timer result into the watcher's RunError!void.
 fn io_uring_timer_run_error(r IoUringResult) ?ErrorKind {
-	if err := r.err {
+	timer := r as IoUringTimerResult
+	if err := timer.err {
 		return err
 	}
-	return match r.timer {
+	return match timer.timer {
 		.request, .expiration { none }
 		.cancel { ErrorKind.canceled }
 	}
@@ -91,11 +92,8 @@ pub fn (self &IoUringTimer) cancel(mut loop IoUringLoop, c_timer &IoUringComplet
 	mut completion := unsafe { c_cancel }
 	unsafe {
 		*completion = IoUringCompletion{
-			op: IoUringOperation{
-				tag: .timer_remove
-				timer_remove: IoUringTimerRemoveOp{
-					timer: c_timer
-				}
+			op: IoUringTimerRemoveOp{
+				timer: c_timer
 			}
 			userdata: userdata
 			callback: fn [cb] (ud voidptr, l_inner &IoUringLoop, c_inner &IoUringCompletion, r IoUringResult) CallbackAction {
