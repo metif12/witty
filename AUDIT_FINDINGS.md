@@ -477,11 +477,18 @@ an item here does not mean its full module has been certified yet.
   parameters, so `Stream[H]` passes a runtime `ActionKey` with an `ActionValue`
   sum type and handlers smart-cast the value. `lib_vt` cannot re-export the
   generic `Stream` because V does not implement generic type aliases.
-- **Surface-message representation:** Ghostty's apprt mailbox carries a tagged
-  `Message` union whose inactive payload does not exist. Witty retains the
-  corrected compact discriminant but stores every possible message payload in
-  one flat `SurfaceMessage`, so its memory representation and invalid-state
-  space are not a one-for-one translation.
+- **Flattened tagged unions:** these Ghostty tagged unions are stored in Witty
+  as one struct holding a tag beside every variant's payload fields, so
+  inactive payloads exist and invalid combinations are representable:
+  - the apprt surface mailbox `Message` (`SurfaceMessage`);
+  - the termio `Message`;
+  - apprt `Action` values (`ActionValue`);
+  - `Parser.Action` (`ParserAction`);
+  - `sgr.Attribute` (`SgrAttribute`);
+  - `input.Binding.Action` and `Binding.Set.Value`;
+  - libxev's per-backend `Operation` and `Result`;
+  - fontconfig's `Value`;
+  - z2d's `PathNode`, used by the sprite renderer.
 - **Surface termio wrapper:** Ghostty's Surface stores `termio.Termio`
   directly. Witty wraps it in a `TermIO` value whose `live` flag and message
   buffer exist for zero-initialized test surfaces.
