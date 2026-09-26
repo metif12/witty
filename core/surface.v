@@ -3051,10 +3051,11 @@ pub fn (mut self Surface) key_event_is_binding(event_orig KeyEvent) ?input.Flags
 }
 
 fn binding_flags(entry &input.SetEntry) input.Flags {
-	return match entry.value.typ {
-		.leader { input.Flags{} }
-		.leaf { entry.value.leaf_flags }
-		.leaf_chained { entry.value.chain_flags }
+	value := entry.value
+	return match value {
+		input.Leader { input.Flags{} }
+		input.Leaf { value.flags }
+		input.LeafChained { value.flags }
 	}
 }
 
@@ -5561,10 +5562,11 @@ fn (self &Surface) catch_all_is_ignore() bool {
 }
 
 fn binding_entry_has_ignore(entry &input.SetEntry) bool {
-	return match entry.value.typ {
-		.leader { false }
-		.leaf { entry.value.leaf_action is input.ActionIgnore }
-		.leaf_chained { entry.value.chain_actions.any(it is input.ActionIgnore) }
+	value := entry.value
+	return match value {
+		input.Leader { false }
+		input.Leaf { value.action is input.ActionIgnore }
+		input.LeafChained { value.actions.any(it is input.ActionIgnore) }
 	}
 }
 
@@ -5659,9 +5661,10 @@ fn (mut self Surface) maybe_handle_binding(event KeyEvent, inspecting bool, mut 
 	}
 
 	// Determine if this entry has an action or if its a leader key.
-	if entry.value.typ == .leader {
+	leader := entry.value
+	if leader is input.Leader {
 		// Setup the next set we'll look at.
-		self.keyboard.sequence_set = *entry.value.leader
+		self.keyboard.sequence_set = *leader.set
 
 		// Store this event so that we can drain and encode on invalid.
 		// We don't need to cap this because it is naturally capped by

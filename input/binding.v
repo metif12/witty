@@ -3030,20 +3030,29 @@ fn parse_unsigned_decimal(s string, maximum u64) !u64 {
 
 // --- Parser ---
 
-// ParserElem is a single element yielded by the binding parser.
-// It can be a leader trigger (in a sequence), a final binding, or a chained action.
-pub struct ParserElem {
+// ParserElem is a single element yielded by the binding parser: the
+// source's `Parser.Elem` tagged union.
+pub type ParserElem = ParserElemBinding | ParserElemChain | ParserElemLeader
+
+// A leader trigger in a sequence.
+pub struct ParserElemLeader {
 pub:
-	typ     ParserElemType
-	trigger Trigger // used for .leader and .binding
-	binding Binding // used for .binding
-	action  Action // used for .chain
+	trigger Trigger
 }
 
-pub enum ParserElemType as u8 {
-	leader
-	binding
-	chain
+// The final trigger and action in a sequence.
+pub struct ParserElemBinding {
+pub:
+	binding Binding
+}
+
+// A chained action `chain=[action]` that should be appended to the
+// previous binding. Note that any action is parsed, including invalid
+// actions for chains such as `unbind`. We expect downstream consumers to
+// validate that the action is valid for chaining.
+pub struct ParserElemChain {
+pub:
+	action Action
 }
 
 // Parser is the full binding parser. It yields elements to support
@@ -3191,24 +3200,20 @@ pub fn (mut self Parser) next() !ParserElem {
 		if self.flags.global() || self.flags.all() {
 			return error('InvalidFormat')
 		}
-		return ParserElem{
-			typ: .leader
+		return ParserElemLeader{
 			trigger: trigger
 		}
 	}
 
 	// If we're a chain then return it as-is.
 	if self.chain {
-		return ParserElem{
-			typ: .chain
+		return ParserElemChain{
 			action: self.action
 		}
 	}
 
 	// Out of triggers, yield the final action.
-	return ParserElem{
-		typ: .binding
-		trigger: trigger
+	return ParserElemBinding{
 		binding: Binding{
 			trigger: trigger
 			action: self.action
@@ -3232,10 +3237,10 @@ pub fn parse_single(raw_input string) !Binding {
 		}
 		return err
 	}
-	return match elem.typ {
-		.leader { error('UnexpectedSequence') }
-		.binding { elem.binding }
-		.chain { error('UnexpectedChain') }
+	return match elem {
+		ParserElemLeader { error('UnexpectedSequence') }
+		ParserElemBinding { elem.binding }
+		ParserElemChain { error('UnexpectedChain') }
 	}
 }
 
@@ -3290,48 +3295,62 @@ fn trigger_key_int(k TriggerKey) int {
 
 // --- Set ---
 
-// SetValue is the entry type for the forward mapping of trigger to action.
-pub struct SetValue {
-pub mut:
-	typ           SetValueType
-	leader        &Set = unsafe { nil } // used when typ == .leader
-	leaf_action   Action // used when typ == .leaf
-	leaf_flags    Flags // used when typ == .leaf
-	chain_actions []Action // used when typ == .leaf_chained
-	chain_flags   Flags // used when typ == .leaf_chained
+// SetValue is the entry type for the forward mapping of trigger to action:
+// the source's `Set.Value` tagged union.
+pub type SetValue = Leader | Leaf | LeafChained
+
+// This key is a leader key in a sequence. You must follow the given
+// set to find the next key in the sequence.
+pub struct Leader {
+pub:
+	set &Set = unsafe { nil }
 }
 
-pub enum SetValueType as u8 {
-	leader
-	leaf
-	leaf_chained
+// Leaf node of a set is an action to trigger. This is a "leaf" compared
+// to the inner nodes which are "leaders" for sequences.
+pub struct Leaf {
+pub:
+	action Action
+	flags  Flags
 }
 
-// GenericLeaf is the common view of a single-action and chained-action leaf.
-// V represents Ghostty's tagged Set.Value union as SetValue plus a tag, so the
-// two source `generic` methods become this single checked conversion.
+pub fn (self Leaf) generic() GenericLeaf {
+	return GenericLeaf{
+		flags:   self.flags
+		actions: [self.action]
+	}
+}
+
+// Leaf node of a set that triggers multiple actions in sequence.
+pub struct LeafChained {
+pub:
+	actions []Action
+	flags   Flags
+}
+
+pub fn (self LeafChained) generic() GenericLeaf {
+	return GenericLeaf{
+		flags:   self.flags
+		actions: self.actions
+	}
+}
+
+// GenericLeaf is a generic leaf node that can be used to unify the
+// handling of leaf and leaf_chained.
 pub struct GenericLeaf {
 pub:
 	flags   Flags
 	actions []Action
 }
 
-// generic returns a common leaf view, or none when this value is a leader.
-pub fn (value &SetValue) generic() ?GenericLeaf {
-	return match value.typ {
-		.leader { none }
-		.leaf {
-			GenericLeaf{
-				flags: value.leaf_flags
-				actions: [value.leaf_action]
-			}
-		}
-		.leaf_chained {
-			GenericLeaf{
-				flags: value.chain_flags
-				actions: value.chain_actions
-			}
-		}
+// generic returns the common leaf view of a leaf or chained leaf, or none
+// for a leader: the source's `inline .leaf, .leaf_chained => |leaf|
+// leaf.generic()` switch arm.
+pub fn (value SetValue) generic() ?GenericLeaf {
+	return match value {
+		Leader { none }
+		Leaf { value.generic() }
+		LeafChained { value.generic() }
 	}
 }
 
@@ -3396,17 +3415,17 @@ pub fn (s &Set) format_entries() []string {
 }
 
 fn format_set_value(value SetValue, prefix string, mut result []string) {
-	match value.typ {
-		.leader {
-			for entry in value.leader.bindings {
+	match value {
+		Leader {
+			for entry in value.set.bindings {
 				format_set_value(entry.value, '${prefix}>${entry.trigger.format()}', mut result)
 			}
 		}
-		.leaf {
-			result << '${prefix}=${value.leaf_action.format()}'
+		Leaf {
+			result << '${prefix}=${value.action.format()}'
 		}
-		.leaf_chained {
-			for i, action in value.chain_actions {
+		LeafChained {
+			for i, action in value.actions {
 				if i == 0 {
 					result << '${prefix}=${action.format()}'
 				} else {
@@ -3452,26 +3471,28 @@ pub fn (s &Set) clone() Set {
 
 	for entry in s.bindings {
 		mut value := entry.value
-		match value.typ {
-			.leaf {
+		match value {
+			Leaf {
 				// Leaves could have data to clone (i.e. text actions contain
-				// allocated strings). V strings copy by reference-count so
-				// the value struct copy is a sufficient deep clone.
-			}
-			.leaf_chained {
-				// Duplicate the actions slice so the clone is independent.
-				value = SetValue{
-					typ: .leaf_chained
-					chain_actions: value.chain_actions.clone()
-					chain_flags: value.chain_flags
+				// allocated strings). V strings are immutable and GC-managed,
+				// so a fresh leaf with the same action is a sufficient copy.
+				value = Leaf{
+					action: value.action
+					flags:  value.flags
 				}
 			}
-			.leader {
+			LeafChained {
+				// Duplicate the actions slice so the clone is independent.
+				value = LeafChained{
+					actions: value.actions.clone()
+					flags:   value.flags
+				}
+			}
+			Leader {
 				// Must be deep cloned into a fresh allocation.
-				mut child := value.leader.clone()
-				value = SetValue{
-					typ: .leader
-					leader: &child
+				mut child := value.set.clone()
+				value = Leader{
+					set: &child
 				}
 			}
 		}
@@ -3509,7 +3530,7 @@ pub fn (mut s Set) put_flags(t Trigger, action Action, flags Flags) {
 			// If we have an existing binding for this trigger, we have to
 			// clean up the old value. For a leaf we update the reverse
 			// mapping; chained leaves aren't in the reverse mapping.
-			if old.typ == .leaf && track_reverse {
+			if old is Leaf && track_reverse {
 				t_hash := t.hash()
 				for ri in 0 .. s.reverse.len {
 					if s.reverse[ri].trigger.hash() == t_hash {
@@ -3518,10 +3539,9 @@ pub fn (mut s Set) put_flags(t Trigger, action Action, flags Flags) {
 					}
 				}
 			}
-			s.bindings[i].value = SetValue{
-				typ: .leaf
-				leaf_action: action
-				leaf_flags: flags
+			s.bindings[i].value = Leaf{
+				action: action
+				flags:  flags
 			}
 			if track_reverse {
 				s.set_reverse(action, t)
@@ -3538,10 +3558,9 @@ pub fn (mut s Set) put_flags(t Trigger, action Action, flags Flags) {
 	// New entry
 	s.bindings << SetEntry{
 		trigger: t
-		value: SetValue{
-			typ: .leaf
-			leaf_action: action
-			leaf_flags: flags
+		value: Leaf{
+			action: action
+			flags:  flags
 		}
 	}
 	if track_reverse {
@@ -3567,32 +3586,34 @@ pub fn (mut s Set) append_chain(action Action) ! {
 	idx := parent.index
 	pval := pset.bindings[idx].value
 
-	match pval.typ {
-		.leader {
+	match pval {
+		Leader {
 			// Leader can never be a chain parent.
 			return error('NoChainParent')
 		}
-		.leaf_chained {
+		LeafChained {
 			// If it is already a chained action, we just append the action.
-			mut actions := pset.bindings[idx].value.chain_actions.clone()
+			mut actions := pval.actions.clone()
 			actions << action
-			pset.bindings[idx].value.chain_actions = actions
+			pset.bindings[idx].value = LeafChained{
+				actions: actions
+				flags:   pval.flags
+			}
 		}
-		.leaf {
+		Leaf {
 			// If it is a leaf, we need to convert it to a leaf_chained. We
 			// also need to remove any prior reverse mappings for this action
 			// since chained actions are not part of the reverse mapping.
-			prior_action := pval.leaf_action
+			prior_action := pval.action
 			prior_trigger := pset.bindings[idx].trigger
 
 			// Convert to leaf_chained first, before fixing up the reverse
 			// mapping. This is important because fixup_reverse_for_action
 			// searches for other bindings with the same action, and we don't
 			// want to find this entry (which is now chained).
-			pset.bindings[idx].value = SetValue{
-				typ: .leaf_chained
-				chain_actions: [prior_action, action]
-				chain_flags: pval.leaf_flags
+			pset.bindings[idx].value = LeafChained{
+				actions: [prior_action, action]
+				flags:   pval.flags
 			}
 
 			// Clean up our reverse mapping. Chained actions are not part of
@@ -3627,16 +3648,16 @@ pub fn (mut s Set) remove(t Trigger) {
 		if s.bindings[i].trigger.folded_equal(t) {
 			entry := s.bindings[i].value
 			s.bindings.delete(i)
-			match entry.typ {
-				.leaf {
+			match entry {
+				Leaf {
 					// For an action we need to fix up the reverse mapping.
-					s.fixup_reverse_for_action(entry.leaf_action, t)
+					s.fixup_reverse_for_action(entry.action, t)
 				}
-				.leaf_chained {
+				LeafChained {
 					// Chained leaves are never in our reverse mapping so no
 					// cleanup is required.
 				}
-				.leader {
+				Leader {
 					// For a leader removal, the child set is owned by the GC
 					// so no explicit deallocation is needed. Leaders are never
 					// part of reverse maps so no other accounting is needed.
@@ -3668,7 +3689,8 @@ fn (mut s Set) fixup_reverse_for_action(action Action, old Trigger) {
 	// Try to find another trigger that maps to the same action
 	action_hash := action.hash()
 	for entry in s.bindings {
-		if entry.value.typ == .leaf && entry.value.leaf_action.hash() == action_hash {
+		value := entry.value
+		if value is Leaf && value.action.hash() == action_hash {
 			s.reverse[found_idx].trigger = entry.trigger
 			return
 		}
@@ -3768,16 +3790,17 @@ fn (mut s Set) parse_and_put_recurse(mut root Set, mut it Parser) !RecurseResult
 		return err
 	}
 
-	match elem.typ {
-		.leader {
+	match elem {
+		ParserElemLeader {
 			t := elem.trigger
 			// If we have a leader, we need to upsert a set for it.
 			for i in 0 .. s.bindings.len {
 				if s.bindings[i].trigger.folded_equal(t) {
-					if s.bindings[i].value.typ == .leader {
+					existing := s.bindings[i].value
+					if existing is Leader {
 						// We have an existing leader for this key already so
 						// recurse into this set.
-						mut inner := s.bindings[i].value.leader
+						mut inner := existing.set
 						return root.parse_and_put_recurse2(mut inner, mut it) or {
 							if err.msg() == 'SequenceUnbind' {
 								// Our child put unbound. If our set is empty we
@@ -3803,9 +3826,8 @@ fn (mut s Set) parse_and_put_recurse(mut root Set, mut it Parser) !RecurseResult
 			mut next_set := &Set{}
 			s.bindings << SetEntry{
 				trigger: t
-				value: SetValue{
-					typ: .leader
-					leader: next_set
+				value: Leader{
+					set: next_set
 				}
 			}
 
@@ -3821,7 +3843,7 @@ fn (mut s Set) parse_and_put_recurse(mut root Set, mut it Parser) !RecurseResult
 				return err
 			}
 		}
-		.binding {
+		ParserElemBinding {
 			b := elem.binding
 			if b.action is ActionUnbind {
 				s.remove(b.trigger)
@@ -3832,7 +3854,7 @@ fn (mut s Set) parse_and_put_recurse(mut root Set, mut it Parser) !RecurseResult
 				set: unsafe { &s }
 			}
 		}
-		.chain {
+		ParserElemChain {
 			// Chains can only happen on the root.
 			action := elem.action
 			// Unbind is not valid for chains.

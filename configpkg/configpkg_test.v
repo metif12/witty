@@ -2287,12 +2287,12 @@ keybind = ctrl+b=new_tab
 		Path{ path: os.join_path(dir, 'user.glsl') },
 	]
 	assert cfg.config_file.items == [Path{ path: os.join_path(dir, 'ignored.conf') }]
-	assert cfg.keybind.set.get(input.Trigger.parse('ctrl+a')!) or {
+	assert (cfg.keybind.set.get(input.Trigger.parse('ctrl+a')!) or {
 		panic('theme keybind was not retained')
-	}.value.leaf_action.tag() == .new_window
-	assert cfg.keybind.set.get(input.Trigger.parse('ctrl+b')!) or {
+	}.value as input.Leaf).action.tag() == .new_window
+	assert (cfg.keybind.set.get(input.Trigger.parse('ctrl+b')!) or {
 		panic('user keybind was not retained')
-	}.value.leaf_action.tag() == .new_tab
+	}.value as input.Leaf).action.tag() == .new_tab
 	assert cfg.diagnostics.len == 0
 }
 
@@ -2863,19 +2863,19 @@ fn test_default_config_initializes_complete_darwin_keybinds() {
 			key: input.TriggerKey.new_unicode(u32(`q`))
 			mods: input.Mods.init(false, false, false, true, false, false, input.SideInfo{})
 		}) or { panic('missing default quit binding') }
-		assert quit.value.leaf_action.tag() == .quit
+		assert (quit.value as input.Leaf).action.tag() == .quit
 
 		resize := cfg.keybind.set.get(input.Trigger{
 			key: input.TriggerKey.new_physical(.arrow_left)
 			mods: input.Mods.init(false, true, false, true, false, false, input.SideInfo{})
 		}) or { panic('missing default split resize binding') }
-		assert resize.value.leaf_action == input.Action(input.ActionResizeSplit{ value: input.SplitResizeParameter{ direction: .left, amount: 10 } })
+		assert (resize.value as input.Leaf).action == input.Action(input.ActionResizeSplit{ value: input.SplitResizeParameter{ direction: .left, amount: 10 } })
 
 		natural := cfg.keybind.set.get(input.Trigger{
 			key: input.TriggerKey.new_physical(.arrow_right)
 			mods: input.Mods.init(false, false, true, false, false, false, input.SideInfo{})
 		}) or { panic('missing natural text editing binding') }
-		assert natural.value.leaf_action == input.Action(input.ActionEsc{ value: 'f' })
+		assert (natural.value as input.Leaf).action == input.Action(input.ActionEsc{ value: 'f' })
 	} $else {
 		assert cfg.keybind.set.bindings.len > 60
 	}

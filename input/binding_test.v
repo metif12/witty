@@ -51,10 +51,6 @@ fn test_binding_source_tag_layouts_and_ordinals() {
 	assert sizeof(ActionScope) == 1
 	assert [ActionScope.app, .surface].map(u8(it)) == [u8(0), 1]
 
-	assert sizeof(ParserElemType) == 1
-	assert [ParserElemType.leader, .binding, .chain].map(u8(it)) == [u8(0), 1, 2]
-	assert sizeof(SetValueType) == 1
-	assert [SetValueType.leader, .leaf, .leaf_chained].map(u8(it)) == [u8(0), 1, 2]
 }
 
 fn test_action_scoped_filters_scope_and_preserves_payload() {
@@ -586,8 +582,8 @@ fn test_parse_action_tuple_invalid_type() {
 fn test_parse_chain() {
 	mut p := Parser.init('chain=new_tab') or { panic(err.msg()) }
 	elem := p.next() or { panic(err.msg()) }
-	assert elem.typ == .chain
-	assert elem.action.tag() == .new_tab
+	assert elem is ParserElemChain
+	assert (elem as ParserElemChain).action.tag() == .new_tab
 	p.next() or {
 		assert err.msg() == 'done'
 		return
@@ -663,10 +659,10 @@ fn test_sequence_iterator_empty_end() {
 fn test_parse_sequence_single() {
 	mut p := Parser.init('ctrl+a=ignore') or { panic(err.msg()) }
 	elem := p.next() or { panic(err.msg()) }
-	assert elem.typ == .binding
-	assert elem.binding.trigger.mods.ctrl() == true
-	assert elem.binding.trigger.key == TriggerKey.new_unicode(u32(`a`))
-	assert elem.binding.action.tag() == .ignore
+	assert elem is ParserElemBinding
+	assert (elem as ParserElemBinding).binding.trigger.mods.ctrl() == true
+	assert (elem as ParserElemBinding).binding.trigger.key == TriggerKey.new_unicode(u32(`a`))
+	assert (elem as ParserElemBinding).binding.action.tag() == .ignore
 	p.next() or {
 		assert err.msg() == 'done'
 		return
@@ -677,12 +673,12 @@ fn test_parse_sequence_single() {
 fn test_parse_sequence_two() {
 	mut p := Parser.init('a>b=ignore') or { panic(err.msg()) }
 	e1 := p.next() or { panic(err.msg()) }
-	assert e1.typ == .leader
-	assert e1.trigger.key == TriggerKey.new_unicode(u32(`a`))
+	assert e1 is ParserElemLeader
+	assert (e1 as ParserElemLeader).trigger.key == TriggerKey.new_unicode(u32(`a`))
 	e2 := p.next() or { panic(err.msg()) }
-	assert e2.typ == .binding
-	assert e2.binding.trigger.key == TriggerKey.new_unicode(u32(`b`))
-	assert e2.binding.action.tag() == .ignore
+	assert e2 is ParserElemBinding
+	assert (e2 as ParserElemBinding).binding.trigger.key == TriggerKey.new_unicode(u32(`b`))
+	assert (e2 as ParserElemBinding).binding.action.tag() == .ignore
 	p.next() or {
 		assert err.msg() == 'done'
 		return
@@ -748,9 +744,9 @@ fn test_set_parse_and_put_typical() {
 
 	// Forward mapping
 	entry := s.get(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }) or { panic('not found') }
-	assert entry.value.typ == .leaf
-	assert entry.value.leaf_action.tag() == .new_window
-	assert entry.value.leaf_flags == Flags{}
+	assert entry.value is Leaf
+	assert (entry.value as Leaf).action.tag() == .new_window
+	assert (entry.value as Leaf).flags == Flags{}
 
 	// Reverse mapping
 	trigger := s.get_trigger(ActionNewWindow{}) or { panic('not found') }
@@ -762,9 +758,9 @@ fn test_set_parse_and_put_unconsumed() {
 	s.parse_and_put('unconsumed:a=new_window') or { panic(err.msg()) }
 
 	entry := s.get(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }) or { panic('not found') }
-	assert entry.value.typ == .leaf
-	assert entry.value.leaf_action.tag() == .new_window
-	assert entry.value.leaf_flags.consumed() == false
+	assert entry.value is Leaf
+	assert (entry.value as Leaf).action.tag() == .new_window
+	assert (entry.value as Leaf).flags.consumed() == false
 
 	trigger := s.get_trigger(ActionNewWindow{}) or { panic('not found') }
 	assert trigger.key == TriggerKey.new_unicode(u32(`a`))
@@ -787,12 +783,12 @@ fn test_set_parse_and_put_sequence() {
 	s.parse_and_put('a>b=new_window') or { panic(err.msg()) }
 
 	a_entry := s.get(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }) or { panic('not found') }
-	assert a_entry.value.typ == .leader
-	inner := a_entry.value.leader
+	assert a_entry.value is Leader
+	inner := (a_entry.value as Leader).set
 
 	b_entry := inner.get(Trigger{ key: TriggerKey.new_unicode(u32(`b`)) }) or { panic('not found') }
-	assert b_entry.value.typ == .leaf
-	assert b_entry.value.leaf_action.tag() == .new_window
+	assert b_entry.value is Leaf
+	assert (b_entry.value as Leaf).action.tag() == .new_window
 }
 
 fn test_set_parse_and_put_sequence_two_actions() {
@@ -801,14 +797,14 @@ fn test_set_parse_and_put_sequence_two_actions() {
 	s.parse_and_put('a>c=new_tab') or { panic(err.msg()) }
 
 	a_entry := s.get(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }) or { panic('not found') }
-	assert a_entry.value.typ == .leader
-	inner := a_entry.value.leader
+	assert a_entry.value is Leader
+	inner := (a_entry.value as Leader).set
 
 	b_entry := inner.get(Trigger{ key: TriggerKey.new_unicode(u32(`b`)) }) or { panic('not found') }
-	assert b_entry.value.leaf_action.tag() == .new_window
+	assert (b_entry.value as Leaf).action.tag() == .new_window
 
 	c_entry := inner.get(Trigger{ key: TriggerKey.new_unicode(u32(`c`)) }) or { panic('not found') }
-	assert c_entry.value.leaf_action.tag() == .new_tab
+	assert (c_entry.value as Leaf).action.tag() == .new_tab
 }
 
 fn test_set_parse_and_put_overwrite_sequence() {
@@ -817,10 +813,10 @@ fn test_set_parse_and_put_overwrite_sequence() {
 	s.parse_and_put('a>b=new_window') or { panic(err.msg()) }
 
 	a_entry := s.get(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }) or { panic('not found') }
-	inner := a_entry.value.leader
+	inner := (a_entry.value as Leader).set
 
 	b_entry := inner.get(Trigger{ key: TriggerKey.new_unicode(u32(`b`)) }) or { panic('not found') }
-	assert b_entry.value.leaf_action.tag() == .new_window
+	assert (b_entry.value as Leaf).action.tag() == .new_window
 }
 
 fn test_set_parse_and_put_overwrite_leader() {
@@ -829,11 +825,11 @@ fn test_set_parse_and_put_overwrite_leader() {
 	s.parse_and_put('a>b=new_window') or { panic(err.msg()) }
 
 	a_entry := s.get(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }) or { panic('not found') }
-	assert a_entry.value.typ == .leader
-	inner := a_entry.value.leader
+	assert a_entry.value is Leader
+	inner := (a_entry.value as Leader).set
 
 	b_entry := inner.get(Trigger{ key: TriggerKey.new_unicode(u32(`b`)) }) or { panic('not found') }
-	assert b_entry.value.leaf_action.tag() == .new_window
+	assert (b_entry.value as Leaf).action.tag() == .new_window
 }
 
 fn test_set_parse_and_put_unbind_leader() {
@@ -903,16 +899,16 @@ fn test_set_consumed_state() {
 	mut s := Set{}
 	s.put(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }, ActionNewWindow{})
 	entry1 := s.get(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }) or { panic('not found') }
-	assert entry1.value.typ == .leaf
-	assert entry1.value.leaf_flags.consumed()
+	assert entry1.value is Leaf
+	assert (entry1.value as Leaf).flags.consumed()
 
 	s.put_flags(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }, ActionNewWindow{}, Flags.init(false, false, false, false))
 	entry2 := s.get(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }) or { panic('not found') }
-	assert !entry2.value.leaf_flags.consumed()
+	assert !(entry2.value as Leaf).flags.consumed()
 
 	s.put(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }, ActionNewWindow{})
 	entry3 := s.get(Trigger{ key: TriggerKey.new_unicode(u32(`a`)) }) or { panic('not found') }
-	assert entry3.value.leaf_flags.consumed()
+	assert (entry3.value as Leaf).flags.consumed()
 }
 
 // --- getEvent tests ---
@@ -925,7 +921,7 @@ fn test_set_get_event_physical() {
 	entry := s.get_event(KeyEvent{ key: .quote, mods: Mods.init(false, true, false, false, false, false, SideInfo{}) }) or {
 		panic('not found')
 	}
-	assert entry.value.leaf_action.tag() == .new_window
+	assert (entry.value as Leaf).action.tag() == .new_window
 
 	// Physical does not match on UTF-8/codepoint
 	r := s.get_event(KeyEvent{
@@ -947,7 +943,7 @@ fn test_set_get_event_codepoint() {
 		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 		unshifted_codepoint: u32(`'`)
 	}) or { panic('not found') }
-	assert entry.value.leaf_action.tag() == .new_window
+	assert (entry.value as Leaf).action.tag() == .new_window
 
 	// Matches on UTF-8
 	entry2 := s.get_event(KeyEvent{
@@ -955,7 +951,7 @@ fn test_set_get_event_codepoint() {
 		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 		utf8: "'"
 	}) or { panic('not found') }
-	assert entry2.value.leaf_action.tag() == .new_window
+	assert (entry2.value as Leaf).action.tag() == .new_window
 
 	// Doesn't match on physical
 	r := s.get_event(KeyEvent{ key: .key_a, mods: Mods.init(false, true, false, false, false, false, SideInfo{}) })
@@ -972,7 +968,7 @@ fn test_set_get_event_case_folding() {
 		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 		unshifted_codepoint: u32(`a`)
 	}) or { panic('not found') }
-	assert entry.value.leaf_action.tag() == .new_window
+	assert (entry.value as Leaf).action.tag() == .new_window
 
 	// Uppercase codepoint
 	entry2 := s.get_event(KeyEvent{
@@ -980,7 +976,7 @@ fn test_set_get_event_case_folding() {
 		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 		unshifted_codepoint: u32(`A`)
 	}) or { panic('not found') }
-	assert entry2.value.leaf_action.tag() == .new_window
+	assert (entry2.value as Leaf).action.tag() == .new_window
 
 	// Negative case for sanity
 	r := s.get_event(KeyEvent{ key: .key_j, mods: Mods.init(false, true, false, false, false, false, SideInfo{}) })
@@ -993,13 +989,13 @@ fn test_set_get_event_catch_all_fallback() {
 
 	// Matches unbound key without modifiers
 	entry := s.get_event(KeyEvent{ key: .key_a }) or { panic('not found') }
-	assert entry.value.leaf_action.tag() == .ignore
+	assert (entry.value as Leaf).action.tag() == .ignore
 
 	// Matches unbound key with modifiers (falls back to catch_all without mods)
 	entry2 := s.get_event(KeyEvent{ key: .key_a, mods: Mods.init(false, true, false, false, false, false, SideInfo{}) }) or {
 		panic('not found')
 	}
-	assert entry2.value.leaf_action.tag() == .ignore
+	assert (entry2.value as Leaf).action.tag() == .ignore
 
 	// Specific binding takes precedence over catch_all
 	s.parse_and_put('ctrl+b=new_window') or { panic(err.msg()) }
@@ -1008,7 +1004,7 @@ fn test_set_get_event_catch_all_fallback() {
 		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
 		unshifted_codepoint: u32(`b`)
 	}) or { panic('not found') }
-	assert entry3.value.leaf_action.tag() == .new_window
+	assert (entry3.value as Leaf).action.tag() == .new_window
 }
 
 fn test_set_get_event_catch_all_with_mods() {
@@ -1020,17 +1016,17 @@ fn test_set_get_event_catch_all_with_mods() {
 	entry := s.get_event(KeyEvent{ key: .key_a, mods: Mods.init(false, true, false, false, false, false, SideInfo{}) }) or {
 		panic('not found')
 	}
-	assert entry.value.leaf_action.tag() == .close_surface
+	assert (entry.value as Leaf).action.tag() == .close_surface
 
 	// Key without mods matches catch_all without mods
 	entry2 := s.get_event(KeyEvent{ key: .key_a }) or { panic('not found') }
-	assert entry2.value.leaf_action.tag() == .ignore
+	assert (entry2.value as Leaf).action.tag() == .ignore
 
 	// Key with different mods falls back to catch_all without mods
 	entry3 := s.get_event(KeyEvent{ key: .key_a, mods: Mods.init(false, false, true, false, false, false, SideInfo{}) }) or {
 		panic('not found')
 	}
-	assert entry3.value.leaf_action.tag() == .ignore
+	assert (entry3.value as Leaf).action.tag() == .ignore
 }
 
 // --- Font size parse tests ---
@@ -1216,11 +1212,10 @@ fn test_set_put_overwrites_sequence() {
 
 fn test_set_value_generic_leaf() {
 	action := Action(ActionNewWindow{})
-	value := SetValue{
-		typ: .leaf
-		leaf_action: action
-		leaf_flags: Flags.init(true, false, true, false)
-	}
+	value := SetValue(Leaf{
+		action: action
+		flags:  Flags.init(true, false, true, false)
+	})
 	leaf := value.generic() or { panic('leaf must have a generic view') }
 	assert leaf.flags.global()
 	assert leaf.actions_slice().len == 1
@@ -1229,19 +1224,16 @@ fn test_set_value_generic_leaf() {
 
 fn test_set_value_generic_chained_leaf() {
 	actions := [Action(ActionNewWindow{}), ActionNewTab{}]
-	value := SetValue{
-		typ: .leaf_chained
-		chain_actions: actions
-		chain_flags: Flags.init(true, false, false, true)
-	}
+	value := SetValue(LeafChained{
+		actions: actions
+		flags:   Flags.init(true, false, false, true)
+	})
 	leaf := value.generic() or { panic('chained leaf must have a generic view') }
 	assert leaf.flags.performable()
 	assert leaf.actions_slice().len == 2
 	assert leaf.actions_slice()[0].equal(actions[0])
 	assert leaf.actions_slice()[1].equal(actions[1])
 
-	leader := SetValue{
-		typ: .leader
-	}
+	leader := SetValue(Leader{})
 	assert leader.generic() == none
 }

@@ -803,9 +803,8 @@ fn test_has_global_keybinds_ignores_global_leaf_under_leader() {
 	leader.put_flags(input.Trigger.parse('b')!, input.ActionNewWindow{}, input.Flags.init(true, false, true, false))
 	app.config.keybind.set.bindings << input.SetEntry{
 		trigger: input.Trigger.parse('ctrl+a')!
-		value: input.SetValue{
-			typ: .leader
-			leader: &leader
+		value: input.Leader{
+			set: &leader
 		}
 	}
 	assert !app.has_global_keybinds()

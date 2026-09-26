@@ -412,19 +412,20 @@ fn (mut self GlobalShortcuts) refresh_map_from_bindings(mut new_map []ShortcutMa
 	}
 	config := self.config.get()
 	for entry in config.keybind.set.bindings {
-		mapped := match entry.value.typ {
-			.leader {
+		value := entry.value
+		mapped := match value {
+			input.Leader {
 				continue
 			}
-			.leaf {
-				map_binding(entry.trigger, entry.value.leaf_flags, [
-					entry.value.leaf_action,
+			input.Leaf {
+				map_binding(entry.trigger, value.flags, [
+					value.action,
 				]) or {
 					continue
 				}
 			}
-			.leaf_chained {
-				map_binding(entry.trigger, entry.value.chain_flags, entry.value.chain_actions) or {
+			input.LeafChained {
+				map_binding(entry.trigger, value.flags, value.actions) or {
 					continue
 				}
 			}

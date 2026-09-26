@@ -165,15 +165,16 @@ pub fn (mut self App) terminate() {
 // in the configuration.
 pub fn (self &App) has_global_keybinds() bool {
 	for entry in self.config.keybind.set.bindings {
-		match entry.value.typ {
-			.leader {}
-			.leaf {
-				if entry.value.leaf_flags.global() {
+		value := entry.value
+		match value {
+			input.Leader {}
+			input.Leaf {
+				if value.flags.global() {
 					return true
 				}
 			}
-			.leaf_chained {
-				if entry.value.chain_flags.global() {
+			input.LeafChained {
+				if value.flags.global() {
 					return true
 				}
 			}

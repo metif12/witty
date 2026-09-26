@@ -95,25 +95,26 @@ fn collect_pretty_bindings(set &input.Set, prefix []input.Trigger, table_name st
 	for entry in set.bindings {
 		mut triggers := prefix.clone()
 		triggers << entry.trigger
-		match entry.value.typ {
-			.leader {
-				collect_pretty_bindings(entry.value.leader, triggers, table_name, has_table, mut
+		value := entry.value
+		match value {
+			input.Leader {
+				collect_pretty_bindings(value.set, triggers, table_name, has_table, mut
 					result)
 			}
-			.leaf {
+			input.Leaf {
 				result << PrettyBinding{
 					has_table:  has_table
 					table_name: table_name
 					triggers:   triggers
-					actions:    [entry.value.leaf_action]
+					actions:    [value.action]
 				}
 			}
-			.leaf_chained {
+			input.LeafChained {
 				result << PrettyBinding{
 					has_table:  has_table
 					table_name: table_name
 					triggers:   triggers
-					actions:    entry.value.chain_actions
+					actions:    value.actions
 				}
 			}
 		}

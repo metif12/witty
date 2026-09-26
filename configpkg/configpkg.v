@@ -4579,32 +4579,42 @@ fn keybinds_set_equal(a inputpkg.Set, b inputpkg.Set) bool {
 	}
 	for entry in a.bindings {
 		other := b.get(entry.trigger) or { return false }
-		if entry.value.typ != other.value.typ {
-			return false
-		}
-		match entry.value.typ {
-			.leader {
-				if !keybinds_set_equal(*entry.value.leader, *other.value.leader) {
+		value := entry.value
+		other_value := other.value
+		match value {
+			inputpkg.Leader {
+				if other_value !is inputpkg.Leader {
+					return false
+				}
+				if !keybinds_set_equal(*value.set, *(other_value as inputpkg.Leader).set) {
 					return false
 				}
 			}
-			.leaf {
-				if !entry.value.leaf_action.equal(other.value.leaf_action) {
+			inputpkg.Leaf {
+				if other_value !is inputpkg.Leaf {
 					return false
 				}
-				if entry.value.leaf_flags != other.value.leaf_flags {
+				other_leaf := other_value as inputpkg.Leaf
+				if !value.action.equal(other_leaf.action) {
+					return false
+				}
+				if value.flags != other_leaf.flags {
 					return false
 				}
 			}
-			.leaf_chained {
-				if entry.value.chain_flags != other.value.chain_flags {
+			inputpkg.LeafChained {
+				if other_value !is inputpkg.LeafChained {
 					return false
 				}
-				if entry.value.chain_actions.len != other.value.chain_actions.len {
+				other_chain := other_value as inputpkg.LeafChained
+				if value.flags != other_chain.flags {
 					return false
 				}
-				for i, act in entry.value.chain_actions {
-					if !act.equal(other.value.chain_actions[i]) {
+				if value.actions.len != other_chain.actions.len {
+					return false
+				}
+				for i, act in value.actions {
+					if !act.equal(other_chain.actions[i]) {
 						return false
 					}
 				}
