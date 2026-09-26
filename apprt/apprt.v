@@ -50,7 +50,7 @@ pub struct RuntimeAction {
 pub:
 	target Target
 	action ActionKey
-	data   ActionValue
+	data   ActionValue = ActionVoid{}
 }
 
 pub fn (mut r RuntimeApp) perform_action(target Target, action ActionKey, data ActionValue) !bool {
@@ -63,7 +63,9 @@ pub fn (mut r RuntimeApp) perform_action(target Target, action ActionKey, data A
 		data: data
 	}
 	if action == .quit_timer {
-		r.quit_timer_running = data.quit_timer_ == .start
+		if data is QuitTimer {
+			r.quit_timer_running = data == .start
+		}
 	}
 	if r.action_fn != unsafe { nil } {
 		return r.action_fn(r.user_data, event)
@@ -407,9 +409,7 @@ pub fn (mut c CoreApp) color_scheme_event(app &App, scheme ColorScheme) ! {
 	}
 	c.config_conditional_state.theme = new_theme
 	mut runtime_app := unsafe { &App(app) }
-	runtime_app.perform_action(Target(AppTarget{}), .reload_config, ActionValue{
-		reload_config_: ReloadConfig{ soft: true }
-	})!
+	runtime_app.perform_action(Target(AppTarget{}), .reload_config, ActionValue(ReloadConfig{ soft: true }))!
 }
 
 pub fn (mut c CoreApp) update_config(app &App, config voidptr) ! {
@@ -443,11 +443,9 @@ pub fn (mut c CoreApp) update_config(app &App, config voidptr) ! {
 		applied.deinit()
 	}
 	mut runtime_app := unsafe { &App(app) }
-	runtime_app.perform_action(Target(AppTarget{}), .config_change, ActionValue{
-		config_change_: ConfigChange{
+	runtime_app.perform_action(Target(AppTarget{}), .config_change, ActionValue(ConfigChange{
 			config: &applied
-		}
-	})!
+		}))!
 }
 
 // focused_surface_pwd returns the working directory reported by the last
@@ -474,19 +472,19 @@ fn (mut c CoreApp) perform_app_action(mut app App, action input.Action) ! {
 	match action.tag {
 		.unbind { panic('unbind action reached app dispatch') }
 		.ignore {}
-		.quit { app.perform_action(target, .quit, ActionValue{})! }
-		.new_window { app.perform_action(target, .new_window, ActionValue{})! }
-		.open_config { app.perform_action(target, .open_config, ActionValue{})! }
-		.reload_config { app.perform_action(target, .reload_config, ActionValue{})! }
-		.close_all_windows { app.perform_action(target, .close_all_windows, ActionValue{})! }
+		.quit { app.perform_action(target, .quit, ActionVoid{})! }
+		.new_window { app.perform_action(target, .new_window, ActionVoid{})! }
+		.open_config { app.perform_action(target, .open_config, ActionVoid{})! }
+		.reload_config { app.perform_action(target, .reload_config, ActionVoid{})! }
+		.close_all_windows { app.perform_action(target, .close_all_windows, ActionVoid{})! }
 		.toggle_quick_terminal {
-			app.perform_action(target, .toggle_quick_terminal, ActionValue{})!
+			app.perform_action(target, .toggle_quick_terminal, ActionVoid{})!
 		}
-		.toggle_visibility { app.perform_action(target, .toggle_visibility, ActionValue{})! }
-		.check_for_updates { app.perform_action(target, .check_for_updates, ActionValue{})! }
-		.show_gtk_inspector { app.perform_action(target, .show_gtk_inspector, ActionValue{})! }
-		.undo { app.perform_action(target, .undo, ActionValue{})! }
-		.redo { app.perform_action(target, .redo, ActionValue{})! }
+		.toggle_visibility { app.perform_action(target, .toggle_visibility, ActionVoid{})! }
+		.check_for_updates { app.perform_action(target, .check_for_updates, ActionVoid{})! }
+		.show_gtk_inspector { app.perform_action(target, .show_gtk_inspector, ActionVoid{})! }
+		.undo { app.perform_action(target, .undo, ActionVoid{})! }
+		.redo { app.perform_action(target, .redo, ActionVoid{})! }
 		else {}
 	}
 }

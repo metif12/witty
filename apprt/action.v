@@ -167,46 +167,49 @@ pub enum ActionKey as i32 {
 // ActionValue holds the data for an Action. Only the field matching
 // the action's key is meaningful. Fields with no associated data
 // (void payloads) don't have entries here.
-pub struct ActionValue {
-pub:
-	close_tab            CloseTabMode
-	new_split            SplitDirection
-	toggle_fullscreen    Fullscreen
-	move_tab             MoveTab
-	goto_tab             GotoTab
-	goto_split_          GotoSplit
-	goto_window_         GotoWindow
-	resize_split_        ResizeSplit
-	size_limit_          SizeLimit
-	initial_size_        InitialSize
-	cell_size_           CellSize
-	scrollbar_           terminal.Scrollbar
-	inspector_           InspectorAction
-	desktop_notification DesktopNotificationValue
-	set_title_           SetTitle
-	prompt_title_        PromptTitle
-	pwd_                 PwdValue
-	mouse_shape_         terminal.MouseShape
-	mouse_visibility_    MouseVisibility
-	mouse_over_link_     MouseOverLink
-	renderer_health_     renderer.Health
-	quit_timer_          QuitTimer
-	float_window_        FloatWindow
-	secure_input_        SecureInput
-	key_sequence_        KeySequence
-	key_table_           KeyTable
-	color_change_        ColorChange
-	reload_config_       ReloadConfig
-	config_change_       ConfigChange
-	open_url_            OpenUrl
-	show_child_exited_   ChildExited
-	progress_report_     osc.ProgressReport
-	command_finished_    CommandFinished
-	start_search_        StartSearch
-	search_total_        SearchTotal
-	search_selected_     SearchSelected
-	readonly_            Readonly
-}
+// The value of an action whose union field is `void`.
+pub struct ActionVoid {}
+
+// The value for an action: the payload type of the matching Action union
+// field. `ActionVoid` stands in for `void`.
+pub type ActionValue = ActionVoid
+	| CellSize
+	| ChildExited
+	| CloseTabMode
+	| ColorChange
+	| CommandFinished
+	| ConfigChange
+	| DesktopNotificationValue
+	| FloatWindow
+	| Fullscreen
+	| GotoSplit
+	| GotoTab
+	| GotoWindow
+	| InitialSize
+	| InspectorAction
+	| KeySequence
+	| KeyTable
+	| MouseOverLink
+	| MouseVisibility
+	| MoveTab
+	| OpenUrl
+	| PromptTitle
+	| PwdValue
+	| QuitTimer
+	| Readonly
+	| ReloadConfig
+	| ResizeSplit
+	| SearchSelected
+	| SearchTotal
+	| SecureInput
+	| SetTitle
+	| SizeLimit
+	| SplitDirection
+	| StartSearch
+	| osc.ProgressReport
+	| renderer.Health
+	| terminal.MouseShape
+	| terminal.Scrollbar
 
 // SplitDirection is the direction of a new split.
 // This is made extern (c_int) to make interop easier with our embedded
@@ -373,20 +376,34 @@ pub:
 	body  string
 }
 
-// KeySequence represents a sequenced key binding event.
-// When active is true, trigger holds the key trigger.
-// When active is false (end), the trigger should be ignored.
-pub struct KeySequence {
+// The end of a key sequence.
+pub struct KeySequenceEnd {}
+
+// A sequenced key binding has continued with a trigger or ended.
+pub type KeySequence = KeySequenceEnd | input.Trigger
+
+// Activate the named key table.
+pub struct KeyTableActivate {
 pub:
-	active  bool
-	trigger input.Trigger
+	name string
 }
 
-// KeyTable represents a key table activation or deactivation event.
-pub struct KeyTable {
-pub:
-	tag  KeyTableTag
-	name string // meaningful only when tag == .activate
+// Deactivate the most recently activated key table.
+pub struct KeyTableDeactivate {}
+
+// Deactivate all key tables.
+pub struct KeyTableDeactivateAll {}
+
+// A key table has been activated or deactivated.
+pub type KeyTable = KeyTableActivate | KeyTableDeactivate | KeyTableDeactivateAll
+
+// The C tag of the active key table variant.
+pub fn (self KeyTable) tag() KeyTableTag {
+	return match self {
+		KeyTableActivate { .activate }
+		KeyTableDeactivate { .deactivate }
+		KeyTableDeactivateAll { .deactivate_all }
+	}
 }
 
 // KeyTableTag identifies the key table operation.

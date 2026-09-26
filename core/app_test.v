@@ -4,6 +4,7 @@ import apprt
 import configpkg
 import datastruct
 import input
+import terminal
 
 struct AppWakeupProbe {
 mut:
@@ -46,15 +47,11 @@ fn app_mailbox_push_forever_for_test(queue_ptr voidptr, done chan bool) {
 
 fn test_runtime_app_records_actions_and_quit_timer() ! {
 	mut runtime := apprt.RuntimeApp{}
-	runtime.perform_action(apprt.Target(apprt.AppTarget{}), .quit_timer, apprt.ActionValue{
-		quit_timer_: .start
-	})!
+	runtime.perform_action(apprt.Target(apprt.AppTarget{}), .quit_timer, apprt.ActionValue(apprt.QuitTimer.start))!
 	assert runtime.actions.len == 1
 	assert runtime.actions[0].action == .quit_timer
 	assert runtime.quit_timer_running
-	runtime.perform_action(apprt.Target(apprt.AppTarget{}), .quit_timer, apprt.ActionValue{
-		quit_timer_: .stop
-	})!
+	runtime.perform_action(apprt.Target(apprt.AppTarget{}), .quit_timer, apprt.ActionValue(apprt.QuitTimer.stop))!
 	assert !runtime.quit_timer_running
 }
 
@@ -101,7 +98,7 @@ fn test_app_color_scheme_change_requests_soft_reload() ! {
 
 	assert runtime.actions.len == 1
 	assert runtime.actions[0].action == .reload_config
-	assert runtime.actions[0].data.reload_config_.soft
+	assert action_value[apprt.ReloadConfig](runtime.actions[0].data).soft
 	app.color_scheme_event(mut runtime, .dark)!
 	assert runtime.actions.len == 1
 }
@@ -230,7 +227,7 @@ fn test_termio_surface_message_routes_core_pointer_to_live_surface() ! {
 	app.tick(mut apprt_runtime)!
 	assert core_runtime.actions.len == 1
 	assert core_runtime.actions[0].action == .mouse_shape
-	assert core_runtime.actions[0].data.mouse_shape_ == .pointer
+	assert action_value[terminal.MouseShape](core_runtime.actions[0].data) == terminal.MouseShape.pointer
 }
 
 fn test_termio_surface_message_ignores_closed_surface() ! {
@@ -368,4 +365,12 @@ fn test_app_focus_surface_requires_known_core_surface() {
 	app.delete_surface(second)
 	assert app.focused_surface() == none
 	assert app.last_focused_surface == none
+}
+
+// The source reads an action's value as `value.<field>`; V needs the variant.
+fn action_value[T](v apprt.ActionValue) T {
+	if v is T {
+		return v
+	}
+	panic('action value is not the expected variant')
 }

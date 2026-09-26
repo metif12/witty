@@ -288,7 +288,8 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 		}
 		.close_tab, .close_window {
 			if mut current := state {
-				if action.action == .close_tab && action.data.close_tab != .this {
+				data := action.data
+				if action.action == .close_tab && data is apprt.CloseTabMode && data != .this {
 					return false
 				}
 				apprt.ghostty_surface_request_close(mut current.surface)
@@ -312,13 +313,19 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 		}
 		.set_title {
 			if current := state {
-				macos.set_view_title(current.view, action.data.set_title_.title)
+				data := action.data
+				if data is apprt.SetTitle {
+					macos.set_view_title(current.view, data.title)
+				}
 				return true
 			}
 		}
 		.initial_size {
 			if current := state {
-				macos.set_view_size(current.view, f64(action.data.initial_size_.width), f64(action.data.initial_size_.height))
+				data := action.data
+				if data is apprt.InitialSize {
+					macos.set_view_size(current.view, f64(data.width), f64(data.height))
+				}
 				return true
 			}
 		}
@@ -329,7 +336,8 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 			}
 		}
 		.goto_tab {
-			value := int(action.data.goto_tab)
+			data := action.data
+			value := if data is apprt.GotoTab { int(data) } else { 0 }
 			if value == int(apprt.GotoTab.previous) {
 				macos.select_tab(-1)
 				return true
@@ -350,10 +358,16 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 			return true
 		}
 		.open_url {
-			return macos.open_url(action.data.open_url_.url)
+			data := action.data
+			if data is apprt.OpenUrl {
+				return macos.open_url(data.url)
+			}
+			return false
 		}
 		.reload_config {
-			return reload_runtime_config(app, action.data.reload_config_.soft)
+			data := action.data
+			soft := if data is apprt.ReloadConfig { data.soft } else { false }
+			return reload_runtime_config(app, soft)
 		}
 		.config_change, .cell_size, .size_limit, .quit_timer {
 			return true

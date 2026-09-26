@@ -8,7 +8,9 @@ import datastruct
 import input
 import global_state
 import internal_os
+import osc
 import os
+import terminal
 import xev
 
 // application_linux.v - The primary GTK application (AdwApplication subclass).
@@ -1564,10 +1566,12 @@ fn application_style_manager_dark_cb(style voidptr, pspec &C.GParamSpec, user_da
 pub fn (mut self Application) perform_action(target apprt.Target, action apprt.ActionKey, data apprt.ActionValue) !bool {
 	match action {
 		.close_tab {
-			mut surface := surface_from_target(target) or { return false }
-			mut tab := tab_from_surface(surface) or { return false }
-			tab.action_close(data.close_tab)
-			return true
+			if data is apprt.CloseTabMode {
+				mut surface := surface_from_target(target) or { return false }
+				mut tab := tab_from_surface(surface) or { return false }
+				tab.action_close(data)
+				return true
+			}
 		}
 		.close_window {
 			surface := surface_from_target(target) or { return false }
@@ -1576,31 +1580,35 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 			return true
 		}
 		.config_change {
-			if unsafe { data.config_change_.config == nil } {
+			if data is apprt.ConfigChange {
+				if unsafe { data.config == nil } {
+					return true
+				}
+				match target {
+					apprt.AppTarget {
+						self.set_config(data.config.clone())
+					}
+					apprt.SurfaceTarget {
+						mut surface := surface_from_target(target) or { return false }
+						surface.set_owned_config(data.config.clone())
+					}
+				}
 				return true
 			}
-			match target {
-				apprt.AppTarget {
-					self.set_config(data.config_change_.config.clone())
-				}
-				apprt.SurfaceTarget {
-					mut surface := surface_from_target(target) or { return false }
-					surface.set_owned_config(data.config_change_.config.clone())
-				}
-			}
-			return true
 		}
 		.desktop_notification {
-			match target {
-				apprt.AppTarget {
-					self.send_desktop_notification(data.desktop_notification.title, data.desktop_notification.body)
+			if data is apprt.DesktopNotificationValue {
+				match target {
+					apprt.AppTarget {
+						self.send_desktop_notification(data.title, data.body)
+					}
+					apprt.SurfaceTarget {
+						surface := surface_from_target(target) or { return false }
+						surface.send_desktop_notification(data.title, data.body)
+					}
 				}
-				apprt.SurfaceTarget {
-					surface := surface_from_target(target) or { return false }
-					surface.send_desktop_notification(data.desktop_notification.title, data.desktop_notification.body)
-				}
+				return true
 			}
-			return true
 		}
 		.equalize_splits {
 			surface := surface_from_target(target) or { return false }
@@ -1612,105 +1620,129 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 			return true
 		}
 		.goto_split {
-			surface := surface_from_target(target) or { return false }
-			if isnil(surface.split_tree) {
-				return false
+			if data is apprt.GotoSplit {
+				surface := surface_from_target(target) or { return false }
+				if isnil(surface.split_tree) {
+					return false
+				}
+				to := match data {
+					.previous { datastruct.Goto(datastruct.GotoPrevious{}) }
+					.next { datastruct.Goto(datastruct.GotoNext{}) }
+					.up { datastruct.Goto(datastruct.GotoSpatial{ direction: .up }) }
+					.left { datastruct.Goto(datastruct.GotoSpatial{ direction: .left }) }
+					.down { datastruct.Goto(datastruct.GotoSpatial{ direction: .down }) }
+					.right { datastruct.Goto(datastruct.GotoSpatial{ direction: .right }) }
+				}
+				mut tree := unsafe { surface.split_tree }
+				return tree.goto_(to)
 			}
-			to := match data.goto_split_ {
-				.previous { datastruct.Goto(datastruct.GotoPrevious{}) }
-				.next { datastruct.Goto(datastruct.GotoNext{}) }
-				.up { datastruct.Goto(datastruct.GotoSpatial{ direction: .up }) }
-				.left { datastruct.Goto(datastruct.GotoSpatial{ direction: .left }) }
-				.down { datastruct.Goto(datastruct.GotoSpatial{ direction: .down }) }
-				.right { datastruct.Goto(datastruct.GotoSpatial{ direction: .right }) }
-			}
-			mut tree := unsafe { surface.split_tree }
-			return tree.goto_(to)
 		}
 		.goto_window {
-			return self.goto_window(data.goto_window_)
+			if data is apprt.GotoWindow {
+				return self.goto_window(data)
+			}
 		}
 		.goto_tab {
-			surface := surface_from_target(target) or { return false }
-			mut window := window_from_surface(surface) or { return false }
-			raw := int(data.goto_tab)
-			selection := if raw == int(apprt.GotoTab.previous) {
-				SelectTab{ kind: .previous }
-			} else if raw == int(apprt.GotoTab.next) {
-				SelectTab{ kind: .next }
-			} else if raw == int(apprt.GotoTab.last) {
-				SelectTab{ kind: .last }
-			} else if raw >= 0 {
-				SelectTab{ kind: .n, n: usize(raw) }
-			} else {
-				return false
+			if data is apprt.GotoTab {
+				surface := surface_from_target(target) or { return false }
+				mut window := window_from_surface(surface) or { return false }
+				raw := int(data)
+				selection := if raw == int(apprt.GotoTab.previous) {
+					SelectTab{ kind: .previous }
+				} else if raw == int(apprt.GotoTab.next) {
+					SelectTab{ kind: .next }
+				} else if raw == int(apprt.GotoTab.last) {
+					SelectTab{ kind: .last }
+				} else if raw >= 0 {
+					SelectTab{ kind: .n, n: usize(raw) }
+				} else {
+					return false
+				}
+				return window.select_tab(selection)
 			}
-			return window.select_tab(selection)
 		}
 		.initial_size {
-			mut surface := surface_from_target(target) or { return false }
-			surface.set_default_size(Size{
-				width: data.initial_size_.width
-				height: data.initial_size_.height
-			})
-			return true
+			if data is apprt.InitialSize {
+				mut surface := surface_from_target(target) or { return false }
+				surface.set_default_size(Size{
+					width: data.width
+					height: data.height
+				})
+				return true
+			}
 		}
 		.inspector {
-			mut surface := surface_from_target(target) or { return false }
-			return surface.control_inspector(data.inspector_)!
+			if data is apprt.InspectorAction {
+				mut surface := surface_from_target(target) or { return false }
+				return surface.control_inspector(data)!
+			}
 		}
 		.key_sequence {
-			mut surface := surface_from_target(target) or { return false }
-			surface.key_sequence_action(data.key_sequence_)
-			return true
+			if data is apprt.KeySequence {
+				mut surface := surface_from_target(target) or { return false }
+				surface.key_sequence_action(data)
+				return true
+			}
 		}
 		.key_table {
-			mut surface := surface_from_target(target) or { return false }
-			surface.key_table_action(data.key_table_)
-			return true
+			if data is apprt.KeyTable {
+				mut surface := surface_from_target(target) or { return false }
+				surface.key_table_action(data)
+				return true
+			}
 		}
 		.mouse_over_link {
-			if mut surface := surface_from_target(target) {
-				surface.set_mouse_hover_url(if data.mouse_over_link_.url.len > 0 {
-					?string(data.mouse_over_link_.url)
-				} else {
-					?string(none)
-				})
+			if data is apprt.MouseOverLink {
+				if mut surface := surface_from_target(target) {
+					surface.set_mouse_hover_url(if data.url.len > 0 {
+						?string(data.url)
+					} else {
+						?string(none)
+					})
+				}
+				return true
 			}
-			return true
 		}
 		.mouse_shape {
-			if mut surface := surface_from_target(target) {
-				surface.set_mouse_shape(data.mouse_shape_)
+			if data is terminal.MouseShape {
+				if mut surface := surface_from_target(target) {
+					surface.set_mouse_shape(data)
+				}
+				return true
 			}
-			return true
 		}
 		.mouse_visibility {
-			if mut surface := surface_from_target(target) {
-				surface.set_mouse_hidden(data.mouse_visibility_ == .hidden)
+			if data is apprt.MouseVisibility {
+				if mut surface := surface_from_target(target) {
+					surface.set_mouse_hidden(data == .hidden)
+				}
+				return true
 			}
-			return true
 		}
 		.move_tab {
-			mut surface := surface_from_target(target) or { return false }
-			mut window := window_from_surface(surface) or { return false }
-			mut rt_surface := surface.rt()
-			return window.move_tab(rt_surface, i64(data.move_tab.amount))
+			if data is apprt.MoveTab {
+				mut surface := surface_from_target(target) or { return false }
+				mut window := window_from_surface(surface) or { return false }
+				mut rt_surface := surface.rt()
+				return window.move_tab(rt_surface, i64(data.amount))
+			}
 		}
 		.new_split {
-			mut surface := surface_from_target(target) or { return false }
-			if isnil(surface.split_tree) {
-				return false
+			if data is apprt.SplitDirection {
+				mut surface := surface_from_target(target) or { return false }
+				if isnil(surface.split_tree) {
+					return false
+				}
+				direction := match data {
+					.right { datastruct.Direction.right }
+					.down { datastruct.Direction.down }
+					.left { datastruct.Direction.left }
+					.up { datastruct.Direction.up }
+				}
+				mut tree := unsafe { surface.split_tree }
+				tree.new_split(direction, surface)
+				return true
 			}
-			direction := match data.new_split {
-				.right { datastruct.Direction.right }
-				.down { datastruct.Direction.down }
-				.left { datastruct.Direction.left }
-				.up { datastruct.Direction.up }
-			}
-			mut tree := unsafe { surface.split_tree }
-			tree.new_split(direction, surface)
-			return true
 		}
 		.new_tab {
 			surface := surface_from_target(target) or { return false }
@@ -1736,15 +1768,19 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 			return true
 		}
 		.quit_timer {
-			match data.quit_timer_ {
-				.start { self.start_quit_timer() }
-				.stop { self.stop_quit_timer() }
+			if data is apprt.QuitTimer {
+				match data {
+					.start { self.start_quit_timer() }
+					.stop { self.stop_quit_timer() }
+				}
+				return true
 			}
-			return true
 		}
 		.reload_config {
-			self.reload_config(target, data.reload_config_.soft)!
-			return true
+			if data is apprt.ReloadConfig {
+				self.reload_config(target, data.soft)!
+				return true
+			}
 		}
 		.open_config {
 			path := configpkg.open_path() or { return false }
@@ -1752,14 +1788,18 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 			return true
 		}
 		.open_url {
-			internal_os.open(data.open_url_.kind, data.open_url_.url) or { return false }
-			return true
+			if data is apprt.OpenUrl {
+				internal_os.open(data.kind, data.url) or { return false }
+				return true
+			}
 		}
 		.pwd {
-			if mut surface := surface_from_target(target) {
-				surface.set_pwd(data.pwd_.pwd)
+			if data is apprt.PwdValue {
+				if mut surface := surface_from_target(target) {
+					surface.set_pwd(data.pwd)
+				}
+				return true
 			}
-			return true
 		}
 		.present_terminal {
 			surface := surface_from_target(target) or { return false }
@@ -1767,17 +1807,21 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 			return true
 		}
 		.progress_report {
-			mut surface := surface_from_target(target) or { return false }
-			surface.set_progress_report(data.progress_report_)
-			return true
+			if data is osc.ProgressReport {
+				mut surface := surface_from_target(target) or { return false }
+				surface.set_progress_report(data)
+				return true
+			}
 		}
 		.prompt_title {
-			if data.prompt_title_ != .surface {
-				return false
+			if data is apprt.PromptTitle {
+				if data != .surface {
+					return false
+				}
+				mut surface := surface_from_target(target) or { return false }
+				surface.prompt_title()
+				return true
 			}
-			mut surface := surface_from_target(target) or { return false }
-			surface.prompt_title()
-			return true
 		}
 		.render {
 			if surface := surface_from_target(target) {
@@ -1786,18 +1830,20 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 			return true
 		}
 		.resize_split {
-			surface := surface_from_target(target) or { return false }
-			if isnil(surface.split_tree) || !surface.split_tree.get_is_split() {
-				return false
+			if data is apprt.ResizeSplit {
+				surface := surface_from_target(target) or { return false }
+				if isnil(surface.split_tree) || !surface.split_tree.get_is_split() {
+					return false
+				}
+				direction := match data.direction {
+					.up { datastruct.Direction.up }
+					.down { datastruct.Direction.down }
+					.left { datastruct.Direction.left }
+					.right { datastruct.Direction.right }
+				}
+				mut tree := unsafe { surface.split_tree }
+				return tree.resize(direction, data.amount)
 			}
-			direction := match data.resize_split_.direction {
-				.up { datastruct.Direction.up }
-				.down { datastruct.Direction.down }
-				.left { datastruct.Direction.left }
-				.right { datastruct.Direction.right }
-			}
-			mut tree := unsafe { surface.split_tree }
-			return tree.resize(direction, data.resize_split_.amount)
 		}
 		.ring_bell {
 			if mut surface := surface_from_target(target) {
@@ -1806,32 +1852,40 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 			return true
 		}
 		.scrollbar {
-			if mut surface := surface_from_target(target) {
-				surface.set_scrollbar(data.scrollbar_)
+			if data is terminal.Scrollbar {
+				if mut surface := surface_from_target(target) {
+					surface.set_scrollbar(data)
+				}
+				return true
 			}
-			return true
 		}
 		.set_title {
-			if mut surface := surface_from_target(target) {
-				surface.set_title(data.set_title_.title)
+			if data is apprt.SetTitle {
+				if mut surface := surface_from_target(target) {
+					surface.set_title(data.title)
+				}
+				return true
 			}
-			return true
 		}
 		.show_child_exited {
-			mut surface := surface_from_target(target) or { return false }
-			return surface.child_exited(data.show_child_exited_)
+			if data is apprt.ChildExited {
+				mut surface := surface_from_target(target) or { return false }
+				return surface.child_exited(data)
+			}
 		}
 		.show_gtk_inspector {
 			C.gtk_window_set_interactive_debugging(true)
 			return true
 		}
 		.size_limit {
-			mut surface := surface_from_target(target) or { return false }
-			surface.set_min_size(Size{
-				width: data.size_limit_.min_width
-				height: data.size_limit_.min_height
-			})
-			return true
+			if data is apprt.SizeLimit {
+				mut surface := surface_from_target(target) or { return false }
+				surface.set_min_size(Size{
+					width: data.min_width
+					height: data.min_height
+				})
+				return true
+			}
 		}
 		.toggle_maximize {
 			if surface := surface_from_target(target) {
@@ -1880,14 +1934,18 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 			return surface.show_on_screen_keyboard(unsafe { nil })
 		}
 		.command_finished {
-			mut surface := surface_from_target(target) or { return false }
-			return surface.command_finished(data.command_finished_)
+			if data is apprt.CommandFinished {
+				mut surface := surface_from_target(target) or { return false }
+				return surface.command_finished(data)
+			}
 		}
 		.start_search {
-			if mut surface := surface_from_target(target) {
-				surface.set_search_active(true, data.start_search_.needle)
+			if data is apprt.StartSearch {
+				if mut surface := surface_from_target(target) {
+					surface.set_search_active(true, data.needle)
+				}
+				return true
 			}
-			return true
 		}
 		.end_search {
 			if mut surface := surface_from_target(target) {
@@ -1896,21 +1954,27 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 			return true
 		}
 		.search_total {
-			if mut surface := surface_from_target(target) {
-				surface.set_search_total(data.search_total_.total)
+			if data is apprt.SearchTotal {
+				if mut surface := surface_from_target(target) {
+					surface.set_search_total(data.total)
+				}
+				return true
 			}
-			return true
 		}
 		.search_selected {
-			if mut surface := surface_from_target(target) {
-				surface.set_search_selected(data.search_selected_.selected)
+			if data is apprt.SearchSelected {
+				if mut surface := surface_from_target(target) {
+					surface.set_search_selected(data.selected)
+				}
+				return true
 			}
-			return true
 		}
 		.readonly {
-			mut surface := surface_from_target(target) or { return false }
-			surface.set_readonly(data.readonly_ == .on)
-			return true
+			if data is apprt.Readonly {
+				mut surface := surface_from_target(target) or { return false }
+				surface.set_readonly(data == .on)
+				return true
+			}
 		}
 		.secure_input, .close_all_windows, .float_window, .toggle_visibility, .toggle_background_opacity, .cell_size, .render_inspector, .renderer_health, .color_change, .reset_window_size, .check_for_updates, .undo, .redo {
 			// These actions are also explicitly unimplemented in the pinned GTK
@@ -1918,6 +1982,8 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 			return false
 		}
 	}
+	// Every value matches its action key, so this is unreachable.
+	return false
 }
 
 // surface_from_target follows the core Surface's runtime pointer back to the

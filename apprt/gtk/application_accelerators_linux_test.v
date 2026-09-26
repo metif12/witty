@@ -110,9 +110,7 @@ fn test_application_dispatches_core_runtime_actions() ! {
 	app.runtime_bridge.actions << apprt.RuntimeAction{
 		target: apprt.Target(apprt.AppTarget{})
 		action: .quit_timer
-		data: apprt.ActionValue{
-			quit_timer_: .start
-		}
+		data: apprt.ActionValue(apprt.QuitTimer.start)
 	}
 	app.dispatch_runtime_actions()!
 	assert app.runtime_bridge.actions.len == 0
@@ -121,9 +119,7 @@ fn test_application_dispatches_core_runtime_actions() ! {
 	app.runtime_bridge.actions << apprt.RuntimeAction{
 		target: apprt.Target(apprt.AppTarget{})
 		action: .quit_timer
-		data: apprt.ActionValue{
-			quit_timer_: .stop
-		}
+		data: apprt.ActionValue(apprt.QuitTimer.stop)
 	}
 	app.dispatch_runtime_actions()!
 	assert app.quit_timer_state == .off

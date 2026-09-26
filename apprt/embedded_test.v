@@ -130,7 +130,7 @@ fn test_embedded_action_callback_receives_target_tag_and_payload() {
 			action_cb: embedded_action_test_callback
 		}
 	}
-	assert app.perform_action(Target(AppTarget{}), .open_config, ActionValue{})!
+	assert app.perform_action(Target(AppTarget{}), .open_config, ActionVoid{})!
 	assert capture.calls == 1
 	assert capture.action.action == .open_config
 
@@ -139,17 +139,15 @@ fn test_embedded_action_callback_receives_target_tag_and_payload() {
 	action := RuntimeAction{
 		target: target
 		action: .resize_split
-		data: ActionValue{
-			resize_split_: ResizeSplit{
+		data: ActionValue(ResizeSplit{
 				direction: .left
 				amount: 42
-			}
-		}
+			})
 	}
 	assert app.perform_action(target, action.action, action.data)!
 	assert capture.calls == 2
-	assert action.data.resize_split_.direction == .left
-	assert action.data.resize_split_.amount == 42
+	assert action_value[ResizeSplit](action.data).direction == .left
+	assert action_value[ResizeSplit](action.data).amount == 42
 }
 
 fn test_core_app_key_event_dispatches_app_binding() {
@@ -250,7 +248,7 @@ fn test_core_app_color_scheme_reloads_only_on_change() {
 	core_app.color_scheme_event(&app, .dark)!
 	assert capture.calls == 1
 	assert capture.action.action == .reload_config
-	assert capture.action.data.reload_config_.soft
+	assert action_value[ReloadConfig](capture.action.data).soft
 	core_app.color_scheme_event(&app, .dark)!
 	assert capture.calls == 1
 }
@@ -342,16 +340,16 @@ fn test_embedded_split_helpers_dispatch_surface_actions() {
 
 	ghostty_surface_split(mut surface, .down)
 	assert capture.action.action == .new_split
-	assert capture.action.data.new_split == .down
+	assert action_value[SplitDirection](capture.action.data) == .down
 
 	ghostty_surface_split_focus(mut surface, .previous)
 	assert capture.action.action == .goto_split
-	assert capture.action.data.goto_split_ == .previous
+	assert action_value[GotoSplit](capture.action.data) == .previous
 
 	ghostty_surface_split_resize(mut surface, .right, 17)
 	assert capture.action.action == .resize_split
-	assert capture.action.data.resize_split_.direction == .right
-	assert capture.action.data.resize_split_.amount == 17
+	assert action_value[ResizeSplit](capture.action.data).direction == .right
+	assert action_value[ResizeSplit](capture.action.data).amount == 17
 
 	ghostty_surface_split_equalize(mut surface)
 	assert capture.action.action == .equalize_splits
@@ -846,4 +844,12 @@ fn test_surface_key_translation_mods_honors_explicit_option_as_alt() {
 		translated := mods_from_int(ghostty_surface_key_translation_mods(&surface, mods_to_int(mods)))
 		assert !translated.alt()
 	}
+}
+
+// The source reads an action's value as `value.<field>`; V needs the variant.
+fn action_value[T](v ActionValue) T {
+	if v is T {
+		return v
+	}
+	panic('action value is not the expected variant')
 }

@@ -49,13 +49,13 @@ fn embedded_bridge_action(app &apprt.App, target apprt.Target, action apprt.Runt
 		apprt.SurfaceTarget { true }
 	}
 	if action.action == .reload_config {
-		capture.reload_soft << action.data.reload_config_.soft
+		capture.reload_soft << action_value[apprt.ReloadConfig](action.data).soft
 	}
 	if action.action == .secure_input {
-		capture.secure_input << action.data.secure_input_
+		capture.secure_input << action_value[apprt.SecureInput](action.data)
 	}
-	if action.action == .config_change && !isnil(action.data.config_change_.config) {
-		capture.config_sizes << action.data.config_change_.config.font_size
+	if action.action == .config_change && !isnil(action_value[apprt.ConfigChange](action.data).config) {
+		capture.config_sizes << action_value[apprt.ConfigChange](action.data).config.font_size
 	}
 	return true
 }
@@ -280,4 +280,12 @@ fn test_embedded_bridge_surface_init_applies_app_conditional_state() ! {
 	backend := unsafe { &EmbeddedSurfaceCore(surface.core_surface.backend) }
 	assert backend.surface.config_conditional_state.theme == .dark
 	assert backend.surface.config.original_font_size == 19
+}
+
+// The source reads an action's value as `value.<field>`; V needs the variant.
+fn action_value[T](v apprt.ActionValue) T {
+	if v is T {
+		return v
+	}
+	panic('action value is not the expected variant')
 }

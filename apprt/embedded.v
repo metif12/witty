@@ -289,12 +289,10 @@ pub fn (mut self App) perform_action(target_ Target, action ActionKey, data Acti
 	// embedded apprt.
 	self.perform_pre_action(target_, action, data)
 
-	// ActionValue is represented as a struct in V, so formatting the whole
-	// value also walks every inactive payload. A config-change contains a
-	// borrowed Config pointer; log that active value as a pointer rather than
-	// recursively formatting the configuration through the inactive fields.
-	if action == .config_change {
-		log_debug('dispatching action target=${target_} action=${action} config=${voidptr(data.config_change_.config)}')
+	// A config-change value holds a borrowed Config pointer; log it as a
+	// pointer rather than recursively formatting the whole configuration.
+	if data is ConfigChange {
+		log_debug('dispatching action target=${target_} action=${action} config=${voidptr(data.config)}')
 	} else {
 		log_debug('dispatching action target=${target_} action=${action} data=${data}')
 	}
@@ -331,8 +329,10 @@ fn (mut self App) perform_pre_action(target_ Target, action ActionKey, data Acti
 						core_surface := unsafe { &CoreSurface(target_.surface) }
 						if !isnil(core_surface.runtime_surface) {
 							surface_ptr := unsafe { &Surface(core_surface.runtime_surface) }
-							unsafe {
-								surface_ptr.title = data.set_title_.title.clone()
+							if data is SetTitle {
+								unsafe {
+									surface_ptr.title = data.title.clone()
+								}
 							}
 						}
 					}
@@ -345,8 +345,8 @@ fn (mut self App) perform_pre_action(target_ Target, action ActionKey, data Acti
 				// For app updates, we update our core config. We need to
 				// clone it because the caller owns the param.
 				AppTarget {
-					if !isnil(data.config_change_.config) {
-						updated := data.config_change_.config.clone()
+					if data is ConfigChange {
+						updated := data.config.clone()
 						self.config.deinit()
 						self.config = updated
 					}
@@ -933,7 +933,7 @@ fn (mut self Surface) queue_inspector_render() {
 	self.app.perform_action(
 		Target(SurfaceTarget{ surface: voidptr(&self.core_surface) }),
 		.render_inspector,
-		ActionValue{},
+		ActionVoid{},
 	) or {
 		log_err('error rendering the inspector err=${err}')
 		return
@@ -1371,7 +1371,7 @@ pub fn ghostty_app_keyboard_changed(mut v App) {
 
 // ghostty_app_open_config opens the configuration.
 pub fn ghostty_app_open_config(mut v App) {
-	v.perform_action(Target(AppTarget{}), .open_config, ActionValue{}) or {
+	v.perform_action(Target(AppTarget{}), .open_config, ActionVoid{}) or {
 		log_err('error reloading config err=${err}')
 		return
 	}
@@ -1743,7 +1743,7 @@ pub fn ghostty_surface_split(mut surface Surface, direction SplitDirection) {
 	surface.app.perform_action(
 		Target(SurfaceTarget{ surface: voidptr(&surface.core_surface) }),
 		.new_split,
-		ActionValue{ new_split: direction },
+		ActionValue(direction),
 	) or {
 		log_err('error creating new split err=${err}')
 		return
@@ -1755,7 +1755,7 @@ pub fn ghostty_surface_split_focus(mut surface Surface, direction GotoSplit) {
 	surface.app.perform_action(
 		Target(SurfaceTarget{ surface: voidptr(&surface.core_surface) }),
 		.goto_split,
-		ActionValue{ goto_split_: direction },
+		ActionValue(direction),
 	) or {
 		log_err('error focusing split err=${err}')
 		return
@@ -1769,12 +1769,10 @@ pub fn ghostty_surface_split_resize(mut surface Surface, direction ResizeSplitDi
 	surface.app.perform_action(
 		Target(SurfaceTarget{ surface: voidptr(&surface.core_surface) }),
 		.resize_split,
-		ActionValue{
-			resize_split_: ResizeSplit{
+		ActionValue(ResizeSplit{
 				direction: direction
 				amount: amount
-			}
-		},
+			}),
 	) or {
 		log_err('error resizing split err=${err}')
 		return
@@ -1787,7 +1785,7 @@ pub fn ghostty_surface_split_equalize(mut surface Surface) {
 	surface.app.perform_action(
 		Target(SurfaceTarget{ surface: voidptr(&surface.core_surface) }),
 		.equalize_splits,
-		ActionValue{},
+		ActionVoid{},
 	) or {
 		log_err('error equalizing splits err=${err}')
 		return

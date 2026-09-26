@@ -288,7 +288,7 @@ fn test_toggle_fullscreen_uses_configured_macos_mode() {
 			assert false, 'surface binding must retain its surface target'
 		}
 	}
-	assert runtime.actions[0].data.toggle_fullscreen == .macos_non_native_padded_notch
+	assert action_value[apprt.Fullscreen](runtime.actions[0].data) == .macos_non_native_padded_notch
 }
 
 fn test_binding_actions_use_canonical_runtime_payloads() {
@@ -298,26 +298,26 @@ fn test_binding_actions_use_canonical_runtime_payloads() {
 	surf.size.screen = rendererpkg.ScreenSize{ width: 800, height: 600 }
 
 	assert surf.perform_binding_action(input.Action.new_enum(.new_split, i32(input.SplitDirection.auto_)))!
-	assert runtime.actions.last().data.new_split == apprt.SplitDirection.right
+	assert action_value[apprt.SplitDirection](runtime.actions.last().data) == apprt.SplitDirection.right
 	surf.size.screen = rendererpkg.ScreenSize{ width: 600, height: 800 }
 	assert surf.perform_binding_action(input.Action.new_enum(.new_split, i32(input.SplitDirection.auto_)))!
-	assert runtime.actions.last().data.new_split == apprt.SplitDirection.down
+	assert action_value[apprt.SplitDirection](runtime.actions.last().data) == apprt.SplitDirection.down
 
 	assert surf.perform_binding_action(input.Action.new_enum(.close_tab, i32(input.CloseTabMode.other)))!
-	assert runtime.actions.last().data.close_tab == apprt.CloseTabMode.other
+	assert action_value[apprt.CloseTabMode](runtime.actions.last().data) == apprt.CloseTabMode.other
 	assert surf.perform_binding_action(input.Action.new_enum(.goto_split, i32(input.SplitFocusDirection.left)))!
-	assert runtime.actions.last().data.goto_split_ == apprt.GotoSplit.left
+	assert action_value[apprt.GotoSplit](runtime.actions.last().data) == apprt.GotoSplit.left
 	assert surf.perform_binding_action(input.Action.new_enum(.goto_window, i32(input.GotoWindow.next)))!
-	assert runtime.actions.last().data.goto_window_ == apprt.GotoWindow.next
+	assert action_value[apprt.GotoWindow](runtime.actions.last().data) == apprt.GotoWindow.next
 	assert surf.perform_binding_action(input.Action.new_enum2(.resize_split, i32(input.SplitResizeDirection.right), 7))!
-	assert runtime.actions.last().data.resize_split_.direction == apprt.ResizeSplitDirection.right
-	assert runtime.actions.last().data.resize_split_.amount == 7
+	assert action_value[apprt.ResizeSplit](runtime.actions.last().data).direction == apprt.ResizeSplitDirection.right
+	assert action_value[apprt.ResizeSplit](runtime.actions.last().data).amount == 7
 	assert surf.perform_binding_action(input.Action.new_enum(.inspector, i32(input.InspectorMode.show)))!
-	assert runtime.actions.last().data.inspector_ == apprt.InspectorAction.show
+	assert action_value[apprt.InspectorAction](runtime.actions.last().data) == apprt.InspectorAction.show
 	assert surf.perform_binding_action(input.Action.new(.previous_tab))!
-	assert runtime.actions.last().data.goto_tab == apprt.GotoTab.previous
+	assert action_value[apprt.GotoTab](runtime.actions.last().data) == apprt.GotoTab.previous
 	assert surf.perform_binding_action(input.Action.new_uint(.goto_tab, 7))!
-	assert int(runtime.actions.last().data.goto_tab) == 7
+	assert int(action_value[apprt.GotoTab](runtime.actions.last().data)) == 7
 }
 
 fn test_surface_key_binding_applies_modifier_remap() {
@@ -936,7 +936,7 @@ fn test_modifier_key_updates_mouse_shape() ! {
 	assert effect == .ignored
 	assert runtime.actions.len == 1
 	assert runtime.actions[0].action == .mouse_shape
-	assert runtime.actions[0].data.mouse_shape_ == .text
+	assert action_value[terminal.MouseShape](runtime.actions[0].data) == .text
 }
 
 fn test_modifier_key_refreshes_link_hover() ! {
@@ -968,9 +968,9 @@ fn test_modifier_key_refreshes_link_hover() ! {
 	assert surf.mouse.over_link
 	assert runtime_app.actions.len == 2
 	assert runtime_app.actions[0].action == .mouse_shape
-	assert runtime_app.actions[0].data.mouse_shape_ == .pointer
+	assert action_value[terminal.MouseShape](runtime_app.actions[0].data) == .pointer
 	assert runtime_app.actions[1].action == .mouse_over_link
-	assert runtime_app.actions[1].data.mouse_over_link_.url == 'http://a'
+	assert action_value[apprt.MouseOverLink](runtime_app.actions[1].data).url == 'http://a'
 }
 
 fn test_focus_callback_always_reveals_mouse() ! {
@@ -983,7 +983,7 @@ fn test_focus_callback_always_reveals_mouse() ! {
 	assert !surf.mouse.hidden
 	assert runtime.actions.len == 1
 	assert runtime.actions[0].action == .mouse_visibility
-	assert runtime.actions[0].data.mouse_visibility_ == .visible
+	assert action_value[apprt.MouseVisibility](runtime.actions[0].data) == .visible
 }
 
 fn test_content_scale_callback_unchanged_dpi_is_noop() ! {
@@ -1022,7 +1022,7 @@ fn test_color_scheme_callback_change() ! {
 	assert surf.config_conditional_state.theme == .light
 	assert runtime.actions.len == 1
 	assert runtime.actions[0].action == .reload_config
-	assert runtime.actions[0].data.reload_config_.soft
+	assert action_value[apprt.ReloadConfig](runtime.actions[0].data).soft
 }
 
 fn test_secure_input_actions_preserve_on_off_and_toggle() ! {
@@ -1031,13 +1031,13 @@ fn test_secure_input_actions_preserve_on_off_and_toggle() ! {
 	surf.rt_app = &runtime
 
 	assert surf.perform_binding_action(input.Action.new(.toggle_secure_input))!
-	assert runtime.actions.last().data.secure_input_ == .toggle
+	assert action_value[apprt.SecureInput](runtime.actions.last().data) == .toggle
 	runtime.actions.clear()
 
 	surf.password_input(true)!
-	assert runtime.actions.last().data.secure_input_ == .on
+	assert action_value[apprt.SecureInput](runtime.actions.last().data) == .on
 	surf.password_input(false)!
-	assert runtime.actions.last().data.secure_input_ == .off
+	assert action_value[apprt.SecureInput](runtime.actions.last().data) == .off
 }
 
 fn test_child_exited_no_wait() {
@@ -1055,8 +1055,8 @@ fn test_child_exited_no_wait() {
 	assert surf.child_exited == true
 	assert app_runtime.actions.len == 1
 	assert app_runtime.actions[0].action == .show_child_exited
-	assert app_runtime.actions[0].data.show_child_exited_.runtime_ms == 1000
-	assert app_runtime.actions[0].data.show_child_exited_.exit_code == 0
+	assert action_value[apprt.ChildExited](app_runtime.actions[0].data).runtime_ms == 1000
+	assert action_value[apprt.ChildExited](app_runtime.actions[0].data).exit_code == 0
 	assert surface_runtime.closed
 }
 
@@ -1072,7 +1072,7 @@ fn test_child_exited_abnormal_native_banner_stops_fallback() {
 	}
 	surf.child_exited_handler(apprt.ChildExited{ runtime_ms: 100, exit_code: 127 })
 	assert app_runtime.actions.len == 1
-	assert app_runtime.actions[0].data.show_child_exited_ == apprt.ChildExited{
+	assert action_value[apprt.ChildExited](app_runtime.actions[0].data) == apprt.ChildExited{
 		exit_code: 127
 		runtime_ms: 100
 	}
@@ -1250,7 +1250,7 @@ fn test_end_key_sequence_no_queued() {
 	assert surf.keyboard.sequence_set == none
 	assert runtime.actions.len == 1
 	assert runtime.actions[0].action == .key_sequence
-	assert !runtime.actions[0].data.key_sequence_.active
+	assert action_value[apprt.KeySequence](runtime.actions[0].data) is apprt.KeySequenceEnd
 }
 
 fn test_end_key_sequence_flush_preserves_allocated_write() {
@@ -1282,7 +1282,7 @@ fn test_deactivate_all_key_tables_action_payload() ! {
 	assert surf.keyboard.table_stack.len == 0
 	assert runtime.actions.len == 1
 	assert runtime.actions[0].action == .key_table
-	assert runtime.actions[0].data.key_table_.tag == .deactivate_all
+	assert action_value[apprt.KeyTable](runtime.actions[0].data).tag() == .deactivate_all
 }
 
 fn test_deactivate_key_table_action_payload() ! {
@@ -1293,7 +1293,7 @@ fn test_deactivate_key_table_action_payload() ! {
 	assert surf.keyboard.table_stack.len == 0
 	assert runtime.actions.len == 1
 	assert runtime.actions[0].action == .key_table
-	assert runtime.actions[0].data.key_table_.tag == .deactivate
+	assert action_value[apprt.KeyTable](runtime.actions[0].data).tag() == .deactivate
 }
 
 fn test_balance_padding_if_needed_disabled() {
@@ -1735,7 +1735,7 @@ fn test_mouse_link_preview_forwards_untrimmed_url() ! {
 	assert runtime.actions.len == 2
 	assert runtime.actions[0].action == .mouse_shape
 	assert runtime.actions[1].action == .mouse_over_link
-	assert runtime.actions[1].data.mouse_over_link_.url == 'http://a   '
+	assert action_value[apprt.MouseOverLink](runtime.actions[1].data).url == 'http://a   '
 }
 
 struct RuntimeCallbackProbe {
@@ -1815,7 +1815,7 @@ fn test_runtime_callbacks_override_headless_storage() ! {
 		user_data: &probe
 		action_fn: runtime_action_probe
 	}
-	assert app.perform_action(apprt.Target(apprt.AppTarget{}), .ring_bell, apprt.ActionValue{})!
+	assert app.perform_action(apprt.Target(apprt.AppTarget{}), .ring_bell, apprt.ActionVoid{})!
 	assert probe.action_kind == .ring_bell
 	assert app.actions.len == 0
 
@@ -1860,8 +1860,8 @@ fn test_open_url_preserves_content_kind_for_runtime() ! {
 
 	assert runtime.actions.len == 1
 	assert runtime.actions[0].action == .open_url
-	assert runtime.actions[0].data.open_url_.kind == .html
-	assert runtime.actions[0].data.open_url_.url == '/tmp/export.html'
+	assert action_value[apprt.OpenUrl](runtime.actions[0].data).kind == .html
+	assert action_value[apprt.OpenUrl](runtime.actions[0].data).url == '/tmp/export.html'
 }
 
 fn test_command_finished_preserves_duration_and_exit_code() ! {
@@ -1874,6 +1874,14 @@ fn test_command_finished_preserves_duration_and_exit_code() ! {
 	assert surf.command_timer == none
 	assert runtime.actions.len == 1
 	assert runtime.actions[0].action == .command_finished
-	assert runtime.actions[0].data.command_finished_.exit_code? == 7
-	assert runtime.actions[0].data.command_finished_.duration.duration >= 1_234_567
+	assert action_value[apprt.CommandFinished](runtime.actions[0].data).exit_code? == 7
+	assert action_value[apprt.CommandFinished](runtime.actions[0].data).duration.duration >= 1_234_567
+}
+
+// The source reads an action's value as `value.<field>`; V needs the variant.
+fn action_value[T](v apprt.ActionValue) T {
+	if v is T {
+		return v
+	}
+	panic('action value is not the expected variant')
 }

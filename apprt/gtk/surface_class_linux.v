@@ -2731,11 +2731,14 @@ fn surface_core_action_cb(data voidptr, action apprt.RuntimeAction) !bool {
 	mut self := unsafe { &SurfaceWidget(data) }
 	match action.action {
 		.prompt_title {
-			if action.data.prompt_title_ != .surface {
-				return false
+			value := action.data
+			if value is apprt.PromptTitle {
+				if value != .surface {
+					return false
+				}
+				self.prompt_title()
+				return true
 			}
-			self.prompt_title()
-			return true
 		}
 		.new_window {
 			return self.app.new_window(self.core_surface)
@@ -2746,37 +2749,46 @@ fn surface_core_action_cb(data voidptr, action apprt.RuntimeAction) !bool {
 			return true
 		}
 		.new_split {
-			direction := match action.data.new_split {
-				.right { datastruct.Direction.right }
-				.left { datastruct.Direction.left }
-				.down { datastruct.Direction.down }
-				.up { datastruct.Direction.up }
+			value := action.data
+			if value is apprt.SplitDirection {
+				direction := match value {
+					.right { datastruct.Direction.right }
+					.left { datastruct.Direction.left }
+					.down { datastruct.Direction.down }
+					.up { datastruct.Direction.up }
+				}
+				mut tree := unsafe { self.split_tree }
+				tree.new_split(direction, self)
+				return true
 			}
-			mut tree := unsafe { self.split_tree }
-			tree.new_split(direction, self)
-			return true
 		}
 		.goto_split {
-			to := match action.data.goto_split_ {
-				.previous { datastruct.Goto(datastruct.GotoPrevious{}) }
-				.next { datastruct.Goto(datastruct.GotoNext{}) }
-				.up { datastruct.Goto(datastruct.GotoSpatial{ direction: .up }) }
-				.left { datastruct.Goto(datastruct.GotoSpatial{ direction: .left }) }
-				.down { datastruct.Goto(datastruct.GotoSpatial{ direction: .down }) }
-				.right { datastruct.Goto(datastruct.GotoSpatial{ direction: .right }) }
+			value := action.data
+			if value is apprt.GotoSplit {
+				to := match value {
+					.previous { datastruct.Goto(datastruct.GotoPrevious{}) }
+					.next { datastruct.Goto(datastruct.GotoNext{}) }
+					.up { datastruct.Goto(datastruct.GotoSpatial{ direction: .up }) }
+					.left { datastruct.Goto(datastruct.GotoSpatial{ direction: .left }) }
+					.down { datastruct.Goto(datastruct.GotoSpatial{ direction: .down }) }
+					.right { datastruct.Goto(datastruct.GotoSpatial{ direction: .right }) }
+				}
+				mut tree := unsafe { self.split_tree }
+				return tree.goto_(to)
 			}
-			mut tree := unsafe { self.split_tree }
-			return tree.goto_(to)
 		}
 		.resize_split {
-			direction := match action.data.resize_split_.direction {
-				.up { datastruct.Direction.up }
-				.down { datastruct.Direction.down }
-				.left { datastruct.Direction.left }
-				.right { datastruct.Direction.right }
+			value := action.data
+			if value is apprt.ResizeSplit {
+				direction := match value.direction {
+					.up { datastruct.Direction.up }
+					.down { datastruct.Direction.down }
+					.left { datastruct.Direction.left }
+					.right { datastruct.Direction.right }
+				}
+				mut tree := unsafe { self.split_tree }
+				return tree.resize(direction, value.amount)
 			}
-			mut tree := unsafe { self.split_tree }
-			return tree.resize(direction, action.data.resize_split_.amount)
 		}
 		.equalize_splits {
 			mut tree := unsafe { self.split_tree }
@@ -2794,104 +2806,161 @@ fn surface_core_action_cb(data voidptr, action apprt.RuntimeAction) !bool {
 			return true
 		}
 		.close_tab {
-			mut window := unsafe { self.split_tree.window }
-			for mut tab in window.tabs {
-				if tab.split_tree == self.split_tree {
-					mode := match action.data.close_tab {
-						.this { CloseTabMode.this }
-						.other { CloseTabMode.other }
-						.right { CloseTabMode.right }
+			value := action.data
+			if value is apprt.CloseTabMode {
+				mut window := unsafe { self.split_tree.window }
+				for mut tab in window.tabs {
+					if tab.split_tree == self.split_tree {
+						mode := match value {
+							.this { CloseTabMode.this }
+							.other { CloseTabMode.other }
+							.right { CloseTabMode.right }
+						}
+						tab.action_close(mode)
+						return true
 					}
-					tab.action_close(mode)
-					return true
 				}
+				return false
 			}
-			return false
 		}
 		.set_title {
-			self.set_title(action.data.set_title_.title)
-			return true
+			value := action.data
+			if value is apprt.SetTitle {
+				self.set_title(value.title)
+				return true
+			}
 		}
 		.initial_size {
-			self.set_default_size(Size{
-				width: action.data.initial_size_.width
-				height: action.data.initial_size_.height
-			})
-			return true
+			value := action.data
+			if value is apprt.InitialSize {
+				self.set_default_size(Size{
+					width: value.width
+					height: value.height
+				})
+				return true
+			}
 		}
 		.size_limit {
-			self.set_min_size(Size{
-				width: action.data.size_limit_.min_width
-				height: action.data.size_limit_.min_height
-			})
-			return true
+			value := action.data
+			if value is apprt.SizeLimit {
+				self.set_min_size(Size{
+					width: value.min_width
+					height: value.min_height
+				})
+				return true
+			}
 		}
 		.mouse_shape {
-			self.set_mouse_shape(action.data.mouse_shape_)
-			return true
+			value := action.data
+			if value is terminal.MouseShape {
+				self.set_mouse_shape(value)
+				return true
+			}
 		}
 		.mouse_visibility {
-			self.set_mouse_hidden(action.data.mouse_visibility_ == .hidden)
-			return true
+			value := action.data
+			if value is apprt.MouseVisibility {
+				self.set_mouse_hidden(value == .hidden)
+				return true
+			}
 		}
 		.mouse_over_link {
-			url := action.data.mouse_over_link_.url
-			self.set_mouse_hover_url(if url.len > 0 { ?string(url) } else { ?string(none) })
-			return true
+			value := action.data
+			if value is apprt.MouseOverLink {
+				url := value.url
+				self.set_mouse_hover_url(if url.len > 0 { ?string(url) } else { ?string(none) })
+				return true
+			}
 		}
 		.scrollbar {
-			self.set_scrollbar(action.data.scrollbar_)
-			return true
+			value := action.data
+			if value is terminal.Scrollbar {
+				self.set_scrollbar(value)
+				return true
+			}
 		}
 		.progress_report {
-			self.set_progress_report(action.data.progress_report_)
-			return true
+			value := action.data
+			if value is osc.ProgressReport {
+				self.set_progress_report(value)
+				return true
+			}
 		}
 		.command_finished {
-			return self.command_finished(action.data.command_finished_)
+			value := action.data
+			if value is apprt.CommandFinished {
+				return self.command_finished(value)
+			}
 		}
 		.desktop_notification {
-			self.send_desktop_notification(action.data.desktop_notification.title, action.data.desktop_notification.body)
-			return true
+			value := action.data
+			if value is apprt.DesktopNotificationValue {
+				self.send_desktop_notification(value.title, value.body)
+				return true
+			}
 		}
 		.readonly {
-			self.set_readonly(action.data.readonly_ == .on)
-			return true
+			value := action.data
+			if value is apprt.Readonly {
+				self.set_readonly(value == .on)
+				return true
+			}
 		}
 		.config_change {
 			self.apply_config()
 			return true
 		}
 		.start_search {
-			self.set_search_active(true, action.data.start_search_.needle)
-			return true
+			value := action.data
+			if value is apprt.StartSearch {
+				self.set_search_active(true, value.needle)
+				return true
+			}
 		}
 		.end_search {
 			self.set_search_active(false, '')
 			return true
 		}
 		.search_total {
-			self.set_search_total(action.data.search_total_.total)
-			return true
+			value := action.data
+			if value is apprt.SearchTotal {
+				self.set_search_total(value.total)
+				return true
+			}
 		}
 		.search_selected {
-			self.set_search_selected(action.data.search_selected_.selected)
-			return true
+			value := action.data
+			if value is apprt.SearchSelected {
+				self.set_search_selected(value.selected)
+				return true
+			}
 		}
 		.show_child_exited {
-			return self.child_exited(action.data.show_child_exited_)
+			value := action.data
+			if value is apprt.ChildExited {
+				return self.child_exited(value)
+			}
 		}
 		.key_sequence {
-			self.key_sequence_action(action.data.key_sequence_)
-			return true
+			value := action.data
+			if value is apprt.KeySequence {
+				self.key_sequence_action(value)
+				return true
+			}
 		}
 		.key_table {
-			self.key_table_action(action.data.key_table_)
-			return true
+			value := action.data
+			if value is apprt.KeyTable {
+				self.key_table_action(value)
+				return true
+			}
 		}
 		.pwd {
-			self.set_pwd(action.data.pwd_.pwd)
-			return true
+			value := action.data
+			if value is apprt.PwdValue {
+				self.set_pwd(value.pwd)
+				return true
+			}
 		}
 		.present_terminal {
 			self.present()
@@ -2925,19 +2994,22 @@ fn surface_core_action_cb(data voidptr, action apprt.RuntimeAction) !bool {
 			return true
 		}
 		.inspector {
-			return self.control_inspector(action.data.inspector_)!
+			value := action.data
+			if value is apprt.InspectorAction {
+				return self.control_inspector(value)!
+			}
 		}
 		.open_config {
-			return self.app.perform_action(apprt.Target(apprt.AppTarget{}), .open_config, apprt.ActionValue{})!
+			return self.app.perform_action(apprt.Target(apprt.AppTarget{}), .open_config, apprt.ActionVoid{})!
 		}
 		.reload_config {
-			return self.app.perform_action(apprt.Target(apprt.AppTarget{}), .reload_config, apprt.ActionValue{})!
+			return self.app.perform_action(apprt.Target(apprt.AppTarget{}), .reload_config, apprt.ActionVoid{})!
 		}
 		.quit {
-			return self.app.perform_action(apprt.Target(apprt.AppTarget{}), .quit, apprt.ActionValue{})!
+			return self.app.perform_action(apprt.Target(apprt.AppTarget{}), .quit, apprt.ActionVoid{})!
 		}
 		.show_gtk_inspector {
-			return self.app.perform_action(apprt.Target(apprt.AppTarget{}), .show_gtk_inspector, apprt.ActionValue{})!
+			return self.app.perform_action(apprt.Target(apprt.AppTarget{}), .show_gtk_inspector, apprt.ActionVoid{})!
 		}
 		.open_url {
 			return self.app.perform_action(apprt.Target(apprt.SurfaceTarget{
@@ -2948,6 +3020,8 @@ fn surface_core_action_cb(data voidptr, action apprt.RuntimeAction) !bool {
 			return false
 		}
 	}
+	// Every value matches its action key, so this is unreachable.
+	return false
 }
 
 fn surface_core_content_scale_cb(data voidptr) !apprt.ContentScale {
@@ -3400,11 +3474,14 @@ pub fn (mut self SurfaceWidget) key_sequence_action(value apprt.KeySequence) {
 		C.g_object_thaw_notify(self.widget)
 	}
 	self.notify_property(g_surface_pspec_key_sequence)
-	if value.active {
-		label := label_from_trigger(value.trigger) or { return }
-		self.key_sequence << label.clone()
-	} else {
-		self.key_sequence.clear()
+	match value {
+		input.Trigger {
+			label := label_from_trigger(value) or { return }
+			self.key_sequence << label.clone()
+		}
+		apprt.KeySequenceEnd {
+			self.key_sequence.clear()
+		}
 	}
 
 	if !isnil(self.key_state_overlay) {
@@ -3421,14 +3498,18 @@ pub fn (mut self SurfaceWidget) key_table_action(value apprt.KeyTable) {
 		C.g_object_thaw_notify(self.widget)
 	}
 	self.notify_property(g_surface_pspec_key_table)
-	match value.tag {
-		.activate { self.key_tables << value.name.clone() }
-		.deactivate {
+	match value {
+		apprt.KeyTableActivate {
+			self.key_tables << value.name.clone()
+		}
+		apprt.KeyTableDeactivate {
 			if self.key_tables.len > 0 {
 				self.key_tables.delete_last()
 			}
 		}
-		.deactivate_all { self.key_tables.clear() }
+		apprt.KeyTableDeactivateAll {
+			self.key_tables.clear()
+		}
 	}
 
 	if !isnil(self.key_state_overlay) {

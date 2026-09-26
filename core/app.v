@@ -408,9 +408,7 @@ pub fn (mut self App) update_config(mut rt_app apprt.RuntimeApp, config &configp
 			config: &rt_app.config
 		}
 	}
-	rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .config_change, apprt.ActionValue{
-		config_change_: cfg_change
-	})!
+	rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .config_change, apprt.ActionValue(cfg_change))!
 }
 
 // add_surface adds an initialized surface to the app's surface list.
@@ -424,9 +422,7 @@ pub fn (mut self App) add_surface(surface &SurfaceRef) {
 	// should be canceled.
 	if surface.rt_app != unsafe { nil } {
 		mut rt_app := unsafe { surface.rt_app }
-		rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .quit_timer, apprt.ActionValue{
-			quit_timer_: .stop
-		}) or {}
+		rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .quit_timer, apprt.ActionValue(apprt.QuitTimer.stop)) or {}
 	}
 }
 
@@ -458,9 +454,7 @@ pub fn (mut self App) delete_surface(surface &SurfaceRef) {
 	// apprt to determine if this is necessary.
 	if self.surfaces.len == 0 && surface.rt_app != unsafe { nil } {
 		mut rt_app := unsafe { surface.rt_app }
-		rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .quit_timer, apprt.ActionValue{
-			quit_timer_: .start
-		}) or {}
+		rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .quit_timer, apprt.ActionValue(apprt.QuitTimer.start)) or {}
 	}
 }
 
@@ -541,7 +535,7 @@ fn (mut self App) redraw_surface(mut rt_app apprt.RuntimeApp, surface &Surface) 
 		return
 	}
 	rt_app.perform_action(apprt.Target(apprt.SurfaceTarget{ surface: surface }), .render,
-		apprt.ActionValue{})!
+		apprt.ActionVoid{})!
 }
 
 // Create a new window
@@ -555,7 +549,7 @@ pub fn (mut self App) new_window(mut rt_app apprt.RuntimeApp, msg NewWindowMsg) 
 	} else {
 		apprt.Target(apprt.AppTarget{})
 	}
-	rt_app.perform_action(target, .new_window, apprt.ActionValue{})!
+	rt_app.perform_action(target, .new_window, apprt.ActionVoid{})!
 }
 
 // focus_event handles an app-level focus event. This should be called
@@ -589,9 +583,7 @@ pub fn (mut self App) color_scheme_event(mut rt_app apprt.RuntimeApp, scheme app
 
 	// Request our configuration be reloaded because the new scheme may
 	// impact the colors of the app.
-	rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .reload_config, apprt.ActionValue{
-		reload_config_: apprt.ReloadConfig{ soft: true }
-	})!
+	rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .reload_config, apprt.ActionValue(apprt.ReloadConfig{ soft: true }))!
 }
 
 // color_scheme_surfaces notifies every live terminal surface after the app's
@@ -698,37 +690,37 @@ pub fn (mut self App) perform_action(mut rt_app apprt.RuntimeApp, action input.A
 		}
 		.ignore {}
 		.quit {
-			rt_app.perform_action(app_target, .quit, apprt.ActionValue{})!
+			rt_app.perform_action(app_target, .quit, apprt.ActionVoid{})!
 		}
 		.new_window {
 			self.new_window(mut rt_app, NewWindowMsg{ parent: none })!
 		}
 		.open_config {
-			rt_app.perform_action(app_target, .open_config, apprt.ActionValue{})!
+			rt_app.perform_action(app_target, .open_config, apprt.ActionVoid{})!
 		}
 		.reload_config {
-			rt_app.perform_action(app_target, .reload_config, apprt.ActionValue{})!
+			rt_app.perform_action(app_target, .reload_config, apprt.ActionVoid{})!
 		}
 		.close_all_windows {
-			rt_app.perform_action(app_target, .close_all_windows, apprt.ActionValue{})!
+			rt_app.perform_action(app_target, .close_all_windows, apprt.ActionVoid{})!
 		}
 		.toggle_quick_terminal {
-			rt_app.perform_action(app_target, .toggle_quick_terminal, apprt.ActionValue{})!
+			rt_app.perform_action(app_target, .toggle_quick_terminal, apprt.ActionVoid{})!
 		}
 		.toggle_visibility {
-			rt_app.perform_action(app_target, .toggle_visibility, apprt.ActionValue{})!
+			rt_app.perform_action(app_target, .toggle_visibility, apprt.ActionVoid{})!
 		}
 		.check_for_updates {
-			rt_app.perform_action(app_target, .check_for_updates, apprt.ActionValue{})!
+			rt_app.perform_action(app_target, .check_for_updates, apprt.ActionVoid{})!
 		}
 		.show_gtk_inspector {
-			rt_app.perform_action(app_target, .show_gtk_inspector, apprt.ActionValue{})!
+			rt_app.perform_action(app_target, .show_gtk_inspector, apprt.ActionVoid{})!
 		}
 		.undo {
-			rt_app.perform_action(app_target, .undo, apprt.ActionValue{})!
+			rt_app.perform_action(app_target, .undo, apprt.ActionVoid{})!
 		}
 		.redo {
-			rt_app.perform_action(app_target, .redo, apprt.ActionValue{})!
+			rt_app.perform_action(app_target, .redo, apprt.ActionVoid{})!
 		}
 		else {
 			// Non-app-scoped action passed to perform_action. In ghostty this

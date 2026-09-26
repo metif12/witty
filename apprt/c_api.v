@@ -4,6 +4,9 @@
 module apprt
 
 import input
+import terminal
+import renderer
+import osc
 
 // CAPITarget mirrors ghostty_target_s.
 pub struct CAPITarget {
@@ -154,154 +157,159 @@ pub fn (target Target) capi() CAPITarget {
 pub fn (runtime_action RuntimeAction) capi() CAPIAction {
 	tag := int(runtime_action.action)
 	data := runtime_action.data
-	return match runtime_action.action {
-		.close_tab { capi_action_payload(tag, int(data.close_tab)) }
-		.new_split { capi_action_payload(tag, int(data.new_split)) }
-		.toggle_fullscreen { capi_action_payload(tag, int(data.toggle_fullscreen)) }
-		.move_tab {
-			capi_action_payload(tag, CActionMoveTab{ amount: isize(data.move_tab.amount) })
+	return match data {
+		CloseTabMode { capi_action_payload(tag, int(data)) }
+		SplitDirection { capi_action_payload(tag, int(data)) }
+		Fullscreen { capi_action_payload(tag, int(data)) }
+		MoveTab {
+			capi_action_payload(tag, CActionMoveTab{ amount: isize(data.amount) })
 		}
-		.goto_tab { capi_action_payload(tag, int(data.goto_tab)) }
-		.goto_split { capi_action_payload(tag, int(data.goto_split_)) }
-		.goto_window { capi_action_payload(tag, int(data.goto_window_)) }
-		.resize_split {
+		GotoTab { capi_action_payload(tag, int(data)) }
+		GotoSplit { capi_action_payload(tag, int(data)) }
+		GotoWindow { capi_action_payload(tag, int(data)) }
+		ResizeSplit {
 			capi_action_payload(tag, CActionResizeSplit{
-				amount: data.resize_split_.amount
-				direction: int(data.resize_split_.direction)
+				amount: data.amount
+				direction: int(data.direction)
 			})
 		}
-		.size_limit {
+		SizeLimit {
 			capi_action_payload(tag, CActionSizeLimit{
-				min_width: data.size_limit_.min_width
-				min_height: data.size_limit_.min_height
-				max_width: data.size_limit_.max_width
-				max_height: data.size_limit_.max_height
+				min_width: data.min_width
+				min_height: data.min_height
+				max_width: data.max_width
+				max_height: data.max_height
 			})
 		}
-		.initial_size {
+		InitialSize {
 			capi_action_payload(tag, CActionSize{
-				width: data.initial_size_.width
-				height: data.initial_size_.height
+				width: data.width
+				height: data.height
 			})
 		}
-		.cell_size {
+		CellSize {
 			capi_action_payload(tag, CActionSize{
-				width: data.cell_size_.width
-				height: data.cell_size_.height
+				width: data.width
+				height: data.height
 			})
 		}
-		.scrollbar {
+		terminal.Scrollbar {
 			capi_action_payload(tag, CActionScrollbar{
-				total: u64(data.scrollbar_.total)
-				offset: u64(data.scrollbar_.offset)
-				len: u64(data.scrollbar_.len)
+				total: u64(data.total)
+				offset: u64(data.offset)
+				len: u64(data.len)
 			})
 		}
-		.inspector { capi_action_payload(tag, int(data.inspector_)) }
-		.desktop_notification {
+		InspectorAction { capi_action_payload(tag, int(data)) }
+		DesktopNotificationValue {
 			capi_action_payload(tag, CActionTwoStrings{
-				first: &char(data.desktop_notification.title.str)
-				second: &char(data.desktop_notification.body.str)
+				first: &char(data.title.str)
+				second: &char(data.body.str)
 			})
 		}
-		.set_title {
-			capi_action_payload(tag, CActionString{ value: &char(data.set_title_.title.str) })
+		SetTitle {
+			capi_action_payload(tag, CActionString{ value: &char(data.title.str) })
 		}
-		.prompt_title { capi_action_payload(tag, int(data.prompt_title_)) }
-		.pwd { capi_action_payload(tag, CActionString{ value: &char(data.pwd_.pwd.str) }) }
-		.mouse_shape { capi_action_payload(tag, int(data.mouse_shape_)) }
-		.mouse_visibility { capi_action_payload(tag, int(data.mouse_visibility_)) }
-		.mouse_over_link {
+		PromptTitle { capi_action_payload(tag, int(data)) }
+		PwdValue { capi_action_payload(tag, CActionString{ value: &char(data.pwd.str) }) }
+		terminal.MouseShape { capi_action_payload(tag, int(data)) }
+		MouseVisibility { capi_action_payload(tag, int(data)) }
+		MouseOverLink {
 			capi_action_payload(tag, CActionSlice{
-				ptr: data.mouse_over_link_.url.str
-				len: usize(data.mouse_over_link_.url.len)
+				ptr: data.url.str
+				len: usize(data.url.len)
 			})
 		}
-		.renderer_health { capi_action_payload(tag, int(data.renderer_health_)) }
-		.quit_timer { capi_action_payload(tag, int(data.quit_timer_)) }
-		.float_window { capi_action_payload(tag, int(data.float_window_)) }
-		.secure_input { capi_action_payload(tag, int(data.secure_input_)) }
-		.key_sequence {
-			trigger := if data.key_sequence_.active {
-				trigger_capi(data.key_sequence_.trigger)
-			} else {
-				// Ghostty's `.end` union arm explicitly uses a default C trigger.
-				CAPIInputTrigger{}
-			}
-			capi_action_payload(tag, CActionKeySequence{
-				active: data.key_sequence_.active
-				trigger: trigger
+		renderer.Health { capi_action_payload(tag, int(data)) }
+		QuitTimer { capi_action_payload(tag, int(data)) }
+		FloatWindow { capi_action_payload(tag, int(data)) }
+		SecureInput { capi_action_payload(tag, int(data)) }
+		KeySequence {
+			capi_action_payload(tag, match data {
+				input.Trigger {
+					CActionKeySequence{
+						active:  true
+						trigger: trigger_capi(data)
+					}
+				}
+				KeySequenceEnd {
+					// Ghostty's `.end` union arm explicitly uses a default C trigger.
+					CActionKeySequence{
+						active:  false
+						trigger: CAPIInputTrigger{}
+					}
+				}
 			})
 		}
-		.key_table {
-			name := data.key_table_.name
+		KeyTable {
+			name := if data is KeyTableActivate { data.name } else { '' }
 			capi_action_payload(tag, CActionKeyTable{
-				tag: int(data.key_table_.tag)
+				tag: int(data.tag())
 				value: CActionSlice{
 					ptr: name.str
 					len: usize(name.len)
 				}
 			})
 		}
-		.color_change {
+		ColorChange {
 			capi_action_payload(tag, CActionColorChange{
-				kind: int(data.color_change_.kind)
-				r: data.color_change_.r
-				g: data.color_change_.g
-				b: data.color_change_.b
+				kind: int(data.kind)
+				r: data.r
+				g: data.g
+				b: data.b
 			})
 		}
-		.reload_config { capi_action_payload(tag, CActionBool{ value: data.reload_config_.soft }) }
-		.config_change {
+		ReloadConfig { capi_action_payload(tag, CActionBool{ value: data.soft }) }
+		ConfigChange {
 			capi_action_payload(tag, CActionConfigChange{
-				config: voidptr(data.config_change_.config)
+				config: voidptr(data.config)
 			})
 		}
-		.open_url {
+		OpenUrl {
 			capi_action_payload(tag, CActionTaggedSlice{
-				tag: int(data.open_url_.kind)
-				ptr: data.open_url_.url.str
-				len: usize(data.open_url_.url.len)
+				tag: int(data.kind)
+				ptr: data.url.str
+				len: usize(data.url.len)
 			})
 		}
-		.show_child_exited {
+		ChildExited {
 			capi_action_payload(tag, CActionChildExited{
-				exit_code: data.show_child_exited_.exit_code
-				runtime_ms: data.show_child_exited_.runtime_ms
+				exit_code: data.exit_code
+				runtime_ms: data.runtime_ms
 			})
 		}
-		.progress_report {
-			progress := data.progress_report_.cval()
+		osc.ProgressReport {
+			progress := data.cval()
 			capi_action_payload(tag, CActionProgressReport{
 				state: progress.state
 				progress: progress.progress
 			})
 		}
-		.command_finished {
-			exit_code := if value := data.command_finished_.exit_code {
+		CommandFinished {
+			exit_code := if value := data.exit_code {
 				i16(value)
 			} else {
 				i16(-1)
 			}
 			capi_action_payload(tag, CActionCommandFinished{
 				exit_code: exit_code
-				duration: data.command_finished_.duration.duration
+				duration: data.duration.duration
 			})
 		}
-		.start_search {
-			capi_action_payload(tag, CActionString{ value: &char(data.start_search_.needle.str) })
+		StartSearch {
+			capi_action_payload(tag, CActionString{ value: &char(data.needle.str) })
 		}
-		.search_total {
+		SearchTotal {
 			capi_action_payload(tag, CActionCount{
-				value: optional_count_capi(data.search_total_.total)
+				value: optional_count_capi(data.total)
 			})
 		}
-		.search_selected {
+		SearchSelected {
 			capi_action_payload(tag, CActionCount{
-				value: optional_count_capi(data.search_selected_.selected)
+				value: optional_count_capi(data.selected)
 			})
 		}
-		.readonly { capi_action_payload(tag, int(data.readonly_)) }
+		Readonly { capi_action_payload(tag, int(data)) }
 		else { CAPIAction{ tag: tag } }
 	}
 }
