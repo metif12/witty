@@ -110,8 +110,10 @@ fn test_update_frame_marks_search_viewport_dirty() ! {
 	defer { term.deinit() }
 	term.modes.set(.cursor_visible, false)
 	state := RenderState{
+		mutex:     sync.new_mutex()
 		terminal_: &term
 	}
+	defer { state.mutex.destroy() }
 	mut render := Renderer{
 		images: ImageRenderState.empty()
 	}

@@ -1154,8 +1154,17 @@ fn (mut self Renderer) update_font_grid_uniforms() {
 	]!
 }
 
-// Update the frame data. The caller holds state.mutex while this extracts its
-// terminal, mouse, and preedit state, matching Ghostty's critical section.
+// Data we extract out of the critical area.
+struct UpdateFrameCritical {
+mut:
+	links            terminal.CellSet
+	mouse            RenderMouse
+	preedit          ?RenderPreedit
+	scrollbar        terminal.Scrollbar
+	overlay_features []OverlayFeature
+}
+
+// Update the frame data.
 pub fn (mut self Renderer) update_frame(state &RenderState, cursor_blink_visible bool) ! {
 	// We fully deinit and reset the terminal state every so often
 	// so that a particularly large terminal state doesn't cause
@@ -1169,45 +1178,13 @@ pub fn (mut self Renderer) update_frame(state &RenderState, cursor_blink_visible
 	}
 	self.terminal_state_frame_count += 1
 
-	// Data we extract out of the critical area. In Ghostty this is done
-	// under the state mutex; here we alias the terminal mutably because
-	// the caller owns a mutable terminal and terminal_state.update mutates
-	// dirty flags.
-	mut t := state.terminal_
-	if t == unsafe { nil } {
-		return
-	}
-	overlay_features := state.inspector_overlay_features()
+	// Update all our data as tightly as possible within the mutex.
+	mut critical := self.update_frame_critical(state) or { return }
 
-	// If we're in a synchronized output state, we pause all rendering.
-	if t.modes.get(.synchronized_output) {
-		return
-	}
-
-	// Update our terminal state.
-	self.terminal_state.update(mut t)
-	if self.terminal_state.dirty != .false_ {
-		t.flags.set_search_viewport_dirty(true)
-	}
-	if self.images.kitty_requires_update(t) {
-		self.images.kitty_update(t, self.size.cell)
-	}
-
-	// Get our scrollbar out of the terminal while frame data is synchronized.
-	scrollbar := t.screens.active.pages.scrollbar()
-
-	// Get our OSC8 links we're hovering if we have a mouse.
-	mut links := terminal.CellSet(map[u64]bool{})
-	if mouse := state.mouse.point {
-		if state.mouse.mods.equal(input.ctrl_or_super_mods(input.Mods{})) {
-			links = self.terminal_state.link_cells(terminal.Pin{
-				x: mouse.x
-				y: mouse.y
-			})
-		}
-	}
-	self.config.links.render_cell_map(mut links, &self.terminal_state, state.mouse.point,
-		state.mouse.mods)!
+	// Outside the critical area we can update our links to contain
+	// our regex results.
+	self.config.links.render_cell_map(mut critical.links, &self.terminal_state, state.mouse.point,
+		state.mouse.mods) or { eprintln('renderer: error searching for regex links err=${err}') }
 
 	// Clear our highlight state and update. The order matters: selected
 	// highlights are appended first and therefore take visual priority.
@@ -1244,7 +1221,7 @@ pub fn (mut self Renderer) update_frame(state &RenderState, cursor_blink_visible
 
 	// Rebuild the inspector overlay after terminal-state highlights have been
 	// updated, matching Ghostty's renderer update order.
-	self.rebuild_overlay(overlay_features) or {
+	self.rebuild_overlay(critical.overlay_features) or {
 		eprintln('renderer: error rebuilding overlay surface: ${err}')
 	}
 	if self.draw_mutex != unsafe { nil } {
@@ -1252,21 +1229,20 @@ pub fn (mut self Renderer) update_frame(state &RenderState, cursor_blink_visible
 	}
 
 	// Build our GPU cells.
-	preedit := if value := state.preedit { value.clone() } else { none }
 	cs := style(&self.terminal_state, StyleOptions{
-		preedit:       preedit != none
+		preedit:       critical.preedit != none
 		focused:       self.focused
 		blink_visible: cursor_blink_visible
 	})
-	self.rebuild_cells(preedit, cs, &links) or {
+	self.rebuild_cells(critical.preedit, cs, &critical.links) or {
 		// This means we weren't able to allocate our buffer to update the
 		// cells. In this case, we continue with our old buffer.
 	}
 
 	// The scrollbar is only emitted during draws so we also check the
 	// scrollbar cache here and update if needed.
-	if !self.scrollbar.eql(scrollbar) {
-		self.scrollbar = scrollbar
+	if !self.scrollbar.eql(critical.scrollbar) {
+		self.scrollbar = critical.scrollbar
 		self.scrollbar_dirty = true
 	}
 
@@ -1293,6 +1269,78 @@ pub fn (mut self Renderer) update_frame(state &RenderState, cursor_blink_visible
 
 	// Signal shaper we're done for the frame.
 	self.font_shaper.end_frame()
+}
+
+// The critical area of update_frame, run while holding state.mutex. Returns
+// none when synchronized output pauses rendering.
+fn (mut self Renderer) update_frame_critical(state &RenderState) ?UpdateFrameCritical {
+	state.mutex.lock()
+	defer {
+		state.mutex.unlock()
+	}
+
+	mut t := state.terminal_
+
+	// If we're in a synchronized output state, we pause all rendering.
+	if t.modes.get(.synchronized_output) {
+		return none
+	}
+
+	// Update our terminal state
+	self.terminal_state.update(mut t)
+
+	// If our terminal state is dirty at all we need to redo
+	// the viewport search.
+	if self.terminal_state.dirty != .false_ {
+		t.flags.set_search_viewport_dirty(true)
+	}
+
+	// Get our scrollbar out of the terminal. We synchronize
+	// the scrollbar read with frame data updates because this
+	// naturally limits the number of calls to this method (it
+	// can be expensive) and also makes it so we don't need another
+	// cross-thread mailbox message within the IO path.
+	scrollbar := t.screens.active.pages.scrollbar()
+
+	// Get our preedit state
+	preedit := if p := state.preedit { ?RenderPreedit(p.clone()) } else { ?RenderPreedit(none) }
+
+	// If we have Kitty graphics data, we enter a SLOW SLOW SLOW path.
+	// We only do this if the Kitty image state is dirty meaning only if
+	// it changes.
+	//
+	// If we have any virtual references, we must also rebuild our
+	// kitty state on every frame because any cell change can move
+	// an image.
+	if self.images.kitty_requires_update(t) {
+		self.images.kitty_update(t, CellSize{
+			width:  self.grid_metrics.cell_width
+			height: self.grid_metrics.cell_height
+		})
+	}
+
+	// Get our OSC8 links we're hovering if we have a mouse.
+	// This requires terminal state because of URLs.
+	mut links := terminal.CellSet(map[u64]bool{})
+	if vp := state.mouse.point {
+		// If the right mods aren't pressed, then we can't match.
+		if state.mouse.mods.equal(input.ctrl_or_super_mods(input.Mods{})) {
+			links = self.terminal_state.link_cells(terminal.Pin{
+				x: vp.x
+				y: vp.y
+			})
+		}
+	}
+
+	overlay_features := state.inspector_overlay_features()
+
+	return UpdateFrameCritical{
+		links:            links
+		mouse:            state.mouse
+		preedit:          preedit
+		scrollbar:        scrollbar
+		overlay_features: overlay_features
+	}
 }
 
 // rebuild_overlay builds or reuses the CPU overlay surface for the selected
