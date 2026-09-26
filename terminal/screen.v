@@ -3642,108 +3642,116 @@ pub fn (mut self Screen) set_attribute(attr SgrAttribute) ! {
 	// the default style.
 	old_style := self.cursor.style
 
-	match attr.kind {
-		.unset {
+	match attr {
+		SgrUnset {
 			self.cursor.style = CellStyle{}
 		}
-		.bold {
+		SgrBold {
 			self.cursor.style.flags.set_bold(true)
 		}
-		.reset_bold {
+		SgrResetBold {
 			// Bold and faint share the same SGR code for this
 			self.cursor.style.flags.set_bold(false)
 			self.cursor.style.flags.set_faint(false)
 		}
-		.italic {
+		SgrItalic {
 			self.cursor.style.flags.set_italic(true)
 		}
-		.reset_italic {
+		SgrResetItalic {
 			self.cursor.style.flags.set_italic(false)
 		}
-		.faint {
+		SgrFaint {
 			self.cursor.style.flags.set_faint(true)
 		}
-		.underline_set {
-			self.cursor.style.flags.set_underline(attr.underline)
+		SgrUnderline {
+			self.cursor.style.flags.set_underline(attr.style)
 		}
-		.underline_color {
+		SgrUnderlineColor {
 			self.cursor.style.underline_color_type = .rgb
-			self.cursor.style.underline_r = attr.r
-			self.cursor.style.underline_g = attr.g
-			self.cursor.style.underline_b = attr.b
+			self.cursor.style.underline_r = attr.rgb.r
+			self.cursor.style.underline_g = attr.rgb.g
+			self.cursor.style.underline_b = attr.rgb.b
 		}
-		.underline_color_256 {
+		SgrUnderlineColor256 {
 			self.cursor.style.underline_color_type = .palette
-			self.cursor.style.underline_palette = attr.index
+			self.cursor.style.underline_palette = attr.idx
 		}
-		.reset_underline_color {
+		SgrResetUnderlineColor {
 			self.cursor.style.underline_color_type = .none
 		}
-		.overline {
+		SgrOverline {
 			self.cursor.style.flags.set_overline(true)
 		}
-		.reset_overline {
+		SgrResetOverline {
 			self.cursor.style.flags.set_overline(false)
 		}
-		.blink {
+		SgrBlink {
 			self.cursor.style.flags.set_blink(true)
 		}
-		.reset_blink {
+		SgrResetBlink {
 			self.cursor.style.flags.set_blink(false)
 		}
-		.inverse {
+		SgrInverse {
 			self.cursor.style.flags.set_inverse(true)
 		}
-		.reset_inverse {
+		SgrResetInverse {
 			self.cursor.style.flags.set_inverse(false)
 		}
-		.invisible {
+		SgrInvisible {
 			self.cursor.style.flags.set_invisible(true)
 		}
-		.reset_invisible {
+		SgrResetInvisible {
 			self.cursor.style.flags.set_invisible(false)
 		}
-		.strikethrough {
+		SgrStrikethrough {
 			self.cursor.style.flags.set_strikethrough(true)
 		}
-		.reset_strikethrough {
+		SgrResetStrikethrough {
 			self.cursor.style.flags.set_strikethrough(false)
 		}
-		.direct_color_fg {
+		SgrDirectColorFg {
 			self.cursor.style.fg_color = .rgb
-			self.cursor.style.fg_r = attr.r
-			self.cursor.style.fg_g = attr.g
-			self.cursor.style.fg_b = attr.b
+			self.cursor.style.fg_r = attr.rgb.r
+			self.cursor.style.fg_g = attr.rgb.g
+			self.cursor.style.fg_b = attr.rgb.b
 		}
-		.direct_color_bg {
+		SgrDirectColorBg {
 			self.cursor.style.bg_color = .rgb
-			self.cursor.style.bg_r = attr.r
-			self.cursor.style.bg_g = attr.g
-			self.cursor.style.bg_b = attr.b
+			self.cursor.style.bg_r = attr.rgb.r
+			self.cursor.style.bg_g = attr.rgb.g
+			self.cursor.style.bg_b = attr.rgb.b
 		}
-		.fg_8, .fg_256 {
+		SgrFg8 {
 			self.cursor.style.fg_color = .palette
-			self.cursor.style.fg_palette = attr.index
+			self.cursor.style.fg_palette = u8(attr.name)
 		}
-		.bg_8, .bg_256 {
+		SgrBg8 {
 			self.cursor.style.bg_color = .palette
-			self.cursor.style.bg_palette = attr.index
+			self.cursor.style.bg_palette = u8(attr.name)
 		}
-		.reset_fg {
+		SgrResetFg {
 			self.cursor.style.fg_color = .none
 		}
-		.reset_bg {
+		SgrResetBg {
 			self.cursor.style.bg_color = .none
 		}
-		.bright_fg_8 {
+		SgrBrightFg8 {
 			self.cursor.style.fg_color = .palette
-			self.cursor.style.fg_palette = attr.index + 8
+			self.cursor.style.fg_palette = u8(attr.name)
 		}
-		.bright_bg_8 {
+		SgrBrightBg8 {
 			self.cursor.style.bg_color = .palette
-			self.cursor.style.bg_palette = attr.index + 8
+			self.cursor.style.bg_palette = u8(attr.name)
 		}
-		.unknown {
+		SgrFg256 {
+			self.cursor.style.fg_color = .palette
+			self.cursor.style.fg_palette = attr.idx
+		}
+		SgrBg256 {
+			self.cursor.style.bg_color = .palette
+			self.cursor.style.bg_palette = attr.idx
+		}
+		SgrUnknown {
 			return
 		}
 	}

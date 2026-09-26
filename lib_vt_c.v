@@ -353,7 +353,7 @@ fn ghostty_sgr_unknown_partial_export(unknown terminal_c.SgrUnknownC, out &voidp
 }
 
 @[export: 'ghostty_sgr_attribute_tag']
-fn ghostty_sgr_attribute_tag_export(attr terminal_c.SgrAttributeC) terminal.SgrAttributeKind {
+fn ghostty_sgr_attribute_tag_export(attr terminal_c.SgrAttributeC) terminal.SgrAttributeTag {
 	return attr.tag
 }
 

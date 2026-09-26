@@ -67,7 +67,7 @@ fn test_c_api_objects_use_supplied_allocator() {
 	assert sgr_parser.set_params([u16(1)], none) == .success
 	assert sgr_parser.set_params([u16(38), 7, 1], none) == .success
 	unknown := sgr_parser.next() or { panic('expected unknown SGR attribute') }
-	assert unknown.unknown_full == [u16(38), 7, 1]
+	assert (unknown as terminal.SgrUnknown).full == [u16(38), 7, 1]
 	sgr_free(mut sgr_parser)
 
 	// Four wrapper objects plus both SGR parameter copies. Replacing the first
@@ -95,21 +95,13 @@ fn test_sgr_c_projection_layout_and_payloads() {
 	assert sizeof(SgrAttributeValueC) == 64
 	assert sizeof(SgrAttributeC) == 72
 
-	underline := sgr_attribute_cval(terminal.SgrAttribute{
-		kind: .underline_set
-		underline: .curly
-	})
-	assert underline.tag == .underline_set
+	underline := sgr_attribute_cval(terminal.SgrUnderline{ style: .curly })
+	assert underline.tag == .underline
 	unsafe {
 		assert *(&i32(&underline.value)) == i32(terminal.UnderlineStyle.curly)
 	}
 
-	color := sgr_attribute_cval(terminal.SgrAttribute{
-		kind: .direct_color_fg
-		r: 0x12
-		g: 0x34
-		b: 0x56
-	})
+	color := sgr_attribute_cval(terminal.SgrDirectColorFg{ rgb: terminal.RGB{ r: 0x12, g: 0x34, b: 0x56 } })
 	unsafe {
 		bytes := &u8(&color.value)
 		assert bytes[0] == 0x12
@@ -117,12 +109,11 @@ fn test_sgr_c_projection_layout_and_payloads() {
 		assert bytes[2] == 0x56
 	}
 
+	// Bright 8-color attributes carry the bright palette name.
+	assert sgr_parser_bright_fg_cval() == 9
+
 	params := [u16(38), 7, 1]
-	unknown_attr := sgr_attribute_cval(terminal.SgrAttribute{
-		kind: .unknown
-		unknown_full: params
-		unknown_partial: params[1..]
-	})
+	unknown_attr := sgr_attribute_cval(terminal.SgrUnknown{ full: params, partial: params[1..] })
 	unsafe {
 		unknown := &SgrUnknownC(&unknown_attr.value)
 		full, full_len := sgr_unknown_full(*unknown)
@@ -132,6 +123,16 @@ fn test_sgr_c_projection_layout_and_payloads() {
 		assert full[0] == 38
 		assert partial[0] == 7
 	}
+}
+
+fn sgr_parser_bright_fg_cval() u8 {
+	mut parser := sgr_new()
+	defer { sgr_free(mut parser) }
+	assert parser.set_params([u16(91)], none) == .success
+	attr := parser.next() or { panic('expected bright foreground attribute') }
+	c := sgr_attribute_cval(attr)
+	assert c.tag == .bright_fg_8
+	return unsafe { *(&u8(&c.value)) }
 }
 
 fn test_osc_command_data_c_layout_and_ordinals() {
@@ -319,11 +320,11 @@ fn test_sgr_parser_lifecycle_and_params() {
 		return
 	}
 	assert attribute_tag(attr) == .bold
-	assert attribute_value(attr).kind == .bold
+	assert attribute_value(attr) is terminal.SgrBold
 	assert parser.next() == none
 
 	parser.reset()
-	assert (parser.next() or { return }).kind == .bold
+	assert (parser.next() or { return }) is terminal.SgrBold
 }
 
 fn test_sgr_parser_colons_and_unknown_payload() {
@@ -331,15 +332,15 @@ fn test_sgr_parser_colons_and_unknown_payload() {
 	defer { sgr_free(mut parser) }
 	assert parser.set_params([u16(38), 2, 0, 1, 2, 3], [u8(`:`), `:`, `:`, `:`, `:`, `;`]) == .success
 	attr := parser.next() or { return }
-	assert attr.kind == .direct_color_fg
-	assert attr.r == 1
-	assert attr.g == 2
-	assert attr.b == 3
+	assert attr.tag() == .direct_color_fg
+	assert (attr as terminal.SgrDirectColorFg).rgb.r == 1
+	assert (attr as terminal.SgrDirectColorFg).rgb.g == 2
+	assert (attr as terminal.SgrDirectColorFg).rgb.b == 3
 
 	assert parser.set_params([u16(38), 7, 1], none) == .success
 	unknown := parser.next() or { return }
-	assert unknown_full(unknown) == [u16(38), 7, 1]
-	assert unknown_partial(unknown) == [u16(38), 7, 1]
+	assert unknown_full(unknown as terminal.SgrUnknown) == [u16(38), 7, 1]
+	assert unknown_partial(unknown as terminal.SgrUnknown) == [u16(38), 7, 1]
 }
 
 fn test_sgr_parser_rejects_invalid_separator_length() {

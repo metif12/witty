@@ -567,11 +567,14 @@ pub fn (mut self StreamHandler) vt(action terminal.ActionKey, value terminal.Act
 		}
 		.set_attribute {
 			if value is terminal.SgrAttribute {
-				sgr := value
-				if sgr.kind == .unknown {
-					// Unknown/invalid SGR attributes aren't common in the wild
-				} else {
-					self.terminal.set_attribute(sgr) or {}
+				match value {
+					terminal.SgrUnknown {
+						// We optimize for the happy path scenario here, since
+						// unknown/invalid SGRs aren't that common in the wild.
+					}
+					else {
+						self.terminal.set_attribute(value) or {}
+					}
 				}
 			}
 		}

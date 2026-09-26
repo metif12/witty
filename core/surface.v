@@ -5392,7 +5392,7 @@ fn (mut self Surface) child_exited_abnormally(info apprt.ChildExited) ! {
 	t.carriage_return()
 
 	// Reset styles
-	t.set_attribute(terminal.SgrAttribute{ kind: .unset })!
+	t.set_attribute(terminal.SgrUnset{})!
 	viewport := t.plain_string()!
 	if viewport.len > 0 {
 		t.linefeed()!
@@ -5404,29 +5404,29 @@ fn (mut self Surface) child_exited_abnormally(info apprt.ChildExited) ! {
 		t.linefeed()!
 	}
 
-	t.set_attribute(terminal.SgrAttribute{ kind: .bright_fg_8, index: 1 })!
-	t.set_attribute(terminal.SgrAttribute{ kind: .bold })!
+	t.set_attribute(terminal.SgrFg8{ name: .bright_red })!
+	t.set_attribute(terminal.SgrBold{})!
 	t.print_string('Ghostty failed to launch the requested command:')!
-	t.set_attribute(terminal.SgrAttribute{ kind: .unset })!
+	t.set_attribute(terminal.SgrUnset{})!
 	t.carriage_return()
 	t.linefeed()!
 	t.linefeed()!
 	t.print_string(self.io.impl.backend.subprocess.args.join(' '))!
-	t.set_attribute(terminal.SgrAttribute{ kind: .unset })!
+	t.set_attribute(terminal.SgrUnset{})!
 	t.carriage_return()
 	t.linefeed()!
 	t.linefeed()!
 	t.print_string('Runtime: ')!
-	t.set_attribute(terminal.SgrAttribute{ kind: .fg_8, index: 1 })!
+	t.set_attribute(terminal.SgrFg8{ name: .red })!
 	t.print_string('${info.runtime_ms} ms')!
-	t.set_attribute(terminal.SgrAttribute{ kind: .unset })!
+	t.set_attribute(terminal.SgrUnset{})!
 	$if !macos {
 		t.carriage_return()
 		t.linefeed()!
 		t.print_string('Exit Code: ')!
-		t.set_attribute(terminal.SgrAttribute{ kind: .fg_8, index: 1 })!
+		t.set_attribute(terminal.SgrFg8{ name: .red })!
 		t.print_string(info.exit_code.str())!
-		t.set_attribute(terminal.SgrAttribute{ kind: .unset })!
+		t.set_attribute(terminal.SgrUnset{})!
 	}
 	t.carriage_return()
 	t.linefeed()!

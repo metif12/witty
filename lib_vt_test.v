@@ -104,7 +104,7 @@ fn test_lib_vt_native_sgr_exports_and_c_projection() {
 	assert ghostty_sgr_set_params_export(parser, &params[0], unsafe { nil }, usize(params.len)) == .success
 	mut attr := terminal_c.SgrAttributeC{}
 	assert ghostty_sgr_next_export(parser, &attr)
-	assert ghostty_sgr_attribute_tag_export(attr) == terminal.SgrAttributeKind.bold
+	assert ghostty_sgr_attribute_tag_export(attr) == terminal.SgrAttributeTag.bold
 	assert !isnil(ghostty_sgr_attribute_value_export(&attr))
 	assert ghostty_sgr_next_export(parser, &attr)
 	assert attr.tag == .direct_color_fg

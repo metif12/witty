@@ -60,20 +60,14 @@ fn same_page(a &Page, b &Page) bool {
 	return voidptr(a) == voidptr(b)
 }
 
-// Ghostty's `.{ .bold = {} }`-style SGR attributes.
-fn sgr(kind SgrAttributeKind) SgrAttribute {
-	return SgrAttribute{
-		kind: kind
-	}
-}
-
 // Ghostty's `.{ .direct_color_bg = .{ .r = r, .g = g, .b = b } }`.
 fn sgr_bg_rgb(r u8, g u8, b u8) SgrAttribute {
-	return SgrAttribute{
-		kind: .direct_color_bg
-		r:    r
-		g:    g
-		b:    b
+	return SgrDirectColorBg{
+		rgb: RGB{
+			r: r
+			g: g
+			b: b
+		}
 	}
 }
 
@@ -175,7 +169,7 @@ fn test_screen_cursor_copy_style_deref() ! {
 	page := &s2.cursor.page_pin.node.data
 
 	// Bold should create our style
-	s2.set_attribute(sgr(.bold))!
+	s2.set_attribute(SgrBold{})!
 	assert page.styles.count() == usize(1)
 	assert s2.cursor.style.flags.bold()
 
@@ -240,7 +234,7 @@ fn test_screen_cursor_copy_style_deref_new_page() ! {
 	assert s2.cursor.y == 9
 
 	// Bold should create our style in page 1.
-	s2.set_attribute(sgr(.bold))!
+	s2.set_attribute(SgrBold{})!
 	assert page.styles.count() == usize(1)
 	assert s2.cursor.style.flags.bold()
 
@@ -260,7 +254,7 @@ fn test_screen_cursor_copy_style_deref_new_page() ! {
 fn test_screen_cursor_copy_style_copy() ! {
 	mut s := Screen.init(10, 10, 0)
 	defer { s.deinit() }
-	s.set_attribute(sgr(.bold))!
+	s.set_attribute(SgrBold{})!
 
 	mut s2 := Screen.init(10, 10, 0)
 	defer { s2.deinit() }
@@ -412,13 +406,13 @@ fn test_screen_style_basics() ! {
 	assert page.styles.count() == usize(0)
 
 	// Set a new style
-	s.set_attribute(sgr(.bold))!
+	s.set_attribute(SgrBold{})!
 	assert s.cursor.style_id != 0
 	assert page.styles.count() == usize(1)
 	assert s.cursor.style.flags.bold()
 
 	// Set another style, we should still only have one since it was unused
-	s.set_attribute(sgr(.italic))!
+	s.set_attribute(SgrItalic{})!
 	assert s.cursor.style_id != 0
 	assert page.styles.count() == usize(1)
 	assert s.cursor.style.flags.italic()
@@ -431,12 +425,12 @@ fn test_screen_style_reset_to_default() ! {
 	assert page.styles.count() == usize(0)
 
 	// Set a new style
-	s.set_attribute(sgr(.bold))!
+	s.set_attribute(SgrBold{})!
 	assert s.cursor.style_id != 0
 	assert page.styles.count() == usize(1)
 
 	// Reset to default
-	s.set_attribute(sgr(.reset_bold))!
+	s.set_attribute(SgrResetBold{})!
 	assert s.cursor.style_id == 0
 	assert page.styles.count() == usize(0)
 }
@@ -448,12 +442,12 @@ fn test_screen_style_reset_with_unset() ! {
 	assert page.styles.count() == usize(0)
 
 	// Set a new style
-	s.set_attribute(sgr(.bold))!
+	s.set_attribute(SgrBold{})!
 	assert s.cursor.style_id != 0
 	assert page.styles.count() == usize(1)
 
 	// Reset to default
-	s.set_attribute(sgr(.unset))!
+	s.set_attribute(SgrUnset{})!
 	assert s.cursor.style_id == 0
 	assert page.styles.count() == usize(0)
 }
@@ -485,9 +479,9 @@ fn test_screen_clear_rows_active_styled_line() ! {
 	mut s := Screen.init(80, 24, 1000)
 	defer { s.deinit() }
 
-	s.set_attribute(sgr(.bold))!
+	s.set_attribute(SgrBold{})!
 	s.test_write_string('hello world')!
-	s.set_attribute(sgr(.unset))!
+	s.set_attribute(SgrUnset{})!
 
 	// We should have one style
 	page := &s.cursor.page_pin.node.data
@@ -633,7 +627,7 @@ fn test_screen_cursor_down_across_pages_preserves_style() ! {
 	}
 
 	// Go back up, set a style
-	s.set_attribute(sgr(.bold))!
+	s.set_attribute(SgrBold{})!
 	{
 		page := &s.cursor.page_pin.node.data
 		styleval := page.styles.get(s.cursor.style_id)
@@ -672,7 +666,7 @@ fn test_screen_cursor_up_across_pages_preserves_style() ! {
 	}
 
 	// Go back up, set a style
-	s.set_attribute(sgr(.bold))!
+	s.set_attribute(SgrBold{})!
 	{
 		page := &s.cursor.page_pin.node.data
 		styleval := page.styles.get(s.cursor.style_id)
@@ -713,7 +707,7 @@ fn test_screen_cursor_absolute_across_pages_preserves_style() ! {
 	}
 
 	// Go back up, set a style
-	s.set_attribute(sgr(.bold))!
+	s.set_attribute(SgrBold{})!
 	{
 		page := &s.cursor.page_pin.node.data
 		styleval := page.styles.get(s.cursor.style_id)
@@ -783,7 +777,7 @@ fn test_screen_cursor_absolute_to_page_with_insufficient_capacity() ! {
 	}
 
 	// Set a style on the cursor.
-	s.set_attribute(sgr(.bold))!
+	s.set_attribute(SgrBold{})!
 	{
 		styleval := new_page.styles.get(s.cursor.style_id)
 		assert styleval.flags.bold()
@@ -886,7 +880,7 @@ fn test_screen_scrolling_with_a_single_row_screen_with_scrollback() ! {
 fn test_screen_scrolling_across_pages_preserves_style() ! {
 	mut s := Screen.init(10, 3, 1)
 	defer { s.deinit() }
-	s.set_attribute(sgr(.bold))!
+	s.set_attribute(SgrBold{})!
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL')!
 	mut start_node := last_node(s)
 	start_page := &start_node.data
@@ -1457,7 +1451,7 @@ fn test_screen_scroll_above_same_page_but_cursor_on_previous_page_last_row() ! {
 	//
 	// This catches a case of memory corruption where the cursor
 	// is moved between pages without accounting for style refs.
-	s.set_attribute(sgr(.reset_bg))!
+	s.set_attribute(SgrResetBg{})!
 	first_node(s).data.assert_integrity()
 	last_node(s).data.assert_integrity()
 }
@@ -4789,7 +4783,7 @@ fn test_screen_cursor_set_hyperlink_oom_uri_too_large_for_string_alloc() ! {
 fn test_screen_increase_capacity_cursor_style_ref_count_preserved() ! {
 	mut s := Screen.init(5, 5, 0)
 	defer { s.deinit() }
-	s.set_attribute(sgr(.bold))!
+	s.set_attribute(SgrBold{})!
 	s.test_write_string('1ABCD')!
 
 	// We should have one page and it should be our cursor page
@@ -4869,7 +4863,7 @@ fn test_screen_increase_capacity_cursor_with_both_style_and_hyperlink_preserved(
 	// Set both a non-default style AND an active hyperlink.
 	// Write one character first with bold to mark the row as styled,
 	// then start the hyperlink and write more characters.
-	s.set_attribute(sgr(.bold))!
+	s.set_attribute(SgrBold{})!
 	s.start_hyperlink('https://example.com/', none)!
 	s.test_write_string('1ABCD')!
 
@@ -4920,7 +4914,7 @@ fn test_screen_increase_capacity_non_cursor_page_returns_early() ! {
 	defer { s.deinit() }
 
 	// Set up a custom style and hyperlink on the cursor
-	s.set_attribute(sgr(.bold))!
+	s.set_attribute(SgrBold{})!
 	s.start_hyperlink('https://example.com/', none)!
 	s.test_write_string('Hello')!
 
@@ -5036,7 +5030,7 @@ fn test_screen_cursor_down_to_page_with_insufficient_capacity() ! {
 
 	// Move cursor to start of active area and set a style
 	s.cursor_absolute(0, 0)
-	s.set_attribute(sgr(.bold))!
+	s.set_attribute(SgrBold{})!
 	assert s.cursor.style.flags.bold()
 	assert s.cursor.style_id != default_style_id
 
@@ -5108,7 +5102,7 @@ fn test_screen_set_attribute_increases_capacity_when_style_map_is_full() ! {
 
 	// Now try to set a new unique attribute that would require a new style slot
 	// This should succeed by increasing capacity (or splitting if at max capacity)
-	s.set_attribute(sgr(.bold))!
+	s.set_attribute(SgrBold{})!
 
 	// The style should have been applied (bold flag set)
 	assert s.cursor.style.flags.bold()
@@ -5169,7 +5163,7 @@ fn test_screen_set_attribute_splits_page_on_out_of_space_at_max_styles() ! {
 
 	// Now try to set a new unique attribute that would require a new style slot
 	// At max capacity, increaseCapacity will return OutOfSpace, triggering page split
-	s.set_attribute(sgr(.bold))!
+	s.set_attribute(SgrBold{})!
 
 	// The style should have been applied (bold flag set)
 	assert s.cursor.style.flags.bold()
@@ -5705,8 +5699,8 @@ fn test_screen_style_underline_color_independent_from_fg() ! {
 	defer { s.deinit() }
 
 	// Set an RGB fg color and a DIFFERENT RGB underline color.
-	s.set_attribute(SgrAttribute{ kind: .direct_color_fg, r: 255, g: 0, b: 0 })!
-	s.set_attribute(SgrAttribute{ kind: .underline_color, r: 0, g: 255, b: 0 })!
+	s.set_attribute(SgrDirectColorFg{ rgb: RGB{ r: 255, g: 0, b: 0 } })!
+	s.set_attribute(SgrUnderlineColor{ rgb: RGB{ r: 0, g: 255, b: 0 } })!
 
 	// The fg color must be preserved unchanged.
 	assert s.cursor.style.fg_color == .rgb
@@ -5736,7 +5730,7 @@ fn test_screen_style_underline_color_independent_from_fg() ! {
 		g: 22
 		b: 33
 	}
-	s.set_attribute(SgrAttribute{ kind: .underline_color_256, index: 7 })!
+	s.set_attribute(SgrUnderlineColor256{ idx: 7 })!
 	assert s.cursor.style.underline_color_type == .palette
 	assert s.cursor.style.underline_palette == 7
 	// fg is still the RGB red we set earlier, untouched by the palette write.
@@ -5746,7 +5740,7 @@ fn test_screen_style_underline_color_independent_from_fg() ! {
 	assert ul2.r == 11 && ul2.g == 22 && ul2.b == 33
 
 	// Reset clears only the underline color.
-	s.set_attribute(sgr(.reset_underline_color))!
+	s.set_attribute(SgrResetUnderlineColor{})!
 	assert s.cursor.style.underline_color_type == .none
 	assert s.cursor.style.fg_color == .rgb
 	assert s.cursor.style.fg_r == 255
@@ -6230,7 +6224,7 @@ fn test_screen_resize_more_cols_reflows_pinned_viewport() ! {
 fn test_screen_clone_deep_copies_managed_cells_and_resets_cursor_state() ! {
 	mut s := Screen.init(3, 2, 10)
 	defer { s.deinit() }
-	s.set_attribute(sgr(.bold))!
+	s.set_attribute(SgrBold{})!
 	s.start_hyperlink('https://example.com/screen-clone', 'screen-clone')!
 	s.test_write_string('x\u0301')!
 	s.cursor.is_protected = true

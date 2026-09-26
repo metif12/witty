@@ -523,16 +523,16 @@ pub fn (mut self SgrParser) next() ?terminal.SgrAttribute {
 	return self.parser.next()
 }
 
-pub fn unknown_full(attr terminal.SgrAttribute) []u16 {
-	return attr.unknown_full
+pub fn unknown_full(unknown terminal.SgrUnknown) []u16 {
+	return unknown.full
 }
 
-pub fn unknown_partial(attr terminal.SgrAttribute) []u16 {
-	return attr.unknown_partial
+pub fn unknown_partial(unknown terminal.SgrUnknown) []u16 {
+	return unknown.partial
 }
 
-pub fn attribute_tag(attr terminal.SgrAttribute) terminal.SgrAttributeKind {
-	return attr.kind
+pub fn attribute_tag(attr terminal.SgrAttribute) terminal.SgrAttributeTag {
+	return attr.tag()
 }
 
 // V callers can use the value-safe internal representation directly.
@@ -560,7 +560,7 @@ pub mut:
 // padding places the 8-byte-aligned union at offset 8 on 64-bit targets.
 pub struct SgrAttributeC {
 pub mut:
-	tag     terminal.SgrAttributeKind
+	tag     terminal.SgrAttributeTag
 	padding u32
 	value   SgrAttributeValueC
 }
@@ -569,36 +569,39 @@ pub mut:
 // C union. Fields smaller than the union occupy its leading bytes.
 pub fn sgr_attribute_cval(attr terminal.SgrAttribute) SgrAttributeC {
 	mut result := SgrAttributeC{
-		tag: attr.kind
+		tag: attr.tag()
 	}
 	unsafe {
 		value := &u8(&result.value)
-		match attr.kind {
-			.unknown {
+		match attr {
+			terminal.SgrUnknown {
 				mut unknown := &SgrUnknownC(value)
-				unknown.full_ptr = if attr.unknown_full.len == 0 {
+				unknown.full_ptr = if attr.full.len == 0 {
 					&u16(nil)
 				} else {
-					&attr.unknown_full[0]
+					&attr.full[0]
 				}
-				unknown.full_len = usize(attr.unknown_full.len)
-				unknown.partial_ptr = if attr.unknown_partial.len == 0 {
+				unknown.full_len = usize(attr.full.len)
+				unknown.partial_ptr = if attr.partial.len == 0 {
 					&u16(nil)
 				} else {
-					&attr.unknown_partial[0]
+					&attr.partial[0]
 				}
-				unknown.partial_len = usize(attr.unknown_partial.len)
+				unknown.partial_len = usize(attr.partial.len)
 			}
-			.underline_set {
-				*(&i32(value)) = i32(attr.underline)
+			terminal.SgrUnderline {
+				*(&i32(value)) = i32(attr.style)
 			}
-			.underline_color, .direct_color_fg, .direct_color_bg {
-				value[0] = attr.r
-				value[1] = attr.g
-				value[2] = attr.b
+			terminal.SgrUnderlineColor, terminal.SgrDirectColorFg, terminal.SgrDirectColorBg {
+				value[0] = attr.rgb.r
+				value[1] = attr.rgb.g
+				value[2] = attr.rgb.b
 			}
-			.underline_color_256, .bg_8, .fg_8, .bright_bg_8, .bright_fg_8, .bg_256, .fg_256 {
-				value[0] = attr.index
+			terminal.SgrBg8, terminal.SgrFg8, terminal.SgrBrightBg8, terminal.SgrBrightFg8 {
+				value[0] = attr.name.cval()
+			}
+			terminal.SgrUnderlineColor256, terminal.SgrBg256, terminal.SgrFg256 {
+				value[0] = attr.idx
 			}
 			else {}
 		}

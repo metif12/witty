@@ -1774,10 +1774,7 @@ fn test_decaln_preserves_color() {
 	}
 	defer { t.deinit() }
 
-	t.set_attribute(SgrAttribute{
-		kind: .direct_color_bg
-		r: 0xff
-	}) or { assert false }
+	t.set_attribute(SgrDirectColorBg{ rgb: RGB{ r: 0xff } }) or { assert false }
 	t.modes.set(.origin, true)
 	t.set_top_and_bottom_margin(2, 3)
 	t.decaln() or { assert false }
@@ -1836,14 +1833,9 @@ fn test_decaln_clears_non_color_attributes() {
 	}
 	defer { t.deinit() }
 
-	t.set_attribute(SgrAttribute{ kind: .bold }) or { assert false }
-	t.set_attribute(SgrAttribute{ kind: .underline_set, underline: .single }) or { assert false }
-	t.set_attribute(SgrAttribute{
-		kind: .direct_color_fg
-		r: 0x12
-		g: 0x34
-		b: 0x56
-	}) or { assert false }
+	t.set_attribute(SgrBold{}) or { assert false }
+	t.set_attribute(SgrUnderline{ style: .single }) or { assert false }
+	t.set_attribute(SgrDirectColorFg{ rgb: RGB{ r: 0x12, g: 0x34, b: 0x56 } }) or { assert false }
 	t.decaln() or { assert false }
 
 	assert !t.screens.active.cursor.style.flags.bold()
@@ -1911,7 +1903,7 @@ fn test_full_reset_with_a_non_empty_pen() {
 	}
 	defer { t.deinit() }
 
-	t.set_attribute(SgrAttribute{ kind: .bold }) or { assert false }
+	t.set_attribute(SgrBold{}) or { assert false }
 	t.print_string('A') or { assert false }
 	t.full_reset()
 
@@ -1944,16 +1936,8 @@ fn test_full_reset_with_a_non_empty_saved_cursor() {
 	}
 	defer { t.deinit() }
 
-	t.set_attribute(SgrAttribute{
-		kind: .direct_color_fg
-		r: 255
-		b: 127
-	}) or { assert false }
-	t.set_attribute(SgrAttribute{
-		kind: .direct_color_bg
-		r: 255
-		b: 127
-	}) or { assert false }
+	t.set_attribute(SgrDirectColorFg{ rgb: RGB{ r: 255, b: 127 } }) or { assert false }
+	t.set_attribute(SgrDirectColorBg{ rgb: RGB{ r: 255, b: 127 } }) or { assert false }
 	t.save_cursor()
 	assert t.screens.active.saved_cursor != none
 	t.full_reset()
@@ -2323,12 +2307,7 @@ fn test_resize_with_high_unique_style_per_cell() {
 	for y in 0 .. int(t.rows) {
 		for x in 0 .. int(t.cols) {
 			t.set_cursor_pos(y, x)
-			t.set_attribute(SgrAttribute{
-				kind: .direct_color_bg
-				r: u8(x)
-				g: u8(y)
-				b: 0
-			}) or { assert false }
+			t.set_attribute(SgrDirectColorBg{ rgb: RGB{ r: u8(x), g: u8(y), b: 0 } }) or { assert false }
 			t.print(u32(`x`)) or { assert false }
 		}
 	}
@@ -2351,12 +2330,7 @@ fn test_resize_with_high_unique_style_per_cell_with_wrapping() {
 	for i in 0 .. cell_count {
 		r := u8(i >> 8)
 		g := u8(i & 0xFF)
-		t.set_attribute(SgrAttribute{
-			kind: .direct_color_bg
-			r: r
-			g: g
-			b: 0
-		}) or { assert false }
+		t.set_attribute(SgrDirectColorBg{ rgb: RGB{ r: r, g: g, b: 0 } }) or { assert false }
 		t.print(u32(`x`)) or { assert false }
 	}
 
@@ -2537,7 +2511,7 @@ fn test_mode_47_copies_cursor_style_both_directions() {
 	}
 	defer { t.deinit() }
 
-	t.set_attribute(SgrAttribute{ kind: .direct_color_fg, r: 255, b: 127 }) or {
+	t.set_attribute(SgrDirectColorFg{ rgb: RGB{ r: 255, b: 127 } }) or {
 		assert false
 	}
 	t.switch_screen_mode(.mode_47, true) or { assert false }
@@ -2547,7 +2521,7 @@ fn test_mode_47_copies_cursor_style_both_directions() {
 	assert t.screens.active.cursor.style.fg_r == 255
 	assert t.screens.active.cursor.style.fg_b == 127
 
-	t.set_attribute(SgrAttribute{ kind: .direct_color_fg, g: 255 }) or { assert false }
+	t.set_attribute(SgrDirectColorFg{ rgb: RGB{ g: 255 } }) or { assert false }
 	t.switch_screen_mode(.mode_47, false) or { assert false }
 	assert t.screens.active_key == .primary
 	assert t.screens.active.cursor.style_id != default_style_id
@@ -2588,14 +2562,14 @@ fn test_mode_1047_copies_cursor_style_both_directions() {
 	}
 	defer { t.deinit() }
 
-	t.set_attribute(SgrAttribute{ kind: .direct_color_fg, r: 255, b: 127 }) or {
+	t.set_attribute(SgrDirectColorFg{ rgb: RGB{ r: 255, b: 127 } }) or {
 		assert false
 	}
 	t.switch_screen_mode(.mode_1047, true) or { assert false }
 	assert t.screens.active.cursor.style.fg_r == 255
 	assert t.screens.active.cursor.style.fg_b == 127
 
-	t.set_attribute(SgrAttribute{ kind: .direct_color_fg, g: 255 }) or { assert false }
+	t.set_attribute(SgrDirectColorFg{ rgb: RGB{ g: 255 } }) or { assert false }
 	t.switch_screen_mode(.mode_1047, false) or { assert false }
 	assert t.screens.active_key == .primary
 	assert t.screens.active.cursor.style.fg_color == .rgb
@@ -2809,7 +2783,7 @@ fn test_print_attributes() {
 	assert result == '0'
 
 	// Bold
-	t.set_attribute(SgrAttribute{ kind: .bold }) or { assert false }
+	t.set_attribute(SgrBold{}) or { assert false }
 	result2 := t.print_attributes() or {
 		assert false
 		return
@@ -2817,7 +2791,7 @@ fn test_print_attributes() {
 	assert result2 == '0;1'
 
 	// Bold + italic
-	t.set_attribute(SgrAttribute{ kind: .italic }) or { assert false }
+	t.set_attribute(SgrItalic{}) or { assert false }
 	result3 := t.print_attributes() or {
 		assert false
 		return
@@ -6062,7 +6036,7 @@ fn test_erase_display_complete_preserves_cursor_style() {
 	}
 	defer { t.deinit() }
 
-	t.set_attribute(SgrAttribute{ kind: .bold }) or { assert false }
+	t.set_attribute(SgrBold{}) or { assert false }
 	t.print_string('AAAA') or { assert false }
 	assert t.screens.active.cursor.style_id != default_style_id
 
@@ -6580,12 +6554,7 @@ fn test_erase_chars_preserves_background_sgr() {
 
 	t.print_string('ABC') or { assert false }
 	t.set_cursor_pos(1, 1)
-	t.set_attribute(SgrAttribute{
-		kind: .direct_color_bg
-		r: 0xFF
-		g: 0
-		b: 0
-	}) or { assert false }
+	t.set_attribute(SgrDirectColorBg{ rgb: RGB{ r: 0xFF, g: 0, b: 0 } }) or { assert false }
 	t.erase_chars(2)
 
 	str := t.plain_string() or {
@@ -6606,12 +6575,7 @@ fn test_insert_blanks_preserves_background_sgr() {
 
 	t.print_string('ABC') or { assert false }
 	t.set_cursor_pos(1, 1)
-	t.set_attribute(SgrAttribute{
-		kind: .direct_color_bg
-		r: 0xFF
-		g: 0
-		b: 0
-	}) or { assert false }
+	t.set_attribute(SgrDirectColorBg{ rgb: RGB{ r: 0xFF, g: 0, b: 0 } }) or { assert false }
 	t.insert_blanks(2)
 
 	str := t.plain_string() or {
@@ -6631,12 +6595,7 @@ fn test_delete_chars_preserves_background_sgr() {
 
 	t.print_string('ABC123') or { assert false }
 	t.set_cursor_pos(1, 3)
-	t.set_attribute(SgrAttribute{
-		kind: .direct_color_bg
-		r: 0xFF
-		g: 0
-		b: 0
-	}) or { assert false }
+	t.set_attribute(SgrDirectColorBg{ rgb: RGB{ r: 0xFF, g: 0, b: 0 } }) or { assert false }
 	t.delete_chars(2)
 
 	str := t.plain_string() or {
@@ -6659,12 +6618,7 @@ fn test_erase_line_right_preserves_background_sgr() {
 
 	t.print_string('ABCDE') or { assert false }
 	t.set_cursor_pos(1, 2)
-	t.set_attribute(SgrAttribute{
-		kind: .direct_color_bg
-		r: 0xFF
-		g: 0
-		b: 0
-	}) or { assert false }
+	t.set_attribute(SgrDirectColorBg{ rgb: RGB{ r: 0xFF, g: 0, b: 0 } }) or { assert false }
 	t.erase_line(.right, false)
 
 	str := t.plain_string() or {
@@ -6686,12 +6640,7 @@ fn test_erase_line_left_preserves_background_sgr() {
 
 	t.print_string('ABCDE') or { assert false }
 	t.set_cursor_pos(1, 2)
-	t.set_attribute(SgrAttribute{
-		kind: .direct_color_bg
-		r: 0xFF
-		g: 0
-		b: 0
-	}) or { assert false }
+	t.set_attribute(SgrDirectColorBg{ rgb: RGB{ r: 0xFF, g: 0, b: 0 } }) or { assert false }
 	t.erase_line(.left, false)
 
 	str := t.plain_string() or {
@@ -6713,12 +6662,7 @@ fn test_erase_line_complete_preserves_background_sgr() {
 
 	t.print_string('ABCDE') or { assert false }
 	t.set_cursor_pos(1, 2)
-	t.set_attribute(SgrAttribute{
-		kind: .direct_color_bg
-		r: 0xFF
-		g: 0
-		b: 0
-	}) or { assert false }
+	t.set_attribute(SgrDirectColorBg{ rgb: RGB{ r: 0xFF, g: 0, b: 0 } }) or { assert false }
 	t.erase_line(.complete, false)
 
 	str := t.plain_string() or {
@@ -6740,12 +6684,7 @@ fn test_index_bottom_of_primary_screen_background_sgr() {
 
 	t.set_cursor_pos(5, 1)
 	t.print(u32(`A`)) or { assert false }
-	t.set_attribute(SgrAttribute{
-		kind: .direct_color_bg
-		r: 0xFF
-		g: 0
-		b: 0
-	}) or { assert false }
+	t.set_attribute(SgrDirectColorBg{ rgb: RGB{ r: 0xFF, g: 0, b: 0 } }) or { assert false }
 	t.index() or { assert false }
 
 	str := t.plain_string() or {
@@ -6771,12 +6710,7 @@ fn test_index_bottom_of_scroll_region_background_sgr() {
 	t.print(u32(`B`)) or { assert false }
 	t.set_cursor_pos(3, 1)
 	t.print(u32(`A`)) or { assert false }
-	t.set_attribute(SgrAttribute{
-		kind: .direct_color_bg
-		r: 0xFF
-		g: 0
-		b: 0
-	}) or { assert false }
+	t.set_attribute(SgrDirectColorBg{ rgb: RGB{ r: 0xFF, g: 0, b: 0 } }) or { assert false }
 	t.index() or { assert false }
 
 	str := t.plain_string() or {

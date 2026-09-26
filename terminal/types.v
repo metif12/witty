@@ -387,58 +387,6 @@ pub fn (self &CellStyle) bg_cell() ?CellData {
 	}
 }
 
-// ============================================================
-// SgrAttribute - SGR (Select Graphic Rendition) attribute
-// ============================================================
-
-pub enum SgrAttributeKind as i32 {
-	unset
-	unknown
-	bold
-	reset_bold
-	italic
-	reset_italic
-	faint
-	underline_set
-	underline_color
-	underline_color_256
-	reset_underline_color
-	overline
-	reset_overline
-	blink
-	reset_blink
-	inverse
-	reset_inverse
-	invisible
-	reset_invisible
-	strikethrough
-	reset_strikethrough
-	direct_color_fg
-	direct_color_bg
-	bg_8
-	fg_8
-	reset_fg
-	reset_bg
-	bright_bg_8
-	bright_fg_8
-	bg_256
-	fg_256
-}
-
-pub struct SgrAttribute {
-pub:
-	kind      SgrAttributeKind
-	underline UnderlineStyle = .none
-	r         u8
-	g         u8
-	b         u8
-	index     u8
-	// Populated for unknown attributes. full is the complete SGR parameter
-	// list and partial begins at the parameter that could not be parsed.
-	unknown_full    []u16
-	unknown_partial []u16
-}
-
 // Hyperlink is defined in hyperlink.v.
 
 // ============================================================

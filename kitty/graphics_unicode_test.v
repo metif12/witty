@@ -243,7 +243,7 @@ fn test_unicode_placement_specifying_image_id_as_palette() ! {
 	t.modes.set(.grapheme_cluster, true)
 
 	// Single cell
-	t.set_attribute(terminal.SgrAttribute{ kind: .fg_256, index: 42 })!
+	t.set_attribute(terminal.SgrFg256{ idx: 42 })!
 	t.print_string('\U0010EEEE̅̅')!
 
 	// Get our top left pin
@@ -269,7 +269,7 @@ fn test_unicode_placement_specifying_image_id_with_high_bits() ! {
 	t.modes.set(.grapheme_cluster, true)
 
 	// Single cell
-	t.set_attribute(terminal.SgrAttribute{ kind: .fg_256, index: 42 })!
+	t.set_attribute(terminal.SgrFg256{ idx: 42 })!
 	t.print_string('\U0010EEEE̅̅̎')!
 
 	// Get our top left pin
@@ -295,8 +295,8 @@ fn test_unicode_placement_specifying_placement_id_as_palette() ! {
 	t.modes.set(.grapheme_cluster, true)
 
 	// Single cell
-	t.set_attribute(terminal.SgrAttribute{ kind: .fg_256, index: 42 })!
-	t.set_attribute(terminal.SgrAttribute{ kind: .underline_color_256, index: 21 })!
+	t.set_attribute(terminal.SgrFg256{ idx: 42 })!
+	t.set_attribute(terminal.SgrUnderlineColor256{ idx: 21 })!
 	t.print_string('\U0010EEEE̅̅')!
 
 	// Get our top left pin
@@ -323,8 +323,8 @@ fn test_unicode_placement_specifying_placement_id_as_rgb() ! {
 	t.modes.set(.grapheme_cluster, true)
 
 	// Single cell
-	t.set_attribute(terminal.SgrAttribute{ kind: .fg_256, index: 42 })!
-	t.set_attribute(terminal.SgrAttribute{ kind: .underline_color, r: 0x12, g: 0x34, b: 0x56 })!
+	t.set_attribute(terminal.SgrFg256{ idx: 42 })!
+	t.set_attribute(terminal.SgrUnderlineColor{ rgb: terminal.RGB{ r: 0x12, g: 0x34, b: 0x56 } })!
 	t.print_string('\U0010EEEE̅̅')!
 
 	// Get our top left pin

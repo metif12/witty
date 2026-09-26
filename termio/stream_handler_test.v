@@ -285,11 +285,8 @@ fn test_stream_handler_decrqss_hollow_cursor_uses_blink_mode() ! {
 fn test_stream_handler_decrqss_uses_terminal_sgr_serialization() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
-	handler.terminal.set_attribute(terminal.SgrAttribute{
-		kind: .underline_set
-		underline: .double
-	})!
-	handler.terminal.set_attribute(terminal.SgrAttribute{ kind: .overline })!
+	handler.terminal.set_attribute(terminal.SgrUnderline{ style: .double })!
+	handler.terminal.set_attribute(terminal.SgrOverline{})!
 
 	handler.dcs_decrqss(.sgr)
 	msg := ctx.mailbox.queue.pop() or { panic('expected SGR DECRPSS response') }

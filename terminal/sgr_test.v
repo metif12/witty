@@ -1,38 +1,38 @@
 module terminal
 
-fn test_sgr_attribute_kind_c_abi() {
-	assert sizeof(SgrAttributeKind) == 4
-	assert int(SgrAttributeKind.unset) == 0
-	assert int(SgrAttributeKind.unknown) == 1
-	assert int(SgrAttributeKind.bold) == 2
-	assert int(SgrAttributeKind.reset_bold) == 3
-	assert int(SgrAttributeKind.italic) == 4
-	assert int(SgrAttributeKind.reset_italic) == 5
-	assert int(SgrAttributeKind.faint) == 6
-	assert int(SgrAttributeKind.underline_set) == 7
-	assert int(SgrAttributeKind.underline_color) == 8
-	assert int(SgrAttributeKind.underline_color_256) == 9
-	assert int(SgrAttributeKind.reset_underline_color) == 10
-	assert int(SgrAttributeKind.overline) == 11
-	assert int(SgrAttributeKind.reset_overline) == 12
-	assert int(SgrAttributeKind.blink) == 13
-	assert int(SgrAttributeKind.reset_blink) == 14
-	assert int(SgrAttributeKind.inverse) == 15
-	assert int(SgrAttributeKind.reset_inverse) == 16
-	assert int(SgrAttributeKind.invisible) == 17
-	assert int(SgrAttributeKind.reset_invisible) == 18
-	assert int(SgrAttributeKind.strikethrough) == 19
-	assert int(SgrAttributeKind.reset_strikethrough) == 20
-	assert int(SgrAttributeKind.direct_color_fg) == 21
-	assert int(SgrAttributeKind.direct_color_bg) == 22
-	assert int(SgrAttributeKind.bg_8) == 23
-	assert int(SgrAttributeKind.fg_8) == 24
-	assert int(SgrAttributeKind.reset_fg) == 25
-	assert int(SgrAttributeKind.reset_bg) == 26
-	assert int(SgrAttributeKind.bright_bg_8) == 27
-	assert int(SgrAttributeKind.bright_fg_8) == 28
-	assert int(SgrAttributeKind.bg_256) == 29
-	assert int(SgrAttributeKind.fg_256) == 30
+fn test_sgr_attribute_tag_c_abi() {
+	assert sizeof(SgrAttributeTag) == 4
+	assert int(SgrAttributeTag.unset) == 0
+	assert int(SgrAttributeTag.unknown) == 1
+	assert int(SgrAttributeTag.bold) == 2
+	assert int(SgrAttributeTag.reset_bold) == 3
+	assert int(SgrAttributeTag.italic) == 4
+	assert int(SgrAttributeTag.reset_italic) == 5
+	assert int(SgrAttributeTag.faint) == 6
+	assert int(SgrAttributeTag.underline) == 7
+	assert int(SgrAttributeTag.underline_color) == 8
+	assert int(SgrAttributeTag.underline_color_256) == 9
+	assert int(SgrAttributeTag.reset_underline_color) == 10
+	assert int(SgrAttributeTag.overline) == 11
+	assert int(SgrAttributeTag.reset_overline) == 12
+	assert int(SgrAttributeTag.blink) == 13
+	assert int(SgrAttributeTag.reset_blink) == 14
+	assert int(SgrAttributeTag.inverse) == 15
+	assert int(SgrAttributeTag.reset_inverse) == 16
+	assert int(SgrAttributeTag.invisible) == 17
+	assert int(SgrAttributeTag.reset_invisible) == 18
+	assert int(SgrAttributeTag.strikethrough) == 19
+	assert int(SgrAttributeTag.reset_strikethrough) == 20
+	assert int(SgrAttributeTag.direct_color_fg) == 21
+	assert int(SgrAttributeTag.direct_color_bg) == 22
+	assert int(SgrAttributeTag.bg_8) == 23
+	assert int(SgrAttributeTag.fg_8) == 24
+	assert int(SgrAttributeTag.reset_fg) == 25
+	assert int(SgrAttributeTag.reset_bg) == 26
+	assert int(SgrAttributeTag.bright_bg_8) == 27
+	assert int(SgrAttributeTag.bright_fg_8) == 28
+	assert int(SgrAttributeTag.bg_256) == 29
+	assert int(SgrAttributeTag.fg_256) == 30
 }
 
 // Tests for SGR (Select Graphic Rendition) parsing.
@@ -46,7 +46,7 @@ fn test_underline_style_storage() {
 // Helper: parse SGR params with semicolon separators.
 fn sgr_parse(params []u16) SgrAttribute {
 	mut p := SgrParser{ params: params }
-	return p.next() or { SgrAttribute{ kind: .unknown } }
+	return p.next() or { SgrUnknown{} }
 }
 
 // Helper: parse SGR params with colon separators (all params except last
@@ -57,28 +57,28 @@ fn sgr_parse_colon(params []u16) SgrAttribute {
 		sep.set(usize(i))
 	}
 	mut p := SgrParser{ params: params, params_sep: sep }
-	return p.next() or { SgrAttribute{ kind: .unknown } }
+	return p.next() or { SgrUnknown{} }
 }
 
 fn test_sgr_parser_basic() {
-	assert sgr_parse([]).kind == .unset
-	assert sgr_parse([u16(0)]).kind == .unset
+	assert sgr_parse([]).tag() == .unset
+	assert sgr_parse([u16(0)]).tag() == .unset
 
 	v1 := sgr_parse([u16(38), 2, 40, 44, 52])
-	assert v1.kind == .direct_color_fg
-	assert v1.r == 40
-	assert v1.g == 44
-	assert v1.b == 52
+	assert v1.tag() == .direct_color_fg
+	assert (v1 as SgrDirectColorFg).rgb.r == 40
+	assert (v1 as SgrDirectColorFg).rgb.g == 44
+	assert (v1 as SgrDirectColorFg).rgb.b == 52
 
-	assert sgr_parse([u16(38), 2, 44, 52]).kind == .unknown
+	assert sgr_parse([u16(38), 2, 44, 52]).tag() == .unknown
 
 	v2 := sgr_parse([u16(48), 2, 40, 44, 52])
-	assert v2.kind == .direct_color_bg
-	assert v2.r == 40
-	assert v2.g == 44
-	assert v2.b == 52
+	assert v2.tag() == .direct_color_bg
+	assert (v2 as SgrDirectColorBg).rgb.r == 40
+	assert (v2 as SgrDirectColorBg).rgb.g == 44
+	assert (v2 as SgrDirectColorBg).rgb.b == 52
 
-	assert sgr_parse([u16(48), 2, 44, 52]).kind == .unknown
+	assert sgr_parse([u16(48), 2, 44, 52]).tag() == .unknown
 }
 
 fn test_sgr_parser_multiple() {
@@ -87,12 +87,12 @@ fn test_sgr_parser_multiple() {
 		assert false, 'expected value'
 		return
 	}
-	assert v1.kind == .unset
+	assert v1.tag() == .unset
 	v2 := p.next() or {
 		assert false, 'expected value'
 		return
 	}
-	assert v2.kind == .direct_color_fg
+	assert v2.tag() == .direct_color_fg
 	assert p.next() == none
 	assert p.next() == none
 }
@@ -106,14 +106,14 @@ fn test_sgr_unsupported_with_colon() {
 		assert false, 'expected value'
 		return
 	}
-	assert v1.kind == .unknown
-	assert v1.unknown_full == [u16(0), 4, 1]
-	assert v1.unknown_partial == [u16(0), 4]
+	assert v1.tag() == .unknown
+	assert (v1 as SgrUnknown).full == [u16(0), 4, 1]
+	assert (v1 as SgrUnknown).partial == [u16(0), 4]
 	v2 := p.next() or {
 		assert false, 'expected value'
 		return
 	}
-	assert v2.kind == .bold
+	assert v2.tag() == .bold
 	assert p.next() == none
 }
 
@@ -124,9 +124,9 @@ fn test_sgr_unknown_preserves_full_and_partial_params() {
 		assert false, 'expected unknown attribute'
 		return
 	}
-	assert attr.kind == .unknown
-	assert attr.unknown_full == params
-	assert attr.unknown_partial == params
+	assert attr.tag() == .unknown
+	assert (attr as SgrUnknown).full == params
+	assert (attr as SgrUnknown).partial == params
 }
 
 fn test_sgr_unsupported_with_multiple_colon() {
@@ -138,58 +138,58 @@ fn test_sgr_unsupported_with_multiple_colon() {
 		assert false, 'expected value'
 		return
 	}
-	assert v1.kind == .unknown
+	assert v1.tag() == .unknown
 	v2 := p.next() or {
 		assert false, 'expected value'
 		return
 	}
-	assert v2.kind == .bold
+	assert v2.tag() == .bold
 	assert p.next() == none
 }
 
 fn test_sgr_bold() {
-	assert sgr_parse([u16(1)]).kind == .bold
-	assert sgr_parse([u16(22)]).kind == .reset_bold
+	assert sgr_parse([u16(1)]).tag() == .bold
+	assert sgr_parse([u16(22)]).tag() == .reset_bold
 }
 
 fn test_sgr_italic() {
-	assert sgr_parse([u16(3)]).kind == .italic
-	assert sgr_parse([u16(23)]).kind == .reset_italic
+	assert sgr_parse([u16(3)]).tag() == .italic
+	assert sgr_parse([u16(23)]).tag() == .reset_italic
 }
 
 fn test_sgr_underline() {
 	v1 := sgr_parse([u16(4)])
-	assert v1.kind == .underline_set
+	assert v1.tag() == .underline
 
 	v2 := sgr_parse([u16(24)])
-	assert v2.kind == .underline_set
-	assert v2.underline == .none
+	assert v2.tag() == .underline
+	assert (v2 as SgrUnderline).style == .none
 }
 
 fn test_sgr_underline_styles() {
 	v1 := sgr_parse_colon([u16(4), 2])
-	assert v1.kind == .underline_set
-	assert v1.underline == .double
+	assert v1.tag() == .underline
+	assert (v1 as SgrUnderline).style == .double
 
 	v2 := sgr_parse_colon([u16(4), 0])
-	assert v2.kind == .underline_set
-	assert v2.underline == .none
+	assert v2.tag() == .underline
+	assert (v2 as SgrUnderline).style == .none
 
 	v3 := sgr_parse_colon([u16(4), 1])
-	assert v3.kind == .underline_set
-	assert v3.underline == .single
+	assert v3.tag() == .underline
+	assert (v3 as SgrUnderline).style == .single
 
 	v4 := sgr_parse_colon([u16(4), 3])
-	assert v4.kind == .underline_set
-	assert v4.underline == .curly
+	assert v4.tag() == .underline
+	assert (v4 as SgrUnderline).style == .curly
 
 	v5 := sgr_parse_colon([u16(4), 4])
-	assert v5.kind == .underline_set
-	assert v5.underline == .dotted
+	assert v5.tag() == .underline
+	assert (v5 as SgrUnderline).style == .dotted
 
 	v6 := sgr_parse_colon([u16(4), 5])
-	assert v6.kind == .underline_set
-	assert v6.underline == .dashed
+	assert v6.tag() == .underline
+	assert (v6 as SgrUnderline).style == .dashed
 }
 
 fn test_sgr_underline_style_with_more() {
@@ -201,12 +201,12 @@ fn test_sgr_underline_style_with_more() {
 		assert false, 'expected value'
 		return
 	}
-	assert v1.kind == .underline_set
+	assert v1.tag() == .underline
 	v2 := p.next() or {
 		assert false, 'expected value'
 		return
 	}
-	assert v2.kind == .bold
+	assert v2.tag() == .bold
 	assert p.next() == none
 }
 
@@ -219,29 +219,29 @@ fn test_sgr_underline_style_with_too_many_colons() {
 		assert false, 'expected value'
 		return
 	}
-	assert v1.kind == .unknown
+	assert v1.tag() == .unknown
 	v2 := p.next() or {
 		assert false, 'expected value'
 		return
 	}
-	assert v2.kind == .bold
+	assert v2.tag() == .bold
 	assert p.next() == none
 }
 
 fn test_sgr_blink() {
-	assert sgr_parse([u16(5)]).kind == .blink
-	assert sgr_parse([u16(6)]).kind == .blink
-	assert sgr_parse([u16(25)]).kind == .reset_blink
+	assert sgr_parse([u16(5)]).tag() == .blink
+	assert sgr_parse([u16(6)]).tag() == .blink
+	assert sgr_parse([u16(25)]).tag() == .reset_blink
 }
 
 fn test_sgr_inverse() {
-	assert sgr_parse([u16(7)]).kind == .inverse
-	assert sgr_parse([u16(27)]).kind == .reset_inverse
+	assert sgr_parse([u16(7)]).tag() == .inverse
+	assert sgr_parse([u16(27)]).tag() == .reset_inverse
 }
 
 fn test_sgr_strikethrough() {
-	assert sgr_parse([u16(9)]).kind == .strikethrough
-	assert sgr_parse([u16(29)]).kind == .reset_strikethrough
+	assert sgr_parse([u16(9)]).tag() == .strikethrough
+	assert sgr_parse([u16(29)]).tag() == .reset_strikethrough
 }
 
 fn test_sgr_8_color() {
@@ -251,29 +251,29 @@ fn test_sgr_8_color() {
 		assert false, 'expected value'
 		return
 	}
-	assert v1.kind == .fg_8
-	assert v1.index == 1 // red
+	assert v1.tag() == .fg_8
+	assert (v1 as SgrFg8).name == .red
 
 	v2 := p.next() or {
 		assert false, 'expected value'
 		return
 	}
-	assert v2.kind == .bg_8
-	assert v2.index == 3 // yellow
+	assert v2.tag() == .bg_8
+	assert (v2 as SgrBg8).name == .yellow
 
 	v3 := p.next() or {
 		assert false, 'expected value'
 		return
 	}
-	assert v3.kind == .bright_fg_8
-	assert v3.index == 0 // bright_black (90-90)
+	assert v3.tag() == .bright_fg_8
+	assert (v3 as SgrBrightFg8).name == .bright_black
 
 	v4 := p.next() or {
 		assert false, 'expected value'
 		return
 	}
-	assert v4.kind == .bright_bg_8
-	assert v4.index == 3 // bright_yellow (103-100)
+	assert v4.tag() == .bright_bg_8
+	assert (v4 as SgrBrightBg8).name == .bright_yellow
 }
 
 fn test_sgr_256_color() {
@@ -282,12 +282,12 @@ fn test_sgr_256_color() {
 		assert false, 'expected value'
 		return
 	}
-	assert v1.kind == .fg_256
+	assert v1.tag() == .fg_256
 	v2 := p.next() or {
 		assert false, 'expected value'
 		return
 	}
-	assert v2.kind == .bg_256
+	assert v2.tag() == .bg_256
 	assert p.next() == none
 }
 
@@ -297,30 +297,30 @@ fn test_sgr_256_color_underline() {
 		assert false, 'expected value'
 		return
 	}
-	assert v1.kind == .underline_color_256
+	assert v1.tag() == .underline_color_256
 	assert p.next() == none
 }
 
 fn test_sgr_24bit_bg_color() {
 	v := sgr_parse_colon([u16(48), 2, 1, 2, 3])
-	assert v.kind == .direct_color_bg
-	assert v.r == 1
-	assert v.g == 2
-	assert v.b == 3
+	assert v.tag() == .direct_color_bg
+	assert (v as SgrDirectColorBg).rgb.r == 1
+	assert (v as SgrDirectColorBg).rgb.g == 2
+	assert (v as SgrDirectColorBg).rgb.b == 3
 }
 
 fn test_sgr_underline_color() {
 	v1 := sgr_parse_colon([u16(58), 2, 1, 2, 3])
-	assert v1.kind == .underline_color
-	assert v1.r == 1
-	assert v1.g == 2
-	assert v1.b == 3
+	assert v1.tag() == .underline_color
+	assert (v1 as SgrUnderlineColor).rgb.r == 1
+	assert (v1 as SgrUnderlineColor).rgb.g == 2
+	assert (v1 as SgrUnderlineColor).rgb.b == 3
 
 	v2 := sgr_parse_colon([u16(58), 2, 0, 1, 2, 3])
-	assert v2.kind == .underline_color
-	assert v2.r == 1
-	assert v2.g == 2
-	assert v2.b == 3
+	assert v2.tag() == .underline_color
+	assert (v2 as SgrUnderlineColor).rgb.r == 1
+	assert (v2 as SgrUnderlineColor).rgb.g == 2
+	assert (v2 as SgrUnderlineColor).rgb.b == 3
 }
 
 fn test_sgr_reset_underline_color() {
@@ -329,7 +329,7 @@ fn test_sgr_reset_underline_color() {
 		assert false, 'expected value'
 		return
 	}
-	assert v.kind == .reset_underline_color
+	assert v.tag() == .reset_underline_color
 }
 
 fn test_sgr_invisible() {
@@ -338,12 +338,12 @@ fn test_sgr_invisible() {
 		assert false, 'expected value'
 		return
 	}
-	assert v1.kind == .invisible
+	assert v1.tag() == .invisible
 	v2 := p.next() or {
 		assert false, 'expected value'
 		return
 	}
-	assert v2.kind == .reset_invisible
+	assert v2.tag() == .reset_invisible
 }
 
 fn test_sgr_underline_bg_and_fg() {
@@ -354,33 +354,33 @@ fn test_sgr_underline_bg_and_fg() {
 		assert false, 'expected value'
 		return
 	}
-	assert v1.kind == .underline_set
-	assert v1.underline == .single
+	assert v1.tag() == .underline
+	assert (v1 as SgrUnderline).style == .single
 
 	v2 := p.next() or {
 		assert false, 'expected value'
 		return
 	}
-	assert v2.kind == .direct_color_fg
-	assert v2.r == 255
-	assert v2.g == 247
-	assert v2.b == 219
+	assert v2.tag() == .direct_color_fg
+	assert (v2 as SgrDirectColorFg).rgb.r == 255
+	assert (v2 as SgrDirectColorFg).rgb.g == 247
+	assert (v2 as SgrDirectColorFg).rgb.b == 219
 
 	v3 := p.next() or {
 		assert false, 'expected value'
 		return
 	}
-	assert v3.kind == .direct_color_bg
-	assert v3.r == 242
-	assert v3.g == 93
-	assert v3.b == 147
+	assert v3.tag() == .direct_color_bg
+	assert (v3 as SgrDirectColorBg).rgb.r == 242
+	assert (v3 as SgrDirectColorBg).rgb.g == 93
+	assert (v3 as SgrDirectColorBg).rgb.b == 147
 
 	v4 := p.next() or {
 		assert false, 'expected value'
 		return
 	}
-	assert v4.kind == .underline_set
-	assert v4.underline == .single
+	assert v4.tag() == .underline
+	assert (v4 as SgrUnderline).style == .single
 }
 
 fn test_sgr_direct_color_fg_missing_color() {
@@ -405,46 +405,46 @@ fn test_sgr_direct_fg_bg_underline_ignore_optional_color_space() {
 	// Colon version should skip the optional color space identifier
 	// 3 8 : 2 : Pi : Pr : Pg : Pb
 	v1 := sgr_parse_colon([u16(38), 2, 0, 1, 2, 3])
-	assert v1.kind == .direct_color_fg
-	assert v1.r == 1
-	assert v1.g == 2
-	assert v1.b == 3
+	assert v1.tag() == .direct_color_fg
+	assert (v1 as SgrDirectColorFg).rgb.r == 1
+	assert (v1 as SgrDirectColorFg).rgb.g == 2
+	assert (v1 as SgrDirectColorFg).rgb.b == 3
 
 	// 4 8 : 2 : Pi : Pr : Pg : Pb
 	v2 := sgr_parse_colon([u16(48), 2, 0, 1, 2, 3])
-	assert v2.kind == .direct_color_bg
-	assert v2.r == 1
-	assert v2.g == 2
-	assert v2.b == 3
+	assert v2.tag() == .direct_color_bg
+	assert (v2 as SgrDirectColorBg).rgb.r == 1
+	assert (v2 as SgrDirectColorBg).rgb.g == 2
+	assert (v2 as SgrDirectColorBg).rgb.b == 3
 
 	// 5 8 : 2 : Pi : Pr : Pg : Pb
 	v3 := sgr_parse_colon([u16(58), 2, 0, 1, 2, 3])
-	assert v3.kind == .underline_color
-	assert v3.r == 1
-	assert v3.g == 2
-	assert v3.b == 3
+	assert v3.tag() == .underline_color
+	assert (v3 as SgrUnderlineColor).rgb.r == 1
+	assert (v3 as SgrUnderlineColor).rgb.g == 2
+	assert (v3 as SgrUnderlineColor).rgb.b == 3
 
 	// Semicolon version should not parse optional color space identifier
 	// 3 8 ; 2 ; Pr ; Pg ; Pb
 	v4 := sgr_parse([u16(38), 2, 0, 1, 2, 3])
-	assert v4.kind == .direct_color_fg
-	assert v4.r == 0
-	assert v4.g == 1
-	assert v4.b == 2
+	assert v4.tag() == .direct_color_fg
+	assert (v4 as SgrDirectColorFg).rgb.r == 0
+	assert (v4 as SgrDirectColorFg).rgb.g == 1
+	assert (v4 as SgrDirectColorFg).rgb.b == 2
 
 	// 4 8 ; 2 ; Pr ; Pg ; Pb
 	v5 := sgr_parse([u16(48), 2, 0, 1, 2, 3])
-	assert v5.kind == .direct_color_bg
-	assert v5.r == 0
-	assert v5.g == 1
-	assert v5.b == 2
+	assert v5.tag() == .direct_color_bg
+	assert (v5 as SgrDirectColorBg).rgb.r == 0
+	assert (v5 as SgrDirectColorBg).rgb.g == 1
+	assert (v5 as SgrDirectColorBg).rgb.b == 2
 
 	// 5 8 ; 2 ; Pr ; Pg ; Pb
 	v6 := sgr_parse([u16(58), 2, 0, 1, 2, 3])
-	assert v6.kind == .underline_color
-	assert v6.r == 0
-	assert v6.g == 1
-	assert v6.b == 2
+	assert v6.tag() == .underline_color
+	assert (v6 as SgrUnderlineColor).rgb.r == 0
+	assert (v6 as SgrUnderlineColor).rgb.g == 1
+	assert (v6 as SgrUnderlineColor).rgb.b == 2
 }
 
 fn test_sgr_direct_fg_colon_with_too_many_colons() {
@@ -460,12 +460,12 @@ fn test_sgr_direct_fg_colon_with_too_many_colons() {
 		assert false, 'expected value'
 		return
 	}
-	assert v1.kind == .unknown
+	assert v1.tag() == .unknown
 	v2 := p.next() or {
 		assert false, 'expected value'
 		return
 	}
-	assert v2.kind == .bold
+	assert v2.tag() == .bold
 	assert p.next() == none
 }
 
@@ -482,16 +482,16 @@ fn test_sgr_direct_fg_colon_with_colorspace_and_extra_param() {
 		assert false, 'expected value'
 		return
 	}
-	assert v1.kind == .direct_color_fg
-	assert v1.r == 1
-	assert v1.g == 2
-	assert v1.b == 3
+	assert v1.tag() == .direct_color_fg
+	assert (v1 as SgrDirectColorFg).rgb.r == 1
+	assert (v1 as SgrDirectColorFg).rgb.g == 2
+	assert (v1 as SgrDirectColorFg).rgb.b == 3
 
 	v2 := p.next() or {
 		assert false, 'expected value'
 		return
 	}
-	assert v2.kind == .bold
+	assert v2.tag() == .bold
 	assert p.next() == none
 }
 
@@ -508,16 +508,16 @@ fn test_sgr_direct_fg_colon_no_colorspace_and_extra_param() {
 		assert false, 'expected value'
 		return
 	}
-	assert v1.kind == .direct_color_fg
-	assert v1.r == 1
-	assert v1.g == 2
-	assert v1.b == 3
+	assert v1.tag() == .direct_color_fg
+	assert (v1 as SgrDirectColorFg).rgb.r == 1
+	assert (v1 as SgrDirectColorFg).rgb.g == 2
+	assert (v1 as SgrDirectColorFg).rgb.b == 3
 
 	v2 := p.next() or {
 		assert false, 'expected value'
 		return
 	}
-	assert v2.kind == .bold
+	assert v2.tag() == .bold
 	assert p.next() == none
 }
 
@@ -540,32 +540,32 @@ fn test_sgr_kakoune_input() {
 		assert false, 'expected value'
 		return
 	}
-	assert v1.kind == .unset
+	assert v1.tag() == .unset
 
 	v2 := p.next() or {
 		assert false, 'expected value'
 		return
 	}
-	assert v2.kind == .underline_set
-	assert v2.underline == .curly
+	assert v2.tag() == .underline
+	assert (v2 as SgrUnderline).style == .curly
 
 	v3 := p.next() or {
 		assert false, 'expected value'
 		return
 	}
-	assert v3.kind == .direct_color_fg
-	assert v3.r == 175
-	assert v3.g == 175
-	assert v3.b == 215
+	assert v3.tag() == .direct_color_fg
+	assert (v3 as SgrDirectColorFg).rgb.r == 175
+	assert (v3 as SgrDirectColorFg).rgb.g == 175
+	assert (v3 as SgrDirectColorFg).rgb.b == 215
 
 	v4 := p.next() or {
 		assert false, 'expected value'
 		return
 	}
-	assert v4.kind == .underline_color
-	assert v4.r == 190
-	assert v4.g == 80
-	assert v4.b == 70
+	assert v4.tag() == .underline_color
+	assert (v4 as SgrUnderlineColor).rgb.r == 190
+	assert (v4 as SgrUnderlineColor).rgb.g == 80
+	assert (v4 as SgrUnderlineColor).rgb.b == 70
 }
 
 // Discussion #5930, another input sent by kakoune
@@ -584,35 +584,35 @@ fn test_sgr_kakoune_input_issue_underline_fg_and_bg() {
 		assert false, 'expected value'
 		return
 	}
-	assert v1.kind == .underline_set
-	assert v1.underline == .curly
+	assert v1.tag() == .underline
+	assert (v1 as SgrUnderline).style == .curly
 
 	v2 := p.next() or {
 		assert false, 'expected value'
 		return
 	}
-	assert v2.kind == .direct_color_fg
-	assert v2.r == 51
-	assert v2.g == 51
-	assert v2.b == 51
+	assert v2.tag() == .direct_color_fg
+	assert (v2 as SgrDirectColorFg).rgb.r == 51
+	assert (v2 as SgrDirectColorFg).rgb.g == 51
+	assert (v2 as SgrDirectColorFg).rgb.b == 51
 
 	v3 := p.next() or {
 		assert false, 'expected value'
 		return
 	}
-	assert v3.kind == .direct_color_bg
-	assert v3.r == 170
-	assert v3.g == 170
-	assert v3.b == 170
+	assert v3.tag() == .direct_color_bg
+	assert (v3 as SgrDirectColorBg).rgb.r == 170
+	assert (v3 as SgrDirectColorBg).rgb.g == 170
+	assert (v3 as SgrDirectColorBg).rgb.b == 170
 
 	v4 := p.next() or {
 		assert false, 'expected value'
 		return
 	}
-	assert v4.kind == .underline_color
-	assert v4.r == 255
-	assert v4.g == 97
-	assert v4.b == 136
+	assert v4.tag() == .underline_color
+	assert (v4 as SgrUnderlineColor).rgb.r == 255
+	assert (v4 as SgrUnderlineColor).rgb.g == 97
+	assert (v4 as SgrUnderlineColor).rgb.b == 136
 
 	assert p.next() == none
 }

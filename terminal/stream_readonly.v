@@ -393,8 +393,11 @@ pub fn (mut self ReadonlyHandler) vt(action ActionKey, value ActionValue) ! {
 		}
 		.set_attribute {
 			if value is SgrAttribute {
-				if value.kind != .unknown {
-					self.terminal.set_attribute(value) or {}
+				match value {
+					SgrUnknown {}
+					else {
+						self.terminal.set_attribute(value) or {}
+					}
 				}
 			}
 		}
