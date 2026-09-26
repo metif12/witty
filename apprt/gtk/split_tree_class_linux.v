@@ -1063,7 +1063,7 @@ fn (mut self SplitTreeWidget) build_tree(current datastruct.Handle) GtkWidget {
 	if node is datastruct.Split {
 		start_child := self.build_tree(node.left)
 		end_child := self.build_tree(node.right)
-		split := new_split_tree_split(self, current, node.layout, start_child, end_child)
+		split := new_split_tree_split(current, node.layout, start_child, end_child)
 		self.splits << split
 		return split.widget
 	}
@@ -1085,8 +1085,7 @@ pub mut:
 	widget GtkWidget = unsafe { nil }
 
 	// The handle of the node in the tree that this split represents.
-	handle     datastruct.Handle
-	split_tree &SplitTreeWidget = unsafe { nil }
+	handle datastruct.Handle
 
 	// Source to reposition the split when properties change. 0 means none.
 	idle u32
@@ -1097,7 +1096,7 @@ pub mut:
 
 // new_split_tree_split creates a new SplitTreeSplit for the given node handle,
 // layout, and child widgets. Mirrors `SplitTreeSplit.new`.
-pub fn new_split_tree_split(split_tree &SplitTreeWidget, handle datastruct.Handle, layout datastruct.Layout, start_child GtkWidget, end_child GtkWidget) &SplitTreeSplit {
+pub fn new_split_tree_split(handle datastruct.Handle, layout datastruct.Layout, start_child GtkWidget, end_child GtkWidget) &SplitTreeSplit {
 	orientation := match layout {
 		.horizontal { GtkOrientation(0) }
 		.vertical { GtkOrientation(1) }
@@ -1109,7 +1108,6 @@ pub fn new_split_tree_split(split_tree &SplitTreeWidget, handle datastruct.Handl
 	mut self := &SplitTreeSplit{
 		widget: GtkWidget(bin)
 		handle: handle
-		split_tree: split_tree
 		paned: paned
 	}
 
@@ -1120,7 +1118,6 @@ pub fn new_split_tree_split(split_tree &SplitTreeWidget, handle datastruct.Handl
 	C.g_signal_connect_data(self.paned, c'notify::max-position', GCallback(voidptr(split_tree_split_changed_cb)), voidptr(self), unsafe { nil }, 0)
 	C.g_signal_connect_data(self.paned, c'notify::min-position', GCallback(voidptr(split_tree_split_changed_cb)), voidptr(self), unsafe { nil }, 0)
 	C.g_signal_connect_data(self.widget, c'destroy', GCallback(voidptr(split_tree_split_destroy_cb)), voidptr(self), unsafe { nil }, 0)
-	self.refresh()
 
 	return self
 }
@@ -1165,10 +1162,7 @@ fn split_tree_split_idle_cb(data voidptr) int {
 		return 0
 	}
 	mut self := unsafe { &SplitTreeSplit(data) }
-	min := object_int_property(voidptr(self.paned), c'min-position')
-	max := object_int_property(voidptr(self.paned), c'max-position')
-	pos_set := object_bool_property(voidptr(self.paned), c'position-set')
-	self.on_idle(min, max, pos_set)
+	self.on_idle()
 	return 0
 }
 
@@ -1189,57 +1183,76 @@ fn object_bool_property(object voidptr, name &char) bool {
 }
 
 // on_idle reconciles the paned position with the tree's desired ratio, and
-// writes user drags back to the tree. Faithful translation of `onIdle`: the
-// pixel<->ratio conversion and the "who wins" logic (desired vs. manual).
-//
-// `min`, `max`, and `pos_set` are the paned's min-position/max-position/
-// position-set properties (read via GObject property getters in ghostty; passed
-// in here to keep the arithmetic faithful without the gobject.Value plumbing).
-pub fn (mut self SplitTreeSplit) on_idle(min int, max int, pos_set bool) {
-	// Our idle source is always over.
+// writes user drags back to the tree. Faithful translation of `onIdle`;
+// split_tree_split_idle_cb is its GLib idle trampoline.
+pub fn (mut self SplitTreeSplit) on_idle() {
+	paned := self.paned
+
+	// Our idle source is always over
 	self.idle = 0
 
-	if isnil(self.split_tree) || !self.split_tree.has_tree
-		|| self.handle.idx() >= self.split_tree.tree.nodes.len {
+	// Get our split. This is the most dangerous part of this entire
+	// widget. We assume that this widget is always a child of a
+	// SplitTree, we assume that our handle is valid, and we assume
+	// the handle is always a split node.
+	ancestor := get_ancestor(self.widget, split_tree_get_type())
+	if isnil(ancestor) {
 		return
 	}
-	node := self.split_tree.tree.nodes[self.handle.idx()]
-	desired_ratio := if node is datastruct.Split {
-		f64(node.ratio.f32())
+	wrapper := split_tree_priv(voidptr(ancestor)).wrapper
+	if isnil(wrapper) {
+		return
+	}
+	mut split_tree := unsafe { &SplitTreeWidget(wrapper) }
+	mut tree := split_tree.get_tree() or { return }
+	node := tree.nodes[self.handle.idx()]
+	split := if node is datastruct.Split {
+		node
 	} else {
-		return
+		panic('split tree handle ${self.handle.idx()} is not a split node')
 	}
 
-	// We don't actually use min, but assert it's zero as ghostty does.
-	if min != 0 {
-		return
-	}
+	// Current, min, and max positions as pixels.
+	pos := C.gtk_paned_get_position(paned)
+	min := object_int_property(voidptr(paned), c'min-position')
+	max := object_int_property(voidptr(paned), c'max-position')
+	pos_set := object_bool_property(voidptr(paned), c'position-set')
 
-	// If max is zero we can't do any math (fully-minimized nested split).
+	// We don't actually use min, but we don't expect this to ever
+	// be non-zero, so let's add an assert to ensure that.
+	assert min == 0
+
+	// If our max is zero then we can't do any math. I don't know
+	// if this is possible but I suspect it can be if you make a nested
+	// split completely minimized.
 	if max == 0 {
 		return
 	}
 
-	// Determine the current ratio from the paned position.
-	pos := C.gtk_paned_get_position(self.paned)
-	pos_f := f64(pos)
-	max_f := f64(max)
-	current_ratio := pos_f / max_f
+	// Determine our current ratio.
+	current_ratio := f64(pos) / f64(max)
+	desired_ratio := f64(split.ratio.f32())
 
-	// If close enough, ignore the update (avoids constant lossy fp updates).
-	if abs_f64(current_ratio - desired_ratio) < 0.001 {
+	// If our ratio is close enough to our desired ratio, then
+	// we ignore the update. This is to avoid constant split updates
+	// for lossy floating point math.
+	if abs_f64(current_ratio - desired_ratio) <= 0.001 {
 		return
 	}
 
-	// If we've never set the position, set it to the desired ratio.
+	// If we're out of bounds, then we need to either set the position
+	// to what we expect OR update our expected ratio.
+
+	// If we've never set the position, then we set it to the desired.
 	if !pos_set {
-		desired_pos := int(round_f64(max_f * desired_ratio))
-		C.gtk_paned_set_position(self.paned, desired_pos)
+		desired_pos := int(round_f64(f64(max) * desired_ratio))
+		C.gtk_paned_set_position(paned, desired_pos)
 		return
 	}
 
-	// Otherwise this is a manual human update; write it back to the tree.
-	self.split_tree.tree.resize_in_place(self.handle, f32(current_ratio))
+	// If we've set the position, then this is a manual human update
+	// and we need to write our update back to the tree.
+	tree.resize_in_place(self.handle, f32(current_ratio))
 }
 
 // --- SplitTreeSplit signal handlers ---------------------------------------

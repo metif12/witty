@@ -427,6 +427,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | z2d path node union | z2d 0.10's `PathNode` is `union(PathNodeTag)` of `move_to: PathMoveTo`, `line_to: PathLineTo`, `curve_to: PathCurveTo` (three control points), and `close_path: PathClose`. Witty's sprite renderer stored one struct with a `kind` beside `x`, `y`, and curve control coordinates, and named the close tag `close`. | Make `PathNode` a sum type of the four node structs with `tag()` returning `PathNodeTag` (the `close_path` name restored), build the variants in the static path and context builders, and match on them in closed-subpath detection, the inner-stroke mask, and the fill and stroke plotters. |
 | kqueue operation and result unions | libxev's kqueue backend defines `Operation` as `union(OperationType)` with a distinct payload struct per operation (including separate `send` and `recv` structs and the heap `Timer`) and `Result` as a union of per-operation error unions; the loop switches on the active payload, and the watchers read `c.op.<op>` and `r.<op>` directly. Witty stored `KqueueOperation` as a struct with a `tag` beside all seventeen payloads (reusing the write and read payloads for send and recv) and `KqueueResult` as one record with `err`, `socket`, `n`, `timer`, and `exit_code`. | Make `KqueueOperation` a sum type of the per-operation structs (adding `KqueueSendOp` and `KqueueRecvOp`) and `KqueueResult` a sum type of per-operation result structs carrying the error name and payload, both with `tag()`; switch on the variants in `add`, `start`, `stop_completion`, `kevent`, `perform`, and `syscall_result` (the heap still stores a pointer into the timer payload), build results through tag-directed helpers, and read payloads with checked casts in the async, process, timer, and stream watchers and the backend tests. |
 | epoll operation and result unions | libxev's epoll backend defines `Operation` and `Result` as tagged unions over its sixteen operations, with distinct `send` and `recv` payload structs. Witty stored both as flattened records like the kqueue backend. | Make `EpollOperation` and `EpollResult` sum types of per-operation structs with `tag()` (adding `EpollSendOp` and `EpollRecvOp`), switch on the variants in the loop's tick, `start`, `stop_completion`, `perform`, and `fd`, build results through tag-directed helpers, and read payloads with checked casts in the watchers and tests. The pending-result checks use an `if _ := res_` guard because V miscompiles `res_ == none` after an `or` block assigns a sum-type option. |
+| split position idle source | Ghostty's `SplitTreeSplit.new` only wires the paned's `notify::position`, `max-position`, and `min-position` signals, and `onIdle` resolves its `SplitTree` with `getAncestor`, returning when the split is orphaned. Witty's constructor also queued a refresh, so the first idle could run before the paned's first allocation, while `max-position` is still `G_MAXINT`: it set the position to 1073741824, the allocation clamped that to the full width, and the next idle took the clamp for a drag and wrote ratio 1.0 into the tree, collapsing the new pane (caught in a traced split-right run). `onIdle` also used a stored `split_tree` pointer, so an orphaned split's idle could resize the live tree. | Drop the constructor refresh, resolve the split tree through the widget's `SplitTree` ancestor and return when there is none, read the paned position inside `on_idle` as the source does, and remove the stored pointer and its constructor parameter. |
 
 ## Focused behavior reviewed
 
@@ -658,6 +659,17 @@ suite on Linux gives 258 passed, 13 skipped (Darwin-only files), and the known
 `font/atlas_wasm_test.v` failure. Not yet exercised on Linux: Wayland
 (including the layer-shell quick terminal), real keyboard and mouse input,
 the Flatpak portal path, and GTK widgets beyond the default window.
+
+Open issues seen while verifying:
+
+- Under Xvfb, the tabs-and-splits D-Bus probe still shows a collapsed root
+  split after `split-down` in roughly one run in 25 (before the split fix above
+  it was about one in eight). A trace of a failing run shows the tree and the
+  root paned positioned correctly (395 of 789 pixels), so the remaining cause
+  lies outside the ratio logic and is not yet understood.
+- Terminal stream throughput measured with a `-prod` print benchmark (80-column
+  ASCII lines through `Terminal.vt_stream`) is about 15 MB/s, far below
+  Ghostty's; the cost has not been profiled.
 
 Repository-wide test state, for honesty about what the gates actually cover:
 
