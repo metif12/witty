@@ -1779,20 +1779,28 @@ fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx usize, sr
 		self.clear_cells(dst_row_idx, x_start, x_end)
 	}
 
-	// Copy row metadata but adjust if partial copy.
-	is_full_row := x_end - x_start >= usize(self.size.cols)
-	if is_full_row {
-		dst_row.wrap = src_row.wrap
-		dst_row.wrap_continuation = src_row.wrap_continuation
-		dst_row.grapheme = src_row.grapheme
-		dst_row.hyperlink = src_row.hyperlink
-		dst_row.styled = src_row.styled
-		dst_row.semantic_prompt = src_row.semantic_prompt
-		dst_row.kitty_virtual_placeholder = src_row.kitty_virtual_placeholder
-		dst_row.dirty = src_row.dirty
-	} else {
-		// For partial copy, keep original flags for non-copied regions.
-		dst_row.dirty = dst_row.dirty || src_row.dirty
+	// Copy all the row metadata but keep our cells offset
+	{
+		mut copy := src_row
+
+		// If we're not copying the full row then we want to preserve
+		// some original state from our dst row.
+		if x_end - x_start < usize(self.size.cols) {
+			copy.wrap = dst_row.wrap
+			copy.wrap_continuation = dst_row.wrap_continuation
+			copy.grapheme = dst_row.grapheme
+			copy.hyperlink = dst_row.hyperlink
+			copy.styled = dst_row.styled
+			copy.dirty = copy.dirty || dst_row.dirty
+		}
+
+		// Our cell offset remains the same
+		copy.cells = dst_row.cells
+		copy.cells_offset = dst_row.cells_offset
+
+		unsafe {
+			*dst_row = copy
+		}
 	}
 
 	// Copy cells.
