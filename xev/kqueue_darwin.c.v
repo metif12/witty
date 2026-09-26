@@ -2029,62 +2029,27 @@ pub enum KqueueTimerTrigger {
 }
 
 // ReadBuffer are the various options for reading.
-pub struct KqueueReadBuffer {
-pub mut:
-	kind BufferKind
-	// Read into this slice.
-	//
-	// For zero-length slices, the event will notify of read readiness
-	// (similar to poll) rather than performing an explicit zero-length
-	// read which will always succeed regardless of if the fd is ready
-	// or not.
-	slice []u8
-	// Read into this array, just set this to undefined and it will
-	// be populated up to the size of the array. This is an option because
-	// the other union members force a specific size anyways so this lets us
-	// use the other size in the union to support small reads without worrying
-	// about buffer allocation.
-	//
-	// To know the size read you have to use the return value of the
-	// read operations (i.e. recv).
-	//
-	// Note that the union at the time of this writing could accomodate a
-	// much larger fixed size array here but we want to retain flexiblity
-	// for future fields.
-	array [32]u8
-
-	// TODO: future will have vectors
-}
+pub type KqueueReadBuffer = ReadBufferArray | ReadBufferSlice
 
 // slice_ptr returns the active buffer as a slice that aliases the completion.
 fn (self &KqueueReadBuffer) slice_ptr() []u8 {
-	return match self.kind {
-		.slice { self.slice }
-		.array { unsafe { (&self.array[0]).vbytes(self.array.len) } }
+	return match self {
+		ReadBufferSlice { self.slice }
+		ReadBufferArray { unsafe { (&self.array[0]).vbytes(self.array.len) } }
 	}
 }
 
 fn (self &KqueueReadBuffer) is_empty_slice() bool {
-	return self.kind == .slice && self.slice.len == 0
+	return self is ReadBufferSlice && self.slice.len == 0
 }
 
 // WriteBuffer are the various options for writing.
-pub struct KqueueWriteBuffer {
-pub mut:
-	kind BufferKind
-	// Write from this buffer.
-	slice []u8
-	// Write from this array. See ReadBuffer.array for why we support this.
-	array     [32]u8
-	array_len usize
-
-	// TODO: future will have vectors
-}
+pub type KqueueWriteBuffer = WriteBufferArray | WriteBufferSlice
 
 fn (self &KqueueWriteBuffer) bytes() []u8 {
-	return match self.kind {
-		.slice { self.slice }
-		.array { unsafe { (&self.array[0]).vbytes(int(self.array_len)) } }
+	return match self {
+		WriteBufferSlice { self.slice }
+		WriteBufferArray { unsafe { (&self.array[0]).vbytes(int(self.len)) } }
 	}
 }
 

@@ -244,9 +244,7 @@ fn test_epoll_timerfd() ! {
 	c := &EpollCompletion{
 		op:       EpollReadOp{
 			fd:     t.fd
-			buffer: EpollReadBuffer{
-				kind: .array
-			}
+			buffer: EpollReadBuffer(ReadBufferArray{})
 		}
 		userdata: &called
 		callback: epoll_test_timerfd_read
@@ -390,10 +388,7 @@ fn test_epoll_socket_accept_connect_send_recv_close() ! {
 	c_send := &EpollCompletion{
 		op:       EpollSendOp{
 			fd:     client_conn
-			buffer: EpollWriteBuffer{
-				kind:  .slice
-				slice: [u8(1), 1, 2, 3, 5, 8, 13]
-			}
+			buffer: EpollWriteBuffer(WriteBufferSlice{ slice: [u8(1), 1, 2, 3, 5, 8, 13] })
 		}
 		callback: epoll_test_send
 	}
@@ -405,10 +400,7 @@ fn test_epoll_socket_accept_connect_send_recv_close() ! {
 	mut c_recv := &EpollCompletion{
 		op:       EpollRecvOp{
 			fd:     server_conn
-			buffer: EpollReadBuffer{
-				kind:  .slice
-				slice: recv_buf
-			}
+			buffer: EpollReadBuffer(ReadBufferSlice{ slice: recv_buf })
 		}
 		userdata: &recv_len
 		callback: epoll_test_recv
@@ -438,10 +430,7 @@ fn test_epoll_socket_accept_connect_send_recv_close() ! {
 		*c_recv = EpollCompletion{
 			op:       EpollRecvOp{
 				fd:     server_conn
-				buffer: EpollReadBuffer{
-					kind:  .slice
-					slice: recv_buf
-				}
+				buffer: EpollReadBuffer(ReadBufferSlice{ slice: recv_buf })
 			}
 			userdata: &eof
 			callback: epoll_test_recv_eof

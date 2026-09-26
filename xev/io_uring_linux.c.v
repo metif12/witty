@@ -481,53 +481,26 @@ fn (mut self IoUringLoop) add_(completion &IoUringCompletion, try_submit bool) {
 			sqe.prep_poll_add(c.op.fd, c.op.events)
 		}
 		IoUringReadOp {
-			match c.op.buffer.kind {
-				.array {
-					sqe.prep_read(c.op.fd, c.op.buffer.slice_ptr(),
-						// offset is a u64 but if the value is -1 then it uses
-						// the offset in the fd.
-						u64(i64(-1)))
-				}
-				.slice {
-					sqe.prep_read(c.op.fd, c.op.buffer.slice,
-						// offset is a u64 but if the value is -1 then it uses
-						// the offset in the fd.
-						u64(i64(-1)))
-				}
-			}
+			// Both buffer kinds resolve to the payload the kernel reads or writes.
+			sqe.prep_read(c.op.fd, c.op.buffer.slice_ptr(),
+				// offset is a u64 but if the value is -1 then it uses
+				// the offset in the fd.
+				u64(i64(-1)))
 		}
 		IoUringPReadOp {
-			match c.op.buffer.kind {
-				.array {
-					sqe.prep_read(c.op.fd, c.op.buffer.slice_ptr(), c.op.offset)
-				}
-				.slice {
-					sqe.prep_read(c.op.fd, c.op.buffer.slice, c.op.offset)
-				}
-			}
+			// Both buffer kinds resolve to the payload the kernel reads or writes.
+			sqe.prep_read(c.op.fd, c.op.buffer.slice_ptr(), c.op.offset)
 		}
 		IoUringRecvOp {
-			match c.op.buffer.kind {
-				.array {
-					sqe.prep_recv(c.op.fd, c.op.buffer.slice_ptr(), 0)
-				}
-				.slice {
-					sqe.prep_recv(c.op.fd, c.op.buffer.slice, 0)
-				}
-			}
+			// Both buffer kinds resolve to the payload the kernel reads or writes.
+			sqe.prep_recv(c.op.fd, c.op.buffer.slice_ptr(), 0)
 		}
 		IoUringRecvMsgOp {
 			sqe.prep_recvmsg(c.op.fd, c.op.msghdr, 0)
 		}
 		IoUringSendOp {
-			match c.op.buffer.kind {
-				.array {
-					sqe.prep_send(c.op.fd, c.op.buffer.bytes(), 0)
-				}
-				.slice {
-					sqe.prep_send(c.op.fd, c.op.buffer.slice, 0)
-				}
-			}
+			// Both buffer kinds resolve to the payload the kernel reads or writes.
+			sqe.prep_send(c.op.fd, c.op.buffer.bytes(), 0)
 		}
 		IoUringSendMsgOp {
 			if _ := c.op.buffer {
@@ -550,30 +523,15 @@ fn (mut self IoUringLoop) add_(completion &IoUringCompletion, try_submit bool) {
 			sqe.prep_timeout_remove(u64(usize(voidptr(c.op.timer))), 0)
 		}
 		IoUringWriteOp {
-			match c.op.buffer.kind {
-				.array {
-					sqe.prep_write(c.op.fd, c.op.buffer.bytes(),
-						// offset is a u64 but if the value is -1 then it uses
-						// the offset in the fd.
-						u64(i64(-1)))
-				}
-				.slice {
-					sqe.prep_write(c.op.fd, c.op.buffer.slice,
-						// offset is a u64 but if the value is -1 then it uses
-						// the offset in the fd.
-						u64(i64(-1)))
-				}
-			}
+			// Both buffer kinds resolve to the payload the kernel reads or writes.
+			sqe.prep_write(c.op.fd, c.op.buffer.bytes(),
+				// offset is a u64 but if the value is -1 then it uses
+				// the offset in the fd.
+				u64(i64(-1)))
 		}
 		IoUringPWriteOp {
-			match c.op.buffer.kind {
-				.array {
-					sqe.prep_write(c.op.fd, c.op.buffer.bytes(), c.op.offset)
-				}
-				.slice {
-					sqe.prep_write(c.op.fd, c.op.buffer.slice, c.op.offset)
-				}
-			}
+			// Both buffer kinds resolve to the payload the kernel reads or writes.
+			sqe.prep_write(c.op.fd, c.op.buffer.bytes(), c.op.offset)
 		}
 		IoUringCancelOp {
 			sqe.prep_cancel(u64(usize(voidptr(c.op.c))), 0)
@@ -852,7 +810,7 @@ fn (self &IoUringCompletion) read_result(op IoUringOperationType, res i32) IoUri
 	if res == 0 {
 		// The source checks @hasField(@TypeOf(active), "buffer"): recvmsg
 		// has no buffer.
-		mut buffer := IoUringReadBuffer{}
+		mut buffer := IoUringReadBuffer(ReadBufferSlice{})
 		match op {
 			.read { buffer = (self.op as IoUringReadOp).buffer }
 			.pread { buffer = (self.op as IoUringPReadOp).buffer }
@@ -862,15 +820,15 @@ fn (self &IoUringCompletion) read_result(op IoUringOperationType, res i32) IoUri
 
 		// If we receieve a zero byte read, it is an EOF _unless_
 		// the requestesd buffer size was zero (weird).
-		return match buffer.kind {
-			.slice {
+		return match buffer {
+			ReadBufferSlice {
 				if buffer.slice.len == 0 {
 					io_uring_result_n(op, 0)
 				} else {
 					io_uring_result_kind(op, .eof)
 				}
 			}
-			.array {
+			ReadBufferArray {
 				io_uring_result_kind(op, .eof)
 			}
 		}
@@ -1456,55 +1414,25 @@ pub mut:
 }
 
 // ReadBuffer are the various options for reading.
-pub struct IoUringReadBuffer {
-pub mut:
-	kind BufferKind
-	// Read into this slice.
-	slice []u8
-	// Read into this array, just set this to undefined and it will
-	// be populated up to the size of the array. This is an option because
-	// the other union members force a specific size anyways so this lets us
-	// use the other size in the union to support small reads without worrying
-	// about buffer allocation.
-	//
-	// To know the size read you have to use the return value of the
-	// read operations (i.e. recv).
-	//
-	// Note that the union at the time of this writing could accomodate a
-	// much larger fixed size array here but we want to retain flexiblity
-	// for future fields.
-	array [32]u8
-
-	// TODO: future will have vectors
-}
+pub type IoUringReadBuffer = ReadBufferArray | ReadBufferSlice
 
 // slice_ptr returns the active buffer as a slice that aliases the completion.
 fn (self &IoUringReadBuffer) slice_ptr() []u8 {
-	return match self.kind {
-		.slice { self.slice }
-		.array { unsafe { (&self.array[0]).vbytes(self.array.len) } }
+	return match self {
+		ReadBufferSlice { self.slice }
+		ReadBufferArray { unsafe { (&self.array[0]).vbytes(self.array.len) } }
 	}
 }
 
 // WriteBuffer are the various options for writing.
-pub struct IoUringWriteBuffer {
-pub mut:
-	kind BufferKind
-	// Write from this buffer.
-	slice []u8
-	// Write from this array. See ReadBuffer.array for why we support this.
-	array     [32]u8
-	array_len usize
-
-	// TODO: future will have vectors
-}
+pub type IoUringWriteBuffer = WriteBufferArray | WriteBufferSlice
 
 // bytes returns the active buffer (`buf.array[0..buf.len]` for arrays) as a
 // slice that aliases the completion.
 fn (self &IoUringWriteBuffer) bytes() []u8 {
-	return match self.kind {
-		.slice { self.slice }
-		.array { unsafe { (&self.array[0]).vbytes(int(self.array_len)) } }
+	return match self {
+		WriteBufferSlice { self.slice }
+		WriteBufferArray { unsafe { (&self.array[0]).vbytes(int(self.len)) } }
 	}
 }
 

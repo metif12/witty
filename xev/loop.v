@@ -73,9 +73,46 @@ pub enum CompletionState as i32 {
 	active = 1
 }
 
-// The tag of every backend's `ReadBuffer` and `WriteBuffer` union(enum).
-// The V buffer records keep the tag in a `kind` field next to the payloads.
-pub enum BufferKind {
-	slice
-	array
+// The payloads of every backend's `ReadBuffer` and `WriteBuffer`
+// union(enum). Each backend's buffer type is a sum type of these variants.
+
+// Read into this slice.
+//
+// For zero-length slices, the event will notify of read readiness
+// (similar to poll) rather than performing an explicit zero-length
+// read which will always succeed regardless of if the fd is ready
+// or not.
+pub struct ReadBufferSlice {
+pub mut:
+	slice []u8
+}
+
+// Read into this array, just set this to undefined and it will
+// be populated up to the size of the array. This is an option because
+// the other union members force a specific size anyways so this lets us
+// use the other size in the union to support small reads without worrying
+// about buffer allocation.
+//
+// To know the size read you have to use the return value of the
+// read operations (i.e. recv).
+//
+// Note that the union at the time of this writing could accomodate a
+// much larger fixed size array here but we want to retain flexiblity
+// for future fields.
+pub struct ReadBufferArray {
+pub mut:
+	array [32]u8
+}
+
+// Write from this buffer.
+pub struct WriteBufferSlice {
+pub mut:
+	slice []u8
+}
+
+// Write from this array. See ReadBuffer.array for why we support this.
+pub struct WriteBufferArray {
+pub mut:
+	array [32]u8
+	len   usize
 }

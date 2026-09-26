@@ -121,7 +121,7 @@ fn test_epoll_stream_pty_child_to_parent() ! {
 	mut read_buf := []u8{len: 128}
 	mut read_len := EpollStreamTestLen{}
 	c_read := &EpollCompletion{}
-	parent.read(mut loop, c_read, EpollReadBuffer{ kind: .slice, slice: read_buf }, &read_len,
+	parent.read(mut loop, c_read, EpollReadBuffer(ReadBufferSlice{ slice: read_buf }), &read_len,
 		epoll_stream_test_read)
 
 	// This should not block!
@@ -131,7 +131,7 @@ fn test_epoll_stream_pty_child_to_parent() ! {
 	// Send
 	send_buf := 'hello, world!'.bytes()
 	c_write := &EpollCompletion{}
-	child.write(mut loop, c_write, EpollWriteBuffer{ kind: .slice, slice: send_buf }, unsafe { nil },
+	child.write(mut loop, c_write, EpollWriteBuffer(WriteBufferSlice{ slice: send_buf }), unsafe { nil },
 		epoll_stream_test_write)
 
 	// The write and read should trigger
@@ -159,7 +159,7 @@ fn test_epoll_stream_pty_parent_to_child() ! {
 	mut read_buf := []u8{len: 128}
 	mut read_len := EpollStreamTestLen{}
 	c_read := &EpollCompletion{}
-	child.read(mut loop, c_read, EpollReadBuffer{ kind: .slice, slice: read_buf }, &read_len,
+	child.read(mut loop, c_read, EpollReadBuffer(ReadBufferSlice{ slice: read_buf }), &read_len,
 		epoll_stream_test_read)
 
 	// This should not block!
@@ -170,7 +170,7 @@ fn test_epoll_stream_pty_parent_to_child() ! {
 	// since we're in cooked mode)
 	send_buf := 'hello, world!\n'.bytes()
 	c_write := &EpollCompletion{}
-	parent.write(mut loop, c_write, EpollWriteBuffer{ kind: .slice, slice: send_buf }, unsafe { nil },
+	parent.write(mut loop, c_write, EpollWriteBuffer(WriteBufferSlice{ slice: send_buf }), unsafe { nil },
 		epoll_stream_test_write)
 
 	// The write and read should trigger
@@ -198,7 +198,7 @@ fn test_epoll_stream_pty_queued_writes() ! {
 	mut read_buf := []u8{len: 128}
 	mut read_len := EpollStreamTestLen{}
 	c_read := &EpollCompletion{}
-	child.read(mut loop, c_read, EpollReadBuffer{ kind: .slice, slice: read_buf }, &read_len,
+	child.read(mut loop, c_read, EpollReadBuffer(ReadBufferSlice{ slice: read_buf }), &read_len,
 		epoll_stream_test_read)
 
 	// This should not block!
@@ -210,16 +210,10 @@ fn test_epoll_stream_pty_queued_writes() ! {
 
 	// Send (note the newline at the end of the buf is important
 	// since we're in cooked mode)
-	parent.queue_write(mut loop, write_queue, write_req[0], EpollWriteBuffer{
-		kind:  .slice
-		slice: 'hello, '.bytes()
-	}, unsafe { nil }, epoll_stream_test_write)
+	parent.queue_write(mut loop, write_queue, write_req[0], EpollWriteBuffer(WriteBufferSlice{ slice: 'hello, '.bytes() }), unsafe { nil }, epoll_stream_test_write)
 
 	mut c_result := EpollStreamTestCompletion{}
-	parent.queue_write(mut loop, write_queue, write_req[1], EpollWriteBuffer{
-		kind:  .slice
-		slice: 'world!\n'.bytes()
-	}, &c_result, epoll_stream_test_write_record)
+	parent.queue_write(mut loop, write_queue, write_req[1], EpollWriteBuffer(WriteBufferSlice{ slice: 'world!\n'.bytes() }), &c_result, epoll_stream_test_write_record)
 
 	// The write and read should trigger
 	loop.run(.until_done)!

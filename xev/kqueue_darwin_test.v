@@ -397,10 +397,7 @@ fn test_kqueue_socket_accept_connect_send_recv_close() ! {
 	mut c_send := &KqueueCompletion{
 		op: KqueueSendOp{
 			fd: client_conn
-			buffer: KqueueWriteBuffer{
-				kind: .slice
-				slice: [u8(1), 1, 2, 3, 5, 8, 13]
-			}
+			buffer: KqueueWriteBuffer(WriteBufferSlice{ slice: [u8(1), 1, 2, 3, 5, 8, 13] })
 		}
 		callback: kqueue_test_send
 	}
@@ -412,10 +409,7 @@ fn test_kqueue_socket_accept_connect_send_recv_close() ! {
 	mut c_recv := &KqueueCompletion{
 		op: KqueueRecvOp{
 			fd: server_conn
-			buffer: KqueueReadBuffer{
-				kind: .slice
-				slice: recv_buf
-			}
+			buffer: KqueueReadBuffer(ReadBufferSlice{ slice: recv_buf })
 		}
 		userdata: &recv_len
 		callback: kqueue_test_recv
@@ -445,10 +439,7 @@ fn test_kqueue_socket_accept_connect_send_recv_close() ! {
 		*c_recv = KqueueCompletion{
 			op: KqueueRecvOp{
 				fd: server_conn
-				buffer: KqueueReadBuffer{
-					kind: .slice
-					slice: recv_buf
-				}
+				buffer: KqueueReadBuffer(ReadBufferSlice{ slice: recv_buf })
 			}
 			userdata: &eof
 			callback: kqueue_test_recv_eof
@@ -514,10 +505,7 @@ fn test_kqueue_file_io_on_thread_pool() ! {
 	mut c_write := &KqueueCompletion{
 		op: KqueueWriteOp{
 			fd: f.fd
-			buffer: KqueueWriteBuffer{
-				kind: .slice
-				slice: write_buf
-			}
+			buffer: KqueueWriteBuffer(WriteBufferSlice{ slice: write_buf })
 		}
 		callback: kqueue_test_send
 	}
@@ -541,10 +529,7 @@ fn test_kqueue_file_io_on_thread_pool() ! {
 	mut c_read := &KqueueCompletion{
 		op: KqueueReadOp{
 			fd: f2.fd
-			buffer: KqueueReadBuffer{
-				kind: .slice
-				slice: read_buf
-			}
+			buffer: KqueueReadBuffer(ReadBufferSlice{ slice: read_buf })
 		}
 		userdata: &read_len
 		callback: kqueue_test_read
@@ -583,9 +568,7 @@ fn test_kqueue_mach_port() ! {
 	mut c_wait := &KqueueCompletion{
 		op: KqueueMachPortOp{
 			port: mach_port
-			buffer: KqueueReadBuffer{
-				kind: .array
-			}
+			buffer: KqueueReadBuffer(ReadBufferArray{})
 		}
 		userdata: &called
 		callback: kqueue_test_ok_set_bool

@@ -128,7 +128,7 @@ fn dynamic_stream_test_pty_child_to_parent() ! {
 	mut read_buf := []u8{len: 128}
 	mut read_len := DynamicStreamTestLen{}
 	c_read := &Completion{}
-	parent.read(mut loop, c_read, ReadBuffer{ kind: .slice, slice: read_buf }, &read_len,
+	parent.read(mut loop, c_read, ReadBuffer(ReadBufferSlice{ slice: read_buf }), &read_len,
 		dynamic_stream_test_read)
 
 	// This should not block!
@@ -138,7 +138,7 @@ fn dynamic_stream_test_pty_child_to_parent() ! {
 	// Send
 	send_buf := 'hello, world!'.bytes()
 	c_write := &Completion{}
-	child.write(mut loop, c_write, WriteBuffer{ kind: .slice, slice: send_buf }, unsafe { nil },
+	child.write(mut loop, c_write, WriteBuffer(WriteBufferSlice{ slice: send_buf }), unsafe { nil },
 		dynamic_stream_test_write)
 
 	// The write and read should trigger
@@ -166,7 +166,7 @@ fn dynamic_stream_test_pty_parent_to_child() ! {
 	mut read_buf := []u8{len: 128}
 	mut read_len := DynamicStreamTestLen{}
 	c_read := &Completion{}
-	child.read(mut loop, c_read, ReadBuffer{ kind: .slice, slice: read_buf }, &read_len,
+	child.read(mut loop, c_read, ReadBuffer(ReadBufferSlice{ slice: read_buf }), &read_len,
 		dynamic_stream_test_read)
 
 	// This should not block!
@@ -177,7 +177,7 @@ fn dynamic_stream_test_pty_parent_to_child() ! {
 	// since we're in cooked mode)
 	send_buf := 'hello, world!\n'.bytes()
 	c_write := &Completion{}
-	parent.write(mut loop, c_write, WriteBuffer{ kind: .slice, slice: send_buf }, unsafe { nil },
+	parent.write(mut loop, c_write, WriteBuffer(WriteBufferSlice{ slice: send_buf }), unsafe { nil },
 		dynamic_stream_test_write)
 
 	// The write and read should trigger
@@ -211,7 +211,7 @@ fn dynamic_stream_test_pty_queued_writes() ! {
 	mut read_buf := []u8{len: 128}
 	mut read_len := DynamicStreamTestLen{}
 	c_read := &Completion{}
-	child.read(mut loop, c_read, ReadBuffer{ kind: .slice, slice: read_buf }, &read_len,
+	child.read(mut loop, c_read, ReadBuffer(ReadBufferSlice{ slice: read_buf }), &read_len,
 		dynamic_stream_test_read)
 
 	// This should not block!
@@ -223,16 +223,10 @@ fn dynamic_stream_test_pty_queued_writes() ! {
 
 	// Send (note the newline at the end of the buf is important
 	// since we're in cooked mode)
-	parent.queue_write(mut loop, write_queue, write_req[0], WriteBuffer{
-		kind:  .slice
-		slice: 'hello, '.bytes()
-	}, unsafe { nil }, dynamic_stream_test_write)
+	parent.queue_write(mut loop, write_queue, write_req[0], WriteBuffer(WriteBufferSlice{ slice: 'hello, '.bytes() }), unsafe { nil }, dynamic_stream_test_write)
 
 	mut c_result := DynamicStreamTestCompletion{}
-	parent.queue_write(mut loop, write_queue, write_req[1], WriteBuffer{
-		kind:  .slice
-		slice: 'world!\n'.bytes()
-	}, &c_result, dynamic_stream_test_write_record)
+	parent.queue_write(mut loop, write_queue, write_req[1], WriteBuffer(WriteBufferSlice{ slice: 'world!\n'.bytes() }), &c_result, dynamic_stream_test_write_record)
 
 	// The write and read should trigger
 	loop.run(.until_done)!

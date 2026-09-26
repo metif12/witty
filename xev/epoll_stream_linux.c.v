@@ -319,34 +319,30 @@ pub fn (self EpollStream) write_init(c &EpollCompletion, buf EpollWriteBuffer) {
 
 // Returns the length of the write buffer
 fn epoll_write_buffer_length(buf EpollWriteBuffer) usize {
-	return match buf.kind {
-		.slice { usize(buf.slice.len) }
-		.array { buf.array_len }
+	return match buf {
+		WriteBufferSlice { usize(buf.slice.len) }
+		WriteBufferArray { buf.len }
 	}
 }
 
 // Given a `WriteBuffer` and number of bytes written during the previous
 // write operation, returns a new `WriteBuffer` with remaining data.
 fn epoll_write_buffer_remainder(buf EpollWriteBuffer, offset usize) EpollWriteBuffer {
-	match buf.kind {
-		.slice {
+	match buf {
+		WriteBufferSlice {
 			assert offset <= usize(buf.slice.len)
-			return EpollWriteBuffer{
-				kind:  .slice
-				slice: buf.slice[int(offset)..]
-			}
+			return EpollWriteBuffer(WriteBufferSlice{ slice: buf.slice[int(offset)..] })
 		}
-		.array {
-			assert offset <= buf.array_len
-			rem_len := buf.array_len - offset
-			mut wb := EpollWriteBuffer{
-				kind:      .array
-				array_len: rem_len
+		WriteBufferArray {
+			assert offset <= buf.len
+			rem_len := buf.len - offset
+			mut wb := WriteBufferArray{
+				len: rem_len
 			}
 			for i in 0 .. int(rem_len) {
 				wb.array[i] = buf.array[int(offset) + i]
 			}
-			return wb
+			return EpollWriteBuffer(wb)
 		}
 	}
 }

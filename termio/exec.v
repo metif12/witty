@@ -450,10 +450,7 @@ pub fn (mut self Exec) queue_write(mut td ThreadData, data []u8, linefeed bool) 
 
 		//for (slice) |b| log.warn("write: {x}", .{b});
 
-		exec.write_stream.queue_write(mut td.loop, &exec.write_queue, req, xev.WriteBuffer{
-			kind:  .slice
-			slice: slice
-		}, exec, exec_tty_write)
+		exec.write_stream.queue_write(mut td.loop, &exec.write_queue, req, xev.WriteBuffer(xev.WriteBufferSlice{ slice: slice }), exec, exec_tty_write)
 	}
 }
 

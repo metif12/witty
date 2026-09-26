@@ -383,10 +383,7 @@ fn test_io_uring_socket_accept_connect_send_recv_close() ! {
 	mut c_send := &IoUringCompletion{
 		op: IoUringSendOp{
 			fd: client_conn
-			buffer: IoUringWriteBuffer{
-				kind: .slice
-				slice: [u8(1), 1, 2, 3, 5, 8, 13]
-			}
+			buffer: IoUringWriteBuffer(WriteBufferSlice{ slice: [u8(1), 1, 2, 3, 5, 8, 13] })
 		}
 		callback: io_uring_test_ok
 	}
@@ -398,10 +395,7 @@ fn test_io_uring_socket_accept_connect_send_recv_close() ! {
 	mut c_recv := &IoUringCompletion{
 		op: IoUringRecvOp{
 			fd: server_conn
-			buffer: IoUringReadBuffer{
-				kind: .slice
-				slice: recv_buf
-			}
+			buffer: IoUringReadBuffer(ReadBufferSlice{ slice: recv_buf })
 		}
 		userdata: &recv_len
 		callback: io_uring_test_recv
@@ -431,10 +425,7 @@ fn test_io_uring_socket_accept_connect_send_recv_close() ! {
 		*c_recv = IoUringCompletion{
 			op: IoUringRecvOp{
 				fd: server_conn
-				buffer: IoUringReadBuffer{
-					kind: .slice
-					slice: recv_buf
-				}
+				buffer: IoUringReadBuffer(ReadBufferSlice{ slice: recv_buf })
 			}
 			userdata: &eof
 			callback: io_uring_test_recv_eof
@@ -614,9 +605,7 @@ fn test_io_uring_socket_read_cancellation() ! {
 	mut c_read := &IoUringCompletion{
 		op: IoUringReadOp{
 			fd: socket
-			buffer: IoUringReadBuffer{
-				kind: .array
-			}
+			buffer: IoUringReadBuffer(ReadBufferArray{})
 		}
 		userdata: &read_result
 		callback: io_uring_test_store_result

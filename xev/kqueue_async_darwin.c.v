@@ -103,9 +103,7 @@ pub fn (self &KqueueAsync) wait(mut loop KqueueLoop, c &KqueueCompletion, userda
 		*completion = KqueueCompletion{
 			op: KqueueMachPortOp{
 				port: self.port
-				buffer: KqueueReadBuffer{
-					kind: .array
-				}
+				buffer: KqueueReadBuffer(ReadBufferArray{})
 			}
 			userdata: userdata
 			callback: fn [cb] (ud voidptr, l_inner &KqueueLoop, c_inner &KqueueCompletion, r KqueueResult) CallbackAction {

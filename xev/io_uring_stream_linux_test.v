@@ -110,7 +110,7 @@ fn test_io_uring_stream_pty_child_to_parent() ! {
 	mut read_buf := []u8{len: 128}
 	mut read_len := IoUringStreamTestLen{}
 	c_read := &IoUringCompletion{}
-	parent.read(mut loop, c_read, IoUringReadBuffer{ kind: .slice, slice: read_buf }, &read_len,
+	parent.read(mut loop, c_read, IoUringReadBuffer(ReadBufferSlice{ slice: read_buf }), &read_len,
 		io_uring_stream_test_read)
 
 	// This should not block!
@@ -120,7 +120,7 @@ fn test_io_uring_stream_pty_child_to_parent() ! {
 	// Send
 	send_buf := 'hello, world!'.bytes()
 	c_write := &IoUringCompletion{}
-	child.write(mut loop, c_write, IoUringWriteBuffer{ kind: .slice, slice: send_buf }, unsafe { nil },
+	child.write(mut loop, c_write, IoUringWriteBuffer(WriteBufferSlice{ slice: send_buf }), unsafe { nil },
 		io_uring_stream_test_write)
 
 	// The write and read should trigger
@@ -148,7 +148,7 @@ fn test_io_uring_stream_pty_parent_to_child() ! {
 	mut read_buf := []u8{len: 128}
 	mut read_len := IoUringStreamTestLen{}
 	c_read := &IoUringCompletion{}
-	child.read(mut loop, c_read, IoUringReadBuffer{ kind: .slice, slice: read_buf }, &read_len,
+	child.read(mut loop, c_read, IoUringReadBuffer(ReadBufferSlice{ slice: read_buf }), &read_len,
 		io_uring_stream_test_read)
 
 	// This should not block!
@@ -159,7 +159,7 @@ fn test_io_uring_stream_pty_parent_to_child() ! {
 	// since we're in cooked mode)
 	send_buf := 'hello, world!\n'.bytes()
 	c_write := &IoUringCompletion{}
-	parent.write(mut loop, c_write, IoUringWriteBuffer{ kind: .slice, slice: send_buf }, unsafe { nil },
+	parent.write(mut loop, c_write, IoUringWriteBuffer(WriteBufferSlice{ slice: send_buf }), unsafe { nil },
 		io_uring_stream_test_write)
 
 	// The write and read should trigger
@@ -187,7 +187,7 @@ fn test_io_uring_stream_pty_queued_writes() ! {
 	mut read_buf := []u8{len: 128}
 	mut read_len := IoUringStreamTestLen{}
 	c_read := &IoUringCompletion{}
-	child.read(mut loop, c_read, IoUringReadBuffer{ kind: .slice, slice: read_buf }, &read_len,
+	child.read(mut loop, c_read, IoUringReadBuffer(ReadBufferSlice{ slice: read_buf }), &read_len,
 		io_uring_stream_test_read)
 
 	// This should not block!
@@ -199,16 +199,10 @@ fn test_io_uring_stream_pty_queued_writes() ! {
 
 	// Send (note the newline at the end of the buf is important
 	// since we're in cooked mode)
-	parent.queue_write(mut loop, write_queue, write_req[0], IoUringWriteBuffer{
-		kind: .slice
-		slice: 'hello, '.bytes()
-	}, unsafe { nil }, io_uring_stream_test_write)
+	parent.queue_write(mut loop, write_queue, write_req[0], IoUringWriteBuffer(WriteBufferSlice{ slice: 'hello, '.bytes() }), unsafe { nil }, io_uring_stream_test_write)
 
 	mut c_result := IoUringStreamTestCompletion{}
-	parent.queue_write(mut loop, write_queue, write_req[1], IoUringWriteBuffer{
-		kind: .slice
-		slice: 'world!\n'.bytes()
-	}, &c_result, io_uring_stream_test_write_record)
+	parent.queue_write(mut loop, write_queue, write_req[1], IoUringWriteBuffer(WriteBufferSlice{ slice: 'world!\n'.bytes() }), &c_result, io_uring_stream_test_write_record)
 
 	// The write and read should trigger
 	loop.run(.until_done)!

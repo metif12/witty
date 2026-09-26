@@ -119,10 +119,7 @@ pub fn (self KqueueStream) poll(mut loop KqueueLoop, c &KqueueCompletion, event 
 		*completion = KqueueCompletion{
 			op: KqueueReadOp{
 				fd: self.fd
-				buffer: KqueueReadBuffer{
-					kind: .slice
-					slice: []u8{}
-				}
+				buffer: KqueueReadBuffer(ReadBufferSlice{ slice: []u8{} })
 			}
 			userdata: userdata
 			callback: fn [cb] (ud voidptr, l_inner &KqueueLoop, c_inner &KqueueCompletion, r KqueueResult) CallbackAction {
@@ -318,34 +315,30 @@ pub fn (self KqueueStream) write_init(c &KqueueCompletion, buf KqueueWriteBuffer
 
 // Returns the length of the write buffer
 fn kqueue_write_buffer_length(buf KqueueWriteBuffer) usize {
-	return match buf.kind {
-		.slice { usize(buf.slice.len) }
-		.array { buf.array_len }
+	return match buf {
+		WriteBufferSlice { usize(buf.slice.len) }
+		WriteBufferArray { buf.len }
 	}
 }
 
 // Given a `WriteBuffer` and number of bytes written during the previous
 // write operation, returns a new `WriteBuffer` with remaining data.
 fn kqueue_write_buffer_remainder(buf KqueueWriteBuffer, offset usize) KqueueWriteBuffer {
-	match buf.kind {
-		.slice {
+	match buf {
+		WriteBufferSlice {
 			assert offset <= usize(buf.slice.len)
-			return KqueueWriteBuffer{
-				kind: .slice
-				slice: buf.slice[int(offset)..]
-			}
+			return KqueueWriteBuffer(WriteBufferSlice{ slice: buf.slice[int(offset)..] })
 		}
-		.array {
-			assert offset <= buf.array_len
-			rem_len := buf.array_len - offset
-			mut wb := KqueueWriteBuffer{
-				kind: .array
-				array_len: rem_len
+		WriteBufferArray {
+			assert offset <= buf.len
+			rem_len := buf.len - offset
+			mut wb := WriteBufferArray{
+				len: rem_len
 			}
 			for i in 0 .. int(rem_len) {
 				wb.array[i] = buf.array[int(offset) + i]
 			}
-			return wb
+			return KqueueWriteBuffer(wb)
 		}
 	}
 }

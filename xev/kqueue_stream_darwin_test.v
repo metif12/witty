@@ -108,7 +108,7 @@ fn test_kqueue_stream_pty_child_to_parent() ! {
 	mut read_buf := []u8{len: 128}
 	mut read_len := StreamTestLen{}
 	c_read := &KqueueCompletion{}
-	parent.read(mut loop, c_read, KqueueReadBuffer{ kind: .slice, slice: read_buf }, &read_len,
+	parent.read(mut loop, c_read, KqueueReadBuffer(ReadBufferSlice{ slice: read_buf }), &read_len,
 		kqueue_stream_test_read)
 
 	// This should not block!
@@ -118,7 +118,7 @@ fn test_kqueue_stream_pty_child_to_parent() ! {
 	// Send
 	send_buf := 'hello, world!'.bytes()
 	c_write := &KqueueCompletion{}
-	child.write(mut loop, c_write, KqueueWriteBuffer{ kind: .slice, slice: send_buf }, unsafe { nil },
+	child.write(mut loop, c_write, KqueueWriteBuffer(WriteBufferSlice{ slice: send_buf }), unsafe { nil },
 		kqueue_stream_test_write)
 
 	// The write and read should trigger
@@ -146,7 +146,7 @@ fn test_kqueue_stream_pty_parent_to_child() ! {
 	mut read_buf := []u8{len: 128}
 	mut read_len := StreamTestLen{}
 	c_read := &KqueueCompletion{}
-	child.read(mut loop, c_read, KqueueReadBuffer{ kind: .slice, slice: read_buf }, &read_len,
+	child.read(mut loop, c_read, KqueueReadBuffer(ReadBufferSlice{ slice: read_buf }), &read_len,
 		kqueue_stream_test_read)
 
 	// This should not block!
@@ -157,7 +157,7 @@ fn test_kqueue_stream_pty_parent_to_child() ! {
 	// since we're in cooked mode)
 	send_buf := 'hello, world!\n'.bytes()
 	c_write := &KqueueCompletion{}
-	parent.write(mut loop, c_write, KqueueWriteBuffer{ kind: .slice, slice: send_buf }, unsafe { nil },
+	parent.write(mut loop, c_write, KqueueWriteBuffer(WriteBufferSlice{ slice: send_buf }), unsafe { nil },
 		kqueue_stream_test_write)
 
 	// The write and read should trigger
@@ -185,7 +185,7 @@ fn test_kqueue_stream_pty_queued_writes() ! {
 	mut read_buf := []u8{len: 128}
 	mut read_len := StreamTestLen{}
 	c_read := &KqueueCompletion{}
-	child.read(mut loop, c_read, KqueueReadBuffer{ kind: .slice, slice: read_buf }, &read_len,
+	child.read(mut loop, c_read, KqueueReadBuffer(ReadBufferSlice{ slice: read_buf }), &read_len,
 		kqueue_stream_test_read)
 
 	// This should not block!
@@ -197,16 +197,10 @@ fn test_kqueue_stream_pty_queued_writes() ! {
 
 	// Send (note the newline at the end of the buf is important
 	// since we're in cooked mode)
-	parent.queue_write(mut loop, write_queue, write_req[0], KqueueWriteBuffer{
-		kind: .slice
-		slice: 'hello, '.bytes()
-	}, unsafe { nil }, kqueue_stream_test_write)
+	parent.queue_write(mut loop, write_queue, write_req[0], KqueueWriteBuffer(WriteBufferSlice{ slice: 'hello, '.bytes() }), unsafe { nil }, kqueue_stream_test_write)
 
 	mut c_result := StreamTestCompletion{}
-	parent.queue_write(mut loop, write_queue, write_req[1], KqueueWriteBuffer{
-		kind: .slice
-		slice: 'world!\n'.bytes()
-	}, &c_result, kqueue_stream_test_write_record)
+	parent.queue_write(mut loop, write_queue, write_req[1], KqueueWriteBuffer(WriteBufferSlice{ slice: 'world!\n'.bytes() }), &c_result, kqueue_stream_test_write_record)
 
 	// The write and read should trigger
 	loop.run(.until_done)!

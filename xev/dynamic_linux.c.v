@@ -239,30 +239,19 @@ fn DynamicCompletion.from_epoll(c &EpollCompletion) &DynamicCompletion {
 // may support more read targets but if you need that you should
 // use the backend directly and not through the dynamic API.
 //
-// A Zig union(enum) { slice: []u8, array: [32]u8 }, laid out like the
-// backends' ReadBuffer records with the tag in `kind`.
-pub struct DynamicReadBuffer {
-pub mut:
-	kind  BufferKind
-	slice []u8
-	array [32]u8
-}
+// A Zig union(enum) { slice: []u8, array: [32]u8 }, sharing the backends'
+// buffer variants so conversions copy the active payload.
+pub type DynamicReadBuffer = ReadBufferArray | ReadBufferSlice
 
 // Convert a backend-specific read buffer to this
 // (fromBackend(.io_uring, buf)).
 pub fn DynamicReadBuffer.from_io_uring(buf IoUringReadBuffer) DynamicReadBuffer {
-	return match buf.kind {
-		.slice {
-			DynamicReadBuffer{
-				kind:  .slice
-				slice: buf.slice
-			}
+	return match buf {
+		ReadBufferSlice {
+			DynamicReadBuffer(buf)
 		}
-		.array {
-			DynamicReadBuffer{
-				kind:  .array
-				array: buf.array
-			}
+		ReadBufferArray {
+			DynamicReadBuffer(buf)
 		}
 	}
 }
@@ -270,18 +259,12 @@ pub fn DynamicReadBuffer.from_io_uring(buf IoUringReadBuffer) DynamicReadBuffer 
 // Convert a backend-specific read buffer to this
 // (fromBackend(.epoll, buf)).
 pub fn DynamicReadBuffer.from_epoll(buf EpollReadBuffer) DynamicReadBuffer {
-	return match buf.kind {
-		.slice {
-			DynamicReadBuffer{
-				kind:  .slice
-				slice: buf.slice
-			}
+	return match buf {
+		ReadBufferSlice {
+			DynamicReadBuffer(buf)
 		}
-		.array {
-			DynamicReadBuffer{
-				kind:  .array
-				array: buf.array
-			}
+		ReadBufferArray {
+			DynamicReadBuffer(buf)
 		}
 	}
 }
@@ -289,18 +272,12 @@ pub fn DynamicReadBuffer.from_epoll(buf EpollReadBuffer) DynamicReadBuffer {
 // Convert this read buffer to the backend-specific
 // buffer (toBackend(.io_uring)).
 pub fn (self DynamicReadBuffer) to_io_uring() IoUringReadBuffer {
-	return match self.kind {
-		.slice {
-			IoUringReadBuffer{
-				kind:  .slice
-				slice: self.slice
-			}
+	return match self {
+		ReadBufferSlice {
+			IoUringReadBuffer(self)
 		}
-		.array {
-			IoUringReadBuffer{
-				kind:  .array
-				array: self.array
-			}
+		ReadBufferArray {
+			IoUringReadBuffer(self)
 		}
 	}
 }
@@ -308,18 +285,12 @@ pub fn (self DynamicReadBuffer) to_io_uring() IoUringReadBuffer {
 // Convert this read buffer to the backend-specific
 // buffer (toBackend(.epoll)).
 pub fn (self DynamicReadBuffer) to_epoll() EpollReadBuffer {
-	return match self.kind {
-		.slice {
-			EpollReadBuffer{
-				kind:  .slice
-				slice: self.slice
-			}
+	return match self {
+		ReadBufferSlice {
+			EpollReadBuffer(self)
 		}
-		.array {
-			EpollReadBuffer{
-				kind:  .array
-				array: self.array
-			}
+		ReadBufferArray {
+			EpollReadBuffer(self)
 		}
 	}
 }
@@ -330,32 +301,19 @@ pub fn (self DynamicReadBuffer) to_epoll() EpollReadBuffer {
 // use the backend directly and not through the dynamic API.
 //
 // A Zig union(enum) { slice: []const u8, array: struct { array: [32]u8,
-// len: usize } }, laid out like the backends' WriteBuffer records with the
-// tag in `kind` and the array's `len` in `array_len`.
-pub struct DynamicWriteBuffer {
-pub mut:
-	kind      BufferKind
-	slice     []u8
-	array     [32]u8
-	array_len usize
-}
+// len: usize } }, sharing the backends' buffer variants so conversions copy
+// the active payload.
+pub type DynamicWriteBuffer = WriteBufferArray | WriteBufferSlice
 
 // Convert a backend-specific write buffer to this
 // (fromBackend(.io_uring, buf)).
 pub fn DynamicWriteBuffer.from_io_uring(buf IoUringWriteBuffer) DynamicWriteBuffer {
-	return match buf.kind {
-		.slice {
-			DynamicWriteBuffer{
-				kind:  .slice
-				slice: buf.slice
-			}
+	return match buf {
+		WriteBufferSlice {
+			DynamicWriteBuffer(buf)
 		}
-		.array {
-			DynamicWriteBuffer{
-				kind:      .array
-				array:     buf.array
-				array_len: buf.array_len
-			}
+		WriteBufferArray {
+			DynamicWriteBuffer(buf)
 		}
 	}
 }
@@ -363,19 +321,12 @@ pub fn DynamicWriteBuffer.from_io_uring(buf IoUringWriteBuffer) DynamicWriteBuff
 // Convert a backend-specific write buffer to this
 // (fromBackend(.epoll, buf)).
 pub fn DynamicWriteBuffer.from_epoll(buf EpollWriteBuffer) DynamicWriteBuffer {
-	return match buf.kind {
-		.slice {
-			DynamicWriteBuffer{
-				kind:  .slice
-				slice: buf.slice
-			}
+	return match buf {
+		WriteBufferSlice {
+			DynamicWriteBuffer(buf)
 		}
-		.array {
-			DynamicWriteBuffer{
-				kind:      .array
-				array:     buf.array
-				array_len: buf.array_len
-			}
+		WriteBufferArray {
+			DynamicWriteBuffer(buf)
 		}
 	}
 }
@@ -383,19 +334,12 @@ pub fn DynamicWriteBuffer.from_epoll(buf EpollWriteBuffer) DynamicWriteBuffer {
 // Convert this write buffer to the backend-specific
 // buffer (toBackend(.io_uring)).
 pub fn (self DynamicWriteBuffer) to_io_uring() IoUringWriteBuffer {
-	return match self.kind {
-		.slice {
-			IoUringWriteBuffer{
-				kind:  .slice
-				slice: self.slice
-			}
+	return match self {
+		WriteBufferSlice {
+			IoUringWriteBuffer(self)
 		}
-		.array {
-			IoUringWriteBuffer{
-				kind:      .array
-				array:     self.array
-				array_len: self.array_len
-			}
+		WriteBufferArray {
+			IoUringWriteBuffer(self)
 		}
 	}
 }
@@ -403,19 +347,12 @@ pub fn (self DynamicWriteBuffer) to_io_uring() IoUringWriteBuffer {
 // Convert this write buffer to the backend-specific
 // buffer (toBackend(.epoll)).
 pub fn (self DynamicWriteBuffer) to_epoll() EpollWriteBuffer {
-	return match self.kind {
-		.slice {
-			EpollWriteBuffer{
-				kind:  .slice
-				slice: self.slice
-			}
+	return match self {
+		WriteBufferSlice {
+			EpollWriteBuffer(self)
 		}
-		.array {
-			EpollWriteBuffer{
-				kind:      .array
-				array:     self.array
-				array_len: self.array_len
-			}
+		WriteBufferArray {
+			EpollWriteBuffer(self)
 		}
 	}
 }
