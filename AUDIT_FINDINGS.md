@@ -637,7 +637,7 @@ Beyond the checker, Witty now compiles and links on Linux (aarch64 Ubuntu
 had never run before that: its first runs aborted in GObject class setup (the
 private-data, signal, template, and tab-bar rows above). It now starts under
 Xvfb, draws the grid with the OpenGL renderer, and runs its pty child. The full
-suite on Linux gives 259 passed, 13 skipped (Darwin-only files), and the known
+suite on Linux gives 258 passed, 13 skipped (Darwin-only files), and the known
 `font/atlas_wasm_test.v` failure. Not yet exercised on Linux: Wayland
 (including the layer-shell quick terminal), real keyboard and mouse input,
 the Flatpak portal path, and GTK widgets beyond the default window.
