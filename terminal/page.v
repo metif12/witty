@@ -1521,8 +1521,12 @@ pub fn (self &Page) verify_integrity() ?IntegrityError {
 	return none
 }
 
-// A helper that verifies integrity and panics on violation.
+// A helper that verifies integrity and panics on violation. Like the
+// upstream slow_runtime_safety gate, this is skipped in production builds.
 pub fn (self &Page) assert_integrity() {
+	$if prod {
+		return
+	}
 	if violation := self.verify_integrity() {
 		panic('page integrity violation: ${violation}')
 	}
@@ -1935,14 +1939,12 @@ pub fn (self &Page) get_row(y usize) &RowData {
 
 // Get the cells for a row.
 pub fn (self &Page) get_cells(row &RowData) []CellData {
-	mut owned := false
-	for y in 0 .. self.rows.len {
-		if voidptr(&self.rows[y]) == voidptr(row) {
-			owned = true
-			break
-		}
+	$if !prod {
+		first := usize(voidptr(unsafe { &self.rows[0] }))
+		last := usize(voidptr(unsafe { &self.rows[self.rows.len - 1] }))
+		assert usize(voidptr(row)) >= first
+		assert usize(voidptr(row)) <= last
 	}
-	assert owned
 	return row.cells[..int(self.size.cols)]
 }
 
