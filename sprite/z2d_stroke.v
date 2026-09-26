@@ -599,18 +599,18 @@ fn z2d_stroke_plot(path Path, options StrokeOptions) !Z2dPolygon {
 	}
 
 	for node in path.nodes {
-		match node.kind {
-			.move_to {
+		match node {
+			PathMoveTo {
 				if plotter.points.items.len > 0 {
 					plotter.finish()
 				}
 				plotter.points.reset()
-				plotter.points.add(Point{ x: node.x, y: node.y })
+				plotter.points.add(node.point)
 			}
-			.line_to {
-				plotter.run_line_to(Point{ x: node.x, y: node.y }, plotter.join_mode)!
+			PathLineTo {
+				plotter.run_line_to(node.point, plotter.join_mode)!
 			}
-			.curve_to {
+			PathCurveTo {
 				if plotter.points.items.len == 0 {
 					return error('invalid stroke path state')
 				}
@@ -618,11 +618,11 @@ fn z2d_stroke_plot(path Path, options StrokeOptions) !Z2dPolygon {
 					plotter.pen = Z2dPen.init(thickness, default_tolerance)
 				}
 				current := plotter.points.items.last()
-				for point in decompose_spline(current, Point{ x: node.c1x, y: node.c1y }, Point{ x: node.c2x, y: node.c2y }, Point{ x: node.x, y: node.y }, default_tolerance) {
+				for point in decompose_spline(current, node.p1, node.p2, node.p3, default_tolerance) {
 					plotter.run_line_to(point, .round_)!
 				}
 			}
-			.close {
+			PathClose {
 				plotter.close_path()
 			}
 		}

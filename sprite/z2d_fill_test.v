@@ -105,12 +105,12 @@ fn test_z2d_multisample_add_span() {
 fn test_z2d_fill_plot_degenerate_line() {
 	path := Path{
 		nodes: [
-			PathNode{ kind: .move_to, x: 5, y: 0 },
-			PathNode{ kind: .line_to, x: 10, y: 10 },
-			PathNode{ kind: .line_to, x: 10, y: 10 },
-			PathNode{ kind: .line_to, x: 0, y: 10 },
-			PathNode{ kind: .close },
-			PathNode{ kind: .move_to, x: 5, y: 0 },
+			PathNode(PathMoveTo{ point: Point{ x: 5, y: 0 } }),
+			PathNode(PathLineTo{ point: Point{ x: 10, y: 10 } }),
+			PathNode(PathLineTo{ point: Point{ x: 10, y: 10 } }),
+			PathNode(PathLineTo{ point: Point{ x: 0, y: 10 } }),
+			PathNode(PathClose{}),
+			PathNode(PathMoveTo{ point: Point{ x: 5, y: 0 } }),
 		]
 	}
 	polygon := z2d_fill_plot(path, 1, 1)!

@@ -167,18 +167,18 @@ fn z2d_fill_plot(path Path, scale f64, tolerance f64) !Z2dPolygon {
 	mut points := Z2dFillPointBuffer{}
 
 	for i, node in path.nodes {
-		match node.kind {
-			.move_to {
+		match node {
+			PathMoveTo {
 				// Path.close adds this final move back to the subpath start.
 				if i == path.nodes.len - 1 {
 					break
 				}
 				points.reset()
-				points.add(Point{ x: node.x, y: node.y })
+				points.add(node.point)
 			}
-			.line_to {
+			PathLineTo {
 				if last := points.last() {
-					point := Point{ x: node.x, y: node.y }
+					point := node.point
 					if !points_equal(last, point) {
 						result.add_edge(last, point)
 						points.add(point)
@@ -187,9 +187,9 @@ fn z2d_fill_plot(path Path, scale f64, tolerance f64) !Z2dPolygon {
 					return error('invalid fill path state')
 				}
 			}
-			.curve_to {
+			PathCurveTo {
 				if last := points.last() {
-					for point in decompose_spline(last, Point{ x: node.c1x, y: node.c1y }, Point{ x: node.c2x, y: node.c2y }, Point{ x: node.x, y: node.y }, tolerance) {
+					for point in decompose_spline(last, node.p1, node.p2, node.p3, tolerance) {
 						if current := points.last() {
 							if !points_equal(current, point) {
 								result.add_edge(current, point)
@@ -201,7 +201,7 @@ fn z2d_fill_plot(path Path, scale f64, tolerance f64) !Z2dPolygon {
 					return error('invalid fill path state')
 				}
 			}
-			.close {
+			PathClose {
 				if points.items.len >= 3 {
 					first := points.first() or { continue }
 					last := points.last() or { continue }

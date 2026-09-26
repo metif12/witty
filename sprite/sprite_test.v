@@ -195,11 +195,11 @@ fn test_alignment_and_fraction_source_layouts() {
 }
 
 fn test_z2d_path_and_cap_source_layouts() {
-	assert sizeof(PathNodeKind) == 1
-	assert u8(PathNodeKind.move_to) == 0
-	assert u8(PathNodeKind.line_to) == 1
-	assert u8(PathNodeKind.curve_to) == 2
-	assert u8(PathNodeKind.close) == 3
+	assert sizeof(PathNodeTag) == 1
+	assert u8(PathNodeTag.move_to) == 0
+	assert u8(PathNodeTag.line_to) == 1
+	assert u8(PathNodeTag.curve_to) == 2
+	assert u8(PathNodeTag.close_path) == 3
 	assert sizeof(LineCapMode) == 1
 	assert u8(LineCapMode.butt) == 0
 	assert u8(LineCapMode.round_) == 1
@@ -394,20 +394,20 @@ fn test_z2d_path_coordinates_are_clamped_before_transform() {
 	mut c := Canvas.init(1, 1, 2, 3)
 	mut path := c.static_path(3)
 	path.move_to(-8388609, 8388608)
-	assert path.nodes[0].x == -8388608.0 + 2.0
-	assert path.nodes[0].y == 8388607.0 + 3.0
+	assert (path.nodes[0] as PathMoveTo).point.x == -8388608.0 + 2.0
+	assert (path.nodes[0] as PathMoveTo).point.y == 8388607.0 + 3.0
 
 	path.line_to(8388608, -8388609)
-	assert path.nodes[1].x == 8388607.0 + 2.0
-	assert path.nodes[1].y == -8388608.0 + 3.0
+	assert (path.nodes[1] as PathLineTo).point.x == 8388607.0 + 2.0
+	assert (path.nodes[1] as PathLineTo).point.y == -8388608.0 + 3.0
 
 	path.curve_to(-8388609, 8388608, 3, 4, 8388608, -8388609)
-	assert path.nodes[2].c1x == -8388608.0 + 2.0
-	assert path.nodes[2].c1y == 8388607.0 + 3.0
-	assert path.nodes[2].c2x == 5
-	assert path.nodes[2].c2y == 7
-	assert path.nodes[2].x == 8388607.0 + 2.0
-	assert path.nodes[2].y == -8388608.0 + 3.0
+	assert (path.nodes[2] as PathCurveTo).p1.x == -8388608.0 + 2.0
+	assert (path.nodes[2] as PathCurveTo).p1.y == 8388607.0 + 3.0
+	assert (path.nodes[2] as PathCurveTo).p2.x == 5
+	assert (path.nodes[2] as PathCurveTo).p2.y == 7
+	assert (path.nodes[2] as PathCurveTo).p3.x == 8388607.0 + 2.0
+	assert (path.nodes[2] as PathCurveTo).p3.y == -8388608.0 + 3.0
 }
 
 fn test_stroke_path_closes_closed_subpaths() {

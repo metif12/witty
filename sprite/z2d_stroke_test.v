@@ -34,18 +34,18 @@ fn test_z2d_slope_compare_tie_breakers() {
 fn test_z2d_stroke_plotter_consumes_degenerate_lines() {
 	first_duplicate := Path{
 		nodes: [
-			PathNode{ kind: .move_to, x: 10, y: 10 },
-			PathNode{ kind: .line_to, x: 10, y: 10 },
-			PathNode{ kind: .line_to, x: 20, y: 20 },
+			PathNode(PathMoveTo{ point: Point{ x: 10, y: 10 } }),
+			PathNode(PathLineTo{ point: Point{ x: 10, y: 10 } }),
+			PathNode(PathLineTo{ point: Point{ x: 20, y: 20 } }),
 		]
 	}
 	assert z2d_stroke_plot(first_duplicate, StrokeOptions{ line_width: 2 })!.edges.len == 4
 
 	last_duplicate := Path{
 		nodes: [
-			PathNode{ kind: .move_to, x: 10, y: 10 },
-			PathNode{ kind: .line_to, x: 20, y: 20 },
-			PathNode{ kind: .line_to, x: 20, y: 20 },
+			PathNode(PathMoveTo{ point: Point{ x: 10, y: 10 } }),
+			PathNode(PathLineTo{ point: Point{ x: 20, y: 20 } }),
+			PathNode(PathLineTo{ point: Point{ x: 20, y: 20 } }),
 		]
 	}
 	assert z2d_stroke_plot(last_duplicate, StrokeOptions{ line_width: 2 })!.edges.len == 4
@@ -54,9 +54,9 @@ fn test_z2d_stroke_plotter_consumes_degenerate_lines() {
 fn test_z2d_stroke_slope_difference_below_epsilon_stays_finite() {
 	path := Path{
 		nodes: [
-			PathNode{ kind: .move_to, x: 2.8641015625e2, y: 1.43154296875e1 },
-			PathNode{ kind: .line_to, x: 2.822548828125e2, y: 1.6e1 },
-			PathNode{ kind: .line_to, x: 2.80990234375e2, y: 1.65126953125e1 },
+			PathNode(PathMoveTo{ point: Point{ x: 2.8641015625e2, y: 1.43154296875e1 } }),
+			PathNode(PathLineTo{ point: Point{ x: 2.822548828125e2, y: 1.6e1 } }),
+			PathNode(PathLineTo{ point: Point{ x: 2.80990234375e2, y: 1.65126953125e1 } }),
 		]
 	}
 	polygon := z2d_stroke_plot(path, StrokeOptions{ line_width: 2 })!
@@ -71,7 +71,7 @@ fn test_z2d_stroke_slope_difference_below_epsilon_stays_finite() {
 
 fn test_z2d_stroke_rejects_line_without_current_point() {
 	path := Path{
-		nodes: [PathNode{ kind: .line_to, x: 1, y: 1 }]
+		nodes: [PathNode(PathLineTo{ point: Point{ x: 1, y: 1 } })]
 	}
 	if _ := z2d_stroke_plot(path, StrokeOptions{}) {
 		assert false

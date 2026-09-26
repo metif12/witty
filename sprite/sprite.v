@@ -446,24 +446,52 @@ pub:
 // Path types
 // ============================================================
 
-pub enum PathNodeKind as u8 {
+// A tagged union of all path node types.
+pub enum PathNodeTag as u8 {
 	move_to
 	line_to
 	curve_to
-	close
+	close_path
 }
 
-pub struct PathNode {
-pub:
-	kind PathNodeKind
-	x    f64
-	y    f64
-	// Control points, only used for `curve_to`.
-	c1x f64
-	c1y f64
-	c2x f64
-	c2y f64
+pub type PathNode = PathClose | PathCurveTo | PathLineTo | PathMoveTo
+
+// The tag of the active path node variant.
+pub fn (self PathNode) tag() PathNodeTag {
+	return match self {
+		PathMoveTo { .move_to }
+		PathLineTo { .line_to }
+		PathCurveTo { .curve_to }
+		PathClose { .close_path }
+	}
 }
+
+// Represents a moveto path node. This starts a new subpath and moves the
+// current point to (x, y).
+pub struct PathMoveTo {
+pub:
+	point Point
+}
+
+// Represents a lineto path node. This draws a line to (x, y) and sets it as
+// its current point.
+pub struct PathLineTo {
+pub:
+	point Point
+}
+
+// Represents a curveto path node. This draws a cubic bezier with the three
+// supplied control points from the current point. The new current point is
+// set to p3.
+pub struct PathCurveTo {
+pub:
+	p1 Point
+	p2 Point
+	p3 Point
+}
+
+// Represents a closepath node.
+pub struct PathClose {}
 
 pub struct Path {
 pub:
@@ -514,14 +542,14 @@ fn (p &StaticPath) ty(y f64) f64 {
 // move_to adds a move-to node.
 pub fn (mut p StaticPath) move_to(x f64, y f64) {
 	point := Point{ x: p.tx(x), y: p.ty(y) }
-	if p.nodes.len > 0 && p.nodes.last().kind == .move_to
-		&& p.nodes.last().x == point.x && p.nodes.last().y == point.y {
-		return
+	if p.nodes.len > 0 {
+		last := p.nodes.last()
+		if last is PathMoveTo && points_equal(last.point, point) {
+			return
+		}
 	}
-	p.nodes << PathNode{
-		kind: .move_to
-		x:    point.x
-		y:    point.y
+	p.nodes << PathMoveTo{
+		point: point
 	}
 	p.initial_point = point
 	p.current_point = point
@@ -536,10 +564,8 @@ pub fn (mut p StaticPath) line_to(x f64, y f64) {
 		p.move_to(x, y)
 		return
 	}
-	p.nodes << PathNode{
-		kind: .line_to
-		x:    p.tx(x)
-		y:    p.ty(y)
+	p.nodes << PathLineTo{
+		point: Point{ x: p.tx(x), y: p.ty(y) }
 	}
 	p.current_point = Point{ x: p.tx(x), y: p.ty(y) }
 	p.wrapped_path = Path{
@@ -553,14 +579,10 @@ pub fn (mut p StaticPath) curve_to(c1x f64, c1y f64, c2x f64, c2y f64, x f64, y 
 	if p.current_point == none {
 		panic('curve_to requires a current point')
 	}
-	p.nodes << PathNode{
-		kind: .curve_to
-		x:    p.tx(x)
-		y:    p.ty(y)
-		c1x:  p.tx(c1x)
-		c1y:  p.ty(c1y)
-		c2x:  p.tx(c2x)
-		c2y:  p.ty(c2y)
+	p.nodes << PathCurveTo{
+		p1: Point{ x: p.tx(c1x), y: p.ty(c1y) }
+		p2: Point{ x: p.tx(c2x), y: p.ty(c2y) }
+		p3: Point{ x: p.tx(x), y: p.ty(y) }
 	}
 	p.current_point = Point{ x: p.tx(x), y: p.ty(y) }
 	p.wrapped_path = Path{
@@ -574,14 +596,10 @@ pub fn (mut p StaticPath) close() {
 	if p.current_point == none {
 		return
 	}
-	p.nodes << PathNode{
-		kind: .close
-	}
+	p.nodes << PathClose{}
 	initial := p.initial_point or { return }
-	p.nodes << PathNode{
-		kind: .move_to
-		x:    initial.x
-		y:    initial.y
+	p.nodes << PathMoveTo{
+		point: initial
 	}
 	p.wrapped_path = Path{
 		nodes: p.nodes
@@ -721,13 +739,13 @@ fn path_nodes_closed(nodes []PathNode) bool {
 	}
 	mut closed := false
 	for i, node in nodes {
-		match node.kind {
-			.move_to {
+		match node {
+			PathMoveTo {
 				if !closed && i != 0 {
 					break
 				}
 			}
-			.close {
+			PathClose {
 				closed = true
 			}
 			else {
@@ -757,12 +775,10 @@ pub fn (mut c Canvas) stroke_path(path Path, opts StrokeOptions, color Color) ! 
 // directly on two temporary canvases.
 pub fn (mut c Canvas) inner_stroke_path(path Path, opts StrokeOptions, color Color) ! {
 	mut closed_nodes := path.nodes.clone()
-	closed_nodes << PathNode{
-		kind: .close
-	}
+	closed_nodes << PathClose{}
 	if path.nodes.len > 0 {
 		for node in path.nodes {
-			if node.kind == .move_to {
+			if node is PathMoveTo {
 				closed_nodes << node
 				break
 			}
@@ -855,16 +871,15 @@ fn (ctx &Context) ty(y f64) f64 {
 }
 
 pub fn (mut ctx Context) move_to(x f64, y f64) {
-	point_x := ctx.tx(x)
-	point_y := ctx.ty(y)
-	if ctx.nodes.len > 0 && ctx.nodes.last().kind == .move_to
-		&& ctx.nodes.last().x == point_x && ctx.nodes.last().y == point_y {
-		return
+	point := Point{ x: ctx.tx(x), y: ctx.ty(y) }
+	if ctx.nodes.len > 0 {
+		last := ctx.nodes.last()
+		if last is PathMoveTo && points_equal(last.point, point) {
+			return
+		}
 	}
-	ctx.nodes << PathNode{
-		kind: .move_to
-		x:    point_x
-		y:    point_y
+	ctx.nodes << PathMoveTo{
+		point: point
 	}
 	ctx.cur_x = x
 	ctx.cur_y = y
@@ -879,10 +894,8 @@ pub fn (mut ctx Context) line_to(x f64, y f64) {
 		ctx.move_to(x, y)
 		return
 	}
-	ctx.nodes << PathNode{
-		kind: .line_to
-		x:    ctx.tx(x)
-		y:    ctx.ty(y)
+	ctx.nodes << PathLineTo{
+		point: Point{ x: ctx.tx(x), y: ctx.ty(y) }
 	}
 	ctx.cur_x = x
 	ctx.cur_y = y
@@ -893,14 +906,10 @@ pub fn (mut ctx Context) curve_to(c1x f64, c1y f64, c2x f64, c2y f64, x f64, y f
 	if !ctx.has_current {
 		return error('curve_to requires a current point')
 	}
-	ctx.nodes << PathNode{
-		kind: .curve_to
-		x:    ctx.tx(x)
-		y:    ctx.ty(y)
-		c1x:  ctx.tx(c1x)
-		c1y:  ctx.ty(c1y)
-		c2x:  ctx.tx(c2x)
-		c2y:  ctx.ty(c2y)
+	ctx.nodes << PathCurveTo{
+		p1: Point{ x: ctx.tx(c1x), y: ctx.ty(c1y) }
+		p2: Point{ x: ctx.tx(c2x), y: ctx.ty(c2y) }
+		p3: Point{ x: ctx.tx(x), y: ctx.ty(y) }
 	}
 	ctx.cur_x = x
 	ctx.cur_y = y
@@ -1006,14 +1015,10 @@ pub fn (mut ctx Context) close_path() ! {
 	if !ctx.has_current {
 		return
 	}
-	ctx.nodes << PathNode{
-		kind: .close
-	}
+	ctx.nodes << PathClose{}
 	if ctx.has_start {
-		ctx.nodes << PathNode{
-			kind: .move_to
-			x:    ctx.tx(ctx.start_x)
-			y:    ctx.ty(ctx.start_y)
+		ctx.nodes << PathMoveTo{
+			point: Point{ x: ctx.tx(ctx.start_x), y: ctx.ty(ctx.start_y) }
 		}
 	}
 }

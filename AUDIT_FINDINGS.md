@@ -424,6 +424,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | binding set value and parser element unions | Ghostty's `Set.Value` is a tagged union of `leader: *Set`, `leaf: Leaf`, and `leaf_chained: LeafChained`, each leaf type providing `generic()`, and `Parser.Elem` is a union of `leader: Trigger`, `binding: Binding`, and `chain: Action`. Witty stored `SetValue` as one struct with a `typ` tag beside `leader`, `leaf_action`, `leaf_flags`, `chain_actions`, and `chain_flags`, and `ParserElem` as a struct with `typ`, `trigger`, `binding`, and `action`. | Make `SetValue` a sum type of `Leader`, `Leaf`, and `LeafChained` (with the source's per-leaf `generic()`), make `ParserElem` a sum type of its three variants, and match on the variants in the set operations, the parser, the surface and app binding lookups, the global-shortcut mapping, `+list-keybinds`, and keybind equality. |
 | binding trigger key union | Ghostty's `Trigger.Key` is `union(C.Tag) { physical: key.Key, unicode: u21, catch_all }`. Witty stored `TriggerKey` as a struct with a `typ` tag beside `physical` and `unicode` fields, compared it with an operator overload, and built keys through `TriggerKey.new_*` helpers and tagged struct literals. | Make `TriggerKey` a sum type of `TriggerKeyPhysical`, `TriggerKeyUnicode`, and `TriggerKeyCatchAll` with `tag()` returning the C tag enum, match on the variants in `Trigger`'s equality, folded equality, hash, format, and unset check and in the C, GTK, and `+list-keybinds` projections, and construct the variants directly, including the backwards-compatible key-name table. |
 | fontconfig value union | Ghostty's fontconfig binding defines `Value` as `union(Type)` over void, integer, double, string, bool, matrix, char set, FreeType face, language set, and range payloads, with `init` and `cval` converting to and from `FcValue`, and the font code reads payloads directly (`.string`, `.integer`, `.char_set`, `.lang_set`). Witty stored one struct with a `tag` beside every payload field, built values through `Value.from_*` helpers, and kept a `PatternValue` alias. | Make `Value` a sum type of per-type variants with `tag()`, translate `init` and `cval` over the variants, construct the variants directly, and read payloads with checked `as` casts in the deferred face and discovery code. |
+| z2d path node union | z2d 0.10's `PathNode` is `union(PathNodeTag)` of `move_to: PathMoveTo`, `line_to: PathLineTo`, `curve_to: PathCurveTo` (three control points), and `close_path: PathClose`. Witty's sprite renderer stored one struct with a `kind` beside `x`, `y`, and curve control coordinates, and named the close tag `close`. | Make `PathNode` a sum type of the four node structs with `tag()` returning `PathNodeTag` (the `close_path` name restored), build the variants in the static path and context builders, and match on them in closed-subpath detection, the inner-stroke mask, and the fill and stroke plotters. |
 
 ## Focused behavior reviewed
 
@@ -487,11 +488,10 @@ an item here does not mean its full module has been certified yet.
   parameters, so `Stream[H]` passes a runtime `ActionKey` with an `ActionValue`
   sum type and handlers smart-cast the value. `lib_vt` cannot re-export the
   generic `Stream` because V does not implement generic type aliases.
-- **Flattened tagged unions:** these Ghostty tagged unions are stored in Witty
-  as one struct holding a tag beside every variant's payload fields, so
-  inactive payloads exist and invalid combinations are representable:
-  - libxev's per-backend `Operation` and `Result`;
-  - z2d's `PathNode`, used by the sprite renderer.
+- **Flattened tagged unions:** libxev's per-backend `Operation` and `Result`
+  tagged unions are stored in Witty as one struct holding a tag beside every
+  variant's payload fields, so inactive payloads exist and invalid combinations
+  are representable.
 - **Surface termio wrapper:** Ghostty's Surface stores `termio.Termio`
   directly. Witty wraps it in a `TermIO` value whose `live` flag and message
   buffer exist for zero-initialized test surfaces.
