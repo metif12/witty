@@ -9,7 +9,7 @@ module osc
 // Format: OSC 52 ; Pc ; Pd ST
 // Pc is a single character clipboard selection (s, c, p, etc.) or empty (defaults to 'c')
 // Pd is the base64-encoded data, "?" for query, or empty to clear.
-fn parse_clipboard_operation(mut parser Parser, terminator_ch ?u8) ?Command {
+fn parse_clipboard_operation(mut parser Parser, _ ?u8) ?Command {
 	assert parser.state == .s_52
 	data := parser.finish_zero_terminated() or { return none }
 	data_str := data.bytestr()
@@ -22,13 +22,9 @@ fn parse_clipboard_operation(mut parser Parser, terminator_ch ?u8) ?Command {
 	// Check for the clipboard kind separator
 	if data_str[0] == `;` {
 		// No explicit kind, default to 'c'
-		parser.command = Command{
-			cmd_type: .clipboard_contents
-			terminator: Terminator.init(terminator_ch)
-			clipboard: ClipboardContents{
-				kind: `c`
-				data: data_str[1..]
-			}
+		parser.command = ClipboardContents{
+			kind: `c`
+			data: data_str[1..]
 		}
 		return parser.command
 	}
@@ -46,13 +42,9 @@ fn parse_clipboard_operation(mut parser Parser, terminator_ch ?u8) ?Command {
 	kind := data_str[0]
 	clipboard_data := data_str[2..]
 
-	parser.command = Command{
-		cmd_type: .clipboard_contents
-		terminator: Terminator.init(terminator_ch)
-		clipboard: ClipboardContents{
-			kind: kind
-			data: clipboard_data
-		}
+	parser.command = ClipboardContents{
+		kind: kind
+		data: clipboard_data
 	}
 	return parser.command
 }

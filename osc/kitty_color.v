@@ -15,13 +15,6 @@ module osc
 // - A color specification (rgb:, rgbi:, #, or named color) to set
 // - Empty or missing to reset
 
-// KittyColorKindType represents whether a kitty color key is a special
-// color name or a palette index.
-pub enum KittyColorKindType as u8 {
-	palette
-	special
-}
-
 // KittyColorSpecial represents the named special colors in the kitty protocol.
 pub enum KittyColorSpecial as u8 {
 	foreground
@@ -34,12 +27,15 @@ pub enum KittyColorSpecial as u8 {
 	second_transparent_background
 }
 
-// KittyColorKind represents either a special color name or a palette index.
-pub struct KittyColorKind {
-pub:
-	kind    KittyColorKindType
-	special KittyColorSpecial
-	palette u8
+// KittyColorKind is either a palette index or a named special color.
+pub type KittyColorKind = KittyColorSpecial | u8
+
+// str formats the key as it appears in the protocol.
+pub fn (self KittyColorKind) str() string {
+	return match self {
+		u8 { u8(self).str() }
+		KittyColorSpecial { KittyColorSpecial(self).str() }
+	}
 }
 
 // kitty_color_kind_max is the maximum number of distinct keys addressable in a
@@ -60,38 +56,41 @@ fn parse_kitty_color_kind(k string) ?KittyColorKind {
 		'visual_bell' { KittyColorSpecial.visual_bell }
 		'second_transparent_background' { KittyColorSpecial.second_transparent_background }
 		else {
-			idx := u8(parse_unsigned_decimal(k, 255) or { return none })
-			return KittyColorKind{
-				kind: .palette
-				palette: idx
-			}
+			return KittyColorKind(u8(parse_unsigned_decimal(k, 255) or { return none }))
 		}
 	}
-	return KittyColorKind{
-		kind: .special
-		special: special
-	}
+	return KittyColorKind(special)
 }
 
-// KittyColorItemType represents the operation type for a kitty color item.
-pub enum KittyColorItemType as u8 {
-	query
-	set
-	reset
-}
-
-// KittyColorItem represents a single operation in the kitty color protocol.
-pub struct KittyColorItem {
+// Query the current value of a color.
+pub struct KittyColorQuery {
 pub:
-	item_type KittyColorItemType
-	key       KittyColorKind
-	color     RGB // only used for set operations
+	key KittyColorKind
 }
+
+// Set a color.
+pub struct KittyColorSet {
+pub:
+	key   KittyColorKind
+	color RGB
+}
+
+// Reset a color to its default.
+pub struct KittyColorReset {
+pub:
+	key KittyColorKind
+}
+
+// A single OSC 21 request.
+pub type KittyColorRequest = KittyColorQuery | KittyColorReset | KittyColorSet
 
 // KittyColorOSC represents a parsed OSC 21 command.
 pub struct KittyColorOSC {
 pub mut:
-	items      []KittyColorItem
+	// list of requests
+	list []KittyColorRequest
+	// We must reply with the same string terminator (ST) as used in the
+	// request.
 	terminator Terminator = .st
 }
 
@@ -102,65 +101,45 @@ fn parse_kitty_color_protocol(mut parser Parser, terminator_ch ?u8) ?Command {
 		parser.state = .invalid
 		return none
 	}
-	data := parser.buffered()
-	data_str := data.bytestr()
-
-	mut items := []KittyColorItem{}
-
-	// Split on semicolons
-	kvs := data_str.split(';')
-	for kv in kvs {
-		if items.len >= kitty_color_kind_max * 2 {
+	mut request := KittyColorOSC{
+		terminator: Terminator.init(terminator_ch)
+	}
+	data := parser.buffered().bytestr()
+	for kv in data.split(';') {
+		if request.list.len >= kitty_color_kind_max * 2 {
+			// exceeded limit for number of keys in kitty color protocol, ignoring
 			parser.state = .invalid
 			return none
 		}
-
-		// Split on '='
 		eq := kv.index_u8(`=`)
-		mut k := ''
-		mut value := ''
-		if eq >= 0 {
-			k = kv[..eq]
-			value = kv[eq + 1..].trim(' ')
-		} else {
-			k = kv
-			value = ''
-		}
-
+		k := if eq >= 0 { kv[..eq] } else { kv }
 		if k.len == 0 {
+			// zero length key in kitty color protocol
 			continue
 		}
-
-		key := parse_kitty_color_kind(k) or { continue }
-
+		key := parse_kitty_color_kind(k) or {
+			// unknown key in kitty color protocol
+			continue
+		}
+		value := if eq >= 0 { kv[eq + 1..].trim(' ') } else { '' }
 		if value.len == 0 {
-			// Reset
-			items << KittyColorItem{
-				item_type: .reset
+			request.list << KittyColorReset{
 				key: key
 			}
 		} else if value == '?' {
-			// Query
-			items << KittyColorItem{
-				item_type: .query
+			request.list << KittyColorQuery{
 				key: key
 			}
 		} else {
-			// Set
-			rgb := parse_rgb(value) or { continue }
-			items << KittyColorItem{
-				item_type: .set
-				key: key
-				color: rgb
+			request.list << KittyColorSet{
+				key:   key
+				color: parse_rgb(value) or {
+					// invalid color format in kitty color protocol
+					continue
+				}
 			}
 		}
 	}
-
-	parser.command = Command{
-		cmd_type: .kitty_color_protocol
-		terminator: Terminator.init(terminator_ch)
-		str_value: data_str
-		kitty_color_items: items
-	}
+	parser.command = request
 	return parser.command
 }

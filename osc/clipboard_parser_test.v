@@ -10,9 +10,9 @@ fn test_osc52_get_set_clipboard() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .clipboard_contents
-	assert cmd.clipboard.kind == `s`
-	assert cmd.clipboard.data == '?'
+	assert cmd is ClipboardContents
+	assert (cmd as ClipboardContents).kind == `s`
+	assert (cmd as ClipboardContents).data == '?'
 }
 
 fn test_osc52_get_set_clipboard_optional_parameter() {
@@ -25,9 +25,9 @@ fn test_osc52_get_set_clipboard_optional_parameter() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .clipboard_contents
-	assert cmd.clipboard.kind == `c`
-	assert cmd.clipboard.data == '?'
+	assert cmd is ClipboardContents
+	assert (cmd as ClipboardContents).kind == `c`
+	assert (cmd as ClipboardContents).data == '?'
 }
 
 fn test_osc52_clear_clipboard() {
@@ -40,9 +40,9 @@ fn test_osc52_clear_clipboard() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .clipboard_contents
-	assert cmd.clipboard.kind == `c`
-	assert cmd.clipboard.data == ''
+	assert cmd is ClipboardContents
+	assert (cmd as ClipboardContents).kind == `c`
+	assert (cmd as ClipboardContents).data == ''
 }
 
 fn test_osc52_allocating_writer_accepts_payload_larger_than_normal_buffer() {
@@ -55,9 +55,9 @@ fn test_osc52_allocating_writer_accepts_payload_larger_than_normal_buffer() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .clipboard_contents
-	assert cmd.clipboard.kind == `c`
-	assert cmd.clipboard.data == 'a'.repeat(max_buf + 1)
+	assert cmd is ClipboardContents
+	assert (cmd as ClipboardContents).kind == `c`
+	assert (cmd as ClipboardContents).data == 'a'.repeat(max_buf + 1)
 }
 
 fn test_osc52_without_allocator_falls_back_to_fixed_buffer() {

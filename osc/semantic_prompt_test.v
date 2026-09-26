@@ -24,10 +24,10 @@ fn test_osc133_end_input_start_output() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .end_input_start_output
-	assert read_aid(cmd.semantic_prompt_options) == none
-	assert read_click(cmd.semantic_prompt_options) == none
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .end_input_start_output
+	assert read_aid((cmd as SemanticPrompt).options_unvalidated) == none
+	assert read_click((cmd as SemanticPrompt).options_unvalidated) == none
 }
 
 fn test_osc133_end_input_start_output_extra_contents() {
@@ -49,9 +49,9 @@ fn test_osc133_end_input_start_output_with_options() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .end_input_start_output
-	aid := read_aid(cmd.semantic_prompt_options) or {
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .end_input_start_output
+	aid := read_aid((cmd as SemanticPrompt).options_unvalidated) or {
 		assert false, 'expected aid'
 		return
 	}
@@ -68,8 +68,8 @@ fn test_osc133_fresh_line() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .fresh_line
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .fresh_line
 }
 
 fn test_osc133_fresh_line_extra_contents() {
@@ -100,10 +100,10 @@ fn test_osc133_fresh_line_new_prompt() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .fresh_line_new_prompt
-	assert read_aid(cmd.semantic_prompt_options) == none
-	assert read_click(cmd.semantic_prompt_options) == none
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .fresh_line_new_prompt
+	assert read_aid((cmd as SemanticPrompt).options_unvalidated) == none
+	assert read_click((cmd as SemanticPrompt).options_unvalidated) == none
 }
 
 fn test_osc133_fresh_line_new_prompt_with_aid() {
@@ -116,9 +116,9 @@ fn test_osc133_fresh_line_new_prompt_with_aid() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .fresh_line_new_prompt
-	aid := read_aid(cmd.semantic_prompt_options) or {
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .fresh_line_new_prompt
+	aid := read_aid((cmd as SemanticPrompt).options_unvalidated) or {
 		assert false, 'expected aid'
 		return
 	}
@@ -135,9 +135,9 @@ fn test_osc133_fresh_line_new_prompt_with_eq_in_aid() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .fresh_line_new_prompt
-	aid := read_aid(cmd.semantic_prompt_options) or {
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .fresh_line_new_prompt
+	aid := read_aid((cmd as SemanticPrompt).options_unvalidated) or {
 		assert false, 'expected aid'
 		return
 	}
@@ -154,9 +154,9 @@ fn test_osc133_fresh_line_new_prompt_with_cl_line() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .fresh_line_new_prompt
-	cl := read_click(cmd.semantic_prompt_options) or {
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .fresh_line_new_prompt
+	cl := read_click((cmd as SemanticPrompt).options_unvalidated) or {
 		assert false, 'expected click'
 		return
 	}
@@ -173,9 +173,9 @@ fn test_osc133_fresh_line_new_prompt_with_cl_m() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .fresh_line_new_prompt
-	cl := read_click(cmd.semantic_prompt_options) or {
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .fresh_line_new_prompt
+	cl := read_click((cmd as SemanticPrompt).options_unvalidated) or {
 		assert false, 'expected click'
 		return
 	}
@@ -192,9 +192,9 @@ fn test_osc133_fresh_line_new_prompt_with_invalid_cl() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .fresh_line_new_prompt
-	assert read_click(cmd.semantic_prompt_options) == none
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .fresh_line_new_prompt
+	assert read_click((cmd as SemanticPrompt).options_unvalidated) == none
 }
 
 fn test_osc133_fresh_line_new_prompt_with_trailing_semicolon() {
@@ -207,8 +207,8 @@ fn test_osc133_fresh_line_new_prompt_with_trailing_semicolon() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .fresh_line_new_prompt
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .fresh_line_new_prompt
 }
 
 fn test_osc133_fresh_line_new_prompt_with_bare_key() {
@@ -221,10 +221,10 @@ fn test_osc133_fresh_line_new_prompt_with_bare_key() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .fresh_line_new_prompt
-	assert read_aid(cmd.semantic_prompt_options) == none
-	assert read_click(cmd.semantic_prompt_options) == none
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .fresh_line_new_prompt
+	assert read_aid((cmd as SemanticPrompt).options_unvalidated) == none
+	assert read_click((cmd as SemanticPrompt).options_unvalidated) == none
 }
 
 fn test_osc133_fresh_line_new_prompt_with_multiple_options() {
@@ -237,14 +237,14 @@ fn test_osc133_fresh_line_new_prompt_with_multiple_options() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .fresh_line_new_prompt
-	aid := read_aid(cmd.semantic_prompt_options) or {
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .fresh_line_new_prompt
+	aid := read_aid((cmd as SemanticPrompt).options_unvalidated) or {
 		assert false, 'expected aid'
 		return
 	}
 	assert aid == 'foo'
-	cl := read_click(cmd.semantic_prompt_options) or {
+	cl := read_click((cmd as SemanticPrompt).options_unvalidated) or {
 		assert false, 'expected click'
 		return
 	}
@@ -261,9 +261,9 @@ fn test_osc133_fresh_line_new_prompt_default_redraw() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .fresh_line_new_prompt
-	assert read_redraw(cmd.semantic_prompt_options) == none
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .fresh_line_new_prompt
+	assert read_redraw((cmd as SemanticPrompt).options_unvalidated) == none
 }
 
 fn test_osc133_fresh_line_new_prompt_with_redraw_0() {
@@ -276,9 +276,9 @@ fn test_osc133_fresh_line_new_prompt_with_redraw_0() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .fresh_line_new_prompt
-	rd := read_redraw(cmd.semantic_prompt_options) or {
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .fresh_line_new_prompt
+	rd := read_redraw((cmd as SemanticPrompt).options_unvalidated) or {
 		assert false, 'expected redraw'
 		return
 	}
@@ -295,9 +295,9 @@ fn test_osc133_fresh_line_new_prompt_with_redraw_1() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .fresh_line_new_prompt
-	rd := read_redraw(cmd.semantic_prompt_options) or {
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .fresh_line_new_prompt
+	rd := read_redraw((cmd as SemanticPrompt).options_unvalidated) or {
 		assert false, 'expected redraw'
 		return
 	}
@@ -314,9 +314,9 @@ fn test_osc133_fresh_line_new_prompt_with_invalid_redraw() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .fresh_line_new_prompt
-	assert read_redraw(cmd.semantic_prompt_options) == none
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .fresh_line_new_prompt
+	assert read_redraw((cmd as SemanticPrompt).options_unvalidated) == none
 }
 
 fn test_osc133_prompt_start() {
@@ -329,9 +329,9 @@ fn test_osc133_prompt_start() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .prompt_start
-	assert read_prompt_kind(cmd.semantic_prompt_options) == none
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .prompt_start
+	assert read_prompt_kind((cmd as SemanticPrompt).options_unvalidated) == none
 }
 
 fn test_osc133_prompt_start_with_k_i() {
@@ -344,9 +344,9 @@ fn test_osc133_prompt_start_with_k_i() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .prompt_start
-	pk := read_prompt_kind(cmd.semantic_prompt_options) or {
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .prompt_start
+	pk := read_prompt_kind((cmd as SemanticPrompt).options_unvalidated) or {
 		assert false, 'expected prompt_kind'
 		return
 	}
@@ -363,9 +363,9 @@ fn test_osc133_prompt_start_with_k_r() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .prompt_start
-	pk := read_prompt_kind(cmd.semantic_prompt_options) or {
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .prompt_start
+	pk := read_prompt_kind((cmd as SemanticPrompt).options_unvalidated) or {
 		assert false, 'expected prompt_kind'
 		return
 	}
@@ -382,9 +382,9 @@ fn test_osc133_prompt_start_with_k_c() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .prompt_start
-	pk := read_prompt_kind(cmd.semantic_prompt_options) or {
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .prompt_start
+	pk := read_prompt_kind((cmd as SemanticPrompt).options_unvalidated) or {
 		assert false, 'expected prompt_kind'
 		return
 	}
@@ -401,9 +401,9 @@ fn test_osc133_prompt_start_with_k_s() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .prompt_start
-	pk := read_prompt_kind(cmd.semantic_prompt_options) or {
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .prompt_start
+	pk := read_prompt_kind((cmd as SemanticPrompt).options_unvalidated) or {
 		assert false, 'expected prompt_kind'
 		return
 	}
@@ -420,9 +420,9 @@ fn test_osc133_prompt_start_with_invalid_k() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .prompt_start
-	assert read_prompt_kind(cmd.semantic_prompt_options) == none
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .prompt_start
+	assert read_prompt_kind((cmd as SemanticPrompt).options_unvalidated) == none
 }
 
 fn test_osc133_prompt_start_extra_contents() {
@@ -444,10 +444,10 @@ fn test_osc133_new_command() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .new_command
-	assert read_aid(cmd.semantic_prompt_options) == none
-	assert read_click(cmd.semantic_prompt_options) == none
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .new_command
+	assert read_aid((cmd as SemanticPrompt).options_unvalidated) == none
+	assert read_click((cmd as SemanticPrompt).options_unvalidated) == none
 }
 
 fn test_osc133_new_command_with_aid() {
@@ -460,9 +460,9 @@ fn test_osc133_new_command_with_aid() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .new_command
-	aid := read_aid(cmd.semantic_prompt_options) or {
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .new_command
+	aid := read_aid((cmd as SemanticPrompt).options_unvalidated) or {
 		assert false, 'expected aid'
 		return
 	}
@@ -479,9 +479,9 @@ fn test_osc133_new_command_with_cl_line() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .new_command
-	cl := read_click(cmd.semantic_prompt_options) or {
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .new_command
+	cl := read_click((cmd as SemanticPrompt).options_unvalidated) or {
 		assert false, 'expected click'
 		return
 	}
@@ -498,14 +498,14 @@ fn test_osc133_new_command_with_multiple_options() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .new_command
-	aid := read_aid(cmd.semantic_prompt_options) or {
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .new_command
+	aid := read_aid((cmd as SemanticPrompt).options_unvalidated) or {
 		assert false, 'expected aid'
 		return
 	}
 	assert aid == 'foo'
-	cl := read_click(cmd.semantic_prompt_options) or {
+	cl := read_click((cmd as SemanticPrompt).options_unvalidated) or {
 		assert false, 'expected click'
 		return
 	}
@@ -531,8 +531,8 @@ fn test_osc133_end_prompt_start_input() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .end_prompt_start_input
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .end_prompt_start_input
 }
 
 fn test_osc133_end_prompt_start_input_extra_contents() {
@@ -554,9 +554,9 @@ fn test_osc133_end_prompt_start_input_with_options() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .end_prompt_start_input
-	aid := read_aid(cmd.semantic_prompt_options) or {
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .end_prompt_start_input
+	aid := read_aid((cmd as SemanticPrompt).options_unvalidated) or {
 		assert false, 'expected aid'
 		return
 	}
@@ -573,8 +573,8 @@ fn test_osc133_end_prompt_start_input_terminate_eol() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .end_prompt_start_input_terminate_eol
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .end_prompt_start_input_terminate_eol
 }
 
 fn test_osc133_end_prompt_start_input_terminate_eol_extra_contents() {
@@ -596,9 +596,9 @@ fn test_osc133_end_prompt_start_input_terminate_eol_with_options() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .end_prompt_start_input_terminate_eol
-	aid := read_aid(cmd.semantic_prompt_options) or {
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .end_prompt_start_input_terminate_eol
+	aid := read_aid((cmd as SemanticPrompt).options_unvalidated) or {
 		assert false, 'expected aid'
 		return
 	}
@@ -615,11 +615,11 @@ fn test_osc133_end_command() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .end_command
-	assert read_exit_code(cmd.semantic_prompt_options) == none
-	assert read_aid(cmd.semantic_prompt_options) == none
-	assert read_err(cmd.semantic_prompt_options) == none
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .end_command
+	assert read_exit_code((cmd as SemanticPrompt).options_unvalidated) == none
+	assert read_aid((cmd as SemanticPrompt).options_unvalidated) == none
+	assert read_err((cmd as SemanticPrompt).options_unvalidated) == none
 }
 
 fn test_osc133_end_command_extra_contents() {
@@ -641,9 +641,9 @@ fn test_osc133_end_command_with_exit_code_0() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .end_command
-	ec := read_exit_code(cmd.semantic_prompt_options) or {
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .end_command
+	ec := read_exit_code((cmd as SemanticPrompt).options_unvalidated) or {
 		assert false, 'expected exit code'
 		return
 	}
@@ -660,14 +660,14 @@ fn test_osc133_end_command_with_exit_code_and_aid() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .semantic_prompt
-	assert cmd.semantic_prompt_action == .end_command
-	aid := read_aid(cmd.semantic_prompt_options) or {
+	assert cmd is SemanticPrompt
+	assert (cmd as SemanticPrompt).action == .end_command
+	aid := read_aid((cmd as SemanticPrompt).options_unvalidated) or {
 		assert false, 'expected aid'
 		return
 	}
 	assert aid == 'foo'
-	ec := read_exit_code(cmd.semantic_prompt_options) or {
+	ec := read_exit_code((cmd as SemanticPrompt).options_unvalidated) or {
 		assert false, 'expected exit code'
 		return
 	}

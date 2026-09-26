@@ -155,9 +155,9 @@ fn test_osc1337_copy_valid_base64() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .clipboard_contents
-	assert cmd.clipboard.kind == `c`
-	assert cmd.clipboard.data == 'YWJjMTIz'
+	assert cmd is ClipboardContents
+	assert (cmd as ClipboardContents).kind == `c`
+	assert (cmd as ClipboardContents).data == 'YWJjMTIz'
 }
 
 fn test_osc1337_currentdir_no_value() {
@@ -188,6 +188,6 @@ fn test_osc1337_currentdir_nonempty_value() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .report_pwd
-	assert cmd.str_value == 'abc123'
+	assert cmd is ReportPwd
+	assert (cmd as ReportPwd).value == 'abc123'
 }

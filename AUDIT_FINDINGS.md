@@ -412,6 +412,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | page integrity checks | `Page.assertIntegrity` and `getCells`' ownership check run only under `slow_runtime_safety`, and `getCells` compares pointer bounds. Witty ran the full page integrity scan in every build and `get_cells` scanned all rows to find the row, both on the live print and render paths. | Skip both in production builds, like `PageList.assert_integrity`, and compare pointer bounds in `get_cells`. |
 | formatter option mutability | Zig struct fields are mutable, and the upstream formatter tests set `formatter.opts.unwrap` and `.trim` after `PageFormatter.init`. Witty declared `PageFormatter.opts` and every `FormatOptions` field immutable. | Make them mutable and translate those tests as written. |
 | renderer frame critical section | Ghostty's `updateFrame` holds `state.mutex` while it updates the render state, reads the scrollbar, clones the preedit, refreshes Kitty images, and collects hovered OSC 8 links, then logs and continues if regex link matching fails. Witty's comment claimed the caller held the mutex, but nothing locked it, so the renderer read the terminal while the IO thread resized or wrote it (caught as a torn page read in the embedded bridge test). Regex link errors also aborted the frame. | Take `state.mutex` around the same critical data as the source, return it as `UpdateFrameCritical`, and log regex link errors. |
+| OSC command union | Ghostty's `osc.Command` is a tagged union whose variants carry their own payloads, with a response terminator only on `color_operation` and the Kitty color OSC; the Kitty color `Kind` and `Request` and the ConEmu tab title are unions too; `Terminal.semanticPrompt` takes the parsed command; and `kittyColorReport` is one function. Witty used a flat `Command` struct with a `cmd_type` tag, a shared `str_value`, every variant's fields side by side, and a terminator on every command; flattened the Kitty kinds and requests and the tab title into tagged structs; split the semantic prompt entry into `semantic_prompt(action, exit_code)` and `semantic_prompt_options(action, options)`; spread the Kitty color report over five helpers; and returned a null title pointer from the C API for an empty title. | Make `Command` a sum type of per-variant payload structs with `key()`, build the matching variant in every OSC parser, make the Kitty color kind and request and the tab title unions, carry the typed payloads through the stream and `ParserAction` (dropping the `OscCommand` alias), translate `semanticPrompt(cmd)` and `kittyColorReport` as single functions, return the title pointer as the source does, and re-translate the upstream OSC 21 tests. |
 
 ## Focused behavior reviewed
 
@@ -464,10 +465,12 @@ an item here does not mean its full module has been certified yet.
   soon as that alias is used as a field or parameter type. Witty therefore
   keeps the exact fixed array directly in color APIs rather than exposing a
   nominal alias that cannot be consumed.
-- **OSC representation:** Ghostty's tagged `Command` union, sentinel slices,
-  allocator/writer objects, and nested parser types are represented by a flat
-  V command struct and GC-backed arrays. Observable parser boundaries are now
-  enforced, but this is not a one-for-one representation or ABI translation.
+- **OSC representation:** the `Command` union and its nested unions are now
+  sum types, but Ghostty's sentinel-terminated slices are V strings, its
+  fixed and allocating `std.Io.Writer` objects are an `OscWriter` tag over one
+  GC-backed buffer, and the allocator is reduced to a presence flag. Observable
+  parser boundaries are enforced, but this is not a one-for-one memory or ABI
+  translation.
 - **Stream dispatch representation:** Ghostty specializes `Stream(Handler)` and
   invokes typed, comptime-tagged callbacks synchronously as parsing progresses.
   Witty's shared parser stores flat `StreamEvent`/`ActionPayload` values for a

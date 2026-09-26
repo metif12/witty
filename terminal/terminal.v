@@ -4343,15 +4343,9 @@ pub fn (mut self Terminal) full_reset() {
 // coherent state, since callers typically can't handle errors (since
 // they're sending sequences via the pty).
 //
-pub fn (mut self Terminal) semantic_prompt(action osc.SemanticAction, exit_code ?i32) {
-	options := if code := exit_code { '${code}' } else { '' }
-	self.semantic_prompt_options(action, options)
-}
-
-// Perform a semantic prompt command with its raw semicolon-separated options.
-// Malformed and unknown options are ignored as required by the OSC 133 spec.
-pub fn (mut self Terminal) semantic_prompt_options(action osc.SemanticAction, options string) {
-	match action {
+pub fn (mut self Terminal) semantic_prompt(cmd osc.SemanticPrompt) {
+	options := cmd.options_unvalidated
+	match cmd.action {
 		.fresh_line {
 			self.semantic_prompt_fresh_line()
 		}
@@ -4381,7 +4375,22 @@ pub fn (mut self Terminal) semantic_prompt_options(action osc.SemanticAction, op
 			}
 		}
 		.new_command {
-			self.semantic_prompt_options(.fresh_line_new_prompt, options)
+			// Spec:
+			// Same as OSC "133;A" but may first implicitly terminate a
+			// previous command: if the options specify an aid and there
+			// is an active (open) command with matching aid, finish the
+			// innermost such command (as well as any other commands
+			// nested more deeply). If no aid is specified, treat as an
+			// aid whose value is the empty string.
+
+			// Ghostty:
+			// We don't currently do explicit command tracking in any way
+			// so there is no need to terminate prior commands. We just
+			// perform the `A` action.
+			self.semantic_prompt(osc.SemanticPrompt{
+				action:              .fresh_line_new_prompt
+				options_unvalidated: cmd.options_unvalidated
+			})
 		}
 		.prompt_start {
 			self.screens.active.cursor_set_semantic_content(CursorSemanticPrompt{

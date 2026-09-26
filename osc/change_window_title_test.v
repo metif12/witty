@@ -22,8 +22,8 @@ fn test_osc0_change_window_title() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .change_window_title
-	assert cmd.str_value == 'ab'
+	assert cmd is ChangeWindowTitle
+	assert (cmd as ChangeWindowTitle).value == 'ab'
 }
 
 fn test_osc2_change_window_title() {
@@ -36,8 +36,8 @@ fn test_osc2_change_window_title() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .change_window_title
-	assert cmd.str_value == 'ab'
+	assert cmd is ChangeWindowTitle
+	assert (cmd as ChangeWindowTitle).value == 'ab'
 }
 
 fn test_osc2_change_window_title_with_utf8() {
@@ -58,9 +58,9 @@ fn test_osc2_change_window_title_with_utf8() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .change_window_title
+	assert cmd is ChangeWindowTitle
 	// The raw bytes should be preserved
-	assert cmd.str_value.len == 7
+	assert (cmd as ChangeWindowTitle).value.len == 7
 }
 
 fn test_osc2_change_window_title_empty() {
@@ -71,8 +71,8 @@ fn test_osc2_change_window_title_empty() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .change_window_title
-	assert cmd.str_value == ''
+	assert cmd is ChangeWindowTitle
+	assert (cmd as ChangeWindowTitle).value == ''
 }
 
 fn test_osc0_change_window_title_longer_than_buffer() {
@@ -96,8 +96,8 @@ fn test_osc0_change_window_title_one_shorter_than_buffer_length() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .change_window_title
-	assert cmd.str_value == 'a'.repeat(max_buf - 1)
+	assert cmd is ChangeWindowTitle
+	assert (cmd as ChangeWindowTitle).value == 'a'.repeat(max_buf - 1)
 }
 
 fn test_osc0_change_window_title_exactly_at_buffer_length() {

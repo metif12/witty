@@ -6,7 +6,7 @@ module osc
 // a desktop notification with a title and body.
 //
 // Format: OSC 777 ; notify ; title ; body ST
-fn parse_rxvt_extension(mut parser Parser, terminator_ch ?u8) ?Command {
+fn parse_rxvt_extension(mut parser Parser, _ ?u8) ?Command {
 	data := parser.finish_zero_terminated() or { return none }
 	data_str := data.bytestr()
 
@@ -34,13 +34,9 @@ fn parse_rxvt_extension(mut parser Parser, terminator_ch ?u8) ?Command {
 	title := rest[..t]
 	body := rest[t + 1..]
 
-	parser.command = Command{
-		cmd_type: .show_desktop_notification
-		terminator: Terminator.init(terminator_ch)
-		desktop_notification: DesktopNotification{
-			title: title
-			body: body
-		}
+	parser.command = DesktopNotification{
+		title: title
+		body: body
 	}
 	return parser.command
 }

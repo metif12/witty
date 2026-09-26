@@ -10,7 +10,7 @@ fn test_osc777_show_desktop_notification_with_title() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .show_desktop_notification
-	assert cmd.desktop_notification.title == 'Title'
-	assert cmd.desktop_notification.body == 'Body'
+	assert cmd is DesktopNotification
+	assert (cmd as DesktopNotification).title == 'Title'
+	assert (cmd as DesktopNotification).body == 'Body'
 }

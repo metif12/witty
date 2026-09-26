@@ -203,10 +203,6 @@ pub:
 	final_byte    u8
 }
 
-// OscCommand is the parsed OSC command itself. Keeping the canonical OSC type
-// here preserves every payload for raw parser consumers such as the inspector.
-pub type OscCommand = osc.Command
-
 // ============================================================
 // Parser action
 // ============================================================
@@ -234,7 +230,7 @@ pub:
 	byte_val    u8 // for execute, dcs_put, apc_put
 	csi         CSIAction // for csi_dispatch
 	esc         ESCAction // for esc_dispatch
-	osc         OscCommand // for osc_dispatch
+	osc         osc.Command = osc.InvalidCommand{} // for osc_dispatch
 	dcs         DCSAction // for dcs_hook
 }
 

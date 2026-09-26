@@ -426,9 +426,9 @@ fn test_color_operation_with_allocator_accepts_missing_payload_writer() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .color_operation
-	assert cmd.color_op == .osc_10
-	assert cmd.color_requests.len == 0
+	assert cmd is ColorOperationCommand
+	assert (cmd as ColorOperationCommand).op == .osc_10
+	assert (cmd as ColorOperationCommand).requests.len == 0
 }
 
 // Translated from ghostty test "OSC 4:" - exhaustive palette + special coverage.

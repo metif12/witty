@@ -2,6 +2,7 @@ module inspector
 
 import ascii
 import cimgui
+import osc
 import terminal
 
 const max_vt_events = 100
@@ -168,7 +169,7 @@ fn encode_vt_action(action terminal.ParserAction) string {
 		.execute_action { '${execute_name(action.byte_val)} (0x${action.byte_val:X})' }
 		.csi_dispatch_action { encode_csi_action(action.csi) }
 		.esc_dispatch_action { encode_esc_action(action.esc) }
-		.osc_dispatch_action { '${action.osc.cmd_type} ' }
+		.osc_dispatch_action { '${action.osc.key()} ' }
 		else { action.action_type.str() }
 	}
 }
@@ -228,64 +229,64 @@ fn vt_action_metadata(action terminal.ParserAction) map[string]string {
 		return result
 	}
 	cmd := action.osc
-	match cmd.cmd_type {
-		.change_window_title, .change_window_icon, .report_pwd, .mouse_shape, .conemu_show_message_box, .conemu_guimacro, .conemu_run_process, .conemu_output_environment_variable, .conemu_comment {
-			result['data'] = cmd.str_value.clone()
+	match cmd {
+		osc.ChangeWindowTitle, osc.ChangeWindowIcon, osc.ReportPwd, osc.MouseShape,
+		osc.ConEmuShowMessageBox, osc.ConEmuGuiMacro, osc.ConEmuRunProcess,
+		osc.ConEmuOutputEnvironmentVariable, osc.ConEmuComment {
+			result['data'] = cmd.value.clone()
 		}
-		.semantic_prompt {
-			result['action'] = cmd.semantic_prompt_action.str()
-			result['options_unvalidated'] = cmd.semantic_prompt_options.clone()
+		osc.SemanticPrompt {
+			result['action'] = cmd.action.str()
+			result['options_unvalidated'] = cmd.options_unvalidated.clone()
 		}
-		.clipboard_contents {
-			result['kind'] = cmd.clipboard.kind.str()
-			result['data'] = cmd.clipboard.data.clone()
+		osc.ClipboardContents {
+			result['kind'] = cmd.kind.str()
+			result['data'] = cmd.data.clone()
 		}
-		.color_operation {
-			result['op'] = cmd.color_op.str()
-			result['requests'] = cmd.color_requests.len.str()
+		osc.ColorOperationCommand {
+			result['op'] = cmd.op.str()
+			result['requests'] = cmd.requests.len.str()
 			result['terminator'] = cmd.terminator.str()
 		}
-		.kitty_color_protocol {
-			result['list'] = cmd.kitty_color_items.len.str()
+		osc.KittyColorOSC {
+			result['list'] = cmd.list.len.str()
 			result['terminator'] = cmd.terminator.str()
 		}
-		.show_desktop_notification {
-			result['title'] = cmd.desktop_notification.title.clone()
-			result['body'] = cmd.desktop_notification.body.clone()
+		osc.DesktopNotification {
+			result['title'] = cmd.title.clone()
+			result['body'] = cmd.body.clone()
 		}
-		.hyperlink_start {
-			result['id'] = cmd.hyperlink.id or { '(unset)' }
-			result['uri'] = cmd.hyperlink.uri.clone()
+		osc.HyperlinkStart {
+			result['id'] = cmd.id or { '(unset)' }
+			result['uri'] = cmd.uri.clone()
 		}
-		.conemu_sleep {
+		osc.ConEmuSleep {
 			result['duration_ms'] = cmd.duration_ms.str()
 		}
-		.conemu_change_tab_title {
-			result['data'] = if cmd.tab_title.kind == .reset {
-				'reset'
-			} else {
-				'value=${cmd.tab_title.value}'
+		osc.ConEmuChangeTabTitle {
+			result['data'] = match cmd.title {
+				osc.ConEmuTabTitleReset { 'reset' }
+				string { 'value=${cmd.title}' }
 			}
 		}
-		.conemu_progress_report {
-			result['state'] = cmd.progress_state.str()
+		osc.ProgressReport {
+			result['state'] = cmd.state.str()
 			result['progress'] = if progress := cmd.progress { progress.str() } else { '(unset)' }
 		}
-		.conemu_xterm_emulation {
-			result['keyboard'] = optional_bool_string(cmd.xterm_keyboard)
-			result['output'] = optional_bool_string(cmd.xterm_output)
+		osc.ConEmuXtermEmulation {
+			result['keyboard'] = optional_bool_string(cmd.keyboard)
+			result['output'] = optional_bool_string(cmd.output)
 		}
-		.kitty_text_sizing {
-			value := cmd.kitty_text_sizing
-			result['scale'] = value.scale.str()
-			result['width'] = value.width.str()
-			result['numerator'] = value.numerator.str()
-			result['denominator'] = value.denominator.str()
-			result['valign'] = value.valign.str()
-			result['halign'] = value.halign.str()
-			result['text'] = value.text.clone()
+		osc.KittyTextSizing {
+			result['scale'] = cmd.scale.str()
+			result['width'] = cmd.width.str()
+			result['numerator'] = cmd.numerator.str()
+			result['denominator'] = cmd.denominator.str()
+			result['valign'] = cmd.valign.str()
+			result['halign'] = cmd.halign.str()
+			result['text'] = cmd.text.clone()
 		}
-		.invalid, .hyperlink_end, .conemu_wait_input {}
+		osc.InvalidCommand, osc.HyperlinkEnd, osc.ConEmuWaitInput {}
 	}
 	return result
 }

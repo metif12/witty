@@ -798,13 +798,15 @@ fn test_color_query_response_mirrors_osc_terminator() ! {
 	handler.vt(terminal.StreamEvent{
 		key: .color_operation
 		payload: terminal.ActionPayload{
-			osc_terminator: .bel
-			color_op: .osc_4
-			color_requests: [osc.ColorRequest(osc.ColorRequestQuery{
-				target: osc.ColorTarget(osc.ColorTargetPalette{
-					index: 1
-				})
-			})]
+			color_operation: osc.ColorOperationCommand{
+				op:         .osc_4
+				requests:   [osc.ColorRequest(osc.ColorRequestQuery{
+					target: osc.ColorTarget(osc.ColorTargetPalette{
+						index: 1
+					})
+				})]
+				terminator: .bel
+			}
 		}
 	})!
 	bel := ctx.mailbox.queue.pop() or { panic('expected BEL-terminated color response') }
@@ -814,13 +816,15 @@ fn test_color_query_response_mirrors_osc_terminator() ! {
 	handler.vt(terminal.StreamEvent{
 		key: .color_operation
 		payload: terminal.ActionPayload{
-			osc_terminator: .st
-			color_op: .osc_4
-			color_requests: [osc.ColorRequest(osc.ColorRequestQuery{
-				target: osc.ColorTarget(osc.ColorTargetPalette{
-					index: 1
-				})
-			})]
+			color_operation: osc.ColorOperationCommand{
+				op:         .osc_4
+				requests:   [osc.ColorRequest(osc.ColorRequestQuery{
+					target: osc.ColorTarget(osc.ColorTargetPalette{
+						index: 1
+					})
+				})]
+				terminator: .st
+			}
 		}
 	})!
 	st := ctx.mailbox.queue.pop() or { panic('expected ST-terminated color response') }
@@ -835,14 +839,12 @@ fn test_kitty_color_query_response_mirrors_osc_terminator() ! {
 	handler.vt(terminal.StreamEvent{
 		key: .kitty_color_report
 		payload: terminal.ActionPayload{
-			osc_terminator: .bel
-			kitty_color_items: [osc.KittyColorItem{
-				item_type: .query
-				key: osc.KittyColorKind{
-					kind: .palette
-					palette: 1
-				}
-			}]
+			kitty_color: osc.KittyColorOSC{
+				list:       [osc.KittyColorRequest(osc.KittyColorQuery{
+					key: u8(1)
+				})]
+				terminator: .bel
+			}
 		}
 	})!
 	msg := ctx.mailbox.queue.pop() or { panic('expected Kitty color response') }

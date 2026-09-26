@@ -238,19 +238,13 @@ pub:
 	id  ?string
 }
 
-// ConEmuTabTitle represents a ConEmu tab title value (reset or set to a string).
-pub enum ConEmuTabTitleKind as u8 {
-	reset
-	value
-}
+// The reset variant of the ConEmu tab title union.
+pub struct ConEmuTabTitleReset {}
 
-pub struct ConEmuTabTitle {
-pub:
-	kind  ConEmuTabTitleKind
-	value string
-}
+// ConEmu change tab title (OSC 9;3): either a reset or a new title value.
+pub type ConEmuTabTitle = ConEmuTabTitleReset | string
 
-// CommandType identifies the type of OSC command.
+// Key identifies the active variant of a Command.
 pub enum CommandType as i32 {
 	invalid
 	change_window_title
@@ -277,45 +271,196 @@ pub enum CommandType as i32 {
 	kitty_text_sizing
 }
 
-// Command represents a parsed OSC command.
-pub struct Command {
+// This generally shouldn't ever be set except as an initial zero value.
+// Ignore it.
+pub struct InvalidCommand {}
+
+// Set the window title of the terminal
+//
+// If title mode 0 is set text is expect to be hex encoded (i.e. utf-8
+// with each code unit further encoded with two hex digits).
+//
+// If title mode 2 is set or the terminal is setup for unconditional
+// utf-8 titles text is interpreted as utf-8. Else text is interpreted
+// as latin1.
+pub struct ChangeWindowTitle {
 pub:
-	cmd_type   CommandType
-	terminator Terminator
-	// String data fields (used by various commands)
-	str_value string
-	// ConEmu sleep duration
-	duration_ms u16
-	// ConEmu progress report
-	progress_state ProgressState
-	progress       ?u8
-	// OSC 9 / OSC 777 desktop notification.
-	desktop_notification DesktopNotification
-	// OSC 52 / iTerm2 clipboard payload.
-	clipboard ClipboardContents
-	// OSC 8 hyperlink payload.
-	hyperlink HyperlinkStart
-	// OSC 66 Kitty text-sizing payload.
-	kitty_text_sizing KittyTextSizing
-	// ConEmu xterm emulation
-	xterm_keyboard ?bool
-	xterm_output   ?bool
-	// ConEmu tab title
-	tab_title ConEmuTabTitle
-	// Semantic prompt data (OSC 133)
-	semantic_prompt_action SemanticAction = .fresh_line
-	// Color operation (OSC 4, 5, 10-19, 104, 105, 110-119). `color_op`
-	// identifies which OSC produced this and `color_requests` holds the
-	// parsed list of set/query/reset requests. (ColorOperation and
-	// ColorRequest are defined in color_parser.v.)
-	color_op       ColorOperation
-	color_requests []ColorRequest
-	// Kitty color protocol (OSC 21). Holds the parsed list of query/set/reset
-	// items so downstream consumers can apply them without re-parsing
-	// str_value. (KittyColorItem is defined in kitty_color.v.)
-	kitty_color_items []KittyColorItem
+	value string
+}
+
+// Set the icon of the terminal window. The name of the icon is not
+// well defined, so this is currently ignored by Ghostty at the time
+// of writing this. We just parse it so that we don't get parse errors
+// in the log.
+pub struct ChangeWindowIcon {
+pub:
+	value string
+}
+
+// Semantic prompt command: https://gitlab.freedesktop.org/Per_Bothner/specifications/blob/master/proposals/semantic-prompts.md
+pub struct SemanticPrompt {
 pub mut:
-	semantic_prompt_options string
+	action              SemanticAction
+	options_unvalidated string
+}
+
+pub fn SemanticPrompt.init(action SemanticAction) SemanticPrompt {
+	return SemanticPrompt{
+		action: action
+	}
+}
+
+// OSC 7. Reports the current working directory of the shell. This is
+// a moderately flawed escape sequence but one that many major terminals
+// support so we also support it. To understand the flaws, read through
+// this terminal-wg issue: https://gitlab.freedesktop.org/terminal-wg/specifications/-/issues/20
+pub struct ReportPwd {
+pub:
+	// The reported pwd value. This is not checked for validity. It should
+	// be a file URL but it is up to the caller to utilize this value.
+	value string
+}
+
+// OSC 22. Set the mouse shape. There doesn't seem to be a standard
+// naming scheme for cursors but it looks like terminals such as Foot
+// are moving towards using the W3C CSS cursor names. For OSC parsing,
+// we just parse whatever string is given.
+pub struct MouseShape {
+pub:
+	value string
+}
+
+// OSC color operations to set, reset, or report color settings. Some OSCs
+// allow multiple operations to be specified in a single OSC so we need a
+// list-like datastructure to manage them.
+//
+// Currently, these OSCs are handled by `color_operation`:
+//
+// 4, 5, 10-19, 104, 105, 110-119
+pub struct ColorOperationCommand {
+pub:
+	op         ColorOperation
+	requests   []ColorRequest
+	terminator Terminator = .st
+}
+
+// End a hyperlink (OSC 8)
+pub struct HyperlinkEnd {}
+
+// ConEmu sleep (OSC 9;1)
+pub struct ConEmuSleep {
+pub:
+	duration_ms u16
+}
+
+// ConEmu show GUI message box (OSC 9;2)
+pub struct ConEmuShowMessageBox {
+pub:
+	value string
+}
+
+// ConEmu change tab title (OSC 9;3)
+pub struct ConEmuChangeTabTitle {
+pub:
+	title ConEmuTabTitle
+}
+
+// ConEmu wait input (OSC 9;5)
+pub struct ConEmuWaitInput {}
+
+// ConEmu GUI macro (OSC 9;6)
+pub struct ConEmuGuiMacro {
+pub:
+	value string
+}
+
+// ConEmu run process (OSC 9;7)
+pub struct ConEmuRunProcess {
+pub:
+	value string
+}
+
+// ConEmu output environment variable (OSC 9;8)
+pub struct ConEmuOutputEnvironmentVariable {
+pub:
+	value string
+}
+
+// ConEmu XTerm keyboard and output emulation (OSC 9;10)
+// https://conemu.github.io/en/TerminalModes.html
+pub struct ConEmuXtermEmulation {
+pub:
+	// null => do not change
+	// false => turn off
+	// true => turn on
+	keyboard ?bool
+	// null => do not change
+	// false => turn off
+	// true => turn on
+	output ?bool
+}
+
+// ConEmu comment (OSC 9;11)
+pub struct ConEmuComment {
+pub:
+	value string
+}
+
+// Command is a parsed OSC command: the source's tagged union. Each variant
+// type carries the payload of the matching union field (clipboard_contents,
+// show_desktop_notification, hyperlink_start, conemu_progress_report,
+// kitty_color_protocol, and kitty_text_sizing reuse their payload types).
+pub type Command = ChangeWindowIcon
+	| ChangeWindowTitle
+	| ClipboardContents
+	| ColorOperationCommand
+	| ConEmuChangeTabTitle
+	| ConEmuComment
+	| ConEmuGuiMacro
+	| ConEmuOutputEnvironmentVariable
+	| ConEmuRunProcess
+	| ConEmuShowMessageBox
+	| ConEmuSleep
+	| ConEmuWaitInput
+	| ConEmuXtermEmulation
+	| DesktopNotification
+	| HyperlinkEnd
+	| HyperlinkStart
+	| InvalidCommand
+	| KittyColorOSC
+	| KittyTextSizing
+	| MouseShape
+	| ProgressReport
+	| ReportPwd
+	| SemanticPrompt
+
+// The key of the active variant.
+pub fn (self Command) key() CommandType {
+	return match self {
+		InvalidCommand { .invalid }
+		ChangeWindowTitle { .change_window_title }
+		ChangeWindowIcon { .change_window_icon }
+		SemanticPrompt { .semantic_prompt }
+		ClipboardContents { .clipboard_contents }
+		ReportPwd { .report_pwd }
+		MouseShape { .mouse_shape }
+		ColorOperationCommand { .color_operation }
+		KittyColorOSC { .kitty_color_protocol }
+		DesktopNotification { .show_desktop_notification }
+		HyperlinkStart { .hyperlink_start }
+		HyperlinkEnd { .hyperlink_end }
+		ConEmuSleep { .conemu_sleep }
+		ConEmuShowMessageBox { .conemu_show_message_box }
+		ConEmuChangeTabTitle { .conemu_change_tab_title }
+		ProgressReport { .conemu_progress_report }
+		ConEmuWaitInput { .conemu_wait_input }
+		ConEmuGuiMacro { .conemu_guimacro }
+		ConEmuRunProcess { .conemu_run_process }
+		ConEmuOutputEnvironmentVariable { .conemu_output_environment_variable }
+		ConEmuXtermEmulation { .conemu_xterm_emulation }
+		ConEmuComment { .conemu_comment }
+		KittyTextSizing { .kitty_text_sizing }
+	}
 }
 
 // OscParserState tracks where we are in parsing the OSC number prefix.
@@ -389,7 +534,7 @@ pub mut:
 	writer OscWriter
 
 	// The command that is the result of parsing.
-	command Command
+	command Command = InvalidCommand{}
 }
 
 // init creates a new OSC Parser. V owns storage through its GC, while the
@@ -410,7 +555,7 @@ pub fn (mut self Parser) reset() {
 	self.state = .start
 	self.buf = []
 	self.writer = .none
-	self.command = Command{}
+	self.command = InvalidCommand{}
 }
 
 // ensure_allocator rejects OSCs whose parsed command requires allocation when

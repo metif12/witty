@@ -424,16 +424,16 @@ pub fn (mut self ReadonlyHandler) vt(event StreamEvent) ! {
 			self.terminal.screens.active.end_hyperlink()
 		}
 		.semantic_prompt {
-			self.terminal.semantic_prompt_options(event.payload.semantic_prompt_action, event.payload.semantic_prompt_opts)
+			self.terminal.semantic_prompt(event.payload.semantic_prompt)
 		}
 		.mouse_shape {
 			self.terminal.mouse_shape = event.payload.mouse_shape_val
 		}
 		.color_operation {
-			self.color_operation(event.payload.color_op, event.payload.color_requests)
+			self.color_operation(event.payload.color_operation.op, event.payload.color_operation.requests)
 		}
 		.kitty_color_report {
-			self.kitty_color_operation(event.payload.kitty_color_items)
+			self.kitty_color_operation(event.payload.kitty_color)
 		}
 
 		// No supported DCS commands have any terminal-modifying effects,
@@ -534,51 +534,48 @@ fn (mut self ReadonlyHandler) readonly_dynamic_reset(dynamic osc.DynamicColor) {
 	}
 }
 
-fn (mut self ReadonlyHandler) kitty_color_operation(items []osc.KittyColorItem) {
-	for item in items {
-		if item.item_type == .query {
-			continue
-		}
-		match item.key.kind {
-			.palette {
-				self.terminal.flags.set_dirty_palette(true)
-				if item.item_type == .set {
-					self.terminal.colors.palette.set(item.key.palette, RGB{
-						r: item.color.r
-						g: item.color.g
-						b: item.color.b
-					})
-				} else {
-					self.terminal.colors.palette.reset(item.key.palette)
+fn (mut self ReadonlyHandler) kitty_color_operation(request osc.KittyColorOSC) {
+	for item in request.list {
+		match item {
+			osc.KittyColorSet {
+				color := RGB{
+					r: item.color.r
+					g: item.color.g
+					b: item.color.b
+				}
+				match item.key {
+					u8 {
+						self.terminal.flags.set_dirty_palette(true)
+						self.terminal.colors.palette.set(item.key, color)
+					}
+					osc.KittyColorSpecial {
+						match item.key {
+							.foreground { self.terminal.colors.foreground.set(color) }
+							.background { self.terminal.colors.background.set(color) }
+							.cursor { self.terminal.colors.cursor.set(color) }
+							else {}
+						}
+					}
 				}
 			}
-			.special {
-				self.readonly_kitty_special(item)
+			osc.KittyColorReset {
+				match item.key {
+					u8 {
+						self.terminal.flags.set_dirty_palette(true)
+						self.terminal.colors.palette.reset(item.key)
+					}
+					osc.KittyColorSpecial {
+						match item.key {
+							.foreground { self.terminal.colors.foreground.reset() }
+							.background { self.terminal.colors.background.reset() }
+							.cursor { self.terminal.colors.cursor.reset() }
+							else {}
+						}
+					}
+				}
 			}
+			osc.KittyColorQuery {}
 		}
-	}
-}
-
-fn (mut self ReadonlyHandler) readonly_kitty_special(item osc.KittyColorItem) {
-	if item.item_type == .set {
-		color := RGB{
-			r: item.color.r
-			g: item.color.g
-			b: item.color.b
-		}
-		match item.key.special {
-			.foreground { self.terminal.colors.foreground.set(color) }
-			.background { self.terminal.colors.background.set(color) }
-			.cursor { self.terminal.colors.cursor.set(color) }
-			else {}
-		}
-		return
-	}
-	match item.key.special {
-		.foreground { self.terminal.colors.foreground.reset() }
-		.background { self.terminal.colors.background.reset() }
-		.cursor { self.terminal.colors.cursor.reset() }
-		else {}
 	}
 }
 

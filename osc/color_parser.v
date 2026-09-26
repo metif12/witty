@@ -403,14 +403,10 @@ fn parse_color_operation(mut parser Parser, terminator_ch ?u8) ?Command {
 	// []ColorRequest and store it directly on the command.
 	requests := parse_color_data(op, data_str)
 
-	// Store the result as a color_operation command. The parsed operation and
-	// request list are wired into the dedicated Command fields so downstream
-	// consumers can apply the color changes without re-parsing strings.
-	parser.command = Command{
-		cmd_type: .color_operation
+	parser.command = ColorOperationCommand{
+		op: op
+		requests: requests
 		terminator: Terminator.init(terminator_ch)
-		color_op: op
-		color_requests: requests
 	}
 	return parser.command
 }

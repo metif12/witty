@@ -355,7 +355,7 @@ pub fn (mut self OscParser) end_ptr(terminator u8) ?&osc.Command {
 
 pub fn command_type(cmd ?osc.Command) osc.CommandType {
 	command := cmd or { return .invalid }
-	return command.cmd_type
+	return command.key()
 }
 
 // CommandData enumerates the types of data that can be extracted
@@ -375,10 +375,10 @@ pub fn command_data(cmd ?osc.Command, data CommandData) ?string {
 			return none
 		}
 		.change_window_title_str {
-			if c.cmd_type == .change_window_title {
-				return c.str_value
+			return match c {
+				osc.ChangeWindowTitle { c.value }
+				else { none }
 			}
-			return none
 		}
 	}
 }

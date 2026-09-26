@@ -393,11 +393,12 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) ! {
 		}
 		.kitty_color_report {
 			// Kitty color protocol: query/set/reset colors (OSC 21).
-			self.kitty_color_report(event.payload.kitty_color_items, event.payload.osc_terminator)!
+			self.kitty_color_report(event.payload.kitty_color)!
 		}
 		.color_operation {
 			// OSC color operations: set/query/reset palette and dynamic colors.
-			self.color_operation(event.payload.color_op, event.payload.color_requests, event.payload.osc_terminator)!
+			self.color_operation(event.payload.color_operation.op, event.payload.color_operation.requests,
+				event.payload.color_operation.terminator)!
 		}
 		.end_hyperlink {
 			self.end_hyperlink()!
@@ -427,7 +428,7 @@ pub fn (mut self StreamHandler) vt(event terminal.StreamEvent) ! {
 			self.clipboard_contents(event.payload.clipboard.kind, event.payload.clipboard.data)!
 		}
 		.semantic_prompt {
-			self.semantic_prompt(event.payload)!
+			self.semantic_prompt(event.payload.semantic_prompt)!
 		}
 		.mouse_shape {
 			self.set_mouse_shape(event.payload.mouse_shape_val)!
@@ -1169,13 +1170,13 @@ fn (mut self StreamHandler) clipboard_contents(kind u8, data string) ! {
 	})
 }
 
-fn (mut self StreamHandler) semantic_prompt(payload terminal.ActionPayload) ! {
-	match payload.semantic_prompt_action {
+fn (mut self StreamHandler) semantic_prompt(cmd osc.SemanticPrompt) ! {
+	match cmd.action {
 		.end_input_start_output {
 			self.surface_message_writer(apprt.SurfaceMessage{ kind: .start_command })
 		}
 		.end_command {
-			raw := osc.read_exit_code(payload.semantic_prompt_opts) or { i32(0) }
+			raw := osc.read_exit_code(cmd.options_unvalidated) or { i32(0) }
 			code := if raw >= 0 && raw <= 255 { u8(raw) } else { u8(1) }
 			self.surface_message_writer(apprt.SurfaceMessage{
 				kind: .stop_command
@@ -1185,7 +1186,9 @@ fn (mut self StreamHandler) semantic_prompt(payload terminal.ActionPayload) ! {
 		else {}
 	}
 
-	self.terminal.semantic_prompt_options(payload.semantic_prompt_action, payload.semantic_prompt_opts)
+	// We do this last so failures are still processed correctly
+	// above.
+	self.terminal.semantic_prompt(cmd)
 }
 
 fn (mut self StreamHandler) report_pwd(url string) ! {
@@ -1427,113 +1430,111 @@ fn (mut self StreamHandler) notify_color_change(target osc.ColorTarget, color te
 // ============================================================
 
 // kitty_color_report applies the parsed Kitty OSC 21 operations.
-fn (mut self StreamHandler) kitty_color_report(items []osc.KittyColorItem, terminator osc.Terminator) ! {
-	mut response := ''
+fn (mut self StreamHandler) kitty_color_report(request osc.KittyColorOSC) ! {
+	mut stream := ''
 
-	for item in items {
-		match item.item_type {
-			.query {
-				key := kitty_color_key_string(item.key)
-				if response.len == 0 {
-					response += '\x1b]21'
+	for item in request.list {
+		match item {
+			osc.KittyColorQuery {
+				key := item.key
+				// If the writer buffer is empty, we need to write our prefix
+				if stream.len == 0 {
+					stream += '\x1b]21'
 				}
-				if !kitty_color_supported(item.key) {
+
+				mut found := ?terminal.RGB(none)
+				match key {
+					u8 {
+						found = self.terminal.colors.palette.current[int(key)]
+					}
+					osc.KittyColorSpecial {
+						match key {
+							.foreground {
+								found = self.terminal.colors.foreground.get()
+							}
+							.background {
+								found = self.terminal.colors.background.get()
+							}
+							.cursor {
+								found = self.terminal.colors.cursor.get()
+							}
+							else {
+								// ignoring unsupported kitty color protocol key
+								continue
+							}
+						}
+					}
+				}
+				color := found or {
+					stream += ';${key}='
 					continue
 				}
-				if color := self.kitty_color_get(item.key) {
-					response += ';${key}=rgb:${hex2(color.r)}/${hex2(color.g)}/${hex2(color.b)}'
-				} else {
-					response += ';${key}='
+
+				stream += ';${key}=rgb:${hex2(color.r)}/${hex2(color.g)}/${hex2(color.b)}'
+			}
+			osc.KittyColorSet {
+				color := terminal_rgb(item.color)
+				match item.key {
+					u8 {
+						self.terminal.flags.set_dirty_palette(true)
+						self.terminal.colors.palette.set(item.key, color)
+					}
+					osc.KittyColorSpecial {
+						match item.key {
+							.foreground {
+								self.terminal.colors.foreground.set(color)
+							}
+							.background {
+								self.terminal.colors.background.set(color)
+							}
+							.cursor {
+								self.terminal.colors.cursor.set(color)
+							}
+							else {
+								// ignoring unsupported kitty color protocol key
+								continue
+							}
+						}
+					}
 				}
 			}
-			.set {
-				self.kitty_color_set(item.key, terminal_rgb(item.color))
-			}
-			.reset {
-				self.kitty_color_reset(item.key)
+			osc.KittyColorReset {
+				match item.key {
+					u8 {
+						self.terminal.flags.set_dirty_palette(true)
+						self.terminal.colors.palette.reset(item.key)
+					}
+					osc.KittyColorSpecial {
+						match item.key {
+							.foreground {
+								self.terminal.colors.foreground.reset()
+							}
+							.background {
+								self.terminal.colors.background.reset()
+							}
+							.cursor {
+								self.terminal.colors.cursor.reset()
+							}
+							else {
+								// ignoring unsupported kitty color protocol key
+								continue
+							}
+						}
+					}
+				}
 			}
 		}
 	}
 
-	if response.len > 0 {
-		response += terminator.string()
-		self.message_writer(Message.write_req(response))
+	// If we had any writes to our buffer, we queue them now
+	if stream.len > 0 {
+		stream += request.terminator.string()
+		self.message_writer(Message.write_req(stream))
 	}
-}
 
-fn kitty_color_supported(key osc.KittyColorKind) bool {
-	return match key.kind {
-		.palette { true }
-		.special {
-			key.special in [.foreground, .background, .cursor]
-		}
-	}
-}
-
-fn (self &StreamHandler) kitty_color_get(key osc.KittyColorKind) ?terminal.RGB {
-	return match key.kind {
-		.palette { self.terminal.colors.palette.current[int(key.palette)] }
-		.special {
-			match key.special {
-				.foreground { self.terminal.colors.foreground.get() }
-				.background { self.terminal.colors.background.get() }
-				.cursor { self.terminal.colors.cursor.get() }
-				else { none }
-			}
-		}
-	}
-}
-
-fn (mut self StreamHandler) kitty_color_set(key osc.KittyColorKind, color terminal.RGB) {
-	match key.kind {
-		.palette {
-			self.terminal.flags.set_dirty_palette(true)
-			self.terminal.colors.palette.set(key.palette, color)
-		}
-		.special {
-			match key.special {
-				.foreground { self.terminal.colors.foreground.set(color) }
-				.background { self.terminal.colors.background.set(color) }
-				.cursor { self.terminal.colors.cursor.set(color) }
-				else {}
-			}
-		}
-	}
-}
-
-fn (mut self StreamHandler) kitty_color_reset(key osc.KittyColorKind) {
-	match key.kind {
-		.palette {
-			self.terminal.flags.set_dirty_palette(true)
-			self.terminal.colors.palette.reset(key.palette)
-		}
-		.special {
-			match key.special {
-				.foreground { self.terminal.colors.foreground.reset() }
-				.background { self.terminal.colors.background.reset() }
-				.cursor { self.terminal.colors.cursor.reset() }
-				else {}
-			}
-		}
-	}
-}
-
-fn kitty_color_key_string(key osc.KittyColorKind) string {
-	return match key.kind {
-		.palette { '${key.palette}' }
-		.special {
-			match key.special {
-				.foreground { 'foreground' }
-				.background { 'background' }
-				.selection_foreground { 'selection_foreground' }
-				.selection_background { 'selection_background' }
-				.cursor { 'cursor' }
-				.cursor_text { 'cursor_text' }
-				.visual_bell { 'visual_bell' }
-				.second_transparent_background { 'second_transparent_background' }
-			}
-		}
-	}
+	// Note: we don't have to do a queueRender here because every
+	// processed stream will queue a render once it is done processing
+	// the read() syscall.
 }
 
 // hex2 formats a byte as a 2-digit lowercase hex string.

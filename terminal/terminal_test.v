@@ -1,5 +1,7 @@
 module terminal
 
+import osc
+
 // Tests translated from ghostty's Terminal.zig
 
 fn test_mouse_mode_storage() {
@@ -37,7 +39,10 @@ fn test_scroll_viewport_source_layout_and_payload() {
 
 fn semantic_click_for(options string) SemanticClick {
 	mut t := Terminal.init(Options{ cols: 10, rows: 5 }) or { panic(err) }
-	t.semantic_prompt_options(.fresh_line_new_prompt, options)
+	t.semantic_prompt(osc.SemanticPrompt{
+		action:              .fresh_line_new_prompt
+		options_unvalidated: options
+	})
 	result := t.screens.active.semantic_prompt.click
 	t.deinit()
 	return result
@@ -2871,7 +2876,7 @@ fn test_index_in_prompt_mode_marks_new_row_as_prompt_continuation() {
 	defer { t.deinit() }
 
 	// Start a prompt.
-	t.semantic_prompt(.fresh_line_new_prompt, none)
+	t.semantic_prompt(osc.SemanticPrompt.init(.fresh_line_new_prompt))
 	for c in 'hello' {
 		t.print(u32(c)) or { assert false }
 	}
@@ -2901,11 +2906,11 @@ fn test_index_in_input_mode_marks_new_row_as_prompt_continuation() {
 	defer { t.deinit() }
 
 	// Start a prompt then switch to input.
-	t.semantic_prompt(.fresh_line_new_prompt, none)
+	t.semantic_prompt(osc.SemanticPrompt.init(.fresh_line_new_prompt))
 	for c in '\$ ' {
 		t.print(u32(c)) or { assert false }
 	}
-	t.semantic_prompt(.end_prompt_start_input, none)
+	t.semantic_prompt(osc.SemanticPrompt.init(.end_prompt_start_input))
 	for c in 'echo \\' {
 		t.print(u32(c)) or { assert false }
 	}
@@ -2931,15 +2936,15 @@ fn test_index_in_output_mode_does_not_mark_new_row_as_prompt() {
 	defer { t.deinit() }
 
 	// Complete prompt cycle: prompt -> input -> output.
-	t.semantic_prompt(.fresh_line_new_prompt, none)
+	t.semantic_prompt(osc.SemanticPrompt.init(.fresh_line_new_prompt))
 	for c in '\$ ' {
 		t.print(u32(c)) or { assert false }
 	}
-	t.semantic_prompt(.end_prompt_start_input, none)
+	t.semantic_prompt(osc.SemanticPrompt.init(.end_prompt_start_input))
 	for c in 'ls' {
 		t.print(u32(c)) or { assert false }
 	}
-	t.semantic_prompt(.end_input_start_output, none)
+	t.semantic_prompt(osc.SemanticPrompt.init(.end_input_start_output))
 
 	// Linefeed while in output mode.
 	t.carriage_return()

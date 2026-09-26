@@ -47,7 +47,6 @@ module terminal
 //   CSIAction         - CSI dispatch data
 //   ESCAction         - ESC dispatch data
 //   DCSAction         - DCS hook data
-//   OscCommand        - OSC command data
 //
 // == Parse table (from parse_table.v) ==
 //   TransitionAction  - Actions for state transitions

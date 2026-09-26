@@ -17,9 +17,9 @@ fn test_osc66_empty_parameters() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .kitty_text_sizing
-	assert cmd.kitty_text_sizing.text == 'bobr'
-	assert cmd.kitty_text_sizing.scale == 1
+	assert cmd is KittyTextSizing
+	assert (cmd as KittyTextSizing).text == 'bobr'
+	assert (cmd as KittyTextSizing).scale == 1
 }
 
 fn test_osc66_single_parameter() {
@@ -32,9 +32,9 @@ fn test_osc66_single_parameter() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .kitty_text_sizing
-	assert cmd.kitty_text_sizing.text == 'kurwa'
-	assert cmd.kitty_text_sizing.scale == 2
+	assert cmd is KittyTextSizing
+	assert (cmd as KittyTextSizing).text == 'kurwa'
+	assert (cmd as KittyTextSizing).scale == 2
 }
 
 fn test_osc66_multiple_parameters() {
@@ -44,14 +44,14 @@ fn test_osc66_multiple_parameters() {
 		p.next(ch)
 	}
 	cmd := p.end(0x1b) or { panic('expected command') }
-	assert cmd.cmd_type == .kitty_text_sizing
-	assert cmd.kitty_text_sizing.scale == 2
-	assert cmd.kitty_text_sizing.width == 7
-	assert cmd.kitty_text_sizing.numerator == 13
-	assert cmd.kitty_text_sizing.denominator == 15
-	assert cmd.kitty_text_sizing.valign == .bottom
-	assert cmd.kitty_text_sizing.halign == .center
-	assert cmd.kitty_text_sizing.text == 'long'
+	assert cmd is KittyTextSizing
+	assert (cmd as KittyTextSizing).scale == 2
+	assert (cmd as KittyTextSizing).width == 7
+	assert (cmd as KittyTextSizing).numerator == 13
+	assert (cmd as KittyTextSizing).denominator == 15
+	assert (cmd as KittyTextSizing).valign == .bottom
+	assert (cmd as KittyTextSizing).halign == .center
+	assert (cmd as KittyTextSizing).text == 'long'
 }
 
 fn test_osc66_ignores_fields_after_second_equals() {
@@ -60,9 +60,9 @@ fn test_osc66_ignores_fields_after_second_equals() {
 		p.next(ch)
 	}
 	cmd := p.end(0x1b) or { panic('expected command') }
-	assert cmd.cmd_type == .kitty_text_sizing
-	assert cmd.kitty_text_sizing.scale == 2
-	assert cmd.kitty_text_sizing.text == 'payload'
+	assert cmd is KittyTextSizing
+	assert (cmd as KittyTextSizing).scale == 2
+	assert (cmd as KittyTextSizing).text == 'payload'
 }
 
 fn test_osc66_scale_is_zero() {
@@ -75,9 +75,9 @@ fn test_osc66_scale_is_zero() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .kitty_text_sizing
+	assert cmd is KittyTextSizing
 	// scale=0 is invalid, should remain default (1)
-	assert cmd.kitty_text_sizing.scale == 1
+	assert (cmd as KittyTextSizing).scale == 1
 }
 
 fn test_osc66_invalid_parameters_keep_defaults() {
@@ -86,10 +86,10 @@ fn test_osc66_invalid_parameters_keep_defaults() {
 		p.next(ch)
 	}
 	cmd := p.end(0x1b) or { panic('expected command') }
-	assert cmd.cmd_type == .kitty_text_sizing
-	assert cmd.kitty_text_sizing.width == 0
-	assert cmd.kitty_text_sizing.valign == .top
-	assert cmd.kitty_text_sizing.numerator == 0
+	assert cmd is KittyTextSizing
+	assert (cmd as KittyTextSizing).width == 0
+	assert (cmd as KittyTextSizing).valign == .top
+	assert (cmd as KittyTextSizing).numerator == 0
 }
 
 fn test_osc66_zero_with_leading_zero_is_valid() {
@@ -98,7 +98,7 @@ fn test_osc66_zero_with_leading_zero_is_valid() {
 		p.next(ch)
 	}
 	cmd := p.end(0x1b) or { panic('expected command') }
-	assert cmd.kitty_text_sizing.width == 0
+	assert (cmd as KittyTextSizing).width == 0
 }
 
 fn test_osc66_numeric_fields_use_zig_parse_int_grammar() {
@@ -107,9 +107,9 @@ fn test_osc66_numeric_fields_use_zig_parse_int_grammar() {
 		p.next(ch)
 	}
 	cmd := p.end(0x1b) or { panic('expected command') }
-	assert cmd.kitty_text_sizing.scale == 2
-	assert cmd.kitty_text_sizing.width == 0
-	assert cmd.kitty_text_sizing.numerator == 15
+	assert (cmd as KittyTextSizing).scale == 2
+	assert (cmd as KittyTextSizing).width == 0
+	assert (cmd as KittyTextSizing).numerator == 15
 }
 
 fn test_osc66_utf8() {
@@ -119,8 +119,8 @@ fn test_osc66_utf8() {
 		p.next(ch)
 	}
 	cmd := p.end(0x1b) or { panic('expected command') }
-	assert cmd.cmd_type == .kitty_text_sizing
-	assert cmd.kitty_text_sizing.text == '👻魑魅魍魉ゴースッティ'
+	assert cmd is KittyTextSizing
+	assert (cmd as KittyTextSizing).text == '👻魑魅魍魉ゴースッティ'
 }
 
 fn test_osc66_unsafe_utf8() {

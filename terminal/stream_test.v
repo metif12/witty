@@ -82,8 +82,9 @@ fn test_stream_collects_raw_parser_actions() {
 	assert s.raw_events[2].csi.params == [u16(5)]
 	assert s.raw_events[2].csi.final_byte == u8(`C`)
 	assert s.raw_events[3].action_type == .osc_dispatch_action
-	assert s.raw_events[3].osc.cmd_type == .change_window_title
-	assert s.raw_events[3].osc.str_value == 'title'
+	title := s.raw_events[3].osc
+	assert title is osc.ChangeWindowTitle
+	assert (title as osc.ChangeWindowTitle).value == 'title'
 	s.clear_events()
 	assert s.events.len == 0
 	assert s.raw_events.len == 0
@@ -108,10 +109,10 @@ fn test_stream_preserves_osc_terminator_for_color_responses() {
 
 	s.next_slice('\x1b]10;?\a'.bytes())
 	color := get_last_event(s.events, .color_operation)
-	assert color.payload.osc_terminator == .bel
-	assert color.payload.color_op == .osc_10
-	assert color.payload.color_requests.len == 1
-	request := color.payload.color_requests[0]
+	assert color.payload.color_operation.terminator == .bel
+	assert color.payload.color_operation.op == .osc_10
+	assert color.payload.color_operation.requests.len == 1
+	request := color.payload.color_operation.requests[0]
 	assert request is osc.ColorRequestQuery
 	if request is osc.ColorRequestQuery {
 		assert request.target is osc.ColorTargetDynamic
@@ -123,11 +124,11 @@ fn test_stream_preserves_osc_terminator_for_color_responses() {
 	s.clear_events()
 	s.next_slice('\x1b]21;foreground=?\x1b\\'.bytes())
 	kitty := get_last_event(s.events, .kitty_color_report)
-	assert kitty.payload.osc_terminator == .st
-	assert kitty.payload.kitty_color_items.len == 1
-	assert kitty.payload.kitty_color_items[0].item_type == .query
-	assert kitty.payload.kitty_color_items[0].key.kind == .special
-	assert kitty.payload.kitty_color_items[0].key.special == .foreground
+	assert kitty.payload.kitty_color.terminator == .st
+	assert kitty.payload.kitty_color.list.len == 1
+	item := kitty.payload.kitty_color.list[0]
+	assert item is osc.KittyColorQuery
+	assert (item as osc.KittyColorQuery).key == osc.KittyColorKind(osc.KittyColorSpecial.foreground)
 }
 
 fn test_stream_carries_typed_semantic_and_progress_actions() {
@@ -136,8 +137,8 @@ fn test_stream_carries_typed_semantic_and_progress_actions() {
 
 	s.next_slice('\x1b]133;D;err=23\a'.bytes())
 	semantic := get_last_event(s.events, .semantic_prompt)
-	assert semantic.payload.semantic_prompt_action == .end_command
-	assert semantic.payload.semantic_prompt_opts == 'err=23'
+	assert semantic.payload.semantic_prompt.action == .end_command
+	assert semantic.payload.semantic_prompt.options_unvalidated == 'err=23'
 
 	s.clear_events()
 	s.next_slice('\x1b]9;4;1;900\a'.bytes())

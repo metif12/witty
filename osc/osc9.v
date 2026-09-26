@@ -29,8 +29,7 @@ fn parse_osc9(mut parser Parser, _ ?u8) ?Command {
 							duration = if parsed > 10000 { u16(10000) } else { u16(parsed) }
 						}
 					}
-					parser.command = Command{
-						cmd_type: .conemu_sleep
+					parser.command = ConEmuSleep{
 						duration_ms: duration
 					}
 					return parser.command
@@ -39,10 +38,9 @@ fn parse_osc9(mut parser Parser, _ ?u8) ?Command {
 				// OSC 9;10 xterm keyboard and output emulation
 				`0` {
 					if data.len == 2 {
-						parser.command = Command{
-							cmd_type: .conemu_xterm_emulation
-							xterm_keyboard: true
-							xterm_output: true
+						parser.command = ConEmuXtermEmulation{
+							keyboard: true
+							output: true
 						}
 						return parser.command
 					}
@@ -54,34 +52,30 @@ fn parse_osc9(mut parser Parser, _ ?u8) ?Command {
 					}
 					match data[3] {
 						`0` {
-							parser.command = Command{
-								cmd_type: .conemu_xterm_emulation
-								xterm_keyboard: false
-								xterm_output: false
+							parser.command = ConEmuXtermEmulation{
+								keyboard: false
+								output: false
 							}
 							return parser.command
 						}
 						`1` {
-							parser.command = Command{
-								cmd_type: .conemu_xterm_emulation
-								xterm_keyboard: true
-								xterm_output: true
+							parser.command = ConEmuXtermEmulation{
+								keyboard: true
+								output: true
 							}
 							return parser.command
 						}
 						`2` {
-							parser.command = Command{
-								cmd_type: .conemu_xterm_emulation
-								xterm_keyboard: none
-								xterm_output: false
+							parser.command = ConEmuXtermEmulation{
+								keyboard: none
+								output: false
 							}
 							return parser.command
 						}
 						`3` {
-							parser.command = Command{
-								cmd_type: .conemu_xterm_emulation
-								xterm_keyboard: none
-								xterm_output: true
+							parser.command = ConEmuXtermEmulation{
+								keyboard: none
+								output: true
 							}
 							return parser.command
 						}
@@ -105,19 +99,15 @@ fn parse_osc9(mut parser Parser, _ ?u8) ?Command {
 					} else {
 						''
 					}
-					parser.command = Command{
-						cmd_type: .conemu_comment
-						str_value: comment_data
+					parser.command = ConEmuComment{
+						value: comment_data
 					}
 					return parser.command
 				}
 
 				// OSC 9;12 mark prompt start
 				`2` {
-					parser.command = Command{
-						cmd_type: .semantic_prompt
-						semantic_prompt_action: .fresh_line_new_prompt
-					}
+					parser.command = SemanticPrompt.init(.fresh_line_new_prompt)
 					return parser.command
 				}
 				else {
@@ -136,9 +126,8 @@ fn parse_osc9(mut parser Parser, _ ?u8) ?Command {
 			}
 			terminated := parser.finish_zero_terminated() or { return none }
 			msg := if terminated.len > 2 { terminated[2..].bytestr() } else { '' }
-			parser.command = Command{
-				cmd_type: .conemu_show_message_box
-				str_value: msg
+			parser.command = ConEmuShowMessageBox{
+				value: msg
 			}
 			return parser.command
 		}
@@ -152,22 +141,15 @@ fn parse_osc9(mut parser Parser, _ ?u8) ?Command {
 				return make_desktop_notification(mut parser, data)
 			}
 			if data.len == 2 {
-				parser.command = Command{
-					cmd_type: .conemu_change_tab_title
-					tab_title: ConEmuTabTitle{
-						kind: .reset
-					}
+				parser.command = ConEmuChangeTabTitle{
+					title: ConEmuTabTitleReset{}
 				}
 				return parser.command
 			}
 			terminated := parser.finish_zero_terminated() or { return none }
 			val := terminated[2..].bytestr()
-			parser.command = Command{
-				cmd_type: .conemu_change_tab_title
-				tab_title: ConEmuTabTitle{
-					kind: .value
-					value: val
-				}
+			parser.command = ConEmuChangeTabTitle{
+				title: val
 			}
 			return parser.command
 		}
@@ -226,9 +208,8 @@ fn parse_osc9(mut parser Parser, _ ?u8) ?Command {
 				progress = u8(0)
 			}
 
-			parser.command = Command{
-				cmd_type: .conemu_progress_report
-				progress_state: pstate
+			parser.command = ProgressReport{
+				state: pstate
 				progress: progress
 			}
 			return parser.command
@@ -236,9 +217,7 @@ fn parse_osc9(mut parser Parser, _ ?u8) ?Command {
 
 		// OSC 9;5 wait for input
 		`5` {
-			parser.command = Command{
-				cmd_type: .conemu_wait_input
-			}
+			parser.command = ConEmuWaitInput{}
 			return parser.command
 		}
 
@@ -252,9 +231,8 @@ fn parse_osc9(mut parser Parser, _ ?u8) ?Command {
 			}
 			terminated := parser.finish_zero_terminated() or { return none }
 			val := if terminated.len > 2 { terminated[2..].bytestr() } else { '' }
-			parser.command = Command{
-				cmd_type: .conemu_guimacro
-				str_value: val
+			parser.command = ConEmuGuiMacro{
+				value: val
 			}
 			return parser.command
 		}
@@ -269,9 +247,8 @@ fn parse_osc9(mut parser Parser, _ ?u8) ?Command {
 			}
 			terminated := parser.finish_zero_terminated() or { return none }
 			val := if terminated.len > 2 { terminated[2..].bytestr() } else { '' }
-			parser.command = Command{
-				cmd_type: .conemu_run_process
-				str_value: val
+			parser.command = ConEmuRunProcess{
+				value: val
 			}
 			return parser.command
 		}
@@ -286,9 +263,8 @@ fn parse_osc9(mut parser Parser, _ ?u8) ?Command {
 			}
 			terminated := parser.finish_zero_terminated() or { return none }
 			val := if terminated.len > 2 { terminated[2..].bytestr() } else { '' }
-			parser.command = Command{
-				cmd_type: .conemu_output_environment_variable
-				str_value: val
+			parser.command = ConEmuOutputEnvironmentVariable{
+				value: val
 			}
 			return parser.command
 		}
@@ -303,9 +279,8 @@ fn parse_osc9(mut parser Parser, _ ?u8) ?Command {
 			}
 			terminated := parser.finish_zero_terminated() or { return none }
 			val := if terminated.len > 2 { terminated[2..].bytestr() } else { '' }
-			parser.command = Command{
-				cmd_type: .report_pwd
-				str_value: val
+			parser.command = ReportPwd{
+				value: val
 			}
 			return parser.command
 		}
@@ -322,11 +297,8 @@ fn parse_osc9(mut parser Parser, _ ?u8) ?Command {
 fn make_desktop_notification(mut parser Parser, _ []u8) ?Command {
 	data := parser.finish_zero_terminated() or { return none }
 	body := data.bytestr()
-	parser.command = Command{
-		cmd_type: .show_desktop_notification
-		desktop_notification: DesktopNotification{
-			body: body
-		}
+	parser.command = DesktopNotification{
+		body: body
 	}
 	return parser.command
 }

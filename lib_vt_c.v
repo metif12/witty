@@ -242,7 +242,8 @@ fn ghostty_osc_command_type_export(raw voidptr) osc.CommandType {
 	if isnil(raw) {
 		return .invalid
 	}
-	return unsafe { (&osc.Command(raw)).cmd_type }
+	command := unsafe { &osc.Command(raw) }
+	return command.key()
 }
 
 @[export: 'ghostty_osc_command_data']
@@ -251,15 +252,15 @@ fn ghostty_osc_command_data_export(raw voidptr, data terminal_c.CommandData, out
 		return false
 	}
 	command := unsafe { &osc.Command(raw) }
-	if command.cmd_type != .change_window_title {
-		return false
-	}
-	mut result := voidptr(command.str_value.str)
-	if command.str_value.len == 0 {
-		result = unsafe { nil }
-	}
-	unsafe {
-		*(&voidptr(out)) = result
+	match command {
+		osc.ChangeWindowTitle {
+			unsafe {
+				*(&voidptr(out)) = voidptr(command.value.str)
+			}
+		}
+		else {
+			return false
+		}
 	}
 	return true
 }

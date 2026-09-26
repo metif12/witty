@@ -242,7 +242,7 @@ pub fn read_exit_code(raw string) ?i32 {
 // ============================================================
 
 // parse_osc133 parses a semantic prompt command from the OSC parser buffer.
-pub fn parse_osc133(mut parser Parser, terminator_ch ?u8) ?Command {
+pub fn parse_osc133(mut parser Parser, _ ?u8) ?Command {
 	data := parser.buffered()
 	if data.len == 0 {
 		parser.state = .invalid
@@ -252,15 +252,10 @@ pub fn parse_osc133(mut parser Parser, terminator_ch ?u8) ?Command {
 	// All valid cases terminate within this block. Any fallthroughs
 	// are invalid. This makes some of our parse logic a little less
 	// repetitive.
-	term := Terminator.init(terminator_ch)
 
 	match data[0] {
 		`A` {
-			parser.command = Command{
-				cmd_type: .semantic_prompt
-				terminator: term
-				semantic_prompt_action: .fresh_line_new_prompt
-			}
+			parser.command = SemanticPrompt.init(.fresh_line_new_prompt)
 			if data.len == 1 {
 				return parser.command
 			}
@@ -268,15 +263,11 @@ pub fn parse_osc133(mut parser Parser, terminator_ch ?u8) ?Command {
 				parser.state = .invalid
 				return none
 			}
-			parser.command.semantic_prompt_options = data[2..].bytestr()
+			parser.set_semantic_prompt_options(data[2..].bytestr())
 			return parser.command
 		}
 		`B` {
-			parser.command = Command{
-				cmd_type: .semantic_prompt
-				terminator: term
-				semantic_prompt_action: .end_prompt_start_input
-			}
+			parser.command = SemanticPrompt.init(.end_prompt_start_input)
 			if data.len == 1 {
 				return parser.command
 			}
@@ -284,15 +275,11 @@ pub fn parse_osc133(mut parser Parser, terminator_ch ?u8) ?Command {
 				parser.state = .invalid
 				return none
 			}
-			parser.command.semantic_prompt_options = data[2..].bytestr()
+			parser.set_semantic_prompt_options(data[2..].bytestr())
 			return parser.command
 		}
 		`I` {
-			parser.command = Command{
-				cmd_type: .semantic_prompt
-				terminator: term
-				semantic_prompt_action: .end_prompt_start_input_terminate_eol
-			}
+			parser.command = SemanticPrompt.init(.end_prompt_start_input_terminate_eol)
 			if data.len == 1 {
 				return parser.command
 			}
@@ -300,15 +287,11 @@ pub fn parse_osc133(mut parser Parser, terminator_ch ?u8) ?Command {
 				parser.state = .invalid
 				return none
 			}
-			parser.command.semantic_prompt_options = data[2..].bytestr()
+			parser.set_semantic_prompt_options(data[2..].bytestr())
 			return parser.command
 		}
 		`C` {
-			parser.command = Command{
-				cmd_type: .semantic_prompt
-				terminator: term
-				semantic_prompt_action: .end_input_start_output
-			}
+			parser.command = SemanticPrompt.init(.end_input_start_output)
 			if data.len == 1 {
 				return parser.command
 			}
@@ -316,15 +299,11 @@ pub fn parse_osc133(mut parser Parser, terminator_ch ?u8) ?Command {
 				parser.state = .invalid
 				return none
 			}
-			parser.command.semantic_prompt_options = data[2..].bytestr()
+			parser.set_semantic_prompt_options(data[2..].bytestr())
 			return parser.command
 		}
 		`D` {
-			parser.command = Command{
-				cmd_type: .semantic_prompt
-				terminator: term
-				semantic_prompt_action: .end_command
-			}
+			parser.command = SemanticPrompt.init(.end_command)
 			if data.len == 1 {
 				return parser.command
 			}
@@ -332,7 +311,7 @@ pub fn parse_osc133(mut parser Parser, terminator_ch ?u8) ?Command {
 				parser.state = .invalid
 				return none
 			}
-			parser.command.semantic_prompt_options = data[2..].bytestr()
+			parser.set_semantic_prompt_options(data[2..].bytestr())
 			return parser.command
 		}
 		`L` {
@@ -340,19 +319,11 @@ pub fn parse_osc133(mut parser Parser, terminator_ch ?u8) ?Command {
 				parser.state = .invalid
 				return none
 			}
-			parser.command = Command{
-				cmd_type: .semantic_prompt
-				terminator: term
-				semantic_prompt_action: .fresh_line
-			}
+			parser.command = SemanticPrompt.init(.fresh_line)
 			return parser.command
 		}
 		`N` {
-			parser.command = Command{
-				cmd_type: .semantic_prompt
-				terminator: term
-				semantic_prompt_action: .new_command
-			}
+			parser.command = SemanticPrompt.init(.new_command)
 			if data.len == 1 {
 				return parser.command
 			}
@@ -360,15 +331,11 @@ pub fn parse_osc133(mut parser Parser, terminator_ch ?u8) ?Command {
 				parser.state = .invalid
 				return none
 			}
-			parser.command.semantic_prompt_options = data[2..].bytestr()
+			parser.set_semantic_prompt_options(data[2..].bytestr())
 			return parser.command
 		}
 		`P` {
-			parser.command = Command{
-				cmd_type: .semantic_prompt
-				terminator: term
-				semantic_prompt_action: .prompt_start
-			}
+			parser.command = SemanticPrompt.init(.prompt_start)
 			if data.len == 1 {
 				return parser.command
 			}
@@ -376,7 +343,7 @@ pub fn parse_osc133(mut parser Parser, terminator_ch ?u8) ?Command {
 				parser.state = .invalid
 				return none
 			}
-			parser.command.semantic_prompt_options = data[2..].bytestr()
+			parser.set_semantic_prompt_options(data[2..].bytestr())
 			return parser.command
 		}
 		else {}
@@ -385,4 +352,11 @@ pub fn parse_osc133(mut parser Parser, terminator_ch ?u8) ?Command {
 	// Any fallthroughs are invalid.
 	parser.state = .invalid
 	return none
+}
+
+// parser.command.semantic_prompt.options_unvalidated = options
+fn (mut self Parser) set_semantic_prompt_options(options string) {
+	if mut self.command is SemanticPrompt {
+		self.command.options_unvalidated = options
+	}
 }

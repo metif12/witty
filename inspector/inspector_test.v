@@ -211,13 +211,10 @@ fn test_vt_event_encodings_match_pinned_ghostty() {
 	}) == '( B'
 	osc_action := terminal.ParserAction{
 		action_type: .osc_dispatch_action
-		osc:         terminal.OscCommand{
-			cmd_type:  .hyperlink_start
-			hyperlink: osc.HyperlinkStart{
-				uri: 'https://example.com'
-				id:  'link-id'
-			}
-		}
+		osc:         osc.Command(osc.HyperlinkStart{
+			uri: 'https://example.com'
+			id:  'link-id'
+		})
 	}
 	assert encode_vt_action(osc_action) == 'hyperlink_start '
 	assert vt_action_metadata(osc_action) == {
@@ -226,15 +223,12 @@ fn test_vt_event_encodings_match_pinned_ghostty() {
 	}
 	kitty_sizing := terminal.ParserAction{
 		action_type: .osc_dispatch_action
-		osc:         terminal.OscCommand{
-			cmd_type:          .kitty_text_sizing
-			kitty_text_sizing: osc.KittyTextSizing{
-				scale:  2
-				width:  3
-				valign: .bottom
-				text:   'hello'
-			}
-		}
+		osc:         osc.Command(osc.KittyTextSizing{
+			scale:  2
+			width:  3
+			valign: .bottom
+			text:   'hello'
+		})
 	}
 	assert vt_action_metadata(kitty_sizing) == {
 		'scale':       '2'

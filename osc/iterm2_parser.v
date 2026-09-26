@@ -97,7 +97,7 @@ fn iterm2_key_from_str(s string) ?Iterm2Key {
 }
 
 // parse_iterm2 parses an OSC 1337 iTerm2 command.
-fn parse_iterm2(mut parser Parser, terminator_ch ?u8) ?Command {
+fn parse_iterm2(mut parser Parser, _ ?u8) ?Command {
 	assert parser.state == .s_1337
 	data := parser.finish_zero_terminated() or { return none }
 	data_str := data.bytestr()
@@ -146,13 +146,9 @@ fn parse_iterm2(mut parser Parser, terminator_ch ?u8) ?Command {
 
 			// It would be better to check for valid base64 data here, but that
 			// would mean parsing the base64 data twice in the "normal" case.
-			parser.command = Command{
-				cmd_type: .clipboard_contents
-				terminator: Terminator.init(terminator_ch)
-				clipboard: ClipboardContents{
-					kind: `c`
-					data: b64_data
-				}
+			parser.command = ClipboardContents{
+				kind: `c`
+				data: b64_data
 			}
 			return parser.command
 		}
@@ -161,10 +157,8 @@ fn parse_iterm2(mut parser Parser, terminator_ch ?u8) ?Command {
 			if val.len == 0 {
 				return none
 			}
-			parser.command = Command{
-				cmd_type: .report_pwd
-				terminator: Terminator.init(terminator_ch)
-				str_value: val
+			parser.command = ReportPwd{
+				value: val
 			}
 			return parser.command
 		}

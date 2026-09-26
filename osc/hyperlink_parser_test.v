@@ -10,9 +10,9 @@ fn test_osc8_hyperlink() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .hyperlink_start
-	assert cmd.hyperlink.uri == 'http://example.com'
-	assert cmd.hyperlink.id == none
+	assert cmd is HyperlinkStart
+	assert (cmd as HyperlinkStart).uri == 'http://example.com'
+	assert (cmd as HyperlinkStart).id == none
 }
 
 fn test_osc8_hyperlink_with_id() {
@@ -25,9 +25,9 @@ fn test_osc8_hyperlink_with_id() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .hyperlink_start
-	assert cmd.hyperlink.id? == 'foo'
-	assert cmd.hyperlink.uri == 'http://example.com'
+	assert cmd is HyperlinkStart
+	assert (cmd as HyperlinkStart).id? == 'foo'
+	assert (cmd as HyperlinkStart).uri == 'http://example.com'
 }
 
 fn test_osc8_hyperlink_with_empty_id() {
@@ -40,10 +40,10 @@ fn test_osc8_hyperlink_with_empty_id() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .hyperlink_start
+	assert cmd is HyperlinkStart
 	// Empty id is treated as no id
-	assert cmd.hyperlink.id == none
-	assert cmd.hyperlink.uri == 'http://example.com'
+	assert (cmd as HyperlinkStart).id == none
+	assert (cmd as HyperlinkStart).uri == 'http://example.com'
 }
 
 fn test_osc8_hyperlink_with_incomplete_key() {
@@ -56,9 +56,9 @@ fn test_osc8_hyperlink_with_incomplete_key() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .hyperlink_start
-	assert cmd.hyperlink.id == none
-	assert cmd.hyperlink.uri == 'http://example.com'
+	assert cmd is HyperlinkStart
+	assert (cmd as HyperlinkStart).id == none
+	assert (cmd as HyperlinkStart).uri == 'http://example.com'
 }
 
 fn test_osc8_hyperlink_stops_options_at_incomplete_key() {
@@ -71,9 +71,9 @@ fn test_osc8_hyperlink_stops_options_at_incomplete_key() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .hyperlink_start
-	assert cmd.hyperlink.id == none
-	assert cmd.hyperlink.uri == 'http://example.com'
+	assert cmd is HyperlinkStart
+	assert (cmd as HyperlinkStart).id == none
+	assert (cmd as HyperlinkStart).uri == 'http://example.com'
 }
 
 fn test_osc8_hyperlink_with_empty_key() {
@@ -86,9 +86,9 @@ fn test_osc8_hyperlink_with_empty_key() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .hyperlink_start
-	assert cmd.hyperlink.id == none
-	assert cmd.hyperlink.uri == 'http://example.com'
+	assert cmd is HyperlinkStart
+	assert (cmd as HyperlinkStart).id == none
+	assert (cmd as HyperlinkStart).uri == 'http://example.com'
 }
 
 fn test_osc8_hyperlink_with_empty_key_and_id() {
@@ -101,9 +101,9 @@ fn test_osc8_hyperlink_with_empty_key_and_id() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .hyperlink_start
-	assert cmd.hyperlink.id? == 'foo'
-	assert cmd.hyperlink.uri == 'http://example.com'
+	assert cmd is HyperlinkStart
+	assert (cmd as HyperlinkStart).id? == 'foo'
+	assert (cmd as HyperlinkStart).uri == 'http://example.com'
 }
 
 fn test_osc8_hyperlink_with_empty_uri_and_id() {
@@ -127,5 +127,5 @@ fn test_osc8_hyperlink_end() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .hyperlink_end
+	assert cmd is HyperlinkEnd
 }

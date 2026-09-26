@@ -10,6 +10,6 @@ fn test_osc22_pointer_cursor() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .mouse_shape
-	assert cmd.str_value == 'pointer'
+	assert cmd is MouseShape
+	assert (cmd as MouseShape).value == 'pointer'
 }

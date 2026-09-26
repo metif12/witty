@@ -10,6 +10,6 @@ fn test_osc1_change_window_icon() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .change_window_icon
-	assert cmd.str_value == 'ab'
+	assert cmd is ChangeWindowIcon
+	assert (cmd as ChangeWindowIcon).value == 'ab'
 }

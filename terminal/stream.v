@@ -481,22 +481,18 @@ pub:
 	raw_ansi bool
 	// String value (for .window_title and .report_pwd).
 	str1 string
-	// OSC request terminator, mirrored by response-producing operations.
-	osc_terminator osc.Terminator
-	// Parsed OSC color data, carried through without reinterpreting raw strings.
-	color_op          osc.ColorOperation
-	color_requests    []osc.ColorRequest
-	kitty_color_items []osc.KittyColorItem
+	// Parsed OSC color operation (for .color_operation).
+	color_operation osc.ColorOperationCommand
+	// Parsed OSC 21 Kitty color protocol request (for .kitty_color_report).
+	kitty_color osc.KittyColorOSC
 	// Byte value (for .dcs_put, .apc_put)
 	byte_val u8
 	// Clipboard kind (for .clipboard_contents)
 	clipboard osc.ClipboardContents
 	// Parsed OSC 8 hyperlink payload.
 	hyperlink osc.HyperlinkStart
-	// Semantic prompt action (for .semantic_prompt)
-	semantic_prompt_action osc.SemanticAction
-	// Semantic prompt options string (for .semantic_prompt, raw ;k=v pairs)
-	semantic_prompt_opts string
+	// Parsed OSC 133 semantic prompt command (for .semantic_prompt)
+	semantic_prompt osc.SemanticPrompt
 	// Parsed ConEmu progress report.
 	progress_report osc.ProgressReport
 	// Parsed OSC 9 / OSC 777 desktop notification.
@@ -1729,76 +1725,60 @@ fn (mut self Stream) csi_u(input CSIAction) {
 // OSC Dispatch
 // ============================================================
 
-fn (mut self Stream) osc_dispatch(cmd OscCommand) {
-	match cmd.cmd_type {
-		.change_window_title {
-			if !validate.utf8_string(cmd.str_value) {
+fn (mut self Stream) osc_dispatch(cmd osc.Command) {
+	match cmd {
+		osc.SemanticPrompt {
+			self.dispatch(.semantic_prompt, ActionPayload{ semantic_prompt: cmd })
+		}
+		osc.ChangeWindowTitle {
+			if !validate.utf8_string(cmd.value) {
+				// change title request: invalid utf-8, ignoring request
 				return
 			}
-			self.dispatch(.window_title, ActionPayload{ str1: cmd.str_value })
+			self.dispatch(.window_title, ActionPayload{ str1: cmd.value })
 		}
-		.change_window_icon {
-			// Ignored (icon not supported)
+		osc.ChangeWindowIcon {
+			// OSC 1 (change icon) received and ignored
 		}
-		.clipboard_contents {
-			self.dispatch(.clipboard_contents, ActionPayload{
-				clipboard: cmd.clipboard
-			})
+		osc.ClipboardContents {
+			self.dispatch(.clipboard_contents, ActionPayload{ clipboard: cmd })
 		}
-		.report_pwd {
-			self.dispatch(.report_pwd, ActionPayload{ str1: cmd.str_value })
+		osc.ReportPwd {
+			self.dispatch(.report_pwd, ActionPayload{ str1: cmd.value })
 		}
-		.mouse_shape {
-			if ms := MouseShape.from_string(cmd.str_value) {
-				self.dispatch(.mouse_shape, ActionPayload{
-					mouse_shape_val: ms
-				})
+		osc.MouseShape {
+			shape := MouseShape.from_string(cmd.value) or {
+				// unknown cursor shape
+				return
 			}
+			self.dispatch(.mouse_shape, ActionPayload{ mouse_shape_val: shape })
 		}
-		.hyperlink_start {
-			self.dispatch(.start_hyperlink, ActionPayload{
-				hyperlink: cmd.hyperlink
-			})
+		osc.ColorOperationCommand {
+			self.dispatch(.color_operation, ActionPayload{ color_operation: cmd })
 		}
-		.hyperlink_end {
+		osc.KittyColorOSC {
+			self.dispatch(.kitty_color_report, ActionPayload{ kitty_color: cmd })
+		}
+		osc.DesktopNotification {
+			self.dispatch(.show_desktop_notification, ActionPayload{ desktop_notification: cmd })
+		}
+		osc.HyperlinkStart {
+			self.dispatch(.start_hyperlink, ActionPayload{ hyperlink: cmd })
+		}
+		osc.HyperlinkEnd {
 			self.dispatch(.end_hyperlink, ActionPayload{})
 		}
-		.show_desktop_notification {
-			self.dispatch(.show_desktop_notification, ActionPayload{
-				desktop_notification: cmd.desktop_notification
-			})
+		osc.ProgressReport {
+			self.dispatch(.progress_report, ActionPayload{ progress_report: cmd })
 		}
-		.semantic_prompt {
-			self.dispatch(.semantic_prompt, ActionPayload{
-				semantic_prompt_action: cmd.semantic_prompt_action
-				semantic_prompt_opts: cmd.semantic_prompt_options
-			})
+		osc.ConEmuSleep, osc.ConEmuShowMessageBox, osc.ConEmuChangeTabTitle, osc.ConEmuWaitInput,
+		osc.ConEmuGuiMacro, osc.ConEmuRunProcess, osc.ConEmuOutputEnvironmentVariable,
+		osc.ConEmuXtermEmulation, osc.ConEmuComment, osc.KittyTextSizing {
+			// unimplemented OSC command
 		}
-		.color_operation {
-			self.dispatch(.color_operation, ActionPayload{
-				osc_terminator: cmd.terminator
-				color_op: cmd.color_op
-				color_requests: cmd.color_requests
-			})
+		osc.InvalidCommand {
+			// invalid OSC command
 		}
-		.kitty_color_protocol {
-			self.dispatch(.kitty_color_report, ActionPayload{
-				osc_terminator: cmd.terminator
-				kitty_color_items: cmd.kitty_color_items
-			})
-		}
-		.conemu_progress_report {
-			self.dispatch(.progress_report, ActionPayload{
-				progress_report: osc.ProgressReport{
-					state: cmd.progress_state
-					progress: cmd.progress
-				}
-			})
-		}
-		.conemu_sleep, .conemu_show_message_box, .conemu_change_tab_title, .conemu_wait_input, .conemu_guimacro, .conemu_run_process, .conemu_output_environment_variable, .conemu_xterm_emulation, .conemu_comment, .kitty_text_sizing {
-			// Ignored
-		}
-		.invalid {}
 	}
 }
 

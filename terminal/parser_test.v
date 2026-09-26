@@ -1,5 +1,7 @@
 module terminal
 
+import osc
+
 // Tests for the VT parser (Parser.next) behavior.
 //
 // Source: src/terminal/Parser.zig `test "..."` blocks.
@@ -521,8 +523,8 @@ fn test_osc_change_window_title() {
 	assert a.len == 1
 	assert a[0].action_type == .osc_dispatch_action
 	cmd := a[0].osc
-	assert cmd.cmd_type == .change_window_title
-	assert cmd.str_value == 'abc'
+	assert cmd is osc.ChangeWindowTitle
+	assert (cmd as osc.ChangeWindowTitle).value == 'abc'
 }
 
 // ============================================================
@@ -544,8 +546,8 @@ fn test_osc_change_window_title_end_in_esc() {
 	assert a.len == 1
 	assert a[0].action_type == .osc_dispatch_action
 	cmd := a[0].osc
-	assert cmd.cmd_type == .change_window_title
-	assert cmd.str_value == 'abc'
+	assert cmd is osc.ChangeWindowTitle
+	assert (cmd as osc.ChangeWindowTitle).value == 'abc'
 }
 
 fn test_osc_invalid_sequence_produces_no_action() {
@@ -580,8 +582,8 @@ fn test_osc_color_operation_preserves_bel_terminator() {
 	}
 	a := dispatch_actions(p.next(0x07))
 	assert a.len == 1
-	assert a[0].osc.cmd_type == .color_operation
-	assert a[0].osc.terminator == .bel
+	assert a[0].osc is osc.ColorOperationCommand
+	assert (a[0].osc as osc.ColorOperationCommand).terminator == .bel
 }
 
 fn test_osc_kitty_color_preserves_st_terminator() {
@@ -593,8 +595,8 @@ fn test_osc_kitty_color_preserves_st_terminator() {
 	a := dispatch_actions(p.next(0x1b))
 	p.next(u8(`\\`))
 	assert a.len == 1
-	assert a[0].osc.cmd_type == .kitty_color_protocol
-	assert a[0].osc.terminator == .st
+	assert a[0].osc is osc.KittyColorOSC
+	assert (a[0].osc as osc.KittyColorOSC).terminator == .st
 }
 
 fn test_osc_raw_action_preserves_ignored_typed_payload() {
@@ -604,9 +606,9 @@ fn test_osc_raw_action_preserves_ignored_typed_payload() {
 	}
 	a := dispatch_actions(p.next(0x07))
 	assert a.len == 1
-	assert a[0].osc.cmd_type == .kitty_text_sizing
-	assert a[0].osc.kitty_text_sizing.scale == 2
-	assert a[0].osc.kitty_text_sizing.text == 'hello'
+	assert a[0].osc is osc.KittyTextSizing
+	assert (a[0].osc as osc.KittyTextSizing).scale == 2
+	assert (a[0].osc as osc.KittyTextSizing).text == 'hello'
 }
 
 // ============================================================

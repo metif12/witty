@@ -101,7 +101,7 @@ fn (mut self KittyTextSizing) update(key u8, value string) bool {
 }
 
 // parse_kitty_text_sizing parses an OSC 66 command.
-fn parse_kitty_text_sizing(mut parser Parser, terminator_ch ?u8) ?Command {
+fn parse_kitty_text_sizing(mut parser Parser, _ ?u8) ?Command {
 	assert parser.state == .s_66
 	data := parser.finish_zero_terminated() or { return none }
 	data_str := data.bytestr()
@@ -148,10 +148,6 @@ fn parse_kitty_text_sizing(mut parser Parser, terminator_ch ?u8) ?Command {
 		}
 	}
 
-	parser.command = Command{
-		cmd_type: .kitty_text_sizing
-		terminator: Terminator.init(terminator_ch)
-		kitty_text_sizing: result
-	}
+	parser.command = result
 	return parser.command
 }

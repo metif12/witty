@@ -10,8 +10,8 @@ fn test_osc7_report_pwd() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .report_pwd
-	assert cmd.str_value == 'file:///tmp/example'
+	assert cmd is ReportPwd
+	assert (cmd as ReportPwd).value == 'file:///tmp/example'
 }
 
 fn test_osc7_report_pwd_empty() {
@@ -24,6 +24,6 @@ fn test_osc7_report_pwd_empty() {
 		assert false, 'expected command'
 		return
 	}
-	assert cmd.cmd_type == .report_pwd
-	assert cmd.str_value == ''
+	assert cmd is ReportPwd
+	assert (cmd as ReportPwd).value == ''
 }

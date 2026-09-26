@@ -8,7 +8,7 @@ module osc
 // If uri is empty, this ends the hyperlink.
 // params is a colon-separated list of key=value pairs.
 // The only recognized key is "id".
-fn parse_hyperlink(mut parser Parser, terminator_ch ?u8) ?Command {
+fn parse_hyperlink(mut parser Parser, _ ?u8) ?Command {
 	data := parser.finish_zero_terminated() or { return none }
 	data_str := data.bytestr()
 
@@ -49,20 +49,13 @@ fn parse_hyperlink(mut parser Parser, terminator_ch ?u8) ?Command {
 			parser.state = .invalid
 			return none
 		}
-		parser.command = Command{
-			cmd_type: .hyperlink_end
-			terminator: Terminator.init(terminator_ch)
-		}
+		parser.command = HyperlinkEnd{}
 		return parser.command
 	}
 
-	parser.command = Command{
-		cmd_type: .hyperlink_start
-		terminator: Terminator.init(terminator_ch)
-		hyperlink: HyperlinkStart{
-			uri: uri
-			id: id
-		}
+	parser.command = HyperlinkStart{
+		uri: uri
+		id: id
 	}
 	return parser.command
 }
