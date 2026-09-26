@@ -140,9 +140,8 @@ fn test_search_callback_routes_owned_results_and_ui_state() {
 		renderer_thread: make_test_renderer_thread()
 	}
 
-	surface_search_event(searchpkg.Event{
-		kind: .viewport_matches
-		viewport_matches: [highlight.Flattened.empty()]
+	surface_search_event(searchpkg.EventViewportMatches{
+		matches: [highlight.Flattened.empty()]
 	}, voidptr(&surface))
 	assert app.mailbox.len() == 0
 	viewport := pop_renderer_message(mut surface)
@@ -151,8 +150,7 @@ fn test_search_callback_routes_owned_results_and_ui_state() {
 		assert viewport.matches.len == 1
 	}
 
-	surface_search_event(searchpkg.Event{
-		kind: .selected_match
+	surface_search_event(searchpkg.EventSelectedMatch{
 		selected: searchpkg.ThreadSelectedMatch{
 			idx: 4
 			highlight: highlight.Flattened.empty()
@@ -168,15 +166,14 @@ fn test_search_callback_routes_owned_results_and_ui_state() {
 	assert selected.message.kind() == .search_selected
 	assert (selected.message as apprt.SurfaceMessageSearchSelected).selected? == 4
 
-	surface_search_event(searchpkg.Event{
-		kind: .total_matches
+	surface_search_event(searchpkg.EventTotalMatches{
 		total: 9
 	}, voidptr(&surface))
 	total := pop_surface_core_message(mut app)
 	assert total.message.kind() == .search_total
 	assert (total.message as apprt.SurfaceMessageSearchTotal).total? == 9
 
-	surface_search_event(searchpkg.Event{ kind: .quit }, voidptr(&surface))
+	surface_search_event(searchpkg.EventQuit{}, voidptr(&surface))
 	cleared_match := pop_renderer_message(mut surface)
 	assert cleared_match is rendererpkg.SearchSelectedMatchMessage
 	if cleared_match is rendererpkg.SearchSelectedMatchMessage {

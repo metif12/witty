@@ -274,20 +274,29 @@ pub enum MessageType as u8 {
 	select_result
 }
 
-// Message is a message posted to the search thread's mailbox.
-pub struct Message {
-pub:
-	kind MessageType
-	// For change_needle: the new needle bytes.
+// Change the search term. If no prior search term is given this
+// will start a search. If an existing search term is given this will
+// stop the prior search and start a new one.
+pub struct MessageChangeNeedle {
+pub mut:
 	needle datastruct.MessageData[u8]
-	// For select_result: the direction to move the selection.
+}
+
+// Select a search result.
+pub struct MessageSelect {
+pub:
 	select Select
 }
 
-pub fn Message.change_needle(data []u8) Message {
-	return Message{
-		kind: .change_needle
-		needle: datastruct.MessageData.init[u8](255, data)
+// Message is a message posted to the search thread's mailbox: the source's
+// tagged union.
+pub type Message = MessageChangeNeedle | MessageSelect
+
+// The tag of the active message variant.
+pub fn (self Message) kind() MessageType {
+	return match self {
+		MessageChangeNeedle { .change_needle }
+		MessageSelect { .select_result }
 	}
 }
 
@@ -319,18 +328,48 @@ pub mut:
 	highlight highlight.Flattened
 }
 
-// Event is an event emitted from the search thread. The active tag is
-// `kind`; the remaining fields carry the payload for that tag.
-pub struct Event {
-pub mut:
-	kind EventType
-	// total_matches payload
+// Search is quitting. The search thread is exiting.
+pub struct EventQuit {}
+
+// Search is complete for the given needle on all screens.
+pub struct EventComplete {}
+
+// Total matches on the current active screen have changed.
+pub struct EventTotalMatches {
+pub:
 	total usize
-	// selected_match payload (none => selection cleared)
+}
+
+// Selected match changed.
+pub struct EventSelectedMatch {
+pub:
 	selected ?ThreadSelectedMatch
-	// viewport_matches payload. The memory is owned by the search thread
-	// and is only valid during the callback.
-	viewport_matches []highlight.Flattened
+}
+
+// Matches in the viewport have changed. The memory is owned by the
+// search thread and is only valid during the callback.
+pub struct EventViewportMatches {
+pub:
+	matches []highlight.Flattened
+}
+
+// Event is an event emitted from the search thread: the source's tagged
+// union.
+pub type Event = EventComplete
+	| EventQuit
+	| EventSelectedMatch
+	| EventTotalMatches
+	| EventViewportMatches
+
+// The tag of the active event variant.
+pub fn (self Event) kind() EventType {
+	return match self {
+		EventQuit { .quit }
+		EventComplete { .complete }
+		EventTotalMatches { .total_matches }
+		EventSelectedMatch { .selected_match }
+		EventViewportMatches { .viewport_matches }
+	}
 }
 
 // Tick result for search progress.
@@ -503,7 +542,7 @@ fn (mut self SearchThread) thread_main_() ! {
 	defer {
 		// Send the quit message
 		if cb := self.opts.event_cb {
-			cb(Event{ kind: .quit }, self.opts.event_userdata)
+			cb(EventQuit{}, self.opts.event_userdata)
 		}
 	}
 
@@ -573,13 +612,13 @@ fn (mut self SearchThread) thread_main_() ! {
 fn (mut self SearchThread) drain_mailbox() ! {
 	for {
 		message := self.mailbox.pop() or { break }
-		match message.kind {
-			.change_needle {
+		match message {
+			MessageChangeNeedle {
 				mut v := message.needle
 				self.change_needle(v.slice())
 				v.deinit()
 			}
-			.select_result {
+			MessageSelect {
 				self.do_select(message.select)
 			}
 		}
@@ -667,9 +706,9 @@ fn (mut self SearchThread) change_needle(needle []u8) {
 
 		// When the search changes then we need to emit that it stopped.
 		if cb := self.opts.event_cb {
-			cb(Event{ kind: .total_matches, total: 0 }, self.opts.event_userdata)
-			cb(Event{ kind: .selected_match, selected: none }, self.opts.event_userdata)
-			cb(Event{ kind: .viewport_matches, viewport_matches: [] }, self.opts.event_userdata)
+			cb(EventTotalMatches{ total: 0 }, self.opts.event_userdata)
+			cb(EventSelectedMatch{ selected: none }, self.opts.event_userdata)
+			cb(EventViewportMatches{ matches: [] }, self.opts.event_userdata)
 		}
 	}
 
@@ -973,7 +1012,7 @@ pub fn (mut self Search) notify(cb EventCallback, ud voidptr) {
 	changed_total := if t := self.last_screen.total { t != total } else { true }
 	if changed_total {
 		self.last_screen.total = total
-		cb(Event{ kind: .total_matches, total: total }, ud)
+		cb(EventTotalMatches{ total: total }, ud)
 	}
 
 	// Check our viewport matches. If they're stale, we do the viewport
@@ -991,7 +1030,7 @@ pub fn (mut self Search) notify(cb EventCallback, ud voidptr) {
 			hl := self.viewport.next() or { break }
 			results << hl.clone()
 		}
-		cb(Event{ kind: .viewport_matches, viewport_matches: results }, ud)
+		cb(EventViewportMatches{ matches: results }, ud)
 	}
 
 	// Check our last selected match data.
@@ -1011,8 +1050,7 @@ pub fn (mut self Search) notify(cb EventCallback, ud voidptr) {
 					idx: m.idx
 					highlight: untracked
 				}
-				cb(Event{
-					kind: .selected_match
+				cb(EventSelectedMatch{
 					selected: ThreadSelectedMatch{
 						idx: m.idx
 						highlight: flattened
@@ -1022,13 +1060,13 @@ pub fn (mut self Search) notify(cb EventCallback, ud voidptr) {
 		}
 	} else if self.last_screen.selected != none {
 		self.last_screen.selected = none
-		cb(Event{ kind: .selected_match, selected: none }, ud)
+		cb(EventSelectedMatch{ selected: none }, ud)
 	}
 
 	// Send our complete notification if we just completed.
 	if !self.last_complete && self.is_complete() {
 		self.last_complete = true
-		cb(Event{ kind: .complete }, ud)
+		cb(EventComplete{}, ud)
 	}
 }
 

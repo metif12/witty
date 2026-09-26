@@ -1701,10 +1701,10 @@ fn surface_search_event(event searchpkg.Event, userdata voidptr) {
 fn (mut surface Surface) search_callback_(event searchpkg.Event) ! {
 	// NOTE: This runs on the search thread.
 
-	match event.kind {
-		.viewport_matches {
-			mut matches := []highlight.Flattened{cap: event.viewport_matches.len}
-			for match_ in event.viewport_matches {
+	match event {
+		searchpkg.EventViewportMatches {
+			mut matches := []highlight.Flattened{cap: event.matches.len}
+			for match_ in event.matches {
 				matches << match_.clone()
 			}
 			_ = surface.renderer_thread.mailbox.push(rendererpkg.RendererMessage(rendererpkg.SearchViewportMatchesMessage{
@@ -1712,7 +1712,7 @@ fn (mut surface Surface) search_callback_(event searchpkg.Event) ! {
 			}), datastruct.blocking_queue_forever)
 			surface.renderer_thread.wakeup.notify()!
 		}
-		.selected_match {
+		searchpkg.EventSelectedMatch {
 			selected := if value := event.selected { ?usize(value.idx) } else { none }
 			match_ := if value := event.selected {
 				?highlight.Flattened(value.highlight.clone())
@@ -1725,10 +1725,10 @@ fn (mut surface Surface) search_callback_(event searchpkg.Event) ! {
 			surface.surface_mailbox().push(apprt.SurfaceMessageSearchSelected{ selected: selected }, datastruct.blocking_queue_forever)
 			surface.renderer_thread.wakeup.notify()!
 		}
-		.total_matches {
+		searchpkg.EventTotalMatches {
 			surface.surface_mailbox().push(apprt.SurfaceMessageSearchTotal{ total: event.total }, datastruct.blocking_queue_forever)
 		}
-		.quit {
+		searchpkg.EventQuit {
 			_ = surface.renderer_thread.mailbox.push(rendererpkg.RendererMessage(rendererpkg.SearchSelectedMatchMessage{
 				match_: none
 			}), datastruct.blocking_queue_forever)
@@ -1740,7 +1740,7 @@ fn (mut surface Surface) search_callback_(event searchpkg.Event) ! {
 			mailbox.push(apprt.SurfaceMessageSearchTotal{ total: none }, datastruct.blocking_queue_forever)
 			mailbox.push(apprt.SurfaceMessageSearchSelected{ selected: none }, datastruct.blocking_queue_forever)
 		}
-		.complete {}
+		searchpkg.EventComplete {}
 	}
 }
 
@@ -4175,16 +4175,16 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				s.deinit()
 				self.search = none
 			} else {
-				_ = s.state.mailbox.push(searchpkg.Message.change_needle(text.bytes()),
-					datastruct.blocking_queue_forever)
+				_ = s.state.mailbox.push(searchpkg.MessageChangeNeedle{
+					needle: datastruct.MessageData.init[u8](255, text.bytes())
+				}, datastruct.blocking_queue_forever)
 				s.state.wakeup.notify() or {}
 			}
 		}
 		.navigate_search {
 			mut s := self.search or { return false }
 			nav := unsafe { input.NavigateSearch(action.enum_param) }
-			_ = s.state.mailbox.push(searchpkg.Message{
-				kind:   .select_result
+			_ = s.state.mailbox.push(searchpkg.MessageSelect{
 				select: if nav == .next { .next } else { .prev }
 			}, datastruct.blocking_queue_forever)
 			s.state.wakeup.notify() or {}

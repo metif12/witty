@@ -57,18 +57,18 @@ fn test_search_thread_processes_messages_asynchronously() ! {
 	})!
 	thread_ := spawn worker.thread_main()
 
-	_ = worker.mailbox.push(Message.change_needle('world'.bytes()), datastruct.blocking_queue_forever)
+	_ = worker.mailbox.push(MessageChangeNeedle{ needle: datastruct.MessageData.init[u8](255, 'world'.bytes()) }, datastruct.blocking_queue_forever)
 	worker.wakeup.notify()!
 	mut total := usize(0)
 	mut complete := false
 	for !complete {
 		select {
 			event := <-events.events {
-				match event.kind {
-					.total_matches {
+				match event {
+					EventTotalMatches {
 						total = event.total
 					}
-					.complete {
+					EventComplete {
 						complete = true
 					}
 					else {}
@@ -85,6 +85,6 @@ fn test_search_thread_processes_messages_asynchronously() ! {
 	worker.stop.notify()!
 	thread_.wait()
 	quit_event := <-events.events
-	assert quit_event.kind == .quit
+	assert quit_event.kind() == .quit
 	worker.deinit()
 }
