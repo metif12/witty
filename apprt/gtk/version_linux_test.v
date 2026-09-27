@@ -20,6 +20,13 @@ fn test_adwaita_capability_helpers_match_their_version_boundaries() {
 	assert supports_banner() == adw_at_least(1, 3, 0)
 }
 
+fn test_at_least_never_exceeds_the_build_headers() {
+	assert !gtk_at_least(gtk_comptime_version.major, gtk_comptime_version.minor,
+		gtk_comptime_version.patch + 1)
+	assert !adw_at_least(adw_comptime_version.major, adw_comptime_version.minor,
+		adw_comptime_version.patch + 1)
+}
+
 fn test_runtime_until_is_the_inverse_of_runtime_at_least() {
 	assert runtime_until(4, 17, 5) == !gtk_runtime_at_least(4, 17, 5)
 }

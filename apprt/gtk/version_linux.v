@@ -1,5 +1,7 @@
 module gtk
 
+import log
+
 // version_linux.v - GTK and libadwaita runtime version detection.
 //
 // Translated from ghostty/src/apprt/gtk/gtk_version.zig and adw_version.zig.
@@ -71,15 +73,19 @@ pub fn gtk_runtime_version() SemVer {
 // gtk_log_version reports the build and runtime versions during application
 // construction. Mirrors `gtk_version.logVersion`.
 pub fn gtk_log_version() {
-	eprintln('[info] gtk: GTK version build=${gtk_comptime_version} runtime=${gtk_runtime_version()}')
+	log.info('GTK version build=${gtk_comptime_version} runtime=${gtk_runtime_version()}')
 }
 
 // gtk_at_least verifies that the GTK version is at least the given version.
 //
-// Faithful to `gtk_version.atLeast`: because in V we cannot disable code
-// generation based on the header version the way Zig's inline comptime check
-// does, this always consults the runtime version.
+// V cannot use this result to disable code generation, but the observable
+// result still retains the source's header-version guard before consulting the
+// runtime library.
 pub fn gtk_at_least(major u16, minor u16, patch u16) bool {
+	required := SemVer{ major: major, minor: minor, patch: patch }
+	if gtk_comptime_version.order(required) == -1 {
+		return false
+	}
 	return gtk_runtime_at_least(major, minor, patch)
 }
 
@@ -125,12 +131,16 @@ pub fn adw_runtime_version() SemVer {
 // adw_log_version reports the build and runtime versions during application
 // construction. Mirrors `adw_version.logVersion`.
 pub fn adw_log_version() {
-	eprintln('[info] gtk: libadwaita version build=${adw_comptime_version} runtime=${adw_runtime_version()}')
+	log.info('libadwaita version build=${adw_comptime_version} runtime=${adw_runtime_version()}')
 }
 
 // adw_at_least verifies that the running libadwaita version is at least the
 // given version. Mirrors `adw_version.atLeast`.
 pub fn adw_at_least(major u16, minor u16, patch u16) bool {
+	required := SemVer{ major: major, minor: minor, patch: patch }
+	if adw_comptime_version.order(required) == -1 {
+		return false
+	}
 	return adw_runtime_at_least(major, minor, patch)
 }
 
