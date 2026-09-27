@@ -128,10 +128,10 @@ pub fn semantic_prompt_table(context cimgui.Context, prompt terminal.SemanticPro
 
 	draw_terminal_label(context, 'Click Handling', "How click events are handled in prompts. Set via 'cl' or 'click_events' options in OSC 133.")
 	context.table_set_column(1)
-	match prompt.click.tag {
-		.none { context.text_disabled('(none)') }
-		.click_events { context.text('click_events') }
-		.cl {
+	match prompt.click {
+		terminal.SemanticClickNone { context.text_disabled('(none)') }
+		terminal.SemanticClickEvents { context.text('click_events') }
+		terminal.SemanticClickCl {
 			context.text(match prompt.click.cl {
 				.line { 'cl=line' }
 				.multiple { 'cl=multiple' }

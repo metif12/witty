@@ -5662,21 +5662,11 @@ fn witty_active_row(s &Screen, y int) &RowData {
 }
 
 fn test_semantic_click_source_layout() {
-	assert sizeof(SemanticClickTag) == 1
-	assert u8(SemanticClickTag.none) == 0
-	assert u8(SemanticClickTag.click_events) == 1
-	assert u8(SemanticClickTag.cl) == 2
-	assert sizeof(SemanticClickCl) == 1
-	assert u8(SemanticClickCl.line) == 0
-	assert u8(SemanticClickCl.multiple) == 1
-	assert u8(SemanticClickCl.conservative_vertical) == 2
-	assert u8(SemanticClickCl.smart_vertical) == 3
-	assert sizeof(SemanticClick) == 2
-	assert sizeof(SemanticPrompt) == 3
-	assert semantic_click_none.tag == .none
-	assert semantic_click_click_events.tag == .click_events
-	assert SemanticClick.from_cl(.smart_vertical).tag == .cl
-	assert SemanticClick.from_cl(.smart_vertical).cl == .smart_vertical
+	assert semantic_click_none is SemanticClickNone
+	assert semantic_click_click_events is SemanticClickEvents
+	click := SemanticClick.from_cl(.smart_vertical)
+	assert click is SemanticClickCl
+	assert (click as SemanticClickCl).cl == .smart_vertical
 }
 
 fn test_semantic_input_clear_source_layout() {

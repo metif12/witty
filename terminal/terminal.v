@@ -4386,12 +4386,7 @@ pub fn (mut self Terminal) semantic_prompt(cmd osc.SemanticPrompt) {
 				}
 			}
 			if click := osc.read_click(options) {
-				self.screens.active.semantic_prompt.click = match click {
-					.line { SemanticClick.from_cl(.line) }
-					.multiple { SemanticClick.from_cl(.multiple) }
-					.conservative_vertical { SemanticClick.from_cl(.conservative_vertical) }
-					.smart_vertical { SemanticClick.from_cl(.smart_vertical) }
-				}
+				self.screens.active.semantic_prompt.click = SemanticClick.from_cl(click)
 			}
 		}
 		.new_command {

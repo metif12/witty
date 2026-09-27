@@ -1796,34 +1796,23 @@ pub const semantic_prompt_disabled = SemanticPrompt{
 	click: semantic_click_none
 }
 
-pub enum SemanticClickTag as u8 {
-	none
-	click_events
-	cl
-}
+pub struct SemanticClickNone {}
 
-pub enum SemanticClickCl as u8 {
-	line
-	multiple
-	conservative_vertical
-	smart_vertical
-}
+pub struct SemanticClickEvents {}
 
-pub struct SemanticClick {
+pub struct SemanticClickCl {
 pub:
-	tag SemanticClickTag
-	cl  SemanticClickCl
+	cl osc.Click
 }
 
-pub const semantic_click_none = SemanticClick{}
-pub const semantic_click_click_events = SemanticClick{
-	tag: .click_events
-}
+pub type SemanticClick = SemanticClickCl | SemanticClickEvents | SemanticClickNone
 
-pub fn SemanticClick.from_cl(cl SemanticClickCl) SemanticClick {
-	return SemanticClick{
-		tag: .cl
-		cl:  cl
+pub const semantic_click_none = SemanticClick(SemanticClickNone{})
+pub const semantic_click_click_events = SemanticClick(SemanticClickEvents{})
+
+pub fn SemanticClick.from_cl(cl osc.Click) SemanticClick {
+	return SemanticClickCl{
+		cl: cl
 	}
 }
 
@@ -4615,13 +4604,13 @@ pub fn (mut self Screen) prompt_click_move(click_pin Pin) PromptClickMove {
 		return prompt_click_move_zero
 	}
 
-	return match self.semantic_prompt.click.tag {
+	return match self.semantic_prompt.click {
 		// None doesn't support movement and click_events must use a
 		// different mechanism (SGR mouse events) that callers must handle.
-		.none, .click_events {
+		SemanticClickNone, SemanticClickEvents {
 			prompt_click_move_zero
 		}
-		.cl {
+		SemanticClickCl {
 			match self.semantic_prompt.click.cl {
 				// All of these currently use dumb line-based navigation.
 				// But eventually we'll support more.

@@ -47,17 +47,17 @@ fn test_terminal_semantic_prompt_click_options() {
 	assert semantic_click_for('click_events=0') == semantic_click_none
 
 	multiple := semantic_click_for('cl=m')
-	assert multiple.tag == .cl
-	assert multiple.cl == .multiple
+	assert multiple is SemanticClickCl
+	assert (multiple as SemanticClickCl).cl == .multiple
 
 	line := semantic_click_for('cl=line')
-	assert line.tag == .cl
-	assert line.cl == .line
+	assert line is SemanticClickCl
+	assert (line as SemanticClickCl).cl == .line
 
 	assert semantic_click_for('click_events=1;cl=m') == semantic_click_click_events
 	conservative := semantic_click_for('click_events=0;cl=v')
-	assert conservative.tag == .cl
-	assert conservative.cl == .conservative_vertical
+	assert conservative is SemanticClickCl
+	assert (conservative as SemanticClickCl).cl == .conservative_vertical
 	assert semantic_click_for('aid=123') == semantic_click_none
 }
 
