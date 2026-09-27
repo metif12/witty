@@ -473,6 +473,9 @@ mut:
 
 	// The configuration that this window is using.
 	config &Config = unsafe { nil }
+	// Application-created windows bind their config property to the
+	// application's config property for their lifetime.
+	config_binding GObject = unsafe { nil }
 
 	// State and logic for windowing protocol for a window.
 	winproto WinProtoWindow = NoopWindow{}
@@ -1732,6 +1735,22 @@ fn (mut self Window) set_config_reference(config &Config) {
 	}
 }
 
+// bind_application_config mirrors Application.initAndShowWindow's
+// application-config -> window-config GObject property binding. The window is
+// already initialized from the current application config, so the source does
+// not request an initial synchronization.
+fn (mut self Window) bind_application_config(app &Application) {
+	if !isnil(self.config_binding) {
+		object_unref(self.config_binding)
+		self.config_binding = unsafe { nil }
+	}
+	if isnil(app) || isnil(app.obj) || isnil(self.obj) {
+		return
+	}
+	self.config_binding = GObject(C.g_object_bind_property(app.obj, c'config', self.obj,
+		c'config', 0))
+}
+
 fn (self &Window) notify_property(pspec &C.GParamSpec) {
 	if !isnil(self.obj) && !isnil(pspec) {
 		C.g_object_notify_by_pspec(self.obj, pspec)
@@ -2300,6 +2319,10 @@ fn (mut self Window) dispose_resources() {
 		self.tab_bar = unsafe { nil }
 	}
 	self.command_palette.set(unsafe { nil })
+	if !isnil(self.config_binding) {
+		object_unref(self.config_binding)
+		self.config_binding = unsafe { nil }
+	}
 
 	if self.config != unsafe { nil } {
 		self.config.unref()

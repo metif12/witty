@@ -2586,12 +2586,6 @@ pub fn (mut self SurfaceWidget) apply_config() {
 	self.sync_bell_border_overlay()
 }
 
-// set_shared_config points the surface at its application's stable config
-// object. This is used after an application-wide config change.
-pub fn (mut self SurfaceWidget) set_shared_config(config &Config) {
-	self.set_config_reference(config)
-}
-
 // set_config_reference is the object-field accessor used by the native
 // `config` property. It releases the previous GObject, retains the incoming
 // one, emits notify::config, and runs the translated property callback.

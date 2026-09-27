@@ -979,14 +979,6 @@ fn (mut self Application) set_config(config configpkg.Config) {
 	} else {
 		self.prop_config()
 	}
-	for mut window in self.windows {
-		for mut tab in window.tabs {
-			for mut surface in tab.split_tree.surfaces {
-				surface.set_shared_config(self.config_object)
-			}
-		}
-		window.prop_config()
-	}
 	// Show our errors if we have any.
 	self.show_config_errors_dialog()
 }
@@ -2189,7 +2181,11 @@ fn window_from_surface(surface &SurfaceWidget) ?&Window {
 		return none
 	}
 	widget := C.gtk_widget_get_ancestor(surface.widget, window_get_type())
-	if isnil(widget) {
+	return window_from_native(widget)
+}
+
+fn window_from_native(widget GtkWidget) ?&Window {
+	if isnil(widget) || C.g_type_check_instance_is_a(widget, window_get_type()) == 0 {
 		return none
 	}
 	priv := window_priv(voidptr(widget))
@@ -2266,16 +2262,7 @@ fn (mut self Application) goto_window(direction apprt.GotoWindow) bool {
 			|| C.gtk_widget_get_visible(GtkWidget(gtk_window)) == 0 {
 			continue
 		}
-		mut window := &Window(unsafe { nil })
-		for candidate in self.windows {
-			if !isnil(candidate) && candidate.as_window() == gtk_window {
-				window = candidate
-				break
-			}
-		}
-		if isnil(window) {
-			continue
-		}
+		mut window := window_from_native(GtkWidget(gtk_window)) or { continue }
 		mut surface := window.get_active_surface() or { continue }
 		C.gtk_window_present(gtk_window)
 		surface.grab_focus()
@@ -2285,11 +2272,9 @@ fn (mut self Application) goto_window(direction apprt.GotoWindow) bool {
 }
 
 fn (mut self Application) toggle_quick_terminal() bool {
-	for mut window in self.windows {
-		if !isnil(window) && window.is_quick_terminal() {
-			window.toggle_visibility()
-			return true
-		}
+	if mut window := get_quick_terminal_window() {
+		window.toggle_visibility()
+		return true
 	}
 	if !self.winproto.supports_quick_terminal() {
 		return false
@@ -2301,6 +2286,7 @@ fn (mut self Application) toggle_quick_terminal() bool {
 	window.set_quick_terminal(true)
 	window.sync_appearance()
 	self.windows << window
+	window.bind_application_config(self)
 	window.new_tab_for_window(none)
 	C.gtk_window_present(window.as_window())
 	return true
@@ -2316,9 +2302,32 @@ fn (mut self Application) new_window(parent ?&core.Surface) bool {
 		return false
 	}
 	self.windows << window
+	window.bind_application_config(self)
 	window.new_tab_for_window(parent)
 	C.gtk_window_present(window.as_window())
 	return true
+}
+
+// get_quick_terminal_window searches GTK's native toplevel list and casts
+// each candidate to the registered GhosttyWindow type, matching Ghostty's
+// getQuickTerminalWindow helper.
+fn get_quick_terminal_window() ?&Window {
+	toplevels := C.gtk_window_list_toplevels()
+	if isnil(toplevels) {
+		return none
+	}
+	defer {
+		C.g_list_free(toplevels)
+	}
+	count := list_length(toplevels)
+	for i := u32(0); i < count; i++ {
+		widget := GtkWidget(list_data_at(toplevels, i))
+		window := window_from_native(widget) or { continue }
+		if window.is_quick_terminal() {
+			return window
+		}
+	}
+	return none
 }
 
 // dispatch_runtime_actions forwards the actions core.App emitted through its
