@@ -16,7 +16,9 @@ import configpkg
 import core
 import input
 import apprt
+import build_meta
 import datastruct
+import internal_os
 
 // --- New opaque handle aliases --------------------------------------------
 // (Grep-verified: none of these `fn C.*` or aliases are declared elsewhere in
@@ -89,6 +91,8 @@ fn C.gtk_native_get_surface_transform(native GtkNative, x &f64, y &f64) int
 fn C.gdk_surface_beep(surface GdkSurface)
 
 fn C.gtk_show_about_dialog(parent GtkWindow, first_property_name &char, ...)
+
+fn C.adw_show_about_dialog(parent GtkWidget, first_property_name &char, ...)
 
 fn C.adw_application_window_set_content(window AdwApplicationWindow, content GtkWidget)
 
@@ -2115,7 +2119,19 @@ pub fn (mut self Window) tab_view_n_pages() {
 // --- Actions ---------------------------------------------------------------
 
 pub fn (mut self Window) action_about() {
-	C.gtk_show_about_dialog(self.as_window(), c'program-name', c'Witty', c'logo-icon-name', &char(application_id.str), c'title', c'About Witty', c'website', c'https://ghostty.org', unsafe { nil })
+	developer_name := internal_os.translate('Ghostty Developers')
+	if supports_dialogs() {
+		C.adw_show_about_dialog(self.as_widget(), c'application-name', c'Ghostty', c'developer-name',
+			&char(developer_name.str), c'application-icon', c'com.mitchellh.ghostty', c'version',
+			&char(build_meta.version_string.str), c'issue-url', c'https://github.com/ghostty-org/ghostty/issues',
+			c'website', c'https://ghostty.org', unsafe { nil })
+		return
+	}
+
+	title := internal_os.translate('About Ghostty')
+	C.gtk_show_about_dialog(self.as_window(), c'program-name', c'Ghostty', c'logo-icon-name',
+		c'com.mitchellh.ghostty', c'title', &char(title.str), c'version',
+		&char(build_meta.version_string.str), c'website', c'https://ghostty.org', unsafe { nil })
 }
 
 pub fn (mut self Window) toggle_inspector() {
