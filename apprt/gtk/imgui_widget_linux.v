@@ -7,6 +7,7 @@ module gtk
 
 import cimgui
 import input
+import log
 import opengl
 import time
 
@@ -100,52 +101,47 @@ pub fn (self &ImguiWidget) queue_render() {
 	}
 }
 
-fn (mut self ImguiWidget) realize() {
-	if self.context_ready {
-		return
+// set_current_context preserves the source boundary even though the cimgui V
+// wrapper makes the context passed to each operation current internally.
+fn (self &ImguiWidget) set_current_context() bool {
+	if !self.context_ready {
+		log.warn('Dear ImGui context not initialized')
+		return false
 	}
+	return true
+}
+
+fn (mut self ImguiWidget) realize() {
+	assert !self.context_ready, 'Dear ImGui context already initialized'
 	C.gtk_gl_area_make_current(self.gl_area)
 	gl_error := C.gtk_gl_area_get_error(self.gl_area)
 	if !isnil(gl_error) {
-		eprintln('[warn] gtk: GLArea for Dear ImGui failed to realize')
+		log.warn('GLArea for Dear ImGui widget failed to realize: ${error_message(gl_error)}')
 		return
 	}
 	context := cimgui.Context.create() or {
-		eprintln('[warn] gtk: unable to initialize Dear ImGui context: ${err}')
+		log.warn('unable to initialize Dear ImGui context')
 		return
 	}
 	self.context = context
 	self.context.set_backend_platform(.gtk)
-	if !self.context.opengl_init() {
-		self.context.destroy()
-		self.context = cimgui.Context{}
-		eprintln('[warn] gtk: unable to initialize Dear ImGui OpenGL backend')
-		return
-	}
+	_ = self.context.opengl_init()
 	self.context_ready = true
 	if self.setup_fn != unsafe { nil } {
 		self.setup_fn(self.user_data)
+	} else {
+		log.warn('default Dear ImGui setup called, this is a bug.')
 	}
 	self.tick_callback_id = C.gtk_widget_add_tick_callback(self.widget, voidptr(imgui_tick_cb), voidptr(self), unsafe { nil })
 }
 
 fn (mut self ImguiWidget) unrealize() {
+	assert self.context_ready, 'Dear ImGui context not initialized'
 	if self.tick_callback_id != 0 {
 		C.gtk_widget_remove_tick_callback(self.widget, self.tick_callback_id)
 		self.tick_callback_id = 0
 	}
-	if !self.context_ready {
-		return
-	}
-	C.gtk_gl_area_make_current(self.gl_area)
-	gl_error := C.gtk_gl_area_get_error(self.gl_area)
-	if isnil(gl_error) {
-		self.context.opengl_shutdown()
-	}
-	self.context.destroy()
-	self.context = cimgui.Context{}
-	self.context_ready = false
-	self.previous_ns = 0
+	self.context.opengl_shutdown()
 }
 
 pub fn (mut self ImguiWidget) deinit() {
@@ -167,7 +163,7 @@ pub fn (mut self ImguiWidget) deinit() {
 }
 
 fn (mut self ImguiWidget) resize(width int, height int) {
-	if !self.context_ready {
+	if !self.set_current_context() {
 		return
 	}
 	self.context.set_size(u32(width), u32(height))
@@ -191,7 +187,7 @@ fn (mut self ImguiWidget) new_frame() {
 }
 
 fn (mut self ImguiWidget) render() bool {
-	if !self.context_ready {
+	if !self.set_current_context() {
 		return false
 	}
 	self.last_render_ns = i64(time.sys_mono_now())
@@ -200,6 +196,8 @@ fn (mut self ImguiWidget) render() bool {
 		self.new_frame()
 		if self.render_fn != unsafe { nil } {
 			self.render_fn(self.user_data)
+		} else {
+			log.warn('default Dear ImGui render called, this is a bug.')
 		}
 		self.context.render_frame()
 	}
@@ -211,7 +209,7 @@ fn (mut self ImguiWidget) render() bool {
 
 fn (mut self ImguiWidget) key_event(action input.KeyAction, controller GtkEventControllerKey, keyval u32, gtk_mods u32) bool {
 	self.queue_render()
-	if !self.context_ready {
+	if !self.set_current_context() {
 		return false
 	}
 	mods := translate_mods(gtk_mods)
@@ -278,7 +276,7 @@ fn imgui_focus_enter_cb(controller GtkEventControllerFocus, data voidptr) {
 	_ = controller
 	if !isnil(data) {
 		self := unsafe { &ImguiWidget(data) }
-		if self.context_ready {
+		if self.set_current_context() {
 			self.context.add_focus(true)
 			self.queue_render()
 		}
@@ -289,7 +287,7 @@ fn imgui_focus_leave_cb(controller GtkEventControllerFocus, data voidptr) {
 	_ = controller
 	if !isnil(data) {
 		self := unsafe { &ImguiWidget(data) }
-		if self.context_ready {
+		if self.set_current_context() {
 			self.context.add_focus(false)
 			self.queue_render()
 		}
@@ -319,11 +317,11 @@ fn imgui_mouse_pressed_cb(gesture GtkGestureClick, press_count int, x f64, y f64
 	_ = y
 	if !isnil(data) {
 		self := unsafe { &ImguiWidget(data) }
-		if self.context_ready {
+		self.queue_render()
+		if self.set_current_context() {
 			if button := imgui_mouse_button(C.gtk_gesture_single_get_current_button(gesture)) {
 				self.context.add_mouse_button(button, true)
 			}
-			self.queue_render()
 		}
 	}
 }
@@ -334,11 +332,11 @@ fn imgui_mouse_released_cb(gesture GtkGestureClick, press_count int, x f64, y f6
 	_ = y
 	if !isnil(data) {
 		self := unsafe { &ImguiWidget(data) }
-		if self.context_ready {
+		self.queue_render()
+		if self.set_current_context() {
 			if button := imgui_mouse_button(C.gtk_gesture_single_get_current_button(gesture)) {
 				self.context.add_mouse_button(button, false)
 			}
-			self.queue_render()
 		}
 	}
 }
@@ -347,10 +345,10 @@ fn imgui_mouse_motion_cb(controller GtkEventControllerMotion, x f64, y f64, data
 	_ = controller
 	if !isnil(data) {
 		self := unsafe { &ImguiWidget(data) }
-		if self.context_ready {
+		self.queue_render()
+		if self.set_current_context() {
 			scale := f64(C.gtk_widget_get_scale_factor(GtkWidget(self.gl_area)))
 			self.context.add_mouse_pos(f32(x * scale), f32(y * scale))
-			self.queue_render()
 		}
 	}
 }
@@ -361,11 +359,11 @@ fn imgui_mouse_scroll_cb(controller GtkEventControllerScroll, x f64, y f64, data
 		return 0
 	}
 	self := unsafe { &ImguiWidget(data) }
-	if !self.context_ready {
+	self.queue_render()
+	if !self.set_current_context() {
 		return 0
 	}
 	self.context.add_mouse_wheel(f32(x), f32(-y))
-	self.queue_render()
 	return 1
 }
 
@@ -373,9 +371,9 @@ fn imgui_im_commit_cb(context GtkIMContext, bytes &char, data voidptr) {
 	_ = context
 	if !isnil(data) && !isnil(bytes) {
 		self := unsafe { &ImguiWidget(data) }
-		if self.context_ready {
+		self.queue_render()
+		if self.set_current_context() {
 			self.context.add_text(unsafe { cstring_to_vstring(bytes) })
-			self.queue_render()
 		}
 	}
 }

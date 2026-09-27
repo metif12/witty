@@ -19,6 +19,7 @@ module gtk
 // registered through the same GLib contracts as Ghostty's Zig implementation.
 
 import datastruct
+import log
 
 // --- New C bindings unique to this file -----------------------------------
 //
@@ -782,7 +783,7 @@ pub fn (mut self SplitTreeWidget) action_new_split(dir string) {
 		'down' { datastruct.Direction.down }
 		'up' { datastruct.Direction.up }
 		else {
-			eprintln('invalid split direction for split-tree.new-split: ${dir}')
+			log.warn('invalid split direction for split-tree.new-split: ${dir}')
 			return
 		}
 	}
