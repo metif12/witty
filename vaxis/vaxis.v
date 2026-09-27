@@ -2,6 +2,7 @@ module vaxis
 
 import encoding.base64
 import os
+import strconv
 import term
 import term.termios
 import time
@@ -13,9 +14,9 @@ pub:
 }
 
 // Scheme is the terminal's preferred light or dark color scheme.
-pub enum Scheme {
-	light
+pub enum Scheme as u8 {
 	dark
+	light
 }
 
 // Style represents text styling attributes.
@@ -25,16 +26,16 @@ pub:
 	bg       Color
 	bold     bool
 	italic   bool
-	ul_style UnderlineStyle = .none_
+	ul_style UnderlineStyle = .off
 }
 
-pub enum UnderlineStyle {
-	none_
+pub enum UnderlineStyle as u8 {
+	off
 	single
 	double_
-	dashed
 	curly
 	dotted
+	dashed
 }
 
 // Key represents one decoded terminal key event.
@@ -86,24 +87,58 @@ pub fn (k Key) matches_any(cps []u32, mods Modifiers) bool {
 
 pub struct Mouse {
 pub:
-	button MouseButton
-	type_  MouseType
-	row    int
-	col    int
+	button  MouseButton
+	type_   MouseType
+	col     u16
+	row     u16
+	xoffset u16
+	yoffset u16
+	mods    MouseModifiers
 }
 
-pub enum MouseButton {
-	none_
+pub enum MouseButton as u8 {
 	left
+	middle
 	right
-	wheel_up
-	wheel_down
+	none_
+	wheel_up    = 64
+	wheel_down  = 65
+	wheel_right = 66
+	wheel_left  = 67
+	button_8    = 128
+	button_9    = 129
+	button_10   = 130
+	button_11   = 131
 }
 
-pub enum MouseType {
+pub enum MouseType as u8 {
 	press
 	release
 	motion
+	drag
+}
+
+// MouseModifiers retains vaxis' packed u3 value in the low three bits.
+pub struct MouseModifiers {
+	value u8
+}
+
+fn MouseModifiers.new(shift bool, alt bool, ctrl bool) MouseModifiers {
+	return MouseModifiers{
+		value: u8(shift) | (u8(alt) << 1) | (u8(ctrl) << 2)
+	}
+}
+
+pub fn (m MouseModifiers) shift() bool {
+	return m.value & 1 != 0
+}
+
+pub fn (m MouseModifiers) alt() bool {
+	return m.value & 2 != 0
+}
+
+pub fn (m MouseModifiers) ctrl() bool {
+	return m.value & 4 != 0
 }
 
 pub struct Winsize {
@@ -225,14 +260,14 @@ fn parse_input(data []u8) ?ParsedInput {
 				else { escape }
 			}
 			return ParsedInput{
-				event: InputEvent(Key{
+				event:    InputEvent(Key{
 					codepoint: code
 				})
 				consumed: 3
 			}
 		}
 		return ParsedInput{
-			event: InputEvent(Key{
+			event:    InputEvent(Key{
 				codepoint: escape
 			})
 			consumed: 1
@@ -242,9 +277,9 @@ fn parse_input(data []u8) ?ParsedInput {
 	byte := data[0]
 	if byte > 0 && byte <= 26 {
 		return ParsedInput{
-			event: InputEvent(Key{
+			event:    InputEvent(Key{
 				codepoint: u32(`a` + byte - 1)
-				mods: Modifiers{
+				mods:      Modifiers{
 					ctrl: true
 				}
 			})
@@ -291,18 +326,14 @@ fn parse_csi(data []u8) ?ParsedInput {
 	if sequence.starts_with('\x1b[<') && (sequence.ends_with('M') || sequence.ends_with('m')) {
 		parts := sequence[3..sequence.len - 1].split(';')
 		if parts.len == 3 {
-			button_code := parts[0].int()
-			mut button := MouseButton.none_
-			if button_code & 64 != 0 {
-				button = if button_code & 1 == 0 { .wheel_up } else { .wheel_down }
-			} else {
-				button = match button_code & 3 {
-					0 { .left }
-					2 { .right }
-					else { .none_ }
-				}
-			}
-			type_ := if button_code & 32 != 0 {
+			button_mask := strconv.parse_uint(parts[0], 10, 16) or { return none }
+			px := parse_mouse_position(parts[1]) or { return none }
+			py := parse_mouse_position(parts[2]) or { return none }
+			button := unsafe { MouseButton(u8(button_mask & 0xc3)) }
+			motion := button_mask & 0x20 != 0
+			type_ := if motion && button != .none_ {
+				MouseType.drag
+			} else if motion {
 				MouseType.motion
 			} else if sequence.ends_with('m') {
 				MouseType.release
@@ -310,11 +341,13 @@ fn parse_csi(data []u8) ?ParsedInput {
 				MouseType.press
 			}
 			return ParsedInput{
-				event: InputEvent(Mouse{
+				event:    InputEvent(Mouse{
 					button: button
-					type_: type_
-					row: max_int(parts[2].int() - 1, 0)
-					col: max_int(parts[1].int() - 1, 0)
+					type_:  type_
+					row:    if py == 0 { u16(0) } else { u16(py - 1) }
+					col:    if px == 0 { u16(0) } else { u16(px - 1) }
+					mods:   MouseModifiers.new(button_mask & 0x04 != 0, button_mask & 0x08 != 0,
+						button_mask & 0x10 != 0)
 				})
 				consumed: final_index + 1
 			}
@@ -334,11 +367,18 @@ fn parse_csi(data []u8) ?ParsedInput {
 	return parsed_key(code, Modifiers{}, final_index + 1)
 }
 
+fn parse_mouse_position(raw string) ?u16 {
+	if raw.len == 0 {
+		return u16(1)
+	}
+	return u16(strconv.parse_uint(raw, 10, 16) or { return none })
+}
+
 fn parsed_key(codepoint u32, mods Modifiers, consumed int) ParsedInput {
 	return ParsedInput{
-		event: InputEvent(Key{
+		event:    InputEvent(Key{
 			codepoint: codepoint
-			mods: mods
+			mods:      mods
 		})
 		consumed: consumed
 	}
@@ -456,7 +496,7 @@ pub fn styled(text string, style Style) string {
 		codes << '3'
 	}
 	match style.ul_style {
-		.none_ {}
+		.off {}
 		.single { codes << '4' }
 		.double_ { codes << '4:2' }
 		.curly { codes << '4:3' }
