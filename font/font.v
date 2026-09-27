@@ -1338,13 +1338,6 @@ pub enum ConstraintHeight as u8 {
 	icon
 }
 
-// Backward compatibility aliases.
-pub type GlyphConstraint = Constraint
-
-pub type GlyphConstraintSize = ConstraintSize
-
-pub const none_constraint = constraint_none
-
 // Presentation for a glyph (text or emoji).
 pub enum Presentation as u8 {
 	text  = 0
@@ -1933,12 +1926,8 @@ fn index_for_render_cell(grid_ptr &SharedGrid, cell &terminal.RenderCell, style 
 	return CodepointValue{}
 }
 
-// ============================================================
-// Backward compat aliases
-// ============================================================
-
-pub type Grid = SharedGrid
-
+// SharedGrid.cell_size returns this module-local projection because importing
+// renderer.CellSize here would create a renderer -> font -> renderer cycle.
 pub struct CellSize {
 pub:
 	width  u32

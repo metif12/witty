@@ -51,12 +51,6 @@ pub fn is_valid(hostname string) bool {
 	return true
 }
 
-// Compatibility alias retained for callers written against the earlier
-// flattened translation.
-pub fn hostname_is_valid(hostname string) bool {
-	return is_valid(hostname)
-}
-
 // is_local recognizes localhost and the hostname returned by the
 // operating system.
 pub fn is_local(hostname string) !bool {
@@ -65,10 +59,4 @@ pub fn is_local(hostname string) !bool {
 	}
 	our_hostname := os.hostname()!
 	return hostname == our_hostname
-}
-
-// Compatibility alias retained for callers written against the earlier
-// flattened translation.
-pub fn hostname_is_local(hostname string) !bool {
-	return is_local(hostname)
 }

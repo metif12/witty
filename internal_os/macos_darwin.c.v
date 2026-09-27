@@ -43,12 +43,6 @@ pub fn is_at_least_version(major i64, minor i64, patch i64) bool {
 	return macos.is_at_least_version(major, minor, patch)
 }
 
-// is_at_least_macos_version is retained for compatibility with the earlier
-// flattened-module spelling.
-pub fn is_at_least_macos_version(major i64, minor i64, patch i64) bool {
-	return is_at_least_version(major, minor, patch)
-}
-
 // app_support_dir returns Ghostty's user Application Support path.
 pub fn app_support_dir(sub_path string) !string {
 	return common_macos_dir(14, sub_path)!

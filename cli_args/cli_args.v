@@ -838,11 +838,6 @@ pub fn LineIterator.init(data string) LineIterator {
 	}
 }
 
-// Compatibility alias for callers written against the earlier translation.
-pub fn LineIterator.new(data string) LineIterator {
-	return LineIterator.init(data)
-}
-
 pub fn LineIterator.new_with_path(data string, filepath string) LineIterator {
 	return LineIterator{
 		lines:    data.split_into_lines()
