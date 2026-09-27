@@ -1156,7 +1156,7 @@ fn (mut self Thread) thread_main_(mut io Termio) ! {
 	}
 
 	// Get the mailbox. This must be an SPSC mailbox for threading.
-	mut mailbox := &io.mailbox
+	mut mailbox := &io.mailbox.spsc
 
 	// This is the data sent to xev callbacks. We want a pointer to both
 	// ourselves and the thread data so we can thread that through (pun intended).
@@ -1197,7 +1197,7 @@ mut:
 // Drain the mailbox, handling all the messages in our terminal implementation.
 fn (mut self Thread) drain_mailbox(mut cb CallbackData) ! {
 	// We assert when starting the thread that this is the state
-	mut mailbox := cb.io.mailbox.queue
+	mut mailbox := cb.io.mailbox.spsc.queue
 	mut io := cb.io
 	mut data := &cb.data
 
@@ -1706,14 +1706,18 @@ const mailbox_capacity = 64
 // but I'm open to changing it with good arguments.
 pub type MailboxQueue = datastruct.BlockingQueue[Message]
 
-// The location to where write-related messages are sent. Ghostty's union has
-// the single SPSC variant (its unbounded variant is commented out), so the
-// SPSC payload is stored directly.
-pub struct Mailbox {
+pub struct MailboxSpsc {
 pub mut:
 	// Write messages to a SPSC queue for multi-threaded applications.
 	queue  &MailboxQueue = unsafe { nil }
 	wakeup xev.Async
+}
+
+// The location to where write-related messages are sent. Ghostty's union has
+// the single SPSC variant because its unbounded variant is commented out.
+pub struct Mailbox {
+pub mut:
+	spsc MailboxSpsc
 }
 
 // Init the SPSC writer.
@@ -1731,14 +1735,16 @@ pub fn Mailbox.init_spsc() !Mailbox {
 
 	ok = true
 	return Mailbox{
-		queue:  queue
-		wakeup: wakeup
+		spsc: MailboxSpsc{
+			queue:  queue
+			wakeup: wakeup
+		}
 	}
 }
 
 pub fn (mut m Mailbox) deinit() {
-	m.queue.destroy()
-	m.wakeup.deinit()
+	m.spsc.queue.destroy()
+	m.spsc.wakeup.deinit()
 }
 
 // Sends the given message without notifying there are messages.
@@ -1750,7 +1756,7 @@ pub fn (mut m Mailbox) deinit() {
 pub fn (mut m Mailbox) send(msg Message, mtx &sync.Mutex) {
 	// Try to write to the queue with an instant timeout. This is the
 	// fast path because we can queue without a lock.
-	if m.queue.push(msg, datastruct.blocking_queue_instant) > 0 {
+	if m.spsc.queue.push(msg, datastruct.blocking_queue_instant) > 0 {
 		return
 	}
 
@@ -1758,7 +1764,7 @@ pub fn (mut m Mailbox) send(msg Message, mtx &sync.Mutex) {
 	// the writer thread so that it can process messages to clear up
 	// space. However, the writer thread may require the renderer
 	// lock so we need to unlock.
-	m.wakeup.notify() or {
+	m.spsc.wakeup.notify() or {
 		eprintln('failed to wake up writer, data will be dropped err=${err}')
 		return
 	}
@@ -1780,11 +1786,13 @@ pub fn (mut m Mailbox) send(msg Message, mtx &sync.Mutex) {
 			mtx.lock()
 		}
 	}
-	_ = m.queue.push(msg, datastruct.blocking_queue_forever)
+	_ = m.spsc.queue.push(msg, datastruct.blocking_queue_forever)
 }
 
 // Notify that there are new messages. This may be a noop depending
 // on the writer type.
 pub fn (mut m Mailbox) notify() {
-	m.wakeup.notify() or { eprintln('failed to notify writer, data will be dropped err=${err}') }
+	m.spsc.wakeup.notify() or {
+		eprintln('failed to notify writer, data will be dropped err=${err}')
+	}
 }
