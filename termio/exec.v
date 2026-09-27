@@ -159,16 +159,15 @@ pub fn (mut self Exec) thread_enter(mut io Termio, mut td ThreadData) ! {
 
 	// Watcher to detect subprocess exit
 	mut process := ?xev.Process(none)
-	if !isnil(self.subprocess.flatpak_command) {
-		// If we're executing via Flatpak then we can't do
-		// traditional process watching (its implemented
-		// as a special case in os/flatpak.zig) since the
-		// command is on the host.
-	} else if cmd := self.subprocess.process {
-		pid := cmd.pid or { return error('ProcessNoPid') }
-		process = xev.Process.init(pid)!
-	} else {
-		return error('ProcessNotStarted')
+	process_value := self.subprocess.process or { return error('ProcessNotStarted') }
+	match process_value {
+		SubprocessForkExec {
+			pid := process_value.command.pid or { return error('ProcessNoPid') }
+			process = xev.Process.init(pid)!
+		}
+		SubprocessFlatpak {
+			// The host process cannot be watched through the local process API.
+		}
 	}
 	defer {
 		if !ok {
@@ -229,11 +228,15 @@ pub fn (mut self Exec) thread_enter(mut io Termio, mut td ThreadData) ! {
 	// Start our process watcher. If we have an xev.Process use it.
 	if p := td.backend.process {
 		p.wait(mut td.loop, &td.backend.process_wait_c, td, exec_process_exit)
-	} else if !isnil(self.subprocess.flatpak_command) {
-		// If we're in flatpak and we have a flatpak command
-		// then we can run the special flatpak logic for watching.
-		mut command := self.subprocess.flatpak_command
-		command.wait_xev(mut td.loop, &td.backend.flatpak_wait_c, td, exec_flatpak_exit)
+	} else if current := self.subprocess.process {
+		match current {
+			SubprocessFlatpak {
+				// If we're in Flatpak, run the special host-command watcher.
+				mut command := current.command
+				command.wait_xev(mut td.loop, &td.backend.flatpak_wait_c, td, exec_flatpak_exit)
+			}
+			SubprocessForkExec {}
+		}
 	}
 
 	// Start our termios timer. We don't support this on Windows.
@@ -577,12 +580,34 @@ pub mut:
 	grid_size    renderer.GridSize
 	screen_size  renderer.ScreenSize
 	pty_         ?pty.Pty
-	running      bool
-	process      ?commandpkg.Command
+	process      ?SubprocessProcess
 	linux_cgroup ?string
-	// Stable native command state when the process was launched on a Flatpak
-	// host. A host PID cannot be watched or signalled with local POSIX calls.
-	flatpak_command &internal_os.FlatpakHostCommand = unsafe { nil }
+}
+
+pub enum SubprocessProcessKind as u8 {
+	fork_exec
+	flatpak
+}
+
+pub struct SubprocessForkExec {
+pub:
+	command commandpkg.Command
+}
+
+pub struct SubprocessFlatpak {
+pub:
+	// The Flatpak API requires stable command storage while its asynchronous
+	// watcher is active, so the active union arm owns a GC-stable pointer.
+	command &internal_os.FlatpakHostCommand = unsafe { nil }
+}
+
+pub type SubprocessProcess = SubprocessForkExec | SubprocessFlatpak
+
+pub fn (self SubprocessProcess) kind() SubprocessProcessKind {
+	return match self {
+		SubprocessForkExec { .fork_exec }
+		SubprocessFlatpak { .flatpak }
+	}
 }
 
 // Add our executable directory to the child environment. Flatpak commands run
@@ -738,17 +763,14 @@ pub fn (mut self Subprocess) deinit() {
 	if mut p := self.pty_ {
 		p.deinit()
 	}
-	self.flatpak_command = unsafe { nil }
 	self.env = none
 }
 
 // Start the subprocess. If the subprocess is already started this
-// will return an error. This forks and execs the configured command
+// will assert. This forks and execs the configured command
 // with the pty slave connected to stdin/stdout/stderr.
 pub fn (mut self Subprocess) start() !PtyFds {
-	if self.running {
-		return error('subprocess already running')
-	}
+	assert self.pty_ == none && self.process == none
 
 	// Create our pty
 	mut p := pty.Pty.open(pty.Winsize{
@@ -802,10 +824,11 @@ pub fn (mut self Subprocess) start() !PtyFds {
 				self.pty_ = none
 				return err
 			}
-			self.flatpak_command = command
+			self.process = SubprocessProcess(SubprocessFlatpak{
+				command: command
+			})
 			p.close_slave()
 			self.env = none
-			self.running = true
 			return PtyFds{
 				read: p.master
 				write: p.master
@@ -837,7 +860,9 @@ pub fn (mut self Subprocess) start() !PtyFds {
 		self.pty_ = none
 		return err
 	}
-	self.process = cmd
+	self.process = SubprocessProcess(SubprocessForkExec{
+		command: cmd
+	})
 
 	// Close the slave fd in the parent. The child has already
 	// inherited it via fork and duped it to stdin/stdout/stderr.
@@ -846,7 +871,6 @@ pub fn (mut self Subprocess) start() !PtyFds {
 	// We can free the env now that the child has it.
 	self.env = none
 
-	self.running = true
 	return PtyFds{
 		read: p.master
 		write: p.master
@@ -857,34 +881,34 @@ pub fn (mut self Subprocess) start() !PtyFds {
 // running state.
 pub fn (mut self Subprocess) external_exit() {
 	self.process = none
-	self.running = false
 }
 
 // Stop the subprocess. This is safe to call anytime. This will send
 // SIGHUP to the process group to signal it to exit.
 // This does not close the pty.
 pub fn (mut self Subprocess) stop() {
-	if !self.running {
-		return
-	}
-
-	if !isnil(self.flatpak_command) {
-		mut command := unsafe { self.flatpak_command }
-		kill_command_flatpak(mut command) or {
-			eprintln('error sending SIGHUP to command, may hang: ${err}')
+	process := self.process or { return }
+	match process {
+		SubprocessForkExec {
+			// Note: this will also wait for the command to exit, so
+			// DO NOT call cmd.wait.
+			kill_command(process.command) or {
+				eprintln('error sending SIGHUP to command, may hang: ${err}')
+			}
 		}
-		_ = command.wait() or {
-			eprintln('error waiting for command to exit: ${err}')
-			u8(0)
+		SubprocessFlatpak {
+			mut command := process.command
+			kill_command_flatpak(mut command) or {
+				eprintln('error sending SIGHUP to command, may hang: ${err}')
+			}
+			_ = command.wait() or {
+				eprintln('error waiting for command to exit: ${err}')
+				u8(0)
+			}
 		}
-	} else if process := self.process {
-		// Note: this will also wait for the command to exit, so
-		// DO NOT call cmd.wait
-		kill_command(process) or { eprintln('error sending SIGHUP to command, may hang: ${err}') }
 	}
 
 	self.process = none
-	self.running = false
 }
 
 // Kill the underlying subprocess. This sends a SIGHUP to the child

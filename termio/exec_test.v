@@ -3,6 +3,7 @@ module termio
 import build_meta
 import command as commandpkg
 import configpkg
+import internal_os
 import os
 import renderer
 
@@ -82,6 +83,25 @@ fn test_exec_command_darwin_direct() {
 // ============================================================
 // Subprocess tests
 // ============================================================
+
+fn test_subprocess_process_union_retains_only_active_arm() {
+	assert sizeof(SubprocessProcessKind) == 1
+	assert u8(SubprocessProcessKind.fork_exec) == 0
+	assert u8(SubprocessProcessKind.flatpak) == 1
+	native := SubprocessProcess(SubprocessForkExec{
+		command: commandpkg.Command{
+			path: '/bin/sh'
+		}
+	})
+	host_command := &internal_os.FlatpakHostCommand{}
+	flatpak := SubprocessProcess(SubprocessFlatpak{
+		command: host_command
+	})
+	assert native.kind() == .fork_exec
+	assert flatpak.kind() == .flatpak
+	assert native is SubprocessForkExec
+	assert flatpak is SubprocessFlatpak
+}
 
 fn test_subprocess_init_basic() {
 	sub := Subprocess.init(ExecConfig{
@@ -216,9 +236,14 @@ fn test_subprocess_start_delegates_to_command() {
 	assert pty_fds.read >= 0
 	assert pty_fds.write == pty_fds.read
 	process := sub.process or { panic('expected the translated Command process') }
-	assert process.path == '/bin/sh'
-	assert process.pid or { -1 } > 0
-	exit_state := process.wait(true)!
+	assert process.kind() == .fork_exec
+	command := match process {
+		SubprocessForkExec { process.command }
+		SubprocessFlatpak { panic('expected a native process') }
+	}
+	assert command.path == '/bin/sh'
+	assert command.pid or { -1 } > 0
+	exit_state := command.wait(true)!
 	match exit_state {
 		commandpkg.ExitNormal {
 			assert exit_state.status == 23
