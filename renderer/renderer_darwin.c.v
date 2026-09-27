@@ -5,6 +5,7 @@ module renderer
 // parts of the translated renderer that only that instantiation compiles.
 import font
 import highlight
+import log
 import macos
 import sync
 import terminal
@@ -28,7 +29,7 @@ fn Renderer.init_metal(opts RendererOpts) !Renderer {
 	metal.blending = opts.config.blending
 
 	post_shaders := load_from_files(opts.config.custom_shaders, .msl) or {
-		eprintln('renderer: error loading custom shaders: ${err}')
+		log.warn('error loading custom shaders err=${err}')
 		[]string{}
 	}
 	mut shaders := metal.init_shaders(post_shaders) or {
@@ -187,7 +188,7 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 	if self.reinitialize_shaders {
 		self.reinitialize_shaders = false
 		post_shaders := load_from_files(self.config.custom_shaders, .msl) or {
-			eprintln('renderer: error loading custom shaders: ${err}')
+			log.warn('error loading custom shaders err=${err}')
 			[]string{}
 		}
 		mut replacement := self.api.init_shaders(post_shaders)!
@@ -403,7 +404,7 @@ fn renderer_metal_frame_completed_callback(renderer_ptr voidptr, target_ptr void
 	}
 	if health == .healthy && self.api.layer != none {
 		self.api.present(target, sync_) or {
-			eprintln('renderer: failed to present render target: ${err}')
+			log.error('Failed to present render target: err=${err}')
 		}
 	}
 	self.frame_completed(health)
@@ -425,7 +426,7 @@ fn renderer_metal_layer_display_callback(context voidptr) {
 	}
 	mut render := unsafe { &Renderer(context) }
 	render.draw_frame(true) or {
-		eprintln('renderer: error drawing frame from Metal layer callback: ${err}')
+		log.warn('Error drawing frame in display callback, err=${err}')
 	}
 }
 
@@ -439,6 +440,6 @@ fn renderer_display_link_callback(display_link voidptr, now voidptr, output_time
 		return 0
 	}
 	draw_now := unsafe { &xev.Async(context) }
-	draw_now.notify() or { eprintln('error notifying draw_now err=${err}') }
+	draw_now.notify() or { log.error('error notifying draw_now err=${err}') }
 	return 0
 }

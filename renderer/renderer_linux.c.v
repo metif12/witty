@@ -5,6 +5,7 @@ module renderer
 // the translated renderer that only that instantiation compiles.
 import font
 import highlight
+import log
 import sync
 import terminal
 
@@ -19,7 +20,7 @@ fn Renderer.init_opengl(opts RendererOpts) !Renderer {
 		return err
 	}
 	post_shaders := load_from_files(opts.config.custom_shaders, .glsl) or {
-		eprintln('renderer: error loading custom shaders: ${err}')
+		log.warn('error loading custom shaders err=${err}')
 		[]string{}
 	}
 	mut shaders := api.init_shaders(post_shaders) or {
@@ -136,7 +137,7 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 	if self.reinitialize_shaders {
 		self.reinitialize_shaders = false
 		post_shaders := load_from_files(self.config.custom_shaders, .glsl) or {
-			eprintln('renderer: error loading custom shaders: ${err}')
+			log.warn('error loading custom shaders err=${err}')
 			[]string{}
 		}
 		mut replacement := self.api.init_shaders(post_shaders)!

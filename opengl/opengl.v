@@ -1,5 +1,7 @@
 module opengl
 
+import log
+
 // Translated from:
 // - ghostty/pkg/opengl/main.zig
 // - ghostty/pkg/opengl/c.zig
@@ -858,6 +860,7 @@ pub fn Shader.create(typ u32) !Shader {
 		must_error()!
 		return error('CreateShader failed')
 	}
+	log.debug('shader created id=${id}')
 	return Shader{
 		id: id
 	}
@@ -871,7 +874,7 @@ pub fn (s Shader) set_source_and_compile(source string) ! {
 	C.glGetShaderiv(s.id, C.GL_COMPILE_STATUS, &success)
 	if success != int(C.GL_TRUE) {
 		msg := s.get_info_log()
-		eprintln('shader compilation failure id=${s.id} message=${unsafe {
+		log.error('shader compilation failure id=${s.id} message=${unsafe {
 			cstring_to_vstring(&char(&msg[0]))
 		}}')
 		return error('CompileFailed')
@@ -887,6 +890,7 @@ pub fn (s Shader) get_info_log() [512]u8 {
 pub fn (s Shader) destroy() {
 	assert s.id != 0
 	C.glDeleteShader(s.id)
+	log.debug('shader destroyed id=${s.id}')
 }
 
 // ============================================================
@@ -906,6 +910,7 @@ pub fn Program.create() !Program {
 		must_error()!
 		return error('CreateProgram failed')
 	}
+	log.debug('program created id=${id}')
 	return Program{
 		id: id
 	}
@@ -934,6 +939,7 @@ pub fn Program.create_vf(vsrc string, fsrc string) !Program {
 pub fn (p Program) destroy() {
 	assert p.id != 0
 	C.glDeleteProgram(p.id)
+	log.debug('program destroyed id=${p.id}')
 }
 
 pub fn (p Program) attach_shader(s Shader) ! {
@@ -945,13 +951,15 @@ pub fn (p Program) link() ! {
 	C.glLinkProgram(p.id)
 	mut success := int(0)
 	C.glGetProgramiv(p.id, C.GL_LINK_STATUS, &success)
-	if success != int(C.GL_TRUE) {
-		msg := p.get_info_log()
-		eprintln('program link failure id=${p.id} message=${unsafe {
-			cstring_to_vstring(&char(&msg[0]))
-		}}')
-		return error('CompileFailed')
+	if success == int(C.GL_TRUE) {
+		log.debug('program linked id=${p.id}')
+		return
 	}
+	msg := p.get_info_log()
+	log.error('program link failure id=${p.id} message=${unsafe {
+		cstring_to_vstring(&char(&msg[0]))
+	}}')
+	return error('CompileFailed')
 }
 
 pub fn (p Program) use() !ProgramBinding {

@@ -181,7 +181,7 @@ pub fn (mut self GLFrame) complete(sync_ bool) {
 		mut api := unsafe { self.api }
 		target := unsafe { *self.target }
 		api.present(target) or {
-			eprintln('renderer: failed to present render target: ${err}')
+			log.error('Failed to present render target: err=${err}')
 		}
 	}
 }
@@ -1003,7 +1003,7 @@ pub fn GLShaders.init(custom_shaders []string) !GLShaders {
 				initialized.deinit()
 			}
 			shaders.post_pipelines = []
-			log.warn('error initializing OpenGL post-process shaders: ${err}')
+			log.warn('error initializing postprocess shaders err=${err}')
 			return shaders
 		}
 		shaders.post_pipelines << pipeline

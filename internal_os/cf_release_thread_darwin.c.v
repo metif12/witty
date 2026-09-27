@@ -7,6 +7,7 @@ module internal_os
 // doesn't block the execution of a high throughput thread like the
 // renderer thread.
 import datastruct
+import log
 import macos
 import xev
 
@@ -134,21 +135,27 @@ pub fn (mut self CFReleaseThread) deinit() {
 // The main entrypoint for the thread.
 pub fn (mut self CFReleaseThread) thread_main() {
 	// Call child function so we can use errors...
-	self.thread_main_() or { eprintln('error in cf release thread err=${err}') }
+	self.thread_main_() or { log.warn('error in cf release thread err=${err}') }
 
 	// If our loop is not stopped, then we need to keep running so that
 	// messages are drained and we can wait for the surface to send a stop
 	// message.
 	if !self.loop.stopped() {
-		eprintln('abrupt cf release thread exit detected, starting xev to drain mailbox')
+		log.warn('abrupt cf release thread exit detected, starting xev to drain mailbox')
+		defer {
+			log.debug('cf release thread fully exiting after abnormal failure')
+		}
 		self.flags.set_drain(true)
 		self.loop.run(.until_done) or {
-			eprintln('failed to start xev loop for draining err=${err}')
+			log.error('failed to start xev loop for draining err=${err}')
 		}
 	}
 }
 
 fn (mut self CFReleaseThread) thread_main_() ! {
+	defer {
+		log.debug('cf release thread exited')
+	}
 	// Right now, on Darwin, `std.Thread.setName` can only name the current
 	// thread, and we have no way to get the current thread from within it,
 	// so instead we use this code to name the thread instead.
@@ -162,6 +169,10 @@ fn (mut self CFReleaseThread) thread_main_() ! {
 	self.stop.wait(mut self.loop, &self.stop_c, self, cf_release_thread_stop_callback)
 
 	// Run
+	log.debug('starting cf release thread')
+	defer {
+		log.debug('starting cf release thread shutdown')
+	}
 	self.loop.run(.until_done)!
 }
 
@@ -185,7 +196,7 @@ fn (mut self CFReleaseThread) drain_mailbox() ! {
 
 fn cf_release_thread_wakeup_callback(self_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorKind) xev.CallbackAction {
 	if err := r {
-		eprintln('error in wakeup err=${err}')
+		log.error('error in wakeup err=${err}')
 		return .rearm
 	}
 
@@ -193,7 +204,7 @@ fn cf_release_thread_wakeup_callback(self_ voidptr, _ &xev.Loop, _ &xev.Completi
 
 	// When we wake up, we check the mailbox. Mailbox producers should
 	// wake up our thread after publishing.
-	t.drain_mailbox() or { eprintln('error draining mailbox err=${err}') }
+	t.drain_mailbox() or { log.error('error draining mailbox err=${err}') }
 
 	return .rearm
 }

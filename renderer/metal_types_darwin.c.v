@@ -1,6 +1,7 @@
 module renderer
 
 import font
+import log
 import macos
 
 // Metal sub-types: Buffer, Frame, RenderPass, Pipeline, Sampler, Target, Texture
@@ -1053,7 +1054,7 @@ pub fn MetalShaders.init(device voidptr, post_shaders []string, pixel_format Met
 		// If an error happens while building postprocess shaders we want to
 		// just not use any postprocess shaders since we don't want to block
 		// Ghostty from working.
-		eprintln('renderer: error initializing postprocess shaders')
+		log.warn('error initializing postprocess shaders')
 		for mut pipeline in self.post_pipelines {
 			pipeline.deinit()
 		}
