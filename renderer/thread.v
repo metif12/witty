@@ -182,6 +182,7 @@ import configpkg
 import crash
 import datastruct
 import internal_os
+import log
 import macos
 import xev
 
@@ -464,11 +465,14 @@ pub fn (mut self RendererThread) thread_main() {
 	// Call child function so we can use errors...
 	self.thread_main_() or {
 		// In the future, we should expose this on the thread struct.
-		eprintln('error in renderer err=${err}')
+		log.warn('error in renderer err=${err}')
 	}
 }
 
 fn (mut self RendererThread) thread_main_() ! {
+	defer {
+		log.debug('renderer thread exited')
+	}
 	// Right now, on Darwin, `std.Thread.setName` can only name the current
 	// thread, and we have no way to get the current thread from within it,
 	// so instead we use this code to name the thread instead.
@@ -518,6 +522,10 @@ fn (mut self RendererThread) thread_main_() ! {
 	self.sync_draw_timer()
 
 	// Run
+	log.debug('starting renderer thread')
+	defer {
+		log.debug('starting renderer thread shutdown')
+	}
 	self.loop.run(.until_done)!
 }
 
@@ -543,7 +551,11 @@ fn (self &RendererThread) set_qos_class() {
 			internal_os.QosClass.user_interactive
 		}
 
-		internal_os.set_qos_class(class) or { eprintln('error setting QoS class err=${err}') }
+		internal_os.set_qos_class(class) or {
+			log.warn('error setting QoS class err=${err}')
+			return
+		}
+		log.debug('thread QoS class set class=${class}')
 	}
 }
 
@@ -609,6 +621,7 @@ fn (mut self RendererThread) drain_mailbox() ! {
 
 	for {
 		msg := self.mailbox.pop() or { break }
+		log.debug('mailbox message=${msg}')
 		match msg {
 			CrashMessage {
 				panic('crash request, crashing intentionally')
@@ -744,13 +757,13 @@ fn (mut self RendererThread) draw_frame(now bool) {
 	if self.draw_from_app_thread {
 		self.app_redraw.notify() or {}
 	} else {
-		self.renderer.draw_frame(false) or { eprintln('error drawing err=${err}') }
+		self.renderer.draw_frame(false) or { log.warn('error drawing err=${err}') }
 	}
 }
 
 fn renderer_thread_wakeup_callback(self_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorKind) xev.CallbackAction {
 	if err := r {
-		eprintln('error in wakeup err=${err}')
+		log.error('error in wakeup err=${err}')
 		return .rearm
 	}
 
@@ -758,7 +771,7 @@ fn renderer_thread_wakeup_callback(self_ voidptr, _ &xev.Loop, _ &xev.Completion
 
 	// When we wake up, we check the mailbox. Mailbox producers should
 	// wake up our thread after publishing.
-	t.drain_mailbox() or { eprintln('error draining mailbox err=${err}') }
+	t.drain_mailbox() or { log.error('error draining mailbox err=${err}') }
 
 	// Render immediately
 	_ = renderer_thread_render_callback(t, unsafe { nil }, unsafe { nil }, none)
@@ -785,7 +798,7 @@ fn renderer_thread_wakeup_callback(self_ voidptr, _ &xev.Loop, _ &xev.Completion
 
 fn renderer_thread_draw_now_callback(self_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorKind) xev.CallbackAction {
 	if err := r {
-		eprintln('error in draw now err=${err}')
+		log.error('error in draw now err=${err}')
 		return .rearm
 	}
 
@@ -802,7 +815,7 @@ fn renderer_thread_draw_callback(self_ voidptr, _ &xev.Loop, _ &xev.Completion, 
 	}
 	if self_ == unsafe { nil } {
 		// This shouldn't happen so we log it.
-		eprintln('render callback fired without data set')
+		log.warn('render callback fired without data set')
 		return .disarm
 	}
 	mut t := unsafe { &RendererThread(self_) }
@@ -824,14 +837,14 @@ fn renderer_thread_render_callback(self_ voidptr, _ &xev.Loop, _ &xev.Completion
 	}
 	if self_ == unsafe { nil } {
 		// This shouldn't happen so we log it.
-		eprintln('render callback fired without data set')
+		log.warn('render callback fired without data set')
 		return .disarm
 	}
 	mut t := unsafe { &RendererThread(self_) }
 
 	// Update our frame data
 	t.renderer.update_frame(t.state, t.flags.cursor_blink_visible()) or {
-		eprintln('error rendering err=${err}')
+		log.warn('error rendering err=${err}')
 	}
 
 	// Draw
@@ -848,7 +861,7 @@ fn renderer_thread_cursor_timer_callback(self_ voidptr, _ &xev.Loop, _ &xev.Comp
 				return .disarm
 			}
 			else {
-				eprintln('error in cursor timer callback err=${err}')
+				log.warn('error in cursor timer callback err=${err}')
 				panic('unreachable')
 			}
 		}
@@ -856,7 +869,7 @@ fn renderer_thread_cursor_timer_callback(self_ voidptr, _ &xev.Loop, _ &xev.Comp
 
 	if self_ == unsafe { nil } {
 		// This shouldn't happen so we log it.
-		eprintln('render callback fired without data set')
+		log.warn('render callback fired without data set')
 		return .disarm
 	}
 	mut t := unsafe { &RendererThread(self_) }
@@ -876,7 +889,7 @@ fn renderer_thread_cursor_cancel_callback(_ voidptr, _ &xev.Loop, _ &xev.Complet
 			.canceled {} // success
 			.not_found {} // completed before it could cancel
 			else {
-				eprintln('error in cursor cancel callback err=${err}')
+				log.warn('error in cursor cancel callback err=${err}')
 				panic('unreachable')
 			}
 		}
