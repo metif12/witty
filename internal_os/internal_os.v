@@ -6,6 +6,7 @@ import encoding.base64
 import log
 import zig_fmt
 import openurl
+import buildcfg
 
 // OpenType is the source alias for the content hint consumed by open.
 pub type OpenType = openurl.Kind
@@ -411,7 +412,7 @@ fn home_unix() !HomeResult {
 	}
 
 	// We try passwd. This doesn't work on multi-user mac but we try it anyways.
-	pw := get_passwd()!
+	pw := get()!
 	if result := pw.home {
 		return HomeResult{
 			value: result
@@ -536,20 +537,21 @@ pub fn expand(cmd string) !PathExpandResult {
 	return PathExpandResult{}
 }
 
-// PasswdEntry represents a passwd database entry.
-pub struct PasswdEntry {
+// Entry is the passwd database entry used to determine the default shell and
+// home directory on Unix systems.
+pub struct Entry {
 pub:
 	shell ?string
 	home  ?string
 	name  ?string
 }
 
-// get_passwd returns the passwd entry for the current user.
-pub fn get_passwd() !PasswdEntry {
+// get returns the passwd entry for the current user.
+pub fn get() !Entry {
 	$if windows {
-		name := os.loginname() or { return PasswdEntry{} }
-		h := home() or { return PasswdEntry{ name: name } }
-		return PasswdEntry{
+		name := os.loginname() or { return Entry{} }
+		h := home() or { return Entry{ name: name } }
+		return Entry{
 			name: name
 			home: h.value
 		}
@@ -558,33 +560,44 @@ pub fn get_passwd() !PasswdEntry {
 	mut buf := []u8{len: 1024}
 	mut pw := C.passwd{}
 	mut pw_result := &C.passwd(unsafe { nil })
-	if C.getpwuid_r(C.getuid(), &pw, unsafe { &char(buf.data) }, usize(buf.len), &pw_result) != 0
-		|| isnil(pw_result) {
-		return PasswdEntry{}
+	result := C.getpwuid_r(C.getuid(), &pw, unsafe { &char(buf.data) }, usize(buf.len),
+		&pw_result)
+	if result != 0 {
+		log.warn('error retrieving pw entry code=${result}')
+		return Entry{}
+	}
+	if isnil(pw_result) {
+		log.warn("no pw entry to detect default shell, will default to 'sh'")
+		return Entry{}
 	}
 
 	// A Flatpak passwd entry only has a reliable username. Query the host for
 	// the shell and home directory, matching Ghostty's host-command path.
 	$if linux {
 		if is_flatpak() {
-			name := if isnil(pw.pw_name) {
-				''
+			if !buildcfg.flatpak {
+				log.warn("flatpak detected, but this build doesn't contain flatpak support")
 			} else {
-				unsafe { cstring_to_vstring(pw.pw_name) }
+				log.info('flatpak detected, will use host command to get our entry')
+				name := if isnil(pw.pw_name) {
+					''
+				} else {
+					unsafe { cstring_to_vstring(pw.pw_name) }
+				}
+				return get_passwd_flatpak(name)!
 			}
-			return get_passwd_flatpak(name)!
 		}
 	}
-	return PasswdEntry{
+	return Entry{
 		shell: if isnil(pw.pw_shell) { none } else { unsafe { cstring_to_vstring(pw.pw_shell) } }
 		home: if isnil(pw.pw_dir) { none } else { unsafe { cstring_to_vstring(pw.pw_dir) } }
 		name: if isnil(pw.pw_name) { none } else { unsafe { cstring_to_vstring(pw.pw_name) } }
 	}
 }
 
-fn parse_flatpak_passwd_output(output string) PasswdEntry {
+fn parse_flatpak_passwd_output(output string) Entry {
 	parts := output.trim_right(' \r\n').split(':')
-	return PasswdEntry{
+	return Entry{
 		shell: if parts.len > 0 { parts[parts.len - 1] } else { none }
 		home: if parts.len > 1 { parts[parts.len - 2] } else { none }
 	}

@@ -376,7 +376,7 @@ fn test_fix_max_files_does_not_shrink_limit() {
 
 fn test_get_passwd_returns_shell_and_home() {
 	$if !windows {
-		entry := get_passwd()!
+		entry := get()!
 		assert (entry.shell or { '' }).len > 0
 		assert (entry.home or { '' }).len > 0
 	}

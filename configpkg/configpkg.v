@@ -9988,7 +9988,7 @@ pub fn (mut c Config) finalize() ! {
 					}
 				}
 			} $else {
-				passwd := internal_os.get_passwd()!
+				passwd := internal_os.get()!
 				if c.command == none {
 					if shell := passwd.shell {
 						c.command = Command(ShellCmd{ shell: shell })

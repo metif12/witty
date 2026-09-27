@@ -1257,7 +1257,7 @@ fn exec_command(command configpkg.Command) []string {
 	// the proper environment variables set, a login shell, and proper
 	// hushlogin behavior.
 	$if macos {
-		passwd := internal_os.get_passwd() or { internal_os.PasswdEntry{} }
+		passwd := internal_os.get() or { internal_os.Entry{} }
 
 		username := passwd.name or {
 			// No username, fall back to non-login behavior

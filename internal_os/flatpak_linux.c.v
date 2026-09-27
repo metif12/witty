@@ -312,7 +312,7 @@ fn (mut self FlatpakHostCommand) current_state() FlatpakState {
 	return self.state
 }
 
-fn get_passwd_flatpak(username string) !PasswdEntry {
+fn get_passwd_flatpak(username string) !Entry {
 	mut pseudoterminal := pty.Pty.open(pty.Winsize{})!
 	defer {
 		pseudoterminal.close_slave()
