@@ -490,42 +490,87 @@ pub fn (i Index) special() ?Special {
 @[heap]
 pub struct Entry {
 pub mut:
-	// Whether the face is loaded (true) or deferred (false).
-	is_loaded bool
-	// The deferred face (valid when !is_loaded).
-	deferred_face DeferredFace
-	// The loaded face (valid when is_loaded).
-	loaded_face Face
+	// The deferred or loaded face.
+	face EntryFace @[required]
 	// Whether this face is a fallback face.
 	fallback bool
-	// Whether to use the scale value or the adjustment enum.
-	use_scale bool = true
-	// Size adjustment to compute once the face is loaded.
-	adjustment SizeAdjustment = .none_
-	// Computed scale factor for this face.
-	scale f64 = 1.0
+	// The size adjustment to calculate after loading, or its computed scale.
+	scale_factor EntryScaleFactor = EntryScale{
+		scale: 1.0
+	}
+}
+
+pub enum EntryFaceKind as u8 {
+	deferred
+	loaded
+}
+
+pub type EntryFace = DeferredFace | Face
+
+pub fn (self EntryFace) kind() EntryFaceKind {
+	return match self {
+		DeferredFace { .deferred }
+		Face { .loaded }
+	}
+}
+
+pub enum EntryScaleFactorKind as u8 {
+	adjustment
+	scale
+}
+
+pub struct EntryScaleAdjustment {
+pub:
+	adjustment SizeAdjustment
+}
+
+pub struct EntryScale {
+pub:
+	scale f64
+}
+
+pub type EntryScaleFactor = EntryScaleAdjustment | EntryScale
+
+pub fn (self EntryScaleFactor) kind() EntryScaleFactorKind {
+	return match self {
+		EntryScaleAdjustment { .adjustment }
+		EntryScale { .scale }
+	}
+}
+
+fn (self EntryScaleFactor) adjustment() ?SizeAdjustment {
+	return match self {
+		EntryScaleAdjustment { self.adjustment }
+		EntryScale { none }
+	}
+}
+
+fn (self EntryScaleFactor) scale() f64 {
+	return match self {
+		EntryScaleAdjustment { 1.0 }
+		EntryScale { self.scale }
+	}
 }
 
 // deinit releases the face resources.
 pub fn (mut self Entry) deinit() {
-	if self.is_loaded {
-		self.loaded_face.deinit()
-	} else {
-		self.deferred_face.deinit()
+	match mut self.face {
+		DeferredFace { self.face.deinit() }
+		Face { self.face.deinit() }
 	}
 }
 
 // get_loaded returns the loaded Face if available, or none if deferred.
 pub fn (mut self Entry) get_loaded() ?&Face {
-	if !self.is_loaded {
-		return none
+	match mut self.face {
+		DeferredFace { return none }
+		Face { return unsafe { &self.face } }
 	}
-	return unsafe { &self.loaded_face }
 }
 
 // is_deferred returns true if this entry is not yet loaded.
 fn (self Entry) is_deferred() bool {
-	return !self.is_loaded
+	return self.face is DeferredFace
 }
 
 // has_codepoint returns true if this face contains the given codepoint
@@ -551,75 +596,69 @@ pub fn (self Entry) has_codepoint(cp u32, p_mode PresentationMode) bool {
 
 // has_codepoint_explicit checks for a codepoint with a specific presentation.
 fn (self Entry) has_codepoint_explicit(cp u32, p Presentation) bool {
-	if self.is_loaded {
-		index := self.loaded_face.glyph_index(cp) or { return false }
-		return match p {
-			.text { !self.loaded_face.is_color_glyph(index) }
-			.emoji { self.loaded_face.is_color_glyph(index) }
+	return match self.face {
+		Face {
+			index := self.face.glyph_index(cp) or { return false }
+			match p {
+				.text { !self.face.is_color_glyph(index) }
+				.emoji { self.face.is_color_glyph(index) }
+			}
 		}
+		DeferredFace { self.face.has_codepoint(cp, p) }
 	}
-	return self.deferred_face.has_codepoint(cp, p)
 }
 
 // has_codepoint_any checks for a codepoint with any presentation.
 fn (self Entry) has_codepoint_any(cp u32) bool {
-	if self.is_loaded {
-		return self.loaded_face.glyph_index(cp) != none
+	return match self.face {
+		Face { self.face.glyph_index(cp) != none }
+		DeferredFace { self.face.has_codepoint(cp, none) }
 	}
-	return self.deferred_face.has_codepoint(cp, none)
 }
 
 // ============================================================
 // EntryOrAlias
 // ============================================================
 
-// EntryOrAlias wraps either a real Entry or an alias pointer to
-// another Entry. Aliases are used to share the same face across
-// styles (e.g., using the regular face for italic when no italic
-// face is available), avoiding memory duplication.
-pub struct EntryOrAlias {
-pub mut:
-	// Whether this is an alias (true) or a real entry (false).
-	is_alias bool
-	// The actual entry data (valid when !is_alias).
-	entry Entry
-	// Pointer to the aliased entry (valid when is_alias).
-	alias_entry &Entry = unsafe { nil }
+// EntryOrAlias retains either a real Entry or an alias pointer to another
+// Entry. Aliases share a face across styles without duplicating its resources.
+pub struct EntryAlias {
+pub:
+	entry &Entry = unsafe { nil }
 }
+
+pub type EntryOrAlias = Entry | EntryAlias
 
 // new_entry creates a heap-allocated EntryOrAlias containing an entry.
 pub fn EntryOrAlias.new_entry(e Entry) &EntryOrAlias {
-	return &EntryOrAlias{
-		entry: e
-	}
+	return &EntryOrAlias(e)
 }
 
 // new_alias creates a heap-allocated EntryOrAlias as an alias.
 // The alias must point to a non-alias entry.
 pub fn EntryOrAlias.new_alias(target &Entry) &EntryOrAlias {
-	return &EntryOrAlias{
-		is_alias: true
-		alias_entry: target
-	}
+	return &EntryOrAlias(EntryAlias{
+		entry: target
+	})
 }
 
 // get_entry returns a pointer to the underlying Entry,
 // resolving aliases transparently.
 pub fn (eoa &EntryOrAlias) get_entry() &Entry {
-	if eoa.is_alias {
-		return eoa.alias_entry
+	match eoa {
+		Entry { return unsafe { &eoa } }
+		EntryAlias { return eoa.entry }
 	}
-	return unsafe { &eoa.entry }
 }
 
 // get_const_entry is the read-only counterpart to get_entry in the source.
 // V does not encode constness in pointer types, but retaining this entry point
 // keeps read-only call sites explicit and preserves the source API surface.
 pub fn (eoa &EntryOrAlias) get_const_entry() &Entry {
-	if eoa.is_alias {
-		return eoa.alias_entry
+	match eoa {
+		Entry { return unsafe { &eoa } }
+		EntryAlias { return eoa.entry }
 	}
-	return unsafe { &eoa.entry }
 }
 
 // ============================================================
@@ -753,11 +792,14 @@ pub fn (mut self Collection) deinit() {
 	// Deinit all entries. Aliases can be ignored.
 	for list in [self.regular_faces, self.bold_faces, self.italic_faces, self.bold_italic_faces] {
 		for item in list {
-			if !item.is_alias {
-				unsafe {
-					mut e := &item.entry
-					e.deinit()
+			match item {
+				Entry {
+					unsafe {
+						mut e := &item
+						e.deinit()
+					}
 				}
+				EntryAlias {}
 			}
 		}
 	}
@@ -828,11 +870,11 @@ pub fn (mut self Collection) add(face Face, opts AddOptions) !Index {
 	}
 
 	self.append_face(opts.style, EntryOrAlias.new_entry(Entry{
-		is_loaded: true
-		loaded_face: owned_face
+		face: EntryFace(owned_face)
 		fallback: opts.fallback
-		use_scale: true
-		scale: scale_factor
+		scale_factor: EntryScaleFactor(EntryScale{
+			scale: scale_factor
+		})
 	}))
 
 	return Index.init(opts.style, u16(count))
@@ -853,10 +895,11 @@ pub fn (mut self Collection) add_deferred(face DeferredFace, opts AddOptions) !I
 	}
 
 	self.append_face(opts.style, EntryOrAlias.new_entry(Entry{
-		deferred_face: face
+		face: EntryFace(face)
 		fallback: opts.fallback
-		use_scale: false
-		adjustment: opts.size_adjustment
+		scale_factor: EntryScaleFactor(EntryScaleAdjustment{
+			adjustment: opts.size_adjustment
+		})
 	}))
 
 	return Index.init(opts.style, u16(count))
@@ -885,8 +928,8 @@ pub fn (mut self Collection) get_entry(index Index) !&Entry {
 
 // get_face_from_entry loads a face from an entry if needed and returns it.
 fn (mut self Collection) get_face_from_entry(mut entry Entry) !&Face {
-	if entry.is_loaded {
-		return unsafe { &entry.loaded_face }
+	if mut loaded := entry.get_loaded() {
+		return loaded
 	}
 
 	// Entry is deferred — load it.
@@ -895,20 +938,23 @@ fn (mut self Collection) get_face_from_entry(mut entry Entry) !&Face {
 	}
 
 	// Load the face.
-	mut face := entry.deferred_face.load(lo.library, lo.face_options())!
+	deferred := entry.face as DeferredFace
+	mut face := deferred.load(lo.library, lo.face_options())!
 
 	// Calculate the scale factor for this entry now that we have a loaded face.
-	if !entry.use_scale {
-		factor := self.scale_factor(face.get_metrics(), entry.adjustment)
-		entry.use_scale = true
-		entry.scale = factor
+	if adjustment := entry.scale_factor.adjustment() {
+		factor := self.scale_factor(face.get_metrics(), adjustment)
+		entry.scale_factor = EntryScaleFactor(EntryScale{
+			scale: factor
+		})
 	}
 
 	// If our scale factor is something other than 1.0
 	// then we need to resize the face.
-	if entry.scale != 1.0 {
+	scale := entry.scale_factor.scale()
+	if scale != 1.0 {
 		mut scaled_opts := lo
-		scaled_opts.size.points *= f32(entry.scale)
+		scaled_opts.size.points *= f32(scale)
 		face.set_face_size(scaled_opts.face_options()) or {
 			// Match the source's errdefer: the deferred descriptor remains
 			// owned by the entry, but the newly loaded face must be released.
@@ -918,13 +964,15 @@ fn (mut self Collection) get_face_from_entry(mut entry Entry) !&Face {
 	}
 
 	// Deinit the deferred face now that we have loaded it.
-	entry.deferred_face.deinit()
+	match mut entry.face {
+		DeferredFace { entry.face.deinit() }
+		Face {}
+	}
 
 	// Set the loaded face on the entry.
-	entry.is_loaded = true
-	entry.loaded_face = face
+	entry.face = EntryFace(face)
 
-	return unsafe { &entry.loaded_face }
+	return entry.get_loaded() or { panic('unreachable') }
 }
 
 // get_index returns the index of the font in this collection that contains
@@ -1006,8 +1054,7 @@ pub fn (mut self Collection) complete_styles(synthetic_config FontSyntheticStyle
 		} else if synthetic := self.synthetic_italic(regular_entry) {
 			log.info('synthetic italic face created')
 			self.italic_faces << EntryOrAlias.new_entry(Entry{
-				is_loaded: true
-				loaded_face: synthetic
+				face: EntryFace(synthetic)
 				fallback: false
 			})
 		} else {
@@ -1026,8 +1073,7 @@ pub fn (mut self Collection) complete_styles(synthetic_config FontSyntheticStyle
 		} else if synthetic := self.synthetic_bold(regular_entry) {
 			log.info('synthetic bold face created')
 			self.bold_faces << EntryOrAlias.new_entry(Entry{
-				is_loaded: true
-				loaded_face: synthetic
+				face: EntryFace(synthetic)
 				fallback: false
 			})
 		} else {
@@ -1053,8 +1099,7 @@ pub fn (mut self Collection) complete_styles(synthetic_config FontSyntheticStyle
 			if synthetic := self.synthetic_italic(bold_base) {
 				log.info('synthetic bold italic face created from bold')
 				self.bold_italic_faces << EntryOrAlias.new_entry(Entry{
-					is_loaded: true
-					loaded_face: synthetic
+					face: EntryFace(synthetic)
 					fallback: false
 				})
 				return
@@ -1067,8 +1112,7 @@ pub fn (mut self Collection) complete_styles(synthetic_config FontSyntheticStyle
 		if synthetic := self.synthetic_bold(italic_base) {
 			log.info('synthetic bold italic face created from italic')
 			self.bold_italic_faces << EntryOrAlias.new_entry(Entry{
-				is_loaded: true
-				loaded_face: synthetic
+				face: EntryFace(synthetic)
 				fallback: false
 			})
 			return
@@ -1156,7 +1200,7 @@ pub fn (mut self Collection) set_size(size DesiredSize) ! {
 	// will have a non-alias entry somewhere.
 	for list in [self.regular_faces, self.bold_faces, self.italic_faces, self.bold_italic_faces] {
 		for item in list {
-			if item.is_alias {
+			if item is EntryAlias {
 				continue
 			}
 			mut entry := item.get_entry()
@@ -1166,7 +1210,8 @@ pub fn (mut self Collection) set_size(size DesiredSize) ! {
 				mut new_opts := lo
 				if primary_entry_ptr != unsafe { nil }
 					&& entry != primary_entry_ptr {
-					new_opts.size.points *= f32(entry.scale)
+					scale := entry.scale_factor.scale()
+					new_opts.size.points *= f32(scale)
 				}
 				face.set_face_size(new_opts.face_options()) or {
 					return error('set size failed')

@@ -7,6 +7,28 @@ fn test_collection_tag_layouts_and_source_ordinals() {
 	assert [SizeAdjustment.none_, .ic_width, .ex_height, .cap_height, .line_height].map(u8(it)) == [u8(0),
 		1, 2, 3, 4]
 	assert default_fallback_adjustment == .ic_width
+	assert sizeof(EntryFaceKind) == 1
+	assert u8(EntryFaceKind.deferred) == 0
+	assert u8(EntryFaceKind.loaded) == 1
+	assert sizeof(EntryScaleFactorKind) == 1
+	assert u8(EntryScaleFactorKind.adjustment) == 0
+	assert u8(EntryScaleFactorKind.scale) == 1
+	deferred_face := EntryFace(DeferredFace{})
+	loaded_face := EntryFace(Face{})
+	adjustment := EntryScaleFactor(EntryScaleAdjustment{
+		adjustment: .cap_height
+	})
+	scale := EntryScaleFactor(EntryScale{
+		scale: 1.25
+	})
+	assert deferred_face.kind() == .deferred
+	assert loaded_face.kind() == .loaded
+	assert adjustment.kind() == .adjustment
+	assert scale.kind() == .scale
+	assert deferred_face is DeferredFace
+	assert loaded_face is Face
+	assert adjustment is EntryScaleAdjustment
+	assert scale is EntryScale
 }
 
 // Tests for Collection (translated from ghostty/src/font/Collection.zig).
@@ -47,17 +69,24 @@ fn test_collection_init() {
 }
 
 fn test_entry_or_alias_const_entry_resolves_both_arms() {
-	entry_value := EntryOrAlias{
-		entry: Entry{ fallback: true }
-	}
+	entry_value := EntryOrAlias(Entry{
+		face: EntryFace(DeferredFace{})
+		fallback: true
+	})
 	assert entry_value.get_const_entry().fallback
+	assert entry_value is Entry
 
-	target := Entry{ fallback: true }
-	alias_value := EntryOrAlias{
-		is_alias: true
-		alias_entry: &target
+	target := Entry{
+		face: EntryFace(DeferredFace{})
+		fallback: true
 	}
+	alias_value := EntryOrAlias(EntryAlias{
+		entry: &target
+	})
 	assert alias_value.get_const_entry() == &target
+	assert alias_value is EntryAlias
+	assert target.face.kind() == .deferred
+	assert target.scale_factor.kind() == .scale
 }
 
 fn test_collection_add_full() {
@@ -68,7 +97,9 @@ fn test_collection_add_full() {
 	// The capacity check depends only on the number of entries. Populate the
 	// same 8190 slots without opening 8190 duplicate FreeType faces.
 	for _ in 0 .. int(index_special_start) - 1 {
-		c.regular_faces << EntryOrAlias.new_entry(Entry{})
+		c.regular_faces << EntryOrAlias.new_entry(Entry{
+			face: EntryFace(DeferredFace{})
+		})
 	}
 	mut face := Face.init_mem(lib, embedded_regular, FaceOptions{
 		size: DesiredSize{ points: 12 }

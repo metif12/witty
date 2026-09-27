@@ -337,7 +337,7 @@ pub fn (mut self CodepointResolver) get_index(cp u32, style Style, p ?Presentati
 					}
 					mut deferred := value.face
 					face := Entry{
-						deferred_face: deferred
+						face: EntryFace(deferred)
 						fallback: true
 					}
 					if !face.has_codepoint(cp, p_mode) {
