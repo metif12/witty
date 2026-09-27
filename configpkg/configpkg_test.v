@@ -424,7 +424,7 @@ fn test_preferred_default_file_path_uses_platform_location() ! {
 		}
 	}
 
-	expected := $if macos { app_support_config_path('config.ghostty') } $else { os.join_path('/tmp/witty-config-home', 'ghostty', 'config.ghostty') }
+	expected := $if macos { default_app_support_path()! } $else { os.join_path('/tmp/witty-config-home', 'ghostty', 'config.ghostty') }
 	assert preferred_default_file_path()! == expected
 }
 
@@ -1645,13 +1645,13 @@ fn test_preferred_config_path_prefers_nonempty_then_existing() ! {
 	second := os.join_path(dir, 'second')
 	third := os.join_path(dir, 'third')
 
-	assert preferred_existing_config_path([first, second, third]) == first
+	assert preferred_existing_config_path([first, second, third])! == first
 	os.write_file(first, '')!
-	assert preferred_existing_config_path([first, second, third]) == first
+	assert preferred_existing_config_path([first, second, third])! == first
 	os.write_file(second, 'configured')!
-	assert preferred_existing_config_path([first, second, third]) == second
+	assert preferred_existing_config_path([first, second, third])! == second
 	os.write_file(first, 'higher priority')!
-	assert preferred_existing_config_path([first, second, third]) == first
+	assert preferred_existing_config_path([first, second, third])! == first
 }
 
 fn test_packed_config_flag_layouts_match_source() {

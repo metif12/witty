@@ -10200,33 +10200,42 @@ pub fn Config.default_config() Config {
 	return result
 }
 
-fn preferred_existing_config_path(paths []string) string {
-	mut first_existing := ''
+fn preferred_existing_config_path(paths []string) !string {
+	assert paths.len > 0
+	mut first_existing := ?string(none)
 	for path in paths {
-		if !os.is_file(path) {
-			continue
+		mut file := os.open(path) or {
+			if err.code() == C.ENOENT || err.code() == C.ENOTDIR {
+				continue
+			}
+			return err
 		}
-		if first_existing.len == 0 {
-			first_existing = path
+		stat := os.stat(path) or {
+			file.close()
+			return err
 		}
-		if os.file_size(path) > 0 {
+		file.close()
+		if stat.size > 0 {
 			return path
 		}
+		if first_existing == none {
+			first_existing = path
+		}
 	}
-	if first_existing.len > 0 {
-		return first_existing
+	if path := first_existing {
+		return path
 	}
 	return paths[0]
 }
 
-fn editable_config_path_candidates() []string {
+fn editable_config_path_candidates() ![]string {
 	mut paths := []string{}
 	$if macos {
-		paths << app_support_config_path('config.ghostty')
-		paths << app_support_config_path('config')
+		paths << default_app_support_path()!
+		paths << legacy_default_app_support_path()!
 	}
-	paths << default_xdg_config_path()
-	paths << legacy_xdg_config_path()
+	paths << default_xdg_path()!
+	paths << legacy_default_xdg_path()!
 	return paths
 }
 
@@ -10235,7 +10244,7 @@ fn editable_config_path_candidates() []string {
 // existing path, create its parent directory, and create a missing file
 // without changing the contents of an existing one.
 pub fn open_path() !string {
-	path := preferred_existing_config_path(editable_config_path_candidates())
+	path := preferred_existing_config_path(editable_config_path_candidates()!)!
 	ensure_editable_config_path(path)!
 	return path
 }
@@ -10245,10 +10254,7 @@ fn ensure_editable_config_path(path string) ! {
 	if directory.len > 0 {
 		os.mkdir_all(directory)!
 	}
-	if !os.exists(path) {
-		mut file := os.create(path)!
-		file.close()
-	}
+	create_config_file(path)!
 }
 
 // default_xdg_path returns Ghostty's current XDG configuration path.
@@ -10382,33 +10388,6 @@ pub fn open(path string) !os.File {
 		return open_file_error(.file_is_empty)
 	}
 	return file
-}
-
-// Compatibility names used by the existing Config loading path.
-pub fn default_xdg_config_path() string {
-	return default_xdg_path() or {
-		os.join_path(os.home_dir(), '.config', 'ghostty', 'config.ghostty')
-	}
-}
-
-pub fn legacy_xdg_config_path() string {
-	return legacy_default_xdg_path() or {
-		os.join_path(os.home_dir(), '.config', 'ghostty', 'config')
-	}
-}
-
-pub fn preferred_xdg_config_path() string {
-	return preferred_xdg_path() or { default_xdg_config_path() }
-}
-
-fn app_support_config_path(name string) string {
-	$if macos {
-		return internal_os.app_support_dir(name) or {
-			os.join_path(os.home_dir(), 'Library', 'Application Support', 'com.mitchellh.ghostty', name)
-		}
-	} $else {
-		return os.join_path(os.home_dir(), 'Library', 'Application Support', 'com.mitchellh.ghostty', name)
-	}
 }
 
 // ============================================================
