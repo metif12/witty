@@ -1569,7 +1569,7 @@ pub fn (req &WriteReq) slice() []u8 {
 
 pub fn (req &WriteReq) message() Message {
 	data := req.payload.slice()
-	return match req.payload.kind {
+	return match req.payload.kind() {
 		.small { Message(WriteSmall.from_slice(data)) }
 		.stable { Message(MessageWriteStable{ data: data.bytestr() }) }
 		.alloc { Message(MessageWriteAlloc{ data: data.bytestr() }) }

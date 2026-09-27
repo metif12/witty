@@ -20,11 +20,11 @@ fn capture_surface_event(data voidptr, event SurfaceEvent, timeout datastruct.Bl
 	match event {
 		RendererHealthEvent {
 			capture.health_events << event.health
-			capture.health_timeouts << timeout.kind
+			capture.health_timeouts << timeout.kind()
 		}
 		ScrollbarEvent {
 			capture.scrollbar_events << event.scrollbar
-			capture.scrollbar_timeouts << timeout.kind
+			capture.scrollbar_timeouts << timeout.kind()
 		}
 	}
 

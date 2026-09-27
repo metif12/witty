@@ -440,7 +440,7 @@ fn selection_scroll_probe_push(_ voidptr, surface voidptr, msg apprt.SurfaceMess
 	if msg.kind() == .selection_scroll_tick {
 		mut probe := unsafe { &SelectionScrollProbe(surface) }
 		probe.values << (msg as apprt.SurfaceMessageSelectionScrollTick).value
-		probe.timeouts << timeout.kind
+		probe.timeouts << timeout.kind()
 	}
 	return 1
 }
@@ -491,7 +491,7 @@ fn password_input_probe_push(_ voidptr, surface voidptr, msg apprt.SurfaceMessag
 	if msg.kind() == .password_input {
 		mut probe := unsafe { &PasswordInputProbe(surface) }
 		probe.values << (msg as apprt.SurfaceMessagePasswordInput).value
-		probe.timeouts << timeout.kind
+		probe.timeouts << timeout.kind()
 	}
 	return 1
 }

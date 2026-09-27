@@ -20,7 +20,7 @@ fn metal_frame_test_completion(renderer_ptr voidptr, target_ptr voidptr, status 
 }
 
 fn capture_metal_health_event(data voidptr, event SurfaceEvent, timeout datastruct.BlockingQueueTimeout) u32 {
-	assert timeout.kind == .forever
+	assert timeout.kind() == .forever
 	mut events := unsafe { &[]Health(data) }
 	if event is RendererHealthEvent {
 		events << event.health

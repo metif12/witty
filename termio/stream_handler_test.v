@@ -29,8 +29,8 @@ mut:
 fn collect_surface_message(app voidptr, surface voidptr, msg apprt.SurfaceMessage, timeout datastruct.BlockingQueueTimeout) u32 {
 	_ = app
 	mut ctx := unsafe { &TestContext(surface) }
-	ctx.timeouts << timeout.kind
-	if ctx.reject_instant && timeout.kind == .instant {
+	ctx.timeouts << timeout.kind()
+	if ctx.reject_instant && timeout.kind() == .instant {
 		return 0
 	}
 	ctx.messages << msg

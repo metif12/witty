@@ -9,11 +9,16 @@ fn test_blocking_queue_timeout_source_layout_and_payload() {
 	assert u8(BlockingQueueTimeoutKind.forever) == 1
 	assert u8(BlockingQueueTimeoutKind.ns) == 2
 	assert sizeof(BlockingQueueTimeout) == 2 * sizeof(u64)
-	assert blocking_queue_instant.kind == .instant
-	assert blocking_queue_forever.kind == .forever
+	assert blocking_queue_instant is BlockingQueueTimeoutInstant
+	assert blocking_queue_instant.kind() == .instant
+	assert blocking_queue_forever is BlockingQueueTimeoutForever
+	assert blocking_queue_forever.kind() == .forever
 	timeout := blocking_queue_timeout(1_099_511_627_776)
-	assert timeout.kind == .ns
-	assert timeout.ns == u64(1_099_511_627_776)
+	assert timeout is BlockingQueueTimeoutNs
+	assert timeout.kind() == .ns
+	if timeout is BlockingQueueTimeoutNs {
+		assert timeout.ns == u64(1_099_511_627_776)
+	}
 }
 
 fn test_blocking_queue_condition_signal_without_waiter_is_lost() {

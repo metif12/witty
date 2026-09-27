@@ -3,26 +3,42 @@ module datastruct
 import sync
 import time
 
-// BlockingQueueTimeoutKind selects how a full-queue push behaves.
+// BlockingQueueTimeout is the source tagged union controlling how a full-queue
+// push waits. Only the nanosecond arm carries a payload.
+pub type BlockingQueueTimeout = BlockingQueueTimeoutInstant
+	| BlockingQueueTimeoutForever
+	| BlockingQueueTimeoutNs
+
+pub struct BlockingQueueTimeoutInstant {}
+
+pub struct BlockingQueueTimeoutForever {}
+
+pub struct BlockingQueueTimeoutNs {
+pub:
+	ns u64
+}
+
+// BlockingQueueTimeoutKind is the declaration-order tag of the source union.
 pub enum BlockingQueueTimeoutKind as u8 {
 	instant
 	forever
 	ns
 }
 
-pub struct BlockingQueueTimeout {
-pub:
-	kind BlockingQueueTimeoutKind
-	ns   u64
-}
-
-pub const blocking_queue_instant = BlockingQueueTimeout{ kind: .instant }
-pub const blocking_queue_forever = BlockingQueueTimeout{ kind: .forever }
+pub const blocking_queue_instant = BlockingQueueTimeout(BlockingQueueTimeoutInstant{})
+pub const blocking_queue_forever = BlockingQueueTimeout(BlockingQueueTimeoutForever{})
 
 pub fn blocking_queue_timeout(ns u64) BlockingQueueTimeout {
-	return BlockingQueueTimeout{
-		kind: .ns
-		ns:   ns
+	return BlockingQueueTimeout(BlockingQueueTimeoutNs{
+		ns: ns
+	})
+}
+
+pub fn (self BlockingQueueTimeout) kind() BlockingQueueTimeoutKind {
+	return match self {
+		BlockingQueueTimeoutInstant { .instant }
+		BlockingQueueTimeoutForever { .forever }
+		BlockingQueueTimeoutNs { .ns }
 	}
 }
 
@@ -180,17 +196,17 @@ pub fn (mut self BlockingQueue[T]) push(value T, timeout BlockingQueueTimeout) u
 	}
 
 	if self.full() {
-		match timeout.kind {
+		match timeout {
 			// If we're not waiting, then we failed to write.
-			.instant {
+			BlockingQueueTimeoutInstant {
 				return 0
 			}
-			.forever {
+			BlockingQueueTimeoutForever {
 				self.not_full_waiters++
 				self.cond_not_full.wait(mut self.mutex)
 				self.not_full_waiters--
 			}
-			.ns {
+			BlockingQueueTimeoutNs {
 				self.not_full_waiters++
 				self.cond_not_full.timed_wait(mut self.mutex, timeout.ns) or {
 					self.not_full_waiters--
