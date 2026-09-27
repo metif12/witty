@@ -169,8 +169,6 @@ fn test_config_local_and_quick_terminal_tag_layouts_and_source_ordinals() {
 	assert sizeof(OptionalFileAction) == 1
 	assert [OptionalFileAction.loaded, .not_found, .error_].map(u8(it)) == [u8(0), 1, 2]
 
-	assert sizeof(QuickTerminalSizeKind) == 1
-	assert [QuickTerminalSizeKind.percentage, .pixels].map(u8(it)) == [u8(0), 1]
 	assert sizeof(CQuickTerminalSizeTag) == 4
 	assert [CQuickTerminalSizeTag.none, .percentage, .pixels].map(i32(it)) == [i32(0), 1, 2]
 	assert sizeof(QuickTerminalPosition) == 1
@@ -916,8 +914,8 @@ fn test_parse_quick_terminal_size() {
 		assert false
 		return
 	}
-	assert primary.kind == .percentage
-	assert primary.percentage == 50
+	assert primary is QuickTerminalSizePercentage
+	assert (primary as QuickTerminalSizePercentage).value == 50
 	assert v.secondary == none
 	assert v.clone() == v
 	formatted_size := v.format_entry() or { '' }
@@ -926,7 +924,12 @@ fn test_parse_quick_terminal_size() {
 
 	v = QuickTerminalSize{}
 	v.parse_cli('0x32p0%')!
-	assert v.primary?.percentage == 50
+	hex_percentage := v.primary or {
+		assert false
+		return
+	}
+	assert hex_percentage is QuickTerminalSizePercentage
+	assert (hex_percentage as QuickTerminalSizePercentage).value == 50
 
 	v = QuickTerminalSize{}
 	v.parse_cli('200px')!
@@ -934,14 +937,24 @@ fn test_parse_quick_terminal_size() {
 		assert false
 		return
 	}
-	assert p2.kind == .pixels
-	assert p2.pixels == 200
+	assert p2 is QuickTerminalSizePixels
+	assert (p2 as QuickTerminalSizePixels).value == 200
 	assert v.secondary == none
 
 	v = QuickTerminalSize{}
 	v.parse_cli('+2__0px,-0px')!
-	assert v.primary?.pixels == 20
-	assert v.secondary?.pixels == 0
+	underscore_primary := v.primary or {
+		assert false
+		return
+	}
+	underscore_secondary := v.secondary or {
+		assert false
+		return
+	}
+	assert underscore_primary is QuickTerminalSizePixels
+	assert (underscore_primary as QuickTerminalSizePixels).value == 20
+	assert underscore_secondary is QuickTerminalSizePixels
+	assert (underscore_secondary as QuickTerminalSizePixels).value == 0
 
 	v = QuickTerminalSize{}
 	v.parse_cli('50%,200px')!
@@ -953,8 +966,10 @@ fn test_parse_quick_terminal_size() {
 		assert false
 		return
 	}
-	assert p3.percentage == 50
-	assert s3.pixels == 200
+	assert p3 is QuickTerminalSizePercentage
+	assert (p3 as QuickTerminalSizePercentage).value == 50
+	assert s3 is QuickTerminalSizePixels
+	assert (s3 as QuickTerminalSizePixels).value == 200
 
 	mut e := QuickTerminalSize{}
 	e.parse_cli(none) or {
@@ -1430,10 +1445,10 @@ gtk-wide-tabs = false')
 		assert false
 		return
 	}
-	assert quick_primary.kind == .percentage
-	assert quick_primary.percentage == 50
-	assert quick_secondary.kind == .pixels
-	assert quick_secondary.pixels == 320
+	assert quick_primary is QuickTerminalSizePercentage
+	assert (quick_primary as QuickTerminalSizePercentage).value == 50
+	assert quick_secondary is QuickTerminalSizePixels
+	assert (quick_secondary as QuickTerminalSizePixels).value == 320
 	assert cfg.gtk_quick_terminal_layer == .overlay
 	assert cfg.gtk_quick_terminal_namespace == 'dev.ghostty.quick'
 	assert cfg.quick_terminal_screen == .macos_menu_bar
@@ -1484,8 +1499,10 @@ gtk-wide-tabs = false')
 		assert false
 		return
 	}
-	assert roundtrip_primary == quick_primary
-	assert roundtrip_secondary == quick_secondary
+	assert roundtrip_primary is QuickTerminalSizePercentage
+	assert roundtrip_primary.value == quick_primary.value
+	assert roundtrip_secondary is QuickTerminalSizePixels
+	assert roundtrip_secondary.value == quick_secondary.value
 	assert roundtrip.gtk_quick_terminal_layer == cfg.gtk_quick_terminal_layer
 	assert roundtrip.gtk_quick_terminal_namespace == cfg.gtk_quick_terminal_namespace
 	assert roundtrip.quick_terminal_screen == cfg.quick_terminal_screen

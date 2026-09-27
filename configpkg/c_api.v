@@ -281,8 +281,8 @@ fn enum_c_name(value string) string {
 @[markused]
 fn quick_terminal_size_value_cval(value ?QuickTerminalSizeValue) CQuickTerminalSize {
 	actual := value or { return CQuickTerminalSize{} }
-	return match actual.kind {
-		.percentage { CQuickTerminalSize.percentage(actual.percentage) }
-		.pixels { CQuickTerminalSize.pixels(actual.pixels) }
+	return match actual {
+		QuickTerminalSizePercentage { CQuickTerminalSize.percentage(actual.value) }
+		QuickTerminalSizePixels { CQuickTerminalSize.pixels(actual.value) }
 	}
 }

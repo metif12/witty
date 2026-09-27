@@ -10707,17 +10707,20 @@ fn format_f64(v f64) string {
 // QuickTerminalSize
 // ------------------------------------------------------------
 
-pub enum QuickTerminalSizeKind as u8 {
-	percentage
-	pixels
+pub struct QuickTerminalSizePercentage {
+pub:
+	value f32
 }
 
-pub struct QuickTerminalSizeValue {
+pub struct QuickTerminalSizePixels {
 pub:
-	kind       QuickTerminalSizeKind
-	percentage f32
-	pixels     u32
+	value u32
 }
+
+// QuickTerminalSizeValue is Config.QuickTerminalSize.Size. Each source arm
+// retains only its own payload; the tag/value layout is introduced solely by
+// CQuickTerminalSize at the C ABI boundary.
+pub type QuickTerminalSizeValue = QuickTerminalSizePercentage | QuickTerminalSizePixels
 
 pub fn QuickTerminalSizeValue.parse(input string) !QuickTerminalSizeValue {
 	if input.len == 0 {
@@ -10726,10 +10729,7 @@ pub fn QuickTerminalSizeValue.parse(input string) !QuickTerminalSizeValue {
 	if input.ends_with('px') {
 		digits := input[..input.len - 2]
 		px := parse_u32(digits) or { return perr(ParseError.invalid_value) }
-		return QuickTerminalSizeValue{
-			kind: .pixels
-			pixels: px
-		}
+		return QuickTerminalSizePixels{ value: px }
 	}
 	if input.ends_with('%') {
 		digits := input[..input.len - 1]
@@ -10737,25 +10737,22 @@ pub fn QuickTerminalSizeValue.parse(input string) !QuickTerminalSizeValue {
 		if pct < 0 {
 			return perr(ParseError.invalid_value)
 		}
-		return QuickTerminalSizeValue{
-			kind: .percentage
-			percentage: pct
-		}
+		return QuickTerminalSizePercentage{ value: pct }
 	}
 	return perr(ParseError.missing_unit)
 }
 
 pub fn (s QuickTerminalSizeValue) to_pixels(parent u32) u32 {
-	return match s.kind {
-		.percentage { u32(s.percentage / 100.0 * f32(parent)) }
-		.pixels { s.pixels }
+	return match s {
+		QuickTerminalSizePercentage { u32(s.value / 100.0 * f32(parent)) }
+		QuickTerminalSizePixels { s.value }
 	}
 }
 
 pub fn (s QuickTerminalSizeValue) format() string {
-	return match s.kind {
-		.percentage { '${format_f64(f64(s.percentage))}%' }
-		.pixels { '${s.pixels}px' }
+	return match s {
+		QuickTerminalSizePercentage { '${format_f64(f64(s.value))}%' }
+		QuickTerminalSizePixels { '${s.value}px' }
 	}
 }
 
