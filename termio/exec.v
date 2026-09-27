@@ -213,27 +213,29 @@ pub fn (mut self Exec) thread_enter(mut io Termio, mut td ThreadData) ! {
 	ok = true
 
 	// Setup our threadata backend state to be our own
-	td.backend = ExecThreadData{
-		start:            process_start
-		write_stream:     stream
-		process:          process
-		write_req_pool:   datastruct.SegmentedPool.init[xev.WriteRequest](exec_write_req_prealloc)
-		write_buf_pool:   datastruct.SegmentedPool.init[ExecWriteBuf](exec_write_req_prealloc)
-		read_thread:      read_thread
-		read_thread_pipe: pipe[1]
-		read_thread_fd:   pty_fds.read
-		termios_timer:    termios_timer
+	td.backend = BackendThreadData{
+		exec: ExecThreadData{
+			start:            process_start
+			write_stream:     stream
+			process:          process
+			write_req_pool:   datastruct.SegmentedPool.init[xev.WriteRequest](exec_write_req_prealloc)
+			write_buf_pool:   datastruct.SegmentedPool.init[ExecWriteBuf](exec_write_req_prealloc)
+			read_thread:      read_thread
+			read_thread_pipe: pipe[1]
+			read_thread_fd:   pty_fds.read
+			termios_timer:    termios_timer
+		}
 	}
 
 	// Start our process watcher. If we have an xev.Process use it.
-	if p := td.backend.process {
-		p.wait(mut td.loop, &td.backend.process_wait_c, td, exec_process_exit)
+	if p := td.backend.exec.process {
+		p.wait(mut td.loop, &td.backend.exec.process_wait_c, td, exec_process_exit)
 	} else if current := self.subprocess.process {
 		match current {
 			SubprocessFlatpak {
 				// If we're in Flatpak, run the special host-command watcher.
 				mut command := current.command
-				command.wait_xev(mut td.loop, &td.backend.flatpak_wait_c, td, exec_flatpak_exit)
+				command.wait_xev(mut td.loop, &td.backend.exec.flatpak_wait_c, td, exec_flatpak_exit)
 			}
 			SubprocessForkExec {}
 		}
@@ -243,13 +245,13 @@ pub fn (mut self Exec) thread_enter(mut io Termio, mut td ThreadData) ! {
 	// Fundamentally, we could support this on Windows so we're just
 	// waiting for someone to implement it.
 	$if !windows {
-		td.backend.termios_timer.run(mut td.loop, &td.backend.termios_timer_c, termios_poll_ms,
+		td.backend.exec.termios_timer.run(mut td.loop, &td.backend.exec.termios_timer_c, termios_poll_ms,
 			td, exec_termios_timer)
 	}
 }
 
 pub fn (mut self Exec) thread_exit(mut td ThreadData) {
-	mut exec := &td.backend
+	mut exec := &td.backend.exec
 
 	if exec.exited {
 		self.subprocess.external_exit()
@@ -277,7 +279,7 @@ pub fn (mut self Exec) thread_exit(mut td ThreadData) {
 pub fn (mut self Exec) focus_gained(mut td ThreadData, focused bool) ! {
 	_ = self
 
-	mut execdata := &td.backend
+	mut execdata := &td.backend.exec
 
 	if !focused {
 		// Flag the timer to end on the next iteration. This is
@@ -306,7 +308,7 @@ pub fn (mut self Exec) resize(grid_size renderer.GridSize, screen_size renderer.
 }
 
 fn exec_process_exit_common(mut td ThreadData, exit_code u32) {
-	mut execdata := &td.backend
+	mut execdata := &td.backend.exec
 	execdata.exited = true
 
 	// Determine how long the process was running for.
@@ -355,7 +357,7 @@ fn exec_termios_timer(td_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorK
 	}
 
 	mut td := unsafe { &ThreadData(td_) }
-	mut exec := &td.backend
+	mut exec := &td.backend.exec
 
 	$if !windows {
 		// This is kind of hacky but we rebuild a Pty struct to get the
@@ -405,7 +407,7 @@ fn exec_termios_timer(td_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorK
 
 pub fn (mut self Exec) queue_write(mut td ThreadData, data []u8, linefeed bool) ! {
 	_ = self
-	mut exec := &td.backend
+	mut exec := &td.backend.exec
 
 	// If our process is exited then we don't send any more writes.
 	if exec.exited {
@@ -549,12 +551,6 @@ pub fn (mut self ExecThreadData) deinit() {
 
 	// Stop our termios timer
 	self.termios_timer.deinit()
-}
-
-// change_config mirrors backend.ThreadData.changeConfig. The pinned exec
-// backend currently has no thread-local configuration to update.
-pub fn (mut self ExecThreadData) change_config(config &DerivedConfig) {
-	_ = config
 }
 
 // ExecConfig holds the configuration for starting a subprocess.

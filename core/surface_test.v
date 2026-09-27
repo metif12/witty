@@ -1087,7 +1087,7 @@ fn test_child_exited_abnormal_terminal_fallback() {
 	surf.config = DerivedConfig{
 		abnormal_command_exit_runtime_ms: 500
 	}
-	surf.io.impl.backend.subprocess.args = ['missing-command', '--flag']
+	surf.io.impl.backend.exec.subprocess.args = ['missing-command', '--flag']
 	surf.child_exited_handler(apprt.ChildExited{ runtime_ms: 100, exit_code: 127 })
 	mut terminal_state := surf.renderer_state.terminal_
 	text := terminal_state.plain_string() or { panic(err) }

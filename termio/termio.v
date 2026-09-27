@@ -185,6 +185,60 @@ import xev
 
 const log_tag_termio = 'io_exec'
 
+pub enum BackendKind as u8 {
+	exec
+}
+
+// BackendConfig retains backend.Config's explicit exec arm.
+pub struct BackendConfig {
+pub:
+	exec ExecConfig
+}
+
+pub fn (self BackendConfig) kind() BackendKind {
+	return .exec
+}
+
+// Backend retains backend.Backend's explicit exec arm. The pinned source has
+// one backend kind, so a product wrapper preserves the arm without inventing
+// another discriminator.
+pub struct Backend {
+pub mut:
+	exec Exec
+}
+
+pub fn (self Backend) kind() BackendKind {
+	return .exec
+}
+
+pub fn (mut self Backend) deinit() {
+	self.exec.deinit()
+}
+
+pub fn (mut self Backend) init_terminal(mut term terminal.Terminal) {
+	self.exec.init_terminal(mut term)
+}
+
+pub fn (mut self Backend) thread_enter(mut io Termio, mut td ThreadData) ! {
+	self.exec.thread_enter(mut io, mut td)!
+}
+
+pub fn (mut self Backend) thread_exit(mut td ThreadData) {
+	self.exec.thread_exit(mut td)
+}
+
+pub fn (mut self Backend) focus_gained(mut td ThreadData, focused bool) ! {
+	self.exec.focus_gained(mut td, focused)!
+}
+
+pub fn (mut self Backend) resize(grid_size renderer.GridSize, screen_size renderer.ScreenSize) ! {
+	self.exec.resize(grid_size, screen_size)!
+}
+
+pub fn (mut self Backend) queue_write(mut td ThreadData, data []u8, linefeed bool) ! {
+	self.exec.queue_write(mut td, data, linefeed)!
+}
+
 // Termio manages terminal IO between the surface and the pty.
 //
 // This maintains the terminal state, pty, subprocess, etc. It parses the
@@ -223,7 +277,7 @@ pub mut:
 	terminal_stream terminal.Stream[StreamHandler]
 
 	// The backend implementation responsible for io (i.e. the pty/exec state).
-	backend Exec
+	backend Backend
 
 	// Last time the cursor was reset (monotonic nanoseconds). This is used
 	// to prevent message flooding with cursor resets. -1 means never.
@@ -353,7 +407,7 @@ pub:
 	config DerivedConfig
 
 	// The backend for termio that implements where reads/writes are sourced.
-	backend Exec
+	backend Backend
 
 	// The mailbox for the terminal. This is how messages are delivered.
 	// If you're using termio.Thread this MUST be "mailbox".
@@ -861,12 +915,31 @@ pub mut:
 	surface_mailbox apprt.SurfaceMailbox
 
 	// Data associated with the backend implementation (i.e. pty/exec state)
-	backend ExecThreadData
+	backend BackendThreadData
 	mailbox &Mailbox = unsafe { nil }
 }
 
 pub fn (mut self ThreadData) deinit() {
 	self.backend.deinit()
+}
+
+// BackendThreadData retains backend.ThreadData's explicit exec arm.
+pub struct BackendThreadData {
+pub mut:
+	exec ExecThreadData
+}
+
+pub fn (self BackendThreadData) kind() BackendKind {
+	return .exec
+}
+
+pub fn (mut self BackendThreadData) deinit() {
+	self.exec.deinit()
+}
+
+pub fn (mut self BackendThreadData) change_config(config &DerivedConfig) {
+	_ = self
+	_ = config
 }
 
 // CursorStyle: use terminal.CursorStyle directly.

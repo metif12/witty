@@ -11,6 +11,14 @@ import terminal
 import term.termios
 import xev
 
+fn test_backend_union_tag_source_layout() {
+	assert sizeof(BackendKind) == 1
+	assert u8(BackendKind.exec) == 0
+	assert BackendConfig{}.kind() == .exec
+	assert Backend{}.kind() == .exec
+	assert BackendThreadData{}.kind() == .exec
+}
+
 fn mailbox_send_forever_for_test(mailbox_ptr voidptr, done chan bool) {
 	mut mailbox := unsafe { &Mailbox(mailbox_ptr) }
 	mailbox.send(MessageWriteStable{ data: 'overflow' }, unsafe { nil })
@@ -38,7 +46,7 @@ fn make_termio_opts() TermioOpts {
 			cell: renderer.CellSize{ width: 8, height: 16 }
 		}
 		full_config: &configpkg.Config{}
-		backend: Exec.init(ExecConfig{}) or { panic(err) }
+		backend: Backend{ exec: Exec.init(ExecConfig{}) or { panic(err) } }
 		mailbox: Mailbox.init_spsc() or { panic(err) }
 		renderer_state: &renderer.State{
 			mutex: sync.new_mutex()
@@ -500,9 +508,11 @@ fn termio_test_exec_thread_data(mut writer Thread, tio &Termio, p pty.Pty) !Thre
 		loop:            &writer.loop
 		renderer_state:  tio.renderer_state
 		surface_mailbox: tio.surface_mailbox
-		backend:         ExecThreadData{
-			read_thread_fd: p.master
-			termios_timer:  xev.Timer.init()!
+		backend:         BackendThreadData{
+			exec: ExecThreadData{
+				read_thread_fd: p.master
+				termios_timer:  xev.Timer.init()!
+			}
 		}
 	}
 }
@@ -523,7 +533,7 @@ fn test_exec_termios_timer_reports_password_input_transitions() ! {
 	mut p := pty.Pty.open(pty.Winsize{ ws_row: 24, ws_col: 80 })!
 	defer { p.deinit() }
 	mut td := termio_test_exec_thread_data(mut writer, &tio, p)!
-	td.backend.termios_timer_running = false
+	td.backend.exec.termios_timer_running = false
 
 	// Canonical input with echo disabled is the password-entry heuristic.
 	mut attrs := termios.Termios{}
@@ -543,7 +553,7 @@ fn test_exec_termios_timer_reports_password_input_transitions() ! {
 	assert probe.timeouts == [.forever, .forever]
 
 	// A stopped timer is not rearmed.
-	assert td.backend.termios_timer_c.state() == .dead
+	assert td.backend.exec.termios_timer_c.state() == .dead
 }
 
 fn test_exec_termios_timer_stops_unfocused_and_restarts_on_focus() ! {
@@ -558,19 +568,19 @@ fn test_exec_termios_timer_stops_unfocused_and_restarts_on_focus() ! {
 
 	// Focusing with no armed timer checks the mode immediately and arms it.
 	tio.backend.focus_gained(mut td, true)!
-	assert td.backend.termios_timer_running
-	assert td.backend.termios_timer_c.state() == .active
+	assert td.backend.exec.termios_timer_running
+	assert td.backend.exec.termios_timer_c.state() == .active
 
 	// Losing focus only flags the armed timer to end on its next tick.
 	tio.backend.focus_gained(mut td, false)!
-	assert !td.backend.termios_timer_running
-	assert td.backend.termios_timer_c.state() == .active
+	assert !td.backend.exec.termios_timer_running
+	assert td.backend.exec.termios_timer_c.state() == .active
 	writer.loop.run(.until_done)!
-	assert td.backend.termios_timer_c.state() == .dead
+	assert td.backend.exec.termios_timer_c.state() == .dead
 
 	// Regaining focus restarts it.
 	tio.backend.focus_gained(mut td, true)!
-	assert td.backend.termios_timer_c.state() == .active
+	assert td.backend.exec.termios_timer_c.state() == .active
 }
 
 fn test_thread_start_error_explains_pty_exhaustion() {

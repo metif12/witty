@@ -2233,7 +2233,7 @@ pub fn (mut self Surface) init(config_original &Config, mut app App, rt_app &app
 		size: self.size
 		full_config: unsafe { config }
 		config: termiopkg.DerivedConfig.init(config)!
-		backend: io_exec
+		backend: termiopkg.Backend{ exec: io_exec }
 		mailbox: io_mailbox
 		renderer_state: &self.renderer_state
 		renderer_wakeup: self.renderer_thread.wakeup
@@ -5369,7 +5369,7 @@ fn (mut self Surface) child_exited_abnormally(info apprt.ChildExited) ! {
 	t.carriage_return()
 	t.linefeed()!
 	t.linefeed()!
-	t.print_string(self.io.impl.backend.subprocess.args.join(' '))!
+	t.print_string(self.io.impl.backend.exec.subprocess.args.join(' '))!
 	t.set_attribute(terminal.SgrUnset{})!
 	t.carriage_return()
 	t.linefeed()!
