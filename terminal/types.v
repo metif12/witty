@@ -69,10 +69,6 @@ pub mut:
 	has_hyperlink bool
 	// The semantic type of the content of this cell.
 	semantic_content SemanticContent = .output
-	// Additional codepoints for grapheme clusters. These are the
-	// codepoints in addition to the first codepoint. The first
-	// codepoint is NOT included since it is on the cell itself.
-	graphemes []u32
 	// For bg_color content variants.
 	color_palette u8
 	color_rgb_r   u8
@@ -93,7 +89,6 @@ pub fn (self &CellData) is_zero() bool {
 	return self.codepoint == 0 && self.content_tag == .codepoint && self.style_id == 0
 		&& self.wide == .narrow && !self.is_protected
 		&& !self.has_hyperlink && self.semantic_content == .output
-		&& self.graphemes.len == 0
 }
 
 // Returns true if the cell has displayable text.

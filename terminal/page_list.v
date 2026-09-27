@@ -5342,7 +5342,6 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 	mut dst := &page.rows[int(self.y)].cells[int(self.x)]
 	dst.content_tag = .codepoint
 	dst.has_hyperlink = false
-	dst.graphemes = []
 	dst.style_id = default_style_id
 
 	// Copy Kitty virtual placeholder status.
@@ -5377,7 +5376,6 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 				mut current_cell := &page.rows[int(self.y)].cells[int(self.x)]
 				current_cell.content_tag = .codepoint
 				current_cell.codepoint = 0xFFFD
-				current_cell.graphemes = []
 			}
 		}
 	}

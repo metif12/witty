@@ -1773,7 +1773,10 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 					} else {
 						self.write_codepoint_with_replacement(mut sb, cell.codepoint)
 						if cell.content_tag == .codepoint_grapheme {
-							for cp in cell.graphemes {
+							cps := self.page.lookup_grapheme_at(usize(y_int), usize(x)) or {
+								panic('grapheme cell is missing its page mapping')
+							}
+							for cp in cps {
 								self.write_codepoint_with_replacement(mut sb, cp)
 							}
 						}

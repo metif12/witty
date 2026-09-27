@@ -678,7 +678,6 @@ fn test_page_pin_row_cell_grapheme_and_style_accessors() {
 	foreign := CellData{
 		content_tag: .codepoint_grapheme
 		codepoint: u32(`z`)
-		graphemes: [u32(0x0302)]
 	}
 	assert pin.grapheme(&foreign) == none
 	assert pin.style(rac.cell).eql(&style)
@@ -1857,7 +1856,7 @@ fn test_page_list_erase_history_preserves_managed_survivor() {
 	assert s.total_rows == 4
 	cell := page.rows[0].cells[3]
 	assert cell.codepoint == u32(`S`)
-	assert cell.graphemes == [u32(0x0302)]
+	assert (page.lookup_grapheme_at(0, 3) or { []u32{} }) == [u32(0x0302)]
 	assert page.styles.get(cell.style_id).flags.bold()
 	assert page.styles.ref_count(cell.style_id) == 1
 	moved_link_id := page.lookup_hyperlink_at(0, 3) or {
@@ -1968,7 +1967,7 @@ fn test_page_list_erase_row_preserves_managed_cell_data() {
 	cell := page.rows[0].cells[2]
 	assert cell.codepoint == u32(`M`)
 	assert cell.has_grapheme()
-	assert cell.graphemes == [u32(0x0301)]
+	assert (page.lookup_grapheme_at(0, 2) or { []u32{} }) == [u32(0x0301)]
 	assert cell.style_id == style_id
 	assert page.styles.get(cell.style_id).flags.bold()
 	assert page.styles.ref_count(cell.style_id) == 1
@@ -4479,7 +4478,7 @@ fn test_page_list_erase_row_bounded_preserves_managed_cell_data() {
 
 	cell := page.rows[0].cells[1]
 	assert cell.codepoint == u32(`M`)
-	assert cell.graphemes == [u32(0x0308)]
+	assert (page.lookup_grapheme_at(0, 1) or { []u32{} }) == [u32(0x0308)]
 	assert page.styles.get(cell.style_id).flags.italic()
 	assert page.styles.ref_count(cell.style_id) == 1
 	moved_link_id := page.lookup_hyperlink_at(0, 1) or {

@@ -2348,7 +2348,7 @@ fn test_page_clone_row_preserves_integrity_after_late_managed_memory_failure() {
 	assert error_message == PageCloneError.string_alloc_out_of_memory.str()
 	assert dst.rows[0].cells[0].codepoint == u32(`a`)
 	assert dst.rows[0].cells[0].has_grapheme()
-	assert dst.rows[0].cells[0].graphemes == [u32(0x0301)]
+	assert (dst.lookup_grapheme_at(0, 0) or { []u32{} }) == [u32(0x0301)]
 	assert !dst.rows[0].cells[0].has_hyperlink
 	assert dst.lookup_hyperlink_at(0, 0) == none
 	assert dst.verify_integrity() == none

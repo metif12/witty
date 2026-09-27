@@ -1442,16 +1442,16 @@ pub fn (self &Page) verify_integrity() ?IntegrityError {
 
 			if cell.has_grapheme() {
 				key := self.cell_key_at(usize(y), usize(x))
-				// If a cell has grapheme data, it must have both the page map
-				// entry and the translated codepoint slice.
-				if key !in self.grapheme_map || cell.graphemes.len == 0 {
+				// If a cell has grapheme data, it must be present in the
+				// grapheme map.
+				if key !in self.grapheme_map {
 					return IntegrityError.missing_grapheme_data
 				}
 				graphemes_seen++
 			} else if total_graphemes > 0 {
 				key := self.cell_key_at(usize(y), usize(x))
 				// It should not have grapheme data if it isn't marked.
-				if key in self.grapheme_map || cell.graphemes.len > 0 {
+				if key in self.grapheme_map {
 					return IntegrityError.unmarked_grapheme_cell
 				}
 			}
@@ -1582,9 +1582,6 @@ pub fn (self &Page) clone() Page {
 				color_rgb_r: cell.color_rgb_r
 				color_rgb_g: cell.color_rgb_g
 				color_rgb_b: cell.color_rgb_b
-			}
-			if cell.graphemes.len > 0 {
-				new_cell.graphemes = cell.graphemes.clone()
 			}
 			new_cells << new_cell
 		}
@@ -1862,7 +1859,7 @@ fn (mut self Page) try_clone_partial_row_from(other &Page, dst_row_idx usize, sr
 				offset: offset
 				len: usize(cps.len)
 			}
-			dst_row.cells[xi].graphemes = cps.clone()
+			self.write_graphemes(offset, cps)
 			dst_row.cells[xi].content_tag = .codepoint_grapheme
 			dst_row.grapheme = true
 		}
@@ -2347,8 +2344,8 @@ pub fn (mut self Page) set_graphemes(row_idx usize, col_idx usize, cps []u32) ! 
 		offset: offset
 		len: usize(cps.len)
 	}
+	self.write_graphemes(offset, cps)
 
-	cell.graphemes = cps.clone()
 	cell.content_tag = .codepoint_grapheme
 	row.grapheme = true
 }
@@ -2375,7 +2372,7 @@ pub fn (mut self Page) append_grapheme(row_idx usize, col_idx usize, cp u32) ! {
 			offset: offset
 			len: 1
 		}
-		cell.graphemes << cp
+		self.write_grapheme_codepoint(offset, 0, cp)
 		cell.content_tag = .codepoint_grapheme
 		row.grapheme = true
 		return
@@ -2385,22 +2382,56 @@ pub fn (mut self Page) append_grapheme(row_idx usize, col_idx usize, cp u32) ! {
 		panic('grapheme cell is missing its page mapping')
 	}
 	if allocation.len % usize(grapheme_chunk_len) != 0 {
+		// We have space in our chunk, use it.
+		self.write_grapheme_codepoint(allocation.offset, int(allocation.len), cp)
 		allocation.len++
 		self.grapheme_map[key] = allocation
-		cell.graphemes << cp
 		return
 	}
 
+	// We don't have enough chunk space so allocate a new, larger slice,
+	// copy the old codepoints into it, and free the old one.
 	new_len := allocation.len + 1
 	new_offset := self.grapheme_alloc.alloc(new_len * usize(sizeof(u32))) or {
 		return error('GraphemeAllocOutOfMemory')
 	}
+	old := self.grapheme_codepoints(allocation)
+	self.write_graphemes(new_offset, old)
+	self.write_grapheme_codepoint(new_offset, int(allocation.len), cp)
 	self.grapheme_alloc.release(allocation.offset, allocation.len * usize(sizeof(u32)))
 	self.grapheme_map[key] = GraphemeAllocation{
 		offset: new_offset
 		len: new_len
 	}
-	cell.graphemes << cp
+}
+
+// grapheme_codepoints returns a borrowed view of a grapheme allocation's
+// codepoints in the page's grapheme memory.
+fn (self &Page) grapheme_codepoints(allocation GraphemeAllocation) []u32 {
+	assert allocation.len > 0
+	return unsafe {
+		array{
+			element_size: int(sizeof(u32))
+			data:         &self.grapheme_alloc.chunks[int(allocation.offset)]
+			len:          int(allocation.len)
+			cap:          int(allocation.len)
+			flags:        .nofree | .nogrow
+		}
+	}
+}
+
+// write_grapheme_codepoint stores codepoint `i` of the allocation at `offset`.
+fn (mut self Page) write_grapheme_codepoint(offset usize, i int, cp u32) {
+	unsafe {
+		*(&u32(&self.grapheme_alloc.chunks[int(offset) + i * int(sizeof(u32))])) = cp
+	}
+}
+
+// write_graphemes stores `cps` at the allocation at `offset`.
+fn (mut self Page) write_graphemes(offset usize, cps []u32) {
+	for i, cp in cps {
+		self.write_grapheme_codepoint(offset, i, cp)
+	}
 }
 
 // Returns the codepoints for the given page-owned cell. These are the
@@ -2408,10 +2439,8 @@ pub fn (mut self Page) append_grapheme(row_idx usize, col_idx usize, cp u32) ! {
 // included since it is on the cell itself.
 pub fn (self &Page) lookup_grapheme(cell &CellData) ?[]u32 {
 	key := self.key_for_cell(cell) or { return none }
-	if key in self.grapheme_map {
-		return cell.graphemes
-	}
-	return none
+	allocation := self.grapheme_map[key] or { return none }
+	return self.grapheme_codepoints(allocation)
 }
 
 // Index-addressed helper for code that already has a page row and column.
@@ -2424,10 +2453,8 @@ pub fn (self &Page) lookup_grapheme_at(row_idx usize, col_idx usize) ?[]u32 {
 		return none
 	}
 	key := self.cell_key_at(row_idx, col_idx)
-	if key in self.grapheme_map {
-		return row.cells[col_idx].graphemes
-	}
-	return none
+	allocation := self.grapheme_map[key] or { return none }
+	return self.grapheme_codepoints(allocation)
 }
 
 // Move the graphemes from one cell to another. This can't fail
@@ -2464,7 +2491,6 @@ pub fn (mut self Page) clear_grapheme(row_idx usize, col_idx usize) {
 	}
 	self.grapheme_alloc.release(allocation.offset, allocation.len * usize(sizeof(u32)))
 	self.grapheme_map.delete(key)
-	self.rows[row_idx].cells[col_idx].graphemes = []
 	// Mark that we no longer have graphemes by changing the content tag.
 	self.rows[row_idx].cells[col_idx].content_tag = .codepoint
 }

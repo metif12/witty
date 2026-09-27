@@ -108,6 +108,13 @@ fn cell_at(t &Terminal, x int, y int) CellData {
 	return *list_cell.cell
 }
 
+// Helper: read the grapheme codepoints of the cell at active-area coordinates
+// (x, y), like ghostty's `page.lookupGrapheme(cell)`.
+fn graphemes_at(t &Terminal, x int, y int) []u32 {
+	list_cell := t.screens.active.pages.get_cell(active_point(x, y)) or { return []u32{} }
+	return list_cell.node.data.lookup_grapheme(list_cell.cell) or { []u32{} }
+}
+
 // Helper: read the page style of the cell at active-area coordinates (x, y).
 fn cell_style_at(t &Terminal, x int, y int) CellStyle {
 	return active_cell(t, x, y).style()
@@ -3271,7 +3278,7 @@ fn test_print_multicodepoint_grapheme_disabled_mode_2027() {
 	assert c0.codepoint == 0x1F468
 	assert c0.has_grapheme()
 	assert c0.wide == .wide
-	assert c0.graphemes.len == 1
+	assert graphemes_at(&t, 0, 0).len == 1
 	c1 := cell_at(&t, 1, 0)
 	assert c1.codepoint == 0
 	assert !c1.has_grapheme()
@@ -3280,7 +3287,7 @@ fn test_print_multicodepoint_grapheme_disabled_mode_2027() {
 	assert c2.codepoint == 0x1F469
 	assert c2.has_grapheme()
 	assert c2.wide == .wide
-	assert c2.graphemes.len == 1
+	assert graphemes_at(&t, 2, 0).len == 1
 	c3 := cell_at(&t, 3, 0)
 	assert c3.codepoint == 0
 	assert !c3.has_grapheme()
@@ -3312,8 +3319,8 @@ fn test_vs16_doesnt_make_character_with_2027_disabled() {
 	assert c0.codepoint == 0x2764
 	assert c0.has_grapheme()
 	assert c0.wide == .narrow
-	assert c0.graphemes.len == 1
-	assert c0.graphemes[0] == 0xFE0F
+	assert graphemes_at(&t, 0, 0).len == 1
+	assert graphemes_at(&t, 0, 0)[0] == 0xFE0F
 }
 
 fn test_ignored_vs16_doesnt_mark_dirty() {
@@ -3396,11 +3403,11 @@ fn test_print_multicodepoint_grapheme_mode_2027() {
 	assert c0.has_grapheme()
 	assert c0.wide == .wide
 	// The other 4 codepoints (ZWJ, 👩, ZWJ, 👧) are stored as graphemes.
-	assert c0.graphemes.len == 4
-	assert c0.graphemes[0] == 0x200D
-	assert c0.graphemes[1] == 0x1F469
-	assert c0.graphemes[2] == 0x200D
-	assert c0.graphemes[3] == 0x1F467
+	assert graphemes_at(&t, 0, 0).len == 4
+	assert graphemes_at(&t, 0, 0)[0] == 0x200D
+	assert graphemes_at(&t, 0, 0)[1] == 0x1F469
+	assert graphemes_at(&t, 0, 0)[2] == 0x200D
+	assert graphemes_at(&t, 0, 0)[3] == 0x1F467
 
 	c1 := cell_at(&t, 1, 0)
 	assert c1.codepoint == 0
@@ -3576,7 +3583,7 @@ fn test_vs15_to_make_narrow_character() {
 	assert c0.codepoint == 0x2614
 	assert c0.has_grapheme()
 	assert c0.wide == .narrow
-	assert c0.graphemes.len == 1
+	assert graphemes_at(&t, 0, 0).len == 1
 	// The wide spacer tail must have been reverted to narrow.
 	c1 := cell_at(&t, 1, 0)
 	assert c1.wide == .narrow
@@ -3606,7 +3613,7 @@ fn test_vs15_on_already_narrow_emoji() {
 	assert c0.codepoint == 0x26C8
 	assert c0.has_grapheme()
 	assert c0.wide == .narrow
-	assert c0.graphemes.len == 1
+	assert graphemes_at(&t, 0, 0).len == 1
 }
 
 fn test_print_invalid_vs15_following_emoji_is_wide() {
@@ -3656,9 +3663,9 @@ fn test_print_invalid_vs15_in_emoji_zwj_sequence() {
 	assert c0.codepoint == 0x1F469
 	assert c0.has_grapheme()
 	// The invalid VS15 is dropped; only ZWJ + 👦 attach.
-	assert c0.graphemes.len == 2
-	assert c0.graphemes[0] == 0x200D
-	assert c0.graphemes[1] == 0x1F466
+	assert graphemes_at(&t, 0, 0).len == 2
+	assert graphemes_at(&t, 0, 0)[0] == 0x200D
+	assert graphemes_at(&t, 0, 0)[1] == 0x1F466
 	assert c0.wide == .wide
 	c1 := cell_at(&t, 1, 0)
 	assert c1.codepoint == 0
@@ -3696,7 +3703,7 @@ fn test_vs15_to_make_narrow_character_with_pending_wrap() {
 	assert c0.codepoint == 0x2614
 	assert c0.has_grapheme()
 	assert c0.wide == .narrow
-	assert c0.graphemes.len == 1
+	assert graphemes_at(&t, 0, 0).len == 1
 }
 
 fn test_vs16_to_make_wide_character_with_mode_2027() {
@@ -3719,7 +3726,7 @@ fn test_vs16_to_make_wide_character_with_mode_2027() {
 	assert c0.codepoint == 0x2764
 	assert c0.has_grapheme()
 	assert c0.wide == .wide
-	assert c0.graphemes.len == 1
+	assert graphemes_at(&t, 0, 0).len == 1
 	c1 := cell_at(&t, 1, 0)
 	assert c1.wide == .spacer_tail
 }
@@ -3744,12 +3751,12 @@ fn test_vs16_repeated_with_mode_2027() {
 	assert c0.codepoint == 0x2764
 	assert c0.has_grapheme()
 	assert c0.wide == .wide
-	assert c0.graphemes.len == 1
+	assert graphemes_at(&t, 0, 0).len == 1
 	c2 := cell_at(&t, 2, 0)
 	assert c2.codepoint == 0x2764
 	assert c2.has_grapheme()
 	assert c2.wide == .wide
-	assert c2.graphemes.len == 1
+	assert graphemes_at(&t, 2, 0).len == 1
 }
 
 fn test_print_invalid_vs16_grapheme() {
@@ -3826,8 +3833,8 @@ fn test_print_invalid_vs16_with_second_char_combining() {
 	assert c0.codepoint == u32(`n`)
 	assert c0.has_grapheme()
 	// The invalid VS16 is dropped; only the combining tilde attaches.
-	assert c0.graphemes.len == 1
-	assert c0.graphemes[0] == 0x0303
+	assert graphemes_at(&t, 0, 0).len == 1
+	assert graphemes_at(&t, 0, 0)[0] == 0x0303
 	assert c0.wide == .narrow
 	c1 := cell_at(&t, 1, 0)
 	assert c1.codepoint == 0
