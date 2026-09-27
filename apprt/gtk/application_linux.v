@@ -1789,12 +1789,19 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 		}
 		.open_config {
 			path := configpkg.open_path() or { return false }
-			internal_os.open(.text, path) or { return false }
+			// The action was resolved once the editable path was found. Ghostty's
+			// openUrl helper logs launcher failures but deliberately does not turn
+			// them into an unhandled action, which would pass the key through.
+			internal_os.open(.text, path) or {
+				eprintln('unable to open url: ${err}')
+			}
 			return true
 		}
 		.open_url {
 			if data is apprt.OpenUrl {
-				internal_os.open(data.kind, data.url) or { return false }
+				internal_os.open(data.kind, data.url) or {
+					eprintln('unable to open url: ${err}')
+				}
 				return true
 			}
 		}
