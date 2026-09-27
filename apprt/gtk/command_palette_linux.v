@@ -478,12 +478,20 @@ fn (mut self CommandPalette) collect_jump_commands() {
 	if isnil(self.app) {
 		return
 	}
-	for window in self.app.windows {
-		for tab in window.tabs {
-			for surface in tab.split_tree.surfaces {
-				self.commands << Command.new_jump(self.config, surface)
-			}
+	core_app := self.app.core()
+	for surface_ref in core_app.surfaces {
+		if isnil(surface_ref) || isnil(surface_ref.core_surface) {
+			continue
 		}
+		core_surface := surface_ref.core_surface
+		if isnil(core_surface.rt_surface) || isnil(core_surface.rt_surface.user_data) {
+			continue
+		}
+		surface := unsafe { &SurfaceWidget(core_surface.rt_surface.user_data) }
+		if isnil(surface) || surface.core_surface != core_surface {
+			continue
+		}
+		self.commands << Command.new_jump(self.config, surface)
 	}
 }
 
