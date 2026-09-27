@@ -247,13 +247,11 @@ fn test_prepare_input_opens_all_sources_before_start() {
 		close_prepared_inputs(mut prepared)
 	}
 	assert prepared.len == 2
-	assert sizeof(PreparedInputTag) == 1
-	assert u8(PreparedInputTag.string) == 0
-	assert u8(PreparedInputTag.file) == 1
-	assert prepared[0].kind == .string
-	assert prepared[1].kind == .file
-	assert prepared[0].data.bytestr() == 'raw bytes'
-	assert read_initial_input_file(mut prepared[1].file)!.bytestr() == 'from file'
+	assert prepared[0] is PreparedInputString
+	assert (prepared[0] as PreparedInputString).data.bytestr() == 'raw bytes'
+	assert prepared[1] is PreparedInputFile
+	mut file_input := prepared[1] as PreparedInputFile
+	assert read_initial_input_file(mut file_input.file)!.bytestr() == 'from file'
 
 	missing := Termio{
 		thread_enter_input: [configpkg.ReadableIO(configpkg.ReadableIORaw{ value: 'not sent' }),

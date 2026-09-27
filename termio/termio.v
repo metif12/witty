@@ -464,14 +464,14 @@ pub fn (mut t Termio) thread_enter(mut thr Thread, mut data ThreadData) ! {
 
 	// If we have inputs, then queue them all up.
 	for mut item in inputs {
-		match item.kind {
-			.string {
+		match mut item {
+			PreparedInputString {
 				t.queue_write(mut data, item.data, false) or {
 					eprintln('failed to queue input string err=${err}')
 					return error('input failed')
 				}
 			}
-			.file {
+			PreparedInputFile {
 				bytes := read_initial_input_file(mut item.file) or {
 					eprintln('failed to read input file err=${err}')
 					return error('input failed')
@@ -488,25 +488,23 @@ pub fn (mut t Termio) thread_enter(mut thr Thread, mut data ThreadData) ! {
 
 const initial_input_max_bytes = 10 * 1024 * 1024
 
-struct PreparedInput {
-	kind PreparedInputTag
+struct PreparedInputString {
 	data []u8
+}
+
+struct PreparedInputFile {
 mut:
 	file os.File
 }
 
-enum PreparedInputTag as u8 {
-	string
-	file
-}
+type PreparedInput = PreparedInputFile | PreparedInputString
 
 fn (t &Termio) prepare_input() ![]PreparedInput {
 	mut result := []PreparedInput{cap: t.thread_enter_input.len}
 	for item in t.thread_enter_input {
 		match item {
 			configpkg.ReadableIORaw {
-				result << PreparedInput{
-					kind: .string
+				result << PreparedInputString{
 					data: item.value.bytes()
 				}
 			}
@@ -515,8 +513,7 @@ fn (t &Termio) prepare_input() ![]PreparedInput {
 					close_prepared_inputs(mut result)
 					return error('input not found')
 				}
-				result << PreparedInput{
-					kind: .file
+				result << PreparedInputFile{
 					file: file
 				}
 			}
@@ -549,8 +546,9 @@ fn read_initial_input_file(mut file os.File) ![]u8 {
 
 fn close_prepared_inputs(mut inputs []PreparedInput) {
 	for mut item in inputs {
-		if item.kind == .file {
-			item.file.close()
+		match mut item {
+			PreparedInputFile { item.file.close() }
+			PreparedInputString {}
 		}
 	}
 }
