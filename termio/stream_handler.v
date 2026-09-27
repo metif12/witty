@@ -110,7 +110,9 @@ pub fn (mut self StreamHandler) change_config(config &DerivedConfig) {
 
 	// If our cursor is the default, then we update it immediately.
 	if self.default_cursor {
-		self.set_cursor_style(.default_) or {}
+		self.set_cursor_style(.default_) or {
+			log.warn('failed to set default cursor style: ${err}')
+		}
 	}
 
 	// The config could have changed any of our colors so update mode 2031
@@ -576,9 +578,12 @@ pub fn (mut self StreamHandler) vt(action terminal.ActionKey, value terminal.Act
 					terminal.SgrUnknown {
 						// We optimize for the happy path scenario here, since
 						// unknown/invalid SGRs aren't that common in the wild.
+						log.warn('unimplemented or unknown SGR attribute: ${value}')
 					}
 					else {
-						self.terminal.set_attribute(value) or {}
+						self.terminal.set_attribute(value) or {
+							log.warn('error setting attribute ${value}: ${err}')
+						}
 					}
 				}
 			}
@@ -968,7 +973,9 @@ pub fn (mut self StreamHandler) set_mode(mode terminal.Mode, enabled bool) ! {
 		// Force resize back to the window size
 		.enable_mode_3 {
 			grid_size := self.size.grid()
-			self.terminal.resize(u16(grid_size.columns), u16(grid_size.rows)) or {}
+			self.terminal.resize(u16(grid_size.columns), u16(grid_size.rows)) or {
+				log.error('error updating terminal size: ${err}')
+			}
 		}
 		.column_132 {
 			self.terminal.deccolm(if enabled { .cols_132 } else { .cols_80 })!
