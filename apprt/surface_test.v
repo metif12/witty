@@ -2,6 +2,14 @@ module apprt
 
 import configpkg
 
+struct SurfaceConfigAppProbe {
+	pwd ?string
+}
+
+fn (p &SurfaceConfigAppProbe) focused_surface_pwd() ?string {
+	return p.pwd
+}
+
 fn test_surface_source_tag_layouts_and_ordinals() {
 	assert sizeof(SurfaceMessageKind) == 1
 	mut message_count := 0
@@ -51,4 +59,18 @@ fn test_new_config_is_independent_when_no_surface_is_focused() {
 	assert config.env.entries.len == 1
 	assert copy.working_directory? == '/copy'
 	assert copy.env.entries.len == 2
+}
+
+fn test_new_config_inherits_focused_pwd_only_for_enabled_context() {
+	mut config := configpkg.Config.default_config()
+	config.working_directory = '/configured'
+	config.window_inherit_working_directory = false
+	config.tab_inherit_working_directory = true
+	app := SurfaceConfigAppProbe{ pwd: '/focused' }
+
+	window_config := new_config(&app, &config, .window)
+	tab_config := new_config(&app, &config, .tab)
+
+	assert window_config.working_directory? == '/configured'
+	assert tab_config.working_directory? == '/focused'
 }

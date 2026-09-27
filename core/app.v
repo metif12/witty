@@ -470,6 +470,13 @@ pub fn (self &App) focused_surface() ?&Surface {
 	return surface
 }
 
+// focused_surface_pwd exposes the source `newConfig` query through the
+// runtime-neutral apprt surface-config interface.
+pub fn (self &App) focused_surface_pwd() ?string {
+	surface := self.focused_surface() or { return none }
+	return surface.pwd()
+}
+
 // needs_confirm_quit returns true if confirmation is needed to quit
 // the app. It is up to the apprt to call this.
 pub fn (self &App) needs_confirm_quit() bool {

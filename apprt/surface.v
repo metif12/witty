@@ -309,7 +309,11 @@ pub fn should_inherit_working_directory(context NewSurfaceContext, config &confi
 // new_config returns the independent configuration used to initialize a new
 // surface. The last focused surface supplies its working directory when the
 // selected creation context enables inheritance.
-pub fn new_config(app &CoreApp, config &configpkg.Config, context NewSurfaceContext) configpkg.Config {
+pub interface SurfaceConfigApp {
+	focused_surface_pwd() ?string
+}
+
+pub fn new_config(app SurfaceConfigApp, config &configpkg.Config, context NewSurfaceContext) configpkg.Config {
 	mut copy := config.clone()
 	if should_inherit_working_directory(context, config) {
 		if pwd := app.focused_surface_pwd() {

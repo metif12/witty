@@ -2677,15 +2677,18 @@ fn (mut self SurfaceWidget) init_surface() ! {
 		linux_cgroup: self.cgroup_path
 	}
 
-	mut surface_config := self.config.get().clone()
+	mut core_app := unsafe { self.app.core_app }
+	core_app.add_surface(surface_ref)
+	mut surface_config := apprt.new_config(core_app, self.config.get(), self.context)
+	defer {
+		surface_config.deinit()
+	}
 	if font_size_request := self.font_size_request {
 		surface_config.font_size = font_size_request.points
 	}
 	if pwd := self.pwd {
 		surface_config.working_directory = pwd
 	}
-	mut core_app := unsafe { self.app.core_app }
-	core_app.add_surface(surface_ref)
 	surface.init(&surface_config, mut core_app, &self.app.runtime_bridge, &self.core_runtime_surface) or {
 		core_app.delete_surface(surface_ref)
 		self.core_surface = unsafe { nil }
