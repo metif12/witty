@@ -10087,8 +10087,9 @@ pub fn Config.default_config() Config {
 		links: [inputpkg.Link{
 			regex: default_url_pattern
 			action: .open
-			highlight: .hover_mods
-			mods: inputpkg.ctrl_or_super_mods(inputpkg.Mods{})
+			highlight: inputpkg.LinkHighlightHoverMods{
+				mods: inputpkg.ctrl_or_super_mods(inputpkg.Mods{})
+			}
 		}]
 	}
 	return result

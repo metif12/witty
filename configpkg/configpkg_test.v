@@ -2887,8 +2887,8 @@ fn test_default_config_initializes_url_link() {
 	link := cfg.link.links[0]
 	assert link.regex == default_url_pattern
 	assert link.action == .open
-	assert link.highlight == .hover_mods
-	assert link.mods == input.ctrl_or_super_mods(input.Mods{})
+	assert link.highlight is input.LinkHighlightHoverMods
+	assert (link.highlight as input.LinkHighlightHoverMods).mods == input.ctrl_or_super_mods(input.Mods{})
 	assert cfg.link.format_entry().len == 0
 	assert cfg.link.equal(cfg.link.clone())
 	assert !cfg.format_config(false).split_into_lines().any(it.starts_with('link ='))
@@ -2899,7 +2899,7 @@ fn test_default_config_initializes_url_link() {
 	cfg.link.links << input.Link{
 		regex: 'issue-[0-9]+'
 		action: .open
-		highlight: .always
+		highlight: input.LinkHighlightAlways{}
 	}
 	assert clone.link.links.len == 1
 

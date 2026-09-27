@@ -12,7 +12,6 @@ pub mut:
 	regex oniguruma.Regex
 	// The situations in which the link should be highlighted.
 	highlight input.LinkHighlight
-	mods      input.Mods
 }
 
 pub fn (mut self Link) deinit() {
@@ -40,7 +39,6 @@ pub fn LinkSet.from_config(config []input.Link) !LinkSet {
 		links << Link{
 			regex: regex
 			highlight: link.highlight
-			mods: link.mods
 		}
 	}
 	return LinkSet{
@@ -77,19 +75,19 @@ pub fn (mut self LinkSet) render_cell_map(mut result terminal.CellSet, render_st
 	str := builder.str()
 	for mut link in self.links {
 		match link.highlight {
-			.always {}
-			.always_mods {
-				if !mouse_mods.equal(link.mods) {
+			input.LinkHighlightAlways {}
+			input.LinkHighlightAlwaysMods {
+				if !mouse_mods.equal(link.highlight.mods) {
 					continue
 				}
 			}
-			.hover {
+			input.LinkHighlightHover {
 				if mouse_viewport == none {
 					continue
 				}
 			}
-			.hover_mods {
-				if mouse_viewport == none || !mouse_mods.equal(link.mods) {
+			input.LinkHighlightHoverMods {
+				if mouse_viewport == none || !mouse_mods.equal(link.highlight.mods) {
 					continue
 				}
 			}
@@ -110,7 +108,7 @@ pub fn (mut self LinkSet) render_cell_map(mut result terminal.CellSet, render_st
 			offset = end
 			mut record := true
 			match link.highlight {
-				.hover, .hover_mods {
+				input.LinkHighlightHover, input.LinkHighlightHoverMods {
 					mouse := mouse_viewport or {
 						record = false
 						terminal.Coordinate{}
@@ -126,7 +124,7 @@ pub fn (mut self LinkSet) render_cell_map(mut result terminal.CellSet, render_st
 						record = false
 					}
 				}
-				.always, .always_mods {}
+				input.LinkHighlightAlways, input.LinkHighlightAlwaysMods {}
 			}
 			if record {
 				for point in string_map.points[start..end] {

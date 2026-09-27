@@ -949,7 +949,7 @@ fn test_modifier_key_refreshes_link_hover() ! {
 	surf.config.links = [DerivedConfigLink{
 		regex: oniguruma.Regex.init(r'http://a', oniguruma.Options{}, .utf8, .default_, none)!
 		action: .open
-		highlight: .hover
+		highlight: input.LinkHighlightHover{}
 	}]
 	defer { surf.config.links[0].regex.deinit() }
 	mut stream := surf.renderer_state.terminal_.vt_stream()
@@ -1694,7 +1694,7 @@ fn test_copy_url_to_clipboard_uses_configured_trailing_space_policy() ! {
 	surf.config.links = [DerivedConfigLink{
 		regex: oniguruma.Regex.init(r'http://a   ', oniguruma.Options{}, .utf8, .default_, none)!
 		action: .open
-		highlight: .hover
+		highlight: input.LinkHighlightHover{}
 	}]
 	defer { surf.config.links[0].regex.deinit() }
 	surf.mouse.over_link = true
@@ -1718,7 +1718,7 @@ fn test_mouse_link_preview_forwards_untrimmed_url() ! {
 	surf.config.links = [DerivedConfigLink{
 		regex: oniguruma.Regex.init(r'http://a   ', oniguruma.Options{}, .utf8, .default_, none)!
 		action: .open
-		highlight: .hover
+		highlight: input.LinkHighlightHover{}
 	}]
 	defer { surf.config.links[0].regex.deinit() }
 	mut runtime := apprt.RuntimeApp{}

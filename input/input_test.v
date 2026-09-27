@@ -26,13 +26,14 @@ fn test_link_clone_equal_and_regex() {
 	original := Link{
 		regex: 'https?://[^ ]+'
 		action: .open
-		highlight: .hover_mods
-		mods: Mods.init(true, true, false, false, false, false, SideInfo{})
+		highlight: LinkHighlightHoverMods{
+			mods: Mods.init(true, true, false, false, false, false, SideInfo{})
+		}
 	}
 	cloned := original.clone()
 	assert original.equal(cloned)
 	assert cloned.regex == original.regex
-	assert cloned.mods.equal(original.mods)
+	assert (cloned.highlight as LinkHighlightHoverMods).mods.equal((original.highlight as LinkHighlightHoverMods).mods)
 
 	mut compiled := original.oni_regex()!
 	defer { compiled.deinit() }
@@ -45,34 +46,31 @@ fn test_link_clone_equal_and_regex() {
 		regex: original.regex
 		action: .open_osc8
 		highlight: original.highlight
-		mods: original.mods
 	}
 	assert !original.equal(different)
 	different_mods := Link{
 		regex: original.regex
 		action: original.action
-		highlight: original.highlight
-		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
+		highlight: LinkHighlightHoverMods{
+			mods: Mods.init(false, true, false, false, false, false, SideInfo{})
+		}
 	}
 	assert !original.equal(different_mods)
 }
 
 fn test_link_non_mod_highlight_has_no_mod_payload() {
-	with_stale_mods := Link{
+	always := Link{
 		regex: 'https?://[^ ]+'
 		action: .open
-		highlight: .always
-		mods: Mods.init(false, true, false, false, false, false, SideInfo{})
+		highlight: LinkHighlightAlways{}
 	}
-	canonical := Link{
-		regex: with_stale_mods.regex
+	hover := Link{
+		regex: always.regex
 		action: .open
-		highlight: .always
+		highlight: LinkHighlightHover{}
 	}
-	assert with_stale_mods.equal(canonical)
-	cloned := with_stale_mods.clone()
-	assert cloned.equal(canonical)
-	assert cloned.mods.equal(Mods{})
+	assert !always.equal(hover)
+	assert always.clone().equal(always)
 }
 
 fn test_command_cval_matches_command() {
@@ -247,13 +245,10 @@ fn test_input_helper_source_tag_layouts_and_ordinals() {
 	assert sizeof(LinkAction) == 1
 	assert [LinkAction.open, .open_osc8].map(u8(it)) == [u8(0), 1]
 
-	assert sizeof(LinkHighlight) == 1
-	assert [LinkHighlight.always, .hover, .always_mods, .hover_mods].map(u8(it)) == [
-		u8(0),
-		1,
-		2,
-		3,
-	]
+	assert LinkHighlight(LinkHighlightAlways{}) is LinkHighlightAlways
+	assert LinkHighlight(LinkHighlightHover{}) is LinkHighlightHover
+	assert LinkHighlight(LinkHighlightAlwaysMods{}) is LinkHighlightAlwaysMods
+	assert LinkHighlight(LinkHighlightHoverMods{}) is LinkHighlightHoverMods
 
 	assert sizeof(KeyboardLayout) == 1
 	assert [KeyboardLayout.unknown, .us_standard, .us_international].map(u8(it)) == [

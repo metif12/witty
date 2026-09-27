@@ -20,8 +20,8 @@ fn test_render_cell_map() ! {
 		state.deinit()
 	}
 	mut links := LinkSet.from_config([
-		input.Link{ regex: 'AB', action: .open, highlight: .always },
-		input.Link{ regex: 'EF', action: .open, highlight: .always },
+		input.Link{ regex: 'AB', action: .open, highlight: input.LinkHighlightAlways{} },
+		input.Link{ regex: 'EF', action: .open, highlight: input.LinkHighlightAlways{} },
 	])!
 	defer {
 		links.deinit()
@@ -42,8 +42,8 @@ fn test_render_cell_map_hover() ! {
 		state.deinit()
 	}
 	mut links := LinkSet.from_config([
-		input.Link{ regex: 'AB', action: .open, highlight: .hover },
-		input.Link{ regex: 'EF', action: .open, highlight: .always },
+		input.Link{ regex: 'AB', action: .open, highlight: input.LinkHighlightHover{} },
+		input.Link{ regex: 'EF', action: .open, highlight: input.LinkHighlightAlways{} },
 	])!
 	defer {
 		links.deinit()
@@ -69,8 +69,9 @@ fn test_render_cell_map_modifiers() ! {
 		input.Link{
 			regex: 'EF'
 			action: .open
-			highlight: .always_mods
-			mods: input.Mods.init(false, true, false, false, false, false, input.SideInfo{})
+			highlight: input.LinkHighlightAlwaysMods{
+				mods: input.Mods.init(false, true, false, false, false, false, input.SideInfo{})
+			}
 		},
 	])!
 	defer {

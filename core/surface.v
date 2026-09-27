@@ -1832,7 +1832,6 @@ pub:
 	regex     oniguruma.Regex
 	action    input.LinkAction
 	highlight input.LinkHighlight
-	mods      input.Mods
 }
 
 pub fn DerivedConfig.from_config(config &Config) !DerivedConfig {
@@ -1848,7 +1847,6 @@ pub fn DerivedConfig.from_config(config &Config) !DerivedConfig {
 			regex: regex
 			action: link.action
 			highlight: link.highlight
-			mods: link.mods
 		}
 	}
 	return DerivedConfig{
@@ -6259,9 +6257,13 @@ fn (self &Surface) link_at_pin(pin Pin, mouse_mods ?input.Mods) ?Link {
 	}
 	for link_cfg in self.config.links {
 		if mods := mouse_mods {
-			if link_cfg.highlight in [.always_mods, .hover_mods]
-				&& !link_cfg.mods.equal(mods) {
-				continue
+			match link_cfg.highlight {
+				input.LinkHighlightAlways, input.LinkHighlightHover {}
+				input.LinkHighlightAlwaysMods, input.LinkHighlightHoverMods {
+					if !link_cfg.highlight.mods.equal(mods) {
+						continue
+					}
+				}
 			}
 		}
 		mut it := strmap.search_iterator(link_cfg.regex)

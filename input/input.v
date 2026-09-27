@@ -360,9 +360,6 @@ pub:
 	regex     string
 	action    LinkAction
 	highlight LinkHighlight
-	// Used by the *_mods highlight variants. Zig represents these variants as
-	// tagged-union payloads; V keeps the payload beside the enum tag.
-	mods Mods
 }
 
 // oni_regex compiles the configured expression for renderer link matching.
@@ -376,16 +373,13 @@ pub fn (self &Link) clone() Link {
 		regex: self.regex.clone()
 		action: self.action
 		highlight: self.highlight
-		mods: if self.highlight in [.always_mods, .hover_mods] { self.mods } else { Mods{} }
 	}
 }
 
 // equal compares the action, highlight payload, and regular expression.
 pub fn (self &Link) equal(other Link) bool {
-	if self.action != other.action || self.highlight != other.highlight || self.regex != other.regex {
-		return false
-	}
-	return self.highlight !in [.always_mods, .hover_mods] || self.mods.equal(other.mods)
+	return self.action == other.action && self.highlight == other.highlight
+		&& self.regex == other.regex
 }
 
 pub enum LinkAction as u8 {
@@ -393,12 +387,24 @@ pub enum LinkAction as u8 {
 	open_osc8
 }
 
-pub enum LinkHighlight as u8 {
-	always
-	hover
-	always_mods
-	hover_mods
+pub struct LinkHighlightAlways {}
+
+pub struct LinkHighlightHover {}
+
+pub struct LinkHighlightAlwaysMods {
+pub:
+	mods Mods
 }
+
+pub struct LinkHighlightHoverMods {
+pub:
+	mods Mods
+}
+
+pub type LinkHighlight = LinkHighlightAlways
+	| LinkHighlightHover
+	| LinkHighlightAlwaysMods
+	| LinkHighlightHoverMods
 
 // KeyboardLayout represents a detected keyboard layout.
 pub enum KeyboardLayout as u8 {
