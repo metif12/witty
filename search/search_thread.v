@@ -262,17 +262,7 @@ pub mut:
 
 // The messages that can be sent to the thread.
 //
-// Source: Thread.Message (tagged union). V has no ergonomic payload-
-// carrying unions here, so we model the tag as an enum and carry the
-// payload alongside in Message.
-pub enum MessageType as u8 {
-	// Change the search term. If no prior search term is given this
-	// will start a search. If an existing search term is given this will
-	// stop the prior search and start a new one.
-	change_needle
-	// Select a search result.
-	select_result
-}
+// Source: Thread.Message (tagged union).
 
 // Change the search term. If no prior search term is given this
 // will start a search. If an existing search term is given this will
@@ -292,30 +282,10 @@ pub:
 // tagged union.
 pub type Message = MessageChangeNeedle | MessageSelect
 
-// The tag of the active message variant.
-pub fn (self Message) kind() MessageType {
-	return match self {
-		MessageChangeNeedle { .change_needle }
-		MessageSelect { .select_result }
-	}
-}
-
 // Events that can be emitted from the search thread. The caller
 // chooses to handle these as they see fit.
 //
-// Source: Thread.Event (tagged union), modeled as tag + payload.
-pub enum EventType as u8 {
-	// Search is quitting. The search thread is exiting.
-	quit
-	// Search is complete for the given needle on all screens.
-	complete
-	// Total matches on the current active screen have changed.
-	total_matches
-	// Selected match changed.
-	selected_match
-	// Matches in the viewport have changed.
-	viewport_matches
-}
+// Source: Thread.Event (tagged union).
 
 // ThreadSelectedMatch represents a selected search result for the search
 // thread. Named ThreadSelectedMatch to avoid conflict with SelectedMatch
@@ -360,17 +330,6 @@ pub type Event = EventComplete
 	| EventSelectedMatch
 	| EventTotalMatches
 	| EventViewportMatches
-
-// The tag of the active event variant.
-pub fn (self Event) kind() EventType {
-	return match self {
-		EventQuit { .quit }
-		EventComplete { .complete }
-		EventTotalMatches { .total_matches }
-		EventSelectedMatch { .selected_match }
-		EventViewportMatches { .viewport_matches }
-	}
-}
 
 // Tick result for search progress.
 //

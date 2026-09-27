@@ -13,16 +13,6 @@ fn test_search_source_tag_layouts_and_ordinals() {
 	assert sizeof(Direction) == 1
 	assert [Direction.forward, .reverse].map(u8(it)) == [u8(0), 1]
 
-	assert sizeof(MessageType) == 1
-	assert [MessageType.change_needle, .select_result].map(u8(it)) == [u8(0), 1]
-	assert sizeof(EventType) == 1
-	assert [EventType.quit, .complete, .total_matches, .selected_match, .viewport_matches].map(u8(it)) == [
-		u8(0),
-		1,
-		2,
-		3,
-		4,
-	]
 	assert sizeof(Tick) == 1
 	assert [Tick.complete, .progress, .blocked].map(u8(it)) == [u8(0), 1, 2]
 }
@@ -85,6 +75,6 @@ fn test_search_thread_processes_messages_asynchronously() ! {
 	worker.stop.notify()!
 	thread_.wait()
 	quit_event := <-events.events
-	assert quit_event.kind() == .quit
+	assert quit_event is EventQuit
 	worker.deinit()
 }
