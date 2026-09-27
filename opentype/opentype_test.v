@@ -1,5 +1,7 @@
 module opentype
 
+const opentype_test_font = $embed_file('@VMODROOT/font/res/JuliaMono-Regular.ttf').to_bytes()
+
 // ============================================================
 // Tests for core types (FixedPoint, F26Dot6, etc.)
 // ============================================================
@@ -1161,29 +1163,128 @@ fn test_svg_has_glyph_binary_search_edge() {
 // ============================================================
 
 fn test_sfnt_parse_real_font() {
-	// TODO: needs embedded font data
+	sfnt := SFNT.init(opentype_test_font) or { panic(err) }
+	assert sfnt.offset_subtable.num_tables == 19
+	assert sfnt.records.len == 19
+	assert sfnt.records[18].tag == [u8(`p`), `r`, `e`, `p`]!
 }
 
 fn test_sfnt_get_table_real_font() {
-	// TODO: needs embedded font data
+	sfnt := SFNT.init(opentype_test_font) or { panic(err) }
+	svg := sfnt.get_table('SVG ') or { panic('Julia Mono should contain an SVG table') }
+	assert svg.len == 430
 }
 
 fn test_head_real_font() {
-	// TODO: needs embedded font data
+	sfnt := SFNT.init(opentype_test_font) or { panic(err) }
+	head := Head.init(sfnt.get_table('head') or { panic('missing head table') }) or { panic(err) }
+	assert head.major_version == 1
+	assert head.minor_version == 0
+	assert head.font_revision == Fixed.from(0.05499267578125)
+	assert head.checksum_adjustment == 1007668681
+	assert head.magic_number == 1594834165
+	assert head.flags == 7
+	assert head.units_per_em == 2000
+	assert head.created == 3797757830
+	assert head.modified == 3797760444
+	assert head.x_min == -1000
+	assert head.y_min == -1058
+	assert head.x_max == 3089
+	assert head.y_max == 2400
+	assert head.mac_style == 0
+	assert head.lowest_rec_ppem == 7
+	assert head.font_direction_hint == 2
+	assert head.index_to_loc_format == 1
+	assert head.glyph_data_format == 0
 }
 
 fn test_hhea_real_font() {
-	// TODO: needs embedded font data
+	sfnt := SFNT.init(opentype_test_font) or { panic(err) }
+	hhea := Hhea.init(sfnt.get_table('hhea') or { panic('missing hhea table') }) or { panic(err) }
+	assert hhea.major_version == 1
+	assert hhea.minor_version == 0
+	assert hhea.ascender == 1900
+	assert hhea.descender == -450
+	assert hhea.line_gap == 0
+	assert hhea.advance_width_max == 1200
+	assert hhea.min_left_side_bearing == -1000
+	assert hhea.min_right_side_bearing == -1889
+	assert hhea.x_max_extent == 3089
+	assert hhea.caret_slope_rise == 1
+	assert hhea.caret_slope_run == 0
+	assert hhea.caret_offset == 0
+	assert hhea.reserved0 == 0
+	assert hhea.reserved1 == 0
+	assert hhea.reserved2 == 0
+	assert hhea.reserved3 == 0
+	assert hhea.metric_data_format == 0
+	assert hhea.number_of_h_metrics == 2
 }
 
 fn test_os2_real_font() {
-	// TODO: needs embedded font data
+	sfnt := SFNT.init(opentype_test_font) or { panic(err) }
+	os2 := OS2.init(sfnt.get_table('OS/2') or { panic('missing OS/2 table') }) or { panic(err) }
+	assert os2.version == 4
+	assert os2.x_avg_char_width == 1200
+	assert os2.us_weight_class == 400
+	assert os2.us_width_class == 5
+	assert os2.fs_type == 0
+	assert os2.y_subscript_x_size == 1300
+	assert os2.y_subscript_y_size == 1200
+	assert os2.y_subscript_x_offset == 0
+	assert os2.y_subscript_y_offset == 150
+	assert os2.y_superscript_x_size == 1300
+	assert os2.y_superscript_y_size == 1200
+	assert os2.y_superscript_x_offset == 0
+	assert os2.y_superscript_y_offset == 700
+	assert os2.y_strikeout_size == 100
+	assert os2.y_strikeout_position == 550
+	assert os2.s_family_class == 0
+	assert os2.panose == [u8(2), 11, 6, 9, 6, 3, 0, 2, 0, 4]!
+	assert os2.ul_unicode_range1 == 3843162111
+	assert os2.ul_unicode_range2 == 3603300351
+	assert os2.ul_unicode_range3 == 117760229
+	assert os2.ul_unicode_range4 == 96510060
+	assert os2.ach_vend_id == [u8(`c`), `o`, `r`, `m`]!
+	assert os2.fs_selection.regular()
+	assert os2.fs_selection.use_typo_metrics()
+	assert os2.fs_selection.to_u16() == 0x00c0
+	assert os2.us_first_char_index == 13
+	assert os2.us_last_char_index == 65535
+	assert os2.s_typo_ascender == 1900
+	assert os2.s_typo_descender == -450
+	assert os2.s_typo_line_gap == 0
+	assert os2.us_win_ascent == 2400
+	assert os2.us_win_descent == 450
+	assert os2.ul_code_page_range1 == 1613234687
+	assert os2.ul_code_page_range2 == 0
+	assert os2.has_sx_height && os2.sx_height == 1100
+	assert os2.has_s_cap_height && os2.s_cap_height == 1450
+	assert os2.has_us_default_char && os2.us_default_char == 0
+	assert os2.has_us_break_char && os2.us_break_char == 32
+	assert os2.has_us_max_context && os2.us_max_context == 126
+	assert !os2.has_us_lower_optical_point_size
+	assert !os2.has_us_upper_optical_point_size
 }
 
 fn test_post_real_font() {
-	// TODO: needs embedded font data
+	sfnt := SFNT.init(opentype_test_font) or { panic(err) }
+	post := Post.init(sfnt.get_table('post') or { panic('missing post table') }) or { panic(err) }
+	assert post.version == Version16Dot16.init(2, 0)
+	assert post.italic_angle == Fixed.from(0.0)
+	assert post.underline_position == -200
+	assert post.underline_thickness == 100
+	assert post.is_fixed_pitch == 1
+	assert post.min_mem_type42 == 0
+	assert post.max_mem_type42 == 0
+	assert post.min_mem_type1 == 0
+	assert post.max_mem_type1 == 0
 }
 
 fn test_svg_real_font() {
-	// TODO: needs embedded font data
+	sfnt := SFNT.init(opentype_test_font) or { panic(err) }
+	svg := SVG.init(sfnt.get_table('SVG ') or { panic('missing SVG table') }) or { panic(err) }
+	assert svg.start_glyph_id == 11482
+	assert svg.end_glyph_id == 11482
+	assert svg.has_glyph(11482)
 }
