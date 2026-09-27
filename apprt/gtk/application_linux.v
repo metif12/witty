@@ -1194,7 +1194,7 @@ fn application_config_errors_reload_cb(dialog GObject, data voidptr) {
 	// retain it for a later configuration update.
 	self.config_errors_dialog.set(unsafe { nil })
 	self.reload_config(apprt.Target(apprt.AppTarget{}), false) or {
-		eprintln('error reloading config: ${err}')
+		log.warn('error reloading config: ${err}')
 	}
 }
 
@@ -1330,16 +1330,9 @@ fn application_sigusr2_cb(user_data voidptr) int {
 		return 1
 	}
 	mut self := unsafe { &Application(user_data) }
-	if isnil(self.core_app) {
-		return 1
-	}
-	mut core_app := unsafe { self.core_app }
-	core_app.perform_action(mut self.runtime_bridge, input.ActionReloadConfig{}) or {
-		eprintln('error reloading config after SIGUSR2: ${err}')
-		return 1
-	}
-	self.dispatch_runtime_actions() or {
-		eprintln('error dispatching config reload after SIGUSR2: ${err}')
+	log.info('received SIGUSR2, reloading configuration')
+	self.reload_config(apprt.Target(apprt.AppTarget{}), false) or {
+		log.warn('error reloading config: ${err}')
 	}
 	return 1
 }
@@ -1473,7 +1466,17 @@ fn application_action_quit_cb(action GSimpleAction, parameter GVariant, user_dat
 		return
 	}
 	mut self := unsafe { &Application(user_data) }
-	self.quit()
+	if isnil(self.core_app) {
+		return
+	}
+	mut core_app := unsafe { self.core_app }
+	core_app.perform_action(mut self.runtime_bridge, input.ActionQuit{}) or {
+		log.warn('error quitting err=${err}')
+		return
+	}
+	self.dispatch_runtime_actions() or {
+		log.warn('error quitting err=${err}')
+	}
 }
 
 fn application_action_reload_config_cb(action GSimpleAction, parameter GVariant, user_data voidptr) {
@@ -1483,8 +1486,16 @@ fn application_action_reload_config_cb(action GSimpleAction, parameter GVariant,
 		return
 	}
 	mut self := unsafe { &Application(user_data) }
-	self.reload_config(apprt.Target(apprt.AppTarget{}), false) or {
-		eprintln('error reloading config: ${err}')
+	if isnil(self.core_app) {
+		return
+	}
+	mut core_app := unsafe { self.core_app }
+	core_app.perform_action(mut self.runtime_bridge, input.ActionReloadConfig{}) or {
+		log.warn('error reloading config err=${err}')
+		return
+	}
+	self.dispatch_runtime_actions() or {
+		log.warn('error reloading config err=${err}')
 	}
 }
 
@@ -1543,16 +1554,12 @@ fn application_global_shortcut_trigger(action input.Action, user_data voidptr) {
 		return
 	}
 	mut core_app := unsafe { self.core_app }
-	if action.scope() == .surface {
-		core_app.perform_all_surface_action(action)
-		return
-	}
-	core_app.perform_action(mut self.runtime_bridge, action) or {
-		eprintln('failed to perform global shortcut action: ${err}')
+	core_app.perform_all_action(mut self.runtime_bridge, action) or {
+		log.warn('failed to perform action=${err}')
 		return
 	}
 	self.dispatch_runtime_actions() or {
-		eprintln('failed to dispatch global shortcut action: ${err}')
+		log.warn('failed to perform action=${err}')
 	}
 }
 
@@ -1653,15 +1660,16 @@ fn (mut self Application) handle_style_manager_dark(style voidptr) {
 	} else {
 		apprt.ColorScheme.dark
 	}
+	log.debug('style manager changed scheme=${scheme}')
 	if !isnil(self.core_app) {
 		mut core_app := unsafe { self.core_app }
 		core_app.color_scheme_event(mut self.runtime_bridge, scheme) or {
-			eprintln('error updating app color scheme: ${err}')
+			log.warn('error updating app color scheme err=${err}')
+		}
+		self.dispatch_runtime_actions() or {
+			log.warn('error updating app color scheme err=${err}')
 		}
 		core_app.color_scheme_surfaces(scheme)
-		self.dispatch_runtime_actions() or {
-			eprintln('error reloading config for color scheme: ${err}')
-		}
 	}
 	if gtk_runtime_at_least(4, 20, 0) {
 		gtk_scheme := application_interface_color_scheme(scheme)

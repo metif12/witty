@@ -202,6 +202,7 @@ import configpkg
 import datastruct
 import font
 import input
+import log
 
 // SurfaceList is a list of active surfaces managed by the app.
 // TODO: When full apprt.Surface type is available, change to []&apprt.Surface.
@@ -595,7 +596,9 @@ pub fn (mut self App) color_scheme_surfaces(scheme apprt.ColorScheme) {
 			continue
 		}
 		mut core_surface := surface.core_surface
-		core_surface.color_scheme_callback(scheme) or {}
+		core_surface.color_scheme_callback(scheme) or {
+			log.warn('unable to tell surface about color scheme change err=${err}')
+		}
 	}
 }
 
