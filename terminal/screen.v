@@ -2943,8 +2943,7 @@ fn (mut self Screen) cursor_change_pin(new Pin) {
 	// as the pins are not equal
 	if !self.cursor.page_pin.eql(new) {
 		self.cursor_mark_dirty()
-		mut new_pin := new
-		new_pin.mark_dirty()
+		new.mark_dirty()
 	}
 
 	// If our pin is on the same page, then we can just update the pin.

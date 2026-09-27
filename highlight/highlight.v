@@ -164,9 +164,13 @@ pub fn Tracked.init(mut list terminal.PageList, start terminal.Pin, end terminal
 // Initialize from pins that are already tracked.
 // Do not call deinit on highlights created with this function.
 pub fn Tracked.init_assume(start &terminal.Pin, end &terminal.Pin) Tracked {
-	return Tracked{
-		start: start
-		end: end
+	// This source API intentionally accepts caller-owned pins whose lifetime
+	// must outlive the temporary highlight; they need not be heap allocated.
+	unsafe {
+		return Tracked{
+			start: start
+			end: end
+		}
 	}
 }
 

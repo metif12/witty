@@ -2383,7 +2383,6 @@ pub enum PageViewport as u8 {
 // Pin - a position within the PageList
 // ============================================================
 
-@[heap]
 pub struct Pin {
 pub mut:
 	node    &PageNode = unsafe { nil }
@@ -2401,7 +2400,7 @@ pub enum PinCellSubset as u8 {
 }
 
 // Returns the row and cell at this pin's position.
-pub fn (self &Pin) row_and_cell() RowAndCell {
+pub fn (self Pin) row_and_cell() RowAndCell {
 	assert !isnil(self.node)
 	assert self.y < self.node.data.size.rows
 	assert self.x < self.node.data.size.cols
@@ -2413,7 +2412,7 @@ pub fn (self &Pin) row_and_cell() RowAndCell {
 }
 
 // Returns the cells for this pin's row. Left and right are inclusive of x.
-pub fn (self &Pin) cells(subset PinCellSubset) []CellData {
+pub fn (self Pin) cells(subset PinCellSubset) []CellData {
 	rac := self.row_and_cell()
 	all := rac.row.cells[..int(self.node.data.size.cols)]
 	return match subset {
@@ -2425,12 +2424,12 @@ pub fn (self &Pin) cells(subset PinCellSubset) []CellData {
 
 // Returns the extra codepoints for a grapheme cell. The cell's first
 // codepoint remains stored directly on the cell and is not returned here.
-pub fn (self &Pin) grapheme(cell &CellData) ?[]u32 {
+pub fn (self Pin) grapheme(cell &CellData) ?[]u32 {
 	return self.node.data.lookup_grapheme(cell)
 }
 
 // Returns the resolved style for a cell on this pin's page.
-pub fn (self &Pin) style(cell &CellData) CellStyle {
+pub fn (self Pin) style(cell &CellData) CellStyle {
 	if cell.style_id == default_style_id {
 		return CellStyle{}
 	}
@@ -2438,27 +2437,29 @@ pub fn (self &Pin) style(cell &CellData) CellStyle {
 }
 
 // Returns the row data at this pin's position.
-pub fn (self &Pin) row_data() &RowData {
+pub fn (self Pin) row_data() &RowData {
 	return self.row_and_cell().row
 }
 
 // Returns the cell data at this pin's position.
-pub fn (self &Pin) cell_data() &CellData {
+pub fn (self Pin) cell_data() &CellData {
 	return self.row_and_cell().cell
 }
 
 // Returns true if the row at this pin is dirty.
-pub fn (self &Pin) is_dirty() bool {
+pub fn (self Pin) is_dirty() bool {
 	return self.node.data.dirty || self.node.data.rows[int(self.y)].dirty
 }
 
 // Mark the row at this pin as dirty.
-pub fn (mut self Pin) mark_dirty() {
-	self.node.data.rows[int(self.y)].dirty = true
+pub fn (self Pin) mark_dirty() {
+	unsafe {
+		self.node.data.rows[int(self.y)].dirty = true
+	}
 }
 
 // Returns true if pins reference the same position.
-pub fn (self &Pin) eql(other Pin) bool {
+pub fn (self Pin) eql(other Pin) bool {
 	p := voidptr(self.node)
 	q := voidptr(other.node)
 	return p == q && self.y == other.y && self.x == other.x
@@ -2466,7 +2467,7 @@ pub fn (self &Pin) eql(other Pin) bool {
 
 // Returns true if self is before other in the linked list.
 // This is O(N) - must traverse the linked list.
-pub fn (self &Pin) before(other Pin) bool {
+pub fn (self Pin) before(other Pin) bool {
 	p := voidptr(self.node)
 	q := voidptr(other.node)
 	if p == q {
@@ -2491,7 +2492,7 @@ pub fn (self &Pin) before(other Pin) bool {
 }
 
 // Returns true if self is between top and bottom (inclusive).
-pub fn (self &Pin) is_between(top_pin Pin, bottom_pin Pin) bool {
+pub fn (self Pin) is_between(top_pin Pin, bottom_pin Pin) bool {
 	$if !prod {
 		if voidptr(top_pin.node) == voidptr(bottom_pin.node) {
 			assert top_pin.y <= bottom_pin.y
@@ -2550,31 +2551,31 @@ pub fn (self &Pin) is_between(top_pin Pin, bottom_pin Pin) bool {
 // ---- Movement methods ----
 
 // Move left by n columns (asserts n <= x).
-pub fn (self &Pin) left(n usize) Pin {
+pub fn (self Pin) left(n usize) Pin {
 	assert n <= usize(self.x), 'Pin.left: n=${n} > x=${self.x}'
-	mut result := *self
+	mut result := self
 	result.x -= u16(n)
 	return result
 }
 
 // Move right by n columns (asserts fits in row).
-pub fn (self &Pin) right(n usize) Pin {
+pub fn (self Pin) right(n usize) Pin {
 	assert usize(self.x) + n < usize(self.node.data.size.cols), 'Pin.right: overflow'
-	mut result := *self
+	mut result := self
 	result.x += u16(n)
 	return result
 }
 
 // Move left, clamping at 0.
-pub fn (self &Pin) left_clamp(n u16) Pin {
-	mut result := *self
+pub fn (self Pin) left_clamp(n u16) Pin {
+	mut result := self
 	result.x = if n > self.x { u16(0) } else { self.x - n }
 	return result
 }
 
 // Move right, clamping at end of row.
-pub fn (self &Pin) right_clamp(n u16) Pin {
-	mut result := *self
+pub fn (self Pin) right_clamp(n u16) Pin {
+	mut result := self
 	max_x := self.node.data.size.cols - 1
 	sum := u32(self.x) + u32(n)
 	result.x = if sum > u32(max_x) { max_x } else { u16(sum) }
@@ -2583,7 +2584,7 @@ pub fn (self &Pin) right_clamp(n u16) Pin {
 
 // Move left by n cells, wrapping to preceding rows as needed.
 // Returns none if the movement goes beyond the start of the page list.
-pub fn (self &Pin) left_wrap(n usize) ?Pin {
+pub fn (self Pin) left_wrap(n usize) ?Pin {
 	cols := usize(self.node.data.size.cols)
 	remaining_in_row := usize(self.x)
 	if n <= remaining_in_row {
@@ -2599,7 +2600,7 @@ pub fn (self &Pin) left_wrap(n usize) ?Pin {
 
 // Move right by n cells, wrapping to following rows as needed.
 // Returns none if the movement goes beyond the end of the page list.
-pub fn (self &Pin) right_wrap(n usize) ?Pin {
+pub fn (self Pin) right_wrap(n usize) ?Pin {
 	cols := usize(self.node.data.size.cols)
 	remaining_in_row := cols - usize(self.x) - 1
 	if n <= remaining_in_row {
@@ -2614,7 +2615,7 @@ pub fn (self &Pin) right_wrap(n usize) ?Pin {
 }
 
 // Move down by n rows, crossing page boundaries. Returns none if overflow.
-pub fn (self &Pin) down(n usize) ?Pin {
+pub fn (self Pin) down(n usize) ?Pin {
 	result := self.down_overflow(n)
 	return match result {
 		DownOverflowOffset { result.pin }
@@ -2623,7 +2624,7 @@ pub fn (self &Pin) down(n usize) ?Pin {
 }
 
 // Move up by n rows, crossing page boundaries. Returns none if overflow.
-pub fn (self &Pin) up(n usize) ?Pin {
+pub fn (self Pin) up(n usize) ?Pin {
 	result := self.up_overflow(n)
 	return match result {
 		UpOverflowOffset { result.pin }
@@ -2646,7 +2647,7 @@ pub:
 pub type DownOverflowResult = DownOverflowOffset | DownOverflowOverflow
 
 // Move down by n, returning overflow info if past end.
-pub fn (self &Pin) down_overflow(n usize) DownOverflowResult {
+pub fn (self Pin) down_overflow(n usize) DownOverflowResult {
 	mut rem := n
 	mut node := self.node
 	mut y := usize(self.y)
@@ -2719,7 +2720,7 @@ pub:
 pub type UpOverflowResult = UpOverflowOffset | UpOverflowOverflow
 
 // Move up by n, returning overflow info if past beginning.
-pub fn (self &Pin) up_overflow(n usize) UpOverflowResult {
+pub fn (self Pin) up_overflow(n usize) UpOverflowResult {
 	mut rem := n
 	mut y := usize(self.y)
 
@@ -2776,7 +2777,7 @@ pub fn (self &Pin) up_overflow(n usize) UpOverflowResult {
 
 // ---- Pin iterator factories ----
 
-pub fn (self &Pin) page_iterator(direction IterDirection, limit ?Pin) PageIterator {
+pub fn (self Pin) page_iterator(direction IterDirection, limit ?Pin) PageIterator {
 	$if !prod {
 		if lim := limit {
 			match direction {
@@ -2784,13 +2785,13 @@ pub fn (self &Pin) page_iterator(direction IterDirection, limit ?Pin) PageIterat
 					assert self.eql(lim) || self.before(lim)
 				}
 				.left_up {
-					assert self.eql(lim) || lim.before(*self)
+					assert self.eql(lim) || lim.before(self)
 				}
 			}
 		}
 	}
 	return PageIterator{
-		row: *self
+		row: self
 		direction: direction
 		limit: if lim := limit {
 			PageIteratorLimit(PageIteratorLimitRow{
@@ -2802,7 +2803,7 @@ pub fn (self &Pin) page_iterator(direction IterDirection, limit ?Pin) PageIterat
 	}
 }
 
-pub fn (self &Pin) row_iterator(direction IterDirection, limit ?Pin) RowIterator {
+pub fn (self Pin) row_iterator(direction IterDirection, limit ?Pin) RowIterator {
 	mut page_it := self.page_iterator(direction, limit)
 	chunk := page_it.next() or {
 		return RowIterator{
@@ -2819,7 +2820,7 @@ pub fn (self &Pin) row_iterator(direction IterDirection, limit ?Pin) RowIterator
 	}
 }
 
-pub fn (self &Pin) cell_iterator(direction IterDirection, limit ?Pin) CellIterator {
+pub fn (self Pin) cell_iterator(direction IterDirection, limit ?Pin) CellIterator {
 	mut row_it := self.row_iterator(direction, limit)
 	mut cell := row_it.next() or {
 		return CellIterator{
@@ -2833,9 +2834,9 @@ pub fn (self &Pin) cell_iterator(direction IterDirection, limit ?Pin) CellIterat
 	}
 }
 
-pub fn (self &Pin) prompt_iterator(direction IterDirection, limit ?Pin) PromptIterator {
+pub fn (self Pin) prompt_iterator(direction IterDirection, limit ?Pin) PromptIterator {
 	return PromptIterator{
-		current: *self
+		current: self
 		limit: limit
 		direction: direction
 	}
@@ -3012,9 +3013,14 @@ pub fn (self &PageTrackedPinsRemap) get(old_pin &Pin) ?&Pin {
 
 fn (mut self PageTrackedPinsRemap) put_no_clobber(old_pin &Pin, new_pin &Pin) {
 	assert self.get(old_pin) == none
-	self.entries << PageTrackedPinPair{
-		old_pin: old_pin
-		new_pin: new_pin
+	// Both pointers are PageList-tracked pins allocated with `&Pin{}`. V's
+	// escape checker cannot derive that lifetime once Pin itself is allowed to
+	// remain a value for ordinary cursor movement.
+	unsafe {
+		self.entries << PageTrackedPinPair{
+			old_pin: old_pin
+			new_pin: new_pin
+		}
 	}
 }
 
