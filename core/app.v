@@ -702,7 +702,8 @@ pub fn (mut self App) perform_action(mut rt_app apprt.RuntimeApp, action input.A
 			rt_app.perform_action(app_target, .open_config, apprt.ActionVoid{})!
 		}
 		input.ActionReloadConfig {
-			rt_app.perform_action(app_target, .reload_config, apprt.ActionVoid{})!
+			rt_app.perform_action(app_target, .reload_config,
+				apprt.ActionValue(apprt.ReloadConfig{ soft: false }))!
 		}
 		input.ActionCloseAllWindows {
 			rt_app.perform_action(app_target, .close_all_windows, apprt.ActionVoid{})!
