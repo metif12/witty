@@ -660,8 +660,8 @@ pub fn (mut self ImageRenderState) kitty_update(t &terminal.Terminal, cell_size 
 	// points. This lets us determine offsets and containment of placements.
 	top := t.screens.active.pages.get_top_left(.viewport)
 	bot := t.screens.active.pages.get_bottom_right(.viewport) or { panic('viewport has no bottom-right') }
-	top_y := (t.screens.active.pages.point_from_pin(.screen, top) or { panic('viewport top is off screen') }).coordinate.y
-	bot_y := (t.screens.active.pages.point_from_pin(.screen, bot) or { panic('viewport bottom is off screen') }).coordinate.y
+	top_y := (t.screens.active.pages.point_from_pin(.screen, top) or { panic('viewport top is off screen') }).coord().y
+	bot_y := (t.screens.active.pages.point_from_pin(.screen, bot) or { panic('viewport bottom is off screen') }).coord().y
 
 	mut pinned := []KittyPinnedPlacement{}
 	mut has_virtual := false
@@ -830,10 +830,10 @@ fn (mut self ImageRenderState) prep_kitty_placement(t &terminal.Terminal, top_y 
 	// This is expensive but necessary.
 	img_top_y := (t.screens.active.pages.point_from_pin(.screen, rect.top_left) or {
 		panic('placement top-left is off screen')
-	}).coordinate.y
+	}).coord().y
 	img_bot_y := (t.screens.active.pages.point_from_pin(.screen, rect.bottom_right) or {
 		panic('placement bottom-right is off screen')
-	}).coordinate.y
+	}).coord().y
 
 	// If the selection isn't within our viewport then skip it.
 	if img_top_y > bot_y {
@@ -915,7 +915,7 @@ fn (mut self ImageRenderState) prep_kitty_virtual_placement(mut storage terminal
 		// up one row.
 		panic('virtual placement is outside the viewport')
 	}
-	viewport_y := viewport.coordinate.y
+	viewport_y := viewport.coord().y
 
 	// Prepare the image for the GPU and store the placement.
 	self.prep_kitty_image(image)!

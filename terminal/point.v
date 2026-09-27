@@ -46,28 +46,52 @@ pub enum PointTag as u8 {
 }
 
 // An x/y point in the terminal for some definition of location (tag).
-//
-// In Zig this is a tagged union (union(Tag)) with each variant holding a
-// Coordinate. In V we represent it as a struct with a tag and coordinate,
-// since V doesn't have tagged unions in the Zig sense.
-pub struct Point {
-pub mut:
-	tag        PointTag = .active
+pub struct PointActive {
+pub:
 	coordinate Coordinate
 }
 
+pub struct PointViewport {
+pub:
+	coordinate Coordinate
+}
+
+pub struct PointScreen {
+pub:
+	coordinate Coordinate
+}
+
+pub struct PointHistory {
+pub:
+	coordinate Coordinate
+}
+
+pub type Point = PointActive | PointViewport | PointScreen | PointHistory
+
 // Create a Point for the given tag and coordinate.
 pub fn Point.new(tag PointTag, coord Coordinate) Point {
-	return Point{
-		tag:        tag
-		coordinate: coord
+	return match tag {
+		.active { Point(PointActive{ coordinate: coord }) }
+		.viewport { Point(PointViewport{ coordinate: coord }) }
+		.screen { Point(PointScreen{ coordinate: coord }) }
+		.history { Point(PointHistory{ coordinate: coord }) }
 	}
 }
 
-// Returns the coordinate regardless of tag (equivalent to Zig's
-// switch-on-all-variants returning the payload).
+// Returns the coordinate regardless of tag.
 pub fn (self &Point) coord() Coordinate {
-	return self.coordinate
+	return match self {
+		PointActive, PointViewport, PointScreen, PointHistory { self.coordinate }
+	}
+}
+
+pub fn (self &Point) tag() PointTag {
+	return match self {
+		PointActive { .active }
+		PointViewport { .viewport }
+		PointScreen { .screen }
+		PointHistory { .history }
+	}
 }
 
 // Coordinate represents an x/y position within the terminal grid.

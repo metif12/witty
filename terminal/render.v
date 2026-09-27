@@ -323,9 +323,7 @@ pub fn (mut self RenderState) update(mut t Terminal) {
 	mut last_dirty_page := &Page(unsafe { nil })
 
 	// Go through and setup our rows.
-	mut row_it := s.pages.row_iterator(.right_down, Point{
-		tag: .viewport
-	}, none)
+	mut row_it := s.pages.row_iterator(.right_down, Point.new(.viewport, Coordinate{}), none)
 	mut next_y := 0
 	mut any_dirty := false
 	for {
@@ -566,8 +564,8 @@ fn (mut self RenderState) update_selection(s &Screen, sel Selection, redraw bool
 
 	// Grab the inefficient data we need from the selection. At
 	// least we can cache it.
-	tl := (s.pages.point_from_pin(.screen, cache.tl_pin) or { panic('selection top-left is off screen') }).coordinate
-	br := (s.pages.point_from_pin(.screen, cache.br_pin) or { panic('selection bottom-right is off screen') }).coordinate
+	tl := (s.pages.point_from_pin(.screen, cache.tl_pin) or { panic('selection top-left is off screen') }).coord()
+	br := (s.pages.point_from_pin(.screen, cache.br_pin) or { panic('selection bottom-right is off screen') }).coord()
 
 	// We need to determine if our selection is within the viewport.
 	// The viewport is generally very small so the efficient way to
@@ -575,7 +573,7 @@ fn (mut self RenderState) update_selection(s &Screen, sel Selection, redraw bool
 	// matching selection pages.
 	for mut row in self.row_data {
 		pin := row.pin
-		p := (s.pages.point_from_pin(.screen, pin) or { panic('render row pin is off screen') }).coordinate
+		p := (s.pages.point_from_pin(.screen, pin) or { panic('render row pin is off screen') }).coord()
 		row_sel := sel.contained_row_cached(s, cache.tl_pin, cache.br_pin, pin, tl, br, p) or {
 			continue
 		}

@@ -67,10 +67,7 @@ pub fn (mut self CellChooser) draw(context cimgui.Context, pages &terminal.PageL
 		return
 	}
 	context.text_disabled('Range: x 0..${maximum.x}, y 0..${maximum.y}')
-	pin := pages.pin(terminal.Point{
-		tag:        self.lookup_region
-		coordinate: self.lookup_coord
-	}) or {
+	pin := pages.pin(terminal.Point.new(self.lookup_region, self.lookup_coord)) or {
 		context.text_disabled('(cell out of range)')
 		return
 	}
@@ -94,7 +91,7 @@ pub fn (mut self CellChooser) draw(context cimgui.Context, pages &terminal.PageL
 
 fn max_coord(pages &terminal.PageList, tag terminal.PointTag) ?terminal.Coordinate {
 	bottom_right := pages.get_bottom_right(tag) or { return none }
-	return (pages.point_from_pin(tag, bottom_right) or { return none }).coordinate
+	return (pages.point_from_pin(tag, bottom_right) or { return none }).coord()
 }
 
 fn draw_cell_info(context cimgui.Context, cell terminal.CellData, row terminal.RowData, coord terminal.Coordinate, pin terminal.Pin) {
@@ -359,14 +356,14 @@ fn draw_pagelist_region(context cimgui.Context, pages &terminal.PageList, tag te
 	context.help_marker(region_help_text(tag))
 	context.table_set_column(2)
 	if top_left_point := pages.point_from_pin(tag, top_left) {
-		context.text('(${top_left_point.coordinate.x}, ${top_left_point.coordinate.y})')
+		context.text('(${top_left_point.coord().x}, ${top_left_point.coord().y})')
 	} else {
 		context.text_disabled('(empty)')
 	}
 	context.table_set_column(3)
 	if bottom := bottom_right {
 		if bottom_point := pages.point_from_pin(tag, bottom) {
-			context.text('(${bottom_point.coordinate.x}, ${bottom_point.coordinate.y})')
+			context.text('(${bottom_point.coord().x}, ${bottom_point.coord().y})')
 			return
 		}
 	}
@@ -395,7 +392,7 @@ fn draw_tracked_pins(context cimgui.Context, pages &terminal.PageList) {
 		context.text(index.str())
 		context.table_set_column(1)
 		if point := pages.point_from_pin(.screen, *pin) {
-			context.text('(${point.coordinate.x}, ${point.coordinate.y})')
+			context.text('(${point.coord().x}, ${point.coord().y})')
 		} else {
 			context.text_disabled('(none)')
 		}

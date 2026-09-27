@@ -467,13 +467,10 @@ pub fn (mut self ImageStorage) delete(mut t Terminal, cmd Delete) {
 			self.delete_by_id(mut t.screens.active, img.id, cmd.placement_id, cmd.delete)
 		}
 		DeleteIntersectCursor {
-			self.delete_intersecting(mut t, Point{
-				tag:        .active
-				coordinate: Coordinate{
+			self.delete_intersecting(mut t, Point.new(.active, Coordinate{
 					x: u16(t.screens.active.cursor.x)
 					y: t.screens.active.cursor.y
-				}
-			}, cmd.delete, none)
+			}), cmd.delete, none)
 		}
 		DeleteIntersectCell {
 			if cmd.x <= 0 || cmd.y <= 0 {
@@ -482,13 +479,10 @@ pub fn (mut self ImageStorage) delete(mut t Terminal, cmd Delete) {
 			if cmd.x - 1 > max_u16 || cmd.y - 1 > max_u16 {
 				return
 			}
-			self.delete_intersecting(mut t, Point{
-				tag:        .active
-				coordinate: Coordinate{
+			self.delete_intersecting(mut t, Point.new(.active, Coordinate{
 					x: u16(cmd.x - 1)
 					y: cmd.y - 1
-				}
-			}, cmd.delete, none)
+			}), cmd.delete, none)
 		}
 		DeleteIntersectCellZ {
 			if cmd.x <= 0 || cmd.y <= 0 {
@@ -497,13 +491,10 @@ pub fn (mut self ImageStorage) delete(mut t Terminal, cmd Delete) {
 			if cmd.x - 1 > max_u16 || cmd.y - 1 > max_u16 {
 				return
 			}
-			self.delete_intersecting(mut t, Point{
-				tag:        .active
-				coordinate: Coordinate{
+			self.delete_intersecting(mut t, Point.new(.active, Coordinate{
 					x: u16(cmd.x - 1)
 					y: cmd.y - 1
-				}
-			}, cmd.delete, cmd.z)
+			}), cmd.delete, cmd.z)
 		}
 		DeleteColumn {
 			if cmd.x <= 0 {
@@ -542,12 +533,9 @@ pub fn (mut self ImageStorage) delete(mut t Terminal, cmd Delete) {
 			if cmd.y - 1 > max_u16 {
 				return
 			}
-			target_pin := t.screens.active.pages.pin(Point{
-				tag:        .active
-				coordinate: Coordinate{
+			target_pin := t.screens.active.pages.pin(Point.new(.active, Coordinate{
 					y: cmd.y - 1
-				}
-			}) or { return }
+			})) or { return }
 
 			mut i := 0
 			for i < self.placements.len {
@@ -840,8 +828,6 @@ struct EvictCandidate {
 
 // Our pin for the placement
 fn track_pin(mut t Terminal, pt Coordinate) &Pin {
-	return t.screens.active.pages.track_pin(t.screens.active.pages.pin(Point{
-		tag:        .active
-		coordinate: pt
-	}) or { panic('placement point is outside the active area') })
+	return t.screens.active.pages.track_pin(t.screens.active.pages.pin(Point.new(.active,
+		pt)) or { panic('placement point is outside the active area') })
 }

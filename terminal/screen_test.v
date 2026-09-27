@@ -6205,7 +6205,7 @@ fn test_screen_resize_more_cols_reflows_pinned_viewport() ! {
 	// so the tracked viewport follows it instead of jumping to active row 1.
 	assert must_point(s, .screen, s.pages.get_top_left(.active)) == screen_pt(0, 1)
 	assert s.pages.viewport == .pin
-	assert must_point(s, .screen, s.pages.get_top_left(.viewport)).coordinate.y == 0
+	assert must_point(s, .screen, s.pages.get_top_left(.viewport)).coord().y == 0
 }
 
 // Ghostty's Screen.clone builds a fresh cursor with only the position and

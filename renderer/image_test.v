@@ -300,7 +300,7 @@ fn test_kitty_virtual_placement_uses_viewport_relative_row() ! {
 	// Push three rows into history so the viewport starts at screen row 3.
 	t.print_string('a\nb\nc\nd\ne\nf\ng\nh')!
 	top := t.screens.active.pages.get_top_left(.viewport)
-	top_y := (t.screens.active.pages.point_from_pin(.screen, top) or { panic('viewport top is off screen') }).coordinate.y
+	top_y := (t.screens.active.pages.point_from_pin(.screen, top) or { panic('viewport top is off screen') }).coord().y
 	assert top_y == 3
 	pin := t.screens.active.pages.pin(terminal.Point.new(.screen, terminal.Coordinate{
 		x: 2

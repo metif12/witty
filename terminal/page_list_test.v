@@ -96,10 +96,10 @@ fn assert_page_list_semantic_highlight(pl &PageList, at Pin, content SemanticCon
 		assert false
 		return
 	}
-	assert start_point.tag == .screen
+	assert start_point is PointScreen
 	assert start_point.coord().x == start.x
 	assert start_point.coord().y == start.y
-	assert end_point.tag == .screen
+	assert end_point is PointScreen
 	assert end_point.coord().x == end.x
 	assert end_point.coord().y == end.y
 }
@@ -692,7 +692,7 @@ fn test_page_pin_row_cell_grapheme_and_style_accessors() {
 	pin.mark_dirty()
 	assert page_cell.is_dirty()
 	screen_point := page_cell.screen_point()
-	assert screen_point.tag == .screen
+	assert screen_point is PointScreen
 	assert screen_point.coord() == Coordinate{ x: 1, y: 1 }
 }
 
@@ -2345,7 +2345,7 @@ fn test_page_list_clone() {
 	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
 	defer { s.deinit() }
 
-	mut c := s.clone(PageCloneOpts{ top: Point{ tag: .screen } }) or { panic(err) }
+	mut c := s.clone(PageCloneOpts{ top: Point.new(.screen, Coordinate{}) }) or { panic(err) }
 	defer { c.deinit() }
 
 	assert c.total_rows == s.total_rows
@@ -2359,7 +2359,7 @@ fn test_page_list_clone_with_history() {
 
 	s.grow_rows(100)
 
-	mut c := s.clone(PageCloneOpts{ top: Point{ tag: .screen } }) or { panic(err) }
+	mut c := s.clone(PageCloneOpts{ top: Point.new(.screen, Coordinate{}) }) or { panic(err) }
 	defer { c.deinit() }
 
 	assert c.total_rows == s.total_rows
@@ -2371,11 +2371,8 @@ fn test_page_list_clone_partial_trimmed_right() {
 	s.grow_rows(30)
 
 	mut c := s.clone(PageCloneOpts{
-		top: Point{ tag: .screen }
-		bot: Point{
-			tag: .screen
-			coordinate: Coordinate{ y: 39 }
-		}
+		top: Point.new(.screen, Coordinate{})
+		bot: Point.new(.screen, Coordinate{ y: 39 })
 	}) or { panic(err) }
 	defer { c.deinit() }
 	assert c.count_total_rows() == 40
@@ -2387,10 +2384,7 @@ fn test_page_list_clone_partial_trimmed_left() {
 	s.grow_rows(30)
 
 	mut c := s.clone(PageCloneOpts{
-		top: Point{
-			tag: .screen
-			coordinate: Coordinate{ y: 10 }
-		}
+		top: Point.new(.screen, Coordinate{ y: 10 })
 	}) or { panic(err) }
 	defer { c.deinit() }
 	assert c.count_total_rows() == 40
@@ -2420,10 +2414,7 @@ fn test_page_list_clone_partial_trimmed_left_reclaims_styles() {
 	assert first.data.styles.set.count() == 1
 
 	mut c := s.clone(PageCloneOpts{
-		top: Point{
-			tag: .screen
-			coordinate: Coordinate{ y: 10 }
-		}
+		top: Point.new(.screen, Coordinate{ y: 10 })
 	}) or { panic(err) }
 	defer { c.deinit() }
 	assert c.count_total_rows() == 40
@@ -2440,14 +2431,8 @@ fn test_page_list_clone_partial_trimmed_both() {
 	s.grow_rows(30)
 
 	mut c := s.clone(PageCloneOpts{
-		top: Point{
-			tag: .screen
-			coordinate: Coordinate{ y: 10 }
-		}
-		bot: Point{
-			tag: .screen
-			coordinate: Coordinate{ y: 35 }
-		}
+		top: Point.new(.screen, Coordinate{ y: 10 })
+		bot: Point.new(.screen, Coordinate{ y: 35 })
 	}) or { panic(err) }
 	defer { c.deinit() }
 	assert c.count_total_rows() == 26
@@ -2459,14 +2444,8 @@ fn test_page_list_clone_ignores_valid_horizontal_coordinates() {
 	s.grow_rows(30)
 
 	mut c := s.clone(PageCloneOpts{
-		top: Point{
-			tag: .screen
-			coordinate: Coordinate{ x: 9, y: 10 }
-		}
-		bot: Point{
-			tag: .screen
-			coordinate: Coordinate{ x: 9, y: 35 }
-		}
+		top: Point.new(.screen, Coordinate{ x: 9, y: 10 })
+		bot: Point.new(.screen, Coordinate{ x: 9, y: 35 })
 	}) or { panic(err) }
 	defer { c.deinit() }
 	assert c.count_total_rows() == 26
@@ -2483,10 +2462,7 @@ fn test_page_list_clone_remap_tracked_pin() {
 	mut remap := PageTrackedPinsRemap.init()
 	defer { remap.deinit() }
 	mut c := s.clone(PageCloneOpts{
-		top: Point{
-			tag: .active
-			coordinate: Coordinate{ y: 5 }
-		}
+		top:          Point.new(.active, Coordinate{ y: 5 })
 		tracked_pins: &remap
 	}) or { panic(err) }
 	defer { c.deinit() }
@@ -2514,10 +2490,7 @@ fn test_page_list_clone_remap_tracked_pin_not_in_cloned_area() {
 	mut remap := PageTrackedPinsRemap.init()
 	defer { remap.deinit() }
 	mut c := s.clone(PageCloneOpts{
-		top: Point{
-			tag: .active
-			coordinate: Coordinate{ y: 5 }
-		}
+		top:          Point.new(.active, Coordinate{ y: 5 })
 		tracked_pins: &remap
 	}) or { panic(err) }
 	defer { c.deinit() }
@@ -2528,19 +2501,13 @@ fn test_page_list_clone_full_dirty() {
 	mut s := PageList.init(80, 24, none)
 	defer { s.deinit() }
 	for y in [u16(0), 12, 23] {
-		s.mark_dirty(Point{
-			tag: .active
-			coordinate: Coordinate{ y: y }
-		})
+		s.mark_dirty(Point.new(.active, Coordinate{ y: y }))
 	}
 
-	mut c := s.clone(PageCloneOpts{ top: Point{ tag: .screen } }) or { panic(err) }
+	mut c := s.clone(PageCloneOpts{ top: Point.new(.screen, Coordinate{}) }) or { panic(err) }
 	defer { c.deinit() }
 	for y in 0 .. 24 {
-		assert c.is_dirty(Point{
-			tag: .active
-			coordinate: Coordinate{ y: u32(y) }
-		}) == (y in [0, 12, 23])
+		assert c.is_dirty(Point.new(.active, Coordinate{ y: u32(y) })) == (y in [0, 12, 23])
 	}
 }
 
@@ -2549,7 +2516,7 @@ fn test_page_list_clone_restarts_page_serials() {
 	defer { s.deinit() }
 	s.grow_rows(usize(initial_capacity(s.cols).rows))
 
-	mut cloned := s.clone(PageCloneOpts{ top: Point{ tag: .screen } }) or { panic(err) }
+	mut cloned := s.clone(PageCloneOpts{ top: Point.new(.screen, Coordinate{}) }) or { panic(err) }
 	defer { cloned.deinit() }
 	mut expected := u64(0)
 	mut node := cloned.pages.first
@@ -2569,7 +2536,7 @@ fn test_page_list_clone_active_only() {
 	s.grow_rows(100)
 
 	mut c := s.clone(PageCloneOpts{
-		top: Point{ tag: .active }
+		top: Point.new(.active, Coordinate{})
 	}) or { panic(err) }
 	defer { c.deinit() }
 
@@ -2585,7 +2552,7 @@ fn test_page_list_clone_less_than_active() {
 
 	// Clone just active area, should be regrown to full active size
 	mut c := s.clone(PageCloneOpts{
-		top: Point{ tag: .active }
+		top: Point.new(.active, Coordinate{})
 	}) or { panic(err) }
 	defer { c.deinit() }
 
@@ -2919,10 +2886,7 @@ fn test_page_list_dirty() {
 
 	// Clear dirty
 	s.clear_dirty()
-	point := Point{
-		tag: .active
-		coordinate: Coordinate{}
-	}
+	point := Point.new(.active, Coordinate{})
 	assert !s.is_dirty(point)
 
 	// Set a row dirty
@@ -2942,7 +2906,7 @@ fn test_page_list_page_iterator_single_page() {
 	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
 	defer { s.deinit() }
 
-	mut it := s.page_iterator(.right_down, Point{ tag: .active }, none)
+	mut it := s.page_iterator(.right_down, Point.new(.active, Coordinate{}), none)
 	mut count := 0
 	for {
 		_ := it.next() or { break }
@@ -2959,7 +2923,7 @@ fn test_page_list_page_iterator_two_pages() {
 	cap := initial_capacity(80)
 	s.grow_rows(usize(cap.rows) * 2)
 
-	mut it := s.page_iterator(.right_down, Point{ tag: .screen }, none)
+	mut it := s.page_iterator(.right_down, Point.new(.screen, Coordinate{}), none)
 	mut count := 0
 	for {
 		_ := it.next() or { break }
@@ -2975,7 +2939,7 @@ fn test_page_list_page_iterator_reverse() {
 	cap := initial_capacity(80)
 	s.grow_rows(usize(cap.rows) * 2)
 
-	mut it := s.page_iterator(.left_up, Point{ tag: .screen }, none)
+	mut it := s.page_iterator(.left_up, Point.new(.screen, Coordinate{}), none)
 	mut count := 0
 	for {
 		_ := it.next() or { break }
@@ -2988,7 +2952,7 @@ fn test_page_list_row_iterator() {
 	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))
 	defer { s.deinit() }
 
-	mut it := s.row_iterator(.right_down, Point{ tag: .active }, none)
+	mut it := s.row_iterator(.right_down, Point.new(.active, Coordinate{}), none)
 	mut count := usize(0)
 	for {
 		_ := it.next() or { break }
@@ -3004,7 +2968,7 @@ fn test_page_list_row_iterator_with_history() {
 	s.grow_rows(50)
 
 	// Active iterator should still give rows count
-	mut it := s.row_iterator(.right_down, Point{ tag: .active }, none)
+	mut it := s.row_iterator(.right_down, Point.new(.active, Coordinate{}), none)
 	mut count := usize(0)
 	for {
 		_ := it.next() or { break }
@@ -3013,7 +2977,7 @@ fn test_page_list_row_iterator_with_history() {
 	assert count == usize(s.rows)
 
 	// Screen iterator should give total_rows
-	mut it2 := s.row_iterator(.right_down, Point{ tag: .screen }, none)
+	mut it2 := s.row_iterator(.right_down, Point.new(.screen, Coordinate{}), none)
 	mut count2 := usize(0)
 	for {
 		_ := it2.next() or { break }
@@ -3026,7 +2990,7 @@ fn test_page_list_cell_iterator() {
 	mut s := PageList.init(10, 5, usize(0x7FFFFFFFFFFFFFFF))
 	defer { s.deinit() }
 
-	mut it := s.cell_iterator(.right_down, Point{ tag: .active }, none)
+	mut it := s.cell_iterator(.right_down, Point.new(.active, Coordinate{}), none)
 	mut count := usize(0)
 	for {
 		_ := it.next() or { break }
@@ -3040,7 +3004,7 @@ fn test_page_list_cell_iterator_reverse() {
 	mut s := PageList.init(10, 5, usize(0x7FFFFFFFFFFFFFFF))
 	defer { s.deinit() }
 
-	mut it := s.cell_iterator(.left_up, Point{ tag: .active }, none)
+	mut it := s.cell_iterator(.left_up, Point.new(.active, Coordinate{}), none)
 	mut count := usize(0)
 	for {
 		_ := it.next() or { break }
@@ -3141,7 +3105,7 @@ fn test_page_list_prompt_iterator_left_up() {
 	first.data.rows[8].semantic_prompt = .prompt_continuation
 	first.data.rows[12].semantic_prompt = .prompt_continuation
 
-	mut it := s.prompt_iterator(.left_up, Point{ tag: .screen }, none)
+	mut it := s.prompt_iterator(.left_up, Point.new(.screen, Coordinate{}), none)
 	for expected in [u32(12), 6, 3] {
 		pin := it.next() or {
 			assert false
@@ -3151,7 +3115,7 @@ fn test_page_list_prompt_iterator_left_up() {
 			assert false
 			return
 		}
-		assert point.tag == .screen
+		assert point is PointScreen
 		assert point.coord() == Coordinate{ x: 0, y: expected }
 	}
 	assert it.next() == none
@@ -3170,7 +3134,7 @@ fn test_page_list_prompt_iterator_right_down() {
 	first.data.rows[8].semantic_prompt = .prompt_continuation
 	first.data.rows[12].semantic_prompt = .prompt_continuation
 
-	mut it := s.prompt_iterator(.right_down, Point{ tag: .screen }, none)
+	mut it := s.prompt_iterator(.right_down, Point.new(.screen, Coordinate{}), none)
 	for expected in [u32(3), 6, 12] {
 		pin := it.next() or {
 			assert false
@@ -3180,7 +3144,7 @@ fn test_page_list_prompt_iterator_right_down() {
 			assert false
 			return
 		}
-		assert point.tag == .screen
+		assert point is PointScreen
 		assert point.coord() == Coordinate{ x: 0, y: expected }
 	}
 	assert it.next() == none
@@ -3197,7 +3161,7 @@ fn test_page_list_prompt_iterator_right_down_continuation_at_start() {
 	first.data.rows[1].semantic_prompt = .prompt_continuation
 	first.data.rows[5].semantic_prompt = .prompt
 
-	mut it := s.prompt_iterator(.right_down, Point{ tag: .screen }, none)
+	mut it := s.prompt_iterator(.right_down, Point.new(.screen, Coordinate{}), none)
 	for expected in [u32(0), 5] {
 		pin := it.next() or {
 			assert false
@@ -3207,7 +3171,7 @@ fn test_page_list_prompt_iterator_right_down_continuation_at_start() {
 			assert false
 			return
 		}
-		assert point.tag == .screen
+		assert point is PointScreen
 		assert point.coord() == Coordinate{ x: 0, y: expected }
 	}
 	assert it.next() == none
@@ -3224,10 +3188,7 @@ fn test_page_list_prompt_iterator_right_down_with_prompt_before_continuation() {
 	first.data.rows[3].semantic_prompt = .prompt_continuation
 	first.data.rows[4].semantic_prompt = .prompt_continuation
 
-	mut it := s.prompt_iterator(.right_down, Point{
-		tag: .screen
-		coordinate: Coordinate{ y: 3 }
-	}, none)
+	mut it := s.prompt_iterator(.right_down, Point.new(.screen, Coordinate{ y: 3 }), none)
 	pin := it.next() or {
 		assert false
 		return
@@ -3236,7 +3197,7 @@ fn test_page_list_prompt_iterator_right_down_with_prompt_before_continuation() {
 		assert false
 		return
 	}
-	assert point == Point{ tag: .screen, coordinate: Coordinate{ x: 0, y: 3 } }
+	assert point == Point.new(.screen, Coordinate{ x: 0, y: 3 })
 	assert it.next() == none
 }
 
@@ -3250,10 +3211,8 @@ fn test_page_list_prompt_iterator_right_down_limit_inclusive() {
 	first.data.rows[5].semantic_prompt = .prompt
 	first.data.rows[10].semantic_prompt = .prompt
 
-	mut it := s.prompt_iterator(.right_down, Point{ tag: .screen }, Point{
-		tag: .screen
-		coordinate: Coordinate{ y: 5 }
-	})
+	mut it := s.prompt_iterator(.right_down, Point.new(.screen, Coordinate{}), Point.new(.screen,
+		Coordinate{ y: 5 }))
 	pin := it.next() or {
 		assert false
 		return
@@ -3262,7 +3221,7 @@ fn test_page_list_prompt_iterator_right_down_limit_inclusive() {
 		assert false
 		return
 	}
-	assert point == Point{ tag: .screen, coordinate: Coordinate{ x: 0, y: 5 } }
+	assert point == Point.new(.screen, Coordinate{ x: 0, y: 5 })
 	assert it.next() == none
 }
 
@@ -3276,13 +3235,8 @@ fn test_page_list_prompt_iterator_left_up_limit_inclusive() {
 	first.data.rows[5].semantic_prompt = .prompt
 	first.data.rows[10].semantic_prompt = .prompt
 
-	mut it := s.prompt_iterator(.left_up, Point{
-		tag: .screen
-		coordinate: Coordinate{ y: 10 }
-	}, Point{
-		tag: .screen
-		coordinate: Coordinate{ y: 15 }
-	})
+	mut it := s.prompt_iterator(.left_up, Point.new(.screen, Coordinate{ y: 10 }), Point.new(.screen,
+		Coordinate{ y: 15 }))
 	pin := it.next() or {
 		assert false
 		return
@@ -3291,7 +3245,7 @@ fn test_page_list_prompt_iterator_left_up_limit_inclusive() {
 		assert false
 		return
 	}
-	assert point == Point{ tag: .screen, coordinate: Coordinate{ x: 0, y: 10 } }
+	assert point == Point.new(.screen, Coordinate{ x: 0, y: 10 })
 	assert it.next() == none
 }
 
@@ -3338,40 +3292,28 @@ fn test_page_list_highlight_semantic_content() {
 		assert false, 'prompt highlight missing'
 		return
 	}
-	assert (s.point_from_pin(.screen, prompt.start) or { Point{} }) == Point{
-		tag: .screen
-		coordinate: Coordinate{ x: 0, y: 2 }
-	}
-	assert (s.point_from_pin(.screen, prompt.end) or { Point{} }) == Point{
-		tag: .screen
-		coordinate: Coordinate{ x: 4, y: 2 }
-	}
+	assert (s.point_from_pin(.screen, prompt.start) or { Point(PointActive{}) }) == Point.new(.screen,
+		Coordinate{ x: 0, y: 2 })
+	assert (s.point_from_pin(.screen, prompt.end) or { Point(PointActive{}) }) == Point.new(.screen,
+		Coordinate{ x: 4, y: 2 })
 
 	input := s.highlight_semantic_content(at, .input) or {
 		assert false, 'input highlight missing'
 		return
 	}
-	assert (s.point_from_pin(.screen, input.start) or { Point{} }) == Point{
-		tag: .screen
-		coordinate: Coordinate{ x: 2, y: 2 }
-	}
-	assert (s.point_from_pin(.screen, input.end) or { Point{} }) == Point{
-		tag: .screen
-		coordinate: Coordinate{ x: 4, y: 2 }
-	}
+	assert (s.point_from_pin(.screen, input.start) or { Point(PointActive{}) }) == Point.new(.screen,
+		Coordinate{ x: 2, y: 2 })
+	assert (s.point_from_pin(.screen, input.end) or { Point(PointActive{}) }) == Point.new(.screen,
+		Coordinate{ x: 4, y: 2 })
 
 	output := s.highlight_semantic_content(at, .output) or {
 		assert false, 'output highlight missing'
 		return
 	}
-	assert (s.point_from_pin(.screen, output.start) or { Point{} }) == Point{
-		tag: .screen
-		coordinate: Coordinate{ x: 0, y: 3 }
-	}
-	assert (s.point_from_pin(.screen, output.end) or { Point{} }) == Point{
-		tag: .screen
-		coordinate: Coordinate{ x: 1, y: 4 }
-	}
+	assert (s.point_from_pin(.screen, output.start) or { Point(PointActive{}) }) == Point.new(.screen,
+		Coordinate{ x: 0, y: 3 })
+	assert (s.point_from_pin(.screen, output.end) or { Point(PointActive{}) }) == Point.new(.screen,
+		Coordinate{ x: 1, y: 4 })
 }
 
 fn test_page_list_highlight_semantic_content_missing_input_and_output() {
@@ -4240,18 +4182,16 @@ fn test_page_list_jump_back_one_prompt() {
 	s.scroll(PageScrollDeltaPrompt{ delta: -1 })
 	assert s.viewport == .pin
 	viewport := s.get_top_left(.viewport)
-	assert s.point_from_pin(.screen, viewport) or { return } == Point{
-		tag: .screen
-		coordinate: Coordinate{ x: 0, y: 1 }
-	}
+	assert s.point_from_pin(.screen, viewport) or { return } == Point.new(.screen, Coordinate{
+		x: 0
+		y: 1
+	})
 	assert s.scrollbar() == Scrollbar{ total: s.total_rows, offset: 1, len: usize(s.rows) }
 
 	s.scroll(PageScrollDeltaPrompt{ delta: -1 })
 	assert s.viewport == .pin
-	assert s.point_from_pin(.screen, s.get_top_left(.viewport)) or { return } == Point{
-		tag: .screen
-		coordinate: Coordinate{ x: 0, y: 1 }
-	}
+	assert s.point_from_pin(.screen, s.get_top_left(.viewport)) or { return } == Point.new(.screen,
+		Coordinate{ x: 0, y: 1 })
 	assert s.scrollbar().offset == 1
 
 	s.scroll(PageScrollDeltaPrompt{ delta: 1 })
@@ -4934,7 +4874,7 @@ fn test_page_list_resize_no_reflow_less_cols_clears_graphemes() {
 	assert s.cols == 5
 	assert s.total_rows == 10
 
-	mut it := s.page_iterator(.right_down, Point{ tag: .screen }, none)
+	mut it := s.page_iterator(.right_down, Point.new(.screen, Coordinate{}), none)
 	for {
 		chunk := it.next() or { break }
 		assert chunk.node.data.grapheme_count() == 0
@@ -5149,7 +5089,7 @@ fn test_page_list_resize_no_reflow_more_cols_forces_smaller_cap() {
 	s.resize(PageResizeOpts{ cols: cap2.cols, reflow: false }) or { panic(err) }
 	assert s.total_rows == rows
 
-	mut it := s.row_iterator(.right_down, Point{ tag: .screen }, none)
+	mut it := s.row_iterator(.right_down, Point.new(.screen, Coordinate{}), none)
 	for {
 		row := it.next() or { break }
 		mut rp := &row.node.data
@@ -5357,7 +5297,7 @@ fn test_page_list_resize_reflow_more_cols_no_wrapped_rows() {
 	assert s.cols == 10
 	assert s.total_rows == 3
 
-	mut it := s.row_iterator(.right_down, Point{ tag: .screen }, none)
+	mut it := s.row_iterator(.right_down, Point.new(.screen, Coordinate{}), none)
 	for {
 		row := it.next() or { break }
 		mut rp := &row.node.data
@@ -5403,7 +5343,7 @@ fn test_page_list_resize_reflow_more_cols_wrapped_rows() {
 	assert sp.coord().y == 0
 
 	// First row should be unwrapped and hold the reflowed content.
-	mut it := s.row_iterator(.right_down, Point{ tag: .screen }, none)
+	mut it := s.row_iterator(.right_down, Point.new(.screen, Coordinate{}), none)
 	row := it.next() or {
 		assert false, 'no row'
 		return
@@ -5585,7 +5525,7 @@ fn test_page_list_resize_reflow_more_cols_wrap_across_page_boundary_cursor_in_se
 	assert s.cols == 4
 	assert s.total_rows == end_rows
 	point := s.point_from_pin(.active, *tracked) or { return }
-	assert point == Point{ tag: .active, coordinate: Coordinate{ x: 3, y: 9 } }
+	assert point == Point.new(.active, Coordinate{ x: 3, y: 9 })
 	p9 := s.pin(Point.new(.active, Coordinate{ x: 0, y: 9 })) or { return }
 	assert !p9.row_data().wrap
 	assert p9.row_data().cells[0].codepoint == 0
@@ -5628,7 +5568,7 @@ fn test_page_list_resize_reflow_less_cols_wrap_across_page_boundary_cursor_in_se
 	}) or { panic(err) }
 	assert s.cols == 4
 	point := s.point_from_pin(.active, *tracked) or { return }
-	assert point == Point{ tag: .active, coordinate: Coordinate{ x: 3, y: 5 } }
+	assert point == Point.new(.active, Coordinate{ x: 3, y: 5 })
 	p3 := s.pin(Point.new(.active, Coordinate{ x: 0, y: 3 })) or { return }
 	assert !p3.row_data().wrap
 	assert !p3.row_data().wrap_continuation
@@ -5664,7 +5604,7 @@ fn test_page_list_resize_grow_cols_with_unwrap_fixes_viewport_pin() {
 	assert s.total_rows == 40
 
 	// Fill all rows with wrapped content.
-	mut pit := s.page_iterator(.right_down, Point{ tag: .screen }, none)
+	mut pit := s.page_iterator(.right_down, Point.new(.screen, Coordinate{}), none)
 	for {
 		chunk := pit.next() or { break }
 		mut page := &chunk.node.data
@@ -5983,7 +5923,7 @@ fn test_page_list_resize_reflow_less_cols_no_wrapped_rows() {
 	assert s.cols == 5
 	assert s.total_rows == 3
 
-	mut it := s.row_iterator(.right_down, Point{ tag: .screen }, none)
+	mut it := s.row_iterator(.right_down, Point.new(.screen, Coordinate{}), none)
 	for {
 		row := it.next() or { break }
 		mut rp := &row.node.data
@@ -6023,7 +5963,7 @@ fn test_page_list_resize_reflow_less_cols_wrapped_rows() {
 	}
 	assert pc.screen_point().coord().y == 2
 
-	mut it := s.row_iterator(.right_down, Point{ tag: .screen }, none)
+	mut it := s.row_iterator(.right_down, Point.new(.screen, Coordinate{}), none)
 	// Row 0: wrapped, cells[0]=0.
 	r0 := it.next() or {
 		assert false, 'no row'
@@ -6078,7 +6018,7 @@ fn test_page_list_resize_reflow_preserves_hyperlink_mapping() {
 	s.resize(PageResizeOpts{ cols: 2, reflow: true }) or { panic(err) }
 
 	mut found := false
-	mut it := s.row_iterator(.right_down, Point{ tag: .screen }, none)
+	mut it := s.row_iterator(.right_down, Point.new(.screen, Coordinate{}), none)
 	for {
 		pin := it.next() or { break }
 		mut reflowed := &pin.node.data
@@ -6157,7 +6097,7 @@ fn test_page_list_resize_reflow_preserves_hyperlinks_across_source_pages() {
 	s.resize(PageResizeOpts{ cols: 3, reflow: true }) or { panic(err) }
 
 	mut found := map[u32]string{}
-	mut it := s.row_iterator(.right_down, Point{ tag: .screen }, none)
+	mut it := s.row_iterator(.right_down, Point.new(.screen, Coordinate{}), none)
 	for {
 		pin := it.next() or { break }
 		mut reflowed := &pin.node.data
@@ -6384,7 +6324,7 @@ fn test_page_list_resize_reflow_less_cols_blank_lines() {
 	assert s.cols == 2
 	assert s.total_rows == 3
 
-	mut it := s.row_iterator(.right_down, Point{ tag: .active }, none)
+	mut it := s.row_iterator(.right_down, Point.new(.active, Coordinate{}), none)
 	r0 := it.next() or {
 		assert false, 'no row'
 		return
@@ -6434,7 +6374,7 @@ fn test_page_list_resize_reflow_less_cols_wrapped_rows_with_graphemes() {
 	}
 	assert voidptr(np) == voidptr(s.pages.last or { return })
 
-	mut it := s.row_iterator(.right_down, Point{ tag: .screen }, none)
+	mut it := s.row_iterator(.right_down, Point.new(.screen, Coordinate{}), none)
 	// Row 0: wrapped, cells[0]=0.
 	r0 := it.next() or {
 		assert false, 'no row'
@@ -6523,7 +6463,7 @@ fn test_page_list_resize_reflow_less_cols_copy_style() {
 	assert s.cols == 2
 	assert s.total_rows == 2
 
-	mut it := s.row_iterator(.right_down, Point{ tag: .active }, none)
+	mut it := s.row_iterator(.right_down, Point.new(.active, Coordinate{}), none)
 	for {
 		row := it.next() or { break }
 		mut rp := &row.node.data
@@ -6779,7 +6719,7 @@ fn test_page_list_resize_reflow_less_cols_copy_kitty_placeholder() {
 	s.resize(PageResizeOpts{ cols: 2, reflow: true }) or { panic(err) }
 	assert s.cols == 2
 	assert s.total_rows == 2
-	mut it := s.row_iterator(.right_down, Point{ tag: .active }, none)
+	mut it := s.row_iterator(.right_down, Point.new(.active, Coordinate{}), none)
 	for {
 		row := it.next() or { break }
 		assert row.row_data().kitty_virtual_placeholder
@@ -6800,7 +6740,7 @@ fn test_page_list_resize_reflow_more_cols_clears_kitty_placeholder() {
 	s.resize(PageResizeOpts{ cols: 4, reflow: true }) or { panic(err) }
 	assert s.cols == 4
 	assert s.total_rows == 2
-	mut it := s.row_iterator(.right_down, Point{ tag: .active }, none)
+	mut it := s.row_iterator(.right_down, Point.new(.active, Coordinate{}), none)
 	row0 := it.next() or { return }
 	assert row0.row_data().kitty_virtual_placeholder
 	row1 := it.next() or { return }
@@ -6821,7 +6761,7 @@ fn test_page_list_resize_reflow_wrap_moves_kitty_placeholder() {
 	s.resize(PageResizeOpts{ cols: 2, reflow: true }) or { panic(err) }
 	assert s.cols == 2
 	assert s.total_rows == 2
-	mut it := s.row_iterator(.right_down, Point{ tag: .active }, none)
+	mut it := s.row_iterator(.right_down, Point.new(.active, Coordinate{}), none)
 	row0 := it.next() or { return }
 	assert !row0.row_data().kitty_virtual_placeholder
 	row1 := it.next() or { return }
@@ -6938,7 +6878,7 @@ fn test_page_list_resize_reflow_less_cols_blank_lines_between() {
 	assert s.cols == 2
 	assert s.total_rows == 5
 
-	mut it := s.row_iterator(.right_down, Point{ tag: .active }, none)
+	mut it := s.row_iterator(.right_down, Point.new(.active, Coordinate{}), none)
 	r0 := it.next() or {
 		assert false, 'no row'
 		return
@@ -6980,7 +6920,7 @@ fn test_page_list_resize_reflow_less_cols_blank_lines_between_no_scrollback() {
 	assert s.cols == 2
 	assert s.total_rows == 3
 
-	mut it := s.row_iterator(.right_down, Point{ tag: .active }, none)
+	mut it := s.row_iterator(.right_down, Point.new(.active, Coordinate{}), none)
 	r0 := it.next() or {
 		assert false, 'no row'
 		return
@@ -7126,7 +7066,7 @@ fn test_page_list_page_iterator_single_page_precise() {
 	}
 	assert first.next == none
 
-	mut it := s.page_iterator(.right_down, Point{ tag: .active }, none)
+	mut it := s.page_iterator(.right_down, Point.new(.active, Coordinate{}), none)
 	chunk := it.next() or {
 		assert false, 'no chunk'
 		return
@@ -7157,7 +7097,7 @@ fn test_page_list_page_iterator_two_pages_precise() {
 		return
 	}
 
-	mut it := s.page_iterator(.right_down, Point{ tag: .active }, none)
+	mut it := s.page_iterator(.right_down, Point.new(.active, Coordinate{}), none)
 	chunk1 := it.next() or {
 		assert false, 'no chunk1'
 		return
@@ -7191,7 +7131,7 @@ fn test_page_list_page_iterator_history_two_pages() {
 	assert s.total_pages() == 2
 
 	active_tl := s.get_top_left(.active)
-	mut it := s.page_iterator(.right_down, Point{ tag: .history }, none)
+	mut it := s.page_iterator(.right_down, Point.new(.history, Coordinate{}), none)
 	chunk := it.next() or {
 		assert false, 'no chunk'
 		return
@@ -7213,7 +7153,7 @@ fn test_page_list_page_iterator_reverse_single_page() {
 	}
 	assert first.next == none
 
-	mut it := s.page_iterator(.left_up, Point{ tag: .active }, none)
+	mut it := s.page_iterator(.left_up, Point.new(.active, Coordinate{}), none)
 	chunk := it.next() or {
 		assert false, 'no chunk'
 		return
@@ -7243,7 +7183,7 @@ fn test_page_list_page_iterator_reverse_two_pages() {
 		return
 	}
 
-	mut it := s.page_iterator(.left_up, Point{ tag: .active }, none)
+	mut it := s.page_iterator(.left_up, Point.new(.active, Coordinate{}), none)
 	mut count := u16(0)
 
 	chunk1 := it.next() or {
@@ -7282,7 +7222,7 @@ fn test_page_list_page_iterator_reverse_history_two_pages() {
 	assert s.total_pages() == 2
 
 	active_tl := s.get_top_left(.active)
-	mut it := s.page_iterator(.left_up, Point{ tag: .history }, none)
+	mut it := s.page_iterator(.left_up, Point.new(.history, Coordinate{}), none)
 	chunk := it.next() or {
 		assert false, 'no chunk'
 		return
@@ -7313,7 +7253,7 @@ fn test_page_list_cell_iterator_precise() {
 		}
 	}
 
-	mut it := s.cell_iterator(.right_down, Point{ tag: .screen }, none)
+	mut it := s.cell_iterator(.right_down, Point.new(.screen, Coordinate{}), none)
 	expected := [[u32(0), 0], [u32(1), 0], [u32(0), 1], [u32(1), 1]]
 	for exp in expected {
 		p := it.next() or {
@@ -7348,7 +7288,7 @@ fn test_page_list_cell_iterator_reverse_precise() {
 		}
 	}
 
-	mut it := s.cell_iterator(.left_up, Point{ tag: .screen }, none)
+	mut it := s.cell_iterator(.left_up, Point.new(.screen, Coordinate{}), none)
 	expected := [[u32(1), 1], [u32(0), 1], [u32(1), 0], [u32(0), 0]]
 	for exp in expected {
 		p := it.next() or {

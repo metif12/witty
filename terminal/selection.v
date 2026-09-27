@@ -398,14 +398,13 @@ pub fn (mut self Selection) adjust(s &Screen, adjustment SelectionAdjustment) {
 			}
 		}
 		.home {
-			new_end := s.pages.pin(Point{
-				tag: .screen
-				coordinate: Coordinate{}
-			}) or { panic('page list has no home pin') }
+			new_end := s.pages.pin(Point.new(.screen, Coordinate{})) or {
+				panic('page list has no home pin')
+			}
 			unsafe { *end_pin = new_end }
 		}
 		.end_ {
-			mut it := s.pages.row_iterator(.left_up, Point{ tag: .screen }, none)
+			mut it := s.pages.row_iterator(.left_up, Point.new(.screen, Coordinate{}), none)
 			for {
 				next := it.next() or { break }
 				rac := next.row_and_cell()

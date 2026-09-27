@@ -2165,8 +2165,8 @@ pub fn (self &Screen) assert_integrity() {
 		pt := self.pages.point_from_pin(.active, *self.cursor.page_pin) or {
 			panic('cursor pin is outside the active area')
 		}
-		assert self.cursor.x == u32(pt.coordinate.x)
-		assert self.cursor.y == pt.coordinate.y
+		assert self.cursor.x == u32(pt.coord().x)
+		assert self.cursor.y == pt.coord().y
 	}
 }
 
@@ -2267,8 +2267,8 @@ pub fn (self &Screen) clone(top Point, bot ?Point) !Screen {
 		page_rac := p.row_and_cell()
 		if pt := pages.point_from_pin(.active, *p) {
 			cursor = Cursor{
-				x:         u32(pt.coordinate.x)
-				y:         pt.coordinate.y
+				x:         u32(pt.coord().x)
+				y:         pt.coord().y
 				page_pin:  p
 				page_row:  page_rac.row
 				page_cell: page_rac.cell
@@ -2333,12 +2333,12 @@ fn (self &Screen) clone_selection(sel Selection, top Point, mut pages PageList, 
 			// the selection is fully out of bounds, so we have no
 			// selection in the cloned area and break out now.
 			clone_top := self.pages.pin(top) or { return none }
-			clone_top_y := (self.pages.point_from_pin(.screen, clone_top) or { return none }).coordinate.y
-			br_y := (self.pages.point_from_pin(.screen, *br) or { return none }).coordinate.y
+			clone_top_y := (self.pages.point_from_pin(.screen, clone_top) or { return none }).coord().y
+			br_y := (self.pages.point_from_pin(.screen, *br) or { return none }).coord().y
 			if br_y < clone_top_y {
 				return none
 			}
-			tl_y := (self.pages.point_from_pin(.screen, *tl) or { return none }).coordinate.y
+			tl_y := (self.pages.point_from_pin(.screen, *tl) or { return none }).coord().y
 			if tl_y > clone_top_y {
 				return none
 			}
@@ -2553,17 +2553,17 @@ pub fn (mut self Screen) cursor_reload() {
 	// points outside the active area. In that case, we update the
 	// pin to be the top-left.
 	pt := self.pages.point_from_pin(.active, *self.cursor.page_pin) or {
-		pin := self.pages.pin(Point{
-			tag: .active
-		}) or { panic('page list has no active area') }
+		pin := self.pages.pin(Point.new(.active, Coordinate{})) or {
+			panic('page list has no active area')
+		}
 		unsafe {
 			*self.cursor.page_pin = pin
 		}
 		self.pages.point_from_pin(.active, pin) or { panic('active pin is not active') }
 	}
 
-	self.cursor.x = u32(pt.coordinate.x)
-	self.cursor.y = pt.coordinate.y
+	self.cursor.x = u32(pt.coord().x)
+	self.cursor.y = pt.coord().y
 	page_rac := self.cursor.page_pin.row_and_cell()
 	self.cursor.page_row = page_rac.row
 	self.cursor.page_cell = page_rac.cell
@@ -2609,9 +2609,7 @@ pub fn (mut self Screen) cursor_down_scroll() ! {
 			old_pin := *self.cursor.page_pin
 
 			// eraseRow will shift everything below it up.
-			self.pages.erase_row(Point{
-				tag: .active
-			})!
+			self.pages.erase_row(Point.new(.active, Coordinate{}))!
 
 			// Note we don't need to mark anything dirty in this branch
 			// because eraseRow will mark all the rotated rows as dirty
@@ -2654,8 +2652,8 @@ pub fn (mut self Screen) cursor_down_scroll() ! {
 			active := self.pages.point_from_pin(.active, page_pin) or {
 				panic('grown cursor pin is not active')
 			}
-			assert u32(active.coordinate.x) == self.cursor.x
-			assert active.coordinate.y == self.cursor.y
+			assert u32(active.coord().x) == self.cursor.x
+			assert active.coord().y == self.cursor.y
 		}
 
 		self.cursor_change_pin(page_pin)
@@ -3451,13 +3449,10 @@ pub fn (mut self Screen) resize(opts ScreenResize) ! {
 	// modify its X/Y for reflow.
 	mut saved_cursor_pin := &Pin(unsafe { nil })
 	if sc := self.saved_cursor {
-		if pin := self.pages.pin(Point{
-			tag:        .active
-			coordinate: Coordinate{
+		if pin := self.pages.pin(Point.new(.active, Coordinate{
 				x: u16(sc.x)
 				y: sc.y
-			}
-		})
+		}))
 		{
 			saved_cursor_pin = self.pages.track_pin(pin)
 		}
@@ -3497,9 +3492,7 @@ pub fn (mut self Screen) resize(opts ScreenResize) ! {
 	// erase our history. This is because PageList always keeps at least
 	// a page size of history.
 	if self.no_scrollback {
-		self.pages.erase_rows(Point{
-			tag: .history
-		}, none)
+		self.pages.erase_rows(Point.new(.history, Coordinate{}), none)
 	}
 
 	// If our cursor was updated, we do a full reload so all our cursor
@@ -3512,8 +3505,8 @@ pub fn (mut self Screen) resize(opts ScreenResize) ! {
 		// implies a non-null saved_cursor.
 		mut sc := self.saved_cursor or { panic('saved cursor pin without a saved cursor') }
 		if pt := self.pages.point_from_pin(.active, *saved_cursor_pin) {
-			sc.x = u32(pt.coordinate.x)
-			sc.y = pt.coordinate.y
+			sc.x = u32(pt.coord().x)
+			sc.y = pt.coord().y
 
 			// If we had pending wrap set and we're no longer at the end of
 			// the line, we unset the pending wrap and move the cursor to
@@ -4357,13 +4350,11 @@ fn first_non_whitespace(from Pin, direction IterDirection, limit ?Pin, whitespac
 pub fn (mut self Screen) select_all() ?Selection {
 	whitespace := [u32(0), u32(` `), u32(`\t`)]
 
-	start := first_non_whitespace_in(self.pages.cell_iterator(.right_down, Point{
-		tag: .screen
-	}, none), whitespace)?
+	start := first_non_whitespace_in(self.pages.cell_iterator(.right_down, Point.new(.screen,
+		Coordinate{}), none), whitespace)?
 
-	end := first_non_whitespace_in(self.pages.cell_iterator(.left_up, Point{
-		tag: .screen
-	}, none), whitespace)?
+	end := first_non_whitespace_in(self.pages.cell_iterator(.left_up, Point.new(.screen,
+		Coordinate{}), none), whitespace)?
 
 	return Selection.init(start, end, false)
 }

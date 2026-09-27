@@ -2888,13 +2888,10 @@ pub fn (self &PageCell) screen_point() Point {
 		prev = nd.prev
 	}
 
-	return Point{
-		tag: .screen
-		coordinate: Coordinate{
+	return Point.new(.screen, Coordinate{
 			x: self.col_idx
 			y: u32(y)
-		}
-	}
+	})
 }
 
 // ============================================================
@@ -3873,7 +3870,7 @@ pub fn (self &PageList) pin(point Point) ?Pin {
 	if u32(point.coord().x) >= u32(self.cols) {
 		return none
 	}
-	mut result := self.get_top_left(point.tag).down(usize(point.coord().y)) or { return none }
+	mut result := self.get_top_left(point.tag()).down(usize(point.coord().y)) or { return none }
 	result.x = point.coord().x
 	return result
 }
@@ -4197,13 +4194,10 @@ pub fn (self &PageList) point_from_pin(tag PointTag, p Pin) ?Point {
 		if tl.y > p.y {
 			return none
 		}
-		return Point{
-			tag: tag
-			coordinate: Coordinate{
+		return Point.new(tag, Coordinate{
 				x: p.x
 				y: u32(p.y - tl.y)
-			}
-		}
+		})
 	}
 
 	// Traverse from tl forward to find p's node
@@ -4212,13 +4206,10 @@ pub fn (self &PageList) point_from_pin(tag PointTag, p Pin) ?Point {
 	for {
 		node := cur or { return none }
 		if voidptr(node) == p_ptr {
-			return Point{
-				tag: tag
-				coordinate: Coordinate{
+			return Point.new(tag, Coordinate{
 					x: p.x
 					y: y + u32(p.y)
-				}
-			}
+			})
 		}
 		y += u32(node.data.size.rows)
 		cur = node.next
@@ -4801,7 +4792,7 @@ pub fn (mut self PageList) erase_rows(tl Point, bl ?Point) {
 
 	// If we deleted active, we need to regrow because one of our invariants
 	// is that we always have full active space.
-	if tl.tag == .active {
+	if tl.tag() == .active {
 		for _ in 0 .. erased {
 			self.grow() or { &PageNode(unsafe { nil }) }
 		}
@@ -6145,7 +6136,7 @@ fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) ! {
 
 	// We need to grab our row iterator now before we rewrite our
 	// linked list below.
-	mut it := self.row_iterator(.right_down, Point{ tag: .screen }, none)
+	mut it := self.row_iterator(.right_down, Point.new(.screen, Coordinate{}), none)
 
 	// Set our new page as the only page. This orphans the existing pages
 	// in the list, but that's fine since we're gonna delete them anyway.
@@ -6268,7 +6259,7 @@ fn (mut self PageList) resize_without_reflow(opts PageResizeOpts) ! {
 			// in existing pages so we need to go through the pages,
 			// resize the columns, and clear any cells that are beyond
 			// the new size.
-			mut it := self.page_iterator(.right_down, Point{ tag: .screen }, none)
+			mut it := self.page_iterator(.right_down, Point.new(.screen, Coordinate{}), none)
 			for {
 				chunk := it.next() or { break }
 				mut page := &chunk.node.data
@@ -6294,7 +6285,7 @@ fn (mut self PageList) resize_without_reflow(opts PageResizeOpts) ! {
 			// the capacity we need to allocate a new page and copy the data.
 			old_cols := self.cols
 
-			mut it := self.page_iterator(.right_down, Point{ tag: .screen }, none)
+			mut it := self.page_iterator(.right_down, Point.new(.screen, Coordinate{}), none)
 			for {
 				chunk := it.next() or { break }
 				// We need to restore our old cols after we resize because
@@ -6558,7 +6549,7 @@ pub fn (self &PageList) page_iterator(direction IterDirection, tl Point, bl ?Poi
 	bl_pin := if bottom := bl {
 		self.pin(bottom) or { panic('page iterator bottom-left is outside the page list') }
 	} else {
-		self.get_bottom_right(tl.tag) or { return PageIterator{} }
+		self.get_bottom_right(tl.tag()) or { return PageIterator{} }
 	}
 
 	return match direction {
@@ -6576,7 +6567,7 @@ pub fn (self &PageList) row_iterator(direction IterDirection, tl Point, bl ?Poin
 	bl_pin := if bottom := bl {
 		self.pin(bottom) or { panic('row iterator bottom-left is outside the page list') }
 	} else {
-		self.get_bottom_right(tl.tag) or { return RowIterator{} }
+		self.get_bottom_right(tl.tag()) or { return RowIterator{} }
 	}
 
 	return match direction {
@@ -6594,7 +6585,7 @@ pub fn (self &PageList) cell_iterator(direction IterDirection, tl Point, bl ?Poi
 	bl_pin := if bottom := bl {
 		self.pin(bottom) or { panic('cell iterator bottom-left is outside the page list') }
 	} else {
-		self.get_bottom_right(tl.tag) or { return CellIterator{} }
+		self.get_bottom_right(tl.tag()) or { return CellIterator{} }
 	}
 
 	return match direction {
@@ -6612,7 +6603,7 @@ pub fn (self &PageList) prompt_iterator(direction IterDirection, tl Point, bl ?P
 	bl_pin := if bottom := bl {
 		self.pin(bottom) or { panic('prompt iterator bottom-left is outside the page list') }
 	} else {
-		self.get_bottom_right(tl.tag) or { return PromptIterator{} }
+		self.get_bottom_right(tl.tag()) or { return PromptIterator{} }
 	}
 
 	return match direction {

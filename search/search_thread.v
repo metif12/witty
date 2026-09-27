@@ -618,9 +618,8 @@ fn (mut self SearchThread) do_select(sel Select) {
 		// Grab the viewport. Viewports and selections are usually small
 		// so this check isn't very expensive, despite appearing O(N^2),
 		// both Ns are usually equal to 1.
-		mut it := screen.pages.page_iterator(.right_down, terminal.Point{
-			tag: .viewport
-		}, none)
+		mut it := screen.pages.page_iterator(.right_down, terminal.Point.new(.viewport,
+			terminal.Coordinate{}), none)
 		mut visible := false
 		outer: for {
 			chunk := it.next() or { break }

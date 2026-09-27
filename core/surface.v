@@ -2681,8 +2681,8 @@ pub fn (mut self Surface) render_inspector(context_handle voidptr) {
 	pages := &self.renderer_state.terminal_.screens.active.pages
 	if point := insp.mouse.last_point {
 		if pt := pages.point_from_pin(.active, point) {
-			hover_grid_x = u32(pt.coordinate.x)
-			hover_grid_y = pt.coordinate.y
+			hover_grid_x = u32(pt.coord().x)
+			hover_grid_y = pt.coord().y
 		}
 	}
 
@@ -2690,8 +2690,8 @@ pub fn (mut self Surface) render_inspector(context_handle voidptr) {
 	mut click_grid_y := u32(0)
 	if point := self.mouse.left_click_pin {
 		if pt := pages.point_from_pin(.active, *point) {
-			click_grid_x = u32(pt.coordinate.x)
-			click_grid_y = pt.coordinate.y
+			click_grid_x = u32(pt.coord().x)
+			click_grid_y = pt.coord().y
 		}
 	}
 
@@ -3612,13 +3612,10 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 		mut screen := self.renderer_state.terminal_.screens.active
 		pos := self.rt_surface.get_cursor_pos()!
 		vp := self.pos_to_viewport(f64(pos.x), f64(pos.y))
-		if pin := screen.pages.pin(terminal.Point{
-			tag:        .viewport
-			coordinate: terminal.Coordinate{
+		if pin := screen.pages.pin(terminal.Point.new(.viewport, terminal.Coordinate{
 				x: u16(vp.x)
 				y: u32(vp.y)
-			}
-		}) {
+		})) {
 			// If we move our cursor too much between clicks then we reset the
 			// multi-click state.
 			if self.mouse.left_click_count > 0 {
@@ -3717,13 +3714,10 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 			return err
 		}
 		vp := self.pos_to_viewport(f64(pos.x), f64(pos.y))
-		pin := screen.pages.pin(terminal.Point{
-			tag:        .viewport
-			coordinate: terminal.Coordinate{
+		pin := screen.pages.pin(terminal.Point.new(.viewport, terminal.Coordinate{
 				x: u16(vp.x)
 				y: u32(vp.y)
-			}
-		}) or {
+		})) or {
 			self.renderer_state.mutex.unlock()
 			return false
 		}
@@ -3874,13 +3868,11 @@ pub fn (mut self Surface) cursor_pos_callback(pos apprt.CursorPos, mods ?input.M
 	if mut insp := self.inspector {
 		insp.mouse.last_xpos = f64(pos.x)
 		insp.mouse.last_ypos = f64(pos.y)
-		insp.mouse.last_point = self.renderer_state.terminal_.screens.active.pages.pin(terminal.Point{
-			tag:        .viewport
-			coordinate: terminal.Coordinate{
+		insp.mouse.last_point = self.renderer_state.terminal_.screens.active.pages.pin(terminal.Point.new(.viewport,
+			terminal.Coordinate{
 				x: u16(pos_vp.x)
 				y: u32(pos_vp.y)
-			}
-		})
+			}))
 		self.queue_render()!
 	}
 
@@ -3927,13 +3919,11 @@ pub fn (mut self Surface) cursor_pos_callback(pos apprt.CursorPos, mods ?input.M
 		if (pos.y <= 1 || pos.y > max_y - 1) && !self.selection_scroll_active {
 			self.queue_io(termiopkg.MessageSelectionScroll{ value: true }, .locked)
 		}
-		if pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.Point{
-			tag:        .viewport
-			coordinate: terminal.Coordinate{
+		if pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.Point.new(.viewport,
+			terminal.Coordinate{
 				x: u16(pos_vp.x)
 				y: u32(pos_vp.y)
-			}
-		}) {
+			})) {
 			match self.mouse.left_click_count {
 				1 { self.drag_left_click_single(pin, f64(pos.x))! }
 				2 { self.drag_left_click_double(pin)! }
@@ -5852,13 +5842,11 @@ fn (mut self Surface) selection_scroll_tick() ! {
 	self.renderer_state.terminal_.scroll_viewport(terminal.ScrollViewport.from_delta(delta))!
 
 	// Continue drag selection
-	if pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.Point{
-		tag:        .viewport
-		coordinate: terminal.Coordinate{
+	if pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.Point.new(.viewport,
+		terminal.Coordinate{
 			x: u16(pos_vp.x)
 			y: u32(pos_vp.y)
-		}
-	}) {
+		})) {
 		self.drag_left_click_single(pin, f64(pos.x))!
 	}
 
@@ -6205,13 +6193,11 @@ fn (self &Surface) link_at_pos(pos apprt.CursorPos) ?Link {
 	}
 
 	pos_vp := self.pos_to_viewport(f64(pos.x), f64(pos.y))
-	pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.Point{
-		tag:        .viewport
-		coordinate: terminal.Coordinate{
+	pin := self.renderer_state.terminal_.screens.active.pages.pin(terminal.Point.new(.viewport,
+		terminal.Coordinate{
 			x: u16(pos_vp.x)
 			y: u32(pos_vp.y)
-		}
-	}) or { return none }
+		})) or { return none }
 	mouse_mods := self.mouse_mods_with_capture(self.mouse.mods)
 
 	// Check if left click is held and mouse moved (cancel link hover during drag)
@@ -6299,13 +6285,10 @@ fn (mut self Surface) maybe_prompt_click() !bool {
 	}
 	pos := self.rt_surface.get_cursor_pos()!
 	pos_vp := self.pos_to_viewport(f64(pos.x), f64(pos.y))
-	click_pin := screen.pages.pin(terminal.Point{
-		tag:        .viewport
-		coordinate: terminal.Coordinate{
+	click_pin := screen.pages.pin(terminal.Point.new(.viewport, terminal.Coordinate{
 			x: u16(pos_vp.x)
 			y: u32(pos_vp.y)
-		}
-	}) or { return false }
+	})) or { return false }
 
 	// Get our cursor's most current prompt.
 	mut prompt_it := screen.cursor.page_pin.prompt_iterator(.left_up, none)
@@ -6485,9 +6468,7 @@ fn (self &Surface) dump_text_viewport(sel TermSelection) ?TextViewport {
 	// Our top-left point. If it doesn't exist in the viewport it must
 	// be before and we can return (0,0).
 	tl_pt := screen.pages.point_from_pin(.viewport, tl_pin) or {
-		terminal.Point{
-			tag: .viewport
-		}
+		terminal.Point.new(.viewport, terminal.Coordinate{})
 	}
 
 	// Our bottom-right point. If it doesn't exist in the viewport

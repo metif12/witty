@@ -73,13 +73,10 @@ fn create_test_terminal(cols u16, rows u16) !Terminal {
 
 // Helper: an active-area point, like ghostty's `.{ .active = .{ .x = x, .y = y } }`.
 fn active_point(x int, y int) Point {
-	return Point{
-		tag: .active
-		coordinate: Coordinate{
+	return Point.new(.active, Coordinate{
 			x: u16(x)
 			y: u32(y)
-		}
-	}
+	})
 }
 
 // Helper: look up an active-area cell like ghostty's

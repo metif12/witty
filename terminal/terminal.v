@@ -2985,12 +2985,9 @@ pub fn (mut self Terminal) index() ! {
 		// Preserve old cursor just for assertions
 		old_cursor := screen.cursor
 
-		screen.pages.erase_row_bounded(Point{
-			tag:        .active
-			coordinate: Coordinate{
+		screen.pages.erase_row_bounded(Point.new(.active, Coordinate{
 				y: self.scrolling_region.top
-			}
-		}, usize(self.scrolling_region.bottom - self.scrolling_region.top))!
+		}), usize(self.scrolling_region.bottom - self.scrolling_region.top))!
 
 		// eraseRow and eraseRowBounded will end up moving the cursor pin
 		// up by 1, so we need to move it back down. A `cursorReload`

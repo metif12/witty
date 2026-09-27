@@ -18,7 +18,7 @@ fn test_coordinate_default() {
 
 fn test_point_new() {
 	p := Point.new(.active, Coordinate{ x: 5, y: 10 })
-	assert p.tag == .active
+	assert p.tag() == .active
 	assert p.coord().x == 5
 	assert p.coord().y == 10
 }
@@ -33,7 +33,10 @@ fn test_point_coord() {
 fn test_point_tags() {
 	assert sizeof(PointTag) == 1
 	assert sizeof(Coordinate) == 8
-	assert sizeof(Point) == 12
+	assert sizeof(PointActive) == sizeof(Coordinate)
+	assert sizeof(PointViewport) == sizeof(Coordinate)
+	assert sizeof(PointScreen) == sizeof(Coordinate)
+	assert sizeof(PointHistory) == sizeof(Coordinate)
 	assert u8(PointTag.active) == 0
 	assert u8(PointTag.viewport) == 1
 	assert u8(PointTag.screen) == 2
@@ -42,15 +45,15 @@ fn test_point_tags() {
 	viewport := Point.new(.viewport, Coordinate{})
 	screen := Point.new(.screen, Coordinate{})
 	history := Point.new(.history, Coordinate{})
-	assert active.tag == .active
-	assert viewport.tag == .viewport
-	assert screen.tag == .screen
-	assert history.tag == .history
+	assert active is PointActive
+	assert viewport is PointViewport
+	assert screen is PointScreen
+	assert history is PointHistory
 }
 
 fn test_point_default() {
-	p := Point{}
-	assert p.tag == .active
+	p := Point(PointActive{})
+	assert p is PointActive
 	assert p.coord().x == 0
 	assert p.coord().y == 0
 }
