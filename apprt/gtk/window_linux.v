@@ -1373,12 +1373,14 @@ fn (self &Window) tab_for_page(page AdwTabPage) ?&Tab {
 		return none
 	}
 	child := C.adw_tab_page_get_child(page)
-	for tab in self.tabs {
-		if tab.widget == child {
-			return tab
-		}
+	if isnil(child) || C.g_type_check_instance_is_a(child, tab_get_type()) == 0 {
+		return none
 	}
-	return none
+	priv := tab_priv(voidptr(child))
+	if isnil(priv.wrapper) {
+		return none
+	}
+	return unsafe { &Tab(priv.wrapper) }
 }
 
 // sync_selected_tab is the direct equivalent of Window's title binding group.
@@ -1389,7 +1391,10 @@ pub fn (mut self Window) sync_selected_tab() {
 		return
 	}
 	C.adw_tab_page_set_needs_attention(page, 0)
-	tab := self.tab_for_page(page) or { return }
+	tab := self.tab_for_page(page) or {
+		log.warn('unexpected non-Tab child in tab view')
+		return
+	}
 	if title := tab.title {
 		self.set_title(title)
 	}
@@ -1420,31 +1425,29 @@ fn (self &Window) sync_window_title() {
 // present_surface selects the tab that owns surface, focuses it, and raises the
 // window. Mirrors Window.surfacePresentRequest.
 pub fn (mut self Window) present_surface(surface &SurfaceWidget) {
-	// Verify that this surface is actually owned by this window. Ghostty does
-	// this through GTK ancestor lookups; the translated widget graph retains
-	// the same relationship explicitly on the surface's SplitTree wrapper.
-	if isnil(surface.split_tree) || surface.split_tree.window != self {
-		log.warn('present request called for surface in different or non-existent window')
+	// Verify ownership through the native hierarchy, which remains canonical
+	// while tabs are being detached or transferred between windows.
+	surface_window := C.gtk_widget_get_ancestor(surface.widget, window_get_type())
+	if isnil(surface_window) {
+		log.warn('present request called for non-existent surface')
+		return
+	}
+	if surface_window != self.obj {
+		log.warn('present request called for surface in different window')
 		return
 	}
 
-	mut found := false
-	for tab in self.tabs {
-		if tab.split_tree == surface.split_tree {
-			page := C.adw_tab_view_get_page(self.tab_view, tab.widget)
-			if isnil(page) {
-				log.warn('present request surface tab has no page')
-				return
-			}
-			C.adw_tab_view_set_selected_page(self.tab_view, page)
-			found = true
-			break
-		}
-	}
-	if !found {
+	tab_widget := C.gtk_widget_get_ancestor(surface.widget, tab_get_type())
+	if isnil(tab_widget) {
 		log.warn('present request surface not found')
 		return
 	}
+	page := C.adw_tab_view_get_page(self.tab_view, tab_widget)
+	if isnil(page) {
+		log.warn('present request surface tab has no page')
+		return
+	}
+	C.adw_tab_view_set_selected_page(self.tab_view, page)
 	surface.grab_focus()
 	C.gtk_window_present(self.as_window())
 }
@@ -1530,16 +1533,10 @@ pub fn (mut self Window) move_tab(surface &Surface, amount i64) bool {
 		return false
 	}
 
-	if isnil(surface) || isnil(surface.surface) || isnil(surface.surface.split_tree) {
+	if isnil(surface) || isnil(surface.surface) || isnil(surface.surface.widget) {
 		return false
 	}
-	mut tab_widget := GtkWidget(unsafe { nil })
-	for tab in self.tabs {
-		if tab.split_tree == surface.surface.split_tree {
-			tab_widget = tab.widget
-			break
-		}
-	}
+	tab_widget := C.gtk_widget_get_ancestor(surface.surface.widget, tab_get_type())
 	if isnil(tab_widget) {
 		return false
 	}
@@ -1838,8 +1835,20 @@ fn (mut self Window) unset_window_decoration() {
 // quitting. Mirrors `getNeedsConfirmQuit`.
 //
 fn (self &Window) get_needs_confirm_quit() bool {
-	for tab in self.tabs {
-		if !isnil(tab) && tab.get_needs_confirm_quit() {
+	if isnil(self.tab_view) {
+		return false
+	}
+	n := C.adw_tab_view_get_n_pages(self.tab_view)
+	if n < 0 {
+		return false
+	}
+	for i in 0 .. n {
+		page := C.adw_tab_view_get_nth_page(self.tab_view, i)
+		tab := self.tab_for_page(page) or {
+			log.warn('unexpected non-Tab child in tab view')
+			continue
+		}
+		if tab.get_needs_confirm_quit() {
 			return true
 		}
 	}
