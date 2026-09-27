@@ -66,11 +66,6 @@ fn test_config_value_tag_layouts_and_source_ordinals() {
 	assert sizeof(AlphaBlending) == 1
 	assert [AlphaBlending.native, .linear, .linear_corrected].map(u8(it)) == [u8(0), 1, 2]
 
-	assert sizeof(BackgroundBlurKind) == 1
-	assert [BackgroundBlurKind.bool_false, .bool_true, .macos_glass_regular, .macos_glass_clear,
-		.radius].map(u8(it)) == [u8(0), 1, 2, 3, 4]
-	assert sizeof(BackgroundBlur) == 2
-
 	assert sizeof(BackgroundImagePosition) == 1
 	assert [BackgroundImagePosition.top_left, .top_center, .top_right, .center_left, .center_center,
 		.center_right, .bottom_left, .bottom_center, .bottom_right, .center].map(u8(it)) == [u8(0),
@@ -1071,16 +1066,16 @@ fn test_calculate_quick_terminal_size() {
 
 // Config.zig: BackgroundBlur "parse BackgroundBlur"
 fn test_parse_background_blur() {
-	assert background_blur_parse_cli(none)!.kind == .bool_true
-	assert background_blur_parse_cli('true')!.kind == .bool_true
-	assert background_blur_parse_cli('false')!.kind == .bool_false
+	assert background_blur_parse_cli(none)! is BackgroundBlurTrue
+	assert background_blur_parse_cli('true')! is BackgroundBlurTrue
+	assert background_blur_parse_cli('false')! is BackgroundBlurFalse
 
 	r := background_blur_parse_cli('42')!
-	assert r.kind == .radius
-	assert r.radius == 42
+	assert r is BackgroundBlurRadius
+	assert (r as BackgroundBlurRadius).radius == 42
 
-	assert background_blur_parse_cli('macos-glass-regular')!.kind == .macos_glass_regular
-	assert background_blur_parse_cli('macos-glass-clear')!.kind == .macos_glass_clear
+	assert background_blur_parse_cli('macos-glass-regular')! is BackgroundBlurMacosGlassRegular
+	assert background_blur_parse_cli('macos-glass-clear')! is BackgroundBlurMacosGlassClear
 
 	background_blur_parse_cli('') or {
 		expect_parse_error(err, .invalid_value)
@@ -1100,22 +1095,22 @@ fn test_parse_background_blur() {
 }
 
 fn test_background_blur_cval() {
-	assert BackgroundBlur{ kind: .bool_false }.cval() == 0
-	assert BackgroundBlur{ kind: .bool_true }.cval() == 20
-	assert BackgroundBlur{ kind: .radius, radius: 37 }.cval() == 37
-	assert BackgroundBlur{ kind: .radius, radius: 255 }.cval() == 255
-	assert BackgroundBlur{ kind: .macos_glass_regular }.cval() == -1
-	assert BackgroundBlur{ kind: .macos_glass_clear }.cval() == -2
-	assert BackgroundBlur{ kind: .bool_false }.format_entry() == 'false'
-	assert BackgroundBlur{ kind: .bool_true }.format_entry() == 'true'
-	assert BackgroundBlur{ kind: .radius, radius: 37 }.format_entry() == '37'
-	assert BackgroundBlur{ kind: .macos_glass_regular }.format_entry() == 'macos-glass-regular'
-	assert BackgroundBlur{ kind: .macos_glass_clear }.format_entry() == 'macos-glass-clear'
-	mut blur := BackgroundBlur{ kind: .bool_false }
+	assert BackgroundBlur(BackgroundBlurFalse{}).cval() == 0
+	assert BackgroundBlur(BackgroundBlurTrue{}).cval() == 20
+	assert BackgroundBlur(BackgroundBlurRadius{ radius: 37 }).cval() == 37
+	assert BackgroundBlur(BackgroundBlurRadius{ radius: 255 }).cval() == 255
+	assert BackgroundBlur(BackgroundBlurMacosGlassRegular{}).cval() == -1
+	assert BackgroundBlur(BackgroundBlurMacosGlassClear{}).cval() == -2
+	assert BackgroundBlur(BackgroundBlurFalse{}).format_entry() == 'false'
+	assert BackgroundBlur(BackgroundBlurTrue{}).format_entry() == 'true'
+	assert BackgroundBlur(BackgroundBlurRadius{ radius: 37 }).format_entry() == '37'
+	assert BackgroundBlur(BackgroundBlurMacosGlassRegular{}).format_entry() == 'macos-glass-regular'
+	assert BackgroundBlur(BackgroundBlurMacosGlassClear{}).format_entry() == 'macos-glass-clear'
+	mut blur := BackgroundBlur(BackgroundBlurFalse{})
 	blur.parse_cli(none)!
-	assert blur.kind == .bool_true
+	assert blur is BackgroundBlurTrue
 	blur.parse_cli('invalid') or {
-		assert blur.kind == .bool_true
+		assert blur is BackgroundBlurTrue
 	}
 }
 
@@ -1912,7 +1907,7 @@ fn test_config_file_whitespace_matches_source_byte_set() {
 fn test_config_file_bare_values_match_line_iterator() {
 	mut cfg := Config.default_config()
 	cfg.font_thicken = false
-	cfg.background_blur = BackgroundBlur{ kind: .bool_false }
+	cfg.background_blur = BackgroundBlurFalse{}
 	cfg.window_decoration = .none_
 	cfg.cursor_style_blink = none
 	cfg.command_palette_entry.parse_cli('title:Example,action:new_window')!
@@ -1920,7 +1915,7 @@ fn test_config_file_bare_values_match_line_iterator() {
 	cfg.load_string('font-thicken\nbackground-blur\nwindow-decoration\ncursor-style-blink\ncommand-palette-entry\n')
 	assert cfg.diagnostics.len == 0
 	assert cfg.font_thicken
-	assert cfg.background_blur.kind == .bool_true
+	assert cfg.background_blur is BackgroundBlurTrue
 	assert cfg.window_decoration == .auto
 	assert cfg.cursor_style_blink or { false }
 	assert cfg.command_palette_entry.items.len == 0
@@ -1949,7 +1944,7 @@ fn test_cli_bare_values_match_reflected_parser() {
 		'--background-blur-radius'])!
 	assert cfg.diagnostics.len == 0
 	assert cfg.font_thicken
-	assert cfg.background_blur.kind == .bool_true
+	assert cfg.background_blur is BackgroundBlurTrue
 	assert cfg.cursor_style_blink or { false }
 }
 
@@ -2433,14 +2428,14 @@ fn test_compat_renamed_config_fields() {
 	mut cfg := Config.default_config()
 	cfg.load_string('background-blur-radius = 17\nadw-toolbar-style = raised-border\n')
 	assert cfg.diagnostics.len == 0
-	assert cfg.background_blur.kind == .radius
-	assert cfg.background_blur.radius == 17
+	assert cfg.background_blur is BackgroundBlurRadius
+	assert (cfg.background_blur as BackgroundBlurRadius).radius == 17
 	assert cfg.gtk_toolbar_style == .raised_border
 
 	// The generic renamed-field handler applies the destination field's
 	// declared default for an explicitly empty value.
 	cfg.load_string('background-blur-radius =\nadw-toolbar-style =\n')
-	assert cfg.background_blur.kind == .bool_false
+	assert cfg.background_blur is BackgroundBlurFalse
 	assert cfg.gtk_toolbar_style == .raised
 }
 
@@ -3256,8 +3251,8 @@ auto-update-channel = stable
 	assert !cfg.window_vsync
 	assert cfg.window_colorspace == .display_p3
 	assert cfg.alpha_blending == .linear
-	assert cfg.background_blur.kind == .radius
-	assert cfg.background_blur.radius == 37
+	assert cfg.background_blur is BackgroundBlurRadius
+	assert (cfg.background_blur as BackgroundBlurRadius).radius == 37
 	assert cfg.clipboard_read == .deny
 	assert cfg.clipboard_write == .ask
 	assert cfg.copy_on_select == .clipboard

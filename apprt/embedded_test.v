@@ -819,9 +819,7 @@ fn test_set_window_background_blur_accepts_null_window() {
 	// this branch ensures the platform implementation and private API symbols
 	// are compiled and linked by the test executable.
 	app.config.background_opacity = 0.5
-	app.config.background_blur = configpkg.BackgroundBlur{
-		kind: .bool_true
-	}
+	app.config.background_blur = configpkg.BackgroundBlurTrue{}
 	ghostty_set_window_background_blur(&app, unsafe { nil })
 }
 

@@ -90,7 +90,7 @@ pub mut:
 	// Alpha blending mode.
 	blending configpkg.AlphaBlending = .native
 	// Background blur mode.
-	background_blur configpkg.BackgroundBlur = configpkg.BackgroundBlur{ kind: .bool_false }
+	background_blur configpkg.BackgroundBlur = configpkg.BackgroundBlurFalse{}
 }
 
 // FontStyleStatus tracks which font styles are enabled.

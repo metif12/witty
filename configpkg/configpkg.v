@@ -4018,7 +4018,7 @@ pub mut:
 	window_vsync               bool = true
 	window_colorspace          WindowColorspace = .srgb
 	alpha_blending             AlphaBlending = .native
-	background_blur            BackgroundBlur = BackgroundBlur{ kind: .bool_false }
+	background_blur            BackgroundBlur = BackgroundBlurFalse{}
 	custom_shader              RepeatablePath
 	background_image           ?Path
 	background_image_opacity   f32 = 1.0
@@ -5267,21 +5267,21 @@ pub fn (b AlphaBlending) is_linear() bool {
 	return b == .linear || b == .linear_corrected
 }
 
-// BackgroundBlur carries every variant accepted by Ghostty, including the
-// platform-specific numeric radius form.
-pub enum BackgroundBlurKind as u8 {
-	bool_false
-	bool_true
-	macos_glass_regular
-	macos_glass_clear
-	radius
-}
+pub struct BackgroundBlurFalse {}
 
-pub struct BackgroundBlur {
+pub struct BackgroundBlurMacosGlassClear {}
+
+pub struct BackgroundBlurMacosGlassRegular {}
+
+pub struct BackgroundBlurRadius {
 pub:
-	kind   BackgroundBlurKind
 	radius u8
 }
+
+pub struct BackgroundBlurTrue {}
+
+// BackgroundBlur is Config.BackgroundBlur. Only the radius arm carries data.
+pub type BackgroundBlur = BackgroundBlurFalse | BackgroundBlurMacosGlassClear | BackgroundBlurMacosGlassRegular | BackgroundBlurRadius | BackgroundBlurTrue
 
 // parse_cli translates BackgroundBlur.parseCLI. The receiver is only changed
 // after a value has parsed successfully, as with the tagged union assignment in
@@ -5291,33 +5291,33 @@ pub fn (mut b BackgroundBlur) parse_cli(input ?string) ! {
 }
 
 pub fn (b BackgroundBlur) enabled() bool {
-	return match b.kind {
-		.bool_false { false }
-		.bool_true { true }
-		.radius { b.radius > 0 }
-		.macos_glass_regular, .macos_glass_clear { true }
+	return match b {
+		BackgroundBlurFalse { false }
+		BackgroundBlurTrue { true }
+		BackgroundBlurRadius { b.radius > 0 }
+		BackgroundBlurMacosGlassRegular, BackgroundBlurMacosGlassClear { true }
 	}
 }
 
 // cval returns the integer representation consumed by the macOS private
 // background-blur API. The negative values select the two macOS glass modes.
 pub fn (b BackgroundBlur) cval() i16 {
-	return match b.kind {
-		.bool_false { i16(0) }
-		.bool_true { i16(20) }
-		.radius { i16(b.radius) }
-		.macos_glass_regular { i16(-1) }
-		.macos_glass_clear { i16(-2) }
+	return match b {
+		BackgroundBlurFalse { i16(0) }
+		BackgroundBlurTrue { i16(20) }
+		BackgroundBlurRadius { i16(b.radius) }
+		BackgroundBlurMacosGlassRegular { i16(-1) }
+		BackgroundBlurMacosGlassClear { i16(-2) }
 	}
 }
 
 pub fn (b BackgroundBlur) format_entry() string {
-	return match b.kind {
-		.bool_false { 'false' }
-		.bool_true { 'true' }
-		.radius { b.radius.str() }
-		.macos_glass_regular { 'macos-glass-regular' }
-		.macos_glass_clear { 'macos-glass-clear' }
+	return match b {
+		BackgroundBlurFalse { 'false' }
+		BackgroundBlurTrue { 'true' }
+		BackgroundBlurRadius { b.radius.str() }
+		BackgroundBlurMacosGlassRegular { 'macos-glass-regular' }
+		BackgroundBlurMacosGlassClear { 'macos-glass-clear' }
 	}
 }
 
@@ -8912,7 +8912,7 @@ fn (mut c Config) apply_kv(key string, value string) {
 			// field's type, including resetting an explicitly empty value to the
 			// replacement field's declared default.
 			if value.len == 0 {
-				c.background_blur = BackgroundBlur{ kind: .bool_false }
+				c.background_blur = BackgroundBlurFalse{}
 			} else {
 				c.background_blur = background_blur_parse_cli(value) or {
 					// A failed renamed-field handler falls through to the original
@@ -9273,7 +9273,7 @@ fn (mut c Config) apply_kv_missing(key string) {
 
 	match key {
 		'background-blur', 'background-blur-radius' {
-			c.background_blur = BackgroundBlur{ kind: .bool_true }
+			c.background_blur = BackgroundBlurTrue{}
 		}
 		'window-decoration' {
 			c.window_decoration = .auto
@@ -10878,37 +10878,31 @@ pub enum QuickTerminalKeyboardInteractivity as u8 {
 pub fn background_blur_parse_cli(input ?string) !BackgroundBlur {
 	in_val := input or {
 		// Emulate bool behavior: unset means true.
-		return BackgroundBlur{
-			kind: .bool_true
-		}
+		return BackgroundBlurTrue{}
 	}
 
 	// Try normal bools.
 	if b := parse_bool_opt(in_val) {
-		return BackgroundBlur{
-			kind: if b { BackgroundBlurKind.bool_true } else { BackgroundBlurKind.bool_false }
+		if b {
+			return BackgroundBlurTrue{}
 		}
+		return BackgroundBlurFalse{}
 	}
 
 	// Try the named void-tag enums.
 	match in_val {
 		'macos-glass-regular' {
-			return BackgroundBlur{
-				kind: .macos_glass_regular
-			}
+			return BackgroundBlurMacosGlassRegular{}
 		}
 		'macos-glass-clear' {
-			return BackgroundBlur{
-				kind: .macos_glass_clear
-			}
+			return BackgroundBlurMacosGlassClear{}
 		}
 		else {}
 	}
 
 	// Otherwise parse as a u8 radius (base-0: accepts decimal/0x/0o/0b).
 	radius := parse_u8_base0(in_val) or { return perr(ParseError.invalid_value) }
-	return BackgroundBlur{
-		kind: .radius
+	return BackgroundBlurRadius{
 		radius: radius
 	}
 }
