@@ -1,6 +1,7 @@
 module gtk
 
 import internal_os
+import log
 import os
 
 // cgroup_linux.v - Systemd cgroup single-instance management.
@@ -37,16 +38,6 @@ pub:
 	pids_max ?u64
 }
 
-// --- Errors ---------------------------------------------------------------
-
-// CgroupError enumerates failures from cgroup setup, mirroring the Zig error
-// set used across cgroup.zig / os/cgroup.zig.
-pub enum CgroupError {
-	dbus_call_failed
-	no_cgroup
-	io_error
-}
-
 // --- D-Bus / GVariant bindings --------------------------------------------
 //
 // The core GVariant / GVariantBuilder / GDBusConnection types and functions
@@ -54,75 +45,13 @@ pub enum CgroupError {
 // g_variant_unref, etc.) are already declared in ipc_dbus_linux.v — reused
 // here, NOT redeclared.
 
-// --- cgroup v2 filesystem helpers -----------------------------------------
-// Translated from ghostty/src/os/cgroup.zig (internal_os.cgroup.*).
-
-// cgroup_current returns the path to the cgroup for the given pid, or none.
-// Mirrors `os.cgroup.current`.
-//
-// It reads /proc/<pid>/cgroup whose first line looks like:
-//   0::/user.slice/user-1000.slice/session-1.scope
-// The cgroup path is the field after the last ':'.
-pub fn cgroup_current(pid int) !internal_os.CgroupCurrentResult {
-	return internal_os.current(pid)
-}
-
-// cgroup_create creates a new cgroup. If `move` is set (>= 0), the given pid is
-// moved into the created cgroup. Mirrors `os.cgroup.create`.
-pub fn cgroup_create(cgroup string, child string, move int) ! {
-	pid := if move >= 0 { ?int(move) } else { none }
-	internal_os.create(cgroup, child, pid)!
-}
-
-// cgroup_remove removes a cgroup. This only succeeds if the cgroup is empty.
-// The path must be '/'-prefixed. Mirrors `os.cgroup.remove`.
-pub fn cgroup_remove(cgroup string) ! {
-	internal_os.remove(cgroup)!
-}
-
-// cgroup_move_into moves the given PID into the given cgroup. Mirrors
-// `os.cgroup.moveInto`.
-pub fn cgroup_move_into(cgroup string, pid int) ! {
-	internal_os.move_into(cgroup, pid)!
-}
-
-// cgroup_controllers returns the raw space-separated list of available
-// controllers for the given ('/'-prefixed) cgroup. Mirrors
-// `os.cgroup.controllers`.
-pub fn cgroup_controllers(cgroup string) !string {
-	return internal_os.controllers(cgroup)
-}
-
-// cgroup_configure_controllers writes `v` (a valid cgroup.subtree_control
-// value) to the cgroup's cgroup.subtree_control. Mirrors
-// `os.cgroup.configureControllers`.
-pub fn cgroup_configure_controllers(cgroup string, v string) ! {
-	internal_os.configure_controllers(cgroup, v)!
-}
-
-// cgroup_configure_memory_high writes a memory.high (soft) limit in bytes.
-// Mirrors `os.cgroup.configureLimit(.{ .memory_high = ... })`.
-pub fn cgroup_configure_memory_high(cgroup string, size usize) ! {
-	internal_os.configure_limit(cgroup, internal_os.CgroupLimitMemoryHigh{
-		value: size
-	})!
-}
-
-// cgroup_configure_pids_max writes a pids.max (hard) limit. Mirrors
-// `os.cgroup.configureLimit(.{ .pids_max = ... })`.
-pub fn cgroup_configure_pids_max(cgroup string, size usize) ! {
-	internal_os.configure_limit(cgroup, internal_os.CgroupLimitPidsMax{
-		value: size
-	})!
-}
-
 // --- High-level init ------------------------------------------------------
 
 // enable_controllers enables all cgroup controllers for the given cgroup.
 // Mirrors `enableControllers` in cgroup.zig: it reads the available controllers
 // (space-separated) and writes them back prefixed with '+'.
 fn enable_controllers(cgroup string) ! {
-	raw := cgroup_controllers(cgroup)!
+	raw := internal_os.controllers(cgroup)!
 
 	// Controllers are space-separated; build "+a +b +c".
 	mut parts := []string{}
@@ -132,7 +61,7 @@ fn enable_controllers(cgroup string) ! {
 		}
 		parts << '+' + controller
 	}
-	cgroup_configure_controllers(cgroup, parts.join(' '))!
+	internal_os.configure_controllers(cgroup, parts.join(' '))!
 }
 
 // init initializes the cgroup for the app. It creates the transient systemd
@@ -144,7 +73,7 @@ pub fn cgroup_init(dbus GDBusConnection, opts Options) !string {
 	pid := os.getpid()
 
 	// Get our initial cgroup so we can detect the switch to the transient one.
-	original_result := cgroup_current(pid)!
+	original_result := internal_os.current(pid)!
 	original := original_result.value or { '' }
 
 	// Create our transient scope. If this succeeds the unit was created but we
@@ -152,7 +81,7 @@ pub fn cgroup_init(dbus GDBusConnection, opts Options) !string {
 	create_scope(dbus, pid)!
 	mut transient := ''
 	for {
-		current_result := cgroup_current(pid)!
+		current_result := internal_os.current(pid)!
 		current := current_result.value or { '' }
 		if current != original {
 			transient = current
@@ -162,15 +91,15 @@ pub fn cgroup_init(dbus GDBusConnection, opts Options) !string {
 		sleep_ms(25)
 	}
 
-	// log.info("transient scope created cgroup={s}", .{transient});
+	log.info('transient scope created cgroup=${transient}')
 
 	// Create the app cgroup and move ourselves into it. This is required
 	// because controllers can't be configured while a process is in a cgroup.
-	cgroup_create(transient, 'app', pid)!
+	internal_os.create(transient, 'app', pid)!
 
 	// Create a cgroup that will contain all our surfaces. Controllers/limits are
 	// configured only on this cgroup so the main app is unaffected.
-	cgroup_create(transient, 'surfaces', -1)!
+	internal_os.create(transient, 'surfaces', none)!
 	surfaces := '${transient}/surfaces'
 
 	// Enable all of our cgroup controllers. In the Zig original failures here
@@ -181,12 +110,16 @@ pub fn cgroup_init(dbus GDBusConnection, opts Options) !string {
 
 	// Configure the "high" (soft) memory limit if requested.
 	if limit := opts.memory_high {
-		cgroup_configure_memory_high(surfaces, limit)!
+		internal_os.configure_limit(surfaces, internal_os.CgroupLimitMemoryHigh{
+			value: usize(limit)
+		})!
 	}
 
 	// Configure the "max" (hard) pids limit if requested.
 	if limit := opts.pids_max {
-		cgroup_configure_pids_max(surfaces, limit)!
+		internal_os.configure_limit(surfaces, internal_os.CgroupLimitPidsMax{
+			value: usize(limit)
+		})!
 	}
 
 	return transient

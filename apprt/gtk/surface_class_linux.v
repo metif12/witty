@@ -1818,8 +1818,8 @@ fn (mut self SurfaceWidget) init_cgroup() {
 	}
 	base := self.app.cgroup_base() or { return }
 	name := 'surfaces/${usize(voidptr(self)):X}.scope'
-	cgroup_create(base, name, -1) or {
-		eprintln('failed to create surface cgroup: ${err}')
+	internal_os.create(base, name, none) or {
+		log.warn('failed to create surface cgroup err=${err}')
 		return
 	}
 	self.cgroup_path = '${base}/${name}'
@@ -1829,8 +1829,8 @@ fn (mut self SurfaceWidget) init_cgroup() {
 // shut down. A dangling empty cgroup is non-fatal.
 fn (mut self SurfaceWidget) clear_cgroup() {
 	path := self.cgroup_path or { return }
-	cgroup_remove(path) or {
-		eprintln('failed to remove cgroup for surface path=${path}: ${err}')
+	internal_os.remove(path) or {
+		log.warn('failed to remove cgroup for surface path=${path} err=${err}')
 	}
 	self.cgroup_path = none
 }
