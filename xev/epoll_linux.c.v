@@ -1186,7 +1186,7 @@ fn (self &EpollCompletion) fd() ?int {
 	}
 }
 
-pub enum EpollOperationType {
+pub enum EpollOperationType as u8 {
 	noop
 	cancel
 	accept
@@ -1715,7 +1715,7 @@ fn (self &EpollWriteBuffer) bytes() []u8 {
 //       DupFailed, Unknown
 //   TimerError = Unexpected
 
-pub enum EpollTimerTrigger {
+pub enum EpollTimerTrigger as u8 {
 	// Unused with epoll
 	request
 	// Timer expired.

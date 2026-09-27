@@ -6,6 +6,32 @@ module xev
 // is not translated: the V Completion flattens the Operation union into a
 // record, so its size is not comparable.
 
+fn test_io_uring_operation_and_timer_tags_match_source() {
+	assert sizeof(IoUringOperationType) == 1
+	assert u8(IoUringOperationType.noop) == 0
+	assert u8(IoUringOperationType.accept) == 1
+	assert u8(IoUringOperationType.close) == 2
+	assert u8(IoUringOperationType.connect) == 3
+	assert u8(IoUringOperationType.poll) == 4
+	assert u8(IoUringOperationType.read) == 5
+	assert u8(IoUringOperationType.pread) == 6
+	assert u8(IoUringOperationType.recv) == 7
+	assert u8(IoUringOperationType.send) == 8
+	assert u8(IoUringOperationType.sendmsg) == 9
+	assert u8(IoUringOperationType.recvmsg) == 10
+	assert u8(IoUringOperationType.shutdown) == 11
+	assert u8(IoUringOperationType.pwrite) == 12
+	assert u8(IoUringOperationType.write) == 13
+	assert u8(IoUringOperationType.timer) == 14
+	assert u8(IoUringOperationType.timer_remove) == 15
+	assert u8(IoUringOperationType.cancel) == 16
+
+	assert sizeof(IoUringTimerTrigger) == 1
+	assert u8(IoUringTimerTrigger.request) == 0
+	assert u8(IoUringTimerTrigger.expiration) == 1
+	assert u8(IoUringTimerTrigger.cancel) == 2
+}
+
 fn io_uring_test_set_bool(ud voidptr, _ &IoUringLoop, _ &IoUringCompletion, _ IoUringResult) CallbackAction {
 	mut b := unsafe { &bool(ud) }
 	unsafe {

@@ -984,7 +984,7 @@ const thread_pool_error_unexpected = error('Unexpected')
 // std.builtin.AtomicOrder, with the values of the GCC/Clang `__ATOMIC_*`
 // constants that the `__atomic_*` builtins take. Zig's `.unordered` has no
 // C11/GCC equivalent; call sites use the next-stronger `.monotonic` (relaxed).
-enum ThreadPoolAtomicOrder {
+enum ThreadPoolAtomicOrder as int {
 	monotonic = 0 // __ATOMIC_RELAXED
 	acquire   = 2 // __ATOMIC_ACQUIRE
 	release   = 3 // __ATOMIC_RELEASE

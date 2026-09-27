@@ -4,6 +4,49 @@ import os
 
 // Tests translated from libxev src/backend/kqueue.zig (pinned 34fa508).
 
+fn test_kqueue_operation_and_timer_tags_match_source() {
+	assert sizeof(KqueueOperationType) == 1
+	assert u8(KqueueOperationType.noop) == 0
+	assert u8(KqueueOperationType.accept) == 1
+	assert u8(KqueueOperationType.connect) == 2
+	assert u8(KqueueOperationType.read) == 3
+	assert u8(KqueueOperationType.write) == 4
+	assert u8(KqueueOperationType.pread) == 5
+	assert u8(KqueueOperationType.pwrite) == 6
+	assert u8(KqueueOperationType.send) == 7
+	assert u8(KqueueOperationType.recv) == 8
+	assert u8(KqueueOperationType.sendto) == 9
+	assert u8(KqueueOperationType.recvfrom) == 10
+	assert u8(KqueueOperationType.close) == 11
+	assert u8(KqueueOperationType.shutdown) == 12
+	assert u8(KqueueOperationType.timer) == 13
+	assert u8(KqueueOperationType.cancel) == 14
+	assert u8(KqueueOperationType.machport) == 15
+	assert u8(KqueueOperationType.proc) == 16
+
+	assert sizeof(KqueueTimerTrigger) == 1
+	assert u8(KqueueTimerTrigger.request) == 0
+	assert u8(KqueueTimerTrigger.expiration) == 1
+	assert u8(KqueueTimerTrigger.cancel) == 2
+}
+
+fn test_kqueue_start_action_keeps_result_payload() {
+	actions := [KqueueStartAction(KqueueStartKevent{}), KqueueStartTimer{}, KqueueStartCancel{},
+		KqueueStartThreadpool{}, KqueueStartResult{
+		value: -37
+	}]
+	assert actions[0] is KqueueStartKevent
+	assert actions[1] is KqueueStartTimer
+	assert actions[2] is KqueueStartCancel
+	assert actions[3] is KqueueStartThreadpool
+	assert actions[4] is KqueueStartResult
+	if actions[4] is KqueueStartResult {
+		assert actions[4].value == -37
+	} else {
+		assert false
+	}
+}
+
 fn kqueue_test_set_bool(ud voidptr, _ &KqueueLoop, _ &KqueueCompletion, _ KqueueResult) CallbackAction {
 	mut b := unsafe { &bool(ud) }
 	unsafe {

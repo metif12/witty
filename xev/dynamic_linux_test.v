@@ -29,6 +29,15 @@ fn test_dynamic_ref_all_decls() {
 	}
 }
 
+fn test_dynamic_poll_event_matches_source_backend_value() {
+	assert sizeof(DynamicPollEvent) == 4
+	assert u32(DynamicPollEvent.read) == 1
+	assert DynamicPollEvent.from_io_uring(.read) == .read
+	assert DynamicPollEvent.from_epoll(.read) == .read
+	assert DynamicPollEvent.read.to_io_uring() == .read
+	assert DynamicPollEvent.read.to_epoll() == .read
+}
+
 struct DynamicTestCompletionHolder {
 	name string
 	c    Completion

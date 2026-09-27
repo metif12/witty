@@ -788,25 +788,29 @@ fn (self &KqueueLoop) done() bool {
 		&& self.completions.empty())
 }
 
-enum KqueueStartAction {
-	// We have set the kevent out parameter
-	kevent
-	// We are a timer,
-	timer
-	// We are a cancellation
-	cancel
-	// We want to run on the threadpool
-	threadpool
-	// We have a result code from making a system call now.
-	result
+struct KqueueStartKevent {}
+
+struct KqueueStartTimer {}
+
+struct KqueueStartCancel {}
+
+struct KqueueStartThreadpool {}
+
+struct KqueueStartResult {
+	value i32
 }
+
+type KqueueStartAction = KqueueStartKevent
+	| KqueueStartTimer
+	| KqueueStartCancel
+	| KqueueStartThreadpool
+	| KqueueStartResult
 
 // Start the completion. This returns true if the Kevent was set
 // and should be queued.
 fn (mut self KqueueLoop) start(mut c KqueueCompletion, mut ev Kevent) bool {
-	mut result := i32(0)
 	action := if c.flags.threadpool() {
-		KqueueStartAction.threadpool
+		KqueueStartAction(KqueueStartThreadpool{})
 	} else {
 		match mut c.op {
 			KqueueNoopOp {
@@ -815,14 +819,14 @@ fn (mut self KqueueLoop) start(mut c KqueueCompletion, mut ev Kevent) bool {
 			}
 			KqueueCancelOp {
 				// Queue the cancel
-				KqueueStartAction.cancel
+				KqueueStartAction(KqueueStartCancel{})
 			}
 			KqueueAcceptOp {
 				ev = c.kevent() or { panic('unreachable') }
-				KqueueStartAction.kevent
+				KqueueStartAction(KqueueStartKevent{})
 			}
 			KqueueConnectOp {
-				mut connect_action := KqueueStartAction.result
+				mut connect_action := KqueueStartAction(KqueueStartResult{})
 				for {
 					rc := C.connect(c.op.socket, c.op.addr.any(), c.op.addr.get_os_sock_len())
 					match posix_errno(rc) {
@@ -835,14 +839,15 @@ fn (mut self KqueueLoop) start(mut c KqueueCompletion, mut ev Kevent) bool {
 						// when it is complete.
 						C.EAGAIN, C.EINPROGRESS {
 							ev = c.kevent() or { panic('unreachable') }
-							connect_action = .kevent
+							connect_action = KqueueStartKevent{}
 							break
 						}
 						// Any other error we report. Like the source, this passes
 						// the libc return code rather than a negated errno.
 						else {
-							result = i32(rc)
-							connect_action = .result
+							connect_action = KqueueStartResult{
+								value: i32(rc)
+							}
 							break
 						}
 					}
@@ -852,7 +857,7 @@ fn (mut self KqueueLoop) start(mut c KqueueCompletion, mut ev Kevent) bool {
 			KqueueWriteOp, KqueuePWriteOp, KqueueReadOp, KqueuePReadOp, KqueueSendOp, KqueueRecvOp,
 			KqueueSendToOp, KqueueRecvFromOp, KqueueMachPortOp, KqueueProcOp {
 				ev = c.kevent() or { panic('unreachable') }
-				KqueueStartAction.kevent
+				KqueueStartAction(KqueueStartKevent{})
 			}
 			KqueueShutdownOp {
 				how := match c.op.how {
@@ -861,13 +866,15 @@ fn (mut self KqueueLoop) start(mut c KqueueCompletion, mut ev Kevent) bool {
 					.both { C.SHUT_RDWR }
 				}
 				// Like the source, the libc return code is the result.
-				result = i32(C.shutdown(c.op.socket, how))
-				KqueueStartAction.result
+				KqueueStartAction(KqueueStartResult{
+					value: i32(C.shutdown(c.op.socket, how))
+				})
 			}
 			KqueueCloseOp {
 				posix_close(c.op.fd)
-				result = 0
-				KqueueStartAction.result
+				KqueueStartAction(KqueueStartResult{
+					value: 0
+				})
 			}
 			KqueueHeapTimer {
 				// Point back to completion since we need this. In the future
@@ -878,13 +885,13 @@ fn (mut self KqueueLoop) start(mut c KqueueCompletion, mut ev Kevent) bool {
 				self.timers.insert(&c.op)
 
 				// We always run timers
-				KqueueStartAction.timer
+				KqueueStartAction(KqueueStartTimer{})
 			}
 		}
 	}
 
 	match action {
-		.kevent, .timer {
+		KqueueStartKevent, KqueueStartTimer {
 			// Increase our active count so we now wait for this. We
 			// assume it'll successfully queue. If it doesn't we handle
 			// that later (see submit)
@@ -893,9 +900,9 @@ fn (mut self KqueueLoop) start(mut c KqueueCompletion, mut ev Kevent) bool {
 
 			// We only return true if this is a kevent, since other
 			// actions can come in here.
-			return action == .kevent
+			return action is KqueueStartKevent
 		}
-		.cancel {
+		KqueueStartCancel {
 			// We are considered an active completion.
 			self.active += 1
 			c.flags.set_state(.active)
@@ -903,7 +910,7 @@ fn (mut self KqueueLoop) start(mut c KqueueCompletion, mut ev Kevent) bool {
 			self.cancellations.push(c)
 			return false
 		}
-		.threadpool {
+		KqueueStartThreadpool {
 			// We need to mark this completion as active no matter
 			// what happens below so that we mark is inactive with
 			// completion handling.
@@ -937,8 +944,8 @@ fn (mut self KqueueLoop) start(mut c KqueueCompletion, mut ev Kevent) bool {
 		}
 		// A result is immediately available. Queue the completion to
 		// be invoked.
-		.result {
-			c.result = c.syscall_result(result)
+		KqueueStartResult {
+			c.result = c.syscall_result(action.value)
 			self.completions.push(c)
 
 			return false
@@ -1854,7 +1861,7 @@ fn (mut self KqueueWakeup) wakeup() ! {
 	self.mach_port.notify()!
 }
 
-pub enum KqueueOperationType {
+pub enum KqueueOperationType as u8 {
 	noop
 	accept
 	connect
@@ -2019,7 +2026,7 @@ pub mut:
 	flags u32 = kqueue_note_exit_flags
 }
 
-pub enum KqueueTimerTrigger {
+pub enum KqueueTimerTrigger as u8 {
 	// Unused with epoll
 	request
 	// Timer expired.

@@ -400,8 +400,8 @@ pub mut:
 	epoll    EpollWriteRequest
 }
 
-pub enum DynamicPollEvent {
-	read
+pub enum DynamicPollEvent as u32 {
+	read = 1
 }
 
 // fromBackend(.io_uring, event)

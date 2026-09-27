@@ -2,6 +2,31 @@ module xev
 
 // Tests translated from libxev src/backend/epoll.zig (pinned 34fa508).
 
+fn test_epoll_operation_and_timer_tags_match_source() {
+	assert sizeof(EpollOperationType) == 1
+	assert u8(EpollOperationType.noop) == 0
+	assert u8(EpollOperationType.cancel) == 1
+	assert u8(EpollOperationType.accept) == 2
+	assert u8(EpollOperationType.connect) == 3
+	assert u8(EpollOperationType.poll) == 4
+	assert u8(EpollOperationType.read) == 5
+	assert u8(EpollOperationType.pread) == 6
+	assert u8(EpollOperationType.write) == 7
+	assert u8(EpollOperationType.pwrite) == 8
+	assert u8(EpollOperationType.send) == 9
+	assert u8(EpollOperationType.recv) == 10
+	assert u8(EpollOperationType.sendmsg) == 11
+	assert u8(EpollOperationType.recvmsg) == 12
+	assert u8(EpollOperationType.close) == 13
+	assert u8(EpollOperationType.shutdown) == 14
+	assert u8(EpollOperationType.timer) == 15
+
+	assert sizeof(EpollTimerTrigger) == 1
+	assert u8(EpollTimerTrigger.request) == 0
+	assert u8(EpollTimerTrigger.expiration) == 1
+	assert u8(EpollTimerTrigger.cancel) == 2
+}
+
 fn epoll_test_set_bool(ud voidptr, _ &EpollLoop, _ &EpollCompletion, _ EpollResult) CallbackAction {
 	mut b := unsafe { &bool(ud) }
 	unsafe {

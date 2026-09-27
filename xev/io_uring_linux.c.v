@@ -842,7 +842,7 @@ fn (self &IoUringCompletion) read_result(op IoUringOperationType, res i32) IoUri
 	}
 }
 
-pub enum IoUringOperationType {
+pub enum IoUringOperationType as u8 {
 	// Do nothing. This operation will not be queued and will never
 	// have its callback fired. This is NOT equivalent to the io_uring
 	// "nop" operation.
@@ -1436,7 +1436,7 @@ fn (self &IoUringWriteBuffer) bytes() []u8 {
 	}
 }
 
-pub enum IoUringTimerTrigger {
+pub enum IoUringTimerTrigger as u8 {
 	// Timer completed due to linked request completing in time.
 	request
 

@@ -18,6 +18,15 @@ fn test_thread_pool_c_api_sizes() {
 	assert sizeof(ThreadPoolConfig) == 8
 }
 
+fn test_thread_pool_atomic_orders_match_compiler_builtins() {
+	assert sizeof(ThreadPoolAtomicOrder) == sizeof(int)
+	assert int(ThreadPoolAtomicOrder.monotonic) == 0
+	assert int(ThreadPoolAtomicOrder.acquire) == 2
+	assert int(ThreadPoolAtomicOrder.release) == 3
+	assert int(ThreadPoolAtomicOrder.acq_rel) == 4
+	assert int(ThreadPoolAtomicOrder.seq_cst) == 5
+}
+
 struct ThreadPoolTestNodeAlign {
 	pad  u8
 	node ThreadPoolNode
