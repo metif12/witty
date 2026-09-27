@@ -159,8 +159,6 @@ fn test_window_and_runtime_config_enum_layouts_and_source_ordinals() {
 }
 
 fn test_config_local_and_quick_terminal_tag_layouts_and_source_ordinals() {
-	assert sizeof(ArgIterKind) == 1
-	assert [ArgIterKind.shell, .direct].map(u8(it)) == [u8(0), 1]
 	assert sizeof(ReplayStepKind) == 1
 	assert [ReplayStepKind.arg, .expand, .conditional_arg, .diagnostic, .command].map(u8(it)) == [u8(0),
 		1, 2, 3, 4]

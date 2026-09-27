@@ -6373,17 +6373,15 @@ pub fn Command.parse_cli(input ?string) !Command {
 pub fn (c Command) arg_iterator() ArgIterator {
 	match c {
 		ShellCmd {
-			return ArgIterator{
-				kind: .shell
+			return ShellArgIterator{
 				shell_str: c.shell
 				pos: 0
 			}
 		}
 		DirectCmd {
-			return ArgIterator{
-				kind: .direct
-				direct_args: c.direct
-				direct_idx: 0
+			return DirectArgIterator{
+				args: c.direct
+				index: 0
 			}
 		}
 	}
@@ -6420,35 +6418,34 @@ pub fn (c Command) format_entry() string {
 	}
 }
 
-// ArgIterator iterates over the arguments of a command.
-pub struct ArgIterator {
+pub struct ShellArgIterator {
 mut:
-	kind ArgIterKind
-	// For shell commands
 	shell_str string
 	pos       int
-	// For direct commands
-	direct_args []string
-	direct_idx  int
 }
 
-enum ArgIterKind as u8 {
-	shell
-	direct
+pub struct DirectArgIterator {
+mut:
+	args  []string
+	index int
 }
+
+// ArgIterator iterates either the allocated shell parser state or the direct
+// argument slice and index retained by the corresponding source union arm.
+pub type ArgIterator = DirectArgIterator | ShellArgIterator
 
 // next returns the next argument, or none if exhausted.
 pub fn (mut it ArgIterator) next() ?string {
-	match it.kind {
-		.shell {
+	match mut it {
+		ShellArgIterator {
 			return it.next_shell_arg()
 		}
-		.direct {
-			if it.direct_idx >= it.direct_args.len {
+		DirectArgIterator {
+			if it.index >= it.args.len {
 				return none
 			}
-			arg := it.direct_args[it.direct_idx]
-			it.direct_idx++
+			arg := it.args[it.index]
+			it.index++
 			return arg
 		}
 	}
@@ -6462,7 +6459,7 @@ pub fn (mut it ArgIterator) deinit() {}
 // With the default options, double quotes group arguments, single quotes are
 // ordinary characters, and backslashes only receive special treatment when
 // immediately preceding a double quote.
-fn (mut it ArgIterator) next_shell_arg() ?string {
+fn (mut it ShellArgIterator) next_shell_arg() ?string {
 	s := it.shell_str
 	// Skip space, tab, carriage return, and newline.
 	for it.pos < s.len && s[it.pos] in [` `, `\t`, `\r`, `\n`] {
