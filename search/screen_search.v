@@ -1,5 +1,6 @@
 module search
 
+import log
 import tripwire
 
 // --- Original Ghostty Comments Start: src/terminal/search/screen.zig
@@ -734,9 +735,9 @@ pub fn (mut self ScreenSearch) reload_active() ! {
 		}
 	}
 	defer {
-		if select_prev {
-			self.do_select(.prev) or {
-				eprintln('reload failed to reset search selection err=${err}')
+			if select_prev {
+				self.do_select(.prev) or {
+					log.info('reload failed to reset search selection err=${err}')
 			}
 		}
 	}
@@ -774,9 +775,11 @@ pub fn (mut self ScreenSearch) reload_active() ! {
 		if mut m := self.selected {
 			active_len := self.active_results.len
 			if m.idx >= usize(active_len) {
-				m.deinit(mut self.screen.pages)
-				self.selected = none
-				self.select_prev()
+					m.deinit(mut self.screen.pages)
+					self.selected = none
+					self.do_select(.prev) or {
+						log.info('reload failed to reset search selection err=${err}')
+					}
 			}
 		}
 	}
@@ -848,9 +851,11 @@ pub fn (mut self ScreenSearch) reload_active() ! {
 				}
 				if !found {
 					// No match, just go back to the first match.
-					m.deinit(mut self.screen.pages)
-					self.selected = none
-					self.select_next()
+						m.deinit(mut self.screen.pages)
+						self.selected = none
+						self.do_select(.next) or {
+							log.info('reload failed to reset search selection err=${err}')
+						}
 				}
 			}
 		}
