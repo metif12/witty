@@ -229,6 +229,7 @@ import terminal
 import highlight
 import datastruct
 import internal_os
+import log
 import xev
 
 // The interval at which we refresh the terminal state to check if
@@ -472,11 +473,14 @@ pub fn (mut self SearchThread) thread_main() {
 	// Call child function so we can use errors...
 	self.thread_main_() or {
 		// In the future, we should expose this on the thread struct.
-		eprintln('search thread err=${err}')
+		log.warn('search thread err=${err}')
 	}
 }
 
 fn (mut self SearchThread) thread_main_() ! {
+	defer {
+		log.debug('search thread exited')
+	}
 	// Right now, on Darwin, `std.Thread.setName` can only name the current
 	// thread, and we have no way to get the current thread from within it,
 	// so instead we use this code to name the thread instead.
@@ -484,7 +488,12 @@ fn (mut self SearchThread) thread_main_() ! {
 		internal_os.set_thread_name('search')
 
 		// We can run with lower priority than other threads.
-		internal_os.set_qos_class(.utility) or { eprintln('error setting QoS class err=${err}') }
+		class := internal_os.QosClass.utility
+		internal_os.set_qos_class(class) or {
+			log.warn('error setting QoS class err=${err}')
+			return
+		}
+		log.debug('thread QoS class set class=${class}')
 	}
 
 	// Start the async handlers
@@ -498,7 +507,10 @@ fn (mut self SearchThread) thread_main_() ! {
 	self.start_refresh_timer()
 
 	// Run
+	log.debug('starting search thread')
 	defer {
+		log.debug('starting search thread shutdown')
+
 		// Send the quit message
 		if cb := self.opts.event_cb {
 			cb(EventQuit{}, self.opts.event_userdata)
@@ -512,7 +524,8 @@ fn (mut self SearchThread) thread_main_() ! {
 		// If our loop is canceled then we drain our messages and quit.
 		if self.loop.stopped() {
 			for {
-				self.mailbox.pop() or { break }
+				message := self.mailbox.pop() or { break }
+				log.debug('mailbox message ignored during shutdown=${message}')
 			}
 
 			return
@@ -571,6 +584,7 @@ fn (mut self SearchThread) thread_main_() ! {
 fn (mut self SearchThread) drain_mailbox() ! {
 	for {
 		message := self.mailbox.pop() or { break }
+		log.debug('mailbox message=${message}')
 		match message {
 			MessageChangeNeedle {
 				mut v := message.needle
@@ -655,6 +669,8 @@ fn (mut self SearchThread) do_select(sel Select) ! {
 //
 // Source: Thread.changeNeedle
 fn (mut self SearchThread) change_needle(needle []u8) {
+	log.debug("changing search needle to '${needle.bytestr()}'")
+
 	// Stop the previous search.
 	if mut s := self.search {
 		// If our search is unchanged, do nothing.
@@ -711,7 +727,7 @@ fn (mut self SearchThread) stop_refresh_timer() {
 
 fn search_thread_wakeup_callback(self_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorKind) xev.CallbackAction {
 	if err := r {
-		eprintln('error in wakeup err=${err}')
+		log.warn('error in wakeup err=${err}')
 		return .rearm
 	}
 
@@ -719,7 +735,7 @@ fn search_thread_wakeup_callback(self_ voidptr, _ &xev.Loop, _ &xev.Completion, 
 
 	// When we wake up, we drain the mailbox. Mailbox producers should
 	// wake up our thread after publishing.
-	self.drain_mailbox() or { eprintln('error draining mailbox err=${err}') }
+	self.drain_mailbox() or { log.warn('error draining mailbox err=${err}') }
 
 	return .rearm
 }
@@ -739,7 +755,7 @@ fn search_thread_refresh_callback(self_ voidptr, _ &xev.Loop, _ &xev.Completion,
 	}
 	if self_ == unsafe { nil } {
 		// This shouldn't happen so we log it.
-		eprintln('refresh callback fired without data set')
+		log.warn('refresh callback fired without data set')
 		return .disarm
 	}
 	mut self := unsafe { &SearchThread(self_) }
@@ -928,7 +944,7 @@ pub fn (mut self Search) feed(mut t terminal.Terminal) {
 		}
 		mut screen := t.screens.get(key) or { continue }
 		new_screen_search := ScreenSearch.init(mut screen, self.viewport.needle()) or {
-			eprintln('error initializing screen search for key=${key} err=${err}')
+			log.warn('error initializing screen search for key=${key} err=${err}')
 			continue
 		}
 		mut ss := heap_screen_search(new_screen_search)
@@ -948,7 +964,7 @@ pub fn (mut self Search) feed(mut t terminal.Terminal) {
 		// Reload our active area for our active screen.
 		if mut ss := self.screens[t.screens.active_key] {
 			ss.reload_active() or {
-				eprintln('error reloading active area for screen key=${t.screens.active_key} err=${err}')
+				log.warn('error reloading active area for screen key=${t.screens.active_key} err=${err}')
 			}
 		}
 	}
@@ -959,10 +975,10 @@ pub fn (mut self Search) feed(mut t terminal.Terminal) {
 	}
 
 	// Feed data to each screen search that needs it.
-	for _, mut ss in self.screens {
+	for key, mut ss in self.screens {
 		if ss.state.needs_feed() {
 			ss.feed() or {
-				eprintln('error feeding screen search err=${err}')
+				log.warn('error feeding screen search key=${key} err=${err}')
 			}
 		}
 	}
@@ -981,6 +997,7 @@ pub fn (mut self Search) notify(cb EventCallback, ud voidptr) {
 	total := screen_search.matches_len()
 	changed_total := if t := self.last_screen.total { t != total } else { true }
 	if changed_total {
+		log.debug('notifying total matches=${total}')
 		self.last_screen.total = total
 		cb(EventTotalMatches{ total: total }, ud)
 	}
@@ -1000,6 +1017,7 @@ pub fn (mut self Search) notify(cb EventCallback, ud voidptr) {
 			hl := self.viewport.next() or { break }
 			results << hl.clone()
 		}
+		log.debug('notifying viewport matches len=${results.len}')
 		cb(EventViewportMatches{ matches: results }, ud)
 	}
 
@@ -1016,6 +1034,7 @@ pub fn (mut self Search) notify(cb EventCallback, ud voidptr) {
 			}
 			if !same {
 				// New selection, notify!
+				log.debug('notifying selection updated idx=${m.idx}')
 				self.last_screen.selected = ScreenStateSelectedMatch{
 					idx: m.idx
 					highlight: untracked
@@ -1029,12 +1048,14 @@ pub fn (mut self Search) notify(cb EventCallback, ud voidptr) {
 			}
 		}
 	} else if self.last_screen.selected != none {
+		log.debug('notifying selection cleared')
 		self.last_screen.selected = none
 		cb(EventSelectedMatch{ selected: none }, ud)
 	}
 
 	// Send our complete notification if we just completed.
 	if !self.last_complete && self.is_complete() {
+		log.debug('notifying search complete')
 		self.last_complete = true
 		cb(EventComplete{}, ud)
 	}
