@@ -24,6 +24,7 @@ fn test_pinned_version_and_context_setup() {
 }
 
 fn test_named_key_abi_values() {
+	assert sizeof(Key) == sizeof(int)
 	assert int(Key.tab) == 512
 	assert int(Key.left_arrow) == 513
 	assert int(Key.key_0) == 536
@@ -32,4 +33,8 @@ fn test_named_key_abi_values() {
 	assert int(Key.apostrophe) == 596
 	assert int(Key.keypad_0) == 612
 	assert int(Key.keypad_equal) == 628
+	assert sizeof(MouseButton) == sizeof(int)
+	assert int(MouseButton.left) == 0
+	assert int(MouseButton.right) == 1
+	assert int(MouseButton.middle) == 2
 }

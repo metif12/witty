@@ -817,7 +817,7 @@ fn Value.init(cvalue &RawValue) Value {
 	}
 }
 
-pub enum SubstituteKind as i32 {
+pub enum SubstituteKind as u32 {
 	pattern
 	font
 	scan
@@ -826,7 +826,7 @@ pub enum SubstituteKind as i32 {
 pub type MatchKind = SubstituteKind
 
 // Weight constants for fontconfig (matching FC_WEIGHT_* values).
-pub enum Weight {
+pub enum Weight as u32 {
 	thin       = 0
 	extralight = 40
 	light      = 50
@@ -842,14 +842,14 @@ pub enum Weight {
 }
 
 // Slant constants for fontconfig (matching FC_SLANT_* values).
-pub enum Slant {
+pub enum Slant as u32 {
 	roman   = 0
 	italic  = 100
 	oblique = 110
 }
 
 // Spacing constants for fontconfig (matching FC_* spacing values).
-pub enum Spacing {
+pub enum Spacing as u32 {
 	proportional = 0
 	dual         = 90
 	mono         = 100
@@ -864,7 +864,7 @@ pub:
 }
 
 // MatchResult indicates the outcome of a font match.
-pub enum MatchResult {
+pub enum MatchResult as u32 {
 	match_
 	no_match
 	type_mismatch

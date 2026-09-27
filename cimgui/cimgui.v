@@ -3,7 +3,7 @@ module cimgui
 // Key mirrors the named keyboard range in Dear ImGui 1.92.5. The explicit
 // first value and declaration order are the ABI: ImGuiKey_Tab is 512 and the
 // remaining values are consecutive.
-pub enum Key {
+pub enum Key as int {
 	none = 0
 	tab  = 512
 	left_arrow
@@ -124,7 +124,7 @@ pub enum Key {
 	keypad_equal
 }
 
-pub enum MouseButton {
+pub enum MouseButton as int {
 	left
 	right
 	middle

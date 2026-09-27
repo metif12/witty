@@ -1,5 +1,44 @@
 module fontconfig
 
+fn test_c_enum_layouts_and_values_match_source() {
+	assert sizeof(SubstituteKind) == sizeof(u32)
+	assert u32(SubstituteKind.pattern) == 0
+	assert u32(SubstituteKind.font) == 1
+	assert u32(SubstituteKind.scan) == 2
+
+	assert sizeof(Weight) == sizeof(u32)
+	assert u32(Weight.thin) == 0
+	assert u32(Weight.extralight) == 40
+	assert u32(Weight.light) == 50
+	assert u32(Weight.demilight) == 55
+	assert u32(Weight.book) == 75
+	assert u32(Weight.regular) == 80
+	assert u32(Weight.medium) == 100
+	assert u32(Weight.demibold) == 180
+	assert u32(Weight.bold) == 200
+	assert u32(Weight.extrabold) == 205
+	assert u32(Weight.black) == 210
+	assert u32(Weight.extrablack) == 215
+
+	assert sizeof(Slant) == sizeof(u32)
+	assert u32(Slant.roman) == 0
+	assert u32(Slant.italic) == 100
+	assert u32(Slant.oblique) == 110
+
+	assert sizeof(Spacing) == sizeof(u32)
+	assert u32(Spacing.proportional) == 0
+	assert u32(Spacing.dual) == 90
+	assert u32(Spacing.mono) == 100
+	assert u32(Spacing.charcell) == 110
+
+	assert sizeof(MatchResult) == sizeof(u32)
+	assert u32(MatchResult.match_) == 0
+	assert u32(MatchResult.no_match) == 1
+	assert u32(MatchResult.type_mismatch) == 2
+	assert u32(MatchResult.no_id) == 3
+	assert u32(MatchResult.out_of_memory) == 4
+}
+
 fn test_property_cval() {
 	assert Property.family.cval() == 'family'
 	assert Property.pixel_size.cval() == 'pixelsize'
