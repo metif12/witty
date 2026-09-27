@@ -155,7 +155,7 @@ pub fn kitty_graphics_execute(mut t Terminal, cmd &Command) ?Response {
 		Display {
 			exec_display(mut t, cmd)
 		}
-		FullDelete {
+		Delete {
 			exec_delete(mut t, cmd)
 		}
 		AnimationFrameLoading {
@@ -377,8 +377,8 @@ fn exec_display(mut t Terminal, cmd &Command) Response {
 // (by ID, by number, all, intersecting cursor, by z-index, etc.).
 fn exec_delete(mut t Terminal, cmd &Command) Response {
 	del := match cmd.control {
-		FullDelete {
-			cmd.control as FullDelete
+		Delete {
+			cmd.control as Delete
 		}
 		else {
 			return Response{ message: 'EINVAL: not a delete command' }

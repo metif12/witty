@@ -42,18 +42,6 @@ fn test_graphics_command_source_tag_layouts_and_ordinals() {
 	assert u8(AnimationAction.stop) == 1
 	assert u8(AnimationAction.run_wait) == 2
 	assert u8(AnimationAction.run) == 3
-	assert sizeof(DeleteKind) == 1
-	assert u8(DeleteKind.all) == 0
-	assert u8(DeleteKind.id) == 1
-	assert u8(DeleteKind.newest) == 2
-	assert u8(DeleteKind.intersect_cursor) == 3
-	assert u8(DeleteKind.animation_frames) == 4
-	assert u8(DeleteKind.intersect_cell) == 5
-	assert u8(DeleteKind.intersect_cell_z) == 6
-	assert u8(DeleteKind.range) == 7
-	assert u8(DeleteKind.column) == 8
-	assert u8(DeleteKind.row) == 9
-	assert u8(DeleteKind.z) == 10
 	assert sizeof(CompositionMode) == 1
 	assert u8(CompositionMode.alpha_blend) == 0
 	assert u8(CompositionMode.overwrite) == 1
@@ -120,11 +108,10 @@ fn test_delete_command() {
 	input := 'a=d,d=p,x=3,y=4'
 	command := CommandParser.parse_string(input) or { panic(err) }
 
-	assert command.control is FullDelete
-	fd := command.control as FullDelete
-	assert fd.kind == .intersect_cell
-	assert fd.data is DeleteIntersectCell
-	dv := fd.data as DeleteIntersectCell
+	assert command.control is Delete
+	fd := command.control as Delete
+	assert fd is DeleteIntersectCell
+	dv := fd as DeleteIntersectCell
 	assert !dv.delete
 	assert dv.x == 3
 	assert dv.y == 4
@@ -207,11 +194,10 @@ fn test_delete_range_command_1() {
 	input := 'a=d,d=r,x=3,y=4'
 	command := CommandParser.parse_string(input) or { panic(err) }
 
-	assert command.control is FullDelete
-	fd := command.control as FullDelete
-	assert fd.kind == .range
-	assert fd.data is DeleteRange
-	range_ := fd.data as DeleteRange
+	assert command.control is Delete
+	fd := command.control as Delete
+	assert fd is DeleteRange
+	range_ := fd as DeleteRange
 	assert !range_.delete
 	assert range_.first == 3
 	assert range_.last == 4
@@ -221,11 +207,10 @@ fn test_delete_range_command_2() {
 	input := 'a=d,d=R,x=5,y=11'
 	command := CommandParser.parse_string(input) or { panic(err) }
 
-	assert command.control is FullDelete
-	fd := command.control as FullDelete
-	assert fd.kind == .range
-	assert fd.data is DeleteRange
-	range_ := fd.data as DeleteRange
+	assert command.control is Delete
+	fd := command.control as Delete
+	assert fd is DeleteRange
+	range_ := fd as DeleteRange
 	assert range_.delete
 	assert range_.first == 5
 	assert range_.last == 11

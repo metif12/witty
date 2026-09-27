@@ -712,11 +712,8 @@ pub fn (mut t Termio) clear_screen(mut td ThreadData, history bool) ! {
 					y: t.terminal.screens.active.cursor.y - 1
 				}))
 			}
-			t.terminal.screens.active.kitty_images.delete(mut t.terminal, terminal.FullDelete{
-				kind: .all
-				data: terminal.DeleteData(terminal.DeleteAll{
-					delete: true
-				})
+			t.terminal.screens.active.kitty_images.delete(mut t.terminal, terminal.DeleteAll{
+				delete: true
 			})
 			return
 		}

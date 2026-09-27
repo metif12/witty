@@ -439,19 +439,10 @@ pub fn (self &ImageStorage) image_by_number(image_number u32) ?Image {
 }
 
 // Delete placements, images.
-pub fn (mut self ImageStorage) delete(mut t Terminal, cmd FullDelete) {
-	match cmd.kind {
-		.all {
-			delete_images := match cmd.data {
-				DeleteAll {
-					(cmd.data as DeleteAll).delete
-				}
-				else {
-					false
-				}
-			}
-
-			if delete_images {
+pub fn (mut self ImageStorage) delete(mut t Terminal, cmd Delete) {
+	match cmd {
+		DeleteAll {
+			if cmd.delete {
 				self.clear_screen_images(mut t.screens.active)
 			} else {
 				// Iterate placements, removing non-virtual ones.
@@ -468,70 +459,57 @@ pub fn (mut self ImageStorage) delete(mut t Terminal, cmd FullDelete) {
 				self.dirty = true
 			}
 		}
-		.id {
-			v := cmd.data as DeleteById
-			self.delete_by_id(mut t.screens.active, v.image_id, v.placement_id, v.delete)
+		DeleteById {
+			self.delete_by_id(mut t.screens.active, cmd.image_id, cmd.placement_id, cmd.delete)
 		}
-		.newest {
-			v := cmd.data as DeleteByNewest
-			img := self.image_by_number(v.image_number) or { return }
-			self.delete_by_id(mut t.screens.active, img.id, v.placement_id, v.delete)
+		DeleteByNewest {
+			img := self.image_by_number(cmd.image_number) or { return }
+			self.delete_by_id(mut t.screens.active, img.id, cmd.placement_id, cmd.delete)
 		}
-		.intersect_cursor {
-			delete_images_flag := match cmd.data {
-				bool {
-					cmd.data as bool
-				}
-				else {
-					false
-				}
-			}
+		DeleteIntersectCursor {
 			self.delete_intersecting(mut t, Point{
 				tag:        .active
 				coordinate: Coordinate{
 					x: u16(t.screens.active.cursor.x)
 					y: t.screens.active.cursor.y
 				}
-			}, delete_images_flag, none)
+			}, cmd.delete, none)
 		}
-		.intersect_cell {
-			v := cmd.data as DeleteIntersectCell
-			if v.x <= 0 || v.y <= 0 {
+		DeleteIntersectCell {
+			if cmd.x <= 0 || cmd.y <= 0 {
 				return
 			}
-			if v.x - 1 > max_u16 || v.y - 1 > max_u16 {
+			if cmd.x - 1 > max_u16 || cmd.y - 1 > max_u16 {
 				return
 			}
 			self.delete_intersecting(mut t, Point{
 				tag:        .active
 				coordinate: Coordinate{
-					x: u16(v.x - 1)
-					y: v.y - 1
+					x: u16(cmd.x - 1)
+					y: cmd.y - 1
 				}
-			}, v.delete, none)
+			}, cmd.delete, none)
 		}
-		.intersect_cell_z {
-			v := cmd.data as DeleteIntersectCellZ
-			if v.x <= 0 || v.y <= 0 {
+		DeleteIntersectCellZ {
+			if cmd.x <= 0 || cmd.y <= 0 {
 				return
 			}
-			if v.x - 1 > max_u16 || v.y - 1 > max_u16 {
+			if cmd.x - 1 > max_u16 || cmd.y - 1 > max_u16 {
 				return
 			}
 			self.delete_intersecting(mut t, Point{
 				tag:        .active
 				coordinate: Coordinate{
-					x: u16(v.x - 1)
-					y: v.y - 1
+					x: u16(cmd.x - 1)
+					y: cmd.y - 1
 				}
-			}, v.delete, v.z)
+			}, cmd.delete, cmd.z)
 		}
-		.column {
-			v := cmd.data as DeleteColumn
-			if v.x <= 0 {
+		DeleteColumn {
+			if cmd.x <= 0 {
 				return
 			}
-			x := v.x - 1
+			x := cmd.x - 1
 			mut i := 0
 			for i < self.placements.len {
 				entry := self.placements[i]
@@ -546,7 +524,7 @@ pub fn (mut self ImageStorage) delete(mut t Terminal, cmd FullDelete) {
 				if r.top_left.x <= x && r.bottom_right.x >= x {
 					entry.value.deinit(mut t.screens.active)
 					self.placements.delete(i)
-					if v.delete {
+					if cmd.delete {
 						self.delete_if_unused(img.id)
 					}
 				} else {
@@ -555,20 +533,19 @@ pub fn (mut self ImageStorage) delete(mut t Terminal, cmd FullDelete) {
 			}
 			self.dirty = true
 		}
-		.row {
-			v := cmd.data as DeleteRow
-			if v.y <= 0 {
+		DeleteRow {
+			if cmd.y <= 0 {
 				return
 			}
-			// v.y is in active coords so we want to convert it to a pin
+			// cmd.y is in active coords so we want to convert it to a pin
 			// so we can compare by page offsets.
-			if v.y - 1 > max_u16 {
+			if cmd.y - 1 > max_u16 {
 				return
 			}
 			target_pin := t.screens.active.pages.pin(Point{
 				tag:        .active
 				coordinate: Coordinate{
-					y: v.y - 1
+					y: cmd.y - 1
 				}
 			}) or { return }
 
@@ -590,7 +567,7 @@ pub fn (mut self ImageStorage) delete(mut t Terminal, cmd FullDelete) {
 				if target_pin_copy.is_between(r.top_left, r.bottom_right) {
 					entry.value.deinit(mut t.screens.active)
 					self.placements.delete(i)
-					if v.delete {
+					if cmd.delete {
 						self.delete_if_unused(img.id)
 					}
 				} else {
@@ -599,8 +576,7 @@ pub fn (mut self ImageStorage) delete(mut t Terminal, cmd FullDelete) {
 			}
 			self.dirty = true
 		}
-		.z {
-			v := cmd.data as DeleteZ
+		DeleteZ {
 			mut i := 0
 			for i < self.placements.len {
 				entry := self.placements[i]
@@ -609,11 +585,11 @@ pub fn (mut self ImageStorage) delete(mut t Terminal, cmd FullDelete) {
 					i++
 					continue
 				}
-				if entry.value.z == v.z {
+				if entry.value.z == cmd.z {
 					image_id := entry.key.image_id
 					entry.value.deinit(mut t.screens.active)
 					self.placements.delete(i)
-					if v.delete {
+					if cmd.delete {
 						self.delete_if_unused(image_id)
 					}
 				} else {
@@ -622,22 +598,21 @@ pub fn (mut self ImageStorage) delete(mut t Terminal, cmd FullDelete) {
 			}
 			self.dirty = true
 		}
-		.range {
-			v := cmd.data as DeleteRange
-			if v.first <= 0 || v.last <= 0 {
+		DeleteRange {
+			if cmd.first <= 0 || cmd.last <= 0 {
 				return
 			}
-			if v.first > v.last {
+			if cmd.first > cmd.last {
 				return
 			}
 			mut i := 0
 			for i < self.placements.len {
 				entry := self.placements[i]
-				if entry.key.image_id >= v.first || entry.key.image_id <= v.last {
+				if entry.key.image_id >= cmd.first || entry.key.image_id <= cmd.last {
 					image_id := entry.key.image_id
 					entry.value.deinit(mut t.screens.active)
 					self.placements.delete(i)
-					if v.delete {
+					if cmd.delete {
 						self.delete_if_unused(image_id)
 					}
 				} else {
@@ -648,7 +623,7 @@ pub fn (mut self ImageStorage) delete(mut t Terminal, cmd FullDelete) {
 		}
 
 		// We don't support animation frames yet so they are successfully deleted!
-		.animation_frames {}
+		DeleteAnimationFrames {}
 	}
 }
 

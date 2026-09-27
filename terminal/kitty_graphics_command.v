@@ -378,7 +378,7 @@ pub enum Quiet as u8 {
 pub type Control = Transmission
 	| TransmitAndDisplay
 	| Display
-	| FullDelete
+	| Delete
 	| AnimationFrameLoading
 	| AnimationControl
 	| AnimationFrameComposition
@@ -402,7 +402,7 @@ pub fn Control.display(d Display) Control {
 	return Control(d)
 }
 
-pub fn Control.delete_(d FullDelete) Control {
+pub fn Control.delete_(d Delete) Control {
 	return Control(d)
 }
 
@@ -900,25 +900,6 @@ fn AnimationControl.parse(kv map[u8]u32) !AnimationControl {
 // Delete
 // ============================================================
 
-pub struct Delete {
-pub:
-	kind DeleteKind
-}
-
-pub enum DeleteKind as u8 {
-	all // a/A
-	id // i/I
-	newest // n/N
-	intersect_cursor // c/C
-	animation_frames // f/F
-	intersect_cell // p/P
-	intersect_cell_z // q/Q
-	range // r/R
-	column // x/X
-	row // y/Y
-	z // z/Z
-}
-
 pub struct DeleteAll {
 pub:
 	delete bool // uppercase = delete from disk too
@@ -978,26 +959,29 @@ pub:
 	z      i32 // z
 }
 
-// DeleteData holds the variant-specific data for a Delete command.
-pub type DeleteData = DeleteAll
+pub struct DeleteIntersectCursor {
+pub:
+	delete bool // uppercase
+}
+
+pub struct DeleteAnimationFrames {
+pub:
+	delete bool // uppercase
+}
+
+pub type Delete = DeleteAll
 	| DeleteById
 	| DeleteByNewest
+	| DeleteIntersectCursor
+	| DeleteAnimationFrames
 	| DeleteIntersectCell
 	| DeleteIntersectCellZ
 	| DeleteRange
 	| DeleteColumn
 	| DeleteRow
 	| DeleteZ
-	| bool // for intersect_cursor, animation_frames
 
-// FullDelete holds both the kind and variant data.
-pub struct FullDelete {
-pub:
-	kind DeleteKind
-	data DeleteData
-}
-
-fn Delete.parse(kv map[u8]u32) !FullDelete {
+fn Delete.parse(kv map[u8]u32) !Delete {
 	what := if `d` in kv {
 		v := kv[`d`]
 		if v > 255 {
@@ -1010,10 +994,7 @@ fn Delete.parse(kv map[u8]u32) !FullDelete {
 
 	return match what {
 		`a`, `A` {
-			FullDelete{
-				kind: .all
-				data: DeleteData(DeleteAll{ delete: what == `A` })
-			}
+			DeleteAll{ delete: what == `A` }
 		}
 		`i`, `I` {
 			mut r := DeleteById{ delete: what == `I` }
@@ -1029,7 +1010,7 @@ fn Delete.parse(kv map[u8]u32) !FullDelete {
 					placement_id: kv[`p`]
 				}
 			}
-			FullDelete{ kind: .id, data: DeleteData(r) }
+			r
 		}
 		`n`, `N` {
 			mut r := DeleteByNewest{ delete: what == `N` }
@@ -1045,13 +1026,13 @@ fn Delete.parse(kv map[u8]u32) !FullDelete {
 					placement_id: kv[`p`]
 				}
 			}
-			FullDelete{ kind: .newest, data: DeleteData(r) }
+			r
 		}
 		`c`, `C` {
-			FullDelete{ kind: .intersect_cursor, data: DeleteData(what == `C`) }
+			DeleteIntersectCursor{ delete: what == `C` }
 		}
 		`f`, `F` {
-			FullDelete{ kind: .animation_frames, data: DeleteData(what == `F`) }
+			DeleteAnimationFrames{ delete: what == `F` }
 		}
 		`p`, `P` {
 			mut r := DeleteIntersectCell{ delete: what == `P` }
@@ -1067,7 +1048,7 @@ fn Delete.parse(kv map[u8]u32) !FullDelete {
 					y: kv[`y`]
 				}
 			}
-			FullDelete{ kind: .intersect_cell, data: DeleteData(r) }
+			r
 		}
 		`q`, `Q` {
 			mut r := DeleteIntersectCellZ{ delete: what == `Q` }
@@ -1090,7 +1071,7 @@ fn Delete.parse(kv map[u8]u32) !FullDelete {
 					z: unsafe { *(&i32(&v)) }
 				}
 			}
-			FullDelete{ kind: .intersect_cell_z, data: DeleteData(r) }
+			r
 		}
 		`r`, `R` {
 			if `x` !in kv || `y` !in kv {
@@ -1101,13 +1082,10 @@ fn Delete.parse(kv map[u8]u32) !FullDelete {
 			if x > y {
 				return error('InvalidFormat: range x > y')
 			}
-			FullDelete{
-				kind: .range
-				data: DeleteData(DeleteRange{
-					delete: what == `R`
-					first: x
-					last: y
-				})
+			DeleteRange{
+				delete: what == `R`
+				first: x
+				last: y
 			}
 		}
 		`x`, `X` {
@@ -1118,7 +1096,7 @@ fn Delete.parse(kv map[u8]u32) !FullDelete {
 					x: kv[`x`]
 				}
 			}
-			FullDelete{ kind: .column, data: DeleteData(r) }
+			r
 		}
 		`y`, `Y` {
 			mut r := DeleteRow{ delete: what == `Y` }
@@ -1128,7 +1106,7 @@ fn Delete.parse(kv map[u8]u32) !FullDelete {
 					y: kv[`y`]
 				}
 			}
-			FullDelete{ kind: .row, data: DeleteData(r) }
+			r
 		}
 		`z`, `Z` {
 			mut r := DeleteZ{ delete: what == `Z` }
@@ -1139,7 +1117,7 @@ fn Delete.parse(kv map[u8]u32) !FullDelete {
 					z: unsafe { *(&i32(&v)) }
 				}
 			}
-			FullDelete{ kind: .z, data: DeleteData(r) }
+			r
 		}
 		else {
 			return error('InvalidFormat: unknown delete kind ${what}')

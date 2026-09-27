@@ -79,7 +79,7 @@ fn test_storage_delete_all_placements_and_images() ! {
 	s.add_placement(2, 1, pin_placement(mut t, 1, 1))
 
 	s.dirty = false
-	s.delete(mut t, FullDelete{ kind: .all, data: DeleteAll{ delete: true } })
+	s.delete(mut t, DeleteAll{ delete: true })
 	assert s.dirty
 	assert s.image_count() == 0
 	assert s.placement_count() == 0
@@ -105,7 +105,7 @@ fn test_storage_delete_all_placements_and_images_preserves_limit() ! {
 	s.add_placement(2, 1, pin_placement(mut t, 1, 1))
 
 	s.dirty = false
-	s.delete(mut t, FullDelete{ kind: .all, data: DeleteAll{ delete: true } })
+	s.delete(mut t, DeleteAll{ delete: true })
 	assert s.dirty
 	assert s.image_count() == 0
 	assert s.placement_count() == 0
@@ -131,7 +131,7 @@ fn test_storage_delete_all_placements() ! {
 	s.add_placement(2, 1, pin_placement(mut t, 1, 1))
 
 	s.dirty = false
-	s.delete(mut t, FullDelete{ kind: .all, data: DeleteAll{ delete: false } })
+	s.delete(mut t, DeleteAll{ delete: false })
 	assert s.dirty
 	assert s.placement_count() == 0
 	assert s.image_count() == 3
@@ -156,7 +156,7 @@ fn test_storage_delete_all_placements_by_image_id() ! {
 	s.add_placement(2, 1, pin_placement(mut t, 1, 1))
 
 	s.dirty = false
-	s.delete(mut t, FullDelete{ kind: .id, data: DeleteById{ image_id: 2 } })
+	s.delete(mut t, DeleteById{ image_id: 2 })
 	assert s.dirty
 	assert s.placement_count() == 1
 	assert s.image_count() == 3
@@ -181,12 +181,9 @@ fn test_storage_delete_all_placements_by_image_id_and_unused_images() ! {
 	s.add_placement(2, 1, pin_placement(mut t, 1, 1))
 
 	s.dirty = false
-	s.delete(mut t, FullDelete{
-		kind: .id
-		data: DeleteById{
-			delete:   true
-			image_id: 2
-		}
+	s.delete(mut t, DeleteById{
+		delete:   true
+		image_id: 2
 	})
 	assert s.dirty
 	assert s.placement_count() == 1
@@ -213,13 +210,10 @@ fn test_storage_delete_placement_by_specific_id() ! {
 	s.add_placement(2, 1, pin_placement(mut t, 1, 1))
 
 	s.dirty = false
-	s.delete(mut t, FullDelete{
-		kind: .id
-		data: DeleteById{
-			delete:       true
-			image_id:     1
-			placement_id: 2
-		}
+	s.delete(mut t, DeleteById{
+		delete:       true
+		image_id:     1
+		placement_id: 2
 	})
 	assert s.dirty
 	assert s.placement_count() == 2
@@ -248,7 +242,7 @@ fn test_storage_delete_intersecting_cursor() ! {
 	t.screens.active.cursor_absolute(12, 12)
 
 	s.dirty = false
-	s.delete(mut t, FullDelete{ kind: .intersect_cursor, data: false })
+	s.delete(mut t, DeleteIntersectCursor{ delete: false })
 	assert s.dirty
 	assert s.placement_count() == 1
 	assert s.image_count() == 2
@@ -282,7 +276,7 @@ fn test_storage_delete_intersecting_cursor_plus_unused() ! {
 	t.screens.active.cursor_absolute(12, 12)
 
 	s.dirty = false
-	s.delete(mut t, FullDelete{ kind: .intersect_cursor, data: true })
+	s.delete(mut t, DeleteIntersectCursor{ delete: true })
 	assert s.dirty
 	assert s.placement_count() == 1
 	assert s.image_count() == 2
@@ -316,7 +310,7 @@ fn test_storage_delete_intersecting_cursor_hits_multiple() ! {
 	t.screens.active.cursor_absolute(26, 26)
 
 	s.dirty = false
-	s.delete(mut t, FullDelete{ kind: .intersect_cursor, data: true })
+	s.delete(mut t, DeleteIntersectCursor{ delete: true })
 	assert s.dirty
 	assert s.placement_count() == 0
 	assert s.image_count() == 1
@@ -342,12 +336,9 @@ fn test_storage_delete_by_column() ! {
 	s.add_placement(1, 2, pin_placement(mut t, 25, 25))
 
 	s.dirty = false
-	s.delete(mut t, FullDelete{
-		kind: .column
-		data: DeleteColumn{
-			delete: false
-			x:      60
-		}
+	s.delete(mut t, DeleteColumn{
+		delete: false
+		x:      60
 	})
 	assert s.dirty
 	assert s.placement_count() == 1
@@ -378,12 +369,9 @@ fn test_storage_delete_by_column_1x1() ! {
 	s.add_placement(1, 2, pin_placement(mut t, 1, 0))
 	s.add_placement(1, 3, pin_placement(mut t, 2, 0))
 
-	s.delete(mut t, FullDelete{
-		kind: .column
-		data: DeleteColumn{
-			delete: false
-			x:      2
-		}
+	s.delete(mut t, DeleteColumn{
+		delete: false
+		x:      2
 	})
 	assert s.placement_count() == 2
 	assert s.image_count() == 1
@@ -418,12 +406,9 @@ fn test_storage_delete_by_row() ! {
 	s.add_placement(1, 2, pin_placement(mut t, 25, 25))
 
 	s.dirty = false
-	s.delete(mut t, FullDelete{
-		kind: .row
-		data: DeleteRow{
-			delete: false
-			y:      60
-		}
+	s.delete(mut t, DeleteRow{
+		delete: false
+		y:      60
 	})
 	assert s.dirty
 	assert s.placement_count() == 1
@@ -454,12 +439,9 @@ fn test_storage_delete_by_row_1x1() ! {
 	s.add_placement(1, 2, pin_placement(mut t, 0, 1))
 	s.add_placement(1, 3, pin_placement(mut t, 0, 2))
 
-	s.delete(mut t, FullDelete{
-		kind: .row
-		data: DeleteRow{
-			delete: false
-			y:      2
-		}
+	s.delete(mut t, DeleteRow{
+		delete: false
+		y:      2
 	})
 	assert s.placement_count() == 2
 	assert s.image_count() == 1
@@ -495,13 +477,10 @@ fn test_storage_delete_images_by_range_1() ! {
 	assert s.placement_count() == 2
 
 	s.dirty = false
-	s.delete(mut t, FullDelete{
-		kind: .range
-		data: DeleteRange{
-			delete: false
-			first:  1
-			last:   2
-		}
+	s.delete(mut t, DeleteRange{
+		delete: false
+		first:  1
+		last:   2
 	})
 	assert s.dirty
 	assert s.image_count() == 3
@@ -529,13 +508,10 @@ fn test_storage_delete_images_by_range_2() ! {
 	assert s.placement_count() == 2
 
 	s.dirty = false
-	s.delete(mut t, FullDelete{
-		kind: .range
-		data: DeleteRange{
-			delete: true
-			first:  1
-			last:   2
-		}
+	s.delete(mut t, DeleteRange{
+		delete: true
+		first:  1
+		last:   2
 	})
 	assert s.dirty
 	assert s.image_count() == 1
@@ -563,13 +539,10 @@ fn test_storage_delete_images_by_range_3() ! {
 	assert s.placement_count() == 2
 
 	s.dirty = false
-	s.delete(mut t, FullDelete{
-		kind: .range
-		data: DeleteRange{
-			delete: false
-			first:  1
-			last:   1
-		}
+	s.delete(mut t, DeleteRange{
+		delete: false
+		first:  1
+		last:   1
 	})
 	assert s.dirty
 	assert s.image_count() == 3
@@ -597,13 +570,10 @@ fn test_storage_delete_images_by_range_4() ! {
 	assert s.placement_count() == 2
 
 	s.dirty = false
-	s.delete(mut t, FullDelete{
-		kind: .range
-		data: DeleteRange{
-			delete: true
-			first:  1
-			last:   1
-		}
+	s.delete(mut t, DeleteRange{
+		delete: true
+		first:  1
+		last:   1
 	})
 	assert s.dirty
 	assert s.image_count() == 1
