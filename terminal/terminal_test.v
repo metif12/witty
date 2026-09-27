@@ -14,18 +14,12 @@ fn test_mouse_mode_storage() {
 }
 
 fn test_scroll_viewport_source_layout_and_payload() {
-	assert sizeof(ScrollViewportTag) == 1
-	assert u8(ScrollViewportTag.top) == 0
-	assert u8(ScrollViewportTag.bottom) == 1
-	assert u8(ScrollViewportTag.delta) == 2
-	assert sizeof(ScrollViewport) == 2 * sizeof(isize)
-
-	assert scroll_viewport_top.tag == .top
-	assert scroll_viewport_bottom.tag == .bottom
+	assert scroll_viewport_top is ScrollViewportTop
+	assert scroll_viewport_bottom is ScrollViewportBottom
 	wide_delta := isize(1_099_511_627_776)
 	delta := ScrollViewport.from_delta(wide_delta)
-	assert delta.tag == .delta
-	assert delta.delta == wide_delta
+	assert delta is ScrollViewportDelta
+	assert (delta as ScrollViewportDelta).delta == wide_delta
 
 	assert sizeof(SwitchScreenMode) == 1
 	assert u8(SwitchScreenMode.mode_47) == 0

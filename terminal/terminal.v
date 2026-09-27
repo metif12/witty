@@ -1853,27 +1853,22 @@ pub enum MouseShiftCaptureState as u8 {
 }
 
 // Options for scrolling the viewport of the terminal grid.
-pub enum ScrollViewportTag as u8 {
-	// Scroll to the top of the scrollback
-	top
-	// Scroll to the bottom, i.e. the top of the active area
-	bottom
-	// Scroll by some delta amount, up is negative.
-	delta
-}
+pub struct ScrollViewportTop {}
 
-pub struct ScrollViewport {
+pub struct ScrollViewportBottom {}
+
+pub struct ScrollViewportDelta {
 pub:
-	tag   ScrollViewportTag
 	delta isize
 }
 
-pub const scroll_viewport_top = ScrollViewport{}
-pub const scroll_viewport_bottom = ScrollViewport{ tag: .bottom }
+pub type ScrollViewport = ScrollViewportBottom | ScrollViewportDelta | ScrollViewportTop
+
+pub const scroll_viewport_top = ScrollViewport(ScrollViewportTop{})
+pub const scroll_viewport_bottom = ScrollViewport(ScrollViewportBottom{})
 
 pub fn ScrollViewport.from_delta(delta isize) ScrollViewport {
-	return ScrollViewport{
-		tag: .delta
+	return ScrollViewportDelta{
 		delta: delta
 	}
 }
@@ -3194,10 +3189,10 @@ pub fn (mut self Terminal) scroll_up(count usize) ! {
 
 // Scroll the viewport of the terminal grid.
 pub fn (mut self Terminal) scroll_viewport(behavior ScrollViewport) ! {
-	match behavior.tag {
-		.top { self.screens.active.scroll(ScrollTop{}) }
-		.bottom { self.screens.active.scroll(ScrollActive{}) }
-		.delta {
+	match behavior {
+		ScrollViewportTop { self.screens.active.scroll(ScrollTop{}) }
+		ScrollViewportBottom { self.screens.active.scroll(ScrollActive{}) }
+		ScrollViewportDelta {
 			self.screens.active.scroll(ScrollDeltaRow{
 				delta: behavior.delta
 			})

@@ -157,8 +157,9 @@ fn test_scroll_viewport_message_preserves_source_payload() {
 	wide_delta := isize(1_099_511_627_776)
 	msg := Message(MessageScrollViewport{ scroll: terminal.ScrollViewport.from_delta(wide_delta) })
 	assert msg.kind() == .scroll_viewport
-	assert (msg as MessageScrollViewport).scroll.tag == .delta
-	assert (msg as MessageScrollViewport).scroll.delta == wide_delta
+	scroll := (msg as MessageScrollViewport).scroll
+	assert scroll is terminal.ScrollViewportDelta
+	assert (scroll as terminal.ScrollViewportDelta).delta == wide_delta
 }
 
 fn test_termio_queue_message_uses_mailbox() {
