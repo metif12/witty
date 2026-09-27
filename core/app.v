@@ -734,9 +734,9 @@ pub fn (mut self App) perform_action(mut rt_app apprt.RuntimeApp, action input.A
 			rt_app.perform_action(app_target, .redo, apprt.ActionVoid{})!
 		}
 		else {
-			// Non-app-scoped action passed to perform_action. In ghostty this
-			// is a compile error (the type only permits app-scoped actions);
-			// here we ignore it defensively.
+			// Ghostty's Scoped(.app) parameter makes this unreachable at
+			// compile time. Preserve that contract at V's runtime boundary.
+			panic('surface-scoped action reached app dispatch')
 		}
 	}
 }

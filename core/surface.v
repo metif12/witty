@@ -4639,10 +4639,16 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				.io { self.queue_io(termiopkg.MessageCrash{}, .unlocked) }
 			}
 		}
-		else {
-			// Any remaining tags are app-scoped and were handled above, or are
-			// void surface actions with no witty-specific behavior. Returning
-			// true matches ghostty's default (the action was "handled").
+		input.ActionIgnore, input.ActionUnbind, input.ActionNewWindow,
+		input.ActionOpenConfig, input.ActionReloadConfig, input.ActionCloseAllWindows,
+		input.ActionToggleQuickTerminal, input.ActionToggleVisibility,
+		input.ActionCheckForUpdates, input.ActionShowGtkInspector, input.ActionUndo,
+		input.ActionRedo, input.ActionQuit {
+			// The scope check above consumes every app-scoped action. Listing
+			// them explicitly keeps this switch exhaustive like Ghostty's
+			// Scoped(.surface) switch, so a newly added surface action cannot
+			// silently fall through as handled.
+			panic('app-scoped action reached surface dispatch')
 		}
 	}
 
