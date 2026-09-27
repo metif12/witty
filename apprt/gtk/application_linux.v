@@ -95,6 +95,10 @@ fn C.gtk_css_provider_load_from_data(provider GtkCssProvider, data &char, length
 
 fn C.gtk_css_section_to_string(section voidptr) &char
 
+fn C.gtk_css_section_get_bytes(section voidptr) GBytes
+
+fn C.g_bytes_get_data(bytes GBytes, size &usize) voidptr
+
 fn C.g_quark_to_string(quark u32) &char
 
 fn C.gtk_style_context_add_provider_for_display(display GdkDisplay, provider GtkCssProvider, priority u32)
@@ -1064,7 +1068,7 @@ fn (mut self Application) load_runtime_css() {
 fn (mut self Application) load_custom_css() {
 	display := C.gdk_display_get_default()
 	if isnil(display) {
-		eprintln('unable to get display while loading custom CSS')
+		log.warn('unable to get display')
 		return
 	}
 
@@ -1083,21 +1087,22 @@ fn (mut self Application) load_custom_css() {
 		optional := entry is configpkg.PathOptional
 		if !os.exists(path) {
 			if !optional {
-				eprintln('error opening gtk-custom-css file ${path}: file not found')
+				log.warn('error opening gtk-custom-css file ${path}: file not found')
 			}
 			continue
 		}
+		log.info('loading gtk-custom-css path=${path}')
 		if os.file_size(path) > css_file_size_limit {
-			eprintln('gtk-custom-css file ${path} was larger than 5 MiB')
+			log.warn('gtk-custom-css file ${path} was larger than 5 MiB')
 			continue
 		}
 		contents := os.read_bytes(path) or {
-			eprintln('error reading gtk-custom-css file ${path}: ${err}')
+			log.warn('error reading gtk-custom-css file ${path}: ${err}')
 			continue
 		}
 		provider := C.gtk_css_provider_new()
 		if isnil(provider) {
-			eprintln('unable to create CSS provider for ${path}')
+			log.warn('unable to create CSS provider for ${path}')
 			continue
 		}
 		C.g_signal_connect_data(provider, c'parsing-error', GCallback(voidptr(application_css_parsing_error_cb)), voidptr(self), unsafe { nil }, 0)
@@ -1111,7 +1116,7 @@ fn application_css_parsing_error_cb(provider GtkCssProvider, section voidptr, er
 	_ = provider
 	_ = data
 	if isnil(err) {
-		eprintln('CSS parsing failed')
+		log.warn('css parsing failed')
 		return
 	}
 	c_err := unsafe { &C.GError(err) }
@@ -1134,7 +1139,19 @@ fn application_css_parsing_error_cb(provider GtkCssProvider, section voidptr, er
 			C.g_free(location_ptr)
 		}
 	}
-	eprintln('CSS parsing failed at ${location}: ${domain} ${c_err.code} ${message}')
+	if gtk_at_least(4, 16, 0) && !isnil(section) {
+		bytes := C.gtk_css_section_get_bytes(section)
+		if !isnil(bytes) {
+			mut length := usize(0)
+			ptr := C.g_bytes_get_data(bytes, &length)
+			if !isnil(ptr) && length <= usize(max_int) {
+				contents := unsafe { tos(&u8(ptr), int(length)) }.clone()
+				log.warn('css parsing failed at ${location}: ${domain} ${c_err.code} ${message}\n${contents}')
+				return
+			}
+		}
+	}
+	log.warn('css parsing failed at ${location}: ${domain} ${c_err.code} ${message}')
 }
 
 // show_config_errors_dialog shows the config errors dialog if the config has
@@ -1197,7 +1214,7 @@ pub fn (self &Application) wakeup() {
 // backend, style manager, signal handlers, action map, global shortcuts, and
 // cgroup. Mirrors the `startup` vfunc.
 fn (mut self Application) startup() {
-	// log.debug("startup")
+	log.debug('startup')
 
 	// Set ourselves as the default application.
 	if !isnil(self.obj) {
@@ -1259,9 +1276,9 @@ fn (mut self Application) startup_xev() {
 	}
 
 	if result {
-		eprintln('[info] gtk: libxev manual backend=${xev.backend()}')
+		log.info('libxev manual backend=${xev.backend()}')
 	} else {
-		eprintln('[warn] gtk: libxev manual backend failed, using default=${xev.backend()}')
+		log.warn('libxev manual backend failed, using default=${xev.backend()}')
 	}
 }
 
