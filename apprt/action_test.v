@@ -195,6 +195,12 @@ fn test_desktop_notification_value() {
 	}
 	assert dn.title == 'Hello'
 	assert dn.body == 'World'
+	assert dn.format() == 'DesktopNotification{ title: Hello, body: World }'
+}
+
+fn test_string_action_payload_formatters() {
+	assert SetTitle{ title: 'terminal' }.format() == 'SetTitle{ terminal }'
+	assert PwdValue{ pwd: '/tmp/project' }.format() == 'Pwd{ /tmp/project }'
 }
 
 // Test ColorChange struct creation.

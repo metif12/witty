@@ -363,10 +363,20 @@ pub:
 	title string
 }
 
+// format matches Ghostty's custom formatter for title actions.
+pub fn (value SetTitle) format() string {
+	return 'SetTitle{ ${value.title} }'
+}
+
 // PwdValue holds the current working directory path.
 pub struct PwdValue {
 pub:
 	pwd string
+}
+
+// format matches Ghostty's custom formatter for working-directory actions.
+pub fn (value PwdValue) format() string {
+	return 'Pwd{ ${value.pwd} }'
 }
 
 // DesktopNotificationValue holds the desktop notification to show.
@@ -374,6 +384,11 @@ pub struct DesktopNotificationValue {
 pub:
 	title string
 	body  string
+}
+
+// format matches Ghostty's custom formatter for notification actions.
+pub fn (value DesktopNotificationValue) format() string {
+	return 'DesktopNotification{ title: ${value.title}, body: ${value.body} }'
 }
 
 // The end of a key sequence.
