@@ -287,21 +287,13 @@ pub fn (mut c CellContents) clear(row u16) {
 	}
 }
 
-// Set the background cell color at [row, col].
-pub fn (mut c CellContents) set_bg(row u16, col u16, bg CellBg) {
-	idx := int(row) * int(c.size.columns) + int(col)
-	if idx < c.bg_cells.len {
-		c.bg_cells[idx] = bg
-	}
-}
-
-// Get the background cell color at [row, col].
-pub fn (c &CellContents) get_bg(row u16, col u16) CellBg {
-	idx := int(row) * int(c.size.columns) + int(col)
-	if idx < c.bg_cells.len {
-		return c.bg_cells[idx]
-	}
-	return CellBg([u8(0), 0, 0, 0]!)
+// bg_cell accesses a background cell. Prefer this function over direct
+// indexing so the row-major offset is always calculated with usize values.
+// The opaque pointer is a V binding adaptation: the fallback compiler emits a
+// fixed array by value when a function returns `&CellBg`, even though CellBg
+// aliases Ghostty's `[4]u8` GPU value.
+pub fn (mut c CellContents) bg_cell(row usize, col usize) voidptr {
+	return voidptr(&c.bg_cells[row * usize(c.size.columns) + col])
 }
 
 // Add a foreground cell to the given layer.

@@ -328,7 +328,10 @@ fn test_cell_contents_reset() ! {
 	cells.resize(GridSize{ columns: 10, rows: 5 })!
 
 	// Set some bg cell data
-	cells.set_bg(0, 0, CellBg([u8(255), 0, 0, 255]!))
+	mut bg_cell := unsafe { &CellBg(cells.bg_cell(0, 0)) }
+	unsafe {
+		*bg_cell = CellBg([u8(255), 0, 0, 255]!)
+	}
 
 	// Add a fg cell
 	cells.add(.text, CellText{
@@ -743,23 +746,24 @@ fn test_multiple_fg_cells_per_row() ! {
 	assert cells.fg_rows.lists[2].len == 0
 }
 
-// Test set_bg / get_bg.
-fn test_bg_cell_set_get() ! {
+// Test the source-shaped background-cell pointer accessor.
+fn test_bg_cell_access() ! {
 	assert sizeof(CellBg) == 4
 
 	mut cells := CellContents{}
 	cells.resize(GridSize{ columns: 10, rows: 5 })!
 
 	// Set bg for cell at (3, 2)
-	cells.set_bg(2, 3, CellBg([u8(100), 150, 200, 255]!))
+	mut bg_cell := unsafe { &CellBg(cells.bg_cell(2, 3)) }
+	unsafe {
+		*bg_cell = CellBg([u8(100), 150, 200, 255]!)
+	}
 
 	// Read it back
 	idx := 2 * 10 + 3
 	assert cells.bg_cells[idx] == CellBg([u8(100), 150, 200, 255]!)
 
-	// Also test get_bg
-	got := cells.get_bg(2, 3)
-	assert got == CellBg([u8(100), 150, 200, 255]!)
+	assert cells.bg_cell(2, 3) == voidptr(&cells.bg_cells[idx])
 }
 
 // Test AtlasKind enum.

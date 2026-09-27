@@ -2286,7 +2286,10 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 			// configured then this is dynamic depending on some situations.
 			bg_alpha := self.compute_bg_alpha(selected, cell_style, bg_style_opt)
 
-			self.cells.set_bg(y, u16(x), CellBg([rgb.r, rgb.g, rgb.b, bg_alpha]!))
+			mut bg_cell := unsafe { &CellBg(self.cells.bg_cell(usize(y), usize(x))) }
+			unsafe {
+				*bg_cell = CellBg([rgb.r, rgb.g, rgb.b, bg_alpha]!)
+			}
 		}
 
 		// If the invisible flag is set on this cell then we don't need to
@@ -2622,10 +2625,17 @@ fn (mut self Renderer) add_preedit_cell(cp PreeditCodepoint, coord terminal.View
 	render := value.render
 
 	// Add our opaque background cell
-	self.cells.set_bg(coord.y, coord.x, CellBg([screen_bg.r, screen_bg.g, screen_bg.b, u8(255)]!))
+	mut bg_cell := unsafe { &CellBg(self.cells.bg_cell(usize(coord.y), usize(coord.x))) }
+	unsafe {
+		*bg_cell = CellBg([screen_bg.r, screen_bg.g, screen_bg.b, u8(255)]!)
+	}
 	if cp.wide && coord.x < u16(self.cells.size.columns) - 1 {
-		self.cells.set_bg(coord.y, coord.x + 1, CellBg([screen_bg.r, screen_bg.g, screen_bg.b,
-			u8(255)]!))
+		mut wide_bg_cell := unsafe {
+			&CellBg(self.cells.bg_cell(usize(coord.y), usize(coord.x + 1)))
+		}
+		unsafe {
+			*wide_bg_cell = CellBg([screen_bg.r, screen_bg.g, screen_bg.b, u8(255)]!)
+		}
 	}
 
 	self.cells.add(.text, CellText{
