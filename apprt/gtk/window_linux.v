@@ -19,6 +19,7 @@ import apprt
 import build_meta
 import datastruct
 import internal_os
+import log
 
 // --- New opaque handle aliases --------------------------------------------
 // (Grep-verified: none of these `fn C.*` or aliases are declared elsewhere in
@@ -1396,14 +1397,30 @@ fn (self &Window) sync_window_title() {
 // present_surface selects the tab that owns surface, focuses it, and raises the
 // window. Mirrors Window.surfacePresentRequest.
 pub fn (mut self Window) present_surface(surface &SurfaceWidget) {
+	// Verify that this surface is actually owned by this window. Ghostty does
+	// this through GTK ancestor lookups; the translated widget graph retains
+	// the same relationship explicitly on the surface's SplitTree wrapper.
+	if isnil(surface.split_tree) || surface.split_tree.window != self {
+		log.warn('present request called for surface in different or non-existent window')
+		return
+	}
+
+	mut found := false
 	for tab in self.tabs {
 		if tab.split_tree == surface.split_tree {
 			page := C.adw_tab_view_get_page(self.tab_view, tab.widget)
-			if !isnil(page) {
-				C.adw_tab_view_set_selected_page(self.tab_view, page)
+			if isnil(page) {
+				log.warn('present request surface tab has no page')
+				return
 			}
+			C.adw_tab_view_set_selected_page(self.tab_view, page)
+			found = true
 			break
 		}
+	}
+	if !found {
+		log.warn('present request surface not found')
+		return
 	}
 	surface.grab_focus()
 	C.gtk_window_present(self.as_window())
