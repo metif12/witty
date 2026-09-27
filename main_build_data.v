@@ -14,7 +14,7 @@ import terminfo
 
 // BuildDataAction is the complete set of artifacts emitted by the source
 // command, in source declaration order.
-pub enum BuildDataAction {
+pub enum BuildDataAction as u8 {
 	// Shell completions
 	bash
 	fish

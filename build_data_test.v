@@ -3,6 +3,10 @@ module main
 import crypto.sha256
 
 fn test_build_data_action_names_match_source_spellings() {
+	assert sizeof(BuildDataAction) == 1
+	assert [BuildDataAction.bash, .fish, .zsh, .sublime, .vim_syntax, .vim_ftdetect,
+		.vim_ftplugin, .vim_compiler, .terminfo].map(u8(it)) == [u8(0), 1, 2, 3, 4, 5,
+		6, 7, 8]
 	// These are the `+action` spellings main_build_data.zig accepts.
 	assert BuildDataAction.bash.name() == 'bash'
 	assert BuildDataAction.fish.name() == 'fish'
