@@ -14,6 +14,7 @@ import diagnostics as diagnosticspkg
 import buildcfg
 import comma_splitter
 import fontstyle
+import log
 
 const default_gtk_opengl_debug = $if debug { true } $else { false }
 const default_quit_after_last_window_closed = $if linux { true } $else { false }
@@ -7420,7 +7421,7 @@ fn (mut self ReplayIterator) next() ?string {
 		match step {
 			ReplayExpand {
 				self.config.expand_paths(step.base) or {
-					eprintln('error expanding paths err=${err}')
+					log.warn('error expanding paths err=${err}')
 				}
 			}
 			ReplayDiagnostic {
@@ -9972,6 +9973,7 @@ pub fn (mut c Config) finalize() ! {
 			if c.command == none && !internal_os.is_flatpak() && probable_cli {
 				if shell := os.getenv_opt('SHELL') {
 					if shell.len > 0 {
+						log.info('default shell source=env value=${shell}')
 						c.command = Command(ShellCmd{ shell: shell })
 					}
 				}
@@ -9979,7 +9981,7 @@ pub fn (mut c Config) finalize() ! {
 
 			$if windows {
 				if c.command == none {
-					eprintln('no default shell found, will default to using cmd')
+					log.warn('no default shell found, will default to using cmd')
 					c.command = Command(ShellCmd{ shell: 'cmd.exe' })
 				}
 				if wd_home {
@@ -9991,13 +9993,18 @@ pub fn (mut c Config) finalize() ! {
 				passwd := internal_os.get()!
 				if c.command == none {
 					if shell := passwd.shell {
+						log.info('default shell src=passwd value=${shell}')
 						c.command = Command(ShellCmd{ shell: shell })
 					}
 				}
 				if wd_home {
 					if home := passwd.home {
+						log.info('default working directory src=passwd value=${home}')
 						c.working_directory = home
 					}
+				}
+				if c.command == none {
+					log.warn('no default shell found, will default to using sh')
 				}
 			}
 		}
