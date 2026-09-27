@@ -491,8 +491,9 @@ mut:
 	tab_overview_focus_timer u32
 	pending_close_page       AdwTabPage = unsafe { nil }
 
-	// The lazily-created command palette owned by this window.
-	command_palette &CommandPalette = unsafe { nil }
+	// The lazily-created command palette. It owns itself only while open, so
+	// retain the same weak GObject reference as Ghostty.
+	command_palette WeakRef = weak_ref_empty()
 
 	// Children in the programmatic equivalent of window.blp.
 	tab_overview           AdwTabOverview = unsafe { nil }
@@ -1167,15 +1168,23 @@ fn window_action_cb(action GSimpleAction, parameter GVariant, data voidptr) {
 }
 
 fn (mut self Window) toggle_command_palette() {
-	mut palette := self.command_palette
-	if isnil(palette) {
-		palette = new_command_palette()
-		palette.config = self.config
-		palette.app = self.app
-		self.command_palette = palette
+	palette_obj := self.command_palette.get()
+	if !isnil(palette_obj) {
+		defer {
+			object_unref(palette_obj)
+		}
+		if existing := command_palette_from_object(palette_obj) {
+			mut palette := unsafe { existing }
+			palette.toggle(self)
+			return
+		}
+		self.command_palette.set(unsafe { nil })
 	}
+
+	mut palette := new_command_palette()
 	palette.config = self.config
 	palette.app = self.app
+	self.command_palette.set(GObject(palette.dialog))
 	palette.toggle(self)
 }
 
@@ -2010,6 +2019,16 @@ pub fn (mut self Window) prop_config() {
 	}
 	self.sync_appearance()
 	self.sync_window_title()
+	palette_obj := self.command_palette.get()
+	if !isnil(palette_obj) {
+		if existing := command_palette_from_object(palette_obj) {
+			mut palette := unsafe { existing }
+			palette.config = self.config
+			palette.app = self.app
+			palette.prop_config()
+		}
+		object_unref(palette_obj)
+	}
 	for mut tab in self.tabs {
 		for mut surface in tab.split_tree.surfaces {
 			surface.apply_config()
@@ -2252,11 +2271,7 @@ fn (mut self Window) dispose_resources() {
 		object_unref(GObject(self.tab_bar))
 		self.tab_bar = unsafe { nil }
 	}
-	if !isnil(self.command_palette) {
-		mut palette := self.command_palette
-		palette.dispose()
-		self.command_palette = unsafe { nil }
-	}
+	self.command_palette.set(unsafe { nil })
 
 	if self.config != unsafe { nil } {
 		self.config.unref()

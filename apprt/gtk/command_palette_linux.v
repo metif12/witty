@@ -364,7 +364,10 @@ pub mut:
 	visible_commands []int
 	window           &Window = unsafe { nil }
 	app              &Application = unsafe { nil }
+	disposed          bool
 }
+
+const command_palette_wrapper_key = 'witty-command-palette-wrapper'
 
 // new_command_palette creates a new CommandPalette. Mirrors
 // `CommandPalette.new`, including ownership of the initially-floating dialog.
@@ -400,12 +403,27 @@ pub fn new_command_palette() &CommandPalette {
 		search: search
 		list: list
 	}
+	C.g_object_set_data(GObject(dialog), &char(command_palette_wrapper_key.str), voidptr(self))
 	C.g_signal_connect_data(dialog, c'closed', GCallback(voidptr(command_palette_dialog_closed_cb)), self, unsafe { nil }, 0)
 	C.g_signal_connect_data(search, c'stop-search', GCallback(voidptr(command_palette_search_stopped_cb)), self, unsafe { nil }, 0)
 	C.g_signal_connect_data(search, c'activate', GCallback(voidptr(command_palette_search_activated_cb)), self, unsafe { nil }, 0)
 	C.g_signal_connect_data(search, c'search-changed', GCallback(voidptr(command_palette_search_changed_cb)), self, unsafe { nil }, 0)
 	C.g_signal_connect_data(list, c'row-activated', GCallback(voidptr(command_palette_row_activated_cb)), self, unsafe { nil }, 0)
 	return self
+}
+
+// command_palette_from_object performs the typed half of Ghostty's
+// WeakRef(CommandPalette).get. The returned wrapper borrows the caller's
+// strong native-object reference.
+fn command_palette_from_object(obj GObject) ?&CommandPalette {
+	if isnil(obj) || C.g_type_check_instance_is_a(obj, C.adw_dialog_get_type()) == 0 {
+		return none
+	}
+	wrapper := C.g_object_get_data(obj, &char(command_palette_wrapper_key.str))
+	if isnil(wrapper) {
+		return none
+	}
+	return unsafe { &CommandPalette(wrapper) }
 }
 
 // prop_config is the config-changed handler: it clears and rebuilds the command
@@ -549,13 +567,11 @@ fn (self &CommandPalette) close() {
 	C.adw_dialog_close(self.dialog)
 }
 
-// dialog_closed resets the search for the next presentation. Ghostty releases
-// the dialog's self-reference here; Witty's wrapper instead remains owned by
-// the Window until window disposal.
+// dialog_closed releases the palette's self-reference. The Window keeps only
+// a weak native reference, so finalization clears its cached palette exactly
+// as in Ghostty.
 pub fn (mut self CommandPalette) dialog_closed() {
-	if !isnil(self.search) {
-		C.gtk_editable_set_text(GtkWidget(self.search), c'')
-	}
+	self.dispose()
 }
 
 // search_stopped is the search "stop-search" template callback (ESC). Mirrors
@@ -751,6 +767,10 @@ pub fn (mut self CommandPalette) filter(query string) []int {
 // dispose releases the command-owned config references and the palette's GTK
 // object. Signal connections are owned by the dialog and disappear with it.
 pub fn (mut self CommandPalette) dispose() {
+	if self.disposed {
+		return
+	}
+	self.disposed = true
 	for mut command in self.commands {
 		command.dispose()
 	}
@@ -759,11 +779,15 @@ pub fn (mut self CommandPalette) dispose() {
 	self.window = unsafe { nil }
 	self.app = unsafe { nil }
 	self.config = unsafe { nil }
-	if !isnil(self.dialog) {
-		object_unref(GObject(self.dialog))
+	dialog := self.dialog
+	if !isnil(dialog) {
+		C.g_object_set_data(GObject(dialog), &char(command_palette_wrapper_key.str), unsafe { nil })
 	}
 	self.widget = unsafe { nil }
 	self.dialog = unsafe { nil }
 	self.search = unsafe { nil }
 	self.list = unsafe { nil }
+	if !isnil(dialog) {
+		object_unref(GObject(dialog))
+	}
 }

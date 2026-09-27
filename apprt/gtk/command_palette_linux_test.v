@@ -125,6 +125,12 @@ fn test_command_palette_uses_configured_entries() {
 	inner.load_string('command-palette-entry = title:Only Entry,description:Configured,action:ignore')
 	mut cfg := config_new(inner)
 	mut palette := new_command_palette()
+	mut weak := weak_ref_empty()
+	weak.set(GObject(palette.dialog))
+	acquired := weak.get()
+	assert !isnil(acquired)
+	assert command_palette_from_object(acquired) or { panic('missing command palette wrapper') } == palette
+	object_unref(acquired)
 	palette.config = cfg
 	palette.prop_config()
 
@@ -135,5 +141,8 @@ fn test_command_palette_uses_configured_entries() {
 	assert command.get_action() or { panic('missing command action') } == input.Action(input.ActionIgnore{})
 
 	palette.dispose()
+	finalized := weak.get()
+	assert isnil(finalized)
+	weak.clear()
 	cfg.unref()
 }
