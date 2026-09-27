@@ -105,20 +105,17 @@ fn test_osc_cli_parser_output_has_native_length_prefix() {
 	assert int(sizeof(usize)) + int(length) <= writer.data.len
 }
 
-fn test_synthetic_main_action_dispatches_and_parses_both_argument_forms() {
-	for args in [Args(SliceArgs{
-		values: ['--p-valid=1', '--style=streaming']
-	}),
-		Args(StringArgs{
-			value: '--p-valid=1 --style=streaming'
-		})] {
-		mut rng := rand.new_default(seed_: [u32(0), 1])
-		mut writer := FixedWriter{
-			capacity: 1024
-		}
-		main_action_impl(.osc, args, mut writer, rng)!
-		assert writer.data.len > 3
+fn test_synthetic_main_action_retains_source_argument_variants() {
+	assert Args(CliArgs{}) is CliArgs
+	assert Args(StringArgs{}) is StringArgs
+	mut rng := rand.new_default(seed_: [u32(0), 1])
+	mut writer := FixedWriter{
+		capacity: 1024
 	}
+	main_action_impl(.osc, StringArgs{
+		value: '--p-valid=1 --style=streaming'
+	}, mut writer, rng)!
+	assert writer.data.len > 3
 }
 
 fn test_synthetic_main_action_preserves_parse_errors() {

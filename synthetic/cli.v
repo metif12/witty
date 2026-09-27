@@ -13,7 +13,6 @@ pub enum Action as u8 {
 }
 
 // The source union has a process-argument tag and a general string iterator.
-// SliceArgs is the already-tokenized form used by embedders and tests.
 pub struct CliArgs {}
 
 pub struct StringArgs {
@@ -21,12 +20,7 @@ pub:
 	value string
 }
 
-pub struct SliceArgs {
-pub:
-	values []string
-}
-
-pub type Args = CliArgs | SliceArgs | StringArgs
+pub type Args = CliArgs | StringArgs
 
 pub struct DetectActionResult {
 pub:
@@ -215,10 +209,15 @@ pub fn main_action(action Action, args_source Args) ! {
 fn main_action_impl(action Action, args_source Args, mut writer io.Writer, rng &rand.PRNG) ! {
 	args := match args_source {
 		CliArgs {
-			if os.args.len > 1 { os.args[1..] } else { []string{} }
-		}
-		SliceArgs {
-			args_source.values
+			mut iter := cli_args.args_iterator()
+			defer {
+				iter.deinit()
+			}
+			mut values := []string{}
+			for {
+				values << (iter.next() or { break })
+			}
+			values
 		}
 		StringArgs {
 			cli_args.parse_argument_string(args_source.value)

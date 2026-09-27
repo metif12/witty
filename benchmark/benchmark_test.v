@@ -196,11 +196,10 @@ fn test_no_data_benchmarks_run_once() {
 	run_cli('osc-parser', '')!
 }
 
-fn test_main_action_accepts_both_argument_sources() {
-	main_action(.codepoint_width, BenchmarkSliceArgs{
-		values: ['--mode=noop']
-	})!
-	main_action(.codepoint_width, BenchmarkStringArgs{
+fn test_main_action_retains_source_argument_variants() {
+	assert Args(CliArgs{}) is CliArgs
+	assert Args(StringArgs{}) is StringArgs
+	main_action(.codepoint_width, StringArgs{
 		value: '--mode=noop'
 	})!
 }
