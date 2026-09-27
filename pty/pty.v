@@ -1,5 +1,8 @@
 module pty
 
+import log
+import os
+
 // Pty is a pseudo-terminal abstraction. This provides a cross-platform
 // interface for creating and managing pseudo-terminals (PTYs).
 //
@@ -109,7 +112,7 @@ pub fn Pty.open(size Winsize) !Pty {
 
 	mut master_fd := -1
 	mut slave_fd := -1
-	if C.openpty(&master_fd, &slave_fd, unsafe { nil }, voidptr(0), voidptr(&size_copy)) < 0 {
+	if C.openpty(&master_fd, &slave_fd, unsafe { nil }, unsafe { nil }, voidptr(&size_copy)) < 0 {
 		return error('openpty failed')
 	}
 
@@ -121,8 +124,10 @@ pub fn Pty.open(size Winsize) !Pty {
 	// Set CLOEXEC on the master fd, only the slave fd should be inherited
 	// by the child process (shell/command).
 	flags := C.fcntl(master_fd, f_getfd, 0)
-	if flags >= 0 {
-		C.fcntl(master_fd, f_setfd, flags | fd_cloexec)
+	if flags < 0 {
+		log.warn('error getting flags for master fd err=${os.last_error()}')
+	} else if C.fcntl(master_fd, f_setfd, flags | fd_cloexec) < 0 {
+		log.warn('error setting CLOEXEC on master fd err=${os.last_error()}')
 	}
 
 	// Enable UTF-8 mode. This is on by default on Linux but it
@@ -135,7 +140,7 @@ pub fn Pty.open(size Winsize) !Pty {
 
 	return Pty{
 		master: master_fd
-		slave: slave_fd
+		slave:  slave_fd
 	}
 }
 
@@ -204,10 +209,9 @@ pub fn (mut self Pty) set_size(size Winsize) ! {
 pub fn (self Pty) child_pre_exec() ! {
 	// A fork inherits the parent's signal dispositions. Restore every signal
 	// Ghostty resets before launching the child so the shell cannot inherit
-	// ignored or application-specific handlers.
-	if C.witty_pty_reset_signals() != 0 {
-		return error('failed to reset child signal handlers')
-	}
+	// ignored or application-specific handlers. The source deliberately ignores
+	// the individual sigaction return values.
+	C.witty_pty_reset_signals()
 
 	// Create a new process group / session.
 	if C.setsid() < 0 {

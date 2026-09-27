@@ -67,12 +67,12 @@ static inline int witty_pty_reset_signals(void) {
     };
     struct sigaction action;
     memset(&action, 0, sizeof(action));
-    action.sa_handler = SIG_DFL;
-    sigemptyset(&action.sa_mask);
-    for (size_t i = 0; i < sizeof(signals) / sizeof(signals[0]); ++i) {
-        if (sigaction(signals[i], &action, NULL) != 0) return -1;
-    }
-    return 0;
+	action.sa_handler = SIG_DFL;
+	sigemptyset(&action.sa_mask);
+	for (size_t i = 0; i < sizeof(signals) / sizeof(signals[0]); ++i) {
+		(void)sigaction(signals[i], &action, NULL);
+	}
+	return 0;
 }
 
 #endif
