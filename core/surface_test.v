@@ -1774,6 +1774,39 @@ fn test_copy_url_to_clipboard_uses_configured_trailing_space_policy() ! {
 	assert contents[0].data == 'http://a   '
 }
 
+fn test_copy_url_to_clipboard_absorbs_runtime_failure() ! {
+	mut surf := make_test_surface()
+	surf.size = make_test_size()
+	surf.config.links = [DerivedConfigLink{
+		regex: oniguruma.Regex.init(r'http://a', oniguruma.Options{}, oniguruma.Encoding.utf8(),
+			oniguruma.Syntax.default_(), none)!
+		action: .open
+		highlight: input.LinkHighlightHover{}
+	}]
+	defer { surf.config.links[0].regex.deinit() }
+	surf.mouse.over_link = true
+	mut runtime := apprt.RuntimeSurface{
+		cursor_pos: apprt.CursorPos{ x: 6, y: 6 }
+		set_clipboard_fn: clipboard_set_failure_probe
+	}
+	surf.rt_surface = &runtime
+	mut stream := surf.renderer_state.terminal_.vt_stream()
+	stream.next_slice('http://a'.bytes())!
+
+	assert !surf.perform_binding_action(input.ActionCopyUrlToClipboard{})!
+}
+
+fn test_copy_title_to_clipboard_absorbs_runtime_failure_as_handled() ! {
+	mut surf := make_test_surface()
+	mut runtime := apprt.RuntimeSurface{
+		title: 'title'
+		set_clipboard_fn: clipboard_set_failure_probe
+	}
+	surf.rt_surface = &runtime
+
+	assert surf.perform_binding_action(input.ActionCopyTitleToClipboard{})!
+}
+
 fn test_mouse_link_preview_forwards_untrimmed_url() ! {
 	mut surf := make_test_surface()
 	surf.size = make_test_size()

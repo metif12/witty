@@ -4194,8 +4194,13 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				self.copy_selection_to_clipboards(sel, [.standard], action.value)!
 				// Clear the selection if configured to do so.
 				if self.config.selection_clear_on_copy {
-					self.set_selection(none)!
-					self.queue_render()!
+					self.set_selection(none) or {
+						log.warn('failed to clear selection after copy err=${err}')
+						return true
+					}
+					self.queue_render() or {
+						log.warn('failed to queue render after clear selection err=${err}')
+					}
 				}
 				return true
 			}
@@ -4218,17 +4223,26 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 					self.renderer_state.terminal_.screens.active.selection_string(terminal.SelectionString{
 						sel: link_info.selection
 						trim: self.config.clipboard_trim_trailing_spaces
-					}) or { return false }
+					}) or {
+						log.error('error reading url string err=${err}')
+						return false
+					}
 				}
 				.open_osc8 {
 					// For OSC8 links, get the URI from hyperlink data.
-					self.osc8_uri(link_info.selection.start()) or { return false }
+					self.osc8_uri(link_info.selection.start()) or {
+						log.warn('failed to get URI for OSC8 hyperlink')
+						return false
+					}
 				}
 			}
 			self.rt_surface.set_clipboard(.standard, [apprt.ClipboardContent{
 				mime: 'text/plain'
 				data: url_text
-			}], false) or { return false }
+			}], false) or {
+				log.error('error copying url to clipboard err=${err}')
+				return false
+			}
 			return true
 		}
 		input.ActionCopyTitleToClipboard {
@@ -4239,7 +4253,10 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			self.rt_surface.set_clipboard(.standard, [apprt.ClipboardContent{
 				mime: 'text/plain'
 				data: title
-			}], false) or { return true }
+			}], false) or {
+				log.error('error copying title to clipboard err=${err}')
+				return true
+			}
 			return true
 		}
 		input.ActionPasteFromClipboard {
