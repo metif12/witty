@@ -1227,7 +1227,7 @@ pub fn (mut self Window) new_tab_for_window(parent ?&core.Surface) {
 // and wires the SplitTree changed signal. Mirrors `newTabPage`.
 fn (mut self Window) new_tab_page(parent ?&core.Surface, context apprt.NewSurfaceContext) AdwTabPage {
 	tab_view := self.tab_view
-	if isnil(tab_view) || isnil(self.config) {
+	if isnil(tab_view) {
 		return AdwTabPage(unsafe { nil })
 	}
 	mut tab := new_tab(self, self.config)
@@ -1236,7 +1236,7 @@ fn (mut self Window) new_tab_page(parent ?&core.Surface, context apprt.NewSurfac
 	}
 
 	// Compute the position to insert at.
-	if self.config == unsafe { nil } {
+	if isnil(self.config) {
 		// If we don't have a config we just append at the end. This should
 		// never happen.
 		return adw_tab_view_append(tab_view, tab.widget)

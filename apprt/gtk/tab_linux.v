@@ -282,8 +282,24 @@ pub mut:
 // from the application if unset and creates the initial surface in the split
 // tree.
 pub fn new_tab(window &Window, config &Config) &Tab {
+	// A tab constructed without an explicit config inherits the application's
+	// config in Ghostty's instance initializer.
+	mut effective_config := config
+	mut inherited_config := false
+	if isnil(effective_config) {
+		mut app := Application.default()
+		effective_config = app.get_config()
+		inherited_config = true
+	}
+	defer {
+		if inherited_config {
+			mut owned := effective_config
+			owned.unref()
+		}
+	}
+
 	obj := C.g_object_new(tab_get_type(), &char(unsafe { nil }))
-	split_tree := new_split_tree_widget(window, config)
+	split_tree := new_split_tree_widget(window, effective_config)
 	C.gtk_box_append(GtkWidget(obj), split_tree.widget)
 	mut self := &Tab{
 		widget: GtkWidget(obj)
@@ -292,7 +308,7 @@ pub fn new_tab(window &Window, config &Config) &Tab {
 	}
 	mut priv := tab_priv(obj)
 	priv.wrapper = voidptr(self)
-	self.set_config_reference(config)
+	self.set_config_reference(effective_config)
 	C.g_signal_connect_data(split_tree.widget, c'notify::tree', GCallback(voidptr(tab_split_tree_notify_tree_cb)), voidptr(self), unsafe { nil }, 0)
 	C.g_signal_connect_data(split_tree.widget, c'notify::active-surface', GCallback(voidptr(tab_split_tree_notify_active_surface_cb)), voidptr(self), unsafe { nil }, 0)
 
@@ -627,7 +643,7 @@ pub fn (mut self Tab) action_previous_page() {
 // title, else the config title, else a default; a zoom/bell prefix is added
 // per config.
 pub fn (self &Tab) computed_title(config_ &Config, terminal_ ?string, override_ ?string, zoomed bool, bell_ringing bool) string {
-	default_title := 'Witty'
+	default_title := 'Ghostty'
 
 	// The plain title: override, else terminal, else config title, else default.
 	plain := if o := override_ {
@@ -638,6 +654,7 @@ pub fn (self &Tab) computed_title(config_ &Config, terminal_ ?string, override_ 
 		config_title(config_) or { default_title }
 	}
 	if isnil(config_) {
+		log.warn('config unavailable for computed title, likely bug')
 		return plain
 	}
 	cfg := config_.get()

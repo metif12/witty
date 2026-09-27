@@ -16,3 +16,10 @@ fn test_tab_computed_title_uses_config_title_and_bell_features() {
 	assert tab.computed_title(cfg, 'Terminal Title', none, false, true) == 'Terminal Title'
 	cfg.unref()
 }
+
+fn test_tab_computed_title_uses_source_fallback_without_config() {
+	tab := Tab{}
+	assert tab.computed_title(unsafe { nil }, none, none, false, false) == 'Ghostty'
+	assert tab.computed_title(unsafe { nil }, 'Terminal Title', none, false, false) == 'Terminal Title'
+	assert tab.computed_title(unsafe { nil }, 'Terminal Title', 'Override', false, false) == 'Override'
+}
