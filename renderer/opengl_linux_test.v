@@ -55,6 +55,18 @@ fn test_render_pass_tags_and_counts_match_source_contract() {
 	assert draw.instance_count == max_count
 }
 
+fn test_opengl_vertex_scalar_adapter_is_compact_and_complete() {
+	assert sizeof(GLVertexScalarType) == 1
+	assert u8(GLVertexScalarType.u8_) == 0
+	assert u8(GLVertexScalarType.u16_) == 1
+	assert u8(GLVertexScalarType.u32_) == 2
+	assert u8(GLVertexScalarType.i8_) == 3
+	assert u8(GLVertexScalarType.i16_) == 4
+	assert u8(GLVertexScalarType.i32_) == 5
+	assert u8(GLVertexScalarType.f32_) == 6
+	assert u8(GLVertexScalarType.f64_) == 7
+}
+
 fn test_opengl_init_does_not_require_a_current_context() {
 	default_api := OpenGLAPI.init(RendererOptions{})!
 	assert default_api.blending == .native

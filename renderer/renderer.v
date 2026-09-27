@@ -2696,7 +2696,7 @@ pub fn (w Wakeup) notify() ! {
 }
 
 // Health status of the renderer.
-pub enum Health {
+pub enum Health as int {
 	healthy   = 0
 	unhealthy = 1
 }

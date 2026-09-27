@@ -391,7 +391,7 @@ pub enum GLVertexStepFunction as u8 {
 	per_instance
 }
 
-pub enum GLVertexScalarType {
+pub enum GLVertexScalarType as u8 {
 	u8_
 	u16_
 	u32_
