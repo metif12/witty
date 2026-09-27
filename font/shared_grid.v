@@ -62,13 +62,13 @@ pub mut:
 	lock &sync.RwMutex = unsafe { nil }
 }
 
-pub enum SharedGridInitFailPoint {
+pub enum SharedGridInitFailPoint as u8 {
 	codepoints_capacity
 	glyphs_capacity
 	reload_metrics
 }
 
-pub enum SharedGridRenderGlyphFailPoint {
+pub enum SharedGridRenderGlyphFailPoint as u8 {
 	get_presentation
 }
 

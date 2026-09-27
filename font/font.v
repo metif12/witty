@@ -900,16 +900,16 @@ pub mut:
 	nodes []AtlasNode
 }
 
-enum AtlasInitFailPoint {
+enum AtlasInitFailPoint as u8 {
 	alloc_data
 	alloc_nodes
 }
 
-enum AtlasReserveFailPoint {
+enum AtlasReserveFailPoint as u8 {
 	insert_node
 }
 
-enum AtlasGrowFailPoint {
+enum AtlasGrowFailPoint as u8 {
 	ensure_node_capacity
 	alloc_data
 }

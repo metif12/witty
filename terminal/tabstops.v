@@ -3,7 +3,7 @@ module terminal
 import fastmem
 import tripwire
 
-enum TabstopsResizeFailPoint {
+enum TabstopsResizeFailPoint as u8 {
 	dynamic_alloc
 }
 

@@ -2,6 +2,17 @@ module font
 
 import sprite
 
+fn test_atlas_tripwire_point_layouts() {
+	assert sizeof(AtlasInitFailPoint) == 1
+	assert u8(AtlasInitFailPoint.alloc_data) == 0
+	assert u8(AtlasInitFailPoint.alloc_nodes) == 1
+	assert sizeof(AtlasReserveFailPoint) == 1
+	assert u8(AtlasReserveFailPoint.insert_node) == 0
+	assert sizeof(AtlasGrowFailPoint) == 1
+	assert u8(AtlasGrowFailPoint.ensure_node_capacity) == 0
+	assert u8(AtlasGrowFailPoint.alloc_data) == 1
+}
+
 fn test_atlas_format_contract() {
 	assert sizeof(AtlasFormat) == 1
 	assert u8(AtlasFormat.grayscale) == 0

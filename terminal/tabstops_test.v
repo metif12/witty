@@ -1,5 +1,10 @@
 module terminal
 
+fn test_resize_tripwire_point_layout() {
+	assert sizeof(TabstopsResizeFailPoint) == 1
+	assert u8(TabstopsResizeFailPoint.dynamic_alloc) == 0
+}
+
 fn test_resize_tripwire() {
 	mut tw := resize_tripwire()
 	tw.error_always(.dynamic_alloc, error('OutOfMemory'))

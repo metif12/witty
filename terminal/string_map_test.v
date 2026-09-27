@@ -20,6 +20,39 @@ fn string_map_test_point(s &Screen, p Pin) Point {
 	return s.pages.point_from_pin(.screen, p) or { panic('match pin is outside the page list') }
 }
 
+fn test_selection_string_map_allocation_failure_cleanup() {
+	assert sizeof(SelectionStringFailPoint) == 1
+	assert u8(SelectionStringFailPoint.copy_map) == 0
+
+	mut s := Screen.init(10, 5, 0)
+	defer { s.deinit() }
+	s.test_write_string('hello')!
+	sel := Selection.init(
+		string_map_test_pin(&s, 0, 0),
+		string_map_test_pin(&s, 4, 0),
+		false,
+	)
+	mut smap := &StringMap{
+		string: 'unchanged'
+	}
+
+	mut tw := selection_string_tripwire()
+	tw.error_always(.copy_map, error('OutOfMemory'))
+	defer {
+		tw.end(.reset) or { panic(err) }
+	}
+	if _ := s.selection_string(SelectionString{
+		sel: sel
+		map: smap
+	}) {
+		assert false, 'expected map allocation failure'
+	} else {
+		assert err.msg() == 'OutOfMemory'
+	}
+	assert smap.string == 'unchanged'
+	assert smap.map.len == 0
+}
+
 fn test_string_map_search_iterator() ! {
 	// Initialize our regex
 	mut re := oniguruma.Regex.init('[A-B]{2}', oniguruma.Options{}, .utf8, .default_, none)!

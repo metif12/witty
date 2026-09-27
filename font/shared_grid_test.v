@@ -120,6 +120,15 @@ fn test_shared_grid_render_glyph_tripwire_rolls_back_cache() {
 	assert false, 'expected render tripwire failure'
 }
 
+fn test_shared_grid_tripwire_point_layouts() {
+	assert sizeof(SharedGridInitFailPoint) == 1
+	assert u8(SharedGridInitFailPoint.codepoints_capacity) == 0
+	assert u8(SharedGridInitFailPoint.glyphs_capacity) == 1
+	assert u8(SharedGridInitFailPoint.reload_metrics) == 2
+	assert sizeof(SharedGridRenderGlyphFailPoint) == 1
+	assert u8(SharedGridRenderGlyphFailPoint.get_presentation) == 0
+}
+
 fn test_shared_grid_init_tripwires_cleanup() {
 	for point in [SharedGridInitFailPoint.codepoints_capacity, .glyphs_capacity, .reload_metrics] {
 		mut lib := Library.init() or { panic(err) }

@@ -2,6 +2,7 @@ module terminal
 
 import fastmem
 import osc
+import tripwire
 import unicode
 
 // --- Original Ghostty Comments Start: src/terminal/Screen.zig
@@ -2020,6 +2021,21 @@ pub:
 	// If non-nil, a stringmap will be written here. The string will be
 	// duplicated here and in the return value.
 	map &StringMap = unsafe { nil }
+}
+
+enum SelectionStringFailPoint as u8 {
+	copy_map
+}
+
+struct SelectionStringTripwire {
+mut:
+	value tripwire.TripwireModule[SelectionStringFailPoint]
+}
+
+const selection_string_tw_singleton = &SelectionStringTripwire{}
+
+fn selection_string_tripwire() &tripwire.TripwireModule[SelectionStringFailPoint] {
+	return unsafe { &selection_string_tw_singleton.value }
 }
 
 pub struct SelectLine {
@@ -4147,10 +4163,16 @@ pub fn (mut self Screen) selection_string(opts SelectionString) !string {
 
 	// Build our final text and if we have a string map set that up.
 	if opts.map != unsafe { nil } {
+		// Match Ghostty's fallible map-pin ownership boundary. V's GC-backed
+		// array transfer itself cannot report allocation failure, so this typed
+		// test checkpoint represents that source error path.
+		map_string := text.clone()
+		mut tw := selection_string_tripwire()
+		tw.check(.copy_map)!
 		mut map_out := opts.map
 		unsafe {
 			*map_out = StringMap{
-				string: text.clone()
+				string: map_string
 				map:    pins.pins
 			}
 		}
