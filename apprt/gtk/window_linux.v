@@ -489,7 +489,6 @@ mut:
 
 	// See tab_overview_open for why we have this. 0 means "no timer".
 	tab_overview_focus_timer u32
-	pending_close_page       AdwTabPage = unsafe { nil }
 
 	// The lazily-created command palette. It owns itself only while open, so
 	// retain the same weak GObject reference as Ghostty.
@@ -893,42 +892,52 @@ fn window_close_page_cb(view AdwTabView, page AdwTabPage, user_data voidptr) int
 		C.adw_tab_view_close_page_finish(view, page, 1)
 		return 1
 	}
-	self.pending_close_page = page
 	mut dialog := close_confirmation_dialog_new(.tab)
-	C.g_signal_connect_data(dialog.dialog.obj, c'close-request', GCallback(voidptr(window_close_tab_confirmed_cb)), voidptr(self), unsafe { nil }, 0)
-	C.g_signal_connect_data(dialog.dialog.obj, c'cancel', GCallback(voidptr(window_close_tab_cancelled_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(dialog.dialog.obj, c'close-request', GCallback(voidptr(window_close_tab_confirmed_cb)), page, unsafe { nil }, 0)
+	C.g_signal_connect_data(dialog.dialog.obj, c'cancel', GCallback(voidptr(window_close_tab_cancelled_cb)), page, unsafe { nil }, 0)
 	dialog.present(tab.widget)
 	return 1
 }
 
-fn window_close_tab_confirmed_cb(dialog GObject, user_data voidptr) {
+fn window_close_tab_confirmed_cb(dialog GObject, page_data voidptr) {
 	_ = dialog
-	if isnil(user_data) {
+	if isnil(page_data) {
 		return
 	}
-	mut self := unsafe { &Window(user_data) }
-	page := self.pending_close_page
-	self.pending_close_page = unsafe { nil }
-	if isnil(page) {
+	page := AdwTabPage(page_data)
+	child := C.adw_tab_page_get_child(page)
+	if isnil(child) {
 		return
 	}
-	if mut tab := self.tab_for_page(page) {
+	priv := tab_priv(voidptr(child))
+	if !isnil(priv.wrapper) {
+		mut tab := unsafe { &Tab(priv.wrapper) }
 		tab.split_tree.deinit_surfaces()
 	}
-	C.adw_tab_view_close_page_finish(self.tab_view, page, 1)
-}
-
-fn window_close_tab_cancelled_cb(dialog GObject, user_data voidptr) {
-	_ = dialog
-	if isnil(user_data) {
+	tab_view := AdwTabView(C.gtk_widget_get_ancestor(child, C.adw_tab_view_get_type()))
+	if isnil(tab_view) {
+		log.warn('close confirmation called for non-existent page')
 		return
 	}
-	mut self := unsafe { &Window(user_data) }
-	page := self.pending_close_page
-	self.pending_close_page = unsafe { nil }
-	if !isnil(page) {
-		C.adw_tab_view_close_page_finish(self.tab_view, page, 0)
+	C.adw_tab_view_close_page_finish(tab_view, page, 1)
+}
+
+fn window_close_tab_cancelled_cb(dialog GObject, page_data voidptr) {
+	_ = dialog
+	if isnil(page_data) {
+		return
 	}
+	page := AdwTabPage(page_data)
+	child := C.adw_tab_page_get_child(page)
+	if isnil(child) {
+		return
+	}
+	tab_view := AdwTabView(C.gtk_widget_get_ancestor(child, C.adw_tab_view_get_type()))
+	if isnil(tab_view) {
+		log.warn('close confirmation called for non-existent page')
+		return
+	}
+	C.adw_tab_view_close_page_finish(tab_view, page, 0)
 }
 
 fn window_page_detached_cb(view AdwTabView, page AdwTabPage, position int, user_data voidptr) {
@@ -2015,7 +2024,7 @@ pub fn (mut self Window) window_realize(mut app Application) {
 // appearance. Mirrors `propConfig`.
 pub fn (mut self Window) prop_config() {
 	if !isnil(self.config) && self.config.get().app_notifications.config_reload() {
-		self.add_toast('Reloaded the configuration')
+		self.add_toast(i18n_('Reloaded the configuration'))
 	}
 	self.sync_appearance()
 	self.sync_window_title()
@@ -2043,7 +2052,11 @@ fn (mut self Window) surface_clipboard_write(clipboard_type apprt.Clipboard, tex
 		|| !self.config.get().app_notifications.clipboard_copy() {
 		return
 	}
-	self.add_toast(if text.len > 0 { 'Copied to clipboard' } else { 'Cleared clipboard' })
+	self.add_toast(if text.len > 0 {
+		i18n_('Copied to clipboard')
+	} else {
+		i18n_('Cleared clipboard')
+	})
 }
 
 // prop_gdk_surface_resize reacts to a GdkSurface width/height change (X11 blur
@@ -2264,7 +2277,6 @@ fn (mut self Window) dispose_resources() {
 		tab.window = unsafe { nil }
 	}
 	self.tabs.clear()
-	self.pending_close_page = unsafe { nil }
 	// Drop the template-child reference taken in init, as GTK's template
 	// dispose does.
 	if !isnil(self.tab_bar) {
