@@ -1,5 +1,6 @@
 module terminal
 
+import log
 import unicode
 
 // --- Original Ghostty Comments Start: src/terminal/Terminal.zig
@@ -3786,7 +3787,7 @@ pub fn (mut self Terminal) erase_line(mode EraseLine, protected_req bool) {
 			end = self.cols
 		}
 		else {
-			// log.err: unimplemented erase line mode
+			log.error('unimplemented erase line mode: ${mode}')
 			return
 		}
 	}

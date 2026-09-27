@@ -5,6 +5,7 @@ import build_meta
 import configpkg
 import datastruct
 import internal_os
+import log
 import osc
 import renderer
 import terminal
@@ -1389,7 +1390,9 @@ fn (mut self StreamHandler) color_operation(op osc.ColorOperation, requests []os
 					osc.ColorTargetDynamic {
 						self.set_dynamic_color(request.target.color, color)
 					}
-					osc.ColorTargetSpecial {}
+					osc.ColorTargetSpecial {
+						log.info('setting special colors not implemented')
+					}
 				}
 				self.notify_color_change(request.target, color)
 			}
@@ -1404,7 +1407,9 @@ fn (mut self StreamHandler) color_operation(op osc.ColorOperation, requests []os
 					osc.ColorTargetDynamic {
 						self.reset_dynamic_color(request.target.color, request.target)
 					}
-					osc.ColorTargetSpecial {}
+					osc.ColorTargetSpecial {
+						log.info('resetting special colors not implemented')
+					}
 				}
 			}
 			osc.ColorRequestResetPalette {
@@ -1419,7 +1424,9 @@ fn (mut self StreamHandler) color_operation(op osc.ColorOperation, requests []os
 					}
 				}
 			}
-			osc.ColorRequestResetSpecial {}
+			osc.ColorRequestResetSpecial {
+				log.warn('resetting all special colors not implemented')
+			}
 			osc.ColorRequestQuery {
 				if report := self.color_query_response(request.target, terminator) {
 					response += report
@@ -1446,7 +1453,7 @@ fn (mut self StreamHandler) set_dynamic_color(dynamic osc.DynamicColor, color te
 		.foreground { self.terminal.colors.foreground.set(color) }
 		.background { self.terminal.colors.background.set(color) }
 		.cursor { self.terminal.colors.cursor.set(color) }
-		else {}
+		else { log.info('setting dynamic color ${dynamic} not implemented') }
 	}
 }
 
@@ -1470,7 +1477,7 @@ fn (mut self StreamHandler) reset_dynamic_color(dynamic osc.DynamicColor, target
 				self.notify_color_change(target, color)
 			}
 		}
-		else {}
+		else { log.warn('resetting dynamic color ${dynamic} not implemented') }
 	}
 }
 
@@ -1489,6 +1496,7 @@ fn (self &StreamHandler) color_query_response(target osc.ColorTarget, terminator
 			self.dynamic_color_query_value(target.color) or { return none }
 		}
 		osc.ColorTargetSpecial {
+			log.info('reporting special colors not implemented')
 			return none
 		}
 	}
@@ -1515,7 +1523,10 @@ fn (self &StreamHandler) dynamic_color_query_value(color osc.DynamicColor) ?term
 				self.terminal.colors.foreground.get()
 			}
 		}
-		else { none }
+		else {
+			log.info('reporting dynamic color ${color} not implemented')
+			none
+		}
 	}
 }
 
