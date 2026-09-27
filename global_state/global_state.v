@@ -1,9 +1,14 @@
 module global_state
 
 import os
+import build_meta
+import font
+import fontconfig
+import harfbuzz
 import internal_os
 import cli_args
 import crash
+import log
 import oniguruma
 import xev
 
@@ -292,16 +297,43 @@ pub fn (mut self GlobalState) init_args(args []string) ! {
 	// Linux, the one platform with more than one candidate backend.
 	$if linux {
 		xev.detect() or {
-			eprintln('failed to detect xev backend, falling back to most compatible backend err=${err}')
+			log.warn('failed to detect xev backend, falling back to most compatible backend err=${err}')
 		}
 	}
+
+	// Output the source's startup metadata after logging and backend selection
+	// are initialized, but before any subsystem initialization can fail.
+	log.info('ghostty version=${build_meta.version_string}')
+	optimize := $if debug { 'Debug' } $else { 'ReleaseFast' }
+	runtime := $if linux || freebsd { 'gtk' } $else { 'none' }
+	renderer_backend := $if macos || ios {
+		'metal'
+	} $else $if wasm32 {
+		'webgl'
+	} $else {
+		'opengl'
+	}
+	log.info('ghostty build optimize=${optimize}')
+	log.info('runtime=${runtime}')
+	font_backend := font.Backend.default_()
+	log.info('font_backend=${font_backend}')
+	if font_backend.has_harfbuzz() {
+		log.info('dependency harfbuzz=${harfbuzz.version_string()}')
+	}
+	if font_backend.has_fontconfig() {
+		log.info('dependency fontconfig=${fontconfig.version()}')
+	}
+	log.info('renderer=${renderer_backend}')
+	log.info('libxev default backend=${xev.backend()}')
 
 	// As early as possible, initialize our resource limits.
 	self.rlimits = ResourceLimits.new()
 
 	// Initialize crash reporting. This is a no-op for builds such as Witty
 	// that do not link Ghostty's optional Sentry native SDK.
-	crash.initialize() or { eprintln('crash reporting initialization failed: ${err}') }
+	crash.initialize() or {
+		log.warn('sentry init failed, no crash capture available err=${err}')
+	}
 
 	// Locale affects libc, gettext, and every child shell, so initialize it
 	// before loading translated resources or starting an application runtime.
@@ -315,7 +347,7 @@ pub fn (mut self GlobalState) init_args(args []string) ! {
 	self.resources_dir = internal_os.resources_dir()
 	if resources_dir := self.resources_dir.app() {
 		internal_os.init(resources_dir) or {
-			eprintln('failed to initialize translations: ${err}')
+			log.warn('failed to init i18n, translations will not be available err=${err}')
 		}
 	}
 }

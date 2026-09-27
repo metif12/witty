@@ -136,7 +136,8 @@ pub fn MetalAPI.init_from_view(view voidptr, content_scale f64) !MetalAPI {
 	}
 }
 
-// init creates a MetalAPI with default/stub values (no device).
+// init creates an offscreen Metal API with a real device and command queue.
+// The layer is absent because this entry point is used by renderer tests.
 pub fn MetalAPI.init() !MetalAPI {
 	device := macos.metal_system_default_device()
 	if device == unsafe { nil } {
