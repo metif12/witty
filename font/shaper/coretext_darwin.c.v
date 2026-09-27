@@ -285,7 +285,9 @@ pub fn (mut self Shaper) end_frame() {
 	// thread to process the items. If the send fails then do a manual
 	// cleanup.
 	if self.cf_release_thread.mailbox.push(internal_os.CFReleaseMessage{
-		refs: items
+		release: internal_os.CFReleaseMessageRelease{
+			refs: items
+		}
 	}, datastruct.blocking_queue_forever) != 0 {
 		self.cf_release_thread.wakeup.notify() or {
 			eprintln('error notifying cf release thread to wake up, may stall err=${err}')

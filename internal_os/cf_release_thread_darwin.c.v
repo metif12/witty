@@ -10,13 +10,17 @@ import datastruct
 import macos
 import xev
 
-// Ghostty's Message union has the single `release` variant, so the payload is
-// stored directly.
-pub struct CFReleaseMessage {
+pub struct CFReleaseMessageRelease {
 pub:
 	// Release a slice of CFTypeRefs. V's GC frees the slice after releasing
 	// all the refs.
 	refs []voidptr
+}
+
+// Ghostty's Message union has the single `release` variant.
+pub struct CFReleaseMessage {
+pub:
+	release CFReleaseMessageRelease
 }
 
 // The type used for sending messages to the thread. For now this is
@@ -173,7 +177,7 @@ fn (mut self CFReleaseThread) drain_mailbox() ! {
 
 	for {
 		message := self.mailbox.pop() or { break }
-		for ref in message.refs {
+		for ref in message.release.refs {
 			macos.cf_release(ref)
 		}
 	}

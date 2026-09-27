@@ -19,3 +19,12 @@ fn test_macos_foundation_directories() {
 	assert app_support.contains('Application Support')
 	assert app_support.contains('com.mitchellh.ghostty/config.ghostty')
 }
+
+fn test_cf_release_message_retains_release_arm() {
+	message := CFReleaseMessage{
+		release: CFReleaseMessageRelease{
+			refs: [voidptr(1), voidptr(2)]
+		}
+	}
+	assert message.release.refs == [voidptr(1), voidptr(2)]
+}
