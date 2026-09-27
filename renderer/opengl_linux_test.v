@@ -13,6 +13,16 @@ fn test_render_pass_tags_and_counts_match_source_contract() {
 	assert sizeof(GLRenderAttachmentKind) == 1
 	assert u8(GLRenderAttachmentKind.texture) == 0
 	assert u8(GLRenderAttachmentKind.target) == 1
+	attachment_texture := GLRenderAttachmentTarget(GLTexture{
+		id: 1
+	})
+	attachment_target := GLRenderAttachmentTarget(GLTarget{
+		fbo: 2
+	})
+	assert attachment_texture.kind() == .texture
+	assert attachment_target.kind() == .target
+	assert attachment_texture is GLTexture
+	assert attachment_target is GLTarget
 	assert sizeof(GLVertexStepFunction) == 1
 	assert u8(GLVertexStepFunction.constant) == 0
 	assert u8(GLVertexStepFunction.per_vertex) == 1

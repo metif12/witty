@@ -204,14 +204,12 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 
 	mut frame := self.api.begin_frame(mut frame_state.target)!
 	mut terminal_attachment := GLRenderAttachment{
-		kind:        .target
-		target:      frame_state.target
+		target:      GLRenderAttachmentTarget(frame_state.target)
 		clear_color: [f32(0), 0, 0, 0]!
 	}
 	if state := frame_state.custom_shader_state {
 		terminal_attachment = GLRenderAttachment{
-			kind:        .texture
-			texture:     state.back_texture
+			target:      GLRenderAttachmentTarget(state.back_texture)
 			clear_color: [f32(0), 0, 0, 0]!
 		}
 	}
@@ -271,14 +269,12 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 	if mut state := frame_state.custom_shader_state {
 		for index, pipeline in self.shaders.post_pipelines {
 			mut attachment := GLRenderAttachment{
-				kind:        .target
-				target:      frame_state.target
+				target:      GLRenderAttachmentTarget(frame_state.target)
 				clear_color: [f32(0), 0, 0, 0]!
 			}
 			if index < self.shaders.post_pipelines.len - 1 {
 				attachment = GLRenderAttachment{
-					kind:        .texture
-					texture:     state.front_texture
+					target:      GLRenderAttachmentTarget(state.front_texture)
 					clear_color: [f32(0), 0, 0, 0]!
 				}
 			}

@@ -211,11 +211,18 @@ pub enum GLRenderAttachmentKind as u8 {
 	target
 }
 
+pub type GLRenderAttachmentTarget = GLTexture | GLTarget
+
+pub fn (self GLRenderAttachmentTarget) kind() GLRenderAttachmentKind {
+	return match self {
+		GLTexture { .texture }
+		GLTarget { .target }
+	}
+}
+
 pub struct GLRenderAttachment {
 pub:
-	kind        GLRenderAttachmentKind @[required]
-	target      GLTarget
-	texture     GLTexture
+	target      GLRenderAttachmentTarget @[required]
 	clear_color ?[4]f32
 }
 
@@ -276,14 +283,14 @@ pub fn (mut self GLRenderPass) step(s GLRenderStep) {
 		target: .framebuffer
 	}
 	attachment := self.attachments[0]
-	match attachment.kind {
-		.target {
+	match attachment.target {
+		GLTarget {
 			fbo := opengl.Framebuffer{
 				id: attachment.target.fbo
 			}
 			fbobind = fbo.bind(.framebuffer) or { return }
 		}
-		.texture {
+		GLTexture {
 			if s.pipeline.fbo == 0 {
 				return
 			}
@@ -291,8 +298,8 @@ pub fn (mut self GLRenderPass) step(s GLRenderStep) {
 				id: s.pipeline.fbo
 			}
 			fbobind = fbo.bind(.framebuffer) or { return }
-			fbobind.texture_2d(.color0, gl_texture_target(attachment.texture.target), opengl.Texture{
-				id: attachment.texture.id
+			fbobind.texture_2d(.color0, gl_texture_target(attachment.target.target), opengl.Texture{
+				id: attachment.target.id
 			}, 0) or {
 				fbobind.unbind()
 				return
