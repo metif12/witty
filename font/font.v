@@ -900,16 +900,16 @@ pub mut:
 	nodes []AtlasNode
 }
 
-enum AtlasInitFailPoint as u8 {
+pub enum AtlasInitFailPoint as u8 {
 	alloc_data
 	alloc_nodes
 }
 
-enum AtlasReserveFailPoint as u8 {
+pub enum AtlasReserveFailPoint as u8 {
 	insert_node
 }
 
-enum AtlasGrowFailPoint as u8 {
+pub enum AtlasGrowFailPoint as u8 {
 	ensure_node_capacity
 	alloc_data
 }
@@ -923,15 +923,15 @@ mut:
 
 const atlas_tripwires = &AtlasTripwires{}
 
-fn atlas_init_tripwire() &tripwire.TripwireModule[AtlasInitFailPoint] {
+pub fn atlas_init_tripwire() &tripwire.TripwireModule[AtlasInitFailPoint] {
 	return unsafe { &atlas_tripwires.init }
 }
 
-fn atlas_reserve_tripwire() &tripwire.TripwireModule[AtlasReserveFailPoint] {
+pub fn atlas_reserve_tripwire() &tripwire.TripwireModule[AtlasReserveFailPoint] {
 	return unsafe { &atlas_tripwires.reserve }
 }
 
-fn atlas_grow_tripwire() &tripwire.TripwireModule[AtlasGrowFailPoint] {
+pub fn atlas_grow_tripwire() &tripwire.TripwireModule[AtlasGrowFailPoint] {
 	return unsafe { &atlas_tripwires.grow }
 }
 

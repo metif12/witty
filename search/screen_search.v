@@ -405,7 +405,7 @@ pub enum Select as u8 {
 // ScreenSearch
 // ============================================================
 
-pub enum ReloadActiveFailPoint as u8 {
+enum ReloadActiveFailPoint as u8 {
 	history_append_new
 	history_append_existing
 }
@@ -417,7 +417,7 @@ mut:
 
 const reload_active_tw_singleton = &ReloadActiveTripwire{}
 
-pub fn reload_active_tripwire() &tripwire.TripwireModule[ReloadActiveFailPoint] {
+fn reload_active_tripwire() &tripwire.TripwireModule[ReloadActiveFailPoint] {
 	return unsafe { &reload_active_tw_singleton.value }
 }
 

@@ -76,7 +76,7 @@ fn sgr_bg_rgb(r u8, g u8, b u8) SgrAttribute {
 // ============================================================
 
 fn test_screen_read_and_write() ! {
-	mut s := Screen.init(80, 24, 1000)
+	mut s := Screen.init(80, 24, 1000)!
 	defer { s.deinit() }
 	assert s.cursor.style_id == u32(0)
 
@@ -86,7 +86,7 @@ fn test_screen_read_and_write() ! {
 }
 
 fn test_screen_read_and_write_newline() ! {
-	mut s := Screen.init(80, 24, 1000)
+	mut s := Screen.init(80, 24, 1000)!
 	defer { s.deinit() }
 	assert s.cursor.style_id == u32(0)
 
@@ -96,7 +96,7 @@ fn test_screen_read_and_write_newline() ! {
 }
 
 fn test_screen_read_and_write_scrollback() ! {
-	mut s := Screen.init(80, 2, 1000)
+	mut s := Screen.init(80, 2, 1000)!
 	defer { s.deinit() }
 
 	s.test_write_string('hello\nworld\ntest')!
@@ -111,7 +111,7 @@ fn test_screen_read_and_write_scrollback() ! {
 }
 
 fn test_screen_read_and_write_no_scrollback_small() ! {
-	mut s := Screen.init(80, 2, 0)
+	mut s := Screen.init(80, 2, 0)!
 	defer { s.deinit() }
 
 	s.test_write_string('hello\nworld\ntest')!
@@ -126,7 +126,7 @@ fn test_screen_read_and_write_no_scrollback_small() ! {
 }
 
 fn test_screen_read_and_write_no_scrollback_large() ! {
-	mut s := Screen.init(80, 2, 0)
+	mut s := Screen.init(80, 2, 0)!
 	defer { s.deinit() }
 
 	for i in 0 .. 1000 {
@@ -141,13 +141,13 @@ fn test_screen_read_and_write_no_scrollback_large() ! {
 }
 
 fn test_screen_cursor_copy_x_y() ! {
-	mut s := Screen.init(10, 10, 0)
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 	s.cursor_absolute(2, 3)
 	assert s.cursor.x == 2
 	assert s.cursor.y == 3
 
-	mut s2 := Screen.init(10, 10, 0)
+	mut s2 := Screen.init(10, 10, 0)!
 	defer { s2.deinit() }
 	s2.cursor_copy(s.cursor, CursorCopyOptions{})!
 	assert s2.cursor.x == 2
@@ -161,10 +161,10 @@ fn test_screen_cursor_copy_x_y() ! {
 }
 
 fn test_screen_cursor_copy_style_deref() ! {
-	mut s := Screen.init(10, 10, 0)
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 
-	mut s2 := Screen.init(10, 10, 0)
+	mut s2 := Screen.init(10, 10, 0)!
 	defer { s2.deinit() }
 	page := &s2.cursor.page_pin.node.data
 
@@ -180,10 +180,10 @@ fn test_screen_cursor_copy_style_deref() ! {
 }
 
 fn test_screen_cursor_copy_style_deref_new_page() ! {
-	mut s := Screen.init(10, 10, 0)
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 
-	mut s2 := Screen.init(10, 10, 2048)
+	mut s2 := Screen.init(10, 10, 2048)!
 	defer { s2.deinit() }
 
 	// We need to get the cursor on a new page.
@@ -252,11 +252,11 @@ fn test_screen_cursor_copy_style_deref_new_page() ! {
 }
 
 fn test_screen_cursor_copy_style_copy() ! {
-	mut s := Screen.init(10, 10, 0)
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 	s.set_attribute(SgrBold{})!
 
-	mut s2 := Screen.init(10, 10, 0)
+	mut s2 := Screen.init(10, 10, 0)!
 	defer { s2.deinit() }
 	page := &s2.cursor.page_pin.node.data
 	s2.cursor_copy(s.cursor, CursorCopyOptions{})!
@@ -265,10 +265,10 @@ fn test_screen_cursor_copy_style_copy() ! {
 }
 
 fn test_screen_cursor_copy_hyperlink_deref() ! {
-	mut s := Screen.init(10, 10, 0)
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 
-	mut s2 := Screen.init(10, 10, 0)
+	mut s2 := Screen.init(10, 10, 0)!
 	defer { s2.deinit() }
 	page := &s2.cursor.page_pin.node.data
 
@@ -284,10 +284,10 @@ fn test_screen_cursor_copy_hyperlink_deref() ! {
 }
 
 fn test_screen_cursor_copy_hyperlink_deref_new_page() ! {
-	mut s := Screen.init(10, 10, 0)
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 
-	mut s2 := Screen.init(10, 10, 2048)
+	mut s2 := Screen.init(10, 10, 2048)!
 	defer { s2.deinit() }
 
 	// We need to get the cursor on a new page.
@@ -356,7 +356,7 @@ fn test_screen_cursor_copy_hyperlink_deref_new_page() ! {
 }
 
 fn test_screen_cursor_copy_hyperlink_copy() ! {
-	mut s := Screen.init(10, 10, 0)
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 
 	// Create a hyperlink for the cursor.
@@ -364,7 +364,7 @@ fn test_screen_cursor_copy_hyperlink_copy() ! {
 	assert s.cursor.page_pin.node.data.hyperlink_set.count() == usize(1)
 	assert s.cursor.hyperlink_id != 0
 
-	mut s2 := Screen.init(10, 10, 0)
+	mut s2 := Screen.init(10, 10, 0)!
 	defer { s2.deinit() }
 	page := &s2.cursor.page_pin.node.data
 
@@ -378,7 +378,7 @@ fn test_screen_cursor_copy_hyperlink_copy() ! {
 }
 
 fn test_screen_cursor_copy_hyperlink_copy_disabled() ! {
-	mut s := Screen.init(10, 10, 0)
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 
 	// Create a hyperlink for the cursor.
@@ -386,7 +386,7 @@ fn test_screen_cursor_copy_hyperlink_copy_disabled() ! {
 	assert s.cursor.page_pin.node.data.hyperlink_set.count() == usize(1)
 	assert s.cursor.hyperlink_id != 0
 
-	mut s2 := Screen.init(10, 10, 0)
+	mut s2 := Screen.init(10, 10, 0)!
 	defer { s2.deinit() }
 	page := &s2.cursor.page_pin.node.data
 
@@ -400,7 +400,7 @@ fn test_screen_cursor_copy_hyperlink_copy_disabled() ! {
 }
 
 fn test_screen_style_basics() ! {
-	mut s := Screen.init(80, 24, 1000)
+	mut s := Screen.init(80, 24, 1000)!
 	defer { s.deinit() }
 	page := &s.cursor.page_pin.node.data
 	assert page.styles.count() == usize(0)
@@ -419,7 +419,7 @@ fn test_screen_style_basics() ! {
 }
 
 fn test_screen_style_reset_to_default() ! {
-	mut s := Screen.init(80, 24, 1000)
+	mut s := Screen.init(80, 24, 1000)!
 	defer { s.deinit() }
 	page := &s.cursor.page_pin.node.data
 	assert page.styles.count() == usize(0)
@@ -436,7 +436,7 @@ fn test_screen_style_reset_to_default() ! {
 }
 
 fn test_screen_style_reset_with_unset() ! {
-	mut s := Screen.init(80, 24, 1000)
+	mut s := Screen.init(80, 24, 1000)!
 	defer { s.deinit() }
 	page := &s.cursor.page_pin.node.data
 	assert page.styles.count() == usize(0)
@@ -453,7 +453,7 @@ fn test_screen_style_reset_with_unset() ! {
 }
 
 fn test_screen_clear_rows_active_one_line() ! {
-	mut s := Screen.init(80, 24, 1000)
+	mut s := Screen.init(80, 24, 1000)!
 	defer { s.deinit() }
 
 	s.test_write_string('hello, world')!
@@ -464,7 +464,7 @@ fn test_screen_clear_rows_active_one_line() ! {
 }
 
 fn test_screen_clear_rows_active_multi_line() ! {
-	mut s := Screen.init(80, 24, 1000)
+	mut s := Screen.init(80, 24, 1000)!
 	defer { s.deinit() }
 
 	s.test_write_string('hello\nworld')!
@@ -476,7 +476,7 @@ fn test_screen_clear_rows_active_multi_line() ! {
 }
 
 fn test_screen_clear_rows_active_styled_line() ! {
-	mut s := Screen.init(80, 24, 1000)
+	mut s := Screen.init(80, 24, 1000)!
 	defer { s.deinit() }
 
 	s.set_attribute(SgrBold{})!
@@ -497,7 +497,7 @@ fn test_screen_clear_rows_active_styled_line() ! {
 }
 
 fn test_screen_clear_rows_protected() ! {
-	mut s := Screen.init(80, 24, 1000)
+	mut s := Screen.init(80, 24, 1000)!
 	defer { s.deinit() }
 
 	s.test_write_string('UNPROTECTED')!
@@ -521,7 +521,7 @@ fn test_screen_clear_rows_protected() ! {
 }
 
 fn test_screen_erase_rows_history() ! {
-	mut s := Screen.init(5, 5, 1000)
+	mut s := Screen.init(5, 5, 1000)!
 	defer { s.deinit() }
 
 	s.test_write_string('1\n2\n3\n4\n5\n6')!
@@ -548,7 +548,7 @@ fn test_screen_erase_rows_history() ! {
 }
 
 fn test_screen_erase_rows_history_with_more_lines() ! {
-	mut s := Screen.init(5, 5, 1000)
+	mut s := Screen.init(5, 5, 1000)!
 	defer { s.deinit() }
 
 	s.test_write_string('A\nB\nC\n1\n2\n3\n4\n5\n6')!
@@ -575,7 +575,7 @@ fn test_screen_erase_rows_history_with_more_lines() ! {
 }
 
 fn test_screen_erase_rows_active_partial() ! {
-	mut s := Screen.init(5, 5, 0)
+	mut s := Screen.init(5, 5, 0)!
 	defer { s.deinit() }
 
 	s.test_write_string('1\n2\n3')!
@@ -598,7 +598,7 @@ fn test_screen_erase_rows_active_partial() ! {
 }
 
 fn test_screen_cursor_down_across_pages_preserves_style() ! {
-	mut s := Screen.init(10, 3, 1)
+	mut s := Screen.init(10, 3, 1)!
 	defer { s.deinit() }
 
 	// Scroll down enough to go to another page
@@ -644,7 +644,7 @@ fn test_screen_cursor_down_across_pages_preserves_style() ! {
 }
 
 fn test_screen_cursor_up_across_pages_preserves_style() ! {
-	mut s := Screen.init(10, 3, 1)
+	mut s := Screen.init(10, 3, 1)!
 	defer { s.deinit() }
 
 	// Scroll down enough to go to another page
@@ -685,7 +685,7 @@ fn test_screen_cursor_up_across_pages_preserves_style() ! {
 }
 
 fn test_screen_cursor_absolute_across_pages_preserves_style() ! {
-	mut s := Screen.init(10, 3, 1)
+	mut s := Screen.init(10, 3, 1)!
 	defer { s.deinit() }
 
 	// Scroll down enough to go to another page
@@ -734,7 +734,7 @@ fn test_screen_cursor_absolute_to_page_with_insufficient_capacity() ! {
 	// - The cursor moves to a different page.
 	// - The new page is at capacity and must have its capacity adjusted.
 
-	mut s := Screen.init(10, 3, 1)
+	mut s := Screen.init(10, 3, 1)!
 	defer { s.deinit() }
 
 	// Scroll down enough to go to another page
@@ -805,7 +805,7 @@ fn test_screen_cursor_absolute_to_page_with_insufficient_capacity() ! {
 }
 
 fn test_screen_scrolling() ! {
-	mut s := Screen.init(10, 3, 0)
+	mut s := Screen.init(10, 3, 0)!
 	defer { s.deinit() }
 	s.set_attribute(sgr_bg_rgb(155, 0, 0))!
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL')!
@@ -840,7 +840,7 @@ fn test_screen_scrolling() ! {
 }
 
 fn test_screen_scrolling_with_a_single_row_screen_no_scrollback() ! {
-	mut s := Screen.init(10, 1, 0)
+	mut s := Screen.init(10, 1, 0)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD')!
 
@@ -856,7 +856,7 @@ fn test_screen_scrolling_with_a_single_row_screen_no_scrollback() ! {
 }
 
 fn test_screen_scrolling_with_a_single_row_screen_with_scrollback() ! {
-	mut s := Screen.init(10, 1, 1)
+	mut s := Screen.init(10, 1, 1)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD')!
 
@@ -881,7 +881,7 @@ fn test_screen_scrolling_with_a_single_row_screen_with_scrollback() ! {
 }
 
 fn test_screen_scrolling_across_pages_preserves_style() ! {
-	mut s := Screen.init(10, 3, 1)
+	mut s := Screen.init(10, 3, 1)!
 	defer { s.deinit() }
 	s.set_attribute(SgrBold{})!
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL')!
@@ -907,7 +907,7 @@ fn test_screen_scrolling_across_pages_preserves_style() ! {
 }
 
 fn test_screen_scroll_down_from_0() ! {
-	mut s := Screen.init(10, 3, 0)
+	mut s := Screen.init(10, 3, 0)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL')!
 
@@ -922,7 +922,7 @@ fn test_screen_scroll_down_from_0() ! {
 }
 
 fn test_screen_scrollback_various_cases() ! {
-	mut s := Screen.init(10, 3, 1)
+	mut s := Screen.init(10, 3, 1)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL')!
 	s.cursor_down_scroll()!
@@ -991,7 +991,7 @@ fn test_screen_scrollback_various_cases() ! {
 }
 
 fn test_screen_scrollback_with_multi_row_delta() ! {
-	mut s := Screen.init(10, 3, 3)
+	mut s := Screen.init(10, 3, 3)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL\n4ABCD\n5EFGH\n6IJKL')!
 
@@ -1012,7 +1012,7 @@ fn test_screen_scrollback_with_multi_row_delta() ! {
 }
 
 fn test_screen_scrollback_empty() ! {
-	mut s := Screen.init(10, 3, 50)
+	mut s := Screen.init(10, 3, 50)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL')!
 	s.scroll(ScrollDeltaRow{ delta: 1 })
@@ -1023,7 +1023,7 @@ fn test_screen_scrollback_empty() ! {
 }
 
 fn test_screen_scrollback_doesnt_move_viewport_if_not_at_bottom() ! {
-	mut s := Screen.init(10, 3, 3)
+	mut s := Screen.init(10, 3, 3)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL\n4ABCD\n5EFGH')!
 
@@ -1052,7 +1052,7 @@ fn test_screen_scrollback_doesnt_move_viewport_if_not_at_bottom() ! {
 }
 
 fn test_screen_scrolling_moves_selection() ! {
-	mut s := Screen.init(5, 3, 1)
+	mut s := Screen.init(5, 3, 1)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL')!
 
@@ -1110,7 +1110,7 @@ fn test_screen_scrolling_moves_selection() ! {
 }
 
 fn test_screen_scrolling_moves_viewport() ! {
-	mut s := Screen.init(10, 3, 1)
+	mut s := Screen.init(10, 3, 1)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL\n')!
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL')!
@@ -1128,7 +1128,7 @@ fn test_screen_scrolling_moves_viewport() ! {
 }
 
 fn test_screen_scrolling_when_viewport_is_pruned() ! {
-	mut s := Screen.init(215, 3, 1)
+	mut s := Screen.init(215, 3, 1)!
 	defer { s.deinit() }
 
 	// Write some to create scrollback and move back into our scrollback.
@@ -1150,7 +1150,7 @@ fn test_screen_scrolling_when_viewport_is_pruned() ! {
 }
 
 fn test_screen_scroll_and_clear_full_screen() ! {
-	mut s := Screen.init(10, 3, 5)
+	mut s := Screen.init(10, 3, 5)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL')!
 
@@ -1171,7 +1171,7 @@ fn test_screen_scroll_and_clear_full_screen() ! {
 }
 
 fn test_screen_scroll_and_clear_partial_screen() ! {
-	mut s := Screen.init(10, 3, 5)
+	mut s := Screen.init(10, 3, 5)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH')!
 
@@ -1192,7 +1192,7 @@ fn test_screen_scroll_and_clear_partial_screen() ! {
 }
 
 fn test_screen_scroll_and_clear_empty_screen() ! {
-	mut s := Screen.init(10, 3, 5)
+	mut s := Screen.init(10, 3, 5)!
 	defer { s.deinit() }
 	s.scroll_clear()!
 	{
@@ -1206,7 +1206,7 @@ fn test_screen_scroll_and_clear_empty_screen() ! {
 }
 
 fn test_screen_scroll_and_clear_ignore_blank_lines() ! {
-	mut s := Screen.init(10, 3, 10)
+	mut s := Screen.init(10, 3, 10)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH')!
 	s.scroll_clear()!
@@ -1242,7 +1242,7 @@ fn test_screen_scroll_and_clear_ignore_blank_lines() ! {
 }
 
 fn test_screen_scroll_above_same_page() ! {
-	mut s := Screen.init(10, 3, 10)
+	mut s := Screen.init(10, 3, 10)!
 	defer { s.deinit() }
 	s.set_attribute(sgr_bg_rgb(155, 0, 0))!
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL')!
@@ -1295,7 +1295,7 @@ fn test_screen_scroll_above_same_page() ! {
 }
 
 fn test_screen_scroll_above_same_page_but_cursor_on_previous_page() ! {
-	mut s := Screen.init(10, 5, 10)
+	mut s := Screen.init(10, 5, 10)!
 	defer { s.deinit() }
 
 	// We need to get the cursor to a new page
@@ -1373,7 +1373,7 @@ fn test_screen_scroll_above_same_page_but_cursor_on_previous_page() ! {
 }
 
 fn test_screen_scroll_above_same_page_but_cursor_on_previous_page_last_row() ! {
-	mut s := Screen.init(10, 5, 10)
+	mut s := Screen.init(10, 5, 10)!
 	defer { s.deinit() }
 
 	// We need to get the cursor to a new page
@@ -1460,7 +1460,7 @@ fn test_screen_scroll_above_same_page_but_cursor_on_previous_page_last_row() ! {
 }
 
 fn test_screen_scroll_above_creates_new_page() ! {
-	mut s := Screen.init(10, 3, 10)
+	mut s := Screen.init(10, 3, 10)!
 	defer { s.deinit() }
 
 	// We need to get the cursor to a new page
@@ -1529,7 +1529,7 @@ fn test_screen_scroll_above_creates_new_page() ! {
 }
 
 fn test_screen_scroll_above_with_cursor_on_non_final_row() ! {
-	mut s := Screen.init(10, 4, 10)
+	mut s := Screen.init(10, 4, 10)!
 	defer { s.deinit() }
 
 	// Get the cursor to be 2 rows above a new page
@@ -1603,7 +1603,7 @@ fn test_screen_scroll_above_with_cursor_on_non_final_row() ! {
 }
 
 fn test_screen_scroll_above_no_scrollback_bottom_of_page() ! {
-	mut s := Screen.init(10, 3, 0)
+	mut s := Screen.init(10, 3, 0)!
 	defer { s.deinit() }
 
 	mut first := first_node(s)
@@ -1665,7 +1665,7 @@ fn test_screen_scroll_above_no_scrollback_bottom_of_page() ! {
 }
 
 fn test_screen_clone() ! {
-	mut s := Screen.init(10, 3, 10)
+	mut s := Screen.init(10, 3, 10)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH')!
 	{
@@ -1700,7 +1700,7 @@ fn test_screen_clone() ! {
 }
 
 fn test_screen_clone_partial() ! {
-	mut s := Screen.init(10, 3, 10)
+	mut s := Screen.init(10, 3, 10)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH')!
 	{
@@ -1724,7 +1724,7 @@ fn test_screen_clone_partial() ! {
 }
 
 fn test_screen_clone_partial_cursor_out_of_bounds() ! {
-	mut s := Screen.init(10, 3, 10)
+	mut s := Screen.init(10, 3, 10)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH')!
 	{
@@ -1748,7 +1748,7 @@ fn test_screen_clone_partial_cursor_out_of_bounds() ! {
 }
 
 fn test_screen_clone_contains_full_selection() ! {
-	mut s := Screen.init(5, 3, 1)
+	mut s := Screen.init(5, 3, 1)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL')!
 
@@ -1769,7 +1769,7 @@ fn test_screen_clone_contains_full_selection() ! {
 }
 
 fn test_screen_clone_contains_none_of_selection() ! {
-	mut s := Screen.init(5, 3, 1)
+	mut s := Screen.init(5, 3, 1)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL')!
 
@@ -1786,7 +1786,7 @@ fn test_screen_clone_contains_none_of_selection() ! {
 }
 
 fn test_screen_clone_contains_selection_start_cutoff() ! {
-	mut s := Screen.init(5, 3, 1)
+	mut s := Screen.init(5, 3, 1)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL')!
 
@@ -1807,7 +1807,7 @@ fn test_screen_clone_contains_selection_start_cutoff() ! {
 }
 
 fn test_screen_clone_contains_selection_end_cutoff() ! {
-	mut s := Screen.init(5, 3, 1)
+	mut s := Screen.init(5, 3, 1)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL')!
 
@@ -1828,7 +1828,7 @@ fn test_screen_clone_contains_selection_end_cutoff() ! {
 }
 
 fn test_screen_clone_contains_selection_end_cutoff_reversed() ! {
-	mut s := Screen.init(5, 3, 1)
+	mut s := Screen.init(5, 3, 1)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL')!
 
@@ -1849,7 +1849,7 @@ fn test_screen_clone_contains_selection_end_cutoff_reversed() ! {
 }
 
 fn test_screen_clone_contains_subset_of_selection() ! {
-	mut s := Screen.init(5, 4, 1)
+	mut s := Screen.init(5, 4, 1)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL\n4ABCD')!
 
@@ -1870,7 +1870,7 @@ fn test_screen_clone_contains_subset_of_selection() ! {
 }
 
 fn test_screen_clone_contains_subset_of_rectangle_selection() ! {
-	mut s := Screen.init(5, 4, 1)
+	mut s := Screen.init(5, 4, 1)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL\n4ABCD')!
 
@@ -1893,7 +1893,7 @@ fn test_screen_clone_contains_subset_of_rectangle_selection() ! {
 }
 
 fn test_screen_clone_basic() ! {
-	mut s := Screen.init(10, 3, 0)
+	mut s := Screen.init(10, 3, 0)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL')!
 
@@ -1917,7 +1917,7 @@ fn test_screen_clone_basic() ! {
 }
 
 fn test_screen_clone_empty_viewport() ! {
-	mut s := Screen.init(10, 3, 0)
+	mut s := Screen.init(10, 3, 0)!
 	defer { s.deinit() }
 
 	{
@@ -1931,7 +1931,7 @@ fn test_screen_clone_empty_viewport() ! {
 }
 
 fn test_screen_clone_one_line_viewport() ! {
-	mut s := Screen.init(10, 3, 0)
+	mut s := Screen.init(10, 3, 0)!
 	defer { s.deinit() }
 	s.test_write_string('1ABC')!
 
@@ -1946,7 +1946,7 @@ fn test_screen_clone_one_line_viewport() ! {
 }
 
 fn test_screen_clone_empty_active() ! {
-	mut s := Screen.init(10, 3, 0)
+	mut s := Screen.init(10, 3, 0)!
 	defer { s.deinit() }
 
 	{
@@ -1960,7 +1960,7 @@ fn test_screen_clone_empty_active() ! {
 }
 
 fn test_screen_clone_one_line_active_with_extra_space() ! {
-	mut s := Screen.init(10, 3, 0)
+	mut s := Screen.init(10, 3, 0)!
 	defer { s.deinit() }
 	s.test_write_string('1ABC')!
 
@@ -1975,7 +1975,7 @@ fn test_screen_clone_one_line_active_with_extra_space() ! {
 }
 
 fn test_screen_clear_history_with_no_history() ! {
-	mut s := Screen.init(10, 3, 3)
+	mut s := Screen.init(10, 3, 3)!
 	defer { s.deinit() }
 	s.test_write_string('4ABCD\n5EFGH\n6IJKL')!
 	assert s.pages.viewport == .active
@@ -1994,7 +1994,7 @@ fn test_screen_clear_history_with_no_history() ! {
 }
 
 fn test_screen_clear_history() ! {
-	mut s := Screen.init(10, 3, 3)
+	mut s := Screen.init(10, 3, 3)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL\n4ABCD\n5EFGH\n6IJKL')!
 	assert s.pages.viewport == .active
@@ -2022,7 +2022,7 @@ fn test_screen_clear_history() ! {
 }
 
 fn test_screen_clear_above_cursor() ! {
-	mut s := Screen.init(10, 10, 3)
+	mut s := Screen.init(10, 10, 3)!
 	defer { s.deinit() }
 	s.test_write_string('4ABCD\n5EFGH\n6IJKL')!
 	s.clear_rows(active_pt(0, 0), active_pt(0, int(s.cursor.y) - 1), false)
@@ -2040,7 +2040,7 @@ fn test_screen_clear_above_cursor() ! {
 }
 
 fn test_screen_clear_above_cursor_with_history() ! {
-	mut s := Screen.init(10, 3, 3)
+	mut s := Screen.init(10, 3, 3)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL\n')!
 	s.test_write_string('4ABCD\n5EFGH\n6IJKL')!
@@ -2059,7 +2059,7 @@ fn test_screen_clear_above_cursor_with_history() ! {
 }
 
 fn test_screen_resize_no_reflow_more_rows() ! {
-	mut s := Screen.init(10, 3, 0)
+	mut s := Screen.init(10, 3, 0)!
 	defer { s.deinit() }
 	str := '1ABCD\n2EFGH\n3IJKL'
 	s.test_write_string(str)!
@@ -2073,7 +2073,7 @@ fn test_screen_resize_no_reflow_more_rows() ! {
 }
 
 fn test_screen_resize_no_reflow_less_rows() ! {
-	mut s := Screen.init(10, 3, 0)
+	mut s := Screen.init(10, 3, 0)!
 	defer { s.deinit() }
 	str := '1ABCD\n2EFGH\n3IJKL'
 	s.test_write_string(str)!
@@ -2092,7 +2092,7 @@ fn test_screen_resize_no_reflow_less_rows() ! {
 }
 
 fn test_screen_resize_no_reflow_less_rows_trims_blank_lines() ! {
-	mut s := Screen.init(10, 3, 0)
+	mut s := Screen.init(10, 3, 0)!
 	defer { s.deinit() }
 	str := '1ABCD'
 	s.test_write_string(str)!
@@ -2125,7 +2125,7 @@ fn test_screen_resize_no_reflow_less_rows_trims_blank_lines() ! {
 }
 
 fn test_screen_resize_no_reflow_more_rows_trims_blank_lines() ! {
-	mut s := Screen.init(10, 3, 0)
+	mut s := Screen.init(10, 3, 0)!
 	defer { s.deinit() }
 	str := '1ABCD'
 	s.test_write_string(str)!
@@ -2158,7 +2158,7 @@ fn test_screen_resize_no_reflow_more_rows_trims_blank_lines() ! {
 }
 
 fn test_screen_resize_no_reflow_more_cols() ! {
-	mut s := Screen.init(10, 3, 0)
+	mut s := Screen.init(10, 3, 0)!
 	defer { s.deinit() }
 	str := '1ABCD\n2EFGH\n3IJKL'
 	s.test_write_string(str)!
@@ -2171,7 +2171,7 @@ fn test_screen_resize_no_reflow_more_cols() ! {
 }
 
 fn test_screen_resize_no_reflow_less_cols() ! {
-	mut s := Screen.init(10, 3, 0)
+	mut s := Screen.init(10, 3, 0)!
 	defer { s.deinit() }
 	str := '1ABCD\n2EFGH\n3IJKL'
 	s.test_write_string(str)!
@@ -2185,7 +2185,7 @@ fn test_screen_resize_no_reflow_less_cols() ! {
 }
 
 fn test_screen_resize_no_reflow_more_rows_with_scrollback_cursor_end() ! {
-	mut s := Screen.init(7, 3, 2)
+	mut s := Screen.init(7, 3, 2)!
 	defer { s.deinit() }
 	str := '1ABCD\n2EFGH\n3IJKL\n4ABCD\n5EFGH'
 	s.test_write_string(str)!
@@ -2198,7 +2198,7 @@ fn test_screen_resize_no_reflow_more_rows_with_scrollback_cursor_end() ! {
 }
 
 fn test_screen_resize_no_reflow_less_rows_with_scrollback() ! {
-	mut s := Screen.init(7, 3, 2)
+	mut s := Screen.init(7, 3, 2)!
 	defer { s.deinit() }
 	str := '1ABCD\n2EFGH\n3IJKL\n4ABCD\n5EFGH'
 	s.test_write_string(str)!
@@ -2213,7 +2213,7 @@ fn test_screen_resize_no_reflow_less_rows_with_scrollback() ! {
 
 // https://github.com/mitchellh/ghostty/issues/1030
 fn test_screen_resize_no_reflow_less_rows_with_empty_trailing() ! {
-	mut s := Screen.init(5, 3, 5)
+	mut s := Screen.init(5, 3, 5)!
 	defer { s.deinit() }
 	str := '1\n2\n3\n4\n5\n6\n7\n8'
 	s.test_write_string(str)!
@@ -2233,7 +2233,7 @@ fn test_screen_resize_no_reflow_less_rows_with_empty_trailing() ! {
 }
 
 fn test_screen_resize_no_reflow_more_rows_with_soft_wrapping() ! {
-	mut s := Screen.init(2, 3, 3)
+	mut s := Screen.init(2, 3, 3)!
 	defer { s.deinit() }
 	str := '1A2B\n3C4E\n5F6G'
 	s.test_write_string(str)!
@@ -2264,7 +2264,7 @@ fn test_screen_resize_no_reflow_more_rows_with_soft_wrapping() ! {
 }
 
 fn test_screen_resize_more_rows_no_scrollback() ! {
-	mut s := Screen.init(5, 3, 0)
+	mut s := Screen.init(5, 3, 0)!
 	defer { s.deinit() }
 	str := '1ABCD\n2EFGH\n3IJKL'
 	s.test_write_string(str)!
@@ -2286,7 +2286,7 @@ fn test_screen_resize_more_rows_no_scrollback() ! {
 }
 
 fn test_screen_resize_more_rows_with_empty_scrollback() ! {
-	mut s := Screen.init(5, 3, 10)
+	mut s := Screen.init(5, 3, 10)!
 	defer { s.deinit() }
 	str := '1ABCD\n2EFGH\n3IJKL'
 	s.test_write_string(str)!
@@ -2308,7 +2308,7 @@ fn test_screen_resize_more_rows_with_empty_scrollback() ! {
 }
 
 fn test_screen_resize_more_rows_with_populated_scrollback() ! {
-	mut s := Screen.init(5, 3, 5)
+	mut s := Screen.init(5, 3, 5)!
 	defer { s.deinit() }
 	str := '1ABCD\n2EFGH\n3IJKL\n4ABCD\n5EFGH'
 	s.test_write_string(str)!
@@ -2342,7 +2342,7 @@ fn test_screen_resize_more_rows_with_populated_scrollback() ! {
 }
 
 fn test_screen_resize_more_cols_no_reflow() ! {
-	mut s := Screen.init(5, 3, 0)
+	mut s := Screen.init(5, 3, 0)!
 	defer { s.deinit() }
 	str := '1ABCD\n2EFGH\n3IJKL'
 	s.test_write_string(str)!
@@ -2366,7 +2366,7 @@ fn test_screen_resize_more_cols_no_reflow() ! {
 
 // https://github.com/mitchellh/ghostty/issues/272#issuecomment-1676038963
 fn test_screen_resize_more_cols_perfect_split() ! {
-	mut s := Screen.init(5, 3, 0)
+	mut s := Screen.init(5, 3, 0)!
 	defer { s.deinit() }
 	str := '1ABCD2EFGH3IJKL'
 	s.test_write_string(str)!
@@ -2380,7 +2380,7 @@ fn test_screen_resize_more_cols_perfect_split() ! {
 
 // https://github.com/mitchellh/ghostty/issues/1159
 fn test_screen_resize_no_reflow_more_cols_with_scrollback_scrolled_up() ! {
-	mut s := Screen.init(5, 3, 5)
+	mut s := Screen.init(5, 3, 5)!
 	defer { s.deinit() }
 	str := '1\n2\n3\n4\n5\n6\n7\n8'
 	s.test_write_string(str)!
@@ -2408,7 +2408,7 @@ fn test_screen_resize_no_reflow_more_cols_with_scrollback_scrolled_up() ! {
 
 // https://github.com/mitchellh/ghostty/issues/1159
 fn test_screen_resize_no_reflow_less_cols_with_scrollback_scrolled_up() ! {
-	mut s := Screen.init(5, 3, 5)
+	mut s := Screen.init(5, 3, 5)!
 	defer { s.deinit() }
 	str := '1\n2\n3\n4\n5\n6\n7\n8'
 	s.test_write_string(str)!
@@ -2446,7 +2446,7 @@ fn test_screen_resize_no_reflow_less_cols_with_scrollback_scrolled_up() ! {
 }
 
 fn test_screen_resize_more_cols_no_reflow_preserves_semantic_prompt() ! {
-	mut s := Screen.init(5, 3, 0)
+	mut s := Screen.init(5, 3, 0)!
 	defer { s.deinit() }
 
 	// Set one of the rows to be a prompt
@@ -2485,7 +2485,7 @@ fn test_screen_resize_more_cols_no_reflow_preserves_semantic_prompt() ! {
 }
 
 fn test_screen_resize_more_cols_with_reflow_that_fits_full_width() ! {
-	mut s := Screen.init(5, 3, 0)
+	mut s := Screen.init(5, 3, 0)!
 	defer { s.deinit() }
 	str := '1ABCD2EFGH\n3IJKL'
 	s.test_write_string(str)!
@@ -2517,7 +2517,7 @@ fn test_screen_resize_more_cols_with_reflow_that_fits_full_width() ! {
 }
 
 fn test_screen_resize_more_cols_with_reflow_that_ends_in_newline() ! {
-	mut s := Screen.init(6, 3, 0)
+	mut s := Screen.init(6, 3, 0)!
 	defer { s.deinit() }
 	str := '1ABCD2EFGH\n3IJKL'
 	s.test_write_string(str)!
@@ -2551,7 +2551,7 @@ fn test_screen_resize_more_cols_with_reflow_that_ends_in_newline() ! {
 }
 
 fn test_screen_resize_more_cols_with_reflow_that_forces_more_wrapping() ! {
-	mut s := Screen.init(5, 3, 0)
+	mut s := Screen.init(5, 3, 0)!
 	defer { s.deinit() }
 	str := '1ABCD2EFGH\n3IJKL'
 	s.test_write_string(str)!
@@ -2584,7 +2584,7 @@ fn test_screen_resize_more_cols_with_reflow_that_forces_more_wrapping() ! {
 }
 
 fn test_screen_resize_more_cols_with_reflow_that_unwraps_multiple_times() ! {
-	mut s := Screen.init(5, 3, 0)
+	mut s := Screen.init(5, 3, 0)!
 	defer { s.deinit() }
 	str := '1ABCD2EFGH3IJKL'
 	s.test_write_string(str)!
@@ -2617,7 +2617,7 @@ fn test_screen_resize_more_cols_with_reflow_that_unwraps_multiple_times() ! {
 }
 
 fn test_screen_resize_more_cols_with_populated_scrollback() ! {
-	mut s := Screen.init(5, 3, 5)
+	mut s := Screen.init(5, 3, 5)!
 	defer { s.deinit() }
 	str := '1ABCD\n2EFGH\n3IJKL\n4ABCD5EFGH'
 	s.test_write_string(str)!
@@ -2650,7 +2650,7 @@ fn test_screen_resize_more_cols_with_populated_scrollback() ! {
 }
 
 fn test_screen_resize_more_cols_with_reflow() ! {
-	mut s := Screen.init(2, 3, 5)
+	mut s := Screen.init(2, 3, 5)!
 	defer { s.deinit() }
 	str := '1ABC\n2DEF\n3ABC\n4DEF'
 	s.test_write_string(str)!
@@ -2683,7 +2683,7 @@ fn test_screen_resize_more_cols_with_reflow() ! {
 }
 
 fn test_screen_resize_more_rows_and_cols_with_wrapping() ! {
-	mut s := Screen.init(2, 4, 0)
+	mut s := Screen.init(2, 4, 0)!
 	defer { s.deinit() }
 	str := '1A2B\n3C4D'
 	s.test_write_string(str)!
@@ -2710,7 +2710,7 @@ fn test_screen_resize_more_rows_and_cols_with_wrapping() ! {
 }
 
 fn test_screen_resize_less_rows_no_scrollback() ! {
-	mut s := Screen.init(5, 3, 0)
+	mut s := Screen.init(5, 3, 0)!
 	defer { s.deinit() }
 	str := '1ABCD\n2EFGH\n3IJKL'
 	s.test_write_string(str)!
@@ -2736,7 +2736,7 @@ fn test_screen_resize_less_rows_no_scrollback() ! {
 }
 
 fn test_screen_resize_less_rows_moving_cursor() ! {
-	mut s := Screen.init(5, 3, 0)
+	mut s := Screen.init(5, 3, 0)!
 	defer { s.deinit() }
 	str := '1ABCD\n2EFGH\n3IJKL'
 	s.test_write_string(str)!
@@ -2768,7 +2768,7 @@ fn test_screen_resize_less_rows_moving_cursor() ! {
 }
 
 fn test_screen_resize_less_rows_with_empty_scrollback() ! {
-	mut s := Screen.init(5, 3, 10)
+	mut s := Screen.init(5, 3, 10)!
 	defer { s.deinit() }
 	str := '1ABCD\n2EFGH\n3IJKL'
 	s.test_write_string(str)!
@@ -2786,7 +2786,7 @@ fn test_screen_resize_less_rows_with_empty_scrollback() ! {
 }
 
 fn test_screen_resize_less_rows_with_populated_scrollback() ! {
-	mut s := Screen.init(5, 3, 5)
+	mut s := Screen.init(5, 3, 5)!
 	defer { s.deinit() }
 	str := '1ABCD\n2EFGH\n3IJKL\n4ABCD\n5EFGH'
 	s.test_write_string(str)!
@@ -2811,7 +2811,7 @@ fn test_screen_resize_less_rows_with_populated_scrollback() ! {
 }
 
 fn test_screen_resize_less_rows_with_full_scrollback() ! {
-	mut s := Screen.init(5, 3, 3)
+	mut s := Screen.init(5, 3, 3)!
 	defer { s.deinit() }
 	str := '00000\n1ABCD\n2EFGH\n3IJKL\n4ABCD\n5EFGH'
 	s.test_write_string(str)!
@@ -2845,7 +2845,7 @@ fn test_screen_resize_less_rows_with_full_scrollback() ! {
 }
 
 fn test_screen_resize_less_cols_no_reflow() ! {
-	mut s := Screen.init(5, 3, 0)
+	mut s := Screen.init(5, 3, 0)!
 	defer { s.deinit() }
 	str := '1AB\n2EF\n3IJ'
 	s.test_write_string(str)!
@@ -2869,7 +2869,7 @@ fn test_screen_resize_less_cols_no_reflow() ! {
 }
 
 fn test_screen_resize_less_cols_with_reflow_but_row_space() ! {
-	mut s := Screen.init(5, 3, 1)
+	mut s := Screen.init(5, 3, 1)!
 	defer { s.deinit() }
 	str := '1ABCD'
 	s.test_write_string(str)!
@@ -2899,7 +2899,7 @@ fn test_screen_resize_less_cols_with_reflow_but_row_space() ! {
 }
 
 fn test_screen_resize_less_cols_with_reflow_with_trimmed_rows() ! {
-	mut s := Screen.init(5, 3, 0)
+	mut s := Screen.init(5, 3, 0)!
 	defer { s.deinit() }
 	str := '3IJKL\n4ABCD\n5EFGH'
 	s.test_write_string(str)!
@@ -2918,7 +2918,7 @@ fn test_screen_resize_less_cols_with_reflow_with_trimmed_rows() ! {
 }
 
 fn test_screen_resize_less_cols_with_reflow_with_trimmed_rows_and_scrollback() ! {
-	mut s := Screen.init(5, 3, 1)
+	mut s := Screen.init(5, 3, 1)!
 	defer { s.deinit() }
 	str := '3IJKL\n4ABCD\n5EFGH'
 	s.test_write_string(str)!
@@ -2937,7 +2937,7 @@ fn test_screen_resize_less_cols_with_reflow_with_trimmed_rows_and_scrollback() !
 }
 
 fn test_screen_resize_less_cols_with_reflow_previously_wrapped() ! {
-	mut s := Screen.init(5, 3, 0)
+	mut s := Screen.init(5, 3, 0)!
 	defer { s.deinit() }
 	str := '3IJKL4ABCD5EFGH'
 	s.test_write_string(str)!
@@ -2965,7 +2965,7 @@ fn test_screen_resize_less_cols_with_reflow_previously_wrapped() ! {
 }
 
 fn test_screen_resize_less_cols_with_reflow_and_scrollback() ! {
-	mut s := Screen.init(5, 3, 5)
+	mut s := Screen.init(5, 3, 5)!
 	defer { s.deinit() }
 	str := '1A\n2B\n3C\n4D\n5E'
 	s.test_write_string(str)!
@@ -2991,7 +2991,7 @@ fn test_screen_resize_less_cols_with_reflow_and_scrollback() ! {
 }
 
 fn test_screen_resize_less_cols_with_reflow_previously_wrapped_and_scrollback() ! {
-	mut s := Screen.init(5, 3, 2)
+	mut s := Screen.init(5, 3, 2)!
 	defer { s.deinit() }
 	str := '1ABCD2EFGH3IJKL4ABCD5EFGH'
 	s.test_write_string(str)!
@@ -3033,7 +3033,7 @@ fn test_screen_resize_less_cols_with_reflow_previously_wrapped_and_scrollback() 
 }
 
 fn test_screen_resize_less_cols_with_scrollback_keeps_cursor_row() ! {
-	mut s := Screen.init(5, 3, 5)
+	mut s := Screen.init(5, 3, 5)!
 	defer { s.deinit() }
 	str := '1A\n2B\n3C\n4D\n5E'
 	s.test_write_string(str)!
@@ -3058,7 +3058,7 @@ fn test_screen_resize_less_cols_with_scrollback_keeps_cursor_row() ! {
 }
 
 fn test_screen_resize_more_rows_less_cols_with_reflow_with_scrollback() ! {
-	mut s := Screen.init(5, 3, 3)
+	mut s := Screen.init(5, 3, 3)!
 	defer { s.deinit() }
 	str := '1ABCD\n2EFGH3IJKL\n4MNOP'
 	s.test_write_string(str)!
@@ -3092,7 +3092,7 @@ fn test_screen_resize_more_rows_less_cols_with_reflow_with_scrollback() ! {
 // in the initial implementation I found this bug! This is a regression
 // test for that.
 fn test_screen_resize_more_rows_then_shrink_again() ! {
-	mut s := Screen.init(5, 3, 10)
+	mut s := Screen.init(5, 3, 10)!
 	defer { s.deinit() }
 	str := '1ABC'
 	s.test_write_string(str)!
@@ -3132,7 +3132,7 @@ fn test_screen_resize_more_rows_then_shrink_again() ! {
 }
 
 fn test_screen_resize_less_cols_to_eliminate_wide_char() ! {
-	mut s := Screen.init(2, 1, 0)
+	mut s := Screen.init(2, 1, 0)!
 	defer { s.deinit() }
 	str := '😀'
 	s.test_write_string(str)!
@@ -3162,7 +3162,7 @@ fn test_screen_resize_less_cols_to_eliminate_wide_char() ! {
 }
 
 fn test_screen_resize_less_cols_to_wrap_wide_char() ! {
-	mut s := Screen.init(3, 3, 0)
+	mut s := Screen.init(3, 3, 0)!
 	defer { s.deinit() }
 	str := 'x😀'
 	s.test_write_string(str)!
@@ -3196,7 +3196,7 @@ fn test_screen_resize_less_cols_to_wrap_wide_char() ! {
 }
 
 fn test_screen_resize_less_cols_to_eliminate_wide_char_with_row_space() ! {
-	mut s := Screen.init(2, 2, 0)
+	mut s := Screen.init(2, 2, 0)!
 	defer { s.deinit() }
 	str := '😀'
 	s.test_write_string(str)!
@@ -3224,7 +3224,7 @@ fn test_screen_resize_less_cols_to_eliminate_wide_char_with_row_space() ! {
 }
 
 fn test_screen_resize_more_cols_with_wide_spacer_head() ! {
-	mut s := Screen.init(3, 2, 0)
+	mut s := Screen.init(3, 2, 0)!
 	defer { s.deinit() }
 	str := '  😀'
 	s.test_write_string(str)!
@@ -3272,7 +3272,7 @@ fn test_screen_resize_more_cols_with_wide_spacer_head() ! {
 }
 
 fn test_screen_resize_more_cols_with_wide_spacer_head_multiple_lines() ! {
-	mut s := Screen.init(3, 3, 0)
+	mut s := Screen.init(3, 3, 0)!
 	defer { s.deinit() }
 	str := 'xxxyy😀'
 	s.test_write_string(str)!
@@ -3318,7 +3318,7 @@ fn test_screen_resize_more_cols_with_wide_spacer_head_multiple_lines() ! {
 }
 
 fn test_screen_resize_more_cols_requiring_a_wide_spacer_head() ! {
-	mut s := Screen.init(2, 2, 0)
+	mut s := Screen.init(2, 2, 0)!
 	defer { s.deinit() }
 	str := 'xx😀'
 	s.test_write_string(str)!
@@ -3364,7 +3364,7 @@ fn test_screen_resize_more_cols_requiring_a_wide_spacer_head() ! {
 }
 
 fn test_screen_resize_more_cols_with_cursor_at_prompt() ! {
-	mut s := Screen.init(10, 3, 5)
+	mut s := Screen.init(10, 3, 5)!
 	defer { s.deinit() }
 
 	// zig fmt: off
@@ -3399,7 +3399,7 @@ fn test_screen_resize_more_cols_with_cursor_at_prompt() ! {
 }
 
 fn test_screen_resize_more_cols_with_cursor_not_at_prompt() ! {
-	mut s := Screen.init(10, 3, 5)
+	mut s := Screen.init(10, 3, 5)!
 	defer { s.deinit() }
 
 	// zig fmt: off
@@ -3435,7 +3435,7 @@ fn test_screen_resize_more_cols_with_cursor_not_at_prompt() ! {
 }
 
 fn test_screen_resize_with_prompt_redraw_last_clears_only_one_line() ! {
-	mut s := Screen.init(10, 4, 5)
+	mut s := Screen.init(10, 4, 5)!
 	defer { s.deinit() }
 
 	// zig fmt: off
@@ -3469,7 +3469,7 @@ fn test_screen_resize_with_prompt_redraw_last_clears_only_one_line() ! {
 }
 
 fn test_screen_resize_with_prompt_redraw_last_multiline_prompt_clears_only_last_line() ! {
-	mut s := Screen.init(20, 5, 5)
+	mut s := Screen.init(20, 5, 5)!
 	defer { s.deinit() }
 
 	// Create a 3-line prompt: 1 initial + 2 continuation lines
@@ -3504,7 +3504,7 @@ fn test_screen_resize_with_prompt_redraw_last_multiline_prompt_clears_only_last_
 }
 
 fn test_screen_select_untracked() ! {
-	mut s := Screen.init(10, 10, 0)
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 	s.test_write_string('ABC  DEF\n 123\n456')!
 
@@ -3518,7 +3518,7 @@ fn test_screen_select_untracked() ! {
 }
 
 fn test_screen_select_all() ! {
-	mut s := Screen.init(10, 10, 0)
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 
 	{
@@ -3539,7 +3539,7 @@ fn test_screen_select_all() ! {
 }
 
 fn test_screen_select_line() ! {
-	mut s := Screen.init(10, 10, 0)
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 	s.test_write_string('ABC  DEF\n 123\n456')!
 
@@ -3589,7 +3589,7 @@ fn test_screen_select_line() ! {
 }
 
 fn test_screen_select_line_across_soft_wrap() ! {
-	mut s := Screen.init(5, 10, 0)
+	mut s := Screen.init(5, 10, 0)!
 	defer { s.deinit() }
 	s.test_write_string(' 12 34012   \n 123')!
 
@@ -3605,7 +3605,7 @@ fn test_screen_select_line_across_soft_wrap() ! {
 }
 
 fn test_screen_select_line_across_full_soft_wrap() ! {
-	mut s := Screen.init(5, 5, 0)
+	mut s := Screen.init(5, 5, 0)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD2EFGH\n3IJKL')!
 
@@ -3620,7 +3620,7 @@ fn test_screen_select_line_across_full_soft_wrap() ! {
 }
 
 fn test_screen_select_line_across_soft_wrap_ignores_blank_lines() ! {
-	mut s := Screen.init(5, 10, 0)
+	mut s := Screen.init(5, 10, 0)!
 	defer { s.deinit() }
 	s.test_write_string(' 12 34012             \n 123')!
 
@@ -3656,7 +3656,7 @@ fn test_screen_select_line_across_soft_wrap_ignores_blank_lines() ! {
 }
 
 fn test_screen_select_line_disabled_whitespace_trimming() ! {
-	mut s := Screen.init(5, 10, 0)
+	mut s := Screen.init(5, 10, 0)!
 	defer { s.deinit() }
 	s.test_write_string(' 12 34012   \n 123')!
 
@@ -3684,7 +3684,7 @@ fn test_screen_select_line_disabled_whitespace_trimming() ! {
 }
 
 fn test_screen_select_line_with_scrollback() ! {
-	mut s := Screen.init(2, 3, 5)
+	mut s := Screen.init(2, 3, 5)!
 	defer { s.deinit() }
 	s.test_write_string('1A\n2B\n3C\n4D\n5E')!
 
@@ -3711,7 +3711,7 @@ fn test_screen_select_line_with_scrollback() ! {
 
 // https://github.com/mitchellh/ghostty/issues/1329
 fn test_screen_select_line_semantic_prompt_boundary() ! {
-	mut s := Screen.init(5, 10, 0)
+	mut s := Screen.init(5, 10, 0)!
 	defer { s.deinit() }
 	s.test_write_string('ABCDE\n')!
 	s.cursor_set_semantic_content(CursorSemanticPrompt{ kind: .initial })
@@ -3745,7 +3745,7 @@ fn test_screen_select_line_semantic_prompt_boundary() ! {
 }
 
 fn test_screen_select_line_semantic_prompt_to_input_boundary() ! {
-	mut s := Screen.init(10, 5, 0)
+	mut s := Screen.init(10, 5, 0)!
 	defer { s.deinit() }
 
 	// Write prompt followed by user input on same row: "$>command"
@@ -3777,7 +3777,7 @@ fn test_screen_select_line_semantic_prompt_to_input_boundary() ! {
 }
 
 fn test_screen_select_line_semantic_input_to_output_boundary() ! {
-	mut s := Screen.init(10, 5, 0)
+	mut s := Screen.init(10, 5, 0)!
 	defer { s.deinit() }
 
 	// Row 0: user input
@@ -3809,7 +3809,7 @@ fn test_screen_select_line_semantic_input_to_output_boundary() ! {
 }
 
 fn test_screen_select_line_semantic_mid_row_boundary() ! {
-	mut s := Screen.init(10, 5, 0)
+	mut s := Screen.init(10, 5, 0)!
 	defer { s.deinit() }
 
 	// Single row with output then prompt then input: "out$>cmd"
@@ -3853,7 +3853,7 @@ fn test_screen_select_line_semantic_mid_row_boundary() ! {
 }
 
 fn test_screen_select_line_semantic_boundary_soft_wrap_with_mid_row_transition() ! {
-	mut s := Screen.init(5, 5, 0)
+	mut s := Screen.init(5, 5, 0)!
 	defer { s.deinit() }
 
 	// Row 0: prompt "$ " + input "cmd" (soft-wraps)
@@ -3903,7 +3903,7 @@ fn test_screen_select_line_semantic_boundary_soft_wrap_with_mid_row_transition()
 }
 
 fn test_screen_select_line_semantic_boundary_disabled() ! {
-	mut s := Screen.init(10, 5, 0)
+	mut s := Screen.init(10, 5, 0)!
 	defer { s.deinit() }
 
 	// Write prompt followed by input
@@ -3925,7 +3925,7 @@ fn test_screen_select_line_semantic_boundary_disabled() ! {
 }
 
 fn test_screen_select_line_semantic_boundary_first_cell_of_row() ! {
-	mut s := Screen.init(5, 5, 0)
+	mut s := Screen.init(5, 5, 0)!
 	defer { s.deinit() }
 
 	// Row 0: input that soft-wraps
@@ -3964,7 +3964,7 @@ fn test_screen_select_line_semantic_boundary_first_cell_of_row() ! {
 }
 
 fn test_screen_select_line_semantic_all_same_content() ! {
-	mut s := Screen.init(5, 5, 0)
+	mut s := Screen.init(5, 5, 0)!
 	defer { s.deinit() }
 
 	// All prompt content that soft-wraps
@@ -3989,7 +3989,7 @@ fn test_screen_select_line_semantic_all_same_content() ! {
 }
 
 fn test_screen_select_word() ! {
-	mut s := Screen.init(10, 10, 0)
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 	s.test_write_string('ABC  DEF\n 123\n456')!
 
@@ -4064,7 +4064,7 @@ fn test_screen_select_word() ! {
 }
 
 fn test_screen_select_word_across_soft_wrap() ! {
-	mut s := Screen.init(5, 10, 0)
+	mut s := Screen.init(5, 10, 0)!
 	defer { s.deinit() }
 	s.test_write_string(' 1234012\n 123')!
 
@@ -4110,7 +4110,7 @@ fn test_screen_select_word_across_soft_wrap() ! {
 }
 
 fn test_screen_select_word_whitespace_across_soft_wrap() ! {
-	mut s := Screen.init(5, 10, 0)
+	mut s := Screen.init(5, 10, 0)!
 	defer { s.deinit() }
 	s.test_write_string('1       1\n 123')!
 
@@ -4177,7 +4177,7 @@ fn test_screen_select_word_with_character_boundary() ! {
 	]
 
 	for case in cases {
-		mut s := Screen.init(20, 10, 0)
+		mut s := Screen.init(20, 10, 0)!
 		defer { s.deinit() }
 		s.test_write_string(case)!
 
@@ -4226,7 +4226,7 @@ fn test_screen_select_word_with_character_boundary() ! {
 }
 
 fn test_screen_select_output() ! {
-	mut s := Screen.init(10, 15, 0)
+	mut s := Screen.init(10, 15, 0)!
 	defer { s.deinit() }
 
 	// Build content with cell-level semantic content:
@@ -4287,7 +4287,7 @@ fn test_screen_select_output() ! {
 }
 
 fn test_screen_selection_string_basic() ! {
-	mut s := Screen.init(5, 3, 0)
+	mut s := Screen.init(5, 3, 0)!
 	defer { s.deinit() }
 	str := '1ABCD\n2EFGH\n3IJKL'
 	s.test_write_string(str)!
@@ -4305,7 +4305,7 @@ fn test_screen_selection_string_basic() ! {
 }
 
 fn test_screen_selection_string_start_outside_of_written_area() ! {
-	mut s := Screen.init(5, 10, 0)
+	mut s := Screen.init(5, 10, 0)!
 	defer { s.deinit() }
 	str := '1ABCD\n2EFGH\n3IJKL'
 	s.test_write_string(str)!
@@ -4323,7 +4323,7 @@ fn test_screen_selection_string_start_outside_of_written_area() ! {
 }
 
 fn test_screen_selection_string_end_outside_of_written_area() ! {
-	mut s := Screen.init(5, 10, 0)
+	mut s := Screen.init(5, 10, 0)!
 	defer { s.deinit() }
 	str := '1ABCD\n2EFGH\n3IJKL'
 	s.test_write_string(str)!
@@ -4341,7 +4341,7 @@ fn test_screen_selection_string_end_outside_of_written_area() ! {
 }
 
 fn test_screen_selection_string_trim_space() ! {
-	mut s := Screen.init(5, 3, 0)
+	mut s := Screen.init(5, 3, 0)!
 	defer { s.deinit() }
 	str := '1AB  \n2EFGH\n3IJKL'
 	s.test_write_string(str)!
@@ -4370,7 +4370,7 @@ fn test_screen_selection_string_trim_space() ! {
 }
 
 fn test_screen_selection_string_trim_empty_line() ! {
-	mut s := Screen.init(5, 5, 0)
+	mut s := Screen.init(5, 5, 0)!
 	defer { s.deinit() }
 	str := '1AB  \n\n2EFGH\n3IJKL'
 	s.test_write_string(str)!
@@ -4399,7 +4399,7 @@ fn test_screen_selection_string_trim_empty_line() ! {
 }
 
 fn test_screen_selection_string_soft_wrap() ! {
-	mut s := Screen.init(5, 3, 0)
+	mut s := Screen.init(5, 3, 0)!
 	defer { s.deinit() }
 	str := '1ABCD2EFGH3IJKL'
 	s.test_write_string(str)!
@@ -4417,7 +4417,7 @@ fn test_screen_selection_string_soft_wrap() ! {
 }
 
 fn test_screen_selection_string_wide_char() ! {
-	mut s := Screen.init(5, 3, 0)
+	mut s := Screen.init(5, 3, 0)!
 	defer { s.deinit() }
 	str := '1A⚡'
 	s.test_write_string(str)!
@@ -4457,7 +4457,7 @@ fn test_screen_selection_string_wide_char() ! {
 }
 
 fn test_screen_selection_string_wide_char_with_header() ! {
-	mut s := Screen.init(5, 3, 0)
+	mut s := Screen.init(5, 3, 0)!
 	defer { s.deinit() }
 	str := '1ABC⚡'
 	s.test_write_string(str)!
@@ -4476,7 +4476,7 @@ fn test_screen_selection_string_wide_char_with_header() ! {
 
 // https://github.com/mitchellh/ghostty/issues/289
 fn test_screen_selection_string_empty_with_soft_wrap() ! {
-	mut s := Screen.init(5, 2, 0)
+	mut s := Screen.init(5, 2, 0)!
 	defer { s.deinit() }
 
 	// Let me describe the situation that caused this because this
@@ -4502,7 +4502,7 @@ fn test_screen_selection_string_empty_with_soft_wrap() ! {
 }
 
 fn test_screen_selection_string_with_zero_width_joiner() ! {
-	mut s := Screen.init(10, 1, 0)
+	mut s := Screen.init(10, 1, 0)!
 	defer { s.deinit() }
 	str := '👨‍' // this has a ZWJ
 	s.test_write_string(str)!
@@ -4531,7 +4531,7 @@ fn test_screen_selection_string_with_zero_width_joiner() ! {
 }
 
 fn test_screen_selection_string_rectangle_basic() ! {
-	mut s := Screen.init(30, 5, 0)
+	mut s := Screen.init(30, 5, 0)!
 	defer { s.deinit() }
 	str := 'Lorem ipsum dolor\n' + 'sit amet, consectetur\n' + 'adipiscing elit, sed do\n' +
 		'eiusmod tempor incididunt\n' + 'ut labore et dolore'
@@ -4548,7 +4548,7 @@ fn test_screen_selection_string_rectangle_basic() ! {
 }
 
 fn test_screen_selection_string_rectangle_w_eol() ! {
-	mut s := Screen.init(30, 5, 0)
+	mut s := Screen.init(30, 5, 0)!
 	defer { s.deinit() }
 	str := 'Lorem ipsum dolor\n' + 'sit amet, consectetur\n' + 'adipiscing elit, sed do\n' +
 		'eiusmod tempor incididunt\n' + 'ut labore et dolore'
@@ -4565,7 +4565,7 @@ fn test_screen_selection_string_rectangle_w_eol() ! {
 }
 
 fn test_screen_selection_string_rectangle_more_complex_w_breaks() ! {
-	mut s := Screen.init(30, 8, 0)
+	mut s := Screen.init(30, 8, 0)!
 	defer { s.deinit() }
 	str := 'Lorem ipsum dolor\n' + 'sit amet, consectetur\n' + 'adipiscing elit, sed do\n' +
 		'eiusmod tempor incididunt\n' + 'ut labore et dolore\n' + '\n' +
@@ -4584,7 +4584,7 @@ fn test_screen_selection_string_rectangle_more_complex_w_breaks() ! {
 }
 
 fn test_screen_selection_string_multi_page() ! {
-	mut s := Screen.init(10, 3, 2048)
+	mut s := Screen.init(10, 3, 2048)!
 	defer { s.deinit() }
 
 	first_page_size := int(first_node(s).data.capacity.rows)
@@ -4613,7 +4613,7 @@ fn test_screen_selection_string_multi_page() ! {
 }
 
 fn test_screen_line_iterator() ! {
-	mut s := Screen.init(5, 5, 0)
+	mut s := Screen.init(5, 5, 0)!
 	defer { s.deinit() }
 	str := '1ABCD\n2EFGH'
 	s.test_write_string(str)!
@@ -4639,7 +4639,7 @@ fn test_screen_line_iterator() ! {
 }
 
 fn test_screen_line_iterator_soft_wrap() ! {
-	mut s := Screen.init(5, 5, 0)
+	mut s := Screen.init(5, 5, 0)!
 	defer { s.deinit() }
 	str := '1ABCD2EFGH\n3ABCD'
 	s.test_write_string(str)!
@@ -4666,7 +4666,7 @@ fn test_screen_line_iterator_soft_wrap() ! {
 }
 
 fn test_screen_hyperlink_start_end() ! {
-	mut s := Screen.init(5, 5, 0)
+	mut s := Screen.init(5, 5, 0)!
 	defer { s.deinit() }
 	assert s.cursor.hyperlink_id == 0
 	{
@@ -4690,7 +4690,7 @@ fn test_screen_hyperlink_start_end() ! {
 }
 
 fn test_screen_hyperlink_reuse() ! {
-	mut s := Screen.init(5, 5, 0)
+	mut s := Screen.init(5, 5, 0)!
 	defer { s.deinit() }
 
 	assert s.cursor.hyperlink_id == 0
@@ -4725,7 +4725,7 @@ fn test_screen_hyperlink_cursor_state_on_resize() ! {
 	// it may be invalid one day. It's here to document/verify the
 	// current behavior.
 
-	mut s := Screen.init(5, 10, 0)
+	mut s := Screen.init(5, 10, 0)!
 	defer { s.deinit() }
 
 	// Start a hyperlink
@@ -4753,7 +4753,7 @@ fn test_screen_hyperlink_cursor_state_on_resize() ! {
 }
 
 fn test_screen_cursor_set_hyperlink_oom_uri_too_large_for_string_alloc() ! {
-	mut s := Screen.init(80, 24, 0)
+	mut s := Screen.init(80, 24, 0)!
 	defer { s.deinit() }
 
 	// Start a hyperlink with a URI that just barely fits in the string alloc.
@@ -4784,7 +4784,7 @@ fn test_screen_cursor_set_hyperlink_oom_uri_too_large_for_string_alloc() ! {
 }
 
 fn test_screen_increase_capacity_cursor_style_ref_count_preserved() ! {
-	mut s := Screen.init(5, 5, 0)
+	mut s := Screen.init(5, 5, 0)!
 	defer { s.deinit() }
 	s.set_attribute(SgrBold{})!
 	s.test_write_string('1ABCD')!
@@ -4826,7 +4826,7 @@ fn test_screen_increase_capacity_cursor_style_ref_count_preserved() ! {
 }
 
 fn test_screen_increase_capacity_cursor_hyperlink_ref_count_preserved() ! {
-	mut s := Screen.init(5, 5, 0)
+	mut s := Screen.init(5, 5, 0)!
 	defer { s.deinit() }
 	s.start_hyperlink('https://example.com/', none)!
 	s.test_write_string('1ABCD')!
@@ -4860,7 +4860,7 @@ fn test_screen_increase_capacity_cursor_hyperlink_ref_count_preserved() ! {
 }
 
 fn test_screen_increase_capacity_cursor_with_both_style_and_hyperlink_preserved() ! {
-	mut s := Screen.init(5, 5, 0)
+	mut s := Screen.init(5, 5, 0)!
 	defer { s.deinit() }
 
 	// Set both a non-default style AND an active hyperlink.
@@ -4913,7 +4913,7 @@ fn test_screen_increase_capacity_non_cursor_page_returns_early() ! {
 	// Test that calling increaseCapacity on a page that is NOT the cursor's
 	// page properly delegates to pages.increaseCapacity without doing the
 	// extra cursor accounting (style/hyperlink re-adding).
-	mut s := Screen.init(80, 24, 10000)
+	mut s := Screen.init(80, 24, 10000)!
 	defer { s.deinit() }
 
 	// Set up a custom style and hyperlink on the cursor
@@ -4994,7 +4994,7 @@ fn test_screen_cursor_down_to_page_with_insufficient_capacity() ! {
 	// 5. rowAndCell() on the stale pin accesses freed memory
 
 	// Small screen to make page boundary crossing easy to set up
-	mut s := Screen.init(10, 3, 1)
+	mut s := Screen.init(10, 3, 1)!
 	defer { s.deinit() }
 
 	// Scroll down enough to create a second page
@@ -5076,7 +5076,7 @@ fn test_screen_set_attribute_increases_capacity_when_style_map_is_full() ! {
 	// returns OutOfSpace, manualStyleUpdate will split the page instead.
 
 	// Use a small screen with multiple rows
-	mut s := Screen.init(10, 5, 10)
+	mut s := Screen.init(10, 5, 10)!
 	defer { s.deinit() }
 
 	// Write content to multiple rows
@@ -5127,7 +5127,7 @@ fn test_screen_set_attribute_increases_capacity_when_style_map_is_full() ! {
 }
 
 fn test_screen_set_attribute_splits_page_on_out_of_space_at_max_styles() ! {
-	mut s := Screen.init(10, 10, 0)
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 
 	// Write content to multiple rows so we have something to split
@@ -5191,7 +5191,7 @@ fn test_screen_set_attribute_splits_page_on_out_of_space_at_max_styles() ! {
 }
 
 fn test_screen_prompt_click_move_line_right_basic() ! {
-	mut s := Screen.init(20, 5, 0)
+	mut s := Screen.init(20, 5, 0)!
 	defer { s.deinit() }
 
 	// Enable line click mode
@@ -5215,7 +5215,7 @@ fn test_screen_prompt_click_move_line_right_basic() ! {
 }
 
 fn test_screen_prompt_click_move_line_right_cursor_not_on_input() ! {
-	mut s := Screen.init(20, 5, 0)
+	mut s := Screen.init(20, 5, 0)!
 	defer { s.deinit() }
 
 	// Enable line click mode
@@ -5239,7 +5239,7 @@ fn test_screen_prompt_click_move_line_right_cursor_not_on_input() ! {
 }
 
 fn test_screen_prompt_click_move_line_right_click_on_same_position() ! {
-	mut s := Screen.init(20, 5, 0)
+	mut s := Screen.init(20, 5, 0)!
 	defer { s.deinit() }
 
 	// Enable line click mode
@@ -5262,7 +5262,7 @@ fn test_screen_prompt_click_move_line_right_click_on_same_position() ! {
 }
 
 fn test_screen_prompt_click_move_line_right_skips_non_input_cells() ! {
-	mut s := Screen.init(20, 5, 0)
+	mut s := Screen.init(20, 5, 0)!
 	defer { s.deinit() }
 
 	// Enable line click mode
@@ -5291,7 +5291,7 @@ fn test_screen_prompt_click_move_line_right_skips_non_input_cells() ! {
 }
 
 fn test_screen_prompt_click_move_line_right_soft_wrapped_line() ! {
-	mut s := Screen.init(10, 5, 0)
+	mut s := Screen.init(10, 5, 0)!
 	defer { s.deinit() }
 
 	// Enable line click mode
@@ -5325,7 +5325,7 @@ fn test_screen_prompt_click_move_line_right_soft_wrapped_line() ! {
 }
 
 fn test_screen_prompt_click_move_disabled_when_click_is_none() ! {
-	mut s := Screen.init(20, 5, 0)
+	mut s := Screen.init(20, 5, 0)!
 	defer { s.deinit() }
 
 	// Click mode is .none by default (disabled)
@@ -5348,7 +5348,7 @@ fn test_screen_prompt_click_move_disabled_when_click_is_none() ! {
 }
 
 fn test_screen_prompt_click_move_line_right_stops_at_hard_wrap() ! {
-	mut s := Screen.init(20, 5, 0)
+	mut s := Screen.init(20, 5, 0)!
 	defer { s.deinit() }
 
 	// Enable line click mode
@@ -5377,7 +5377,7 @@ fn test_screen_prompt_click_move_line_right_stops_at_hard_wrap() ! {
 }
 
 fn test_screen_prompt_click_move_line_right_stops_at_non_continuation_row() ! {
-	mut s := Screen.init(20, 5, 0)
+	mut s := Screen.init(20, 5, 0)!
 	defer { s.deinit() }
 
 	// Enable line click mode
@@ -5420,7 +5420,7 @@ fn test_screen_prompt_click_move_line_right_stops_at_non_continuation_row() ! {
 }
 
 fn test_screen_prompt_click_move_line_left_basic() ! {
-	mut s := Screen.init(20, 5, 0)
+	mut s := Screen.init(20, 5, 0)!
 	defer { s.deinit() }
 
 	// Enable line click mode
@@ -5444,7 +5444,7 @@ fn test_screen_prompt_click_move_line_left_basic() ! {
 }
 
 fn test_screen_prompt_click_move_line_left_skips_non_input_cells() ! {
-	mut s := Screen.init(20, 5, 0)
+	mut s := Screen.init(20, 5, 0)!
 	defer { s.deinit() }
 
 	// Enable line click mode
@@ -5473,7 +5473,7 @@ fn test_screen_prompt_click_move_line_left_skips_non_input_cells() ! {
 }
 
 fn test_screen_prompt_click_move_line_left_soft_wrapped_line() ! {
-	mut s := Screen.init(10, 5, 0)
+	mut s := Screen.init(10, 5, 0)!
 	defer { s.deinit() }
 
 	// Enable line click mode
@@ -5507,7 +5507,7 @@ fn test_screen_prompt_click_move_line_left_soft_wrapped_line() ! {
 }
 
 fn test_screen_prompt_click_move_line_left_stops_at_hard_wrap() ! {
-	mut s := Screen.init(20, 5, 0)
+	mut s := Screen.init(20, 5, 0)!
 	defer { s.deinit() }
 
 	// Enable line click mode
@@ -5539,7 +5539,7 @@ fn test_screen_prompt_click_move_click_right_of_input_same_line() ! {
 	// Set up: "> hello" where "> " is prompt and "hello" is input
 	// Clicking to the right of the 'o' should move cursor past the input
 
-	mut s := Screen.init(20, 5, 0)
+	mut s := Screen.init(20, 5, 0)!
 	defer { s.deinit() }
 
 	// Enable line click mode
@@ -5563,7 +5563,7 @@ fn test_screen_prompt_click_move_click_right_of_input_same_line() ! {
 }
 
 fn test_screen_prompt_click_move_click_right_of_input_cursor_at_end() ! {
-	mut s := Screen.init(20, 5, 0)
+	mut s := Screen.init(20, 5, 0)!
 	defer { s.deinit() }
 
 	// Enable line click mode
@@ -5586,7 +5586,7 @@ fn test_screen_prompt_click_move_click_right_of_input_cursor_at_end() ! {
 }
 
 fn test_screen_prompt_click_move_click_right_of_input_on_lower_line() ! {
-	mut s := Screen.init(20, 5, 0)
+	mut s := Screen.init(20, 5, 0)!
 	defer { s.deinit() }
 
 	// Enable line click mode
@@ -5612,7 +5612,7 @@ fn test_screen_prompt_click_move_click_right_of_input_on_lower_line() ! {
 }
 
 fn test_screen_prompt_click_move_click_right_of_input_cursor_at_end_lower_line() ! {
-	mut s := Screen.init(20, 5, 0)
+	mut s := Screen.init(20, 5, 0)!
 	defer { s.deinit() }
 
 	// Enable line click mode
@@ -5634,7 +5634,7 @@ fn test_screen_prompt_click_move_click_right_of_input_cursor_at_end_lower_line()
 }
 
 fn test_screen_prompt_click_move_click_right_of_input_cursor_on_last_char() ! {
-	mut s := Screen.init(20, 5, 0)
+	mut s := Screen.init(20, 5, 0)!
 	defer { s.deinit() }
 
 	// Enable line click mode
@@ -5673,7 +5673,7 @@ fn witty_active_row(s &Screen, y int) &RowData {
 	return must_cell(s, active_pt(0, y)).row
 }
 
-fn test_semantic_click_source_layout() {
+fn test_semantic_click_source_layout() ! {
 	assert semantic_click_none is SemanticClickNone
 	assert semantic_click_click_events is SemanticClickEvents
 	click := SemanticClick.from_cl(.smart_vertical)
@@ -5681,7 +5681,7 @@ fn test_semantic_click_source_layout() {
 	assert (click as SemanticClickCl).cl == .smart_vertical
 }
 
-fn test_semantic_input_clear_source_layout() {
+fn test_semantic_input_clear_source_layout() ! {
 	assert sizeof(SemanticInputClear) == 1
 	assert u8(SemanticInputClear.clear_explicit) == 0
 	assert u8(SemanticInputClear.clear_eol) == 1
@@ -5697,7 +5697,7 @@ fn test_semantic_input_clear_source_layout() {
 // SGR 58 underline color must NOT corrupt the fg color (and vice versa). This
 // mirrors ghostty's separate Style.underline_color union.
 fn test_screen_style_underline_color_independent_from_fg() ! {
-	mut s := Screen.init(80, 24, 1000)
+	mut s := Screen.init(80, 24, 1000)!
 	defer { s.deinit() }
 
 	// Set an RGB fg color and a DIFFERENT RGB underline color.
@@ -5760,14 +5760,14 @@ fn test_screen_style_underline_color_independent_from_fg() ! {
 	assert a.hash() != b.hash()
 }
 
-fn test_screen_viewport_is_bottom() {
-	mut s := Screen.init(80, 24, 1000)
+fn test_screen_viewport_is_bottom() ! {
+	mut s := Screen.init(80, 24, 1000)!
 	defer { s.deinit() }
 	assert s.viewport_is_bottom()
 }
 
 fn test_screen_reset() ! {
-	mut s := Screen.init(80, 24, 1000)
+	mut s := Screen.init(80, 24, 1000)!
 	defer { s.deinit() }
 
 	s.test_write_string('hello')!
@@ -5779,8 +5779,8 @@ fn test_screen_reset() ! {
 	assert s.cursor.y == 0
 }
 
-fn test_screen_cursor_movement() {
-	mut s := Screen.init(10, 10, 0)
+fn test_screen_cursor_movement() ! {
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 
 	assert s.cursor.x == 0
@@ -5809,8 +5809,8 @@ fn test_screen_cursor_movement() {
 
 // Ghostty's cursorChangePin marks the old and the new cursor rows dirty
 // whenever the pin changes.
-fn test_screen_cursor_vertical_movement_marks_old_and_new_rows_dirty() {
-	mut s := Screen.init(10, 4, 0)
+fn test_screen_cursor_vertical_movement_marks_old_and_new_rows_dirty() ! {
+	mut s := Screen.init(10, 4, 0)!
 	defer { s.deinit() }
 	s.cursor_absolute(2, 1)
 	s.pages.clear_dirty()
@@ -5827,8 +5827,8 @@ fn test_screen_cursor_vertical_movement_marks_old_and_new_rows_dirty() {
 	assert s.pages.is_dirty(active_pt(0, 3))
 }
 
-fn test_screen_zero_distance_cursor_movement_stays_clean() {
-	mut s := Screen.init(10, 3, 0)
+fn test_screen_zero_distance_cursor_movement_stays_clean() ! {
+	mut s := Screen.init(10, 3, 0)!
 	defer { s.deinit() }
 	s.cursor_absolute(2, 1)
 	s.pages.clear_dirty()
@@ -5841,8 +5841,8 @@ fn test_screen_zero_distance_cursor_movement_stays_clean() {
 	}
 }
 
-fn test_screen_cursor_cell_left_right() {
-	mut s := Screen.init(10, 3, 0)
+fn test_screen_cursor_cell_left_right() ! {
+	mut s := Screen.init(10, 3, 0)!
 	defer { s.deinit() }
 	s.cursor_absolute(5, 1)
 	witty_set_active_cell(s, 3, 1, CellData.init(u32(`L`)))
@@ -5856,8 +5856,8 @@ fn test_screen_cursor_cell_left_right() {
 	assert voidptr(right) == voidptr(must_cell(s, active_pt(7, 1)).cell)
 }
 
-fn test_screen_cursor_previous_cell_and_row_up_reference_page_storage() {
-	mut s := Screen.init(10, 3, 0)
+fn test_screen_cursor_previous_cell_and_row_up_reference_page_storage() ! {
+	mut s := Screen.init(10, 3, 0)!
 	defer { s.deinit() }
 	s.cursor_absolute(5, 2)
 	witty_set_active_cell(s, 9, 1, CellData.init(u32(`P`)))
@@ -5869,8 +5869,8 @@ fn test_screen_cursor_previous_cell_and_row_up_reference_page_storage() {
 	assert voidptr(previous_row) == voidptr(witty_active_row(s, 1))
 }
 
-fn test_screen_blank_cell() {
-	mut s := Screen.init(10, 10, 0)
+fn test_screen_blank_cell() ! {
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 
 	cell := s.blank_cell()
@@ -5879,7 +5879,7 @@ fn test_screen_blank_cell() {
 }
 
 fn test_screen_select_clear() ! {
-	mut s := Screen.init(10, 10, 0)
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 
 	s.test_write_string('hello')!
@@ -5895,7 +5895,7 @@ fn test_screen_select_clear() ! {
 }
 
 fn test_screen_soft_wrap_write() ! {
-	mut s := Screen.init(5, 5, 0)
+	mut s := Screen.init(5, 5, 0)!
 	defer { s.deinit() }
 
 	s.test_write_string('helloworld')!
@@ -5905,7 +5905,7 @@ fn test_screen_soft_wrap_write() ! {
 }
 
 fn test_screen_cursor_reset_wrap() ! {
-	mut s := Screen.init(5, 5, 0)
+	mut s := Screen.init(5, 5, 0)!
 	defer { s.deinit() }
 
 	s.test_write_string('hello')!
@@ -5915,8 +5915,8 @@ fn test_screen_cursor_reset_wrap() ! {
 	assert s.cursor.pending_wrap == false
 }
 
-fn test_screen_cursor_reset_wrap_clears_wide_spacer_head() {
-	mut s := Screen.init(5, 5, 0)
+fn test_screen_cursor_reset_wrap_clears_wide_spacer_head() ! {
+	mut s := Screen.init(5, 5, 0)!
 	defer { s.deinit() }
 	mut row0 := witty_active_row(s, 0)
 	mut row1 := witty_active_row(s, 1)
@@ -5933,8 +5933,8 @@ fn test_screen_cursor_reset_wrap_clears_wide_spacer_head() {
 	assert must_cell(s, active_pt(4, 0)).cell.is_zero()
 }
 
-fn test_screen_cursor_reset_wrap_preserves_next_row_without_wrap() {
-	mut s := Screen.init(5, 5, 0)
+fn test_screen_cursor_reset_wrap_preserves_next_row_without_wrap() ! {
+	mut s := Screen.init(5, 5, 0)!
 	defer { s.deinit() }
 	mut row1 := witty_active_row(s, 1)
 	row1.wrap_continuation = true
@@ -5944,8 +5944,8 @@ fn test_screen_cursor_reset_wrap_preserves_next_row_without_wrap() {
 	assert witty_active_row(s, 1).wrap_continuation
 }
 
-fn test_screen_split_cell_boundary_clears_wrapped_wide_spacer_head() {
-	mut s := Screen.init(5, 3, 0)
+fn test_screen_split_cell_boundary_clears_wrapped_wide_spacer_head() ! {
+	mut s := Screen.init(5, 3, 0)!
 	defer { s.deinit() }
 	mut row0 := witty_active_row(s, 0)
 	row0.wrap = true
@@ -5958,8 +5958,8 @@ fn test_screen_split_cell_boundary_clears_wrapped_wide_spacer_head() {
 	assert must_cell(s, active_pt(4, 0)).cell.is_zero()
 }
 
-fn test_screen_split_cell_boundary_clears_previous_wrapped_wide_spacer_head() {
-	mut s := Screen.init(5, 3, 0)
+fn test_screen_split_cell_boundary_clears_previous_wrapped_wide_spacer_head() ! {
+	mut s := Screen.init(5, 3, 0)!
 	defer { s.deinit() }
 	s.cursor_absolute(0, 1)
 	mut row1 := witty_active_row(s, 1)
@@ -5977,8 +5977,8 @@ fn test_screen_split_cell_boundary_clears_previous_wrapped_wide_spacer_head() {
 	assert must_cell(s, active_pt(4, 0)).cell.is_zero()
 }
 
-fn test_screen_semantic_content() {
-	mut s := Screen.init(10, 10, 0)
+fn test_screen_semantic_content() ! {
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 
 	assert s.cursor.semantic_content == .output
@@ -5994,8 +5994,8 @@ fn test_screen_semantic_content() {
 	assert s.cursor.semantic_content == .output
 }
 
-fn test_screen_cursor_set_semantic_content_union() {
-	mut s := Screen.init(10, 10, 0)
+fn test_screen_cursor_set_semantic_content_union() ! {
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 
 	s.cursor_set_semantic_content(CursorSemanticPrompt{ kind: .continuation })
@@ -6014,7 +6014,7 @@ fn test_screen_cursor_set_semantic_content_union() {
 }
 
 fn test_screen_first_implicit_hyperlink_uses_zero_offset() ! {
-	mut s := Screen.init(10, 10, 0)
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 
 	s.start_hyperlink('https://example.com/', none)!
@@ -6034,11 +6034,11 @@ fn test_screen_first_implicit_hyperlink_uses_zero_offset() ! {
 }
 
 fn test_screen_cursor_copy_explicit_hyperlink_id() ! {
-	mut s := Screen.init(10, 10, 0)
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 	s.start_hyperlink('https://example.com/', 'same-id')!
 
-	mut s2 := Screen.init(10, 10, 0)
+	mut s2 := Screen.init(10, 10, 0)!
 	defer { s2.deinit() }
 	s2.cursor_copy(s.cursor, CursorCopyOptions{})!
 	link := s2.cursor.hyperlink_state or {
@@ -6056,7 +6056,7 @@ fn test_screen_cursor_copy_explicit_hyperlink_id() ! {
 }
 
 fn test_screen_cursor_set_hyperlink_updates_cursor_cell_and_row() ! {
-	mut s := Screen.init(5, 3, 0)
+	mut s := Screen.init(5, 3, 0)!
 	defer { s.deinit() }
 	s.cursor_absolute(2, 1)
 	s.start_hyperlink('https://example.com/cursor', 'cursor')!
@@ -6075,7 +6075,7 @@ fn test_screen_cursor_set_hyperlink_updates_cursor_cell_and_row() ! {
 }
 
 fn test_screen_append_grapheme_updates_cursor_row_cell() ! {
-	mut s := Screen.init(5, 3, 0)
+	mut s := Screen.init(5, 3, 0)!
 	defer { s.deinit() }
 	s.cursor_absolute(2, 1)
 	witty_set_active_cell(s, 2, 1, CellData.init(u32(`a`)))
@@ -6091,7 +6091,7 @@ fn test_screen_append_grapheme_updates_cursor_row_cell() ! {
 }
 
 fn test_screen_test_write_string_wide_and_grapheme() ! {
-	mut s := Screen.init(4, 2, 0)
+	mut s := Screen.init(4, 2, 0)!
 	defer { s.deinit() }
 
 	s.test_write_string('A界́')!
@@ -6111,7 +6111,7 @@ fn test_screen_test_write_string_wide_and_grapheme() ! {
 }
 
 fn test_screen_test_write_string_wide_wraps_with_spacer_head() ! {
-	mut s := Screen.init(3, 2, 0)
+	mut s := Screen.init(3, 2, 0)!
 	defer { s.deinit() }
 
 	s.test_write_string('AB界')!
@@ -6131,7 +6131,7 @@ fn test_screen_test_write_string_wide_wraps_with_spacer_head() ! {
 // sets the hyperlink before it marks the row styled, which trips the page
 // integrity check when a style and a hyperlink are both active.
 fn test_screen_test_write_string_preserves_style_and_hyperlink() ! {
-	mut s := Screen.init(4, 2, 0)
+	mut s := Screen.init(4, 2, 0)!
 	defer { s.deinit() }
 
 	s.cursor.style.flags.set_bold(true)
@@ -6148,7 +6148,7 @@ fn test_screen_test_write_string_preserves_style_and_hyperlink() ! {
 }
 
 fn test_screen_dump_string_bounded_region() ! {
-	mut s := Screen.init(5, 3, 0)
+	mut s := Screen.init(5, 3, 0)!
 	defer { s.deinit() }
 
 	s.test_write_string('ABCDE\nFGHIJ\nKLMNO')!
@@ -6163,7 +6163,7 @@ fn test_screen_dump_string_bounded_region() ! {
 // Ghostty's Screen.resize tracks the saved cursor with a pin so reflow
 // moves it along with its cell.
 fn test_screen_resize_more_cols_reflows_saved_cursor() ! {
-	mut s := Screen.init(2, 3, 5)
+	mut s := Screen.init(2, 3, 5)!
 	defer { s.deinit() }
 	s.test_write_string('1A2B')!
 	s.saved_cursor = SavedCursor{
@@ -6185,7 +6185,7 @@ fn test_screen_resize_more_cols_reflows_saved_cursor() ! {
 // Selections are tracked pins, so reflow remaps both ends and keeps the
 // selection's orientation.
 fn test_screen_resize_more_cols_reflows_selection() ! {
-	mut s := Screen.init(2, 3, 5)
+	mut s := Screen.init(2, 3, 5)!
 	defer { s.deinit() }
 	s.test_write_string('1A2B')!
 	s.select(Selection.init(must_pin(s, active_pt(1, 1)), must_pin(s, active_pt(0, 0)),
@@ -6204,7 +6204,7 @@ fn test_screen_resize_more_cols_reflows_selection() ! {
 
 // A pinned viewport follows its row through reflow.
 fn test_screen_resize_more_cols_reflows_pinned_viewport() ! {
-	mut s := Screen.init(2, 2, 10)
+	mut s := Screen.init(2, 2, 10)!
 	defer { s.deinit() }
 	s.test_write_string('ABCD\nEF\nGH')!
 	assert must_point(s, .screen, s.pages.get_top_left(.active)) == screen_pt(0, 2)
@@ -6224,7 +6224,7 @@ fn test_screen_resize_more_cols_reflows_pinned_viewport() ! {
 // page pointers; every other cursor field starts at its default. The cloned
 // pages own their managed memory (graphemes, styles, hyperlinks).
 fn test_screen_clone_deep_copies_managed_cells_and_resets_cursor_state() ! {
-	mut s := Screen.init(3, 2, 10)
+	mut s := Screen.init(3, 2, 10)!
 	defer { s.deinit() }
 	s.set_attribute(SgrBold{})!
 	s.start_hyperlink('https://example.com/screen-clone', 'screen-clone')!
@@ -6280,7 +6280,7 @@ fn test_screen_clone_deep_copies_managed_cells_and_resets_cursor_state() ! {
 // Ghostty's promptClickMove accepts either an input pen or an input cell
 // under the cursor.
 fn test_screen_prompt_click_move_uses_input_under_cursor() ! {
-	mut s := Screen.init(20, 5, 0)
+	mut s := Screen.init(20, 5, 0)!
 	defer { s.deinit() }
 	s.semantic_prompt.click = SemanticClick.from_cl(.line)
 	s.cursor_set_semantic_content(CursorSemanticPrompt{ kind: .initial })
@@ -6297,7 +6297,7 @@ fn test_screen_prompt_click_move_uses_input_under_cursor() ! {
 	assert r.left == 0
 }
 
-fn test_key_flag_stack_wraps_at_capacity() {
+fn test_key_flag_stack_wraps_at_capacity() ! {
 	mut stack := KeyFlagStack{}
 	for value in 1 .. 9 {
 		stack.push(KeyFlags.from_int(u8(value)))
@@ -6310,14 +6310,14 @@ fn test_key_flag_stack_wraps_at_capacity() {
 	assert stack.current().int() == 7
 }
 
-fn test_key_flag_stack_pop_zero_is_noop() {
+fn test_key_flag_stack_pop_zero_is_noop() ! {
 	mut stack := KeyFlagStack{}
 	stack.push(KeyFlags.from_int(5))
 	stack.pop(0)
 	assert stack.current().int() == 5
 }
 
-fn test_key_flag_stack_large_pop_resets_all_entries() {
+fn test_key_flag_stack_large_pop_resets_all_entries() ! {
 	mut stack := KeyFlagStack{}
 	stack.set(.set_, KeyFlags.from_int(3))
 	stack.push(KeyFlags.from_int(5))

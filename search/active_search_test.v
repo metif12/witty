@@ -16,8 +16,8 @@ fn write_active_search_text(mut list terminal.PageList, x u16, y u16, text strin
 	}
 }
 
-fn test_active_search_finds_matches() {
-	mut list := terminal.PageList.init(10, 10, usize(0x7fffffffffffffff))
+fn test_active_search_finds_matches() ! {
+	mut list := terminal.PageList.init(10, 10, usize(0x7fffffffffffffff))!
 	defer { list.deinit() }
 	write_active_search_text(mut list, 0, 0, 'Fizz')
 	write_active_search_text(mut list, 0, 2, 'Fizz')

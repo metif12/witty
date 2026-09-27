@@ -1409,7 +1409,7 @@ fn mouse_selection_test_mods(rect bool) input.Mods {
 }
 
 fn check_mouse_selection(click_x f64, click_y u32, drag_x f64, drag_y u32, start_x u16, start_y u32, end_x u16, end_y u32, rect bool) {
-	mut screen := terminal.Screen.init(10, 5, 0)
+	mut screen := terminal.Screen.init(10, 5, 0) or { panic(err) }
 	defer { screen.deinit() }
 	mods := mouse_selection_test_mods(rect)
 	click_pin, drag_pin, click_x_pos, drag_x_pos := mouse_selection_test_input(&screen,
@@ -1436,7 +1436,7 @@ fn check_mouse_selection(click_x f64, click_y u32, drag_x f64, drag_y u32, start
 
 // Like `check_mouse_selection` but checks that the resulting selection is none.
 fn mouse_selection_is_null(click_x f64, click_y u32, drag_x f64, drag_y u32, rect bool) {
-	mut screen := terminal.Screen.init(10, 5, 0)
+	mut screen := terminal.Screen.init(10, 5, 0) or { panic(err) }
 	defer { screen.deinit() }
 	mods := mouse_selection_test_mods(rect)
 	click_pin, drag_pin, click_x_pos, drag_x_pos := mouse_selection_test_input(&screen,

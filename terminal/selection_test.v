@@ -37,8 +37,8 @@ fn sel_test_expect_equal(expected Selection, actual Selection) {
 	assert expected.rectangle == actual.rectangle
 }
 
-fn test_selection_adjust_right() {
-	mut s := Screen.init(10, 10, 0)
+fn test_selection_adjust_right() ! {
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 	s.test_write_string('A1234\nB5678\nC1234\nD5678') or { panic(err) }
 
@@ -73,8 +73,8 @@ fn test_selection_adjust_right() {
 	}
 }
 
-fn test_selection_adjust_left() {
-	mut s := Screen.init(10, 10, 0)
+fn test_selection_adjust_left() ! {
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 	s.test_write_string('A1234\nB5678\nC1234\nD5678') or { panic(err) }
 
@@ -101,8 +101,8 @@ fn test_selection_adjust_left() {
 	}
 }
 
-fn test_selection_adjust_left_skips_blanks() {
-	mut s := Screen.init(10, 10, 0)
+fn test_selection_adjust_left_skips_blanks() ! {
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 	s.test_write_string('A1234\nB5678\nC12\nD56') or { panic(err) }
 
@@ -129,8 +129,8 @@ fn test_selection_adjust_left_skips_blanks() {
 	}
 }
 
-fn test_selection_adjust_up() {
-	mut s := Screen.init(10, 10, 0)
+fn test_selection_adjust_up() ! {
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 	s.test_write_string('A\nB\nC\nD\nE') or { panic(err) }
 
@@ -155,8 +155,8 @@ fn test_selection_adjust_up() {
 	}
 }
 
-fn test_selection_adjust_down() {
-	mut s := Screen.init(10, 10, 0)
+fn test_selection_adjust_down() ! {
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 	s.test_write_string('A\nB\nC\nD\nE') or { panic(err) }
 
@@ -181,8 +181,8 @@ fn test_selection_adjust_down() {
 	}
 }
 
-fn test_selection_adjust_down_with_not_full_screen() {
-	mut s := Screen.init(10, 10, 0)
+fn test_selection_adjust_down_with_not_full_screen() ! {
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 	s.test_write_string('A\nB\nC') or { panic(err) }
 
@@ -198,8 +198,8 @@ fn test_selection_adjust_down_with_not_full_screen() {
 	}
 }
 
-fn test_selection_adjust_home() {
-	mut s := Screen.init(10, 10, 0)
+fn test_selection_adjust_home() ! {
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 	s.test_write_string('A\nB\nC') or { panic(err) }
 
@@ -215,8 +215,8 @@ fn test_selection_adjust_home() {
 	}
 }
 
-fn test_selection_adjust_end_with_not_full_screen() {
-	mut s := Screen.init(10, 10, 0)
+fn test_selection_adjust_end_with_not_full_screen() ! {
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 	s.test_write_string('A\nB\nC') or { panic(err) }
 
@@ -232,8 +232,8 @@ fn test_selection_adjust_end_with_not_full_screen() {
 	}
 }
 
-fn test_selection_adjust_beginning_of_line() {
-	mut s := Screen.init(8, 10, 0)
+fn test_selection_adjust_beginning_of_line() ! {
+	mut s := Screen.init(8, 10, 0)!
 	defer { s.deinit() }
 	s.test_write_string('A12 B34\nC12 D34') or { panic(err) }
 
@@ -271,8 +271,8 @@ fn test_selection_adjust_beginning_of_line() {
 	}
 }
 
-fn test_selection_adjust_end_of_line() {
-	mut s := Screen.init(8, 10, 0)
+fn test_selection_adjust_end_of_line() ! {
+	mut s := Screen.init(8, 10, 0)!
 	defer { s.deinit() }
 	s.test_write_string('A12 B34\nC12 D34') or { panic(err) }
 
@@ -308,8 +308,8 @@ fn test_selection_adjust_end_of_line() {
 	}
 }
 
-fn test_selection_order_standard() {
-	mut s := Screen.init(100, 100, 1)
+fn test_selection_order_standard() ! {
+	mut s := Screen.init(100, 100, 1)!
 	defer { s.deinit() }
 
 	{
@@ -349,8 +349,8 @@ fn test_selection_order_standard() {
 	}
 }
 
-fn test_selection_order_rectangle() {
-	mut s := Screen.init(100, 100, 1)
+fn test_selection_order_rectangle() ! {
+	mut s := Screen.init(100, 100, 1)!
 	defer { s.deinit() }
 
 	// Conventions:
@@ -423,8 +423,8 @@ fn test_selection_order_rectangle() {
 	}
 }
 
-fn test_top_left() {
-	mut s := Screen.init(10, 10, 0)
+fn test_top_left() ! {
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 	{
 		// forward
@@ -456,8 +456,8 @@ fn test_top_left() {
 	}
 }
 
-fn test_bottom_right() {
-	mut s := Screen.init(10, 10, 0)
+fn test_bottom_right() ! {
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 	{
 		// forward
@@ -489,8 +489,8 @@ fn test_bottom_right() {
 	}
 }
 
-fn test_ordered() {
-	mut s := Screen.init(10, 10, 0)
+fn test_ordered() ! {
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 	{
 		// forward
@@ -528,8 +528,8 @@ fn test_ordered() {
 	}
 }
 
-fn test_selection_contains() {
-	mut s := Screen.init(10, 10, 0)
+fn test_selection_contains() ! {
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 	{
 		sel := Selection.init(sel_test_pin(&s, 5, 1), sel_test_pin(&s, 3, 2), false)
@@ -560,8 +560,8 @@ fn test_selection_contains() {
 	}
 }
 
-fn test_selection_contains_rectangle() {
-	mut s := Screen.init(15, 15, 0)
+fn test_selection_contains_rectangle() ! {
+	mut s := Screen.init(15, 15, 0)!
 	defer { s.deinit() }
 	{
 		sel := Selection.init(sel_test_pin(&s, 3, 3), sel_test_pin(&s, 7, 9), true)
@@ -609,8 +609,8 @@ fn test_selection_contains_rectangle() {
 	}
 }
 
-fn test_selection_contained_row() {
-	mut s := Screen.init(10, 5, 0)
+fn test_selection_contained_row() ! {
+	mut s := Screen.init(10, 5, 0)!
 	defer { s.deinit() }
 
 	{
@@ -685,7 +685,7 @@ fn test_selection_contained_row() {
 
 // SelectionOrder and SelectionAdjustment keep Zig's declaration order and
 // one-byte backing type.
-fn test_selection_enum_source_layouts() {
+fn test_selection_enum_source_layouts() ! {
 	assert sizeof(SelectionOrder) == 1
 	assert u8(SelectionOrder.forward) == 0
 	assert u8(SelectionOrder.reverse) == 1
@@ -707,8 +707,8 @@ fn test_selection_enum_source_layouts() {
 
 // eql, start/end pointer access, and track/deinit bookkeeping of the pins
 // registered with the page list.
-fn test_selection_bounds_access_tracking_and_equality() {
-	mut s := Screen.init(10, 10, 0)
+fn test_selection_bounds_access_tracking_and_equality() ! {
+	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 
 	mut sel := Selection.init(sel_test_pin(&s, 1, 1), sel_test_pin(&s, 3, 3), false)
@@ -749,8 +749,8 @@ fn test_selection_bounds_access_tracking_and_equality() {
 // Line, absolute, and page adjustments applied in sequence. Selection.zig
 // has no page_up/page_down test; with no scrollback both fall back to
 // home/end.
-fn test_selection_adjust_absolute_and_page() {
-	mut s := Screen.init(8, 10, 0)
+fn test_selection_adjust_absolute_and_page() ! {
+	mut s := Screen.init(8, 10, 0)!
 	defer { s.deinit() }
 	s.test_write_string('A12 B34\nC12 D34\nE') or { panic(err) }
 

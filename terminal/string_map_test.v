@@ -20,11 +20,11 @@ fn string_map_test_point(s &Screen, p Pin) Point {
 	return s.pages.point_from_pin(.screen, p) or { panic('match pin is outside the page list') }
 }
 
-fn test_selection_string_map_allocation_failure_cleanup() {
+fn test_selection_string_map_allocation_failure_cleanup() ! {
 	assert sizeof(SelectionStringFailPoint) == 1
 	assert u8(SelectionStringFailPoint.copy_map) == 0
 
-	mut s := Screen.init(10, 5, 0)
+	mut s := Screen.init(10, 5, 0)!
 	defer { s.deinit() }
 	s.test_write_string('hello')!
 	sel := Selection.init(
@@ -59,7 +59,7 @@ fn test_string_map_search_iterator() ! {
 	defer { re.deinit() }
 
 	// Initialize our screen
-	mut s := Screen.init(5, 5, 0)
+	mut s := Screen.init(5, 5, 0)!
 	defer { s.deinit() }
 	str := '1ABCD2EFGH\n3IJKL'
 	s.test_write_string(str)!
@@ -101,7 +101,7 @@ fn test_string_map_search_iterator_url_detection() ! {
 	defer { re.deinit() }
 
 	// Initialize our screen with text containing a URL
-	mut s := Screen.init(40, 5, 0)
+	mut s := Screen.init(40, 5, 0)!
 	defer { s.deinit() }
 	s.test_write_string('hello https://example.com/path world')!
 
@@ -146,7 +146,7 @@ fn test_string_map_search_iterator_url_with_click_position() ! {
 	defer { re.deinit() }
 
 	// Initialize our screen with text containing a URL
-	mut s := Screen.init(40, 5, 0)
+	mut s := Screen.init(40, 5, 0)!
 	defer { s.deinit() }
 	s.test_write_string('hello https://example.com world')!
 

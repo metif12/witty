@@ -16,8 +16,8 @@ fn write_page_list_text(mut list terminal.PageList, tag terminal.PointTag, x u16
 	}
 }
 
-fn test_viewport_simple_search() {
-	mut list := terminal.PageList.init(10, 10, usize(0x7fffffffffffffff))
+fn test_viewport_simple_search() ! {
+	mut list := terminal.PageList.init(10, 10, usize(0x7fffffffffffffff))!
 	defer { list.deinit() }
 	write_page_list_text(mut list, .active, 0, 0, 'Fizz')
 	write_page_list_text(mut list, .active, 0, 2, 'Fizz')
@@ -44,8 +44,8 @@ fn test_viewport_simple_search() {
 	assert finder.next() == none
 }
 
-fn test_viewport_dirty_tracking() {
-	mut list := terminal.PageList.init(10, 10, usize(0x7fffffffffffffff))
+fn test_viewport_dirty_tracking() ! {
+	mut list := terminal.PageList.init(10, 10, usize(0x7fffffffffffffff))!
 	defer { list.deinit() }
 	write_page_list_text(mut list, .active, 0, 0, 'Fizz')
 
@@ -62,8 +62,8 @@ fn test_viewport_dirty_tracking() {
 	assert finder.next() == none
 }
 
-fn test_viewport_history_does_not_research_unchanged_pages() {
-	mut list := terminal.PageList.init(10, 2, usize(100_000_000))
+fn test_viewport_history_does_not_research_unchanged_pages() ! {
+	mut list := terminal.PageList.init(10, 2, usize(100_000_000))!
 	defer { list.deinit() }
 	write_page_list_text(mut list, .screen, 0, 0, 'Fizz')
 	initial_node := list.pages.first or {

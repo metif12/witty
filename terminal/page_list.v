@@ -2,6 +2,7 @@ module terminal
 
 import fastmem
 import strings
+import tripwire
 
 // --- Original Ghostty Comments Start: src/terminal/PageList.zig
 //
@@ -3503,10 +3504,57 @@ pub mut:
 // Init / Deinit / Reset
 // ============================================================
 
-pub fn PageList.init(cols u16, rows u16, max_size ?usize) PageList {
+enum PageListInitFailPoint as u8 {
+	init_memory_pool
+	init_pages
+	viewport_pin
+	viewport_pin_track
+}
+
+enum PageListInitPagesFailPoint as u8 {
+	page_node
+	page_buf_std
+	page_buf_non_std
+}
+
+struct PageListInitTripwires {
+mut:
+	init       tripwire.TripwireModule[PageListInitFailPoint]
+	init_pages tripwire.TripwireModule[PageListInitPagesFailPoint]
+}
+
+const page_list_init_tripwires = &PageListInitTripwires{}
+
+fn page_list_init_tripwire() &tripwire.TripwireModule[PageListInitFailPoint] {
+	return unsafe { &page_list_init_tripwires.init }
+}
+
+fn page_list_init_pages_tripwire() &tripwire.TripwireModule[PageListInitPagesFailPoint] {
+	return unsafe { &page_list_init_tripwires.init_pages }
+}
+
+struct PageListInitialPages {
+	pages       PageNodeList
+	page_serial u64
+	page_size   usize
+	total_rows usize
+}
+
+fn cleanup_initial_pages(pages PageNodeList) {
+	mut current := pages.first
+	for {
+		mut node := current or { break }
+		current = node.next
+		node.data.deinit()
+	}
+}
+
+fn init_pages(cols u16, rows u16) !PageListInitialPages {
+	mut tw := page_list_init_pages_tripwire()
 	// Create initial pages to fit the viewport
 	cap := initial_capacity(cols)
 	assert Page.layout(cap).total_size <= usize(max_page_size)
+	pooled := Page.layout(cap).total_size <= standard_page_size()
 	mut page_list := PageNodeList{}
 	mut page_serial := u64(0)
 	mut page_size := usize(0)
@@ -3514,10 +3562,18 @@ pub fn PageList.init(cols u16, rows u16, max_size ?usize) PageList {
 
 	mut rem := u16(rows)
 	for rem > 0 {
+		tw.check(.page_node) or {
+			cleanup_initial_pages(page_list)
+			return err
+		}
 		mut node := &PageNode{
-			data: Page.init(cap)
 			serial: page_serial
 		}
+		tw.check(if pooled { .page_buf_std } else { .page_buf_non_std }) or {
+			cleanup_initial_pages(page_list)
+			return err
+		}
+		node.data = Page.init(cap)
 		use := if rem < cap.rows { rem } else { cap.rows }
 		node.data.size.rows = use
 		rem -= use
@@ -3527,24 +3583,48 @@ pub fn PageList.init(cols u16, rows u16, max_size ?usize) PageList {
 		total_rows += usize(use)
 	}
 	assert page_list.first != none
+	return PageListInitialPages{
+		pages: page_list
+		page_serial: page_serial
+		page_size: page_size
+		total_rows: total_rows
+	}
+}
+
+pub fn PageList.init(cols u16, rows u16, max_size ?usize) !PageList {
+	mut tw := page_list_init_tripwire()
+	// V uses GC-backed page and node storage rather than Ghostty's explicit
+	// memory pool, but this checkpoint retains the source initialization
+	// failure boundary.
+	tw.check(.init_memory_pool)!
+	tw.check(.init_pages)!
+	initial := init_pages(cols, rows)!
 
 	mms := min_max_size_calc(cols, rows)
 
 	// Create viewport pin
+	tw.check(.viewport_pin) or {
+		cleanup_initial_pages(initial.pages)
+		return err
+	}
 	viewport_pin := &Pin{
-		node: page_list.first or { panic('initial page list is empty') }
+		node: initial.pages.first or { panic('initial page list is empty') }
+	}
+	tw.check(.viewport_pin_track) or {
+		cleanup_initial_pages(initial.pages)
+		return err
 	}
 
 	result := PageList{
 		cols: cols
 		rows: rows
-		pages: page_list
-		page_serial: page_serial
+		pages: initial.pages
+		page_serial: initial.page_serial
 		page_serial_min: 0
-		page_size: page_size
+		page_size: initial.page_size
 		explicit_max_size: max_size or { max_usize }
 		min_max_size: mms
-		total_rows: total_rows
+		total_rows: initial.total_rows
 		tracked_pins_storage: [viewport_pin]
 		viewport: .active
 		viewport_pin: viewport_pin

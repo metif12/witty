@@ -24,7 +24,7 @@ pub enum ScreenKey as u8 {
 }
 
 pub fn ScreenSet.init(opts ScreenOptions) !ScreenSet {
-	mut init_primary := Screen.init(opts.cols, opts.rows, opts.max_scrollback)
+	mut init_primary := Screen.init(opts.cols, opts.rows, opts.max_scrollback)!
 	mut primary := unsafe { &Screen(memdup(&init_primary, int(sizeof(Screen)))) }
 	// This can't fail because the storage is always empty at this point
 	// and the only fail-able case is that we have to evict images.
@@ -62,7 +62,7 @@ pub fn (mut self ScreenSet) get_init(key ScreenKey, opts ScreenOptions) !&Screen
 		return existing
 	}
 
-	mut init_screen := Screen.init(opts.cols, opts.rows, opts.max_scrollback)
+	mut init_screen := Screen.init(opts.cols, opts.rows, opts.max_scrollback)!
 	mut screen := unsafe { &Screen(memdup(&init_screen, int(sizeof(Screen)))) }
 	screen.kitty_images.set_limit(mut screen, opts.kitty_image_storage_limit)
 	self.all[key] = screen
