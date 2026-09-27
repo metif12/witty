@@ -120,7 +120,7 @@ fn test_coord_convert_surface_to_grid_no_padding() {
 	}
 
 	// (0,0) surface -> (0,0) grid
-	result := SizeCoordinate(SurfaceCoord{ x: 0.0, y: 0.0 }).convert(.grid, sz)
+	result := Coordinate(SurfaceCoord{ x: 0.0, y: 0.0 }).convert(.grid, sz)
 	match result {
 		GridCoord {
 			assert result.x == 0
@@ -132,7 +132,7 @@ fn test_coord_convert_surface_to_grid_no_padding() {
 	}
 
 	// (6,0) surface -> (1,0) grid (6/5 = 1.2, truncated to 1)
-	result2 := SizeCoordinate(SurfaceCoord{ x: 6.0, y: 0.0 }).convert(.grid, sz)
+	result2 := Coordinate(SurfaceCoord{ x: 6.0, y: 0.0 }).convert(.grid, sz)
 	match result2 {
 		GridCoord {
 			assert result2.x == 1
@@ -144,7 +144,7 @@ fn test_coord_convert_surface_to_grid_no_padding() {
 	}
 
 	// (6,10) surface -> (1,1) grid
-	result3 := SizeCoordinate(SurfaceCoord{ x: 6.0, y: 10.0 }).convert(.grid, sz)
+	result3 := Coordinate(SurfaceCoord{ x: 6.0, y: 10.0 }).convert(.grid, sz)
 	match result3 {
 		GridCoord {
 			assert result3.x == 1
@@ -164,7 +164,7 @@ fn test_coord_convert_surface_negative_clamped() {
 		padding: Padding{}
 	}
 
-	result := SizeCoordinate(SurfaceCoord{ x: -10.0, y: -10.0 }).convert(.grid, sz)
+	result := Coordinate(SurfaceCoord{ x: -10.0, y: -10.0 }).convert(.grid, sz)
 	match result {
 		GridCoord {
 			assert result.x == 0
@@ -185,7 +185,7 @@ fn test_coord_convert_surface_large_clamped() {
 	}
 
 	g := sz.grid()
-	result := SizeCoordinate(SurfaceCoord{ x: 100000.0, y: 100000.0 }).convert(.grid, sz)
+	result := Coordinate(SurfaceCoord{ x: 100000.0, y: 100000.0 }).convert(.grid, sz)
 	match result {
 		GridCoord {
 			assert result.x == g.columns - 1
@@ -205,7 +205,7 @@ fn test_coord_convert_grid_to_surface() {
 		padding: Padding{ left: 10, top: 20 }
 	}
 
-	result := SizeCoordinate(GridCoord{ x: 2, y: 3 }).convert(.surface, sz)
+	result := Coordinate(GridCoord{ x: 2, y: 3 }).convert(.surface, sz)
 	match result {
 		SurfaceCoord {
 			// x: 2 * 5 + 10 = 20
@@ -227,7 +227,7 @@ fn test_coord_convert_surface_to_terminal() {
 		padding: Padding{ left: 10, top: 20 }
 	}
 
-	result := SizeCoordinate(SurfaceCoord{ x: 30.0, y: 50.0 }).convert(.terminal, sz)
+	result := Coordinate(SurfaceCoord{ x: 30.0, y: 50.0 }).convert(.terminal, sz)
 	match result {
 		TerminalCoord {
 			// x: 30 - 10 = 20
@@ -259,7 +259,7 @@ fn test_coordinate_conversion_same_grid_preserves_out_of_bounds_value() {
 		screen: ScreenSize{ width: 100, height: 100 }
 		cell: CellSize{ width: 5, height: 10 }
 	}
-	result := SizeCoordinate(GridCoord{ x: 500, y: 500 }).convert(.grid, sz)
+	result := Coordinate(GridCoord{ x: 500, y: 500 }).convert(.grid, sz)
 	match result {
 		GridCoord {
 			assert result.x == 500

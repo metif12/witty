@@ -3973,7 +3973,7 @@ pub fn (mut self Surface) color_scheme_callback(scheme apprt.ColorScheme) ! {
 
 // pos_to_viewport converts surface pixel coordinates to viewport cell coordinates.
 pub fn (self &Surface) pos_to_viewport(xpos f64, ypos f64) Coordinate {
-	coord := rendererpkg.SizeCoordinate(rendererpkg.SurfaceCoord{ x: xpos, y: ypos })
+	coord := rendererpkg.Coordinate(rendererpkg.SurfaceCoord{ x: xpos, y: ypos })
 	grid := coord.convert(.grid, self.size)
 	match grid {
 		rendererpkg.GridCoord {

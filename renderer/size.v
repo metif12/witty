@@ -81,7 +81,7 @@ pub fn (mut self Size) balance_padding(explicit Padding) {
 //   * grid: (0, 0) is the top-left of the grid. Units are in cells. Negative
 //     values are not allowed but values greater than the grid size are
 //     possible and are off the grid.
-pub type SizeCoordinate = SurfaceCoord | TerminalCoord | GridCoord
+pub type Coordinate = SurfaceCoord | TerminalCoord | GridCoord
 
 pub struct SurfaceCoord {
 pub:
@@ -109,7 +109,7 @@ pub enum CoordTag as u8 {
 }
 
 // Convert a coordinate to a different space within the same Size.
-pub fn (self SizeCoordinate) convert(to CoordTag, size Size) SizeCoordinate {
+pub fn (self Coordinate) convert(to CoordTag, size Size) Coordinate {
 	// Same-space conversion is an exact identity, even when the coordinate is
 	// outside the current surface or grid.
 	match self {
@@ -134,12 +134,12 @@ pub fn (self SizeCoordinate) convert(to CoordTag, size Size) SizeCoordinate {
 	surface := self.convert_to_surface(size)
 
 	if to == .surface {
-		return SizeCoordinate(SurfaceCoord{
+		return Coordinate(SurfaceCoord{
 			x: surface.x
 			y: surface.y
 		})
 	} else if to == .terminal {
-		return SizeCoordinate(TerminalCoord{
+		return Coordinate(TerminalCoord{
 			x: surface.x - f64(size.padding.left)
 			y: surface.y - f64(size.padding.top)
 		})
@@ -161,7 +161,7 @@ pub fn (self SizeCoordinate) convert(to CoordTag, size Size) SizeCoordinate {
 		row := u16(clamped_y / cell_height)
 		clamped_col := if col < g.columns - 1 { col } else { g.columns - 1 }
 		clamped_row := if row < g.rows - 1 { row } else { g.rows - 1 }
-		return SizeCoordinate(GridCoord{
+		return Coordinate(GridCoord{
 			x: clamped_col
 			y: clamped_row
 		})
@@ -169,7 +169,7 @@ pub fn (self SizeCoordinate) convert(to CoordTag, size Size) SizeCoordinate {
 }
 
 // Convert a coordinate to the surface coordinate system.
-fn (self SizeCoordinate) convert_to_surface(size Size) SurfaceCoord {
+fn (self Coordinate) convert_to_surface(size Size) SurfaceCoord {
 	match self {
 		SurfaceCoord {
 			return SurfaceCoord{
