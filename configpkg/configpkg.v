@@ -4051,10 +4051,10 @@ pub mut:
 	// The named font style to use for each of the requested terminal font
 	// styles. This looks up the style based on the font style string advertised
 	// by the font itself.
-	font_style             fontstyle.FontStyle
-	font_style_bold        fontstyle.FontStyle
-	font_style_italic      fontstyle.FontStyle
-	font_style_bold_italic fontstyle.FontStyle
+	font_style             fontstyle.FontStyle = fontstyle.FontStyleDefault{}
+	font_style_bold        fontstyle.FontStyle = fontstyle.FontStyleDefault{}
+	font_style_italic      fontstyle.FontStyle = fontstyle.FontStyleDefault{}
+	font_style_bold_italic fontstyle.FontStyle = fontstyle.FontStyleDefault{}
 	// The font families to use, with fallback fonts appended by repeating the
 	// option. An empty list means use the platform default.
 	font_family             []string

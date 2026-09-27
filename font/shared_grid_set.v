@@ -115,9 +115,9 @@ pub fn (mut self SharedGridSet) ref(config &DerivedConfig, font_size DesiredSize
 
 	// Setup our enabled/disabled styles
 	mut styles := StyleStatus.init_fill(true)
-	styles.set(.bold, config.font_style_bold.kind != .false_)
-	styles.set(.italic, config.font_style_italic.kind != .false_)
-	styles.set(.bold_italic, config.font_style_bold_italic.kind != .false_)
+	styles.set(.bold, !config.font_style_bold.is_false())
+	styles.set(.italic, !config.font_style_italic.is_false())
+	styles.set(.bold_italic, !config.font_style_bold_italic.is_false())
 
 	// Init our resolver which just requires setting fields.
 	mut discover := self.discover() or {
@@ -384,10 +384,10 @@ pub mut:
 	font_family_bold               []string
 	font_family_italic             []string
 	font_family_bold_italic        []string
-	font_style                     fontstyle.FontStyle
-	font_style_bold                fontstyle.FontStyle
-	font_style_italic              fontstyle.FontStyle
-	font_style_bold_italic         fontstyle.FontStyle
+	font_style                     fontstyle.FontStyle = fontstyle.FontStyleDefault{}
+	font_style_bold                fontstyle.FontStyle = fontstyle.FontStyleDefault{}
+	font_style_italic              fontstyle.FontStyle = fontstyle.FontStyleDefault{}
+	font_style_bold_italic         fontstyle.FontStyle = fontstyle.FontStyleDefault{}
 	font_variation                 []Variation
 	font_variation_bold            []Variation
 	font_variation_italic          []Variation

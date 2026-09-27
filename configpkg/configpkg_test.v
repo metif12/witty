@@ -1030,7 +1030,7 @@ fn test_repeatable_font_variation_uses_zig_float_grammar() {
 }
 
 fn test_font_value_type_formatters() {
-	mut style := FontStyle{}
+	mut style := font_style_parse_cli('default')!
 	style.parse_cli('Regular')!
 	assert style.clone() == style
 	assert style.name_value() or { '' } == 'Regular'
@@ -3178,10 +3178,10 @@ auto-update-channel = stable
 	assert cfg.env.entries == [StringMapEntry{'FOO', 'replaced'}, StringMapEntry{'BAR', 'second'}]
 	assert cfg.enquiry_response == 'witty'
 	assert cfg.font_feature == ['liga', 'calt']
-	assert cfg.font_style == FontStyle{ kind: .name, name: 'Regular' }
-	assert cfg.font_style_bold == FontStyle{ kind: .name, name: 'Bold' }
-	assert cfg.font_style_italic == FontStyle{ kind: .name, name: 'Italic' }
-	assert cfg.font_style_bold_italic == FontStyle{ kind: .name, name: 'Bold Italic' }
+	assert cfg.font_style.name_value()? == 'Regular'
+	assert cfg.font_style_bold.name_value()? == 'Bold'
+	assert cfg.font_style_italic.name_value()? == 'Italic'
+	assert cfg.font_style_bold_italic.name_value()? == 'Bold Italic'
 	assert cfg.font_synthetic_style.bold()
 	assert !cfg.font_synthetic_style.italic()
 	assert !cfg.font_synthetic_style.bold_italic()
