@@ -6087,6 +6087,7 @@ fn (mut self Surface) show_desktop_notification(title string, body string) ! {
 	now := time.sys_mono_now()
 	if last := self.app.last_notification_time {
 		if now - last < u64(time.second) {
+			log.warn('rate limiting desktop notifications')
 			return
 		}
 	}
@@ -6096,6 +6097,7 @@ fn (mut self Surface) show_desktop_notification(title string, body string) ! {
 	if content_hash == self.app.last_notification_digest {
 		if last := self.app.last_notification_time {
 			if now - last < u64(5 * time.second) {
+				log.warn('suppressing identical desktop notification')
 				return
 			}
 		}

@@ -394,7 +394,7 @@ pub fn (mut self App) update_config(mut rt_app apprt.RuntimeApp, config &configp
 	//
 	mut applied := config.clone()
 	conditional_result := config.change_conditional_state(self.config_conditional_state) or {
-		eprintln('failed to apply conditional state to config err=${err}')
+		log.warn('failed to apply conditional state to config err=${err}')
 		configpkg.ConfigChangeResult{}
 	}
 	if conditional := conditional_result.value {
@@ -423,7 +423,9 @@ pub fn (mut self App) add_surface(surface &SurfaceRef) {
 	// should be canceled.
 	if surface.rt_app != unsafe { nil } {
 		mut rt_app := unsafe { surface.rt_app }
-		rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .quit_timer, apprt.ActionValue(apprt.QuitTimer.stop)) or {}
+		rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .quit_timer, apprt.ActionValue(apprt.QuitTimer.stop)) or {
+			log.warn('error stopping quit timer err=${err}')
+		}
 	}
 }
 
@@ -455,7 +457,9 @@ pub fn (mut self App) delete_surface(surface &SurfaceRef) {
 	// apprt to determine if this is necessary.
 	if self.surfaces.len == 0 && surface.rt_app != unsafe { nil } {
 		mut rt_app := unsafe { surface.rt_app }
-		rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .quit_timer, apprt.ActionValue(apprt.QuitTimer.start)) or {}
+		rt_app.perform_action(apprt.Target(apprt.AppTarget{}), .quit_timer, apprt.ActionValue(apprt.QuitTimer.start)) or {
+			log.warn('error starting quit timer err=${err}')
+		}
 	}
 }
 
@@ -513,6 +517,7 @@ fn (mut self App) drain_mailbox(mut rt_app apprt.RuntimeApp) ! {
 			// mailbox processing to the next tick so that the apprt
 			// can try to quit as quickly as possible.
 			QuitMsg {
+				log.info('quit message received, short circuiting mailbox drain')
 				self.perform_action(mut rt_app, input.ActionQuit{})!
 				return
 			}
@@ -569,6 +574,7 @@ pub fn (mut self App) focus_event(focused bool) {
 	if self.focused == focused {
 		return
 	}
+	log.debug('focus event focused=${focused}')
 	self.focused = focused
 }
 
@@ -653,9 +659,7 @@ pub fn (mut self App) key_event(mut rt_app apprt.RuntimeApp, event input.KeyEven
 	// we look directly in the top-level set.
 	leaf := self.lookup_binding(mut rt_app, event) or { return false }
 	actions := leaf.actions_slice()
-	if actions.len == 0 {
-		return false
-	}
+	assert actions.len > 0
 
 	// If we aren't focused, then we only process global keybinds.
 	if !self.focused && !leaf.flags.global() {
@@ -680,8 +684,7 @@ pub fn (mut self App) key_event(mut rt_app apprt.RuntimeApp, event input.KeyEven
 	}
 	for action in actions {
 		self.perform_action(mut rt_app, action) or {
-			// Log and continue; a failed app keybind action shouldn't stop
-			// processing the remainder of the chain.
+			log.warn('error performing app keybind action action=${action.tag()} err=${err}')
 		}
 	}
 
@@ -746,7 +749,7 @@ pub fn (mut self App) perform_action(mut rt_app apprt.RuntimeApp, action input.A
 pub fn (mut self App) perform_all_chained_action(mut rt_app apprt.RuntimeApp, actions []input.Action) {
 	for action in actions {
 		self.perform_all_action(mut rt_app, action) or {
-			// Log and continue to the next chained action.
+			log.warn('error performing chained action action=${action.tag()} err=${err}')
 		}
 	}
 }
@@ -768,7 +771,7 @@ pub fn (mut self App) perform_all_action(mut rt_app apprt.RuntimeApp, action inp
 		.surface {
 			for surface in self.surfaces {
 				surface.perform_binding_action(action) or {
-					// Log and continue with the next surface.
+					log.warn('error performing binding action on surface ptr=${voidptr(surface)} err=${err}')
 				}
 			}
 		}
@@ -783,7 +786,9 @@ pub fn (mut self App) perform_all_surface_action(action input.Action) {
 		return
 	}
 	for surface in self.surfaces {
-		surface.perform_binding_action(action) or {}
+		surface.perform_binding_action(action) or {
+			log.warn('error performing binding action on surface ptr=${voidptr(surface)} err=${err}')
+		}
 	}
 }
 
