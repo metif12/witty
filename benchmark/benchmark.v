@@ -684,11 +684,16 @@ mut:
 	t &terminal.Terminal = unsafe { nil }
 }
 
+@[inline]
+pub fn (mut self TerminalStreamHandler) vt_print(value terminal.ActionPrint) ! {
+	self.t.print(value.cp)!
+}
+
 pub fn (mut self TerminalStreamHandler) vt(action terminal.ActionKey, value terminal.ActionValue) ! {
 	match action {
 		.print {
 			if value is terminal.ActionPrint {
-				self.t.print(value.cp)!
+				self.vt_print(value)!
 			}
 		}
 		else {}

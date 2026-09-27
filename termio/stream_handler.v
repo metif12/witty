@@ -157,6 +157,11 @@ fn (mut self StreamHandler) renderer_message_writer(msg renderer.RendererMessage
 	_ = self.renderer_mailbox.push(msg, datastruct.blocking_queue_forever)
 }
 
+@[inline]
+pub fn (mut self StreamHandler) vt_print(value terminal.ActionPrint) ! {
+	self.terminal.print(value.cp)!
+}
+
 pub fn (mut self StreamHandler) vt(action terminal.ActionKey, value terminal.ActionValue) ! {
 	// The branch hints here are based on real world data
 	// which indicates that the most common actions are:
@@ -174,7 +179,7 @@ pub fn (mut self StreamHandler) vt(action terminal.ActionKey, value terminal.Act
 	match action {
 		.print {
 			if value is terminal.ActionPrint {
-				self.terminal.print(value.cp)!
+				self.vt_print(value)!
 			}
 		}
 		.print_repeat {

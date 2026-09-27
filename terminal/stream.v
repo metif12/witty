@@ -943,8 +943,12 @@ fn (mut self Stream[H]) handle_action(action ParserAction) ! {
 	}
 }
 
+// Ghostty's comptime tag gives print a concrete payload. V cannot express a
+// payload type dependent on the action tag, so keep this dominant typed branch
+// explicit instead of heap-copying ActionPrint into ActionValue per codepoint.
+@[inline]
 pub fn (mut self Stream[H]) print(c u32) ! {
-	self.handler.vt(.print, ActionPrint{ cp: c })!
+	self.handler.vt_print(ActionPrint{ cp: c })!
 }
 
 pub fn (mut self Stream[H]) execute(c u8) ! {

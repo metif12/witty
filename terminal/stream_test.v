@@ -16,11 +16,15 @@ pub fn (mut self StreamPrintH) vt(action ActionKey, value ActionValue) ! {
 	match action {
 		.print {
 			if value is ActionPrint {
-				self.c = value.cp
+				self.vt_print(value)!
 			}
 		}
 		else {}
 	}
+}
+
+pub fn (mut self StreamPrintH) vt_print(value ActionPrint) ! {
+	self.c = value.cp
 }
 
 pub fn (mut self StreamPrintH) deinit() {}
@@ -40,11 +44,15 @@ pub fn (mut self SimdPrintInvalidUtf8H) vt(action ActionKey, value ActionValue) 
 	match action {
 		.print {
 			if value is ActionPrint {
-				self.c = value.cp
+				self.vt_print(value)!
 			}
 		}
 		else {}
 	}
+}
+
+pub fn (mut self SimdPrintInvalidUtf8H) vt_print(value ActionPrint) ! {
+	self.c = value.cp
 }
 
 pub fn (mut self SimdPrintInvalidUtf8H) deinit() {}
@@ -64,11 +72,15 @@ pub fn (mut self SimdCompleteIncompleteUtf8H) vt(action ActionKey, value ActionV
 	match action {
 		.print {
 			if value is ActionPrint {
-				self.c = value.cp
+				self.vt_print(value)!
 			}
 		}
 		else {}
 	}
+}
+
+pub fn (mut self SimdCompleteIncompleteUtf8H) vt_print(value ActionPrint) ! {
+	self.c = value.cp
 }
 
 pub fn (mut self SimdCompleteIncompleteUtf8H) deinit() {}
@@ -1143,6 +1155,42 @@ fn test_stream_sgr_with_17_parameters_for_underline_color() ! {
 	assert s.handler.called
 }
 
+// These focused handlers intentionally ignore print actions. Ghostty still
+// instantiates a concrete .print branch for every handler, so the translated
+// typed hook is present even when its body is empty.
+pub fn (mut self StreamCursorRightH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamDecSetModeH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamAnsiSetModeH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamAnsiSetModeUnknownH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamRestoreModeH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamPopKittyKeyboardH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamDecscaH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamDecedDecsedH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamDecelDecselH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamDecscusrH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamDecscusrWithoutSpaceH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamXtshiftescapeH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamChangeWindowTitleH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamInsertCharactersH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamScoscH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamScorcH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamTooManyCsiParamsH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamCsiParamTooLongH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamSendReportCsiTH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamInvalidCsiTH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamCsiTPushTitleH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamCsiTPushTitleWithExplicitWindowH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamCsiTPushTitleWithExplicitIconH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamCsiTPushTitleWithIndexH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamCsiTPopTitleH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamCsiTPopTitleWithExplicitWindowH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamCsiTPopTitleWithExplicitIconH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamCsiTPopTitleWithIndexH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamCsiWClearTabStopsH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamCsiWTabSetH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamCsiWResetTabStopsH) vt_print(_ ActionPrint) ! {}
+pub fn (mut self StreamSgrUnderlineColorH) vt_print(_ ActionPrint) ! {}
+
 // ============================================================
 // Witty-only tests
 // ============================================================
@@ -1171,6 +1219,10 @@ pub fn (mut self ActionRecorder) vt(action ActionKey, value ActionValue) ! {
 		key:   action
 		value: value
 	}
+}
+
+pub fn (mut self ActionRecorder) vt_print(value ActionPrint) ! {
+	self.vt(.print, value)!
 }
 
 pub fn (mut self ActionRecorder) deinit() {}
@@ -1239,6 +1291,10 @@ pub fn (mut self RawActionRecorder) vt_raw(action ParserAction) !bool {
 
 pub fn (mut self RawActionRecorder) vt(action ActionKey, value ActionValue) ! {
 	self.keys << action
+}
+
+pub fn (mut self RawActionRecorder) vt_print(_ ActionPrint) ! {
+	self.keys << .print
 }
 
 pub fn (mut self RawActionRecorder) deinit() {}

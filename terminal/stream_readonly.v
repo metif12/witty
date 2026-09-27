@@ -138,11 +138,16 @@ pub fn (mut self ReadonlyHandler) deinit() {
 	// call this.
 }
 
+@[inline]
+pub fn (mut self ReadonlyHandler) vt_print(value ActionPrint) ! {
+	self.terminal.print(value.cp)!
+}
+
 pub fn (mut self ReadonlyHandler) vt(action ActionKey, value ActionValue) ! {
 	match action {
 		.print {
 			if value is ActionPrint {
-				self.terminal.print(value.cp)!
+				self.vt_print(value)!
 			}
 		}
 		.print_repeat {

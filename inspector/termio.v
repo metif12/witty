@@ -113,6 +113,10 @@ pub fn (mut self VTHandler) deinit() {
 pub fn (mut self VTHandler) vt(action terminal.ActionKey, value terminal.ActionValue) ! {
 }
 
+@[inline]
+pub fn (mut self VTHandler) vt_print(value terminal.ActionPrint) ! {
+}
+
 // This is called with every single terminal action.
 pub fn (mut self VTHandler) vt_raw(action terminal.ParserAction) !bool {
 	state := self.state or { return true }
