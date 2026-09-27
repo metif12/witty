@@ -74,6 +74,19 @@ fn test_application_get_config_returns_referenced_wrapper() {
 	config.unref()
 }
 
+fn test_application_config_load_failure_uses_diagnostic_default() {
+	mut config := application_default_config_after_load_error(error('InvalidConfigPath'))
+	mut default_config := configpkg.Config.default_config()
+	defer {
+		config.deinit()
+		default_config.deinit()
+	}
+	assert config.diagnostics.len == 1
+	assert config.diagnostics[0].format() ==
+		'error loading user configuration: InvalidConfigPath'
+	assert config.font_size == default_config.font_size
+}
+
 fn test_application_activate_queues_new_window() {
 	mut core_app := &core.App{
 		mailbox: core.MailboxQueue.create() or { panic(err) }

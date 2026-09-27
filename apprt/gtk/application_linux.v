@@ -442,6 +442,16 @@ pub fn Application.default() &Application {
 
 // new creates a new Application. Mirrors `Application.new`.
 //
+// application_default_config_after_load_error preserves startup when the
+// user's configuration cannot be loaded. Ghostty records the failure on a
+// fresh default config so the GTK diagnostics UI can explain the degraded
+// startup instead of aborting before a window can be shown.
+fn application_default_config_after_load_error(err IError) configpkg.Config {
+	mut config := configpkg.Config.default_config()
+	config.add_diagnostic_fmt('error loading user configuration: ${err}')
+	return config
+}
+
 // This does far more than a normal constructor because it is the main program
 // entrypoint: it loads config, sets GTK env vars, resolves the app id and
 // single-instance flags, initializes libadwaita and the windowing protocol,
@@ -461,8 +471,11 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 	}
 
 	// Load defaults, user files, command-line flags, recursive files, and theme
-	// replay before GTK reads any startup settings.
-	mut config := configpkg.Config.load()!
+	// replay before GTK reads any startup settings. A broken configuration must
+	// not prevent the diagnostics UI from starting.
+	mut config := configpkg.Config.load() or {
+		application_default_config_after_load_error(err)
+	}
 
 	// Setup our GTK init env vars. This must happen BEFORE GTK init.
 	set_gtk_env(&config)
