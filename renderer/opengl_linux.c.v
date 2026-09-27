@@ -234,7 +234,7 @@ pub fn (self &OpenGLAPI) texture_options() GLTextureOptions {
 	return GLTextureOptions{
 		format: .rgba
 		internal_format: .srgba
-		target: .texture_2d
+		target: .t2d
 		min_filter: .linear
 		mag_filter: .linear
 		wrap_s: .clamp_to_edge
@@ -267,7 +267,7 @@ pub enum ImageTextureFormat as u8 {
 }
 
 // gl_pixel_format translates an image pixel layout to its OpenGL format.
-fn (format ImageTextureFormat) gl_pixel_format() GLTextureFormat {
+fn (format ImageTextureFormat) gl_pixel_format() opengl.TextureFormat {
 	return match format {
 		.gray { .red }
 		.rgba { .rgba }
@@ -282,7 +282,7 @@ pub fn (self &OpenGLAPI) image_texture_options(format ImageTextureFormat, srgb b
 	return GLTextureOptions{
 		format: format.gl_pixel_format()
 		internal_format: if srgb { .srgba } else { .rgba }
-		target: .texture_2d
+		target: .t2d
 		min_filter: .linear
 		mag_filter: .linear
 		wrap_s: .clamp_to_edge
@@ -299,7 +299,7 @@ pub fn (self &OpenGLAPI) atlas_texture_options(format font.AtlasFormat) !GLTextu
 			GLTextureOptions{
 				format: .red
 				internal_format: .red
-				target: .texture_rectangle
+				target: .rectangle
 				min_filter: .nearest
 				mag_filter: .nearest
 				wrap_s: .clamp_to_edge
@@ -310,7 +310,7 @@ pub fn (self &OpenGLAPI) atlas_texture_options(format font.AtlasFormat) !GLTextu
 			GLTextureOptions{
 				format: .bgra
 				internal_format: .srgba
-				target: .texture_rectangle
+				target: .rectangle
 				min_filter: .nearest
 				mag_filter: .nearest
 				wrap_s: .clamp_to_edge
@@ -332,83 +332,4 @@ pub fn (self &OpenGLAPI) init_atlas_texture(atlas &font.Atlas) !GLTexture {
 // begin_frame creates a frame that presents target on successful completion.
 pub fn (mut self OpenGLAPI) begin_frame(mut target GLTarget) !GLFrame {
 	return GLFrame.begin(mut self, mut target)
-}
-
-// OpenGL texture target.
-pub enum GLTextureTarget {
-	texture_2d
-	texture_rectangle
-}
-
-// OpenGL texture format.
-pub enum GLTextureFormat {
-	red
-	rgba
-	bgra
-}
-
-// OpenGL internal format.
-pub enum GLInternalFormat {
-	red
-	rgba
-	srgba
-}
-
-// OpenGL filter mode.
-pub enum GLFilter {
-	nearest
-	linear
-	linear_mipmap_linear
-}
-
-// OpenGL wrap mode.
-pub enum GLWrapMode {
-	clamp_to_edge
-	repeat
-	mirror_repeat
-}
-
-// OpenGL buffer target.
-pub enum GLBufferTarget {
-	array
-	element_array
-	uniform
-}
-
-// OpenGL buffer usage.
-pub enum GLBufferUsage {
-	static_draw
-	dynamic_draw
-	stream_draw
-}
-
-// OpenGL debug message severity levels.
-pub enum GLDebugSeverity {
-	high
-	medium
-	low
-	notification
-}
-
-// OpenGL debug message source.
-pub enum GLDebugSource {
-	api
-	window_system
-	shader_compiler
-	third_party
-	application
-	other
-}
-
-// OpenGL debug message type.
-pub enum GLDebugType {
-	error
-	deprecated_behavior
-	undefined_behavior
-	portability
-	performance
-	marker
-	push_group
-	pop_group
-	other
 }

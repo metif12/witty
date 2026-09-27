@@ -15,39 +15,23 @@ pub struct GLBuffer {
 pub mut:
 	id     u32
 	len    usize
-	target GLBufferTarget = .array
-	usage  GLBufferUsage = .dynamic_draw
+	target opengl.BufferTarget = .array
+	usage  opengl.BufferUsage = .dynamic_draw
 }
 
 pub struct GLBufferOptions {
 pub:
-	target GLBufferTarget = .array
-	usage  GLBufferUsage = .dynamic_draw
-}
-
-fn gl_buffer_target(target GLBufferTarget) opengl.BufferTarget {
-	return match target {
-		.array { .array }
-		.element_array { .element_array }
-		.uniform { .uniform }
-	}
-}
-
-fn gl_buffer_usage(usage GLBufferUsage) opengl.BufferUsage {
-	return match usage {
-		.static_draw { .static_draw }
-		.dynamic_draw { .dynamic_draw }
-		.stream_draw { .stream_draw }
-	}
+	target opengl.BufferTarget = .array
+	usage  opengl.BufferUsage = .dynamic_draw
 }
 
 pub fn GLBuffer.init(opts GLBufferOptions, len usize) !GLBuffer {
 	buffer := opengl.Buffer.create()!
-	binding := buffer.bind(gl_buffer_target(opts.target)) or {
+	binding := buffer.bind(opts.target) or {
 		buffer.destroy()
 		return err
 	}
-	binding.set_data_null_manual(len, gl_buffer_usage(opts.usage)) or {
+	binding.set_data_null_manual(len, opts.usage) or {
 		binding.unbind()
 		buffer.destroy()
 		return err
@@ -63,7 +47,7 @@ pub fn GLBuffer.init(opts GLBufferOptions, len usize) !GLBuffer {
 
 pub fn GLBuffer.init_fill[T](opts GLBufferOptions, data []T) !GLBuffer {
 	buffer := opengl.Buffer.create()!
-	binding := buffer.bind(gl_buffer_target(opts.target)) or {
+	binding := buffer.bind(opts.target) or {
 		buffer.destroy()
 		return err
 	}
@@ -73,7 +57,7 @@ pub fn GLBuffer.init_fill[T](opts GLBufferOptions, data []T) !GLBuffer {
 	} else {
 		unsafe { voidptr(data.data).vbytes(byte_len) }
 	}
-	binding.set_data(bytes, gl_buffer_usage(opts.usage)) or {
+	binding.set_data(bytes, opts.usage) or {
 		binding.unbind()
 		buffer.destroy()
 		return err
@@ -101,14 +85,14 @@ pub fn (mut self GLBuffer) sync(data []u8) ! {
 	buffer := opengl.Buffer{
 		id: self.id
 	}
-	binding := buffer.bind(gl_buffer_target(self.target))!
+	binding := buffer.bind(self.target)!
 	defer {
 		binding.unbind()
 	}
 	required := usize(data.len)
 	if required > self.len {
 		self.len = required * 2
-		binding.set_data_null_manual(self.len, gl_buffer_usage(self.usage))!
+		binding.set_data_null_manual(self.len, self.usage)!
 	}
 	binding.set_sub_data(0, data)!
 }
@@ -129,7 +113,7 @@ pub fn (mut self GLBuffer) sync_from_array_lists[T](lists [][]T) !usize {
 	buffer := opengl.Buffer{
 		id: self.id
 	}
-	binding := buffer.bind(gl_buffer_target(self.target))!
+	binding := buffer.bind(self.target)!
 	defer {
 		binding.unbind()
 	}
@@ -145,7 +129,7 @@ pub fn (mut self GLBuffer) sync_from_array_lists[T](lists [][]T) !usize {
 	if req_bytes > self.len {
 		// Reallocate the buffer to hold double what we require.
 		self.len = req_bytes * 2
-		binding.set_data_null_manual(self.len, gl_buffer_usage(self.usage))!
+		binding.set_data_null_manual(self.len, self.usage)!
 	}
 
 	// We can fit within the buffer so we can just replace bytes.
@@ -298,7 +282,7 @@ pub fn (mut self GLRenderPass) step(s GLRenderStep) {
 				id: s.pipeline.fbo
 			}
 			fbobind = fbo.bind(.framebuffer) or { return }
-			fbobind.texture_2d(.color0, gl_texture_target(attachment.target.target), opengl.Texture{
+			fbobind.texture_2d(.color0, attachment.target.target, opengl.Texture{
 				id: attachment.target.id
 			}, 0) or {
 				fbobind.unbind()
@@ -348,7 +332,7 @@ pub fn (mut self GLRenderPass) step(s GLRenderStep) {
 
 		opengl.Texture{
 			id: texture.id
-		}.bind(gl_texture_target(texture.target)) or { return }
+		}.bind(texture.target) or { return }
 	}
 
 	for i, sampler in s.samplers {
@@ -547,27 +531,27 @@ pub mut:
 
 pub struct GLSamplerOptions {
 pub:
-	min_filter GLFilter @[required]
-	mag_filter GLFilter @[required]
-	wrap_s     GLWrapMode @[required]
-	wrap_t     GLWrapMode @[required]
+	min_filter opengl.TextureMinFilter @[required]
+	mag_filter opengl.TextureMagFilter @[required]
+	wrap_s     opengl.TextureWrap @[required]
+	wrap_t     opengl.TextureWrap @[required]
 }
 
 pub fn GLSampler.init(opts GLSamplerOptions) !GLSampler {
 	sampler := opengl.Sampler.create()!
-	sampler.parameter(.min_filter, int(gl_min_filter(opts.min_filter))) or {
+	sampler.parameter(.min_filter, int(opts.min_filter)) or {
 		sampler.destroy()
 		return err
 	}
-	sampler.parameter(.mag_filter, int(gl_mag_filter(opts.mag_filter))) or {
+	sampler.parameter(.mag_filter, int(opts.mag_filter)) or {
 		sampler.destroy()
 		return err
 	}
-	sampler.parameter(.wrap_s, int(gl_wrap(opts.wrap_s))) or {
+	sampler.parameter(.wrap_s, int(opts.wrap_s)) or {
 		sampler.destroy()
 		return err
 	}
-	sampler.parameter(.wrap_t, int(gl_wrap(opts.wrap_t))) or {
+	sampler.parameter(.wrap_t, int(opts.wrap_t)) or {
 		sampler.destroy()
 		return err
 	}
@@ -601,7 +585,7 @@ pub struct GLTargetOptions {
 pub:
 	width           usize @[required]
 	height          usize @[required]
-	internal_format GLInternalFormat @[required]
+	internal_format opengl.TextureInternalFormat @[required]
 }
 
 pub fn GLTarget.init(opts GLTargetOptions) !GLTarget {
@@ -610,7 +594,7 @@ pub fn GLTarget.init(opts GLTargetOptions) !GLTarget {
 	defer {
 		rbo_bind.unbind()
 	}
-	rbo_bind.storage(gl_internal_format(opts.internal_format), int(opts.width), int(opts.height))!
+	rbo_bind.storage(opts.internal_format, int(opts.width), int(opts.height))!
 
 	fbo := opengl.Framebuffer.create()!
 	fbo_bind := fbo.bind(.framebuffer)!
@@ -651,89 +635,43 @@ pub mut:
 	id     u32
 	width  usize
 	height usize
-	format GLTextureFormat = .rgba
-	target GLTextureTarget = .texture_2d
+	format opengl.TextureFormat = .rgba
+	target opengl.TextureTarget = .t2d
 }
 
 pub struct GLTextureOptions {
 pub:
-	format          GLTextureFormat @[required]
-	internal_format GLInternalFormat @[required]
-	target          GLTextureTarget @[required]
-	min_filter      GLFilter @[required]
-	mag_filter      GLFilter @[required]
-	wrap_s          GLWrapMode @[required]
-	wrap_t          GLWrapMode @[required]
-}
-
-fn gl_texture_target(target GLTextureTarget) opengl.TextureTarget {
-	return match target {
-		.texture_2d { .t2d }
-		.texture_rectangle { .rectangle }
-	}
-}
-
-fn gl_texture_format(format GLTextureFormat) opengl.TextureFormat {
-	return match format {
-		.red { .red }
-		.rgba { .rgba }
-		.bgra { .bgra }
-	}
-}
-
-fn gl_internal_format(format GLInternalFormat) opengl.TextureInternalFormat {
-	return match format {
-		.red { .red }
-		.rgba { .rgba }
-		.srgba { .srgba }
-	}
-}
-
-fn gl_min_filter(filter GLFilter) opengl.TextureMinFilter {
-	return match filter {
-		.nearest { .nearest }
-		.linear { .linear }
-		.linear_mipmap_linear { .linear_mipmap_linear }
-	}
-}
-
-fn gl_mag_filter(filter GLFilter) opengl.TextureMagFilter {
-	return match filter {
-		.nearest { .nearest }
-		else { .linear }
-	}
-}
-
-fn gl_wrap(wrap GLWrapMode) opengl.TextureWrap {
-	return match wrap {
-		.clamp_to_edge { .clamp_to_edge }
-		.repeat { .repeat }
-		.mirror_repeat { .mirrored_repeat }
-	}
+	format          opengl.TextureFormat @[required]
+	internal_format opengl.TextureInternalFormat @[required]
+	target          opengl.TextureTarget @[required]
+	min_filter      opengl.TextureMinFilter @[required]
+	mag_filter      opengl.TextureMagFilter @[required]
+	wrap_s          opengl.TextureWrap @[required]
+	wrap_t          opengl.TextureWrap @[required]
 }
 
 pub fn GLTexture.init(opts GLTextureOptions, width usize, height usize, data ?[]u8) !GLTexture {
 	texture := opengl.Texture.create()!
-	binding := texture.bind(gl_texture_target(opts.target)) or {
+	binding := texture.bind(opts.target) or {
 		texture.destroy()
 		return err
 	}
-	binding.parameter(.wrap_s, int(gl_wrap(opts.wrap_s))) or {
+	binding.parameter(.wrap_s, int(opts.wrap_s)) or {
 		binding.unbind()
 		texture.destroy()
 		return err
 	}
-	binding.parameter(.wrap_t, int(gl_wrap(opts.wrap_t))) or {
+	binding.parameter(.wrap_t, int(opts.wrap_t)) or {
 		binding.unbind()
 		texture.destroy()
 		return err
 	}
-	binding.parameter(.min_filter, int(gl_min_filter(opts.min_filter))) or {
+	binding.parameter(.min_filter, int(opts.min_filter)) or {
 		binding.unbind()
 		texture.destroy()
 		return err
 	}
-	binding.parameter(.mag_filter, int(gl_mag_filter(opts.mag_filter))) or {
+	binding.parameter(.mag_filter, int(opts.mag_filter)) or {
 		binding.unbind()
 		texture.destroy()
 		return err
@@ -744,7 +682,7 @@ pub fn GLTexture.init(opts GLTextureOptions, width usize, height usize, data ?[]
 			ptr = voidptr(d.data)
 		}
 	}
-	binding.image_2d(0, gl_internal_format(opts.internal_format), int(width), int(height), gl_texture_format(opts.format), .unsigned_byte, ptr) or {
+	binding.image_2d(0, opts.internal_format, int(width), int(height), opts.format, .unsigned_byte, ptr) or {
 		binding.unbind()
 		texture.destroy()
 		return err
@@ -775,11 +713,11 @@ pub fn (self GLTexture) replace_region(x usize, y usize, width usize, height usi
 	}
 	binding := opengl.Texture{
 		id: self.id
-	}.bind(gl_texture_target(self.target))!
+	}.bind(self.target)!
 	defer {
 		binding.unbind()
 	}
-	binding.sub_image_2d(0, int(x), int(y), int(width), int(height), gl_texture_format(self.format), .unsigned_byte, ptr)!
+	binding.sub_image_2d(0, int(x), int(y), int(width), int(height), self.format, .unsigned_byte, ptr)!
 }
 
 // ============================================================

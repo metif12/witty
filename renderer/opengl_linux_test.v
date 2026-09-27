@@ -1,6 +1,7 @@
 module renderer
 
 import font
+import opengl
 
 fn test_image_texture_format_source_layout_and_ordinals() {
 	assert sizeof(ImageTextureFormat) == 1
@@ -81,12 +82,40 @@ fn test_opengl_buffer_options_are_shared_by_every_role() {
 	assert api.bg_image_buffer_options() == want
 }
 
+fn test_opengl_options_retain_canonical_gl_types() {
+	buffer := GLBufferOptions{
+		target: .storage
+		usage: .dynamic_copy
+	}
+	assert buffer.target == opengl.BufferTarget.storage
+	assert u32(buffer.target) == u32(C.GL_SHADER_STORAGE_BUFFER)
+	assert buffer.usage == opengl.BufferUsage.dynamic_copy
+	assert u32(buffer.usage) == u32(C.GL_DYNAMIC_COPY)
+
+	texture := GLTextureOptions{
+		format: .rgb
+		internal_format: .srgb
+		target: .cube_map
+		min_filter: .nearest_mipmap_linear
+		mag_filter: .nearest
+		wrap_s: .clamp_to_border
+		wrap_t: .mirrored_repeat
+	}
+	assert texture.format == opengl.TextureFormat.rgb
+	assert texture.internal_format == opengl.TextureInternalFormat.srgb
+	assert texture.target == opengl.TextureTarget.cube_map
+	assert texture.min_filter == opengl.TextureMinFilter.nearest_mipmap_linear
+	assert texture.mag_filter == opengl.TextureMagFilter.nearest
+	assert texture.wrap_s == opengl.TextureWrap.clamp_to_border
+	assert texture.wrap_t == opengl.TextureWrap.mirrored_repeat
+}
+
 fn test_opengl_texture_and_sampler_options_match_source() {
 	api := OpenGLAPI{}
 	assert api.texture_options() == GLTextureOptions{
 		format: .rgba
 		internal_format: .srgba
-		target: .texture_2d
+		target: .t2d
 		min_filter: .linear
 		mag_filter: .linear
 		wrap_s: .clamp_to_edge
@@ -117,13 +146,13 @@ fn test_opengl_atlas_texture_options_match_atlas_layout() {
 	gray := api.atlas_texture_options(.grayscale)!
 	assert gray.format == .red
 	assert gray.internal_format == .red
-	assert gray.target == .texture_rectangle
+	assert gray.target == .rectangle
 	assert gray.min_filter == .nearest
 
 	bgra := api.atlas_texture_options(.bgra)!
 	assert bgra.format == .bgra
 	assert bgra.internal_format == .srgba
-	assert bgra.target == .texture_rectangle
+	assert bgra.target == .rectangle
 
 	if _ := api.atlas_texture_options(font.AtlasFormat.bgr) {
 		assert false
