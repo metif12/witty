@@ -1,6 +1,8 @@
 @[has_globals]
 module gtk
 
+import log
+
 // resize_overlay_linux.v - The GObject ResizeOverlay widget class for the GTK
 // apprt.
 //
@@ -156,7 +158,7 @@ fn on_resize_idle(ud voidptr) int {
 	// Cancel our previous show timer no matter what.
 	if priv.timer != 0 {
 		if !C.g_source_remove(priv.timer) {
-			eprintln('unable to remove size overlay timer')
+			log.warn('unable to remove size overlay timer')
 		}
 		priv.timer = 0
 	}
@@ -322,19 +324,19 @@ fn resize_overlay_dispose(obj voidptr) {
 	mut priv := resize_overlay_priv(obj)
 	if priv.idler != 0 {
 		if !C.g_source_remove(priv.idler) {
-			eprintln('unable to remove resize overlay idler')
+			log.warn('unable to remove resize overlay idler')
 		}
 		priv.idler = 0
 	}
 	if priv.timer != 0 {
 		if !C.g_source_remove(priv.timer) {
-			eprintln('unable to remove resize overlay timer')
+			log.warn('unable to remove resize overlay timer')
 		}
 		priv.timer = 0
 	}
 	if priv.delay_timer != 0 {
 		if !C.g_source_remove(priv.delay_timer) {
-			eprintln('unable to remove resize overlay delay timer')
+			log.warn('unable to remove resize overlay delay timer')
 		}
 		priv.delay_timer = 0
 	}

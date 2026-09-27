@@ -1,5 +1,6 @@
 module renderer
 
+import log
 import terminal
 
 const overlay_max_i32 = usize(2147483647)
@@ -198,7 +199,9 @@ fn (mut self Overlay) highlight_hyperlinks(state &terminal.RenderState) {
 			for x < row.cells.len && row.cells[x].raw.has_hyperlink {
 				x++
 			}
-			self.highlight_grid_rect(usize(start_x), usize(y), usize(x - start_x), 1, .hyperlink) or {}
+			self.highlight_grid_rect(usize(start_x), usize(y), usize(x - start_x), 1, .hyperlink) or {
+				log.warn('Error drawing hyperlink border: ${err}')
+			}
 		}
 	}
 }
@@ -220,7 +223,9 @@ fn (mut self Overlay) highlight_semantic_prompts(state &terminal.RenderState) {
 			y++
 		}
 		bar_width := if self.cell_size.width < 5 { int(self.cell_size.width) } else { 5 }
-		self.highlight_pixel_rect(0, usize(start_y), usize(bar_width), usize(y - start_y), .semantic_prompt) or {}
+		self.highlight_pixel_rect(0, usize(start_y), usize(bar_width), usize(y - start_y), .semantic_prompt) or {
+			log.warn('Error drawing semantic prompt bar: ${err}')
+		}
 	}
 
 	// Highlight contiguous prompt/input content. Output is intentionally
@@ -244,7 +249,9 @@ fn (mut self Overlay) highlight_semantic_prompts(state &terminal.RenderState) {
 			} else {
 				OverlayColor.semantic_input
 			}
-			self.highlight_grid_rect(usize(start_x), usize(row_y), usize(x - start_x), 1, color) or {}
+			self.highlight_grid_rect(usize(start_x), usize(row_y), usize(x - start_x), 1, color) or {
+				log.warn('Error drawing semantic content highlight: ${err}')
+			}
 		}
 	}
 }

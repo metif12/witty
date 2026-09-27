@@ -1,6 +1,7 @@
 module gtk
 
 import ascii
+import log
 // command_palette_linux.v - The GTK command palette.
 //
 // Translated from ghostty/src/apprt/gtk/class/command_palette.zig.
@@ -430,7 +431,7 @@ fn command_palette_from_object(obj GObject) ?&CommandPalette {
 // list from the new config. Mirrors `propConfig`.
 pub fn (mut self CommandPalette) prop_config() {
 	if isnil(self.config) {
-		eprintln('command palette does not have a config!')
+		log.warn('command palette does not have a config!')
 		return
 	}
 

@@ -30,6 +30,7 @@ module gtk
 // Only the *new* D-Bus C functions this file needs are declared below.
 
 import input
+import log
 import rand
 
 // --- New D-Bus C bindings -------------------------------------------------
@@ -606,23 +607,21 @@ fn (mut self GlobalShortcuts) on_response(method Method, vardict GVariant) {
 	match method {
 		.create_session {
 			dbus := self.dbus_connection
-			if isnil(dbus) {
-				return
-			}
+			assert !isnil(dbus), 'global shortcuts response requires a D-Bus connection'
 
 			// Extract the session handle from the response vardict.
 			//   vardict.lookup("session_handle", "&s", &handle)
 			handle := self.lookup_session_handle(vardict) or {
-				// log.warn("session handle not found in response")
+				log.warn('session handle not found in response')
 				return
 			}
 			self.handle = handle
+			log.debug('session_handle=${handle}')
 
 			// Subscribe to keybind activations, scoped (by arg0-path) to our
 			// session handle. Precondition: no existing activate subscription.
-			if self.activate_subscription == 0 {
-				self.activate_subscription = C.g_dbus_connection_signal_subscribe(dbus, unsafe { nil }, &char(portal_iface_global_shortcuts.str), c'Activated', &char(portal_object_path.str), &char(self.handle.str), g_dbus_signal_flags_match_arg0_path, GCallback(voidptr(global_shortcuts_activated_cb)), voidptr(self), unsafe { nil })
-			}
+			assert self.activate_subscription == 0, 'global shortcuts activation subscription already exists'
+			self.activate_subscription = C.g_dbus_connection_signal_subscribe(dbus, unsafe { nil }, &char(portal_iface_global_shortcuts.str), c'Activated', &char(portal_object_path.str), &char(self.handle.str), g_dbus_signal_flags_match_arg0_path, GCallback(voidptr(global_shortcuts_activated_cb)), voidptr(self), unsafe { nil })
 
 			// Now that we have a session, bind our shortcuts.
 			self.request(.bind_shortcuts)
@@ -702,7 +701,7 @@ fn global_shortcuts_call_finished_cb(source GObject, result GAsyncResult, user_d
 		C.g_variant_unref(params)
 	}
 	if !isnil(call_error) {
-		eprintln('global shortcuts portal request failed: ${error_message(call_error)}')
+		log.warn('request failed=${error_message(call_error)}')
 		C.g_error_free(call_error)
 	}
 }
@@ -725,10 +724,7 @@ fn global_shortcuts_responded_cb(dbus GDBusConnection, sender_name &char, object
 	}
 
 	response_value := C.g_variant_get_child_value(parameters, 0)
-	if isnil(response_value) {
-		self.has_pending_method = false
-		return
-	}
+	assert !isnil(response_value), 'global shortcuts response is missing its response code'
 	response := C.g_variant_get_uint32(response_value)
 	C.g_variant_unref(response_value)
 
@@ -738,17 +734,20 @@ fn global_shortcuts_responded_cb(dbus GDBusConnection, sender_name &char, object
 			C.g_variant_unref(vardict)
 		}
 	}
-	if response == 0 && self.has_pending_method && !isnil(vardict) {
+	if response == 0 {
+		assert self.has_pending_method, 'global shortcuts response has no pending method'
+		assert !isnil(vardict), 'successful global shortcuts response is missing its result'
 		method := self.pending_method
 		self.has_pending_method = false
+		log.debug('request successful')
 		self.on_response(method, vardict)
 		return
 	}
 	self.has_pending_method = false
 	match response {
-		1 {}
-		2 { eprintln('global shortcuts portal request ended unexpectedly') }
-		else { eprintln('global shortcuts portal returned unknown response code ${response}') }
+		1 { log.debug('request was cancelled by user') }
+		2 { log.warn('request ended unexpectedly') }
+		else { log.warn('unrecognized response code=${response}') }
 	}
 }
 
