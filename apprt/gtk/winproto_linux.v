@@ -150,12 +150,14 @@ pub type WinProtoApp = NoopApp | WaylandApp | X11App
 pub fn WinProtoApp.init(gdk_display GdkDisplay, app_id string, config &configpkg.Config) !WinProtoApp {
 	// none: noop.App (declines every display; never selected here)
 	// wayland
-	if v := WaylandApp.init(gdk_display, app_id, config) {
-		return v
+	wayland := WaylandApp.init(gdk_display, app_id, config)!
+	if wayland.matched {
+		return wayland.app
 	}
 	// x11
-	if v := X11App.init(gdk_display, app_id, config) {
-		return v
+	x11 := X11App.init(gdk_display, app_id, config)!
+	if x11.matched {
+		return x11.app
 	}
 
 	return NoopApp{}

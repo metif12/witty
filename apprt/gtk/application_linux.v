@@ -544,6 +544,12 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 		log.warn('error initializing windowing protocol err=${err}')
 		NoopApp{}
 	}
+	protocol_name := match winproto {
+		NoopApp { 'none' }
+		WaylandApp { 'wayland' }
+		X11App { 'x11' }
+	}
+	log.debug('windowing protocol=${protocol_name}')
 	log.debug('creating GTK application id=${app_id} single-instance=${single_instance}')
 
 	// The runtime provider is retained for the application's lifetime. The

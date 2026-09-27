@@ -26,6 +26,7 @@ module gtk
 
 import input
 import configpkg
+import log
 
 #flag linux -lwayland-client
 
@@ -77,6 +78,8 @@ fn C.GDK_IS_WAYLAND_DISPLAY(display GdkDisplay) int
 fn C.gdk_wayland_display_get_wl_display(display GdkDisplay) WlDisplay
 
 fn C.gdk_wayland_surface_get_wl_surface(surface GdkSurface) WlSurface
+
+fn C.witty_gdk_is_wayland_surface(surface GdkSurface) int
 
 // --- libwayland-client C declarations --------------------------------------
 
@@ -228,25 +231,28 @@ pub mut:
 	context &WaylandContext = unsafe { nil }
 }
 
+// V cannot express Ghostty's error-union-of-optional return directly. This
+// probe keeps "not a Wayland display" distinct from a failed Wayland setup so
+// WinProtoApp can continue probing only in the former case.
+struct WaylandAppProbe {
+	matched bool
+	app     WaylandApp
+}
+
 // WaylandApp.init sets up the Wayland backend for the given display, or returns
-// `none` if the display is not Wayland. Mirrors `wayland.App.init`.
-//
-// Ghostty returns `!?App`; V has no Result-of-Option, so we return
-// `?WaylandApp`: `none` means "not a Wayland display" OR "setup failed"
-// (ghostty's error.NoWaylandDisplay / error.RoundtripFailed). Hard failures are
-// logged and mapped to `none` so the app degrades to the no-op backend.
-pub fn WaylandApp.init(gdk_display GdkDisplay, app_id string, config &configpkg.Config) ?WaylandApp {
+// a non-matching probe if the display is not Wayland. Mirrors
+// `wayland.App.init`; actual setup failures remain errors.
+fn WaylandApp.init(gdk_display GdkDisplay, app_id string, config &configpkg.Config) !WaylandAppProbe {
 	_ = app_id
 	_ = config
 
 	if C.GDK_IS_WAYLAND_DISPLAY(gdk_display) == 0 {
-		return none
+		return WaylandAppProbe{}
 	}
 
 	display := C.gdk_wayland_display_get_wl_display(gdk_display)
 	if display == unsafe { nil } {
-		eprintln('no wayland display')
-		return none
+		return error('NoWaylandDisplay')
 	}
 
 	// Create our context for callbacks so we have a stable pointer.
@@ -255,24 +261,44 @@ pub fn WaylandApp.init(gdk_display GdkDisplay, app_id string, config &configpkg.
 	// Get the registry and bind the globals we need, then round-trip so the
 	// server delivers the global advertisements.
 	registry := C.wl_display_get_registry(display)
-	registry_set_listener(registry, mut context)
+	if isnil(registry) {
+		return error('WaylandRegistryFailed')
+	}
+	registry_set_listener(registry, mut context)!
 	if C.wl_display_roundtrip(display) < 0 {
-		eprintln('wayland roundtrip failed')
-		return none
+		context.free_listeners()
+		return error('RoundtripFailed')
 	}
 
 	// A second round-trip to learn the default decoration mode.
 	if context.kde_decoration_manager != unsafe { nil } {
-		deco_manager_set_listener(context.kde_decoration_manager, mut context)
+		deco_manager_set_listener(context.kde_decoration_manager, mut context) or {
+			context.free_listeners()
+			return err
+		}
 		if C.wl_display_roundtrip(display) < 0 {
-			eprintln('wayland roundtrip failed')
-			return none
+			context.free_listeners()
+			return error('RoundtripFailed')
 		}
 	}
 
-	return WaylandApp{
-		display: display
-		context: context
+	return WaylandAppProbe{
+		matched: true
+		app: WaylandApp{
+			display: display
+			context: context
+		}
+	}
+}
+
+fn (mut self WaylandContext) free_listeners() {
+	if !isnil(self.registry_listener) {
+		C.witty_wayland_listener_free(self.registry_listener)
+		self.registry_listener = unsafe { nil }
+	}
+	if !isnil(self.decoration_listener) {
+		C.witty_wayland_listener_free(self.decoration_listener)
+		self.decoration_listener = unsafe { nil }
 	}
 }
 
@@ -282,14 +308,7 @@ pub fn (mut self WaylandApp) deinit() {
 	if isnil(self.context) {
 		return
 	}
-	if !isnil(self.context.registry_listener) {
-		C.witty_wayland_listener_free(self.context.registry_listener)
-		self.context.registry_listener = unsafe { nil }
-	}
-	if !isnil(self.context.decoration_listener) {
-		C.witty_wayland_listener_free(self.context.decoration_listener)
-		self.context.decoration_listener = unsafe { nil }
-	}
+	self.context.free_listeners()
 }
 
 // event_mods mirrors `wayland.App.eventMods`. Wayland has no equivalent of the
@@ -303,11 +322,11 @@ pub fn (mut self WaylandApp) event_mods(device GdkDevice, gtk_mods u32) ?input.M
 // supports_quick_terminal mirrors `wayland.App.supportsQuickTerminal`.
 pub fn (self WaylandApp) supports_quick_terminal() bool {
 	if !layer_shell_is_supported() {
-		eprintln('your compositor does not support the wlr-layer-shell protocol; disabling quick terminal')
+		log.warn('your compositor does not support the wlr-layer-shell protocol; disabling quick terminal')
 		return false
 	}
 	if self.context.xdg_wm_dialog_present && layer_shell_version_less_than(1, 0, 4) {
-		eprintln('the version of gtk4-layer-shell installed on your system is too old (must be 1.0.4 or newer); disabling quick terminal')
+		log.warn('the version of gtk4-layer-shell installed on your system is too old (must be 1.0.4 or newer); disabling quick terminal')
 		return false
 	}
 	return true
@@ -350,6 +369,9 @@ pub mut:
 // WaylandWindow.init mirrors `wayland.Window.init`.
 pub fn WaylandWindow.init(mut app WaylandApp, mut apprt_window ApprtWindow) !WaylandWindow {
 	gdk_surface := apprt_window.get_surface() or { return error('not a wayland surface') }
+	if C.witty_gdk_is_wayland_surface(gdk_surface) == 0 {
+		return error('no wayland surface')
+	}
 
 	wl_surface := C.gdk_wayland_surface_get_wl_surface(gdk_surface)
 	if wl_surface == unsafe { nil } {
@@ -360,7 +382,7 @@ pub fn WaylandWindow.init(mut app WaylandApp, mut apprt_window ApprtWindow) !Way
 	mut deco := KdeKwinServerDecoration(unsafe { nil })
 	if app.context.kde_decoration_manager != unsafe { nil } {
 		deco = kde_decoration_manager_create(app.context.kde_decoration_manager, wl_surface) or {
-			eprintln('could not create decoration object=${err}')
+			log.warn('could not create decoration object=${err}')
 			KdeKwinServerDecoration(unsafe { nil })
 		}
 	}
@@ -395,12 +417,13 @@ pub fn (mut self WaylandWindow) resize_event() ! {}
 
 // sync_appearance mirrors `wayland.Window.syncAppearance`.
 pub fn (mut self WaylandWindow) sync_appearance() ! {
-	self.sync_blur() or { eprintln('failed to sync blur=${err}') }
-	self.sync_decoration() or { eprintln('failed to sync decoration=${err}') }
+	self.sync_blur() or { log.error('failed to sync blur=${err}') }
+	// Preserve the pinned source wording, including its duplicate "blur" label.
+	self.sync_decoration() or { log.error('failed to sync blur=${err}') }
 
 	if self.apprt_window.is_quick_terminal() {
 		self.sync_quick_terminal() or {
-			eprintln('failed to sync quick terminal appearance=${err}')
+			log.warn('failed to sync quick terminal appearance=${err}')
 		}
 	}
 }
@@ -443,7 +466,10 @@ pub fn (mut self WaylandWindow) set_urgent(urgent bool) ! {
 	if urgent {
 		token := xdg_activation_get_token(activation)!
 		xdg_activation_token_set_surface(token, self.surface)
-		activation_token_set_listener(token, mut self)
+		activation_token_set_listener(token, mut self) or {
+			xdg_activation_token_destroy(token)
+			return err
+		}
 		xdg_activation_token_commit(token)
 		self.activation_token = token
 	}
@@ -518,7 +544,7 @@ fn (mut self WaylandWindow) sync_quick_terminal() ! {
 		.none_ { LayerShellKeyboardMode.none_ }
 		.on_demand {
 			if C.gtk_layer_get_protocol_version() < 4 {
-				eprintln('your compositor does not support on-demand keyboard access; falling back to exclusive access')
+				log.warn('your compositor does not support on-demand keyboard access; falling back to exclusive access')
 				LayerShellKeyboardMode.exclusive
 			} else {
 				LayerShellKeyboardMode.on_demand
@@ -555,7 +581,7 @@ fn (mut self WaylandWindow) sync_quick_terminal() ! {
 		manager := self.app_context.kde_slide_manager
 		if manager != unsafe { nil } {
 			slide := kde_slide_manager_create(manager, self.surface) or {
-				eprintln('could not create slide object=${err}')
+				log.warn('could not create slide object=${err}')
 				return
 			}
 			location := match anchored {
@@ -592,8 +618,12 @@ fn wayland_entered_monitor_cb(surface GdkSurface, monitor voidptr, user_data voi
 
 // registry_set_listener installs the registry global/global_remove listener
 // that binds the KDE-KWin + xdg_activation globals into the context.
-fn registry_set_listener(registry WlRegistry, mut context WaylandContext) {
-	context.registry_listener = C.witty_wayland_registry_add_listener(registry, GCallback(voidptr(wayland_registry_global_cb)), GCallback(voidptr(wayland_registry_remove_cb)), voidptr(context))
+fn registry_set_listener(registry WlRegistry, mut context WaylandContext) ! {
+	listener := C.witty_wayland_registry_add_listener(registry, GCallback(voidptr(wayland_registry_global_cb)), GCallback(voidptr(wayland_registry_remove_cb)), voidptr(context))
+	if isnil(listener) {
+		return error('WaylandRegistryListenerFailed')
+	}
+	context.registry_listener = listener
 }
 
 fn wayland_registry_global_cb(context_ptr voidptr, registry WlRegistry, name u32, interface_ptr &char, version u32) {
@@ -602,6 +632,7 @@ fn wayland_registry_global_cb(context_ptr voidptr, registry WlRegistry, name u32
 	}
 	mut context := unsafe { &WaylandContext(context_ptr) }
 	interface_name := unsafe { cstring_to_vstring(interface_ptr) }
+	log.debug('found global ${interface_name}')
 	if interface_name == 'xdg_wm_dialog_v1' {
 		context.xdg_wm_dialog_present = true
 		return
@@ -615,9 +646,10 @@ fn wayland_registry_global_cb(context_ptr voidptr, registry WlRegistry, name u32
 			return
 		}
 	}
+	log.debug('matched interface=${interface_name}')
 	proxy := C.witty_wayland_registry_bind(registry, name, u32(kind), version)
 	if isnil(proxy) {
-		eprintln('error binding Wayland interface ${interface_name}')
+		log.warn('error binding interface ${interface_name} error=registry bind failed')
 		return
 	}
 	match kind {
@@ -642,34 +674,26 @@ fn wayland_registry_remove_cb(context_ptr voidptr, registry WlRegistry, name u32
 		return
 	}
 	mut context := unsafe { &WaylandContext(context_ptr) }
-	if context.kde_blur_manager == unsafe { nil } {
-		return
-	}
-	if C.witty_wayland_proxy_get_id(context.kde_blur_manager) == name {
+	if context.kde_blur_manager != unsafe { nil }
+		&& C.witty_wayland_proxy_get_id(context.kde_blur_manager) == name {
 		C.witty_wayland_proxy_destroy(context.kde_blur_manager)
 		context.kde_blur_manager = unsafe { nil }
 		return
 	}
-	if context.kde_decoration_manager == unsafe { nil } {
-		return
-	}
-	if C.witty_wayland_proxy_get_id(context.kde_decoration_manager) == name {
+	if context.kde_decoration_manager != unsafe { nil }
+		&& C.witty_wayland_proxy_get_id(context.kde_decoration_manager) == name {
 		C.witty_wayland_proxy_destroy(context.kde_decoration_manager)
 		context.kde_decoration_manager = unsafe { nil }
 		return
 	}
-	if context.kde_slide_manager == unsafe { nil } {
-		return
-	}
-	if C.witty_wayland_proxy_get_id(context.kde_slide_manager) == name {
+	if context.kde_slide_manager != unsafe { nil }
+		&& C.witty_wayland_proxy_get_id(context.kde_slide_manager) == name {
 		C.witty_wayland_proxy_destroy(context.kde_slide_manager)
 		context.kde_slide_manager = unsafe { nil }
 		return
 	}
-	if context.xdg_activation == unsafe { nil } {
-		return
-	}
-	if C.witty_wayland_proxy_get_id(context.xdg_activation) == name {
+	if context.xdg_activation != unsafe { nil }
+		&& C.witty_wayland_proxy_get_id(context.xdg_activation) == name {
 		C.witty_wayland_proxy_destroy(context.xdg_activation)
 		context.xdg_activation = unsafe { nil }
 	}
@@ -677,8 +701,12 @@ fn wayland_registry_remove_cb(context_ptr voidptr, registry WlRegistry, name u32
 
 // deco_manager_set_listener installs the decoration-manager listener that
 // records the compositor's default decoration mode.
-fn deco_manager_set_listener(manager KdeKwinServerDecorationManager, mut context WaylandContext) {
-	context.decoration_listener = C.witty_kde_decoration_add_listener(manager, GCallback(voidptr(wayland_decoration_default_mode_cb)), voidptr(context))
+fn deco_manager_set_listener(manager KdeKwinServerDecorationManager, mut context WaylandContext) ! {
+	listener := C.witty_kde_decoration_add_listener(manager, GCallback(voidptr(wayland_decoration_default_mode_cb)), voidptr(context))
+	if isnil(listener) {
+		return error('WaylandDecorationListenerFailed')
+	}
+	context.decoration_listener = listener
 }
 
 fn wayland_decoration_default_mode_cb(context_ptr voidptr, manager KdeKwinServerDecorationManager, mode u32) {
@@ -692,8 +720,12 @@ fn wayland_decoration_default_mode_cb(context_ptr voidptr, manager KdeKwinServer
 
 // activation_token_set_listener installs the activation-token `done` listener
 // that activates the surface once the token is ready.
-fn activation_token_set_listener(token XdgActivationTokenV1, mut window WaylandWindow) {
-	window.activation_listener = C.witty_xdg_activation_token_add_listener(token, GCallback(voidptr(wayland_activation_done_cb)), voidptr(&window))
+fn activation_token_set_listener(token XdgActivationTokenV1, mut window WaylandWindow) ! {
+	listener := C.witty_xdg_activation_token_add_listener(token, GCallback(voidptr(wayland_activation_done_cb)), voidptr(&window))
+	if isnil(listener) {
+		return error('WaylandActivationListenerFailed')
+	}
+	window.activation_listener = listener
 }
 
 fn wayland_activation_done_cb(window_ptr voidptr, token XdgActivationTokenV1, token_value &char) {
@@ -703,9 +735,11 @@ fn wayland_activation_done_cb(window_ptr voidptr, token XdgActivationTokenV1, to
 	mut window := unsafe { &WaylandWindow(window_ptr) }
 	activation := window.app_context.xdg_activation
 	current := window.activation_token
-	if activation == unsafe { nil } || current == unsafe { nil }
-		|| C.witty_wayland_proxy_get_id(token) != C.witty_wayland_proxy_get_id(current) {
-		eprintln('received event for unknown activation token; ignoring')
+	if activation == unsafe { nil } || current == unsafe { nil } {
+		return
+	}
+	if C.witty_wayland_proxy_get_id(token) != C.witty_wayland_proxy_get_id(current) {
+		log.warn('received event for unknown activation token; ignoring')
 		return
 	}
 	C.witty_xdg_activation_activate(activation, token_value, window.surface)

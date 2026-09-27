@@ -2,6 +2,11 @@
 
 #include <X11/XKBlib.h>
 #include <X11/Xlib.h>
+#include <gdk/x11/gdkx.h>
+
+static inline int witty_gdk_is_x11_surface(void *surface) {
+  return GDK_IS_X11_SURFACE(surface);
+}
 
 static inline int witty_x11_event_type(const void *event) {
   return ((const XEvent *)event)->type;

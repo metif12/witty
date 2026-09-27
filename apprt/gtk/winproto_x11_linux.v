@@ -17,6 +17,7 @@ module gtk
 
 import input
 import configpkg
+import log
 
 #flag linux -lX11
 
@@ -52,6 +53,8 @@ fn C.gdk_x11_display_set_program_class(display GdkDisplay, program_class &char)
 fn C.gdk_x11_get_xatom_by_name_for_display(display GdkDisplay, atom_name &char) XAtom
 
 fn C.gdk_x11_surface_get_xid(surface GdkSurface) XWindow
+
+fn C.witty_gdk_is_x11_surface(surface GdkSurface) int
 
 fn C.gdk_x11_surface_set_urgency_hint(surface GdkSurface, urgent int)
 
@@ -166,17 +169,20 @@ pub mut:
 	atoms           Atoms
 }
 
-// X11App.init sets up the X11 backend for the given display, or returns `none`
-// if the display is not X11. Mirrors `x11.App.init`.
-//
-// Ghostty returns `!?App`; V has no Result-of-Option, so we return `?X11App`:
-// `none` means "not an X11 display" OR "Xkb initialization failed". Hard
-// failures (ghostty's `error.XkbInitializationError`) are logged and mapped to
-// `none` so the app degrades gracefully to the no-op backend.
-pub fn X11App.init(gdk_display GdkDisplay, app_id string, config &configpkg.Config) ?X11App {
+// V cannot express Ghostty's error-union-of-optional return directly. Keep a
+// display mismatch separate from XKB initialization errors.
+struct X11AppProbe {
+	matched bool
+	app     X11App
+}
+
+// X11App.init sets up the X11 backend for the given display, or returns a
+// non-matching probe if the display is not X11. Actual initialization failures
+// remain errors, matching `x11.App.init`.
+fn X11App.init(gdk_display GdkDisplay, app_id string, config &configpkg.Config) !X11AppProbe {
 	// If the display isn't X11, then we don't need to do anything.
 	if C.GDK_IS_X11_DISPLAY(gdk_display) == 0 {
-		return none
+		return X11AppProbe{}
 	}
 
 	xlib_display := C.gdk_x11_display_get_xdisplay(gdk_display)
@@ -191,25 +197,31 @@ pub fn X11App.init(gdk_display GdkDisplay, app_id string, config &configpkg.Conf
 	C.gdk_x11_display_set_program_class(gdk_display, app_id.str)
 
 	// XKB init.
+	log.debug('Xkb.init: initializing Xkb')
+	log.debug('Xkb.init: running XkbQueryExtension')
 	mut opcode := 0
 	mut base_event_code := 0
 	mut base_error_code := 0
 	mut major := xkb_major_version
 	mut minor := xkb_minor_version
 	if C.XkbQueryExtension(xlib_display, &opcode, &base_event_code, &base_error_code, &major, &minor) == 0 {
-		eprintln('Fatal: error initializing Xkb extension: XkbQueryExtension failed')
-		return none
+		log.error('Fatal: error initializing Xkb extension: error executing XkbQueryExtension')
+		return error('XkbInitializationError')
 	}
 
+	log.debug('Xkb.init: running XkbSelectEventDetails')
 	if C.XkbSelectEventDetails(xlib_display, xkb_use_core_kbd, xkb_state_notify, xkb_modifier_state_mask, xkb_modifier_state_mask) == 0 {
-		eprintln('Fatal: error initializing Xkb extension: XkbSelectEventDetails failed')
-		return none
+		log.error('Fatal: error initializing Xkb extension: error executing XkbSelectEventDetails')
+		return error('XkbInitializationError')
 	}
 
-	return X11App{
-		display: xlib_display
-		base_event_code: base_event_code
-		atoms: Atoms.init(gdk_display)
+	return X11AppProbe{
+		matched: true
+		app: X11App{
+			display: xlib_display
+			base_event_code: base_event_code
+			atoms: Atoms.init(gdk_display)
+		}
 	}
 }
 
@@ -246,6 +258,7 @@ pub fn (self X11App) event_mods(device GdkDevice, gtk_mods u32) ?input.Mods {
 	}
 
 	lookup_mods := u64(C.witty_xkb_event_lookup_mods(&next_event[0]))
+	log.debug('X11: found extra XkbStateNotify event w/lookup_mods: ${lookup_mods:b}')
 
 	mut mods := input.Mods{}
 	if lookup_mods & x_shift_mask != 0 {
@@ -270,6 +283,7 @@ pub fn (self X11App) event_mods(device GdkDevice, gtk_mods u32) ?input.Mods {
 // supports_quick_terminal mirrors `x11.App.supportsQuickTerminal`. The quick
 // terminal is not yet supported on X11.
 pub fn (self X11App) supports_quick_terminal() bool {
+	log.warn('quick terminal is not yet supported on X11')
 	return false
 }
 
@@ -299,6 +313,9 @@ pub mut:
 // X11Window.init mirrors `x11.Window.init`.
 pub fn X11Window.init(mut app X11App, mut apprt_window ApprtWindow) !X11Window {
 	surface := apprt_window.get_surface() or { return error('not an X11 surface') }
+	if C.witty_gdk_is_x11_surface(surface) == 0 {
+		return error('not an X11 surface')
+	}
 
 	// In ghostty this is a cast to gdk_x11.X11Surface; here we resolve the XID
 	// directly from the GdkSurface.
@@ -340,8 +357,8 @@ pub fn (mut self X11Window) sync_appearance() ! {
 		y: i64(y)
 	}
 
-	self.sync_blur() or { eprintln('failed to synchronize blur=${err}') }
-	self.sync_decorations() or { eprintln('failed to synchronize decorations=${err}') }
+	self.sync_blur() or { log.error('failed to synchronize blur=${err}') }
+	self.sync_decorations() or { log.error('failed to synchronize decorations=${err}') }
 }
 
 // client_side_decoration_enabled mirrors
@@ -380,6 +397,7 @@ fn (mut self X11Window) sync_blur() ! {
 			return
 		}
 	}
+	log.debug('set blur=${blur}, window xid=${self.xid}, region=${self.blur_region}')
 
 	self.change_property_region(self.app.atoms.kde_blur, xa_cardinal, &self.blur_region)!
 	self.last_applied_blur_region = self.blur_region
