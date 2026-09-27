@@ -176,6 +176,7 @@ import configpkg
 import crash
 import datastruct
 import internal_os
+import log
 import os
 import renderer
 import sync
@@ -521,17 +522,17 @@ pub fn (mut t Termio) thread_enter(mut thr Thread, mut data ThreadData) ! {
 		match mut item {
 			PreparedInputString {
 				t.queue_write(mut data, item.data, false) or {
-					eprintln('failed to queue input string err=${err}')
+					log.warn('failed to queue input string err=${err}')
 					return error('input failed')
 				}
 			}
 			PreparedInputFile {
 				bytes := read_initial_input_file(mut item.file) or {
-					eprintln('failed to read input file err=${err}')
+					log.warn('failed to read input file err=${err}')
 					return error('input failed')
 				}
 				t.queue_write(mut data, bytes, false) or {
-					eprintln('failed to queue input file err=${err}')
+					log.warn('failed to queue input file err=${err}')
 					return error('input failed')
 				}
 			}
@@ -564,6 +565,7 @@ fn (t &Termio) prepare_input() ![]PreparedInput {
 			}
 			configpkg.ReadableIOPath {
 				file := os.open(item.value) or {
+					log.warn('failed to open input file=${item.value} err=${err}')
 					close_prepared_inputs(mut result)
 					return error('input not found')
 				}
@@ -859,13 +861,13 @@ fn (mut t Termio) process_output_locked(buf []u8) {
 	if !isnil(t.renderer_state.inspector) {
 		for i, byte in buf {
 			t.renderer_state.record_inspector_pty_read(buf[i..i + 1]) or {
-				eprintln('error recording pty read in inspector err=${err}')
+				log.error('error recording pty read in inspector err=${err}')
 			}
 
-			t.terminal_stream.next(byte) or { eprintln('error processing terminal data: ${err}') }
+			t.terminal_stream.next(byte) or { log.error('error processing terminal data: ${err}') }
 		}
 	} else {
-		t.terminal_stream.next_slice(buf) or { eprintln('error processing terminal data: ${err}') }
+		t.terminal_stream.next_slice(buf) or { log.error('error processing terminal data: ${err}') }
 	}
 
 	// If our stream handling caused messages to be sent to the mailbox
@@ -1116,7 +1118,7 @@ pub fn (mut self Thread) deinit() {
 pub fn (mut self Thread) thread_main(mut io Termio) {
 	// Call child function so we can use errors...
 	self.thread_main_(mut io) or {
-		eprintln('error in io thread err=${err}')
+		log.warn('error in io thread err=${err}')
 
 		// If there is an error, we replace our terminal screen with
 		// the error message. It might be better in the future to send
@@ -1130,15 +1132,21 @@ pub fn (mut self Thread) thread_main(mut io Termio) {
 	// messages are drained and we can wait for the surface to send a stop
 	// message.
 	if !self.loop.stopped() {
-		eprintln('abrupt io thread exit detected, starting xev to drain mailbox')
+		log.warn('abrupt io thread exit detected, starting xev to drain mailbox')
+		defer {
+			log.debug('io thread fully exiting after abnormal failure')
+		}
 		self.flags.set_drain(true)
 		self.loop.run(.until_done) or {
-			eprintln('failed to start xev loop for draining err=${err}')
+			log.error('failed to start xev loop for draining err=${err}')
 		}
 	}
 }
 
 fn (mut self Thread) thread_main_(mut io Termio) ! {
+	defer {
+		log.debug('IO thread exited')
+	}
 	// Right now, on Darwin, `std.Thread.setName` can only name the current
 	// thread, and we have no way to get the current thread from within it,
 	// so instead we use this code to name the thread instead.
@@ -1182,6 +1190,10 @@ fn (mut self Thread) thread_main_(mut io Termio) ! {
 	self.stop.wait(mut self.loop, &self.stop_c, cb, termio_thread_stop_callback)
 
 	// Run
+	log.debug('starting IO thread')
+	defer {
+		log.debug('starting IO thread shutdown')
+	}
 	self.loop.run(.until_done)!
 }
 
@@ -1217,6 +1229,7 @@ fn (mut self Thread) drain_mailbox(mut cb CallbackData) ! {
 		message := mailbox.pop() or { break }
 		// If we have a message we always redraw
 		redraw = true
+		log.debug('mailbox message=${message.kind()}')
 
 		match message {
 			MessageColorSchemeReport {
@@ -1305,7 +1318,7 @@ fn termio_thread_sync_reset_callback(cb_ voidptr, _ &xev.Loop, _ &xev.Completion
 		match err {
 			.canceled {}
 			else {
-				eprintln('error during sync reset callback err=${err}')
+				log.warn('error during sync reset callback err=${err}')
 				return .disarm
 			}
 		}
@@ -1324,7 +1337,7 @@ fn termio_thread_coalesce_callback(cb_ voidptr, _ &xev.Loop, _ &xev.Completion, 
 		match err {
 			.canceled {}
 			else {
-				eprintln('error during coalesce callback err=${err}')
+				log.warn('error during coalesce callback err=${err}')
 				return .disarm
 			}
 		}
@@ -1337,7 +1350,7 @@ fn termio_thread_coalesce_callback(cb_ voidptr, _ &xev.Loop, _ &xev.Completion, 
 
 	if v := cb.self_.coalesce_data.resize {
 		cb.self_.coalesce_data.resize = none
-		cb.io.resize(mut cb.data, v) or { eprintln('error during resize err=${err}') }
+		cb.io.resize(mut cb.data, v) or { log.warn('error during resize err=${err}') }
 	}
 
 	return .disarm
@@ -1345,7 +1358,7 @@ fn termio_thread_coalesce_callback(cb_ voidptr, _ &xev.Loop, _ &xev.Completion, 
 
 fn termio_thread_wakeup_callback(cb_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorKind) xev.CallbackAction {
 	if err := r {
-		eprintln('error in wakeup err=${err}')
+		log.error('error in wakeup err=${err}')
 		return .rearm
 	}
 
@@ -1355,7 +1368,7 @@ fn termio_thread_wakeup_callback(cb_ voidptr, _ &xev.Loop, _ &xev.Completion, r 
 		return .rearm
 	}
 	mut cb := unsafe { &CallbackData(cb_) }
-	cb.self_.drain_mailbox(mut cb) or { eprintln('error draining mailbox err=${err}') }
+	cb.self_.drain_mailbox(mut cb) or { log.error('error draining mailbox err=${err}') }
 
 	return .rearm
 }
@@ -1397,7 +1410,7 @@ fn termio_thread_selection_scroll_callback(cb_ voidptr, _ &xev.Loop, _ &xev.Comp
 		match err {
 			.canceled {}
 			else {
-				eprintln('error during selection scroll callback err=${err}')
+				log.warn('error during selection scroll callback err=${err}')
 				return .disarm
 			}
 		}
@@ -1765,7 +1778,7 @@ pub fn (mut m Mailbox) send(msg Message, mtx &sync.Mutex) {
 	// space. However, the writer thread may require the renderer
 	// lock so we need to unlock.
 	m.spsc.wakeup.notify() or {
-		eprintln('failed to wake up writer, data will be dropped err=${err}')
+		log.warn('failed to wake up writer, data will be dropped err=${err}')
 		return
 	}
 
@@ -1793,6 +1806,6 @@ pub fn (mut m Mailbox) send(msg Message, mtx &sync.Mutex) {
 // on the writer type.
 pub fn (mut m Mailbox) notify() {
 	m.spsc.wakeup.notify() or {
-		eprintln('failed to notify writer, data will be dropped err=${err}')
+		log.warn('failed to notify writer, data will be dropped err=${err}')
 	}
 }

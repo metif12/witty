@@ -155,7 +155,7 @@ fn (mut self StreamHandler) renderer_message_writer(msg renderer.RendererMessage
 		// This is an EXTREMELY unlikely case. We still don't return
 		// and attempt to send the message because its most likely
 		// that everything is fine, but log in case a freeze happens.
-		eprintln('failed to notify renderer, may deadlock err=${err}')
+		log.warn('failed to notify renderer, may deadlock err=${err}')
 	}
 	_ = self.renderer_mailbox.push(msg, datastruct.blocking_queue_forever)
 }
