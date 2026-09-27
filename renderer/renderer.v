@@ -1237,6 +1237,7 @@ pub fn (mut self Renderer) update_frame(state &RenderState, cursor_blink_visible
 	self.rebuild_cells(critical.preedit, cs, &critical.links) or {
 		// This means we weren't able to allocate our buffer to update the
 		// cells. In this case, we continue with our old buffer.
+		log.warn('error rebuilding GPU cells err=${err}')
 	}
 
 	// The scrollbar is only emitted during draws so we also check the
@@ -1975,6 +1976,7 @@ fn (mut self Renderer) rebuild_cells(preedit ?RenderPreedit, cursor_style_ ?Styl
 			// scenarios. In this case, we don't want to corrupt
 			// our render state so just clear this row and keep
 			// trying to finish it out.
+			log.warn('error building row y=${y} err=${err}')
 			self.cells.clear(u16(y))
 		}
 	}
@@ -2184,7 +2186,9 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 		run := next_run.value
 		shaped_cells := self.font_shaper_cache.get(run) or {
 			new_cells := self.font_shaper.shape(run)!
-			self.font_shaper_cache.put(run, new_cells) or {}
+			self.font_shaper_cache.put(run, new_cells) or {
+				log.warn('error caching font shaping results err=${err}')
+			}
 			new_cells
 		}
 		for shaped_cell in shaped_cells {
@@ -2313,22 +2317,30 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 		// We draw underlines first so that they layer underneath text.
 		if underline != .none {
 			ul_color := cell_style.underline_color(state.colors.palette) or { fg }
-			self.add_underline(u16(x), y, underline, ul_color, alpha) or {}
+			self.add_underline(u16(x), y, underline, ul_color, alpha) or {
+				log.warn('error adding underline to cell, will be invalid x=${x} y=${y}, err=${err}')
+			}
 		}
 
 		if cell_style.flags.overline() {
-			self.add_overline(u16(x), y, fg, alpha) or {}
+			self.add_overline(u16(x), y, fg, alpha) or {
+				log.warn('error adding overline to cell, will be invalid x=${x} y=${y}, err=${err}')
+			}
 		}
 
 		for shaped_glyph in shaped[x] {
 			self.add_glyph(u16(x), y, fg, alpha, shaped_glyph.cell.glyph_index,
 				shaped_glyph.font_index, shaped_glyph.cell.x_offset, shaped_glyph.cell.y_offset,
-				u32(cell.grid_width()), cells_raw, x, cells_len)!
+				u32(cell.grid_width()), cells_raw, x, cells_len) or {
+				log.warn('error adding glyph to cell, will be invalid x=${x} y=${y}, err=${err}')
+			}
 		}
 
 		// Finally, draw a strikethrough if necessary.
 		if cell_style.flags.strikethrough() {
-			self.add_strikethrough(u16(x), y, fg, alpha) or {}
+			self.add_strikethrough(u16(x), y, fg, alpha) or {
+				log.warn('error adding strikethrough to cell, will be invalid x=${x} y=${y}, err=${err}')
+			}
 		}
 	}
 }
