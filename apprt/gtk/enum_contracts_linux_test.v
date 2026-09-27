@@ -41,3 +41,18 @@ fn test_gtk_enum_layouts_and_source_values() {
 	assert sizeof(Protocol) == 1
 	assert [Protocol.none_, .wayland, .x11].map(u8(it)) == [u8(0), 1, 2]
 }
+
+fn test_winproto_unions_retain_only_the_active_backend() {
+	mut app := WinProtoApp(NoopApp{})
+	assert app is NoopApp
+	assert !app.supports_quick_terminal()
+
+	mut window := WinProtoWindow(NoopWindow{})
+	assert window is NoopWindow
+	assert window.client_side_decoration_enabled()
+	mut env := map[string]string{}
+	window.add_subprocess_env(mut env)!
+	window.resize_event()!
+	window.sync_appearance()!
+	window.set_urgent(true)!
+}

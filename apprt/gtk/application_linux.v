@@ -381,7 +381,7 @@ mut:
 
 	// State and logic for the underlying windowing protocol. Mirrors
 	// `Private.winproto`.
-	winproto WinProtoApp
+	winproto WinProtoApp = NoopApp{}
 
 	// The base path of the transient cgroup, if cgroups are enabled and
 	// initialization succeeded. Mirrors `Private.transient_cgroup_base`.
@@ -505,9 +505,7 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 	}
 	winproto := WinProtoApp.init(display, app_id, &config) or {
 		// log.warn("error initializing windowing protocol")
-		WinProtoApp{
-			protocol: .none_
-		}
+		NoopApp{}
 	}
 
 	// The runtime provider is retained for the application's lifetime. The

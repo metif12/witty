@@ -473,7 +473,7 @@ mut:
 	config &Config = unsafe { nil }
 
 	// State and logic for windowing protocol for a window.
-	winproto WinProtoWindow
+	winproto WinProtoWindow = NoopWindow{}
 
 	// The bridge object that winproto backends receive. Mirrors ghostty
 	// passing `*Window` to winproto (which only calls the small accessor set
@@ -733,9 +733,7 @@ fn (mut self Window) init(app &Application) {
 
 	// We initialize our windowing protocol to none because we can't actually
 	// initialize this until we get realized.
-	self.winproto = WinProtoWindow{
-		protocol: .none_
-	}
+	self.winproto = NoopWindow{}
 
 	// Add our dev CSS class if we're in debug mode.
 	$if debug {

@@ -5,11 +5,8 @@ module gtk
 // Translated from ghostty/src/apprt/gtk/winproto.zig.
 //
 // Ghostty models this as a tagged union `union(Protocol)` with `inline else`
-// dispatch. V has no comptime `inline for`/`inline else`, so we model the
-// union as a struct carrying a `Protocol` tag plus one instance of each
-// backend's state; dispatch is a plain `match` on the tag. Only the active
-// backend's state is meaningful. This preserves ghostty's semantics: exactly
-// one protocol is selected per application at init time.
+// dispatch. V sum types retain the selected backend directly; explicit
+// matches replace Zig's comptime field iteration and inline dispatch.
 //
 // See:
 //   - winproto_noop_linux.v    (NoopApp / NoopWindow)
@@ -141,15 +138,8 @@ pub fn (self &ApprtWindow) is_quick_terminal() bool {
 
 // --- App: per-application window-protocol state ----------------------------
 //
-// Mirrors `winproto.App`. Carries the active protocol tag plus one instance of
-// each backend's app state.
-pub struct WinProtoApp {
-pub mut:
-	protocol Protocol = .none_
-	none_    NoopApp
-	wayland  WaylandApp
-	x11      X11App
-}
+// Mirrors `winproto.App`. Only the selected backend's app state is retained.
+pub type WinProtoApp = NoopApp | WaylandApp | X11App
 
 // WinProtoApp.init tries each protocol backend in turn (Wayland, then X11)
 // and selects the first one whose `init` accepts the current display,
@@ -161,151 +151,122 @@ pub fn WinProtoApp.init(gdk_display GdkDisplay, app_id string, config &configpkg
 	// none: noop.App (declines every display; never selected here)
 	// wayland
 	if v := WaylandApp.init(gdk_display, app_id, config) {
-		return WinProtoApp{
-			protocol: .wayland
-			wayland: v
-		}
+		return v
 	}
 	// x11
 	if v := X11App.init(gdk_display, app_id, config) {
-		return WinProtoApp{
-			protocol: .x11
-			x11: v
-		}
+		return v
 	}
 
-	return WinProtoApp{
-		protocol: .none_
-	}
+	return NoopApp{}
 }
 
 // deinit mirrors `winproto.App.deinit`.
 pub fn (mut self WinProtoApp) deinit() {
-	match self.protocol {
-		.none_ { self.none_.deinit() }
-		.wayland { self.wayland.deinit() }
-		.x11 { self.x11.deinit() }
+	match mut self {
+		NoopApp { self.deinit() }
+		WaylandApp { self.deinit() }
+		X11App { self.deinit() }
 	}
 }
 
 // event_mods mirrors `winproto.App.eventMods`. Falls back to the standard GDK
 // modifier translation if the backend has no opinion.
 pub fn (mut self WinProtoApp) event_mods(device GdkDevice, gtk_mods u32) input.Mods {
-	backend := match self.protocol {
-		.none_ { self.none_.event_mods(device, gtk_mods) }
-		.wayland { self.wayland.event_mods(device, gtk_mods) }
-		.x11 { self.x11.event_mods(device, gtk_mods) }
+	backend := match mut self {
+		NoopApp { self.event_mods(device, gtk_mods) }
+		WaylandApp { self.event_mods(device, gtk_mods) }
+		X11App { self.event_mods(device, gtk_mods) }
 	}
 	return backend or { translate_mods(gtk_mods) }
 }
 
 // supports_quick_terminal mirrors `winproto.App.supportsQuickTerminal`.
 pub fn (self WinProtoApp) supports_quick_terminal() bool {
-	return match self.protocol {
-		.none_ { self.none_.supports_quick_terminal() }
-		.wayland { self.wayland.supports_quick_terminal() }
-		.x11 { self.x11.supports_quick_terminal() }
+	return match self {
+		NoopApp { self.supports_quick_terminal() }
+		WaylandApp { self.supports_quick_terminal() }
+		X11App { self.supports_quick_terminal() }
 	}
 }
 
 // init_quick_terminal mirrors `winproto.App.initQuickTerminal`. Only Wayland
 // has an effect (initializing gtk4-layer-shell).
 pub fn (mut self WinProtoApp) init_quick_terminal(mut apprt_window ApprtWindow) ! {
-	match self.protocol {
-		.none_ { self.none_.init_quick_terminal(apprt_window)! }
-		.wayland { self.wayland.init_quick_terminal(apprt_window)! }
-		.x11 { self.x11.init_quick_terminal(apprt_window)! }
+	match mut self {
+		NoopApp { self.init_quick_terminal(apprt_window)! }
+		WaylandApp { self.init_quick_terminal(apprt_window)! }
+		X11App { self.init_quick_terminal(apprt_window)! }
 	}
 }
 
 // --- Window: per-window window-protocol state ------------------------------
 //
-// Mirrors `winproto.Window`. Carries the active protocol tag plus one instance
-// of each backend's per-window state.
-pub struct WinProtoWindow {
-pub mut:
-	protocol Protocol = .none_
-	none_    NoopWindow
-	wayland  WaylandWindow
-	x11      X11Window
-}
+// Mirrors `winproto.Window`. Only the selected backend's per-window state is
+// retained.
+pub type WinProtoWindow = NoopWindow | WaylandWindow | X11Window
 
 // WinProtoWindow.init constructs the per-window state for whichever protocol
 // the app selected. Mirrors `winproto.Window.init`.
 pub fn WinProtoWindow.init(mut app WinProtoApp, mut apprt_window ApprtWindow) !WinProtoWindow {
-	return match app.protocol {
-		.none_ {
-			WinProtoWindow{
-				protocol: .none_
-				none_: NoopWindow.init(app.none_, apprt_window)!
-			}
-		}
-		.wayland {
-			WinProtoWindow{
-				protocol: .wayland
-				wayland: WaylandWindow.init(mut app.wayland, mut apprt_window)!
-			}
-		}
-		.x11 {
-			WinProtoWindow{
-				protocol: .x11
-				x11: X11Window.init(mut app.x11, mut apprt_window)!
-			}
-		}
+	return match mut app {
+		NoopApp { NoopWindow.init(app, apprt_window)! }
+		WaylandApp { WaylandWindow.init(mut app, mut apprt_window)! }
+		X11App { X11Window.init(mut app, mut apprt_window)! }
 	}
 }
 
 // deinit mirrors `winproto.Window.deinit`.
 pub fn (mut self WinProtoWindow) deinit() {
-	match self.protocol {
-		.none_ { self.none_.deinit() }
-		.wayland { self.wayland.deinit() }
-		.x11 { self.x11.deinit() }
+	match mut self {
+		NoopWindow { self.deinit() }
+		WaylandWindow { self.deinit() }
+		X11Window { self.deinit() }
 	}
 }
 
 // resize_event mirrors `winproto.Window.resizeEvent`.
 pub fn (mut self WinProtoWindow) resize_event() ! {
-	match self.protocol {
-		.none_ { self.none_.resize_event()! }
-		.wayland { self.wayland.resize_event()! }
-		.x11 { self.x11.resize_event()! }
+	match mut self {
+		NoopWindow { self.resize_event()! }
+		WaylandWindow { self.resize_event()! }
+		X11Window { self.resize_event()! }
 	}
 }
 
 // sync_appearance mirrors `winproto.Window.syncAppearance`.
 pub fn (mut self WinProtoWindow) sync_appearance() ! {
-	match self.protocol {
-		.none_ { self.none_.sync_appearance()! }
-		.wayland { self.wayland.sync_appearance()! }
-		.x11 { self.x11.sync_appearance()! }
+	match mut self {
+		NoopWindow { self.sync_appearance()! }
+		WaylandWindow { self.sync_appearance()! }
+		X11Window { self.sync_appearance()! }
 	}
 }
 
 // client_side_decoration_enabled mirrors
 // `winproto.Window.clientSideDecorationEnabled`.
 pub fn (self WinProtoWindow) client_side_decoration_enabled() bool {
-	return match self.protocol {
-		.none_ { self.none_.client_side_decoration_enabled() }
-		.wayland { self.wayland.client_side_decoration_enabled() }
-		.x11 { self.x11.client_side_decoration_enabled() }
+	return match self {
+		NoopWindow { self.client_side_decoration_enabled() }
+		WaylandWindow { self.client_side_decoration_enabled() }
+		X11Window { self.client_side_decoration_enabled() }
 	}
 }
 
 // add_subprocess_env mirrors `winproto.Window.addSubprocessEnv`.
 pub fn (mut self WinProtoWindow) add_subprocess_env(mut env map[string]string) ! {
-	match self.protocol {
-		.none_ { self.none_.add_subprocess_env(mut env)! }
-		.wayland { self.wayland.add_subprocess_env(mut env)! }
-		.x11 { self.x11.add_subprocess_env(mut env)! }
+	match mut self {
+		NoopWindow { self.add_subprocess_env(mut env)! }
+		WaylandWindow { self.add_subprocess_env(mut env)! }
+		X11Window { self.add_subprocess_env(mut env)! }
 	}
 }
 
 // set_urgent mirrors `winproto.Window.setUrgent`.
 pub fn (mut self WinProtoWindow) set_urgent(urgent bool) ! {
-	match self.protocol {
-		.none_ { self.none_.set_urgent(urgent)! }
-		.wayland { self.wayland.set_urgent(urgent)! }
-		.x11 { self.x11.set_urgent(urgent)! }
+	match mut self {
+		NoopWindow { self.set_urgent(urgent)! }
+		WaylandWindow { self.set_urgent(urgent)! }
+		X11Window { self.set_urgent(urgent)! }
 	}
 }
