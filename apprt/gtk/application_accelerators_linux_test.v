@@ -55,6 +55,25 @@ fn test_application_cgroup_mode_gate() {
 	assert !cgroup_isolation_enabled(.single_instance, g_application_non_unique)
 }
 
+fn test_application_get_config_returns_referenced_wrapper() {
+	mut inner := configpkg.Config.default_config()
+	defer {
+		inner.deinit()
+	}
+	mut config := config_new(inner)
+	mut app := Application{
+		config_object: config
+	}
+	mut acquired := app.get_config()
+	assert acquired == config
+
+	// get_config owns an additional GObject reference, so releasing it must
+	// leave the application's original reference valid.
+	acquired.unref()
+	assert config.get().background == inner.background
+	config.unref()
+}
+
 fn test_application_activate_queues_new_window() {
 	mut core_app := &core.App{
 		mailbox: core.MailboxQueue.create() or { panic(err) }

@@ -421,22 +421,21 @@ mut:
 	deinitialized bool
 }
 
-// default gets this application as the default GApplication, cast to our
-// `Application`. Mirrors `Application.default`.
-//
-pub fn Application.default_app() GApplication {
-	return C.g_application_get_default()
-}
-
 // default returns the translated wrapper for the default GhosttyApplication.
-pub fn Application.default() ?&Application {
+// Ghostty treats a missing default or a default of the wrong type as an
+// invariant violation, because either state means application initialization
+// is fundamentally broken.
+pub fn Application.default() &Application {
 	obj := C.g_application_get_default()
 	if isnil(obj) {
-		return none
+		panic('default GApplication is not set')
+	}
+	if C.g_type_check_instance_is_a(obj, ghostty_application_get_type()) == 0 {
+		panic('default GApplication is not a GhosttyApplication')
 	}
 	priv := ghostty_application_priv(obj)
 	if isnil(priv.wrapper) {
-		return none
+		panic('default GhosttyApplication has no translated wrapper')
 	}
 	return unsafe { &Application(priv.wrapper) }
 }
@@ -900,10 +899,15 @@ fn (self &Application) accelerator_for_action(action input.Action) ?string {
 
 // --- Properties -----------------------------------------------------------
 
-// get_config returns the configuration for this application. Mirrors
-// `Application.getConfig` (which increases the GObject ref count).
-pub fn (self &Application) get_config() configpkg.Config {
-	return self.config
+// get_config returns the configuration object for this application with its
+// GObject reference count increased. The caller owns the returned reference.
+// Mirrors `Application.getConfig`.
+pub fn (mut self Application) get_config() &Config {
+	if isnil(self.config_object) {
+		panic('GhosttyApplication has no configuration object')
+	}
+	mut config := unsafe { self.config_object }
+	return config.ref()
 }
 
 // set_config sets the configuration and re-applies config-derived state.
