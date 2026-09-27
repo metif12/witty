@@ -420,8 +420,9 @@ mut:
 	// `Private.signal_source`.
 	signal_source ?u32
 
-	// The reusable config errors dialog owned by the application.
-	config_errors_dialog &ConfigErrorsDialog = unsafe { nil }
+	// The reusable config errors dialog. It can close independently of the
+	// application, so retain the same weak reference as Ghostty.
+	config_errors_dialog WeakRef = weak_ref_empty()
 
 	// CSS provider for shipped and configuration-derived application styles.
 	css_provider GtkCssProvider = unsafe { nil }
@@ -1128,15 +1129,22 @@ fn application_css_parsing_error_cb(provider GtkCssProvider, section voidptr, er
 // show_config_errors_dialog shows the config errors dialog if the config has
 // diagnostics. Mirrors `Application.showConfigErrorsDialog`.
 fn (mut self Application) show_config_errors_dialog() {
-	if !isnil(self.config_errors_dialog) {
-		mut dialog := self.config_errors_dialog
-		dialog.set_config(self.config_object)
-		if self.config_object.has_diagnostics() {
-			dialog.present(unsafe { nil })
-		} else {
-			dialog.close()
+	dialog_obj := self.config_errors_dialog.get()
+	if !isnil(dialog_obj) {
+		defer {
+			object_unref(dialog_obj)
 		}
-		return
+		if existing := config_errors_dialog_from_object(dialog_obj) {
+			mut dialog := unsafe { existing }
+			dialog.set_config(self.config_object)
+			if self.config_object.has_diagnostics() {
+				dialog.present(unsafe { nil })
+			} else {
+				dialog.close()
+			}
+			return
+		}
+		self.config_errors_dialog.set(unsafe { nil })
 	}
 	if isnil(self.config_object) || !self.config_object.has_diagnostics() {
 		return
@@ -1144,7 +1152,7 @@ fn (mut self Application) show_config_errors_dialog() {
 
 	mut dialog := config_errors_dialog_new(self.config_object)
 	C.g_signal_connect_data(dialog.dialog.obj, c'reload-config', GCallback(voidptr(application_config_errors_reload_cb)), voidptr(self), unsafe { nil }, 0)
-	self.config_errors_dialog = dialog
+	self.config_errors_dialog.set(dialog.dialog.obj)
 	dialog.present(unsafe { nil })
 }
 
@@ -1154,6 +1162,9 @@ fn application_config_errors_reload_cb(dialog GObject, data voidptr) {
 		return
 	}
 	mut self := unsafe { &Application(data) }
+	// The response handler closes this dialog after emitting the signal. Do not
+	// retain it for a later configuration update.
+	self.config_errors_dialog.set(unsafe { nil })
 	self.reload_config(apprt.Target(apprt.AppTarget{}), false) or {
 		eprintln('error reloading config: ${err}')
 	}
@@ -1558,13 +1569,15 @@ fn (mut self Application) dispose() {
 		return
 	}
 	self.disposed = true
-	if !isnil(self.config_errors_dialog) {
-		mut diag := self.config_errors_dialog
-		diag.close()
-		diag.dispose()
-		diag.unref()
-		self.config_errors_dialog = unsafe { nil }
+	dialog_obj := self.config_errors_dialog.get()
+	if !isnil(dialog_obj) {
+		if existing := config_errors_dialog_from_object(dialog_obj) {
+			mut dialog := unsafe { existing }
+			dialog.close()
+		}
+		object_unref(dialog_obj)
 	}
+	self.config_errors_dialog.set(unsafe { nil })
 
 	if v := self.signal_source {
 		if !C.g_source_remove(v) {

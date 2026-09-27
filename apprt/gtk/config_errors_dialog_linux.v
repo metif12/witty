@@ -71,7 +71,8 @@ const config_errors_dialog_ui = '<?xml version="1.0" encoding="UTF-8"?>
 // GObject pointer of the wrapped Config (Config.obj).
 struct C.GhosttyConfigErrorsDialogPrivate {
 mut:
-	config voidptr
+	config  voidptr
+	wrapper voidptr
 }
 
 // The GObject type id and private-data offset, registered lazily.
@@ -200,9 +201,26 @@ pub fn config_errors_dialog_new(config &Config) &ConfigErrorsDialog {
 			obj: obj
 		}
 	}
+	mut priv := config_errors_dialog_priv(obj)
+	priv.wrapper = voidptr(self)
 	self.set_config(config)
 	C.g_signal_connect_data(obj, c'response', GCallback(voidptr(config_errors_dialog_response_cb)), voidptr(self), unsafe { nil }, 0)
 	return self
+}
+
+// config_errors_dialog_from_object performs the typed half of Ghostty's
+// WeakRef(ConfigErrorsDialog).get. The returned wrapper borrows the caller's
+// strong native-object reference.
+fn config_errors_dialog_from_object(obj GObject) ?&ConfigErrorsDialog {
+	if isnil(obj)
+		|| C.g_type_check_instance_is_a(obj, config_errors_dialog_get_type()) == 0 {
+		return none
+	}
+	priv := config_errors_dialog_priv(obj)
+	if isnil(priv.wrapper) {
+		return none
+	}
+	return unsafe { &ConfigErrorsDialog(priv.wrapper) }
 }
 
 fn config_errors_dialog_response_cb(obj GObject, response_id &char, data voidptr) {
