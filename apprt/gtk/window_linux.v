@@ -1137,14 +1137,17 @@ fn window_action_cb(action GSimpleAction, parameter GVariant, data voidptr) {
 		'close' { self.action_close() }
 		'close-tab' {
 			if isnil(parameter) {
+				log.warn('win.close-tab called without a parameter')
 				return
 			}
 			mut length := usize(0)
 			value := C.g_variant_get_string(parameter, &length)
 			if isnil(value) {
+				log.warn('invalid mode provided to win.close-tab')
 				return
 			}
-			match unsafe { cstring_to_vstring(value) } {
+			mode_value := unsafe { cstring_to_vstring(value) }
+			match mode_value {
 				'this' {
 					self.perform_binding_action(input.ActionCloseTab{ value: .this })
 				}
@@ -1154,7 +1157,9 @@ fn window_action_cb(action GSimpleAction, parameter GVariant, data voidptr) {
 				'right' {
 					self.perform_binding_action(input.ActionCloseTab{ value: .right })
 				}
-				else {}
+				else {
+					log.warn('invalid mode provided to win.close-tab: ${mode_value}')
+				}
 			}
 		}
 		'new-tab' { self.action_new_tab() }
@@ -1657,7 +1662,7 @@ fn (mut self Window) sync_appearance() {
 
 	// Do our window-protocol specific appearance sync.
 	self.winproto.sync_appearance() or {
-		// log.warn: failed to sync winproto appearance
+		log.warn('failed to sync winproto appearance error=${err}')
 	}
 }
 
@@ -1695,7 +1700,7 @@ fn (mut self Window) perform_binding_action(action input.Action) {
 	}
 	mut core_surface := surface.core()
 	core_surface.perform_binding_action(action) or {
-		eprintln('error performing window binding action: ${err}')
+		log.warn('error performing binding action error=${err}')
 	}
 }
 
@@ -2005,7 +2010,7 @@ pub fn (mut self Window) window_realize(mut app Application) {
 	if wp := WinProtoWindow.init(mut app_wp, mut self.apprt_window) {
 		self.winproto = wp
 	} else {
-		// log.warn: failed to initialize window protocol
+		log.warn('failed to initialize window protocol error=${err}')
 		return
 	}
 
@@ -2063,7 +2068,7 @@ fn (mut self Window) surface_clipboard_write(clipboard_type apprt.Clipboard, tex
 // fix). Mirrors `propGdkSurfaceWidth`/`propGdkSurfaceHeight`.
 pub fn (mut self Window) prop_gdk_surface_resize() {
 	self.winproto.resize_event() or {
-		// log.warn: winproto resize event failed
+		log.warn('winproto resize event failed error=${err}')
 	}
 }
 
@@ -2084,7 +2089,7 @@ pub fn (mut self Window) prop_is_active() {
 	}
 
 	self.winproto.set_urgent(false) or {
-		// log.warn: winproto failed to reset urgency
+		log.warn('winproto failed to reset urgency=${err}')
 	}
 }
 
@@ -2104,7 +2109,7 @@ pub fn (mut self Window) prop_maximized() {
 // `propScaleFactor`.
 pub fn (mut self Window) prop_scale_factor() {
 	self.winproto.sync_appearance() or {
-		// log.warn: failed to sync appearance after scale factor update
+		log.warn('failed to sync appearance after scale factor has been updated=${err}')
 	}
 }
 
@@ -2112,15 +2117,14 @@ pub fn (mut self Window) prop_scale_factor() {
 // `propQuickTerminal`.
 pub fn (mut self Window) prop_quick_terminal(mut app Application) {
 	if self.surface_init {
-		// log.warn: quick terminal property can't be changed after surfaces
-		// have been initialized
+		log.warn("quick terminal property can't be changed after surfaces have been initialized")
 		return
 	}
 	if self.quick_terminal {
 		// Initialize the quick terminal at the app-layer.
 		mut app_wp := app.winproto()
 		app_wp.init_quick_terminal(mut self.apprt_window) or {
-			// log.warn: failed to initialize quick terminal
+			log.warn('failed to initialize quick terminal error=${err}')
 			return
 		}
 	}
@@ -2184,7 +2188,10 @@ pub fn (mut self Window) action_about() {
 }
 
 pub fn (mut self Window) toggle_inspector() {
-	self.perform_binding_action(input.ActionInspector{ value: .toggle })
+	mut surface := self.get_active_surface() or { return }
+	surface.control_inspector(.toggle) or {
+		log.warn('failed to toggle inspector error=${err}')
+	}
 }
 
 pub fn (mut self Window) action_close() {
@@ -2239,7 +2246,7 @@ pub fn (mut self Window) action_ring_bell() {
 	if cfg.bell_features.system() {
 		native_surface := C.gtk_native_get_surface(self.as_native())
 		if isnil(native_surface) {
-			eprintln('unable to get native surface from window')
+			log.warn('unable to get native surface from window')
 		} else {
 			C.gdk_surface_beep(native_surface)
 		}
@@ -2250,7 +2257,7 @@ pub fn (mut self Window) action_ring_bell() {
 			return
 		}
 		self.winproto.set_urgent(true) or {
-			eprintln('winproto failed to set urgency=${err}')
+			log.warn('winproto failed to set urgency=${err}')
 		}
 	}
 }

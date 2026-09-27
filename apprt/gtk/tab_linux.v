@@ -19,6 +19,7 @@ module gtk
 import core
 import datastruct
 import apprt
+import log
 
 // --- New Adw C bindings unique to this file -------------------------------
 //
@@ -335,19 +336,26 @@ fn (mut self Tab) init_action_map() {
 
 fn tab_action_close_cb(action GSimpleAction, parameter GVariant, data voidptr) {
 	_ = action
-	if isnil(parameter) || isnil(data) {
+	if isnil(data) {
+		return
+	}
+	if isnil(parameter) {
+		log.warn('tab.close-tab called without a parameter')
 		return
 	}
 	mut length := usize(0)
 	value := C.g_variant_get_string(parameter, &length)
 	if isnil(value) {
+		log.warn('invalid mode provided to tab.close-tab')
 		return
 	}
-	mode := match unsafe { cstring_to_vstring(value) } {
+	mode_value := unsafe { cstring_to_vstring(value) }
+	mode := match mode_value {
 		'this' { CloseTabMode.this }
 		'other' { CloseTabMode.other }
 		'right' { CloseTabMode.right }
 		else {
+			log.warn('invalid mode provided to tab.close-tab: ${mode_value}')
 			return
 		}
 	}
