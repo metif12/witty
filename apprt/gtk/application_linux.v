@@ -492,7 +492,7 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 
 	// Set the gettext global domain so unqualified translations resolve.
 	internal_os.init_global_domain() or {
-		eprintln('i18n initialization failed error=${err}')
+		log.warn('i18n initialization failed error=${err}')
 	}
 
 	// Load defaults, user files, command-line flags, recursive files, and theme
@@ -529,7 +529,7 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 		if C.g_application_id_is_valid(&char(class.str)) {
 			app_id = class
 		} else {
-			// log.warn("invalid 'class' in config, ignoring")
+			log.warn("invalid 'class' in config, ignoring")
 		}
 	}
 
@@ -541,9 +541,10 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 		return error('GDK display is unavailable')
 	}
 	winproto := WinProtoApp.init(display, app_id, &config) or {
-		// log.warn("error initializing windowing protocol")
+		log.warn('error initializing windowing protocol err=${err}')
 		NoopApp{}
 	}
+	log.debug('creating GTK application id=${app_id} single-instance=${single_instance}')
 
 	// The runtime provider is retained for the application's lifetime. The
 	// priority matches Ghostty's application priority + 3.
@@ -705,14 +706,17 @@ pub fn (mut self Application) run() ! {
 
 	// If we are NOT the primary instance, we never run the loop.
 	if !isnil(self.obj) && C.g_application_get_is_remote(self.obj) {
-		// log.debug("application is remote, exiting after activation")
+		log.debug('application is remote, exiting run loop after activation')
 		return
 	}
 
 	// Tell systemd that we are ready.
 	internal_os.ready()
 
-	// log.debug("entering runloop")
+	log.debug('entering runloop')
+	defer {
+		log.debug('exiting runloop')
+	}
 	self.running = true
 	for self.running {
 		C.g_main_context_iteration(ctx, true)
@@ -744,7 +748,7 @@ fn (self &Application) must_quit() bool {
 
 	// If the quit timer has expired, quit.
 	if self.quit_timer is QuitTimerExpired {
-		// log.debug("must_quit due to quit timer expired")
+		log.debug('must_quit due to quit timer expired')
 		return true
 	}
 
@@ -754,7 +758,7 @@ fn (self &Application) must_quit() bool {
 		&& !isnil(self.obj) {
 		windows := C.gtk_application_get_windows(GtkApplication(self.obj))
 		if isnil(windows) {
-			// log.debug("must_quit due to no app windows")
+			log.debug('must_quit due to no app windows')
 			return true
 		}
 	}
@@ -874,7 +878,7 @@ fn (mut self Application) stop_quit_timer() {
 		QuitTimerExpired {}
 		QuitTimerActive {
 			if !C.g_source_remove(timer.source) {
-				// log.warn("unable to remove quit timer source")
+				log.warn('unable to remove quit timer source=${timer.source}')
 			}
 		}
 	}
@@ -1610,7 +1614,7 @@ fn (mut self Application) dispose() {
 
 	if v := self.signal_source {
 		if !C.g_source_remove(v) {
-			// log.warn("unable to remove signal source")
+			log.warn('unable to remove signal source')
 		}
 		self.signal_source = none
 	}
@@ -2324,14 +2328,13 @@ fn set_gtk_env(config &configpkg.Config) {
 		gdk_debug << 'opengl'
 	}
 
-	if gdk_debug.len > 0 {
-		val := gdk_debug.join(',')
-		C.setenv(c'GDK_DEBUG', &char(val.str), 1)
-	}
-	if gdk_disable.len > 0 {
-		val := gdk_disable.join(',')
-		C.setenv(c'GDK_DISABLE', &char(val.str), 1)
-	}
+	gdk_debug_value := gdk_debug.join(',')
+	log.warn('setting GDK_DEBUG=${gdk_debug_value}')
+	C.setenv(c'GDK_DEBUG', &char(gdk_debug_value.str), 1)
+
+	gdk_disable_value := gdk_disable.join(',')
+	log.warn('setting GDK_DISABLE=${gdk_disable_value}')
+	C.setenv(c'GDK_DISABLE', &char(gdk_disable_value.str), 1)
 }
 
 // find_active_window is a GCompareFunc that matches the currently-active
