@@ -9,6 +9,13 @@ fn test_gtk_enum_layouts_and_source_values() {
 		3,
 		4,
 	]
+	assert sizeof(GtkInterfaceColorScheme) == 4
+	assert [GtkInterfaceColorScheme.unsupported, .default_, .dark, .light].map(i32(it)) == [
+		i32(0),
+		1,
+		2,
+		3,
+	]
 	assert sizeof(GBusType) == 4
 	assert [GBusType.starter, .@none, .system, .session].map(i32(it)) == [i32(-1), 0, 1, 2]
 	assert sizeof(Align) == 4
@@ -36,6 +43,11 @@ fn test_gtk_enum_layouts_and_source_values() {
 	assert [IMKeyEvent.false_, .composing, .not_composing].map(u8(it)) == [u8(0), 1, 2]
 	assert sizeof(Protocol) == 1
 	assert [Protocol.none_, .wayland, .x11].map(u8(it)) == [u8(0), 1, 2]
+}
+
+fn test_application_interface_color_scheme_maps_core_scheme() {
+	assert application_interface_color_scheme(.light) == .light
+	assert application_interface_color_scheme(.dark) == .dark
 }
 
 fn test_select_tab_union_retains_only_the_active_payload() {

@@ -141,6 +141,23 @@ pub enum AdwColorScheme as i32 {
 	force_dark   = 4
 }
 
+// GtkInterfaceColorScheme backs GtkCssProvider:prefers-color-scheme beginning
+// with GTK 4.20. Keep every native value because GTK may surface the other two
+// through property APIs even though Ghostty assigns only light and dark.
+pub enum GtkInterfaceColorScheme as i32 {
+	unsupported = 0
+	default_    = 1
+	dark        = 2
+	light       = 3
+}
+
+fn application_interface_color_scheme(scheme apprt.ColorScheme) GtkInterfaceColorScheme {
+	return match scheme {
+		.light { .light }
+		.dark { .dark }
+	}
+}
+
 const gtk_style_provider_priority_application = u32(600)
 const gtk_style_provider_priority_user = u32(800)
 const application_style_css = $embed_file('style.css').to_string()
@@ -1583,8 +1600,19 @@ fn (mut self Application) handle_style_manager_dark(style voidptr) {
 			eprintln('error reloading config for color scheme: ${err}')
 		}
 	}
-	// GTK 4.20 CSS provider prefers-color-scheme propagation is translated
-	// with CSS provider lifecycle support.
+	if gtk_runtime_at_least(4, 20, 0) {
+		gtk_scheme := application_interface_color_scheme(scheme)
+		if !isnil(self.css_provider) {
+			C.g_object_set(GObject(self.css_provider), c'prefers-color-scheme', int(gtk_scheme),
+				unsafe { nil })
+		}
+		for provider in self.custom_css_providers {
+			if !isnil(provider) {
+				C.g_object_set(GObject(provider), c'prefers-color-scheme', int(gtk_scheme),
+					unsafe { nil })
+			}
+		}
+	}
 }
 
 fn application_style_manager_dark_cb(style voidptr, pspec &C.GParamSpec, user_data voidptr) {
