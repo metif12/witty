@@ -46,6 +46,28 @@ fn test_regular_command_has_no_jump_surface() {
 	cfg.unref()
 }
 
+fn test_command_data_retains_only_the_active_payload() {
+	regular := Command{
+		data: RegularData{
+			command: input.Command{
+				action: input.ActionIgnore{}
+				title: 'Regular'
+			}
+		}
+	}
+	assert regular.data is RegularData
+	assert !regular.is_jump()
+
+	jump := Command{
+		data: JumpData{
+			sort_key: 42
+		}
+	}
+	assert jump.data is JumpData
+	assert jump.is_jump()
+	assert jump.get_action() == none
+}
+
 fn test_command_palette_action_key_uses_full_action_format() {
 	mut cfg := config_new(configpkg.Config{})
 	mut command := Command.new(cfg, input.Command{
@@ -63,15 +85,19 @@ fn test_command_palette_filter_matches_title_or_action_key() {
 	mut palette := &CommandPalette{}
 	palette.commands = [
 		&Command{
-			command: input.Command{
-				action: input.ActionNewWindow{}
-				title: 'Open a Window'
+			data: RegularData{
+				command: input.Command{
+					action: input.ActionNewWindow{}
+					title: 'Open a Window'
+				}
 			}
 		},
 		&Command{
-			command: input.Command{
-				action: input.ActionCopyToClipboard{}
-				title: 'Copy Selection'
+			data: RegularData{
+				command: input.Command{
+					action: input.ActionCopyToClipboard{}
+					title: 'Copy Selection'
+				}
 			}
 		},
 	]

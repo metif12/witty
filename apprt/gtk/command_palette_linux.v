@@ -86,54 +86,49 @@ fn C.adw_dialog_close(dialog AdwDialog) bool
 
 fn C.gtk_widget_get_realized(widget GtkWidget) bool
 
-// --- CommandDataKind ------------------------------------------------------
+// --- CommandData ----------------------------------------------------------
 
-// CommandDataKind mirrors the tag of the Zig `Private.CommandData` union
-// (regular vs jump).
-pub enum CommandDataKind as u8 {
-	regular
-	jump
+// These types mirror the two payloads of `Private.CommandData`. Keeping the
+// payload in a sum type means a command retains only its active representation,
+// just like the source union.
+pub struct RegularData {
+pub mut:
+	command        input.Command
+	action_str     string
+	action_key_str string
 }
+
+pub struct JumpData {
+pub mut:
+	surface         WeakRef = weak_ref_empty()
+	surface_ptr     &SurfaceWidget = unsafe { nil }
+	title           string
+	description     string
+	sort_key        usize
+}
+
+pub type CommandData = JumpData | RegularData
 
 // --- Command --------------------------------------------------------------
 
 // Command is the V model corresponding to Ghostty's `GhosttyCommand` GObject
-// wrapper. Fields mirror the Zig `Private` struct, flattened (V has no
-// tagged-union field ergonomics matching the Zig union): `kind` selects which
-// of the regular/jump fields are live.
+// wrapper. Fields mirror the Zig `Private` struct.
 @[heap]
 pub struct Command {
 pub mut:
 	// The config this command was built from. nil means "unset".
 	config &Config = unsafe { nil }
 
-	// Which kind of command this is.
-	kind CommandDataKind = .regular
-
-	// --- regular data ---
-	// The underlying input command (title/description/action live here).
-	command input.Command
-	// Cached, lazily-computed derived strings. Empty means "not yet computed".
-	action_str     string
-	action_key_str string
-
-	// --- jump data ---
-	// Weak reference to the target surface (so we don't keep it alive).
-	jump_surface     WeakRef = weak_ref_empty()
-	jump_surface_ptr &SurfaceWidget = unsafe { nil }
-	// Cached lazily-computed jump title/description.
-	jump_title       string
-	jump_description string
-	// A stable sort key for jump commands (the surface pointer in ghostty).
-	sort_key usize
+	data CommandData = RegularData{}
 }
 
 // new creates a regular command wrapping an input.Command.
 pub fn Command.new(config &Config, command input.Command) &Command {
 	mut self := &Command{
 		config: unsafe { nil }
-		kind: .regular
-		command: command.clone()
+		data: RegularData{
+			command: command.clone()
+		}
 	}
 	if !isnil(config) {
 		self.config = config_ref(config)
@@ -143,18 +138,20 @@ pub fn Command.new(config &Config, command input.Command) &Command {
 
 // new_jump creates a jump command focusing a specific surface.
 pub fn Command.new_jump(config &Config, surface &SurfaceWidget) &Command {
+	mut jump := JumpData{
+		// TODO: replace with a surface id once Ghostty adds one (matches the
+		// source `@intFromPtr(surface)`).
+		sort_key: usize(voidptr(surface))
+		surface_ptr: unsafe { surface }
+	}
+	jump.surface.set(GObject(surface.widget))
 	mut self := &Command{
 		config: unsafe { nil }
-		kind: .jump
-		// TODO: replace with a surface id once witty adds one (matches ghostty's
-		// `@intFromPtr(surface)`).
-		sort_key: usize(voidptr(surface))
-		jump_surface_ptr: surface
+		data: jump
 	}
 	if !isnil(config) {
 		self.config = config_ref(config)
 	}
-	self.jump_surface.set(GObject(surface.widget))
 	return self
 }
 
@@ -172,96 +169,106 @@ fn config_ref(config &Config) &Config {
 // prop_get_action_key returns a stable string key for the action, or `none` for
 // jump commands. Mirrors `propGetActionKey`.
 pub fn (mut self Command) prop_get_action_key() ?string {
-	if self.kind != .regular {
-		return none
+	match mut self.data {
+		RegularData {
+			if self.data.action_key_str.len > 0 {
+				return self.data.action_key_str
+			}
+			self.data.action_key_str = self.data.command.action.format()
+			return self.data.action_key_str
+		}
+		JumpData {
+			return none
+		}
 	}
-	if self.action_key_str.len > 0 {
-		return self.action_key_str
-	}
-	self.action_key_str = self.command.action.format()
-	return self.action_key_str
 }
 
 // prop_get_action returns the GTK accelerator string for this command's action
 // (e.g. "<Ctrl>c"), or `none` if there is no keybind. Mirrors `propGetAction`.
 pub fn (mut self Command) prop_get_action() ?string {
-	if self.kind != .regular {
-		return none
-	}
-	if self.action_str.len > 0 {
-		return self.action_str
-	}
-	if isnil(self.config) {
-		return none
-	}
+	match mut self.data {
+		RegularData {
+			if self.data.action_str.len > 0 {
+				return self.data.action_str
+			}
+			if isnil(self.config) {
+				return none
+			}
 
-	cfg := self.config.get()
-	trigger := cfg.keybind.set.get_trigger(self.command.action) or { return none }
-	accel := accel_from_trigger(trigger) or { return none }
-	self.action_str = accel
-	return self.action_str
+			cfg := self.config.get()
+			trigger := cfg.keybind.set.get_trigger(self.data.command.action) or { return none }
+			accel := accel_from_trigger(trigger) or { return none }
+			self.data.action_str = accel
+			return self.data.action_str
+		}
+		JumpData {
+			return none
+		}
+	}
 }
 
 // prop_get_title returns the display title. For jump commands this is
 // "Focus: <surface title>" (or "Focus: Untitled"). Mirrors `propGetTitle`.
 pub fn (mut self Command) prop_get_title() ?string {
-	if self.kind == .regular {
-		return self.command.title
+	match mut self.data {
+		RegularData {
+			return self.data.command.title
+		}
+		JumpData {
+			if self.data.title.len > 0 {
+				return self.data.title
+			}
+			obj := self.data.surface.get()
+			if isnil(obj) {
+				return none
+			}
+			defer {
+				object_unref(obj)
+			}
+			if isnil(self.data.surface_ptr) {
+				return none
+			}
+			surface_title := self.data.surface_ptr.get_title() or { 'Untitled' }
+			self.data.title = 'Focus: ${surface_title}'
+			return self.data.title
+		}
 	}
-
-	// jump
-	if self.jump_title.len > 0 {
-		return self.jump_title
-	}
-	obj := self.jump_surface.get()
-	if isnil(obj) {
-		return none
-	}
-	defer {
-		object_unref(obj)
-	}
-	if isnil(self.jump_surface_ptr) {
-		return none
-	}
-	surface := self.jump_surface_ptr
-	surface_title := surface.get_title() or { 'Untitled' }
-	self.jump_title = 'Focus: ${surface_title}'
-	return self.jump_title
 }
 
 // prop_get_description returns the (optional) description. For jump commands
 // this is the surface pwd when it isn't already part of the title. Mirrors
 // `propGetDescription`.
 pub fn (mut self Command) prop_get_description() ?string {
-	if self.kind == .regular {
-		return self.command.description
-	}
-
-	// jump
-	if self.jump_description.len > 0 {
-		return self.jump_description
-	}
-	obj := self.jump_surface.get()
-	if isnil(obj) {
-		return none
-	}
-	defer {
-		object_unref(obj)
-	}
-	if isnil(self.jump_surface_ptr) {
-		return none
-	}
-	surface := self.jump_surface_ptr
-	title := surface.get_title() or { 'Untitled' }
-	if pwd := surface.get_pwd() {
-		if !title.contains(pwd) {
-			self.jump_description = pwd
+	match mut self.data {
+		RegularData {
+			return self.data.command.description
+		}
+		JumpData {
+			if self.data.description.len > 0 {
+				return self.data.description
+			}
+			obj := self.data.surface.get()
+			if isnil(obj) {
+				return none
+			}
+			defer {
+				object_unref(obj)
+			}
+			if isnil(self.data.surface_ptr) {
+				return none
+			}
+			title := self.data.surface_ptr.get_title() or { 'Untitled' }
+			if pwd := self.data.surface_ptr.get_pwd() {
+				if !title.contains(pwd) {
+					self.data.description = pwd
+				}
+			}
+			if self.data.description.len == 0 {
+				return none
+			}
+			return self.data.description
 		}
 	}
-	if self.jump_description.len == 0 {
-		return none
-	}
-	return self.jump_description
 }
 
 // --- Command accessors ----------------------------------------------------
@@ -269,32 +276,36 @@ pub fn (mut self Command) prop_get_description() ?string {
 // get_action returns a copy of the action for regular commands, or `none` for
 // jump commands. Mirrors `getAction`.
 pub fn (self &Command) get_action() ?input.Action {
-	if self.kind != .regular {
-		return none
+	return match self.data {
+		RegularData { self.data.command.action }
+		JumpData { none }
 	}
-	return self.command.action
 }
 
 // is_jump reports whether this is a jump command. Mirrors `isJump`.
 pub fn (self &Command) is_jump() bool {
-	return self.kind == .jump
+	return self.data is JumpData
 }
 
 // get_jump_surface returns the jump target with a new strong reference. The
 // caller must call SurfaceWidget.unref when finished, matching getJumpSurface.
 pub fn (mut self Command) get_jump_surface() ?&SurfaceWidget {
-	if self.kind != .jump {
-		return none
+	match mut self.data {
+		RegularData {
+			return none
+		}
+		JumpData {
+			obj := self.data.surface.get()
+			if isnil(obj) {
+				return none
+			}
+			if isnil(self.data.surface_ptr) {
+				object_unref(obj)
+				return none
+			}
+			return self.data.surface_ptr
+		}
 	}
-	obj := self.jump_surface.get()
-	if isnil(obj) {
-		return none
-	}
-	if isnil(self.jump_surface_ptr) {
-		object_unref(obj)
-		return none
-	}
-	return self.jump_surface_ptr
 }
 
 // present_jump_surface presents the jump target while holding the strong
@@ -315,9 +326,12 @@ pub fn (mut self Command) dispose() {
 		self.config.unref()
 		self.config = unsafe { nil }
 	}
-	if self.kind == .jump {
-		self.jump_surface.set(unsafe { nil })
-		self.jump_surface_ptr = unsafe { nil }
+	match mut self.data {
+		RegularData {}
+		JumpData {
+			self.data.surface.set(unsafe { nil })
+			self.data.surface_ptr = unsafe { nil }
+		}
 	}
 }
 
@@ -498,10 +512,15 @@ fn compare_commands(mut a Command, mut b Command) bool {
 	// Titles are equal: use sort_key as a tie-breaker for jump commands. A
 	// regular command in either slot means "not less than" (matches the Zig
 	// `.regular => return false`).
-	if a.kind != .jump || b.kind != .jump {
-		return false
+	a_sort_key := match a.data {
+		RegularData { return false }
+		JumpData { a.data.sort_key }
 	}
-	return a.sort_key < b.sort_key
+	b_sort_key := match b.data {
+		RegularData { return false }
+		JumpData { b.data.sort_key }
+	}
+	return a_sort_key < b_sort_key
 }
 
 // --- Dialog / activation --------------------------------------------------
