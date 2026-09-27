@@ -31,8 +31,13 @@ pub fn (mut self SpirvLog) deinit() {
 pub fn load_from_files(paths configpkg.RepeatablePath, target Target) ![]string {
 	mut shaders := []string{cap: paths.items.len}
 	for item in paths.items {
-		shader := load_from_file(item.path, target) or {
-			if item.optional && is_missing_file_error(err) {
+		path := match item {
+			configpkg.PathOptional { item.path }
+			configpkg.PathRequired { item.path }
+		}
+		optional := item is configpkg.PathOptional
+		shader := load_from_file(path, target) or {
+			if optional && is_missing_file_error(err) {
 				continue
 			}
 			return err

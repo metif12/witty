@@ -1030,9 +1030,13 @@ fn (mut self Application) load_custom_css() {
 
 	css_file_size_limit := u64(5 * 1024 * 1024)
 	for entry in self.config.gtk_custom_css.items {
-		path := entry.path
+		path := match entry {
+			configpkg.PathOptional { entry.path }
+			configpkg.PathRequired { entry.path }
+		}
+		optional := entry is configpkg.PathOptional
 		if !os.exists(path) {
-			if !entry.optional {
+			if !optional {
 				eprintln('error opening gtk-custom-css file ${path}: file not found')
 			}
 			continue

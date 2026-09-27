@@ -254,7 +254,7 @@ fn test_load_cli_args_applies_flags_paths_and_command_tail() {
 	assert cfg.font_family == ['From CLI']
 	assert !cfg.window_vsync
 	assert cfg.custom_shader.items == [
-		Path{ path: os.join_path(os.getwd(), 'shader.glsl') },
+		Path(PathRequired{ path: os.join_path(os.getwd(), 'shader.glsl') }),
 	]
 	command := cfg.initial_command or { panic('missing -e command') }
 	match command {
@@ -1718,13 +1718,12 @@ fn test_bell_audio_parse_format_and_path_expansion() {
 	assert cfg.bell_audio_volume == 0.5
 	cfg.load_string('bell-audio-path = ?sounds/bell.oga\nbell-audio-volume = 0.75')
 	assert cfg.diagnostics.len == 0
-	assert cfg.bell_audio_path? == Path{ path: 'sounds/bell.oga', optional: true }
+	assert cfg.bell_audio_path? == Path(PathOptional{ path: 'sounds/bell.oga' })
 	assert cfg.bell_audio_volume == 0.75
 	cfg.expand_paths(base)!
-	assert cfg.bell_audio_path? == Path{
+	assert cfg.bell_audio_path? == Path(PathOptional{
 		path: os.join_path(base, 'sounds', 'bell.oga')
-		optional: true
-	}
+	})
 	formatted := cfg.format_config(true)
 	assert formatted.contains('bell-audio-path = ?${os.join_path(base, 'sounds', 'bell.oga')}\n')
 	assert formatted.contains('bell-audio-volume = 0.75\n')
@@ -1742,8 +1741,8 @@ fn test_gtk_css_config_parse_format_clone_and_clear() {
 	assert cfg.window_titlebar_background? == ColorRGB{18, 52, 86}
 	assert cfg.window_titlebar_foreground? == ColorRGB{240, 248, 255}
 	assert cfg.gtk_custom_css.items == [
-		Path{ path: 'one.css' },
-		Path{ path: 'optional.css', optional: true },
+		Path(PathRequired{ path: 'one.css' }),
+		Path(PathOptional{ path: 'optional.css' }),
 	]
 
 	cloned := cfg.clone()
@@ -2222,7 +2221,7 @@ fn test_theme_loading_resolves_user_theme_name() {
 	cfg.finalize()!
 	assert cfg.background == ColorRGB{0x12, 0x34, 0x56}
 	assert cfg.custom_shader.items == [
-		Path{ path: 'shader.glsl' },
+		Path(PathRequired{ path: 'shader.glsl' }),
 	]
 	assert cfg.diagnostics.len == 0
 }
@@ -2305,10 +2304,10 @@ keybind = ctrl+b=new_tab
 	assert cfg.palette.value[2] == ColorRGB{0x22, 0x22, 0x22}
 	assert cfg.font_family == ['Theme Font', 'User Font']
 	assert cfg.custom_shader.items == [
-		Path{ path: os.join_path(dir, 'theme.glsl') },
-		Path{ path: os.join_path(dir, 'user.glsl') },
+		Path(PathRequired{ path: os.join_path(dir, 'theme.glsl') }),
+		Path(PathRequired{ path: os.join_path(dir, 'user.glsl') }),
 	]
-	assert cfg.config_file.items == [Path{ path: os.join_path(dir, 'ignored.conf') }]
+	assert cfg.config_file.items == [Path(PathRequired{ path: os.join_path(dir, 'ignored.conf') })]
 	assert (cfg.keybind.set.get(input.Trigger.parse('ctrl+a')!) or {
 		panic('theme keybind was not retained')
 	}.value as input.Leaf).action.tag() == .new_window
@@ -2345,8 +2344,8 @@ fn test_conditional_theme_replay_replaces_theme_repeatables() {
 	}
 	assert saw_light_theme_step
 	assert cfg.custom_shader.items == [
-		Path{ path: 'light.glsl' },
-		Path{ path: 'user.glsl' },
+		Path(PathRequired{ path: 'light.glsl' }),
+		Path(PathRequired{ path: 'user.glsl' }),
 	]
 
 	dark_result := cfg.change_conditional_state(ConditionalState{ theme: .dark })!
@@ -2372,8 +2371,8 @@ fn test_conditional_theme_replay_replaces_theme_repeatables() {
 	}
 	assert saw_dark_theme_step
 	assert dark_cfg.custom_shader.items == [
-		Path{ path: 'dark.glsl' },
-		Path{ path: 'user.glsl' },
+		Path(PathRequired{ path: 'dark.glsl' }),
+		Path(PathRequired{ path: 'user.glsl' }),
 	]
 }
 
@@ -3251,15 +3250,16 @@ auto-update-channel = stable
 	assert cfg.font_thicken_strength == 42
 	assert !cfg.font_shaping_break.cursor()
 	assert cfg.custom_shader.items == [
-		Path{ path: 'one.glsl' },
-		Path{ path: 'optional shader.glsl', optional: true },
+		Path(PathRequired{ path: 'one.glsl' }),
+		Path(PathOptional{ path: 'optional shader.glsl' }),
 	]
 	assert cfg.config_file.items == [
-		Path{ path: 'extra.conf' },
-		Path{ path: 'optional.conf', optional: true },
+		Path(PathRequired{ path: 'extra.conf' }),
+		Path(PathOptional{ path: 'optional.conf' }),
 	]
-	assert cfg.background_image?.path == 'bg.png'
-	assert cfg.background_image?.optional
+	background_image := cfg.background_image or { panic('missing background image') }
+	assert background_image is PathOptional
+	assert (background_image as PathOptional).path == 'bg.png'
 	assert cfg.background_image_opacity == 0.75
 	assert cfg.background_image_position == .center_center
 	assert cfg.background_image_fit == .cover
@@ -3530,8 +3530,8 @@ fn test_repeatable_path_parses_required_optional_quotes_and_reset() {
 	paths.parse_cli('?"optional shader.glsl"')!
 	paths.parse_cli('?')!
 	assert paths.items == [
-		Path{ path: 'one.glsl' },
-		Path{ path: 'optional shader.glsl', optional: true },
+		Path(PathRequired{ path: 'one.glsl' }),
+		Path(PathOptional{ path: 'optional shader.glsl' }),
 	]
 	paths.parse_cli('')!
 	assert paths.items.len == 0
@@ -3542,9 +3542,10 @@ fn test_path_parse_distinguishes_quoted_question_mark() {
 	maybe_optional := Path.parse('?"optional.conf"')!
 	required := maybe_required.value or { panic('missing required path') }
 	optional := maybe_optional.value or { panic('missing optional path') }
-	assert required == Path{ path: '?required.conf' }
-	assert optional == Path{ path: 'optional.conf', optional: true }
+	assert required == Path(PathRequired{ path: '?required.conf' })
+	assert optional == Path(PathOptional{ path: 'optional.conf' })
 	assert !required.equal(optional)
+	assert !Path(PathRequired{ path: 'same.conf' }).equal(Path(PathOptional{ path: 'same.conf' }))
 }
 
 fn test_path_parse_preserves_error_union_optional_contract() {
@@ -3555,30 +3556,30 @@ fn test_path_parse_preserves_error_union_optional_contract() {
 	}
 	assert missing_error == .value_required
 	assert Path.parse('')!.value == none
-	assert Path.parse('?')!.value? == Path{ path: '', optional: true }
-	assert Path.parse('""')!.value? == Path{ path: '' }
-	assert Path.parse('?""')!.value? == Path{ path: '', optional: true }
+	assert Path.parse('?')!.value? == Path(PathOptional{ path: '' })
+	assert Path.parse('""')!.value? == Path(PathRequired{ path: '' })
+	assert Path.parse('?""')!.value? == Path(PathOptional{ path: '' })
 }
 
 fn test_path_public_parse_and_format_apis() {
-	mut path := Path{
+	mut path := Path(PathRequired{
 		path: 'original.conf'
-	}
+	})
 	assert path.len() == 13
 	assert path.format_entry() == 'original.conf'
 
 	path.parse_cli('?"optional.conf"')!
-	assert path == Path{ path: 'optional.conf', optional: true }
+	assert path == Path(PathOptional{ path: 'optional.conf' })
 	assert path.format_entry() == '?optional.conf'
 
 	// Empty parsed paths do not replace the existing value.
 	path.parse_cli('?')!
 	path.parse_cli('""')!
-	assert path == Path{ path: 'optional.conf', optional: true }
+	assert path == Path(PathOptional{ path: 'optional.conf' })
 
 	assert RepeatablePath{}.format_entry() == ['']
 	assert RepeatablePath{
-		items: [Path{ path: 'one' }, Path{ path: 'two', optional: true }]
+		items: [Path(PathRequired{ path: 'one' }), Path(PathOptional{ path: 'two' })]
 	}.format_entry() == ['one', '?two']
 }
 
@@ -3593,10 +3594,11 @@ fn test_path_expand_uses_translated_home_expansion() {
 	}
 	os.setenv('HOME', '/tmp/witty-path-home/', true)
 
-	mut path := Path{ path: '~/shader.glsl' }
+	mut path := Path(PathRequired{ path: '~/shader.glsl' })
 	mut diagnostics := []Diagnostic{}
 	path.expand('/tmp', mut diagnostics)!
-	assert path.path == '/tmp/witty-path-home//shader.glsl'
+	assert path is PathRequired
+	assert (path as PathRequired).path == '/tmp/witty-path-home//shader.glsl'
 	assert diagnostics.len == 0
 }
 
@@ -3610,10 +3612,11 @@ fn test_path_expand_canonicalizes_existing_relative_path() ! {
 		}
 		os.symlink(os.join_path(dir, 'actual'), os.join_path(dir, 'linked'))!
 
-		mut path := Path{ path: 'linked' }
+		mut path := Path(PathRequired{ path: 'linked' })
 		mut diagnostics := []Diagnostic{}
 		path.expand(dir, mut diagnostics)!
-		assert path.path == os.real_path(os.join_path(dir, 'actual'))
+		assert path is PathRequired
+		assert (path as PathRequired).path == os.real_path(os.join_path(dir, 'actual'))
 		assert diagnostics.len == 0
 	}
 }
@@ -3628,10 +3631,10 @@ fn test_path_expand_records_resolution_errors_and_blanks_path() ! {
 		}
 		os.write_file(os.join_path(dir, 'file'), '')!
 
-		mut path := Path{ path: 'file/child', optional: true }
+		mut path := Path(PathOptional{ path: 'file/child' })
 		mut diagnostics := []Diagnostic{}
 		path.expand(dir, mut diagnostics)!
-		assert path == Path{ path: '', optional: false }
+		assert path == Path(PathRequired{ path: '' })
 		assert diagnostics.len == 1
 		assert diagnostics[0].message.starts_with('error resolving file path file/child: ')
 	}
@@ -3648,8 +3651,8 @@ fn test_load_file_expands_paths_relative_to_declaring_file() {
 	os.write_file(path, 'custom-shader = shader.glsl\nbackground-image = images/bg.png\n')!
 	mut cfg := Config.default_config()
 	cfg.load_file(path)!
-	assert cfg.custom_shader.items == [Path{ path: os.join_path(dir, 'shader.glsl') }]
-	assert cfg.background_image? == Path{ path: os.join_path(dir, 'images', 'bg.png') }
+	assert cfg.custom_shader.items == [Path(PathRequired{ path: os.join_path(dir, 'shader.glsl') })]
+	assert cfg.background_image? == Path(PathRequired{ path: os.join_path(dir, 'images', 'bg.png') })
 	assert cfg.diagnostics.len == 0
 }
 
@@ -3672,11 +3675,11 @@ fn test_load_recursive_files_preserves_order_and_nested_bases() {
 	cfg.load_recursive_files()!
 	assert cfg.font_size == 12
 	assert cfg.config_file.items == [
-		Path{ path: os.real_path(first) },
-		Path{ path: os.real_path(second) },
+		Path(PathRequired{ path: os.real_path(first) }),
+		Path(PathRequired{ path: os.real_path(second) }),
 	]
 	assert cfg.custom_shader.items == [
-		Path{ path: os.join_path(os.dir(os.real_path(second)), 'effect.glsl') },
+		Path(PathRequired{ path: os.join_path(os.dir(os.real_path(second)), 'effect.glsl') }),
 	]
 	assert cfg.diagnostics.len == 0
 }

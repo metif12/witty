@@ -5414,7 +5414,7 @@ pub fn (mut p RepeatablePath) parse_cli(input ?string) ! {
 		p.items.clear()
 		return
 	}
-	if item.path.len > 0 {
+	if item.len() > 0 {
 		p.items << item
 	}
 }
@@ -5748,15 +5748,25 @@ pub fn (r RepeatableCommand) format_entry() []string {
 	return result
 }
 
-// Path represents a config file path.
-pub struct Path {
+// Path is a tagged config file path. Optional paths may be absent without
+// producing a diagnostic; required paths may not.
+pub struct PathOptional {
 pub mut:
-	path     string
-	optional bool
+	path string
 }
 
+pub struct PathRequired {
+pub mut:
+	path string
+}
+
+pub type Path = PathOptional | PathRequired
+
 pub fn (p Path) len() int {
-	return p.path.len
+	return match p {
+		PathOptional { p.path.len }
+		PathRequired { p.path.len }
+	}
 }
 
 // PathParseResult preserves Ghostty's error-union-of-optional return in V,
@@ -5781,9 +5791,14 @@ pub fn Path.parse(input ?string) !PathParseResult {
 		value = value[1..value.len - 1]
 	}
 	return PathParseResult{
-		value: Path{
-			path: value
-			optional: optional
+		value: if optional {
+			Path(PathOptional{
+				path: value
+			})
+		} else {
+			Path(PathRequired{
+				path: value
+			})
 		}
 	}
 }
@@ -5802,19 +5817,37 @@ pub fn (mut p Path) parse_cli(input ?string) ! {
 }
 
 pub fn (a Path) equal(b Path) bool {
-	return a.path == b.path && a.optional == b.optional
+	return match a {
+		PathOptional {
+			b is PathOptional && a.path == b.path
+		}
+		PathRequired {
+			b is PathRequired && a.path == b.path
+		}
+	}
 }
 
 pub fn (p Path) clone() !Path {
-	return Path{
-		path: p.path
-		optional: p.optional
+	return match p {
+		PathOptional {
+			Path(PathOptional{
+				path: p.path
+			})
+		}
+		PathRequired {
+			Path(PathRequired{
+				path: p.path
+			})
+		}
 	}
 }
 
 // format_entry is the value passed to Config's entry formatter.
 pub fn (p Path) format_entry() string {
-	return '${if p.optional { '?' } else { '' }}${p.path}'
+	return match p {
+		PathOptional { '?${p.path}' }
+		PathRequired { p.path }
+	}
 }
 
 // expand resolves this path exactly when a configuration reader finishes a
@@ -5822,21 +5855,29 @@ pub fn (p Path) format_entry() string {
 // them.
 pub fn (mut p Path) expand(base string, mut diagnostics []Diagnostic) ! {
 	assert os.is_abs_path(base)
-	if p.path.len == 0 || os.is_abs_path(p.path) {
+	path := match p {
+		PathOptional { p.path }
+		PathRequired { p.path }
+	}
+	if path.len == 0 || os.is_abs_path(path) {
 		return
 	}
-	if p.path.starts_with('~/') {
+	if path.starts_with('~/') {
 		$if !windows {
-			original := p.path
+			original := path
 			expanded := internal_os.expand_home(original) or {
-				p.path = ''
-				p.optional = false
+				p = PathRequired{
+					path: ''
+				}
 				diagnostics << Diagnostic{
 					message: 'error expanding home directory for path ${original}: ${err}'
 				}
 				return
 			}
-			p.path = expanded
+			match mut p {
+				PathOptional { p.path = expanded }
+				PathRequired { p.path = expanded }
+			}
 			return
 		}
 	}
@@ -5844,24 +5885,33 @@ pub fn (mut p Path) expand(base string, mut diagnostics []Diagnostic) ! {
 	if base_stat.get_filetype() != .directory {
 		return error_with_code('not a directory', C.ENOTDIR)
 	}
-	joined := os.join_path(base, p.path)
+	joined := os.join_path(base, path)
 	// Ghostty asks the directory for a real path first, preserving canonical
 	// symlink resolution for existing entries. A missing entry falls back to
 	// lexical path resolution so configuration may name files created later.
 	_ := os.stat(joined) or {
 		if err.code() == C.ENOENT {
-			p.path = os.norm_path(joined)
+			resolved := os.norm_path(joined)
+			match mut p {
+				PathOptional { p.path = resolved }
+				PathRequired { p.path = resolved }
+			}
 			return
 		}
-		original := p.path
-		p.path = ''
-		p.optional = false
+		original := path
+		p = PathRequired{
+			path: ''
+		}
 		diagnostics << Diagnostic{
 			message: 'error resolving file path ${original}: ${err}'
 		}
 		return
 	}
-	p.path = os.real_path(joined)
+	resolved := os.real_path(joined)
+	match mut p {
+		PathOptional { p.path = resolved }
+		PathRequired { p.path = resolved }
+	}
 }
 
 // RepeatableLink is Config.RepeatableLink. Custom link parsing is deliberately
@@ -7685,10 +7735,14 @@ pub fn (mut c Config) load_recursive_files() ! {
 	for index < c.config_file.items.len {
 		item := c.config_file.items[index]
 		index++
-		if item.path.len == 0 {
+		path := match item {
+			PathOptional { item.path }
+			PathRequired { item.path }
+		}
+		optional := item is PathOptional
+		if path.len == 0 {
 			continue
 		}
-		path := item.path
 		assert os.is_abs_path(path)
 		if path in loaded {
 			c.add_replay_diagnostic('config-file ${path}: cycle detected')
@@ -7696,7 +7750,7 @@ pub fn (mut c Config) load_recursive_files() ! {
 		}
 		loaded[path] = true
 		mut file := os.open(path) or {
-			if err.code() != C.ENOENT || !item.optional {
+			if err.code() != C.ENOENT || !optional {
 				message := if err.code() == C.ENOENT {
 					'error opening config-file ${path}: error.FileNotFound'
 				} else {
@@ -8275,7 +8329,7 @@ fn (mut c Config) apply_kv(key string, value string) {
 					return
 				}
 				if parsed := maybe_parsed.value {
-					if parsed.path.len > 0 {
+					if parsed.len() > 0 {
 						c.background_image = parsed
 					}
 				}
@@ -8290,7 +8344,7 @@ fn (mut c Config) apply_kv(key string, value string) {
 					return
 				}
 				if parsed := maybe_parsed.value {
-					if parsed.path.len > 0 {
+					if parsed.len() > 0 {
 						c.bell_audio_path = parsed
 					}
 				}

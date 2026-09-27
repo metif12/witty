@@ -127,9 +127,9 @@ fn test_derived_config_deinit() {
 	mut config := DerivedConfig{
 		font_features:  ['liga', 'calt']
 		custom_shaders: configpkg.RepeatablePath{
-			items: [configpkg.Path{ path: '/tmp/shader.glsl' }]
+			items: [configpkg.Path(configpkg.PathRequired{ path: '/tmp/shader.glsl' })]
 		}
-		bg_image:       configpkg.Path{
+		bg_image:       configpkg.PathRequired{
 			path: '/tmp/background.png'
 		}
 	}
@@ -144,7 +144,7 @@ fn test_prep_background_image_detects_magic_without_extension() ! {
 		'image-png-none-50x76-2147483647-raw.data')
 	mut render := Renderer{
 		config: DerivedConfig{
-			bg_image: configpkg.Path{
+			bg_image: configpkg.PathRequired{
 				path: path
 			}
 		}
@@ -161,16 +161,19 @@ fn test_prep_background_image_detects_magic_without_extension() ! {
 
 fn test_derived_config_owns_shader_path_list() {
 	mut cfg := configpkg.Config.default_config()
-	cfg.custom_shader.items << configpkg.Path{
+	cfg.custom_shader.items << configpkg.PathRequired{
 		path: '/tmp/first.glsl'
 	}
 	mut derived := DerivedConfig.init(&cfg)!
-	cfg.custom_shader.items[0].path = '/tmp/changed.glsl'
-	cfg.custom_shader.items << configpkg.Path{
+	cfg.custom_shader.items[0] = configpkg.PathRequired{
+		path: '/tmp/changed.glsl'
+	}
+	cfg.custom_shader.items << configpkg.PathRequired{
 		path: '/tmp/second.glsl'
 	}
 	assert derived.custom_shaders.items.len == 1
-	assert derived.custom_shaders.items[0].path == '/tmp/first.glsl'
+	assert derived.custom_shaders.items[0] is configpkg.PathRequired
+	assert (derived.custom_shaders.items[0] as configpkg.PathRequired).path == '/tmp/first.glsl'
 	derived.deinit()
 }
 

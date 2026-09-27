@@ -1696,8 +1696,11 @@ fn (self &SurfaceWidget) ring_bell() {
 		return
 	}
 	config_path := cfg.bell_audio_path or { return }
-	path := config_path.path
-	required := !config_path.optional
+	path := match config_path {
+		configpkg.PathOptional { config_path.path }
+		configpkg.PathRequired { config_path.path }
+	}
+	required := config_path is configpkg.PathRequired
 	assert os.is_abs_path(path)
 	volume := if cfg.bell_audio_volume < 0.0 {
 		0.0

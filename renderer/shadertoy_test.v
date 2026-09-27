@@ -22,12 +22,12 @@ fn test_glsl_from_shader_uses_ghostty_prefix() {
 fn test_load_shaders_skips_only_missing_optional_files() {
 	missing := os.join_path(os.temp_dir(), 'witty-shader-missing-${os.getpid()}.glsl')
 	paths := configpkg.RepeatablePath{
-		items: [configpkg.Path{ path: missing, optional: true }]
+		items: [configpkg.Path(configpkg.PathOptional{ path: missing })]
 	}
 	assert load_from_files(paths, .glsl)! == []string{}
 
 	required := configpkg.RepeatablePath{
-		items: [configpkg.Path{ path: missing }]
+		items: [configpkg.Path(configpkg.PathRequired{ path: missing })]
 	}
 	load_from_files(required, .glsl) or {
 		assert err.msg().starts_with('shader file not found:')

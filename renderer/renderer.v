@@ -1433,24 +1433,28 @@ pub fn (mut self Renderer) frame_completed(health Health) {
 // Call this any time the background image path changes.
 fn (mut self Renderer) prep_background_image() ! {
 	if path_config := self.config.bg_image {
-		contents := os.read_bytes(path_config.path) or {
-			eprintln('renderer: error reading background image file "${path_config.path}": ${err}')
+		path := match path_config {
+			configpkg.PathOptional { path_config.path }
+			configpkg.PathRequired { path_config.path }
+		}
+		contents := os.read_bytes(path) or {
+			eprintln('renderer: error reading background image file "${path}": ${err}')
 			return
 		}
 		detected_type := file_type.FileType.detect(contents)
 		image_type := match detected_type {
-			.unknown { file_type.FileType.guess_from_extension(os.file_ext(path_config.path)) }
+			.unknown { file_type.FileType.guess_from_extension(os.file_ext(path)) }
 			else { detected_type }
 		}
 
 		match image_type {
 			.png, .jpeg {}
 			.unknown {
-				eprintln('renderer: cannot determine file type for background image file "${path_config.path}"')
+				eprintln('renderer: cannot determine file type for background image file "${path}"')
 				return
 			}
 			else {
-				eprintln('renderer: unsupported file type ${image_type} for background image file "${path_config.path}"')
+				eprintln('renderer: unsupported file type ${image_type} for background image file "${path}"')
 				return
 			}
 		}
