@@ -11,9 +11,7 @@
 // Background: https://invisible-island.net/ncurses/man/terminfo.5.html
 module terminfo
 
-// CapabilityValueTag is the tag of `Source.Capability.Value`. The source's
-// union payloads are flattened into the fields below, since V has no tagged
-// union with per-arm payload storage.
+// CapabilityValueTag is the declaration-order tag of Source.Capability.Value.
 pub enum CapabilityValueTag as u8 {
 	// Canceled value, i.e. suffixed with @
 	canceled
@@ -26,37 +24,33 @@ pub enum CapabilityValueTag as u8 {
 	string
 }
 
-// CapabilityValue is `Source.Capability.Value`.
-pub struct CapabilityValue {
+pub struct CapabilityValueCanceled {}
+
+pub struct CapabilityValueBoolean {}
+
+pub struct CapabilityValueNumeric {
 pub:
-	tag     CapabilityValueTag @[required]
-	numeric u32
-	str     string
+	value u32
 }
 
-pub fn CapabilityValue.canceled() CapabilityValue {
-	return CapabilityValue{
-		tag: .canceled
-	}
+pub struct CapabilityValueString {
+pub:
+	value string
 }
 
-pub fn CapabilityValue.boolean() CapabilityValue {
-	return CapabilityValue{
-		tag: .boolean
-	}
-}
+// CapabilityValue is Source.Capability.Value as a payload-carrying tagged
+// union. The void arms are empty structs and only the selected data arm exists.
+pub type CapabilityValue = CapabilityValueCanceled
+	| CapabilityValueBoolean
+	| CapabilityValueNumeric
+	| CapabilityValueString
 
-pub fn CapabilityValue.numeric(value u32) CapabilityValue {
-	return CapabilityValue{
-		tag: .numeric
-		numeric: value
-	}
-}
-
-pub fn CapabilityValue.string(value string) CapabilityValue {
-	return CapabilityValue{
-		tag: .string
-		str: value
+pub fn (self CapabilityValue) tag() CapabilityValueTag {
+	return match self {
+		CapabilityValueCanceled { .canceled }
+		CapabilityValueBoolean { .boolean }
+		CapabilityValueNumeric { .numeric }
+		CapabilityValueString { .string }
 	}
 }
 
@@ -104,11 +98,11 @@ pub fn (self &Source) encode() string {
 	for cap in self.capabilities {
 		out << `\t`
 		out << cap.name.bytes()
-		match cap.value.tag {
-			.canceled { out << `@` }
-			.boolean {}
-			.numeric { out << '#${cap.value.numeric}'.bytes() }
-			.string { out << '=${cap.value.str}'.bytes() }
+		match cap.value {
+			CapabilityValueCanceled { out << `@` }
+			CapabilityValueBoolean {}
+			CapabilityValueNumeric { out << '#${cap.value.value}'.bytes() }
+			CapabilityValueString { out << '=${cap.value.value}'.bytes() }
 		}
 		out << `,`
 		out << `\n`
@@ -154,20 +148,20 @@ pub fn (self &Source) xtgettcap_map() map[string]string {
 
 // xtgettcap_raw_value is the pre-hex-encoding XTGETTCAP payload for a value.
 fn xtgettcap_raw_value(value CapabilityValue) string {
-	return match value.tag {
-		.canceled {
+	return match value {
+		CapabilityValueCanceled {
 			// Ghostty raises a compile error here; nothing in its terminfo is
 			// canceled, so reaching this means the data changed.
 			panic('canceled not handled yet')
 		}
-		.boolean {
+		CapabilityValueBoolean {
 			''
 		}
-		.numeric {
-			value.numeric.str()
+		CapabilityValueNumeric {
+			value.value.str()
 		}
-		.string {
-			decode_capability_string(value.str)
+		CapabilityValueString {
+			decode_capability_string(value.value)
 		}
 	}
 }

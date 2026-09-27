@@ -10,12 +10,12 @@ fn test_xtgettcap_map() {
 			'Ghostty',
 		]
 		capabilities: [
-			Capability{ name: 'am', value: CapabilityValue.boolean() },
-			Capability{ name: 'colors', value: CapabilityValue.numeric(256) },
-			Capability{ name: 'kx', value: CapabilityValue.string('^?') },
-			Capability{ name: 'kbs', value: CapabilityValue.string('^H') },
-			Capability{ name: 'kf1', value: CapabilityValue.string('\\EOP') },
-			Capability{ name: 'Smulx', value: CapabilityValue.string('\\E[4:%p1%dm') },
+			Capability{ name: 'am', value: CapabilityValueBoolean{} },
+			Capability{ name: 'colors', value: CapabilityValueNumeric{ value: 256 } },
+			Capability{ name: 'kx', value: CapabilityValueString{ value: '^?' } },
+			Capability{ name: 'kbs', value: CapabilityValueString{ value: '^H' } },
+			Capability{ name: 'kf1', value: CapabilityValueString{ value: '\\EOP' } },
+			Capability{ name: 'Smulx', value: CapabilityValueString{ value: '\\E[4:%p1%dm' } },
 		]
 	}
 
@@ -35,10 +35,10 @@ fn test_encode() {
 			'Ghostty',
 		]
 		capabilities: [
-			Capability{ name: 'am', value: CapabilityValue.boolean() },
-			Capability{ name: 'ccc', value: CapabilityValue.canceled() },
-			Capability{ name: 'colors', value: CapabilityValue.numeric(256) },
-			Capability{ name: 'bel', value: CapabilityValue.string('^G') },
+			Capability{ name: 'am', value: CapabilityValueBoolean{} },
+			Capability{ name: 'ccc', value: CapabilityValueCanceled{} },
+			Capability{ name: 'colors', value: CapabilityValueNumeric{ value: 256 } },
+			Capability{ name: 'bel', value: CapabilityValueString{ value: '^G' } },
 		]
 	}
 
@@ -49,22 +49,28 @@ fn test_encode() {
 
 // The translated entry must keep the source's names, ordering and size.
 fn test_ghostty_terminfo_entry_matches_source() {
+	assert sizeof(CapabilityValueTag) == 1
+	assert u8(CapabilityValueTag.canceled) == 0
+	assert u8(CapabilityValueTag.boolean) == 1
+	assert u8(CapabilityValueTag.numeric) == 2
+	assert u8(CapabilityValueTag.string) == 3
 	assert ghostty.names == ['xterm-ghostty', 'ghostty', 'Ghostty']
 	assert ghostty.capabilities.len == 268
 
 	// Spot-check one of each value kind, in source order.
 	assert ghostty.capabilities[0].name == 'am'
-	assert ghostty.capabilities[0].value.tag == .boolean
+	assert ghostty.capabilities[0].value is CapabilityValueBoolean
+	assert ghostty.capabilities[0].value.tag() == .boolean
 
 	mut numeric_count := 0
 	mut string_count := 0
 	mut boolean_count := 0
 	for cap in ghostty.capabilities {
-		match cap.value.tag {
-			.numeric { numeric_count++ }
-			.string { string_count++ }
-			.boolean { boolean_count++ }
-			.canceled { assert false, 'no canceled capability in the source entry' }
+		match cap.value {
+			CapabilityValueNumeric { numeric_count++ }
+			CapabilityValueString { string_count++ }
+			CapabilityValueBoolean { boolean_count++ }
+			CapabilityValueCanceled { assert false, 'no canceled capability in the source entry' }
 		}
 	}
 	assert boolean_count == 15
