@@ -87,8 +87,7 @@ pub fn (mut self App) perform_action(target apprt.Target, action apprt.ActionKey
 // other process that is not Ghostty) there is no full-featured apprt App to
 // use.
 pub fn App.perform_ipc(target apprt.IpcTarget, action apprt.IpcAction) !bool {
-	// action is `apprt.IpcAction`, which is a type alias for IpcNewWindow.
-	return ipc_new_window(target, action)
+	return ipc_new_window(target, action.new_window)
 }
 
 // redraw_inspector redraws the inspector for the given surface. Mirrors

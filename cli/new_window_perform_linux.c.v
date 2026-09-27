@@ -9,8 +9,10 @@ fn perform_new_window_ipc(opts NewWindowOptions) !bool {
 	} else {
 		apprt.IpcTarget(apprt.IpcTargetDetect{})
 	}
-	action := apprt.IpcAction(apprt.IpcNewWindow{
-		arguments: opts.arguments
-	})
+	action := apprt.IpcAction{
+		new_window: apprt.IpcNewWindow{
+			arguments: opts.arguments
+		}
+	}
 	return gtk.App.perform_ipc(target, action)
 }

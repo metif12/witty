@@ -57,7 +57,10 @@ pub fn (target IpcTarget) cval() IpcTargetC {
 
 // IpcAction represents an IPC action to perform on a running instance.
 // In Zig, this is a tagged union: Action = union(enum) { new_window: NewWindow }
-pub type IpcAction = IpcNewWindow
+pub struct IpcAction {
+pub:
+	new_window IpcNewWindow
+}
 
 // IpcNewWindow holds the arguments to pass to Ghostty for a new window command.
 pub struct IpcNewWindow {
@@ -128,9 +131,8 @@ pub:
 
 // cval converts an action to its C ABI projection.
 pub fn (action IpcAction) cval() !IpcActionC {
-	window := IpcNewWindow(action)
 	return IpcActionC{
 		key: .new_window
-		value: IpcActionCValue{ new_window: window.cval()! }
+		value: IpcActionCValue{ new_window: action.new_window.cval()! }
 	}
 }

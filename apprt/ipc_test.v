@@ -40,10 +40,12 @@ fn test_ipc_new_window_no_args() {
 	assert nw.arguments == none
 }
 
-// Test IpcAction type alias wraps IpcNewWindow.
+// Test IpcAction retains the source union boundary around IpcNewWindow.
 fn test_ipc_action() {
-	a := IpcAction(IpcNewWindow{ arguments: ['ls'] })
-	arguments := a.arguments or { panic('expected arguments') }
+	a := IpcAction{
+		new_window: IpcNewWindow{ arguments: ['ls'] }
+	}
+	arguments := a.new_window.arguments or { panic('expected arguments') }
 	assert arguments.len == 1
 	assert arguments[0] == 'ls'
 }
@@ -76,7 +78,7 @@ fn test_ipc_new_window_cval_preserves_optional_arguments() {
 	empty_c.deinit()
 
 	args_value := IpcNewWindow{ arguments: ['echo', 'hello'] }
-	mut action_c := IpcAction(args_value).cval()!
+	mut action_c := IpcAction{ new_window: args_value }.cval()!
 	assert action_c.key == .new_window
 	mut args_c := unsafe { action_c.value.new_window }
 	unsafe {
