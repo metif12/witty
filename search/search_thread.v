@@ -577,8 +577,8 @@ fn (mut self SearchThread) drain_mailbox() ! {
 				self.change_needle(v.slice())
 				v.deinit()
 			}
-			MessageSelect {
-				self.do_select(message.select)
+		MessageSelect {
+				self.do_select(message.select)!
 			}
 		}
 	}
@@ -587,7 +587,7 @@ fn (mut self SearchThread) drain_mailbox() ! {
 // Select a search result and scroll it into view when necessary.
 //
 // Source: Thread.select.
-fn (mut self SearchThread) do_select(sel Select) {
+fn (mut self SearchThread) do_select(sel Select) ! {
 	mut s := self.search or { return }
 	key := s.last_screen.key
 
@@ -595,7 +595,11 @@ fn (mut self SearchThread) do_select(sel Select) {
 	if mut screen_search := s.screens[key] {
 		// Make the selection. Ignore the result because we don't care if
 		// the selection didn't change.
-		screen_search.do_select(sel)
+		screen_search.do_select(sel) or {
+			self.opts.mutex.unlock()
+			self.search = s
+			return err
+		}
 		flattened := screen_search.selected_match() or {
 			self.opts.mutex.unlock()
 			self.search = s
@@ -923,7 +927,11 @@ pub fn (mut self Search) feed(mut t terminal.Terminal) {
 			continue
 		}
 		mut screen := t.screens.get(key) or { continue }
-		mut ss := heap_screen_search(ScreenSearch.init(mut screen, self.viewport.needle()))
+		new_screen_search := ScreenSearch.init(mut screen, self.viewport.needle()) or {
+			eprintln('error initializing screen search for key=${key} err=${err}')
+			continue
+		}
+		mut ss := heap_screen_search(new_screen_search)
 		self.screens[key] = ss
 	}
 
@@ -939,7 +947,9 @@ pub fn (mut self Search) feed(mut t terminal.Terminal) {
 
 		// Reload our active area for our active screen.
 		if mut ss := self.screens[t.screens.active_key] {
-			ss.reload_active()
+			ss.reload_active() or {
+				eprintln('error reloading active area for screen key=${t.screens.active_key} err=${err}')
+			}
 		}
 	}
 
@@ -951,7 +961,9 @@ pub fn (mut self Search) feed(mut t terminal.Terminal) {
 	// Feed data to each screen search that needs it.
 	for _, mut ss in self.screens {
 		if ss.state.needs_feed() {
-			ss.feed()
+			ss.feed() or {
+				eprintln('error feeding screen search err=${err}')
+			}
 		}
 	}
 }

@@ -1,5 +1,7 @@
 module search
 
+import tripwire
+
 // --- Original Ghostty Comments Start: src/terminal/search/screen.zig
 //
 // Source: /Users/alexander/code/3rd/ghostty/src/terminal/search/screen.zig
@@ -403,6 +405,22 @@ pub enum Select as u8 {
 // ScreenSearch
 // ============================================================
 
+pub enum ReloadActiveFailPoint as u8 {
+	history_append_new
+	history_append_existing
+}
+
+struct ReloadActiveTripwire {
+mut:
+	value tripwire.TripwireModule[ReloadActiveFailPoint]
+}
+
+const reload_active_tw_singleton = &ReloadActiveTripwire{}
+
+pub fn reload_active_tripwire() &tripwire.TripwireModule[ReloadActiveFailPoint] {
+	return unsafe { &reload_active_tw_singleton.value }
+}
+
 pub struct ScreenSearch {
 pub mut:
 	// The screen being searched.
@@ -441,7 +459,7 @@ pub mut:
 // Source: ScreenSearch.init. This builds the initial active area search
 // and then calls reload_active() to populate the initial active-area
 // state (and set up history if the screen has scrollback).
-pub fn ScreenSearch.init(mut screen terminal.Screen, needle []u8) ScreenSearch {
+pub fn ScreenSearch.init(mut screen terminal.Screen, needle []u8) !ScreenSearch {
 	mut result := ScreenSearch{
 		screen: &screen
 		rows: screen.pages.rows
@@ -452,7 +470,10 @@ pub fn ScreenSearch.init(mut screen terminal.Screen, needle []u8) ScreenSearch {
 	}
 
 	// Update our initial active area state.
-	result.reload_active()
+	result.reload_active() or {
+		result.deinit()
+		return err
+	}
 
 	return result
 }
@@ -514,11 +535,11 @@ pub fn (self &ScreenSearch) matches() []highlight.Flattened {
 // Search the full screen state. This will block until the search
 // is complete. For performance, it is recommended to use tick and
 // feed to incrementally make progress on the search instead.
-pub fn (mut self ScreenSearch) search_all() {
+pub fn (mut self ScreenSearch) search_all() ! {
 	for {
 		match self.state {
 			.active, .history { self.tick() }
-			.history_feed { self.feed() }
+			.history_feed { self.feed()! }
 			.complete {
 				return
 			}
@@ -557,14 +578,14 @@ pub fn (mut self ScreenSearch) tick() bool {
 // potentially stale history results (pruned) and reclaim some memory.
 //
 // Source: ScreenSearch.feed
-pub fn (mut self ScreenSearch) feed() {
+pub fn (mut self ScreenSearch) feed() ! {
 	// If the screen resizes, we have to reset our entire search. That
 	// isn't ideal but we don't have a better way right now to handle
 	// reflowing the search results beyond putting a tracked pin for
 	// every single result.
 	if u16(self.screen.pages.rows) != self.rows || u16(self.screen.pages.cols) != self.cols {
 		// Reinit
-		new := ScreenSearch.init(mut self.screen, self.needle())
+		new := ScreenSearch.init(mut self.screen, self.needle())!
 
 		// Deinit/reinit
 		self.deinit()
@@ -700,13 +721,7 @@ fn (mut self ScreenSearch) tick_history() {
 //
 // Source: ScreenSearch.reloadActive
 //
-// Notes on this translation:
-//   - Zig uses defer/errdefer for the "reset selection on exit" and OOM
-//     cleanup paths. V functions here are infallible (no OOM error is
-//     surfaced), so the errdefer OOM/tripwire branches are unreachable
-//     and are folded away; the deferred select_prev/select-fixup logic is
-//     translated as explicit steps at the end of the function.
-pub fn (mut self ScreenSearch) reload_active() {
+pub fn (mut self ScreenSearch) reload_active() ! {
 	// If our selection pin became garbage it means we scrolled off
 	// the end. Clear our selection and on exit of this function,
 	// try to select the last match.
@@ -716,6 +731,13 @@ pub fn (mut self ScreenSearch) reload_active() {
 			m.deinit(mut self.screen.pages)
 			self.selected = none
 			select_prev = true
+		}
+	}
+	defer {
+		if select_prev {
+			self.do_select(.prev) or {
+				eprintln('reload failed to reset search selection err=${err}')
+			}
 		}
 	}
 
@@ -734,7 +756,7 @@ pub fn (mut self ScreenSearch) reload_active() {
 		if self.screen.no_scrollback {
 			assert self.history_search == none, 'no_scrollback but history exists'
 		} else {
-			self.reload_active_history(node)
+			self.reload_active_history(node)!
 		}
 	} else {
 		// No history node means we have no history.
@@ -834,18 +856,14 @@ pub fn (mut self ScreenSearch) reload_active() {
 		}
 	}
 
-	// Deferred: if our selection pin became garbage at entry, try to
-	// select the last match now that results are rebuilt.
-	if select_prev {
-		self.select_prev()
-	}
 }
 
 // Handle the history-diffing branch of reload_active when active.update
 // reports that the active-area start node moved (history grew).
 //
 // Source: ScreenSearch.reloadActive (the `history:` block)
-fn (mut self ScreenSearch) reload_active_history(history_node &terminal.PageNode) {
+fn (mut self ScreenSearch) reload_active_history(history_node &terminal.PageNode) ! {
+	mut tw := reload_active_tripwire()
 	// If our start pin became garbage, it means we pruned all the way up
 	// through it, so we have no history anymore. Reset our history state.
 	mut have_history := false
@@ -902,6 +920,7 @@ fn (mut self ScreenSearch) reload_active_history(history_node &terminal.PageNode
 	// called frequently enough that there isn't a massive amount of
 	// history to search here.
 	mut window := SlidingWindow.init(.forward, self.needle())
+	defer { window.deinit() }
 	for {
 		window.append(h.start_pin.node)
 		if voidptr(h.start_pin.node) == voidptr(history_node) {
@@ -918,10 +937,17 @@ fn (mut self ScreenSearch) reload_active_history(history_node &terminal.PageNode
 		if hl.chunks.len > 0 && voidptr(hl.chunks[0].node) == voidptr(history_node) {
 			continue
 		}
-		results << hl.clone()
+		mut cloned := hl.clone()
+		tw.check(.history_append_new) or {
+			cloned.deinit()
+			for mut result in results {
+				result.deinit()
+			}
+			self.history_search = h
+			return err
+		}
+		results << cloned
 	}
-	window.deinit()
-
 	// If we have no matches then there is nothing to change in our
 	// history (fast path).
 	if results.len == 0 {
@@ -936,6 +962,13 @@ fn (mut self ScreenSearch) reload_active_history(history_node &terminal.PageNode
 	// Matches! Reverse our list then append all the remaining history
 	// items that didn't start on our original node.
 	reverse_flattened(mut results)
+	tw.check(.history_append_existing) or {
+		for mut result in results {
+			result.deinit()
+		}
+		self.history_search = h
+		return err
+	}
 	for hl in self.history_results {
 		results << hl.clone()
 	}
@@ -1019,8 +1052,8 @@ pub fn (self &ScreenSearch) selected_match() ?highlight.Flattened {
 // Select the next or previous search result. This requires read/write
 // access to the underlying screen, since we utilize tracked pins to
 // ensure our selection sticks with contents changing.
-pub fn (mut self ScreenSearch) do_select(to Select) bool {
-	self.reload_active()
+pub fn (mut self ScreenSearch) do_select(to Select) !bool {
+	self.reload_active()!
 	self.prune_history()
 	return match to {
 		.next { self.select_next() }

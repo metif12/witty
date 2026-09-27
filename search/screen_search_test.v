@@ -44,9 +44,9 @@ fn test_simple_search() ! {
 	defer { s.deinit() }
 	s.next_slice('Fizz\r\nBuzz\r\nFizz\r\nBang'.bytes())!
 
-	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())
+	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())!
 	defer { searcher.deinit() }
-	searcher.search_all()
+	searcher.search_all()!
 	assert searcher.active_results.len == 2
 	// We don't test history results since there is overlap
 
@@ -81,9 +81,9 @@ fn test_simple_search_with_history() ! {
 	grow_to_pages(mut t, mut s, 3)!
 	s.next_slice('hello.'.bytes())!
 
-	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())
+	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())!
 	defer { searcher.deinit() }
-	searcher.search_all()
+	searcher.search_all()!
 	assert searcher.active_results.len == 0
 
 	// Get all matches
@@ -110,9 +110,9 @@ fn test_reload_active_with_history_change() ! {
 	s.next_slice('Fizz\r\n'.bytes())!
 
 	// Start up our search which will populate our initial active area.
-	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())
+	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())!
 	defer { searcher.deinit() }
-	searcher.search_all()
+	searcher.search_all()!
 	{
 		matches := searcher.matches()
 		assert matches.len == 1
@@ -123,8 +123,8 @@ fn test_reload_active_with_history_change() ! {
 	s.next_slice('2Fizz'.bytes())!
 
 	// Active area changed so reload
-	searcher.reload_active()
-	searcher.search_all()
+	searcher.reload_active()!
+	searcher.search_all()!
 
 	// Get all matches
 	{
@@ -145,8 +145,8 @@ fn test_reload_active_with_history_change() ! {
 	// Reset the screen which will make our pin garbage.
 	t.full_reset()
 	s.next_slice('WeFizzing'.bytes())!
-	searcher.reload_active()
-	searcher.search_all()
+	searcher.reload_active()!
+	searcher.search_all()!
 
 	{
 		matches := searcher.matches()
@@ -167,17 +167,17 @@ fn test_active_change_contents() ! {
 	defer { s.deinit() }
 	s.next_slice('Fuzz\r\nBuzz\r\nFizz\r\nBang'.bytes())!
 
-	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())
+	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())!
 	defer { searcher.deinit() }
-	searcher.search_all()
+	searcher.search_all()!
 	assert searcher.active_results.len == 1
 
 	// Erase the screen, move our cursor to the top, and change contents.
 	s.next_slice('\x1b[2J\x1b[H'.bytes())! // Clear screen and move home
 	s.next_slice('Bang\r\nFizz\r\nHello!'.bytes())!
 
-	searcher.reload_active()
-	searcher.search_all()
+	searcher.reload_active()!
+	searcher.search_all()!
 	assert searcher.active_results.len == 1
 
 	// Get all matches
@@ -199,15 +199,15 @@ fn test_select_next() ! {
 	defer { s.deinit() }
 	s.next_slice('Fizz\r\nBuzz\r\nFizz\r\nBang'.bytes())!
 
-	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())
+	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())!
 	defer { searcher.deinit() }
 
 	// Initially no selection
 	assert searcher.selected_match() == none
 
 	// Select our next match (first)
-	searcher.search_all()
-	_ = searcher.do_select(.next)
+	searcher.search_all()!
+	_ = searcher.do_select(.next)!
 	{
 		sel := selected_untracked(&searcher)
 		assert point_of(&t, .screen, sel.start) == screen_pt(0, 2)
@@ -215,7 +215,7 @@ fn test_select_next() ! {
 	}
 
 	// Next match
-	_ = searcher.do_select(.next)
+	_ = searcher.do_select(.next)!
 	{
 		sel := selected_untracked(&searcher)
 		assert point_of(&t, .screen, sel.start) == screen_pt(0, 0)
@@ -223,7 +223,7 @@ fn test_select_next() ! {
 	}
 
 	// Next match (no wrap)
-	_ = searcher.do_select(.next)
+	_ = searcher.do_select(.next)!
 	{
 		sel := selected_untracked(&searcher)
 		assert point_of(&t, .screen, sel.start) == screen_pt(0, 0)
@@ -239,11 +239,11 @@ fn test_select_in_active_changes_contents_completely() ! {
 	defer { s.deinit() }
 	s.next_slice('Fizz\r\nBuzz\r\nFizz\r\nBang'.bytes())!
 
-	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())
+	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())!
 	defer { searcher.deinit() }
-	searcher.search_all()
-	_ = searcher.do_select(.next)
-	_ = searcher.do_select(.next)
+	searcher.search_all()!
+	_ = searcher.do_select(.next)!
+	_ = searcher.do_select(.next)!
 	{
 		// Initial selection is the first fizz
 		sel := selected_untracked(&searcher)
@@ -255,7 +255,7 @@ fn test_select_in_active_changes_contents_completely() ! {
 	s.next_slice('\x1b[2J\x1b[H'.bytes())! // Clear screen and move home
 	s.next_slice('Fuzz\r\nFizz\r\nHello!'.bytes())!
 
-	searcher.reload_active()
+	searcher.reload_active()!
 	{
 		// Our selection should move to the first
 		sel := selected_untracked(&searcher)
@@ -267,7 +267,7 @@ fn test_select_in_active_changes_contents_completely() ! {
 	s.next_slice('\x1b[2J\x1b[H'.bytes())! // Clear screen and move home
 	s.next_slice('Fuzz\r\nFizz\r\nFizz'.bytes())!
 
-	searcher.reload_active()
+	searcher.reload_active()!
 	{
 		// Our selection should not move to the first
 		sel := selected_untracked(&searcher)
@@ -291,12 +291,12 @@ fn test_select_into_history() ! {
 	grow_to_pages(mut t, mut s, 3)!
 	s.next_slice('hello.'.bytes())!
 
-	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())
+	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())!
 	defer { searcher.deinit() }
-	searcher.search_all()
+	searcher.search_all()!
 
 	// Get all matches
-	_ = searcher.do_select(.next)
+	_ = searcher.do_select(.next)!
 	{
 		sel := selected_untracked(&searcher)
 		assert point_of(&t, .screen, sel.start) == screen_pt(0, 0)
@@ -307,7 +307,7 @@ fn test_select_into_history() ! {
 	s.next_slice('\x1b[2J\x1b[H'.bytes())! // Clear screen and move home
 	s.next_slice('yo yo'.bytes())!
 
-	searcher.reload_active()
+	searcher.reload_active()!
 	{
 		// Our selection should not move since the history is still active.
 		sel := selected_untracked(&searcher)
@@ -317,7 +317,7 @@ fn test_select_into_history() ! {
 
 	// Create some new history by adding more lines.
 	s.next_slice('\r\nfizz\r\nfizz\r\nfizz'.bytes())! // Clear screen and move home
-	searcher.reload_active()
+	searcher.reload_active()!
 	{
 		// Our selection should not move since the history is still not
 		// pruned.
@@ -335,15 +335,15 @@ fn test_select_prev() ! {
 	defer { s.deinit() }
 	s.next_slice('Fizz\r\nBuzz\r\nFizz\r\nBang'.bytes())!
 
-	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())
+	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())!
 	defer { searcher.deinit() }
 
 	// Initially no selection
 	assert searcher.selected_match() == none
 
 	// Select prev (oldest first)
-	searcher.search_all()
-	_ = searcher.do_select(.prev)
+	searcher.search_all()!
+	_ = searcher.do_select(.prev)!
 	{
 		sel := selected_untracked(&searcher)
 		assert point_of(&t, .screen, sel.start) == screen_pt(0, 0)
@@ -351,7 +351,7 @@ fn test_select_prev() ! {
 	}
 
 	// Prev match (towards newest)
-	_ = searcher.do_select(.prev)
+	_ = searcher.do_select(.prev)!
 	{
 		sel := selected_untracked(&searcher)
 		assert point_of(&t, .screen, sel.start) == screen_pt(0, 2)
@@ -359,7 +359,7 @@ fn test_select_prev() ! {
 	}
 
 	// Prev match (no wrap, stays at newest)
-	_ = searcher.do_select(.prev)
+	_ = searcher.do_select(.prev)!
 	{
 		sel := selected_untracked(&searcher)
 		assert point_of(&t, .screen, sel.start) == screen_pt(0, 2)
@@ -375,26 +375,26 @@ fn test_select_prev_then_next() ! {
 	defer { s.deinit() }
 	s.next_slice('Fizz\r\nBuzz\r\nFizz\r\nBang'.bytes())!
 
-	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())
+	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())!
 	defer { searcher.deinit() }
-	searcher.search_all()
+	searcher.search_all()!
 
 	// Select next (newest first)
-	_ = searcher.do_select(.next)
+	_ = searcher.do_select(.next)!
 	{
 		sel := selected_untracked(&searcher)
 		assert point_of(&t, .screen, sel.start) == screen_pt(0, 2)
 	}
 
 	// Select next (older)
-	_ = searcher.do_select(.next)
+	_ = searcher.do_select(.next)!
 	{
 		sel := selected_untracked(&searcher)
 		assert point_of(&t, .screen, sel.start) == screen_pt(0, 0)
 	}
 
 	// Select prev (back to newer)
-	_ = searcher.do_select(.prev)
+	_ = searcher.do_select(.prev)!
 	{
 		sel := selected_untracked(&searcher)
 		assert point_of(&t, .screen, sel.start) == screen_pt(0, 2)
@@ -416,12 +416,12 @@ fn test_select_prev_with_history() ! {
 	grow_to_pages(mut t, mut s, 3)!
 	s.next_slice('Fizz.'.bytes())!
 
-	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())
+	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())!
 	defer { searcher.deinit() }
-	searcher.search_all()
+	searcher.search_all()!
 
 	// Select prev (oldest first, should be in history)
-	_ = searcher.do_select(.prev)
+	_ = searcher.do_select(.prev)!
 	{
 		sel := selected_untracked(&searcher)
 		assert point_of(&t, .screen, sel.start) == screen_pt(0, 0)
@@ -429,7 +429,7 @@ fn test_select_prev_with_history() ! {
 	}
 
 	// Select prev (towards newer, should move to active area)
-	_ = searcher.do_select(.prev)
+	_ = searcher.do_select(.prev)!
 	{
 		sel := selected_untracked(&searcher)
 		assert point_of(&t, .active, sel.start) == active_pt(0, 1)
@@ -459,12 +459,80 @@ fn test_screen_search_no_scrollback_has_no_history() ! {
 	s.next_slice('\x1b[22J'.bytes())!
 	s.next_slice('hello.'.bytes())!
 
-	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())
+	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())!
 	defer { searcher.deinit() }
-	searcher.search_all()
+	searcher.search_all()!
 	assert searcher.active_results.len == 0
 
 	// Get all matches
 	matches := searcher.matches()
 	assert matches.len == 0
+}
+
+fn test_reload_active_history_append_existing_failure_cleanup() ! {
+	assert sizeof(ReloadActiveFailPoint) == 1
+	assert u8(ReloadActiveFailPoint.history_append_new) == 0
+	assert u8(ReloadActiveFailPoint.history_append_existing) == 1
+
+	mut t := terminal.Terminal.init(terminal.Options{
+		cols:           10
+		rows:           2
+		max_scrollback: screen_search_test_max_scrollback
+	})!
+	defer { t.deinit() }
+	mut s := t.vt_stream()
+	defer { s.deinit() }
+
+	s.next_slice('Fizz\r\nFizz\r\n'.bytes())!
+	grow_to_pages(mut t, mut s, 3)!
+	s.next_slice('Fizz.'.bytes())!
+	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())!
+	defer { searcher.deinit() }
+	searcher.search_all()!
+
+	s.next_slice('\r\nFizz\r\nFizz\r\n'.bytes())!
+	grow_to_pages(mut t, mut s, 4)!
+
+	mut tw := reload_active_tripwire()
+	tw.error_always(.history_append_existing, error('OutOfMemory'))
+	defer {
+		tw.end(.reset) or { panic(err) }
+	}
+	if _ := searcher.do_select(.next) {
+		assert false, 'expected history append failure'
+	} else {
+		assert err.msg() == 'OutOfMemory'
+	}
+}
+
+fn test_reload_active_history_append_new_failure_cleanup() ! {
+	mut t := terminal.Terminal.init(terminal.Options{
+		cols:           10
+		rows:           2
+		max_scrollback: screen_search_test_max_scrollback
+	})!
+	defer { t.deinit() }
+	mut s := t.vt_stream()
+	defer { s.deinit() }
+
+	s.next_slice('Fizz\r\nFizz\r\n'.bytes())!
+	grow_to_pages(mut t, mut s, 3)!
+	s.next_slice('Fizz.'.bytes())!
+	mut searcher := ScreenSearch.init(mut t.screens.active, 'Fizz'.bytes())!
+	defer { searcher.deinit() }
+	searcher.search_all()!
+
+	s.next_slice('\r\nFizz\r\nFizz\r\n'.bytes())!
+	grow_to_pages(mut t, mut s, 4)!
+
+	mut tw := reload_active_tripwire()
+	tw.error_after(.history_append_new, error('OutOfMemory'), 1)
+	defer {
+		tw.end(.reset) or { panic(err) }
+	}
+	if _ := searcher.do_select(.next) {
+		assert false, 'expected history append failure'
+	} else {
+		assert err.msg() == 'OutOfMemory'
+	}
 }
