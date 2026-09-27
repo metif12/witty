@@ -1,5 +1,19 @@
 module opengl
 
+fn C.witty_gl_test_resolver_pointer() voidptr
+
+fn C.witty_gl_test_context_loaded() int
+
+fn test_glad_custom_loader_lifecycle() {
+	version := load(C.witty_gl_test_resolver_pointer()) or { panic(err) }
+	assert version_major(version) == 4
+	assert version_minor(version) == 3
+	assert C.witty_gl_test_context_loaded() == 1
+	get_error() or { panic(err) }
+	unload()
+	assert C.witty_gl_test_context_loaded() == 0
+}
+
 fn test_compile_surface() {
 	// Compile-time smoke checks for translated pkg/opengl surface.
 	_ = Primitive.triangle

@@ -1,8 +1,9 @@
 #ifndef WITTY_OPENGL_CONSTANTS_H
 #define WITTY_OPENGL_CONSTANTS_H
 
-#include <dlfcn.h>
 #include <stdint.h>
+#include <string.h>
+#include <glad/gl.h>
 
 /*
  * Keep this header independent from platform GL headers. opengl.v declares
@@ -470,50 +471,39 @@ extern void glDeleteSamplers(int n, unsigned int *samplers);
 #define GL_SHADER_STORAGE_BUFFER 0x90D2
 #endif
 
-#ifndef __APPLE__
-typedef void (*witty_gl_proc)(void);
-typedef witty_gl_proc (*witty_glx_get_proc_address_arb_fn)(const unsigned char *);
+#if defined(_MSC_VER)
+#define WITTY_GL_THREAD_LOCAL __declspec(thread)
+#else
+#define WITTY_GL_THREAD_LOCAL _Thread_local
 #endif
 
-static void *witty_gl_get_proc(const char *name) {
-#ifndef __APPLE__
-	static witty_glx_get_proc_address_arb_fn glx_get_proc = 0;
-	if (glx_get_proc == 0) {
-		glx_get_proc = (witty_glx_get_proc_address_arb_fn)dlsym(RTLD_DEFAULT, "glXGetProcAddressARB");
+static WITTY_GL_THREAD_LOCAL GladGLContext witty_gl_context;
+
+static int witty_gl_load(void *get_proc_address) {
+	if (get_proc_address != 0) {
+		return gladLoadGLContext(&witty_gl_context, (GLADloadfunc)get_proc_address);
 	}
-	if (glx_get_proc != 0) {
-		void *proc = (void *)glx_get_proc((const unsigned char *)name);
-		if (proc != 0) {
-			return proc;
-		}
-	}
-#endif
-	return dlsym(RTLD_DEFAULT, name);
+	return gladLoaderLoadGLContext(&witty_gl_context);
+}
+
+static void witty_gl_unload(void) {
+	gladLoaderUnloadGLContext(&witty_gl_context);
+	memset(&witty_gl_context, 0, sizeof(witty_gl_context));
 }
 
 static int witty_glVertexBindingDivisor(unsigned int bindingindex, unsigned int divisor) {
-	typedef void (*proc_fn)(unsigned int, unsigned int);
-	static proc_fn proc = 0;
-	if (proc == 0) {
-		proc = (proc_fn)witty_gl_get_proc("glVertexBindingDivisor");
-	}
-	if (proc == 0) {
+	if (witty_gl_context.VertexBindingDivisor == 0) {
 		return 0;
 	}
-	proc(bindingindex, divisor);
+	witty_gl_context.VertexBindingDivisor(bindingindex, divisor);
 	return 1;
 }
 
 static int witty_glVertexAttribBinding(unsigned int attribindex, unsigned int bindingindex) {
-	typedef void (*proc_fn)(unsigned int, unsigned int);
-	static proc_fn proc = 0;
-	if (proc == 0) {
-		proc = (proc_fn)witty_gl_get_proc("glVertexAttribBinding");
-	}
-	if (proc == 0) {
+	if (witty_gl_context.VertexAttribBinding == 0) {
 		return 0;
 	}
-	proc(attribindex, bindingindex);
+	witty_gl_context.VertexAttribBinding(attribindex, bindingindex);
 	return 1;
 }
 
@@ -524,15 +514,10 @@ static int witty_glVertexAttribFormat(
 	unsigned char normalized,
 	unsigned int relativeoffset
 ) {
-	typedef void (*proc_fn)(unsigned int, int, unsigned int, unsigned char, unsigned int);
-	static proc_fn proc = 0;
-	if (proc == 0) {
-		proc = (proc_fn)witty_gl_get_proc("glVertexAttribFormat");
-	}
-	if (proc == 0) {
+	if (witty_gl_context.VertexAttribFormat == 0) {
 		return 0;
 	}
-	proc(attribindex, size, type, normalized, relativeoffset);
+	witty_gl_context.VertexAttribFormat(attribindex, size, type, normalized, relativeoffset);
 	return 1;
 }
 
@@ -542,15 +527,10 @@ static int witty_glVertexAttribIFormat(
 	unsigned int type,
 	unsigned int relativeoffset
 ) {
-	typedef void (*proc_fn)(unsigned int, int, unsigned int, unsigned int);
-	static proc_fn proc = 0;
-	if (proc == 0) {
-		proc = (proc_fn)witty_gl_get_proc("glVertexAttribIFormat");
-	}
-	if (proc == 0) {
+	if (witty_gl_context.VertexAttribIFormat == 0) {
 		return 0;
 	}
-	proc(attribindex, size, type, relativeoffset);
+	witty_gl_context.VertexAttribIFormat(attribindex, size, type, relativeoffset);
 	return 1;
 }
 
@@ -560,15 +540,10 @@ static int witty_glVertexAttribLFormat(
 	unsigned int type,
 	unsigned int relativeoffset
 ) {
-	typedef void (*proc_fn)(unsigned int, int, unsigned int, unsigned int);
-	static proc_fn proc = 0;
-	if (proc == 0) {
-		proc = (proc_fn)witty_gl_get_proc("glVertexAttribLFormat");
-	}
-	if (proc == 0) {
+	if (witty_gl_context.VertexAttribLFormat == 0) {
 		return 0;
 	}
-	proc(attribindex, size, type, relativeoffset);
+	witty_gl_context.VertexAttribLFormat(attribindex, size, type, relativeoffset);
 	return 1;
 }
 
@@ -578,15 +553,10 @@ static int witty_glBindVertexBuffer(
 	intptr_t offset,
 	int stride
 ) {
-	typedef void (*proc_fn)(unsigned int, unsigned int, intptr_t, int);
-	static proc_fn proc = 0;
-	if (proc == 0) {
-		proc = (proc_fn)witty_gl_get_proc("glBindVertexBuffer");
-	}
-	if (proc == 0) {
+	if (witty_gl_context.BindVertexBuffer == 0) {
 		return 0;
 	}
-	proc(bindingindex, buffer, offset, stride);
+	witty_gl_context.BindVertexBuffer(bindingindex, buffer, offset, stride);
 	return 1;
 }
 
@@ -602,15 +572,10 @@ static int witty_glBlitFramebuffer(
 	unsigned int mask,
 	unsigned int filter
 ) {
-	typedef void (*proc_fn)(int, int, int, int, int, int, int, int, unsigned int, unsigned int);
-	static proc_fn proc = 0;
-	if (proc == 0) {
-		proc = (proc_fn)witty_gl_get_proc("glBlitFramebuffer");
-	}
-	if (proc == 0) {
+	if (witty_gl_context.BlitFramebuffer == 0) {
 		return 0;
 	}
-	proc(src_x0, src_y0, src_x1, src_y1, dst_x0, dst_y0, dst_x1, dst_y1, mask, filter);
+	witty_gl_context.BlitFramebuffer(src_x0, src_y0, src_x1, src_y1, dst_x0, dst_y0, dst_x1, dst_y1, mask, filter);
 	return 1;
 }
 
@@ -624,17 +589,139 @@ typedef void (*witty_gl_debug_callback)(
 	const void *
 );
 
-static int witty_glDebugMessageCallback(witty_gl_debug_callback callback, const void *user_param) {
-	typedef void (*proc_fn)(witty_gl_debug_callback, const void *);
-	static proc_fn proc = 0;
-	if (proc == 0) {
-		proc = (proc_fn)witty_gl_get_proc("glDebugMessageCallback");
-	}
-	if (proc == 0) {
+static int witty_glDebugMessageCallback(void *callback, void *user_param) {
+	if (witty_gl_context.DebugMessageCallback == 0) {
 		return 0;
 	}
-	proc(callback, user_param);
+	witty_gl_context.DebugMessageCallback((GLDEBUGPROC)callback, user_param);
 	return 1;
 }
+
+#ifdef _VTEST
+static const GLubyte *witty_gl_test_get_string(GLenum name) {
+	if (name == GL_VERSION) {
+		return (const GLubyte *)"4.3 Witty Glad test";
+	}
+	return (const GLubyte *)"";
+}
+
+static void witty_gl_test_get_integerv(GLenum name, GLint *value) {
+	(void)name;
+	if (value != 0) {
+		*value = 0;
+	}
+}
+
+static GLenum witty_gl_test_get_error(void) {
+	return GL_NO_ERROR;
+}
+
+static void witty_gl_test_noop(void) {
+}
+
+static GLADapiproc witty_gl_test_resolver(const char *name) {
+	if (strcmp(name, "glGetString") == 0) {
+		return (GLADapiproc)witty_gl_test_get_string;
+	}
+	if (strcmp(name, "glGetIntegerv") == 0) {
+		return (GLADapiproc)witty_gl_test_get_integerv;
+	}
+	if (strcmp(name, "glGetError") == 0) {
+		return (GLADapiproc)witty_gl_test_get_error;
+	}
+	return (GLADapiproc)witty_gl_test_noop;
+}
+
+static void *witty_gl_test_resolver_pointer(void) {
+	return (void *)witty_gl_test_resolver;
+}
+
+static int witty_gl_test_context_loaded(void) {
+	return witty_gl_context.GetString != 0 &&
+		witty_gl_context.GetIntegerv != 0 &&
+		witty_gl_context.GetError != 0;
+}
+#endif
+
+/*
+ * The pinned Glad build uses its explicit context instead of defining global
+ * gl* symbols. These macros preserve the C spellings used by V while routing
+ * every operation through the same thread-local context as Ghostty.
+ */
+#define glActiveTexture(...) witty_gl_context.ActiveTexture(__VA_ARGS__)
+#define glAttachShader(...) witty_gl_context.AttachShader(__VA_ARGS__)
+#define glBindBuffer(...) witty_gl_context.BindBuffer(__VA_ARGS__)
+#define glBindBufferBase(...) witty_gl_context.BindBufferBase(__VA_ARGS__)
+#define glBindFramebuffer(...) witty_gl_context.BindFramebuffer(__VA_ARGS__)
+#define glBindRenderbuffer(...) witty_gl_context.BindRenderbuffer(__VA_ARGS__)
+#define glBindSampler(...) witty_gl_context.BindSampler(__VA_ARGS__)
+#define glBindTexture(...) witty_gl_context.BindTexture(__VA_ARGS__)
+#define glBindVertexArray(...) witty_gl_context.BindVertexArray(__VA_ARGS__)
+#define glBlendFunc(...) witty_gl_context.BlendFunc(__VA_ARGS__)
+#define glBufferData(...) witty_gl_context.BufferData(__VA_ARGS__)
+#define glBufferSubData(...) witty_gl_context.BufferSubData(__VA_ARGS__)
+#define glCheckFramebufferStatus(...) witty_gl_context.CheckFramebufferStatus(__VA_ARGS__)
+#define glClear(...) witty_gl_context.Clear(__VA_ARGS__)
+#define glClearColor(...) witty_gl_context.ClearColor(__VA_ARGS__)
+#define glCompileShader(...) witty_gl_context.CompileShader(__VA_ARGS__)
+#define glCopyTexSubImage2D(...) witty_gl_context.CopyTexSubImage2D(__VA_ARGS__)
+#define glCreateProgram(...) witty_gl_context.CreateProgram(__VA_ARGS__)
+#define glCreateShader(...) witty_gl_context.CreateShader(__VA_ARGS__)
+#define glDeleteBuffers(...) witty_gl_context.DeleteBuffers(__VA_ARGS__)
+#define glDeleteFramebuffers(...) witty_gl_context.DeleteFramebuffers(__VA_ARGS__)
+#define glDeleteProgram(...) witty_gl_context.DeleteProgram(__VA_ARGS__)
+#define glDeleteRenderbuffers(...) witty_gl_context.DeleteRenderbuffers(__VA_ARGS__)
+#define glDeleteSamplers(...) witty_gl_context.DeleteSamplers(__VA_ARGS__)
+#define glDeleteShader(...) witty_gl_context.DeleteShader(__VA_ARGS__)
+#define glDeleteTextures(...) witty_gl_context.DeleteTextures(__VA_ARGS__)
+#define glDeleteVertexArrays(...) witty_gl_context.DeleteVertexArrays(__VA_ARGS__)
+#define glDisable(...) witty_gl_context.Disable(__VA_ARGS__)
+#define glDrawArrays(...) witty_gl_context.DrawArrays(__VA_ARGS__)
+#define glDrawArraysInstanced(...) witty_gl_context.DrawArraysInstanced(__VA_ARGS__)
+#define glDrawBuffers(...) witty_gl_context.DrawBuffers(__VA_ARGS__)
+#define glDrawElements(...) witty_gl_context.DrawElements(__VA_ARGS__)
+#define glDrawElementsInstanced(...) witty_gl_context.DrawElementsInstanced(__VA_ARGS__)
+#define glEnable(...) witty_gl_context.Enable(__VA_ARGS__)
+#define glEnableVertexAttribArray(...) witty_gl_context.EnableVertexAttribArray(__VA_ARGS__)
+#define glFinish(...) witty_gl_context.Finish(__VA_ARGS__)
+#define glFlush(...) witty_gl_context.Flush(__VA_ARGS__)
+#define glFramebufferRenderbuffer(...) witty_gl_context.FramebufferRenderbuffer(__VA_ARGS__)
+#define glFramebufferTexture2D(...) witty_gl_context.FramebufferTexture2D(__VA_ARGS__)
+#define glFrontFace(...) witty_gl_context.FrontFace(__VA_ARGS__)
+#define glGenBuffers(...) witty_gl_context.GenBuffers(__VA_ARGS__)
+#define glGenFramebuffers(...) witty_gl_context.GenFramebuffers(__VA_ARGS__)
+#define glGenRenderbuffers(...) witty_gl_context.GenRenderbuffers(__VA_ARGS__)
+#define glGenSamplers(...) witty_gl_context.GenSamplers(__VA_ARGS__)
+#define glGenTextures(...) witty_gl_context.GenTextures(__VA_ARGS__)
+#define glGenVertexArrays(...) witty_gl_context.GenVertexArrays(__VA_ARGS__)
+#define glGenerateMipmap(...) witty_gl_context.GenerateMipmap(__VA_ARGS__)
+#define glGetError(...) witty_gl_context.GetError(__VA_ARGS__)
+#define glGetIntegerv(...) witty_gl_context.GetIntegerv(__VA_ARGS__)
+#define glGetProgramInfoLog(...) witty_gl_context.GetProgramInfoLog(__VA_ARGS__)
+#define glGetProgramiv(...) witty_gl_context.GetProgramiv(__VA_ARGS__)
+#define glGetShaderInfoLog(...) witty_gl_context.GetShaderInfoLog(__VA_ARGS__)
+#define glGetShaderiv(...) witty_gl_context.GetShaderiv(__VA_ARGS__)
+#define glGetStringi(...) witty_gl_context.GetStringi(__VA_ARGS__)
+#define glGetUniformLocation(...) witty_gl_context.GetUniformLocation(__VA_ARGS__)
+#define glLinkProgram(...) witty_gl_context.LinkProgram(__VA_ARGS__)
+#define glPixelStorei(...) witty_gl_context.PixelStorei(__VA_ARGS__)
+#define glRenderbufferStorage(...) witty_gl_context.RenderbufferStorage(__VA_ARGS__)
+#define glSamplerParameteri(...) witty_gl_context.SamplerParameteri(__VA_ARGS__)
+#define glShaderSource(...) witty_gl_context.ShaderSource(__VA_ARGS__)
+#define glTexImage2D(...) witty_gl_context.TexImage2D(__VA_ARGS__)
+#define glTexParameteri(...) witty_gl_context.TexParameteri(__VA_ARGS__)
+#define glTexSubImage2D(...) witty_gl_context.TexSubImage2D(__VA_ARGS__)
+#define glUniform1f(...) witty_gl_context.Uniform1f(__VA_ARGS__)
+#define glUniform1i(...) witty_gl_context.Uniform1i(__VA_ARGS__)
+#define glUniform2f(...) witty_gl_context.Uniform2f(__VA_ARGS__)
+#define glUniform3f(...) witty_gl_context.Uniform3f(__VA_ARGS__)
+#define glUniform4f(...) witty_gl_context.Uniform4f(__VA_ARGS__)
+#define glUniformBlockBinding(...) witty_gl_context.UniformBlockBinding(__VA_ARGS__)
+#define glUniformMatrix4fv(...) witty_gl_context.UniformMatrix4fv(__VA_ARGS__)
+#define glUseProgram(...) witty_gl_context.UseProgram(__VA_ARGS__)
+#define glVertexAttribDivisor(...) witty_gl_context.VertexAttribDivisor(__VA_ARGS__)
+#define glVertexAttribIPointer(...) witty_gl_context.VertexAttribIPointer(__VA_ARGS__)
+#define glVertexAttribPointer(...) witty_gl_context.VertexAttribPointer(__VA_ARGS__)
+#define glViewport(...) witty_gl_context.Viewport(__VA_ARGS__)
 
 #endif

@@ -24,7 +24,15 @@ module opengl
 
 #flag linux -ldl
 
+#flag -I @VMODROOT/opengl
+
+#flag @VMODROOT/opengl/glad.c
+
 #insert "@VMODROOT/opengl/gl_headers.h"
+
+fn C.witty_gl_load(get_proc_address voidptr) int
+
+fn C.witty_gl_unload()
 
 fn C.glGetError() u32
 
@@ -196,30 +204,28 @@ fn C.glDeleteSamplers(n int, samplers &u32)
 // glad.zig compatibility
 // ============================================================
 
-// load reports the GL version, mirroring `glad.load`. Witty links the GL
-// entry points directly rather than resolving them through glad, so there is
-// no loader to prime and the proc-address argument is unused.
+// load initializes the pinned Glad thread-local context. A null resolver uses
+// Glad's platform loader; a non-null resolver follows gladLoadGLContext.
 pub fn load(get_proc_address voidptr) !u32 {
-	_ = get_proc_address
-	mut major := int(0)
-	mut minor := int(0)
-	C.glGetIntegerv(C.GL_MAJOR_VERSION, &major)
-	C.glGetIntegerv(C.GL_MINOR_VERSION, &minor)
-	get_error()!
-	return (u32(major) << 16) | u32(minor)
+	result := C.witty_gl_load(get_proc_address)
+	if result == 0 {
+		return error('GLInitFailed')
+	}
+	return u32(result)
 }
 
-// unload mirrors `glad.unload`. The source releases its glad loader context
-// here; witty has no loader context to release.
+// unload releases the platform loader owned by the current Glad context and
+// invalidates that context, matching Ghostty's glad.unload lifecycle.
 pub fn unload() {
+	C.witty_gl_unload()
 }
 
 pub fn version_major(res u32) u32 {
-	return res >> 16
+	return res / 10_000
 }
 
 pub fn version_minor(res u32) u32 {
-	return res & 0xffff
+	return res % 10_000
 }
 
 // ============================================================
