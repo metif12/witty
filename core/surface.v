@@ -1451,6 +1451,7 @@ import apprt
 import datastruct
 import font
 import input
+import log
 import math
 import time
 import os
@@ -1465,6 +1466,7 @@ import inspector as inspectorpkg
 import global_state
 import highlight
 import renderer as rendererpkg
+import simd
 import termio as termiopkg
 import unicode
 import crash
@@ -2806,20 +2808,26 @@ pub fn (self &Surface) has_selection() bool {
 	return self.renderer_state.terminal_.screens.active.selection != none
 }
 
+// SelectionStringResult preserves Ghostty's fallible optional selection text.
+// V cannot directly return a Result whose success value is an Option.
+pub struct SelectionStringResult {
+pub:
+	value ?string
+}
+
 // selection_string returns the selected text.
-pub fn (self &Surface) selection_string() ?string {
+pub fn (self &Surface) selection_string() !SelectionStringResult {
 	self.renderer_state.mutex.lock()
 	defer {
 		self.renderer_state.mutex.unlock()
 	}
-	sel := self.renderer_state.terminal_.screens.active.selection or { return none }
+	sel := self.renderer_state.terminal_.screens.active.selection or {
+		return SelectionStringResult{}
+	}
 	text := self.renderer_state.terminal_.screens.active.selection_string(terminal.SelectionString{
 		sel: sel
-	}) or { return none }
-	if text.len == 0 {
-		return none
-	}
-	return text
+	})!
+	return SelectionStringResult{ value: text }
 }
 
 // pwd returns the current working directory of the terminal.
@@ -4109,7 +4117,8 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			)!
 		}
 		input.ActionSearchSelection {
-			selection := self.selection_string() or { return false }
+			selection_result := self.selection_string()!
+			selection := selection_result.value or { return false }
 			return self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.start_search,
@@ -6162,13 +6171,49 @@ fn (mut self Surface) copy_selection_to_clipboards(sel TermSelection, clipboards
 
 fn (mut self Surface) clipboard_write(data string, loc apprt.Clipboard) ! {
 	if self.config.clipboard_write == .deny {
+		log.info("application attempted to write clipboard, but 'clipboard-write' is set to deny")
 		return
 	}
-	decoded := base64.decode(data)
+	decoded := decode_osc52_base64(data) or {
+		log.info('application sent invalid base64 data for OSC 52')
+		return
+	}
 	self.rt_surface.set_clipboard(loc, [apprt.ClipboardContent{
 		mime: 'text/plain'
-		data: decoded.bytestr()
-	}], self.config.clipboard_write == .ask)!
+		data: decoded
+	}], self.config.clipboard_write == .ask) or {
+		log.error('error setting clipboard string err=${err}')
+		return
+	}
+}
+
+// decode_osc52_base64 mirrors the standard padded Base64 decoder used by
+// Surface.clipboardWrite. Invalid shape/alphabet input is rejected, while
+// noncanonical unused trailing bits are accepted just as Ghostty accepts the
+// decoder's InvalidPadding result after it has produced the bytes.
+fn decode_osc52_base64(data string) ?string {
+	if data.len % 4 != 0 {
+		return none
+	}
+	mut padding := 0
+	for padding < data.len && data[data.len - 1 - padding] == `=` {
+		padding++
+	}
+	if padding > 2 {
+		return none
+	}
+	for c in data[..data.len - padding] {
+		if c == `=` {
+			return none
+		}
+	}
+	output_len := data.len / 4 * 3 - padding
+	mut output := []u8{len: output_len}
+	decoded := simd.decode(data.bytes(), mut output) or { return none }
+	if decoded.len != output_len {
+		return none
+	}
+	return decoded.bytestr()
 }
 
 fn (mut self Surface) start_clipboard_request(loc apprt.Clipboard, req apprt.ClipboardRequest) !bool {

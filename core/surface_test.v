@@ -18,6 +18,10 @@ import renderer as rendererpkg
 import xev
 import font
 
+fn clipboard_set_failure_probe(_ voidptr, _ apprt.Clipboard, _ []apprt.ClipboardContent, _ bool) ! {
+	return error('clipboard unavailable')
+}
+
 fn test_surface_private_source_tag_layouts_and_ordinals() {
 	assert sizeof(MouseReportAction) == 1
 	assert [MouseReportAction.press, .release, .motion].map(u8(it)) == [u8(0), 1, 2]
@@ -1371,6 +1375,53 @@ fn test_has_selection() {
 	surf.renderer_state.terminal_.screens.active.select(TermSelection.init(surface_active_pin(&surf,
 		0, 0), surface_active_pin(&surf, 5, 0), false)) or { panic(err) }
 	assert surf.has_selection() == true
+}
+
+fn test_selection_string_distinguishes_no_selection_from_empty_selection() ! {
+	mut surf := make_test_surface()
+	assert surf.selection_string()!.value == none
+
+	surf.renderer_state.terminal_.screens.active.select(TermSelection.init(surface_active_pin(&surf,
+		0, 0), surface_active_pin(&surf, 0, 0), false))!
+	selection_result := surf.selection_string()!
+	selection := selection_result.value or {
+		assert false, 'an existing empty selection must not become none'
+		return
+	}
+	assert selection == ''
+}
+
+fn test_osc52_base64_validation_and_noncanonical_padding() {
+	assert decode_osc52_base64('aGVsbG8=')? == 'hello'
+	assert decode_osc52_base64('Zh==')? == 'f'
+	assert decode_osc52_base64('AA!A') == none
+	assert decode_osc52_base64('Zg=') == none
+	assert decode_osc52_base64('Zg===') == none
+	assert decode_osc52_base64('====') == none
+}
+
+fn test_clipboard_write_ignores_invalid_base64() ! {
+	mut runtime := apprt.RuntimeSurface{}
+	mut surf := make_test_surface()
+	surf.rt_surface = &runtime
+
+	surf.clipboard_write('AA!A', .standard)!
+	assert runtime.clipboards.len == 0
+	surf.clipboard_write('aGVsbG8=', .standard)!
+	assert runtime.clipboards[.standard][0].data == 'hello'
+}
+
+fn test_clipboard_write_absorbs_runtime_failure_and_honors_deny() ! {
+	mut failing_runtime := apprt.RuntimeSurface{ set_clipboard_fn: clipboard_set_failure_probe }
+	mut surf := make_test_surface()
+	surf.rt_surface = &failing_runtime
+	surf.clipboard_write('aGVsbG8=', .standard)!
+
+	mut denied_runtime := apprt.RuntimeSurface{}
+	surf.rt_surface = &denied_runtime
+	surf.config.clipboard_write = .deny
+	surf.clipboard_write('aGVsbG8=', .standard)!
+	assert denied_runtime.clipboards.len == 0
 }
 
 fn test_surface_dump_text_public_wrapper_and_text_lifecycle() {
