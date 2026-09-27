@@ -116,5 +116,5 @@ pub fn is_error(err IError, expected ErrorKind) bool {
 
 // ensure_init is the testing helper from pkg/oniguruma/testing.zig.
 pub fn ensure_init() ! {
-	init([.utf8])!
+	init([Encoding.utf8()])!
 }

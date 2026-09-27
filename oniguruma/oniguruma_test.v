@@ -76,40 +76,46 @@ fn test_ensure_init() {
 }
 
 fn test_all_linked_encoding_constants() {
-	init([.ascii, .iso_8859_1, .iso_8859_2, .iso_8859_3, .iso_8859_4, .iso_8859_5, .iso_8859_6,
-		.iso_8859_7, .iso_8859_8, .iso_8859_9, .iso_8859_10, .iso_8859_11, .iso_8859_13, .iso_8859_14,
-		.iso_8859_15, .iso_8859_16, .utf8, .utf16_be, .utf16_le, .utf32_be, .utf32_le, .euc_jp,
-		.euc_tw, .euc_kr, .euc_cn, .sjis, .koi8_r, .cp1251, .big5, .gb18030])!
+	assert sizeof(Encoding) == sizeof(voidptr)
+	init([Encoding.ascii(), Encoding.iso_8859_1(), Encoding.iso_8859_2(), Encoding.iso_8859_3(),
+		Encoding.iso_8859_4(), Encoding.iso_8859_5(), Encoding.iso_8859_6(), Encoding.iso_8859_7(),
+		Encoding.iso_8859_8(), Encoding.iso_8859_9(), Encoding.iso_8859_10(), Encoding.iso_8859_11(),
+		Encoding.iso_8859_13(), Encoding.iso_8859_14(), Encoding.iso_8859_15(), Encoding.iso_8859_16(),
+		Encoding.utf8(), Encoding.utf16_be(), Encoding.utf16_le(), Encoding.utf32_be(), Encoding.utf32_le(),
+		Encoding.euc_jp(), Encoding.euc_tw(), Encoding.euc_kr(), Encoding.euc_cn(), Encoding.sjis(),
+		Encoding.koi8_r(), Encoding.cp1251(), Encoding.big5(), Encoding.gb18030()])!
 	deinit()
-	assert int(Encoding.koi8) == 26
 }
 
 fn test_all_syntax_constants() {
-	init([.utf8])!
+	assert sizeof(Syntax) == sizeof(voidptr)
+	init([Encoding.utf8()])!
 	defer { deinit() }
-	for syntax in [Syntax.default_, .asis, .posix_basic, .posix_extended, .emacs, .grep, .gnu_regex,
-		.java, .perl, .perl_ng, .ruby, .oniguruma] {
-		mut regex := Regex.init('foo', Options{}, .utf8, syntax, none)!
+	for syntax in [Syntax.default_(), Syntax.asis(), Syntax.posix_basic(), Syntax.posix_extended(),
+		Syntax.emacs(), Syntax.grep(), Syntax.gnu_regex(), Syntax.java(), Syntax.perl(), Syntax.perl_ng(),
+		Syntax.ruby(), Syntax.oniguruma()] {
+		mut regex := Regex.init('foo', Options{}, Encoding.utf8(), syntax, none)!
 		regex.deinit()
 	}
+	assert Syntax.default_() == Syntax.oniguruma()
 }
 
 fn test_regex_error_info() {
-	init([.utf8])!
+	init([Encoding.utf8()])!
 	defer { deinit() }
 	mut info := ErrorInfo{}
-	if _ := Regex.init('(', Options{}, .utf8, .default_, &info) {
+	if _ := Regex.init('(', Options{}, Encoding.utf8(), Syntax.default_(), &info) {
 		assert false, 'expected invalid regex'
 	} else {
 		assert error_kind_of(err) != none
-		assert info.encoding == .utf8
+		assert info.encoding == Encoding.utf8()
 	}
 }
 
 fn test_regex_search_and_mismatch() {
-	init([.utf8])!
+	init([Encoding.utf8()])!
 	defer { deinit() }
-	mut regex := Regex.init('foo', Options{}, .utf8, .default_, none)!
+	mut regex := Regex.init('foo', Options{}, Encoding.utf8(), Syntax.default_(), none)!
 	defer { regex.deinit() }
 	mut region := regex.search('hello foo bar', Options{})!
 	defer { region.deinit() }
@@ -127,9 +133,9 @@ fn test_regex_search_and_mismatch() {
 
 fn test_region_native_layout_and_borrowed_ranges() {
 	assert sizeof(Region) == 8 + 3 * sizeof(voidptr)
-	init([.utf8])!
+	init([Encoding.utf8()])!
 	defer { deinit() }
-	mut regex := Regex.init('(foo) (bar)', Options{}, .utf8, .default_, none)!
+	mut regex := Regex.init('(foo) (bar)', Options{}, Encoding.utf8(), Syntax.default_(), none)!
 	defer { regex.deinit() }
 	mut region := regex.search('xfoo barz', Options{})!
 	defer { region.deinit() }

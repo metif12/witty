@@ -949,7 +949,8 @@ fn test_modifier_key_refreshes_link_hover() ! {
 	surf.rt_surface = &runtime_surface
 	surf.config.link_previews = .true_
 	surf.config.links = [DerivedConfigLink{
-		regex: oniguruma.Regex.init(r'http://a', oniguruma.Options{}, .utf8, .default_, none)!
+		regex: oniguruma.Regex.init(r'http://a', oniguruma.Options{}, oniguruma.Encoding.utf8(),
+			oniguruma.Syntax.default_(), none)!
 		action: .open
 		highlight: input.LinkHighlightHover{}
 	}]
@@ -1690,7 +1691,8 @@ fn test_copy_url_to_clipboard_uses_configured_trailing_space_policy() ! {
 	surf.size = make_test_size()
 	surf.config.clipboard_trim_trailing_spaces = false
 	surf.config.links = [DerivedConfigLink{
-		regex: oniguruma.Regex.init(r'http://a   ', oniguruma.Options{}, .utf8, .default_, none)!
+		regex: oniguruma.Regex.init(r'http://a   ', oniguruma.Options{}, oniguruma.Encoding.utf8(),
+			oniguruma.Syntax.default_(), none)!
 		action: .open
 		highlight: input.LinkHighlightHover{}
 	}]
@@ -1714,7 +1716,8 @@ fn test_mouse_link_preview_forwards_untrimmed_url() ! {
 	surf.size = make_test_size()
 	surf.config.link_previews = .true_
 	surf.config.links = [DerivedConfigLink{
-		regex: oniguruma.Regex.init(r'http://a   ', oniguruma.Options{}, .utf8, .default_, none)!
+		regex: oniguruma.Regex.init(r'http://a   ', oniguruma.Options{}, oniguruma.Encoding.utf8(),
+			oniguruma.Syntax.default_(), none)!
 		action: .open
 		highlight: input.LinkHighlightHover{}
 	}]

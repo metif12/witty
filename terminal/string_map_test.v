@@ -55,7 +55,8 @@ fn test_selection_string_map_allocation_failure_cleanup() ! {
 
 fn test_string_map_search_iterator() ! {
 	// Initialize our regex
-	mut re := oniguruma.Regex.init('[A-B]{2}', oniguruma.Options{}, .utf8, .default_, none)!
+	mut re := oniguruma.Regex.init('[A-B]{2}', oniguruma.Options{}, oniguruma.Encoding.utf8(),
+		oniguruma.Syntax.default_(), none)!
 	defer { re.deinit() }
 
 	// Initialize our screen
@@ -96,8 +97,8 @@ fn test_string_map_search_iterator() ! {
 
 fn test_string_map_search_iterator_url_detection() ! {
 	// Initialize URL regex
-	mut re := oniguruma.Regex.init(string_map_test_url_regex, oniguruma.Options{}, .utf8,
-		.default_, none)!
+	mut re := oniguruma.Regex.init(string_map_test_url_regex, oniguruma.Options{}, oniguruma.Encoding.utf8(),
+		oniguruma.Syntax.default_(), none)!
 	defer { re.deinit() }
 
 	// Initialize our screen with text containing a URL
@@ -141,8 +142,8 @@ fn test_string_map_search_iterator_url_detection() ! {
 
 fn test_string_map_search_iterator_url_with_click_position() ! {
 	// Initialize URL regex
-	mut re := oniguruma.Regex.init(string_map_test_url_regex, oniguruma.Options{}, .utf8,
-		.default_, none)!
+	mut re := oniguruma.Regex.init(string_map_test_url_regex, oniguruma.Options{}, oniguruma.Encoding.utf8(),
+		oniguruma.Syntax.default_(), none)!
 	defer { re.deinit() }
 
 	// Initialize our screen with text containing a URL

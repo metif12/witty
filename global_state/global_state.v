@@ -308,7 +308,7 @@ pub fn (mut self GlobalState) init_args(args []string) ! {
 	internal_os.ensure_locale()!
 
 	// Initialize Oniguruma for regular-expression link matching.
-	oniguruma.init([.utf8])!
+	oniguruma.init([oniguruma.Encoding.utf8()])!
 
 	// Find our resources directory once for the app so every launch
 	// hereafter can use this cached value.

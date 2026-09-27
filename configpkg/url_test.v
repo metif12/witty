@@ -9,9 +9,10 @@ struct UrlRegexCase {
 }
 
 fn test_default_url_regex_matches_pinned_oniguruma_cases() {
-	oniguruma.init([.utf8])!
+	oniguruma.init([oniguruma.Encoding.utf8()])!
 	defer { oniguruma.deinit() }
-	mut regex := oniguruma.Regex.init(default_url_pattern, oniguruma.Options{}, .utf8, .default_, none)!
+	mut regex := oniguruma.Regex.init(default_url_pattern, oniguruma.Options{}, oniguruma.Encoding.utf8(),
+		oniguruma.Syntax.default_(), none)!
 	defer { regex.deinit() }
 
 	cases := [

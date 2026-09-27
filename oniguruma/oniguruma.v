@@ -11,11 +11,56 @@ module oniguruma
 
 #include "bridge.h"
 
-fn C.witty_onig_initialize(encoding_ids &int, count usize) int
+fn C.witty_onig_initialize(encodings &voidptr, count usize) int
 
 fn C.onig_end() int
 
-fn C.witty_onig_new(out &voidptr, pattern &u8, pattern_len usize, options u32, encoding_id int, syntax_id int, error_par &voidptr, error_par_end &voidptr) int
+fn C.witty_onig_new(out &voidptr, pattern &u8, pattern_len usize, options u32, encoding voidptr, syntax voidptr, error_par &voidptr, error_par_end &voidptr) int
+
+fn C.witty_onig_encoding_ascii() voidptr
+fn C.witty_onig_encoding_iso_8859_1() voidptr
+fn C.witty_onig_encoding_iso_8859_2() voidptr
+fn C.witty_onig_encoding_iso_8859_3() voidptr
+fn C.witty_onig_encoding_iso_8859_4() voidptr
+fn C.witty_onig_encoding_iso_8859_5() voidptr
+fn C.witty_onig_encoding_iso_8859_6() voidptr
+fn C.witty_onig_encoding_iso_8859_7() voidptr
+fn C.witty_onig_encoding_iso_8859_8() voidptr
+fn C.witty_onig_encoding_iso_8859_9() voidptr
+fn C.witty_onig_encoding_iso_8859_10() voidptr
+fn C.witty_onig_encoding_iso_8859_11() voidptr
+fn C.witty_onig_encoding_iso_8859_13() voidptr
+fn C.witty_onig_encoding_iso_8859_14() voidptr
+fn C.witty_onig_encoding_iso_8859_15() voidptr
+fn C.witty_onig_encoding_iso_8859_16() voidptr
+fn C.witty_onig_encoding_utf8() voidptr
+fn C.witty_onig_encoding_utf16_be() voidptr
+fn C.witty_onig_encoding_utf16_le() voidptr
+fn C.witty_onig_encoding_utf32_be() voidptr
+fn C.witty_onig_encoding_utf32_le() voidptr
+fn C.witty_onig_encoding_euc_jp() voidptr
+fn C.witty_onig_encoding_euc_tw() voidptr
+fn C.witty_onig_encoding_euc_kr() voidptr
+fn C.witty_onig_encoding_euc_cn() voidptr
+fn C.witty_onig_encoding_sjis() voidptr
+fn C.witty_onig_encoding_koi8() voidptr
+fn C.witty_onig_encoding_koi8_r() voidptr
+fn C.witty_onig_encoding_cp1251() voidptr
+fn C.witty_onig_encoding_big5() voidptr
+fn C.witty_onig_encoding_gb18030() voidptr
+
+fn C.witty_onig_syntax_default_() voidptr
+fn C.witty_onig_syntax_asis() voidptr
+fn C.witty_onig_syntax_posix_basic() voidptr
+fn C.witty_onig_syntax_posix_extended() voidptr
+fn C.witty_onig_syntax_emacs() voidptr
+fn C.witty_onig_syntax_grep() voidptr
+fn C.witty_onig_syntax_gnu_regex() voidptr
+fn C.witty_onig_syntax_java() voidptr
+fn C.witty_onig_syntax_perl() voidptr
+fn C.witty_onig_syntax_perl_ng() voidptr
+fn C.witty_onig_syntax_ruby() voidptr
+fn C.witty_onig_syntax_oniguruma() voidptr
 
 fn C.onig_free(regex voidptr)
 
@@ -258,54 +303,61 @@ pub fn (mut o Options) set_match_whole_string(value bool) {
 	o.set_bit(24, value)
 }
 
-pub enum Encoding {
-	ascii
-	iso_8859_1
-	iso_8859_2
-	iso_8859_3
-	iso_8859_4
-	iso_8859_5
-	iso_8859_6
-	iso_8859_7
-	iso_8859_8
-	iso_8859_9
-	iso_8859_10
-	iso_8859_11
-	iso_8859_13
-	iso_8859_14
-	iso_8859_15
-	iso_8859_16
-	utf8
-	utf16_be
-	utf16_le
-	utf32_be
-	utf32_le
-	euc_jp
-	euc_tw
-	euc_kr
-	euc_cn
-	sjis
-	koi8
-	koi8_r
-	cp1251
-	big5
-	gb18030
+// Encoding and Syntax are opaque pointers in the source wrapper. The V values
+// retain exactly one native pointer and expose associated constructors because
+// V cannot declare a compile-time constant initialized from a C symbol.
+pub struct Encoding {
+	handle voidptr
 }
 
-pub enum Syntax {
-	default_
-	asis
-	posix_basic
-	posix_extended
-	emacs
-	grep
-	gnu_regex
-	java
-	perl
-	perl_ng
-	ruby
-	oniguruma
+pub fn Encoding.ascii() Encoding { return Encoding{ handle: C.witty_onig_encoding_ascii() } }
+pub fn Encoding.iso_8859_1() Encoding { return Encoding{ handle: C.witty_onig_encoding_iso_8859_1() } }
+pub fn Encoding.iso_8859_2() Encoding { return Encoding{ handle: C.witty_onig_encoding_iso_8859_2() } }
+pub fn Encoding.iso_8859_3() Encoding { return Encoding{ handle: C.witty_onig_encoding_iso_8859_3() } }
+pub fn Encoding.iso_8859_4() Encoding { return Encoding{ handle: C.witty_onig_encoding_iso_8859_4() } }
+pub fn Encoding.iso_8859_5() Encoding { return Encoding{ handle: C.witty_onig_encoding_iso_8859_5() } }
+pub fn Encoding.iso_8859_6() Encoding { return Encoding{ handle: C.witty_onig_encoding_iso_8859_6() } }
+pub fn Encoding.iso_8859_7() Encoding { return Encoding{ handle: C.witty_onig_encoding_iso_8859_7() } }
+pub fn Encoding.iso_8859_8() Encoding { return Encoding{ handle: C.witty_onig_encoding_iso_8859_8() } }
+pub fn Encoding.iso_8859_9() Encoding { return Encoding{ handle: C.witty_onig_encoding_iso_8859_9() } }
+pub fn Encoding.iso_8859_10() Encoding { return Encoding{ handle: C.witty_onig_encoding_iso_8859_10() } }
+pub fn Encoding.iso_8859_11() Encoding { return Encoding{ handle: C.witty_onig_encoding_iso_8859_11() } }
+pub fn Encoding.iso_8859_13() Encoding { return Encoding{ handle: C.witty_onig_encoding_iso_8859_13() } }
+pub fn Encoding.iso_8859_14() Encoding { return Encoding{ handle: C.witty_onig_encoding_iso_8859_14() } }
+pub fn Encoding.iso_8859_15() Encoding { return Encoding{ handle: C.witty_onig_encoding_iso_8859_15() } }
+pub fn Encoding.iso_8859_16() Encoding { return Encoding{ handle: C.witty_onig_encoding_iso_8859_16() } }
+pub fn Encoding.utf8() Encoding { return Encoding{ handle: C.witty_onig_encoding_utf8() } }
+pub fn Encoding.utf16_be() Encoding { return Encoding{ handle: C.witty_onig_encoding_utf16_be() } }
+pub fn Encoding.utf16_le() Encoding { return Encoding{ handle: C.witty_onig_encoding_utf16_le() } }
+pub fn Encoding.utf32_be() Encoding { return Encoding{ handle: C.witty_onig_encoding_utf32_be() } }
+pub fn Encoding.utf32_le() Encoding { return Encoding{ handle: C.witty_onig_encoding_utf32_le() } }
+pub fn Encoding.euc_jp() Encoding { return Encoding{ handle: C.witty_onig_encoding_euc_jp() } }
+pub fn Encoding.euc_tw() Encoding { return Encoding{ handle: C.witty_onig_encoding_euc_tw() } }
+pub fn Encoding.euc_kr() Encoding { return Encoding{ handle: C.witty_onig_encoding_euc_kr() } }
+pub fn Encoding.euc_cn() Encoding { return Encoding{ handle: C.witty_onig_encoding_euc_cn() } }
+pub fn Encoding.sjis() Encoding { return Encoding{ handle: C.witty_onig_encoding_sjis() } }
+pub fn Encoding.koi8() Encoding { return Encoding{ handle: C.witty_onig_encoding_koi8() } }
+pub fn Encoding.koi8_r() Encoding { return Encoding{ handle: C.witty_onig_encoding_koi8_r() } }
+pub fn Encoding.cp1251() Encoding { return Encoding{ handle: C.witty_onig_encoding_cp1251() } }
+pub fn Encoding.big5() Encoding { return Encoding{ handle: C.witty_onig_encoding_big5() } }
+pub fn Encoding.gb18030() Encoding { return Encoding{ handle: C.witty_onig_encoding_gb18030() } }
+
+pub struct Syntax {
+	handle voidptr
 }
+
+pub fn Syntax.default_() Syntax { return Syntax{ handle: C.witty_onig_syntax_default_() } }
+pub fn Syntax.asis() Syntax { return Syntax{ handle: C.witty_onig_syntax_asis() } }
+pub fn Syntax.posix_basic() Syntax { return Syntax{ handle: C.witty_onig_syntax_posix_basic() } }
+pub fn Syntax.posix_extended() Syntax { return Syntax{ handle: C.witty_onig_syntax_posix_extended() } }
+pub fn Syntax.emacs() Syntax { return Syntax{ handle: C.witty_onig_syntax_emacs() } }
+pub fn Syntax.grep() Syntax { return Syntax{ handle: C.witty_onig_syntax_grep() } }
+pub fn Syntax.gnu_regex() Syntax { return Syntax{ handle: C.witty_onig_syntax_gnu_regex() } }
+pub fn Syntax.java() Syntax { return Syntax{ handle: C.witty_onig_syntax_java() } }
+pub fn Syntax.perl() Syntax { return Syntax{ handle: C.witty_onig_syntax_perl() } }
+pub fn Syntax.perl_ng() Syntax { return Syntax{ handle: C.witty_onig_syntax_perl_ng() } }
+pub fn Syntax.ruby() Syntax { return Syntax{ handle: C.witty_onig_syntax_ruby() } }
+pub fn Syntax.oniguruma() Syntax { return Syntax{ handle: C.witty_onig_syntax_oniguruma() } }
 
 pub struct ErrorInfo {
 pub mut:
@@ -316,9 +368,9 @@ pub mut:
 
 // init initializes Oniguruma for the encodings that the process will use.
 pub fn init(encodings []Encoding) ! {
-	mut values := []int{len: encodings.len}
-	for i, encoding in encodings {
-		values[i] = int(encoding)
+	mut values := []voidptr{cap: encodings.len}
+	for encoding in encodings {
+		values << encoding.handle
 	}
 	result := if values.len == 0 {
 		C.witty_onig_initialize(unsafe { nil }, 0)
@@ -350,7 +402,8 @@ pub fn Regex.init(pattern string, options Options, encoding Encoding, syntax Syn
 	mut error_par := voidptr(unsafe { nil })
 	mut error_par_end := voidptr(unsafe { nil })
 	result := unsafe {
-		C.witty_onig_new(&value, pattern.str, usize(pattern.len), options.int(), int(encoding), int(syntax), &error_par, &error_par_end)
+		C.witty_onig_new(&value, pattern.str, usize(pattern.len), options.int(), encoding.handle,
+			syntax.handle, &error_par, &error_par_end)
 	}
 	if result < 0 {
 		if mut info := error_info {

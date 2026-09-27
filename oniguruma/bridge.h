@@ -4,74 +4,63 @@
 #include <stddef.h>
 #include <oniguruma.h>
 
-enum { WITTY_ONIG_ENCODING_COUNT = 31 };
+#define WITTY_ONIG_GET_ENCODING(name, value) \
+    static inline void *witty_onig_encoding_##name(void) { return (void *)(value); }
 
-static inline OnigEncoding witty_onig_encoding(int value) {
-    switch (value) {
-    case 0: return ONIG_ENCODING_ASCII;
-    case 1: return ONIG_ENCODING_ISO_8859_1;
-    case 2: return ONIG_ENCODING_ISO_8859_2;
-    case 3: return ONIG_ENCODING_ISO_8859_3;
-    case 4: return ONIG_ENCODING_ISO_8859_4;
-    case 5: return ONIG_ENCODING_ISO_8859_5;
-    case 6: return ONIG_ENCODING_ISO_8859_6;
-    case 7: return ONIG_ENCODING_ISO_8859_7;
-    case 8: return ONIG_ENCODING_ISO_8859_8;
-    case 9: return ONIG_ENCODING_ISO_8859_9;
-    case 10: return ONIG_ENCODING_ISO_8859_10;
-    case 11: return ONIG_ENCODING_ISO_8859_11;
-    case 12: return ONIG_ENCODING_ISO_8859_13;
-    case 13: return ONIG_ENCODING_ISO_8859_14;
-    case 14: return ONIG_ENCODING_ISO_8859_15;
-    case 15: return ONIG_ENCODING_ISO_8859_16;
-    case 16: return ONIG_ENCODING_UTF8;
-    case 17: return ONIG_ENCODING_UTF16_BE;
-    case 18: return ONIG_ENCODING_UTF16_LE;
-    case 19: return ONIG_ENCODING_UTF32_BE;
-    case 20: return ONIG_ENCODING_UTF32_LE;
-    case 21: return ONIG_ENCODING_EUC_JP;
-    case 22: return ONIG_ENCODING_EUC_TW;
-    case 23: return ONIG_ENCODING_EUC_KR;
-    case 24: return ONIG_ENCODING_EUC_CN;
-    case 25: return ONIG_ENCODING_SJIS;
-    // Ghostty's bundled build also omits koi8.c. The public value remains in
-    // Encoding for API parity, but cannot be initialized by that library.
-    case 26: return NULL;
-    case 27: return ONIG_ENCODING_KOI8_R;
-    case 28: return ONIG_ENCODING_CP1251;
-    case 29: return ONIG_ENCODING_BIG5;
-    case 30: return ONIG_ENCODING_GB18030;
-    default: return NULL;
-    }
-}
+WITTY_ONIG_GET_ENCODING(ascii, ONIG_ENCODING_ASCII)
+WITTY_ONIG_GET_ENCODING(iso_8859_1, ONIG_ENCODING_ISO_8859_1)
+WITTY_ONIG_GET_ENCODING(iso_8859_2, ONIG_ENCODING_ISO_8859_2)
+WITTY_ONIG_GET_ENCODING(iso_8859_3, ONIG_ENCODING_ISO_8859_3)
+WITTY_ONIG_GET_ENCODING(iso_8859_4, ONIG_ENCODING_ISO_8859_4)
+WITTY_ONIG_GET_ENCODING(iso_8859_5, ONIG_ENCODING_ISO_8859_5)
+WITTY_ONIG_GET_ENCODING(iso_8859_6, ONIG_ENCODING_ISO_8859_6)
+WITTY_ONIG_GET_ENCODING(iso_8859_7, ONIG_ENCODING_ISO_8859_7)
+WITTY_ONIG_GET_ENCODING(iso_8859_8, ONIG_ENCODING_ISO_8859_8)
+WITTY_ONIG_GET_ENCODING(iso_8859_9, ONIG_ENCODING_ISO_8859_9)
+WITTY_ONIG_GET_ENCODING(iso_8859_10, ONIG_ENCODING_ISO_8859_10)
+WITTY_ONIG_GET_ENCODING(iso_8859_11, ONIG_ENCODING_ISO_8859_11)
+WITTY_ONIG_GET_ENCODING(iso_8859_13, ONIG_ENCODING_ISO_8859_13)
+WITTY_ONIG_GET_ENCODING(iso_8859_14, ONIG_ENCODING_ISO_8859_14)
+WITTY_ONIG_GET_ENCODING(iso_8859_15, ONIG_ENCODING_ISO_8859_15)
+WITTY_ONIG_GET_ENCODING(iso_8859_16, ONIG_ENCODING_ISO_8859_16)
+WITTY_ONIG_GET_ENCODING(utf8, ONIG_ENCODING_UTF8)
+WITTY_ONIG_GET_ENCODING(utf16_be, ONIG_ENCODING_UTF16_BE)
+WITTY_ONIG_GET_ENCODING(utf16_le, ONIG_ENCODING_UTF16_LE)
+WITTY_ONIG_GET_ENCODING(utf32_be, ONIG_ENCODING_UTF32_BE)
+WITTY_ONIG_GET_ENCODING(utf32_le, ONIG_ENCODING_UTF32_LE)
+WITTY_ONIG_GET_ENCODING(euc_jp, ONIG_ENCODING_EUC_JP)
+WITTY_ONIG_GET_ENCODING(euc_tw, ONIG_ENCODING_EUC_TW)
+WITTY_ONIG_GET_ENCODING(euc_kr, ONIG_ENCODING_EUC_KR)
+WITTY_ONIG_GET_ENCODING(euc_cn, ONIG_ENCODING_EUC_CN)
+WITTY_ONIG_GET_ENCODING(sjis, ONIG_ENCODING_SJIS)
+WITTY_ONIG_GET_ENCODING(koi8, ONIG_ENCODING_KOI8)
+WITTY_ONIG_GET_ENCODING(koi8_r, ONIG_ENCODING_KOI8_R)
+WITTY_ONIG_GET_ENCODING(cp1251, ONIG_ENCODING_CP1251)
+WITTY_ONIG_GET_ENCODING(big5, ONIG_ENCODING_BIG5)
+WITTY_ONIG_GET_ENCODING(gb18030, ONIG_ENCODING_GB18030)
 
-static inline OnigSyntaxType *witty_onig_syntax(int value) {
-    switch (value) {
-    case 0: return ONIG_SYNTAX_ONIGURUMA;
-    case 1: return ONIG_SYNTAX_ASIS;
-    case 2: return ONIG_SYNTAX_POSIX_BASIC;
-    case 3: return ONIG_SYNTAX_POSIX_EXTENDED;
-    case 4: return ONIG_SYNTAX_EMACS;
-    case 5: return ONIG_SYNTAX_GREP;
-    case 6: return ONIG_SYNTAX_GNU_REGEX;
-    case 7: return ONIG_SYNTAX_JAVA;
-    case 8: return ONIG_SYNTAX_PERL;
-    case 9: return ONIG_SYNTAX_PERL_NG;
-    case 10: return ONIG_SYNTAX_RUBY;
-    case 11: return ONIG_SYNTAX_ONIGURUMA;
-    default: return NULL;
-    }
-}
+#undef WITTY_ONIG_GET_ENCODING
 
-static inline int witty_onig_initialize(const int *encoding_ids, size_t count) {
-    OnigEncoding encodings[WITTY_ONIG_ENCODING_COUNT];
-    size_t i;
-    if (count > WITTY_ONIG_ENCODING_COUNT) return ONIGERR_INVALID_ARGUMENT;
-    for (i = 0; i < count; ++i) {
-        encodings[i] = witty_onig_encoding(encoding_ids[i]);
-        if (encodings[i] == NULL) return ONIGERR_INVALID_ARGUMENT;
-    }
-    return onig_initialize(count == 0 ? NULL : encodings, (int)count);
+#define WITTY_ONIG_GET_SYNTAX(name, value) \
+    static inline void *witty_onig_syntax_##name(void) { return (void *)(value); }
+
+WITTY_ONIG_GET_SYNTAX(default_, ONIG_SYNTAX_ONIGURUMA)
+WITTY_ONIG_GET_SYNTAX(asis, ONIG_SYNTAX_ASIS)
+WITTY_ONIG_GET_SYNTAX(posix_basic, ONIG_SYNTAX_POSIX_BASIC)
+WITTY_ONIG_GET_SYNTAX(posix_extended, ONIG_SYNTAX_POSIX_EXTENDED)
+WITTY_ONIG_GET_SYNTAX(emacs, ONIG_SYNTAX_EMACS)
+WITTY_ONIG_GET_SYNTAX(grep, ONIG_SYNTAX_GREP)
+WITTY_ONIG_GET_SYNTAX(gnu_regex, ONIG_SYNTAX_GNU_REGEX)
+WITTY_ONIG_GET_SYNTAX(java, ONIG_SYNTAX_JAVA)
+WITTY_ONIG_GET_SYNTAX(perl, ONIG_SYNTAX_PERL)
+WITTY_ONIG_GET_SYNTAX(perl_ng, ONIG_SYNTAX_PERL_NG)
+WITTY_ONIG_GET_SYNTAX(ruby, ONIG_SYNTAX_RUBY)
+WITTY_ONIG_GET_SYNTAX(oniguruma, ONIG_SYNTAX_ONIGURUMA)
+
+#undef WITTY_ONIG_GET_SYNTAX
+
+static inline int witty_onig_initialize(void *const *encodings, size_t count) {
+    return onig_initialize((OnigEncoding *)encodings, (int)count);
 }
 
 static inline int witty_onig_new(
@@ -79,24 +68,21 @@ static inline int witty_onig_new(
     const unsigned char *pattern,
     size_t pattern_len,
     unsigned int options,
-    int encoding_id,
-    int syntax_id,
+    void *encoding,
+    void *syntax,
     void **error_par,
     void **error_par_end
 ) {
-    OnigEncoding encoding = witty_onig_encoding(encoding_id);
-    OnigSyntaxType *syntax = witty_onig_syntax(syntax_id);
     OnigRegex regex = NULL;
     OnigErrorInfo info = {0};
     int result;
-    if (encoding == NULL || syntax == NULL) return ONIGERR_INVALID_ARGUMENT;
     result = onig_new(
         &regex,
         pattern,
         pattern + pattern_len,
         options,
-        encoding,
-        syntax,
+        (OnigEncoding)encoding,
+        (OnigSyntaxType *)syntax,
         &info
     );
     if (result < 0) {

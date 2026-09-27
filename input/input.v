@@ -364,7 +364,8 @@ pub:
 
 // oni_regex compiles the configured expression for renderer link matching.
 pub fn (self &Link) oni_regex() !oniguruma.Regex {
-	return oniguruma.Regex.init(self.regex, oniguruma.Options{}, .utf8, .default_, none)
+	return oniguruma.Regex.init(self.regex, oniguruma.Options{}, oniguruma.Encoding.utf8(),
+		oniguruma.Syntax.default_(), none)
 }
 
 // clone returns an independently owned copy of the link configuration.
