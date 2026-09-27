@@ -842,7 +842,9 @@ pub fn (mut t Termio) process_output(buf []u8) {
 // already held.
 fn (mut t Termio) process_output_locked(buf []u8) {
 	// Schedule a render. We can call this first because we have the lock.
-	t.terminal_stream.handler.queue_render() or {}
+	t.terminal_stream.handler.queue_render() or {
+		panic('unreachable: renderer wakeup failed while processing output: ${err}')
+	}
 
 	// Whenever a character is typed, we ensure the cursor is in the
 	// non-blink state so it is rendered if visible. If we're under HEAVY
