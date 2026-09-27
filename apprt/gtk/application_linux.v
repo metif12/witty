@@ -1649,13 +1649,13 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 				mut window := window_from_surface(surface) or { return false }
 				raw := int(data)
 				selection := if raw == int(apprt.GotoTab.previous) {
-					SelectTab{ kind: .previous }
+					SelectTab(SelectTabPrevious{})
 				} else if raw == int(apprt.GotoTab.next) {
-					SelectTab{ kind: .next }
+					SelectTab(SelectTabNext{})
 				} else if raw == int(apprt.GotoTab.last) {
-					SelectTab{ kind: .last }
+					SelectTab(SelectTabLast{})
 				} else if raw >= 0 {
-					SelectTab{ kind: .n, n: usize(raw) }
+					SelectTab(SelectTabN{ n: usize(raw) })
 				} else {
 					return false
 				}

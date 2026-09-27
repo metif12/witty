@@ -34,10 +34,17 @@ fn test_gtk_enum_layouts_and_source_values() {
 	assert [Method.create_session, .bind_shortcuts].map(u8(it)) == [u8(0), 1]
 	assert sizeof(IMKeyEvent) == 1
 	assert [IMKeyEvent.false_, .composing, .not_composing].map(u8(it)) == [u8(0), 1, 2]
-	assert sizeof(SelectTabKind) == 1
-	assert [SelectTabKind.previous, .next, .last, .n].map(u8(it)) == [u8(0), 1, 2, 3]
 	assert sizeof(Protocol) == 1
 	assert [Protocol.none_, .wayland, .x11].map(u8(it)) == [u8(0), 1, 2]
+}
+
+fn test_select_tab_union_retains_only_the_active_payload() {
+	assert SelectTab(SelectTabPrevious{}) is SelectTabPrevious
+	assert SelectTab(SelectTabNext{}) is SelectTabNext
+	assert SelectTab(SelectTabLast{}) is SelectTabLast
+	selection := SelectTab(SelectTabN{ n: usize(1_099_511_627_776) })
+	assert selection is SelectTabN
+	assert (selection as SelectTabN).n == usize(1_099_511_627_776)
 }
 
 fn test_winproto_unions_retain_only_the_active_backend() {

@@ -424,21 +424,18 @@ pub fn window_get_type() GType {
 
 // --- SelectTab ------------------------------------------------------------
 
-// SelectTabKind mirrors the tag of the Zig `SelectTab` union.
-pub enum SelectTabKind as u8 {
-	previous
-	next
-	last
-	n
+pub struct SelectTabPrevious {}
+
+pub struct SelectTabNext {}
+
+pub struct SelectTabLast {}
+
+pub struct SelectTabN {
+pub:
+	n usize
 }
 
-// SelectTab mirrors the Zig `SelectTab = union(enum)`. When `kind == .n` the
-// `n` field carries the (1-indexed) tab number.
-pub struct SelectTab {
-pub:
-	kind SelectTabKind
-	n    usize
-}
+pub type SelectTab = SelectTabLast | SelectTabN | SelectTabNext | SelectTabPrevious
 
 // --- Window ---------------------------------------------------------------
 
@@ -1426,7 +1423,7 @@ pub fn (mut self Window) surface_initialized(surface &SurfaceWidget) {
 // select_tab selects the tab as requested. Returns true if the tab selection
 // changed. Mirrors `selectTab` — this is pure position arithmetic and is fully
 // translated.
-pub fn (mut self Window) select_tab(n SelectTab) bool {
+pub fn (mut self Window) select_tab(selection SelectTab) bool {
 	tab_view := self.tab_view
 
 	// Get our current tab numeric position.
@@ -1439,25 +1436,25 @@ pub fn (mut self Window) select_tab(n SelectTab) bool {
 	// Get our total.
 	total := adw_tab_view_get_n_pages(tab_view)
 
-	target := match n.kind {
-		.previous {
+	target := match selection {
+		SelectTabPrevious {
 			if current > 0 { current - 1 } else { total - 1 }
 		}
-		.next {
+		SelectTabNext {
 			if current < total - 1 { current + 1 } else { 0 }
 		}
-		.last {
+		SelectTabLast {
 			total - 1
 		}
-		.n {
+		SelectTabN {
 			// 1-indexed
-			if n.n == 0 {
+			if selection.n == 0 {
 				return false
 			}
-			if n.n > usize(2147483647) {
+			if selection.n > usize(2147483647) {
 				return false
 			}
-			n_int := int(n.n)
+			n_int := int(selection.n)
 			if n_int - 1 < total - 1 { n_int - 1 } else { total - 1 }
 		}
 	}

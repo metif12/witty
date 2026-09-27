@@ -2368,9 +2368,9 @@ pub fn (mut self SurfaceWidget) ec_scroll_horizontal(x f64) bool {
 	if !isnil(self.split_tree) && !isnil(self.split_tree.window) {
 		mut window := unsafe { self.split_tree.window }
 		if self.pending_horizontal_scroll < 0 {
-			window.select_tab(SelectTab{ kind: .next })
+			window.select_tab(SelectTabNext{})
 		} else {
-			window.select_tab(SelectTab{ kind: .previous })
+			window.select_tab(SelectTabPrevious{})
 		}
 	}
 	if self.pending_horizontal_scroll_reset != 0 {
