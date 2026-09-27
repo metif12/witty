@@ -121,23 +121,21 @@ pub fn kitty_graphics_execute(mut t Terminal, cmd &Command) ?Response {
 
 	// Dispatch based on command control type.
 	mut result := match cmd.control {
-		Transmission {
-			tr := cmd.control as Transmission
-			if tr.is_query {
-				exec_query(cmd)
-			} else {
-				if mut loading := storage.loading {
-					match cmd.quiet {
-						.no {
-							quiet = loading.quiet
-						}
-						.ok, .failures {
-							loading.quiet = cmd.quiet
-						}
+		ControlQuery {
+			exec_query(cmd)
+		}
+		ControlTransmit {
+			if mut loading := storage.loading {
+				match cmd.quiet {
+					.no {
+						quiet = loading.quiet
+					}
+					.ok, .failures {
+						loading.quiet = cmd.quiet
 					}
 				}
-				exec_transmit(mut t, cmd)
 			}
+			exec_transmit(mut t, cmd)
 		}
 		TransmitAndDisplay {
 			if mut loading := storage.loading {
@@ -213,7 +211,7 @@ fn exec_query(cmd &Command) Response {
 
 	// Build a partial response to start.
 	mut result := Response{
-		id: t.image_id
+		id:           t.image_id
 		image_number: t.image_number
 		placement_id: t.placement_id
 	}
@@ -240,7 +238,7 @@ fn exec_transmit(mut t Terminal, cmd &Command) Response {
 
 	// Build a partial response to start.
 	mut result := Response{
-		id: t_data.image_id
+		id:           t_data.image_id
 		image_number: t_data.image_number
 		placement_id: t_data.placement_id
 	}
@@ -268,7 +266,7 @@ fn exec_transmit(mut t Terminal, cmd &Command) Response {
 		d_copy.image_id = load_result.image.id
 		disp_cmd := Command{
 			control: Display(d_copy)
-			quiet: cmd.quiet
+			quiet:   cmd.quiet
 		}
 		result = exec_display(mut t, &disp_cmd)
 	}
@@ -301,7 +299,7 @@ fn exec_display(mut t Terminal, cmd &Command) Response {
 	}
 
 	mut result := Response{
-		id: d.image_id
+		id:           d.image_id
 		image_number: d.image_number
 		placement_id: d.placement_id
 	}
@@ -344,16 +342,16 @@ fn exec_display(mut t Terminal, cmd &Command) Response {
 
 	// Build the placement.
 	p := Placement{
-		location: location
-		x_offset: d.x_offset
-		y_offset: d.y_offset
-		source_x: d.x
-		source_y: d.y
-		source_width: d.width
+		location:      location
+		x_offset:      d.x_offset
+		y_offset:      d.y_offset
+		source_x:      d.x
+		source_y:      d.y
+		source_width:  d.width
 		source_height: d.height
-		columns: d.columns
-		rows: d.rows
-		z: d.z
+		columns:       d.columns
+		rows:          d.rows
+		z:             d.z
 	}
 
 	storage.add_placement(img.id, result.placement_id, p)
@@ -413,7 +411,7 @@ fn load_and_add_image(mut t Terminal, cmd &Command) !LoadResult {
 		if t_data.more_chunks {
 			return LoadResult{
 				image: loading_ptr.image
-				more: true
+				more:  true
 			}
 		}
 
@@ -426,7 +424,7 @@ fn load_and_add_image(mut t Terminal, cmd &Command) !LoadResult {
 		storage.loading = none
 		storage.add_image(img)!
 		return LoadResult{
-			image: img
+			image:   img
 			display: display
 		}
 	}
@@ -455,7 +453,7 @@ fn load_and_add_image(mut t Terminal, cmd &Command) !LoadResult {
 		storage.loading = &loading
 		return LoadResult{
 			image: loading.image
-			more: true
+			more:  true
 		}
 	}
 
@@ -465,7 +463,7 @@ fn load_and_add_image(mut t Terminal, cmd &Command) !LoadResult {
 	storage.add_image(img)!
 
 	return LoadResult{
-		image: img
+		image:   img
 		display: display
 	}
 }

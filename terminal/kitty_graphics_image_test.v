@@ -14,15 +14,15 @@ fn testdata_path(name string) string {
 
 fn test_image_without_data_preserves_metadata() {
 	image := Image{
-		id: 1
-		number: 2
-		width: 3
-		height: 4
-		format: .rgba
-		compression: .zlib_deflate
-		data: [u8(5), 6]
+		id:            1
+		number:        2
+		width:         3
+		height:        4
+		format:        .rgba
+		compression:   .zlib_deflate
+		data:          [u8(5), 6]
 		transmit_time: 7
-		implicit_id: true
+		implicit_id:   true
 	}
 	copy := image.without_data()
 	assert copy.id == image.id
@@ -41,13 +41,15 @@ fn test_image_without_data_preserves_metadata() {
 fn test_image_load_with_invalid_rgb_data() {
 	// <ESC>_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA<ESC>\
 	cmd := Command{
-		control: Control(Transmission{
-			format_: .rgb
-			width: 1
-			height: 1
-			image_id: 31
+		control: Control(ControlTransmit{
+			transmission: Transmission{
+				format_:  .rgb
+				width:    1
+				height:   1
+				image_id: 31
+			}
 		})
-		data: 'AAAA'.bytes()
+		data:    'AAAA'.bytes()
 	}
 	mut loading := LoadingImage.init_from_cmd(&cmd) or {
 		assert false, 'expected init to succeed: ${err}'
@@ -58,13 +60,15 @@ fn test_image_load_with_invalid_rgb_data() {
 
 fn test_image_load_with_image_too_wide() {
 	cmd := Command{
-		control: Control(Transmission{
-			format_: .rgb
-			width: u32(max_dimension + 1)
-			height: 1
-			image_id: 31
+		control: Control(ControlTransmit{
+			transmission: Transmission{
+				format_:  .rgb
+				width:    u32(max_dimension + 1)
+				height:   1
+				image_id: 31
+			}
 		})
-		data: 'AAAA'.bytes()
+		data:    'AAAA'.bytes()
 	}
 	mut loading := LoadingImage.init_from_cmd(&cmd) or {
 		assert false, 'expected init to succeed: ${err}'
@@ -82,13 +86,15 @@ fn test_image_load_with_image_too_wide() {
 
 fn test_image_load_with_image_too_tall() {
 	cmd := Command{
-		control: Control(Transmission{
-			format_: .rgb
-			height: u32(max_dimension + 1)
-			width: 1
-			image_id: 31
+		control: Control(ControlTransmit{
+			transmission: Transmission{
+				format_:  .rgb
+				height:   u32(max_dimension + 1)
+				width:    1
+				image_id: 31
+			}
 		})
-		data: 'AAAA'.bytes()
+		data:    'AAAA'.bytes()
 	}
 	mut loading := LoadingImage.init_from_cmd(&cmd) or {
 		assert false, 'expected init to succeed: ${err}'
@@ -110,15 +116,17 @@ fn test_image_load_rgb_zlib_compressed_direct() {
 		return
 	}
 	cmd := Command{
-		control: Control(Transmission{
-			format_: .rgb
-			medium: .direct
-			compression: .zlib_deflate
-			height: 96
-			width: 128
-			image_id: 31
+		control: Control(ControlTransmit{
+			transmission: Transmission{
+				format_:     .rgb
+				medium:      .direct
+				compression: .zlib_deflate
+				height:      96
+				width:       128
+				image_id:    31
+			}
 		})
-		data: data
+		data:    data
 	}
 	mut loading := LoadingImage.init_from_cmd(&cmd) or {
 		assert false, 'expected init to succeed: ${err}'
@@ -145,15 +153,17 @@ fn test_image_load_rgb_not_compressed_direct() {
 		return
 	}
 	cmd := Command{
-		control: Control(Transmission{
-			format_: .rgb
-			medium: .direct
-			compression: .none_
-			width: 20
-			height: 15
-			image_id: 31
+		control: Control(ControlTransmit{
+			transmission: Transmission{
+				format_:     .rgb
+				medium:      .direct
+				compression: .none_
+				width:       20
+				height:      15
+				image_id:    31
+			}
 		})
-		data: data
+		data:    data
 	}
 	mut loading := LoadingImage.init_from_cmd(&cmd) or {
 		assert false, 'expected init to succeed: ${err}'
@@ -181,16 +191,18 @@ fn test_image_load_rgb_zlib_compressed_direct_chunked() {
 
 	// Setup our initial chunk
 	cmd := Command{
-		control: Control(Transmission{
-			format_: .rgb
-			medium: .direct
-			compression: .zlib_deflate
-			height: 96
-			width: 128
-			image_id: 31
-			more_chunks: true
+		control: Control(ControlTransmit{
+			transmission: Transmission{
+				format_:     .rgb
+				medium:      .direct
+				compression: .zlib_deflate
+				height:      96
+				width:       128
+				image_id:    31
+				more_chunks: true
+			}
 		})
-		data: data[0..1024].clone()
+		data:    data[0..1024].clone()
 	}
 	mut loading := LoadingImage.init_from_cmd(&cmd) or {
 		assert false, 'expected init to succeed: ${err}'
@@ -230,14 +242,16 @@ fn test_image_load_rgb_zlib_compressed_direct_chunked_zero_initial() {
 
 	// Setup our initial chunk with no data.
 	cmd := Command{
-		control: Control(Transmission{
-			format_: .rgb
-			medium: .direct
-			compression: .zlib_deflate
-			height: 96
-			width: 128
-			image_id: 31
-			more_chunks: true
+		control: Control(ControlTransmit{
+			transmission: Transmission{
+				format_:     .rgb
+				medium:      .direct
+				compression: .zlib_deflate
+				height:      96
+				width:       128
+				image_id:    31
+				more_chunks: true
+			}
 		})
 	}
 	mut loading := LoadingImage.init_from_cmd(&cmd) or {
@@ -289,15 +303,17 @@ fn test_image_load_temporary_file_without_correct_path() {
 	}
 
 	cmd := Command{
-		control: Control(Transmission{
-			format_: .rgb
-			medium: .temporary_file
-			compression: .none_
-			width: 20
-			height: 15
-			image_id: 31
+		control: Control(ControlTransmit{
+			transmission: Transmission{
+				format_:     .rgb
+				medium:      .temporary_file
+				compression: .none_
+				width:       20
+				height:      15
+				image_id:    31
+			}
 		})
-		data: path.bytes()
+		data:    path.bytes()
 	}
 	LoadingImage.init_from_cmd(&cmd) or {
 		// Expected: temporary file not named correctly.
@@ -323,15 +339,17 @@ fn test_image_load_rgb_not_compressed_temporary_file() {
 	path := os.real_path(tmp)
 
 	cmd := Command{
-		control: Control(Transmission{
-			format_: .rgb
-			medium: .temporary_file
-			compression: .none_
-			width: 20
-			height: 15
-			image_id: 31
+		control: Control(ControlTransmit{
+			transmission: Transmission{
+				format_:     .rgb
+				medium:      .temporary_file
+				compression: .none_
+				width:       20
+				height:      15
+				image_id:    31
+			}
 		})
-		data: path.bytes()
+		data:    path.bytes()
 	}
 	mut loading := LoadingImage.init_from_cmd(&cmd) or {
 		os.rm(path) or {}
@@ -371,15 +389,17 @@ fn test_image_load_rgb_not_compressed_regular_file() {
 	}
 
 	cmd := Command{
-		control: Control(Transmission{
-			format_: .rgb
-			medium: .file
-			compression: .none_
-			width: 20
-			height: 15
-			image_id: 31
+		control: Control(ControlTransmit{
+			transmission: Transmission{
+				format_:     .rgb
+				medium:      .file
+				compression: .none_
+				width:       20
+				height:      15
+				image_id:    31
+			}
 		})
-		data: path.bytes()
+		data:    path.bytes()
 	}
 	mut loading := LoadingImage.init_from_cmd(&cmd) or {
 		assert false, 'expected init to succeed: ${err}'
@@ -417,15 +437,17 @@ fn test_image_load_png_not_compressed_regular_file() {
 	}
 
 	cmd := Command{
-		control: Control(Transmission{
-			format_: .png
-			medium: .file
-			compression: .none_
-			width: 0
-			height: 0
-			image_id: 31
+		control: Control(ControlTransmit{
+			transmission: Transmission{
+				format_:     .png
+				medium:      .file
+				compression: .none_
+				width:       0
+				height:      0
+				image_id:    31
+			}
 		})
-		data: path.bytes()
+		data:    path.bytes()
 	}
 	mut loading := LoadingImage.init_from_cmd(&cmd) or {
 		assert false, 'expected init to succeed: ${err}'

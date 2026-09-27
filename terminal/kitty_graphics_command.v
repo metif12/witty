@@ -173,19 +173,27 @@ pub fn (mut self CommandParser) complete() !Command {
 	}
 
 	control := match action {
-		`q` { Control(Control.query(Transmission.parse(self.kv)!)) }
-		`t` { Control(Control.transmit(Transmission.parse(self.kv)!)) }
-		`T` {
-			Control(Control.transmit_and_display(TransmitAndDisplay{
+		`q` {
+			Control(ControlQuery{
 				transmission: Transmission.parse(self.kv)!
-				display: Display.parse(self.kv)!
-			}))
+			})
 		}
-		`p` { Control(Control.display(Display.parse(self.kv)!)) }
-		`d` { Control(Control.delete_(Delete.parse(self.kv)!)) }
-		`f` { Control(Control.transmit_animation_frame(AnimationFrameLoading.parse(self.kv)!)) }
-		`a` { Control(Control.control_animation(AnimationControl.parse(self.kv)!)) }
-		`c` { Control(Control.compose_animation(AnimationFrameComposition.parse(self.kv)!)) }
+		`t` {
+			Control(ControlTransmit{
+				transmission: Transmission.parse(self.kv)!
+			})
+		}
+		`T` {
+			Control(TransmitAndDisplay{
+				transmission: Transmission.parse(self.kv)!
+				display:      Display.parse(self.kv)!
+			})
+		}
+		`p` { Control(Display.parse(self.kv)!) }
+		`d` { Control(Delete.parse(self.kv)!) }
+		`f` { Control(AnimationFrameLoading.parse(self.kv)!) }
+		`a` { Control(AnimationControl.parse(self.kv)!) }
+		`c` { Control(AnimationFrameComposition.parse(self.kv)!) }
 		else {
 			return error('InvalidFormat: unknown action ${action}')
 		}
@@ -208,8 +216,8 @@ pub fn (mut self CommandParser) complete() !Command {
 
 	return Command{
 		control: control
-		quiet: quiet
-		data: self.decode_data()!
+		quiet:   quiet
+		data:    self.decode_data()!
 	}
 }
 
@@ -370,23 +378,24 @@ pub fn (mut self Command) deinit() {
 }
 
 pub enum CommandAction as u8 {
-	query // q
-	transmit // t
-	transmit_and_display // T
-	display // p
-	delete_ // d
+	query                    // q
+	transmit                 // t
+	transmit_and_display     // T
+	display                  // p
+	delete_                  // d
 	transmit_animation_frame // f
-	control_animation // a
-	compose_animation // c
+	control_animation        // a
+	compose_animation        // c
 }
 
 pub enum Quiet as u8 {
-	no // 0
-	ok // 1
+	no       // 0
+	ok       // 1
 	failures // 2
 }
 
-pub type Control = Transmission
+pub type Control = ControlQuery
+	| ControlTransmit
 	| TransmitAndDisplay
 	| Display
 	| Delete
@@ -394,46 +403,24 @@ pub type Control = Transmission
 	| AnimationControl
 	| AnimationFrameComposition
 
-// Named constructors to distinguish query vs transmit (both use Transmission).
-pub fn Control.query(t Transmission) Control {
-	mut copy := t
-	copy.is_query = true
-	return Control(copy)
+pub struct ControlQuery {
+pub:
+	transmission Transmission
 }
 
-pub fn Control.transmit(t Transmission) Control {
-	return Control(t)
-}
-
-pub fn Control.transmit_and_display(t TransmitAndDisplay) Control {
-	return Control(t)
-}
-
-pub fn Control.display(d Display) Control {
-	return Control(d)
-}
-
-pub fn Control.delete_(d Delete) Control {
-	return Control(d)
-}
-
-pub fn Control.transmit_animation_frame(f AnimationFrameLoading) Control {
-	return Control(f)
-}
-
-pub fn Control.control_animation(a AnimationControl) Control {
-	return Control(a)
-}
-
-pub fn Control.compose_animation(c AnimationFrameComposition) Control {
-	return Control(c)
+pub struct ControlTransmit {
+pub:
+	transmission Transmission
 }
 
 // Returns the transmission data if it has any.
 pub fn (self Command) transmission() ?Transmission {
 	return match self.control {
-		Transmission {
-			self.control as Transmission
+		ControlQuery {
+			(self.control as ControlQuery).transmission
+		}
+		ControlTransmit {
+			(self.control as ControlTransmit).transmission
 		}
 		TransmitAndDisplay {
 			(self.control as TransmitAndDisplay).transmission
@@ -471,7 +458,7 @@ pub:
 
 pub struct Transmission {
 pub mut:
-	format_      TransmissionFormat = .rgba // f
+	format_      TransmissionFormat = .rgba   // f
 	medium       TransmissionMedium = .direct // t
 	width        u32 // s
 	height       u32 // v
@@ -482,14 +469,12 @@ pub mut:
 	placement_id u32 // p
 	compression  TransmissionCompression = .none_ // o
 	more_chunks  bool // m
-	// Internal: distinguishes query from transmit (both map to Transmission)
-	is_query bool
 }
 
 pub enum TransmissionFormat as u8 {
-	rgb // 24
+	rgb  // 24
 	rgba // 32
-	png // 100
+	png  // 100
 	// The following are not supported directly via the protocol
 	// but they are formats that a png may decode to that we
 	// support.
@@ -510,10 +495,10 @@ pub fn (self TransmissionFormat) bpp() u8 {
 }
 
 pub enum TransmissionMedium as u8 {
-	direct // d
-	file // f
+	direct         // d
+	file           // f
 	temporary_file // t
-	shared_memory // s
+	shared_memory  // s
 }
 
 pub enum TransmissionCompression as u8 {
@@ -627,11 +612,11 @@ pub mut:
 	rows                u32 // r
 	cursor_movement     CursorMovement = .after // C
 	virtual_placement   bool // U
-	parent_id           u32 // P
-	parent_placement_id u32 // Q
-	horizontal_offset   i32 // H
-	vertical_offset     i32 // V
-	z                   i32 // z
+	parent_id           u32  // P
+	parent_placement_id u32  // Q
+	horizontal_offset   i32  // H
+	vertical_offset     i32  // V
+	z                   i32  // z
 }
 
 pub enum CursorMovement as u8 {
@@ -870,10 +855,10 @@ pub mut:
 }
 
 pub enum AnimationAction as u8 {
-	invalid // 0
-	stop // 1
+	invalid  // 0
+	stop     // 1
 	run_wait // 2
-	run // 3
+	run      // 3
 }
 
 fn AnimationControl.parse(kv map[u8]u32) !AnimationControl {
@@ -919,55 +904,55 @@ pub:
 pub struct DeleteById {
 pub:
 	delete       bool // uppercase
-	image_id     u32 // i
-	placement_id u32 // p
+	image_id     u32  // i
+	placement_id u32  // p
 }
 
 pub struct DeleteByNewest {
 pub:
 	delete       bool // uppercase
-	image_number u32 // I
-	placement_id u32 // p
+	image_number u32  // I
+	placement_id u32  // p
 }
 
 pub struct DeleteIntersectCell {
 pub:
 	delete bool // uppercase
-	x      u32 // x
-	y      u32 // y
+	x      u32  // x
+	y      u32  // y
 }
 
 pub struct DeleteIntersectCellZ {
 pub:
 	delete bool // uppercase
-	x      u32 // x
-	y      u32 // y
-	z      i32 // z
+	x      u32  // x
+	y      u32  // y
+	z      i32  // z
 }
 
 pub struct DeleteRange {
 pub:
 	delete bool // uppercase
-	first  u32 // x
-	last   u32 // y
+	first  u32  // x
+	last   u32  // y
 }
 
 pub struct DeleteColumn {
 pub:
 	delete bool // uppercase
-	x      u32 // x
+	x      u32  // x
 }
 
 pub struct DeleteRow {
 pub:
 	delete bool // uppercase
-	y      u32 // y
+	y      u32  // y
 }
 
 pub struct DeleteZ {
 pub:
 	delete bool // uppercase
-	z      i32 // z
+	z      i32  // z
 }
 
 pub struct DeleteIntersectCursor {
@@ -1095,8 +1080,8 @@ fn Delete.parse(kv map[u8]u32) !Delete {
 			}
 			DeleteRange{
 				delete: what == `R`
-				first: x
-				last: y
+				first:  x
+				last:   y
 			}
 		}
 		`x`, `X` {
@@ -1142,5 +1127,5 @@ fn Delete.parse(kv map[u8]u32) !Delete {
 
 pub enum CompositionMode as u8 {
 	alpha_blend // 0
-	overwrite // 1
+	overwrite   // 1
 }

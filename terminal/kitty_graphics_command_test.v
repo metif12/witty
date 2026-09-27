@@ -51,9 +51,8 @@ fn test_transmission_command() {
 	input := 'f=24,s=10,v=20'
 	command := CommandParser.parse_string(input) or { panic(err) }
 
-	assert command.control is Transmission
-	v := command.control as Transmission
-	assert !v.is_query
+	assert command.control is ControlTransmit
+	v := (command.control as ControlTransmit).transmission
 	assert v.format_ == .rgb
 	assert v.width == 10
 	assert v.height == 20
@@ -63,8 +62,8 @@ fn test_transmission_ignores_m_if_medium_is_not_direct() {
 	input := 'a=t,t=t,m=1'
 	command := CommandParser.parse_string(input) or { panic(err) }
 
-	assert command.control is Transmission
-	v := command.control as Transmission
+	assert command.control is ControlTransmit
+	v := (command.control as ControlTransmit).transmission
 	assert v.medium == .temporary_file
 	assert !v.more_chunks
 }
@@ -73,8 +72,8 @@ fn test_transmission_respects_m_if_medium_is_direct() {
 	input := 'a=t,t=d,m=1'
 	command := CommandParser.parse_string(input) or { panic(err) }
 
-	assert command.control is Transmission
-	v := command.control as Transmission
+	assert command.control is ControlTransmit
+	v := (command.control as ControlTransmit).transmission
 	assert v.medium == .direct
 	assert v.more_chunks
 }
@@ -83,9 +82,8 @@ fn test_query_command() {
 	input := 'i=31,s=1,v=1,a=q,t=d,f=24;QUFBQQ'
 	command := CommandParser.parse_string(input) or { panic(err) }
 
-	assert command.control is Transmission
-	v := command.control as Transmission
-	assert v.is_query
+	assert command.control is ControlQuery
+	v := (command.control as ControlQuery).transmission
 	assert v.medium == .direct
 	assert v.width == 1
 	assert v.height == 1
@@ -121,7 +119,7 @@ fn test_no_control_data() {
 	input := ';QUFBQQ'
 	command := CommandParser.parse_string(input) or { panic(err) }
 
-	assert command.control is Transmission
+	assert command.control is ControlTransmit
 	assert command.data == 'AAAA'.bytes()
 }
 
@@ -150,8 +148,8 @@ fn test_ignore_unknown_keys_long() {
 	input := 'f=24,s=10,v=20,hello=world'
 	command := CommandParser.parse_string(input) or { panic(err) }
 
-	assert command.control is Transmission
-	v := command.control as Transmission
+	assert command.control is ControlTransmit
+	v := (command.control as ControlTransmit).transmission
 	assert v.format_ == .rgb
 	assert v.width == 10
 	assert v.height == 20
@@ -162,8 +160,8 @@ fn test_ignore_very_long_values() {
 	input := 'f=24,s=10,v=2000000000000000000000000000000000000000'
 	command := CommandParser.parse_string(input) or { panic(err) }
 
-	assert command.control is Transmission
-	v := command.control as Transmission
+	assert command.control is ControlTransmit
+	v := (command.control as ControlTransmit).transmission
 	assert v.format_ == .rgb
 	assert v.width == 10
 	// Very long value overflows the accumulator and gets ignored
