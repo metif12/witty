@@ -6,9 +6,6 @@ fn test_collection_tag_layouts_and_source_ordinals() {
 	assert sizeof(SizeAdjustment) == 1
 	assert [SizeAdjustment.none_, .ic_width, .ex_height, .cap_height, .line_height].map(u8(it)) == [u8(0),
 		1, 2, 3, 4]
-	assert sizeof(PresentationModeKind) == 1
-	assert [PresentationModeKind.explicit_, .default_, .any].map(u8(it)) == [u8(0), 1, 2]
-	assert sizeof(PresentationMode) == 2
 	assert default_fallback_adjustment == .ic_width
 }
 
@@ -314,13 +311,13 @@ fn test_index_packed_layout_matches_ghostty() {
 fn test_presentation_mode() {
 	// Test PresentationMode constructors.
 	explicit := PresentationMode.explicit(.emoji)
-	assert explicit.kind == .explicit_
-	assert explicit.presentation == .emoji
+	assert explicit is PresentationModeExplicit
+	assert (explicit as PresentationModeExplicit).presentation == .emoji
 
 	default_ := PresentationMode.default_(.text)
-	assert default_.kind == .default_
-	assert default_.presentation == .text
+	assert default_ is PresentationModeDefault
+	assert (default_ as PresentationModeDefault).presentation == .text
 
 	any := PresentationMode.any()
-	assert any.kind == .any
+	assert any is PresentationModeAny
 }

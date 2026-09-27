@@ -365,7 +365,7 @@ pub fn (mut self CodepointResolver) get_index(cp u32, style Style, p ?Presentati
 	// If this is regular with any matching presentation, then we are done
 	// there is nothing more we can do. Otherwise we fall through and do
 	// an any presentation search.
-	if style == .regular && p_mode.kind == .any {
+	if style == .regular && p_mode is PresentationModeAny {
 		return none
 	}
 

@@ -376,44 +376,38 @@ pub enum SizeAdjustment as u8 {
 // PresentationMode
 // ============================================================
 
-// PresentationModeKind identifies the type of presentation matching.
-pub enum PresentationModeKind as u8 {
-	// The codepoint has an explicit presentation (VS15/VS16).
-	explicit_
-	// The codepoint has no explicit presentation; use UCD default.
-	default_
-	// The codepoint can be any presentation.
-	any
+// PresentationModeExplicit requires an explicit presentation (VS15/VS16).
+pub struct PresentationModeExplicit {
+pub:
+	presentation Presentation
 }
 
-// PresentationMode describes the requested presentation for a codepoint.
-pub struct PresentationMode {
+// PresentationModeDefault uses the codepoint's UCD default presentation.
+pub struct PresentationModeDefault {
 pub:
-	kind         PresentationModeKind
-	presentation Presentation = .text
+	presentation Presentation
 }
+
+// PresentationModeAny accepts either text or emoji presentation.
+pub struct PresentationModeAny {}
+
+// PresentationMode describes the requested presentation for a codepoint. Only
+// the explicit and default arms retain a Presentation payload.
+pub type PresentationMode = PresentationModeAny | PresentationModeDefault | PresentationModeExplicit
 
 // explicit creates a PresentationMode requiring an explicit presentation.
 pub fn PresentationMode.explicit(p Presentation) PresentationMode {
-	return PresentationMode{
-		kind: .explicit_
-		presentation: p
-	}
+	return PresentationModeExplicit{ presentation: p }
 }
 
 // default_ creates a PresentationMode using the UCD default presentation.
 pub fn PresentationMode.default_(p Presentation) PresentationMode {
-	return PresentationMode{
-		kind: .default_
-		presentation: p
-	}
+	return PresentationModeDefault{ presentation: p }
 }
 
 // any creates a PresentationMode accepting any presentation.
 pub fn PresentationMode.any() PresentationMode {
-	return PresentationMode{
-		kind: .any
-	}
+	return PresentationModeAny{}
 }
 
 // ============================================================
@@ -537,8 +531,8 @@ fn (self Entry) is_deferred() bool {
 // has_codepoint returns true if this face contains the given codepoint
 // with the specified presentation mode.
 pub fn (self Entry) has_codepoint(cp u32, p_mode PresentationMode) bool {
-	match p_mode.kind {
-		.default_ {
+	match p_mode {
+		PresentationModeDefault {
 			if self.fallback {
 				// Fallback fonts require explicit presentation matching.
 				return self.has_codepoint_explicit(cp, p_mode.presentation)
@@ -546,10 +540,10 @@ pub fn (self Entry) has_codepoint(cp u32, p_mode PresentationMode) bool {
 			// Non-fallback fonts accept any presentation.
 			return self.has_codepoint_any(cp)
 		}
-		.explicit_ {
+		PresentationModeExplicit {
 			return self.has_codepoint_explicit(cp, p_mode.presentation)
 		}
-		.any {
+		PresentationModeAny {
 			return self.has_codepoint_any(cp)
 		}
 	}
