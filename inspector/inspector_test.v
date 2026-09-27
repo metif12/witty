@@ -5,6 +5,18 @@ import input
 import osc
 import terminal
 
+struct DetachableHeaderProbe {
+mut:
+	calls int
+}
+
+fn detachable_header_test_content(probe &DetachableHeaderProbe) {
+	unsafe {
+		mut value := probe
+		value.calls++
+	}
+}
+
 fn test_to_kibi_bytes_matches_source_integer_conversion() {
 	assert to_kibi_bytes(0) == 0
 	assert to_kibi_bytes(1023) == 0
@@ -146,6 +158,35 @@ fn test_inspector_renders_key_stream_into_real_imgui_frame() {
 	}, mut term)
 	dockspace_id := context.get_id('Main Dockspace')
 	assert context.dock_node_exists(dockspace_id)
+	context.render_frame()
+}
+
+fn test_callback_detachable_header_window_lifecycle() {
+	if !cimgui.available() {
+		return
+	}
+	context := cimgui.Context.create()!
+	defer {
+		context.destroy()
+	}
+	setup(context)
+	context.set_size(800, 600)
+	assert context.build_font_atlas()
+	context.begin_frame(1.0 / 60.0)
+	_ = context.begin_window('Host')
+
+	mut state := DetachableHeaderState{
+		show_window: true
+	}
+	mut probe := &DetachableHeaderProbe{}
+	detachable_header(context, 'Detached', mut state, probe, detachable_header_test_content)
+	assert state.first_show
+	assert probe.calls == 1
+
+	state.show_window = false
+	detachable_header(context, 'Attached', mut state, probe, detachable_header_test_content)
+	assert !state.first_show
+	context.end_window()
 	context.render_frame()
 }
 

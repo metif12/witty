@@ -319,6 +319,82 @@ static inline bool witty_cimgui_detachable_header(
     return is_open;
 }
 
+// This is Ghostty's newer callback-based detachableHeader helper. Bit zero in
+// the result means a window was begun and must be ended; bit one means the
+// caller should render its content. The pushed ID is always popped by the
+// matching end call.
+static inline int witty_cimgui_detachable_header_state_begin(
+    ImGuiContext* context,
+    const char* label,
+    bool* show_window,
+    bool* first_show
+) {
+    ImGui_SetCurrentContext(context);
+    ImGui_PushID(label);
+
+    if (*show_window) {
+        if (!*first_show) {
+            *first_show = true;
+            ImGuiID current_dock_id = ImGui_GetWindowDockID();
+            if (current_dock_id != 0) {
+                ImGuiID dock_id_right = 0;
+                ImGuiID dock_id_left = 0;
+                (void)ImGui_DockBuilderSplitNode(
+                    current_dock_id,
+                    ImGuiDir_Right,
+                    0.3f,
+                    &dock_id_right,
+                    &dock_id_left
+                );
+                ImGui_DockBuilderDockWindow(label, dock_id_right);
+                ImGui_DockBuilderFinish(current_dock_id);
+            }
+        }
+
+        bool visible = ImGui_Begin(
+            label,
+            show_window,
+            ImGuiWindowFlags_NoFocusOnAppearing
+        );
+        return visible ? 3 : 1;
+    }
+
+    *first_show = false;
+    ImGui_SetNextItemAllowOverlap();
+    bool is_open = ImGui_CollapsingHeader(label, ImGuiTreeNodeFlags_None);
+
+    ImVec2 header_max = ImGui_GetItemRectMax();
+    ImVec2 header_min = ImGui_GetItemRectMin();
+    float button_size = ImGui_GetFrameHeight() - 4.0f;
+    ImGui_SameLine();
+    ImGui_SetCursorScreenPos((ImVec2){
+        header_max.x - button_size - 4.0f,
+        header_min.y + 2.0f,
+    });
+    ImGui_PushStyleVarImVec2(
+        ImGuiStyleVar_FramePadding,
+        (ImVec2){0.0f, 0.0f}
+    );
+    if (ImGui_ButtonEx(">>##detach", (ImVec2){button_size, button_size})) {
+        *show_window = true;
+    }
+    ImGui_PopStyleVar();
+    if (ImGui_IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
+        ImGui_SetTooltipUnformatted("Pop out into separate window");
+    }
+
+    return is_open ? 2 : 0;
+}
+
+static inline void witty_cimgui_detachable_header_state_end(
+    ImGuiContext* context,
+    int state
+) {
+    ImGui_SetCurrentContext(context);
+    if ((state & 1) != 0) ImGui_End();
+    ImGui_PopID();
+}
+
 static inline void witty_cimgui_end_window(ImGuiContext* context) {
     ImGui_SetCurrentContext(context);
     ImGui_End();

@@ -91,6 +91,10 @@ fn C.witty_cimgui_detachable_window(context voidptr, label &char, detached &bool
 
 fn C.witty_cimgui_detachable_header(context voidptr, label &char, detached &bool) bool
 
+fn C.witty_cimgui_detachable_header_state_begin(context voidptr, label &char, show_window &bool, first_show &bool) int
+
+fn C.witty_cimgui_detachable_header_state_end(context voidptr, state int)
+
 fn C.witty_cimgui_end_window(context voidptr)
 
 fn C.witty_cimgui_set_window_focus(context voidptr, name &char)
@@ -395,6 +399,18 @@ pub fn (ctx Context) detachable_header(label string, detached bool) (bool, bool)
 	mut updated := detached
 	open := C.witty_cimgui_detachable_header(ctx.handle, label.str, &updated)
 	return open, updated
+}
+
+pub fn (ctx Context) detachable_header_state_begin(label string, show_window bool, first_show bool) (int, bool, bool) {
+	mut updated_show := show_window
+	mut updated_first := first_show
+	state := C.witty_cimgui_detachable_header_state_begin(ctx.handle, label.str, &updated_show,
+		&updated_first)
+	return state, updated_show, updated_first
+}
+
+pub fn (ctx Context) detachable_header_state_end(state int) {
+	C.witty_cimgui_detachable_header_state_end(ctx.handle, state)
 }
 
 pub fn (ctx Context) end_window() {

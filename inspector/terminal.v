@@ -12,6 +12,37 @@ mut:
 	window_first bool = true
 }
 
+// DetachableHeaderState is the state for Ghostty's callback-based detachable
+// header helper. first_show is internal and resets whenever the window closes.
+pub struct DetachableHeaderState {
+pub mut:
+	show_window bool
+mut:
+	first_show bool
+}
+
+// help_marker draws a disabled marker and its hover tooltip. The explicit
+// context is the V binding equivalent of Ghostty's current ImGui context.
+pub fn help_marker(context cimgui.Context, text string) {
+	context.help_marker(text)
+}
+
+// detachable_header renders content either beneath a collapsing header or in
+// a detached window. V's generic callback is the direct counterpart of the
+// source anytype context and comptime callback.
+pub fn detachable_header[T](context cimgui.Context, label string, mut state DetachableHeaderState, value T, content_fn fn (T)) {
+	mode, show_window, first_show := context.detachable_header_state_begin(label,
+		state.show_window, state.first_show)
+	state.show_window = show_window
+	state.first_show = first_show
+	defer {
+		context.detachable_header_state_end(mode)
+	}
+	if mode & 2 != 0 {
+		content_fn(value)
+	}
+}
+
 // window_end closes a detached window begun by window.
 //
 // The explicit context is the V binding equivalent of Ghostty's process-wide
@@ -399,7 +430,7 @@ fn draw_dynamic_rgb(context cimgui.Context, label string, rgb terminal.DynamicRG
 		context.table_set_column(0)
 		context.text('override:')
 		context.same_line()
-		context.help_marker('Overridden color set by escape sequences.')
+		help_marker(context, 'Overridden color set by escape sequences.')
 		context.table_set_column(1)
 		context.color_edit3('##override', cimgui_color(color), cimgui.color_edit_flags_none)
 	}
@@ -410,7 +441,7 @@ fn draw_dynamic_rgb(context cimgui.Context, label string, rgb terminal.DynamicRG
 		if rgb.override_color != none {
 			context.text('default:')
 			context.same_line()
-			context.help_marker('Default color from configuration.')
+			help_marker(context, 'Default color from configuration.')
 			context.table_set_column(1)
 		}
 		context.color_edit3('##default', cimgui_color(color), cimgui.color_edit_flags_none)
@@ -448,7 +479,7 @@ fn draw_terminal_label(context cimgui.Context, label string, help string) {
 	context.table_set_column(0)
 	context.text(label)
 	context.same_line()
-	context.help_marker(help)
+	help_marker(context, help)
 }
 
 fn terminal_enum_name(value string) string {

@@ -53,7 +53,7 @@ pub fn (mut self CellChooser) draw(context cimgui.Context, pages &terminal.PageL
 	mut y_changed, mut y_value := context.input_u32('##grid_y', self.lookup_coord.y)
 	changed = changed || y_changed
 	context.same_line()
-	context.help_marker('Choose the coordinate space and X/Y position (0-indexed).')
+	help_marker(context, 'Choose the coordinate space and X/Y position (0-indexed).')
 	if changed {
 		if maximum := region_max {
 			self.lookup_coord.x = if x_value > maximum.x { maximum.x } else { x_value }
@@ -108,7 +108,7 @@ fn draw_cell_info(context cimgui.Context, cell terminal.CellData, row terminal.R
 	context.table_set_column(0)
 	context.text('Codepoint')
 	context.table_set_column(1)
-	context.help_marker('Primary Unicode codepoint for the cell.')
+	help_marker(context, 'Primary Unicode codepoint for the cell.')
 	context.table_set_column(2)
 	codepoint := cell.codepoint()
 	if codepoint == 0 {
@@ -122,7 +122,7 @@ fn draw_cell_info(context cimgui.Context, cell terminal.CellData, row terminal.R
 		context.table_set_column(0)
 		context.text('Grapheme')
 		context.table_set_column(1)
-		context.help_marker('Extra codepoints that combine with the primary codepoint to form the grapheme cluster.')
+		help_marker(context, 'Extra codepoints that combine with the primary codepoint to form the grapheme cluster.')
 		context.table_set_column(2)
 		draw_codepoint_list(context, '##cell_grapheme', pin.grapheme(&cell) or { []u32{} })
 	}
@@ -132,7 +132,7 @@ fn draw_cell_info(context cimgui.Context, cell terminal.CellData, row terminal.R
 	context.table_set_column(0)
 	context.text('Row Flags')
 	context.table_set_column(1)
-	context.help_marker('Flags set on the row containing this cell.')
+	help_marker(context, 'Flags set on the row containing this cell.')
 	context.table_set_column(2)
 	draw_row_flags(context, row)
 	draw_cell_info_row(context, 'Style ID', 'Internal style reference ID for this cell.', cell.style_id.str())
@@ -153,7 +153,7 @@ fn draw_cell_info_row(context cimgui.Context, label string, help string, value s
 	context.table_set_column(0)
 	context.text(label)
 	context.table_set_column(1)
-	context.help_marker(help)
+	help_marker(context, help)
 	context.table_set_column(2)
 	if value in ['(default)', '(see below)'] {
 		context.text_disabled(value)
@@ -258,7 +258,7 @@ fn draw_pagelist_inspector(context cimgui.Context, mut pages terminal.PageList) 
 		draw_tracked_pins(context, pages)
 	}
 	if context.collapsing_header_default_open('Pages') {
-		context.help_marker('Pages are shown most-recent first. Each page holds a grid of rows/cells plus metadata tables for styles, graphemes, strings, and hyperlinks.')
+		help_marker(context, 'Pages are shown most-recent first. Each page holds a grid of rows/cells plus metadata tables for styles, graphemes, strings, and hyperlinks.')
 
 		active_pin := pages.get_top_left(.active)
 		viewport_pin := pages.get_top_left(.viewport)
@@ -353,7 +353,7 @@ fn draw_pagelist_region(context cimgui.Context, pages &terminal.PageList, tag te
 	context.table_set_column(0)
 	context.text(tag.str())
 	context.table_set_column(1)
-	context.help_marker(region_help_text(tag))
+	help_marker(context, region_help_text(tag))
 	context.table_set_column(2)
 	if top_left_point := pages.point_from_pin(tag, top_left) {
 		context.text('(${top_left_point.coord().x}, ${top_left_point.coord().y})')
@@ -427,7 +427,7 @@ fn draw_pagelist_info_row(context cimgui.Context, label string, help string, val
 	context.table_set_column(0)
 	context.text(label)
 	context.table_set_column(1)
-	context.help_marker(help)
+	help_marker(context, help)
 	context.table_set_column(2)
 	context.text(value)
 }
@@ -473,7 +473,7 @@ fn draw_managed_row(context cimgui.Context, label string, help string, used u32,
 	context.table_set_column(0)
 	context.text(label)
 	context.table_set_column(1)
-	context.help_marker(help)
+	help_marker(context, help)
 	context.table_set_column(2)
 	context.text(used.str())
 	context.table_set_column(3)

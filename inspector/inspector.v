@@ -296,14 +296,14 @@ pub fn (mut self RendererInfo) draw(context cimgui.Context, open bool) {
 	mut hyperlinks := self.features.contains(.highlight_hyperlinks)
 	_, hyperlinks = context.checkbox('Overlay Hyperlinks', hyperlinks)
 	context.same_line()
-	context.help_marker('When enabled, highlights OSC8 hyperlinks.')
+	help_marker(context, 'When enabled, highlights OSC8 hyperlinks.')
 	self.set_feature(.highlight_hyperlinks, hyperlinks)
 
 	context.separator_text('Semantic Prompts')
 	mut semantic_prompts := self.features.contains(.semantic_prompts)
 	_, semantic_prompts = context.checkbox('Overlay Semantic Prompts', semantic_prompts)
 	context.same_line()
-	context.help_marker('When enabled, highlights OSC 133 semantic prompts.')
+	help_marker(context, 'When enabled, highlights OSC 133 semantic prompts.')
 	self.set_feature(.semantic_prompts, semantic_prompts)
 
 	context.indent()

@@ -153,6 +153,15 @@ pub fn (ctx Context) detachable_header(label string, detached bool) (bool, bool)
 	return false, detached
 }
 
+pub fn (ctx Context) detachable_header_state_begin(label string, show_window bool, first_show bool) (int, bool, bool) {
+	_ = label
+	return 0, show_window, if show_window { true } else { false }
+}
+
+pub fn (ctx Context) detachable_header_state_end(state int) {
+	_ = state
+}
+
 pub fn (ctx Context) end_window() {}
 
 pub fn (ctx Context) set_window_focus(name string) {
