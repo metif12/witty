@@ -87,6 +87,29 @@ fn test_application_config_load_failure_uses_diagnostic_default() {
 	assert config.font_size == default_config.font_size
 }
 
+fn test_application_cgroup_startup_failure_becomes_config_diagnostic() {
+	mut core_config := configpkg.Config.default_config()
+	defer {
+		core_config.deinit()
+	}
+	mut config_object := config_new(core_config)
+	mut app := Application{
+		config: core_config.clone()
+		config_object: config_object
+	}
+	defer {
+		app.config.deinit()
+		config_object.unref()
+	}
+
+	app.record_cgroup_startup_error(error('DbusConnectionFailed'))
+	expected := 'cgroup initialization failed: DbusConnectionFailed'
+	assert app.config.diagnostics.len == 1
+	assert app.config.diagnostics[0].format() == expected
+	assert config_object.get().diagnostics.len == 1
+	assert config_object.get().diagnostics[0].format() == expected
+}
+
 fn test_application_activate_queues_new_window() {
 	mut core_app := &core.App{
 		mailbox: core.MailboxQueue.create() or { panic(err) }

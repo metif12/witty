@@ -1182,11 +1182,25 @@ fn (mut self Application) startup() {
 
 	// Setup our cgroup for the application.
 	self.startup_cgroup() or {
-		// log.warn("cgroup initialization failed")
+		self.record_cgroup_startup_error(err)
 	}
 
 	// Show config diagnostics if any.
 	self.show_config_errors_dialog()
+}
+
+// record_cgroup_startup_error adds the startup failure to the configuration
+// diagnostics that back the GTK error dialog. Witty retains both the core
+// value and its GObject wrapper, so both views must receive the same source
+// diagnostic.
+fn (mut self Application) record_cgroup_startup_error(err IError) {
+	message := 'cgroup initialization failed: ${err}'
+	self.config.add_diagnostic_fmt(message)
+	if !isnil(self.config_object) {
+		mut config := unsafe { self.config_object }
+		mut inner := config.get_mut()
+		inner.add_diagnostic_fmt(message)
+	}
 }
 
 // Configure libxev to use a specific backend.
@@ -1478,14 +1492,14 @@ fn (mut self Application) startup_cgroup() ! {
 
 	if isnil(self.obj) {
 		if self.config.linux_cgroup_hard_fail {
-			return error('D-Bus connection required for cgroup isolation')
+			return error('DbusConnectionFailed')
 		}
 		return
 	}
 	dbus := C.g_application_get_dbus_connection(self.obj)
 	if isnil(dbus) {
 		if self.config.linux_cgroup_hard_fail {
-			return error('D-Bus connection required for cgroup isolation')
+			return error('DbusConnectionFailed')
 		}
 		return
 	}
@@ -1495,7 +1509,7 @@ fn (mut self Application) startup_cgroup() ! {
 		pids_max: self.config.linux_cgroup_processes_limit
 	}) or {
 		if self.config.linux_cgroup_hard_fail {
-			return error('cgroup initialization failed: ${err}')
+			return error('CgroupInitFailed')
 		}
 		return
 	}
