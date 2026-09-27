@@ -767,10 +767,13 @@ fn test_screen_cursor_absolute_to_page_with_insufficient_capacity() ! {
 		mut n := u32(1)
 		for {
 			start_node.data.styles.add(CellStyle{
-				bg_color: .rgb
-				bg_r:     u8(n)
-				bg_g:     u8(n >> 8)
-				bg_b:     u8(n >> 16)
+				bg_color: StyleColorRgb{
+					rgb: RGB{
+						r: u8(n)
+						g: u8(n >> 8)
+						b: u8(n >> 16)
+					}
+				}
 			}) or { break }
 			n += 1
 		}
@@ -1638,7 +1641,7 @@ fn test_screen_scroll_above_no_scrollback_bottom_of_page() ! {
 	//   +----------+ :
 	//  +-------------+
 
-	//try s.pages.diagram(std.io.getStdErr().writer());
+	// try s.pages.diagram(std.io.getStdErr().writer());
 
 	{
 		contents := s.dump_string_alloc(.viewport)!
@@ -3991,9 +3994,9 @@ fn test_screen_select_word() ! {
 	s.test_write_string('ABC  DEF\n 123\n456')!
 
 	// Default boundary codepoints for word selection
-	boundary_codepoints := [u32(0), u32(` `), u32(`\t`), u32(`'`), u32(`"`), u32(`│`),
-		u32(`\``), u32(`|`), u32(`:`), u32(`;`), u32(`,`), u32(`(`), u32(`)`), u32(`[`),
-		u32(`]`), u32(`{`), u32(`}`), u32(`<`), u32(`>`), u32(`$`)]
+	boundary_codepoints := [u32(0), u32(` `), u32(`\t`), u32(`'`), u32(`"`), u32(`│`), u32(`\``),
+		u32(`|`), u32(`:`), u32(`;`), u32(`,`), u32(`(`), u32(`)`), u32(`[`), u32(`]`), u32(`{`),
+		u32(`}`), u32(`<`), u32(`>`), u32(`$`)]
 
 	// Outside of active area
 	// try testing.expect(s.selectWord(.{ .x = 9, .y = 0 }) == null);
@@ -4066,9 +4069,9 @@ fn test_screen_select_word_across_soft_wrap() ! {
 	s.test_write_string(' 1234012\n 123')!
 
 	// Default boundary codepoints for word selection
-	boundary_codepoints := [u32(0), u32(` `), u32(`\t`), u32(`'`), u32(`"`), u32(`│`),
-		u32(`\``), u32(`|`), u32(`:`), u32(`;`), u32(`,`), u32(`(`), u32(`)`), u32(`[`),
-		u32(`]`), u32(`{`), u32(`}`), u32(`<`), u32(`>`), u32(`$`)]
+	boundary_codepoints := [u32(0), u32(` `), u32(`\t`), u32(`'`), u32(`"`), u32(`│`), u32(`\``),
+		u32(`|`), u32(`:`), u32(`;`), u32(`,`), u32(`(`), u32(`)`), u32(`[`), u32(`]`), u32(`{`),
+		u32(`}`), u32(`<`), u32(`>`), u32(`$`)]
 
 	{
 		contents := s.dump_string_alloc(.screen)!
@@ -4112,9 +4115,9 @@ fn test_screen_select_word_whitespace_across_soft_wrap() ! {
 	s.test_write_string('1       1\n 123')!
 
 	// Default boundary codepoints for word selection
-	boundary_codepoints := [u32(0), u32(` `), u32(`\t`), u32(`'`), u32(`"`), u32(`│`),
-		u32(`\``), u32(`|`), u32(`:`), u32(`;`), u32(`,`), u32(`(`), u32(`)`), u32(`[`),
-		u32(`]`), u32(`{`), u32(`}`), u32(`<`), u32(`>`), u32(`$`)]
+	boundary_codepoints := [u32(0), u32(` `), u32(`\t`), u32(`'`), u32(`"`), u32(`│`), u32(`\``),
+		u32(`|`), u32(`:`), u32(`;`), u32(`,`), u32(`(`), u32(`)`), u32(`[`), u32(`]`), u32(`{`),
+		u32(`}`), u32(`<`), u32(`>`), u32(`$`)]
 
 	// Going forward
 	{
@@ -4149,9 +4152,9 @@ fn test_screen_select_word_whitespace_across_soft_wrap() ! {
 
 fn test_screen_select_word_with_character_boundary() ! {
 	// Default boundary codepoints for word selection
-	boundary_codepoints := [u32(0), u32(` `), u32(`\t`), u32(`'`), u32(`"`), u32(`│`),
-		u32(`\``), u32(`|`), u32(`:`), u32(`;`), u32(`,`), u32(`(`), u32(`)`), u32(`[`),
-		u32(`]`), u32(`{`), u32(`}`), u32(`<`), u32(`>`), u32(`$`)]
+	boundary_codepoints := [u32(0), u32(` `), u32(`\t`), u32(`'`), u32(`"`), u32(`│`), u32(`\``),
+		u32(`|`), u32(`:`), u32(`;`), u32(`,`), u32(`(`), u32(`)`), u32(`[`), u32(`]`), u32(`{`),
+		u32(`}`), u32(`<`), u32(`>`), u32(`$`)]
 
 	cases := [
 		" 'abc' \n123",
@@ -4810,7 +4813,7 @@ fn test_screen_increase_capacity_cursor_style_ref_count_preserved() ! {
 	assert voidptr(s.cursor.page_cell) == voidptr(page_rac.cell)
 
 	// Style should be preserved
-	assert s.cursor.style == old_style
+	assert s.cursor.style.eql(&old_style)
 	assert s.cursor.style_id != (default_style_id)
 
 	// After increaseCapacity, the 5 chars are cloned (5 refs) and
@@ -4888,7 +4891,7 @@ fn test_screen_increase_capacity_cursor_with_both_style_and_hyperlink_preserved(
 	_ = s.increase_capacity(s.cursor.page_pin.node, IncreaseCapacity.grapheme_bytes)!
 
 	// Style should be preserved
-	assert s.cursor.style == old_style
+	assert s.cursor.style.eql(&old_style)
 	assert s.cursor.style_id != default_style_id
 
 	// Hyperlink should be preserved with correct URI
@@ -4960,7 +4963,7 @@ fn test_screen_increase_capacity_non_cursor_page_returns_early() ! {
 	assert s.cursor.page_pin.node.data.capacity.styles == cursor_page_styles_cap
 
 	// Cursor state should be completely unchanged since we didn't touch its page
-	assert s.cursor.style == old_style
+	assert s.cursor.style.eql(&old_style)
 	assert s.cursor.style_id == old_style_id
 	// Ghostty compares the heap-allocated `?*Hyperlink` pointers; Witty stores
 	// the cursor hyperlink by value, so compare the values.
@@ -5019,10 +5022,13 @@ fn test_screen_cursor_down_to_page_with_insufficient_capacity() ! {
 		mut n := u32(1)
 		for {
 			new_node.data.styles.add(CellStyle{
-				bg_color: .rgb
-				bg_r:     u8(n)
-				bg_g:     u8(n >> 8)
-				bg_b:     u8(n >> 16)
+				bg_color: StyleColorRgb{
+					rgb: RGB{
+						r: u8(n)
+						g: u8(n >> 8)
+						b: u8(n >> 16)
+					}
+				}
 			}) or { break }
 			n += 1
 		}
@@ -5091,10 +5097,13 @@ fn test_screen_set_attribute_increases_capacity_when_style_map_is_full() ! {
 		mut n := usize(1)
 		for n < max_items {
 			page.styles.add(CellStyle{
-				bg_color: .rgb
-				bg_r:     u8(n)
-				bg_g:     u8(n >> 8)
-				bg_b:     u8(n >> 16)
+				bg_color: StyleColorRgb{
+					rgb: RGB{
+						r: u8(n)
+						g: u8(n >> 8)
+						b: u8(n >> 16)
+					}
+				}
 			}) or { break }
 			n += 1
 		}
@@ -5149,10 +5158,13 @@ fn test_screen_set_attribute_splits_page_on_out_of_space_at_max_styles() ! {
 		mut n := usize(1)
 		for n < max_items {
 			page.styles.add(CellStyle{
-				bg_color: .rgb
-				bg_r:     u8(n)
-				bg_g:     u8(n >> 8)
-				bg_b:     u8(n >> 16)
+				bg_color: StyleColorRgb{
+					rgb: RGB{
+						r: u8(n)
+						g: u8(n >> 8)
+						b: u8(n >> 16)
+					}
+				}
 			}) or { break }
 			n += 1
 		}
@@ -5693,16 +5705,18 @@ fn test_screen_style_underline_color_independent_from_fg() ! {
 	s.set_attribute(SgrUnderlineColor{ rgb: RGB{ r: 0, g: 255, b: 0 } })!
 
 	// The fg color must be preserved unchanged.
-	assert s.cursor.style.fg_color == .rgb
-	assert s.cursor.style.fg_r == 255
-	assert s.cursor.style.fg_g == 0
-	assert s.cursor.style.fg_b == 0
+	assert s.cursor.style.fg_color is StyleColorRgb
+	fg_color := (s.cursor.style.fg_color as StyleColorRgb).rgb
+	assert fg_color.r == 255
+	assert fg_color.g == 0
+	assert fg_color.b == 0
 
 	// The underline color is stored in its own fields.
-	assert s.cursor.style.underline_color_type == .rgb
-	assert s.cursor.style.underline_r == 0
-	assert s.cursor.style.underline_g == 255
-	assert s.cursor.style.underline_b == 0
+	assert s.cursor.style.underline_color is StyleColorRgb
+	underline_rgb := (s.cursor.style.underline_color as StyleColorRgb).rgb
+	assert underline_rgb.r == 0
+	assert underline_rgb.g == 255
+	assert underline_rgb.b == 0
 
 	// Resolution reads back the correct, independent colors.
 	mut palette := [256]RGB{}
@@ -5714,35 +5728,33 @@ fn test_screen_style_underline_color_independent_from_fg() ! {
 	ul := s.cursor.style.underline_color(palette) or { panic('expected underline color') }
 	assert ul.r == 0 && ul.g == 255 && ul.b == 0
 
-	// Palette underline color must read from underline_palette, not fg_palette.
+	// Palette underline color must retain its own payload, independent of fg.
 	palette[7] = RGB{
 		r: 11
 		g: 22
 		b: 33
 	}
 	s.set_attribute(SgrUnderlineColor256{ idx: 7 })!
-	assert s.cursor.style.underline_color_type == .palette
-	assert s.cursor.style.underline_palette == 7
+	assert s.cursor.style.underline_color is StyleColorPalette
+	assert (s.cursor.style.underline_color as StyleColorPalette).index == 7
 	// fg is still the RGB red we set earlier, untouched by the palette write.
-	assert s.cursor.style.fg_color == .rgb
-	assert s.cursor.style.fg_r == 255
+	assert s.cursor.style.fg_color is StyleColorRgb
+	assert (s.cursor.style.fg_color as StyleColorRgb).rgb.r == 255
 	ul2 := s.cursor.style.underline_color(palette) or { panic('expected underline color') }
 	assert ul2.r == 11 && ul2.g == 22 && ul2.b == 33
 
 	// Reset clears only the underline color.
 	s.set_attribute(SgrResetUnderlineColor{})!
-	assert s.cursor.style.underline_color_type == .none
-	assert s.cursor.style.fg_color == .rgb
-	assert s.cursor.style.fg_r == 255
+	assert s.cursor.style.underline_color is StyleColorNone
+	assert s.cursor.style.fg_color is StyleColorRgb
+	assert (s.cursor.style.fg_color as StyleColorRgb).rgb.r == 255
 
 	// Two styles differing only in underline color must be distinct.
 	a := CellStyle{
-		underline_color_type: .rgb
-		underline_r:          1
+		underline_color: StyleColorRgb{ rgb: RGB{ r: 1 } }
 	}
 	b := CellStyle{
-		underline_color_type: .rgb
-		underline_r:          2
+		underline_color: StyleColorRgb{ rgb: RGB{ r: 2 } }
 	}
 	assert !a.eql(&b)
 	assert a.hash() != b.hash()

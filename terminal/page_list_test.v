@@ -39,7 +39,7 @@ fn set_active_cell(mut pl PageList, x u16, y u16, cp u32) {
 		if int(p.x) < row.cells.len {
 			row.cells[int(p.x)] = CellData{
 				content_tag: .codepoint
-				codepoint: cp
+				codepoint:   cp
 			}
 		}
 	}
@@ -52,7 +52,7 @@ fn set_screen_cell(mut pl PageList, x u16, y u16, cp u32) {
 		if int(p.x) < row.cells.len {
 			row.cells[int(p.x)] = CellData{
 				content_tag: .codepoint
-				codepoint: cp
+				codepoint:   cp
 			}
 		}
 	}
@@ -62,8 +62,8 @@ fn set_screen_semantic_cell(mut pl PageList, x u16, y u16, cp u32, semantic Sema
 	p := pl.pin(Point.new(.screen, Coordinate{ x: x, y: y })) or { return }
 	mut row := &p.node.data.rows[int(p.y)]
 	row.cells[int(p.x)] = CellData{
-		content_tag: .codepoint
-		codepoint: cp
+		content_tag:      .codepoint
+		codepoint:        cp
 		semantic_content: semantic
 	}
 }
@@ -339,7 +339,7 @@ fn test_page_list_increase_capacity_after_col_shrink() {
 	defer { s.deinit() }
 
 	s.resize(PageResizeOpts{
-		cols: 5
+		cols:   5
 		reflow: false
 	}) or { panic(err) }
 	assert s.cols == 5
@@ -461,9 +461,9 @@ fn test_page_list_grow_prune_required_with_a_single_page() {
 	}
 	assert voidptr(new_node) != voidptr(current_first)
 	assert s.scrollbar().eql(Scrollbar{
-		total: s.count_total_rows()
+		total:  s.count_total_rows()
 		offset: s.total_rows - usize(s.rows)
-		len: usize(s.rows)
+		len:    usize(s.rows)
 	})
 }
 
@@ -502,8 +502,8 @@ fn test_page_list_compact_oversized_page() {
 	}
 	tracked := s.track_pin(Pin{
 		node: first
-		x: 5
-		y: 10
+		x:    5
+		y:    10
 	})
 
 	mut node := first
@@ -662,8 +662,8 @@ fn test_page_pin_row_cell_grapheme_and_style_accessors() {
 	}
 	page.rows[int(pin.y)].cells[int(pin.x)] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`a`)
-		style_id: style_id
+		codepoint:   u32(`a`)
+		style_id:    style_id
 	}
 	page.rows[int(pin.y)].styled = true
 	page.set_graphemes(usize(pin.y), usize(pin.x), [u32(0x0301)]) or { panic(err) }
@@ -677,7 +677,7 @@ fn test_page_pin_row_cell_grapheme_and_style_accessors() {
 	assert pin.grapheme(rac.cell) or { []u32{} } == [u32(0x0301)]
 	foreign := CellData{
 		content_tag: .codepoint_grapheme
-		codepoint: u32(`z`)
+		codepoint:   u32(`z`)
 	}
 	assert pin.grapheme(&foreign) == none
 	assert pin.style(rac.cell).eql(&style)
@@ -801,9 +801,12 @@ fn test_page_list_reflow_grows_style_capacity_without_losing_styles() {
 		page.rows[0].styled = true
 		for x in 0 .. 60 {
 			style := CellStyle{
-				fg_color: .rgb
-				fg_r: u8(x)
-				fg_g: u8(page_index + 1)
+				fg_color: StyleColorRgb{
+					rgb: RGB{
+						r: u8(x)
+						g: u8(page_index + 1)
+					}
+				}
 			}
 			id := page.styles.add(style) or {
 				assert false, 'failed to populate source style ${page_index}:${x}'
@@ -811,14 +814,14 @@ fn test_page_list_reflow_grows_style_capacity_without_losing_styles() {
 			}
 			page.rows[0].cells[x] = CellData{
 				content_tag: .codepoint
-				codepoint: u32(`a`) + u32(page_index)
-				style_id: id
+				codepoint:   u32(`a`) + u32(page_index)
+				style_id:    id
 			}
 		}
 	}
 
 	list.resize(PageResizeOpts{
-		cols: 120
+		cols:   120
 		reflow: true
 	}) or { panic(err) }
 
@@ -835,9 +838,10 @@ fn test_page_list_reflow_grows_style_capacity_without_losing_styles() {
 			cell := dst.rows[y].cells[x]
 			assert cell.style_id != default_style_id
 			style := dst.styles.get(cell.style_id)
-			assert style.fg_color == .rgb
-			assert style.fg_r == u8(x)
-			assert style.fg_g == u8(y + 1)
+			assert style.fg_color is StyleColorRgb
+			rgb := (style.fg_color as StyleColorRgb).rgb
+			assert rgb.r == u8(x)
+			assert rgb.g == u8(y + 1)
 		}
 	}
 	if integrity_error := dst.verify_integrity() {
@@ -869,9 +873,12 @@ fn test_page_list_erase_row_propagates_style_capacity_error_across_pages() {
 		page.rows[int(row_ref.y)].styled = true
 		for x in 0 .. 60 {
 			style := CellStyle{
-				fg_color: .rgb
-				fg_r: u8(x)
-				fg_g: u8(page_index + 1)
+				fg_color: StyleColorRgb{
+					rgb: RGB{
+						r: u8(x)
+						g: u8(page_index + 1)
+					}
+				}
 			}
 			id := page.styles.add(style) or {
 				assert false, 'failed to populate source style ${page_index}:${x}'
@@ -879,8 +886,8 @@ fn test_page_list_erase_row_propagates_style_capacity_error_across_pages() {
 			}
 			page.rows[int(row_ref.y)].cells[x] = CellData{
 				content_tag: .codepoint
-				codepoint: u32(`a`) + u32(page_index)
-				style_id: id
+				codepoint:   u32(`a`) + u32(page_index)
+				style_id:    id
 			}
 		}
 	}
@@ -1683,8 +1690,8 @@ fn test_page_list_pin_is_valid() {
 	node.data.size.cols = 1
 	assert !s.pin_is_valid(Pin{
 		node: node
-		y: 0
-		x: 1
+		y:    0
+		x:    1
 	})
 	node.data.size.cols = 80
 }
@@ -1837,13 +1844,13 @@ fn test_page_list_erase_history_preserves_managed_survivor() {
 	}
 	page.rows[2].cells[3] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`S`)
-		style_id: style_id
+		codepoint:   u32(`S`)
+		style_id:    style_id
 	}
 	page.rows[2].styled = true
 	page.set_graphemes(2, 3, [u32(0x0302)]) or { panic(err) }
 	hyperlink_id := page.insert_hyperlink(Hyperlink{
-		id: HyperlinkExplicitId{
+		id:  HyperlinkExplicitId{
 			value: 'survivor'
 		}
 		uri: 'https://example.com/survivor'
@@ -1949,13 +1956,13 @@ fn test_page_list_erase_row_preserves_managed_cell_data() {
 	}
 	page.rows[1].cells[2] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`M`)
-		style_id: style_id
+		codepoint:   u32(`M`)
+		style_id:    style_id
 	}
 	page.rows[1].styled = true
 	page.set_graphemes(1, 2, [u32(0x0301)]) or { panic(err) }
 	hyperlink_id := page.insert_hyperlink(Hyperlink{
-		id: HyperlinkExplicitId{
+		id:  HyperlinkExplicitId{
 			value: 'managed'
 		}
 		uri: 'https://example.com/managed'
@@ -2001,10 +2008,10 @@ fn test_page_list_erase_row_moves_managed_cell_and_pin_across_page_boundary() {
 	mut second_page := &second.data
 	second_page.rows[0].cells[1] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`B`)
+		codepoint:   u32(`B`)
 	}
 	hyperlink_id := second_page.insert_hyperlink(Hyperlink{
-		id: HyperlinkImplicitId{
+		id:  HyperlinkImplicitId{
 			offset: 7
 		}
 		uri: 'https://example.com/boundary'
@@ -2051,8 +2058,8 @@ fn test_page_list_split_at_middle_row() {
 
 	split_pin := Pin{
 		node: first
-		y: 5
-		x: 0
+		y:    5
+		x:    0
 	}
 	s.split(split_pin) or {
 		assert false, 'split failed: ${err}'
@@ -2084,8 +2091,8 @@ fn test_page_list_split_at_row_0_noop() {
 
 	split_pin := Pin{
 		node: first
-		y: 0
-		x: 0
+		y:    0
+		x:    0
 	}
 	s.split(split_pin) or {
 		assert false, 'split failed: ${err}'
@@ -2107,8 +2114,8 @@ fn test_page_list_split_at_last_row() {
 
 	split_pin := Pin{
 		node: first
-		y: 9
-		x: 0
+		y:    9
+		x:    0
 	}
 	s.split(split_pin) or {
 		assert false, 'split failed: ${err}'
@@ -2144,8 +2151,8 @@ fn test_page_list_split_moves_tracked_pins() {
 
 	split_pin := Pin{
 		node: first
-		y: 5
-		x: 0
+		y:    5
+		x:    0
 	}
 	s.split(split_pin) or {
 		assert false, 'split failed: ${err}'
@@ -2182,8 +2189,8 @@ fn test_page_list_split_tracked_pin_before_split_unchanged() {
 
 	split_pin := Pin{
 		node: first
-		y: 5
-		x: 0
+		y:    5
+		x:    0
 	}
 	s.split(split_pin) or {
 		assert false, 'split failed: ${err}'
@@ -2216,8 +2223,8 @@ fn test_page_list_split_tracked_pin_at_split_point() {
 
 	split_pin := Pin{
 		node: first
-		y: 5
-		x: 0
+		y:    5
+		x:    0
 	}
 	s.split(split_pin) or {
 		assert false, 'split failed: ${err}'
@@ -2253,8 +2260,8 @@ fn test_page_list_split_preserves_wrap_flags() {
 
 	split_pin := Pin{
 		node: first
-		y: 5
-		x: 0
+		y:    5
+		x:    0
 	}
 	s.split(split_pin) or {
 		assert false, 'split failed: ${err}'
@@ -2291,8 +2298,8 @@ fn test_page_list_split_middle_page_preserves_order() {
 	// Split to create 2 pages (at row 4)
 	split1 := Pin{
 		node: first
-		y: 4
-		x: 0
+		y:    4
+		x:    0
 	}
 	s.split(split1) or {
 		assert false, 'split1 failed: ${err}'
@@ -2307,8 +2314,8 @@ fn test_page_list_split_middle_page_preserves_order() {
 	}
 	split2 := Pin{
 		node: second
-		y: 4
-		x: 0
+		y:    4
+		x:    0
 	}
 	s.split(split2) or {
 		assert false, 'split2 failed: ${err}'
@@ -2405,8 +2412,8 @@ fn test_page_list_clone_partial_trimmed_left_reclaims_styles() {
 		first.data.rows[y].styled = true
 		first.data.rows[y].cells[0] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(`A`)
-			style_id: style_id
+			codepoint:   u32(`A`)
+			style_id:    style_id
 		}
 		first.data.styles.use_style(style_id)
 	}
@@ -2570,8 +2577,8 @@ fn test_page_list_resize_no_reflow_more_rows() {
 	assert s.total_rows == 3
 
 	s.resize(PageResizeOpts{
-		cols: 80
-		rows: 10
+		cols:   80
+		rows:   10
 		reflow: false
 	}) or { panic(err) }
 
@@ -2589,8 +2596,8 @@ fn test_page_list_resize_no_reflow_more_rows_with_history() {
 	old_total := s.total_rows
 
 	s.resize(PageResizeOpts{
-		cols: 80
-		rows: 10
+		cols:   80
+		rows:   10
 		reflow: false
 	}) or { panic(err) }
 
@@ -2608,8 +2615,8 @@ fn test_page_list_resize_no_reflow_less_rows() {
 	}
 
 	s.resize(PageResizeOpts{
-		cols: 80
-		rows: 5
+		cols:   80
+		rows:   5
 		reflow: false
 	}) or { panic(err) }
 
@@ -2626,8 +2633,8 @@ fn test_page_list_resize_no_reflow_one_row() {
 	}
 
 	s.resize(PageResizeOpts{
-		cols: 80
-		rows: 1
+		cols:   80
+		rows:   1
 		reflow: false
 	}) or { panic(err) }
 
@@ -2639,8 +2646,8 @@ fn test_page_list_resize_no_reflow_less_cols() {
 	defer { s.deinit() }
 
 	s.resize(PageResizeOpts{
-		cols: 5
-		rows: 10
+		cols:   5
+		rows:   10
 		reflow: false
 	}) or { panic(err) }
 
@@ -2670,8 +2677,8 @@ fn test_page_list_resize_no_reflow_less_cols_pin_in_trimmed() {
 	tp := s.track_pin(p)
 
 	s.resize(PageResizeOpts{
-		cols: 5
-		rows: 10
+		cols:   5
+		rows:   10
 		reflow: false
 	}) or { panic(err) }
 
@@ -2686,8 +2693,8 @@ fn test_page_list_resize_no_reflow_more_cols() {
 	defer { s.deinit() }
 
 	s.resize(PageResizeOpts{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		reflow: false
 	}) or { panic(err) }
 
@@ -2709,15 +2716,15 @@ fn test_page_list_resize_no_reflow_less_cols_then_more() {
 	defer { s.deinit() }
 
 	s.resize(PageResizeOpts{
-		cols: 2
-		rows: 10
+		cols:   2
+		rows:   10
 		reflow: false
 	}) or { panic(err) }
 	assert s.cols == 2
 
 	s.resize(PageResizeOpts{
-		cols: 5
-		rows: 10
+		cols:   5
+		rows:   10
 		reflow: false
 	}) or { panic(err) }
 	assert s.cols == 5
@@ -2738,8 +2745,8 @@ fn test_page_list_resize_no_reflow_less_rows_and_cols() {
 	defer { s.deinit() }
 
 	s.resize(PageResizeOpts{
-		cols: 5
-		rows: 5
+		cols:   5
+		rows:   5
 		reflow: false
 	}) or { panic(err) }
 
@@ -2752,8 +2759,8 @@ fn test_page_list_resize_no_reflow_more_rows_and_less_cols() {
 	defer { s.deinit() }
 
 	s.resize(PageResizeOpts{
-		cols: 5
-		rows: 20
+		cols:   5
+		rows:   20
 		reflow: false
 	}) or { panic(err) }
 
@@ -2767,8 +2774,8 @@ fn test_page_list_resize_no_reflow_empty_screen() {
 	defer { s.deinit() }
 
 	s.resize(PageResizeOpts{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		reflow: false
 	}) or { panic(err) }
 
@@ -2793,8 +2800,8 @@ fn test_page_list_resize_more_rows_and_cols_large() {
 	assert cap.rows < new_rows
 
 	s.resize(PageResizeOpts{
-		cols: new_cols
-		rows: new_rows
+		cols:   new_cols
+		rows:   new_rows
 		reflow: true
 	}) or { panic(err) }
 
@@ -3263,24 +3270,24 @@ fn test_page_list_highlight_semantic_content() {
 
 	for x in 0 .. 2 {
 		page.rows[2].cells[x] = CellData{
-			codepoint: u32(`$`)
+			codepoint:        u32(`$`)
 			semantic_content: .prompt
 		}
 	}
 	for x in 2 .. 5 {
 		page.rows[2].cells[x] = CellData{
-			codepoint: u32(`i`)
+			codepoint:        u32(`i`)
 			semantic_content: .input
 		}
 	}
 	for x in 0 .. 3 {
 		page.rows[3].cells[x] = CellData{
-			codepoint: u32(`o`)
+			codepoint:        u32(`o`)
 			semantic_content: .output
 		}
 	}
 	page.rows[4].cells[1] = CellData{
-		codepoint: u32(`z`)
+		codepoint:        u32(`z`)
 		semantic_content: .output
 	}
 
@@ -3328,7 +3335,7 @@ fn test_page_list_highlight_semantic_content_missing_input_and_output() {
 	page.rows[0].semantic_prompt = .prompt
 	for x in 0 .. 5 {
 		page.rows[0].cells[x] = CellData{
-			codepoint: u32(`$`)
+			codepoint:        u32(`$`)
 			semantic_content: .prompt
 		}
 	}
@@ -3592,9 +3599,9 @@ fn test_page_pin_horizontal_movement_preserves_garbage() {
 		return
 	}
 	p := Pin{
-		node: base.node
-		y: base.y
-		x: base.x
+		node:    base.node
+		y:       base.y
+		x:       base.x
 		garbage: true
 	}
 	assert p.left(1).garbage
@@ -3929,15 +3936,15 @@ fn test_page_node_list_append_remove() {
 	mut list := PageNodeList{}
 
 	n1 := &PageNode{
-		data: Page.init(std_capacity)
+		data:   Page.init(std_capacity)
 		serial: 1
 	}
 	n2 := &PageNode{
-		data: Page.init(std_capacity)
+		data:   Page.init(std_capacity)
 		serial: 2
 	}
 	n3 := &PageNode{
-		data: Page.init(std_capacity)
+		data:   Page.init(std_capacity)
 		serial: 3
 	}
 
@@ -3979,11 +3986,11 @@ fn test_page_node_list_prepend() {
 	mut list := PageNodeList{}
 
 	n1 := &PageNode{
-		data: Page.init(std_capacity)
+		data:   Page.init(std_capacity)
 		serial: 1
 	}
 	n2 := &PageNode{
-		data: Page.init(std_capacity)
+		data:   Page.init(std_capacity)
 		serial: 2
 	}
 
@@ -4001,15 +4008,15 @@ fn test_page_node_list_insert_after() {
 	mut list := PageNodeList{}
 
 	n1 := &PageNode{
-		data: Page.init(std_capacity)
+		data:   Page.init(std_capacity)
 		serial: 1
 	}
 	n2 := &PageNode{
-		data: Page.init(std_capacity)
+		data:   Page.init(std_capacity)
 		serial: 2
 	}
 	n3 := &PageNode{
-		data: Page.init(std_capacity)
+		data:   Page.init(std_capacity)
 		serial: 3
 	}
 
@@ -4037,15 +4044,15 @@ fn test_page_node_list_insert_before() {
 	mut list := PageNodeList{}
 
 	n1 := &PageNode{
-		data: Page.init(std_capacity)
+		data:   Page.init(std_capacity)
 		serial: 1
 	}
 	n2 := &PageNode{
-		data: Page.init(std_capacity)
+		data:   Page.init(std_capacity)
 		serial: 2
 	}
 	n3 := &PageNode{
-		data: Page.init(std_capacity)
+		data:   Page.init(std_capacity)
 		serial: 3
 	}
 
@@ -4068,11 +4075,11 @@ fn test_page_node_list_pop() {
 	mut list := PageNodeList{}
 
 	n1 := &PageNode{
-		data: Page.init(std_capacity)
+		data:   Page.init(std_capacity)
 		serial: 1
 	}
 	n2 := &PageNode{
-		data: Page.init(std_capacity)
+		data:   Page.init(std_capacity)
 		serial: 2
 	}
 
@@ -4164,9 +4171,9 @@ fn test_page_list_jump_zero_prompts() {
 	s.scroll(PageScrollDeltaPrompt{})
 	assert s.viewport == .active
 	assert s.scrollbar() == Scrollbar{
-		total: s.total_rows
+		total:  s.total_rows
 		offset: s.total_rows - usize(s.rows)
-		len: usize(s.rows)
+		len:    usize(s.rows)
 	}
 }
 
@@ -4401,13 +4408,13 @@ fn test_page_list_erase_row_bounded_preserves_managed_cell_data() {
 	}
 	page.rows[1].cells[1] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`M`)
-		style_id: style_id
+		codepoint:   u32(`M`)
+		style_id:    style_id
 	}
 	page.rows[1].styled = true
 	page.set_graphemes(1, 1, [u32(0x0308)]) or { panic(err) }
 	hyperlink_id := page.insert_hyperlink(Hyperlink{
-		id: HyperlinkImplicitId{
+		id:  HyperlinkImplicitId{
 			offset: 9
 		}
 		uri: 'https://example.com/bounded'
@@ -4449,10 +4456,10 @@ fn test_page_list_erase_row_bounded_exact_page_boundary() {
 	mut second_page := &second.data
 	second_page.rows[0].cells[2] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`B`)
+		codepoint:   u32(`B`)
 	}
 	hyperlink_id := second_page.insert_hyperlink(Hyperlink{
-		id: HyperlinkImplicitId{
+		id:  HyperlinkImplicitId{
 			offset: 10
 		}
 		uri: 'https://example.com/exact-boundary'
@@ -4636,7 +4643,7 @@ fn test_page_list_resize_no_reflow_one_row_precise() {
 	for y in u16(0) .. 10 {
 		page.rows[int(y)].cells[0] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(`A`)
+			codepoint:   u32(`A`)
 		}
 	}
 
@@ -4666,7 +4673,7 @@ fn test_page_list_resize_no_reflow_less_rows_cursor_on_bottom() {
 	for y in u16(0) .. 10 {
 		page.rows[int(y)].cells[0] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(y)
+			codepoint:   u32(y)
 		}
 	}
 
@@ -4711,7 +4718,7 @@ fn test_page_list_resize_no_reflow_less_rows_cursor_in_scrollback() {
 	for y in u16(0) .. 10 {
 		page.rows[int(y)].cells[0] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(y)
+			codepoint:   u32(y)
 		}
 	}
 
@@ -4778,7 +4785,7 @@ fn test_page_list_resize_no_reflow_more_rows_extends_blank_lines() {
 	// Write codepoint into first line.
 	page.rows[0].cells[0] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`A`)
+		codepoint:   u32(`A`)
 	}
 	// Fill remaining lines with a background color (still blank).
 	for y in u16(1) .. 3 {
@@ -4814,7 +4821,7 @@ fn test_page_list_resize_no_reflow_less_rows_trims_blank_lines() {
 	// Write codepoint into first line.
 	page.rows[0].cells[0] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`A`)
+		codepoint:   u32(`A`)
 	}
 	// Fill remaining lines with a background color (still blank).
 	for y in u16(1) .. 5 {
@@ -4865,7 +4872,7 @@ fn test_page_list_resize_no_reflow_less_cols_clears_graphemes() {
 	// Add a grapheme at (9, 0).
 	page.rows[0].cells[9] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`A`)
+		codepoint:   u32(`A`)
 	}
 	page.append_grapheme(0, 9, u32(`A`)) or { panic(err) }
 	assert page.grapheme_count() == 1
@@ -4891,7 +4898,7 @@ fn test_page_list_resize_no_reflow_preserves_hyperlink_key_stride() {
 	}
 	mut page := &first.data
 	link := Hyperlink{
-		id: HyperlinkExplicitId{
+		id:  HyperlinkExplicitId{
 			value: 'resize-link'
 		}
 		uri: 'https://example.com/resize-link'
@@ -4899,13 +4906,13 @@ fn test_page_list_resize_no_reflow_preserves_hyperlink_key_stride() {
 	link_id := page.insert_hyperlink(link) or { panic(err) }
 	page.rows[1].cells[1] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`a`)
+		codepoint:   u32(`a`)
 	}
 	page.set_hyperlink(1, 1, link_id) or { panic(err) }
 	page.hyperlink_set.use_link(link_id)
 	page.rows[1].cells[3] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`b`)
+		codepoint:   u32(`b`)
 	}
 	page.set_hyperlink(1, 3, link_id) or { panic(err) }
 
@@ -4949,7 +4956,7 @@ fn test_page_list_resize_no_reflow_less_rows_trims_blank_lines_cursor_in_blank_l
 
 	page.rows[0].cells[0] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`A`)
+		codepoint:   u32(`A`)
 	}
 	for y in u16(1) .. 5 {
 		page.rows[int(y)].cells[0] = CellData{
@@ -4997,7 +5004,7 @@ fn test_page_list_resize_no_reflow_less_rows_trims_blank_lines_erases_pages() {
 	mut page := &first.data
 	page.rows[0].cells[0] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`A`)
+		codepoint:   u32(`A`)
 	}
 
 	// Resize down. Every row except the first is blank so we should
@@ -5022,23 +5029,23 @@ fn test_page_list_resize_no_reflow_more_cols_with_spacer_head() {
 	page.rows[0].wrap = true
 	page.rows[0].cells[0] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`x`)
+		codepoint:   u32(`x`)
 	}
 	page.rows[0].cells[1] = CellData{
 		content_tag: .codepoint
-		codepoint: 0
-		wide: .spacer_head
+		codepoint:   0
+		wide:        .spacer_head
 	}
 	// Row 1: wide emoji + spacer_tail.
 	page.rows[1].cells[0] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(0x1F600)
-		wide: .wide
+		codepoint:   u32(0x1F600)
+		wide:        .wide
 	}
 	page.rows[1].cells[1] = CellData{
 		content_tag: .codepoint
-		codepoint: 0
-		wide: .spacer_tail
+		codepoint:   0
+		wide:        .spacer_tail
 	}
 
 	s.resize(PageResizeOpts{ cols: 3, reflow: false }) or { panic(err) }
@@ -5080,7 +5087,7 @@ fn test_page_list_resize_no_reflow_more_cols_forces_smaller_cap() {
 		for x in 0 .. int(s.cols) {
 			page.rows[y].cells[x] = CellData{
 				content_tag: .codepoint
-				codepoint: u32(`A`)
+				codepoint:   u32(`A`)
 			}
 		}
 	}
@@ -5174,8 +5181,8 @@ fn test_page_list_resize_no_reflow_more_cols_remaps_pins_in_backfill_path() {
 	// first page, so the tracked pin must move before the old page is destroyed.
 	tracked := s.track_pin(Pin{
 		node: second_page
-		x: 0
-		y: 0
+		x:    0
+		y:    0
 	})
 	marker := u32(`X`)
 	mut rac := tracked.row_and_cell()
@@ -5218,7 +5225,7 @@ fn test_page_list_resize_no_reflow_more_rows_adds_blank_rows_if_cursor_at_bottom
 	for y in 0 .. int(s.total_rows) {
 		page.rows[y].cells[0] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(y)
+			codepoint:   u32(y)
 		}
 	}
 
@@ -5241,7 +5248,7 @@ fn test_page_list_resize_no_reflow_more_rows_adds_blank_rows_if_cursor_at_bottom
 
 	// Resize with cursor preserved.
 	s.resize(PageResizeOpts{
-		rows: 10
+		rows:   10
 		reflow: false
 		cursor: PageResizeCursor{
 			x: 0
@@ -5288,7 +5295,7 @@ fn test_page_list_resize_reflow_more_cols_no_wrapped_rows() {
 		for x in 0 .. int(s.cols) {
 			page.rows[y].cells[x] = CellData{
 				content_tag: .codepoint
-				codepoint: u32(`A`)
+				codepoint:   u32(`A`)
 			}
 		}
 	}
@@ -5324,7 +5331,7 @@ fn test_page_list_resize_reflow_more_cols_wrapped_rows() {
 		for x in 0 .. int(s.cols) {
 			page.rows[y].cells[x] = CellData{
 				content_tag: .codepoint
-				codepoint: u32(`A`)
+				codepoint:   u32(`A`)
 			}
 		}
 	}
@@ -5375,7 +5382,7 @@ fn test_page_list_resize_reflow_invalidates_viewport_offset_cache() {
 		for x in 0 .. int(s.cols) {
 			page.rows[y].cells[x] = CellData{
 				content_tag: .codepoint
-				codepoint: u32(`A`)
+				codepoint:   u32(`A`)
 			}
 		}
 	}
@@ -5430,7 +5437,7 @@ fn test_page_list_resize_reflow_more_cols_creates_multiple_pages() {
 		}
 		page.rows[y].cells[0] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(`A`)
+			codepoint:   u32(`A`)
 		}
 	}
 
@@ -5464,7 +5471,7 @@ fn test_page_list_resize_reflow_more_cols_wrap_across_page_boundary() {
 	for x in 0 .. int(s.cols) {
 		first.data.rows[y0].cells[x] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(x)
+			codepoint:   u32(x)
 		}
 	}
 	mut last := s.pages.last or { return }
@@ -5472,7 +5479,7 @@ fn test_page_list_resize_reflow_more_cols_wrap_across_page_boundary() {
 	for x in 0 .. int(s.cols) {
 		last.data.rows[0].cells[x] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(x)
+			codepoint:   u32(x)
 		}
 	}
 	end_rows := s.total_rows - 1
@@ -5506,7 +5513,7 @@ fn test_page_list_resize_reflow_more_cols_wrap_across_page_boundary_cursor_in_se
 	for x in 0 .. int(s.cols) {
 		first.data.rows[y0].cells[x] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(x)
+			codepoint:   u32(x)
 		}
 	}
 	mut last := s.pages.last or { return }
@@ -5514,7 +5521,7 @@ fn test_page_list_resize_reflow_more_cols_wrap_across_page_boundary_cursor_in_se
 	for x in 0 .. int(s.cols) {
 		last.data.rows[0].cells[x] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(x)
+			codepoint:   u32(x)
 		}
 	}
 	tracked := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 1, y: 9 })) or { return })
@@ -5546,7 +5553,7 @@ fn test_page_list_resize_reflow_less_cols_wrap_across_page_boundary_cursor_in_se
 	for x in 0 .. int(s.cols) {
 		first.data.rows[y0].cells[x] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(x)
+			codepoint:   u32(x)
 		}
 	}
 	mut last := s.pages.last or { return }
@@ -5554,7 +5561,7 @@ fn test_page_list_resize_reflow_less_cols_wrap_across_page_boundary_cursor_in_se
 	for x in 0 .. int(s.cols) {
 		last.data.rows[0].cells[x] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(x)
+			codepoint:   u32(x)
 		}
 	}
 	tracked := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 2, y: 5 })) or { return })
@@ -5562,7 +5569,7 @@ fn test_page_list_resize_reflow_less_cols_wrap_across_page_boundary_cursor_in_se
 	assert tracked.y == 0
 
 	s.resize(PageResizeOpts{
-		cols: 4
+		cols:   4
 		reflow: true
 		cursor: PageResizeCursor{ x: 2, y: 5 }
 	}) or { panic(err) }
@@ -5617,7 +5624,7 @@ fn test_page_list_resize_grow_cols_with_unwrap_fixes_viewport_pin() {
 			for x in 0 .. int(s.cols) {
 				page.rows[y].cells[x] = CellData{
 					content_tag: .codepoint
-					codepoint: u32(`A`)
+					codepoint:   u32(`A`)
 				}
 			}
 		}
@@ -5663,7 +5670,7 @@ fn test_page_list_resize_reflow_more_cols_cursor_in_wrapped_row() {
 	for x in 0 .. int(s.cols) {
 		page.rows[0].cells[x] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(x)
+			codepoint:   u32(x)
 		}
 	}
 	// Row 1: wrap continuation.
@@ -5671,7 +5678,7 @@ fn test_page_list_resize_reflow_more_cols_cursor_in_wrapped_row() {
 	for x in 0 .. int(s.cols) {
 		page.rows[1].cells[x] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(x)
+			codepoint:   u32(x)
 		}
 	}
 
@@ -5708,14 +5715,14 @@ fn test_page_list_resize_reflow_more_cols_cursor_in_not_wrapped_row() {
 	for x in 0 .. int(s.cols) {
 		page.rows[0].cells[x] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(x)
+			codepoint:   u32(x)
 		}
 	}
 	page.rows[1].wrap_continuation = true
 	for x in 0 .. int(s.cols) {
 		page.rows[1].cells[x] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(x)
+			codepoint:   u32(x)
 		}
 	}
 
@@ -5752,7 +5759,7 @@ fn test_page_list_resize_reflow_more_cols_cursor_in_wrapped_row_that_isnt_unwrap
 	for x in 0 .. int(s.cols) {
 		page.rows[0].cells[x] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(x)
+			codepoint:   u32(x)
 		}
 	}
 	// Row 1: wrap + wrap_continuation.
@@ -5761,7 +5768,7 @@ fn test_page_list_resize_reflow_more_cols_cursor_in_wrapped_row_that_isnt_unwrap
 	for x in 0 .. int(s.cols) {
 		page.rows[1].cells[x] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(x)
+			codepoint:   u32(x)
 		}
 	}
 	// Row 2: wrap_continuation.
@@ -5769,7 +5776,7 @@ fn test_page_list_resize_reflow_more_cols_cursor_in_wrapped_row_that_isnt_unwrap
 	for x in 0 .. int(s.cols) {
 		page.rows[2].cells[x] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(x)
+			codepoint:   u32(x)
 		}
 	}
 
@@ -5829,7 +5836,7 @@ fn test_page_list_resize_reflow_less_cols_no_reflow_preserves_semantic_prompt() 
 	for x in 0 .. int(s.cols) {
 		page.rows[1].cells[x] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(x)
+			codepoint:   u32(x)
 		}
 	}
 
@@ -5914,7 +5921,7 @@ fn test_page_list_resize_reflow_less_cols_no_wrapped_rows() {
 		for x in 0 .. 4 {
 			page.rows[y].cells[x] = CellData{
 				content_tag: .codepoint
-				codepoint: u32(x)
+				codepoint:   u32(x)
 			}
 		}
 	}
@@ -5947,7 +5954,7 @@ fn test_page_list_resize_reflow_less_cols_wrapped_rows() {
 		for x in 0 .. int(s.cols) {
 			page.rows[y].cells[x] = CellData{
 				content_tag: .codepoint
-				codepoint: u32(x)
+				codepoint:   u32(x)
 			}
 		}
 	}
@@ -6005,10 +6012,10 @@ fn test_page_list_resize_reflow_preserves_hyperlink_mapping() {
 	mut page := &first.data
 	page.rows[0].cells[3] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`L`)
+		codepoint:   u32(`L`)
 	}
 	source_id := page.insert_hyperlink(Hyperlink{
-		id: HyperlinkExplicitId{
+		id:  HyperlinkExplicitId{
 			value: 'link-id'
 		}
 		uri: 'https://example.com/reflow'
@@ -6068,10 +6075,10 @@ fn test_page_list_resize_reflow_preserves_hyperlinks_across_source_pages() {
 	first_page.rows[1].wrap = true
 	first_page.rows[1].cells[1] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`A`)
+		codepoint:   u32(`A`)
 	}
 	first_id := first_page.insert_hyperlink(Hyperlink{
-		id: HyperlinkImplicitId{
+		id:  HyperlinkImplicitId{
 			offset: 1
 		}
 		uri: 'https://example.com/first'
@@ -6082,10 +6089,10 @@ fn test_page_list_resize_reflow_preserves_hyperlinks_across_source_pages() {
 	second_page.rows[0].wrap_continuation = true
 	second_page.rows[0].cells[0] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`B`)
+		codepoint:   u32(`B`)
 	}
 	second_id := second_page.insert_hyperlink(Hyperlink{
-		id: HyperlinkImplicitId{
+		id:  HyperlinkImplicitId{
 			offset: 2
 		}
 		uri: 'https://example.com/second'
@@ -6127,18 +6134,18 @@ fn test_page_list_resize_reflow_exceeds_hyperlink_memory_forcing_capacity_increa
 	y0 := usize(page0.size.rows) - 1
 	x0 := usize(page0.size.cols) - 1
 	first_id := page0.insert_hyperlink(Hyperlink{
-		id: HyperlinkImplicitId{ offset: 0 }
+		id:  HyperlinkImplicitId{ offset: 0 }
 		uri: uri
 	}) or { panic(err) }
 	page0.rows[y0].wrap = true
 	page0.rows[y0].cells[x0] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`X`)
+		codepoint:   u32(`X`)
 	}
 	page0.set_hyperlink(y0, x0, first_id) or { panic(err) }
 	mut first_error := ''
 	_ := page0.insert_hyperlink(Hyperlink{
-		id: HyperlinkImplicitId{ offset: 1 }
+		id:  HyperlinkImplicitId{ offset: 1 }
 		uri: 'AAAAAAAAAAAAAAAAAAAAAAAAAA'
 	}) or {
 		first_error = err.msg()
@@ -6149,18 +6156,18 @@ fn test_page_list_resize_reflow_exceeds_hyperlink_memory_forcing_capacity_increa
 	mut last := s.pages.last or { return }
 	mut page1 := &last.data
 	second_id := page1.insert_hyperlink(Hyperlink{
-		id: HyperlinkImplicitId{ offset: 1 }
+		id:  HyperlinkImplicitId{ offset: 1 }
 		uri: uri
 	}) or { panic(err) }
 	page1.rows[0].wrap_continuation = true
 	page1.rows[0].cells[0] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`X`)
+		codepoint:   u32(`X`)
 	}
 	page1.set_hyperlink(0, 0, second_id) or { panic(err) }
 	mut second_error := ''
 	_ := page1.insert_hyperlink(Hyperlink{
-		id: HyperlinkImplicitId{ offset: 2 }
+		id:  HyperlinkImplicitId{ offset: 2 }
 		uri: 'AAAAAAAAAAAAAAAAAAAAAAAAAA'
 	}) or {
 		second_error = err.msg()
@@ -6184,16 +6191,19 @@ fn test_page_list_resize_reflow_exceeds_style_memory_forcing_capacity_increase()
 	page0.rows[y0].styled = true
 	for x in 0 .. int(s.cols) {
 		style := CellStyle{
-			bg_color: .rgb
-			bg_r: u8(x)
-			bg_g: u8(x >> 8)
-			bg_b: u8(x >> 16)
+			bg_color: StyleColorRgb{
+				rgb: RGB{
+					r: u8(x)
+					g: u8(x >> 8)
+					b: u8(x >> 16)
+				}
+			}
 		}
 		id := page0.styles.add(style) or { break }
 		page0.rows[y0].cells[x] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(`X`)
-			style_id: id
+			codepoint:   u32(`X`)
+			style_id:    id
 		}
 	}
 
@@ -6203,16 +6213,19 @@ fn test_page_list_resize_reflow_exceeds_style_memory_forcing_capacity_increase()
 	page1.rows[0].styled = true
 	for x in 0 .. int(s.cols) {
 		style := CellStyle{
-			fg_color: .rgb
-			fg_r: u8(x)
-			fg_g: u8(x >> 8)
-			fg_b: u8(x >> 16)
+			fg_color: StyleColorRgb{
+				rgb: RGB{
+					r: u8(x)
+					g: u8(x >> 8)
+					b: u8(x >> 16)
+				}
+			}
 		}
 		id := page1.styles.add(style) or { break }
 		page1.rows[0].cells[x] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(`X`)
-			style_id: id
+			codepoint:   u32(`X`)
+			style_id:    id
 		}
 	}
 
@@ -6233,7 +6246,7 @@ fn test_page_list_resize_reflow_less_cols_cursor_in_wrapped_row() {
 		for x in 0 .. int(s.cols) {
 			page.rows[y].cells[x] = CellData{
 				content_tag: .codepoint
-				codepoint: u32(x)
+				codepoint:   u32(x)
 			}
 		}
 	}
@@ -6267,7 +6280,7 @@ fn reflow_cursor_cell_helper(init_cols u16, new_cols u16, pin_x u16, exp_x u32, 
 		for x in 0 .. 2 {
 			page.rows[y].cells[x] = CellData{
 				content_tag: .codepoint
-				codepoint: u32(x)
+				codepoint:   u32(x)
 			}
 		}
 	}
@@ -6316,7 +6329,7 @@ fn test_page_list_resize_reflow_less_cols_blank_lines() {
 	for x in 0 .. 4 {
 		page.rows[0].cells[x] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(x)
+			codepoint:   u32(x)
 		}
 	}
 
@@ -6352,7 +6365,7 @@ fn test_page_list_resize_reflow_less_cols_wrapped_rows_with_graphemes() {
 		for x in 0 .. int(s.cols) {
 			page.rows[y].cells[x] = CellData{
 				content_tag: .codepoint
-				codepoint: u32(x)
+				codepoint:   u32(x)
 			}
 		}
 		page.append_grapheme(y, 2, u32(`A`)) or { panic(err) }
@@ -6411,7 +6424,7 @@ fn test_page_list_resize_reflow_less_cols_cursor_goes_to_scrollback() {
 		for x in 0 .. int(s.cols) {
 			page.rows[y].cells[x] = CellData{
 				content_tag: .codepoint
-				codepoint: u32(x)
+				codepoint:   u32(x)
 			}
 		}
 	}
@@ -6451,8 +6464,8 @@ fn test_page_list_resize_reflow_less_cols_copy_style() {
 	for x in 0 .. int(s.cols) - 1 {
 		page.rows[0].cells[x] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(x)
-			style_id: style_id
+			codepoint:   u32(x)
+			style_id:    style_id
 		}
 		page.rows[0].styled = true
 		page.styles.use_style(style_id)
@@ -6489,13 +6502,13 @@ fn test_page_list_resize_reflow_less_cols_to_eliminate_a_wide_char() {
 	mut page := &first.data
 	page.rows[0].cells[0] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(0x1F600)
-		wide: .wide
+		codepoint:   u32(0x1F600)
+		wide:        .wide
 	}
 	page.rows[0].cells[1] = CellData{
 		content_tag: .codepoint
-		codepoint: 0
-		wide: .spacer_tail
+		codepoint:   0
+		wide:        .spacer_tail
 	}
 
 	s.resize(PageResizeOpts{ cols: 1, reflow: true }) or { panic(err) }
@@ -6523,17 +6536,17 @@ fn test_page_list_resize_reflow_less_cols_to_wrap_a_wide_char() {
 	mut page := &first.data
 	page.rows[0].cells[0] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`x`)
+		codepoint:   u32(`x`)
 	}
 	page.rows[0].cells[1] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(0x1F600)
-		wide: .wide
+		codepoint:   u32(0x1F600)
+		wide:        .wide
 	}
 	page.rows[0].cells[2] = CellData{
 		content_tag: .codepoint
-		codepoint: 0
-		wide: .spacer_tail
+		codepoint:   0
+		wide:        .spacer_tail
 	}
 
 	s.resize(PageResizeOpts{ cols: 2, reflow: true }) or { panic(err) }
@@ -6568,23 +6581,23 @@ fn test_page_list_resize_reflow_less_cols_to_wrap_a_multicodepoint_grapheme_with
 	graphemes := [u32(0x200D), u32(0x1F468), u32(0x200D), u32(0x1F466), u32(0x200D), u32(0x1F466)]
 	page.rows[0].cells[0] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(0x1F468)
-		wide: .wide
+		codepoint:   u32(0x1F468)
+		wide:        .wide
 	}
 	page.set_graphemes(0, 0, graphemes) or { panic(err) }
 	page.rows[0].cells[1] = CellData{
 		content_tag: .codepoint
-		wide: .spacer_tail
+		wide:        .spacer_tail
 	}
 	page.rows[0].cells[2] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(0x1F468)
-		wide: .wide
+		codepoint:   u32(0x1F468)
+		wide:        .wide
 	}
 	page.set_graphemes(0, 2, graphemes) or { panic(err) }
 	page.rows[0].cells[3] = CellData{
 		content_tag: .codepoint
-		wide: .spacer_tail
+		wide:        .spacer_tail
 	}
 
 	s.resize(PageResizeOpts{ cols: 3, reflow: true }) or { panic(err) }
@@ -6624,8 +6637,8 @@ fn test_page_list_resize_reflow_more_cols_unwrap_wide_spacer_head() {
 	page.rows[1].wrap_continuation = true
 	page.rows[1].cells[0] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(0x1F600)
-		wide: .wide
+		codepoint:   u32(0x1F600)
+		wide:        .wide
 	}
 	page.rows[1].cells[1] = CellData{ content_tag: .codepoint, wide: .spacer_tail }
 
@@ -6658,8 +6671,8 @@ fn test_page_list_resize_reflow_more_cols_unwrap_wide_spacer_head_across_two_row
 	page.rows[2].wrap_continuation = true
 	page.rows[2].cells[0] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(0x1F600)
-		wide: .wide
+		codepoint:   u32(0x1F600)
+		wide:        .wide
 	}
 	page.rows[2].cells[1] = CellData{ content_tag: .codepoint, wide: .spacer_tail }
 
@@ -6688,8 +6701,8 @@ fn test_page_list_resize_reflow_more_cols_unwrap_still_requires_wide_spacer_head
 	page.rows[1].wrap_continuation = true
 	page.rows[1].cells[0] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(0x1F600)
-		wide: .wide
+		codepoint:   u32(0x1F600)
+		wide:        .wide
 	}
 	page.rows[1].cells[1] = CellData{ content_tag: .codepoint, wide: .spacer_tail }
 
@@ -6792,7 +6805,7 @@ fn test_page_list_resize_reflow_grapheme_map_capacity_exceeded() {
 		y := start_row + i
 		page0.rows[y].cells[0] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(`A`)
+			codepoint:   u32(`A`)
 		}
 		page0.append_grapheme(y, 0, u32(0x0301)) or { panic(err) }
 	}
@@ -6807,7 +6820,7 @@ fn test_page_list_resize_reflow_grapheme_map_capacity_exceeded() {
 	for y in 0 .. count {
 		page1.rows[y].cells[0] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(`B`)
+			codepoint:   u32(`B`)
 		}
 		page1.append_grapheme(y, 0, u32(0x0302)) or { panic(err) }
 	}
@@ -6837,7 +6850,7 @@ fn test_page_list_resize_reflow_exceeds_grapheme_memory_forcing_capacity_increas
 	page0.rows[y0].wrap = true
 	page0.rows[y0].cells[x0] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`X`)
+		codepoint:   u32(`X`)
 	}
 	page0.set_graphemes(y0, x0, cps) or { panic(err) }
 
@@ -6846,7 +6859,7 @@ fn test_page_list_resize_reflow_exceeds_grapheme_memory_forcing_capacity_increas
 	page1.rows[0].wrap = true
 	page1.rows[0].cells[0] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`X`)
+		codepoint:   u32(`X`)
 	}
 	page1.set_graphemes(0, 0, cps) or { panic(err) }
 
@@ -6866,11 +6879,11 @@ fn test_page_list_resize_reflow_less_cols_blank_lines_between() {
 	for x in 0 .. 4 {
 		page.rows[0].cells[x] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(x)
+			codepoint:   u32(x)
 		}
 		page.rows[2].cells[x] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(x)
+			codepoint:   u32(x)
 		}
 	}
 
@@ -6909,11 +6922,11 @@ fn test_page_list_resize_reflow_less_cols_blank_lines_between_no_scrollback() {
 	mut page := &first.data
 	page.rows[0].cells[0] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`A`)
+		codepoint:   u32(`A`)
 	}
 	page.rows[2].cells[0] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`C`)
+		codepoint:   u32(`C`)
 	}
 
 	s.resize(PageResizeOpts{ cols: 2, reflow: true }) or { panic(err) }
@@ -6953,7 +6966,7 @@ fn test_page_list_resize_reflow_less_cols_cursor_not_on_last_line_preserves_loca
 		for x in 0 .. 2 {
 			page.rows[y].cells[x] = CellData{
 				content_tag: .codepoint
-				codepoint: u32(x)
+				codepoint:   u32(x)
 			}
 		}
 	}
@@ -6968,7 +6981,7 @@ fn test_page_list_resize_reflow_less_cols_cursor_not_on_last_line_preserves_loca
 	})
 
 	s.resize(PageResizeOpts{
-		cols: 4
+		cols:   4
 		reflow: true
 		cursor: PageResizeCursor{
 			x: 1
@@ -7001,32 +7014,32 @@ fn test_page_list_resize_reflow_less_cols_wraps_spacer_head() {
 	page.rows[0].wrap = true
 	page.rows[0].cells[0] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`x`)
+		codepoint:   u32(`x`)
 	}
 	page.rows[0].cells[1] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`x`)
+		codepoint:   u32(`x`)
 	}
 	page.rows[0].cells[2] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`x`)
+		codepoint:   u32(`x`)
 	}
 	page.rows[0].cells[3] = CellData{
 		content_tag: .codepoint
-		codepoint: 0
-		wide: .spacer_head
+		codepoint:   0
+		wide:        .spacer_head
 	}
 	// Row 1: wide emoji + spacer tail.
 	page.rows[1].wrap_continuation = true
 	page.rows[1].cells[0] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(0x1F600)
-		wide: .wide
+		codepoint:   u32(0x1F600)
+		wide:        .wide
 	}
 	page.rows[1].cells[1] = CellData{
 		content_tag: .codepoint
-		codepoint: 0
-		wide: .spacer_tail
+		codepoint:   0
+		wide:        .spacer_tail
 	}
 
 	s.resize(PageResizeOpts{ cols: 3, reflow: true }) or { panic(err) }
@@ -7248,7 +7261,7 @@ fn test_page_list_cell_iterator_precise() {
 		for x in u16(0) .. 2 {
 			page.rows[int(y)].cells[int(x)] = CellData{
 				content_tag: .codepoint
-				codepoint: u32(x)
+				codepoint:   u32(x)
 			}
 		}
 	}
@@ -7283,7 +7296,7 @@ fn test_page_list_cell_iterator_reverse_precise() {
 		for x in u16(0) .. 2 {
 			page.rows[int(y)].cells[int(x)] = CellData{
 				content_tag: .codepoint
-				codepoint: u32(x)
+				codepoint:   u32(x)
 			}
 		}
 	}
@@ -7453,9 +7466,9 @@ fn test_page_list_erase_rows_invalidates_viewport_offset_cache() {
 		y: u32(rows_to_erase - 1)
 	}))
 	assert s.scrollbar() == Scrollbar{
-		total: s.total_rows
+		total:  s.total_rows
 		offset: usize(pin_y - rows_to_erase)
-		len: usize(s.rows)
+		len:    usize(s.rows)
 	}
 }
 
@@ -7471,9 +7484,9 @@ fn test_page_list_erase_row_invalidates_viewport_offset_cache() {
 
 	s.erase_row(Point.new(.history, Coordinate{})) or { panic(err) }
 	assert s.scrollbar() == Scrollbar{
-		total: s.total_rows
+		total:  s.total_rows
 		offset: usize(pin_y - 1)
-		len: usize(s.rows)
+		len:    usize(s.rows)
 	}
 }
 
@@ -7489,9 +7502,9 @@ fn test_page_list_erase_row_bounded_invalidates_viewport_offset_cache() {
 
 	s.erase_row_bounded(Point.new(.history, Coordinate{}), 10) or { panic(err) }
 	assert s.scrollbar() == Scrollbar{
-		total: s.total_rows
+		total:  s.total_rows
 		offset: usize(pin_y - 1)
-		len: usize(s.rows)
+		len:    usize(s.rows)
 	}
 }
 
@@ -7509,9 +7522,9 @@ fn test_page_list_erase_row_bounded_multi_page_invalidates_viewport_offset_cache
 		panic(err)
 	}
 	assert s.scrollbar() == Scrollbar{
-		total: s.total_rows
+		total:  s.total_rows
 		offset: usize(pin_y - 1)
-		len: usize(s.rows)
+		len:    usize(s.rows)
 	}
 }
 
@@ -7529,9 +7542,9 @@ fn test_page_list_erase_row_bounded_full_page_shift_invalidates_viewport_offset_
 		panic(err)
 	}
 	assert s.scrollbar() == Scrollbar{
-		total: s.total_rows
+		total:  s.total_rows
 		offset: usize(pin_y - 1)
-		len: usize(s.rows)
+		len:    usize(s.rows)
 	}
 }
 
@@ -7550,9 +7563,9 @@ fn test_page_list_erase_row_bounded_exhausts_pages_invalidates_viewport_offset_c
 		panic(err)
 	}
 	assert s.scrollbar() == Scrollbar{
-		total: s.total_rows
+		total:  s.total_rows
 		offset: usize(pin_y - 1)
-		len: usize(s.rows)
+		len:    usize(s.rows)
 	}
 }
 
@@ -7751,8 +7764,8 @@ fn test_page_list_split_preserves_styled_cells() {
 		mut row := &page.rows[int(y)]
 		row.cells[0] = CellData{
 			content_tag: .codepoint
-			codepoint: u32(`S`)
-			style_id: style_id
+			codepoint:   u32(`S`)
+			style_id:    style_id
 		}
 		row.styled = true
 		page.styles.use_style(style_id)
@@ -7796,7 +7809,7 @@ fn test_page_list_split_preserves_grapheme_clusters() {
 	mut row6 := &page.rows[6]
 	row6.cells[0] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(0x1F468) // Man emoji
+		codepoint:   u32(0x1F468) // Man emoji
 	}
 	page.set_graphemes(6, 0, [u32(0x200D), u32(0x1F469)]) or { panic(err) }
 
@@ -7841,7 +7854,7 @@ fn test_page_list_split_preserves_hyperlinks() {
 
 	// Add a hyperlink to row 7 (will be row 2 in second page).
 	hyperlink_id := page.insert_hyperlink(Hyperlink{
-		id: HyperlinkImplicitId{
+		id:  HyperlinkImplicitId{
 			offset: 0
 		}
 		uri: 'https://example.com'
@@ -7849,7 +7862,7 @@ fn test_page_list_split_preserves_hyperlinks() {
 	mut row7 := &page.rows[7]
 	row7.cells[0] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`L`)
+		codepoint:   u32(`L`)
 	}
 	page.set_hyperlink(7, 0, hyperlink_id) or { panic(err) }
 

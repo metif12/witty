@@ -804,7 +804,6 @@ fn append_point_bytes(mapping &PointMap, point Coordinate, count int) {
 	}
 }
 
-
 // Terminal formatter formats the active terminal screen.
 //
 // This will always only emit data related to the currently active screen.
@@ -831,7 +830,7 @@ pub mut:
 	// Extra stuff to emit, such as terminal modes, palette, cursor, etc.
 	// This information is ONLY emitted when the format is "vt".
 	extra   TerminalExtra = terminal_extra_styles
-	pin_map &PinMap = unsafe { nil }
+	pin_map &PinMap       = unsafe { nil }
 }
 
 // Extra stuff to emit for terminal formatting.
@@ -920,10 +919,10 @@ fn (mut self TerminalExtra) set_bit(mask u16, enabled bool) {
 pub fn TerminalFormatter.init(t &Terminal, opts FormatOptions) TerminalFormatter {
 	return TerminalFormatter{
 		terminal: unsafe { t }
-		opts: opts
-		content: ScreenContent(ScreenContentSelection{ sel: none })
-		extra: terminal_extra_styles
-		pin_map: unsafe { nil }
+		opts:     opts
+		content:  ScreenContent(ScreenContentSelection{ sel: none })
+		extra:    terminal_extra_styles
+		pin_map:  unsafe { nil }
 	}
 }
 
@@ -1049,7 +1048,7 @@ pub mut:
 	content ScreenContent = ScreenContent(ScreenContentSelection{ sel: none })
 	// Extra stuff to emit, such as cursor, style, hyperlinks, etc.
 	// This information is ONLY emitted when the format is "vt".
-	extra   ScreenExtra = screen_extra_none
+	extra ScreenExtra = screen_extra_none
 	// If non-nil, then `pins` will contain the Pin of every byte written,
 	// offset by the byte index.
 	//
@@ -1161,10 +1160,10 @@ pub fn (self ScreenExtra) is_set() bool {
 
 pub fn ScreenFormatter.init(screen &Screen, opts FormatOptions) ScreenFormatter {
 	return ScreenFormatter{
-		screen: unsafe { screen }
-		opts: opts
+		screen:  unsafe { screen }
+		opts:    opts
 		content: ScreenContent(ScreenContentSelection{ sel: none })
-		extra: screen_extra_none
+		extra:   screen_extra_none
 		pin_map: unsafe { nil }
 	}
 }
@@ -1259,8 +1258,8 @@ pub fn (self PageListFormatter) format() string {
 				for point in point_map.points {
 					self.pin_map.pins << Pin{
 						node: chunk.node
-						x: u16(point.x)
-						y: u16(point.y)
+						x:    u16(point.x)
+						y:    u16(point.y)
 					}
 				}
 			}
@@ -1466,15 +1465,15 @@ pub:
 
 pub fn PageFormatter.init(page &Page, opts FormatOptions) PageFormatter {
 	return PageFormatter{
-		page: unsafe { page }
-		opts: opts
-		start_x: 0
-		start_y: 0
-		end_x: none
-		end_y: none
-		rectangle: false
+		page:           unsafe { page }
+		opts:           opts
+		start_x:        0
+		start_y:        0
+		end_x:          none
+		end_y:          none
+		rectangle:      false
 		trailing_state: none
-		point_map: unsafe { nil }
+		point_map:      unsafe { nil }
 	}
 }
 
@@ -1504,7 +1503,7 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 	if start_x >= page_cols {
 		return FormatResult{
 			output: ''
-			state: TrailingState{ rows: blank_rows, cells: blank_cells }
+			state:  TrailingState{ rows: blank_rows, cells: blank_cells }
 		}
 	}
 	end_x_unclamped := self.end_x or { page_cols - 1 }
@@ -1515,14 +1514,14 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 	if start_y >= page_rows {
 		return FormatResult{
 			output: ''
-			state: TrailingState{ rows: blank_rows, cells: blank_cells }
+			state:  TrailingState{ rows: blank_rows, cells: blank_cells }
 		}
 	}
 	end_y_unclamped := self.end_y or { page_rows - 1 }
 	if start_y > end_y_unclamped {
 		return FormatResult{
 			output: ''
-			state: TrailingState{ rows: blank_rows, cells: blank_cells }
+			state:  TrailingState{ rows: blank_rows, cells: blank_cells }
 		}
 	}
 	mut end_y := math.min(end_y_unclamped, page_rows - 1)
@@ -1545,7 +1544,7 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 	if start_y == end_y && start_x > end_x {
 		return FormatResult{
 			output: ''
-			state: TrailingState{ rows: blank_rows, cells: blank_cells }
+			state:  TrailingState{ rows: blank_rows, cells: blank_cells }
 		}
 	}
 
@@ -1818,7 +1817,7 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 
 	return FormatResult{
 		output: sb.str()
-		state: TrailingState{ rows: blank_rows, cells: blank_cells }
+		state:  TrailingState{ rows: blank_rows, cells: blank_cells }
 	}
 }
 
@@ -1891,16 +1890,18 @@ fn (self PageFormatter) cell_style(cell CellData) CellStyle {
 		}
 		.bg_color_palette {
 			CellStyle{
-				bg_color: .palette
-				bg_palette: cell.color_palette
+				bg_color: StyleColorPalette{ index: cell.color_palette }
 			}
 		}
 		.bg_color_rgb {
 			CellStyle{
-				bg_color: .rgb
-				bg_r: cell.color_rgb_r
-				bg_g: cell.color_rgb_g
-				bg_b: cell.color_rgb_b
+				bg_color: StyleColorRgb{
+					rgb: RGB{
+						r: cell.color_rgb_r
+						g: cell.color_rgb_g
+						b: cell.color_rgb_b
+					}
+				}
 			}
 		}
 	}
@@ -1974,50 +1975,56 @@ fn format_style_vt_with_palette(style CellStyle, palette ?[]RGB) string {
 
 	// Foreground color
 	match style.fg_color {
-		.palette {
+		StyleColorPalette {
+			idx := (style.fg_color as StyleColorPalette).index
 			if pal := palette {
-				rgb := pal[int(style.fg_palette)]
+				rgb := pal[int(idx)]
 				sb.write_string('\x1b[38;2;${rgb.r};${rgb.g};${rgb.b}m')
 			} else {
-				sb.write_string('\x1b[38;5;${style.fg_palette}m')
+				sb.write_string('\x1b[38;5;${idx}m')
 			}
 		}
-		.rgb {
-			sb.write_string('\x1b[38;2;${style.fg_r};${style.fg_g};${style.fg_b}m')
+		StyleColorRgb {
+			rgb := (style.fg_color as StyleColorRgb).rgb
+			sb.write_string('\x1b[38;2;${rgb.r};${rgb.g};${rgb.b}m')
 		}
-		.none {}
+		StyleColorNone {}
 	}
 
 	// Background color
 	match style.bg_color {
-		.palette {
+		StyleColorPalette {
+			idx := (style.bg_color as StyleColorPalette).index
 			if pal := palette {
-				rgb := pal[int(style.bg_palette)]
+				rgb := pal[int(idx)]
 				sb.write_string('\x1b[48;2;${rgb.r};${rgb.g};${rgb.b}m')
 			} else {
-				sb.write_string('\x1b[48;5;${style.bg_palette}m')
+				sb.write_string('\x1b[48;5;${idx}m')
 			}
 		}
-		.rgb {
-			sb.write_string('\x1b[48;2;${style.bg_r};${style.bg_g};${style.bg_b}m')
+		StyleColorRgb {
+			rgb := (style.bg_color as StyleColorRgb).rgb
+			sb.write_string('\x1b[48;2;${rgb.r};${rgb.g};${rgb.b}m')
 		}
-		.none {}
+		StyleColorNone {}
 	}
 
 	// Underline color
-	match style.underline_color_type {
-		.palette {
+	match style.underline_color {
+		StyleColorPalette {
+			idx := (style.underline_color as StyleColorPalette).index
 			if pal := palette {
-				rgb := pal[int(style.underline_palette)]
+				rgb := pal[int(idx)]
 				sb.write_string('\x1b[58;2;${rgb.r};${rgb.g};${rgb.b}m')
 			} else {
-				sb.write_string('\x1b[58;5;${style.underline_palette}m')
+				sb.write_string('\x1b[58;5;${idx}m')
 			}
 		}
-		.rgb {
-			sb.write_string('\x1b[58;2;${style.underline_r};${style.underline_g};${style.underline_b}m')
+		StyleColorRgb {
+			rgb := (style.underline_color as StyleColorRgb).rgb
+			sb.write_string('\x1b[58;2;${rgb.r};${rgb.g};${rgb.b}m')
 		}
-		.none {}
+		StyleColorNone {}
 	}
 
 	return sb.str()
@@ -2029,47 +2036,53 @@ fn format_style_html_with_palette(style CellStyle, palette ?[]RGB) string {
 
 	// Colors
 	match style.fg_color {
-		.palette {
+		StyleColorPalette {
+			idx := (style.fg_color as StyleColorPalette).index
 			if pal := palette {
-				rgb := pal[int(style.fg_palette)]
+				rgb := pal[int(idx)]
 				sb.write_string('color: rgb(${rgb.r}, ${rgb.g}, ${rgb.b});')
 			} else {
-				sb.write_string('color: var(--vt-palette-${style.fg_palette});')
+				sb.write_string('color: var(--vt-palette-${idx});')
 			}
 		}
-		.rgb {
-			sb.write_string('color: rgb(${style.fg_r}, ${style.fg_g}, ${style.fg_b});')
+		StyleColorRgb {
+			rgb := (style.fg_color as StyleColorRgb).rgb
+			sb.write_string('color: rgb(${rgb.r}, ${rgb.g}, ${rgb.b});')
 		}
-		.none {}
+		StyleColorNone {}
 	}
 
 	match style.bg_color {
-		.palette {
+		StyleColorPalette {
+			idx := (style.bg_color as StyleColorPalette).index
 			if pal := palette {
-				rgb := pal[int(style.bg_palette)]
+				rgb := pal[int(idx)]
 				sb.write_string('background-color: rgb(${rgb.r}, ${rgb.g}, ${rgb.b});')
 			} else {
-				sb.write_string('background-color: var(--vt-palette-${style.bg_palette});')
+				sb.write_string('background-color: var(--vt-palette-${idx});')
 			}
 		}
-		.rgb {
-			sb.write_string('background-color: rgb(${style.bg_r}, ${style.bg_g}, ${style.bg_b});')
+		StyleColorRgb {
+			rgb := (style.bg_color as StyleColorRgb).rgb
+			sb.write_string('background-color: rgb(${rgb.r}, ${rgb.g}, ${rgb.b});')
 		}
-		.none {}
+		StyleColorNone {}
 	}
-	match style.underline_color_type {
-		.palette {
+	match style.underline_color {
+		StyleColorPalette {
+			idx := (style.underline_color as StyleColorPalette).index
 			if pal := palette {
-				rgb := pal[int(style.underline_palette)]
+				rgb := pal[int(idx)]
 				sb.write_string('text-decoration-color: rgb(${rgb.r}, ${rgb.g}, ${rgb.b});')
 			} else {
-				sb.write_string('text-decoration-color: var(--vt-palette-${style.underline_palette});')
+				sb.write_string('text-decoration-color: var(--vt-palette-${idx});')
 			}
 		}
-		.rgb {
-			sb.write_string('text-decoration-color: rgb(${style.underline_r}, ${style.underline_g}, ${style.underline_b});')
+		StyleColorRgb {
+			rgb := (style.underline_color as StyleColorRgb).rgb
+			sb.write_string('text-decoration-color: rgb(${rgb.r}, ${rgb.g}, ${rgb.b});')
 		}
-		.none {}
+		StyleColorNone {}
 	}
 
 	// Text decoration line

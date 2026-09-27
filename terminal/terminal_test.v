@@ -74,8 +74,8 @@ fn create_test_terminal(cols u16, rows u16) !Terminal {
 // Helper: an active-area point, like ghostty's `.{ .active = .{ .x = x, .y = y } }`.
 fn active_point(x int, y int) Point {
 	return Point.new(.active, Coordinate{
-			x: u16(x)
-			y: u32(y)
+		x: u16(x)
+		y: u32(y)
 	})
 }
 
@@ -1839,10 +1839,11 @@ fn test_decaln_clears_non_color_attributes() {
 	assert !t.screens.active.cursor.style.flags.bold()
 	assert t.screens.active.cursor.style.flags.underline() == .none
 	style := cell_style_at(&t, 0, 0)
-	assert style.fg_color == .rgb
-	assert style.fg_r == 0x12
-	assert style.fg_g == 0x34
-	assert style.fg_b == 0x56
+	assert style.fg_color is StyleColorRgb
+	rgb := (style.fg_color as StyleColorRgb).rgb
+	assert rgb.r == 0x12
+	assert rgb.g == 0x34
+	assert rgb.b == 0x56
 	assert !style.flags.bold()
 	assert style.flags.underline() == .none
 }
@@ -1987,8 +1988,8 @@ fn test_full_reset_default_modes() {
 	mut defaults := build_default_modes()
 	defaults.data |= mode_mask(.grapheme_cluster)
 	mut t := Terminal.init(Options{
-		cols: 10
-		rows: 10
+		cols:          10
+		rows:          10
 		default_modes: defaults
 	}) or {
 		assert false
@@ -2515,17 +2516,19 @@ fn test_mode_47_copies_cursor_style_both_directions() {
 	t.switch_screen_mode(.mode_47, true) or { assert false }
 	assert t.screens.active_key == .alternate
 	assert t.screens.active.cursor.style_id != default_style_id
-	assert t.screens.active.cursor.style.fg_color == .rgb
-	assert t.screens.active.cursor.style.fg_r == 255
-	assert t.screens.active.cursor.style.fg_b == 127
+	assert t.screens.active.cursor.style.fg_color is StyleColorRgb
+	alt_rgb := (t.screens.active.cursor.style.fg_color as StyleColorRgb).rgb
+	assert alt_rgb.r == 255
+	assert alt_rgb.b == 127
 
 	t.set_attribute(SgrDirectColorFg{ rgb: RGB{ g: 255 } }) or { assert false }
 	t.switch_screen_mode(.mode_47, false) or { assert false }
 	assert t.screens.active_key == .primary
 	assert t.screens.active.cursor.style_id != default_style_id
-	assert t.screens.active.cursor.style.fg_color == .rgb
-	assert t.screens.active.cursor.style.fg_r == 0
-	assert t.screens.active.cursor.style.fg_g == 255
+	assert t.screens.active.cursor.style.fg_color is StyleColorRgb
+	primary_rgb := (t.screens.active.cursor.style.fg_color as StyleColorRgb).rgb
+	assert primary_rgb.r == 0
+	assert primary_rgb.g == 255
 }
 
 fn test_mode_1047_alt_screen_plain() {
@@ -2564,15 +2567,18 @@ fn test_mode_1047_copies_cursor_style_both_directions() {
 		assert false
 	}
 	t.switch_screen_mode(.mode_1047, true) or { assert false }
-	assert t.screens.active.cursor.style.fg_r == 255
-	assert t.screens.active.cursor.style.fg_b == 127
+	assert t.screens.active.cursor.style.fg_color is StyleColorRgb
+	alt_rgb := (t.screens.active.cursor.style.fg_color as StyleColorRgb).rgb
+	assert alt_rgb.r == 255
+	assert alt_rgb.b == 127
 
 	t.set_attribute(SgrDirectColorFg{ rgb: RGB{ g: 255 } }) or { assert false }
 	t.switch_screen_mode(.mode_1047, false) or { assert false }
 	assert t.screens.active_key == .primary
-	assert t.screens.active.cursor.style.fg_color == .rgb
-	assert t.screens.active.cursor.style.fg_r == 0
-	assert t.screens.active.cursor.style.fg_g == 255
+	assert t.screens.active.cursor.style.fg_color is StyleColorRgb
+	primary_rgb := (t.screens.active.cursor.style.fg_color as StyleColorRgb).rgb
+	assert primary_rgb.r == 0
+	assert primary_rgb.g == 255
 }
 
 fn test_mode_1049_alt_screen_plain() {

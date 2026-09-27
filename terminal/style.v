@@ -142,19 +142,29 @@ pub:
 // Returns true if the style is equal to another style.
 pub fn (self &CellStyle) eql(other &CellStyle) bool {
 	return self.flags.int() == other.flags.int()
-		&& style_color_eql(self.fg_color, self.fg_r, self.fg_g, self.fg_b, self.fg_palette, other.fg_color, other.fg_r, other.fg_g, other.fg_b, other.fg_palette)
-		&& style_color_eql(self.bg_color, self.bg_r, self.bg_g, self.bg_b, self.bg_palette, other.bg_color, other.bg_r, other.bg_g, other.bg_b, other.bg_palette)
-		&& style_color_eql(self.underline_color_type, self.underline_r, self.underline_g, self.underline_b, self.underline_palette, other.underline_color_type, other.underline_r, other.underline_g, other.underline_b, other.underline_palette)
+		&& self.fg_color.eql(other.fg_color) && self.bg_color.eql(other.bg_color)
+		&& self.underline_color.eql(other.underline_color)
 }
 
-fn style_color_eql(tag ColorType, r u8, g u8, b u8, palette u8, other_tag ColorType, other_r u8, other_g u8, other_b u8, other_palette u8) bool {
-	if tag != other_tag {
-		return false
+pub fn (self StyleColor) tag() ColorType {
+	return match self {
+		StyleColorNone { .none }
+		StyleColorPalette { .palette }
+		StyleColorRgb { .rgb }
 	}
-	return match tag {
-		.none { true }
-		.palette { palette == other_palette }
-		.rgb { r == other_r && g == other_g && b == other_b }
+}
+
+pub fn (self StyleColor) eql(other StyleColor) bool {
+	return match self {
+		StyleColorNone { other is StyleColorNone }
+		StyleColorPalette {
+			other is StyleColorPalette
+				&& (self as StyleColorPalette).index == (other as StyleColorPalette).index
+		}
+		StyleColorRgb {
+			other is StyleColorRgb
+				&& (self as StyleColorRgb).rgb.eql((other as StyleColorRgb).rgb)
+		}
 	}
 }
 
@@ -178,15 +188,9 @@ pub fn (self &CellStyle) bg(cell &CellData, palette [256]RGB) ?RGB {
 		}
 		else {
 			match self.bg_color {
-				.none { none }
-				.palette { palette[int(self.bg_palette)] }
-				.rgb {
-					RGB{
-						r: self.bg_r
-						g: self.bg_g
-						b: self.bg_b
-					}
-				}
+				StyleColorNone { none }
+				StyleColorPalette { palette[int((self.bg_color as StyleColorPalette).index)] }
+				StyleColorRgb { (self.bg_color as StyleColorRgb).rgb }
 			}
 		}
 	}
@@ -200,7 +204,7 @@ pub fn (self &CellStyle) fg(opts FgOpts) RGB {
 	// certain colors require more checks (e.g. `bold_is_bright`).
 
 	match self.fg_color {
-		.none {
+		StyleColorNone {
 			if self.flags.bold() {
 				if bold := opts.bold_color {
 					match bold {
@@ -211,8 +215,8 @@ pub fn (self &CellStyle) fg(opts FgOpts) RGB {
 			}
 			return opts.default_color
 		}
-		.palette {
-			idx := self.fg_palette
+		StyleColorPalette {
+			idx := (self.fg_color as StyleColorPalette).index
 			if self.flags.bold() {
 				if _ := opts.bold_color {
 					// bold_is_bright: if idx < 8, use bright variant
@@ -224,12 +228,8 @@ pub fn (self &CellStyle) fg(opts FgOpts) RGB {
 			}
 			return opts.palette[int(idx)]
 		}
-		.rgb {
-			rgb := RGB{
-				r: self.fg_r
-				g: self.fg_g
-				b: self.fg_b
-			}
+		StyleColorRgb {
+			rgb := (self.fg_color as StyleColorRgb).rgb
 			if self.flags.bold() && rgb.r == opts.default_color.r && rgb.g == opts.default_color.g
 				&& rgb.b == opts.default_color.b {
 				if bold := opts.bold_color {
@@ -246,16 +246,10 @@ pub fn (self &CellStyle) fg(opts FgOpts) RGB {
 
 // Returns the underline color for this style.
 pub fn (self &CellStyle) underline_color(palette [256]RGB) ?RGB {
-	return match self.underline_color_type {
-		.none { none }
-		.palette { palette[int(self.underline_palette)] }
-		.rgb {
-			RGB{
-				r: self.underline_r
-				g: self.underline_g
-				b: self.underline_b
-			}
-		}
+	return match self.underline_color {
+		StyleColorNone { none }
+		StyleColorPalette { palette[int((self.underline_color as StyleColorPalette).index)] }
+		StyleColorRgb { (self.underline_color as StyleColorRgb).rgb }
 	}
 }
 
@@ -269,20 +263,23 @@ pub fn (self &CellStyle) underline_color(palette [256]RGB) ?RGB {
 // explicitly preserves the same field layout without relying on V struct
 // padding or inactive tagged-union storage.
 pub fn (self &CellStyle) hash() u64 {
-	fg_data := style_color_data(self.fg_color, self.fg_r, self.fg_g, self.fg_b, self.fg_palette)
-	bg_data := style_color_data(self.bg_color, self.bg_r, self.bg_g, self.bg_b, self.bg_palette)
-	underline_data := style_color_data(self.underline_color_type, self.underline_r, self.underline_g, self.underline_b, self.underline_palette)
+	fg_data := self.fg_color.data()
+	bg_data := self.bg_color.data()
+	underline_data := self.underline_color.data()
 
-	low := u64(int(self.fg_color)) | (u64(int(self.bg_color)) << 8) | (u64(int(self.underline_color_type)) << 16) | (fg_data << 24) | ((bg_data & 0xffff) << 48)
+	low := u64(int(self.fg_color.tag())) | (u64(int(self.bg_color.tag())) << 8) | (u64(int(self.underline_color.tag())) << 16) | (fg_data << 24) | ((bg_data & 0xffff) << 48)
 	high := (bg_data >> 16) | (underline_data << 8) | (u64(self.flags.int()) << 32)
 	return internal_hash.int_u64(low ^ high)
 }
 
-fn style_color_data(tag ColorType, r u8, g u8, b u8, palette u8) u64 {
-	return match tag {
-		.none { u64(0) }
-		.palette { u64(palette) }
-		.rgb { u64(r) | (u64(g) << 8) | (u64(b) << 16) }
+fn (self StyleColor) data() u64 {
+	return match self {
+		StyleColorNone { u64(0) }
+		StyleColorPalette { u64((self as StyleColorPalette).index) }
+		StyleColorRgb {
+			rgb := (self as StyleColorRgb).rgb
+			u64(rgb.r) | (u64(rgb.g) << 8) | (u64(rgb.b) << 16)
+		}
 	}
 }
 

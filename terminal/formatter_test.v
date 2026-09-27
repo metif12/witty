@@ -4387,10 +4387,10 @@ fn test_cell_style_default() {
 			.none)
 	}.default() == false
 	assert CellStyle{
-		fg_color: .palette
+		fg_color: StyleColorPalette{}
 	}.default() == false
 	assert CellStyle{
-		bg_color: .rgb
+		bg_color: StyleColorRgb{}
 	}.default() == false
 }
 
@@ -4412,16 +4412,12 @@ fn test_format_style_vt() {
 
 	// Palette foreground color
 	assert format_style_vt(CellStyle{
-		fg_color:   .palette
-		fg_palette: 1
+		fg_color: StyleColorPalette{ index: 1 }
 	}) == '\x1b[0m\x1b[38;5;1m'
 
 	// RGB foreground color
 	assert format_style_vt(CellStyle{
-		fg_color: .rgb
-		fg_r:     0xab
-		fg_g:     0xcd
-		fg_b:     0xef
+		fg_color: StyleColorRgb{ rgb: RGB{ r: 0xab, g: 0xcd, b: 0xef } }
 	}) == '\x1b[0m\x1b[38;2;171;205;239m'
 }
 

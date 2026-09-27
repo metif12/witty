@@ -1792,7 +1792,7 @@ pub mut:
 }
 
 pub const semantic_prompt_disabled = SemanticPrompt{
-	seen: false
+	seen:  false
 	click: semantic_click_none
 }
 
@@ -1861,7 +1861,7 @@ pub mut:
 	semantic_content_clear_eol bool
 	// The pointers into the page list where the cursor is currently
 	// located. This makes it faster to move the cursor.
-	page_pin  &Pin  = unsafe { nil }
+	page_pin  &Pin      = unsafe { nil }
 	page_row  &RowData  = unsafe { nil }
 	page_cell &CellData = unsafe { nil }
 }
@@ -2666,7 +2666,7 @@ pub fn (mut self Screen) cursor_down_scroll() ! {
 
 		// Clear the new row so it gets our bg color. We only do this
 		// if we have a bg color at all.
-		if self.cursor.style.bg_color != .none {
+		if self.cursor.style.bg_color !is StyleColorNone {
 			mut page := &self.cursor.page_pin.node.data
 			mut cells := page.get_cells(self.cursor.page_row)
 			self.clear_cells(mut page, mut self.cursor.page_row, mut cells)
@@ -3450,8 +3450,8 @@ pub fn (mut self Screen) resize(opts ScreenResize) ! {
 	mut saved_cursor_pin := &Pin(unsafe { nil })
 	if sc := self.saved_cursor {
 		if pin := self.pages.pin(Point.new(.active, Coordinate{
-				x: u16(sc.x)
-				y: sc.y
+			x: u16(sc.x)
+			y: sc.y
 		}))
 		{
 			saved_cursor_pin = self.pages.track_pin(pin)
@@ -3619,17 +3619,13 @@ pub fn (mut self Screen) set_attribute(attr SgrAttribute) ! {
 			self.cursor.style.flags.set_underline(attr.style)
 		}
 		SgrUnderlineColor {
-			self.cursor.style.underline_color_type = .rgb
-			self.cursor.style.underline_r = attr.rgb.r
-			self.cursor.style.underline_g = attr.rgb.g
-			self.cursor.style.underline_b = attr.rgb.b
+			self.cursor.style.underline_color = StyleColorRgb{ rgb: attr.rgb }
 		}
 		SgrUnderlineColor256 {
-			self.cursor.style.underline_color_type = .palette
-			self.cursor.style.underline_palette = attr.idx
+			self.cursor.style.underline_color = StyleColorPalette{ index: attr.idx }
 		}
 		SgrResetUnderlineColor {
-			self.cursor.style.underline_color_type = .none
+			self.cursor.style.underline_color = StyleColorNone{}
 		}
 		SgrOverline {
 			self.cursor.style.flags.set_overline(true)
@@ -3662,46 +3658,34 @@ pub fn (mut self Screen) set_attribute(attr SgrAttribute) ! {
 			self.cursor.style.flags.set_strikethrough(false)
 		}
 		SgrDirectColorFg {
-			self.cursor.style.fg_color = .rgb
-			self.cursor.style.fg_r = attr.rgb.r
-			self.cursor.style.fg_g = attr.rgb.g
-			self.cursor.style.fg_b = attr.rgb.b
+			self.cursor.style.fg_color = StyleColorRgb{ rgb: attr.rgb }
 		}
 		SgrDirectColorBg {
-			self.cursor.style.bg_color = .rgb
-			self.cursor.style.bg_r = attr.rgb.r
-			self.cursor.style.bg_g = attr.rgb.g
-			self.cursor.style.bg_b = attr.rgb.b
+			self.cursor.style.bg_color = StyleColorRgb{ rgb: attr.rgb }
 		}
 		SgrFg8 {
-			self.cursor.style.fg_color = .palette
-			self.cursor.style.fg_palette = u8(attr.name)
+			self.cursor.style.fg_color = StyleColorPalette{ index: u8(attr.name) }
 		}
 		SgrBg8 {
-			self.cursor.style.bg_color = .palette
-			self.cursor.style.bg_palette = u8(attr.name)
+			self.cursor.style.bg_color = StyleColorPalette{ index: u8(attr.name) }
 		}
 		SgrResetFg {
-			self.cursor.style.fg_color = .none
+			self.cursor.style.fg_color = StyleColorNone{}
 		}
 		SgrResetBg {
-			self.cursor.style.bg_color = .none
+			self.cursor.style.bg_color = StyleColorNone{}
 		}
 		SgrBrightFg8 {
-			self.cursor.style.fg_color = .palette
-			self.cursor.style.fg_palette = u8(attr.name)
+			self.cursor.style.fg_color = StyleColorPalette{ index: u8(attr.name) }
 		}
 		SgrBrightBg8 {
-			self.cursor.style.bg_color = .palette
-			self.cursor.style.bg_palette = u8(attr.name)
+			self.cursor.style.bg_color = StyleColorPalette{ index: u8(attr.name) }
 		}
 		SgrFg256 {
-			self.cursor.style.fg_color = .palette
-			self.cursor.style.fg_palette = attr.idx
+			self.cursor.style.fg_color = StyleColorPalette{ index: attr.idx }
 		}
 		SgrBg256 {
-			self.cursor.style.bg_color = .palette
-			self.cursor.style.bg_palette = attr.idx
+			self.cursor.style.bg_color = StyleColorPalette{ index: attr.idx }
 		}
 		SgrUnknown {
 			return

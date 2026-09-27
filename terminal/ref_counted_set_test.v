@@ -326,8 +326,7 @@ fn test_rcs_robin_hood_displacement_updates_stored_psl() {
 	mut styles_by_bucket := [][]CellStyle{len: int(l.table_cap)}
 	for palette_index in 0 .. 256 {
 		style := CellStyle{
-			fg_color: .palette
-			fg_palette: u8(palette_index)
+			fg_color: StyleColorPalette{ index: u8(palette_index) }
 		}
 		bucket := int(style.hash() & u64(l.table_mask))
 		styles_by_bucket[bucket] << style

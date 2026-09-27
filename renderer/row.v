@@ -61,18 +61,15 @@ fn resolve_bg(cell terminal.CellData, s terminal.CellStyle, palette [256]termina
 			}
 		}
 		.codepoint, .codepoint_grapheme {
-			if s.bg_color == .palette {
-				return palette[s.bg_palette]
-			}
-			if s.bg_color == .rgb {
-				return terminal.RGB{
-					r: s.bg_r
-					g: s.bg_g
-					b: s.bg_b
+			match s.bg_color {
+				terminal.StyleColorNone { return none }
+				terminal.StyleColorPalette {
+					return palette[(s.bg_color as terminal.StyleColorPalette).index]
+				}
+				terminal.StyleColorRgb {
+					return (s.bg_color as terminal.StyleColorRgb).rgb
 				}
 			}
-			// .none -> default background
-			return none
 		}
 	}
 }

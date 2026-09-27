@@ -185,13 +185,13 @@ pub fn table(context cimgui.Context, style terminal.CellStyle, palette [256]term
 	}
 	draw_terminal_label(context, 'Foreground', 'The foreground (text) color')
 	context.table_set_column(1)
-	color(context, 'fg', style.fg_color, style.fg_palette, terminal.RGB{ r: style.fg_r, g: style.fg_g, b: style.fg_b }, palette, resolve_palette)
+	color(context, 'fg', style.fg_color, palette, resolve_palette)
 	draw_terminal_label(context, 'Background', 'The background (cell) color')
 	context.table_set_column(1)
-	color(context, 'bg', style.bg_color, style.bg_palette, terminal.RGB{ r: style.bg_r, g: style.bg_g, b: style.bg_b }, palette, resolve_palette)
+	color(context, 'bg', style.bg_color, palette, resolve_palette)
 	draw_terminal_label(context, 'Underline', 'The underline color, if underlines are enabled.')
 	context.table_set_column(1)
-	color(context, 'underline', style.underline_color_type, style.underline_palette, terminal.RGB{ r: style.underline_r, g: style.underline_g, b: style.underline_b }, palette, resolve_palette)
+	color(context, 'underline', style.underline_color, palette, resolve_palette)
 
 	draw_style_flag(context, style.flags.bold(), 'bold', 'Text will be rendered with bold weight.')
 	draw_style_flag(context, style.flags.italic(), 'italic', 'Text will be rendered in italic style.')
@@ -219,21 +219,22 @@ fn draw_style_flag(context cimgui.Context, enabled bool, name string, help strin
 }
 
 // color renders one source style color row.
-pub fn color(context cimgui.Context, id string, kind terminal.ColorType, palette_index u8, rgb terminal.RGB, palette [256]terminal.RGB, resolve_palette bool) {
+pub fn color(context cimgui.Context, id string, color terminal.StyleColor, palette [256]terminal.RGB, resolve_palette bool) {
 	context.push_id_str(id)
 	defer {
 		context.pop_id()
 	}
-	match kind {
-		.none { context.text('default') }
-		.palette {
-			context.text('Palette ${palette_index}')
+	match color {
+		terminal.StyleColorNone { context.text('default') }
+		terminal.StyleColorPalette {
+			idx := (color as terminal.StyleColorPalette).index
+			context.text('Palette ${idx}')
 			if resolve_palette {
-				context.color_edit3('color_fg', cimgui_color(palette[int(palette_index)]), cimgui.color_edit_flags_style)
+				context.color_edit3('color_fg', cimgui_color(palette[int(idx)]), cimgui.color_edit_flags_style)
 			}
 		}
-		.rgb {
-			context.color_edit3('color_fg', cimgui_color(rgb), cimgui.color_edit_flags_style)
+		terminal.StyleColorRgb {
+			context.color_edit3('color_fg', cimgui_color((color as terminal.StyleColorRgb).rgb), cimgui.color_edit_flags_style)
 		}
 	}
 }

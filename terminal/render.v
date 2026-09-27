@@ -227,24 +227,24 @@ struct RenderSelectionCache {
 // Initial state.
 pub fn RenderState.empty() RenderState {
 	return RenderState{
-		rows: 0
-		cols: 0
-		colors: RenderColors{
+		rows:     0
+		cols:     0
+		colors:   RenderColors{
 			cursor: none
 		}
-		cursor: RenderCursor{
-			active: Coordinate{}
-			viewport: none
-			cell: CellData{}
-			style: CellStyle{}
-			visual_style: .block
+		cursor:   RenderCursor{
+			active:         Coordinate{}
+			viewport:       none
+			cell:           CellData{}
+			style:          CellStyle{}
+			visual_style:   .block
 			password_input: false
-			visible: true
-			blinking: false
+			visible:        true
+			blinking:       false
 		}
 		row_data: []
-		dirty: .false_
-		screen: .primary
+		dirty:    .false_
+		screen:   .primary
 	}
 }
 
@@ -338,8 +338,8 @@ pub fn (mut self RenderState) update(mut t Terminal) {
 		if self.cursor.viewport == none && voidptr(row_pin.node) == voidptr(s.cursor.page_pin.node)
 			&& row_pin.y == s.cursor.page_pin.y {
 			self.cursor.viewport = ViewportPoint{
-				y: u16(y)
-				x: u16(s.cursor.x)
+				y:         u16(y)
+				x:         u16(s.cursor.x)
 				// Future: we should use our own state here to look this
 				// up rather than calling this.
 				wide_tail: if s.cursor.x > 0 {
@@ -437,16 +437,18 @@ pub fn (mut self RenderState) update(mut t Terminal) {
 				}
 				.bg_color_rgb {
 					self.row_data[y].cells[x].style = CellStyle{
-						bg_color: .rgb
-						bg_r:     page_cell.color_rgb_r
-						bg_g:     page_cell.color_rgb_g
-						bg_b:     page_cell.color_rgb_b
+						bg_color: StyleColorRgb{
+							rgb: RGB{
+								r: page_cell.color_rgb_r
+								g: page_cell.color_rgb_g
+								b: page_cell.color_rgb_b
+							}
+						}
 					}
 				}
 				.bg_color_palette {
 					self.row_data[y].cells[x].style = CellStyle{
-						bg_color:   .palette
-						bg_palette: page_cell.color_palette
+						bg_color: StyleColorPalette{ index: page_cell.color_palette }
 					}
 				}
 			}

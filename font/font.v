@@ -1876,11 +1876,7 @@ fn style_to_font_style(style terminal.CellStyle) Style {
 
 fn comparable_style(style terminal.CellStyle) terminal.CellStyle {
 	mut result := style
-	result.bg_color = .none
-	result.bg_r = 0
-	result.bg_g = 0
-	result.bg_b = 0
-	result.bg_palette = 0
+	result.bg_color = terminal.StyleColorNone{}
 	return result
 }
 

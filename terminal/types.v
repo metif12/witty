@@ -80,7 +80,7 @@ pub mut:
 pub fn CellData.init(cp u32) CellData {
 	return CellData{
 		content_tag: .codepoint
-		codepoint: cp
+		codepoint:   cp
 	}
 }
 
@@ -327,33 +327,33 @@ pub enum ColorType as u8 {
 	rgb
 }
 
+pub struct StyleColorNone {}
+
+pub struct StyleColorPalette {
+pub:
+	index u8
+}
+
+pub struct StyleColorRgb {
+pub:
+	rgb RGB
+}
+
+pub type StyleColor = StyleColorNone | StyleColorPalette | StyleColorRgb
+
 // CellStyle holds the complete style for a cell.
 pub struct CellStyle {
 pub mut:
 	flags           StyleFlags
-	fg_color        ColorType = .none
-	bg_color        ColorType = .none
-	underline_color_type ColorType = .none
-	fg_r            u8
-	fg_g            u8
-	fg_b            u8
-	bg_r            u8
-	bg_g            u8
-	bg_b            u8
-	fg_palette      u8
-	bg_palette      u8
-	// Dedicated underline-color storage, independent of the fg color.
-	// Ghostty stores this in a separate Style.underline_color Color union.
-	underline_r       u8
-	underline_g       u8
-	underline_b       u8
-	underline_palette u8
+	fg_color        StyleColor = StyleColorNone{}
+	bg_color        StyleColor = StyleColorNone{}
+	underline_color StyleColor = StyleColorNone{}
 }
 
 // Returns true if this is the default (empty) style.
 pub fn (self &CellStyle) default() bool {
-	return self.flags.int() == 0 && self.fg_color == .none && self.bg_color == .none
-		&& self.underline_color_type == .none
+	return self.flags.int() == 0 && self.fg_color is StyleColorNone
+		&& self.bg_color is StyleColorNone && self.underline_color is StyleColorNone
 }
 
 // Returns a blank cell with the background color of this style.
@@ -362,21 +362,23 @@ pub fn (self &CellStyle) default() bool {
 // cell tagged as background-only content, so no style-map lookup is needed.
 pub fn (self &CellStyle) bg_cell() ?CellData {
 	return match self.bg_color {
-		.none {
+		StyleColorNone {
 			none
 		}
-		.palette {
+		StyleColorPalette {
+			color := self.bg_color as StyleColorPalette
 			CellData{
-				content_tag: .bg_color_palette
-				color_palette: self.bg_palette
+				content_tag:   .bg_color_palette
+				color_palette: color.index
 			}
 		}
-		.rgb {
+		StyleColorRgb {
+			color := self.bg_color as StyleColorRgb
 			CellData{
 				content_tag: .bg_color_rgb
-				color_rgb_r: self.bg_r
-				color_rgb_g: self.bg_g
-				color_rgb_b: self.bg_b
+				color_rgb_r: color.rgb.r
+				color_rgb_g: color.rgb.g
+				color_rgb_b: color.rgb.b
 			}
 		}
 	}

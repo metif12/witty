@@ -9,7 +9,6 @@ module terminal
 
 import math
 
-
 // ============================================================
 // VirtualPlacement - a virtual placement in the terminal
 // ============================================================
@@ -173,15 +172,15 @@ pub fn (self &VirtualPlacement) render_placement(storage &ImageStorage, img &Ima
 	}
 
 	return RenderPlacement{
-		top_left: self.pin
-		offset_x: u32(math.round(dest_x_offset * p_x_scale))
-		offset_y: u32(math.round(dest_y_offset * p_y_scale))
-		source_x: u32(math.round(src_x))
-		source_y: u32(math.round(src_y))
-		source_width: u32(math.round(src_width))
+		top_left:      self.pin
+		offset_x:      u32(math.round(dest_x_offset * p_x_scale))
+		offset_y:      u32(math.round(dest_y_offset * p_y_scale))
+		source_x:      u32(math.round(src_x))
+		source_y:      u32(math.round(src_y))
+		source_width:  u32(math.round(src_width))
 		source_height: u32(math.round(src_height))
-		dest_width: u32(math.round(dest_width))
-		dest_height: u32(math.round(dest_height))
+		dest_width:    u32(math.round(dest_width))
+		dest_height:   u32(math.round(dest_height))
 	}
 }
 
@@ -197,7 +196,7 @@ fn (self &VirtualPlacement) grid(storage &ImageStorage, image &Image, cell_width
 	// If no ID, then we find the first virtual placement for this image.
 	p := if self.placement_id > 0 {
 		storage.get_placement(PlacementKey{
-			image_id: self.image_id
+			image_id:     self.image_id
 			placement_id: PlacementId.init(.external, self.placement_id)
 		}) or {
 			return error('PlacementMissingPlacement')
@@ -268,8 +267,8 @@ fn IncompletePlacement.init(row &Pin, cell &CellData) IncompletePlacement {
 	style := row.style(cell)
 
 	mut result := IncompletePlacement{
-		pin: *row
-		image_id_low: color_to_id(style.fg_color, style.fg_palette, style.fg_r, style.fg_g, style.fg_b)
+		pin:          *row
+		image_id_low: color_to_id(style.fg_color)
 		placement_id: fn_placement_id(style)
 	}
 
@@ -355,27 +354,28 @@ fn (self &IncompletePlacement) complete() VirtualPlacement {
 	high := u32(self.image_id_high or { 0 })
 
 	return VirtualPlacement{
-		pin: self.pin
-		image_id: low | (high << 24)
+		pin:          self.pin
+		image_id:     low | (high << 24)
 		placement_id: self.placement_id or { 0 }
-		col: self.col or { 0 }
-		row: self.row or { 0 }
-		width: self.width
-		height: 1
+		col:          self.col or { 0 }
+		row:          self.row or { 0 }
+		width:        self.width
+		height:       1
 	}
 }
 
 // Convert a style color to a Kitty image protocol ID. This works by
 // taking the 24 most significant bits of the color, which lets it work
 // for both palette and rgb-based colors.
-fn color_to_id(ct ColorType, palette u8, r u8, g u8, b u8) u32 {
-	return match ct {
-		.none { u32(0) }
-		.palette { u32(palette) }
-		.rgb {
-			r32 := u32(r)
-			g32 := u32(g)
-			b32 := u32(b)
+fn color_to_id(color StyleColor) u32 {
+	return match color {
+		StyleColorNone { u32(0) }
+		StyleColorPalette { u32((color as StyleColorPalette).index) }
+		StyleColorRgb {
+			rgb := (color as StyleColorRgb).rgb
+			r32 := u32(rgb.r)
+			g32 := u32(rgb.g)
+			b32 := u32(rgb.b)
 			(r32 << 16) | (g32 << 8) | b32
 		}
 	}
@@ -383,7 +383,7 @@ fn color_to_id(ct ColorType, palette u8, r u8, g u8, b u8) u32 {
 
 // Get placement ID from underline color (if set).
 fn fn_placement_id(style CellStyle) ?u32 {
-	id := color_to_id(style.underline_color_type, style.underline_palette, style.underline_r, style.underline_g, style.underline_b)
+	id := color_to_id(style.underline_color)
 	if id != 0 {
 		return id
 	}

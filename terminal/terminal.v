@@ -1715,7 +1715,7 @@ pub struct Options {
 pub:
 	cols           u16
 	rows           u16
-	max_scrollback usize = 10_000
+	max_scrollback usize  = 10_000
 	colors         Colors = terminal.colors_default
 
 	// The default mode state. When the terminal gets a reset, it
@@ -1908,25 +1908,25 @@ pub fn Terminal.init(opts Options) !Terminal {
 	rows := opts.rows
 
 	mut screen_set := ScreenSet.init(ScreenOptions{
-		cols: u32(cols)
-		rows: u32(rows)
+		cols:           u32(cols)
+		rows:           u32(rows)
 		max_scrollback: opts.max_scrollback
 	})!
 
 	return Terminal{
-		cols: cols
-		rows: rows
-		screens: screen_set
-		tabstops: Tabstops.init(usize(cols), terminal.tabstop_interval)!
+		cols:             cols
+		rows:             rows
+		screens:          screen_set
+		tabstops:         Tabstops.init(usize(cols), terminal.tabstop_interval)!
 		scrolling_region: ScrollingRegion{
-			top: 0
+			top:    0
 			bottom: rows - 1
-			left: 0
-			right: cols - 1
+			left:   0
+			right:  cols - 1
 		}
-		colors: opts.colors
-		modes: ModeState{
-			values: opts.default_modes
+		colors:           opts.colors
+		modes:            ModeState{
+			values:  opts.default_modes
 			default: opts.default_modes
 		}
 	}
@@ -2382,7 +2382,7 @@ fn (mut self Terminal) print_cell(unmapped_c u32, wide CellWide) {
 			semantic_content: self.screens.active.cursor.semantic_content
 			// The page's hyperlink map still holds the prior link until
 			// it is replaced or cleared below.
-			has_hyperlink: had_hyperlink
+			has_hyperlink:    had_hyperlink
 		}
 	}
 
@@ -2736,13 +2736,13 @@ enum WrapMode as u8 {
 // was already saved it is overwritten.
 pub fn (mut self Terminal) save_cursor() {
 	self.screens.active.saved_cursor = SavedCursor{
-		x: self.screens.active.cursor.x
-		y: self.screens.active.cursor.y
-		style: self.screens.active.cursor.style
+		x:            self.screens.active.cursor.x
+		y:            self.screens.active.cursor.y
+		style:        self.screens.active.cursor.style
 		is_protected: self.screens.active.cursor.is_protected
 		pending_wrap: self.screens.active.cursor.pending_wrap
-		origin: self.modes.get(.origin)
-		charset: self.screens.active.charset
+		origin:       self.modes.get(.origin)
+		charset:      self.screens.active.charset
 	}
 }
 
@@ -2967,14 +2967,14 @@ pub fn (mut self Terminal) index() ! {
 		}
 
 		// Slow path for left and right scrolling region margins.
-		if self.scrolling_region.left != 0 || self.scrolling_region.right != self.cols - 1
-			// PERF(mitchellh): If we have an SGR background set then
-			// we need to preserve that background in our erased rows.
-			// scrollUp does that but eraseRowBounded below does not.
-			// However, scrollUp is WAY slower. We should optimize this
-			// case to work in the eraseRowBounded codepath and remove
-			// this check.
-			 || !screen.blank_cell().is_zero() {
+		if self.scrolling_region.left != 0 || self.scrolling_region.right != self.cols - 1 ||
+		// PERF(mitchellh): If we have an SGR background set then
+		// we need to preserve that background in our erased rows.
+		// scrollUp does that but eraseRowBounded below does not.
+		// However, scrollUp is WAY slower. We should optimize this
+		// case to work in the eraseRowBounded codepath and remove
+		// this check.
+		!screen.blank_cell().is_zero() {
 			self.scroll_up(1)!
 			return
 		}
@@ -2986,7 +2986,7 @@ pub fn (mut self Terminal) index() ! {
 		old_cursor := screen.cursor
 
 		screen.pages.erase_row_bounded(Point.new(.active, Coordinate{
-				y: self.scrolling_region.top
+			y: self.scrolling_region.top
 		}), usize(self.scrolling_region.bottom - self.scrolling_region.top))!
 
 		// eraseRow and eraseRowBounded will end up moving the cursor pin
@@ -3915,15 +3915,7 @@ pub fn (mut self Terminal) decaln() ! {
 	old_style := self.screens.active.cursor.style
 	self.screens.active.cursor.style = CellStyle{
 		fg_color: old_style.fg_color
-		fg_r: old_style.fg_r
-		fg_g: old_style.fg_g
-		fg_b: old_style.fg_b
-		fg_palette: old_style.fg_palette
 		bg_color: old_style.bg_color
-		bg_r: old_style.bg_r
-		bg_g: old_style.bg_g
-		bg_b: old_style.bg_b
-		bg_palette: old_style.bg_palette
 	}
 	self.screens.active.manual_style_update() or {
 		self.screens.active.cursor.style = old_style
@@ -3932,10 +3924,10 @@ pub fn (mut self Terminal) decaln() ! {
 
 	// Reset margins, also sets cursor to top-left
 	self.scrolling_region = ScrollingRegion{
-		top: 0
+		top:    0
 		bottom: self.rows - 1
-		left: 0
-		right: self.cols - 1
+		left:   0
+		right:  self.cols - 1
 	}
 
 	// Origin mode is disabled
@@ -3955,9 +3947,9 @@ pub fn (mut self Terminal) decaln() ! {
 		cols := int(page.size.cols)
 		for x in 0 .. cols {
 			row.cells[x] = CellData{
-				content_tag: .codepoint
-				codepoint:   u32(`E`)
-				style_id:    self.screens.active.cursor.style_id
+				content_tag:  .codepoint
+				codepoint:    u32(`E`)
+				style_id:     self.screens.active.cursor.style_id
 				// DECALN does not respect protected state. Verified with xterm.
 				is_protected: false
 			}
@@ -4038,9 +4030,9 @@ pub fn (mut self Terminal) print_attributes() !string {
 	}
 
 	match pen.fg_color {
-		.none {}
-		.palette {
-			idx := pen.fg_palette
+		StyleColorNone {}
+		StyleColorPalette {
+			idx := (pen.fg_color as StyleColorPalette).index
 			if idx >= 16 {
 				result.write_string(';38:5:${idx}')
 			} else if idx >= 8 {
@@ -4049,12 +4041,15 @@ pub fn (mut self Terminal) print_attributes() !string {
 				result.write_string(';3${idx}')
 			}
 		}
-		.rgb { result.write_string(';38:2::${pen.fg_r}:${pen.fg_g}:${pen.fg_b}') }
+		StyleColorRgb {
+			rgb := (pen.fg_color as StyleColorRgb).rgb
+			result.write_string(';38:2::${rgb.r}:${rgb.g}:${rgb.b}')
+		}
 	}
 	match pen.bg_color {
-		.none {}
-		.palette {
-			idx := pen.bg_palette
+		StyleColorNone {}
+		StyleColorPalette {
+			idx := (pen.bg_color as StyleColorPalette).index
 			if idx >= 16 {
 				result.write_string(';48:5:${idx}')
 			} else if idx >= 8 {
@@ -4063,7 +4058,10 @@ pub fn (mut self Terminal) print_attributes() !string {
 				result.write_string(';4${idx}')
 			}
 		}
-		.rgb { result.write_string(';48:2::${pen.bg_r}:${pen.bg_g}:${pen.bg_b}') }
+		StyleColorRgb {
+			rgb := (pen.bg_color as StyleColorRgb).rgb
+			result.write_string(';48:2::${rgb.r}:${rgb.g}:${rgb.b}')
+		}
 	}
 
 	return result.str()
@@ -4117,17 +4115,17 @@ pub fn (mut self Terminal) resize(cols u16, rows u16) ! {
 	// Resize primary screen, which supports reflow.
 	mut primary := self.screens.get(.primary) or { panic('primary screen must be initialized') }
 	primary.resize(ScreenResize{
-		cols: u32(cols)
-		rows: u32(rows)
-		reflow: self.modes.get(.wraparound)
+		cols:          u32(cols)
+		rows:          u32(rows)
+		reflow:        self.modes.get(.wraparound)
 		prompt_redraw: self.flags.shell_redraws_prompt()
 	})!
 
 	// Alternate screen, if it exists, doesn't reflow.
 	if mut alternate := self.screens.get(.alternate) {
 		alternate.resize(ScreenResize{
-			cols: u32(cols)
-			rows: u32(rows)
+			cols:   u32(cols)
+			rows:   u32(rows)
 			reflow: false
 		})!
 	}
@@ -4141,10 +4139,10 @@ pub fn (mut self Terminal) resize(cols u16, rows u16) ! {
 
 	// Reset the scrolling region
 	self.scrolling_region = ScrollingRegion{
-		top: 0
+		top:    0
 		bottom: rows - 1
-		left: 0
-		right: cols - 1
+		left:   0
+		right:  cols - 1
 	}
 }
 
@@ -4194,9 +4192,9 @@ pub fn (mut self Terminal) switch_screen(key ScreenKey) !SwitchScreenResult {
 	// Get or initialize the new screen.
 	mut new := self.screens.get(key) or {
 		self.screens.get_init(key, ScreenOptions{
-			cols: u32(self.cols)
-			rows: u32(self.rows)
-			max_scrollback: if key == .primary {
+			cols:                      u32(self.cols)
+			rows:                      u32(self.rows)
+			max_scrollback:            if key == .primary {
 				primary := self.screens.get(.primary) or {
 					panic('primary screen must be initialized')
 				}
@@ -4334,10 +4332,10 @@ pub fn (mut self Terminal) full_reset() {
 	self.pwd = ''
 	self.status_display = .main
 	self.scrolling_region = ScrollingRegion{
-		top: 0
+		top:    0
 		bottom: self.rows - 1
-		left: 0
-		right: self.cols - 1
+		left:   0
+		right:  self.cols - 1
 	}
 
 	// Always mark dirty so we redraw everything

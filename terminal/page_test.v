@@ -16,8 +16,8 @@ fn test_packed_cell_enum_storage() {
 // Test that a page can be initialized.
 fn test_page_init() {
 	mut page := Page.init(PageCapacity{
-		cols: 120
-		rows: 80
+		cols:   120
+		rows:   80
 		styles: 32
 	})
 	defer {
@@ -30,8 +30,8 @@ fn test_page_init() {
 
 fn test_page_pause_integrity_checks_is_nested() {
 	mut page := Page.init(PageCapacity{
-		cols: 3
-		rows: 2
+		cols:   3
+		rows:   2
 		styles: 8
 	})
 	defer {
@@ -60,8 +60,8 @@ fn test_cell_is_zero_by_default() {
 // Test reading and writing cells.
 fn test_page_read_and_write_cells() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -87,8 +87,8 @@ fn test_page_read_and_write_cells() {
 // Test appending small graphemes.
 fn test_page_append_grapheme_small() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -134,8 +134,8 @@ fn test_page_append_grapheme_small() {
 // Test appending graphemes larger than chunk.
 fn test_page_append_grapheme_larger_than_chunk() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -168,8 +168,8 @@ fn test_page_append_grapheme_larger_than_chunk() {
 // Test clearing graphemes when not all cells have them.
 fn test_page_clear_grapheme_not_all_cells() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -205,8 +205,8 @@ fn test_page_clear_grapheme_not_all_cells() {
 // Test cloning a page.
 fn test_page_clone() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -262,8 +262,8 @@ fn test_page_clone() {
 // Test cloning a page with graphemes.
 fn test_page_clone_graphemes() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -301,8 +301,8 @@ fn test_page_clone_graphemes() {
 // Test cloning a page with styles.
 fn test_page_clone_styles() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -352,8 +352,8 @@ fn test_page_clone_styles() {
 
 fn test_page_clone_preserves_inline_managed_values() {
 	mut page := Page.init(PageCapacity{
-		cols: 2
-		rows: 1
+		cols:   2
+		rows:   1
 		styles: 8
 	})
 	defer { page.deinit() }
@@ -367,7 +367,7 @@ fn test_page_clone_preserves_inline_managed_values() {
 		return
 	}
 	link := Hyperlink{
-		id: HyperlinkExplicitId{
+		id:  HyperlinkExplicitId{
 			value: 'clone-inline'
 		}
 		uri: 'https://example.com/clone-inline'
@@ -376,8 +376,8 @@ fn test_page_clone_preserves_inline_managed_values() {
 	page.rows[0].styled = true
 	page.rows[0].cells[0] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`x`)
-		style_id: style_id
+		codepoint:   u32(`x`)
+		style_id:    style_id
 	}
 	page.set_hyperlink(0, 0, link_id) or { panic(err) }
 
@@ -395,8 +395,8 @@ fn test_page_clone_preserves_inline_managed_values() {
 // Test cloneFrom (copy between pages).
 fn test_page_clone_from() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -415,8 +415,8 @@ fn test_page_clone_from() {
 
 	// Clone
 	mut page2 := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -456,8 +456,8 @@ fn test_page_clone_from() {
 // Test cloneFrom with shrunk columns.
 fn test_page_clone_from_shrink_columns() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -476,8 +476,8 @@ fn test_page_clone_from_shrink_columns() {
 
 	// Clone into smaller page.
 	mut page2 := Page.init(PageCapacity{
-		cols: 5
-		rows: 10
+		cols:   5
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -497,8 +497,8 @@ fn test_page_clone_from_shrink_columns() {
 // Test cloneFrom with partial range.
 fn test_page_clone_from_partial() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -517,8 +517,8 @@ fn test_page_clone_from_partial() {
 
 	// Clone only first 5 rows.
 	mut page2 := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -542,8 +542,8 @@ fn test_page_clone_from_partial() {
 // Test cloneFrom with graphemes.
 fn test_page_clone_from_graphemes() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -563,8 +563,8 @@ fn test_page_clone_from_graphemes() {
 
 	// Clone.
 	mut page2 := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -620,8 +620,8 @@ fn test_page_clone_from_graphemes() {
 // Test cloneFrom frees destination graphemes.
 fn test_page_clone_from_frees_dst_graphemes() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -638,8 +638,8 @@ fn test_page_clone_from_frees_dst_graphemes() {
 
 	// Create page2 with graphemes.
 	mut page2 := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -671,8 +671,8 @@ fn test_page_clone_from_frees_dst_graphemes() {
 // Test clone_partial_row_from.
 fn test_page_clone_row_from_partial() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -693,8 +693,8 @@ fn test_page_clone_row_from_partial() {
 
 	// Clone partial row (cols 2..8).
 	mut page2 := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -716,8 +716,8 @@ fn test_page_clone_row_from_partial() {
 // Test clone_partial_row_from with grapheme in non-copied source region.
 fn test_page_clone_row_from_partial_grapheme_in_non_copied_source_region() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -742,8 +742,8 @@ fn test_page_clone_row_from_partial_grapheme_in_non_copied_source_region() {
 
 	// Clone partial row (cols 2..8).
 	mut page2 := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -768,8 +768,8 @@ fn test_page_clone_row_from_partial_grapheme_in_non_copied_source_region() {
 // Test clone_partial_row_from with grapheme in non-copied dest region.
 fn test_page_clone_row_from_partial_grapheme_in_non_copied_dest_region() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -791,8 +791,8 @@ fn test_page_clone_row_from_partial_grapheme_in_non_copied_dest_region() {
 
 	// Create destination page with graphemes at cols 0 and 9.
 	mut page2 := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -830,8 +830,8 @@ fn test_page_clone_row_from_partial_grapheme_in_non_copied_dest_region() {
 // Test moveCells with text-only rows.
 fn test_page_move_cells_text_only() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -866,8 +866,8 @@ fn test_page_move_cells_text_only() {
 // Test moveCells with graphemes.
 fn test_page_move_cells_graphemes() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -909,22 +909,22 @@ fn test_page_move_cells_graphemes() {
 
 fn test_page_clone_partial_row_marks_kitty_virtual_placeholder() {
 	mut src := Page.init(PageCapacity{
-		cols: 4
-		rows: 2
+		cols:   4
+		rows:   2
 		styles: 8
 	})
 	defer { src.deinit() }
 	src.size.rows = 2
 	src.rows[0].cells[2] = CellData{
 		content_tag: .codepoint
-		codepoint: kitty_unicode_placeholder
+		codepoint:   kitty_unicode_placeholder
 	}
 	src.set_graphemes(0, 2, [u32(0x0305)]) or { panic(err) }
 	src.rows[0].kitty_virtual_placeholder = true
 
 	mut dst := Page.init(PageCapacity{
-		cols: 4
-		rows: 2
+		cols:   4
+		rows:   2
 		styles: 8
 	})
 	defer { dst.deinit() }
@@ -937,15 +937,15 @@ fn test_page_clone_partial_row_marks_kitty_virtual_placeholder() {
 
 fn test_page_move_cells_marks_kitty_virtual_placeholder() {
 	mut page := Page.init(PageCapacity{
-		cols: 4
-		rows: 2
+		cols:   4
+		rows:   2
 		styles: 8
 	})
 	defer { page.deinit() }
 	page.size.rows = 2
 	page.rows[0].cells[1] = CellData{
 		content_tag: .codepoint
-		codepoint: kitty_unicode_placeholder
+		codepoint:   kitty_unicode_placeholder
 	}
 	page.set_graphemes(0, 1, [u32(0x0305)]) or { panic(err) }
 	page.rows[0].kitty_virtual_placeholder = true
@@ -960,8 +960,8 @@ fn test_page_move_cells_marks_kitty_virtual_placeholder() {
 // Test verifyIntegrity with good graphemes.
 fn test_page_verify_integrity_graphemes_good() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -990,8 +990,8 @@ fn test_page_verify_integrity_graphemes_good() {
 // Test verifyIntegrity with grapheme row not marked.
 fn test_page_verify_integrity_grapheme_row_not_marked() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -1019,8 +1019,8 @@ fn test_page_verify_integrity_grapheme_row_not_marked() {
 // Test verifyIntegrity with good styles.
 fn test_page_verify_integrity_styles_good() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -1059,8 +1059,8 @@ fn test_page_verify_integrity_styles_good() {
 // Test verifyIntegrity with styles ref count mismatch.
 fn test_page_verify_integrity_styles_ref_count_mismatch() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -1103,8 +1103,8 @@ fn test_page_verify_integrity_styles_ref_count_mismatch() {
 // silently allocating an unbounded side array.
 fn test_page_style_set_honors_capacity() {
 	mut page := Page.init(PageCapacity{
-		cols: 1
-		rows: 1
+		cols:   1
+		rows:   1
 		styles: 8
 	})
 	defer {
@@ -1114,16 +1114,14 @@ fn test_page_style_set_honors_capacity() {
 	// Layout.init(8) provides six item slots, with ID zero reserved.
 	for i in 0 .. 5 {
 		page.styles.add(CellStyle{
-			fg_color: .rgb
-			fg_r: u8(i + 1)
+			fg_color: StyleColorRgb{ rgb: RGB{ r: u8(i + 1) } }
 		}) or {
 			assert false, 'style ${i} unexpectedly failed'
 			return
 		}
 	}
 	if _ := page.styles.add(CellStyle{
-		fg_color: .rgb
-		fg_r: 99
+		fg_color: StyleColorRgb{ rgb: RGB{ r: 99 } }
 	}) {
 		assert false, 'style set exceeded its page capacity'
 	}
@@ -1132,8 +1130,8 @@ fn test_page_style_set_honors_capacity() {
 // Test verifyIntegrity with zero rows.
 fn test_page_verify_integrity_zero_rows() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -1147,8 +1145,8 @@ fn test_page_verify_integrity_zero_rows() {
 // Test verifyIntegrity with zero cols.
 fn test_page_verify_integrity_zero_cols() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -1163,8 +1161,8 @@ fn test_page_verify_integrity_zero_cols() {
 // Test exactRowCapacity with empty rows.
 fn test_page_exact_row_capacity_empty_rows() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -1185,8 +1183,8 @@ fn test_page_exact_row_capacity_empty_rows() {
 // Test exactRowCapacity with styles.
 fn test_page_exact_row_capacity_styles() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -1295,8 +1293,8 @@ fn test_page_exact_row_capacity_styles() {
 // Test exactRowCapacity with grapheme_bytes.
 fn test_page_exact_row_capacity_grapheme_bytes() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -1394,8 +1392,8 @@ fn test_page_exact_row_capacity_grapheme_bytes() {
 // Test exactRowCapacity with grapheme_bytes larger than chunk.
 fn test_page_exact_row_capacity_grapheme_bytes_larger_than_chunk() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -1443,8 +1441,8 @@ fn page_size_min_reference(darwin_arm64 usize, other usize) usize {
 // logical V layout auditable byte-for-byte even though V uses GC-owned arrays.
 fn test_page_capacity_defaults_and_layout_reference() {
 	cap := PageCapacity{
-		cols: 215
-		rows: 215
+		cols:   215
+		rows:   215
 		styles: 128
 	}
 	assert cap.hyperlink_bytes == 192
@@ -1485,8 +1483,8 @@ fn test_page_capacity_defaults_and_layout_reference() {
 
 fn test_page_layout_small_and_zero_metadata_reference() {
 	l := Page.layout(PageCapacity{
-		cols: 80
-		rows: 128
+		cols:   80
+		rows:   128
 		styles: 16
 	})
 	assert l.total_size == page_size_min_reference(180224, 167936)
@@ -1502,12 +1500,12 @@ fn test_page_layout_small_and_zero_metadata_reference() {
 	assert l.hyperlink_map_start == 166896
 
 	zero := Page.layout(PageCapacity{
-		cols: 10
-		rows: 10
-		styles: 0
+		cols:            10
+		rows:            10
+		styles:          0
 		hyperlink_bytes: 0
-		grapheme_bytes: 0
-		string_bytes: 0
+		grapheme_bytes:  0
+		string_bytes:    0
 	})
 	assert zero.total_size == page_size_min_reference(16384, 4096)
 	assert zero.rows_size == 80
@@ -1562,9 +1560,9 @@ fn test_page_managed_map_capacities_follow_layout() {
 	assert page.hyperlink_capacity() == 64
 
 	mut empty := Page.init(PageCapacity{
-		cols: 1
-		rows: 1
-		grapheme_bytes: 0
+		cols:            1
+		rows:            1
+		grapheme_bytes:  0
 		hyperlink_bytes: 0
 	})
 	defer { empty.deinit() }
@@ -1574,19 +1572,19 @@ fn test_page_managed_map_capacities_follow_layout() {
 
 fn test_page_set_graphemes_enforces_map_capacity_and_rolls_back_allocation() {
 	mut page := Page.init(PageCapacity{
-		cols: 2
-		rows: 1
+		cols:           2
+		rows:           1
 		grapheme_bytes: 16
 	})
 	defer { page.deinit() }
 	page.size.rows = 1
 	page.rows[0].cells[0] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`a`)
+		codepoint:   u32(`a`)
 	}
 	page.rows[0].cells[1] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`b`)
+		codepoint:   u32(`b`)
 	}
 	assert page.grapheme_capacity() == 1
 	page.set_graphemes(0, 0, [u32(0x0301)]) or { panic(err) }
@@ -1609,11 +1607,11 @@ fn test_page_set_graphemes_enforces_allocator_capacity() {
 	page.size.rows = 1
 	page.rows[0].cells[0] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`a`)
+		codepoint:   u32(`a`)
 	}
 	page.rows[0].cells[1] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`b`)
+		codepoint:   u32(`b`)
 	}
 	page.set_graphemes(0, 0, []u32{len: int(grapheme_bytes_default / 4) - 1, init: u32(`x`)}) or {
 		panic(err)
@@ -1667,7 +1665,7 @@ fn test_page_clone_from_hyperlinks_exact_capacity() {
 	hyperlink_cap := page.hyperlink_capacity()
 	assert hyperlink_cap <= int(page.size.cols) * int(page.size.rows)
 	id := page.insert_hyperlink(Hyperlink{
-		id: HyperlinkImplicitId{}
+		id:  HyperlinkImplicitId{}
 		uri: 'https://example.com'
 	}) or { panic(err) }
 
@@ -1676,7 +1674,7 @@ fn test_page_clone_from_hyperlinks_exact_capacity() {
 		for y in 0 .. int(page.size.rows) {
 			page.rows[y].cells[x] = CellData{
 				content_tag: .codepoint
-				codepoint: 42
+				codepoint:   42
 			}
 			if page.hyperlink_count() > 0 {
 				page.hyperlink_set.use_link(id)
@@ -1708,14 +1706,14 @@ fn test_page_insert_hyperlink_enforces_string_allocator_capacity() {
 	defer { page.deinit() }
 	page.size.rows = 1
 	_ := page.insert_hyperlink(Hyperlink{
-		id: HyperlinkImplicitId{}
+		id:  HyperlinkImplicitId{}
 		uri: 'a'.repeat(int(string_bytes_default) - 1)
 	}) or { panic(err) }
 	assert page.hyperlink_set.string_used() == usize(string_bytes_default)
 
 	mut error_message := ''
 	_ := page.insert_hyperlink(Hyperlink{
-		id: HyperlinkImplicitId{ offset: 1 }
+		id:  HyperlinkImplicitId{ offset: 1 }
 		uri: 'AAAAAAAAAAAAAAAAAAAAAAAAAA'
 	}) or {
 		error_message = err.msg()
@@ -1888,7 +1886,7 @@ fn test_page_hyperlink_basic() {
 	// Insert a hyperlink.
 	hl_id := page.insert_hyperlink(Hyperlink{
 		uri: 'https://example.com'
-		id: HyperlinkExplicitId{ value: '' }
+		id:  HyperlinkExplicitId{ value: '' }
 	}) or { panic(err) }
 
 	// Set it on a cell.
@@ -1916,8 +1914,8 @@ fn test_page_hyperlink_basic() {
 // Test clear_cells clears graphemes and styles.
 fn test_page_clear_cells() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
+		cols:   10
+		rows:   10
 		styles: 8
 	})
 	defer {
@@ -2019,7 +2017,7 @@ fn test_page_swap_cells() {
 	page.rows[0].styled = true
 	page.set_graphemes(0, 0, [u32(0x0301)]) or { panic(err) }
 	link_id := page.insert_hyperlink(Hyperlink{
-		id: HyperlinkExplicitId{
+		id:  HyperlinkExplicitId{
 			value: 'reinit'
 		}
 		uri: 'https://example.com/reinit'
@@ -2049,12 +2047,12 @@ fn test_page_swap_cells() {
 
 fn test_page_swap_cells_swaps_grapheme_and_hyperlink_mappings() {
 	mut page := Page.init(PageCapacity{
-		cols: 2
-		rows: 1
-		styles: 0
+		cols:            2
+		rows:            1
+		styles:          0
 		hyperlink_bytes: 32 * 48
-		grapheme_bytes: grapheme_chunk * 2
-		string_bytes: 64
+		grapheme_bytes:  grapheme_chunk * 2
+		string_bytes:    64
 	})
 	defer { page.deinit() }
 	page.rows[0].cells[0] = CellData.init(u32(`A`))
@@ -2173,7 +2171,7 @@ fn test_page_clone_row_from_partial_hyperlink_in_same_page_copy() {
 
 	// We need to create a hyperlink.
 	link := Hyperlink{
-		id: HyperlinkImplicitId{
+		id:  HyperlinkImplicitId{
 			offset: 0
 		}
 		uri: 'https://example.com/partial-inline'
@@ -2228,7 +2226,7 @@ fn test_page_clone_row_from_partial_hyperlink_in_same_page_omit() {
 
 	// We need to create a hyperlink.
 	hyperlink_id := page.insert_hyperlink(Hyperlink{
-		id: HyperlinkImplicitId{
+		id:  HyperlinkImplicitId{
 			offset: 0
 		}
 		uri: ''
@@ -2272,8 +2270,8 @@ fn test_page_clone_row_from_partial_hyperlink_in_same_page_omit() {
 // This tests that capacity_for_count properly accounts for ID 0 being reserved.
 fn test_page_exact_row_capacity_single_style_clone() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 2
+		cols:   10
+		rows:   2
 		styles: 8
 	})
 	defer {
@@ -2316,8 +2314,8 @@ fn test_page_exact_row_capacity_single_style_clone() {
 
 fn test_page_clone_row_reports_bounded_style_failure() {
 	mut src := Page.init(PageCapacity{
-		cols: 1
-		rows: 1
+		cols:   1
+		rows:   1
 		styles: u16(StyleSet.capacity_for_count(1))
 	})
 	defer { src.deinit() }
@@ -2326,14 +2324,14 @@ fn test_page_clone_row_reports_bounded_style_failure() {
 	}
 	src.rows[0].cells[0] = CellData{
 		content_tag: .codepoint
-		codepoint: u32(`a`)
-		style_id: style_id
+		codepoint:   u32(`a`)
+		style_id:    style_id
 	}
 	src.rows[0].styled = true
 
 	mut dst := Page.init(PageCapacity{
-		cols: 1
-		rows: 1
+		cols:   1
+		rows:   1
 		styles: 0
 	})
 	defer { dst.deinit() }
@@ -2346,29 +2344,29 @@ fn test_page_clone_row_reports_bounded_style_failure() {
 
 fn test_page_clone_row_preserves_integrity_after_late_managed_memory_failure() {
 	mut src := Page.init(PageCapacity{
-		cols: 1
-		rows: 1
-		styles: 0
+		cols:            1
+		rows:            1
+		styles:          0
 		hyperlink_bytes: 32 * 48
-		grapheme_bytes: grapheme_chunk
-		string_bytes: 128
+		grapheme_bytes:  grapheme_chunk
+		string_bytes:    128
 	})
 	defer { src.deinit() }
 	src.rows[0].cells[0] = CellData.init(u32(`a`))
 	src.set_graphemes(0, 0, [u32(0x0301)]) or { panic(err) }
 	link_id := src.insert_hyperlink(Hyperlink{
-		id: HyperlinkImplicitId{ offset: 1 }
+		id:  HyperlinkImplicitId{ offset: 1 }
 		uri: 'https://example.com'
 	}) or { panic(err) }
 	src.set_hyperlink(0, 0, link_id) or { panic(err) }
 
 	mut dst := Page.init(PageCapacity{
-		cols: 1
-		rows: 1
-		styles: 0
+		cols:            1
+		rows:            1
+		styles:          0
 		hyperlink_bytes: 32 * 48
-		grapheme_bytes: grapheme_chunk
-		string_bytes: 0
+		grapheme_bytes:  grapheme_chunk
+		string_bytes:    0
 	})
 	defer { dst.deinit() }
 	mut error_message := ''
@@ -2385,26 +2383,26 @@ fn test_page_clone_row_preserves_integrity_after_late_managed_memory_failure() {
 
 fn test_page_clone_partial_row_deduplicates_hyperlink_before_allocating_strings() {
 	link := Hyperlink{
-		id: HyperlinkExplicitId{ value: 'same' }
+		id:  HyperlinkExplicitId{ value: 'same' }
 		uri: 'https://example.com'
 	}
 	mut src := Page.init(PageCapacity{
-		cols: 2
-		rows: 1
-		styles: 0
+		cols:            2
+		rows:            1
+		styles:          0
 		hyperlink_bytes: 32 * 48
-		string_bytes: 64
+		string_bytes:    64
 	})
 	defer { src.deinit() }
 	src_id := src.insert_hyperlink(link) or { panic(err) }
 	src.set_hyperlink(0, 1, src_id) or { panic(err) }
 
 	mut dst := Page.init(PageCapacity{
-		cols: 2
-		rows: 1
-		styles: 0
+		cols:            2
+		rows:            1
+		styles:          0
 		hyperlink_bytes: 32 * 48
-		string_bytes: 64
+		string_bytes:    64
 	})
 	defer { dst.deinit() }
 	dst_id := dst.insert_hyperlink(link) or { panic(err) }
@@ -2422,9 +2420,9 @@ fn test_page_clone_partial_row_deduplicates_hyperlink_before_allocating_strings(
 
 fn test_page_clone_reports_grapheme_allocator_failure_before_map_failure() {
 	mut src := Page.init(PageCapacity{
-		cols: 1
-		rows: 1
-		styles: 0
+		cols:           1
+		rows:           1
+		styles:         0
 		grapheme_bytes: grapheme_chunk
 	})
 	defer { src.deinit() }
@@ -2432,9 +2430,9 @@ fn test_page_clone_reports_grapheme_allocator_failure_before_map_failure() {
 	src.set_graphemes(0, 0, [u32(0x0301)]) or { panic(err) }
 
 	mut dst := Page.init(PageCapacity{
-		cols: 1
-		rows: 2
-		styles: 0
+		cols:           1
+		rows:           2
+		styles:         0
 		grapheme_bytes: grapheme_chunk
 	})
 	defer { dst.deinit() }
@@ -2454,8 +2452,8 @@ fn test_page_clone_reports_grapheme_allocator_failure_before_map_failure() {
 // Test exactRowCapacity styles with a maxed-out single row.
 fn test_page_exact_row_capacity_styles_max_single_row() {
 	mut page := Page.init(PageCapacity{
-		cols: 1000
-		rows: 1
+		cols:   1000
+		rows:   1
 		styles: max_u16
 	})
 	defer {
@@ -2475,10 +2473,12 @@ fn test_page_exact_row_capacity_styles_max_single_row() {
 			break
 		}
 		style_id := page.styles.add(CellStyle{
-			fg_color: .rgb
-			fg_r: u8(i & 0xFF)
-			fg_g: u8((i >> 8) & 0xFF)
-			fg_b: 0
+			fg_color: StyleColorRgb{
+				rgb: RGB{
+					r: u8(i & 0xFF)
+					g: u8((i >> 8) & 0xFF)
+				}
+			}
 		}) or { break }
 		unsafe {
 			page.rows[0].cells[i].style_id = style_id
@@ -2496,11 +2496,11 @@ fn test_page_exact_row_capacity_styles_max_single_row() {
 
 fn test_page_exact_row_capacity_hyperlinks() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 10
-		styles: 8
+		cols:            10
+		rows:            10
+		styles:          8
 		hyperlink_bytes: 32 * 48
-		string_bytes: 512
+		string_bytes:    512
 	})
 	defer { page.deinit() }
 	page.size.rows = page.capacity.rows
@@ -2510,7 +2510,7 @@ fn test_page_exact_row_capacity_hyperlinks() {
 	assert empty.string_bytes == 0
 
 	id1 := page.insert_hyperlink(Hyperlink{
-		id: HyperlinkImplicitId{
+		id:  HyperlinkImplicitId{
 			offset: 1
 		}
 		uri: 'https://example.com'
@@ -2527,7 +2527,7 @@ fn test_page_exact_row_capacity_hyperlinks() {
 	assert duplicate.string_bytes == cap_one.string_bytes
 
 	id2 := page.insert_hyperlink(Hyperlink{
-		id: HyperlinkExplicitId{
+		id:  HyperlinkExplicitId{
 			value: 'my-link-id'
 		}
 		uri: 'https://other.example.org/path'
@@ -2538,7 +2538,7 @@ fn test_page_exact_row_capacity_hyperlinks() {
 	assert cap_two.string_bytes == string_chunk * 3
 
 	id3 := page.insert_hyperlink(Hyperlink{
-		id: HyperlinkImplicitId{
+		id:  HyperlinkImplicitId{
 			offset: 99
 		}
 		uri: 'https://outside.example.com'
@@ -2564,17 +2564,17 @@ fn test_page_exact_row_capacity_hyperlinks() {
 
 fn test_page_exact_row_capacity_single_hyperlink_clone() {
 	mut page := Page.init(PageCapacity{
-		cols: 10
-		rows: 2
-		styles: 8
+		cols:            10
+		rows:            2
+		styles:          8
 		hyperlink_bytes: 32 * 48
-		string_bytes: 512
+		string_bytes:    512
 	})
 	defer { page.deinit() }
 	page.size.rows = page.capacity.rows
 
 	id := page.insert_hyperlink(Hyperlink{
-		id: HyperlinkImplicitId{
+		id:  HyperlinkImplicitId{
 			offset: 1
 		}
 		uri: 'https://example.com'
@@ -2593,17 +2593,17 @@ fn test_page_exact_row_capacity_single_hyperlink_clone() {
 fn test_page_exact_row_capacity_hyperlink_map_for_many_cells() {
 	cols := u16(50)
 	mut page := Page.init(PageCapacity{
-		cols: cols
-		rows: 2
-		styles: 8
+		cols:            cols
+		rows:            2
+		styles:          8
 		hyperlink_bytes: 32 * 48
-		string_bytes: 512
+		string_bytes:    512
 	})
 	defer { page.deinit() }
 	page.size.rows = page.capacity.rows
 
 	id := page.insert_hyperlink(Hyperlink{
-		id: HyperlinkImplicitId{
+		id:  HyperlinkImplicitId{
 			offset: 1
 		}
 		uri: 'https://example.com'
