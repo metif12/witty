@@ -287,6 +287,8 @@ fn C.gdk_event_get_device(event GdkEvent) GdkDevice
 
 fn C.gdk_device_get_num_lock_state(device GdkDevice) bool
 
+fn C.gdk_surface_get_scale_factor(surface GdkSurface) int
+
 fn C.gdk_key_event_get_consumed_modifiers(event GdkEvent) u32
 
 // GdkClipboard
@@ -790,15 +792,21 @@ fn terminal_surface_dispose(obj voidptr) {
 			self.vadj = unsafe { nil }
 		}
 		if self.progress_bar_timer != 0 {
-			C.g_source_remove(self.progress_bar_timer)
+			if !C.g_source_remove(self.progress_bar_timer) {
+				log.warn('unable to remove progress bar timer')
+			}
 			self.progress_bar_timer = 0
 		}
 		if self.idle_rechild != 0 {
-			C.g_source_remove(self.idle_rechild)
+			if !C.g_source_remove(self.idle_rechild) {
+				log.warn('unable to remove idle source')
+			}
 			self.idle_rechild = 0
 		}
 		if self.pending_horizontal_scroll_reset != 0 {
-			C.g_source_remove(self.pending_horizontal_scroll_reset)
+			if !C.g_source_remove(self.pending_horizontal_scroll_reset) {
+				log.warn('unable to remove pending horizontal scroll reset source')
+			}
 			self.pending_horizontal_scroll_reset = 0
 		}
 		C.adw_bin_set_child(AdwBin(obj), GtkWidget(unsafe { nil }))
@@ -1149,6 +1157,7 @@ fn (self &SurfaceWidget) notify_property(pspec &C.GParamSpec) {
 // pointer is retained, matching Ghostty's Surface.setParent.
 pub fn (mut self SurfaceWidget) set_parent(parent &core.Surface, context apprt.NewSurfaceContext) {
 	if self.has_core() {
+		log.warn('setParent called after surface is already realized')
 		return
 	}
 	self.context = context
@@ -1200,6 +1209,8 @@ pub fn (self &SurfaceWidget) get_content_scale() !apprt.ContentScale {
 	s := C.gtk_widget_get_scale_factor(self.gl_area)
 	if s > 0 {
 		gtk_scale = f32(s)
+	} else {
+		log.warn('gtk_widget_get_scale_factor returned a non-positive number: ${s}')
 	}
 
 	// Also scale using font-specific DPI (gtk-xft-dpi is font DPI * 1024).
@@ -1208,7 +1219,11 @@ pub fn (self &SurfaceWidget) get_content_scale() !apprt.ContentScale {
 		if gtk_xft_dpi > 0 {
 			xft_dpi := f32(gtk_xft_dpi) / 1024.0
 			xft_dpi_scale = xft_dpi / 96.0
+		} else {
+			log.warn('gtk-xft-dpi has invalid value (${gtk_xft_dpi}), using default')
 		}
+	} else {
+		log.warn('gtk-xft-dpi was not set, using default value')
 	}
 
 	scale := gtk_scale * xft_dpi_scale
@@ -1296,7 +1311,7 @@ pub fn action_prompt_title(action GSimpleAction, parameter GVariant, data voidpt
 	}
 	mut surface := self.core_surface
 	surface.perform_binding_action(input.ActionPromptSurfaceTitle{}) or {
-		eprintln('unable to perform prompt title action err=${err}')
+		log.warn('unable to perform prompt title action err=${err}')
 	}
 }
 
@@ -1483,7 +1498,16 @@ fn (self &SurfaceWidget) sync_bell_border_overlay() {
 	if isnil(self.bell_revealer) {
 		return
 	}
-	show := self.bell_ringing && !isnil(self.config) && self.config.get().bell_features.border()
+	if !self.bell_ringing {
+		C.gtk_revealer_set_reveal_child(self.bell_revealer, false)
+		return
+	}
+	if isnil(self.config) {
+		log.warn('config unavailable for computing whether border should be shown, likely bug')
+		C.gtk_revealer_set_reveal_child(self.bell_revealer, false)
+		return
+	}
+	show := self.config.get().bell_features.border()
 	C.gtk_revealer_set_reveal_child(self.bell_revealer, show)
 }
 
@@ -1526,7 +1550,7 @@ fn (self &SurfaceWidget) sync_unfocused_split_overlay() {
 pub fn (mut self SurfaceWidget) set_progress_report(value osc.ProgressReport) {
 	if self.progress_bar_timer != 0 {
 		if !C.g_source_remove(self.progress_bar_timer) {
-			eprintln('unable to remove progress bar timer')
+			log.warn('unable to remove progress bar timer')
 		}
 		self.progress_bar_timer = 0
 	}
@@ -1641,7 +1665,7 @@ pub fn (mut self SurfaceWidget) command_finished(value apprt.CommandFinished) bo
 // activating it present this exact core surface.
 pub fn (self &SurfaceWidget) send_desktop_notification(title string, body string) {
 	if !self.has_core() {
-		eprintln("can't send notification because there is no core surface")
+		log.warn("can't send notification because there is no core surface")
 		return
 	}
 	if isnil(self.app) || isnil(self.app.obj) {
@@ -1986,7 +2010,7 @@ pub fn (mut self SurfaceWidget) key_event(action input.KeyAction, event GdkEvent
 		utf8: utf8
 		unshifted_codepoint: unshifted_codepoint
 	}) or {
-		eprintln('error in key callback err=${err}')
+		log.error('error in key callback err=${err}')
 		return false
 	}
 
@@ -2089,7 +2113,7 @@ pub fn (mut self SurfaceWidget) im_preedit_changed(str string) {
 	}
 	mut surface := self.core_surface
 	surface.preedit_callback(str) or {
-		eprintln('error in preedit callback err=${err}')
+		log.warn('error in preedit callback err=${err}')
 	}
 }
 
@@ -2101,7 +2125,7 @@ pub fn (mut self SurfaceWidget) im_preedit_end() {
 	}
 	mut surface := self.core_surface
 	surface.preedit_callback('') or {
-		eprintln('error in preedit callback err=${err}')
+		log.warn('error in preedit callback err=${err}')
 	}
 }
 
@@ -2119,7 +2143,7 @@ pub fn (mut self SurfaceWidget) im_commit(str string) {
 		// handler associates it with the keypress.
 		.not_composing {
 			if str.len > self.im_buf.len {
-				eprintln('not enough buffer space for input method commit')
+				log.warn('not enough buffer space for input method commit')
 				return
 			}
 			for i in 0 .. str.len {
@@ -2139,7 +2163,7 @@ pub fn (mut self SurfaceWidget) im_commit(str string) {
 	mut surface := self.core_surface
 	// Well-behaved IMs trigger preedit-end for us; some don't, so end it here.
 	surface.preedit_callback('') or {
-		eprintln('error in preedit callback err=${err}')
+		log.warn('error in preedit callback err=${err}')
 	}
 	// Send the text with an invalid key (no PTY encoding for the key itself).
 	surface.key_callback(core.KeyEvent{
@@ -2148,7 +2172,7 @@ pub fn (mut self SurfaceWidget) im_commit(str string) {
 		mods: input.Mods{}
 		utf8: str
 	}) or {
-		eprintln('error in key callback err=${err}')
+		log.warn('error in key callback err=${err}')
 	}
 }
 
@@ -2202,7 +2226,7 @@ pub fn (mut self SurfaceWidget) gc_mouse_down(event GdkEvent, button u32, x f64,
 	gtk_mods := C.gdk_event_get_modifier_state(event)
 	mods := translate_mods(gtk_mods)
 	consumed := surface.mouse_button_callback(.press, btn, mods) or {
-		eprintln('error in mouse button callback err=${err}')
+		log.warn('error in key callback err=${err}')
 		false
 	}
 
@@ -2240,7 +2264,7 @@ pub fn (mut self SurfaceWidget) gc_mouse_up(event GdkEvent, button u32) {
 	gtk_mods := C.gdk_event_get_modifier_state(event)
 	mods := translate_mods(gtk_mods)
 	consumed := surface.mouse_button_callback(.release, btn, mods) or {
-		eprintln('error in mouse button callback err=${err}')
+		log.warn('error in key callback err=${err}')
 		return
 	}
 
@@ -2248,7 +2272,7 @@ pub fn (mut self SurfaceWidget) gc_mouse_up(event GdkEvent, button u32) {
 	// didn't intercept.
 	if !consumed && btn == .left && !surface.has_selection() {
 		if !self.show_on_screen_keyboard(event) {
-			eprintln('failed to activate the on-screen keyboard')
+			log.warn('failed to activate the on-screen keyboard')
 		}
 	}
 }
@@ -2297,7 +2321,7 @@ pub fn (mut self SurfaceWidget) ec_mouse_motion(event GdkEvent, x f64, y f64) {
 		gtk_mods := C.gdk_event_get_modifier_state(event)
 		mods := translate_mods(gtk_mods)
 		surface.cursor_pos_callback(self.cursor_pos, mods) or {
-			eprintln('error in cursor pos callback err=${err}')
+			log.warn('error in cursor pos callback err=${err}')
 		}
 	}
 }
@@ -2313,7 +2337,7 @@ pub fn (mut self SurfaceWidget) ec_mouse_leave(event GdkEvent) {
 		gtk_mods := C.gdk_event_get_modifier_state(event)
 		mods := translate_mods(gtk_mods)
 		surface.cursor_pos_callback(apprt.CursorPos{ x: -1, y: -1 }, mods) or {
-			eprintln('error in cursor pos callback err=${err}')
+			log.warn('error in cursor pos callback err=${err}')
 		}
 	}
 }
@@ -2346,7 +2370,7 @@ pub fn (mut self SurfaceWidget) ec_scroll_vertical(x f64, y f64) bool {
 	sx, sy := self.scaled_coordinates(x, y)
 	// We invert because we apply natural scrolling to the values.
 	surface.scroll_callback(sx * -1 * multiplier, sy * -1 * multiplier, input.ScrollMods.init(self.precision_scroll, .none_)) or {
-		eprintln('error in scroll callback err=${err}')
+		log.warn('error in scroll callback err=${err}')
 		return false
 	}
 	return true
@@ -2433,7 +2457,7 @@ fn surface_idle_focus_cb(data voidptr) int {
 	if self.has_core() {
 		mut surface := self.core_surface
 		surface.focus_callback(self.focused) or {
-			eprintln('error in focus callback err=${err}')
+			log.warn('error in focus callback err=${err}')
 		}
 	}
 	return 0
@@ -2443,11 +2467,14 @@ fn surface_idle_focus_cb(data voidptr) int {
 
 // glarea_realize is the GtkGLArea "realize" handler. Mirrors `glareaRealize`.
 pub fn (mut self SurfaceWidget) glarea_realize() {
+	log.debug('realize')
 	// Make the GL area current so we can detect OpenGL errors.
 	C.gtk_gl_area_make_current(self.gl_area)
 	gl_err := C.gtk_gl_area_get_error(self.gl_area)
 	if !isnil(gl_err) {
-		eprintln('failed to make GL context current; switching to error state')
+		log.warn('failed to make GL context current: ${error_message(gl_err)}')
+		log.warn('this error is almost always due to a library, driver, or GTK issue')
+		log.warn('this is a common cause of this issue: https://ghostty.org/docs/help/gtk-opengl-context')
 		self.set_error(true)
 		return
 	}
@@ -2458,7 +2485,7 @@ pub fn (mut self SurfaceWidget) glarea_realize() {
 		mut surface := self.core_surface
 		mut realized := true
 		surface.renderer.display_realized() or {
-			eprintln('core display_realized failed err=${err}')
+			log.warn('core displayRealized failed err=${err}')
 			realized = false
 		}
 		if realized {
@@ -2473,12 +2500,14 @@ pub fn (mut self SurfaceWidget) glarea_realize() {
 // glarea_unrealize is the GtkGLArea "unrealize" handler. Mirrors
 // `glareaUnrealize`.
 pub fn (mut self SurfaceWidget) glarea_unrealize() {
+	log.debug('unrealize')
 	if self.has_core() {
 		// The context is not guaranteed current on unrealize, so make it current.
 		C.gtk_gl_area_make_current(self.gl_area)
 		gl_err := C.gtk_gl_area_get_error(self.gl_area)
 		if !isnil(gl_err) {
-			eprintln('gl_area_make_current failed in unrealize; resources likely leaked')
+			log.warn('gl_area_make_current failed in unrealize msg=${error_message(gl_err)}')
+			log.warn('OpenGL resources and memory likely leaked')
 			return
 		}
 		mut surface := self.core_surface
@@ -2498,7 +2527,7 @@ pub fn (mut self SurfaceWidget) glarea_render() bool {
 	mut surface := self.core_surface
 	// core.Surface.draw() draws a single frame (renderer.draw_frame(true)).
 	surface.draw() or {
-		eprintln('failed to draw frame err=${err}')
+		log.warn('failed to draw frame err=${err}')
 		return false
 	}
 	return true
@@ -2508,6 +2537,16 @@ pub fn (mut self SurfaceWidget) glarea_render() bool {
 // Stores the cached size and either forwards resize callbacks to the core
 // surface or initializes the surface on the first resize.
 pub fn (mut self SurfaceWidget) glarea_resize(width int, height int) {
+	mut window_scale := 0
+	root := C.gtk_widget_get_root(self.gl_area)
+	if !isnil(root) {
+		gdk_surface := C.gtk_native_get_surface(GtkNative(root))
+		if !isnil(gdk_surface) {
+			window_scale = C.gdk_surface_get_scale_factor(gdk_surface)
+		}
+	}
+	log.debug('gl resize width=${width} height=${height} scale=${C.gtk_widget_get_scale_factor(self.gl_area)} window_scale=${window_scale}')
+
 	// Store our cached size.
 	self.size = apprt.SurfaceSize{
 		width: u32(width)
@@ -2525,10 +2564,10 @@ pub fn (mut self SurfaceWidget) glarea_resize(width int, height int) {
 			}
 		}
 		surface.content_scale_callback(scale) or {
-			eprintln('error in content scale callback err=${err}')
+			log.warn('error in content scale callback err=${err}')
 		}
 		surface.size_callback(self.size) or {
-			eprintln('error in size callback err=${err}')
+			log.warn('error in size callback err=${err}')
 		}
 		self.resize_overlay_schedule()
 		return
@@ -2536,7 +2575,7 @@ pub fn (mut self SurfaceWidget) glarea_resize(width int, height int) {
 
 	// If we don't have a surface, initialize it now.
 	self.init_surface() or {
-		eprintln('surface failed to initialize err=${err}')
+		log.warn('surface failed to initialize err=${err}')
 	}
 }
 
@@ -2639,14 +2678,15 @@ fn (mut self SurfaceWidget) resize_overlay_schedule() {
 // font and working-directory state, creates the transient cgroup when enabled,
 // registers the surface, and emits `init`.
 fn (mut self SurfaceWidget) init_surface() ! {
-	if self.has_core() {
-		return
-	}
+	assert !self.has_core(), 'surface is already initialized'
 
 	// Make the GL context current for surface operations.
 	C.gtk_gl_area_make_current(self.gl_area)
 	gl_err := C.gtk_gl_area_get_error(self.gl_area)
 	if !isnil(gl_err) {
+		log.warn('failed to make GL context current: ${error_message(gl_err)}')
+		log.warn('this error is usually due to a driver or gtk bug')
+		log.warn('this is a common cause of this issue: https://gitlab.gnome.org/GNOME/gtk/-/issues/4950')
 		return error('failed to make GL context current')
 	}
 
@@ -2690,6 +2730,7 @@ fn (mut self SurfaceWidget) init_surface() ! {
 		surface_config.working_directory = pwd
 	}
 	surface.init(&surface_config, mut core_app, &self.app.runtime_bridge, &self.core_runtime_surface) or {
+		log.warn('failed to initialize surface err=${err}')
 		core_app.delete_surface(surface_ref)
 		self.core_surface = unsafe { nil }
 		self.core_surface_ref = unsafe { nil }
@@ -2828,6 +2869,7 @@ pub fn (mut self SurfaceWidget) clipboard_request(clipboard_type apprt.Clipboard
 	if state is apprt.ClipboardRequestPaste {
 		formats := C.gdk_clipboard_get_formats(clipboard)
 		if isnil(formats) || !C.gdk_content_formats_contain_gtype(formats, g_type_string) {
+			log.debug('clipboard has no text format, not starting paste request')
 			return false
 		}
 	}
@@ -2856,7 +2898,7 @@ fn surface_clipboard_read_text_cb(source GObject, result GAsyncResult, data void
 	mut read_error := GError(unsafe { nil })
 	text_ptr := C.gdk_clipboard_read_text_finish(GdkClipboard(source), result, &read_error)
 	if !isnil(read_error) {
-		eprintln('failed to read clipboard: ${error_message(read_error)}')
+		log.warn('failed to read clipboard err=${error_message(read_error)}')
 		C.g_error_free(read_error)
 		return
 	}
@@ -2873,7 +2915,7 @@ fn surface_clipboard_read_text_cb(source GObject, result GAsyncResult, data void
 			self.show_clipboard_confirmation(request.state, text)
 			return
 		}
-		eprintln('failed to complete clipboard request: ${err}')
+		log.warn('failed to complete clipboard request err=${err}')
 		return
 	}
 	C.g_signal_emit_by_name(self.widget, c'clipboard-read')
@@ -2894,7 +2936,7 @@ pub fn (mut self SurfaceWidget) paste(text string) {
 			self.show_clipboard_confirmation(apprt.ClipboardRequestPaste{}, text)
 			return
 		}
-		eprintln('failed to complete clipboard request: ${err}')
+		log.warn('failed to complete clipboard request err=${err}')
 	}
 }
 
@@ -2962,7 +3004,7 @@ fn surface_clipboard_confirmation_confirm_cb(obj GObject, remember int, data voi
 		}
 	}
 	surface.complete_clipboard_request(request, text, true) or {
-		eprintln('failed to complete confirmed clipboard request: ${err}')
+		log.warn('failed to complete clipboard request: ${err}')
 	}
 }
 
@@ -2987,7 +3029,9 @@ fn surface_clipboard_confirmation_deny_cb(obj GObject, remember int, data voidpt
 		apprt.ClipboardRequestOsc52Write {
 			surface.config.clipboard_write = .deny
 		}
-		apprt.ClipboardRequestPaste {}
+		apprt.ClipboardRequestPaste {
+			panic('paste should not be able to be remembered')
+		}
 	}
 }
 
@@ -3086,7 +3130,7 @@ fn surface_vadjustment_changed_cb(adj GtkAdjustment, data voidptr) {
 	row := if value <= 0 { u64(0) } else { u64(value + 0.5) }
 	mut surface := self.core_surface
 	surface.perform_binding_action(input.ActionScrollToRow{ value: usize(row) }) or {
-		eprintln('error performing scroll_to_row action err=${err}')
+		log.error('error performing scroll_to_row action err=${err}')
 	}
 }
 
@@ -3225,7 +3269,7 @@ fn surface_search_stop_cb(overlay GtkWidget, data voidptr) {
 	}
 	mut surface := self.core_surface
 	surface.perform_binding_action(input.ActionEndSearch{}) or {
-		eprintln('unable to perform end_search action err=${err}')
+		log.warn('unable to perform end_search action err=${err}')
 	}
 	C.gtk_widget_grab_focus(GtkWidget(self.gl_area))
 }
@@ -3247,7 +3291,7 @@ fn surface_search_changed_cb(overlay GtkWidget, needle_ptr &char, data voidptr) 
 	}
 	mut surface := self.core_surface
 	surface.perform_binding_action(input.ActionSearch{ value: needle }) or {
-		eprintln('unable to perform search action err=${err}')
+		log.warn('unable to perform search action err=${err}')
 	}
 }
 
@@ -3271,7 +3315,7 @@ fn surface_search_navigate(data voidptr, direction input.NavigateSearch) {
 	}
 	mut surface := self.core_surface
 	surface.perform_binding_action(input.ActionNavigateSearch{ value: direction }) or {
-		eprintln('unable to perform navigate_search action err=${err}')
+		log.warn('unable to perform navigate_search action err=${err}')
 	}
 }
 
