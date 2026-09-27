@@ -53,8 +53,12 @@ fn test_descriptor_hash() {
 // test_descriptor_hash_family_names tests that descriptors with
 // different family names produce different hashes.
 fn test_descriptor_hash_family_names() {
-	d1 := Descriptor{ family: 'A' }
-	d2 := Descriptor{ family: 'B' }
+	d1 := Descriptor{
+		family: 'A'
+	}
+	d2 := Descriptor{
+		family: 'B'
+	}
 	assert d1.hashcode() == u64(0xbe9ee1e426d783d7)
 	assert d1.hashcode() != d2.hashcode()
 }
@@ -62,8 +66,12 @@ fn test_descriptor_hash_family_names() {
 // Ghostty hashes the IEEE-754 bits of the requested point size. Values that
 // differ by less than the old decimal quantization must remain distinct.
 fn test_descriptor_hash_exact_size_bits() {
-	d1 := Descriptor{ size: f32(12.000001) }
-	d2 := Descriptor{ size: f32(12.000002) }
+	d1 := Descriptor{
+		size: f32(12.000001)
+	}
+	d2 := Descriptor{
+		size: f32(12.000002)
+	}
 	assert d1.size != d2.size
 	assert d1.hashcode() != d2.hashcode()
 }
@@ -156,6 +164,28 @@ fn test_coretext_codepoint() {
 	}
 }
 
+// Ghostty propagates an error loading the selected collection face while
+// looking up a CoreText fallback. It must not silently try a lower-priority
+// style or turn the failure into an absent fallback.
+fn test_coretext_fallback_propagates_collection_face_load_error() {
+	$if macos {
+		mut collection := Collection.init()
+		defer { collection.deinit() }
+		collection.regular_faces << EntryOrAlias.new_entry(Entry{
+			face: EntryFace(DeferredFace{})
+		})
+
+		ct := CoreTextDiscovery.init()
+		ct.discover_fallback(mut collection, Descriptor{
+			codepoint: 0x4E00
+		}) or {
+			assert err.msg() == 'deferred loading unavailable'
+			return
+		}
+		assert false, 'expected the collection face load error'
+	}
+}
+
 // test_coretext_sorting tests that CoreText sorts results correctly.
 fn test_coretext_sorting() {
 	// TODO: requires real CoreText backend and SF Pro font
@@ -215,25 +245,31 @@ fn test_coretext_score_uses_zig_ascii_matching() {
 }
 
 fn coretext_ascii_eql_ignore_case(lhs string, rhs string) bool {
-	return C.witty_ascii_eql_ignore_case(&char(lhs.str), usize(lhs.len), &char(rhs.str), usize(rhs.len)) == 1
+	return C.witty_ascii_eql_ignore_case(&char(lhs.str), usize(lhs.len), &char(rhs.str),
+		usize(rhs.len)) == 1
 }
 
 fn coretext_ascii_contains_ignore_case(haystack string, needle string) bool {
-	return C.witty_ascii_index_of_ignore_case(&char(haystack.str), usize(haystack.len), &char(needle.str), usize(needle.len)) == 1
+	return C.witty_ascii_index_of_ignore_case(&char(haystack.str), usize(haystack.len),
+		&char(needle.str), usize(needle.len)) == 1
 }
 
 // test_descriptor_clone tests that cloning a descriptor works correctly.
 fn test_descriptor_clone() {
 	d := Descriptor{
-		family: 'Test Family'
-		style: 'Bold'
-		codepoint: 0x41
-		size: 12.0
-		bold: true
-		variations: [Variation{
-			id: VariationId{ value: 0x77676874 } // 'wght'
-			value: 700.0
-		}]
+		family:     'Test Family'
+		style:      'Bold'
+		codepoint:  0x41
+		size:       12.0
+		bold:       true
+		variations: [
+			Variation{
+				id:    VariationId{
+					value: 0x77676874
+				} // 'wght'
+				value: 700.0
+			},
+		]
 	}
 	c := d.clone()
 	assert c.family or { '' } == 'Test Family'

@@ -13,7 +13,8 @@ import macos
 pub fn (d &Descriptor) to_core_text_descriptor() !&macos.CTFontDescriptor {
 	family := d.family or { '' }
 	style := d.style or { '' }
-	ptr := C.witty_ct_build_descriptor(&char(family.str), &char(style.str), d.codepoint, f64(d.size), b2i(d.bold), b2i(d.italic), b2i(d.monospace))
+	ptr := C.witty_ct_build_descriptor(&char(family.str), &char(style.str), d.codepoint,
+		f64(d.size), b2i(d.bold), b2i(d.italic), b2i(d.monospace))
 	if isnil(ptr) {
 		return error('CTFontDescriptorCreateWithAttributes failed')
 	}
@@ -44,10 +45,11 @@ pub fn (ct &CoreTextDiscovery) discover(desc Descriptor) !CtDiscoverIterator {
 
 	// Build our collection and grab the matching descriptors (a CFArray).
 	list := C.witty_ct_matching_descriptors(voidptr(ct_desc))
+	if isnil(list) {
+		return error('CoreText: failed to create matching font descriptors')
+	}
 	defer {
-		if !isnil(list) {
-			C.witty_ct_release(list)
-		}
+		C.witty_ct_release(list)
 	}
 
 	// Copy the matching descriptors into a V slice, retaining each so they
@@ -56,9 +58,9 @@ pub fn (ct &CoreTextDiscovery) discover(desc Descriptor) !CtDiscoverIterator {
 	sort_matching_descriptors(desc, mut zig_list)
 
 	return CtDiscoverIterator{
-		list: zig_list
+		list:       zig_list
 		variations: desc.variations
-		i: 0
+		i:          0
 	}
 }
 
@@ -88,8 +90,10 @@ fn sort_matching_descriptors(desc Descriptor, mut list []voidptr) {
 	style_ptr := if s := desc.style { &char(s.str) } else { &char(unsafe { nil }) }
 	style_len := if s := desc.style { usize(s.len) } else { usize(0) }
 	list.sort_with_compare(fn [desc, style_ptr, style_len] (a &voidptr, b &voidptr) int {
-		lhs := C.witty_ct_score(style_ptr, style_len, desc.codepoint, b2i(desc.bold), b2i(desc.italic), *a)
-		rhs := C.witty_ct_score(style_ptr, style_len, desc.codepoint, b2i(desc.bold), b2i(desc.italic), *b)
+		lhs := C.witty_ct_score(style_ptr, style_len, desc.codepoint, b2i(desc.bold),
+			b2i(desc.italic), *a)
+		rhs := C.witty_ct_score(style_ptr, style_len, desc.codepoint, b2i(desc.bold),
+			b2i(desc.italic), *b)
 		// Higher score is earlier.
 		if lhs > rhs {
 			return -1
@@ -112,11 +116,12 @@ pub fn (ct &CoreTextDiscovery) discover_fallback(mut collection Collection, desc
 	// - http://unicode.org/charts/PDF/U4E00.pdf
 	// - https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/platform/fonts/LocaleInFonts.md#unified-han-ideographs
 	if desc.codepoint >= 0x4E00 && desc.codepoint <= 0x9FFF {
-		if han := ct.discover_codepoint(mut collection, desc) {
+		han := ct.discover_codepoint(mut collection, desc)!
+		if han.has_value {
 			return CtDiscoverIterator{
-				list: [han]
+				list:       [han.descriptor]
 				variations: desc.variations
-				i: 0
+				i:          0
 			}
 		}
 	}
@@ -128,11 +133,12 @@ pub fn (ct &CoreTextDiscovery) discover_fallback(mut collection Collection, desc
 	// font that CoreText wants to use.
 	// See: https://github.com/ghostty-org/ghostty/issues/2499
 	if it.list.len == 0 && desc.codepoint > 0 {
-		if ct_desc := ct.discover_codepoint(mut collection, desc) {
+		ct_desc := ct.discover_codepoint(mut collection, desc)!
+		if ct_desc.has_value {
 			return CtDiscoverIterator{
-				list: [ct_desc]
+				list:       [ct_desc.descriptor]
 				variations: desc.variations
-				i: 0
+				i:          0
 			}
 		}
 	}
@@ -140,14 +146,21 @@ pub fn (ct &CoreTextDiscovery) discover_fallback(mut collection Collection, desc
 	return it
 }
 
+// CtDescriptorValue preserves Ghostty's fallible optional descriptor result.
+// V cannot nest an Option inside a Result, so has_value represents the
+// optional layer while the containing Result preserves face-load failures.
+struct CtDescriptorValue {
+	has_value  bool
+	descriptor voidptr
+}
+
 // discover_codepoint discovers a font for a specific codepoint using the
 // CoreText CTFontCreateForString API, starting from the active collection face
 // that best matches the descriptor's requested style. Returns a retained
 // descriptor or none.
-fn (ct &CoreTextDiscovery) discover_codepoint(mut collection Collection, desc Descriptor) ?voidptr {
-	if desc.codepoint == 0 {
-		return none
-	}
+fn (ct &CoreTextDiscovery) discover_codepoint(mut collection Collection, desc Descriptor) !CtDescriptorValue {
+	_ = ct
+	assert desc.codepoint > 0
 
 	// The order matters: prefer an exact style, then progressively fall back
 	// to the primary regular face.
@@ -168,23 +181,29 @@ fn (ct &CoreTextDiscovery) discover_codepoint(mut collection Collection, desc De
 		if collection.face_count(style) == 0 {
 			continue
 		}
-		face := collection.get_face(Index.init(style, 0)) or { continue }
+		// Ghostty uses `try collection.getFace` here. Once a requested style
+		// has entries, failure to load its primary face must not silently fall
+		// through to a different style.
+		face := collection.get_face(Index.init(style, 0))!
 		if !isnil(face.ct_font) {
 			seed_font = face.ct_font
 			break
 		}
 	}
 	if isnil(seed_font) {
-		return none
+		return CtDescriptorValue{}
 	}
 
 	// Ask CoreText for a font that can render this codepoint (skipping the
 	// LastResort font). Returns a retained descriptor.
 	out := C.witty_ct_font_for_string(seed_font, desc.codepoint)
 	if isnil(out) {
-		return none
+		return CtDescriptorValue{}
 	}
-	return out
+	return CtDescriptorValue{
+		has_value:  true
+		descriptor: out
+	}
 }
 
 // CtDiscoverIterator iterates over CoreText discovery results.
@@ -230,10 +249,10 @@ pub fn (mut it CtDiscoverIterator) next() !DeferredFaceValue {
 	it.i++
 	return DeferredFaceValue{
 		has_value: true
-		face: DeferredFace{
+		face:      DeferredFace{
 			coretext: CoreTextDeferredFace{
-			ct_font: font_ptr
-			variations: it.variations.clone()
+				ct_font:    font_ptr
+				variations: it.variations.clone()
 			}
 		}
 	}
