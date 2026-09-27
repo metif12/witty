@@ -8,6 +8,7 @@ import datastruct
 import input
 import global_state
 import internal_os
+import log
 import osc
 import os
 import terminal
@@ -64,6 +65,12 @@ fn C.g_settings_sync()
 fn C.g_variant_is_of_type(value GVariant, vtype GVariantType) bool
 
 fn C.g_variant_get_uint64(value GVariant) u64
+
+fn C.g_variant_iter_new(value GVariant) voidptr
+
+fn C.g_variant_iter_next_value(iter voidptr) GVariant
+
+fn C.g_variant_iter_free(iter voidptr)
 
 // GtkApplication
 fn C.gtk_application_get_windows(app GtkApplication) GList
@@ -1348,7 +1355,8 @@ fn application_action_new_window_cb(action GSimpleAction, parameter GVariant, us
 }
 
 // action_new_window queues a new window. The `new-window-command` variant's
-// string-array parameter is only validated and logged by the pinned source.
+// string-array parameter is validated and each command argument is logged by
+// the pinned source.
 pub fn (mut self Application) action_new_window(action GSimpleAction, parameter GVariant) {
 	_ = action
 	if !isnil(parameter) {
@@ -1356,7 +1364,28 @@ pub fn (mut self Application) action_new_window(action GSimpleAction, parameter 
 		// ensure that the supplied parameter is an array of strings
 		if !C.g_variant_is_of_type(parameter, as_variant_type) {
 			type_string := unsafe { cstring_to_vstring(C.g_variant_get_type_string(parameter)) }
-			eprintln('[warn] gtk: parameter is of type ${type_string}')
+			log.warn('parameter is of type ${type_string}')
+		} else {
+			string_variant_type := C.g_variant_type_new(c's')
+			iter := C.g_variant_iter_new(parameter)
+			for {
+				value := C.g_variant_iter_next_value(iter)
+				if isnil(value) {
+					break
+				}
+				// The outer `as` check guarantees this, but retain Ghostty's
+				// defensive element check at the native boundary.
+				if C.g_variant_is_of_type(value, string_variant_type) {
+					mut length := usize(0)
+					argument := C.g_variant_get_string(value, &length)
+					if !isnil(argument) {
+						log.debug('new-window command argument: ${unsafe { tos(&u8(argument), int(length)) }}')
+					}
+				}
+				C.g_variant_unref(value)
+			}
+			C.g_variant_iter_free(iter)
+			C.g_variant_type_free(string_variant_type)
 		}
 		C.g_variant_type_free(as_variant_type)
 	}
