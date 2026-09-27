@@ -1694,17 +1694,15 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 	match action {
 		.close_tab {
 			if data is apprt.CloseTabMode {
-				mut surface := surface_from_target(target) or { return false }
-				mut tab := tab_from_surface(surface) or { return false }
-				tab.action_close(data)
-				return true
+				surface := surface_from_target(target) or { return false }
+				mode := data.str()
+				return C.gtk_widget_activate_action_variant(surface.widget, c'tab.close',
+					C.g_variant_new_string(&char(mode.str)))
 			}
 		}
 		.close_window {
 			surface := surface_from_target(target) or { return false }
-			mut window := window_from_surface(surface) or { return false }
-			window.action_close()
-			return true
+			return C.gtk_widget_activate_action_variant(surface.widget, c'win.close', unsafe { nil })
 		}
 		.config_change {
 			if data is apprt.ConfigChange {
@@ -1743,13 +1741,8 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 				return false
 			}
 			surface := surface_from_target(target) or { return false }
-			if isnil(surface.split_tree) {
-				log.warn('surface is not in a split tree, ignoring equalize_splits')
-				return false
-			}
-			mut tree := unsafe { surface.split_tree }
-			tree.action_equalize()
-			return true
+			return C.gtk_widget_activate_action_variant(surface.widget, c'split-tree.equalize',
+				unsafe { nil })
 		}
 		.goto_split {
 			if data is apprt.GotoSplit {
@@ -1884,19 +1877,10 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 					log.warn('new split to app is unexpected')
 					return false
 				}
-				mut surface := surface_from_target(target) or { return false }
-				if isnil(surface.split_tree) {
-					return false
-				}
-				direction := match data {
-					.right { datastruct.Direction.right }
-					.down { datastruct.Direction.down }
-					.left { datastruct.Direction.left }
-					.up { datastruct.Direction.up }
-				}
-				mut tree := unsafe { surface.split_tree }
-				tree.new_split(direction, surface)
-				return true
+				surface := surface_from_target(target) or { return false }
+				direction := data.str()
+				return C.gtk_widget_activate_action_variant(surface.widget, c'split-tree.new-split',
+					C.g_variant_new_string(&char(direction.str)))
 			}
 		}
 		.new_tab {
@@ -2193,20 +2177,22 @@ fn surface_from_target(target apprt.Target) ?&SurfaceWidget {
 }
 
 fn window_from_surface(surface &SurfaceWidget) ?&Window {
-	if isnil(surface) || isnil(surface.split_tree) || isnil(surface.split_tree.window) {
+	if isnil(surface) || isnil(surface.widget) {
 		return none
 	}
-	return surface.split_tree.window
-}
-
-fn tab_from_surface(surface &SurfaceWidget) ?&Tab {
-	window := window_from_surface(surface) or { return none }
-	for tab in window.tabs {
-		if tab.split_tree == surface.split_tree {
-			return tab
-		}
+	widget := C.gtk_widget_get_ancestor(surface.widget, window_get_type())
+	if isnil(widget) {
+		return none
 	}
-	return none
+	priv := window_priv(voidptr(widget))
+	if isnil(priv.wrapper) {
+		return none
+	}
+	window := unsafe { &Window(priv.wrapper) }
+	if isnil(window) || window.obj != widget {
+		return none
+	}
+	return window
 }
 
 // send_desktop_notification sends an application-scoped notification. A zero
