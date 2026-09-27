@@ -1040,6 +1040,18 @@ fn test_secure_input_actions_preserve_on_off_and_toggle() ! {
 	assert action_value[apprt.SecureInput](runtime.actions.last().data) == .off
 }
 
+fn test_surface_binding_reload_requests_hard_app_reload() ! {
+	mut runtime := apprt.RuntimeApp{ actions_handled: true }
+	mut surf := make_test_surface()
+	surf.rt_app = &runtime
+
+	assert surf.perform_binding_action(input.ActionReloadConfig{})!
+	assert runtime.actions.len == 1
+	assert runtime.actions[0].target is apprt.AppTarget
+	assert runtime.actions[0].action == .reload_config
+	assert !action_value[apprt.ReloadConfig](runtime.actions[0].data).soft
+}
+
 fn test_child_exited_no_wait() {
 	mut app_runtime := apprt.RuntimeApp{ actions_handled: true }
 	mut surface_runtime := apprt.RuntimeSurface{}

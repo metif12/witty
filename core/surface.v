@@ -4023,9 +4023,16 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 					apprt.ActionVoid{},
 				)!
 			}
+			input.ActionReloadConfig {
+				self.rt_app.perform_action(
+					apprt.Target(apprt.AppTarget{}),
+					.reload_config,
+					apprt.ActionValue(apprt.ReloadConfig{ soft: false }),
+				)!
+			}
 			else {
-				// All other app-scoped actions (open_config,
-				// reload_config, close_all_windows, quit, toggle_quick_terminal,
+				// All other app-scoped actions (open_config, close_all_windows,
+				// quit, toggle_quick_terminal,
 				// toggle_visibility, check_for_updates, show_gtk_inspector) are
 				// forwarded to the app.
 				self.rt_app.perform_action(

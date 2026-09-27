@@ -103,6 +103,16 @@ fn test_app_color_scheme_change_requests_soft_reload() ! {
 	assert runtime.actions.len == 1
 }
 
+fn test_app_binding_reload_requests_hard_reload() ! {
+	mut app := App{}
+	mut runtime := apprt.RuntimeApp{}
+	app.perform_action(mut runtime, input.ActionReloadConfig{})!
+
+	assert runtime.actions.len == 1
+	assert runtime.actions[0].action == .reload_config
+	assert !action_value[apprt.ReloadConfig](runtime.actions[0].data).soft
+}
+
 fn test_app_mailbox_is_bounded_fifo_and_reusable() {
 	mut queue := MailboxQueue.create() or { panic(err) }
 	defer {

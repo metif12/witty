@@ -475,7 +475,10 @@ fn (mut c CoreApp) perform_app_action(mut app App, action input.Action) ! {
 		input.ActionQuit { app.perform_action(target, .quit, ActionVoid{})! }
 		input.ActionNewWindow { app.perform_action(target, .new_window, ActionVoid{})! }
 		input.ActionOpenConfig { app.perform_action(target, .open_config, ActionVoid{})! }
-		input.ActionReloadConfig { app.perform_action(target, .reload_config, ActionVoid{})! }
+		input.ActionReloadConfig {
+			app.perform_action(target, .reload_config,
+				ActionValue(ReloadConfig{ soft: false }))!
+		}
 		input.ActionCloseAllWindows { app.perform_action(target, .close_all_windows, ActionVoid{})! }
 		input.ActionToggleQuickTerminal {
 			app.perform_action(target, .toggle_quick_terminal, ActionVoid{})!
