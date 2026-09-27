@@ -756,60 +756,72 @@ const min_i32 = i32(-2147483648)
 // metrics_modifier_apply_u32 applies a modifier to a u32 value, matching
 // the Zig Modifier.apply semantics for unsigned integers.
 fn metrics_modifier_apply_u32(mod MetricsModifier, v u32) u32 {
-	if mod.is_percent {
-		// Percent is clamped to a minimum of 0.
-		p := if mod.percent > 0 { mod.percent } else { f64(0) }
-		applied := math.round(f64(v) * p)
-		if applied <= 0 {
-			return 0
+	match mod {
+		MetricsModifierPercent {
+			// Percent is clamped to a minimum of 0.
+			p := if mod.value > 0 { mod.value } else { f64(0) }
+			applied := math.round(f64(v) * p)
+			if applied <= 0 {
+				return 0
+			}
+			if applied > f64(u32(0xFFFFFFFF)) {
+				panic('integer overflow applying metrics percentage')
+			}
+			return u32(applied)
 		}
-		if applied > f64(u32(0xFFFFFFFF)) {
-			panic('integer overflow applying metrics percentage')
+		MetricsModifierAbsolute {
+			// Absolute: saturating add, clamped to a minimum of 0 (unsigned).
+			applied := i64(v) + i64(mod.value)
+			if applied < 0 {
+				return 0
+			}
+			if applied > i64(u32(0xFFFFFFFF)) {
+				return u32(0xFFFFFFFF)
+			}
+			return u32(applied)
 		}
-		return u32(applied)
 	}
-	// Absolute: saturating add, clamped to a minimum of 0 (unsigned).
-	applied := i64(v) + i64(mod.absolute)
-	if applied < 0 {
-		return 0
-	}
-	if applied > i64(u32(0xFFFFFFFF)) {
-		return u32(0xFFFFFFFF)
-	}
-	return u32(applied)
 }
 
 // metrics_modifier_apply_i32 applies a modifier to an i32 value.
 fn metrics_modifier_apply_i32(mod MetricsModifier, v i32) i32 {
-	if mod.is_percent {
-		p := if mod.percent > 0 { mod.percent } else { f64(0) }
-		applied := math.round(f64(v) * p)
-		if applied > f64(i32(0x7FFFFFFF)) {
-			panic('integer overflow applying metrics percentage')
+	match mod {
+		MetricsModifierPercent {
+			p := if mod.value > 0 { mod.value } else { f64(0) }
+			applied := math.round(f64(v) * p)
+			if applied > f64(i32(0x7FFFFFFF)) {
+				panic('integer overflow applying metrics percentage')
+			}
+			if applied < f64(min_i32) {
+				panic('integer overflow applying metrics percentage')
+			}
+			return i32(applied)
 		}
-		if applied < f64(min_i32) {
-			panic('integer overflow applying metrics percentage')
+		MetricsModifierAbsolute {
+			applied := i64(v) + i64(mod.value)
+			if applied > i64(max_i32) {
+				return max_i32
+			}
+			if applied < i64(min_i32) {
+				// Match `maxInt(T) * sign(clamped_i64)` in the source.
+				return -max_i32
+			}
+			return i32(applied)
 		}
-		return i32(applied)
 	}
-	applied := i64(v) + i64(mod.absolute)
-	if applied > i64(max_i32) {
-		return max_i32
-	}
-	if applied < i64(min_i32) {
-		// Match `maxInt(T) * sign(clamped_i64)` in the source.
-		return -max_i32
-	}
-	return i32(applied)
 }
 
 // metrics_modifier_apply_f64 applies a modifier to an f64 value.
 fn metrics_modifier_apply_f64(mod MetricsModifier, v f64) f64 {
-	if mod.is_percent {
-		p := if mod.percent > 0 { mod.percent } else { f64(0) }
-		return v * p
+	return match mod {
+		MetricsModifierPercent {
+			p := if mod.value > 0 { mod.value } else { f64(0) }
+			v * p
+		}
+		MetricsModifierAbsolute {
+			v + f64(mod.value)
+		}
 	}
-	return v + f64(mod.absolute)
 }
 
 // ============================================================

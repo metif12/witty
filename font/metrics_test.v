@@ -3,20 +3,10 @@ module font
 fn test_metrics_apply_absolute_and_percent_modifiers() {
 	mut metrics := default_grid_metrics(10, 20)
 	mut modifiers := MetricsModifierSet{}
-	modifiers.put(.cell_width, MetricsModifier{
-		absolute: 2
-	})
-	modifiers.put(.cell_height, MetricsModifier{
-		is_percent: true
-		percent: 1.5
-	})
-	modifiers.put(.underline_thickness, MetricsModifier{
-		absolute: 3
-	})
-	modifiers.put(.icon_height, MetricsModifier{
-		is_percent: true
-		percent: 0.5
-	})
+	modifiers.put(.cell_width, MetricsModifier(MetricsModifierAbsolute{ value: 2 }))
+	modifiers.put(.cell_height, MetricsModifier(MetricsModifierPercent{ value: 1.5 }))
+	modifiers.put(.underline_thickness, MetricsModifier(MetricsModifierAbsolute{ value: 3 }))
+	modifiers.put(.icon_height, MetricsModifier(MetricsModifierPercent{ value: 0.5 }))
 
 	metrics.apply(modifiers)
 
@@ -29,12 +19,8 @@ fn test_metrics_apply_absolute_and_percent_modifiers() {
 fn test_metrics_apply_clamps_sizes() {
 	mut metrics := default_grid_metrics(10, 20)
 	mut modifiers := MetricsModifierSet{}
-	modifiers.put(.cell_width, MetricsModifier{
-		absolute: -100
-	})
-	modifiers.put(.underline_position, MetricsModifier{
-		absolute: -100
-	})
+	modifiers.put(.cell_width, MetricsModifier(MetricsModifierAbsolute{ value: -100 }))
+	modifiers.put(.underline_position, MetricsModifier(MetricsModifierAbsolute{ value: -100 }))
 
 	metrics.apply(modifiers)
 
@@ -69,10 +55,7 @@ fn metrics_zero() Metrics {
 // ghostty: test "Metrics: apply modifiers"
 fn test_metrics_apply_modifiers() {
 	mut set := MetricsModifierSet{}
-	set.put(.cell_width, MetricsModifier{
-		is_percent: true
-		percent: 1.2
-	})
+	set.put(.cell_width, MetricsModifier(MetricsModifierPercent{ value: 1.2 }))
 
 	mut m := metrics_zero()
 	m.cell_width = 100
@@ -83,10 +66,7 @@ fn test_metrics_apply_modifiers() {
 // ghostty: test "Metrics: adjust cell height smaller"
 fn test_metrics_adjust_cell_height_smaller() {
 	mut set := MetricsModifierSet{}
-	set.put(.cell_height, MetricsModifier{
-		is_percent: true
-		percent: 0.75
-	})
+	set.put(.cell_height, MetricsModifier(MetricsModifierPercent{ value: 0.75 }))
 
 	mut m := metrics_zero()
 	m.face_y = 0.33
@@ -111,10 +91,7 @@ fn test_metrics_adjust_cell_height_smaller() {
 // ghostty: test "Metrics: adjust cell height larger"
 fn test_metrics_adjust_cell_height_larger() {
 	mut set := MetricsModifierSet{}
-	set.put(.cell_height, MetricsModifier{
-		is_percent: true
-		percent: 1.75
-	})
+	set.put(.cell_height, MetricsModifier(MetricsModifierPercent{ value: 1.75 }))
 
 	mut m := metrics_zero()
 	m.face_y = 0.33
@@ -139,10 +116,7 @@ fn test_metrics_adjust_cell_height_larger() {
 // ghostty: test "Metrics: adjust icon height by percentage"
 fn test_metrics_adjust_icon_height_by_percentage() {
 	mut set := MetricsModifierSet{}
-	set.put(.icon_height, MetricsModifier{
-		is_percent: true
-		percent: 0.75
-	})
+	set.put(.icon_height, MetricsModifier(MetricsModifierPercent{ value: 0.75 }))
 
 	mut m := metrics_zero()
 	m.icon_height = 100.0
@@ -160,10 +134,7 @@ fn test_metrics_adjust_icon_height_by_percentage() {
 // ghostty: test "Metrics: adjust icon height by absolute pixels"
 fn test_metrics_adjust_icon_height_by_absolute_pixels() {
 	mut set := MetricsModifierSet{}
-	set.put(.icon_height, MetricsModifier{
-		is_percent: false
-		absolute: -5
-	})
+	set.put(.icon_height, MetricsModifier(MetricsModifierAbsolute{ value: -5 }))
 
 	mut m := metrics_zero()
 	m.icon_height = 100.0
@@ -181,16 +152,18 @@ fn test_metrics_adjust_icon_height_by_absolute_pixels() {
 // ghostty: test "Modifier: parse absolute"
 fn test_modifier_parse_absolute() {
 	m1 := MetricsModifier.parse('100')!
-	assert m1.is_percent == false
-	assert m1.absolute == i32(100)
+	assert m1 is MetricsModifierAbsolute
+	assert m1.value == i32(100)
 
 	m2 := MetricsModifier.parse('-100')!
-	assert m2.is_percent == false
-	assert m2.absolute == i32(-100)
+	assert m2 is MetricsModifierAbsolute
+	assert m2.value == i32(-100)
 }
 
 fn test_modifier_parse_cli() {
-	assert MetricsModifier.parse_cli('20%')!.percent == 1.2
+	m := MetricsModifier.parse_cli('20%')!
+	assert m is MetricsModifierPercent
+	assert m.value == 1.2
 	MetricsModifier.parse_cli(none) or {
 		assert err.msg() == 'value required'
 		return
@@ -199,10 +172,16 @@ fn test_modifier_parse_cli() {
 }
 
 fn test_modifier_parse_absolute_matches_zig_i32_boundaries() {
-	assert MetricsModifier.parse('+42')!.absolute == 42
-	assert MetricsModifier.parse('1__2')!.absolute == 12
-	assert MetricsModifier.parse('2147483647')!.absolute == 2147483647
-	assert MetricsModifier.parse('-2147483648')!.absolute == i32(-2147483647 - 1)
+	for input, expected in {
+		'+42':        i32(42)
+		'1__2':       i32(12)
+		'2147483647': i32(2147483647)
+		'-2147483648': i32(-2147483647 - 1)
+	} {
+		m := MetricsModifier.parse(input)!
+		assert m is MetricsModifierAbsolute
+		assert m.value == expected
+	}
 	for invalid in ['', '+', '-', '_1', '1_', '1x', '2147483648', '-2147483649'] {
 		MetricsModifier.parse(invalid) or { continue }
 		assert false, 'expected ${invalid} to fail'
@@ -212,19 +191,23 @@ fn test_modifier_parse_absolute_matches_zig_i32_boundaries() {
 // ghostty: test "Modifier: parse percent"
 fn test_modifier_parse_percent() {
 	m1 := MetricsModifier.parse('20%')!
-	assert m1.is_percent == true
-	assert m1.percent == 1.2
+	assert m1 is MetricsModifierPercent
+	assert m1.value == 1.2
 
 	m2 := MetricsModifier.parse('-20%')!
-	assert m2.is_percent == true
-	assert m2.percent == 0.8
+	assert m2 is MetricsModifierPercent
+	assert m2.value == 0.8
 
 	m3 := MetricsModifier.parse('0%')!
-	assert m3.is_percent == true
-	assert m3.percent == 1.0
+	assert m3 is MetricsModifierPercent
+	assert m3.value == 1.0
 
-	assert MetricsModifier.parse('2_0%')!.percent == 1.2
-	assert MetricsModifier.parse('0x14p0%')!.percent == 1.2
+	m4 := MetricsModifier.parse('2_0%')!
+	assert m4 is MetricsModifierPercent
+	assert m4.value == 1.2
+	m5 := MetricsModifier.parse('0x14p0%')!
+	assert m5 is MetricsModifierPercent
+	assert m5.value == 1.2
 	if _ := MetricsModifier.parse(' 20%') {
 		assert false, 'expected leading whitespace to fail'
 	}
@@ -232,16 +215,10 @@ fn test_modifier_parse_percent() {
 
 // ghostty: test "Modifier: percent"
 fn test_modifier_percent() {
-	m1 := MetricsModifier{
-		is_percent: true
-		percent: 0.8
-	}
+	m1 := MetricsModifier(MetricsModifierPercent{ value: 0.8 })
 	assert m1.apply(u32(100)) == u32(80)
 
-	m2 := MetricsModifier{
-		is_percent: true
-		percent: 1.8
-	}
+	m2 := MetricsModifier(MetricsModifierPercent{ value: 1.8 })
 	assert m2.apply(u32(100)) == u32(180)
 	assert m1.apply(i32(100)) == i32(80)
 	assert m1.apply(f64(100)) == f64(80)
@@ -249,23 +226,14 @@ fn test_modifier_percent() {
 
 // ghostty: test "Modifier: absolute"
 fn test_modifier_absolute() {
-	m1 := MetricsModifier{
-		is_percent: false
-		absolute: -100
-	}
+	m1 := MetricsModifier(MetricsModifierAbsolute{ value: -100 })
 	assert m1.apply(u32(100)) == u32(0)
 
-	m2 := MetricsModifier{
-		is_percent: false
-		absolute: -120
-	}
+	m2 := MetricsModifier(MetricsModifierAbsolute{ value: -120 })
 	assert m2.apply(u32(100)) == u32(0)
 
-	m3 := MetricsModifier{
-		is_percent: false
-		absolute: 100
-	}
+	m3 := MetricsModifier(MetricsModifierAbsolute{ value: 100 })
 	assert m3.apply(u32(100)) == u32(200)
-	assert MetricsModifier{ absolute: -1 }.apply(i32(-2147483647 - 1)) == i32(-2147483647)
-	assert MetricsModifier{ absolute: 1 }.apply(i32(2147483647)) == i32(2147483647)
+	assert MetricsModifier(MetricsModifierAbsolute{ value: -1 }).apply(i32(-2147483647 - 1)) == i32(-2147483647)
+	assert MetricsModifier(MetricsModifierAbsolute{ value: 1 }).apply(i32(2147483647)) == i32(2147483647)
 }

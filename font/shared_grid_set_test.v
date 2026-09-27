@@ -73,13 +73,8 @@ fn test_gridset_key_hash_matches_source() {
 
 fn test_gridset_key_metric_key_tags_match_source() {
 	mut modifiers := MetricsModifierSet{}
-	modifiers.put(.cursor_thickness, MetricsModifier{
-		is_percent: true
-		percent: 1.25
-	})
-	modifiers.put(.cursor_height, MetricsModifier{
-		absolute: -3
-	})
+	modifiers.put(.cursor_thickness, MetricsModifier(MetricsModifierPercent{ value: 1.25 }))
+	modifiers.put(.cursor_height, MetricsModifier(MetricsModifierAbsolute{ value: -3 }))
 	mut key := Key{
 		metric_modifiers: modifiers
 		font_size: DesiredSize{ points: 12 }
@@ -175,10 +170,7 @@ fn test_gridset_key_descriptors_for_style() {
 fn test_gridset_key_metric_modifiers() {
 	// Test that keys with different metric modifiers produce different hashes.
 	cfg1 := DerivedConfig{
-		adjust_cell_width: MetricsModifier{
-			is_percent: true
-			percent: 1.2
-		}
+		adjust_cell_width: MetricsModifier(MetricsModifierPercent{ value: 1.2 })
 	}
 	cfg2 := DerivedConfig{}
 
@@ -192,16 +184,10 @@ fn test_gridset_key_metric_modifiers() {
 
 fn test_gridset_key_preserves_exact_metric_modifier_bits() {
 	cfg1 := DerivedConfig{
-		adjust_cell_width: MetricsModifier{
-			is_percent: true
-			percent: 1.200001
-		}
+		adjust_cell_width: MetricsModifier(MetricsModifierPercent{ value: 1.200001 })
 	}
 	cfg2 := DerivedConfig{
-		adjust_cell_width: MetricsModifier{
-			is_percent: true
-			percent: 1.200002
-		}
+		adjust_cell_width: MetricsModifier(MetricsModifierPercent{ value: 1.200002 })
 	}
 
 	mut k1 := Key.init(&cfg1, DesiredSize{ points: 12 })!
@@ -212,31 +198,17 @@ fn test_gridset_key_preserves_exact_metric_modifier_bits() {
 	assert k1.hashcode() != k2.hashcode()
 }
 
-fn test_metrics_modifier_hash_ignores_inactive_payload() {
-	percent1 := MetricsModifier{
-		is_percent: true
-		percent: 1.25
-		absolute: 1
-	}
-	percent2 := MetricsModifier{
-		is_percent: true
-		percent: 1.25
-		absolute: 999
-	}
+fn test_metrics_modifier_hashes_active_payload() {
+	percent1 := MetricsModifier(MetricsModifierPercent{ value: 1.25 })
+	percent2 := MetricsModifier(MetricsModifierPercent{ value: 1.25 })
 	mut percent1_hash := SourceHash{}
 	percent1.hash(mut percent1_hash)
 	mut percent2_hash := SourceHash{}
 	percent2.hash(mut percent2_hash)
 	assert percent1_hash.final() == percent2_hash.final()
 
-	absolute1 := MetricsModifier{
-		absolute: 3
-		percent: 1.1
-	}
-	absolute2 := MetricsModifier{
-		absolute: 3
-		percent: 9.9
-	}
+	absolute1 := MetricsModifier(MetricsModifierAbsolute{ value: 3 })
+	absolute2 := MetricsModifier(MetricsModifierAbsolute{ value: 3 })
 	mut absolute1_hash := SourceHash{}
 	absolute1.hash(mut absolute1_hash)
 	mut absolute2_hash := SourceHash{}
@@ -248,12 +220,12 @@ fn test_gridset_metrics_modifier_set() {
 	mut set := MetricsModifierSet{}
 	assert set.count() == 0
 
-	set.put(.cell_width, MetricsModifier{ is_percent: true, percent: 1.2 })
+	set.put(.cell_width, MetricsModifier(MetricsModifierPercent{ value: 1.2 }))
 	assert set.count() == 1
 
 	if m := set.get(.cell_width) {
-		assert m.is_percent == true
-		assert m.percent == 1.2
+		assert m is MetricsModifierPercent
+		assert m.value == 1.2
 	} else {
 		assert false
 	}

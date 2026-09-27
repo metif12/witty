@@ -744,38 +744,48 @@ pub enum MetricsKey as u8 {
 // a delta, so percent is a percentage to change, not a percentage of.
 // For example, "20%" is 20% larger, not 20% of the value. Likewise,
 // an absolute value of "20" is 20 larger, not literally 20.
-pub struct MetricsModifier {
+pub type MetricsModifier = MetricsModifierPercent | MetricsModifierAbsolute
+
+pub struct MetricsModifierPercent {
 pub:
-	// If true, this is a percent modifier; otherwise absolute.
-	is_percent bool
-	// The percentage value (1.2 = 20% increase). Used when is_percent == true.
-	percent f64
-	// The absolute delta value. Used when is_percent == false.
-	absolute i32
+	value f64
+}
+
+pub struct MetricsModifierAbsolute {
+pub:
+	value i32
 }
 
 // format_entry is Metrics.Modifier.formatEntry. Percent modifiers store a
 // multiplier, so the configuration value converts it back to a delta percent.
 pub fn (m MetricsModifier) format_entry() string {
-	if m.is_percent {
-		value := (m.percent - 1.0) * 100.0
-		if value == f64(i64(value)) {
-			return '${i64(value)}%'
+	return match m {
+		MetricsModifierPercent {
+			value := (m.value - 1.0) * 100.0
+			if value == f64(i64(value)) {
+				'${i64(value)}%'
+			} else {
+				'${value}%'
+			}
 		}
-		return '${value}%'
+		MetricsModifierAbsolute {
+			m.value.str()
+		}
 	}
-	return m.absolute.str()
 }
 
 // hash writes the active tagged-union payload exactly as Ghostty does.
 pub fn (m MetricsModifier) hash(mut hasher SourceHash) {
-	if m.is_percent {
-		hasher.put_u8(0)
-		hasher.put_f64(m.percent)
-		return
+	match m {
+		MetricsModifierPercent {
+			hasher.put_u8(0)
+			hasher.put_f64(m.value)
+		}
+		MetricsModifierAbsolute {
+			hasher.put_u8(1)
+			hasher.put_i32(m.value)
+		}
 	}
-	hasher.put_u8(1)
-	hasher.put_i32(m.absolute)
 }
 
 // parse parses a modifier value. If the value ends in "%" it is assumed to be
@@ -795,22 +805,13 @@ pub fn MetricsModifier.parse(input string) !MetricsModifier {
 		percent /= 100.0
 
 		if percent <= -1.0 {
-			return MetricsModifier{
-				is_percent: true
-				percent: 0
-			}
+			return MetricsModifier(MetricsModifierPercent{ value: 0 })
 		}
-		return MetricsModifier{
-			is_percent: true
-			percent: 1.0 + percent
-		}
+		return MetricsModifier(MetricsModifierPercent{ value: 1.0 + percent })
 	}
 
 	n := parse_metrics_i32(input) or { return error('invalid format') }
-	return MetricsModifier{
-		is_percent: false
-		absolute: n
-	}
+	return MetricsModifier(MetricsModifierAbsolute{ value: n })
 }
 
 // parse_cli is the optional-value adapter used by the configuration parser.
@@ -856,10 +857,7 @@ pub fn (mut self MetricsModifierSet) put(key MetricsKey, val MetricsModifier) {
 
 // get returns the modifier for the given key, or none if not set.
 pub fn (self &MetricsModifierSet) get(key MetricsKey) ?MetricsModifier {
-	if int(key) in self.entries {
-		return self.entries[int(key)]
-	}
-	return none
+	return self.entries[int(key)] or { return none }
 }
 
 // count returns the number of modifiers in the set.

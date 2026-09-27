@@ -16,6 +16,7 @@ import crash
 import oniguruma
 import renderer as rendererpkg
 import xev
+import font
 
 fn test_surface_private_source_tag_layouts_and_ordinals() {
 	assert sizeof(MouseReportAction) == 1
@@ -247,8 +248,9 @@ fn test_derived_config_preserves_complete_font_configuration() {
 	assert derived.font.font_codepoint_map.entries.len == 1
 	assert derived.font.font_codepoint_map.entries[0].descriptor.family? == 'Symbols'
 	assert !derived.font.font_synthetic_style.bold()
-	assert derived.font.adjust_cell_width?.is_percent
-	assert derived.font.adjust_cell_width?.percent == 1.1
+	modifier := derived.font.adjust_cell_width or { panic('missing cell-width modifier') }
+	assert modifier is font.MetricsModifierPercent
+	assert modifier.value == 1.1
 	assert !derived.font.freetype_load_flags.hinting()
 	assert derived.font.freetype_load_flags.force_autohint()
 }

@@ -5,6 +5,19 @@ import input
 import terminal
 import cli_args
 import buildcfg
+import font
+
+fn assert_metric_modifier_absolute(modifier ?font.MetricsModifier, expected i32) {
+	value := modifier or { panic('missing metrics modifier') }
+	assert value is font.MetricsModifierAbsolute
+	assert value.value == expected
+}
+
+fn assert_metric_modifier_percent(modifier ?font.MetricsModifier, expected f64) {
+	value := modifier or { panic('missing metrics modifier') }
+	assert value is font.MetricsModifierPercent
+	assert value.value == expected
+}
 
 enum FormatterTestEnum {
 	one
@@ -3216,20 +3229,19 @@ auto-update-channel = stable
 	assert cfg.font_codepoint_map.map.entries[0].descriptor.family? == 'Comic Sans'
 	assert cfg.font_codepoint_map.map.entries[1].range == [u32(1), u32(5)]!
 	assert cfg.font_codepoint_map.map.entries[2].range == [u32(6), u32(6)]!
-	assert cfg.adjust_cell_width?.absolute == 1
-	assert cfg.adjust_cell_height?.is_percent
-	assert cfg.adjust_cell_height?.percent == 1.2
-	assert cfg.adjust_font_baseline?.absolute == -2
-	assert cfg.adjust_underline_position?.absolute == 3
-	assert cfg.adjust_underline_thickness?.absolute == 4
-	assert cfg.adjust_strikethrough_position?.absolute == -5
-	assert cfg.adjust_strikethrough_thickness?.absolute == 6
-	assert cfg.adjust_overline_position?.absolute == -7
-	assert cfg.adjust_overline_thickness?.absolute == 8
-	assert cfg.adjust_cursor_thickness?.absolute == 9
-	assert cfg.adjust_cursor_height?.percent == 0.9
-	assert cfg.adjust_box_thickness?.absolute == 11
-	assert cfg.adjust_icon_height?.percent == 1.12
+	assert_metric_modifier_absolute(cfg.adjust_cell_width, 1)
+	assert_metric_modifier_percent(cfg.adjust_cell_height, 1.2)
+	assert_metric_modifier_absolute(cfg.adjust_font_baseline, -2)
+	assert_metric_modifier_absolute(cfg.adjust_underline_position, 3)
+	assert_metric_modifier_absolute(cfg.adjust_underline_thickness, 4)
+	assert_metric_modifier_absolute(cfg.adjust_strikethrough_position, -5)
+	assert_metric_modifier_absolute(cfg.adjust_strikethrough_thickness, 6)
+	assert_metric_modifier_absolute(cfg.adjust_overline_position, -7)
+	assert_metric_modifier_absolute(cfg.adjust_overline_thickness, 8)
+	assert_metric_modifier_absolute(cfg.adjust_cursor_thickness, 9)
+	assert_metric_modifier_percent(cfg.adjust_cursor_height, 0.9)
+	assert_metric_modifier_absolute(cfg.adjust_box_thickness, 11)
+	assert_metric_modifier_percent(cfg.adjust_icon_height, 1.12)
 	assert !cfg.freetype_load_flags.hinting()
 	assert cfg.freetype_load_flags.force_autohint()
 	assert cfg.freetype_load_flags.monochrome()
