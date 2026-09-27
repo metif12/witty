@@ -147,22 +147,22 @@ pub:
 	action ?Action
 }
 
-// SpecialCaseKind tags the three overrides an action enum can request while
-// command-line action detection is in progress.
-pub enum SpecialCaseKind as u8 {
-	action
-	fallback
-	abort_if_no_action
+pub struct SpecialCaseAction {
+pub:
+	value Action
 }
+
+pub struct SpecialCaseFallback {
+pub:
+	value Action
+}
+
+pub struct SpecialCaseAbortIfNoAction {}
 
 // SpecialCase is the translated cli.action.SpecialCase tagged union. V has no
 // comptime type-returning functions, so this is specialized to Ghostty's sole
-// CLI action enum. The value is ignored for abort_if_no_action.
-pub struct SpecialCase {
-pub:
-	kind  SpecialCaseKind
-	value Action
-}
+// CLI action enum. Only the action and fallback arms retain an Action payload.
+pub type SpecialCase = SpecialCaseAbortIfNoAction | SpecialCaseAction | SpecialCaseFallback
 
 pub fn (action Action) cli_name() string {
 	return action.str().replace('_', '-')
@@ -182,21 +182,13 @@ pub fn actions() []Action {
 // detect_special_case preserves Ghostty's Action.detectSpecialCase hook.
 pub fn Action.detect_special_case(arg string) ?SpecialCase {
 	if arg == '-e' {
-		return SpecialCase{
-			kind: .abort_if_no_action
-		}
+		return SpecialCaseAbortIfNoAction{}
 	}
 	if arg == '--version' {
-		return SpecialCase{
-			kind: .action
-			value: .version
-		}
+		return SpecialCaseAction{ value: .version }
 	}
 	if arg == '--help' || arg == '-h' {
-		return SpecialCase{
-			kind: .fallback
-			value: .help
-		}
+		return SpecialCaseFallback{ value: .help }
 	}
 	return none
 }
@@ -217,10 +209,10 @@ pub fn detect_iter[T](mut iter T) !DetectActionResult {
 	for {
 		arg := iter.next() or { break }
 		if special := Action.detect_special_case(arg) {
-			match special.kind {
-				.action { return DetectActionResult{ action: special.value } }
-				.fallback { fallback = special.value }
-				.abort_if_no_action {
+			match special {
+				SpecialCaseAction { return DetectActionResult{ action: special.value } }
+				SpecialCaseFallback { fallback = special.value }
+				SpecialCaseAbortIfNoAction {
 					if _ := pending {
 					} else {
 						return DetectActionResult{}

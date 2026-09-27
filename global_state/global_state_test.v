@@ -58,6 +58,26 @@ fn test_detect_action_exec_aborts_before_action() {
 	assert detect_action(['+help', '-e'])!.action? == .help
 }
 
+fn test_detect_action_special_case_variants() {
+	version := Action.detect_special_case('--version') or {
+		assert false
+		return
+	}
+	assert version is SpecialCaseAction
+	assert (version as SpecialCaseAction).value == .version
+	help := Action.detect_special_case('--help') or {
+		assert false
+		return
+	}
+	assert help is SpecialCaseFallback
+	assert (help as SpecialCaseFallback).value == .help
+	abort := Action.detect_special_case('-e') or {
+		assert false
+		return
+	}
+	assert abort is SpecialCaseAbortIfNoAction
+}
+
 fn test_cli_action_layout_and_source_ordinals() {
 	assert sizeof(Action) == 1
 	mut action_count := 0
