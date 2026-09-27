@@ -1747,7 +1747,7 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 		.goto_split {
 			if data is apprt.GotoSplit {
 				surface := surface_from_target(target) or { return false }
-				if isnil(surface.split_tree) {
+				mut tree := split_tree_from_surface(surface) or {
 					log.warn('surface is not in a split tree, ignoring goto_split')
 					return false
 				}
@@ -1759,7 +1759,6 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 					.down { datastruct.Goto(datastruct.GotoSpatial{ direction: .down }) }
 					.right { datastruct.Goto(datastruct.GotoSpatial{ direction: .right }) }
 				}
-				mut tree := unsafe { surface.split_tree }
 				return tree.goto_(to)
 			}
 		}
@@ -1808,6 +1807,10 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 		}
 		.key_sequence {
 			if data is apprt.KeySequence {
+				if target is apprt.AppTarget {
+					log.warn('key_sequence action to app is unexpected')
+					return false
+				}
 				mut surface := surface_from_target(target) or { return false }
 				surface.key_sequence_action(data)
 				return true
@@ -1815,6 +1818,10 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 		}
 		.key_table {
 			if data is apprt.KeyTable {
+				if target is apprt.AppTarget {
+					log.warn('key_table action to app is unexpected')
+					return false
+				}
 				mut surface := surface_from_target(target) or { return false }
 				surface.key_table_action(data)
 				return true
@@ -1993,11 +2000,11 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 					return false
 				}
 				surface := surface_from_target(target) or { return false }
-				if isnil(surface.split_tree) {
+				mut tree := split_tree_from_surface(surface) or {
 					log.warn('surface is not in a split tree, ignoring resize_split')
 					return false
 				}
-				if !surface.split_tree.get_is_split() {
+				if !tree.get_is_split() {
 					return false
 				}
 				direction := match data.direction {
@@ -2006,7 +2013,6 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 					.left { datastruct.Direction.left }
 					.right { datastruct.Direction.right }
 				}
-				mut tree := unsafe { surface.split_tree }
 				return tree.resize(direction, data.amount)
 			}
 		}
@@ -2026,6 +2032,10 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 		}
 		.set_title {
 			if data is apprt.SetTitle {
+				if target is apprt.AppTarget {
+					log.warn('set_title to app is unexpected')
+					return true
+				}
 				if mut surface := surface_from_target(target) {
 					surface.set_title(data.title)
 				}
@@ -2069,32 +2079,48 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 		}
 		.toggle_tab_overview {
 			surface := surface_from_target(target) or { return false }
-			mut window := window_from_surface(surface) or { return false }
+			mut window := window_from_surface(surface) or {
+				log.warn('surface is not in a window, ignoring new_tab')
+				return false
+			}
 			window.toggle_tab_overview()
 			return true
 		}
 		.toggle_window_decorations {
 			surface := surface_from_target(target) or { return false }
-			mut window := window_from_surface(surface) or { return false }
+			mut window := window_from_surface(surface) or {
+				log.warn('surface is not in a window, ignoring toggle_window_decorations')
+				return false
+			}
 			window.toggle_window_decorations()
 			return true
 		}
 		.toggle_command_palette {
 			surface := surface_from_target(target) or { return false }
-			mut window := window_from_surface(surface) or { return false }
-			window.toggle_command_palette()
-			return true
+			return C.gtk_widget_activate_action_variant(surface.widget,
+				c'win.toggle-command-palette', unsafe { nil })
 		}
 		.toggle_split_zoom {
-			surface := surface_from_target(target) or { return false }
-			if isnil(surface.split_tree) || !surface.split_tree.get_is_split() {
+			if target is apprt.AppTarget {
+				log.warn('toggle_split_zoom to app is unexpected')
 				return false
 			}
-			mut tree := unsafe { surface.split_tree }
-			tree.action_zoom()
-			return true
+			surface := surface_from_target(target) or { return false }
+			tree := split_tree_from_surface(surface) or {
+				log.warn('surface is not in a split tree, ignoring toggle_split_zoom')
+				return false
+			}
+			if !tree.get_is_split() {
+				return false
+			}
+			return C.gtk_widget_activate_action_variant(surface.widget, c'split-tree.zoom',
+				unsafe { nil })
 		}
 		.show_on_screen_keyboard {
+			if target is apprt.AppTarget {
+				log.warn('show_on_screen_keyboard to app is unexpected')
+				return false
+			}
 			mut surface := surface_from_target(target) or { return false }
 			return surface.show_on_screen_keyboard(unsafe { nil })
 		}
@@ -2182,6 +2208,25 @@ fn window_from_surface(surface &SurfaceWidget) ?&Window {
 	}
 	widget := C.gtk_widget_get_ancestor(surface.widget, window_get_type())
 	return window_from_native(widget)
+}
+
+fn split_tree_from_surface(surface &SurfaceWidget) ?&SplitTreeWidget {
+	if isnil(surface) || isnil(surface.widget) {
+		return none
+	}
+	widget := C.gtk_widget_get_ancestor(surface.widget, split_tree_get_type())
+	if isnil(widget) {
+		return none
+	}
+	priv := split_tree_priv(voidptr(widget))
+	if isnil(priv.wrapper) {
+		return none
+	}
+	tree := unsafe { &SplitTreeWidget(priv.wrapper) }
+	if isnil(tree) || tree.widget != widget {
+		return none
+	}
+	return tree
 }
 
 fn window_from_native(widget GtkWidget) ?&Window {
