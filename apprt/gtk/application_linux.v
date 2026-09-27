@@ -226,23 +226,19 @@ fn glib_log_writer_function(level u32, fields voidptr, n_fields usize, user_data
 	msg := message or { return g_log_writer_unhandled }
 	domain_name := domain or { '«unknown»' }
 	if level & g_log_level_error != 0 {
-		eprintln('[error] glib: ERROR: ${domain_name}: ${msg}')
+		log.error('glib: ERROR: ${domain_name}: ${msg}')
 	} else if level & g_log_level_critical != 0 {
-		eprintln('[error] glib: CRITICAL: ${domain_name}: ${msg}')
+		log.error('glib: CRITICAL: ${domain_name}: ${msg}')
 	} else if level & g_log_level_warning != 0 {
-		eprintln('[warn] glib: WARNING: ${domain_name}: ${msg}')
+		log.warn('glib: WARNING: ${domain_name}: ${msg}')
 	} else if level & g_log_level_message != 0 {
-		eprintln('[info] glib: MESSAGE: ${domain_name}: ${msg}')
+		log.info('glib: MESSAGE: ${domain_name}: ${msg}')
 	} else if level & g_log_level_info != 0 {
-		eprintln('[info] glib: INFO: ${domain_name}: ${msg}')
+		log.info('glib: INFO: ${domain_name}: ${msg}')
 	} else if level & g_log_level_debug != 0 {
-		$if debug {
-			eprintln('[debug] glib: DEBUG: ${domain_name}: ${msg}')
-		}
+		log.debug('glib: DEBUG: ${domain_name}: ${msg}')
 	} else {
-		$if debug {
-			eprintln('[debug] glib: UNKNOWN: ${domain_name}: ${msg}')
-		}
+		log.debug('glib: UNKNOWN: ${domain_name}: ${msg}')
 	}
 	return g_log_writer_handled
 }
@@ -1524,7 +1520,10 @@ fn (mut self Application) reload_config(target apprt.Target, soft bool) ! {
 	defer {
 		internal_os.ready()
 	}
-	config := if soft { self.config.clone() } else { configpkg.Config.load()! }
+	mut config := if soft { self.config.clone() } else { configpkg.Config.load()! }
+	defer {
+		config.deinit()
+	}
 	match target {
 		apprt.SurfaceTarget {
 			mut surface := surface_from_target(target) or {
@@ -1535,7 +1534,7 @@ fn (mut self Application) reload_config(target apprt.Target, soft bool) ! {
 		}
 		apprt.AppTarget {
 			if isnil(self.core_app) {
-				self.set_config(config)
+				self.set_config(config.clone())
 				return
 			}
 			mut core_app := unsafe { self.core_app }
@@ -1960,7 +1959,10 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 			}
 		}
 		.open_config {
-			path := configpkg.open_path() or { return false }
+			path := configpkg.open_path() or {
+				log.warn('error getting config file path: ${err}')
+				return false
+			}
 			// The action was resolved once the editable path was found. Ghostty's
 			// openUrl helper logs launcher failures but deliberately does not turn
 			// them into an unhandled action, which would pass the key through.
