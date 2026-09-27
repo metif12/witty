@@ -42,14 +42,14 @@ pub:
 mut:
 	// State of the process. This is updated by the dedicated thread it
 	// runs in and is protected by the given lock and condition variable.
-	state       FlatpakState
+	state       FlatpakState           = FlatpakStateInit{}
 	state_mutex &sync.Mutex          = sync.new_mutex()
 	state_cv    datastruct.Condition = datastruct.Condition.init()
 }
 
 // State the process is in. This can't be inspected directly, you
 // must use getters on the struct to get access.
-enum FlatpakStateTag {
+enum FlatpakStateTag as u8 {
 	// Initial state
 	init
 	// Error starting. The error message is only available via logs.
@@ -62,17 +62,42 @@ enum FlatpakStateTag {
 	exited
 }
 
-// Ghostty's tagged State union, flattened: `pid` belongs to started and
-// exited, `status` to exited, and the remaining fields to started.
-struct FlatpakState {
+struct FlatpakStateInit {}
+
+struct FlatpakStateErr {}
+
+struct FlatpakStateStarted {
 mut:
-	tag          FlatpakStateTag
 	pid          u32
-	loop_xev     &xev.Loop          = unsafe { nil }
-	completion   &FlatpakCompletion = unsafe { nil }
+	loop_xev     ?&xev.Loop
+	completion   ?&FlatpakCompletion
 	subscription u32
 	loop         voidptr
-	status       u8
+}
+
+struct FlatpakStateExited {
+	pid    u32
+	status u8
+}
+
+// FlatpakState is Ghostty's process-state tagged union. The started-only event
+// loop handles and completion pointer no longer survive in the other states.
+type FlatpakState = FlatpakStateInit | FlatpakStateErr | FlatpakStateStarted | FlatpakStateExited
+
+fn (self FlatpakState) tag() FlatpakStateTag {
+	return match self {
+		FlatpakStateInit { .init }
+		FlatpakStateErr { .err }
+		FlatpakStateStarted { .started }
+		FlatpakStateExited { .exited }
+	}
+}
+
+fn (self FlatpakState) started() FlatpakStateStarted {
+	return match self {
+		FlatpakStateStarted { self }
+		else { panic('Flatpak host command is not in the started state') }
+	}
 }
 
 // The callback of waitXev. Zig's `WaitError!u8` result is split into the
@@ -117,14 +142,15 @@ pub fn (mut self FlatpakHostCommand) spawn() !u32 {
 	defer {
 		self.state_mutex.unlock()
 	}
-	for self.state.tag == .init {
+	for self.state is FlatpakStateInit {
 		self.state_cv.wait(mut self.state_mutex)
 	}
 
-	return match self.state.tag {
-		.init { panic('unreachable') }
-		.err { error('FlatpakSpawnFail') }
-		.started, .exited { self.state.pid }
+	return match self.state {
+		FlatpakStateInit { panic('unreachable') }
+		FlatpakStateErr { error('FlatpakSpawnFail') }
+		FlatpakStateStarted { self.state.pid }
+		FlatpakStateExited { self.state.pid }
 	}
 }
 
@@ -137,19 +163,18 @@ pub fn (mut self FlatpakHostCommand) wait() !u8 {
 	}
 
 	for {
-		match self.state.tag {
-			.init {
+		state_snapshot := self.state
+		match state_snapshot {
+			FlatpakStateInit {
 				return error('FlatpakMustBeStarted')
 			}
-			.err {
+			FlatpakStateErr {
 				return error('FlatpakSpawnFail')
 			}
-			.started {}
-			.exited {
-				status := self.state.status
-				self.state = FlatpakState{
-					tag: .init
-				}
+			FlatpakStateStarted {}
+			FlatpakStateExited {
+				status := state_snapshot.status
+				self.state = FlatpakStateInit{}
 				self.state_cv.broadcast()
 				return status
 			}
@@ -177,23 +202,23 @@ pub fn (mut self FlatpakHostCommand) wait_xev(mut loop xev.Loop, completion &Fla
 		}
 	}
 
-	match self.state.tag {
-		.init {
+	match mut self.state {
+		FlatpakStateInit {
 			c.result = FlatpakWaitResult{
 				err: error('FlatpakMustBeStarted')
 			}
 		}
-		.err {
+		FlatpakStateErr {
 			c.result = FlatpakWaitResult{
 				err: error('FlatpakSpawnFail')
 			}
 		}
-		.started {
+		FlatpakStateStarted {
 			self.state.loop_xev = unsafe { &loop }
 			self.state.completion = c
 			return
 		}
-		.exited {
+		FlatpakStateExited {
 			c.result = FlatpakWaitResult{
 				status: self.state.status
 			}
@@ -245,7 +270,7 @@ fn (mut self FlatpakHostCommand) started_pid() ?u32 {
 	defer {
 		self.state_mutex.unlock()
 	}
-	if self.state.tag == .started {
+	if self.state is FlatpakStateStarted {
 		return self.state.pid
 	}
 	return none

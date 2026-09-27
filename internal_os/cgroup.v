@@ -25,8 +25,23 @@ pub enum CgroupLimitKind as u8 {
 	pids_max    = 1
 }
 
-pub struct CgroupLimit {
+pub struct CgroupLimitMemoryHigh {
 pub:
-	kind  CgroupLimitKind
 	value usize
+}
+
+pub struct CgroupLimitPidsMax {
+pub:
+	value usize
+}
+
+// CgroupLimit retains only the payload for the selected cgroup control file,
+// matching Ghostty's Limit tagged union.
+pub type CgroupLimit = CgroupLimitMemoryHigh | CgroupLimitPidsMax
+
+pub fn (self CgroupLimit) kind() CgroupLimitKind {
+	return match self {
+		CgroupLimitMemoryHigh { .memory_high }
+		CgroupLimitPidsMax { .pids_max }
+	}
 }

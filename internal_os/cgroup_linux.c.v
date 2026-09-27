@@ -62,12 +62,12 @@ pub fn configure_controllers(cgroup string, value string) ! {
 }
 
 pub fn configure_limit(cgroup string, limit CgroupLimit) ! {
-	filename := match limit.kind {
-		.memory_high { 'memory.high' }
-		.pids_max { 'pids.max' }
+	filename, value := match limit {
+		CgroupLimitMemoryHigh { 'memory.high', limit.value }
+		CgroupLimitPidsMax { 'pids.max', limit.value }
 	}
 	path := os.join_path(checked_cgroup_path(cgroup)!, filename)
-	cgroup_write_existing(path, limit.value.str())!
+	cgroup_write_existing(path, value.str())!
 }
 
 fn cgroup_write_existing(path string, value string) ! {

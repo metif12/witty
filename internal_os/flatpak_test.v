@@ -12,6 +12,29 @@ mut:
 	status u8
 }
 
+fn test_flatpak_state_is_the_source_tagged_union() {
+	assert sizeof(FlatpakStateTag) == 1
+	assert u8(FlatpakStateTag.init) == 0
+	assert u8(FlatpakStateTag.err) == 1
+	assert u8(FlatpakStateTag.started) == 2
+	assert u8(FlatpakStateTag.exited) == 3
+
+	init_state := FlatpakState(FlatpakStateInit{})
+	assert init_state is FlatpakStateInit
+	assert init_state.tag() == .init
+	started_state := FlatpakState(FlatpakStateStarted{
+		pid: 42
+	})
+	assert started_state is FlatpakStateStarted
+	assert started_state.tag() == .started
+	exited_state := FlatpakState(FlatpakStateExited{
+		pid: 42
+		status: 3
+	})
+	assert exited_state is FlatpakStateExited
+	assert exited_state.tag() == .exited
+}
+
 fn flatpak_test_wait_cb(ud voidptr, _ &xev.Loop, _ &FlatpakCompletion, r ?IError, status u8) {
 	mut probe := unsafe { &FlatpakWaitProbe(ud) }
 	probe.called = true
@@ -55,8 +78,7 @@ fn test_flatpak_host_command_wait_xev_delivers_exit_status() ! {
 	mut command := FlatpakHostCommand{
 		argv: ['/bin/true']
 	}
-	command.update_state(FlatpakState{
-		tag:    .exited
+	command.update_state(FlatpakStateExited{
 		pid:    42
 		status: 3
 	})

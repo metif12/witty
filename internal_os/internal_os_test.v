@@ -617,7 +617,18 @@ fn test_cgroup_path_from_contents() {
 
 fn test_cgroup_limit_uses_pointer_width_payload() {
 	assert sizeof(CgroupLimitKind) == 1
-	assert sizeof(CgroupLimit) == 2 * sizeof(usize)
+	assert sizeof(CgroupLimitMemoryHigh) == sizeof(usize)
+	assert sizeof(CgroupLimitPidsMax) == sizeof(usize)
+	memory := CgroupLimit(CgroupLimitMemoryHigh{
+		value: usize(1) << 40
+	})
+	assert memory is CgroupLimitMemoryHigh
+	assert memory.kind() == .memory_high
+	pids := CgroupLimit(CgroupLimitPidsMax{
+		value: 128
+	})
+	assert pids is CgroupLimitPidsMax
+	assert pids.kind() == .pids_max
 }
 
 fn test_cgroup_write_existing_does_not_create_files() {

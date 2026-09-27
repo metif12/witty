@@ -135,7 +135,7 @@ fn flatpak_host_command_thread_main(command &FlatpakHostCommand) {
 	bus := C.g_bus_get_sync(C.G_BUS_TYPE_SESSION, unsafe { nil }, &g_err)
 	if isnil(bus) {
 		eprintln('spawn error getting bus: ${gerror_message(g_err)}')
-		self.update_state(FlatpakState{ tag: .err })
+		self.update_state(FlatpakStateErr{})
 		return
 	}
 	defer {
@@ -145,7 +145,7 @@ fn flatpak_host_command_thread_main(command &FlatpakHostCommand) {
 	// Spawn the command first. This will setup all our IO.
 	self.start(bus, loop) or {
 		eprintln('error starting host command: ${err}')
-		self.update_state(FlatpakState{ tag: .err })
+		self.update_state(FlatpakStateErr{})
 		return
 	}
 
@@ -260,8 +260,7 @@ fn (mut self FlatpakHostCommand) start(bus voidptr, loop voidptr) ! {
 
 	pid := flatpak_variant_get_uint32(reply, 0)
 
-	self.update_state(FlatpakState{
-		tag:          .started
+	self.update_state(FlatpakStateStarted{
 		pid:          pid
 		subscription: subscription_id
 		loop:         loop
@@ -271,37 +270,38 @@ fn (mut self FlatpakHostCommand) start(bus voidptr, loop voidptr) ! {
 
 fn flatpak_host_command_on_exit(bus voidptr, _ &char, _ &char, _ &char, _ &char, params voidptr, ud voidptr) {
 	mut self := unsafe { &FlatpakHostCommand(ud) }
-	state := self.current_state()
+	started_state := self.current_state().started()
 
 	// "(uu)"
 	pid := flatpak_variant_get_uint32(params, 0)
 	exit_status_raw := flatpak_variant_get_uint32(params, 1)
-	if state.pid != pid {
+	if started_state.pid != pid {
 		return
 	}
 
 	// std.posix.W.EXITSTATUS (Linux)
 	exit_status := u8((exit_status_raw & 0xff00) >> 8)
 	// Update our state
-	self.update_state(FlatpakState{
-		tag:    .exited
+	self.update_state(FlatpakStateExited{
 		pid:    pid
 		status: exit_status
 	})
-	if !isnil(state.completion) {
-		mut completion := state.completion
+	if completion_ptr := started_state.completion {
+		// The stored pointer is caller-owned mutable completion state; optional
+		// unwrapping otherwise marks the alias immutable in the pinned compiler.
+		mut completion := unsafe { completion_ptr }
 		completion.result = FlatpakWaitResult{
 			status: exit_status
 		}
-		mut loop := state.loop_xev
+		mut loop := started_state.loop_xev or { panic('Flatpak xev completion has no loop') }
 		flatpak_completion_run(mut loop, completion)
 	}
 
 	// We're done now, so we can unsubscribe
-	C.g_dbus_connection_signal_unsubscribe(bus, state.subscription)
+	C.g_dbus_connection_signal_unsubscribe(bus, started_state.subscription)
 
 	// We are also done with our loop so we can exit.
-	C.g_main_loop_quit(state.loop)
+	C.g_main_loop_quit(started_state.loop)
 }
 
 fn (mut self FlatpakHostCommand) current_state() FlatpakState {
