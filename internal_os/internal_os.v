@@ -24,6 +24,24 @@ fn C.pipe(fds &int) int
 
 fn C.fcntl(fd i32, cmd i32, arg ...voidptr) i32
 
+fn C.fork() int
+
+fn C.dup(fd int) int
+
+fn C.dup2(oldfd int, newfd int) int
+
+fn C.close(fd int) int
+
+fn C.execvp(file &char, argv &&char) int
+
+fn C._exit(status int)
+
+fn C.read(fd int, buf voidptr, count usize) isize
+
+fn C.write(fd i32, buf voidptr, count usize) int
+
+fn C.waitpid(pid int, status &int, options int) int
+
 fn C.getrlimit(resource int, rlp &C.rlimit) int
 
 fn C.setrlimit(resource int, rlp &C.rlimit) int
@@ -76,14 +94,130 @@ pub fn open(kind OpenType, url string) ! {
 	executable, args := open_command_for_os(os_name, kind, url)!
 	mut process := os.new_process(executable)
 	process.set_args(args)
-	// Ghostty pipes both streams so platform helpers never write into the
-	// terminal and their diagnostic output can be captured by the reaper.
-	process.set_redirect_stdio()
-	process.run()
-	if process.status == .aborted {
-		return error('failed to start URL handler: ${process.err}')
-	}
+	spawn_open_process(mut process)!
 	spawn reap_open_process(mut process)
+}
+
+// Ghostty redirects only stdout and stderr, leaving stdin inherited. V's
+// Process redirection creates a third pipe, so POSIX uses the same fork/exec
+// layout as the source and then hands the child to Process for wait/cleanup.
+fn spawn_open_process(mut process os.Process) ! {
+	$if windows {
+		process.set_redirect_stdio()
+		process.run()
+		if process.status == .aborted {
+			err := process.err
+			process.close()
+			return error('failed to start URL handler: ${err}')
+		}
+	} $else {
+		stdout_pipe := pipe()!
+		stderr_pipe := pipe() or {
+			close_pipe(stdout_pipe)
+			return err
+		}
+		exec_error_pipe := pipe() or {
+			close_pipe(stdout_pipe)
+			close_pipe(stderr_pipe)
+			return err
+		}
+
+		mut argv := []&char{cap: process.args.len + 2}
+		argv << &char(process.filename.str)
+		for arg in process.args {
+			argv << &char(arg.str)
+		}
+		argv << &char(unsafe { nil })
+
+		pid := C.fork()
+		if pid < 0 {
+			errno_code := C.errno
+			close_pipe(stdout_pipe)
+			close_pipe(stderr_pipe)
+			close_pipe(exec_error_pipe)
+			return error('failed to start URL handler: ${os.posix_get_error_msg(errno_code)}')
+		}
+		if pid == 0 {
+			C.close(stdout_pipe[0])
+			C.close(stderr_pipe[0])
+			C.close(exec_error_pipe[0])
+			if C.dup2(stdout_pipe[1], 1) < 0 || C.dup2(stderr_pipe[1], 2) < 0 {
+				open_child_report_error(exec_error_pipe[1])
+			}
+			if stdout_pipe[1] > 2 {
+				C.close(stdout_pipe[1])
+			}
+			if stderr_pipe[1] > 2 {
+				C.close(stderr_pipe[1])
+			}
+			C.execvp(&char(process.filename.str), argv.data)
+			open_child_report_error(exec_error_pipe[1])
+		}
+
+		os.fd_close(stdout_pipe[1])
+		os.fd_close(stderr_pipe[1])
+		os.fd_close(exec_error_pipe[1])
+		spawn_error := read_open_spawn_error(exec_error_pipe[0]) or {
+			os.fd_close(exec_error_pipe[0])
+			os.fd_close(stdout_pipe[0])
+			os.fd_close(stderr_pipe[0])
+			mut status := 0
+			C.waitpid(pid, &status, 0)
+			return err
+		}
+		os.fd_close(exec_error_pipe[0])
+		if spawn_error != 0 {
+			os.fd_close(stdout_pipe[0])
+			os.fd_close(stderr_pipe[0])
+			mut status := 0
+			C.waitpid(pid, &status, 0)
+			return error('failed to start URL handler: ${os.posix_get_error_msg(spawn_error)}')
+		}
+
+		process.pid = pid
+		process.status = .running
+		process.use_stdio_ctl = true
+		process.stdio_fd = [-1, stdout_pipe[0], stderr_pipe[0]]!
+	}
+}
+
+// This runs after fork and before exec in a potentially multithreaded process,
+// so it is deliberately limited to async-signal-safe libc calls.
+fn open_child_report_error(fd int) {
+	errno_code := i32(C.errno)
+	for {
+		result := C.write(i32(fd), &errno_code, sizeof(i32))
+		if result >= 0 || C.errno != C.EINTR {
+			break
+		}
+	}
+	C._exit(127)
+}
+
+fn read_open_spawn_error(fd int) !int {
+	for {
+		mut errno_code := i32(0)
+		count := C.read(fd, &errno_code, sizeof(i32))
+		if count == 0 {
+			return 0
+		}
+		if count == isize(sizeof(i32)) {
+			return int(errno_code)
+		}
+		if count < 0 && C.errno == C.EINTR {
+			continue
+		}
+		if count < 0 {
+			return os.error_posix()
+		}
+		return error('short read from URL handler spawn pipe')
+	}
+	return error('unreachable URL handler spawn-pipe state')
+}
+
+fn close_pipe(fds [2]int) {
+	os.fd_close(fds[0])
+	os.fd_close(fds[1])
 }
 
 // The platform URL opener may block until the target application exits. Reap

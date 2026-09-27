@@ -52,9 +52,7 @@ fn test_open_process_collects_stdout_and_stderr_concurrently() {
 	$if !windows {
 		mut process := os.new_process('/bin/sh')
 		process.set_args(['-c', 'head -c 131072 /dev/zero >&2; printf stdout-complete'])
-		process.set_redirect_stdio()
-		process.run()
-		assert process.status != .aborted
+		spawn_open_process(mut process)!
 
 		stdout_result := chan OpenProcessOutput{ cap: 1 }
 		stderr_result := chan OpenProcessOutput{ cap: 1 }
@@ -71,6 +69,58 @@ fn test_open_process_collects_stdout_and_stderr_concurrently() {
 		assert !stdout.too_long
 		assert stderr.data.len == 0
 		assert stderr.too_long
+	}
+}
+
+fn test_open_process_inherits_stdin_and_redirects_output() {
+	$if !windows {
+		input_pipe := pipe()!
+		input := 'inherited-stdin-policy'
+		assert C.write(i32(input_pipe[1]), input.str, usize(input.len)) == input.len
+		os.fd_close(input_pipe[1])
+		saved_stdin := C.dup(0)
+		assert saved_stdin >= 0
+		mut stdin_restored := false
+		defer {
+			if !stdin_restored {
+				C.dup2(saved_stdin, 0)
+				os.fd_close(saved_stdin)
+			}
+		}
+		assert C.dup2(input_pipe[0], 0) >= 0
+		os.fd_close(input_pipe[0])
+
+		mut process := os.new_process('/bin/sh')
+		process.set_args(['-c', 'cat'])
+		spawn_open_process(mut process)!
+		assert C.dup2(saved_stdin, 0) >= 0
+		os.fd_close(saved_stdin)
+		stdin_restored = true
+		assert process.use_stdio_ctl
+		assert process.stdio_fd[0] == -1
+
+		stdout_result := chan OpenProcessOutput{ cap: 1 }
+		stderr_result := chan OpenProcessOutput{ cap: 1 }
+		collect_open_output(mut process, .stdout, stdout_result)
+		collect_open_output(mut process, .stderr, stderr_result)
+		stdout := <-stdout_result
+		stderr := <-stderr_result
+		process.wait()
+		process.close()
+		assert stdout.data == input
+		assert !stdout.too_long
+		assert stderr.data.len == 0
+	}
+}
+
+fn test_open_process_reports_exec_failure() {
+	$if !windows {
+		mut process := os.new_process('/witty-test/missing-url-handler')
+		spawn_open_process(mut process) or {
+			assert err.msg().contains('failed to start URL handler')
+			return
+		}
+		assert false
 	}
 }
 
