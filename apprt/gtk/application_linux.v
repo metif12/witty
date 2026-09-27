@@ -222,13 +222,17 @@ fn glib_log_writer_function(level u32, fields voidptr, n_fields usize, user_data
 // --- Quit timer state -----------------------------------------------------
 //
 // Mirrors the `quit_timer: union(enum) { off, active: c_uint, expired }` in the
-// Zig Private struct. We model the tagged union as a tag plus the active source
-// id.
-pub enum QuitTimerState as u8 {
-	off
-	active
-	expired
+// Zig Private struct. Only the active arm owns a GLib source id.
+pub struct QuitTimerOff {}
+
+pub struct QuitTimerActive {
+pub:
+	source u32
 }
+
+pub struct QuitTimerExpired {}
+
+pub type QuitTimer = QuitTimerOff | QuitTimerActive | QuitTimerExpired
 
 // --- GObject class registration -------------------------------------------
 
@@ -393,8 +397,7 @@ mut:
 
 	// The quit timer used to quit the app after the last window is closed.
 	// Mirrors `Private.quit_timer`.
-	quit_timer_state  QuitTimerState = .off
-	quit_timer_source u32
+	quit_timer QuitTimer = QuitTimerOff{}
 
 	// glib source id for our SIGUSR2 signal handler. Mirrors
 	// `Private.signal_source`.
@@ -705,7 +708,7 @@ fn (self &Application) must_quit() bool {
 	}
 
 	// If the quit timer has expired, quit.
-	if self.quit_timer_state == .expired {
+	if self.quit_timer is QuitTimerExpired {
 		// log.debug("must_quit due to quit timer expired")
 		return true
 	}
@@ -807,11 +810,13 @@ fn (mut self Application) start_quit_timer() {
 	}
 
 	if delay := self.config.quit_after_last_window_closed_delay {
-		self.quit_timer_source = C.g_timeout_add(delay.as_milliseconds(), voidptr(handle_quit_timer_expired), voidptr(self))
-		self.quit_timer_state = .active
+		self.quit_timer = QuitTimerActive{
+			source: C.g_timeout_add(delay.as_milliseconds(), voidptr(handle_quit_timer_expired),
+				voidptr(self))
+		}
 	} else {
 		// If no delay is configured, treat the timer as immediately expired.
-		self.quit_timer_state = .expired
+		self.quit_timer = QuitTimerExpired{}
 	}
 }
 
@@ -821,26 +826,24 @@ fn handle_quit_timer_expired(data voidptr) int {
 		return 0
 	}
 	mut self := unsafe { &Application(data) }
-	self.quit_timer_state = .expired
-	self.quit_timer_source = 0
+	self.quit_timer = QuitTimerExpired{}
 	return 0
 }
 
 // stop_quit_timer is called when a new surface gets opened. Mirrors
 // `Application.stopQuitTimer`.
 fn (mut self Application) stop_quit_timer() {
-	match self.quit_timer_state {
-		.off {}
-		.expired {
-			self.quit_timer_state = .off
-		}
-		.active {
-			if !C.g_source_remove(self.quit_timer_source) {
+	timer := self.quit_timer
+	match timer {
+		QuitTimerOff { return }
+		QuitTimerExpired {}
+		QuitTimerActive {
+			if !C.g_source_remove(timer.source) {
 				// log.warn("unable to remove quit timer source")
 			}
-			self.quit_timer_state = .off
 		}
 	}
+	self.quit_timer = QuitTimerOff{}
 }
 
 // --- Action accelerators --------------------------------------------------

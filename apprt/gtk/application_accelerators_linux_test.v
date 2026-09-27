@@ -36,17 +36,16 @@ fn test_application_quit_timer_without_delay_expires_immediately() {
 		}
 	}
 	app.start_quit_timer()
-	assert app.quit_timer_state == .expired
+	assert app.quit_timer is QuitTimerExpired
 }
 
 fn test_application_quit_timer_callback_marks_expired() {
 	mut app := Application{
-		quit_timer_state: .active
-		quit_timer_source: 42
+		quit_timer: QuitTimerActive{ source: 42 }
 	}
+	assert (app.quit_timer as QuitTimerActive).source == 42
 	assert handle_quit_timer_expired(voidptr(&app)) == 0
-	assert app.quit_timer_state == .expired
-	assert app.quit_timer_source == 0
+	assert app.quit_timer is QuitTimerExpired
 }
 
 fn test_application_cgroup_mode_gate() {
@@ -114,7 +113,7 @@ fn test_application_dispatches_core_runtime_actions() ! {
 	}
 	app.dispatch_runtime_actions()!
 	assert app.runtime_bridge.actions.len == 0
-	assert app.quit_timer_state == .expired
+	assert app.quit_timer is QuitTimerExpired
 
 	app.runtime_bridge.actions << apprt.RuntimeAction{
 		target: apprt.Target(apprt.AppTarget{})
@@ -122,7 +121,7 @@ fn test_application_dispatches_core_runtime_actions() ! {
 		data: apprt.ActionValue(apprt.QuitTimer.stop)
 	}
 	app.dispatch_runtime_actions()!
-	assert app.quit_timer_state == .off
+	assert app.quit_timer is QuitTimerOff
 }
 
 fn test_application_sigusr2_callback_continues_without_instance() {

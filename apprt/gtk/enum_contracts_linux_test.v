@@ -30,8 +30,6 @@ fn test_gtk_enum_layouts_and_source_values() {
 		2,
 	]
 
-	assert sizeof(QuitTimerState) == 1
-	assert [QuitTimerState.off, .active, .expired].map(u8(it)) == [u8(0), 1, 2]
 	assert sizeof(CommandDataKind) == 1
 	assert [CommandDataKind.regular, .jump].map(u8(it)) == [u8(0), 1]
 	assert sizeof(Method) == 1
