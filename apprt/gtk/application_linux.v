@@ -579,6 +579,12 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 	self.obj = GApplication(obj)
 	mut priv := ghostty_application_priv(obj)
 	priv.wrapper = voidptr(self)
+	// Core actions borrow their payloads for the duration of perform_action.
+	// Dispatch them synchronously through the translated GTK App, exactly like
+	// Ghostty's apprt vtable, rather than retaining borrowed data in a queue.
+	self.runtime_bridge.user_data = self
+	self.runtime_bridge.action_fn = application_runtime_action_cb
+	self.runtime_bridge.wakeup_fn = application_runtime_wakeup_cb
 	C.g_application_set_resource_base_path(self.obj, c'/com/mitchellh/ghostty')
 	C.g_signal_connect_data(self.obj, c'notify::config', GCallback(voidptr(application_config_notify_cb)), voidptr(self), unsafe { nil }, 0)
 
@@ -628,6 +634,9 @@ pub fn (mut self Application) deinit() {
 	}
 	self.custom_css_providers.clear()
 	self.windows.clear()
+	self.runtime_bridge.action_fn = unsafe { nil }
+	self.runtime_bridge.wakeup_fn = unsafe { nil }
+	self.runtime_bridge.user_data = unsafe { nil }
 	self.runtime_bridge.config.deinit()
 	self.config.deinit()
 }
@@ -1192,6 +1201,22 @@ fn application_config_errors_reload_cb(dialog GObject, data voidptr) {
 
 // --- Libghostty callbacks -------------------------------------------------
 
+fn application_runtime_action_cb(data voidptr, action apprt.RuntimeAction) !bool {
+	if isnil(data) {
+		return false
+	}
+	mut self := unsafe { &Application(data) }
+	return self.perform_action(action.target, action.action, action.data)!
+}
+
+fn application_runtime_wakeup_cb(data voidptr) {
+	if isnil(data) {
+		return
+	}
+	self := unsafe { &Application(data) }
+	self.wakeup()
+}
+
 // wakeup wakes up the GTK event loop. Mirrors `Application.wakeup`.
 pub fn (self &Application) wakeup() {
 	C.g_main_context_wakeup(C.g_main_context_default())
@@ -1507,7 +1532,6 @@ fn (mut self Application) reload_config(target apprt.Target, soft bool) ! {
 			}
 			mut core_surface := surface.core_surface
 			core_surface.update_config(&config)!
-			surface.set_owned_config(config)
 		}
 		apprt.AppTarget {
 			if isnil(self.core_app) {
@@ -2375,8 +2399,9 @@ fn get_quick_terminal_window() ?&Window {
 	return none
 }
 
-// dispatch_runtime_actions forwards the actions core.App emitted through its
-// portable runtime boundary into the GTK implementation.
+// dispatch_runtime_actions drains actions explicitly queued by tests or
+// headless callers. Normal GTK core actions use application_runtime_action_cb
+// and are dispatched synchronously so borrowed action payloads remain valid.
 fn (mut self Application) dispatch_runtime_actions() ! {
 	actions := self.runtime_bridge.actions.clone()
 	self.runtime_bridge.actions.clear()
