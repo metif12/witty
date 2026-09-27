@@ -520,7 +520,7 @@ pub fn posix_connect(sock int, sock_addr voidptr, len u32) ! {
 }
 
 // Translation of std.posix.ShutdownHow.
-pub enum ShutdownHow {
+pub enum ShutdownHow as u8 {
 	recv
 	send
 	both
