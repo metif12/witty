@@ -74,8 +74,6 @@ fn test_config_value_tag_layouts_and_source_ordinals() {
 	assert [BackgroundImageFit.contain, .cover, .stretch, .none_].map(u8(it)) == [u8(0), 1,
 		2, 3]
 
-	assert sizeof(ReadableIOKind) == 1
-	assert [ReadableIOKind.raw, .path].map(u8(it)) == [u8(0), 1]
 	assert sizeof(FontStyleKind) == 1
 	assert [FontStyleKind.default_, .false_, .name].map(u8(it)) == [u8(0), 1, 2]
 }
@@ -1207,24 +1205,21 @@ fn test_config_command_arg_iterator_matches_zig_general_defaults() {
 
 fn test_readable_io_parse_clone_parse_and_format() {
 	raw := ReadableIO.parse_cli('foo\\n\\u{1F601}\\x21')!
-	assert raw == ReadableIO{
-		kind: .raw
+	assert raw == ReadableIO(ReadableIORaw{
 		value: 'foo\\n\\u{1F601}\\x21'
-	}
-	assert raw.clone_parsed()! == ReadableIO{
-		kind: .raw
+	})
+	assert raw.clone_parsed()! == ReadableIO(ReadableIORaw{
 		value: 'foo\n😁!'
-	}
+	})
 	assert parse_zig_string('zero=\\u{0000000}')! == 'zero=\x00'
-	assert ReadableIO.parse_cli('raw:hello')! == ReadableIO{ kind: .raw, value: 'hello' }
-	assert ReadableIO.parse_cli('path:file.txt')! == ReadableIO{ kind: .path, value: 'file.txt' }
-	assert ReadableIO.parse_cli(' raw \t: hello')! == ReadableIO{ kind: .raw, value: ' hello' }
-	assert ReadableIO.parse_cli('path')! == ReadableIO{ kind: .path, value: '' }
-	assert ReadableIO.parse_cli('raw')! == ReadableIO{ kind: .raw, value: '' }
-	assert ReadableIO.parse_cli('other:value')! == ReadableIO{
-		kind: .raw
+	assert ReadableIO.parse_cli('raw:hello')! == ReadableIO(ReadableIORaw{ value: 'hello' })
+	assert ReadableIO.parse_cli('path:file.txt')! == ReadableIO(ReadableIOPath{ value: 'file.txt' })
+	assert ReadableIO.parse_cli(' raw \t: hello')! == ReadableIO(ReadableIORaw{ value: ' hello' })
+	assert ReadableIO.parse_cli('path')! == ReadableIO(ReadableIOPath{ value: '' })
+	assert ReadableIO.parse_cli('raw')! == ReadableIO(ReadableIORaw{ value: '' })
+	assert ReadableIO.parse_cli('other:value')! == ReadableIO(ReadableIORaw{
 		value: 'other:value'
-	}
+	})
 
 	ReadableIO.parse_cli('bad\\q') or {
 		assert err.msg() == 'invalid string'
@@ -3187,10 +3182,8 @@ auto-update-channel = stable
 			assert false, 'expected shell command'
 		}
 	}
-	assert cfg.input.items == [ReadableIO{ kind: .raw, value: 'hello' }, ReadableIO{
-		kind: .path
-		value: 'startup.txt'
-	}]
+	assert cfg.input.items == [ReadableIO(ReadableIORaw{ value: 'hello' }),
+		ReadableIO(ReadableIOPath{ value: 'startup.txt' })]
 	assert cfg.env.entries == [StringMapEntry{'FOO', 'replaced'}, StringMapEntry{'BAR', 'second'}]
 	assert cfg.enquiry_response == 'witty'
 	assert cfg.font_feature == ['liga', 'calt']

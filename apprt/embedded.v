@@ -583,8 +583,7 @@ pub fn (mut self Surface) init(mut app App, opts SurfaceOptions) ! {
 	// representation. Termio decodes this after cloning the startup state.
 	if initial := opts.initial_input {
 		config.input.items.clear()
-		config.input.items << configpkg.ReadableIO{
-			kind: .raw
+		config.input.items << configpkg.ReadableIORaw{
 			value: input.zig_escape(initial)
 		}
 	}

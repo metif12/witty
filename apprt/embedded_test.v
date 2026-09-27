@@ -655,8 +655,7 @@ fn test_surface_init_present_empty_input_clears_configured_input() {
 			backend: voidptr(&capture)
 		}
 		mut config := configpkg.Config.default_config()
-		config.input.items << configpkg.ReadableIO{
-			kind: .raw
+		config.input.items << configpkg.ReadableIORaw{
 			value: 'configured input'
 		}
 		mut app := App{
@@ -673,10 +672,9 @@ fn test_surface_init_present_empty_input_clears_configured_input() {
 			surface.deinit()
 		}
 
-		assert capture.input_items == [configpkg.ReadableIO{
-			kind: .raw
+		assert capture.input_items == [configpkg.ReadableIO(configpkg.ReadableIORaw{
 			value: ''
-		}]
+		})]
 	}
 }
 

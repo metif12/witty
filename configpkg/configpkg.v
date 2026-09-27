@@ -5428,18 +5428,20 @@ pub fn (p RepeatablePath) format_entry() []string {
 	return p.items.map(it.format_entry())
 }
 
-// ReadableIO is a startup input source. Values retain their Zig string
-// escapes so configuration formatting can recreate the original value.
-pub enum ReadableIOKind as u8 {
-	raw
-	path
-}
-
-pub struct ReadableIO {
+pub struct ReadableIORaw {
 pub:
-	kind  ReadableIOKind
 	value string
 }
+
+pub struct ReadableIOPath {
+pub:
+	value string
+}
+
+// ReadableIO is a startup input source. Each variant owns its string payload,
+// which retains Zig escapes so configuration formatting can recreate the
+// original value.
+pub type ReadableIO = ReadableIOPath | ReadableIORaw
 
 // parse_zig_string decodes the escape sequences accepted by Zig string
 // literals. The output never contains more bytes than the input.
@@ -5528,34 +5530,49 @@ pub fn ReadableIO.parse_cli(input ?string) !ReadableIO {
 	tag := value[..tag_end].trim(' \t')
 	payload := if colon < 0 { '' } else { value[colon + 1..].clone() }
 	if tag == 'raw' {
-		return ReadableIO{ kind: .raw, value: payload }
+		return ReadableIORaw{ value: payload }
 	}
 	if tag == 'path' {
-		return ReadableIO{ kind: .path, value: payload }
+		return ReadableIOPath{ value: payload }
 	}
-	return ReadableIO{ kind: .raw, value: value.clone() }
+	return ReadableIORaw{ value: value.clone() }
 }
 
 pub fn (r ReadableIO) clone() ReadableIO {
-	return ReadableIO{
-		kind: r.kind
-		value: r.value.clone()
+	return match r {
+		ReadableIORaw { ReadableIORaw{ value: r.value.clone() } }
+		ReadableIOPath { ReadableIOPath{ value: r.value.clone() } }
 	}
 }
 
 pub fn (r ReadableIO) clone_parsed() !ReadableIO {
-	return ReadableIO{
-		kind: r.kind
-		value: parse_zig_string(r.value)!
+	return match r {
+		ReadableIORaw { ReadableIORaw{ value: parse_zig_string(r.value)! } }
+		ReadableIOPath { ReadableIOPath{ value: parse_zig_string(r.value)! } }
 	}
 }
 
 pub fn (r ReadableIO) equal(other ReadableIO) bool {
-	return r.kind == other.kind && r.value == other.value
+	match r {
+		ReadableIORaw {
+			if other is ReadableIORaw {
+				return r.value == other.value
+			}
+		}
+		ReadableIOPath {
+			if other is ReadableIOPath {
+				return r.value == other.value
+			}
+		}
+	}
+	return false
 }
 
 pub fn (r ReadableIO) format_entry() string {
-	return '${r.kind.str()}:${r.value}'
+	return match r {
+		ReadableIORaw { 'raw:${r.value}' }
+		ReadableIOPath { 'path:${r.value}' }
+	}
 }
 
 pub struct RepeatableReadableIO {

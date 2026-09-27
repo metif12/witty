@@ -224,13 +224,11 @@ fn test_termio_clones_and_decodes_startup_input() {
 		tio.deinit()
 	}
 
-	assert tio.thread_enter_input == [configpkg.ReadableIO{
-		kind: .raw
+	assert tio.thread_enter_input == [configpkg.ReadableIO(configpkg.ReadableIORaw{
 		value: 'hello\nworld'
-	}, configpkg.ReadableIO{
-		kind: .path
+	}), configpkg.ReadableIO(configpkg.ReadableIOPath{
 		value: 'startup.txt'
-	}]
+	})]
 }
 
 fn test_prepare_input_opens_all_sources_before_start() {
@@ -241,8 +239,8 @@ fn test_prepare_input_opens_all_sources_before_start() {
 	}
 
 	tio := Termio{
-		thread_enter_input: [configpkg.ReadableIO{ kind: .raw, value: 'raw bytes' },
-			configpkg.ReadableIO{ kind: .path, value: path }]
+		thread_enter_input: [configpkg.ReadableIO(configpkg.ReadableIORaw{ value: 'raw bytes' }),
+			configpkg.ReadableIO(configpkg.ReadableIOPath{ value: path })]
 	}
 	mut prepared := tio.prepare_input()!
 	defer {
@@ -258,8 +256,8 @@ fn test_prepare_input_opens_all_sources_before_start() {
 	assert read_initial_input_file(mut prepared[1].file)!.bytestr() == 'from file'
 
 	missing := Termio{
-		thread_enter_input: [configpkg.ReadableIO{ kind: .raw, value: 'not sent' },
-			configpkg.ReadableIO{ kind: .path, value: path + '.missing' }]
+		thread_enter_input: [configpkg.ReadableIO(configpkg.ReadableIORaw{ value: 'not sent' }),
+			configpkg.ReadableIO(configpkg.ReadableIOPath{ value: path + '.missing' })]
 	}
 	missing.prepare_input() or {
 		assert err.msg() == 'input not found'

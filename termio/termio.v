@@ -503,14 +503,14 @@ enum PreparedInputTag as u8 {
 fn (t &Termio) prepare_input() ![]PreparedInput {
 	mut result := []PreparedInput{cap: t.thread_enter_input.len}
 	for item in t.thread_enter_input {
-		match item.kind {
-			.raw {
+		match item {
+			configpkg.ReadableIORaw {
 				result << PreparedInput{
 					kind: .string
 					data: item.value.bytes()
 				}
 			}
-			.path {
+			configpkg.ReadableIOPath {
 				file := os.open(item.value) or {
 					close_prepared_inputs(mut result)
 					return error('input not found')
