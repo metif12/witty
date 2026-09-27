@@ -4,6 +4,7 @@ module apprt
 import configpkg
 import input
 import internal_os
+import log
 
 // "apprt" is the "application runtime" package. This abstracts the
 // application runtime and lifecycle management such as creating windows,
@@ -327,7 +328,9 @@ pub fn (mut c CoreApp) key_event(app &App, event voidptr) bool {
 	mut runtime_app := unsafe { &App(app) }
 	if flags.global() {
 		for action in actions {
-			c.perform_all_action(mut runtime_app, action) or {}
+			c.perform_all_action(mut runtime_app, action) or {
+				log.warn('error performing chained action action=${action.tag()} err=${err}')
+			}
 		}
 		return true
 	}
@@ -340,7 +343,9 @@ pub fn (mut c CoreApp) key_event(app &App, event voidptr) bool {
 		}
 	}
 	for action in actions {
-		c.perform_app_action(mut runtime_app, action) or {}
+		c.perform_app_action(mut runtime_app, action) or {
+			log.warn('error performing app keybind action action=${action.tag()} err=${err}')
+		}
 	}
 	return true
 }
@@ -433,7 +438,7 @@ pub fn (mut c CoreApp) update_config(app &App, config voidptr) ! {
 	// the original so each surface can resolve its own state.
 	mut applied := cfg.clone()
 	conditional_result := cfg.change_conditional_state(c.config_conditional_state) or {
-		eprintln('failed to apply conditional state to config err=${err}')
+		log.warn('failed to apply conditional state to config err=${err}')
 		configpkg.ConfigChangeResult{}
 	}
 	if conditional := conditional_result.value {
@@ -504,7 +509,9 @@ fn (mut c CoreApp) perform_all_action(mut app App, action input.Action) ! {
 			continue
 		}
 		mut surface := unsafe { &Surface(surface_ptr) }
-		surface.core_surface.perform_binding_action(action) or {}
+		surface.core_surface.perform_binding_action(action) or {
+			log.warn('error performing binding action on surface ptr=${usize(surface_ptr):X} err=${err}')
+		}
 	}
 }
 
