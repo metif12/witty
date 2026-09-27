@@ -1799,6 +1799,38 @@ fn test_mouse_link_preview_forwards_untrimmed_url() ! {
 	assert action_value[apprt.MouseOverLink](runtime.actions[1].data).url == 'http://a   '
 }
 
+fn test_process_links_does_not_apply_clipboard_trimming() ! {
+	mut surf := make_test_surface()
+	surf.size = make_test_size()
+	surf.config.clipboard_trim_trailing_spaces = true
+	surf.config.links = [DerivedConfigLink{
+		regex: oniguruma.Regex.init(r'http://a   ', oniguruma.Options{}, oniguruma.Encoding.utf8(),
+			oniguruma.Syntax.default_(), none)!
+		action: .open
+		highlight: input.LinkHighlightHover{}
+	}]
+	defer { surf.config.links[0].regex.deinit() }
+	mut runtime := apprt.RuntimeApp{ actions_handled: true }
+	surf.rt_app = &runtime
+	mut stream := surf.renderer_state.terminal_.vt_stream()
+	stream.next_slice('http://a   '.bytes())!
+
+	assert surf.process_links(apprt.CursorPos{ x: 6, y: 6 })!
+	assert runtime.actions.len == 1
+	assert runtime.actions[0].action == .open_url
+	assert action_value[apprt.OpenUrl](runtime.actions[0].data).url == 'http://a   '
+}
+
+fn test_clear_screen_binding_requests_history_clear() ! {
+	mut surf := make_test_surface()
+	assert surf.perform_binding_action(input.ActionClearScreen{})!
+	assert surf.io.messages.len == 1
+	assert surf.io.messages[0] is termiopkg.MessageClearScreen
+	if surf.io.messages[0] is termiopkg.MessageClearScreen {
+		assert surf.io.messages[0].history
+	}
+}
+
 struct RuntimeCallbackProbe {
 mut:
 	action_kind apprt.ActionKey

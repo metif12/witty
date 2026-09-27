@@ -4306,7 +4306,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			if alternate {
 				return false
 			}
-			self.queue_io(termiopkg.MessageClearScreen{ history: false }, .unlocked)
+			self.queue_io(termiopkg.MessageClearScreen{ history: true }, .unlocked)
 		}
 		input.ActionScrollToTop {
 			self.queue_io(termiopkg.MessageScrollViewport{ scroll: terminal.scroll_viewport_top }, .unlocked)
@@ -5859,15 +5859,13 @@ fn (mut self Surface) process_links(pos apprt.CursorPos) !bool {
 		.open {
 			url := self.renderer_state.terminal_.screens.active.selection_string(terminal.SelectionString{
 				sel: link.selection
-				trim: self.config.clipboard_trim_trailing_spaces
-			}) or { return false }
-			if url.len > 0 {
-				// Try resolving as local path first
-				if resolved := self.resolve_path_for_opening(url) {
-					self.open_url(apprt.OpenUrl{ kind: .unknown, url: resolved })!
-				} else {
-					self.open_url(apprt.OpenUrl{ kind: .unknown, url: url })!
-				}
+				trim: false
+			})!
+			// Try resolving as local path first.
+			if resolved := self.resolve_path_for_opening(url) {
+				self.open_url(apprt.OpenUrl{ kind: .unknown, url: resolved })!
+			} else {
+				self.open_url(apprt.OpenUrl{ kind: .unknown, url: url })!
 			}
 			return true
 		}
@@ -5876,6 +5874,7 @@ fn (mut self Surface) process_links(pos apprt.CursorPos) !bool {
 				self.open_url(apprt.OpenUrl{ kind: .unknown, url: uri })!
 				return true
 			}
+			log.warn('failed to get URI for OSC8 hyperlink')
 		}
 	}
 	return false
@@ -5887,7 +5886,8 @@ fn (mut self Surface) open_url(action apprt.OpenUrl) ! {
 		.open_url,
 		apprt.ActionValue(action),
 	)!
-	if !handled && action.url.len > 0 {
+	if !handled {
+		log.warn('apprt did not handle open URL action, falling back to default opener')
 		internal_os.open(action.kind, action.url)!
 	}
 }
