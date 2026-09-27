@@ -32,7 +32,6 @@ module gtk
 pub type GObject = voidptr
 pub type GType = usize
 pub type GVariant = voidptr
-pub type GSettings = voidptr
 pub type GError = voidptr
 
 // GLib / GIO application

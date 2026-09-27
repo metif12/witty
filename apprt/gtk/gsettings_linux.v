@@ -14,9 +14,6 @@ module gtk
 // underlying mechanism (GtkSettings.getDefault + GObject.getProperty into a
 // GValue) is faithful.
 //
-// Per the translation brief we also expose the plain GSettings bindings
-// (g_settings_new / g_settings_get_*) so GNOME schema values can be read.
-
 // --- Opaque handle aliases (module-local) ---------------------------------
 
 // GtkSettings is a gtk.Settings*.
@@ -107,52 +104,4 @@ mut:
 
 fn (mut storage GValueStorage) ptr() GValue {
 	return GValue(&storage.words[0])
-}
-
-// --- GSettings (GNOME schema) bindings ------------------------------------
-//
-// Provided per the translation brief for reading GNOME/GSettings schema values
-// (e.g. org.gnome.desktop.interface). Not used by the Zig gsettings.zig itself,
-// which only reads GtkSettings, but declared here for the module to build on.
-
-// GSettings handle alias `GSettings` is declared in c_gtk_linux.v; reused here.
-
-fn C.g_settings_new(schema_id &char) GSettings
-fn C.g_settings_get_boolean(settings GSettings, key &char) int
-fn C.g_settings_get_int(settings GSettings, key &char) int
-fn C.g_settings_get_string(settings GSettings, key &char) &char
-fn C.g_settings_get_double(settings GSettings, key &char) f64
-
-// gsettings_new creates a GSettings object for the given schema id. Returns nil
-// if the schema is not installed (GLib aborts in that case, so callers should
-// only use known-installed schemas).
-pub fn gsettings_new(schema_id string) GSettings {
-	return C.g_settings_new(&char(schema_id.str))
-}
-
-// gsettings_get_boolean reads a boolean value from a GSettings schema.
-pub fn gsettings_get_boolean(settings GSettings, key string) bool {
-	return C.g_settings_get_boolean(settings, &char(key.str)) != 0
-}
-
-// gsettings_get_int reads an integer value from a GSettings schema.
-pub fn gsettings_get_int(settings GSettings, key string) int {
-	return C.g_settings_get_int(settings, &char(key.str))
-}
-
-// gsettings_get_double reads a double value from a GSettings schema.
-pub fn gsettings_get_double(settings GSettings, key string) f64 {
-	return C.g_settings_get_double(settings, &char(key.str))
-}
-
-// gsettings_get_string reads a string value from a GSettings schema. The
-// returned string is a V copy; the GLib-allocated original is freed.
-pub fn gsettings_get_string(settings GSettings, key string) string {
-	ptr := C.g_settings_get_string(settings, &char(key.str))
-	if isnil(ptr) {
-		return ''
-	}
-	result := unsafe { cstring_to_vstring(ptr) }
-	g_free_mem(voidptr(ptr))
-	return result
 }
