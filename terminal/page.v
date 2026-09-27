@@ -1380,21 +1380,52 @@ pub fn (mut self Page) deinit() {
 // Reinitialize the page with the same capacity.
 pub fn (mut self Page) reinit() {
 	cap := self.capacity
-	layout := Page.layout(cap)
 	self.size = PageSize{
 		cols: cap.cols
 		rows: cap.rows
 	}
-	self.rows = []RowData{cap: int(cap.rows)}
-	for _ in 0 .. int(cap.rows) {
-		self.append_row()
+
+	// Ghostty zeroes and reuses the page's existing mapping. Retain the V
+	// backing arrays when their shape still matches this capacity; capacity can
+	// change when PageList reinterprets a standard-size recycled page after a
+	// column resize, in which case the arrays must be rebuilt.
+	mut reusable_rows := self.rows.len == int(cap.rows)
+	if reusable_rows {
+		for row in self.rows {
+			if row.cells.len != int(cap.cols) {
+				reusable_rows = false
+				break
+			}
+		}
+	}
+	if reusable_rows {
+		for i in 0 .. self.rows.len {
+			cells := self.rows[i].cells
+			if cells.len > 0 {
+				unsafe {
+					vmemset(cells.data, 0, cells.len * int(sizeof(CellData)))
+				}
+			}
+			self.rows[i] = RowData{
+				cells: cells
+				cells_offset: u32(i)
+			}
+		}
+	} else {
+		self.rows = []RowData{cap: int(cap.rows)}
+		for i in 0 .. int(cap.rows) {
+			mut row := RowData.init(u32(cap.cols))
+			row.cells_offset = u32(i)
+			self.rows << row
+		}
 	}
 	self.dirty = false
-	self.styles = StyleSet.init(cap.styles)
-	self.grapheme_alloc = BitmapAllocator.init(grapheme_chunk, layout.grapheme_alloc_layout)
-	self.grapheme_map = map[u64]GraphemeAllocation{}
-	self.hyperlink_set = HyperlinkSet.init_bounded(layout.hyperlink_set_layout, layout.string_alloc_layout)
-	self.hyperlink_map = map[u64]u32{}
+	self.pause_integrity_checks = 0
+	self.styles.set.reset()
+	self.grapheme_alloc.reset()
+	self.grapheme_map.clear()
+	self.hyperlink_set.reset()
+	self.hyperlink_map.clear()
 }
 
 // Verifies the integrity of the page data. This is not fast,

@@ -94,6 +94,20 @@ pub fn BitmapAllocator.init(chunk_size int, l BitmapAllocatorLayout) BitmapAlloc
 	}
 }
 
+// reset releases every allocation while retaining the allocator's backing
+// arrays. Page.reinit uses this to mirror zeroing and reusing Ghostty's page
+// mapping instead of allocating replacement V arrays for every recycled page.
+fn (mut self BitmapAllocator) reset() {
+	for i in 0 .. self.bitmaps.len {
+		self.bitmaps[i] = ~u64(0)
+	}
+	if self.chunks.len > 0 {
+		unsafe {
+			vmemset(self.chunks.data, 0, self.chunks.len)
+		}
+	}
+}
+
 // bytes_required returns the number of bytes required to allocate n elements
 // of size element_size. This accounts for the chunk size alignment used by
 // the bitmap allocator.

@@ -223,6 +223,24 @@ pub fn RefCountedSet.init(l RefCountedSetLayout) RefCountedSet {
 	}
 }
 
+// reset removes every item while retaining the bounded set's backing arrays.
+fn (mut self RefCountedSet) reset() {
+	if self.hash_table.len > 0 {
+		unsafe {
+			vmemset(self.hash_table.data, 0, self.hash_table.len * int(sizeof(u16)))
+		}
+	}
+	if self.items.len > 0 {
+		unsafe {
+			vmemset(self.items.data, 0, self.items.len * int(sizeof(RefCountedSetItem)))
+		}
+	}
+	self.max_psl = 0
+	self.psl_stats = [32]u16{}
+	self.living = 0
+	self.next_id = 1
+}
+
 // Add an item to the set if not present and increment its ref count.
 //
 // Returns the item's ID.

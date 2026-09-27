@@ -2012,6 +2012,19 @@ fn test_page_swap_cells() {
 			rac.cell.codepoint = u32(`A`)
 		}
 	}
+	style_id := page.styles.add(CellStyle{
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
+	}) or { panic(err) }
+	page.rows[0].cells[0].style_id = style_id
+	page.rows[0].styled = true
+	page.set_graphemes(0, 0, [u32(0x0301)]) or { panic(err) }
+	link_id := page.insert_hyperlink(Hyperlink{
+		id: HyperlinkExplicitId{
+			value: 'reinit'
+		}
+		uri: 'https://example.com/reinit'
+	}) or { panic(err) }
+	page.set_hyperlink(0, 0, link_id) or { panic(err) }
 	{
 		mut rac := page.get_row_and_cell(1, 0)
 		unsafe {
@@ -2080,6 +2093,11 @@ fn test_page_reinit() {
 		rows: 10
 	})
 	page.size.rows = u16(page.capacity.rows)
+	rows_data := voidptr(page.rows.data)
+	cells_data := voidptr(page.rows[0].cells.data)
+	styles_data := voidptr(page.styles.set.items.data)
+	grapheme_data := voidptr(page.grapheme_alloc.chunks.data)
+	hyperlink_data := voidptr(page.hyperlink_set.entries.data)
 
 	// Write something.
 	{
@@ -2096,6 +2114,17 @@ fn test_page_reinit() {
 		cols: 10
 		rows: 10
 	}
+	assert voidptr(page.rows.data) == rows_data
+	assert voidptr(page.rows[0].cells.data) == cells_data
+	assert voidptr(page.styles.set.items.data) == styles_data
+	assert voidptr(page.grapheme_alloc.chunks.data) == grapheme_data
+	assert voidptr(page.hyperlink_set.entries.data) == hyperlink_data
+	assert page.styles.count() == 0
+	assert page.grapheme_count() == 0
+	assert page.grapheme_alloc.used_bytes() == 0
+	assert page.hyperlink_count() == 0
+	assert page.hyperlink_set.count() == 0
+	assert page.hyperlink_set.string_alloc.used_bytes() == 0
 
 	// Should be blank now.
 	{

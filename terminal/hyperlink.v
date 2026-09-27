@@ -225,6 +225,23 @@ fn HyperlinkSet.init_bounded(set_layout PageSetLayout, string_layout BitmapAlloc
 	}
 }
 
+// reset removes every link while retaining all bounded backing arrays.
+fn (mut self HyperlinkSet) reset() {
+	for i in 0 .. self.entries.len {
+		self.entries[i] = HyperlinkSetEntry{}
+	}
+	if self.hash_table.len > 0 {
+		unsafe {
+			vmemset(self.hash_table.data, 0, self.hash_table.len * int(sizeof(u16)))
+		}
+	}
+	self.max_psl = 0
+	self.psl_stats = [32]u16{}
+	self.living = 0
+	self.next_id = 1
+	self.string_alloc.reset()
+}
+
 pub fn (self &HyperlinkSet) clone() HyperlinkSet {
 	return HyperlinkSet{
 		entries: self.entries.clone()
