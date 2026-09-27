@@ -5,14 +5,10 @@ module renderer
 
 fn (mut self Image) upload(api &OpenGLAPI) ! {
 	self.prep_for_upload()!
-	pending := self.pending or { return error('image has no pending data') }
+	pending := self.get_pending() or { return error('image has no pending data') }
 	texture := GLTexture.init(api.image_texture_options(.rgba, true), pending.width, pending.height, pending.data_slice())!
-	self.release_texture()
-	self.texture = texture
-	self.pending = none
-	self.width = pending.width
-	self.height = pending.height
-	self.state = .ready
+	self.deinit()
+	self = ImageReady{ texture: texture }
 }
 
 pub fn (mut self ImageRenderState) draw(api &OpenGLAPI, pipeline GLPipeline, mut pass GLRenderPass, placement_type DrawPlacements) {
@@ -33,10 +29,10 @@ pub fn (mut self ImageRenderState) draw(api &OpenGLAPI, pipeline GLPipeline, mut
 	}
 	for placement in placements {
 		entry := self.images[image_key(placement.image_id)] or { continue }
-		if entry.image.state !in [.ready, .unload_ready] {
-			continue
+		texture := match entry.image {
+			ImageReady, ImageUnloadReady { entry.image.texture }
+			else { continue }
 		}
-		texture := entry.image.texture or { continue }
 		if texture.id == 0 {
 			continue
 		}

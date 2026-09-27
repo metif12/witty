@@ -26,10 +26,10 @@ fn test_image_render_state_upload_removes_unloading() {
 	}
 	mut state := ImageRenderState.empty()
 	state.images[1] = ImageEntry{
-		image: Image{ state: .unload_pending }
+		image: ImageUnloadPending{}
 	}
 	state.images[2] = ImageEntry{
-		image: Image{ state: .ready }
+		image: ImageReady{}
 	}
 	result := state.upload(&api)
 	assert result == true
@@ -50,7 +50,7 @@ fn test_overlay_update_replaces_then_unloads_image() {
 		pixels: [u8(1), 2, 3, 4]
 	})
 	mut ready_entry := state.images[overlay_image_key] or { panic('missing overlay image') }
-	ready_entry.image.state = .ready
+	ready_entry.image = ImageReady{}
 	state.images[overlay_image_key] = ready_entry
 
 	state.overlay_update(Overlay{
@@ -59,12 +59,12 @@ fn test_overlay_update_replaces_then_unloads_image() {
 		pixels: [u8(5), 6, 7, 8]
 	})
 	replaced := state.images[overlay_image_key] or { panic('missing replaced overlay') }
-	assert replaced.image.state == .replace
+	assert replaced.image is ImageReplace
 	assert state.overlay_placements.len == 1
 
 	state.overlay_update(none)
 	unloading := state.images[overlay_image_key] or { panic('missing unloading overlay') }
-	assert unloading.image.state == .unload_replace
+	assert unloading.image is ImageUnloadReplace
 	assert state.overlay_placements.len == 0
 	state.upload(&api)
 	assert overlay_image_key !in state.images
@@ -80,23 +80,19 @@ fn test_image_upload_converts_bgr_to_rgba_texture() ! {
 		state.deinit()
 	}
 	state.images[3] = ImageEntry{
-		image: Image{
-			state: .pending
+		image: ImagePending{
 			pending: PendingImage{
 				width: 2
 				height: 1
 				pixel_format: .bgr
 				data: [u8(1), 2, 3, 4, 5, 6]
 			}
-			width: 2
-			height: 1
 		}
 	}
 	assert state.upload(&api)
 	entry := state.images[3] or { return error('missing uploaded image') }
-	assert entry.image.state == .ready
-	assert entry.image.pending == none
-	texture := entry.image.texture or { return error('missing uploaded Metal texture') }
+	assert entry.image is ImageReady
+	texture := (entry.image as ImageReady).texture
 	assert texture.handle != unsafe { nil }
 	mut bytes := []u8{len: 8}
 	macos.metal_texture_get_bytes(texture.handle, mut bytes, 8, 0, 0, 2, 1)
@@ -117,16 +113,13 @@ fn test_image_draw_encodes_gpu_placement() ! {
 		state.deinit()
 	}
 	state.images[7] = ImageEntry{
-		image: Image{
-			state: .pending
+		image: ImagePending{
 			pending: PendingImage{
 				width: 1
 				height: 1
 				pixel_format: .rgba
 				data: [u8(255), 0, 0, 255]
 			}
-			width: 1
-			height: 1
 		}
 	}
 	state.kitty_placements << ImagePlacement{

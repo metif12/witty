@@ -218,13 +218,12 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 	mut pass := GLRenderPass.begin([terminal_attachment])
 
 	if image := self.bg_image {
-		texture := image.texture or { GLTexture{} }
-		if image.state == .ready && texture.id != 0 {
+		if image is ImageReady && image.texture.id != 0 {
 			pass.step(GLRenderStep{
 				pipeline: self.shaders.bg_image
 				uniforms: frame_state.uniforms
 				buffers:  [frame_state.bg_image_buffer]
-				textures: [texture]
+				textures: [image.texture]
 				draw:     GLDraw{
 					primitive:    .triangle
 					vertex_count: 3

@@ -324,83 +324,131 @@ pub fn (p &PendingImage) data_slice() []u8 {
 	return p.data[..p.len()]
 }
 
-// Image upload state tracks whether the image data is pending, ready (uploaded
-// to GPU), or unloading.
-pub enum ImageUploadState as u8 {
-	// The image data is pending upload to the GPU.
-	pending
-	// The image has been replaced - old texture exists, new data pending.
-	replace
-	// The image is uploaded and ready to be used.
-	ready
-	// Pending data scheduled to be unloaded.
-	unload_pending
-	// An uploaded texture scheduled to be unloaded.
-	unload_ready
-	// A texture plus replacement data scheduled to be unloaded.
-	unload_replace
+pub struct ImagePending {
+pub mut:
+	pending PendingImage
 }
 
-// The state for a single image that is to be rendered.
-pub struct Image {
+pub struct ImageReplace {
 pub mut:
-	// Current state of the image.
-	state ImageUploadState = .pending
-	// Pending data for upload.
-	pending ?PendingImage
-	// The texture, once uploaded, for the compile-time selected graphics API.
-	texture ?GraphicsTexture
-	// Width/height of the image.
-	width  u32
-	height u32
+	texture GraphicsTexture
+	pending PendingImage
 }
+
+pub struct ImageReady {
+pub mut:
+	texture GraphicsTexture
+}
+
+pub struct ImageUnloadPending {
+pub mut:
+	pending PendingImage
+}
+
+pub struct ImageUnloadReady {
+pub mut:
+	texture GraphicsTexture
+}
+
+pub struct ImageUnloadReplace {
+pub mut:
+	texture GraphicsTexture
+	pending PendingImage
+}
+
+// The state for a single image that is to be rendered. Each lifecycle arm
+// owns only its source payload: pending pixels, a ready texture, or both while
+// replacing.
+pub type Image = ImagePending
+	| ImageReplace
+	| ImageReady
+	| ImageUnloadPending
+	| ImageUnloadReady
+	| ImageUnloadReplace
 
 // Mark this image for unload whatever state it is in.
 pub fn (mut self Image) mark_for_unload() {
-	self.state = match self.state {
-		.pending { .unload_pending }
-		.ready { .unload_ready }
-		.replace { .unload_replace }
-		.unload_pending, .unload_ready, .unload_replace {
-			return
+	match mut self {
+		ImagePending {
+			pending := self.pending
+			self = ImageUnloadPending{ pending: pending }
 		}
+		ImageReady {
+			texture := self.texture
+			self = ImageUnloadReady{ texture: texture }
+		}
+		ImageReplace {
+			texture := self.texture
+			pending := self.pending
+			self = ImageUnloadReplace{
+				texture: texture
+				pending: pending
+			}
+		}
+		ImageUnloadPending, ImageUnloadReady, ImageUnloadReplace {}
 	}
 }
 
 // Mark the current image to be replaced with a pending one.
-pub fn (mut self Image) mark_for_replace(new_pending PendingImage) {
-	has_texture := self.has_texture()
-	self.pending = new_pending
-	self.state = if has_texture { .replace } else { .pending }
+pub fn (mut self Image) mark_for_replace(new_image Image) {
+	assert new_image.is_pending()
+	new_pending := new_image.get_pending() or { return }
+	if texture := self.get_texture() {
+		self = ImageReplace{
+			texture: texture
+			pending: new_pending
+		}
+		return
+	}
+	self = ImagePending{ pending: new_pending }
 }
 
 // Returns true if this image is pending upload.
 pub fn (self &Image) is_pending() bool {
-	return self.state in [.pending, .replace, .unload_pending, .unload_replace]
+	return self is ImagePending || self is ImageReplace || self is ImageUnloadPending
+		|| self is ImageUnloadReplace
 }
 
 // Returns true if this image is marked for unload.
 pub fn (self &Image) is_unloading() bool {
-	return self.state in [.unload_pending, .unload_ready, .unload_replace]
+	return self is ImageUnloadPending || self is ImageUnloadReady || self is ImageUnloadReplace
 }
 
 // Returns true if this image has a texture ready.
 pub fn (self &Image) has_texture() bool {
-	return self.state in [.ready, .replace, .unload_ready, .unload_replace]
+	return self is ImageReady || self is ImageReplace || self is ImageUnloadReady
+		|| self is ImageUnloadReplace
 }
 
 pub fn (mut self Image) deinit() {
-	self.release_texture()
-	self.pending = none
-	self.width = 0
-	self.height = 0
+	match mut self {
+		ImagePending, ImageUnloadPending {
+			self.pending.data = []u8{}
+		}
+		ImageReplace, ImageUnloadReplace {
+			self.pending.data = []u8{}
+			self.texture.deinit()
+		}
+		ImageReady, ImageUnloadReady {
+			self.texture.deinit()
+		}
+	}
 }
 
-fn (mut self Image) release_texture() {
-	if mut texture := self.texture {
-		texture.deinit()
+fn (self Image) get_pending() ?PendingImage {
+	return match self {
+		ImagePending, ImageUnloadPending { self.pending }
+		ImageReplace, ImageUnloadReplace { self.pending }
+		ImageReady, ImageUnloadReady { none }
 	}
-	self.texture = none
+}
+
+fn (self Image) get_texture() ?GraphicsTexture {
+	return match self {
+		ImageReady, ImageUnloadReady { self.texture }
+		ImageReplace, ImageUnloadReplace { self.texture }
+		ImagePending, ImageUnloadPending { none }
+	}
 }
 
 // Entry in the image map, pairing an image with its transmit time.
@@ -517,7 +565,17 @@ pub fn (mut self ImageRenderState) upload(api &GraphicsAPI) bool {
 // Converts pending image data to the upload format in place. Images that are
 // already RGBA are left untouched.
 pub fn (mut self Image) convert() ! {
-	mut pending := self.pending or { return error('image has no pending data') }
+	match mut self {
+		ImagePending, ImageUnloadPending, ImageReplace, ImageUnloadReplace {
+			convert_pending(mut self.pending)!
+		}
+		ImageReady, ImageUnloadReady {
+			return error('image has no pending data')
+		}
+	}
+}
+
+fn convert_pending(mut pending PendingImage) ! {
 	if pending.data.len != int(pending.data_len()) {
 		return error('image data size does not match dimensions')
 	}
@@ -526,7 +584,6 @@ pub fn (mut self Image) convert() ! {
 	}
 	pending.data = pending_to_rgba(pending)!
 	pending.pixel_format = .rgba
-	self.pending = pending
 }
 
 // Prepare pending image data for a later GPU upload.
@@ -922,7 +979,7 @@ fn (mut self ImageRenderState) prep_kitty_image(image terminal.Image) ! {
 		// If this was an existing entry, replace it (marks for replace,
 		// which keeps the existing texture if any).
 		mut entry := self.images[id] or { ImageEntry{} }
-		entry.image.mark_for_replace(pending)
+		entry.image.mark_for_replace(ImagePending{ pending: pending })
 		entry.image.prep_for_upload() or {
 			entry.image.mark_for_unload()
 			self.images[id] = entry
@@ -933,12 +990,7 @@ fn (mut self ImageRenderState) prep_kitty_image(image terminal.Image) ! {
 	} else {
 		// New entry.
 		mut entry := ImageEntry{
-			image: Image{
-				state: .pending
-				pending: pending
-				width: image.width
-				height: image.height
-			}
+			image: ImagePending{ pending: pending }
 		}
 		entry.image.prep_for_upload() or {
 			entry.image.mark_for_unload()
@@ -962,19 +1014,12 @@ pub fn (mut self ImageRenderState) overlay_update(overlay ?Overlay) {
 
 		if overlay_image_key in self.images {
 			mut entry := self.images[overlay_image_key] or { ImageEntry{} }
-			entry.image.mark_for_replace(pending)
-			entry.image.width = pending.width
-			entry.image.height = pending.height
+			entry.image.mark_for_replace(ImagePending{ pending: pending })
 			entry.transmit_time = time.sys_mono_now()
 			self.images[overlay_image_key] = entry
 		} else {
 			self.images[overlay_image_key] = ImageEntry{
-				image: Image{
-					state: .pending
-					pending: pending
-					width: pending.width
-					height: pending.height
-				}
+				image: ImagePending{ pending: pending }
 				transmit_time: time.sys_mono_now()
 			}
 		}
@@ -995,4 +1040,3 @@ pub fn (mut self ImageRenderState) overlay_update(overlay ?Overlay) {
 		self.images[overlay_image_key] = entry
 	}
 }
-

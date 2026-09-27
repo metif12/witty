@@ -5,15 +5,11 @@ module renderer
 
 fn (mut self Image) upload(api &MetalAPI) ! {
 	self.prep_for_upload()!
-	pending := self.pending or { return error('image has no pending data') }
+	pending := self.get_pending() or { return error('image has no pending data') }
 	texture := MetalTexture.init(api.image_texture_options(.rgba, true), pending.width,
 		pending.height, pending.data_slice())!
-	self.release_texture()
-	self.texture = texture
-	self.pending = none
-	self.width = pending.width
-	self.height = pending.height
-	self.state = .ready
+	self.deinit()
+	self = ImageReady{ texture: texture }
 }
 
 // Draw the given named set of placements.
@@ -38,10 +34,10 @@ pub fn (mut self ImageRenderState) draw(api &MetalAPI, pipeline MetalPipeline, m
 	}
 	for placement in placements {
 		entry := self.images[image_key(placement.image_id)] or { continue }
-		if entry.image.state !in [.ready, .unload_ready] {
-			continue
+		texture := match entry.image {
+			ImageReady, ImageUnloadReady { entry.image.texture }
+			else { continue }
 		}
-		texture := entry.image.texture or { continue }
 		vertex := ImageVertex{
 			grid_pos: [f32(placement.x), f32(placement.y)]!
 			cell_offset: [f32(placement.cell_offset_x), f32(placement.cell_offset_y)]!

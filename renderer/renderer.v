@@ -1467,15 +1467,10 @@ fn (mut self Renderer) prep_background_image() ! {
 			data:         decoded.data
 		}
 		if mut existing := self.bg_image {
-			existing.mark_for_replace(pending)
+			existing.mark_for_replace(ImagePending{ pending: pending })
 			self.bg_image = existing
 		} else {
-			self.bg_image = Image{
-				state:   .pending
-				pending: pending
-				width:   pending.width
-				height:  pending.height
-			}
+			self.bg_image = ImagePending{ pending: pending }
 		}
 	} else if mut existing := self.bg_image {
 		existing.mark_for_unload()

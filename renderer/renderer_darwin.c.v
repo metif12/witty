@@ -272,16 +272,12 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 	])
 
 	if image := self.bg_image {
-		if image.state == .ready {
-			texture := image.texture or {
-				return error('ready Metal background image has no texture')
-			}
-
+		if image is ImageReady {
 			pass.step(MetalRenderStep{
 				pipeline: self.shaders.bg_image
 				uniforms: frame_state.uniforms
 				buffers:  [?MetalBuffer(frame_state.bg_image_buffer)]
-				textures: [?MetalTexture(MetalTexture(texture))]
+				textures: [?MetalTexture(MetalTexture(image.texture))]
 				draw:     MetalRenderDraw{
 					draw_type:    .triangle
 					vertex_count: 3

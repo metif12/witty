@@ -151,10 +151,10 @@ fn test_prep_background_image_detects_magic_without_extension() ! {
 	}
 	render.prep_background_image()!
 	mut image := render.bg_image or { return error('background image was not prepared') }
-	assert image.state == .pending
-	assert image.width == 50
-	assert image.height == 76
-	pending := image.pending or { return error('background image has no pending pixels') }
+	assert image is ImagePending
+	pending := image.get_pending() or { return error('background image has no pending pixels') }
+	assert pending.width == 50
+	assert pending.height == 76
 	assert pending.data.len == 50 * 76 * 4
 	image.deinit()
 }

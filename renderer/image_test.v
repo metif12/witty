@@ -64,29 +64,28 @@ fn test_pending_image_data_slice() {
 }
 
 fn test_image_prep_for_upload_converts_in_place() ! {
-	mut image := Image{
-		state: .pending
+	mut image := Image(ImagePending{
 		pending: PendingImage{
 			width: 2
 			height: 1
 			pixel_format: .bgr
 			data: [u8(1), 2, 3, 4, 5, 6]
 		}
-	}
+	})
 	image.prep_for_upload()!
-	pending := image.pending or { return error('missing converted image') }
+	pending := image.get_pending() or { return error('missing converted image') }
 	assert pending.pixel_format == .rgba
 	assert pending.data == [u8(3), 2, 1, 255, 6, 5, 4, 255]
 
 	// Preparation is idempotent once the data is RGBA.
 	image.prep_for_upload()!
-	assert (image.pending or { return error('missing converted image') }).data == pending.data
+	assert (image.get_pending() or { return error('missing converted image') }).data == pending.data
 }
 
 // Test Image state transitions.
 fn test_image_state_pending() {
-	img := Image{}
-	assert img.state == .pending
+	img := Image(ImagePending{})
+	assert img is ImagePending
 	assert img.is_pending()
 	assert !img.is_unloading()
 	assert !img.has_texture()
@@ -94,72 +93,65 @@ fn test_image_state_pending() {
 
 // Test Image mark_for_unload.
 fn test_image_mark_for_unload() {
-	mut img := Image{}
-	img.state = .ready
+	mut img := Image(ImageReady{})
 	img.mark_for_unload()
-	assert img.state == .unload_ready
+	assert img is ImageUnloadReady
 	assert img.is_unloading()
 	assert !img.is_pending()
 	assert img.has_texture()
 }
 
 fn test_image_mark_for_unload_preserves_pending_and_replace_variants() {
-	mut pending := Image{ state: .pending }
+	mut pending := Image(ImagePending{})
 	pending.mark_for_unload()
-	assert pending.state == .unload_pending
+	assert pending is ImageUnloadPending
 	assert pending.is_pending()
 	assert !pending.has_texture()
 
-	mut replace := Image{ state: .replace }
+	mut replace := Image(ImageReplace{})
 	replace.mark_for_unload()
-	assert replace.state == .unload_replace
+	assert replace is ImageUnloadReplace
 	assert replace.is_pending()
 	assert replace.has_texture()
 
 	replace.mark_for_unload()
-	assert replace.state == .unload_replace
+	assert replace is ImageUnloadReplace
 }
 
 // Test Image has_texture.
 fn test_image_has_texture() {
-	mut img := Image{}
-	img.state = .ready
-	assert img.has_texture()
-	img.state = .replace
-	assert img.has_texture()
-	img.state = .pending
-	assert !img.has_texture()
-	img.state = .unload_ready
-	assert img.has_texture()
-	img.state = .unload_replace
-	assert img.has_texture()
+	assert Image(ImageReady{}).has_texture()
+	assert Image(ImageReplace{}).has_texture()
+	assert !Image(ImagePending{}).has_texture()
+	assert Image(ImageUnloadReady{}).has_texture()
+	assert Image(ImageUnloadReplace{}).has_texture()
 }
 
 // Test Image mark_for_replace.
 fn test_image_mark_for_replace() {
-	mut img := Image{
-		width: 10
-		height: 10
-	}
-	img.state = .ready
-	img.mark_for_replace(PendingImage{
-		width: 20
-		height: 20
-		pixel_format: .rgba
+	mut img := Image(ImageReady{})
+	img.mark_for_replace(ImagePending{
+		pending: PendingImage{
+			width: 20
+			height: 20
+			pixel_format: .rgba
+		}
 	})
-	assert img.state == .replace
+	assert img is ImageReplace
 	assert img.is_pending()
 	assert img.has_texture()
 }
 
 fn test_image_mark_for_replace_without_texture_stays_pending() {
-	mut img := Image{ state: .unload_pending }
-	img.mark_for_replace(PendingImage{
-		width: 20
-		height: 20
-		pixel_format: .rgba
+	mut img := Image(ImageUnloadPending{})
+	img.mark_for_replace(ImagePending{
+		pending: PendingImage{
+			width: 20
+			height: 20
+			pixel_format: .rgba
+		}
 	})
-	assert img.state == .pending
+	assert img is ImagePending
 	assert img.is_pending()
 	assert !img.has_texture()
 }
@@ -209,8 +201,8 @@ fn test_overlay_update_prepares_image_and_placement() {
 
 	assert overlay_image_key in state.images
 	entry := state.images[overlay_image_key] or { panic('missing overlay image') }
-	assert entry.image.state == .pending
-	pending := entry.image.pending or { panic('missing pending overlay') }
+	assert entry.image is ImagePending
+	pending := entry.image.get_pending() or { panic('missing pending overlay') }
 	assert pending.width == 2
 	assert pending.height == 3
 	assert pending.pixel_format == .rgba
@@ -253,7 +245,7 @@ fn test_kitty_update_reads_terminal_storage() ! {
 	assert !storage.dirty
 	assert kitty_image_key(7) in state.images
 	entry := state.images[kitty_image_key(7)] or { panic('expected prepared image') }
-	pending := entry.image.pending or { panic('expected pending image') }
+	pending := entry.image.get_pending() or { panic('expected pending image') }
 	assert pending.pixel_format == .rgba
 	assert pending.data == [u8(255), 255, 255, 255]
 	assert state.kitty_placements.len == 1
@@ -360,12 +352,11 @@ fn test_draw_placements_enum() {
 	assert u8(DrawPlacements.overlay) == 3
 }
 
-fn test_image_upload_state_source_layout_and_ordinals() {
-	assert sizeof(ImageUploadState) == 1
-	assert u8(ImageUploadState.pending) == 0
-	assert u8(ImageUploadState.replace) == 1
-	assert u8(ImageUploadState.ready) == 2
-	assert u8(ImageUploadState.unload_pending) == 3
-	assert u8(ImageUploadState.unload_ready) == 4
-	assert u8(ImageUploadState.unload_replace) == 5
+fn test_image_union_retains_source_variants() {
+	assert Image(ImagePending{}) is ImagePending
+	assert Image(ImageReplace{}) is ImageReplace
+	assert Image(ImageReady{}) is ImageReady
+	assert Image(ImageUnloadPending{}) is ImageUnloadPending
+	assert Image(ImageUnloadReady{}) is ImageUnloadReady
+	assert Image(ImageUnloadReplace{}) is ImageUnloadReplace
 }
