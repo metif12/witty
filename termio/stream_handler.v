@@ -674,7 +674,7 @@ fn (mut self StreamHandler) dcs_command(mut cmd terminal.DcsCommand) ! {
 			}
 
 			mut viewer := self.tmux_viewer or { return }
-			for action in viewer.next(cmd.notification) {
+			for action in viewer.next(terminal.tmux_viewer_input(cmd.notification)) {
 				match action {
 					terminal.TmuxViewerActionExit {}
 					terminal.TmuxViewerActionCommand {

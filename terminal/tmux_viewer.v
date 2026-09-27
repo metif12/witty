@@ -37,6 +37,20 @@ pub:
 	windows []TmuxViewerWindow
 }
 
+// Input to the viewer. The pinned source currently has only the tmux arm.
+pub struct TmuxViewerInput {
+pub:
+	tmux tmux.Notification
+}
+
+// tmux_viewer_input constructs the source's sole Input arm. The pinned V
+// compiler cannot initialize this cross-module wrapper directly.
+pub fn tmux_viewer_input(notification tmux.Notification) TmuxViewerInput {
+	return TmuxViewerInput{
+		tmux: notification
+	}
+}
+
 pub struct TmuxViewerWindow {
 pub:
 	id     usize
@@ -138,9 +152,13 @@ pub fn (mut self TmuxViewer) deinit() {
 	self.tmux_version = ''
 }
 
-// next processes one control-mode notification and returns every action the
-// caller must perform before delivering the next notification.
-pub fn (mut self TmuxViewer) next(notification tmux.Notification) []TmuxViewerAction {
+// next processes one viewer input and returns every action the caller must
+// perform before delivering the next input.
+pub fn (mut self TmuxViewer) next(input TmuxViewerInput) []TmuxViewerAction {
+	return self.next_tmux(input.tmux)
+}
+
+fn (mut self TmuxViewer) next_tmux(notification tmux.Notification) []TmuxViewerAction {
 	return match self.state {
 		.defunct { []TmuxViewerAction{} }
 		.startup_block { self.next_startup_block(notification) }
