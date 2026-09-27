@@ -5,12 +5,14 @@ module termio
 // pty and forward it to the Termio instance.
 
 import apprt
+import buildcfg
 import build_meta
 import command as commandpkg
 import configpkg
 import crash
 import datastruct
 import internal_os
+import log
 import os
 import pty
 import renderer
@@ -34,6 +36,8 @@ import xev
 fn C.pipe(fds voidptr) int
 
 fn C.close(fd int) int
+
+fn C.access(path &char, mode int) int
 
 fn C.witty_read_retry(fd int, buf voidptr, count usize) int
 
@@ -62,6 +66,7 @@ const sig_hup = int(C.SIGHUP)
 const f_getfl = int(C.F_GETFL)
 const f_setfl = int(C.F_SETFL)
 const o_nonblock = int(C.O_NONBLOCK)
+const f_ok = int(C.F_OK)
 
 // poll event flags
 const pollin = i16(int(C.POLLIN))
@@ -119,7 +124,7 @@ pub fn (mut self Exec) init_terminal(mut term terminal.Terminal) {
 	// set that on the terminal now. This allows rapidly initializing
 	// new surfaces to use the proper pwd.
 	if cwd := self.subprocess.cwd {
-		term.set_pwd(cwd) or {}
+		term.set_pwd(cwd) or { log.warn('error setting initial pwd err=${err}') }
 	}
 
 	// Setup our initial grid/screen size from the terminal. This
@@ -130,7 +135,7 @@ pub fn (mut self Exec) init_terminal(mut term terminal.Terminal) {
 	}, renderer.ScreenSize{
 		width: term.width_px
 		height: term.height_px
-	}) or {}
+	}) or { panic('unexpected error setting initial pty size: ${err}') }
 }
 
 pub fn (mut self Exec) thread_enter(mut io Termio, mut td ThreadData) ! {
@@ -267,7 +272,7 @@ pub fn (mut self Exec) thread_exit(mut td ThreadData) {
 		// which is completely fine since that is what we were trying
 		// to achieve.
 		if C.errno != C.EPIPE {
-			eprintln('error writing to read thread quit pipe err=${os.posix_get_error_msg(C.errno)}')
+			log.warn('error writing to read thread quit pipe err=${os.posix_get_error_msg(C.errno)}')
 		}
 	}
 
@@ -314,6 +319,7 @@ fn exec_process_exit_common(mut td ThreadData, exit_code u32) {
 	// Determine how long the process was running for.
 	runtime_ns := time.sys_mono_now() - execdata.start
 	runtime_ms := runtime_ns / u64(time.millisecond)
+	log.debug('child process exited status=${exit_code} runtime=${runtime_ms}ms')
 
 	// We always notify the surface immediately that the child has
 	// exited and some metadata about the exit.
@@ -350,7 +356,7 @@ fn exec_termios_timer(td_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorK
 				return .disarm
 			}
 			else {
-				eprintln('error in termios timer callback err=${err}')
+				log.warn('error in termios timer callback err=${err}')
 				panic('crash in termios timer callback')
 			}
 		}
@@ -365,7 +371,7 @@ fn exec_termios_timer(td_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorK
 		mode := pty.Pty{
 			master: exec.read_thread_fd
 		}.get_mode() or {
-			eprintln('error getting termios mode err=${err}')
+			log.warn('error getting termios mode err=${err}')
 
 			// If we have an error we return the default mode values
 			// which are the likely values.
@@ -374,6 +380,7 @@ fn exec_termios_timer(td_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorK
 
 		// If the mode changed, then we process it.
 		if mode != exec.termios_mode {
+			log.debug('termios change mode=${mode}')
 			exec.termios_mode = mode
 
 			// We assume we're in some sort of password input if we're
@@ -465,7 +472,7 @@ fn exec_tty_write(td_ voidptr, _ &xev.Loop, _ &xev.Completion, _ xev.Stream, _ x
 	td.write_buf_pool.put()
 
 	if err := r {
-		eprintln('write error: ${err}')
+		log.error('write error: ${err}')
 		return .disarm
 	}
 	_ = n
@@ -617,6 +624,7 @@ fn add_executable_to_path(mut env map[string]string, executable string, flatpak 
 	if exe_dir.len == 0 {
 		return
 	}
+	log.debug('appending ghostty bin to path dir=${exe_dir}')
 
 	// We always set this so that if the shell overwrites the path scripts
 	// still have a way to find the Ghostty binary when running in Ghostty.
@@ -643,6 +651,7 @@ pub fn Subprocess.init(cfg ExecConfig) !Subprocess {
 
 	// If we have a resources dir then set our env var
 	if dir := cfg.resources_dir {
+		log.info('found Ghostty resources dir: ${dir}')
 		env['GHOSTTY_RESOURCES_DIR'] = dir
 	}
 
@@ -664,7 +673,9 @@ pub fn Subprocess.init(cfg ExecConfig) !Subprocess {
 		}
 	} else {
 		$if macos {
-			// On macOS the terminfo SHOULD exist, warn if missing
+			log.warn('ghostty terminfo not found, using xterm-256color')
+			log.warn('the terminfo SHOULD exist on macos, please ensure')
+			log.warn("you're using a valid app bundle.")
 		}
 		env['TERM'] = 'xterm-256color'
 		env['COLORTERM'] = 'truecolor'
@@ -672,7 +683,8 @@ pub fn Subprocess.init(cfg ExecConfig) !Subprocess {
 
 	// Add our binary to the path if we can find it. Skip this for Flatpak
 	// because the command runs on the host and cannot reach sandbox binaries.
-	add_executable_to_path(mut env, os.executable(), internal_os.is_flatpak())
+	add_executable_to_path(mut env, os.executable(), buildcfg.flatpak
+		&& internal_os.is_flatpak())
 
 	// On macOS, export additional data directories from our
 	// application bundle.
@@ -770,34 +782,53 @@ pub fn (mut self Subprocess) start() !PtyFds {
 
 	// Create our pty
 	mut p := pty.Pty.open(pty.Winsize{
-		ws_row: u16(self.grid_size.rows)
-		ws_col: u16(self.grid_size.columns)
-		ws_xpixel: u16(self.screen_size.width)
-		ws_ypixel: u16(self.screen_size.height)
+		ws_row: clamp_u16(self.grid_size.rows)
+		ws_col: clamp_u16(self.grid_size.columns)
+		ws_xpixel: clamp_u16(self.screen_size.width)
+		ws_ypixel: clamp_u16(self.screen_size.height)
 	})!
 	self.pty_ = p
+	mut in_child := false
+	mut started := false
+	defer {
+		if !in_child && !started {
+			p.close_slave()
+			p.deinit()
+			self.pty_ = none
+		}
+	}
+
+	log.debug('starting command command=${self.args}')
 
 	// If we can't access the cwd, then don't use it. This is important
 	// because our cwd can be set by the shell (OSC 7) and we don't
 	// want to break new windows.
 	cwd := if c := self.cwd {
 		$if linux {
-			if internal_os.is_flatpak() {
+			if buildcfg.flatpak && internal_os.is_flatpak() {
+				log.info('flatpak detected, will use host command to verify cwd access')
 				if flatpak_cwd_accessible(c)! { c } else { '' }
 			} else {
-				if os.is_dir(c) { c } else { '' }
+				if C.access(c.str, f_ok) == 0 {
+					c
+				} else {
+					log.warn('cannot access cwd, ignoring: ${os.posix_get_error_msg(C.errno)}')
+					''
+				}
 			}
 		} $else {
-			if os.is_dir(c) { c } else { '' }
+			if C.access(c.str, f_ok) == 0 {
+				c
+			} else {
+				log.warn('cannot access cwd, ignoring: ${os.posix_get_error_msg(C.errno)}')
+				''
+			}
 		}
 	} else {
 		''
 	}
 
 	if self.args.len == 0 {
-		p.close_slave()
-		p.deinit()
-		self.pty_ = none
 		return error('no command specified')
 	}
 
@@ -806,28 +837,29 @@ pub fn (mut self Subprocess) start() !PtyFds {
 	// descriptors as the pinned implementation.
 	$if linux {
 		if internal_os.is_flatpak() {
-			mut command := &internal_os.FlatpakHostCommand{
-				argv: self.args
-				cwd: if cwd.len > 0 { cwd } else { none }
-				env: self.env
-				stdin: p.slave
-				stdout: p.slave
-				stderr: p.slave
-			}
-			_ = command.spawn() or {
+			if !buildcfg.flatpak {
+				log.warn('flatpak detected, but flatpak support not built-in')
+			} else {
+				mut command := &internal_os.FlatpakHostCommand{
+					argv: self.args
+					cwd: if cwd.len > 0 { cwd } else { none }
+					env: self.env
+					stdin: p.slave
+					stdout: p.slave
+					stderr: p.slave
+				}
+				pid := command.spawn()!
+				self.process = SubprocessProcess(SubprocessFlatpak{
+					command: command
+				})
+				log.info('started subcommand on host via flatpak API path=${self.args[0]} pid=${pid}')
 				p.close_slave()
-				p.deinit()
-				self.pty_ = none
-				return err
-			}
-			self.process = SubprocessProcess(SubprocessFlatpak{
-				command: command
-			})
-			p.close_slave()
-			self.env = none
-			return PtyFds{
-				read: p.master
-				write: p.master
+				self.env = none
+				started = true
+				return PtyFds{
+					read: p.master
+					write: p.master
+				}
 			}
 		}
 	}
@@ -849,16 +881,18 @@ pub fn (mut self Subprocess) start() !PtyFds {
 	}
 	cmd.start() or {
 		if commandpkg.is_exec_failed_in_child(err) {
+			in_child = true
 			return err
 		}
-		p.close_slave()
-		p.deinit()
-		self.pty_ = none
 		return err
 	}
 	self.process = SubprocessProcess(SubprocessForkExec{
 		command: cmd
 	})
+	log.info('started subcommand path=${self.args[0]} pid=${cmd.pid}')
+	$if linux {
+		log.info('subcommand cgroup=${self.linux_cgroup or { '-'}}')
+	}
 
 	// Close the slave fd in the parent. The child has already
 	// inherited it via fork and duped it to stdin/stdout/stderr.
@@ -866,6 +900,7 @@ pub fn (mut self Subprocess) start() !PtyFds {
 
 	// We can free the env now that the child has it.
 	self.env = none
+	started = true
 
 	return PtyFds{
 		read: p.master
@@ -889,16 +924,16 @@ pub fn (mut self Subprocess) stop() {
 			// Note: this will also wait for the command to exit, so
 			// DO NOT call cmd.wait.
 			kill_command(process.command) or {
-				eprintln('error sending SIGHUP to command, may hang: ${err}')
+				log.error('error sending SIGHUP to command, may hang: ${err}')
 			}
 		}
 		SubprocessFlatpak {
 			mut command := process.command
 			kill_command_flatpak(mut command) or {
-				eprintln('error sending SIGHUP to command, may hang: ${err}')
+				log.error('error sending SIGHUP to command, may hang: ${err}')
 			}
 			_ = command.wait() or {
-				eprintln('error waiting for command to exit: ${err}')
+				log.error('error waiting for command to exit: ${err}')
 				u8(0)
 			}
 		}
@@ -933,11 +968,16 @@ fn kill_pid(pid int) ! {
 			$if macos {
 				// killpg failed with EPERM, expected on Darwin and ignoring
 				ignore = errno == C.EPERM
+				if ignore {
+					log.debug('killpg failed with EPERM, expected on Darwin and ignoring')
+				}
 			}
 			if !ignore {
-				eprintln('error killing process group pgid=${pgid} err=${errno}')
+				log.warn('error killing process group pgid=${pgid} err=${errno}')
 				return error('KillFailed')
 			}
+		} else {
+			log.debug('process group killed pgid=${pgid}')
 		}
 
 		// See Command.zig wait for why we specify WNOHANG.
@@ -946,6 +986,7 @@ fn kill_pid(pid int) ! {
 		// kill them again.
 		mut status := 0
 		res := C.waitpid(pid, &status, wnohang)
+		log.debug('waitpid result=${res}')
 		if res != 0 {
 			break
 		}
@@ -968,7 +1009,7 @@ fn subprocess_getpgid(pid int) ?int {
 	for {
 		pgid := C.getpgid(pid)
 		if pgid == my_pgid {
-			eprintln('pgid is our own, retrying')
+			log.warn('pgid is our own, retrying')
 			time.sleep(10 * time.millisecond)
 			continue
 		}
@@ -985,7 +1026,7 @@ fn subprocess_getpgid(pid int) ?int {
 
 		// If we have an error we're done.
 		if pgid < 0 {
-			eprintln('error getting pgid for kill')
+			log.warn('error getting pgid for kill')
 			return none
 		}
 
@@ -1005,7 +1046,7 @@ fn kill_command_flatpak(mut command internal_os.FlatpakHostCommand) ! {
 fn subprocess_child_pre_exec(mut cmd commandpkg.Command) {
 	mut subprocess := unsafe { &Subprocess(cmd.get_data()) }
 	subprocess.child_pre_exec() or {
-		eprintln('error initializing child: ${err}')
+		log.error('error initializing child: ${err}')
 	}
 }
 
@@ -1098,7 +1139,13 @@ pub fn thread_main_posix(fd int, quit int, io &Termio) {
 	// and only fall back to poll when there's no data.
 	flags := C.fcntl(fd, f_getfl, 0)
 	if flags >= 0 {
-		C.fcntl(fd, f_setfl, flags | o_nonblock)
+		if C.fcntl(fd, f_setfl, flags | o_nonblock) < 0 {
+			log.warn('read thread failed to set flags err=${os.posix_get_error_msg(C.errno)}')
+			log.warn("this isn't a fatal error, but may cause performance issues")
+		}
+	} else {
+		log.warn('read thread failed to get flags err=${os.posix_get_error_msg(C.errno)}')
+		log.warn("this isn't a fatal error, but may cause performance issues")
 	}
 
 	// Build up the list of fds we're going to poll. We watch for data
@@ -1133,12 +1180,16 @@ pub fn thread_main_posix(fd int, quit int, io &Termio) {
 
 					// The pty is closed. We're probably gracefully shutting down.
 					2 {
+						log.info('io reader exiting')
 						return
 					}
 
 					// The pinned implementation treats all other read errors as
 					// unreachable because continuing would hide an IO failure.
-					else { panic('unexpected pty read error') }
+					else {
+						log.error('io reader error err=${os.posix_get_error_msg(C.errno)}')
+						panic('unexpected pty read error')
+					}
 				}
 			}
 			if n == 0 {
@@ -1158,17 +1209,19 @@ pub fn thread_main_posix(fd int, quit int, io &Termio) {
 		pollfds[1].revents = 0
 		poll_result := C.poll(&pollfds[0], u32(2), -1)
 		if poll_result < 0 {
-			// poll failed, exit the thread.
+			log.warn('poll failed on read thread, exiting early err=${os.posix_get_error_msg(C.errno)}')
 			return
 		}
 
 		// If our quit fd is readable, we're done.
 		if pollfds[1].revents & pollin != 0 {
+			log.info('read thread got quit signal')
 			return
 		}
 
 		// If the pty fd has HUP, the child process has closed the pty.
 		if pollfds[0].revents & pollhup != 0 {
+			log.info('pty fd closed, read thread exiting')
 			return
 		}
 	}
@@ -1200,7 +1253,7 @@ fn flatpak_cwd_accessible(cwd string) !bool {
 		stderr: dev_null.fd
 	}
 	command.spawn() or {
-		eprintln('cannot spawn command at cwd, ignoring: ${err}')
+		log.warn('cannot spawn command at cwd, ignoring: ${err}')
 		return false
 	}
 	_ = command.wait()!
@@ -1215,12 +1268,12 @@ fn setup_shell_command(integration configpkg.ShellIntegration, resources_dir ?st
 		// This is a source of confusion for users despite being
 		// opt-in since it results in some Ghostty features not
 		// working. We always want to log it.
-		eprintln('shell integration disabled by configuration')
+		log.info('shell integration disabled by configuration')
 		return default_cmd
 	}
 
 	dir := resources_dir or {
-		eprintln('no resources dir set, shell integration disabled')
+		log.warn('no resources dir set, shell integration disabled')
 		return default_cmd
 	}
 
@@ -1238,9 +1291,10 @@ fn setup_shell_command(integration configpkg.ShellIntegration, resources_dir ?st
 
 	integration_result := setup(dir, default_cmd, mut env, force)!
 	result := integration_result.value or {
-		eprintln('shell could not be detected, no automatic shell integration will be injected')
+		log.warn('shell could not be detected, no automatic shell integration will be injected')
 		return default_cmd
 	}
+	log.info('shell integration automatically injected shell=${result.shell}')
 
 	return result.command
 }
@@ -1257,15 +1311,23 @@ fn exec_command(command configpkg.Command) []string {
 	// the proper environment variables set, a login shell, and proper
 	// hushlogin behavior.
 	$if macos {
-		passwd := internal_os.get() or { internal_os.Entry{} }
+		passwd := internal_os.get() or {
+			log.warn('failed to read passwd, not using a login shell err=${err}')
+			return exec_command_posix(command)
+		}
 
 		username := passwd.name or {
-			// No username, fall back to non-login behavior
+			log.warn('failed to get username, not using a login shell')
 			return exec_command_posix(command)
 		}
 
 		hush := if h := passwd.home {
-			os.exists(os.join_path(h, '.hushlogin'))
+			if !os.is_dir(h) {
+				log.warn('failed to open home dir, not checking for hushlogin')
+				false
+			} else {
+				os.exists(os.join_path(h, '.hushlogin'))
+			}
 		} else {
 			false
 		}

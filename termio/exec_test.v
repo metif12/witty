@@ -255,6 +255,29 @@ fn test_subprocess_start_delegates_to_command() {
 	sub.external_exit()
 }
 
+fn test_subprocess_start_failure_releases_pty() {
+	$if windows {
+		return
+	}
+	mut sub := Subprocess{
+		args: []
+		env: map[string]string{}
+		grid_size: renderer.GridSize{
+			columns: 80
+			rows: 24
+		}
+		screen_size: renderer.ScreenSize{
+			width: 800
+			height: 480
+		}
+	}
+	sub.start() or {
+		assert sub.pty_ == none
+		return
+	}
+	assert false, 'an empty command must fail'
+}
+
 fn test_clamp_u16() {
 	assert clamp_u16(0) == u16(0)
 	assert clamp_u16(100) == u16(100)
