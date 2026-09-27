@@ -1055,8 +1055,9 @@ pub fn (mut self Renderer) set_macos_display_id(display_id u32) ! {
 		if self.display_link == unsafe { nil } {
 			return
 		}
+		log.info('updating display link display id=${display_id}')
 		self.display_link.set_current_cg_display(display_id) or {
-			eprintln('renderer: error setting display link display id=${display_id}: ${err}')
+			log.warn('error setting display link display id err=${err}')
 		}
 	} $else {
 		_ = display_id
@@ -1184,7 +1185,7 @@ pub fn (mut self Renderer) update_frame(state &RenderState, cursor_blink_visible
 	// Outside the critical area we can update our links to contain
 	// our regex results.
 	self.config.links.render_cell_map(mut critical.links, &self.terminal_state, state.mouse.point,
-		state.mouse.mods) or { eprintln('renderer: error searching for regex links err=${err}') }
+		state.mouse.mods) or { log.warn('error searching for regex links err=${err}') }
 
 	// Clear our highlight state and update. The order matters: selected
 	// highlights are appended first and therefore take visual priority.
@@ -1222,7 +1223,7 @@ pub fn (mut self Renderer) update_frame(state &RenderState, cursor_blink_visible
 	// Rebuild the inspector overlay after terminal-state highlights have been
 	// updated, matching Ghostty's renderer update order.
 	self.rebuild_overlay(critical.overlay_features) or {
-		eprintln('renderer: error rebuilding overlay surface: ${err}')
+		log.warn('error rebuilding overlay surface err=${err}')
 	}
 	if self.draw_mutex != unsafe { nil } {
 		self.draw_mutex.lock()
@@ -1439,7 +1440,7 @@ fn (mut self Renderer) prep_background_image() ! {
 			configpkg.PathRequired { path_config.path }
 		}
 		contents := os.read_bytes(path) or {
-			eprintln('renderer: error reading background image file "${path}": ${err}')
+			log.warn('error reading background image file "${path}": ${err}')
 			return
 		}
 		detected_type := file_type.FileType.detect(contents)
@@ -1451,11 +1452,11 @@ fn (mut self Renderer) prep_background_image() ! {
 		match image_type {
 			.png, .jpeg {}
 			.unknown {
-				eprintln('renderer: cannot determine file type for background image file "${path}"')
+				log.warn('Cannot determine file type for background image file "${path}"!')
 				return
 			}
 			else {
-				eprintln('renderer: unsupported file type ${image_type} for background image file "${path}"')
+				log.warn('Unsupported file type ${image_type} for background image file "${path}"!')
 				return
 			}
 		}
@@ -2799,7 +2800,7 @@ pub fn (mut r Renderer) display_realized() ! {
 			return error('OpenGL swap chain is not defunct')
 		}
 		post_shaders := load_from_files(r.config.custom_shaders, .glsl) or {
-			eprintln('renderer: error loading custom shaders: ${err}')
+			log.warn('error loading custom shaders err=${err}')
 			[]string{}
 		}
 		r.shaders = r.api.init_shaders(post_shaders)!
