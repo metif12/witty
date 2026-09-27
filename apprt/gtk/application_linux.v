@@ -1738,8 +1738,13 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 			}
 		}
 		.equalize_splits {
+			if target is apprt.AppTarget {
+				log.warn('equalize splits to app is unexpected')
+				return false
+			}
 			surface := surface_from_target(target) or { return false }
 			if isnil(surface.split_tree) {
+				log.warn('surface is not in a split tree, ignoring equalize_splits')
 				return false
 			}
 			mut tree := unsafe { surface.split_tree }
@@ -1750,6 +1755,7 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 			if data is apprt.GotoSplit {
 				surface := surface_from_target(target) or { return false }
 				if isnil(surface.split_tree) {
+					log.warn('surface is not in a split tree, ignoring goto_split')
 					return false
 				}
 				to := match data {
@@ -1772,7 +1778,10 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 		.goto_tab {
 			if data is apprt.GotoTab {
 				surface := surface_from_target(target) or { return false }
-				mut window := window_from_surface(surface) or { return false }
+				mut window := window_from_surface(surface) or {
+					log.warn('surface is not in a window, ignoring new_tab')
+					return false
+				}
 				raw := int(data)
 				selection := if raw == int(apprt.GotoTab.previous) {
 					SelectTab(SelectTabPrevious{})
@@ -1820,6 +1829,10 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 		}
 		.mouse_over_link {
 			if data is apprt.MouseOverLink {
+				if target is apprt.AppTarget {
+					log.warn('mouse over link to app is unexpected')
+					return true
+				}
 				if mut surface := surface_from_target(target) {
 					surface.set_mouse_hover_url(if data.url.len > 0 {
 						?string(data.url)
@@ -1832,6 +1845,10 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 		}
 		.mouse_shape {
 			if data is terminal.MouseShape {
+				if target is apprt.AppTarget {
+					log.warn('mouse shape to app is unexpected')
+					return true
+				}
 				if mut surface := surface_from_target(target) {
 					surface.set_mouse_shape(data)
 				}
@@ -1840,6 +1857,10 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 		}
 		.mouse_visibility {
 			if data is apprt.MouseVisibility {
+				if target is apprt.AppTarget {
+					log.warn('mouse visibility to app is unexpected')
+					return true
+				}
 				if mut surface := surface_from_target(target) {
 					surface.set_mouse_hidden(data == .hidden)
 				}
@@ -1849,13 +1870,20 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 		.move_tab {
 			if data is apprt.MoveTab {
 				mut surface := surface_from_target(target) or { return false }
-				mut window := window_from_surface(surface) or { return false }
+				mut window := window_from_surface(surface) or {
+					log.warn('surface is not in a window, ignoring new_tab')
+					return false
+				}
 				mut rt_surface := surface.rt()
 				return window.move_tab(rt_surface, i64(data.amount))
 			}
 		}
 		.new_split {
 			if data is apprt.SplitDirection {
+				if target is apprt.AppTarget {
+					log.warn('new split to app is unexpected')
+					return false
+				}
 				mut surface := surface_from_target(target) or { return false }
 				if isnil(surface.split_tree) {
 					return false
@@ -1872,8 +1900,15 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 			}
 		}
 		.new_tab {
+			if target is apprt.AppTarget {
+				log.warn('new tab to app is unexpected')
+				return false
+			}
 			surface := surface_from_target(target) or { return false }
-			mut window := window_from_surface(surface) or { return false }
+			mut window := window_from_surface(surface) or {
+				log.warn('surface is not in a window, ignoring new_tab')
+				return false
+			}
 			window.new_tab(surface.core_surface)
 			return true
 		}
@@ -1915,20 +1950,24 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 			// openUrl helper logs launcher failures but deliberately does not turn
 			// them into an unhandled action, which would pass the key through.
 			internal_os.open(.text, path) or {
-				eprintln('unable to open url: ${err}')
+				log.warn('unable to open url: ${err}')
 			}
 			return true
 		}
 		.open_url {
 			if data is apprt.OpenUrl {
 				internal_os.open(data.kind, data.url) or {
-					eprintln('unable to open url: ${err}')
+					log.warn('unable to open url: ${err}')
 				}
 				return true
 			}
 		}
 		.pwd {
 			if data is apprt.PwdValue {
+				if target is apprt.AppTarget {
+					log.warn('pwd to app is unexpected')
+					return true
+				}
 				if mut surface := surface_from_target(target) {
 					surface.set_pwd(data.pwd)
 				}
@@ -1965,8 +2004,16 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 		}
 		.resize_split {
 			if data is apprt.ResizeSplit {
+				if target is apprt.AppTarget {
+					log.warn('resize_split to app is unexpected')
+					return false
+				}
 				surface := surface_from_target(target) or { return false }
-				if isnil(surface.split_tree) || !surface.split_tree.get_is_split() {
+				if isnil(surface.split_tree) {
+					log.warn('surface is not in a split tree, ignoring resize_split')
+					return false
+				}
+				if !surface.split_tree.get_is_split() {
 					return false
 				}
 				direction := match data.direction {
@@ -2113,6 +2160,7 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 		.secure_input, .close_all_windows, .float_window, .toggle_visibility, .toggle_background_opacity, .cell_size, .render_inspector, .renderer_health, .color_change, .reset_window_size, .check_for_updates, .undo, .redo {
 			// These actions are also explicitly unimplemented in the pinned GTK
 			// runtime.
+			log.warn('unimplemented action=${action}')
 			return false
 		}
 	}
