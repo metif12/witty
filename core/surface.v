@@ -1691,7 +1691,7 @@ fn (mut s SurfaceSearch) deinit() {
 	s.state.deinit()
 }
 
-fn surface_search_event(event searchpkg.Event, userdata voidptr) {
+fn search_callback(event searchpkg.Event, userdata voidptr) {
 	// IMPORTANT: This function is run on the SEARCH THREAD! It is NOT SAFE
 	// to access anything other than values that never change on the surface.
 	// The surface is guaranteed to be valid for the lifetime of the search
@@ -4155,7 +4155,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				mut state := searchpkg.SearchThread.init(searchpkg.ThreadOptions{
 					mutex:          self.renderer_state.mutex
 					terminal:       self.renderer_state.terminal_
-					event_cb:       surface_search_event
+					event_cb:       search_callback
 					event_userdata: voidptr(&self)
 				})!
 				mut init_s := &SurfaceSearch{
@@ -6021,13 +6021,14 @@ fn (mut self Surface) complete_clipboard_paste(data string, allow_unsafe bool) !
 		}
 		if unsafe_paste {
 			self.renderer_state.mutex.unlock()
+			log.info('potentially unsafe paste detected, rejecting until confirmation')
 			return error('UnsafePaste')
 		}
 	}
 
 	// Scroll to bottom before pasting
 	self.scroll_to_bottom() or {
-		eprintln('error scrolling to bottom err=${err}')
+		log.warn('error scrolling to bottom err=${err}')
 	}
 	self.renderer_state.mutex.unlock()
 
@@ -6056,20 +6057,7 @@ pub fn (mut self Surface) complete_clipboard_request(req apprt.ClipboardRequest,
 			self.complete_clipboard_paste(data, confirmed)!
 		}
 		apprt.ClipboardRequestOsc52Read {
-			if self.config.clipboard_read == .deny {
-				return error('UnauthorizedPaste')
-			}
-			if self.config.clipboard_read == .ask && !confirmed {
-				return error('UnauthorizedPaste')
-			}
-			kind := match req.clipboard {
-				.standard { 'c' }
-				.selection { 's' }
-				.primary { 'p' }
-			}
-			encoded := base64.encode_str(data)
-			response := '\x1b]52;${kind};${encoded}\x1b\\'
-			self.queue_io(termiopkg.MessageWriteAlloc{ data: response }, .unlocked)
+			self.complete_clipboard_read_osc52(data, req.clipboard, confirmed)!
 		}
 		apprt.ClipboardRequestOsc52Write {
 			self.rt_surface.set_clipboard(req.clipboard, [apprt.ClipboardContent{
@@ -6078,6 +6066,27 @@ pub fn (mut self Surface) complete_clipboard_request(req apprt.ClipboardRequest,
 			}], !confirmed)!
 		}
 	}
+}
+
+fn (mut self Surface) complete_clipboard_read_osc52(data string, clipboard_type apprt.Clipboard, confirmed bool) ! {
+	// We should never get here if clipboard-read is set to deny because a
+	// denied request is never started.
+	assert self.config.clipboard_read != .deny
+
+	if self.config.clipboard_read == .ask && !confirmed {
+		return error('UnauthorizedPaste')
+	}
+
+	// Reply even when the clipboard is empty because the requesting client is
+	// waiting for the OSC 52 response.
+	kind := match clipboard_type {
+		.standard { 'c' }
+		.selection { 's' }
+		.primary { 'p' }
+	}
+	encoded := base64.encode_str(data)
+	response := '\x1b]52;${kind};${encoded}\x1b\\'
+	self.queue_io(termiopkg.MessageWriteAlloc{ data: response }, .unlocked)
 }
 
 fn (mut self Surface) show_desktop_notification(title string, body string) ! {
@@ -6189,7 +6198,7 @@ fn (mut self Surface) copy_selection_to_clipboards(sel TermSelection, clipboards
 	assert contents.len > 0
 	for loc in clipboards {
 		self.rt_surface.set_clipboard(loc, contents, false) or {
-			eprintln('error setting clipboard string clipboard=${loc} err=${err}')
+			log.error('error setting clipboard string clipboard=${loc} err=${err}')
 		}
 	}
 }
@@ -6246,6 +6255,7 @@ fn (mut self Surface) start_clipboard_request(loc apprt.Clipboard, req apprt.Cli
 		apprt.ClipboardRequestPaste {}
 		apprt.ClipboardRequestOsc52Read {
 			if self.config.clipboard_read == .deny {
+				log.info("application attempted to read clipboard, but 'clipboard-read' is set to deny")
 				return false
 			}
 		}

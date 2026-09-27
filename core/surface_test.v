@@ -145,7 +145,7 @@ fn test_search_callback_routes_owned_results_and_ui_state() {
 		renderer_thread: make_test_renderer_thread()
 	}
 
-	surface_search_event(searchpkg.EventViewportMatches{
+	search_callback(searchpkg.EventViewportMatches{
 		matches: [highlight.Flattened.empty()]
 	}, voidptr(&surface))
 	assert app.mailbox.len() == 0
@@ -155,7 +155,7 @@ fn test_search_callback_routes_owned_results_and_ui_state() {
 		assert viewport.matches.len == 1
 	}
 
-	surface_search_event(searchpkg.EventSelectedMatch{
+	search_callback(searchpkg.EventSelectedMatch{
 		selected: searchpkg.ThreadSelectedMatch{
 			idx: 4
 			highlight: highlight.Flattened.empty()
@@ -171,14 +171,14 @@ fn test_search_callback_routes_owned_results_and_ui_state() {
 	assert selected.message.kind() == .search_selected
 	assert (selected.message as apprt.SurfaceMessageSearchSelected).selected? == 4
 
-	surface_search_event(searchpkg.EventTotalMatches{
+	search_callback(searchpkg.EventTotalMatches{
 		total: 9
 	}, voidptr(&surface))
 	total := pop_surface_core_message(mut app)
 	assert total.message.kind() == .search_total
 	assert (total.message as apprt.SurfaceMessageSearchTotal).total? == 9
 
-	surface_search_event(searchpkg.EventQuit{}, voidptr(&surface))
+	search_callback(searchpkg.EventQuit{}, voidptr(&surface))
 	cleared_match := pop_renderer_message(mut surface)
 	assert cleared_match is rendererpkg.SearchSelectedMatchMessage
 	if cleared_match is rendererpkg.SearchSelectedMatchMessage {
@@ -1227,6 +1227,25 @@ fn test_complete_clipboard_request_osc52_read() ! {
 	}, 'hello', false)!
 	assert surf.io.messages.len == 1
 	assert surf.io.messages[0].write_slice().bytestr() == '\x1b]52;s;aGVsbG8=\x1b\\'
+}
+
+fn test_complete_clipboard_read_osc52_replies_to_empty_clipboard() ! {
+	mut surf := make_test_surface()
+	surf.config.clipboard_read = .allow
+	surf.complete_clipboard_read_osc52('', .primary, false)!
+	assert surf.io.messages.len == 1
+	assert surf.io.messages[0].write_slice().bytestr() == '\x1b]52;p;\x1b\\'
+}
+
+fn test_start_clipboard_request_rejects_denied_osc52_read() ! {
+	mut runtime := apprt.RuntimeSurface{}
+	mut surf := make_test_surface()
+	surf.rt_surface = &runtime
+	surf.config.clipboard_read = .deny
+	assert !surf.start_clipboard_request(.standard, apprt.ClipboardRequestOsc52Read{
+		clipboard: .standard
+	})!
+	assert runtime.requests.len == 0
 }
 
 fn test_complete_clipboard_request_osc52_read_requires_confirmation() {
