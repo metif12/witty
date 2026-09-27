@@ -53,6 +53,17 @@ pub fn CommandParser.init() CommandParser {
 	return CommandParser{}
 }
 
+// Release all parser-owned state. V's garbage collector owns the backing
+// allocations, so clearing the containers is the source deinitializer's
+// observable operation.
+pub fn (mut self CommandParser) deinit() {
+	self.kv = map[u8]u32{}
+	self.data_buf = []u8{}
+	self.kv_temp_len = 0
+	self.kv_current = 0
+	self.state = .control_key
+}
+
 // Parse a complete command string.
 pub fn CommandParser.parse_string(data string) !Command {
 	mut parser := CommandParser.init()

@@ -63,7 +63,7 @@ pub mut:
 	// CSI or OSC, but it is a private escape sequence that is used
 	// to send commands to the terminal emulator. This is used by
 	// the kitty graphics protocol.
-	apc ApcHandler
+	apc terminal.ApcHandler
 
 	// The DCS handler maintains DCS state. DCS is like CSI or OSC,
 	// but requires more stateful parsing. This is used by functionality
@@ -782,8 +782,9 @@ fn (self &StreamHandler) format_decscusr() int {
 // ============================================================
 
 pub fn (mut self StreamHandler) apc_end() ! {
-	cmd := self.apc.end() or { return }
-	if response := self.terminal.kitty_graphics(&cmd) {
+	mut cmd := self.apc.end() or { return }
+	defer { cmd.deinit() }
+	if response := self.terminal.kitty_graphics(&cmd.kitty) {
 		encoded := response.encode()
 		if encoded.len > 0 {
 			self.message_writer(Message.write_req(encoded))
@@ -1703,65 +1704,6 @@ pub fn (mut self StreamHandler) send_size_report(style terminal.SizeReportStyle)
 // Display a GUI progress report.
 fn (mut self StreamHandler) progress_report(report osc.ProgressReport) {
 	self.surface_message_writer(apprt.SurfaceMessage(report))
-}
-
-// ============================================================
-// APC and DCS handlers
-// ============================================================
-
-// ApcHandler maintains APC (Application Program Command) state.
-// APC is used by the kitty graphics protocol.
-pub struct ApcHandler {
-mut:
-	state  ApcHandlerState
-	parser terminal.CommandParser
-}
-
-pub fn (mut self ApcHandler) deinit() {
-	self.state = .inactive
-	self.parser = terminal.CommandParser.init()
-}
-
-pub fn (mut self ApcHandler) start() {
-	self.state = .identify
-	self.parser = terminal.CommandParser.init()
-}
-
-pub fn (mut self ApcHandler) feed(byte_val u8) {
-	match self.state {
-		.inactive { panic('ApcHandler.feed called while inactive') }
-		.ignore {}
-		.identify {
-			self.state = if byte_val == `G` && terminal.kitty_graphics { .kitty } else { .ignore }
-		}
-		.kitty {
-			self.parser.feed(byte_val) or {
-				self.state = .ignore
-			}
-		}
-	}
-}
-
-pub fn (mut self ApcHandler) end() ?terminal.Command {
-	defer {
-		self.state = .inactive
-		self.parser = terminal.CommandParser.init()
-	}
-
-	if self.state == .inactive {
-		panic('ApcHandler.end called while inactive')
-	}
-	if self.state != .kitty {
-		return none
-	}
-	return self.parser.complete() or { return none }
-}
-
-enum ApcHandlerState as u8 {
-	inactive
-	ignore
-	identify
-	kitty
 }
 
 // DcsHandler wraps terminal.DcsHandler, delegating all DCS state
