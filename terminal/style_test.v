@@ -97,6 +97,39 @@ fn test_style_flags_retain_source_packed_layout() {
 	assert flags.underline() == .curly
 }
 
+fn test_style_bold_color_uses_only_the_active_variant() {
+	default_color := RGB{ r: 10, g: 20, b: 30 }
+	explicit_color := RGB{ r: 40, g: 50, b: 60 }
+	mut palette := [256]RGB{}
+	palette[1] = RGB{ r: 1, g: 2, b: 3 }
+	palette[9] = RGB{ r: 4, g: 5, b: 6 }
+	style := CellStyle{
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
+	}
+
+	assert style.fg(FgOpts{
+		default_color: default_color
+		palette: palette
+		bold_color: BoldColorBright{}
+	}) == default_color
+	assert style.fg(FgOpts{
+		default_color: default_color
+		palette: palette
+		bold_color: BoldColorColor{ color: explicit_color }
+	}) == explicit_color
+
+	palette_style := CellStyle{
+		fg_color: .palette
+		fg_palette: 1
+		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
+	}
+	assert palette_style.fg(FgOpts{
+		default_color: default_color
+		palette: palette
+		bold_color: BoldColorBright{}
+	}) == palette[9]
+}
+
 // Tests for Style VT and HTML formatting.
 // Source: style.zig tests
 

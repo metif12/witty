@@ -508,15 +508,15 @@ fn test_terminal_color_parse_cli() {
 // Config.zig: BoldColor "parseCLI"
 fn test_bold_color_parse_cli() {
 	a := bold_color_parse_cli('#4e2a84')!
-	assert !a.bright
-	assert a.color == ColorRGB{78, 42, 132}
+	assert a is BoldColorColor
+	assert (a as BoldColorColor).color == ColorRGB{78, 42, 132}
 	assert a.format_entry() == '#4e2a84'
 
 	b := bold_color_parse_cli('black')!
-	assert !b.bright
-	assert b.color == ColorRGB{0, 0, 0}
+	assert b is BoldColorColor
+	assert (b as BoldColorColor).color == ColorRGB{0, 0, 0}
 
-	assert BoldColor.parse_cli('bright')!.bright
+	assert BoldColor.parse_cli('bright')! is BoldColorBright
 	assert BoldColor.parse_cli('bright')!.format_entry() == 'bright'
 	BoldColor.parse_cli(none) or {
 		expect_parse_error(err, .value_required)
@@ -2507,7 +2507,7 @@ fn test_compat_removed_bold_is_bright() {
 		assert false, 'expected bold_color to be set'
 		return
 	}
-	assert bc.bright
+	assert bc is BoldColorBright
 }
 
 // Config.zig: "compatibility: window new-window"
@@ -3239,8 +3239,9 @@ auto-update-channel = stable
 	assert cfg.background_image_fit == .cover
 	assert cfg.background_image_repeat
 	assert cfg.background_opacity_cells
-	assert cfg.bold_color?.bright == false
-	assert cfg.bold_color?.color == ColorRGB{102, 51, 153}
+	bold_color := cfg.bold_color or { panic('missing bold color') }
+	assert bold_color is BoldColorColor
+	assert (bold_color as BoldColorColor).color == ColorRGB{102, 51, 153}
 	assert cfg.unfocused_split_fill? == ColorRGB{250, 250, 210}
 	assert cfg.split_divider_color? == ColorRGB{170, 187, 204}
 	assert cfg.split_preserve_zoom.navigation()

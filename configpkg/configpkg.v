@@ -5343,28 +5343,31 @@ pub enum BackgroundImageFit as u8 {
 	none_
 }
 
-// BoldColor configuration.
-pub struct BoldColor {
+pub struct BoldColorBright {}
+
+pub struct BoldColorColor {
 pub:
-	bright bool = true
-	color  ColorRGB
+	color ColorRGB
 }
+
+// BoldColor is Config.BoldColor. Only the color arm owns an RGB value.
+pub type BoldColor = BoldColorBright | BoldColorColor
 
 pub fn BoldColor.parse_cli(input ?string) !BoldColor {
 	value := input or { return perr(ParseError.value_required) }
 	if value == 'bright' {
-		return BoldColor{
-			bright: true
-		}
+		return BoldColorBright{}
 	}
-	return BoldColor{
-		bright: false
+	return BoldColorColor{
 		color: ColorRGB.parse_cli(value)!
 	}
 }
 
 pub fn (b BoldColor) format_entry() string {
-	return if b.bright { 'bright' } else { b.color.format_entry() }
+	return match b {
+		BoldColorBright { 'bright' }
+		BoldColorColor { b.color.format_entry() }
+	}
 }
 
 // RepeatablePath holds a list of file paths.
@@ -8972,9 +8975,7 @@ fn (mut c Config) apply_kv(key string, value string) {
 				return
 			}
 			if set {
-				c.bold_color = BoldColor{
-					bright: true
-				}
+				c.bold_color = BoldColorBright{}
 			}
 		}
 		'macos-non-native-fullscreen' {
@@ -9289,7 +9290,7 @@ fn (mut c Config) apply_kv_missing(key string) {
 			c.selection_background = TerminalColorCellForeground{}
 		}
 		'bold-is-bright' {
-			c.bold_color = BoldColor{ bright: true }
+			c.bold_color = BoldColorBright{}
 		}
 		'adw-toolbar-style' {
 			// compatibilityRenamed fails because the destination enum requires a

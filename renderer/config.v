@@ -144,12 +144,16 @@ pub fn DerivedConfig.init(config &configpkg.Config) !DerivedConfig {
 		background: bg
 		foreground: fg
 		bold_color: if bold := config.bold_color {
-			terminal.BoldColor{
-				bright: bold.bright
-				color: terminal.RGB{
-					r: bold.color.r
-					g: bold.color.g
-					b: bold.color.b
+			match bold {
+				configpkg.BoldColorBright { terminal.BoldColor(terminal.BoldColorBright{}) }
+				configpkg.BoldColorColor {
+					terminal.BoldColor(terminal.BoldColorColor{
+						color: terminal.RGB{
+							r: bold.color.r
+							g: bold.color.g
+							b: bold.color.b
+						}
+					})
 				}
 			}
 		} else {

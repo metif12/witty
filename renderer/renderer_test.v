@@ -187,8 +187,8 @@ fn test_derived_config_preserves_explicit_bold_color() {
 	cfg.load_string('bold-color = #123456\n')
 	mut derived := DerivedConfig.init(&cfg)!
 	bold := derived.bold_color or { panic('missing bold color') }
-	assert !bold.bright
-	assert bold.color == terminal.RGB{
+	assert bold is terminal.BoldColorColor
+	assert (bold as terminal.BoldColorColor).color == terminal.RGB{
 		r: 0x12
 		g: 0x34
 		b: 0x56

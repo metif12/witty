@@ -203,11 +203,9 @@ pub fn (self &CellStyle) fg(opts FgOpts) RGB {
 		.none {
 			if self.flags.bold() {
 				if bold := opts.bold_color {
-					if bold.bright {
-						// bright mode: no special color, use default
-					} else {
-						// color mode: use the explicit bold color
-						return bold.to_terminal_rgb()
+					match bold {
+						BoldColorBright {}
+						BoldColorColor { return bold.color }
 					}
 				}
 			}
@@ -235,9 +233,9 @@ pub fn (self &CellStyle) fg(opts FgOpts) RGB {
 			if self.flags.bold() && rgb.r == opts.default_color.r && rgb.g == opts.default_color.g
 				&& rgb.b == opts.default_color.b {
 				if bold := opts.bold_color {
-					if !bold.bright {
-						// color mode: use the explicit bold color
-						return bold.to_terminal_rgb()
+					match bold {
+						BoldColorBright {}
+						BoldColorColor { return bold.color }
 					}
 				}
 			}
