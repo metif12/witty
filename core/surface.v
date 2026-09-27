@@ -1679,7 +1679,7 @@ pub mut:
 
 fn (mut s SurfaceSearch) deinit() {
 	// Notify the thread to stop
-	s.state.stop.notify() or { eprintln('error notifying search thread to stop, may stall err=${err}') }
+	s.state.stop.notify() or { log.error('error notifying search thread to stop, may stall err=${err}') }
 
 	// Wait for the OS thread to quit
 	if worker := s.thread_ {
@@ -1697,7 +1697,7 @@ fn search_callback(event searchpkg.Event, userdata voidptr) {
 	// The surface is guaranteed to be valid for the lifetime of the search
 	// thread.
 	mut surface := unsafe { &Surface(userdata) }
-	surface.search_callback_(event) or { eprintln('error in search callback err=${err}') }
+	surface.search_callback_(event) or { log.warn('error in search callback err=${err}') }
 }
 
 fn (mut surface Surface) search_callback_(event searchpkg.Event) ! {
@@ -2051,7 +2051,7 @@ pub fn (mut self Surface) init(config_original &Config, mut app App, rt_app &app
 	// Apply our conditional state. If we fail to apply the conditional state
 	// then we log and attempt to move forward with the old config.
 	conditional_result := config_original.change_conditional_state(app.config_conditional_state) or {
-		eprintln('failed to apply conditional state to config err=${err}')
+		log.warn('failed to apply conditional state to config err=${err}')
 		configpkg.ConfigChangeResult{}
 	}
 	mut config_ := &Config(unsafe { nil })
@@ -2197,7 +2197,7 @@ pub fn (mut self Surface) init(config_original &Config, mut app App, rt_app &app
 	// Start our IO implementation
 	mut env := rt_surface.default_termio_env() or {
 		// If an error occurs, we don't want to block surface startup.
-		eprintln('error getting env map for surface err=${err}')
+		log.warn('error getting env map for surface err=${err}')
 		internal_os.get_env_map() or { map[string]string{} }
 	}
 
@@ -2299,7 +2299,7 @@ pub fn (mut self Surface) init(config_original &Config, mut app App, rt_app &app
 	self.recompute_initial_size() or {
 		// We don't treat this as a fatal error because not setting
 		// an initial size shouldn't stop our terminal from working.
-		eprintln('unable to set initial window size: ${err}')
+		log.warn('unable to set initial window size: ${err}')
 	}
 
 	// Set the configured title, the complete xdg-terminal-exec command, or the
@@ -2363,7 +2363,7 @@ pub fn (mut self Surface) deinit() {
 
 	// Stop rendering thread
 	self.renderer_thread.stop.notify() or {
-		eprintln('error notifying renderer thread to stop, may stall err=${err}')
+		log.error('error notifying renderer thread to stop, may stall err=${err}')
 	}
 	renderer_thr := self.renderer_os_thread or { panic('renderer thread was never started') }
 	renderer_thr.wait()
@@ -2374,7 +2374,7 @@ pub fn (mut self Surface) deinit() {
 
 	// Stop our IO thread
 	self.io_thread.impl.stop.notify() or {
-		eprintln('error notifying io thread to stop, may stall err=${err}')
+		log.error('error notifying io thread to stop, may stall err=${err}')
 	}
 	io_thr := self.io_os_thread or { panic('io thread was never started') }
 	io_thr.wait()
@@ -2541,7 +2541,7 @@ pub fn (mut self Surface) handle_message(msg apprt.SurfaceMessage) ! {
 				.ring_bell,
 				apprt.ActionVoid{},
 			) or {
-				eprintln('apprt failed to ring bell=${err}')
+				log.warn('apprt failed to ring bell=${err}')
 			}
 		}
 		osc.ProgressReport {
@@ -2550,7 +2550,7 @@ pub fn (mut self Surface) handle_message(msg apprt.SurfaceMessage) ! {
 				.progress_report,
 				apprt.ActionValue(msg),
 			) or {
-				eprintln('apprt failed to report progress err=${err}')
+				log.warn('apprt failed to report progress err=${err}')
 			}
 		}
 		apprt.SurfaceMessageSelectionScrollTick {
@@ -2736,7 +2736,7 @@ pub fn (mut self Surface) update_config(config &Config) ! {
 	// runtime notification below; consumers must not retain its pointer.
 	mut resolved := config.clone()
 	conditional_result := config.change_conditional_state(self.config_conditional_state) or {
-		eprintln('failed to apply conditional state to config err=${err}')
+		log.warn('failed to apply conditional state to config err=${err}')
 		configpkg.ConfigChangeResult{}
 	}
 	if conditional := conditional_result.value {
@@ -2761,7 +2761,7 @@ pub fn (mut self Surface) update_config(config &Config) ! {
 
 	// Deactivate all key tables (pointers may be stale after config change)
 	self.deactivate_all_key_tables() or {
-		eprintln('failed to deactivate key tables err=${err}')
+		log.warn('failed to deactivate key tables err=${err}')
 	}
 
 	// Update font size (preserving manual adjustments)
@@ -2781,7 +2781,7 @@ pub fn (mut self Surface) update_config(config &Config) ! {
 
 	// With mailbox messages sent, we have to wake them up so they process it.
 	self.queue_render() or {
-		eprintln('failed to notify renderer of config change err=${err}')
+		log.warn('failed to notify renderer of config change err=${err}')
 	}
 
 	// Notify runtime of config change
@@ -3126,7 +3126,7 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 			if pos := self.rt_surface.get_cursor_pos() {
 				self.renderer_state.mutex.lock()
 				self.mouse_refresh_links(pos, self.pos_to_viewport(f64(pos.x), f64(pos.y)), self.mouse.over_link) or {
-					eprintln('failed to refresh links err=${err}')
+					log.warn('failed to refresh links err=${err}')
 				}
 				self.renderer_state.mutex.unlock()
 			}
@@ -4071,7 +4071,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			// CSI/ESC triggers a scroll.
 			self.renderer_state.mutex.lock()
 			self.scroll_to_bottom() or {
-				eprintln('error scrolling to bottom err=${err}')
+				log.warn('error scrolling to bottom err=${err}')
 			}
 			self.renderer_state.mutex.unlock()
 		}
@@ -4084,7 +4084,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			// Text triggers a scroll.
 			self.renderer_state.mutex.lock()
 			self.scroll_to_bottom() or {
-				eprintln('error scrolling to bottom err=${err}')
+				log.warn('error scrolling to bottom err=${err}')
 			}
 			self.renderer_state.mutex.unlock()
 		}
@@ -4093,7 +4093,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			self.renderer_state.mutex.lock()
 			normal := !self.renderer_state.terminal_.modes.get(.cursor_keys)
 			self.scroll_to_bottom() or {
-				eprintln('error scrolling to bottom err=${err}')
+				log.warn('error scrolling to bottom err=${err}')
 			}
 			self.renderer_state.mutex.unlock()
 			data := if normal { action.value.normal } else { action.value.application }
@@ -4595,7 +4595,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				.key_table,
 				apprt.ActionValue(apprt.KeyTable(apprt.KeyTableDeactivate{})),
 			) or {
-				eprintln('failed to notify app of key table err=${err}')
+				log.warn('failed to notify app of key table err=${err}')
 			}
 		}
 		input.ActionDeactivateAllKeyTables {
@@ -4650,7 +4650,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 						datastruct.blocking_queue_forever)
 					self.queue_render() or {
 						// Not a big deal if this fails.
-						eprintln('failed to notify renderer of crash message err=${err}')
+						log.warn('failed to notify renderer of crash message err=${err}')
 					}
 				}
 				.io { self.queue_io(termiopkg.MessageCrash{}, .unlocked) }
@@ -4812,7 +4812,7 @@ fn (mut self Surface) activate_key_table(name string, once bool) !bool {
 		.key_table,
 		apprt.ActionValue(apprt.KeyTable(apprt.KeyTableActivate{ name: name })),
 	) or {
-		eprintln('failed to notify app of key table err=${err}')
+		log.warn('failed to notify app of key table err=${err}')
 	}
 
 	return true
@@ -4835,7 +4835,7 @@ fn (mut self Surface) mods_changed(mods input.Mods) {
 	self.renderer_state.mutex.unlock()
 
 	self.queue_render() or {
-		eprintln('failed to notify renderer of mods change err=${err}')
+		log.warn('failed to notify renderer of mods change err=${err}')
 	}
 }
 
@@ -5199,7 +5199,7 @@ fn (mut self Surface) set_cell_size(size rendererpkg.CellSize) ! {
 
 	// Recompute initial window size if configured
 	self.recompute_initial_size() or {
-		eprintln('unable to recompute initial window size: ${err}')
+		log.warn('unable to recompute initial window size: ${err}')
 	}
 
 	// Notify runtime of cell size change
@@ -5260,7 +5260,7 @@ fn (mut self Surface) hide_mouse() {
 		.mouse_visibility,
 		apprt.ActionValue(apprt.MouseVisibility.hidden),
 	) or {
-		eprintln('apprt failed to set mouse visibility err=${err}')
+		log.warn('apprt failed to set mouse visibility err=${err}')
 	}
 }
 
@@ -5274,7 +5274,7 @@ fn (mut self Surface) show_mouse() {
 		.mouse_visibility,
 		apprt.ActionValue(apprt.MouseVisibility.visible),
 	) or {
-		eprintln('apprt failed to set mouse visibility err=${err}')
+		log.warn('apprt failed to set mouse visibility err=${err}')
 	}
 }
 
@@ -5295,7 +5295,7 @@ fn (mut self Surface) child_exited_handler(info apprt.ChildExited) {
 			good_exit = info.exit_code == 0
 		}
 		if !good_exit {
-			eprintln('abnormal process exit detected, showing error message')
+			log.warn('abnormal process exit detected, showing error message')
 
 			// Try and show a GUI message. If it returns true, don't do anything else.
 			shown := self.rt_app.perform_action(
@@ -5303,7 +5303,7 @@ fn (mut self Surface) child_exited_handler(info apprt.ChildExited) {
 				.show_child_exited,
 				apprt.ActionValue(info),
 			) or {
-				eprintln('error trying to show native child exited GUI err=${err}')
+				log.error('error trying to show native child exited GUI err=${err}')
 				false
 			}
 			if shown {
@@ -5313,7 +5313,7 @@ fn (mut self Surface) child_exited_handler(info apprt.ChildExited) {
 			// If a native GUI notification was not shown, update our terminal to
 			// note the abnormal exit.
 			self.child_exited_abnormally(info) or {
-				eprintln('error handling abnormal child exit err=${err}')
+				log.error('error handling abnormal child exit err=${err}')
 				return
 			}
 
@@ -5334,7 +5334,7 @@ fn (mut self Surface) child_exited_handler(info apprt.ChildExited) {
 			.show_child_exited,
 			apprt.ActionValue(info),
 		) or {
-			eprintln('error trying to show native child exited GUI err=${err}')
+			log.error('error trying to show native child exited GUI err=${err}')
 			false
 		}
 		if shown {
@@ -5448,20 +5448,20 @@ fn (mut self Surface) password_input(v bool) ! {
 		.secure_input,
 		apprt.ActionValue(if v { apprt.SecureInput.on } else { apprt.SecureInput.off }),
 	) or {
-		eprintln('apprt failed to set secure input state err=${err}')
+		log.warn('apprt failed to set secure input state err=${err}')
 	}
 
 	self.queue_render()!
 }
 
 fn (mut self Surface) update_renderer_health(health rendererpkg.Health) {
-	eprintln('renderer health status change status=${health}')
+	log.warn('renderer health status change status=${health}')
 	self.rt_app.perform_action(
 		apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 		.renderer_health,
 		apprt.ActionValue(health),
 	) or {
-		eprintln('failed to notify app of renderer health change err=${err}')
+		log.warn('failed to notify app of renderer health change err=${err}')
 	}
 }
 
@@ -5471,7 +5471,7 @@ fn (mut self Surface) update_scrollbar(scrollbar terminal.Scrollbar) {
 		.scrollbar,
 		apprt.ActionValue(scrollbar),
 	) or {
-		eprintln('failed to notify app of scrollbar change err=${err}')
+		log.warn('failed to notify app of scrollbar change err=${err}')
 	}
 }
 
@@ -5481,7 +5481,7 @@ fn (mut self Surface) notify_config_conditional_state() {
 		.reload_config,
 		apprt.ActionValue(apprt.ReloadConfig{ soft: true }),
 	) or {
-		eprintln('failed to notify app of config state change err=${err}')
+		log.warn('failed to notify app of config state change err=${err}')
 	}
 }
 
@@ -5507,7 +5507,7 @@ fn (mut self Surface) end_key_sequence(action KeySequenceQueued, mem KeySequence
 		.key_sequence,
 		apprt.ActionValue(apprt.KeySequence(apprt.KeySequenceEnd{})),
 	) or {
-		eprintln('failed to notify app of key sequence end err=${err}')
+		log.warn('failed to notify app of key sequence end err=${err}')
 	}
 
 	// No matter what we clear our current sequence set. This restores
@@ -5553,7 +5553,7 @@ fn (mut self Surface) deactivate_all_key_tables() !bool {
 		.key_table,
 		apprt.ActionValue(apprt.KeyTable(apprt.KeyTableDeactivateAll{})),
 	) or {
-		eprintln('failed to notify app of key table err=${err}')
+		log.warn('failed to notify app of key table err=${err}')
 	}
 
 	return true
@@ -5690,7 +5690,7 @@ fn (mut self Surface) maybe_handle_binding(event KeyEvent, inspecting bool, mut 
 			.key_sequence,
 			apprt.ActionValue(apprt.KeySequence(entry.trigger)),
 		) or {
-			eprintln('failed to notify app of key sequence err=${err}')
+			log.warn('failed to notify app of key sequence err=${err}')
 		}
 
 		return MaybeHandleBindingResult{
@@ -5732,7 +5732,7 @@ fn (mut self Surface) maybe_handle_binding(event KeyEvent, inspecting bool, mut 
 			if v := self.perform_binding_action(action) {
 				performed = performed || v
 			} else {
-				eprintln('key binding action failed action=${action.tag()} err=${err}')
+				log.info('key binding action failed action=${action.tag()} err=${err}')
 			}
 		}
 	}
