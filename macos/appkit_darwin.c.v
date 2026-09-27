@@ -30,14 +30,7 @@ import input
 // Callback types. Each callback receives the view's userdata pointer first.
 pub type DrawCallback = fn (userdata voidptr, ctx voidptr, width f64, height f64)
 
-pub type KeyCallback = fn (userdata voidptr, event voidptr, action KeyEventAction, keycode u16, modflags u64, chars &u8, len int, uchars &u8, ulen int)
-
-// KeyEventAction is the AppKit-side key action passed to the terminal frontend.
-pub enum KeyEventAction {
-	press
-	repeat
-	release
-}
+pub type KeyCallback = fn (userdata voidptr, event voidptr, action input.KeyAction, keycode u16, modflags u64, chars &u8, len int, uchars &u8, ulen int)
 
 pub type ResizeCallback = fn (userdata voidptr, width f64, height f64)
 
@@ -388,9 +381,9 @@ fn sel(name string) Sel {
 @[inline]
 fn objc_rect(x f64, y f64, width f64, height f64) ObjCRect {
 	return ObjCRect{
-		x: x
-		y: y
-		width: width
+		x:      x
+		y:      y
+		width:  width
 		height: height
 	}
 }
@@ -398,7 +391,7 @@ fn objc_rect(x f64, y f64, width f64, height f64) ObjCRect {
 @[inline]
 fn objc_size(width f64, height f64) ObjCSize {
 	return ObjCSize{
-		width: width
+		width:  width
 		height: height
 	}
 }
@@ -766,7 +759,7 @@ pub fn system_locale() ?SystemLocale {
 	}
 	return SystemLocale{
 		language: objc_utf8_string(language_obj)
-		country: objc_utf8_string(country_obj)
+		country:  objc_utf8_string(country_obj)
 	}
 }
 
@@ -960,9 +953,9 @@ fn vt_view_draw_rect(self ObjId, _cmd Sel, _dirty_rect ObjCRect) {
 
 fn vt_view_key_down(self ObjId, _cmd Sel, event ObjId) {
 	action := if msg_bool(event, 'isARepeat') {
-		KeyEventAction.repeat
+		input.KeyAction.repeat
 	} else {
-		KeyEventAction.press
+		input.KeyAction.press
 	}
 	dispatch_key(self, event, action)
 }
@@ -982,7 +975,7 @@ fn vt_view_flags_changed(self ObjId, _cmd Sel, event ObjId) {
 // release. The logical modifier bit alone is insufficient for right-side keys:
 // it stays set while the opposite side remains held, so consult the legacy
 // device-specific mask for those keycodes as the AppKit frontend does.
-fn modifier_key_action(keycode u16, flags u64) ?KeyEventAction {
+fn modifier_key_action(keycode u16, flags u64) ?input.KeyAction {
 	logical_mask := match keycode {
 		0x39 { ns_event_modifier_flag_caps_lock }
 		0x38, 0x3c { ns_event_modifier_flag_shift }
@@ -1005,10 +998,10 @@ fn modifier_key_action(keycode u16, flags u64) ?KeyEventAction {
 		0x36 { flags & nx_device_rcmd_key_mask != 0 }
 		else { true }
 	}
-	return if side_pressed { KeyEventAction.press } else { KeyEventAction.release }
+	return if side_pressed { input.KeyAction.press } else { input.KeyAction.release }
 }
 
-fn dispatch_key(self ObjId, event ObjId, action KeyEventAction) {
+fn dispatch_key(self ObjId, event ObjId, action input.KeyAction) {
 	if g_key_cb == unsafe { nil } {
 		return
 	}
@@ -2205,9 +2198,9 @@ pub fn metal_render_pass_descriptor() voidptr {
 pub fn metal_render_pass_set_attachment(descriptor voidptr, index usize, texture voidptr, clear_color ?[4]f64) {
 	if color := clear_color {
 		C.witty_metal_render_pass_set_attachment(descriptor, index, texture, true, MetalClearColor{
-			red: color[0]
+			red:   color[0]
 			green: color[1]
-			blue: color[2]
+			blue:  color[2]
 			alpha: color[3]
 		})
 	} else {
@@ -2264,7 +2257,7 @@ pub fn metal_new_pipeline(device voidptr, vertex_library voidptr, fragment_libra
 	mut c_attachments := []C.witty_metal_pipeline_attachment{cap: attachments.len}
 	for attachment in attachments {
 		c_attachments << C.witty_metal_pipeline_attachment{
-			pixel_format: attachment.pixel_format
+			pixel_format:     attachment.pixel_format
 			blending_enabled: attachment.blending_enabled
 		}
 	}

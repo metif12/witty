@@ -109,7 +109,9 @@ fn C.CFStringGetCStringPtr(str voidptr, encoding u32) &char
 
 fn C.CFStringGetSurrogatePairForLongCharacter(cp u32, surrogates voidptr) int
 
-fn C.CFNumberCreate(alloc voidptr, number_type int, value_ptr voidptr) voidptr
+fn C.CFNumberCreate(alloc voidptr, number_type i64, value_ptr voidptr) voidptr
+
+fn C.CFNumberGetValue(number voidptr, number_type i64, value_ptr voidptr) int
 
 fn C.CFDictionaryCreate(alloc voidptr, keys voidptr, values voidptr, count isize, key_cb voidptr, value_cb voidptr) voidptr
 
@@ -410,7 +412,7 @@ pub fn cf_retain(obj voidptr) voidptr {
 	return C.CFRetain(obj)
 }
 
-pub enum ComparisonResult {
+pub enum ComparisonResult as int {
 	less    = -1
 	equal   = 0
 	greater = 1
@@ -496,8 +498,7 @@ pub fn (s &CFString) cstring_ptr(encoding Encoding) ?&char {
 	return ptr
 }
 
-@[_allow_multiple_values]
-pub enum Encoding {
+pub enum Encoding as u32 {
 	invalid         = 0xffffffff
 	mac_roman       = 0
 	windows_latin_1 = 0x0500
@@ -505,7 +506,6 @@ pub enum Encoding {
 	nextstep_latin  = 0x0b01
 	ascii           = 0x0600
 	unicode         = 0x0100
-	utf16           = 0x0100
 	utf8            = 0x08000100
 	non_lossy_ascii = 0x0bff
 	utf16_be        = 0x10000100
@@ -552,14 +552,14 @@ pub fn get_surrogate_pair(cp u32) SurrogatePair {
 	mut pair := [u16(0), 0]!
 	if C.CFStringGetSurrogatePairForLongCharacter(cp, voidptr(&pair[0])) != 0 {
 		return SurrogatePair{
-			hi: pair[0]
-			lo: pair[1]
+			hi:      pair[0]
+			lo:      pair[1]
 			is_pair: true
 		}
 	}
 	return SurrogatePair{
-		hi: u16(cp)
-		lo: 0
+		hi:      u16(cp)
+		lo:      0
 		is_pair: false
 	}
 }
@@ -578,16 +578,37 @@ pub fn string_get_surrogate_pair_for_long_character(ch u32, mut surrogates []u16
 pub struct CFNumber {}
 
 pub fn CFNumber.create(num_type NumberType, value_ptr voidptr) !&CFNumber {
-	ptr := C.CFNumberCreate(unsafe { nil }, int(num_type), value_ptr)
+	ptr := C.CFNumberCreate(unsafe { nil }, i64(num_type), value_ptr)
 	return require_cf_ref[CFNumber](ptr, 'CFNumberCreate')
+}
+
+pub fn (n &CFNumber) get_value(num_type NumberType, value_ptr voidptr) bool {
+	return C.CFNumberGetValue(voidptr(n), i64(num_type), value_ptr) != 0
 }
 
 pub fn (n &CFNumber) release() {
 	cf_release(voidptr(n))
 }
 
-pub enum NumberType {
-	int_type = 9
+// CFNumberType is CF_ENUM(CFIndex, ...), and every supported macOS target has
+// a 64-bit CFIndex. V does not permit isize as an enum backing type.
+pub enum NumberType as i64 {
+	sint8      = 1
+	sint16     = 2
+	sint32     = 3
+	sint64     = 4
+	float32    = 5
+	float64    = 6
+	char_      = 7
+	short_     = 8
+	int_type   = 9
+	long_      = 10
+	long_long  = 11
+	float_     = 12
+	double_    = 13
+	cf_index   = 14
+	ns_integer = 15
+	cg_float   = 16
 }
 
 // ============================================================
@@ -698,7 +719,7 @@ pub fn (d &CFData) get_length() int {
 
 pub struct CFURL {}
 
-pub enum URLPathStyle {
+pub enum URLPathStyle as int {
 	posix   = 0
 	windows = 2
 }
@@ -851,7 +872,7 @@ pub:
 pub fn CFRange.init(location int, length int) CFRange {
 	return CFRange{
 		location: isize(location)
-		length: isize(length)
+		length:   isize(length)
 	}
 }
 
@@ -868,11 +889,11 @@ pub:
 	value      voidptr
 }
 
-pub enum CTParagraphStyleSpecifier {
+pub enum CTParagraphStyleSpecifier as u32 {
 	base_writing_direction = 13
 }
 
-pub enum WritingDirection {
+pub enum WritingDirection as int {
 	natural = -1
 	ltr     = 0
 	rtl     = 1
@@ -1092,7 +1113,7 @@ pub fn (f &CTFont) release() {
 // text.StringAttribute
 // ============================================================
 
-pub enum StringAttribute {
+pub enum StringAttribute as u8 {
 	font
 	paragraph_style
 	writing_direction
@@ -1152,10 +1173,10 @@ pub:
 
 pub fn CGAffineTransform.identity() CGAffineTransform {
 	return CGAffineTransform{
-		a: 1
-		b: 0
-		c: 0
-		d: 1
+		a:  1
+		b:  0
+		c:  0
+		d:  1
 		tx: 0
 		ty: 0
 	}
@@ -1185,8 +1206,8 @@ pub fn CGRect.init(x f64, y f64, width f64, height f64) CGRect {
 			x: x
 			y: y
 		}
-		size: CGSize{
-			width: width
+		size:   CGSize{
+			width:  width
 			height: height
 		}
 	}
@@ -1206,7 +1227,7 @@ pub fn (r CGRect) get_width() f64 {
 
 pub type CGGlyph = u16
 
-pub enum CGImageAlphaInfo {
+pub enum CGImageAlphaInfo as u32 {
 	none                = 0
 	premultiplied_last  = 1
 	premultiplied_first = 2
@@ -1217,7 +1238,7 @@ pub enum CGImageAlphaInfo {
 	only                = 7
 }
 
-pub enum CGBitmapInfo {
+pub enum CGBitmapInfo as u32 {
 	alpha_mask           = 0x1F
 	float_mask           = 0xF00
 	float_components     = 0x100
@@ -1231,7 +1252,7 @@ pub enum CGBitmapInfo {
 
 pub struct CGColorSpace {}
 
-pub enum CGColorSpaceName {
+pub enum CGColorSpaceName as u8 {
 	display_p3
 	extended_linear_display_p3
 	srgb
@@ -1298,7 +1319,7 @@ pub fn (p &CGMutablePath) get_bounding_box() CGRect {
 	return CGRect.init(x, y, w, h)
 }
 
-pub enum CGContextTextDrawingMode {
+pub enum CGContextTextDrawingMode as int {
 	fill             = 0
 	stroke           = 1
 	fill_stroke      = 2
@@ -1674,7 +1695,7 @@ pub fn (d &CVDisplayLink) set_output_callback(callback voidptr, context voidptr)
 // os.log
 // ============================================================
 
-pub enum LogType {
+pub enum LogType as u8 {
 	default_ = 0x00
 	debug    = 0x02
 	info     = 0x01
@@ -1712,7 +1733,7 @@ pub fn signpost_init() {
 	// Zig-specific dso handle workaround is not needed in this V translation.
 }
 
-pub enum SignpostType {
+pub enum SignpostType as u8 {
 	event          = 0
 	interval_begin = 1
 	interval_end   = 2
@@ -1758,7 +1779,7 @@ pub const signpost_category_dynamic_stack_tracing = 'DynamicStackTracing'
 // iosurface
 // ============================================================
 
-pub enum PixelFormat {
+pub enum PixelFormat as int {
 	p1_monochrome                                = C.kCVPixelFormatType_1Monochrome
 	p2_indexed                                   = C.kCVPixelFormatType_2Indexed
 	p4_indexed                                   = C.kCVPixelFormatType_4Indexed
@@ -1850,7 +1871,7 @@ pub:
 	width             int
 	height            int
 	pixel_format      PixelFormat = .p32_bgra
-	bytes_per_element int = 4
+	bytes_per_element int         = 4
 	colorspace        ?&CGColorSpace
 }
 

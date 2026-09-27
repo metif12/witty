@@ -67,10 +67,10 @@ fn surface_options(view voidptr, userdata voidptr, inherited apprt.SurfaceOption
 	return apprt.SurfaceOptions{
 		...inherited
 		platform_tag: int(apprt.PlatformTag.macos)
-		platform: apprt.PlatformC{
+		platform:     apprt.PlatformC{
 			nsview: view
 		}
-		userdata: userdata
+		userdata:     userdata
 		scale_factor: macos.view_backing_scale(view)
 	}
 }
@@ -414,14 +414,14 @@ fn main() {
 
 	mut runtime := standalone_runtime()
 	runtime.app = apprt.ghostty_app_new(&apprt.AppOptions{
-		userdata: voidptr(runtime)
+		userdata:                     voidptr(runtime)
 		supports_selection_clipboard: true
-		wakeup_cb: runtime_wakeup
-		action_cb: runtime_action
-		read_clipboard_cb: runtime_read_clipboard
-		confirm_read_clipboard_cb: runtime_confirm_read_clipboard
-		write_clipboard_cb: runtime_write_clipboard
-		close_surface_cb: runtime_close_surface
+		wakeup_cb:                    runtime_wakeup
+		action_cb:                    runtime_action
+		read_clipboard_cb:            runtime_read_clipboard
+		confirm_read_clipboard_cb:    runtime_confirm_read_clipboard
+		write_clipboard_cb:           runtime_write_clipboard
+		close_surface_cb:             runtime_close_surface
 	}, &config) or {
 		eprintln('application initialization failed')
 		return
@@ -494,7 +494,7 @@ fn key_event_fallback(chars &u8, len int) string {
 	}
 }
 
-fn on_key(userdata voidptr, event voidptr, key_action macos.KeyEventAction, keycode u16, modflags u64, chars &u8, len int, _uchars &u8, _ulen int) {
+fn on_key(userdata voidptr, event voidptr, key_action input.KeyAction, keycode u16, modflags u64, chars &u8, len int, _uchars &u8, _ulen int) {
 	mut state := state_from_userdata(userdata) or { return }
 	if state.closed || state.surface == unsafe { nil } {
 		return
@@ -505,19 +505,14 @@ fn on_key(userdata voidptr, event voidptr, key_action macos.KeyEventAction, keyc
 	fallback := key_event_fallback(chars, len)
 	text := key_event_text(event, translation_mods, fallback)
 	unshifted := macos.event_characters(event, 0).runes()
-	action := match key_action {
-		.press { input.KeyAction.press }
-		.repeat { input.KeyAction.repeat }
-		.release { input.KeyAction.release }
-	}
 	apprt.ghostty_surface_key(mut state.surface, apprt.CAPIKeyEvent{
-		action: action
-		mods: mods
-		consumed_mods: translation_mods & ~(2 | 8 | 128 | 512)
-		keycode: u32(keycode)
-		text: if text.len > 0 { text } else { none }
+		action:              key_action
+		mods:                mods
+		consumed_mods:       translation_mods & ~(2 | 8 | 128 | 512)
+		keycode:             u32(keycode)
+		text:                if text.len > 0 { text } else { none }
 		unshifted_codepoint: if unshifted.len > 0 { u32(unshifted[0]) } else { u32(0) }
-		composing: false
+		composing:           false
 	})
 }
 
