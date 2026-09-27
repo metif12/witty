@@ -39,7 +39,7 @@ fn test_benchmark_once_runs_lifecycle_and_reports_result() {
 		setup_fn:    benchmark_test_setup
 		teardown_fn: benchmark_test_teardown
 	})
-	result := bench.run(RunMode.once())!
+	result := bench.run(RunModeOnce{})!
 	assert state.setup_count == 1
 	assert state.step_count == 1
 	assert state.teardown_count == 1
@@ -52,7 +52,7 @@ fn test_benchmark_duration_repeats_until_deadline() {
 	bench := Benchmark.init(voidptr(&state), VTable{
 		step_fn: benchmark_test_step
 	})
-	result := bench.run(RunMode.duration(1_000_000))!
+	result := bench.run(RunModeDuration{ nanoseconds: 1_000_000 })!
 	assert result.iterations > 1
 	assert result.duration >= 1_000_000
 	assert state.step_count == result.iterations
@@ -67,7 +67,7 @@ fn test_benchmark_setup_failure_skips_step_and_teardown() {
 		setup_fn:    benchmark_test_setup
 		teardown_fn: benchmark_test_teardown
 	})
-	bench.run(RunMode.once()) or {
+	bench.run(RunModeOnce{}) or {
 		assert err.msg() == 'benchmark failed'
 		assert state.setup_count == 1
 		assert state.step_count == 0
@@ -86,7 +86,7 @@ fn test_benchmark_step_failure_still_tears_down() {
 		setup_fn:    benchmark_test_setup
 		teardown_fn: benchmark_test_teardown
 	})
-	bench.run(RunMode.once()) or {
+	bench.run(RunModeOnce{}) or {
 		assert err.msg() == 'benchmark failed'
 		assert state.setup_count == 1
 		assert state.step_count == 1

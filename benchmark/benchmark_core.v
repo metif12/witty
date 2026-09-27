@@ -21,35 +21,19 @@ pub:
 	teardown_fn ?BenchmarkTeardownFn
 }
 
-// RunModeTag identifies the active RunMode payload.
-pub enum RunModeTag as u8 {
-	once
-	duration
-}
+// Run the benchmark exactly once.
+pub struct RunModeOnce {}
 
-// RunMode determines how long a benchmark runs. The duration payload is in
-// nanoseconds, matching Benchmark.RunMode.duration.
-pub struct RunMode {
+// Run the benchmark for a fixed duration in nanoseconds. This will not
+// interrupt a running step, matching Benchmark.RunMode.duration.
+pub struct RunModeDuration {
 pub:
-	tag         RunModeTag
 	nanoseconds u64
 }
 
-// once constructs a mode that executes exactly one step.
-pub fn RunMode.once() RunMode {
-	return RunMode{
-		tag: .once
-	}
-}
-
-// duration constructs a mode that executes steps until at least nanoseconds
-// have elapsed. A running step is never interrupted.
-pub fn RunMode.duration(nanoseconds u64) RunMode {
-	return RunMode{
-		tag:         .duration
-		nanoseconds: nanoseconds
-	}
-}
+// RunMode determines how long a benchmark runs. Only duration carries the
+// nanosecond payload, exactly as in Ghostty's tagged union.
+pub type RunMode = RunModeOnce | RunModeDuration
 
 // RunResult reports the number of completed steps and elapsed nanoseconds.
 pub struct RunResult {
@@ -113,9 +97,9 @@ pub fn (self Benchmark) run(mode RunMode) !RunResult {
 
 		now := time.sys_mono_now()
 		elapsed := u64(now - start)
-		exit := match mode.tag {
-			.once { true }
-			.duration { elapsed >= mode.nanoseconds }
+		exit := match mode {
+			RunModeOnce { true }
+			RunModeDuration { elapsed >= mode.nanoseconds }
 		}
 
 		if exit {

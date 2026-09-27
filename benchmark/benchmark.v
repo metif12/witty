@@ -243,7 +243,7 @@ fn run_codepoint_width(args []string) ! {
 	defer {
 		implementation.destroy()
 	}
-	implementation.benchmark().run(RunMode.once())!
+	implementation.benchmark().run(RunModeOnce{})!
 }
 
 fn codepoint_width_setup(ptr voidptr) ! {
@@ -369,7 +369,7 @@ fn run_grapheme_break(args []string) ! {
 	defer {
 		implementation.destroy()
 	}
-	implementation.benchmark().run(RunMode.once())!
+	implementation.benchmark().run(RunModeOnce{})!
 }
 
 fn grapheme_break_setup(ptr voidptr) ! {
@@ -466,7 +466,7 @@ fn run_is_symbol(args []string) ! {
 	defer {
 		implementation.destroy()
 	}
-	implementation.benchmark().run(RunMode.once())!
+	implementation.benchmark().run(RunModeOnce{})!
 }
 
 fn is_symbol_setup(ptr voidptr) ! {
@@ -559,7 +559,7 @@ fn run_terminal_parser(args []string) ! {
 	defer {
 		implementation.destroy()
 	}
-	implementation.benchmark().run(RunMode.once())!
+	implementation.benchmark().run(RunModeOnce{})!
 }
 
 fn terminal_parser_setup(ptr voidptr) ! {
@@ -642,7 +642,7 @@ fn run_terminal_stream(args []string) ! {
 	defer {
 		implementation.destroy()
 	}
-	implementation.benchmark().run(RunMode.once())!
+	implementation.benchmark().run(RunModeOnce{})!
 }
 
 fn terminal_stream_setup(ptr voidptr) ! {
@@ -745,7 +745,7 @@ fn run_screen_clone(args []string) ! {
 	defer {
 		implementation.destroy()
 	}
-	implementation.benchmark().run(RunMode.once())!
+	implementation.benchmark().run(RunModeOnce{})!
 }
 
 fn screen_clone_setup(ptr voidptr) ! {
@@ -857,7 +857,7 @@ fn run_osc_parser(args []string) ! {
 	defer {
 		implementation.destroy()
 	}
-	implementation.benchmark().run(RunMode.once())!
+	implementation.benchmark().run(RunModeOnce{})!
 }
 
 fn osc_parser_setup(ptr voidptr) ! {
