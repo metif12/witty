@@ -48,19 +48,19 @@ pub mut:
 	// Selection foreground color override.
 	selection_foreground ?configpkg.TerminalColor
 	// Search match background color.
-	search_background configpkg.TerminalColor = configpkg.TerminalColor{
+	search_background configpkg.TerminalColor = configpkg.TerminalColorColor{
 		color: configpkg.ColorRGB{ r: 0xff, g: 0xe0, b: 0x82 }
 	}
 	// Search match foreground color.
-	search_foreground configpkg.TerminalColor = configpkg.TerminalColor{
+	search_foreground configpkg.TerminalColor = configpkg.TerminalColorColor{
 		color: configpkg.ColorRGB{ r: 0, g: 0, b: 0 }
 	}
 	// Selected search match background color.
-	search_selected_background configpkg.TerminalColor = configpkg.TerminalColor{
+	search_selected_background configpkg.TerminalColor = configpkg.TerminalColorColor{
 		color: configpkg.ColorRGB{ r: 0xf2, g: 0xa5, b: 0x7e }
 	}
 	// Selected search match foreground color.
-	search_selected_foreground configpkg.TerminalColor = configpkg.TerminalColor{
+	search_selected_foreground configpkg.TerminalColor = configpkg.TerminalColorColor{
 		color: configpkg.ColorRGB{ r: 0, g: 0, b: 0 }
 	}
 	// Bold color override.

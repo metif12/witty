@@ -1694,26 +1694,38 @@ fn (mut self Renderer) update_custom_shader_uniforms_from_state() {
 	}
 
 	if cursor_text := self.config.cursor_text {
+		color := match cursor_text {
+			configpkg.TerminalColorColor { cursor_text.color }
+			else { panic('cursor-text is not an explicit color') }
+		}
 		self.custom_shader_uniforms.cursor_text = [
-			f32(cursor_text.color.r) / 255.0,
-			f32(cursor_text.color.g) / 255.0,
-			f32(cursor_text.color.b) / 255.0,
+			f32(color.r) / 255.0,
+			f32(color.g) / 255.0,
+			f32(color.b) / 255.0,
 			f32(1.0),
 		]!
 	}
 	if selection_background := self.config.selection_background {
+		color := match selection_background {
+			configpkg.TerminalColorColor { selection_background.color }
+			else { panic('selection-background is not an explicit color') }
+		}
 		self.custom_shader_uniforms.selection_background_color = [
-			f32(selection_background.color.r) / 255.0,
-			f32(selection_background.color.g) / 255.0,
-			f32(selection_background.color.b) / 255.0,
+			f32(color.r) / 255.0,
+			f32(color.g) / 255.0,
+			f32(color.b) / 255.0,
 			f32(1.0),
 		]!
 	}
 	if selection_foreground := self.config.selection_foreground {
+		color := match selection_foreground {
+			configpkg.TerminalColorColor { selection_foreground.color }
+			else { panic('selection-foreground is not an explicit color') }
+		}
 		self.custom_shader_uniforms.selection_foreground_color = [
-			f32(selection_foreground.color.r) / 255.0,
-			f32(selection_foreground.color.g) / 255.0,
-			f32(selection_foreground.color.b) / 255.0,
+			f32(color.r) / 255.0,
+			f32(color.g) / 255.0,
+			f32(color.b) / 255.0,
 			f32(1.0),
 		]!
 	}
@@ -1846,22 +1858,22 @@ fn cell_set_key(x u32, y u32) u64 {
 // Resolve a config TerminalColor to an RGB, given the cell's style-derived
 // foreground and background colors.
 fn resolve_terminal_color(tc configpkg.TerminalColor, inverse bool, fg_style terminal.RGB, bg_style terminal.RGB) terminal.RGB {
-	return match tc.kind {
-		.color {
+	return match tc {
+		configpkg.TerminalColorColor {
 			terminal.RGB{
 				r: tc.color.r
 				g: tc.color.g
 				b: tc.color.b
 			}
 		}
-		.cell_foreground {
+		configpkg.TerminalColorCellForeground {
 			if inverse {
 				bg_style
 			} else {
 				fg_style
 			}
 		}
-		.cell_background {
+		configpkg.TerminalColorCellBackground {
 			if inverse {
 				fg_style
 			} else {
@@ -2799,4 +2811,3 @@ pub fn (mut r Renderer) display_unrealized() {
 		r.shaders.deinit()
 	}
 }
-

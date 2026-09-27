@@ -4029,10 +4029,10 @@ pub mut:
 	bold_color                 ?BoldColor
 	selection_background       ?TerminalColor
 	selection_foreground       ?TerminalColor
-	search_background          TerminalColor = TerminalColor{ color: ColorRGB{ r: 0xff, g: 0xe0, b: 0x82 } }
-	search_foreground          TerminalColor = TerminalColor{ color: ColorRGB{ r: 0, g: 0, b: 0 } }
-	search_selected_background TerminalColor = TerminalColor{ color: ColorRGB{ r: 0xf2, g: 0xa5, b: 0x7e } }
-	search_selected_foreground TerminalColor = TerminalColor{ color: ColorRGB{ r: 0, g: 0, b: 0 } }
+	search_background          TerminalColor = TerminalColorColor{ color: ColorRGB{ r: 0xff, g: 0xe0, b: 0x82 } }
+	search_foreground          TerminalColor = TerminalColorColor{ color: ColorRGB{ r: 0, g: 0, b: 0 } }
+	search_selected_background TerminalColor = TerminalColorColor{ color: ColorRGB{ r: 0xf2, g: 0xa5, b: 0x7e } }
+	search_selected_foreground TerminalColor = TerminalColorColor{ color: ColorRGB{ r: 0, g: 0, b: 0 } }
 	link                       RepeatableLink
 	// Enable URL matching. URLs are matched on hover with control (Linux) or
 	// command (macOS) pressed and open using the default system application for
@@ -5201,51 +5201,44 @@ pub fn (config FontShapingBreak) format_entry() string {
 	return if config.cursor() { 'cursor' } else { 'no-cursor' }
 }
 
-// TerminalColorKind identifies whether a terminal color is explicit or is
-// derived from the cell foreground/background. TerminalColor carries the RGB
-// payload used by the explicit color variant.
-pub enum TerminalColorKind as u8 {
-	color
-	cell_foreground
-	cell_background
-}
+pub struct TerminalColorCellBackground {}
 
-pub struct TerminalColor {
+pub struct TerminalColorCellForeground {}
+
+pub struct TerminalColorColor {
 pub:
-	kind  TerminalColorKind = .color
 	color ColorRGB
 }
+
+// TerminalColor is Config.TerminalColor. Only the explicit-color arm carries
+// an RGB value; the two cell-relative arms are payload-free.
+pub type TerminalColor = TerminalColorCellBackground | TerminalColorCellForeground | TerminalColorColor
 
 pub fn TerminalColor.parse_cli(input_ ?string) !TerminalColor {
 	input := input_ or { return perr(ParseError.value_required) }
 	if input == 'cell-foreground' {
-		return TerminalColor{
-			kind: .cell_foreground
-		}
+		return TerminalColorCellForeground{}
 	}
 	if input == 'cell-background' {
-		return TerminalColor{
-			kind: .cell_background
-		}
+		return TerminalColorCellBackground{}
 	}
-	return TerminalColor{
-		kind: .color
+	return TerminalColorColor{
 		color: ColorRGB.parse_cli(input)!
 	}
 }
 
 pub fn (c TerminalColor) to_terminal_rgb() ?terminal.RGB {
-	if c.kind == .color {
-		return c.color.to_terminal_rgb()
+	return match c {
+		TerminalColorColor { c.color.to_terminal_rgb() }
+		TerminalColorCellForeground, TerminalColorCellBackground { none }
 	}
-	return none
 }
 
 pub fn (c TerminalColor) format_entry() string {
-	return match c.kind {
-		.color { c.color.format_entry() }
-		.cell_foreground { 'cell-foreground' }
-		.cell_background { 'cell-background' }
+	return match c {
+		TerminalColorColor { c.color.format_entry() }
+		TerminalColorCellForeground { 'cell-foreground' }
+		TerminalColorCellBackground { 'cell-background' }
 	}
 }
 
@@ -8954,12 +8947,8 @@ fn (mut c Config) apply_kv(key string, value string) {
 				return
 			}
 			if set {
-				c.cursor_color = TerminalColor{
-					kind: .cell_foreground
-				}
-				c.cursor_text = TerminalColor{
-					kind: .cell_background
-				}
+				c.cursor_color = TerminalColorCellForeground{}
+				c.cursor_text = TerminalColorCellBackground{}
 			}
 		}
 		'selection-invert-fg-bg' {
@@ -8970,12 +8959,8 @@ fn (mut c Config) apply_kv(key string, value string) {
 				return
 			}
 			if set {
-				c.selection_foreground = TerminalColor{
-					kind: .cell_background
-				}
-				c.selection_background = TerminalColor{
-					kind: .cell_foreground
-				}
+				c.selection_foreground = TerminalColorCellBackground{}
+				c.selection_background = TerminalColorCellForeground{}
 			}
 		}
 		'bold-is-bright' {
@@ -9296,12 +9281,12 @@ fn (mut c Config) apply_kv_missing(key string) {
 			c.command_palette_entry = RepeatableCommand{}
 		}
 		'cursor-invert-fg-bg' {
-			c.cursor_color = TerminalColor{ kind: .cell_foreground }
-			c.cursor_text = TerminalColor{ kind: .cell_background }
+			c.cursor_color = TerminalColorCellForeground{}
+			c.cursor_text = TerminalColorCellBackground{}
 		}
 		'selection-invert-fg-bg' {
-			c.selection_foreground = TerminalColor{ kind: .cell_background }
-			c.selection_background = TerminalColor{ kind: .cell_foreground }
+			c.selection_foreground = TerminalColorCellBackground{}
+			c.selection_background = TerminalColorCellForeground{}
 		}
 		'bold-is-bright' {
 			c.bold_color = BoldColor{ bright: true }
@@ -10370,8 +10355,7 @@ pub fn format_color(c ColorRGB) string {
 }
 
 // ------------------------------------------------------------
-// TerminalColor carries the payload of Ghostty's tagged union while using an
-// explicit tag in V.
+// TerminalColor
 // ------------------------------------------------------------
 
 // terminal_color_parse_cli translates `TerminalColor.parseCLI`.

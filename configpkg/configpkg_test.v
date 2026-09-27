@@ -58,11 +58,6 @@ fn test_platform_config_enum_layouts_and_source_ordinals() {
 }
 
 fn test_config_value_tag_layouts_and_source_ordinals() {
-	assert sizeof(TerminalColorKind) == 1
-	assert [TerminalColorKind.color, .cell_foreground, .cell_background].map(u8(it)) == [u8(0),
-		1, 2]
-	assert sizeof(TerminalColor) == 4
-
 	assert sizeof(WindowPaddingColor) == 1
 	assert [WindowPaddingColor.background, .extend, .extend_always].map(u8(it)) == [u8(0), 1,
 		2]
@@ -481,15 +476,15 @@ fn test_color_format() {
 // Config.zig: TerminalColor "parseCLI"
 fn test_terminal_color_parse_cli() {
 	a := terminal_color_parse_cli('#4e2a84')!
-	assert a.kind == .color
-	assert a.color == ColorRGB{78, 42, 132}
+	assert a is TerminalColorColor
+	assert (a as TerminalColorColor).color == ColorRGB{78, 42, 132}
 
 	b := terminal_color_parse_cli('black')!
-	assert b.kind == .color
-	assert b.color == ColorRGB{0, 0, 0}
+	assert b is TerminalColorColor
+	assert (b as TerminalColorColor).color == ColorRGB{0, 0, 0}
 
-	assert terminal_color_parse_cli('cell-foreground')!.kind == .cell_foreground
-	assert terminal_color_parse_cli('cell-background')!.kind == .cell_background
+	assert terminal_color_parse_cli('cell-foreground')! is TerminalColorCellForeground
+	assert terminal_color_parse_cli('cell-background')! is TerminalColorCellBackground
 	mut got_value_required := false
 	TerminalColor.parse_cli(none) or {
 		expect_parse_error(err, .value_required)
@@ -498,8 +493,8 @@ fn test_terminal_color_parse_cli() {
 	assert got_value_required
 	terminal_rgb := a.to_terminal_rgb() or { terminal.RGB{} }
 	assert terminal_rgb == terminal.RGB{ r: 78, g: 42, b: 132 }
-	assert TerminalColor{ kind: .cell_foreground }.to_terminal_rgb() == none
-	assert TerminalColor{ kind: .cell_background }.format_entry() == 'cell-background'
+	assert TerminalColor(TerminalColorCellForeground{}).to_terminal_rgb() == none
+	assert TerminalColor(TerminalColorCellBackground{}).format_entry() == 'cell-background'
 
 	terminal_color_parse_cli('a') or {
 		expect_parse_error(err, .invalid_value)
@@ -2278,7 +2273,9 @@ keybind = ctrl+b=new_tab
 	cfg.finalize()!
 
 	assert cfg.font_size == 17
-	assert cfg.cursor_color?.color == ColorRGB{0xAA, 0xBB, 0xCC}
+	cursor_color := cfg.cursor_color or { panic('missing cursor color') }
+	assert cursor_color is TerminalColorColor
+	assert (cursor_color as TerminalColorColor).color == ColorRGB{0xAA, 0xBB, 0xCC}
 	assert cfg.palette.value[1] == ColorRGB{0x11, 0x11, 0x11}
 	assert cfg.palette.value[2] == ColorRGB{0x22, 0x22, 0x22}
 	assert cfg.font_family == ['Theme Font', 'User Font']
@@ -2461,8 +2458,10 @@ fn test_compat_removed_cursor_invert_fg_bg() {
 	mut cfg := Config.default_config()
 	cfg.load_string('cursor-invert-fg-bg = true\n')
 	cfg.finalize()!
-	assert cfg.cursor_color?.kind == .cell_foreground
-	assert cfg.cursor_text?.kind == .cell_background
+	cursor_color := cfg.cursor_color or { panic('missing cursor color') }
+	cursor_text := cfg.cursor_text or { panic('missing cursor text') }
+	assert cursor_color is TerminalColorCellForeground
+	assert cursor_text is TerminalColorCellBackground
 }
 
 // Config.zig: "compatibility: removed selection-invert-fg-bg"
@@ -2470,23 +2469,28 @@ fn test_compat_removed_selection_invert_fg_bg() {
 	mut cfg := Config.default_config()
 	cfg.load_string('selection-invert-fg-bg = true\n')
 	cfg.finalize()!
-	assert cfg.selection_foreground?.kind == .cell_background
-	assert cfg.selection_background?.kind == .cell_foreground
+	selection_foreground := cfg.selection_foreground or { panic('missing selection foreground') }
+	selection_background := cfg.selection_background or { panic('missing selection background') }
+	assert selection_foreground is TerminalColorCellBackground
+	assert selection_background is TerminalColorCellForeground
 }
 
 fn test_terminal_color_config_fields() {
 	mut cfg := Config.default_config()
-	assert cfg.search_foreground.color == ColorRGB{0, 0, 0}
-	assert cfg.search_background.color == ColorRGB{0xff, 0xe0, 0x82}
-	assert cfg.search_selected_foreground.color == ColorRGB{0, 0, 0}
-	assert cfg.search_selected_background.color == ColorRGB{0xf2, 0xa5, 0x7e}
+	assert (cfg.search_foreground as TerminalColorColor).color == ColorRGB{0, 0, 0}
+	assert (cfg.search_background as TerminalColorColor).color == ColorRGB{0xff, 0xe0, 0x82}
+	assert (cfg.search_selected_foreground as TerminalColorColor).color == ColorRGB{0, 0, 0}
+	assert (cfg.search_selected_background as TerminalColorColor).color == ColorRGB{0xf2, 0xa5, 0x7e}
 
 	cfg.load_string('cursor-color = #4e2a84\ncursor-text = cell-background\nselection-background = cell-foreground\nsearch-background = #010203\n')
-	assert cfg.cursor_color?.kind == .color
-	assert cfg.cursor_color?.color == ColorRGB{78, 42, 132}
-	assert cfg.cursor_text?.kind == .cell_background
-	assert cfg.selection_background?.kind == .cell_foreground
-	assert cfg.search_background.color == ColorRGB{1, 2, 3}
+	cursor_color := cfg.cursor_color or { panic('missing cursor color') }
+	cursor_text := cfg.cursor_text or { panic('missing cursor text') }
+	selection_background := cfg.selection_background or { panic('missing selection background') }
+	assert cursor_color is TerminalColorColor
+	assert (cursor_color as TerminalColorColor).color == ColorRGB{78, 42, 132}
+	assert cursor_text is TerminalColorCellBackground
+	assert selection_background is TerminalColorCellForeground
+	assert (cfg.search_background as TerminalColorColor).color == ColorRGB{1, 2, 3}
 	assert cfg.diagnostics.len == 0
 
 	cfg.load_string('cursor-color =\nselection-background =\n')

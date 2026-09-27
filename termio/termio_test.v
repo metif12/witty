@@ -73,14 +73,14 @@ fn test_mailbox_push_pop_fifo() {
 
 fn test_derived_config_converts_only_explicit_cursor_color() {
 	mut config := configpkg.Config.default_config()
-	config.cursor_color = configpkg.TerminalColor{
+	config.cursor_color = configpkg.TerminalColorColor{
 		color: configpkg.ColorRGB{ r: 0x12, g: 0x34, b: 0x56 }
 	}
 	derived := DerivedConfig.init(&config)!
 	cursor_color := derived.cursor_color or { panic('explicit cursor color was discarded') }
 	assert cursor_color == terminal.RGB{ r: 0x12, g: 0x34, b: 0x56 }
 
-	config.cursor_color = configpkg.TerminalColor{ kind: .cell_foreground }
+	config.cursor_color = configpkg.TerminalColorCellForeground{}
 	cell_relative := DerivedConfig.init(&config)!
 	assert cell_relative.cursor_color == none
 

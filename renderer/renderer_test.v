@@ -207,7 +207,7 @@ fn test_terminal_color_resolves_explicit_and_cell_colors() {
 		g: 50
 		b: 60
 	}
-	explicit := configpkg.TerminalColor{
+	explicit := configpkg.TerminalColorColor{
 		color: configpkg.ColorRGB{
 			r: 1
 			g: 2
@@ -219,10 +219,10 @@ fn test_terminal_color_resolves_explicit_and_cell_colors() {
 		g: 2
 		b: 3
 	}
-	assert resolve_terminal_color(configpkg.TerminalColor{ kind: .cell_foreground }, false, fg, bg) == fg
-	assert resolve_terminal_color(configpkg.TerminalColor{ kind: .cell_foreground }, true, fg, bg) == bg
-	assert resolve_terminal_color(configpkg.TerminalColor{ kind: .cell_background }, false, fg, bg) == bg
-	assert resolve_terminal_color(configpkg.TerminalColor{ kind: .cell_background }, true, fg, bg) == fg
+	assert resolve_terminal_color(configpkg.TerminalColorCellForeground{}, false, fg, bg) == fg
+	assert resolve_terminal_color(configpkg.TerminalColorCellForeground{}, true, fg, bg) == bg
+	assert resolve_terminal_color(configpkg.TerminalColorCellBackground{}, false, fg, bg) == bg
+	assert resolve_terminal_color(configpkg.TerminalColorCellBackground{}, true, fg, bg) == fg
 }
 
 fn inspector_features_callback(ptr voidptr) []OverlayFeature {
