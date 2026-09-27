@@ -522,10 +522,25 @@ static uint32_t witty_ct_score(
 		has_codepoint = witty_coretext_glyph_for_codepoint((void *)font, codepoint, &g) ? 1 : 0;
 	}
 
-	// Symbolic traits (bold / italic / monospace).
+	// Symbolic traits (bold / italic / monospace). Ghostty reads these from
+	// the candidate descriptor and only then refines bold/italic from the
+	// loaded font's OpenType tables and variation values.
 	int is_bold = 0, is_italic = 0, is_mono = 0;
 	{
-		CTFontSymbolicTraits t = CTFontGetSymbolicTraits(font);
+		CTFontSymbolicTraits t = 0;
+		CFDictionaryRef traits = (CFDictionaryRef)CTFontDescriptorCopyAttribute(
+			(CTFontDescriptorRef)candidate_desc, kCTFontTraitsAttribute);
+		if (traits) {
+			CFNumberRef symbolic = (CFNumberRef)CFDictionaryGetValue(
+				traits, kCTFontSymbolicTrait);
+			if (symbolic) {
+				int32_t raw = 0;
+				if (CFNumberGetValue(symbolic, kCFNumberSInt32Type, &raw)) {
+					t = (CTFontSymbolicTraits)(uint32_t)raw;
+				}
+			}
+			CFRelease(traits);
+		}
 		is_bold = (t & kCTFontTraitBold) ? 1 : 0;
 		is_italic = (t & kCTFontTraitItalic) ? 1 : 0;
 		is_mono = (t & kCTFontTraitMonoSpace) ? 1 : 0;
@@ -563,22 +578,24 @@ static uint32_t witty_ct_score(
 			for (CFIndex i = 0; i < count; i++) {
 				CFDictionaryRef axis = (CFDictionaryRef)CFArrayGetValueAtIndex(axes, i);
 				CFNumberRef id_number = (CFNumberRef)CFDictionaryGetValue(axis, kCTFontVariationAxisIdentifierKey);
+				CFStringRef name = (CFStringRef)CFDictionaryGetValue(axis, kCTFontVariationAxisNameKey);
 				CFNumberRef default_number = (CFNumberRef)CFDictionaryGetValue(axis, kCTFontVariationAxisDefaultValueKey);
-				if (!id_number || !default_number) continue;
+				if (!id_number || !name || !default_number) continue;
 
-				int32_t identifier = 0;
+				char name_buf[1024];
+				name_buf[0] = 0;
+				(void)CFStringGetCString(name, name_buf, sizeof(name_buf), kCFStringEncodingUTF8);
 				double value = 0;
-				if (!CFNumberGetValue(id_number, kCFNumberSInt32Type, &identifier)) continue;
 				(void)CFNumberGetValue(default_number, kCFNumberDoubleType, &value);
 				CFNumberRef configured = (CFNumberRef)CFDictionaryGetValue(values, id_number);
 				if (configured) (void)CFNumberGetValue(configured, kCFNumberDoubleType, &value);
 
-				if ((uint32_t)identifier == (uint32_t)'wght') {
+				if (strcmp(name_buf, "wght") == 0) {
 					is_bold = value > 600.0;
-				} else if ((uint32_t)identifier == (uint32_t)'ital') {
+				} else if (strcmp(name_buf, "ital") == 0) {
 					is_italic = value > 0.5;
 					ital_seen = 1;
-				} else if (!ital_seen && (uint32_t)identifier == (uint32_t)'slnt') {
+				} else if (!ital_seen && strcmp(name_buf, "slnt") == 0) {
 					is_italic = value <= -5.0;
 				}
 			}
