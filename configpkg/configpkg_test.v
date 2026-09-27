@@ -162,6 +162,11 @@ fn test_config_local_and_quick_terminal_tag_layouts_and_source_ordinals() {
 	assert sizeof(ReplayStepKind) == 1
 	assert [ReplayStepKind.arg, .expand, .conditional_arg, .diagnostic, .command].map(u8(it)) == [u8(0),
 		1, 2, 3, 4]
+	steps := [ReplayStep(ReplayArg{}), ReplayStep(ReplayExpand{}),
+		ReplayStep(ReplayConditionalArg{}), ReplayStep(ReplayDiagnostic{}),
+		ReplayStep(ReplayCommand{})]
+	assert steps.map(it.kind()) == [ReplayStepKind.arg, .expand, .conditional_arg, .diagnostic,
+		.command]
 	assert sizeof(OptionalFileAction) == 1
 	assert [OptionalFileAction.loaded, .not_found, .error_].map(u8(it)) == [u8(0), 1, 2]
 
@@ -335,8 +340,8 @@ fn test_load_iter_replay_keeps_exact_normalized_argument() {
 	cfg.load_iter(mut iter)
 	assert cfg.title or { '' } == 'a=b'
 	assert cfg.replay_steps.len == 1
-	assert cfg.replay_steps[0].kind == .arg
-	assert cfg.replay_steps[0].value == '--title=a=b'
+	assert cfg.replay_steps[0] is ReplayArg
+	assert (cfg.replay_steps[0] as ReplayArg).value == '--title=a=b'
 }
 
 fn test_parse_manually_hook_records_args_and_consumes_command_tail() {
@@ -344,19 +349,19 @@ fn test_parse_manually_hook_records_args_and_consumes_command_tail() {
 	mut empty := cli_args.slice_iterator([])
 	assert regular.parse_manually_hook('--font-size=18', mut empty)
 	assert regular.replay_steps.len == 1
-	assert regular.replay_steps[0].kind == .arg
-	assert regular.replay_steps[0].value == '--font-size=18'
+	assert regular.replay_steps[0] is ReplayArg
+	assert (regular.replay_steps[0] as ReplayArg).value == '--font-size=18'
 
 	mut command := Config.default_config()
 	mut params := cli_args.slice_iterator(['echo', 'hello world'])
 	assert !command.parse_manually_hook('-e', mut params)
 	assert command.initial_command or { panic('missing command') }.string_val() == 'echo hello world'
 	assert command.replay_steps.len == 3
-	assert command.replay_steps[0].kind == .command
-	assert command.replay_steps[1].kind == .arg
-	assert command.replay_steps[1].value == 'echo'
-	assert command.replay_steps[2].kind == .arg
-	assert command.replay_steps[2].value == 'hello world'
+	assert command.replay_steps[0] is ReplayCommand
+	assert command.replay_steps[1] is ReplayArg
+	assert (command.replay_steps[1] as ReplayArg).value == 'echo'
+	assert command.replay_steps[2] is ReplayArg
+	assert (command.replay_steps[2] as ReplayArg).value == 'hello world'
 }
 
 fn test_empty_command_diagnostic_is_regenerated_without_replay_location() ! {
@@ -1929,7 +1934,11 @@ fn test_config_file_bare_values_match_line_iterator() {
 	assert cfg.window_decoration == .auto
 	assert cfg.cursor_style_blink or { false }
 	assert cfg.command_palette_entry.items.len == 0
-	assert cfg.replay_steps.all(it.kind != .arg || !it.value.contains('='))
+	for step in cfg.replay_steps {
+		if step is ReplayArg {
+			assert !step.value.contains('=')
+		}
+	}
 }
 
 fn test_config_file_bare_required_and_unknown_values_are_diagnostics() {
@@ -2101,22 +2110,20 @@ fn test_conditional_replay_requires_every_condition_to_match() {
 		os: .linux
 	}
 	replay_steps_into(mut destination, [
-		ReplayStep{
-			kind: .conditional_arg
-			value: '--font-size=19'
+		ReplayStep(ReplayConditionalArg{
 			conditions: [
 				Conditional{ key: .theme, op: .eq, value: 'dark' },
 				Conditional{ key: .os, op: .eq, value: 'linux' },
 			]
-		},
-		ReplayStep{
-			kind: .conditional_arg
-			value: '--font-thicken=true'
+			arg: '--font-size=19'
+		}),
+		ReplayStep(ReplayConditionalArg{
 			conditions: [
 				Conditional{ key: .theme, op: .eq, value: 'dark' },
 				Conditional{ key: .os, op: .ne, value: 'linux' },
 			]
-		},
+			arg: '--font-thicken=true'
+		}),
 	])
 	assert destination.font_size == 19
 	assert !destination.font_thicken
@@ -2314,7 +2321,7 @@ fn test_conditional_theme_replay_replaces_theme_repeatables() {
 	assert cfg.font_family == ['Light Font', 'User Font']
 	mut saw_light_theme_step := false
 	for step in cfg.replay_steps {
-		if step.kind == .conditional_arg && step.value == '--font-family=Light Font' {
+		if step is ReplayConditionalArg && step.arg == '--font-family=Light Font' {
 			saw_light_theme_step = true
 			assert step.conditions == [Conditional{
 				key: .theme
@@ -2336,7 +2343,7 @@ fn test_conditional_theme_replay_replaces_theme_repeatables() {
 	assert dark_cfg.font_family == ['Dark Font', 'User Font']
 	mut saw_dark_theme_step := false
 	for step in dark_cfg.replay_steps {
-		if step.kind == .conditional_arg && step.value == '--font-family=Dark Font' {
+		if step is ReplayConditionalArg && step.arg == '--font-family=Dark Font' {
 			saw_dark_theme_step = true
 			assert step.conditions == [Conditional{
 				key: .theme
@@ -2344,7 +2351,11 @@ fn test_conditional_theme_replay_replaces_theme_repeatables() {
 				value: 'dark'
 			}]
 		}
-		assert step.value != '--font-family=Light Font'
+		match step {
+			ReplayArg { assert step.value != '--font-family=Light Font' }
+			ReplayConditionalArg { assert step.arg != '--font-family=Light Font' }
+			else {}
+		}
 	}
 	assert saw_dark_theme_step
 	assert dark_cfg.custom_shader.items == [
@@ -3381,11 +3392,11 @@ fn test_xdg_terminal_exec_sets_only_initial_command_mode() {
 	command := cfg.initial_command or { panic('missing initial command') }
 	assert command.string_val() == 'echo hello world'
 	assert cfg.replay_steps.len == 3
-	assert cfg.replay_steps[0].kind == .command
-	assert cfg.replay_steps[1].kind == .arg
-	assert cfg.replay_steps[1].value == 'echo'
-	assert cfg.replay_steps[2].kind == .arg
-	assert cfg.replay_steps[2].value == 'hello world'
+	assert cfg.replay_steps[0] is ReplayCommand
+	assert cfg.replay_steps[1] is ReplayArg
+	assert (cfg.replay_steps[1] as ReplayArg).value == 'echo'
+	assert cfg.replay_steps[2] is ReplayArg
+	assert (cfg.replay_steps[2] as ReplayArg).value == 'hello world'
 }
 
 fn test_xdg_terminal_exec_theme_replay_uses_command_marker() ! {
@@ -3713,10 +3724,10 @@ fn test_recursive_replay_steps_are_inserted_before_command_tail() {
 	mut child_index := -1
 	mut command_index := -1
 	for i, step in cfg.replay_steps {
-		if step.kind == .arg && step.value == '--font-size=19' {
+		if step is ReplayArg && step.value == '--font-size=19' {
 			child_index = i
 		}
-		if step.kind == .command {
+		if step is ReplayCommand {
 			command_index = i
 		}
 	}

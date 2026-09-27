@@ -7307,15 +7307,43 @@ enum ReplayStepKind as u8 {
 	command
 }
 
+struct ReplayArg {
+	value string
+}
+
+struct ReplayExpand {
+	base string
+}
+
+struct ReplayConditionalArg {
+	conditions []Conditional
+	arg        string
+}
+
+struct ReplayDiagnostic {
+	diagnostic Diagnostic
+}
+
+struct ReplayCommand {}
+
 // ReplayStep records configuration input in source order. Ghostty rebuilds a
 // configuration from these steps after loading a theme so that the theme is a
 // base layer and every user option—including repeatable options—retains its
 // normal parser semantics.
-struct ReplayStep {
-	kind       ReplayStepKind
-	value      string
-	diagnostic Diagnostic
-	conditions []Conditional
+type ReplayStep = ReplayArg
+	| ReplayExpand
+	| ReplayConditionalArg
+	| ReplayDiagnostic
+	| ReplayCommand
+
+fn (self ReplayStep) kind() ReplayStepKind {
+	return match self {
+		ReplayArg { .arg }
+		ReplayExpand { .expand }
+		ReplayConditionalArg { .conditional_arg }
+		ReplayDiagnostic { .diagnostic }
+		ReplayCommand { .command }
+	}
 }
 
 // ReplayIterator reapplies retained side effects and yields arguments through
@@ -7339,16 +7367,16 @@ fn (mut self ReplayIterator) next() ?string {
 	for self.index < self.steps.len {
 		step := self.steps[self.index]
 		self.index++
-		match step.kind {
-			.expand {
-				self.config.expand_paths(step.value) or {
+		match step {
+			ReplayExpand {
+				self.config.expand_paths(step.base) or {
 					eprintln('error expanding paths err=${err}')
 				}
 			}
-			.diagnostic {
+			ReplayDiagnostic {
 				self.config.diagnostics << step.diagnostic.clone()
 			}
-			.conditional_arg {
+			ReplayConditionalArg {
 				mut matches := true
 				for condition in step.conditions {
 					if !self.config.conditional_state.match(condition) {
@@ -7357,13 +7385,13 @@ fn (mut self ReplayIterator) next() ?string {
 					}
 				}
 				if matches {
-					return step.value
+					return step.arg
 				}
 			}
-			.arg {
+			ReplayArg {
 				return step.value
 			}
-			.command {
+			ReplayCommand {
 				return '-e'
 			}
 		}
@@ -7543,21 +7571,17 @@ fn (mut c Config) load_iter_internal[T](mut iter T, overwrite_font_families bool
 // V's garbage collector removes the allocator parameter from the source API.
 pub fn (mut c Config) parse_manually_hook[T](arg string, mut iter T) bool {
 	if arg != '-e' {
-		c.replay_steps << ReplayStep{
-			kind: .arg
+		c.replay_steps << ReplayArg{
 			value: arg
 		}
 		return true
 	}
 
 	mut command_args := []string{}
-	c.replay_steps << ReplayStep{
-		kind: .command
-	}
+	c.replay_steps << ReplayCommand{}
 	for {
 		param := iter.next() or { break }
-		c.replay_steps << ReplayStep{
-			kind: .arg
+		c.replay_steps << ReplayArg{
 			value: param
 		}
 		command_args << param
@@ -7587,12 +7611,9 @@ fn (mut c Config) apply_command_tail(command_args []string, location diagnostics
 // mode. Unlike the normal -e parser, this only sets the initial command and
 // marker; all other configuration remains as loaded from default files.
 fn (mut c Config) load_xdg_terminal_exec_args(args []string) {
-	c.replay_steps << ReplayStep{
-		kind: .command
-	}
+	c.replay_steps << ReplayCommand{}
 	for arg in args {
-		c.replay_steps << ReplayStep{
-			kind: .arg
+		c.replay_steps << ReplayArg{
 			value: arg
 		}
 	}
@@ -7653,7 +7674,7 @@ pub fn (mut c Config) load_recursive_files() ! {
 	}
 	mut replay_suffix := []ReplayStep{}
 	for i, step in c.replay_steps {
-		if step.kind == .command {
+		if step is ReplayCommand {
 			replay_suffix = c.replay_steps[i..].clone()
 			c.replay_steps.trim(i)
 			break
@@ -7708,9 +7729,8 @@ pub fn (mut c Config) load_recursive_files() ! {
 }
 
 fn (mut c Config) expand_paths(base string) ! {
-	c.replay_steps << ReplayStep{
-		kind: .expand
-		value: base
+	c.replay_steps << ReplayExpand{
+		base: base
 	}
 	c.custom_shader.expand(base, mut c.diagnostics)!
 	c.config_file.expand(base, mut c.diagnostics)!
@@ -7749,8 +7769,7 @@ fn (mut c Config) add_replay_diagnostic(message string) {
 
 fn (mut c Config) add_replay_diagnostic_entry(diagnostic Diagnostic) {
 	c.diagnostics << diagnostic
-	c.replay_steps << ReplayStep{
-		kind: .diagnostic
+	c.replay_steps << ReplayDiagnostic{
 		diagnostic: diagnostic.clone()
 	}
 }
@@ -7803,10 +7822,31 @@ fn (mut c Config) contextualize_diagnostics(start int, key string, value string,
 fn clone_replay_steps(steps []ReplayStep) []ReplayStep {
 	mut result := []ReplayStep{cap: steps.len}
 	for step in steps {
-		result << ReplayStep{
-			...step
-			diagnostic: step.diagnostic.clone()
-			conditions: step.conditions.map(it.clone())
+		match step {
+			ReplayArg {
+				result << ReplayArg{
+					value: step.value.clone()
+				}
+			}
+			ReplayExpand {
+				result << ReplayExpand{
+					base: step.base.clone()
+				}
+			}
+			ReplayConditionalArg {
+				result << ReplayConditionalArg{
+					conditions: step.conditions.map(it.clone())
+					arg:        step.arg.clone()
+				}
+			}
+			ReplayDiagnostic {
+				result << ReplayDiagnostic{
+					diagnostic: step.diagnostic.clone()
+				}
+			}
+			ReplayCommand {
+				result << ReplayCommand{}
+			}
 		}
 	}
 	return result
@@ -10025,22 +10065,33 @@ fn (mut c Config) load_theme(theme ThemePair) ! {
 	// source Replay.Step union.
 	for i in 0 .. rebuilt.replay_steps.len {
 		step := rebuilt.replay_steps[i]
-		if step.kind == .command {
-			break
-		}
-		if step.kind !in [.arg, .conditional_arg] {
-			continue
-		}
-		mut conditions := [Conditional{
-			key: .theme
-			op: .eq
-			value: state.theme.str()
-		}]
-		conditions << step.conditions.map(it.clone())
-		rebuilt.replay_steps[i] = ReplayStep{
-			...step
-			kind: .conditional_arg
-			conditions: conditions
+		match step {
+			ReplayArg {
+				rebuilt.replay_steps[i] = ReplayConditionalArg{
+					conditions: [Conditional{
+						key:   .theme
+						op:    .eq
+						value: state.theme.str()
+					}]
+					arg:        step.value
+				}
+			}
+			ReplayConditionalArg {
+				mut conditions := [Conditional{
+					key:   .theme
+					op:    .eq
+					value: state.theme.str()
+				}]
+				conditions << step.conditions.map(it.clone())
+				rebuilt.replay_steps[i] = ReplayConditionalArg{
+					conditions: conditions
+					arg:        step.arg
+				}
+			}
+			ReplayCommand {
+				break
+			}
+			else {}
 		}
 	}
 
