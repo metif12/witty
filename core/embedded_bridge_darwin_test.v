@@ -66,6 +66,14 @@ fn embedded_bridge_close(userdata voidptr, confirm bool) {
 	capture.confirm = confirm
 }
 
+fn test_embedded_bridge_does_not_retarget_stale_surface_actions_to_app() {
+	bridge := EmbeddedAppCore{}
+	assert bridge_apprt_target(&bridge, apprt.Target(apprt.AppTarget{}))? is apprt.AppTarget
+	assert bridge_apprt_target(&bridge, apprt.Target(apprt.SurfaceTarget{
+		surface: voidptr(usize(1))
+	})) == none
+}
+
 fn test_embedded_bridge_uses_canonical_core_surface() {
 	install_embedded_bridge()
 	mut capture := EmbeddedBridgeCapture{}

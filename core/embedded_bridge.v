@@ -13,6 +13,7 @@ import configpkg
 import datastruct
 import font
 import input
+import log
 import renderer
 import terminal
 
@@ -130,7 +131,7 @@ fn bridge_app_sync_runtime(mut self EmbeddedAppCore, app &apprt.App) {
 	self.runtime.config = app.config.clone()
 }
 
-fn bridge_app_flush_actions(mut self EmbeddedAppCore, app &apprt.App) {
+fn bridge_app_flush_actions(mut self EmbeddedAppCore, app &apprt.App) ! {
 	if self.runtime.actions.len == 0 {
 		return
 	}
@@ -138,12 +139,15 @@ fn bridge_app_flush_actions(mut self EmbeddedAppCore, app &apprt.App) {
 	self.runtime.actions.clear()
 	mut rt_app := unsafe { &apprt.App(app) }
 	for action in actions {
-		target := bridge_apprt_target(self, action.target)
-		rt_app.perform_action(target, action.action, action.data) or {}
+		target := bridge_apprt_target(self, action.target) or {
+			log.warn('dropping embedded action for stale surface action=${action.action}')
+			continue
+		}
+		_ = rt_app.perform_action(target, action.action, action.data)!
 	}
 }
 
-fn bridge_apprt_target(self &EmbeddedAppCore, target apprt.Target) apprt.Target {
+fn bridge_apprt_target(self &EmbeddedAppCore, target apprt.Target) ?apprt.Target {
 	match target {
 		apprt.AppTarget {
 			return apprt.Target(apprt.AppTarget{})
@@ -158,14 +162,14 @@ fn bridge_apprt_target(self &EmbeddedAppCore, target apprt.Target) apprt.Target 
 			}
 		}
 	}
-	return apprt.Target(apprt.AppTarget{})
+	return none
 }
 
 fn bridge_app_tick(ptr voidptr, app &apprt.App) ! {
 	mut self := unsafe { &EmbeddedAppCore(ptr) }
 	bridge_app_sync_runtime(mut self, app)
 	self.app.tick(mut self.runtime)!
-	bridge_app_flush_actions(mut self, app)
+	bridge_app_flush_actions(mut self, app)!
 }
 
 fn bridge_app_focus(ptr voidptr, focused bool) {
@@ -177,7 +181,9 @@ fn bridge_app_key(ptr voidptr, app &apprt.App, event &input.KeyEvent) bool {
 	mut self := unsafe { &EmbeddedAppCore(ptr) }
 	bridge_app_sync_runtime(mut self, app)
 	result := self.app.key_event(mut self.runtime, *event)
-	bridge_app_flush_actions(mut self, app)
+	bridge_app_flush_actions(mut self, app) or {
+		log.error('error performing embedded app keybind action err=${err}')
+	}
 	return result
 }
 
@@ -221,14 +227,14 @@ fn bridge_app_color_scheme(ptr voidptr, app &apprt.App, scheme apprt.ColorScheme
 	mut self := unsafe { &EmbeddedAppCore(ptr) }
 	bridge_app_sync_runtime(mut self, app)
 	self.app.color_scheme_event(mut self.runtime, scheme)!
-	bridge_app_flush_actions(mut self, app)
+	bridge_app_flush_actions(mut self, app)!
 }
 
 fn bridge_app_update_config(ptr voidptr, app &apprt.App, config &configpkg.Config) ! {
 	mut self := unsafe { &EmbeddedAppCore(ptr) }
 	bridge_app_sync_runtime(mut self, app)
 	self.app.update_config(mut self.runtime, config)!
-	bridge_app_flush_actions(mut self, app)
+	bridge_app_flush_actions(mut self, app)!
 }
 
 fn bridge_app_focused_pwd(ptr voidptr) ?string {
@@ -363,12 +369,16 @@ fn bridge_surface_init(config &configpkg.Config, core_app &apprt.CoreApp, app &a
 	app_core.surfaces << self
 	app_core.app.add_surface(&self.surface_ref)
 	self.registered = true
-	bridge_app_flush_actions(mut app_core, app)
+	bridge_app_flush_actions(mut app_core, app) or {
+		log.warn('error stopping embedded quit timer err=${err}')
+	}
 	self.surface.init(config, mut app_core.app, &self.runtime_app, &self.runtime_surface) or {
 		if self.registered {
 			app_core.app.delete_surface(&self.surface_ref)
 			self.registered = false
-			bridge_app_flush_actions(mut app_core, app)
+			bridge_app_flush_actions(mut app_core, app) or {
+				log.warn('error starting embedded quit timer during cleanup err=${err}')
+			}
 		}
 		app_core.surfaces = app_core.surfaces.filter(it != self)
 		wrapper.backend = unsafe { nil }
