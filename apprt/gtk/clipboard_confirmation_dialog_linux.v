@@ -455,7 +455,10 @@ pub fn clipboard_confirmation_dialog_new_for_request(req apprt.ClipboardRequest,
 	self.request = req
 	self.text = text
 	self.clipboard_contents = buffer
-	self.can_remember = req.kind in [.osc_52_read, .osc_52_write]
+	self.can_remember = match req {
+		apprt.ClipboardRequestPaste { false }
+		apprt.ClipboardRequestOsc52Read, apprt.ClipboardRequestOsc52Write { true }
+	}
 
 	mut priv := clipboard_confirmation_dialog_priv(self.dialog.obj)
 	priv.can_remember = b2i(self.can_remember)
@@ -528,16 +531,16 @@ fn (mut self ClipboardConfirmationDialog) prop_blur() {
 // `propRequest` (the `notify::request` callback).
 fn (mut self ClipboardConfirmationDialog) prop_request() {
 	req := self.request or { return }
-	match req.kind {
-		.osc_52_write {
+	match req {
+		apprt.ClipboardRequestOsc52Write {
 			self.dialog.set_heading(&char(i18n_('Authorize Clipboard Access').str))
 			self.dialog.set_body(&char(i18n_('An application is attempting to write to the clipboard. The current clipboard contents are shown below.').str))
 		}
-		.osc_52_read {
+		apprt.ClipboardRequestOsc52Read {
 			self.dialog.set_heading(&char(i18n_('Authorize Clipboard Access').str))
 			self.dialog.set_body(&char(i18n_('An application is attempting to read from the clipboard. The current clipboard contents are shown below.').str))
 		}
-		.paste {
+		apprt.ClipboardRequestPaste {
 			self.dialog.set_heading(&char(i18n_('Warning: Potentially Unsafe Paste').str))
 			self.dialog.set_body(&char(i18n_('Pasting this text into the terminal may be dangerous as it looks like some commands may be executed.').str))
 		}

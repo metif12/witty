@@ -2478,8 +2478,7 @@ pub fn (mut self Surface) handle_message(msg apprt.SurfaceMessage) ! {
 			if self.config.clipboard_read == .deny {
 				return
 			}
-			self.start_clipboard_request(.standard, apprt.ClipboardRequest{
-				kind: .osc_52_read
+			self.start_clipboard_request(.standard, apprt.ClipboardRequestOsc52Read{
 				clipboard: msg.clipboard
 			})!
 		}
@@ -3696,10 +3695,7 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 			} else {
 				apprt.Clipboard.standard
 			}
-			self.start_clipboard_request(clipboard, apprt.ClipboardRequest{
-				kind: .paste
-				clipboard: clipboard
-			})!
+			self.start_clipboard_request(clipboard, apprt.ClipboardRequestPaste{})!
 		}
 	}
 
@@ -3784,10 +3780,7 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 					return true
 				}
 				self.renderer_state.mutex.unlock()
-				self.start_clipboard_request(.standard, apprt.ClipboardRequest{
-					kind: .paste
-					clipboard: .standard
-				})!
+				self.start_clipboard_request(.standard, apprt.ClipboardRequestPaste{})!
 				return true
 			}
 			.paste {
@@ -3800,10 +3793,7 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 					return err
 				}
 				self.renderer_state.mutex.unlock()
-				self.start_clipboard_request(.standard, apprt.ClipboardRequest{
-					kind: .paste
-					clipboard: .standard
-				})!
+				self.start_clipboard_request(.standard, apprt.ClipboardRequestPaste{})!
 				return true
 			}
 		}
@@ -4237,16 +4227,10 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			return true
 		}
 		input.ActionPasteFromClipboard {
-			return self.start_clipboard_request(.standard, apprt.ClipboardRequest{
-				kind: .paste
-				clipboard: .standard
-			})!
+			return self.start_clipboard_request(.standard, apprt.ClipboardRequestPaste{})!
 		}
 		input.ActionPasteFromSelection {
-			return self.start_clipboard_request(.selection, apprt.ClipboardRequest{
-				kind: .paste
-				clipboard: .selection
-			})!
+			return self.start_clipboard_request(.selection, apprt.ClipboardRequestPaste{})!
 		}
 		input.ActionIncreaseFontSize {
 			// Max delta is somewhat arbitrary.
@@ -6028,11 +6012,11 @@ fn (mut self Surface) complete_clipboard_paste(data string, allow_unsafe bool) !
 // complete_clipboard_request completes exactly one request previously sent to
 // the application runtime. The data is copied into the IO queue before return.
 pub fn (mut self Surface) complete_clipboard_request(req apprt.ClipboardRequest, data string, confirmed bool) ! {
-	match req.kind {
-		.paste {
+	match req {
+		apprt.ClipboardRequestPaste {
 			self.complete_clipboard_paste(data, confirmed)!
 		}
-		.osc_52_read {
+		apprt.ClipboardRequestOsc52Read {
 			if self.config.clipboard_read == .deny {
 				return error('UnauthorizedPaste')
 			}
@@ -6048,7 +6032,7 @@ pub fn (mut self Surface) complete_clipboard_request(req apprt.ClipboardRequest,
 			response := '\x1b]52;${kind};${encoded}\x1b\\'
 			self.queue_io(termiopkg.MessageWriteAlloc{ data: response }, .unlocked)
 		}
-		.osc_52_write {
+		apprt.ClipboardRequestOsc52Write {
 			self.rt_surface.set_clipboard(req.clipboard, [apprt.ClipboardContent{
 				mime: 'text/plain'
 				data: data
@@ -6181,8 +6165,16 @@ fn (mut self Surface) clipboard_write(data string, loc apprt.Clipboard) ! {
 }
 
 fn (mut self Surface) start_clipboard_request(loc apprt.Clipboard, req apprt.ClipboardRequest) !bool {
-	if req.kind == .osc_52_read && self.config.clipboard_read == .deny {
-		return false
+	match req {
+		apprt.ClipboardRequestPaste {}
+		apprt.ClipboardRequestOsc52Read {
+			if self.config.clipboard_read == .deny {
+				return false
+			}
+		}
+		apprt.ClipboardRequestOsc52Write {
+			panic('OSC 52 writes do not start clipboard read requests')
+		}
 	}
 	return self.rt_surface.clipboard_request(loc, req)!
 }

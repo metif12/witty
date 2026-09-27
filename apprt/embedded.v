@@ -700,7 +700,7 @@ pub fn (mut self Surface) clipboard_request(clipboard_type Clipboard, state Clip
 	if isnil(raw_state) {
 		return error('OutOfMemory')
 	}
-	mut state_ptr := unsafe { &ClipboardRequest(raw_state) }
+	mut state_ptr := unsafe { &ClipboardRequest(voidptr(raw_state)) }
 	unsafe {
 		*state_ptr = state
 	}
@@ -735,7 +735,7 @@ fn (mut self Surface) complete_clipboard_request(str string, state &ClipboardReq
 				self.userdata,
 				str,
 				state,
-				state.kind,
+				state.tag(),
 			)
 			return
 		}
@@ -744,7 +744,7 @@ fn (mut self Surface) complete_clipboard_request(str string, state &ClipboardReq
 				self.userdata,
 				&char(str.str),
 				state,
-				int(state.kind),
+				int(state.tag()),
 			)
 			return
 		}

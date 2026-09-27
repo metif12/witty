@@ -104,12 +104,15 @@ fn test_embedded_clipboard_c_callbacks_preserve_request_and_project_contents() {
 		app: &app
 		userdata: voidptr(&capture)
 	}
-	request := ClipboardRequest{ kind: .osc_52_read, clipboard: .selection }
+	request := ClipboardRequestOsc52Read{ clipboard: .selection }
 	assert surface.clipboard_request(.selection, request)!
 	assert capture.read_clipboard == int(Clipboard.selection)
 	assert !isnil(capture.read_state)
-	assert capture.read_state.kind == .osc_52_read
-	assert capture.read_state.clipboard == .selection
+	read_state := *capture.read_state
+	assert read_state is ClipboardRequestOsc52Read
+	if read_state is ClipboardRequestOsc52Read {
+		assert read_state.clipboard == .selection
+	}
 
 	surface.complete_clipboard_request('clipboard response', capture.read_state, true)
 	surface.set_clipboard(.standard, [ClipboardContent{

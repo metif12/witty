@@ -3128,8 +3128,7 @@ pub fn (mut self SurfaceWidget) set_clipboard(clipboard_type apprt.Clipboard, co
 		return
 	}
 
-	self.show_clipboard_confirmation(apprt.ClipboardRequest{
-		kind: .osc_52_write
+	self.show_clipboard_confirmation(apprt.ClipboardRequestOsc52Write{
 		clipboard: clipboard_type
 	}, text)
 }
@@ -3142,7 +3141,7 @@ pub fn (mut self SurfaceWidget) clipboard_request(clipboard_type apprt.Clipboard
 		return false
 	}
 
-	if state.kind == .paste {
+	if state is apprt.ClipboardRequestPaste {
 		formats := C.gdk_clipboard_get_formats(clipboard)
 		if isnil(formats) || !C.gdk_content_formats_contain_gtype(formats, g_type_string) {
 			return false
@@ -3206,9 +3205,9 @@ pub fn (mut self SurfaceWidget) paste(text string) {
 		return
 	}
 	mut surface := self.core_surface
-	surface.complete_clipboard_request(apprt.ClipboardRequest{ kind: .paste }, text, false) or {
+	surface.complete_clipboard_request(apprt.ClipboardRequestPaste{}, text, false) or {
 		if err.msg() in ['UnsafePaste', 'UnauthorizedPaste'] {
-			self.show_clipboard_confirmation(apprt.ClipboardRequest{ kind: .paste }, text)
+			self.show_clipboard_confirmation(apprt.ClipboardRequestPaste{}, text)
 			return
 		}
 		eprintln('failed to complete clipboard request: ${err}')
@@ -3268,14 +3267,14 @@ fn surface_clipboard_confirmation_confirm_cb(obj GObject, remember int, data voi
 	}
 	mut surface := self.core_surface
 	if remember != 0 {
-		match request.kind {
-			.osc_52_read {
+		match request {
+			apprt.ClipboardRequestOsc52Read {
 				surface.config.clipboard_read = .allow
 			}
-			.osc_52_write {
+			apprt.ClipboardRequestOsc52Write {
 				surface.config.clipboard_write = .allow
 			}
-			.paste {}
+			apprt.ClipboardRequestPaste {}
 		}
 	}
 	surface.complete_clipboard_request(request, text, true) or {
@@ -3297,14 +3296,14 @@ fn surface_clipboard_confirmation_deny_cb(obj GObject, remember int, data voidpt
 		return
 	}
 	mut surface := self.core_surface
-	match request.kind {
-		.osc_52_read {
+	match request {
+		apprt.ClipboardRequestOsc52Read {
 			surface.config.clipboard_read = .deny
 		}
-		.osc_52_write {
+		apprt.ClipboardRequestOsc52Write {
 			surface.config.clipboard_write = .deny
 		}
-		.paste {}
+		apprt.ClipboardRequestPaste {}
 	}
 }
 

@@ -49,14 +49,33 @@ pub enum ClipboardRequestType as u8 {
 	osc_52_write
 }
 
+// A direct paste of clipboard contents. This arm carries no clipboard because
+// the clipboard to read is supplied separately to clipboard_request.
+pub struct ClipboardRequestPaste {}
+
+// A request to read clipboard contents via OSC 52.
+pub struct ClipboardRequestOsc52Read {
+pub:
+	clipboard Clipboard
+}
+
+// A request to write clipboard contents via OSC 52.
+pub struct ClipboardRequestOsc52Write {
+pub:
+	clipboard Clipboard
+}
+
 // ClipboardRequest is a clipboard request. This is used to request clipboard
 // contents and must be sent as a response to a ClipboardRequest event.
-pub struct ClipboardRequest {
-pub:
-	// The type of clipboard request.
-	kind ClipboardRequestType
-	// The clipboard to operate on (meaningful for osc_52_read and osc_52_write).
-	clipboard Clipboard
+pub type ClipboardRequest = ClipboardRequestOsc52Read | ClipboardRequestOsc52Write | ClipboardRequestPaste
+
+// tag returns the source union discriminator used by the embedded callbacks.
+pub fn (request ClipboardRequest) tag() ClipboardRequestType {
+	return match request {
+		ClipboardRequestPaste { .paste }
+		ClipboardRequestOsc52Read { .osc_52_read }
+		ClipboardRequestOsc52Write { .osc_52_write }
+	}
 }
 
 // ColorScheme represents the color scheme in use (light vs dark).

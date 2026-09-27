@@ -55,14 +55,21 @@ fn test_clipboard_request_type() {
 	assert sizeof(ClipboardRequestType) == 1
 }
 
-// Test ClipboardRequest struct creation.
+// Test every ClipboardRequest union arm and its source discriminator.
 fn test_clipboard_request() {
-	cr := ClipboardRequest{ kind: .paste }
-	assert cr.kind == .paste
-	$if linux || freebsd {
-		assert sizeof(ClipboardRequest) == 8
-	} $else {
-		assert sizeof(ClipboardRequest) == 2
+	paste := ClipboardRequest(ClipboardRequestPaste{})
+	read := ClipboardRequest(ClipboardRequestOsc52Read{ clipboard: .selection })
+	write := ClipboardRequest(ClipboardRequestOsc52Write{ clipboard: .primary })
+	assert paste.tag() == .paste
+	assert read.tag() == .osc_52_read
+	assert write.tag() == .osc_52_write
+	assert read is ClipboardRequestOsc52Read
+	if read is ClipboardRequestOsc52Read {
+		assert read.clipboard == .selection
+	}
+	assert write is ClipboardRequestOsc52Write
+	if write is ClipboardRequestOsc52Write {
+		assert write.clipboard == .primary
 	}
 }
 

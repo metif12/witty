@@ -518,7 +518,7 @@ fn test_right_click_copy_or_paste_requests_paste_without_selection() {
 	assert surf.mouse_button_callback(.press, .right, input.Mods{})!
 	assert runtime.requests.len == 1
 	assert runtime.requests[0].clipboard == .standard
-	assert runtime.requests[0].request.kind == .paste
+	assert runtime.requests[0].request is apprt.ClipboardRequestPaste
 }
 
 fn test_mouse_shift_capture_uses_terminal_override_then_config_default() {
@@ -1193,21 +1193,19 @@ fn test_complete_clipboard_paste_rejects_unsafe_text() {
 
 fn test_runtime_clipboard_request_preserves_source_and_request() ! {
 	mut runtime := apprt.RuntimeSurface{}
-	request := apprt.ClipboardRequest{
-		kind: .osc_52_read
+	request := apprt.ClipboardRequestOsc52Read{
 		clipboard: .primary
 	}
 	assert runtime.clipboard_request(.standard, request)!
 	assert runtime.requests.len == 1
 	assert runtime.requests[0].clipboard == .standard
-	assert runtime.requests[0].request == request
+	assert runtime.requests[0].request == apprt.ClipboardRequest(request)
 }
 
 fn test_complete_clipboard_request_osc52_read() ! {
 	mut surf := make_test_surface()
 	surf.config.clipboard_read = .allow
-	surf.complete_clipboard_request(apprt.ClipboardRequest{
-		kind: .osc_52_read
+	surf.complete_clipboard_request(apprt.ClipboardRequestOsc52Read{
 		clipboard: .selection
 	}, 'hello', false)!
 	assert surf.io.messages.len == 1
@@ -1217,8 +1215,7 @@ fn test_complete_clipboard_request_osc52_read() ! {
 fn test_complete_clipboard_request_osc52_read_requires_confirmation() {
 	mut surf := make_test_surface()
 	surf.config.clipboard_read = .ask
-	surf.complete_clipboard_request(apprt.ClipboardRequest{
-		kind: .osc_52_read
+	surf.complete_clipboard_request(apprt.ClipboardRequestOsc52Read{
 		clipboard: .standard
 	}, 'hello', false) or {
 		assert err.msg() == 'UnauthorizedPaste'
@@ -1232,8 +1229,7 @@ fn test_complete_clipboard_request_osc52_write() ! {
 	mut surf := make_test_surface()
 	mut runtime := apprt.RuntimeSurface{}
 	surf.rt_surface = &runtime
-	surf.complete_clipboard_request(apprt.ClipboardRequest{
-		kind: .osc_52_write
+	surf.complete_clipboard_request(apprt.ClipboardRequestOsc52Write{
 		clipboard: .primary
 	}, 'hello', true)!
 	assert runtime.clipboards[.primary][0].mime == 'text/plain'
