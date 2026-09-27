@@ -642,7 +642,7 @@ pub fn (mut self App) key_event(mut rt_app apprt.RuntimeApp, event input.KeyEven
 	// Get the keybind entry for this event. We don't support key sequences so
 	// we look directly in the top-level set.
 	leaf := self.lookup_binding(mut rt_app, event) or { return false }
-	actions := leaf.actions
+	actions := leaf.actions_slice()
 	if actions.len == 0 {
 		return false
 	}

@@ -1218,6 +1218,7 @@ fn test_set_value_generic_leaf() {
 	})
 	leaf := value.generic() or { panic('leaf must have a generic view') }
 	assert leaf.flags.global()
+	assert leaf.actions is GenericLeafActionsSingle
 	assert leaf.actions_slice().len == 1
 	assert leaf.actions_slice()[0].equal(action)
 }
@@ -1230,6 +1231,7 @@ fn test_set_value_generic_chained_leaf() {
 	})
 	leaf := value.generic() or { panic('chained leaf must have a generic view') }
 	assert leaf.flags.performable()
+	assert leaf.actions is GenericLeafActionsMany
 	assert leaf.actions_slice().len == 2
 	assert leaf.actions_slice()[0].equal(actions[0])
 	assert leaf.actions_slice()[1].equal(actions[1])

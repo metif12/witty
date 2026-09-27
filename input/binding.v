@@ -3322,7 +3322,9 @@ pub:
 pub fn (self Leaf) generic() GenericLeaf {
 	return GenericLeaf{
 		flags:   self.flags
-		actions: [self.action]
+		actions: GenericLeafActions(GenericLeafActionsSingle{
+			actions: [self.action]!
+		})
 	}
 }
 
@@ -3336,16 +3338,31 @@ pub:
 pub fn (self LeafChained) generic() GenericLeaf {
 	return GenericLeaf{
 		flags:   self.flags
-		actions: self.actions
+		actions: GenericLeafActions(GenericLeafActionsMany{
+			actions: self.actions
+		})
 	}
 }
+
+pub struct GenericLeafActionsSingle {
+pub:
+	actions [1]Action
+}
+
+pub struct GenericLeafActionsMany {
+pub:
+	actions []Action
+}
+
+// GenericLeafActions is the source's single-fixed-array or many-slice union.
+pub type GenericLeafActions = GenericLeafActionsSingle | GenericLeafActionsMany
 
 // GenericLeaf is a generic leaf node that can be used to unify the
 // handling of leaf and leaf_chained.
 pub struct GenericLeaf {
 pub:
 	flags   Flags
-	actions []Action
+	actions GenericLeafActions
 }
 
 // generic returns the common leaf view of a leaf or chained leaf, or none
@@ -3361,7 +3378,14 @@ pub fn (value SetValue) generic() ?GenericLeaf {
 
 // actions_slice returns every action represented by this leaf.
 pub fn (leaf &GenericLeaf) actions_slice() []Action {
-	return leaf.actions
+	return leaf.actions.slice()
+}
+
+fn (actions &GenericLeafActions) slice() []Action {
+	return match actions {
+		GenericLeafActionsSingle { actions.actions[..] }
+		GenericLeafActionsMany { actions.actions }
+	}
 }
 
 // ChainParent is information about a chain parent entry, including which set
