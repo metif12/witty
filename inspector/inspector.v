@@ -1,12 +1,20 @@
 module inspector
 
 import cimgui
+import font
 import input
 import renderer
 import terminal
 import encoding.utf8.validate
 
 const max_key_events = 50
+
+// setup configures the current inspector ImGui context. Runtime-owned context
+// creation and backend initialization happen outside this function, matching
+// Ghostty's Inspector.setup boundary.
+pub fn setup(context cimgui.Context) {
+	context.inspector_setup(font.embedded_regular)
+}
 
 // KeyEvent is one keyboard event captured by the terminal inspector. It owns
 // the cloned UTF-8, binding, and PTY data stored in its fields.
@@ -407,8 +415,8 @@ fn draw_info_row(context cimgui.Context, label string, value string) {
 
 fn create_main_dockspace(context cimgui.Context) bool {
 	dockspace_id := context.get_id('Main Dockspace')
-	setup := !context.dock_node_exists(dockspace_id)
-	if setup {
+	needs_setup := !context.dock_node_exists(dockspace_id)
+	if needs_setup {
 		assert context.dock_node_add(dockspace_id)
 		context.dock_node_set_main_viewport_size(dockspace_id)
 		for name in ['Dear ImGui Demo', 'Terminal', 'Surface', 'Keyboard', 'Terminal IO', 'Renderer'] {
@@ -417,7 +425,7 @@ fn create_main_dockspace(context cimgui.Context) bool {
 		context.dock_finish(dockspace_id)
 	}
 	assert context.dock_space_over_main_viewport(dockspace_id)
-	return setup
+	return needs_setup
 }
 
 fn (mut self Inspector) draw_key_stream(context cimgui.Context, open bool) {

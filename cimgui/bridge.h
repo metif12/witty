@@ -15,13 +15,27 @@ extern "C" {
 void ImFontConfig_ImFontConfig(ImFontConfig* self);
 void ImGuiStyle_ImGuiStyle(ImGuiStyle* self);
 
-static inline ImGuiContext* witty_cimgui_context_create(void* font_data, int font_len) {
+static inline ImGuiContext* witty_cimgui_context_create(void) {
     ImGuiContext* context = ImGui_CreateContext(NULL);
     if (context == NULL) return NULL;
 
     ImGui_SetCurrentContext(context);
+    return context;
+}
+
+static inline void witty_cimgui_set_backend_platform(ImGuiContext* context, int platform) {
+    ImGui_SetCurrentContext(context);
     ImGuiIO* io = ImGui_GetIO();
-    io->BackendPlatformName = "ghostty_embedded";
+    io->BackendPlatformName = platform == 1 ? "ghostty_gtk" : "ghostty_embedded";
+}
+
+static inline void witty_cimgui_inspector_setup(
+    ImGuiContext* context,
+    void* font_data,
+    int font_len
+) {
+    ImGui_SetCurrentContext(context);
+    ImGuiIO* io = ImGui_GetIO();
     io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     io->ConfigFlags |= ImGuiConfigFlags_IsSRGB;
     io->IniFilename = NULL;
@@ -38,8 +52,6 @@ static inline ImGuiContext* witty_cimgui_context_create(void* font_data, int fon
         &font_config,
         NULL
     );
-
-    return context;
 }
 
 static inline void witty_cimgui_context_destroy(ImGuiContext* context) {

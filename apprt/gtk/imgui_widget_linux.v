@@ -6,7 +6,6 @@ module gtk
 // wiring programmatically, so this wrapper owns that tree directly.
 
 import cimgui
-import font
 import input
 import opengl
 import time
@@ -111,11 +110,12 @@ fn (mut self ImguiWidget) realize() {
 		eprintln('[warn] gtk: GLArea for Dear ImGui failed to realize')
 		return
 	}
-	context := cimgui.Context.create(font.embedded_regular) or {
+	context := cimgui.Context.create() or {
 		eprintln('[warn] gtk: unable to initialize Dear ImGui context: ${err}')
 		return
 	}
 	self.context = context
+	self.context.set_backend_platform(.gtk)
 	if !self.context.opengl_init() {
 		self.context.destroy()
 		self.context = cimgui.Context{}

@@ -1,19 +1,17 @@
 module cimgui
 
-const test_font = $embed_file('@VMODROOT/font/res/JetBrainsMono-Regular.ttf').to_bytes()
-
-fn test_pinned_version_and_context_setup() {
+fn test_pinned_version_and_context_creation() {
 	if !available() {
 		return
 	}
-	ctx := Context.create(test_font) or { panic(err) }
+	ctx := Context.create() or { panic(err) }
 	defer {
 		ctx.destroy()
 	}
 
 	assert version() == '1.92.5'
-	assert ctx.config_flags() & (1 << 7) != 0
-	assert ctx.config_flags() & (1 << 20) != 0
+	assert ctx.config_flags() & (1 << 7) == 0
+	assert ctx.config_flags() & (1 << 20) == 0
 
 	ctx.set_size(752, 528)
 	width, height := ctx.display_size()

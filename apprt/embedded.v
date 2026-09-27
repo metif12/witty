@@ -12,7 +12,7 @@ import internal_os
 import math
 import time
 import cimgui
-import font
+import inspector
 import os
 
 // log_warn logs a warning message.
@@ -1019,7 +1019,9 @@ pub mut:
 
 // TerminalInspector.init initializes the inspector.
 pub fn (mut self TerminalInspector) init(mut surface Surface) ! {
-	context := cimgui.Context.create(font.embedded_regular)!
+	context := cimgui.Context.create()!
+	context.set_backend_platform(.embedded)
+	inspector.setup(context)
 	self.surface = unsafe { surface }
 	self.context = context
 

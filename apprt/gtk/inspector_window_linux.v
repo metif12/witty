@@ -1,5 +1,7 @@
 module gtk
 
+import inspector as inspectorpkg
+
 // GTK terminal inspector translated from:
 // - ghostty/src/apprt/gtk/class/inspector_widget.zig
 // - ghostty/src/apprt/gtk/class/inspector_window.zig
@@ -93,10 +95,13 @@ fn (mut self InspectorWidget) deinit() {
 }
 
 fn inspector_widget_setup_cb(data voidptr) {
-	_ = data
-	// cimgui.Context.create performs Inspector.setup exactly once for the
-	// current context: docking and sRGB flags, disabled ini/log files, and the
-	// embedded regular font at 32 px.
+	if isnil(data) {
+		return
+	}
+	self := unsafe { &InspectorWidget(data) }
+	if !isnil(self.imgui) {
+		inspectorpkg.setup(self.imgui.context)
+	}
 }
 
 fn inspector_widget_render_cb(data voidptr) {

@@ -5,8 +5,6 @@ import input
 import osc
 import terminal
 
-const test_font = $embed_file('@VMODROOT/font/res/JetBrainsMono-Regular.ttf').to_bytes()
-
 fn test_to_kibi_bytes_matches_source_integer_conversion() {
 	assert to_kibi_bytes(0) == 0
 	assert to_kibi_bytes(1023) == 0
@@ -96,10 +94,13 @@ fn test_inspector_renders_key_stream_into_real_imgui_frame() {
 	if !cimgui.available() {
 		return
 	}
-	context := cimgui.Context.create(test_font)!
+	context := cimgui.Context.create()!
 	defer {
 		context.destroy()
 	}
+	setup(context)
+	assert context.config_flags() & (1 << 7) != 0
+	assert context.config_flags() & (1 << 20) != 0
 	context.set_size(800, 600)
 	assert context.build_font_atlas()
 	mut value := Inspector.init()!

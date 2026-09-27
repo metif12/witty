@@ -4,9 +4,16 @@ pub fn available() bool {
 	return false
 }
 
-pub fn Context.create(font_data []u8) !Context {
-	_ = font_data
+pub fn Context.create() !Context {
 	return error('Dear ImGui native library is unavailable on this target')
+}
+
+pub fn (ctx Context) set_backend_platform(platform BackendPlatform) {
+	_ = platform
+}
+
+pub fn (ctx Context) inspector_setup(font_data []u8) {
+	_ = font_data
 }
 
 pub fn (ctx Context) destroy() {}

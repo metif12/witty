@@ -28,7 +28,11 @@ module cimgui
 
 #include "bridge.h"
 
-fn C.witty_cimgui_context_create(font_data voidptr, font_len int) voidptr
+fn C.witty_cimgui_context_create() voidptr
+
+fn C.witty_cimgui_set_backend_platform(context voidptr, platform int)
+
+fn C.witty_cimgui_inspector_setup(context voidptr, font_data voidptr, font_len int)
 
 fn C.witty_cimgui_context_destroy(context voidptr)
 
@@ -252,15 +256,23 @@ pub fn available() bool {
 	return true
 }
 
-pub fn Context.create(font_data []u8) !Context {
-	if font_data.len == 0 {
-		return error('inspector font data is empty')
-	}
-	handle := C.witty_cimgui_context_create(font_data.data, font_data.len)
+pub fn Context.create() !Context {
+	handle := C.witty_cimgui_context_create()
 	if isnil(handle) {
 		return error('out of memory creating Dear ImGui context')
 	}
 	return Context{ handle: handle }
+}
+
+pub fn (ctx Context) set_backend_platform(platform BackendPlatform) {
+	C.witty_cimgui_set_backend_platform(ctx.handle, int(platform))
+}
+
+// inspector_setup is the low-level dcimgui binding used by inspector.setup.
+// It is separate from context creation because Ghostty invokes setup only
+// after the runtime has selected and initialized the context.
+pub fn (ctx Context) inspector_setup(font_data []u8) {
+	C.witty_cimgui_inspector_setup(ctx.handle, font_data.data, font_data.len)
 }
 
 pub fn (ctx Context) destroy() {
