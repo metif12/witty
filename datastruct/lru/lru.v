@@ -44,7 +44,7 @@ pub mut:
 pub fn new_auto_hash_map[K, V](capacity int) HashMap[K, V] {
 	assert capacity >= 0
 	return HashMap[K, V]{
-		items: map[K]&Entry[K, V]{}
+		items:    map[K]&Entry[K, V]{}
 		capacity: capacity
 	}
 }
@@ -63,7 +63,7 @@ pub fn (mut self HashMap[K, V]) get_or_put(key K) GetOrPutResult[K, V] {
 		self.remove_entry(entry)
 		self.append_entry(entry)
 		return GetOrPutResult[K, V]{
-			value_ptr: &entry.value
+			value_ptr:      &entry.value
 			found_existing: true
 		}
 	}
@@ -79,10 +79,7 @@ pub fn (mut self HashMap[K, V]) get_or_put(key K) GetOrPutResult[K, V] {
 	}
 
 	least_used := self.pop_first_entry() or { panic('cannot insert into a zero-capacity LRU') }
-	evicted := KV[K, V]{
-		key: least_used.key
-		value: least_used.value
-	}
+	evicted_value := least_used.value
 	self.items.delete(least_used.key)
 	mut entry := unsafe { least_used }
 	entry.key = key
@@ -90,7 +87,13 @@ pub fn (mut self HashMap[K, V]) get_or_put(key K) GetOrPutResult[K, V] {
 	self.items[key] = entry
 	return GetOrPutResult[K, V]{
 		value_ptr: &entry.value
-		evicted: evicted
+		// Ghostty copies entry.data after reassigning its key. Preserve that
+		// source order: the returned key is the inserted key while the value is
+		// still the evicted value until the caller initializes value_ptr.
+		evicted:   KV[K, V]{
+			key:   entry.key
+			value: evicted_value
+		}
 	}
 }
 

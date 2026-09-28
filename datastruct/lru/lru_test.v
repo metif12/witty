@@ -26,14 +26,14 @@ fn test_get_or_put_and_eviction() {
 	result = cache.get_or_put(3)
 	assert !result.found_existing
 	evicted := result.evicted or { panic('expected an eviction') }
-	assert evicted.key == 1
+	assert evicted.key == 3
 	assert evicted.value == 1
 	set_value(mut result, 3)
 
 	assert cache.get_or_put(2).found_existing
 	result = cache.get_or_put(4)
 	evicted_again := result.evicted or { panic('expected an eviction') }
-	assert evicted_again.key == 3
+	assert evicted_again.key == 4
 	assert evicted_again.value == 3
 	set_value(mut result, 4)
 	assert cache.len() == 2
@@ -50,7 +50,7 @@ fn test_get_does_not_change_recency() {
 
 	third := cache.get_or_put(3)
 	evicted := third.evicted or { panic('expected an eviction') }
-	assert evicted.key == 1
+	assert evicted.key == 3
 	assert evicted.value == 10
 }
 
