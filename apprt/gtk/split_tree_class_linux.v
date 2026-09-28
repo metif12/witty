@@ -106,7 +106,7 @@ fn surface_tree_boxed_copy(value voidptr) voidptr {
 	tree := unsafe { &SurfaceTree(value) }
 	copy := tree.clone()
 	return voidptr(&SurfaceTree{
-		nodes: copy.nodes
+		nodes:  copy.nodes
 		zoomed: copy.zoomed
 	})
 }
@@ -259,9 +259,9 @@ pub fn split_tree_get_type() GType {
 		mut query := C.GTypeQuery{}
 		C.g_type_query(parent, &query)
 		info := C.GTypeInfo{
-			class_size: u16(query.class_size)
+			class_size:    u16(query.class_size)
 			instance_size: u16(query.instance_size)
-			class_init: voidptr(split_tree_class_init)
+			class_init:    voidptr(split_tree_class_init)
 			instance_init: voidptr(split_tree_instance_init)
 		}
 		g_split_tree_type = C.g_type_register_static(parent, c'GhosttySplitTree', &info, 0)
@@ -326,9 +326,9 @@ pub fn new_split_tree_widget(window &Window, config &Config) &SplitTreeWidget {
 	C.gtk_widget_set_vexpand(GtkWidget(tree_bin), 1)
 	C.gtk_box_append(widget, GtkWidget(tree_bin))
 	mut w := &SplitTreeWidget{
-		widget: widget
-		window: window
-		config: config
+		widget:   widget
+		window:   window
+		config:   config
 		tree_bin: tree_bin
 	}
 	mut priv := split_tree_priv(voidptr(widget))
@@ -1163,7 +1163,7 @@ pub fn new_split_tree_split(handle datastruct.Handle, layout datastruct.Layout, 
 	mut self := &SplitTreeSplit{
 		widget: GtkWidget(bin)
 		handle: handle
-		paned: paned
+		paned:  paned
 	}
 
 	// Setup our paned fields.
@@ -1344,7 +1344,16 @@ pub fn (mut self SurfaceWidget) ref() &SurfaceWidget {
 	if !isnil(self.widget) {
 		object_ref(self.widget)
 	}
-	return unsafe { &self }
+	return self
+}
+
+// ref_sink converts a floating surface reference into a strong reference, or
+// adds a strong reference when it is already sunk. Mirrors `Common.refSink`.
+pub fn (mut self SurfaceWidget) ref_sink() &SurfaceWidget {
+	if !isnil(self.widget) {
+		C.g_object_ref_sink(self.widget)
+	}
+	return self
 }
 
 // unref decrements the surface's GObject reference count. Mirrors

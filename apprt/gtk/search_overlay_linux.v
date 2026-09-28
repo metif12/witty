@@ -88,8 +88,21 @@ pub fn new_search_overlay() &SearchOverlay {
 	obj := C.g_object_new(search_overlay_get_type(), &char(unsafe { nil }))
 	priv := search_overlay_priv(obj)
 	return &SearchOverlay{
-		widget: obj
+		widget:       obj
 		search_entry: priv.search_entry
+	}
+}
+
+pub fn (mut self SearchOverlay) ref() &SearchOverlay {
+	if !isnil(self.widget) {
+		object_ref(GObject(self.widget))
+	}
+	return self
+}
+
+pub fn (mut self SearchOverlay) unref() {
+	if !isnil(self.widget) {
+		object_unref(GObject(self.widget))
 	}
 }
 
@@ -128,18 +141,22 @@ pub fn (mut self SearchOverlay) set_search_contents(content string) {
 // set_search_total sets the total number of matches, notifying property changes
 // only when the value (or its presence) actually changes. Mirrors
 // `setSearchTotal`.
-pub fn (mut self SearchOverlay) set_search_total(total ?u64) {
+pub fn (mut self SearchOverlay) set_search_total(total ?usize) {
 	if isnil(self.widget) {
 		return
 	}
 	mut priv := search_overlay_priv(voidptr(self.widget))
 	had_total := priv.has_search_total != 0
-	same_total := if value := total { had_total && priv.search_total == value } else { !had_total }
+	same_total := if value := total {
+		had_total && priv.search_total == u64(value)
+	} else {
+		!had_total
+	}
 	if same_total {
 		return
 	}
 	if value := total {
-		priv.search_total = value
+		priv.search_total = u64(value)
 		priv.has_search_total = 1
 	} else {
 		priv.search_total = 0
@@ -154,14 +171,14 @@ pub fn (mut self SearchOverlay) set_search_total(total ?u64) {
 
 // set_search_selected sets the currently selected match index. Mirrors
 // `setSearchSelected`.
-pub fn (mut self SearchOverlay) set_search_selected(selected ?u64) {
+pub fn (mut self SearchOverlay) set_search_selected(selected ?usize) {
 	if isnil(self.widget) {
 		return
 	}
 	mut priv := search_overlay_priv(voidptr(self.widget))
 	had_selected := priv.has_search_selected != 0
 	same_selected := if value := selected {
-		had_selected && priv.search_selected == value
+		had_selected && priv.search_selected == u64(value)
 	} else {
 		!had_selected
 	}
@@ -169,7 +186,7 @@ pub fn (mut self SearchOverlay) set_search_selected(selected ?u64) {
 		return
 	}
 	if value := selected {
-		priv.search_selected = value
+		priv.search_selected = u64(value)
 		priv.has_search_selected = 1
 	} else {
 		priv.search_selected = 0
@@ -708,9 +725,9 @@ pub fn search_overlay_get_type() GType {
 		mut query := C.GTypeQuery{}
 		C.g_type_query(parent, &query)
 		info := C.GTypeInfo{
-			class_size: u16(query.class_size)
+			class_size:    u16(query.class_size)
 			instance_size: u16(query.instance_size)
-			class_init: voidptr(search_overlay_class_init)
+			class_init:    voidptr(search_overlay_class_init)
 			instance_init: voidptr(search_overlay_instance_init)
 		}
 		g_search_overlay_type = C.g_type_register_static(parent, c'GhosttySearchOverlay', &info, 0)

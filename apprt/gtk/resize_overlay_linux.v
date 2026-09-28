@@ -87,7 +87,20 @@ pub fn new_resize_overlay() &ResizeOverlay {
 	priv := resize_overlay_priv(obj)
 	return &ResizeOverlay{
 		widget: obj
-		label: priv.label
+		label:  priv.label
+	}
+}
+
+pub fn (mut self ResizeOverlay) ref() &ResizeOverlay {
+	if !isnil(self.widget) {
+		object_ref(GObject(self.widget))
+	}
+	return self
+}
+
+pub fn (mut self ResizeOverlay) unref() {
+	if !isnil(self.widget) {
+		object_unref(GObject(self.widget))
 	}
 }
 
@@ -405,9 +418,9 @@ pub fn resize_overlay_get_type() GType {
 		mut query := C.GTypeQuery{}
 		C.g_type_query(parent, &query)
 		info := C.GTypeInfo{
-			class_size: u16(query.class_size)
+			class_size:    u16(query.class_size)
 			instance_size: u16(query.instance_size)
-			class_init: voidptr(resize_overlay_class_init)
+			class_init:    voidptr(resize_overlay_class_init)
 			instance_init: voidptr(resize_overlay_instance_init)
 		}
 		g_resize_overlay_type = C.g_type_register_static(parent, c'GhosttyResizeOverlay', &info, 0)

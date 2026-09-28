@@ -75,6 +75,19 @@ pub fn new_surface_child_exited() &SurfaceChildExited {
 	}
 }
 
+pub fn (mut self SurfaceChildExited) ref() &SurfaceChildExited {
+	if !isnil(self.widget) {
+		object_ref(GObject(self.widget))
+	}
+	return self
+}
+
+pub fn (mut self SurfaceChildExited) unref() {
+	if !isnil(self.widget) {
+		object_unref(GObject(self.widget))
+	}
+}
+
 // set_data stores a copy of the child-exited data (or clears it) and refreshes
 // the banner. Mirrors `setData` (which copies into a glib-allocated boxed value
 // and notifies the `data` property, whose notify handler runs `propData`).
@@ -324,9 +337,9 @@ pub fn surface_child_exited_get_type() GType {
 		mut query := C.GTypeQuery{}
 		C.g_type_query(parent, &query)
 		info := C.GTypeInfo{
-			class_size: u16(query.class_size)
+			class_size:    u16(query.class_size)
 			instance_size: u16(query.instance_size)
-			class_init: voidptr(surface_child_exited_class_init)
+			class_init:    voidptr(surface_child_exited_class_init)
 			instance_init: voidptr(surface_child_exited_instance_init)
 		}
 		g_surface_child_exited_type = C.g_type_register_static(parent, c'GhosttySurfaceChildExited', &info, 0)

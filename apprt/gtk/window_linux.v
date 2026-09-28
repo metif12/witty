@@ -726,6 +726,19 @@ pub fn Window.new(app &Application) &Window {
 	return self
 }
 
+pub fn (mut self Window) ref() &Window {
+	if !isnil(self.obj) {
+		object_ref(GObject(self.obj))
+	}
+	return self
+}
+
+pub fn (mut self Window) unref() {
+	if !isnil(self.obj) {
+		object_unref(GObject(self.obj))
+	}
+}
+
 // init runs the tractable parts of the Zig `init` instanceInit. Mirrors the
 // non-GObject-machinery portions: config fallback, winproto reset, tab-binding
 // intent, window icon, action map, initial config-driven state (maximize /

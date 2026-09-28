@@ -13,8 +13,8 @@ import inspector as inspectorpkg
 @[heap]
 pub struct InspectorWidget {
 mut:
-	imgui   &ImguiWidget = unsafe { nil }
-	surface &SurfaceWidget = unsafe { nil }
+	imgui   &ImguiWidget     = unsafe { nil }
+	surface &SurfaceWidget   = unsafe { nil }
 	owner   &InspectorWindow = unsafe { nil }
 }
 
@@ -22,7 +22,7 @@ mut:
 pub struct InspectorWindow {
 mut:
 	obj       AdwApplicationWindow = unsafe { nil }
-	inspector &InspectorWidget = unsafe { nil }
+	inspector &InspectorWidget     = unsafe { nil }
 }
 
 fn new_inspector_widget(surface &SurfaceWidget) !&InspectorWidget {
@@ -31,6 +31,26 @@ fn new_inspector_widget(surface &SurfaceWidget) !&InspectorWidget {
 	C.gtk_widget_add_css_class(self.imgui.as_widget(), c'inspector')
 	self.set_surface(surface)!
 	return self
+}
+
+pub fn (mut self InspectorWidget) ref() &InspectorWidget {
+	if !isnil(self.imgui) {
+		self.imgui.ref()
+	}
+	return self
+}
+
+pub fn (mut self InspectorWidget) ref_sink() &InspectorWidget {
+	if !isnil(self.imgui) {
+		self.imgui.ref_sink()
+	}
+	return self
+}
+
+pub fn (mut self InspectorWidget) unref() {
+	if !isnil(self.imgui) {
+		self.imgui.unref()
+	}
 }
 
 fn (mut self InspectorWidget) set_surface(surface &SurfaceWidget) ! {
@@ -161,6 +181,26 @@ pub fn new_inspector_window(mut surface SurfaceWidget) !&InspectorWindow {
 	C.adw_application_window_set_content(obj, GtkWidget(toolbar))
 	C.g_object_weak_ref(GObject(obj), voidptr(inspector_window_weak_notify), voidptr(self))
 	return self
+}
+
+pub fn (mut self InspectorWindow) ref() &InspectorWindow {
+	if !isnil(self.obj) {
+		object_ref(GObject(self.obj))
+	}
+	return self
+}
+
+pub fn (mut self InspectorWindow) ref_sink() &InspectorWindow {
+	if !isnil(self.obj) {
+		C.g_object_ref_sink(GObject(self.obj))
+	}
+	return self
+}
+
+pub fn (mut self InspectorWindow) unref() {
+	if !isnil(self.obj) {
+		object_unref(GObject(self.obj))
+	}
 }
 
 pub fn (self &InspectorWindow) present() {

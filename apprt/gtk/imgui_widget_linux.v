@@ -16,8 +16,8 @@ pub type ImguiWidgetCallback = fn (voidptr)
 @[heap]
 pub struct ImguiWidget {
 mut:
-	widget           GtkWidget = unsafe { nil }
-	gl_area          GtkGLArea = unsafe { nil }
+	widget           GtkWidget    = unsafe { nil }
+	gl_area          GtkGLArea    = unsafe { nil }
 	im_context       GtkIMContext = unsafe { nil }
 	context          cimgui.Context
 	context_ready    bool
@@ -26,7 +26,7 @@ mut:
 	previous_ns      i64
 	setup_fn         ImguiWidgetCallback = unsafe { nil }
 	render_fn        ImguiWidgetCallback = unsafe { nil }
-	user_data        voidptr = unsafe { nil }
+	user_data        voidptr             = unsafe { nil }
 }
 
 fn C.gtk_widget_add_tick_callback(widget GtkWidget, callback voidptr, user_data voidptr, notify voidptr) u32
@@ -51,12 +51,12 @@ pub fn new_imgui_widget(setup_fn ImguiWidgetCallback, render_fn ImguiWidgetCallb
 	C.adw_bin_set_child(AdwBin(widget), GtkWidget(gl_area))
 
 	mut self := &ImguiWidget{
-		widget: widget
-		gl_area: gl_area
+		widget:     widget
+		gl_area:    gl_area
 		im_context: C.gtk_im_multicontext_new()
-		setup_fn: setup_fn
-		render_fn: render_fn
-		user_data: user_data
+		setup_fn:   setup_fn
+		render_fn:  render_fn
+		user_data:  user_data
 	}
 	C.g_signal_connect_data(gl_area, c'realize', GCallback(voidptr(imgui_glarea_realize_cb)), voidptr(self), unsafe { nil }, 0)
 	C.g_signal_connect_data(gl_area, c'unrealize', GCallback(voidptr(imgui_glarea_unrealize_cb)), voidptr(self), unsafe { nil }, 0)
@@ -93,6 +93,26 @@ pub fn new_imgui_widget(setup_fn ImguiWidgetCallback, render_fn ImguiWidgetCallb
 
 pub fn (self &ImguiWidget) as_widget() GtkWidget {
 	return self.widget
+}
+
+pub fn (mut self ImguiWidget) ref() &ImguiWidget {
+	if !isnil(self.widget) {
+		object_ref(GObject(self.widget))
+	}
+	return self
+}
+
+pub fn (mut self ImguiWidget) ref_sink() &ImguiWidget {
+	if !isnil(self.widget) {
+		C.g_object_ref_sink(GObject(self.widget))
+	}
+	return self
+}
+
+pub fn (mut self ImguiWidget) unref() {
+	if !isnil(self.widget) {
+		object_unref(GObject(self.widget))
+	}
 }
 
 pub fn (self &ImguiWidget) queue_render() {

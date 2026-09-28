@@ -3198,16 +3198,14 @@ pub fn (mut self SurfaceWidget) set_search_total(total ?usize) {
 	if isnil(self.search_overlay) {
 		return
 	}
-	value := if actual := total { ?u64(u64(actual)) } else { ?u64(none) }
-	self.search_overlay.set_search_total(value)
+	self.search_overlay.set_search_total(total)
 }
 
 pub fn (mut self SurfaceWidget) set_search_selected(selected ?usize) {
 	if isnil(self.search_overlay) {
 		return
 	}
-	value := if actual := selected { ?u64(u64(actual)) } else { ?u64(none) }
-	self.search_overlay.set_search_selected(value)
+	self.search_overlay.set_search_selected(selected)
 }
 
 // key_sequence_action mirrors Surface.keySequenceAction. Each trigger is

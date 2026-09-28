@@ -160,11 +160,19 @@ fn tab_set_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) 
 		}
 		tab_prop_title {
 			text := C.g_value_get_string(value)
-			self.set_title(if isnil(text) { ?string(none) } else { ?string(unsafe { cstring_to_vstring(text) }) })
+			self.set_title(if isnil(text) {
+				?string(none)
+			} else {
+				?string(unsafe { cstring_to_vstring(text) })
+			})
 		}
 		tab_prop_tooltip {
 			text := C.g_value_get_string(value)
-			self.set_tooltip(if isnil(text) { ?string(none) } else { ?string(unsafe { cstring_to_vstring(text) }) })
+			self.set_tooltip(if isnil(text) {
+				?string(none)
+			} else {
+				?string(unsafe { cstring_to_vstring(text) })
+			})
 		}
 		else {}
 	}
@@ -233,9 +241,9 @@ pub fn tab_get_type() GType {
 		mut query := C.GTypeQuery{}
 		C.g_type_query(parent, &query)
 		info := C.GTypeInfo{
-			class_size: u16(query.class_size)
+			class_size:    u16(query.class_size)
 			instance_size: u16(query.instance_size)
-			class_init: voidptr(tab_class_init)
+			class_init:    voidptr(tab_class_init)
 			instance_init: voidptr(tab_instance_init)
 		}
 		g_tab_type = C.g_type_register_static(parent, c'GhosttyTab', &info, 0)
@@ -302,8 +310,8 @@ pub fn new_tab(window &Window, config &Config) &Tab {
 	split_tree := new_split_tree_widget(window, effective_config)
 	C.gtk_box_append(GtkWidget(obj), split_tree.widget)
 	mut self := &Tab{
-		widget: GtkWidget(obj)
-		window: window
+		widget:     GtkWidget(obj)
+		window:     window
 		split_tree: split_tree
 	}
 	mut priv := tab_priv(obj)
@@ -317,6 +325,19 @@ pub fn new_tab(window &Window, config &Config) &Tab {
 	self.split_tree.new_split(.right, none)
 
 	return self
+}
+
+pub fn (mut self Tab) ref() &Tab {
+	if !isnil(self.widget) {
+		object_ref(GObject(self.widget))
+	}
+	return self
+}
+
+pub fn (mut self Tab) unref() {
+	if !isnil(self.widget) {
+		object_unref(GObject(self.widget))
+	}
 }
 
 fn tab_split_tree_notify_tree_cb(split_tree GtkWidget, pspec voidptr, data voidptr) {

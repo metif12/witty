@@ -668,6 +668,15 @@ pub fn (mut self Application) init_quick_terminal(mut apprt_window ApprtWindow) 
 	self.winproto.init_quick_terminal(mut apprt_window)!
 }
 
+// ref increments the reference count of the Application GObject and returns
+// the application. Mirrors `Common.ref`.
+pub fn (mut self Application) ref() &Application {
+	if !isnil(self.obj) {
+		object_ref(self.obj)
+	}
+	return self
+}
+
 // unref decrements the reference count of the Application GObject. Mirrors
 // the GObject `unref`.
 pub fn (mut self Application) unref() {
