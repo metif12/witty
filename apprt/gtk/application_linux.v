@@ -2326,13 +2326,7 @@ fn (mut self Application) goto_window(direction apprt.GotoWindow) bool {
 			break
 		}
 	}
-	start := if active >= 0 {
-		active
-	} else if direction == .next {
-		-1
-	} else {
-		0
-	}
+	start := goto_window_start(active, direction)
 	for offset := 1; offset <= count; offset++ {
 		index := if direction == .next {
 			(start + offset) % count
@@ -2351,6 +2345,16 @@ fn (mut self Application) goto_window(direction apprt.GotoWindow) bool {
 		return true
 	}
 	return false
+}
+
+// Return the synthetic index immediately before the first candidate. When no
+// window is active Ghostty begins at the list head in either direction; after
+// that first candidate, previous traversal wraps to the tail.
+fn goto_window_start(active int, direction apprt.GotoWindow) int {
+	if active >= 0 {
+		return active
+	}
+	return if direction == .next { -1 } else { 1 }
 }
 
 fn (mut self Application) toggle_quick_terminal() bool {
