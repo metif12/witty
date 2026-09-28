@@ -241,6 +241,8 @@ fn C.CTFontCopyTable(font voidptr, tag u32, opts u32) voidptr
 
 fn C.CTFontGetSymbolicTraits(font voidptr) u32
 
+fn C.CTFontGetGlyphsForCharacters(font voidptr, characters &u16, glyphs &u16, count isize) bool
+
 fn C.CTFontDrawGlyphs(font voidptr, glyphs &u16, positions voidptr, count usize, context voidptr)
 
 fn C.vt_ct_typesetter_create_line(typesetter voidptr, location isize, length isize) voidptr
@@ -1158,6 +1160,12 @@ pub fn (f &CTFont) copy_table(tag CTFontTableTag) ?&CFData {
 
 pub fn (f &CTFont) get_symbolic_traits() CTFontSymbolicTraits {
 	return CTFontSymbolicTraits.from_raw(C.CTFontGetSymbolicTraits(voidptr(f)))
+}
+
+pub fn (f &CTFont) get_glyphs_for_characters(characters []u16, glyphs []CGGlyph) bool {
+	assert characters.len == glyphs.len
+	return C.CTFontGetGlyphsForCharacters(voidptr(f), characters.data, glyphs.data,
+		isize(characters.len))
 }
 
 pub fn CTFont.create_with_descriptor(desc &CTFontDescriptor, size f64) !&CTFont {

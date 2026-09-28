@@ -128,9 +128,13 @@ fn Score.score(desc &Descriptor, ct_desc voidptr) Score {
 
 	mut has_codepoint := false
 	if desc.codepoint > 0 {
-		mut glyph := u32(0)
-		has_codepoint = C.witty_coretext_glyph_for_codepoint(font_ptr, desc.codepoint,
-			&glyph) != 0
+		mut unichars := []u16{len: 2}
+		pair := macos.string_get_surrogate_pair_for_long_character(desc.codepoint,
+			mut unichars)
+		len := if pair { 2 } else { 1 }
+		mut glyphs := []macos.CGGlyph{len: 2}
+		native_font := unsafe { &macos.CTFont(font_ptr) }
+		has_codepoint = native_font.get_glyphs_for_characters(unichars[..len], glyphs[..len])
 	}
 
 	traits := C.witty_ct_descriptor_traits(ct_desc)

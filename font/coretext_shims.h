@@ -90,27 +90,6 @@ static int witty_coretext_copy_display_name(void *font_ptr, uint8_t *buf, size_t
 	return ok ? 1 : 0;
 }
 
-static int witty_coretext_glyph_for_codepoint(void *font_ptr, uint32_t cp, uint32_t *glyph_out) {
-	if (!font_ptr || !glyph_out) return 0;
-	UniChar chars[2] = {0, 0};
-	CGGlyph glyphs[2] = {0, 0};
-	CFIndex len = 1;
-	if (cp <= 0xFFFF) {
-		chars[0] = (UniChar)cp;
-	} else if (cp <= 0x10FFFF) {
-		uint32_t v = cp - 0x10000;
-		chars[0] = (UniChar)(0xD800 + (v >> 10));
-		chars[1] = (UniChar)(0xDC00 + (v & 0x3FF));
-		len = 2;
-	} else {
-		return 0;
-	}
-	if (!CTFontGetGlyphsForCharacters((CTFontRef)font_ptr, chars, glyphs, len)) return 0;
-	if (glyphs[0] == 0) return 0;
-	*glyph_out = (uint32_t)glyphs[0];
-	return 1;
-}
-
 // Primitive metric accessors used by the direct V translation of
 // coretext.zig's Face.getMetrics().
 static int witty_coretext_basic_metrics(
@@ -605,13 +584,6 @@ static int witty_coretext_copy_family_name(void *font_ptr, uint8_t *buf, size_t 
 static int witty_coretext_copy_display_name(void *font_ptr, uint8_t *buf, size_t len) {
 	(void)font_ptr;
 	if (buf && len > 0) buf[0] = 0;
-	return 0;
-}
-
-static int witty_coretext_glyph_for_codepoint(void *font_ptr, uint32_t cp, uint32_t *glyph_out) {
-	(void)font_ptr;
-	(void)cp;
-	(void)glyph_out;
 	return 0;
 }
 

@@ -30,8 +30,6 @@ fn C.witty_coretext_release(ptr voidptr)
 
 fn C.witty_coretext_copy_family_name(font_ptr voidptr, buf &u8, len usize) int
 
-fn C.witty_coretext_glyph_for_codepoint(font_ptr voidptr, cp u32, glyph_out &u32) int
-
 fn C.witty_coretext_basic_metrics(font_ptr voidptr, px_per_em &f64, ascent &f64, descent &f64, line_gap &f64, cap_height &f64, ex_height &f64) int
 
 fn C.witty_coretext_glyphs_for_characters(font_ptr voidptr, characters &u16, glyphs &u16, count int) int
@@ -384,14 +382,23 @@ pub fn (self &CoreTextFace) is_color_glyph(glyph_id u32) bool {
 // Returns the glyph index for the given Unicode code point. If this
 // face doesn't support this glyph, null is returned.
 pub fn (self CoreTextFace) glyph_index(cp u32) ?u32 {
-	// The shim handles UTF-32 -> UTF-16 conversion (including surrogate
-	// pairs) and calls CTFontGetGlyphsForCharacters. It returns 0 (and we
-	// return none) if the font doesn't contain the codepoint.
-	mut glyph := u32(0)
-	if C.witty_coretext_glyph_for_codepoint(self.ct_font, cp, &glyph) == 0 {
+	$if macos {
+		mut unichars := []u16{len: 2}
+		pair := macos.string_get_surrogate_pair_for_long_character(cp, mut unichars)
+		len := if pair { 2 } else { 1 }
+
+		mut glyphs := []macos.CGGlyph{len: 2}
+		native_font := unsafe { &macos.CTFont(self.ct_font) }
+		if !native_font.get_glyphs_for_characters(unichars[..len], glyphs[..len]) {
+			return none
+		}
+		if pair {
+			assert glyphs[1] == 0
+		}
+		return u32(glyphs[0])
+	} $else {
 		return none
 	}
-	return glyph
 }
 
 struct CoreTextGlyphLayout {
@@ -914,8 +921,17 @@ pub fn (self CoreTextDeferredFace) has_codepoint(cp u32, p ?Presentation) bool {
 			return false
 		}
 	}
-	mut glyph := u32(0)
-	return C.witty_coretext_glyph_for_codepoint(self.ct_font, cp, &glyph) != 0
+	$if macos {
+		mut unichars := []u16{len: 2}
+		pair := macos.string_get_surrogate_pair_for_long_character(cp, mut unichars)
+		len := if pair { 2 } else { 1 }
+
+		mut glyphs := []macos.CGGlyph{len: 2}
+		native_font := unsafe { &macos.CTFont(self.ct_font) }
+		return native_font.get_glyphs_for_characters(unichars[..len], glyphs[..len])
+	} $else {
+		return false
+	}
 }
 
 // family_name returns the family name of the deferred CoreText font.
