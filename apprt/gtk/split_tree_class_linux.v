@@ -353,7 +353,11 @@ fn (mut self SplitTreeWidget) init_action_map() {
 
 fn split_tree_action_new_split_cb(action GSimpleAction, parameter GVariant, data voidptr) {
 	_ = action
-	if isnil(data) || isnil(parameter) {
+	if isnil(data) {
+		return
+	}
+	if isnil(parameter) {
+		log.warn('split-tree.new-split called without a parameter')
 		return
 	}
 	mut length := usize(0)
@@ -885,7 +889,7 @@ pub fn (mut self SplitTreeWidget) surface_close_request(surface &SurfaceWidget) 
 
 	mut dialog := close_confirmation_dialog_new(.surface)
 	C.g_signal_connect_data(dialog.dialog.obj, c'close-request', GCallback(voidptr(split_tree_close_confirmed_cb)), voidptr(self), unsafe { nil }, 0)
-	dialog.present(surface.as_widget())
+	dialog.present(self.widget)
 }
 
 fn split_tree_close_confirmed_cb(dialog GObject, data voidptr) {
@@ -1068,6 +1072,12 @@ pub fn (mut self SplitTreeWidget) on_rebuild() {
 
 	// Prior to rebuilding, all surfaces must be orphaned.
 	assert !self.get_tree_has_parents()
+
+	// The previous native widget graph has been disposed now that its terminal
+	// surfaces are orphaned, so its translated wrappers can be released before
+	// constructing their replacements.
+	self.scrolled_windows.clear()
+	self.splits.clear()
 
 	if self.has_tree && !self.tree.is_empty() {
 		root := self.tree.zoomed or { datastruct.handle_root }
