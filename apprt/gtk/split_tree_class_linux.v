@@ -528,7 +528,7 @@ pub fn (mut self SplitTreeWidget) get_active_surface() ?&SurfaceWidget {
 	if node is datastruct.Leaf[SurfaceWidget] {
 		return node.view
 	}
-	return none
+	panic('active split tree handle ${handle.idx()} is not a leaf node')
 }
 
 // get_active_surface_handle returns the tree handle (node index) of the active
@@ -697,7 +697,7 @@ pub fn (mut self SplitTreeWidget) goto_(to datastruct.Goto) bool {
 	if node is datastruct.Leaf[SurfaceWidget] {
 		surface = node.view
 	} else {
-		return false
+		panic('split tree navigation target ${target.idx()} is not a leaf node')
 	}
 	surface.grab_focus()
 
@@ -824,6 +824,11 @@ pub fn (mut self SplitTreeWidget) action_zoom() {
 // `surfaceCloseRequest`: records the pending-close handle and either closes
 // immediately or shows a confirmation dialog.
 pub fn (mut self SplitTreeWidget) surface_close_request(surface &SurfaceWidget) {
+	if !surface.has_core() {
+		return
+	}
+	mut core := surface.core()
+
 	// Reset pending close.
 	self.pending_close = none
 
@@ -846,13 +851,7 @@ pub fn (mut self SplitTreeWidget) surface_close_request(surface &SurfaceWidget) 
 	self.pending_close = handle
 
 	// If we don't need to confirm, close immediately.
-	if surface.has_core() {
-		mut core := surface.core()
-		if !core.needs_confirm_quit() {
-			self.close_confirmation_close()
-			return
-		}
-	} else {
+	if !core.needs_confirm_quit() {
 		self.close_confirmation_close()
 		return
 	}
@@ -884,6 +883,8 @@ pub fn (mut self SplitTreeWidget) close_confirmation_close() {
 	closing_node := self.tree.nodes[handle.idx()]
 	if closing_node is datastruct.Leaf[SurfaceWidget] {
 		closing = closing_node.view
+	} else {
+		panic('pending close handle ${handle.idx()} is not a leaf node')
 	}
 
 	// Figure out the next focus target: the "previous" surface unless we're
@@ -898,6 +899,8 @@ pub fn (mut self SplitTreeWidget) close_confirmation_close() {
 			node := self.tree.nodes[target.idx()]
 			if node is datastruct.Leaf[SurfaceWidget] {
 				next_focus = node.view
+			} else {
+				panic('next focus handle ${target.idx()} is not a leaf node')
 			}
 		}
 	}
@@ -980,6 +983,7 @@ pub fn (mut self SplitTreeWidget) prop_surface_parent() {
 	if self.get_tree_has_parents() {
 		return
 	}
+	assert self.rebuild_source == 0
 	self.rebuild_pending = false
 	self.rebuild_source = C.g_idle_add(voidptr(split_tree_rebuild_cb), self)
 }
@@ -990,7 +994,9 @@ pub fn (mut self SplitTreeWidget) prop_surface_parent() {
 fn (mut self SplitTreeWidget) prop_tree() {
 	// Cancel any pending rebuild so we start clean.
 	if self.rebuild_source != 0 {
-		C.g_source_remove(self.rebuild_source)
+		if !C.g_source_remove(self.rebuild_source) {
+			log.warn('unable to remove rebuild source')
+		}
 		self.rebuild_source = 0
 	}
 
@@ -1031,9 +1037,7 @@ pub fn (mut self SplitTreeWidget) on_rebuild() {
 	self.rebuild_source = 0
 
 	// Prior to rebuilding, all surfaces must be orphaned.
-	if self.get_tree_has_parents() {
-		return
-	}
+	assert !self.get_tree_has_parents()
 
 	if self.has_tree && !self.tree.is_empty() {
 		root := self.tree.zoomed or { datastruct.handle_root }
@@ -1057,20 +1061,21 @@ pub fn (mut self SplitTreeWidget) on_rebuild() {
 // (GtkPaned wrapper) with recursively-built children. Mirrors `buildTree`.
 fn (mut self SplitTreeWidget) build_tree(current datastruct.Handle) GtkWidget {
 	node := self.tree.nodes[current.idx()]
-	if node is datastruct.Leaf[SurfaceWidget] {
-		mut scrolled := new_surface_scrolled_window()
-		scrolled.set_surface(node.view)
-		self.scrolled_windows << scrolled
-		return scrolled.widget
+	match node {
+		datastruct.Leaf[SurfaceWidget] {
+			mut scrolled := new_surface_scrolled_window()
+			scrolled.set_surface(node.view)
+			self.scrolled_windows << scrolled
+			return scrolled.widget
+		}
+		datastruct.Split {
+			start_child := self.build_tree(node.left)
+			end_child := self.build_tree(node.right)
+			split := new_split_tree_split(current, node.layout, start_child, end_child)
+			self.splits << split
+			return split.widget
+		}
 	}
-	if node is datastruct.Split {
-		start_child := self.build_tree(node.left)
-		end_child := self.build_tree(node.right)
-		split := new_split_tree_split(current, node.layout, start_child, end_child)
-		self.splits << split
-		return split.widget
-	}
-	return GtkWidget(unsafe { nil })
 }
 
 // --- SplitTreeSplit -------------------------------------------------------
