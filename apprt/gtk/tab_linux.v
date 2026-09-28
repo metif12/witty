@@ -361,11 +361,28 @@ fn tab_action_close_cb(action GSimpleAction, parameter GVariant, data voidptr) {
 	}
 	mut length := usize(0)
 	value := C.g_variant_get_string(parameter, &length)
-	if isnil(value) {
+	mut self := unsafe { &Tab(data) }
+	self.action_close(if isnil(value) {
+		?string(none)
+	} else {
+		?string(unsafe { cstring_to_vstring(value) })
+	})
+}
+
+// action_close handles the "tab.close" action. Mirrors `actionClose`: it
+// resolves the parent page before validating the externally supplied mode,
+// then delegates to AdwTabView so its close-page signal can be intercepted.
+fn (mut self Tab) action_close(mode_ ?string) {
+	tab_view := self.get_tab_view()
+	if isnil(tab_view) {
+		return
+	}
+	page := C.adw_tab_view_get_page(tab_view, self.widget)
+
+	mode_value := mode_ or {
 		log.warn('invalid mode provided to tab.close-tab')
 		return
 	}
-	mode_value := unsafe { cstring_to_vstring(value) }
 	mode := match mode_value {
 		'this' { CloseTabMode.this }
 		'other' { CloseTabMode.other }
@@ -375,8 +392,12 @@ fn tab_action_close_cb(action GSimpleAction, parameter GVariant, data voidptr) {
 			return
 		}
 	}
-	mut self := unsafe { &Tab(data) }
-	self.action_close(mode)
+
+	match mode {
+		.this { C.adw_tab_view_close_page(tab_view, page) }
+		.other { C.adw_tab_view_close_other_pages(tab_view, page) }
+		.right { C.adw_tab_view_close_pages_after(tab_view, page) }
+	}
 }
 
 fn tab_action_ring_bell_cb(action GSimpleAction, parameter GVariant, data voidptr) {
@@ -576,26 +597,6 @@ pub fn (mut self Tab) prop_active_surface() {
 }
 
 // --- Actions --------------------------------------------------------------
-
-// action_close handles the "tab.close" action for the given mode. Mirrors
-// `actionClose`: it looks up this tab's page in the tab view and delegates to
-// the parent (which emits a close-page signal the parent can intercept).
-pub fn (mut self Tab) action_close(mode CloseTabMode) {
-	tab_view := self.get_tab_view()
-	if isnil(tab_view) {
-		return
-	}
-	page := C.adw_tab_view_get_page(tab_view, self.widget)
-
-	match mode {
-		.this { C.adw_tab_view_close_page(tab_view, page) }
-		.other { C.adw_tab_view_close_other_pages(tab_view, page) }
-		.right { C.adw_tab_view_close_pages_after(tab_view, page) }
-		else {
-			return
-		}
-	}
-}
 
 // action_ring_bell handles the "tab.ring-bell" action. Mirrors `actionRingBell`:
 // marks the page as needing attention only if it isn't the selected page.
