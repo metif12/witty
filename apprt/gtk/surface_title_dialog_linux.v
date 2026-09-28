@@ -150,6 +150,7 @@ fn surface_title_dialog_class_init(klass voidptr, class_data voidptr) {
 	C.g_type_class_adjust_private_offset(klass, &g_surface_title_dialog_priv_offset)
 	bytes := C.g_bytes_new_static(surface_title_dialog_ui.str, usize(surface_title_dialog_ui.len))
 	C.gtk_widget_class_set_template(klass, bytes)
+	C.g_bytes_unref(bytes)
 
 	// Signal: set (one [*:0]const u8 / string param, void return).
 	mut set_param_type := g_type_string

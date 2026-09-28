@@ -303,6 +303,7 @@ fn surface_child_exited_class_init(klass voidptr, class_data voidptr) {
 	if supports_banner() {
 		bytes := C.g_bytes_new_static(surface_child_exited_ui.str, usize(surface_child_exited_ui.len))
 		C.gtk_widget_class_set_template(klass, bytes)
+		C.g_bytes_unref(bytes)
 
 		// Binding: banner template child into the private struct.
 		banner_offset := g_surface_child_exited_priv_offset + int(__offsetof(C.GhosttySurfaceChildExitedPrivate, banner))

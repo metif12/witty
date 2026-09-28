@@ -396,6 +396,7 @@ fn surface_scrolled_window_class_init(klass voidptr, class_data voidptr) {
 	C.g_type_class_adjust_private_offset(klass, &g_surface_scrolled_window_priv_offset)
 	bytes := C.g_bytes_new_static(surface_scrolled_window_ui.str, usize(surface_scrolled_window_ui.len))
 	C.gtk_widget_class_set_template(klass, bytes)
+	C.g_bytes_unref(bytes)
 
 	// Template callbacks.
 	C.gtk_widget_class_bind_template_callback_full(klass, c'scrollbar_policy', voidptr(surface_scrolled_window_scrollbar_policy_cb))

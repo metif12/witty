@@ -142,6 +142,7 @@ fn close_confirmation_dialog_class_init(klass voidptr, class_data voidptr) {
 	// Template.
 	bytes := C.g_bytes_new_static(close_confirmation_dialog_ui.str, usize(close_confirmation_dialog_ui.len))
 	C.gtk_widget_class_set_template(klass, bytes)
+	C.g_bytes_unref(bytes)
 
 	// Property: target.
 	pspec := C.g_param_spec_enum(c'target', c'target', c'The close target', close_confirmation_target_get_type(), int(CloseTarget.app), g_param_readwrite)

@@ -665,6 +665,7 @@ fn search_overlay_class_init(klass voidptr, class_data voidptr) {
 	C.g_type_class_adjust_private_offset(klass, &g_search_overlay_priv_offset)
 	bytes := C.g_bytes_new_static(search_overlay_ui.str, usize(search_overlay_ui.len))
 	C.gtk_widget_class_set_template(klass, bytes)
+	C.g_bytes_unref(bytes)
 
 	// Binding: search_entry template child into the private struct.
 	entry_offset := g_search_overlay_priv_offset + int(__offsetof(C.GhosttySearchOverlayPrivate, search_entry))

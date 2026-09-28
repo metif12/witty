@@ -142,6 +142,7 @@ fn config_errors_dialog_class_init(klass voidptr, class_data voidptr) {
 
 	bytes := C.g_bytes_new_static(config_errors_dialog_ui.str, usize(config_errors_dialog_ui.len))
 	C.gtk_widget_class_set_template(klass, bytes)
+	C.g_bytes_unref(bytes)
 
 	pspec := C.g_param_spec_object(c'config', c'config', c'The config being shown', config_get_type(), g_param_readwrite)
 	C.witty_gobject_class_set_get_property(klass, voidptr(config_errors_dialog_get_property))

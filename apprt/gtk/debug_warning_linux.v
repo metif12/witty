@@ -58,6 +58,7 @@ fn debug_warning_class_init(klass voidptr, class_data voidptr) {
 	ui := if supports_banner() { debug_warning_ui_banner } else { debug_warning_ui_label }
 	bytes := C.g_bytes_new_static(ui.str, usize(ui.len))
 	C.gtk_widget_class_set_template(klass, bytes)
+	C.g_bytes_unref(bytes)
 }
 
 // instanceInit builds the widget tree from the template. Mirrors the Zig
