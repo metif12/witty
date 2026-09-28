@@ -237,6 +237,10 @@ fn C.CTFontCreateCopyWithAttributes(font voidptr, size f64, matrix voidptr, desc
 
 fn C.CTFontCopyFontDescriptor(font voidptr) voidptr
 
+fn C.CTFontCopyTable(font voidptr, tag u32, opts u32) voidptr
+
+fn C.CTFontGetSymbolicTraits(font voidptr) u32
+
 fn C.CTFontDrawGlyphs(font voidptr, glyphs &u16, positions voidptr, count usize, context voidptr)
 
 fn C.vt_ct_typesetter_create_line(typesetter voidptr, location isize, length isize) voidptr
@@ -1099,6 +1103,41 @@ pub fn (d &CTFontDescriptor) release() {
 
 pub struct CTFont {}
 
+pub type CTFontTableTag = u32
+
+pub fn CTFontTableTag.init(tag string) CTFontTableTag {
+	assert tag.len == 4
+	return CTFontTableTag(u32(tag[0]) << 24 | u32(tag[1]) << 16 | u32(tag[2]) << 8 |
+		u32(tag[3]))
+}
+
+pub struct CTFontSymbolicTraits {
+pub:
+	italic        bool
+	bold          bool
+	expanded      bool
+	condensed     bool
+	monospace     bool
+	vertical      bool
+	ui_optimized  bool
+	color_glyphs  bool
+	composite     bool
+}
+
+pub fn CTFontSymbolicTraits.from_raw(raw u32) CTFontSymbolicTraits {
+	return CTFontSymbolicTraits{
+		italic:       raw & (u32(1) << 0) != 0
+		bold:         raw & (u32(1) << 1) != 0
+		expanded:     raw & (u32(1) << 5) != 0
+		condensed:    raw & (u32(1) << 6) != 0
+		monospace:    raw & (u32(1) << 10) != 0
+		vertical:     raw & (u32(1) << 11) != 0
+		ui_optimized: raw & (u32(1) << 12) != 0
+		color_glyphs: raw & (u32(1) << 13) != 0
+		composite:    raw & (u32(1) << 14) != 0
+	}
+}
+
 pub fn (f &CTFont) copy_with_attributes(size f64, matrix voidptr, desc voidptr) !&CTFont {
 	ptr := C.CTFontCreateCopyWithAttributes(voidptr(f), size, matrix, desc)
 	return require_cf_ref[CTFont](ptr, 'CTFontCreateCopyWithAttributes')
@@ -1107,6 +1146,18 @@ pub fn (f &CTFont) copy_with_attributes(size f64, matrix voidptr, desc voidptr) 
 pub fn (f &CTFont) copy_descriptor() !&CTFontDescriptor {
 	ptr := C.CTFontCopyFontDescriptor(voidptr(f))
 	return require_cf_ref[CTFontDescriptor](ptr, 'CTFontCopyFontDescriptor')
+}
+
+pub fn (f &CTFont) copy_table(tag CTFontTableTag) ?&CFData {
+	ptr := C.CTFontCopyTable(voidptr(f), u32(tag), 0)
+	if isnil(ptr) {
+		return none
+	}
+	return cast_cf_ref[CFData](ptr)
+}
+
+pub fn (f &CTFont) get_symbolic_traits() CTFontSymbolicTraits {
+	return CTFontSymbolicTraits.from_raw(C.CTFontGetSymbolicTraits(voidptr(f)))
 }
 
 pub fn CTFont.create_with_descriptor(desc &CTFontDescriptor, size f64) !&CTFont {
@@ -1468,6 +1519,8 @@ pub type TextDrawingMode = CGContextTextDrawingMode
 pub type BitmapContext = CGBitmapContext
 
 pub type Font = CTFont
+
+pub type FontTableTag = CTFontTableTag
 
 pub type FontDescriptor = CTFontDescriptor
 

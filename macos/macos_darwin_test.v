@@ -116,6 +116,19 @@ fn test_text_and_graphics_enum_contracts_match_source() {
 	assert int(CGContextTextDrawingMode.clip) == 7
 }
 
+fn test_font_table_tag_and_symbolic_traits() {
+	assert u32(CTFontTableTag.init('SVG ')) == 0x53564720
+	assert u32(CTFontTableTag.init('sbix')) == 0x73626978
+
+	traits := CTFontSymbolicTraits.from_raw((u32(1) << 0) | (u32(1) << 10) |
+		(u32(1) << 13))
+	assert traits.italic
+	assert !traits.bold
+	assert traits.monospace
+	assert traits.color_glyphs
+	assert !traits.composite
+}
+
 fn test_os_and_video_enum_contracts_match_source() {
 	assert sizeof(LogType) == sizeof(u8)
 	assert u8(LogType.default_) == 0

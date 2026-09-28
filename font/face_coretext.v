@@ -32,12 +32,6 @@ fn C.witty_coretext_copy_family_name(font_ptr voidptr, buf &u8, len usize) int
 
 fn C.witty_coretext_glyph_for_codepoint(font_ptr voidptr, cp u32, glyph_out &u32) int
 
-fn C.witty_coretext_copy_table(font_ptr voidptr, tag4 &char, buffer_out &&u8, len_out &u32) int
-
-fn C.witty_coretext_color_info(font_ptr voidptr, has_sbix &int) int
-
-fn C.witty_coretext_free_buffer(ptr &u8)
-
 fn C.witty_coretext_basic_metrics(font_ptr voidptr, px_per_em &f64, ascent &f64, descent &f64, line_gap &f64, cap_height &f64, ex_height &f64) int
 
 fn C.witty_coretext_glyphs_for_characters(font_ptr voidptr, characters &u16, glyphs &u16, count int) int
@@ -201,8 +195,11 @@ pub fn CoreTextFace.init_font(ct_font voidptr, opts FaceOptions) !CoreTextFace {
 
 	// Determine color state from the font's symbolic traits and tables.
 	mut color := ?ColorState(none)
-	mut ignored_sbix := int(0)
-	is_color := C.witty_coretext_color_info(ct_font, &ignored_sbix) != 0
+	mut is_color := false
+	$if macos {
+		native_font := unsafe { &macos.CTFont(ct_font) }
+		is_color = native_font.get_symbolic_traits().color_glyphs
+	}
 	if is_color {
 		color = ColorState.init(ct_font) or {
 			C.witty_coretext_release(ct_font)
@@ -762,18 +759,20 @@ pub fn (self CoreTextFace) copy_table(tag string) ![]u8 {
 	if tag.len != 4 {
 		return error('CoreText: font table tag must be 4 characters')
 	}
-	mut ptr := &u8(unsafe { nil })
-	mut n := u32(0)
-	if C.witty_coretext_copy_table(self.ct_font, &char(tag.str), &ptr, &n) == 0 {
-		return error('CoreText: font table not found: ${tag}')
+	$if macos {
+		native_font := unsafe { &macos.CTFont(self.ct_font) }
+		data := native_font.copy_table(macos.CTFontTableTag.init(tag)) or {
+			return error('CoreText: font table not found: ${tag}')
+		}
+		defer { data.release() }
+		len := data.get_length()
+		if len == 0 {
+			return []u8{}
+		}
+		return unsafe { data.get_pointer().vbytes(len) }.clone()
+	} $else {
+		return error('CoreText: unsupported platform')
 	}
-	// Copy the C-allocated buffer into a V-owned slice, then free the C one.
-	mut buf := []u8{len: int(n)}
-	if n > 0 {
-		unsafe { vmemcpy(buf.data, ptr, int(n)) }
-	}
-	C.witty_coretext_free_buffer(ptr)
-	return buf
 }
 
 // ============================================================
@@ -800,35 +799,31 @@ pub mut:
 // init creates a ColorState from a CoreText font by checking for
 // sbix and SVG tables.
 pub fn ColorState.init(ct_font voidptr) !ColorState {
-	// Steps:
-	// 1. Check for sbix table:
-	//    sbix is true if the table exists in the font data at all.
-	//    In the future we probably want to actually parse it and
-	//    check for glyphs.
-	//    tag = FontTableTag.init("sbix")
-	//    data = ct_font.copyTable(tag) or false
-	//    sbix = data != null && data.getLength() > 0
-	//
-	// 2. Read the SVG table out of the font data:
-	//    tag = FontTableTag.init("SVG ")
-	//    data = ct_font.copyTable(tag) or null
-	//    svg = opentype.SVG.init(data.getPointer()[0..data.getLength()]) or null
-	//    (On error: EndOfStream or SVGVersionNotSupported -> InvalidSVGTable)
-	mut has_sbix := int(0)
-	_ = C.witty_coretext_color_info(ct_font, &has_sbix)
-	mut svg_data := []u8{}
-	mut svg := ?opentype.SVG(none)
-	mut ptr := &u8(unsafe { nil })
-	mut len := u32(0)
-	if C.witty_coretext_copy_table(ct_font, c'SVG ', &ptr, &len) != 0 {
-		defer { C.witty_coretext_free_buffer(ptr) }
-		svg_data = unsafe { ptr.vbytes(int(len)) }.clone()
-		svg = opentype.SVG.init(svg_data)!
-	}
-	return ColorState{
-		sbix: has_sbix != 0
-		svg: svg
-		svg_data: svg_data
+	$if macos {
+		native_font := unsafe { &macos.CTFont(ct_font) }
+		mut sbix := false
+		if data := native_font.copy_table(macos.CTFontTableTag.init('sbix')) {
+			sbix = data.get_length() > 0
+			data.release()
+		}
+
+		mut svg_data := []u8{}
+		mut svg := ?opentype.SVG(none)
+		if data := native_font.copy_table(macos.CTFontTableTag.init('SVG ')) {
+			defer { data.release() }
+			len := data.get_length()
+			if len > 0 {
+				svg_data = unsafe { data.get_pointer().vbytes(len) }.clone()
+			}
+			svg = opentype.SVG.init(svg_data)!
+		}
+		return ColorState{
+			sbix: sbix
+			svg: svg
+			svg_data: svg_data
+		}
+	} $else {
+		return error('CoreText: unsupported platform')
 	}
 }
 
@@ -909,8 +904,11 @@ pub fn (self CoreTextDeferredFace) has_codepoint(cp u32, p ?Presentation) bool {
 	//    var glyphs = [2]Glyph{ 0, 0 }
 	//    return ct_font.getGlyphsForCharacters(unichars[0..len], glyphs[0..len])
 	if presentation := p {
-		mut has_sbix := int(0)
-		is_color := C.witty_coretext_color_info(self.ct_font, &has_sbix) != 0
+		mut is_color := false
+		$if macos {
+			native_font := unsafe { &macos.CTFont(self.ct_font) }
+			is_color = native_font.get_symbolic_traits().color_glyphs
+		}
 		actual := if is_color { Presentation.emoji } else { Presentation.text }
 		if actual != presentation {
 			return false

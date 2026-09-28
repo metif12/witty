@@ -212,10 +212,6 @@ static int witty_coretext_glyph_bounds(
 	return 1;
 }
 
-static void witty_coretext_free_buffer(uint8_t *ptr) {
-	free(ptr);
-}
-
 // ------------------------------------------------------------------
 // Discovery + descriptor scoring helpers (CoreText backend).
 // ------------------------------------------------------------------
@@ -571,63 +567,6 @@ static void *witty_ct_font_for_string(void *orig_font, uint32_t codepoint) {
 // Face helpers (CoreText backend).
 // ------------------------------------------------------------------
 
-// Copy an SFNT table from a font by 4-char tag. Returns 1 and allocates a
-// buffer (freed with witty_coretext_free_buffer) on success, 0 otherwise.
-static int witty_coretext_copy_table(
-	void *font_ptr,
-	const char *tag4,
-	uint8_t **buffer_out,
-	uint32_t *len_out
-) {
-	if (buffer_out) *buffer_out = NULL;
-	if (len_out) *len_out = 0;
-	if (!font_ptr || !tag4 || !buffer_out || !len_out) return 0;
-
-	uint32_t tag = ((uint32_t)(uint8_t)tag4[0] << 24) |
-		((uint32_t)(uint8_t)tag4[1] << 16) |
-		((uint32_t)(uint8_t)tag4[2] << 8) |
-		((uint32_t)(uint8_t)tag4[3]);
-
-	CFDataRef data = CTFontCopyTable(
-		(CTFontRef)font_ptr, (CTFontTableTag)tag, kCTFontTableOptionNoOptions);
-	if (!data) return 0;
-
-	CFIndex n = CFDataGetLength(data);
-	const UInt8 *ptr = CFDataGetBytePtr(data);
-	if (n <= 0 || !ptr) {
-		CFRelease(data);
-		return 0;
-	}
-	uint8_t *out = (uint8_t *)malloc((size_t)n);
-	if (!out) {
-		CFRelease(data);
-		return 0;
-	}
-	memcpy(out, ptr, (size_t)n);
-	CFRelease(data);
-	*buffer_out = out;
-	*len_out = (uint32_t)n;
-	return 1;
-}
-
-// Returns 1 if the font has any colorized glyphs (symbolic color trait), and
-// sets *has_sbix to 1 if it has an sbix table.
-static int witty_coretext_color_info(void *font_ptr, int *has_sbix) {
-	if (has_sbix) *has_sbix = 0;
-	if (!font_ptr) return 0;
-	CTFontSymbolicTraits t = CTFontGetSymbolicTraits((CTFontRef)font_ptr);
-	int color = (t & kCTFontTraitColorGlyphs) ? 1 : 0;
-	if (has_sbix) {
-		CFDataRef data = CTFontCopyTable(
-			(CTFontRef)font_ptr, (CTFontTableTag)'sbix', kCTFontTableOptionNoOptions);
-		if (data) {
-			if (CFDataGetLength(data) > 0) *has_sbix = 1;
-			CFRelease(data);
-		}
-	}
-	return color;
-}
-
 #else
 static void *witty_coretext_create_font_named(char *name, double size) {
 	(void)name;
@@ -748,10 +687,6 @@ static int witty_coretext_glyph_bounds(
 	return 0;
 }
 
-static void witty_coretext_free_buffer(uint8_t *ptr) {
-	(void)ptr;
-}
-
 // --- Non-Apple stubs for discovery/face helpers. ---
 
 static void witty_ct_release(void *ptr) { (void)ptr; }
@@ -820,18 +755,4 @@ static void *witty_ct_font_for_string(void *orig_font, uint32_t codepoint) {
 	return NULL;
 }
 
-static int witty_coretext_copy_table(
-	void *font_ptr, const char *tag4, uint8_t **buffer_out, uint32_t *len_out
-) {
-	(void)font_ptr; (void)tag4;
-	if (buffer_out) *buffer_out = NULL;
-	if (len_out) *len_out = 0;
-	return 0;
-}
-
-static int witty_coretext_color_info(void *font_ptr, int *has_sbix) {
-	(void)font_ptr;
-	if (has_sbix) *has_sbix = 0;
-	return 0;
-}
 #endif
