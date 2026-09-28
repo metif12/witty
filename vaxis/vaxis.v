@@ -697,6 +697,7 @@ struct ParsedInput {
 }
 
 // Tty incrementally decodes events read from the terminal.
+@[heap]
 pub struct Tty {
 mut:
 	pending        []u8
@@ -739,6 +740,10 @@ pub fn (mut tty Tty) poll() ?InputEvent {
 		tty.poll_posix()
 	}
 
+	return tty.parse_pending()
+}
+
+fn (mut tty Tty) parse_pending() ?InputEvent {
 	for tty.pending.len > 0 {
 		parsed := parse_input(tty.pending) or { return none }
 		tty.pending.delete_many(0, parsed.consumed)

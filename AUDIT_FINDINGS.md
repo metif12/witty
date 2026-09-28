@@ -711,9 +711,12 @@ none, browser, action, ipc. dependencies: zf 0.10.3 ranking/highlighting.
   and renders the retained screen. The pinned event queue ring and wrapping
   grapheme cache are translated. On POSIX, the preview now opens `/dev/tty`,
   applies the pinned raw termios flags until deinit, reads input bytes from that
-  descriptor, queries its winsize, and writes session output there. Its input
-  delivery is still synchronous polling rather than the pinned threaded
-  `Loop` with SIGWINCH callbacks; Windows still uses the V console adapter.
+  descriptor, queries its winsize, and writes session output there. A reader
+  thread now feeds the translated bounded event queue and is stopped with the
+  pinned device-status wakeup. The loop remains specialized to `InputEvent`
+  rather than source-generic `Loop(Event)`, applies capability interception on
+  the preview thread, and still polls winsize instead of installing SIGWINCH
+  callbacks. Windows still uses the V console adapter.
   Image decoding/transcoding and high-level loading also remain absent.
   Pinned vaxis width data and all three `gwidth.Method` algorithms are
   available.

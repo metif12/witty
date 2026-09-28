@@ -507,13 +507,16 @@ pub fn (mut self Preview) run() ! {
 	defer {
 		tty.write(vx.deinit()) or {}
 	}
+	mut loop := vaxis.InputLoop.new(mut tty)
+	loop.start()
+	defer { loop.deinit(&vx) }
 	tty.write(vx.enter_alt_screen())!
 	tty.write(vx.set_title('👻 Ghostty Theme Preview 👻'))!
 	tty.write(vx.query_terminal_send())!
 	mut queued := []vaxis.InputEvent{}
 	query_start := time.ticks()
 	for !vx.queries_done && time.ticks() - query_start < 1000 {
-		if raw := tty.poll() {
+		if raw := loop.try_event() {
 			if event := vx.handle_input(raw) {
 				queued << event
 			}
@@ -550,7 +553,7 @@ pub fn (mut self Preview) run() ! {
 		}
 		queued.clear()
 		for {
-			raw := tty.poll() or { break }
+			raw := loop.try_event() or { break }
 			if event := vx.handle_input(raw) {
 				if event is vaxis.Winsize {
 					tty.write(vx.resize(event))!

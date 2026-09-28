@@ -121,3 +121,26 @@ fn (mut tty Tty) poll_posix() {
 		pfd.revents = 0
 	}
 }
+
+pub fn (mut tty Tty) next_input() !InputEvent {
+	for {
+		if event := tty.parse_pending() {
+			return event
+		}
+		mut buf := [1024]u8{}
+		count := C.read(tty.fd, &buf[0], usize(buf.len))
+		if count < 0 {
+			if C.errno == C.EINTR {
+				continue
+			}
+			return error('read /dev/tty failed')
+		}
+		if count == 0 {
+			return error('read /dev/tty returned zero')
+		}
+		for i in 0 .. int(count) {
+			tty.pending << buf[i]
+		}
+	}
+	panic('unreachable')
+}
