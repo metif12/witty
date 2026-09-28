@@ -2194,8 +2194,7 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 		.readonly {
 			if data is apprt.Readonly {
 				mut surface := surface_from_target(target) or { return false }
-				surface.set_readonly(data == .on)
-				return true
+				return surface.set_readonly(data)
 			}
 		}
 		.secure_input, .close_all_windows, .float_window, .toggle_visibility,

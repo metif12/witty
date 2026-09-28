@@ -1102,9 +1102,6 @@ pub mut:
 	// True while the bell is ringing.
 	bell_ringing bool
 
-	// True while terminal input is disabled by the core surface.
-	readonly bool
-
 	// Removes stalled OSC progress reports after fifteen seconds.
 	progress_bar_timer u32
 
@@ -1536,12 +1533,12 @@ pub fn (self &SurfaceWidget) get_readonly() bool {
 }
 
 // set_readonly mirrors Surface.setReadonly and the readonly blueprint binding.
-pub fn (mut self SurfaceWidget) set_readonly(readonly bool) {
-	self.readonly = readonly
+pub fn (mut self SurfaceWidget) set_readonly(_ apprt.Readonly) bool {
 	self.notify_property(g_surface_pspec_readonly)
 	if !isnil(self.readonly_revealer) {
-		C.gtk_revealer_set_reveal_child(self.readonly_revealer, readonly)
+		C.gtk_revealer_set_reveal_child(self.readonly_revealer, self.get_readonly())
 	}
+	return true
 }
 
 // set_is_split mirrors the split-tree to surface property binding.

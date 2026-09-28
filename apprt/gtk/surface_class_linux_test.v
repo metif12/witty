@@ -2,6 +2,7 @@ module gtk
 
 import apprt
 import configpkg
+import core
 
 fn test_compute_fraction_clamps_out_of_range_progress() {
 	assert compute_fraction(100) == 1.0
@@ -42,4 +43,18 @@ fn test_surface_set_config_owns_native_reference() {
 	finalized := weak.get()
 	assert isnil(finalized)
 	weak.clear()
+}
+
+fn test_surface_readonly_notification_uses_core_state() {
+	mut core_surface := &core.Surface{
+		readonly: true
+	}
+	mut surface := SurfaceWidget{
+		core_surface: core_surface
+	}
+
+	// The action payload is only a notification. The canonical state was
+	// already changed by core.Surface before this GTK boundary is entered.
+	assert surface.set_readonly(.off)
+	assert surface.get_readonly()
 }
