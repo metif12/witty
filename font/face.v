@@ -493,6 +493,7 @@ import quirks
 import freetype
 import fontconfig
 import harfbuzz
+import log
 import macos
 import math
 import os
@@ -1061,6 +1062,35 @@ fn init_freetype_face(lib Library, mut ft_face freetype.Face, opts FaceOptions) 
 		size: opts.size
 	}
 	result.quirks_disable_default_font_features = quirks.disable_default_font_features(&result)
+
+	// In debug mode, output the available variation axes when they exist.
+	$if debug {
+		if result.face.has_multiple_masters() {
+			mut name_buf := []u8{len: 1024}
+			font_name := result.name(mut name_buf) or {
+				result.hb_font.destroy()
+				result.face.deinit()
+				return err
+			}
+			log.debug('variation axes font=${font_name}')
+
+			mut mm := result.face.get_mm_var() or {
+				result.hb_font.destroy()
+				result.face.deinit()
+				return err
+			}
+			defer { result.lib.lib.done_mm_var(&mm) }
+			for axis in mm.axis {
+				if axis.tag > u64(0x7fff_ffff) {
+					continue
+				}
+				id := VariationId{
+					value: u32(axis.tag)
+				}
+				log.debug('variation axis: name=${axis.name} id=${id.str()} min=${axis.minimum >> 16} max=${axis.maximum >> 16} def=${axis.def >> 16}')
+			}
+		}
+	}
 	return result
 }
 
@@ -1231,7 +1261,7 @@ pub fn (mut self Face) set_variations(vs []Variation, opts FaceOptions) ! {
 	// Freetype requires that we send ALL coordinates in at once so the
 	// first thing we have to do is get all the vars and put them into
 	// an array.
-	mut mm := self.face.get_mm_var() or { return }
+	mut mm := self.face.get_mm_var()!
 	defer {
 		self.lib.lib.done_mm_var(&mm)
 	}
@@ -1242,12 +1272,12 @@ pub fn (mut self Face) set_variations(vs []Variation, opts FaceOptions) ! {
 	// cheap.
 	max_axes := if mm.num_axis < 32 { mm.num_axis } else { u32(32) }
 	mut coords := []i64{len: int(max_axes)}
-	self.face.get_var_design_coordinates(mut coords) or { return }
+	self.face.get_var_design_coordinates(mut coords)!
 
 	// Now we go through each axis and see if its set. This is slow
 	// but there usually aren't many axes and usually not many set
 	// variations, either.
-	for i in 0 .. max_axes {
+	for i in 0 .. mm.num_axis {
 		axis := mm.axis[i]
 		for v in vs {
 			if u32(axis.tag) == v.id.value {
@@ -1258,7 +1288,7 @@ pub fn (mut self Face) set_variations(vs []Variation, opts FaceOptions) ! {
 	}
 
 	// Set them!
-	self.face.set_var_design_coordinates(coords) or { return }
+	self.face.set_var_design_coordinates(coords)!
 }
 
 // glyph_index returns the glyph index for the given Unicode code point.
@@ -1485,7 +1515,10 @@ pub fn (self Face) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOpt
 			bitmap_left = i32(math.floor(x))
 		}
 		else {
-			return error('unsupported FreeType glyph format ${glyph.format}')
+			log.error('Can\'t render glyph with unsupported glyph format "${freetype.Tag{
+				value: glyph.format
+			}.str()}"')
+			return error('UnsupportedGlyphFormat')
 		}
 	}
 
@@ -1501,7 +1534,8 @@ pub fn (self Face) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOpt
 			}
 		}
 		else {
-			return error('unsupported FreeType pixel mode ${bitmap.pixel_mode}')
+			log.warn('glyph=${glyph_index} pixel mode=${bitmap.pixel_mode}')
+			panic('unsupported pixel mode')
 		}
 	}
 
@@ -1796,7 +1830,11 @@ fn (self &Face) measure_ic_width() ?f64 {
 	self.face.load_glyph(glyph_index, self.glyph_load_flags(false)) or { return none }
 	glyph := self.face.glyph() or { return none }
 	advance := freetype.f26dot6_to_f64(glyph.advance.x)
-	if get_glyph_size(&glyph).width > advance {
+	glyph_width := get_glyph_size(&glyph).width
+	if glyph_width > advance {
+		mut name_buf := []u8{len: 1024}
+		font_name := self.name(mut name_buf) or { '<Error getting font name>' }
+		log.warn('(getMetrics) Width of glyph \'水\' for font "${font_name}" is greater than its advance (${glyph_width} > ${advance}), discarding ic_width metric.')
 		return none
 	}
 	return advance
