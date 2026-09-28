@@ -121,6 +121,26 @@ pub fn (self &ImguiWidget) queue_render() {
 	}
 }
 
+// setup calls the widget's setup virtual method. The correct Dear ImGui
+// context is current when this is invoked by realize.
+pub fn (self &ImguiWidget) setup() {
+	if self.setup_fn != unsafe { nil } {
+		self.setup_fn(self.user_data)
+	} else {
+		log.warn('default Dear ImGui setup called, this is a bug.')
+	}
+}
+
+// render calls the widget's per-frame render virtual method. The correct Dear
+// ImGui context is current when this is invoked by gl_area_render.
+pub fn (self &ImguiWidget) render() {
+	if self.render_fn != unsafe { nil } {
+		self.render_fn(self.user_data)
+	} else {
+		log.warn('default Dear ImGui render called, this is a bug.')
+	}
+}
+
 // set_current_context preserves the source boundary even though the cimgui V
 // wrapper makes the context passed to each operation current internally.
 fn (self &ImguiWidget) set_current_context() bool {
@@ -147,11 +167,7 @@ fn (mut self ImguiWidget) realize() {
 	self.context.set_backend_platform(.gtk)
 	_ = self.context.opengl_init()
 	self.context_ready = true
-	if self.setup_fn != unsafe { nil } {
-		self.setup_fn(self.user_data)
-	} else {
-		log.warn('default Dear ImGui setup called, this is a bug.')
-	}
+	self.setup()
 	self.tick_callback_id = C.gtk_widget_add_tick_callback(self.widget, voidptr(imgui_tick_cb), voidptr(self), unsafe { nil })
 }
 
@@ -206,7 +222,7 @@ fn (mut self ImguiWidget) new_frame() {
 	self.context.begin_frame(delta_time)
 }
 
-fn (mut self ImguiWidget) render() bool {
+fn (mut self ImguiWidget) gl_area_render() bool {
 	if !self.set_current_context() {
 		return false
 	}
@@ -214,11 +230,7 @@ fn (mut self ImguiWidget) render() bool {
 	for _ in 0 .. 2 {
 		self.context.opengl_new_frame()
 		self.new_frame()
-		if self.render_fn != unsafe { nil } {
-			self.render_fn(self.user_data)
-		} else {
-			log.warn('default Dear ImGui render called, this is a bug.')
-		}
+		self.render()
 		self.context.render_frame()
 	}
 	opengl.clear_color(f32(0x28) / 255.0, f32(0x2c) / 255.0, f32(0x34) / 255.0, 1.0)
@@ -289,7 +301,7 @@ fn imgui_glarea_render_cb(area GtkGLArea, gl_context voidptr, data voidptr) int 
 		return 0
 	}
 	mut self := unsafe { &ImguiWidget(data) }
-	return b2i(self.render())
+	return b2i(self.gl_area_render())
 }
 
 fn imgui_focus_enter_cb(controller GtkEventControllerFocus, data voidptr) {
