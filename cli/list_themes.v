@@ -241,7 +241,8 @@ pub fn (mut self Preview) update(event Event) ! {
 	match event {
 		KeyPressEvent {
 			key := event.key
-			if key.matches(u32(`c`), vaxis.Modifiers{ ctrl: true }) {
+			if key.matches(u32(`c`), vaxis.Modifiers.init(false, false, true, false, false,
+				false, false, false)) {
 				self.should_quit = true
 			}
 			match self.mode {
@@ -252,7 +253,8 @@ pub fn (mut self Preview) update(event Event) ! {
 					if key.matches_any([u32(`?`), vaxis.f1], vaxis.Modifiers{}) {
 						self.mode = .help
 					}
-					if key.matches(u32(`h`), vaxis.Modifiers{ ctrl: true }) {
+					if key.matches(u32(`h`), vaxis.Modifiers.init(false, false, true, false,
+						false, false, false, false)) {
 						self.mode = .help
 					}
 					if key.matches(u32(`/`), vaxis.Modifiers{}) {
@@ -261,7 +263,8 @@ pub fn (mut self Preview) update(event Event) ! {
 					if key.matches_any([vaxis.enter, vaxis.kp_enter], vaxis.Modifiers{}) {
 						self.mode = .save
 					}
-					if key.matches_any([u32(`x`), u32(`/`)], vaxis.Modifiers{ ctrl: true }) {
+					if key.matches_any([u32(`x`), u32(`/`)], vaxis.Modifiers.init(false, false,
+						true, false, false, false, false, false)) {
 						self.text_input.clear_retaining_capacity()
 						self.search_text = ''
 						self.update_filtered()!
@@ -293,9 +296,8 @@ pub fn (mut self Preview) update(event Event) ! {
 					}
 					if key.matches(u32(`c`), vaxis.Modifiers{}) {
 						vaxis.copy_to_system_clipboard(self.themes[self.filtered[self.current]].theme)
-					} else if key.matches(u32(`c`), vaxis.Modifiers{
-						shift: true
-					}) {
+					} else if key.matches(u32(`c`), vaxis.Modifiers.init(true, false, false,
+						false, false, false, false, false)) {
 						vaxis.copy_to_system_clipboard(self.themes[self.filtered[self.current]].path)
 					}
 					if key.matches(u32(`f`), vaxis.Modifiers{}) {
@@ -321,7 +323,8 @@ pub fn (mut self Preview) update(event Event) ! {
 					if key.matches_any([u32(`?`), vaxis.escape, vaxis.f1], vaxis.Modifiers{}) {
 						self.mode = .normal
 					}
-					if key.matches(u32(`h`), vaxis.Modifiers{ ctrl: true }) {
+					if key.matches(u32(`h`), vaxis.Modifiers.init(false, false, true, false,
+						false, false, false, false)) {
 						self.mode = .normal
 					}
 				}
@@ -330,7 +333,8 @@ pub fn (mut self Preview) update(event Event) ! {
 						self.mode = .normal
 						return
 					}
-					if key.matches_any([u32(`x`), u32(`/`)], vaxis.Modifiers{ ctrl: true }) {
+					if key.matches_any([u32(`x`), u32(`/`)], vaxis.Modifiers.init(false, false,
+						true, false, false, false, false, false)) {
 						self.text_input.clear_retaining_capacity()
 						self.search_text = ''
 						self.update_filtered()!

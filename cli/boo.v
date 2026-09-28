@@ -131,7 +131,8 @@ pub fn run_boo(args []string) !int {
 			event := tty.poll() or { break }
 			match event {
 				vaxis.Key {
-					if event.matches(u32(`c`), vaxis.Modifiers{ ctrl: true })
+					if event.matches(u32(`c`), vaxis.Modifiers.init(false, false, true, false,
+						false, false, false, false))
 						|| event.matches(vaxis.escape, vaxis.Modifiers{}) {
 						return 0
 					}
