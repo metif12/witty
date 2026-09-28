@@ -568,7 +568,7 @@ fn (mut self Shaper) get_font(run font.TextRun) !&macos.CFDictionary {
 	feature_attrs := if disable_defaults { self.features_no_default } else { self.features }
 	desc := macos.CTFontDescriptor.create_with_attributes(feature_attrs)!
 	defer { desc.release() }
-	run_font := original.copy_with_attributes(0, unsafe { nil }, desc)!
+	run_font := original.copy_with_attributes(0, unsafe { nil }, voidptr(desc))!
 	defer { run_font.release() }
 
 	attr_keys := [macos.StringAttribute.font.key()]

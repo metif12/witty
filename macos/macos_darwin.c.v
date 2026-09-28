@@ -235,6 +235,8 @@ fn C.CTFontCreateWithFontDescriptor(desc voidptr, size f64, matrix voidptr) void
 
 fn C.CTFontCreateCopyWithAttributes(font voidptr, size f64, matrix voidptr, desc voidptr) voidptr
 
+fn C.CTFontCopyFontDescriptor(font voidptr) voidptr
+
 fn C.CTFontDrawGlyphs(font voidptr, glyphs &u16, positions voidptr, count usize, context voidptr)
 
 fn C.vt_ct_typesetter_create_line(typesetter voidptr, location isize, length isize) voidptr
@@ -1097,9 +1099,14 @@ pub fn (d &CTFontDescriptor) release() {
 
 pub struct CTFont {}
 
-pub fn (f &CTFont) copy_with_attributes(size f64, matrix voidptr, desc &CTFontDescriptor) !&CTFont {
-	ptr := C.CTFontCreateCopyWithAttributes(voidptr(f), size, matrix, voidptr(desc))
+pub fn (f &CTFont) copy_with_attributes(size f64, matrix voidptr, desc voidptr) !&CTFont {
+	ptr := C.CTFontCreateCopyWithAttributes(voidptr(f), size, matrix, desc)
 	return require_cf_ref[CTFont](ptr, 'CTFontCreateCopyWithAttributes')
+}
+
+pub fn (f &CTFont) copy_descriptor() !&CTFontDescriptor {
+	ptr := C.CTFontCopyFontDescriptor(voidptr(f))
+	return require_cf_ref[CTFontDescriptor](ptr, 'CTFontCopyFontDescriptor')
 }
 
 pub fn CTFont.create_with_descriptor(desc &CTFontDescriptor, size f64) !&CTFont {

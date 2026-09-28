@@ -80,6 +80,28 @@ fn test_coretext_name() {
 	}
 }
 
+fn test_coretext_synthetic_faces_preserve_size() {
+	$if macos {
+		opts := FaceOptions{
+			size: DesiredSize{
+				points: 24
+			}
+		}
+		mut face := named_coretext_test_face('Menlo', opts.size.points) or { panic(err) }
+		defer { face.deinit() }
+		expected := face.get_metrics().px_per_em
+
+		mut italic := face.synthetic_italic(opts) or { panic(err) }
+		defer { italic.deinit() }
+		assert math.abs(italic.get_metrics().px_per_em - expected) < 0.001
+
+		mut bold := face.synthetic_bold(opts) or { panic(err) }
+		defer { bold.deinit() }
+		assert math.abs(bold.get_metrics().px_per_em - expected) < 0.001
+		assert bold.synthetic_bold? == 24.0 / 14.0
+	}
+}
+
 fn test_coretext_emoji_color_detection() {
 	$if macos {
 		mut face := named_coretext_test_face('Apple Color Emoji', 18) or { panic(err) }

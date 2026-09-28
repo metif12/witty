@@ -26,8 +26,6 @@ fn C.witty_coretext_create_font_named(name &char, size f64) voidptr
 
 fn C.witty_coretext_create_font_from_data(data &u8, len usize, size f64) voidptr
 
-fn C.witty_coretext_copy_font_with_size(font_ptr voidptr, size f64) voidptr
-
 fn C.witty_coretext_release(ptr voidptr)
 
 fn C.witty_coretext_copy_family_name(font_ptr voidptr, buf &u8, len usize) int
@@ -35,10 +33,6 @@ fn C.witty_coretext_copy_family_name(font_ptr voidptr, buf &u8, len usize) int
 fn C.witty_coretext_glyph_for_codepoint(font_ptr voidptr, cp u32, glyph_out &u32) int
 
 fn C.witty_coretext_copy_table(font_ptr voidptr, tag4 &char, buffer_out &&u8, len_out &u32) int
-
-fn C.witty_coretext_copy_italic(font_ptr voidptr) voidptr
-
-fn C.witty_coretext_copy_with_variations(font_ptr voidptr, ids &u32, values &f64, count int, size f64) voidptr
 
 fn C.witty_coretext_color_info(font_ptr voidptr, has_sbix &int) int
 
@@ -82,7 +76,15 @@ pub fn copy_coretext_font_with_size(font_ptr voidptr, size f64) voidptr {
 	if isnil(font_ptr) {
 		return unsafe { nil }
 	}
-	return C.witty_coretext_copy_font_with_size(font_ptr, size)
+	$if macos {
+		ct_font := unsafe { &macos.CTFont(font_ptr) }
+		copy := ct_font.copy_with_attributes(size, unsafe { nil }, unsafe { nil }) or {
+			return unsafe { nil }
+		}
+		return voidptr(copy)
+	} $else {
+		return unsafe { nil }
+	}
 }
 
 // release_coretext_font releases a font returned by
@@ -182,12 +184,12 @@ pub fn CoreTextFace.init(lib Library, source []u8, opts FaceOptions) !CoreTextFa
 pub fn CoreTextFace.init_font_copy(base voidptr, opts FaceOptions) !CoreTextFace {
 	// Create a copy. copyWithAttributes takes a size in points, but we need
 	// to scale by the DPI, which is what DesiredSize.pixels() does.
-	ct_font := C.witty_coretext_copy_font_with_size(base, opts.size.pixels())
+	ct_font := copy_coretext_font_with_size(base, opts.size.pixels())
 	if isnil(ct_font) {
 		return error('CoreText: failed to copy font with size')
 	}
 	// init_font takes ownership of ct_font.
-	return CoreTextFace.init_font(ct_font, opts)!
+	return CoreTextFace.init_font(voidptr(ct_font), opts)!
 }
 
 // Initialize a face with a CTFont. This will take ownership over
@@ -276,12 +278,21 @@ pub fn (mut self CoreTextFace) deinit() {
 // Return a new face that is the same as this but has a transformation
 // matrix applied to italicize it.
 pub fn (self &CoreTextFace) synthetic_italic(opts FaceOptions) !CoreTextFace {
-	// Copy the font with the italic-skew transform applied.
-	ct_font := C.witty_coretext_copy_italic(self.ct_font)
-	if isnil(ct_font) {
-		return error('CoreText: failed to create synthetic italic')
+	$if macos {
+		original := unsafe { &macos.CTFont(self.ct_font) }
+		matrix := macos.CGAffineTransform{
+			a:  italic_skew.a
+			b:  italic_skew.b
+			c:  italic_skew.c
+			d:  italic_skew.d
+			tx: italic_skew.tx
+			ty: italic_skew.ty
+		}
+		ct_font := original.copy_with_attributes(0, voidptr(&matrix), unsafe { nil })!
+		return CoreTextFace.init_font(voidptr(ct_font), opts)!
+	} $else {
+		return error('CoreText: unsupported platform')
 	}
-	return CoreTextFace.init_font(ct_font, opts)!
 }
 
 // Return a new face that is the same as this but applies a synthetic
@@ -289,7 +300,7 @@ pub fn (self &CoreTextFace) synthetic_italic(opts FaceOptions) !CoreTextFace {
 // variant.
 pub fn (self &CoreTextFace) synthetic_bold(opts FaceOptions) !CoreTextFace {
 	// Copy the font without any additional transforms.
-	ct_font := C.witty_coretext_copy_font_with_size(self.ct_font, 0.0)
+	ct_font := copy_coretext_font_with_size(self.ct_font, 0.0)
 	if isnil(ct_font) {
 		return error('CoreText: failed to copy font for synthetic bold')
 	}
@@ -336,26 +347,28 @@ pub fn (mut self CoreTextFace) set_variations(vs []Variation, opts FaceOptions) 
 		return
 	}
 
-	// Marshal the axis ids/values into parallel arrays for the shim, which
-	// builds a variation-carrying descriptor and copies the font with it.
-	mut ids := []u32{cap: vs.len}
-	mut values := []f64{cap: vs.len}
-	for v in vs {
-		ids << v.id.value
-		values << v.value
-	}
+	$if macos {
+		original := unsafe { &macos.CTFont(self.ct_font) }
+		mut desc := original.copy_descriptor()!
+		defer { desc.release() }
+		for v in vs {
+			id_value := i32(v.id.value)
+			id := macos.CFNumber.create(.int_type, voidptr(&id_value))!
+			defer { id.release() }
+			mut next := desc.copy_with_variation(id, v.value)!
+			desc.release()
+			desc = next
+		}
 
-	// Preserve our current size so that applying variations doesn't resize.
-	ct_font := C.witty_coretext_copy_with_variations(self.ct_font, &u32(ids.data), &f64(values.data), vs.len, self.size.pixels())
-	if isnil(ct_font) {
-		return error('CoreText: failed to apply variations')
+		mut new_opts := opts
+		new_opts.size = self.size
+		ct_font := original.copy_with_attributes(0, unsafe { nil }, voidptr(desc))!
+		face := CoreTextFace.init_font(voidptr(ct_font), new_opts)!
+		self.deinit()
+		self = face
+	} $else {
+		return error('CoreText: unsupported platform')
 	}
-
-	mut new_opts := opts
-	new_opts.size = self.size
-	face := CoreTextFace.init_font(ct_font, new_opts)!
-	self.deinit()
-	self = face
 }
 
 // Returns true if the face has any glyphs that are colorized.

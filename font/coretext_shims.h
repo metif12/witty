@@ -66,16 +66,6 @@ static void *witty_coretext_create_font_from_path(char *path, double size) {
 	return (void *)font;
 }
 
-static void *witty_coretext_copy_font_with_size(void *font_ptr, double size) {
-	if (!font_ptr) return witty_coretext_create_default_font(size);
-	return (void *)CTFontCreateCopyWithAttributes(
-		(CTFontRef)font_ptr,
-		witty_coretext_font_size(size),
-		NULL,
-		NULL
-	);
-}
-
 static void witty_coretext_release(void *ptr) {
 	if (ptr) CFRelease((CFTypeRef)ptr);
 }
@@ -620,44 +610,6 @@ static int witty_coretext_copy_table(
 	return 1;
 }
 
-// Copy a font applying an italic-skew transform (synthetic italic). Retained.
-static void *witty_coretext_copy_italic(void *font_ptr) {
-	if (!font_ptr) return NULL;
-	CGAffineTransform m = CGAffineTransformMake(1, 0, 0.267949, 1, 0, 0);
-	return (void *)CTFontCreateCopyWithAttributes(
-		(CTFontRef)font_ptr, 0.0, &m, NULL);
-}
-
-// Copy a font with a new descriptor that carries variation axes applied.
-// `ids` and `values` are parallel arrays of length `count`. Retained.
-static void *witty_coretext_copy_with_variations(
-	void *font_ptr,
-	const uint32_t *ids,
-	const double *values,
-	int count,
-	double size
-) {
-	if (!font_ptr) return NULL;
-	CTFontDescriptorRef desc = CTFontCopyFontDescriptor((CTFontRef)font_ptr);
-	if (!desc) return NULL;
-	for (int i = 0; i < count; i++) {
-		int32_t idv = (int32_t)ids[i];
-		CFNumberRef idnum = CFNumberCreate(NULL, kCFNumberSInt32Type, &idv);
-		if (!idnum) continue;
-		CTFontDescriptorRef next = CTFontDescriptorCreateCopyWithVariation(
-			desc, idnum, values[i]);
-		CFRelease(idnum);
-		if (next) {
-			CFRelease(desc);
-			desc = next;
-		}
-	}
-	CTFontRef out = CTFontCreateCopyWithAttributes(
-		(CTFontRef)font_ptr, size > 0 ? size : 0.0, NULL, desc);
-	CFRelease(desc);
-	return (void *)out;
-}
-
 // Returns 1 if the font has any colorized glyphs (symbolic color trait), and
 // sets *has_sbix to 1 if it has an sbix table.
 static int witty_coretext_color_info(void *font_ptr, int *has_sbix) {
@@ -697,12 +649,6 @@ static void *witty_coretext_create_font_from_data(const uint8_t *data, size_t le
 
 static void *witty_coretext_create_font_from_path(char *path, double size) {
 	(void)path;
-	(void)size;
-	return NULL;
-}
-
-static void *witty_coretext_copy_font_with_size(void *font_ptr, double size) {
-	(void)font_ptr;
 	(void)size;
 	return NULL;
 }
@@ -881,15 +827,6 @@ static int witty_coretext_copy_table(
 	if (buffer_out) *buffer_out = NULL;
 	if (len_out) *len_out = 0;
 	return 0;
-}
-
-static void *witty_coretext_copy_italic(void *font_ptr) { (void)font_ptr; return NULL; }
-
-static void *witty_coretext_copy_with_variations(
-	void *font_ptr, const uint32_t *ids, const double *values, int count, double size
-) {
-	(void)font_ptr; (void)ids; (void)values; (void)count; (void)size;
-	return NULL;
 }
 
 static int witty_coretext_color_info(void *font_ptr, int *has_sbix) {
