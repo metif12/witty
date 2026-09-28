@@ -1780,15 +1780,7 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 					log.warn('surface is not in a split tree, ignoring goto_split')
 					return false
 				}
-				to := match data {
-					.previous { datastruct.Goto(datastruct.GotoPrevious{}) }
-					.next { datastruct.Goto(datastruct.GotoNext{}) }
-					.up { datastruct.Goto(datastruct.GotoSpatial{ direction: .up }) }
-					.left { datastruct.Goto(datastruct.GotoSpatial{ direction: .left }) }
-					.down { datastruct.Goto(datastruct.GotoSpatial{ direction: .down }) }
-					.right { datastruct.Goto(datastruct.GotoSpatial{ direction: .right }) }
-				}
-				return tree.goto_(to)
+				return tree.goto_(goto_split_target(data))
 			}
 		}
 		.goto_window {
@@ -2208,6 +2200,19 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 	}
 	// Every value matches its action key, so this is unreachable.
 	return false
+}
+
+// Translate the application action into the split-tree traversal operation.
+// Linear previous/next navigation wraps, matching Ghostty's Action.gotoSplit.
+fn goto_split_target(value apprt.GotoSplit) datastruct.Goto {
+	return match value {
+		.previous { datastruct.Goto(datastruct.GotoPreviousWrapped{}) }
+		.next { datastruct.Goto(datastruct.GotoNextWrapped{}) }
+		.up { datastruct.Goto(datastruct.GotoSpatial{ direction: .up }) }
+		.left { datastruct.Goto(datastruct.GotoSpatial{ direction: .left }) }
+		.down { datastruct.Goto(datastruct.GotoSpatial{ direction: .down }) }
+		.right { datastruct.Goto(datastruct.GotoSpatial{ direction: .right }) }
+	}
 }
 
 // surface_from_target follows the core Surface's runtime pointer back to the
