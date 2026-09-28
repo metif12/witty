@@ -709,10 +709,14 @@ none, browser, action, ipc. dependencies: zf 0.10.3 ranking/highlighting.
   capability/F3-probe event interception. The preview sends the pinned
   capability query, waits up to one second for DA1, enables detected features,
   and renders the retained screen. The pinned event queue ring and wrapping
-  grapheme cache are translated. Its polling TTY remains a synchronous V
-  adapter rather than the pinned threaded `Loop`/`Tty` implementation; image
-  decoding/transcoding and high-level loading also remain absent. Pinned vaxis
-  width data and all three `gwidth.Method` algorithms are available.
+  grapheme cache are translated. On POSIX, the preview now opens `/dev/tty`,
+  applies the pinned raw termios flags until deinit, reads input bytes from that
+  descriptor, queries its winsize, and writes session output there. Its input
+  delivery is still synchronous polling rather than the pinned threaded
+  `Loop` with SIGWINCH callbacks; Windows still uses the V console adapter.
+  Image decoding/transcoding and high-level loading also remain absent.
+  Pinned vaxis width data and all three `gwidth.Method` algorithms are
+  available.
 
 These are confirmed structural boundaries or larger refactors. The absence of
 an item here does not mean its full module has been certified yet.

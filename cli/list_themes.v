@@ -500,13 +500,16 @@ pub fn (self &Preview) ui_err() vaxis.Style {
 
 // run is the TUI preview event loop.
 pub fn (mut self Preview) run() ! {
-	mut tty := vaxis.Tty.new()
-	self.winsize = vaxis.terminal_size()
+	mut tty := vaxis.Tty.new()!
+	defer { tty.deinit() }
+	self.winsize = tty.get_winsize()!
 	mut vx := vaxis.Vaxis.new(vaxis.VaxisOptions{})
-	print(vx.enter_alt_screen())
-	print(vx.set_title('👻 Ghostty Theme Preview 👻'))
-	print(vx.query_terminal_send())
-	flush_stdout()
+	defer {
+		tty.write(vx.deinit()) or {}
+	}
+	tty.write(vx.enter_alt_screen())!
+	tty.write(vx.set_title('👻 Ghostty Theme Preview 👻'))!
+	tty.write(vx.query_terminal_send())!
 	mut queued := []vaxis.InputEvent{}
 	query_start := time.ticks()
 	for !vx.queries_done && time.ticks() - query_start < 1000 {
@@ -519,23 +522,17 @@ pub fn (mut self Preview) run() ! {
 		}
 	}
 	vx.queries_done = true
-	print(vx.enable_detected_features())
-	print(vx.set_mouse_mode(true))
+	tty.write(vx.enable_detected_features())!
+	tty.write(vx.set_mouse_mode(true))!
 	if vx.caps.color_scheme_updates {
-		print(vx.subscribe_to_color_scheme_updates())
+		tty.write(vx.subscribe_to_color_scheme_updates())!
 	}
-	print(vx.resize(self.winsize))
-	flush_stdout()
-	defer {
-		print(vx.deinit())
-		flush_stdout()
-	}
-
+	tty.write(vx.resize(self.winsize))!
 	mut dirty := true
 	for !self.should_quit {
-		winsize := vaxis.terminal_size()
+		winsize := tty.get_winsize()!
 		if winsize != self.winsize {
-			print(vx.resize(winsize))
+			tty.write(vx.resize(winsize))!
 			self.update(Event(WinsizeEvent{
 				winsize: winsize
 			}))!
@@ -545,7 +542,7 @@ pub fn (mut self Preview) run() ! {
 		mut handled_input := false
 		for event in queued {
 			if event is vaxis.Winsize {
-				print(vx.resize(event))
+				tty.write(vx.resize(event))!
 			}
 			self.update_from_vaxis(event)!
 			handled_input = true
@@ -556,7 +553,7 @@ pub fn (mut self Preview) run() ! {
 			raw := tty.poll() or { break }
 			if event := vx.handle_input(raw) {
 				if event is vaxis.Winsize {
-					print(vx.resize(event))
+					tty.write(vx.resize(event))!
 				}
 				self.update_from_vaxis(event)!
 			}
@@ -566,8 +563,7 @@ pub fn (mut self Preview) run() ! {
 
 		if dirty && !self.should_quit {
 			self.draw_window(mut vx)!
-			print(vx.render())
-			flush_stdout()
+			tty.write(vx.render())!
 			dirty = false
 		}
 		if !handled_input {

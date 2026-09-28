@@ -696,49 +696,47 @@ struct ParsedInput {
 	consumed int
 }
 
-// Tty incrementally decodes keys and SGR mouse reports from stdin. The V
-// terminal helper applies and restores non-canonical input around every poll,
-// so callers don't leave the host terminal in a broken state after a crash.
+// Tty incrementally decodes events read from the terminal.
 pub struct Tty {
 mut:
-	pending []u8
+	pending        []u8
+	fd             int = -1
+	original_state termios.Termios
 }
 
-pub fn Tty.new() Tty {
-	return Tty{
-		pending: []u8{cap: 32}
+pub fn Tty.new() !Tty {
+	$if windows {
+		return Tty{
+			pending: []u8{cap: 32}
+		}
+	} $else {
+		return Tty.open_posix()
 	}
 }
 
 // poll returns one event when input is available and otherwise returns none.
 pub fn (mut tty Tty) poll() ?InputEvent {
-	$if !windows {
-		// ISIG would turn Ctrl-C into SIGINT before the application can handle
-		// it. Temporarily clear it while polling, then restore the exact state.
-		mut old_state := termios.Termios{}
-		if termios.tcgetattr(0, mut old_state) == 0 {
-			mut raw_state := old_state
-			raw_state.c_lflag &= termios.invert(termios.flag(1)) // POSIX ISIG
-			termios.tcsetattr(0, C.TCSANOW, mut raw_state)
-			defer {
-				termios.tcsetattr(0, C.TCSANOW, mut old_state)
-			}
-		}
-	}
-
 	if tty.pending.len == 0 {
-		raw := term.key_pressed(blocking: false, echo: false)
-		if raw < 0 {
-			return none
+		$if windows {
+			raw := term.key_pressed(blocking: false, echo: false)
+			if raw < 0 {
+				return none
+			}
+			tty.append_raw(raw)
+		} $else {
+			tty.poll_posix()
 		}
-		tty.append_raw(raw)
 	}
-	for {
-		raw := term.key_pressed(blocking: false, echo: false)
-		if raw < 0 {
-			break
+	$if windows {
+		for {
+			raw := term.key_pressed(blocking: false, echo: false)
+			if raw < 0 {
+				break
+			}
+			tty.append_raw(raw)
 		}
-		tty.append_raw(raw)
+	} $else {
+		tty.poll_posix()
 	}
 
 	for tty.pending.len > 0 {

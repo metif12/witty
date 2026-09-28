@@ -120,7 +120,8 @@ pub fn run_boo(args []string) !int {
 		return error('boo animation has no frames')
 	}
 
-	mut tty := vaxis.Tty.new()
+	mut tty := vaxis.Tty.new()!
+	defer { tty.deinit() }
 	mut frame := 0
 	vaxis.begin_session('👻 Ghostty 👻')
 	defer {
@@ -142,7 +143,7 @@ pub fn run_boo(args []string) !int {
 			}
 		}
 
-		size := vaxis.terminal_size()
+		size := tty.get_winsize()!
 		print(draw_boo_frame(frames[frame], int(size.cols), int(size.rows))!)
 		flush_stdout()
 		frame++
