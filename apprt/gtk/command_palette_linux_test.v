@@ -107,8 +107,6 @@ fn test_command_palette_filter_matches_title_or_action_key() {
 	assert palette.filter('missing').len == 0
 }
 
-fn C.gtk_init_check() bool
-
 fn test_command_palette_uses_configured_entries() {
 	// The palette builds real Adwaita widgets, which need GTK initialized
 	// against a display. A headless test run has none, so skip there.

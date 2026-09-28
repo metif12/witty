@@ -51,25 +51,34 @@ pub fn new_key_state_overlay() &KeyStateOverlay {
 
 // --- Property getters/setters ---------------------------------------------
 
-// get_tables returns the key-table StringList. Mirrors `getTables`.
-pub fn (self &KeyStateOverlay) get_tables() &StringList {
+// get_tables returns the optional key-table StringList. Mirrors `getTables`.
+pub fn (self &KeyStateOverlay) get_tables() ?&StringList {
 	if isnil(self.widget) {
-		return unsafe { nil }
+		return none
 	}
-	return unsafe { &StringList(key_state_priv(voidptr(self.widget)).tables) }
+	tables := key_state_priv(voidptr(self.widget)).tables
+	if isnil(tables) {
+		return none
+	}
+	return unsafe { &StringList(tables) }
 }
 
-// get_sequence returns the key-sequence StringList. Mirrors `getSequence`.
-pub fn (self &KeyStateOverlay) get_sequence() &StringList {
+// get_sequence returns the optional key-sequence StringList. Mirrors
+// `getSequence`.
+pub fn (self &KeyStateOverlay) get_sequence() ?&StringList {
 	if isnil(self.widget) {
-		return unsafe { nil }
+		return none
 	}
-	return unsafe { &StringList(key_state_priv(voidptr(self.widget)).sequence) }
+	sequence := key_state_priv(voidptr(self.widget)).sequence
+	if isnil(sequence) {
+		return none
+	}
+	return unsafe { &StringList(sequence) }
 }
 
 // set_tables replaces the key-table StringList, destroying the old one (which
 // this object owns). Mirrors `setTables`.
-pub fn (mut self KeyStateOverlay) set_tables(value &StringList) {
+pub fn (mut self KeyStateOverlay) set_tables(value ?&StringList) {
 	if isnil(self.widget) {
 		return
 	}
@@ -79,8 +88,8 @@ pub fn (mut self KeyStateOverlay) set_tables(value &StringList) {
 		old.destroy()
 		priv.tables = unsafe { nil }
 	}
-	if !isnil(value) {
-		priv.tables = voidptr(value)
+	if v := value {
+		priv.tables = voidptr(v)
 	}
 	C.g_object_notify_by_pspec(self.widget, g_key_state_overlay_pspec_tables)
 	C.g_object_notify_by_pspec(self.widget, g_key_state_overlay_pspec_has_tables)
@@ -88,7 +97,7 @@ pub fn (mut self KeyStateOverlay) set_tables(value &StringList) {
 
 // set_sequence replaces the key-sequence StringList, destroying the old one.
 // Mirrors `setSequence`.
-pub fn (mut self KeyStateOverlay) set_sequence(value &StringList) {
+pub fn (mut self KeyStateOverlay) set_sequence(value ?&StringList) {
 	if isnil(self.widget) {
 		return
 	}
@@ -98,8 +107,8 @@ pub fn (mut self KeyStateOverlay) set_sequence(value &StringList) {
 		old.destroy()
 		priv.sequence = unsafe { nil }
 	}
-	if !isnil(value) {
-		priv.sequence = voidptr(value)
+	if v := value {
+		priv.sequence = voidptr(v)
 	}
 	C.g_object_notify_by_pspec(self.widget, g_key_state_overlay_pspec_sequence)
 	C.g_object_notify_by_pspec(self.widget, g_key_state_overlay_pspec_has_sequence)
@@ -108,20 +117,14 @@ pub fn (mut self KeyStateOverlay) set_sequence(value &StringList) {
 // get_has_tables reports whether there is at least one key table. Mirrors
 // `getHasTables`.
 pub fn (self &KeyStateOverlay) get_has_tables() bool {
-	tables := self.get_tables()
-	if isnil(tables) {
-		return false
-	}
+	tables := self.get_tables() or { return false }
 	return tables.strings.len > 0
 }
 
 // get_has_sequence reports whether there is a pending key sequence. Mirrors
 // `getHasSequence`.
 pub fn (self &KeyStateOverlay) get_has_sequence() bool {
-	sequence := self.get_sequence()
-	if isnil(sequence) {
-		return false
-	}
+	sequence := self.get_sequence() or { return false }
 	return sequence.strings.len > 0
 }
 
@@ -223,7 +226,6 @@ pub fn (mut self KeyStateOverlay) ref() &KeyStateOverlay {
 pub fn (mut self KeyStateOverlay) unref() {
 	if !isnil(self.widget) {
 		object_unref(GObject(self.widget))
-		self.widget = unsafe { nil }
 	}
 }
 
@@ -550,9 +552,9 @@ pub fn key_state_overlay_get_type() GType {
 		mut query := C.GTypeQuery{}
 		C.g_type_query(parent, &query)
 		info := C.GTypeInfo{
-			class_size: u16(query.class_size)
+			class_size:    u16(query.class_size)
 			instance_size: u16(query.instance_size)
-			class_init: voidptr(key_state_overlay_class_init)
+			class_init:    voidptr(key_state_overlay_class_init)
 			instance_init: voidptr(key_state_overlay_instance_init)
 		}
 		g_key_state_overlay_type = C.g_type_register_static(parent, c'GhosttyKeyStateOverlay', &info, 0)

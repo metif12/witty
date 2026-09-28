@@ -55,6 +55,8 @@ pub type GdkKeymap = voidptr
 // libadwaita
 pub type AdwApplication = voidptr
 
+fn C.gtk_init_check() bool
+
 // --- GObject reference counting -------------------------------------------
 
 fn C.g_object_ref(obj GObject) GObject
