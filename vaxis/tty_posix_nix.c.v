@@ -1,5 +1,7 @@
 module vaxis
 
+import log
+import os
 import term.termios
 
 #flag -I @VMODROOT/vaxis
@@ -85,7 +87,9 @@ pub fn Tty.reset_winsize_handler() {
 pub fn (mut tty Tty) deinit() {
 	if tty.fd >= 0 {
 		mut original := tty.original_state
-		termios.tcsetattr(tty.fd, C.TCSAFLUSH, mut original)
+		if termios.tcsetattr(tty.fd, C.TCSAFLUSH, mut original) != 0 {
+			log.error('could not restore terminal: ${os.posix_get_error_msg(C.errno)}')
+		}
 		$if !macos {
 			C.close(tty.fd)
 		}
