@@ -182,6 +182,13 @@ fn create_scope(dbus GDBusConnection, pid_ int) ! {
 	reply := C.g_dbus_connection_call_sync(dbus, c'org.freedesktop.systemd1', c'/org/freedesktop/systemd1', c'org.freedesktop.systemd1.Manager', c'StartTransientUnit', value, reply_type, 0, -1, unsafe { nil }, &call_error)
 	if isnil(reply) {
 		if !isnil(call_error) {
+			c_error := unsafe { &C.GError(call_error) }
+			message := if isnil(c_error.message) {
+				'(no message)'
+			} else {
+				unsafe { cstring_to_vstring(c_error.message) }
+			}
+			log.error('creating transient cgroup scope failed code=${c_error.code} err=${message}')
 			C.g_error_free(call_error)
 		}
 		return error('D-Bus StartTransientUnit call failed')
