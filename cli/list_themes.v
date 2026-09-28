@@ -111,6 +111,7 @@ mut:
 	color_scheme vaxis.Scheme = .light
 	mouse        ?vaxis.Mouse
 	text_input   vaxis.TextInput
+	tty          ?&vaxis.Tty
 	winsize      vaxis.Winsize
 	theme_filter ColorScheme
 }
@@ -295,11 +296,11 @@ pub fn (mut self Preview) update(event Event) ! {
 						self.hex = false
 					}
 					if key.matches(u32(`c`), vaxis.Modifiers{}) {
-						vaxis.copy_to_system_clipboard(self.themes[self.filtered[self.current]].theme)
+						self.copy_to_system_clipboard(self.themes[self.filtered[self.current]].theme)!
 					} else if key.matches(u32(`c`), vaxis.Modifiers.init(true, false, false, false,
 						false, false, false, false))
 					{
-						vaxis.copy_to_system_clipboard(self.themes[self.filtered[self.current]].path)
+						self.copy_to_system_clipboard(self.themes[self.filtered[self.current]].path)!
 					}
 					if key.matches(u32(`f`), vaxis.Modifiers{}) {
 						match self.theme_filter {
@@ -368,6 +369,11 @@ pub fn (mut self Preview) update(event Event) ! {
 			self.winsize = event.winsize
 		}
 	}
+}
+
+fn (mut self Preview) copy_to_system_clipboard(text string) ! {
+	tty := self.tty or { return error('NoTty') }
+	tty.write(vaxis.clipboard_copy_sequence(text))!
 }
 
 // ui_fg returns the foreground color for the UI based on color scheme.
@@ -502,6 +508,8 @@ pub fn (self &Preview) ui_err() vaxis.Style {
 pub fn (mut self Preview) run() ! {
 	mut tty := vaxis.Tty.new()!
 	defer { tty.deinit() }
+	self.tty = &tty
+	defer { self.tty = none }
 	self.winsize = tty.get_winsize()!
 	mut vx := vaxis.Vaxis.new(vaxis.VaxisOptions{})
 	defer {
