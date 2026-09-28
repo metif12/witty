@@ -1041,45 +1041,349 @@ fn utf8_sequence_length(first u8) int {
 	return 1
 }
 
-// TextInput implements the editing behavior needed by the theme search box.
-pub struct TextInput {
+// TextInputBuffer is the source TextInput.Buffer gap buffer. V's arrays own
+// their storage, replacing the source allocator field without changing the
+// cursor/gap behavior.
+pub struct TextInputBuffer {
 mut:
-	text string
+	buffer   []u8
+	cursor   usize
+	gap_size usize
+}
+
+pub fn TextInputBuffer.new() TextInputBuffer {
+	return TextInputBuffer{}
+}
+
+pub fn (mut b TextInputBuffer) deinit() {
+	b.clear_and_free()
+}
+
+pub fn (b &TextInputBuffer) first_half() []u8 {
+	return b.buffer[..b.cursor]
+}
+
+pub fn (b &TextInputBuffer) second_half() []u8 {
+	return b.buffer[b.cursor + b.gap_size..]
+}
+
+pub fn (mut b TextInputBuffer) grow(n usize) {
+	new_size := b.buffer.len + int(n) + 512
+	mut new_memory := []u8{len: new_size}
+	first := b.first_half()
+	second := b.second_half()
+	copy(mut new_memory[..first.len], first)
+	copy(mut new_memory[new_size - second.len..], second)
+	b.buffer = new_memory
+	b.gap_size = usize(new_size - second.len) - b.cursor
+}
+
+pub fn (mut b TextInputBuffer) insert_slice_at_cursor(data string) {
+	if data.len == 0 {
+		return
+	}
+	if b.gap_size <= usize(data.len) {
+		b.grow(usize(data.len))
+	}
+	copy(mut b.buffer[int(b.cursor)..int(b.cursor) + data.len], data.bytes())
+	b.cursor += usize(data.len)
+	b.gap_size -= usize(data.len)
+}
+
+pub fn (mut b TextInputBuffer) move_gap_left(n usize) {
+	new_index := if n > b.cursor { usize(0) } else { b.cursor - n }
+	count := int(b.cursor - new_index)
+	if count > 0 {
+		destination := int(new_index + b.gap_size)
+		source := int(new_index)
+		for i in 0 .. count {
+			b.buffer[destination + i] = b.buffer[source + i]
+		}
+	}
+	b.cursor = new_index
+}
+
+pub fn (mut b TextInputBuffer) move_gap_right(n usize) {
+	second_len := usize(b.second_half().len)
+	delta := if n > second_len { second_len } else { n }
+	count := int(delta)
+	if count > 0 {
+		destination := int(b.cursor)
+		source := int(b.cursor + b.gap_size)
+		for i in 0 .. count {
+			b.buffer[destination + i] = b.buffer[source + i]
+		}
+	}
+	b.cursor += delta
+}
+
+pub fn (mut b TextInputBuffer) grow_gap_left(n usize) {
+	delta := if n > b.cursor { b.cursor } else { n }
+	b.gap_size += delta
+	b.cursor -= delta
+}
+
+pub fn (mut b TextInputBuffer) grow_gap_right(n usize) {
+	maximum := usize(b.buffer.len) - b.cursor
+	b.gap_size = if b.gap_size + n > maximum { maximum } else { b.gap_size + n }
+}
+
+pub fn (mut b TextInputBuffer) clear_and_free() {
+	b.cursor = 0
+	b.buffer = []u8{}
+	b.gap_size = 0
+}
+
+pub fn (mut b TextInputBuffer) clear_retaining_capacity() {
+	b.cursor = 0
+	b.gap_size = usize(b.buffer.len)
+}
+
+pub fn (mut b TextInputBuffer) to_owned_slice() string {
+	result := b.string()
+	b.clear_and_free()
+	return result
+}
+
+pub fn (b &TextInputBuffer) real_length() usize {
+	return usize(b.first_half().len + b.second_half().len)
+}
+
+pub fn (b &TextInputBuffer) string() string {
+	mut result := []u8{len: int(b.real_length())}
+	first := b.first_half()
+	second := b.second_half()
+	copy(mut result[..first.len], first)
+	copy(mut result[first.len..], second)
+	return result.bytestr()
+}
+
+// TextInput implements vaxis' cursor-aware editing behavior.
+pub struct TextInput {
+pub mut:
+	buf TextInputBuffer
+mut:
+	draw_offset     u16
+	prev_cursor_col u16
+	prev_cursor_idx u16
+	scroll_offset   u16 = 4
 }
 
 pub fn TextInput.new() TextInput {
-	return TextInput{}
+	return TextInput{
+		buf: TextInputBuffer.new()
+	}
 }
 
 pub fn (mut t TextInput) deinit() {
-	t.text = ''
+	t.buf.deinit()
 }
 
-pub fn (t TextInput) real_length() int {
-	return t.text.runes().len
+pub fn (t &TextInput) real_length() usize {
+	return t.buf.real_length()
 }
 
-pub fn (t TextInput) get_text() string {
-	return t.text
-}
-
-pub fn (mut t TextInput) clear_retaining_capacity() {
-	t.text = ''
+pub fn (t &TextInput) get_text() string {
+	return t.buf.string()
 }
 
 pub fn (mut t TextInput) update(key Key) {
-	if key.codepoint == backspace || key.codepoint == delete {
-		mut runes := t.text.runes()
-		if runes.len > 0 {
-			runes.delete_last()
-			t.text = runes.string()
+	ctrl := Modifiers.from_int(4)
+	alt := Modifiers.from_int(2)
+	if key.matches(backspace, Modifiers{}) {
+		t.delete_before_cursor()
+	} else if key.matches(delete, Modifiers{}) || key.matches(u32(`d`), ctrl) {
+		t.delete_after_cursor()
+	} else if key.matches(left, Modifiers{}) || key.matches(u32(`b`), ctrl) {
+		t.cursor_left()
+	} else if key.matches(right, Modifiers{}) || key.matches(u32(`f`), ctrl) {
+		t.cursor_right()
+	} else if key.matches(u32(`a`), ctrl) || key.matches(home, Modifiers{}) {
+		t.buf.move_gap_left(usize(t.buf.first_half().len))
+	} else if key.matches(u32(`e`), ctrl) || key.matches(end, Modifiers{}) {
+		t.buf.move_gap_right(usize(t.buf.second_half().len))
+	} else if key.matches(u32(`k`), ctrl) {
+		t.delete_to_end()
+	} else if key.matches(u32(`u`), ctrl) {
+		t.delete_to_start()
+	} else if key.matches(u32(`b`), alt) || key.matches(left, alt) {
+		t.move_backward_wordwise()
+	} else if key.matches(u32(`f`), alt) || key.matches(right, alt) {
+		t.move_forward_wordwise()
+	} else if key.matches(u32(`w`), ctrl) || key.matches(backspace, alt) {
+		t.delete_word_before()
+	} else if key.matches(u32(`d`), alt) {
+		t.delete_word_after()
+	} else if text := key.text {
+		t.insert_slice_at_cursor(text)
+	}
+}
+
+pub fn (mut t TextInput) insert_slice_at_cursor(data string) {
+	t.buf.insert_slice_at_cursor(data)
+}
+
+pub fn (t &TextInput) slice_to_cursor() string {
+	return t.buf.first_half().bytestr()
+}
+
+pub fn (mut t TextInput) cursor_left() {
+	length := last_grapheme_byte_length(t.buf.first_half().bytestr())
+	t.buf.move_gap_left(usize(length))
+}
+
+pub fn (mut t TextInput) cursor_right() {
+	length := first_grapheme_byte_length(t.buf.second_half().bytestr())
+	t.buf.move_gap_right(usize(length))
+}
+
+pub fn (t &TextInput) graphemes_before_cursor() u16 {
+	return u16(grapheme_count(t.buf.first_half().bytestr()))
+}
+
+pub fn (mut t TextInput) clear_and_free() {
+	t.buf.clear_and_free()
+	t.reset()
+}
+
+pub fn (mut t TextInput) clear_retaining_capacity() {
+	t.buf.clear_retaining_capacity()
+	t.reset()
+}
+
+pub fn (mut t TextInput) to_owned_slice() string {
+	defer {
+		t.reset()
+	}
+	return t.buf.to_owned_slice()
+}
+
+pub fn (mut t TextInput) reset() {
+	t.draw_offset = 0
+	t.prev_cursor_col = 0
+	t.prev_cursor_idx = 0
+}
+
+pub fn (t &TextInput) byte_offset_to_cursor() usize {
+	return t.buf.cursor
+}
+
+pub fn (mut t TextInput) delete_to_end() {
+	t.buf.grow_gap_right(usize(t.buf.second_half().len))
+}
+
+pub fn (mut t TextInput) delete_to_start() {
+	t.buf.grow_gap_left(t.buf.cursor)
+}
+
+pub fn (mut t TextInput) delete_before_cursor() {
+	length := last_grapheme_byte_length(t.buf.first_half().bytestr())
+	t.buf.grow_gap_left(usize(length))
+}
+
+pub fn (mut t TextInput) delete_after_cursor() {
+	length := first_grapheme_byte_length(t.buf.second_half().bytestr())
+	t.buf.grow_gap_right(usize(length))
+}
+
+pub fn (mut t TextInput) move_backward_wordwise() {
+	first := t.buf.first_half().bytestr()
+	trimmed := first.trim_right(' ')
+	index := trimmed.last_index(' ') or { -1 }
+	destination := if index < 0 { usize(0) } else { usize(index + 1) }
+	t.buf.move_gap_left(t.buf.cursor - destination)
+}
+
+pub fn (mut t TextInput) move_forward_wordwise() {
+	second := t.buf.second_half()
+	mut i := 0
+	for i < second.len && second[i] == ` ` {
+		i++
+	}
+	mut index := second.len
+	for j in i .. second.len {
+		if second[j] == ` ` {
+			index = j
+			break
 		}
-		return
 	}
-	if key.mods.ctrl() || key.codepoint < 0x20 || key.codepoint > 0x10ffff {
-		return
+	t.buf.move_gap_right(usize(index))
+}
+
+pub fn (mut t TextInput) delete_word_before() {
+	previous := t.buf.cursor
+	t.move_backward_wordwise()
+	t.buf.grow_gap_right(previous - t.buf.cursor)
+}
+
+pub fn (mut t TextInput) delete_word_after() {
+	second := t.buf.second_half()
+	mut i := 0
+	for i < second.len && second[i] == ` ` {
+		i++
 	}
-	t.text += rune(key.codepoint).str()
+	mut index := second.len
+	for j in i .. second.len {
+		if second[j] == ` ` {
+			index = j
+			break
+		}
+	}
+	t.buf.grow_gap_right(usize(index))
+}
+
+fn first_grapheme_byte_length(text string) int {
+	if text.len == 0 {
+		return 0
+	}
+	runes := text.runes()
+	if runes.len == 0 {
+		return 0
+	}
+	mut length := runes[0].str().len
+	mut previous := u32(runes[0])
+	mut state := unicode.BreakState.default
+	for i in 1 .. runes.len {
+		current := u32(runes[i])
+		if current < 0x20 || current == 0x7f
+			|| unicode.grapheme_break(previous, current, &state) {
+			break
+		}
+		length += runes[i].str().len
+		previous = current
+	}
+	return length
+}
+
+fn last_grapheme_byte_length(text string) int {
+	if text.len == 0 {
+		return 0
+	}
+	mut offset := 0
+	mut last_length := 0
+	for offset < text.len {
+		length := first_grapheme_byte_length(text[offset..])
+		if length == 0 {
+			break
+		}
+		last_length = length
+		offset += length
+	}
+	return last_length
+}
+
+fn grapheme_count(text string) int {
+	mut count := 0
+	mut offset := 0
+	for offset < text.len {
+		length := first_grapheme_byte_length(text[offset..])
+		if length == 0 {
+			break
+		}
+		count++
+		offset += length
+	}
+	return count
 }
 
 pub fn terminal_size() Winsize {

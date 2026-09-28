@@ -7,7 +7,7 @@ import vaxis
 fn preview_test_theme(name string) ThemeListElement {
 	return ThemeListElement{
 		theme: name
-		path: @FILE
+		path:  @FILE
 	}
 }
 
@@ -92,7 +92,7 @@ fn test_theme_list_element_sorting() {
 // Test ThemeListElement to_uri
 fn test_theme_list_element_to_uri() {
 	theme := ThemeListElement{
-		path: '/home/user/.config/ghostty/themes/Dracula'
+		path:  '/home/user/.config/ghostty/themes/Dracula'
 		theme: 'Dracula'
 	}
 	uri := theme.to_uri()
@@ -207,7 +207,7 @@ fn test_preview_new_propagates_theme_load_failure() {
 	os.rm(missing) or {}
 	if _ := Preview.init([ThemeListElement{
 		theme: 'Missing'
-		path: missing
+		path:  missing
 	}], .all) {
 		assert false, 'missing theme must fail preview initialization'
 	}
@@ -220,16 +220,19 @@ fn test_preview_search_uses_text_input() {
 	], .all)!
 	p.mode = .search
 	p.update(Event(KeyPressEvent{
-		key: vaxis.Key{ codepoint: u32(`d`) }
+		key: vaxis.Key{
+			codepoint: u32(`d`)
+			text:      'd'
+		}
 	}))!
-	assert p.search_text == 'd'
+	assert p.text_input.get_text() == 'd'
 	assert p.filtered.len == 1
 	assert p.themes[p.filtered[0]].theme == 'Dracula'
 
 	p.update(Event(KeyPressEvent{
 		key: vaxis.Key{ codepoint: vaxis.backspace }
 	}))!
-	assert p.search_text == ''
+	assert p.text_input.get_text() == ''
 	assert p.filtered.len == 2
 }
 
@@ -238,14 +241,16 @@ fn test_preview_ascii_lowercases_search_tokens_for_zf() {
 		preview_test_theme('Dracula'),
 		preview_test_theme('ivory'),
 	], .all)!
-	p.search_text = 'D'
+	p.text_input.insert_slice_at_cursor('D')
 	p.update_filtered()!
 	assert p.filtered.len == 1
 	assert p.themes[p.filtered[0]].theme == 'Dracula'
-	p.search_text = 'd'
+	p.text_input.clear_retaining_capacity()
+	p.text_input.insert_slice_at_cursor('d')
 	p.update_filtered()!
 	assert p.filtered.len == 1
-	p.search_text = 'İ'
+	p.text_input.clear_retaining_capacity()
+	p.text_input.insert_slice_at_cursor('İ')
 	p.update_filtered()!
 	assert p.filtered.len == 0
 }
@@ -260,9 +265,9 @@ fn test_preview_mouse_selects_visible_theme() {
 	p.update(Event(MouseEvent{
 		mouse: vaxis.Mouse{
 			button: .left
-			type_: .release
-			row: 2
-			col: 5
+			type_:  .release
+			row:    2
+			col:    5
 		}
 	}))!
 	_ = p.draw()
@@ -279,17 +284,17 @@ fn test_preview_draw_consumes_only_latest_mouse_event_and_highlights_row() {
 	p.update(Event(MouseEvent{
 		mouse: vaxis.Mouse{
 			button: .left
-			type_: .release
-			row: 1
-			col: 5
+			type_:  .release
+			row:    1
+			col:    5
 		}
 	}))!
 	p.update(Event(MouseEvent{
 		mouse: vaxis.Mouse{
 			button: .none_
-			type_: .motion
-			row: 2
-			col: 5
+			type_:  .motion
+			row:    2
+			col:    5
 		}
 	}))!
 
@@ -312,12 +317,12 @@ fn test_preview_draw_renders_theme_load_failure() {
 	missing := os.join_path(os.temp_dir(), 'witty-missing-theme-draw-${os.getpid()}')
 	os.rm(missing) or {}
 	mut p := Preview{
-		themes: [ThemeListElement{
+		themes:     [ThemeListElement{
 			theme: 'Missing'
-			path: missing
+			path:  missing
 		}]
-		filtered: [usize(0)]
-		winsize: vaxis.Winsize{ rows: 12, cols: 80 }
+		filtered:   [usize(0)]
+		winsize:    vaxis.Winsize{ rows: 12, cols: 80 }
 		text_input: vaxis.TextInput.new()
 	}
 	output := p.draw()

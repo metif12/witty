@@ -111,7 +111,6 @@ mut:
 	mode         PreviewMode  = .normal
 	color_scheme vaxis.Scheme = .light
 	mouse        ?vaxis.Mouse
-	search_text  string
 	text_input   vaxis.TextInput
 	winsize      vaxis.Winsize
 	theme_filter ColorScheme
@@ -135,7 +134,6 @@ pub fn Preview.init(themes []ThemeListElement, theme_filter ColorScheme) !Previe
 // deinit releases the preview-owned filtering and text-input state.
 pub fn (mut self Preview) deinit() {
 	self.filtered.clear()
-	self.search_text = ''
 	self.text_input.deinit()
 }
 
@@ -153,8 +151,9 @@ fn (mut self Preview) update_filtered() ! {
 
 	mut theme_config := configpkg.Config.default_config()
 
-	if self.search_text.len > 0 {
-		query := ascii.lower_string(self.search_text)
+	search_text := self.text_input.get_text()
+	if search_text.len > 0 {
+		query := ascii.lower_string(search_text)
 		tokens := query.split(' ').filter(it.len > 0)
 
 		for i, mut theme in self.themes {
@@ -266,7 +265,6 @@ pub fn (mut self Preview) update(event Event) ! {
 					if key.matches_any([u32(`x`), u32(`/`)], vaxis.Modifiers.init(false, false,
 						true, false, false, false, false, false)) {
 						self.text_input.clear_retaining_capacity()
-						self.search_text = ''
 						self.update_filtered()!
 					}
 					if key.matches_any([vaxis.home, vaxis.kp_home], vaxis.Modifiers{}) {
@@ -336,12 +334,10 @@ pub fn (mut self Preview) update(event Event) ! {
 					if key.matches_any([u32(`x`), u32(`/`)], vaxis.Modifiers.init(false, false,
 						true, false, false, false, false, false)) {
 						self.text_input.clear_retaining_capacity()
-						self.search_text = ''
 						self.update_filtered()!
 						return
 					}
 					self.text_input.update(key)
-					self.search_text = self.text_input.get_text()
 					self.update_filtered()!
 				}
 				.save {
@@ -639,9 +635,10 @@ pub fn (mut self Preview) draw() string {
 			x := max_int((width - modal_width) / 2, 0)
 			y := max_int(height - 5, 0)
 			draw_box(mut out, x, y, modal_width, 3, standard)
-			text := '/ ${self.search_text}'
+			text := self.text_input.get_text()
 			put_segment(mut out, y + 1, x + 2, x + modal_width - 1, text, standard)
-			out.write_string(vaxis.show_cursor(y + 1, min_int(x + 2 + text.runes().len, x +
+			cursor_width := self.text_input.slice_to_cursor().runes().len
+			out.write_string(vaxis.show_cursor(y + 1, min_int(x + 2 + cursor_width, x +
 				modal_width - 2)))
 		}
 		.save {

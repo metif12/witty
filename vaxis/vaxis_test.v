@@ -262,14 +262,88 @@ fn test_key_decoder_handles_sgr_mouse() {
 	}
 }
 
-fn test_text_input_edits_unicode_by_codepoint() {
+fn test_text_input_buffer_matches_source_gap_operations() {
+	mut buffer := TextInputBuffer.new()
+	defer {
+		buffer.deinit()
+	}
+	buffer.insert_slice_at_cursor('abc')
+	assert buffer.first_half().bytestr() == 'abc'
+	assert buffer.second_half().bytestr() == ''
+	buffer.move_gap_left(1)
+	assert buffer.first_half().bytestr() == 'ab'
+	assert buffer.second_half().bytestr() == 'c'
+	buffer.insert_slice_at_cursor(' ')
+	assert buffer.first_half().bytestr() == 'ab '
+	assert buffer.second_half().bytestr() == 'c'
+	buffer.grow_gap_left(1)
+	assert buffer.first_half().bytestr() == 'ab'
+	assert buffer.second_half().bytestr() == 'c'
+	buffer.grow_gap_right(1)
+	assert buffer.first_half().bytestr() == 'ab'
+	assert buffer.second_half().bytestr() == ''
+	assert buffer.real_length() == 2
+}
+
+fn test_text_input_edits_by_grapheme_and_source_bindings() {
 	mut input := TextInput.new()
-	input.update(Key{ codepoint: u32(`a`) })
-	input.update(Key{ codepoint: 0x1f642 })
-	assert input.get_text() == 'a🙂'
-	assert input.real_length() == 2
+	input.update(Key{
+		codepoint: multicodepoint
+		text:      '👩‍🚀'
+	})
+	input.update(Key{
+		codepoint: multicodepoint
+		text:      '👩‍🚀'
+	})
+	assert input.get_text() == '👩‍🚀👩‍🚀'
+	assert input.real_length() == usize('👩‍🚀👩‍🚀'.len)
+	assert input.graphemes_before_cursor() == 2
 	input.update(Key{ codepoint: backspace })
-	assert input.get_text() == 'a'
+	assert input.get_text() == '👩‍🚀'
+
+	input.clear_retaining_capacity()
+	input.insert_slice_at_cursor('hello world')
+	input.update(Key{
+		codepoint: u32(`a`)
+		mods:      Modifiers.from_int(4)
+	})
+	assert input.byte_offset_to_cursor() == 0
+	input.update(Key{ codepoint: right })
+	assert input.slice_to_cursor() == 'h'
+	input.update(Key{
+		codepoint: u32(`e`)
+		mods:      Modifiers.from_int(4)
+	})
+	assert input.byte_offset_to_cursor() == usize('hello world'.len)
+	input.update(Key{
+		codepoint: u32(`b`)
+		mods:      Modifiers.from_int(2)
+	})
+	assert input.slice_to_cursor() == 'hello '
+	input.update(Key{
+		codepoint: u32(`d`)
+		mods:      Modifiers.from_int(2)
+	})
+	assert input.get_text() == 'hello '
+	input.update(Key{
+		codepoint: u32(`u`)
+		mods:      Modifiers.from_int(4)
+	})
+	assert input.get_text() == ''
+
+	input.insert_slice_at_cursor('one two three')
+	input.update(Key{
+		codepoint: u32(`w`)
+		mods:      Modifiers.from_int(4)
+	})
+	assert input.get_text() == 'one two '
+	input.update(Key{
+		codepoint: u32(`k`)
+		mods:      Modifiers.from_int(4)
+	})
+	assert input.get_text() == 'one two '
+	assert input.to_owned_slice() == 'one two '
+	assert input.get_text() == ''
 	input.clear_retaining_capacity()
 	assert input.get_text() == ''
 }
