@@ -31,6 +31,8 @@ pub type GtkScrolledWindow = voidptr
 
 fn C.gtk_scrolled_window_set_child(sw GtkScrolledWindow, child GtkWidget)
 
+fn C.gtk_scrolled_window_get_type() GType
+
 const g_binding_sync_create = int(1 << 1)
 
 // --- PolicyType -----------------------------------------------------------
@@ -78,7 +80,10 @@ pub fn new_surface_scrolled_window() &SurfaceScrolledWindow {
 }
 
 // get_surface returns the embedded surface widget. Mirrors `getSurface`.
-pub fn (self &SurfaceScrolledWindow) get_surface() &SurfaceWidget {
+pub fn (self &SurfaceScrolledWindow) get_surface() ?&SurfaceWidget {
+	if isnil(self.surface) {
+		return none
+	}
 	return self.surface
 }
 
@@ -145,14 +150,14 @@ fn (mut self SurfaceScrolledWindow) prop_surface() {
 		return
 	}
 	scrolled_window := C.adw_bin_get_child(self.widget)
+	assert !isnil(scrolled_window)
+	assert C.g_type_check_instance_is_a(scrolled_window, C.gtk_scrolled_window_get_type()) != 0
 	child := if isnil(self.surface) {
 		GtkWidget(unsafe { nil })
 	} else {
 		self.surface.as_widget()
 	}
-	if !isnil(scrolled_window) {
-		C.gtk_scrolled_window_set_child(scrolled_window, child)
-	}
+	C.gtk_scrolled_window_set_child(scrolled_window, child)
 
 	if !isnil(self.config_binding) {
 		object_unref(self.config_binding)
