@@ -192,13 +192,12 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 
 	if self.reinitialize_shaders {
 		self.reinitialize_shaders = false
+		self.shaders.deinit()
 		post_shaders := load_from_files(self.config.custom_shaders, .msl) or {
 			log.warn('error loading custom shaders err=${err}')
 			[]string{}
 		}
-		mut replacement := self.api.init_shaders(post_shaders)!
-		self.shaders.deinit()
-		self.shaders = replacement
+		self.shaders = self.api.init_shaders(post_shaders)!
 		self.has_custom_shaders = post_shaders.len > 0
 	}
 
