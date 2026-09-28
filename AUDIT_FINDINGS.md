@@ -9,6 +9,8 @@ below exist. Earlier versions of this document overstated the completed review.
 
 | Area | Bug | Fix |
 |---|---|---|
+| vaxis Window behavior | The adapter had no retained window type, so source child clipping, borders, cell writes, fill, cursor state, wrap modes, word/line tokenization, scrolling, and mouse hit testing could not be expressed. | Translate pinned `Window.zig`'s child/border, read/write, fill/clear, cursor, print, scroll, and mouse methods over the retained `Screen`, including source word-wrap and line-iterator quirks. Verify source print and child cases directly. Preview migration to these types remains open. |
+| vaxis Cell and Screen storage | The compatibility layer had no retained source `Cell` values or `Screen` buffer, so even basic indexed cell writes, reads, clears, cursor state, image placement values, and width-method storage were absent. | Translate the pinned value records and `Screen` state with its in-bounds read/write, clear, and release operations; retain `Scale`'s thirteen-bit packed value and source defaults. This is the base for the render-diff migration. |
 | Theme preview width propagation | List rows, links, boxes, and sample segments kept clipping with the default `wcwidth` method after the preview switched its search widget to Unicode width. Preview centering also counted runes where Ghostty uses byte lengths. | Carry the selected width method through all ANSI preview helpers and restore Ghostty's byte-length centering calculations. |
 | Theme sample segment widths | The preview's sample code advanced and wrapped syntax-colored segments by rune count, so wide glyphs and combining sequences shifted subsequent colors or caused early wrapping. | Walk vaxis grapheme clusters, use the selected terminal width method, and carry one cursor across all segments exactly as pinned `Window.print(.grapheme)` does. |
 | vaxis ANSI adapter clipping | The preview's `truncate` helper used rune count, so a two-cell grapheme could spill past a child window and combining sequences could be split at the edge. | Traverse pinned vaxis grapheme clusters and advance by the selected width method, skipping zero-width clusters and stopping at a newline as `Window.print` does. The default adapter call uses vaxis' initial `wcwidth` method. |
@@ -695,9 +697,10 @@ none, browser, action, ipc. dependencies: zf 0.10.3 ranking/highlighting.
 ## Remaining known divergences (NOT yet fixed)
 
 - **vaxis screen and terminal session:** The compatibility layer still writes
-  styled ANSI segments directly rather than retaining vaxis' `Cell`, `Screen`,
-  `Window`, render diff, terminal capability state, full terminal query,
-  synchronized output, pixel-mouse translation, and threaded TTY event loop.
+  styled ANSI segments directly rather than using its newly translated
+  `Cell`, `Screen`, and `Window` values for preview drawing and render diff.
+  Terminal capability state, full terminal query, synchronized output,
+  pixel-mouse translation, and the threaded TTY event loop remain absent.
   The preview now queries and subscribes to color-scheme updates, but its
   session/render path is not yet a complete translation of the pinned vaxis
   `Vaxis`, `Loop`, and `Tty` implementations. Pinned vaxis width data and all
