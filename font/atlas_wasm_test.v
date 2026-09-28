@@ -37,7 +37,10 @@ fn test_atlas_wasm_api_reports_reserve_and_grow_failures() {
 	}
 	defer { atlas_free(atlas) }
 
-	assert atlas_reserve(mut atlas, 3, 3) == none
+	if region := atlas_reserve(mut atlas, 3, 3) {
+		unsafe { free(region) }
+		assert false, 'atlas_reserve must fail when the atlas is full'
+	}
 	mut tw := atlas_grow_tripwire()
 	tw.error_always(.alloc_data, error('OutOfMemory'))
 	defer { tw.end(.reset) or { panic(err) } }
