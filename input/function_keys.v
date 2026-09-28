@@ -72,7 +72,6 @@ fn make_pc_style(fmt string) []FunctionKeyEntry {
 		seq := fmt.replace('{}', code.str())
 		entries << FunctionKeyEntry{
 			mods: m
-			mods_empty_is_any: false
 			sequence: seq
 		}
 	}
@@ -350,36 +349,36 @@ fn get_function_key_entries(k Key) []FunctionKeyEntry {
 		.backspace {
 			return [
 				// Modify Keys Normal
-				FunctionKeyEntry{ mods: Mods.init(true, false, false, false, false, false, SideInfo{}), modify_other_keys: .set, mods_empty_is_any: false, sequence: '\x7f' },
-				FunctionKeyEntry{ mods: Mods.init(false, false, true, false, false, false, SideInfo{}), modify_other_keys: .set, mods_empty_is_any: false, sequence: '\x1b\x7f' },
-				FunctionKeyEntry{ mods: Mods.init(true, false, true, false, false, false, SideInfo{}), modify_other_keys: .set, mods_empty_is_any: false, sequence: '\x1b\x7f' },
-				FunctionKeyEntry{ mods: Mods.init(true, true, false, false, false, false, SideInfo{}), modify_other_keys: .set, mods_empty_is_any: false, sequence: '\x08' },
-				FunctionKeyEntry{ mods: Mods.init(false, true, true, false, false, false, SideInfo{}), modify_other_keys: .set, mods_empty_is_any: false, sequence: '\x1b\x08' },
-				FunctionKeyEntry{ mods: Mods.init(false, false, false, true, false, false, SideInfo{}), modify_other_keys: .set, mods_empty_is_any: false, sequence: '\x7f' },
-				FunctionKeyEntry{ mods: Mods.init(true, false, false, true, false, false, SideInfo{}), modify_other_keys: .set, mods_empty_is_any: false, sequence: '\x7f' },
-				FunctionKeyEntry{ mods: Mods.init(false, false, true, true, false, false, SideInfo{}), modify_other_keys: .set, mods_empty_is_any: false, sequence: '\x1b\x7f' },
-				FunctionKeyEntry{ mods: Mods.init(true, false, true, true, false, false, SideInfo{}), modify_other_keys: .set, mods_empty_is_any: false, sequence: '\x1b\x7f' },
-				FunctionKeyEntry{ mods: Mods.init(false, true, false, true, false, false, SideInfo{}), modify_other_keys: .set, mods_empty_is_any: false, sequence: '\x08' },
-				FunctionKeyEntry{ mods: Mods.init(true, true, false, true, false, false, SideInfo{}), modify_other_keys: .set, mods_empty_is_any: false, sequence: '\x08' },
-				FunctionKeyEntry{ mods: Mods.init(false, true, true, true, false, false, SideInfo{}), modify_other_keys: .set, mods_empty_is_any: false, sequence: '\x1b\x08' },
-				FunctionKeyEntry{ mods: Mods.init(true, true, true, true, false, false, SideInfo{}), modify_other_keys: .set, mods_empty_is_any: false, sequence: '\x1b\x08' },
+				FunctionKeyEntry{ mods: Mods.init(true, false, false, false, false, false, SideInfo{}), modify_other_keys: .set, sequence: '\x7f' },
+				FunctionKeyEntry{ mods: Mods.init(false, false, true, false, false, false, SideInfo{}), modify_other_keys: .set, sequence: '\x1b\x7f' },
+				FunctionKeyEntry{ mods: Mods.init(true, false, true, false, false, false, SideInfo{}), modify_other_keys: .set, sequence: '\x1b\x7f' },
+				FunctionKeyEntry{ mods: Mods.init(true, true, false, false, false, false, SideInfo{}), modify_other_keys: .set, sequence: '\x08' },
+				FunctionKeyEntry{ mods: Mods.init(false, true, true, false, false, false, SideInfo{}), modify_other_keys: .set, sequence: '\x1b\x08' },
+				FunctionKeyEntry{ mods: Mods.init(false, false, false, true, false, false, SideInfo{}), modify_other_keys: .set, sequence: '\x7f' },
+				FunctionKeyEntry{ mods: Mods.init(true, false, false, true, false, false, SideInfo{}), modify_other_keys: .set, sequence: '\x7f' },
+				FunctionKeyEntry{ mods: Mods.init(false, false, true, true, false, false, SideInfo{}), modify_other_keys: .set, sequence: '\x1b\x7f' },
+				FunctionKeyEntry{ mods: Mods.init(true, false, true, true, false, false, SideInfo{}), modify_other_keys: .set, sequence: '\x1b\x7f' },
+				FunctionKeyEntry{ mods: Mods.init(false, true, false, true, false, false, SideInfo{}), modify_other_keys: .set, sequence: '\x08' },
+				FunctionKeyEntry{ mods: Mods.init(true, true, false, true, false, false, SideInfo{}), modify_other_keys: .set, sequence: '\x08' },
+				FunctionKeyEntry{ mods: Mods.init(false, true, true, true, false, false, SideInfo{}), modify_other_keys: .set, sequence: '\x1b\x08' },
+				FunctionKeyEntry{ mods: Mods.init(true, true, true, true, false, false, SideInfo{}), modify_other_keys: .set, sequence: '\x1b\x08' },
 				// Modify Keys Other
-				FunctionKeyEntry{ mods: Mods.init(true, false, false, false, false, false, SideInfo{}), modify_other_keys: .set_other, mods_empty_is_any: false, sequence: '\x1b[27;2;127~' },
-				FunctionKeyEntry{ mods: Mods.init(false, false, true, false, false, false, SideInfo{}), modify_other_keys: .set_other, mods_empty_is_any: false, sequence: '\x1b[27;3;127~' },
-				FunctionKeyEntry{ mods: Mods.init(true, false, true, false, false, false, SideInfo{}), modify_other_keys: .set_other, mods_empty_is_any: false, sequence: '\x1b[27;4;127~' },
-				FunctionKeyEntry{ mods: Mods.init(true, true, false, false, false, false, SideInfo{}), modify_other_keys: .set_other, mods_empty_is_any: false, sequence: '\x1b[27;6;127~' },
-				FunctionKeyEntry{ mods: Mods.init(false, true, true, false, false, false, SideInfo{}), modify_other_keys: .set_other, mods_empty_is_any: false, sequence: '\x1b[27;7;127~' },
-				FunctionKeyEntry{ mods: Mods.init(true, true, true, false, false, false, SideInfo{}), modify_other_keys: .set_other, mods_empty_is_any: false, sequence: '\x1b[27;8;127~' },
-				FunctionKeyEntry{ mods: Mods.init(false, false, false, true, false, false, SideInfo{}), modify_other_keys: .set_other, mods_empty_is_any: false, sequence: '\x1b[27;9;127~' },
-				FunctionKeyEntry{ mods: Mods.init(true, false, false, true, false, false, SideInfo{}), modify_other_keys: .set_other, mods_empty_is_any: false, sequence: '\x1b[27;10;127~' },
-				FunctionKeyEntry{ mods: Mods.init(false, false, true, true, false, false, SideInfo{}), modify_other_keys: .set_other, mods_empty_is_any: false, sequence: '\x1b[27;11;127~' },
-				FunctionKeyEntry{ mods: Mods.init(true, false, true, true, false, false, SideInfo{}), modify_other_keys: .set_other, mods_empty_is_any: false, sequence: '\x1b[27;12;127~' },
-				FunctionKeyEntry{ mods: Mods.init(false, true, false, true, false, false, SideInfo{}), modify_other_keys: .set_other, mods_empty_is_any: false, sequence: '\x1b[27;13;127~' },
-				FunctionKeyEntry{ mods: Mods.init(true, true, false, true, false, false, SideInfo{}), modify_other_keys: .set_other, mods_empty_is_any: false, sequence: '\x1b[27;14;127~' },
-				FunctionKeyEntry{ mods: Mods.init(false, true, true, true, false, false, SideInfo{}), modify_other_keys: .set_other, mods_empty_is_any: false, sequence: '\x1b[27;15;127~' },
-				FunctionKeyEntry{ mods: Mods.init(true, true, true, true, false, false, SideInfo{}), modify_other_keys: .set_other, mods_empty_is_any: false, sequence: '\x1b[27;16;127~' },
+				FunctionKeyEntry{ mods: Mods.init(true, false, false, false, false, false, SideInfo{}), modify_other_keys: .set_other, sequence: '\x1b[27;2;127~' },
+				FunctionKeyEntry{ mods: Mods.init(false, false, true, false, false, false, SideInfo{}), modify_other_keys: .set_other, sequence: '\x1b[27;3;127~' },
+				FunctionKeyEntry{ mods: Mods.init(true, false, true, false, false, false, SideInfo{}), modify_other_keys: .set_other, sequence: '\x1b[27;4;127~' },
+				FunctionKeyEntry{ mods: Mods.init(true, true, false, false, false, false, SideInfo{}), modify_other_keys: .set_other, sequence: '\x1b[27;6;127~' },
+				FunctionKeyEntry{ mods: Mods.init(false, true, true, false, false, false, SideInfo{}), modify_other_keys: .set_other, sequence: '\x1b[27;7;127~' },
+				FunctionKeyEntry{ mods: Mods.init(true, true, true, false, false, false, SideInfo{}), modify_other_keys: .set_other, sequence: '\x1b[27;8;127~' },
+				FunctionKeyEntry{ mods: Mods.init(false, false, false, true, false, false, SideInfo{}), modify_other_keys: .set_other, sequence: '\x1b[27;9;127~' },
+				FunctionKeyEntry{ mods: Mods.init(true, false, false, true, false, false, SideInfo{}), modify_other_keys: .set_other, sequence: '\x1b[27;10;127~' },
+				FunctionKeyEntry{ mods: Mods.init(false, false, true, true, false, false, SideInfo{}), modify_other_keys: .set_other, sequence: '\x1b[27;11;127~' },
+				FunctionKeyEntry{ mods: Mods.init(true, false, true, true, false, false, SideInfo{}), modify_other_keys: .set_other, sequence: '\x1b[27;12;127~' },
+				FunctionKeyEntry{ mods: Mods.init(false, true, false, true, false, false, SideInfo{}), modify_other_keys: .set_other, sequence: '\x1b[27;13;127~' },
+				FunctionKeyEntry{ mods: Mods.init(true, true, false, true, false, false, SideInfo{}), modify_other_keys: .set_other, sequence: '\x1b[27;14;127~' },
+				FunctionKeyEntry{ mods: Mods.init(false, true, true, true, false, false, SideInfo{}), modify_other_keys: .set_other, sequence: '\x1b[27;15;127~' },
+				FunctionKeyEntry{ mods: Mods.init(true, true, true, true, false, false, SideInfo{}), modify_other_keys: .set_other, sequence: '\x1b[27;16;127~' },
 				// Default
-				FunctionKeyEntry{ mods: Mods.init(false, true, false, false, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x08' },
+				FunctionKeyEntry{ mods: Mods.init(false, true, false, false, false, false, SideInfo{}), sequence: '\x08' },
 				FunctionKeyEntry{ sequence: '\x7f' },
 			]
 		}
@@ -388,25 +387,25 @@ fn get_function_key_entries(k Key) []FunctionKeyEntry {
 		.tab {
 			return [
 				// Modify Keys Normal
-				FunctionKeyEntry{ mods: Mods.init(true, false, false, false, false, false, SideInfo{}), modify_other_keys: .set, mods_empty_is_any: false, sequence: '\x1b[Z' },
-				FunctionKeyEntry{ mods: Mods.init(false, false, true, false, false, false, SideInfo{}), modify_other_keys: .set, mods_empty_is_any: false, sequence: '\x1b\t' },
+				FunctionKeyEntry{ mods: Mods.init(true, false, false, false, false, false, SideInfo{}), modify_other_keys: .set, sequence: '\x1b[Z' },
+				FunctionKeyEntry{ mods: Mods.init(false, false, true, false, false, false, SideInfo{}), modify_other_keys: .set, sequence: '\x1b\t' },
 				// Modify Keys Other
-				FunctionKeyEntry{ mods: Mods.init(true, false, false, false, false, false, SideInfo{}), modify_other_keys: .set_other, mods_empty_is_any: false, sequence: '\x1b[27;2;9~' },
-				FunctionKeyEntry{ mods: Mods.init(false, false, true, false, false, false, SideInfo{}), modify_other_keys: .set_other, mods_empty_is_any: false, sequence: '\x1b[27;3;9~' },
+				FunctionKeyEntry{ mods: Mods.init(true, false, false, false, false, false, SideInfo{}), modify_other_keys: .set_other, sequence: '\x1b[27;2;9~' },
+				FunctionKeyEntry{ mods: Mods.init(false, false, true, false, false, false, SideInfo{}), modify_other_keys: .set_other, sequence: '\x1b[27;3;9~' },
 				// Everything else
-				FunctionKeyEntry{ mods: Mods.init(true, false, true, false, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;4;9~' },
-				FunctionKeyEntry{ mods: Mods.init(false, true, false, false, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;5;9~' },
-				FunctionKeyEntry{ mods: Mods.init(true, true, false, false, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;6;9~' },
-				FunctionKeyEntry{ mods: Mods.init(false, true, true, false, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;7;9~' },
-				FunctionKeyEntry{ mods: Mods.init(true, true, true, false, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;8;9~' },
-				FunctionKeyEntry{ mods: Mods.init(false, false, false, true, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;9;9~' },
-				FunctionKeyEntry{ mods: Mods.init(true, false, false, true, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;10;9~' },
-				FunctionKeyEntry{ mods: Mods.init(false, false, true, true, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;11;9~' },
-				FunctionKeyEntry{ mods: Mods.init(true, false, true, true, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;12;9~' },
-				FunctionKeyEntry{ mods: Mods.init(false, true, false, true, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;13;9~' },
-				FunctionKeyEntry{ mods: Mods.init(true, true, false, true, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;14;9~' },
-				FunctionKeyEntry{ mods: Mods.init(false, true, true, true, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;15;9~' },
-				FunctionKeyEntry{ mods: Mods.init(true, true, true, true, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;16;9~' },
+				FunctionKeyEntry{ mods: Mods.init(true, false, true, false, false, false, SideInfo{}), sequence: '\x1b[27;4;9~' },
+				FunctionKeyEntry{ mods: Mods.init(false, true, false, false, false, false, SideInfo{}), sequence: '\x1b[27;5;9~' },
+				FunctionKeyEntry{ mods: Mods.init(true, true, false, false, false, false, SideInfo{}), sequence: '\x1b[27;6;9~' },
+				FunctionKeyEntry{ mods: Mods.init(false, true, true, false, false, false, SideInfo{}), sequence: '\x1b[27;7;9~' },
+				FunctionKeyEntry{ mods: Mods.init(true, true, true, false, false, false, SideInfo{}), sequence: '\x1b[27;8;9~' },
+				FunctionKeyEntry{ mods: Mods.init(false, false, false, true, false, false, SideInfo{}), sequence: '\x1b[27;9;9~' },
+				FunctionKeyEntry{ mods: Mods.init(true, false, false, true, false, false, SideInfo{}), sequence: '\x1b[27;10;9~' },
+				FunctionKeyEntry{ mods: Mods.init(false, false, true, true, false, false, SideInfo{}), sequence: '\x1b[27;11;9~' },
+				FunctionKeyEntry{ mods: Mods.init(true, false, true, true, false, false, SideInfo{}), sequence: '\x1b[27;12;9~' },
+				FunctionKeyEntry{ mods: Mods.init(false, true, false, true, false, false, SideInfo{}), sequence: '\x1b[27;13;9~' },
+				FunctionKeyEntry{ mods: Mods.init(true, true, false, true, false, false, SideInfo{}), sequence: '\x1b[27;14;9~' },
+				FunctionKeyEntry{ mods: Mods.init(false, true, true, true, false, false, SideInfo{}), sequence: '\x1b[27;15;9~' },
+				FunctionKeyEntry{ mods: Mods.init(true, true, true, true, false, false, SideInfo{}), sequence: '\x1b[27;16;9~' },
 				// Default
 				FunctionKeyEntry{ sequence: '\t' },
 			]
@@ -415,25 +414,25 @@ fn get_function_key_entries(k Key) []FunctionKeyEntry {
 		// Enter has complex modifier handling
 		.enter {
 			return [
-				FunctionKeyEntry{ mods: Mods.init(true, false, false, false, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;2;13~' },
+				FunctionKeyEntry{ mods: Mods.init(true, false, false, false, false, false, SideInfo{}), sequence: '\x1b[27;2;13~' },
 				// Modify Keys Normal
-				FunctionKeyEntry{ mods: Mods.init(false, false, true, false, false, false, SideInfo{}), modify_other_keys: .set, mods_empty_is_any: false, sequence: '\x1b\r' },
+				FunctionKeyEntry{ mods: Mods.init(false, false, true, false, false, false, SideInfo{}), modify_other_keys: .set, sequence: '\x1b\r' },
 				// Modify Keys Other
-				FunctionKeyEntry{ mods: Mods.init(false, false, true, false, false, false, SideInfo{}), modify_other_keys: .set_other, mods_empty_is_any: false, sequence: '\x1b[27;3;13~' },
+				FunctionKeyEntry{ mods: Mods.init(false, false, true, false, false, false, SideInfo{}), modify_other_keys: .set_other, sequence: '\x1b[27;3;13~' },
 				// Everything else
-				FunctionKeyEntry{ mods: Mods.init(true, false, true, false, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;4;13~' },
-				FunctionKeyEntry{ mods: Mods.init(false, true, false, false, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;5;13~' },
-				FunctionKeyEntry{ mods: Mods.init(true, true, false, false, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;6;13~' },
-				FunctionKeyEntry{ mods: Mods.init(false, true, true, false, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;7;13~' },
-				FunctionKeyEntry{ mods: Mods.init(true, true, true, false, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;8;13~' },
-				FunctionKeyEntry{ mods: Mods.init(false, false, false, true, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;9;13~' },
-				FunctionKeyEntry{ mods: Mods.init(true, false, false, true, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;10;13~' },
-				FunctionKeyEntry{ mods: Mods.init(false, false, true, true, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;11;13~' },
-				FunctionKeyEntry{ mods: Mods.init(true, false, true, true, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;12;13~' },
-				FunctionKeyEntry{ mods: Mods.init(false, true, false, true, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;13;13~' },
-				FunctionKeyEntry{ mods: Mods.init(true, true, false, true, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;14;13~' },
-				FunctionKeyEntry{ mods: Mods.init(false, true, true, true, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;15;13~' },
-				FunctionKeyEntry{ mods: Mods.init(true, true, true, true, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;16;13~' },
+				FunctionKeyEntry{ mods: Mods.init(true, false, true, false, false, false, SideInfo{}), sequence: '\x1b[27;4;13~' },
+				FunctionKeyEntry{ mods: Mods.init(false, true, false, false, false, false, SideInfo{}), sequence: '\x1b[27;5;13~' },
+				FunctionKeyEntry{ mods: Mods.init(true, true, false, false, false, false, SideInfo{}), sequence: '\x1b[27;6;13~' },
+				FunctionKeyEntry{ mods: Mods.init(false, true, true, false, false, false, SideInfo{}), sequence: '\x1b[27;7;13~' },
+				FunctionKeyEntry{ mods: Mods.init(true, true, true, false, false, false, SideInfo{}), sequence: '\x1b[27;8;13~' },
+				FunctionKeyEntry{ mods: Mods.init(false, false, false, true, false, false, SideInfo{}), sequence: '\x1b[27;9;13~' },
+				FunctionKeyEntry{ mods: Mods.init(true, false, false, true, false, false, SideInfo{}), sequence: '\x1b[27;10;13~' },
+				FunctionKeyEntry{ mods: Mods.init(false, false, true, true, false, false, SideInfo{}), sequence: '\x1b[27;11;13~' },
+				FunctionKeyEntry{ mods: Mods.init(true, false, true, true, false, false, SideInfo{}), sequence: '\x1b[27;12;13~' },
+				FunctionKeyEntry{ mods: Mods.init(false, true, false, true, false, false, SideInfo{}), sequence: '\x1b[27;13;13~' },
+				FunctionKeyEntry{ mods: Mods.init(true, true, false, true, false, false, SideInfo{}), sequence: '\x1b[27;14;13~' },
+				FunctionKeyEntry{ mods: Mods.init(false, true, true, true, false, false, SideInfo{}), sequence: '\x1b[27;15;13~' },
+				FunctionKeyEntry{ mods: Mods.init(true, true, true, true, false, false, SideInfo{}), sequence: '\x1b[27;16;13~' },
 				// Default
 				FunctionKeyEntry{ sequence: '\r' },
 			]
@@ -442,21 +441,21 @@ fn get_function_key_entries(k Key) []FunctionKeyEntry {
 		// Escape has complex modifier handling
 		.escape {
 			return [
-				FunctionKeyEntry{ mods: Mods.init(true, false, false, false, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;2;27~' },
-				FunctionKeyEntry{ mods: Mods.init(false, false, true, false, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b\x1b' },
-				FunctionKeyEntry{ mods: Mods.init(true, false, true, false, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;4;27~' },
-				FunctionKeyEntry{ mods: Mods.init(false, true, false, false, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;5;27~' },
-				FunctionKeyEntry{ mods: Mods.init(true, true, false, false, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;6;27~' },
-				FunctionKeyEntry{ mods: Mods.init(false, true, true, false, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;7;27~' },
-				FunctionKeyEntry{ mods: Mods.init(true, true, true, false, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;8;27~' },
-				FunctionKeyEntry{ mods: Mods.init(false, false, false, true, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;9;27~' },
-				FunctionKeyEntry{ mods: Mods.init(true, false, false, true, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;10;27~' },
-				FunctionKeyEntry{ mods: Mods.init(false, false, true, true, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;11;27~' },
-				FunctionKeyEntry{ mods: Mods.init(true, false, true, true, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;12;27~' },
-				FunctionKeyEntry{ mods: Mods.init(false, true, false, true, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;13;27~' },
-				FunctionKeyEntry{ mods: Mods.init(true, true, false, true, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;14;27~' },
-				FunctionKeyEntry{ mods: Mods.init(false, true, true, true, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;15;27~' },
-				FunctionKeyEntry{ mods: Mods.init(true, true, true, true, false, false, SideInfo{}), mods_empty_is_any: false, sequence: '\x1b[27;16;27~' },
+				FunctionKeyEntry{ mods: Mods.init(true, false, false, false, false, false, SideInfo{}), sequence: '\x1b[27;2;27~' },
+				FunctionKeyEntry{ mods: Mods.init(false, false, true, false, false, false, SideInfo{}), sequence: '\x1b\x1b' },
+				FunctionKeyEntry{ mods: Mods.init(true, false, true, false, false, false, SideInfo{}), sequence: '\x1b[27;4;27~' },
+				FunctionKeyEntry{ mods: Mods.init(false, true, false, false, false, false, SideInfo{}), sequence: '\x1b[27;5;27~' },
+				FunctionKeyEntry{ mods: Mods.init(true, true, false, false, false, false, SideInfo{}), sequence: '\x1b[27;6;27~' },
+				FunctionKeyEntry{ mods: Mods.init(false, true, true, false, false, false, SideInfo{}), sequence: '\x1b[27;7;27~' },
+				FunctionKeyEntry{ mods: Mods.init(true, true, true, false, false, false, SideInfo{}), sequence: '\x1b[27;8;27~' },
+				FunctionKeyEntry{ mods: Mods.init(false, false, false, true, false, false, SideInfo{}), sequence: '\x1b[27;9;27~' },
+				FunctionKeyEntry{ mods: Mods.init(true, false, false, true, false, false, SideInfo{}), sequence: '\x1b[27;10;27~' },
+				FunctionKeyEntry{ mods: Mods.init(false, false, true, true, false, false, SideInfo{}), sequence: '\x1b[27;11;27~' },
+				FunctionKeyEntry{ mods: Mods.init(true, false, true, true, false, false, SideInfo{}), sequence: '\x1b[27;12;27~' },
+				FunctionKeyEntry{ mods: Mods.init(false, true, false, true, false, false, SideInfo{}), sequence: '\x1b[27;13;27~' },
+				FunctionKeyEntry{ mods: Mods.init(true, true, false, true, false, false, SideInfo{}), sequence: '\x1b[27;14;27~' },
+				FunctionKeyEntry{ mods: Mods.init(false, true, true, true, false, false, SideInfo{}), sequence: '\x1b[27;15;27~' },
+				FunctionKeyEntry{ mods: Mods.init(true, true, true, true, false, false, SideInfo{}), sequence: '\x1b[27;16;27~' },
 				// Default
 				FunctionKeyEntry{ sequence: '\x1b' },
 			]

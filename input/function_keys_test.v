@@ -69,8 +69,22 @@ fn test_kp_keys() {
 		code := i + 2
 		assert entry.sequence == '\x1bO${code}q'
 		assert entry.keypad == .application
+		assert entry.mods_empty_is_any
 		assert entry.mods.equal(m)
 	}
+}
+
+// All nonempty-modifier entries inherit Entry.mods_empty_is_any = true in
+// Ghostty. Although the matcher only consults the flag for empty modifiers,
+// preserving it keeps the translated entry data identical to the source.
+fn test_modified_entry_defaults() {
+	pc := get_function_key_entries(.arrow_up)
+	assert pc[0].mods.int() != 0
+	assert pc[0].mods_empty_is_any
+
+	manual := get_function_key_entries(.backspace)
+	assert manual[0].mods.int() != 0
+	assert manual[0].mods_empty_is_any
 }
 
 // Confirms that the modifier keypad entries are actually reachable through
