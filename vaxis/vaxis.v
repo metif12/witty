@@ -1,7 +1,6 @@
 module vaxis
 
 import encoding.base64
-import os
 import strconv
 import strings
 import term
@@ -1941,24 +1940,28 @@ pub fn terminal_size() Winsize {
 	}
 }
 
-pub fn detect_color_scheme() Scheme {
-	parts := os.getenv('COLORFGBG').split(';')
-	if parts.len > 0 {
-		background := parts.last().int()
-		if background >= 0 && background <= 6 {
-			return .dark
-		}
-	}
-	return .light
-}
-
 pub fn begin_session(title string) {
-	print('\x1b[?1049h\x1b[?25l\x1b[?1003h\x1b[?1006h\x1b]0;${title}\a')
+	print('\x1b[?1049h\x1b]2;${title}\x1b\\\x1b[?1002;1003;1004;1006h')
 	flush_stdout()
 }
 
 pub fn end_session() {
-	print('\x1b[?1006l\x1b[?1003l\x1b[?25h\x1b[0m\x1b[?1049l')
+	print('\x1b[?1002;1003;1004;1006;1016l\x1b[?25h\x1b[0m\x1b[?1049l')
+	flush_stdout()
+}
+
+pub fn query_color_scheme_update_capability() {
+	print('\x1b[?2031$p')
+	flush_stdout()
+}
+
+pub fn subscribe_to_color_scheme_updates() {
+	print('\x1b[?996n\x1b[?2031h')
+	flush_stdout()
+}
+
+pub fn unsubscribe_from_color_scheme_updates() {
+	print('\x1b[?2031l')
 	flush_stdout()
 }
 

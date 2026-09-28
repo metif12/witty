@@ -125,7 +125,7 @@ pub fn Preview.init(themes []ThemeListElement, theme_filter ColorScheme) !Previe
 		theme_filter: theme_filter
 		text_input:   vaxis.TextInput.new()
 		winsize:      vaxis.terminal_size()
-		color_scheme: vaxis.detect_color_scheme()
+		color_scheme: .light
 	}
 	p.update_filtered()!
 	return p
@@ -503,9 +503,13 @@ pub fn (self &Preview) ui_err() vaxis.Style {
 pub fn (mut self Preview) run() ! {
 	mut tty := vaxis.Tty.new()
 	self.winsize = vaxis.terminal_size()
-	self.color_scheme = vaxis.detect_color_scheme()
 	vaxis.begin_session('👻 Ghostty Theme Preview 👻')
+	vaxis.query_color_scheme_update_capability()
+	mut color_scheme_subscribed := false
 	defer {
+		if color_scheme_subscribed {
+			vaxis.unsubscribe_from_color_scheme_updates()
+		}
 		vaxis.end_session()
 	}
 
@@ -542,6 +546,12 @@ pub fn (mut self Preview) run() ! {
 					self.update(Event(WinsizeEvent{
 						winsize: event
 					}))!
+				}
+				vaxis.CapabilityEvent {
+					if event.capability == .color_scheme_updates && !color_scheme_subscribed {
+						vaxis.subscribe_to_color_scheme_updates()
+						color_scheme_subscribed = true
+					}
 				}
 				else {}
 			}

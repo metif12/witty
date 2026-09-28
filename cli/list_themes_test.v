@@ -179,6 +179,7 @@ fn test_options_defaults() {
 
 fn test_preview_public_lifecycle_and_styles() {
 	mut preview := Preview.init([], .all)!
+	assert preview.color_scheme == .light
 	preview.color_scheme = .light
 	assert preview.ui_fg().rgb == [u8(0), 0, 0]!
 	assert preview.ui_bg().rgb == [u8(0xff), 0xff, 0xff]!

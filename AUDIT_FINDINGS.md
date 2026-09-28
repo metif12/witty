@@ -9,6 +9,7 @@ below exist. Earlier versions of this document overstated the completed review.
 
 | Area | Bug | Fix |
 |---|---|---|
+| Theme preview terminal color scheme | `Preview.init` and `run` guessed dark/light from `COLORFGBG`, although pinned vaxis starts in light mode and changes only after a terminal report. Witty neither queried support for color-scheme updates nor subscribed after receiving that capability. Its session wrapper also used OSC 0 with BEL and an incomplete mouse mode sequence. | Start light, query DECRQM 2031, subscribe with the pinned request/mode sequences when support is reported, reset the subscription on exit, and restore vaxis' OSC 2/ST title and mouse mode sequences. |
 | Theme preview rendering | The preview omitted the pinned cursor and selection swatches, most styled code segments, the second shell prompt component, diagnostic formatting, and continuous lorem text; it also compressed the six-row palette into five rows and erased the source iterator's empty tokens. | Restore Ghostty's color, sample, palette, diagnostic, and repeated-text layout using the translated ANSI renderer, retaining empty split tokens and the source's explicit-color requirement for optional cursor/selection values. |
 | GTK wrapper ownership surface | Application, ImGui/inspector widgets, resize/search/child-exit/scrolled-surface widgets, tabs, and windows omitted the public native `ref`/`unref` entry points supplied by Ghostty's class `Common` helper; the surface `ref` also returned an unsafe address expression instead of its receiver, and four non-dialog wrappers omitted their source `refSink` entry point. Search match setters additionally widened source `usize` values to `u64` at the V API boundary and callers manually projected them back. | Restore each audited ownership operation on its canonical native object, return each wrapper from `ref`/`ref_sink`, retain `usize` through the search API, and widen only in the registered `u64` GObject property storage. |
 | GTK config identity and diagnostics | Application reload mutated a stable `Config` wrapper and compensated by manually reapplying surface and tab state from the window callback, rather than replacing Ghostty's reference-counted config object. `diagnostics_buffer` also exposed a nonoptional native pointer and accepted diagnostics larger than Ghostty's fixed 4095-byte writer. | Replace the application config GObject on every config change so normal property bindings and ownership propagate it, remove the stable-wrapper mutation API and source-external refresh loop, restore the optional buffer contract, and omit/log diagnostics that overflow the source-sized writer. |
@@ -685,6 +686,14 @@ opentype (all 6 tables), cli_args, split_tree, command (POSIX). apprt: structs,
 none, browser, action, ipc. dependencies: zf 0.10.3 ranking/highlighting.
 
 ## Remaining known divergences (NOT yet fixed)
+
+- **vaxis screen and terminal session:** The compatibility layer still writes
+  styled ANSI segments directly rather than retaining vaxis' `Cell`, `Screen`,
+  `Window`, render diff, terminal capability state, full terminal query,
+  synchronized output, pixel-mouse translation, and threaded TTY event loop.
+  The preview now queries and subscribes to color-scheme updates, but its
+  session/render path is not yet a complete translation of the pinned vaxis
+  `Vaxis`, `Loop`, and `Tty` implementations.
 
 These are confirmed structural boundaries or larger refactors. The absence of
 an item here does not mean its full module has been certified yet.
