@@ -1896,7 +1896,7 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 					return false
 				}
 				mut rt_surface := surface.rt()
-				return window.move_tab(rt_surface, i64(data.amount))
+				return window.move_tab(rt_surface, data.amount)
 			}
 		}
 		.new_split {

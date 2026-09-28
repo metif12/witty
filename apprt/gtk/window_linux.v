@@ -1508,10 +1508,8 @@ pub fn (mut self Window) select_tab(selection SelectTab) bool {
 			if n_int - 1 < total - 1 { n_int - 1 } else { total - 1 }
 		}
 	}
-	if target < 0 || target >= total {
-		// Assertion in Zig; guard defensively here.
-		return false
-	}
+	assert target >= 0
+	assert target < total
 
 	// If our target is the same as our current then we do nothing.
 	if target == current {
@@ -1527,7 +1525,7 @@ pub fn (mut self Window) select_tab(selection SelectTab) bool {
 // move_tab moves the tab containing the given surface by the given amount.
 // Returns whether this affected any tab positioning. Mirrors `moveTab`. The
 // wrap-around position arithmetic is fully translated.
-pub fn (mut self Window) move_tab(surface &Surface, amount i64) bool {
+pub fn (mut self Window) move_tab(surface &Surface, amount isize) bool {
 	tab_view := self.tab_view
 
 	// If we have one tab we never move.
@@ -1549,7 +1547,7 @@ pub fn (mut self Window) move_tab(surface &Surface, amount i64) bool {
 	pos := adw_tab_view_get_page_position(tab_view, page)
 
 	// Move it (with wrap-around).
-	initial := int(i64(pos) + amount)
+	initial := int(isize(pos) + amount)
 	max := total - 1
 	desired_pos := if initial < 0 {
 		max + initial + 1
@@ -1558,9 +1556,8 @@ pub fn (mut self Window) move_tab(surface &Surface, amount i64) bool {
 	} else {
 		initial
 	}
-	if desired_pos < 0 || desired_pos >= total {
-		return false
-	}
+	assert desired_pos >= 0
+	assert desired_pos < total
 
 	return adw_tab_view_reorder_page(tab_view, page, desired_pos) != 0
 }
