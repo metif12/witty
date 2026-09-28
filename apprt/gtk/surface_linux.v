@@ -31,7 +31,7 @@ pub fn (mut self Surface) gobj() &SurfaceWidget {
 // In Zig this asserts non-optional because libghostty should only call this
 // for initialized surfaces.
 pub fn (mut self Surface) core() &core.Surface {
-	return self.surface.core()
+	return self.surface.core() or { panic('initialized GTK surface has no core surface') }
 }
 
 // rt_app returns the apprt App for this surface. Mirrors `Surface.rtApp`.

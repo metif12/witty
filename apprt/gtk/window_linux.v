@@ -1087,9 +1087,7 @@ fn window_overview_create_tab_cb(overview AdwTabOverview, user_data voidptr) Adw
 	}
 	mut self := unsafe { &Window(user_data) }
 	if mut surface := self.get_active_surface() {
-		if surface.has_core() {
-			return self.new_tab_page(surface.core(), .tab)
-		}
+		return self.new_tab_page(surface.core(), .tab)
 	}
 	return self.new_tab_page(none, .tab)
 }
@@ -1681,8 +1679,8 @@ fn (mut self Window) sync_appearance() {
 fn (mut self Window) sync_actions() {
 	mut has_selection := false
 	if surface := self.get_active_surface() {
-		if surface.has_core() {
-			has_selection = surface.core().has_selection()
+		if core_surface := surface.core() {
+			has_selection = core_surface.has_selection()
 		}
 	}
 	action := C.g_action_map_lookup_action(GActionMap(self.obj), c'copy')
@@ -1705,10 +1703,7 @@ fn (mut self Window) toggle_css_class(class string, value bool) {
 // actions and dispatches them to the active core surface.
 fn (mut self Window) perform_binding_action(action input.Action) {
 	mut surface := self.get_active_surface() or { return }
-	if !surface.has_core() {
-		return
-	}
-	mut core_surface := surface.core()
+	mut core_surface := surface.core() or { return }
 	core_surface.perform_binding_action(action) or {
 		log.warn('error performing binding action error=${err}')
 	}

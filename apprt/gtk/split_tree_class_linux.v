@@ -511,8 +511,7 @@ pub fn (self &SplitTreeWidget) get_needs_confirm_quit() bool {
 	for {
 		entry := it.next() or { break }
 		mut view := entry.view
-		if view.has_core() {
-			mut core := view.core()
+		if mut core := view.core() {
 			if core.needs_confirm_quit() {
 				return true
 			}
@@ -624,8 +623,8 @@ pub fn (mut self SplitTreeWidget) new_split(direction datastruct.Direction, pare
 
 	// Inherit from the parent if asked to.
 	if p := parent_ {
-		if p.has_core() {
-			surface.set_parent(p.core(), .split)
+		if core_parent := p.core() {
+			surface.set_parent(core_parent, .split)
 		}
 	}
 	surface.set_is_split(self.get_is_split())
@@ -855,10 +854,7 @@ pub fn (mut self SplitTreeWidget) action_zoom() {
 // `surfaceCloseRequest`: records the pending-close handle and either closes
 // immediately or shows a confirmation dialog.
 pub fn (mut self SplitTreeWidget) surface_close_request(surface &SurfaceWidget) {
-	if !surface.has_core() {
-		return
-	}
-	mut core := surface.core()
+	mut core := surface.core() or { return }
 
 	// Reset pending close.
 	self.pending_close = none

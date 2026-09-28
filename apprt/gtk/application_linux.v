@@ -2154,7 +2154,7 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 				return false
 			}
 			mut surface := surface_from_target(target) or { return false }
-			return surface.show_on_screen_keyboard(unsafe { nil })
+			return surface.show_on_screen_keyboard(none)
 		}
 		.command_finished {
 			if data is apprt.CommandFinished {

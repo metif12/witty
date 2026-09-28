@@ -1145,7 +1145,10 @@ pub mut:
 // --- Basic accessors ------------------------------------------------------
 
 // core returns the (optional) core surface. Mirrors `Surface.core`.
-pub fn (self &SurfaceWidget) core() &core.Surface {
+pub fn (self &SurfaceWidget) core() ?&core.Surface {
+	if isnil(self.core_surface) {
+		return none
+	}
 	return self.core_surface
 }
 
@@ -2291,11 +2294,12 @@ pub fn (mut self SurfaceWidget) gc_mouse_up(event GdkEvent, button u32) {
 
 // show_on_screen_keyboard asks the current input context to activate the
 // platform on-screen keyboard for the event.
-pub fn (self &SurfaceWidget) show_on_screen_keyboard(event GdkEvent) bool {
+pub fn (self &SurfaceWidget) show_on_screen_keyboard(event ?GdkEvent) bool {
 	if isnil(self.im_context) {
 		return false
 	}
-	return C.gtk_im_context_activate_osk(self.im_context, event)
+	native_event := event or { GdkEvent(unsafe { nil }) }
+	return C.gtk_im_context_activate_osk(self.im_context, native_event)
 }
 
 // ec_mouse_motion is the GtkEventControllerMotion "motion" handler. Mirrors
@@ -2653,6 +2657,12 @@ fn (mut self SurfaceWidget) set_config_reference(config &Config) {
 	}
 	self.notify_property(g_surface_pspec_config)
 	self.apply_config()
+}
+
+// set_config changes the shared configuration object for this surface.
+// Mirrors the public `Surface.setConfig` entry point.
+pub fn (mut self SurfaceWidget) set_config(config &Config) {
+	self.set_config_reference(config)
 }
 
 // set_owned_config installs a surface-local config object for a targeted
@@ -3057,18 +3067,21 @@ fn surface_clipboard_confirmation_deny_cb(obj GObject, remember int, data voidpt
 
 // get_hadjustment returns the horizontal adjustment. Mirrors
 // `Surface.getHAdjustment`.
-pub fn (self &SurfaceWidget) get_hadjustment() GtkAdjustment {
+pub fn (self &SurfaceWidget) get_hadjustment() ?GtkAdjustment {
+	if isnil(self.hadj) {
+		return none
+	}
 	return self.hadj
 }
 
 // get_h_adjustment is the source-shaped `Surface.getHAdjustment` entry point.
-pub fn (self &SurfaceWidget) get_h_adjustment() GtkAdjustment {
+pub fn (self &SurfaceWidget) get_h_adjustment() ?GtkAdjustment {
 	return self.get_hadjustment()
 }
 
 // set_hadjustment sets the horizontal adjustment (reffed). Mirrors
 // `Surface.setHAdjustment`.
-pub fn (mut self SurfaceWidget) set_hadjustment(adj GtkAdjustment) {
+pub fn (mut self SurfaceWidget) set_hadjustment(adj ?GtkAdjustment) {
 	C.g_object_freeze_notify(self.widget)
 	defer {
 		C.g_object_thaw_notify(self.widget)
@@ -3078,32 +3091,33 @@ pub fn (mut self SurfaceWidget) set_hadjustment(adj GtkAdjustment) {
 		object_unref(self.hadj)
 		self.hadj = unsafe { nil }
 	}
-	if isnil(adj) {
-		return
-	}
-	object_ref(adj)
-	self.hadj = adj
+	new_adjustment := adj or { return }
+	object_ref(new_adjustment)
+	self.hadj = new_adjustment
 }
 
 // set_h_adjustment is the source-shaped `Surface.setHAdjustment` entry point.
-pub fn (mut self SurfaceWidget) set_h_adjustment(adj GtkAdjustment) {
+pub fn (mut self SurfaceWidget) set_h_adjustment(adj ?GtkAdjustment) {
 	self.set_hadjustment(adj)
 }
 
 // get_vadjustment returns the vertical adjustment. Mirrors
 // `Surface.getVAdjustment`.
-pub fn (self &SurfaceWidget) get_vadjustment() GtkAdjustment {
+pub fn (self &SurfaceWidget) get_vadjustment() ?GtkAdjustment {
+	if isnil(self.vadj) {
+		return none
+	}
 	return self.vadj
 }
 
 // get_v_adjustment is the source-shaped `Surface.getVAdjustment` entry point.
-pub fn (self &SurfaceWidget) get_v_adjustment() GtkAdjustment {
+pub fn (self &SurfaceWidget) get_v_adjustment() ?GtkAdjustment {
 	return self.get_vadjustment()
 }
 
 // set_vadjustment sets the vertical adjustment (reffed). Mirrors
 // `Surface.setVAdjustment`.
-pub fn (mut self SurfaceWidget) set_vadjustment(adj GtkAdjustment) {
+pub fn (mut self SurfaceWidget) set_vadjustment(adj ?GtkAdjustment) {
 	C.g_object_freeze_notify(self.widget)
 	defer {
 		C.g_object_thaw_notify(self.widget)
@@ -3113,17 +3127,17 @@ pub fn (mut self SurfaceWidget) set_vadjustment(adj GtkAdjustment) {
 		object_unref(self.vadj)
 		self.vadj = unsafe { nil }
 	}
-	if isnil(adj) {
+	new_adjustment := adj or {
 		self.update_vadjustment_signal_target()
 		return
 	}
-	object_ref(adj)
-	self.vadj = adj
+	object_ref(new_adjustment)
+	self.vadj = new_adjustment
 	self.update_vadjustment_signal_target()
 }
 
 // set_v_adjustment is the source-shaped `Surface.setVAdjustment` entry point.
-pub fn (mut self SurfaceWidget) set_v_adjustment(adj GtkAdjustment) {
+pub fn (mut self SurfaceWidget) set_v_adjustment(adj ?GtkAdjustment) {
 	self.set_vadjustment(adj)
 }
 
@@ -3171,9 +3185,7 @@ pub fn (mut self SurfaceWidget) set_scrollbar(scrollbar terminal.Scrollbar) {
 		&& f64_approx_eq_abs(C.gtk_adjustment_get_page_size(self.vadj), page_size, 0.001) {
 		return
 	}
-	if isnil(self.vadj_signal_group) {
-		self.update_vadjustment_signal_target()
-	}
+	assert !isnil(self.vadj_signal_group)
 	C.g_signal_group_block(self.vadj_signal_group)
 	C.gtk_adjustment_configure(self.vadj, value, 0, upper, 1, page_size, page_size)
 	C.g_signal_group_unblock(self.vadj_signal_group)
