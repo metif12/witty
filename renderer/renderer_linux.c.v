@@ -43,6 +43,7 @@ fn Renderer.init_opengl(opts RendererOpts) !Renderer {
 	}
 
 	metrics := opts.font_grid.metrics
+	bg_alpha := background_opacity_alpha(opts.config.background_opacity)
 	mut result := Renderer{
 		draw_mutex:             sync.new_mutex()
 		surface_mailbox:        opts.surface_mailbox
@@ -65,7 +66,7 @@ fn Renderer.init_opengl(opts RendererOpts) !Renderer {
 				opts.config.background.r,
 				opts.config.background.g,
 				opts.config.background.b,
-				u8(opts.config.background_opacity * 255.0),
+				bg_alpha,
 			]!
 			bools:        UniformBools{
 				use_display_p3:        opts.config.colorspace == .display_p3

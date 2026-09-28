@@ -45,6 +45,12 @@ fn test_derived_config_defaults() {
 	assert config.faint_opacity == 128
 }
 
+fn test_background_opacity_alpha_rounds_like_source() {
+	assert background_opacity_alpha(0.0) == 0
+	assert background_opacity_alpha(0.5) == 128
+	assert background_opacity_alpha(1.0) == 255
+}
+
 fn test_renderer_emits_health_transitions_and_dirty_scrollbar() {
 	mut capture := SurfaceEventCapture{}
 	mailbox := SurfaceMailbox{

@@ -1252,11 +1252,12 @@ pub fn (mut self Renderer) update_frame(state &RenderState, cursor_blink_visible
 	}
 
 	// Update our background color.
+	bg_alpha := background_opacity_alpha(self.config.background_opacity)
 	self.uniforms.bg_color = [
 		self.terminal_state.colors.background.r,
 		self.terminal_state.colors.background.g,
 		self.terminal_state.colors.background.b,
-		u8(self.config.background_opacity * 255.0),
+		bg_alpha,
 	]!
 
 	// Prepare the rebuilt overlay image for upload, or unload the prior image
@@ -1274,6 +1275,12 @@ pub fn (mut self Renderer) update_frame(state &RenderState, cursor_blink_visible
 
 	// Signal shaper we're done for the frame.
 	self.font_shaper.end_frame()
+}
+
+// Convert the clamped background opacity to the byte used by the renderer
+// uniforms. Ghostty rounds here rather than truncating the fractional byte.
+fn background_opacity_alpha(opacity f64) u8 {
+	return u8(math.round(opacity * 255.0))
 }
 
 // The critical area of update_frame, run while holding state.mutex. Returns
