@@ -672,7 +672,7 @@ config theme: location iteration, named/absolute lookup, and diagnostics.
 benchmark: lifecycle, CLI/data-file helpers, CodepointWidth, GraphemeBreak,
 IsSymbol, TerminalParser, TerminalStream, ScreenClone, and OscParser.
 native image wrappers: stb and Wuffs PNG/JPEG decoding plus pixel swizzling.
-root: quirks, build_config,
+root: quirks, build_config, file_type, fastmem, math,
 opentype (all 6 tables), cli_args, split_tree, command (POSIX). apprt: structs,
 none, browser, action, ipc.
 
