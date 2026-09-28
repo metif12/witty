@@ -68,8 +68,8 @@ pub fn (self TaggedPageAllocator) alloc(length usize, alignment usize) ?TaggedPa
 		return none
 	}
 	return TaggedPageMemory{
-		ptr: ptr
-		len: length
+		ptr:        ptr
+		len:        length
 		mapped_len: mapped_len
 	}
 }
@@ -111,6 +111,6 @@ pub fn (mut self TaggedPageMemory) unmap() {
 	self.mapped_len = 0
 }
 
-pub fn tagged_page_size() usize {
+fn tagged_page_size() usize {
 	return C.witty_tagged_page_size()
 }

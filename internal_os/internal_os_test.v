@@ -4,8 +4,7 @@ import os
 
 fn test_desktop_environment_tag_layout_matches_source() {
 	assert sizeof(DesktopEnvironment) == 1
-	assert [DesktopEnvironment.gnome, .macos, .other, .windows].map(u8(it)) == [u8(0), 1, 2,
-		3]
+	assert [DesktopEnvironment.gnome, .macos, .other, .windows].map(u8(it)) == [u8(0), 1, 2, 3]
 }
 
 fn test_open_type_alias_matches_source_kind() {
@@ -35,7 +34,8 @@ fn test_open_command_platform_selection() {
 	assert executable_freebsd == 'xdg-open'
 	assert args_freebsd == ['file:///tmp/a.html']
 
-	executable_windows, args_windows := open_command_for_os('windows', .unknown, 'https://example.com')!
+	executable_windows, args_windows := open_command_for_os('windows', .unknown,
+		'https://example.com')!
 	assert executable_windows == 'rundll32'
 	assert args_windows == ['url.dll,FileProtocolHandler', 'https://example.com']
 
@@ -54,8 +54,8 @@ fn test_open_process_collects_stdout_and_stderr_concurrently() {
 		process.set_args(['-c', 'head -c 131072 /dev/zero >&2; printf stdout-complete'])
 		spawn_open_process(mut process)!
 
-		stdout_result := chan OpenProcessOutput{ cap: 1 }
-		stderr_result := chan OpenProcessOutput{ cap: 1 }
+		stdout_result := chan OpenProcessOutput{cap: 1}
+		stderr_result := chan OpenProcessOutput{cap: 1}
 		stdout_thread := spawn collect_open_stdout(mut process, stdout_result)
 		stderr_thread := spawn collect_open_stderr(mut process, stderr_result)
 		stdout := <-stdout_result
@@ -99,8 +99,8 @@ fn test_open_process_inherits_stdin_and_redirects_output() {
 		assert process.use_stdio_ctl
 		assert process.stdio_fd[0] == -1
 
-		stdout_result := chan OpenProcessOutput{ cap: 1 }
-		stderr_result := chan OpenProcessOutput{ cap: 1 }
+		stdout_result := chan OpenProcessOutput{cap: 1}
+		stderr_result := chan OpenProcessOutput{cap: 1}
 		collect_open_output(mut process, .stdout, stdout_result)
 		collect_open_output(mut process, .stderr, stderr_result)
 		stdout := <-stdout_result
@@ -126,7 +126,7 @@ fn test_open_process_reports_exec_failure() {
 
 fn test_open_process_output_source_limit() {
 	mut exact_accumulator := OpenProcessOutputAccumulator{
-		data: []u8{ cap: open_process_output_max + 1 }
+		data: []u8{cap: open_process_output_max + 1}
 	}
 	exact_accumulator.add('x'.repeat(open_process_output_max).bytes())
 	exact := exact_accumulator.finish()
@@ -134,7 +134,7 @@ fn test_open_process_output_source_limit() {
 	assert !exact.too_long
 
 	mut oversized_accumulator := OpenProcessOutputAccumulator{
-		data: []u8{ cap: open_process_output_max + 1 }
+		data: []u8{cap: open_process_output_max + 1}
 	}
 	oversized_accumulator.add('x'.repeat(open_process_output_max).bytes())
 	oversized_accumulator.add([u8(`x`)])
@@ -396,14 +396,21 @@ fn test_shell_command_builder_ignores_empty_arguments() {
 }
 
 fn test_shell_escape_writer() {
-	assert shell_escape('abc') == 'abc'
-	assert shell_escape('a c') == 'a\\ c'
-	assert shell_escape('a?c') == 'a\\?c'
-	assert shell_escape('a\\c') == 'a\\\\c'
-	assert shell_escape('a|c') == 'a\\|c'
-	assert shell_escape('a"c') == 'a\\"c'
-	assert shell_escape('a(1)') == 'a\\(1\\)'
-	assert shell_escape('line one\nline two') == 'line\\ one\nline\\ two'
+	for input, expected in {
+		'abc':                'abc'
+		'a c':                'a\\ c'
+		'a?c':                'a\\?c'
+		'a\\c':               'a\\\\c'
+		'a|c':                'a\\|c'
+		'a"c':                'a\\"c'
+		'a(1)':               'a\\(1\\)'
+		'line one\nline two': 'line\\ one\nline\\ two'
+	} {
+		mut writer := ShellEscapeWriter.init()
+		writer.write(input)
+		assert writer.string() == expected
+		writer.deinit()
+	}
 }
 
 fn test_fix_max_files_can_restore_when_available() {
@@ -511,8 +518,8 @@ fn test_systemd_notification_entry_points_without_socket() {
 
 fn test_hostname_validation() {
 	for hostname in ['example', 'example.com', 'www.example.com', 'example.com.',
-		'host-name.example.com.', '123.example.com.', 'a-b.com', '127.0.0.1',
-		'a'.repeat(63) + '.com', 'a.'.repeat(126) + 'a'] {
+		'host-name.example.com.', '123.example.com.', 'a-b.com', '127.0.0.1', 'a'.repeat(63) + '.com',
+		'a.'.repeat(126) + 'a'] {
 		assert is_valid(hostname), hostname
 	}
 	for hostname in ['', '.example.com', 'example.com..', 'host..domain', '-hostname', 'hostname-',
@@ -649,12 +656,17 @@ fn test_parse_terminal_exec() {
 		'b',
 		'c',
 	]
-	assert (parse_terminal_exec(['xdg-terminal-exec', '-e', 'a', 'b', 'c']) or {
-		[]string{}
-	}) == ['a', 'b', 'c']
-	assert (parse_terminal_exec(['xdg-terminal-exec', 'a', '-e', 'b', 'c']) or {
-		[]string{}
-	}) == ['a', '-e', 'b', 'c']
+	assert (parse_terminal_exec(['xdg-terminal-exec', '-e', 'a', 'b', 'c']) or { []string{} }) == [
+		'a',
+		'b',
+		'c',
+	]
+	assert (parse_terminal_exec(['xdg-terminal-exec', 'a', '-e', 'b', 'c']) or { []string{} }) == [
+		'a',
+		'-e',
+		'b',
+		'c',
+	]
 }
 
 fn test_cgroup_path_from_contents() {

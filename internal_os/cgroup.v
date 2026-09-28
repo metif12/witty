@@ -10,7 +10,7 @@ pub:
 
 // cgroup_path_from_contents extracts everything after the final colon and
 // trims only the trailing characters ignored by the cgroup v2 proc format.
-pub fn cgroup_path_from_contents(contents string) CgroupCurrentResult {
+fn cgroup_path_from_contents(contents string) CgroupCurrentResult {
 	idx := contents.last_index_u8(`:`)
 	if idx < 0 {
 		return CgroupCurrentResult{}

@@ -39,12 +39,20 @@ pub fn (r ResourcesDir) host() ?string {
 
 // The sentinel values are target-specific because each package layout uses
 // the exact terminfo database format selected by the pinned build.
-const resources_sentinels = $if windows { ['terminfo/ghostty.terminfo'] } $else $if macos { [
-	'terminfo/78/xterm-ghostty',
-] } $else $if freebsd { ['site-terminfo/g/ghostty', 'site-terminfo/x/xterm-ghostty'] } $else { [
-	'terminfo/g/ghostty',
-	'terminfo/x/xterm-ghostty',
-] }
+const resources_sentinels = $if windows {
+	['terminfo/ghostty.terminfo']
+} $else $if macos {
+	[
+		'terminfo/78/xterm-ghostty',
+	]
+} $else $if freebsd {
+	['site-terminfo/g/ghostty', 'site-terminfo/x/xterm-ghostty']
+} $else {
+	[
+		'terminfo/g/ghostty',
+		'terminfo/x/xterm-ghostty',
+	]
+}
 
 // resources_dir gets the directory to the bundled resources directory, if it
 // exists (not all platforms or packages have it). This translates Ghostty's
@@ -86,7 +94,7 @@ fn resources_dir_from_env() ?ResourcesDir {
 
 // resources_dir_from_exe climbs the directory tree starting from the given
 // executable path, looking for the terminfo bundle as Ghostty expects it.
-pub fn resources_dir_from_exe(exe_path string) ResourcesDir {
+fn resources_dir_from_exe(exe_path string) ResourcesDir {
 	mut exe := exe_path
 
 	for {

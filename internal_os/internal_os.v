@@ -370,11 +370,6 @@ pub fn (t &TempDir) name() string {
 	return t.dir_name
 }
 
-pub fn (t TempDir) create_file(name string) !os.File {
-	full := os.join_path(t.path, name)
-	return os.create(full)
-}
-
 pub fn (mut t TempDir) deinit() {
 	if t.destroyed || t.dir_name.len == 0 || t.path != os.join_path(t.parent, t.dir_name) {
 		return
@@ -945,10 +940,4 @@ pub fn (self &ShellEscapeWriter) string() string {
 
 pub fn (mut self ShellEscapeWriter) deinit() {
 	self.buffer = []u8{}
-}
-
-pub fn shell_escape(data string) string {
-	mut writer := ShellEscapeWriter.init()
-	writer.write(data)
-	return writer.string()
 }
