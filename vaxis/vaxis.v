@@ -2375,8 +2375,12 @@ pub fn hyperlink(text string, uri string, style Style) string {
 }
 
 pub fn copy_to_system_clipboard(text string) {
-	print('\x1b]52;c;${base64.encode_str(text)}\a')
+	print(clipboard_copy_sequence(text))
 	flush_stdout()
+}
+
+pub fn clipboard_copy_sequence(text string) string {
+	return '\x1b]52;c;${base64.encode_str(text)}\x1b\\'
 }
 
 pub fn truncate(text string, width int) string {

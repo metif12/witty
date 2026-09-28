@@ -684,3 +684,7 @@ fn test_pinned_vaxis_gwidth_methods_and_uucode_properties() {
 	assert first_grapheme_byte_length('a🏿') == 'a🏿'.len
 	assert first_grapheme_byte_length('\r\n') == 2
 }
+
+fn test_clipboard_copy_uses_pinned_osc52_terminator() {
+	assert clipboard_copy_sequence('abc') == '\x1b]52;c;YWJj\x1b\\'
+}
