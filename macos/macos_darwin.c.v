@@ -233,6 +233,8 @@ fn C.CTFontDescriptorCreateCopyWithVariation(original voidptr, id voidptr, value
 
 fn C.CTFontDescriptorCopyAttribute(desc voidptr, attribute voidptr) voidptr
 
+fn C.CTFontGetGlyphCount(font voidptr) isize
+
 fn C.CTFontCreateWithFontDescriptor(desc voidptr, size f64, matrix voidptr) voidptr
 
 fn C.CTFontCreateCopyWithAttributes(font voidptr, size f64, matrix voidptr, desc voidptr) voidptr
@@ -1271,6 +1273,10 @@ pub fn (f &CTFont) copy_post_script_name() !&CFString {
 
 pub fn (f &CTFont) get_symbolic_traits() CTFontSymbolicTraits {
 	return CTFontSymbolicTraits.from_raw(C.CTFontGetSymbolicTraits(voidptr(f)))
+}
+
+pub fn (f &CTFont) get_glyph_count() int {
+	return int(C.CTFontGetGlyphCount(voidptr(f)))
 }
 
 pub fn (f &CTFont) get_glyphs_for_characters(characters []u16, glyphs []CGGlyph) bool {

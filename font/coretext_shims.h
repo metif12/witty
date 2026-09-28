@@ -58,61 +58,6 @@ static void witty_ct_release(void *ptr) {
 	if (ptr) CFRelease((CFTypeRef)ptr);
 }
 
-static int witty_ct_descriptor_is_color(void *desc_ptr) {
-	if (!desc_ptr) return 0;
-	CTFontRef font = CTFontCreateWithFontDescriptor(
-		(CTFontDescriptorRef)desc_ptr, 12.0, NULL);
-	if (!font) return 0;
-	CTFontSymbolicTraits traits = CTFontGetSymbolicTraits(font);
-	CFRelease(font);
-	return (traits & kCTFontTraitColorGlyphs) != 0;
-}
-
-// Primitive CoreText accessors used by the direct V translation of
-// discovery.zig's Score.score().
-static uint64_t witty_ct_font_glyph_count(void *font_ptr) {
-	if (!font_ptr) return 0;
-	CFIndex count = CTFontGetGlyphCount((CTFontRef)font_ptr);
-	return count > 0 ? (uint64_t)count : 0;
-}
-
-// Return the three symbolic traits used by discovery as compact bridge bits:
-// bit 0 bold, bit 1 italic, and bit 2 monospace.
-static uint32_t witty_ct_descriptor_traits(void *desc_ptr) {
-	if (!desc_ptr) return 0;
-	uint32_t result = 0;
-	CFDictionaryRef traits = (CFDictionaryRef)CTFontDescriptorCopyAttribute(
-		(CTFontDescriptorRef)desc_ptr, kCTFontTraitsAttribute);
-	if (!traits) return 0;
-	CFNumberRef symbolic = (CFNumberRef)CFDictionaryGetValue(
-		traits, kCTFontSymbolicTrait);
-	if (symbolic) {
-		int32_t raw = 0;
-		if (CFNumberGetValue(symbolic, kCFNumberSInt32Type, &raw)) {
-			CTFontSymbolicTraits value = (CTFontSymbolicTraits)(uint32_t)raw;
-			if (value & kCTFontTraitBold) result |= 1u;
-			if (value & kCTFontTraitItalic) result |= 2u;
-			if (value & kCTFontTraitMonoSpace) result |= 4u;
-		}
-	}
-	CFRelease(traits);
-	return result;
-}
-
-static int witty_ct_descriptor_style_name(
-	void *desc_ptr, uint8_t *buf, size_t len
-) {
-	if (!desc_ptr || !buf || len == 0) return 0;
-	buf[0] = 0;
-	CFStringRef value = (CFStringRef)CTFontDescriptorCopyAttribute(
-		(CTFontDescriptorRef)desc_ptr, kCTFontStyleNameAttribute);
-	if (!value) return 0;
-	Boolean ok = CFStringGetCString(
-		value, (char *)buf, (CFIndex)len, kCFStringEncodingUTF8);
-	CFRelease(value);
-	return ok ? 1 : 0;
-}
-
 static void *witty_ct_font_copy_variation_axes(void *font_ptr) {
 	if (!font_ptr) return NULL;
 	return (void *)CTFontCopyVariationAxes((CTFontRef)font_ptr);
@@ -281,11 +226,6 @@ static void witty_coretext_destroy_hb_font(void *font_ptr) {
 // --- Non-Apple stubs for discovery/face helpers. ---
 
 static void witty_ct_release(void *ptr) { (void)ptr; }
-static int witty_ct_descriptor_is_color(void *desc_ptr) {
-	(void)desc_ptr;
-	return 0;
-}
-
 static void *witty_ct_font_copy_variation_axes(void *font_ptr) {
 	(void)font_ptr;
 	return NULL;

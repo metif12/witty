@@ -7,9 +7,6 @@ import log
 import macos
 import opentype
 
-fn C.witty_ct_font_glyph_count(font_ptr voidptr) u64
-fn C.witty_ct_descriptor_traits(desc_ptr voidptr) u32
-fn C.witty_ct_descriptor_style_name(desc_ptr voidptr, buf &u8, len usize) int
 fn C.witty_ct_font_copy_variation_axes(font_ptr voidptr) voidptr
 fn C.witty_ct_font_copy_variation_values(font_ptr voidptr) voidptr
 fn C.witty_ct_variation_count(axes_ptr voidptr) int
@@ -151,8 +148,8 @@ fn Score.score(desc &Descriptor, ct_desc voidptr) Score {
 	defer { native_font.release() }
 	font_ptr := voidptr(native_font)
 
-	glyph_count_raw := C.witty_ct_font_glyph_count(font_ptr)
-	glyph_count := if glyph_count_raw > u64(0xffff) { u16(0xffff) } else { u16(glyph_count_raw) }
+	glyph_count_raw := native_font.get_glyph_count()
+	glyph_count := if glyph_count_raw > 0xffff { u16(0xffff) } else { u16(glyph_count_raw) }
 
 	mut has_codepoint := false
 	if desc.codepoint > 0 {
@@ -164,10 +161,22 @@ fn Score.score(desc &Descriptor, ct_desc voidptr) Score {
 		has_codepoint = native_font.get_glyphs_for_characters(unichars[..len], glyphs[..len])
 	}
 
-	traits := C.witty_ct_descriptor_traits(ct_desc)
-	mut is_bold := traits & 1 != 0
-	mut is_italic := traits & 2 != 0
-	monospace := traits & 4 != 0
+	mut symbolic_traits := macos.CTFontSymbolicTraits{}
+	if traits_ptr := descriptor.copy_attribute(.traits) {
+		traits := unsafe { &macos.CFDictionary(traits_ptr) }
+		defer { traits.release() }
+		symbolic_ptr := traits.get_value(macos.CTFontTraitKey.symbolic.key())
+		if !isnil(symbolic_ptr) {
+			symbolic := unsafe { &macos.CFNumber(symbolic_ptr) }
+			mut raw := i32(0)
+			if symbolic.get_value(.sint32, voidptr(&raw)) {
+				symbolic_traits = macos.CTFontSymbolicTraits.from_raw(u32(raw))
+			}
+		}
+	}
+	mut is_bold := symbolic_traits.bold
+	mut is_italic := symbolic_traits.italic
+	monospace := symbolic_traits.monospace
 
 	core_face := CoreTextFace{
 		ct_font: font_ptr
@@ -212,13 +221,14 @@ fn Score.score(desc &Descriptor, ct_desc voidptr) Score {
 		}
 	}
 
-	mut style_buf := []u8{len: 128}
-	style_str := if unsafe {
-		C.witty_ct_descriptor_style_name(ct_desc, &style_buf[0], usize(style_buf.len))
-	} != 0 {
-		unsafe { cstring_to_vstring(&char(style_buf.data)) }
-	} else {
-		''
+	mut style_str := ''
+	if style_ptr := descriptor.copy_attribute(.style_name) {
+		style := unsafe { &macos.CFString(style_ptr) }
+		defer { style.release() }
+		mut style_buf := []u8{len: 128}
+		if style_cstr := style.cstring(mut style_buf, .utf8) {
+			style_str = unsafe { cstring_to_vstring(style_cstr) }
+		}
 	}
 
 	mut desired_styles := []string{}
