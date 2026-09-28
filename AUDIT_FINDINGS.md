@@ -660,7 +660,8 @@ shaders (pipeline table, vertex attributes, and the Uniforms/CellText/CellBg/
 Image/BgImage ABI structs) and the OpenGL wrappers Frame/Pipeline/RenderPass/
 Sampler/Target/Texture/buffer/shaders, plus the `Metal.zig` and `OpenGL.zig`
 API surfaces, including Metal's asynchronous command-buffer completion block.
-datastruct: CircBuf, ArrayListCollection, CacheTable. ssh: cache Entry/DiskCache. tmux:
+datastruct: CircBuf, ArrayListCollection, CacheTable, comparison,
+IntrusiveDoublyLinkedList, LRU HashMap, SegmentedPool. ssh: cache Entry/DiskCache. tmux:
 control, layout, output.
 termio: exec, shell_integration, stream_handler. simd: index_of, base64, vt.
 synthetic: Bytes, Generator, Utf8, Osc, and all three CLI actions.
