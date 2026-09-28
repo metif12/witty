@@ -265,7 +265,39 @@ fn test_preview_mouse_selects_visible_theme() {
 			col: 5
 		}
 	}))!
+	_ = p.draw()
 	assert p.current == 2
+}
+
+fn test_preview_draw_consumes_only_latest_mouse_event_and_highlights_row() {
+	mut p := Preview.init([
+		preview_test_theme('One'),
+		preview_test_theme('Two'),
+		preview_test_theme('Three'),
+	], .all)!
+	p.winsize = vaxis.Winsize{ rows: 20, cols: 100 }
+	p.update(Event(MouseEvent{
+		mouse: vaxis.Mouse{
+			button: .left
+			type_: .release
+			row: 1
+			col: 5
+		}
+	}))!
+	p.update(Event(MouseEvent{
+		mouse: vaxis.Mouse{
+			button: .none_
+			type_: .motion
+			row: 2
+			col: 5
+		}
+	}))!
+
+	output := p.draw()
+	assert p.current == 0
+	assert p.mouse == none
+	expected := vaxis.hyperlink('Three', p.themes[2].to_uri(), p.ui_highlighted())
+	assert output.contains(expected)
 }
 
 fn test_preview_draws_empty_state() {
@@ -284,7 +316,7 @@ fn test_preview_draw_renders_theme_load_failure() {
 			theme: 'Missing'
 			path: missing
 		}]
-		filtered: [0]
+		filtered: [usize(0)]
 		winsize: vaxis.Winsize{ rows: 12, cols: 80 }
 		text_input: vaxis.TextInput.new()
 	}

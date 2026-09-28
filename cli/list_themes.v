@@ -104,12 +104,13 @@ pub struct Preview {
 mut:
 	should_quit  bool
 	themes       []ThemeListElement
-	filtered     []int
-	current      int
-	window       int
+	filtered     []usize
+	current      usize
+	window       usize
 	hex          bool
 	mode         PreviewMode  = .normal
 	color_scheme vaxis.Scheme = .light
+	mouse        ?vaxis.Mouse
 	search_text  string
 	text_input   vaxis.TextInput
 	winsize      vaxis.Winsize
@@ -167,14 +168,14 @@ fn (mut self Preview) update_filtered() ! {
 			})
 			if r != none {
 				theme.rank = r
-				self.filtered << i
+				self.filtered << usize(i)
 			}
 		}
 	} else {
 		for i, mut theme in self.themes {
 			theme_config.load_file(theme.path)!
 			if should_include_theme(self.theme_filter, theme_config) {
-				self.filtered << i
+				self.filtered << usize(i)
 				theme.rank = none
 			}
 		}
@@ -195,12 +196,13 @@ fn (mut self Preview) update_filtered() ! {
 	if selected.len > 0 {
 		for idx, filt_idx in self.filtered {
 			if self.themes[filt_idx].theme == selected {
+				idx_usize := usize(idx)
 				// Keep the relative position but ensure all search results are visible
-				new_window := if idx > relative { idx - relative } else { 0 }
+				new_window := if idx_usize > relative { idx_usize - relative } else { usize(0) }
 				// If the new window would hide some results at the top, adjust it
-				self.current = idx
+				self.current = idx_usize
 				self.window = if self.filtered.len <= small_list_threshold {
-					0
+					usize(0)
 				} else {
 					new_window
 				}
@@ -214,7 +216,7 @@ fn (mut self Preview) update_filtered() ! {
 }
 
 // up moves the selection up by count items.
-fn (mut self Preview) up(count int) {
+fn (mut self Preview) up(count usize) {
 	if self.filtered.len == 0 {
 		self.current = 0
 		return
@@ -223,14 +225,14 @@ fn (mut self Preview) up(count int) {
 }
 
 // down moves the selection down by count items.
-fn (mut self Preview) down(count int) {
+fn (mut self Preview) down(count usize) {
 	if self.filtered.len == 0 {
 		self.current = 0
 		return
 	}
 	self.current += count
-	if self.current >= self.filtered.len {
-		self.current = self.filtered.len - 1
+	if self.current >= usize(self.filtered.len) {
+		self.current = usize(self.filtered.len - 1)
 	}
 }
 
@@ -268,9 +270,8 @@ pub fn (mut self Preview) update(event Event) ! {
 						self.current = 0
 					}
 					if key.matches_any([vaxis.end, vaxis.kp_end], vaxis.Modifiers{}) {
-						if self.filtered.len > 0 {
-							self.current = self.filtered.len - 1
-						}
+						assert self.filtered.len > 0
+						self.current = usize(self.filtered.len - 1)
 					}
 					if key.matches_any([u32(`j`), u32(`+`), vaxis.down, vaxis.kp_down, vaxis.kp_add], vaxis.Modifiers{}) {
 						self.down(1)
@@ -290,9 +291,9 @@ pub fn (mut self Preview) update(event Event) ! {
 					if key.matches(u32(`d`), vaxis.Modifiers{}) {
 						self.hex = false
 					}
-					if self.filtered.len > 0 && key.matches(u32(`c`), vaxis.Modifiers{}) {
+					if key.matches(u32(`c`), vaxis.Modifiers{}) {
 						vaxis.copy_to_system_clipboard(self.themes[self.filtered[self.current]].theme)
-					} else if self.filtered.len > 0 && key.matches(u32(`c`), vaxis.Modifiers{
+					} else if key.matches(u32(`c`), vaxis.Modifiers{
 						shift: true
 					}) {
 						vaxis.copy_to_system_clipboard(self.themes[self.filtered[self.current]].path)
@@ -356,19 +357,7 @@ pub fn (mut self Preview) update(event Event) ! {
 			self.color_scheme = event.scheme
 		}
 		MouseEvent {
-			if self.mode == .normal {
-				if event.mouse.button == .wheel_up {
-					self.up(1)
-				} else if event.mouse.button == .wheel_down {
-					self.down(1)
-				} else if event.mouse.button == .left && event.mouse.type_ == .release
-					&& event.mouse.col < min_int(32, int(self.winsize.cols)) {
-					selection := self.window + event.mouse.row
-					if selection < self.filtered.len {
-						self.current = selection
-					}
-				}
-			}
+			self.mouse = event.mouse
 		}
 		WinsizeEvent {
 			self.winsize = event.winsize
@@ -561,20 +550,42 @@ pub fn (mut self Preview) draw() string {
 	height := max_int(int(self.winsize.rows), 1)
 	list_width := min_int(32, width)
 	standard := self.ui_standard()
+	mut highlight := ?usize(none)
+
+	if mouse := self.mouse {
+		self.mouse = none
+		if self.mode == .normal {
+			if mouse.button == .wheel_up {
+				self.up(1)
+			}
+			if mouse.button == .wheel_down {
+				self.down(1)
+			}
+			if int(mouse.col) < list_width && int(mouse.row) < height {
+				if mouse.button == .left && mouse.type_ == .release {
+					selection := self.window + usize(mouse.row)
+					if selection < usize(self.filtered.len) {
+						self.current = selection
+					}
+				}
+				highlight = usize(mouse.row)
+			}
+		}
+	}
 
 	if self.filtered.len == 0 {
 		self.current = 0
 		self.window = 0
 	} else {
-		end := self.window + height - 1
+		end := self.window + usize(height - 1)
 		if self.current > end {
-			self.window = self.current - height + 1
+			self.window = self.current - usize(height) + 1
 		}
 		if self.current < self.window {
 			self.window = self.current
 		}
-		if self.window >= self.filtered.len {
-			self.window = self.filtered.len - 1
+		if self.window >= usize(self.filtered.len) {
+			self.window = usize(self.filtered.len - 1)
 		}
 	}
 
@@ -585,8 +596,8 @@ pub fn (mut self Preview) draw() string {
 	}
 
 	for row in 0 .. height {
-		index := self.window + row
-		if index >= self.filtered.len {
+		index := self.window + usize(row)
+		if index >= usize(self.filtered.len) {
 			break
 		}
 		theme := self.themes[self.filtered[index]]
@@ -598,7 +609,12 @@ pub fn (mut self Preview) draw() string {
 				put_segment(mut out, row, list_width - 2, list_width, ' ❮', self.ui_selected())
 			}
 		} else {
-			put_link(mut out, row, 2, list_width, theme.theme, theme.to_uri(), standard)
+			style := if highlighted := highlight {
+				if highlighted == usize(row) { self.ui_highlighted() } else { standard }
+			} else {
+				standard
+			}
+			put_link(mut out, row, 2, list_width, theme.theme, theme.to_uri(), style)
 		}
 	}
 
@@ -625,10 +641,8 @@ pub fn (mut self Preview) draw() string {
 				modal_width - 2)))
 		}
 		.save {
-			if self.filtered.len > 0 {
-				theme := self.themes[self.filtered[self.current]]
-				draw_save_modal(mut out, width, height, theme.theme, standard)
-			}
+			theme := self.themes[self.filtered[self.current]]
+			draw_save_modal(mut out, width, height, theme.theme, standard)
 			out.write_string(vaxis.hide_cursor())
 		}
 	}
@@ -1097,14 +1111,17 @@ pub fn run_list_themes(args []string) !int {
 	mut it := themepkg.LocationIterator.new()
 	for {
 		loc := it.next() or { break }
+		if !os.exists(loc.dir) {
+			continue
+		}
 		entries := os.ls(loc.dir) or {
-			eprintln('error trying to open ${loc.dir}')
+			eprintln('error trying to open ${loc.dir}: ${err}')
 			continue
 		}
 		for entry in entries {
-			// Skip non-files and .DS_Store
+			// Ghostty accepts regular files and symbolic-link directory entries.
 			full_path := os.join_path(loc.dir, entry)
-			if !os.is_file(full_path) {
+			if !os.is_file(full_path) && !os.is_link(full_path) {
 				continue
 			}
 			if entry == '.DS_Store' {
