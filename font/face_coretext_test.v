@@ -140,7 +140,7 @@ fn test_coretext_in_memory_font() {
 			}
 		}) or { panic(err) }
 		defer { face.deinit() }
-		assert face.hb_font != unsafe { nil }
+		assert face.hb_font.ptr != unsafe { nil }
 		assert face.glyph_index(u32(`A`)) != none
 		mut atlas := Atlas.init(128, .grayscale)!
 		defer { atlas.deinit() }

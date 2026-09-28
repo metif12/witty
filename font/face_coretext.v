@@ -5,6 +5,7 @@ import macos
 import math
 import opentype
 import quirks
+import harfbuzz
 
 // CoreText-based font face implementation for macOS.
 //
@@ -12,19 +13,7 @@ import quirks
 // framework. It provides glyph lookup, rendering, metrics, and table access.
 //
 // This is the macOS equivalent of the FreeType-based Face in face.v.
-// CoreText calls are isolated in coretext_shims.h so this module also
-// compiles on non-Apple targets, where constructors report unsupported data.
-//
 // Translated from ghostty/src/font/face/coretext.zig
-
-// CoreText helpers implemented in the C shim header (font/coretext_shims.h).
-// These are only functional on macOS; on other platforms they return
-// null/zero so the module still compiles.
-#include "coretext_shims.h"
-
-fn C.witty_coretext_create_hb_font(font_ptr voidptr, pixels f64) voidptr
-
-fn C.witty_coretext_destroy_hb_font(font_ptr voidptr)
 
 // copy_coretext_font_with_size returns a retained copy of a native CoreText
 // font. It returns nil on non-Darwin targets or for a non-CoreText face.
@@ -66,7 +55,7 @@ pub mut:
 
 	// Harfbuzz font corresponding to this face. We only use this
 	// if we're using Harfbuzz.
-	hb_font voidptr = unsafe { nil }
+	hb_font harfbuzz.Font
 
 	// Set quirks.disableDefaultFontFeatures
 	quirks_disable_default_font_features bool
@@ -174,13 +163,23 @@ pub fn CoreTextFace.init_font(ct_font voidptr, opts FaceOptions) !CoreTextFace {
 		}
 	}
 
-	hb_font := C.witty_coretext_create_hb_font(ct_font, opts.size.pixels())
-	if isnil(hb_font) {
+	mut hb_font := harfbuzz.Font{}
+	$if macos {
+		hb_font = harfbuzz.Font.create_coretext(ct_font) or {
+			if c := color {
+				c.deinit()
+			}
+			release_coretext_font(ct_font)
+			return err
+		}
+		pixels := opentype.F26Dot6.from(opts.size.pixels())
+		hb_font.set_scale(u32(pixels.raw), u32(pixels.raw))
+	} $else {
 		if c := color {
 			c.deinit()
 		}
 		release_coretext_font(ct_font)
-		return error('CoreText: failed to create HarfBuzz font')
+		return error('CoreText: unsupported platform')
 	}
 	mut result := CoreTextFace{
 		ct_font: ct_font
@@ -252,10 +251,7 @@ pub fn (mut self CoreTextFace) deinit() {
 		release_coretext_font(self.ct_font)
 		self.ct_font = unsafe { nil }
 	}
-	if !isnil(self.hb_font) {
-		C.witty_coretext_destroy_hb_font(self.hb_font)
-		self.hb_font = unsafe { nil }
-	}
+	self.hb_font.destroy()
 	if c := self.color {
 		c.deinit()
 	}
