@@ -703,13 +703,16 @@ mut:
 	pending        []u8
 	fd             int = -1
 	original_state termios.Termios
+	stdin_handle   voidptr
+	stdout_handle  voidptr
+	input_mode     u32
+	output_mode    u32
+	output_cp      u32
 }
 
 pub fn Tty.new() !Tty {
 	$if windows {
-		return Tty{
-			pending: []u8{cap: 32}
-		}
+		return Tty.open_windows()
 	} $else {
 		return Tty.open_posix()
 	}

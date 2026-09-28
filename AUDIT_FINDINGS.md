@@ -9,6 +9,7 @@ below exist. Earlier versions of this document overstated the completed review.
 
 | Area | Bug | Fix |
 |---|---|---|
+| vaxis Windows console session setup | The Windows `Tty` adapter never read or set console modes or the output code page, wrote through process `print`, and derived winsize from a generic terminal helper. Pinned `WindowsTty` saves the original modes/code page, enables raw window/mouse input and VT/UTF-8 output, writes to its console handle, queries the visible buffer rectangle, and restores/closes those handles at teardown. | Translate that console ownership and I/O surface through Win32 APIs. The `INPUT_RECORD` event decoder remains untranslated and is called out below; the Windows vaxis type gate passes, but no Windows runtime test was available. |
 | vaxis POSIX terminal restoration diagnostics | Pinned `PosixTty.deinit` logs a failed restoration of the original termios, while Witty ignored the `tcsetattr` result. A teardown failure could leave a user's terminal in raw mode without a diagnostic. | Check the restore result and log its POSIX error before following the pinned descriptor-close policy. |
 | GTK command-palette activation lifetime | Ghostty obtains a strong reference to the selected command from its selection model before closing the dialog. Witty closed first and only then indexed palette-owned command arrays, so a synchronous close/finalize could dispose the command and clear the window before activation used them. | Resolve the visible command before closing and hold a native palette reference through dispatch, preserving the selected wrapper and its action/surface state until activation returns. Invalid positions still close the dialog as in Ghostty. |
 | vaxis reader-thread capability handling | The input loop queued parsed terminal reports and applied vaxis capability and DA1 handling only when the preview drained that queue. A DA1 response therefore could not end startup's query wait until the UI polled, and other capabilities could be delayed behind unrelated application events. The shared query flag was also a plain boolean despite cross-thread access. | Intercept parsed input on the reader thread before posting application events, keep direct and SIGWINCH events as direct queue posts, and use an atomic query flag. PTY coverage verifies DA1 completes before queue drainage and that the report does not become an application event. |
@@ -724,8 +725,10 @@ none, browser, action, ipc. dependencies: zf 0.10.3 ranking/highlighting.
   between renders. Parsed input is now intercepted on the reader thread before
   posting application events, including DA1 query completion; its cross-thread
   completion flag is atomic. The loop remains specialized to `InputEvent`
-  rather than source-generic `Loop(Event)`. Windows still uses the V console
-  adapter.
+  rather than source-generic `Loop(Event)`. Windows now owns the pinned
+  console mode/code-page lifecycle and handle-based output/winsize query, but
+  still uses the V key polling adapter instead of pinned `INPUT_RECORD`
+  decoding for key, mouse, resize, and focus events.
   Image decoding/transcoding and high-level loading also remain absent.
   Pinned vaxis width data and all three `gwidth.Method` algorithms are
   available.
