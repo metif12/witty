@@ -187,9 +187,11 @@ fn split_tree_dispose(obj voidptr) {
 	priv := split_tree_priv(obj)
 	if !isnil(priv.wrapper) {
 		mut self := unsafe { &SplitTreeWidget(priv.wrapper) }
-		self.last_focused = unsafe { nil }
+		self.last_focused.set(unsafe { nil })
 		if self.rebuild_source != 0 {
-			C.g_source_remove(self.rebuild_source)
+			if !C.g_source_remove(self.rebuild_source) {
+				log.warn('unable to remove rebuild source')
+			}
 			self.rebuild_source = 0
 		}
 		self.rebuild_pending = false
@@ -292,9 +294,9 @@ pub mut:
 	tree_bin AdwBin = unsafe { nil }
 
 	// Last focused surface in the tree. We need this to handle various tree
-	// change states. In ghostty this is a WeakRef(Surface); here a plain
-	// (weak) pointer that we clear when the surface goes away.
-	last_focused &SurfaceWidget = unsafe { nil }
+	// change states. The weak reference clears itself if the surface is
+	// finalized and takes a temporary strong reference when read.
+	last_focused WeakRef = weak_ref_empty()
 
 	// The source that we use to rebuild the tree. Also used to debounce
 	// updates. 0 means "none".
@@ -550,12 +552,15 @@ fn (mut self SplitTreeWidget) get_active_surface_handle() ?datastruct.Handle {
 
 	// Otherwise fall back to the last-focused surface, if it's still in the
 	// tree. This keeps background actions (bell etc.) working.
-	if !isnil(self.last_focused) {
+	last_focused := self.last_focused.get()
+	if !isnil(last_focused) {
+		defer {
+			object_unref(last_focused)
+		}
 		mut it2 := self.tree.iterator()
 		for {
 			entry := it2.next() or { break }
-			mut view := entry.view
-			if view.eql(self.last_focused) {
+			if GObject(entry.view.widget) == last_focused {
 				return entry.handle
 			}
 		}
@@ -566,11 +571,17 @@ fn (mut self SplitTreeWidget) get_active_surface_handle() ?datastruct.Handle {
 
 // get_last_focused_surface returns the last-focused surface in the tree, or
 // `none`. Mirrors `getLastFocusedSurface`.
-pub fn (self &SplitTreeWidget) get_last_focused_surface() ?&SurfaceWidget {
-	if isnil(self.last_focused) {
+pub fn (mut self SplitTreeWidget) get_last_focused_surface() ?&SurfaceWidget {
+	last_focused := self.last_focused.get()
+	if isnil(last_focused) {
 		return none
 	}
-	return self.last_focused
+	defer {
+		object_unref(last_focused)
+	}
+	return window_surface_wrapper(GtkWidget(last_focused)) or {
+		panic('last-focused object is not a translated surface')
+	}
 }
 
 // get_tree_has_parents returns whether any surface in the tree currently has a
@@ -615,7 +626,7 @@ pub fn (mut self SplitTreeWidget) new_split(direction datastruct.Direction, pare
 	single_tree := datastruct.SplitTree.new[SurfaceWidget](surface)
 
 	// Move focus to the new surface no matter what.
-	self.last_focused = surface
+	self.last_focused.set(GObject(surface.widget))
 
 	// If we have no tree yet, this single tree becomes our tree.
 	if !self.has_tree {
@@ -702,7 +713,7 @@ pub fn (mut self SplitTreeWidget) goto_(to datastruct.Goto) bool {
 	surface.grab_focus()
 
 	// Record the new last-focused so a subsequent tree change refocuses right.
-	self.last_focused = surface
+	self.last_focused.set(GObject(surface.widget))
 
 	// Handle zoom preservation on navigation.
 	if self.tree.zoomed != none {
@@ -930,7 +941,7 @@ pub fn (mut self SplitTreeWidget) close_confirmation_close() {
 	// Grab focus. We set last_focused because focus is set when the tree is
 	// redrawn.
 	if !isnil(next_focus) {
-		self.last_focused = next_focus
+		self.last_focused.set(GObject(next_focus.widget))
 	}
 }
 
@@ -970,7 +981,7 @@ pub fn (mut self SplitTreeWidget) prop_surface_focused(surface &SurfaceWidget) {
 	if !surface.get_focused() {
 		return
 	}
-	self.last_focused = surface
+	self.last_focused.set(GObject(surface.widget))
 	self.notify_property(g_split_tree_pspec_active_surface)
 }
 
@@ -1048,8 +1059,15 @@ pub fn (mut self SplitTreeWidget) on_rebuild() {
 	}
 
 	// Refocus the last-focused surface (GTK resets focus during rebuild).
-	if !isnil(self.last_focused) {
-		self.last_focused.grab_focus()
+	last_focused := self.last_focused.get()
+	if !isnil(last_focused) {
+		defer {
+			object_unref(last_focused)
+		}
+		surface := window_surface_wrapper(GtkWidget(last_focused)) or {
+			panic('last-focused object is not a translated surface')
+		}
+		surface.grab_focus()
 	}
 
 	self.notify_property(g_split_tree_pspec_is_split)
@@ -1139,7 +1157,9 @@ fn split_tree_split_destroy_cb(widget voidptr, data voidptr) {
 	}
 	mut self := unsafe { &SplitTreeSplit(data) }
 	if self.idle != 0 {
-		C.g_source_remove(self.idle)
+		if !C.g_source_remove(self.idle) {
+			log.warn('unable to remove idle source')
+		}
 		self.idle = 0
 	}
 	self.paned = unsafe { nil }
