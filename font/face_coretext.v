@@ -1,6 +1,7 @@
 module font
 
 import log
+import macos
 import math
 import opentype
 import quirks
@@ -58,8 +59,6 @@ fn C.witty_coretext_create_hb_font(font_ptr voidptr, pixels f64) voidptr
 fn C.witty_coretext_destroy_hb_font(font_ptr voidptr)
 
 fn C.witty_coretext_glyph_bounds(font_ptr voidptr, glyph_id u32, x_out &f64, y_out &f64, width_out &f64, height_out &f64) int
-
-fn C.witty_coretext_render_glyph(font_ptr voidptr, glyph_id u32, canvas_width u32, canvas_height u32, rect_x f64, rect_y f64, translate_x f64, translate_y f64, scale_x f64, scale_y f64, is_color int, thicken int, thicken_strength u8, synthetic_bold f64, buffer_out &&u8) int
 
 fn C.witty_ct_font_from_descriptor(desc voidptr, size f64) voidptr
 
@@ -479,23 +478,75 @@ pub fn (self CoreTextFace) render_glyph(mut atlas Atlas, glyph_index u32, opts R
 		log.warn('font atlas color depth doesn\'t equal font color depth atlas=${atlas.format.depth()} font=${depth}')
 		return error('CoreText: font atlas color depth does not match glyph color depth')
 	}
-	mut pixels := &u8(unsafe { nil })
-	line_width := self.synthetic_bold or { 0.0 }
-	if C.witty_coretext_render_glyph(self.ct_font, glyph_index, layout.px_width, layout.px_height, layout.rect.x, layout.rect.y, layout.translate_x, layout.translate_y, layout.scale_x, layout.scale_y, int(is_color), int(opts.thicken), opts.thicken_strength, line_width, &pixels) == 0 {
-		return error('CoreText: failed to rasterize glyph')
-	}
-	defer { C.witty_coretext_free_buffer(pixels) }
-	region := atlas.reserve(layout.px_width, layout.px_height)!
-	atlas.set(region, unsafe {
-		pixels.vbytes(int(layout.px_width * layout.px_height * depth))
-	})
-	return Glyph{
-		width: layout.px_width
-		height: layout.px_height
-		offset_x: layout.offset_x
-		offset_y: layout.offset_y
-		atlas_x: region.x
-		atlas_y: region.y
+	$if macos {
+		color_space := if is_color {
+			macos.CGColorSpace.create_named(.display_p3)!
+		} else {
+			macos.CGColorSpace.create_named(.linear_gray)!
+		}
+		defer { color_space.release() }
+
+		mut pixels := []u8{len: int(usize(layout.px_width) * usize(layout.px_height) * usize(depth))}
+		context_opts := if is_color {
+			u32(macos.CGBitmapInfo.byte_order_32_little) |
+				u32(macos.CGImageAlphaInfo.premultiplied_first)
+		} else {
+			u32(macos.CGImageAlphaInfo.only)
+		}
+		bitmap := macos.CGBitmapContext.create(pixels, usize(layout.px_width), usize(layout.px_height),
+			8, usize(layout.px_width * depth), color_space, context_opts)!
+		context := bitmap.as_context()
+		defer { context.release() }
+
+		if is_color {
+			context.set_rgb_fill_color(0, 0, 0, 0)
+		} else {
+			context.set_gray_fill_color(0, 0)
+		}
+		context.fill_rect(macos.CGRect.init(0, 0, f64(layout.px_width), f64(layout.px_height)))
+
+		context.set_allows_font_smoothing(true)
+		context.set_should_smooth_fonts(opts.thicken)
+		context.set_allows_font_subpixel_positioning(true)
+		context.set_should_subpixel_position_fonts(true)
+		context.set_allows_font_subpixel_quantization(false)
+		context.set_should_subpixel_quantize_fonts(false)
+		context.set_allows_antialiasing(true)
+		context.set_should_antialias(true)
+
+		if is_color {
+			context.set_rgb_fill_color(1, 1, 1, 1)
+			context.set_rgb_stroke_color(1, 1, 1, 1)
+		} else {
+			strength := f64(opts.thicken_strength) / 255.0
+			context.set_gray_fill_color(strength, 1)
+			context.set_gray_stroke_color(strength, 1)
+		}
+		if line_width := self.synthetic_bold {
+			context.set_text_drawing_mode(.fill_stroke)
+			context.set_line_width(line_width)
+		}
+
+		context.translate_ctm(layout.translate_x, layout.translate_y)
+		context.scale_ctm(layout.scale_x, layout.scale_y)
+		ct_font := unsafe { &macos.CTFont(self.ct_font) }
+		ct_font.draw_glyphs([macos.CGGlyph(glyph_index)], [macos.CGPoint{
+			x: -layout.rect.x
+			y: -layout.rect.y
+		}], context)
+
+		region := atlas.reserve(layout.px_width, layout.px_height)!
+		atlas.set(region, pixels)
+		return Glyph{
+			width:    layout.px_width
+			height:   layout.px_height
+			offset_x: layout.offset_x
+			offset_y: layout.offset_y
+			atlas_x:  region.x
+			atlas_y:  region.y
+		}
+	} $else {
+		return error('CoreText: unsupported platform')
 	}
 }
 

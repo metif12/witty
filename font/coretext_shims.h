@@ -222,88 +222,6 @@ static int witty_coretext_glyph_bounds(
 	return 1;
 }
 
-static int witty_coretext_render_glyph(
-	void *font_ptr,
-	uint32_t glyph_id,
-	uint32_t canvas_width,
-	uint32_t canvas_height,
-	double rect_x,
-	double rect_y,
-	double translate_x,
-	double translate_y,
-	double scale_x,
-	double scale_y,
-	int is_color,
-	int thicken,
-	uint8_t thicken_strength,
-	double synthetic_bold,
-	uint8_t **buffer_out
-) {
-	if (!font_ptr || !buffer_out || canvas_width == 0 || canvas_height == 0) return 0;
-	*buffer_out = NULL;
-
-	const size_t depth = is_color ? 4 : 1;
-	if ((size_t)canvas_width > SIZE_MAX / (size_t)canvas_height ||
-		(size_t)canvas_width * (size_t)canvas_height > SIZE_MAX / depth) return 0;
-	const size_t len = (size_t)canvas_width * (size_t)canvas_height * depth;
-	uint8_t *buf = (uint8_t *)calloc(len, 1);
-	if (!buf) return 0;
-
-	CGColorSpaceRef color_space = CGColorSpaceCreateWithName(
-		is_color ? kCGColorSpaceDisplayP3 : kCGColorSpaceLinearGray);
-	if (!color_space) {
-		free(buf);
-		return 0;
-	}
-	const CGBitmapInfo bitmap_info = is_color
-		? (kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst)
-		: kCGImageAlphaOnly;
-	CGContextRef ctx = CGBitmapContextCreate(
-		buf,
-		canvas_width,
-		canvas_height,
-		8,
-		(size_t)canvas_width * depth,
-		color_space,
-		bitmap_info);
-	CGColorSpaceRelease(color_space);
-	if (!ctx) {
-		free(buf);
-		return 0;
-	}
-
-	CGContextSetAllowsFontSmoothing(ctx, true);
-	CGContextSetShouldSmoothFonts(ctx, thicken != 0);
-	CGContextSetAllowsFontSubpixelPositioning(ctx, true);
-	CGContextSetShouldSubpixelPositionFonts(ctx, true);
-	CGContextSetAllowsFontSubpixelQuantization(ctx, false);
-	CGContextSetShouldSubpixelQuantizeFonts(ctx, false);
-	CGContextSetAllowsAntialiasing(ctx, true);
-	CGContextSetShouldAntialias(ctx, true);
-	if (is_color) {
-		CGContextSetRGBFillColor(ctx, 1.0, 1.0, 1.0, 1.0);
-		CGContextSetRGBStrokeColor(ctx, 1.0, 1.0, 1.0, 1.0);
-	} else {
-		const double strength = (double)thicken_strength / 255.0;
-		CGContextSetGrayFillColor(ctx, strength, 1.0);
-		CGContextSetGrayStrokeColor(ctx, strength, 1.0);
-	}
-	if (synthetic_bold > 0.0) {
-		CGContextSetTextDrawingMode(ctx, kCGTextFillStroke);
-		CGContextSetLineWidth(ctx, synthetic_bold);
-	}
-	CGContextTranslateCTM(ctx, translate_x, translate_y);
-	CGContextScaleCTM(ctx, scale_x, scale_y);
-	CGContextSetTextMatrix(ctx, CGAffineTransformIdentity);
-
-	CGGlyph glyph = (CGGlyph)glyph_id;
-	CGPoint pos = CGPointMake(-rect_x, -rect_y);
-	CTFontDrawGlyphs((CTFontRef)font_ptr, &glyph, &pos, 1, ctx);
-	CGContextRelease(ctx);
-	*buffer_out = buf;
-	return 1;
-}
-
 static void witty_coretext_free_buffer(uint8_t *ptr) {
 	free(ptr);
 }
@@ -881,21 +799,6 @@ static int witty_coretext_glyph_bounds(
 	if (y_out) *y_out = 0;
 	if (width_out) *width_out = 0;
 	if (height_out) *height_out = 0;
-	return 0;
-}
-
-static int witty_coretext_render_glyph(
-	void *font_ptr, uint32_t glyph_id, uint32_t canvas_width,
-	uint32_t canvas_height, double rect_x, double rect_y,
-	double translate_x, double translate_y, double scale_x, double scale_y,
-	int is_color, int thicken, uint8_t thicken_strength,
-	double synthetic_bold, uint8_t **buffer_out
-) {
-	(void)font_ptr; (void)glyph_id; (void)canvas_width; (void)canvas_height;
-	(void)rect_x; (void)rect_y; (void)translate_x; (void)translate_y;
-	(void)scale_x; (void)scale_y; (void)is_color; (void)thicken;
-	(void)thicken_strength; (void)synthetic_bold;
-	if (buffer_out) *buffer_out = NULL;
 	return 0;
 }
 

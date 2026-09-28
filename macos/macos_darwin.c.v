@@ -235,6 +235,8 @@ fn C.CTFontCreateWithFontDescriptor(desc voidptr, size f64, matrix voidptr) void
 
 fn C.CTFontCreateCopyWithAttributes(font voidptr, size f64, matrix voidptr, desc voidptr) voidptr
 
+fn C.CTFontDrawGlyphs(font voidptr, glyphs &u16, positions voidptr, count usize, context voidptr)
+
 fn C.vt_ct_typesetter_create_line(typesetter voidptr, location isize, length isize) voidptr
 
 fn C.vt_ctrun_get_glyphs_all(run voidptr, out_glyphs voidptr)
@@ -1107,6 +1109,12 @@ pub fn CTFont.create_with_descriptor(desc &CTFontDescriptor, size f64) !&CTFont 
 
 pub fn (f &CTFont) release() {
 	cf_release(voidptr(f))
+}
+
+pub fn (f &CTFont) draw_glyphs(glyphs []CGGlyph, positions []CGPoint, context &CGContext) {
+	assert positions.len == glyphs.len
+	C.CTFontDrawGlyphs(voidptr(f), glyphs.data, voidptr(positions.data), usize(glyphs.len),
+		voidptr(context))
 }
 
 // ============================================================
