@@ -715,10 +715,13 @@ none, browser, action, ipc. dependencies: zf 0.10.3 ranking/highlighting.
   applies the pinned raw termios flags until deinit, reads input bytes from that
   descriptor, queries its winsize, and writes session output there. A reader
   thread now feeds the translated bounded event queue and is stopped with the
-  pinned device-status wakeup. The loop remains specialized to `InputEvent`
-  rather than source-generic `Loop(Event)`, applies capability interception on
-  the preview thread, and still polls winsize instead of installing SIGWINCH
-  callbacks. Windows still uses the V console adapter.
+  pinned device-status wakeup. The POSIX TTY installs a SIGWINCH handler, the
+  loop registers its resize callback and posts the initial winsize, and parsed
+  in-band resize reports reset that handler. The preview blocks on the queue
+  between renders. The loop remains specialized to `InputEvent` rather than
+  source-generic `Loop(Event)`, and applies capability interception when the
+  preview drains input instead of on the reader thread. Windows still uses the
+  V console adapter.
   Image decoding/transcoding and high-level loading also remain absent.
   Pinned vaxis width data and all three `gwidth.Method` algorithms are
   available.

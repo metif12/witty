@@ -2,6 +2,13 @@ module vaxis
 
 import time
 
+pub fn Tty.notify_winsize(context voidptr, callback voidptr) ! {
+	_ = context
+	_ = callback
+}
+
+pub fn Tty.reset_winsize_handler() {}
+
 pub fn (mut tty Tty) deinit() {
 	_ = tty
 }

@@ -2,25 +2,52 @@ module vaxis
 
 import sync
 
-// InputLoop is the fixed InputEvent form of pinned vaxis Loop(Event). The
-// reader owns parsing; the caller applies capability interception as it drains
-// the queue so Vaxis state is modified on one thread.
+// InputLoop is the fixed InputEvent form of pinned vaxis Loop(Event).
+// Parsed input is intercepted when drained; direct posts and SIGWINCH
+// notifications are already application events.
+struct LoopParsedEvent {
+	event InputEvent
+}
+
+struct LoopForwardedEvent {
+	event InputEvent
+}
+
+type LoopMessage = LoopParsedEvent | LoopForwardedEvent
+
 @[heap]
 pub struct InputLoop {
 mut:
-	tty         &Tty                    = unsafe { nil }
-	queue       &EventQueue[InputEvent] = unsafe { nil }
+	tty         &Tty                     = unsafe { nil }
+	vx          &Vaxis                   = unsafe { nil }
+	queue       &EventQueue[LoopMessage] = unsafe { nil }
 	thread_     ?thread
 	quit_mutex  &sync.Mutex = unsafe { nil }
 	should_quit bool
 }
 
-pub fn InputLoop.new(mut tty Tty) &InputLoop {
+pub fn InputLoop.new(mut tty Tty, mut vx Vaxis) &InputLoop {
 	return &InputLoop{
 		tty:        &tty
-		queue:      EventQueue.new[InputEvent](512)
+		vx:         &vx
+		queue:      EventQueue.new[LoopMessage](512)
 		quit_mutex: sync.new_mutex()
 	}
+}
+
+pub fn (mut loop InputLoop) init() ! {
+	$if !windows {
+		Tty.notify_winsize(voidptr(loop), voidptr(input_loop_winsize_callback))!
+	}
+}
+
+fn input_loop_winsize_callback(context voidptr) {
+	mut loop := unsafe { &InputLoop(context) }
+	if loop.vx.state.in_band_resize {
+		return
+	}
+	winsize := loop.tty.get_winsize() or { return }
+	loop.post_event(InputEvent(winsize))
 }
 
 pub fn (mut loop InputLoop) start() {
@@ -53,7 +80,13 @@ pub fn (mut loop InputLoop) deinit(vx &Vaxis) {
 }
 
 pub fn (mut loop InputLoop) next_event() InputEvent {
-	return loop.queue.pop()
+	for {
+		loop.poll_event()
+		if event := loop.try_event() {
+			return event
+		}
+	}
+	panic('unreachable')
 }
 
 pub fn (mut loop InputLoop) poll_event() {
@@ -61,15 +94,27 @@ pub fn (mut loop InputLoop) poll_event() {
 }
 
 pub fn (mut loop InputLoop) try_event() ?InputEvent {
-	return loop.queue.try_pop()
+	for {
+		message := loop.queue.try_pop() or { return none }
+		match message {
+			LoopForwardedEvent { return message.event }
+			LoopParsedEvent {
+				mut vx := unsafe { loop.vx }
+				if event := vx.handle_input(message.event) {
+					return event
+				}
+			}
+		}
+	}
+	return none
 }
 
 pub fn (mut loop InputLoop) post_event(event InputEvent) {
-	loop.queue.push(event)
+	loop.queue.push(LoopForwardedEvent{ event: event })
 }
 
 pub fn (mut loop InputLoop) try_post_event(event InputEvent) bool {
-	return loop.queue.try_push(event)
+	return loop.queue.try_push(LoopForwardedEvent{ event: event })
 }
 
 fn (mut loop InputLoop) is_quitting() bool {
@@ -79,12 +124,16 @@ fn (mut loop InputLoop) is_quitting() bool {
 }
 
 fn (mut loop InputLoop) tty_run() {
+	$if !windows {
+		winsize := loop.tty.get_winsize() or { return }
+		loop.post_event(InputEvent(winsize))
+	}
 	for !loop.is_quitting() {
 		mut tty := unsafe { loop.tty }
 		event := tty.next_input() or { return }
 		if loop.is_quitting() {
 			return
 		}
-		loop.post_event(event)
+		loop.queue.push(LoopParsedEvent{ event: event })
 	}
 }

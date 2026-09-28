@@ -515,7 +515,8 @@ pub fn (mut self Preview) run() ! {
 	defer {
 		tty.write(vx.deinit()) or {}
 	}
-	mut loop := vaxis.InputLoop.new(mut tty)
+	mut loop := vaxis.InputLoop.new(mut tty, mut vx)
+	loop.init()!
 	loop.start()
 	defer { loop.deinit(&vx) }
 	tty.write(vx.enter_alt_screen())!
@@ -524,10 +525,8 @@ pub fn (mut self Preview) run() ! {
 	mut queued := []vaxis.InputEvent{}
 	query_start := time.ticks()
 	for !vx.queries_done && time.ticks() - query_start < 1000 {
-		if raw := loop.try_event() {
-			if event := vx.handle_input(raw) {
-				queued << event
-			}
+		if event := loop.try_event() {
+			queued << event
 		} else {
 			time.sleep(8 * time.millisecond)
 		}
@@ -541,34 +540,24 @@ pub fn (mut self Preview) run() ! {
 	tty.write(vx.resize(self.winsize))!
 	mut dirty := true
 	for !self.should_quit {
-		winsize := tty.get_winsize()!
-		if winsize != self.winsize {
-			tty.write(vx.resize(winsize))!
-			self.update(Event(WinsizeEvent{
-				winsize: winsize
-			}))!
-			dirty = true
+		if queued.len == 0 && !dirty {
+			loop.poll_event()
 		}
 
-		mut handled_input := false
 		for event in queued {
 			if event is vaxis.Winsize {
 				tty.write(vx.resize(event))!
 			}
 			self.update_from_vaxis(event)!
-			handled_input = true
 			dirty = true
 		}
 		queued.clear()
 		for {
-			raw := loop.try_event() or { break }
-			if event := vx.handle_input(raw) {
-				if event is vaxis.Winsize {
-					tty.write(vx.resize(event))!
-				}
-				self.update_from_vaxis(event)!
+			event := loop.try_event() or { break }
+			if event is vaxis.Winsize {
+				tty.write(vx.resize(event))!
 			}
-			handled_input = true
+			self.update_from_vaxis(event)!
 			dirty = true
 		}
 
@@ -576,9 +565,6 @@ pub fn (mut self Preview) run() ! {
 			self.draw_window(mut vx)!
 			tty.write(vx.render())!
 			dirty = false
-		}
-		if !handled_input {
-			time.sleep(8 * time.millisecond)
 		}
 	}
 }

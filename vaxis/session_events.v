@@ -25,6 +25,7 @@ pub fn (mut vx Vaxis) handle_input(event InputEvent) ?InputEvent {
 		Winsize {
 			$if !windows {
 				vx.state.in_band_resize = true
+				Tty.reset_winsize_handler()
 			}
 			return InputEvent(event)
 		}

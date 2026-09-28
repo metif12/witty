@@ -2,6 +2,8 @@ module vaxis
 
 import term.termios
 
+#flag -I @VMODROOT/vaxis
+#include "tty_winch.h"
 #include <fcntl.h>
 #include <errno.h>
 #include <poll.h>
@@ -14,6 +16,12 @@ fn C.poll(fds voidptr, nfds u32, timeout int) int
 fn C.read(fd int, buf voidptr, count usize) isize
 
 fn C.write(fd int, buf voidptr, count usize) isize
+
+fn C.witty_vaxis_install_winch()
+
+fn C.witty_vaxis_reset_winch()
+
+fn C.witty_vaxis_notify_winch(context voidptr, callback voidptr) int
 
 struct TtyPollFd {
 mut:
@@ -56,11 +64,22 @@ fn Tty.open_posix() !Tty {
 		C.close(fd)
 		return error('tcsetattr failed')
 	}
+	C.witty_vaxis_install_winch()
 	return Tty{
 		pending:        []u8{cap: 1024}
 		fd:             fd
 		original_state: original
 	}
+}
+
+pub fn Tty.notify_winsize(context voidptr, callback voidptr) ! {
+	if C.witty_vaxis_notify_winch(context, callback) == 0 {
+		return error('OutOfMemory')
+	}
+}
+
+pub fn Tty.reset_winsize_handler() {
+	C.witty_vaxis_reset_winch()
 }
 
 pub fn (mut tty Tty) deinit() {
