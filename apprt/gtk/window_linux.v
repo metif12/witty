@@ -2222,9 +2222,7 @@ pub fn (mut self Window) action_about() {
 
 pub fn (mut self Window) toggle_inspector() {
 	mut surface := self.get_active_surface() or { return }
-	surface.control_inspector(.toggle) or {
-		log.warn('failed to toggle inspector error=${err}')
-	}
+	_ = surface.control_inspector(.toggle)
 }
 
 pub fn (mut self Window) action_close() {

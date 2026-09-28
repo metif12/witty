@@ -3383,7 +3383,7 @@ pub fn (self &SurfaceWidget) toggle_maximize() {
 
 // control_inspector controls the terminal inspector window. Mirrors
 // Surface.controlInspector.
-pub fn (mut self SurfaceWidget) control_inspector(value apprt.InspectorAction) !bool {
+pub fn (mut self SurfaceWidget) control_inspector(value apprt.InspectorAction) bool {
 	if !isnil(self.inspector) {
 		match value {
 			.show {}
@@ -3397,7 +3397,7 @@ pub fn (mut self SurfaceWidget) control_inspector(value apprt.InspectorAction) !
 
 	match value {
 		.toggle, .show {
-			inspector_window := new_inspector_window(mut self)!
+			inspector_window := new_inspector_window(mut self)
 			self.inspector = inspector_window
 			inspector_window.present()
 		}

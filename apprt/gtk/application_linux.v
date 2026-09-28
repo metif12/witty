@@ -1831,7 +1831,7 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 		.inspector {
 			if data is apprt.InspectorAction {
 				mut surface := surface_from_target(target) or { return false }
-				return surface.control_inspector(data)!
+				return surface.control_inspector(data)
 			}
 		}
 		.key_sequence {

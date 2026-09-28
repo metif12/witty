@@ -16,6 +16,7 @@ fn test_source_public_surface_callbacks_are_callable() {
 	assert surface.get_h_adjustment() == none
 	assert surface.get_v_adjustment() == none
 	assert !surface.show_on_screen_keyboard(none)
+	assert surface.control_inspector(.hide)
 	assert !surface.child_exited(apprt.ChildExited{})
 	assert surface.child_exited
 

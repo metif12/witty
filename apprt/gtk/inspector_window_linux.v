@@ -1,6 +1,7 @@
 module gtk
 
 import inspector as inspectorpkg
+import log
 
 // GTK terminal inspector translated from:
 // - ghostty/src/apprt/gtk/class/inspector_widget.zig
@@ -25,11 +26,11 @@ mut:
 	inspector &InspectorWidget     = unsafe { nil }
 }
 
-fn new_inspector_widget(surface &SurfaceWidget) !&InspectorWidget {
+fn new_inspector_widget(surface &SurfaceWidget) &InspectorWidget {
 	mut self := &InspectorWidget{}
 	self.imgui = new_imgui_widget(inspector_widget_setup_cb, inspector_widget_render_cb, voidptr(self))
 	C.gtk_widget_add_css_class(self.imgui.as_widget(), c'inspector')
-	self.set_surface(surface)!
+	self.set_surface(surface)
 	return self
 }
 
@@ -53,8 +54,23 @@ pub fn (mut self InspectorWidget) unref() {
 	}
 }
 
-fn (mut self InspectorWidget) set_surface(surface &SurfaceWidget) ! {
-	if self.surface == surface {
+// get_surface returns the weakly held inspected surface, if it is still live.
+// Mirrors `InspectorWidget.getSurface`.
+pub fn (self &InspectorWidget) get_surface() ?&SurfaceWidget {
+	if isnil(self.surface) {
+		return none
+	}
+	return self.surface
+}
+
+// set_surface changes the weak inspected surface. Inspector activation errors
+// are diagnosed and absorbed at this source boundary.
+pub fn (mut self InspectorWidget) set_surface(surface_ ?&SurfaceWidget) {
+	if new_surface := surface_ {
+		if self.surface == new_surface {
+			return
+		}
+	} else if isnil(self.surface) {
 		return
 	}
 	if !isnil(self.surface) {
@@ -72,11 +88,15 @@ fn (mut self InspectorWidget) set_surface(surface &SurfaceWidget) ! {
 		}
 	}
 
-	if isnil(surface) || !surface.has_core() {
+	surface := surface_ or { return }
+	if !surface.has_core() {
 		return
 	}
 	mut core_surface := surface.core_surface
-	core_surface.activate_inspector()!
+	core_surface.activate_inspector() or {
+		log.warn('failed to activate inspector err=${err}')
+		return
+	}
 	C.g_object_weak_ref(GObject(surface.widget), voidptr(inspector_surface_weak_notify), voidptr(self))
 	self.surface = surface
 	self.imgui.queue_render()
@@ -98,14 +118,14 @@ fn (mut self InspectorWidget) clear_surface_from_weak(surface_obj GObject) {
 	}
 }
 
-fn (self &InspectorWidget) queue_render() {
+pub fn (self &InspectorWidget) queue_render() {
 	if !isnil(self.imgui) {
 		self.imgui.queue_render()
 	}
 }
 
 fn (mut self InspectorWidget) deinit() {
-	self.set_surface(unsafe { nil }) or {}
+	self.set_surface(none)
 	if !isnil(self.imgui) {
 		mut imgui := unsafe { self.imgui }
 		imgui.deinit()
@@ -143,18 +163,13 @@ fn inspector_surface_weak_notify(data voidptr, object GObject) {
 	}
 }
 
-pub fn new_inspector_window(mut surface SurfaceWidget) !&InspectorWindow {
+pub fn new_inspector_window(mut surface SurfaceWidget) &InspectorWindow {
 	obj := AdwApplicationWindow(C.g_object_new(C.adw_application_window_get_type(), c'application', surface.app.obj, &char(unsafe { nil })))
-	if isnil(obj) {
-		return error('unable to create GTK inspector window')
-	}
+	assert !isnil(obj)
 	mut self := &InspectorWindow{
 		obj: obj
 	}
-	mut inspector := new_inspector_widget(surface) or {
-		C.gtk_window_destroy(GtkWindow(obj))
-		return err
-	}
+	mut inspector := new_inspector_widget(surface)
 	self.inspector = inspector
 	inspector.owner = self
 	surface.inspector = self
@@ -217,7 +232,7 @@ pub fn (self &InspectorWindow) queue_render() {
 
 pub fn (mut self InspectorWindow) close() {
 	if !isnil(self.inspector) {
-		self.inspector.set_surface(unsafe { nil }) or {}
+		self.inspector.set_surface(none)
 	}
 	self.destroy_window()
 }
