@@ -3,14 +3,57 @@ module vaxis
 import encoding.base64
 import os
 import strconv
+import strings
 import term
 import term.termios
 import unicode
 
-// Color represents an RGB color.
-pub struct Color {
+pub struct ColorDefault {}
+
+pub struct ColorIndex {
+pub:
+	index u8
+}
+
+pub struct ColorRgb {
 pub:
 	rgb [3]u8
+}
+
+// Color is vaxis' default/index/RGB tagged union.
+pub type Color = ColorDefault | ColorIndex | ColorRgb
+
+pub fn (a Color) eql(b Color) bool {
+	match a {
+		ColorDefault {
+			return b is ColorDefault
+		}
+		ColorIndex {
+			return match b {
+				ColorIndex { a.index == b.index }
+				else { false }
+			}
+		}
+		ColorRgb {
+			return match b {
+				ColorRgb { a.rgb == b.rgb }
+				else { false }
+			}
+		}
+	}
+}
+
+pub fn color_rgb_from_uint(value u32) Color {
+	return ColorRgb{
+		rgb: [u8(value >> 16), u8(value >> 8), u8(value)]!
+	}
+}
+
+pub fn color_rgb_from_spec(spec string) !Color {
+	rgb := parse_color_spec(spec) or { return error('InvalidColorSpec') }
+	return ColorRgb{
+		rgb: rgb
+	}
 }
 
 // Scheme is the terminal's preferred light or dark color scheme.
@@ -22,11 +65,24 @@ pub enum Scheme as u8 {
 // Style represents text styling attributes.
 pub struct Style {
 pub:
-	fg       Color
-	bg       Color
-	bold     bool
-	italic   bool
-	ul_style UnderlineStyle = .off
+	fg            Color          = ColorDefault{}
+	bg            Color          = ColorDefault{}
+	ul            Color          = ColorDefault{}
+	ul_style      UnderlineStyle = .off
+	bold          bool
+	dim           bool
+	italic        bool
+	blink         bool
+	reverse       bool
+	invisible     bool
+	strikethrough bool
+}
+
+pub fn (a Style) eql(b Style) bool {
+	return a.fg.eql(b.fg) && a.bg.eql(b.bg) && a.ul.eql(b.ul) && a.ul_style == b.ul_style
+		&& a.bold == b.bold && a.dim == b.dim && a.italic == b.italic && a.blink == b.blink
+		&& a.reverse == b.reverse && a.invisible == b.invisible
+		&& a.strikethrough == b.strikethrough
 }
 
 pub enum UnderlineStyle as u8 {
@@ -46,8 +102,7 @@ mut:
 
 pub fn Modifiers.init(shift bool, alt bool, ctrl bool, super_ bool, hyper bool, meta bool, caps_lock bool, num_lock bool) Modifiers {
 	return Modifiers{
-		value: u8(shift) | (u8(alt) << 1) | (u8(ctrl) << 2) | (u8(super_) << 3) |
-			(u8(hyper) << 4) | (u8(meta) << 5) | (u8(caps_lock) << 6) | (u8(num_lock) << 7)
+		value: u8(shift) | (u8(alt) << 1) | (u8(ctrl) << 2) | (u8(super_) << 3) | (u8(hyper) << 4) | (u8(meta) << 5) | (u8(caps_lock) << 6) | (u8(num_lock) << 7)
 	}
 }
 
@@ -144,9 +199,7 @@ pub struct KittyFlags {
 
 pub fn KittyFlags.init(disambiguate bool, report_events bool, report_alternate_keys bool, report_all_as_ctl_seqs bool, report_text bool) KittyFlags {
 	return KittyFlags{
-		value: (u8(disambiguate) | (u8(report_events) << 1) |
-			(u8(report_alternate_keys) << 2) | (u8(report_all_as_ctl_seqs) << 3) |
-			(u8(report_text) << 4)) & 0x1f
+		value: (u8(disambiguate) | (u8(report_events) << 1) | (u8(report_alternate_keys) << 2) | (u8(report_all_as_ctl_seqs) << 3) | (u8(report_text) << 4)) & 0x1f
 	}
 }
 
@@ -732,11 +785,11 @@ fn parse_input(data []u8) ?ParsedInput {
 			`_` { return parse_apc(data) }
 			else {}
 		}
+
 		return ParsedInput{
 			event:    InputEvent(Key{
 				codepoint: u32(data[1])
-				mods:      Modifiers.init(false, true, false, false, false, false, false,
-					false)
+				mods:      Modifiers.init(false, true, false, false, false, false, false, false)
 			})
 			consumed: 2
 		}
@@ -744,8 +797,8 @@ fn parse_input(data []u8) ?ParsedInput {
 
 	byte := data[0]
 	if byte == 0 {
-		return parsed_key(u32(`@`), Modifiers.init(false, false, true, false, false, false,
-			false, false), 1)
+		return parsed_key(u32(`@`), Modifiers.init(false, false, true, false, false, false, false,
+			false), 1)
 	}
 	if byte == 0x08 {
 		return parsed_key(backspace, Modifiers{}, 1)
@@ -754,8 +807,8 @@ fn parse_input(data []u8) ?ParsedInput {
 		return parsed_key(tab, Modifiers{}, 1)
 	}
 	if byte == 0x0a {
-		return parsed_key(u32(`j`), Modifiers.init(false, false, true, false, false, false,
-			false, false), 1)
+		return parsed_key(u32(`j`), Modifiers.init(false, false, true, false, false, false, false,
+			false), 1)
 	}
 	if byte == 0x0d {
 		return parsed_key(enter, Modifiers{}, 1)
@@ -765,8 +818,7 @@ fn parse_input(data []u8) ?ParsedInput {
 		return ParsedInput{
 			event:    InputEvent(Key{
 				codepoint: u32(`a` + byte - 1)
-				mods:      Modifiers.init(false, false, true, false, false, false, false,
-					false)
+				mods:      Modifiers.init(false, false, true, false, false, false, false, false)
 			})
 			consumed: 1
 		}
@@ -789,8 +841,7 @@ fn parse_input(data []u8) ?ParsedInput {
 	mut state := unicode.BreakState.default
 	for i in 1 .. runes.len {
 		current := u32(runes[i])
-		if current < 0x20 || current == 0x7f
-			|| unicode.grapheme_break(previous, current, &state) {
+		if current < 0x20 || current == 0x7f || unicode.grapheme_break(previous, current, &state) {
 			break
 		}
 		consumed += runes[i].str().len
@@ -855,21 +906,32 @@ fn parse_osc(data []u8) ?ParsedInput {
 	}
 	semicolon := find_byte(data, 2, `;`)
 	if semicolon < 0 || semicolon >= sequence_end {
-		return ParsedInput{ consumed: sequence_end }
+		return ParsedInput{
+			consumed: sequence_end
+		}
 	}
 	ps := strconv.parse_uint(data[2..semicolon].bytestr(), 10, 8) or {
-		return ParsedInput{ consumed: sequence_end }
+		return ParsedInput{
+			consumed: sequence_end
+		}
 	}
 	content_end := if bel_terminated { sequence_end - 1 } else { sequence_end - 2 }
 	if ps == 4 {
 		color_delimiter := find_byte(data, semicolon + 1, `;`)
 		if color_delimiter < 0 || color_delimiter >= content_end {
-			return ParsedInput{ consumed: sequence_end }
+			return ParsedInput{
+				consumed: sequence_end
+			}
 		}
-		index := strconv.parse_uint(data[semicolon + 1..color_delimiter].bytestr(), 10,
-			8) or { return ParsedInput{ consumed: sequence_end } }
+		index := strconv.parse_uint(data[semicolon + 1..color_delimiter].bytestr(), 10, 8) or {
+			return ParsedInput{
+				consumed: sequence_end
+			}
+		}
 		rgb := parse_color_spec(data[color_delimiter + 1..content_end].bytestr()) or {
-			return ParsedInput{ consumed: sequence_end }
+			return ParsedInput{
+				consumed: sequence_end
+			}
 		}
 		return ParsedInput{
 			event:    InputEvent(ColorReport{
@@ -883,14 +945,19 @@ fn parse_osc(data []u8) ?ParsedInput {
 	}
 	if ps == 10 || ps == 11 || ps == 12 {
 		rgb := parse_color_spec(data[semicolon + 1..content_end].bytestr()) or {
-			return ParsedInput{ consumed: sequence_end }
+			return ParsedInput{
+				consumed: sequence_end
+			}
 		}
 		kind := match ps {
 			10 { ColorReportKind(ColorReportFg{}) }
 			11 { ColorReportKind(ColorReportBg{}) }
 			12 { ColorReportKind(ColorReportCursor{}) }
-			else { return ParsedInput{ consumed: sequence_end } }
+			else { return ParsedInput{
+					consumed: sequence_end
+				} }
 		}
+
 		return ParsedInput{
 			event:    InputEvent(ColorReport{
 				kind:  kind
@@ -901,7 +968,9 @@ fn parse_osc(data []u8) ?ParsedInput {
 	}
 	if ps == 52 {
 		if semicolon + 1 >= content_end || data[semicolon + 1] != `c` {
-			return ParsedInput{ consumed: sequence_end }
+			return ParsedInput{
+				consumed: sequence_end
+			}
 		}
 		text := base64.decode_str(data[semicolon + 3..content_end].bytestr())
 		return ParsedInput{
@@ -954,23 +1023,46 @@ fn parse_ss3(data []u8) ?ParsedInput {
 		}
 	}
 	code := match data[2] {
-		`A` { up }
-		`B` { down }
-		`C` { right }
-		`D` { left }
-		`E` { kp_begin }
-		`F` { end }
-		`H` { home }
-		`P` { f1 }
-		`Q` { f2 }
-		`R` { f3 }
-		`S` { f4 }
+		`A` {
+			up
+		}
+		`B` {
+			down
+		}
+		`C` {
+			right
+		}
+		`D` {
+			left
+		}
+		`E` {
+			kp_begin
+		}
+		`F` {
+			end
+		}
+		`H` {
+			home
+		}
+		`P` {
+			f1
+		}
+		`Q` {
+			f2
+		}
+		`R` {
+			f3
+		}
+		`S` {
+			f4
+		}
 		else {
 			return ParsedInput{
 				consumed: 3
 			}
 		}
 	}
+
 	return parsed_key(code, Modifiers{}, 3)
 }
 
@@ -1006,8 +1098,11 @@ fn parse_csi(data []u8) ?ParsedInput {
 			`Q` { f2 }
 			`R` { f3 }
 			`S` { f4 }
-			else { return ParsedInput{ consumed: sequence.len } }
+			else { return ParsedInput{
+					consumed: sequence.len
+				} }
 		}
+
 		mut key := Key{
 			codepoint: code
 		}
@@ -1016,7 +1111,9 @@ fn parse_csi(data []u8) ?ParsedInput {
 		if fields.len > 1 {
 			modifier_parts := fields[1].split(':')
 			mask := parse_param_u8(modifier_parts[0], u8(1)) or {
-				return ParsedInput{ consumed: sequence.len }
+				return ParsedInput{
+					consumed: sequence.len
+				}
 			}
 			key.mods = Modifiers.from_int(if mask > 0 { mask - 1 } else { 0 })
 			if modifier_parts.len > 1 && modifier_parts[1] == '3' {
@@ -1025,7 +1122,9 @@ fn parse_csi(data []u8) ?ParsedInput {
 		}
 		if fields.len > 2 {
 			key.text = parse_codepoint_text(fields[2]) or {
-				return ParsedInput{ consumed: sequence.len }
+				return ParsedInput{
+					consumed: sequence.len
+				}
 			}
 		}
 		return ParsedInput{
@@ -1043,7 +1142,9 @@ fn parse_csi(data []u8) ?ParsedInput {
 	if final == `~` {
 		fields := sequence[2..sequence.len - 1].split(';')
 		number := parse_param_u32(fields[0], none) or {
-			return ParsedInput{ consumed: sequence.len }
+			return ParsedInput{
+				consumed: sequence.len
+			}
 		}
 		if number == 200 {
 			return ParsedInput{
@@ -1077,8 +1178,11 @@ fn parse_csi(data []u8) ?ParsedInput {
 			23 { f11 }
 			24 { f12 }
 			57427 { kp_begin }
-			else { return ParsedInput{ consumed: sequence.len } }
+			else { return ParsedInput{
+					consumed: sequence.len
+				} }
 		}
+
 		mut key := Key{
 			codepoint: code
 		}
@@ -1086,7 +1190,9 @@ fn parse_csi(data []u8) ?ParsedInput {
 		if fields.len > 1 {
 			modifier_parts := fields[1].split(':')
 			mask := parse_param_u8(modifier_parts[0], u8(1)) or {
-				return ParsedInput{ consumed: sequence.len }
+				return ParsedInput{
+					consumed: sequence.len
+				}
 			}
 			key.mods = Modifiers.from_int(if mask > 0 { mask - 1 } else { 0 })
 			if modifier_parts.len > 1 && modifier_parts[1] == '3' {
@@ -1095,7 +1201,9 @@ fn parse_csi(data []u8) ?ParsedInput {
 		}
 		if fields.len > 2 {
 			key.text = parse_codepoint_text(fields[2]) or {
-				return ParsedInput{ consumed: sequence.len }
+				return ParsedInput{
+					consumed: sequence.len
+				}
 			}
 		}
 		return ParsedInput{
@@ -1131,20 +1239,27 @@ fn parse_csi(data []u8) ?ParsedInput {
 				consumed: sequence.len
 			}
 		}
-		return ParsedInput{ consumed: sequence.len }
+		return ParsedInput{
+			consumed: sequence.len
+		}
 	}
 	if final == `n` {
 		if sequence.len >= 3 && sequence[2] == `?` {
 			if delimiter := sequence.index_after(';', 3) {
 				ps := strconv.parse_uint(sequence[3..delimiter], 10, 16) or {
-					return ParsedInput{ consumed: sequence.len }
+					return ParsedInput{
+						consumed: sequence.len
+					}
 				}
 				if ps == 997 && delimiter + 1 < sequence.len - 1 {
 					scheme := match sequence[delimiter + 1] {
 						`1` { Scheme.dark }
 						`2` { Scheme.light }
-						else { return ParsedInput{ consumed: sequence.len } }
+						else { return ParsedInput{
+								consumed: sequence.len
+							} }
 					}
+
 					return ParsedInput{
 						event:    InputEvent(ColorScheme{
 							scheme: scheme
@@ -1154,20 +1269,30 @@ fn parse_csi(data []u8) ?ParsedInput {
 				}
 			}
 		}
-		return ParsedInput{ consumed: sequence.len }
+		return ParsedInput{
+			consumed: sequence.len
+		}
 	}
 	if final == `t` {
 		fields := sequence[2..sequence.len - 1].split(';')
 		if fields.len >= 3 && fields[0] == '48' {
-			rows := parse_u16(fields[1]) or { return ParsedInput{ consumed: sequence.len } }
-			cols := parse_u16(fields[2]) or { return ParsedInput{ consumed: sequence.len } }
+			rows := parse_u16(fields[1]) or { return ParsedInput{
+				consumed: sequence.len
+			} }
+			cols := parse_u16(fields[2]) or { return ParsedInput{
+				consumed: sequence.len
+			} }
 			y_pixel := if fields.len > 3 {
-				parse_u16(fields[3]) or { return ParsedInput{ consumed: sequence.len } }
+				parse_u16(fields[3]) or { return ParsedInput{
+					consumed: sequence.len
+				} }
 			} else {
 				u16(0)
 			}
 			x_pixel := if fields.len > 4 {
-				parse_u16(fields[4]) or { return ParsedInput{ consumed: sequence.len } }
+				parse_u16(fields[4]) or { return ParsedInput{
+					consumed: sequence.len
+				} }
 			} else {
 				u16(0)
 			}
@@ -1181,7 +1306,9 @@ fn parse_csi(data []u8) ?ParsedInput {
 				consumed: sequence.len
 			}
 		}
-		return ParsedInput{ consumed: sequence.len }
+		return ParsedInput{
+			consumed: sequence.len
+		}
 	}
 
 	if final == `u` {
@@ -1196,7 +1323,9 @@ fn parse_csi(data []u8) ?ParsedInput {
 		fields := sequence[2..sequence.len - 1].split(';')
 		alternate := fields[0].split(':')
 		codepoint := parse_param_u21(alternate[0]) or {
-			return ParsedInput{ consumed: sequence.len }
+			return ParsedInput{
+				consumed: sequence.len
+			}
 		}
 		mut key := Key{
 			codepoint: codepoint
@@ -1211,7 +1340,9 @@ fn parse_csi(data []u8) ?ParsedInput {
 		if fields.len > 1 {
 			modifier_parts := fields[1].split(':')
 			mask := parse_param_u8(modifier_parts[0], u8(1)) or {
-				return ParsedInput{ consumed: sequence.len }
+				return ParsedInput{
+					consumed: sequence.len
+				}
 			}
 			key.mods = Modifiers.from_int(if mask > 0 { mask - 1 } else { 0 })
 			if modifier_parts.len > 1 && modifier_parts[1] == '3' {
@@ -1220,11 +1351,13 @@ fn parse_csi(data []u8) ?ParsedInput {
 		}
 		if fields.len > 2 {
 			key.text = parse_codepoint_text(fields[2]) or {
-				return ParsedInput{ consumed: sequence.len }
+				return ParsedInput{
+					consumed: sequence.len
+				}
 			}
 		}
-		only_shift := Modifiers.init(true, false, false, false, false, false,
-			key.mods.caps_lock(), key.mods.num_lock())
+		only_shift := Modifiers.init(true, false, false, false, false, false, key.mods.caps_lock(),
+			key.mods.num_lock())
 		if key.text == none && key.mods.eql(only_shift) && key.codepoint <= 0xff
 			&& key.codepoint >= 0x20 && key.codepoint <= 0x7e {
 			upper := if key.codepoint >= `a` && key.codepoint <= `z` {
@@ -1250,17 +1383,24 @@ fn parse_csi(data []u8) ?ParsedInput {
 	if final == `y` {
 		if delimiter := sequence.index_after(';', 3) {
 			ps := strconv.parse_uint(sequence[3..delimiter], 10, 16) or {
-				return ParsedInput{ consumed: sequence.len }
+				return ParsedInput{
+					consumed: sequence.len
+				}
 			}
 			pm := strconv.parse_uint(sequence[delimiter + 1..sequence.len - 2], 10, 8) or {
-				return ParsedInput{ consumed: sequence.len }
+				return ParsedInput{
+					consumed: sequence.len
+				}
 			}
 			capability := match ps {
 				1016 { Capability.sgr_pixels }
 				2027 { Capability.unicode }
 				2031 { Capability.color_scheme_updates }
-				else { return ParsedInput{ consumed: sequence.len } }
+				else { return ParsedInput{
+						consumed: sequence.len
+					} }
 			}
+
 			if pm != 0 && pm != 4 {
 				return ParsedInput{
 					event:    InputEvent(CapabilityEvent{
@@ -1270,7 +1410,9 @@ fn parse_csi(data []u8) ?ParsedInput {
 				}
 			}
 		}
-		return ParsedInput{ consumed: sequence.len }
+		return ParsedInput{
+			consumed: sequence.len
+		}
 	}
 	if final == `q` {
 		if sequence.len >= 2 && sequence[sequence.len - 2] == ` ` {
@@ -1285,7 +1427,9 @@ fn parse_csi(data []u8) ?ParsedInput {
 				}
 			}
 		}
-		return ParsedInput{ consumed: sequence.len }
+		return ParsedInput{
+			consumed: sequence.len
+		}
 	}
 
 	return ParsedInput{
@@ -1319,7 +1463,9 @@ fn parse_mouse(data []u8, sequence string) ?ParsedInput {
 	mut xterm := false
 	if sequence.len == 3 && sequence[2] == `M` {
 		if data.len < 6 {
-			return ParsedInput{ consumed: sequence.len }
+			return ParsedInput{
+				consumed: sequence.len
+			}
 		}
 		xterm = true
 		button_mask = u64(data[3] - 32)
@@ -1328,15 +1474,25 @@ fn parse_mouse(data []u8, sequence string) ?ParsedInput {
 	} else if sequence.len >= 4 && sequence[2] == `<` {
 		parts := sequence[3..sequence.len - 1].split(';')
 		if parts.len != 3 {
-			return ParsedInput{ consumed: sequence.len }
+			return ParsedInput{
+				consumed: sequence.len
+			}
 		}
 		button_mask = strconv.parse_uint(parts[0], 10, 16) or {
-			return ParsedInput{ consumed: sequence.len }
+			return ParsedInput{
+				consumed: sequence.len
+			}
 		}
-		px = parse_mouse_position(parts[1]) or { return ParsedInput{ consumed: sequence.len } }
-		py = parse_mouse_position(parts[2]) or { return ParsedInput{ consumed: sequence.len } }
+		px = parse_mouse_position(parts[1]) or { return ParsedInput{
+			consumed: sequence.len
+		} }
+		py = parse_mouse_position(parts[2]) or { return ParsedInput{
+			consumed: sequence.len
+		} }
 	} else {
-		return ParsedInput{ consumed: sequence.len }
+		return ParsedInput{
+			consumed: sequence.len
+		}
 	}
 	if button_mask & 0x100 != 0 {
 		return ParsedInput{
@@ -1737,8 +1893,7 @@ fn first_grapheme_byte_length(text string) int {
 	mut state := unicode.BreakState.default
 	for i in 1 .. runes.len {
 		current := u32(runes[i])
-		if current < 0x20 || current == 0x7f
-			|| unicode.grapheme_break(previous, current, &state) {
+		if current < 0x20 || current == 0x7f || unicode.grapheme_break(previous, current, &state) {
 			break
 		}
 		length += runes[i].str().len
@@ -1824,23 +1979,91 @@ pub fn show_cursor(row int, col int) string {
 }
 
 pub fn styled(text string, style Style) string {
-	mut codes := ['38;2;${style.fg.rgb[0]};${style.fg.rgb[1]};${style.fg.rgb[2]}',
-		'48;2;${style.bg.rgb[0]};${style.bg.rgb[1]};${style.bg.rgb[2]}']
-	if style.bold {
-		codes << '1'
-	}
-	if style.italic {
-		codes << '3'
-	}
+	mut result := strings.new_builder(text.len + 64)
+	result.write_string(foreground_sequence(style.fg))
+	result.write_string(background_sequence(style.bg))
+	result.write_string(underline_color_sequence(style.ul))
 	match style.ul_style {
 		.off {}
-		.single { codes << '4' }
-		.double_ { codes << '4:2' }
-		.curly { codes << '4:3' }
-		.dotted { codes << '4:4' }
-		.dashed { codes << '4:5' }
+		.single { result.write_string('\x1b[4m') }
+		.double_ { result.write_string('\x1b[4:2m') }
+		.curly { result.write_string('\x1b[4:3m') }
+		.dotted { result.write_string('\x1b[4:4m') }
+		.dashed { result.write_string('\x1b[4:5m') }
 	}
-	return '\x1b[${codes.join(';')}m${text}\x1b[0m'
+
+	if style.bold {
+		result.write_string('\x1b[1m')
+	}
+	if style.dim {
+		result.write_string('\x1b[2m')
+	}
+	if style.italic {
+		result.write_string('\x1b[3m')
+	}
+	if style.blink {
+		result.write_string('\x1b[5m')
+	}
+	if style.reverse {
+		result.write_string('\x1b[7m')
+	}
+	if style.invisible {
+		result.write_string('\x1b[8m')
+	}
+	if style.strikethrough {
+		result.write_string('\x1b[9m')
+	}
+	result.write_string(text)
+	result.write_string('\x1b[m')
+	return result.str()
+}
+
+fn foreground_sequence(color Color) string {
+	return match color {
+		ColorDefault {
+			''
+		}
+		ColorIndex {
+			if color.index <= 7 {
+				'\x1b[3${color.index}m'
+			} else if color.index <= 15 {
+				'\x1b[9${color.index - 8}m'
+			} else {
+				'\x1b[38:5:${color.index}m'
+			}
+		}
+		ColorRgb {
+			'\x1b[38:2:${color.rgb[0]}:${color.rgb[1]}:${color.rgb[2]}m'
+		}
+	}
+}
+
+fn background_sequence(color Color) string {
+	return match color {
+		ColorDefault {
+			''
+		}
+		ColorIndex {
+			if color.index <= 7 {
+				'\x1b[4${color.index}m'
+			} else if color.index <= 15 {
+				'\x1b[10${color.index - 8}m'
+			} else {
+				'\x1b[48:5:${color.index}m'
+			}
+		}
+		ColorRgb {
+			'\x1b[48:2:${color.rgb[0]}:${color.rgb[1]}:${color.rgb[2]}m'
+		}
+	}
+}
+
+fn underline_color_sequence(color Color) string {
+	return match color {
+		ColorDefault { '' }
+		ColorIndex { '\x1b[58:5:${color.index}m' }
+		ColorRgb { '\x1b[58:2:${color.rgb[0]}:${color.rgb[1]}:${color.rgb[2]}m' }
+	}
 }
 
 pub fn hyperlink(text string, uri string, style Style) string {

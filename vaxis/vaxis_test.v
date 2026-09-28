@@ -125,8 +125,12 @@ fn test_key_model_matches_pinned_vaxis_rules_and_constants() {
 	}
 	assert shift_semicolon.matches(u32(`;`), Modifiers.from_int(1))
 	assert shift_semicolon.matches(u32(`:`), Modifiers{})
-	assert Key{ codepoint: left_shift }.is_modifier()
-	assert !Key{ codepoint: f1 }.is_modifier()
+	assert Key{
+		codepoint: left_shift
+	}.is_modifier()
+	assert !Key{
+		codepoint: f1
+	}.is_modifier()
 	assert name_map['insert'] == insert
 	assert name_map['f32'] == f32_key
 	assert backspace == 0x7f
@@ -159,6 +163,7 @@ fn test_key_decoder_handles_kitty_fields_and_ignored_sequences() {
 			assert false
 		}
 	}
+
 	unknown := parse_input('\x1b[999z'.bytes()) or { panic('unknown CSI should be consumed') }
 	assert unknown.consumed == 6
 	assert unknown.event == none
@@ -176,7 +181,9 @@ fn test_parser_restores_pinned_non_key_events() {
 	assert focus_out_event is FocusOut
 
 	paste_start_result := parse_input('\x1b[200~'.bytes()) or { panic('paste-start should decode') }
-	paste_start_event := paste_start_result.event or { panic('paste-start should produce an event') }
+	paste_start_event := paste_start_result.event or {
+		panic('paste-start should produce an event')
+	}
 	assert paste_start_event is PasteStart
 	paste_end_result := parse_input('\x1b[201~'.bytes()) or { panic('paste-end should decode') }
 	paste_end_event := paste_end_result.event or { panic('paste-end should produce an event') }
@@ -238,8 +245,12 @@ fn test_parser_restores_pinned_non_key_events() {
 }
 
 fn test_parser_restores_capability_and_control_string_events() {
-	kitty_keyboard_result := parse_input('\x1b[?u'.bytes()) or { panic('Kitty query should decode') }
-	kitty_keyboard := kitty_keyboard_result.event or { panic('Kitty query should produce an event') }
+	kitty_keyboard_result := parse_input('\x1b[?u'.bytes()) or {
+		panic('Kitty query should decode')
+	}
+	kitty_keyboard := kitty_keyboard_result.event or {
+		panic('Kitty query should produce an event')
+	}
 	match kitty_keyboard {
 		CapabilityEvent {
 			assert kitty_keyboard.capability == .kitty_keyboard
@@ -248,12 +259,14 @@ fn test_parser_restores_capability_and_control_string_events() {
 			assert false
 		}
 	}
+
 	kitty_graphics_result := parse_input('\x1b_Gi=1;OK\x1b\\'.bytes()) or {
 		panic('Kitty graphics response should decode')
 	}
 	kitty_graphics := kitty_graphics_result.event or {
 		panic('Kitty graphics response should produce an event')
 	}
+
 	match kitty_graphics {
 		CapabilityEvent {
 			assert kitty_graphics.capability == .kitty_graphics
@@ -262,6 +275,7 @@ fn test_parser_restores_capability_and_control_string_events() {
 			assert false
 		}
 	}
+
 	da_result := parse_input('\x1b[?1;2c'.bytes()) or { panic('DA should decode') }
 	da := da_result.event or { panic('DA should produce an event') }
 	match da {
@@ -272,6 +286,7 @@ fn test_parser_restores_capability_and_control_string_events() {
 			assert false
 		}
 	}
+
 	pixels_result := parse_input('\x1b[?1016;1$y'.bytes()) or { panic('DECRPM should decode') }
 	pixels := pixels_result.event or { panic('DECRPM should produce an event') }
 	match pixels {
@@ -282,6 +297,7 @@ fn test_parser_restores_capability_and_control_string_events() {
 			assert false
 		}
 	}
+
 	cursor_result := parse_input('\x1b[>1;2;3;29;30;40;100;101 q'.bytes()) or {
 		panic('cursor capability should decode')
 	}
@@ -294,6 +310,7 @@ fn test_parser_restores_capability_and_control_string_events() {
 			assert false
 		}
 	}
+
 	skipped := parse_input('\x1bPignored\x1b\\'.bytes()) or { panic('DCS should be consumed') }
 	assert skipped.consumed == '\x1bPignored\x1b\\'.len
 	assert skipped.event == none
@@ -313,6 +330,7 @@ fn test_key_decoder_preserves_first_grapheme() {
 			assert false
 		}
 	}
+
 	flag := parsed_key_event('🇺🇸')
 	assert flag.codepoint == multicodepoint
 	assert flag.text or { '' } == '🇺🇸'
@@ -364,6 +382,7 @@ fn test_key_decoder_handles_sgr_mouse() {
 			assert false
 		}
 	}
+
 	match drag_event {
 		Mouse {
 			assert drag_event.type_ == .drag
@@ -372,6 +391,7 @@ fn test_key_decoder_handles_sgr_mouse() {
 			assert false
 		}
 	}
+
 	match motion_event {
 		Mouse {
 			assert motion_event.type_ == .motion
@@ -380,6 +400,7 @@ fn test_key_decoder_handles_sgr_mouse() {
 			assert false
 		}
 	}
+
 	match modified_event {
 		Mouse {
 			assert modified_event.mods.shift()
@@ -390,7 +411,10 @@ fn test_key_decoder_handles_sgr_mouse() {
 			assert false
 		}
 	}
-	default_position := parse_input('\x1b[<0;;M'.bytes()) or { panic('default mouse position should decode') }
+
+	default_position := parse_input('\x1b[<0;;M'.bytes()) or {
+		panic('default mouse position should decode')
+	}
 	default_event := default_position.event or { panic('default mouse should produce an event') }
 	match default_event {
 		Mouse {
@@ -401,6 +425,7 @@ fn test_key_decoder_handles_sgr_mouse() {
 			assert false
 		}
 	}
+
 	xterm_result := parse_input([u8(0x1b), `[`, `M`, u8(32), u8(44), u8(39)]) or {
 		panic('X10 mouse should decode')
 	}
@@ -417,6 +442,7 @@ fn test_key_decoder_handles_sgr_mouse() {
 			assert false
 		}
 	}
+
 	leave_result := parse_input('\x1b[<259;1;1M'.bytes()) or { panic('mouse leave should decode') }
 	leave_event := leave_result.event or { panic('mouse leave should produce an event') }
 	assert leave_event is MouseLeave
@@ -510,13 +536,64 @@ fn test_text_input_edits_by_grapheme_and_source_bindings() {
 
 fn test_style_and_hyperlink_emit_terminal_sequences() {
 	style := Style{
-		fg:       Color{ rgb: [u8(1), 2, 3]! }
-		bg:       Color{ rgb: [u8(4), 5, 6]! }
-		bold:     true
-		ul_style: .curly
+		fg:            ColorRgb{
+			rgb: [u8(1), 2, 3]!
+		}
+		bg:            ColorRgb{
+			rgb: [u8(4), 5, 6]!
+		}
+		ul:            ColorIndex{
+			index: 200
+		}
+		bold:          true
+		dim:           true
+		italic:        true
+		blink:         true
+		reverse:       true
+		invisible:     true
+		strikethrough: true
+		ul_style:      .curly
 	}
 	styled_text := styled('hello', style)
-	assert styled_text.contains('\x1b[38;2;1;2;3;48;2;4;5;6;1;4:3m')
-	assert styled_text.ends_with('\x1b[0m')
+	assert styled_text == '\x1b[38:2:1:2:3m\x1b[48:2:4:5:6m\x1b[58:5:200m\x1b[4:3m\x1b[1m\x1b[2m\x1b[3m\x1b[5m\x1b[7m\x1b[8m\x1b[9mhello\x1b[m'
 	assert hyperlink('hello', 'file:///tmp/theme', style).contains('\x1b]8;;file:///tmp/theme')
+}
+
+fn test_color_and_style_match_pinned_vaxis_model() {
+	assert color_rgb_from_uint(0x123456).eql(ColorRgb{ rgb: [u8(0x12), 0x34, 0x56]! })
+	assert (color_rgb_from_spec('rgb:aaaa/bbbb/cccc') or { panic(err) }).eql(ColorRgb{
+		rgb: [u8(0xaa), 0xbb, 0xcc]!
+	})
+	if _ := color_rgb_from_spec('RGB:aaaa/bbbb/cccc') {
+		assert false
+	} else {
+		assert err.msg() == 'InvalidColorSpec'
+	}
+	assert Color(ColorDefault{}).eql(ColorDefault{})
+	assert Color(ColorIndex{
+		index: 42
+	}).eql(ColorIndex{ index: 42 })
+	assert !Color(ColorIndex{
+		index: 42
+	}).eql(ColorIndex{ index: 43 })
+	assert !Color(ColorIndex{
+		index: 42
+	}).eql(ColorRgb{ rgb: [u8(0), 0, 42]! })
+	assert Style{}.eql(Style{})
+	assert !Style{}.eql(Style{ dim: true })
+	assert styled('x', Style{
+		fg: ColorIndex{
+			index: 3
+		}
+	}) == '\x1b[33mx\x1b[m'
+	assert styled('x', Style{
+		fg: ColorIndex{
+			index: 11
+		}
+	}) == '\x1b[93mx\x1b[m'
+	assert styled('x', Style{
+		bg: ColorIndex{
+			index: 201
+		}
+	}) == '\x1b[48:5:201mx\x1b[m'
 }

@@ -240,8 +240,9 @@ pub fn (mut self Preview) update(event Event) ! {
 	match event {
 		KeyPressEvent {
 			key := event.key
-			if key.matches(u32(`c`), vaxis.Modifiers.init(false, false, true, false, false,
-				false, false, false)) {
+			if key.matches(u32(`c`), vaxis.Modifiers.init(false, false, true, false, false, false,
+				false, false))
+			{
 				self.should_quit = true
 			}
 			match self.mode {
@@ -252,8 +253,9 @@ pub fn (mut self Preview) update(event Event) ! {
 					if key.matches_any([u32(`?`), vaxis.f1], vaxis.Modifiers{}) {
 						self.mode = .help
 					}
-					if key.matches(u32(`h`), vaxis.Modifiers.init(false, false, true, false,
-						false, false, false, false)) {
+					if key.matches(u32(`h`), vaxis.Modifiers.init(false, false, true, false, false,
+						false, false, false))
+					{
 						self.mode = .help
 					}
 					if key.matches(u32(`/`), vaxis.Modifiers{}) {
@@ -263,7 +265,8 @@ pub fn (mut self Preview) update(event Event) ! {
 						self.mode = .save
 					}
 					if key.matches_any([u32(`x`), u32(`/`)], vaxis.Modifiers.init(false, false,
-						true, false, false, false, false, false)) {
+						true, false, false, false, false, false))
+					{
 						self.text_input.clear_retaining_capacity()
 						self.update_filtered()!
 					}
@@ -294,8 +297,9 @@ pub fn (mut self Preview) update(event Event) ! {
 					}
 					if key.matches(u32(`c`), vaxis.Modifiers{}) {
 						vaxis.copy_to_system_clipboard(self.themes[self.filtered[self.current]].theme)
-					} else if key.matches(u32(`c`), vaxis.Modifiers.init(true, false, false,
-						false, false, false, false, false)) {
+					} else if key.matches(u32(`c`), vaxis.Modifiers.init(true, false, false, false,
+						false, false, false, false))
+					{
 						vaxis.copy_to_system_clipboard(self.themes[self.filtered[self.current]].path)
 					}
 					if key.matches(u32(`f`), vaxis.Modifiers{}) {
@@ -321,8 +325,9 @@ pub fn (mut self Preview) update(event Event) ! {
 					if key.matches_any([u32(`?`), vaxis.escape, vaxis.f1], vaxis.Modifiers{}) {
 						self.mode = .normal
 					}
-					if key.matches(u32(`h`), vaxis.Modifiers.init(false, false, true, false,
-						false, false, false, false)) {
+					if key.matches(u32(`h`), vaxis.Modifiers.init(false, false, true, false, false,
+						false, false, false))
+					{
 						self.mode = .normal
 					}
 				}
@@ -332,7 +337,8 @@ pub fn (mut self Preview) update(event Event) ! {
 						return
 					}
 					if key.matches_any([u32(`x`), u32(`/`)], vaxis.Modifiers.init(false, false,
-						true, false, false, false, false, false)) {
+						true, false, false, false, false, false))
+					{
 						self.text_input.clear_retaining_capacity()
 						self.update_filtered()!
 						return
@@ -369,12 +375,12 @@ pub fn (mut self Preview) update(event Event) ! {
 pub fn (self &Preview) ui_fg() vaxis.Color {
 	return match self.color_scheme {
 		.light {
-			vaxis.Color{
+			vaxis.ColorRgb{
 				rgb: [u8(0x00), 0x00, 0x00]!
 			}
 		}
 		.dark {
-			vaxis.Color{
+			vaxis.ColorRgb{
 				rgb: [u8(0xff), 0xff, 0xff]!
 			}
 		}
@@ -385,12 +391,12 @@ pub fn (self &Preview) ui_fg() vaxis.Color {
 pub fn (self &Preview) ui_bg() vaxis.Color {
 	return match self.color_scheme {
 		.light {
-			vaxis.Color{
+			vaxis.ColorRgb{
 				rgb: [u8(0xff), 0xff, 0xff]!
 			}
 		}
 		.dark {
-			vaxis.Color{
+			vaxis.ColorRgb{
 				rgb: [u8(0x00), 0x00, 0x00]!
 			}
 		}
@@ -409,12 +415,12 @@ pub fn (self &Preview) ui_standard() vaxis.Style {
 pub fn (self &Preview) ui_hover_bg() vaxis.Color {
 	return match self.color_scheme {
 		.light {
-			vaxis.Color{
+			vaxis.ColorRgb{
 				rgb: [u8(0xbb), 0xbb, 0xbb]!
 			}
 		}
 		.dark {
-			vaxis.Color{
+			vaxis.ColorRgb{
 				rgb: [u8(0x22), 0x22, 0x22]!
 			}
 		}
@@ -433,12 +439,12 @@ pub fn (self &Preview) ui_highlighted() vaxis.Style {
 pub fn (self &Preview) ui_selected_fg() vaxis.Color {
 	return match self.color_scheme {
 		.light {
-			vaxis.Color{
+			vaxis.ColorRgb{
 				rgb: [u8(0x00), 0xaa, 0x00]!
 			}
 		}
 		.dark {
-			vaxis.Color{
+			vaxis.ColorRgb{
 				rgb: [u8(0x00), 0xaa, 0x00]!
 			}
 		}
@@ -449,12 +455,12 @@ pub fn (self &Preview) ui_selected_fg() vaxis.Color {
 pub fn (self &Preview) ui_selected_bg() vaxis.Color {
 	return match self.color_scheme {
 		.light {
-			vaxis.Color{
+			vaxis.ColorRgb{
 				rgb: [u8(0xaa), 0xaa, 0xaa]!
 			}
 		}
 		.dark {
-			vaxis.Color{
+			vaxis.ColorRgb{
 				rgb: [u8(0x33), 0x33, 0x33]!
 			}
 		}
@@ -473,12 +479,12 @@ pub fn (self &Preview) ui_selected() vaxis.Style {
 pub fn (self &Preview) ui_err_fg() vaxis.Color {
 	return match self.color_scheme {
 		.light {
-			vaxis.Color{
+			vaxis.ColorRgb{
 				rgb: [u8(0xff), 0x00, 0x00]!
 			}
 		}
 		.dark {
-			vaxis.Color{
+			vaxis.ColorRgb{
 				rgb: [u8(0xff), 0x00, 0x00]!
 			}
 		}
@@ -690,10 +696,10 @@ pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string 
 			error_text.runes().len) / 2, 0), x_off + width, error_text, self.ui_err())
 		return out.str()
 	}
-	fg := vaxis.Color{
+	fg := vaxis.ColorRgb{
 		rgb: [config.foreground.r, config.foreground.g, config.foreground.b]!
 	}
-	bg := vaxis.Color{
+	bg := vaxis.ColorRgb{
 		rgb: [config.background.r, config.background.g, config.background.b]!
 	}
 	standard := vaxis.Style{
@@ -1046,7 +1052,7 @@ fn write_auto_theme_file(theme_name string) ! {
 // color returns a vaxis.Color from the config palette at the given index.
 fn color_from_palette(cfg configpkg.Config, palette int) vaxis.Color {
 	c := cfg.palette.value[palette]
-	return vaxis.Color{
+	return vaxis.ColorRgb{
 		rgb: [c.r, c.g, c.b]!
 	}
 }
