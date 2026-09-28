@@ -9,6 +9,7 @@ below exist. Earlier versions of this document overstated the completed review.
 
 | Area | Bug | Fix |
 |---|---|---|
+| Theme preview width propagation | List rows, links, boxes, and sample segments kept clipping with the default `wcwidth` method after the preview switched its search widget to Unicode width. Preview centering also counted runes where Ghostty uses byte lengths. | Carry the selected width method through all ANSI preview helpers and restore Ghostty's byte-length centering calculations. |
 | Theme sample segment widths | The preview's sample code advanced and wrapped syntax-colored segments by rune count, so wide glyphs and combining sequences shifted subsequent colors or caused early wrapping. | Walk vaxis grapheme clusters, use the selected terminal width method, and carry one cursor across all segments exactly as pinned `Window.print(.grapheme)` does. |
 | vaxis ANSI adapter clipping | The preview's `truncate` helper used rune count, so a two-cell grapheme could spill past a child window and combining sequences could be split at the edge. | Traverse pinned vaxis grapheme clusters and advance by the selected width method, skipping zero-width clusters and stopping at a newline as `Window.print` does. The default adapter call uses vaxis' initial `wcwidth` method. |
 | vaxis clipboard copy terminator | The theme preview's OSC 52 copy helper ended its payload with BEL, while pinned vaxis uses ST. | Emit the source's OSC 52 sequence and verify the encoded payload and terminator directly. |

@@ -268,6 +268,19 @@ fn test_preview_segments_follow_negotiated_grapheme_width() {
 	assert unicode_out.str().contains(vaxis.position(0, 4) + vaxis.styled('x', p.ui_standard()))
 }
 
+fn test_preview_segments_clip_with_reported_width_method() {
+	mut p := Preview.init([], .all)!
+	mut wcwidth_out := strings.new_builder(128)
+	p.put_segment(mut wcwidth_out, 0, 0, 3, '👩‍🚀x', p.ui_standard())
+	wcwidth_output := wcwidth_out.str()
+	assert wcwidth_output.contains(vaxis.styled('👩‍🚀', p.ui_standard()))
+	assert !wcwidth_output.contains(vaxis.styled('👩‍🚀x', p.ui_standard()))
+	p.width_method = .unicode
+	mut unicode_out := strings.new_builder(128)
+	p.put_segment(mut unicode_out, 0, 0, 3, '👩‍🚀x', p.ui_standard())
+	assert unicode_out.str().contains(vaxis.styled('👩‍🚀x', p.ui_standard()))
+}
+
 fn test_preview_ascii_lowercases_search_tokens_for_zf() {
 	mut p := Preview.init([
 		preview_test_theme('Dracula'),

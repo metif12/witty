@@ -624,7 +624,7 @@ pub fn (mut self Preview) draw() string {
 	mut out := strings.new_builder(width * height * 2)
 	out.write_string(vaxis.clear_screen())
 	for row in 0 .. height {
-		put_segment(mut out, row, 0, width, ' '.repeat(width), standard)
+		self.put_segment(mut out, row, 0, width, ' '.repeat(width), standard)
 	}
 
 	for row in 0 .. height {
@@ -634,11 +634,11 @@ pub fn (mut self Preview) draw() string {
 		}
 		theme := self.themes[self.filtered[index]]
 		if index == self.current {
-			put_segment(mut out, row, 0, list_width, ' '.repeat(list_width), self.ui_selected())
-			put_segment(mut out, row, 0, list_width, '❯ ', self.ui_selected())
-			put_link(mut out, row, 2, list_width, theme.theme, theme.to_uri(), self.ui_selected())
+			self.put_segment(mut out, row, 0, list_width, ' '.repeat(list_width), self.ui_selected())
+			self.put_segment(mut out, row, 0, list_width, '❯ ', self.ui_selected())
+			self.put_link(mut out, row, 2, list_width, theme.theme, theme.to_uri(), self.ui_selected())
 			if list_width >= 2 {
-				put_segment(mut out, row, list_width - 2, list_width, ' ❮', self.ui_selected())
+				self.put_segment(mut out, row, list_width - 2, list_width, ' ❮', self.ui_selected())
 			}
 		} else {
 			style := if highlighted := highlight {
@@ -646,7 +646,7 @@ pub fn (mut self Preview) draw() string {
 			} else {
 				standard
 			}
-			put_link(mut out, row, 2, list_width, theme.theme, theme.to_uri(), style)
+			self.put_link(mut out, row, 2, list_width, theme.theme, theme.to_uri(), style)
 		}
 	}
 
@@ -661,19 +661,19 @@ pub fn (mut self Preview) draw() string {
 			out.write_string(vaxis.hide_cursor())
 		}
 		.help {
-			draw_help_modal(mut out, width, height, standard)
+			self.draw_help_modal(mut out, width, height, standard)
 			out.write_string(vaxis.hide_cursor())
 		}
 		.search {
 			modal_width := min_int(max_int(width - 40, 20), max_int(width - 2, 1))
 			x := max_int((width - modal_width) / 2, 0)
 			y := max_int(height - 5, 0)
-			draw_box(mut out, x, y, modal_width, 3, standard)
+			self.draw_box(mut out, x, y, modal_width, 3, standard)
 			child_width := max_int(modal_width - 2, 0)
 			input := self.text_input.draw_with_style_method(child_width, standard,
 				self.width_method)
 			for cell in input.cells {
-				put_segment(mut out, y + 1, x + 1 + int(cell.col), x + modal_width - 1, cell.text,
+				self.put_segment(mut out, y + 1, x + 1 + int(cell.col), x + modal_width - 1, cell.text,
 					input.style)
 			}
 			if child_width > 0 {
@@ -682,7 +682,7 @@ pub fn (mut self Preview) draw() string {
 		}
 		.save {
 			theme := self.themes[self.filtered[self.current]]
-			draw_save_modal(mut out, width, height, theme.theme, standard)
+			self.draw_save_modal(mut out, width, height, theme.theme, standard)
 			out.write_string(vaxis.hide_cursor())
 		}
 	}
@@ -696,9 +696,9 @@ pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string 
 	if self.filtered.len == 0 {
 		text := 'No theme found!'
 		for row in 0 .. height {
-			put_segment(mut out, row, x_off, x_off + width, ' '.repeat(width), self.ui_standard())
+			self.put_segment(mut out, row, x_off, x_off + width, ' '.repeat(width), self.ui_standard())
 		}
-		put_preview_segment(mut out, max_int(height / 2 - 1, 0), x_off + max_int((width -
+		self.put_preview_segment(mut out, max_int(height / 2 - 1, 0), x_off + max_int((width -
 			text.len) / 2, 0), x_off + width, height, text, self.ui_standard())
 		return out.str()
 	}
@@ -708,17 +708,17 @@ pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string 
 	config.load_file(theme.path) or {
 		standard := self.ui_standard()
 		for row in 0 .. height {
-			put_segment(mut out, row, x_off, x_off + width, ' '.repeat(width), standard)
+			self.put_segment(mut out, row, x_off, x_off + width, ' '.repeat(width), standard)
 		}
 		middle := height / 2
 		text := 'Unable to open ${theme.theme} from:'
-		put_segment(mut out, max_int(middle - 1, 0), x_off + max_int((width -
-			text.runes().len) / 2, 0), x_off + width, text, self.ui_err())
-		put_link(mut out, middle, x_off + max_int((width - theme.path.runes().len) / 2, 0), x_off +
+		self.put_segment(mut out, max_int(middle - 1, 0), x_off + max_int((width -
+			text.len) / 2, 0), x_off + width, text, self.ui_err())
+		self.put_link(mut out, middle, x_off + max_int((width - theme.path.len) / 2, 0), x_off +
 			width, theme.path, theme.to_uri(), self.ui_err())
 		error_text := err.msg()
-		put_segment(mut out, min_int(middle + 1, max_int(height - 1, 0)), x_off + max_int((width -
-			error_text.runes().len) / 2, 0), x_off + width, error_text, self.ui_err())
+		self.put_segment(mut out, min_int(middle + 1, max_int(height - 1, 0)), x_off + max_int((width -
+			error_text.len) / 2, 0), x_off + width, error_text, self.ui_err())
 		return out.str()
 	}
 	fg := vaxis.ColorRgb{
@@ -786,20 +786,20 @@ pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string 
 	}
 
 	for row in 0 .. height {
-		put_segment(mut out, row, x_off, x_off + width, ' '.repeat(width), standard)
+		self.put_segment(mut out, row, x_off, x_off + width, ' '.repeat(width), standard)
 	}
-	put_link(mut out, 1, x_off + max_int((width - theme.theme.runes().len) / 2, 0), x_off + width,
+	self.put_link(mut out, 1, x_off + max_int((width - theme.theme.len) / 2, 0), x_off + width,
 		theme.theme, theme.to_uri(), standard_bold_italic)
-	put_link(mut out, 2, x_off + max_int((width - theme.path.runes().len) / 2, 0), x_off + width,
+	self.put_link(mut out, 2, x_off + max_int((width - theme.path.len) / 2, 0), x_off + width,
 		theme.path, theme.to_uri(), standard)
 
 	mut next_row := 4
 	if config.diagnostics.len > 0 && next_row < height {
 		heading := 'Problems were encountered trying to load the theme:'
-		put_preview_segment(mut out, next_row, x_off + max_int((width - heading.len) / 2, 0),
+		self.put_preview_segment(mut out, next_row, x_off + max_int((width - heading.len) / 2, 0),
 			x_off + width, height, heading, self.ui_err())
 		for i, diagnostic in config.diagnostics {
-			put_preview_segment(mut out, next_row + 2 + i, x_off + 2, x_off + width, height,
+			self.put_preview_segment(mut out, next_row + 2 + i, x_off + 2, x_off + width, height,
 				diagnostic.format(), self.ui_err())
 		}
 		next_row += 2 + config.diagnostics.len
@@ -812,13 +812,13 @@ pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string 
 			continue
 		}
 		label := if self.hex { ' ${i:02x}' } else { '${i:3}' }
-		put_preview_segment(mut out, row, col, x_off + width, height, label, standard)
+		self.put_preview_segment(mut out, row, col, x_off + width, height, label, standard)
 		palette_style := vaxis.Style{
 			fg: color_from_palette(config, i)
 			bg: bg
 		}
-		put_preview_segment(mut out, row, col + 4, x_off + width, height, '████', palette_style)
-		put_preview_segment(mut out, row + 1, col + 4, x_off + width, height, '████',
+		self.put_preview_segment(mut out, row, col + 4, x_off + width, height, '████', palette_style)
+		self.put_preview_segment(mut out, row + 1, col + 4, x_off + width, height, '████',
 			palette_style)
 	}
 	next_row += 6
@@ -846,14 +846,14 @@ pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string 
 		PreviewSegment{ text: ' ', style: standard },
 		PreviewSegment{ text: 'ziggzagg.zig', style: color6ul },
 	])
-	put_preview_segment(mut out, next_row + 1, x_off + 2, right, height,
+	self.put_preview_segment(mut out, next_row + 1, x_off + 2, right, height,
 		'───────┬${'─'.repeat(max_int(width - 10, 0))}', color238)
 	self.put_preview_segments(mut out, next_row + 2, x_off + 2, right, sample_bottom, [
 		PreviewSegment{ text: '       │ ', style: color238 },
 		PreviewSegment{ text: 'File: ', style: standard },
 		PreviewSegment{ text: 'ziggzagg.zig', style: standard_bold },
 	])
-	put_preview_segment(mut out, next_row + 3, x_off + 2, right, height,
+	self.put_preview_segment(mut out, next_row + 3, x_off + 2, right, height,
 		'───────┼${'─'.repeat(max_int(width - 10, 0))}', color238)
 	self.put_preview_segments(mut out, next_row + 4, x_off + 2, right, sample_bottom, [
 		PreviewSegment{ text: '   1   │ ', style: color238 },
@@ -864,7 +864,7 @@ pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string 
 		PreviewSegment{ text: '"std"', style: color10 },
 		PreviewSegment{ text: ');', style: standard },
 	])
-	put_preview_segment(mut out, next_row + 5, x_off + 2, right, height, '   2   │', color238)
+	self.put_preview_segment(mut out, next_row + 5, x_off + 2, right, height, '   2   │', color238)
 	self.put_preview_segments(mut out, next_row + 6, x_off + 2, right, sample_bottom, [
 		PreviewSegment{ text: '   3   │ ', style: color238 },
 		PreviewSegment{ text: 'pub ', style: color5 },
@@ -985,7 +985,7 @@ pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string 
 		PreviewSegment{ text: '  17   │ ', style: color238 },
 		PreviewSegment{ text: '}', style: standard },
 	])
-	put_preview_segment(mut out, next_row + 21, x_off + 2, right, height,
+	self.put_preview_segment(mut out, next_row + 21, x_off + 2, right, height,
 		'───────┴${'─'.repeat(max_int(width - 10, 0))}', color238)
 	self.put_preview_segments(mut out, next_row + 22, x_off + 2, right, sample_bottom, [
 		PreviewSegment{ text: 'ghostty ', style: color6 },
@@ -1056,7 +1056,7 @@ pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string 
 			}
 		}
 
-		put_preview_segment(mut out, row, col, x_off + width, height, word, style)
+		self.put_preview_segment(mut out, row, col, x_off + width, height, word, style)
 		col += word_width + 1
 	}
 	return out.str()
@@ -1089,11 +1089,11 @@ fn preview_palette_style(config configpkg.Config, index int, bg vaxis.Color) vax
 	}
 }
 
-fn put_preview_segment(mut out strings.Builder, row int, col int, right int, bottom int, text string, style vaxis.Style) {
+fn (self &Preview) put_preview_segment(mut out strings.Builder, row int, col int, right int, bottom int, text string, style vaxis.Style) {
 	if row >= bottom {
 		return
 	}
-	put_segment(mut out, row, col, right, text, style)
+	self.put_segment(mut out, row, col, right, text, style)
 }
 
 fn (self &Preview) put_preview_segments(mut out strings.Builder, row int, col int, right int, bottom int, segments []PreviewSegment) {
@@ -1146,11 +1146,11 @@ fn (self &Preview) put_preview_segments(mut out strings.Builder, row int, col in
 	}
 }
 
-fn put_segment(mut out strings.Builder, row int, col int, right int, text string, style vaxis.Style) {
+fn (self &Preview) put_segment(mut out strings.Builder, row int, col int, right int, text string, style vaxis.Style) {
 	if row < 0 || col < 0 || col >= right {
 		return
 	}
-	visible := vaxis.truncate(text, right - col)
+	visible := vaxis.truncate_with_method(text, right - col, self.width_method)
 	if visible.len == 0 {
 		return
 	}
@@ -1158,11 +1158,11 @@ fn put_segment(mut out strings.Builder, row int, col int, right int, text string
 	out.write_string(vaxis.styled(visible, style))
 }
 
-fn put_link(mut out strings.Builder, row int, col int, right int, text string, uri string, style vaxis.Style) {
+fn (self &Preview) put_link(mut out strings.Builder, row int, col int, right int, text string, uri string, style vaxis.Style) {
 	if row < 0 || col < 0 || col >= right {
 		return
 	}
-	visible := vaxis.truncate(text, right - col)
+	visible := vaxis.truncate_with_method(text, right - col, self.width_method)
 	if visible.len == 0 {
 		return
 	}
@@ -1170,18 +1170,18 @@ fn put_link(mut out strings.Builder, row int, col int, right int, text string, u
 	out.write_string(vaxis.hyperlink(visible, uri, style))
 }
 
-fn draw_box(mut out strings.Builder, x int, y int, width int, height int, style vaxis.Style) {
+fn (self &Preview) draw_box(mut out strings.Builder, x int, y int, width int, height int, style vaxis.Style) {
 	if width < 2 || height < 2 {
 		return
 	}
-	put_segment(mut out, y, x, x + width, '┌${'─'.repeat(width - 2)}┐', style)
+	self.put_segment(mut out, y, x, x + width, '┌${'─'.repeat(width - 2)}┐', style)
 	for row in y + 1 .. y + height - 1 {
-		put_segment(mut out, row, x, x + width, '│${' '.repeat(width - 2)}│', style)
+		self.put_segment(mut out, row, x, x + width, '│${' '.repeat(width - 2)}│', style)
 	}
-	put_segment(mut out, y + height - 1, x, x + width, '└${'─'.repeat(width - 2)}┘', style)
+	self.put_segment(mut out, y + height - 1, x, x + width, '└${'─'.repeat(width - 2)}┘', style)
 }
 
-fn draw_help_modal(mut out strings.Builder, screen_width int, screen_height int, style vaxis.Style) {
+fn (self &Preview) draw_help_modal(mut out strings.Builder, screen_width int, screen_height int, style vaxis.Style) {
 	help := [
 		HelpEntry{ keys: '^C, q, ESC', help: 'Quit.' },
 		HelpEntry{ keys: 'F1, ?, ^H', help: 'Toggle help window.' },
@@ -1207,14 +1207,14 @@ fn draw_help_modal(mut out strings.Builder, screen_width int, screen_height int,
 	height := min_int(22, max_int(screen_height - 2, 1))
 	x := max_int((screen_width - width) / 2, 0)
 	y := max_int((screen_height - height) / 2, 0)
-	draw_box(mut out, x, y, width, height, style)
+	self.draw_box(mut out, x, y, width, height, style)
 	for i, entry in help {
 		if i + 1 >= height - 1 {
 			break
 		}
-		put_segment(mut out, y + i + 1, x + 2, x + width - 1, entry.keys, style)
-		put_segment(mut out, y + i + 1, x + 15, x + width - 1, '—', style)
-		put_segment(mut out, y + i + 1, x + 17, x + width - 1, entry.help, style)
+		self.put_segment(mut out, y + i + 1, x + 2, x + width - 1, entry.keys, style)
+		self.put_segment(mut out, y + i + 1, x + 15, x + width - 1, '—', style)
+		self.put_segment(mut out, y + i + 1, x + 17, x + width - 1, entry.help, style)
 	}
 }
 
@@ -1223,7 +1223,7 @@ struct HelpEntry {
 	help string
 }
 
-fn draw_save_modal(mut out strings.Builder, screen_width int, screen_height int, theme string, style vaxis.Style) {
+fn (self &Preview) draw_save_modal(mut out strings.Builder, screen_width int, screen_height int, theme string, style vaxis.Style) {
 	instructions := [
 		'To apply this theme, add the following line to your Ghostty configuration:',
 		'',
@@ -1244,12 +1244,12 @@ fn draw_save_modal(mut out strings.Builder, screen_width int, screen_height int,
 	height := min_int(17, max_int(screen_height - 2, 1))
 	x := max_int((screen_width - width) / 2, 0)
 	y := max_int((screen_height - height) / 2, 0)
-	draw_box(mut out, x, y, width, height, style)
+	self.draw_box(mut out, x, y, width, height, style)
 	for i, line in instructions {
 		if i + 1 >= height - 1 {
 			break
 		}
-		put_segment(mut out, y + i + 1, x + 2, x + width - 1, line, style)
+		self.put_segment(mut out, y + i + 1, x + 2, x + width - 1, line, style)
 	}
 }
 
