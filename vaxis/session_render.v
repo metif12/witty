@@ -97,22 +97,7 @@ pub fn (mut vx Vaxis) render() string {
 				}
 			}
 			if img := cell.image {
-				out.write_string('\x1b_Ga=p,i=${img.img_id}')
-				if offset := img.options.pixel_offset {
-					out.write_string(',X=${offset.x},Y=${offset.y}')
-				}
-				if clip := img.options.clip_region {
-					if x := clip.x { out.write_string(',x=${x}') }
-					if y := clip.y { out.write_string(',y=${y}') }
-					if width := clip.width { out.write_string(',w=${width}') }
-					if height := clip.height { out.write_string(',h=${height}') }
-				}
-				if size := img.options.size {
-					if rows := size.rows { out.write_string(',r=${rows}') }
-					if cols := size.cols { out.write_string(',c=${cols}') }
-				}
-				if z := img.options.z_index { out.write_string(',z=${z}') }
-				out.write_string(',C=1\x1b\\')
+				out.write_string(render_image_placement(img))
 			}
 			out.write_string(render_style_delta(cursor_style, cell.style, vx.sgr,
 				vx.enable_workarounds))
@@ -185,6 +170,27 @@ pub fn (mut vx Vaxis) render() string {
 	return out.str()
 }
 
+fn render_image_placement(img ImagePlacement) string {
+	mut out := strings.new_builder(80)
+	out.write_string('\x1b_Ga=p,i=${img.img_id}')
+	if offset := img.options.pixel_offset {
+		out.write_string(',X=${offset.x},Y=${offset.y}')
+	}
+	if clip := img.options.clip_region {
+		if x := clip.x { out.write_string(',x=${x}') }
+		if y := clip.y { out.write_string(',y=${y}') }
+		if width := clip.width { out.write_string(',w=${width}') }
+		if height := clip.height { out.write_string(',h=${height}') }
+	}
+	if size := img.options.size {
+		if rows := size.rows { out.write_string(',r=${rows}') }
+		if cols := size.cols { out.write_string(',c=${cols}') }
+	}
+	if z := img.options.z_index { out.write_string(',z=${z}') }
+	out.write_string(',C=1\x1b\\')
+	return out.str()
+}
+
 fn render_color(color Color, channel int, sgr SgrMode, workarounds bool) string {
 	base := match channel {
 		0 { 30 }
@@ -192,11 +198,13 @@ fn render_color(color Color, channel int, sgr SgrMode, workarounds bool) string 
 		else { 0 }
 	}
 	return match color {
-		ColorDefault { '\x1b[${match channel {
-			0 { 39 }
-			1 { 49 }
-			else { 59 }
-		}}m' }
+		ColorDefault {
+			'\x1b[${match channel {
+				0 { 39 }
+				1 { 49 }
+				else { 59 }
+			}}m'
+		}
 		ColorIndex {
 			idx := color.index
 			if channel != 2 && idx <= 7 {

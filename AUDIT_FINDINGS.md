@@ -706,9 +706,10 @@ none, browser, action, ipc. dependencies: zf 0.10.3 ranking/highlighting.
   scaling, cursor, and synchronized-output sequences. Clipboard, title,
   notification, color query/set, scheme subscription, and Kitty image
   transmission/control sequences are now translated, along with image cell
-  sizing and placement. Its synchronous query
-  wait, image decoding/transcoding and high-level loading, working-directory
-  control, pretty printing, and the threaded TTY event loop remain absent.
+  sizing and placement, working-directory control, pretty printing, and
+  capability/F3-probe event interception. Its synchronous query wait, image
+  decoding/transcoding and high-level loading, and the threaded TTY event loop
+  remain absent.
   The preview now queries and subscribes to color-scheme updates, but its
   session/render path is not yet a complete translation of the pinned vaxis
   `Vaxis`, `Loop`, and `Tty` implementations. Pinned vaxis width data and all

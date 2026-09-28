@@ -25,6 +25,12 @@ fn test_session_control_sequences_and_state() {
 	assert vx.subscribe_to_color_scheme_updates() == '\x1b[?996n\x1b[?2031h'
 	assert vx.state.color_scheme_updates
 	assert vx.device_status_report() == '\x1b[5n'
+	assert terminal_working_directory_sequence('/tmp/a', 'host') == '\x1b]7;file://host/tmp/a\x1b\\'
+	invalid_dir := vx.set_terminal_working_directory('relative') or {
+		assert err.msg() == 'InvalidAbsolutePath'
+		''
+	}
+	assert invalid_dir == ''
 	vx.screen.deinit()
 	vx.screen_last.deinit()
 }

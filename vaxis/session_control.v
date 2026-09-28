@@ -1,6 +1,7 @@
 module vaxis
 
 import encoding.base64
+import os
 
 // These return the bytes written to the pinned Vaxis IoWriter.
 pub fn (vx &Vaxis) notify(title ?string, body string) string {
@@ -65,4 +66,21 @@ pub fn (mut vx Vaxis) subscribe_to_color_scheme_updates() string {
 pub fn (vx &Vaxis) device_status_report() string {
 	_ = vx
 	return '\x1b[5n'
+}
+
+pub fn (vx &Vaxis) set_terminal_working_directory(path string) !string {
+	_ = vx
+	if path.len == 0 || path[0] != `/` {
+		return error('InvalidAbsolutePath')
+	}
+	$if windows {
+		return terminal_working_directory_sequence(path, 'localhost')
+	} $else {
+		hostname := os.getenv_opt('HOSTNAME') or { 'localhost' }
+		return terminal_working_directory_sequence(path, hostname)
+	}
+}
+
+fn terminal_working_directory_sequence(path string, hostname string) string {
+	return '\x1b]7;file://${hostname}${path}\x1b\\'
 }
