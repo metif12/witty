@@ -36,7 +36,8 @@ pub fn (mut self Surface) core() &core.Surface {
 
 // rt_app returns the apprt App for this surface. Mirrors `Surface.rtApp`.
 pub fn (self &Surface) rt_app() &App {
-	return self.surface.app.rt_app
+	_ = self
+	return Application.default().rt()
 }
 
 // close closes the surface. Mirrors `Surface.close`.
