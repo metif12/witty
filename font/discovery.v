@@ -222,8 +222,6 @@ module font
 
 import fontconfig
 import math
-import macos
-import opentype as _
 
 // CoreText discovery/scoring helpers implemented in the C shim header.
 // See font/coretext_shims.h. These are only functional on macOS; on other
@@ -241,12 +239,6 @@ fn C.witty_ct_matching_descriptors(search_desc voidptr) voidptr
 fn C.witty_cf_array_count(arr voidptr) int
 
 fn C.witty_cf_array_get(arr voidptr, i int) voidptr
-
-fn C.witty_ct_score(desired_style &char, desired_style_len usize, codepoint u32, want_bold int, want_italic int, candidate_desc voidptr) u32
-
-fn C.witty_ascii_eql_ignore_case(lhs &char, lhs_len usize, rhs &char, rhs_len usize) int
-
-fn C.witty_ascii_index_of_ignore_case(haystack &char, haystack_len usize, needle &char, needle_len usize) int
 
 fn C.witty_ct_descriptor_drop_charset(desc voidptr) voidptr
 
@@ -534,12 +526,6 @@ pub fn Score.init(glyph_count u16, fuzzy_style u8, bold bool, italic bool, exact
 	}
 }
 
-pub fn Score.from_int(v u32) Score {
-	return Score{
-		value: v & 0x1fff_ffff
-	}
-}
-
 pub fn (self Score) glyph_count() u16 {
 	return u16(self.value)
 }
@@ -572,23 +558,6 @@ pub fn (self Score) codepoint() bool {
 // sort earlier.
 pub fn (self Score) int() u32 {
 	return self.value
-}
-
-// score computes the sorting Score for a candidate CoreText descriptor
-// against the given search descriptor. This mirrors ghostty's Score.score():
-// it loads the font (fonts that can't be loaded score 0), prefers more
-// glyphs, prioritizes codepoint coverage, and matches bold/italic/monospace
-// traits and the style string.
-//
-// The heavy lifting (loading the font, reading symbolic and OpenType traits,
-// variation axes, glyph coverage, and style-string fuzzy matching) is done in
-// the C shim since it needs the CoreText framework; here we unpack the packed
-// score into its symbolic fields.
-pub fn Score.score(desc &Descriptor, ct_desc voidptr) Score {
-	style_ptr := if s := desc.style { &char(s.str) } else { &char(unsafe { nil }) }
-	style_len := if s := desc.style { usize(s.len) } else { usize(0) }
-	v := C.witty_ct_score(style_ptr, style_len, desc.codepoint, b2i(desc.bold), b2i(desc.italic), ct_desc)
-	return Score.from_int(v)
 }
 
 // Note: DeferredFace is defined in face.v

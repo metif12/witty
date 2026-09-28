@@ -4,33 +4,6 @@
 #include <string.h>
 #include <math.h>
 
-static unsigned char witty_ascii_lower(unsigned char c) {
-	return c >= 'A' && c <= 'Z' ? (unsigned char)(c + ('a' - 'A')) : c;
-}
-
-static int witty_ascii_eql_ignore_case(
-	const char *lhs, size_t lhs_len, const char *rhs, size_t rhs_len
-) {
-	if (lhs_len != rhs_len) return 0;
-	for (size_t i = 0; i < lhs_len; i++) {
-		if (witty_ascii_lower((unsigned char)lhs[i]) !=
-			witty_ascii_lower((unsigned char)rhs[i])) return 0;
-	}
-	return 1;
-}
-
-static int witty_ascii_index_of_ignore_case(
-	const char *haystack, size_t haystack_len,
-	const char *needle, size_t needle_len
-) {
-	if (needle_len > haystack_len) return 0;
-	for (size_t i = 0; i + needle_len <= haystack_len; i++) {
-		if (witty_ascii_eql_ignore_case(
-			haystack + i, needle_len, needle, needle_len)) return 1;
-	}
-	return 0;
-}
-
 #ifdef __APPLE__
 #include <CoreFoundation/CoreFoundation.h>
 #include <CoreGraphics/CoreGraphics.h>
@@ -478,215 +451,105 @@ static void *witty_cf_array_get(void *arr, int i) {
 	return (void *)CFArrayGetValueAtIndex((CFArrayRef)arr, (CFIndex)i);
 }
 
-// Compute a sorting score for a candidate descriptor against the search
-// fields. Higher is better. The packed layout matches font/discovery.v's
-// Score.to_int(): glyph_count[0..16), fuzzy_style[16..24), bold[24],
-// italic[25], exact_style[26], monospace[27], codepoint[28].
-//
-// This mirrors ghostty's Score.score() using CoreText's trait/attribute APIs,
-// OpenType head/OS/2 flags, and active variation-axis values.
-static uint32_t witty_ct_score(
-	const char *desired_style, // may be NULL
-	size_t desired_style_len,
-	uint32_t codepoint,
-	int want_bold,
-	int want_italic,
-	void *candidate_desc
-) {
-	uint32_t glyph_count = 0;
-	uint8_t fuzzy_style = 0;
-	uint32_t bold_match = 0;
-	uint32_t italic_match = 0;
-	uint32_t exact_style = 0;
-	uint32_t monospace = 0;
-	uint32_t has_codepoint = 0;
+// Primitive CoreText accessors used by the direct V translation of
+// discovery.zig's Score.score().
+static uint64_t witty_ct_font_glyph_count(void *font_ptr) {
+	if (!font_ptr) return 0;
+	CFIndex count = CTFontGetGlyphCount((CTFontRef)font_ptr);
+	return count > 0 ? (uint64_t)count : 0;
+}
 
-	if (!candidate_desc) return 0;
-
-	// We always load the font; fonts we can't load score 0.
-	CTFontRef font = CTFontCreateWithFontDescriptor(
-		(CTFontDescriptorRef)candidate_desc, 12.0, NULL);
-	if (!font) return 0;
-
-	// Glyph count (clamped to u16 max).
-	{
-		CFIndex gc = CTFontGetGlyphCount(font);
-		if (gc < 0) gc = 0;
-		if (gc > 0xFFFF) gc = 0xFFFF;
-		glyph_count = (uint32_t)gc;
-	}
-
-	// Codepoint coverage.
-	if (codepoint > 0) {
-		uint32_t g = 0;
-		has_codepoint = witty_coretext_glyph_for_codepoint((void *)font, codepoint, &g) ? 1 : 0;
-	}
-
-	// Symbolic traits (bold / italic / monospace). Ghostty reads these from
-	// the candidate descriptor and only then refines bold/italic from the
-	// loaded font's OpenType tables and variation values.
-	int is_bold = 0, is_italic = 0, is_mono = 0;
-	{
-		CTFontSymbolicTraits t = 0;
-		CFDictionaryRef traits = (CFDictionaryRef)CTFontDescriptorCopyAttribute(
-			(CTFontDescriptorRef)candidate_desc, kCTFontTraitsAttribute);
-		if (traits) {
-			CFNumberRef symbolic = (CFNumberRef)CFDictionaryGetValue(
-				traits, kCTFontSymbolicTrait);
-			if (symbolic) {
-				int32_t raw = 0;
-				if (CFNumberGetValue(symbolic, kCFNumberSInt32Type, &raw)) {
-					t = (CTFontSymbolicTraits)(uint32_t)raw;
-				}
-			}
-			CFRelease(traits);
-		}
-		is_bold = (t & kCTFontTraitBold) ? 1 : 0;
-		is_italic = (t & kCTFontTraitItalic) ? 1 : 0;
-		is_mono = (t & kCTFontTraitMonoSpace) ? 1 : 0;
-	}
-	{
-		CFDataRef head = CTFontCopyTable(font, (CTFontTableTag)'head', kCTFontTableOptionNoOptions);
-		if (head) {
-			const UInt8 *bytes = CFDataGetBytePtr(head);
-			CFIndex len = CFDataGetLength(head);
-			if (bytes && len >= 46) {
-				uint16_t mac_style = ((uint16_t)bytes[44] << 8) | bytes[45];
-				is_bold = is_bold || ((mac_style & 1) != 0);
-				is_italic = is_italic || ((mac_style & 2) != 0);
-			}
-			CFRelease(head);
-		}
-
-		CFDataRef os2 = CTFontCopyTable(font, (CTFontTableTag)'OS/2', kCTFontTableOptionNoOptions);
-		if (os2) {
-			const UInt8 *bytes = CFDataGetBytePtr(os2);
-			CFIndex len = CFDataGetLength(os2);
-			if (bytes && len >= 64) {
-				uint16_t selection = ((uint16_t)bytes[62] << 8) | bytes[63];
-				is_bold = is_bold || ((selection & 0x20) != 0);
-				is_italic = is_italic || ((selection & 0x01) != 0);
-			}
-			CFRelease(os2);
-		}
-
-		CFArrayRef axes = CTFontCopyVariationAxes(font);
-		CFDictionaryRef values = (CFDictionaryRef)CTFontCopyAttribute(font, kCTFontVariationAttribute);
-		if (axes && values) {
-			int ital_seen = 0;
-			CFIndex count = CFArrayGetCount(axes);
-			for (CFIndex i = 0; i < count; i++) {
-				CFDictionaryRef axis = (CFDictionaryRef)CFArrayGetValueAtIndex(axes, i);
-				CFNumberRef id_number = (CFNumberRef)CFDictionaryGetValue(axis, kCTFontVariationAxisIdentifierKey);
-				CFStringRef name = (CFStringRef)CFDictionaryGetValue(axis, kCTFontVariationAxisNameKey);
-				CFNumberRef default_number = (CFNumberRef)CFDictionaryGetValue(axis, kCTFontVariationAxisDefaultValueKey);
-				if (!id_number || !name || !default_number) continue;
-
-				char name_buf[1024];
-				name_buf[0] = 0;
-				(void)CFStringGetCString(name, name_buf, sizeof(name_buf), kCFStringEncodingUTF8);
-				double value = 0;
-				(void)CFNumberGetValue(default_number, kCFNumberDoubleType, &value);
-				CFNumberRef configured = (CFNumberRef)CFDictionaryGetValue(values, id_number);
-				if (configured) (void)CFNumberGetValue(configured, kCFNumberDoubleType, &value);
-
-				if (strcmp(name_buf, "wght") == 0) {
-					is_bold = value > 600.0;
-				} else if (strcmp(name_buf, "ital") == 0) {
-					is_italic = value > 0.5;
-					ital_seen = 1;
-				} else if (!ital_seen && strcmp(name_buf, "slnt") == 0) {
-					is_italic = value <= -5.0;
-				}
-			}
-		}
-		if (values) CFRelease(values);
-		if (axes) CFRelease(axes);
-	}
-	monospace = is_mono ? 1 : 0;
-	bold_match = (want_bold == is_bold) ? 1 : 0;
-	italic_match = (want_italic == is_italic) ? 1 : 0;
-
-	// Style string from the descriptor.
-	char style_buf[128];
-	style_buf[0] = 0;
-	{
-		CFStringRef sname = (CFStringRef)CTFontDescriptorCopyAttribute(
-			(CTFontDescriptorRef)candidate_desc, kCTFontStyleNameAttribute);
-		if (sname) {
-			CFStringGetCString(sname, style_buf, sizeof(style_buf), kCFStringEncodingUTF8);
-			CFRelease(sname);
+// Return the three symbolic traits used by discovery as compact bridge bits:
+// bit 0 bold, bit 1 italic, and bit 2 monospace.
+static uint32_t witty_ct_descriptor_traits(void *desc_ptr) {
+	if (!desc_ptr) return 0;
+	uint32_t result = 0;
+	CFDictionaryRef traits = (CFDictionaryRef)CTFontDescriptorCopyAttribute(
+		(CTFontDescriptorRef)desc_ptr, kCTFontTraitsAttribute);
+	if (!traits) return 0;
+	CFNumberRef symbolic = (CFNumberRef)CFDictionaryGetValue(
+		traits, kCTFontSymbolicTrait);
+	if (symbolic) {
+		int32_t raw = 0;
+		if (CFNumberGetValue(symbolic, kCFNumberSInt32Type, &raw)) {
+			CTFontSymbolicTraits value = (CTFontSymbolicTraits)(uint32_t)raw;
+			if (value & kCTFontTraitBold) result |= 1u;
+			if (value & kCTFontTraitItalic) result |= 2u;
+			if (value & kCTFontTraitMonoSpace) result |= 4u;
 		}
 	}
-
-	// Determine desired style strings.
-	const char *desired[4];
-	size_t desired_len[4];
-	int desired_n = 0;
-	if (desired_style) {
-		desired[desired_n++] = desired_style;
-		desired_len[0] = desired_style_len;
-	} else if (want_bold && want_italic) {
-		desired[desired_n++] = "bold italic";
-		desired_len[0] = sizeof("bold italic") - 1;
-		desired[desired_n++] = "bold";
-		desired_len[1] = sizeof("bold") - 1;
-		desired[desired_n++] = "italic";
-		desired_len[2] = sizeof("italic") - 1;
-		desired[desired_n++] = "oblique";
-		desired_len[3] = sizeof("oblique") - 1;
-	} else if (want_bold) {
-		desired[desired_n++] = "bold";
-		desired_len[0] = sizeof("bold") - 1;
-		desired[desired_n++] = "upright";
-		desired_len[1] = sizeof("upright") - 1;
-	} else if (want_italic) {
-		desired[desired_n++] = "italic";
-		desired_len[0] = sizeof("italic") - 1;
-		desired[desired_n++] = "regular";
-		desired_len[1] = sizeof("regular") - 1;
-		desired[desired_n++] = "oblique";
-		desired_len[2] = sizeof("oblique") - 1;
-	} else {
-		desired[desired_n++] = "regular";
-		desired_len[0] = sizeof("regular") - 1;
-		desired[desired_n++] = "upright";
-		desired_len[1] = sizeof("upright") - 1;
-	}
-
-	// Exact (case-insensitive) match on first desired style.
-	size_t style_len = strlen(style_buf);
-	if (desired_n > 0 && witty_ascii_eql_ignore_case(
-		style_buf, style_len, desired[0], desired_len[0])) {
-		exact_style = 1;
-	}
-
-	// Fuzzy match: start from the style length, subtract any matching
-	// desired-style lengths, then invert so smaller leftover -> higher score.
-	{
-		size_t leftover = style_len;
-		size_t slen = leftover;
-		for (int i = 0; i < desired_n; i++) {
-			// case-insensitive substring search
-			size_t dl = desired_len[i];
-			if (witty_ascii_index_of_ignore_case(style_buf, slen, desired[i], dl)) {
-				if (leftover >= dl) leftover -= dl; else leftover = 0;
-			}
-		}
-		if (leftover > 255) leftover = 255;
-		fuzzy_style = (uint8_t)(255 - leftover);
-	}
-
-	CFRelease(font);
-
-	uint32_t result = glyph_count & 0xFFFF;
-	result |= ((uint32_t)fuzzy_style) << 16;
-	result |= bold_match << 24;
-	result |= italic_match << 25;
-	result |= exact_style << 26;
-	result |= monospace << 27;
-	result |= has_codepoint << 28;
+	CFRelease(traits);
 	return result;
+}
+
+static int witty_ct_descriptor_style_name(
+	void *desc_ptr, uint8_t *buf, size_t len
+) {
+	if (!desc_ptr || !buf || len == 0) return 0;
+	buf[0] = 0;
+	CFStringRef value = (CFStringRef)CTFontDescriptorCopyAttribute(
+		(CTFontDescriptorRef)desc_ptr, kCTFontStyleNameAttribute);
+	if (!value) return 0;
+	Boolean ok = CFStringGetCString(
+		value, (char *)buf, (CFIndex)len, kCFStringEncodingUTF8);
+	CFRelease(value);
+	return ok ? 1 : 0;
+}
+
+static void *witty_ct_font_copy_variation_axes(void *font_ptr) {
+	if (!font_ptr) return NULL;
+	return (void *)CTFontCopyVariationAxes((CTFontRef)font_ptr);
+}
+
+static void *witty_ct_font_copy_variation_values(void *font_ptr) {
+	if (!font_ptr) return NULL;
+	return (void *)CTFontCopyAttribute(
+		(CTFontRef)font_ptr, kCTFontVariationAttribute);
+}
+
+static int witty_ct_variation_count(void *axes_ptr) {
+	if (!axes_ptr) return 0;
+	return (int)CFArrayGetCount((CFArrayRef)axes_ptr);
+}
+
+// Extract one variation axis name and its effective value. The effective value
+// is the font instance value when present and the axis default otherwise.
+static int witty_ct_variation_get(
+	void *axes_ptr,
+	void *values_ptr,
+	int index,
+	uint8_t *name_buf,
+	size_t name_len,
+	double *value_out
+) {
+	if (!axes_ptr || !values_ptr || !name_buf || name_len == 0 || !value_out) {
+		return 0;
+	}
+	CFArrayRef axes = (CFArrayRef)axes_ptr;
+	CFIndex count = CFArrayGetCount(axes);
+	if (index < 0 || (CFIndex)index >= count) return 0;
+	CFDictionaryRef axis = (CFDictionaryRef)CFArrayGetValueAtIndex(
+		axes, (CFIndex)index);
+	CFNumberRef identifier = (CFNumberRef)CFDictionaryGetValue(
+		axis, kCTFontVariationAxisIdentifierKey);
+	CFStringRef name = (CFStringRef)CFDictionaryGetValue(
+		axis, kCTFontVariationAxisNameKey);
+	CFNumberRef default_value = (CFNumberRef)CFDictionaryGetValue(
+		axis, kCTFontVariationAxisDefaultValueKey);
+	if (!identifier || !name || !default_value) return 0;
+
+	double value = 0;
+	(void)CFNumberGetValue(default_value, kCFNumberDoubleType, &value);
+	CFNumberRef configured = (CFNumberRef)CFDictionaryGetValue(
+		(CFDictionaryRef)values_ptr, identifier);
+	if (configured) {
+		(void)CFNumberGetValue(configured, kCFNumberDoubleType, &value);
+	}
+	name_buf[0] = 0;
+	(void)CFStringGetCString(
+		name, (char *)name_buf, (CFIndex)name_len, kCFStringEncodingUTF8);
+	*value_out = value;
+	return 1;
 }
 
 // Create a copy of a descriptor with the character-set attribute removed so
@@ -1038,15 +901,6 @@ static int witty_ct_descriptor_is_color(void *desc_ptr) {
 
 static int witty_cf_array_count(void *arr) { (void)arr; return 0; }
 static void *witty_cf_array_get(void *arr, int i) { (void)arr; (void)i; return NULL; }
-
-static uint32_t witty_ct_score(
-	const char *desired_style, size_t desired_style_len, uint32_t codepoint,
-	int want_bold, int want_italic, void *candidate_desc
-) {
-	(void)desired_style; (void)desired_style_len; (void)codepoint; (void)want_bold;
-	(void)want_italic; (void)candidate_desc;
-	return 0;
-}
 
 static void *witty_ct_descriptor_drop_charset(void *desc) { (void)desc; return NULL; }
 

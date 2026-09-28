@@ -18,6 +18,19 @@ pub fn eql_ignore_case(a string, b string) bool {
 	return true
 }
 
+// index_of_ignore_case translates std.ascii.indexOfIgnoreCase.
+pub fn index_of_ignore_case(haystack string, needle string) ?int {
+	if needle.len > haystack.len {
+		return none
+	}
+	for i in 0 .. haystack.len - needle.len + 1 {
+		if eql_ignore_case(haystack[i..i + needle.len], needle) {
+			return i
+		}
+	}
+	return none
+}
+
 // order_ignore_case translates std.ascii.orderIgnoreCase. Its result follows
 // V's comparison convention: negative, zero, or positive.
 pub fn order_ignore_case(lhs string, rhs string) int {

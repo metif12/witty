@@ -2,7 +2,18 @@ module font
 
 // CoreText discovery (discovery.zig's CoreText and Descriptor.toCoreTextDescriptor),
 // compiled only for Darwin where the CoreText font backend is selected.
+import ascii
+import log
 import macos
+import opentype
+
+fn C.witty_ct_font_glyph_count(font_ptr voidptr) u64
+fn C.witty_ct_descriptor_traits(desc_ptr voidptr) u32
+fn C.witty_ct_descriptor_style_name(desc_ptr voidptr, buf &u8, len usize) int
+fn C.witty_ct_font_copy_variation_axes(font_ptr voidptr) voidptr
+fn C.witty_ct_font_copy_variation_values(font_ptr voidptr) voidptr
+fn C.witty_ct_variation_count(axes_ptr voidptr) int
+fn C.witty_ct_variation_get(axes_ptr voidptr, values_ptr voidptr, index int, name_buf &u8, name_len usize, value_out &f64) int
 
 // to_core_text_descriptor converts the descriptor to a CoreText font
 // descriptor for font lookup or conversion to a specific font.
@@ -87,13 +98,9 @@ fn copy_matching_descriptors(list voidptr) []voidptr {
 // matches (highest score) come first. This mirrors ghostty's
 // sortMatchingDescriptors: a higher score is "less" (earlier).
 fn sort_matching_descriptors(desc Descriptor, mut list []voidptr) {
-	style_ptr := if s := desc.style { &char(s.str) } else { &char(unsafe { nil }) }
-	style_len := if s := desc.style { usize(s.len) } else { usize(0) }
-	list.sort_with_compare(fn [desc, style_ptr, style_len] (a &voidptr, b &voidptr) int {
-		lhs := C.witty_ct_score(style_ptr, style_len, desc.codepoint, b2i(desc.bold),
-			b2i(desc.italic), *a)
-		rhs := C.witty_ct_score(style_ptr, style_len, desc.codepoint, b2i(desc.bold),
-			b2i(desc.italic), *b)
+	list.sort_with_compare(fn [desc] (a &voidptr, b &voidptr) int {
+		lhs := Score.score(&desc, *a).int()
+		rhs := Score.score(&desc, *b).int()
 		// Higher score is earlier.
 		if lhs > rhs {
 			return -1
@@ -103,6 +110,132 @@ fn sort_matching_descriptors(desc Descriptor, mut list []voidptr) {
 		}
 		return 0
 	})
+}
+
+// score computes the sorting score for a candidate CoreText descriptor.
+// The control flow and score precedence are a direct translation of
+// discovery.zig's Score.score; the C shim only exposes primitive CoreText
+// values that V's C interop cannot retrieve generically.
+fn Score.score(desc &Descriptor, ct_desc voidptr) Score {
+	font_ptr := C.witty_ct_font_from_descriptor(ct_desc, 12)
+	if isnil(font_ptr) {
+		return Score{}
+	}
+	defer { C.witty_coretext_release(font_ptr) }
+
+	glyph_count_raw := C.witty_ct_font_glyph_count(font_ptr)
+	glyph_count := if glyph_count_raw > u64(0xffff) { u16(0xffff) } else { u16(glyph_count_raw) }
+
+	mut has_codepoint := false
+	if desc.codepoint > 0 {
+		mut glyph := u32(0)
+		has_codepoint = C.witty_coretext_glyph_for_codepoint(font_ptr, desc.codepoint,
+			&glyph) != 0
+	}
+
+	traits := C.witty_ct_descriptor_traits(ct_desc)
+	mut is_bold := traits & 1 != 0
+	mut is_italic := traits & 2 != 0
+	monospace := traits & 4 != 0
+
+	core_face := CoreTextFace{
+		ct_font: font_ptr
+	}
+	if head := score_head_table(core_face) {
+		is_bold = is_bold || head.mac_style & 1 == 1
+		is_italic = is_italic || head.mac_style & 2 == 2
+	}
+	if os2 := score_os2_table(core_face) {
+		is_bold = is_bold || os2.fs_selection.bold()
+		is_italic = is_italic || os2.fs_selection.italic()
+	}
+
+	axes := C.witty_ct_font_copy_variation_axes(font_ptr)
+	if !isnil(axes) {
+		defer { C.witty_ct_release(axes) }
+		values := C.witty_ct_font_copy_variation_values(font_ptr)
+		if !isnil(values) {
+			defer { C.witty_ct_release(values) }
+			mut ital_seen := false
+			for i in 0 .. C.witty_ct_variation_count(axes) {
+				mut name_buf := []u8{len: 1024}
+				mut value := f64(0)
+				assert unsafe {
+					C.witty_ct_variation_get(axes, values, i, &name_buf[0], usize(name_buf.len),
+						&value)
+				} != 0
+				name := unsafe { cstring_to_vstring(&char(name_buf.data)) }
+				if name == 'wght' {
+					is_bold = value > 600
+					continue
+				}
+				if name == 'ital' {
+					is_italic = value > 0.5
+					ital_seen = true
+					continue
+				}
+				if !ital_seen && name == 'slnt' {
+					is_italic = value <= -5.0
+				}
+			}
+		}
+	}
+
+	mut style_buf := []u8{len: 128}
+	style_str := if unsafe {
+		C.witty_ct_descriptor_style_name(ct_desc, &style_buf[0], usize(style_buf.len))
+	} != 0 {
+		unsafe { cstring_to_vstring(&char(style_buf.data)) }
+	} else {
+		''
+	}
+
+	mut desired_styles := []string{}
+	if style := desc.style {
+		desired_styles << style
+	} else if desc.bold {
+		if desc.italic {
+			desired_styles = ['bold italic', 'bold', 'italic', 'oblique']
+		} else {
+			desired_styles = ['bold', 'upright']
+		}
+	} else if desc.italic {
+		desired_styles = ['italic', 'regular', 'oblique']
+	} else {
+		desired_styles = ['regular', 'upright']
+	}
+
+	exact_style := ascii.eql_ignore_case(style_str, desired_styles[0])
+	mut fuzzy_style := u8(style_str.len)
+	for desired in desired_styles {
+		if ascii.index_of_ignore_case(style_str, desired) != none {
+			fuzzy_style = if int(fuzzy_style) > desired.len {
+				fuzzy_style - u8(desired.len)
+			} else {
+				u8(0)
+			}
+		}
+	}
+	fuzzy_style = u8(255) - fuzzy_style
+
+	return Score.init(glyph_count, fuzzy_style, desc.bold == is_bold, desc.italic == is_italic,
+		exact_style, monospace, has_codepoint)
+}
+
+fn score_head_table(face CoreTextFace) ?opentype.Head {
+	data := face.copy_table('head') or { return none }
+	return opentype.Head.init(data) or {
+		log.warn('error parsing head table: ${err}')
+		return none
+	}
+}
+
+fn score_os2_table(face CoreTextFace) ?opentype.OS2 {
+	data := face.copy_table('OS/2') or { return none }
+	return opentype.OS2.init(data) or {
+		log.warn('error parsing OS/2 table: ${err}')
+		return none
+	}
 }
 
 // discover_fallback finds fallback fonts for a codepoint.
