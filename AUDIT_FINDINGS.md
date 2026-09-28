@@ -700,15 +700,17 @@ none, browser, action, ipc. dependencies: zf 0.10.3 ranking/highlighting.
 - **vaxis screen and terminal session:** The compatibility layer still writes
   styled ANSI segments directly rather than using its newly translated
   `Cell`, `Screen`, and `Window` values for preview drawing and render diff.
-  Terminal capability state, full terminal query, synchronized output,
-  pixel-mouse translation, and the threaded TTY event loop remain absent.
+  The translated session now has terminal capability and option state, pinned
+  query bytes, feature enablement, resize/reset control, and pixel-mouse
+  translation. Its render diff, synchronous query wait, image and color
+  control methods, and threaded TTY event loop remain absent.
   The preview now queries and subscribes to color-scheme updates, but its
   session/render path is not yet a complete translation of the pinned vaxis
   `Vaxis`, `Loop`, and `Tty` implementations. Pinned vaxis width data and all
   three `gwidth.Method` algorithms are now available, and the preview selects
   Unicode width after a positive mode 2027 response. The rest of pinned
-  `queryTerminal` capability discovery, explicit-width probing, and the
-  session's capability-driven render path remain to translate. The preview
+  `queryTerminal` synchronous discovery and the session's capability-driven
+  render path remain to translate. The preview
   still has no retained screen for clipping or diff rendering.
 
 These are confirmed structural boundaries or larger refactors. The absence of
