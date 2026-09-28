@@ -1,5 +1,6 @@
 module internal_os
 
+import log
 import pty
 
 #pkgconfig gio-2.0 gio-unix-2.0
@@ -83,7 +84,7 @@ fn flatpak_host_command_signal_linux(pid u32, sig u8, pg bool) ! {
 	}
 	bus := C.g_bus_get_sync(C.G_BUS_TYPE_SESSION, unsafe { nil }, &g_err)
 	if isnil(bus) {
-		eprintln('signal error getting bus: ${gerror_message(g_err)}')
+		log.warn('signal error getting bus: ${gerror_message(g_err)}')
 		return error('FlatpakSetupFail')
 	}
 	defer {
@@ -98,7 +99,7 @@ fn flatpak_host_command_signal_linux(pid u32, sig u8, pg bool) ! {
 		usize(params.len)), C.G_VARIANT_TYPE(c'()'), C.G_DBUS_CALL_FLAGS_NONE, C.G_MAXINT,
 		unsafe { nil }, &g_err)
 	if !isnil(g_err) {
-		eprintln('signal send error: ${gerror_message(g_err)}')
+		log.warn('signal send error: ${gerror_message(g_err)}')
 		return
 	}
 	C.g_variant_unref(reply)
@@ -134,7 +135,7 @@ fn flatpak_host_command_thread_main(command &FlatpakHostCommand) {
 	}
 	bus := C.g_bus_get_sync(C.G_BUS_TYPE_SESSION, unsafe { nil }, &g_err)
 	if isnil(bus) {
-		eprintln('spawn error getting bus: ${gerror_message(g_err)}')
+		log.warn('spawn error getting bus: ${gerror_message(g_err)}')
 		self.update_state(FlatpakStateErr{})
 		return
 	}
@@ -144,7 +145,7 @@ fn flatpak_host_command_thread_main(command &FlatpakHostCommand) {
 
 	// Spawn the command first. This will setup all our IO.
 	self.start(bus, loop) or {
-		eprintln('error starting host command: ${err}')
+		log.warn('error starting host command: ${err}')
 		self.update_state(FlatpakStateErr{})
 		return
 	}
@@ -172,15 +173,15 @@ fn (mut self FlatpakHostCommand) start(bus voidptr, loop voidptr) ! {
 		C.g_object_unref(fd_list)
 	}
 	if C.g_unix_fd_list_append(fd_list, self.stdin, &err) < 0 {
-		eprintln('error adding fd: ${gerror_message(err)}')
+		log.warn('error adding fd: ${gerror_message(err)}')
 		return error('FlatpakSetupFail')
 	}
 	if C.g_unix_fd_list_append(fd_list, self.stdout, &err) < 0 {
-		eprintln('error adding fd: ${gerror_message(err)}')
+		log.warn('error adding fd: ${gerror_message(err)}')
 		return error('FlatpakSetupFail')
 	}
 	if C.g_unix_fd_list_append(fd_list, self.stderr, &err) < 0 {
-		eprintln('error adding fd: ${gerror_message(err)}')
+		log.warn('error adding fd: ${gerror_message(err)}')
 		return error('FlatpakSetupFail')
 	}
 
@@ -251,7 +252,7 @@ fn (mut self FlatpakHostCommand) start(bus voidptr, loop voidptr) ! {
 		c'HostCommand', params, C.G_VARIANT_TYPE(c'(u)'), C.G_DBUS_CALL_FLAGS_NONE, C.G_MAXINT,
 		fd_list, unsafe { nil }, unsafe { nil }, &err)
 	if isnil(reply) {
-		eprintln('Flatpak.HostCommand failed: ${gerror_message(err)}')
+		log.warn('Flatpak.HostCommand failed: ${gerror_message(err)}')
 		return error('FlatpakRPCFail')
 	}
 	defer {
@@ -259,6 +260,7 @@ fn (mut self FlatpakHostCommand) start(bus voidptr, loop voidptr) ! {
 	}
 
 	pid := flatpak_variant_get_uint32(reply, 0)
+	log.debug('HostCommand started pid=${pid} subscription=${subscription_id}')
 
 	self.update_state(FlatpakStateStarted{
 		pid:          pid
@@ -286,6 +288,7 @@ fn flatpak_host_command_on_exit(bus voidptr, _ &char, _ &char, _ &char, _ &char,
 		pid:    pid
 		status: exit_status
 	})
+	log.debug('HostCommand exited pid=${pid} status=${exit_status}')
 	if completion_ptr := started_state.completion {
 		// The stored pointer is caller-owned mutable completion state; optional
 		// unwrapping otherwise marks the alias immutable in the pinned compiler.

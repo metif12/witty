@@ -363,7 +363,7 @@ pub fn (mut t TempDir) deinit() {
 		return
 	}
 	os.rmdir_all(t.path) or {
-		eprintln('error deleting temp dir: ${err}')
+		log.error('error deleting temp dir err=${err}')
 		return
 	}
 	t.destroyed = true
