@@ -1,5 +1,6 @@
 module internal_os
 
+import log
 import os
 import time as _
 
@@ -38,7 +39,7 @@ fn launched_by_systemd_linux() bool {
 
 	comm_path := '/proc/${ppid}/comm'
 	mut comm_file := os.open(comm_path) or {
-		eprintln("unable to open '${comm_path}' for reading")
+		log.error("unable to open '${comm_path}' for reading")
 		return false
 	}
 	defer {
@@ -46,7 +47,7 @@ fn launched_by_systemd_linux() bool {
 	}
 	mut comm_data := []u8{len: systemd_task_comm_len}
 	comm_size := comm_file.read(mut comm_data) or {
-		eprintln("problems reading from '${comm_path}'")
+		log.error("problems reading from '${comm_path}'")
 		return false
 	}
 	return comm_data[..comm_size].bytestr().trim_right('\n') == 'systemd'
@@ -58,11 +59,11 @@ fn systemd_notify_send(message string) {
 		return
 	}
 	if socket_path[0] != `/` && socket_path[0] != `@` {
-		eprintln('only AF_UNIX sockets with path or abstract namespace addresses are supported')
+		log.warn('only AF_UNIX sockets with path or abstract namespace addresses are supported!')
 		return
 	}
 	if socket_path.len >= systemd_unix_path_len {
-		eprintln('NOTIFY_SOCKET path is too long')
+		log.warn('NOTIFY_SOCKET path is too long!')
 		return
 	}
 
@@ -75,7 +76,7 @@ fn systemd_notify_send(message string) {
 
 	socket_fd := C.socket(C.AF_UNIX, C.SOCK_DGRAM | C.SOCK_CLOEXEC, 0)
 	if socket_fd < 0 {
-		eprintln('creating systemd notification socket failed')
+		log.warn('creating socket failed: ${os.last_error()}')
 		return
 	}
 	defer {
@@ -83,24 +84,24 @@ fn systemd_notify_send(message string) {
 	}
 
 	if C.connect(socket_fd, &socket_address, u32(sizeof(C.sockaddr_un))) != 0 {
-		eprintln('unable to connect to systemd notification socket')
+		log.warn('unable to connect to notify socket: ${os.last_error()}')
 		return
 	}
 
 	written := C.write(socket_fd, message.str, usize(message.len))
 	if written < 0 {
-		eprintln('unable to write to systemd notification socket')
+		log.warn('unable to write to notify socket: ${os.last_error()}')
 		return
 	}
 	if written < message.len {
-		eprintln('short write to systemd notification socket: ${written} < ${message.len}')
+		log.warn('short write to notify socket: ${written} < ${message.len}')
 	}
 }
 
 fn systemd_notify_reloading_linux() {
 	mut timestamp := C.timespec{}
 	if C.clock_gettime(C.CLOCK_MONOTONIC, &timestamp) != 0 {
-		eprintln('unable to get monotonic clock for systemd reload notification')
+		log.error('unable to get MONOTONIC clock: ${os.last_error()}')
 		return
 	}
 	now := u64(timestamp.tv_sec) * 1_000_000 + u64(timestamp.tv_nsec) / 1_000
