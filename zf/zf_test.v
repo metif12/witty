@@ -30,6 +30,25 @@ fn test_segment_len() {
 	assert segment_len('a/b', 1) == 1
 }
 
+fn test_basename_matches_pinned_zig_path_semantics() {
+	assert basename('') == ''
+	assert basename('/') == ''
+	assert basename('///') == ''
+	assert basename('/aaa/') == 'aaa'
+	assert basename('basename.ext//') == 'basename.ext'
+
+	$if windows {
+		assert basename('C:') == ''
+		assert basename('C:\\') == ''
+		assert basename('C:\\dir\\base.ext') == 'base.ext'
+		assert basename('C:/dir/base.ext') == 'base.ext'
+		assert basename('C:base.ext') == 'base.ext'
+	} $else {
+		assert basename('C:') == 'C:'
+		assert basename('\\dir\\base.ext') == '\\dir\\base.ext'
+	}
+}
+
 fn test_rank_matches_pinned_zf_scores() {
 	assert_rank(4.0, rank('Monokai Classic', ['kai'], RankOptions{
 		to_lower: true
@@ -115,13 +134,13 @@ fn test_rank_strict_path() {
 }
 
 fn test_highlight_library_interface() {
-	mut matches := []int{len: 128}
-	assert highlight('abcdef', ['a', 'f'], mut matches, RankOptions{}) == [0, 5]
+	mut matches := []usize{len: 128}
+	assert highlight('abcdef', ['a', 'f'], mut matches, RankOptions{}) == [usize(0), 5]
 	assert highlight('abcdeF', ['a', 'F'], mut matches, RankOptions{
 		to_lower: false
-	}) == [0, 5]
+	}) == [usize(0), 5]
 	assert highlight('a/path/to/file', ['path', 'file'], mut matches, RankOptions{}) == [
-		2,
+		usize(2),
 		3,
 		4,
 		5,
@@ -131,7 +150,7 @@ fn test_highlight_library_interface() {
 		13,
 	]
 	assert highlight('lib/ziglyph/zig.mod', ['ziglyph'], mut matches, RankOptions{}) == [
-		4,
+		usize(4),
 		5,
 		6,
 		7,
@@ -140,28 +159,31 @@ fn test_highlight_library_interface() {
 		10,
 	]
 
-	assert highlight_token('abcdef', 'a', mut matches, RankTokenOptions{}) == [0]
+	assert highlight_token('abcdef', 'a', mut matches, RankTokenOptions{}) == [usize(0)]
 	assert highlight_token('abcdeF', 'F', mut matches, RankTokenOptions{
 		to_lower: false
-	}) == [5]
+	}) == [usize(5)]
 	assert highlight_token('a/path/to/file', 'file', mut matches, RankTokenOptions{
 		filename: 'file'
-	}) == [10, 11, 12, 13]
+	}) == [usize(10), 11, 12, 13]
 	assert highlight_token('s/', 's', mut matches, RankTokenOptions{
 		filename: 's'
-	}) == [0]
+	}) == [usize(0)]
 	assert highlight_token('/this/is/path/not/a/file/', 'file', mut matches, RankTokenOptions{
 		filename: 'file'
-	}) == [20, 21, 22, 23]
+	}) == [usize(20), 21, 22, 23]
 
-	assert highlight('ababab', ['aab'], mut matches, RankOptions{}) == [0, 2, 3]
-	assert highlight('abbbbbabab', ['aab'], mut matches, RankOptions{}) == [6, 8, 9]
-	assert highlight('abcdefg', ['acg'], mut matches, RankOptions{}) == [0, 2, 6]
-	assert highlight('__init__.py', ['initpy'], mut matches, RankOptions{}) == [2, 3, 4, 5, 9, 10]
+	assert highlight('ababab', ['aab'], mut matches, RankOptions{}) == [usize(0), 2, 3]
+	assert highlight('abbbbbabab', ['aab'], mut matches, RankOptions{}) == [usize(6), 8, 9]
+	assert highlight('abcdefg', ['acg'], mut matches, RankOptions{}) == [usize(0), 2, 6]
+	assert highlight('__init__.py', ['initpy'], mut matches, RankOptions{}) == [usize(2), 3, 4,
+		5, 9, 10]
 }
 
 fn test_highlight_respects_output_buffer() {
-	mut matches := []int{len: 4}
-	assert highlight('abcd', ['ab', 'cd', 'abcd'], mut matches, RankOptions{}) == [0, 1, 2, 3]
-	assert highlight('wxyz', ['wxy', 'xyz'], mut matches, RankOptions{}) == [0, 1, 2, 1]
+	mut matches := []usize{len: 4}
+	assert highlight('abcd', ['ab', 'cd', 'abcd'], mut matches, RankOptions{}) == [usize(0),
+		1, 2, 3]
+	assert highlight('wxyz', ['wxy', 'xyz'], mut matches, RankOptions{}) == [usize(0), 1,
+		2, 1]
 }
