@@ -704,11 +704,13 @@ pub fn (mut self SplitTreeWidget) goto_(to datastruct.Goto) bool {
 	// Record the new last-focused so a subsequent tree change refocuses right.
 	self.last_focused = surface
 
-	// Handle zoom preservation on navigation. Witty's pinned configuration
-	// currently has no split-preserve-zoom field, so it has Ghostty's default
-	// behavior and clears zoom when navigating.
+	// Handle zoom preservation on navigation.
 	if self.tree.zoomed != none {
-		self.tree.zoom(none)
+		if !self.config.get().split_preserve_zoom.navigation() {
+			self.tree.zoom(none)
+		} else {
+			self.tree.zoom(target)
+		}
 		self.notify_property(g_split_tree_pspec_tree)
 		self.prop_tree()
 		self.notify_property(g_split_tree_pspec_is_zoomed)
