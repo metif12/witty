@@ -55,7 +55,7 @@ pub fn (mut vx Vaxis) handle_input(event InputEvent) ?InputEvent {
 		}
 		else {
 			$if windows {
-				if event is KeyRelease || event is MouseLeave || event is Paste || event is PasteStart
+				if event is MouseLeave || event is Paste || event is PasteStart
 					|| event is PasteEnd || event is ColorReport || event is ColorScheme {
 					return none
 				}

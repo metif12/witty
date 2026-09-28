@@ -32,6 +32,10 @@ fn test_session_event_capabilities_and_query_probes() {
 		mods:      shift
 	})) or { panic('missing forwarded key') }
 	assert forwarded is Key
+	released := vx.handle_input(InputEvent(KeyRelease{
+		key: Key{ codepoint: u32(`x`) }
+	})) or { panic('missing forwarded key release') }
+	assert released is KeyRelease
 	vx.screen.deinit()
 	vx.screen_last.deinit()
 }

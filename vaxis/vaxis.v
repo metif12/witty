@@ -708,6 +708,7 @@ mut:
 	input_mode     u32
 	output_mode    u32
 	output_cp      u32
+	last_mouse_button_press u16
 }
 
 pub fn Tty.new() !Tty {

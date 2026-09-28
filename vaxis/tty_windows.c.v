@@ -1,7 +1,5 @@
 module vaxis
 
-import time
-
 #include <windows.h>
 
 fn C.GetConsoleOutputCP() u32
@@ -92,11 +90,5 @@ pub fn (tty &Tty) write(bytes string) ! {
 }
 
 pub fn (mut tty Tty) next_input() !InputEvent {
-	for {
-		if event := tty.poll() {
-			return event
-		}
-		time.sleep(8 * time.millisecond)
-	}
-	panic('unreachable')
+	return tty.next_console_input()
 }
