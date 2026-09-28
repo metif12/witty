@@ -207,15 +207,15 @@ fn test_stream_handler_xtgettcap_omits_unknown_and_formats_boolean() ! {
 		assert false
 		return
 	}
-	assert boolean_msg.kind() == .write_small
-	assert (boolean_msg as WriteSmall).slice().bytestr() == '\x1bP1+r616D\x1b\\'
+	assert boolean_msg.kind() == .write_stable
+	assert (boolean_msg as MessageWriteStable).data == '\x1bP1+r616D\x1b\\'
 
 	numeric_msg := ctx.mailbox.spsc.queue.pop() or {
 		assert false
 		return
 	}
-	assert numeric_msg.kind() == .write_small
-	assert (numeric_msg as WriteSmall).slice().bytestr() == '\x1bP1+r636F6C6F7273=323536\x1b\\'
+	assert numeric_msg.kind() == .write_stable
+	assert (numeric_msg as MessageWriteStable).data == '\x1bP1+r636F6C6F7273=323536\x1b\\'
 }
 
 fn test_stream_handler_xtversion_uses_build_version() ! {

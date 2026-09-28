@@ -480,26 +480,31 @@ pub fn (mut self StreamHandler) vt(action terminal.ActionKey, value terminal.Act
 		}
 		.kitty_keyboard_push {
 			if value is terminal.ActionKittyKeyboardFlags {
+				log.debug('pushing kitty keyboard mode: ${value.flags}')
 				self.terminal.screens.active.kitty_keyboard.push(value.flags)
 			}
 		}
 		.kitty_keyboard_pop {
 			if value is u16 {
+				log.debug('popping kitty keyboard mode n=${value}')
 				self.terminal.screens.active.kitty_keyboard.pop(usize(value))
 			}
 		}
 		.kitty_keyboard_set {
 			if value is terminal.ActionKittyKeyboardFlags {
+				log.debug('setting kitty keyboard mode: set ${value.flags}')
 				self.terminal.screens.active.kitty_keyboard.set(.set_, value.flags)
 			}
 		}
 		.kitty_keyboard_set_or {
 			if value is terminal.ActionKittyKeyboardFlags {
+				log.debug('setting kitty keyboard mode: or ${value.flags}')
 				self.terminal.screens.active.kitty_keyboard.set(.or_, value.flags)
 			}
 		}
 		.kitty_keyboard_set_not {
 			if value is terminal.ActionKittyKeyboardFlags {
+				log.debug('setting kitty keyboard mode: not ${value.flags}')
 				self.terminal.screens.active.kitty_keyboard.set(.not_, value.flags)
 			}
 		}
@@ -569,7 +574,7 @@ pub fn (mut self StreamHandler) vt(action terminal.ActionKey, value terminal.Act
 		}
 		.configure_charset {
 			if value is terminal.ActionConfigureCharset {
-				self.terminal.configure_charset(value.slot, value.charset)
+				self.configure_charset(value.slot, value.charset)
 			}
 		}
 		.set_attribute {
@@ -656,11 +661,10 @@ fn (mut self StreamHandler) dcs_command(mut cmd terminal.DcsCommand) ! {
 			if !terminal.tmux_control_mode {
 				return
 			}
+			log.info('tmux control mode event cmd=${cmd.notification}')
 			match cmd.notification {
 				tmux.NotifEnter {
-					if mut old := self.tmux_viewer {
-						old.deinit()
-					}
+					assert self.tmux_viewer == none
 					viewer_value := terminal.TmuxViewer.init()!
 					mut viewer := &terminal.TmuxViewer{}
 					unsafe {
@@ -679,8 +683,12 @@ fn (mut self StreamHandler) dcs_command(mut cmd terminal.DcsCommand) ! {
 				else {}
 			}
 
-			mut viewer := self.tmux_viewer or { return }
+			mut viewer := self.tmux_viewer or {
+				log.info('received tmux control mode command without viewer: ${cmd.notification}')
+				return
+			}
 			for action in viewer.next(terminal.tmux_viewer_input(cmd.notification)) {
+				log.info('tmux viewer action=${action}')
 				match action {
 					terminal.TmuxViewerActionExit {}
 					terminal.TmuxViewerActionCommand {
@@ -712,7 +720,7 @@ fn (mut self StreamHandler) dcs_xtgettcap(mut xtgettcap terminal.DcsXtgettcap) {
 	for {
 		key := xtgettcap.next() or { break }
 		response := xtgettcap_map[key] or { continue }
-		self.message_writer(Message.write_req(response))
+		self.message_writer(MessageWriteStable{ data: response })
 	}
 }
 
@@ -793,6 +801,7 @@ pub fn (mut self StreamHandler) apc_end() ! {
 	if response := self.terminal.kitty_graphics(&cmd.kitty) {
 		encoded := response.encode()
 		if encoded.len > 0 {
+			log.debug('kitty graphics response: ${encoded.hex()}')
 			self.message_writer(Message.write_req(encoded))
 		}
 	}
@@ -1087,7 +1096,9 @@ pub fn (mut self StreamHandler) device_attributes(req terminal.DeviceAttributeRe
 		.secondary {
 			self.message_writer(MessageWriteStable{ data: '\x1b[>1;10;0c' })
 		}
-		.tertiary {}
+		.tertiary {
+			log.warn('unimplemented device attributes req: ${req}')
+		}
 	}
 }
 
@@ -1184,6 +1195,7 @@ pub fn (mut self StreamHandler) restore_cursor() ! {
 }
 
 pub fn (mut self StreamHandler) enquiry() ! {
+	log.debug('sending enquiry response=${self.enquiry_response}')
 	self.message_writer(Message.write_req(self.enquiry_response))
 }
 
@@ -1199,7 +1211,7 @@ pub fn (mut self StreamHandler) full_reset() ! {
 	self.message_writer(MessageColorSchemeReport{ force: false })
 
 	// Clear the progress bar
-	self.surface_message_writer(apprt.SurfaceMessage(osc.ProgressReport{ state: .remove }))
+	self.progress_report(osc.ProgressReport{ state: .remove })
 }
 
 // ============================================================
@@ -1207,6 +1219,7 @@ pub fn (mut self StreamHandler) full_reset() ! {
 // ============================================================
 
 pub fn (mut self StreamHandler) query_kitty_keyboard() ! {
+	log.debug('querying kitty keyboard mode')
 	flags := self.terminal.screens.active.kitty_keyboard.current()
 	resp := '\x1b[?${flags.int()}u'
 	self.message_writer(Message.write_req(resp))
@@ -1217,6 +1230,7 @@ pub fn (mut self StreamHandler) query_kitty_keyboard() ! {
 // ============================================================
 
 pub fn (mut self StreamHandler) report_xtversion() ! {
+	log.debug('reporting XTVERSION: ghostty ${build_meta.version_string}')
 	resp := '\x1bP>|ghostty ${build_meta.version_string}\x1b\\'
 	self.message_writer(Message.write_req(resp))
 }
