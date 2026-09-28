@@ -102,7 +102,8 @@ pub fn (self &SurfaceScrolledWindow) get_surface() ?&SurfaceWidget {
 
 // set_surface sets the embedded surface widget and re-parents it into the
 // scrolled window, rebinding the config. Mirrors `setSurface` + `propSurface`.
-pub fn (mut self SurfaceScrolledWindow) set_surface(surface &SurfaceWidget) {
+pub fn (mut self SurfaceScrolledWindow) set_surface(surface_ ?&SurfaceWidget) {
+	surface := surface_ or { unsafe { nil } }
 	if surface == self.surface {
 		return
 	}
@@ -316,11 +317,11 @@ fn surface_scrolled_window_set_property(obj voidptr, property_id u32, value void
 		surface_scrolled_window_prop_surface {
 			surface_obj := C.g_value_get_object(value)
 			if isnil(surface_obj) {
-				self.set_surface(unsafe { nil })
+				self.set_surface(none)
 			} else {
 				surface_private := terminal_surface_priv(surface_obj)
 				self.set_surface(if isnil(surface_private.wrapper) {
-					unsafe { nil }
+					none
 				} else {
 					unsafe { &SurfaceWidget(surface_private.wrapper) }
 				})

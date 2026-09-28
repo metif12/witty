@@ -28,6 +28,6 @@ fn test_surface_scrolled_window_set_surface_updates_wrapper_state() {
 	scrolled.set_surface(surface)
 	assert scrolled.get_surface() == surface
 
-	scrolled.set_surface(unsafe { nil })
+	scrolled.set_surface(none)
 	assert isnil(scrolled.get_surface())
 }
