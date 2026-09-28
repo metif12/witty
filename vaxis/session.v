@@ -2,6 +2,8 @@ module vaxis
 
 import os
 import strings
+import datastruct
+import sync
 import sync.stdatomic
 
 pub struct Capabilities {
@@ -58,6 +60,8 @@ pub mut:
 	opts               VaxisOptions
 	refresh            bool
 	queries_done       &stdatomic.AtomicVal[bool] = unsafe { nil }
+	query_lock         &sync.Mutex = unsafe { nil }
+	query_condition    datastruct.Condition
 	next_img_id        u32                        = 1
 	sgr                SgrMode                    = .standard
 	enable_workarounds bool                       = true
@@ -70,6 +74,8 @@ pub fn Vaxis.new(opts VaxisOptions) Vaxis {
 		screen:       Screen{}
 		screen_last:  InternalScreen.new(0, 0)
 		queries_done: stdatomic.new_atomic(true)
+		query_lock: sync.new_mutex()
+		query_condition: datastruct.Condition.init()
 	}
 }
 
@@ -77,6 +83,8 @@ pub fn (mut vx Vaxis) deinit() string {
 	sequence := vx.reset_state()
 	vx.screen.deinit()
 	vx.screen_last.deinit()
+	vx.query_condition.deinit()
+	vx.query_lock.destroy()
 	return sequence
 }
 
@@ -172,6 +180,17 @@ pub fn (mut vx Vaxis) query_terminal_send() string {
 		'\x1b[H\x1b]66;w=1; \x1b\\\x1b[6n' +
 		'\x1b[H\x1b]66;s=2; \x1b\\\x1b[> q\x1b[6n' +
 		'\x1b[>0q\x1b[?u\x1b_Gi=1,a=q\x1b\\\x1b[c'
+}
+
+// query_terminal is pinned vaxis' blocking capability probe. The DA1 reader
+// callback signals the condition; application events stay in the loop queue.
+pub fn (mut vx Vaxis) query_terminal(mut tty Tty, timeout_ns u64) ! {
+	tty.write(vx.query_terminal_send())!
+	vx.query_lock.lock()
+	vx.query_condition.timed_wait(mut vx.query_lock, timeout_ns) or {}
+	vx.query_lock.unlock()
+	vx.queries_done.store(true)
+	tty.write(vx.enable_detected_features())!
 }
 
 pub fn (mut vx Vaxis) enable_detected_features() string {

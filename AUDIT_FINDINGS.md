@@ -9,6 +9,7 @@ below exist. Earlier versions of this document overstated the completed review.
 
 | Area | Bug | Fix |
 |---|---|---|
+| vaxis blocking capability query | Pinned `queryTerminal` sends the probe, waits up to the caller's deadline for the reader's DA1 wakeup, then enables features; Witty implemented this only as an 8 ms poll loop in the theme preview and drained application events into a side list while waiting. | Add a source-shaped `Vaxis.query_terminal` with a timed wake condition, signal it from DA1 interception, and let the preview use it so queued application events remain in the loop. PTY coverage checks an early DA1 wakeup before queue drainage and the timeout path. The condition/mutex are a V representation of the source futex and are released with the session. |
 | vaxis Windows console input | The loop read Windows input through V's `term.key_pressed`, losing native key releases, mouse, focus, and resize records; the session handler also discarded key-release events even if they were produced. | Translate pinned `WindowsTty.nextEvent`'s `ReadConsoleInputW` loop, UTF-16 pair and embedded ANSI handling, virtual-key map, button-state tracking, and mouse/focus/resize records; forward key releases through the Windows event handler. The Windows vaxis DLL cross compiles with MinGW. Witty's legacy `Tty.poll` path for untranslated `boo` remains below. |
 | vaxis Windows console session setup | The Windows `Tty` adapter never read or set console modes or the output code page, wrote through process `print`, and derived winsize from a generic terminal helper. Pinned `WindowsTty` saves the original modes/code page, enables raw window/mouse input and VT/UTF-8 output, writes to its console handle, queries the visible buffer rectangle, and restores/closes those handles at teardown. | Translate that console ownership and I/O surface through Win32 APIs. The Windows vaxis type gate passes, but no Windows runtime test was available. |
 | vaxis POSIX terminal restoration diagnostics | Pinned `PosixTty.deinit` logs a failed restoration of the original termios, while Witty ignored the `tcsetattr` result. A teardown failure could leave a user's terminal in raw mode without a diagnostic. | Check the restore result and log its POSIX error before following the pinned descriptor-close policy. |
@@ -725,7 +726,9 @@ none, browser, action, ipc. dependencies: zf 0.10.3 ranking/highlighting.
   in-band resize reports reset that handler. The preview blocks on the queue
   between renders. Parsed input is now intercepted on the reader thread before
   posting application events, including DA1 query completion; its cross-thread
-  completion flag is atomic. The loop remains specialized to `InputEvent`
+  completion flag is atomic. The preview now uses a blocking capability query
+  with a timed DA1 wakeup, leaving application events in the loop queue. The
+  loop remains specialized to `InputEvent`
   rather than source-generic `Loop(Event)`. Windows now owns the pinned
   console mode/code-page lifecycle and handle-based output/winsize query; its
   threaded input path decodes native `INPUT_RECORD` key, mouse, resize, and

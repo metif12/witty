@@ -2,7 +2,6 @@ module cli
 
 import ascii
 import os
-import time
 import net.urllib
 import configpkg
 import themepkg
@@ -521,18 +520,7 @@ pub fn (mut self Preview) run() ! {
 	defer { loop.deinit(&vx) }
 	tty.write(vx.enter_alt_screen())!
 	tty.write(vx.set_title('👻 Ghostty Theme Preview 👻'))!
-	tty.write(vx.query_terminal_send())!
-	mut queued := []vaxis.InputEvent{}
-	query_start := time.ticks()
-	for !vx.queries_done.load() && time.ticks() - query_start < 1000 {
-		if event := loop.try_event() {
-			queued << event
-		} else {
-			time.sleep(8 * time.millisecond)
-		}
-	}
-	vx.queries_done.store(true)
-	tty.write(vx.enable_detected_features())!
+	vx.query_terminal(mut tty, 1_000_000_000)!
 	tty.write(vx.set_mouse_mode(true))!
 	if vx.caps.color_scheme_updates {
 		tty.write(vx.subscribe_to_color_scheme_updates())!
@@ -540,18 +528,9 @@ pub fn (mut self Preview) run() ! {
 	tty.write(vx.resize(self.winsize))!
 	mut dirty := true
 	for !self.should_quit {
-		if queued.len == 0 && !dirty {
+		if !dirty {
 			loop.poll_event()
 		}
-
-		for event in queued {
-			if event is vaxis.Winsize {
-				tty.write(vx.resize(event))!
-			}
-			self.update_from_vaxis(event)!
-			dirty = true
-		}
-		queued.clear()
 		for {
 			event := loop.try_event() or { break }
 			if event is vaxis.Winsize {

@@ -31,6 +31,7 @@ pub fn (mut vx Vaxis) handle_input(event InputEvent) ?InputEvent {
 		}
 		CapabilityEvent {
 			if event.capability == .da1 {
+				vx.query_condition.signal()
 				vx.queries_done.store(true)
 				return none
 			}

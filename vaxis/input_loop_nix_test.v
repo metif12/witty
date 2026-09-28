@@ -22,6 +22,12 @@ fn wake_input_loop_for_test(fd int) {
 	assert C.write(fd, &bytes[0], 2) == 2
 }
 
+fn reply_da1_for_test(fd int) {
+	time.sleep(30 * time.millisecond)
+	response := '\x1b[?1;2c\n'.bytes()
+	assert C.write(fd, response.data, usize(response.len)) == response.len
+}
+
 fn test_input_loop_reads_and_queues_terminal_events() {
 	mut master := 0
 	mut slave := 0
@@ -40,8 +46,7 @@ fn test_input_loop_reads_and_queues_terminal_events() {
 	}
 	mut vx := Vaxis.new(VaxisOptions{})
 	defer {
-		vx.screen.deinit()
-		vx.screen_last.deinit()
+		_ = vx.deinit()
 	}
 	C.witty_vaxis_install_winch()
 	defer { C.witty_vaxis_reset_winch() }
@@ -82,17 +87,17 @@ fn test_input_loop_reads_and_queues_terminal_events() {
 	}
 	assert vx.state.in_band_resize
 	_ = loop.next_event() // the report's newline
-	_ = vx.query_terminal_send()
-	da1 := '\x1b[?1;2c\n'.bytes()
-	assert C.write(master, da1.data, usize(da1.len)) == da1.len
-	for _ in 0 .. 100 {
-		if vx.queries_done.load() {
-			break
-		}
-		time.sleep(5 * time.millisecond)
-	}
+	responder := spawn reply_da1_for_test(master)
+	query_start := time.ticks()
+	vx.query_terminal(mut tty, 2_000_000_000)!
+	assert time.ticks() - query_start < 1000
+	responder.wait()
 	assert vx.queries_done.load() // Reader intercepts DA1 before queue drainage.
 	assert loop.next_event() is Key // The canonical PTY's newline, not DA1.
+	timeout_start := time.ticks()
+	vx.query_terminal(mut tty, 20_000_000)!
+	assert time.ticks() - timeout_start >= 10
+	assert vx.queries_done.load()
 	waker := spawn wake_input_loop_for_test(master)
 	loop.stop(&vx)
 	waker.wait()
