@@ -1,5 +1,6 @@
 module font
 
+import log
 import math
 import opentype
 import quirks
@@ -42,7 +43,13 @@ fn C.witty_coretext_color_info(font_ptr voidptr, has_sbix &int) int
 
 fn C.witty_coretext_free_buffer(ptr &u8)
 
-fn C.witty_coretext_get_metrics(font_ptr voidptr, px_per_em &f64, cell_width &f64, ascent &f64, descent &f64, line_gap &f64, underline_position &f64, underline_thickness &f64, strikethrough_position &f64, strikethrough_thickness &f64, cap_height &f64, ex_height &f64, ascii_height &f64, ic_width &f64, has_ic_width &int) int
+fn C.witty_coretext_basic_metrics(font_ptr voidptr, px_per_em &f64, ascent &f64, descent &f64, line_gap &f64, cap_height &f64, ex_height &f64) int
+
+fn C.witty_coretext_glyphs_for_characters(font_ptr voidptr, characters &u16, glyphs &u16, count int) int
+
+fn C.witty_coretext_glyph_advances(font_ptr voidptr, glyphs &u16, advances voidptr, count int) f64
+
+fn C.witty_coretext_glyphs_bounds(font_ptr voidptr, glyphs &u16, count int, x_out &f64, y_out &f64, width_out &f64, height_out &f64) int
 
 fn C.witty_coretext_units_per_em(font_ptr voidptr) u32
 
@@ -61,6 +68,12 @@ fn C.witty_ct_font_copy_descriptor(font voidptr) voidptr
 fn C.witty_ct_descriptor_path(desc voidptr, buf &u8, len usize) int
 
 fn C.witty_ct_release(ptr voidptr)
+
+fn C.witty_ct_font_copy_variation_axes(font_ptr voidptr) voidptr
+
+fn C.witty_ct_variation_count(axes_ptr voidptr) int
+
+fn C.witty_ct_variation_axis_info(axes_ptr voidptr, index int, name_buf &u8, name_len usize, identifier_out &u32, minimum_out &f64, maximum_out &f64, default_out &f64) int
 
 fn C.witty_coretext_copy_display_name(font_ptr voidptr, buf &u8, len usize) int
 
@@ -211,6 +224,35 @@ pub fn CoreTextFace.init_font(ct_font voidptr, opts FaceOptions) !CoreTextFace {
 		size: opts.size
 	}
 	result.quirks_disable_default_font_features = quirks.disable_default_font_features(&result)
+
+	// In debug mode, output the available variation axes when they exist.
+	$if debug {
+		axes := C.witty_ct_font_copy_variation_axes(ct_font)
+		if !isnil(axes) {
+			defer { C.witty_ct_release(axes) }
+			mut name_buf := []u8{len: 1024}
+			font_name := result.name(mut name_buf) or {
+				result.deinit()
+				return err
+			}
+			log.debug('variation axes font=${font_name}')
+			for i in 0 .. C.witty_ct_variation_count(axes) {
+				mut identifier := u32(0)
+				mut minimum := f64(0)
+				mut maximum := f64(0)
+				mut default_value := f64(0)
+				assert unsafe {
+					C.witty_ct_variation_axis_info(axes, i, &name_buf[0], usize(name_buf.len),
+						&identifier, &minimum, &maximum, &default_value)
+				} != 0
+				axis_name := unsafe { cstring_to_vstring(&char(name_buf.data)) }
+				id := VariationId{
+					value: identifier
+				}
+				log.debug('variation axis: name=${axis_name} id=${id.str()} min=${minimum} max=${maximum} def=${default_value}')
+			}
+		}
+	}
 	return result
 }
 
@@ -434,6 +476,7 @@ pub fn (self CoreTextFace) render_glyph(mut atlas Atlas, glyph_index u32, opts R
 	}
 	depth := if is_color { u32(4) } else { u32(1) }
 	if atlas.format.depth() != depth {
+		log.warn('font atlas color depth doesn\'t equal font color depth atlas=${atlas.format.depth()} font=${depth}')
 		return error('CoreText: font atlas color depth does not match glyph color depth')
 	}
 	mut pixels := &u8(unsafe { nil })
@@ -456,43 +499,88 @@ pub fn (self CoreTextFace) render_glyph(mut atlas Atlas, glyph_index u32, opts R
 	}
 }
 
+struct CoreTextSize {
+	width  f64
+	height f64
+}
+
 // Get the FaceMetrics for this face. CoreText supplies glyph measurements;
 // OpenType tables supply the same metric precedence and broken-table handling
 // used by Ghostty.
 pub fn (mut self CoreTextFace) get_metrics() FaceMetrics {
 	mut px_per_em := f64(0)
-	mut cell_width := f64(0)
 	mut ascent := f64(0)
-	mut descent := f64(0)
+	mut raw_descent := f64(0)
 	mut line_gap := f64(0)
-	mut ul_pos := f64(0)
-	mut ul_thick := f64(0)
-	mut st_pos := f64(0)
-	mut st_thick := f64(0)
 	mut cap_height := f64(0)
 	mut ex_height := f64(0)
-	mut ascii_height := f64(0)
-	mut ic_width := f64(0)
-	mut has_ic_width := int(0)
-
-	if C.witty_coretext_get_metrics(self.ct_font, &px_per_em, &cell_width, &ascent, &descent, &line_gap, &ul_pos, &ul_thick, &st_pos, &st_thick, &cap_height, &ex_height, &ascii_height, &ic_width, &has_ic_width) == 0 {
+	if C.witty_coretext_basic_metrics(self.ct_font, &px_per_em, &ascent, &raw_descent,
+		&line_gap, &cap_height, &ex_height) == 0 {
 		return FaceMetrics{}
+	}
+
+	// Measure the widest visible ASCII advance and the height of their
+	// collective bounds.
+	mut characters := []u16{len: 127 - 32}
+	for i in 0 .. characters.len {
+		characters[i] = u16(i + 32)
+	}
+	mut glyphs := []u16{len: characters.len}
+	unsafe {
+		C.witty_coretext_glyphs_for_characters(self.ct_font, &characters[0], &glyphs[0],
+			characters.len)
+	}
+	mut advances := []CoreTextSize{len: glyphs.len}
+	unsafe {
+		C.witty_coretext_glyph_advances(self.ct_font, &glyphs[0], advances.data, glyphs.len)
+	}
+	mut cell_width := f64(0)
+	for advance in advances {
+		cell_width = math.max(cell_width, advance.width)
+	}
+	mut ascii_bounds := GlyphSize{}
+	unsafe {
+		C.witty_coretext_glyphs_bounds(self.ct_font, &glyphs[0], glyphs.len, &ascii_bounds.x,
+			&ascii_bounds.y, &ascii_bounds.width, &ascii_bounds.height)
+	}
+
+	// Measure "水" (CJK water ideograph, U+6C34) for the CSS ic unit.
+	mut ic_width := ?f64(none)
+	if water_glyph := self.glyph_index(0x6c34) {
+		mut water_glyphs := [u16(water_glyph)]
+		mut water_advance := [CoreTextSize{}]
+		unsafe {
+			C.witty_coretext_glyph_advances(self.ct_font, &water_glyphs[0], water_advance.data,
+				1)
+		}
+		mut water_bounds := GlyphSize{}
+		unsafe {
+			C.witty_coretext_glyphs_bounds(self.ct_font, &water_glyphs[0], 1, &water_bounds.x,
+				&water_bounds.y, &water_bounds.width, &water_bounds.height)
+		}
+		if water_bounds.width > water_advance[0].width {
+			mut name_buf := []u8{len: 1024}
+			font_name := self.name(mut name_buf) or { '<Error getting font name>' }
+			log.warn('(getMetrics) Width of glyph \'水\' for font "${font_name}" is greater than its advance (${water_bounds.width} > ${water_advance[0].width}), discarding ic_width metric.')
+		} else {
+			ic_width = water_advance[0].width
+		}
 	}
 
 	base := FaceMetrics{
 		px_per_em: px_per_em
 		cell_width: cell_width
 		ascent: ascent
-		descent: descent
+		descent: -raw_descent
 		line_gap: line_gap
-		underline_position: ul_pos
-		underline_thickness: ul_thick
-		strikethrough_position: st_pos
-		strikethrough_thickness: st_thick
+		underline_position: none
+		underline_thickness: none
+		strikethrough_position: none
+		strikethrough_thickness: none
 		cap_height: cap_height
 		ex_height: ex_height
-		ascii_height: ascii_height
-		ic_width: if has_ic_width != 0 { ic_width } else { none }
+		ascii_height: ascii_bounds.height
+		ic_width: ic_width
 	}
 
 	head := self.parse_head_table()
@@ -511,28 +599,37 @@ fn (self CoreTextFace) parse_head_table() ?opentype.Head {
 	data := self.copy_table('head') or {
 		self.copy_table('bhed') or { return none }
 	}
-	return opentype.Head.init(data) or { none }
+	return opentype.Head.init(data) or {
+		log.warn('error parsing head table: ${err}')
+		none
+	}
 }
 
 fn (self CoreTextFace) parse_post_table() ?opentype.Post {
 	data := self.copy_table('post') or { return none }
-	return opentype.Post.init(data) or { none }
+	return opentype.Post.init(data) or {
+		log.warn('error parsing post table: ${err}')
+		none
+	}
 }
 
 fn (self CoreTextFace) parse_os2_table() ?opentype.OS2 {
 	data := self.copy_table('OS/2') or { return none }
-	return opentype.OS2.init(data) or { none }
+	return opentype.OS2.init(data) or {
+		log.warn('error parsing OS/2 table: ${err}')
+		none
+	}
 }
 
 fn (self CoreTextFace) parse_hhea_table() ?opentype.Hhea {
 	data := self.copy_table('hhea') or { return none }
-	return opentype.Hhea.init(data) or { none }
+	return opentype.Hhea.init(data) or {
+		log.warn('error parsing hhea table: ${err}')
+		none
+	}
 }
 
 fn refine_coretext_metrics(base FaceMetrics, units_per_em u32, post ?opentype.Post, os2 ?opentype.OS2, hhea ?opentype.Hhea) FaceMetrics {
-	if units_per_em == 0 {
-		return base
-	}
 	px_per_unit := base.px_per_em / f64(units_per_em)
 	mut result := base
 

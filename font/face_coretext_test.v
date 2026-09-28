@@ -53,7 +53,13 @@ fn test_coretext_basic_ascii_rendering() {
 	$if macos {
 		mut face := named_coretext_test_face('Menlo', 12) or { panic(err) }
 		defer { face.deinit() }
-		metrics := Metrics.calc(face.get_metrics())
+		face_metrics := face.get_metrics()
+		assert face_metrics.px_per_em > 0
+		assert face_metrics.cell_width > 0
+		assert face_metrics.ascent > 0
+		assert face_metrics.descent < 0
+		assert face_metrics.ascii_height or { 0 } > 0
+		metrics := Metrics.calc(face_metrics)
 		mut atlas := Atlas.init(512, .grayscale)!
 		defer { atlas.deinit() }
 		for cp in u32(32) .. u32(127) {

@@ -121,85 +121,59 @@ static int witty_coretext_glyph_for_codepoint(void *font_ptr, uint32_t cp, uint3
 	return 1;
 }
 
-static int witty_coretext_get_metrics(
+// Primitive metric accessors used by the direct V translation of
+// coretext.zig's Face.getMetrics().
+static int witty_coretext_basic_metrics(
 	void *font_ptr,
 	double *px_per_em,
-	double *cell_width,
 	double *ascent,
 	double *descent,
 	double *line_gap,
-	double *underline_position,
-	double *underline_thickness,
-	double *strikethrough_position,
-	double *strikethrough_thickness,
 	double *cap_height,
-	double *ex_height,
-	double *ascii_height,
-	double *ic_width,
-	int *has_ic_width
+	double *ex_height
 ) {
 	if (!font_ptr) return 0;
 	CTFontRef font = (CTFontRef)font_ptr;
-	double size = CTFontGetSize(font);
-	double asc = CTFontGetAscent(font);
-	double desc = -CTFontGetDescent(font);
-	double leading = CTFontGetLeading(font);
-	double cap = CTFontGetCapHeight(font);
-	double xh = CTFontGetXHeight(font);
+	if (px_per_em) *px_per_em = CTFontGetSize(font);
+	if (ascent) *ascent = CTFontGetAscent(font);
+	if (descent) *descent = CTFontGetDescent(font);
+	if (line_gap) *line_gap = CTFontGetLeading(font);
+	if (cap_height) *cap_height = CTFontGetCapHeight(font);
+	if (ex_height) *ex_height = CTFontGetXHeight(font);
+	return 1;
+}
 
-	double max_advance = 0.0;
-	UniChar chars[95];
-	CGGlyph glyphs[95];
-	CGSize advances[95];
-	for (int i = 0; i < 95; i++) chars[i] = (UniChar)(32 + i);
-	memset(glyphs, 0, sizeof(glyphs));
-	memset(advances, 0, sizeof(advances));
-	(void)CTFontGetGlyphsForCharacters(font, chars, glyphs, 95);
-	CTFontGetAdvancesForGlyphs(font, kCTFontOrientationHorizontal, glyphs, advances, 95);
-	for (int i = 0; i < 95; i++) {
-		if (advances[i].width > max_advance) {
-			max_advance = advances[i].width;
-		}
-	}
-	CGRect ascii_bounds = CTFontGetBoundingRectsForGlyphs(
-		font, kCTFontOrientationHorizontal, glyphs, NULL, 95);
+static int witty_coretext_glyphs_for_characters(
+	void *font_ptr, const uint16_t *characters, uint16_t *glyphs, int count
+) {
+	if (!font_ptr || !characters || !glyphs || count < 0) return 0;
+	return CTFontGetGlyphsForCharacters(
+		(CTFontRef)font_ptr, (const UniChar *)characters, (CGGlyph *)glyphs,
+		(CFIndex)count) ? 1 : 0;
+}
 
-	double measured_ic_width = 0.0;
-	int measured_has_ic_width = 0;
-	UniChar water_char = 0x6C34;
-	CGGlyph water_glyph = 0;
-	if (CTFontGetGlyphsForCharacters(font, &water_char, &water_glyph, 1) && water_glyph != 0) {
-		CGSize water_advance = CGSizeZero;
-		CTFontGetAdvancesForGlyphs(
-			font, kCTFontOrientationHorizontal, &water_glyph, &water_advance, 1);
-		CGRect water_bounds = CTFontGetBoundingRectsForGlyphs(
-			font, kCTFontOrientationHorizontal, &water_glyph, NULL, 1);
-		if (water_bounds.size.width <= water_advance.width) {
-			measured_ic_width = water_advance.width;
-			measured_has_ic_width = 1;
-		}
-	}
+static double witty_coretext_glyph_advances(
+	void *font_ptr, const uint16_t *glyphs, void *advances, int count
+) {
+	if (!font_ptr || !glyphs || count < 0) return 0;
+	return CTFontGetAdvancesForGlyphs(
+		(CTFontRef)font_ptr, kCTFontOrientationHorizontal,
+		(const CGGlyph *)glyphs, (CGSize *)advances, (CFIndex)count);
+}
 
-	if (px_per_em) *px_per_em = size;
-	if (cell_width) *cell_width = max_advance;
-	if (ascent) *ascent = asc;
-	if (descent) *descent = desc;
-	if (line_gap) *line_gap = leading > 0.0 ? leading : 0.0;
-	if (underline_position) *underline_position = CTFontGetUnderlinePosition(font);
-	if (underline_thickness) {
-		double thickness = CTFontGetUnderlineThickness(font);
-		*underline_thickness = thickness > 0.0 ? thickness : 1.0;
-	}
-	if (strikethrough_position) *strikethrough_position = cap > 0.0 ? cap * 0.45 : asc * 0.35;
-	if (strikethrough_thickness) {
-		double thickness = CTFontGetUnderlineThickness(font);
-		*strikethrough_thickness = thickness > 0.0 ? thickness : 1.0;
-	}
-	if (cap_height) *cap_height = cap;
-	if (ex_height) *ex_height = xh;
-	if (ascii_height) *ascii_height = ascii_bounds.size.height;
-	if (ic_width) *ic_width = measured_ic_width;
-	if (has_ic_width) *has_ic_width = measured_has_ic_width;
+static int witty_coretext_glyphs_bounds(
+	void *font_ptr, const uint16_t *glyphs, int count,
+	double *x_out, double *y_out, double *width_out, double *height_out
+) {
+	if (!font_ptr || !glyphs || count < 0 || !x_out || !y_out ||
+		!width_out || !height_out) return 0;
+	CGRect rect = CTFontGetBoundingRectsForGlyphs(
+		(CTFontRef)font_ptr, kCTFontOrientationHorizontal,
+		(const CGGlyph *)glyphs, NULL, (CFIndex)count);
+	*x_out = rect.origin.x;
+	*y_out = rect.origin.y;
+	*width_out = rect.size.width;
+	*height_out = rect.size.height;
 	return 1;
 }
 
@@ -512,6 +486,50 @@ static int witty_ct_variation_count(void *axes_ptr) {
 	return (int)CFArrayGetCount((CFArrayRef)axes_ptr);
 }
 
+static int witty_ct_variation_axis_info(
+	void *axes_ptr,
+	int index,
+	uint8_t *name_buf,
+	size_t name_len,
+	uint32_t *identifier_out,
+	double *minimum_out,
+	double *maximum_out,
+	double *default_out
+) {
+	if (!axes_ptr || !name_buf || name_len == 0 || !identifier_out ||
+		!minimum_out || !maximum_out || !default_out) return 0;
+	CFArrayRef axes = (CFArrayRef)axes_ptr;
+	CFIndex count = CFArrayGetCount(axes);
+	if (index < 0 || (CFIndex)index >= count) return 0;
+	CFDictionaryRef axis = (CFDictionaryRef)CFArrayGetValueAtIndex(
+		axes, (CFIndex)index);
+	CFNumberRef identifier = (CFNumberRef)CFDictionaryGetValue(
+		axis, kCTFontVariationAxisIdentifierKey);
+	CFStringRef name = (CFStringRef)CFDictionaryGetValue(
+		axis, kCTFontVariationAxisNameKey);
+	CFNumberRef minimum = (CFNumberRef)CFDictionaryGetValue(
+		axis, kCTFontVariationAxisMinimumValueKey);
+	CFNumberRef maximum = (CFNumberRef)CFDictionaryGetValue(
+		axis, kCTFontVariationAxisMaximumValueKey);
+	CFNumberRef default_value = (CFNumberRef)CFDictionaryGetValue(
+		axis, kCTFontVariationAxisDefaultValueKey);
+	if (!identifier || !name || !minimum || !maximum || !default_value) return 0;
+
+	int32_t identifier_value = 0;
+	(void)CFNumberGetValue(identifier, kCFNumberSInt32Type, &identifier_value);
+	*identifier_out = (uint32_t)identifier_value;
+	*minimum_out = 0;
+	*maximum_out = 0;
+	*default_out = 0;
+	(void)CFNumberGetValue(minimum, kCFNumberDoubleType, minimum_out);
+	(void)CFNumberGetValue(maximum, kCFNumberDoubleType, maximum_out);
+	(void)CFNumberGetValue(default_value, kCFNumberDoubleType, default_out);
+	name_buf[0] = 0;
+	(void)CFStringGetCString(
+		name, (char *)name_buf, (CFIndex)name_len, kCFStringEncodingUTF8);
+	return 1;
+}
+
 // Extract one variation axis name and its effective value. The effective value
 // is the font instance value when present and the axis default otherwise.
 static int witty_ct_variation_get(
@@ -794,38 +812,48 @@ static int witty_coretext_glyph_for_codepoint(void *font_ptr, uint32_t cp, uint3
 	return 0;
 }
 
-static int witty_coretext_get_metrics(
+static int witty_coretext_basic_metrics(
 	void *font_ptr,
 	double *px_per_em,
-	double *cell_width,
 	double *ascent,
 	double *descent,
 	double *line_gap,
-	double *underline_position,
-	double *underline_thickness,
-	double *strikethrough_position,
-	double *strikethrough_thickness,
 	double *cap_height,
-	double *ex_height,
-	double *ascii_height,
-	double *ic_width,
-	int *has_ic_width
+	double *ex_height
 ) {
 	(void)font_ptr;
 	(void)px_per_em;
-	(void)cell_width;
 	(void)ascent;
 	(void)descent;
 	(void)line_gap;
-	(void)underline_position;
-	(void)underline_thickness;
-	(void)strikethrough_position;
-	(void)strikethrough_thickness;
 	(void)cap_height;
 	(void)ex_height;
-	(void)ascii_height;
-	(void)ic_width;
-	(void)has_ic_width;
+	return 0;
+}
+
+static int witty_coretext_glyphs_for_characters(
+	void *font_ptr, const uint16_t *characters, uint16_t *glyphs, int count
+) {
+	(void)font_ptr; (void)characters; (void)glyphs; (void)count;
+	return 0;
+}
+
+static double witty_coretext_glyph_advances(
+	void *font_ptr, const uint16_t *glyphs, void *advances, int count
+) {
+	(void)font_ptr; (void)glyphs; (void)advances; (void)count;
+	return 0;
+}
+
+static int witty_coretext_glyphs_bounds(
+	void *font_ptr, const uint16_t *glyphs, int count,
+	double *x_out, double *y_out, double *width_out, double *height_out
+) {
+	(void)font_ptr; (void)glyphs; (void)count;
+	if (x_out) *x_out = 0;
+	if (y_out) *y_out = 0;
+	if (width_out) *width_out = 0;
+	if (height_out) *height_out = 0;
 	return 0;
 }
 
@@ -901,6 +929,27 @@ static int witty_ct_descriptor_is_color(void *desc_ptr) {
 
 static int witty_cf_array_count(void *arr) { (void)arr; return 0; }
 static void *witty_cf_array_get(void *arr, int i) { (void)arr; (void)i; return NULL; }
+
+static void *witty_ct_font_copy_variation_axes(void *font_ptr) {
+	(void)font_ptr;
+	return NULL;
+}
+
+static int witty_ct_variation_count(void *axes_ptr) {
+	(void)axes_ptr;
+	return 0;
+}
+
+static int witty_ct_variation_axis_info(
+	void *axes_ptr, int index, uint8_t *name_buf, size_t name_len,
+	uint32_t *identifier_out, double *minimum_out, double *maximum_out,
+	double *default_out
+) {
+	(void)axes_ptr; (void)index; (void)identifier_out; (void)minimum_out;
+	(void)maximum_out; (void)default_out;
+	if (name_buf && name_len > 0) name_buf[0] = 0;
+	return 0;
+}
 
 static void *witty_ct_descriptor_drop_charset(void *desc) { (void)desc; return NULL; }
 
