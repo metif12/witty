@@ -1,5 +1,7 @@
 module internal_os
 
+import log
+
 #include <locale.h>
 
 fn C.setlocale(category int, locale &char) &char
@@ -19,7 +21,8 @@ pub fn ensure_locale() ! {
 		}
 	}
 
-	if set_process_locale('') != none {
+	if value := set_process_locale('') {
+		log.info('setlocale from env result=${value}')
 		return
 	}
 
@@ -30,6 +33,7 @@ pub fn ensure_locale() ! {
 			setenv('LANG', '')
 			unsetenv('LANG')
 			if value := set_process_locale('') {
+				log.info('setlocale after unset lang result=${value}')
 				if value != 'C' {
 					return
 				}
@@ -37,9 +41,13 @@ pub fn ensure_locale() ! {
 		}
 	}
 
-	if set_process_locale('en_US.UTF-8') != none {
+	log.warn('setlocale failed with LANG and system default. Falling back to en_US.UTF-8')
+	if value := set_process_locale('en_US.UTF-8') {
 		setenv('LANG', 'en_US.UTF-8')
+		log.info('setlocale default result=${value}')
+		return
 	}
+	log.warn('setlocale failed even with the fallback, uncertain results')
 }
 
 fn set_process_locale(value string) ?string {
