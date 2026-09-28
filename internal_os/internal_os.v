@@ -75,8 +75,12 @@ mut:
 // host.
 fn open_command_for_os(os_name string, kind openurl.Kind, url string) !(string, []string) {
 	return match os_name {
-		'linux', 'freebsd' { 'xdg-open', [url] }
-		'windows' { 'rundll32', ['url.dll,FileProtocolHandler', url] }
+		'linux', 'freebsd' {
+			'xdg-open', [url]
+		}
+		'windows' {
+			'rundll32', ['url.dll,FileProtocolHandler', url]
+		}
 		'macos' {
 			if kind == .text {
 				'open', ['-t', url]
@@ -84,13 +88,25 @@ fn open_command_for_os(os_name string, kind openurl.Kind, url string) !(string, 
 				'open', [url]
 			}
 		}
-		else { error('URL opening is unsupported on this platform') }
+		else {
+			error('URL opening is unsupported on this platform')
+		}
 	}
 }
 
 // open opens a URL or path with the source content-type hint.
 pub fn open(kind OpenType, url string) ! {
-	os_name := $if macos { 'macos' } $else $if linux { 'linux' } $else $if freebsd { 'freebsd' } $else $if windows { 'windows' } $else { 'unsupported' }
+	os_name := $if macos {
+		'macos'
+	} $else $if linux {
+		'linux'
+	} $else $if freebsd {
+		'freebsd'
+	} $else $if windows {
+		'windows'
+	} $else {
+		'unsupported'
+	}
 	executable, args := open_command_for_os(os_name, kind, url)!
 	mut process := os.new_process(executable)
 	process.set_args(args)
@@ -223,8 +239,8 @@ fn close_pipe(fds [2]int) {
 // The platform URL opener may block until the target application exits. Reap
 // it away from the caller so opening a link never stalls terminal input.
 fn reap_open_process(mut process os.Process) {
-	stdout_result := chan OpenProcessOutput{ cap: 1 }
-	stderr_result := chan OpenProcessOutput{ cap: 1 }
+	stdout_result := chan OpenProcessOutput{cap: 1}
+	stderr_result := chan OpenProcessOutput{cap: 1}
 	stdout_thread := spawn collect_open_stdout(mut process, stdout_result)
 	stderr_thread := spawn collect_open_stderr(mut process, stderr_result)
 	stdout := <-stdout_result
@@ -269,7 +285,7 @@ fn (mut self OpenProcessOutputAccumulator) finish() OpenProcessOutput {
 		self.too_long = true
 	}
 	return OpenProcessOutput{
-		data: if self.too_long { '' } else { self.data.bytestr() }
+		data:     if self.too_long { '' } else { self.data.bytestr() }
 		too_long: self.too_long
 	}
 }
@@ -284,7 +300,7 @@ fn collect_open_stderr(mut process os.Process, result chan OpenProcessOutput) {
 
 fn collect_open_output(mut process os.Process, kind os.ChildProcessPipeKind, result chan OpenProcessOutput) {
 	mut output := OpenProcessOutputAccumulator{
-		data: []u8{ cap: open_process_output_max + 1 }
+		data: []u8{cap: open_process_output_max + 1}
 	}
 	$if windows {
 		wdata := unsafe { &os.WProcess(process.wdata) }
@@ -293,6 +309,7 @@ fn collect_open_output(mut process os.Process, kind os.ChildProcessPipeKind, res
 			.stderr { voidptr(wdata.child_stderr_read) }
 			.stdin { unsafe { nil } }
 		}
+
 		if !isnil(handle) {
 			mut buffer := [4096]u8{}
 			for {
@@ -340,8 +357,8 @@ pub fn TempDir.init() !TempDir {
 			return err
 		}
 		return TempDir{
-			path: path
-			parent: parent
+			path:     path
+			parent:   parent
 			dir_name: name
 		}
 	}
@@ -684,7 +701,9 @@ pub:
 pub fn get() !Entry {
 	$if windows {
 		name := os.loginname() or { return Entry{} }
-		h := home() or { return Entry{ name: name } }
+		h := home() or { return Entry{
+			name: name
+		} }
 		return Entry{
 			name: name
 			home: h.value
@@ -694,8 +713,7 @@ pub fn get() !Entry {
 	mut buf := []u8{len: 1024}
 	mut pw := C.passwd{}
 	mut pw_result := &C.passwd(unsafe { nil })
-	result := C.getpwuid_r(C.getuid(), &pw, unsafe { &char(buf.data) }, usize(buf.len),
-		&pw_result)
+	result := C.getpwuid_r(C.getuid(), &pw, unsafe { &char(buf.data) }, usize(buf.len), &pw_result)
 	if result != 0 {
 		log.warn('error retrieving pw entry code=${result}')
 		return Entry{}
@@ -724,8 +742,8 @@ pub fn get() !Entry {
 	}
 	return Entry{
 		shell: if isnil(pw.pw_shell) { none } else { unsafe { cstring_to_vstring(pw.pw_shell) } }
-		home: if isnil(pw.pw_dir) { none } else { unsafe { cstring_to_vstring(pw.pw_dir) } }
-		name: if isnil(pw.pw_name) { none } else { unsafe { cstring_to_vstring(pw.pw_name) } }
+		home:  if isnil(pw.pw_dir) { none } else { unsafe { cstring_to_vstring(pw.pw_dir) } }
+		name:  if isnil(pw.pw_name) { none } else { unsafe { cstring_to_vstring(pw.pw_name) } }
 	}
 }
 
@@ -733,7 +751,7 @@ fn parse_flatpak_passwd_output(output string) Entry {
 	parts := output.trim_right(' \r\n').split(':')
 	return Entry{
 		shell: if parts.len > 0 { parts[parts.len - 1] } else { none }
-		home: if parts.len > 1 { parts[parts.len - 2] } else { none }
+		home:  if parts.len > 1 { parts[parts.len - 2] } else { none }
 	}
 }
 
@@ -784,12 +802,13 @@ pub mut:
 // limit so it can later be restored, or none if the limit couldn't be queried.
 pub fn fix_max_files() ?Rlimit {
 	old := getrlimit_nofile() or {
-		// Oh well; we tried.
+		log.warn('failed to query file handle limit, may limit max windows')
 		return none
 	}
 
 	// If we're already at the max, we're done.
 	if old.cur >= old.max {
+		log.debug('file handle limit already maximized value=${old.cur}')
 		return old
 	}
 
@@ -815,6 +834,7 @@ pub fn fix_max_files() ?Rlimit {
 		}
 	}
 
+	log.debug('file handle limit raised value=${lim.cur}')
 	return old
 }
 
