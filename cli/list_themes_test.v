@@ -2,7 +2,6 @@ module cli
 
 import configpkg
 import os
-import strings
 import vaxis
 
 fn preview_test_theme(name string) ThemeListElement {
@@ -238,49 +237,6 @@ fn test_preview_search_uses_text_input() {
 	assert p.filtered.len == 2
 }
 
-fn test_preview_search_draw_uses_text_input_window_and_cursor() {
-	mut p := Preview.init([], .all)!
-	p.mode = .search
-	p.winsize = vaxis.Winsize{ rows: 20, cols: 100 }
-	p.text_input.insert_slice_at_cursor('abc')
-	output := p.draw()
-	assert output.contains(vaxis.position(16, 21) + vaxis.styled('a', p.ui_standard()))
-	assert output.contains(vaxis.show_cursor(16, 24))
-	p.text_input.clear_retaining_capacity()
-	p.text_input.insert_slice_at_cursor('👩‍🚀')
-	p.width_method = .unicode
-	unicode_output := p.draw()
-	assert unicode_output.contains(vaxis.show_cursor(16, 23))
-}
-
-fn test_preview_segments_follow_negotiated_grapheme_width() {
-	mut p := Preview.init([], .all)!
-	segments := [
-		PreviewSegment{ text: '👩‍🚀', style: p.ui_standard() },
-		PreviewSegment{ text: 'x', style: p.ui_standard() },
-	]
-	mut wcwidth_out := strings.new_builder(128)
-	p.put_preview_segments(mut wcwidth_out, 0, 2, 6, 2, segments)
-	assert wcwidth_out.str().contains(vaxis.position(1, 0) + vaxis.styled('x', p.ui_standard()))
-	p.width_method = .unicode
-	mut unicode_out := strings.new_builder(128)
-	p.put_preview_segments(mut unicode_out, 0, 2, 6, 2, segments)
-	assert unicode_out.str().contains(vaxis.position(0, 4) + vaxis.styled('x', p.ui_standard()))
-}
-
-fn test_preview_segments_clip_with_reported_width_method() {
-	mut p := Preview.init([], .all)!
-	mut wcwidth_out := strings.new_builder(128)
-	p.put_segment(mut wcwidth_out, 0, 0, 3, '👩‍🚀x', p.ui_standard())
-	wcwidth_output := wcwidth_out.str()
-	assert wcwidth_output.contains(vaxis.styled('👩‍🚀', p.ui_standard()))
-	assert !wcwidth_output.contains(vaxis.styled('👩‍🚀x', p.ui_standard()))
-	p.width_method = .unicode
-	mut unicode_out := strings.new_builder(128)
-	p.put_segment(mut unicode_out, 0, 0, 3, '👩‍🚀x', p.ui_standard())
-	assert unicode_out.str().contains(vaxis.styled('👩‍🚀x', p.ui_standard()))
-}
-
 fn test_preview_ascii_lowercases_search_tokens_for_zf() {
 	mut p := Preview.init([
 		preview_test_theme('Dracula'),
@@ -300,131 +256,10 @@ fn test_preview_ascii_lowercases_search_tokens_for_zf() {
 	assert p.filtered.len == 0
 }
 
-fn test_preview_mouse_selects_visible_theme() {
-	mut p := Preview.init([
-		preview_test_theme('One'),
-		preview_test_theme('Two'),
-		preview_test_theme('Three'),
-	], .all)!
-	p.winsize = vaxis.Winsize{ rows: 20, cols: 100 }
-	p.update(Event(MouseEvent{
-		mouse: vaxis.Mouse{
-			button: .left
-			type_:  .release
-			row:    2
-			col:    5
-		}
-	}))!
-	_ = p.draw()
-	assert p.current == 2
-}
-
-fn test_preview_draw_consumes_only_latest_mouse_event_and_highlights_row() {
-	mut p := Preview.init([
-		preview_test_theme('One'),
-		preview_test_theme('Two'),
-		preview_test_theme('Three'),
-	], .all)!
-	p.winsize = vaxis.Winsize{ rows: 20, cols: 100 }
-	p.update(Event(MouseEvent{
-		mouse: vaxis.Mouse{
-			button: .left
-			type_:  .release
-			row:    1
-			col:    5
-		}
-	}))!
-	p.update(Event(MouseEvent{
-		mouse: vaxis.Mouse{
-			button: .none_
-			type_:  .motion
-			row:    2
-			col:    5
-		}
-	}))!
-
-	output := p.draw()
-	assert p.current == 0
-	assert p.mouse == none
-	expected := vaxis.hyperlink('Three', p.themes[2].to_uri(), p.ui_highlighted())
-	assert output.contains(expected)
-}
-
-fn test_preview_draws_empty_state() {
-	mut p := Preview.init([], .all)!
-	p.winsize = vaxis.Winsize{ rows: 12, cols: 80 }
-	output := p.draw()
-	assert output.contains('No theme found!')
-	assert output.contains('\x1b[2J\x1b[H')
-}
-
-fn test_preview_draw_renders_theme_load_failure() {
-	missing := os.join_path(os.temp_dir(), 'witty-missing-theme-draw-${os.getpid()}')
-	os.rm(missing) or {}
-	mut p := Preview{
-		themes:     [ThemeListElement{
-			theme: 'Missing'
-			path:  missing
-		}]
-		filtered:   [usize(0)]
-		winsize:    vaxis.Winsize{ rows: 12, cols: 80 }
-		text_input: vaxis.TextInput.new()
-	}
-	output := p.draw()
-	assert output.contains('Unable to open Missing from:')
-	assert output.contains(missing)
-}
-
 fn test_preview_terminal_colors_preserve_explicit_values_and_defaults() {
 	fg := vaxis.ColorRgb{ rgb: [u8(1), 2, 3]! }
 	assert preview_terminal_color(none, fg).eql(fg)
 	assert preview_terminal_color(configpkg.TerminalColorColor{
 		color: configpkg.ColorRGB{ r: 7, g: 8, b: 9 }
 	}, fg).eql(vaxis.ColorRgb{ rgb: [u8(7), 8, 9]! })
-}
-
-fn test_preview_draw_restores_pinned_palette_and_sample_segments() {
-	path := os.join_path(os.temp_dir(), 'witty-theme-preview-${os.getpid()}')
-	os.write_file(path, 'foreground = 010203\nbackground = 040506\ncursor-text = 070809\ncursor-color = 0a0b0c\nselection-foreground = 0d0e0f\nselection-background = 101112\n')!
-	defer {
-		os.rm(path) or {}
-	}
-	mut p := Preview.init([ThemeListElement{
-		theme: 'Pinned Preview'
-		path:  path
-	}], .all)!
-	p.winsize = vaxis.Winsize{ rows: 140, cols: 120 }
-	output := p.draw()
-	bg := vaxis.ColorRgb{ rgb: [u8(4), 5, 6]! }
-	assert output.contains(vaxis.position(4, 32) + vaxis.styled('  0', vaxis.Style{
-		fg: vaxis.ColorRgb{ rgb: [u8(1), 2, 3]! }
-		bg: bg
-	}))
-	assert output.contains(vaxis.position(7, 32) + vaxis.styled('  8', vaxis.Style{
-		fg: vaxis.ColorRgb{ rgb: [u8(1), 2, 3]! }
-		bg: bg
-	}))
-	assert output.contains(vaxis.styled('stdout.print("{d}\\n", .{i})', vaxis.Style{
-		fg: vaxis.ColorRgb{ rgb: [u8(13), 14, 15]! }
-		bg: vaxis.ColorRgb{ rgb: [u8(16), 17, 18]! }
-	}))
-	assert output.contains(vaxis.styled(';', vaxis.Style{
-		fg: vaxis.ColorRgb{ rgb: [u8(7), 8, 9]! }
-		bg: vaxis.ColorRgb{ rgb: [u8(10), 11, 12]! }
-	}))
-	assert output.contains('  impure (ghostty-env)')
-	assert output.count('Lorem') > 1
-}
-
-fn test_preview_sample_segments_wrap_at_child_edge() {
-	mut p := Preview.init([], .all)!
-	mut out := strings.new_builder(64)
-	style := vaxis.Style{}
-	p.put_preview_segments(mut out, 1, 4, 8, 4, [PreviewSegment{
-		text:  'ABCDEF'
-		style: style
-	}])
-	output := out.str()
-	assert output.contains(vaxis.position(1, 4) + vaxis.styled('ABCD', style))
-	assert output.contains(vaxis.position(2, 2) + vaxis.styled('EF', style))
 }

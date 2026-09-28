@@ -2,7 +2,6 @@ module cli
 
 import ascii
 import os
-import strings
 import time
 import net.urllib
 import configpkg
@@ -110,7 +109,6 @@ mut:
 	hex          bool
 	mode         PreviewMode  = .normal
 	color_scheme vaxis.Scheme = .light
-	width_method vaxis.GWidthMethod = .wcwidth
 	mouse        ?vaxis.Mouse
 	text_input   vaxis.TextInput
 	winsize      vaxis.Winsize
@@ -504,21 +502,40 @@ pub fn (self &Preview) ui_err() vaxis.Style {
 pub fn (mut self Preview) run() ! {
 	mut tty := vaxis.Tty.new()
 	self.winsize = vaxis.terminal_size()
-	vaxis.begin_session('👻 Ghostty Theme Preview 👻')
-	vaxis.query_color_scheme_update_capability()
-	vaxis.query_unicode_capability()
-	mut color_scheme_subscribed := false
-	defer {
-		if color_scheme_subscribed {
-			vaxis.unsubscribe_from_color_scheme_updates()
+	mut vx := vaxis.Vaxis.new(vaxis.VaxisOptions{})
+	print(vx.enter_alt_screen())
+	print(vx.set_title('👻 Ghostty Theme Preview 👻'))
+	print(vx.query_terminal_send())
+	flush_stdout()
+	mut queued := []vaxis.InputEvent{}
+	query_start := time.ticks()
+	for !vx.queries_done && time.ticks() - query_start < 1000 {
+		if raw := tty.poll() {
+			if event := vx.handle_input(raw) {
+				queued << event
+			}
+		} else {
+			time.sleep(8 * time.millisecond)
 		}
-		vaxis.end_session()
+	}
+	vx.queries_done = true
+	print(vx.enable_detected_features())
+	print(vx.set_mouse_mode(true))
+	if vx.caps.color_scheme_updates {
+		print(vx.subscribe_to_color_scheme_updates())
+	}
+	print(vx.resize(self.winsize))
+	flush_stdout()
+	defer {
+		print(vx.deinit())
+		flush_stdout()
 	}
 
 	mut dirty := true
 	for !self.should_quit {
 		winsize := vaxis.terminal_size()
 		if winsize != self.winsize {
+			print(vx.resize(winsize))
 			self.update(Event(WinsizeEvent{
 				winsize: winsize
 			}))!
@@ -526,47 +543,30 @@ pub fn (mut self Preview) run() ! {
 		}
 
 		mut handled_input := false
-		for {
-			event := tty.poll() or { break }
-			match event {
-				vaxis.Key {
-					self.update(Event(KeyPressEvent{
-						key: event
-					}))!
-				}
-				vaxis.Mouse {
-					self.update(Event(MouseEvent{
-						mouse: event
-					}))!
-				}
-				vaxis.ColorScheme {
-					self.update(Event(ColorSchemeEvent{
-						scheme: event.scheme
-					}))!
-				}
-				vaxis.Winsize {
-					self.update(Event(WinsizeEvent{
-						winsize: event
-					}))!
-				}
-				vaxis.CapabilityEvent {
-					if event.capability == .color_scheme_updates && !color_scheme_subscribed {
-						vaxis.subscribe_to_color_scheme_updates()
-						color_scheme_subscribed = true
-					} else if event.capability == .unicode && self.width_method != .unicode {
-						self.width_method = .unicode
-						vaxis.enable_unicode_mode()
-					}
-				}
-				else {}
+		for event in queued {
+			if event is vaxis.Winsize {
+				print(vx.resize(event))
 			}
-
+			self.update_from_vaxis(event)!
+			handled_input = true
+			dirty = true
+		}
+		queued.clear()
+		for {
+			raw := tty.poll() or { break }
+			if event := vx.handle_input(raw) {
+				if event is vaxis.Winsize {
+					print(vx.resize(event))
+				}
+				self.update_from_vaxis(event)!
+			}
 			handled_input = true
 			dirty = true
 		}
 
 		if dirty && !self.should_quit {
-			print(self.draw())
+			self.draw_window(mut vx)!
+			print(vx.render())
 			flush_stdout()
 			dirty = false
 		}
@@ -576,490 +576,14 @@ pub fn (mut self Preview) run() ! {
 	}
 }
 
-// draw renders the full TUI interface.
-pub fn (mut self Preview) draw() string {
-	width := max_int(int(self.winsize.cols), 1)
-	height := max_int(int(self.winsize.rows), 1)
-	list_width := min_int(32, width)
-	standard := self.ui_standard()
-	mut highlight := ?usize(none)
-
-	if mouse := self.mouse {
-		self.mouse = none
-		if self.mode == .normal {
-			if mouse.button == .wheel_up {
-				self.up(1)
-			}
-			if mouse.button == .wheel_down {
-				self.down(1)
-			}
-			if int(mouse.col) < list_width && int(mouse.row) < height {
-				if mouse.button == .left && mouse.type_ == .release {
-					selection := self.window + usize(mouse.row)
-					if selection < usize(self.filtered.len) {
-						self.current = selection
-					}
-				}
-				highlight = usize(mouse.row)
-			}
-		}
+fn (mut self Preview) update_from_vaxis(event vaxis.InputEvent) ! {
+	match event {
+		vaxis.Key { self.update(Event(KeyPressEvent{ key: event }))! }
+		vaxis.Mouse { self.update(Event(MouseEvent{ mouse: event }))! }
+		vaxis.ColorScheme { self.update(Event(ColorSchemeEvent{ scheme: event.scheme }))! }
+		vaxis.Winsize { self.update(Event(WinsizeEvent{ winsize: event }))! }
+		else {}
 	}
-
-	if self.filtered.len == 0 {
-		self.current = 0
-		self.window = 0
-	} else {
-		end := self.window + usize(height - 1)
-		if self.current > end {
-			self.window = self.current - usize(height) + 1
-		}
-		if self.current < self.window {
-			self.window = self.current
-		}
-		if self.window >= usize(self.filtered.len) {
-			self.window = usize(self.filtered.len - 1)
-		}
-	}
-
-	mut out := strings.new_builder(width * height * 2)
-	out.write_string(vaxis.clear_screen())
-	for row in 0 .. height {
-		self.put_segment(mut out, row, 0, width, ' '.repeat(width), standard)
-	}
-
-	for row in 0 .. height {
-		index := self.window + usize(row)
-		if index >= usize(self.filtered.len) {
-			break
-		}
-		theme := self.themes[self.filtered[index]]
-		if index == self.current {
-			self.put_segment(mut out, row, 0, list_width, ' '.repeat(list_width), self.ui_selected())
-			self.put_segment(mut out, row, 0, list_width, '❯ ', self.ui_selected())
-			self.put_link(mut out, row, 2, list_width, theme.theme, theme.to_uri(), self.ui_selected())
-			if list_width >= 2 {
-				self.put_segment(mut out, row, list_width - 2, list_width, ' ❮', self.ui_selected())
-			}
-		} else {
-			style := if highlighted := highlight {
-				if highlighted == usize(row) { self.ui_highlighted() } else { standard }
-			} else {
-				standard
-			}
-			self.put_link(mut out, row, 2, list_width, theme.theme, theme.to_uri(), style)
-		}
-	}
-
-	if self.filtered.len == 0 {
-		out.write_string(self.draw_preview(0, width, height))
-	} else if width > list_width {
-		out.write_string(self.draw_preview(list_width, width - list_width, height))
-	}
-
-	match self.mode {
-		.normal {
-			out.write_string(vaxis.hide_cursor())
-		}
-		.help {
-			self.draw_help_modal(mut out, width, height, standard)
-			out.write_string(vaxis.hide_cursor())
-		}
-		.search {
-			modal_width := min_int(max_int(width - 40, 20), max_int(width - 2, 1))
-			x := max_int((width - modal_width) / 2, 0)
-			y := max_int(height - 5, 0)
-			self.draw_box(mut out, x, y, modal_width, 3, standard)
-			child_width := max_int(modal_width - 2, 0)
-			input := self.text_input.draw_with_style_method(child_width, standard,
-				self.width_method)
-			for cell in input.cells {
-				self.put_segment(mut out, y + 1, x + 1 + int(cell.col), x + modal_width - 1, cell.text,
-					input.style)
-			}
-			if child_width > 0 {
-				out.write_string(vaxis.show_cursor(y + 1, x + 1 + int(input.cursor_col)))
-			}
-		}
-		.save {
-			theme := self.themes[self.filtered[self.current]]
-			self.draw_save_modal(mut out, width, height, theme.theme, standard)
-			out.write_string(vaxis.hide_cursor())
-		}
-	}
-
-	return out.str()
-}
-
-// draw_preview renders the theme color preview pane.
-pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string {
-	mut out := strings.new_builder(width * height)
-	if self.filtered.len == 0 {
-		text := 'No theme found!'
-		for row in 0 .. height {
-			self.put_segment(mut out, row, x_off, x_off + width, ' '.repeat(width), self.ui_standard())
-		}
-		self.put_preview_segment(mut out, max_int(height / 2 - 1, 0), x_off + max_int((width -
-			text.len) / 2, 0), x_off + width, height, text, self.ui_standard())
-		return out.str()
-	}
-
-	theme := self.themes[self.filtered[self.current]]
-	mut config := configpkg.Config.default_config()
-	config.load_file(theme.path) or {
-		standard := self.ui_standard()
-		for row in 0 .. height {
-			self.put_segment(mut out, row, x_off, x_off + width, ' '.repeat(width), standard)
-		}
-		middle := height / 2
-		text := 'Unable to open ${theme.theme} from:'
-		self.put_segment(mut out, max_int(middle - 1, 0), x_off + max_int((width -
-			text.len) / 2, 0), x_off + width, text, self.ui_err())
-		self.put_link(mut out, middle, x_off + max_int((width - theme.path.len) / 2, 0), x_off +
-			width, theme.path, theme.to_uri(), self.ui_err())
-		error_text := err.msg()
-		self.put_segment(mut out, min_int(middle + 1, max_int(height - 1, 0)), x_off + max_int((width -
-			error_text.len) / 2, 0), x_off + width, error_text, self.ui_err())
-		return out.str()
-	}
-	fg := vaxis.ColorRgb{
-		rgb: [config.foreground.r, config.foreground.g, config.foreground.b]!
-	}
-	bg := vaxis.ColorRgb{
-		rgb: [config.background.r, config.background.g, config.background.b]!
-	}
-	cursor_fg := preview_terminal_color(config.cursor_text, bg)
-	cursor_bg := preview_terminal_color(config.cursor_color, fg)
-	selection_fg := preview_terminal_color(config.selection_foreground, bg)
-	selection_bg := preview_terminal_color(config.selection_background, fg)
-	cursor := vaxis.Style{
-		fg: cursor_fg
-		bg: cursor_bg
-	}
-	standard_selection := vaxis.Style{
-		fg: selection_fg
-		bg: selection_bg
-	}
-	standard := vaxis.Style{
-		fg: fg
-		bg: bg
-	}
-	standard_bold := vaxis.Style{
-		fg:   fg
-		bg:   bg
-		bold: true
-	}
-	standard_italic := vaxis.Style{
-		fg:     fg
-		bg:     bg
-		italic: true
-	}
-	standard_bold_italic := vaxis.Style{
-		fg:     fg
-		bg:     bg
-		bold:   true
-		italic: true
-	}
-	standard_underline := vaxis.Style{
-		fg:       fg
-		bg:       bg
-		ul_style: .single
-	}
-	standard_double_underline := vaxis.Style{
-		fg:       fg
-		bg:       bg
-		ul_style: .double_
-	}
-	standard_dashed_underline := vaxis.Style{
-		fg:       fg
-		bg:       bg
-		ul_style: .dashed
-	}
-	standard_curly_underline := vaxis.Style{
-		fg:       fg
-		bg:       bg
-		ul_style: .curly
-	}
-	standard_dotted_underline := vaxis.Style{
-		fg:       fg
-		bg:       bg
-		ul_style: .dotted
-	}
-
-	for row in 0 .. height {
-		self.put_segment(mut out, row, x_off, x_off + width, ' '.repeat(width), standard)
-	}
-	self.put_link(mut out, 1, x_off + max_int((width - theme.theme.len) / 2, 0), x_off + width,
-		theme.theme, theme.to_uri(), standard_bold_italic)
-	self.put_link(mut out, 2, x_off + max_int((width - theme.path.len) / 2, 0), x_off + width,
-		theme.path, theme.to_uri(), standard)
-
-	mut next_row := 4
-	if config.diagnostics.len > 0 && next_row < height {
-		heading := 'Problems were encountered trying to load the theme:'
-		self.put_preview_segment(mut out, next_row, x_off + max_int((width - heading.len) / 2, 0),
-			x_off + width, height, heading, self.ui_err())
-		for i, diagnostic in config.diagnostics {
-			self.put_preview_segment(mut out, next_row + 2 + i, x_off + 2, x_off + width, height,
-				diagnostic.format(), self.ui_err())
-		}
-		next_row += 2 + config.diagnostics.len
-	}
-
-	for i in 0 .. 16 {
-		row := next_row + (i / 8) * 3
-		col := x_off + (i % 8) * 8
-		if row >= height || col >= x_off + width {
-			continue
-		}
-		label := if self.hex { ' ${i:02x}' } else { '${i:3}' }
-		self.put_preview_segment(mut out, row, col, x_off + width, height, label, standard)
-		palette_style := vaxis.Style{
-			fg: color_from_palette(config, i)
-			bg: bg
-		}
-		self.put_preview_segment(mut out, row, col + 4, x_off + width, height, '████', palette_style)
-		self.put_preview_segment(mut out, row + 1, col + 4, x_off + width, height, '████',
-			palette_style)
-	}
-	next_row += 6
-
-	color1 := preview_palette_style(config, 1, bg)
-	color2 := preview_palette_style(config, 2, bg)
-	color3 := preview_palette_style(config, 3, bg)
-	color4 := preview_palette_style(config, 4, bg)
-	color5 := preview_palette_style(config, 5, bg)
-	color6 := preview_palette_style(config, 6, bg)
-	color6ul := vaxis.Style{
-		fg:       color_from_palette(config, 6)
-		bg:       bg
-		ul_style: .single
-	}
-	color10 := preview_palette_style(config, 10, bg)
-	color12 := preview_palette_style(config, 12, bg)
-	color238 := preview_palette_style(config, 238, bg)
-	right := x_off + width
-	sample_bottom := min_int(next_row + 24, height)
-	self.put_preview_segments(mut out, next_row, x_off + 2, right, sample_bottom, [
-		PreviewSegment{ text: '→', style: color2 },
-		PreviewSegment{ text: ' ', style: standard },
-		PreviewSegment{ text: 'bat', style: color4 },
-		PreviewSegment{ text: ' ', style: standard },
-		PreviewSegment{ text: 'ziggzagg.zig', style: color6ul },
-	])
-	self.put_preview_segment(mut out, next_row + 1, x_off + 2, right, height,
-		'───────┬${'─'.repeat(max_int(width - 10, 0))}', color238)
-	self.put_preview_segments(mut out, next_row + 2, x_off + 2, right, sample_bottom, [
-		PreviewSegment{ text: '       │ ', style: color238 },
-		PreviewSegment{ text: 'File: ', style: standard },
-		PreviewSegment{ text: 'ziggzagg.zig', style: standard_bold },
-	])
-	self.put_preview_segment(mut out, next_row + 3, x_off + 2, right, height,
-		'───────┼${'─'.repeat(max_int(width - 10, 0))}', color238)
-	self.put_preview_segments(mut out, next_row + 4, x_off + 2, right, sample_bottom, [
-		PreviewSegment{ text: '   1   │ ', style: color238 },
-		PreviewSegment{ text: 'const', style: color5 },
-		PreviewSegment{ text: ' std ', style: standard },
-		PreviewSegment{ text: '= @import', style: color5 },
-		PreviewSegment{ text: '(', style: standard },
-		PreviewSegment{ text: '"std"', style: color10 },
-		PreviewSegment{ text: ');', style: standard },
-	])
-	self.put_preview_segment(mut out, next_row + 5, x_off + 2, right, height, '   2   │', color238)
-	self.put_preview_segments(mut out, next_row + 6, x_off + 2, right, sample_bottom, [
-		PreviewSegment{ text: '   3   │ ', style: color238 },
-		PreviewSegment{ text: 'pub ', style: color5 },
-		PreviewSegment{ text: 'fn ', style: color12 },
-		PreviewSegment{ text: 'main', style: color2 },
-		PreviewSegment{ text: '() ', style: standard },
-		PreviewSegment{ text: '!', style: color5 },
-		PreviewSegment{ text: 'void', style: color12 },
-		PreviewSegment{ text: ' {', style: standard },
-	])
-	self.put_preview_segments(mut out, next_row + 7, x_off + 2, right, sample_bottom, [
-		PreviewSegment{ text: '   4   │     ', style: color238 },
-		PreviewSegment{ text: 'const ', style: color5 },
-		PreviewSegment{ text: 'stdout ', style: standard },
-		PreviewSegment{ text: '=', style: color5 },
-		PreviewSegment{ text: ' std.Io.getStdOut().writer();', style: standard },
-	])
-	self.put_preview_segments(mut out, next_row + 8, x_off + 2, right, sample_bottom, [
-		PreviewSegment{ text: '   5   │     ', style: color238 },
-		PreviewSegment{ text: 'var ', style: color5 },
-		PreviewSegment{ text: 'i:', style: standard },
-		PreviewSegment{ text: ' usize', style: color12 },
-		PreviewSegment{ text: ' =', style: color5 },
-		PreviewSegment{ text: ' 1', style: color4 },
-		PreviewSegment{ text: ';', style: standard },
-	])
-	self.put_preview_segments(mut out, next_row + 9, x_off + 2, right, sample_bottom, [
-		PreviewSegment{ text: '   6   │     ', style: color238 },
-		PreviewSegment{ text: 'while ', style: color5 },
-		PreviewSegment{ text: '(i ', style: standard },
-		PreviewSegment{ text: '<= ', style: color5 },
-		PreviewSegment{ text: '16', style: color4 },
-		PreviewSegment{ text: ') : (i ', style: standard },
-		PreviewSegment{ text: '+= ', style: color5 },
-		PreviewSegment{ text: '1', style: color4 },
-		PreviewSegment{ text: ') {', style: standard },
-	])
-	self.put_preview_segments(mut out, next_row + 10, x_off + 2, right, sample_bottom, [
-		PreviewSegment{ text: '   7   │         ', style: color238 },
-		PreviewSegment{ text: 'if ', style: color5 },
-		PreviewSegment{ text: '(i ', style: standard },
-		PreviewSegment{ text: '% ', style: color5 },
-		PreviewSegment{ text: '15 ', style: color4 },
-		PreviewSegment{ text: '== ', style: color5 },
-		PreviewSegment{ text: '0', style: color4 },
-		PreviewSegment{ text: ') {', style: standard },
-	])
-	self.put_preview_segments(mut out, next_row + 11, x_off + 2, right, sample_bottom, [
-		PreviewSegment{ text: '   8   │             ', style: color238 },
-		PreviewSegment{ text: 'try ', style: color5 },
-		PreviewSegment{ text: 'stdout.writeAll(', style: standard },
-		PreviewSegment{ text: '"ZiggZagg', style: color10 },
-		PreviewSegment{ text: '\\n', style: color12 },
-		PreviewSegment{ text: '"', style: color10 },
-		PreviewSegment{ text: ');', style: standard },
-	])
-	self.put_preview_segments(mut out, next_row + 12, x_off + 2, right, sample_bottom, [
-		PreviewSegment{ text: '   9   │         ', style: color238 },
-		PreviewSegment{ text: '} ', style: standard },
-		PreviewSegment{ text: 'else if ', style: color5 },
-		PreviewSegment{ text: '(i ', style: standard },
-		PreviewSegment{ text: '% ', style: color5 },
-		PreviewSegment{ text: '3 ', style: color4 },
-		PreviewSegment{ text: '== ', style: color5 },
-		PreviewSegment{ text: '0', style: color4 },
-		PreviewSegment{ text: ') {', style: standard },
-	])
-	self.put_preview_segments(mut out, next_row + 13, x_off + 2, right, sample_bottom, [
-		PreviewSegment{ text: '  10   │             ', style: color238 },
-		PreviewSegment{ text: 'try ', style: color5 },
-		PreviewSegment{ text: 'stdout.writeAll(', style: standard },
-		PreviewSegment{ text: '"Zigg', style: color10 },
-		PreviewSegment{ text: '\\n', style: color12 },
-		PreviewSegment{ text: '"', style: color10 },
-		PreviewSegment{ text: ');', style: standard },
-	])
-	self.put_preview_segments(mut out, next_row + 14, x_off + 2, right, sample_bottom, [
-		PreviewSegment{ text: '  11   │         ', style: color238 },
-		PreviewSegment{ text: '} ', style: standard },
-		PreviewSegment{ text: 'else if ', style: color5 },
-		PreviewSegment{ text: '(i ', style: standard },
-		PreviewSegment{ text: '% ', style: color5 },
-		PreviewSegment{ text: '5 ', style: color4 },
-		PreviewSegment{ text: '== ', style: color5 },
-		PreviewSegment{ text: '0', style: color4 },
-		PreviewSegment{ text: ') {', style: standard },
-	])
-	self.put_preview_segments(mut out, next_row + 15, x_off + 2, right, sample_bottom, [
-		PreviewSegment{ text: '  12   │             ', style: color238 },
-		PreviewSegment{ text: 'try ', style: color5 },
-		PreviewSegment{ text: 'stdout.writeAll(', style: standard },
-		PreviewSegment{ text: '"Zagg', style: color10 },
-		PreviewSegment{ text: '\\n', style: color12 },
-		PreviewSegment{ text: '"', style: color10 },
-		PreviewSegment{ text: ');', style: standard },
-	])
-	self.put_preview_segments(mut out, next_row + 16, x_off + 2, right, sample_bottom, [
-		PreviewSegment{ text: '  13   │         ', style: color238 },
-		PreviewSegment{ text: '} ', style: standard },
-		PreviewSegment{ text: 'else ', style: color5 },
-		PreviewSegment{ text: '{', style: standard },
-	])
-	self.put_preview_segments(mut out, next_row + 17, x_off + 2, right, sample_bottom, [
-		PreviewSegment{ text: '  14   │             ', style: color238 },
-		PreviewSegment{ text: 'try ', style: color5 },
-		PreviewSegment{ text: 'stdout.print("{d}\\n", .{i})', style: standard_selection },
-		PreviewSegment{ text: ';', style: cursor },
-	])
-	self.put_preview_segments(mut out, next_row + 18, x_off + 2, right, sample_bottom, [
-		PreviewSegment{ text: '  15   │         ', style: color238 },
-		PreviewSegment{ text: '}', style: standard },
-	])
-	self.put_preview_segments(mut out, next_row + 19, x_off + 2, right, sample_bottom, [
-		PreviewSegment{ text: '  16   │     ', style: color238 },
-		PreviewSegment{ text: '}', style: standard },
-	])
-	self.put_preview_segments(mut out, next_row + 20, x_off + 2, right, sample_bottom, [
-		PreviewSegment{ text: '  17   │ ', style: color238 },
-		PreviewSegment{ text: '}', style: standard },
-	])
-	self.put_preview_segment(mut out, next_row + 21, x_off + 2, right, height,
-		'───────┴${'─'.repeat(max_int(width - 10, 0))}', color238)
-	self.put_preview_segments(mut out, next_row + 22, x_off + 2, right, sample_bottom, [
-		PreviewSegment{ text: 'ghostty ', style: color6 },
-		PreviewSegment{ text: 'on ', style: standard },
-		PreviewSegment{ text: ' main ', style: color4 },
-		PreviewSegment{ text: '[+] ', style: color1 },
-		PreviewSegment{ text: 'via ', style: standard },
-		PreviewSegment{ text: ' v0.13.0 ', style: color3 },
-		PreviewSegment{ text: 'via ', style: standard },
-		PreviewSegment{ text: '  impure (ghostty-env)', style: color4 },
-	])
-	self.put_preview_segments(mut out, next_row + 23, x_off + 2, right, sample_bottom, [
-		PreviewSegment{ text: '✦ ', style: color4 },
-		PreviewSegment{ text: 'at ', style: standard },
-		PreviewSegment{ text: '10:36:15 ', style: color3 },
-		PreviewSegment{ text: '→', style: color2 },
-	])
-	next_row += 24
-
-	words := lorem_ipsum.split_any(' \n')
-	mut row := next_row + 1
-	mut col := x_off + 2
-	mut word_index := 0
-	for row < height && words.len > 0 {
-		word := words[word_index]
-		word_index = (word_index + 1) % words.len
-		word_width := word.len
-		if col + word_width > x_off + width {
-			row++
-			col = x_off + 2
-		}
-		if row >= height {
-			break
-		}
-		style := match word {
-			'ipsum' {
-				vaxis.Style{
-					fg: color_from_palette(config, 2)
-					bg: bg
-				}
-			}
-			'consectetur' {
-				standard_bold
-			}
-			'reprehenderit' {
-				standard_italic
-			}
-			'Praesent' {
-				standard_bold_italic
-			}
-			'auctor' {
-				standard_underline
-			}
-			'dui' {
-				standard_double_underline
-			}
-			'erat' {
-				standard_dashed_underline
-			}
-			'enim' {
-				standard_dotted_underline
-			}
-			'odio' {
-				standard_curly_underline
-			}
-			else {
-				standard
-			}
-		}
-
-		self.put_preview_segment(mut out, row, col, x_off + width, height, word, style)
-		col += word_width + 1
-	}
-	return out.str()
 }
 
 struct PreviewSegment {
@@ -1086,170 +610,6 @@ fn preview_palette_style(config configpkg.Config, index int, bg vaxis.Color) vax
 	return vaxis.Style{
 		fg: color_from_palette(config, index)
 		bg: bg
-	}
-}
-
-fn (self &Preview) put_preview_segment(mut out strings.Builder, row int, col int, right int, bottom int, text string, style vaxis.Style) {
-	if row >= bottom {
-		return
-	}
-	self.put_segment(mut out, row, col, right, text, style)
-}
-
-fn (self &Preview) put_preview_segments(mut out strings.Builder, row int, col int, right int, bottom int, segments []PreviewSegment) {
-	if row < 0 || row >= bottom || col < 0 || col >= right {
-		return
-	}
-	// Match pinned Window.print(.grapheme): segments share one cursor, widths
-	// come from the window's negotiated method, and wrapping uses its left edge.
-	left := col - 2
-	mut current_row := row
-	mut current_col := col
-	for segment in segments {
-		mut offset := 0
-		for offset < segment.text.len {
-			if current_col >= right {
-				current_row++
-				current_col = left
-			}
-			if current_row >= bottom {
-				return
-			}
-			run_row := current_row
-			run_col := current_col
-			mut run := strings.new_builder(segment.text.len - offset)
-			for offset < segment.text.len && current_col < right {
-				length := vaxis.first_grapheme_byte_length(segment.text[offset..])
-				if length == 0 {
-					return
-				}
-				grapheme := segment.text[offset..offset + length]
-				offset += length
-				if grapheme == '\n' {
-					current_row++
-					current_col = left
-					break
-				}
-				w := int(vaxis.gwidth(grapheme, self.width_method))
-				if w == 0 {
-					continue
-				}
-				run.write_string(grapheme)
-				current_col += w
-			}
-			run_text := run.str()
-			if run_text.len > 0 {
-				out.write_string(vaxis.position(run_row, run_col))
-				out.write_string(vaxis.styled(run_text, segment.style))
-			}
-		}
-	}
-}
-
-fn (self &Preview) put_segment(mut out strings.Builder, row int, col int, right int, text string, style vaxis.Style) {
-	if row < 0 || col < 0 || col >= right {
-		return
-	}
-	visible := vaxis.truncate_with_method(text, right - col, self.width_method)
-	if visible.len == 0 {
-		return
-	}
-	out.write_string(vaxis.position(row, col))
-	out.write_string(vaxis.styled(visible, style))
-}
-
-fn (self &Preview) put_link(mut out strings.Builder, row int, col int, right int, text string, uri string, style vaxis.Style) {
-	if row < 0 || col < 0 || col >= right {
-		return
-	}
-	visible := vaxis.truncate_with_method(text, right - col, self.width_method)
-	if visible.len == 0 {
-		return
-	}
-	out.write_string(vaxis.position(row, col))
-	out.write_string(vaxis.hyperlink(visible, uri, style))
-}
-
-fn (self &Preview) draw_box(mut out strings.Builder, x int, y int, width int, height int, style vaxis.Style) {
-	if width < 2 || height < 2 {
-		return
-	}
-	self.put_segment(mut out, y, x, x + width, '┌${'─'.repeat(width - 2)}┐', style)
-	for row in y + 1 .. y + height - 1 {
-		self.put_segment(mut out, row, x, x + width, '│${' '.repeat(width - 2)}│', style)
-	}
-	self.put_segment(mut out, y + height - 1, x, x + width, '└${'─'.repeat(width - 2)}┘', style)
-}
-
-fn (self &Preview) draw_help_modal(mut out strings.Builder, screen_width int, screen_height int, style vaxis.Style) {
-	help := [
-		HelpEntry{ keys: '^C, q, ESC', help: 'Quit.' },
-		HelpEntry{ keys: 'F1, ?, ^H', help: 'Toggle help window.' },
-		HelpEntry{ keys: 'f', help: 'Cycle through theme filters.' },
-		HelpEntry{ keys: 'k, ↑', help: 'Move up 1 theme.' },
-		HelpEntry{ keys: 'ScrollUp', help: 'Move up 1 theme.' },
-		HelpEntry{ keys: 'PgUp', help: 'Move up 20 themes.' },
-		HelpEntry{ keys: 'j, ↓', help: 'Move down 1 theme.' },
-		HelpEntry{ keys: 'ScrollDown', help: 'Move down 1 theme.' },
-		HelpEntry{ keys: 'PgDown', help: 'Move down 20 themes.' },
-		HelpEntry{ keys: 'h, x', help: 'Show palette numbers in hexadecimal.' },
-		HelpEntry{ keys: 'd', help: 'Show palette numbers in decimal.' },
-		HelpEntry{ keys: 'c', help: 'Copy theme name to the clipboard.' },
-		HelpEntry{ keys: 'C', help: 'Copy theme path to the clipboard.' },
-		HelpEntry{ keys: 'Home', help: 'Go to the start of the list.' },
-		HelpEntry{ keys: 'End', help: 'Go to the end of the list.' },
-		HelpEntry{ keys: '/', help: 'Start search.' },
-		HelpEntry{ keys: '^X, ^/', help: 'Clear search.' },
-		HelpEntry{ keys: '⏎', help: 'Save theme or close search window.' },
-		HelpEntry{ keys: 'w', help: 'Write theme to auto config file.' },
-	]
-	width := min_int(60, max_int(screen_width - 2, 1))
-	height := min_int(22, max_int(screen_height - 2, 1))
-	x := max_int((screen_width - width) / 2, 0)
-	y := max_int((screen_height - height) / 2, 0)
-	self.draw_box(mut out, x, y, width, height, style)
-	for i, entry in help {
-		if i + 1 >= height - 1 {
-			break
-		}
-		self.put_segment(mut out, y + i + 1, x + 2, x + width - 1, entry.keys, style)
-		self.put_segment(mut out, y + i + 1, x + 15, x + width - 1, '—', style)
-		self.put_segment(mut out, y + i + 1, x + 17, x + width - 1, entry.help, style)
-	}
-}
-
-struct HelpEntry {
-	keys string
-	help string
-}
-
-fn (self &Preview) draw_save_modal(mut out strings.Builder, screen_width int, screen_height int, theme string, style vaxis.Style) {
-	instructions := [
-		'To apply this theme, add the following line to your Ghostty configuration:',
-		'',
-		'theme = ${theme}',
-		'',
-		'Save the configuration file and then reload it to apply the new theme.',
-		'',
-		"Or press 'w' to write an auto theme file to your system's preferred default config path.",
-		'Then add the following line to your Ghostty configuration and reload:',
-		'',
-		'config-file = ?auto/theme.ghostty',
-		'',
-		'For more details on configuration and themes, visit the Ghostty documentation:',
-		'',
-		'https://ghostty.org/docs/config/reference',
-	]
-	width := min_int(92, max_int(screen_width - 2, 1))
-	height := min_int(17, max_int(screen_height - 2, 1))
-	x := max_int((screen_width - width) / 2, 0)
-	y := max_int((screen_height - height) / 2, 0)
-	self.draw_box(mut out, x, y, width, height, style)
-	for i, line in instructions {
-		if i + 1 >= height - 1 {
-			break
-		}
-		self.put_segment(mut out, y + i + 1, x + 2, x + width - 1, line, style)
 	}
 }
 

@@ -697,27 +697,21 @@ none, browser, action, ipc. dependencies: zf 0.10.3 ranking/highlighting.
 
 ## Remaining known divergences (NOT yet fixed)
 
-- **vaxis screen and terminal session:** The theme preview still writes styled
-  ANSI segments directly rather than drawing into the translated `Cell`,
-  `Screen`, and `Window` values and using the session render diff.
-  The translated session now has terminal capability and option state, pinned
+- **vaxis screen and terminal session:** The theme preview now draws into the
+  translated `Cell`, `Screen`, and `Window` values and uses the session render
+  diff. The translated session has terminal capability and option state, pinned
   query bytes, feature enablement, resize/reset control, pixel-mouse
   translation, and a cell render diff with source style, link, image placement,
   scaling, cursor, and synchronized-output sequences. Clipboard, title,
   notification, color query/set, scheme subscription, and Kitty image
   transmission/control sequences are now translated, along with image cell
   sizing and placement, working-directory control, pretty printing, and
-  capability/F3-probe event interception. Its synchronous query wait, image
-  decoding/transcoding and high-level loading, and the threaded TTY event loop
-  remain absent.
-  The preview now queries and subscribes to color-scheme updates, but its
-  session/render path is not yet a complete translation of the pinned vaxis
-  `Vaxis`, `Loop`, and `Tty` implementations. Pinned vaxis width data and all
-  three `gwidth.Method` algorithms are now available, and the preview selects
-  Unicode width after a positive mode 2027 response. The rest of pinned
-  `queryTerminal` synchronous discovery and the preview's session-driven
-  render path remain to translate. The preview
-  still has no retained screen for clipping or diff rendering.
+  capability/F3-probe event interception. The preview sends the pinned
+  capability query, waits up to one second for DA1, enables detected features,
+  and renders the retained screen. Its polling TTY remains a synchronous V
+  adapter rather than the pinned threaded `Loop`/`Tty` implementation; image
+  decoding/transcoding and high-level loading also remain absent. Pinned vaxis
+  width data and all three `gwidth.Method` algorithms are available.
 
 These are confirmed structural boundaries or larger refactors. The absence of
 an item here does not mean its full module has been certified yet.
