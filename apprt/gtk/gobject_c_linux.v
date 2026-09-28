@@ -182,6 +182,8 @@ fn C.g_object_weak_ref(object GObject, notify voidptr, data voidptr)
 
 fn C.g_object_set(object GObject, first_property_name &char, ...)
 
+fn C.g_object_get(object GObject, first_property_name &char, ...)
+
 fn C.g_object_set_data(object GObject, key &char, data voidptr)
 
 fn C.g_object_get_data(object GObject, key &char) voidptr

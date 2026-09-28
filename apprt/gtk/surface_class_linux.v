@@ -455,7 +455,7 @@ fn surface_size_boxed_copy(value voidptr) voidptr {
 	}
 	size := unsafe { &Size(value) }
 	return voidptr(&Size{
-		width: size.width
+		width:  size.width
 		height: size.height
 	})
 }
@@ -480,8 +480,8 @@ fn font_desired_size_boxed_copy(value voidptr) voidptr {
 	size := unsafe { &font.DesiredSize(value) }
 	return voidptr(&font.DesiredSize{
 		points: size.points
-		xdpi: size.xdpi
-		ydpi: size.ydpi
+		xdpi:   size.xdpi
+		ydpi:   size.ydpi
 	})
 }
 
@@ -549,7 +549,9 @@ fn terminal_surface_get_property(obj voidptr, property_id u32, value voidptr, ps
 	priv := terminal_surface_priv(obj)
 	if isnil(priv.wrapper) {
 		match property_id {
-			surface_prop_bell_ringing, surface_prop_child_exited, surface_prop_error, surface_prop_focused, surface_prop_mouse_hidden, surface_prop_zoom, surface_prop_is_split, surface_prop_readonly {
+			surface_prop_bell_ringing, surface_prop_child_exited, surface_prop_error,
+			surface_prop_focused, surface_prop_mouse_hidden, surface_prop_zoom,
+			surface_prop_is_split, surface_prop_readonly {
 				C.g_value_set_boolean(value, 0)
 			}
 			surface_prop_mouse_shape {
@@ -558,10 +560,12 @@ fn terminal_surface_get_property(obj voidptr, property_id u32, value voidptr, ps
 			surface_prop_config {
 				C.g_value_set_object(value, unsafe { nil })
 			}
-			surface_prop_default_size, surface_prop_font_size_request, surface_prop_key_sequence, surface_prop_key_table, surface_prop_min_size {
+			surface_prop_default_size, surface_prop_font_size_request, surface_prop_key_sequence,
+			surface_prop_key_table, surface_prop_min_size {
 				C.g_value_set_boxed(value, unsafe { nil })
 			}
-			surface_prop_mouse_hover_url, surface_prop_pwd, surface_prop_title, surface_prop_title_override {
+			surface_prop_mouse_hover_url, surface_prop_pwd, surface_prop_title,
+			surface_prop_title_override {
 				C.g_value_set_string(value, &char(unsafe { nil }))
 			}
 			surface_prop_hadjustment, surface_prop_vadjustment {
@@ -729,11 +733,19 @@ fn terminal_surface_set_property(obj voidptr, property_id u32, value voidptr, ps
 		}
 		surface_prop_pwd {
 			text := C.g_value_get_string(value)
-			self.set_pwd(if isnil(text) { ?string(none) } else { ?string(unsafe { cstring_to_vstring(text) }) })
+			self.set_pwd(if isnil(text) {
+				?string(none)
+			} else {
+				?string(unsafe { cstring_to_vstring(text) })
+			})
 		}
 		surface_prop_title {
 			text := C.g_value_get_string(value)
-			self.set_title(if isnil(text) { ?string(none) } else { ?string(unsafe { cstring_to_vstring(text) }) })
+			self.set_title(if isnil(text) {
+				?string(none)
+			} else {
+				?string(unsafe { cstring_to_vstring(text) })
+			})
 		}
 		surface_prop_title_override {
 			text := C.g_value_get_string(value)
@@ -937,9 +949,9 @@ pub fn terminal_surface_get_type() GType {
 		mut query := C.GTypeQuery{}
 		C.g_type_query(parent, &query)
 		info := C.GTypeInfo{
-			class_size: u16(query.class_size)
+			class_size:    u16(query.class_size)
 			instance_size: u16(query.instance_size)
-			class_init: voidptr(terminal_surface_class_init)
+			class_init:    voidptr(terminal_surface_class_init)
 			instance_init: voidptr(terminal_surface_instance_init)
 		}
 		g_terminal_surface_type = C.g_type_register_static(parent, c'GhosttySurface', &info, 0)
@@ -995,11 +1007,11 @@ pub mut:
 	widget GtkWidget = unsafe { nil }
 
 	// Owning GTK objects and containers.
-	app           &Application = unsafe { nil }
-	split_tree    &SplitTreeWidget = unsafe { nil }
+	app           &Application            = unsafe { nil }
+	split_tree    &SplitTreeWidget        = unsafe { nil }
 	context       apprt.NewSurfaceContext = .window
-	terminal_page GtkWidget = unsafe { nil }
-	error_page    GtkWidget = unsafe { nil }
+	terminal_page GtkWidget               = unsafe { nil }
+	error_page    GtkWidget               = unsafe { nil }
 
 	// The GLArea that renders the actual surface (template child).
 	gl_area GtkGLArea = unsafe { nil }
@@ -1009,17 +1021,17 @@ pub mut:
 
 	// URL hover labels and the right-click context menu from the surface
 	// blueprint.
-	url_left             GtkLabel = unsafe { nil }
-	url_right            GtkLabel = unsafe { nil }
-	context_menu         GtkPopover = unsafe { nil }
-	readonly_revealer    GtkWidget = unsafe { nil }
-	progress_bar_overlay GtkWidget = unsafe { nil }
-	bell_revealer        GtkWidget = unsafe { nil }
-	resize_overlay       &ResizeOverlay = unsafe { nil }
-	search_overlay       &SearchOverlay = unsafe { nil }
-	key_state_overlay    &KeyStateOverlay = unsafe { nil }
+	url_left             GtkLabel            = unsafe { nil }
+	url_right            GtkLabel            = unsafe { nil }
+	context_menu         GtkPopover          = unsafe { nil }
+	readonly_revealer    GtkWidget           = unsafe { nil }
+	progress_bar_overlay GtkWidget           = unsafe { nil }
+	bell_revealer        GtkWidget           = unsafe { nil }
+	resize_overlay       &ResizeOverlay      = unsafe { nil }
+	search_overlay       &SearchOverlay      = unsafe { nil }
+	key_state_overlay    &KeyStateOverlay    = unsafe { nil }
 	child_exited_overlay &SurfaceChildExited = unsafe { nil }
-	unfocused_revealer   GtkWidget = unsafe { nil }
+	unfocused_revealer   GtkWidget           = unsafe { nil }
 
 	// The core surface backing this GTK surface. This starts out nil because it
 	// can't be initialized until there is a realized GLArea. In ghostty this is
@@ -1114,11 +1126,11 @@ pub mut:
 	action_group GSimpleActionGroup = unsafe { nil }
 
 	// Gtk.Scrollable interface adjustments.
-	hadj              GtkAdjustment = unsafe { nil }
-	vadj              GtkAdjustment = unsafe { nil }
+	hadj              GtkAdjustment       = unsafe { nil }
+	vadj              GtkAdjustment       = unsafe { nil }
 	hscroll_policy    GtkScrollablePolicy = .natural
 	vscroll_policy    GtkScrollablePolicy = .natural
-	vadj_signal_group GSignalGroup = unsafe { nil }
+	vadj_signal_group GSignalGroup        = unsafe { nil }
 
 	// How much pending horizontal scroll we have.
 	pending_horizontal_scroll       f64
@@ -1897,9 +1909,9 @@ pub fn (mut self SurfaceWidget) key_event(action input.KeyAction, event GdkEvent
 		if self.has_core() {
 			ime_point := self.core_surface.ime_point()
 			rect := C.GdkRectangle{
-				x: int(ime_point.x)
-				y: int(ime_point.y)
-				width: 1
+				x:      int(ime_point.x)
+				y:      int(ime_point.y)
+				width:  1
 				height: 1
 			}
 			C.gtk_im_context_set_cursor_location(self.im_context, &rect)
@@ -2002,12 +2014,12 @@ pub fn (mut self SurfaceWidget) key_event(action input.KeyAction, event GdkEvent
 	}
 	mut surface := self.core_surface
 	effect := surface.key_callback(core.KeyEvent{
-		action: core_key_action(action)
-		key: physical_key
-		mods: mods
-		consumed_mods: consumed_mods
-		composing: self.im_composing
-		utf8: utf8
+		action:              core_key_action(action)
+		key:                 physical_key
+		mods:                mods
+		consumed_mods:       consumed_mods
+		composing:           self.im_composing
+		utf8:                utf8
 		unshifted_codepoint: unshifted_codepoint
 	}) or {
 		log.error('error in key callback err=${err}')
@@ -2168,9 +2180,9 @@ pub fn (mut self SurfaceWidget) im_commit(str string) {
 	// Send the text with an invalid key (no PTY encoding for the key itself).
 	surface.key_callback(core.KeyEvent{
 		action: .press
-		key: .unidentified
-		mods: input.Mods{}
-		utf8: str
+		key:    .unidentified
+		mods:   input.Mods{}
+		utf8:   str
 	}) or {
 		log.warn('error in key callback err=${err}')
 	}
@@ -2235,9 +2247,9 @@ pub fn (mut self SurfaceWidget) gc_mouse_down(event GdkEvent, button u32, x f64,
 		C.g_signal_emit_by_name(self.widget, c'menu')
 		if !isnil(self.context_menu) {
 			rect := C.GdkRectangle{
-				x: int(x)
-				y: int(y)
-				width: 1
+				x:      int(x)
+				y:      int(y)
+				width:  1
 				height: 1
 			}
 			C.gtk_popover_set_pointing_to(self.context_menu, &rect)
@@ -2548,7 +2560,7 @@ pub fn (mut self SurfaceWidget) glarea_resize(width int, height int) {
 
 	// Store our cached size.
 	self.size = apprt.SurfaceSize{
-		width: u32(width)
+		width:  u32(width)
 		height: u32(height)
 	}
 
@@ -2698,22 +2710,22 @@ fn (mut self SurfaceWidget) init_surface() ! {
 	mut surface := &core.Surface{}
 	mut surface_ref := &core.SurfaceRef{
 		core_surface: surface
-		rt_app: &self.app.runtime_bridge
+		rt_app:       &self.app.runtime_bridge
 	}
 	self.core_surface = surface
 	self.core_surface_ref = surface_ref
 	self.core_runtime_surface = apprt.RuntimeSurface{
-		user_data: self
-		close_fn: surface_core_close_cb
-		content_scale_fn: surface_core_content_scale_cb
-		size_fn: surface_core_size_cb
-		cursor_pos_fn: surface_core_cursor_pos_cb
-		title_fn: surface_core_title_cb
-		set_clipboard_fn: surface_core_set_clipboard_cb
+		user_data:             self
+		close_fn:              surface_core_close_cb
+		content_scale_fn:      surface_core_content_scale_cb
+		size_fn:               surface_core_size_cb
+		cursor_pos_fn:         surface_core_cursor_pos_cb
+		title_fn:              surface_core_title_cb
+		set_clipboard_fn:      surface_core_set_clipboard_cb
 		supports_clipboard_fn: surface_core_supports_clipboard_cb
-		clipboard_request_fn: surface_core_clipboard_request_cb
-		default_env_fn: surface_core_default_env_cb
-		linux_cgroup: self.cgroup_path
+		clipboard_request_fn:  surface_core_clipboard_request_cb
+		default_env_fn:        surface_core_default_env_cb
+		linux_cgroup:          self.cgroup_path
 	}
 
 	mut core_app := unsafe { self.app.core_app }
@@ -2875,7 +2887,7 @@ pub fn (mut self SurfaceWidget) clipboard_request(clipboard_type apprt.Clipboard
 
 	request := &ClipboardReadRequest{
 		surface: self
-		state: state
+		state:   state
 	}
 	self.pending_clipboard_reads << request
 	object_ref(self.widget)
@@ -2968,8 +2980,6 @@ fn (mut self SurfaceWidget) clipboard_dialog_for_object(obj GObject) ?&Clipboard
 fn (mut self SurfaceWidget) finish_clipboard_dialog(dialog &ClipboardConfirmationDialog) {
 	for i, pending in self.pending_clipboard_dialogs {
 		if pending == dialog {
-			mut owned := self.pending_clipboard_dialogs[i]
-			owned.dispose()
 			self.pending_clipboard_dialogs.delete(i)
 			return
 		}
@@ -2983,10 +2993,19 @@ fn surface_clipboard_confirmation_confirm_cb(obj GObject, remember int, data voi
 	mut self := unsafe { &SurfaceWidget(data) }
 	mut dialog := self.clipboard_dialog_for_object(obj) or { return }
 	request := dialog.get_request() or { return }
-	text := dialog.text
 	defer {
 		self.finish_clipboard_dialog(dialog)
 	}
+	text_buffer := dialog.get_clipboard_contents() or { return }
+	mut text_ptr := &char(unsafe { nil })
+	C.g_object_get(GObject(text_buffer), c'text', &text_ptr, &char(unsafe { nil }))
+	if isnil(text_ptr) {
+		return
+	}
+	defer {
+		C.g_free(text_ptr)
+	}
+	text := unsafe { cstring_to_vstring(text_ptr) }
 	if !self.has_core() {
 		return
 	}
@@ -3588,25 +3607,25 @@ pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &C
 	C.g_object_ref_sink(GObject(error_page))
 
 	mut w := &SurfaceWidget{
-		widget: GtkWidget(obj)
-		app: window.app
-		split_tree: split_tree
-		config: config_ref(config)
-		gl_area: gl_area
-		im_context: C.gtk_im_multicontext_new()
-		terminal_page: terminal_page
-		error_page: error_page
-		url_left: url_left
-		url_right: url_right
-		context_menu: context_menu
-		readonly_revealer: readonly_revealer
+		widget:               GtkWidget(obj)
+		app:                  window.app
+		split_tree:           split_tree
+		config:               config_ref(config)
+		gl_area:              gl_area
+		im_context:           C.gtk_im_multicontext_new()
+		terminal_page:        terminal_page
+		error_page:           error_page
+		url_left:             url_left
+		url_right:            url_right
+		context_menu:         context_menu
+		readonly_revealer:    readonly_revealer
 		progress_bar_overlay: progress_bar_overlay
-		bell_revealer: bell_revealer
-		resize_overlay: resize_overlay
-		search_overlay: search_overlay
-		key_state_overlay: key_state_overlay
+		bell_revealer:        bell_revealer
+		resize_overlay:       resize_overlay
+		search_overlay:       search_overlay
+		key_state_overlay:    key_state_overlay
 		child_exited_overlay: child_exited_overlay
-		unfocused_revealer: unfocused_revealer
+		unfocused_revealer:   unfocused_revealer
 	}
 	mut native_priv := terminal_surface_priv(obj)
 	native_priv.wrapper = voidptr(w)

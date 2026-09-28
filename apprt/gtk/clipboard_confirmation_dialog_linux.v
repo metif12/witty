@@ -16,18 +16,16 @@ module gtk
 // The GObject class registration (`defineClass`), the four PROPERTIES, the
 // `.ui` template + child bindings + template callbacks, and the
 // `confirm`/`deny` SIGNALS are hand-expanded below onto the raw GObject/GTK C
-// API. The V struct `ClipboardConfirmationDialog` keeps the translated private
-// fields.
+// API. The V struct `ClipboardConfirmationDialog` retains only the native
+// instance; property state lives in the registered GObject private data.
 // The real LOGIC — the request -> heading/body text (prop_request), the blur /
 // reveal / hide widget-state toggles, and the response-id -> signal routing
 // (with the remember flag) — is translated directly.
 //
 // NOTE(types): ghostty's `request` is a boxed `?*apprt.ClipboardRequest` and
-// `clipboard-contents` is an object `?*gtk.TextBuffer`. witty's request is a
-// plain V struct with no boxed GType, so the `request` property is installed
-// against `G_TYPE_POINTER`; `clipboard-contents` is installed against
-// `G_TYPE_OBJECT`. The 1.4 blueprint (with the AdwSwitchRow remember switch) is
-// used — the newest — matching `supports_switch_row()` at runtime.
+// `clipboard-contents` is an object `?*gtk.TextBuffer`. The V sum type cannot
+// be exposed to GLib directly, so its boxed payload is the equivalent compact
+// tag/clipboard projection registered under Ghostty's exact boxed type name.
 
 import apprt
 
@@ -55,18 +53,8 @@ fn C.gtk_widget_set_sensitive(widget GtkWidget, sensitive int)
 
 fn C.adw_switch_row_get_active(row AdwSwitchRow) int
 
-fn C.gtk_text_view_set_buffer(text_view GtkTextView, buffer GtkTextBuffer)
-
 // Template-callback binding.
 fn C.gtk_widget_class_bind_template_callback_full(widget_class voidptr, callback_name &char, callback_symbol voidptr)
-
-// GValue pointer accessors + a pointer GParamSpec (for the boxed-less request
-// property). Not declared in gobject_c_linux.v.
-fn C.g_value_get_pointer(value voidptr) voidptr
-
-fn C.g_value_set_pointer(value voidptr, v_pointer voidptr)
-
-fn C.g_param_spec_pointer(name &char, nick &char, blurb &char, flags int) &C.GParamSpec
 
 // --- GObject class registration -------------------------------------------
 // Hand-expansion of ghostty's `gobject.ext.defineClass` for
@@ -75,8 +63,9 @@ fn C.g_param_spec_pointer(name &char, nick &char, blurb &char, flags int) &C.GPa
 // `confirm`/`deny` signals (each carrying the remember bool), private data, and
 // dispose + finalize vfuncs.
 
-// GObject fundamental types used for the property pspecs.
-// G_TYPE_BOOLEAN = 5 << 2, G_TYPE_POINTER = 17 << 2.
+// GObject fundamental type used for the signal/property declarations.
+// G_TYPE_BOOLEAN = 5 << 2. G_TYPE_POINTER remains module-visible because the
+// global-shortcuts signal uses it as a parameter type.
 const g_type_boolean = GType(5 << 2)
 const g_type_pointer = GType(17 << 2)
 
@@ -182,6 +171,91 @@ const clipboard_confirmation_dialog_ui = '<?xml version="1.0" encoding="UTF-8"?>
 </interface>
 '
 
+// This is the sole fragment added by Ghostty's 1.4 Blueprint. Removing it
+// yields the compiled 1.0 template selected when SwitchRow is unavailable.
+const clipboard_confirmation_dialog_switch_row_ui = '        <child>
+          <object class="AdwSwitchRow" id="remember_choice">
+            <style>
+              <class name="card"/>
+            </style>
+            <property name="visible" bind-source="GhosttyClipboardConfirmationDialog" bind-property="can-remember" bind-flags="sync-create"/>
+            <property name="title" translatable="yes">Remember choice for this split</property>
+            <property name="subtitle" translatable="yes">Reload configuration to show this prompt again</property>
+          </object>
+        </child>
+'
+
+// ClipboardRequestBox is the scalar boxed representation of Ghostty's tagged
+// ClipboardRequest union. GObject treats boxed values as opaque; conversions
+// at the V boundary preserve the exact active arm and its clipboard payload.
+struct ClipboardRequestBox {
+mut:
+	tag       apprt.ClipboardRequestType
+	clipboard apprt.Clipboard
+}
+
+__global g_clipboard_request_boxed_type = GType(0)
+
+fn clipboard_request_box(request apprt.ClipboardRequest) ClipboardRequestBox {
+	return match request {
+		apprt.ClipboardRequestPaste {
+			ClipboardRequestBox{
+				tag:       .paste
+				clipboard: .standard
+			}
+		}
+		apprt.ClipboardRequestOsc52Read {
+			ClipboardRequestBox{
+				tag:       .osc_52_read
+				clipboard: request.clipboard
+			}
+		}
+		apprt.ClipboardRequestOsc52Write {
+			ClipboardRequestBox{
+				tag:       .osc_52_write
+				clipboard: request.clipboard
+			}
+		}
+	}
+}
+
+fn (request &ClipboardRequestBox) value() apprt.ClipboardRequest {
+	return match request.tag {
+		.paste { apprt.ClipboardRequestPaste{} }
+		.osc_52_read { apprt.ClipboardRequestOsc52Read{ clipboard: request.clipboard } }
+		.osc_52_write { apprt.ClipboardRequestOsc52Write{ clipboard: request.clipboard } }
+	}
+}
+
+fn clipboard_request_boxed_copy(value voidptr) voidptr {
+	if isnil(value) {
+		return unsafe { nil }
+	}
+	source := unsafe { &ClipboardRequestBox(value) }
+	result := C.g_malloc0(sizeof(ClipboardRequestBox))
+	if isnil(result) {
+		return unsafe { nil }
+	}
+	mut copy := unsafe { &ClipboardRequestBox(result) }
+	copy.tag = source.tag
+	copy.clipboard = source.clipboard
+	return result
+}
+
+fn clipboard_request_boxed_free(value voidptr) {
+	if !isnil(value) {
+		C.g_free(value)
+	}
+}
+
+fn clipboard_request_boxed_get_type() GType {
+	if g_clipboard_request_boxed_type == GType(0) {
+		g_clipboard_request_boxed_type = C.g_boxed_type_register_static(c'GhosttyClipboardRequest',
+			voidptr(clipboard_request_boxed_copy), voidptr(clipboard_request_boxed_free))
+	}
+	return g_clipboard_request_boxed_type
+}
+
 // The C-layout private struct mirroring ghostty\'s `Private`: the four property
 // fields followed by the template-child pointers (bound at their offsets).
 struct C.GhosttyClipboardConfirmationDialogPrivate {
@@ -219,7 +293,7 @@ fn clipboard_confirmation_dialog_get_property(obj voidptr, property_id u32, valu
 		clipboard_prop_blur { C.g_value_set_boolean(value, priv.blur) }
 		clipboard_prop_can_remember { C.g_value_set_boolean(value, priv.can_remember) }
 		clipboard_prop_clipboard_contents { C.g_value_set_object(value, priv.clipboard_contents) }
-		clipboard_prop_request { C.g_value_set_pointer(value, priv.request) }
+		clipboard_prop_request { C.g_value_set_boxed(value, priv.request) }
 		else {}
 	}
 }
@@ -248,7 +322,10 @@ fn clipboard_confirmation_dialog_set_property(obj voidptr, property_id u32, valu
 			}
 		}
 		clipboard_prop_request {
-			priv.request = C.g_value_get_pointer(value)
+			if !isnil(priv.request) {
+				clipboard_request_boxed_free(priv.request)
+			}
+			priv.request = C.g_value_dup_boxed(value)
 		}
 		else {}
 	}
@@ -270,7 +347,10 @@ fn clipboard_confirmation_dialog_dispose(obj voidptr) {
 // the parent. Mirrors the `finalize` vfunc.
 fn clipboard_confirmation_dialog_finalize(obj voidptr) {
 	mut priv := clipboard_confirmation_dialog_priv(obj)
-	priv.request = unsafe { nil }
+	if !isnil(priv.request) {
+		clipboard_request_boxed_free(priv.request)
+		priv.request = unsafe { nil }
+	}
 	C.witty_gobject_call_parent_finalize(obj)
 }
 
@@ -294,8 +374,28 @@ fn clipboard_confirmation_notify_blur_cb(obj voidptr, pspec voidptr, ud voidptr)
 }
 
 fn clipboard_confirmation_notify_request_cb(obj voidptr, pspec voidptr, ud voidptr) {
-	// The request heading/body is applied V-side (prop_request) since the
-	// request is a plain V value, not a boxed GObject. Nothing to do here.
+	priv := clipboard_confirmation_dialog_priv(obj)
+	if isnil(priv.request) {
+		return
+	}
+	request := unsafe { &ClipboardRequestBox(priv.request) }
+	mut dialog := Dialog{
+		obj: GObject(obj)
+	}
+	match request.tag {
+		.osc_52_write {
+			dialog.set_heading(&char(i18n_('Authorize Clipboard Access').str))
+			dialog.set_body(&char(i18n_('An application is attempting to write to the clipboard. The current clipboard contents are shown below.').str))
+		}
+		.osc_52_read {
+			dialog.set_heading(&char(i18n_('Authorize Clipboard Access').str))
+			dialog.set_body(&char(i18n_('An application is attempting to read from the clipboard. The current clipboard contents are shown below.').str))
+		}
+		.paste {
+			dialog.set_heading(&char(i18n_('Warning: Potentially Unsafe Paste').str))
+			dialog.set_body(&char(i18n_('Pasting this text into the terminal may be dangerous as it looks like some commands may be executed.').str))
+		}
+	}
 }
 
 fn clipboard_confirmation_reveal_clicked_cb(button voidptr, obj voidptr) {
@@ -319,8 +419,15 @@ fn clipboard_confirmation_hide_clicked_cb(button voidptr, obj voidptr) {
 // confirm/deny signals, and overrides the get/set/dispose/finalize vfuncs.
 fn clipboard_confirmation_dialog_class_init(klass voidptr, class_data voidptr) {
 	C.g_type_class_adjust_private_offset(klass, &g_clipboard_confirmation_dialog_priv_offset)
-	bytes := C.g_bytes_new_static(clipboard_confirmation_dialog_ui.str, usize(clipboard_confirmation_dialog_ui.len))
+	template_ui := if supports_switch_row() {
+		clipboard_confirmation_dialog_ui
+	} else {
+		clipboard_confirmation_dialog_ui.replace(clipboard_confirmation_dialog_switch_row_ui,
+			'')
+	}
+	bytes := C.g_bytes_new(template_ui.str, usize(template_ui.len))
 	C.gtk_widget_class_set_template(klass, bytes)
+	C.g_bytes_unref(bytes)
 
 	// Template child bindings (into the private struct).
 	off := g_clipboard_confirmation_dialog_priv_offset
@@ -341,8 +448,8 @@ fn clipboard_confirmation_dialog_class_init(klass voidptr, class_data voidptr) {
 	// Properties.
 	blur_pspec := C.g_param_spec_boolean(c'blur', c'blur', c'Whether contents are blurred', 0, g_param_readwrite)
 	can_remember_pspec := C.g_param_spec_boolean(c'can-remember', c'can-remember', c'Whether the choice can be remembered', 0, g_param_readwrite)
-	contents_pspec := C.g_param_spec_object(c'clipboard-contents', c'clipboard-contents', c'The clipboard contents', C.g_object_get_type(), g_param_readwrite)
-	request_pspec := C.g_param_spec_pointer(c'request', c'request', c'The clipboard request', g_param_readwrite)
+	contents_pspec := C.g_param_spec_object(c'clipboard-contents', c'clipboard-contents', c'The clipboard contents', C.gtk_text_buffer_get_type(), g_param_readwrite)
+	request_pspec := C.g_param_spec_boxed(c'request', c'request', c'The clipboard request', clipboard_request_boxed_get_type(), g_param_readwrite)
 	C.witty_gobject_class_set_get_property(klass, voidptr(clipboard_confirmation_dialog_get_property))
 	C.witty_gobject_class_set_set_property(klass, voidptr(clipboard_confirmation_dialog_set_property))
 	C.witty_gobject_class_set_dispose(klass, voidptr(clipboard_confirmation_dialog_dispose))
@@ -361,6 +468,9 @@ fn clipboard_confirmation_dialog_class_init(klass voidptr, class_data voidptr) {
 
 fn clipboard_confirmation_dialog_instance_init(instance voidptr, klass voidptr) {
 	C.gtk_widget_init_template(instance)
+	// Trigger initial values (matches ghostty's `init`).
+	clipboard_confirmation_notify_blur_cb(instance, unsafe { nil }, unsafe { nil })
+	clipboard_confirmation_notify_request_cb(instance, unsafe { nil }, unsafe { nil })
 }
 
 // clipboard_confirmation_dialog_get_type lazily registers the
@@ -372,9 +482,9 @@ pub fn clipboard_confirmation_dialog_get_type() GType {
 		mut query := C.GTypeQuery{}
 		C.g_type_query(parent, &query)
 		info := C.GTypeInfo{
-			class_size: u16(query.class_size)
+			class_size:    u16(query.class_size)
 			instance_size: u16(query.instance_size)
-			class_init: voidptr(clipboard_confirmation_dialog_class_init)
+			class_init:    voidptr(clipboard_confirmation_dialog_class_init)
 			instance_init: voidptr(clipboard_confirmation_dialog_instance_init)
 		}
 		g_clipboard_confirmation_dialog_type = C.g_type_register_static(parent, c'GhosttyClipboardConfirmationDialog', &info, 0)
@@ -386,89 +496,44 @@ pub fn clipboard_confirmation_dialog_get_type() GType {
 // --- ClipboardConfirmationDialog ------------------------------------------
 
 // ClipboardConfirmationDialog is the clipboard-confirmation dialog GObject
-// (`GhosttyClipboardConfirmationDialog`, a subclass of `Dialog`). Modeled as a
-// struct embedding the base `Dialog` plus the private fields.
+// (`GhosttyClipboardConfirmationDialog`, a subclass of `Dialog`). The native
+// instance-private storage is authoritative, as it is in Ghostty.
 @[heap]
 pub struct ClipboardConfirmationDialog {
 mut:
-	// The base dialog (`Dialog` parent instance).
 	dialog Dialog
-
-	// The request that this dialog is for. Mirrors `Private.request`.
-	request ?apprt.ClipboardRequest
-
-	// The clipboard contents being read/written. Mirrors
-	// `Private.clipboard_contents`.
-	clipboard_contents GtkTextBuffer = unsafe { nil }
-
-	// Whether the contents should be blurred. Mirrors `Private.blur`.
-	blur bool
-
-	// Whether the user can remember the choice. Mirrors `Private.can_remember`.
-	can_remember bool
-
-	// Template children. Bound in the GObject private via
-	// `gtk_widget_class_bind_template_child_full` and read back into this wrapper
-	// by `clipboard_confirmation_dialog_new`. Mirrors the `Private` bindings.
-	text_view_scroll GtkScrolledWindow = unsafe { nil }
-	text_view        GtkTextView = unsafe { nil }
-	reveal_button    GtkButton = unsafe { nil }
-	hide_button      GtkButton = unsafe { nil }
-	remember_choice  AdwSwitchRow = unsafe { nil }
-
-	// V owns the request payload and text while the dialog is presented. The
-	// generated Zig bindings keep the same values in boxed/object properties.
-	text string
 }
 
 // clipboard_confirmation_dialog_new creates a new dialog. Mirrors
-// `gobject.ext.newInstance(Self, .{})` + the `init` instanceInit which triggers
-// the initial `propBlur`/`propRequest`. The template children are read back from
-// the GObject private into the V wrapper.
+// `gobject.ext.newInstance(Self, .{})`.
 pub fn clipboard_confirmation_dialog_new() &ClipboardConfirmationDialog {
 	obj := C.g_object_new(clipboard_confirmation_dialog_get_type(), &char(unsafe { nil }))
-	priv := clipboard_confirmation_dialog_priv(obj)
-	mut self := &ClipboardConfirmationDialog{
+	return &ClipboardConfirmationDialog{
 		dialog: Dialog{
 			obj: obj
 		}
-		can_remember: supports_switch_row()
-		text_view_scroll: priv.text_view_scroll
-		text_view: priv.text_view
-		reveal_button: priv.reveal_button
-		hide_button: priv.hide_button
-		remember_choice: priv.remember_choice
 	}
-	// Trigger initial values (matches ghostty's `init`).
-	self.prop_blur()
-	self.prop_request()
-	return self
 }
 
 // clipboard_confirmation_dialog_new_for_request constructs the populated
 // dialog used by Surface.show_clipboard_confirmation.
 pub fn clipboard_confirmation_dialog_new_for_request(req apprt.ClipboardRequest, text string) &ClipboardConfirmationDialog {
-	mut self := clipboard_confirmation_dialog_new()
 	buffer := C.gtk_text_buffer_new(unsafe { nil })
 	C.gtk_text_buffer_insert_at_cursor(buffer, &char(text.str), text.len)
-
-	self.request = req
-	self.text = text
-	self.clipboard_contents = buffer
-	self.can_remember = match req {
+	request := clipboard_request_box(req)
+	can_remember := match req {
 		apprt.ClipboardRequestPaste { false }
 		apprt.ClipboardRequestOsc52Read, apprt.ClipboardRequestOsc52Write { true }
 	}
-
-	mut priv := clipboard_confirmation_dialog_priv(self.dialog.obj)
-	priv.can_remember = b2i(self.can_remember)
-	priv.clipboard_contents = voidptr(object_ref(buffer))
-	C.gtk_text_view_set_buffer(self.text_view, buffer)
-	if !isnil(self.remember_choice) {
-		C.gtk_widget_set_visible(self.remember_choice, b2i(self.can_remember))
+	obj := C.g_object_new(clipboard_confirmation_dialog_get_type(), c'request', voidptr(&request),
+		c'can-remember', b2i(can_remember), c'clipboard-contents', buffer,
+		&char(unsafe { nil }))
+	object_unref(buffer)
+	return &ClipboardConfirmationDialog{
+		dialog: Dialog{
+			obj: obj
+		}
 	}
-	self.prop_request()
-	return self
 }
 
 // Route the inherited Adwaita response signal to Ghostty's confirm/deny
@@ -479,7 +544,7 @@ fn clipboard_confirmation_native_response_cb(obj GObject, response_id &char) {
 		return
 	}
 	priv := clipboard_confirmation_dialog_priv(obj)
-	remember := priv.can_remember != 0 && !isnil(priv.remember_choice)
+	remember := !isnil(priv.remember_choice)
 		&& C.adw_switch_row_get_active(priv.remember_choice) != 0
 	response := unsafe { cstring_to_vstring(response_id) }
 	if response == 'cancel' {
@@ -497,97 +562,30 @@ pub fn (mut self ClipboardConfirmationDialog) present(parent GtkWidget) {
 // get_request returns the clipboard request without copying. Mirrors
 // `getRequest`.
 pub fn (self &ClipboardConfirmationDialog) get_request() ?apprt.ClipboardRequest {
-	return self.request
+	priv := clipboard_confirmation_dialog_priv(self.dialog.obj)
+	if isnil(priv.request) {
+		return none
+	}
+	return unsafe { &ClipboardRequestBox(priv.request) }.value()
 }
 
 // get_clipboard_contents returns the clipboard contents buffer without copying.
 // Mirrors `getClipboardContents`.
-pub fn (self &ClipboardConfirmationDialog) get_clipboard_contents() GtkTextBuffer {
-	return self.clipboard_contents
-}
-
-// --- Signal Handlers ------------------------------------------------------
-
-// prop_blur applies the current blur state to the text view + reveal/hide
-// buttons. Mirrors `propBlur` (the `notify::blur` callback).
-fn (mut self ClipboardConfirmationDialog) prop_blur() {
-	if isnil(self.text_view_scroll) {
-		return
+pub fn (self &ClipboardConfirmationDialog) get_clipboard_contents() ?GtkTextBuffer {
+	contents := clipboard_confirmation_dialog_priv(self.dialog.obj).clipboard_contents
+	if isnil(contents) {
+		return none
 	}
-	if self.blur {
-		C.gtk_widget_set_sensitive(self.text_view_scroll, b2i(false))
-		C.gtk_widget_add_css_class(self.text_view, c'blurred')
-		C.gtk_widget_set_visible(self.reveal_button, b2i(true))
-		C.gtk_widget_set_visible(self.hide_button, b2i(false))
-	} else {
-		C.gtk_widget_set_sensitive(self.text_view_scroll, b2i(true))
-		C.gtk_widget_remove_css_class(self.text_view, c'blurred')
-		C.gtk_widget_set_visible(self.reveal_button, b2i(false))
-		C.gtk_widget_set_visible(self.hide_button, b2i(false))
-	}
-}
-
-// prop_request applies the current request to the dialog heading/body. Mirrors
-// `propRequest` (the `notify::request` callback).
-fn (mut self ClipboardConfirmationDialog) prop_request() {
-	req := self.request or { return }
-	match req {
-		apprt.ClipboardRequestOsc52Write {
-			self.dialog.set_heading(&char(i18n_('Authorize Clipboard Access').str))
-			self.dialog.set_body(&char(i18n_('An application is attempting to write to the clipboard. The current clipboard contents are shown below.').str))
-		}
-		apprt.ClipboardRequestOsc52Read {
-			self.dialog.set_heading(&char(i18n_('Authorize Clipboard Access').str))
-			self.dialog.set_body(&char(i18n_('An application is attempting to read from the clipboard. The current clipboard contents are shown below.').str))
-		}
-		apprt.ClipboardRequestPaste {
-			self.dialog.set_heading(&char(i18n_('Warning: Potentially Unsafe Paste').str))
-			self.dialog.set_body(&char(i18n_('Pasting this text into the terminal may be dangerous as it looks like some commands may be executed.').str))
-		}
-	}
-}
-
-// reveal_button_clicked un-blurs the contents. Mirrors `revealButtonClicked`
-// (the `reveal_clicked` template callback).
-fn (mut self ClipboardConfirmationDialog) reveal_button_clicked() {
-	C.gtk_widget_set_sensitive(self.text_view_scroll, b2i(true))
-	C.gtk_widget_remove_css_class(self.text_view, c'blurred')
-	C.gtk_widget_set_visible(self.hide_button, b2i(true))
-	C.gtk_widget_set_visible(self.reveal_button, b2i(false))
-}
-
-// hide_button_clicked re-blurs the contents. Mirrors `hideButtonClicked` (the
-// `hide_clicked` template callback).
-fn (mut self ClipboardConfirmationDialog) hide_button_clicked() {
-	C.gtk_widget_set_sensitive(self.text_view_scroll, b2i(false))
-	C.gtk_widget_add_css_class(self.text_view, c'blurred')
-	C.gtk_widget_set_visible(self.hide_button, b2i(false))
-	C.gtk_widget_set_visible(self.reveal_button, b2i(true))
-}
-
-// dispose releases the clipboard-contents buffer held by the V wrapper. The
-// GObject-side dispose (buffer unref + gtk_widget_dispose_template + parent
-// chain) is the `clipboard_confirmation_dialog_dispose` vfunc registered above.
-pub fn (mut self ClipboardConfirmationDialog) dispose() {
-	if !isnil(self.clipboard_contents) {
-		object_unref(self.clipboard_contents)
-		self.clipboard_contents = unsafe { nil }
-	}
-}
-
-// finalize clears the owned request on the V wrapper. The GObject-side finalize
-// (request clear + parent chain) is the `clipboard_confirmation_dialog_finalize`
-// vfunc registered above. Here `request` is a plain V optional value.
-pub fn (mut self ClipboardConfirmationDialog) finalize() {
-	self.request = none
+	return GtkTextBuffer(contents)
 }
 
 // --- GObject reference counting -------------------------------------------
 // Mirrors the `Common(Self, Private)` ref helpers.
 
 // ref increments the reference count of the dialog GObject. Mirrors `ref`.
-pub fn (mut self ClipboardConfirmationDialog) ref() {
+pub fn (mut self ClipboardConfirmationDialog) ref() &ClipboardConfirmationDialog {
 	self.dialog.ref()
+	return self
 }
 
 // unref decrements the reference count of the dialog GObject. Mirrors `unref`.

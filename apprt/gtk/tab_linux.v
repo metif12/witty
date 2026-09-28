@@ -397,6 +397,7 @@ fn (mut self Tab) action_close(mode_ ?string) {
 		.this { C.adw_tab_view_close_page(tab_view, page) }
 		.other { C.adw_tab_view_close_other_pages(tab_view, page) }
 		.right { C.adw_tab_view_close_pages_after(tab_view, page) }
+		else { panic('invalid CloseTabMode') }
 	}
 }
 

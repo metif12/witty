@@ -228,7 +228,7 @@ fn close_confirmation_native_response_cb(obj GObject, response_id &char) {
 pub fn (mut self CloseConfirmationDialog) present(parent GtkWidget) {
 	// Setup our title/body text.
 	priv := close_confirmation_dialog_priv(voidptr(self.dialog.obj))
-	target := CloseTarget(priv.target)
+	target := unsafe { CloseTarget(priv.target) }
 	self.dialog.set_heading(&char(target.title().str))
 	self.dialog.set_body(&char(target.body().str))
 
