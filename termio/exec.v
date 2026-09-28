@@ -3,7 +3,6 @@ module termio
 // Exec implements the logic for starting and stopping a subprocess with a
 // pty as well as spinning up the necessary read thread to read from the
 // pty and forward it to the Termio instance.
-
 import apprt
 import buildcfg
 import build_meta
@@ -131,9 +130,9 @@ pub fn (mut self Exec) init_terminal(mut term terminal.Terminal) {
 	// can't fail because the pty should not exist at this point.
 	self.resize(renderer.GridSize{
 		columns: term.cols
-		rows: term.rows
+		rows:    term.rows
 	}, renderer.ScreenSize{
-		width: term.width_px
+		width:  term.width_px
 		height: term.height_px
 	}) or { panic('unexpected error setting initial pty size: ${err}') }
 }
@@ -174,6 +173,7 @@ pub fn (mut self Exec) thread_enter(mut io Termio, mut td ThreadData) ! {
 			// The host process cannot be watched through the local process API.
 		}
 	}
+
 	defer {
 		if !ok {
 			if mut p := process {
@@ -240,7 +240,8 @@ pub fn (mut self Exec) thread_enter(mut io Termio, mut td ThreadData) ! {
 			SubprocessFlatpak {
 				// If we're in Flatpak, run the special host-command watcher.
 				mut command := current.command
-				command.wait_xev(mut td.loop, &td.backend.exec.flatpak_wait_c, td, exec_flatpak_exit)
+				command.wait_xev(mut td.loop, &td.backend.exec.flatpak_wait_c, td,
+					exec_flatpak_exit)
 			}
 			SubprocessForkExec {}
 		}
@@ -250,8 +251,8 @@ pub fn (mut self Exec) thread_enter(mut io Termio, mut td ThreadData) ! {
 	// Fundamentally, we could support this on Windows so we're just
 	// waiting for someone to implement it.
 	$if !windows {
-		td.backend.exec.termios_timer.run(mut td.loop, &td.backend.exec.termios_timer_c, termios_poll_ms,
-			td, exec_termios_timer)
+		td.backend.exec.termios_timer.run(mut td.loop, &td.backend.exec.termios_timer_c,
+			termios_poll_ms, td, exec_termios_timer)
 	}
 }
 
@@ -324,9 +325,9 @@ fn exec_process_exit_common(mut td ThreadData, exit_code u32) {
 	// We always notify the surface immediately that the child has
 	// exited and some metadata about the exit.
 	td.surface_mailbox.push(apprt.SurfaceMessage(apprt.ChildExited{
-			exit_code:  exit_code
-			runtime_ms: runtime_ms
-		}), datastruct.blocking_queue_forever)
+		exit_code:  exit_code
+		runtime_ms: runtime_ms
+	}), datastruct.blocking_queue_forever)
 }
 
 fn exec_process_exit(td_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorKind, exit_code u32) xev.CallbackAction {
@@ -398,7 +399,8 @@ fn exec_termios_timer(td_ voidptr, _ &xev.Loop, _ &xev.Completion, r ?xev.ErrorK
 				// We have to notify the surface that we're in password input.
 				// We must block on this because the balanced true/false state
 				// of this is critical to apprt behavior.
-				td.surface_mailbox.push(apprt.SurfaceMessagePasswordInput{ value: password_input }, datastruct.blocking_queue_forever)
+				td.surface_mailbox.push(apprt.SurfaceMessagePasswordInput{ value: password_input },
+					datastruct.blocking_queue_forever)
 			}
 		}
 	}
@@ -460,9 +462,11 @@ pub fn (mut self Exec) queue_write(mut td ThreadData, data []u8, linefeed bool) 
 			slice = unsafe { (&u8(&buf.bytes[0])).vbytes(buf_i) }
 		}
 
-		//for (slice) |b| log.warn("write: {x}", .{b});
+		// for (slice) |b| log.warn("write: {x}", .{b});
 
-		exec.write_stream.queue_write(mut td.loop, &exec.write_queue, req, xev.WriteBuffer(xev.WriteBufferSlice{ slice: slice }), exec, exec_tty_write)
+		exec.write_stream.queue_write(mut td.loop, &exec.write_queue, req, xev.WriteBuffer(xev.WriteBufferSlice{
+			slice: slice
+		}), exec, exec_tty_write)
 	}
 }
 
@@ -476,7 +480,7 @@ fn exec_tty_write(td_ voidptr, _ &xev.Loop, _ &xev.Completion, _ xev.Stream, _ x
 		return .disarm
 	}
 	_ = n
-	//log.info("WROTE: {d}", .{d});
+	// log.info("WROTE: {d}", .{d});
 
 	return .disarm
 }
@@ -683,8 +687,7 @@ pub fn Subprocess.init(cfg ExecConfig) !Subprocess {
 
 	// Add our binary to the path if we can find it. Skip this for Flatpak
 	// because the command runs on the host and cannot reach sandbox binaries.
-	add_executable_to_path(mut env, os.executable(), buildcfg.flatpak
-		&& internal_os.is_flatpak())
+	add_executable_to_path(mut env, os.executable(), buildcfg.flatpak && internal_os.is_flatpak())
 
 	// On macOS, export additional data directories from our
 	// application bundle.
@@ -719,13 +722,24 @@ pub fn Subprocess.init(cfg ExecConfig) !Subprocess {
 	env.delete('VTE_VERSION')
 
 	// Setup our shell integration, if we can.
-	default_shell_command := cfg.command or { configpkg.ShellCmd{ shell: 'sh' } }
+	default_shell_command := cfg.command or {
+		$if windows {
+			configpkg.ShellCmd{
+				shell: 'cmd.exe'
+			}
+		} $else {
+			configpkg.ShellCmd{
+				shell: 'sh'
+			}
+		}
+	}
 
 	// Always set up shell features (GHOSTTY_SHELL_FEATURES). These are
 	// used by both automatic and manual shell integrations.
 	setup_features(mut env, cfg.shell_integration_features)
 
-	shell_command := setup_shell_command(cfg.shell_integration, cfg.resources_dir, default_shell_command, mut env)!
+	shell_command := setup_shell_command(cfg.shell_integration, cfg.resources_dir,
+		default_shell_command, mut env)!
 
 	// Add the environment variables that override any others.
 	mut it := cfg.env_override.iterator()
@@ -735,7 +749,7 @@ pub fn Subprocess.init(cfg ExecConfig) !Subprocess {
 	}
 
 	// Build our args list
-	args := exec_command(shell_command)
+	args := exec_command(shell_command)!
 
 	// We have to copy the cwd because there is no guarantee that
 	// pointers in full_config remain valid.
@@ -752,14 +766,14 @@ pub fn Subprocess.init(cfg ExecConfig) !Subprocess {
 	}
 
 	return Subprocess{
-		env: env
-		cwd: cwd
-		args: args
+		env:          env
+		cwd:          cwd
+		args:         args
 		linux_cgroup: cfg.linux_cgroup
 		// Should be initialized with init_terminal call.
-		grid_size: renderer.GridSize{}
+		grid_size:   renderer.GridSize{}
 		screen_size: renderer.ScreenSize{
-			width: 1
+			width:  1
 			height: 1
 		}
 	}
@@ -782,8 +796,8 @@ pub fn (mut self Subprocess) start() !PtyFds {
 
 	// Create our pty
 	mut p := pty.Pty.open(pty.Winsize{
-		ws_row: clamp_u16(self.grid_size.rows)
-		ws_col: clamp_u16(self.grid_size.columns)
+		ws_row:    clamp_u16(self.grid_size.rows)
+		ws_col:    clamp_u16(self.grid_size.columns)
 		ws_xpixel: clamp_u16(self.screen_size.width)
 		ws_ypixel: clamp_u16(self.screen_size.height)
 	})!
@@ -841,10 +855,10 @@ pub fn (mut self Subprocess) start() !PtyFds {
 				log.warn('flatpak detected, but flatpak support not built-in')
 			} else {
 				mut command := &internal_os.FlatpakHostCommand{
-					argv: self.args
-					cwd: if cwd.len > 0 { cwd } else { none }
-					env: self.env
-					stdin: p.slave
+					argv:   self.args
+					cwd:    if cwd.len > 0 { cwd } else { none }
+					env:    self.env
+					stdin:  p.slave
 					stdout: p.slave
 					stderr: p.slave
 				}
@@ -857,7 +871,7 @@ pub fn (mut self Subprocess) start() !PtyFds {
 				self.env = none
 				started = true
 				return PtyFds{
-					read: p.master
+					read:  p.master
 					write: p.master
 				}
 			}
@@ -868,16 +882,16 @@ pub fn (mut self Subprocess) start() !PtyFds {
 	// backend. Command owns the fork/exec, environment, descriptor, cgroup,
 	// working-directory, and pre-exec contracts.
 	mut cmd := commandpkg.Command{
-		path: self.args[0]
-		args: self.args
-		env: self.env
-		cwd: if cwd.len > 0 { cwd } else { none }
-		stdin_fd: p.slave
-		stdout_fd: p.slave
-		stderr_fd: p.slave
-		pre_exec: subprocess_child_pre_exec
+		path:         self.args[0]
+		args:         self.args
+		env:          self.env
+		cwd:          if cwd.len > 0 { cwd } else { none }
+		stdin_fd:     p.slave
+		stdout_fd:    p.slave
+		stderr_fd:    p.slave
+		pre_exec:     subprocess_child_pre_exec
 		linux_cgroup: self.linux_cgroup
-		data: voidptr(self)
+		data:         voidptr(self)
 	}
 	cmd.start() or {
 		if commandpkg.is_exec_failed_in_child(err) {
@@ -891,7 +905,7 @@ pub fn (mut self Subprocess) start() !PtyFds {
 	})
 	log.info('started subcommand path=${self.args[0]} pid=${cmd.pid}')
 	$if linux {
-		log.info('subcommand cgroup=${self.linux_cgroup or { '-'}}')
+		log.info('subcommand cgroup=${self.linux_cgroup or { '-' }}')
 	}
 
 	// Close the slave fd in the parent. The child has already
@@ -903,7 +917,7 @@ pub fn (mut self Subprocess) start() !PtyFds {
 	started = true
 
 	return PtyFds{
-		read: p.master
+		read:  p.master
 		write: p.master
 	}
 }
@@ -1045,9 +1059,7 @@ fn kill_command_flatpak(mut command internal_os.FlatpakHostCommand) ! {
 // descriptors and before it replaces the process image.
 fn subprocess_child_pre_exec(mut cmd commandpkg.Command) {
 	mut subprocess := unsafe { &Subprocess(cmd.get_data()) }
-	subprocess.child_pre_exec() or {
-		log.error('error initializing child: ${err}')
-	}
+	subprocess.child_pre_exec() or { log.error('error initializing child: ${err}') }
 }
 
 fn (self &Subprocess) child_pre_exec() ! {
@@ -1066,8 +1078,8 @@ pub fn (mut self Subprocess) resize(grid_size renderer.GridSize, screen_size ren
 		// usable. This should be protected upstream but we still clamp
 		// in case there is a bad caller which has happened before.
 		p.set_size(pty.Winsize{
-			ws_row: clamp_u16(grid_size.rows)
-			ws_col: clamp_u16(grid_size.columns)
+			ws_row:    clamp_u16(grid_size.rows)
+			ws_col:    clamp_u16(grid_size.columns)
 			ws_xpixel: clamp_u16(screen_size.width)
 			ws_ypixel: clamp_u16(screen_size.height)
 		})!
@@ -1122,7 +1134,7 @@ pub fn thread_main_posix(fd int, quit int, io &Termio) {
 	has_crash_state := io != unsafe { nil }
 	if has_crash_state {
 		crash.set_thread_state(crash.ThreadState{
-			kind: .io
+			kind:    .io
 			surface: io.surface_mailbox.surface
 		})
 	}
@@ -1152,13 +1164,13 @@ pub fn thread_main_posix(fd int, quit int, io &Termio) {
 	// on the pty fd and our quit notification pipe.
 	mut pollfds := [2]PollFd{}
 	pollfds[0] = PollFd{
-		fd: fd
-		events: pollin
+		fd:      fd
+		events:  pollin
 		revents: 0
 	}
 	pollfds[1] = PollFd{
-		fd: quit
-		events: pollin
+		fd:      quit
+		events:  pollin
 		revents: 0
 	}
 
@@ -1177,13 +1189,11 @@ pub fn thread_main_posix(fd int, quit int, io &Termio) {
 					1 {
 						break
 					}
-
 					// The pty is closed. We're probably gracefully shutting down.
 					2 {
 						log.info('io reader exiting')
 						return
 					}
-
 					// The pinned implementation treats all other read errors as
 					// unreachable because continuing would hide an IO failure.
 					else {
@@ -1278,12 +1288,24 @@ fn setup_shell_command(integration configpkg.ShellIntegration, resources_dir ?st
 	}
 
 	force := match integration {
-		.detect { ?Shell(none) }
-		.bash { ?Shell(Shell.bash) }
-		.elvish { ?Shell(Shell.elvish) }
-		.fish { ?Shell(Shell.fish) }
-		.nushell { ?Shell(Shell.nushell) }
-		.zsh { ?Shell(Shell.zsh) }
+		.detect {
+			?Shell(none)
+		}
+		.bash {
+			?Shell(Shell.bash)
+		}
+		.elvish {
+			?Shell(Shell.elvish)
+		}
+		.fish {
+			?Shell(Shell.fish)
+		}
+		.nushell {
+			?Shell(Shell.nushell)
+		}
+		.zsh {
+			?Shell(Shell.zsh)
+		}
 		.none_ { // handled above
 			?Shell(none)
 		}
@@ -1294,6 +1316,7 @@ fn setup_shell_command(integration configpkg.ShellIntegration, resources_dir ?st
 		log.warn('shell could not be detected, no automatic shell integration will be injected')
 		return default_cmd
 	}
+
 	log.info('shell integration automatically injected shell=${result.shell}')
 
 	return result.command
@@ -1305,8 +1328,8 @@ fn setup_shell_command(integration configpkg.ShellIntegration, resources_dir ?st
 //
 // On macOS, we use login(1) to get all of the proper environment
 // variables set, a login shell, and proper hushlogin behavior.
-// On other platforms, we wrap shell commands with /bin/sh.
-fn exec_command(command configpkg.Command) []string {
+// On other platforms, we wrap shell commands with the platform shell.
+fn exec_command(command configpkg.Command) ![]string {
 	// If we're on macOS, we have to use `login(1)` to get all of
 	// the proper environment variables set, a login shell, and proper
 	// hushlogin behavior.
@@ -1411,7 +1434,31 @@ fn exec_command(command configpkg.Command) []string {
 				args << cmd_str
 			}
 		}
+
 		return args
+	}
+
+	$if windows {
+		return match command {
+			configpkg.DirectCmd {
+				// We need to clone the command since there's no guarantee the
+				// config remains valid.
+				command.direct.clone()
+			}
+			configpkg.ShellCmd {
+				// We run our shell wrapped in `cmd.exe` so that we don't have
+				// to parse the command line ourselves if it has arguments.
+				windir := os.getenv_opt('WINDIR') or {
+					log.warn('failed to get WINDIR, cannot run shell command err=${err}')
+					return error('SystemError')
+				}
+				[
+					os.join_path(windir, 'System32', 'cmd.exe'),
+					'/C',
+					command.shell,
+				]
+			}
+		}
 	}
 
 	return exec_command_posix(command)

@@ -36,7 +36,7 @@ fn test_exec_command_direct_posix() {
 fn test_exec_command_darwin_shell() {
 	$if macos {
 		// On Darwin, exec_command should use login(1)
-		result := exec_command(configpkg.ShellCmd{ shell: 'foo bar baz' })
+		result := exec_command(configpkg.ShellCmd{ shell: 'foo bar baz' })!
 		// Result should start with /usr/bin/login
 		assert result.len >= 1
 		assert result[0] == '/usr/bin/login'
@@ -48,10 +48,13 @@ fn test_exec_command_darwin_shell() {
 			}
 		}
 		assert has_flp
+	} $else $if windows {
+		windir := os.getenv('WINDIR')
+		result := exec_command(configpkg.ShellCmd{ shell: 'foo bar baz' })!
+		assert result == [os.join_path(windir, 'System32', 'cmd.exe'), '/C', 'foo bar baz']
 	} $else {
-
 		// On non-macOS, exec_command wraps with /bin/sh
-		result := exec_command(configpkg.ShellCmd{ shell: 'foo bar baz' })
+		result := exec_command(configpkg.ShellCmd{ shell: 'foo bar baz' })!
 		assert result.len >= 3
 		assert result[0] == '/bin/sh'
 	}
@@ -62,18 +65,17 @@ fn test_exec_command_darwin_direct() {
 		// Direct commands on Darwin also use login(1) but pass args directly
 		result := exec_command(configpkg.DirectCmd{
 			direct: ['foo', 'bar baz']
-		})
+		})!
 		assert result.len >= 1
 		assert result[0] == '/usr/bin/login'
 		// Should contain the direct args at the end
 		assert result[result.len - 2] == 'foo'
 		assert result[result.len - 1] == 'bar baz'
 	} $else {
-
 		// On non-macOS, direct commands are returned as-is
 		result := exec_command(configpkg.DirectCmd{
 			direct: ['foo', 'bar baz']
-		})
+		})!
 		assert result.len == 2
 		assert result[0] == 'foo'
 		assert result[1] == 'bar baz'
@@ -143,7 +145,7 @@ fn test_add_executable_to_path_skips_flatpak_sandbox_binary() {
 
 fn test_subprocess_init_with_resources() {
 	sub := Subprocess.init(ExecConfig{
-		term: 'xterm-ghostty'
+		term:          'xterm-ghostty'
 		resources_dir: '/tmp/ghostty-resources'
 	}) or {
 		assert false, 'should succeed'
@@ -181,7 +183,10 @@ fn test_subprocess_init_with_env_override() {
 	sub := Subprocess.init(ExecConfig{
 		env_override: configpkg.RepeatableStringMap{
 			entries: [
-				configpkg.StringMapEntry{ key: 'MY_VAR', value: 'my_value' },
+				configpkg.StringMapEntry{
+					key:   'MY_VAR'
+					value: 'my_value'
+				},
 			]
 		}
 	}) or {
@@ -199,13 +204,11 @@ fn test_subprocess_resize() {
 
 	sub.resize(renderer.GridSize{
 		columns: 80
-		rows: 24
+		rows:    24
 	}, renderer.ScreenSize{
-		width: 800
+		width:  800
 		height: 480
-	}) or {
-		assert false, 'resize should succeed'
-	}
+	}) or { assert false, 'resize should succeed' }
 
 	assert sub.grid_size.columns == 80
 	assert sub.grid_size.rows == 24
@@ -218,14 +221,14 @@ fn test_subprocess_start_delegates_to_command() {
 		return
 	}
 	mut sub := Subprocess{
-		args: ['/bin/sh', '-c', 'exit 23']
-		env: map[string]string{}
-		grid_size: renderer.GridSize{
+		args:        ['/bin/sh', '-c', 'exit 23']
+		env:         map[string]string{}
+		grid_size:   renderer.GridSize{
 			columns: 80
-			rows: 24
+			rows:    24
 		}
 		screen_size: renderer.ScreenSize{
-			width: 800
+			width:  800
 			height: 480
 		}
 	}
@@ -241,6 +244,7 @@ fn test_subprocess_start_delegates_to_command() {
 		SubprocessForkExec { process.command }
 		SubprocessFlatpak { panic('expected a native process') }
 	}
+
 	assert command.path == '/bin/sh'
 	assert command.pid or { -1 } > 0
 	exit_state := command.wait(true)!
@@ -252,6 +256,7 @@ fn test_subprocess_start_delegates_to_command() {
 			assert false, 'expected a normal command exit'
 		}
 	}
+
 	sub.external_exit()
 }
 
@@ -260,14 +265,14 @@ fn test_subprocess_start_failure_releases_pty() {
 		return
 	}
 	mut sub := Subprocess{
-		args: []
-		env: map[string]string{}
-		grid_size: renderer.GridSize{
+		args:        []
+		env:         map[string]string{}
+		grid_size:   renderer.GridSize{
 			columns: 80
-			rows: 24
+			rows:    24
 		}
 		screen_size: renderer.ScreenSize{
-			width: 800
+			width:  800
 			height: 480
 		}
 	}
@@ -318,7 +323,9 @@ fn test_read_error_classifies_closed_pty() {
 // ============================================================
 
 fn test_arg_iterator_shell_basic() {
-	cmd := configpkg.Command(configpkg.ShellCmd{ shell: 'bash --norc --noprofile' })
+	cmd := configpkg.Command(configpkg.ShellCmd{
+		shell: 'bash --norc --noprofile'
+	})
 	mut iter := cmd.arg_iterator()
 
 	assert iter.next() or { '' } == 'bash'
@@ -330,7 +337,9 @@ fn test_arg_iterator_shell_basic() {
 }
 
 fn test_arg_iterator_shell_quoted() {
-	cmd := configpkg.Command(configpkg.ShellCmd{ shell: '"/path/to/my bash" --flag' })
+	cmd := configpkg.Command(configpkg.ShellCmd{
+		shell: '"/path/to/my bash" --flag'
+	})
 	mut iter := cmd.arg_iterator()
 
 	assert iter.next() or { '' } == '/path/to/my bash'
@@ -341,7 +350,9 @@ fn test_arg_iterator_shell_quoted() {
 }
 
 fn test_arg_iterator_direct() {
-	cmd := configpkg.Command(configpkg.DirectCmd{ direct: ['foo', 'bar baz', 'qux'] })
+	cmd := configpkg.Command(configpkg.DirectCmd{
+		direct: ['foo', 'bar baz', 'qux']
+	})
 	mut iter := cmd.arg_iterator()
 
 	arg1 := iter.next() or {
