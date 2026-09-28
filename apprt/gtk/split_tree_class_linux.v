@@ -612,6 +612,10 @@ fn (self &SplitTreeWidget) get_tree_has_parents() bool {
 pub fn (mut self SplitTreeWidget) new_split(direction datastruct.Direction, parent_ ?&SurfaceWidget) {
 	// Create our new surface.
 	mut surface := new_surface_widget(self.window, self, self.config)
+	C.g_object_ref_sink(GObject(surface.widget))
+	defer {
+		surface.unref()
+	}
 	self.surfaces << surface
 
 	// Inherit from the parent if asked to.
@@ -623,7 +627,10 @@ pub fn (mut self SplitTreeWidget) new_split(direction datastruct.Direction, pare
 	surface.set_is_split(self.get_is_split())
 
 	// Create a single-node tree from the new surface.
-	single_tree := datastruct.SplitTree.new[SurfaceWidget](surface)
+	mut single_tree := datastruct.SplitTree.new[SurfaceWidget](surface)
+	defer {
+		single_tree.free()
+	}
 
 	// Move focus to the new surface no matter what.
 	self.last_focused.set(GObject(surface.widget))
@@ -638,7 +645,10 @@ pub fn (mut self SplitTreeWidget) new_split(direction datastruct.Direction, pare
 	handle := self.get_active_surface_handle() or { datastruct.handle_root }
 
 	// Create the split! Always split equally for new splits.
-	new_tree := self.tree.split_(handle, direction, 0.5, &single_tree)
+	mut new_tree := self.tree.split_(handle, direction, 0.5, &single_tree)
+	defer {
+		new_tree.free()
+	}
 	self.set_tree(&new_tree)
 }
 
@@ -681,7 +691,10 @@ pub fn (mut self SplitTreeWidget) resize(direction datastruct.Direction, amount 
 		.up, .down { datastruct.Layout.vertical }
 	}
 
-	new_tree := self.tree.resize(active, layout, f32(ratio))
+	mut new_tree := self.tree.resize(active, layout, f32(ratio))
+	defer {
+		new_tree.free()
+	}
 	self.set_tree(&new_tree)
 	return true
 }
@@ -809,7 +822,10 @@ pub fn (mut self SplitTreeWidget) action_equalize() {
 	if !self.has_tree {
 		return
 	}
-	new_tree := self.tree.equalize()
+	mut new_tree := self.tree.equalize()
+	defer {
+		new_tree.free()
+	}
 	self.set_tree(&new_tree)
 }
 
@@ -919,7 +935,10 @@ pub fn (mut self SplitTreeWidget) close_confirmation_close() {
 	// Tear down the core surface before publishing the empty/new tree. An empty
 	// tree synchronously closes its tab, so doing this first prevents the tab
 	// close path from deinitializing the same surface twice.
-	new_tree := self.tree.remove(handle)
+	mut new_tree := self.tree.remove(handle)
+	defer {
+		new_tree.free()
+	}
 	if !isnil(closing) && !isnil(closing.core_surface_ref) && !isnil(closing.app)
 		&& !isnil(closing.app.core_app) {
 		mut app := unsafe { closing.app.core_app }
