@@ -408,9 +408,9 @@ pub fn window_get_type() GType {
 		mut query := C.GTypeQuery{}
 		C.g_type_query(parent, &query)
 		info := C.GTypeInfo{
-			class_size: u16(query.class_size)
+			class_size:    u16(query.class_size)
 			instance_size: u16(query.instance_size)
-			class_init: voidptr(window_class_init)
+			class_init:    voidptr(window_class_init)
 			instance_init: voidptr(window_instance_init)
 		}
 		g_window_type = C.g_type_register_static(parent, c'GhosttyWindow', &info, 0)
@@ -498,17 +498,17 @@ mut:
 	command_palette WeakRef = weak_ref_empty()
 
 	// Children in the programmatic equivalent of window.blp.
-	tab_overview           AdwTabOverview = unsafe { nil }
-	tab_bar                AdwTabBar = unsafe { nil }
-	tab_view               AdwTabView = unsafe { nil }
-	toolbar                AdwToolbarView = unsafe { nil }
+	tab_overview           AdwTabOverview  = unsafe { nil }
+	tab_bar                AdwTabBar       = unsafe { nil }
+	tab_view               AdwTabView      = unsafe { nil }
+	toolbar                AdwToolbarView  = unsafe { nil }
 	toast_overlay          AdwToastOverlay = unsafe { nil }
-	header_bar             GtkWidget = unsafe { nil }
-	window_title           GtkWidget = unsafe { nil }
-	tab_bar_start          GtkWidget = unsafe { nil }
-	tab_bar_end            GtkWidget = unsafe { nil }
-	overview_header_toggle GtkWidget = unsafe { nil }
-	overview_tab_toggle    GtkWidget = unsafe { nil }
+	header_bar             GtkWidget       = unsafe { nil }
+	window_title           GtkWidget       = unsafe { nil }
+	tab_bar_start          GtkWidget       = unsafe { nil }
+	tab_bar_end            GtkWidget       = unsafe { nil }
+	overview_header_toggle GtkWidget       = unsafe { nil }
+	overview_tab_toggle    GtkWidget       = unsafe { nil }
 
 	// V-side owners for the GhosttyTab wrappers inserted in tab_view.
 	tabs      []&Tab
@@ -644,12 +644,12 @@ pub fn Window.new(app &Application) &Window {
 	C.adw_tab_overview_set_enable_new_tab(tab_overview, 1)
 
 	mut self := &Window{
-		obj: AdwApplicationWindow(obj)
-		app: app
-		tab_overview: tab_overview
-		tab_bar: tab_bar
-		tab_view: tab_view
-		toolbar: toolbar
+		obj:           AdwApplicationWindow(obj)
+		app:           app
+		tab_overview:  tab_overview
+		tab_bar:       tab_bar
+		tab_view:      tab_view
+		toolbar:       toolbar
 		toast_overlay: toast_overlay
 	}
 	mut priv := window_priv(obj)
@@ -2061,7 +2061,6 @@ pub fn (mut self Window) prop_config() {
 		self.add_toast(i18n_('Reloaded the configuration'))
 	}
 	self.sync_appearance()
-	self.sync_window_title()
 	palette_obj := self.command_palette.get()
 	if !isnil(palette_obj) {
 		if existing := command_palette_from_object(palette_obj) {
@@ -2071,15 +2070,6 @@ pub fn (mut self Window) prop_config() {
 			palette.prop_config()
 		}
 		object_unref(palette_obj)
-	}
-	for mut tab in self.tabs {
-		for mut surface in tab.split_tree.surfaces {
-			surface.apply_config()
-		}
-		// The translated Config wrapper is stable across reloads, so the
-		// programmatic equivalent of Tab's Blueprint expression must be
-		// reevaluated explicitly after its inner configuration is replaced.
-		tab.sync_from_active_surface()
 	}
 }
 

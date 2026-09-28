@@ -27,3 +27,30 @@ gtk-wide-tabs = false')
 
 	cfg.unref()
 }
+
+fn test_gtk_config_diagnostics_buffer_matches_fixed_writer_capacity() {
+	mut inner := configpkg.Config.default_config()
+	mut empty_cfg := config_new(inner)
+	if _ := empty_cfg.diagnostics_buffer() {
+		assert false
+	}
+	empty_cfg.unref()
+
+	inner.add_diagnostic_fmt('short')
+	inner.add_diagnostic_fmt('x'.repeat(4095))
+	inner.add_diagnostic_fmt('y'.repeat(4096))
+	mut cfg := config_new(inner)
+
+	buffer := cfg.diagnostics_buffer() or {
+		assert false
+		return
+	}
+	mut text_ptr := &char(unsafe { nil })
+	C.g_object_get(GObject(buffer), c'text', &text_ptr, unsafe { nil })
+	text := unsafe { cstring_to_vstring(text_ptr) }
+	assert text == 'short\n${'x'.repeat(4095)}\n'
+
+	C.g_free(text_ptr)
+	object_unref(GObject(buffer))
+	cfg.unref()
+}

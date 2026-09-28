@@ -21,6 +21,7 @@ module gtk
 // `diagnostics-buffer` and `has-diagnostics` properties used by GTK bindings.
 
 import configpkg
+import log
 
 // --- New GTK C bindings ---------------------------------------------------
 // Only functions not already declared anywhere else in the module.
@@ -68,10 +69,11 @@ fn config_get_property(obj voidptr, property_id u32, value voidptr, pspec voidpt
 	wrapper := unsafe { &Config(priv.wrapper) }
 	match property_id {
 		config_prop_diagnostics_buffer {
-			buffer := wrapper.diagnostics_buffer()
-			C.g_value_set_object(value, buffer)
-			if !isnil(buffer) {
+			if buffer := wrapper.diagnostics_buffer() {
+				C.g_value_set_object(value, buffer)
 				object_unref(GObject(buffer))
+			} else {
+				C.g_value_set_object(value, unsafe { nil })
 			}
 		}
 		config_prop_has_diagnostics {
@@ -109,9 +111,9 @@ pub fn config_get_type() GType {
 		mut query := C.GTypeQuery{}
 		C.g_type_query(parent, &query)
 		info := C.GTypeInfo{
-			class_size: u16(query.class_size)
+			class_size:    u16(query.class_size)
 			instance_size: u16(query.instance_size)
-			class_init: voidptr(config_class_init)
+			class_init:    voidptr(config_class_init)
 		}
 		g_config_type = C.g_type_register_static(parent, c'GhosttyConfig', &info, 0)
 		g_config_priv_offset = C.g_type_add_instance_private(g_config_type, sizeof(C.GhosttyConfigPrivate))
@@ -148,7 +150,7 @@ mut:
 pub fn config_new(inner configpkg.Config) &Config {
 	obj := GObject(C.g_object_new(config_get_type(), &char(unsafe { nil })))
 	mut self := &Config{
-		obj: obj
+		obj:   obj
 		inner: inner.clone()
 	}
 	mut priv := config_priv(voidptr(obj))
@@ -169,18 +171,6 @@ pub fn (mut self Config) get_mut() &configpkg.Config {
 	return &self.inner
 }
 
-// replace swaps the owned core configuration. Application uses this to keep
-// the stable wrapper shared by windows/global shortcuts synchronized across a
-// reload, matching Ghostty's config GObject property replacement semantics.
-pub fn (mut self Config) replace(inner configpkg.Config) {
-	self.inner.deinit()
-	self.inner = inner
-	if !isnil(self.obj) {
-		C.g_object_notify_by_pspec(self.obj, g_config_pspec_diagnostics_buffer)
-		C.g_object_notify_by_pspec(self.obj, g_config_pspec_has_diagnostics)
-	}
-}
-
 // has_diagnostics reports whether this configuration has any diagnostics.
 // Mirrors `Config.hasDiagnostics` (backs the `has-diagnostics` property).
 pub fn (self &Config) has_diagnostics() bool {
@@ -191,16 +181,20 @@ pub fn (self &Config) has_diagnostics() bool {
 // GtkTextBuffer, or returns a nil buffer if there are no diagnostics. Mirrors
 // `Config.diagnosticsBuffer` (backs the `diagnostics-buffer` property, transfer
 // full).
-pub fn (self &Config) diagnostics_buffer() GtkTextBuffer {
+pub fn (self &Config) diagnostics_buffer() ?GtkTextBuffer {
 	if self.inner.diagnostics.len == 0 {
-		return unsafe { nil }
+		return none
 	}
 
 	text_buf := C.gtk_text_buffer_new(unsafe { nil })
 	for diag in self.inner.diagnostics {
-		// In ghostty each diagnostic is formatted into a fixed buffer via
-		// `diag.format(&writer)`; the translated diagnostic returns that text.
 		msg := diag.format()
+		// Ghostty formats each diagnostic through a fixed [4095:0]u8 writer.
+		// A diagnostic that does not fit is logged and omitted in its entirety.
+		if msg.len > 4095 {
+			log.warn('error writing diagnostic to buffer err=NoSpaceLeft')
+			continue
+		}
 		C.gtk_text_buffer_insert_at_cursor(text_buf, &char(msg.str), msg.len)
 		C.gtk_text_buffer_insert_at_cursor(text_buf, c'\n', 1)
 	}

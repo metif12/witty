@@ -358,9 +358,9 @@ pub fn ghostty_application_get_type() GType {
 		mut query := C.GTypeQuery{}
 		C.g_type_query(parent, &query)
 		info := C.GTypeInfo{
-			class_size: u16(query.class_size)
+			class_size:    u16(query.class_size)
 			instance_size: u16(query.instance_size)
-			class_init: voidptr(ghostty_application_class_init)
+			class_init:    voidptr(ghostty_application_class_init)
 			instance_init: voidptr(ghostty_application_instance_init)
 		}
 		g_ghostty_application_type = C.g_type_register_static(parent, c'GhosttyApplication', &info, 0)
@@ -388,12 +388,11 @@ mut:
 	// The libghostty App instance. Mirrors `Private.core_app`.
 	core_app &core.App = unsafe { nil }
 
-	// The configuration for the application. Mirrors `Private.config`. Since
-	// the GObject `Config` wrapper is out of scope, we hold the core config
-	// value directly.
+	// The core configuration retained by the translated runtime bridge.
 	config configpkg.Config
 
-	// Stable GTK config wrapper shared with child objects.
+	// The current GTK config wrapper. Reloading replaces this object, matching
+	// Ghostty's `Private.config` ownership and property-binding semantics.
 	config_object &Config = unsafe { nil }
 
 	// Headless action boundary used by core.App. Actions emitted through it are
@@ -562,16 +561,16 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 
 	// Instantiate the native GhosttyApplication subclass.
 	mut self := &Application{
-		rt_app: unsafe { rt_app }
-		core_app: unsafe { core_app }
-		config: config
-		config_object: config_new(config)
-		runtime_bridge: apprt.RuntimeApp{
+		rt_app:           unsafe { rt_app }
+		core_app:         unsafe { core_app }
+		config:           config
+		config_object:    config_new(config)
+		runtime_bridge:   apprt.RuntimeApp{
 			config: config.clone()
 		}
 		global_shortcuts: GlobalShortcuts.new()
-		winproto: winproto
-		css_provider: css_provider
+		winproto:         winproto
+		css_provider:     css_provider
 	}
 	obj := C.g_object_new(ghostty_application_get_type(), c'application-id', &char(app_id.str), c'flags', GApplicationFlags(app_flags), &char(unsafe { nil }))
 	if isnil(obj) {
@@ -974,12 +973,12 @@ fn (mut self Application) set_config(config configpkg.Config) {
 	self.config = config
 	self.runtime_bridge.config.deinit()
 	self.runtime_bridge.config = config.clone()
-	if isnil(self.config_object) {
-		self.config_object = config_new(config)
-	} else {
-		mut object := unsafe { self.config_object }
-		object.replace(config.clone())
+	new_object := config_new(config)
+	if !isnil(self.config_object) {
+		mut old_object := unsafe { self.config_object }
+		old_object.unref()
 	}
+	self.config_object = new_object
 	if !isnil(self.global_shortcuts) {
 		mut shortcuts := unsafe { self.global_shortcuts }
 		shortcuts.set_config(self.config_object)
@@ -1612,7 +1611,7 @@ fn (mut self Application) startup_cgroup() ! {
 
 	path := cgroup_init(dbus, Options{
 		memory_high: self.config.linux_cgroup_memory_limit
-		pids_max: self.config.linux_cgroup_processes_limit
+		pids_max:    self.config.linux_cgroup_processes_limit
 	}) or {
 		if self.config.linux_cgroup_hard_fail {
 			return error('CgroupInitFailed')
@@ -1814,7 +1813,7 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 			if data is apprt.InitialSize {
 				mut surface := surface_from_target(target) or { return false }
 				surface.set_default_size(Size{
-					width: data.width
+					width:  data.width
 					height: data.height
 				})
 				return true
@@ -2080,7 +2079,7 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 			if data is apprt.SizeLimit {
 				mut surface := surface_from_target(target) or { return false }
 				surface.set_min_size(Size{
-					width: data.min_width
+					width:  data.min_width
 					height: data.min_height
 				})
 				return true
@@ -2191,7 +2190,9 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 				return true
 			}
 		}
-		.secure_input, .close_all_windows, .float_window, .toggle_visibility, .toggle_background_opacity, .cell_size, .render_inspector, .renderer_health, .color_change, .reset_window_size, .check_for_updates, .undo, .redo {
+		.secure_input, .close_all_windows, .float_window, .toggle_visibility,
+		.toggle_background_opacity, .cell_size, .render_inspector, .renderer_health, .color_change,
+		.reset_window_size, .check_for_updates, .undo, .redo {
 			// These actions are also explicitly unimplemented in the pinned GTK
 			// runtime.
 			log.warn('unimplemented action=${action}')
