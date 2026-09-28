@@ -1,6 +1,7 @@
 module internal_os
 
 import dl
+import log
 import os
 
 const ghostty_gettext_domain = 'com.mitchellh.ghostty'
@@ -74,6 +75,7 @@ pub fn init(resources_dir string) ! {
 		return
 	}
 	locale_dir := os.join_path(share_dir, 'locale')
+	log.debug('binding domain=${ghostty_gettext_domain} path=${locale_dir}')
 	unsafe {
 		bind := BindTextDomainFunction(state.bind_symbol)
 		if isnil(bind(&char(ghostty_gettext_domain.str), &char(locale_dir.str))) {
@@ -201,12 +203,20 @@ fn load_gettext() ! {
 		return
 	}
 
-	candidates := $if macos { ['/opt/homebrew/opt/gettext/lib/libintl.8.dylib',
-		'/usr/local/opt/gettext/lib/libintl.8.dylib', 'libintl.8.dylib', 'libintl.dylib'] } $else $if linux { [
-		'libc.so.6',
-		'libintl.so.8',
-		'libintl.so',
-	] } $else $if freebsd { ['libintl.so', 'libintl.so.8'] } $else { []string{} }
+	candidates := $if macos {
+		['/opt/homebrew/opt/gettext/lib/libintl.8.dylib',
+			'/usr/local/opt/gettext/lib/libintl.8.dylib', 'libintl.8.dylib', 'libintl.dylib']
+	} $else $if linux {
+		[
+			'libc.so.6',
+			'libintl.so.8',
+			'libintl.so',
+		]
+	} $else $if freebsd {
+		['libintl.so', 'libintl.so.8']
+	} $else {
+		[]string{}
+	}
 
 	for candidate in candidates {
 		handle := dl.open(candidate, dl.rtld_lazy | dl.rtld_local)
@@ -214,14 +224,16 @@ fn load_gettext() ! {
 			continue
 		}
 		dgettext_symbol := dl.sym(handle, 'dgettext')
-		if isnil(dgettext_symbol) {
+		bind_symbol := dl.sym(handle, 'bindtextdomain')
+		domain_symbol := dl.sym(handle, 'textdomain')
+		if isnil(dgettext_symbol) || isnil(bind_symbol) || isnil(domain_symbol) {
 			dl.close(handle)
 			continue
 		}
 		state.handle = handle
 		state.dgettext_symbol = dgettext_symbol
-		state.bind_symbol = dl.sym(handle, 'bindtextdomain')
-		state.domain_symbol = dl.sym(handle, 'textdomain')
+		state.bind_symbol = bind_symbol
+		state.domain_symbol = domain_symbol
 		return
 	}
 	return error('gettext runtime not found')
