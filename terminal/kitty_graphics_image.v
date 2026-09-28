@@ -111,10 +111,10 @@ module terminal
 // Defines the Image (fully loaded image data), LoadingImage (in-progress
 // image loading), Rect (placement rectangle in grid cells), and
 // RenderPlacement (placement rendering information) types.
-
 import os
 import time
 import compress.zlib
+import log
 import wuffs.png as wuffs_png
 
 // POSIX shared-memory / mmap bindings, required for the shared_memory
@@ -193,14 +193,14 @@ pub fn (mut self Image) deinit() {
 // Mostly for logging.
 pub fn (self &Image) without_data() Image {
 	return Image{
-		id: self.id
-		number: self.number
-		width: self.width
-		height: self.height
-		format: self.format
-		compression: self.compression
+		id:            self.id
+		number:        self.number
+		width:         self.width
+		height:        self.height
+		format:        self.format
+		compression:   self.compression
 		transmit_time: self.transmit_time
-		implicit_id: self.implicit_id
+		implicit_id:   self.implicit_id
 	}
 }
 
@@ -239,16 +239,16 @@ pub fn (mut self LoadingImage) destroy() {
 pub fn LoadingImage.init_from_cmd(cmd &Command) !LoadingImage {
 	t := cmd.transmission() or { return error('no transmission in command') }
 	mut result := LoadingImage{
-		image: Image{
-			id: t.image_id
-			number: t.image_number
-			width: t.width
-			height: t.height
+		image:   Image{
+			id:          t.image_id
+			number:      t.image_number
+			width:       t.width
+			height:      t.height
 			compression: t.compression
-			format: t.format_
+			format:      t.format_
 		}
 		display: cmd.display()
-		quiet: cmd.quiet
+		quiet:   cmd.quiet
 	}
 
 	// Special case for the direct medium, we just add the chunk directly.
@@ -279,6 +279,7 @@ pub fn LoadingImage.init_from_cmd(cmd &Command) !LoadingImage {
 			cmd.data.bytestr()
 		}
 	}
+
 	if path.len == 0 {
 		return error('invalid data: empty file path')
 	}
@@ -336,7 +337,6 @@ fn (mut self LoadingImage) read_shared_memory(t Transmission, path string) ! {
 		.png {
 			stat_size
 		}
-
 		// For these formats we have a size we must have.
 		.gray, .gray_alpha, .rgb, .rgba {
 			bpp := usize(self.image.format.bpp())
@@ -364,7 +364,11 @@ fn (mut self LoadingImage) read_shared_memory(t Transmission, path string) ! {
 	start := usize(t.offset)
 	end := if t.size > 0 {
 		e := usize(t.offset) + usize(t.size)
-		if e < expected_size { e } else { expected_size }
+		if e < expected_size {
+			e
+		} else {
+			expected_size
+		}
 	} else {
 		expected_size
 	}
@@ -430,7 +434,6 @@ fn (mut self LoadingImage) read_file(medium TransmissionMedium, t Transmission, 
 		mut fm := &f
 		fm.close()
 	}
-
 	// Set our data
 	self.data << data
 }
@@ -531,11 +534,9 @@ fn (mut self LoadingImage) decode_png() ! {
 		return error('invalid data: empty png')
 	}
 
-	result := wuffs_png.decode(self.data) or {
-		return error('InvalidData')
-	}
+	result := wuffs_png.decode(self.data) or { return error('InvalidData') }
 	if result.data.len > max_image_size {
-		eprintln('png image too large size=${result.data.len} max_size=${max_image_size}')
+		log.warn('png image too large size=${result.data.len} max_size=${max_image_size}')
 		return error('InvalidData')
 	}
 

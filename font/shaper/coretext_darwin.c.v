@@ -3,8 +3,10 @@ module shaper
 import datastruct
 import font
 import internal_os
+import log
 import macos
 import math
+import unicode
 
 // Shaper that uses CoreText.
 //
@@ -72,7 +74,7 @@ pub mut:
 pub fn RunState.init() RunState {
 	return RunState{
 		codepoints: []Codepoint{}
-		unichars: []u16{}
+		unichars:   []u16{}
 	}
 }
 
@@ -100,15 +102,15 @@ mut:
 // These are in addition to the features from feature.v's default_features.
 pub const ct_default_features = [
 	Feature{
-		tag: [u8(`c`), u8(`a`), u8(`l`), u8(`t`)]!
+		tag:   [u8(`c`), u8(`a`), u8(`l`), u8(`t`)]!
 		value: 1
 	},
 	Feature{
-		tag: [u8(`l`), u8(`i`), u8(`g`), u8(`a`)]!
+		tag:   [u8(`l`), u8(`i`), u8(`g`), u8(`a`)]!
 		value: 1
 	},
 	Feature{
-		tag: [u8(`c`), u8(`l`), u8(`i`), u8(`g`)]!
+		tag:   [u8(`c`), u8(`l`), u8(`i`), u8(`g`)]!
 		value: 1
 	},
 ]
@@ -202,22 +204,21 @@ pub fn Shaper.init(opts font.ShaperOptions) !Shaper {
 	unsafe {
 		*cf_release_thread = internal_os.CFReleaseThread.init()!
 	}
-
 	// Start the CF release thread.
 	cf_release_thr := spawn cf_release_thread.thread_main()
 
 	return Shaper{
-		run_state: run_state
-		features: features
-		features_no_default: features_no_default
-		cell_buf: []font.ShapeCell{}
+		run_state:            run_state
+		features:             features
+		features_no_default:  features_no_default
+		cell_buf:             []font.ShapeCell{}
 		typesetter_attr_dict: typesetter_attr_dict
-		cached_fonts: []?&macos.CFDictionary{}
-		cached_font_grid: 0
-		cf_release_pool: []voidptr{}
-		cf_release_thread: cf_release_thread
-		cf_release_thr: cf_release_thr
-		feature_strings: opts.features.clone()
+		cached_fonts:         []?&macos.CFDictionary{}
+		cached_font_grid:     0
+		cf_release_pool:      []voidptr{}
+		cf_release_thread:    cf_release_thread
+		cf_release_thr:       cf_release_thr
+		feature_strings:      opts.features.clone()
 	}
 }
 
@@ -250,7 +251,7 @@ pub fn (mut self Shaper) deinit() {
 		// wait for a release thread. But in production this is a bug
 		// and we should warn.
 		$if !test {
-			eprintln('BUG: CFRelease pool was not empty, releasing remaining objects')
+			log.warn('BUG: CFRelease pool was not empty, releasing remaining objects')
 		}
 	}
 	self.cf_release_pool = []
@@ -258,7 +259,7 @@ pub fn (mut self Shaper) deinit() {
 	// Stop the CF release thread
 	if self.cf_release_thread != unsafe { nil } {
 		self.cf_release_thread.stop.notify() or {
-			eprintln('error notifying cf release thread to stop, may stall err=${err}')
+			log.error('error notifying cf release thread to stop, may stall err=${err}')
 		}
 		if thr := self.cf_release_thr {
 			thr.wait()
@@ -290,7 +291,7 @@ pub fn (mut self Shaper) end_frame() {
 		}
 	}, datastruct.blocking_queue_forever) != 0 {
 		self.cf_release_thread.wakeup.notify() or {
-			eprintln('error notifying cf release thread to wake up, may stall err=${err}')
+			log.warn('error notifying cf release thread to wake up, may stall err=${err}')
 		}
 		return
 	}
@@ -303,8 +304,8 @@ pub fn (mut self Shaper) end_frame() {
 // Create a run iterator for the given options.
 pub fn (mut self Shaper) run_iterator(opts font.RunOptions) font.RunIterator {
 	return font.RunIterator.new_with_hooks(unsafe { &self }, opts, font.RunIteratorHooks{
-		prepare: coretext_run_prepare
-		add: coretext_run_add
+		prepare:  coretext_run_prepare
+		add:      coretext_run_add
 		finalize: coretext_run_finalize
 	})
 }
@@ -323,12 +324,12 @@ fn coretext_run_add(shaper_ptr voidptr, cp u32, cluster u32) ! {
 	}
 	shaper.run_state.codepoints << Codepoint{
 		codepoint: cp
-		cluster: cluster
+		cluster:   cluster
 	}
 	if sp.is_pair {
 		shaper.run_state.codepoints << Codepoint{
 			codepoint: 0
-			cluster: cluster
+			cluster:   cluster
 		}
 	}
 }
@@ -365,7 +366,7 @@ pub fn (mut self Shaper) shape(run font.TextRun) ![]font.ShapeCell {
 			}
 
 			self.cell_buf << font.ShapeCell{
-				x: u32(entry.cluster)
+				x:           u32(entry.cluster)
 				glyph_index: entry.codepoint
 			}
 		}
@@ -387,7 +388,8 @@ pub fn (mut self Shaper) shape(run font.TextRun) ![]font.ShapeCell {
 
 	// Create a typesetter from the attributed string and the cached
 	// attr dict. (See comment in init for more info on the attr dict.)
-	typesetter := macos.CTTypesetter.create_with_attributed_string_and_options(attr_str, self.typesetter_attr_dict)!
+	typesetter := macos.CTTypesetter.create_with_attributed_string_and_options(attr_str,
+		self.typesetter_attr_dict)!
 	self.cf_release_pool << voidptr(typesetter)
 
 	// Create a line from the typesetter
@@ -462,20 +464,19 @@ pub fn (mut self Shaper) shape(run font.TextRun) ![]font.ShapeCell {
 					break
 				}
 
-				if is_first_codepoint_in_cluster
-					&& !is_after_glyph_from_current_or_next_clusters {
+				if is_first_codepoint_in_cluster && !is_after_glyph_from_current_or_next_clusters {
 					cell_offset = Offset{
 						cluster: cluster
-						x: run_offset.x
+						x:       run_offset.x
 					}
 				}
 			}
 
 			position := positions[idx]
 			self.cell_buf << font.ShapeCell{
-				x: cell_offset.cluster
-				x_offset: i32(math.round(position.x - cell_offset.x))
-				y_offset: i32(math.round(position.y))
+				x:           cell_offset.cluster
+				x_offset:    i32(math.round(position.x - cell_offset.x))
+				y_offset:    i32(math.round(position.y))
 				glyph_index: glyphs[idx]
 			}
 
@@ -605,7 +606,7 @@ pub fn (mut self RunIteratorHook) add_codepoint(cp u32, cluster u32) ! {
 	// Build our reverse lookup table for codepoints to clusters
 	state.codepoints << Codepoint{
 		codepoint: cp
-		cluster: cluster
+		cluster:   cluster
 	}
 
 	// log.warn("run cp={X}", .{cp});
@@ -616,7 +617,7 @@ pub fn (mut self RunIteratorHook) add_codepoint(cp u32, cluster u32) ! {
 	if sp.is_pair {
 		state.codepoints << Codepoint{
 			codepoint: 0
-			cluster: cluster
+			cluster:   cluster
 		}
 	}
 }
@@ -635,22 +636,79 @@ fn (self &Shaper) debug_positions(run_offset Offset, run_offset_y f64, cell_offs
 	advance_y_offset := run_offset_y - cell_offset_y
 	x_offset_diff := x_offset - advance_x_offset
 	y_offset_diff := position.y - advance_y_offset
+	positions_differ := math.abs(x_offset_diff) > 0.0001 || math.abs(y_offset_diff) > 0.0001
+	old_offset_y := position.y - cell_offset_y
+	position_y_differs := math.abs(cell_offset_y) > 0.0001
+	cluster := state.codepoints[index].cluster
+	cluster_differs := cluster != cell_offset.cluster
 
-	if index < 0 || index >= state.codepoints.len {
-		return
-	}
-	cluster_differs := state.codepoints[index].cluster != cell_offset.cluster
-	if x_offset_diff == 0 && y_offset_diff == 0 && !cluster_differs {
-		return
-	}
-	mut context := []string{}
-	start := if index > 2 { index - 2 } else { 0 }
-	end := if index + 3 < state.codepoints.len { index + 3 } else { state.codepoints.len }
-	for i in start .. end {
-		entry := state.codepoints[i]
-		if entry.codepoint != 0 {
-			context << 'U+${entry.codepoint:04X}@${entry.cluster}'
+	// To debug every loop, flip this to true:
+	extra_debugging := false
+
+	mut is_previous_codepoint_prepend := false
+	if cluster_differs || extra_debugging {
+		mut i := index
+		for i > 0 {
+			i--
+			codepoint := state.codepoints[i]
+
+			// Skip surrogate pair padding.
+			if codepoint.codepoint == 0 {
+				continue
+			}
+
+			is_previous_codepoint_prepend = unicode.get(codepoint.codepoint).grapheme_break() == .prepend
+			break
 		}
 	}
-	eprintln('CoreText position mismatch codepoints=${context.join(' ')} x_diff=${x_offset_diff:.2f} y_diff=${y_offset_diff:.2f} cluster=${state.codepoints[index].cluster} cell_cluster=${cell_offset.cluster}')
+
+	mut formatted_cps := ''
+	if positions_differ || position_y_differs || cluster_differs || extra_debugging {
+		mut codepoints_text := []string{}
+		mut last_cluster := ?u32(none)
+		for i, cp in state.codepoints {
+			if i64(cp.cluster) >= i64(cell_offset.cluster) - 1
+				&& u64(cp.cluster) <= u64(cluster) + 1 && cp.codepoint != 0 {
+				mut formatted := ''
+				if last := last_cluster {
+					if cp.cluster != last {
+						formatted += ' '
+					}
+				}
+				if i == index {
+					formatted += '▸'
+				}
+				formatted += if cp.codepoint > 0xffff {
+					'\\U${cp.codepoint:08x}'
+				} else {
+					'\\u${cp.codepoint:04x}'
+				}
+				codepoints_text << formatted
+				last_cluster = cp.cluster
+			}
+		}
+		formatted_cps = codepoints_text.join('') + ' → '
+		for cp in state.codepoints {
+			if i64(cp.cluster) >= i64(cell_offset.cluster) - 1
+				&& u64(cp.cluster) <= u64(cluster) + 1 && cp.codepoint != 0 {
+				formatted_cps += rune(cp.codepoint).str()
+			}
+		}
+	}
+
+	if extra_debugging {
+		log.warn('extra debugging of positions index=${index} cell_offset.cluster=${cell_offset.cluster} cluster=${cluster} run_offset.cluster=${run_offset.cluster} diff=${i64(cluster) - i64(cell_offset.cluster)} pos=(${x_offset:.2f},${position.y:.2f}) run_offset=(${run_offset.x:.2f},${run_offset_y:.2f}) cell_offset=(${cell_offset.x:.2f},${cell_offset_y:.2f}) is_prev_prepend=${is_previous_codepoint_prepend} cps = ${formatted_cps}')
+	}
+
+	if positions_differ {
+		log.warn('position differs from advance: cluster=${cluster} pos=(${x_offset:.2f},${position.y:.2f}) adv=(${advance_x_offset:.2f},${advance_y_offset:.2f}) diff=(${x_offset_diff:.2f},${y_offset_diff:.2f}) cps = ${formatted_cps}')
+	}
+
+	if position_y_differs {
+		log.warn('position.y differs from old offset.y: cluster=${cluster} pos=(${x_offset:.2f},${position.y:.2f}) run_offset=(${run_offset.x:.2f},${run_offset_y:.2f}) cell_offset=(${cell_offset.x:.2f},${cell_offset_y:.2f}) old offset.y=${old_offset_y:.2f} cps = ${formatted_cps}')
+	}
+
+	if cluster_differs {
+		log.warn('cell_offset.cluster differs from cluster (potential ligature detected) cell_offset.cluster=${cell_offset.cluster} cluster=${cluster} run_offset.cluster=${run_offset.cluster} diff=${i64(cluster) - i64(cell_offset.cluster)} pos=(${x_offset:.2f},${position.y:.2f}) run_offset=(${run_offset.x:.2f},${run_offset_y:.2f}) cell_offset=(${cell_offset.x:.2f},${cell_offset_y:.2f}) is_prev_prepend=${is_previous_codepoint_prepend} cps = ${formatted_cps}')
+	}
 }

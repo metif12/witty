@@ -2,6 +2,8 @@ module shaper
 
 import font
 import harfbuzz
+import log
+import unicode
 
 // Shaper that uses HarfBuzz.
 //
@@ -69,20 +71,17 @@ pub fn HbShaper.init(opts font.ShaperOptions) !HbShaper {
 	mut feat_list := []harfbuzz.Feature{cap: feature_list.features.len}
 	for feature in feature_list.features {
 		feat_list << harfbuzz.Feature{
-			tag: u32(feature.tag[0]) << 24 |
-				u32(feature.tag[1]) << 16 |
-				u32(feature.tag[2]) << 8 |
-				u32(feature.tag[3])
+			tag:   u32(feature.tag[0]) << 24 | u32(feature.tag[1]) << 16 | u32(feature.tag[2]) << 8 | u32(feature.tag[3])
 			value: feature.value
 			start: harfbuzz.feature_global_start
-			end: harfbuzz.feature_global_end
+			end:   harfbuzz.feature_global_end
 		}
 	}
 
 	return HbShaper{
-		hb_buf: harfbuzz.Buffer.create()!
-		cell_buf: []font.ShapeCell{}
-		hb_feats: feat_list
+		hb_buf:     harfbuzz.Buffer.create()!
+		cell_buf:   []font.ShapeCell{}
+		hb_feats:   feat_list
 		codepoints: []HbCodepoint{}
 	}
 }
@@ -111,8 +110,8 @@ pub fn (self &HbShaper) end_frame() {
 pub fn (mut self HbShaper) run_iterator(opts font.RunOptions) font.RunIterator {
 	self.grid = opts.grid
 	return font.RunIterator.new_with_hooks(unsafe { &self }, opts, font.RunIteratorHooks{
-		prepare: harfbuzz_run_prepare
-		add: harfbuzz_run_add
+		prepare:  harfbuzz_run_prepare
+		add:      harfbuzz_run_add
 		finalize: harfbuzz_run_finalize
 	})
 }
@@ -130,7 +129,7 @@ fn harfbuzz_run_add(shaper_ptr voidptr, cp u32, cluster u32) ! {
 	mut shaper := unsafe { &HbShaper(shaper_ptr) }
 	shaper.hb_buf.add(cp, u32(shaper.codepoints.len))
 	shaper.codepoints << HbCodepoint{
-		cluster: cluster
+		cluster:   cluster
 		codepoint: cp
 	}
 }
@@ -200,8 +199,7 @@ pub fn (mut self HbShaper) shape(run font.TextRun) ![]font.ShapeCell {
 		// then we need to reset our current cell offsets.
 		cluster := self.codepoints[index].cluster
 		if cell_offset.cluster != cluster {
-			is_after_glyph_from_current_or_next_clusters :=
-				cluster <= run_offset.cluster
+			is_after_glyph_from_current_or_next_clusters := cluster <= run_offset.cluster
 
 			is_first_codepoint_in_cluster := if index > 0 {
 				// Check if the previous codepoint belongs to a different cluster.
@@ -238,11 +236,10 @@ pub fn (mut self HbShaper) shape(run font.TextRun) ![]font.ShapeCell {
 			// exceptions to this heuristic for detecting ligatures,
 			// but using the logging below seems to show it works
 			// well.)
-			if is_first_codepoint_in_cluster
-				&& !is_after_glyph_from_current_or_next_clusters {
+			if is_first_codepoint_in_cluster && !is_after_glyph_from_current_or_next_clusters {
 				cell_offset = HbCellOffset{
 					cluster: cluster
-					x: run_offset.x
+					x:       run_offset.x
 				}
 			}
 		}
@@ -257,9 +254,9 @@ pub fn (mut self HbShaper) shape(run font.TextRun) ![]font.ShapeCell {
 		// self.debug_positions(run_offset, cell_offset, pos_v, index)
 
 		self.cell_buf << font.ShapeCell{
-			x: cell_offset.cluster
-			x_offset: x_offset
-			y_offset: y_offset
+			x:           cell_offset.cluster
+			x_offset:    x_offset
+			y_offset:    y_offset
 			glyph_index: info_v.codepoint
 		}
 
@@ -318,7 +315,7 @@ pub fn (mut self HbRunIteratorHook) add_codepoint(cp u32, cluster u32) ! {
 	index := u32(self.shaper.codepoints.len)
 	self.shaper.hb_buf.add(cp, index)
 	self.shaper.codepoints << HbCodepoint{
-		cluster: cluster
+		cluster:   cluster
 		codepoint: cp
 	}
 }
@@ -337,21 +334,72 @@ fn (self &HbShaper) debug_positions(run_offset HbRunOffset, cell_offset HbCellOf
 	advance_y_offset := run_offset.y
 	x_offset_diff := x_offset - advance_x_offset
 	y_offset_diff := y_offset - advance_y_offset
-	if int(index) >= self.codepoints.len {
-		return
-	}
-	cluster := self.codepoints[int(index)].cluster
-	cluster_differs := cluster != cell_offset.cluster
-	if x_offset_diff == 0 && y_offset_diff == 0 && !cluster_differs {
-		return
-	}
+	positions_differ := x_offset_diff != 0 || y_offset_diff != 0
+	y_offset_differs := run_offset.y != 0
 	idx := int(index)
-	start := if idx > 2 { idx - 2 } else { 0 }
-	end := if idx + 3 < self.codepoints.len { idx + 3 } else { self.codepoints.len }
-	mut context := []string{}
-	for i in start .. end {
-		entry := self.codepoints[i]
-		context << 'U+${entry.codepoint:04X}@${entry.cluster}'
+	cluster := self.codepoints[idx].cluster
+	cluster_differs := cluster != cell_offset.cluster
+
+	// To debug every loop, flip this to true:
+	extra_debugging := false
+
+	mut is_previous_codepoint_prepend := false
+	if cluster_differs || extra_debugging {
+		mut i := idx
+		if i > 0 {
+			i--
+			codepoint := self.codepoints[i]
+			is_previous_codepoint_prepend = unicode.get(codepoint.codepoint).grapheme_break() == .prepend
+		}
 	}
-	eprintln('HarfBuzz position mismatch codepoints=${context.join(' ')} x_diff=${x_offset_diff} y_diff=${y_offset_diff} cluster=${cluster} cell_cluster=${cell_offset.cluster}')
+
+	mut formatted_cps := ''
+	if positions_differ || y_offset_differs || cluster_differs || extra_debugging {
+		mut codepoints_text := []string{}
+		mut last_cluster := ?u32(none)
+		for i, cp in self.codepoints {
+			if i64(cp.cluster) >= i64(cell_offset.cluster) - 1
+				&& u64(cp.cluster) <= u64(cluster) + 1 {
+				mut formatted := ''
+				if last := last_cluster {
+					if cp.cluster != last {
+						formatted += ' '
+					}
+				}
+				if i == idx {
+					formatted += '▸'
+				}
+				formatted += if cp.codepoint > 0xffff {
+					'\\U${cp.codepoint:08x}'
+				} else {
+					'\\u${cp.codepoint:04x}'
+				}
+				codepoints_text << formatted
+				last_cluster = cp.cluster
+			}
+		}
+		formatted_cps = codepoints_text.join('') + ' → '
+		for cp in self.codepoints {
+			if i64(cp.cluster) >= i64(cell_offset.cluster) - 1
+				&& u64(cp.cluster) <= u64(cluster) + 1 {
+				formatted_cps += rune(cp.codepoint).str()
+			}
+		}
+	}
+
+	if extra_debugging {
+		log.warn('extra debugging of positions index=${index} cell_offset.cluster=${cell_offset.cluster} cluster=${cluster} run_offset.cluster=${run_offset.cluster} diff=${i64(cluster) - i64(cell_offset.cluster)} pos=(${x_offset},${y_offset}) run_offset=(${run_offset.x},${run_offset.y}) cell_offset.x=${cell_offset.x} is_prev_prepend=${is_previous_codepoint_prepend} cps = ${formatted_cps}')
+	}
+
+	if positions_differ {
+		log.warn('position differs from advance: cluster=${cluster} pos=(${x_offset},${y_offset}) adv=(${advance_x_offset},${advance_y_offset}) diff=(${x_offset_diff},${y_offset_diff}) cps = ${formatted_cps}')
+	}
+
+	if y_offset_differs {
+		log.warn('run_offset.y differs from zero: cluster=${cluster} pos=(${x_offset},${y_offset}) run_offset=(${run_offset.x},${run_offset.y}) cell_offset.x=${cell_offset.x} cps = ${formatted_cps}')
+	}
+
+	if cluster_differs {
+		log.warn('cell_offset.cluster differs from cluster (potential ligature detected) cell_offset.cluster=${cell_offset.cluster} cluster=${cluster} run_offset.cluster=${run_offset.cluster} diff=${i64(cluster) - i64(cell_offset.cluster)} pos=(${x_offset},${y_offset}) run_offset=(${run_offset.x},${run_offset.y}) cell_offset.x=${cell_offset.x} is_prev_prepend=${is_previous_codepoint_prepend} cps = ${formatted_cps}')
+	}
 }
