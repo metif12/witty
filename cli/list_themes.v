@@ -839,7 +839,7 @@ pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string 
 	color238 := preview_palette_style(config, 238, bg)
 	right := x_off + width
 	sample_bottom := min_int(next_row + 24, height)
-	put_preview_segments(mut out, next_row, x_off + 2, right, sample_bottom, [
+	self.put_preview_segments(mut out, next_row, x_off + 2, right, sample_bottom, [
 		PreviewSegment{ text: '→', style: color2 },
 		PreviewSegment{ text: ' ', style: standard },
 		PreviewSegment{ text: 'bat', style: color4 },
@@ -848,14 +848,14 @@ pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string 
 	])
 	put_preview_segment(mut out, next_row + 1, x_off + 2, right, height,
 		'───────┬${'─'.repeat(max_int(width - 10, 0))}', color238)
-	put_preview_segments(mut out, next_row + 2, x_off + 2, right, sample_bottom, [
+	self.put_preview_segments(mut out, next_row + 2, x_off + 2, right, sample_bottom, [
 		PreviewSegment{ text: '       │ ', style: color238 },
 		PreviewSegment{ text: 'File: ', style: standard },
 		PreviewSegment{ text: 'ziggzagg.zig', style: standard_bold },
 	])
 	put_preview_segment(mut out, next_row + 3, x_off + 2, right, height,
 		'───────┼${'─'.repeat(max_int(width - 10, 0))}', color238)
-	put_preview_segments(mut out, next_row + 4, x_off + 2, right, sample_bottom, [
+	self.put_preview_segments(mut out, next_row + 4, x_off + 2, right, sample_bottom, [
 		PreviewSegment{ text: '   1   │ ', style: color238 },
 		PreviewSegment{ text: 'const', style: color5 },
 		PreviewSegment{ text: ' std ', style: standard },
@@ -865,7 +865,7 @@ pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string 
 		PreviewSegment{ text: ');', style: standard },
 	])
 	put_preview_segment(mut out, next_row + 5, x_off + 2, right, height, '   2   │', color238)
-	put_preview_segments(mut out, next_row + 6, x_off + 2, right, sample_bottom, [
+	self.put_preview_segments(mut out, next_row + 6, x_off + 2, right, sample_bottom, [
 		PreviewSegment{ text: '   3   │ ', style: color238 },
 		PreviewSegment{ text: 'pub ', style: color5 },
 		PreviewSegment{ text: 'fn ', style: color12 },
@@ -875,14 +875,14 @@ pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string 
 		PreviewSegment{ text: 'void', style: color12 },
 		PreviewSegment{ text: ' {', style: standard },
 	])
-	put_preview_segments(mut out, next_row + 7, x_off + 2, right, sample_bottom, [
+	self.put_preview_segments(mut out, next_row + 7, x_off + 2, right, sample_bottom, [
 		PreviewSegment{ text: '   4   │     ', style: color238 },
 		PreviewSegment{ text: 'const ', style: color5 },
 		PreviewSegment{ text: 'stdout ', style: standard },
 		PreviewSegment{ text: '=', style: color5 },
 		PreviewSegment{ text: ' std.Io.getStdOut().writer();', style: standard },
 	])
-	put_preview_segments(mut out, next_row + 8, x_off + 2, right, sample_bottom, [
+	self.put_preview_segments(mut out, next_row + 8, x_off + 2, right, sample_bottom, [
 		PreviewSegment{ text: '   5   │     ', style: color238 },
 		PreviewSegment{ text: 'var ', style: color5 },
 		PreviewSegment{ text: 'i:', style: standard },
@@ -891,7 +891,7 @@ pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string 
 		PreviewSegment{ text: ' 1', style: color4 },
 		PreviewSegment{ text: ';', style: standard },
 	])
-	put_preview_segments(mut out, next_row + 9, x_off + 2, right, sample_bottom, [
+	self.put_preview_segments(mut out, next_row + 9, x_off + 2, right, sample_bottom, [
 		PreviewSegment{ text: '   6   │     ', style: color238 },
 		PreviewSegment{ text: 'while ', style: color5 },
 		PreviewSegment{ text: '(i ', style: standard },
@@ -902,7 +902,7 @@ pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string 
 		PreviewSegment{ text: '1', style: color4 },
 		PreviewSegment{ text: ') {', style: standard },
 	])
-	put_preview_segments(mut out, next_row + 10, x_off + 2, right, sample_bottom, [
+	self.put_preview_segments(mut out, next_row + 10, x_off + 2, right, sample_bottom, [
 		PreviewSegment{ text: '   7   │         ', style: color238 },
 		PreviewSegment{ text: 'if ', style: color5 },
 		PreviewSegment{ text: '(i ', style: standard },
@@ -912,7 +912,7 @@ pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string 
 		PreviewSegment{ text: '0', style: color4 },
 		PreviewSegment{ text: ') {', style: standard },
 	])
-	put_preview_segments(mut out, next_row + 11, x_off + 2, right, sample_bottom, [
+	self.put_preview_segments(mut out, next_row + 11, x_off + 2, right, sample_bottom, [
 		PreviewSegment{ text: '   8   │             ', style: color238 },
 		PreviewSegment{ text: 'try ', style: color5 },
 		PreviewSegment{ text: 'stdout.writeAll(', style: standard },
@@ -921,7 +921,7 @@ pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string 
 		PreviewSegment{ text: '"', style: color10 },
 		PreviewSegment{ text: ');', style: standard },
 	])
-	put_preview_segments(mut out, next_row + 12, x_off + 2, right, sample_bottom, [
+	self.put_preview_segments(mut out, next_row + 12, x_off + 2, right, sample_bottom, [
 		PreviewSegment{ text: '   9   │         ', style: color238 },
 		PreviewSegment{ text: '} ', style: standard },
 		PreviewSegment{ text: 'else if ', style: color5 },
@@ -932,7 +932,7 @@ pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string 
 		PreviewSegment{ text: '0', style: color4 },
 		PreviewSegment{ text: ') {', style: standard },
 	])
-	put_preview_segments(mut out, next_row + 13, x_off + 2, right, sample_bottom, [
+	self.put_preview_segments(mut out, next_row + 13, x_off + 2, right, sample_bottom, [
 		PreviewSegment{ text: '  10   │             ', style: color238 },
 		PreviewSegment{ text: 'try ', style: color5 },
 		PreviewSegment{ text: 'stdout.writeAll(', style: standard },
@@ -941,7 +941,7 @@ pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string 
 		PreviewSegment{ text: '"', style: color10 },
 		PreviewSegment{ text: ');', style: standard },
 	])
-	put_preview_segments(mut out, next_row + 14, x_off + 2, right, sample_bottom, [
+	self.put_preview_segments(mut out, next_row + 14, x_off + 2, right, sample_bottom, [
 		PreviewSegment{ text: '  11   │         ', style: color238 },
 		PreviewSegment{ text: '} ', style: standard },
 		PreviewSegment{ text: 'else if ', style: color5 },
@@ -952,7 +952,7 @@ pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string 
 		PreviewSegment{ text: '0', style: color4 },
 		PreviewSegment{ text: ') {', style: standard },
 	])
-	put_preview_segments(mut out, next_row + 15, x_off + 2, right, sample_bottom, [
+	self.put_preview_segments(mut out, next_row + 15, x_off + 2, right, sample_bottom, [
 		PreviewSegment{ text: '  12   │             ', style: color238 },
 		PreviewSegment{ text: 'try ', style: color5 },
 		PreviewSegment{ text: 'stdout.writeAll(', style: standard },
@@ -961,33 +961,33 @@ pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string 
 		PreviewSegment{ text: '"', style: color10 },
 		PreviewSegment{ text: ');', style: standard },
 	])
-	put_preview_segments(mut out, next_row + 16, x_off + 2, right, sample_bottom, [
+	self.put_preview_segments(mut out, next_row + 16, x_off + 2, right, sample_bottom, [
 		PreviewSegment{ text: '  13   │         ', style: color238 },
 		PreviewSegment{ text: '} ', style: standard },
 		PreviewSegment{ text: 'else ', style: color5 },
 		PreviewSegment{ text: '{', style: standard },
 	])
-	put_preview_segments(mut out, next_row + 17, x_off + 2, right, sample_bottom, [
+	self.put_preview_segments(mut out, next_row + 17, x_off + 2, right, sample_bottom, [
 		PreviewSegment{ text: '  14   │             ', style: color238 },
 		PreviewSegment{ text: 'try ', style: color5 },
 		PreviewSegment{ text: 'stdout.print("{d}\\n", .{i})', style: standard_selection },
 		PreviewSegment{ text: ';', style: cursor },
 	])
-	put_preview_segments(mut out, next_row + 18, x_off + 2, right, sample_bottom, [
+	self.put_preview_segments(mut out, next_row + 18, x_off + 2, right, sample_bottom, [
 		PreviewSegment{ text: '  15   │         ', style: color238 },
 		PreviewSegment{ text: '}', style: standard },
 	])
-	put_preview_segments(mut out, next_row + 19, x_off + 2, right, sample_bottom, [
+	self.put_preview_segments(mut out, next_row + 19, x_off + 2, right, sample_bottom, [
 		PreviewSegment{ text: '  16   │     ', style: color238 },
 		PreviewSegment{ text: '}', style: standard },
 	])
-	put_preview_segments(mut out, next_row + 20, x_off + 2, right, sample_bottom, [
+	self.put_preview_segments(mut out, next_row + 20, x_off + 2, right, sample_bottom, [
 		PreviewSegment{ text: '  17   │ ', style: color238 },
 		PreviewSegment{ text: '}', style: standard },
 	])
 	put_preview_segment(mut out, next_row + 21, x_off + 2, right, height,
 		'───────┴${'─'.repeat(max_int(width - 10, 0))}', color238)
-	put_preview_segments(mut out, next_row + 22, x_off + 2, right, sample_bottom, [
+	self.put_preview_segments(mut out, next_row + 22, x_off + 2, right, sample_bottom, [
 		PreviewSegment{ text: 'ghostty ', style: color6 },
 		PreviewSegment{ text: 'on ', style: standard },
 		PreviewSegment{ text: ' main ', style: color4 },
@@ -997,7 +997,7 @@ pub fn (mut self Preview) draw_preview(x_off int, width int, height int) string 
 		PreviewSegment{ text: 'via ', style: standard },
 		PreviewSegment{ text: '  impure (ghostty-env)', style: color4 },
 	])
-	put_preview_segments(mut out, next_row + 23, x_off + 2, right, sample_bottom, [
+	self.put_preview_segments(mut out, next_row + 23, x_off + 2, right, sample_bottom, [
 		PreviewSegment{ text: '✦ ', style: color4 },
 		PreviewSegment{ text: 'at ', style: standard },
 		PreviewSegment{ text: '10:36:15 ', style: color3 },
@@ -1096,19 +1096,18 @@ fn put_preview_segment(mut out strings.Builder, row int, col int, right int, bot
 	put_segment(mut out, row, col, right, text, style)
 }
 
-fn put_preview_segments(mut out strings.Builder, row int, col int, right int, bottom int, segments []PreviewSegment) {
+fn (self &Preview) put_preview_segments(mut out strings.Builder, row int, col int, right int, bottom int, segments []PreviewSegment) {
 	if row < 0 || row >= bottom || col < 0 || col >= right {
 		return
 	}
-	// Every call begins at column 2 of the sample child window. Window.print
-	// wraps at the child window's left edge when a segment reaches its right edge.
+	// Match pinned Window.print(.grapheme): segments share one cursor, widths
+	// come from the window's negotiated method, and wrapping uses its left edge.
 	left := col - 2
 	mut current_row := row
 	mut current_col := col
 	for segment in segments {
-		runes := segment.text.runes()
-		mut start := 0
-		for start < runes.len {
+		mut offset := 0
+		for offset < segment.text.len {
 			if current_col >= right {
 				current_row++
 				current_col = left
@@ -1116,11 +1115,33 @@ fn put_preview_segments(mut out strings.Builder, row int, col int, right int, bo
 			if current_row >= bottom {
 				return
 			}
-			count := min_int(right - current_col, runes.len - start)
-			put_segment(mut out, current_row, current_col, right, runes[start..start + count].string(),
-				segment.style)
-			current_col += count
-			start += count
+			run_row := current_row
+			run_col := current_col
+			mut run := strings.new_builder(segment.text.len - offset)
+			for offset < segment.text.len && current_col < right {
+				length := vaxis.first_grapheme_byte_length(segment.text[offset..])
+				if length == 0 {
+					return
+				}
+				grapheme := segment.text[offset..offset + length]
+				offset += length
+				if grapheme == '\n' {
+					current_row++
+					current_col = left
+					break
+				}
+				w := int(vaxis.gwidth(grapheme, self.width_method))
+				if w == 0 {
+					continue
+				}
+				run.write_string(grapheme)
+				current_col += w
+			}
+			run_text := run.str()
+			if run_text.len > 0 {
+				out.write_string(vaxis.position(run_row, run_col))
+				out.write_string(vaxis.styled(run_text, segment.style))
+			}
 		}
 	}
 }

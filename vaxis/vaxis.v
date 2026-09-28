@@ -2142,7 +2142,7 @@ pub fn (mut t TextInput) delete_word_after() {
 	t.buf.grow_gap_right(usize(index))
 }
 
-fn first_grapheme_byte_length(text string) int {
+pub fn first_grapheme_byte_length(text string) int {
 	if text.len == 0 {
 		return 0
 	}

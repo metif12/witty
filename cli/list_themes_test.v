@@ -253,6 +253,21 @@ fn test_preview_search_draw_uses_text_input_window_and_cursor() {
 	assert unicode_output.contains(vaxis.show_cursor(16, 23))
 }
 
+fn test_preview_segments_follow_negotiated_grapheme_width() {
+	mut p := Preview.init([], .all)!
+	segments := [
+		PreviewSegment{ text: '👩‍🚀', style: p.ui_standard() },
+		PreviewSegment{ text: 'x', style: p.ui_standard() },
+	]
+	mut wcwidth_out := strings.new_builder(128)
+	p.put_preview_segments(mut wcwidth_out, 0, 2, 6, 2, segments)
+	assert wcwidth_out.str().contains(vaxis.position(1, 0) + vaxis.styled('x', p.ui_standard()))
+	p.width_method = .unicode
+	mut unicode_out := strings.new_builder(128)
+	p.put_preview_segments(mut unicode_out, 0, 2, 6, 2, segments)
+	assert unicode_out.str().contains(vaxis.position(0, 4) + vaxis.styled('x', p.ui_standard()))
+}
+
 fn test_preview_ascii_lowercases_search_tokens_for_zf() {
 	mut p := Preview.init([
 		preview_test_theme('Dracula'),
@@ -389,9 +404,10 @@ fn test_preview_draw_restores_pinned_palette_and_sample_segments() {
 }
 
 fn test_preview_sample_segments_wrap_at_child_edge() {
+	mut p := Preview.init([], .all)!
 	mut out := strings.new_builder(64)
 	style := vaxis.Style{}
-	put_preview_segments(mut out, 1, 4, 8, 4, [PreviewSegment{
+	p.put_preview_segments(mut out, 1, 4, 8, 4, [PreviewSegment{
 		text:  'ABCDEF'
 		style: style
 	}])
