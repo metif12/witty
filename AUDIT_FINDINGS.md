@@ -730,6 +730,12 @@ an item here does not mean its full module has been certified yet.
   rather than returning a view into it. The cache therefore owns an 8 KiB
   dynamic array so returned slices retain the source's shared backing and
   overwrite behavior on wrap; its aggregate layout differs from Zig.
+- **vaxis widget framework and `boo`:** Pinned `cli/boo.zig` builds a `vxfw.App`
+  and a `Boo` widget whose `init`/`tick` events update a 100 by 41 cell buffer,
+  whose draw function returns a centered child surface, and whose framework
+  manages terminal events, focus, timers, and rendering. Witty still parses
+  those frames into ANSI strings and advances them in a sleep loop; the pinned
+  vaxis `vxfw` package and this widget pipeline have not been translated.
 - **Fixed-array type aliases:** the pinned V compiler accepts a public alias
   declaration for Ghostty's `[256]RGB` `color.Palette` but emits invalid C as
   soon as that alias is used as a field or parameter type. Witty therefore
