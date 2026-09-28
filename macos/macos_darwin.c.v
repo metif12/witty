@@ -239,6 +239,8 @@ fn C.CTFontCopyFontDescriptor(font voidptr) voidptr
 
 fn C.CTFontCopyTable(font voidptr, tag u32, opts u32) voidptr
 
+fn C.CTFontCopyPostScriptName(font voidptr) voidptr
+
 fn C.CTFontGetSymbolicTraits(font voidptr) u32
 
 fn C.CTFontGetGlyphsForCharacters(font voidptr, characters &u16, glyphs &u16, count isize) bool
@@ -272,6 +274,8 @@ fn C.vt_ctrun_get_positions_all(run voidptr, out_positions voidptr)
 fn C.vt_ctrun_get_string_indices_all(run voidptr, out_indices voidptr)
 
 fn C.vt_ctfont_get_bounding_rects_for_glyphs(font voidptr, orientation u32, glyphs &u16, rects voidptr, count usize, x &f64, y &f64, width &f64, height &f64)
+
+fn C.vt_ctfont_create_for_string(font voidptr, str voidptr, location isize, length isize) voidptr
 
 fn C.vt_ctparagraphstyle_create(settings_ptr voidptr, count usize) voidptr
 
@@ -1182,6 +1186,11 @@ pub fn (f &CTFont) copy_table(tag CTFontTableTag) ?&CFData {
 	return cast_cf_ref[CFData](ptr)
 }
 
+pub fn (f &CTFont) copy_post_script_name() !&CFString {
+	ptr := C.CTFontCopyPostScriptName(voidptr(f))
+	return require_cf_ref[CFString](ptr, 'CTFontCopyPostScriptName')
+}
+
 pub fn (f &CTFont) get_symbolic_traits() CTFontSymbolicTraits {
 	return CTFontSymbolicTraits.from_raw(C.CTFontGetSymbolicTraits(voidptr(f)))
 }
@@ -1236,6 +1245,15 @@ pub fn (f &CTFont) get_x_height() f64 {
 
 pub fn (f &CTFont) get_units_per_em() u32 {
 	return C.CTFontGetUnitsPerEm(voidptr(f))
+}
+
+pub fn (f &CTFont) create_for_string(str &CFString, range CFRange) ?&CTFont {
+	ptr := C.vt_ctfont_create_for_string(voidptr(f), voidptr(str), range.location,
+		range.length)
+	if isnil(ptr) {
+		return none
+	}
+	return cast_cf_ref[CTFont](ptr)
 }
 
 pub fn CTFont.create_with_descriptor(desc &CTFontDescriptor, size f64) !&CTFont {

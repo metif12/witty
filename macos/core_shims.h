@@ -164,6 +164,18 @@ void vt_ctfont_get_bounding_rects_for_glyphs(
 	*height_out = rect.size.height;
 }
 
+void *vt_ctfont_create_for_string(
+	void *font_ptr,
+	void *string_ptr,
+	long location,
+	long length
+) {
+	return (void *)CTFontCreateForString(
+		(CTFontRef)font_ptr,
+		(CFStringRef)string_ptr,
+		CFRangeMake(location, length));
+}
+
 void* vt_ctparagraphstyle_create(void *settings_ptr, size_t count) {
 	return (void*)CTParagraphStyleCreate((const CTParagraphStyleSetting *)settings_ptr, count);
 }

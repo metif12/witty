@@ -331,15 +331,33 @@ fn (ct &CoreTextDiscovery) discover_codepoint(mut collection Collection, desc De
 		return CtDescriptorValue{}
 	}
 
-	// Ask CoreText for a font that can render this codepoint (skipping the
-	// LastResort font). Returns a retained descriptor.
-	out := C.witty_ct_font_for_string(seed_font, desc.codepoint)
-	if isnil(out) {
+	encoded := rune(desc.codepoint).str()
+	str := macos.CFString.create_with_bytes(encoded.bytes(), .utf8, false)!
+	defer { str.release() }
+
+	mut unichars := []u16{len: 2}
+	pair := macos.string_get_surrogate_pair_for_long_character(desc.codepoint,
+		mut unichars)
+	range_len := if pair { 2 } else { 1 }
+	original := unsafe { &macos.CTFont(seed_font) }
+	fallback := original.create_for_string(str, macos.CFRange.init(0, range_len)) or {
 		return CtDescriptorValue{}
 	}
+	defer { fallback.release() }
+
+	postscript_name := fallback.copy_post_script_name()!
+	defer { postscript_name.release() }
+	mut name_buf := []u8{len: 64}
+	if name_ptr := postscript_name.cstring(mut name_buf, .utf8) {
+		if unsafe { cstring_to_vstring(name_ptr) } == 'LastResort' {
+			return CtDescriptorValue{}
+		}
+	}
+
+	out := fallback.copy_descriptor()!
 	return CtDescriptorValue{
 		has_value:  true
-		descriptor: out
+		descriptor: voidptr(out)
 	}
 }
 

@@ -242,8 +242,6 @@ fn C.witty_cf_array_get(arr voidptr, i int) voidptr
 
 fn C.witty_ct_descriptor_drop_charset(desc voidptr) voidptr
 
-fn C.witty_ct_font_for_string(orig_font voidptr, codepoint u32) voidptr
-
 fn C.witty_coretext_release(ptr voidptr)
 
 // ============================================================

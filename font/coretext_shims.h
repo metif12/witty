@@ -346,53 +346,6 @@ static void *witty_ct_font_copy_descriptor(void *font) {
 	return (void *)CTFontCopyFontDescriptor((CTFontRef)font);
 }
 
-// Use CTFontCreateForString to find a font that supports the given codepoint,
-// starting from `orig_font`. Returns a retained descriptor, or NULL. Skips
-// CoreText's "LastResort" fallback font.
-static void *witty_ct_font_for_string(void *orig_font, uint32_t codepoint) {
-	if (!orig_font || codepoint == 0) return NULL;
-
-	UniChar chars[2] = {0, 0};
-	CFIndex clen = 1;
-	if (codepoint <= 0xFFFF) {
-		chars[0] = (UniChar)codepoint;
-	} else if (codepoint <= 0x10FFFF) {
-		uint32_t v = codepoint - 0x10000;
-		chars[0] = (UniChar)(0xD800 + (v >> 10));
-		chars[1] = (UniChar)(0xDC00 + (v & 0x3FF));
-		clen = 2;
-	} else {
-		return NULL;
-	}
-
-	CFStringRef str = CFStringCreateWithCharacters(NULL, chars, clen);
-	if (!str) return NULL;
-
-	CTFontRef font = CTFontCreateForString(
-		(CTFontRef)orig_font, str, CFRangeMake(0, clen));
-	CFRelease(str);
-	if (!font) return NULL;
-
-	// Reject the "LastResort" fallback font.
-	CFStringRef psname = CTFontCopyPostScriptName(font);
-	if (psname) {
-		char name_buf[64];
-		name_buf[0] = 0;
-		if (CFStringGetCString(psname, name_buf, sizeof(name_buf), kCFStringEncodingUTF8)) {
-			if (strcmp(name_buf, "LastResort") == 0) {
-				CFRelease(psname);
-				CFRelease(font);
-				return NULL;
-			}
-		}
-		CFRelease(psname);
-	}
-
-	CTFontDescriptorRef desc = CTFontCopyFontDescriptor(font);
-	CFRelease(font);
-	return (void *)desc;
-}
-
 // ------------------------------------------------------------------
 // Face helpers (CoreText backend).
 // ------------------------------------------------------------------
@@ -481,10 +434,5 @@ static int witty_ct_descriptor_path(void *desc, uint8_t *buf, size_t len) {
 }
 
 static void *witty_ct_font_copy_descriptor(void *font) { (void)font; return NULL; }
-
-static void *witty_ct_font_for_string(void *orig_font, uint32_t codepoint) {
-	(void)orig_font; (void)codepoint;
-	return NULL;
-}
 
 #endif
