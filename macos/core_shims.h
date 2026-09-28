@@ -141,6 +141,29 @@ void vt_ctrun_get_string_indices_all(void *run_ptr, void *out_indices) {
 	CTRunGetStringIndices((CTRunRef)run_ptr, CFRangeMake(0, 0), (CFIndex *)out_indices);
 }
 
+void vt_ctfont_get_bounding_rects_for_glyphs(
+	void *font_ptr,
+	unsigned int orientation,
+	const uint16_t *glyphs,
+	void *rects_ptr,
+	size_t count,
+	double *x_out,
+	double *y_out,
+	double *width_out,
+	double *height_out
+) {
+	CGRect rect = CTFontGetBoundingRectsForGlyphs(
+		(CTFontRef)font_ptr,
+		(CTFontOrientation)orientation,
+		(const CGGlyph *)glyphs,
+		(CGRect *)rects_ptr,
+		(CFIndex)count);
+	*x_out = rect.origin.x;
+	*y_out = rect.origin.y;
+	*width_out = rect.size.width;
+	*height_out = rect.size.height;
+}
+
 void* vt_ctparagraphstyle_create(void *settings_ptr, size_t count) {
 	return (void*)CTParagraphStyleCreate((const CTParagraphStyleSetting *)settings_ptr, count);
 }

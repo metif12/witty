@@ -271,6 +271,8 @@ fn C.vt_ctrun_get_positions_all(run voidptr, out_positions voidptr)
 
 fn C.vt_ctrun_get_string_indices_all(run voidptr, out_indices voidptr)
 
+fn C.vt_ctfont_get_bounding_rects_for_glyphs(font voidptr, orientation u32, glyphs &u16, rects voidptr, count usize, x &f64, y &f64, width &f64, height &f64)
+
 fn C.vt_ctparagraphstyle_create(settings_ptr voidptr, count usize) voidptr
 
 fn C.vt_ctframesetter_create_frame(framesetter_ptr voidptr, location isize, length isize, path_ptr voidptr, attrs_ptr voidptr) voidptr
@@ -1193,6 +1195,19 @@ pub fn (f &CTFont) get_glyphs_for_characters(characters []u16, glyphs []CGGlyph)
 pub fn (f &CTFont) get_advances_for_glyphs(orientation CTFontOrientation, glyphs []CGGlyph, advances voidptr) f64 {
 	return C.CTFontGetAdvancesForGlyphs(voidptr(f), u32(orientation), glyphs.data, advances,
 		isize(glyphs.len))
+}
+
+pub fn (f &CTFont) get_bounding_rects_for_glyphs(orientation CTFontOrientation, glyphs []CGGlyph, rects []CGRect) CGRect {
+	assert rects.len == 0 || rects.len == glyphs.len
+	mut rects_ptr := voidptr(unsafe { nil })
+	if rects.len > 0 {
+		rects_ptr = voidptr(rects.data)
+	}
+	mut result := CGRect{}
+	C.vt_ctfont_get_bounding_rects_for_glyphs(voidptr(f), u32(orientation), glyphs.data,
+		rects_ptr, usize(glyphs.len), &result.origin.x, &result.origin.y, &result.size.width,
+		&result.size.height)
+	return result
 }
 
 pub fn (f &CTFont) get_size() f64 {

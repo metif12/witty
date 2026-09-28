@@ -35,22 +35,6 @@ static int witty_coretext_copy_display_name(void *font_ptr, uint8_t *buf, size_t
 	return ok ? 1 : 0;
 }
 
-static int witty_coretext_glyphs_bounds(
-	void *font_ptr, const uint16_t *glyphs, int count,
-	double *x_out, double *y_out, double *width_out, double *height_out
-) {
-	if (!font_ptr || !glyphs || count < 0 || !x_out || !y_out ||
-		!width_out || !height_out) return 0;
-	CGRect rect = CTFontGetBoundingRectsForGlyphs(
-		(CTFontRef)font_ptr, kCTFontOrientationHorizontal,
-		(const CGGlyph *)glyphs, NULL, (CFIndex)count);
-	*x_out = rect.origin.x;
-	*y_out = rect.origin.y;
-	*width_out = rect.size.width;
-	*height_out = rect.size.height;
-	return 1;
-}
-
 static void *witty_coretext_create_hb_font(void *font_ptr, double pixels) {
 	if (!font_ptr) return NULL;
 	hb_font_t *font = hb_coretext_font_create((CTFontRef)font_ptr);
@@ -64,31 +48,6 @@ static void *witty_coretext_create_hb_font(void *font_ptr, double pixels) {
 
 static void witty_coretext_destroy_hb_font(void *font_ptr) {
 	if (font_ptr) hb_font_destroy((hb_font_t *)font_ptr);
-}
-
-static int witty_coretext_glyph_bounds(
-	void *font_ptr,
-	uint32_t glyph_id,
-	double *x_out,
-	double *y_out,
-	double *width_out,
-	double *height_out
-) {
-	if (!font_ptr || !x_out || !y_out || !width_out || !height_out) return 0;
-	CGGlyph glyph = (CGGlyph)glyph_id;
-	CGRect rect = CTFontGetBoundingRectsForGlyphs(
-		(CTFontRef)font_ptr,
-		kCTFontOrientationHorizontal,
-		&glyph,
-		NULL,
-		1
-	);
-	if (CGRectIsNull(rect)) return 0;
-	*x_out = rect.origin.x;
-	*y_out = rect.origin.y;
-	*width_out = rect.size.width;
-	*height_out = rect.size.height;
-	return 1;
 }
 
 // ------------------------------------------------------------------
@@ -455,18 +414,6 @@ static int witty_coretext_copy_display_name(void *font_ptr, uint8_t *buf, size_t
 	return 0;
 }
 
-static int witty_coretext_glyphs_bounds(
-	void *font_ptr, const uint16_t *glyphs, int count,
-	double *x_out, double *y_out, double *width_out, double *height_out
-) {
-	(void)font_ptr; (void)glyphs; (void)count;
-	if (x_out) *x_out = 0;
-	if (y_out) *y_out = 0;
-	if (width_out) *width_out = 0;
-	if (height_out) *height_out = 0;
-	return 0;
-}
-
 static void *witty_coretext_create_hb_font(void *font_ptr, double pixels) {
 	(void)font_ptr;
 	(void)pixels;
@@ -475,18 +422,6 @@ static void *witty_coretext_create_hb_font(void *font_ptr, double pixels) {
 
 static void witty_coretext_destroy_hb_font(void *font_ptr) {
 	(void)font_ptr;
-}
-
-static int witty_coretext_glyph_bounds(
-	void *font_ptr, uint32_t glyph_id, double *x_out, double *y_out,
-	double *width_out, double *height_out
-) {
-	(void)font_ptr; (void)glyph_id;
-	if (x_out) *x_out = 0;
-	if (y_out) *y_out = 0;
-	if (width_out) *width_out = 0;
-	if (height_out) *height_out = 0;
-	return 0;
 }
 
 // --- Non-Apple stubs for discovery/face helpers. ---

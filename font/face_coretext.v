@@ -26,13 +26,9 @@ fn C.witty_coretext_release(ptr voidptr)
 
 fn C.witty_coretext_copy_family_name(font_ptr voidptr, buf &u8, len usize) int
 
-fn C.witty_coretext_glyphs_bounds(font_ptr voidptr, glyphs &u16, count int, x_out &f64, y_out &f64, width_out &f64, height_out &f64) int
-
 fn C.witty_coretext_create_hb_font(font_ptr voidptr, pixels f64) voidptr
 
 fn C.witty_coretext_destroy_hb_font(font_ptr voidptr)
-
-fn C.witty_coretext_glyph_bounds(font_ptr voidptr, glyph_id u32, x_out &f64, y_out &f64, width_out &f64, height_out &f64) int
 
 fn C.witty_ct_font_copy_descriptor(font voidptr) voidptr
 
@@ -471,8 +467,21 @@ fn coretext_glyph_layout(bounds GlyphSize, sbix bool, synthetic_bold ?f64, opts 
 // in the given texture atlas.
 pub fn (self CoreTextFace) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOptions) !Glyph {
 	mut bounds := GlyphSize{}
-	if C.witty_coretext_glyph_bounds(self.ct_font, glyph_index, &bounds.x, &bounds.y, &bounds.width, &bounds.height) == 0 {
-		return error('CoreText: failed to get glyph bounds')
+	$if macos {
+		native_font := unsafe { &macos.CTFont(self.ct_font) }
+		rect := native_font.get_bounding_rects_for_glyphs(.horizontal,
+			[macos.CGGlyph(glyph_index)], []macos.CGRect{})
+		if rect.is_null() {
+			return error('CoreText: failed to get glyph bounds')
+		}
+		bounds = GlyphSize{
+			x: rect.origin.x
+			y: rect.origin.y
+			width: rect.size.width
+			height: rect.size.height
+		}
+	} $else {
+		return error('CoreText: unsupported platform')
 	}
 	is_color := self.is_color_glyph(glyph_index)
 	sbix := if color := self.color { is_color && color.sbix } else { false }
@@ -604,9 +613,15 @@ pub fn (mut self CoreTextFace) get_metrics() FaceMetrics {
 		cell_width = math.max(cell_width, advance.width)
 	}
 	mut ascii_bounds := GlyphSize{}
-	unsafe {
-		C.witty_coretext_glyphs_bounds(self.ct_font, &glyphs[0], glyphs.len, &ascii_bounds.x,
-			&ascii_bounds.y, &ascii_bounds.width, &ascii_bounds.height)
+	$if macos {
+		native_font := unsafe { &macos.CTFont(self.ct_font) }
+		rect := native_font.get_bounding_rects_for_glyphs(.horizontal, glyphs, []macos.CGRect{})
+		ascii_bounds = GlyphSize{
+			x: rect.origin.x
+			y: rect.origin.y
+			width: rect.size.width
+			height: rect.size.height
+		}
 	}
 
 	// Measure "水" (CJK water ideograph, U+6C34) for the CSS ic unit.
@@ -619,9 +634,16 @@ pub fn (mut self CoreTextFace) get_metrics() FaceMetrics {
 			native_font.get_advances_for_glyphs(.horizontal, water_glyphs[..], water_advance.data)
 		}
 		mut water_bounds := GlyphSize{}
-		unsafe {
-			C.witty_coretext_glyphs_bounds(self.ct_font, &water_glyphs[0], 1, &water_bounds.x,
-				&water_bounds.y, &water_bounds.width, &water_bounds.height)
+		$if macos {
+			native_font := unsafe { &macos.CTFont(self.ct_font) }
+			rect := native_font.get_bounding_rects_for_glyphs(.horizontal, water_glyphs[..],
+				[]macos.CGRect{})
+			water_bounds = GlyphSize{
+				x: rect.origin.x
+				y: rect.origin.y
+				width: rect.size.width
+				height: rect.size.height
+			}
 		}
 		if water_bounds.width > water_advance[0].width {
 			mut name_buf := []u8{len: 1024}
