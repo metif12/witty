@@ -21,7 +21,7 @@ pub fn SegmentedPool.init[T](prealloc usize) SegmentedPool[T] {
 	}
 	return SegmentedPool[T]{
 		available: prealloc
-		values: values
+		values:    values
 	}
 }
 
@@ -37,7 +37,7 @@ pub fn (mut self SegmentedPool[T]) get() !&T {
 		return error('OutOfValues')
 	}
 	idx := self.i % usize(self.values.len)
-	self.i++
+	self.i = if self.i == ~usize(0) { usize(0) } else { self.i + usize(1) }
 	self.available--
 	return self.values[int(idx)]
 }

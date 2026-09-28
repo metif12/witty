@@ -54,3 +54,14 @@ fn test_segmented_pool_zero_preallocation() {
 		assert false, 'expected OutOfValues'
 	}
 }
+
+fn test_segmented_pool_index_wraps() {
+	mut pool := SegmentedPool.init[u8](2)
+	defer { pool.deinit() }
+	pool.i = ~usize(0)
+	pool.available = 1
+
+	value := pool.get()!
+	assert value == pool.values[1]
+	assert pool.i == 0
+}
