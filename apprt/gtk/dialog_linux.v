@@ -99,9 +99,9 @@ pub fn dialog_get_type() GType {
 		mut query := C.GTypeQuery{}
 		C.g_type_query(parent, &query)
 		info := C.GTypeInfo{
-			class_size: u16(query.class_size)
+			class_size:    u16(query.class_size)
 			instance_size: u16(query.instance_size)
-			class_init: voidptr(dialog_class_init)
+			class_init:    voidptr(dialog_class_init)
 		}
 		g_dialog_type = C.g_type_register_static(parent, c'GhosttyDialog', &info, 0)
 	}
@@ -127,10 +127,11 @@ mut:
 //
 // The comptime `switch (Parent)` becomes a runtime branch on
 // `supports_dialogs()`.
-pub fn (mut self Dialog) present(parent GtkWidget) {
+pub fn (mut self Dialog) present(parent ?GtkWidget) {
 	if supports_dialogs() {
 		// AdwAlertDialog path: present directly against the parent widget.
-		C.adw_dialog_present(AdwDialog(self.obj), parent)
+		parent_widget := parent or { GtkWidget(unsafe { nil }) }
+		C.adw_dialog_present(AdwDialog(self.obj), parent_widget)
 		return
 	}
 
@@ -141,8 +142,8 @@ pub fn (mut self Dialog) present(parent GtkWidget) {
 
 	// We need to get the window for the parent in order to set the
 	// transient-for property on the MessageDialog.
-	if !isnil(parent) {
-		root := C.gtk_widget_get_root(parent)
+	if parent_widget := parent {
+		root := C.gtk_widget_get_root(parent_widget)
 		if !isnil(root)
 			&& C.g_type_check_instance_is_a(root, C.gtk_window_get_type()) != 0 {
 			C.gtk_window_set_transient_for(GtkWindow(self.obj), GtkWindow(root))

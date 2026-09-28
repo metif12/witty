@@ -1177,7 +1177,7 @@ fn (mut self Application) show_config_errors_dialog() {
 			mut dialog := unsafe { existing }
 			dialog.set_config(?&Config(self.config_object))
 			if self.config_object.has_diagnostics() {
-				dialog.present(unsafe { nil })
+				dialog.present(none)
 			} else {
 				dialog.close()
 			}
@@ -1192,7 +1192,7 @@ fn (mut self Application) show_config_errors_dialog() {
 	mut dialog := config_errors_dialog_new(self.config_object)
 	C.g_signal_connect_data(dialog.dialog.obj, c'reload-config', GCallback(voidptr(application_config_errors_reload_cb)), voidptr(self), unsafe { nil }, 0)
 	self.config_errors_dialog.set(dialog.dialog.obj)
-	dialog.present(unsafe { nil })
+	dialog.present(none)
 }
 
 fn application_config_errors_reload_cb(dialog GObject, data voidptr) {

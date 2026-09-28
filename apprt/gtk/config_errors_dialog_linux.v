@@ -220,7 +220,7 @@ fn config_errors_dialog_from_object(obj GObject) ?&ConfigErrorsDialog {
 }
 
 // present shows the dialog. Mirrors `ConfigErrorsDialog.present`.
-pub fn (mut self ConfigErrorsDialog) present(parent GtkWidget) {
+pub fn (mut self ConfigErrorsDialog) present(parent ?GtkWidget) {
 	self.dialog.present(parent)
 }
 

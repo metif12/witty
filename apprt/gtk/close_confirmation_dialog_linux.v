@@ -172,9 +172,9 @@ pub fn close_confirmation_dialog_get_type() GType {
 		mut query := C.GTypeQuery{}
 		C.g_type_query(parent, &query)
 		info := C.GTypeInfo{
-			class_size: u16(query.class_size)
+			class_size:    u16(query.class_size)
 			instance_size: u16(query.instance_size)
-			class_init: voidptr(close_confirmation_dialog_class_init)
+			class_init:    voidptr(close_confirmation_dialog_class_init)
 			instance_init: voidptr(close_confirmation_dialog_instance_init)
 		}
 		g_close_confirmation_dialog_type = C.g_type_register_static(parent, c'GhosttyCloseConfirmationDialog', &info, 0)
@@ -225,7 +225,7 @@ fn close_confirmation_native_response_cb(obj GObject, response_id &char) {
 
 // present sets up the title/body from the target and shows the dialog. Mirrors
 // `CloseConfirmationDialog.present`.
-pub fn (mut self CloseConfirmationDialog) present(parent GtkWidget) {
+pub fn (mut self CloseConfirmationDialog) present(parent ?GtkWidget) {
 	// Setup our title/body text.
 	priv := close_confirmation_dialog_priv(voidptr(self.dialog.obj))
 	target := unsafe { CloseTarget(priv.target) }

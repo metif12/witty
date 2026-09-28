@@ -555,7 +555,7 @@ fn clipboard_confirmation_native_response_cb(obj GObject, response_id &char) {
 }
 
 // present shows the dialog. Mirrors `ClipboardConfirmationDialog.present`.
-pub fn (mut self ClipboardConfirmationDialog) present(parent GtkWidget) {
+pub fn (mut self ClipboardConfirmationDialog) present(parent ?GtkWidget) {
 	self.dialog.present(parent)
 }
 
