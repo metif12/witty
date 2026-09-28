@@ -211,16 +211,28 @@ pub fn (mut self ReadonlyHandler) vt(action ActionKey, value ActionValue) ! {
 		}
 		.cursor_col_relative {
 			if value is ActionCursorMovement {
+				base := self.terminal.screens.active.cursor.x + 1
+				col := if u32(value.value) > u32(65535) - base {
+					u32(65535)
+				} else {
+					base + u32(value.value)
+				}
 				self.terminal.set_cursor_pos(
 					usize(self.terminal.screens.active.cursor.y) + 1,
-					usize(self.terminal.screens.active.cursor.x) + 1 + value.value,
+					col,
 				)
 			}
 		}
 		.cursor_row_relative {
 			if value is ActionCursorMovement {
+				base := self.terminal.screens.active.cursor.y + 1
+				row := if u32(value.value) > u32(65535) - base {
+					u32(65535)
+				} else {
+					base + u32(value.value)
+				}
 				self.terminal.set_cursor_pos(
-					usize(self.terminal.screens.active.cursor.y) + 1 + value.value,
+					row,
 					usize(self.terminal.screens.active.cursor.x) + 1,
 				)
 			}

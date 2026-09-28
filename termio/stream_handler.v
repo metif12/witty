@@ -23,7 +23,7 @@ pub const tmux_enabled = terminal.tmux_control_mode
 // unless all of the member fields are copied.
 pub struct StreamHandler {
 pub mut:
-	size     &renderer.Size = unsafe { nil }
+	size     &renderer.Size     = unsafe { nil }
 	terminal &terminal.Terminal = unsafe { nil }
 
 	// Mailbox for data to the termio thread.
@@ -44,7 +44,7 @@ pub mut:
 
 	// The default cursor state. This is used with CSI q. This is
 	// set to true when we're currently in the default cursor state.
-	default_cursor       bool = true
+	default_cursor       bool                 = true
 	default_cursor_style terminal.CursorStyle = .block
 	default_cursor_blink ?bool
 
@@ -59,7 +59,6 @@ pub mut:
 
 	// ---------------------------------------------------------------
 	// Internal state
-
 	// The APC command handler maintains the APC state. APC is like
 	// CSI or OSC, but it is a private escape sequence that is used
 	// to send commands to the terminal emulator. This is used by
@@ -247,23 +246,36 @@ pub fn (mut self StreamHandler) vt(action terminal.ActionKey, value terminal.Act
 		}
 		.cursor_col {
 			if value is terminal.ActionCursorMovement {
-				self.terminal.set_cursor_pos(usize(self.terminal.screens.active.cursor.y) + 1, value.value)
+				self.terminal.set_cursor_pos(usize(self.terminal.screens.active.cursor.y) + 1,
+					value.value)
 			}
 		}
 		.cursor_row {
 			if value is terminal.ActionCursorMovement {
-				self.terminal.set_cursor_pos(value.value, usize(self.terminal.screens.active.cursor.x) + 1)
+				self.terminal.set_cursor_pos(value.value,
+
+					usize(self.terminal.screens.active.cursor.x) + 1)
 			}
 		}
 		.cursor_col_relative {
 			if value is terminal.ActionCursorMovement {
-				col := usize(self.terminal.screens.active.cursor.x) + 1 + value.value
+				base := self.terminal.screens.active.cursor.x + 1
+				col := if u32(value.value) > u32(65535) - base {
+					u32(65535)
+				} else {
+					base + u32(value.value)
+				}
 				self.terminal.set_cursor_pos(usize(self.terminal.screens.active.cursor.y) + 1, col)
 			}
 		}
 		.cursor_row_relative {
 			if value is terminal.ActionCursorMovement {
-				row := usize(self.terminal.screens.active.cursor.y) + 1 + value.value
+				base := self.terminal.screens.active.cursor.y + 1
+				row := if u32(value.value) > u32(65535) - base {
+					u32(65535)
+				} else {
+					base + u32(value.value)
+				}
 				self.terminal.set_cursor_pos(row, usize(self.terminal.screens.active.cursor.x) + 1)
 			}
 		}
@@ -517,8 +529,7 @@ pub fn (mut self StreamHandler) vt(action terminal.ActionKey, value terminal.Act
 		.color_operation {
 			if value is terminal.ActionColorOperation {
 				// OSC color operations: set/query/reset palette and dynamic colors.
-				self.color_operation(value.op, value.requests,
-					value.terminator)!
+				self.color_operation(value.op, value.requests, value.terminator)!
 			}
 		}
 		.end_hyperlink {
@@ -617,7 +628,6 @@ pub fn (mut self StreamHandler) vt(action terminal.ActionKey, value terminal.Act
 				self.apc.feed(value)
 			}
 		}
-
 		// Unimplemented
 		.title_push, .title_pop {}
 	}
@@ -630,8 +640,8 @@ pub fn (mut self StreamHandler) vt(action terminal.ActionKey, value terminal.Act
 pub fn (mut self StreamHandler) dcs_hook(dcs terminal.DCSAction) ! {
 	mut cmd := self.dcs.hook(terminal.DcsParams{
 		intermediates: dcs.intermediates.bytestr()
-		params: dcs.params.clone()
-		final_byte: dcs.final_byte
+		params:        dcs.params.clone()
+		final_byte:    dcs.final_byte
 	}) or { return }
 	defer { cmd.deinit() }
 	self.dcs_command(mut cmd)!
@@ -687,6 +697,7 @@ fn (mut self StreamHandler) dcs_command(mut cmd terminal.DcsCommand) ! {
 				log.info('received tmux control mode command without viewer: ${cmd.notification}')
 				return
 			}
+
 			for action in viewer.next(terminal.tmux_viewer_input(cmd.notification)) {
 				log.info('tmux viewer action=${action}')
 				match action {
@@ -762,6 +773,7 @@ fn (mut self StreamHandler) dcs_decrqss(setting terminal.DcsDecrqss) {
 			'\x1bP0\$r\x1b\\'
 		}
 	}
+
 	self.message_writer(Message.write_req(resp))
 }
 
@@ -775,21 +787,35 @@ fn (self &StreamHandler) format_decscusr() int {
 	blinking := self.terminal.modes.get(.cursor_blinking)
 	return match self.terminal.screens.active.cursor.cursor_style {
 		.block {
-			if blinking { 1 } else { 2 }
+			if blinking {
+				1
+			} else {
+				2
+			}
 		}
 		.underline {
-			if blinking { 3 } else { 4 }
+			if blinking {
+				3
+			} else {
+				4
+			}
 		}
 		.bar {
-			if blinking { 5 } else { 6 }
+			if blinking {
+				5
+			} else {
+				6
+			}
 		}
 		.block_hollow {
-			if blinking { 1 } else { 2 }
+			if blinking {
+				1
+			} else {
+				2
+			}
 		}
 	}
 }
-
-
 
 // ============================================================
 // APC handler
@@ -800,7 +826,10 @@ pub fn (mut self StreamHandler) apc_end() ! {
 	defer { cmd.deinit() }
 	if response := self.terminal.kitty_graphics(&cmd.kitty) {
 		encoded := response.encode()
-		if encoded.len > 0 {
+		if encoded.len > 1024 {
+			return error('OutOfMemory')
+		}
+		if encoded.len > 2 {
 			log.debug('kitty graphics response: ${encoded.hex()}')
 			self.message_writer(Message.write_req(encoded))
 		}
@@ -937,12 +966,10 @@ pub fn (mut self StreamHandler) set_mode(mode terminal.Mode, enabled bool) ! {
 		// We know about just so that we don't log that it is
 		// an unknown mode.
 		.autorepeat {}
-
 		// Schedule a render since we changed colors
 		.reverse_colors {
 			self.terminal.flags.set_dirty_reverse_colors(true)
 		}
-
 		// Origin resets cursor pos. This is called whether or not
 		// we're enabling or disabling origin mode and whether or
 		// not the value changed.
@@ -966,7 +993,6 @@ pub fn (mut self StreamHandler) set_mode(mode terminal.Mode, enabled bool) ! {
 		.alt_screen_save_cursor_clear_enter {
 			self.terminal.switch_screen_mode(.mode_1049, enabled)!
 		}
-
 		// Mode 1048 is xterm's conditional save cursor depending
 		// on if alt screen is enabled or not (at the terminal emulator
 		// level). Alt screen is always enabled for us so this just
@@ -978,7 +1004,6 @@ pub fn (mut self StreamHandler) set_mode(mode terminal.Mode, enabled bool) ! {
 				self.terminal.restore_cursor()
 			}
 		}
-
 		// Force resize back to the window size
 		.enable_mode_3 {
 			grid_size := self.size.grid()
@@ -989,7 +1014,6 @@ pub fn (mut self StreamHandler) set_mode(mode terminal.Mode, enabled bool) ! {
 		.column_132 {
 			self.terminal.deccolm(if enabled { .cols_132 } else { .cols_80 })!
 		}
-
 		// We need to start a timer to prevent the emulator being hung
 		// forever.
 		.synchronized_output {
@@ -1306,7 +1330,7 @@ fn (mut self StreamHandler) clipboard_contents(kind u8, data string) ! {
 	// Write clipboard contents
 	self.surface_message_writer(apprt.SurfaceMessageClipboardWrite{
 		clipboard_type: clipboard_type
-		req: apprt.WriteReq.init(data.bytes())
+		req:            apprt.WriteReq.init(data.bytes())
 	})
 }
 
@@ -1343,7 +1367,9 @@ fn (mut self StreamHandler) report_pwd(url string) ! {
 		}
 
 		// Report the change.
-		self.surface_message_writer(apprt.SurfaceMessagePwdChange{ req: apprt.WriteReq.stable([]u8{}) })
+		self.surface_message_writer(apprt.SurfaceMessagePwdChange{
+			req: apprt.WriteReq.stable([]u8{})
+		})
 		return
 	}
 
@@ -1356,7 +1382,7 @@ fn (mut self StreamHandler) report_pwd(url string) ! {
 	// this OSC 7 context. kitty-shell-cwd expects the full, unencoded path.
 	uri := internal_os.parse(url, internal_os.ParseOptions{
 		mac_address: $if macos { false } $else { true }
-		raw_path: url.starts_with('kitty-shell-cwd://')
+		raw_path:    url.starts_with('kitty-shell-cwd://')
 	}) or {
 		log.warn('invalid url in OSC 7: ${err}')
 		return
@@ -1388,7 +1414,9 @@ fn (mut self StreamHandler) report_pwd(url string) ! {
 	self.terminal.set_pwd(uri.path)!
 
 	// Report it to the surface.
-	self.surface_message_writer(apprt.SurfaceMessagePwdChange{ req: apprt.WriteReq.init(uri.path.bytes()) })
+	self.surface_message_writer(apprt.SurfaceMessagePwdChange{
+		req: apprt.WriteReq.init(uri.path.bytes())
+	})
 
 	// If we haven't seen a title, use our pwd as the title.
 	if !self.seen_title {
@@ -1426,6 +1454,7 @@ fn (mut self StreamHandler) color_operation(op osc.ColorOperation, requests []os
 						log.info('setting special colors not implemented')
 					}
 				}
+
 				self.notify_color_change(request.target, color)
 			}
 			osc.ColorRequestReset {
@@ -1434,7 +1463,8 @@ fn (mut self StreamHandler) color_operation(op osc.ColorOperation, requests []os
 						idx := request.target.index
 						self.terminal.flags.set_dirty_palette(true)
 						self.terminal.colors.palette.reset(idx)
-						self.notify_color_change(request.target, self.terminal.colors.palette.current[int(idx)])
+						self.notify_color_change(request.target,
+							self.terminal.colors.palette.current[int(idx)])
 					}
 					osc.ColorTargetDynamic {
 						self.reset_dynamic_color(request.target.color, request.target)
@@ -1512,7 +1542,9 @@ fn (mut self StreamHandler) reset_dynamic_color(dynamic osc.DynamicColor, target
 				self.notify_color_change(target, color)
 			}
 		}
-		else { log.warn('resetting dynamic color ${dynamic} not implemented') }
+		else {
+			log.warn('resetting dynamic color ${dynamic} not implemented')
+		}
 	}
 }
 
@@ -1535,6 +1567,7 @@ fn (self &StreamHandler) color_query_response(target osc.ColorTarget, terminator
 			return none
 		}
 	}
+
 	term := terminator.string()
 	return match self.osc_color_report_format {
 		.format_16_bit {
@@ -1543,14 +1576,20 @@ fn (self &StreamHandler) color_query_response(target osc.ColorTarget, terminator
 		.format_8_bit {
 			'${prefix}${hex2(color.r)}/${hex2(color.g)}/${hex2(color.b)}${term}'
 		}
-		.none_ { '' }
+		.none_ {
+			''
+		}
 	}
 }
 
 fn (self &StreamHandler) dynamic_color_query_value(color osc.DynamicColor) ?terminal.RGB {
 	return match color {
-		.foreground { self.terminal.colors.foreground.get() or { panic('unreachable') } }
-		.background { self.terminal.colors.background.get() or { panic('unreachable') } }
+		.foreground {
+			self.terminal.colors.foreground.get() or { panic('unreachable') }
+		}
+		.background {
+			self.terminal.colors.background.get() or { panic('unreachable') }
+		}
 		.cursor {
 			if value := self.terminal.colors.cursor.get() {
 				value
@@ -1568,13 +1607,13 @@ fn (self &StreamHandler) dynamic_color_query_value(color osc.DynamicColor) ?term
 // notify_color_change forwards an OSC color mutation to the surface.
 fn (mut self StreamHandler) notify_color_change(target osc.ColorTarget, color terminal.RGB) {
 	self.surface_message_writer(apprt.SurfaceMessage(osc.ColoredTarget{
-			target: target
-			color: osc.RGB{
-				r: color.r
-				g: color.g
-				b: color.b
-			}
-		}))
+		target: target
+		color:  osc.RGB{
+			r: color.r
+			g: color.g
+			b: color.b
+		}
+	}))
 }
 
 // ============================================================
@@ -1617,6 +1656,7 @@ fn (mut self StreamHandler) kitty_color_report(request osc.KittyColorOSC) ! {
 						}
 					}
 				}
+
 				color := found or {
 					stream += ';${key}='
 					continue

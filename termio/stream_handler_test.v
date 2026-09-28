@@ -40,24 +40,24 @@ fn collect_surface_message(app voidptr, surface voidptr, msg apprt.SurfaceMessag
 // Helper to create a StreamHandler with a test terminal.
 fn make_test_handler() (&StreamHandler, &TestContext) {
 	mut ctx := &TestContext{
-		t: terminal.Terminal.init(terminal.Options{
+		t:        terminal.Terminal.init(terminal.Options{
 			cols: 80
 			rows: 24
 		}) or { panic('failed to init terminal') }
-		mailbox: Mailbox.init_spsc() or { panic(err) }
+		mailbox:  Mailbox.init_spsc() or { panic(err) }
 		rmailbox: renderer.Mailbox.create() or { panic(err) }
 	}
 
 	mut handler := &StreamHandler{
-		terminal: &ctx.t
-		termio_mailbox: &ctx.mailbox
-		renderer_state: &ctx.rstate
-		renderer_mailbox: ctx.rmailbox
-		surface_mailbox: apprt.SurfaceMailbox{
+		terminal:             &ctx.t
+		termio_mailbox:       &ctx.mailbox
+		renderer_state:       &ctx.rstate
+		renderer_mailbox:     ctx.rmailbox
+		surface_mailbox:      apprt.SurfaceMailbox{
 			surface: ctx
 			push_fn: collect_surface_message
 		}
-		size: &ctx.rsize
+		size:                 &ctx.rsize
 		default_cursor_style: .block
 	}
 	return handler, ctx
@@ -86,7 +86,7 @@ fn test_progress_report_forwards_payload() ! {
 		ctx.t.deinit()
 	}
 	handler.progress_report(osc.ProgressReport{
-		state: .set
+		state:    .set
 		progress: 42
 	})
 	assert ctx.messages.len == 1
@@ -161,7 +161,7 @@ fn test_stream_handler_tmux_viewer_lifecycle_and_commands() ! {
 
 	mut session := terminal.DcsCommand(terminal.DcsCommandTmux{
 		notification: tmux.Notification(tmux.NotifSessionChanged{
-			id: 7
+			id:   7
 			name: 'main'
 		})
 	})
@@ -273,7 +273,9 @@ fn test_stream_handler_decrqss_hollow_cursor_uses_blink_mode() ! {
 
 	handler.terminal.modes.set(.cursor_blinking, true)
 	handler.dcs_decrqss(.decscusr)
-	blinking := ctx.mailbox.spsc.queue.pop() or { panic('expected blinking cursor DECRPSS response') }
+	blinking := ctx.mailbox.spsc.queue.pop() or {
+		panic('expected blinking cursor DECRPSS response')
+	}
 	assert (blinking as WriteSmall).slice().bytestr() == '\x1bP1\$r1 q\x1b\\'
 
 	handler.terminal.modes.set(.cursor_blinking, false)
@@ -545,7 +547,9 @@ fn test_stream_handler_kitty_keyboard() ! {
 	defer { ctx.t.deinit() }
 
 	// Push
-	handler.vt(.kitty_keyboard_push, terminal.ActionKittyKeyboardFlags{ flags: terminal.KeyFlags.from_int(5) })!
+	handler.vt(.kitty_keyboard_push, terminal.ActionKittyKeyboardFlags{
+		flags: terminal.KeyFlags.from_int(5)
+	})!
 	assert handler.terminal.screens.active.kitty_keyboard.current().int() == 5
 
 	// Pop
@@ -574,6 +578,25 @@ fn test_stream_handler_mouse_modes() ! {
 	handler.set_mode(.mouse_event_normal, false)!
 	assert handler.terminal.flags.mouse_event() == .none
 	assert handler.terminal.mouse_shape == .text
+}
+
+fn test_stream_handler_relative_cursor_movement_saturates() ! {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+
+	handler.terminal.set_cursor_pos(5, 10)
+	handler.vt(.cursor_col_relative, terminal.ActionCursorMovement{
+		value: ~u16(0)
+	})!
+	assert handler.terminal.screens.active.cursor.x == 79
+	assert handler.terminal.screens.active.cursor.y == 4
+
+	handler.terminal.set_cursor_pos(5, 10)
+	handler.vt(.cursor_row_relative, terminal.ActionCursorMovement{
+		value: ~u16(0)
+	})!
+	assert handler.terminal.screens.active.cursor.x == 9
+	assert handler.terminal.screens.active.cursor.y == 23
 }
 
 // Test set_mode for mouse format.
@@ -611,10 +634,10 @@ fn test_stream_handler_change_config() ! {
 
 	config := DerivedConfig{
 		osc_color_report_format: .format_8_bit
-		clipboard_write: .deny
-		enquiry_response: 'test'
-		cursor_style: .underline
-		cursor_blink: true
+		clipboard_write:         .deny
+		enquiry_response:        'test'
+		cursor_style:            .underline
+		cursor_blink:            true
 	}
 	handler.change_config(&config)
 
@@ -631,11 +654,13 @@ fn test_color_query_response_mirrors_osc_terminator() ! {
 
 	handler.vt(.color_operation, terminal.ActionColorOperation{
 		op:         .osc_4
-		requests:   [osc.ColorRequest(osc.ColorRequestQuery{
-			target: osc.ColorTarget(osc.ColorTargetPalette{
-				index: 1
-			})
-		})]
+		requests:   [
+			osc.ColorRequest(osc.ColorRequestQuery{
+				target: osc.ColorTarget(osc.ColorTargetPalette{
+					index: 1
+				})
+			}),
+		]
 		terminator: .bel
 	})!
 	bel := ctx.mailbox.spsc.queue.pop() or { panic('expected BEL-terminated color response') }
@@ -644,11 +669,13 @@ fn test_color_query_response_mirrors_osc_terminator() ! {
 
 	handler.vt(.color_operation, terminal.ActionColorOperation{
 		op:         .osc_4
-		requests:   [osc.ColorRequest(osc.ColorRequestQuery{
-			target: osc.ColorTarget(osc.ColorTargetPalette{
-				index: 1
-			})
-		})]
+		requests:   [
+			osc.ColorRequest(osc.ColorRequestQuery{
+				target: osc.ColorTarget(osc.ColorTargetPalette{
+					index: 1
+				})
+			}),
+		]
 		terminator: .st
 	})!
 	st := ctx.mailbox.spsc.queue.pop() or { panic('expected ST-terminated color response') }
