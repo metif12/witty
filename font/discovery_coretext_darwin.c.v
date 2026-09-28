@@ -7,11 +7,6 @@ import log
 import macos
 import opentype
 
-fn C.witty_ct_font_copy_variation_axes(font_ptr voidptr) voidptr
-fn C.witty_ct_font_copy_variation_values(font_ptr voidptr) voidptr
-fn C.witty_ct_variation_count(axes_ptr voidptr) int
-fn C.witty_ct_variation_get(axes_ptr voidptr, values_ptr voidptr, index int, name_buf &u8, name_len usize, value_out &f64) int
-
 // to_core_text_descriptor converts the descriptor to a CoreText font
 // descriptor for font lookup or conversion to a specific font.
 //
@@ -190,21 +185,39 @@ fn Score.score(desc &Descriptor, ct_desc voidptr) Score {
 		is_italic = is_italic || os2.fs_selection.italic()
 	}
 
-	axes := C.witty_ct_font_copy_variation_axes(font_ptr)
-	if !isnil(axes) {
-		defer { C.witty_ct_release(axes) }
-		values := C.witty_ct_font_copy_variation_values(font_ptr)
-		if !isnil(values) {
-			defer { C.witty_ct_release(values) }
+	if axes_ptr := native_font.copy_attribute(.variation_axes) {
+		axes := unsafe { &macos.CFArray(axes_ptr) }
+		defer { axes.release() }
+		if values_ptr := native_font.copy_attribute(.variation) {
+			values := unsafe { &macos.CFDictionary(values_ptr) }
+			defer { values.release() }
 			mut ital_seen := false
-			for i in 0 .. C.witty_ct_variation_count(axes) {
+			for i in 0 .. axes.get_count() {
+				axis_ptr := axes.get_value_at_index(i)
+				assert !isnil(axis_ptr)
+				axis := unsafe { &macos.CFDictionary(axis_ptr) }
+				identifier_ptr := axis.get_value(macos.CTFontVariationAxisKey.identifier.key())
+				name_ptr := axis.get_value(macos.CTFontVariationAxisKey.name.key())
+				default_ptr := axis.get_value(macos.CTFontVariationAxisKey.default_value.key())
+				assert !isnil(identifier_ptr)
+				assert !isnil(name_ptr)
+				assert !isnil(default_ptr)
+				identifier := unsafe { &macos.CFNumber(identifier_ptr) }
+				name_string := unsafe { &macos.CFString(name_ptr) }
+				default_value := unsafe { &macos.CFNumber(default_ptr) }
 				mut name_buf := []u8{len: 1024}
+				name := if name_cstr := name_string.cstring(mut name_buf, .utf8) {
+					unsafe { cstring_to_vstring(name_cstr) }
+				} else {
+					''
+				}
 				mut value := f64(0)
-				assert unsafe {
-					C.witty_ct_variation_get(axes, values, i, &name_buf[0], usize(name_buf.len),
-						&value)
-				} != 0
-				name := unsafe { cstring_to_vstring(&char(name_buf.data)) }
+				default_value.get_value(.double_, voidptr(&value))
+				configured_ptr := values.get_value(voidptr(identifier))
+				if !isnil(configured_ptr) {
+					configured := unsafe { &macos.CFNumber(configured_ptr) }
+					configured.get_value(.double_, voidptr(&value))
+				}
 				if name == 'wght' {
 					is_bold = value > 600
 					continue
