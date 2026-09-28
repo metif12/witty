@@ -1167,7 +1167,7 @@ fn (mut self Application) show_config_errors_dialog() {
 		}
 		if existing := config_errors_dialog_from_object(dialog_obj) {
 			mut dialog := unsafe { existing }
-			dialog.set_config(self.config_object)
+			dialog.set_config(?&Config(self.config_object))
 			if self.config_object.has_diagnostics() {
 				dialog.present(unsafe { nil })
 			} else {

@@ -13,10 +13,9 @@ module gtk
 //
 // The GObject class registration (`defineClass`), the `config` PROPERTY, the
 // `.ui` template, and the `reload-config` SIGNAL are hand-expanded below onto
-// the raw GObject/GTK C API. The V struct `ConfigErrorsDialog` keeps the
-// `&Config` and an optional V callback so ownership + response routing stay
-// observable from V. The real LOGIC — the response-id routing ("reload" ->
-// emit) and the config ref/unref ownership (get/set/dispose) — is translated
+// the raw GObject/GTK C API. The native instance-private property is the sole
+// config owner. The real LOGIC — the response-id routing ("reload" -> emit)
+// and the config ref/unref ownership (get/set/dispose) — is translated
 // directly.
 //
 // The `config` property is typed as GhosttyConfig, matching the pinned class.
@@ -71,8 +70,7 @@ const config_errors_dialog_ui = '<?xml version="1.0" encoding="UTF-8"?>
 // GObject pointer of the wrapped Config (Config.obj).
 struct C.GhosttyConfigErrorsDialogPrivate {
 mut:
-	config  voidptr
-	wrapper voidptr
+	config voidptr
 }
 
 // The GObject type id and private-data offset, registered lazily.
@@ -125,6 +123,17 @@ fn config_errors_dialog_dispose(obj voidptr) {
 	C.witty_gobject_call_parent_dispose(obj)
 }
 
+// Route the inherited Adwaita response virtual method to Ghostty's
+// reload-config signal. Mirrors `ConfigErrorsDialog.response`.
+fn config_errors_dialog_native_response_cb(obj GObject, response_id &char) {
+	if isnil(obj) || isnil(response_id) {
+		return
+	}
+	if unsafe { cstring_to_vstring(response_id) } == 'reload' {
+		C.g_signal_emit_by_name(obj, c'reload-config')
+	}
+}
+
 // config_errors_dialog_class_init installs the template, the `config` property,
 // the `reload-config` signal, and overrides the get/set/dispose vfuncs.
 fn config_errors_dialog_class_init(klass voidptr, class_data voidptr) {
@@ -138,6 +147,7 @@ fn config_errors_dialog_class_init(klass voidptr, class_data voidptr) {
 	C.witty_gobject_class_set_get_property(klass, voidptr(config_errors_dialog_get_property))
 	C.witty_gobject_class_set_set_property(klass, voidptr(config_errors_dialog_set_property))
 	C.witty_gobject_class_set_dispose(klass, voidptr(config_errors_dialog_dispose))
+	C.witty_dialog_class_set_response(klass, b2i(supports_dialogs()), voidptr(config_errors_dialog_native_response_cb))
 	C.g_object_class_install_property(klass, config_errors_prop_config, pspec)
 
 	C.g_signal_new(c'reload-config', g_config_errors_dialog_type, g_signal_run_last, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, g_type_none, 0)
@@ -155,9 +165,9 @@ pub fn config_errors_dialog_get_type() GType {
 		mut query := C.GTypeQuery{}
 		C.g_type_query(parent, &query)
 		info := C.GTypeInfo{
-			class_size: u16(query.class_size)
+			class_size:    u16(query.class_size)
 			instance_size: u16(query.instance_size)
-			class_init: voidptr(config_errors_dialog_class_init)
+			class_init:    voidptr(config_errors_dialog_class_init)
 			instance_init: voidptr(config_errors_dialog_instance_init)
 		}
 		g_config_errors_dialog_type = C.g_type_register_static(parent, c'GhosttyConfigErrorsDialog', &info, 0)
@@ -169,21 +179,12 @@ pub fn config_errors_dialog_get_type() GType {
 // --- ConfigErrorsDialog ---------------------------------------------------
 
 // ConfigErrorsDialog is the config-errors dialog GObject
-// (`GhosttyConfigErrorsDialog`, a subclass of `Dialog`). Modeled as a struct
-// embedding the base `Dialog` plus the private `config`.
+// (`GhosttyConfigErrorsDialog`, a subclass of `Dialog`). Native private data is
+// authoritative; the V value only wraps the object instance.
 @[heap]
 pub struct ConfigErrorsDialog {
 mut:
-	// The base dialog (`Dialog` parent instance).
 	dialog Dialog
-
-	// The config whose diagnostics we display. Mirrors `Private.config` (the
-	// ref-counted `config` property). Nil when unset.
-	config &Config = unsafe { nil }
-
-	// Signal callback. Ghostty emits a GObject `reload-config` signal; modeled
-	// here as both the native signal and an optional direct V callback.
-	on_reload_config ?fn ()
 }
 
 // config_errors_dialog_new creates a new dialog for the given config. Mirrors
@@ -196,40 +197,26 @@ pub fn config_errors_dialog_new(config &Config) &ConfigErrorsDialog {
 		config_obj = config.obj
 	}
 	obj := C.g_object_new(config_errors_dialog_get_type(), c'config', config_obj, &char(unsafe { nil }))
-	mut self := &ConfigErrorsDialog{
+	return &ConfigErrorsDialog{
 		dialog: Dialog{
 			obj: obj
 		}
 	}
-	mut priv := config_errors_dialog_priv(obj)
-	priv.wrapper = voidptr(self)
-	self.set_config(config)
-	C.g_signal_connect_data(obj, c'response', GCallback(voidptr(config_errors_dialog_response_cb)), voidptr(self), unsafe { nil }, 0)
-	return self
 }
 
 // config_errors_dialog_from_object performs the typed half of Ghostty's
-// WeakRef(ConfigErrorsDialog).get. The returned wrapper borrows the caller's
+// WeakRef(ConfigErrorsDialog).get. The transient wrapper borrows the caller's
 // strong native-object reference.
 fn config_errors_dialog_from_object(obj GObject) ?&ConfigErrorsDialog {
 	if isnil(obj)
 		|| C.g_type_check_instance_is_a(obj, config_errors_dialog_get_type()) == 0 {
 		return none
 	}
-	priv := config_errors_dialog_priv(obj)
-	if isnil(priv.wrapper) {
-		return none
+	return &ConfigErrorsDialog{
+		dialog: Dialog{
+			obj: obj
+		}
 	}
-	return unsafe { &ConfigErrorsDialog(priv.wrapper) }
-}
-
-fn config_errors_dialog_response_cb(obj GObject, response_id &char, data voidptr) {
-	_ = obj
-	if isnil(response_id) || isnil(data) {
-		return
-	}
-	mut self := unsafe { &ConfigErrorsDialog(data) }
-	self.response(unsafe { cstring_to_vstring(response_id) })
 }
 
 // present shows the dialog. Mirrors `ConfigErrorsDialog.present`.
@@ -242,54 +229,29 @@ pub fn (mut self ConfigErrorsDialog) close() {
 	self.dialog.close()
 }
 
-// response routes an AdwAlertDialog response id: only "reload" emits the
-// reload-config signal. Mirrors the `response` virtual method. Emits the real
-// GObject signal and invokes the optional V callback.
-fn (mut self ConfigErrorsDialog) response(response_id string) {
-	if response_id != 'reload' {
-		return
-	}
-	if !isnil(self.dialog.obj) {
-		C.g_signal_emit_by_name(self.dialog.obj, c'reload-config')
-	}
-	if cb := self.on_reload_config {
-		cb()
-	}
-}
-
-// dispose releases the held config reference on the V wrapper. The GObject-side
-// dispose (config unref + gtk_widget_dispose_template + parent chain) is the
-// `config_errors_dialog_dispose` vfunc registered above.
-pub fn (mut self ConfigErrorsDialog) dispose() {
-	if !isnil(self.config) {
-		self.config.unref()
-		self.config = unsafe { nil }
-	}
-}
-
 // get_config returns the held config (without taking a reference). Mirrors
 // `getConfig` (the `config` property getter).
-pub fn (self &ConfigErrorsDialog) get_config() &Config {
-	return self.config
+pub fn (self &ConfigErrorsDialog) get_config() ?&Config {
+	config_obj := config_errors_dialog_priv(self.dialog.obj).config
+	if isnil(config_obj) {
+		return none
+	}
+	wrapper := config_priv(config_obj).wrapper
+	if isnil(wrapper) {
+		return none
+	}
+	return unsafe { &Config(wrapper) }
 }
 
-// set_config sets the held config, unref-ing any previous one and ref-ing the
-// new one. Mirrors `setConfig`.
-//
-// NOTE: in ghostty the property setter itself handles the reference (using
-// `GValue.get` vs. `take`), so `setConfig` does not ref. Here there is no
-// property machinery, so we take the reference explicitly to keep ownership
-// correct.
-fn (mut self ConfigErrorsDialog) set_config(config &Config) {
-	if !isnil(self.config) {
-		self.config.unref()
-	}
-	self.config = unsafe { config }
-	if !isnil(self.config) {
-		self.config.ref()
-	}
+// set_config updates the registered object property. Its native setter owns
+// the reference exactly once, matching Ghostty's typed GValue accessor.
+fn (mut self ConfigErrorsDialog) set_config(config ?&Config) {
 	if !isnil(self.dialog.obj) {
-		config_obj := if isnil(config) { GObject(unsafe { nil }) } else { config.obj }
+		value := config or {
+			C.g_object_set(self.dialog.obj, c'config', GObject(unsafe { nil }), unsafe { nil })
+			return
+		}
+		config_obj := value.obj
 		C.g_object_set(self.dialog.obj, c'config', config_obj, unsafe { nil })
 	}
 }
@@ -298,8 +260,9 @@ fn (mut self ConfigErrorsDialog) set_config(config &Config) {
 // Mirrors the `Common(Self, Private)` ref helpers.
 
 // ref increments the reference count of the dialog GObject. Mirrors `ref`.
-pub fn (mut self ConfigErrorsDialog) ref() {
+pub fn (mut self ConfigErrorsDialog) ref() &ConfigErrorsDialog {
 	self.dialog.ref()
+	return self
 }
 
 // unref decrements the reference count of the dialog GObject. Mirrors `unref`.
