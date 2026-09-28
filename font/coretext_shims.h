@@ -58,25 +58,6 @@ static void witty_ct_release(void *ptr) {
 	if (ptr) CFRelease((CFTypeRef)ptr);
 }
 
-static void witty_ct_retain(void *ptr) {
-	if (ptr) CFRetain((CFTypeRef)ptr);
-}
-
-// Given a search descriptor, build a font collection and return the CFArray
-// of matching descriptors (retained; caller releases). May return NULL.
-static void *witty_ct_matching_descriptors(void *search_desc) {
-	if (!search_desc) return NULL;
-	const void *values[1] = { search_desc };
-	CFArrayRef desc_arr = CFArrayCreate(NULL, values, 1, &kCFTypeArrayCallBacks);
-	if (!desc_arr) return NULL;
-	CTFontCollectionRef set = CTFontCollectionCreateWithFontDescriptors(desc_arr, NULL);
-	CFRelease(desc_arr);
-	if (!set) return NULL;
-	CFArrayRef list = CTFontCollectionCreateMatchingFontDescriptors(set);
-	CFRelease(set);
-	return (void *)list;
-}
-
 static int witty_ct_descriptor_is_color(void *desc_ptr) {
 	if (!desc_ptr) return 0;
 	CTFontRef font = CTFontCreateWithFontDescriptor(
@@ -85,18 +66,6 @@ static int witty_ct_descriptor_is_color(void *desc_ptr) {
 	CTFontSymbolicTraits traits = CTFontGetSymbolicTraits(font);
 	CFRelease(font);
 	return (traits & kCTFontTraitColorGlyphs) != 0;
-}
-
-static int witty_cf_array_count(void *arr) {
-	if (!arr) return 0;
-	return (int)CFArrayGetCount((CFArrayRef)arr);
-}
-
-// Returns the value at index (NOT retained; caller should retain to keep it
-// alive past the array's lifetime).
-static void *witty_cf_array_get(void *arr, int i) {
-	if (!arr) return NULL;
-	return (void *)CFArrayGetValueAtIndex((CFArrayRef)arr, (CFIndex)i);
 }
 
 // Primitive CoreText accessors used by the direct V translation of
@@ -312,20 +281,10 @@ static void witty_coretext_destroy_hb_font(void *font_ptr) {
 // --- Non-Apple stubs for discovery/face helpers. ---
 
 static void witty_ct_release(void *ptr) { (void)ptr; }
-static void witty_ct_retain(void *ptr) { (void)ptr; }
-
-static void *witty_ct_matching_descriptors(void *search_desc) {
-	(void)search_desc;
-	return NULL;
-}
-
 static int witty_ct_descriptor_is_color(void *desc_ptr) {
 	(void)desc_ptr;
 	return 0;
 }
-
-static int witty_cf_array_count(void *arr) { (void)arr; return 0; }
-static void *witty_cf_array_get(void *arr, int i) { (void)arr; (void)i; return NULL; }
 
 static void *witty_ct_font_copy_variation_axes(void *font_ptr) {
 	(void)font_ptr;

@@ -230,14 +230,6 @@ import math
 
 fn C.witty_ct_release(ptr voidptr)
 
-fn C.witty_ct_retain(ptr voidptr)
-
-fn C.witty_ct_matching_descriptors(search_desc voidptr) voidptr
-
-fn C.witty_cf_array_count(arr voidptr) int
-
-fn C.witty_cf_array_get(arr voidptr, i int) voidptr
-
 fn C.witty_ct_descriptor_drop_charset(desc voidptr) voidptr
 
 fn C.witty_coretext_release(ptr voidptr)

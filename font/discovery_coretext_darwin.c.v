@@ -85,14 +85,15 @@ pub fn (ct &CoreTextDiscovery) discover(desc Descriptor) !CtDiscoverIterator {
 		macos.cf_release(voidptr(ct_desc))
 	}
 
-	// Build our collection and grab the matching descriptors (a CFArray).
-	list := C.witty_ct_matching_descriptors(voidptr(ct_desc))
-	if isnil(list) {
-		return error('CoreText: failed to create matching font descriptors')
-	}
-	defer {
-		C.witty_ct_release(list)
-	}
+	// Our descriptors have to be in an array.
+	desc_arr := macos.CFArray.create([voidptr(ct_desc)])!
+	defer { desc_arr.release() }
+
+	// Build our collection and grab the matching descriptors.
+	set := macos.CTFontCollection.create_with_font_descriptors(desc_arr)!
+	defer { set.release() }
+	list := set.create_matching_font_descriptors()!
+	defer { list.release() }
 
 	// Copy the matching descriptors into a V slice, retaining each so they
 	// survive the release of the CFArray, then sort by score.
@@ -109,17 +110,12 @@ pub fn (ct &CoreTextDiscovery) discover(desc Descriptor) !CtDiscoverIterator {
 // copy_matching_descriptors copies the CFArray of matching descriptors into a
 // V slice, retaining each descriptor (the array releases its members when it
 // is freed, so we must retain to keep them alive).
-fn copy_matching_descriptors(list voidptr) []voidptr {
-	if isnil(list) {
-		return []voidptr{}
-	}
-	n := C.witty_cf_array_count(list)
+fn copy_matching_descriptors(list &macos.CFArray) []voidptr {
+	n := list.get_count()
 	mut out := []voidptr{cap: n}
 	for i in 0 .. n {
-		d := C.witty_cf_array_get(list, i)
-		if !isnil(d) {
-			C.witty_ct_retain(d)
-		}
+		d := list.get_value_at_index(i)
+		macos.cf_retain(d)
 		out << d
 	}
 	return out
