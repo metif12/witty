@@ -19,6 +19,7 @@ import os
 #include "pty_shims.h"
 
 #flag linux -lutil
+#flag freebsd -lutil
 
 fn C.openpty(master &int, slave &int, name &char, termp voidptr, winp voidptr) int
 
@@ -221,6 +222,7 @@ pub fn (self Pty) child_pre_exec() ! {
 	// Set controlling terminal. The slave fd becomes the controlling
 	// terminal for the new session.
 	if C.witty_pty_set_controlling_terminal(self.slave) != 0 {
+		log.error('error setting controlling terminal errno=${os.last_error()}')
 		return error('ioctl TIOCSCTTY failed: could not set controlling terminal')
 	}
 
