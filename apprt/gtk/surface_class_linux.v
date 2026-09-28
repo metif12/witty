@@ -2391,14 +2391,13 @@ pub fn (mut self SurfaceWidget) ec_scroll_horizontal(x f64) bool {
 		return true
 	}
 
-	if !isnil(self.split_tree) && !isnil(self.split_tree.window) {
-		mut window := unsafe { self.split_tree.window }
-		if self.pending_horizontal_scroll < 0 {
-			window.select_tab(SelectTabNext{})
-		} else {
-			window.select_tab(SelectTabPrevious{})
-		}
-	}
+	// Route this through the tab action group so touchpad navigation follows
+	// the same propagation and availability rules as menus and keybindings.
+	_ = C.gtk_widget_activate_action_variant(self.widget, if self.pending_horizontal_scroll < 0 {
+		c'tab.next-page'
+	} else {
+		c'tab.previous-page'
+	}, unsafe { nil })
 	if self.pending_horizontal_scroll_reset != 0 {
 		C.g_source_remove(self.pending_horizontal_scroll_reset)
 		self.pending_horizontal_scroll_reset = 0
@@ -3995,10 +3994,8 @@ pub fn (self &SurfaceWidget) default_termio_env() !map[string]string {
 		internal_os.filter_snap_paths(mut env)
 	}
 
-	// Let the owning window protocol add values such as X11's WINDOWID. The
-	// split tree is the translated owner path for the source's ancestor lookup.
-	if !isnil(self.split_tree) && !isnil(self.split_tree.window) {
-		mut window := unsafe { self.split_tree.window }
+	// Let the owning window protocol add values such as X11's WINDOWID.
+	if mut window := window_from_surface(self) {
 		mut winproto := window.winproto()
 		winproto.add_subprocess_env(mut env)!
 		if window.is_quick_terminal() {
