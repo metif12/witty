@@ -1212,8 +1212,11 @@ fn (mut self Window) toggle_command_palette() {
 	}
 
 	mut palette := new_command_palette()
-	palette.config = self.config
+	defer {
+		palette.unref()
+	}
 	palette.app = self.app
+	palette.set_config(self.config)
 	self.command_palette.set(GObject(palette.dialog))
 	palette.toggle(self)
 }
@@ -2078,9 +2081,8 @@ pub fn (mut self Window) prop_config() {
 	if !isnil(palette_obj) {
 		if existing := command_palette_from_object(palette_obj) {
 			mut palette := unsafe { existing }
-			palette.config = self.config
 			palette.app = self.app
-			palette.prop_config()
+			palette.set_config(self.config)
 		}
 		object_unref(palette_obj)
 	}

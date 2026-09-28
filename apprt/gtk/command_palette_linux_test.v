@@ -9,7 +9,7 @@ fn test_command_palette_action_accelerator_from_config_keybind() {
 	mut cfg := config_new(inner)
 	mut command := Command.new(cfg, input.Command{
 		action: input.ActionNewWindow{}
-		title: 'New Window'
+		title:  'New Window'
 	})
 
 	assert command.prop_get_action() or { '' } == '<Shift><Ctrl>a'
@@ -24,7 +24,7 @@ fn test_command_palette_action_without_keybind_is_none() {
 	mut cfg := config_new(configpkg.Config{})
 	mut command := Command.new(cfg, input.Command{
 		action: input.ActionNewWindow{}
-		title: 'New Window'
+		title:  'New Window'
 	})
 
 	assert command.prop_get_action() == none
@@ -37,7 +37,7 @@ fn test_regular_command_has_no_jump_surface() {
 	mut cfg := config_new(configpkg.Config{})
 	mut command := Command.new(cfg, input.Command{
 		action: input.ActionNewWindow{}
-		title: 'New Window'
+		title:  'New Window'
 	})
 
 	assert command.get_jump_surface() == none
@@ -51,7 +51,7 @@ fn test_command_data_retains_only_the_active_payload() {
 		data: RegularData{
 			command: input.Command{
 				action: input.ActionIgnore{}
-				title: 'Regular'
+				title:  'Regular'
 			}
 		}
 	}
@@ -72,7 +72,7 @@ fn test_command_palette_action_key_uses_full_action_format() {
 	mut cfg := config_new(configpkg.Config{})
 	mut command := Command.new(cfg, input.Command{
 		action: input.ActionText{ value: 'hello world' }
-		title: 'Type Text'
+		title:  'Type Text'
 	})
 
 	assert command.prop_get_action_key() or { '' } == 'text:hello world'
@@ -88,7 +88,7 @@ fn test_command_palette_filter_matches_title_or_action_key() {
 			data: RegularData{
 				command: input.Command{
 					action: input.ActionNewWindow{}
-					title: 'Open a Window'
+					title:  'Open a Window'
 				}
 			}
 		},
@@ -96,7 +96,7 @@ fn test_command_palette_filter_matches_title_or_action_key() {
 			data: RegularData{
 				command: input.Command{
 					action: input.ActionCopyToClipboard{}
-					title: 'Copy Selection'
+					title:  'Copy Selection'
 				}
 			}
 		},
@@ -131,8 +131,7 @@ fn test_command_palette_uses_configured_entries() {
 	assert !isnil(acquired)
 	assert command_palette_from_object(acquired) or { panic('missing command palette wrapper') } == palette
 	object_unref(acquired)
-	palette.config = cfg
-	palette.prop_config()
+	palette.set_config(cfg)
 
 	assert palette.commands.len == 1
 	mut command := palette.commands[0]
@@ -140,7 +139,13 @@ fn test_command_palette_uses_configured_entries() {
 	assert command.prop_get_description() or { '' } == 'Configured'
 	assert command.get_action() or { panic('missing command action') } == input.Action(input.ActionIgnore{})
 
-	palette.dispose()
+	// new_command_palette returns a caller reference in addition to the
+	// self-reference released when the dialog closes.
+	palette.unref()
+	still_alive := weak.get()
+	assert !isnil(still_alive)
+	object_unref(still_alive)
+	palette.dialog_closed()
 	finalized := weak.get()
 	assert isnil(finalized)
 	weak.clear()

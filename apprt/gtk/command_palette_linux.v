@@ -87,6 +87,8 @@ fn C.adw_dialog_close(dialog AdwDialog) bool
 
 fn C.gtk_widget_get_realized(widget GtkWidget) bool
 
+fn C.g_object_is_floating(object GObject) bool
+
 // --- CommandData ----------------------------------------------------------
 
 // These types mirror the two payloads of `Private.CommandData`. Keeping the
@@ -101,11 +103,11 @@ pub mut:
 
 pub struct JumpData {
 pub mut:
-	surface         WeakRef = weak_ref_empty()
-	surface_ptr     &SurfaceWidget = unsafe { nil }
-	title           string
-	description     string
-	sort_key        usize
+	surface     WeakRef        = weak_ref_empty()
+	surface_ptr &SurfaceWidget = unsafe { nil }
+	title       string
+	description string
+	sort_key    usize
 }
 
 pub type CommandData = JumpData | RegularData
@@ -127,7 +129,7 @@ pub mut:
 pub fn Command.new(config &Config, command input.Command) &Command {
 	mut self := &Command{
 		config: unsafe { nil }
-		data: RegularData{
+		data:   RegularData{
 			command: command.clone()
 		}
 	}
@@ -142,13 +144,13 @@ pub fn Command.new_jump(config &Config, surface &SurfaceWidget) &Command {
 	mut jump := JumpData{
 		// TODO: replace with a surface id once Ghostty adds one (matches the
 		// source `@intFromPtr(surface)`).
-		sort_key: usize(voidptr(surface))
+		sort_key:    usize(voidptr(surface))
 		surface_ptr: unsafe { surface }
 	}
 	jump.surface.set(GObject(surface.widget))
 	mut self := &Command{
 		config: unsafe { nil }
-		data: jump
+		data:   jump
 	}
 	if !isnil(config) {
 		self.config = config_ref(config)
@@ -363,18 +365,26 @@ pub mut:
 	// The command list and indices currently visible after filtering.
 	commands         []&Command
 	visible_commands []int
-	window           &Window = unsafe { nil }
+	window           &Window      = unsafe { nil }
 	app              &Application = unsafe { nil }
-	disposed          bool
+	disposed         bool
 }
 
 const command_palette_wrapper_key = 'witty-command-palette-wrapper'
 
 // new_command_palette creates a new CommandPalette. Mirrors
-// `CommandPalette.new`, including ownership of the initially-floating dialog.
+// `CommandPalette.new`: the initial native reference is the palette's
+// self-reference, released by dialog_closed, and the returned wrapper owns one
+// additional caller reference.
 pub fn new_command_palette() &CommandPalette {
 	dialog := C.adw_dialog_new()
-	C.g_object_ref_sink(GObject(dialog))
+	// Ghostty's AdwBin is initially floating. AdwDialog is the programmatic
+	// root used by this translation and can be returned as an ordinary
+	// transfer-full GObject, so only sink it when it is actually floating. In
+	// either case the initial reference becomes the close-time self-reference.
+	if C.g_object_is_floating(GObject(dialog)) {
+		C.g_object_ref_sink(GObject(dialog))
+	}
 	C.adw_dialog_set_content_width(dialog, 700)
 
 	toolbar := C.adw_toolbar_view_new()
@@ -402,15 +412,41 @@ pub fn new_command_palette() &CommandPalette {
 		widget: GtkWidget(dialog)
 		dialog: dialog
 		search: search
-		list: list
+		list:   list
 	}
 	C.g_object_set_data(GObject(dialog), &char(command_palette_wrapper_key.str), voidptr(self))
+	C.g_object_weak_ref(GObject(dialog), voidptr(command_palette_native_finalize_cb), voidptr(self))
 	C.g_signal_connect_data(dialog, c'closed', GCallback(voidptr(command_palette_dialog_closed_cb)), self, unsafe { nil }, 0)
 	C.g_signal_connect_data(search, c'stop-search', GCallback(voidptr(command_palette_search_stopped_cb)), self, unsafe { nil }, 0)
 	C.g_signal_connect_data(search, c'activate', GCallback(voidptr(command_palette_search_activated_cb)), self, unsafe { nil }, 0)
 	C.g_signal_connect_data(search, c'search-changed', GCallback(voidptr(command_palette_search_changed_cb)), self, unsafe { nil }, 0)
 	C.g_signal_connect_data(list, c'row-activated', GCallback(voidptr(command_palette_row_activated_cb)), self, unsafe { nil }, 0)
+	object_ref(GObject(dialog))
 	return self
+}
+
+// ref returns a new caller-owned reference to the palette.
+pub fn (mut self CommandPalette) ref() &CommandPalette {
+	if !isnil(self.dialog) {
+		object_ref(GObject(self.dialog))
+	}
+	return self
+}
+
+// ref_sink adopts a floating palette reference or adds a reference when the
+// native object is already owned, matching Common.refSink.
+pub fn (mut self CommandPalette) ref_sink() &CommandPalette {
+	if !isnil(self.dialog) {
+		C.g_object_ref_sink(GObject(self.dialog))
+	}
+	return self
+}
+
+// unref releases one caller or self reference.
+pub fn (mut self CommandPalette) unref() {
+	if !isnil(self.dialog) {
+		object_unref(GObject(self.dialog))
+	}
 }
 
 // command_palette_from_object performs the typed half of Ghostty's
@@ -425,6 +461,21 @@ fn command_palette_from_object(obj GObject) ?&CommandPalette {
 		return none
 	}
 	return unsafe { &CommandPalette(wrapper) }
+}
+
+// set_config applies the ownership and notification behavior of the native
+// `config` GObject property. The palette owns its own reference independently
+// of the commands rebuilt by prop_config.
+pub fn (mut self CommandPalette) set_config(config &Config) {
+	if self.config == config {
+		return
+	}
+	new_config := if isnil(config) { unsafe { nil } } else { config_ref(config) }
+	if !isnil(self.config) {
+		self.config.unref()
+	}
+	self.config = new_config
+	self.prop_config()
 }
 
 // prop_config is the config-changed handler: it clears and rebuilds the command
@@ -561,8 +612,6 @@ pub fn (mut self CommandPalette) toggle(window &Window) {
 		return
 	}
 	self.window = unsafe { window }
-	self.prop_config()
-	C.gtk_editable_set_text(GtkWidget(self.search), c'')
 
 	// Window holds the AdwApplicationWindow in `obj`; present it as the parent.
 	C.adw_dialog_present(self.dialog, window.obj)
@@ -580,7 +629,7 @@ fn (self &CommandPalette) close() {
 // a weak native reference, so finalization clears its cached palette exactly
 // as in Ghostty.
 pub fn (mut self CommandPalette) dialog_closed() {
-	self.dispose()
+	self.unref()
 }
 
 // search_stopped is the search "stop-search" template callback (ESC). Mirrors
@@ -715,6 +764,14 @@ fn command_palette_dialog_closed_cb(dialog AdwDialog, data voidptr) {
 	}
 }
 
+fn command_palette_native_finalize_cb(data voidptr, object GObject) {
+	_ = object
+	if !isnil(data) {
+		mut self := unsafe { &CommandPalette(data) }
+		self.finalize_state()
+	}
+}
+
 fn command_palette_search_stopped_cb(search GtkSearchEntry, data voidptr) {
 	_ = search
 	if !isnil(data) {
@@ -773,9 +830,10 @@ pub fn (mut self CommandPalette) filter(query string) []int {
 	return result
 }
 
-// dispose releases the command-owned config references and the palette's GTK
-// object. Signal connections are owned by the dialog and disappear with it.
-pub fn (mut self CommandPalette) dispose() {
+// finalize_state mirrors the palette dispose vfunc after the final native
+// reference is released. Signal connections are owned by the dialog and have
+// already disappeared when the weak notification runs.
+fn (mut self CommandPalette) finalize_state() {
 	if self.disposed {
 		return
 	}
@@ -785,18 +843,14 @@ pub fn (mut self CommandPalette) dispose() {
 	}
 	self.commands.clear()
 	self.visible_commands.clear()
+	if !isnil(self.config) {
+		self.config.unref()
+	}
+	self.config = unsafe { nil }
 	self.window = unsafe { nil }
 	self.app = unsafe { nil }
-	self.config = unsafe { nil }
-	dialog := self.dialog
-	if !isnil(dialog) {
-		C.g_object_set_data(GObject(dialog), &char(command_palette_wrapper_key.str), unsafe { nil })
-	}
 	self.widget = unsafe { nil }
 	self.dialog = unsafe { nil }
 	self.search = unsafe { nil }
 	self.list = unsafe { nil }
-	if !isnil(dialog) {
-		object_unref(GObject(dialog))
-	}
 }
