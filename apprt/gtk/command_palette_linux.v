@@ -654,19 +654,31 @@ pub fn (mut self CommandPalette) row_activated(pos u32) {
 // position: jump commands present their surface, regular commands emit the
 // `trigger` signal with the action. Mirrors `activated`.
 fn (mut self CommandPalette) activated(pos u32) {
+	// Ghostty obtains a strong reference to the selected model object before
+	// closing. Here the palette owns its V command wrappers, so keep their
+	// native owner alive until activation has finished.
+	mut cmd := &Command(unsafe { nil })
+	if pos < u32(self.visible_commands.len) {
+		command_index := self.visible_commands[pos]
+		if command_index >= 0 && command_index < self.commands.len {
+			cmd = self.commands[command_index]
+		}
+	}
+	if !isnil(cmd) {
+		self.ref()
+	}
+	defer {
+		if !isnil(cmd) {
+			self.unref()
+		}
+	}
+
 	// Close before running the action so a follow-up dialog (e.g. the change
 	// title dialog) doesn't displace us before we register as closed.
 	self.close()
-
-	// Resolve the command at `pos` from the visible list.
-	if pos >= u32(self.visible_commands.len) {
+	if isnil(cmd) {
 		return
 	}
-	command_index := self.visible_commands[pos]
-	if command_index < 0 || command_index >= self.commands.len {
-		return
-	}
-	mut cmd := self.commands[command_index]
 
 	// Jump commands present their surface.
 	if cmd.is_jump() {
