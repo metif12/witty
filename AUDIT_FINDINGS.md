@@ -703,9 +703,12 @@ none, browser, action, ipc. dependencies: zf 0.10.3 ranking/highlighting.
   The translated session now has terminal capability and option state, pinned
   query bytes, feature enablement, resize/reset control, pixel-mouse
   translation, and a cell render diff with source style, link, image placement,
-  scaling, cursor, and synchronized-output sequences. Its synchronous query
-  wait, image transmission and color
-  control methods, and threaded TTY event loop remain absent.
+  scaling, cursor, and synchronized-output sequences. Clipboard, title,
+  notification, color query/set, scheme subscription, and Kitty image
+  transmission/control sequences are now translated, along with image cell
+  sizing and placement. Its synchronous query
+  wait, image decoding/transcoding and high-level loading, working-directory
+  control, pretty printing, and the threaded TTY event loop remain absent.
   The preview now queries and subscribes to color-scheme updates, but its
   session/render path is not yet a complete translation of the pinned vaxis
   `Vaxis`, `Loop`, and `Tty` implementations. Pinned vaxis width data and all
