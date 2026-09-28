@@ -18,5 +18,4 @@ fn test_weak_ref_does_not_keep_gobject_alive() {
 	config.unref()
 	finalized := weak.get()
 	assert isnil(finalized)
-	weak.clear()
 }

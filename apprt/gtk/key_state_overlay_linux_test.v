@@ -37,5 +37,4 @@ fn test_key_state_overlay_optional_properties_and_native_lifetime() {
 	overlay.unref()
 	finalized := weak.get()
 	assert isnil(finalized)
-	weak.clear()
 }

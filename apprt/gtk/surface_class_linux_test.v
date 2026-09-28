@@ -44,7 +44,6 @@ fn test_surface_set_config_owns_native_reference() {
 	surface.set_config_reference(none)
 	finalized := weak.get()
 	assert isnil(finalized)
-	weak.clear()
 }
 
 fn test_surface_readonly_notification_uses_core_state() {

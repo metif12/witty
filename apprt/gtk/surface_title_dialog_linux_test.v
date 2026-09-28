@@ -22,5 +22,4 @@ fn test_surface_title_dialog_initial_value_property() {
 	dialog.unref()
 	finalized := weak.get()
 	assert isnil(finalized)
-	weak.clear()
 }

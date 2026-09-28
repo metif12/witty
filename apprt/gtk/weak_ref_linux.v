@@ -31,8 +31,6 @@ module gtk
 @[typedef]
 struct C.GWeakRef {}
 
-fn C.g_weak_ref_init(weak_ref &C.GWeakRef, object GObject)
-fn C.g_weak_ref_clear(weak_ref &C.GWeakRef)
 fn C.g_weak_ref_set(weak_ref &C.GWeakRef, object GObject)
 fn C.g_weak_ref_get(weak_ref &C.GWeakRef) GObject
 
@@ -70,20 +68,4 @@ pub fn (mut self WeakRef) set(obj GObject) {
 // Mirrors `WeakRef.get`.
 pub fn (mut self WeakRef) get() GObject {
 	return C.g_weak_ref_get(&self.ref)
-}
-
-// init initializes the weak reference to point at `obj` (or empty when nil).
-// This corresponds to GLib's `g_weak_ref_init`. It is not strictly part of
-// the Zig API (which relies on the zeroed default), but is provided so callers
-// that need an explicitly-initialized `GWeakRef` at a stable address can do
-// so faithfully.
-pub fn (mut self WeakRef) init(obj GObject) {
-	C.g_weak_ref_init(&self.ref, obj)
-}
-
-// clear releases the weak reference, disconnecting it from the object it
-// points to. Corresponds to GLib's `g_weak_ref_clear`. Call this before the
-// backing `WeakRef` storage is freed.
-pub fn (mut self WeakRef) clear() {
-	C.g_weak_ref_clear(&self.ref)
 }

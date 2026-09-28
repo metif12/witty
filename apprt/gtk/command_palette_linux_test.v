@@ -146,6 +146,5 @@ fn test_command_palette_uses_configured_entries() {
 	palette.dialog_closed()
 	finalized := weak.get()
 	assert isnil(finalized)
-	weak.clear()
 	cfg.unref()
 }
