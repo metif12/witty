@@ -445,18 +445,14 @@ fn (self &Tab) notify_property(pspec &C.GParamSpec) {
 // get_active_surface returns the currently active surface, or `none`. See the
 // "active-surface" property. Mirrors `getActiveSurface`. Does not ref.
 pub fn (mut self Tab) get_active_surface() ?&SurfaceWidget {
-	if isnil(self.split_tree) {
-		return none
-	}
+	assert !isnil(self.split_tree)
 	return self.split_tree.get_active_surface()
 }
 
 // get_surface_tree returns the surface tree of this tab, or `none`. Mirrors
 // `getSurfaceTree`.
 pub fn (mut self Tab) get_surface_tree() ?&datastruct.SplitTree[SurfaceWidget] {
-	if isnil(self.split_tree) {
-		return none
-	}
+	assert !isnil(self.split_tree)
 	return self.split_tree.get_tree()
 }
 
@@ -469,9 +465,7 @@ pub fn (self &Tab) get_split_tree() &SplitTreeWidget {
 // get_needs_confirm_quit returns true if this tab needs confirmation before
 // quitting. Mirrors `getNeedsConfirmQuit`.
 pub fn (self &Tab) get_needs_confirm_quit() bool {
-	if isnil(self.split_tree) {
-		return false
-	}
+	assert !isnil(self.split_tree)
 	return self.split_tree.get_needs_confirm_quit()
 }
 

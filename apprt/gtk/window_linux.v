@@ -2076,6 +2076,10 @@ pub fn (mut self Window) prop_config() {
 		for mut surface in tab.split_tree.surfaces {
 			surface.apply_config()
 		}
+		// The translated Config wrapper is stable across reloads, so the
+		// programmatic equivalent of Tab's Blueprint expression must be
+		// reevaluated explicitly after its inner configuration is replaced.
+		tab.sync_from_active_surface()
 	}
 }
 
