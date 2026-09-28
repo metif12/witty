@@ -2,6 +2,7 @@ module termio
 
 import configpkg
 import internal_os
+import log
 import os
 
 // Shell types we support
@@ -65,7 +66,7 @@ pub fn setup(resource_dir string, command configpkg.Command, mut env map[string]
 
 	return ShellIntegrationResult{
 		value: ShellIntegration{
-			shell: shell
+			shell:   shell
 			command: new_command
 		}
 	}
@@ -214,12 +215,13 @@ fn setup_bash(command configpkg.Command, resource_dir string, mut env map[string
 
 	// Set our new ENV to point to our integration script.
 	script_path := '${resource_dir}/shell-integration/bash/ghostty.bash'
-	if os.exists(script_path) {
-		env['ENV'] = script_path
-	} else {
+	mut script := os.open(script_path) or {
+		log.warn('unable to open ${script_path}: ${err}')
 		env.delete('GHOSTTY_BASH_ENV')
 		return ShellCommandResult{}
 	}
+	script.close()
+	env['ENV'] = script_path
 
 	env['GHOSTTY_BASH_INJECT'] = inject_parts.join(' ')
 	if rc := rcfile {
@@ -253,7 +255,12 @@ fn setup_bash(command configpkg.Command, resource_dir string, mut env map[string
 fn setup_xdg_data_dirs(resource_dir string, mut env map[string]string) bool {
 	// Get our path to the shell integration directory.
 	integ_path := '${resource_dir}/shell-integration'
-	if !os.is_dir(integ_path) {
+	integ_stat := os.stat(integ_path) or {
+		log.warn('unable to open ${integ_path}: ${err}')
+		return false
+	}
+	if integ_stat.get_filetype() != .directory {
+		log.warn('unable to open ${integ_path}: not a directory')
 		return false
 	}
 
@@ -353,7 +360,12 @@ fn setup_zsh(command configpkg.Command, resource_dir string, mut env map[string]
 
 	// Set our new ZDOTDIR to point to our shell resource directory.
 	integ_path := '${resource_dir}/shell-integration/zsh'
-	if !os.is_dir(integ_path) {
+	integ_stat := os.stat(integ_path) or {
+		log.warn('unable to open ${integ_path}: ${err}')
+		return none
+	}
+	if integ_stat.get_filetype() != .directory {
+		log.warn('unable to open ${integ_path}: not a directory')
 		return none
 	}
 	env['ZDOTDIR'] = integ_path
