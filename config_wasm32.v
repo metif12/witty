@@ -3,12 +3,12 @@
 module main
 
 import configpkg
+import log
 
 // Create a new configuration filled with the initial default values.
 @[export: 'config_new']
 fn config_new_wasm_export() voidptr {
 	result := ghostty_config_new() or {
-		eprintln('error allocating config')
 		return unsafe { nil }
 	}
 	return voidptr(result)
@@ -35,6 +35,6 @@ fn config_load_string_wasm_export(raw voidptr, str &u8, len usize) {
 fn config_finalize_wasm_export(raw voidptr) {
 	mut config := unsafe { &configpkg.Config(raw) }
 	config.finalize() or {
-		eprintln('error finalizing config err=${err}')
+		log.error('error finalizing config err=${err}')
 	}
 }

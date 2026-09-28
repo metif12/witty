@@ -15,6 +15,7 @@ import cli
 import core
 import global_state
 import internal_os
+import log
 
 // Install the runtime-neutral bridge used by the embedded/libghostty API.
 // This keeps apprt free of a circular dependency while ensuring its C-facing
@@ -127,7 +128,7 @@ pub fn ghostty_init(argc int, argv []string) int {
 		[]string{}
 	}
 	state.init_args(args) or {
-		eprintln('failed to initialize ghostty error=${err}')
+		log.error('failed to initialize ghostty error=${err}')
 		return 1
 	}
 	return 0
@@ -139,8 +140,9 @@ pub fn ghostty_init(argc int, argv []string) int {
 pub fn ghostty_cli_try_action() {
 	state := global_state.get_state()
 	action := state.action or { return }
+	log.info('executing CLI action=${action}')
 	code := run_cli_action(action, state.cli_args) or {
-		eprintln('CLI action failed: ${err}')
+		log.error('CLI action failed error=${err}')
 		exit(1)
 	}
 	exit(code)

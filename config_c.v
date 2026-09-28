@@ -4,6 +4,7 @@ module main
 
 import configpkg
 import input
+import log
 import os
 
 // ConfigDiagnostic mirrors ghostty_diagnostic_s.
@@ -25,6 +26,7 @@ pub:
 pub fn ghostty_config_new() ?&configpkg.Config {
 	raw := unsafe { malloc(sizeof(configpkg.Config)) }
 	if isnil(raw) {
+		log.error('error allocating config err=OutOfMemory')
 		return none
 	}
 	mut result := unsafe { &configpkg.Config(raw) }
@@ -52,6 +54,7 @@ pub fn ghostty_config_clone(config &configpkg.Config) ?&configpkg.Config {
 	}
 	raw := unsafe { malloc(sizeof(configpkg.Config)) }
 	if isnil(raw) {
+		log.error('error allocating config err=OutOfMemory')
 		return none
 	}
 	mut result := unsafe { &configpkg.Config(raw) }
@@ -66,31 +69,31 @@ pub fn ghostty_config_clone(config &configpkg.Config) ?&configpkg.Config {
 pub fn ghostty_config_load_cli_args(mut config configpkg.Config) {
 	args := if os.args.len > 1 { os.args[1..] } else { []string{} }
 	config.load_cli_args(args) or {
-		eprintln('error loading config err=${err}')
+		log.error('error loading config err=${err}')
 	}
 }
 
 pub fn ghostty_config_load_default_files(mut config configpkg.Config) {
 	config.load_default_files() or {
-		eprintln('error loading config err=${err}')
+		log.error('error loading config err=${err}')
 	}
 }
 
 pub fn ghostty_config_load_file(mut config configpkg.Config, path string) {
 	config.load_file(path) or {
-		eprintln('error loading config from file path=${path} err=${err}')
+		log.error('error loading config from file path=${path} err=${err}')
 	}
 }
 
 pub fn ghostty_config_load_recursive_files(mut config configpkg.Config) {
 	config.load_recursive_files() or {
-		eprintln('error loading config err=${err}')
+		log.error('error loading config err=${err}')
 	}
 }
 
 pub fn ghostty_config_finalize(mut config configpkg.Config) {
 	config.finalize() or {
-		eprintln('error finalizing config err=${err}')
+		log.error('error finalizing config err=${err}')
 	}
 }
 
@@ -99,7 +102,10 @@ pub fn ghostty_config_get(mut config configpkg.Config, ptr voidptr, key string) 
 }
 
 pub fn ghostty_config_trigger(config &configpkg.Config, action_text string) InputTrigger {
-	action := input.Action.parse(action_text) or { return InputTrigger{} }
+	action := input.Action.parse(action_text) or {
+		log.error('error finding trigger err=${err}')
+		return InputTrigger{}
+	}
 	trigger := config.keybind.set.get_trigger(action) or { return InputTrigger{} }
 	key := match trigger.key {
 		input.TriggerKeyPhysical { u32(trigger.key.key) }
@@ -131,7 +137,7 @@ pub fn ghostty_config_get_diagnostic(mut config &configpkg.Config, idx u32) Conf
 
 pub fn ghostty_config_open_path() GhosttyString {
 	path := configpkg.open_path() or {
-		eprintln('error opening config in editor: ${err}')
+		log.error('error opening config in editor err=${err}')
 		return GhosttyString.empty()
 	}
 	return GhosttyString.from_slice(path.bytes())
