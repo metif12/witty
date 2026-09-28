@@ -1070,6 +1070,7 @@ pub fn (mut self Renderer) set_macos_display_id(display_id u32) ! {
 //
 // Must be called on the render thread.
 pub fn (mut self Renderer) set_focus(focus bool) ! {
+	assert self.focused != focus
 	self.focused = focus
 
 	// Flag that we need to update our custom shaders
@@ -2806,6 +2807,7 @@ pub fn (mut r Renderer) display_realized() ! {
 			[]string{}
 		}
 		r.shaders = r.api.init_shaders(post_shaders)!
+		r.has_custom_shaders = post_shaders.len > 0
 		r.frames = []GLFrameState{cap: opengl_swap_chain_count}
 		for _ in 0 .. opengl_swap_chain_count {
 			r.frames << GLFrameState.init(&r.api, r.has_custom_shaders)!

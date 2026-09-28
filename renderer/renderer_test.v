@@ -105,6 +105,20 @@ fn test_swap_chain_slot_can_be_acquired_again_after_release() ! {
 	render.release_frame()
 }
 
+fn test_renderer_focus_transition_updates_source_state() ! {
+	mut render := Renderer{
+		focused: true
+	}
+	render.set_focus(false)!
+	assert !render.focused
+	assert render.custom_shader_focused_changed
+
+	render.custom_shader_focused_changed = false
+	render.set_focus(true)!
+	assert render.focused
+	assert render.custom_shader_focused_changed
+}
+
 fn test_update_frame_marks_search_viewport_dirty() ! {
 	mut term := terminal.Terminal.init(terminal.Options{ cols: 2, rows: 2 })!
 	defer { term.deinit() }
