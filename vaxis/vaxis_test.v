@@ -688,3 +688,13 @@ fn test_pinned_vaxis_gwidth_methods_and_uucode_properties() {
 fn test_clipboard_copy_uses_pinned_osc52_terminator() {
 	assert clipboard_copy_sequence('abc') == '\x1b]52;c;YWJj\x1b\\'
 }
+
+fn test_ansi_adapter_truncates_by_pinned_grapheme_cell_width() {
+	assert truncate('界ab', 2) == '界'
+	assert truncate('e\u0301x', 1) == 'e\u0301'
+	assert truncate('a\u200bx', 1) == 'a'
+	assert truncate('👩‍🚀x', 2) == '👩‍🚀'
+	assert truncate_with_method('👩‍🚀x', 3, .wcwidth) == '👩‍🚀'
+	assert truncate_with_method('👩‍🚀x', 3, .unicode) == '👩‍🚀x'
+	assert truncate('one\ntwo', 8) == 'one'
+}

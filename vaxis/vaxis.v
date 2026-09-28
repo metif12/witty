@@ -2384,14 +2384,35 @@ pub fn clipboard_copy_sequence(text string) string {
 }
 
 pub fn truncate(text string, width int) string {
+	return truncate_with_method(text, width, .wcwidth)
+}
+
+// Match Window.print's non-wrapping grapheme traversal for the ANSI adapter.
+pub fn truncate_with_method(text string, width int, method GWidthMethod) string {
 	if width <= 0 {
 		return ''
 	}
-	runes := text.runes()
-	if runes.len <= width {
-		return text
+	mut visible := strings.new_builder(text.len)
+	mut offset := 0
+	mut col := 0
+	for offset < text.len && col < width {
+		length := first_grapheme_byte_length(text[offset..])
+		if length == 0 {
+			break
+		}
+		grapheme := text[offset..offset + length]
+		offset += length
+		if grapheme == '\n' {
+			break
+		}
+		w := int(gwidth(grapheme, method))
+		if w == 0 {
+			continue
+		}
+		visible.write_string(grapheme)
+		col += w
 	}
-	return runes[..width].string()
+	return visible.str()
 }
 
 fn max_int(a int, b int) int {

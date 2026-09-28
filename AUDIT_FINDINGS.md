@@ -9,6 +9,7 @@ below exist. Earlier versions of this document overstated the completed review.
 
 | Area | Bug | Fix |
 |---|---|---|
+| vaxis ANSI adapter clipping | The preview's `truncate` helper used rune count, so a two-cell grapheme could spill past a child window and combining sequences could be split at the edge. | Traverse pinned vaxis grapheme clusters and advance by the selected width method, skipping zero-width clusters and stopping at a newline as `Window.print` does. The default adapter call uses vaxis' initial `wcwidth` method. |
 | vaxis clipboard copy terminator | The theme preview's OSC 52 copy helper ended its payload with BEL, while pinned vaxis uses ST. | Emit the source's OSC 52 sequence and verify the encoded payload and terminator directly. |
 | Theme preview Unicode width selection | The preview never queried vaxis' Unicode width capability, so its search widget continued counting every codepoint with `wcwidth` even after a terminal reported Unicode grapheme width support. | Query DECRQM 2027, retain the reported method in preview state, enable mode 2027 on a positive response, and pass the method to the translated text-input renderer and cursor measurement. |
 | vaxis grapheme width | The text-input draw adapter used Ghostty's Unicode width table, and the compatibility layer had no translation of vaxis' three `gwidth.Method` strategies. The two pinned uucode revisions share Unicode 16 data but differ on emoji modifier grapheme boundaries. | Generate vaxis' East Asian width, mark, emoji-presentation, and control ranges from its locked uucode UCD; translate `unicode`, `wcwidth`, and `no_zwj` width rules and adapt emoji modifier boundaries to vaxis' untailored iterator for parser and widget text. Verify the generated binary is reproducible from the pinned UCD. |
@@ -701,7 +702,10 @@ none, browser, action, ipc. dependencies: zf 0.10.3 ranking/highlighting.
   three `gwidth.Method` algorithms are now available, and the preview selects
   Unicode width after a positive mode 2027 response. The rest of pinned
   `queryTerminal` capability discovery, explicit-width probing, and the
-  session's capability-driven render path remain to translate.
+  session's capability-driven render path remain to translate. The preview's
+  multi-segment sample layout still advances by runes instead of the source
+  `Window.print` grapheme cell widths and has no retained screen for clipping
+  or diff rendering.
 
 These are confirmed structural boundaries or larger refactors. The absence of
 an item here does not mean its full module has been certified yet.
