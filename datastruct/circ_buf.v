@@ -33,8 +33,8 @@ mut:
 pub fn new_circ_buf[T](size int, default_value T) CircBuf[T] {
 	assert size >= 0
 	return CircBuf[T]{
-		storage: []T{len: size, init: default_value}
-		full: size == 0
+		storage:       []T{len: size, init: default_value}
+		full:          size == 0
 		default_value: default_value
 	}
 }
@@ -78,17 +78,17 @@ pub fn (mut self CircBuf[T]) clear() {
 
 pub fn (self &CircBuf[T]) iterator(direction CircBufDirection) CircBufIterator[T] {
 	return CircBufIterator[T]{
-		buf: *self
+		buf:       *self
 		direction: direction
 	}
 }
 
-pub fn (self &CircBuf[T]) first() ?T {
+pub fn (self &CircBuf[T]) first() ?&T {
 	mut iterator := self.iterator(.forward)
 	return iterator.next()
 }
 
-pub fn (self &CircBuf[T]) last() ?T {
+pub fn (self &CircBuf[T]) last() ?&T {
 	mut iterator := self.iterator(.reverse)
 	return iterator.next()
 }
@@ -179,12 +179,6 @@ pub fn (mut self CircBuf[T]) delete_oldest(n int) {
 	self.full = false
 }
 
-// get returns the value at a logical offset from the oldest element.
-pub fn (self &CircBuf[T]) get(offset int) T {
-	assert offset >= 0 && offset < self.len()
-	return self.storage[self.storage_offset(offset)]
-}
-
 // get_ptr_slice returns the two storage slices for a logical range and marks
 // any portion beyond the current length as written.
 pub fn (mut self CircBuf[T]) get_ptr_slice(offset int, slice_len int) CircBufSlices[T] {
@@ -206,7 +200,7 @@ pub fn (mut self CircBuf[T]) get_ptr_slice(offset int, slice_len int) CircBufSli
 		}
 	}
 	return CircBufSlices[T]{
-		first: unsafe { self.storage[start_idx..] }
+		first:  unsafe { self.storage[start_idx..] }
 		second: unsafe { self.storage[..end_idx + 1] }
 	}
 }
@@ -239,7 +233,7 @@ pub mut:
 	idx int
 }
 
-pub fn (mut self CircBufIterator[T]) next() ?T {
+pub fn (mut self CircBufIterator[T]) next() ?&T {
 	if self.idx >= self.buf.len() {
 		return none
 	}
@@ -249,7 +243,7 @@ pub fn (mut self CircBufIterator[T]) next() ?T {
 	}
 	storage_idx := (self.buf.tail + tail_idx) % self.buf.capacity()
 	self.idx++
-	return self.buf.storage[storage_idx]
+	return unsafe { &self.buf.storage[storage_idx] }
 }
 
 // seek_by moves the iterator index with saturating subtraction, matching

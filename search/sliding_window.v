@@ -93,11 +93,11 @@ pub fn SlidingWindow.init(direction Direction, needle_unowned []u8) SlidingWindo
 	}
 
 	return SlidingWindow{
-		data: DataBuf.new()
-		meta: MetaBuf.new()
+		data:        DataBuf.new()
+		meta:        MetaBuf.new()
 		data_offset: 0
-		needle: needle
-		direction: direction
+		needle:      needle
+		direction:   direction
 		overlap_buf: []u8{len: needle.len * 2}
 	}
 }
@@ -212,9 +212,10 @@ pub fn (mut self SlidingWindow) next() ?highlight.Flattened {
 		prune_count := self.meta.len() - meta_it.idx
 		if prune_count > 0 {
 			// Delete all the metas before the one we found and their data.
+			meta_it = self.meta.iterator(.forward)
 			mut prune_data_len := 0
-			for i in 0 .. prune_count {
-				meta := self.meta.get(i)
+			for _ in 0 .. prune_count {
+				meta := meta_it.next() or { panic('missing metadata to prune') }
 				prune_data_len += meta.cell_map.len
 			}
 			self.meta.delete_oldest(prune_count)
@@ -256,8 +257,9 @@ fn (mut self SlidingWindow) build_highlight(start_offset int, length int) highli
 	mut prune_data_len := 0
 	mut found_tl := false
 
-	for i in 0 .. self.meta.len() {
-		meta := self.meta.get(i)
+	mut meta_it := self.meta.iterator(.forward)
+	for {
+		meta := meta_it.next() or { break }
 		prior_meta_consumed := meta_consumed
 		meta_consumed += meta.cell_map.len
 
@@ -282,14 +284,14 @@ fn (mut self SlidingWindow) build_highlight(start_offset int, length int) highli
 			result.top_x = start_map.x
 			result.bot_x = end_map.x
 			self.chunk_buf << highlight.Chunk{
-				node: meta.node
+				node:   meta.node
 				serial: meta.serial
-				start: u16(start_map.y)
-				end: u16(end_map.y + 1)
+				start:  u16(start_map.y)
+				end:    u16(end_map.y + 1)
 			}
-			prune_meta_count = i
+			prune_meta_count = meta_it.idx - 1
 			prune_data_len = prior_meta_consumed
-			br_continue_from = -1 // no continuation
+			br_continue_from = -1
 			found_tl = true
 			break
 		} else {
@@ -298,14 +300,14 @@ fn (mut self SlidingWindow) build_highlight(start_offset int, length int) highli
 			map_entry := meta.cell_map[meta_i]
 			result.top_x = map_entry.x
 			self.chunk_buf << highlight.Chunk{
-				node: meta.node
+				node:   meta.node
 				serial: meta.serial
-				start: u16(map_entry.y)
-				end: meta.node.data.size.rows
+				start:  u16(map_entry.y)
+				end:    meta.node.data.size.rows
 			}
-			prune_meta_count = i
+			prune_meta_count = meta_it.idx - 1
 			prune_data_len = prior_meta_consumed
-			br_continue_from = i + 1
+			br_continue_from = meta_it.idx
 			br_consumed = meta_consumed
 			found_tl = true
 			break
@@ -319,8 +321,8 @@ fn (mut self SlidingWindow) build_highlight(start_offset int, length int) highli
 	if br_continue_from >= 0 {
 		mut mc := br_consumed
 		mut found_br := false
-		for j := br_continue_from; j < self.meta.len(); j++ {
-			meta := self.meta.get(j)
+		for {
+			meta := meta_it.next() or { break }
 
 			// meta_i is the index we expect to find the match in the
 			// cell map within this meta if it contains it.
@@ -329,10 +331,10 @@ fn (mut self SlidingWindow) build_highlight(start_offset int, length int) highli
 				// This meta doesn't contain the match. We still add it
 				// to our results because we want the full flattened list.
 				self.chunk_buf << highlight.Chunk{
-					node: meta.node
+					node:   meta.node
 					serial: meta.serial
-					start: 0
-					end: meta.node.data.size.rows
+					start:  0
+					end:    meta.node.data.size.rows
 				}
 				mc += meta.cell_map.len
 				continue
@@ -342,10 +344,10 @@ fn (mut self SlidingWindow) build_highlight(start_offset int, length int) highli
 			map_entry := meta.cell_map[meta_i]
 			result.bot_x = map_entry.x
 			self.chunk_buf << highlight.Chunk{
-				node: meta.node
+				node:   meta.node
 				serial: meta.serial
-				start: 0
-				end: u16(map_entry.y + 1)
+				start:  0
+				end:    u16(map_entry.y + 1)
 			}
 			found_br = true
 			break
@@ -483,8 +485,8 @@ pub fn (mut self SlidingWindow) append(node &terminal.PageNode) int {
 	// Append meta entry.
 	self.meta.ensure_unused_capacity(1)
 	self.meta.append_assume_capacity(Meta{
-		node: unsafe { &terminal.PageNode(node) }
-		serial: node.serial
+		node:     unsafe { &terminal.PageNode(node) }
+		serial:   node.serial
 		cell_map: cell_map
 	})
 
@@ -507,8 +509,9 @@ fn (mut self SlidingWindow) test_change_needle(new_needle []u8) {
 fn (self &SlidingWindow) assert_integrity() {
 	// Verify data matches metadata exactly.
 	mut data_len := 0
-	for i in 0 .. self.meta.len() {
-		m := self.meta.get(i)
+	mut meta_it := self.meta.iterator(.forward)
+	for {
+		m := meta_it.next() or { break }
 		data_len += m.cell_map.len
 	}
 	assert data_len == self.data.len(), 'integrity: data_len=${data_len} != buf.len=${self.data.len()}'

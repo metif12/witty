@@ -22,9 +22,9 @@ fn test_circ_buf_append_and_wrap() ! {
 		buf.delete_oldest(1)
 		buf.append(4)!
 		mut iterator := buf.iterator(.forward)
-		assert iterator.next()? == 2
-		assert iterator.next()? == 3
-		assert iterator.next()? == 4
+		assert *iterator.next()? == 2
+		assert *iterator.next()? == 3
+		assert *iterator.next()? == 4
 		assert iterator.next() == none
 		return
 	}
@@ -37,13 +37,13 @@ fn test_circ_buf_reverse_iterator_seek_and_reset() {
 	buf.append_assume_capacity(2)
 	buf.append_assume_capacity(3)
 	mut iterator := buf.iterator(.reverse)
-	assert iterator.next()? == 3
+	assert *iterator.next()? == 3
 	iterator.seek_by(1)
-	assert iterator.next()? == 1
+	assert *iterator.next()? == 1
 	iterator.seek_by(-100)
-	assert iterator.next()? == 3
+	assert *iterator.next()? == 3
 	iterator.reset()
-	assert iterator.next()? == 3
+	assert *iterator.next()? == 3
 }
 
 fn test_circ_buf_first_last_and_clear() {
@@ -52,8 +52,8 @@ fn test_circ_buf_first_last_and_clear() {
 	assert buf.last() == none
 	buf.append_assume_capacity(4)
 	buf.append_assume_capacity(5)
-	assert buf.first()? == 4
-	assert buf.last()? == 5
+	assert *buf.first()? == 4
+	assert *buf.last()? == 5
 	buf.clear()
 	assert buf.empty()
 	assert buf.len() == 0

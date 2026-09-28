@@ -89,9 +89,9 @@ fn test_data_buf_append_full_delete_and_wrap() ! {
 		buf.delete_oldest(1)
 		buf.append(4)!
 		mut it := buf.iterator(.forward)
-		assert it.next() or { 0 } == 2
-		assert it.next() or { 0 } == 3
-		assert it.next() or { 0 } == 4
+		assert *(it.next() or { panic('missing first value') }) == 2
+		assert *(it.next() or { panic('missing second value') }) == 3
+		assert *(it.next() or { panic('missing third value') }) == 4
 		assert it.next() == none
 		return
 	}
@@ -158,7 +158,7 @@ fn test_data_buf_zero_length_operations_are_noops() {
 	buf.append_slice_assume_capacity('hello'.bytes())
 	buf.delete_oldest(0)
 	assert buf.len() == 5
-	assert buf.first() or { 0 } == `h`
+	assert *(buf.first() or { panic('missing first value') }) == `h`
 }
 
 fn test_meta_buf_basic() {
@@ -167,12 +167,13 @@ fn test_meta_buf_basic() {
 
 	buf.ensure_unused_capacity(2)
 	buf.append_assume_capacity(Meta{
-		serial: 42
+		serial:   42
 		cell_map: [terminal.Coordinate{ x: 1, y: 2 }]
 	})
 	assert buf.len() == 1
 
-	m := buf.get(0)
+	mut it := buf.iterator(.forward)
+	m := it.next() or { panic('missing metadata') }
 	assert m.serial == 42
 	assert m.cell_map.len == 1
 	assert m.cell_map[0].x == 1
@@ -190,8 +191,9 @@ fn test_meta_buf_delete_oldest() {
 
 	buf.delete_oldest(1)
 	assert buf.len() == 2
-	assert buf.get(0).serial == 2
-	assert buf.get(1).serial == 3
+	mut it := buf.iterator(.forward)
+	assert (it.next() or { panic('missing first metadata') }).serial == 2
+	assert (it.next() or { panic('missing second metadata') }).serial == 3
 }
 
 // ============================================================
@@ -293,7 +295,7 @@ fn test_sliding_window_clear_and_retain_capacity() {
 	w.data.append_slice_assume_capacity('hello'.bytes())
 	w.meta.ensure_unused_capacity(1)
 	w.meta.append_assume_capacity(Meta{
-		serial: 1
+		serial:   1
 		cell_map: []terminal.Coordinate{len: 5}
 	})
 
@@ -324,7 +326,7 @@ fn test_sliding_window_next_data_shorter_than_needle() {
 	w.data.append_slice_assume_capacity('hi'.bytes())
 	w.meta.ensure_unused_capacity(1)
 	w.meta.append_assume_capacity(Meta{
-		serial: 1
+		serial:   1
 		cell_map: []terminal.Coordinate{len: 2}
 	})
 
@@ -353,7 +355,7 @@ fn sliding_test_node(lines []string, wraps []bool, cols u16, serial u64) &termin
 		}
 	}
 	return &terminal.PageNode{
-		data: page
+		data:   page
 		serial: serial
 	}
 }
