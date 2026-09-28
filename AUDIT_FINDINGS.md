@@ -708,7 +708,8 @@ none, browser, action, ipc. dependencies: zf 0.10.3 ranking/highlighting.
   sizing and placement, working-directory control, pretty printing, and
   capability/F3-probe event interception. The preview sends the pinned
   capability query, waits up to one second for DA1, enables detected features,
-  and renders the retained screen. Its polling TTY remains a synchronous V
+  and renders the retained screen. The pinned event queue ring and wrapping
+  grapheme cache are translated. Its polling TTY remains a synchronous V
   adapter rather than the pinned threaded `Loop`/`Tty` implementation; image
   decoding/transcoding and high-level loading also remain absent. Pinned vaxis
   width data and all three `gwidth.Method` algorithms are available.
@@ -716,6 +717,10 @@ none, browser, action, ipc. dependencies: zf 0.10.3 ranking/highlighting.
 These are confirmed structural boundaries or larger refactors. The absence of
 an item here does not mean its full module has been certified yet.
 
+- **vaxis grapheme cache storage:** V copies a slice of a fixed array field
+  rather than returning a view into it. The cache therefore owns an 8 KiB
+  dynamic array so returned slices retain the source's shared backing and
+  overwrite behavior on wrap; its aggregate layout differs from Zig.
 - **Fixed-array type aliases:** the pinned V compiler accepts a public alias
   declaration for Ghostty's `[256]RGB` `color.Palette` but emits invalid C as
   soon as that alias is used as a field or parameter type. Witty therefore
