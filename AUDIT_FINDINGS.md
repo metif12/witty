@@ -9,6 +9,7 @@ below exist. Earlier versions of this document overstated the completed review.
 
 | Area | Bug | Fix |
 |---|---|---|
+| vaxis text-input drawing | The gap-buffer editor had no translation of `TextInput.draw`, `drawWithStyle`, or `widthToCursor`. The theme search box instead printed the entire buffer from the wrong interior column, counted runes instead of cell widths for the cursor, and never scrolled or drew edge ellipses. | Translate the widget's scroll offset, first/second-half cell writes, cursor position, and ellipsis rules into cell commands for the existing ANSI adapter; draw those cells in the search box's interior and test narrow, moved-cursor, wide, and combining-grapheme cases. |
 | Theme preview terminal color scheme | `Preview.init` and `run` guessed dark/light from `COLORFGBG`, although pinned vaxis starts in light mode and changes only after a terminal report. Witty neither queried support for color-scheme updates nor subscribed after receiving that capability. Its session wrapper also used OSC 0 with BEL and an incomplete mouse mode sequence. | Start light, query DECRQM 2031, subscribe with the pinned request/mode sequences when support is reported, reset the subscription on exit, and restore vaxis' OSC 2/ST title and mouse mode sequences. |
 | Theme preview rendering | The preview omitted the pinned cursor and selection swatches, most styled code segments, the second shell prompt component, diagnostic formatting, and continuous lorem text; it also compressed the six-row palette into five rows and erased the source iterator's empty tokens. | Restore Ghostty's color, sample, palette, diagnostic, and repeated-text layout using the translated ANSI renderer, retaining empty split tokens and the source's explicit-color requirement for optional cursor/selection values. |
 | GTK wrapper ownership surface | Application, ImGui/inspector widgets, resize/search/child-exit/scrolled-surface widgets, tabs, and windows omitted the public native `ref`/`unref` entry points supplied by Ghostty's class `Common` helper; the surface `ref` also returned an unsafe address expression instead of its receiver, and four non-dialog wrappers omitted their source `refSink` entry point. Search match setters additionally widened source `usize` values to `u64` at the V API boundary and callers manually projected them back. | Restore each audited ownership operation on its canonical native object, return each wrapper from `ref`/`ref_sink`, retain `usize` through the search API, and widen only in the registered `u64` GObject property storage. |
@@ -693,7 +694,10 @@ none, browser, action, ipc. dependencies: zf 0.10.3 ranking/highlighting.
   synchronized output, pixel-mouse translation, and threaded TTY event loop.
   The preview now queries and subscribes to color-scheme updates, but its
   session/render path is not yet a complete translation of the pinned vaxis
-  `Vaxis`, `Loop`, and `Tty` implementations.
+  `Vaxis`, `Loop`, and `Tty` implementations. The translated text-input draw
+  path currently measures graphemes using Ghostty's translated Unicode width
+  table; pinned vaxis instead uses its own uucode version and negotiated
+  `gwidth.Method`, so rare width cases and capability changes remain open.
 
 These are confirmed structural boundaries or larger refactors. The absence of
 an item here does not mean its full module has been certified yet.

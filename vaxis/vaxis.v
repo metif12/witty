@@ -1788,6 +1788,150 @@ pub fn (t &TextInput) graphemes_before_cursor() u16 {
 	return u16(grapheme_count(t.buf.first_half().bytestr()))
 }
 
+// TextInputDraw is the cell-level result of drawing the source widget into a
+// window. The ANSI preview adapter writes these cells at the window's origin.
+pub struct TextInputDraw {
+pub:
+	cells      []TextInputCell
+	cursor_col u16
+	style      Style
+}
+
+pub struct TextInputCell {
+pub:
+	col  u16
+	text string
+}
+
+pub fn (mut t TextInput) draw(width int) TextInputDraw {
+	return t.draw_with_style(width, Style{})
+}
+
+// draw_with_style follows the pinned TextInput.drawWithStyle cursor, scroll,
+// and ellipsis rules. Width represents the interior width of its child window.
+pub fn (mut t TextInput) draw_with_style(width int, style Style) TextInputDraw {
+	mut cells := []TextInputCell{}
+	cursor_idx := t.graphemes_before_cursor()
+	if cursor_idx < t.draw_offset {
+		t.draw_offset = cursor_idx
+	}
+	if width <= 0 {
+		return TextInputDraw{ style: style }
+	}
+
+	for {
+		cursor_width := t.width_to_cursor()
+		if cursor_width < width {
+			break
+		}
+		delta := cursor_width - width + 1
+		next_offset := int(t.draw_offset) + delta
+		t.draw_offset = u16(if next_offset > 0xffff { 0xffff } else { next_offset })
+	}
+
+	t.prev_cursor_idx = cursor_idx
+	t.prev_cursor_col = 0
+	mut col := 0
+	mut i := 0
+	first := t.buf.first_half().bytestr()
+	mut offset := 0
+	for offset < first.len {
+		length := first_grapheme_byte_length(first[offset..])
+		if length == 0 {
+			break
+		}
+		grapheme := first[offset..offset + length]
+		offset += length
+		if i < int(t.draw_offset) {
+			i++
+			continue
+		}
+		w := int(default_grapheme_width(grapheme))
+		if col + w >= width {
+			cells << TextInputCell{ col: u16(width - 1), text: '…' }
+			break
+		}
+		cells << TextInputCell{ col: u16(col), text: grapheme }
+		col += w
+		i++
+		if i == int(cursor_idx) {
+			t.prev_cursor_col = u16(col)
+		}
+	}
+
+	second := t.buf.second_half().bytestr()
+	offset = 0
+	for offset < second.len {
+		length := first_grapheme_byte_length(second[offset..])
+		if length == 0 {
+			break
+		}
+		grapheme := second[offset..offset + length]
+		offset += length
+		if i < int(t.draw_offset) {
+			i++
+			continue
+		}
+		w := int(default_grapheme_width(grapheme))
+		if col + w > width {
+			cells << TextInputCell{ col: u16(width - 1), text: '…' }
+			break
+		}
+		cells << TextInputCell{ col: u16(col), text: grapheme }
+		col += w
+		i++
+		if i == int(cursor_idx) {
+			t.prev_cursor_col = u16(col)
+		}
+	}
+	if t.draw_offset > 0 {
+		cells << TextInputCell{ col: 0, text: '…' }
+	}
+	return TextInputDraw{
+		cells:      cells
+		cursor_col: t.prev_cursor_col
+		style:      style
+	}
+}
+
+pub fn (t &TextInput) width_to_cursor() int {
+	first := t.buf.first_half().bytestr()
+	mut offset := 0
+	mut i := 0
+	mut width := 0
+	for offset < first.len {
+		length := first_grapheme_byte_length(first[offset..])
+		if length == 0 {
+			break
+		}
+		if i >= int(t.draw_offset) {
+			width += int(default_grapheme_width(first[offset..offset + length]))
+		}
+		offset += length
+		i++
+	}
+	return width
+}
+
+// The current terminal adapter has no negotiated vaxis width method, so it
+// uses the default wcwidth path over the translated Unicode property table.
+fn default_grapheme_width(grapheme string) u16 {
+	mut width := u16(0)
+	for cp in grapheme.runes() {
+		value := u32(cp)
+		if value == 0 || value < 0x20 || (value >= 0x7f && value < 0xa0)
+			|| value == 0x00ad || value == 0x200b || value == 0x200c || value == 0x200d
+			|| value == 0x2060 || value == 0x034f || value == 0xfeff
+			|| (value >= 0x180b && value <= 0x180d)
+			|| (value >= 0xfe00 && value <= 0xfe0f)
+			|| (value >= 0xe0100 && value <= 0xe01ef) {
+			continue
+		}
+		width += u16(unicode.get(value).width())
+	}
+	return width
+}
+
 pub fn (mut t TextInput) clear_and_free() {
 	t.buf.clear_and_free()
 	t.reset()

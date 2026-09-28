@@ -597,3 +597,29 @@ fn test_color_and_style_match_pinned_vaxis_model() {
 		}
 	}) == '\x1b[48:5:201mx\x1b[m'
 }
+
+fn test_text_input_draw_scrolls_and_places_cursor_like_pinned_widget() {
+	mut input := TextInput.new()
+	input.insert_slice_at_cursor('abcdef')
+	drawn := input.draw_with_style(4, Style{})
+	assert input.draw_offset == 3
+	assert drawn.cursor_col == 3
+	assert drawn.cells.last() == TextInputCell{ col: 0, text: '…' }
+	assert drawn.cells[1] == TextInputCell{ col: 1, text: 'e' }
+	assert drawn.cells[2] == TextInputCell{ col: 2, text: 'f' }
+
+	input.cursor_left()
+	input.cursor_left()
+	moved := input.draw_with_style(4, Style{})
+	assert moved.cursor_col == 1
+	assert moved.cells.last() == TextInputCell{ col: 0, text: '…' }
+}
+
+fn test_text_input_draw_counts_wide_and_combining_graphemes() {
+	mut input := TextInput.new()
+	input.insert_slice_at_cursor('界e\u0301')
+	drawn := input.draw(5)
+	assert drawn.cursor_col == 3
+	assert drawn.cells[0] == TextInputCell{ col: 0, text: '界' }
+	assert drawn.cells[1] == TextInputCell{ col: 2, text: 'e\u0301' }
+}

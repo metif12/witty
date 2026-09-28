@@ -238,6 +238,16 @@ fn test_preview_search_uses_text_input() {
 	assert p.filtered.len == 2
 }
 
+fn test_preview_search_draw_uses_text_input_window_and_cursor() {
+	mut p := Preview.init([], .all)!
+	p.mode = .search
+	p.winsize = vaxis.Winsize{ rows: 20, cols: 100 }
+	p.text_input.insert_slice_at_cursor('abc')
+	output := p.draw()
+	assert output.contains(vaxis.position(16, 21) + vaxis.styled('a', p.ui_standard()))
+	assert output.contains(vaxis.show_cursor(16, 24))
+}
+
 fn test_preview_ascii_lowercases_search_tokens_for_zf() {
 	mut p := Preview.init([
 		preview_test_theme('Dracula'),

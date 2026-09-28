@@ -664,11 +664,15 @@ pub fn (mut self Preview) draw() string {
 			x := max_int((width - modal_width) / 2, 0)
 			y := max_int(height - 5, 0)
 			draw_box(mut out, x, y, modal_width, 3, standard)
-			text := self.text_input.get_text()
-			put_segment(mut out, y + 1, x + 2, x + modal_width - 1, text, standard)
-			cursor_width := self.text_input.slice_to_cursor().runes().len
-			out.write_string(vaxis.show_cursor(y + 1, min_int(x + 2 + cursor_width, x +
-				modal_width - 2)))
+			child_width := max_int(modal_width - 2, 0)
+			input := self.text_input.draw_with_style(child_width, standard)
+			for cell in input.cells {
+				put_segment(mut out, y + 1, x + 1 + int(cell.col), x + modal_width - 1, cell.text,
+					input.style)
+			}
+			if child_width > 0 {
+				out.write_string(vaxis.show_cursor(y + 1, x + 1 + int(input.cursor_col)))
+			}
 		}
 		.save {
 			theme := self.themes[self.filtered[self.current]]
