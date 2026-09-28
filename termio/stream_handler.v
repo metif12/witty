@@ -1242,7 +1242,7 @@ pub fn (mut self StreamHandler) report_xtversion() ! {
 fn (mut self StreamHandler) window_title(title string) ! {
 	mut buf := [256]u8{}
 	if title.len >= buf.len {
-		// Title larger than our buffer, ignore
+		log.warn('change title requested larger than our buffer size, ignoring')
 		return
 	}
 
@@ -1333,16 +1333,22 @@ fn (mut self StreamHandler) report_pwd(url string) ! {
 	// as resetting the pwd as if we never saw a pwd.
 	if url.len == 0 {
 		// Blank value can never fail because no allocs happen.
-		self.terminal.set_pwd('')!
+		self.terminal.set_pwd('') or { panic('unreachable') }
 
 		// If we haven't seen a title, we're using the pwd as our title.
 		// Set it to blank which will reset our title behavior.
 		if !self.seen_title {
 			self.window_title('')!
+			assert !self.seen_title
 		}
 
 		// Report the change.
 		self.surface_message_writer(apprt.SurfaceMessagePwdChange{ req: apprt.WriteReq.stable([]u8{}) })
+		return
+	}
+
+	$if windows {
+		log.warn('reportPwd unimplemented on windows')
 		return
 	}
 
@@ -1352,12 +1358,12 @@ fn (mut self StreamHandler) report_pwd(url string) ! {
 		mac_address: $if macos { false } $else { true }
 		raw_path: url.starts_with('kitty-shell-cwd://')
 	}) or {
-		// invalid url in OSC 7
+		log.warn('invalid url in OSC 7: ${err}')
 		return
 	}
 
 	if uri.scheme != 'file' && uri.scheme != 'kitty-shell-cwd' {
-		// OSC 7 scheme must be file or kitty-shell-cwd.
+		log.warn('OSC 7 scheme must be file or kitty-shell-cwd, got: ${uri.scheme}')
 		return
 	}
 
@@ -1366,14 +1372,19 @@ fn (mut self StreamHandler) report_pwd(url string) ! {
 	// is to validate the hostname to be local.
 	host := uri.hostname()
 	if host.len == 0 {
-		// OSC 7 uri must contain a hostname.
+		log.warn('OSC 7 uri must contain a hostname: UriMissingHost')
 		return
 	}
-	if !(internal_os.is_local(host) or { false }) {
-		// OSC 7 host must be local.
+	host_valid := internal_os.is_local(host) or {
+		log.warn('failed to get hostname for OSC 7 validation: ${err}')
+		return
+	}
+	if !host_valid {
+		log.warn('OSC 7 host (${host}) must be local')
 		return
 	}
 
+	log.debug('terminal pwd: ${uri.path}')
 	self.terminal.set_pwd(uri.path)!
 
 	// Report it to the surface.
