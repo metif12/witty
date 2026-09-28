@@ -133,6 +133,10 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 			self.release_frame()
 		}
 	}
+	// Match SwapChain.nextFrame: select the slot before any later operation
+	// can fail, preserving the source round-robin sequence after errors.
+	self.frame_index = (self.frame_index + 1) % self.frames.len
+	mut frame_state := &self.frames[self.frame_index]
 
 	if self.reinitialize_shaders {
 		self.reinitialize_shaders = false
@@ -146,17 +150,16 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 		self.has_custom_shaders = post_shaders.len > 0
 	}
 
-	next_index := (self.frame_index + 1) % self.frames.len
 	if self.has_custom_shaders {
-		if _ := self.frames[next_index].custom_shader_state {
+		if _ := frame_state.custom_shader_state {
 		} else {
 			mut state := GLCustomShaderState.init(&self.api)!
 			state.resize(&self.api, surface_width, surface_height)!
-			self.frames[next_index].custom_shader_state = state
+			frame_state.custom_shader_state = state
 		}
-	} else if mut state := self.frames[next_index].custom_shader_state {
+	} else if mut state := frame_state.custom_shader_state {
 		state.deinit()
-		self.frames[next_index].custom_shader_state = none
+		frame_state.custom_shader_state = none
 	}
 
 	if size_changed {
@@ -167,8 +170,6 @@ fn (mut self Renderer) draw_frame_opengl(sync_ bool) ! {
 		self.update_screen_size_uniforms()
 	}
 
-	self.frame_index = next_index
-	mut frame_state := &self.frames[self.frame_index]
 	if frame_state.target.width != surface_width || frame_state.target.height != surface_height
 		|| frame_state.target_config_modified != self.target_config_modified {
 		frame_state.resize_target(&self.api, surface_width, surface_height)!

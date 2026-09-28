@@ -184,6 +184,11 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 			self.release_frame()
 		}
 	}
+	// SwapChain.nextFrame advances the index before any of the fallible frame
+	// preparation below, so a failed frame still consumes its place in the
+	// round-robin sequence.
+	self.frame_index = (self.frame_index + 1) % self.frames.len
+	mut frame_state := &self.frames[self.frame_index]
 
 	if self.reinitialize_shaders {
 		self.reinitialize_shaders = false
@@ -198,19 +203,17 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 	}
 
 	if self.has_custom_shaders {
-		if frame_state := self.frames[(self.frame_index + 1) % self.frames.len].custom_shader_state {
-			_ = frame_state
+		if state := frame_state.custom_shader_state {
+			_ = state
 		} else {
 			mut state := MetalCustomShaderState.init(&self.api)!
 			state.resize(&self.api, surface_width, surface_height)!
-			next_index := (self.frame_index + 1) % self.frames.len
-			self.frames[next_index].custom_shader_state = state
+			frame_state.custom_shader_state = state
 		}
 	} else {
-		next_index := (self.frame_index + 1) % self.frames.len
-		if mut state := self.frames[next_index].custom_shader_state {
+		if mut state := frame_state.custom_shader_state {
 			state.deinit()
-			self.frames[next_index].custom_shader_state = none
+			frame_state.custom_shader_state = none
 		}
 	}
 
@@ -222,8 +225,6 @@ fn (mut self Renderer) draw_frame_metal(sync_ bool) ! {
 		self.update_screen_size_uniforms()
 	}
 
-	self.frame_index = (self.frame_index + 1) % self.frames.len
-	mut frame_state := &self.frames[self.frame_index]
 	if frame_state.target.width != surface_width || frame_state.target.height != surface_height
 		|| frame_state.target_config_modified != self.target_config_modified {
 		frame_state.resize_target(&self.api, surface_width, surface_height)!

@@ -928,7 +928,9 @@ fn test_rebuild_row_shapes_and_renders_text() ! {
 	render.cells_rebuilt = true
 	render.draw_frame(true)!
 	assert render.health == .healthy
-	assert render.frame_index == 0
-	assert render.frames[0].target.width == 300
-	assert render.frames[0].target.height == 100
+	// Ghostty initializes the swap-chain index to zero and nextFrame advances
+	// before returning, so the first Metal frame uses slot one.
+	assert render.frame_index == 1
+	assert render.frames[1].target.width == 300
+	assert render.frames[1].target.height == 100
 }

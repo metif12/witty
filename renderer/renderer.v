@@ -828,8 +828,10 @@ pub mut:
 	shaders GraphicsShaders
 
 	// Per-frame resources used for triple buffering.
-	frames      []GraphicsFrameState
-	frame_index int = -1
+	frames []GraphicsFrameState
+	// Ghostty's SwapChain starts at zero and nextFrame advances before it
+	// returns the selected frame.
+	frame_index int
 	// Semaphore that prevents the CPU from reusing per-frame resources until
 	// the graphics backend reports that the frame has completed.
 	frame_sema         &sync.Semaphore = unsafe { nil }
@@ -2810,7 +2812,7 @@ pub fn (mut r Renderer) display_realized() ! {
 		}
 		r.frame_sema = sync.new_semaphore_init(u32(opengl_swap_chain_count))
 		r.swap_chain_defunct = false
-		r.frame_index = -1
+		r.frame_index = 0
 		r.reinitialize_shaders = false
 		r.target_config_modified = 1
 	}
