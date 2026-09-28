@@ -22,21 +22,9 @@ import quirks
 // null/zero so the module still compiles.
 #include "coretext_shims.h"
 
-fn C.witty_coretext_release(ptr voidptr)
-
-fn C.witty_coretext_copy_family_name(font_ptr voidptr, buf &u8, len usize) int
-
 fn C.witty_coretext_create_hb_font(font_ptr voidptr, pixels f64) voidptr
 
 fn C.witty_coretext_destroy_hb_font(font_ptr voidptr)
-
-fn C.witty_ct_font_copy_descriptor(font voidptr) voidptr
-
-fn C.witty_ct_descriptor_path(desc voidptr, buf &u8, len usize) int
-
-fn C.witty_ct_release(ptr voidptr)
-
-fn C.witty_coretext_copy_display_name(font_ptr voidptr, buf &u8, len usize) int
 
 // copy_coretext_font_with_size returns a retained copy of a native CoreText
 // font. It returns nil on non-Darwin targets or for a non-CoreText face.
@@ -59,7 +47,9 @@ pub fn copy_coretext_font_with_size(font_ptr voidptr, size f64) voidptr {
 // copy_coretext_font_with_size.
 pub fn release_coretext_font(font_ptr voidptr) {
 	if !isnil(font_ptr) {
-		C.witty_coretext_release(font_ptr)
+		$if macos {
+			macos.cf_release(font_ptr)
+		}
 	}
 }
 
@@ -179,7 +169,7 @@ pub fn CoreTextFace.init_font(ct_font voidptr, opts FaceOptions) !CoreTextFace {
 	}
 	if is_color {
 		color = ColorState.init(ct_font) or {
-			C.witty_coretext_release(ct_font)
+			release_coretext_font(ct_font)
 			return error(err.msg())
 		}
 	}
@@ -189,7 +179,7 @@ pub fn CoreTextFace.init_font(ct_font voidptr, opts FaceOptions) !CoreTextFace {
 		if c := color {
 			c.deinit()
 		}
-		C.witty_coretext_release(ct_font)
+		release_coretext_font(ct_font)
 		return error('CoreText: failed to create HarfBuzz font')
 	}
 	mut result := CoreTextFace{
@@ -259,7 +249,7 @@ pub fn CoreTextFace.init_font(ct_font voidptr, opts FaceOptions) !CoreTextFace {
 // deinit releases all resources associated with this face.
 pub fn (mut self CoreTextFace) deinit() {
 	if !isnil(self.ct_font) {
-		C.witty_coretext_release(self.ct_font)
+		release_coretext_font(self.ct_font)
 		self.ct_font = unsafe { nil }
 	}
 	if !isnil(self.hb_font) {
@@ -319,14 +309,20 @@ pub fn (self &CoreTextFace) synthetic_bold(opts FaceOptions) !CoreTextFace {
 // but sometimes allocation isn't required and a static string is
 // returned.
 pub fn (self &CoreTextFace) name(mut buf []u8) !string {
-	// Copy the family name into the caller-provided buffer.
-	if buf.len == 0 {
-		return error('CoreText: name buffer is empty')
-	}
-	if C.witty_coretext_copy_family_name(self.ct_font, &u8(buf.data), usize(buf.len)) == 0 {
+	$if macos {
+		native_font := unsafe { &macos.CTFont(self.ct_font) }
+		family_name := native_font.copy_family_name()!
+		defer { family_name.release() }
+		if name_ptr := family_name.cstring_ptr(.utf8) {
+			return unsafe { cstring_to_vstring(name_ptr) }
+		}
+		if name_ptr := family_name.cstring(mut buf, .utf8) {
+			return unsafe { cstring_to_vstring(name_ptr) }
+		}
 		return error('CoreText: failed to copy family name')
+	} $else {
+		return error('CoreText: unsupported platform')
 	}
-	return unsafe { cstring_to_vstring(&char(buf.data)) }
 }
 
 // Resize the font in-place. If this succeeds, the caller is responsible
@@ -924,7 +920,7 @@ pub mut:
 // deinit releases the CoreText deferred face resources.
 pub fn (mut self CoreTextDeferredFace) deinit() {
 	if self.ct_font != unsafe { nil } {
-		C.witty_coretext_release(self.ct_font)
+		release_coretext_font(self.ct_font)
 		self.ct_font = unsafe { nil }
 	}
 	self.variations = []
@@ -979,13 +975,21 @@ pub fn (self CoreTextDeferredFace) has_codepoint(cp u32, p ?Presentation) bool {
 
 // family_name returns the family name of the deferred CoreText font.
 pub fn (self CoreTextDeferredFace) family_name(mut buf []u8) !string {
-	if buf.len == 0 {
+	$if macos {
+		native_font := unsafe { &macos.CTFont(self.ct_font) }
+		family_ptr := native_font.copy_attribute(.family_name) or { return 'unknown' }
+		family_name := unsafe { &macos.CFString(family_ptr) }
+		defer { family_name.release() }
+		if name_ptr := family_name.cstring_ptr(.utf8) {
+			return unsafe { cstring_to_vstring(name_ptr) }
+		}
+		if name_ptr := family_name.cstring(mut buf, .utf8) {
+			return unsafe { cstring_to_vstring(name_ptr) }
+		}
 		return error('CoreText: failed to copy family name')
+	} $else {
+		return error('CoreText: unsupported platform')
 	}
-	if C.witty_coretext_copy_family_name(self.ct_font, &u8(buf.data), usize(buf.len)) == 0 {
-		return 'unknown'
-	}
-	return unsafe { cstring_to_vstring(&char(buf.data)) }
 }
 
 // name returns the display name of the deferred CoreText font.
@@ -996,10 +1000,20 @@ pub fn (self CoreTextDeferredFace) name(mut buf []u8) !string {
 	// this to be returned efficiently." In this case, we need
 	// to allocate. But we can't return an allocated string because
 	// we don't have an allocator. Let's use the stack and log it.
-	if buf.len == 0 || C.witty_coretext_copy_display_name(self.ct_font, &u8(buf.data), usize(buf.len)) == 0 {
+	$if macos {
+		native_font := unsafe { &macos.CTFont(self.ct_font) }
+		display_name := native_font.copy_display_name()!
+		defer { display_name.release() }
+		if name_ptr := display_name.cstring_ptr(.utf8) {
+			return unsafe { cstring_to_vstring(name_ptr) }
+		}
+		if name_ptr := display_name.cstring(mut buf, .utf8) {
+			return unsafe { cstring_to_vstring(name_ptr) }
+		}
 		return error('CoreText: failed to copy display name')
+	} $else {
+		return error('CoreText: unsupported platform')
 	}
-	return unsafe { cstring_to_vstring(&char(buf.data)) }
 }
 
 // load loads this deferred CoreText face into a CoreTextFace.
@@ -1032,20 +1046,33 @@ pub fn (self CoreTextDeferredFace) load_freetype(lib Library, opts FaceOptions) 
 	// 5. face = Face.init_file(lib, path, 0, opts)
 	// 6. face.set_variations(self.variations, opts)
 	// 7. return face
-	desc := C.witty_ct_font_copy_descriptor(self.ct_font)
-	if desc == unsafe { nil } {
-		return error('CoreText: failed to copy font descriptor')
+	$if macos {
+		native_font := unsafe { &macos.CTFont(self.ct_font) }
+		desc := native_font.copy_descriptor()!
+		defer { desc.release() }
+		url_ptr := desc.copy_attribute(.url) or { return error('FontHasNoFile') }
+		url := unsafe { &macos.CFURL(url_ptr) }
+		defer { url.release() }
+		path_string := url.copy_path() or { return error('FontHasNoFile') }
+		defer { path_string.release() }
+		blank := macos.CFString.create_with_bytes([], .utf8, false)!
+		defer { blank.release() }
+		decoded := macos.CFURL.create_string_by_replacing_percent_escapes(path_string,
+			blank)!
+		defer { decoded.release() }
+		mut path_buf := []u8{len: 1024}
+		path_ptr := decoded.cstring(mut path_buf[..1023], .utf8) or {
+			return error('FontPathCantDecode')
+		}
+		path := unsafe { cstring_to_vstring(path_ptr) }
+		path_buf[path.len] = 0
+		mut face := Face.init_file(lib, path, 0, opts)!
+		face.set_variations(self.variations, opts) or {
+			face.deinit()
+			return err
+		}
+		return face
+	} $else {
+		return error('CoreText: unsupported platform')
 	}
-	defer { C.witty_ct_release(desc) }
-	mut path_buf := []u8{len: 4096}
-	if C.witty_ct_descriptor_path(desc, &u8(path_buf.data), usize(path_buf.len)) == 0 {
-		return error('CoreText: font has no file URL')
-	}
-	path := unsafe { cstring_to_vstring(&char(path_buf.data)) }
-	mut face := Face.init_file(lib, path, 0, opts)!
-	face.set_variations(self.variations, opts) or {
-		face.deinit()
-		return err
-	}
-	return face
 }

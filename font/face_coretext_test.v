@@ -262,5 +262,14 @@ fn test_coretext_deferred_face_queries_and_load() {
 		}) or { panic(err) }
 		defer { loaded.deinit() }
 		assert loaded.glyph_index(u32(`A`)) != none
+		mut lib := Library.init() or { panic(err) }
+		defer { lib.deinit() }
+		mut freetype_face := deferred.load_freetype(lib, FaceOptions{
+			size: DesiredSize{
+				points: 13
+			}
+		}) or { panic(err) }
+		defer { freetype_face.deinit() }
+		assert freetype_face.glyph_index(u32(`A`)) != none
 	}
 }

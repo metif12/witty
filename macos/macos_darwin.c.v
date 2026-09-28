@@ -247,6 +247,10 @@ fn C.CTFontCopyPostScriptName(font voidptr) voidptr
 
 fn C.CTFontCopyAttribute(font voidptr, attribute voidptr) voidptr
 
+fn C.CTFontCopyFamilyName(font voidptr) voidptr
+
+fn C.CTFontCopyDisplayName(font voidptr) voidptr
+
 fn C.CTFontGetSymbolicTraits(font voidptr) u32
 
 fn C.CTFontGetGlyphsForCharacters(font voidptr, characters &u16, glyphs &u16, count isize) bool
@@ -1271,6 +1275,16 @@ pub fn (f &CTFont) copy_table(tag CTFontTableTag) ?&CFData {
 pub fn (f &CTFont) copy_post_script_name() !&CFString {
 	ptr := C.CTFontCopyPostScriptName(voidptr(f))
 	return require_cf_ref[CFString](ptr, 'CTFontCopyPostScriptName')
+}
+
+pub fn (f &CTFont) copy_family_name() !&CFString {
+	ptr := C.CTFontCopyFamilyName(voidptr(f))
+	return require_cf_ref[CFString](ptr, 'CTFontCopyFamilyName')
+}
+
+pub fn (f &CTFont) copy_display_name() !&CFString {
+	ptr := C.CTFontCopyDisplayName(voidptr(f))
+	return require_cf_ref[CFString](ptr, 'CTFontCopyDisplayName')
 }
 
 pub fn (f &CTFont) copy_attribute(attribute CTFontAttribute) ?voidptr {
