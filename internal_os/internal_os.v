@@ -696,9 +696,11 @@ pub:
 pub fn get() !Entry {
 	$if windows {
 		name := os.loginname() or { return Entry{} }
-		h := home() or { return Entry{
-			name: name
-		} }
+		h := home() or {
+			return Entry{
+				name: name
+			}
+		}
 		return Entry{
 			name: name
 			home: h.value
@@ -903,9 +905,12 @@ pub fn (mut b ShellCommandBuilder) append_arg(arg string) {
 	b.args << arg
 }
 
-// to_owned_slice returns the accumulated command as a single space-joined string.
-pub fn (b ShellCommandBuilder) to_owned_slice() string {
-	return b.args.join(' ')
+// to_owned_slice transfers the accumulated command to a single string and
+// resets the builder, matching the source allocating writer's ownership move.
+pub fn (mut b ShellCommandBuilder) to_owned_slice() string {
+	result := b.args.join(' ')
+	b.args = []string{}
+	return result
 }
 
 // deinit cleans up the builder.

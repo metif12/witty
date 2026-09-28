@@ -393,6 +393,8 @@ fn test_shell_command_builder_ignores_empty_arguments() {
 	command.append_arg('--posix')
 	command.append_arg('-l')
 	assert command.to_owned_slice() == 'bash --posix -l'
+	command.append_arg('zsh')
+	assert command.to_owned_slice() == 'zsh'
 }
 
 fn test_shell_escape_writer() {
