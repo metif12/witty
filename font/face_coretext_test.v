@@ -1,7 +1,8 @@
 module font
 
-import opentype
+import macos
 import math
+import opentype
 
 fn test_coretext_render_options_match_source_defaults() {
 	opts := RenderOptions{}
@@ -36,17 +37,30 @@ fn test_coretext_glyph_layout_preserves_source_subpixel_math() {
 	assert math.abs(layout.scale_y - 1.0) < 0.000001
 }
 
-fn named_coretext_test_face(name string, points f32) !CoreTextFace {
-	base := C.witty_coretext_create_font_named(&char(name.str), f64(points))
-	if base == unsafe { nil } {
-		return error('CoreText font unavailable: ${name}')
+fn named_coretext_test_font(name string, points f32) !voidptr {
+	$if macos {
+		cf_name := macos.CFString.create_with_bytes(name.bytes(), .utf8, false)!
+		defer { cf_name.release() }
+		desc := macos.CTFontDescriptor.create_with_name_and_size(cf_name, f64(points))!
+		defer { desc.release() }
+		return voidptr(macos.CTFont.create_with_descriptor(desc, f64(points))!)
+	} $else {
+		return error('CoreText unsupported')
 	}
-	defer { C.witty_coretext_release(base) }
-	return CoreTextFace.init_font_copy(base, FaceOptions{
-		size: DesiredSize{
-			points: points
-		}
-	})
+}
+
+fn named_coretext_test_face(name string, points f32) !CoreTextFace {
+	$if macos {
+		base := named_coretext_test_font(name, points)!
+		defer { macos.cf_release(base) }
+		return CoreTextFace.init_font_copy(base, FaceOptions{
+			size: DesiredSize{
+				points: points
+			}
+		})
+	} $else {
+		return error('CoreText unsupported')
+	}
 }
 
 fn test_coretext_basic_ascii_rendering() {
@@ -230,10 +244,7 @@ fn test_coretext_svg_font_table_and_color_range() {
 
 fn test_coretext_deferred_face_queries_and_load() {
 	$if macos {
-		font_ptr := C.witty_coretext_create_font_named(c'Menlo', 12)
-		if font_ptr == unsafe { nil } {
-			panic('Menlo unavailable')
-		}
+		font_ptr := named_coretext_test_font('Menlo', 12) or { panic(err) }
 		mut deferred := CoreTextDeferredFace{
 			ct_font: font_ptr
 		}

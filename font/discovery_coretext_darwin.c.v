@@ -117,11 +117,12 @@ fn sort_matching_descriptors(desc Descriptor, mut list []voidptr) {
 // discovery.zig's Score.score; the C shim only exposes primitive CoreText
 // values that V's C interop cannot retrieve generically.
 fn Score.score(desc &Descriptor, ct_desc voidptr) Score {
-	font_ptr := C.witty_ct_font_from_descriptor(ct_desc, 12)
-	if isnil(font_ptr) {
+	descriptor := unsafe { &macos.CTFontDescriptor(ct_desc) }
+	native_font := macos.CTFont.create_with_descriptor(descriptor, 12) or {
 		return Score{}
 	}
-	defer { C.witty_coretext_release(font_ptr) }
+	defer { native_font.release() }
+	font_ptr := voidptr(native_font)
 
 	glyph_count_raw := C.witty_ct_font_glyph_count(font_ptr)
 	glyph_count := if glyph_count_raw > u64(0xffff) { u16(0xffff) } else { u16(glyph_count_raw) }
@@ -133,7 +134,6 @@ fn Score.score(desc &Descriptor, ct_desc voidptr) Score {
 			mut unichars)
 		len := if pair { 2 } else { 1 }
 		mut glyphs := []macos.CGGlyph{len: 2}
-		native_font := unsafe { &macos.CTFont(font_ptr) }
 		has_codepoint = native_font.get_glyphs_for_characters(unichars[..len], glyphs[..len])
 	}
 
@@ -379,10 +379,8 @@ pub fn (mut it CtDiscoverIterator) next() !DeferredFaceValue {
 
 	// Retain the discovered CTFont. File lookup is deferred until a
 	// FreeType-backed render face is actually requested.
-	font_ptr := C.witty_ct_font_from_descriptor(desc, 12.0)
-	if isnil(font_ptr) {
-		return error('CoreText: failed to create font')
-	}
+	descriptor := unsafe { &macos.CTFontDescriptor(desc) }
+	font_ptr := voidptr(macos.CTFont.create_with_descriptor(descriptor, 12)!)
 	it.i++
 	return DeferredFaceValue{
 		has_value: true

@@ -22,10 +22,6 @@ import quirks
 // null/zero so the module still compiles.
 #include "coretext_shims.h"
 
-fn C.witty_coretext_create_font_named(name &char, size f64) voidptr
-
-fn C.witty_coretext_create_font_from_data(data &u8, len usize, size f64) voidptr
-
 fn C.witty_coretext_release(ptr voidptr)
 
 fn C.witty_coretext_copy_family_name(font_ptr voidptr, buf &u8, len usize) int
@@ -45,8 +41,6 @@ fn C.witty_coretext_create_hb_font(font_ptr voidptr, pixels f64) voidptr
 fn C.witty_coretext_destroy_hb_font(font_ptr voidptr)
 
 fn C.witty_coretext_glyph_bounds(font_ptr voidptr, glyph_id u32, x_out &f64, y_out &f64, width_out &f64, height_out &f64) int
-
-fn C.witty_ct_font_from_descriptor(desc voidptr, size f64) voidptr
 
 fn C.witty_ct_font_copy_descriptor(font voidptr) voidptr
 
@@ -156,17 +150,20 @@ pub const italic_skew = AffineTransform{
 
 // Initialize a CoreText-based font from a TTF/TTC in memory.
 pub fn CoreTextFace.init(lib Library, source []u8, opts FaceOptions) !CoreTextFace {
-	// Create a CTFont from the in-memory data at a default size (12); the
-	// final size is applied by init_font_copy below.
 	_ = lib
-	base := C.witty_coretext_create_font_from_data(&u8(source.data), usize(source.len), 12.0)
-	if isnil(base) {
-		return error('CoreText: failed to create font from data')
+	$if macos {
+		data := macos.CFData.create_with_bytes_no_copy(source)!
+		defer { data.release() }
+		desc := macos.create_font_descriptor_from_data(data) or {
+			return error('CoreText: failed to create font descriptor from data')
+		}
+		defer { desc.release() }
+		base := macos.CTFont.create_with_descriptor(desc, 12)!
+		defer { base.release() }
+		return CoreTextFace.init_font_copy(voidptr(base), opts)!
+	} $else {
+		return error('CoreText: unsupported platform')
 	}
-	defer {
-		C.witty_coretext_release(base)
-	}
-	return CoreTextFace.init_font_copy(base, opts)!
 }
 
 // Initialize a CoreText-based face from another initialized font face

@@ -11,61 +11,6 @@
 #include <harfbuzz/hb.h>
 #include <harfbuzz/hb-coretext.h>
 
-static double witty_coretext_font_size(double size) {
-	return size > 0.0 ? size : 13.0;
-}
-
-static void *witty_coretext_create_font_named(char *name, double size) {
-	const char *family = name && name[0] ? name : "Menlo";
-	CFStringRef cf_name = CFStringCreateWithCString(NULL, family, kCFStringEncodingUTF8);
-	if (!cf_name) return NULL;
-	CTFontRef font = CTFontCreateWithName(cf_name, witty_coretext_font_size(size), NULL);
-	CFRelease(cf_name);
-	return (void *)font;
-}
-
-static void *witty_coretext_create_default_font(double size) {
-	return witty_coretext_create_font_named("Menlo", size);
-}
-
-// Create a CTFont from an in-memory TTF/TTC buffer. Retained; caller frees
-// with witty_coretext_release. Returns NULL on failure.
-static void *witty_coretext_create_font_from_data(const uint8_t *data, size_t len, double size) {
-	if (!data || len == 0) return NULL;
-	CFDataRef cf = CFDataCreateWithBytesNoCopy(NULL, data, (CFIndex)len, kCFAllocatorNull);
-	if (!cf) return NULL;
-	CTFontDescriptorRef desc = CTFontManagerCreateFontDescriptorFromData(cf);
-	CFRelease(cf);
-	if (!desc) return NULL;
-	CTFontRef font = CTFontCreateWithFontDescriptor(desc, witty_coretext_font_size(size), NULL);
-	CFRelease(desc);
-	return (void *)font;
-}
-
-static void *witty_coretext_create_font_from_path(char *path, double size) {
-	if (!path || !path[0]) return witty_coretext_create_default_font(size);
-	CFURLRef url = CFURLCreateFromFileSystemRepresentation(
-		NULL,
-		(const UInt8 *)path,
-		(CFIndex)strlen(path),
-		false
-	);
-	if (!url) return witty_coretext_create_default_font(size);
-
-	CFArrayRef descs = CTFontManagerCreateFontDescriptorsFromURL(url);
-	CFRelease(url);
-	if (!descs || CFArrayGetCount(descs) == 0) {
-		if (descs) CFRelease(descs);
-		return witty_coretext_create_default_font(size);
-	}
-
-	CTFontDescriptorRef desc = (CTFontDescriptorRef)CFArrayGetValueAtIndex(descs, 0);
-	CTFontRef font = CTFontCreateWithFontDescriptor(desc, witty_coretext_font_size(size), NULL);
-	CFRelease(descs);
-	if (!font) return witty_coretext_create_default_font(size);
-	return (void *)font;
-}
-
 static void witty_coretext_release(void *ptr) {
 	if (ptr) CFRelease((CFTypeRef)ptr);
 }
@@ -481,14 +426,6 @@ static int witty_ct_descriptor_path(void *desc, uint8_t *buf, size_t len) {
 	return ok ? 1 : 0;
 }
 
-// Create a CTFont from a descriptor at the given size. Retained; caller frees
-// with witty_coretext_release.
-static void *witty_ct_font_from_descriptor(void *desc, double size) {
-	if (!desc) return NULL;
-	return (void *)CTFontCreateWithFontDescriptor(
-		(CTFontDescriptorRef)desc, witty_coretext_font_size(size), NULL);
-}
-
 // Copy the descriptor of a CTFont (retained; caller releases).
 static void *witty_ct_font_copy_descriptor(void *font) {
 	if (!font) return NULL;
@@ -547,30 +484,6 @@ static void *witty_ct_font_for_string(void *orig_font, uint32_t codepoint) {
 // ------------------------------------------------------------------
 
 #else
-static void *witty_coretext_create_font_named(char *name, double size) {
-	(void)name;
-	(void)size;
-	return NULL;
-}
-
-static void *witty_coretext_create_default_font(double size) {
-	(void)size;
-	return NULL;
-}
-
-static void *witty_coretext_create_font_from_data(const uint8_t *data, size_t len, double size) {
-	(void)data;
-	(void)len;
-	(void)size;
-	return NULL;
-}
-
-static void *witty_coretext_create_font_from_path(char *path, double size) {
-	(void)path;
-	(void)size;
-	return NULL;
-}
-
 static void witty_coretext_release(void *ptr) {
 	(void)ptr;
 }
@@ -713,11 +626,6 @@ static int witty_ct_descriptor_path(void *desc, uint8_t *buf, size_t len) {
 	(void)desc;
 	if (buf && len > 0) buf[0] = 0;
 	return 0;
-}
-
-static void *witty_ct_font_from_descriptor(void *desc, double size) {
-	(void)desc; (void)size;
-	return NULL;
 }
 
 static void *witty_ct_font_copy_descriptor(void *font) { (void)font; return NULL; }
