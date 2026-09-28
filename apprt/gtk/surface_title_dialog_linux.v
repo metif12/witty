@@ -180,9 +180,9 @@ pub fn surface_title_dialog_get_type() GType {
 		mut query := C.GTypeQuery{}
 		C.g_type_query(parent, &query)
 		info := C.GTypeInfo{
-			class_size: u16(query.class_size)
+			class_size:    u16(query.class_size)
 			instance_size: u16(query.instance_size)
-			class_init: voidptr(surface_title_dialog_class_init)
+			class_init:    voidptr(surface_title_dialog_class_init)
 			instance_init: voidptr(surface_title_dialog_instance_init)
 		}
 		g_surface_title_dialog_type = C.g_type_register_static(parent, c'GhosttySurfaceTitleDialog', &info, 0)
@@ -215,6 +215,33 @@ pub fn surface_title_dialog_new(initial_value ?string) &SurfaceTitleDialog {
 	}
 	return &SurfaceTitleDialog{
 		obj: obj
+	}
+}
+
+// get_initial_value returns the optional `initial-value` property. It is the
+// V spelling of `properties.initial-value.get`.
+pub fn (self &SurfaceTitleDialog) get_initial_value() ?string {
+	if isnil(self.obj) {
+		return none
+	}
+	value := surface_title_dialog_priv(voidptr(self.obj)).initial_value
+	if isnil(value) {
+		return none
+	}
+	return unsafe { cstring_to_vstring(value) }
+}
+
+// set_initial_value replaces the owned `initial-value` property. It routes
+// through GObject just like `properties.initial-value.set`, so normal property
+// notification is preserved.
+pub fn (mut self SurfaceTitleDialog) set_initial_value(value ?string) {
+	if isnil(self.obj) {
+		return
+	}
+	if text := value {
+		C.g_object_set(self.obj, c'initial-value', &char(text.str), &char(unsafe { nil }))
+	} else {
+		C.g_object_set(self.obj, c'initial-value', &char(unsafe { nil }), &char(unsafe { nil }))
 	}
 }
 
