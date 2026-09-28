@@ -14,6 +14,8 @@ fn test_compute_fraction_clamps_out_of_range_progress() {
 fn test_source_public_surface_callbacks_are_callable() {
 	mut surface := SurfaceWidget{}
 	assert surface.core() == none
+	assert surface.get_size() == apprt.SurfaceSize{}
+	assert surface.get_cursor_pos() == apprt.CursorPos{}
 	assert surface.get_h_adjustment() == none
 	assert surface.get_v_adjustment() == none
 	assert !surface.show_on_screen_keyboard(none)

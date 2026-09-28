@@ -1216,7 +1216,7 @@ pub fn (self &SurfaceWidget) get_focused() bool {
 // get_content_scale returns the content scale for the surface. Mirrors
 // `Surface.getContentScale`. The GTK scale factor and gtk-xft-dpi scaling are
 // combined, matching the Zig original.
-pub fn (self &SurfaceWidget) get_content_scale() !apprt.ContentScale {
+pub fn (self &SurfaceWidget) get_content_scale() apprt.ContentScale {
 	mut gtk_scale := f32(1.0)
 	s := C.gtk_widget_get_scale_factor(self.gl_area)
 	if s > 0 {
@@ -1246,13 +1246,13 @@ pub fn (self &SurfaceWidget) get_content_scale() !apprt.ContentScale {
 }
 
 // get_size returns the cached surface size in pixels. Mirrors `Surface.getSize`.
-pub fn (self &SurfaceWidget) get_size() !apprt.SurfaceSize {
+pub fn (self &SurfaceWidget) get_size() apprt.SurfaceSize {
 	return self.size
 }
 
 // get_cursor_pos returns the cached cursor position. Mirrors
 // `Surface.getCursorPos`.
-pub fn (self &SurfaceWidget) get_cursor_pos() !apprt.CursorPos {
+pub fn (self &SurfaceWidget) get_cursor_pos() apprt.CursorPos {
 	return self.cursor_pos
 }
 
@@ -2569,12 +2569,7 @@ pub fn (mut self SurfaceWidget) glarea_resize(width int, height int) {
 	if self.has_core() {
 		mut surface := self.core_surface
 		// Update content scale too (no dedicated signal for it).
-		scale := self.get_content_scale() or {
-			apprt.ContentScale{
-				x: 1.0
-				y: 1.0
-			}
-		}
+		scale := self.get_content_scale()
 		surface.content_scale_callback(scale) or {
 			log.warn('error in content scale callback err=${err}')
 		}
@@ -2769,17 +2764,17 @@ fn surface_core_close_cb(data voidptr, confirm bool) {
 
 fn surface_core_content_scale_cb(data voidptr) !apprt.ContentScale {
 	self := unsafe { &SurfaceWidget(data) }
-	return self.get_content_scale()!
+	return self.get_content_scale()
 }
 
 fn surface_core_size_cb(data voidptr) !apprt.SurfaceSize {
 	self := unsafe { &SurfaceWidget(data) }
-	return self.get_size()!
+	return self.get_size()
 }
 
 fn surface_core_cursor_pos_cb(data voidptr) !apprt.CursorPos {
 	self := unsafe { &SurfaceWidget(data) }
-	return self.get_cursor_pos()!
+	return self.get_cursor_pos()
 }
 
 fn surface_core_title_cb(data voidptr) ?string {
