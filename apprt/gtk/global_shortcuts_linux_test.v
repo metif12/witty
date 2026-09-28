@@ -42,7 +42,7 @@ fn test_global_shortcut_portal_payload_types() {
 
 	shortcuts.handle = '/org/freedesktop/portal/desktop/session/1_2/ghostty_7654321'
 	shortcuts.map = [ShortcutMapEntry{
-		id: 'CTRL+a'
+		id:     'CTRL+a'
 		action: input.Action.parse('text:hello')!
 	}]
 	bind_payload := shortcuts.make_payload(.bind_shortcuts, 'ghostty_1234567') or {
@@ -82,11 +82,17 @@ fn test_global_shortcut_trigger_handler_receives_action() {
 	mut received := input.Action(input.ActionIgnore{})
 	mut shortcuts := GlobalShortcuts{
 		map: [ShortcutMapEntry{
-			id: 'CTRL+n'
+			id:     'CTRL+n'
 			action: input.ActionNewWindow{}
 		}]
 	}
 	shortcuts.set_trigger_handler(record_global_shortcut, voidptr(&received))
 	shortcuts.shortcut_activated('CTRL+n')
 	assert received == input.Action(input.ActionNewWindow{})
+}
+
+fn test_global_shortcuts_accepts_absent_dbus_connection() {
+	mut shortcuts := GlobalShortcuts{}
+	shortcuts.set_dbus_connection(none)
+	assert isnil(shortcuts.dbus_connection)
 }

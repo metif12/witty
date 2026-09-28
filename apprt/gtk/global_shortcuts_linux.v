@@ -838,7 +838,8 @@ pub fn (mut self GlobalShortcuts) set_trigger_handler(handler fn (input.Action, 
 // set_dbus_connection sets (or clears) the D-Bus connection. Setting a new
 // connection triggers a refresh; clearing/replacing first closes prior portal
 // registrations. Mirrors `GlobalShortcuts.setDbusConnection`.
-pub fn (mut self GlobalShortcuts) set_dbus_connection(dbus_connection GDBusConnection) {
+pub fn (mut self GlobalShortcuts) set_dbus_connection(dbus_connection_ ?GDBusConnection) {
+	dbus_connection := dbus_connection_ or { GDBusConnection(unsafe { nil }) }
 	// If we have a prior connection, close our prior registrations first.
 	if !isnil(self.dbus_connection) {
 		self.close()
