@@ -41,7 +41,7 @@ fn test_surface_set_config_owns_native_reference() {
 
 	// The native property accepts null during teardown; releasing it proves the
 	// public setter retained its own reference rather than borrowing the caller.
-	surface.set_config_reference(unsafe { nil })
+	surface.set_config_reference(none)
 	finalized := weak.get()
 	assert isnil(finalized)
 	weak.clear()

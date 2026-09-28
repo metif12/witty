@@ -148,11 +148,11 @@ fn tab_set_property(obj voidptr, property_id u32, value voidptr, pspec voidptr) 
 		tab_prop_config {
 			config_obj := C.g_value_get_object(value)
 			if isnil(config_obj) {
-				self.set_config_reference(unsafe { nil })
+				self.set_config_reference(none)
 			} else {
 				config_private := config_priv(config_obj)
 				self.set_config_reference(if isnil(config_private.wrapper) {
-					unsafe { nil }
+					none
 				} else {
 					unsafe { &Config(config_private.wrapper) }
 				})
@@ -182,7 +182,7 @@ fn tab_dispose(obj voidptr) {
 	priv := tab_priv(obj)
 	if !isnil(priv.wrapper) {
 		mut self := unsafe { &Tab(priv.wrapper) }
-		self.set_config_reference(unsafe { nil })
+		self.set_config_reference(none)
 	}
 	C.witty_gobject_call_parent_dispose(obj)
 }
@@ -465,7 +465,8 @@ pub fn (mut self Tab) set_parent_with_context(parent &core.Surface, context appr
 
 // --- Properties -----------------------------------------------------------
 
-fn (mut self Tab) set_config_reference(config &Config) {
+fn (mut self Tab) set_config_reference(config_ ?&Config) {
+	config := config_ or { unsafe { nil } }
 	if self.config == config {
 		return
 	}

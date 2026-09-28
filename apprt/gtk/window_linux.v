@@ -325,11 +325,11 @@ fn window_set_property(obj voidptr, property_id u32, value voidptr, pspec voidpt
 		window_prop_config {
 			config_obj := C.g_value_get_object(value)
 			if isnil(config_obj) {
-				self.set_config_reference(unsafe { nil })
+				self.set_config_reference(none)
 			} else {
 				config_private := config_priv(config_obj)
 				self.set_config_reference(if isnil(config_private.wrapper) {
-					unsafe { nil }
+					none
 				} else {
 					unsafe { &Config(config_private.wrapper) }
 				})
@@ -1726,7 +1726,8 @@ fn (mut self Window) add_toast(title string) {
 
 // --- Properties -----------------------------------------------------------
 
-fn (mut self Window) set_config_reference(config &Config) {
+fn (mut self Window) set_config_reference(config_ ?&Config) {
+	config := config_ or { unsafe { nil } }
 	if self.config == config {
 		return
 	}

@@ -184,11 +184,11 @@ fn global_shortcuts_set_property(obj voidptr, property_id u32, value voidptr, ps
 		global_shortcuts_prop_config {
 			config_obj := C.g_value_get_object(value)
 			if isnil(config_obj) {
-				self.set_config_reference(unsafe { nil })
+				self.set_config_reference(none)
 			} else {
 				config_private := config_priv(config_obj)
 				self.set_config_reference(if isnil(config_private.wrapper) {
-					unsafe { nil }
+					none
 				} else {
 					unsafe { &Config(config_private.wrapper) }
 				})
@@ -257,9 +257,9 @@ pub fn global_shortcuts_get_type() GType {
 		mut query := C.GTypeQuery{}
 		C.g_type_query(parent, &query)
 		info := C.GTypeInfo{
-			class_size: u16(query.class_size)
+			class_size:    u16(query.class_size)
 			instance_size: u16(query.instance_size)
-			class_init: voidptr(global_shortcuts_class_init)
+			class_init:    voidptr(global_shortcuts_class_init)
 			instance_init: voidptr(global_shortcuts_instance_init)
 		}
 		g_global_shortcuts_type = C.g_type_register_static(parent, c'GhosttyGlobalShortcuts', &info, 0)
@@ -458,7 +458,7 @@ fn map_binding(trigger input.Trigger, flags input.Flags, actions []input.Action)
 	shortcut := xdg_shortcut_from_trigger(trigger) or { return none }
 
 	return ShortcutMapEntry{
-		id: shortcut
+		id:     shortcut
 		action: actions[0]
 	}
 }
@@ -521,11 +521,11 @@ fn (mut self GlobalShortcuts) make_payload(method Method, request_token string) 
 			session_token := generate_token()
 			options := variant_string_dict([
 				VariantStringEntry{
-					key: 'handle_token'
+					key:   'handle_token'
 					value: request_token
 				},
 				VariantStringEntry{
-					key: 'session_handle_token'
+					key:   'session_handle_token'
 					value: session_token
 				},
 			])
@@ -553,11 +553,11 @@ fn (mut self GlobalShortcuts) make_payload(method Method, request_token string) 
 			for entry in self.map {
 				details := variant_string_dict([
 					VariantStringEntry{
-						key: 'description'
+						key:   'description'
 						value: action_to_string(entry.action)
 					},
 					VariantStringEntry{
-						key: 'preferred_trigger'
+						key:   'preferred_trigger'
 						value: entry.id
 					},
 				])
@@ -570,7 +570,7 @@ fn (mut self GlobalShortcuts) make_payload(method Method, request_token string) 
 
 			options := variant_string_dict([
 				VariantStringEntry{
-					key: 'handle_token'
+					key:   'handle_token'
 					value: request_token
 				},
 			])
@@ -781,7 +781,8 @@ fn global_shortcuts_activated_cb(dbus GDBusConnection, sender_name &char, object
 
 // --- Property handlers ----------------------------------------------------
 
-fn (mut self GlobalShortcuts) set_config_reference(config &Config) {
+fn (mut self GlobalShortcuts) set_config_reference(config_ ?&Config) {
+	config := config_ or { unsafe { nil } }
 	if self.config == config {
 		return
 	}

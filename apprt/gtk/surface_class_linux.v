@@ -675,7 +675,7 @@ fn terminal_surface_set_property(obj voidptr, property_id u32, value voidptr, ps
 		surface_prop_config {
 			config_obj := C.g_value_get_object(value)
 			if isnil(config_obj) {
-				self.set_config_reference(unsafe { nil })
+				self.set_config_reference(none)
 			} else {
 				config_private := config_priv(config_obj)
 				if !isnil(config_private.wrapper) {
@@ -2634,7 +2634,8 @@ pub fn (mut self SurfaceWidget) apply_config() {
 // set_config_reference is the object-field accessor used by the native
 // `config` property. It releases the previous GObject, retains the incoming
 // one, emits notify::config, and runs the translated property callback.
-fn (mut self SurfaceWidget) set_config_reference(config &Config) {
+fn (mut self SurfaceWidget) set_config_reference(config_ ?&Config) {
+	config := config_ or { unsafe { nil } }
 	if self.config == config {
 		self.notify_property(g_surface_pspec_config)
 		self.apply_config()
