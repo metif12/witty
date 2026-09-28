@@ -491,6 +491,63 @@ pub fn translate_mods(state u32) input.Mods {
 	return input.Mods.init((state & gdk_shift_mask) != 0, (state & gdk_control_mask) != 0, (state & gdk_alt_mask) != 0, (state & gdk_super_mask) != 0, (state & gdk_lock_mask) != 0, false, input.SideInfo{})
 }
 
+fn C.gdk_event_get_device(event GdkEvent) GdkDevice
+
+fn C.gdk_device_get_num_lock_state(device GdkDevice) bool
+
+// event_mods returns the modifiers for a GTK key event. The window-protocol
+// backend may provide a more accurate modifier snapshot than the GDK event;
+// the physical key then supplies sided modifier state for modifier keys
+// themselves. Mirrors `eventMods`.
+pub fn event_mods(event GdkEvent, physical_key input.Key, gtk_mods u32, action input.KeyAction, mut app_winproto WinProtoApp) input.Mods {
+	device := C.gdk_event_get_device(event)
+	mut mods := app_winproto.event_mods(device, gtk_mods)
+	if !isnil(device) {
+		mods.set_num_lock(C.gdk_device_get_num_lock_state(device))
+	}
+
+	// GTK does not set the main modifier when only the modifier key itself is
+	// pressed, so set it from the physical key and remember which side it was.
+	pressed := action != .release
+	match physical_key {
+		.shift_left {
+			mods.set_shift(pressed)
+			mods.set_side_shift(.left)
+		}
+		.shift_right {
+			mods.set_shift(pressed)
+			mods.set_side_shift(.right)
+		}
+		.control_left {
+			mods.set_ctrl(pressed)
+			mods.set_side_ctrl(.left)
+		}
+		.control_right {
+			mods.set_ctrl(pressed)
+			mods.set_side_ctrl(.right)
+		}
+		.alt_left {
+			mods.set_alt(pressed)
+			mods.set_side_alt(.left)
+		}
+		.alt_right {
+			mods.set_alt(pressed)
+			mods.set_side_alt(.right)
+		}
+		.meta_left {
+			mods.set_super(pressed)
+			mods.set_side_super(.left)
+		}
+		.meta_right {
+			mods.set_super(pressed)
+			mods.set_side_super(.right)
+		}
+		else {}
+	}
+
+	return mods
+}
+
 fn C.gdk_key_event_get_layout(event GdkEvent) u32
 
 @[typedef]

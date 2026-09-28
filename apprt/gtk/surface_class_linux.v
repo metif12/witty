@@ -283,10 +283,6 @@ fn C.gtk_gesture_single_get_current_button(gesture voidptr) u32
 // GdkEvent
 fn C.gdk_event_get_modifier_state(event GdkEvent) u32
 
-fn C.gdk_event_get_device(event GdkEvent) GdkDevice
-
-fn C.gdk_device_get_num_lock_state(device GdkDevice) bool
-
 fn C.gdk_surface_get_scale_factor(surface GdkSurface) int
 
 fn C.gdk_key_event_get_consumed_modifiers(event GdkEvent) u32
@@ -1969,18 +1965,9 @@ pub fn (mut self SurfaceWidget) key_event(action input.KeyAction, event GdkEvent
 
 	// Get our modifiers for the event.
 	//
-	device := C.gdk_event_get_device(event)
-	mut mods := if !isnil(self.app) {
-		mut app := unsafe { self.app }
-		mut winproto := app.winproto()
-		winproto.event_mods(device, gtk_mods)
-	} else {
-		translate_mods(gtk_mods)
-	}
-	if !isnil(device) {
-		mods.set_num_lock(C.gdk_device_get_num_lock_state(device))
-	}
-	self.apply_sided_mods(mut mods, physical_key, action)
+	mut app := Application.default()
+	mut app_winproto := app.winproto()
+	mods := event_mods(event, physical_key, gtk_mods, action, mut app_winproto)
 
 	consumed_mods := translate_mods(C.gdk_key_event_get_consumed_modifiers(event))
 	unshifted_codepoint := keyval_unicode_unshifted(GtkWidget(self.gl_area), event, keycode)
@@ -2048,49 +2035,6 @@ pub fn (mut self SurfaceWidget) key_event(action input.KeyAction, event GdkEvent
 	}
 
 	return false
-}
-
-// apply_sided_mods applies the sided-modifier fixups for modifier keys
-// themselves. Faithful port of the `switch (physical_key)` in key.eventMods:
-// GTK doesn't set the main modifier when only the modifier key is pressed, but
-// core logic relies on it, and we record which side.
-fn (self &SurfaceWidget) apply_sided_mods(mut mods input.Mods, physical_key input.Key, action input.KeyAction) {
-	pressed := action != .release
-	match physical_key {
-		.shift_left {
-			mods.set_shift(pressed)
-			mods.set_side_shift(.left)
-		}
-		.shift_right {
-			mods.set_shift(pressed)
-			mods.set_side_shift(.right)
-		}
-		.control_left {
-			mods.set_ctrl(pressed)
-			mods.set_side_ctrl(.left)
-		}
-		.control_right {
-			mods.set_ctrl(pressed)
-			mods.set_side_ctrl(.right)
-		}
-		.alt_left {
-			mods.set_alt(pressed)
-			mods.set_side_alt(.left)
-		}
-		.alt_right {
-			mods.set_alt(pressed)
-			mods.set_side_alt(.right)
-		}
-		.meta_left {
-			mods.set_super(pressed)
-			mods.set_side_super(.left)
-		}
-		.meta_right {
-			mods.set_super(pressed)
-			mods.set_side_super(.right)
-		}
-		else {}
-	}
 }
 
 // ec_key_pressed is the GtkEventControllerKey "key-pressed" handler. Mirrors
