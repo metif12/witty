@@ -60,14 +60,37 @@ pub fn (mut self HashMap[K, V]) deinit() {
 pub fn (mut self HashMap[K, V]) get_or_put(key K) GetOrPutResult[K, V] {
 	if key in self.items {
 		entry := self.items[key] or { panic('LRU map entry disappeared') }
-		self.remove_entry(entry)
-		self.append_entry(entry)
-		return GetOrPutResult[K, V]{
-			value_ptr:      &entry.value
-			found_existing: true
-		}
+		return self.found_entry(entry)
 	}
+	return self.insert_entry(key)
+}
 
+// get_or_put_context performs the source HashMap's context-aware lookup. A
+// valid context must return the same hash for keys it considers equal; the V
+// map remains only the ownership index while equality is decided by ctx.
+pub fn (mut self HashMap[K, V]) get_or_put_context[X](key K, ctx X) GetOrPutResult[K, V] {
+	_ = ctx.hash(key)
+	mut current := self.first
+	for current != none {
+		entry := current or { break }
+		if ctx.eql(entry.key, key) {
+			return self.found_entry(entry)
+		}
+		current = entry.next
+	}
+	return self.insert_entry(key)
+}
+
+fn (mut self HashMap[K, V]) found_entry(entry &Entry[K, V]) GetOrPutResult[K, V] {
+	self.remove_entry(entry)
+	self.append_entry(entry)
+	return GetOrPutResult[K, V]{
+		value_ptr:      &entry.value
+		found_existing: true
+	}
+}
+
+fn (mut self HashMap[K, V]) insert_entry(key K) GetOrPutResult[K, V] {
 	if self.items.len < self.capacity {
 		mut entry := &Entry[K, V]{}
 		entry.key = key
@@ -100,6 +123,21 @@ pub fn (mut self HashMap[K, V]) get_or_put(key K) GetOrPutResult[K, V] {
 pub fn (self &HashMap[K, V]) get(key K) ?V {
 	entry := self.items[key] or { return none }
 	return entry.value
+}
+
+// get_context returns the value whose key is equal according to ctx without
+// changing recency, matching getContext in the pinned implementation.
+pub fn (self &HashMap[K, V]) get_context[X](key K, ctx X) ?V {
+	_ = ctx.hash(key)
+	mut current := self.first
+	for current != none {
+		entry := current or { break }
+		if ctx.eql(entry.key, key) {
+			return entry.value
+		}
+		current = entry.next
+	}
+	return none
 }
 
 pub fn (self &HashMap[K, V]) len() int {
