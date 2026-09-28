@@ -223,17 +223,6 @@ module font
 import fontconfig
 import math
 
-// CoreText discovery/scoring helpers implemented in the C shim header.
-// See font/coretext_shims.h. These are only functional on macOS; on other
-// platforms they return null/zero.
-#include "coretext_shims.h"
-
-fn C.witty_ct_release(ptr voidptr)
-
-fn C.witty_ct_descriptor_drop_charset(desc voidptr) voidptr
-
-fn C.witty_coretext_release(ptr voidptr)
-
 // ============================================================
 // Descriptor
 // ============================================================

@@ -423,7 +423,7 @@ pub mut:
 pub fn (mut it CtDiscoverIterator) deinit() {
 	for d in it.list {
 		if !isnil(d) {
-			C.witty_ct_release(d)
+			macos.cf_release(d)
 		}
 	}
 	it.list = []voidptr{}
@@ -439,16 +439,16 @@ pub fn (mut it CtDiscoverIterator) next() !DeferredFaceValue {
 	// Get our descriptor. We remove the character-set limitation because we
 	// may have used it to filter, but we don't want it anymore because it
 	// would restrict the characters available on the loaded font.
-	desc := C.witty_ct_descriptor_drop_charset(src)
-	if isnil(desc) {
-		return error('CoreText: failed to copy font descriptor')
-	}
-	defer { C.witty_ct_release(desc) }
+	attrs := macos.CFMutableDictionary.create(0)!
+	defer { attrs.release() }
+	attrs.set_value(macos.CTFontAttribute.character_set.key(), macos.k_cf_null())
+	src_descriptor := unsafe { &macos.CTFontDescriptor(src) }
+	desc := src_descriptor.copy_with_attributes(attrs.as_dictionary())!
+	defer { desc.release() }
 
 	// Retain the discovered CTFont. File lookup is deferred until a
 	// FreeType-backed render face is actually requested.
-	descriptor := unsafe { &macos.CTFontDescriptor(desc) }
-	font_ptr := voidptr(macos.CTFont.create_with_descriptor(descriptor, 12)!)
+	font_ptr := voidptr(macos.CTFont.create_with_descriptor(desc, 12)!)
 	it.i++
 	return DeferredFaceValue{
 		has_value: true

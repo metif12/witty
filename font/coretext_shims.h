@@ -58,21 +58,6 @@ static void witty_ct_release(void *ptr) {
 	if (ptr) CFRelease((CFTypeRef)ptr);
 }
 
-// Create a copy of a descriptor with the character-set attribute removed so
-// that loaded fonts aren't restricted to that single codepoint. Retained;
-// caller releases.
-static void *witty_ct_descriptor_drop_charset(void *desc) {
-	if (!desc) return NULL;
-	CFMutableDictionaryRef attrs = CFDictionaryCreateMutable(
-		NULL, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
-	if (!attrs) return NULL;
-	CFDictionarySetValue(attrs, kCTFontCharacterSetAttribute, kCFNull);
-	CTFontDescriptorRef out = CTFontDescriptorCreateCopyWithAttributes(
-		(CTFontDescriptorRef)desc, attrs);
-	CFRelease(attrs);
-	return (void *)out;
-}
-
 // Extract the font file path for a descriptor (via its URL attribute).
 // Returns 1 on success and fills buf; 0 otherwise.
 static int witty_ct_descriptor_path(void *desc, uint8_t *buf, size_t len) {
@@ -126,8 +111,6 @@ static void witty_coretext_destroy_hb_font(void *font_ptr) {
 // --- Non-Apple stubs for discovery/face helpers. ---
 
 static void witty_ct_release(void *ptr) { (void)ptr; }
-static void *witty_ct_descriptor_drop_charset(void *desc) { (void)desc; return NULL; }
-
 static int witty_ct_descriptor_path(void *desc, uint8_t *buf, size_t len) {
 	(void)desc;
 	if (buf && len > 0) buf[0] = 0;
