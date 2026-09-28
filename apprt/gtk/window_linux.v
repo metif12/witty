@@ -1394,10 +1394,7 @@ pub fn (mut self Window) sync_selected_tab() {
 		return
 	}
 	C.adw_tab_page_set_needs_attention(page, 0)
-	tab := self.tab_for_page(page) or {
-		log.warn('unexpected non-Tab child in tab view')
-		return
-	}
+	tab := self.get_selected_tab() or { return }
 	if title := tab.title {
 		self.set_title(title)
 	}
@@ -1776,12 +1773,21 @@ pub fn (self &Window) get_active_surface() ?&SurfaceWidget {
 	if isnil(self.tab_view) {
 		return none
 	}
-	page := adw_tab_view_get_selected_page(self.tab_view)
+	mut tab := self.get_selected_tab() or { return none }
+	return tab.get_active_surface()
+}
+
+// get_selected_tab returns the selected page's GhosttyTab. Every page created
+// by this window must have that child type, so a different child is an
+// invariant violation rather than an absent selection.
+fn (self &Window) get_selected_tab() ?&Tab {
+	page := C.adw_tab_view_get_selected_page(self.tab_view)
 	if isnil(page) {
 		return none
 	}
-	mut tab := self.tab_for_page(page) or { return none }
-	return tab.get_active_surface()
+	child := C.adw_tab_page_get_child(page)
+	assert C.g_type_check_instance_is_a(child, tab_get_type()) != 0
+	return self.tab_for_page(page)
 }
 
 // get_config returns the configuration for this window. The reference count is
@@ -1855,9 +1861,7 @@ fn (self &Window) get_needs_confirm_quit() bool {
 		return false
 	}
 	n := C.adw_tab_view_get_n_pages(self.tab_view)
-	if n < 0 {
-		return false
-	}
+	assert n >= 0
 	for i in 0 .. n {
 		page := C.adw_tab_view_get_nth_page(self.tab_view, i)
 		tab := self.tab_for_page(page) or {
