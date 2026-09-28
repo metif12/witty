@@ -187,15 +187,13 @@ pub fn close_confirmation_dialog_get_type() GType {
 
 // CloseConfirmationDialog is the close-confirmation dialog GObject
 // (`GhosttyCloseConfirmationDialog`, a subclass of `Dialog`). Modeled as a
-// struct embedding the base `Dialog` plus the private `target`.
+// struct embedding the base `Dialog`; the target remains authoritative in the
+// native instance-private property storage, as it is in Ghostty.
 @[heap]
 pub struct CloseConfirmationDialog {
 mut:
 	// The base dialog. In ghostty this is the parent instance (`Dialog`).
 	dialog Dialog
-
-	// The close target. Mirrors `Private.target` (the `target` property).
-	target CloseTarget = .app
 }
 
 // close_confirmation_dialog_new creates a new dialog for the given target.
@@ -207,7 +205,6 @@ pub fn close_confirmation_dialog_new(target CloseTarget) &CloseConfirmationDialo
 		dialog: Dialog{
 			obj: obj
 		}
-		target: target
 	}
 }
 
@@ -230,8 +227,10 @@ fn close_confirmation_native_response_cb(obj GObject, response_id &char) {
 // `CloseConfirmationDialog.present`.
 pub fn (mut self CloseConfirmationDialog) present(parent GtkWidget) {
 	// Setup our title/body text.
-	self.dialog.set_heading(&char(self.target.title().str))
-	self.dialog.set_body(&char(self.target.body().str))
+	priv := close_confirmation_dialog_priv(voidptr(self.dialog.obj))
+	target := CloseTarget(priv.target)
+	self.dialog.set_heading(&char(target.title().str))
+	self.dialog.set_body(&char(target.body().str))
 
 	// Show it.
 	self.dialog.present(parent)
@@ -245,9 +244,20 @@ pub fn (mut self CloseConfirmationDialog) close() {
 // --- GObject reference counting -------------------------------------------
 // Mirrors the `Common(Self, Private)` ref helpers (ref/refSink/unref).
 
-// ref increments the reference count of the dialog GObject. Mirrors `ref`.
-pub fn (mut self CloseConfirmationDialog) ref() {
+// ref increments the reference count of the dialog GObject and returns this
+// wrapper. Mirrors `ref`.
+pub fn (mut self CloseConfirmationDialog) ref() &CloseConfirmationDialog {
 	self.dialog.ref()
+	return self
+}
+
+// ref_sink clears the initial floating reference or takes an additional
+// reference, and returns this wrapper. Mirrors `refSink`.
+pub fn (mut self CloseConfirmationDialog) ref_sink() &CloseConfirmationDialog {
+	if !isnil(self.dialog.obj) {
+		C.g_object_ref_sink(GObject(self.dialog.obj))
+	}
+	return self
 }
 
 // unref decrements the reference count of the dialog GObject. Mirrors `unref`.
