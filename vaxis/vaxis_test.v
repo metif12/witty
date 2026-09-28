@@ -298,6 +298,19 @@ fn test_parser_restores_capability_and_control_string_events() {
 		}
 	}
 
+	unicode_result := parse_input('\x1b[?2027;1$y'.bytes()) or {
+		panic('Unicode-width capability should decode')
+	}
+	unicode_event := unicode_result.event or { panic('Unicode-width capability should produce an event') }
+	match unicode_event {
+		CapabilityEvent {
+			assert unicode_event.capability == .unicode
+		}
+		else {
+			assert false
+		}
+	}
+
 	cursor_result := parse_input('\x1b[>1;2;3;29;30;40;100;101 q'.bytes()) or {
 		panic('cursor capability should decode')
 	}
@@ -635,6 +648,16 @@ fn test_text_input_draw_counts_wide_and_combining_graphemes() {
 	assert drawn.cursor_col == 3
 	assert drawn.cells[0] == TextInputCell{ col: 0, text: '界' }
 	assert drawn.cells[1] == TextInputCell{ col: 2, text: 'e\u0301' }
+}
+
+fn test_text_input_draw_uses_window_width_method() {
+	mut input := TextInput.new()
+	input.insert_slice_at_cursor('👩‍🚀')
+	wcwidth := input.draw_with_style(8, Style{})
+	assert wcwidth.cursor_col == 4
+	unicode_width := input.draw_with_style_method(8, Style{}, .unicode)
+	assert unicode_width.cursor_col == 2
+	assert unicode_width.cells[0] == TextInputCell{ col: 0, text: '👩‍🚀' }
 }
 
 fn test_pinned_vaxis_gwidth_methods_and_uucode_properties() {

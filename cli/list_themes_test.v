@@ -246,6 +246,11 @@ fn test_preview_search_draw_uses_text_input_window_and_cursor() {
 	output := p.draw()
 	assert output.contains(vaxis.position(16, 21) + vaxis.styled('a', p.ui_standard()))
 	assert output.contains(vaxis.show_cursor(16, 24))
+	p.text_input.clear_retaining_capacity()
+	p.text_input.insert_slice_at_cursor('👩‍🚀')
+	p.width_method = .unicode
+	unicode_output := p.draw()
+	assert unicode_output.contains(vaxis.show_cursor(16, 23))
 }
 
 fn test_preview_ascii_lowercases_search_tokens_for_zf() {

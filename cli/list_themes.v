@@ -110,6 +110,7 @@ mut:
 	hex          bool
 	mode         PreviewMode  = .normal
 	color_scheme vaxis.Scheme = .light
+	width_method vaxis.GWidthMethod = .wcwidth
 	mouse        ?vaxis.Mouse
 	text_input   vaxis.TextInput
 	winsize      vaxis.Winsize
@@ -505,6 +506,7 @@ pub fn (mut self Preview) run() ! {
 	self.winsize = vaxis.terminal_size()
 	vaxis.begin_session('👻 Ghostty Theme Preview 👻')
 	vaxis.query_color_scheme_update_capability()
+	vaxis.query_unicode_capability()
 	mut color_scheme_subscribed := false
 	defer {
 		if color_scheme_subscribed {
@@ -551,6 +553,9 @@ pub fn (mut self Preview) run() ! {
 					if event.capability == .color_scheme_updates && !color_scheme_subscribed {
 						vaxis.subscribe_to_color_scheme_updates()
 						color_scheme_subscribed = true
+					} else if event.capability == .unicode && self.width_method != .unicode {
+						self.width_method = .unicode
+						vaxis.enable_unicode_mode()
 					}
 				}
 				else {}
@@ -665,7 +670,8 @@ pub fn (mut self Preview) draw() string {
 			y := max_int(height - 5, 0)
 			draw_box(mut out, x, y, modal_width, 3, standard)
 			child_width := max_int(modal_width - 2, 0)
-			input := self.text_input.draw_with_style(child_width, standard)
+			input := self.text_input.draw_with_style_method(child_width, standard,
+				self.width_method)
 			for cell in input.cells {
 				put_segment(mut out, y + 1, x + 1 + int(cell.col), x + modal_width - 1, cell.text,
 					input.style)

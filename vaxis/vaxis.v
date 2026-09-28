@@ -1810,6 +1810,12 @@ pub fn (mut t TextInput) draw(width int) TextInputDraw {
 // draw_with_style follows the pinned TextInput.drawWithStyle cursor, scroll,
 // and ellipsis rules. Width represents the interior width of its child window.
 pub fn (mut t TextInput) draw_with_style(width int, style Style) TextInputDraw {
+	return t.draw_with_style_method(width, style, .wcwidth)
+}
+
+// The Window passed to pinned TextInput.drawWithStyle supplies this method
+// through its Screen. The ANSI adapter passes the negotiated method directly.
+pub fn (mut t TextInput) draw_with_style_method(width int, style Style, method GWidthMethod) TextInputDraw {
 	mut cells := []TextInputCell{}
 	cursor_idx := t.graphemes_before_cursor()
 	if cursor_idx < t.draw_offset {
@@ -1820,7 +1826,7 @@ pub fn (mut t TextInput) draw_with_style(width int, style Style) TextInputDraw {
 	}
 
 	for {
-		cursor_width := t.width_to_cursor()
+		cursor_width := t.width_to_cursor_method(method)
 		if cursor_width < width {
 			break
 		}
@@ -1846,7 +1852,7 @@ pub fn (mut t TextInput) draw_with_style(width int, style Style) TextInputDraw {
 			i++
 			continue
 		}
-		w := int(gwidth(grapheme, .wcwidth))
+		w := int(gwidth(grapheme, method))
 		if col + w >= width {
 			cells << TextInputCell{ col: u16(width - 1), text: '…' }
 			break
@@ -1872,7 +1878,7 @@ pub fn (mut t TextInput) draw_with_style(width int, style Style) TextInputDraw {
 			i++
 			continue
 		}
-		w := int(gwidth(grapheme, .wcwidth))
+		w := int(gwidth(grapheme, method))
 		if col + w > width {
 			cells << TextInputCell{ col: u16(width - 1), text: '…' }
 			break
@@ -1895,6 +1901,10 @@ pub fn (mut t TextInput) draw_with_style(width int, style Style) TextInputDraw {
 }
 
 pub fn (t &TextInput) width_to_cursor() int {
+	return t.width_to_cursor_method(.wcwidth)
+}
+
+pub fn (t &TextInput) width_to_cursor_method(method GWidthMethod) int {
 	first := t.buf.first_half().bytestr()
 	mut offset := 0
 	mut i := 0
@@ -1905,7 +1915,7 @@ pub fn (t &TextInput) width_to_cursor() int {
 			break
 		}
 		if i >= int(t.draw_offset) {
-			width += int(gwidth(first[offset..offset + length], .wcwidth))
+			width += int(gwidth(first[offset..offset + length], method))
 		}
 		offset += length
 		i++
@@ -2233,6 +2243,16 @@ pub fn end_session() {
 
 pub fn query_color_scheme_update_capability() {
 	print('\x1b[?2031$p')
+	flush_stdout()
+}
+
+pub fn query_unicode_capability() {
+	print('\x1b[?2027$p')
+	flush_stdout()
+}
+
+pub fn enable_unicode_mode() {
+	print('\x1b[?2027h')
 	flush_stdout()
 }
 
