@@ -2,6 +2,7 @@ module cli
 
 import configpkg
 import os
+import strings
 import vaxis
 
 fn preview_test_theme(name string) ThemeListElement {
@@ -328,4 +329,57 @@ fn test_preview_draw_renders_theme_load_failure() {
 	output := p.draw()
 	assert output.contains('Unable to open Missing from:')
 	assert output.contains(missing)
+}
+
+fn test_preview_terminal_colors_preserve_explicit_values_and_defaults() {
+	fg := vaxis.ColorRgb{ rgb: [u8(1), 2, 3]! }
+	assert preview_terminal_color(none, fg).eql(fg)
+	assert preview_terminal_color(configpkg.TerminalColorColor{
+		color: configpkg.ColorRGB{ r: 7, g: 8, b: 9 }
+	}, fg).eql(vaxis.ColorRgb{ rgb: [u8(7), 8, 9]! })
+}
+
+fn test_preview_draw_restores_pinned_palette_and_sample_segments() {
+	path := os.join_path(os.temp_dir(), 'witty-theme-preview-${os.getpid()}')
+	os.write_file(path, 'foreground = 010203\nbackground = 040506\ncursor-text = 070809\ncursor-color = 0a0b0c\nselection-foreground = 0d0e0f\nselection-background = 101112\n')!
+	defer {
+		os.rm(path) or {}
+	}
+	mut p := Preview.init([ThemeListElement{
+		theme: 'Pinned Preview'
+		path:  path
+	}], .all)!
+	p.winsize = vaxis.Winsize{ rows: 140, cols: 120 }
+	output := p.draw()
+	bg := vaxis.ColorRgb{ rgb: [u8(4), 5, 6]! }
+	assert output.contains(vaxis.position(4, 32) + vaxis.styled('  0', vaxis.Style{
+		fg: vaxis.ColorRgb{ rgb: [u8(1), 2, 3]! }
+		bg: bg
+	}))
+	assert output.contains(vaxis.position(7, 32) + vaxis.styled('  8', vaxis.Style{
+		fg: vaxis.ColorRgb{ rgb: [u8(1), 2, 3]! }
+		bg: bg
+	}))
+	assert output.contains(vaxis.styled('stdout.print("{d}\\n", .{i})', vaxis.Style{
+		fg: vaxis.ColorRgb{ rgb: [u8(13), 14, 15]! }
+		bg: vaxis.ColorRgb{ rgb: [u8(16), 17, 18]! }
+	}))
+	assert output.contains(vaxis.styled(';', vaxis.Style{
+		fg: vaxis.ColorRgb{ rgb: [u8(7), 8, 9]! }
+		bg: vaxis.ColorRgb{ rgb: [u8(10), 11, 12]! }
+	}))
+	assert output.contains('  impure (ghostty-env)')
+	assert output.count('Lorem') > 1
+}
+
+fn test_preview_sample_segments_wrap_at_child_edge() {
+	mut out := strings.new_builder(64)
+	style := vaxis.Style{}
+	put_preview_segments(mut out, 1, 4, 8, 4, [PreviewSegment{
+		text:  'ABCDEF'
+		style: style
+	}])
+	output := out.str()
+	assert output.contains(vaxis.position(1, 4) + vaxis.styled('ABCD', style))
+	assert output.contains(vaxis.position(2, 2) + vaxis.styled('EF', style))
 }
