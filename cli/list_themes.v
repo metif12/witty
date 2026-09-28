@@ -524,14 +524,14 @@ pub fn (mut self Preview) run() ! {
 	tty.write(vx.query_terminal_send())!
 	mut queued := []vaxis.InputEvent{}
 	query_start := time.ticks()
-	for !vx.queries_done && time.ticks() - query_start < 1000 {
+	for !vx.queries_done.load() && time.ticks() - query_start < 1000 {
 		if event := loop.try_event() {
 			queued << event
 		} else {
 			time.sleep(8 * time.millisecond)
 		}
 	}
-	vx.queries_done = true
+	vx.queries_done.store(true)
 	tty.write(vx.enable_detected_features())!
 	tty.write(vx.set_mouse_mode(true))!
 	if vx.caps.color_scheme_updates {

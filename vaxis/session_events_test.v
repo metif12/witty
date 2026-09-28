@@ -26,7 +26,7 @@ fn test_session_event_capabilities_and_query_probes() {
 	assert vx.handle_input(InputEvent(CapabilityEvent{
 		capability: .da1
 	})) == none
-	assert vx.queries_done
+	assert vx.queries_done.load()
 	forwarded := vx.handle_input(InputEvent(Key{
 		codepoint: f3
 		mods:      shift

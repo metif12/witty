@@ -3,24 +3,14 @@ module vaxis
 import sync
 
 // InputLoop is the fixed InputEvent form of pinned vaxis Loop(Event).
-// Parsed input is intercepted when drained; direct posts and SIGWINCH
-// notifications are already application events.
-struct LoopParsedEvent {
-	event InputEvent
-}
-
-struct LoopForwardedEvent {
-	event InputEvent
-}
-
-type LoopMessage = LoopParsedEvent | LoopForwardedEvent
+// The reader intercepts terminal reports before posting application events.
 
 @[heap]
 pub struct InputLoop {
 mut:
-	tty         &Tty                     = unsafe { nil }
-	vx          &Vaxis                   = unsafe { nil }
-	queue       &EventQueue[LoopMessage] = unsafe { nil }
+	tty         &Tty                    = unsafe { nil }
+	vx          &Vaxis                  = unsafe { nil }
+	queue       &EventQueue[InputEvent] = unsafe { nil }
 	thread_     ?thread
 	quit_mutex  &sync.Mutex = unsafe { nil }
 	should_quit bool
@@ -30,7 +20,7 @@ pub fn InputLoop.new(mut tty Tty, mut vx Vaxis) &InputLoop {
 	return &InputLoop{
 		tty:        &tty
 		vx:         &vx
-		queue:      EventQueue.new[LoopMessage](512)
+		queue:      EventQueue.new[InputEvent](512)
 		quit_mutex: sync.new_mutex()
 	}
 }
@@ -80,13 +70,7 @@ pub fn (mut loop InputLoop) deinit(vx &Vaxis) {
 }
 
 pub fn (mut loop InputLoop) next_event() InputEvent {
-	for {
-		loop.poll_event()
-		if event := loop.try_event() {
-			return event
-		}
-	}
-	panic('unreachable')
+	return loop.queue.pop()
 }
 
 pub fn (mut loop InputLoop) poll_event() {
@@ -94,27 +78,15 @@ pub fn (mut loop InputLoop) poll_event() {
 }
 
 pub fn (mut loop InputLoop) try_event() ?InputEvent {
-	for {
-		message := loop.queue.try_pop() or { return none }
-		match message {
-			LoopForwardedEvent { return message.event }
-			LoopParsedEvent {
-				mut vx := unsafe { loop.vx }
-				if event := vx.handle_input(message.event) {
-					return event
-				}
-			}
-		}
-	}
-	return none
+	return loop.queue.try_pop()
 }
 
 pub fn (mut loop InputLoop) post_event(event InputEvent) {
-	loop.queue.push(LoopForwardedEvent{ event: event })
+	loop.queue.push(event)
 }
 
 pub fn (mut loop InputLoop) try_post_event(event InputEvent) bool {
-	return loop.queue.try_push(LoopForwardedEvent{ event: event })
+	return loop.queue.try_push(event)
 }
 
 fn (mut loop InputLoop) is_quitting() bool {
@@ -134,6 +106,9 @@ fn (mut loop InputLoop) tty_run() {
 		if loop.is_quitting() {
 			return
 		}
-		loop.queue.push(LoopParsedEvent{ event: event })
+		mut vx := unsafe { loop.vx }
+		if forwarded := vx.handle_input(event) {
+			loop.post_event(forwarded)
+		}
 	}
 }

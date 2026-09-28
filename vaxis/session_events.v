@@ -5,7 +5,7 @@ module vaxis
 pub fn (mut vx Vaxis) handle_input(event InputEvent) ?InputEvent {
 	match event {
 		Key {
-			if event.codepoint == f3 && !vx.queries_done {
+			if event.codepoint == f3 && !vx.queries_done.load() {
 				if event.mods.shift() {
 					vx.caps.explicit_width = true
 					vx.caps.unicode = .unicode
@@ -31,7 +31,7 @@ pub fn (mut vx Vaxis) handle_input(event InputEvent) ?InputEvent {
 		}
 		CapabilityEvent {
 			if event.capability == .da1 {
-				vx.queries_done = true
+				vx.queries_done.store(true)
 				return none
 			}
 			$if windows {

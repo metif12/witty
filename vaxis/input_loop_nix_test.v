@@ -82,6 +82,17 @@ fn test_input_loop_reads_and_queues_terminal_events() {
 	}
 	assert vx.state.in_band_resize
 	_ = loop.next_event() // the report's newline
+	_ = vx.query_terminal_send()
+	da1 := '\x1b[?1;2c\n'.bytes()
+	assert C.write(master, da1.data, usize(da1.len)) == da1.len
+	for _ in 0 .. 100 {
+		if vx.queries_done.load() {
+			break
+		}
+		time.sleep(5 * time.millisecond)
+	}
+	assert vx.queries_done.load() // Reader intercepts DA1 before queue drainage.
+	assert loop.next_event() is Key // The canonical PTY's newline, not DA1.
 	waker := spawn wake_input_loop_for_test(master)
 	loop.stop(&vx)
 	waker.wait()

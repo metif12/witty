@@ -9,6 +9,7 @@ below exist. Earlier versions of this document overstated the completed review.
 
 | Area | Bug | Fix |
 |---|---|---|
+| vaxis reader-thread capability handling | The input loop queued parsed terminal reports and applied vaxis capability and DA1 handling only when the preview drained that queue. A DA1 response therefore could not end startup's query wait until the UI polled, and other capabilities could be delayed behind unrelated application events. The shared query flag was also a plain boolean despite cross-thread access. | Intercept parsed input on the reader thread before posting application events, keep direct and SIGWINCH events as direct queue posts, and use an atomic query flag. PTY coverage verifies DA1 completes before queue drainage and that the report does not become an application event. |
 | GTK template byte ownership | Nine hand-expanded class initializers retained the caller's `GBytes` reference after `gtk_widget_class_set_template`, leaking one reference per registered class. | Drop the caller reference immediately after installing each template, following the existing clipboard dialog pattern; GTK retains its own template reference. |
 | Theme preview clipboard output | The preview's copy-name and copy-path keys still called the old stdout helper after the session renderer moved to the controlling TTY, so OSC 52 could be redirected away from the terminal. | Bind the preview's active `Tty` during `run` and write the translated clipboard sequence through its terminal descriptor. |
 | vaxis previous-screen storage | Pinned vaxis keeps an `InternalScreen` of prior cells for diff rendering, including default/skipped/skip flags, link IDs, cursor state, and mouse/cursor shapes; Witty had no corresponding state. | Translate `InternalCell` equality and `InternalScreen` initialization, indexed read/write, release, and state fields. V strings replace the source arena-owned byte lists; render-diff integration remains open. |
@@ -718,10 +719,11 @@ none, browser, action, ipc. dependencies: zf 0.10.3 ranking/highlighting.
   pinned device-status wakeup. The POSIX TTY installs a SIGWINCH handler, the
   loop registers its resize callback and posts the initial winsize, and parsed
   in-band resize reports reset that handler. The preview blocks on the queue
-  between renders. The loop remains specialized to `InputEvent` rather than
-  source-generic `Loop(Event)`, and applies capability interception when the
-  preview drains input instead of on the reader thread. Windows still uses the
-  V console adapter.
+  between renders. Parsed input is now intercepted on the reader thread before
+  posting application events, including DA1 query completion; its cross-thread
+  completion flag is atomic. The loop remains specialized to `InputEvent`
+  rather than source-generic `Loop(Event)`. Windows still uses the V console
+  adapter.
   Image decoding/transcoding and high-level loading also remain absent.
   Pinned vaxis width data and all three `gwidth.Method` algorithms are
   available.

@@ -2,12 +2,12 @@ module vaxis
 
 fn test_session_query_and_feature_state() {
 	mut vx := Vaxis.new(VaxisOptions{})
-	assert vx.queries_done
+	assert vx.queries_done.load()
 	assert vx.query_terminal_send() == '\x1b[?1016$p\x1b[?2027$p\x1b[?2031$p\x1b[?2048h' +
 		'\x1b[H\x1b]66;w=1; \x1b\\\x1b[6n' +
 		'\x1b[H\x1b]66;s=2; \x1b\\\x1b[> q\x1b[6n' +
 		'\x1b[>0q\x1b[?u\x1b_Gi=1,a=q\x1b\\\x1b[c'
-	assert !vx.queries_done
+	assert !vx.queries_done.load()
 	vx.queue_refresh()
 	assert vx.refresh
 	vx.caps.kitty_keyboard = true

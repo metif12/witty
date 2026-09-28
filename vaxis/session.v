@@ -2,6 +2,7 @@ module vaxis
 
 import os
 import strings
+import sync.stdatomic
 
 pub struct Capabilities {
 pub mut:
@@ -56,18 +57,19 @@ pub mut:
 	caps               Capabilities
 	opts               VaxisOptions
 	refresh            bool
-	queries_done       bool    = true
-	next_img_id        u32     = 1
-	sgr                SgrMode = .standard
-	enable_workarounds bool    = true
+	queries_done       &stdatomic.AtomicVal[bool] = unsafe { nil }
+	next_img_id        u32                        = 1
+	sgr                SgrMode                    = .standard
+	enable_workarounds bool                       = true
 	state              VaxisState
 }
 
 pub fn Vaxis.new(opts VaxisOptions) Vaxis {
 	return Vaxis{
-		opts:        opts
-		screen:      Screen{}
-		screen_last: InternalScreen.new(0, 0)
+		opts:         opts
+		screen:       Screen{}
+		screen_last:  InternalScreen.new(0, 0)
+		queries_done: stdatomic.new_atomic(true)
 	}
 }
 
@@ -165,7 +167,7 @@ pub fn (mut vx Vaxis) exit_alt_screen() string {
 // This is the exact pinned queryTerminalSend sequence. The TTY loop handles
 // responses and wakes the query wait on the DA1 report.
 pub fn (mut vx Vaxis) query_terminal_send() string {
-	vx.queries_done = false
+	vx.queries_done.store(false)
 	return '\x1b[?1016$p\x1b[?2027$p\x1b[?2031$p\x1b[?2048h' +
 		'\x1b[H\x1b]66;w=1; \x1b\\\x1b[6n' +
 		'\x1b[H\x1b]66;s=2; \x1b\\\x1b[> q\x1b[6n' +
