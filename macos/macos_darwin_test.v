@@ -119,6 +119,9 @@ fn test_text_and_graphics_enum_contracts_match_source() {
 fn test_font_table_tag_and_symbolic_traits() {
 	assert u32(CTFontTableTag.init('SVG ')) == 0x53564720
 	assert u32(CTFontTableTag.init('sbix')) == 0x73626978
+	assert u32(CTFontOrientation.default_) == 0
+	assert u32(CTFontOrientation.horizontal) == 1
+	assert u32(CTFontOrientation.vertical) == 2
 
 	traits := CTFontSymbolicTraits.from_raw((u32(1) << 0) | (u32(1) << 10) |
 		(u32(1) << 13))

@@ -26,15 +26,7 @@ fn C.witty_coretext_release(ptr voidptr)
 
 fn C.witty_coretext_copy_family_name(font_ptr voidptr, buf &u8, len usize) int
 
-fn C.witty_coretext_basic_metrics(font_ptr voidptr, px_per_em &f64, ascent &f64, descent &f64, line_gap &f64, cap_height &f64, ex_height &f64) int
-
-fn C.witty_coretext_glyphs_for_characters(font_ptr voidptr, characters &u16, glyphs &u16, count int) int
-
-fn C.witty_coretext_glyph_advances(font_ptr voidptr, glyphs &u16, advances voidptr, count int) f64
-
 fn C.witty_coretext_glyphs_bounds(font_ptr voidptr, glyphs &u16, count int, x_out &f64, y_out &f64, width_out &f64, height_out &f64) int
-
-fn C.witty_coretext_units_per_em(font_ptr voidptr) u32
 
 fn C.witty_coretext_create_hb_font(font_ptr voidptr, pixels f64) voidptr
 
@@ -579,8 +571,15 @@ pub fn (mut self CoreTextFace) get_metrics() FaceMetrics {
 	mut line_gap := f64(0)
 	mut cap_height := f64(0)
 	mut ex_height := f64(0)
-	if C.witty_coretext_basic_metrics(self.ct_font, &px_per_em, &ascent, &raw_descent,
-		&line_gap, &cap_height, &ex_height) == 0 {
+	$if macos {
+		native_font := unsafe { &macos.CTFont(self.ct_font) }
+		px_per_em = native_font.get_size()
+		ascent = native_font.get_ascent()
+		raw_descent = native_font.get_descent()
+		line_gap = native_font.get_leading()
+		cap_height = native_font.get_cap_height()
+		ex_height = native_font.get_x_height()
+	} $else {
 		return FaceMetrics{}
 	}
 
@@ -591,13 +590,14 @@ pub fn (mut self CoreTextFace) get_metrics() FaceMetrics {
 		characters[i] = u16(i + 32)
 	}
 	mut glyphs := []u16{len: characters.len}
-	unsafe {
-		C.witty_coretext_glyphs_for_characters(self.ct_font, &characters[0], &glyphs[0],
-			characters.len)
+	$if macos {
+		native_font := unsafe { &macos.CTFont(self.ct_font) }
+		native_font.get_glyphs_for_characters(characters, glyphs)
 	}
 	mut advances := []CoreTextSize{len: glyphs.len}
-	unsafe {
-		C.witty_coretext_glyph_advances(self.ct_font, &glyphs[0], advances.data, glyphs.len)
+	$if macos {
+		native_font := unsafe { &macos.CTFont(self.ct_font) }
+		native_font.get_advances_for_glyphs(.horizontal, glyphs, advances.data)
 	}
 	mut cell_width := f64(0)
 	for advance in advances {
@@ -614,9 +614,9 @@ pub fn (mut self CoreTextFace) get_metrics() FaceMetrics {
 	if water_glyph := self.glyph_index(0x6c34) {
 		mut water_glyphs := [u16(water_glyph)]
 		mut water_advance := [CoreTextSize{}]
-		unsafe {
-			C.witty_coretext_glyph_advances(self.ct_font, &water_glyphs[0], water_advance.data,
-				1)
+		$if macos {
+			native_font := unsafe { &macos.CTFont(self.ct_font) }
+			native_font.get_advances_for_glyphs(.horizontal, water_glyphs[..], water_advance.data)
 		}
 		mut water_bounds := GlyphSize{}
 		unsafe {
@@ -655,7 +655,12 @@ pub fn (mut self CoreTextFace) get_metrics() FaceMetrics {
 	units_per_em := if value := head {
 		u32(value.units_per_em)
 	} else {
-		C.witty_coretext_units_per_em(self.ct_font)
+		mut value := u32(0)
+		$if macos {
+			native_font := unsafe { &macos.CTFont(self.ct_font) }
+			value = native_font.get_units_per_em()
+		}
+		value
 	}
 	return refine_coretext_metrics(base, units_per_em, post, os2, hhea)
 }

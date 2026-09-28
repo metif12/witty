@@ -243,6 +243,22 @@ fn C.CTFontGetSymbolicTraits(font voidptr) u32
 
 fn C.CTFontGetGlyphsForCharacters(font voidptr, characters &u16, glyphs &u16, count isize) bool
 
+fn C.CTFontGetAdvancesForGlyphs(font voidptr, orientation u32, glyphs &u16, advances voidptr, count isize) f64
+
+fn C.CTFontGetSize(font voidptr) f64
+
+fn C.CTFontGetAscent(font voidptr) f64
+
+fn C.CTFontGetDescent(font voidptr) f64
+
+fn C.CTFontGetLeading(font voidptr) f64
+
+fn C.CTFontGetCapHeight(font voidptr) f64
+
+fn C.CTFontGetXHeight(font voidptr) f64
+
+fn C.CTFontGetUnitsPerEm(font voidptr) u32
+
 fn C.CTFontDrawGlyphs(font voidptr, glyphs &u16, positions voidptr, count usize, context voidptr)
 
 fn C.vt_ct_typesetter_create_line(typesetter voidptr, location isize, length isize) voidptr
@@ -1107,6 +1123,12 @@ pub struct CTFont {}
 
 pub type CTFontTableTag = u32
 
+pub enum CTFontOrientation as u32 {
+	default_
+	horizontal
+	vertical
+}
+
 pub fn CTFontTableTag.init(tag string) CTFontTableTag {
 	assert tag.len == 4
 	return CTFontTableTag(u32(tag[0]) << 24 | u32(tag[1]) << 16 | u32(tag[2]) << 8 |
@@ -1166,6 +1188,39 @@ pub fn (f &CTFont) get_glyphs_for_characters(characters []u16, glyphs []CGGlyph)
 	assert characters.len == glyphs.len
 	return C.CTFontGetGlyphsForCharacters(voidptr(f), characters.data, glyphs.data,
 		isize(characters.len))
+}
+
+pub fn (f &CTFont) get_advances_for_glyphs(orientation CTFontOrientation, glyphs []CGGlyph, advances voidptr) f64 {
+	return C.CTFontGetAdvancesForGlyphs(voidptr(f), u32(orientation), glyphs.data, advances,
+		isize(glyphs.len))
+}
+
+pub fn (f &CTFont) get_size() f64 {
+	return C.CTFontGetSize(voidptr(f))
+}
+
+pub fn (f &CTFont) get_ascent() f64 {
+	return C.CTFontGetAscent(voidptr(f))
+}
+
+pub fn (f &CTFont) get_descent() f64 {
+	return C.CTFontGetDescent(voidptr(f))
+}
+
+pub fn (f &CTFont) get_leading() f64 {
+	return C.CTFontGetLeading(voidptr(f))
+}
+
+pub fn (f &CTFont) get_cap_height() f64 {
+	return C.CTFontGetCapHeight(voidptr(f))
+}
+
+pub fn (f &CTFont) get_x_height() f64 {
+	return C.CTFontGetXHeight(voidptr(f))
+}
+
+pub fn (f &CTFont) get_units_per_em() u32 {
+	return C.CTFontGetUnitsPerEm(voidptr(f))
 }
 
 pub fn CTFont.create_with_descriptor(desc &CTFontDescriptor, size f64) !&CTFont {
@@ -1529,6 +1584,8 @@ pub type BitmapContext = CGBitmapContext
 pub type Font = CTFont
 
 pub type FontTableTag = CTFontTableTag
+
+pub type FontOrientation = CTFontOrientation
 
 pub type FontDescriptor = CTFontDescriptor
 

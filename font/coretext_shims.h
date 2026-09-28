@@ -35,46 +35,6 @@ static int witty_coretext_copy_display_name(void *font_ptr, uint8_t *buf, size_t
 	return ok ? 1 : 0;
 }
 
-// Primitive metric accessors used by the direct V translation of
-// coretext.zig's Face.getMetrics().
-static int witty_coretext_basic_metrics(
-	void *font_ptr,
-	double *px_per_em,
-	double *ascent,
-	double *descent,
-	double *line_gap,
-	double *cap_height,
-	double *ex_height
-) {
-	if (!font_ptr) return 0;
-	CTFontRef font = (CTFontRef)font_ptr;
-	if (px_per_em) *px_per_em = CTFontGetSize(font);
-	if (ascent) *ascent = CTFontGetAscent(font);
-	if (descent) *descent = CTFontGetDescent(font);
-	if (line_gap) *line_gap = CTFontGetLeading(font);
-	if (cap_height) *cap_height = CTFontGetCapHeight(font);
-	if (ex_height) *ex_height = CTFontGetXHeight(font);
-	return 1;
-}
-
-static int witty_coretext_glyphs_for_characters(
-	void *font_ptr, const uint16_t *characters, uint16_t *glyphs, int count
-) {
-	if (!font_ptr || !characters || !glyphs || count < 0) return 0;
-	return CTFontGetGlyphsForCharacters(
-		(CTFontRef)font_ptr, (const UniChar *)characters, (CGGlyph *)glyphs,
-		(CFIndex)count) ? 1 : 0;
-}
-
-static double witty_coretext_glyph_advances(
-	void *font_ptr, const uint16_t *glyphs, void *advances, int count
-) {
-	if (!font_ptr || !glyphs || count < 0) return 0;
-	return CTFontGetAdvancesForGlyphs(
-		(CTFontRef)font_ptr, kCTFontOrientationHorizontal,
-		(const CGGlyph *)glyphs, (CGSize *)advances, (CFIndex)count);
-}
-
 static int witty_coretext_glyphs_bounds(
 	void *font_ptr, const uint16_t *glyphs, int count,
 	double *x_out, double *y_out, double *width_out, double *height_out
@@ -89,11 +49,6 @@ static int witty_coretext_glyphs_bounds(
 	*width_out = rect.size.width;
 	*height_out = rect.size.height;
 	return 1;
-}
-
-static uint32_t witty_coretext_units_per_em(void *font_ptr) {
-	if (!font_ptr) return 0;
-	return (uint32_t)CTFontGetUnitsPerEm((CTFontRef)font_ptr);
 }
 
 static void *witty_coretext_create_hb_font(void *font_ptr, double pixels) {
@@ -500,39 +455,6 @@ static int witty_coretext_copy_display_name(void *font_ptr, uint8_t *buf, size_t
 	return 0;
 }
 
-static int witty_coretext_basic_metrics(
-	void *font_ptr,
-	double *px_per_em,
-	double *ascent,
-	double *descent,
-	double *line_gap,
-	double *cap_height,
-	double *ex_height
-) {
-	(void)font_ptr;
-	(void)px_per_em;
-	(void)ascent;
-	(void)descent;
-	(void)line_gap;
-	(void)cap_height;
-	(void)ex_height;
-	return 0;
-}
-
-static int witty_coretext_glyphs_for_characters(
-	void *font_ptr, const uint16_t *characters, uint16_t *glyphs, int count
-) {
-	(void)font_ptr; (void)characters; (void)glyphs; (void)count;
-	return 0;
-}
-
-static double witty_coretext_glyph_advances(
-	void *font_ptr, const uint16_t *glyphs, void *advances, int count
-) {
-	(void)font_ptr; (void)glyphs; (void)advances; (void)count;
-	return 0;
-}
-
 static int witty_coretext_glyphs_bounds(
 	void *font_ptr, const uint16_t *glyphs, int count,
 	double *x_out, double *y_out, double *width_out, double *height_out
@@ -542,11 +464,6 @@ static int witty_coretext_glyphs_bounds(
 	if (y_out) *y_out = 0;
 	if (width_out) *width_out = 0;
 	if (height_out) *height_out = 0;
-	return 0;
-}
-
-static uint32_t witty_coretext_units_per_em(void *font_ptr) {
-	(void)font_ptr;
 	return 0;
 }
 
