@@ -105,6 +105,11 @@ fn test_subprocess_process_union_retains_only_active_arm() {
 	assert flatpak is SubprocessFlatpak
 }
 
+fn test_args_formatter() {
+	assert ArgsFormatter{args: []}.str() == ''
+	assert ArgsFormatter{args: ['foo', 'bar baz', '']}.str() == '`foo`, `bar baz`, ``'
+}
+
 fn test_subprocess_init_basic() {
 	sub := Subprocess.init(ExecConfig{
 		term: 'xterm-256color'

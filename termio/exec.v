@@ -617,6 +617,18 @@ pub fn (self SubprocessProcess) kind() SubprocessProcessKind {
 	}
 }
 
+struct ArgsFormatter {
+	args []string
+}
+
+fn (self ArgsFormatter) str() string {
+	mut result := []string{cap: self.args.len}
+	for arg in self.args {
+		result << '`${arg}`'
+	}
+	return result.join(', ')
+}
+
 // Add our executable directory to the child environment. Flatpak commands run
 // on the host, where a binary inside the sandbox cannot be reached.
 fn add_executable_to_path(mut env map[string]string, executable string, flatpak bool) {
@@ -812,7 +824,7 @@ pub fn (mut self Subprocess) start() !PtyFds {
 		}
 	}
 
-	log.debug('starting command command=${self.args}')
+	log.debug('starting command command=${ArgsFormatter{args: self.args}}')
 
 	// If we can't access the cwd, then don't use it. This is important
 	// because our cwd can be set by the shell (OSC 7) and we don't
