@@ -138,6 +138,7 @@ pub fn run_boo(args []string) !int {
 					}
 				}
 				vaxis.Mouse {}
+				else {}
 			}
 		}
 

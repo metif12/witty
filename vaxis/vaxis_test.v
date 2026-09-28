@@ -34,6 +34,7 @@ fn test_dependency_enum_and_mouse_layouts_match_source() {
 	assert u8(MouseType.drag) == 3
 	assert sizeof(MouseModifiers) == 1
 	assert sizeof(Mouse) == 12
+	assert sizeof(Winsize) == 8
 	assert sizeof(Modifiers) == 1
 	assert Modifiers.init(true, true, true, true, true, true, true, true).int() == 0xff
 	assert sizeof(KittyFlags) == 1
@@ -149,13 +150,153 @@ fn test_key_decoder_handles_kitty_fields_and_ignored_sequences() {
 
 	release := parse_input('\x1b[97;1:3u'.bytes()) or { panic('release should be consumed') }
 	assert release.consumed == 9
-	assert release.event == none
+	release_event := release.event or { panic('release should produce an event') }
+	match release_event {
+		KeyRelease {
+			assert release_event.key.codepoint == `a`
+		}
+		else {
+			assert false
+		}
+	}
 	unknown := parse_input('\x1b[999z'.bytes()) or { panic('unknown CSI should be consumed') }
 	assert unknown.consumed == 6
 	assert unknown.event == none
 	unknown_ss3 := parse_input('\x1bOZ'.bytes()) or { panic('unknown SS3 should be consumed') }
 	assert unknown_ss3.consumed == 3
 	assert unknown_ss3.event == none
+}
+
+fn test_parser_restores_pinned_non_key_events() {
+	focus_in_result := parse_input('\x1b[I'.bytes()) or { panic('focus-in should decode') }
+	focus_in_event := focus_in_result.event or { panic('focus-in should produce an event') }
+	assert focus_in_event is FocusIn
+	focus_out_result := parse_input('\x1b[O'.bytes()) or { panic('focus-out should decode') }
+	focus_out_event := focus_out_result.event or { panic('focus-out should produce an event') }
+	assert focus_out_event is FocusOut
+
+	paste_start_result := parse_input('\x1b[200~'.bytes()) or { panic('paste-start should decode') }
+	paste_start_event := paste_start_result.event or { panic('paste-start should produce an event') }
+	assert paste_start_event is PasteStart
+	paste_end_result := parse_input('\x1b[201~'.bytes()) or { panic('paste-end should decode') }
+	paste_end_event := paste_end_result.event or { panic('paste-end should produce an event') }
+	assert paste_end_event is PasteEnd
+
+	paste_result := parse_input('\x1b]52;c;b3NjNTIgcGFzdGU=\x1b\\'.bytes()) or {
+		panic('OSC 52 should decode')
+	}
+	paste_event := paste_result.event or { panic('OSC 52 should produce an event') }
+	match paste_event {
+		Paste {
+			assert paste_event.text == 'osc52 paste'
+		}
+		else {
+			assert false
+		}
+	}
+
+	color_result := parse_input('\x1b]11;rgb:aaaa/bbbb/cccc\x07'.bytes()) or {
+		panic('color report should decode')
+	}
+	color_event := color_result.event or { panic('color report should produce an event') }
+	match color_event {
+		ColorReport {
+			assert color_event.value == [u8(0xaa), 0xbb, 0xcc]!
+			assert color_event.kind is ColorReportBg
+		}
+		else {
+			assert false
+		}
+	}
+
+	dark_result := parse_input('\x1b[?997;1n'.bytes()) or { panic('scheme should decode') }
+	dark_event := dark_result.event or { panic('scheme should produce an event') }
+	match dark_event {
+		ColorScheme {
+			assert dark_event.scheme == .dark
+		}
+		else {
+			assert false
+		}
+	}
+
+	resize_result := parse_input('\x1b[48;24;80;720;1280t'.bytes()) or {
+		panic('resize should decode')
+	}
+	resize_event := resize_result.event or { panic('resize should produce an event') }
+	match resize_event {
+		Winsize {
+			assert resize_event.rows == 24
+			assert resize_event.cols == 80
+			assert resize_event.y_pixel == 720
+			assert resize_event.x_pixel == 1280
+		}
+		else {
+			assert false
+		}
+	}
+}
+
+fn test_parser_restores_capability_and_control_string_events() {
+	kitty_keyboard_result := parse_input('\x1b[?u'.bytes()) or { panic('Kitty query should decode') }
+	kitty_keyboard := kitty_keyboard_result.event or { panic('Kitty query should produce an event') }
+	match kitty_keyboard {
+		CapabilityEvent {
+			assert kitty_keyboard.capability == .kitty_keyboard
+		}
+		else {
+			assert false
+		}
+	}
+	kitty_graphics_result := parse_input('\x1b_Gi=1;OK\x1b\\'.bytes()) or {
+		panic('Kitty graphics response should decode')
+	}
+	kitty_graphics := kitty_graphics_result.event or {
+		panic('Kitty graphics response should produce an event')
+	}
+	match kitty_graphics {
+		CapabilityEvent {
+			assert kitty_graphics.capability == .kitty_graphics
+		}
+		else {
+			assert false
+		}
+	}
+	da_result := parse_input('\x1b[?1;2c'.bytes()) or { panic('DA should decode') }
+	da := da_result.event or { panic('DA should produce an event') }
+	match da {
+		CapabilityEvent {
+			assert da.capability == .da1
+		}
+		else {
+			assert false
+		}
+	}
+	pixels_result := parse_input('\x1b[?1016;1$y'.bytes()) or { panic('DECRPM should decode') }
+	pixels := pixels_result.event or { panic('DECRPM should produce an event') }
+	match pixels {
+		CapabilityEvent {
+			assert pixels.capability == .sgr_pixels
+		}
+		else {
+			assert false
+		}
+	}
+	cursor_result := parse_input('\x1b[>1;2;3;29;30;40;100;101 q'.bytes()) or {
+		panic('cursor capability should decode')
+	}
+	cursor := cursor_result.event or { panic('cursor capability should produce an event') }
+	match cursor {
+		CapabilityEvent {
+			assert cursor.capability == .multi_cursor
+		}
+		else {
+			assert false
+		}
+	}
+	skipped := parse_input('\x1bPignored\x1b\\'.bytes()) or { panic('DCS should be consumed') }
+	assert skipped.consumed == '\x1bPignored\x1b\\'.len
+	assert skipped.event == none
 }
 
 fn test_key_decoder_preserves_first_grapheme() {
@@ -260,6 +401,25 @@ fn test_key_decoder_handles_sgr_mouse() {
 			assert false
 		}
 	}
+	xterm_result := parse_input([u8(0x1b), `[`, `M`, u8(32), u8(44), u8(39)]) or {
+		panic('X10 mouse should decode')
+	}
+	xterm_event := xterm_result.event or { panic('X10 mouse should produce an event') }
+	match xterm_event {
+		Mouse {
+			assert xterm_result.consumed == 6
+			assert xterm_event.button == .left
+			assert xterm_event.type_ == .press
+			assert xterm_event.col == 11
+			assert xterm_event.row == 6
+		}
+		else {
+			assert false
+		}
+	}
+	leave_result := parse_input('\x1b[<259;1;1M'.bytes()) or { panic('mouse leave should decode') }
+	leave_event := leave_result.event or { panic('mouse leave should produce an event') }
+	assert leave_event is MouseLeave
 }
 
 fn test_text_input_buffer_matches_source_gap_operations() {

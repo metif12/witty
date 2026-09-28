@@ -527,6 +527,17 @@ pub fn (mut self Preview) run() ! {
 						mouse: event
 					}))!
 				}
+				vaxis.ColorScheme {
+					self.update(Event(ColorSchemeEvent{
+						scheme: event.scheme
+					}))!
+				}
+				vaxis.Winsize {
+					self.update(Event(WinsizeEvent{
+						winsize: event
+					}))!
+				}
+				else {}
 			}
 
 			handled_input = true

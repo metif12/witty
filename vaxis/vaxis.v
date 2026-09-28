@@ -559,11 +559,85 @@ pub fn (m MouseModifiers) ctrl() bool {
 
 pub struct Winsize {
 pub:
-	rows u16
-	cols u16
+	rows    u16
+	cols    u16
+	x_pixel u16
+	y_pixel u16
 }
 
-pub type InputEvent = Key | Mouse
+pub struct KeyRelease {
+pub:
+	key Key
+}
+
+pub struct MouseLeave {}
+
+pub struct FocusIn {}
+
+pub struct FocusOut {}
+
+pub struct PasteStart {}
+
+pub struct PasteEnd {}
+
+pub struct Paste {
+pub:
+	text string
+}
+
+pub struct ColorReportFg {}
+
+pub struct ColorReportBg {}
+
+pub struct ColorReportCursor {}
+
+pub struct ColorReportIndex {
+pub:
+	index u8
+}
+
+pub type ColorReportKind = ColorReportBg | ColorReportCursor | ColorReportFg | ColorReportIndex
+
+pub struct ColorReport {
+pub:
+	kind  ColorReportKind
+	value [3]u8
+}
+
+pub struct ColorScheme {
+pub:
+	scheme Scheme
+}
+
+pub enum Capability as u8 {
+	kitty_keyboard
+	kitty_graphics
+	rgb
+	sgr_pixels
+	unicode
+	da1
+	color_scheme_updates
+	multi_cursor
+}
+
+pub struct CapabilityEvent {
+pub:
+	capability Capability
+}
+
+pub type InputEvent = CapabilityEvent
+	| ColorReport
+	| ColorScheme
+	| FocusIn
+	| FocusOut
+	| Key
+	| KeyRelease
+	| Mouse
+	| MouseLeave
+	| Paste
+	| PasteEnd
+	| PasteStart
+	| Winsize
 
 struct ParsedInput {
 	event    ?InputEvent
@@ -650,11 +724,13 @@ fn parse_input(data []u8) ?ParsedInput {
 		if data.len == 1 {
 			return parsed_key(escape, Modifiers{}, 1)
 		}
-		if data[1] == `[` {
-			return parse_csi(data)
-		}
-		if data[1] == `O` {
-			return parse_ss3(data)
+		match data[1] {
+			`O` { return parse_ss3(data) }
+			`P`, `X`, `^` { return skip_until_st(data) }
+			`[` { return parse_csi(data) }
+			`]` { return parse_osc(data) }
+			`_` { return parse_apc(data) }
+			else {}
 		}
 		return ParsedInput{
 			event:    InputEvent(Key{
@@ -725,6 +801,149 @@ fn parse_input(data []u8) ?ParsedInput {
 	return parsed_key_text(codepoint, data[..consumed].bytestr(), Modifiers{}, consumed)
 }
 
+fn parse_apc(data []u8) ?ParsedInput {
+	if data.len < 3 {
+		return none
+	}
+	sequence_end := find_byte(data, 2, u8(escape))
+	if sequence_end < 0 || data.len < sequence_end + 2 {
+		return none
+	}
+	consumed := sequence_end + 2
+	if data[2] == `G` {
+		return ParsedInput{
+			event:    InputEvent(CapabilityEvent{
+				capability: .kitty_graphics
+			})
+			consumed: consumed
+		}
+	}
+	return ParsedInput{
+		consumed: consumed
+	}
+}
+
+fn skip_until_st(data []u8) ?ParsedInput {
+	if data.len < 3 {
+		return none
+	}
+	sequence_end := find_byte(data, 2, u8(escape))
+	if sequence_end < 0 || data.len < sequence_end + 2 {
+		return none
+	}
+	return ParsedInput{
+		consumed: sequence_end + 2
+	}
+}
+
+fn parse_osc(data []u8) ?ParsedInput {
+	if data.len < 3 {
+		return none
+	}
+	mut bel_terminated := false
+	mut sequence_end := 0
+	escape_end := find_byte(data, 2, u8(escape))
+	if escape_end >= 0 && data.len >= escape_end + 2 {
+		sequence_end = escape_end + 2
+	} else {
+		bel := find_byte(data, 2, 0x07)
+		if bel < 0 {
+			return none
+		}
+		bel_terminated = true
+		sequence_end = bel + 1
+	}
+	semicolon := find_byte(data, 2, `;`)
+	if semicolon < 0 || semicolon >= sequence_end {
+		return ParsedInput{ consumed: sequence_end }
+	}
+	ps := strconv.parse_uint(data[2..semicolon].bytestr(), 10, 8) or {
+		return ParsedInput{ consumed: sequence_end }
+	}
+	content_end := if bel_terminated { sequence_end - 1 } else { sequence_end - 2 }
+	if ps == 4 {
+		color_delimiter := find_byte(data, semicolon + 1, `;`)
+		if color_delimiter < 0 || color_delimiter >= content_end {
+			return ParsedInput{ consumed: sequence_end }
+		}
+		index := strconv.parse_uint(data[semicolon + 1..color_delimiter].bytestr(), 10,
+			8) or { return ParsedInput{ consumed: sequence_end } }
+		rgb := parse_color_spec(data[color_delimiter + 1..content_end].bytestr()) or {
+			return ParsedInput{ consumed: sequence_end }
+		}
+		return ParsedInput{
+			event:    InputEvent(ColorReport{
+				kind:  ColorReportKind(ColorReportIndex{
+					index: u8(index)
+				})
+				value: rgb
+			})
+			consumed: sequence_end
+		}
+	}
+	if ps == 10 || ps == 11 || ps == 12 {
+		rgb := parse_color_spec(data[semicolon + 1..content_end].bytestr()) or {
+			return ParsedInput{ consumed: sequence_end }
+		}
+		kind := match ps {
+			10 { ColorReportKind(ColorReportFg{}) }
+			11 { ColorReportKind(ColorReportBg{}) }
+			12 { ColorReportKind(ColorReportCursor{}) }
+			else { return ParsedInput{ consumed: sequence_end } }
+		}
+		return ParsedInput{
+			event:    InputEvent(ColorReport{
+				kind:  kind
+				value: rgb
+			})
+			consumed: sequence_end
+		}
+	}
+	if ps == 52 {
+		if semicolon + 1 >= content_end || data[semicolon + 1] != `c` {
+			return ParsedInput{ consumed: sequence_end }
+		}
+		text := base64.decode_str(data[semicolon + 3..content_end].bytestr())
+		return ParsedInput{
+			event:    InputEvent(Paste{
+				text: text
+			})
+			consumed: sequence_end
+		}
+	}
+	return ParsedInput{
+		consumed: sequence_end
+	}
+}
+
+fn parse_color_spec(spec string) ?[3]u8 {
+	parts := spec.split(':')
+	if parts.len < 2 || parts[0] != 'rgb' {
+		return none
+	}
+	channels := parts[1].split('/')
+	if channels.len < 3 {
+		return none
+	}
+	mut result := [3]u8{}
+	for i, channel in channels[..3] {
+		if channel.len != 4 {
+			return none
+		}
+		result[i] = u8(strconv.parse_uint(channel[2..], 16, 8) or { return none })
+	}
+	return result
+}
+
+fn find_byte(data []u8, start int, target u8) int {
+	for i in start .. data.len {
+		if data[i] == target {
+			return i
+		}
+	}
+	return -1
+}
+
 fn parse_ss3(data []u8) ?ParsedInput {
 	if data.len < 3 {
 		return none
@@ -792,15 +1011,16 @@ fn parse_csi(data []u8) ?ParsedInput {
 		mut key := Key{
 			codepoint: code
 		}
+		mut is_release := false
 		fields := sequence[2..sequence.len - 1].split(';')
 		if fields.len > 1 {
 			modifier_parts := fields[1].split(':')
-			mask := parse_param_u32(modifier_parts[0], u32(1)) or {
+			mask := parse_param_u8(modifier_parts[0], u8(1)) or {
 				return ParsedInput{ consumed: sequence.len }
 			}
-			key.mods = Modifiers.from_int(u8(if mask > 0 { mask - 1 } else { 0 }))
+			key.mods = Modifiers.from_int(if mask > 0 { mask - 1 } else { 0 })
 			if modifier_parts.len > 1 && modifier_parts[1] == '3' {
-				return ParsedInput{ consumed: sequence.len }
+				is_release = true
 			}
 		}
 		if fields.len > 2 {
@@ -809,7 +1029,13 @@ fn parse_csi(data []u8) ?ParsedInput {
 			}
 		}
 		return ParsedInput{
-			event:    InputEvent(key)
+			event:    if is_release {
+				InputEvent(KeyRelease{
+					key: key
+				})
+			} else {
+				InputEvent(key)
+			}
 			consumed: sequence.len
 		}
 	}
@@ -818,6 +1044,18 @@ fn parse_csi(data []u8) ?ParsedInput {
 		fields := sequence[2..sequence.len - 1].split(';')
 		number := parse_param_u32(fields[0], none) or {
 			return ParsedInput{ consumed: sequence.len }
+		}
+		if number == 200 {
+			return ParsedInput{
+				event:    InputEvent(PasteStart{})
+				consumed: sequence.len
+			}
+		}
+		if number == 201 {
+			return ParsedInput{
+				event:    InputEvent(PasteEnd{})
+				consumed: sequence.len
+			}
 		}
 		code := match number {
 			2 { insert }
@@ -844,14 +1082,15 @@ fn parse_csi(data []u8) ?ParsedInput {
 		mut key := Key{
 			codepoint: code
 		}
+		mut is_release := false
 		if fields.len > 1 {
 			modifier_parts := fields[1].split(':')
-			mask := parse_param_u32(modifier_parts[0], u32(1)) or {
+			mask := parse_param_u8(modifier_parts[0], u8(1)) or {
 				return ParsedInput{ consumed: sequence.len }
 			}
-			key.mods = Modifiers.from_int(u8(if mask > 0 { mask - 1 } else { 0 }))
+			key.mods = Modifiers.from_int(if mask > 0 { mask - 1 } else { 0 })
 			if modifier_parts.len > 1 && modifier_parts[1] == '3' {
-				return ParsedInput{ consumed: sequence.len }
+				is_release = true
 			}
 		}
 		if fields.len > 2 {
@@ -860,37 +1099,123 @@ fn parse_csi(data []u8) ?ParsedInput {
 			}
 		}
 		return ParsedInput{
-			event:    InputEvent(key)
+			event:    if is_release {
+				InputEvent(KeyRelease{
+					key: key
+				})
+			} else {
+				InputEvent(key)
+			}
 			consumed: sequence.len
 		}
 	}
 
+	if final == `I` {
+		return ParsedInput{
+			event:    InputEvent(FocusIn{})
+			consumed: sequence.len
+		}
+	}
+	if final == `O` {
+		return ParsedInput{
+			event:    InputEvent(FocusOut{})
+			consumed: sequence.len
+		}
+	}
+	if final == `c` {
+		if sequence.len >= 4 && sequence[2] == `?` {
+			return ParsedInput{
+				event:    InputEvent(CapabilityEvent{
+					capability: .da1
+				})
+				consumed: sequence.len
+			}
+		}
+		return ParsedInput{ consumed: sequence.len }
+	}
+	if final == `n` {
+		if sequence.len >= 3 && sequence[2] == `?` {
+			if delimiter := sequence.index_after(';', 3) {
+				ps := strconv.parse_uint(sequence[3..delimiter], 10, 16) or {
+					return ParsedInput{ consumed: sequence.len }
+				}
+				if ps == 997 && delimiter + 1 < sequence.len - 1 {
+					scheme := match sequence[delimiter + 1] {
+						`1` { Scheme.dark }
+						`2` { Scheme.light }
+						else { return ParsedInput{ consumed: sequence.len } }
+					}
+					return ParsedInput{
+						event:    InputEvent(ColorScheme{
+							scheme: scheme
+						})
+						consumed: sequence.len
+					}
+				}
+			}
+		}
+		return ParsedInput{ consumed: sequence.len }
+	}
+	if final == `t` {
+		fields := sequence[2..sequence.len - 1].split(';')
+		if fields.len >= 3 && fields[0] == '48' {
+			rows := parse_u16(fields[1]) or { return ParsedInput{ consumed: sequence.len } }
+			cols := parse_u16(fields[2]) or { return ParsedInput{ consumed: sequence.len } }
+			y_pixel := if fields.len > 3 {
+				parse_u16(fields[3]) or { return ParsedInput{ consumed: sequence.len } }
+			} else {
+				u16(0)
+			}
+			x_pixel := if fields.len > 4 {
+				parse_u16(fields[4]) or { return ParsedInput{ consumed: sequence.len } }
+			} else {
+				u16(0)
+			}
+			return ParsedInput{
+				event:    InputEvent(Winsize{
+					rows:    rows
+					cols:    cols
+					x_pixel: x_pixel
+					y_pixel: y_pixel
+				})
+				consumed: sequence.len
+			}
+		}
+		return ParsedInput{ consumed: sequence.len }
+	}
+
 	if final == `u` {
 		if sequence.len > 2 && sequence[2] == `?` {
-			return ParsedInput{ consumed: sequence.len }
+			return ParsedInput{
+				event:    InputEvent(CapabilityEvent{
+					capability: .kitty_keyboard
+				})
+				consumed: sequence.len
+			}
 		}
 		fields := sequence[2..sequence.len - 1].split(';')
 		alternate := fields[0].split(':')
-		codepoint := parse_param_u32(alternate[0], none) or {
+		codepoint := parse_param_u21(alternate[0]) or {
 			return ParsedInput{ consumed: sequence.len }
 		}
 		mut key := Key{
 			codepoint: codepoint
 		}
+		mut is_release := false
 		if alternate.len > 1 {
-			key.shifted_codepoint = parse_param_u32(alternate[1], none)
+			key.shifted_codepoint = parse_param_u21(alternate[1])
 		}
 		if alternate.len > 2 {
-			key.base_layout_codepoint = parse_param_u32(alternate[2], none)
+			key.base_layout_codepoint = parse_param_u21(alternate[2])
 		}
 		if fields.len > 1 {
 			modifier_parts := fields[1].split(':')
-			mask := parse_param_u32(modifier_parts[0], u32(1)) or {
+			mask := parse_param_u8(modifier_parts[0], u8(1)) or {
 				return ParsedInput{ consumed: sequence.len }
 			}
-			key.mods = Modifiers.from_int(u8(if mask > 0 { mask - 1 } else { 0 }))
+			key.mods = Modifiers.from_int(if mask > 0 { mask - 1 } else { 0 })
 			if modifier_parts.len > 1 && modifier_parts[1] == '3' {
-				return ParsedInput{ consumed: sequence.len }
+				is_release = true
 			}
 		}
 		if fields.len > 2 {
@@ -911,14 +1236,80 @@ fn parse_csi(data []u8) ?ParsedInput {
 			key.shifted_codepoint = upper
 		}
 		return ParsedInput{
-			event:    InputEvent(key)
+			event:    if is_release {
+				InputEvent(KeyRelease{
+					key: key
+				})
+			} else {
+				InputEvent(key)
+			}
 			consumed: sequence.len
 		}
+	}
+
+	if final == `y` {
+		if delimiter := sequence.index_after(';', 3) {
+			ps := strconv.parse_uint(sequence[3..delimiter], 10, 16) or {
+				return ParsedInput{ consumed: sequence.len }
+			}
+			pm := strconv.parse_uint(sequence[delimiter + 1..sequence.len - 2], 10, 8) or {
+				return ParsedInput{ consumed: sequence.len }
+			}
+			capability := match ps {
+				1016 { Capability.sgr_pixels }
+				2027 { Capability.unicode }
+				2031 { Capability.color_scheme_updates }
+				else { return ParsedInput{ consumed: sequence.len } }
+			}
+			if pm != 0 && pm != 4 {
+				return ParsedInput{
+					event:    InputEvent(CapabilityEvent{
+						capability: capability
+					})
+					consumed: sequence.len
+				}
+			}
+		}
+		return ParsedInput{ consumed: sequence.len }
+	}
+	if final == `q` {
+		if sequence.len >= 2 && sequence[sequence.len - 2] == ` ` {
+			for byte in sequence[..sequence.len - 2].bytes() {
+				if byte >= `0` && byte <= `9` {
+					return ParsedInput{
+						event:    InputEvent(CapabilityEvent{
+							capability: .multi_cursor
+						})
+						consumed: sequence.len
+					}
+				}
+			}
+		}
+		return ParsedInput{ consumed: sequence.len }
 	}
 
 	return ParsedInput{
 		consumed: sequence.len
 	}
+}
+
+fn parse_u16(raw string) ?u16 {
+	return u16(strconv.parse_uint(raw, 10, 16) or { return none })
+}
+
+fn parse_param_u8(raw string, default ?u8) ?u8 {
+	if raw.len == 0 {
+		return default
+	}
+	return u8(strconv.parse_uint(raw, 10, 8) or { return none })
+}
+
+fn parse_param_u21(raw string) ?u32 {
+	value := parse_param_u32(raw, none) or { return none }
+	if value > 0x1fffff {
+		return none
+	}
+	return value
 }
 
 fn parse_mouse(data []u8, sequence string) ?ParsedInput {
@@ -928,7 +1319,7 @@ fn parse_mouse(data []u8, sequence string) ?ParsedInput {
 	mut xterm := false
 	if sequence.len == 3 && sequence[2] == `M` {
 		if data.len < 6 {
-			return none
+			return ParsedInput{ consumed: sequence.len }
 		}
 		xterm = true
 		button_mask = u64(data[3] - 32)
@@ -949,6 +1340,7 @@ fn parse_mouse(data []u8, sequence string) ?ParsedInput {
 	}
 	if button_mask & 0x100 != 0 {
 		return ParsedInput{
+			event:    InputEvent(MouseLeave{})
 			consumed: if xterm { 6 } else { sequence.len }
 		}
 	}
