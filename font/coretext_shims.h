@@ -62,74 +62,6 @@ static void witty_ct_retain(void *ptr) {
 	if (ptr) CFRetain((CFTypeRef)ptr);
 }
 
-// Build a CTFontDescriptor from the fields of a font Descriptor. Any zero/
-// empty field is omitted. Traits are only set if at least one is requested.
-static void *witty_ct_build_descriptor(
-	const char *family,
-	const char *style,
-	uint32_t codepoint,
-	double size,
-	int bold,
-	int italic,
-	int monospace
-) {
-	CFMutableDictionaryRef attrs = CFDictionaryCreateMutable(
-		NULL, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
-	if (!attrs) return NULL;
-
-	if (family && family[0]) {
-		CFStringRef v = CFStringCreateWithCString(NULL, family, kCFStringEncodingUTF8);
-		if (v) {
-			CFDictionarySetValue(attrs, kCTFontFamilyNameAttribute, v);
-			CFRelease(v);
-		}
-	}
-	if (style && style[0]) {
-		CFStringRef v = CFStringCreateWithCString(NULL, style, kCFStringEncodingUTF8);
-		if (v) {
-			CFDictionarySetValue(attrs, kCTFontStyleNameAttribute, v);
-			CFRelease(v);
-		}
-	}
-	if (codepoint > 0) {
-		CFCharacterSetRef cs = CFCharacterSetCreateWithCharactersInRange(
-			NULL, CFRangeMake((CFIndex)codepoint, 1));
-		if (cs) {
-			CFDictionarySetValue(attrs, kCTFontCharacterSetAttribute, cs);
-			CFRelease(cs);
-		}
-	}
-	if (size > 0) {
-		int32_t s = (int32_t)(size + 0.5);
-		CFNumberRef v = CFNumberCreate(NULL, kCFNumberSInt32Type, &s);
-		if (v) {
-			CFDictionarySetValue(attrs, kCTFontSizeAttribute, v);
-			CFRelease(v);
-		}
-	}
-
-	uint32_t traits = 0;
-	if (bold) traits |= kCTFontTraitBold;
-	if (italic) traits |= kCTFontTraitItalic;
-	if (monospace) traits |= kCTFontTraitMonoSpace;
-	if (traits != 0) {
-		int32_t tv = (int32_t)traits;
-		CFNumberRef num = CFNumberCreate(NULL, kCFNumberSInt32Type, &tv);
-		CFMutableDictionaryRef tdict = CFDictionaryCreateMutable(
-			NULL, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
-		if (num && tdict) {
-			CFDictionarySetValue(tdict, kCTFontSymbolicTrait, num);
-			CFDictionarySetValue(attrs, kCTFontTraitsAttribute, tdict);
-		}
-		if (num) CFRelease(num);
-		if (tdict) CFRelease(tdict);
-	}
-
-	CTFontDescriptorRef desc = CTFontDescriptorCreateWithAttributes(attrs);
-	CFRelease(attrs);
-	return (void *)desc;
-}
-
 // Given a search descriptor, build a font collection and return the CFArray
 // of matching descriptors (retained; caller releases). May return NULL.
 static void *witty_ct_matching_descriptors(void *search_desc) {
@@ -381,15 +313,6 @@ static void witty_coretext_destroy_hb_font(void *font_ptr) {
 
 static void witty_ct_release(void *ptr) { (void)ptr; }
 static void witty_ct_retain(void *ptr) { (void)ptr; }
-
-static void *witty_ct_build_descriptor(
-	const char *family, const char *style, uint32_t codepoint,
-	double size, int bold, int italic, int monospace
-) {
-	(void)family; (void)style; (void)codepoint; (void)size;
-	(void)bold; (void)italic; (void)monospace;
-	return NULL;
-}
 
 static void *witty_ct_matching_descriptors(void *search_desc) {
 	(void)search_desc;

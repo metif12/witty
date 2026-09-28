@@ -22,14 +22,45 @@ fn C.witty_ct_variation_get(axes_ptr voidptr, values_ptr voidptr, index int, nam
 // character set, size and symbolic traits) via the C shim. The returned
 // descriptor is retained; callers must release it with macos.cf_release.
 pub fn (d &Descriptor) to_core_text_descriptor() !&macos.CTFontDescriptor {
-	family := d.family or { '' }
-	style := d.style or { '' }
-	ptr := C.witty_ct_build_descriptor(&char(family.str), &char(style.str), d.codepoint,
-		f64(d.size), b2i(d.bold), b2i(d.italic), b2i(d.monospace))
-	if isnil(ptr) {
-		return error('CTFontDescriptorCreateWithAttributes failed')
+	attrs := macos.CFMutableDictionary.create(0)!
+	defer { attrs.release() }
+
+	if family_bytes := d.family {
+		family := macos.CFString.create_with_bytes(family_bytes.bytes(), .utf8, false)!
+		defer { family.release() }
+		attrs.set_value(macos.CTFontAttribute.family_name.key(), voidptr(family))
 	}
-	return unsafe { &macos.CTFontDescriptor(ptr) }
+	if style_bytes := d.style {
+		style := macos.CFString.create_with_bytes(style_bytes.bytes(), .utf8, false)!
+		defer { style.release() }
+		attrs.set_value(macos.CTFontAttribute.style_name.key(), voidptr(style))
+	}
+	if d.codepoint > 0 {
+		character_set := macos.CFCharacterSet.create_with_characters_in_range(macos.CFRange.init(int(d.codepoint),
+			1))!
+		defer { character_set.release() }
+		attrs.set_value(macos.CTFontAttribute.character_set.key(), voidptr(character_set))
+	}
+	if d.size > 0 {
+		size_value := i32(d.size + 0.5)
+		size := macos.CFNumber.create(.sint32, voidptr(&size_value))!
+		defer { size.release() }
+		attrs.set_value(macos.CTFontAttribute.size.key(), voidptr(size))
+	}
+
+	traits_value := (if d.italic { u32(1) << 0 } else { u32(0) }) |
+		(if d.bold { u32(1) << 1 } else { u32(0) }) |
+		(if d.monospace { u32(1) << 10 } else { u32(0) })
+	if traits_value > 0 {
+		traits_raw := i32(traits_value)
+		traits_num := macos.CFNumber.create(.sint32, voidptr(&traits_raw))!
+		defer { traits_num.release() }
+		traits := macos.CFMutableDictionary.create(0)!
+		defer { traits.release() }
+		traits.set_value(macos.CTFontTraitKey.symbolic.key(), voidptr(traits_num))
+		attrs.set_value(macos.CTFontAttribute.traits.key(), voidptr(traits))
+	}
+	return macos.CTFontDescriptor.create_with_attributes(attrs.as_dictionary())!
 }
 
 // CoreTextDiscovery discovers fonts using Apple's CoreText framework (macOS).

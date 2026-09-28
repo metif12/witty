@@ -232,8 +232,6 @@ fn C.witty_ct_release(ptr voidptr)
 
 fn C.witty_ct_retain(ptr voidptr)
 
-fn C.witty_ct_build_descriptor(family &char, style &char, codepoint u32, size f64, bold int, italic int, monospace int) voidptr
-
 fn C.witty_ct_matching_descriptors(search_desc voidptr) voidptr
 
 fn C.witty_cf_array_count(arr voidptr) int

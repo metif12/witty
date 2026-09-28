@@ -57,6 +57,63 @@ const void* vt_k_ct_writing_direction_attribute_name(void) {
 	return kCTWritingDirectionAttributeName;
 }
 
+const void* vt_k_cf_null(void) {
+	return kCFNull;
+}
+
+const void* vt_ct_font_attribute(int attribute) {
+	switch (attribute) {
+		case 0: return kCTFontURLAttribute;
+		case 1: return kCTFontNameAttribute;
+		case 2: return kCTFontDisplayNameAttribute;
+		case 3: return kCTFontFamilyNameAttribute;
+		case 4: return kCTFontStyleNameAttribute;
+		case 5: return kCTFontTraitsAttribute;
+		case 6: return kCTFontVariationAttribute;
+		case 7: return kCTFontSizeAttribute;
+		case 8: return kCTFontMatrixAttribute;
+		case 9: return kCTFontCascadeListAttribute;
+		case 10: return kCTFontCharacterSetAttribute;
+		case 11: return kCTFontLanguagesAttribute;
+		case 12: return kCTFontBaselineAdjustAttribute;
+		case 13: return kCTFontMacintoshEncodingsAttribute;
+		case 14: return kCTFontFeaturesAttribute;
+		case 15: return kCTFontFeatureSettingsAttribute;
+		case 16: return kCTFontFixedAdvanceAttribute;
+		case 17: return kCTFontOrientationAttribute;
+		case 18: return kCTFontFormatAttribute;
+		case 19: return kCTFontRegistrationScopeAttribute;
+		case 20: return kCTFontPriorityAttribute;
+		case 21: return kCTFontEnabledAttribute;
+		case 22: return kCTFontDownloadableAttribute;
+		case 23: return kCTFontDownloadedAttribute;
+		case 24: return kCTFontVariationAxesAttribute;
+		default: return NULL;
+	}
+}
+
+const void* vt_ct_font_trait_key(int key) {
+	switch (key) {
+		case 0: return kCTFontSymbolicTrait;
+		case 1: return kCTFontWeightTrait;
+		case 2: return kCTFontWidthTrait;
+		case 3: return kCTFontSlantTrait;
+		default: return NULL;
+	}
+}
+
+const void* vt_ct_font_variation_axis_key(int key) {
+	switch (key) {
+		case 0: return kCTFontVariationAxisIdentifierKey;
+		case 1: return kCTFontVariationAxisMinimumValueKey;
+		case 2: return kCTFontVariationAxisMaximumValueKey;
+		case 3: return kCTFontVariationAxisDefaultValueKey;
+		case 4: return kCTFontVariationAxisNameKey;
+		case 5: return kCTFontVariationAxisHiddenKey;
+		default: return NULL;
+	}
+}
+
 void vt_cfattributedstring_replace_string(void *str_ptr, long location, long length, void *replacement_ptr) {
 	if (!str_ptr || !replacement_ptr) return;
 	CFAttributedStringReplaceString(

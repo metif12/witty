@@ -231,6 +231,8 @@ fn C.CTFontDescriptorCreateCopyWithAttributes(original voidptr, attrs voidptr) v
 
 fn C.CTFontDescriptorCreateCopyWithVariation(original voidptr, id voidptr, value f64) voidptr
 
+fn C.CTFontDescriptorCopyAttribute(desc voidptr, attribute voidptr) voidptr
+
 fn C.CTFontCreateWithFontDescriptor(desc voidptr, size f64, matrix voidptr) voidptr
 
 fn C.CTFontCreateCopyWithAttributes(font voidptr, size f64, matrix voidptr, desc voidptr) voidptr
@@ -407,6 +409,14 @@ fn C.vt_k_ct_typesetter_option_forced_embedding_level() voidptr
 fn C.vt_k_ct_paragraph_style_attribute_name() voidptr
 
 fn C.vt_k_ct_writing_direction_attribute_name() voidptr
+
+fn C.vt_k_cf_null() voidptr
+
+fn C.vt_ct_font_attribute(attribute int) voidptr
+
+fn C.vt_ct_font_trait_key(key int) voidptr
+
+fn C.vt_ct_font_variation_axis_key(key int) voidptr
 
 fn C.vt_cfattributedstring_replace_string(str voidptr, location isize, length isize, replacement voidptr)
 
@@ -1097,6 +1107,66 @@ pub:
 
 pub struct CTFontDescriptor {}
 
+pub enum CTFontAttribute as u8 {
+	url
+	name
+	display_name
+	family_name
+	style_name
+	traits
+	variation
+	size
+	matrix
+	cascade_list
+	character_set
+	languages
+	baseline_adjust
+	macintosh_encodings
+	features
+	feature_settings
+	fixed_advance
+	orientation
+	format
+	registration_scope
+	priority
+	enabled
+	downloadable
+	downloaded
+	variation_axes
+}
+
+pub fn (a CTFontAttribute) key() voidptr {
+	return C.vt_ct_font_attribute(int(a))
+}
+
+pub enum CTFontTraitKey as u8 {
+	symbolic
+	weight
+	width
+	slant
+}
+
+pub fn (k CTFontTraitKey) key() voidptr {
+	return C.vt_ct_font_trait_key(int(k))
+}
+
+pub enum CTFontVariationAxisKey as u8 {
+	identifier
+	minimum_value
+	maximum_value
+	default_value
+	name
+	hidden
+}
+
+pub fn (k CTFontVariationAxisKey) key() voidptr {
+	return C.vt_ct_font_variation_axis_key(int(k))
+}
+
+pub fn k_cf_null() voidptr {
+	return C.vt_k_cf_null()
+}
+
 pub fn CTFontDescriptor.create_with_attributes(attrs &CFDictionary) !&CTFontDescriptor {
 	ptr := C.CTFontDescriptorCreateWithAttributes(voidptr(attrs))
 	return require_cf_ref[CTFontDescriptor](ptr, 'CTFontDescriptorCreateWithAttributes')
@@ -1115,6 +1185,14 @@ pub fn (d &CTFontDescriptor) copy_with_attributes(attrs &CFDictionary) !&CTFontD
 pub fn (d &CTFontDescriptor) copy_with_variation(id &CFNumber, value f64) !&CTFontDescriptor {
 	ptr := C.CTFontDescriptorCreateCopyWithVariation(voidptr(d), voidptr(id), value)
 	return require_cf_ref[CTFontDescriptor](ptr, 'CTFontDescriptorCreateCopyWithVariation')
+}
+
+pub fn (d &CTFontDescriptor) copy_attribute(attribute CTFontAttribute) ?voidptr {
+	ptr := C.CTFontDescriptorCopyAttribute(voidptr(d), attribute.key())
+	if isnil(ptr) {
+		return none
+	}
+	return ptr
 }
 
 pub fn (d &CTFontDescriptor) release() {
@@ -1621,6 +1699,12 @@ pub type FontTableTag = CTFontTableTag
 pub type FontOrientation = CTFontOrientation
 
 pub type FontDescriptor = CTFontDescriptor
+
+pub type FontAttribute = CTFontAttribute
+
+pub type FontTraitKey = CTFontTraitKey
+
+pub type FontVariationAxisKey = CTFontVariationAxisKey
 
 pub type FontCollection = CTFontCollection
 
