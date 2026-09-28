@@ -1461,6 +1461,9 @@ fn (mut self StreamHandler) color_operation(op osc.ColorOperation, requests []os
 			}
 			osc.ColorRequestQuery {
 				if report := self.color_query_response(request.target, terminator) {
+					if response.len + report.len > 1024 {
+						return error('OutOfMemory')
+					}
 					response += report
 				}
 			}
@@ -1546,13 +1549,13 @@ fn (self &StreamHandler) color_query_response(target osc.ColorTarget, terminator
 
 fn (self &StreamHandler) dynamic_color_query_value(color osc.DynamicColor) ?terminal.RGB {
 	return match color {
-		.foreground { self.terminal.colors.foreground.get() }
-		.background { self.terminal.colors.background.get() }
+		.foreground { self.terminal.colors.foreground.get() or { panic('unreachable') } }
+		.background { self.terminal.colors.background.get() or { panic('unreachable') } }
 		.cursor {
 			if value := self.terminal.colors.cursor.get() {
 				value
 			} else {
-				self.terminal.colors.foreground.get()
+				self.terminal.colors.foreground.get() or { panic('unreachable') }
 			}
 		}
 		else {
@@ -1608,7 +1611,7 @@ fn (mut self StreamHandler) kitty_color_report(request osc.KittyColorOSC) ! {
 								found = self.terminal.colors.cursor.get()
 							}
 							else {
-								// ignoring unsupported kitty color protocol key
+								log.warn('ignoring unsupported kitty color protocol key: ${key}')
 								continue
 							}
 						}
@@ -1640,7 +1643,7 @@ fn (mut self StreamHandler) kitty_color_report(request osc.KittyColorOSC) ! {
 								self.terminal.colors.cursor.set(color)
 							}
 							else {
-								// ignoring unsupported kitty color protocol key
+								log.warn('ignoring unsupported kitty color protocol key: ${item.key}')
 								continue
 							}
 						}
@@ -1665,7 +1668,7 @@ fn (mut self StreamHandler) kitty_color_report(request osc.KittyColorOSC) ! {
 								self.terminal.colors.cursor.reset()
 							}
 							else {
-								// ignoring unsupported kitty color protocol key
+								log.warn('ignoring unsupported kitty color protocol key: ${item.key}')
 								continue
 							}
 						}
@@ -1678,7 +1681,7 @@ fn (mut self StreamHandler) kitty_color_report(request osc.KittyColorOSC) ! {
 	// If we had any writes to our buffer, we queue them now
 	if stream.len > 0 {
 		stream += request.terminator.string()
-		self.message_writer(Message.write_req(stream))
+		self.message_writer(MessageWriteAlloc{ data: stream })
 	}
 
 	// Note: we don't have to do a queueRender here because every

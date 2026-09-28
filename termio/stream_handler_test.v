@@ -656,6 +656,27 @@ fn test_color_query_response_mirrors_osc_terminator() ! {
 	assert (st as WriteSmall).slice().bytestr().ends_with('\x1b\\')
 }
 
+fn test_color_query_response_preserves_fixed_buffer_limit() ! {
+	mut handler, mut ctx := make_test_handler()
+	defer { ctx.t.deinit() }
+	handler.osc_color_report_format = .format_16_bit
+	mut requests := []osc.ColorRequest{cap: 64}
+	for _ in 0 .. 64 {
+		requests << osc.ColorRequest(osc.ColorRequestQuery{
+			target: osc.ColorTarget(osc.ColorTargetPalette{
+				index: 1
+			})
+		})
+	}
+
+	handler.color_operation(.osc_4, requests, .st) or {
+		assert err.msg() == 'OutOfMemory'
+		assert ctx.mailbox.spsc.queue.len() == 0
+		return
+	}
+	assert false, 'the fixed OSC color response buffer must reject oversized output'
+}
+
 fn test_kitty_color_query_response_mirrors_osc_terminator() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
@@ -667,8 +688,8 @@ fn test_kitty_color_query_response_mirrors_osc_terminator() ! {
 		terminator: .bel
 	})!
 	msg := ctx.mailbox.spsc.queue.pop() or { panic('expected Kitty color response') }
-	assert msg.kind() == .write_small
-	response := (msg as WriteSmall).slice().bytestr()
+	assert msg.kind() == .write_alloc
+	response := (msg as MessageWriteAlloc).data
 	assert response.starts_with('\x1b]21;1=rgb:')
 	assert response.ends_with('\a')
 }
