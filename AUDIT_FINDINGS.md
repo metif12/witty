@@ -593,6 +593,7 @@ below exist. Earlier versions of this document overstated the completed review.
 | OSC 7 and title validation diagnostics | Oversized window titles and every invalid OSC 7 boundary were silently ignored; hostname lookup errors were collapsed into an ordinary nonlocal host, and Windows entered URI/path handling that Ghostty explicitly marks unsupported. The empty-PWD reset also omitted the source's post-title invariant. | Restore the oversized-title, parse, scheme, missing-host, hostname-error, nonlocal-host, Windows, and successful-path diagnostics, preserve hostname lookup errors, and assert that an automatic title reset leaves `seen_title` false. |
 | stream-handler color response boundaries | OSC color queries accumulated into an unbounded V string instead of Ghostty's 1024-byte fixed allocator, dynamic foreground/background absence silently suppressed a reply instead of enforcing the source invariant, and Kitty OSC 21 replies selected the small-message arm rather than transferring their allocated writer buffer. Unsupported Kitty color keys were also silent. | Enforce the fixed response capacity before queueing any partial result, retain the required-color assertions and cursor fallback, send Kitty query output through `write_alloc`, and restore all three unsupported-key warnings. |
 | stream-handler cursor saturation and APC boundary | Relative row/column actions widened the operands before ordinary addition instead of preserving Ghostty's `u16` saturating `+|` intermediate in both live and readonly handlers. Terminal clamping made current endpoints equivalent, but the translated operation itself differed. Kitty graphics response encoding also lost the caller's 1024-byte fixed-writer error boundary and weakened its source length guard. | Saturate both relative coordinates at `u16` maximum before terminal clamping, reject graphics encodings beyond the pinned stack capacity, and retain the exact greater-than-two emission condition. |
+| stale Keybind formatter coverage gap | The Keybind test section still claimed the configuration formatter was untranslated and omitted the pinned single, multiple, nested, table-only, and mixed root/table formatter cases, even though the formatter implementation had since been restored. | Remove the obsolete scope claim and translate all five pinned Keybind formatting tests against the live generic entry formatter. |
 
 ## Focused behavior reviewed
 
@@ -845,11 +846,12 @@ Open issues seen while verifying:
 Repository-wide test state, for honesty about what the gates actually cover:
 
 - `v` and `v -prod` both build, and the full test suite passes.
-- One toolchain caveat: `cli/actions_test.v` needs `v -g test`. Without `-g`
-  the V compiler segfaults inside its own `transform.Transformer.merge_worker`
-  while compiling `Config.format_config`, which walks a very large struct at
-  comptime. The same code compiles in a full-project build, so this only
-  affects small compilation units. The 16 tests pass under `-g`.
+- The earlier small-unit compiler crash while compiling `Config.format_config`
+  no longer reproduces with the pinned fallback compiler: the full
+  `configpkg_test.v` unit, including the restored Keybind formatter cases,
+  passes without `-g`. Adding `-g` currently exposes a separate fallback
+  compiler bug that places generated C `#line` directives after expressions;
+  the normal project gates do not use that mode.
 - Test files that report "compilation failed" with no diagnostic are worth
   treating as suspicious rather than as runner noise: two such reports this
   session turned out to be a V compiler segfault, one of them masking a real

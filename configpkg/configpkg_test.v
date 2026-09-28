@@ -2547,9 +2547,7 @@ fn test_compat_window_new_window() {
 }
 
 // --- Keybinds ---
-// Translations of Config.zig's `Keybinds` tests. Tests that require the config
-// formatter subsystem (formatEntry/formatConfig) are omitted because that
-// subsystem is not translated in witty.
+// Translations of Config.zig's `Keybinds` tests.
 
 // Config.zig: Keybinds "parseCLI"
 fn test_keybinds_parse_cli() {
@@ -2558,6 +2556,31 @@ fn test_keybinds_parse_cli() {
 	set.parse_cli('shift+a=csi:hello')!
 	// Same trigger, so the second overwrites the first.
 	assert set.set.bindings.len == 1
+}
+
+// Config.zig: Keybinds "formatConfig single"
+fn test_keybinds_format_config_single() {
+	mut keybinds := Keybinds{}
+	keybinds.parse_cli('shift+a=csi:hello')!
+	assert format_entry('a', keybinds) == 'a = shift+a=csi:hello\n'
+}
+
+// Config.zig: Keybinds "formatConfig multiple items"
+fn test_keybinds_format_config_multiple_items() {
+	mut keybinds := Keybinds{}
+	keybinds.parse_cli('ctrl+z>1=goto_tab:1')!
+	keybinds.parse_cli('ctrl+z>2=goto_tab:2')!
+	assert format_entry('keybind', keybinds) == 'keybind = ctrl+z>1=goto_tab:1\nkeybind = ctrl+z>2=goto_tab:2\n'
+}
+
+// Config.zig: Keybinds "formatConfig multiple items nested"
+fn test_keybinds_format_config_multiple_items_nested() {
+	mut keybinds := Keybinds{}
+	keybinds.parse_cli('ctrl+a>ctrl+b>n=new_window')!
+	keybinds.parse_cli('ctrl+a>ctrl+b>w=close_window')!
+	keybinds.parse_cli('ctrl+a>ctrl+c>t=new_tab')!
+	keybinds.parse_cli('ctrl+b>ctrl+d>a=previous_tab')!
+	assert format_entry('a', keybinds) == 'a = ctrl+a>ctrl+b>n=new_window\na = ctrl+a>ctrl+b>w=close_window\na = ctrl+a>ctrl+c>t=new_tab\na = ctrl+b>ctrl+d>a=previous_tab\n'
 }
 
 // Config.zig: Keybinds "parseCLI table definition"
@@ -2772,6 +2795,23 @@ fn test_keybinds_equal_with_tables_different_bindings() {
 	keybinds2.parse_cli('foo/shift+b=paste_from_clipboard')!
 
 	assert !keybinds1.equal(keybinds2)
+}
+
+// Config.zig: Keybinds "formatEntry with tables"
+fn test_keybinds_format_entry_with_tables() {
+	mut keybinds := Keybinds{}
+	keybinds.parse_cli('foo/shift+a=csi:hello')!
+	assert format_entry('keybind', keybinds) == 'keybind = foo/shift+a=csi:hello\n'
+}
+
+// Config.zig: Keybinds "formatEntry with tables and root set"
+fn test_keybinds_format_entry_with_tables_and_root_set() {
+	mut keybinds := Keybinds{}
+	keybinds.parse_cli('shift+b=csi:world')!
+	keybinds.parse_cli('foo/shift+a=csi:hello')!
+	output := format_entry('keybind', keybinds)
+	assert output.contains('keybind = shift+b=csi:world\n')
+	assert output.contains('keybind = foo/shift+a=csi:hello\n')
 }
 
 // Config.zig: Keybinds "parseCLI clear clears tables"
