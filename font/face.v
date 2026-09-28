@@ -1305,9 +1305,7 @@ pub fn (self Face) has_color() bool {
 
 // is_color_glyph returns true if the given glyph ID is colorized.
 pub fn (self &Face) is_color_glyph(glyph_id u32) bool {
-	if isnil(self.ft_mutex) {
-		return false
-	}
+	assert !isnil(self.ft_mutex)
 	self.ft_mutex.lock()
 	defer {
 		self.ft_mutex.unlock()
@@ -1324,7 +1322,7 @@ pub fn (self &Face) is_color_glyph(glyph_id u32) bool {
 	flags.set_no_svg(true)
 	self.face.load_glyph(glyph_id, flags) or { return false }
 
-	glyph := self.face.glyph() or { return false }
+	glyph := self.face.glyph() or { panic('FreeType returned no glyph slot') }
 	return glyph.bitmap.pixel_mode == freetype.pixel_mode_bgra
 }
 
@@ -1392,22 +1390,20 @@ fn get_glyph_size(glyph &freetype.GlyphSlotRec) GlyphSize {
 // render_glyph renders a glyph using the glyph index. The rendered glyph
 // is stored in the given texture atlas.
 pub fn (self Face) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOptions) !Glyph {
-	if isnil(self.ft_mutex) {
-		return error('font face is not initialized')
-	}
+	assert !isnil(self.ft_mutex)
 	self.ft_mutex.lock()
 	defer {
 		self.ft_mutex.unlock()
 	}
 
 	self.face.load_glyph(glyph_index, self.glyph_load_flags(opts.constraint.does_anything()))!
-	mut glyph := self.face.glyph() or { return error('FreeType returned no glyph slot') }
+	mut glyph := self.face.glyph() or { panic('FreeType returned no glyph slot') }
 
 	if self.synthetic.bold() && glyph.format == freetype.glyph_format_outline {
-		size_metrics := self.face.size_metrics() or { return error('FreeType face has no size metrics') }
+		size_metrics := self.face.size_metrics() or { panic('FreeType face has no size metrics') }
 		amount := i64(math.ceil(f64(size_metrics.height) * (64.0 / 2048.0)))
 		freetype.outline_embolden(mut glyph.outline, amount)
-		glyph = self.face.glyph() or { return error('FreeType returned no glyph slot') }
+		glyph = self.face.glyph() or { panic('FreeType returned no glyph slot') }
 	}
 
 	rect := get_glyph_size(&glyph)
@@ -1470,7 +1466,7 @@ pub fn (self Face) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOpt
 				})
 			}
 			self.face.render_glyph(if self.load_flags.monochrome() { .mono } else { .normal })!
-			glyph = self.face.glyph() or { return error('FreeType returned no rendered glyph') }
+			glyph = self.face.glyph() or { panic('FreeType returned no rendered glyph') }
 			freetype.bitmap_convert(self.lib.lib, &glyph.bitmap, mut bitmap, 1)!
 			bitmap_left = glyph.bitmap_left
 			bitmap_top = glyph.bitmap_top
@@ -1585,7 +1581,7 @@ pub fn (self Face) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOpt
 // units_to_px_y converts font design units to pixels based on the
 // y-scale factor of the current font size.
 fn (self Face) units_to_px_y(units i32) i32 {
-	metrics := self.face.size_metrics() or { return 0 }
+	metrics := self.face.size_metrics() or { panic('FreeType face has no size metrics') }
 	return i32(freetype.mul_fix(
 		units,
 		i32(metrics.y_scale),
@@ -1611,7 +1607,7 @@ fn (self Face) units_to_px_y(units i32) i32 {
 // IC width is measured from '水' (U+6C34).
 pub fn (mut self Face) get_metrics() FaceMetrics {
 	face := self.face
-	size_metrics := face.size_metrics() or { return FaceMetrics{} }
+	size_metrics := face.size_metrics() or { panic('FreeType face has no size metrics') }
 
 	// This code relies on this assumption, and it should always be
 	// true since we don't do any non-uniform scaling on the font ever.
@@ -1624,15 +1620,12 @@ pub fn (mut self Face) get_metrics() FaceMetrics {
 	// If we have no head, but it is a scalable face, take the UPM from
 	// FreeType's units_per_EM, otherwise we'll assume that UPM == PPEM.
 	head := face.get_sfnt_table_head()
-	mut units_per_em := if h := head {
+	units_per_em := if h := head {
 		h.units_per_em
 	} else if is_scalable {
 		face.units_per_em()
 	} else {
 		size_metrics.y_ppem
-	}
-	if units_per_em == 0 {
-		units_per_em = 1
 	}
 	px_per_em := f64(size_metrics.y_ppem)
 	px_per_unit := px_per_em / f64(units_per_em)
@@ -1732,21 +1725,20 @@ pub fn (mut self Face) get_metrics() FaceMetrics {
 	mut cell_width := f64(0)
 	mut ascii_top := f64(0)
 	mut ascii_bottom := f64(0)
-	if !isnil(self.ft_mutex) {
-		self.ft_mutex.lock()
-		for cp := u32(32); cp < 127; cp++ {
-			if glyph_index := face.get_char_index(cp) {
-				face.load_glyph(glyph_index, self.glyph_load_flags(false)) or { continue }
-				glyph := face.glyph() or { continue }
-				advance := freetype.f26dot6_to_f64(glyph.advance.x)
-				cell_width = math.max(cell_width, advance)
-				rect := get_glyph_size(&glyph)
-				ascii_top = math.max(ascii_top, rect.y + rect.height)
-				ascii_bottom = math.min(ascii_bottom, rect.y)
-			}
+	assert !isnil(self.ft_mutex)
+	self.ft_mutex.lock()
+	for cp := u32(32); cp < 127; cp++ {
+		if glyph_index := face.get_char_index(cp) {
+			face.load_glyph(glyph_index, self.glyph_load_flags(false)) or { continue }
+			glyph := face.glyph() or { panic('FreeType returned no glyph slot') }
+			advance := freetype.f26dot6_to_f64(glyph.advance.x)
+			cell_width = math.max(cell_width, advance)
+			rect := get_glyph_size(&glyph)
+			ascii_top = math.max(ascii_top, rect.y + rect.height)
+			ascii_bottom = math.min(ascii_bottom, rect.y)
 		}
-		self.ft_mutex.unlock()
 	}
+	self.ft_mutex.unlock()
 	if cell_width == 0.0 {
 		cell_width = freetype.f26dot6_to_f64(size_metrics.max_advance)
 	}
@@ -1805,30 +1797,26 @@ pub fn (mut self Face) get_metrics() FaceMetrics {
 }
 
 fn (self &Face) measure_glyph_height(cp u32) ?f64 {
-	if isnil(self.ft_mutex) {
-		return none
-	}
+	assert !isnil(self.ft_mutex)
 	self.ft_mutex.lock()
 	defer {
 		self.ft_mutex.unlock()
 	}
 	glyph_index := self.face.get_char_index(cp) or { return none }
 	self.face.load_glyph(glyph_index, self.glyph_load_flags(false)) or { return none }
-	glyph := self.face.glyph() or { return none }
+	glyph := self.face.glyph() or { panic('FreeType returned no glyph slot') }
 	return get_glyph_size(&glyph).height
 }
 
 fn (self &Face) measure_ic_width() ?f64 {
-	if isnil(self.ft_mutex) {
-		return none
-	}
+	assert !isnil(self.ft_mutex)
 	self.ft_mutex.lock()
 	defer {
 		self.ft_mutex.unlock()
 	}
 	glyph_index := self.face.get_char_index(0x6c34) or { return none }
 	self.face.load_glyph(glyph_index, self.glyph_load_flags(false)) or { return none }
-	glyph := self.face.glyph() or { return none }
+	glyph := self.face.glyph() or { panic('FreeType returned no glyph slot') }
 	advance := freetype.f26dot6_to_f64(glyph.advance.x)
 	glyph_width := get_glyph_size(&glyph).width
 	if glyph_width > advance {
