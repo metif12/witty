@@ -267,10 +267,11 @@ fn surface_title_dialog_ready_cb(source GObject, result GAsyncResult, data voidp
 // Mirrors the `Common(Self, Private)` ref helpers.
 
 // ref increments the reference count of the dialog GObject. Mirrors `ref`.
-pub fn (mut self SurfaceTitleDialog) ref() {
+pub fn (mut self SurfaceTitleDialog) ref() &SurfaceTitleDialog {
 	if !isnil(self.obj) {
 		object_ref(self.obj)
 	}
+	return self
 }
 
 // unref decrements the reference count of the dialog GObject. Mirrors `unref`.

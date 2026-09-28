@@ -186,10 +186,11 @@ pub fn (mut self Dialog) set_body(body &char) {
 // Mirrors the `Common(Self, null)` ref helpers.
 
 // ref increments the reference count of the Dialog GObject. Mirrors `ref`.
-pub fn (mut self Dialog) ref() {
+pub fn (mut self Dialog) ref() &Dialog {
 	if !isnil(self.obj) {
 		object_ref(self.obj)
 	}
+	return self
 }
 
 // unref decrements the reference count of the Dialog GObject. Mirrors `unref`.

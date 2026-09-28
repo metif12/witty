@@ -106,10 +106,11 @@ pub fn debug_warning_new() &DebugWarning {
 }
 
 // ref increments the reference count of the DebugWarning GObject.
-pub fn (mut self DebugWarning) ref() {
+pub fn (mut self DebugWarning) ref() &DebugWarning {
 	if !isnil(self.obj) {
 		object_ref(self.obj)
 	}
+	return self
 }
 
 // unref decrements the reference count of the DebugWarning GObject.
