@@ -840,7 +840,7 @@ fn parse_input(data []u8) ?ParsedInput {
 	mut state := unicode.BreakState.default
 	for i in 1 .. runes.len {
 		current := u32(runes[i])
-		if current < 0x20 || current == 0x7f || unicode.grapheme_break(previous, current, &state) {
+		if vaxis_grapheme_break(previous, current, &state) {
 			break
 		}
 		consumed += runes[i].str().len
@@ -1846,7 +1846,7 @@ pub fn (mut t TextInput) draw_with_style(width int, style Style) TextInputDraw {
 			i++
 			continue
 		}
-		w := int(default_grapheme_width(grapheme))
+		w := int(gwidth(grapheme, .wcwidth))
 		if col + w >= width {
 			cells << TextInputCell{ col: u16(width - 1), text: '…' }
 			break
@@ -1872,7 +1872,7 @@ pub fn (mut t TextInput) draw_with_style(width int, style Style) TextInputDraw {
 			i++
 			continue
 		}
-		w := int(default_grapheme_width(grapheme))
+		w := int(gwidth(grapheme, .wcwidth))
 		if col + w > width {
 			cells << TextInputCell{ col: u16(width - 1), text: '…' }
 			break
@@ -1905,7 +1905,7 @@ pub fn (t &TextInput) width_to_cursor() int {
 			break
 		}
 		if i >= int(t.draw_offset) {
-			width += int(default_grapheme_width(first[offset..offset + length]))
+			width += int(gwidth(first[offset..offset + length], .wcwidth))
 		}
 		offset += length
 		i++
@@ -1913,23 +1913,132 @@ pub fn (t &TextInput) width_to_cursor() int {
 	return width
 }
 
-// The current terminal adapter has no negotiated vaxis width method, so it
-// uses the default wcwidth path over the translated Unicode property table.
-fn default_grapheme_width(grapheme string) u16 {
-	mut width := u16(0)
-	for cp in grapheme.runes() {
-		value := u32(cp)
-		if value == 0 || value < 0x20 || (value >= 0x7f && value < 0xa0)
-			|| value == 0x00ad || value == 0x200b || value == 0x200c || value == 0x200d
-			|| value == 0x2060 || value == 0x034f || value == 0xfeff
-			|| (value >= 0x180b && value <= 0x180d)
-			|| (value >= 0xfe00 && value <= 0xfe0f)
-			|| (value >= 0xe0100 && value <= 0xe01ef) {
-			continue
-		}
-		width += u16(unicode.get(value).width())
+// GWidthMethod is the pinned vaxis width strategy selected by terminal
+// capabilities. TextInput starts with wcwidth, the source default.
+pub enum GWidthMethod as u8 {
+	unicode
+	wcwidth
+	no_zwj
+}
+
+// These merged ranges are generated from vaxis' locked uucode UCD files.
+const pinned_width_data = $embed_file('@VMODROOT/vaxis/width_data.bin').to_bytes()
+
+fn width_data_u32(index int) u32 {
+	offset := index * 4
+	return u32(pinned_width_data[offset]) | (u32(pinned_width_data[offset + 1]) << 8)
+		| (u32(pinned_width_data[offset + 2]) << 16) | (u32(pinned_width_data[offset + 3]) << 24)
+}
+
+fn width_property(cp u32, group int) bool {
+	mut offset := 4
+	for previous in 0 .. group {
+		offset += int(width_data_u32(previous)) * 2
 	}
-	return width
+	mut range_left := 0
+	mut range_right := int(width_data_u32(group))
+	for range_left < range_right {
+		middle := (range_left + range_right) / 2
+		start := width_data_u32(offset + middle * 2)
+		range_end := width_data_u32(offset + middle * 2 + 1)
+		if cp < start {
+			range_right = middle
+		} else if cp > range_end {
+			range_left = middle + 1
+		} else {
+			return true
+		}
+	}
+	return false
+}
+
+fn eaw_to_width(cp u32) int {
+	if cp == 0 {
+		return 0
+	}
+	if cp < 32 || (cp >= 0x7f && cp < 0xa0) {
+		return -1
+	}
+	if width_property(cp, 1) || cp == 0x00ad || cp == 0x200b || cp == 0x200c
+		|| cp == 0x200d || cp == 0x2060 || cp == 0x034f || cp == 0xfeff
+		|| (cp >= 0x180b && cp <= 0x180d) || (cp >= 0xfe00 && cp <= 0xfe0f)
+		|| (cp >= 0xe0100 && cp <= 0xe01ef) {
+		return 0
+	}
+	return if width_property(cp, 0) { 2 } else { 1 }
+}
+
+// gwidth translates vaxis/src/gwidth.zig using the locked uucode properties.
+pub fn gwidth(value string, method GWidthMethod) u16 {
+	match method {
+		.wcwidth {
+			mut total := u16(0)
+			for cp in value.runes() {
+				codepoint := u32(cp)
+				w := if codepoint >= 0x1f3fb && codepoint <= 0x1f3ff { 2 } else { eaw_to_width(codepoint) }
+				if w > 0 {
+					total += u16(w)
+				}
+			}
+			return total
+		}
+		.no_zwj {
+			mut total := u16(0)
+			for part in value.split('\u200d') {
+				total += gwidth(part, .unicode)
+			}
+			return total
+		}
+		.unicode {
+			mut total := u16(0)
+			mut offset := 0
+			for offset < value.len {
+				length := first_grapheme_byte_length(value[offset..])
+				if length == 0 {
+					break
+				}
+				grapheme := value[offset..offset + length]
+				offset += length
+				mut width := 0
+				mut emoji_vs := false
+				mut text_vs := false
+				mut emoji_presentation := false
+				mut ri_count := 0
+				for cp in grapheme.runes() {
+					codepoint := u32(cp)
+					if codepoint == 0xfe0f {
+						emoji_vs = true
+						continue
+					}
+					if codepoint == 0xfe0e {
+						text_vs = true
+						continue
+					}
+					if width_property(codepoint, 2) {
+						emoji_presentation = true
+					}
+					if codepoint >= 0x1f1e6 && codepoint <= 0x1f1ff {
+						ri_count++
+					}
+					w := eaw_to_width(codepoint)
+					if w > width {
+						width = w
+					}
+				}
+				if text_vs {
+					if width < 1 {
+						width = 1
+					}
+				} else if emoji_vs || emoji_presentation || ri_count == 2 {
+					if width < 2 {
+						width = 2
+					}
+				}
+				total += u16(width)
+			}
+			return total
+		}
+	}
 }
 
 pub fn (mut t TextInput) clear_and_free() {
@@ -2036,13 +2145,41 @@ fn first_grapheme_byte_length(text string) int {
 	mut state := unicode.BreakState.default
 	for i in 1 .. runes.len {
 		current := u32(runes[i])
-		if current < 0x20 || current == 0x7f || unicode.grapheme_break(previous, current, &state) {
+		if vaxis_grapheme_break(previous, current, &state) {
 			break
 		}
 		length += runes[i].str().len
 		previous = current
 	}
 	return length
+}
+
+// The two pinned uucode revisions share Unicode 16 data, but Ghostty tailors
+// emoji modifier clusters while vaxis follows GraphemeBreakProperty=Extend.
+// Map those classes to vaxis' source classes in the shared transition table.
+fn vaxis_grapheme_break(cp1 u32, cp2 u32, state &unicode.BreakState) bool {
+	if cp1 == 0x0d && cp2 == 0x0a {
+		unsafe { *state = .default }
+		return false
+	}
+	if cp1 == 0x0d || cp1 == 0x0a || cp2 == 0x0d || cp2 == 0x0a
+		|| width_property(cp1, 3) || width_property(cp2, 3) {
+		unsafe { *state = .default }
+		return true
+	}
+	gb1 := unicode.get(cp1).grapheme_break()
+	gb2 := unicode.get(cp2).grapheme_break()
+	from := match gb1 {
+		.emoji_modifier_base { u32(0x1f600) }
+		.emoji_modifier { u32(0x0301) }
+		else { cp1 }
+	}
+	to := match gb2 {
+		.emoji_modifier_base { u32(0x1f600) }
+		.emoji_modifier { u32(0x0301) }
+		else { cp2 }
+	}
+	return unicode.grapheme_break(from, to, state)
 }
 
 fn last_grapheme_byte_length(text string) int {

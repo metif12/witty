@@ -9,6 +9,7 @@ below exist. Earlier versions of this document overstated the completed review.
 
 | Area | Bug | Fix |
 |---|---|---|
+| vaxis grapheme width | The text-input draw adapter used Ghostty's Unicode width table, and the compatibility layer had no translation of vaxis' three `gwidth.Method` strategies. The two pinned uucode revisions share Unicode 16 data but differ on emoji modifier grapheme boundaries. | Generate vaxis' East Asian width, mark, emoji-presentation, and control ranges from its locked uucode UCD; translate `unicode`, `wcwidth`, and `no_zwj` width rules and adapt emoji modifier boundaries to vaxis' untailored iterator for parser and widget text. Verify the generated binary is reproducible from the pinned UCD. |
 | vaxis text-input drawing | The gap-buffer editor had no translation of `TextInput.draw`, `drawWithStyle`, or `widthToCursor`. The theme search box instead printed the entire buffer from the wrong interior column, counted runes instead of cell widths for the cursor, and never scrolled or drew edge ellipses. | Translate the widget's scroll offset, first/second-half cell writes, cursor position, and ellipsis rules into cell commands for the existing ANSI adapter; draw those cells in the search box's interior and test narrow, moved-cursor, wide, and combining-grapheme cases. |
 | Theme preview terminal color scheme | `Preview.init` and `run` guessed dark/light from `COLORFGBG`, although pinned vaxis starts in light mode and changes only after a terminal report. Witty neither queried support for color-scheme updates nor subscribed after receiving that capability. Its session wrapper also used OSC 0 with BEL and an incomplete mouse mode sequence. | Start light, query DECRQM 2031, subscribe with the pinned request/mode sequences when support is reported, reset the subscription on exit, and restore vaxis' OSC 2/ST title and mouse mode sequences. |
 | Theme preview rendering | The preview omitted the pinned cursor and selection swatches, most styled code segments, the second shell prompt component, diagnostic formatting, and continuous lorem text; it also compressed the six-row palette into five rows and erased the source iterator's empty tokens. | Restore Ghostty's color, sample, palette, diagnostic, and repeated-text layout using the translated ANSI renderer, retaining empty split tokens and the source's explicit-color requirement for optional cursor/selection values. |
@@ -694,10 +695,11 @@ none, browser, action, ipc. dependencies: zf 0.10.3 ranking/highlighting.
   synchronized output, pixel-mouse translation, and threaded TTY event loop.
   The preview now queries and subscribes to color-scheme updates, but its
   session/render path is not yet a complete translation of the pinned vaxis
-  `Vaxis`, `Loop`, and `Tty` implementations. The translated text-input draw
-  path currently measures graphemes using Ghostty's translated Unicode width
-  table; pinned vaxis instead uses its own uucode version and negotiated
-  `gwidth.Method`, so rare width cases and capability changes remain open.
+  `Vaxis`, `Loop`, and `Tty` implementations. Pinned vaxis width data and all
+  three `gwidth.Method` algorithms are now available, but the ANSI adapter
+  still uses the source's default `wcwidth` method because terminal width
+  capabilities are not negotiated or stored. The preview's width method may
+  therefore differ after a terminal reports Unicode width support.
 
 These are confirmed structural boundaries or larger refactors. The absence of
 an item here does not mean its full module has been certified yet.

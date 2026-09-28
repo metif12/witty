@@ -337,6 +337,19 @@ fn test_key_decoder_preserves_first_grapheme() {
 	combining := parsed_key_event('a\u0301')
 	assert combining.codepoint == multicodepoint
 	assert combining.text or { '' } == 'a\u0301'
+	modifier_input := 'a🏿b'
+	modifier := parse_input(modifier_input.bytes()) or { panic('modifier grapheme should decode') }
+	assert modifier.consumed == 'a🏿'.len
+	modifier_event := modifier.event or { panic('modifier grapheme should produce an event') }
+	match modifier_event {
+		Key {
+			assert modifier_event.codepoint == multicodepoint
+			assert modifier_event.text or { '' } == 'a🏿'
+		}
+		else {
+			assert false
+		}
+	}
 }
 
 fn test_key_decoder_handles_sgr_mouse() {
@@ -622,4 +635,29 @@ fn test_text_input_draw_counts_wide_and_combining_graphemes() {
 	assert drawn.cursor_col == 3
 	assert drawn.cells[0] == TextInputCell{ col: 0, text: '界' }
 	assert drawn.cells[1] == TextInputCell{ col: 2, text: 'e\u0301' }
+}
+
+fn test_pinned_vaxis_gwidth_methods_and_uucode_properties() {
+	assert pinned_width_data.len == 4616
+	assert width_data_u32(0) == 122
+	assert width_data_u32(1) == 354
+	assert width_data_u32(2) == 80
+	assert width_data_u32(3) == 19
+	assert gwidth('a', .unicode) == 1
+	assert gwidth('a', .wcwidth) == 1
+	assert gwidth('a', .no_zwj) == 1
+	assert gwidth('👩‍🚀', .unicode) == 2
+	assert gwidth('👩‍🚀', .wcwidth) == 4
+	assert gwidth('👩‍🚀', .no_zwj) == 4
+	assert gwidth('❤️', .unicode) == 2
+	assert gwidth('❤️', .wcwidth) == 1
+	assert gwidth('🇺🇸', .unicode) == 2
+	assert gwidth('🇺🇸', .wcwidth) == 2
+	assert gwidth('\u200b', .wcwidth) == 0
+	assert gwidth('e\u0301', .wcwidth) == 1
+	assert gwidth('👋🏿', .wcwidth) == 4
+	assert gwidth('a🏿', .unicode) == 2
+	assert gwidth('☝🏿', .unicode) == 2
+	assert first_grapheme_byte_length('a🏿') == 'a🏿'.len
+	assert first_grapheme_byte_length('\r\n') == 2
 }
