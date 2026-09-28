@@ -3381,6 +3381,13 @@ pub fn (self &SurfaceWidget) toggle_maximize() {
 	}
 }
 
+// toggle_command_palette asks the containing window to toggle its command
+// palette. Mirrors `Surface.toggleCommandPalette`.
+pub fn (self &SurfaceWidget) toggle_command_palette() bool {
+	return C.gtk_widget_activate_action_variant(self.widget, c'win.toggle-command-palette',
+		unsafe { nil })
+}
+
 // control_inspector controls the terminal inspector window. Mirrors
 // Surface.controlInspector.
 pub fn (mut self SurfaceWidget) control_inspector(value apprt.InspectorAction) bool {

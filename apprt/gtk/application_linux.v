@@ -2129,8 +2129,7 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 		}
 		.toggle_command_palette {
 			surface := surface_from_target(target) or { return false }
-			return C.gtk_widget_activate_action_variant(surface.widget,
-				c'win.toggle-command-palette', unsafe { nil })
+			return surface.toggle_command_palette()
 		}
 		.toggle_split_zoom {
 			if target is apprt.AppTarget {
