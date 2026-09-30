@@ -61,3 +61,15 @@ pub fn (image ImageUnmanaged) row_byte_size() usize {
 pub fn (image ImageUnmanaged) is_animation() bool {
 	return image.animation.frames.len > 0
 }
+
+pub fn (image &ImageUnmanaged) flip_vertically() ! {
+	flip_vertically(&image.pixels, image.height)!
+}
+
+pub fn (image &ImageUnmanaged) crop(area Box) !ImageUnmanaged {
+	return crop(image, area)
+}
+
+pub fn (image &ImageUnmanaged) iterator() PixelStorageIterator {
+	return PixelStorageIterator.init(&image.pixels)
+}

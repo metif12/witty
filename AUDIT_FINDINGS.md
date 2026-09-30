@@ -9,6 +9,7 @@ below exist. Earlier versions of this document overstated the completed review.
 
 | Area | Bug | Fix |
 |---|---|---|
+| zigimg image editing and pixel iteration | The image foundation lacked pinned `ImageEditor` and `PixelStorageIterator`. | Translate crop-box clamping, independent cropped pixel/palette storage, in-place vertical row swaps, and pointer-backed pixel iteration across every storage variant. Preserve straight alpha, packed channel bit order, the iterator's initial length and live storage pointer, and the editor's animation behavior. Five image test files, native checks against the unmodified locked Zig dependency, and Windows DLL cross compilation pass. Allocator and representation limits remain below. |
 | zigimg image foundation and memory codecs | The locked vaxis image dependency had no V translation. | Translate all pixel-format words/storage variants, borrowed raw storage, indexed palette capacity/slices, memory streams, raw image construction, and QOI/farbfeld memory codecs. Preserve the exact pinned PNG writer, whose chunk-writing bodies are commented out and which emits only its signature. Native Zig reference execution verifies QOI/farbfeld bytes and PNG output/errors; three V test files and Windows DLL cross compilation pass. Remaining library/API and format coverage is listed below. |
 | vaxis fixed reader/parser storage | POSIX input accumulated in a dynamic pending buffer, Windows embedded ANSI input grew dynamically, CSI key text owned independent strings, and malformed OSC color/base64 reports silently lost the source errors. | Restore the 1,024-byte POSIX read buffer, pinned incomplete-sequence offset/read-count behavior, 128-byte Windows ANSI state, and public parser with borrowed input/CSI text. Translate the locked uucode UTF-8 DFA and unsigned parameter/base64 validation; propagate OSC errors on both live reader paths. Focused tests cover source buffer quirks, partial CSI scratch writes, malformed UTF-8 byte consumption, and report errors; the native PTY smoke and Windows framework DLL cross compilation pass. |
 | vaxis input reader thread creation | V's `spawn` panicked on native thread creation failures, used a different default stack, and reader I/O errors were silently discarded. | Restore fallible POSIX/Windows thread creation with the source's 16 MiB default stack, native argument ownership, join/handle cleanup, allocation/resource error results, and reader-error reporting. The preview and framework propagate start failures. Native PTY tests cover idempotent start and status-query shutdown; the framework PTY smoke passes and its Windows DLL cross compiles. |
@@ -761,13 +762,13 @@ an item here does not mean its full module has been certified yet.
 - **zigimg image dependency:** The translation now pins
   `d7b7ab0ba0899643831ef042bd73289510b39906`, with all 24 pixel-format tags,
   storage variants, raw initialization/slices, palette capacity operations,
-  memory streams, and QOI/farbfeld codecs. The source PNG writer is translated
+  memory streams, QOI/farbfeld codecs, image editing, and pixel iteration. The source PNG writer is translated
   as it actually exists: it emits only the eight-byte signature because its
   chunk-writing bodies are commented out. A native Zig 0.15.2 reference harness
   verifies that behavior and QOI/farbfeld bytes without modifying the source.
   PNG decoding and the other format decoders, automatic format dispatch, file
   and bit streams, conversions/quantization, full color convenience methods,
-  image editing, and the complete managed/unmanaged image API remain open.
+  and the complete managed/unmanaged image API remain open.
   Arrays use GC ownership and V length fields in place of allocator slices;
   allocation failures are not reproduced. Sub-byte scalar fields/indices use
   bytes or backing words, sum variants have named V wrappers, and nested
@@ -963,9 +964,10 @@ exercised on this macOS host. The Metal build compiler is absent here
 (`xcrun --find metal` fails), so the remaining metallib build divergence
 cannot be validated on this host yet.
 
-All three zigimg V test files pass. The image dependency DLL cross compiles
+All five zigimg V test files pass. The image dependency DLL cross compiles
 with MinGW, and the unmodified locked Zig dependency passes the standalone
-QOI/farbfeld/PNG reference harness in `zigimg/verify_reference.zig`. The harness
+QOI/farbfeld/PNG, editing, and all-format pixel iteration reference harness in
+`zigimg/verify_reference.zig`. The harness
 uses Zig 0.15.2 targeting macOS 14.0 to avoid native linking failures against
 this host's newer SDK. These checks do not exercise a Windows runtime.
 
