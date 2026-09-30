@@ -66,6 +66,9 @@ pub fn (self &ThemeListElement) to_uri() string {
 	}.str()
 }
 
+// The terminal event subscription from pinned cli/list_themes.zig.
+type PreviewInputEvent = vaxis.Key | vaxis.Mouse | vaxis.ColorScheme | vaxis.Winsize
+
 // Event is the union of possible input events for the TUI preview.
 pub type Event = KeyPressEvent | MouseEvent | ColorSchemeEvent | WinsizeEvent
 
@@ -514,10 +517,10 @@ pub fn (mut self Preview) run() ! {
 	defer {
 		tty.write(vx.deinit()) or {}
 	}
-	mut loop := vaxis.InputLoop.new(mut tty, mut vx)
+	mut loop := vaxis.Loop.new[PreviewInputEvent](mut tty, mut vx)
 	loop.init()!
-	loop.start()
-	defer { loop.deinit(&vx) }
+	loop.start()!
+	defer { loop.deinit() }
 	tty.write(vx.enter_alt_screen())!
 	tty.write(vx.set_title('👻 Ghostty Theme Preview 👻'))!
 	vx.query_terminal(mut tty, 1_000_000_000)!
@@ -548,13 +551,12 @@ pub fn (mut self Preview) run() ! {
 	}
 }
 
-fn (mut self Preview) update_from_vaxis(event vaxis.InputEvent) ! {
+fn (mut self Preview) update_from_vaxis(event PreviewInputEvent) ! {
 	match event {
 		vaxis.Key { self.update(Event(KeyPressEvent{ key: event }))! }
 		vaxis.Mouse { self.update(Event(MouseEvent{ mouse: event }))! }
 		vaxis.ColorScheme { self.update(Event(ColorSchemeEvent{ scheme: event.scheme }))! }
 		vaxis.Winsize { self.update(Event(WinsizeEvent{ winsize: event }))! }
-		else {}
 	}
 }
 

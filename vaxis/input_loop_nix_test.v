@@ -1,6 +1,7 @@
 module vaxis
 
 import time
+import term.termios
 
 #include <unistd.h>
 #include <signal.h>
@@ -16,16 +17,87 @@ fn C.openpty(master &int, slave &int, name voidptr, termp voidptr, winp voidptr)
 
 fn C.raise(signal_number int) int
 
-fn wake_input_loop_for_test(fd int) {
-	time.sleep(30 * time.millisecond)
-	mut bytes := [u8(`z`), u8(`\n`)]!
-	assert C.write(fd, &bytes[0], 2) == 2
+fn reply_device_status_for_test(fd int) {
+	mut output := []u8{}
+	mut buf := [1024]u8{}
+	for !output.bytestr().contains('\x1b[5n') {
+		count := C.read(fd, &buf[0], usize(buf.len))
+		assert count > 0
+		output << buf[..int(count)]
+	}
+	response := '\x1b[0n'.bytes()
+	assert C.write(fd, response.data, usize(response.len)) == response.len
+}
+
+fn make_pty_noncanonical_for_test(fd int) {
+	mut attributes := termios.Termios{}
+	assert termios.tcgetattr(fd, mut attributes) == 0
+	attributes.c_lflag &= termios.invert(termios.flag(int(C.ICANON) | int(C.ECHO)))
+	attributes.c_cc[int(C.VMIN)] = 1
+	attributes.c_cc[int(C.VTIME)] = 0
+	assert termios.tcsetattr(fd, C.TCSANOW, mut attributes) == 0
 }
 
 fn reply_da1_for_test(fd int) {
 	time.sleep(30 * time.millisecond)
 	response := '\x1b[?1;2c\n'.bytes()
 	assert C.write(fd, response.data, usize(response.len)) == response.len
+}
+
+struct PtyCustomEvent {
+	value u8
+}
+
+type PtyLoopEvent = Key | PtyCustomEvent
+
+fn test_generic_loop_reads_only_subscribed_events_and_intercepts_reports() {
+	mut master := 0
+	mut slave := 0
+	mut size := C.winsize{
+		ws_row: 24
+		ws_col: 80
+	}
+	assert C.openpty(&master, &slave, unsafe { nil }, unsafe { nil }, &size) == 0
+	defer {
+		C.close(master)
+		C.close(slave)
+	}
+	mut tty := Tty{
+		fd:      slave
+		pending: []u8{cap: 128}
+	}
+	mut vx := Vaxis.new(VaxisOptions{})
+	defer { _ = vx.deinit() }
+	mut loop := Loop.new[PtyLoopEvent](mut tty, mut vx)
+	loop_winsize_callback[PtyLoopEvent](voidptr(loop))
+	assert loop.try_event() == none
+	loop.start()!
+	loop.start()! // Starting an active reader is a source no-op.
+	loop.post_event(PtyLoopEvent(PtyCustomEvent{ value: 7 }))
+	vx.query_terminal_send()
+	// The initial and reported winsizes, focus event and DA1 must not be queued.
+	input := '\x1b[I\x1b[48;30;90t\x1b[?1;2cx\n'.bytes()
+	assert C.write(master, input.data, usize(input.len)) == input.len
+	custom := loop.next_event()
+	assert custom is PtyCustomEvent
+	if custom is PtyCustomEvent {
+		assert custom.value == 7
+	}
+	key := loop.next_event()
+	assert key is Key
+	if key is Key {
+		assert key.codepoint == `x`
+		assert (key.text or { panic('missing key text') }) == 'x'
+	}
+	assert vx.queries_done.load()
+	assert vx.state.in_band_resize
+	_ = loop.next_event() // canonical PTY newline
+	make_pty_noncanonical_for_test(slave)
+	waker := spawn reply_device_status_for_test(master)
+	loop.stop()
+	waker.wait()
+	assert loop.try_event() == none
+	loop.deinit()
 }
 
 fn test_input_loop_reads_and_queues_terminal_events() {
@@ -50,9 +122,10 @@ fn test_input_loop_reads_and_queues_terminal_events() {
 	}
 	C.witty_vaxis_install_winch()
 	defer { C.witty_vaxis_reset_winch() }
-	mut loop := InputLoop.new(mut tty, mut vx)
+	mut loop := Loop.new[InputEvent](mut tty, mut vx)
 	loop.init()!
-	loop.start()
+	loop.start()!
+	loop.start()! // Starting an active reader is a source no-op.
 	initial := loop.next_event()
 	assert initial is Winsize
 	if initial is Winsize {
@@ -98,9 +171,10 @@ fn test_input_loop_reads_and_queues_terminal_events() {
 	vx.query_terminal(mut tty, 20_000_000)!
 	assert time.ticks() - timeout_start >= 10
 	assert vx.queries_done.load()
-	waker := spawn wake_input_loop_for_test(master)
-	loop.stop(&vx)
+	make_pty_noncanonical_for_test(slave)
+	waker := spawn reply_device_status_for_test(master)
+	loop.stop()
 	waker.wait()
 	assert loop.try_event() == none
-	loop.deinit(&vx)
+	loop.deinit()
 }

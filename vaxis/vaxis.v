@@ -1599,7 +1599,7 @@ fn utf8_sequence_length(first u8) int {
 // their storage, replacing the source allocator field without changing the
 // cursor/gap behavior.
 pub struct TextInputBuffer {
-mut:
+pub mut:
 	buffer   []u8
 	cursor   usize
 	gap_size usize

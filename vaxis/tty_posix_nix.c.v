@@ -127,6 +127,21 @@ pub fn (tty &Tty) write(bytes string) ! {
 	}
 }
 
+// PosixTty.read: return after each raw read, including ignored parser reports.
+pub fn (tty &Tty) read(mut buf []u8) !usize {
+	for {
+		count := C.read(tty.fd, buf.data, usize(buf.len))
+		if count < 0 {
+			if C.errno == C.EINTR {
+				continue
+			}
+			return error('read /dev/tty failed')
+		}
+		return usize(count)
+	}
+	panic('unreachable')
+}
+
 fn (mut tty Tty) poll_posix() {
 	mut pfd := TtyPollFd{
 		fd:     tty.fd

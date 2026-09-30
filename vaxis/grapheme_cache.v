@@ -3,14 +3,12 @@ module vaxis
 // Pinned vaxis GraphemeCache.zig: a wrapping 8 KiB store for event key text.
 pub struct GraphemeCache {
 mut:
-	buf []u8
+	buf [8192]u8
 	idx usize
 }
 
 pub fn GraphemeCache.new() GraphemeCache {
-	return GraphemeCache{
-		buf: []u8{len: 8192}
-	}
+	return GraphemeCache{}
 }
 
 pub fn (mut cache GraphemeCache) put(bytes []u8) []u8 {
@@ -23,5 +21,6 @@ pub fn (mut cache GraphemeCache) put(bytes []u8) []u8 {
 		cache.buf[int(start) + i] = byte
 	}
 	cache.idx += usize(bytes.len)
-	return cache.buf[int(start)..int(cache.idx)]
+	// Direct fixed-array slices copy in V; this view borrows the source buffer.
+	return unsafe { (&cache.buf[0] + int(start)).vbytes(bytes.len) }
 }

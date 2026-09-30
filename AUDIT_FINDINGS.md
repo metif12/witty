@@ -9,6 +9,11 @@ below exist. Earlier versions of this document overstated the completed review.
 
 | Area | Bug | Fix |
 |---|---|---|
+| vaxis input reader thread creation | V's `spawn` panicked on native thread creation failures, used a different default stack, and reader I/O errors were silently discarded. | Restore fallible POSIX/Windows thread creation with the source's 16 MiB default stack, native argument ownership, join/handle cleanup, allocation/resource error results, and reader-error reporting. The preview and framework propagate start failures. Native PTY tests cover idempotent start and status-query shutdown; the framework PTY smoke passes and its Windows DLL cross compiles. |
+| vaxis widget framework and `boo` | The pinned `vxfw` package was absent and `boo` emitted ANSI frames from a polling/sleep loop. | Translate the framework event/command surface, surfaces, hit testing, focus and mouse routing, timers, retained application loop, and all 15 widgets. Route `boo` through `vxfw.App` and its fixed 4,100-cell widget buffer with borrowed cells, source span styles, centering/minimum-size layout, tick scheduling, and exit keys. Six focused framework test files and all-frame `boo` tests pass; a native PTY smoke test exercises startup queries, rendering, Escape exit, device-status shutdown, and restoration. GC/allocator and coordinate representation limits remain below. |
+| vaxis grapheme cache inline storage | The wrapping cache used a dynamic array to work around V's copying fixed-array slices, so its aggregate storage differed from pinned `GraphemeCache`. | Restore the inline `[8192]u8` and return explicit borrowed byte views. Tests pin aggregate size, overwrite-on-wrap, and an empty view at the end of the buffer. |
+| vaxis application event loop | The input loop was specialized to `InputEvent`, so applications could neither post their own event variants nor subscribe to a subset of terminal events as pinned `Loop(Event)` permits. | Translate `Loop[T]` over an application sum type, retaining the 512-entry queue and blocking/nonblocking operations; filter terminal variants at compile time while processing reports regardless of subscriptions. Initial and signal resizes use the same subscription filter, and the theme preview declares the source's four terminal event variants. Unit and PTY cases cover custom events, omitted variants, report interception, queue bounds, and multiple loop specializations. |
+| vaxis reader key text and shutdown boundary | The translated wrapping grapheme cache was not used by the input reader, Windows shutdown omitted the source's device-status query, and POSIX shutdown could remain blocked because `Tty.next_input` kept reading after a status reply that the parser discarded. Existing PTY tests supplied an application key to wake it. | Borrow subscribed key-press/release text from the reader's cache, preserving overwrite-on-wrap behavior; send the device-status query on both platforms; restore the POSIX raw-read boundary through `Tty.read` so an ignored reply lets the worker observe shutdown. PTY tests now reply to the actual query without adding application events. Platform reader files and an opaque thread argument avoid the pinned V compiler's generic platform-condition and thread-wrapper ABI defects. |
 | vaxis blocking capability query | Pinned `queryTerminal` sends the probe, waits up to the caller's deadline for the reader's DA1 wakeup, then enables features; Witty implemented this only as an 8 ms poll loop in the theme preview and drained application events into a side list while waiting. | Add a source-shaped `Vaxis.query_terminal` with a timed wake condition, signal it from DA1 interception, and let the preview use it so queued application events remain in the loop. PTY coverage checks an early DA1 wakeup before queue drainage and the timeout path. The condition/mutex are a V representation of the source futex and are released with the session. |
 | vaxis Windows console input | The loop read Windows input through V's `term.key_pressed`, losing native key releases, mouse, focus, and resize records; the session handler also discarded key-release events even if they were produced. | Translate pinned `WindowsTty.nextEvent`'s `ReadConsoleInputW` loop, UTF-16 pair and embedded ANSI handling, virtual-key map, button-state tracking, and mouse/focus/resize records; forward key releases through the Windows event handler. The Windows vaxis DLL cross compiles with MinGW. Witty's legacy `Tty.poll` path for untranslated `boo` remains below. |
 | vaxis Windows console session setup | The Windows `Tty` adapter never read or set console modes or the output code page, wrote through process `print`, and derived winsize from a generic terminal helper. Pinned `WindowsTty` saves the original modes/code page, enables raw window/mouse input and VT/UTF-8 output, writes to its console handle, queries the visible buffer rectangle, and restores/closes those handles at teardown. | Translate that console ownership and I/O surface through Win32 APIs. The Windows vaxis type gate passes, but no Windows runtime test was available. |
@@ -728,12 +733,18 @@ none, browser, action, ipc. dependencies: zf 0.10.3 ranking/highlighting.
   posting application events, including DA1 query completion; its cross-thread
   completion flag is atomic. The preview now uses a blocking capability query
   with a timed DA1 wakeup, leaving application events in the loop queue. The
-  loop remains specialized to `InputEvent`
-  rather than source-generic `Loop(Event)`. Windows now owns the pinned
+  loop is now generic over application event sum types, with compile-time
+  terminal subscriptions, application-event posting, and borrowed key text
+  from the reader's wrapping cache. POSIX shutdown now completes on an ignored
+  device-status reply instead of requiring an application event. Incremental
+  parsing still keeps pending bytes in the TTY's dynamic buffer rather than
+  the source loop's fixed buffer. Thread creation is now fallible with the
+  source's default stack size and native allocation/join lifecycle. Windows now owns the pinned
   console mode/code-page lifecycle and handle-based output/winsize query; its
   threaded input path decodes native `INPUT_RECORD` key, mouse, resize, and
-  focus events. The source-external `Tty.poll` path used by untranslated
-  `boo` still uses V's key polling adapter.
+  focus events. `boo` now uses the same generic loop through `vxfw.App`.
+  The retained source-external `Tty.poll` adapter still uses V's key polling
+  on Windows, but neither interactive CLI calls it.
   Image decoding/transcoding and high-level loading also remain absent.
   Pinned vaxis width data and all three `gwidth.Method` algorithms are
   available.
@@ -741,16 +752,17 @@ none, browser, action, ipc. dependencies: zf 0.10.3 ranking/highlighting.
 These are confirmed structural boundaries or larger refactors. The absence of
 an item here does not mean its full module has been certified yet.
 
-- **vaxis grapheme cache storage:** V copies a slice of a fixed array field
-  rather than returning a view into it. The cache therefore owns an 8 KiB
-  dynamic array so returned slices retain the source's shared backing and
-  overwrite behavior on wrap; its aggregate layout differs from Zig.
-- **vaxis widget framework and `boo`:** Pinned `cli/boo.zig` builds a `vxfw.App`
-  and a `Boo` widget whose `init`/`tick` events update a 100 by 41 cell buffer,
-  whose draw function returns a centered child surface, and whose framework
-  manages terminal events, focus, timers, and rendering. Witty still parses
-  those frames into ANSI strings and advances them in a sleep loop; the pinned
-  vaxis `vxfw` package and this widget pipeline have not been translated.
+- **vaxis widget framework representation:** All pinned `vxfw` widgets and
+  the `boo` widget pipeline are translated. Frame buffers, command arrays, and
+  layout temporaries use V GC ownership in place of explicit allocators and
+  per-frame arenas; allocation failures are not exposed. The source's signed
+  `i17` coordinates use `i32`, spinner atomic values use V atomic wrappers,
+  nested source declarations have module-level V names, and widget callbacks
+  retain opaque user-data pointers. Public APIs that allocate therefore do
+  not reproduce the source's allocator arguments/failure modes. Native event
+  routing/layout/timer tests and a PTY application smoke pass; Windows runtime
+  behavior remains untested. These representation limits do not certify
+  identical layouts or lifetime/failure contracts.
 - **Fixed-array type aliases:** the pinned V compiler accepts a public alias
   declaration for Ghostty's `[256]RGB` `color.Palette` but emits invalid C as
   soon as that alias is used as a field or parameter type. Witty therefore
@@ -915,6 +927,20 @@ an item here does not mean its full module has been certified yet.
   attached in place.
 
 ## Status
+
+Vaxis loop/framework checkpoint verification: all 22 vaxis test files pass,
+including the POSIX PTY and six framework test files; all-frame `boo` tests
+pass, and native/Linux application checks pass. A native PTY application
+smoke covers capability queries, frame rendering, Escape exit, reader-thread
+shutdown, and terminal restoration. The framework DLL cross compiles with
+MinGW. The previous generic-loop checkpoint also verified the focused theme
+preview tests and Windows loop test executable. Existing platform/compiler
+warnings remain. These checks use
+`/Users/alex/.cache/v/v1-fallback/0.5.2/v`, with `VEXE` set to that executable
+so it loads its matching standard library. No Windows runtime behavior was
+exercised on this macOS host. The Metal build compiler is absent here
+(`xcrun --find metal` fails), so the remaining metallib build divergence
+cannot be validated on this host yet.
 
 The focused tests and compile gates named in each audit session are expected to
 pass at the recorded commit. A repository-wide build is not proof that every
