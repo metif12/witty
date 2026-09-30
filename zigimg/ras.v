@@ -34,30 +34,10 @@ pub fn (header &RasHeader) debug() {
 		'size: ${header.width}x${header.height} (d=${header.depth})\nlen=${header.length}\n' + 'type=.${header.type_}\ncmap=.${header.color_map_type}\n' + 'cmap_len=${header.color_map_length}\n')
 }
 
-// Specialization of utils.FixedStorage(Rgba32, 256), with a borrowed slice
-// into the inline array. Keep the containing codec alive while using data.
-pub struct RasPalette {
-pub mut:
-	data    []Rgba32
-	storage [256]Rgba32
-}
-
-pub fn (mut palette RasPalette) resize(size usize) {
-	assert size <= 256
-	mut data := []Rgba32{}
-	unsafe {
-		data.data = &palette.storage[0]
-		data.len = int(size)
-		data.cap = int(size)
-		data.flags = .nofree
-	}
-	palette.data = data
-}
-
 pub struct RAS {
 pub mut:
 	header  RasHeader
-	palette RasPalette
+	palette FixedStorage256[Rgba32]
 }
 
 pub fn (codec &RAS) width() usize {

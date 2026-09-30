@@ -1,7 +1,7 @@
 module zigimg
 
 // Memory variants of pinned io.ReadStream and io.WriteStream. File variants
-// and bit readers/writers remain untranslated.
+// remain untranslated. Bit streams are translated in bit_stream.v.
 pub struct ReadStream {
 	buffer []u8
 mut:
