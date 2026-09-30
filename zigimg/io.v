@@ -49,6 +49,17 @@ pub fn (mut stream ReadStream) take_byte() !u8 {
 	return stream.take(1)![0]
 }
 
+// std.Io.Reader.readSliceAll consumes/copies the available prefix before EOF.
+// This differs from take, whose fixed-memory peek leaves the position intact
+// if the full request cannot be satisfied.
+pub fn (mut stream ReadStream) read_slice_all(mut destination []u8) ! {
+	remaining := stream.buffer.len - stream.position
+	count := if destination.len < remaining { destination.len } else { remaining }
+	bytes := stream.take(count)!
+	copy(mut destination, bytes)
+	if count < destination.len { return error('EndOfStream') }
+}
+
 pub struct WriteStream {
 mut:
 	buffer   []u8

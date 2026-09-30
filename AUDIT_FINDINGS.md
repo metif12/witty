@@ -9,6 +9,7 @@ below exist. Earlier versions of this document overstated the completed review.
 
 | Area | Bug | Fix |
 |---|---|---|
+| zigimg Sun raster decoder | The locked RAS decoder was absent, including its inline palette and RLE path. | Translate the 28-byte big-endian header, pixel-format selection, planar palette, opaque 32-bit color conversion, one-bit padding/polarity, and clipped RLE runs. Preserve the source's raw copy for one-bit indexed images, absent padding for other depths, consumed-prefix EOF behavior, and successful writer that emits no bytes. Eight V test files, native reference comparisons, Linux checking, and Windows compilation pass. |
 | zigimg Netpbm codecs and bit streams | The locked dependency's PBM/PGM/PPM readers and writers, and its borrowed Zig bit-stream implementations, were absent. | Translate all six Netpbm encodings and both bit orders, preserving source comments/token limits, bitmap polarity/row padding, sample-scaling differences, partial EOF, bit-pattern casts, and failed-flush state. The native reference harness checks decoder results, exact encoder bytes, parser errors, and bit-stream boundary cases. Seven V test files and Windows DLL cross compilation pass. Arbitrary-width/aggregate bit types and the image-wide encoder-options union remain outside this slice. |
 | zigimg image editing and pixel iteration | The image foundation lacked pinned `ImageEditor` and `PixelStorageIterator`. | Translate crop-box clamping, independent cropped pixel/palette storage, in-place vertical row swaps, and pointer-backed pixel iteration across every storage variant. Preserve straight alpha, packed channel bit order, the iterator's initial length and live storage pointer, and the editor's animation behavior. Five image test files, native checks against the unmodified locked Zig dependency, and Windows DLL cross compilation pass. Allocator and representation limits remain below. |
 | zigimg image foundation and memory codecs | The locked vaxis image dependency had no V translation. | Translate all pixel-format words/storage variants, borrowed raw storage, indexed palette capacity/slices, memory streams, raw image construction, and QOI/farbfeld memory codecs. Preserve the exact pinned PNG writer, whose chunk-writing bodies are commented out and which emits only its signature. Native Zig reference execution verifies QOI/farbfeld bytes and PNG output/errors; three V test files and Windows DLL cross compilation pass. Remaining library/API and format coverage is listed below. |
@@ -763,11 +764,12 @@ an item here does not mean its full module has been certified yet.
 - **zigimg image dependency:** The translation now pins
   `d7b7ab0ba0899643831ef042bd73289510b39906`, with all 24 pixel-format tags,
   storage variants, raw initialization/slices, palette capacity operations,
-  memory and bit streams, QOI/farbfeld/PBM/PGM/PPM codecs, image editing,
+  memory and bit streams, QOI/farbfeld/PBM/PGM/PPM/RAS codecs, image editing,
   and pixel iteration. The source PNG writer is translated
   as it actually exists: it emits only the eight-byte signature because its
   chunk-writing bodies are commented out. A native Zig 0.15.2 reference harness
-  verifies that behavior and QOI/farbfeld bytes without modifying the source.
+  verifies those codec behaviors and bytes without modifying the source. The
+  pinned RAS writer succeeds without emitting bytes; that is also preserved.
   PNG decoding and the other format decoders, automatic format dispatch, file
   streams, conversions/quantization, full color convenience methods,
   and the complete managed/unmanaged image API remain open.
@@ -970,13 +972,15 @@ exercised on this macOS host. The Metal build compiler is absent here
 (`xcrun --find metal` fails), so the remaining metallib build divergence
 cannot be validated on this host yet.
 
-All seven zigimg V test files pass. The image dependency DLL cross compiles
+All eight zigimg V test files pass. The image dependency DLL cross compiles
 with MinGW, and the unmodified locked Zig dependency passes the standalone
-QOI/farbfeld/PNG/PBM/PGM/PPM, editing, all-format pixel iteration, and bit-stream
+QOI/farbfeld/PNG/PBM/PGM/PPM/RAS, editing, all-format pixel iteration, and bit-stream
 reference harness in
 `zigimg/verify_reference.zig`. The harness
 uses Zig 0.15.2 targeting macOS 14.0 to avoid native linking failures against
-this host's newer SDK. These checks do not exercise a Windows runtime.
+this host's newer SDK. The dependency passes Linux checking, and the bit-stream,
+Netpbm, and raster test executables cross compile with MinGW. These checks do
+not exercise a Windows runtime.
 
 The focused tests and compile gates named in each audit session are expected to
 pass at the recorded commit. A repository-wide build is not proof that every

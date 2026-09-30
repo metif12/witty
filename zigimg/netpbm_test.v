@@ -1,5 +1,33 @@
 module zigimg
 
+fn test_netpbm_specializations_expose_instance_header_read_and_write_methods() {
+	mut reader := ReadStream.init_memory('P2\n2 1\n15\n3 9\n'.bytes())
+	mut codec := PGM{}
+	pixels := codec.read(mut reader)!
+	assert codec.header.width == 2 && codec.header.height == 1
+	assert codec.header.max_value == 15
+	assert codec.pixel_format()! == .grayscale8
+	mut output := []u8{len: 100}
+	mut writer := WriteStream.init_memory(mut output)
+	codec.write(mut writer, pixels)!
+	assert writer.buffered().bytestr() == 'P2\n# Created by zigimg\n2 1\n15\n3 9\n'
+	mut pbm := PBM{
+		header: NetpbmHeader{
+			width:  1
+			height: 1
+		}
+	}
+	writer.seek_to(0)!
+	pbm.write(mut writer, pixels) or {
+		assert err.msg() == 'Unsupported'
+		assert writer.buffered().bytestr() == 'P1\n# Created by zigimg\n1 1\n'
+	}
+	mut ppm := PPM{}
+	reader = ReadStream.init_memory('P6\n1 1\n255\n\x01\x02\x03'.bytes())
+	assert ppm.read(mut reader)!.as_bytes() == [u8(1), 2, 3]
+	assert ppm.pixel_format()! == .rgb24
+}
+
 fn test_netpbm_format_detection_peeks_and_readers_accept_each_header() {
 	for index, magic in ['P1', 'P2', 'P3', 'P4', 'P5', 'P6'] {
 		mut stream := ReadStream.init_memory(magic.bytes())
