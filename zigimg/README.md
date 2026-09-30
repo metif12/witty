@@ -2,7 +2,7 @@ This is an incremental V translation of zigimg revision
 `d7b7ab0ba0899643831ef042bd73289510b39906`, the dependency locked by pinned
 vaxis. It currently covers the pixel-format words, storage variants, raw and
 indexed storage, memory and bit streams, crop/flip editing, pixel iteration,
-QOI, farbfeld, PBM, PGM, PPM, PAM, Sun raster, SGI, and XBM codecs, and the pinned PNG writer. It does
+QOI, farbfeld, PBM, PGM, PPM, PAM, Sun raster, SGI, XBM, and PCX codecs, and the pinned PNG writer. It does
 not yet provide the complete image library or vaxis loading.
 
 The PNG writer in this exact revision emits only the eight-byte signature;
@@ -33,6 +33,15 @@ bits without row padding, its hexadecimal parsing quirks, and ignored
 unterminated data lines. Its writer emits no bytes. The pinned format detector
 repeatedly peeks at a leading define line without advancing; that loop is also
 preserved. Direct decoding bypasses detection, as in the source.
+
+PCX preserves its 128-byte header, indexed and planar RGB decoding, built-in
+and end-relative VGA palettes, streaming RLE, and the fast encoder's 16-byte
+run accumulation. Compression flags, stride/partial-byte quirks, short active
+palettes, and whole-slice even-width indexed encoding follow the locked source.
+The fast path uses scalar comparisons instead of SIMD; V names the reserved
+header field `reserved0`. Pixels left unwritten by the source reader are
+undefined allocator memory, while V's pixel storage starts zeroed; the tests
+compare defined outputs.
 
 V arrays and GC replace allocator slices. Sub-byte scalar values use byte
 storage or packed backing words. Allocation errors, every color conversion
