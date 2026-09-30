@@ -49,6 +49,21 @@ pub fn (mut stream ReadStream) take_byte() !u8 {
 	return stream.take(1)![0]
 }
 
+pub fn (stream ReadStream) peek_delimiter_inclusive(delimiter u8) ![]u8 {
+	for index in stream.position .. stream.buffer.len {
+		if stream.buffer[index] == delimiter {
+			return stream.peek(index - stream.position + 1)
+		}
+	}
+	return error('EndOfStream')
+}
+
+pub fn (mut stream ReadStream) take_delimiter_inclusive(delimiter u8) ![]u8 {
+	line := stream.peek_delimiter_inclusive(delimiter)!
+	stream.position += line.len
+	return line
+}
+
 // std.Io.Reader.readSliceAll consumes/copies the available prefix before EOF.
 // This differs from take, whose fixed-memory peek leaves the position intact
 // if the full request cannot be satisfied.

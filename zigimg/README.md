@@ -2,7 +2,7 @@ This is an incremental V translation of zigimg revision
 `d7b7ab0ba0899643831ef042bd73289510b39906`, the dependency locked by pinned
 vaxis. It currently covers the pixel-format words, storage variants, raw and
 indexed storage, memory and bit streams, crop/flip editing, pixel iteration,
-QOI, farbfeld, PBM, PGM, PPM, PAM, Sun raster, and SGI codecs, and the pinned PNG writer. It does
+QOI, farbfeld, PBM, PGM, PPM, PAM, Sun raster, SGI, and XBM codecs, and the pinned PNG writer. It does
 not yet provide the complete image library or vaxis loading.
 
 The PNG writer in this exact revision emits only the eight-byte signature;
@@ -27,6 +27,12 @@ and storage tags. Duration comments retain Zig decimal formatting and signs,
 verified against its native formatter across 19,968 float bit patterns.
 The source accepts grayscale2 in header construction but omits its pixel
 writer arm; writing nonempty grayscale2 images therefore traps.
+
+XBM preserves ordered defines, zero-sentinel hotspots, continuous LSB-first
+bits without row padding, its hexadecimal parsing quirks, and ignored
+unterminated data lines. Its writer emits no bytes. The pinned format detector
+repeatedly peeks at a leading define line without advancing; that loop is also
+preserved. Direct decoding bypasses detection, as in the source.
 
 V arrays and GC replace allocator slices. Sub-byte scalar values use byte
 storage or packed backing words. Allocation errors, every color conversion
@@ -61,4 +67,12 @@ version newer than that compiler supports:
 zig run -target aarch64-macos.14.0 -lc --dep zigimg \
   -Mroot=zigimg/verify_reference.zig \
   -Mzigimg=/path/to/zigimg-d7b7ab0ba0899643831ef042bd73289510b39906/zigimg.zig
+```
+
+The XBM detector uses separate bounded process probes. Build the V executable
+from `zigimg/reference_probes/xbm_detect` and the locked-source Zig executable
+from its `reference.zig`, with the same module and target options above. Then run:
+
+```sh
+python3 zigimg/reference_probes/xbm_detect/verify.py /path/to/v-probe /path/to/zig-probe
 ```
