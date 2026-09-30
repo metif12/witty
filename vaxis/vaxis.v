@@ -1,7 +1,6 @@
 module vaxis
 
 import encoding.base64
-import strconv
 import strings
 import term
 import term.termios
@@ -49,7 +48,7 @@ pub fn color_rgb_from_uint(value u32) Color {
 }
 
 pub fn color_rgb_from_spec(spec string) !Color {
-	rgb := parse_color_spec(spec) or { return error('InvalidColorSpec') }
+	rgb := parse_color_spec(spec)!
 	return ColorRgb{
 		rgb: rgb
 	}
@@ -696,6 +695,22 @@ struct ParsedInput {
 	consumed int
 }
 
+fn own_input_key_text(event InputEvent) InputEvent {
+	match event {
+		Key {
+			mut key := event
+			if text := key.text { key.text = text.clone() }
+			return InputEvent(key)
+		}
+		KeyRelease {
+			mut key := event.key
+			if text := key.text { key.text = text.clone() }
+			return InputEvent(KeyRelease{key: key})
+		}
+		else { return event }
+	}
+}
+
 // Tty incrementally decodes events read from the terminal.
 @[heap]
 pub struct Tty {
@@ -775,6 +790,19 @@ fn (mut tty Tty) append_raw(value i64) {
 }
 
 fn parse_input(data []u8) ?ParsedInput {
+	mut parser := Parser{}
+	mut parsed := decode_input(data, mut parser, false) or { return none }
+	// The legacy polling adapter owns text because it drains/shifts its dynamic
+	// pending buffer before callers can use the returned event.
+	if data.len > 1 && data[0] == 27 && data[1] == `[` {
+		if event := parsed.event {
+			parsed = ParsedInput{ event: own_input_key_text(event), consumed: parsed.consumed }
+		}
+	}
+	return parsed
+}
+
+fn decode_input(data []u8, mut parser Parser, borrow bool) ?ParsedInput {
 	if data.len == 0 {
 		return none
 	}
@@ -786,8 +814,8 @@ fn parse_input(data []u8) ?ParsedInput {
 		match data[1] {
 			`O` { return parse_ss3(data) }
 			`P`, `X`, `^` { return skip_until_st(data) }
-			`[` { return parse_csi(data) }
-			`]` { return parse_osc(data) }
+			`[` { return parse_csi(data, mut parser) }
+			`]` { return parse_osc(data, true) or { return none } }
 			`_` { return parse_apc(data) }
 			else {}
 		}
@@ -833,29 +861,24 @@ fn parse_input(data []u8) ?ParsedInput {
 		return parsed_key(backspace, Modifiers{}, 1)
 	}
 
-	char_len := utf8_sequence_length(byte)
-	if data.len < char_len {
-		return none
-	}
-	runes := data.bytestr().runes()
-	if runes.len == 0 {
-		return none
-	}
-	mut consumed := char_len
+	mut iter := InputUtf8Iterator{ bytes: data }
+	first := iter.next() or { return none }
+	mut consumed := iter.i
 	mut rune_count := 1
-	mut previous := u32(runes[0])
+	mut previous := first
 	mut state := unicode.BreakState.default
-	for i in 1 .. runes.len {
-		current := u32(runes[i])
+	for {
+		current := iter.next() or { break }
 		if vaxis_grapheme_break(previous, current, &state) {
 			break
 		}
-		consumed += runes[i].str().len
+		consumed = iter.i
 		rune_count++
 		previous = current
 	}
-	codepoint := if rune_count > 1 { multicodepoint } else { u32(runes[0]) }
-	return parsed_key_text(codepoint, data[..consumed].bytestr(), Modifiers{}, consumed)
+	codepoint := if rune_count > 1 { multicodepoint } else { first }
+	text := if borrow { unsafe { tos(data.data, consumed) } } else { data[..consumed].bytestr() }
+	return parsed_key_text(codepoint, text, Modifiers{}, consumed)
 }
 
 fn parse_apc(data []u8) ?ParsedInput {
@@ -893,9 +916,9 @@ fn skip_until_st(data []u8) ?ParsedInput {
 	}
 }
 
-fn parse_osc(data []u8) ?ParsedInput {
+fn parse_osc(data []u8, clipboard bool) !ParsedInput {
 	if data.len < 3 {
-		return none
+		return ParsedInput{}
 	}
 	mut bel_terminated := false
 	mut sequence_end := 0
@@ -905,7 +928,7 @@ fn parse_osc(data []u8) ?ParsedInput {
 	} else {
 		bel := find_byte(data, 2, 0x07)
 		if bel < 0 {
-			return none
+			return ParsedInput{}
 		}
 		bel_terminated = true
 		sequence_end = bel + 1
@@ -916,7 +939,7 @@ fn parse_osc(data []u8) ?ParsedInput {
 			consumed: sequence_end
 		}
 	}
-	ps := strconv.parse_uint(data[2..semicolon].bytestr(), 10, 8) or {
+	ps := parse_input_unsigned(data[2..semicolon].bytestr(), 10, 8) or {
 		return ParsedInput{
 			consumed: sequence_end
 		}
@@ -929,16 +952,12 @@ fn parse_osc(data []u8) ?ParsedInput {
 				consumed: sequence_end
 			}
 		}
-		index := strconv.parse_uint(data[semicolon + 1..color_delimiter].bytestr(), 10, 8) or {
+		index := parse_input_unsigned(data[semicolon + 1..color_delimiter].bytestr(), 10, 8) or {
 			return ParsedInput{
 				consumed: sequence_end
 			}
 		}
-		rgb := parse_color_spec(data[color_delimiter + 1..content_end].bytestr()) or {
-			return ParsedInput{
-				consumed: sequence_end
-			}
-		}
+		rgb := parse_color_spec(data[color_delimiter + 1..content_end].bytestr())!
 		return ParsedInput{
 			event:    InputEvent(ColorReport{
 				kind:  ColorReportKind(ColorReportIndex{
@@ -950,11 +969,7 @@ fn parse_osc(data []u8) ?ParsedInput {
 		}
 	}
 	if ps == 10 || ps == 11 || ps == 12 {
-		rgb := parse_color_spec(data[semicolon + 1..content_end].bytestr()) or {
-			return ParsedInput{
-				consumed: sequence_end
-			}
-		}
+		rgb := parse_color_spec(data[semicolon + 1..content_end].bytestr())!
 		kind := match ps {
 			10 { ColorReportKind(ColorReportFg{}) }
 			11 { ColorReportKind(ColorReportBg{}) }
@@ -978,7 +993,8 @@ fn parse_osc(data []u8) ?ParsedInput {
 				consumed: sequence_end
 			}
 		}
-		text := base64.decode_str(data[semicolon + 3..content_end].bytestr())
+		assert clipboard // Source requires a present system clipboard allocator.
+		text := decode_clipboard_base64(data[semicolon + 3..content_end])!
 		return ParsedInput{
 			event:    InputEvent(Paste{
 				text: text
@@ -991,21 +1007,21 @@ fn parse_osc(data []u8) ?ParsedInput {
 	}
 }
 
-fn parse_color_spec(spec string) ?[3]u8 {
+fn parse_color_spec(spec string) ![3]u8 {
 	parts := spec.split(':')
 	if parts.len < 2 || parts[0] != 'rgb' {
-		return none
+		return error('InvalidColorSpec')
 	}
 	channels := parts[1].split('/')
 	if channels.len < 3 {
-		return none
+		return error('InvalidColorSpec')
 	}
 	mut result := [3]u8{}
 	for i, channel in channels[..3] {
 		if channel.len != 4 {
-			return none
+			return error('InvalidColorSpec')
 		}
-		result[i] = u8(strconv.parse_uint(channel[2..], 16, 8) or { return none })
+		result[i] = u8(parse_input_unsigned(channel[2..], 16, 8)!)
 	}
 	return result
 }
@@ -1072,7 +1088,7 @@ fn parse_ss3(data []u8) ?ParsedInput {
 	return parsed_key(code, Modifiers{}, 3)
 }
 
-fn parse_csi(data []u8) ?ParsedInput {
+fn parse_csi(data []u8, mut parser Parser) ?ParsedInput {
 	mut final_index := -1
 	for i in 2 .. data.len {
 		byte := data[i]
@@ -1127,7 +1143,7 @@ fn parse_csi(data []u8) ?ParsedInput {
 			}
 		}
 		if fields.len > 2 {
-			key.text = parse_codepoint_text(fields[2]) or {
+			key.text = parser.parse_codepoint_text(fields[2]) or {
 				return ParsedInput{
 					consumed: sequence.len
 				}
@@ -1147,7 +1163,7 @@ fn parse_csi(data []u8) ?ParsedInput {
 
 	if final == `~` {
 		fields := sequence[2..sequence.len - 1].split(';')
-		number := parse_param_u32(fields[0], none) or {
+		number := parse_input_unsigned(fields[0], 10, 16) or {
 			return ParsedInput{
 				consumed: sequence.len
 			}
@@ -1206,7 +1222,7 @@ fn parse_csi(data []u8) ?ParsedInput {
 			}
 		}
 		if fields.len > 2 {
-			key.text = parse_codepoint_text(fields[2]) or {
+			key.text = parser.parse_codepoint_text(fields[2]) or {
 				return ParsedInput{
 					consumed: sequence.len
 				}
@@ -1252,7 +1268,7 @@ fn parse_csi(data []u8) ?ParsedInput {
 	if final == `n` {
 		if sequence.len >= 3 && sequence[2] == `?` {
 			if delimiter := sequence.index_after(';', 3) {
-				ps := strconv.parse_uint(sequence[3..delimiter], 10, 16) or {
+				ps := parse_input_unsigned(sequence[3..delimiter], 10, 16) or {
 					return ParsedInput{
 						consumed: sequence.len
 					}
@@ -1356,7 +1372,7 @@ fn parse_csi(data []u8) ?ParsedInput {
 			}
 		}
 		if fields.len > 2 {
-			key.text = parse_codepoint_text(fields[2]) or {
+			key.text = parser.parse_codepoint_text(fields[2]) or {
 				return ParsedInput{
 					consumed: sequence.len
 				}
@@ -1371,7 +1387,8 @@ fn parse_csi(data []u8) ?ParsedInput {
 			} else {
 				key.codepoint
 			}
-			key.text = rune(upper).str()
+			parser.buf[0] = u8(upper)
+			key.text = unsafe { tos(&parser.buf[0], 1) }
 			key.shifted_codepoint = upper
 		}
 		return ParsedInput{
@@ -1388,12 +1405,12 @@ fn parse_csi(data []u8) ?ParsedInput {
 
 	if final == `y` {
 		if delimiter := sequence.index_after(';', 3) {
-			ps := strconv.parse_uint(sequence[3..delimiter], 10, 16) or {
+			ps := parse_input_unsigned(sequence[3..delimiter], 10, 16) or {
 				return ParsedInput{
 					consumed: sequence.len
 				}
 			}
-			pm := strconv.parse_uint(sequence[delimiter + 1..sequence.len - 2], 10, 8) or {
+			pm := parse_input_unsigned(sequence[delimiter + 1..sequence.len - 2], 10, 8) or {
 				return ParsedInput{
 					consumed: sequence.len
 				}
@@ -1444,14 +1461,14 @@ fn parse_csi(data []u8) ?ParsedInput {
 }
 
 fn parse_u16(raw string) ?u16 {
-	return u16(strconv.parse_uint(raw, 10, 16) or { return none })
+	return u16(parse_input_unsigned(raw, 10, 16) or { return none })
 }
 
 fn parse_param_u8(raw string, default ?u8) ?u8 {
 	if raw.len == 0 {
 		return default
 	}
-	return u8(strconv.parse_uint(raw, 10, 8) or { return none })
+	return u8(parse_input_unsigned(raw, 10, 8) or { return none })
 }
 
 fn parse_param_u21(raw string) ?u32 {
@@ -1484,7 +1501,7 @@ fn parse_mouse(data []u8, sequence string) ?ParsedInput {
 				consumed: sequence.len
 			}
 		}
-		button_mask = strconv.parse_uint(parts[0], 10, 16) or {
+		button_mask = parse_input_unsigned(parts[0], 10, 16) or {
 			return ParsedInput{
 				consumed: sequence.len
 			}
@@ -1536,26 +1553,14 @@ fn parse_param_u32(raw string, default ?u32) ?u32 {
 	if raw.len == 0 {
 		return default
 	}
-	return u32(strconv.parse_uint(raw, 10, 32) or { return none })
-}
-
-fn parse_codepoint_text(raw string) ?string {
-	mut result := ''
-	for part in raw.split(':') {
-		cp := parse_param_u32(part, none) or { return none }
-		if cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff) {
-			return none
-		}
-		result += rune(cp).str()
-	}
-	return result
+	return u32(parse_input_unsigned(raw, 10, 32) or { return none })
 }
 
 fn parse_mouse_position(raw string) ?u16 {
 	if raw.len == 0 {
 		return u16(1)
 	}
-	return u16(strconv.parse_uint(raw, 10, 16) or { return none })
+	return u16(parse_input_unsigned(raw, 10, 16) or { return none })
 }
 
 fn parsed_key(codepoint u32, mods Modifiers, consumed int) ParsedInput {
@@ -1577,22 +1582,6 @@ fn parsed_key_text(codepoint u32, text string, mods Modifiers, consumed int) Par
 		})
 		consumed: consumed
 	}
-}
-
-fn utf8_sequence_length(first u8) int {
-	if first & 0x80 == 0 {
-		return 1
-	}
-	if first & 0xe0 == 0xc0 {
-		return 2
-	}
-	if first & 0xf0 == 0xe0 {
-		return 3
-	}
-	if first & 0xf8 == 0xf0 {
-		return 4
-	}
-	return 1
 }
 
 // TextInputBuffer is the source TextInput.Buffer gap buffer. V's arrays own

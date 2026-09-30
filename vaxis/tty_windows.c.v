@@ -90,5 +90,6 @@ pub fn (tty &Tty) write(bytes string) ! {
 }
 
 pub fn (mut tty Tty) next_input() !InputEvent {
-	return tty.next_console_input()
+	mut parser := Parser{}
+	return own_input_key_text(tty.next_console_input(mut parser, true)!)
 }

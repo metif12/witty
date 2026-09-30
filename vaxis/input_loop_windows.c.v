@@ -5,9 +5,10 @@ module vaxis
 fn loop_tty_run[T](context voidptr) ! {
 	mut loop := unsafe { &Loop[T](context) }
 	mut cache := GraphemeCache.new()
+	mut parser := Parser{}
 	for !loop.is_quitting() {
 		mut tty := unsafe { loop.tty }
-		event := tty.next_input()!
+		event := tty.next_console_input(mut parser, loop.vx.opts.system_clipboard)!
 		loop.handle_input(event, mut cache)
 	}
 }

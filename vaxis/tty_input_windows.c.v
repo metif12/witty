@@ -56,7 +56,8 @@ fn C.ReadConsoleInputW(handle voidptr, record &C.INPUT_RECORD, count u32, receiv
 // event, exactly as in the pinned loop.
 struct WindowsInputState {
 mut:
-	ansi_buf   []u8
+	ansi_buf   [128]u8
+	ansi_idx   usize
 	utf16_high u16
 	utf16_half bool
 }
@@ -134,7 +135,11 @@ fn windows_key_base_layout(vk u16) ?u32 {
 	}
 }
 
-fn (mut tty Tty) windows_key_event(record C.KEY_EVENT_RECORD, mut state WindowsInputState) ?InputEvent {
+struct WindowsKeyResult {
+	event ?InputEvent
+}
+
+fn (mut tty Tty) windows_key_event(record C.KEY_EVENT_RECORD, mut state WindowsInputState, mut parser Parser, clipboard bool) !WindowsKeyResult {
 	utf16 := unsafe { record.uChar.UnicodeChar }
 	if state.utf16_half {
 		state.utf16_half = false
@@ -147,39 +152,46 @@ fn (mut tty Tty) windows_key_event(record C.KEY_EVENT_RECORD, mut state WindowsI
 				mods:                  windows_key_modifiers(record.dwControlKeyState)
 				text:                  rune(codepoint).str()
 			}
-			return if record.bKeyDown == 0 { InputEvent(KeyRelease{
-					key: key
-				}) } else { InputEvent(key) }
+			return WindowsKeyResult{
+				event: if record.bKeyDown == 0 { InputEvent(KeyRelease{
+						key: key
+					}) } else { InputEvent(key) }
+			}
 		}
 	}
 
 	mut base := u32(0)
 	if record.wVirtualKeyCode == 0 {
 		ascii := unsafe { record.uChar.AsciiChar }
-		if state.ansi_buf.len == 0 && ascii != 27 {
+		if state.ansi_idx == 0 && ascii != 27 {
 			base = u32(utf16)
 		} else {
-			state.ansi_buf << ascii
-			if state.ansi_buf.len <= 2 {
-				return none
+			state.ansi_buf[int(state.ansi_idx)] = ascii
+			state.ansi_idx++
+			if state.ansi_idx <= 2 {
+				return WindowsKeyResult{}
 			}
-			parsed := parse_input(state.ansi_buf) or { return none }
-			state.ansi_buf.clear()
-			return parsed.event
+			bytes := unsafe { (&state.ansi_buf[0]).vbytes(int(state.ansi_idx)) }
+			parsed := parser.parse(bytes, clipboard)!
+			if parsed.n == 0 { return WindowsKeyResult{} }
+			state.ansi_idx = 0
+			return WindowsKeyResult{
+				event: parsed.event
+			}
 		}
 	} else {
 		base = windows_key_base_layout(record.wVirtualKeyCode) or {
 			log.warn('unknown wVirtualKeyCode: 0x${record.wVirtualKeyCode.hex()}')
-			return none
+			return WindowsKeyResult{}
 		}
 	}
 	if base >= 0xd800 && base <= 0xdbff {
 		state.utf16_high = u16(base)
 		state.utf16_half = true
-		return none
+		return WindowsKeyResult{}
 	}
 	if base >= 0xdc00 && base <= 0xdfff {
-		return none
+		return WindowsKeyResult{}
 	}
 
 	mut codepoint := base
@@ -194,9 +206,11 @@ fn (mut tty Tty) windows_key_event(record C.KEY_EVENT_RECORD, mut state WindowsI
 		mods:                  windows_key_modifiers(record.dwControlKeyState)
 		text:                  text
 	}
-	return if record.bKeyDown == 0 { InputEvent(KeyRelease{
-			key: key
-		}) } else { InputEvent(key) }
+	return WindowsKeyResult{
+		event: if record.bKeyDown == 0 { InputEvent(KeyRelease{
+				key: key
+			}) } else { InputEvent(key) }
+	}
 }
 
 fn (mut tty Tty) windows_mouse_event(record C.MOUSE_EVENT_RECORD) ?InputEvent {
@@ -260,7 +274,7 @@ fn (mut tty Tty) windows_mouse_event(record C.MOUSE_EVENT_RECORD) ?InputEvent {
 	})
 }
 
-fn (mut tty Tty) next_console_input() !InputEvent {
+fn (mut tty Tty) next_console_input(mut parser Parser, clipboard bool) !InputEvent {
 	mut state := WindowsInputState{}
 	for {
 		mut count := u32(0)
@@ -273,7 +287,9 @@ fn (mut tty Tty) next_console_input() !InputEvent {
 		}
 		match record.EventType {
 			0x0001 {
-				if event := tty.windows_key_event(unsafe { record.Event.KeyEvent }, mut state) {
+				result := tty.windows_key_event(unsafe { record.Event.KeyEvent }, mut state, mut
+					parser, clipboard)!
+				if event := result.event {
 					return event
 				}
 			}

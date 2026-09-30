@@ -8,16 +8,16 @@ fn loop_tty_run[T](context voidptr) ! {
 	mut cache := GraphemeCache.new()
 	winsize := loop.tty.get_winsize()!
 	post_terminal_event(mut loop, winsize)
-	mut buf := [1024]u8{}
-	// A direct V fixed-array slice copies; borrow the read buffer instead.
-	mut bytes := unsafe { (&buf[0]).vbytes(buf.len) }
+	mut parser := Parser{}
+	mut reader := LoopReadBuffer{}
 	for !loop.is_quitting() {
 		mut tty := unsafe { loop.tty }
+		mut bytes := reader.read_buffer()
 		count := tty.read(mut bytes)!
-		tty.pending << bytes[..int(count)]
-		for {
-			event := tty.parse_pending() or { break }
-			loop.handle_input(event, mut cache)
+		reader.begin_read(count)
+		for reader.has_next() {
+			result := reader.parse_next(mut parser, loop.vx.opts.system_clipboard)!
+			if event := result.event { loop.handle_input(event, mut cache) }
 		}
 	}
 }
