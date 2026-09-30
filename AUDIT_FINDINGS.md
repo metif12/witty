@@ -9,6 +9,7 @@ below exist. Earlier versions of this document overstated the completed review.
 
 | Area | Bug | Fix |
 |---|---|---|
+| zigimg compression helpers | The locked PackBits, endian-parameterized LZW, and CCITT decoders were absent. | Translate declared-length PackBits runs, LZW dictionaries/clear/end codes/early change/partial-input continuation, and all 195 CCITT codes with row/color state. Preserve ignored LZW unknown codes, first partial-code processing, empty-resume data loss, dictionary mutation order on write failure, PackBits's unread final control, and CCITT's cumulative padding and absent partial-byte flush. Sixteen image test files pass; a separate native harness verifies unchanged locked source copies and exact table fingerprints. Linux checking and Windows DLL/test compilation pass. |
 | zigimg BMP codec | The locked BMP headers, reader, and writer were absent. | Translate all three info-header representations, color-space/intent/CIE metadata, V4/V5 BGR24/BGRA32 selection, bottom-up rows, and exact encoder header bytes. Preserve ignored offsets/masks, omitted row padding, Windows 3.1 header rejection after consumption, signed and zero-dimension paths, unconventional encoder masks, and partial-write/error positions. Thirteen image test files and unmodified native reference checks pass, with Linux checking and Windows compilation. |
 | zigimg PCX codec | The locked PCX reader, writer, and RLE encoders were absent. | Translate the 128-byte header, indexed and planar RGB decoding, built-in/end-relative VGA palettes, bit/nibble packing, and streaming/16-byte RLE paths. Preserve ignored compression flags, signed stride comparison, row discard boundaries, even-width bitmap tail loss, short active palettes, whole-slice indexed encoding, and the fast encoder's run accumulation across different 16-byte chunks. Twelve image test files and unmodified native reference checks pass, with Linux checking and Windows compilation. |
 | zigimg XBM decoder | The locked XBM decoder was absent. | Translate ordered define values, zero-sentinel hotspots, white/black indexed palette, continuous LSB-first bits, hexadecimal token collection, truncated two-byte words, and newline/EOF behavior. Preserve the no-op writer and source detector that repeatedly peeks at a leading define without advancing. Eleven image test files and native reference comparisons pass, with Linux checking and Windows compilation; separate bounded V/Zig process probes verify the detector loop without hanging the suite. |
@@ -771,7 +772,7 @@ an item here does not mean its full module has been certified yet.
   `d7b7ab0ba0899643831ef042bd73289510b39906`, with all 24 pixel-format tags,
   storage variants, raw initialization/slices, palette capacity operations,
   memory and bit streams, QOI/farbfeld/PBM/PGM/PPM/PAM/RAS/SGI/XBM/PCX/BMP codecs, image editing,
-  and pixel iteration. The source PNG writer is translated
+  pixel iteration, and PackBits/LZW/CCITT compression helpers. The source PNG writer is translated
   as it actually exists: it emits only the eight-byte signature because its
   chunk-writing bodies are commented out. A native Zig 0.15.2 reference harness
   verifies those codec behaviors and bytes without modifying the source. The
@@ -802,7 +803,7 @@ an item here does not mean its full module has been certified yet.
   can leave allocated pixels unwritten, with the same zero-initialization
   boundary described above. Default `BMP` headers use initialized V values in
   place of source `undefined` fields, which callers must initialize before use.
-  PNG decoding and the other format decoders, automatic format dispatch, file
+  PNG/GIF/IFF/JPEG/TGA/TIFF decoding, automatic format dispatch, file
   streams, conversions/quantization, full color convenience methods,
   and the complete managed/unmanaged image API remain open.
   Arrays use GC ownership and V length fields in place of allocator slices;
@@ -814,6 +815,12 @@ an item here does not mean its full module has been certified yet.
   not exposed. Bit streams support V's native integer
   and floating point scalars, with type markers for compile-time endianness;
   Zig arbitrary-width integers and other bit-castable types are not reproduced.
+  Compression helpers use wider backing values for the source's `u13`, `u4`,
+  and `u1` state, preserving their checked bounds and truncation where used.
+  LZW dictionary storage uses V maps and GC instead of an allocator-backed
+  array hash map and arena. Its free `lzw_decoder_init[E]` constructor supports
+  calls from generic functions, where the pinned V compiler mis-specializes
+  the static constructor; concrete static calls remain available.
   Codec writers currently accept per-codec options rather than the complete
   image-wide encoder-options union. This is an incremental dependency
   translation, not certification of the full library or vaxis image loading.
@@ -1007,7 +1014,7 @@ exercised on this macOS host. The Metal build compiler is absent here
 (`xcrun --find metal` fails), so the remaining metallib build divergence
 cannot be validated on this host yet.
 
-All thirteen zigimg V test files pass. The image dependency DLL cross compiles
+All sixteen zigimg V test files pass. The image dependency DLL cross compiles
 with MinGW, and the unmodified locked Zig dependency passes the standalone
 QOI/farbfeld/PNG/PBM/PGM/PPM/PAM/RAS/SGI/XBM/PCX/BMP, editing, all-format pixel iteration, and bit-stream
 reference harness in
@@ -1019,6 +1026,14 @@ numeric-parser test files pass, and its float test executable cross compiles
 after restoring Windows CRT locale operations. Native and Linux application
 checks pass with existing warnings. These checks do
 not exercise a Windows runtime.
+
+The separate compression reference harness verifies LZW in both byte orders,
+early-change modes, 5,120-literal code-size transitions, dictionary and partial
+input state, write-failure ordering, PackBits boundaries, all 195 CCITT codes,
+and CCITT row/padding behavior. Its runner checks locked source SHA-256 values
+and copies unchanged source files into a temporary package to access private
+modules, adding only the reference harness. The LZW, CCITT, and PackBits V test
+executables also cross compile with MinGW; no Windows runtime was exercised.
 
 The focused tests and compile gates named in each audit session are expected to
 pass at the recorded commit. A repository-wide build is not proof that every

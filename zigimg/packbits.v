@@ -1,0 +1,29 @@
+module zigimg
+
+// Pinned compressions/packbits.zig. Output is deliberately not clipped and
+// reaching the declared compressed length inside a literal succeeds early.
+pub fn packbits_decode(mut stream ReadStream, mut destination []u8, length u32) ! {
+	assert length > 0
+	mut output_offset := u32(0)
+	mut input_offset := u32(0)
+	for input_offset < length - 1 {
+		control := usize(stream.take_byte()!)
+		input_offset++
+		if control < 128 {
+			for _ in 0 .. int(control + 1) {
+				if input_offset >= length { return }
+				destination[int(output_offset)] = stream.take_byte()!
+				output_offset++
+				input_offset++
+			}
+		} else if control > 128 {
+			if input_offset >= length { return }
+			value := stream.take_byte()!
+			input_offset++
+			for _ in 0 .. int(257 - control) {
+				destination[int(output_offset)] = value
+				output_offset++
+			}
+		}
+	}
+}

@@ -2,8 +2,9 @@ This is an incremental V translation of zigimg revision
 `d7b7ab0ba0899643831ef042bd73289510b39906`, the dependency locked by pinned
 vaxis. It currently covers the pixel-format words, storage variants, raw and
 indexed storage, memory and bit streams, crop/flip editing, pixel iteration,
-QOI, farbfeld, PBM, PGM, PPM, PAM, Sun raster, SGI, XBM, PCX, and BMP codecs, and the pinned PNG writer. It does
-not yet provide the complete image library or vaxis loading.
+QOI, farbfeld, PBM, PGM, PPM, PAM, Sun raster, SGI, XBM, PCX, and BMP codecs,
+PackBits/LZW/CCITT compression helpers, and the pinned PNG writer. It does not
+yet provide the complete image library or vaxis loading.
 
 The PNG writer in this exact revision emits only the eight-byte signature;
 its chunk-writing bodies are commented out. Native reference execution and V
@@ -50,6 +51,15 @@ dimensions are accepted; signed dimensions follow the source path, including
 negative heights that leave pixels unwritten. Those undefined source pixels
 and default codec headers share the initialization boundary described above.
 
+PackBits preserves declared-length truncation, unclipped runs, and its unread
+final lone control byte. LZW retains endian selection, clear/end codes, early
+change, dictionary mutation order, partial-input state, and source handling of
+unknown codes and empty resumptions. CCITT retains all 195 code entries, color
+across rows/calls, cumulative padding, and its absent final partial-byte flush.
+Their sub-byte state uses wider V backing values. LZW maps and GC replace the
+source dictionary and arena; `lzw_decoder_init[E]` works around the pinned V
+compiler's static-constructor specialization defect inside generic callers.
+
 V arrays and GC replace allocator slices. Sub-byte scalar values use byte
 storage or packed backing words. Allocation errors, every color conversion
 method, file streams, decoding other formats, format dispatch, and the
@@ -92,3 +102,15 @@ from its `reference.zig`, with the same module and target options above. Then ru
 ```sh
 python3 zigimg/reference_probes/xbm_detect/verify.py /path/to/v-probe /path/to/zig-probe
 ```
+
+The compression modules are private to the locked package. Their separate
+reference runner verifies source hashes, copies unchanged source files into a
+temporary package, and adds the harness there:
+
+```sh
+python3 zigimg/verify_compressions_reference.py \
+  /path/to/zigimg-d7b7ab0ba0899643831ef042bd73289510b39906 \
+  /path/to/zig-0.15.2/zig
+```
+
+Its default target is `aarch64-macos.14.0`; use `--target` for another host.

@@ -110,6 +110,13 @@ pub fn (mut stream WriteStream) write_all(bytes []u8) ! {
 	if count < bytes.len { return error('WriteFailed') }
 }
 
+// std.Io.Writer.write on a fixed memory writer either writes the entire slice
+// or consumes the available prefix and returns WriteFailed, just like writeAll.
+pub fn (mut stream WriteStream) write(bytes []u8) !usize {
+	stream.write_all(bytes)!
+	return usize(bytes.len)
+}
+
 pub fn (mut stream WriteStream) write_byte(byte u8) ! {
 	if stream.position == stream.buffer.len { return error('WriteFailed') }
 	stream.buffer[stream.position] = byte
