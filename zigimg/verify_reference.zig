@@ -37,7 +37,8 @@ pub fn main() !void {
     try std.testing.expectEqualSlices(u8, "\x89PNG", writer.memory.buffered());
     try verifyEditing();
     try verifyIteration();
-    std.debug.print("PASS: locked QOI/farbfeld bytes, signature-only PNG writer, editing, and pixel iteration\n", .{});
+    try @import("verify_netpbm_reference.zig").verify();
+    std.debug.print("PASS: locked codecs (QOI/farbfeld/PNG/PBM/PGM/PPM), editing, pixel iteration, and bit streams\n", .{});
 }
 
 fn verifyEditing() !void {
