@@ -9,6 +9,7 @@ below exist. Earlier versions of this document overstated the completed review.
 
 | Area | Bug | Fix |
 |---|---|---|
+| zigimg image foundation and memory codecs | The locked vaxis image dependency had no V translation. | Translate all pixel-format words/storage variants, borrowed raw storage, indexed palette capacity/slices, memory streams, raw image construction, and QOI/farbfeld memory codecs. Preserve the exact pinned PNG writer, whose chunk-writing bodies are commented out and which emits only its signature. Native Zig reference execution verifies QOI/farbfeld bytes and PNG output/errors; three V test files and Windows DLL cross compilation pass. Remaining library/API and format coverage is listed below. |
 | vaxis fixed reader/parser storage | POSIX input accumulated in a dynamic pending buffer, Windows embedded ANSI input grew dynamically, CSI key text owned independent strings, and malformed OSC color/base64 reports silently lost the source errors. | Restore the 1,024-byte POSIX read buffer, pinned incomplete-sequence offset/read-count behavior, 128-byte Windows ANSI state, and public parser with borrowed input/CSI text. Translate the locked uucode UTF-8 DFA and unsigned parameter/base64 validation; propagate OSC errors on both live reader paths. Focused tests cover source buffer quirks, partial CSI scratch writes, malformed UTF-8 byte consumption, and report errors; the native PTY smoke and Windows framework DLL cross compilation pass. |
 | vaxis input reader thread creation | V's `spawn` panicked on native thread creation failures, used a different default stack, and reader I/O errors were silently discarded. | Restore fallible POSIX/Windows thread creation with the source's 16 MiB default stack, native argument ownership, join/handle cleanup, allocation/resource error results, and reader-error reporting. The preview and framework propagate start failures. Native PTY tests cover idempotent start and status-query shutdown; the framework PTY smoke passes and its Windows DLL cross compiles. |
 | vaxis widget framework and `boo` | The pinned `vxfw` package was absent and `boo` emitted ANSI frames from a polling/sleep loop. | Translate the framework event/command surface, surfaces, hit testing, focus and mouse routing, timers, retained application loop, and all 15 widgets. Route `boo` through `vxfw.App` and its fixed 4,100-cell widget buffer with borrowed cells, source span styles, centering/minimum-size layout, tick scheduling, and exit keys. Six focused framework test files and all-frame `boo` tests pass; a native PTY smoke test exercises startup queries, rendering, Escape exit, device-status shutdown, and restoration. GC/allocator and coordinate representation limits remain below. |
@@ -748,13 +749,30 @@ none, browser, action, ipc. dependencies: zf 0.10.3 ranking/highlighting.
   focus events. `boo` now uses the same generic loop through `vxfw.App`.
   The retained source-external `Tty.poll` adapter still uses V's key polling
   on Windows, but neither interactive CLI calls it.
-  Image decoding/transcoding and high-level loading also remain absent.
+  High-level image loading and decoded-image transmission remain absent. The
+  locked zigimg dependency now has QOI/farbfeld memory decoding and encoding,
+  pixel storage, and its source-shaped PNG writer; remaining coverage is below.
   Pinned vaxis width data and all three `gwidth.Method` algorithms are
   available.
 
 These are confirmed structural boundaries or larger refactors. The absence of
 an item here does not mean its full module has been certified yet.
 
+- **zigimg image dependency:** The translation now pins
+  `d7b7ab0ba0899643831ef042bd73289510b39906`, with all 24 pixel-format tags,
+  storage variants, raw initialization/slices, palette capacity operations,
+  memory streams, and QOI/farbfeld codecs. The source PNG writer is translated
+  as it actually exists: it emits only the eight-byte signature because its
+  chunk-writing bodies are commented out. A native Zig 0.15.2 reference harness
+  verifies that behavior and QOI/farbfeld bytes without modifying the source.
+  PNG decoding and the other format decoders, automatic format dispatch, file
+  and bit streams, conversions/quantization, full color convenience methods,
+  image editing, and the complete managed/unmanaged image API remain open.
+  Arrays use GC ownership and V length fields in place of allocator slices;
+  allocation failures are not reproduced. Sub-byte scalar fields/indices use
+  bytes or backing words, sum variants have named V wrappers, and nested
+  declarations use module-level names. This is an incremental dependency
+  translation, not certification of the full library or vaxis image loading.
 - **vaxis widget framework representation:** All pinned `vxfw` widgets and
   the `boo` widget pipeline are translated. Frame buffers, command arrays, and
   layout temporaries use V GC ownership in place of explicit allocators and
@@ -931,7 +949,7 @@ an item here does not mean its full module has been certified yet.
 
 ## Status
 
-Vaxis loop/framework checkpoint verification: all 24 vaxis test files pass,
+Vaxis loop/framework and image foundation verification: all 24 vaxis test files pass,
 including the POSIX PTY and six framework test files; all-frame `boo` tests
 pass, and native/Linux application checks pass. A native PTY application
 smoke covers capability queries, frame rendering, Escape exit, reader-thread
@@ -944,6 +962,12 @@ so it loads its matching standard library. No Windows runtime behavior was
 exercised on this macOS host. The Metal build compiler is absent here
 (`xcrun --find metal` fails), so the remaining metallib build divergence
 cannot be validated on this host yet.
+
+All three zigimg V test files pass. The image dependency DLL cross compiles
+with MinGW, and the unmodified locked Zig dependency passes the standalone
+QOI/farbfeld/PNG reference harness in `zigimg/verify_reference.zig`. The harness
+uses Zig 0.15.2 targeting macOS 14.0 to avoid native linking failures against
+this host's newer SDK. These checks do not exercise a Windows runtime.
 
 The focused tests and compile gates named in each audit session are expected to
 pass at the recorded commit. A repository-wide build is not proof that every
