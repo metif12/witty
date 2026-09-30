@@ -9,6 +9,8 @@ below exist. Earlier versions of this document overstated the completed review.
 
 | Area | Bug | Fix |
 |---|---|---|
+| zigimg PAM codec | The locked PAM header parser, sample decoding/encoding, and image-sequence handling were absent. | Translate tuple inference/validation, comments and token boundaries, all six tuple types, source little-endian 16-bit samples, floor scaling, monochrome-alpha AND, subsequent animation frames, and encoder comments. Preserve short trailing magic bytes, error positions, and the source's omitted grayscale2 writer branch. Native checks verify decoding and exact encoder bytes; duration formatting matches Zig over 19,968 float bit patterns. Ten image test files, Linux checking, and Windows compilation pass. |
+| Windows numeric locale helper | Importing the shared numeric parser into PAM exposed its unconditional use of POSIX locale APIs under MinGW. | Use the Windows CRT's locale creation, float/double conversion, and locale release functions while retaining the C numeric locale and direct f32 conversion. Native numeric tests pass and the float-parser test executable cross compiles. Windows runtime behavior remains untested. |
 | zigimg SGI decoder | The locked SGI decoder and shared fixed palette storage were absent. | Translate its 510-byte big-endian header, planar channels, bottom-up rows, uncompressed data, and 8/16-bit RLE with absolute row tables. Preserve the source's byte-indexed/byte-swapped RGBA64 alpha, grayscale8 selection for 16-bit grayscale, unclipped RLE runs, consumption of trailing compressed data, and successful writer that emits no bytes. Nine V test files and native reference comparisons pass, with Linux checking and Windows compilation. |
 | zigimg Sun raster decoder | The locked RAS decoder was absent, including its inline palette and RLE path. | Translate the 28-byte big-endian header, pixel-format selection, planar palette, opaque 32-bit color conversion, one-bit padding/polarity, and clipped RLE runs. Preserve the source's raw copy for one-bit indexed images, absent padding for other depths, consumed-prefix EOF behavior, and successful writer that emits no bytes. Eight V test files, native reference comparisons, Linux checking, and Windows compilation pass. |
 | zigimg Netpbm codecs and bit streams | The locked dependency's PBM/PGM/PPM readers and writers, and its borrowed Zig bit-stream implementations, were absent. | Translate all six Netpbm encodings and both bit orders, preserving source comments/token limits, bitmap polarity/row padding, sample-scaling differences, partial EOF, bit-pattern casts, and failed-flush state. The native reference harness checks decoder results, exact encoder bytes, parser errors, and bit-stream boundary cases. Seven V test files and Windows DLL cross compilation pass. Arbitrary-width/aggregate bit types and the image-wide encoder-options union remain outside this slice. |
@@ -765,7 +767,7 @@ an item here does not mean its full module has been certified yet.
 - **zigimg image dependency:** The translation now pins
   `d7b7ab0ba0899643831ef042bd73289510b39906`, with all 24 pixel-format tags,
   storage variants, raw initialization/slices, palette capacity operations,
-  memory and bit streams, QOI/farbfeld/PBM/PGM/PPM/RAS/SGI codecs, image editing,
+  memory and bit streams, QOI/farbfeld/PBM/PGM/PPM/PAM/RAS/SGI codecs, image editing,
   and pixel iteration. The source PNG writer is translated
   as it actually exists: it emits only the eight-byte signature because its
   chunk-writing bodies are commented out. A native Zig 0.15.2 reference harness
@@ -773,6 +775,11 @@ an item here does not mean its full module has been certified yet.
   pinned RAS and SGI writers succeed without emitting bytes; that is also preserved.
   SGI retains the source's RGBA64 alpha byte indexing and endian swap,
   grayscale8 storage for 16-bit grayscale, and unclipped RLE scanlines.
+  PAM preserves little-endian 16-bit samples, monochrome-alpha AND, subsequent
+  animation frames, comments, and the source's absent grayscale2 writer arm
+  after successful header construction. Its duration formatter uses V's Ryu
+  mantissa conversion with Zig decimal/sign placement; a native reference hash
+  matches 19,968 boundary and deterministic sampled float bit patterns.
   PNG decoding and the other format decoders, automatic format dispatch, file
   streams, conversions/quantization, full color convenience methods,
   and the complete managed/unmanaged image API remain open.
@@ -978,14 +985,17 @@ exercised on this macOS host. The Metal build compiler is absent here
 (`xcrun --find metal` fails), so the remaining metallib build divergence
 cannot be validated on this host yet.
 
-All nine zigimg V test files pass. The image dependency DLL cross compiles
+All ten zigimg V test files pass. The image dependency DLL cross compiles
 with MinGW, and the unmodified locked Zig dependency passes the standalone
-QOI/farbfeld/PNG/PBM/PGM/PPM/RAS/SGI, editing, all-format pixel iteration, and bit-stream
+QOI/farbfeld/PNG/PBM/PGM/PPM/PAM/RAS/SGI, editing, all-format pixel iteration, and bit-stream
 reference harness in
 `zigimg/verify_reference.zig`. The harness
 uses Zig 0.15.2 targeting macOS 14.0 to avoid native linking failures against
 this host's newer SDK. The dependency passes Linux checking, and the bit-stream,
-Netpbm, raster, and SGI test executables cross compile with MinGW. These checks do
+Netpbm, raster, SGI, and PAM test executables cross compile with MinGW. The two
+numeric-parser test files pass, and its float test executable cross compiles
+after restoring Windows CRT locale operations. Native and Linux application
+checks pass with existing warnings. These checks do
 not exercise a Windows runtime.
 
 The focused tests and compile gates named in each audit session are expected to

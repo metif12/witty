@@ -40,7 +40,8 @@ pub fn main() !void {
     try @import("verify_netpbm_reference.zig").verify();
     try @import("verify_ras_reference.zig").verify();
     try @import("verify_sgi_reference.zig").verify();
-    std.debug.print("PASS: locked codecs (QOI/farbfeld/PNG/PBM/PGM/PPM/RAS/SGI), editing, pixel iteration, and bit streams\n", .{});
+    try @import("verify_pam_reference.zig").verify();
+    std.debug.print("PASS: locked codecs (QOI/farbfeld/PNG/PBM/PGM/PPM/RAS/SGI/PAM), editing, pixel iteration, and bit streams\n", .{});
 }
 
 fn verifyEditing() !void {

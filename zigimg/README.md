@@ -2,7 +2,7 @@ This is an incremental V translation of zigimg revision
 `d7b7ab0ba0899643831ef042bd73289510b39906`, the dependency locked by pinned
 vaxis. It currently covers the pixel-format words, storage variants, raw and
 indexed storage, memory and bit streams, crop/flip editing, pixel iteration,
-QOI, farbfeld, PBM, PGM, PPM, Sun raster, and SGI codecs, and the pinned PNG writer. It does
+QOI, farbfeld, PBM, PGM, PPM, PAM, Sun raster, and SGI codecs, and the pinned PNG writer. It does
 not yet provide the complete image library or vaxis loading.
 
 The PNG writer in this exact revision emits only the eight-byte signature;
@@ -19,6 +19,14 @@ unscaled channel offset; its 16-bit grayscale branch still selects grayscale8.
 The writer succeeds without emitting bytes. The shared inline fixed storage
 has a 256-element specialization; the private SGI header debug logger remains
 unexposed.
+
+PAM preserves the pinned header parser, sample scaling, little-endian 16-bit
+samples, monochrome-alpha AND, image sequences, and encoder comments. Only
+subsequent images become animation frames; the reader compares dimensions
+and storage tags. Duration comments retain Zig decimal formatting and signs,
+verified against its native formatter across 19,968 float bit patterns.
+The source accepts grayscale2 in header construction but omits its pixel
+writer arm; writing nonempty grayscale2 images therefore traps.
 
 V arrays and GC replace allocator slices. Sub-byte scalar values use byte
 storage or packed backing words. Allocation errors, every color conversion
