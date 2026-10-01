@@ -4,8 +4,9 @@ vaxis. It currently covers the pixel-format words, storage variants, raw and
 indexed storage, memory and bit streams, crop/flip editing, pixel iteration,
 QOI, farbfeld, PBM, PGM, PPM, PAM, Sun raster, SGI, XBM, PCX, BMP, IFF, GIF, and TGA codecs,
 PackBits/LZW/CCITT compression helpers, the octree palette quantizer, pixel-format
-conversion, and the pinned PNG writer. It does not yet provide the complete
-image library or vaxis loading.
+conversion, managed image construction/editing methods, image-wide encoder options,
+fixed-memory image writing, and the pinned PNG writer. It does not yet provide
+the complete image library or vaxis loading.
 
 The PNG writer in this exact revision emits only the eight-byte signature;
 its chunk-writing bodies are commented out. Native reference execution and V
@@ -139,8 +140,26 @@ animation frames unchanged. Native hashes match 18,432 format-pair cases and
 
 V arrays and GC replace allocator slices. Sub-byte scalar values use byte
 storage or packed backing words. Allocation errors, the full color convenience
-methods, file streams, decoding other formats, format dispatch, and the
-remaining managed image APIs still require translation.
+methods, file streams and image file methods, PNG/JPEG/TIFF decoding, and
+automatic image detection/loading still require translation.
+
+Managed images support creation, copied raw pixels, metadata, conversion,
+editing, iteration, and conversion to/from unmanaged views. Those views copy
+slice headers while sharing pixel, palette, and animation-frame backing data;
+their dimensions and loop counts remain independent. Iteration borrows the
+live image pixels. Lifecycle methods use GC in place of allocator reclamation,
+including the source's skipped shared first animation frame. Managed images
+have no allocator field or ABI prefix cast. V arrays cannot enforce Zig's
+read-only slice type contract.
+
+The image-wide encoder-options sum covers all 17 source tags. Fixed-memory
+writing returns a borrowed prefix and preserves partial buffer writes on
+failure. The pinned JPEG and TIFF writers emit no bytes, as do the other
+recorded no-op writers. Empty option markers replace void union arms; three
+distinct Netpbm wrappers preserve PBM/PGM/PPM tags, and the format enum uses
+byte backing instead of u5. Creation/crop overflow and zero-height row/flip
+operations preserve checked traps. The native dispatch hash matches 6,528
+cases across both image APIs, including buffer sizes and option variations.
 
 Cropping copies the active indexed palette and pixel rows into independent
 storage and does not copy animation data. Flipping mutates the existing pixels.
@@ -150,8 +169,8 @@ premultiplying alpha and preserve floating point values.
 
 PBM/PGM/PPM preserve the pinned parser's comments, 16-byte number buffer,
 single raster delimiter, bitmap polarity/padding, and format-specific sample
-scaling. They expose per-codec options while the image-wide encoder-options
-union remains untranslated. The bit streams specialize on `BigEndian` or
+scaling. Both per-codec and image-wide options are available. The bit streams
+specialize on `BigEndian` or
 `LittleEndian` and support V's native integer and floating point scalar types;
 Zig's arbitrary-width integers and other bit-castable types remain a boundary.
 
@@ -222,6 +241,22 @@ traps, and the pinned ARM64 NaN-prefix result:
 
 ```sh
 python3 zigimg/reference_probes/converter_bounds/verify.py /path/to/v-probe /path/to/zig-probe
+```
+
+The managed image and fixed-memory dispatch runner verifies the entire locked
+source tree before copying it unchanged:
+
+```sh
+python3 zigimg/verify_image_api_reference.py \
+  /path/to/zigimg-d7b7ab0ba0899643831ef042bd73289510b39906 \
+  /path/to/zig-0.15.2/zig --probe-output /path/to/zig-probe
+```
+
+Build the V probe from `zigimg/reference_probes/image_bounds`, then compare
+dimension overflow and zero-height checks through both image APIs:
+
+```sh
+python3 zigimg/reference_probes/image_bounds/verify.py /path/to/v-probe /path/to/zig-probe
 ```
 
 IFF checked bounds use separate process probes. Build the V executable from

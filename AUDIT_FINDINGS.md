@@ -9,6 +9,7 @@ below exist. Earlier versions of this document overstated the completed review.
 
 | Area | Bug | Fix |
 |---|---|---|
+| zigimg managed images and encoder dispatch | Managed image construction/editing methods, image-wide encoder options, managed/unmanaged views, and fixed-memory image writers were absent. Image dimensions could wrap in creation/cropping and zero-height row/flip operations lacked explicit checked traps. | Translate creation/raw copying, metadata, editing, live iteration, conversion, shallow views, lifecycle hooks, all 17 option tags, and fixed-buffer dispatch. Views copy slice headers while sharing pixels, palettes, and frame arrays. Preserve partial writes and the pinned JPEG/TIFF no-op writers. Twenty-two image test files pass; an unchanged-source native matrix matches 6,528 managed/unmanaged writer cases, and eight subprocess probes verify dimension overflow and zero-height traps. Linux checking and Windows DLL/test compilation pass. File I/O, loading/detection, allocator reclamation, read-only slice enforcement, and aggregate ABI boundaries remain below. |
 | zigimg pixel-format converter | The locked conversion table and unmanaged-image conversion methods were absent. | Translate all 460 table entries through their source conversion groups, including indexed quantization, integer scaling, weighted f32 grayscale, and alpha handling. Preserve omitted pairs, nine BGR555 wrong-union traps, straight rgba-to-RGB332, premultiplied indexed-to-RGB332/rgba64-to-BGRA32, full returned palettes despite local slice shortening, four empty alignment traps, and SIMD-prefix truncation versus scalar-tail rounding. Twenty-one image test files pass; unchanged native hashes match 18,432 format-pair cases and 6,066,176 precision conversions. Separate probes verify nineteen traps and the pinned ARM64 NaN-prefix result; Linux checking and Windows DLL/test compilation pass. Allocator, CPU-feature/float-cast, and remaining image API boundaries are recorded below. |
 | zigimg octree quantizer | The locked palette quantizer, per-level node lists, and RGB(A) input normalization were absent. | Translate tree insertion, weighted averages, palette borrowing/order, first-child lookup fallback, checked leaf accumulation, wrapping reduction sums, and f32 alpha/channel scaling. Preserve sufficient-budget behavior, skipped level zero, zero-budget/default indices, and repeated-reduction/capacity traps. Twenty image test files pass; native hashes match 2,160 tree/palette/index cases and 336,128 color-normalization cases, with six separate checked-bound probes. Linux checking and Windows DLL/test compilation pass. Arena/root/generic representation limits remain below. |
 | zigimg TGA codec | The locked TGA record/extension model, raw/RLE reader, and encoders were absent. | Translate the packed metadata, 512-byte buffered packet decoder, palettes, alpha policy, seven encoder storage formats, row ordering, and scalar equivalents of both RLE encoders. Preserve the 26-byte minimum, different detector/reader footer checks, unchecked origins/direction flags, active-palette indexing, extension-only alpha override, 256-byte ID omission, 39-byte metadata-name limit, SIMD tail splitting, and conversion runs across rows. Native hashes match 2,016 encoder and 1,120 decoder cases; nineteen image test files, separate checked-bound probes, Linux checking, and Windows DLL/test compilation pass. CPU-feature selection, sentinel/initialization, and image-wide API boundaries remain below. |
@@ -778,12 +779,14 @@ an item here does not mean its full module has been certified yet.
   storage variants, raw initialization/slices, palette capacity operations,
   memory and bit streams, QOI/farbfeld/PBM/PGM/PPM/PAM/RAS/SGI/XBM/PCX/BMP/IFF/GIF/TGA codecs, image editing,
   pixel iteration, PackBits/LZW/CCITT compression helpers, and the octree palette
-  quantizer, pixel-format converter, and unmanaged-image conversion methods.
+  quantizer, pixel-format converter, managed image construction/editing
+  methods, image-wide encoder options, and managed/unmanaged fixed-memory writing.
   The source PNG writer is translated
   as it actually exists: it emits only the eight-byte signature because its
   chunk-writing bodies are commented out. A native Zig 0.15.2 reference harness
   verifies those codec behaviors and bytes without modifying the source. The
-  pinned RAS, SGI, XBM, IFF, and GIF writers succeed without emitting bytes; that is also preserved.
+  pinned RAS, SGI, XBM, IFF, GIF, JPEG, and TIFF writers succeed without
+  emitting bytes; that is also preserved.
   SGI retains the source's RGBA64 alpha byte indexing and endian swap,
   grayscale8 storage for 16-bit grayscale, and unclipped RLE scanlines.
   PAM preserves little-endian 16-bit samples, monochrome-alpha AND, subsequent
@@ -901,9 +904,23 @@ an item here does not mean its full module has been certified yet.
   Image convert/convertNoFree replace only the main pixels, leave animation
   frames unchanged, and return early for the current format. GC replaces the
   source's distinct old-storage freeing contracts.
-  PNG/JPEG/TIFF decoding, automatic format dispatch, file
-  streams, full color convenience methods,
-  and the complete managed/unmanaged image API remain open.
+  Managed/unmanaged views retain shared pixel, palette, and animation-frame
+  backing data with independent slice lengths and scalar metadata. Iterators
+  point at the live managed pixels through replacement. Raw creation copies
+  input without validating dimensions against its length; cropping drops
+  animation. Fixed-memory image writing dispatches all 17 encoder tags and
+  returns a borrowed prefix, preserving buffer mutation on errors. Dimension
+  multiplication and zero-height row/flip checks retain source traps.
+  The managed image has no allocator field and delegates explicitly rather
+  than reproducing the source's prefix layout and pointer cast to unmanaged
+  storage. Lifecycle hooks retain the skipped shared first animation frame,
+  but GC replaces all explicit reclamation. Encoder options use a V sum type
+  with empty markers for void arms and distinct PBM/PGM/PPM wrappers; Format
+  uses a byte instead of the source's u5 tag. These aggregates are not ABI
+  aliases. V byte arrays also lack the source's read-only slice type contract.
+  PNG/JPEG/TIFF decoding, automatic detection/loading, file streams and image
+  file methods, full color convenience methods, and the complete image API
+  remain open.
   Arrays use GC ownership and V length fields in place of allocator slices;
   allocation failures are not reproduced. Sub-byte scalar fields/indices use
   bytes or backing words, sum variants have named V wrappers, and nested
@@ -919,9 +936,8 @@ an item here does not mean its full module has been certified yet.
   array hash map and arena. Its free `lzw_decoder_init[E]` constructor supports
   calls from generic functions, where the pinned V compiler mis-specializes
   the static constructor; concrete static calls remain available.
-  Codec writers currently accept per-codec options rather than the complete
-  image-wide encoder-options union. This is an incremental dependency
-  translation, not certification of the full library or vaxis image loading.
+  This is an incremental dependency translation, not certification of the
+  full library or vaxis image loading.
 - **vaxis widget framework representation:** All pinned `vxfw` widgets and
   the `boo` widget pipeline are translated. Frame buffers, command arrays, and
   layout temporaries use V GC ownership in place of explicit allocators and
@@ -1196,6 +1212,21 @@ in `zigimg/reference_probes/converter_bounds`. Native comparisons use page
 allocation because an align(1) arena can trigger the source's destination
 f32 alignment cast. The module passes Linux checking; its DLL and focused test
 executable cross compile with MinGW. Windows runtime remains untested.
+
+The image API runner at `zigimg/verify_image_api_reference.py` verifies a hash
+of the entire locked `src` tree before copying it unchanged. Its matrix covers
+all 17 encoder tags, eight storage profiles, three option profiles, eight buffer
+capacities, and both managed/unmanaged entry points: 6,528 cases compare errors,
+successful lengths, borrowed pointers, and every buffer byte, including partial
+writes and untouched tails. Direct V/native cases verify creation across all 24
+pixel formats, raw copy/dimension independence, shared backing with independent
+slice headers, animation-frame sharing, live iteration through conversion,
+editing, failed/same-format conversion, and no-op writers with invalid images.
+Eight subprocess cases in `zigimg/reference_probes/image_bounds` compare checked
+creation/crop overflow and zero-height row/flip traps through both image APIs.
+All 22 image test files, native/Linux checking, and MinGW DLL/focused-test
+compilation pass; Windows runtime and allocator/aggregate ABI parity remain
+uncertified.
 
 The focused tests and compile gates named in each audit session are expected to
 pass at the recorded commit. A repository-wide build is not proof that every

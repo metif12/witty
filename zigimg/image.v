@@ -8,10 +8,24 @@ pub mut:
 	duration f32
 }
 
+pub fn (frame AnimationFrame) deinit() {
+	frame.pixels.deinit()
+}
+
 pub struct Animation {
 pub mut:
 	frames     []AnimationFrame
 	loop_count i32 = animation_loop_infinite
+}
+
+pub fn (mut animation Animation) deinit() {
+	// The source skips the shared first frame when releasing pixel allocations.
+	if animation.frames.len >= 2 {
+		for frame in animation.frames[1..] {
+			frame.deinit()
+		}
+	}
+	// GC replaces ArrayList.deinit; post-deinit state is undefined in the source.
 }
 
 pub struct ImageUnmanaged {
@@ -20,6 +34,21 @@ pub mut:
 	height    usize
 	pixels    PixelStorage = InvalidPixels{}
 	animation Animation
+}
+
+pub fn (mut image ImageUnmanaged) deinit() {
+	image.pixels.deinit()
+	image.animation.deinit()
+}
+
+pub fn (image ImageUnmanaged) to_managed() Image {
+	return Image{
+		width:  image.width
+		height: image.height
+		// Copy slice headers while retaining the same backing pixel/palette data.
+		pixels:    image.pixels.slice(0, image.pixels.len())
+		animation: image.animation
+	}
 }
 
 pub fn ImageUnmanaged.from_raw_pixels_owned(width usize, height usize, bytes []u8, format PixelFormat) !ImageUnmanaged {
@@ -38,8 +67,13 @@ pub fn ImageUnmanaged.create(width usize, height usize, format PixelFormat) !Ima
 	return ImageUnmanaged{
 		width:  width
 		height: height
-		pixels: PixelStorage.init(format, width * height)!
+		pixels: PixelStorage.init(format, image_pixel_count(width, height))!
 	}
+}
+
+fn image_pixel_count(width usize, height usize) usize {
+	assert height == 0 || width <= ~usize(0) / height
+	return width * height
 }
 
 pub fn (image ImageUnmanaged) pixel_format() PixelFormat {
@@ -55,6 +89,7 @@ pub fn (image ImageUnmanaged) image_byte_size() usize {
 }
 
 pub fn (image ImageUnmanaged) row_byte_size() usize {
+	assert image.height != 0
 	return image.image_byte_size() / image.height
 }
 

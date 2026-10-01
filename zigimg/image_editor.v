@@ -27,6 +27,7 @@ pub fn (area Box) clamp(image_width usize, image_height usize) Box {
 
 pub fn flip_vertically(pixels &PixelStorage, height usize) ! {
 	mut image_data := pixels.as_bytes()
+	assert height != 0
 	row_size := int(usize(image_data.len) / height)
 	mut temp := []u8{len: row_size}
 	for image_data.len > row_size {
@@ -41,7 +42,7 @@ pub fn flip_vertically(pixels &PixelStorage, height usize) ! {
 
 pub fn crop(image &ImageUnmanaged, area Box) !ImageUnmanaged {
 	box := area.clamp(image.width, image.height)
-	mut pixels := PixelStorage.init(image.pixel_format(), box.width * box.height)!
+	mut pixels := PixelStorage.init(image.pixel_format(), image_pixel_count(box.width, box.height))!
 	if image.pixel_format().is_indexed() {
 		palette := image.pixels.get_palette() or { panic('missing source palette') }
 		pixels.resize_palette(usize(palette.len))

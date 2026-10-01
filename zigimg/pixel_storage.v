@@ -400,6 +400,11 @@ pub fn PixelStorage.init(format PixelFormat, pixel_count usize) !PixelStorage {
 	}
 }
 
+pub fn (storage PixelStorage) deinit() {
+	// Source frees each active slice/palette allocation. GC owns these in V.
+	_ = storage
+}
+
 pub fn PixelStorage.init_raw_pixels(bytes []u8, format PixelFormat) !PixelStorage {
 	return match format {
 		.grayscale1 {
