@@ -6,12 +6,26 @@ QOI, farbfeld, PBM, PGM, PPM, PAM, Sun raster, SGI, XBM, PCX, BMP, IFF, GIF, and
 PackBits/LZW/CCITT compression helpers, the octree palette quantizer, pixel-format
 conversion, managed image construction/editing methods, image-wide encoder options,
 fixed-memory image writing, in-memory format detection, TIFF metadata/IFDs/decoding,
-and the pinned PNG writer. It does not yet provide the complete image library
+PNG header/filter/processor foundations, and the pinned PNG writer. It does not yet provide the complete image library
 or vaxis loading.
 
 The PNG writer in this exact revision emits only the eight-byte signature;
 its chunk-writing bodies are commented out. Native reference execution and V
 tests preserve that behavior, including fixed-buffer failures.
+
+PNG header loading validates IHDR fields and CRC while accepting unnamed
+compression/filter bytes. Scanline filtering, defiltering, sample spreading,
+reader callbacks, borrowed one/two-processor options, and tRNS/PLTE processors
+follow the source. The heuristic's whole-row stride and omitted final run,
+gray16 transparency's byte-index comparisons, repeated tRNS replacement,
+and palette RGBA8 writes for BGRA32/RGBA64 destinations are preserved. The
+RGB24 direct processor API also retains its zero-stride loop for grayscale
+alpha destinations. Full PNG loading, IDAT buffering, Adam7, InfoProcessor,
+ZlibCompressor, and chunk-writer interfaces remain untranslated. GC/opaque
+callbacks replace allocators and generated vtables; allocator selection and
+root DefaultPngOptions overrides are absent. Undefined native initial storage,
+failed scalar union assignments, and unwritten alpha tails are excluded from
+comparisons; V storage initializes. The wasm branch has not run locally.
 
 The pinned Sun raster writer succeeds without writing bytes. Its decoder
 preserves source RLE, planar palettes, one-bit row padding and polarity, and
@@ -348,6 +362,17 @@ python3 zigimg/verify_tiff_decode_reference.py \
 It verifies the locked source tree and compiler dependency hashes before
 compiling the unchanged reference. Fixtures use Python's zlib for input
 generation; native decoding defines the expected behavior.
+
+The PNG foundation runner guards the same source/compiler dependencies and
+checks native goldens for headers, filtering, row helpers through full native
+PNG reads, and processor state/truncations. Its 74,260 defined cases also run
+in `png_reference_test.v`. Passing `--v` builds both isolated probes and
+compares fourteen checked traps and the inherited zero-stride loop:
+
+```sh
+python3 zigimg/verify_png_foundation_reference.py \
+  /path/to/locked-zigimg /path/to/zig-0.15.2/zig --v /path/to/v-0.5.2
+```
 
 IFF checked bounds use separate process probes. Build the V executable from
 `zigimg/reference_probes/iff_bounds` and the locked-source Zig executable from

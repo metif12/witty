@@ -9,6 +9,7 @@ below exist. Earlier versions of this document overstated the completed review.
 
 | Area | Bug | Fix |
 |---|---|---|
+| zigimg PNG header, filtering, and processors | Header loading, scanline filtering/defiltering/spreading, and the reader processor/options surface were absent. | Translate chunk IDs/headers, IHDR validation and CRC, all five filters and the pinned heuristic, opaque-context callbacks, borrowed generic option storage, and tRNS/PLTE processors. Preserve open compression/filter bytes, error positions, first ancillary versus all critical callbacks, callback state after failure, repeated tRNS replacement, gray16 byte-index comparisons, and RGBA palette writes independent of destination channel order/width. Unchanged-source matrices match 74,260 defined cases; fourteen checked traps and the inherited zero-stride loop match in isolated processes. All 27 image test files, native/Linux checks, and Windows DLL/focused-test compilation pass. Full PNG loading, IDAT/Adam7, InfoProcessor, allocator/root-option overrides, and representation/undefined-memory boundaries remain below. |
 | zigimg TIFF decoder | The pinned strip reader, compression wrappers, and read/readImage APIs were absent. | Translate all five accepted pixel storage paths and all six accepted compression kinds, including the Zig 0.15.2 zlib buffered-reader dependency. Preserve unchecked TIFF versions, ignored compressed byte counts outside PackBits, floor-rounded one-bit rows, wrapping predictors for every value other than one, CCITT photometric truncation, linear clipping, partial writes, and read-ahead/error positions. An unchanged-source differential run matches 39,707 cases and fifteen checked traps. All 25 image test files, native/Linux checks, and Windows DLL/test compilation pass. Undefined-memory/GC/ABI boundaries, diagnostics, automatic loading, and the remaining codecs/interfaces stay open below. |
 | zigimg TIFF metadata | The pinned packed records, IFD/tag model, bitmap metadata processing, format selection, and row sizing were absent. | Translate all 32 tag IDs, both byte orders, SHORT/LONG and rational access, duplicate-tag replacement, Zig 0.15.2 hash-table placement/growth/iteration, bitmap defaults, palette planes, and pixel-format constraints. Preserve raw inline SHORT words, ignored fill-order/orientation tags, partial tag-array reads, capacity-dependent palette processing order, and floor-rounded one-bit row sizes. Native hashes match 3,072 table mutations, 38,400 format/row cases, and 4,224 metadata/palette cases. Thirteen checked-trap probes, all 24 image test files, native/Linux checks, and Windows DLL/test compilation pass. The debug formatter, the remaining generic map API, allocator reclamation, and undefined-memory/aggregate representation limits remain below. |
 | zigimg in-memory format detection | Both image APIs lacked the pinned 17-detector registry and JPEG/TIFF signature checks. | Translate ordered detection with seeking before each check and propagated detector errors. Preserve short-input blocking, TIFF's byte-order-only acceptance and swallowed peek errors, TGA precedence over TIFF, and the inherited XBM non-advancing loop. The unchanged native source matches 589,824 prefix/length cases; direct tests cover every returning format, both image APIs, detector positions, and ambiguous signatures. Separate process timeouts verify the XBM loop through both image APIs. Twenty-three image test files, native/Linux checking, and Windows DLL/test compilation pass. Automatic loading, reader dispatch, file methods, and the remaining codec/interface surfaces stay open. |
@@ -784,7 +785,8 @@ an item here does not mean its full module has been certified yet.
   pixel iteration, PackBits/LZW/CCITT compression helpers, and the octree palette
   quantizer, pixel-format converter, managed image construction/editing
   methods, image-wide encoder options, managed/unmanaged fixed-memory writing,
-  in-memory format detection, and TIFF metadata/IFD/strip decoding.
+  in-memory format detection, TIFF metadata/IFD/strip decoding, and PNG header/
+  filter/processor foundations.
   The source PNG writer is translated
   as it actually exists: it emits only the eight-byte signature because its
   chunk-writing bodies are commented out. A native Zig 0.15.2 reference harness
@@ -984,7 +986,38 @@ an item here does not mean its full module has been certified yet.
   Source short strip/output tails and unfilled pixels are undefined; V starts
   them at zero and tests compare defined data. Source read defers reclaim IFD
   maps and strip arrays while leaving scalar metadata; V keeps GC-backed data.
-  PNG/JPEG decoding, automatic loading/reader dispatch, file streams and
+  PNG now has the source's 17 chunk constants, packed chunk header with a
+  borrowed native-order name view, IHDR loading with exhaustive color/interlace
+  enum validation, and its IEEE CRC. Unnamed compression/filter bytes are
+  accepted as in the source's non-exhaustive enums. Header helpers preserve
+  checked u8/u32 arithmetic. Filtering packs sub-byte samples, swaps native
+  16-bit words to big endian, preserves pixel-stride neighbors, and maps fixed
+  writer failures to InvalidData after retaining written prefixes. The
+  heuristic uses the entire row length as its horizontal stride and omits
+  unfinished final runs; TryAll traps only after a nonempty row is filled.
+  Defiltering and spreading preserve byte wrapping, unscaled sub-byte samples,
+  untouched channel gaps, and optional word swaps; they are not yet wired to
+  a translated image loader.
+  Reader callbacks preserve initial chunk-ID matching, all critical
+  notifications, first-only ancillary processing, stride-growth checks,
+  palette ordering, and row source-format restoration only after success.
+  The one/two-processor generic options borrow their inline callback arrays
+  and embedded live contexts. tRNS skips CRC validation, allows replacement
+  chunks until palette/row processing, keeps partial indexed-alpha writes,
+  and compares a byte at each u16 sample index in the gray16 path. Its RGB24
+  direct API retains the zero-stride loop for grayscale-alpha destinations.
+  PLTE borrows the live palette and writes RGBA8 bytes even for BGRA32/RGBA64
+  destinations. Source processor palette/default storage and failed scalar
+  tRNS union assignments can be undefined; V initializes them and preserves
+  the old scalar arm after a failed read. Comparisons exclude undefined state
+  and alpha tails. The wasm checked-multiply branch is translated but not run.
+  V string/array headers replace Chunk's sentinel pointer and read-only name
+  slice. Explicit opaque-context callbacks and GC-backed vtables replace
+  generated typed-pointer adapters/static tables; allocator selection,
+  NoopAllocator, getWithTempAllocator, and root DefaultPngOptions overrides
+  are not exposed. Full PNG load/loadWithHeader, consecutive IDAT buffering,
+  Adam7, InfoProcessor, ZlibCompressor, and chunk-writer interfaces remain open.
+  JPEG decoding, automatic loading/reader dispatch, file streams and
   image file methods, the FormatInterface callback surface, full color
   convenience methods, and the complete image API remain open. The registry's
   direct V dispatch replaces source function-pointer/reflection representation.
@@ -1346,6 +1379,27 @@ trap. Ordinary returned errors cannot satisfy these trap probes. All 25 image
 test files pass, as do native/Linux module checks and MinGW DLL/focused-test
 compilation. Windows runtime remains untested. The full image library and
 vaxis loading remain uncertified.
+
+The PNG foundation runner at `zigimg/verify_png_foundation_reference.py` guards
+the locked source tree and Zig 0.15.2 reader/writer/flate files before copying
+the source unchanged. Its native/V matrices match 8,482 header cases
+(`8cb5945cdde99fe7`), 43,200 filtering cases (`809cede448778a71`), 1,800 row
+cases (`2ad35f81b5cd96cd`), 2,058 processor cases (`b0a838ddd9ac9218`), and
+18,720 tRNS truncations (`0975e75ee48838d7`). Row goldens come from the full
+unchanged native PNG reader; the V comparison exercises the translated filter,
+defilter, and spread helpers without claiming a V image loader. Fixtures cover
+all 15 accepted PNG formats, five filters/heuristic, packed rows, multiple rows,
+short/full/oversized writer buffers with defined sentinel tails, every header
+byte value, processor states, palette aliasing, and error positions. Failed
+native scalar union assignments and unwritten allocated tails are excluded
+from state hashing. Fourteen subprocess probes in
+`zigimg/reference_probes/png_foundation_bounds` compare arithmetic, row/palette
+bounds, wrong union/source arms, and TryAll; an ordinary returned error cannot
+satisfy a trap probe. Separate 250 ms processes verify entry into the inherited
+RGB24-to-grayscale-alpha zero-stride loop. All 27 image test files pass, as do
+native/Linux module checking and Windows DLL/focused-test compilation. Windows
+runtime remains untested; the remaining PNG reader and whole library are not
+certified.
 
 The focused tests and compile gates named in each audit session are expected to
 pass at the recorded commit. A repository-wide build is not proof that every

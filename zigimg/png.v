@@ -100,7 +100,9 @@ pub fn (header PngHeaderData) channel_count() u8 {
 }
 
 pub fn (header PngHeaderData) pixel_bits() u8 {
-	return header.bit_depth * header.channel_count()
+	channels := header.channel_count()
+	assert header.bit_depth <= u8(255) / channels
+	return header.bit_depth * channels
 }
 
 pub fn (header PngHeaderData) line_bytes() u32 {
