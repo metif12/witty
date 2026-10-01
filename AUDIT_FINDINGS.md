@@ -9,6 +9,7 @@ below exist. Earlier versions of this document overstated the completed review.
 
 | Area | Bug | Fix |
 |---|---|---|
+| zigimg octree quantizer | The locked palette quantizer, per-level node lists, and RGB(A) input normalization were absent. | Translate tree insertion, weighted averages, palette borrowing/order, first-child lookup fallback, checked leaf accumulation, wrapping reduction sums, and f32 alpha/channel scaling. Preserve sufficient-budget behavior, skipped level zero, zero-budget/default indices, and repeated-reduction/capacity traps. Twenty image test files pass; native hashes match 2,160 tree/palette/index cases and 336,128 color-normalization cases, with six separate checked-bound probes. Linux checking and Windows DLL/test compilation pass. Arena/root/generic representation and the consuming pixel-format converter remain below. |
 | zigimg TGA codec | The locked TGA record/extension model, raw/RLE reader, and encoders were absent. | Translate the packed metadata, 512-byte buffered packet decoder, palettes, alpha policy, seven encoder storage formats, row ordering, and scalar equivalents of both RLE encoders. Preserve the 26-byte minimum, different detector/reader footer checks, unchecked origins/direction flags, active-palette indexing, extension-only alpha override, 256-byte ID omission, 39-byte metadata-name limit, SIMD tail splitting, and conversion runs across rows. Native hashes match 2,016 encoder and 1,120 decoder cases; nineteen image test files, separate checked-bound probes, Linux checking, and Windows DLL/test compilation pass. CPU-feature selection, sentinel/initialization, and image-wide API boundaries remain below. |
 | zigimg GIF decoder | The locked GIF header/extension model, sub-block/LZW reader, and animation renderer were absent. | Translate both versions, global/local palettes, comments/application records, frame grouping/filtering, interlacing, transparency, all disposal paths, and first-frame sharing. Preserve ignored extension size/terminator fields, byte-scanned unknown extensions, indexed transparency without palette-alpha changes, final-local-palette overwrite, canvas-height interlacing, linear clipping, shifted RGBA background channels, opaque restoration to a transparency color, ignored LZW write failures, and the no-op writer. Eighteen image test files and unchanged native reference checks pass; separate probes verify text-count, buffered-toss, loop-count, and indexed-background bounds. Linux checking and Windows DLL/test compilation pass. GC/initialization and image-wide API boundaries remain below. |
 | zigimg IFF decoder | The locked IFF chunk/header model, PBM/ILBM/ACBM reader, planar conversion, Atari ByteRun2, and HAM/EHB palette paths were absent. | Translate them with source chunk lengths, unpadded walking, unclipped planar bits, ACBM's raw path despite the compression flag, HAM row state, EHB priority, and partial-input positions. Preserve rejected DEEP detection, its zero/non-consuming header stub, and the no-op writer. Seventeen image test files and unchanged native reference checks pass; separate V/Zig probes verify checked stride, padding, empty-palette, and HAM bounds. Linux checking and Windows DLL/test compilation pass. Initialization and diagnostic/API boundaries remain below. |
@@ -775,7 +776,8 @@ an item here does not mean its full module has been certified yet.
   `d7b7ab0ba0899643831ef042bd73289510b39906`, with all 24 pixel-format tags,
   storage variants, raw initialization/slices, palette capacity operations,
   memory and bit streams, QOI/farbfeld/PBM/PGM/PPM/PAM/RAS/SGI/XBM/PCX/BMP/IFF/GIF/TGA codecs, image editing,
-  pixel iteration, and PackBits/LZW/CCITT compression helpers. The source PNG writer is translated
+  pixel iteration, PackBits/LZW/CCITT compression helpers, and the octree palette
+  quantizer. The source PNG writer is translated
   as it actually exists: it emits only the eight-byte signature because its
   chunk-writing bodies are commented out. A native Zig 0.15.2 reference harness
   verifies those codec behaviors and bytes without modifying the source. The
@@ -853,8 +855,26 @@ an item here does not mean its full module has been certified yet.
   and option names use strings, without Zig's sentinel type contract. Source
   undefined RGB555 padding bits, default footer signatures, and incomplete
   ID storage are initialized in V; comparisons exclude undefined output bits.
+  The octree quantizer now retains linked per-level lists, checked leaf sums,
+  wrapping reduction sums, weighted floor averages, palette traversal/order,
+  borrowed output, and first-child fallback for colors absent from the tree.
+  A sufficient palette budget leaves the tree intact; reduction skips level
+  zero, and a zero budget emits no entries while lookup retains default zero
+  indices. Repeated reduction can encounter collapsed nodes and trap on a
+  negative removed-leaf cast; output capacity is checked by indexed writes.
+  Input normalization preserves the f32 round-trip for integer alpha,
+  intermediate 16-bit quantization before narrowing, packed channel scaling,
+  and NaN upper clamping. GC replaces the arena and allocation failures;
+  the root uses a stable heap address in place of the source's inline node.
+  Source `allocateNode` returns uninitialized storage until `Node.init`, while
+  V allocation initializes it. Generic input covers translated RGB(A) types,
+  rather than arbitrary caller structs with Zig's color-method namespaces.
+  The pinned V compiler also emits invalid default formatters for recursive
+  fixed pointer arrays; pointer assertions use `voidptr` to avoid that path.
+  Tests compare defined behavior; allocator/lifetime and aggregate ABI parity
+  are not certified. The consuming pixel-format converter remains absent.
   PNG/JPEG/TIFF decoding, automatic format dispatch, file
-  streams, conversions/quantization, full color convenience methods,
+  streams, pixel-format conversions, full color convenience methods,
   and the complete managed/unmanaged image API remain open.
   Arrays use GC ownership and V length fields in place of allocator slices;
   allocation failures are not reproduced. Sub-byte scalar fields/indices use
@@ -1064,7 +1084,7 @@ exercised on this macOS host. The Metal build compiler is absent here
 (`xcrun --find metal` fails), so the remaining metallib build divergence
 cannot be validated on this host yet.
 
-All nineteen zigimg V test files pass. The image dependency DLL cross compiles
+All twenty zigimg V test files pass. The image dependency DLL cross compiles
 with MinGW, and the unmodified locked Zig dependency passes the standalone
 QOI/farbfeld/PNG/PBM/PGM/PPM/PAM/RAS/SGI/XBM/PCX/BMP/IFF/GIF/TGA, editing, all-format pixel iteration, and bit-stream
 reference harness in
@@ -1118,6 +1138,19 @@ and CCITT row/padding behavior. Its runner checks locked source SHA-256 values
 and copies unchanged source files into a temporary package to access private
 modules, adding only the reference harness. The LZW, CCITT, and PackBits V test
 executables also cross compile with MinGW; no Windows runtime was exercised.
+
+The private octree quantizer has a separate source-hash-verified native runner
+at `zigimg/verify_quantizer_reference.py`, which copies unchanged locked source
+into a temporary package and adds its harness. Native hashes match 2,160
+palette/index/tree-count cases and 336,128 input normalization cases, including
+complete packed-color ranges, all 8-bit alpha/color pairs, 16-bit alpha
+round-trips, and sampled float bit patterns. Direct cases compare node list
+registration, wrapping merges, floor averages, palette borrowing, zero budgets,
+missing colors, and all translated RGB(A) input types. Six subprocess probes in
+`zigimg/reference_probes/quantizer_bounds` compare palette capacity, repeated
+reduction, component/reference overflow, average casts, and invalid color
+levels. The module passes Linux checking, and its DLL and focused test
+executable cross compile with MinGW; Windows runtime remains untested.
 
 The focused tests and compile gates named in each audit session are expected to
 pass at the recorded commit. A repository-wide build is not proof that every

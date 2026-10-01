@@ -3,8 +3,8 @@ This is an incremental V translation of zigimg revision
 vaxis. It currently covers the pixel-format words, storage variants, raw and
 indexed storage, memory and bit streams, crop/flip editing, pixel iteration,
 QOI, farbfeld, PBM, PGM, PPM, PAM, Sun raster, SGI, XBM, PCX, BMP, IFF, GIF, and TGA codecs,
-PackBits/LZW/CCITT compression helpers, and the pinned PNG writer. It does not
-yet provide the complete image library or vaxis loading.
+PackBits/LZW/CCITT compression helpers, the octree palette quantizer, and the
+pinned PNG writer. It does not yet provide the complete image library or vaxis loading.
 
 The PNG writer in this exact revision emits only the eight-byte signature;
 its chunk-writing bodies are commented out. Native reference execution and V
@@ -101,6 +101,22 @@ Their sub-byte state uses wider V backing values. LZW maps and GC replace the
 source dictionary and arena; `lzw_decoder_init[E]` works around the pinned V
 compiler's static-constructor specialization defect inside generic callers.
 
+The octree quantizer preserves per-level insertion lists, weighted integer
+averages, wrapping reduction sums, checked leaf accumulation, traversal order,
+and first-child fallback for missing colors. RGB(A) input normalization retains
+the source's f32 alpha round-trip, channel-width scaling, and NaN upper clamp.
+Output borrows the caller's palette; its requested color budget does not clip
+to the buffer's length. A sufficient budget leaves the tree intact. Reduction
+does not process level zero; a zero budget emits no palette entries, while
+lookup still returns default indices. Repeating reduction can trap on an
+already collapsed node. Native hashes match 2,160 palette/tree/index cases and
+336,128 color-normalization cases. GC replaces the arena and the root uses a
+stable heap address. Generic input accepts the translated RGB(A) storage types;
+arbitrary caller types with Zig color-method namespaces remain a boundary.
+The pinned V compiler cannot format recursive fixed pointer arrays; pointer
+assertions use `voidptr` to avoid its invalid generated formatter. The
+pixel-format converter that consumes this helper is still untranslated.
+
 V arrays and GC replace allocator slices. Sub-byte scalar values use byte
 storage or packed backing words. Allocation errors, every color conversion
 method, file streams, decoding other formats, format dispatch, and the
@@ -155,6 +171,22 @@ python3 zigimg/verify_compressions_reference.py \
 ```
 
 Its default target is `aarch64-macos.14.0`; use `--target` for another host.
+
+The private quantizer uses the same source-hash/copy approach:
+
+```sh
+python3 zigimg/verify_quantizer_reference.py \
+  /path/to/zigimg-d7b7ab0ba0899643831ef042bd73289510b39906 \
+  /path/to/zig-0.15.2/zig --probe-output /path/to/zig-probe
+```
+
+Build the V probe from `zigimg/reference_probes/quantizer_bounds`, then compare
+palette capacity, repeated reduction, component/reference overflow, average
+casts, and color-level checks:
+
+```sh
+python3 zigimg/reference_probes/quantizer_bounds/verify.py /path/to/v-probe /path/to/zig-probe
+```
 
 IFF checked bounds use separate process probes. Build the V executable from
 `zigimg/reference_probes/iff_bounds` and the locked-source Zig executable from
