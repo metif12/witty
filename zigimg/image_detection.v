@@ -42,15 +42,12 @@ fn image_detect_format(mut stream ReadStream) !Format {
 	return error('Unsupported')
 }
 
-// Only these detectors are translated here; the JPEG/TIFF readers and codec
-// state remain untranslated. JPEG's source detector is a private callback.
+// JPEG's source detector is a private callback; its reader/state remain open.
 fn jpeg_format_detect(mut stream ReadStream) !bool {
 	magic := stream.peek(2)!
 	return magic == [u8(0xff), 0xd8]
 }
 
 fn tiff_format_detect(mut stream ReadStream) !bool {
-	// Source peekEndianess accepts only the byte-order marker and ignores version.
-	magic := stream.peek(2) or { return false }
-	return magic == 'II'.bytes() || magic == 'MM'.bytes()
+	return TIFF.format_detect(mut stream)
 }

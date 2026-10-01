@@ -5,8 +5,9 @@ indexed storage, memory and bit streams, crop/flip editing, pixel iteration,
 QOI, farbfeld, PBM, PGM, PPM, PAM, Sun raster, SGI, XBM, PCX, BMP, IFF, GIF, and TGA codecs,
 PackBits/LZW/CCITT compression helpers, the octree palette quantizer, pixel-format
 conversion, managed image construction/editing methods, image-wide encoder options,
-fixed-memory image writing, in-memory format detection, and the pinned PNG
-writer. It does not yet provide the complete image library or vaxis loading.
+fixed-memory image writing, in-memory format detection, TIFF metadata/IFDs,
+and the pinned PNG writer. It does not yet provide the complete image library
+or vaxis loading.
 
 The PNG writer in this exact revision emits only the eight-byte signature;
 its chunk-writing bodies are commented out. Native reference execution and V
@@ -169,10 +170,28 @@ byte-order marker without checking the version; TGA can take precedence over
 TIFF through its header or footer. Unknown inputs without a newline can fail
 at the final XBM delimiter peek; a leading define line preserves its
 non-advancing loop. Registry dispatch uses direct V matches rather than the
-source's reflected callback array. JPEG/TIFF helpers here cover detection;
-their codec state/read APIs remain untranslated. A native hash matches
+source's reflected callback array. JPEG's helper here covers detection;
+its codec state/read APIs remain untranslated. A native hash matches
 589,824 prefix/length cases, and separate bounded processes compare the XBM
 loop through both image APIs.
+
+TIFF metadata preserves its packed 6/12/10-byte records, all 32 tag IDs,
+IFD parsing, bitmap defaults, sample/palette fields, format selection, and
+row sizing. Tags retain raw inline SHORT words, byte-order-aware arrays,
+rational pairs, ignored fill-order/orientation fields, and successful short
+array reads with undefined source tails. Tests compare only defined samples
+in those tails. The tag map matches Zig 0.15.2 hashing, placement, growth,
+reservation, duplicate replacement, and bucket-order iteration. Reserving
+capacity can put the palette before the bits tag, making it use the default
+bit depth. Component arrays truncate to u16; RGB/RGBA selection ignores the
+samples-per-pixel value that row sizing uses. One-bit row sizing rounds down.
+Native hashes match 3,072 table
+mutations, 38,400 bitmap/row cases, and 4,224 metadata/palette cases. Thirteen
+separate probes compare checked enum, capacity, component, arithmetic, and
+palette traps. Fixed storage has eight- and 256-element specializations;
+GC replaces reclamation, V initializes undefined source fields/storage,
+and the remaining general-purpose map API and debug formatter stay open.
+TIFF strip decoding and complete read APIs still require translation.
 
 Cropping copies the active indexed palette and pixel rows into independent
 storage and does not copy animation data. Flipping mutates the existing pixels.
@@ -280,6 +299,22 @@ then compare both image APIs:
 ```sh
 python3 zigimg/reference_probes/image_detection/verify.py \
   /path/to/v-detection-probe /path/to/zig-detection-probe
+```
+
+The TIFF metadata runner verifies the same unchanged locked source tree:
+
+```sh
+python3 zigimg/verify_tiff_metadata_reference.py \
+  /path/to/zigimg-d7b7ab0ba0899643831ef042bd73289510b39906 \
+  /path/to/zig-0.15.2/zig --probe-output /path/to/zig-probe
+```
+
+Build the V probe from `zigimg/reference_probes/tiff_metadata_bounds`, then
+compare its checked metadata traps:
+
+```sh
+python3 zigimg/reference_probes/tiff_metadata_bounds/verify.py \
+  /path/to/v-probe /path/to/zig-probe
 ```
 
 IFF checked bounds use separate process probes. Build the V executable from

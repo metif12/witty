@@ -151,7 +151,7 @@ fn (image ImageUnmanaged) internal_write(mut stream WriteStream, options Encoder
 			TGA.write_image(mut stream, image, options)!
 		}
 		TiffEncoderOptions {
-			// TIFF.writeImage also succeeds without output in the source.
+			TIFF.write_image(mut stream, image, options)!
 		}
 		XbmEncoderOptions {
 			XBM.write_image(mut stream, image)!

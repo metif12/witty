@@ -1,5 +1,24 @@
 module zigimg
 
+// TIFF uses the source's separate eight-element specialization.
+pub struct FixedStorage8[T] {
+pub mut:
+	data    []T
+	storage [8]T
+}
+
+pub fn (mut buffer FixedStorage8[T]) resize[T](size usize) {
+	assert size <= 8
+	mut data := []T{}
+	unsafe {
+		data.data = &buffer.storage[0]
+		data.len = int(size)
+		data.cap = int(size)
+		data.flags = .nofree
+	}
+	buffer.data = data
+}
+
 // The 256-element specialization of pinned utils.FixedStorage(T, size).
 // V does not provide Zig's type factory parameterized on an integer value.
 pub struct FixedStorage256[T] {
