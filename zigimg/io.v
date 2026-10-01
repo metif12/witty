@@ -75,6 +75,14 @@ pub fn (mut stream ReadStream) read_slice_all(mut destination []u8) ! {
 	if count < destination.len { return error('EndOfStream') }
 }
 
+// std.Io.Reader.discardAll consumes the available prefix before reporting EOF.
+pub fn (mut stream ReadStream) discard_all(count usize) ! {
+	remaining := usize(stream.buffer.len - stream.position)
+	discarded := if count < remaining { count } else { remaining }
+	stream.position += int(discarded)
+	if discarded < count { return error('EndOfStream') }
+}
+
 pub struct WriteStream {
 mut:
 	buffer   []u8

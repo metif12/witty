@@ -2,7 +2,7 @@ This is an incremental V translation of zigimg revision
 `d7b7ab0ba0899643831ef042bd73289510b39906`, the dependency locked by pinned
 vaxis. It currently covers the pixel-format words, storage variants, raw and
 indexed storage, memory and bit streams, crop/flip editing, pixel iteration,
-QOI, farbfeld, PBM, PGM, PPM, PAM, Sun raster, SGI, XBM, PCX, and BMP codecs,
+QOI, farbfeld, PBM, PGM, PPM, PAM, Sun raster, SGI, XBM, PCX, BMP, and IFF codecs,
 PackBits/LZW/CCITT compression helpers, and the pinned PNG writer. It does not
 yet provide the complete image library or vaxis loading.
 
@@ -50,6 +50,16 @@ encoder's V5 masks. Windows 3.1 headers are parsed and then rejected. Zero
 dimensions are accepted; signed dimensions follow the source path, including
 negative heights that leave pixels unwritten. Those undefined source pixels
 and default codec headers share the initialization boundary described above.
+
+IFF preserves PBM/ILBM/ACBM decoding, planar layout, PackBits, Atari ByteRun2,
+HAM6/HAM8 color carry and palette reduction, and EHB expansion and priority.
+Its chunk walker does not consume odd-byte padding; planar conversion does
+not clip set padding bits at image width. DEEP detection is rejected, while
+its public header helper returns zeros without consuming bytes. The writer
+emits no bytes. The source leaves default IFF headers, inactive palette entries,
+and temporary planes unwritten by short PackBits input undefined. V initializes
+that storage; comparisons cover defined outputs. Public header debug hooks
+remain untranslated.
 
 PackBits preserves declared-length truncation, unclipped runs, and its unread
 final lone control byte. LZW retains endian selection, clear/end codes, early
@@ -114,3 +124,15 @@ python3 zigimg/verify_compressions_reference.py \
 ```
 
 Its default target is `aarch64-macos.14.0`; use `--target` for another host.
+
+IFF checked bounds use separate process probes. Build the V executable from
+`zigimg/reference_probes/iff_bounds` and the locked-source Zig executable from
+its `reference.zig`, using the same module and target options above, then run:
+
+```sh
+python3 zigimg/reference_probes/iff_bounds/verify.py /path/to/v-probe /path/to/zig-probe
+```
+
+They verify stride overflow, an out-of-bounds padding bit, empty CMAP, and HAM
+palette reduction below four bits. The native harness uses synthetic images;
+upstream binary fixture files are absent from the locked source archive.
