@@ -5,8 +5,8 @@ indexed storage, memory and bit streams, crop/flip editing, pixel iteration,
 QOI, farbfeld, PBM, PGM, PPM, PAM, Sun raster, SGI, XBM, PCX, BMP, IFF, GIF, and TGA codecs,
 PackBits/LZW/CCITT compression helpers, the octree palette quantizer, pixel-format
 conversion, managed image construction/editing methods, image-wide encoder options,
-fixed-memory image writing, and the pinned PNG writer. It does not yet provide
-the complete image library or vaxis loading.
+fixed-memory image writing, in-memory format detection, and the pinned PNG
+writer. It does not yet provide the complete image library or vaxis loading.
 
 The PNG writer in this exact revision emits only the eight-byte signature;
 its chunk-writing bodies are commented out. Native reference execution and V
@@ -140,8 +140,9 @@ animation frames unchanged. Native hashes match 18,432 format-pair cases and
 
 V arrays and GC replace allocator slices. Sub-byte scalar values use byte
 storage or packed backing words. Allocation errors, the full color convenience
-methods, file streams and image file methods, PNG/JPEG/TIFF decoding, and
-automatic image detection/loading still require translation.
+methods, file streams and image file methods, PNG/JPEG/TIFF decoding,
+automatic image loading/reader dispatch, and the FormatInterface callback
+surface still require translation.
 
 Managed images support creation, copied raw pixels, metadata, conversion,
 editing, iteration, and conversion to/from unmanaged views. Those views copy
@@ -160,6 +161,18 @@ distinct Netpbm wrappers preserve PBM/PGM/PPM tags, and the format enum uses
 byte backing instead of u5. Creation/crop overflow and zero-height row/flip
 operations preserve checked traps. The native dispatch hash matches 6,528
 cases across both image APIs, including buffer sizes and option variations.
+
+Both image APIs detect in-memory formats through the pinned 17-detector order,
+seeking before each check and propagating its errors. An earlier short peek
+can block an otherwise valid later signature. TIFF accepts only the II/MM
+byte-order marker without checking the version; TGA can take precedence over
+TIFF through its header or footer. Unknown inputs without a newline can fail
+at the final XBM delimiter peek; a leading define line preserves its
+non-advancing loop. Registry dispatch uses direct V matches rather than the
+source's reflected callback array. JPEG/TIFF helpers here cover detection;
+their codec state/read APIs remain untranslated. A native hash matches
+589,824 prefix/length cases, and separate bounded processes compare the XBM
+loop through both image APIs.
 
 Cropping copies the active indexed palette and pixel rows into independent
 storage and does not copy animation data. Flipping mutates the existing pixels.
@@ -257,6 +270,16 @@ dimension overflow and zero-height checks through both image APIs:
 
 ```sh
 python3 zigimg/reference_probes/image_bounds/verify.py /path/to/v-probe /path/to/zig-probe
+```
+
+The same runner compares in-memory detection. Pass
+`--detect-probe-output /path/to/zig-detection-probe` to also build its XBM-loop
+probe. Build the V counterpart from `zigimg/reference_probes/image_detection`,
+then compare both image APIs:
+
+```sh
+python3 zigimg/reference_probes/image_detection/verify.py \
+  /path/to/v-detection-probe /path/to/zig-detection-probe
 ```
 
 IFF checked bounds use separate process probes. Build the V executable from

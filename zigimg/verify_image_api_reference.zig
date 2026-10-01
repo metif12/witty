@@ -3,6 +3,8 @@ const Image = @import("src/Image.zig");
 const ImageUnmanaged = @import("src/ImageUnmanaged.zig");
 const PixelFormat = @import("src/pixel_format.zig").PixelFormat;
 const color = @import("src/color.zig");
+const codecs = @import("src/formats.zig");
+const io = @import("src/io.zig");
 const allocator = std.heap.page_allocator;
 
 fn options(format: Image.Format, variant: usize) Image.EncoderOptions {
@@ -177,6 +179,85 @@ fn verifyEditor() !void {
     try std.testing.expectEqual(pointer, image.rawBytes().ptr);
 }
 
+fn detectionError(err: anyerror) u64 {
+    return switch (err) {
+        error.Unseekable => 100,
+        error.EndOfStream => 101,
+        error.Unsupported => 102,
+        error.InvalidData => 103,
+        else => @panic(@errorName(err)),
+    };
+}
+
+fn detectionCode(bytes: []const u8, managed: bool) u64 {
+    const format = (if (managed) Image.detectFormatFromMemory(bytes) else ImageUnmanaged.detectFormatFromMemory(bytes)) catch |err| return detectionError(err);
+    return @intFromEnum(format);
+}
+
+fn verifyDetectionExamples() !void {
+    for ([_][]const u8{ "GIF89a", &.{ 0xff, 0xd8 }, "P7\n", "II", "qoif" }) |bytes| {
+        try std.testing.expectEqual(@as(u64, 101), detectionCode(bytes, false));
+        try std.testing.expectEqual(@as(u64, 101), detectionCode(bytes, true));
+    }
+    try std.testing.expectEqual(@as(u64, 100), detectionCode(&.{}, false));
+    try std.testing.expectEqual(@as(u64, 101), detectionCode("B", false));
+    try std.testing.expectEqual(@as(u64, @intFromEnum(Image.Format.bmp)), detectionCode("BM", false));
+    const signatures = [_][]const u8{ "BM", "farbfeld", "GIF89a", "FORM\x00\x00\x00\x00ILBM", &.{ 0xff, 0xd8 }, "P7\n", "P1", &.{ 0x0a, 5 }, "P2", &.{ 0x89, 'P', 'N', 'G', 13, 10, 26, 10 }, "P3", "qoif", &.{ 0x59, 0xa6, 0x6a, 0x95 }, &.{ 1, 0xda }, "II", "MM", "P4", "P5", "P6" };
+    const expected = [_]Image.Format{ .bmp, .farbfeld, .gif, .iff, .jpeg, .pam, .pbm, .pcx, .pgm, .png, .ppm, .qoi, .ras, .sgi, .tiff, .tiff, .pbm, .pgm, .ppm };
+    for (signatures, expected) |signature, format| {
+        var bytes: [32]u8 = @splat(0x9e);
+        @memcpy(bytes[0..signature.len], signature);
+        bytes[31] = '\n';
+        try std.testing.expectEqual(@as(u64, @intFromEnum(format)), detectionCode(&bytes, false));
+        try std.testing.expectEqual(@as(u64, @intFromEnum(format)), detectionCode(&bytes, true));
+    }
+    try std.testing.expectEqual(@as(u64, 102), detectionCode("garbage\n", false));
+    try std.testing.expectEqual(@as(u64, 101), detectionCode("garbage!", false));
+    try std.testing.expectEqual(@as(u64, @intFromEnum(Image.Format.tga)), detectionCode(&@as([19]u8, @splat(0)), false));
+    var hybrid: [32]u8 = @splat(0x9e);
+    @memcpy(hybrid[0..2], "II");
+    @memcpy(hybrid[14..30], "TRUEVISION-XFILE");
+    hybrid[30] = '.';
+    hybrid[31] = 0;
+    try std.testing.expectEqual(@as(u64, @intFromEnum(Image.Format.tga)), detectionCode(&hybrid, false));
+    @memcpy(hybrid[0..2], "BM");
+    try std.testing.expectEqual(@as(u64, @intFromEnum(Image.Format.bmp)), detectionCode(&hybrid, false));
+    for ([_][]const u8{ &.{}, &.{0xff}, &.{ 0xff, 0xd8 }, "II", "MM", "IM" }) |bytes| {
+        var jpeg = io.ReadStream.initMemory(bytes);
+        const detect_jpeg = codecs.jpeg.JPEG.formatInterface().formatDetect;
+        if (bytes.len < 2) {
+            try std.testing.expectError(error.EndOfStream, detect_jpeg(&jpeg));
+        } else {
+            try std.testing.expectEqual(std.mem.eql(u8, bytes, &.{ 0xff, 0xd8 }), try detect_jpeg(&jpeg));
+        }
+        try std.testing.expectEqual(@as(u64, 0), jpeg.getPos());
+        var tiff = io.ReadStream.initMemory(bytes);
+        try std.testing.expectEqual(std.mem.eql(u8, bytes, "II") or std.mem.eql(u8, bytes, "MM"), try codecs.tiff.TIFF.formatDetect(&tiff));
+        try std.testing.expectEqual(@as(u64, 0), tiff.getPos());
+    }
+}
+
+fn verifyDetectionMatrix() !void {
+    var hash: u64 = 14695981039346656037;
+    var cases: usize = 0;
+    var buffer: [32]u8 = @splat(0x9e);
+    buffer[31] = '\n';
+    for (0..65536) |prefix| {
+        buffer[0] = @truncate(prefix >> 8);
+        buffer[1] = @truncate(prefix);
+        for ([_]usize{ 0, 1, 2, 3, 7, 8, 12, 19, 32 }) |size| {
+            const code = detectionCode(buffer[0..size], false);
+            mix(&hash, prefix);
+            mix(&hash, size);
+            mix(&hash, code);
+            cases += 1;
+        }
+    }
+    std.debug.print("image detection matrix: {d} cases, {x:0>16}\n", .{ cases, hash });
+    try std.testing.expectEqual(@as(usize, 589824), cases);
+    try std.testing.expectEqual(@as(u64, 0xac90c12c037cfaf4), hash);
+}
+
 pub fn main() !void {
     try std.testing.expectEqual(@as(usize, 1), @sizeOf(Image.Format));
     try std.testing.expectEqual(@as(usize, 5), @bitSizeOf(Image.Format));
@@ -184,10 +265,12 @@ pub fn main() !void {
     try verifyViews();
     try verifyEditor();
     try verifyMatrix();
+    try verifyDetectionExamples();
+    try verifyDetectionMatrix();
     const invalid = ImageUnmanaged{ .width = std.math.maxInt(usize), .height = std.math.maxInt(usize) };
     for ([_]Image.Format{ .gif, .iff, .jpeg, .ras, .sgi, .tiff, .xbm }) |format| {
         const result = try invalid.writeToMemory(allocator, &.{}, options(format, 0));
         try std.testing.expectEqual(@as(usize, 0), result.len);
     }
-    std.debug.print("PASS: managed image views, edits, conversions, and fixed-memory dispatch\n", .{});
+    std.debug.print("PASS: managed image views, edits, conversions, fixed-memory dispatch, and detection\n", .{});
 }

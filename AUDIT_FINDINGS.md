@@ -9,6 +9,7 @@ below exist. Earlier versions of this document overstated the completed review.
 
 | Area | Bug | Fix |
 |---|---|---|
+| zigimg in-memory format detection | Both image APIs lacked the pinned 17-detector registry and JPEG/TIFF signature checks. | Translate ordered detection with seeking before each check and propagated detector errors. Preserve short-input blocking, TIFF's byte-order-only acceptance and swallowed peek errors, TGA precedence over TIFF, and the inherited XBM non-advancing loop. The unchanged native source matches 589,824 prefix/length cases; direct tests cover every returning format, both image APIs, detector positions, and ambiguous signatures. Separate process timeouts verify the XBM loop through both image APIs. Twenty-three image test files, native/Linux checking, and Windows DLL/test compilation pass. Automatic loading, reader dispatch, file methods, and the remaining codec/interface surfaces stay open. |
 | zigimg managed images and encoder dispatch | Managed image construction/editing methods, image-wide encoder options, managed/unmanaged views, and fixed-memory image writers were absent. Image dimensions could wrap in creation/cropping and zero-height row/flip operations lacked explicit checked traps. | Translate creation/raw copying, metadata, editing, live iteration, conversion, shallow views, lifecycle hooks, all 17 option tags, and fixed-buffer dispatch. Views copy slice headers while sharing pixels, palettes, and frame arrays. Preserve partial writes and the pinned JPEG/TIFF no-op writers. Twenty-two image test files pass; an unchanged-source native matrix matches 6,528 managed/unmanaged writer cases, and eight subprocess probes verify dimension overflow and zero-height traps. Linux checking and Windows DLL/test compilation pass. File I/O, loading/detection, allocator reclamation, read-only slice enforcement, and aggregate ABI boundaries remain below. |
 | zigimg pixel-format converter | The locked conversion table and unmanaged-image conversion methods were absent. | Translate all 460 table entries through their source conversion groups, including indexed quantization, integer scaling, weighted f32 grayscale, and alpha handling. Preserve omitted pairs, nine BGR555 wrong-union traps, straight rgba-to-RGB332, premultiplied indexed-to-RGB332/rgba64-to-BGRA32, full returned palettes despite local slice shortening, four empty alignment traps, and SIMD-prefix truncation versus scalar-tail rounding. Twenty-one image test files pass; unchanged native hashes match 18,432 format-pair cases and 6,066,176 precision conversions. Separate probes verify nineteen traps and the pinned ARM64 NaN-prefix result; Linux checking and Windows DLL/test compilation pass. Allocator, CPU-feature/float-cast, and remaining image API boundaries are recorded below. |
 | zigimg octree quantizer | The locked palette quantizer, per-level node lists, and RGB(A) input normalization were absent. | Translate tree insertion, weighted averages, palette borrowing/order, first-child lookup fallback, checked leaf accumulation, wrapping reduction sums, and f32 alpha/channel scaling. Preserve sufficient-budget behavior, skipped level zero, zero-budget/default indices, and repeated-reduction/capacity traps. Twenty image test files pass; native hashes match 2,160 tree/palette/index cases and 336,128 color-normalization cases, with six separate checked-bound probes. Linux checking and Windows DLL/test compilation pass. Arena/root/generic representation limits remain below. |
@@ -780,7 +781,8 @@ an item here does not mean its full module has been certified yet.
   memory and bit streams, QOI/farbfeld/PBM/PGM/PPM/PAM/RAS/SGI/XBM/PCX/BMP/IFF/GIF/TGA codecs, image editing,
   pixel iteration, PackBits/LZW/CCITT compression helpers, and the octree palette
   quantizer, pixel-format converter, managed image construction/editing
-  methods, image-wide encoder options, and managed/unmanaged fixed-memory writing.
+  methods, image-wide encoder options, managed/unmanaged fixed-memory writing,
+  and in-memory format detection.
   The source PNG writer is translated
   as it actually exists: it emits only the eight-byte signature because its
   chunk-writing bodies are commented out. A native Zig 0.15.2 reference harness
@@ -918,9 +920,18 @@ an item here does not mean its full module has been certified yet.
   with empty markers for void arms and distinct PBM/PGM/PPM wrappers; Format
   uses a byte instead of the source's u5 tag. These aggregates are not ABI
   aliases. V byte arrays also lack the source's read-only slice type contract.
-  PNG/JPEG/TIFF decoding, automatic detection/loading, file streams and image
-  file methods, full color convenience methods, and the complete image API
-  remain open.
+  In-memory detection visits all 17 source detectors in declaration order,
+  seeks before each, and propagates errors from earlier signature checks;
+  a short valid JPEG/GIF/TIFF signature can therefore fail before its detector.
+  TIFF checks only II/MM byte-order markers and suppresses peek errors; TGA
+  can win before TIFF, including through its footer on an invalid header.
+  Unknown inputs without a newline can fail in XBM's final delimiter peek,
+  while leading define lines retain its non-advancing loop. JPEG/TIFF signature
+  helpers serve this registry; their stateful codec APIs remain untranslated.
+  PNG/JPEG/TIFF decoding, automatic loading/reader dispatch, file streams and
+  image file methods, the FormatInterface callback surface, full color
+  convenience methods, and the complete image API remain open. The registry's
+  direct V dispatch replaces source function-pointer/reflection representation.
   Arrays use GC ownership and V length fields in place of allocator slices;
   allocation failures are not reproduced. Sub-byte scalar fields/indices use
   bytes or backing words, sum variants have named V wrappers, and nested
@@ -1227,6 +1238,17 @@ creation/crop overflow and zero-height row/flip traps through both image APIs.
 All 22 image test files, native/Linux checking, and MinGW DLL/focused-test
 compilation pass; Windows runtime and allocator/aggregate ABI parity remain
 uncertified.
+
+That runner also compares in-memory detection through the unchanged source.
+All 65,536 two-byte prefixes at nine buffer lengths produce the same hash:
+589,824 cases include zero-length seeking, early detector failures, and final
+XBM delimiter failures. Direct V/native examples cover every returning format,
+both image APIs, byte-order-only TIFF acceptance, detector peek positions,
+short valid signatures blocked by earlier checks, and BMP/TGA/TIFF precedence.
+Separate bounded processes in `zigimg/reference_probes/image_detection` verify
+the inherited XBM loop through both image APIs. All 23 image test files pass;
+native/Linux checking and Windows DLL/focused-test compilation pass. Windows
+runtime remains untested.
 
 The focused tests and compile gates named in each audit session are expected to
 pass at the recorded commit. A repository-wide build is not proof that every
