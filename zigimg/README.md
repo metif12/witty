@@ -5,7 +5,7 @@ indexed storage, memory and bit streams, crop/flip editing, pixel iteration,
 QOI, farbfeld, PBM, PGM, PPM, PAM, Sun raster, SGI, XBM, PCX, BMP, IFF, GIF, and TGA codecs,
 PackBits/LZW/CCITT compression helpers, the octree palette quantizer, pixel-format
 conversion, managed image construction/editing methods, image-wide encoder options,
-fixed-memory image writing, in-memory format detection, TIFF metadata/IFDs,
+fixed-memory image writing, in-memory format detection, TIFF metadata/IFDs/decoding,
 and the pinned PNG writer. It does not yet provide the complete image library
 or vaxis loading.
 
@@ -141,7 +141,7 @@ animation frames unchanged. Native hashes match 18,432 format-pair cases and
 
 V arrays and GC replace allocator slices. Sub-byte scalar values use byte
 storage or packed backing words. Allocation errors, the full color convenience
-methods, file streams and image file methods, PNG/JPEG/TIFF decoding,
+methods, file streams and image file methods, PNG/JPEG decoding,
 automatic image loading/reader dispatch, and the FormatInterface callback
 surface still require translation.
 
@@ -191,7 +191,27 @@ separate probes compare checked enum, capacity, component, arithmetic, and
 palette traps. Fixed storage has eight- and 256-element specializations;
 GC replaces reclamation, V initializes undefined source fields/storage,
 and the remaining general-purpose map API and debug formatter stay open.
-TIFF strip decoding and complete read APIs still require translation.
+TIFF read/readImage and strips now decode grayscale1/grayscale8/indexed8/RGB24/
+RGBA32 with uncompressed, PackBits, CCITT RLE, LZW, DEFLATE, and Pixar DEFLATE.
+Versions are ignored, only the first IFD is used, and compressed byte counts
+constrain only PackBits. Predictors other than one wrap channel differences
+except at row starts. One-bit rows keep floor byte counts and continuous bits;
+grayscale8 retains its absent photometric inversion. Source undefined short
+strip tails/unwritten pixels share the initialization boundary above. GC keeps
+IFD/strip backing data reclaimed by source read defers.
+
+The private TIFF zlib adapter follows Zig 0.15.2's buffered reader with a
+64 KiB window and 32 KiB history. It preserves stored/fixed/dynamic yield
+points, partial output on errors, word-sized read-ahead, and the consumed
+trailer. The source ignores FCHECK, FDICT, and Adler32 validation. Fixed matches
+crossing the window retain its unreachable-rebase trap. Full lookup tables
+replace the source's small Huffman tables and linked fallback; GC owns them.
+This is the memory/zlib path required by TIFF, not the full Zig flate API.
+The unchanged-source runner compares 39,707 cases across helpers and complete
+TIFF reads, including output, errors, positions, partial writes, palettes,
+predictors, and byte orders. Fifteen isolated probes compare checked traps.
+All 25 image test files pass, with native/Linux checks and Windows DLL/test
+compilation; Windows runtime remains untested.
 
 Cropping copies the active indexed palette and pixel rows into independent
 storage and does not copy animation data. Flipping mutates the existing pixels.
@@ -316,6 +336,18 @@ compare its checked metadata traps:
 python3 zigimg/reference_probes/tiff_metadata_bounds/verify.py \
   /path/to/v-probe /path/to/zig-probe
 ```
+
+The TIFF decoder comparison builds both probes, generates synthetic inputs,
+and runs its ordinary and checked-trap cases:
+
+```sh
+python3 zigimg/verify_tiff_decode_reference.py \
+  /path/to/locked-zigimg /path/to/zig-0.15.2 /path/to/v-0.5.2
+```
+
+It verifies the locked source tree and compiler dependency hashes before
+compiling the unchanged reference. Fixtures use Python's zlib for input
+generation; native decoding defines the expected behavior.
 
 IFF checked bounds use separate process probes. Build the V executable from
 `zigimg/reference_probes/iff_bounds` and the locked-source Zig executable from

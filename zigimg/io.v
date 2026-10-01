@@ -75,6 +75,15 @@ pub fn (mut stream ReadStream) read_slice_all(mut destination []u8) ! {
 	if count < destination.len { return error('EndOfStream') }
 }
 
+// A short fixed-memory read succeeds, including at EOF.
+pub fn (mut stream ReadStream) read_slice_short(mut destination []u8) !usize {
+	remaining := stream.buffer.len - stream.position
+	count := if destination.len < remaining { destination.len } else { remaining }
+	bytes := stream.take(count)!
+	copy(mut destination, bytes)
+	return usize(count)
+}
+
 // std.Io.Reader.discardAll consumes the available prefix before reporting EOF.
 pub fn (mut stream ReadStream) discard_all(count usize) ! {
 	remaining := usize(stream.buffer.len - stream.position)

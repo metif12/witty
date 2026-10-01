@@ -1,6 +1,6 @@
 module zigimg
 
-// TIFF metadata/state; strip decoding and read/readImage remain untranslated.
+// Pinned TIFF codec state. Metadata and strips are split across source files.
 pub struct TIFF {
 pub mut:
 	endianess TiffEndian
