@@ -196,9 +196,7 @@ fn test_png_processor_callbacks_options_borrowing_and_palette_order() {
 	assert data.src_format == .indexed8 && row == [u8(9), 0, 0, 17]
 	options.processors[0].id = 123
 	assert configured.processors[0].id == 123
-	mut defaults := PngDefaultOptions{
-		processor: PngTrnsProcessor{}
-	}
+	mut defaults := PngDefaultOptions.init(PngTrnsProcessor{})
 	assert defaults.get().processors.len == 1
 	mut one := PngCustomReaderOptions1.init(PngTrnsProcessor{})
 	assert one.get().processors[0].id == png_chunk_trns.id

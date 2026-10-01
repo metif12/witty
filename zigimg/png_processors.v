@@ -498,3 +498,9 @@ pub fn (mut options PngCustomReaderOptions2[P, Q]) get[P, Q]() PngReaderOptions 
 }
 
 pub type PngDefaultOptions = PngCustomReaderOptions1[PngTrnsProcessor]
+
+pub fn PngDefaultOptions.init(processor PngTrnsProcessor) PngDefaultOptions {
+	return PngDefaultOptions{
+		processor: processor
+	}
+}

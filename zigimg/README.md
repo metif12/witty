@@ -6,8 +6,9 @@ QOI, farbfeld, PBM, PGM, PPM, PAM, Sun raster, SGI, XBM, PCX, BMP, IFF, GIF, and
 PackBits/LZW/CCITT compression helpers, the octree palette quantizer, pixel-format
 conversion, managed image construction/editing methods, image-wide encoder options,
 fixed-memory image writing, in-memory format detection, TIFF metadata/IFDs/decoding,
-PNG header/filter/processor foundations, and the pinned PNG writer. It does not yet provide the complete image library
-or vaxis loading.
+PNG header/filter/processor foundations and information diagnostics, and the
+pinned PNG writer. It does not yet provide the complete image library or vaxis
+loading.
 
 The PNG writer in this exact revision emits only the eight-byte signature;
 its chunk-writing bodies are commented out. Native reference execution and V
@@ -20,12 +21,22 @@ follow the source. The heuristic's whole-row stride and omitted final run,
 gray16 transparency's byte-index comparisons, repeated tRNS replacement,
 and palette RGBA8 writes for BGRA32/RGBA64 destinations are preserved. The
 RGB24 direct processor API also retains its zero-stride loop for grayscale
-alpha destinations. Full PNG loading, IDAT buffering, Adam7, InfoProcessor,
+alpha destinations. Full PNG loading, IDAT buffering, Adam7,
 ZlibCompressor, and chunk-writer interfaces remain untranslated. GC/opaque
 callbacks replace allocators and generated vtables; allocator selection and
 root DefaultPngOptions overrides are absent. Undefined native initial storage,
 failed scalar union assignments, and unwritten alpha tails are excluded from
 comparisons; V storage initializes. The wasm branch has not run locally.
+
+The PNG information processor preserves diagnostic text, IDAT totals,
+palette counts, and binary byte-size formatting. It inspects at most 1,024
+bytes of text/iTXt and initially reads at most 81 bytes of zTXt. Compressed
+iTXt is printed raw; zTXt method zero uses the pinned buffered zlib reader.
+Unknown zTXt methods leave the rest unread. Ancillary CRCs are ignored, and
+writer failures return success with the current input position, which can
+leave payload/CRC bytes unconsumed. Delimiter, field, enum-name, and counter
+bounds retain checked traps. Writers are currently limited to fixed memory;
+GC scratch and format strings replace stack storage and streaming formatting.
 
 The pinned Sun raster writer succeeds without writing bytes. Its decoder
 preserves source RLE, planar palettes, one-bit row padding and polarity, and
@@ -372,6 +383,16 @@ compares fourteen checked traps and the inherited zero-stride loop:
 ```sh
 python3 zigimg/verify_png_foundation_reference.py \
   /path/to/locked-zigimg /path/to/zig-0.15.2/zig --v /path/to/v-0.5.2
+```
+
+The information-processor runner compares 51,223 cases and twelve checked
+traps, including diagnostic bytes, partial output, input/error positions,
+IDAT state, float byte-size formatting, and zTXt buffered decompression. It
+also guards the pinned formatter files:
+
+```sh
+python3 zigimg/verify_png_info_reference.py \
+  /path/to/locked-zigimg /path/to/zig-0.15.2/zig /path/to/v-0.5.2
 ```
 
 IFF checked bounds use separate process probes. Build the V executable from

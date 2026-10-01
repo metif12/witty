@@ -1,8 +1,9 @@
 module zigimg
 
 // The zlib/indirect-reader path of Zig 0.15.2 std.compress.flate.Decompress,
-// as used by pinned TIFF. This is deliberately not V's zlib decoder: the
-// source ignores FCHECK/FDICT/checksums and buffers output before streaming it.
+// as used by pinned TIFF and PNG diagnostics. This is deliberately not V's
+// zlib decoder: the source ignores FCHECK/FDICT/checksums and buffers output
+// before streaming it.
 const tiff_flate_length_base = [3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43,
 	51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258]!
 const tiff_flate_length_extra = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4,
