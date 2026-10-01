@@ -83,6 +83,14 @@ pub fn (mut stream ReadStream) discard_all(count usize) ! {
 	if discarded < count { return error('EndOfStream') }
 }
 
+// Reader.toss only advances already-buffered bytes and checks the new position.
+pub fn (mut stream ReadStream) toss(count usize) {
+	// Check before narrowing the source's usize count to V's array index type.
+	assert count <= usize(stream.buffer.len - stream.position)
+	stream.position += int(count)
+	assert stream.position >= 0 && stream.position <= stream.buffer.len
+}
+
 pub struct WriteStream {
 mut:
 	buffer   []u8

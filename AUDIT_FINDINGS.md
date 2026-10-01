@@ -9,6 +9,7 @@ below exist. Earlier versions of this document overstated the completed review.
 
 | Area | Bug | Fix |
 |---|---|---|
+| zigimg GIF decoder | The locked GIF header/extension model, sub-block/LZW reader, and animation renderer were absent. | Translate both versions, global/local palettes, comments/application records, frame grouping/filtering, interlacing, transparency, all disposal paths, and first-frame sharing. Preserve ignored extension size/terminator fields, byte-scanned unknown extensions, indexed transparency without palette-alpha changes, final-local-palette overwrite, canvas-height interlacing, linear clipping, shifted RGBA background channels, opaque restoration to a transparency color, ignored LZW write failures, and the no-op writer. Eighteen image test files and unchanged native reference checks pass; separate probes verify text-count, buffered-toss, loop-count, and indexed-background bounds. Linux checking and Windows DLL/test compilation pass. GC/initialization and image-wide API boundaries remain below. |
 | zigimg IFF decoder | The locked IFF chunk/header model, PBM/ILBM/ACBM reader, planar conversion, Atari ByteRun2, and HAM/EHB palette paths were absent. | Translate them with source chunk lengths, unpadded walking, unclipped planar bits, ACBM's raw path despite the compression flag, HAM row state, EHB priority, and partial-input positions. Preserve rejected DEEP detection, its zero/non-consuming header stub, and the no-op writer. Seventeen image test files and unchanged native reference checks pass; separate V/Zig probes verify checked stride, padding, empty-palette, and HAM bounds. Linux checking and Windows DLL/test compilation pass. Initialization and diagnostic/API boundaries remain below. |
 | zigimg compression helpers | The locked PackBits, endian-parameterized LZW, and CCITT decoders were absent. | Translate declared-length PackBits runs, LZW dictionaries/clear/end codes/early change/partial-input continuation, and all 195 CCITT codes with row/color state. Preserve ignored LZW unknown codes, first partial-code processing, empty-resume data loss, dictionary mutation order on write failure, PackBits's unread final control, and CCITT's cumulative padding and absent partial-byte flush. Sixteen image test files pass; a separate native harness verifies unchanged locked source copies and exact table fingerprints. Linux checking and Windows DLL/test compilation pass. |
 | zigimg BMP codec | The locked BMP headers, reader, and writer were absent. | Translate all three info-header representations, color-space/intent/CIE metadata, V4/V5 BGR24/BGRA32 selection, bottom-up rows, and exact encoder header bytes. Preserve ignored offsets/masks, omitted row padding, Windows 3.1 header rejection after consumption, signed and zero-dimension paths, unconventional encoder masks, and partial-write/error positions. Thirteen image test files and unmodified native reference checks pass, with Linux checking and Windows compilation. |
@@ -772,12 +773,12 @@ an item here does not mean its full module has been certified yet.
 - **zigimg image dependency:** The translation now pins
   `d7b7ab0ba0899643831ef042bd73289510b39906`, with all 24 pixel-format tags,
   storage variants, raw initialization/slices, palette capacity operations,
-  memory and bit streams, QOI/farbfeld/PBM/PGM/PPM/PAM/RAS/SGI/XBM/PCX/BMP/IFF codecs, image editing,
+  memory and bit streams, QOI/farbfeld/PBM/PGM/PPM/PAM/RAS/SGI/XBM/PCX/BMP/IFF/GIF codecs, image editing,
   pixel iteration, and PackBits/LZW/CCITT compression helpers. The source PNG writer is translated
   as it actually exists: it emits only the eight-byte signature because its
   chunk-writing bodies are commented out. A native Zig 0.15.2 reference harness
   verifies those codec behaviors and bytes without modifying the source. The
-  pinned RAS, SGI, XBM, and IFF writers succeed without emitting bytes; that is also preserved.
+  pinned RAS, SGI, XBM, IFF, and GIF writers succeed without emitting bytes; that is also preserved.
   SGI retains the source's RGBA64 alpha byte indexing and endian swap,
   grayscale8 storage for 16-bit grayscale, and unclipped RLE scanlines.
   PAM preserves little-endian 16-bit samples, monochrome-alpha AND, subsequent
@@ -816,7 +817,26 @@ an item here does not mean its full module has been certified yet.
   initializes this storage, so comparisons certify defined outputs only.
   IFF's public header debug hooks still require the source logging/formatter
   infrastructure and are not translated.
-  PNG/GIF/JPEG/TGA/TIFF decoding, automatic format dispatch, file
+  GIF preserves frame grouping by animation extensions, filtering of frames
+  without graphic controls when any control exists, independent rendered
+  frames with the image sharing its first frame, and all disposal methods.
+  Small palettes remain indexed even with transparency; palette alpha stays
+  opaque. Multiple local palettes overwrite the output palette in order.
+  Interlaced sub-images use canvas height, horizontal positions use linear
+  bounds, and RGBA initial background channels follow the source's u32Rgb-to-
+  u32Rgba conversion. Background disposal uses the transparency palette color
+  with opaque alpha. The source ignores graphic/application block sizes and
+  graphic terminator values, scans unknown extensions to their first zero,
+  skips only one plain-text sub-block, and ignores LZW writer overflow.
+  Its plain-text count of 255, out-of-buffer toss, short animation-loop data,
+  and narrow indexed background cast retain checked traps. Packed GIF flags
+  use byte words/accessors; its nonexhaustive disposal enum uses wider backing
+  values. GC replaces the arena and allocated record lifetimes; the codec and
+  record `deinit` methods therefore do not reproduce allocator reclamation.
+  Source default magic/version, absent color-table entries, incomplete comment
+  entries, and pixels left unwritten by short LZW data can be undefined. V
+  initializes them; comparisons certify defined outputs only.
+  PNG/JPEG/TGA/TIFF decoding, automatic format dispatch, file
   streams, conversions/quantization, full color convenience methods,
   and the complete managed/unmanaged image API remain open.
   Arrays use GC ownership and V length fields in place of allocator slices;
@@ -1027,14 +1047,14 @@ exercised on this macOS host. The Metal build compiler is absent here
 (`xcrun --find metal` fails), so the remaining metallib build divergence
 cannot be validated on this host yet.
 
-All seventeen zigimg V test files pass. The image dependency DLL cross compiles
+All eighteen zigimg V test files pass. The image dependency DLL cross compiles
 with MinGW, and the unmodified locked Zig dependency passes the standalone
-QOI/farbfeld/PNG/PBM/PGM/PPM/PAM/RAS/SGI/XBM/PCX/BMP/IFF, editing, all-format pixel iteration, and bit-stream
+QOI/farbfeld/PNG/PBM/PGM/PPM/PAM/RAS/SGI/XBM/PCX/BMP/IFF/GIF, editing, all-format pixel iteration, and bit-stream
 reference harness in
 `zigimg/verify_reference.zig`. The harness
 uses Zig 0.15.2 targeting macOS 14.0 to avoid native linking failures against
 this host's newer SDK. The dependency passes Linux checking, and the bit-stream,
-Netpbm, raster, SGI, PAM, XBM, PCX, BMP, and IFF test executables cross compile with MinGW. The two
+Netpbm, raster, SGI, PAM, XBM, PCX, BMP, IFF, and GIF test executables cross compile with MinGW. The two
 numeric-parser test files pass, and its float test executable cross compiles
 after restoring Windows CRT locale operations. Native and Linux application
 checks pass with existing warnings. These checks do
@@ -1048,6 +1068,18 @@ compares PBM/ILBM/ACBM, PackBits/ByteRun2, direct RGB24, HAM6/HAM8 including
 oversized palette reduction, EHB/HAM priority, header bytes, stream positions,
 and the no-op writer. Upstream binary fixture files are absent from the locked
 source archive; these checks use synthetic fixtures.
+
+GIF's native comparison cases cover header/flag layouts, empty canvases, both
+version detectors, chunked LZW, Netscape/ANIMEXTS loop metadata, comments and
+unknown extensions, plain-text skipping, indexed/RGB/RGBA selection, canvas-
+height interlacing, linear clipping, transparency, all disposal paths, frame
+filtering and palette overwrite, independent output storage, partial-input
+positions, ignored LZW write failures, zero local dimensions, and its no-op
+writer. Separate subprocess probes in `zigimg/reference_probes/gif_bounds`
+verify plain-text byte overflow, checked buffered toss, short loop-count
+records, and background casts outside the selected indexed width. These also
+use synthetic fixtures against the unmodified locked dependency; upstream
+binary fixture files are absent. Windows verification is compilation only.
 
 The separate compression reference harness verifies LZW in both byte orders,
 early-change modes, 5,120-literal code-size transitions, dictionary and partial

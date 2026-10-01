@@ -2,7 +2,7 @@ This is an incremental V translation of zigimg revision
 `d7b7ab0ba0899643831ef042bd73289510b39906`, the dependency locked by pinned
 vaxis. It currently covers the pixel-format words, storage variants, raw and
 indexed storage, memory and bit streams, crop/flip editing, pixel iteration,
-QOI, farbfeld, PBM, PGM, PPM, PAM, Sun raster, SGI, XBM, PCX, BMP, and IFF codecs,
+QOI, farbfeld, PBM, PGM, PPM, PAM, Sun raster, SGI, XBM, PCX, BMP, IFF, and GIF codecs,
 PackBits/LZW/CCITT compression helpers, and the pinned PNG writer. It does not
 yet provide the complete image library or vaxis loading.
 
@@ -60,6 +60,20 @@ emits no bytes. The source leaves default IFF headers, inactive palette entries,
 and temporary planes unwritten by short PackBits input undefined. V initializes
 that storage; comparisons cover defined outputs. Public header debug hooks
 remain untranslated.
+
+GIF preserves both versions, palette/extension records, LZW sub-blocks, frame
+grouping and filtering, independent rendering with first-frame sharing,
+interlacing, and all disposal paths. Indexed transparency leaves palette alpha
+opaque, multiple local palettes overwrite the output palette, and interlacing
+uses canvas height. Clipping checks linear pixel bounds. RGBA background
+initialization shifts channels through the source's u32Rgb-to-u32Rgba call;
+background restoration uses an opaque transparency palette color. The reader
+ignores graphic/application block sizes, graphic terminator values, and LZW
+write failures, scans unknown extensions to their first zero, and skips one
+plain-text sub-block. Its writer emits no bytes. Packed flags use byte words
+and accessors; GC replaces arenas and record reclamation. Source undefined
+magic/version, unread palette entries, incomplete comment records, and pixels
+unwritten by short LZW input share the initialization boundary above.
 
 PackBits preserves declared-length truncation, unclipped runs, and its unread
 final lone control byte. LZW retains endian selection, clear/end codes, early
@@ -136,3 +150,14 @@ python3 zigimg/reference_probes/iff_bounds/verify.py /path/to/v-probe /path/to/z
 They verify stride overflow, an out-of-bounds padding bit, empty CMAP, and HAM
 palette reduction below four bits. The native harness uses synthetic images;
 upstream binary fixture files are absent from the locked source archive.
+
+GIF has equivalent probes in `zigimg/reference_probes/gif_bounds`, with a V
+`main.v`, a locked-source `reference.zig`, and a verifier:
+
+```sh
+python3 zigimg/reference_probes/gif_bounds/verify.py /path/to/v-probe /path/to/zig-probe
+```
+
+They verify plain-text byte-count overflow, checked buffered toss, short loop
+data, and indexed background casts. The normal harness compares decoding,
+animation frames, metadata, error positions, and the no-op writer.
