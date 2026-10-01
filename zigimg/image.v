@@ -73,3 +73,13 @@ pub fn (image &ImageUnmanaged) crop(area Box) !ImageUnmanaged {
 pub fn (image &ImageUnmanaged) iterator() PixelStorageIterator {
 	return PixelStorageIterator.init(&image.pixels)
 }
+
+pub fn (mut image ImageUnmanaged) convert(destination_format PixelFormat) ! {
+	// GC replaces freeing the old storage. Animation frames are not converted.
+	image.convert_no_free(destination_format)!
+}
+
+pub fn (mut image ImageUnmanaged) convert_no_free(destination_format PixelFormat) ! {
+	if image.pixel_format() == destination_format { return }
+	image.pixels = PixelFormatConverter.convert(&image.pixels, destination_format)!
+}

@@ -384,8 +384,17 @@ pub fn PixelStorage.init(format PixelFormat, pixel_count usize) !PixelStorage {
 			})
 		}
 		.float32 {
+			mut data := []Colorf32{len: int(pixel_count)}
+			if pixel_count == 0 {
+				// Allocator.alloc with align(1) and zero bytes returns maxInt(usize).
+				// The converter's unconditional f32 alignCast observes this pointer.
+				unsafe {
+					data.data = voidptr(~usize(0))
+					data.flags = .nofree
+				}
+			}
 			PixelStorage(Colorf32Pixels{
-				data: []Colorf32{len: int(pixel_count)}
+				data: data
 			})
 		}
 	}
@@ -491,6 +500,10 @@ fn pixel_array_view[T](bytes []u8, check_alignment bool) []T {
 	mut result := []T{}
 	unsafe {
 		result.data = bytes.data
+		$if T is Colorf32 {
+			// std.mem.bytesAsSlice discards the input pointer for empty slices.
+			if bytes.len == 0 { result.data = voidptr(~usize(0)) }
+		}
 		result.len = int(usize(bytes.len) / sizeof(T))
 		result.cap = result.len
 		result.flags = .nofree

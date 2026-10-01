@@ -9,7 +9,8 @@ below exist. Earlier versions of this document overstated the completed review.
 
 | Area | Bug | Fix |
 |---|---|---|
-| zigimg octree quantizer | The locked palette quantizer, per-level node lists, and RGB(A) input normalization were absent. | Translate tree insertion, weighted averages, palette borrowing/order, first-child lookup fallback, checked leaf accumulation, wrapping reduction sums, and f32 alpha/channel scaling. Preserve sufficient-budget behavior, skipped level zero, zero-budget/default indices, and repeated-reduction/capacity traps. Twenty image test files pass; native hashes match 2,160 tree/palette/index cases and 336,128 color-normalization cases, with six separate checked-bound probes. Linux checking and Windows DLL/test compilation pass. Arena/root/generic representation and the consuming pixel-format converter remain below. |
+| zigimg pixel-format converter | The locked conversion table and unmanaged-image conversion methods were absent. | Translate all 460 table entries through their source conversion groups, including indexed quantization, integer scaling, weighted f32 grayscale, and alpha handling. Preserve omitted pairs, nine BGR555 wrong-union traps, straight rgba-to-RGB332, premultiplied indexed-to-RGB332/rgba64-to-BGRA32, full returned palettes despite local slice shortening, four empty alignment traps, and SIMD-prefix truncation versus scalar-tail rounding. Twenty-one image test files pass; unchanged native hashes match 18,432 format-pair cases and 6,066,176 precision conversions. Separate probes verify nineteen traps and the pinned ARM64 NaN-prefix result; Linux checking and Windows DLL/test compilation pass. Allocator, CPU-feature/float-cast, and remaining image API boundaries are recorded below. |
+| zigimg octree quantizer | The locked palette quantizer, per-level node lists, and RGB(A) input normalization were absent. | Translate tree insertion, weighted averages, palette borrowing/order, first-child lookup fallback, checked leaf accumulation, wrapping reduction sums, and f32 alpha/channel scaling. Preserve sufficient-budget behavior, skipped level zero, zero-budget/default indices, and repeated-reduction/capacity traps. Twenty image test files pass; native hashes match 2,160 tree/palette/index cases and 336,128 color-normalization cases, with six separate checked-bound probes. Linux checking and Windows DLL/test compilation pass. Arena/root/generic representation limits remain below. |
 | zigimg TGA codec | The locked TGA record/extension model, raw/RLE reader, and encoders were absent. | Translate the packed metadata, 512-byte buffered packet decoder, palettes, alpha policy, seven encoder storage formats, row ordering, and scalar equivalents of both RLE encoders. Preserve the 26-byte minimum, different detector/reader footer checks, unchecked origins/direction flags, active-palette indexing, extension-only alpha override, 256-byte ID omission, 39-byte metadata-name limit, SIMD tail splitting, and conversion runs across rows. Native hashes match 2,016 encoder and 1,120 decoder cases; nineteen image test files, separate checked-bound probes, Linux checking, and Windows DLL/test compilation pass. CPU-feature selection, sentinel/initialization, and image-wide API boundaries remain below. |
 | zigimg GIF decoder | The locked GIF header/extension model, sub-block/LZW reader, and animation renderer were absent. | Translate both versions, global/local palettes, comments/application records, frame grouping/filtering, interlacing, transparency, all disposal paths, and first-frame sharing. Preserve ignored extension size/terminator fields, byte-scanned unknown extensions, indexed transparency without palette-alpha changes, final-local-palette overwrite, canvas-height interlacing, linear clipping, shifted RGBA background channels, opaque restoration to a transparency color, ignored LZW write failures, and the no-op writer. Eighteen image test files and unchanged native reference checks pass; separate probes verify text-count, buffered-toss, loop-count, and indexed-background bounds. Linux checking and Windows DLL/test compilation pass. GC/initialization and image-wide API boundaries remain below. |
 | zigimg IFF decoder | The locked IFF chunk/header model, PBM/ILBM/ACBM reader, planar conversion, Atari ByteRun2, and HAM/EHB palette paths were absent. | Translate them with source chunk lengths, unpadded walking, unclipped planar bits, ACBM's raw path despite the compression flag, HAM row state, EHB priority, and partial-input positions. Preserve rejected DEEP detection, its zero/non-consuming header stub, and the no-op writer. Seventeen image test files and unchanged native reference checks pass; separate V/Zig probes verify checked stride, padding, empty-palette, and HAM bounds. Linux checking and Windows DLL/test compilation pass. Initialization and diagnostic/API boundaries remain below. |
@@ -777,7 +778,8 @@ an item here does not mean its full module has been certified yet.
   storage variants, raw initialization/slices, palette capacity operations,
   memory and bit streams, QOI/farbfeld/PBM/PGM/PPM/PAM/RAS/SGI/XBM/PCX/BMP/IFF/GIF/TGA codecs, image editing,
   pixel iteration, PackBits/LZW/CCITT compression helpers, and the octree palette
-  quantizer. The source PNG writer is translated
+  quantizer, pixel-format converter, and unmanaged-image conversion methods.
+  The source PNG writer is translated
   as it actually exists: it emits only the eight-byte signature because its
   chunk-writing bodies are commented out. A native Zig 0.15.2 reference harness
   verifies those codec behaviors and bytes without modifying the source. The
@@ -872,9 +874,35 @@ an item here does not mean its full module has been certified yet.
   The pinned V compiler also emits invalid default formatters for recursive
   fixed pointer arrays; pointer assertions use `voidptr` to avoid that path.
   Tests compare defined behavior; allocator/lifetime and aggregate ABI parity
-  are not certified. The consuming pixel-format converter remains absent.
+  are not certified. The pixel-format converter now retains all 460 pinned
+  table entries through the same conversion groups. Indexed-to-grayscale and
+  RGB(A)/float-to-grayscale16 remain unavailable. Nine BGR555 entries select
+  the source's wrong RGB555 union arm and trap, including for empty storage.
+  Integer downscaling truncates; widening rounds. Integer alpha drops through
+  f32 with quantization back to its source width before RGB conversion;
+  grayscale alpha drops directly through f32 instead. The table's rgba-to-
+  RGB332 path retains straight channels, indexed-to-RGB332 premultiplies, and
+  rgba64-to-BGRA32 premultiplies while retaining alpha. RGB-to-grayscale-alpha
+  normalizes alpha through f32, rather than narrowing its integer bits.
+  Indexed quantization reads every active source palette entry and retains
+  the full returned palette with opaque black tail: the source shortens only
+  a local IndexedStorage copy. SIMD float-to-byte prefixes truncate, whereas
+  their scalar tails round/clamp. Four allocated empty float conversions trap
+  on unconditional f32 alignment casts. Empty float allocation retains the
+  source's maxInt(usize) align(1) sentinel, as does empty raw initialization.
+  Empty views sliced from float storage can pass with aligned pointers.
+  Unaligned float input traps. Scalar NaN scaling
+  clamps upward, while the pinned Zig/ARM64 SIMD
+  float cast emits zero for NaN without trapping. That cast's behavior on
+  other targets/compiler modes, and CPU-feature-specific vector lengths,
+  remain build/representation boundaries. Individual native page allocations
+  satisfy the source's destination alignCast; an align(1) arena may not.
+  V GC allocation/alignment does not reproduce caller-selected allocators.
+  Image convert/convertNoFree replace only the main pixels, leave animation
+  frames unchanged, and return early for the current format. GC replaces the
+  source's distinct old-storage freeing contracts.
   PNG/JPEG/TIFF decoding, automatic format dispatch, file
-  streams, pixel-format conversions, full color convenience methods,
+  streams, full color convenience methods,
   and the complete managed/unmanaged image API remain open.
   Arrays use GC ownership and V length fields in place of allocator slices;
   allocation failures are not reproduced. Sub-byte scalar fields/indices use
@@ -1151,6 +1179,23 @@ missing colors, and all translated RGB(A) input types. Six subprocess probes in
 reduction, component/reference overflow, average casts, and invalid color
 levels. The module passes Linux checking, and its DLL and focused test
 executable cross compile with MinGW; Windows runtime remains untested.
+
+The private converter's source-hash-verified runner is
+`zigimg/verify_converter_reference.py`. Its unchanged-source matrix covers
+all 24 format tags, all source/destination pairs, eight pixel lengths, and
+four input patterns: 18,432 cases compare errors, defined pixel bytes, palette
+lengths/entries, and empty storage behavior. Another hash covers 6,066,176
+conversions with complete packed-color ranges and all 8-bit alpha/channel
+pairs, plus 16-bit and normalized float inputs. Unused RGB555 padding bits are
+masked. Trap pairs use matrix markers and are executed separately by subprocess
+probes. Direct cases verify prefix/tail rounding, finite fractional cast bounds,
+NaN prefix/tail behavior, opaque palette tails, and unmanaged-image replacement,
+same-format borrowing, failed-conversion state, and unchanged animation frames.
+Nineteen checked traps and one native NaN result are compared by subprocesses
+in `zigimg/reference_probes/converter_bounds`. Native comparisons use page
+allocation because an align(1) arena can trigger the source's destination
+f32 alignment cast. The module passes Linux checking; its DLL and focused test
+executable cross compile with MinGW. Windows runtime remains untested.
 
 The focused tests and compile gates named in each audit session are expected to
 pass at the recorded commit. A repository-wide build is not proof that every

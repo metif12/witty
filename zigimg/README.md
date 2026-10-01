@@ -3,8 +3,9 @@ This is an incremental V translation of zigimg revision
 vaxis. It currently covers the pixel-format words, storage variants, raw and
 indexed storage, memory and bit streams, crop/flip editing, pixel iteration,
 QOI, farbfeld, PBM, PGM, PPM, PAM, Sun raster, SGI, XBM, PCX, BMP, IFF, GIF, and TGA codecs,
-PackBits/LZW/CCITT compression helpers, the octree palette quantizer, and the
-pinned PNG writer. It does not yet provide the complete image library or vaxis loading.
+PackBits/LZW/CCITT compression helpers, the octree palette quantizer, pixel-format
+conversion, and the pinned PNG writer. It does not yet provide the complete
+image library or vaxis loading.
 
 The PNG writer in this exact revision emits only the eight-byte signature;
 its chunk-writing bodies are commented out. Native reference execution and V
@@ -114,12 +115,31 @@ already collapsed node. Native hashes match 2,160 palette/tree/index cases and
 stable heap address. Generic input accepts the translated RGB(A) storage types;
 arbitrary caller types with Zig color-method namespaces remain a boundary.
 The pinned V compiler cannot format recursive fixed pointer arrays; pointer
-assertions use `voidptr` to avoid its invalid generated formatter. The
-pixel-format converter that consumes this helper is still untranslated.
+assertions use `voidptr` to avoid its invalid generated formatter.
+
+The converter preserves all 460 pinned table entries, including unavailable
+indexed-to-gray/RGB-to-grayscale16 pairs and nine BGR555 entries that trap on
+the wrong union arm. Alpha handling retains the table's straight rgba-to-RGB332,
+premultiplied indexed-to-RGB332, and premultiplied rgba64-to-BGRA32 paths.
+RGB-to-gray-alpha scales alpha through f32, while gray-to-gray-alpha narrows
+integer fields directly. Quantization shortens only a local palette slice in
+the source; returned indexed storage keeps its full palette and opaque black
+tail. Float-to-RGBA/BGRA prefixes truncate and scalar tails round/clamp; four
+allocated empty conversions trap on unconditional f32 alignment casts; borrowed
+empty views sliced from float storage pass when their pointers are aligned.
+Empty float allocation/raw initialization retains Zig's maxInt(usize) align(1)
+sentinel. NaN casts in the
+pinned Zig/ARM64 prefix emit zero, while scalar NaN scaling clamps upward.
+Other CPU/compiler float-cast behavior and feature-specific vector lengths
+remain boundaries. Native page allocations satisfy destination alignment;
+an align(1) arena need not. V GC replaces caller-selected allocation/alignment
+and freeing. Image convert/convertNoFree replace only the main pixels and leave
+animation frames unchanged. Native hashes match 18,432 format-pair cases and
+6,066,176 precision conversions.
 
 V arrays and GC replace allocator slices. Sub-byte scalar values use byte
-storage or packed backing words. Allocation errors, every color conversion
-method, file streams, decoding other formats, format dispatch, and the
+storage or packed backing words. Allocation errors, the full color convenience
+methods, file streams, decoding other formats, format dispatch, and the
 remaining managed image APIs still require translation.
 
 Cropping copies the active indexed palette and pixel rows into independent
@@ -186,6 +206,22 @@ casts, and color-level checks:
 
 ```sh
 python3 zigimg/reference_probes/quantizer_bounds/verify.py /path/to/v-probe /path/to/zig-probe
+```
+
+The private converter has its own unchanged-source runner:
+
+```sh
+python3 zigimg/verify_converter_reference.py \
+  /path/to/zigimg-d7b7ab0ba0899643831ef042bd73289510b39906 \
+  /path/to/zig-0.15.2/zig --probe-output /path/to/zig-probe
+```
+
+Build the V probe from `zigimg/reference_probes/converter_bounds`, then compare
+wrong-union access, empty/unaligned float storage, palette bounds, float cast
+traps, and the pinned ARM64 NaN-prefix result:
+
+```sh
+python3 zigimg/reference_probes/converter_bounds/verify.py /path/to/v-probe /path/to/zig-probe
 ```
 
 IFF checked bounds use separate process probes. Build the V executable from
