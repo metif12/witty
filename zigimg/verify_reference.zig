@@ -46,7 +46,8 @@ pub fn main() !void {
     try @import("verify_bmp_reference.zig").verify();
     try @import("verify_iff_reference.zig").verify();
     try @import("verify_gif_reference.zig").verify();
-    std.debug.print("PASS: locked codecs (QOI/farbfeld/PNG/PBM/PGM/PPM/RAS/SGI/PAM/XBM/PCX/BMP/IFF/GIF), editing, pixel iteration, and bit streams\n", .{});
+    try @import("verify_tga_reference.zig").verify();
+    std.debug.print("PASS: locked codecs (QOI/farbfeld/PNG/PBM/PGM/PPM/RAS/SGI/PAM/XBM/PCX/BMP/IFF/GIF/TGA), editing, pixel iteration, and bit streams\n", .{});
 }
 
 fn verifyEditing() !void {

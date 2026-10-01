@@ -2,7 +2,7 @@ This is an incremental V translation of zigimg revision
 `d7b7ab0ba0899643831ef042bd73289510b39906`, the dependency locked by pinned
 vaxis. It currently covers the pixel-format words, storage variants, raw and
 indexed storage, memory and bit streams, crop/flip editing, pixel iteration,
-QOI, farbfeld, PBM, PGM, PPM, PAM, Sun raster, SGI, XBM, PCX, BMP, IFF, and GIF codecs,
+QOI, farbfeld, PBM, PGM, PPM, PAM, Sun raster, SGI, XBM, PCX, BMP, IFF, GIF, and TGA codecs,
 PackBits/LZW/CCITT compression helpers, and the pinned PNG writer. It does not
 yet provide the complete image library or vaxis loading.
 
@@ -74,6 +74,23 @@ plain-text sub-block. Its writer emits no bytes. Packed flags use byte words
 and accessors; GC replaces arenas and record reclamation. Source undefined
 magic/version, unread palette entries, incomplete comment records, and pixels
 unwritten by short LZW input share the initialization boundary above.
+
+TGA preserves its packed records and 495-byte extension, grayscale/indexed/
+RGB555/BGR/BGRA decoding, all seven encoder storage formats, both row orders,
+raw and RLE packets, and the reader's 512-byte read-ahead into trailing data.
+Detection requires footer dot/null values; decoding checks only its signature.
+Decoding requires at least 26 input bytes even for 1.0 images. Palette offsets
+index the active palette directly and origins/right-to-left are ignored. When
+an extension is present, only its useful-alpha attribute preserves alpha.
+The encoder omits an accepted 256-byte ID through its truncated length field and rejects metadata
+names of 40 bytes. Its direct-storage RLE starts new runs per row and vector
+tail; RGB/RGBA conversion retains runs across rows. Scalar comparisons preserve
+baseline amd64/arm64 vector packet boundaries; other Zig CPU-feature selections
+remain a build-model boundary. Sentinel fields use physical byte arrays and
+metadata option names use V strings. Source undefined RGB555 padding bits,
+default footer signatures, and incomplete ID storage share the initialization
+boundary above. Native hashes compare 2,016 encoder cases and 1,120 decoder
+cases, including source positions; unused RGB555 padding is excluded.
 
 PackBits preserves declared-length truncation, unclipped runs, and its unread
 final lone control byte. LZW retains endian selection, clear/end codes, early
@@ -161,3 +178,13 @@ python3 zigimg/reference_probes/gif_bounds/verify.py /path/to/v-probe /path/to/z
 They verify plain-text byte-count overflow, checked buffered toss, short loop
 data, and indexed background casts. The normal harness compares decoding,
 animation frames, metadata, error positions, and the no-op writer.
+
+TGA uses equivalent probes in `zigimg/reference_probes/tga_bounds`:
+
+```sh
+python3 zigimg/reference_probes/tga_bounds/verify.py /path/to/v-probe /path/to/zig-probe
+```
+
+They verify palette offset/capacity checks and overflow of palette-end and
+pixel-byte arithmetic against the unchanged locked source. Windows checks
+compile the module and focused test executable; runtime remains untested.
