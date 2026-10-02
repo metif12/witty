@@ -71,7 +71,7 @@ pub const embedded_spleen_otb = $embed_file('@VMODROOT/font/res/spleen-8x16.otb'
 // font-owned atlas.
 
 // render_builtin_cell_glyph renders a built-in sprite glyph into the atlas.
-// Unsupported codepoints produce the empty glyph returned by SpriteFace.
+// Unsupported codepoints trap with runtime safety; release builds retain the blank fallback.
 pub fn render_builtin_cell_glyph(mut atlas Atlas, cp u32, metrics Metrics) !Glyph {
 	return sprite_face_render_glyph(mut atlas, cp, metrics, RenderOptions{})
 }

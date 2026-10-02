@@ -240,7 +240,7 @@ fn test_atlas_dump_grayscale_with_partial_writer() {
 	assert writer.data[header.len..] == atlas.data
 }
 
-fn test_atlas_dump_bgr_and_reject_bgra() {
+fn test_atlas_dump_bgr() {
 	mut bgr := Atlas.init(3, .bgr)!
 	bgr.data[0] = 1
 	bgr.data[1] = 2
@@ -252,13 +252,6 @@ fn test_atlas_dump_bgr_and_reject_bgra() {
 	assert writer.data[..11].bytestr() == 'P6\n3 3\n255\n'
 	assert writer.data[11..] == bgr.data
 
-	bgra := Atlas.init(3, .bgra)!
-	mut rejected := AtlasChunkWriter{
-		chunk: 1024
-	}
-	if _ := bgra.dump(mut rejected) {
-		assert false, 'BGRA dump must be rejected'
-	}
 }
 
 fn test_atlas_grow() {
@@ -334,11 +327,14 @@ fn test_sprite_canvas_write_atlas_propagates_full() {
 	assert false, 'expected Canvas.write_atlas to preserve AtlasFull'
 }
 
-fn test_builtin_glyph_render_ignores_unsupported_codepoint() {
-	mut atlas := Atlas.init(64, .grayscale)!
-	glyph := render_builtin_cell_glyph(mut atlas, u32(`A`), default_grid_metrics(8, 16))!
-	assert glyph.width == 0
-	assert glyph.height == 0
+fn test_builtin_glyph_render_unsupported_codepoint_release_fallback() {
+	assert !sprite_face_has_codepoint(u32(`A`))
+	$if prod {
+		mut atlas := Atlas.init(64, .grayscale)!
+		glyph := render_builtin_cell_glyph(mut atlas, u32(`A`), default_grid_metrics(8, 16))!
+		assert glyph.width == 0
+		assert glyph.height == 0
+	}
 }
 
 fn test_sprite_render_writes_cursor_atlas() {

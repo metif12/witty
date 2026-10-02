@@ -1204,7 +1204,7 @@ pub fn (a &Atlas) dump(mut writer io.Writer) ! {
 		.grayscale { '5' }
 		.bgr { '6' }
 		.bgra {
-			return error('Cannot dump this atlas format')
+			panic('Cannot dump this atlas format.')
 		}
 	}
 	header := 'P${magic}\n${a.size} ${a.size}\n255\n'

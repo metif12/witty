@@ -409,6 +409,11 @@ pub fn has_codepoint(cp u32) bool {
 // 5. Return the canvas and trimmed raster data to the font bridge. The bridge
 //    invokes Canvas.write_atlas because V cannot import font from sprite.
 pub fn (self &SpriteFace) render_glyph(cp u32, opts RenderOptions) !RenderedGlyph {
+	$if !prod {
+		// Ghostty traps unsupported sprite codepoints in runtime-safety builds.
+		assert self.has_codepoint(cp), 'invalid sprite codepoint ${cp:x}'
+	}
+
 	draw := get_draw_fn(cp) or {
 		return RenderedGlyph{}
 	}

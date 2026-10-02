@@ -1537,33 +1537,20 @@ pub fn (self Face) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOpt
 
 	px_width := bitmap.width
 	px_height := bitmap.rows
-	if px_width == 0 || px_height == 0 || bitmap.buffer == unsafe { nil } {
-		return Glyph{}
-	}
 	row_bytes := u32(if bitmap.pitch < 0 { -bitmap.pitch } else { bitmap.pitch })
 	len := int(row_bytes * px_height)
 	mut pixels := unsafe { bitmap.buffer.vbytes(len) }
-	if bitmap.pixel_mode == freetype.pixel_mode_gray && bitmap.num_grays > 1
-		&& bitmap.num_grays < 256 {
+	if bitmap.pixel_mode == freetype.pixel_mode_gray && bitmap.num_grays < 256 {
 		factor := u8(255 / (bitmap.num_grays - 1))
 		for mut pixel in pixels {
 			pixel *= factor
 		}
 		bitmap.num_grays = 256
 	}
-	if row_bytes != px_width * atlas.format.depth() {
-		return error('FreeType returned a non-dense glyph bitmap')
-	}
-	// FreeType represents a negative pitch bottom-up. Atlas data is top-down.
-	if bitmap.pitch < 0 {
-		mut top_down := []u8{len: len}
-		for row in 0 .. int(px_height) {
-			src := (int(px_height) - row - 1) * int(row_bytes)
-			dst := row * int(row_bytes)
-			copy(mut top_down[dst..dst + int(row_bytes)], pixels[src..src + int(row_bytes)])
-		}
-		pixels = top_down.clone()
-	}
+	// FreeType Face.renderGlyph relies on these source invariants. A negative
+	// pitch is not a supported alternate layout here.
+	assert px_width > 0 && px_height > 0
+	assert i64(px_width * atlas.format.depth()) == i64(bitmap.pitch)
 
 	region := atlas.reserve(px_width, px_height)!
 	atlas.set(region, pixels)

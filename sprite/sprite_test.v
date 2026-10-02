@@ -849,10 +849,11 @@ fn test_render_glyph_uncovered_codepoint_is_blank() {
 	face := SpriteFace{
 		metrics: font.default_grid_metrics(8, 16)
 	}
-	// 'A' is not a sprite codepoint, so render_glyph returns a blank glyph.
-	glyph := face.render_glyph(0x0041, RenderOptions{}) or {
-		panic('render_glyph failed: ${err}')
+	assert !face.has_codepoint(0x0041)
+	$if prod {
+		// The source retains this blank fallback when runtime safety is off.
+		glyph := face.render_glyph(0x0041, RenderOptions{}) or { panic(err) }
+		assert glyph.raster.width == 0
+		assert glyph.raster.height == 0
 	}
-	assert glyph.raster.width == 0
-	assert glyph.raster.height == 0
 }
