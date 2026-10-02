@@ -183,9 +183,11 @@ pub fn (mut self Exec) thread_enter(mut io Termio, mut td ThreadData) ! {
 		match current {
 			SubprocessFlatpak {
 				// If we're in Flatpak, run the special host-command watcher.
-				mut command := current.command
-				command.wait_xev(mut td.loop, &td.backend.exec.flatpak_wait_c, td,
-					exec_flatpak_exit)
+				$if linux {
+					mut command := current.command
+					command.wait_xev(mut td.loop, &td.backend.exec.flatpak_wait_c, td,
+						exec_flatpak_exit)
+				}
 			}
 			SubprocessForkExec {}
 		}
@@ -222,7 +224,7 @@ pub fn (mut self Exec) thread_exit(mut td ThreadData) {
 		}
 		// Interrupt the blocking ReadFile before joining so the reader can
 		// inspect the quit pipe. ERROR_NOT_FOUND means no request is pending.
-		if C.CancelIoEx(exec.read_thread_fd, unsafe { nil }) == 0 {
+		if !C.CancelIoEx(exec.read_thread_fd, unsafe { nil }) {
 			code := C.GetLastError()
 			if code != 1168 { log.warn('error interrupting read thread err=${code}') }
 		}
@@ -741,8 +743,8 @@ pub fn Subprocess.init(cfg ExecConfig) !Subprocess {
 		args:         args
 		linux_cgroup: cfg.linux_cgroup
 		// Should be initialized with init_terminal call.
-		grid_size:   renderer.GridSize{}
-		screen_size: renderer.ScreenSize{
+		grid_size:    renderer.GridSize{}
+		screen_size:  renderer.ScreenSize{
 			width:  1
 			height: 1
 		}
@@ -776,13 +778,15 @@ pub fn (mut self Subprocess) start() !PtyFds {
 	mut started := false
 	defer {
 		if !in_child && !started {
-			$if !windows { p.close_slave() }
+			$if !windows {
+				p.close_slave()
+			}
 			p.deinit()
 			self.pty_ = none
 		}
 	}
 
-	log.debug('starting command command=${ArgsFormatter{args: self.args}}')
+	log.debug('starting command command=${ArgsFormatter{ args: self.args }}')
 
 	// If we can't access the cwd, then don't use it. This is important
 	// because our cwd can be set by the shell (OSC 7) and we don't
@@ -800,6 +804,8 @@ pub fn (mut self Subprocess) start() !PtyFds {
 					''
 				}
 			}
+		} $else $if windows {
+			if windows_cwd_access(c) { c } else { '' }
 		} $else {
 			if C.access(c.str, f_ok) == 0 {
 				c
@@ -837,7 +843,9 @@ pub fn (mut self Subprocess) start() !PtyFds {
 					command: command
 				})
 				log.info('started subcommand on host via flatpak API path=${self.args[0]} pid=${pid}')
-				$if !windows { p.close_slave() }
+				$if !windows {
+					p.close_slave()
+				}
 				self.env = none
 				started = true
 				return PtyFds{
@@ -852,12 +860,12 @@ pub fn (mut self Subprocess) start() !PtyFds {
 	// backend. Command owns the fork/exec, environment, descriptor, cgroup,
 	// working-directory, and pre-exec contracts.
 	mut cmd := commandpkg.Command{
-		path: self.args[0]
-		args: self.args
-		env: self.env
-		cwd: if cwd.len > 0 { cwd } else { none }
+		path:         self.args[0]
+		args:         self.args
+		env:          self.env
+		cwd:          if cwd.len > 0 { cwd } else { none }
 		linux_cgroup: self.linux_cgroup
-		data: voidptr(self)
+		data:         voidptr(self)
 	}
 	$if windows {
 		cmd.pseudo_console = p.pseudo_console
@@ -885,16 +893,18 @@ pub fn (mut self Subprocess) start() !PtyFds {
 
 	// Close the slave fd in the parent. The child has already
 	// inherited it via fork and duped it to stdin/stdout/stderr.
-	$if !windows { p.close_slave() }
+	$if !windows {
+		p.close_slave()
+	}
 
 	// We can free the env now that the child has it.
 	self.env = none
 	started = true
 
 	$if windows {
-		return PtyFds{read: p.out_pipe, write: p.in_pipe}
+		return PtyFds{ read: p.out_pipe, write: p.in_pipe }
 	} $else {
-		return PtyFds{read: p.master, write: p.master}
+		return PtyFds{ read: p.master, write: p.master }
 	}
 }
 
@@ -918,13 +928,15 @@ pub fn (mut self Subprocess) stop() {
 			}
 		}
 		SubprocessFlatpak {
-			mut command := process.command
-			kill_command_flatpak(mut command) or {
-				log.error('error sending SIGHUP to command, may hang: ${err}')
-			}
-			_ = command.wait() or {
-				log.error('error waiting for command to exit: ${err}')
-				u8(0)
+			$if linux {
+				mut command := process.command
+				kill_command_flatpak(mut command) or {
+					log.error('error sending SIGHUP to command, may hang: ${err}')
+				}
+				_ = command.wait() or {
+					log.error('error waiting for command to exit: ${err}')
+					u8(0)
+				}
 			}
 		}
 	}
@@ -938,7 +950,7 @@ pub fn (mut self Subprocess) stop() {
 fn kill_command(command commandpkg.Command) ! {
 	if pid := command.pid {
 		$if windows {
-			if C.TerminateProcess(command.process_handle, 0) == 0 {
+			if !C.TerminateProcess(command.process_handle, 0) {
 				return error('Unexpected: ${C.GetLastError()}')
 			}
 			mut cmd := command
@@ -947,12 +959,6 @@ fn kill_command(command commandpkg.Command) ! {
 			kill_pid(pid)!
 		}
 	}
-}
-
-// Kill the underlying process started via Flatpak host command.
-// This sends a signal via the Flatpak API.
-fn kill_command_flatpak(mut command internal_os.FlatpakHostCommand) ! {
-	command.signal(u8(sig_hup), true)!
 }
 
 // Resize the pty subprocess. This is safe to call anytime.
@@ -1009,40 +1015,6 @@ pub struct ReadThread {}
 //
 // io may be null (e.g. in tests / non-wired usage) in which case data is
 // simply drained.
-
-fn exec_flatpak_exit(td_ voidptr, _ &xev.Loop, _ &internal_os.FlatpakCompletion, r ?IError, exit_code u8) {
-	if _ := r {
-		panic('unreachable')
-	}
-	mut td := unsafe { &ThreadData(td_) }
-	exec_process_exit_common(mut td, u32(exit_code))
-}
-
-// Flatpak sandboxing prevents access to certain reserved paths
-// regardless of configured permissions. Perform a test spawn
-// to get around this problem
-//
-// https://docs.flatpak.org/en/latest/sandbox-permissions.html#reserved-paths
-fn flatpak_cwd_accessible(cwd string) !bool {
-	mut dev_null := os.open_file('/dev/null', 'r+')!
-	defer {
-		dev_null.close()
-	}
-	mut command := internal_os.FlatpakHostCommand{
-		argv:   ['/bin/sh', '-c', ':']
-		cwd:    cwd
-		stdin:  dev_null.fd
-		stdout: dev_null.fd
-		stderr: dev_null.fd
-	}
-	command.spawn() or {
-		log.warn('cannot spawn command at cwd, ignoring: ${err}')
-		return false
-	}
-	_ = command.wait()!
-
-	return true
-}
 
 // setup_shell_command handles the shell integration dispatch based on the
 // configured shell integration mode and resources directory.

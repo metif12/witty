@@ -4,6 +4,7 @@ import sync.stdatomic
 
 // src/pty.zig WindowsPty, Ghostty 6c0e02d. Win32 structures are declared by
 // the SDK; ownership, failure cleanup, naming, and ConPTY setup stay in V.
+#flag windows -DNTDDI_VERSION=0x0A000006
 #include <windows.h>
 
 pub type Fd = voidptr
@@ -11,9 +12,9 @@ pub type Fd = voidptr
 @[typedef]
 struct C.SECURITY_ATTRIBUTES {
 mut:
-	nLength u32
+	nLength              u32
 	lpSecurityDescriptor voidptr
-	bInheritHandle int
+	bInheritHandle       int
 }
 
 @[typedef]
@@ -25,29 +26,30 @@ mut:
 
 fn C.CreateNamedPipeW(name &u16, open_mode u32, pipe_mode u32, instances u32, out_size u32, in_size u32, timeout u32, attributes &C.SECURITY_ATTRIBUTES) voidptr
 fn C.CreateFileW(name &u16, access u32, share u32, attributes &C.SECURITY_ATTRIBUTES, disposition u32, flags u32, template_ voidptr) voidptr
-fn C.CreatePipe(read &voidptr, write &voidptr, attributes voidptr, size u32) int
-fn C.SetHandleInformation(handle voidptr, mask u32, flags u32) int
+fn C.CreatePipe(read &voidptr, write &voidptr, attributes voidptr, size u32) bool
+fn C.SetHandleInformation(handle voidptr, mask u32, flags u32) bool
 fn C.CreatePseudoConsole(size C.COORD, input voidptr, output voidptr, flags u32, console &voidptr) int
 fn C.ResizePseudoConsole(console voidptr, size C.COORD) int
 fn C.ClosePseudoConsole(console voidptr)
 fn C.GetCurrentProcessId() u32
-fn C.CloseHandle(handle voidptr) int
+fn C.CloseHandle(handle voidptr) bool
 fn C.GetLastError() u32
 
 struct PipeNameCounter {
 mut:
 	value u32 = 1
 }
+
 const pipe_name_counter = &PipeNameCounter{}
 
 pub struct Pty {
 pub mut:
-	out_pipe voidptr
-	in_pipe voidptr
-	out_pipe_pty voidptr
-	in_pipe_pty voidptr
+	out_pipe       voidptr
+	in_pipe        voidptr
+	out_pipe_pty   voidptr
+	in_pipe_pty    voidptr
 	pseudo_console voidptr
-	size Winsize
+	size           Winsize
 }
 
 pub fn Pty.open(size Winsize) !Pty {
@@ -60,7 +62,7 @@ pub fn Pty.open(size Winsize) !Pty {
 	attributes := C.SECURITY_ATTRIBUTES{
 		nLength: u32(sizeof(C.SECURITY_ATTRIBUTES))
 	}
-	mut p := Pty{size: size}
+	mut p := Pty{ size: size }
 	mut success := false
 	defer {
 		if !success {
@@ -87,11 +89,11 @@ pub fn Pty.open(size Winsize) !Pty {
 	if p.in_pipe_pty == voidptr(usize(-1)) { return error('Unexpected: ${C.GetLastError()}') }
 	// The input uses an overlapped named pipe; anonymous pipes cannot be used
 	// with the libxev IOCP writer. The output reader remains blocking.
-	if C.CreatePipe(&p.out_pipe, &p.out_pipe_pty, unsafe { nil }, 0) == 0 {
+	if !C.CreatePipe(&p.out_pipe, &p.out_pipe_pty, unsafe { nil }, 0) {
 		return error('Unexpected: ${C.GetLastError()}')
 	}
 	for handle in [p.in_pipe, p.in_pipe_pty, p.out_pipe, p.out_pipe_pty] {
-		if C.SetHandleInformation(handle, 1, 0) == 0 {
+		if !C.SetHandleInformation(handle, 1, 0) {
 			return error('Unexpected: ${C.GetLastError()}')
 		}
 	}

@@ -10,10 +10,10 @@ import pty
 fn C.ReadFile(handle voidptr, buffer voidptr, size u32, count &u32, overlapped voidptr) bool
 fn C.WriteFile(handle voidptr, buffer voidptr, size u32, count &u32, overlapped voidptr) bool
 fn C.CancelIoEx(handle voidptr, overlapped voidptr) bool
-fn C.PeekNamedPipe(handle voidptr, buffer voidptr, size u32, read &u32, available &u32, remaining &u32) int
-fn C.TerminateProcess(handle voidptr, code u32) int
+fn C.PeekNamedPipe(handle voidptr, buffer voidptr, size u32, read &u32, available &u32, remaining &u32) bool
+fn C.TerminateProcess(handle voidptr, code u32) bool
 fn C.GetLastError() u32
-fn C.CloseHandle(handle voidptr) int
+fn C.CloseHandle(handle voidptr) bool
 
 fn spawn_reader(fd pty.Fd, quit internal_os.PipeFd, io &Termio) thread {
 	return spawn thread_main_windows(fd, quit, io)
@@ -25,7 +25,7 @@ pub fn thread_main_windows(fd pty.Fd, quit internal_os.PipeFd, io &Termio) {
 	defer { C.CloseHandle(quit) }
 	if io != unsafe { nil } {
 		crash.set_thread_state(crash.ThreadState{
-			kind: .io
+			kind:    .io
 			surface: io.surface_mailbox.surface
 		})
 	}
@@ -46,8 +46,8 @@ pub fn thread_main_windows(fd pty.Fd, quit internal_os.PipeFd, io &Termio) {
 			}
 		}
 		mut quit_bytes := u32(0)
-		if C.PeekNamedPipe(quit, unsafe { nil }, 0, unsafe { nil }, &quit_bytes,
-			unsafe { nil }) == 0 {
+		if !C.PeekNamedPipe(quit, unsafe { nil }, 0, unsafe { nil }, &quit_bytes,
+			unsafe { nil }) {
 			log.error('quit pipe reader error err=${C.GetLastError()}')
 			panic('unexpected quit pipe read error')
 		}

@@ -336,105 +336,109 @@ pub fn (mut self Command) start() ! {
 }
 
 // start_posix implements the POSIX fork/exec subprocess launch.
-fn (mut self Command) start_posix() ! {
-	// Null-terminate the argument pointers before fork. The command's argument
-	// strings remain alive for the lifetime of this function.
-	mut c_argv := unsafe { []&char{len: self.args.len + 1, init: &char(0)} }
-	for i, arg in self.args {
-		c_argv[i] = arg.str
+$if !windows {
+	fn (mut self Command) start_posix() ! {
+		// Null-terminate the argument pointers before fork. The command's argument
+		// strings remain alive for the lifetime of this function.
+		mut c_argv := unsafe { []&char{len: self.args.len + 1, init: &char(0)} }
+		for i, arg in self.args {
+			c_argv[i] = arg.str
+		}
+
+		// Build the exact environment before fork and retain its backing strings.
+		// `none` represents inheritance; a present empty map is an explicitly empty
+		// environment, matching Command.env's source contract.
+		mut has_env := false
+		env := if values := self.env {
+			has_env = true
+			create_null_delimited_env(values)
+		} else {
+			NullDelimitedEnv{}
+		}
+
+		// Fork. IMPORTANT: do all allocation prior to the fork().
+		// It is undefined behavior to malloc between fork and exec.
+		pid := $if linux {
+			if cgroup := self.linux_cgroup {
+				internal_os.clone_into(cgroup)!
+			} else {
+				C.fork()
+			}
+		} $else { C.fork() }
+		if pid < 0 {
+			return error('fork failed')
+		}
+
+		if pid != 0 {
+			// Parent, return immediately.
+			self.pid = pid
+			return
+		}
+
+		// We are the child.
+
+		// Setup our file descriptors for std streams.
+		if self.stdin_fd >= 0 {
+			setup_fd(self.stdin_fd, 0) or { return error(exec_failed_in_child_message) }
+		}
+		if self.stdout_fd >= 0 {
+			setup_fd(self.stdout_fd, 1) or { return error(exec_failed_in_child_message) }
+		}
+		if self.stderr_fd >= 0 {
+			setup_fd(self.stderr_fd, 2) or { return error(exec_failed_in_child_message) }
+		}
+
+		// Setup our working directory.
+		// This can fail if we don't have permission to go to this directory
+		// or if due to race conditions it doesn't exist or any various other
+		// reasons. We don't want to crash the entire process if this fails
+		// so we ignore it. We don't log because that'll show up in the output.
+		if cwd := self.cwd {
+			C.chdir(cwd.str)
+		}
+
+		// Ghostty may raise process-wide resource limits during startup. Restore
+		// the inherited originals in the child before handing control to it.
+		global_state.get_state().rlimits.restore()
+
+		// If the user requested a pre exec callback, call it now.
+		// This runs in the child process after fork but before exec,
+		// which is useful for PTY setup, signal handling, setsid, etc.
+		if pre_exec_fn := self.pre_exec {
+			pre_exec_fn(mut self)
+		}
+
+		// Finally, replace our process.
+		// Note: we must use the "p"-variant of exec here because we
+		// do not guarantee our command is looked up already in the path.
+		// We use execvp/witty_execvpe, both of which search PATH.
+
+		// Determine our env vars. Faithful to Zig `startPosix`:
+		//
+		//   const envp = if (self.env) |env_map|
+		//       (try createNullDelimitedEnvMap(arena, env_map)).ptr
+		//   else ... std.c.environ;
+		//
+		// If custom environment variables were provided, we build a full
+		// null-delimited `envp` array (these are the EXACT vars to set; they
+		// are NOT merged with the parent environment) and use execvpe.
+		// Otherwise we use execvp, which inherits the current environment.
+		if has_env {
+			C.witty_execvpe(self.path.str, c_argv.data, env.pointers.data)
+		} else {
+			C.execvp(self.path.str, c_argv.data)
+		}
+
+		// If we are executing this code, the exec failed. We're in the
+		// child process so there isn't much we can do. We try to output
+		// something reasonable. It's important to note we MUST NOT return
+		// any other error condition from here on out - we must exit.
+		C.witty_command_write_exec_error()
+
+		// This specific error tells the caller that execution is continuing in the
+		// forked child and that it must terminate instead of resuming parent logic.
+		return error(exec_failed_in_child_message)
 	}
-
-	// Build the exact environment before fork and retain its backing strings.
-	// `none` represents inheritance; a present empty map is an explicitly empty
-	// environment, matching Command.env's source contract.
-	mut has_env := false
-	env := if values := self.env {
-		has_env = true
-		create_null_delimited_env(values)
-	} else {
-		NullDelimitedEnv{}
-	}
-
-	// Fork. IMPORTANT: do all allocation prior to the fork().
-	// It is undefined behavior to malloc between fork and exec.
-	pid := $if linux { if cgroup := self.linux_cgroup {
-		internal_os.clone_into(cgroup)!
-	} else {
-		C.fork()
-	} } $else { C.fork() }
-	if pid < 0 {
-		return error('fork failed')
-	}
-
-	if pid != 0 {
-		// Parent, return immediately.
-		self.pid = pid
-		return
-	}
-
-	// We are the child.
-
-	// Setup our file descriptors for std streams.
-	if self.stdin_fd >= 0 {
-		setup_fd(self.stdin_fd, 0) or { return error(exec_failed_in_child_message) }
-	}
-	if self.stdout_fd >= 0 {
-		setup_fd(self.stdout_fd, 1) or { return error(exec_failed_in_child_message) }
-	}
-	if self.stderr_fd >= 0 {
-		setup_fd(self.stderr_fd, 2) or { return error(exec_failed_in_child_message) }
-	}
-
-	// Setup our working directory.
-	// This can fail if we don't have permission to go to this directory
-	// or if due to race conditions it doesn't exist or any various other
-	// reasons. We don't want to crash the entire process if this fails
-	// so we ignore it. We don't log because that'll show up in the output.
-	if cwd := self.cwd {
-		C.chdir(cwd.str)
-	}
-
-	// Ghostty may raise process-wide resource limits during startup. Restore
-	// the inherited originals in the child before handing control to it.
-	global_state.get_state().rlimits.restore()
-
-	// If the user requested a pre exec callback, call it now.
-	// This runs in the child process after fork but before exec,
-	// which is useful for PTY setup, signal handling, setsid, etc.
-	if pre_exec_fn := self.pre_exec {
-		pre_exec_fn(mut self)
-	}
-
-	// Finally, replace our process.
-	// Note: we must use the "p"-variant of exec here because we
-	// do not guarantee our command is looked up already in the path.
-	// We use execvp/witty_execvpe, both of which search PATH.
-
-	// Determine our env vars. Faithful to Zig `startPosix`:
-	//
-	//   const envp = if (self.env) |env_map|
-	//       (try createNullDelimitedEnvMap(arena, env_map)).ptr
-	//   else ... std.c.environ;
-	//
-	// If custom environment variables were provided, we build a full
-	// null-delimited `envp` array (these are the EXACT vars to set; they
-	// are NOT merged with the parent environment) and use execvpe.
-	// Otherwise we use execvp, which inherits the current environment.
-	if has_env {
-		C.witty_execvpe(self.path.str, c_argv.data, env.pointers.data)
-	} else {
-		C.execvp(self.path.str, c_argv.data)
-	}
-
-	// If we are executing this code, the exec failed. We're in the
-	// child process so there isn't much we can do. We try to output
-	// something reasonable. It's important to note we MUST NOT return
-	// any other error condition from here on out - we must exit.
-	C.witty_command_write_exec_error()
-
-	// This specific error tells the caller that execution is continuing in the
-	// forked child and that it must terminate instead of resuming parent logic.
-	return error(exec_failed_in_child_message)
 }
 
 // setup_fd preserves Command.setupFd's target-specific behavior: Linux uses
@@ -538,7 +542,7 @@ fn create_null_delimited_env(env map[string]string) NullDelimitedEnv {
 		pointers[i] = entry.str
 	}
 	return NullDelimitedEnv{
-		entries: entries
+		entries:  entries
 		pointers: pointers
 	}
 }
