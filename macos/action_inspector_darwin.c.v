@@ -70,6 +70,7 @@ fn register_inspector_view() {
  C.macos_objc_register_class_pair(cls)
 }
 pub fn (mut surface NativeActionSurface) control_inspector(mode int) {
+ if mode !in [0, 1, 2] { return }
  if surface.closed || surface.scroll == unsafe{nil} { return }
  visible := surface.inspector != unsafe{nil}
  desired := if mode == 0 { !visible } else { mode == 1 }

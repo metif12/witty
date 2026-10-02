@@ -557,9 +557,11 @@ pub fn (mut state NativeActionSurface) set_progress(report_state int, progress ?
 		msg_void(state.progress_timer, 'invalidate')
 		state.progress_timer = nil_obj()
 	}
-	state.progress_active = report_state != 0
-	state.progress_state = report_state
-	state.progress = progress
+	// Ghostty.Action.ProgressReport.State maps unknown native values to remove.
+	normalized := if report_state in [0, 1, 2, 3, 4] { report_state } else { 0 }
+	state.progress_active = normalized != 0
+	state.progress_state = normalized
+	state.progress = if state.progress_active { progress } else { none }
 	if state.progress_active {
 		state.progress_timer = C.witty_action_timer(15, state.owner, sel('progressTimer:'),
 			nil_obj(), false)

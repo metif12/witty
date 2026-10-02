@@ -34,6 +34,9 @@ fn test_native_inspector_metal_view_size_key_and_ime_consumers() {
  assert inspector_marked_range(inspector.view,nil_obj()).length == 2
  inspector_unmark(inspector.view,nil_obj())
  assert !inspector_has_marked(inspector.view,nil_obj())
+ surface.control_inspector(99)
+ assert surface.inspector == inspector
+ assert g_inspector_test_destroyed == 0
  surface.control_inspector(0)
  assert surface.inspector == unsafe{nil}
  assert g_inspector_test_destroyed == 1

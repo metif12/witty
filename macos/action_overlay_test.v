@@ -82,6 +82,13 @@ fn test_native_search_editor_and_timer_consumers() {
 	assert !msg_bool(first, 'isValid')
 	msg_void(surface.progress_timer, 'fire')
 	assert !surface.progress_active
+	surface.set_progress(1, u8(25))
+	removed := surface.progress_timer
+	surface.set_progress(99, u8(25))
+	assert !msg_bool(removed, 'isValid')
+	assert !surface.progress_active
+	assert surface.progress_state == 0
+	assert surface.progress == none
 	surface.ring_bell()
 	assert surface.bell
 	surface.begin_key_down()
