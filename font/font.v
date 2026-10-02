@@ -1244,6 +1244,14 @@ pub mut:
 	constraint_width u8 = 1
 }
 
+// Source RenderOptions width fields are u2. Validate that range at every
+// rendering boundary because V's smallest unsigned integer is u8.
+fn (opts RenderOptions) assert_narrow_widths() {
+	if width := opts.cell_width { assert width <= 3 }
+	assert opts.constraint_width <= 3
+	assert opts.constraint.max_constraint_width <= 3
+}
+
 // Constraint controls how a glyph is constrained to fit its cell.
 // Specifies scaling/positioning attributes for glyphs.
 pub struct Constraint {

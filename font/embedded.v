@@ -85,6 +85,7 @@ pub fn sprite_face_has_codepoint(cp u32) bool {
 }
 
 pub fn sprite_face_render_glyph(mut atlas Atlas, cp u32, metrics Metrics, opts RenderOptions) !Glyph {
+	opts.assert_narrow_widths()
 	face := spritepkg.SpriteFace{
 		metrics: sprite_metrics(metrics)
 	}

@@ -145,6 +145,7 @@ pub fn (mut self WebCanvasFace) grapheme_glyph_index(cluster []u8) !u32 {
 // Render a glyph using the glyph index. The rendered glyph is stored
 // in the given texture atlas.
 pub fn (self WebCanvasFace) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOptions) !Glyph {
+	opts.assert_narrow_widths()
 	_ = opts
 	mut render := self.render_glyph_internal(glyph_index)!
 	defer { render.deinit() }

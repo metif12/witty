@@ -435,3 +435,10 @@ fn test_constraint_optional_ratio_preserves_present_zero_and_negative() {
 	assert RenderOptions{}.cell_width == none
 	assert (RenderOptions{ cell_width: 0 }.cell_width or { u8(255) }) == 0
 }
+
+fn test_render_options_accepts_source_two_bit_width_range() {
+	for width in u8(0) .. u8(4) {
+		RenderOptions{ cell_width: width, constraint_width: width }.assert_narrow_widths()
+	}
+	RenderOptions{}.assert_narrow_widths()
+}

@@ -479,6 +479,7 @@ fn coretext_glyph_layout(bounds GlyphSize, sbix bool, synthetic_bold ?f64, opts 
 // Render a glyph using the glyph index. The rendered glyph is stored
 // in the given texture atlas.
 pub fn (self CoreTextFace) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOptions) !Glyph {
+	opts.assert_narrow_widths()
 	mut bounds := GlyphSize{}
 	$if macos {
 		native_font := unsafe { &macos.CTFont(self.ct_font) }

@@ -1470,6 +1470,7 @@ fn get_glyph_size(glyph &freetype.GlyphSlotRec) GlyphSize {
 // render_glyph renders a glyph using the glyph index. The rendered glyph
 // is stored in the given texture atlas.
 pub fn (self Face) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOptions) !Glyph {
+	opts.assert_narrow_widths()
 	if self.backend == .web_canvas {
 		return self.web_canvas.render_glyph(mut atlas, glyph_index, opts)
 	}
