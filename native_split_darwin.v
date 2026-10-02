@@ -12,6 +12,7 @@ fn do_new_split(current &TermState, direction apprt.SplitDirection) bool {
 	added.controller = controller
 	new_tree := controller.host.tree.inserting(view, current.view, match direction { .left { macos.SplitNewDirection.left } .right { .right } .up { .up } .down { .down } }) or {
 		eprintln('failed to insert split: ${err}')
+		collect_detached_surfaces()
 		return false
 	}
 	replace_controller_tree(controller, new_tree, view, current.view, 'New Split')
