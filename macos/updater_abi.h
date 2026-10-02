@@ -1,5 +1,17 @@
 // Objective-C message/block ABI only. Update policy and transitions are in V.
 #include <Block.h>
+#include <math.h>
+extern id objc_initWeak(id*,id);
+extern id objc_loadWeakRetained(id*);
+extern void objc_destroyWeak(id*);
+typedef struct witty_update_weak { id owner; unsigned refs; } witty_update_weak;
+static inline void *witty_update_weak_new(void *owner) { witty_update_weak *weak=calloc(1,sizeof(*weak)); if(!weak) abort(); objc_initWeak(&weak->owner,(id)owner); return weak; }
+static inline void *witty_update_weak_retain(void *owner) { if(owner) ((witty_update_weak*)owner)->refs++; return owner; }
+static inline void witty_update_weak_release(void *owner) { if(!owner) return; witty_update_weak *weak=owner; if(--weak->refs) return; objc_destroyWeak(&weak->owner); free(weak); }
+static inline void *witty_update_weak_load(void *owner) { return owner ? objc_loadWeakRetained(&((witty_update_weak*)owner)->owner) : nil; }
+typedef struct witty_update_delayed { witty_update_weak *owner; void (*callback)(void*); } witty_update_delayed;
+static void witty_update_delayed_invoke(void *context) { witty_update_delayed *task=context; id owner=witty_update_weak_load(task->owner); if(owner) { task->callback(owner); ((void (*)(id,SEL))objc_msgSend)(owner,sel_registerName("release")); } witty_update_weak_release(task->owner); free(task); }
+static inline void witty_update_dispatch_after_weak(void *owner,double seconds,void *callback) { witty_update_delayed *task=calloc(1,sizeof(*task)); if(!task) abort(); task->owner=witty_update_weak_retain(witty_update_weak_new(owner)); task->callback=callback; dispatch_after_f(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(seconds*1000000000.0)),dispatch_get_main_queue(),task,witty_update_delayed_invoke); }
 typedef struct witty_update_block { void *isa; int flags,reserved; void (*invoke)(void*,...); void *descriptor; } witty_update_block;
 static inline void *witty_update_block_copy(void *block) { return block ? _Block_copy(block) : NULL; }
 static inline void witty_update_block_release(void *block) { if (block) _Block_release(block); }
@@ -15,3 +27,26 @@ static inline void *witty_update_regex(void *string,void *pattern) { witty_updat
 static inline void witty_update_message3(void *object,void *selector,void *a,void *b,void *c) { ((void (*)(id,SEL,id,id,id))objc_msgSend)((id)object,(SEL)selector,(id)a,(id)b,(id)c); }
 static inline void *witty_update_blend(void *color,double fraction,void *other) { return ((id (*)(id,SEL,double,id))objc_msgSend)((id)color,sel_registerName("blendedColorWithFraction:ofColor:"),fraction,(id)other); }
 static inline double witty_update_text_width(void *text,void *font) { id attributes=((id (*)(id,SEL,id,id))objc_msgSend)((id)objc_getClass("NSDictionary"),sel_registerName("dictionaryWithObject:forKey:"),(id)font,(id)CFSTR("NSFont")); CGSize size=((CGSize (*)(id,SEL,id))objc_msgSend)((id)text,sel_registerName("sizeWithAttributes:"),attributes); return size.width; }
+static inline void witty_update_draw_ring(double progress,void *color) {
+    id context=((id (*)(id,SEL))objc_msgSend)((id)objc_getClass("NSGraphicsContext"),sel_registerName("currentContext"));
+    CGContextRef cg=((CGContextRef (*)(id,SEL))objc_msgSend)(context,sel_registerName("CGContext"));
+    if(!cg) return;
+    CGContextSaveGState(cg);
+    CGContextSetStrokeColorWithColor(cg,(CGColorRef)color); CGContextSetLineWidth(cg,2);
+    CGContextSetAlpha(cg,0.2); CGContextStrokeEllipseInRect(cg,CGRectMake(1,1,12,12));
+    CGContextSetAlpha(cg,1); CGContextSetLineCap(cg,kCGLineCapRound);
+    CGContextAddArc(cg,7,7,6,M_PI_2,M_PI_2-progress*2*M_PI,1); CGContextStrokePath(cg);
+    CGContextRestoreGState(cg);
+}
+typedef struct witty_update_os_version {long major,minor,patch;} witty_update_os_version;
+static inline bool witty_update_is_tahoe(void) { id process=((id (*)(id,SEL))objc_msgSend)((id)objc_getClass("NSProcessInfo"),sel_registerName("processInfo")); witty_update_os_version minimum={26,0,0}; return ((BOOL (*)(id,SEL,witty_update_os_version))objc_msgSend)(process,sel_registerName("isOperatingSystemAtLeastVersion:"),minimum); }
+extern const CGFloat NSFontWeightMedium;
+extern const CGFloat NSFontWeightSemibold;
+static inline void *witty_update_font(void) { return ((id (*)(id,SEL,double,double))objc_msgSend)((id)objc_getClass("NSFont"),sel_registerName("systemFontOfSize:weight:"),11,NSFontWeightMedium); }
+static inline void *witty_update_title_font(void) { return ((id (*)(id,SEL,double,double))objc_msgSend)((id)objc_getClass("NSFont"),sel_registerName("systemFontOfSize:weight:"),13,NSFontWeightSemibold); }
+static inline void witty_update_draw_text(void *text,void *color,double width) {
+    id values[]={witty_update_font(),(id)color};
+    id keys[]={(id)CFSTR("NSFont"),(id)CFSTR("NSColor")};
+    id attributes=((id (*)(id,SEL,const id*,const id*,unsigned long))objc_msgSend)((id)objc_getClass("NSDictionary"),sel_registerName("dictionaryWithObjects:forKeys:count:"),values,keys,2);
+    ((void (*)(id,SEL,CGRect,id))objc_msgSend)((id)text,sel_registerName("drawInRect:withAttributes:"),CGRectMake(28,6,width-36,16),attributes);
+}

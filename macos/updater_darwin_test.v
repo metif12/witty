@@ -2,6 +2,7 @@
 module macos
 
 import os
+import json
 
 #insert "@VMODROOT/macos/updater_test_abi.h"
 fn C.witty_update_test_block(kind int) voidptr
@@ -16,6 +17,36 @@ fn audit_load_sparkle() {
 	}
 	bundle := msg_id1(get_class('NSBundle'), 'bundleWithPath:', nsstring(path))
 	assert msg_bool(bundle, 'load')
+}
+
+struct UpdateProbeRecord {
+	text string
+	width string
+	icon ?string
+	badge ?string
+	installable bool
+}
+
+fn test_original_swift_view_model_records() {
+	states := [
+		UpdateState{},
+		UpdateState{kind: .permission_request},
+		UpdateState{kind: .checking},
+		UpdateState{kind: .update_available, version: '1.3.0'},
+		UpdateState{kind: .not_found},
+		UpdateState{kind: .error, error_description: 'Source error'},
+		UpdateState{kind: .downloading},
+		UpdateState{kind: .downloading, expected_length: 0},
+		UpdateState{kind: .downloading, expected_length: 200, downloaded: 25},
+		UpdateState{kind: .downloading, expected_length: 100, downloaded: 150},
+		UpdateState{kind: .extracting, extraction_progress: 0.125},
+		UpdateState{kind: .extracting, extraction_progress: 1.5},
+		UpdateState{kind: .installing},
+		UpdateState{kind: .installing, auto_update: true},
+	]
+	mut records := []UpdateProbeRecord{}
+	for state in states { records << UpdateProbeRecord{state.text(), state.max_width_text(), state.icon_name(), state.badge(), state.is_installable()} }
+	if path := os.getenv_opt('WITTY_UPDATER_MODEL_OUTPUT') { os.write_file(path, json.encode(records))! }
 }
 
 fn test_original_update_state_text_equality_and_cancel_rules() {
@@ -66,23 +97,23 @@ fn test_native_update_install_chain_and_protocol_driver_callbacks() {
 	defer { stop_native_updater(); close_tab(view) }
 	C.witty_update_test_reset()
 	block := ObjId(C.witty_update_test_block(1))
-	update_show_checking(driver, sel(''), ObjId(C.witty_update_test_block(0)))
+	msg_void1(driver, 'showUserInitiatedUpdateCheckWithCancellation:', ObjId(C.witty_update_test_block(0)))
 	native_update_install()
 	assert g_update_controller.is_installing()
 	assert !termination_requires_confirmation(true)
-	update_show_found(driver, sel(''), nil_obj(), nil_obj(), block)
+	C.witty_update_message3(driver, sel('showUpdateFoundWithAppcastItem:state:reply:'), nil_obj(), nil_obj(), block)
 	assert C.witty_update_test_count() == 1
 	assert C.witty_update_test_value() == int(UpdateChoice.install)
 	update_show_downloading(driver, sel(''), ObjId(C.witty_update_test_block(0)))
-	update_download_expected(driver, sel(''), 100)
-	update_download_received(driver, sel(''), 42)
+	msg_void_u64(driver, 'showDownloadDidReceiveExpectedContentLength:', 100)
+	msg_void_u64(driver, 'showDownloadDidReceiveDataOfLength:', 42)
 	assert native_update_text() == 'Downloading: 42%'
 	update_download_expected(driver, sel(''), 200)
 	assert native_update_text() == 'Downloading: 0%'
 	update_start_extracting(driver, sel(''))
 	update_extracting_progress(driver, sel(''), 0.75)
 	assert native_update_text() == 'Preparing: 75%'
-	update_show_ready(driver, sel(''), block)
+	msg_void1(driver, 'showReadyToInstallAndRelaunch:', block)
 	assert C.witty_update_test_count() == 2
 	assert update_install_on_quit(driver, sel(''), nil_obj(), nil_obj(), ObjId(C.witty_update_test_block(0)))
 	assert native_update_text() == 'Restart to Complete Update'
@@ -93,12 +124,22 @@ fn test_native_update_install_chain_and_protocol_driver_callbacks() {
 	assert !g_update_is_installing
 	assert C.witty_update_test_count() == 3
 	assert g_update_controller.pills.len == 1
-	update_pill_action(driver, sel(''), g_update_controller.pills[u64(view_window(view))])
+	update_pill_action(driver, sel(''), g_update_controller.pills[u64(view_window(view))] or { panic('missing update pill') })
 	assert msg_bool(g_update_controller.popover, 'isShown')
 	assert native_update_is_available() == false
 	update_will_relaunch(driver, sel(''), nil_obj())
 	update_dismiss_installation(driver, sel(''))
 	assert native_update_text() == ''
+	C.witty_update_test_reset()
+	update_show_not_found(driver, sel(''), nil_obj(), ObjId(C.witty_update_test_block(0)))
+	update_show_not_found(driver, sel(''), nil_obj(), ObjId(C.witty_update_test_block(3)))
+	update_reset_not_found(driver, sel(''), nil_obj())
+	assert C.witty_update_test_count() == 1
+	assert C.witty_update_test_value() == 0 // timer captures first equal notFound state
+	update_show_not_found(driver, sel(''), nil_obj(), ObjId(C.witty_update_test_block(0)))
+	update_show_not_found(driver, sel(''), nil_obj(), ObjId(C.witty_update_test_block(3)))
+	update_pill_action(driver, sel(''), nil_obj())
+	assert C.witty_update_test_value() == 44 // pill click acknowledges current state
 	// The source's cancel retains its canceled installCancellable optional.
 	update_show_checking(driver, sel(''), ObjId(C.witty_update_test_block(0)))
 	native_update_install()
@@ -115,11 +156,49 @@ fn test_permission_reply_publishes_idle_before_native_response() {
 	driver := msg_id(msg_id(register_update_driver(), 'alloc'), 'init')
 	g_update_controller = &NativeUpdateController{driver: driver}
 	defer { stop_native_updater() }
-	g_update_controller.set_state(UpdateState{kind: .permission_request, reply: UpdateCallback{call: update_native_permission, context: C.witty_update_test_block(2)}})
+	g_update_controller.set_state(UpdateState{kind: .permission_request, reply: UpdateCallback{call: update_native_permission, context: C.witty_update_test_block(2), owner: C.witty_update_weak_new(driver)}})
 	g_update_controller.state.reply.invoke(1)
 	assert g_update_controller.state.kind == .idle
 	response := C.witty_update_test_object()
 	assert msg_bool(response, 'automaticUpdateChecks')
 	assert !msg_bool(response, 'sendSystemProfile')
 	msg_void(response, 'release')
+}
+
+fn test_real_sparkle_updater_constructor_config_and_menu_consumers() {
+	app_init()
+	audit_load_sparkle()
+	start_native_updater(NativeUpdateConfig{auto_update: 0})!
+	defer { stop_native_updater() }
+	assert msg_bool1(g_update_controller.updater, 'isKindOfClass:', get_class('SPUUpdater'))
+	assert msg_bool1(g_update_controller.driver, 'conformsToProtocol:', get_protocol('SPUUserDriver'))
+	assert msg_bool1(g_update_controller.driver, 'conformsToProtocol:', get_protocol('SPUUpdaterDelegate'))
+	assert !msg_bool(g_update_controller.updater, 'automaticallyChecksForUpdates')
+	assert !msg_bool(g_update_controller.updater, 'automaticallyDownloadsUpdates')
+	assert objc_utf8_string(update_feed_url(nil_obj(), sel(''), nil_obj())) == 'https://release.files.ghostty.org/appcast.xml'
+	sync_native_updater_config(NativeUpdateConfig{auto_update: 0, channel: 'tip'})
+	assert objc_utf8_string(update_feed_url(nil_obj(), sel(''), nil_obj())) == 'https://tip.files.ghostty.org/appcast.xml'
+	if os.getenv('WITTY_UPDATER_TEST_BUNDLE') == '1' { assert g_update_controller.state.kind == .idle }
+	menu := msg_id(msg_id_u64(msg_id(shared_app(), 'mainMenu'), 'itemAtIndex:', 0), 'submenu')
+	item := msg_id_u64(menu, 'itemAtIndex:', msg_u64(menu, 'numberOfItems') - 1)
+	assert objc_utf8_string(msg_id(item, 'title')) == 'Check for Updates…'
+	assert msg_id(item, 'target') == g_update_controller.driver
+	assert update_validate_menu(g_update_controller.driver, sel(''), item) == msg_bool(g_update_controller.updater, 'canCheckForUpdates')
+}
+
+fn test_source_weak_callbacks_cannot_modify_replacement_controller() {
+	app_init()
+	audit_load_sparkle()
+	first := msg_id(msg_id(register_update_driver(), 'alloc'), 'init')
+	g_update_controller = &NativeUpdateController{driver: first}
+	update_show_error(first, sel(''), nil_obj(), nil_obj())
+	captured := retained_update_state(g_update_controller.state)
+	stop_native_updater()
+	second := msg_id(msg_id(register_update_driver(), 'alloc'), 'init')
+	g_update_controller = &NativeUpdateController{driver: second}
+	g_update_controller.set_state(UpdateState{kind: .checking})
+	captured.dismiss.invoke(0)
+	assert g_update_controller.state.kind == .checking
+	release_update_state(captured)
+	stop_native_updater()
 }

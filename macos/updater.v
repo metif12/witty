@@ -15,12 +15,13 @@ pub:
 
 pub struct UpdateCallback {
 pub:
-	call fn (voidptr, int) = empty_update_callback
+	call fn (voidptr, voidptr, int) = empty_update_callback
 	context voidptr
+	owner voidptr
 }
 
-fn empty_update_callback(_context voidptr, _value int) {}
-pub fn (callback UpdateCallback) invoke(value int) { callback.call(callback.context, value) }
+fn empty_update_callback(_context voidptr, _owner voidptr, _value int) {}
+pub fn (callback UpdateCallback) invoke(value int) { callback.call(callback.context, callback.owner, value) }
 
 pub struct UpdateState {
 pub:
@@ -139,4 +140,8 @@ pub fn (state UpdateState) foreground_color() string {
 }
 pub fn (state UpdateState) background_color() string {
 	return match state.kind { .permission_request { 'blue_black_0.3' } .update_available { 'accent' } .not_found { 'blue_black_0.5' } .error { 'orange_0.2' } else { 'control' } }
+}
+
+fn math_round_update_percentage(value f64) string {
+	return '${math.round_to_even(value * 100):.0f}'
 }

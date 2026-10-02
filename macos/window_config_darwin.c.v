@@ -251,6 +251,7 @@ pub fn apply_native_window_config(view voidptr, config NativeWindowConfig, initi
 	reapply_hidden_native_window_style(window)
 	update_native_titlebar(window)
 	if config.titlebar_style == 2 { dispatch_main(push_native_tabs, window) }
+	refresh_native_update_presentation()
 }
 
 fn save_native_window_position(self ObjId) {

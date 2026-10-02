@@ -17,6 +17,16 @@ fn C.witty_update_regex(text ObjId, pattern ObjId) ObjId
 fn C.witty_update_blend(color ObjId, fraction f64, other ObjId) ObjId
 fn C.witty_update_text_width(text ObjId, font ObjId) f64
 fn C.witty_update_message3(object ObjId, selector Sel, a ObjId, b ObjId, c ObjId)
+fn C.witty_update_draw_ring(progress f64, color ObjId)
+fn C.witty_update_is_tahoe() bool
+fn C.witty_update_font() ObjId
+fn C.witty_update_title_font() ObjId
+fn C.witty_update_draw_text(text ObjId, color ObjId, width f64)
+fn C.witty_update_weak_new(owner ObjId) voidptr
+fn C.witty_update_weak_retain(owner voidptr) voidptr
+fn C.witty_update_weak_release(owner voidptr)
+fn C.witty_update_weak_load(owner voidptr) ObjId
+fn C.witty_update_dispatch_after_weak(owner ObjId, seconds f64, callback voidptr)
 
 @[heap]
 pub struct NativeUpdateController {
@@ -30,44 +40,62 @@ mut:
 	install_listening bool
 	channel string = 'stable'
 	pills map[u64]ObjId
+	badges map[u64]ObjId
+	accessories map[u64]ObjId
 	popover ObjId
 	reset_timer ObjId
+	reset_state UpdateState
 }
 
 __global ( g_update_controller &NativeUpdateController )
 
-fn update_native_void(context voidptr, _value int) { C.witty_update_block_void(context) }
-fn update_native_choice(context voidptr, value int) { C.witty_update_block_choice(context, value) }
-fn update_native_permission(context voidptr, value int) {
+fn update_native_void(context voidptr, _owner voidptr, _value int) { C.witty_update_block_void(context) }
+fn update_native_choice(context voidptr, _owner voidptr, value int) { C.witty_update_block_choice(context, value) }
+fn update_native_permission(context voidptr, owner voidptr, value int) {
 	// The permission wrapper publishes idle before replying, as in UpdateDriver.
 	block := C.witty_update_block_copy(context)
 	defer { C.witty_update_block_release(block) }
-	if g_update_controller != unsafe { nil } { g_update_controller.set_state(UpdateState{}) }
+	if update_owner_is_current(owner) { g_update_controller.set_state(UpdateState{}) }
 	response := C.witty_update_permission(value != 0)
 	C.witty_update_block_object(block, response)
 	msg_void(response, 'release')
 }
-fn update_dismiss(_context voidptr, _value int) {
-	if g_update_controller != unsafe { nil } { g_update_controller.set_state(UpdateState{}) }
+fn update_dismiss(_context voidptr, owner voidptr, _value int) {
+	if update_owner_is_current(owner) { g_update_controller.set_state(UpdateState{}) }
 }
-fn update_retry_start(_context voidptr, _value int) {
-	if g_update_controller != unsafe { nil } {
+fn update_retry_start(_context voidptr, owner voidptr, _value int) {
+	if update_owner_is_current(owner) {
 		g_update_controller.set_state(UpdateState{})
 		g_update_controller.start()
 	}
 }
-fn update_retry_check(_context voidptr, _value int) {
-	if g_update_controller != unsafe { nil } {
+fn update_retry_check(_context voidptr, owner voidptr, _value int) {
+	if update_owner_is_current(owner) {
 		g_update_controller.set_state(UpdateState{})
-		dispatch_main(update_check_later, unsafe { nil })
+		C.witty_update_dispatch_after_weak(g_update_controller.driver, 0, voidptr(update_retry_check_main))
 	}
 }
-fn update_check_later(_context voidptr) {
-	if g_update_controller != unsafe { nil } { msg_void(g_update_controller.updater, 'checkForUpdates') }
+fn update_retry_check_main(owner voidptr) {
+	if update_driver_is_current(owner) { g_update_controller.check_for_updates() }
+}
+fn update_check_later(owner voidptr) {
+	if update_driver_is_current(owner) { msg_void(g_update_controller.updater, 'checkForUpdates') }
+}
+
+fn update_driver_is_current(owner voidptr) bool { return g_update_controller != unsafe { nil } && voidptr(g_update_controller.driver) == owner }
+fn update_owner_is_current(weak voidptr) bool {
+	owner := C.witty_update_weak_load(weak)
+	if is_nil(owner) { return false }
+	current := update_driver_is_current(voidptr(owner))
+	msg_void(owner, 'release')
+	return current
+}
+fn weak_update_callback(call fn (voidptr, voidptr, int)) UpdateCallback {
+	return UpdateCallback{call: call, owner: C.witty_update_weak_new(g_update_controller.driver)}
 }
 
 fn retained_update_callback(callback UpdateCallback) UpdateCallback {
-	return UpdateCallback{call: callback.call, context: C.witty_update_block_copy(callback.context)}
+	return UpdateCallback{call: callback.call, context: C.witty_update_block_copy(callback.context), owner: C.witty_update_weak_retain(callback.owner)}
 }
 fn retained_update_state(state UpdateState) UpdateState {
 	return UpdateState{
@@ -84,6 +112,7 @@ fn release_update_state(state UpdateState) {
 	msg_void(ObjId(state.object), 'release')
 	for callback in [state.cancel_callback, state.reply, state.acknowledgement, state.retry, state.dismiss] {
 		C.witty_update_block_release(callback.context)
+		C.witty_update_weak_release(callback.owner)
 	}
 }
 
@@ -96,12 +125,17 @@ pub fn (mut controller NativeUpdateController) set_state(state UpdateState) {
 	if changed {
 		msg_void(controller.reset_timer, 'invalidate')
 		controller.reset_timer = nil_obj()
-		if state.kind == .not_found {
-			controller.reset_timer = ObjId(C.witty_action_timer(5, controller.driver,
-				sel('resetNotFound:'), nil_obj(), false))
-		}
+		release_update_state(controller.reset_state)
+		controller.reset_state = UpdateState{}
 	}
 	controller.refresh_presentation()
+	// The source reset task belongs to a mounted UpdatePill, rather than to the
+	// standard-driver fallback when there are no native terminal views.
+	if changed && state.kind == .not_found && controller.pills.len > 0 {
+		controller.reset_state = retained_update_state(state)
+		controller.reset_timer = ObjId(C.witty_action_timer(5, controller.driver,
+			sel('resetNotFound:'), nil_obj(), false))
+	}
 	if controller.install_listening {
 		if !state.is_installable() {
 			controller.install_subscription = false
@@ -129,7 +163,7 @@ pub fn (mut controller NativeUpdateController) check_for_updates() {
 	// Preserve that distinction from the source rather than clearing isInstalling.
 	controller.install_listening = false
 	controller.state.cancel()
-	dispatch_after(0.1, update_check_later, unsafe { nil })
+	C.witty_update_dispatch_after_weak(controller.driver, 0.1, voidptr(update_check_later))
 }
 
 pub fn (mut controller NativeUpdateController) start() {
@@ -139,8 +173,8 @@ pub fn (mut controller NativeUpdateController) start() {
 		kind: .error
 		object: voidptr(error)
 		error_description: objc_utf8_string(msg_id(error, 'localizedDescription'))
-		retry: UpdateCallback{call: update_retry_start}
-		dismiss: UpdateCallback{call: update_dismiss}
+		retry: weak_update_callback(update_retry_start)
+		dismiss: weak_update_callback(update_dismiss)
 	})
 }
 
@@ -155,7 +189,11 @@ pub fn (mut controller NativeUpdateController) deinit() {
 	msg_void(controller.popover, 'release')
 	for _, pill in controller.pills { msg_void(pill, 'removeFromSuperview'); msg_void(pill, 'release') }
 	controller.pills.clear()
+	for _, accessory in controller.accessories { msg_void(accessory, 'release') }
+	controller.accessories.clear()
+	controller.badges.clear()
 	release_update_state(controller.state)
+	release_update_state(controller.reset_state)
 	msg_void(controller.updater, 'release')
 	msg_void(controller.standard, 'release')
 	msg_void(controller.driver, 'release')
@@ -166,9 +204,14 @@ fn update_has_unobtrusive_target() bool {
 	windows := msg_id(shared_app(), 'windows')
 	for i in 0 .. int(msg_u64(windows, 'count')) {
 		window := msg_id_u64(windows, 'objectAtIndex:', u64(i))
-		if native_window_data(window) != none && msg_bool(window, 'isVisible') { return true }
+		if is_native_update_window(window) && msg_bool(window, 'isVisible') { return true }
 	}
 	return false
+}
+
+fn is_native_update_window(window ObjId) bool {
+	return msg_bool1(window, 'isKindOfClass:', get_class('VTTerminalWindow')) ||
+		msg_bool1(window, 'isKindOfClass:', get_class('VTQuickTerminalWindow'))
 }
 
 fn register_update_driver() ObjId {
@@ -232,8 +275,8 @@ pub fn start_native_updater(cfg NativeUpdateConfig) ! {
 	if is_nil(updater) { msg_void(driver, 'release'); msg_void(standard, 'release'); return error('Unable to initialize Sparkle updater') }
 	g_update_controller = &NativeUpdateController{updater: updater, driver: driver, standard: standard}
 	center := msg_id(get_class('NSNotificationCenter'), 'defaultCenter')
-	C.witty_macos_observe(center, driver, sel('terminalWindowWillClose:'), nsstring('NSWindowWillCloseNotification'), nil_obj())
-	for event in ['NSWindowDidBecomeVisibleNotification', 'NSWindowDidBecomeKeyNotification', 'NSWindowDidResizeNotification'] {
+	C.witty_macos_observe(center, driver, sel('terminalWindowWillClose:'), nsstring('TerminalWindowWillClose'), nil_obj())
+	for event in ['NSWindowDidChangeOcclusionStateNotification', 'NSWindowDidBecomeKeyNotification', 'NSWindowDidResizeNotification', 'NSWindowDidEnterFullScreenNotification', 'NSWindowDidExitFullScreenNotification', 'com.mitchellh.fullscreenDidEnter', 'com.mitchellh.fullscreenDidExit', 'QuickTerminalDidChangeVisibility'] {
 		C.witty_macos_observe(center, driver, sel('refreshWindows:'), nsstring(event), nil_obj())
 	}
 	install_update_menu()
@@ -258,7 +301,7 @@ pub fn sync_native_updater_config(cfg NativeUpdateConfig) {
 
 fn update_show_permission(_self ObjId, _cmd Sel, request ObjId, reply ObjId) {
 	g_update_controller.set_state(UpdateState{kind: .permission_request, object: voidptr(request),
-		reply: UpdateCallback{call: update_native_permission, context: voidptr(reply)}})
+		reply: UpdateCallback{call: update_native_permission, context: voidptr(reply), owner: C.witty_update_weak_new(g_update_controller.driver)}})
 	if !update_has_unobtrusive_target() { msg_void2(g_update_controller.standard, 'showUpdatePermissionRequest:reply:', request, reply) }
 }
 fn update_show_checking(_self ObjId, _cmd Sel, cancellation ObjId) {
@@ -295,7 +338,7 @@ fn update_show_not_found(_self ObjId, _cmd Sel, error ObjId, acknowledgement Obj
 fn update_show_error(_self ObjId, _cmd Sel, error ObjId, acknowledgement ObjId) {
 	g_update_controller.set_state(UpdateState{kind: .error, object: voidptr(error),
 		error_description: objc_utf8_string(msg_id(error, 'localizedDescription')),
-		retry: UpdateCallback{call: update_retry_check}, dismiss: UpdateCallback{call: update_dismiss}})
+		retry: weak_update_callback(update_retry_check), dismiss: weak_update_callback(update_dismiss)})
 	if !update_has_unobtrusive_target() { msg_void2(g_update_controller.standard, 'showUpdaterError:acknowledgement:', error, acknowledgement) }
 	else { C.witty_update_block_void(acknowledgement) }
 }
@@ -328,7 +371,7 @@ fn update_show_ready(_self ObjId, _cmd Sel, reply ObjId) {
 	else { C.witty_update_block_choice(reply, int(UpdateChoice.install)) }
 }
 fn update_show_installing(_self ObjId, _cmd Sel, terminated bool, retry ObjId) {
-	g_update_controller.set_state(UpdateState{kind: .installing, retry: UpdateCallback{call: update_native_void, context: voidptr(retry)}, dismiss: UpdateCallback{call: update_dismiss}})
+	g_update_controller.set_state(UpdateState{kind: .installing, retry: UpdateCallback{call: update_native_void, context: voidptr(retry)}, dismiss: weak_update_callback(update_dismiss)})
 	if !update_has_unobtrusive_target() { C.witty_update_message_bool_object(g_update_controller.standard, sel('showInstallingUpdateWithApplicationTerminated:retryTerminatingApplication:'), terminated, retry) }
 }
 fn update_show_installed(_self ObjId, _cmd Sel, relaunched bool, acknowledgement ObjId) {
@@ -345,7 +388,7 @@ fn update_feed_url(_self ObjId, _cmd Sel, _updater ObjId) ObjId {
 }
 fn update_install_on_quit(_self ObjId, _cmd Sel, _updater ObjId, _item ObjId, immediate ObjId) bool {
 	g_update_controller.set_state(UpdateState{kind: .installing, auto_update: true,
-		retry: UpdateCallback{call: update_native_void, context: voidptr(immediate)}, dismiss: UpdateCallback{call: update_dismiss}})
+		retry: UpdateCallback{call: update_native_void, context: voidptr(immediate)}, dismiss: weak_update_callback(update_dismiss)})
 	return true
 }
 fn update_will_relaunch(_self ObjId, _cmd Sel, _updater ObjId) {
@@ -353,12 +396,11 @@ fn update_will_relaunch(_self ObjId, _cmd Sel, _updater ObjId) {
 	windows := msg_id(shared_app(), 'windows')
 	for i in 0 .. int(msg_u64(windows, 'count')) { msg_void(msg_id_u64(windows, 'objectAtIndex:', u64(i)), 'invalidateRestorableState') }
 }
-fn update_terminal_will_close(_self ObjId, _cmd Sel, notification ObjId) {
-	if native_window_data(msg_id(notification, 'object')) == none { return }
-	dispatch_after(0.05, update_window_closed, unsafe { nil })
+fn update_terminal_will_close(_self ObjId, _cmd Sel, _notification ObjId) {
+	C.witty_update_dispatch_after_weak(g_update_controller.driver, 0.05, voidptr(update_window_closed))
 }
-fn update_window_closed(_context voidptr) {
-	if g_update_controller == unsafe { nil } || update_has_unobtrusive_target() { return }
+fn update_window_closed(owner voidptr) {
+	if !update_driver_is_current(owner) || update_has_unobtrusive_target() { return }
 	g_update_controller.state.cancel()
 	g_update_controller.set_state(UpdateState{})
 }
@@ -367,7 +409,10 @@ fn update_refresh_windows(_self ObjId, _cmd Sel, _notification ObjId) {
 }
 fn update_reset_not_found(_self ObjId, _cmd Sel, _timer ObjId) {
 	if g_update_controller == unsafe { nil } || g_update_controller.state.kind != .not_found { return }
-	old := retained_update_state(g_update_controller.state)
+	update_acknowledge_not_found(g_update_controller.reset_state)
+}
+fn update_acknowledge_not_found(state UpdateState) {
+	old := retained_update_state(state)
 	g_update_controller.set_state(UpdateState{})
 	old.acknowledgement.invoke(0)
 	release_update_state(old)
@@ -412,12 +457,12 @@ fn (mut controller NativeUpdateController) refresh_presentation() {
 	mut live := []u64{}
 	for i in 0 .. int(msg_u64(windows, 'count')) {
 		window := msg_id_u64(windows, 'objectAtIndex:', u64(i))
-		if native_window_data(window) == none { continue }
+		if !is_native_update_window(window) { continue }
 		live << u64(window)
 		content := msg_id(window, 'contentView')
 		mut pill := controller.pills[u64(window)] or { nil_obj() }
 		if is_nil(pill) {
-			pill = msg_id_rect(alloc('NSButton'), 'initWithFrame:', objc_rect(0, 0, 200, 28))
+			pill = update_pill_view()
 			msg_void1(pill, 'setTarget:', controller.driver)
 			msg_void1(pill, 'setAction:', sel('pill:'))
 			msg_void_u64(pill, 'setBezelStyle:', 13)
@@ -425,39 +470,82 @@ fn (mut controller NativeUpdateController) refresh_presentation() {
 			msg_void_bool(pill, 'setWantsLayer:', true)
 			msg_void1(content, 'addSubview:', pill)
 			controller.pills[u64(window)] = pill
+			badge := update_badge_view()
+			msg_void1(pill, 'addSubview:', badge)
+			controller.badges[u64(window)] = badge
+			msg_void(badge, 'release')
 		}
 		msg_void_bool(pill, 'setHidden:', controller.state.kind == .idle)
-		msg_void1(pill, 'setTitle:', nsstring(controller.state.text()))
+		msg_void_bool(pill, 'setNeedsDisplay:', true)
 		msg_void1(pill, 'setToolTip:', nsstring(controller.state.text()))
 		msg_void1(pill, 'setAccessibilityLabel:', nsstring(controller.state.text()))
-		font := msg_id_f64(get_class('NSFont'), 'systemFontOfSize:', 11)
+		font := C.witty_update_font()
 		msg_void1(pill, 'setFont:', font)
-		width := C.witty_update_text_width(nsstring(controller.state.max_width_text()), font) + 44
+		width := C.witty_update_text_width(nsstring(controller.state.max_width_text()), font) + 36
 		bounds := msg_rect(content, 'bounds')
-		msg_void_rect(pill, 'setFrame:', objc_rect(bounds.width - width - 12, bounds.height - 38, width, 28))
+		mut supports_accessory := true
+		if data := native_window_data(window) { supports_accessory = data.config.titlebar_style in [0, 1] && data.config.decorations }
+		if msg_bool1(window, 'isKindOfClass:', get_class('VTQuickTerminalWindow')) { supports_accessory = false }
+		mut fullscreen := (msg_u64(window, 'styleMask') & u64(1 << 14)) != 0
+		if state := g_fullscreen_states[u64(window)] { fullscreen = fullscreen || state.saved }
+		if supports_accessory && !fullscreen {
+			mut accessory := controller.accessories[u64(window)] or { nil_obj() }
+			if is_nil(accessory) {
+				accessory = msg_id(alloc('NSTitlebarAccessoryViewController'), 'init')
+				msg_void_u64(accessory, 'setLayoutAttribute:', 2)
+				container := msg_id_rect(alloc('NSView'), 'initWithFrame:', objc_rect(0, 0, width + 5, 33))
+				msg_void1(accessory, 'setView:', container)
+				msg_void(container, 'release')
+				msg_void1(window, 'addTitlebarAccessoryViewController:', accessory)
+				controller.accessories[u64(window)] = accessory
+			}
+			padding := if C.witty_update_is_tahoe() { if !is_nil(msg_id(window, 'toolbar')) { 10.0 } else { 5.0 } } else { if !is_nil(msg_id(window, 'toolbar')) { 9.0 } else { 4.0 } }
+			container := msg_id(accessory, 'view')
+			if msg_id(pill, 'superview') != container { msg_void(pill, 'removeFromSuperview'); msg_void1(container, 'addSubview:', pill) }
+			msg_void_rect(container, 'setFrame:', objc_rect(0, 0, width + padding, 28 + padding))
+			msg_void_rect(pill, 'setFrame:', objc_rect(0, 0, width, 28))
+			msg_void_bool(accessory, 'setHidden:', controller.state.kind == .idle)
+		} else {
+			if msg_id(pill, 'superview') != content { msg_void(pill, 'removeFromSuperview'); msg_void1(content, 'addSubview:', pill) }
+			msg_void_rect(pill, 'setFrame:', objc_rect(bounds.width - width - 9, 9, width, 28))
+			if accessory := controller.accessories[u64(window)] { msg_void_bool(accessory, 'setHidden:', true) }
+		}
 		layer := msg_id(pill, 'layer')
 		msg_void_f64(layer, 'setCornerRadius:', 14)
 		msg_void1(layer, 'setBackgroundColor:', msg_id(update_color(controller.state.background_color()), 'CGColor'))
 		msg_void1(pill, 'setContentTintColor:', update_color(controller.state.foreground_color()))
-		if icon := controller.state.icon_name() {
-			image := msg_id2(get_class('NSImage'), 'imageWithSystemSymbolName:accessibilityDescription:', nsstring(icon), nsstring(controller.state.text()))
-			msg_void1(pill, 'setImage:', image)
-			msg_void_u64(pill, 'setImagePosition:', 2)
-		} else { msg_void1(pill, 'setImage:', nil_obj()) }
+		badge := controller.badges[u64(window)] or { nil_obj() }
+		msg_void_bool(badge, 'setNeedsDisplay:', true)
+		msg_void1(badge, 'setAccessibilityLabel:', nsstring(controller.state.text()))
+		badge_layer := msg_id(badge, 'layer')
+		if controller.state.kind == .checking {
+			if is_nil(msg_id1(badge_layer, 'animationForKey:', nsstring('checking'))) {
+				animation := msg_id1(get_class('CABasicAnimation'), 'animationWithKeyPath:', nsstring('transform.rotation.z'))
+				msg_void1(animation, 'setFromValue:', msg_id_f64(get_class('NSNumber'), 'numberWithDouble:', 0))
+				msg_void1(animation, 'setToValue:', msg_id_f64(get_class('NSNumber'), 'numberWithDouble:', -6.283185307179586))
+				msg_void_f64(animation, 'setDuration:', 2.5)
+				C.witty_action_repeat_forever(animation)
+				msg_void2(badge_layer, 'addAnimation:forKey:', animation, nsstring('checking'))
+			}
+		} else { msg_void1(badge_layer, 'removeAnimationForKey:', nsstring('checking')) }
 	}
 	mut removed := []u64{}
 	for key, pill in controller.pills {
 		if key !in live { msg_void(pill, 'removeFromSuperview'); msg_void(pill, 'release'); removed << key }
 	}
-	for key in removed { controller.pills.delete(key) }
+	for key in removed {
+		controller.pills.delete(key)
+		controller.badges.delete(key)
+		if accessory := controller.accessories[key] { msg_void(accessory, 'release'); controller.accessories.delete(key) }
+	}
 	if !is_nil(controller.popover) && msg_bool(controller.popover, 'isShown') { controller.build_popover() }
 }
 
 fn update_pill_action(_self ObjId, _cmd Sel, sender ObjId) {
-	if g_update_controller.state.kind == .not_found { update_reset_not_found(nil_obj(), sel(''), nil_obj()); return }
+	if g_update_controller.state.kind == .not_found { update_acknowledge_not_found(g_update_controller.state); return }
 	if is_nil(g_update_controller.popover) {
 		g_update_controller.popover = msg_id(alloc('NSPopover'), 'init')
-		msg_void_u64(g_update_controller.popover, 'setBehavior:', 1)
+		msg_void_u64(g_update_controller.popover, 'setBehavior:', 2)
 	}
 	if msg_bool(g_update_controller.popover, 'isShown') { msg_void(g_update_controller.popover, 'close'); return }
 	g_update_controller.build_popover()
@@ -471,6 +559,11 @@ fn update_popover_button(controller &NativeUpdateController, text string, tag u6
 	msg_void1(button, 'setAction:', sel('popoverAction:'))
 	msg_void_u64(button, 'setTag:', tag)
 	msg_void_u64(button, 'setBezelStyle:', 1)
+	if controller.state.kind != .permission_request { msg_void_u64(button, 'setControlSize:', 1) }
+	if tag in [u64(1), 3, 5, 7] { msg_void1(button, 'setKeyEquivalent:', nsstring('\x1b')) }
+	if tag in [u64(2), 6, 9] || (tag == 8 && controller.state.kind == .installing) {
+		msg_void1(button, 'setKeyEquivalent:', nsstring('\r'))
+	}
 	msg_void1(view, 'addSubview:', button)
 	msg_void(button, 'release')
 }
@@ -478,18 +571,32 @@ fn update_popover_button(controller &NativeUpdateController, text string, tag u6
 fn (mut controller NativeUpdateController) build_popover() {
 	state := controller.state
 	if state.kind == .idle { msg_void(controller.popover, 'close'); return }
+	height := if state.kind == .update_available { if state.release_notes_url.len > 0 { 220.0 } else { 180.0 } } else if state.kind == .checking || state.kind == .extracting { 108.0 } else if state.kind == .downloading { 136.0 } else { 164.0 }
 	view_controller := msg_id(alloc('NSViewController'), 'init')
-	view := msg_id_rect(alloc('NSView'), 'initWithFrame:', objc_rect(0, 0, 300, 164))
-	label := action_label(state.text(), objc_rect(16, 116, 268, 32))
+	view := msg_id_rect(alloc('NSView'), 'initWithFrame:', objc_rect(0, 0, 300, height))
+	title := match state.kind {
+		.permission_request { 'Enable automatic updates?' }
+		.checking { 'Checking for updates…' }
+		.update_available { 'Update Available' }
+		.downloading { 'Downloading Update' }
+		.extracting { 'Preparing Update' }
+		.installing { 'Restart Required' }
+		.not_found { 'No Updates Found' }
+		.error { 'Update Failed' }
+		else { '' }
+	}
+	label := action_label(title, objc_rect(if state.kind == .checking { 40.0 } else { 16.0 }, height - 42, 268, 26))
+	msg_void1(label, 'setFont:', if state.kind == .checking { msg_id_f64(get_class('NSFont'), 'systemFontOfSize:', 13) } else { C.witty_update_title_font() })
 	msg_void1(view, 'addSubview:', label)
 	msg_void(label, 'release')
-	mut description := state.description()
+	mut description := if state.kind == .error { state.error_description } else { state.description() }
+	if state.kind in [.checking, .downloading, .extracting] { description = '' }
 	if state.kind == .permission_request { description = 'Ghostty can automatically check for updates in the background.' }
 	if state.kind == .installing { description = 'The update is ready. Please restart the application to complete the installation.' }
 	if state.kind == .update_available {
 		description = 'Version: ${state.version}'
 		length := msg_u64(ObjId(state.object), 'contentLength')
-		if length > 0 { description += '\nSize: ' + objc_utf8_string(msg_id2(get_class('NSByteCountFormatter'), 'stringFromByteCount:countStyle:', ObjId(length), ObjId(1))) }
+		if length > 0 { description += '\nSize: ' + objc_utf8_string(msg_id2(get_class('NSByteCountFormatter'), 'stringFromByteCount:countStyle:', ObjId(length), ObjId(0))) }
 		date := msg_id(ObjId(state.object), 'date')
 		if !is_nil(date) {
 			formatter := msg_id(alloc('NSDateFormatter'), 'init')
@@ -498,7 +605,9 @@ fn (mut controller NativeUpdateController) build_popover() {
 			msg_void(formatter, 'release')
 		}
 	}
-	info := action_label(description, objc_rect(16, 56, 268, 60))
+	info := action_label(description, objc_rect(16, height - 106, 268, 60))
+	msg_void1(info, 'setFont:', msg_id_f64(get_class('NSFont'), 'systemFontOfSize:', 11))
+	msg_void1(info, 'setTextColor:', update_color('secondary'))
 	msg_void_bool(info, 'setSelectable:', state.kind == .update_available)
 	msg_void1(view, 'addSubview:', info)
 	msg_void(info, 'release')
@@ -506,10 +615,11 @@ fn (mut controller NativeUpdateController) build_popover() {
 		.permission_request { update_popover_button(controller, 'Not Now', 1, 16, 12, 90, view); update_popover_button(controller, 'Allow', 2, 210, 12, 74, view) }
 		.checking, .downloading { update_popover_button(controller, 'Cancel', 3, 208, 12, 76, view) }
 		.update_available {
-			update_popover_button(controller, 'Skip', 4, 12, 12, 48, view)
-			update_popover_button(controller, 'Later', 5, 62, 12, 52, view)
-			update_popover_button(controller, 'Install and Relaunch', 6, 122, 12, 166, view)
-			if state.release_notes_url.len > 0 { update_popover_button(controller, state.release_notes_label, 10, 16, 46, 268, view) }
+			y := if state.release_notes_url.len > 0 { 58.0 } else { 16.0 }
+			update_popover_button(controller, 'Skip', 4, 12, y, 48, view)
+			update_popover_button(controller, 'Later', 5, 62, y, 52, view)
+			update_popover_button(controller, 'Install and Relaunch', 6, 122, y, 166, view)
+			if state.release_notes_url.len > 0 { update_popover_button(controller, state.release_notes_label, 10, 16, 12, 268, view) }
 		}
 		.installing { update_popover_button(controller, 'Restart Later', 7, 12, 12, 120, view); update_popover_button(controller, 'Restart Now', 8, 168, 12, 120, view) }
 		.not_found { update_popover_button(controller, 'OK', 9, 212, 12, 72, view) }
@@ -517,7 +627,9 @@ fn (mut controller NativeUpdateController) build_popover() {
 		else {}
 	}
 	if state.kind in [.checking, .downloading, .extracting] {
-		progress := msg_id_rect(alloc('NSProgressIndicator'), 'initWithFrame:', objc_rect(16, 86, 268, 12))
+		progress := msg_id_rect(alloc('NSProgressIndicator'), 'initWithFrame:', if state.kind == .checking { objc_rect(16, height - 36, 14, 14) } else { objc_rect(16, height - 60, 268, 12) })
+		msg_void_u64(progress, 'setControlSize:', 1)
+		if state.kind == .checking { msg_void_u64(progress, 'setStyle:', 1) }
 		mut determinate := state.kind == .extracting
 		mut value := state.extraction_progress
 		if state.kind == .downloading { if expected := state.expected_length { if expected > 0 { determinate = true; value = f64(state.downloaded) / f64(expected) } } }
@@ -528,6 +640,14 @@ fn (mut controller NativeUpdateController) build_popover() {
 		msg_void1(progress, 'startAnimation:', nil_obj())
 		msg_void1(view, 'addSubview:', progress)
 		msg_void(progress, 'release')
+		if determinate {
+			display_progress := if state.kind == .downloading { if value < 0 { 0.0 } else if value > 1 { 1.0 } else { value } } else { value }
+			percentage := action_label('${math_round_update_percentage(display_progress)}%', objc_rect(16, height - 80, 268, 18))
+			msg_void1(percentage, 'setFont:', msg_id_f64(get_class('NSFont'), 'systemFontOfSize:', 11))
+			msg_void1(percentage, 'setTextColor:', update_color('secondary'))
+			msg_void1(view, 'addSubview:', percentage)
+			msg_void(percentage, 'release')
+		}
 	}
 	msg_void1(view_controller, 'setView:', view)
 	msg_void1(controller.popover, 'setContentViewController:', view_controller)
@@ -560,6 +680,11 @@ fn update_popover_action(_self ObjId, _cmd Sel, sender ObjId) {
 pub fn native_update_is_installable() bool { return g_update_controller != unsafe { nil } && g_update_controller.state.is_installable() }
 pub fn native_update_is_available() bool { return g_update_controller != unsafe { nil } && g_update_controller.state.kind == .update_available }
 pub fn native_update_text() string { return if g_update_controller != unsafe { nil } { g_update_controller.state.text() } else { '' } }
+pub fn native_update_description() string { return if g_update_controller != unsafe { nil } { g_update_controller.state.description() } else { '' } }
+pub fn native_update_icon_name() ?string { if g_update_controller != unsafe { nil } { return g_update_controller.state.icon_name() }; return none }
+pub fn native_update_badge() ?string { if g_update_controller != unsafe { nil } { return g_update_controller.state.badge() }; return none }
 pub fn native_update_install() { if g_update_controller != unsafe { nil } { g_update_controller.install_update() } }
+pub fn native_update_check() { if g_update_controller != unsafe { nil } { g_update_controller.check_for_updates() } }
+pub fn refresh_native_update_presentation() { if g_update_controller != unsafe { nil } { g_update_controller.refresh_presentation() } }
 pub fn native_update_cancel() { if g_update_controller != unsafe { nil } { g_update_controller.state.cancel() } }
 pub fn stop_native_updater() { if g_update_controller != unsafe { nil } { g_update_controller.deinit() } }
