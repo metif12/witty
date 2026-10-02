@@ -12,6 +12,7 @@
 module main
 
 import cli
+import buildcfg
 import core
 import global_state
 import internal_os
@@ -53,8 +54,8 @@ pub:
 // empty returns an empty GhosttyString with null pointer.
 pub fn GhosttyString.empty() GhosttyString {
 	return GhosttyString{
-		ptr: unsafe { nil }
-		len: 0
+		ptr:      unsafe { nil }
+		len:      0
 		sentinel: false
 	}
 }
@@ -70,8 +71,8 @@ pub fn GhosttyString.from_string(s string) GhosttyString {
 		(&u8(ptr))[s.len] = 0
 	}
 	return GhosttyString{
-		ptr: &u8(ptr)
-		len: usize(s.len)
+		ptr:      &u8(ptr)
+		len:      usize(s.len)
 		sentinel: true
 	}
 }
@@ -88,8 +89,8 @@ pub fn GhosttyString.from_slice(b []u8) GhosttyString {
 		vmemcpy(ptr, b.data, b.len)
 	}
 	return GhosttyString{
-		ptr: &u8(ptr)
-		len: usize(b.len)
+		ptr:      &u8(ptr)
+		len:      usize(b.len)
 		sentinel: false
 	}
 }
@@ -182,8 +183,13 @@ fn action_args(args []string, action global_state.Action) []string {
 // ghostty_info: Return metadata about Ghostty, such as version, build mode, etc.
 pub fn ghostty_info() Info {
 	return Info{
-		mode: if is_debug { .debug } else { .release_fast }
-		version: version_string.str
+		mode:        match buildcfg.mode_string {
+			'ReleaseSafe' { .release_safe }
+			'ReleaseSmall' { .release_small }
+			'ReleaseFast' { .release_fast }
+			else { .debug }
+		}
+		version:     version_string.str
 		version_len: usize(version_string.len)
 	}
 }

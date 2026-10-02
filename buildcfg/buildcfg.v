@@ -25,6 +25,16 @@ pub const slow_runtime_safety = $if prod {
 	true
 }
 
+pub const mode_string = $if release_safe ? {
+	'ReleaseSafe'
+} $else $if release_small ? {
+	'ReleaseSmall'
+} $else $if prod {
+	'ReleaseFast'
+} $else {
+	'Debug'
+}
+
 // Ghostty's main build enables Oniguruma and synthesizes both terminal
 // features from that one option. `-d no_oniguruma` models the reduced
 // libghostty-vt build, whose source build explicitly disables it.
@@ -34,5 +44,17 @@ pub const tmux_control_mode = oniguruma
 
 // Config.zig enables gettext on Darwin and GNU-libc Unix targets. An explicit
 // build option overrides that default, including identity canonicalization.
-const default_i18n = $if macos || ios { true } $else $if (linux || freebsd) && glibc { true } $else { false }
-pub const i18n = $if no_i18n ? { false } $else $if i18n ? { true } $else { default_i18n }
+const default_i18n = $if macos || ios {
+	true
+} $else $if (linux || freebsd) && glibc {
+	true
+} $else {
+	false
+}
+pub const i18n = $if no_i18n ? {
+	false
+} $else $if i18n ? {
+	true
+} $else {
+	default_i18n
+}

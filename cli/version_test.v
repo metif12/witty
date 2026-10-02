@@ -21,10 +21,10 @@ fn test_version_output_reports_translated_build_metadata() {
 }
 
 fn test_version_output_hyperlink_requires_commit_metadata() {
-	assert build_meta.commit_hash == '6c0e02d'
+	assert build_meta.reference_commit == '6c0e02d1138d5376e4ac2f5e311b225494514a97'
 	plain := version_output(false)
 	tty := version_output(true)
 	assert !plain.contains('\x1b]8;;')
-	assert tty.starts_with('\x1b]8;;https://github.com/ghostty-org/ghostty/commit/6c0e02d\x1b\\Ghostty ${build_meta.version_string}\n\n')
+	assert tty.starts_with('\x1b]8;;https://github.com/ghostty-org/ghostty/commit/${build_meta.commit_hash}\x1b\\Ghostty ${build_meta.version_string}\n\n')
 	assert tty.contains('\x1b]8;;\x1b\\Version\n')
 }

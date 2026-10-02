@@ -2,6 +2,7 @@ module cli
 
 import apprt
 import build_meta
+import buildcfg
 import font
 import os
 import renderer
@@ -40,11 +41,7 @@ fn version_output(tty bool) string {
 }
 
 fn build_mode_name() string {
-	$if debug {
-		return 'Debug'
-	} $else {
-		return 'ReleaseFast'
-	}
+	return buildcfg.mode_string
 }
 
 fn runtime_name(runtime apprt.Runtime) string {

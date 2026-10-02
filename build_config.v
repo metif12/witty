@@ -17,7 +17,11 @@ pub const version_string = build_meta.version_string
 pub type ReleaseChannel = buildcfg.ReleaseChannel
 
 // The release channel for this build.
-pub const release_channel = ReleaseChannel.tip
+pub const release_channel = if build_meta.release_channel == 'stable' {
+	ReleaseChannel.stable
+} else {
+	ReleaseChannel.tip
+}
 
 // Linux packaging feature flags. These mirror Ghostty's generated build
 // options and can be enabled with `-d flatpak` and `-d snap` respectively.

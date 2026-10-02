@@ -43,7 +43,8 @@ pub fn compile_options(root string, mode Mode, artifact Artifact, explicit_versi
 		.debug { args << '-g' }
 		.release_safe { args << ['-d', 'release_safe', '-cflags', '-O2'] }
 		.release_fast { args << '-prod' }
-		.release_small { args << ['-prod', '-no-prod-options', '-cflags', '-Os'] }
+		.release_small { args << ['-prod', '-d', 'release_small', '-no-prod-options', '-cflags',
+				'-Os'] }
 	}
 
 	match artifact {

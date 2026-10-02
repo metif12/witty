@@ -2,6 +2,7 @@ module global_state
 
 import os
 import build_meta
+import buildcfg
 import font
 import fontconfig
 import harfbuzz
@@ -190,10 +191,14 @@ pub fn Action.detect_special_case(arg string) ?SpecialCase {
 		return SpecialCaseAbortIfNoAction{}
 	}
 	if arg == '--version' {
-		return SpecialCaseAction{ value: .version }
+		return SpecialCaseAction{
+			value: .version
+		}
 	}
 	if arg == '--help' || arg == '-h' {
-		return SpecialCaseFallback{ value: .help }
+		return SpecialCaseFallback{
+			value: .help
+		}
 	}
 	return none
 }
@@ -215,8 +220,14 @@ pub fn detect_iter[T](mut iter T) !DetectActionResult {
 		arg := iter.next() or { break }
 		if special := Action.detect_special_case(arg) {
 			match special {
-				SpecialCaseAction { return DetectActionResult{ action: special.value } }
-				SpecialCaseFallback { fallback = special.value }
+				SpecialCaseAction {
+					return DetectActionResult{
+						action: special.value
+					}
+				}
+				SpecialCaseFallback {
+					fallback = special.value
+				}
 				SpecialCaseAbortIfNoAction {
 					if _ := pending {
 					} else {
@@ -245,9 +256,13 @@ pub fn detect_iter[T](mut iter T) !DetectActionResult {
 		pending = matched
 	}
 	if action := pending {
-		return DetectActionResult{ action: action }
+		return DetectActionResult{
+			action: action
+		}
 	}
-	return DetectActionResult{ action: fallback }
+	return DetectActionResult{
+		action: fallback
+	}
 }
 
 // detect_action is the explicit-slice convenience used by embedders and tests.
@@ -304,7 +319,7 @@ pub fn (mut self GlobalState) init_args(args []string) ! {
 	// Output the source's startup metadata after logging and backend selection
 	// are initialized, but before any subsystem initialization can fail.
 	log.info('ghostty version=${build_meta.version_string}')
-	optimize := $if debug { 'Debug' } $else { 'ReleaseFast' }
+	optimize := buildcfg.mode_string
 	runtime := $if linux || freebsd { 'gtk' } $else { 'none' }
 	renderer_backend := $if macos || ios {
 		'metal'
@@ -331,9 +346,7 @@ pub fn (mut self GlobalState) init_args(args []string) ! {
 
 	// Initialize crash reporting. This is a no-op for builds such as Witty
 	// that do not link Ghostty's optional Sentry native SDK.
-	crash.initialize() or {
-		log.warn('sentry init failed, no crash capture available err=${err}')
-	}
+	crash.initialize() or { log.warn('sentry init failed, no crash capture available err=${err}') }
 
 	// Locale affects libc, gettext, and every child shell, so initialize it
 	// before loading translated resources or starting an application runtime.
