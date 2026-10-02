@@ -16,7 +16,6 @@ module terminal_c
 //   - c/paste.zig  → paste_is_safe()
 //   - c/osc.zig    → OscParser/OscCommand wrappers, CommandData enum
 //   - c/main.zig   → module aggregator (this file)
-
 import input
 import log
 import lib_allocator
@@ -287,14 +286,15 @@ pub fn (mut self KeyEncoder) setopt(option KeyEncoderOption, value KeyEncoderOpt
 // the bytes written on success or the required size when the buffer is too
 // small, matching ghostty_key_encoder_encode.
 pub fn (self &KeyEncoder) encode(event &KeyEvent, mut out []u8) (Result, usize) {
-	encoded := input.encode(event.event, self.opts)
-	if encoded.len > out.len {
-		return Result.out_of_memory, usize(encoded.len)
+	mut writer := KeyFixedWriter{
+		buffer: out
 	}
-	for i, byte in encoded.bytes() {
-		out[i] = byte
+	input.encode_writer(mut writer, event.event, self.opts) or {
+		mut discarding := KeyDiscardingWriter{}
+		input.encode_writer(mut discarding, event.event, self.opts) or { panic(err) }
+		return Result.out_of_memory, discarding.count
 	}
-	return Result.success, usize(encoded.len)
+	return Result.success, usize(writer.end)
 }
 
 // ============================================================
@@ -327,7 +327,7 @@ pub fn osc_new_alloc(allocator ?&lib_allocator.Allocator) (Result, &OscParser) {
 	mut parser := unsafe { &OscParser(raw) }
 	unsafe {
 		*parser = OscParser{
-			parser: osc.Parser.init(voidptr(1))
+			parser:    osc.Parser.init(voidptr(1))
 			allocator: selected
 			allocated: true
 		}
@@ -381,7 +381,7 @@ pub fn command_type(cmd ?osc.Command) osc.CommandType {
 // from an OSC command through the C API.
 // C: GhosttyOscCommandData
 pub enum CommandData as i32 {
-	invalid // 0
+	invalid                 // 0
 	change_window_title_str // 1
 }
 
@@ -499,8 +499,7 @@ pub fn (mut self SgrParser) set_params_raw(params &u16, separators &u8, len usiz
 	}
 
 	if !isnil(self.params_ptr) && self.params_len > 0 {
-		self.allocator.free_bytes(self.params_ptr, self.params_len * sizeof(u16), 1,
-			0)
+		self.allocator.free_bytes(self.params_ptr, self.params_len * sizeof(u16), 1, 0)
 	}
 	self.params_ptr = next_ptr
 	self.params_len = len
@@ -665,4 +664,32 @@ fn c_enum_valid[T](value T) bool {
 		if value == enum_value.value { return true }
 	}
 	return false
+}
+
+// std.Io.Writer.fixedDrain copies the available prefix before WriteFailed.
+struct KeyFixedWriter {
+mut:
+	buffer []u8
+	end    int
+}
+
+fn (mut writer KeyFixedWriter) write(data []u8) !int {
+	remaining := writer.buffer.len - writer.end
+	count := if data.len < remaining { data.len } else { remaining }
+	for i in 0 .. count {
+		writer.buffer[writer.end + i] = data[i]
+	}
+	writer.end += count
+	if count < data.len { return error('WriteFailed') }
+	return count
+}
+
+struct KeyDiscardingWriter {
+mut:
+	count usize
+}
+
+fn (mut writer KeyDiscardingWriter) write(data []u8) !int {
+	writer.count += usize(data.len)
+	return data.len
 }

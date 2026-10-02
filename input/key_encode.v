@@ -1,6 +1,8 @@
 module input
 
 import terminal
+import io
+import strings
 
 // Key encoding for terminal input. Translates key events into the proper
 // escape sequences based on terminal mode state (legacy, xterm modifyOtherKeys,
@@ -36,13 +38,13 @@ pub mut:
 // state. macos_option_as_alt remains false because it depends on app config.
 pub fn Options.from_terminal(t &terminal.Terminal) Options {
 	return Options{
-		alt_esc_prefix: t.modes.get(.alt_esc_prefix)
-		cursor_key_application: t.modes.get(.cursor_keys)
-		keypad_key_application: t.modes.get(.keypad_keys)
+		alt_esc_prefix:             t.modes.get(.alt_esc_prefix)
+		cursor_key_application:     t.modes.get(.cursor_keys)
+		keypad_key_application:     t.modes.get(.keypad_keys)
 		ignore_keypad_with_numlock: t.modes.get(.ignore_keypad_with_numlock)
-		modify_other_keys_state_2: t.flags.modify_other_keys_2()
-		kitty_flags: t.screens.active.kitty_keyboard.current()
-		macos_option_as_alt: .false_
+		modify_other_keys_state_2:  t.flags.modify_other_keys_2()
+		kitty_flags:                t.screens.active.kitty_keyboard.current()
+		macos_option_as_alt:        .false_
 	}
 }
 
@@ -53,30 +55,44 @@ pub fn Options.from_terminal(t &terminal.Terminal) Options {
 // Not all key events will result in output. Returns an empty string
 // if no output should be sent.
 pub fn encode(event KeyEvent, opts Options) string {
+	mut writer := strings.new_builder(0)
+	encode_writer(mut writer, event, opts) or { panic(err) }
+	return writer.str()
+}
+
+// Source key_encode.encode writes directly to std.Io.Writer. This entry
+// preserves streaming and WriteFailed for fixed and external writers.
+pub fn encode_writer(mut writer io.Writer, event KeyEvent, opts Options) ! {
 	if opts.kitty_flags.int() != 0 {
-		return kitty_encode(event, opts)
+		return kitty_encode_writer(mut writer, event, opts)
 	}
-	return legacy_encode(event, opts)
+	return legacy_encode_writer(mut writer, event, opts)
 }
 
 // kitty_encode performs Kitty keyboard protocol encoding of the key event.
 fn kitty_encode(event KeyEvent, opts Options) string {
+	mut writer := strings.new_builder(0)
+	kitty_encode_writer(mut writer, event, opts) or { panic(err) }
+	return writer.str()
+}
+
+fn kitty_encode_writer(mut writer io.Writer, event KeyEvent, opts Options) ! {
 	// This should never happen but we'll check anyway.
 	if opts.kitty_flags.int() == 0 {
-		return legacy_encode(event, opts)
+		return legacy_encode_writer(mut writer, event, opts)
 	}
 
 	// We only process "press" events unless report events is active
 	if event.action == .release {
 		if !opts.kitty_flags.report_events() {
-			return ''
+			return
 		}
 		// Enter, backspace, and tab do not report release events unless "report
 		// all" is set
 		if !opts.kitty_flags.report_all() {
 			match event.key {
 				.enter, .backspace, .tab {
-					return ''
+					return
 				}
 				else {}
 			}
@@ -102,10 +118,10 @@ fn kitty_encode(event KeyEvent, opts Options) string {
 	// always use the unshifted value.
 	if entry_ == none && event.unshifted_codepoint > 0 {
 		entry_ = KittyEntry{
-			key: event.key
-			code: event.unshifted_codepoint
+			key:        event.key
+			code:       event.unshifted_codepoint
 			final_byte: `u`
-			modifier: false
+			modifier:   false
 		}
 	}
 
@@ -120,7 +136,7 @@ fn kitty_encode(event KeyEvent, opts Options) string {
 			}
 		}
 		if !skip_preprocessing {
-			return ''
+			return
 		}
 	}
 
@@ -132,12 +148,12 @@ fn kitty_encode(event KeyEvent, opts Options) string {
 			match event.key {
 				.enter {
 					if !is_control_utf8(event.utf8) {
-						return event.utf8
+						return key_write_all(mut writer, event.utf8)
 					}
 				}
 				.backspace {
 					if !is_control_utf8(event.utf8) {
-						return ''
+						return
 					}
 				}
 				else {}
@@ -151,13 +167,13 @@ fn kitty_encode(event KeyEvent, opts Options) string {
 			if binding_mods.empty() {
 				match event.key {
 					.enter {
-						return '\r'
+						return key_write_all(mut writer, '\r')
 					}
 					.tab {
-						return '\t'
+						return key_write_all(mut writer, '\t')
 					}
 					.backspace {
-						return '\x7f'
+						return key_write_all(mut writer, '\x7f')
 					}
 					else {}
 				}
@@ -177,24 +193,24 @@ fn kitty_encode(event KeyEvent, opts Options) string {
 					}
 				}
 				if all_printable && runes.len > 0 {
-					return event.utf8
+					return key_write_all(mut writer, event.utf8)
 				}
 			}
 		}
 	}
 
-	entry := entry_ or { return '' }
+	entry := entry_ or { return }
 
 	// If this is just a modifier we require "report all" to send the sequence.
 	if entry.modifier && !opts.kitty_flags.report_all() {
-		return ''
+		return
 	}
 
 	// Build the KittySequence
 	mut seq := KittySequence{
-		key_code: entry.code
+		key_code:   entry.code
 		final_byte: entry.final_byte
-		mods: KittyMods.from_input(event.action, event.key, all_mods)
+		mods:       KittyMods.from_input(event.action, event.key, all_mods)
 	}
 
 	if opts.kitty_flags.report_events() {
@@ -255,7 +271,7 @@ fn kitty_encode(event KeyEvent, opts Options) string {
 		}
 	}
 
-	return seq.encode_seq()
+	return seq.encode_writer(mut writer)
 }
 
 // legacy_encode performs legacy encoding of the key event. "Legacy" in this case
@@ -265,22 +281,31 @@ fn kitty_encode(event KeyEvent, opts Options) string {
 // meant to be extensions that do not change any existing behavior
 // and therefore safe to combine.
 fn legacy_encode(event KeyEvent, opts Options) string {
+	mut writer := strings.new_builder(0)
+	legacy_encode_writer(mut writer, event, opts) or { panic(err) }
+	return writer.str()
+}
+
+fn legacy_encode_writer(mut writer io.Writer, event KeyEvent, opts Options) ! {
 	all_mods := event.mods
 	effective_mods := event.effective_mods()
 	binding_mods := effective_mods.binding()
 
 	// Legacy encoding only does press/repeat
 	if event.action != .press && event.action != .repeat {
-		return ''
+		return
 	}
 
 	// If we're in a dead key state then we never emit a sequence.
 	if event.composing {
-		return ''
+		return
 	}
 
 	// If we match a PC style function key then that is our result.
-	if sequence := pc_style_function_key(event.key, all_mods, opts.cursor_key_application, opts.keypad_key_application, opts.ignore_keypad_with_numlock, opts.modify_other_keys_state_2) {
+	if sequence := pc_style_function_key(event.key, all_mods, opts.cursor_key_application,
+		opts.keypad_key_application, opts.ignore_keypad_with_numlock,
+		opts.modify_other_keys_state_2)
+	{
 		// If we have UTF-8 text, then we never emit PC style function
 		// keys. Many function keys (escape, enter, backspace) have
 		// a specific meaning when dead keys are active.
@@ -288,26 +313,27 @@ fn legacy_encode(event KeyEvent, opts Options) string {
 			match event.key {
 				.backspace {
 					if !is_control_utf8(event.utf8) {
-						return ''
+						return
 					}
 				}
 				.enter, .escape {
 					if !is_control_utf8(event.utf8) {
 						// don't use pc_style; fall through to text encoding
 					} else {
-						return sequence
+						return key_write_all(mut writer, sequence)
 					}
 				}
 				else {
-					return sequence
+					return key_write_all(mut writer, sequence)
 				}
 			}
+
 			// For enter/escape with non-control UTF8, fall through
 			if event.key != .enter && event.key != .escape {
-				return sequence
+				return key_write_all(mut writer, sequence)
 			}
 		} else {
-			return sequence
+			return key_write_all(mut writer, sequence)
 		}
 	}
 
@@ -315,9 +341,10 @@ fn legacy_encode(event KeyEvent, opts Options) string {
 	if ch := ctrl_seq(event.key, event.utf8, event.unshifted_codepoint, all_mods) {
 		// C0 sequences support alt-as-esc prefixing.
 		if binding_mods.alt() {
-			return '\x1b' + [ch].bytestr()
+			key_write_byte(mut writer, 0x1b)!
+			return key_write_byte(mut writer, ch)
 		}
-		return [ch].bytestr()
+		return key_write_byte(mut writer, ch)
 	}
 
 	// If we have no UTF8 text then the only possibility is the
@@ -325,9 +352,10 @@ fn legacy_encode(event KeyEvent, opts Options) string {
 	utf8 := event.utf8
 	if utf8.len == 0 {
 		if b := legacy_alt_prefix(event, binding_mods, all_mods, opts) {
-			return '\x1b' + [b].bytestr()
+			key_write_byte(mut writer, 0x1b)!
+			return key_write_byte(mut writer, b)
 		}
-		return ''
+		return
 	}
 
 	// In modify other keys state 2, we send the CSI 27 sequence
@@ -390,7 +418,11 @@ fn legacy_encode(event KeyEvent, opts Options) string {
 				for i, modset in fk_modifiers {
 					if mods_binding.equal(modset) {
 						code := i + 2
-						return '\x1b[27;${code};${codepoint}~'
+						key_write_all(mut writer, '\x1b[27;')!
+						key_write_decimal(mut writer, u64(code))!
+						key_write_all(mut writer, ';')!
+						key_write_decimal(mut writer, u64(codepoint))!
+						return key_write_byte(mut writer, `~`)
 					}
 				}
 			}
@@ -422,24 +454,29 @@ fn legacy_encode(event KeyEvent, opts Options) string {
 				csi_u_mods.set_shift(false)
 			}
 
-			return '\x1b[${ch};${csi_u_mods.seq_int()}u'
+			key_write_all(mut writer, '\x1b[')!
+			key_write_decimal(mut writer, u64(ch))!
+			key_write_byte(mut writer, `;`)!
+			key_write_decimal(mut writer, u64(csi_u_mods.seq_int()))!
+			return key_write_byte(mut writer, `u`)
 		}
 	}
 
 	// If we have alt-pressed and alt-esc-prefix is enabled, then
 	// we need to prefix the utf8 sequence with an esc.
 	if b := legacy_alt_prefix(event, binding_mods, all_mods, opts) {
-		return '\x1b' + [b].bytestr()
+		key_write_byte(mut writer, 0x1b)!
+		return key_write_byte(mut writer, b)
 	}
 
 	// If we are on macOS, command+keys do not encode text.
 	$if macos {
 		if all_mods.super_() {
-			return ''
+			return
 		}
 	}
 
-	return utf8
+	return key_write_all(mut writer, utf8)
 }
 
 // legacy_alt_prefix returns the byte to alt-prefix, or none if no
@@ -664,49 +701,135 @@ fn ctrl_seq(logical_key Key, utf8 string, unshifted_codepoint u32, mods Mods) ?u
 
 	// From Kitty's key encoding logic.
 	return match ch {
-		` ` { u8(0) }
-		`/` { u8(31) }
-		`0` { u8(48) }
-		`1` { u8(49) }
-		`2` { u8(0) }
-		`3` { u8(27) }
-		`4` { u8(28) }
-		`5` { u8(29) }
-		`6` { u8(30) }
-		`7` { u8(31) }
-		`8` { u8(127) }
-		`9` { u8(57) }
-		`?` { u8(127) }
-		`@` { u8(0) }
-		`\\` { u8(28) }
-		`]` { u8(29) }
-		`^` { u8(30) }
-		`_` { u8(31) }
-		`a` { u8(1) }
-		`b` { u8(2) }
-		`c` { u8(3) }
-		`d` { u8(4) }
-		`e` { u8(5) }
-		`f` { u8(6) }
-		`g` { u8(7) }
-		`h` { u8(8) }
-		`j` { u8(10) }
-		`k` { u8(11) }
-		`l` { u8(12) }
-		`n` { u8(14) }
-		`o` { u8(15) }
-		`p` { u8(16) }
-		`q` { u8(17) }
-		`r` { u8(18) }
-		`s` { u8(19) }
-		`t` { u8(20) }
-		`u` { u8(21) }
-		`v` { u8(22) }
-		`w` { u8(23) }
-		`x` { u8(24) }
-		`y` { u8(25) }
-		`z` { u8(26) }
-		`~` { u8(30) }
+		` ` {
+			u8(0)
+		}
+		`/` {
+			u8(31)
+		}
+		`0` {
+			u8(48)
+		}
+		`1` {
+			u8(49)
+		}
+		`2` {
+			u8(0)
+		}
+		`3` {
+			u8(27)
+		}
+		`4` {
+			u8(28)
+		}
+		`5` {
+			u8(29)
+		}
+		`6` {
+			u8(30)
+		}
+		`7` {
+			u8(31)
+		}
+		`8` {
+			u8(127)
+		}
+		`9` {
+			u8(57)
+		}
+		`?` {
+			u8(127)
+		}
+		`@` {
+			u8(0)
+		}
+		`\\` {
+			u8(28)
+		}
+		`]` {
+			u8(29)
+		}
+		`^` {
+			u8(30)
+		}
+		`_` {
+			u8(31)
+		}
+		`a` {
+			u8(1)
+		}
+		`b` {
+			u8(2)
+		}
+		`c` {
+			u8(3)
+		}
+		`d` {
+			u8(4)
+		}
+		`e` {
+			u8(5)
+		}
+		`f` {
+			u8(6)
+		}
+		`g` {
+			u8(7)
+		}
+		`h` {
+			u8(8)
+		}
+		`j` {
+			u8(10)
+		}
+		`k` {
+			u8(11)
+		}
+		`l` {
+			u8(12)
+		}
+		`n` {
+			u8(14)
+		}
+		`o` {
+			u8(15)
+		}
+		`p` {
+			u8(16)
+		}
+		`q` {
+			u8(17)
+		}
+		`r` {
+			u8(18)
+		}
+		`s` {
+			u8(19)
+		}
+		`t` {
+			u8(20)
+		}
+		`u` {
+			u8(21)
+		}
+		`v` {
+			u8(22)
+		}
+		`w` {
+			u8(23)
+		}
+		`x` {
+			u8(24)
+		}
+		`y` {
+			u8(25)
+		}
+		`z` {
+			u8(26)
+		}
+		`~` {
+			u8(30)
+		}
 		// These are purposely NOT handled here because of the fixterms
 		// specification: https://www.leonerd.org.uk/hacks/fixterms/
 		// These are processed as CSI u.
@@ -828,84 +951,115 @@ mut:
 	text       string
 }
 
-// encode_seq encodes the KittySequence into a terminal escape sequence string.
+// String adapters keep the existing V API while the source encoder streams.
 fn (s KittySequence) encode_seq() string {
-	if s.final_byte == `u` || s.final_byte == `~` {
-		return s.encode_full()
-	}
-	return s.encode_special()
+	mut writer := strings.new_builder(0)
+	s.encode_writer(mut writer) or { panic(err) }
+	return writer.str()
 }
 
-// encode_full encodes a full CSI u/~ sequence.
-fn (s KittySequence) encode_full() string {
-	mut result := '\x1b[${s.key_code}'
+fn (s KittySequence) encode_writer(mut writer io.Writer) ! {
+	if s.final_byte == `u` || s.final_byte == `~` {
+		return s.encode_full_writer(mut writer)
+	}
+	return s.encode_special_writer(mut writer)
+}
 
-	// Write our alternates
+fn (s KittySequence) encode_full_writer(mut writer io.Writer) ! {
+	key_write_all(mut writer, '\x1b[')!
+	key_write_decimal(mut writer, u64(s.key_code))!
 	if s.alternates[0] != 0 {
-		result += ':${s.alternates[0]}'
+		key_write_byte(mut writer, `:`)!
+		key_write_decimal(mut writer, u64(s.alternates[0]))!
 	}
 	if s.alternates[1] != 0 {
-		if s.alternates[0] == 0 {
-			result += '::${s.alternates[1]}'
-		} else {
-			result += ':${s.alternates[1]}'
-		}
+		if s.alternates[0] == 0 { key_write_byte(mut writer, `:`)! }
+		key_write_byte(mut writer, `:`)!
+		key_write_decimal(mut writer, u64(s.alternates[1]))!
 	}
-
-	// Mods and events section
 	mods := s.mods.seq_int()
 	mut emit_prior := false
 	if s.event != .none_ && s.event != .press {
-		result += ';${mods}:${int(s.event)}'
+		key_write_byte(mut writer, `;`)!
+		key_write_decimal(mut writer, u64(mods))!
+		key_write_byte(mut writer, `:`)!
+		key_write_decimal(mut writer, u64(s.event))!
 		emit_prior = true
 	} else if mods > 1 {
-		result += ';${mods}'
+		key_write_byte(mut writer, `;`)!
+		key_write_decimal(mut writer, u64(mods))!
 		emit_prior = true
 	}
-
-	// Text section
 	if s.text.len > 0 && source_utf8_validate(s.text) {
-		runes := s.text.runes()
 		mut count := 0
-		for r in runes {
+		for r in s.text.runes() {
 			cp := u32(r)
-			// If the codepoint is non-printable ASCII character, skip.
-			if is_control(cp) {
-				continue
-			}
-
-			// We need to add our ";". We need to add two if we didn't emit
-			// the modifier section. We only do this initially.
+			if is_control(cp) { continue
+			 }
 			if count == 0 {
-				if !emit_prior {
-					result += ';'
-				}
-				result += ';'
+				if !emit_prior { key_write_byte(mut writer, `;`)! }
+				key_write_byte(mut writer, `;`)!
 			} else {
-				result += ':'
+				key_write_byte(mut writer, `:`)!
 			}
-
-			result += '${cp}'
-			count += 1
+			key_write_decimal(mut writer, u64(cp))!
+			count++
 		}
 	}
-
-	result += [s.final_byte].bytestr()
-	return result
+	return key_write_byte(mut writer, s.final_byte)
 }
 
-// encode_special encodes a special key sequence (arrow keys, function keys, etc).
-fn (s KittySequence) encode_special() string {
+fn (s KittySequence) encode_special_writer(mut writer io.Writer) ! {
 	mods := s.mods.seq_int()
-	final_ch := [s.final_byte].bytestr()
-
+	key_write_all(mut writer, '\x1b[')!
 	if s.event != .none_ {
-		return '\x1b[1;${mods}:${int(s.event)}${final_ch}'
+		key_write_all(mut writer, '1;')!
+		key_write_decimal(mut writer, u64(mods))!
+		key_write_byte(mut writer, `:`)!
+		key_write_decimal(mut writer, u64(s.event))!
+	} else if mods > 1 {
+		key_write_all(mut writer, '1;')!
+		key_write_decimal(mut writer, u64(mods))!
 	}
+	return key_write_byte(mut writer, s.final_byte)
+}
 
-	if mods > 1 {
-		return '\x1b[1;${mods}${final_ch}'
+// std.Io.Writer.writeAll repeatedly calls write until the whole slice is sent.
+fn key_write_bytes(mut writer io.Writer, data []u8) ! {
+	mut index := 0
+	for index < data.len {
+		index += writer.write(data[index..])!
 	}
+}
 
-	return '\x1b[${final_ch}'
+fn key_write_all(mut writer io.Writer, data string) ! {
+	key_write_bytes(mut writer, unsafe { data.str.vbytes(data.len) })!
+}
+
+fn key_write_byte(mut writer io.Writer, byte u8) ! {
+	key_write_bytes(mut writer, [byte])!
+}
+
+// std.Io.Writer.printIntAny's base-10 branch formats into a fixed scratch
+// buffer, taking two digits at a time; no full encoded sequence is allocated.
+fn key_write_decimal(mut writer io.Writer, value u64) ! {
+	mut buffer := [65]u8{}
+	mut a := value
+	mut index := buffer.len
+	for a >= 100 {
+		index -= 2
+		digits := a % 100
+		buffer[index] = `0` + u8(digits / 10)
+		buffer[index + 1] = `0` + u8(digits % 10)
+		a /= 100
+	}
+	if a < 10 {
+		index--
+		buffer[index] = `0` + u8(a)
+	} else {
+		index -= 2
+		buffer[index] = `0` + u8(a / 10)
+		buffer[index + 1] = `0` + u8(a % 10)
+	}
+	key_write_bytes(mut writer, buffer[index..])!
 }

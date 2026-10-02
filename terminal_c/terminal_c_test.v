@@ -36,13 +36,13 @@ fn c_api_test_free(ctx voidptr, memory voidptr, _ usize, _ u8, _ usize) {
 fn test_c_api_objects_use_supplied_allocator() {
 	mut state := CApiAllocatorState{}
 	vtable := lib_allocator.VTable{
-		alloc: c_api_test_alloc
-		resize: c_api_test_resize
-		remap: c_api_test_remap
+		alloc:   c_api_test_alloc
+		resize:  c_api_test_resize
+		remap:   c_api_test_remap
 		free_fn: c_api_test_free
 	}
 	allocator := lib_allocator.Allocator{
-		ctx: &state
+		ctx:    &state
 		vtable: &vtable
 	}
 
@@ -100,15 +100,19 @@ fn test_sgr_c_projection_layout_and_payloads() {
 	unsafe {
 		assert *(&i32(&underline.value)) == i32(terminal.UnderlineStyle.curly)
 	}
-
-	color := sgr_attribute_cval(terminal.SgrDirectColorFg{ rgb: terminal.RGB{ r: 0x12, g: 0x34, b: 0x56 } })
+	color := sgr_attribute_cval(terminal.SgrDirectColorFg{
+		rgb: terminal.RGB{
+			r: 0x12
+			g: 0x34
+			b: 0x56
+		}
+	})
 	unsafe {
 		bytes := &u8(&color.value)
 		assert bytes[0] == 0x12
 		assert bytes[1] == 0x34
 		assert bytes[2] == 0x56
 	}
-
 	// Bright 8-color attributes carry the bright palette name.
 	assert sgr_parser_bright_fg_cval() == 9
 
@@ -145,7 +149,11 @@ fn test_osc_command_data_c_layout_and_ordinals() {
 // ============================================================
 
 fn test_rgb_get() {
-	c := RGB{ r: 0xAA, g: 0xBB, b: 0xCC }
+	c := RGB{
+		r: 0xAA
+		g: 0xBB
+		b: 0xCC
+	}
 	r, g, b := rgb_get(c)
 	assert r == 0xAA
 	assert g == 0xBB
@@ -153,7 +161,11 @@ fn test_rgb_get() {
 }
 
 fn test_rgb_get_zero() {
-	c := RGB{ r: 0, g: 0, b: 0 }
+	c := RGB{
+		r: 0
+		g: 0
+		b: 0
+	}
 	r, g, b := rgb_get(c)
 	assert r == 0
 	assert g == 0
@@ -161,7 +173,11 @@ fn test_rgb_get_zero() {
 }
 
 fn test_rgb_get_max() {
-	c := RGB{ r: 255, g: 255, b: 255 }
+	c := RGB{
+		r: 255
+		g: 255
+		b: 255
+	}
 	r, g, b := rgb_get(c)
 	assert r == 255
 	assert g == 255
@@ -384,5 +400,39 @@ fn test_c_enum_setters_preserve_checked_and_unchecked_source_modes() {
 		assert i32(event.get_action()) == 99
 		assert i32(event.get_key()) == 999999
 		assert i32(encoder.opts.macos_option_as_alt) == 99
+	}
+}
+
+fn test_key_encoder_short_buffers_keep_source_emitted_prefix() {
+	mut encoder := key_encoder_new()
+	mut event := key_event_new()
+	event.set_key(.arrow_up)
+	mut short := [u8(0x7e), 0x7e]
+	status, required := encoder.encode(event, mut short)
+	assert status == .out_of_memory
+	assert required == 3
+	assert short == [u8(0x1b), 0x5b]
+	// The fixed writer and the discard replay must agree at every boundary
+	// in full Kitty sequences, associated UTF-8, and legacy plain text.
+	for flags in [u8(0), 1, 9, 13, 25, 31] {
+		encoder.setopt(.kitty_flags, flags)
+		event.set_key(.key_a)
+		event.set_unshifted_codepoint(97)
+		event.set_utf8('AЖ')
+		event.set_mods(input.Mods.from_int(1))
+		expected := input.encode(event.event, encoder.opts).bytes()
+		for capacity in 0 .. expected.len + 2 {
+			mut out := []u8{len: capacity, init: 0x7e}
+			result, needed := encoder.encode(event, mut out)
+			assert needed == usize(expected.len)
+			if capacity < expected.len {
+				assert result == .out_of_memory
+				assert out == expected[..capacity]
+			} else {
+				assert result == .success
+				assert out[..expected.len] == expected
+				assert out[expected.len..] == []u8{len: capacity - expected.len, init: 0x7e}
+			}
+		}
 	}
 }
