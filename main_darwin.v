@@ -496,13 +496,16 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 			}
 		}
 		.open_config {
-			cli.run_edit_config([]) or { return false }
+			owned := ghostty_config_open_path()
+			defer { owned.deinit() }
+			path := owned.bytes().bytestr()
+			if path.len > 0 { macos.source_open_url(macos.source_config_file_url(path), 1) }
 			return true
 		}
 		.open_url {
 			data := action.data
 			if data is apprt.OpenUrl {
-				return macos.open_url(data.url)
+				return macos.source_open_url(data.url, i32(data.kind))
 			}
 			return false
 		}
