@@ -16,6 +16,7 @@ module terminal_c
 //   - c/paste.zig  → paste_is_safe()
 //   - c/osc.zig    → OscParser/OscCommand wrappers, CommandData enum
 //   - c/main.zig   → module aggregator (this file)
+import buildcfg
 import input
 import log
 import lib_allocator
@@ -115,7 +116,7 @@ pub fn key_event_free(mut event KeyEvent) {
 }
 
 pub fn (mut self KeyEvent) set_action(action input.KeyAction) {
-	$if !prod {
+	if buildcfg.runtime_safety {
 		if !c_enum_valid(action) {
 			log.warn('set_action invalid action value=${i32(action)}')
 			return
@@ -129,7 +130,7 @@ pub fn (self &KeyEvent) get_action() input.KeyAction {
 }
 
 pub fn (mut self KeyEvent) set_key(key input.Key) {
-	$if !prod {
+	if buildcfg.runtime_safety {
 		if !c_enum_valid(key) {
 			log.warn('set_key invalid key value=${i32(key)}')
 			return
@@ -271,7 +272,7 @@ pub fn (mut self KeyEncoder) setopt(option KeyEncoderOption, value KeyEncoderOpt
 		}
 		input.OptionAsAlt {
 			if option == .macos_option_as_alt {
-				$if !prod {
+				if buildcfg.runtime_safety {
 					if !c_enum_valid(value) {
 						log.warn('setopt invalid OptionAsAlt value=${i32(value)}')
 						return
@@ -697,7 +698,7 @@ fn (mut writer KeyDiscardingWriter) write(data []u8) !int {
 
 // Check before reading the option-specific C value, as setopt does upstream.
 pub fn key_encoder_option_valid(option KeyEncoderOption) bool {
-	$if !prod {
+	if buildcfg.runtime_safety {
 		if !c_enum_valid(option) {
 			log.warn('setopt invalid option value=${i32(option)}')
 			return false

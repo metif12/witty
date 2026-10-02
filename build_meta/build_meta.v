@@ -1,13 +1,16 @@
-// Build metadata shared by the executable and translated library modules.
-// The pinned Ghostty source supplies this through its generated build_config
-// module. GitVersion detects the main branch and seven-character commit hash,
-// producing this semantic version at the reference commit.
+// Generated build options are supplied by the translated build driver.
+// Direct V invocations retain their own checkout identity through VMODHASH.
 module build_meta
 
-pub const version_string = '1.3.0-main+6c0e02d'
+pub const version_string = $d('app_version_string', '1.3.0-dev+' + @VMODHASH)
 
 // Release channel of the pinned Ghostty source translated by this tree.
-pub const release_channel = 'tip'
+pub const release_channel = $d('release_channel', 'tip')
 
 // GitVersion's short_hash at the pinned Ghostty reference commit.
-pub const commit_hash = '6c0e02d'
+pub const commit_hash = $d('commit_hash', @VMODHASH)
+pub const git_branch = $d('git_branch', 'dev')
+pub const git_changes = $d('git_changes', false)
+
+// Provenance of the translated original is separate from the V build identity.
+pub const reference_commit = '6c0e02d1138d5376e4ac2f5e311b225494514a97'

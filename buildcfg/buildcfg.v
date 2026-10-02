@@ -14,6 +14,17 @@ pub enum ReleaseChannel as u8 {
 pub const flatpak = $if flatpak ? { true } $else { false }
 pub const snap = $if snap ? { true } $else { false }
 
+// Debug and ReleaseSafe both retain source runtime checks. The translated
+// build driver selects ReleaseSafe without V's -prod (which removes assert).
+pub const runtime_safety = $if prod { false } $else { true }
+pub const slow_runtime_safety = $if prod {
+	false
+} $else $if release_safe ? {
+	false
+} $else {
+	true
+}
+
 // Ghostty's main build enables Oniguruma and synthesizes both terminal
 // features from that one option. `-d no_oniguruma` models the reduced
 // libghostty-vt build, whose source build explicitly disables it.

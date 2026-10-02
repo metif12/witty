@@ -120,7 +120,7 @@ module sprite
 // special sprite handling and just treat it like a normal font face.
 //
 // Translated from ghostty/src/font/sprite/Face.zig
-
+import buildcfg
 import sprite_types as font
 
 // A function that draws a glyph on the provided canvas.
@@ -409,14 +409,12 @@ pub fn has_codepoint(cp u32) bool {
 // 5. Return the canvas and trimmed raster data to the font bridge. The bridge
 //    invokes Canvas.write_atlas because V cannot import font from sprite.
 pub fn (self &SpriteFace) render_glyph(cp u32, opts RenderOptions) !RenderedGlyph {
-	$if !prod {
+	if buildcfg.runtime_safety {
 		// Ghostty traps unsupported sprite codepoints in runtime-safety builds.
 		assert self.has_codepoint(cp), 'invalid sprite codepoint ${cp:x}'
 	}
 
-	draw := get_draw_fn(cp) or {
-		return RenderedGlyph{}
-	}
+	draw := get_draw_fn(cp) or { return RenderedGlyph{} }
 
 	metrics := self.metrics
 
@@ -442,8 +440,8 @@ pub fn (self &SpriteFace) render_glyph(cp u32, opts RenderOptions) !RenderedGlyp
 	raster := canvas.rasterize()
 
 	return RenderedGlyph{
-		canvas:   canvas
-		raster:   raster
+		canvas: canvas
+		raster: raster
 		// Offsets account for padding and the trimmed edges, matching
 		// ghostty Face.renderGlyph.
 		offset_x: i32(raster.source_x) - i32(padding_x)

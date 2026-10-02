@@ -1,5 +1,6 @@
 module terminal_c
 
+import buildcfg
 import input
 import lib_allocator
 import terminal
@@ -392,11 +393,11 @@ fn test_c_enum_setters_preserve_checked_and_unchecked_source_modes() {
 	mut encoder := key_encoder_new()
 	encoder.setopt(.macos_option_as_alt, input.OptionAsAlt.left)
 	encoder.setopt(.macos_option_as_alt, unsafe { *(&input.OptionAsAlt(&invalid_action)) })
-	$if !prod {
+	if buildcfg.runtime_safety {
 		assert event.get_action() == .repeat
 		assert event.get_key() == .key_z
 		assert encoder.opts.macos_option_as_alt == .left
-	} $else {
+	} else {
 		assert i32(event.get_action()) == 99
 		assert i32(event.get_key()) == 999999
 		assert i32(encoder.opts.macos_option_as_alt) == 99
@@ -443,5 +444,6 @@ fn test_key_encoder_rejects_invalid_option_before_setting_a_value() {
 	mut encoder := key_encoder_new()
 	encoder.setopt(option, true)
 	assert !encoder.opts.alt_esc_prefix
-	$if !prod { assert !key_encoder_option_valid(option) }
+	if buildcfg.runtime_safety { assert !key_encoder_option_valid(option)
+	 }
 }
