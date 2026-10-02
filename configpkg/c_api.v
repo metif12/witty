@@ -91,7 +91,10 @@ pub fn (mut c Config) c_get(key string, ptr voidptr) bool {
 	// `class` is a C keyword, so V emits the backing field as `_class`. Dynamic
 	// comptime field access does not apply that escape in generated C.
 	if normalized_key == 'class' {
-		value := c.class or { return false }
+		value := c.class or {
+			c_write_cstring(ptr, unsafe { nil })
+			return true
+		}
 		c_write_cstring(ptr, &char(value.str))
 		return true
 	}
@@ -105,7 +108,8 @@ pub fn (mut c Config) c_get(key string, ptr voidptr) bool {
 					return true
 				} $else $if field.unaliased_typ is ?string {
 					if c.$(field.name) == none {
-						return false
+						c_write_cstring(ptr, unsafe { nil })
+						return true
 					}
 					value := c.$(field.name)?
 					c_write_cstring(ptr, &char(value.str))
