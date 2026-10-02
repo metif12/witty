@@ -320,15 +320,17 @@ fn hash_max(a usize, b usize) usize {
 // OffsetHashMap - offset-based wrapper
 // ============================================================
 
-// OffsetHashMap is the relocatable wrapper used by pages. Ghostty recreates
-// an unmanaged map from the metadata offset in a contiguous page allocation.
-// Witty pages use GC-owned arrays, so the stable heap allocation below is the
-// corresponding V representation; metadata_offset is retained for serialized
-// layout accounting.
+pub struct U64HashContext {}
+
+pub fn (_ U64HashContext) hash(key u64) u64 { return hash_key(key) }
+pub fn (_ U64HashContext) eql(a u64, b u64) bool { return a == b }
+
+// OffsetHashMap is the source's AutoOffsetHashMap(u64, u64) specialization.
+// Only its metadata byte offset persists; every map view resolves the supplied
+// base, including after the entire caller-owned buffer is moved.
 pub struct OffsetHashMap {
 pub mut:
 	metadata_offset Offset
-	inner           &HashMapUnmanaged = unsafe { nil }
 }
 
 pub fn OffsetHashMap.layout(cap u32) HashMapLayout {
@@ -336,19 +338,14 @@ pub fn OffsetHashMap.layout(cap u32) HashMapLayout {
 }
 
 pub fn OffsetHashMap.init(buf OffsetBuf, layout HashMapLayout) OffsetHashMap {
-	mut inner := HashMapUnmanaged.init(layout.capacity)
+	offsets := generic_offset_hash_map_init[u64, u64, U64HashContext](buf, layout, U64HashContext{})
 	return OffsetHashMap{
-		metadata_offset: buf.member(16)
-		inner: &inner
+		metadata_offset: offsets.metadata_offset
 	}
 }
 
-// map returns the persistent unmanaged map. The base argument is retained in
-// the API because callers rebuild this view after moving a Ghostty page.
-pub fn (self &OffsetHashMap) map(base &u8) &HashMapUnmanaged {
-	_ = base
-	assert self.inner != unsafe { nil }
-	return self.inner
+pub fn (self &OffsetHashMap) map(base &u8) GenericHashMap[u64, u64, U64HashContext] {
+	return generic_hash_map_view[u64, u64, U64HashContext](self.metadata_offset.ptr(base), U64HashContext{})
 }
 
 // ============================================================

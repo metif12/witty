@@ -13,15 +13,15 @@ pub fn unregister_value_storage(ptr voidptr, bytes usize) {
 	$if gcboehm ? { C.GC_remove_roots(ptr, unsafe { &u8(ptr) + bytes }) }
 }
 
-struct AlignmentProbe[T] {
-	prefix u8
-	value T
-}
+fn C.witty_c_type_alignment(voidptr) usize
 
 pub fn alignment_log[T]() u8 {
-	bytes := usize(__offsetof(AlignmentProbe[T], value))
+	value := T{}
+	bytes := C.witty_c_type_alignment(&value)
 	mut result := u8(0)
-	for (usize(1) << result) < bytes { result++ }
+	for (usize(1) << result) < bytes {
+		result++
+	}
 	return result
 }
 
@@ -29,7 +29,7 @@ pub fn alignment_log[T]() u8 {
 // Its arrays are borrowed views of allocator-owned memory, never V allocations.
 pub struct ArrayList[T] {
 pub mut:
-	items []T
+	items    []T
 	capacity usize
 }
 
@@ -46,7 +46,8 @@ pub fn (mut self ArrayList[T]) ensure_total_capacity(allocator Allocator, minimu
 	old := self.items.data
 	mut raw := unsafe { nil }
 	if self.capacity > 0 {
-		raw = allocator.remap_bytes(old, self.capacity * sizeof(T), alignment_log[T](), capacity * sizeof(T), 0)
+		raw = allocator.remap_bytes(old, self.capacity * sizeof(T), alignment_log[T](),
+			capacity * sizeof(T), 0)
 	}
 	if isnil(raw) {
 		raw = allocator.alloc_bytes(capacity * sizeof(T), alignment_log[T](), 0)
