@@ -7,6 +7,9 @@ import unicode
 // backend, so the pinned source selects this exact uucode table path.
 @[inline]
 pub fn codepoint_width(cp u32) i8 {
+	$if !js && !wasm32 && !no_simd ? {
+		return C.ghostty_simd_codepoint_width(cp)
+	}
 	if cp > 0x1fffff {
 		return 1
 	}

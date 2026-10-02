@@ -41,5 +41,31 @@ fn test_base64_decode_rejects_invalid_character() {
 
 fn test_base64_decode_one_byte_input_matches_scalar_fallback() {
 	mut output := []u8{}
-	assert decode('A'.bytes(), mut output)! == []u8{}
+	assert decode_scalar('A'.bytes(), mut output)! == []u8{}
+}
+
+fn test_scalar_base64_preserves_source_partial_writes_on_error() {
+	for i, input in ['AAA!AAAA', 'AAAA!AAA'] {
+		mut output := []u8{len: 6, init: 0xa5}
+		decode_scalar(input.bytes(), mut output) or {
+			assert err.msg() == 'Base64Invalid'
+			assert output == if i == 0 {
+				[u8(0xa5), 0xa5, 0xa5, 0xa5, 0xa5, 0xa5]
+			} else {
+				[u8(0), 0, 0, 0, 0xa5, 0xa5]
+			}
+			continue
+		}
+		assert false
+	}
+}
+
+fn test_scalar_base64_sixteen_byte_group_validates_before_writing() {
+	mut output := []u8{len: 24, init: 0xa5}
+	scalar_base64_decode('AAAAAAAAAAAAAAA!AAAAAAAAAAAAAAAA'.bytes(), mut output) or {
+		assert err.msg() == 'InvalidCharacter'
+		assert output == []u8{len: 24, init: 0xa5}
+		return
+	}
+	assert false
 }

@@ -52,9 +52,8 @@ fn utf8_decode_sequence(bytes []u8) ?u32 {
 			b0 := bytes[0]
 			b1 := bytes[1]
 			b2 := bytes[2]
-			if b0 >= 0xe0 && b0 <= 0xef && utf8_continuation(b1)
-				&& utf8_continuation(b2) && !(b0 == 0xe0 && b1 < 0xa0)
-				&& !(b0 == 0xed && b1 >= 0xa0) {
+			if b0 >= 0xe0 && b0 <= 0xef && utf8_continuation(b1) && utf8_continuation(b2)
+				&& !(b0 == 0xe0 && b1 < 0xa0) && !(b0 == 0xed && b1 >= 0xa0) {
 				return (u32(b0 & 0x0f) << 12) | (u32(b1 & 0x3f) << 6) | u32(b2 & 0x3f)
 			}
 		}
@@ -63,14 +62,14 @@ fn utf8_decode_sequence(bytes []u8) ?u32 {
 			b1 := bytes[1]
 			b2 := bytes[2]
 			b3 := bytes[3]
-			if b0 >= 0xf0 && b0 <= 0xf4 && utf8_continuation(b1)
-				&& utf8_continuation(b2) && utf8_continuation(b3)
-				&& !(b0 == 0xf0 && b1 < 0x90) && !(b0 == 0xf4 && b1 > 0x8f) {
+			if b0 >= 0xf0 && b0 <= 0xf4 && utf8_continuation(b1) && utf8_continuation(b2)
+				&& utf8_continuation(b3) && !(b0 == 0xf0 && b1 < 0x90) && !(b0 == 0xf4 && b1 > 0x8f) {
 				return (u32(b0 & 0x07) << 18) | (u32(b1 & 0x3f) << 12) | (u32(b2 & 0x3f) << 6) | u32(b3 & 0x3f)
 			}
 		}
 		else {}
 	}
+
 	return none
 }
 
@@ -80,6 +79,15 @@ fn utf8_decode_sequence(bytes []u8) ?u32 {
 // leading byte, and an invalid leading byte is left unconsumed.
 pub fn utf8_decode_until_control_seq(input []u8, mut output []u32) DecodeResult {
 	assert output.len >= input.len
+	$if !js && !wasm32 && !no_simd ? {
+		mut decoded := usize(0)
+		consumed := C.ghostty_simd_decode_utf8_until_control_seq(input.data, usize(input.len),
+			output.data, &decoded)
+		return DecodeResult{
+			consumed: consumed
+			decoded:  decoded
+		}
+	}
 	escape_idx := index_of(input, 0x1b) or { usize(input.len) }
 	decode_input := input[..escape_idx]
 
@@ -106,6 +114,6 @@ pub fn utf8_decode_until_control_seq(input []u8, mut output []u32) DecodeResult 
 
 	return DecodeResult{
 		consumed: decode_offset
-		decoded: decode_count
+		decoded:  decode_count
 	}
 }
