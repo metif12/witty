@@ -39,6 +39,7 @@ mut:
 	// The window's own DerivedConfig is captured when its class is created.
 	app_config macos.NativeWindowConfig
 	creation_config macos.NativeWindowConfig
+	applied_color_scheme ?apprt.ColorScheme
 	force_opaque bool
 	quick bool
 	closed bool
@@ -626,6 +627,9 @@ fn main() {
 		exit(1)
 	}
 	apprt.ghostty_app_set_focus(mut runtime.app, macos.app_is_active())
+	macos.sync_native_application_appearance(native_window_config(&config))
+	macos.set_application_appearance_callback(native_application_appearance_changed)
+	defer { macos.stop_application_appearance_callback() }
 	sync_config_menu(&config)
 	macos.set_native_restoration_callbacks(encode_native_controller, decode_native_controller, native_restoration_allowed)
 	macos.apply_native_save_state(int(config.window_save_state))

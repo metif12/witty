@@ -20,7 +20,12 @@ fn native_surface_appearance_config(current &TermState) macos.NativeWindowConfig
 }
 fn sync_native_window(current &TermState) {
 	if current.controller == unsafe { nil } { return }
-	if current.controller.quick { macos.sync_quick_terminal_appearance(current.controller.force_opaque); return }
+	mut controller := current.controller
+	if current.controller.quick {
+		macos.sync_quick_terminal_appearance(current.controller.force_opaque)
+		sync_native_surface_color_scheme(mut controller)
+		return
+	}
 	focused := current.controller.focused
 	if focused == unsafe { nil } { return }
 	mut chosen := focused
@@ -35,4 +40,9 @@ fn sync_native_window(current &TermState) {
 	}
 	background := chosen.background_color or { chosen.native_config.background }
 	macos.apply_native_window_config(focused.view, native_surface_appearance_config(focused), false, background, chosen.native_config.opacity, current.controller.force_opaque)
+	// TerminalWindow's defer occurs after its isVisible guard; Quick Terminal
+	// publishes before that guard instead.
+	if macos.native_window_is_visible(macos.view_window(focused.view)) {
+		sync_native_surface_color_scheme(mut controller)
+	}
 }

@@ -40,17 +40,20 @@ fn native_config_change_main(context voidptr) {
 		}
 	} else {
 		sync_config_menu(&task.config)
+		macos.sync_native_application_appearance(projection)
 		macos.update_quick_terminal_config(native_quick_config(&task.config))
 		macos.apply_native_save_state(int(task.config.window_save_state))
 		mut runtime := standalone_runtime()
 		for mut controller in runtime.controllers {
 			if controller.closed { continue }
 			controller.app_config = projection
+			if controller.quick && controller.focused != unsafe { nil } { sync_native_window(controller.focused) }
 			// TerminalController only applies app appearance when its tree is empty.
 			if controller.host != unsafe { nil } && controller.host.tree.root == unsafe { nil } {
 				created := controller.creation_config
 				empty := macos.NativeWindowConfig{...created,shadow:projection.shadow,theme:projection.theme,background:projection.background,opacity:projection.opacity,blur:projection.blur}
 				macos.apply_native_window_config(controller.host.container,empty,false,created.background,created.opacity,controller.force_opaque)
+				if macos.native_window_is_visible(macos.view_window(controller.host.container)) { sync_native_surface_color_scheme(mut controller) }
 			}
 		}
 		for mut current in runtime.states {
