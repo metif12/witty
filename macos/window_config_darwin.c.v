@@ -25,7 +25,7 @@ mut:
 	backdrop_overlay ObjId
 }
 __global ( g_native_windows map[u64]&NativeWindowData )
-fn native_window_data(window ObjId) ?&NativeWindowData { return g_native_windows[u64(window)] }
+fn native_window_data(window ObjId) ?&NativeWindowData { return g_native_windows[u64(window)] or { none } }
 fn native_window_can_become_key(_self ObjId, _cmd Sel) bool { return true }
 fn native_window_update(self ObjId, cmd Sel) { msg_super_void(self, unsafe { C.sel_getName(cmd).vstring() }); update_native_titlebar(self) }
 fn C.sel_getName(selector Sel) &char
