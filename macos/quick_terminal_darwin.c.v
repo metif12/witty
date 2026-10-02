@@ -63,7 +63,7 @@ fn quick_from_observer(observer ObjId) ?&NativeQuickTerminal {
 fn quick_did_resign_key(observer ObjId, _cmd Sel, notification ObjId) {
 	mut q := quick_from_observer(observer) or { return }
 	if msg_id(notification, 'object') != q.window || !q.visible || !is_nil(msg_id(q.window, 'attachedSheet')) { return }
-	if app_is_active() { q.previous_app = unsafe { nil } }
+	if app_is_active() { msg_void(q.previous_app,'release'); q.previous_app = unsafe { nil } }
 	q.dock_hidden_at_resign = q.hidden_dock
 	q.restore_dock()
 	if !q.config.autohide { return }
@@ -190,7 +190,7 @@ pub fn (mut q NativeQuickTerminal) show() {
 	if !app_is_active() {
 		previous := msg_id(msg_id(get_class('NSWorkspace'), 'sharedWorkspace'), 'frontmostApplication')
 		bundle := msg_id(get_class('NSBundle'), 'mainBundle')
-		if objc_utf8_string(msg_id(previous, 'bundleIdentifier')) != objc_utf8_string(msg_id(bundle, 'bundleIdentifier')) { q.previous_app = voidptr(msg_id(previous, 'retain')) }
+		if objc_utf8_string(msg_id(previous, 'bundleIdentifier')) != objc_utf8_string(msg_id(bundle, 'bundleIdentifier')) { msg_void(q.previous_app,'release'); q.previous_app = voidptr(msg_id(previous, 'retain')) }
 	}
 	q.previous_space = C.CGSGetActiveSpace(C.CGSMainConnectionID())
 	if g_quick_create != unsafe { nil } && is_nil(view_userdata(ObjId(q.view))) {
@@ -224,7 +224,7 @@ pub fn (mut q NativeQuickTerminal) hide() {
 	if !q.visible { return }; q.visible = false
 	msg_void2(msg_id(get_class('NSNotificationCenter'), 'defaultCenter'), 'postNotificationName:object:', nsstring('QuickTerminalDidChangeVisibility'), q.observer)
 	q.save_screen_state(true); q.restore_dock(); q.dock_state_saved = false; q.dock_hidden_at_resign = false
-	if !msg_bool(q.window, 'isOnActiveSpace') { q.previous_app = unsafe { nil }; msg_void1(q.window, 'orderOut:', nil_obj()); return }
+	if !msg_bool(q.window, 'isOnActiveSpace') { msg_void(q.previous_app,'release'); q.previous_app = unsafe { nil }; msg_void1(q.window, 'orderOut:', nil_obj()); if g_app_was_hidden { msg_void1(shared_app(),'hide:',nil_obj()) }; return }
 	mut screen := msg_id(q.window, 'screen'); if is_nil(screen) { screen = msg_id(get_class('NSScreen'), 'mainScreen') }; if is_nil(screen) { return }
 	if !is_nil(q.previous_app) {
 		previous := ObjId(q.previous_app); q.previous_app = unsafe { nil }
