@@ -88,14 +88,14 @@ pub fn (mut surface NativeActionSurface) control_inspector(mode int) {
  msg_void_u64(view,'setPreferredFramesPerSecond:',30)
  C.witty_macos_objc_msg_void_clear_color(view,sel('setClearColor:'),MetalClearColor{red:40.0/255,green:44.0/255,blue:52.0/255,alpha:1})
  inspector_tracking(view,nil_obj())
- C.witty_macos_observe(msg_id(get_class('NSNotificationCenter'),'defaultCenter'),view,sel('occlusion:'),nsstring('NSWindowDidChangeOcclusionStateNotification'),nil_obj())
+ C.witty_macos_observe(msg_id(get_class('NSNotificationCenter'),'defaultCenter'),view,sel('occlusion:'),nsstring('NSWindowDidChangeOcclusionStateNotification'),voidptr(nil_obj()))
  surface.inspector = state
  surface.scroll.inspector = view
  msg_void1(surface.scroll.container,'addSubview:',view)
  surface.scroll.layout()
  dispatch_main(inspector_focus_main,voidptr(state))
 }
-fn inspector_focus_main(context voidptr) { state := unsafe{&NativeInspectorView(context)}; if state.valid() { msg_bool1(view_window(state.view),'makeFirstResponder:',state.view) } }
+fn inspector_focus_main(context voidptr) { state := unsafe{&NativeInspectorView(context)}; if state.valid() { msg_bool1(view_window(voidptr(state.view)),'makeFirstResponder:',state.view) } }
 fn (mut surface NativeActionSurface) hide_inspector() {
  if surface.inspector == unsafe{nil} { return }
  mut state := surface.inspector
@@ -142,15 +142,15 @@ fn inspector_draw(self ObjId,_cmd Sel,_dirty ObjCRect) {
  msg_void1(command,'presentDrawable:',drawable); msg_void(command,'commit')
 }
 fn inspector_occlusion(self ObjId,_cmd Sel,notification ObjId) {
- window := msg_id(notification,'object'); if window != view_window(self) { return }
+ window := msg_id(notification,'object'); if window != view_window(voidptr(self)) { return }
  msg_void_bool(self,'setPaused:',msg_u64(window,'occlusionState') & 2 == 0)
 }
-fn inspector_tracking(self ObjId,_cmd Sel) { setup_view_tracking(self) }
+fn inspector_tracking(self ObjId,_cmd Sel) { setup_view_tracking(voidptr(self)) }
 fn inspector_mouse_button(self ObjId,cmd Sel,event ObjId) {
  state := inspector_state(self) or{return}; if !state.valid() || state.surface.callbacks.inspector.button == unsafe{nil} { return }
  pressed := cmd in [sel('mouseDown:'),sel('rightMouseDown:')]
  right := cmd in [sel('rightMouseDown:'),sel('rightMouseUp:')]
- state.surface.callbacks.inspector.button(state.backend,if pressed { input.MouseButtonState.press } else { input.MouseButtonState.release },if right { input.MouseButton.right } else { input.MouseButton.left },event_mods(event))
+ state.surface.callbacks.inspector.button(state.backend,if pressed { input.MouseButtonState.press } else { input.MouseButtonState.release },if right { input.MouseButton.right } else { input.MouseButton.left },event_mods(voidptr(event)))
 }
 fn inspector_mouse_motion(self ObjId,_cmd Sel,event ObjId) {
  state := inspector_state(self) or{return}; if !state.valid() || state.surface.callbacks.inspector.motion == unsafe{nil} { return }
@@ -164,8 +164,8 @@ fn inspector_scroll(self ObjId,_cmd Sel,event ObjId) {
 }
 fn inspector_key_action(self ObjId,event ObjId,action input.KeyAction) {
  state := inspector_state(self) or{return}; if !state.valid() || state.surface.callbacks.inspector.key == unsafe{nil} { return }
- key := input.mac_keycode_to_key(event_keycode(event)); if key == .unidentified { return }
- state.surface.callbacks.inspector.key(state.backend,action,key,event_mods(event))
+ key := input.mac_keycode_to_key(event_keycode(voidptr(event))); if key == .unidentified { return }
+ state.surface.callbacks.inspector.key(state.backend,action,key,event_mods(voidptr(event)))
 }
 fn inspector_key_down(self ObjId,_cmd Sel,event ObjId) {
  inspector_key_action(self,event,if msg_bool(event,'isARepeat') { .repeat } else { .press })
@@ -173,8 +173,8 @@ fn inspector_key_down(self ObjId,_cmd Sel,event ObjId) {
 }
 fn inspector_key_up(self ObjId,_cmd Sel,event ObjId) { inspector_key_action(self,event,.release) }
 fn inspector_flags(self ObjId,_cmd Sel,event ObjId) {
- mask := match event_keycode(event) { 0x39 { 16 } 0x38,0x3c { 1 } 0x3b,0x3e { 2 } 0x3a,0x3d { 4 } 0x37,0x36 { 8 } else { return } }
- inspector_key_action(self,event,if event_mods(event) & mask != 0 { .press } else { .release })
+ mask := match event_keycode(voidptr(event)) { 0x39 { 16 } 0x38,0x3c { 1 } 0x3b,0x3e { 2 } 0x3a,0x3d { 4 } 0x37,0x36 { 8 } else { return } }
+ inspector_key_action(self,event,if event_mods(voidptr(event)) & mask != 0 { .press } else { .release })
 }
 fn inspector_has_marked(self ObjId,_cmd Sel) bool { if state := inspector_state(self) { return msg_u64(state.marked,'length') > 0 }; return false }
 fn inspector_marked_range(self ObjId,_cmd Sel) NativeRange { if state := inspector_state(self) { return NativeRange{length:usize(msg_u64(state.marked,'length'))} }; return NativeRange{} }
