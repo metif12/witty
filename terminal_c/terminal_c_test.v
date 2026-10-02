@@ -369,11 +369,13 @@ fn test_c_enum_setters_preserve_checked_and_unchecked_source_modes() {
 	mut event := key_event_new()
 	event.set_action(.repeat)
 	event.set_key(.key_z)
-	event.set_action(unsafe { input.KeyAction(99) })
-	event.set_key(unsafe { input.Key(999999) })
+	invalid_action := i32(99)
+	invalid_key := i32(999999)
+	event.set_action(unsafe { *(&input.KeyAction(&invalid_action)) })
+	event.set_key(unsafe { *(&input.Key(&invalid_key)) })
 	mut encoder := key_encoder_new()
 	encoder.setopt(.macos_option_as_alt, input.OptionAsAlt.left)
-	encoder.setopt(.macos_option_as_alt, unsafe { input.OptionAsAlt(99) })
+	encoder.setopt(.macos_option_as_alt, unsafe { *(&input.OptionAsAlt(&invalid_action)) })
 	$if !prod {
 		assert event.get_action() == .repeat
 		assert event.get_key() == .key_z
