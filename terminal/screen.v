@@ -2135,8 +2135,12 @@ pub mut:
 //
 // If max scrollback is 0, then no scrollback is kept at all.
 pub fn Screen.init(cols u32, rows u32, max_scrollback usize) !Screen {
+	return Screen.init_alloc(lib_allocator.c_allocator_value(), cols, rows, max_scrollback)
+}
+
+pub fn Screen.init_alloc(allocator lib_allocator.Allocator, cols u32, rows u32, max_scrollback usize) !Screen {
 	// Initialize our backing pages.
-	mut pages := PageList.init(u16(cols), u16(rows), max_scrollback)!
+	mut pages := PageList.init_alloc(allocator, page_list_page_allocator(), u16(cols), u16(rows), max_scrollback)!
 
 	// Create our tracked pin for the cursor.
 	first := pages.pages.first or { panic('page list has no pages') }

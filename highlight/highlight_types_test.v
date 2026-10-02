@@ -12,7 +12,7 @@ fn test_flattened_highlight_init_spans_pages() ! {
 	// Grow one row beyond the first page. The standard page capacity can
 	// change as Page's translated layout evolves, so don't hard-code it.
 	rows_to_next_page := usize(start_node.data.capacity.rows - start_node.data.size.rows) + 1
-	list.grow_rows(rows_to_next_page)
+	list.grow_rows(rows_to_next_page)!
 	end_node := list.pages.last or {
 		assert false, 'missing last page'
 		return
@@ -21,12 +21,12 @@ fn test_flattened_highlight_init_spans_pages() ! {
 
 	result := Flattened.init(terminal.Pin{
 		node: start_node
-		x: 3
-		y: 2
+		x:    3
+		y:    2
 	}, terminal.Pin{
 		node: end_node
-		x: 5
-		y: 1
+		x:    5
+		y:    1
 	})
 	assert result.chunks.len >= 2
 	assert result.chunks[0].serial == start_node.serial
@@ -45,7 +45,7 @@ fn test_untracked_highlight_track_uses_tracked_init() ! {
 	initial_tracked := list.count_tracked_pins()
 	mut tracked := (Untracked{
 		start: start
-		end: end
+		end:   end
 	}).track(mut list)!
 	assert list.count_tracked_pins() == initial_tracked + 2
 	tracked.deinit(mut list)

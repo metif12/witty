@@ -1914,11 +1914,16 @@ pub fn Terminal.init(opts Options) !Terminal {
 		max_scrollback: opts.max_scrollback
 	})!
 
+	tabstops := Tabstops.init(usize(cols), terminal.tabstop_interval) or {
+		screen_set.deinit()
+		return err
+	}
+
 	return Terminal{
 		cols:             cols
 		rows:             rows
 		screens:          screen_set
-		tabstops:         Tabstops.init(usize(cols), terminal.tabstop_interval)!
+		tabstops:         tabstops
 		scrolling_region: ScrollingRegion{
 			top:    0
 			bottom: rows - 1

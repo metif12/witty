@@ -205,3 +205,53 @@ fn test_page_list_clone_remap_allocation_failure_releases_new_pool() ! {
 	}
 	assert false
 }
+
+fn test_screen_original_init_general_allocator_failures_release_owned_pools() ! {
+ vtable := lib_allocator.VTable{alloc:page_pool_test_alloc,resize:page_pool_test_resize,remap:page_pool_test_remap,free_fn:page_pool_test_free}
+ mut reached_success := false
+ for fail_at in 0 .. 30 {
+  mut state := PagePoolTestState{fail_at:fail_at}
+  mut screen := Screen.init_alloc(page_pool_test_allocator(&state,&vtable),80,24,0) or {
+   assert err.msg() == 'OutOfMemory'
+   assert state.live == 0
+   continue
+  }
+  screen.deinit()
+  assert state.live == 0
+  reached_success = true
+  break
+ }
+ assert reached_success
+}
+
+fn test_screen_original_clone_general_allocator_failures_release_remap_and_new_pools() ! {
+ mut source := Screen.init(80,24,0)!
+ defer {source.deinit()}
+ first := source.pages.pin(Point.new(.active,Coordinate{x:2,y:1}))?
+ last := source.pages.pin(Point.new(.active,Coordinate{x:6,y:3}))?
+ source.select(Selection.init(first,last,false))!
+ mut first_page := source.pages.pages.first?
+ first_page.data.rows[1].cells[2].codepoint = 65
+ first_page.data.rows[1].header.dirty = true
+ source_pins := source.pages.count_tracked_pins()
+ vtable := lib_allocator.VTable{alloc:page_pool_test_alloc,resize:page_pool_test_resize,remap:page_pool_test_remap,free_fn:page_pool_test_free}
+ mut reached_success := false
+ for fail_at in 0 .. 50 {
+  mut state := PagePoolTestState{fail_at:fail_at}
+  mut cloned := source.clone_alloc(page_pool_test_allocator(&state,&vtable),Point.new(.active,Coordinate{}),none) or {
+   assert err.msg() == 'OutOfMemory'
+   assert state.live == 0
+   assert source.pages.count_tracked_pins() == source_pins
+   continue
+  }
+  assert cloned.selection != none
+  cloned_first := cloned.pages.pages.first?
+  assert cloned_first.data.rows[1].cells[2].codepoint == 65
+  cloned.deinit()
+  assert state.live == 0
+  assert source.pages.count_tracked_pins() == source_pins
+  reached_success = true
+  break
+ }
+ assert reached_success
+}

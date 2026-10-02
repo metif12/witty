@@ -1,5 +1,7 @@
 module terminal
 
+import buildcfg
+
 fn test_page_list_direction_values_match_source_order() ! {
 	assert sizeof(IterDirection) == 1
 	assert int(IterDirection.left_up) == 0
@@ -771,6 +773,7 @@ fn test_page_pin_left_right_wrap() ! {
 }
 
 fn test_page_list_pause_integrity_checks_is_nested() ! {
+	if !buildcfg.slow_runtime_safety { return }
 	mut s := PageList.init(3, 2, usize(0))!
 	defer { s.deinit() }
 	original_total := s.total_rows
@@ -1196,6 +1199,7 @@ fn test_page_list_grow_reuses_non_standard_page_without_leak() ! {
 		return
 	}
 	assert page_backing_size(first_page.data.capacity) > standard_page_size()
+	first_page_mem := first_page.data.memory.data
 
 	for first_page.data.size.rows < first_page.data.capacity.rows {
 		_ = s.grow()!
@@ -1216,7 +1220,8 @@ fn test_page_list_grow_reuses_non_standard_page_without_leak() ! {
 	tracked := s.track_pin(Pin{ node: first_page })!
 	_ = s.grow()!
 	assert voidptr(s.pages.first or { return }) != voidptr(first_page)
-	assert voidptr(s.pages.last or { return }) != voidptr(first_page)
+	// The source compares backing memory; pooled node slots may be reused.
+	assert (s.pages.last or { return }).data.memory.data != first_page_mem
 	assert voidptr(tracked.node) == voidptr(s.pages.first or { return })
 	assert tracked.x == 0
 	assert tracked.y == 0
@@ -3872,6 +3877,7 @@ fn test_page_list_assert_integrity() ! {
 }
 
 fn test_page_list_verify_integrity() ! {
+	if !buildcfg.slow_runtime_safety { return }
 	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 

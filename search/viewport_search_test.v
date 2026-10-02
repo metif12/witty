@@ -11,7 +11,7 @@ fn write_page_list_text(mut list terminal.PageList, tag terminal.PointTag, x u16
 		mut row := &pin.node.data.rows[int(pin.y)]
 		row.cells[int(pin.x)] = terminal.CellData{
 			content_tag: .codepoint
-			codepoint: u32(ch)
+			codepoint:   u32(ch)
 		}
 	}
 }
@@ -70,7 +70,7 @@ fn test_viewport_history_does_not_research_unchanged_pages() ! {
 		assert false, 'missing initial page'
 		return
 	}
-	list.grow_rows(usize(initial_node.data.capacity.rows))
+	list.grow_rows(usize(initial_node.data.capacity.rows))!
 	list.scroll(terminal.PageScrollTop{})
 	assert list.viewport == .top
 

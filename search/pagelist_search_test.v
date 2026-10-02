@@ -21,7 +21,7 @@ fn test_pagelist_search_initial_page_and_feed() ! {
 		assert false, 'missing initial page'
 		return
 	}
-	list.grow_rows(usize(initial_node.data.capacity.rows))
+	list.grow_rows(usize(initial_node.data.capacity.rows))!
 	first_node := list.pages.first or {
 		assert false, 'missing first page'
 		return

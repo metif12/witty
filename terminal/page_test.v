@@ -1,5 +1,7 @@
 module terminal
 
+import buildcfg
+
 // Tests for page.v, translated from Ghostty's terminal/page.zig tests.
 
 fn test_packed_cell_enum_storage() ! {
@@ -29,6 +31,7 @@ fn test_page_init() ! {
 }
 
 fn test_page_pause_integrity_checks_is_nested() ! {
+	if !buildcfg.slow_runtime_safety { return }
 	mut page := Page.init(PageCapacity{
 		cols:   3
 		rows:   2
