@@ -3,6 +3,7 @@ module renderer
 import font
 import log
 import macos
+import time
 
 // Metal sub-types: Buffer, Frame, RenderPass, Pipeline, Sampler, Target, Texture
 //
@@ -917,7 +918,9 @@ pub fn (mut self MetalCustomShaderState) resize(api &MetalAPI, width usize, heig
 	self.back_texture = back_texture
 }
 
-const metal_shader_source = $embed_file('shaders.metal').to_string()
+$if compiled_metallib ? {
+	const metal_shader_library = $embed_file('../.witty-build/native/ghostty.metallib').to_bytes()
+}
 
 // MetalShaders manages the Metal shader library and all pipelines.
 pub struct MetalShaders {
@@ -941,10 +944,7 @@ pub mut:
 }
 
 pub fn MetalShaders.init(device voidptr, post_shaders []string, pixel_format MetalPixelFormat) !MetalShaders {
-	library := macos.metal_new_library_source(device, metal_shader_source)
-	if library == unsafe { nil } {
-		return error('Metal shader library compilation failed')
-	}
+	library := load_builtin_metal_library(device)!
 	mut self := MetalShaders{
 		library: library
 	}
@@ -1108,4 +1108,21 @@ fn metal_bg_image_attributes() []MetalVertexAttribute {
 		MetalVertexAttribute{ format: .float, offset: __offsetof(BgImageBuffer, opacity) },
 		MetalVertexAttribute{ format: .uchar, offset: __offsetof(BgImageBuffer, info) },
 	]
+}
+
+fn load_builtin_metal_library(device voidptr) !voidptr {
+	$if compiled_metallib ? {
+		start := time.sys_mono_now()
+		library := macos.metal_new_library_data(device, metal_shader_library) or {
+			log.error('metal error=${err}')
+			return err
+		}
+		log.debug('shader library loaded time=${(time.sys_mono_now() - start) / 1000}us')
+		return library
+	} $else {
+		// Unconfigured direct compiler invocations have no selected Metal build
+		// artifact. The translated production build compiles it first and always
+		// passes compiled_metallib; this guard never substitutes runtime compilation.
+		return error('MetalShaderLibraryNotBuilt: run tools/metallib_build and compile with -d compiled_metallib')
+	}
 }

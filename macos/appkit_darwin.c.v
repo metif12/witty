@@ -1,6 +1,8 @@
 @[has_globals]
 module macos
 
+import log
+
 import os
 import input
 
@@ -232,6 +234,11 @@ fn C.witty_metal_encoder_draw(encoder voidptr, primitive u64, vertex_count usize
 fn C.witty_metal_new_sampler(device voidptr, min_filter u64, mag_filter u64, s_address_mode u64, t_address_mode u64) voidptr
 
 fn C.witty_metal_new_iosurface_texture(device voidptr, surface voidptr, pixel_format u64, width usize, height usize, resource_options u64, usage u64) voidptr
+
+fn C.witty_metal_library_data(device voidptr, data voidptr, error &voidptr) voidptr
+fn C.witty_metal_dispatch_data(data voidptr, length usize) voidptr
+fn C.witty_metal_dispatch_release(data voidptr)
+fn C.witty_metal_error_description(error voidptr) &char
 
 fn C.witty_metal_new_library_source(device voidptr, source &char, length usize) voidptr
 
@@ -2362,4 +2369,21 @@ pub fn metal_has_unified_memory(device voidptr) bool {
 		return true
 	}
 	return msg_bool(ObjId(device), 'hasUnifiedMemory')
+}
+
+// Built-in shaders use compiled library data. Custom ShaderToy shaders retain
+// their separate source-compilation API, as in the original renderer.
+pub fn metal_new_library_data(device voidptr, bytes []u8) !voidptr {
+	data := C.witty_metal_dispatch_data(bytes.data, usize(bytes.len))
+	if isnil(data) { return error('OutOfMemory') }
+	defer { C.witty_metal_dispatch_release(data) }
+	mut native_error := voidptr(unsafe { nil })
+	library := C.witty_metal_library_data(device, data, &native_error)
+	if !isnil(native_error) {
+		description := C.witty_metal_error_description(native_error)
+		assert !isnil(description)
+		log.error('metal error=${unsafe { cstring_to_vstring(description) }}')
+		return error('MetalFailed')
+	}
+	return library
 }

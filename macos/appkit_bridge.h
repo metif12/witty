@@ -560,6 +560,21 @@ static inline void* witty_metal_new_library_source(void* device, const char* sou
 	return library;
 }
 
+static inline void* witty_metal_library_data(void* device, void* data, void** error) {
+	return ((void* (*)(void*, SEL, void*, void**))objc_msgSend)(device, sel_registerName("newLibraryWithData:error:"), data, error);
+}
+
+static inline void* witty_metal_dispatch_data(const void* bytes, size_t length) {
+	return (void*)dispatch_data_create(bytes, length, dispatch_get_main_queue(), DISPATCH_DATA_DESTRUCTOR_DEFAULT);
+}
+
+static inline void witty_metal_dispatch_release(void* data) { dispatch_release((dispatch_data_t)data); }
+
+static inline const char* witty_metal_error_description(void* error) {
+	void* description = ((void* (*)(void*, SEL))objc_msgSend)(error, sel_registerName("localizedDescription"));
+	return ((const char* (*)(void*, SEL, unsigned long))objc_msgSend)(description, sel_registerName("cStringUsingEncoding:"), 1);
+}
+
 static inline void* witty_metal_new_pipeline(
 	void* device,
 	void* vertex_library,
