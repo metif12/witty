@@ -7,6 +7,7 @@ import configpkg
 import global_state
 import input
 import macos
+import source_startup
 
 // The macOS executable is a native host for Ghostty's translated embedded
 // runtime. The host owns AppKit windows; terminal, renderer, input, selection,
@@ -495,6 +496,7 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 }
 
 fn main() {
+	source_startup.prepare()
 	mut global := global_state.get_state_mut()
 	global.init() or {
 		eprintln(startup_error_message(err))
