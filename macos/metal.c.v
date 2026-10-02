@@ -10,6 +10,7 @@ $if macos || ios {
 	#flag -I@VEXEROOT/vlib/macos
 	#flag -I@VMODROOT/macos
 	#include "metal_bridge.h"
+	#insert "@VMODROOT/macos/string_abi.h"
 
 	type ObjId = voidptr
 
@@ -54,6 +55,8 @@ $if macos || ios {
 	fn C.macos_objc_msg_id0(obj ObjId, selector Sel) ObjId
 
 	fn C.macos_objc_msg_id1(obj ObjId, selector Sel, a0 voidptr) ObjId
+	fn C.witty_macos_nsstring(bytes &u8, length usize) ObjId
+	fn C.witty_macos_utf8_length(value ObjId) usize
 
 	fn C.macos_objc_msg_id2(obj ObjId, selector Sel, a0 voidptr, a1 voidptr) ObjId
 
@@ -544,7 +547,7 @@ $if macos || ios {
 
 	@[inline]
 	fn nsstring(s string) ObjId {
-		return C.macos_objc_msg_id1(get_class('NSString'), sel('stringWithUTF8String:'), cstr(s))
+		return C.witty_macos_nsstring(s.str, usize(s.len))
 	}
 
 	fn objc_utf8_string(obj ObjId) string {
@@ -555,7 +558,7 @@ $if macos || ios {
 		if ptr == unsafe { nil } {
 			return ''
 		}
-		return unsafe { ptr.vstring().clone() }
+		return unsafe { ptr.vstring_with_len(int(C.witty_macos_utf8_length(obj))).clone() }
 	}
 
 	// home_directory_for_current_user returns the current user's home through
