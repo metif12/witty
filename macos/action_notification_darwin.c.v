@@ -14,6 +14,14 @@ fn C.witty_action_notification_action(identifier voidptr, title voidptr, options
 fn C.witty_action_notification_category(identifier voidptr, actions voidptr, intents voidptr, options u64) voidptr
 fn C.witty_action_complete_void(block voidptr)
 fn C.witty_action_complete_options(block voidptr, options u64)
+
+struct C.witty_action_notification_delivery {
+	object     voidptr
+	completion voidptr
+}
+
+fn C.witty_action_notification_dispatch(object voidptr, completion voidptr, callback voidptr)
+fn C.witty_action_notification_delivery_free(delivery &C.witty_action_notification_delivery)
 fn C.witty_action_sheet(alert voidptr, window voidptr, callback voidptr, context voidptr)
 
 const notification_category = 'com.mitchellh.ghostty.userNotification'
@@ -119,8 +127,7 @@ fn notification_process(context voidptr) {
 	match job.operation {
 		0 {
 			if !is_nil(job.result) {
-				eprintln('Error while requesting notification authorization: ${objc_utf8_string(msg_id(job.result,
-					'localizedDescription'))}')
+				eprintln('Error while requesting notification authorization: ${objc_utf8_string(msg_id(job.result, 'localizedDescription'))}')
 			}
 		}
 		1 {
@@ -130,8 +137,7 @@ fn notification_process(context voidptr) {
 		}
 		2 {
 			if !is_nil(job.result) {
-				eprintln('Error scheduling user notification: ${objc_utf8_string(msg_id(job.result,
-					'localizedDescription'))}')
+				eprintln('Error scheduling user notification: ${objc_utf8_string(msg_id(job.result, 'localizedDescription'))}')
 				return
 			}
 			job.surface.notification_identifiers << job.identifier
@@ -152,8 +158,7 @@ fn notification_process(context voidptr) {
 		}
 		4 {
 			if !is_nil(job.result) {
-				eprintln('Error requesting badge authorization: ${objc_utf8_string(msg_id(job.result,
-					'localizedDescription'))}')
+				eprintln('Error requesting badge authorization: ${objc_utf8_string(msg_id(job.result, 'localizedDescription'))}')
 			} else if job.granted {
 				set_dock_bell_badge()
 			}
@@ -217,6 +222,14 @@ fn notification_surface(notification ObjId) ?&NativeActionSurface {
 }
 
 fn notification_response(_self ObjId, _cmd Sel, _center ObjId, response ObjId, completion ObjId) {
+	C.witty_action_notification_dispatch(response, completion, voidptr(notification_response_main))
+}
+
+fn notification_response_main(context voidptr) {
+	delivery := unsafe { &C.witty_action_notification_delivery(context) }
+	defer { C.witty_action_notification_delivery_free(delivery) }
+	response := delivery.object
+	completion := delivery.completion
 	notification := msg_id(response, 'notification')
 	if mut surface := notification_surface(notification) {
 		action := objc_utf8_string(msg_id(response, 'actionIdentifier'))
@@ -227,7 +240,11 @@ fn notification_response(_self ObjId, _cmd Sel, _center ObjId, response ObjId, c
 				surface.notification_identifiers =
 					surface.notification_identifiers.filter(it != identifier)
 				if action != 'com.apple.UNNotificationDismissActionIdentifier' {
-					present_view(surface.view)
+					if surface.callbacks.present != unsafe { nil } {
+						surface.callbacks.present(surface.userdata, surface.view)
+					} else {
+						present_view(surface.view)
+					}
 				}
 			}
 		}
@@ -236,6 +253,14 @@ fn notification_response(_self ObjId, _cmd Sel, _center ObjId, response ObjId, c
 }
 
 fn notification_present(_self ObjId, _cmd Sel, _center ObjId, notification ObjId, completion ObjId) {
+	C.witty_action_notification_dispatch(notification, completion, voidptr(notification_present_main))
+}
+
+fn notification_present_main(context voidptr) {
+	delivery := unsafe { &C.witty_action_notification_delivery(context) }
+	defer { C.witty_action_notification_delivery_free(delivery) }
+	notification := delivery.object
+	completion := delivery.completion
 	mut options := u64(0)
 	if surface := notification_surface(notification) {
 		if !msg_bool(view_window(surface.view), 'isKeyWindow') || !surface.focused { options = 18 }

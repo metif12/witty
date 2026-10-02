@@ -1,3 +1,5 @@
+#ifndef WITTY_NOTIFICATION_BRIDGE_H
+#define WITTY_NOTIFICATION_BRIDGE_H
 /* Block ABI adapters. The notification policy and lifecycle are translated in V. */
 extern void* _NSConcreteStackBlock[32];
 typedef void (*witty_action_callback)(void*,void*,long long,bool);
@@ -38,3 +40,20 @@ static inline void* witty_action_notification_action(void* identifier,void* titl
 static inline void* witty_action_notification_category(void* identifier,void* actions,void* intents,unsigned long options) {
  return ((id(*)(id,SEL,id,id,id,unsigned long))objc_msgSend)((id)objc_getClass("UNNotificationCategory"),sel_registerName("categoryWithIdentifier:actions:intentIdentifiers:options:"),(id)identifier,(id)actions,(id)intents,options);
 }
+
+// Retained Objective-C parameters cross the delegate's MainActor boundary.
+extern void* _Block_copy(const void*);
+extern void _Block_release(const void*);
+typedef struct witty_action_notification_delivery { void* object; void* completion; } witty_action_notification_delivery;
+static inline void witty_action_notification_dispatch(void* object,void* completion,void* callback) {
+ witty_action_notification_delivery* delivery=malloc(sizeof(*delivery));
+ delivery->object=((id(*)(id,SEL))objc_msgSend)((id)object,sel_registerName("retain"));
+ delivery->completion=_Block_copy(completion);
+ dispatch_async_f(dispatch_get_main_queue(),delivery,(dispatch_function_t)callback);
+}
+static inline void witty_action_notification_delivery_free(witty_action_notification_delivery* delivery) {
+ ((void(*)(id,SEL))objc_msgSend)((id)delivery->object,sel_registerName("release"));
+ _Block_release(delivery->completion); free(delivery);
+}
+
+#endif
