@@ -336,7 +336,7 @@ fn exec_display(mut t Terminal, cmd &Command) Response {
 			pin: track_pin(mut t, Coordinate{
 				x: u16(t.screens.active.cursor.x)
 				y: t.screens.active.cursor.y
-			})
+			})!
 		})
 	}
 

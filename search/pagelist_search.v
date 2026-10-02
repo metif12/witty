@@ -24,7 +24,7 @@ pub mut:
 
 // Initialize a new page list search starting from the given node.
 // The search proceeds in reverse order (towards older content).
-pub fn PageListSearch.init(needle []u8, list &terminal.PageList, start &terminal.PageNode) !!PageListSearch {
+pub fn PageListSearch.init(needle []u8, list &terminal.PageList, start &terminal.PageNode) !PageListSearch {
 	// Create a tracked pin at the start node pointing to the last row.
 	mut mutable_list := unsafe { &terminal.PageList(list) }
 	pin := mutable_list.track_pin(terminal.Pin{
