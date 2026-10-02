@@ -773,6 +773,7 @@ pub fn ArgsIterator.new(args []string) ArgsIterator {
 	}
 }
 
+$if !ghostty_wasm_module ? {
 // Create an args iterator for the process args. This skips argv0.
 pub fn args_iterator() ArgsIterator {
 	mut args := process_args_snapshot()
@@ -782,6 +783,8 @@ pub fn args_iterator() ArgsIterator {
 	return ArgsIterator{
 		args: args
 	}
+}
+
 }
 
 pub fn (mut self ArgsIterator) next() ?string {

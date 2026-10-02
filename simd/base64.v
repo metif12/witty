@@ -1,6 +1,7 @@
 module simd
 
 import log
+$if ghostty_wasm_module ? { import wasm_log }
 
 // Base64 routines translated from src/simd/base64.zig.
 
@@ -26,7 +27,7 @@ pub fn max_len(input []u8) usize {
 fn max_len_scalar(input []u8) usize {
 	scalar := base64_scalar_input(input)
 	return calc_size_for_slice(scalar) or {
-		log.warn('failed to calculate base64 size for payload: ${err}')
+		$if ghostty_wasm_module ? { wasm_log.write(.warn, 'simd_base64', 'failed to calculate base64 size for payload: ${err}') } $else { log.warn('failed to calculate base64 size for payload: ${err}') }
 		return 0
 	}
 }

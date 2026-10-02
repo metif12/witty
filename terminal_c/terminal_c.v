@@ -19,6 +19,7 @@ module terminal_c
 import buildcfg
 import input
 import log
+$if ghostty_wasm_module ? { import wasm_log }
 import lib_allocator
 import osc
 import terminal
@@ -118,7 +119,7 @@ pub fn key_event_free(mut event KeyEvent) {
 pub fn (mut self KeyEvent) set_action(action input.KeyAction) {
 	if buildcfg.runtime_safety {
 		if !c_enum_valid(action) {
-			log.warn('set_action invalid action value=${i32(action)}')
+			$if ghostty_wasm_module ? { wasm_log.write(.warn, 'key_event', 'set_action invalid action value=${i32(action)}') } $else { log.warn('set_action invalid action value=${i32(action)}') }
 			return
 		}
 	}
@@ -132,7 +133,7 @@ pub fn (self &KeyEvent) get_action() input.KeyAction {
 pub fn (mut self KeyEvent) set_key(key input.Key) {
 	if buildcfg.runtime_safety {
 		if !c_enum_valid(key) {
-			log.warn('set_key invalid key value=${i32(key)}')
+			$if ghostty_wasm_module ? { wasm_log.write(.warn, 'key_event', 'set_key invalid key value=${i32(key)}') } $else { log.warn('set_key invalid key value=${i32(key)}') }
 			return
 		}
 	}
@@ -274,7 +275,7 @@ pub fn (mut self KeyEncoder) setopt(option KeyEncoderOption, value KeyEncoderOpt
 			if option == .macos_option_as_alt {
 				if buildcfg.runtime_safety {
 					if !c_enum_valid(value) {
-						log.warn('setopt invalid OptionAsAlt value=${i32(value)}')
+						$if ghostty_wasm_module ? { wasm_log.write(.warn, 'key_encode', 'setopt invalid OptionAsAlt value=${i32(value)}') } $else { log.warn('setopt invalid OptionAsAlt value=${i32(value)}') }
 						return
 					}
 				}
@@ -514,6 +515,8 @@ pub fn (mut self SgrParser) set_params_raw(params &u16, separators &u8, len usiz
 	self.parser.params_sep = terminal.SepList.init_empty()
 	if !isnil(separators) {
 		if len > usize(terminal.max_params) {
+			message := 'ghostty_sgr_set_params: separators length ${len} exceeds max supported length ${terminal.max_params}'
+			$if ghostty_wasm_module ? { wasm_log.write(.warn, 'sgr', message) } $else { log.warn(message) }
 			return .invalid_value
 		}
 		for i in 0 .. int(len) {
@@ -702,7 +705,7 @@ fn (mut writer KeyDiscardingWriter) write(data []u8) !int {
 pub fn key_encoder_option_valid(option KeyEncoderOption) bool {
 	if buildcfg.runtime_safety {
 		if !c_enum_valid(option) {
-			log.warn('setopt invalid option value=${i32(option)}')
+			$if ghostty_wasm_module ? { wasm_log.write(.warn, 'key_encode', 'setopt invalid option value=${i32(option)}') } $else { log.warn('setopt invalid option value=${i32(option)}') }
 			return false
 		}
 	}

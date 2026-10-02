@@ -1,7 +1,9 @@
 module input
 
 import ascii
-import cimgui
+$if !ghostty_wasm_module ? {
+	import cimgui
+}
 
 // --- Original Ghostty Comments Start: src/input/key.zig
 //
@@ -644,6 +646,7 @@ pub fn (k Key) codepoint() ?u32 {
 	}
 }
 
+$if !ghostty_wasm_module ? {
 // imgui_key returns the Dear ImGui key for this physical key. This is the
 // exact mapping used by Ghostty's inspector input backend.
 pub fn (k Key) imgui_key() ?cimgui.Key {
@@ -756,6 +759,8 @@ pub fn (k Key) imgui_key() ?cimgui.Key {
 		.meta_right { .right_super }
 		else { none }
 	}
+}
+
 }
 
 // modifier returns true if this key is a modifier.

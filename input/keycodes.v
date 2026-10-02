@@ -508,6 +508,8 @@ const raw_keycodes_entries = [
 	RawKeycodeEntry{usb: 0x0c02d0, evdev: 0x0279, xkb: 0x0281, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
  ]
 
+// lib_vt.zig deliberately does not import native keycodes.
+$if !ghostty_wasm_module ? {
 // The same OS-specific native column selected by Ghostty's entries builder.
 pub const keycodes_entries = native_keycodes_entries()
 
@@ -549,4 +551,6 @@ pub fn mac_keycode_to_key(native u32) Key {
 		if raw.mac == native { return raw.key }
 	}
 	return .unidentified
+}
+
 }

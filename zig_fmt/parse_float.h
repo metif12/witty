@@ -8,7 +8,11 @@
 #endif
 
 static inline int witty_zig_strtod(const char *text, char **end, double *value) {
-#if defined(_WIN32)
+#if defined(__EMSCRIPTEN__)
+    /* Emscripten musl floatscan parses a literal decimal dot and does not
+     * expose strtod_l/strtof_l; its unchanged parser is locale-independent. */
+    *value = strtod(text, end);
+#elif defined(_WIN32)
     _locale_t locale = _create_locale(LC_NUMERIC, "C");
     if (locale == (_locale_t)0) return 0;
     *value = _strtod_l(text, end, locale);
@@ -23,7 +27,9 @@ static inline int witty_zig_strtod(const char *text, char **end, double *value) 
 }
 
 static inline int witty_zig_strtof(const char *text, char **end, float *value) {
-#if defined(_WIN32)
+#if defined(__EMSCRIPTEN__)
+    *value = strtof(text, end);
+#elif defined(_WIN32)
     _locale_t locale = _create_locale(LC_NUMERIC, "C");
     if (locale == (_locale_t)0) return 0;
     *value = _strtof_l(text, end, locale);

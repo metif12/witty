@@ -10,9 +10,7 @@ fn compiler_argument(value string) string {
 
 pub fn (d Driver) v_arguments(artifact Artifact, deps NativeDeps) ![]string {
 	module_path := d.compiler_module_path()!
-	mut args := [d.cfg.compiler, '-path', module_path, '-cc', os.getenv_opt('CC') or {
-		'clang'
-	},
+	mut args := [d.cfg.compiler, '-path', module_path, '-cc', if d.cfg.target.wasm() { os.getenv_opt('EMCC') or { 'emcc' } } else { os.getenv_opt('CC') or { 'clang' } },
 		'-d', 'managed_native']
 	args << d.cfg.options(artifact)!
 	for define in deps.defines {
@@ -28,8 +26,10 @@ pub fn (d Driver) v_arguments(artifact Artifact, deps NativeDeps) ![]string {
 			else { 'i386' }
 		}]
 	}
-	for argument in d.cfg.sdk_arguments()! {
-		args << ['-cflags', compiler_argument(argument)]
+	if !d.cfg.target.wasm() {
+		for argument in d.cfg.sdk_arguments()! {
+			args << ['-cflags', compiler_argument(argument)]
+		}
 	}
 	if d.cfg.target.abi == 'gnu' { args << '-glibc' }
 	if d.cfg.target.abi == 'musl' { args << '-musl' }
@@ -79,7 +79,9 @@ fn (d Driver) stage_sources(name string, filenames []string) !string {
 
 pub fn (d Driver) build_vt() !string {
 	deps := d.build_native_dependencies(true)!
-	source := d.stage_sources('vt', ['lib_vt.v', 'lib_vt_c.v'])!
+	mut files := ['lib_vt.v', 'lib_vt_c.v']
+	if d.cfg.target.wasm() { files << 'lib_allocator_wasm32.v' }
+	source := d.stage_sources('vt', files)!
 	mut args :=
 		d.v_arguments(if d.cfg.target.wasm() { Artifact.wasm_module } else { Artifact.lib }, deps)!
 	args << ['-d', 'no_oniguruma', '-d', 'no_i18n', '-d', 'no_sentry']
@@ -93,7 +95,7 @@ pub fn (d Driver) build_vt() !string {
 	} else {
 		'.so.0.1.0'
 	}
-	output := d.cache_path('artifacts', 'libghostty-vt' + extension)
+	output := d.cache_path('artifacts', (if d.cfg.target.wasm() { 'ghostty-vt' } else { 'libghostty-vt' }) + extension)
 	os.mkdir_all(os.dir(output))!
 	if !d.cfg.target.wasm() {
 		object := output + '.o'
@@ -101,7 +103,16 @@ pub fn (d Driver) build_vt() !string {
 		checked_process(d.cfg.root, args)!
 		d.link_library(object, output, deps, true)!
 	} else {
-		args << ['-o', output, source]
+		loader := output.all_before_last('.wasm') + '.js'
+		args << ['-ldflags', '-sSTANDALONE_WASM=1', '-ldflags', '--no-entry',
+			'-ldflags', '-sMODULARIZE=1', '-ldflags', '-sEXPORT_NAME=GhosttyVT',
+			// The selected V runtime rejects pointers in the first 64 KiB.
+			// Place Wasm static data above that compiler-owned guard, too.
+			'-ldflags', '-sGLOBAL_BASE=65536',
+			'-ldflags', '-sEXPORTED_RUNTIME_METHODS=HEAPU8,HEAPU16,HEAPU32',
+			'-ldflags', '--js-library=' + compiler_argument(os.join_path(d.cfg.root, 'wasm_log', 'host.js')),
+			'-ldflags', '-sALLOW_MEMORY_GROWTH=1', '-ldflags', wasm_export_argument(d.cfg.root, files)!,
+			'-o', loader, source]
 		checked_process(d.cfg.root, args)!
 	}
 	if !d.cfg.target.wasm() {
@@ -129,6 +140,7 @@ pub fn (d Driver) build_vt() !string {
 		}
 	} else {
 		d.install_file(output, 'bin/ghostty-vt.wasm')!
+		d.install_file(output.all_before_last('.wasm') + '.js', 'bin/ghostty-vt.js')!
 	}
 	return output
 }
@@ -240,4 +252,18 @@ fn (d Driver) runtime_archive() !string {
 		compiler:  os.getenv_opt('CC') or { 'clang' }
 		arguments: d.cfg.sdk_arguments()!
 	}, flags)
+}
+
+// Zig @export has a named export list; Emscripten needs that same list at link
+// time. Read the existing V export annotations rather than exporting private
+// compiler or module symbols.
+fn wasm_export_argument(root string, files []string) !string {
+	mut symbols := []string{}
+	for filename in files {
+		for line in os.read_file(os.join_path(root, filename))!.split_into_lines() {
+			if !line.starts_with("@[export: '") { continue }
+			symbols << "'_" + line.all_after("@[export: '").all_before("'") + "'"
+		}
+	}
+	return compiler_argument('-sEXPORTED_FUNCTIONS=[' + symbols.join(',') + ']')
 }

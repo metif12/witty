@@ -50,7 +50,7 @@ pub fn compile_options(root string, mode Mode, artifact Artifact, explicit_versi
 	match artifact {
 		.exe {}
 		.lib { args << ['-shared', '-d', 'ghostty_lib'] }
-		.wasm_module { args << ['-b', 'wasm', '-d', 'ghostty_wasm_module'] }
+		.wasm_module { args << ['-os', 'wasm32_emscripten', '-gc', 'none', '-d', 'ghostty_wasm_module'] }
 	}
 
 	return args
