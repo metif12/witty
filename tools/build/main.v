@@ -5,6 +5,8 @@ import json
 import os
 
 fn main() {
+	// Build diagnostics stay local; some V versions auto-submit C failures.
+	os.setenv('V_C_ERROR_BUG_REPORT_DISABLED', '1', true)
 	if '--help' in os.args {
 		println('V translation of Ghostty build.zig\n\nUsage: v run tools/build [step] [-Dname=value] [--prefix path] [-- args]\n\nSteps: install, run, lib-vt, test, test-lib-vt, run-valgrind, test-valgrind,\n       dist, distcheck, update-translations, resources, docs, locales, webdata, config\n\nOptions match src/build/Config.zig; --system and -fsys=NAME control system libraries.')
 		return
