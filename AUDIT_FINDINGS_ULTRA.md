@@ -1507,18 +1507,18 @@ Ten isolated worker checkouts are used in waves: this environment permits three 
 | T08 | Implemented | `9834594` | 990 unchanged Ghostty encoder differential cases matched |
 | T09 | Implemented | `0bc93b8` | Absent versus invalid progress; parser regression |
 | T10 | Implemented | `3e3a56d, 284e6b7` | All 242 key-table rows and native columns; table tests |
-| T11 | In progress | worker08 | Packed contiguous backing and pool translation still required |
-| T12 | Implemented | `cdad202` | Generic caller-backed offset map/refcount set; original layouts, relocation, contexts and independent integer widths tested |
+| T11 | In progress | `4ddfe66, 154f46e`; workers08/01 | Real contiguous mmap backing, packed rows/cells/offset storage and memcpy relocation; native Page probe and Page/Screen/Terminal suites pass; source arena/pool/pin/clone lifecycle still being integrated |
+| T12 | In progress | `cdad202`; worker08 | Generic caller-backed offset map/refcount set and layouts/relocation validated; final AutoHash pointer/array/optional/union categories and rejected floats are being translated |
 | T13 | Implemented | `defa489` | Caller allocator reaches payload, ArrayList and SegmentedList; allocation failure, reset, OSC/terminal/C tests |
 | T14 | Implemented | `c3267ae` | Original Oniguruma grammar and failure handling; tmux tests |
-| R01 | In progress | worker10 | Windows ConPTY/Exec/termio translation active |
+| R01 | Implemented | `b2db4d1, 203eecb` | ConPTY/read/write HANDLE lifecycle, cancellation and NT cwd access; Darwin PTY/Exec tests and Windows COFF ABI compile pass; full Windows termio check awaits renderer target glue; Windows execution unverified |
 | R02 | Implemented | `0329051` | Nullable strings write NULL successfully; config ABI tests |
 | R03 | Implemented | `ede5f8d` | Notification error is warned/caught; mailbox regression |
 | R04 | Implemented | `0740574` | Exclusive atomic file, permissions and exact bound; cache tests |
-| R05 | In progress | worker03 | Pending implementation/integration |
+| R05 | Implemented | `c5dad01` | Original blueprint/native command model, filter/factory/gettext/config property and trigger signal; Linux GTK typecheck passes; native GTK execution unavailable here |
 | R06 | Implemented | `289b3da, c38a060` | Unique portal-ID map replacement; Linux typecheck/collision tests |
 | R07 | Implemented | `56a2ec3` | Pinned gettext canonicalizer/archive; enabled and disabled i18n tests |
-| R08 | In progress | worker03 | Pending implementation/integration |
+| R08 | Implemented | `7b847ba` | Original CSS/icon/Blueprint resources and actual gresource generation/compilation paths; resource tests and Linux GTK typecheck pass; native resource compilation/display unavailable here |
 | R09 | Implemented | `0b40e1c` | Native ImGui/Inspector virtual classes; Linux typecheck |
 | RF-01 | Implemented | `bb72641` | Production selected backend; all 24 font files/Metal alternatives tested |
 | RF-02 | Implemented | `dcfd8a5` | Run grid lock held during shaping; blocking concurrency regression |
@@ -1535,7 +1535,7 @@ Ten isolated worker checkouts are used in waves: this environment permits three 
 | S02 | Implemented | `227ebde` | Checked empty/all-padding traps and InvalidPadding warning; subprocess probes |
 | S03 | Implemented | `6cea9e6` | Source aligned libc allocation/in-place remap; alignment 1–65536 and over-32-bit growth tests |
 | S04 | Implemented | `6166ffc, ef531fb` | Exact native SDK/Breakpad build; real SIGSEGV minidump and restart local transport; clean tracked-only build |
-| S05 | In progress | `ced0309, 30b6d21, a49c083, 40daa4e`; root | Config/retarget/options; standalone generators and terminfo/shell/theme/docs/locale install paths; native dependency/artifact/package graph still required |
+| S05 | In progress | `ced0309, 30b6d21, a49c083, fe11b40, b33c55b, 1b9bc49, d163a1e, ef1f85e, 0574201`; root | Source-selected native dependencies, actual VT library/export/init/install/version paths, source frame generation and benchmark/generator CLIs; C examples and native package builds pass; full package/install/generated-resource dispatch and renderer selection still being integrated |
 | S06 | In progress | `3277fc6, 38b8900, f012e5e`; root | GitVersion, channel, artifact and all four modes; ABI/version tests; production build-driver wiring still required |
 | S07 | In progress | worker05 | Pending implementation/integration |
 | S08 | Implemented | `af434d2` | Original startup messages and status 1; executable probes; timer subclaim corrected below |
@@ -1543,7 +1543,7 @@ Ten isolated worker checkouts are used in waves: this environment permits three 
 | S10 | Implemented | `2c4b036` | Xoshiro/random selection/streaming; 756 unchanged Zig differential cases matched |
 | S11 | Implemented | `bf0e21d, 60d05b4` | 32 image suites; 132 native rows matched; 8 inherited undefined-state trap cases excluded and documented |
 | S12 | Implemented | `695dedc` | Original 9-bit lookahead, sorted alphabet and linked fallback; Huffman/codec tests |
-| S13 | In progress | worker10 | IOCP and WASI translation active; native platform execution unavailable here |
+| S13 | Implemented | `7aab070` | Locked source IOCP/WASI loops, cancellation/timers/completions and native thread/futex paths; Darwin regressions, source batch/ABI tests, Windows COFF compile and both WASI feature typechecks pass; native Windows/WASI execution unverified |
 | S14 | Implemented | `9b1dc71` | Decoded image path/memory loading, premultiplied conversion, transmission; V tests and native conversion probe |
 | S15 | Implemented | `4242ed4` | Actual C-backed V type factories; compiled enum holes, layout/defaults/alignment/padding/nested/zero-size cases |
 | S16 | Implemented | `930e186` | Build-time SDK/minimum-version mapping and embedding; helper tests pass; actual Apple Metal compiler unavailable |
@@ -1570,3 +1570,31 @@ The pinned browser font implementation itself lacks Collection-required metrics/
 The large fixed-Huffman flate match-at-64KiB trap is confirmed in the actual pinned Zig decompressor with the same 200,000-byte fixture and small output bound. It is retained as inherited checked-source behavior, rather than silently replaced. The source fixture and native log are recorded in `/tmp/witty-ultra-fixes/image-flate-probe/`.
 
 The S05 resource install was exercised through the translated driver into an isolated prefix. All completions and terminfo matched recorded original hashes, every locked theme matched its source bytes, all 25 gettext catalogs were compiled/installed, and the Darwin documentation placeholder matched. Sparkle 2.8.0 was resolved from the original SwiftPM lock and its binary archive matched the original Package.swift SHA-256. Main install/library/packaging orchestration is still pending and is not certified by these resource checks.
+
+### Further integrated build/platform verification
+
+The source-pinned native build graph now compiles the original zlib, libpng,
+FreeType, Oniguruma, HarfBuzz, libxml2, Fontconfig and Dear ImGui inputs with
+artifact target/SDK/optimization options. Both Debug and ReleaseSafe native
+package builds were exercised. System header/link choices and independent
+glslang/SPIRV-Cross build choices are wired into the compiler arguments.
+
+The VT artifact was exercised from the four unchanged upstream C examples,
+including a separate C process that tests exported V initialization. Scalar
+and SIMD builds passed; installed versioned Darwin libraries, relative aliases
+and loader paths also passed those examples. This caught and corrected V
+initialization/archive-classification defects that module tests did not cover.
+The SGR example inherits a pinned original header/enum discrepancy: public
+`sgr.h` inserts RESET_UNDERLINE at tag 8, while actual `Attribute.Tag` has no
+such member. V preserves the original exported tags. The example's successful
+exit does not certify that inconsistent original header. Reproducible fixtures
+and the explanation are in `build_support/reference_probes/vt_examples`.
+
+The unchanged source framegen C program and all 235 frame inputs are restored.
+Its freshly generated compressed bytes match `cli/framedata.compressed`
+(SHA-256 `cda4389141fa7a180dd78b7c8f6742c118273ef7bd3e449ef322a9e85e3dc8c6`).
+Generator/benchmark native CLI checks pass, including source SIGPIPE startup
+needed for successful generator shutdown when stdout closes. Full macOS/GTK
+packaging and native target execution remain separate pending checks; Apple
+Metal/Xcode tools, GTK runtime and Windows/WASI execution are unavailable on
+this macOS Command Line Tools host.
