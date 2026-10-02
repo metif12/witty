@@ -18,6 +18,8 @@ mut:
 	view    voidptr
 	native_config macos.NativeWindowConfig
 	background_color ?u32
+	cell_width f64
+	cell_height f64
 	actions &macos.NativeActionSurface = unsafe { nil }
 	controller &TerminalController = unsafe { nil }
 	surface &apprt.Surface = unsafe { nil }
@@ -421,15 +423,9 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 			}
 		}
 		.goto_tab {
-			data := action.data
-			value := if data is apprt.GotoTab { int(data) } else { 0 }
-			if value == int(apprt.GotoTab.previous) {
-				macos.select_tab(-1)
-				return true
-			}
-			if value == int(apprt.GotoTab.next) {
-				macos.select_tab(1)
-				return true
+			if current := state {
+				data := action.data
+				if data is apprt.GotoTab { return macos.goto_native_tab(current.view, int(data)) }
 			}
 		}
 		.present_terminal {
@@ -457,9 +453,20 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 			soft := if data is apprt.ReloadConfig { data.soft } else { false }
 			return reload_runtime_config(app, state, soft)
 		}
-		.config_change, .cell_size, .size_limit, .quit_timer {
+		.config_change {
+			data := action.data
+			if data is apprt.ConfigChange { return native_config_change(app, state, data.config) }
+		}
+		.cell_size {
+			if current := state {
+				data := action.data
+				if data is apprt.CellSize {
+					macos.dispatch_main(native_cell_size_main, voidptr(&NativeCellSizeTask{state: current, width: data.width, height: data.height}))
+				}
+			}
 			return true
 		}
+		.size_limit, .quit_timer { return false }
 		else {}
 	}
 
