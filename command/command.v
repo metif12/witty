@@ -358,13 +358,19 @@ $if !windows {
 
 		// Fork. IMPORTANT: do all allocation prior to the fork().
 		// It is undefined behavior to malloc between fork and exec.
-		pid := $if linux {
+		// Keep the source platform selection as a statement. V's checker also
+		// resolves names in excluded compile-time expression branches, which
+		// otherwise requires a non-Linux cgroup placeholder.
+		mut pid := int(0)
+		$if linux {
 			if cgroup := self.linux_cgroup {
-				internal_os.clone_into(cgroup)!
+				pid = internal_os.clone_into(cgroup)!
 			} else {
-				C.fork()
+				pid = C.fork()
 			}
-		} $else { C.fork() }
+		} $else {
+			pid = C.fork()
+		}
 		if pid < 0 {
 			return error('fork failed')
 		}
