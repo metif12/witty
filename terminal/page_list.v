@@ -3,6 +3,7 @@ module terminal
 import buildcfg
 import strings
 import tripwire
+import lib_allocator
 
 // --- Original Ghostty Comments Start: src/terminal/PageList.zig
 //
@@ -2982,44 +2983,25 @@ pub:
 	tracked_pins &PageTrackedPinsRemap = unsafe { nil }
 }
 
-struct PageTrackedPinPair {
-	old_pin &Pin = unsafe { nil }
-	new_pin &Pin = unsafe { nil }
-}
-
 pub struct PageTrackedPinsRemap {
 mut:
-	entries []PageTrackedPinPair
+ table lib_allocator.PointerHashMap[&Pin, &Pin]
 }
 
 pub fn PageTrackedPinsRemap.init() PageTrackedPinsRemap {
-	return PageTrackedPinsRemap{}
+ return PageTrackedPinsRemap.init_alloc(lib_allocator.c_allocator_value())
 }
 
-pub fn (mut self PageTrackedPinsRemap) deinit() {
-	self.entries = []
+pub fn PageTrackedPinsRemap.init_alloc(allocator lib_allocator.Allocator) PageTrackedPinsRemap {
+ return PageTrackedPinsRemap{table: lib_allocator.PointerHashMap[&Pin, &Pin]{allocator: allocator}}
 }
 
-pub fn (self &PageTrackedPinsRemap) get(old_pin &Pin) ?&Pin {
-	for entry in self.entries {
-		if voidptr(entry.old_pin) == voidptr(old_pin) {
-			return entry.new_pin
-		}
-	}
-	return none
-}
+pub fn (mut self PageTrackedPinsRemap) deinit() { self.table.deinit() }
 
-fn (mut self PageTrackedPinsRemap) put_no_clobber(old_pin &Pin, new_pin &Pin) {
-	assert self.get(old_pin) == none
-	// Both pointers are PageList-tracked pins allocated with `&Pin{}`. V's
-	// escape checker cannot derive that lifetime once Pin itself is allowed to
-	// remain a value for ordinary cursor movement.
-	unsafe {
-		self.entries << PageTrackedPinPair{
-			old_pin: old_pin
-			new_pin: new_pin
-		}
-	}
+pub fn (self &PageTrackedPinsRemap) get(old_pin &Pin) ?&Pin { return self.table.get(old_pin) }
+
+fn (mut self PageTrackedPinsRemap) put_no_clobber(old_pin &Pin, new_pin &Pin) ! {
+ self.table.put_no_clobber(old_pin, new_pin)!
 }
 
 // ============================================================
@@ -3466,6 +3448,8 @@ pub fn (mut self PromptIterator) next_left_up() ?Pin {
 @[heap]
 pub struct PageList {
 pub mut:
+	// Source-owned arena pools for nodes, standard page blocks, and pins.
+	pool MemoryPool
 	// The linked list of pages.
 	pages PageNodeList
 
@@ -3485,6 +3469,7 @@ pub mut:
 
 	// Tracked pins that auto-update during modifications.
 	tracked_pins_storage []&Pin
+	tracked_pins_set lib_allocator.PointerArraySet[&Pin]
 
 	// Viewport state.
 	viewport                PageViewport = .active
@@ -3540,160 +3525,129 @@ struct PageListInitialPages {
 	total_rows  usize
 }
 
-fn cleanup_initial_pages(pages PageNodeList) {
+// initPages only owns non-standard buffers; pool deinit releases pooled
+// nodes/standard blocks on the enclosing error path.
+fn cleanup_initial_pages(pool &MemoryPool, pages PageNodeList) {
 	mut current := pages.first
 	for {
-		mut node := current or { break }
+		node := current or { break }
 		current = node.next
-		node.data.deinit()
+		if usize(node.data.memory.len) > standard_page_size() {
+			pool.pages.arena.child_allocator.free_bytes(node.data.memory.data,
+				usize(node.data.memory.len), page_pool_alignment_log(), 0)
+		}
 	}
 }
 
-fn init_pages(cols u16, rows u16) !PageListInitialPages {
-	mut tw := page_list_init_pages_tripwire()
-	// Create initial pages to fit the viewport
-	cap := initial_capacity(cols)
-	assert Page.layout(cap).total_size <= usize(max_page_size)
-	pooled := Page.layout(cap).total_size <= standard_page_size()
-	mut page_list := PageNodeList{}
-	mut page_serial := u64(0)
-	mut page_size := usize(0)
-	mut total_rows := usize(0)
+fn page_pool_alignment_log() u8 {
+	mut alignment := u8(0)
+	for (usize(1) << alignment) < page_memory_alignment() { alignment++ }
+	return alignment
+}
 
-	mut rem := u16(rows)
+fn init_pages(mut pool MemoryPool, serial &u64, cols u16, rows u16) !PageListInitialPages {
+	mut tw := page_list_init_pages_tripwire()
+	cap := initial_capacity(cols)
+	layout := Page.layout(cap)
+	assert layout.total_size <= usize(max_page_size)
+	pooled := layout.total_size <= standard_page_size()
+	mut page_list := PageNodeList{}
+	mut page_size := usize(0)
+	mut rem := rows
+	mut ready := false
+	defer { if !ready { cleanup_initial_pages(&pool, page_list) } }
 	for rem > 0 {
-		tw.check(.page_node) or {
-			cleanup_initial_pages(page_list)
-			return err
+		tw.check(.page_node)!
+		mut node := pool.nodes.create()!
+		mut node_ready := false
+		defer { if !node_ready { pool.nodes.destroy(node) } }
+		tw.check(if pooled { .page_buf_std } else { .page_buf_non_std })!
+		mut buffer := unsafe { nil }
+		if pooled {
+			buffer = pool.pages.create()!
+		} else {
+			buffer = pool.pages.arena.child_allocator.alloc_bytes(layout.total_size, page_pool_alignment_log(), 0)
+			if isnil(buffer) { return error('OutOfMemory') }
 		}
-		mut node := &PageNode{
-			serial: page_serial
-		}
-		tw.check(if pooled { .page_buf_std } else { .page_buf_non_std }) or {
-			cleanup_initial_pages(page_list)
-			return err
-		}
-		node.data = Page.init(cap) or {
-			cleanup_initial_pages(page_list)
-			return err
-		}
-		use := if rem < cap.rows { rem } else { cap.rows }
-		node.data.size.rows = use
-		rem -= use
+		length := if pooled { standard_page_size() } else { layout.total_size }
+		if buildcfg.runtime_safety { unsafe { vmemset(buffer, 0, int(length)) } }
+		serial_value := unsafe { *serial }
+		unsafe { *node = PageNode{data: Page.init_buf(OffsetBuf.init(&u8(buffer)), layout), serial: serial_value} }
+		node.data.memory = lib_allocator.borrowed_array[u8](buffer, int(length), int(length))
+		node.data.size.rows = if rem < node.data.capacity.rows { rem } else { node.data.capacity.rows }
+		rem -= node.data.size.rows
 		page_list.append(node)
-		page_size += page_backing_size(cap)
-		page_serial += 1
-		total_rows += usize(use)
+		page_size += length
+		unsafe { *serial = *serial + 1 }
+		node_ready = true
 	}
 	assert page_list.first != none
-	return PageListInitialPages{
-		pages:       page_list
-		page_serial: page_serial
-		page_size:   page_size
-		total_rows:  total_rows
-	}
+	ready = true
+	return PageListInitialPages{pages: page_list, page_serial: unsafe { *serial }, page_size: page_size, total_rows: usize(rows)}
 }
 
 pub fn PageList.init(cols u16, rows u16, max_size ?usize) !PageList {
+	return PageList.init_alloc(lib_allocator.c_allocator_value(), page_list_page_allocator(), cols, rows, max_size)
+}
+
+// Exposes the original general/page allocator injection for failure tests and
+// embedders. The default entry selects the source's platform page allocator.
+pub fn PageList.init_alloc(allocator lib_allocator.Allocator, page_allocator lib_allocator.Allocator, cols u16, rows u16, max_size ?usize) !PageList {
 	mut tw := page_list_init_tripwire()
-	// V uses GC-backed page and node storage rather than Ghostty's explicit
-	// memory pool, but this checkpoint retains the source initialization
-	// failure boundary.
 	tw.check(.init_memory_pool)!
+	mut pool := MemoryPool.init(allocator, page_allocator, 4)!
+	mut pool_ready := false
+	defer { if !pool_ready { pool.deinit() } }
 	tw.check(.init_pages)!
-	initial := init_pages(cols, rows)!
-
-	mms := min_max_size_calc(cols, rows)
-
-	// Create viewport pin
-	tw.check(.viewport_pin) or {
-		cleanup_initial_pages(initial.pages)
-		return err
-	}
-	viewport_pin := &Pin{
-		node: initial.pages.first or { panic('initial page list is empty') }
-	}
-	tw.check(.viewport_pin_track) or {
-		cleanup_initial_pages(initial.pages)
-		return err
-	}
-
+	mut serial := u64(0)
+	initial := init_pages(mut pool, &serial, cols, rows)!
+	// The original outer pool errdefer owns pooled buffers through later errors.
+	tw.check(.viewport_pin)!
+	mut viewport_pin := pool.pins.create()!
+	unsafe { *viewport_pin = Pin{node: initial.pages.first or { panic('unreachable empty initial page list') }} }
+	mut tracked := lib_allocator.PointerArraySet[&Pin]{}
+	mut tracked_ready := false
+	defer { if !tracked_ready { tracked.deinit(pool.alloc) } }
+	tw.check(.viewport_pin_track)!
+	tracked.put_no_clobber(pool.alloc, viewport_pin)!
 	result := PageList{
-		cols:                    cols
-		rows:                    rows
-		pages:                   initial.pages
-		page_serial:             initial.page_serial
-		page_serial_min:         0
-		page_size:               initial.page_size
-		explicit_max_size:       max_size or { max_usize }
-		min_max_size:            mms
-		total_rows:              initial.total_rows
-		tracked_pins_storage:    [viewport_pin]
-		viewport:                .active
-		viewport_pin:            viewport_pin
-		viewport_pin_row_offset: none
+		pool: pool, cols: cols, rows: rows, pages: initial.pages,
+		page_serial: serial, page_serial_min: 0, page_size: initial.page_size,
+		explicit_max_size: max_size or { max_usize }, min_max_size: min_max_size_calc(cols, rows),
+		total_rows: usize(rows), tracked_pins_set: tracked, tracked_pins_storage: tracked.keys,
+		viewport: .active, viewport_pin: viewport_pin, viewport_pin_row_offset: none
 	}
+	pool_ready = true
+	tracked_ready = true
 	result.assert_integrity()
 	return result
 }
 
 pub fn (mut self PageList) deinit() {
 	self.assert_integrity()
-	mut node := self.pages.first
-	for {
-		n := node or { break }
-		node = n.next
-		self.destroy_node(n)
-	}
-	self.tracked_pins_storage = []
-	self.pages = PageNodeList{}
+	self.tracked_pins_set.deinit(self.pool.alloc)
+	cleanup_initial_pages(&self.pool, self.pages)
+	self.pool.deinit()
 }
 
 pub fn (mut self PageList) reset() {
 	defer { self.assert_integrity() }
 	cap := initial_capacity(self.cols)
 	assert cap.rows > 0
-
-	mut old_node := self.pages.first
-	for {
-		node := old_node or { break }
-		old_node = node.next
-		self.destroy_node(node)
-	}
-	assert self.page_size == 0
-
-	// Rebuild page list
-	mut page_list := PageNodeList{}
-	mut page_serial := self.page_serial
-	mut total_rows := usize(0)
-	mut page_size := usize(0)
-
-	mut rem := self.rows
-	for rem > 0 {
-		mut node := &PageNode{
-			data:   Page.init(cap) or { panic(err) }
-			serial: page_serial
-		}
-		use := if rem < cap.rows { rem } else { cap.rows }
-		node.data.size.rows = use
-		rem -= use
-		page_list.append(node)
-		page_size += page_backing_size(cap)
-		page_serial += 1
-		total_rows += usize(use)
-	}
-
-	self.pages = page_list
-	self.page_serial = page_serial
-	self.page_size = page_size
-	self.total_rows = total_rows
-
-	// Update all tracked pins to point to first page top-left
-	first := self.pages.first or { panic('reset page list is empty') }
+	page_count := (usize(self.rows) + usize(cap.rows) - 1) / usize(cap.rows)
+	cleanup_initial_pages(&self.pool, self.pages)
+	self.pool.pages.reset(lib_allocator.ArenaResetMode{kind: .retain_with_limit, limit: page_count * self.pool.pages.item_size})
+	self.pool.nodes.reset(lib_allocator.ArenaResetMode{kind: .retain_with_limit, limit: page_count * self.pool.nodes.raw.item_size})
+	self.pool.pages.arena.zero_payloads()
+	initial := init_pages(mut self.pool, &self.page_serial, self.cols, self.rows) or { panic('initPages failed') }
+	self.pages = initial.pages
+	self.page_size = initial.page_size
+	self.total_rows = usize(self.rows)
+	first := self.pages.first or { panic('unreachable empty reset page list') }
 	for mut p in self.tracked_pins_storage {
 		p.node = first
-		p.y = 0
 		p.x = 0
+		p.y = 0
 		p.garbage = true
 	}
 	self.viewport_pin.garbage = false
@@ -3750,26 +3704,40 @@ pub fn (self &PageList) max_size() usize {
 // ============================================================
 
 fn (mut self PageList) create_page(cap PageCapacity) !&PageNode {
-	assert Page.layout(cap).total_size <= usize(max_page_size)
-	mut node := &PageNode{
-		data:   Page.init(cap)!
-		serial: self.page_serial
+	mut page := self.pool.nodes.create()!
+	mut ready := false
+	defer { if !ready { self.pool.nodes.destroy(page) } }
+	layout := Page.layout(cap)
+	pooled := layout.total_size <= standard_page_size()
+	assert layout.total_size <= usize(max_page_size)
+	mut buffer := unsafe { nil }
+	if pooled {
+		buffer = self.pool.pages.create()!
+	} else {
+		buffer = self.pool.pages.arena.child_allocator.alloc_bytes(layout.total_size, page_pool_alignment_log(), 0)
+		if isnil(buffer) { return error('OutOfMemory') }
 	}
-	// Page itself initializes at full size. PageList's createPageExt source
-	// specialization resets a newly allocated node to empty so callers can
-	// append or clone the exact live row range.
-	node.data.size.rows = 0
-	self.page_serial += 1
-	self.page_size += page_backing_size(cap)
-	return node
+	length := if pooled { standard_page_size() } else { layout.total_size }
+	if buildcfg.runtime_safety { unsafe { vmemset(buffer, 0, int(length)) } }
+	unsafe { *page = PageNode{data: Page.init_buf(OffsetBuf.init(&u8(buffer)), layout), serial: self.page_serial} }
+	page.data.memory = lib_allocator.borrowed_array[u8](buffer, int(length), int(length))
+	page.data.size.rows = 0
+	self.page_serial++
+	self.page_size += length
+	ready = true
+	return page
 }
 
 fn (mut self PageList) destroy_node(node &PageNode) {
-	self.page_size -= page_backing_size(node.data.capacity)
-	unsafe {
-		mut mutable_node := node
-		mutable_node.data.deinit()
+	self.page_size -= usize(node.data.memory.len)
+	if usize(node.data.memory.len) <= standard_page_size() {
+		unsafe { vmemset(node.data.memory.data, 0, node.data.memory.len) }
+		self.pool.pages.destroy(node.data.memory.data)
+	} else {
+		self.pool.pages.arena.child_allocator.free_bytes(node.data.memory.data,
+			usize(node.data.memory.len), page_pool_alignment_log(), 0)
 	}
+	self.pool.nodes.destroy(node)
 }
 
 // V cannot compose Result and Option return types directly.
@@ -4223,30 +4191,23 @@ pub fn (self &PageList) highlight_semantic_content(at Pin, content SemanticConte
 // ============================================================
 
 // Track a pin so it auto-updates during modifications.
-pub fn (mut self PageList) track_pin(p Pin) &Pin {
-	$if !prod {
-		assert self.pin_is_valid(p)
-	}
-	tracked := &Pin{
-		node:    p.node
-		y:       p.y
-		x:       p.x
-		garbage: p.garbage
-	}
-	self.tracked_pins_storage << tracked
+pub fn (mut self PageList) track_pin(p Pin) !&Pin {
+	if buildcfg.slow_runtime_safety { assert self.pin_is_valid(p) }
+	mut tracked := self.pool.pins.create()!
+	mut ready := false
+	defer { if !ready { self.pool.pins.destroy(tracked) } }
+	unsafe { *tracked = p }
+	self.tracked_pins_set.put_no_clobber(self.pool.alloc, tracked)!
+	self.tracked_pins_storage = self.tracked_pins_set.keys
+	ready = true
 	return tracked
 }
 
-// Untrack a pin.
 pub fn (mut self PageList) untrack_pin(p &Pin) {
-	pp := voidptr(p)
-	vp := voidptr(self.viewport_pin)
-	assert pp != vp, 'cannot untrack viewport pin'
-	for i, tp in self.tracked_pins_storage {
-		if voidptr(tp) == pp {
-			self.tracked_pins_storage.delete(i)
-			return
-		}
+	assert voidptr(p) != voidptr(self.viewport_pin)
+	if self.tracked_pins_set.swap_remove(p) {
+		self.pool.pins.destroy(p)
+		self.tracked_pins_storage = self.tracked_pins_set.keys
 	}
 }
 
@@ -4952,10 +4913,26 @@ pub fn (mut self PageList) split(p Pin) ! {
 // ============================================================
 
 pub fn (self &PageList) clone(opts PageCloneOpts) !PageList {
+ return self.clone_alloc(self.pool.alloc, opts)
+}
+
+pub fn (self &PageList) clone_alloc(allocator lib_allocator.Allocator, opts PageCloneOpts) !PageList {
 	mut it := self.page_iterator(.right_down, opts.top, opts.bot)
 
-	mut viewport_pin := &Pin{}
+	mut count_it := it
+	mut page_count := usize(0)
+	for { _ := count_it.next() or { break }; page_count++ }
+	mut pool := MemoryPool.init(allocator, page_list_page_allocator(), page_count)!
+	mut pool_ready := false
+	defer { if !pool_ready { pool.deinit() } }
+	mut viewport_pin := pool.pins.create()!
+	mut tracked := lib_allocator.PointerArraySet[&Pin]{}
+	mut tracked_ready := false
+	defer { if !tracked_ready { tracked.deinit(pool.alloc) } }
+	tracked.put_no_clobber(pool.alloc, viewport_pin)!
 	mut result := PageList{
+		pool: pool
+		tracked_pins_set: tracked
 		cols:                    self.cols
 		rows:                    self.rows
 		pages:                   PageNodeList{}
@@ -4965,12 +4942,22 @@ pub fn (self &PageList) clone(opts PageCloneOpts) !PageList {
 		explicit_max_size:       self.explicit_max_size
 		min_max_size:            self.min_max_size
 		total_rows:              0
-		tracked_pins_storage:    [viewport_pin]
+		tracked_pins_storage:    tracked.keys
 		viewport:                .active
 		viewport_pin:            viewport_pin
 		viewport_pin_row_offset: none
 	}
 
+	pool_ready = true
+	tracked_ready = true
+	mut result_ready := false
+	defer {
+		if !result_ready {
+			cleanup_initial_pages(&result.pool, result.pages)
+			result.tracked_pins_set.deinit(result.pool.alloc)
+			result.pool.deinit()
+		}
+	}
 	for {
 		chunk := it.next() or { break }
 		new_node := result.create_page(chunk.node.data.capacity)!
@@ -4978,16 +4965,7 @@ pub fn (self &PageList) clone(opts PageCloneOpts) !PageList {
 		assert new_page.capacity.rows >= chunk.end - chunk.start
 		new_page.size.rows = chunk.end - chunk.start
 		new_page.size.cols = chunk.node.data.size.cols
-		new_page.clone_from(&chunk.node.data, chunk.start, chunk.end) or {
-			result.destroy_node(new_node)
-			mut cleanup_node := result.pages.first
-			for {
-				node := cleanup_node or { break }
-				cleanup_node = node.next
-				result.destroy_node(node)
-			}
-			return err
-		}
+		new_page.clone_from(&chunk.node.data, chunk.start, chunk.end)!
 		new_page.dirty = chunk.node.data.dirty
 
 		result.pages.append(new_node)
@@ -5001,17 +4979,19 @@ pub fn (self &PageList) clone(opts PageCloneOpts) !PageList {
 					|| old_pin.y >= chunk.end {
 					continue
 				}
-				new_pin := &Pin{
+				mut new_pin := result.pool.pins.create()!
+				unsafe { *new_pin = Pin{
 					node:    new_node
 					y:       old_pin.y - chunk.start
 					x:       old_pin.x
 					garbage: old_pin.garbage
-				}
-				result.tracked_pins_storage << new_pin
+				} }
 				unsafe {
 					mut remap := opts.tracked_pins
-					remap.put_no_clobber(old_pin, new_pin)
+					remap.put_no_clobber(old_pin, new_pin)!
 				}
+				result.tracked_pins_set.put_no_clobber(result.pool.alloc, new_pin)!
+				result.tracked_pins_storage = result.tracked_pins_set.keys
 			}
 		}
 	}
@@ -5031,6 +5011,9 @@ pub fn (self &PageList) clone(opts PageCloneOpts) !PageList {
 		result.total_rows = usize(result.rows)
 	}
 
+	result_ready = true
+	pool_ready = true
+	tracked_ready = true
 	result.assert_integrity()
 	return result
 }
