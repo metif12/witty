@@ -51,9 +51,13 @@ fn window_font_attributed_title(window ObjId) ObjId {
 	return msg_id(msg_id2(alloc('NSAttributedString'), 'initWithString:attributes:', msg_id(window, 'title'), attributes), 'autorelease')
 }
 
+fn refresh_native_window_title_attributes(window ObjId) {
+	msg_void1(msg_id(window, 'tab'), 'setAttributedTitle:', window_font_attributed_title(window))
+}
+
 fn window_font_title_changed(self ObjId, _cmd Sel, title ObjId) {
 	C.witty_window_font_super_set_title(self, title)
-	msg_void1(msg_id(self, 'tab'), 'setAttributedTitle:', window_font_attributed_title(self))
+	refresh_native_window_title_attributes(self)
 	window_font_single_line(self)
 }
 
@@ -69,7 +73,11 @@ pub fn set_native_window_title_font(view voidptr, family ?string) {
 	size := msg_f64(get_class('NSFont'), 'systemFontSize')
 	font := if name := family { C.witty_macos_msg_id_obj_f64(get_class('NSFont'), sel('fontWithName:size:'), nsstring(name), size) } else { nil_obj() }
 	C.macos_set_associated_object(window, voidptr(&native_title_font_key), font, usize(1))
-	msg_void1(window_font_title_field(window), 'setFont:', if is_nil(font) { msg_id_f64(get_class('NSFont'), 'titleBarFontOfSize:', size) } else { font })
+	display_font := if is_nil(font) { msg_id_f64(get_class('NSFont'), 'titleBarFontOfSize:', size) } else { font }
+	msg_void1(window_font_title_field(window), 'setFont:', display_font)
+	// TitlebarTabsVenturaTerminalWindow.titlebarFont also projects the font to
+	// TerminalToolbar's centered label when that custom toolbar exists.
+	if data := native_window_data(window) { msg_void1(data.title_label, 'setFont:', display_font) }
 	window_font_single_line(window)
-	msg_void1(msg_id(window, 'tab'), 'setAttributedTitle:', window_font_attributed_title(window))
+	refresh_native_window_title_attributes(window)
 }

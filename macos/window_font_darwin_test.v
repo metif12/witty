@@ -1,10 +1,14 @@
 module macos
 
+#insert "@VMODROOT/macos/window_font_test_abi.h"
+fn C.witty_window_font_test_attribute(value ObjId, name ObjId) ObjId
+
 fn C.object_setClass(object ObjId, cls ObjId) ObjId
 
 fn font_fixture_fullscreen(_self ObjId, _cmd Sel) u64 { return u64(1 << 14) }
 fn font_fixture_toolbar_name(_self ObjId, _cmd Sel) ObjId { return nsstring('NSToolbarFullScreenWindow') }
 fn font_fixture_container_name(_self ObjId, _cmd Sel) ObjId { return nsstring('NSTitlebarContainerView') }
+fn font_fixture_key_window(_self ObjId, _cmd Sel) bool { return true }
 
 fn test_source_window_title_font_and_native_tab_title_updates() {
 	app_init()
@@ -13,6 +17,10 @@ fn test_source_window_title_font_and_native_tab_title_updates() {
 	second := new_tab(640, 480, 'second')
 	defer { close_tab(first); close_tab(second) }
 	window := msg_id(second, 'window')
+	mut data := &NativeWindowData{ window: window, config: NativeWindowConfig{ titlebar_style: 2 } }
+	g_native_windows[u64(window)] = data
+	toolbar := create_terminal_toolbar(mut data)
+	msg_void1(window, 'setToolbar:', toolbar)
 	set_native_window_title_font(second, 'Menlo')
 	font := window_title_font(window)
 	assert !is_nil(font)
@@ -20,16 +28,20 @@ fn test_source_window_title_font_and_native_tab_title_updates() {
 	field := window_font_title_field(window)
 	assert !is_nil(field)
 	assert msg_id(field, 'font') == font
+	assert msg_id(data.title_label, 'font') == font
 	assert !msg_bool(field, 'usesSingleLineMode')
 	msg_void1(window, 'setTitle:', nsstring('changed title'))
 	attributed := msg_id(msg_id(window, 'tab'), 'attributedTitle')
 	assert objc_utf8_string(msg_id(attributed, 'string')) == 'changed title'
+	assert C.witty_window_font_test_attribute(attributed, nsstring('NSFont')) == font
+	assert C.witty_window_font_test_attribute(attributed, nsstring('NSColor')) == msg_id(get_class('NSColor'), if msg_bool(window, 'isKeyWindow') { 'labelColor' } else { 'secondaryLabelColor' })
 	assert !msg_bool(field, 'usesSingleLineMode')
 	set_native_window_title_font(second, 'ThisFontDoesNotExist_WittySourceAudit')
 	assert is_nil(window_title_font(window))
 	assert is_nil(msg_id(msg_id(window, 'tab'), 'attributedTitle'))
 	expected := msg_id_f64(get_class('NSFont'), 'titleBarFontOfSize:', msg_f64(get_class('NSFont'), 'systemFontSize'))
 	assert msg_id(field, 'font') == expected
+	assert msg_id(data.title_label, 'font') == expected
 	set_native_window_title_font(second, 'Menlo')
 	set_native_window_title_font(second, none)
 	assert is_nil(window_title_font(window))
@@ -37,10 +49,14 @@ fn test_source_window_title_font_and_native_tab_title_updates() {
 	assert msg_id(field, 'font') == expected
 	// AppKit subclasses still call NSWindow's title setter exactly once.
 	cls := C.macos_objc_allocate_class_pair(native_window_class(), cstr('WittyFontObservedWindow'), 0)
+	add_method(cls, 'isKeyWindow', voidptr(font_fixture_key_window), 'B@:')
 	C.macos_objc_register_class_pair(cls)
 	probe := msg_id_rect_u64_u64_bool(msg_id(cls, 'alloc'), 'initWithContentRect:styleMask:backing:defer:', objc_rect(0, 0, 640, 480), ns_window_style_titled, ns_backing_store_buffered, false)
 	msg_void1(probe, 'setTitle:', nsstring('subclass title'))
 	assert objc_utf8_string(msg_id(probe, 'title')) == 'subclass title'
+	C.macos_set_associated_object(probe, voidptr(&native_title_font_key), font, usize(1))
+	refresh_native_window_title_attributes(probe)
+	assert C.witty_window_font_test_attribute(msg_id(msg_id(probe, 'tab'), 'attributedTitle'), nsstring('NSColor')) == msg_id(get_class('NSColor'), 'labelColor')
 	msg_void(probe, 'release')
 }
 
