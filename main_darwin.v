@@ -25,6 +25,8 @@ mut:
 	surface &apprt.Surface = unsafe { nil }
 	closing bool
 	closed  bool
+	initial_width f64
+	initial_height f64
 }
 
 @[heap]
@@ -34,12 +36,17 @@ mut:
 	focused &TermState = unsafe { nil }
 	force_opaque bool
 	quick bool
+	closed bool
+	initial_frame macos.NativeWindowFrame
+	title_override ?string
 }
 
 struct StandaloneRuntime {
 mut:
 	app    &apprt.App = unsafe { nil }
 	states []&TermState
+	controllers []&TerminalController
+	undos []&ControllerUndo
 }
 
 struct StandaloneRuntimeSingleton {
@@ -121,6 +128,8 @@ fn create_surface(view voidptr, inherited apprt.SurfaceOptions) ?&TermState {
 	if macos.view_window(view) != unsafe { nil } {
 		state.controller = &TerminalController{host: macos.create_split_host(view), focused: state}
 		macos.apply_native_window_config(view, state.native_config, true, state.native_config.background, state.native_config.opacity, false)
+		state.controller.initial_frame = macos.native_window_frame(view)
+		runtime.controllers << state.controller
 	}
 
 	scale := macos.view_backing_scale(view)
@@ -143,40 +152,36 @@ fn inherited_options(state ?&TermState, context apprt.NewSurfaceContext) apprt.S
 
 fn do_new_window(source ?&TermState) bool {
 	view := macos.create_window(800, 600, '')
-	return create_surface(view, inherited_options(source, .window)) != none
+	state := create_surface(view, inherited_options(source, .window)) or { return false }
+	register_new_controller_undo(state, source, false)
+	return true
 }
 
 fn do_new_tab(source ?&TermState) bool {
 	if current := source { if macos.quick_terminal_deny_tab(current.view) { return true } }
 	view := macos.new_tab(800, 600, '')
-	return create_surface(view, inherited_options(source, .tab)) != none
+	state := create_surface(view, inherited_options(source, .tab)) or { return false }
+	register_new_controller_undo(state, source, true)
+	return true
 }
 
 fn close_state_now(mut state TermState) {
-	if state.closed {
-		return
-	}
-	state.closing = true
-	state.closed = true
-	if state.actions != unsafe { nil } { state.actions.deinit() }
-	macos.view_set_userdata(state.view, unsafe { nil })
-	if state.surface != unsafe { nil } {
-		apprt.ghostty_surface_free(mut state.surface)
-		state.surface = unsafe { nil }
-	}
-	if state.controller != unsafe { nil } && state.controller.host.tree.root.leaves().len > 1 {
-		mut controller := state.controller
-		old_tree := controller.host.tree
-		node := old_tree.root.find(state.view) or { return }
-		next := old_tree.focus_target(if old_tree.root.leaves()[0] == state.view { macos.SplitFocusDirection.next } else { macos.SplitFocusDirection.previous }, node)
-		controller.host.replace_tree(old_tree.removing(node))
-		if view := next { macos.focus_split_view(view) }
+	if state.closed || state.controller == unsafe { nil } { return }
+	state.closing = false
+	mut controller := state.controller
+	tree := controller.host.tree
+	node := tree.root.find(state.view) or { return }
+	if tree.root.leaves().len > 1 {
+		mut next := voidptr(unsafe { nil })
+		mut old_focus := voidptr(unsafe { nil })
+		if controller.focused != unsafe { nil } { old_focus = controller.focused.view }
+		if controller.focused == &state { if target := tree.focus_target(if tree.root.leaves()[0] == state.view { macos.SplitFocusDirection.next } else { macos.SplitFocusDirection.previous }, node) { next = target } }
+		replace_controller_tree(controller, tree.removing(node), next, old_focus, 'Close Terminal')
 	} else if mut quick := macos.quick_terminal_for_view(state.view) {
 		quick.hide()
-		if state.controller != unsafe { nil } { state.controller.host.replace_tree(macos.NativeSplitTree{}) }
-	} else {
-		macos.close_tab(state.view)
-	}
+		controller.host.replace_tree(macos.NativeSplitTree{})
+		collect_detached_surfaces()
+	} else { close_controller_immediately(controller, false) }
 }
 
 fn close_state_main(userdata voidptr) {
@@ -197,11 +202,11 @@ fn runtime_close_surface(userdata voidptr, confirm bool) {
 	if mut q := macos.quick_terminal_for_view(state.view) {
 		if state.controller.host.tree.root.leaves().len == 1 && !apprt.ghostty_surface_process_exited(state.surface) { q.hide(); return }
 	}
-	if confirm && !macos.confirm_close(state.view) {
-		return
-	}
-	request_close_state(mut state)
+	if confirm {
+		macos.confirm_native_controller_close(state.view, 'Close Terminal?', 'The terminal still has a running process. If you close the terminal the process will be killed.', 'Close', voidptr(state), finish_close_surface)
+	} else { request_close_state(mut state) }
 }
+fn finish_close_surface(context voidptr, confirmed bool) { if confirmed { mut state := unsafe { &TermState(context) }; request_close_state(mut state) } }
 
 fn runtime_wakeup(userdata voidptr) {
 	macos.dispatch_main(runtime_tick_main, userdata)
@@ -251,7 +256,7 @@ fn on_should_terminate() bool {
 
 fn on_reopen() bool {
 	runtime := standalone_runtime()
-	controllers := runtime.states.filter(!it.closed).len
+	controllers := runtime.controllers.filter(!it.closed).len
 	if !macos.should_create_reopen_window(false, controllers, macos.application_has_become_active()) {
 		return true
 	}
@@ -378,23 +383,14 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 			return if state != none { do_new_tab(state) } else { do_new_window(none) }
 		}
 		.close_tab, .close_window {
-			if mut current := state {
+			if current := state {
 				data := action.data
-				if action.action == .close_tab && data is apprt.CloseTabMode && data != .this {
-					return false
-				}
-				apprt.ghostty_surface_request_close(mut current.surface)
-				return true
+				mode := if data is apprt.CloseTabMode { data } else { apprt.CloseTabMode.this }
+				return do_close_controller(current, action.action == .close_window, mode)
 			}
 		}
 		.close_all_windows {
-			mut runtime := standalone_runtime()
-			for mut candidate in runtime.states.clone() {
-				if !candidate.closed && candidate.surface != unsafe { nil } {
-					apprt.ghostty_surface_request_close(mut candidate.surface)
-				}
-			}
-			return true
+			return do_close_all_controllers()
 		}
 		.render {
 			if current := state {
@@ -413,10 +409,13 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 			}
 		}
 		.initial_size {
-			if current := state {
+			if mut current := state {
 				data := action.data
 				if data is apprt.InitialSize {
-					macos.set_view_size(current.view, f64(data.width), f64(data.height))
+					scale := macos.view_backing_scale(current.view)
+					current.initial_width = f64(data.width) / scale
+					current.initial_height = f64(data.height) / scale
+					do_reset_window_size(current)
 				}
 				return true
 			}
@@ -477,6 +476,8 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 			return true
 		}
 		.size_limit, .quit_timer { return false }
+		.undo { return macos.native_undo() }
+		.redo { return macos.native_redo() }
 		else {}
 	}
 
@@ -540,8 +541,10 @@ fn main() {
 		do_new_window(none)
 	}
 	macos.app_run()
+	macos.clear_native_undo()
 
 	for mut state in runtime.states {
+		if state.closed { continue }
 		state.closed = true
 		if state.actions != unsafe { nil } { state.actions.deinit() }
 		macos.view_set_userdata(state.view, unsafe { nil })
@@ -615,8 +618,9 @@ fn on_action(userdata voidptr, action_id int) {
 			do_new_tab(state)
 		}
 		vt_action_close_tab {
-			apprt.ghostty_surface_request_close(mut state.surface)
+			do_close_controller(state, false, .this)
 		}
+		5 { do_close_controller(state, true, .this) }
 		else {}
 	}
 }

@@ -49,6 +49,7 @@ pub fn create_split_host(view voidptr) &NativeSplitHost {
 	msg_void1(container, 'addSubview:', view)
 	msg_void1(window, 'setInitialFirstResponder:', view)
 	msg_bool1(window, 'makeFirstResponder:', view)
+	msg_void(view, 'release')
 	return host
 }
 pub fn create_split_surface_view(host &NativeSplitHost) voidptr {

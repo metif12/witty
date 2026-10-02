@@ -14,7 +14,7 @@ fn do_new_split(current &TermState, direction apprt.SplitDirection) bool {
 		eprintln('failed to insert split: ${err}')
 		return false
 	}
-	controller.host.replace_tree(new_tree)
+	replace_controller_tree(controller, new_tree, view, current.view, 'New Split')
 	controller.focused = added
 	macos.focus_split_view(view)
 	return true

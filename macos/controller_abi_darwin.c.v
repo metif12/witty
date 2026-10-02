@@ -1,5 +1,8 @@
 module macos
 
+fn C.witty_controller_timer(seconds f64, target ObjId, selector Sel) ObjId
+fn C.witty_controller_register_undo(manager ObjId, target ObjId, selector Sel)
+
 #flag darwin -framework ApplicationServices
 
 #insert "@VMODROOT/macos/controller_abi.h"

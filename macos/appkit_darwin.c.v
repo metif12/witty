@@ -201,6 +201,7 @@ fn register_classes() {
 		add_method(delegate_cls, 'applicationShouldHandleReopen:hasVisibleWindows:', voidptr(vt_app_should_handle_reopen), 'B@:@B')
 		add_method(delegate_cls, 'applicationWillTerminate:', voidptr(vt_app_will_terminate), 'v@:@')
 		add_method(delegate_cls, 'windowShouldClose:', voidptr(vt_window_should_close), 'B@:@')
+		register_native_undo_methods(delegate_cls)
 		C.macos_objc_register_class_pair(delegate_cls)
 	}
 }
@@ -554,7 +555,7 @@ fn vt_window_should_close(_self ObjId, _cmd Sel, window ObjId) bool {
 	if is_nil(userdata) {
 		return true
 	}
-	g_action_cb(userdata, vt_action_close_tab)
+	g_action_cb(userdata, 5)
 	return false
 }
 
