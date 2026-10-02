@@ -1507,8 +1507,8 @@ Ten isolated worker checkouts are used in waves: this environment permits three 
 | T08 | Implemented | `9834594` | 990 unchanged Ghostty encoder differential cases matched |
 | T09 | Implemented | `0bc93b8` | Absent versus invalid progress; parser regression |
 | T10 | Implemented | `3e3a56d, 284e6b7` | All 242 key-table rows and native columns; table tests |
-| T11 | In progress | `4ddfe66, 154f46e`; workers08/01 | Real contiguous mmap backing, packed rows/cells/offset storage and memcpy relocation; native Page probe and Page/Screen/Terminal suites pass; source arena/pool/pin/clone lifecycle still being integrated |
-| T12 | In progress | `cdad202`; worker08 | Generic caller-backed offset map/refcount set and layouts/relocation validated; final AutoHash pointer/array/optional/union categories and rejected floats are being translated |
+| T11 | Implemented | `4ddfe66, 154f46e, ec1ce0c, e49db79, 06262b5, faf49b1, 00f8a38, 4956cdb, a606e15, 9281161, c80b7e1`; workers08/01 | Contiguous packed mmap storage, source arena pools/free lists/retained reset, pooled pins/pointer identity/remap and allocator failure cleanup; native Page/53 allocator events/5 PageList snapshots and full ReleaseSafe consumer suites pass |
+| T12 | In progress | `cdad202, b4d9170`; worker08 | Caller-backed generic maps/refcount sets and source AutoHash pointer/fixed array/selected union/optional/error/equality/rejection contracts pass native comparisons; final unique-representation fast path being verified |
 | T13 | Implemented | `defa489` | Caller allocator reaches payload, ArrayList and SegmentedList; allocation failure, reset, OSC/terminal/C tests |
 | T14 | Implemented | `c3267ae` | Original Oniguruma grammar and failure handling; tmux tests |
 | R01 | Implemented | `b2db4d1, 203eecb` | ConPTY/read/write HANDLE lifecycle, cancellation and NT cwd access; Darwin PTY/Exec tests and Windows COFF ABI compile pass; full Windows termio check awaits renderer target glue; Windows execution unverified |
@@ -1535,9 +1535,9 @@ Ten isolated worker checkouts are used in waves: this environment permits three 
 | S02 | Implemented | `227ebde` | Checked empty/all-padding traps and InvalidPadding warning; subprocess probes |
 | S03 | Implemented | `6cea9e6` | Source aligned libc allocation/in-place remap; alignment 1–65536 and over-32-bit growth tests |
 | S04 | Implemented | `6166ffc, ef531fb` | Exact native SDK/Breakpad build; real SIGSEGV minidump and restart local transport; clean tracked-only build |
-| S05 | In progress | `ced0309, 30b6d21, a49c083, fe11b40, b33c55b, 1b9bc49, d163a1e, ef1f85e, 0574201`; root | Source-selected native dependencies, actual VT library/export/init/install/version paths, source frame generation and benchmark/generator CLIs; C examples and native package builds pass; full package/install/generated-resource dispatch and renderer selection still being integrated |
-| S06 | In progress | `3277fc6, 38b8900, f012e5e`; root | GitVersion, channel, artifact and all four modes; ABI/version tests; production build-driver wiring still required |
-| S07 | In progress | worker05 | Pending implementation/integration |
+| S05 | In progress | `ced0309, 30b6d21, a49c083, fe11b40, b33c55b, 1b9bc49, d163a1e, ef1f85e, 0574201, 7100753, ea111be, d024dab, 7adea4d, 4dc9980`; root/worker02 | Real install/run/test/native dependencies/generators/resources/distribution/retargeted XCFramework/V native bundle graph; installed VT C examples and all generated hashes pass; managed full library and Wasm/platform compiler integration checks remain active |
+| S06 | Implemented | `3277fc6, 38b8900, f012e5e, ea111be, 4dc9980`; root | Current GitVersion/channel and four-mode/artifact options are emitted by the production artifact/host-generator/test driver; configuration/version/native installed VT checks pass; full-library metadata consumer validation underway |
+| S07 | Implemented | `8c24731`; worker05 | Actual borrowed config clone and scoped main-thread projection, logical cell-size/layout updates, source numeric/last/relative tab navigation and rejected size_limit/quit_timer; native tab tests and host typecheck pass |
 | S08 | Implemented | `af434d2` | Original startup messages and status 1; executable probes; timer subclaim corrected below |
 | S09 | Implemented | `2b553c8` | ConEmu nominal limit is not a writer-capacity rejection; regression |
 | S10 | Implemented | `2c4b036` | Xoshiro/random selection/streaming; 756 unchanged Zig differential cases matched |
@@ -1548,14 +1548,14 @@ Ten isolated worker checkouts are used in waves: this environment permits three 
 | S15 | Implemented | `4242ed4` | Actual C-backed V type factories; compiled enum holes, layout/defaults/alignment/padding/nested/zero-size cases |
 | S16 | Implemented | `930e186` | Build-time SDK/minimum-version mapping and embedding; helper tests pass; actual Apple Metal compiler unavailable |
 | SH01 | Implemented | `c7c4d5a` | Immutable split tree and native controls; model tests/host typecheck |
-| SH02 | In progress | worker05 | Pending implementation/integration |
+| SH02 | In progress | `4882e78`; worker05 | Native Quick Terminal panel/lazy surface, sizing/screen/cache/focus/Space/Dock/previous-app/animation lifecycle implemented and native geometry/cache tests pass; saved-tree restoration is being integrated with SH03 |
 | SH03 | In progress | worker05 | Pending implementation/integration |
-| SH04 | In progress | worker05 | Pending implementation/integration |
+| SH04 | Implemented | `8de10ae, d245a1f, 26053a2`; worker05 | Configured geometry/decorations/shadow/theme/opacity/blur/buttons/fullscreen exception and source Ventura titlebar/accessory layout; native window tests and host check pass; missing native config correctly remains none |
 | SH05 | Implemented | `617f532` | Four fullscreen styles and source restoration; native contract tests/typecheck |
 | SH06 | In progress | worker05 | Termination/reopen guards integrated (`c66db29`); source updater-install producer still being translated |
 | SB-01 | Implemented | `450725b` | Native text-input client, IME and key responder; native contract tests |
 | SB-02 | Implemented | `a938d46, 26c0fa6` | Native Services, drag/drop, accessibility and Swift-compatible Unicode range/grapheme cases; worker and root native tests |
-| SB-03 | In progress | `3bd3844, 0ebfcc5`; worker06 | Live search/key context/progress/bell/health/readonly/secure input/cursor/link and notification families; AppKit/control/delegate tests; remaining action families pending |
+| SB-03 | In progress | `3bd3844, 0ebfcc5, bf6684b`; worker06 | Search/key context/progress/bell/health/readonly/secure input/cursor/link/notifications and action-state cleanup integrated; remaining source native window/title/palette/inspector/scrollbar/overlay consumers active |
 | SB-04 | Implemented | `d566e33, 6bec729` | Matching-window display ID, backing refresh and true zeroing weak view lifetime; AppKit tests |
 | SB-05 | Implemented | `c56924a` | Configuration-driven menu conversion/apply/clear; native menu tests |
 | SB-06 | Implemented | `b988d4f, eb109ee` | Surface-targeted reload preserves target and rejects unresolved surfaces; native host regression |
@@ -1598,3 +1598,11 @@ needed for successful generator shutdown when stdout closes. Full macOS/GTK
 packaging and native target execution remain separate pending checks; Apple
 Metal/Xcode tools, GTK runtime and Windows/WASI execution are unavailable on
 this macOS Command Line Tools host.
+
+### Integrated generator and installed-artifact verification
+
+The actual `tools/build install` step ran into an isolated prefix with help and Unicode generator emission enabled. It installed the versioned VT library and relative aliases, all VT headers, pkg-config metadata, the source Darwin documentation placeholder, and all three generators. The four unchanged original C VT examples compiled and ran against this installed library. Generated help output matched native Zig SHA-256 `2d783d30d916b038b592d2fb9f8cd9897fc5d1bfee6eab8a48e43a16f6a0d658`. Property and symbol generator output matched the previously recorded native hashes `b32ded890688c75f0dad566e4b07060ecdbaa367c8e18f0e717fe576713dfea9` and `43bbdff55dc0787b17fa2f73cd6b183ebbaa640e999b4ca27276970e1d71d869`; the compiled Unicode byte import matched `c66888cff0007450992232712af32fa216455db60987abaa9dec00f681fb3eed`.
+
+The Unicode input was independently regenerated by the unchanged pinned uucode dependency generator with the original Ghostty build configuration. Its two-stage buildtime input matched 72,192 bytes and SHA-256 `756ffe2c8f8778509a3a37706f7767f9c8cfdcf02d436bb90f46f29136cc9f40`; the V generator did not read the finished runtime properties/symbol table to produce its output. The full u21 dependency-input/runtime-output comparison, generated runtime Unicode suite, generated CLI help suite, native plist metadata/Services check, and production driver config/version tests passed.
+
+The macOS V bundle compiler adaptation preserves source resources, Icon Composer input, project plist values, entitlements, architecture choices, signing/copy operations and run environment. Native V contract tests replace the Swift XCTest compiler step. A full app/Metal/asset-catalog/XCFramework build requires Xcode tools absent from this CLT-only environment, and is not certified by the successful plist/library tests. Direct V Wasm compilation has also exposed compiler/runtime module limitations; the artifact integration remains under investigation.
