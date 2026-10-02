@@ -465,7 +465,7 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 			if mut current := state {
 				data := action.data
 				if data is apprt.SetTitle && !current.closed && current.actions != unsafe { nil } {
-					current.actions.set_title(data.title)
+					if title := macos.source_c_utf8(data.title) { current.actions.set_title(title) }
 				}
 				return true
 			}

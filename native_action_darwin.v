@@ -106,7 +106,9 @@ fn runtime_native_action(app &apprt.App, target apprt.Target, state ?&TermState,
 		}
 		.pwd {
 			if data is apprt.PwdValue {
-				overlay.set_pwd(data.pwd, current.native_config.proxy_icon)
+				if pwd := macos.source_c_utf8(data.pwd) {
+					overlay.set_pwd(pwd, native_controller_config(current).proxy_icon)
+				}
 				return true
 			}
 		}
@@ -171,13 +173,15 @@ fn runtime_native_action(app &apprt.App, target apprt.Target, state ?&TermState,
 		}
 		.desktop_notification {
 			if data is apprt.DesktopNotificationValue {
-				overlay.desktop_notification(data.title, data.body)
+				if title := macos.source_c_utf8(data.title) {
+					if body := macos.source_c_utf8(data.body) { overlay.desktop_notification(title, body) }
+				}
 				return true
 			}
 		}
 		.start_search {
 			if data is apprt.StartSearch {
-				overlay.start_search(data.needle)
+				overlay.start_search(macos.source_c_utf8_repair(data.needle))
 				return true
 			}
 		}
@@ -216,7 +220,7 @@ fn runtime_native_action(app &apprt.App, target apprt.Target, state ?&TermState,
 		.key_table {
 			if data is apprt.KeyTable {
 				match data {
-					apprt.KeyTableActivate { overlay.set_key_table(0, data.name) }
+					apprt.KeyTableActivate { overlay.set_key_table(0, macos.source_utf8(data.name) or { '' }) }
 					apprt.KeyTableDeactivate { overlay.set_key_table(1, '') }
 					apprt.KeyTableDeactivateAll { overlay.set_key_table(2, '') }
 				}
@@ -263,7 +267,7 @@ fn runtime_native_action(app &apprt.App, target apprt.Target, state ?&TermState,
 		}
 		.mouse_over_link {
 			if data is apprt.MouseOverLink {
-				overlay.mouse_over_link(data.url)
+				overlay.mouse_over_link(macos.source_utf8(data.url) or { '' })
 				return true
 			}
 		}

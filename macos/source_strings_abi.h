@@ -1,4 +1,5 @@
-#pragma once
+#ifndef WITTY_MACOS_SOURCE_STRINGS_ABI_H
+#define WITTY_MACOS_SOURCE_STRINGS_ABI_H
 #pragma push_macro("UChar")
 #undef UChar
 #include <unicode/ustring.h>
@@ -23,3 +24,4 @@ static inline void* witty_source_c_utf8_repair(const char* source) {
     free(characters);
     return ((id (*)(id,SEL))objc_msgSend)(string,sel_registerName("autorelease"));
 }
+#endif
