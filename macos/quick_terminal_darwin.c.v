@@ -280,8 +280,10 @@ pub fn quick_terminal_deny_tab(view voidptr) bool {
 		msg_void1(alert, 'setMessageText:', nsstring('Cannot Create New Tab'))
 		msg_void1(alert, 'setInformativeText:', nsstring("Tabs aren't supported in the Quick Terminal."))
 		msg_id1(alert, 'addButtonWithTitle:', nsstring('OK'))
-		msg_void_u64(alert, 'setAlertStyle:', 2)
-		msg_void2(alert, 'beginSheetModalForWindow:completionHandler:', ObjId(view_window(view)), nil_obj()); return true
+		msg_void_u64(alert, 'setAlertStyle:', 0)
+		msg_void2(alert, 'beginSheetModalForWindow:completionHandler:', ObjId(view_window(view)), nil_obj())
+		msg_void(alert,'release')
+		return true
 	}
 	return false
 }
