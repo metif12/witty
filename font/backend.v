@@ -41,7 +41,7 @@ pub fn Backend.default_() Backend {
 	// macOS also supports "coretext_freetype" but there is no scenario
 	// that is the default. It is only used by people who want to
 	// self-compile Ghostty and prefer the freetype aesthetic.
-	$if macos {
+	$if macos || ios {
 		return .coretext
 	} $else $if wasm32 {
 		return .web_canvas

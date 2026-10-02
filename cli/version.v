@@ -33,7 +33,7 @@ fn version_output(tty bool) string {
 	output << '  - V version     : ${vversion.v_version}'
 	output << '  - build mode    : ${build_mode_name()}'
 	output << '  - app runtime   : ${runtime_name(apprt.Runtime.default())}'
-	output << '  - font engine   : ${font.Backend.default_()}'
+	output << '  - font engine   : ${font.Backend.selected_()}'
 	output << '  - renderer      : ${renderer.Backend.default_()}'
 	output << '  - libxev        : ${xev.backend()}'
 	output << platform_version_lines()

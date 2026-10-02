@@ -20,6 +20,8 @@ fn test_config_source_defaults_and_cross_target_decisions() ! {
 	assert !wasm.simd && !wasm.i18n && !wasm.sentry
 	assert wasm.renderer == 'webgl' && wasm.font_backend == 'web_canvas'
 	assert wasm.wasm_target == 'browser' && wasm.wasm_shared
+	ios := init_config(root, ['-Dtarget=aarch64-ios-simulator', '-Dversion-string=1.3.0'])!
+	assert ios.target.minimum == '17.0' && ios.font_backend == 'coretext' && ios.renderer == 'metal'
 }
 
 fn test_config_source_artifacts_overrides_and_retargeting() ! {

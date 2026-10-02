@@ -164,9 +164,9 @@ pub fn init_config(root string, args []string) !Config {
 	if gtk.exit_code == 0 { x11 = gtk.output.contains('x11'); wayland = gtk.output.contains('wayland') }
 	runtime := options['app-runtime'] or { if target.os in ['linux', 'freebsd'] { 'gtk' } else { 'none' } }
 	if runtime !in ['gtk', 'none'] { return error('invalid app-runtime') }
-	renderer := options['renderer'] or { if target.wasm() { 'webgl' } else if target.darwin() { 'metal' } else { 'opengl' } }
+	renderer := options['renderer'] or { if target.arch == 'wasm32' { 'webgl' } else if target.darwin() { 'metal' } else { 'opengl' } }
 	if renderer !in ['metal', 'opengl', 'webgl'] { return error('invalid renderer') }
-	font_backend := options['font-backend'] or { if target.wasm() { 'web_canvas' } else if target.os == 'macos' { 'coretext' } else { 'fontconfig_freetype' } }
+	font_backend := options['font-backend'] or { if target.arch == 'wasm32' { 'web_canvas' } else if target.darwin() { 'coretext' } else { 'fontconfig_freetype' } }
 	if font_backend !in ['freetype', 'fontconfig_freetype', 'coretext', 'coretext_freetype',
 		'coretext_harfbuzz', 'coretext_noshape', 'web_canvas'] { return error('invalid font-backend') }
 	emit_bench := option_bool(options, 'emit-bench', false)!
