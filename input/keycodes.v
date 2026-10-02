@@ -514,7 +514,10 @@ pub const keycodes_entries = native_keycodes_entries()
 fn native_keycodes_entries() []KeycodeFullEntry {
 	mut result := []KeycodeFullEntry{cap: raw_keycodes_entries.len}
 	for raw in raw_keycodes_entries {
-		native := $if windows { raw.windows } $else $if linux || freebsd { raw.xkb } $else { raw.mac }
+		native := $if windows { raw.windows } $else $if linux || freebsd { raw.xkb } $else $if macos || ios { raw.mac } $else {
+			$compile_error('unsupported native keycode platform')
+			u32(0)
+		}
 		result << KeycodeFullEntry{key: raw.key, usb: raw.usb, native: native, code: raw.code}
 	}
 	return result
