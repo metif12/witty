@@ -6,6 +6,7 @@ import macos
 
 fn install_native_input_callbacks() {
 	macos.set_input_client_callbacks(macos.InputClientCallbacks{
+		begin_key_down: native_begin_key_down
 		translation_mods: native_translation_mods
 		key: native_key
 		binding: native_binding

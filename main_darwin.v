@@ -16,6 +16,7 @@ import macos
 struct TermState {
 mut:
 	view    voidptr
+	actions &macos.NativeActionSurface = unsafe { nil }
 	controller &TerminalController = unsafe { nil }
 	surface &apprt.Surface = unsafe { nil }
 	closing bool
@@ -104,6 +105,9 @@ fn create_surface(view voidptr, inherited apprt.SurfaceOptions) ?&TermState {
 		return none
 	}
 	macos.view_set_userdata(view, voidptr(state))
+	state.actions = macos.new_action_surface(view, voidptr(state), macos.ActionCallbacks{binding: native_binding_action})
+	state.actions.bell_border = runtime.app.config.bell_features.border()
+	state.actions.secure_indication = runtime.app.config.macos_secure_input_indication
 	runtime.states << state
 	if macos.view_window(view) != unsafe { nil } {
 		state.controller = &TerminalController{host: macos.create_split_host(view), focused: state}
@@ -143,6 +147,7 @@ fn close_state_now(mut state TermState) {
 	}
 	state.closing = true
 	state.closed = true
+	if state.actions != unsafe { nil } { state.actions.deinit() }
 	macos.view_set_userdata(state.view, unsafe { nil })
 	if state.surface != unsafe { nil } {
 		apprt.ghostty_surface_free(mut state.surface)
@@ -196,6 +201,7 @@ fn runtime_tick_main(userdata voidptr) {
 }
 
 fn on_app_focus(focused bool) {
+	macos.secure_app_focus(focused)
 	mut runtime := standalone_runtime()
 	if runtime.app != unsafe { nil } {
 		apprt.ghostty_app_set_focus(mut runtime.app, focused)
@@ -445,7 +451,7 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 		else {}
 	}
 
-	return false
+	return runtime_native_action(app, state, action)
 }
 
 fn main() {
@@ -531,6 +537,7 @@ fn on_resize(userdata voidptr, width f64, height f64) {
 	scale := macos.view_backing_scale(state.view)
 	apprt.ghostty_surface_set_content_scale(mut state.surface, scale, scale)
 	apprt.ghostty_surface_set_size(mut state.surface, u32(width * scale), u32(height * scale))
+	if state.actions != unsafe { nil } { state.actions.resize() }
 }
 
 fn on_display(userdata voidptr, display_id u32) {
@@ -544,6 +551,7 @@ fn on_focus(userdata voidptr, focused bool) {
 	mut state := state_from_userdata(userdata) or { return }
 	if !state.closed && state.surface != unsafe { nil } {
 		apprt.ghostty_surface_set_focus(mut state.surface, focused)
+		if state.actions != unsafe { nil } { state.actions.focus(focused) }
 		if focused && state.controller != unsafe { nil } { state.controller.focused = state }
 	}
 }

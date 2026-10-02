@@ -1,0 +1,122 @@
+module main
+
+import apprt
+import input
+import macos
+import osc
+import renderer
+import terminal
+
+// Native consumers of Ghostty.App.action. Core actions are produced by the
+// translated embedded runtime; these handlers present the source native state.
+fn runtime_native_action(app &apprt.App, state ?&TermState, action apprt.RuntimeAction) bool {
+	if action.action == .secure_input {
+		data := action.data
+		if data is apprt.SecureInput {
+			if mut current := state {
+				if app.config.macos_auto_secure_input { current.actions.secure_input(int(data)) }
+			} else {
+				macos.secure_set_global(int(data))
+			}
+			return true
+		}
+	}
+	current := state or { return false }
+	if current.closed || current.actions == unsafe { nil } { return false }
+	mut overlay := current.actions
+	data := action.data
+	match action.action {
+		.start_search {
+			if data is apprt.StartSearch {
+				overlay.start_search(data.needle)
+				return true
+			}
+		}
+		.end_search {
+			overlay.end_search()
+			return true
+		}
+		.search_total {
+			if data is apprt.SearchTotal {
+				overlay.search_counts(overlay.search_selected, data.total)
+				return true
+			}
+		}
+		.search_selected {
+			if data is apprt.SearchSelected {
+				overlay.search_counts(data.selected, overlay.search_total)
+				return true
+			}
+		}
+		.key_sequence {
+			if data is apprt.KeySequence {
+				match data {
+					input.Trigger { overlay.set_key_sequence(true, data.format()) }
+					apprt.KeySequenceEnd { overlay.set_key_sequence(false, '') }
+				}
+
+				return true
+			}
+		}
+		.key_table {
+			if data is apprt.KeyTable {
+				match data {
+					apprt.KeyTableActivate { overlay.set_key_table(0, data.name) }
+					apprt.KeyTableDeactivate { overlay.set_key_table(1, '') }
+					apprt.KeyTableDeactivateAll { overlay.set_key_table(2, '') }
+				}
+
+				return true
+			}
+		}
+		.progress_report {
+			if data is osc.ProgressReport {
+				overlay.set_progress(int(data.state), data.progress)
+				return true
+			}
+		}
+		.readonly {
+			if data is apprt.Readonly {
+				overlay.set_readonly(data == .on)
+				return true
+			}
+		}
+		.ring_bell {
+			overlay.ring_bell()
+			return true
+		}
+		.renderer_health {
+			if data is renderer.Health {
+				overlay.renderer_health(data == .healthy)
+				return true
+			}
+		}
+		.mouse_shape {
+			if data is terminal.MouseShape {
+				macos.set_cursor_shape(current.view, int(data))
+				return true
+			}
+		}
+		.mouse_visibility {
+			if data is apprt.MouseVisibility {
+				macos.set_cursor_visibility(data == .visible)
+				return true
+			}
+		}
+		.mouse_over_link {
+			if data is apprt.MouseOverLink {
+				overlay.mouse_over_link(data.url)
+				return true
+			}
+		}
+		else {}
+	}
+
+	return false
+}
+
+fn native_begin_key_down(userdata voidptr) {
+	if mut state := state_from_userdata(userdata) {
+		if !state.closed && state.actions != unsafe { nil } { state.actions.begin_key_down() }
+	}
+}
