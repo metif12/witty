@@ -1,0 +1,89 @@
+module macos
+
+#insert "@VMODROOT/macos/window_zoom_abi.h"
+fn C.witty_native_os_at_least(major i64,minor i64,patch i64) bool
+
+fn native_window_split_zoom(window ObjId,_cmd Sel,_sender ObjId) {
+	view:=terminal_view_for_window(window)
+	userdata:=view_userdata(view)
+	if !is_nil(userdata) && g_action_cb != unsafe { nil } { g_action_cb(userdata,10) }
+}
+fn register_native_zoom_window_methods(cls ObjId) { add_method(cls,'splitZoom:',voidptr(native_window_split_zoom),'v@:@') }
+fn zoom_button(window ObjId,toolbar bool) ObjId {
+	button:=msg_id_rect(alloc('NSButton'),'initWithFrame:',objc_rect(0,0,20,20))
+	msg_void1(button,'setTarget:',if toolbar { nil_obj() } else { window })
+	msg_void1(button,'setAction:',sel('splitZoom:'))
+	msg_void_bool(button,'setBordered:',false)
+	msg_void_bool(button,'setAllowsExpansionToolTips:',true)
+	msg_void1(button,'setToolTip:',nsstring('Reset Zoom'))
+	msg_void1(button,'setContentTintColor:',msg_id(get_class('NSColor'),'controlAccentColor'))
+	msg_void_u64(button,'setState:',1)
+	msg_void1(button,'setImage:',msg_id1(get_class('NSImage'),'imageNamed:',nsstring('ResetZoom')))
+	msg_void_bool(button,'setTranslatesAutoresizingMaskIntoConstraints:',false)
+	for anchor in ['widthAnchor','heightAnchor'] { msg_void_bool(msg_id_f64(msg_id(button,anchor),'constraintEqualToConstant:',20),'setActive:',true) }
+	return button
+}
+fn prepare_native_zoom_views(mut data NativeWindowData) {
+	if !is_nil(data.zoom_tab_button) { return }
+	data.zoom_tab_button=zoom_button(data.window,false)
+	msg_void_bool(data.zoom_tab_button,'setHidden:',true)
+	stack:=msg_id(alloc('NSStackView'),'init')
+	msg_void_u64(stack,'setOrientation:',0)
+	C.witty_macos_priority(stack,sel('setHuggingPriority:forOrientation:'),750,0)
+	msg_void_f64(stack,'setSpacing:',4)
+	msg_void_u64(stack,'setAlignment:',10)
+	previous:=msg_id(msg_id(data.window,'tab'),'accessoryView')
+	if !is_nil(previous) { msg_void1(stack,'addArrangedSubview:',previous) }
+	msg_void1(stack,'addArrangedSubview:',data.zoom_tab_button)
+	msg_void1(msg_id(data.window,'tab'),'setAccessoryView:',stack)
+	msg_void(stack,'release')
+	data.zoom_toolbar_button=zoom_button(data.window,true)
+	if msg_u64(data.window,'styleMask') & ns_window_style_titled!=0 {
+		data.zoom_accessory=msg_id(alloc('NSTitlebarAccessoryViewController'),'init')
+		msg_void_u64(data.zoom_accessory,'setLayoutAttribute:',2)
+		container:=msg_id_rect(alloc('NSView'),'initWithFrame:',objc_rect(0,0,0,0))
+		button:=zoom_button(data.window,false)
+		msg_void1(button,'setToolTip:',nsstring('Reset Split Zoom'))
+		msg_void1(container,'addSubview:',button)
+		msg_void(button,'release')
+		msg_void1(data.zoom_accessory,'setView:',container)
+		msg_void(container,'release')
+		msg_void1(data.window,'addTitlebarAccessoryViewController:',data.zoom_accessory)
+	}
+}
+fn release_native_zoom_views(data &NativeWindowData) {
+	msg_void(data.zoom_tab_button,'release')
+	msg_void(data.zoom_toolbar_button,'release')
+	msg_void(data.zoom_accessory,'release')
+}
+fn set_zoom_accessory_attached(data &NativeWindowData,attached bool) {
+	if is_nil(data.zoom_accessory) { return }
+	items:=msg_id(data.window,'titlebarAccessoryViewControllers')
+	for i in 0 .. int(msg_u64(items,'count')) {
+		if msg_id_u64(items,'objectAtIndex:',u64(i))!=data.zoom_accessory { continue }
+		if !attached { msg_void_u64(data.window,'removeTitlebarAccessoryViewControllerAtIndex:',u64(i)) }
+		return
+	}
+	if attached && msg_u64(data.window,'styleMask') & ns_window_style_titled!=0 { msg_void1(data.window,'addTitlebarAccessoryViewController:',data.zoom_accessory) }
+}
+fn update_native_zoom_views(mut data NativeWindowData) {
+	prepare_native_zoom_views(mut data)
+	msg_void_bool(data.zoom_tab_button,'setHidden:',!data.surface_zoomed)
+	color:=msg_id(get_class('NSColor'),if msg_bool(data.window,'isKeyWindow') { 'controlAccentColor' } else { 'secondaryLabelColor' })
+	msg_void1(data.zoom_tab_button,'setContentTintColor:',color)
+	msg_void1(data.zoom_toolbar_button,'setContentTintColor:',msg_id(get_class('NSColor'),if msg_bool(data.window,'isKeyWindow') { 'controlAccentColor' } else { 'tertiaryLabelColor' }))
+	view:=msg_id(data.zoom_accessory,'view')
+	toolbar:=msg_id(data.window,'toolbar')
+	padding:=if C.witty_native_os_at_least(26,0,0) { if !is_nil(toolbar) { 10.0 } else { 5.0 } } else { if !is_nil(toolbar) { 9.0 } else { 4.0 } }
+	msg_void_rect(view,'setFrame:',objc_rect(0,0,if data.surface_zoomed { 30.0 } else { 0.0 },if data.surface_zoomed { 20.0+padding } else { 0.0 }))
+	msg_void_bool(view,'setHidden:',!data.surface_zoomed)
+	if msg_u64(msg_id(view,'subviews'),'count')>0 {
+		button:=msg_id_u64(msg_id(view,'subviews'),'objectAtIndex:',0)
+		msg_void_rect(button,'setFrame:',objc_rect(0,0,20,20))
+		msg_void1(button,'setContentTintColor:',msg_id(get_class('NSColor'),if msg_bool(data.window,'isMainWindow') { 'controlAccentColor' } else { 'secondaryLabelColor' }))
+	}
+	set_zoom_accessory_attached(data,msg_u64(msg_id(msg_id(data.window,'tabGroup'),'windows'),'count')<=1)
+}
+pub fn set_native_split_zoom(view voidptr,zoomed bool) {
+	if mut data:=native_window_data(msg_id(view,'window')) { data.surface_zoomed=zoomed; update_native_zoom_views(mut data) }
+}

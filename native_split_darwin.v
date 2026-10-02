@@ -43,3 +43,13 @@ fn do_resize_split(current &TermState, data apprt.ResizeSplit) bool {
 	macos.invalidate_native_restorable_state(host.container)
 	return true
 }
+fn do_toggle_split_zoom(current &TermState) bool {
+	if current.controller == unsafe { nil } { return false }
+	mut host:=current.controller.host
+	if host.tree.root == unsafe { nil } || host.tree.root.is_leaf() { return false }
+	node:=host.tree.root.find(current.view) or { return false }
+	host.replace_tree(macos.NativeSplitTree{root:host.tree.root,zoomed:if host.tree.zoomed==node { unsafe { &macos.NativeSplitNode(nil) } } else { node }})
+	macos.invalidate_native_restorable_state(host.container)
+	macos.focus_native_window(macos.view_window(host.container))
+	return true
+}

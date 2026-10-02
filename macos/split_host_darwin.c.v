@@ -57,6 +57,7 @@ pub fn create_split_surface_view(host &NativeSplitHost) voidptr {
 }
 pub fn (mut host NativeSplitHost) replace_tree(tree NativeSplitTree) {
 	host.tree = tree
+	set_native_split_zoom(host.container,tree.zoomed != unsafe { nil })
 	host.layout()
 }
 pub fn (mut host NativeSplitHost) layout() {

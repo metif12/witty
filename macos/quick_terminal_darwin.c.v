@@ -292,6 +292,7 @@ fn quick_window_class() ObjId {
 	cls = C.macos_objc_allocate_class_pair(get_class('NSPanel'), cstr('VTQuickTerminalWindow'), 0)
 	add_method(cls, 'canBecomeKeyWindow', voidptr(native_window_can_become_key), 'B@:')
 	add_method(cls, 'canBecomeMainWindow', voidptr(native_window_can_become_key), 'B@:')
+	register_native_zoom_window_methods(cls)
 	C.macos_objc_register_class_pair(cls)
 	return cls
 }

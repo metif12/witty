@@ -417,17 +417,7 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 			return true
 		}
 		.toggle_split_zoom {
-			if current := state {
-				if current.controller != unsafe { nil } {
-					mut host := current.controller.host
-					if host.tree.root == unsafe { nil } || host.tree.root.is_leaf() { return false }
-					node := host.tree.root.find(current.view) or { return false }
-					host.replace_tree(macos.NativeSplitTree{root: host.tree.root, zoomed: if host.tree.zoomed == node { unsafe { &macos.NativeSplitNode(nil) } } else { node }})
-					macos.invalidate_native_restorable_state(host.container)
-					macos.focus_native_window(macos.view_window(host.container))
-					return true
-				}
-			}
+			if current := state { return do_toggle_split_zoom(current) }
 		}
 		.new_tab {
 			return if state != none { do_new_tab(state) } else { do_new_window(none) }
@@ -677,6 +667,7 @@ fn on_action(userdata voidptr, action_id int) {
 			do_close_controller(state, false, .this)
 		}
 		5 { do_close_controller(state, true, .this) }
+		10 { do_toggle_split_zoom(state) }
 		else {}
 	}
 }

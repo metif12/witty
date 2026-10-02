@@ -26,6 +26,10 @@ mut:
 	new_tab_image_layer ObjId
 	backdrop_overlay ObjId
 	tab_color int
+	surface_zoomed bool
+	zoom_tab_button ObjId
+	zoom_toolbar_button ObjId
+	zoom_accessory ObjId
 }
 __global ( g_native_windows map[u64]&NativeWindowData )
 fn native_window_data(window ObjId) ?&NativeWindowData { return g_native_windows[u64(window)] or { none } }
@@ -33,6 +37,18 @@ pub fn native_tab_color(view voidptr) int { if data := native_window_data(msg_id
 pub fn set_native_tab_color(view voidptr, color int) { if mut data := native_window_data(msg_id(view,'window')) { data.tab_color = color; msg_void(data.window,'invalidateRestorableState') } }
 fn native_window_can_become_key(_self ObjId, _cmd Sel) bool { return true }
 fn native_window_update(self ObjId, cmd Sel) { C.witty_macos_window_super_void0(self, cmd); update_native_titlebar(self) }
+fn native_window_key_changed(self ObjId,cmd Sel) {
+	C.witty_macos_window_super_void0(self,cmd)
+	if mut data:=native_window_data(self) {
+		if msg_bool(self,'isKeyWindow') && msg_u64(msg_id(msg_id(self,'tabGroup'),'windows'),'count')<2 {
+			msg_void_bool(data.backdrop,'setHidden:',true)
+			msg_void_bool(data.drag_handle,'setHidden:',true)
+			msg_void_bool(data.title_label,'setHidden:',false)
+		}
+		update_native_zoom_views(mut data)
+	}
+	update_native_titlebar(self)
+}
 fn C.sel_getName(selector Sel) &char
 fn native_window_add_accessory(self ObjId, _cmd Sel, controller ObjId) {
 	if data := native_window_data(self) {
@@ -43,7 +59,10 @@ fn native_window_add_accessory(self ObjId, _cmd Sel, controller ObjId) {
 		}
 	}
 	C.witty_macos_window_super_void1(self, sel('addTitlebarAccessoryViewController:'), controller)
-	if is_tab_bar_accessory(controller) { dispatch_main(push_native_tabs, self) }
+	if is_tab_bar_accessory(controller) {
+		if data:=native_window_data(self) { set_zoom_accessory_attached(data,false) }
+		dispatch_main(push_native_tabs, voidptr(self))
+	}
 }
 fn native_window_remove_accessory(self ObjId, _cmd Sel, index u64) {
 	array := msg_id(self, 'titlebarAccessoryViewControllers')
@@ -51,6 +70,7 @@ fn native_window_remove_accessory(self ObjId, _cmd Sel, index u64) {
 	was_tabbar := is_tab_bar_accessory(controller)
 	C.witty_macos_msg_super_void_u64(self, sel('removeTitlebarAccessoryViewControllerAtIndex:'), index)
 	if was_tabbar { if data := native_window_data(self) { msg_void_bool(data.backdrop, 'setHidden:', true); msg_void_bool(data.drag_handle, 'setHidden:', true); msg_void_bool(data.title_label, 'setHidden:', false) } }
+	if was_tabbar { if data:=native_window_data(self) { set_zoom_accessory_attached(data,true) } }
 }
 fn native_drag_down(self ObjId, _cmd Sel, event ObjId) {
 	if msg_u64(event, 'type') == 1 && msg_u64(event, 'clickCount') == 1 { msg_void1(msg_id(self, 'window'), 'performWindowDragWithEvent:', event); msg_void(msg_id(get_class('NSCursor'), 'closedHandCursor'), 'set') }
@@ -66,6 +86,8 @@ fn register_native_window_class() {
 	add_method(cls, 'close', voidptr(native_window_close), 'v@:')
 	add_method(cls, 'canBecomeKeyWindow', voidptr(native_window_can_become_key), 'B@:')
 	add_method(cls, 'canBecomeMainWindow', voidptr(native_window_can_become_key), 'B@:')
+	register_native_zoom_window_methods(cls)
+	for selector in ['becomeKey','resignKey'] { add_method(cls,selector,voidptr(native_window_key_changed),'v@:') }
 	add_method(cls, 'addTitlebarAccessoryViewController:', voidptr(native_window_add_accessory), 'v@:@')
 	add_method(cls, 'removeTitlebarAccessoryViewControllerAtIndex:', voidptr(native_window_remove_accessory), 'v@:Q')
 	for selector in ['update', 'layoutIfNeeded', 'updateConstraintsIfNeeded'] { add_method(cls, selector, voidptr(native_window_update), 'v@:') }
@@ -237,6 +259,12 @@ pub fn apply_native_window_config(view voidptr, config NativeWindowConfig, initi
 		} else if !restore_last_window_position(window) { msg_void(window, 'center') }
 		for button in [u64(0), 1, 2] { msg_void_bool(msg_id_u64(window, 'standardWindowButton:', button), 'setHidden:', config.buttons_hidden) }
 	}
+	if host:=split_host(msg_id(window,'contentView')) { data.surface_zoomed=host.tree.zoomed != unsafe { nil } }
+	if config.titlebar_style==2 && is_nil(msg_id(window,'toolbar')) && msg_u64(window,'styleMask') & ns_window_style_titled!=0 {
+		msg_void1(window,'setToolbar:',create_terminal_toolbar(mut data))
+		msg_void_u64(window,'setToolbarStyle:',4)
+	}
+	update_native_zoom_views(mut data)
 	if !msg_bool(window, 'isVisible') { return }
 	appearance_name := if config.titlebar_style == 2 || config.theme == 0 { if data.light { 'NSAppearanceNameAqua' } else { 'NSAppearanceNameDarkAqua' } } else if config.theme == 2 { 'NSAppearanceNameAqua' } else if config.theme == 3 { 'NSAppearanceNameDarkAqua' } else { '' }
 	msg_void1(window, 'setAppearance:', if appearance_name.len > 0 { msg_id1(get_class('NSAppearance'), 'appearanceNamed:', nsstring(appearance_name)) } else { nil_obj() })
@@ -250,7 +278,7 @@ pub fn apply_native_window_config(view voidptr, config NativeWindowConfig, initi
 	if !config.proxy_icon { msg_void1(window, 'setRepresentedURL:', nil_obj()) }
 	reapply_hidden_native_window_style(window)
 	update_native_titlebar(window)
-	if config.titlebar_style == 2 { dispatch_main(push_native_tabs, window) }
+	if config.titlebar_style == 2 { dispatch_main(push_native_tabs, voidptr(window)) }
 	refresh_native_update_presentation()
 }
 
@@ -267,6 +295,7 @@ fn native_window_close(self ObjId,_cmd Sel) {
 	terminal_window_will_close(self)
 	msg_void2(msg_id(get_class('NSNotificationCenter'), 'defaultCenter'), 'postNotificationName:object:', nsstring('TerminalWindowWillClose'), self)
 	C.witty_macos_window_super_void0(self, sel('close'))
+	if data:=native_window_data(self) { release_native_zoom_views(data) }
 	g_native_windows.delete(u64(self))
 }
 fn restore_last_window_position(window ObjId) bool {
@@ -318,7 +347,7 @@ fn native_toolbar_defaults(_self ObjId, _cmd Sel, _toolbar ObjId) ObjId {
 }
 fn native_toolbar_item(self ObjId, _cmd Sel, _toolbar ObjId, identifier ObjId, _inserted bool) ObjId {
 	window := g_toolbar_windows[u64(self)] or { return nil_obj() }
-	data := native_window_data(window) or { return nil_obj() }
+	mut data := native_window_data(window) or { return nil_obj() }
 	item := msg_id1(alloc('NSToolbarItem'), 'initWithItemIdentifier:', identifier)
 	if objc_utf8_string(identifier) == 'TitleText' {
 		msg_void1(item, 'setView:', data.title_label)
@@ -326,6 +355,13 @@ fn native_toolbar_item(self ObjId, _cmd Sel, _toolbar ObjId, identifier ObjId, _
 		height := msg_id_f64(msg_id(data.title_label, 'heightAnchor'), 'constraintEqualToConstant:', 22)
 		msg_void_bool(height, 'setActive:', true)
 		msg_void_bool(item, 'setEnabled:', true)
+	}
+	if objc_utf8_string(identifier)=='ResetZoom' {
+		prepare_native_zoom_views(mut data)
+		msg_void1(item,'setView:',data.zoom_toolbar_button)
+		msg_void1(data.zoom_toolbar_button,'removeConstraints:',msg_id(data.zoom_toolbar_button,'constraints'))
+		msg_void_bool(msg_id_f64(msg_id(data.zoom_toolbar_button,'widthAnchor'),'constraintEqualToConstant:',22),'setActive:',true)
+		msg_void_bool(msg_id_f64(msg_id(data.zoom_toolbar_button,'heightAnchor'),'constraintEqualToConstant:',20),'setActive:',true)
 	}
 	return item
 }
