@@ -1,15 +1,74 @@
+@[has_globals]
 module gtk
 
-// Dear ImGui GTK widget translated from
-// ghostty/src/apprt/gtk/class/imgui_widget.zig. Ghostty implements this as an
-// Adw.Bin subclass; Witty's GTK classes build the same widget tree and signal
-// wiring programmatically, so this wrapper owns that tree directly.
+// Translated GhosttyImguiWidget native subclass and virtual-method contract.
+// The GL/input tree below expands the corresponding source blueprint.
 
 import cimgui
 import input
 import log
 import opengl
 import time
+
+#include "imgui_native_shims.h"
+
+fn C.witty_imgui_class_size() usize
+fn C.witty_imgui_class_set_setup(voidptr, voidptr)
+fn C.witty_imgui_class_set_render(voidptr, voidptr)
+fn C.witty_imgui_call_setup(voidptr)
+fn C.witty_imgui_call_render(voidptr)
+fn C.witty_imgui_parent_dispose(voidptr, voidptr)
+
+__global g_imgui_widget_type = GType(0)
+__global g_imgui_widget_parent = voidptr(unsafe { nil })
+const imgui_widget_wrapper_key = 'ghostty-imgui-widget-wrapper'
+
+fn imgui_widget_class_init(klass voidptr, _ voidptr) {
+	g_imgui_widget_parent = C.g_type_class_peek_parent(klass)
+	C.witty_imgui_class_set_setup(klass, voidptr(imgui_default_setup))
+	C.witty_imgui_class_set_render(klass, voidptr(imgui_default_render))
+	C.witty_gobject_class_set_dispose(klass, voidptr(imgui_native_dispose))
+}
+
+fn imgui_native_instance_init(instance voidptr, _ voidptr) {
+	_ = new_imgui_widget_instance(GtkWidget(instance))
+}
+
+fn imgui_default_setup(_ voidptr) { log.warn('default Dear ImGui setup called, this is a bug.') }
+fn imgui_default_render(_ voidptr) { log.warn('default Dear ImGui render called, this is a bug.') }
+
+fn imgui_native_dispose(obj voidptr) {
+	// Parent disposal unrealizes the GLArea before its context is destroyed.
+	C.witty_imgui_parent_dispose(g_imgui_widget_parent, obj)
+	wrapper := C.g_object_get_data(GObject(obj), &char(imgui_widget_wrapper_key.str))
+	if !isnil(wrapper) {
+		mut self := unsafe { &ImguiWidget(wrapper) }
+		self.deinit()
+		C.g_object_set_data(GObject(obj), &char(imgui_widget_wrapper_key.str), unsafe { nil })
+	}
+}
+
+pub fn imgui_widget_get_type() GType {
+	if g_imgui_widget_type == GType(0) {
+		parent := C.adw_bin_get_type()
+		mut query := C.GTypeQuery{}
+		C.g_type_query(parent, &query)
+		info := C.GTypeInfo{
+			class_size: u16(C.witty_imgui_class_size())
+			instance_size: u16(query.instance_size)
+			class_init: voidptr(imgui_widget_class_init)
+			instance_init: voidptr(imgui_native_instance_init)
+		}
+		g_imgui_widget_type = C.g_type_register_static(parent, c'GhosttyImguiWidget', &info, 0)
+	}
+	return g_imgui_widget_type
+}
+
+fn imgui_native_wrapper(obj voidptr) ?&ImguiWidget {
+	wrapper := C.g_object_get_data(GObject(obj), &char(imgui_widget_wrapper_key.str))
+	if isnil(wrapper) { return none }
+	return unsafe { &ImguiWidget(wrapper) }
+}
 
 pub type ImguiWidgetCallback = fn (voidptr)
 
@@ -36,7 +95,19 @@ fn C.gtk_widget_remove_tick_callback(widget GtkWidget, id u32)
 fn C.g_object_weak_unref(object GObject, notify voidptr, data voidptr)
 
 pub fn new_imgui_widget(setup_fn ImguiWidgetCallback, render_fn ImguiWidgetCallback, user_data voidptr) &ImguiWidget {
-	widget := GtkWidget(C.g_object_new(C.adw_bin_get_type(), &char(unsafe { nil })))
+	return new_imgui_widget_type(imgui_widget_get_type(), setup_fn, render_fn, user_data)
+}
+
+fn new_imgui_widget_type(native_type GType, setup_fn ImguiWidgetCallback, render_fn ImguiWidgetCallback, user_data voidptr) &ImguiWidget {
+	widget := GtkWidget(C.g_object_new(native_type, &char(unsafe { nil })))
+	mut self := imgui_native_wrapper(widget) or { panic('native ImGui instance did not initialize') }
+	if setup_fn != unsafe { nil } { self.setup_fn = setup_fn }
+	if render_fn != unsafe { nil } { self.render_fn = render_fn }
+	if !isnil(user_data) { self.user_data = user_data }
+	return self
+}
+
+fn new_imgui_widget_instance(widget GtkWidget) &ImguiWidget {
 	gl_area := C.gtk_gl_area_new()
 	C.gtk_widget_add_css_class(widget, c'imgui')
 	C.gtk_widget_set_hexpand(widget, 1)
@@ -54,10 +125,8 @@ pub fn new_imgui_widget(setup_fn ImguiWidgetCallback, render_fn ImguiWidgetCallb
 		widget:     widget
 		gl_area:    gl_area
 		im_context: C.gtk_im_multicontext_new()
-		setup_fn:   setup_fn
-		render_fn:  render_fn
-		user_data:  user_data
 	}
+	C.g_object_set_data(GObject(widget), &char(imgui_widget_wrapper_key.str), voidptr(self))
 	C.g_signal_connect_data(gl_area, c'realize', GCallback(voidptr(imgui_glarea_realize_cb)), voidptr(self), unsafe { nil }, 0)
 	C.g_signal_connect_data(gl_area, c'unrealize', GCallback(voidptr(imgui_glarea_unrealize_cb)), voidptr(self), unsafe { nil }, 0)
 	C.g_signal_connect_data(gl_area, c'resize', GCallback(voidptr(imgui_glarea_resize_cb)), voidptr(self), unsafe { nil }, 0)
@@ -124,21 +193,11 @@ pub fn (self &ImguiWidget) queue_render() {
 // setup calls the widget's setup virtual method. The correct Dear ImGui
 // context is current when this is invoked by realize.
 pub fn (self &ImguiWidget) setup() {
-	if self.setup_fn != unsafe { nil } {
-		self.setup_fn(self.user_data)
-	} else {
-		log.warn('default Dear ImGui setup called, this is a bug.')
-	}
+	if !isnil(self.widget) { C.witty_imgui_call_setup(self.widget) }
 }
 
-// render calls the widget's per-frame render virtual method. The correct Dear
-// ImGui context is current when this is invoked by gl_area_render.
 pub fn (self &ImguiWidget) render() {
-	if self.render_fn != unsafe { nil } {
-		self.render_fn(self.user_data)
-	} else {
-		log.warn('default Dear ImGui render called, this is a bug.')
-	}
+	if !isnil(self.widget) { C.witty_imgui_call_render(self.widget) }
 }
 
 // set_current_context preserves the source boundary even though the cimgui V

@@ -1,3 +1,4 @@
+@[has_globals]
 module gtk
 
 import inspector as inspectorpkg
@@ -10,6 +11,71 @@ import log
 // The source uses GObject subclasses and blueprint templates. Witty's GTK
 // runtime expands those templates programmatically, while preserving the same
 // ownership and activation lifecycle.
+
+__global g_inspector_widget_type = GType(0)
+__global g_inspector_widget_parent = voidptr(unsafe { nil })
+
+fn inspector_widget_class_init(klass voidptr, _ voidptr) {
+	g_inspector_widget_parent = C.g_type_class_peek_parent(klass)
+	C.witty_imgui_class_set_setup(klass, voidptr(inspector_native_setup))
+	C.witty_imgui_class_set_render(klass, voidptr(inspector_native_render))
+	C.witty_gobject_class_set_get_property(klass, voidptr(inspector_native_get_property))
+	C.witty_gobject_class_set_set_property(klass, voidptr(inspector_native_set_property))
+	C.witty_gobject_class_set_dispose(klass, voidptr(inspector_native_dispose))
+	C.g_object_class_install_property(klass, 1, C.g_param_spec_object(c'surface', c'surface', c'surface', terminal_surface_get_type(), g_param_readwrite))
+}
+
+pub fn inspector_widget_get_type() GType {
+	if g_inspector_widget_type == GType(0) {
+		parent := imgui_widget_get_type()
+		mut query := C.GTypeQuery{}
+		C.g_type_query(parent, &query)
+		info := C.GTypeInfo{class_size: u16(query.class_size), instance_size: u16(query.instance_size), class_init: voidptr(inspector_widget_class_init), instance_init: voidptr(inspector_native_instance_init)}
+		g_inspector_widget_type = C.g_type_register_static(parent, c'GhosttyInspectorWidget', &info, 0)
+	}
+	return g_inspector_widget_type
+}
+
+fn inspector_native_instance_init(obj voidptr, _ voidptr) {
+	mut imgui := imgui_native_wrapper(obj) or { panic('native inspector parent did not initialize') }
+	self := &InspectorWidget{imgui: imgui}
+	imgui.user_data = voidptr(self)
+	imgui.setup_fn = inspector_widget_setup_cb
+	imgui.render_fn = inspector_widget_render_cb
+	C.gtk_widget_add_css_class(GtkWidget(obj), c'inspector')
+}
+
+fn inspector_native_setup(obj voidptr) {
+	self := imgui_native_wrapper(obj) or { return }
+	if self.setup_fn != unsafe { nil } { self.setup_fn(self.user_data) }
+}
+fn inspector_native_render(obj voidptr) {
+	self := imgui_native_wrapper(obj) or { return }
+	if self.render_fn != unsafe { nil } { self.render_fn(self.user_data) }
+}
+fn inspector_native_get_property(obj voidptr, id u32, value voidptr, _ voidptr) {
+	if id != 1 { return }
+	imgui := imgui_native_wrapper(obj) or { C.g_value_set_object(value, unsafe { nil }); return }
+	self := unsafe { &InspectorWidget(imgui.user_data) }
+	C.g_value_set_object(value, if isnil(self.surface) { unsafe { nil } } else { voidptr(self.surface.widget) })
+}
+fn inspector_native_set_property(obj voidptr, id u32, value voidptr, _ voidptr) {
+	if id != 1 { return }
+	imgui := imgui_native_wrapper(obj) or { return }
+	mut self := unsafe { &InspectorWidget(imgui.user_data) }
+	object := C.g_value_get_object(value)
+	if isnil(object) { self.set_surface(none) } else {
+		priv := terminal_surface_priv(object)
+		if !isnil(priv.wrapper) { self.set_surface(unsafe { &SurfaceWidget(priv.wrapper) }) }
+	}
+}
+fn inspector_native_dispose(obj voidptr) {
+	if imgui := imgui_native_wrapper(obj) {
+		mut self := unsafe { &InspectorWidget(imgui.user_data) }
+		self.set_surface(none)
+	}
+	C.witty_imgui_parent_dispose(g_inspector_widget_parent, obj)
+}
 
 @[heap]
 pub struct InspectorWidget {
@@ -27,9 +93,8 @@ mut:
 }
 
 fn new_inspector_widget(surface &SurfaceWidget) &InspectorWidget {
-	mut self := &InspectorWidget{}
-	self.imgui = new_imgui_widget(inspector_widget_setup_cb, inspector_widget_render_cb, voidptr(self))
-	C.gtk_widget_add_css_class(self.imgui.as_widget(), c'inspector')
+	imgui := new_imgui_widget_type(inspector_widget_get_type(), unsafe { nil }, unsafe { nil }, unsafe { nil })
+	mut self := unsafe { &InspectorWidget(imgui.user_data) }
 	self.set_surface(surface)
 	return self
 }
