@@ -1,0 +1,157 @@
+{
+  "module_name": "main",
+  "native_v": "pub struct NativeNested { pub: value u32 }\npub fn (self NativeNested) cval() NestedC { return NestedC{value:self.value + 1} }\npub type NativeUnion = NativeNested | u32\nfn C.witty_abi_alignment() usize\nfn C.witty_abi_offset() usize\nfn main() {\n assert sizeof(EmptyCTag)==4\n\n assert sizeof(AlignedC)==16\n assert C.witty_abi_alignment()==8\n assert C.witty_abi_offset()==8\n assert sizeof(NativeOnlyC)==0\n assert sizeof(NativeOnlyCValue)==0\n assert sizeof(NativeAlias)==sizeof(NativeNested)\n\n assert int(CTag.a)==0\n assert int(CTag.b)==2\n assert int(VTag.b)==1\n assert sizeof(NestedC)==4\n assert NestedC{}.value==7\n assert sizeof(PaddedCValue)==8\n assert sizeof(PaddedC)==16\n plain:=padded_cval(NativeUnion(u32(42)))\n assert plain.tag==.a\n unsafe {assert plain.value.a==42}\n nested:=padded_cval(NativeUnion(NativeNested{value:99}))\n assert nested.tag==.b\n unsafe {assert nested.value.b.value==100}\n value:=PaddedBValue{value:7}\n assert value.value==7\n}\n",
+  "native_c": "typedef struct NativeNested { uint32_t value; } NativeNested;\n#define witty_abi_alignment() _Alignof(AlignedC)\n#define witty_abi_offset() offsetof(AlignedC, value)",
+  "enums": [
+    {
+      "target": "c",
+      "name": "CTag",
+      "keys": [
+        {
+          "name": "a"
+        },
+        {
+          "removed": true
+        },
+        {
+          "name": "b"
+        }
+      ]
+    },
+    {
+      "target": "native",
+      "name": "VTag",
+      "keys": [
+        {
+          "name": "a"
+        },
+        {
+          "removed": true
+        },
+        {
+          "name": "b"
+        }
+      ]
+    },
+    {
+      "target": "c",
+      "name": "EmptyCTag",
+      "keys": [
+        {
+          "removed": true
+        }
+      ]
+    }
+  ],
+  "structs": [
+    {
+      "target": "c",
+      "name": "NestedC",
+      "native_type": "NativeNested",
+      "fields": [
+        {
+          "name": "value",
+          "typ": {
+            "v_type": "u32",
+            "c_type": "uint32_t"
+          },
+          "default_value": "7"
+        }
+      ]
+    },
+    {
+      "target": "c",
+      "name": "AlignedC",
+      "fields": [
+        {
+          "name": "prefix",
+          "typ": {
+            "v_type": "u8",
+            "c_type": "uint8_t"
+          }
+        },
+        {
+          "name": "value",
+          "typ": {
+            "v_type": "u32",
+            "c_type": "uint32_t"
+          },
+          "alignment": 8
+        }
+      ]
+    },
+    {
+      "target": "native",
+      "name": "NativeAlias",
+      "native_type": "NativeNested"
+    }
+  ],
+  "unions": [
+    {
+      "target": "c",
+      "name": "Padded",
+      "native_type": "NativeUnion",
+      "tag_type": "CTag",
+      "padding": {
+        "v_type": "u64",
+        "c_type": "uint64_t"
+      },
+      "fields": [
+        {
+          "name": "a",
+          "variant": "u32",
+          "typ": {
+            "v_type": "u32",
+            "c_type": "uint32_t"
+          }
+        },
+        {
+          "name": "b",
+          "variant": "NativeNested",
+          "typ": {
+            "kind": "structure",
+            "v_type": "NativeNested",
+            "c_type": "NativeNested",
+            "has_c": true,
+            "c_v_type": "NestedC",
+            "c_c_type": "NestedC",
+            "has_cval": true
+          }
+        }
+      ]
+    },
+    {
+      "target": "native",
+      "name": "NativeOnly",
+      "native_type": "NativeUnion",
+      "tag_type": "CTag",
+      "padding": {
+        "v_type": "u64",
+        "c_type": "uint64_t"
+      },
+      "fields": [
+        {
+          "name": "a",
+          "variant": "u32",
+          "typ": {
+            "v_type": "u32",
+            "c_type": "uint32_t"
+          }
+        },
+        {
+          "name": "b",
+          "variant": "NativeNested",
+          "typ": {
+            "kind": "structure",
+            "v_type": "NativeNested",
+            "c_type": "NativeNested",
+            "has_c": true,
+            "c_v_type": "NestedC",
+            "c_c_type": "NestedC",
+            "has_cval": true
+          }
+        }
+      ]
+    }
+  ]
+}
