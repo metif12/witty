@@ -7,8 +7,10 @@ module main
 import core
 import apprt.gtk
 import global_state
+import source_startup
 
 fn main() {
+	source_startup.prepare()
 	mut state := global_state.get_state_mut()
 	state.init() or {
 		eprintln(startup_error_message(err))

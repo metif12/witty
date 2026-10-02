@@ -6,7 +6,9 @@ pub type PipeFd = int
 
 // pipe() that works on POSIX systems. This sets CLOEXEC on the file
 // descriptors. Returns [read_fd, write_fd].
-pub fn pipe() ![2]PipeFd {
+// The native fd_t alias is an int. Returning the primitive fixed-array type
+// avoids V 0.5.2 generating an inconsistent result typedef for alias elements.
+pub fn pipe() ![2]int {
 	mut fds := [2]int{}
 	if C.pipe(&fds[0]) != 0 {
 		return os.error_posix()
@@ -37,4 +39,3 @@ fn set_cloexec(fd int) ! {
 		return os.error_posix()
 	}
 }
-
