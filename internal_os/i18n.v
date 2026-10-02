@@ -1,8 +1,11 @@
 module internal_os
 
-import dl
+import math
 import log
 import os
+
+#flag -I @VMODROOT/internal_os
+#include "i18n_shims.h"
 
 const ghostty_gettext_domain = 'com.mitchellh.ghostty'
 
@@ -36,51 +39,33 @@ pub const supported_locales = [
 	'lt_LT.UTF-8',
 ]!
 
-type GettextFunction = fn (&char, &char) &char
-
-type BindTextDomainFunction = fn (&char, &char) &char
-
-type TextDomainFunction = fn (&char) &char
-
-struct I18nState {
-mut:
-	handle          voidptr
-	dgettext_symbol voidptr
-	bind_symbol     voidptr
-	domain_symbol   voidptr
+$if !no_i18n ? {
+	#flag darwin @VMODROOT/.witty-build/native/libintl.a
+	#flag freebsd -lintl
 }
 
-struct I18nStateSingleton {
-mut:
-	state I18nState
-}
+fn C.bindtextdomain(&char, &char) &char
+fn C.textdomain(&char) &char
+fn C.dgettext(&char, &char) &char
+fn C._libintl_locale_name_canonicalize(&char)
 
-const i18n_state_singleton = &I18nStateSingleton{}
-
-fn get_i18n_state() &I18nState {
-	return unsafe { &i18n_state_singleton.state }
-}
-
-// init binds Ghostty's gettext domain to the locale directory adjacent to the
-// application resource directory. If gettext is unavailable the application
-// remains usable and translations fall back to their message IDs.
+// init binds the same linked gettext implementation selected by Ghostty.
 pub fn init(resources_dir string) ! {
-	$if windows {
-		return
+	$if no_i18n ? { return } $else $if i18n ? {
+		i18n_init_enabled(resources_dir)!
+	} $else $if macos || ios || ((linux || freebsd) && glibc) {
+		i18n_init_enabled(resources_dir)!
 	}
+}
+
+fn i18n_init_enabled(resources_dir string) ! {
+	$if windows { return }
 	share_dir := i18n_share_dir(resources_dir) or { return error('InvalidResourcesDir') }
-	load_gettext() or { return }
-	state := get_i18n_state()
-	if isnil(state.bind_symbol) {
-		return
-	}
 	locale_dir := os.join_path(share_dir, 'locale')
+	if locale_dir.len >= 4096 { return error('OutOfMemory') }
 	log.debug('binding domain=${ghostty_gettext_domain} path=${locale_dir}')
-	unsafe {
-		bind := BindTextDomainFunction(state.bind_symbol)
-		if isnil(bind(&char(ghostty_gettext_domain.str), &char(locale_dir.str))) {
-			return error('unable to bind gettext domain')
-		}
+	if isnil(C.bindtextdomain(&char(ghostty_gettext_domain.str), &char(locale_dir.str))) {
+		return error('OutOfMemory')
 	}
 }
 
@@ -110,46 +95,32 @@ fn i18n_share_dir(path string) ?string {
 	return path[..end]
 }
 
-// init_global_domain makes unqualified gettext calls use Ghostty's
-// domain. Fully owning runtimes such as GTK call this during startup.
 pub fn init_global_domain() ! {
-	load_gettext() or { return }
-	state := get_i18n_state()
-	if isnil(state.domain_symbol) {
-		return
-	}
-	unsafe {
-		set_domain := TextDomainFunction(state.domain_symbol)
-		if isnil(set_domain(&char(ghostty_gettext_domain.str))) {
-			return error('unable to set gettext domain')
-		}
+	$if no_i18n ? { return } $else $if i18n ? {
+		i18n_global_domain_enabled()!
+	} $else $if macos || ios || ((linux || freebsd) && glibc) {
+		i18n_global_domain_enabled()!
 	}
 }
 
-// translate_c translates a null-terminated message and preserves gettext's
-// stable pointer contract. The input pointer is returned when no catalog or
-// gettext runtime is available.
+fn i18n_global_domain_enabled() ! {
+	if isnil(C.textdomain(&char(ghostty_gettext_domain.str))) { return error('OutOfMemory') }
+}
+
 pub fn translate_c(msgid &char) &char {
-	if isnil(msgid) {
-		return unsafe { msgid }
-	}
-	load_gettext() or { return unsafe { msgid } }
-	state := get_i18n_state()
-	if isnil(state.dgettext_symbol) {
-		return unsafe { msgid }
-	}
-	unsafe {
-		gettext := GettextFunction(state.dgettext_symbol)
-		return gettext(&char(ghostty_gettext_domain.str), msgid)
-	}
+	$if no_i18n ? { return unsafe { msgid } } $else $if i18n ? {
+		return i18n_translate_enabled(msgid)
+	} $else $if macos || ios || ((linux || freebsd) && glibc) {
+		return i18n_translate_enabled(msgid)
+	} $else { return unsafe { msgid } }
+}
+
+fn i18n_translate_enabled(msgid &char) &char {
+	return C.dgettext(&char(ghostty_gettext_domain.str), msgid)
 }
 
 pub fn translate(msgid string) string {
-	translated := translate_c(&char(msgid.str))
-	if isnil(translated) {
-		return msgid
-	}
-	return unsafe { cstring_to_vstring(translated) }
+	return unsafe { cstring_to_vstring(translate_c(&char(msgid.str))) }
 }
 
 // static_locale is the V equivalent of Ghostty's compile-time locale
@@ -164,77 +135,58 @@ pub fn static_locale(value string) string {
 	panic('unsupported locale: ${value}')
 }
 
-// canonicalize_locale handles the locale spellings that gettext does not
-// canonicalize correctly on Darwin. Other locale names are normalized to
-// POSIX separators while preserving their encoding suffix.
+// canonicalize_locale_into is the original bounded in-place wrapper around
+// gettext's unchanged gnulib canonicalizer. The Chinese override deliberately
+// requires three components; two-component spellings go through gnulib.
+pub fn canonicalize_locale_into(mut buffer []u8, locale string) !string {
+	$if no_i18n ? {
+		return copy_locale(mut buffer, locale)
+	} $else $if i18n ? {
+		return canonicalize_locale_enabled(mut buffer, locale)
+	} $else $if macos || ios || ((linux || freebsd) && glibc) {
+		return canonicalize_locale_enabled(mut buffer, locale)
+	} $else { return copy_locale(mut buffer, locale) }
+}
+
+fn copy_locale(mut buffer []u8, locale string) !string {
+	if buffer.len < locale.len + 1 { return error('NoSpaceLeft') }
+	copy(mut buffer[..locale.len], locale.bytes())
+	buffer[locale.len] = 0
+	return buffer[..locale.len].bytestr()
+}
+
+fn canonicalize_locale_enabled(mut buffer []u8, locale string) !string {
+	if fixed := fix_zh_locale(locale) {
+		if buffer.len < fixed.len + 1 { return error('NoSpaceLeft') }
+		copy(mut buffer[..fixed.len], fixed.bytes())
+		buffer[fixed.len] = 0
+		return buffer[..fixed.len].bytestr()
+	}
+	if buffer.len < math.max(16, locale.len + 1) { return error('NoSpaceLeft') }
+	copy(mut buffer[..locale.len], locale.bytes())
+	buffer[locale.len] = 0
+	C._libintl_locale_name_canonicalize(unsafe { &char(buffer.data) })
+	mut len := 0
+	for len < buffer.len && buffer[len] != 0 { len++ }
+	return buffer[..len].bytestr()
+}
+
 pub fn canonicalize_locale(locale string) string {
+	mut buffer := []u8{len: math.max(16, locale.len + 1)}
+	return canonicalize_locale_into(mut buffer, locale) or { panic(err) }
+}
+
+fn fix_zh_locale(locale string) ?string {
 	parts := locale.split('-')
-	if parts.len >= 2 && parts[0] == 'zh' {
-		script := parts[1]
-		region := if parts.len >= 3 { parts[2] } else { '' }
-		if script == 'Hans' {
-			return if region == 'SG' { 'zh_SG' } else { 'zh_CN' }
-		}
-		if script == 'Hant' {
-			return match region {
-				'MO' { 'zh_MO' }
-				'HK' { 'zh_HK' }
-				else { 'zh_TW' }
-			}
-		}
+	if parts.len < 3 || parts[0] != 'zh' { return none }
+	if parts[1] == 'Hans' {
+		return if parts[2] == 'SG' { 'zh_SG' } else { 'zh_CN' }
 	}
-	return locale.replace('-', '_')
+	if parts[1] == 'Hant' {
+		return match parts[2] { 'MO' { 'zh_MO' } 'HK' { 'zh_HK' } else { 'zh_TW' } }
+	}
+	return none
 }
 
-pub fn shutdown_i18n() {
-	mut state := get_i18n_state()
-	if !isnil(state.handle) {
-		dl.close(state.handle)
-	}
-	state.handle = unsafe { nil }
-	state.dgettext_symbol = unsafe { nil }
-	state.bind_symbol = unsafe { nil }
-	state.domain_symbol = unsafe { nil }
-}
-
-fn load_gettext() ! {
-	mut state := get_i18n_state()
-	if !isnil(state.handle) {
-		return
-	}
-
-	candidates := $if macos {
-		['/opt/homebrew/opt/gettext/lib/libintl.8.dylib',
-			'/usr/local/opt/gettext/lib/libintl.8.dylib', 'libintl.8.dylib', 'libintl.dylib']
-	} $else $if linux {
-		[
-			'libc.so.6',
-			'libintl.so.8',
-			'libintl.so',
-		]
-	} $else $if freebsd {
-		['libintl.so', 'libintl.so.8']
-	} $else {
-		[]string{}
-	}
-
-	for candidate in candidates {
-		handle := dl.open(candidate, dl.rtld_lazy | dl.rtld_local)
-		if isnil(handle) {
-			continue
-		}
-		dgettext_symbol := dl.sym(handle, 'dgettext')
-		bind_symbol := dl.sym(handle, 'bindtextdomain')
-		domain_symbol := dl.sym(handle, 'textdomain')
-		if isnil(dgettext_symbol) || isnil(bind_symbol) || isnil(domain_symbol) {
-			dl.close(handle)
-			continue
-		}
-		state.handle = handle
-		state.dgettext_symbol = dgettext_symbol
-		state.bind_symbol = bind_symbol
-		state.domain_symbol = domain_symbol
-		return
-	}
-	return error('gettext runtime not found')
-}
+// The source linked library has process lifetime and no shutdown hook.
+pub fn shutdown_i18n() {}

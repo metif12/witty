@@ -31,3 +31,8 @@ pub const slow_runtime_safety = $if prod {
 pub const oniguruma = $if no_oniguruma ? { false } $else { true }
 pub const kitty_graphics = oniguruma
 pub const tmux_control_mode = oniguruma
+
+// Config.zig enables gettext on Darwin and GNU-libc Unix targets. An explicit
+// build option overrides that default, including identity canonicalization.
+const default_i18n = $if macos || ios { true } $else $if (linux || freebsd) && glibc { true } $else { false }
+pub const i18n = $if no_i18n ? { false } $else $if i18n ? { true } $else { default_i18n }

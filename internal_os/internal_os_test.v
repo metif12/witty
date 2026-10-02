@@ -1,6 +1,7 @@
 module internal_os
 
 import os
+import buildcfg
 
 fn test_desktop_environment_tag_layout_matches_source() {
 	assert sizeof(DesktopEnvironment) == 1
@@ -457,13 +458,16 @@ fn test_click_interval_matches_platform_contract() {
 }
 
 fn test_i18n_locale_canonicalization() {
-	assert canonicalize_locale('en_US') == 'en_US'
-	assert canonicalize_locale('en-US') == 'en_US'
-	assert canonicalize_locale('zh-Hans') == 'zh_CN'
-	assert canonicalize_locale('zh-Hans-SG') == 'zh_SG'
-	assert canonicalize_locale('zh-Hant') == 'zh_TW'
-	assert canonicalize_locale('zh-Hant-HK') == 'zh_HK'
-	assert canonicalize_locale('zh-Hant-MO') == 'zh_MO'
+	$if macos || ios {
+		if !buildcfg.i18n { assert canonicalize_locale('zh-Hans') == 'zh-Hans'; return }
+		assert canonicalize_locale('en_US') == 'en_US'
+		assert canonicalize_locale('en-US') == 'en_US'
+		assert canonicalize_locale('zh-Hans') == 'zh_CN'
+		assert canonicalize_locale('zh-Hans-SG') == 'zh_SG'
+		assert canonicalize_locale('zh-Hant') == 'zh_TW'
+		assert canonicalize_locale('zh-Hant-HK') == 'zh_HK'
+		assert canonicalize_locale('zh-Hant-MO') == 'zh_MO'
+	}
 }
 
 fn test_i18n_unknown_message_falls_back_to_msgid() {
