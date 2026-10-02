@@ -396,6 +396,7 @@ module font
 
 import datastruct
 import fastmem
+import font.feature as feature_parser
 import harfbuzz
 import io
 import math
@@ -1396,12 +1397,19 @@ struct ShaperCodepoint {
 }
 
 pub fn Shaper.init(opts ShaperOptions) !Shaper {
-	mut feats := []harfbuzz.Feature{}
-	mut feature_names := ['liga']
-	feature_names << opts.features
-	for feature in feature_names {
-		if parsed := harfbuzz.Feature.from_string(feature) {
-			feats << parsed
+	mut feature_list := feature_parser.FeatureList{
+		features: feature_parser.default_features.clone()
+	}
+	for setting in opts.features {
+		feature_list.append_from_string(setting)
+	}
+	mut feats := []harfbuzz.Feature{cap: feature_list.features.len}
+	for setting in feature_list.features {
+		feats << harfbuzz.Feature{
+			tag: u32(setting.tag[0]) << 24 | u32(setting.tag[1]) << 16 | u32(setting.tag[2]) << 8 | u32(setting.tag[3])
+			value: setting.value
+			start: harfbuzz.feature_global_start
+			end: harfbuzz.feature_global_end
 		}
 	}
 	return Shaper{
@@ -1443,7 +1451,7 @@ pub fn (mut s Shaper) shape(run TextRun) ![]ShapeCell {
 	}
 	mut grid := unsafe { grid_ptr }
 	face := grid.resolver.collection.get_face(run.font_index)!
-	feature_start := if face.quirks_disable_default_font_features { 1 } else { 0 }
+	feature_start := if face.quirks_disable_default_font_features { feature_parser.default_features.len } else { 0 }
 	face.ft_mutex.lock()
 	harfbuzz.shape(face.hb_font, s.hb_buf, s.hb_feats[feature_start..])
 	face.ft_mutex.unlock()

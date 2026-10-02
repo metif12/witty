@@ -156,3 +156,15 @@ fn test_public_run_iterator_propagates_hook_errors() {
 	}
 	assert false, 'expected the shaping hook error'
 }
+
+fn test_live_harfbuzz_shaper_uses_source_feature_list_parser() {
+	mut shaper := Shaper.init(ShaperOptions{ features: ['-liga,+dlig', 'kern==1'] })!
+	defer { shaper.deinit() }
+	assert shaper.hb_feats.len == 4
+	assert shaper.hb_feats[1].tag == 0x6c696761
+	assert shaper.hb_feats[1].value == 0
+	assert shaper.hb_feats[2].tag == 0x646c6967
+	assert shaper.hb_feats[2].value == 1
+	assert shaper.hb_feats[3].tag == 0x6b65726e
+	assert shaper.hb_feats[3].value == 1
+}
