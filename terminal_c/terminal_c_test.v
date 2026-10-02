@@ -355,3 +355,12 @@ fn test_sgr_wasm_attribute_allocation_helpers() {
 	assert attr.tag == .unset
 	wasm_free_attribute(attr)
 }
+
+// src/terminal/c/key_event.zig truncates the ABI u32 to the event's u21.
+fn test_unshifted_codepoint_truncates_to_source_u21() {
+	mut event := key_event_new()
+	for raw in [u32(0), 0x1fffff, 0x200001, 0xffffffff] {
+		event.set_unshifted_codepoint(raw)
+		assert event.get_unshifted_codepoint() == raw & 0x1fffff
+	}
+}

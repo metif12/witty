@@ -163,7 +163,7 @@ pub fn (self &KeyEvent) get_utf8() string {
 }
 
 pub fn (mut self KeyEvent) set_unshifted_codepoint(codepoint u32) {
-	self.event.unshifted_codepoint = codepoint
+	self.event.unshifted_codepoint = codepoint & 0x1fffff
 }
 
 pub fn (self &KeyEvent) get_unshifted_codepoint() u32 {
