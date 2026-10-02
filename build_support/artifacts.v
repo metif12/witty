@@ -9,7 +9,8 @@ fn compiler_argument(value string) string {
 }
 
 pub fn (d Driver) v_arguments(artifact Artifact, deps NativeDeps) ![]string {
-	mut args := [d.cfg.compiler, '-path', '${d.cfg.root}|@vlib|@vmodules', '-cc', os.getenv_opt('CC') or {
+	module_path := d.compiler_module_path()!
+	mut args := [d.cfg.compiler, '-path', module_path, '-cc', os.getenv_opt('CC') or {
 		'clang'
 	},
 		'-d', 'managed_native']

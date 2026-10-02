@@ -29,7 +29,7 @@ pub fn (d Driver) host_tool(name string, folder string) !string {
 	output := d.cache_path('host', name)
 	os.mkdir_all(os.dir(output))!
 	// The source host generators do not initialize crash, SIMD, or gettext.
-	mut args := [d.cfg.compiler, '-path', '${d.cfg.root}|@vlib|@vmodules', '-d', 'no_i18n']
+	mut args := [d.cfg.compiler, '-path', d.compiler_module_path()!, '-d', 'no_i18n']
 	args << compile_options(d.cfg.root, .debug, .exe, d.cfg.version)!
 	args << ['-cflags', '-fno-omit-frame-pointer', '-cflags', '-funwind-tables',
 		'-o', output, os.join_path(d.cfg.root, folder)]
