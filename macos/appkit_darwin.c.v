@@ -356,7 +356,7 @@ fn vt_view_mouse_up(self ObjId, _cmd Sel, event ObjId) {
 }
 
 fn vt_view_mouse_dragged(self ObjId, _cmd Sel, event ObjId) {
-	dispatch_mouse(self, event, 2)
+	dispatch_mouse(self, event, 7)
 }
 
 fn vt_view_right_mouse_down(self ObjId, _cmd Sel, event ObjId) {
@@ -392,7 +392,7 @@ fn vt_view_mouse_exited(self ObjId, _cmd Sel, event ObjId) {
 }
 
 fn vt_view_mouse_moved(self ObjId, _cmd Sel, event ObjId) {
-	dispatch_mouse(self, event, 2)
+	dispatch_mouse(self, event, 7)
 }
 
 fn vt_view_right_mouse_dragged(self ObjId, _cmd Sel, event ObjId) {

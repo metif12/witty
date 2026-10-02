@@ -35,6 +35,10 @@ struct TerminalController {
 mut:
 	host &macos.NativeSplitHost = unsafe { nil }
 	focused &TermState = unsafe { nil }
+	// BaseTerminalController/TerminalController listen for app notifications.
+	// The window's own DerivedConfig is captured when its class is created.
+	app_config macos.NativeWindowConfig
+	creation_config macos.NativeWindowConfig
 	force_opaque bool
 	quick bool
 	closed bool
@@ -130,7 +134,8 @@ fn create_surface(view voidptr, inherited apprt.SurfaceOptions) ?&TermState {
 	}
 	runtime.states << state
 	if macos.view_window(view) != unsafe { nil } {
-		state.controller = &TerminalController{host: macos.create_split_host(view), focused: state, restorable: (inherited.command or { '' }) == ''}
+		app_config := native_window_config(&runtime.app.config)
+		state.controller = &TerminalController{host: macos.create_split_host(view), focused: state, app_config: app_config, creation_config: app_config, restorable: (inherited.command or { '' }) == ''}
 		macos.apply_native_window_config(view, state.native_config, true, state.native_config.background, state.native_config.opacity, false)
 		state.controller.initial_frame = macos.native_window_frame(view)
 		if runtime.app.config.maximize {
@@ -746,6 +751,7 @@ fn on_mouse(userdata voidptr, event_type int, x f64, y f64, modflags u64, button
 	}
 	mods := int(macos.input_mods(modflags).int())
 	apprt.ghostty_surface_mouse_pos(mut state.surface, x, y, mods)
+	if event_type == 7 { native_focus_follows_mouse(state) }
 	return match event_type {
 		mouse_left_down {
 			apprt.ghostty_surface_mouse_button(mut state.surface, .press, .left, mods)

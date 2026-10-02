@@ -92,7 +92,8 @@ fn controller_undo_state(controller &TerminalController) ?ControllerUndoState {
 fn restore_controller_state(snapshot ControllerUndoState) &TerminalController {
 	view := macos.create_window(800, 600, '')
 	mut runtime := standalone_runtime()
-	mut controller := &TerminalController{host: macos.create_split_host(view), initial_frame: snapshot.frame, title_override: snapshot.title_override}
+	app_config := native_window_config(&runtime.app.config)
+	mut controller := &TerminalController{host: macos.create_split_host(view), app_config: app_config, creation_config: app_config, initial_frame: snapshot.frame, title_override: snapshot.title_override}
 	runtime.controllers << controller
 	controller.host.replace_tree(snapshot.tree)
 	macos.release_native_object(view)
@@ -104,7 +105,7 @@ fn restore_controller_state(snapshot ControllerUndoState) &TerminalController {
 	}
 	if controller.focused != unsafe { nil } {
 		state := controller.focused
-		macos.apply_native_window_config(state.view, state.native_config, false, state.background_color or { state.native_config.background }, state.native_config.opacity, false)
+		macos.apply_native_window_config(state.view, native_surface_appearance_config(state), true, state.background_color or { state.native_config.background }, state.native_config.opacity, false)
 		macos.apply_native_window_frame(state.view, snapshot.frame)
 		macos.configure_native_restoration(state.view, true)
 		macos.restore_native_tab(state.view, snapshot.tab_group.object(), snapshot.tab_index)
@@ -195,7 +196,7 @@ fn undo_new_controller_close(context voidptr) {
 fn register_new_controller_undo(state &TermState, source ?&TermState, tab bool,options apprt.SurfaceOptions) { register_controller_undo(&ControllerUndo{kind: .new_close, controller: state.controller, source: source, new_tab: tab, name: if tab { 'New Tab' } else { 'New Window' },base_options:options}, voidptr(state.controller)) }
 fn do_reset_window_size(current &TermState) bool {
 	if current.controller == unsafe { nil } || current.controller.closed || current.controller.quick { return false }
-	config := standalone_runtime().app.config
+	config := native_controller_config(current)
 	macos.reset_native_window_size(current.view, config.maximize, current.controller.initial_frame, current.initial_width, current.initial_height)
 	return true
 }
@@ -205,5 +206,6 @@ fn apply_initial_native_content_size(context voidptr) {
 	state:=controller.focused
 	if state.closed || state.initial_width<=0 || state.initial_height<=0 { return }
 	macos.reset_native_window_size(state.view,false,controller.initial_frame,state.initial_width,state.initial_height)
-	macos.adjust_native_window_origin_after_default_size(state.view,state.native_config.position_x,state.native_config.position_y)
+	config := native_controller_config(state)
+	macos.adjust_native_window_origin_after_default_size(state.view,config.position_x,config.position_y)
 }

@@ -35,21 +35,58 @@ fn native_config_change_main(context voidptr) {
 	if mut current := task.target {
 		if !current.closed {
 			current.native_config = projection
-            native_action_config(current,&task.config)
-			sync_native_window(current)
+			native_surface_action_config(current,&task.config)
+			if current.controller != unsafe { nil } && current.controller.focused == current { sync_native_window(current) }
 		}
 	} else {
 		sync_config_menu(&task.config)
 		macos.update_quick_terminal_config(native_quick_config(&task.config))
 		macos.apply_native_save_state(int(task.config.window_save_state))
 		mut runtime := standalone_runtime()
+		for mut controller in runtime.controllers {
+			if controller.closed { continue }
+			controller.app_config = projection
+			// TerminalController only applies app appearance when its tree is empty.
+			if controller.host != unsafe { nil } && controller.host.tree.root == unsafe { nil } {
+				created := controller.creation_config
+				empty := macos.NativeWindowConfig{...created,shadow:projection.shadow,theme:projection.theme,background:projection.background,opacity:projection.opacity,blur:projection.blur}
+				macos.apply_native_window_config(controller.host.container,empty,false,created.background,created.opacity,controller.force_opaque)
+			}
+		}
 		for mut current in runtime.states {
 			if current.closed { continue }
-			current.native_config = projection
-            native_action_config(current,&task.config)
-			sync_native_window(current)
+			// SwiftUI SurfaceView overlays read ghostty.config, while AppKit's
+			// SurfaceView derived config observes notifications with object:self.
+			native_app_action_config(current,&task.config)
 		}
 	}
+}
+fn native_app_action_config(current &TermState, config &configpkg.Config) {
+	if current.closed || current.actions == unsafe { nil } { return }
+	mut actions := current.actions
+	actions.bell_border = config.bell_features.border()
+	actions.secure_indication = config.macos_secure_input_indication
+	// Cache BaseTerminalController's updated policy for a later focus/pwd
+	// publication, without changing the represented URL during notification.
+	actions.proxy_icon = config.macos_titlebar_proxy_icon == .visible
+	color := config.background
+	actions.visual_background = (u32(color.r) << 16) | (u32(color.g) << 8) | u32(color.b)
+	actions.refresh_config()
+}
+fn native_surface_action_config(current &TermState, config &configpkg.Config) {
+	if current.closed || current.actions == unsafe { nil } { return }
+	mut actions := current.actions
+	color := config.background
+	actions.configure_scroll(config.scrollbar == .never, (0.299 * f64(color.r) + 0.587 * f64(color.g) + 0.114 * f64(color.b)) / 255 > 0.5)
+}
+// SurfaceView.mouseMoved reads BaseTerminalController's app-derived setting.
+// mouseEntered/mouseExited only publish position and never enter this branch.
+fn native_focus_follows_mouse(current &TermState) {
+	if current.controller == unsafe { nil } || current.actions == unsafe { nil } || current.actions.focused { return }
+	controller := current.controller
+	if !controller.app_config.focus_follows_mouse || !macos.native_window_is_key(macos.view_window(current.view)) { return }
+	if controller.focused != unsafe { nil } && controller.focused.actions != unsafe { nil } && controller.focused.actions.command_palette_is_showing() { return }
+	macos.move_focus(current.view,unsafe { nil },none)
 }
 @[heap]
 struct NativeCellSizeTask {
@@ -66,10 +103,9 @@ fn native_cell_size_main(context voidptr) {
 	current.cell_height = f64(task.height) / scale
     current.actions.set_scroll_cell_height(current.cell_height)
 	if current.controller != unsafe { nil } && current.controller.focused == current {
-		macos.set_native_cell_size(current.view, current.cell_width, current.cell_height, current.native_config.step_resize)
-		mut host := current.controller.host
-		host.increment_width = if current.native_config.step_resize && current.cell_width > 0 { current.cell_width } else { 1 }
-		host.increment_height = if current.native_config.step_resize && current.cell_height > 0 { current.cell_height } else { 1 }
-		host.layout()
+		config := native_controller_config(current)
+		macos.set_native_cell_size(current.view, current.cell_width, current.cell_height, config.step_resize)
+		// TerminalSplitTreeView keeps point increments of 1 independently of
+		// BaseTerminalController's optional window contentResizeIncrements.
 	}
 }

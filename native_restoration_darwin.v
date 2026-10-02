@@ -25,7 +25,7 @@ fn load_native_surface(saved macos.NativeSavedSurface,_quick bool) ?voidptr {
 	mut state:=create_surface(view,apprt.SurfaceOptions{working_directory:saved.pwd}) or { return none }
 	if uuid:=macos.native_uuid_string(saved.uuid) { state.actions.uuid=uuid }
 	state.actions.restore_surface_title(saved.title,saved.is_user_set_title)
-	state.actions.restore_pwd(saved.pwd,state.native_config.proxy_icon)
+	state.actions.restore_pwd(saved.pwd,native_controller_config(state).proxy_icon)
 	return view
 }
 fn encode_native_controller(view voidptr,quick bool) ?voidptr {
@@ -82,7 +82,8 @@ fn decode_native_controller(value voidptr,quick bool) ?voidptr {
 }
 fn attach_restored_controller(view voidptr,saved NativeRestoredController,quick bool) &TerminalController {
 	mut runtime:=standalone_runtime()
-	mut controller:=&TerminalController{host:macos.create_split_host(view),quick:quick,title_override:saved.title_override}
+	app_config := native_window_config(&runtime.app.config)
+	mut controller:=&TerminalController{host:macos.create_split_host(view),app_config:app_config,creation_config:app_config,quick:quick,title_override:saved.title_override}
 	runtime.controllers << controller
 	controller.host.replace_tree(saved.tree)
 	macos.detach_automatic_native_tab(controller.host.container)
@@ -94,7 +95,7 @@ fn attach_restored_controller(view voidptr,saved NativeRestoredController,quick 
 	}
 	if controller.focused != unsafe { nil } {
 		state:=controller.focused
-		macos.apply_native_window_config(state.view,state.native_config,false,state.background_color or { state.native_config.background },state.native_config.opacity,false)
+		macos.apply_native_window_config(state.view,native_surface_appearance_config(state),true,state.background_color or { state.native_config.background },state.native_config.opacity,false)
 		macos.configure_native_restoration(state.view,!quick)
 		macos.set_native_tab_color(state.view,saved.tab_color)
 		controller.initial_frame=macos.native_window_frame(state.view)

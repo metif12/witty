@@ -24,6 +24,7 @@ mut:
 	animation_in bool
 	animation_frame ObjCRect
 	focus_retries u8
+	force_opaque bool
 }
 __global (
 	g_quick_terminal &NativeQuickTerminal
@@ -176,7 +177,7 @@ fn quick_animate_complete(context voidptr) {
 	if task.entering {
 		if !q.visible { q.restore_dock(); return }
 		msg_void_u64(q.window, 'setLevel:', 3)
-		apply_native_window_config(q.view, q.config.window, false, q.config.window.background, q.config.window.opacity, false)
+		sync_quick_terminal_appearance(q.force_opaque)
 		dispatch_main(quick_focus_retry, voidptr(q))
 		if !app_is_active() { msg_void_bool(shared_app(), 'activateIgnoringOtherApps:', true); q.focus_retries = 10; dispatch_main(quick_focus_retry, voidptr(q)) }
 	} else {
@@ -310,6 +311,22 @@ pub fn (mut q NativeQuickTerminal) toggle_fullscreen() {
 pub fn update_quick_terminal_config(config NativeQuickConfig) {
 	if g_quick_terminal == unsafe { nil } { return }
 	g_quick_terminal.config = NativeQuickConfig{...config, position: g_quick_terminal.config.position}
-	msg_void_u64(g_quick_terminal.window, 'setCollectionBehavior:', u64(1 << 6) | u64(1 << 8) | if config.remain_on_space { u64(1 << 1) } else { u64(1) })
-	apply_native_window_config(g_quick_terminal.view, config.window, false, config.window.background, config.window.opacity, false)
+	sync_quick_terminal_appearance(g_quick_terminal.force_opaque)
+}
+// QuickTerminalController.syncAppearance uses its app-derived configuration,
+// independently of every SurfaceView's targeted derived-config notifications.
+pub fn sync_quick_terminal_appearance(force_opaque bool) {
+	if g_quick_terminal == unsafe { nil } { return }
+	mut q := g_quick_terminal
+	q.force_opaque = force_opaque
+	msg_void_u64(q.window, 'setCollectionBehavior:', u64(1 << 6) | u64(1 << 8) | if q.config.remain_on_space { u64(1 << 1) } else { u64(1) })
+	if !msg_bool(q.window,'isVisible') { return }
+	if !force_opaque && (q.config.window.opacity < 1 || q.config.window.blur < 0) {
+		msg_void_bool(q.window,'setOpaque:',false)
+		msg_void1(q.window,'setBackgroundColor:',native_color(0xffffff,0.001))
+		if q.config.window.blur >= 0 { C.witty_macos_set_window_background_blur(q.window,int(q.config.window.blur)) }
+	} else {
+		msg_void_bool(q.window,'setOpaque:',true)
+		msg_void1(q.window,'setBackgroundColor:',msg_id(get_class('NSColor'),'windowBackgroundColor'))
+	}
 }

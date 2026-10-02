@@ -275,7 +275,6 @@ pub fn apply_native_window_config(view voidptr, config NativeWindowConfig, initi
 	if transparent && config.blur >= 0 { C.witty_macos_set_window_background_blur(window, int(config.blur)) }
 	msg_void_bool(window, 'setTitlebarAppearsTransparent:', config.titlebar_style == 1)
 	msg_void_u64(window, 'setTitleVisibility:', u64(if config.titlebar_style in [2, 3] { 1 } else { 0 }))
-	if !config.proxy_icon { msg_void1(window, 'setRepresentedURL:', nil_obj()) }
 	reapply_hidden_native_window_style(window)
 	update_native_titlebar(window)
 	if config.titlebar_style == 2 { dispatch_main(push_native_tabs, voidptr(window)) }
