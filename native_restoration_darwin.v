@@ -85,6 +85,7 @@ fn attach_restored_controller(view voidptr,saved NativeRestoredController,quick 
 	mut controller:=&TerminalController{host:macos.create_split_host(view),quick:quick,title_override:saved.title_override}
 	runtime.controllers << controller
 	controller.host.replace_tree(saved.tree)
+	macos.detach_automatic_native_tab(controller.host.container)
 	for leaf in saved.tree.root.leaves() {
 		mut state:=state_from_userdata(macos.view_get_userdata(leaf)) or { continue }
 		state.controller=controller

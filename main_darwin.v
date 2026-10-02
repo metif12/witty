@@ -133,8 +133,10 @@ fn create_surface(view voidptr, inherited apprt.SurfaceOptions) ?&TermState {
 		state.controller = &TerminalController{host: macos.create_split_host(view), focused: state, restorable: (inherited.command or { '' }) == ''}
 		macos.apply_native_window_config(view, state.native_config, true, state.native_config.background, state.native_config.opacity, false)
 		state.controller.initial_frame = macos.native_window_frame(view)
+		if runtime.app.config.maximize || (state.initial_width>0 && state.initial_height>0) { macos.reset_native_window_size(view,runtime.app.config.maximize,state.controller.initial_frame,state.initial_width,state.initial_height); state.controller.initial_frame=macos.native_window_frame(view) }
 		runtime.controllers << state.controller
 		macos.configure_native_restoration(view, state.controller.restorable)
+		macos.detach_automatic_native_tab(view)
 	}
 
 	scale := macos.view_backing_scale(view)
@@ -156,18 +158,20 @@ fn inherited_options(state ?&TermState, context apprt.NewSurfaceContext) apprt.S
 }
 
 fn do_new_window(source ?&TermState) bool {
+	return new_controller_with_options(source,inherited_options(source,.window),false)
+}
+fn new_controller_with_options(source ?&TermState,options apprt.SurfaceOptions,tab bool) bool {
+	mut parent:=voidptr(unsafe { nil })
+	if current:=source { if tab { if macos.quick_terminal_deny_tab(current.view) { return true }; parent=macos.view_window(current.view) } }
 	view := macos.create_window(800, 600, '')
-	state := create_surface(view, inherited_options(source, .window)) or { return false }
-	register_new_controller_undo(state, source, false)
+	state := create_surface(view, options) or { return false }
+	if tab && parent != unsafe { nil } { macos.attach_native_new_tab(parent,state.view,standalone_runtime().app.config.window_new_tab_position == .end) }
+	register_new_controller_undo(state, source, tab, options)
 	return true
 }
 
 fn do_new_tab(source ?&TermState) bool {
-	if current := source { if macos.quick_terminal_deny_tab(current.view) { return true } }
-	view := macos.new_tab(800, 600, '')
-	state := create_surface(view, inherited_options(source, .tab)) or { return false }
-	register_new_controller_undo(state, source, true)
-	return true
+	return new_controller_with_options(source,inherited_options(source,.tab),true)
 }
 
 fn close_state_now(mut state TermState) {

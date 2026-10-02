@@ -253,13 +253,19 @@ pub fn apply_native_window_config(view voidptr, config NativeWindowConfig, initi
 	if config.titlebar_style == 2 { dispatch_main(push_native_tabs, window) }
 }
 
-fn native_window_close(self ObjId, _cmd Sel) {
+fn save_native_window_position(self ObjId) {
 	frame := msg_rect(self, 'frame')
 	points := [voidptr(msg_id_f64(get_class('NSNumber'), 'numberWithDouble:', frame.x)), voidptr(msg_id_f64(get_class('NSNumber'), 'numberWithDouble:', frame.y))]
 	array := C.witty_macos_array(points.data, usize(points.len))
 	msg_void2(msg_id(get_class('NSUserDefaults'), 'standardUserDefaults'), 'setObject:forKey:', array, nsstring('NSWindowLastPosition'))
+}
+fn native_window_did_move(_self ObjId,_cmd Sel,notification ObjId) { window:=msg_id(notification,'object'); if msg_bool1(window,'isKindOfClass:',get_class('VTTerminalWindow')) { save_native_window_position(window) } }
+fn register_native_window_delegate_methods(cls ObjId) { add_method(cls,'windowDidMove:',voidptr(native_window_did_move),'v@:@') }
+fn native_window_close(self ObjId,_cmd Sel) {
+	save_native_window_position(self)
 	msg_void2(msg_id(get_class('NSNotificationCenter'), 'defaultCenter'), 'postNotificationName:object:', nsstring('TerminalWindowWillClose'), self)
 	C.witty_macos_window_super_void0(self, sel('close'))
+	g_native_windows.delete(u64(self))
 }
 fn restore_last_window_position(window ObjId) bool {
 	points := msg_id1(msg_id(get_class('NSUserDefaults'), 'standardUserDefaults'), 'arrayForKey:', nsstring('NSWindowLastPosition'))

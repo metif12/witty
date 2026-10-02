@@ -203,6 +203,7 @@ fn register_classes() {
 		add_method(delegate_cls, 'windowShouldClose:', voidptr(vt_window_should_close), 'B@:@')
 		register_native_undo_methods(delegate_cls)
 		register_native_restoration_methods(delegate_cls)
+		register_native_window_delegate_methods(delegate_cls)
 		C.macos_objc_register_class_pair(delegate_cls)
 	}
 }

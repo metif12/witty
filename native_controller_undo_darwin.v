@@ -30,6 +30,7 @@ mut:
 	name string
 	source ?&TermState
 	new_tab bool
+	base_options apprt.SurfaceOptions
 }
 fn undo_expiration() f64 { return f64(standalone_runtime().app.config.undo_timeout.duration) / 1e9 }
 fn register_controller_undo(record &ControllerUndo, target voidptr) {
@@ -41,6 +42,7 @@ fn release_controller_undo(context voidptr) {
 	mut runtime := standalone_runtime()
 	record := unsafe { &ControllerUndo(context) }
 	for i, item in runtime.undos { if item == record { runtime.undos.delete(i); break } }
+	for snapshot in record.states { mut group:=snapshot.tab_group; group.deinit() }
 	collect_detached_surfaces()
 }
 fn collect_detached_surfaces() {
@@ -176,15 +178,21 @@ fn perform_controller_undo(context voidptr) {
 		}
 		.new_close {
 			if record.controller.closed { return }
-			macos.native_undo_disable()
-			close_controller_immediately(record.controller, !record.new_tab)
-			macos.native_undo_enable()
-			register_controller_undo(&ControllerUndo{kind: .new_redo, source: record.source, new_tab: record.new_tab, name: record.name}, voidptr(standalone_runtime().app))
+			if record.new_tab { macos.dispatch_main(undo_new_controller_close,voidptr(record)) }
+			else { undo_new_controller_close(voidptr(record)) }
+			register_controller_undo(&ControllerUndo{kind: .new_redo, source: record.source, new_tab: record.new_tab, name: record.name,base_options:record.base_options}, voidptr(standalone_runtime().app))
 		}
-		.new_redo { if record.new_tab { do_new_tab(record.source) } else { do_new_window(record.source) } }
+		.new_redo { new_controller_with_options(record.source,record.base_options,record.new_tab) }
 	}
 }
-fn register_new_controller_undo(state &TermState, source ?&TermState, tab bool) { register_controller_undo(&ControllerUndo{kind: .new_close, controller: state.controller, source: source, new_tab: tab, name: if tab { 'New Tab' } else { 'New Window' }}, voidptr(state.controller)) }
+fn undo_new_controller_close(context voidptr) {
+	record:=unsafe { &ControllerUndo(context) }
+	if record.controller.closed || record.controller.focused == unsafe { nil } { return }
+	macos.native_undo_disable()
+	do_close_controller(record.controller.focused,!record.new_tab,.this)
+	macos.native_undo_enable()
+}
+fn register_new_controller_undo(state &TermState, source ?&TermState, tab bool,options apprt.SurfaceOptions) { register_controller_undo(&ControllerUndo{kind: .new_close, controller: state.controller, source: source, new_tab: tab, name: if tab { 'New Tab' } else { 'New Window' },base_options:options}, voidptr(state.controller)) }
 fn do_reset_window_size(current &TermState) bool {
 	if current.controller == unsafe { nil } || current.controller.closed || current.controller.quick { return false }
 	config := standalone_runtime().app.config

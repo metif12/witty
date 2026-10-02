@@ -33,6 +33,24 @@ pub fn restore_native_tab(view voidptr, group voidptr, index int) {
 	msg_void2(anchor, 'addTabbedWindow:ordered:', msg_id(view, 'window'), ObjId(if index < count { -1 } else { 1 }))
 }
 pub fn add_native_tab(parent voidptr, child voidptr) { msg_void2(msg_id(parent, 'window'), 'addTabbedWindow:ordered:', msg_id(child, 'window'), ObjId(1)) }
+pub fn attach_native_new_tab(parent voidptr,view voidptr,at_end bool) {
+	window:=msg_id(view,'window')
+	if msg_bool(parent,'isMiniaturized') { msg_void1(parent,'deminiaturize:',nil_obj()) }
+	group:=msg_id(parent,'tabGroup'); tabs:=msg_id(group,'windows')
+	for i in 0 .. int(msg_u64(tabs,'count')) { if msg_id_u64(tabs,'objectAtIndex:',u64(i))==window { msg_void1(group,'removeWindow:',window); break } }
+	if msg_u64(window,'tabbingMode')!=2 {
+		mut anchor:=ObjId(parent)
+		if at_end { latest:=msg_id(msg_id(parent,'tabGroup'),'windows'); count:=msg_u64(latest,'count'); if count>0 { anchor=msg_id_u64(latest,'objectAtIndex:',count-1) } }
+		msg_void2(anchor,'addTabbedWindow:ordered:',window,ObjId(1))
+	}
+	msg_void1(window,'makeKeyAndOrderFront:',nil_obj())
+}
+pub fn detach_automatic_native_tab(view voidptr) {
+	window:=msg_id(view,'window')
+	if msg_u64(window,'styleMask') & u64(1<<14)!=0 { return }
+	group:=msg_id(window,'tabGroup')
+	if msg_u64(msg_id(group,'windows'),'count')>1 { msg_void1(group,'removeWindow:',window) }
+}
 pub fn close_native_window(window voidptr) { msg_void(window, 'close'); if g_window == window { g_window = nil_obj() } }
 pub fn focus_native_window(window voidptr) { msg_void1(window, 'makeKeyAndOrderFront:', nil_obj()) }
 pub fn invalidate_native_restorable_state(view voidptr) { msg_void(msg_id(view, 'window'), 'invalidateRestorableState') }
