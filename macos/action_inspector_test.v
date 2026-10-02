@@ -15,12 +15,16 @@ fn inspector_test_destroy(_userdata voidptr) { g_inspector_test_destroyed++ }
 fn inspector_test_key(_backend voidptr,_action input.KeyAction,key input.Key,_mods int) { g_inspector_test_keys << key }
 fn test_native_inspector_metal_view_size_key_and_ime_consumers() {
  app_init()
+ msg_void(shared_app(),'finishLaunching')
  view := create_window(640,480,'inspector')
  mut surface := new_action_surface(view,unsafe{nil},ActionCallbacks{inspector:NativeInspectorCallbacks{init:inspector_test_init,alive:inspector_test_alive,size:inspector_test_size,destroy:inspector_test_destroy,key:inspector_test_key}})
  defer { surface.deinit(); close_tab(view) }
+ msg_void1(msg_id(get_class('NSRunLoop'),'currentRunLoop'),'runUntilDate:',msg_id_f64(get_class('NSDate'),'dateWithTimeIntervalSinceNow:',0.1))
  surface.control_inspector(1)
  assert surface.inspector != unsafe{nil}
  inspector := surface.inspector
+ msg_void1(msg_id(get_class('NSRunLoop'),'currentRunLoop'),'runUntilDate:',msg_id_f64(get_class('NSDate'),'dateWithTimeIntervalSinceNow:',0.03))
+ assert msg_id(view_window(view),'firstResponder') == inspector.view
  assert msg_u64(inspector.view,'preferredFramesPerSecond') == 30
  assert !msg_bool(inspector.view,'isPaused')
  inspector_update_size(inspector)
@@ -39,5 +43,7 @@ fn test_native_inspector_metal_view_size_key_and_ime_consumers() {
  assert g_inspector_test_destroyed == 0
  surface.control_inspector(0)
  assert surface.inspector == unsafe{nil}
+ msg_void1(msg_id(get_class('NSRunLoop'),'currentRunLoop'),'runUntilDate:',msg_id_f64(get_class('NSDate'),'dateWithTimeIntervalSinceNow:',0.03))
+ assert msg_id(view_window(view),'firstResponder') == view
  assert g_inspector_test_destroyed == 1
 }

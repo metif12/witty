@@ -14,7 +14,7 @@ mut:
 __global g_native_focus_tasks = []&NativeFocusTask{}
 
 pub fn move_focus(to voidptr, from voidptr, delay ?f64) {
-	if is_nil(to) || (delay or { 0.0 }) >= 0.5 { return }
+	if is_nil(to) || !((delay or { 0.0 }) < 0.5) { return }
 	task := &NativeFocusTask{ to: ObjId(to), from: ObjId(from), delay: delay }
 	msg_void(task.to, 'retain')
 	msg_void(task.from, 'retain')

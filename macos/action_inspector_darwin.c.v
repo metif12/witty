@@ -96,14 +96,14 @@ pub fn (mut surface NativeActionSurface) control_inspector(mode int) {
  surface.scroll.layout()
  dispatch_main(inspector_focus_main,voidptr(state))
 }
-fn inspector_focus_main(context voidptr) { state := unsafe{&NativeInspectorView(context)}; if state.valid() { msg_bool1(view_window(voidptr(state.view)),'makeFirstResponder:',state.view) } }
+fn inspector_focus_main(context voidptr) { state := unsafe{&NativeInspectorView(context)}; if state.valid() { msg_bool(state.surface.view,'resignFirstResponder'); msg_bool1(view_window(voidptr(state.view)),'makeFirstResponder:',state.view) } }
 fn (mut surface NativeActionSurface) hide_inspector() {
  if surface.inspector == unsafe{nil} { return }
  mut state := surface.inspector
  state.closed = true
  msg_void_bool(state.view,'setPaused:',true)
  msg_void1(msg_id(get_class('NSNotificationCenter'),'defaultCenter'),'removeObserver:',state.view)
- msg_bool1(view_window(surface.view),'makeFirstResponder:',surface.view)
+ move_focus(surface.view,unsafe{nil},none)
  surface.scroll.inspector = nil_obj()
  surface.inspector = unsafe{nil}
  msg_void(state.view,'removeFromSuperview')
