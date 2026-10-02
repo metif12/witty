@@ -28,7 +28,9 @@ import log
 
 #flag -I @VMODROOT/opengl
 
-#flag @VMODROOT/opengl/glad.c
+$if !managed_native ? {
+	#flag @VMODROOT/opengl/glad.c
+}
 
 #insert "@VMODROOT/opengl/gl_headers.h"
 

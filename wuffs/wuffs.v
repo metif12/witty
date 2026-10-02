@@ -6,7 +6,9 @@ module wuffs
 // in V.
 
 #flag -I @VMODROOT/wuffs
-#flag @VMODROOT/wuffs/wuffs_bridge.c
+$if !managed_native ? {
+	#flag @VMODROOT/wuffs/wuffs_bridge.c
+}
 #include "wuffs_bridge.h"
 
 fn C.witty_wuffs_decoder_size(kind int) usize

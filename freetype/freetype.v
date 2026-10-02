@@ -146,15 +146,15 @@ pub fn error_kind_of(err IError) ErrorKind {
 
 // C compiler flags for the FreeType library. FreeType installs its headers
 // under a `freetype2` subdirectory, so we add that to the include path.
-#flag darwin -I/opt/homebrew/include/freetype2
-
-#flag darwin -I/opt/homebrew/opt/freetype/include/freetype2
-
-#flag darwin -L/opt/homebrew/lib
-
-#flag linux -I/usr/include/freetype2
-
-#flag -lfreetype
+$if managed_native ? {
+	#flag -I@VMODROOT/.witty-build/deps/freetype/include
+} $else {
+	#flag darwin -I/opt/homebrew/include/freetype2
+	#flag darwin -I/opt/homebrew/opt/freetype/include/freetype2
+	#flag darwin -L/opt/homebrew/lib
+	#flag linux -I/usr/include/freetype2
+	#flag -lfreetype
+}
 
 // FreeType exposes both the classic `FT_FREETYPE_H`-style macro includes
 // and, since 2.6.1, direct header paths. V's `#include` only accepts

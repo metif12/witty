@@ -36,6 +36,7 @@ pub fn build(repo_root string, compiler string, compiler_args []string) !string 
 		objects << object
 	}
 	archive := archive_path(repo_root)
+	if os.exists(archive) { os.rm(archive)! }
 	mut archive_args := ['rcs', archive]
 	archive_args << objects
 	run('ar', archive_args)!

@@ -11,13 +11,14 @@ module fontconfig
 // declared as `fn C.Fc*` below.
 
 // C compiler flags for the fontconfig library.
-#flag darwin -I/opt/homebrew/include
-
-#flag darwin -L/opt/homebrew/lib
-
-#flag linux -I/usr/include
-
-#flag -lfontconfig
+$if managed_native ? {
+	#flag -I@VMODROOT/.witty-build/deps/fontconfig
+} $else {
+	#flag darwin -I/opt/homebrew/include
+	#flag darwin -L/opt/homebrew/lib
+	#flag linux -I/usr/include
+	#flag -lfontconfig
+}
 
 #include <fontconfig/fontconfig.h>
 

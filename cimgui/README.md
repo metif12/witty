@@ -20,3 +20,12 @@ different architecture.
 
 The checked-in macOS arm64 archive has SHA-256
 `8e4a438f605ff75802029a31a7071773f75be528340d61ca8617f2682521cf8e`.
+
+The target-aware V builder (`build_support.Driver.build_cimgui`) uses these same
+locked files and also compiles the original macOS platform backend. The two
+`imgui_impl_osx` files were verified by Zig fetch against the original package
+hash `N-V-__8AAEbOfQBnvcFcCX2W5z7tDaN8vaNZGamEQtNOe0UI` before copying.
+It writes `.witty-build/native/libdcimgui.a`, propagates target/SDK/optimization
+arguments, selects the source macOS/iOS/OpenGL branches, and retains original
+Windows export and FreeBSD/musl PIC flags. The existing script remains a host
+bootstrap for direct module tests.

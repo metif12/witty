@@ -184,7 +184,7 @@ pub fn init_config(root string, args []string) !Config {
 	else if target.os == 'linux' && target.arch == host_target().arch && os.getenv_opt('IN_NIX_SHELL') != none {
 		patch_rpath = os.getenv_opt('LD_LIBRARY_PATH')
 	}
-	for lib in ['freetype', 'harfbuzz', 'fontconfig', 'libpng', 'zlib', 'oniguruma'] {
+	for lib in ['freetype', 'harfbuzz', 'fontconfig', 'libxml2', 'libpng', 'zlib', 'oniguruma'] {
 		if lib !in system_libraries { system_libraries[lib] = !target.darwin() && system_package }
 	}
 	for lib in ['glslang', 'spirv-cross', 'simdutf', 'highway'] {
@@ -222,6 +222,7 @@ pub fn (cfg Config) options(artifact Artifact) ![]string {
 		'gtk_wayland': cfg.wayland, 'sentry': cfg.sentry, 'wasm_shared': cfg.wasm_shared} {
 		if enabled { args << ['-d', name] }
 	}
+	if !cfg.sentry { args << ['-d', 'no_sentry'] }
 	if !cfg.simd { args << ['-d', 'no_simd'] }
 	args << ['-d', if cfg.i18n { 'i18n' } else { 'no_i18n' }]
 	args << ['-d', 'font_backend_${cfg.font_backend}', '-d', 'renderer_${cfg.renderer}',

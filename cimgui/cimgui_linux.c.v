@@ -10,9 +10,13 @@ module cimgui
 
 #flag -I@VMODROOT/cimgui/vendor/dear_bindings
 
-#flag @VMODROOT/cimgui/lib/libdcimgui_linux.a
+$if !managed_native ? {
+	#flag @VMODROOT/cimgui/lib/libdcimgui_linux.a
+}
 
-#pkgconfig freetype2
+$if !managed_native ? {
+	#pkgconfig freetype2
+}
 
 #flag -lstdc++
 

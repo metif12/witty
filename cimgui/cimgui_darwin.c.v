@@ -10,11 +10,17 @@ module cimgui
 
 #flag -I@VMODROOT/cimgui/vendor/dear_bindings
 
-#flag @VMODROOT/cimgui/lib/libdcimgui_darwin.a
+$if !managed_native ? {
+	#flag @VMODROOT/cimgui/lib/libdcimgui_darwin.a
+}
 
-#flag -L/opt/homebrew/lib
+$if !managed_native ? {
+	#flag -L/opt/homebrew/lib
+}
 
-#flag -lfreetype
+$if !managed_native ? {
+	#flag -lfreetype
+}
 
 #flag -lc++
 

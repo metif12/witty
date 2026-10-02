@@ -1,8 +1,12 @@
 module harfbuzz
 
-#flag darwin -I/opt/homebrew/include
-#flag darwin -L/opt/homebrew/lib
-#flag darwin -lharfbuzz
+$if managed_native ? {
+	#flag -I@VMODROOT/.witty-build/include
+} $else {
+	#flag darwin -I/opt/homebrew/include
+	#flag darwin -L/opt/homebrew/lib
+	#flag darwin -lharfbuzz
+}
 #flag darwin -framework CoreText
 
 #include <harfbuzz/hb-coretext.h>

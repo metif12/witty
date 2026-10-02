@@ -12,7 +12,9 @@ module stb
 // causes conflicting declarations even though their implementations are
 // independent.
 #flag -I @VMODROOT/stb
-#flag @VMODROOT/stb/stb_bridge.c
+$if !managed_native ? {
+	#flag @VMODROOT/stb/stb_bridge.c
+}
 // stb_image calls libm (`pow`), which glibc keeps in a separate library.
 #flag linux -lm
 #include "stb_bridge.h"

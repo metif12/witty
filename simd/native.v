@@ -17,19 +17,21 @@ $if !js && !wasm32 && !no_simd ? {
 	#flag -I @VMODROOT/simd/native/highway
 	#flag -I @VMODROOT/simd/native/simdutf
 	#flag -I @VMODROOT/simd/native/utfcpp/source
-	#flag @VMODROOT/simd/native/simd/base64.o
-	#flag @VMODROOT/simd/native/simd/index_of.o
-	#flag @VMODROOT/simd/native/simd/codepoint_width.o
-	#flag @VMODROOT/simd/native/simd/vt.o
-	#flag @VMODROOT/simd/native/simdutf/simdutf.o
-	#flag @VMODROOT/simd/native/abort.o
-	#flag @VMODROOT/simd/native/aligned_allocator.o
-	#flag @VMODROOT/simd/native/nanobenchmark.o
-	#flag @VMODROOT/simd/native/per_target.o
-	#flag @VMODROOT/simd/native/print.o
-	#flag @VMODROOT/simd/native/targets.o
-	#flag @VMODROOT/simd/native/timer.o
-	#flag @VMODROOT/simd/native/highway_bridge.o
+	$if !managed_native ? {
+		#flag @VMODROOT/simd/native/simd/base64.o
+		#flag @VMODROOT/simd/native/simd/index_of.o
+		#flag @VMODROOT/simd/native/simd/codepoint_width.o
+		#flag @VMODROOT/simd/native/simd/vt.o
+		#flag @VMODROOT/simd/native/simdutf/simdutf.o
+		#flag @VMODROOT/simd/native/abort.o
+		#flag @VMODROOT/simd/native/aligned_allocator.o
+		#flag @VMODROOT/simd/native/nanobenchmark.o
+		#flag @VMODROOT/simd/native/per_target.o
+		#flag @VMODROOT/simd/native/print.o
+		#flag @VMODROOT/simd/native/targets.o
+		#flag @VMODROOT/simd/native/timer.o
+		#flag @VMODROOT/simd/native/highway_bridge.o
+	}
 	#flag darwin -lc++
 	#flag linux -lstdc++
 	#flag freebsd -lstdc++

@@ -10,12 +10,17 @@ module harfbuzz
 // scripts.
 
 // C compiler flags for HarfBuzz library.
-#flag darwin -I/opt/homebrew/include
-#flag darwin -I/opt/homebrew/include/freetype2
-#flag darwin -L/opt/homebrew/lib
-#flag linux -I/usr/include/harfbuzz
-#flag linux -I/usr/include/freetype2
-#flag -lharfbuzz
+$if managed_native ? {
+	#flag -I@VMODROOT/.witty-build/include
+	#flag -I@VMODROOT/.witty-build/deps/freetype/include
+} $else {
+	#flag darwin -I/opt/homebrew/include
+	#flag darwin -I/opt/homebrew/include/freetype2
+	#flag darwin -L/opt/homebrew/lib
+	#flag linux -I/usr/include/harfbuzz
+	#flag linux -I/usr/include/freetype2
+	#flag -lharfbuzz
+}
 
 #include <harfbuzz/hb.h>
 #include <harfbuzz/hb-ft.h>
