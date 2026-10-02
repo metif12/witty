@@ -24,7 +24,7 @@ pub fn NativeShaper.init_backend(backend font.Backend, opts font.ShaperOptions) 
 	}
 	match backend {
 		.coretext {
-			$if macos {
+			$if macos || ios {
 				native := Shaper.init(opts)!
 				result.coretext = &Shaper{
 					...native
@@ -50,7 +50,7 @@ pub fn NativeShaper.init_backend(backend font.Backend, opts font.ShaperOptions) 
 pub fn (mut self NativeShaper) deinit() {
 	match self.backend {
 		.coretext {
-			$if macos {
+			$if macos || ios {
 				if !isnil(self.coretext) {
 					mut native := unsafe { &Shaper(self.coretext) }
 					native.deinit()
@@ -73,7 +73,7 @@ pub fn (mut self NativeShaper) deinit() {
 pub fn (mut self NativeShaper) end_frame() {
 	match self.backend {
 		.coretext {
-			$if macos {
+			$if macos || ios {
 				mut native := unsafe { &Shaper(self.coretext) }
 				native.end_frame()
 			}
@@ -93,7 +93,7 @@ pub fn (mut self NativeShaper) end_frame() {
 pub fn (mut self NativeShaper) run_iterator(opts font.RunOptions) font.RunIterator {
 	match self.backend {
 		.coretext {
-			$if macos {
+			$if macos || ios {
 				mut native := unsafe { &Shaper(self.coretext) }
 				return native.run_iterator(opts)
 			} $else {
@@ -115,7 +115,7 @@ pub fn (mut self NativeShaper) run_iterator(opts font.RunOptions) font.RunIterat
 pub fn (mut self NativeShaper) shape(run font.TextRun) ![]font.ShapeCell {
 	match self.backend {
 		.coretext {
-			$if macos {
+			$if macos || ios {
 				mut native := unsafe { &Shaper(self.coretext) }
 				return native.shape(run)
 			} $else {

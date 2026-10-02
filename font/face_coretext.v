@@ -21,7 +21,7 @@ pub fn copy_coretext_font_with_size(font_ptr voidptr, size f64) voidptr {
 	if isnil(font_ptr) {
 		return unsafe { nil }
 	}
-	$if macos {
+	$if macos || ios {
 		ct_font := unsafe { &macos.CTFont(font_ptr) }
 		copy := ct_font.copy_with_attributes(size, unsafe { nil }, unsafe { nil }) or {
 			return unsafe { nil }
@@ -36,7 +36,7 @@ pub fn copy_coretext_font_with_size(font_ptr voidptr, size f64) voidptr {
 // copy_coretext_font_with_size.
 pub fn release_coretext_font(font_ptr voidptr) {
 	if !isnil(font_ptr) {
-		$if macos {
+		$if macos || ios {
 			macos.cf_release(font_ptr)
 		}
 	}
@@ -112,7 +112,7 @@ pub const italic_skew = AffineTransform{
 // Initialize a CoreText-based font from a TTF/TTC in memory.
 pub fn CoreTextFace.init(lib Library, source []u8, opts FaceOptions) !CoreTextFace {
 	_ = lib
-	$if macos {
+	$if macos || ios {
 		data := macos.CFData.create_with_bytes_no_copy(source)!
 		defer { data.release() }
 		desc := macos.create_font_descriptor_from_data(data) or {
@@ -152,7 +152,7 @@ pub fn CoreTextFace.init_font(ct_font voidptr, opts FaceOptions) !CoreTextFace {
 	// Determine color state from the font's symbolic traits and tables.
 	mut color := ?ColorState(none)
 	mut is_color := false
-	$if macos {
+	$if macos || ios {
 		native_font := unsafe { &macos.CTFont(ct_font) }
 		is_color = native_font.get_symbolic_traits().color_glyphs
 	}
@@ -164,7 +164,7 @@ pub fn CoreTextFace.init_font(ct_font voidptr, opts FaceOptions) !CoreTextFace {
 	}
 
 	mut hb_font := harfbuzz.Font{}
-	$if macos {
+	$if macos || ios {
 		if (opts.backend or { Backend.selected_() }).has_harfbuzz() {
 			hb_font = harfbuzz.Font.create_coretext(ct_font) or {
 				if c := color {
@@ -192,7 +192,7 @@ pub fn CoreTextFace.init_font(ct_font voidptr, opts FaceOptions) !CoreTextFace {
 	result.quirks_disable_default_font_features = quirks.disable_default_font_features(&result)
 
 	// In debug mode, output the available variation axes when they exist.
-	$if macos {
+	$if macos || ios {
 		$if debug {
 			native_font := unsafe { &macos.CTFont(ct_font) }
 			if axes_ptr := native_font.copy_attribute(.variation_axes) {
@@ -265,7 +265,7 @@ pub fn (mut self CoreTextFace) deinit() {
 // Return a new face that is the same as this but has a transformation
 // matrix applied to italicize it.
 pub fn (self &CoreTextFace) synthetic_italic(opts FaceOptions) !CoreTextFace {
-	$if macos {
+	$if macos || ios {
 		original := unsafe { &macos.CTFont(self.ct_font) }
 		matrix := macos.CGAffineTransform{
 			a:  italic_skew.a
@@ -307,7 +307,7 @@ pub fn (self &CoreTextFace) synthetic_bold(opts FaceOptions) !CoreTextFace {
 // but sometimes allocation isn't required and a static string is
 // returned.
 pub fn (self &CoreTextFace) name(mut buf []u8) !string {
-	$if macos {
+	$if macos || ios {
 		native_font := unsafe { &macos.CTFont(self.ct_font) }
 		family_name := native_font.copy_family_name()!
 		defer { family_name.release() }
@@ -340,7 +340,7 @@ pub fn (mut self CoreTextFace) set_variations(vs []Variation, opts FaceOptions) 
 		return
 	}
 
-	$if macos {
+	$if macos || ios {
 		original := unsafe { &macos.CTFont(self.ct_font) }
 		mut desc := original.copy_descriptor()!
 		defer { desc.release() }
@@ -380,7 +380,7 @@ pub fn (self &CoreTextFace) is_color_glyph(glyph_id u32) bool {
 // Returns the glyph index for the given Unicode code point. If this
 // face doesn't support this glyph, null is returned.
 pub fn (self CoreTextFace) glyph_index(cp u32) ?u32 {
-	$if macos {
+	$if macos || ios {
 		mut unichars := []u16{len: 2}
 		pair := macos.string_get_surrogate_pair_for_long_character(cp, mut unichars)
 		len := if pair { 2 } else { 1 }
@@ -481,7 +481,7 @@ fn coretext_glyph_layout(bounds GlyphSize, sbix bool, synthetic_bold ?f64, opts 
 pub fn (self CoreTextFace) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOptions) !Glyph {
 	opts.assert_narrow_widths()
 	mut bounds := GlyphSize{}
-	$if macos {
+	$if macos || ios {
 		native_font := unsafe { &macos.CTFont(self.ct_font) }
 		rect := native_font.get_bounding_rects_for_glyphs(.horizontal, [
 			macos.CGGlyph(glyph_index),
@@ -503,10 +503,10 @@ pub fn (self CoreTextFace) render_glyph(mut atlas Atlas, glyph_index u32, opts R
 	layout := coretext_glyph_layout(bounds, sbix, self.synthetic_bold, opts) or { return Glyph{} }
 	depth := if is_color { u32(4) } else { u32(1) }
 	if atlas.format.depth() != depth {
-		log.warn('font atlas color depth doesn\'t equal font color depth atlas=${atlas.format.depth()} font=${depth}')
+		log.warn("font atlas color depth doesn't equal font color depth atlas=${atlas.format.depth()} font=${depth}")
 		return error('CoreText: font atlas color depth does not match glyph color depth')
 	}
-	$if macos {
+	$if macos || ios {
 		color_space := if is_color {
 			macos.CGColorSpace.create_named(.display_p3)!
 		} else {
@@ -594,7 +594,7 @@ pub fn (mut self CoreTextFace) get_metrics() FaceMetrics {
 	mut line_gap := f64(0)
 	mut cap_height := f64(0)
 	mut ex_height := f64(0)
-	$if macos {
+	$if macos || ios {
 		native_font := unsafe { &macos.CTFont(self.ct_font) }
 		px_per_em = native_font.get_size()
 		ascent = native_font.get_ascent()
@@ -613,12 +613,12 @@ pub fn (mut self CoreTextFace) get_metrics() FaceMetrics {
 		characters[i] = u16(i + 32)
 	}
 	mut glyphs := []u16{len: characters.len}
-	$if macos {
+	$if macos || ios {
 		native_font := unsafe { &macos.CTFont(self.ct_font) }
 		native_font.get_glyphs_for_characters(characters, glyphs)
 	}
 	mut advances := []CoreTextSize{len: glyphs.len}
-	$if macos {
+	$if macos || ios {
 		native_font := unsafe { &macos.CTFont(self.ct_font) }
 		native_font.get_advances_for_glyphs(.horizontal, glyphs, advances.data)
 	}
@@ -627,7 +627,7 @@ pub fn (mut self CoreTextFace) get_metrics() FaceMetrics {
 		cell_width = math.max(cell_width, advance.width)
 	}
 	mut ascii_bounds := GlyphSize{}
-	$if macos {
+	$if macos || ios {
 		native_font := unsafe { &macos.CTFont(self.ct_font) }
 		rect := native_font.get_bounding_rects_for_glyphs(.horizontal, glyphs, []macos.CGRect{})
 		ascii_bounds = GlyphSize{
@@ -643,12 +643,12 @@ pub fn (mut self CoreTextFace) get_metrics() FaceMetrics {
 	if water_glyph := self.glyph_index(0x6c34) {
 		mut water_glyphs := [u16(water_glyph)]
 		mut water_advance := [CoreTextSize{}]
-		$if macos {
+		$if macos || ios {
 			native_font := unsafe { &macos.CTFont(self.ct_font) }
 			native_font.get_advances_for_glyphs(.horizontal, water_glyphs[..], water_advance.data)
 		}
 		mut water_bounds := GlyphSize{}
-		$if macos {
+		$if macos || ios {
 			native_font := unsafe { &macos.CTFont(self.ct_font) }
 			rect := native_font.get_bounding_rects_for_glyphs(.horizontal, water_glyphs[..],
 				[]macos.CGRect{})
@@ -692,7 +692,7 @@ pub fn (mut self CoreTextFace) get_metrics() FaceMetrics {
 		u32(value.units_per_em)
 	} else {
 		mut value := u32(0)
-		$if macos {
+		$if macos || ios {
 			native_font := unsafe { &macos.CTFont(self.ct_font) }
 			value = native_font.get_units_per_em()
 		}
@@ -802,7 +802,7 @@ pub fn (self CoreTextFace) copy_table(tag string) ![]u8 {
 	if tag.len != 4 {
 		return error('CoreText: font table tag must be 4 characters')
 	}
-	$if macos {
+	$if macos || ios {
 		native_font := unsafe { &macos.CTFont(self.ct_font) }
 		data := native_font.copy_table(macos.CTFontTableTag.init(tag)) or {
 			return error('CoreText: font table not found: ${tag}')
@@ -842,7 +842,7 @@ pub mut:
 // init creates a ColorState from a CoreText font by checking for
 // sbix and SVG tables.
 pub fn ColorState.init(ct_font voidptr) !ColorState {
-	$if macos {
+	$if macos || ios {
 		native_font := unsafe { &macos.CTFont(ct_font) }
 		mut sbix := false
 		if data := native_font.copy_table(macos.CTFontTableTag.init('sbix')) {
@@ -948,7 +948,7 @@ pub fn (self CoreTextDeferredFace) has_codepoint(cp u32, p ?Presentation) bool {
 	//    return ct_font.getGlyphsForCharacters(unichars[0..len], glyphs[0..len])
 	if presentation := p {
 		mut is_color := false
-		$if macos {
+		$if macos || ios {
 			native_font := unsafe { &macos.CTFont(self.ct_font) }
 			is_color = native_font.get_symbolic_traits().color_glyphs
 		}
@@ -957,7 +957,7 @@ pub fn (self CoreTextDeferredFace) has_codepoint(cp u32, p ?Presentation) bool {
 			return false
 		}
 	}
-	$if macos {
+	$if macos || ios {
 		mut unichars := []u16{len: 2}
 		pair := macos.string_get_surrogate_pair_for_long_character(cp, mut unichars)
 		len := if pair { 2 } else { 1 }
@@ -972,7 +972,7 @@ pub fn (self CoreTextDeferredFace) has_codepoint(cp u32, p ?Presentation) bool {
 
 // family_name returns the family name of the deferred CoreText font.
 pub fn (self CoreTextDeferredFace) family_name(mut buf []u8) !string {
-	$if macos {
+	$if macos || ios {
 		native_font := unsafe { &macos.CTFont(self.ct_font) }
 		family_ptr := native_font.copy_attribute(.family_name) or { return 'unknown' }
 		family_name := unsafe { &macos.CFString(family_ptr) }
@@ -997,7 +997,7 @@ pub fn (self CoreTextDeferredFace) name(mut buf []u8) !string {
 	// this to be returned efficiently." In this case, we need
 	// to allocate. But we can't return an allocated string because
 	// we don't have an allocator. Let's use the stack and log it.
-	$if macos {
+	$if macos || ios {
 		native_font := unsafe { &macos.CTFont(self.ct_font) }
 		display_name := native_font.copy_display_name()!
 		defer { display_name.release() }
@@ -1044,7 +1044,7 @@ pub fn (self CoreTextDeferredFace) load_freetype(lib Library, opts FaceOptions) 
 	// 5. face = Face.init_file(lib, path, 0, opts)
 	// 6. face.set_variations(self.variations, opts)
 	// 7. return face
-	$if macos {
+	$if macos || ios {
 		native_font := unsafe { &macos.CTFont(self.ct_font) }
 		desc := native_font.copy_descriptor()!
 		defer { desc.release() }

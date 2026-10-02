@@ -38,7 +38,7 @@ pub fn (self &Discover) discover(desc Descriptor) !DiscoverIterator {
 		}
 	}
 	if self.backend.has_coretext() {
-		$if macos {
+		$if macos || ios {
 			native := CoreTextDiscovery.init()
 			iterator := native.discover(desc)!
 			return DiscoverIterator{
@@ -48,7 +48,7 @@ pub fn (self &Discover) discover(desc Descriptor) !DiscoverIterator {
 				}
 			}
 		} $else {
-			return error('CoreText discovery requires macOS')
+			return error('CoreText discovery requires Darwin')
 		}
 	}
 	return DiscoverIterator{
@@ -64,7 +64,7 @@ pub fn (self &Discover) discover_fallback(mut collection Collection, desc Descri
 		}
 	}
 	if self.backend.has_coretext() {
-		$if macos {
+		$if macos || ios {
 			native := CoreTextDiscovery.init()
 			iterator := native.discover_fallback(mut collection, desc)!
 			return DiscoverIterator{
@@ -74,7 +74,7 @@ pub fn (self &Discover) discover_fallback(mut collection Collection, desc Descri
 				}
 			}
 		} $else {
-			return error('CoreText discovery requires macOS')
+			return error('CoreText discovery requires Darwin')
 		}
 	}
 	return DiscoverIterator{
@@ -92,11 +92,11 @@ mut:
 pub fn (mut self DiscoverIterator) next() !DeferredFaceValue {
 	if self.backend.has_fontconfig() { return self.fontconfig.next() }
 	if self.backend.has_coretext() {
-		$if macos {
+		$if macos || ios {
 			mut native := unsafe { &CtDiscoverIterator(self.coretext) }
 			return native.next()
 		} $else {
-			return error('CoreText discovery requires macOS')
+			return error('CoreText discovery requires Darwin')
 		}
 	}
 	return DeferredFaceValue{}
@@ -105,7 +105,7 @@ pub fn (mut self DiscoverIterator) next() !DeferredFaceValue {
 pub fn (mut self DiscoverIterator) deinit() {
 	if self.backend.has_fontconfig() { self.fontconfig.deinit() }
 	if self.backend.has_coretext() {
-		$if macos {
+		$if macos || ios {
 			if !isnil(self.coretext) {
 				mut native := unsafe { &CtDiscoverIterator(self.coretext) }
 				native.deinit()

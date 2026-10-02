@@ -488,6 +488,7 @@ const void* vt_kca_gravity_center(void) {
 	return CFSTR("center");
 }
 
+#if TARGET_OS_OSX
 void* vt_display_link_create_with_active_displays(void) {
 	CVDisplayLinkRef link = NULL;
 	if (CVDisplayLinkCreateWithActiveCGDisplays(&link) != kCVReturnSuccess) return NULL;
@@ -531,6 +532,8 @@ bool vt_display_link_set_output_callback(
 		context
 	) == kCVReturnSuccess;
 }
+
+#endif
 
 void* vt_os_log_create(const char *subsystem, const char *category) {
 	return (void*)os_log_create(subsystem, category);

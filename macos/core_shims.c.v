@@ -4,4 +4,6 @@ module macos
 // are awkward to express directly in V. AppKit/Objective-C runtime work lives in
 // appkit.v and uses V's macOS message-send bridge.
 
-#insert "@VMODROOT/macos/core_shims.h"
+$if macos || ios {
+	#insert "@VMODROOT/macos/core_shims.h"
+}
