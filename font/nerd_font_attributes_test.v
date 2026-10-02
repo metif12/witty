@@ -52,7 +52,7 @@ fn test_get_constraint_powerline_stretch() {
 	assert c.pad_right == -0.03
 	assert c.pad_top == -0.005
 	assert c.pad_bottom == -0.005
-	assert c.max_xy_ratio == 0.7
+	assert (c.max_xy_ratio or { panic('missing max ratio') }) == 0.7
 }
 
 // Test multi-codepoint arm (0xe0a0...0xe0a3 and 0xe0cf share constraint).
