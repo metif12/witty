@@ -6,7 +6,7 @@ import input
 // stores its action so later native menu additions share the same conversion.
 pub struct MenuShortcut {
 pub:
-	key string
+	key       string
 	modifiers u64
 }
 
@@ -49,7 +49,7 @@ pub fn menu_shortcut(trigger input.Trigger) ?MenuShortcut {
 		}
 		input.TriggerKeyCatchAll { return none }
 	}
-	return MenuShortcut{key: key, modifiers: event_modifier_flags(int(trigger.mods.int()))}
+	return MenuShortcut{ key: key, modifiers: event_modifier_flags(int(trigger.mods.int())) }
 }
 
 pub fn menu_set_shortcut(action string, trigger ?input.Trigger) {
@@ -74,4 +74,32 @@ pub fn event_modifier_flags(mods int) u64 {
 	if mods & 4 != 0 { flags |= ns_event_modifier_flag_option }
 	if mods & 8 != 0 { flags |= ns_event_modifier_flag_command }
 	return flags
+}
+
+// KeyboardShortcut+Extension.keyList / description used by key-sequence caps.
+pub fn shortcut_description(trigger input.Trigger) ?string {
+	shortcut := menu_shortcut(trigger) or { return none }
+	mut parts := []string{}
+	mods := int(trigger.mods.int())
+	if mods & 2 != 0 { parts << '⌃' }
+	if mods & 4 != 0 { parts << '⌥' }
+	if mods & 1 != 0 { parts << '⇧' }
+	if mods & 8 != 0 { parts << '⌘' }
+	parts << match shortcut.key {
+		'\r' { '⏎' }
+		'\x1b' { '⎋' }
+		'\x7f' { '⌫' }
+		' ' { '␣' }
+		'\t' { '⇥' }
+		'\uF700' { '▲' }
+		'\uF701' { '▼' }
+		'\uF702' { '◀' }
+		'\uF703' { '▶' }
+		'\uF72C' { '↑' }
+		'\uF72D' { '↓' }
+		'\uF729' { '⤒' }
+		'\uF72B' { '⤓' }
+		else { objc_utf8_string(msg_id(nsstring(shortcut.key), 'uppercaseString')) }
+	}
+	return parts.join('')
 }

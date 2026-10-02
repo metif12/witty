@@ -34,4 +34,4 @@ pub fn termination_requires_confirmation(core_needs_confirm bool) bool {
 		u32(msg_u64(why, 'typeCodeValue')), core_needs_confirm)
 }
 
-fn vt_app_did_hide(_self ObjId, _cmd Sel, _notification ObjId) { g_app_was_hidden = true }
+fn vt_app_did_hide(_self ObjId, _cmd Sel, _notification ObjId) { g_app_was_hidden = true; capture_native_hidden_windows() }

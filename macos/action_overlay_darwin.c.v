@@ -17,8 +17,9 @@ fn C.witty_action_repeat_forever(animation voidptr)
 
 pub struct ActionCallbacks {
 pub:
-    inspector NativeInspectorCallbacks
-    size      fn (voidptr, f64, f64) = unsafe { nil }
+	inspector NativeInspectorCallbacks
+	size      fn (voidptr, f64, f64)    = unsafe { nil }
+	present   fn (voidptr, voidptr)     = unsafe { nil }
 	binding   fn (voidptr, string) bool = unsafe { nil }
 	title     fn (voidptr, string)      = unsafe { nil }
 	tab_title fn (voidptr, ?string)     = unsafe { nil }
@@ -36,6 +37,7 @@ pub struct NativeActionSurface {
 pub mut:
 	terminal_title           ?string
 	pwd                      ?string
+	proxy_icon               bool
 	uuid                     string
 	title                    string
 	notification_identifiers []string
@@ -57,38 +59,61 @@ pub mut:
 	password_input           bool
 	secure_indication        bool = true
 	bell_border              bool
+	visual_background        u32
 	progress_state           int
 	progress                 ?u8
 	progress_active          bool
 mut:
-    inspector &NativeInspectorView = unsafe { nil }
-    scroll &NativeSurfaceScroll = unsafe { nil }
-	title_timer      ObjId
-	title_fallback   ObjId
-	pending_title    string
-	progress_view    ObjId
-	owner            ObjId
-	overlay          ObjId
-	search_bar       ObjId
-	search_field     ObjId
-	search_count     ObjId
-	search_timer     ObjId
-	search_published bool
-	progress_timer   ObjId
-	progress_layer   ObjId
-	progress_track   ObjId
-	popover          ObjId
-	secure_badge     ObjId
-	pulse_timer      ObjId
-	drag_start       ObjCPoint
-	drag_origin      ObjCRect
-	key_top          bool
-	key_badge        ObjId
-	readonly_badge   ObjId
-	health_label     ObjId
-	hover_label      ObjId
-	hover_url        string
-	hover_left       bool
+	inspector           &NativeInspectorView  = unsafe { nil }
+	scroll              &NativeSurfaceScroll  = unsafe { nil }
+	palette             &NativeCommandPalette = unsafe { nil }
+	title_timer         ObjId
+	title_fallback      ObjId
+	pending_title       string
+	progress_view       ObjId
+	owner               ObjId
+	overlay             ObjId
+	search_bar          ObjId
+	search_field        ObjId
+	search_count        ObjId
+	search_timer        ObjId
+	search_published    bool
+	progress_timer      ObjId
+	progress_layer      ObjId
+	progress_track      ObjId
+	popover             ObjId
+	secure_badge        ObjId
+	pulse_timer         ObjId
+	drag_start          ObjCPoint
+	drag_origin         ObjCRect
+	key_top             bool
+	key_drag_start      f64
+	key_drag_offset     f64
+	key_dragging        bool
+	key_width           f64
+	key_dots            []ObjId
+	previous_sequence   []string
+	previous_tables     []string
+	hover_tracking_rect ObjCRect
+	hover_tracking      ObjId
+	secure_gradient     ObjId
+	secure_mask         ObjId
+	bell_layer          ObjId
+	highlighted         bool
+	highlight_layer     ObjId
+	highlight_radial    ObjId
+	highlight_border    ObjId
+	highlight_mask      ObjId
+	highlight_shadows   []ObjId
+	highlight_timer     ObjId
+	last_progress_value int = -1000
+	last_progress_width f64
+	key_badge           ObjId
+	readonly_badge      ObjId
+	health_label        ObjId
+	hover_label         ObjId
+	hover_url           string
+	hover_left          bool
 }
 
 __global (
@@ -111,6 +136,7 @@ fn action_owner(surface &NativeActionSurface) ObjId {
 		add_ptr_ivar(cls, 'state')
 		register_action_notification_methods(cls)
 		register_action_title_methods(cls)
+		register_action_visual_methods(cls)
 		add_method(cls, 'controlTextDidChange:', voidptr(action_search_edit), 'v@:@')
 		add_method(cls, 'control:textView:doCommandBySelector:', voidptr(action_search_command),
 			'B@:@@:')
@@ -194,17 +220,18 @@ pub fn new_action_surface(view voidptr, userdata voidptr, callbacks ActionCallba
 	msg_void1(state.progress_view, 'setAccessibilityRole:', nsstring('AXProgressIndicator'))
 	msg_void1(state.progress_track, 'addSublayer:', state.progress_layer)
 	g_action_surfaces[u64(view)] = state
-	state.key_badge = action_button(state, '', 'keyInfo:', objc_rect(8, 8, 280, 28))
+	state.key_badge = new_key_indicator(state)
 	msg_void1(state.overlay, 'addSubview:', state.key_badge)
 	state.readonly_badge = action_button(state, 'Read-only', 'readonly:', objc_rect(8, 8, 100, 28))
 	msg_void1(state.overlay, 'addSubview:', state.readonly_badge)
-	state.health_label = action_label('Oh, no. 😭\n\nThe renderer has failed. This is usually due to exhausting available GPU memory. Please free up available resources.', objc_rect(8,
-		8, 340, 80))
+	state.health_label = new_health_overlay()
 	msg_void1(state.overlay, 'addSubview:', state.health_label)
 	state.secure_badge = action_button(state, '🔒', 'secureInfo:', objc_rect(8, 10, 35, 35))
 	msg_void1(state.overlay, 'addSubview:', state.secure_badge)
 	state.hover_label = action_label('', objc_rect(0, 0, 320, 24))
 	msg_void1(state.overlay, 'addSubview:', state.hover_label)
+	state.initialize_visuals()
+	state.initialize_highlight()
 	state.scroll = new_surface_scroll(state)
 	state.refresh()
 	return state
@@ -212,20 +239,24 @@ pub fn new_action_surface(view voidptr, userdata voidptr, callbacks ActionCallba
 
 pub fn (mut state NativeActionSurface) deinit() {
 	if state.closed { return }
-    state.hide_inspector()
+	state.hide_inspector()
 	state.closed = true
+	if state.palette != unsafe { nil } { state.palette.close() }
 	state.remove_notifications()
 	for timer in [state.search_timer, state.progress_timer, state.pulse_timer, state.title_timer,
-		state.title_fallback] {
+		state.title_fallback, state.highlight_timer] {
 		if !is_nil(timer) { msg_void(timer, 'invalidate') }
 	}
 	g_secure_scopes.delete(u64(state.view))
 	secure_apply()
 	g_action_surfaces.delete(u64(state.view))
+	C.macos_objc_set_ptr_ivar(state.owner, cstr('state'), nil_obj())
+	C.macos_objc_set_ptr_ivar(state.overlay, cstr('state'), nil_obj())
+	C.macos_objc_set_ptr_ivar(state.key_badge, cstr('state'), nil_obj())
 	msg_void(state.overlay, 'removeFromSuperview')
 	msg_void(state.overlay, 'release')
 	msg_void(state.owner, 'release')
-    if state.scroll != unsafe { nil } { state.scroll.deinit() }
+	if state.scroll != unsafe { nil } { state.scroll.deinit() }
 }
 
 fn action_passive_hit(_self ObjId, _cmd Sel, _point ObjCPoint) ObjId {
@@ -252,6 +283,7 @@ fn (mut state NativeActionSurface) refresh() {
 	if state.closed { return }
 	width := view_width(state.view)
 	height := view_height(state.view)
+	if state.palette != unsafe { nil } { state.palette.layout() }
 	if state.search_active {
 		right := state.search_corner in [.top_right, .bottom_right]
 		bottom := state.search_corner in [.bottom_left, .bottom_right]
@@ -261,30 +293,20 @@ fn (mut state NativeActionSurface) refresh() {
 			8
 		}, 340, 42))
 	}
-	key_text := state.key_tables.join(' › ') +
-		(if state.key_tables.len > 0 && state.key_sequence.len > 0 { ' │ ' } else { '' }) +
-		state.key_sequence.join(' ') + (if state.key_sequence.len > 0 { ' …' } else { '' })
-	msg_void1(state.key_badge, 'setTitle:', nsstring(key_text))
-	msg_void_bool(state.key_badge, 'setHidden:', key_text.len == 0)
-	msg_void_rect(state.key_badge, 'setFrame:', objc_rect((width - 280) / 2, if state.key_top {
-		8
-	} else {
-		height - 36
-	}, 280, 28))
+	state.refresh_key_visuals()
 	msg_void_bool(state.readonly_badge, 'setHidden:', !state.readonly)
 	msg_void_rect(state.readonly_badge, 'setFrame:', objc_rect(width - 108, 8, 100, 28))
 	msg_void_bool(state.health_label, 'setHidden:', state.healthy)
-	msg_void_rect(state.health_label, 'setFrame:', objc_rect(16, height / 2 - 40, width - 32, 80))
+	msg_void_rect(state.health_label, 'setFrame:', objc_rect((width - 486) / 2, (height - 128) / 2, 486, 128))
 	msg_void_bool(state.hover_label, 'setHidden:', state.hover_url.len == 0)
 	msg_void1(state.hover_label, 'setStringValue:', nsstring(state.hover_url))
-	msg_void_rect(state.hover_label, 'setFrame:', objc_rect(if state.hover_left {
-		width - 320
-	} else {
-		0
-	}, height - 24, 320, 24))
+	state.refresh_hover_visuals()
 	msg_void_bool(state.secure_badge, 'setHidden:', !(g_secure_enabled && state.focused
 		&& state.secure_indication && msg_bool(view_window(state.view), 'isKeyWindow')))
+	state.refresh_secure_visuals()
 	msg_void_rect(state.secure_badge, 'setFrame:', objc_rect(width - 45, 10, 35, 35))
+	state.refresh_bell_visuals()
+	state.refresh_highlight()
 	state.refresh_progress()
 	msg_void_bool(state.overlay, 'setNeedsDisplay:', true)
 }
@@ -459,7 +481,16 @@ fn search_drag_end(self ObjId, _cmd Sel, _event ObjId) {
 		} else {
 			if top { SearchCorner.top_right } else { SearchCorner.bottom_right }
 		}
-		state.refresh()
+		right := state.search_corner in [.top_right, .bottom_right]
+		bottom := state.search_corner in [.bottom_left, .bottom_right]
+		msg_void(get_class('NSAnimationContext'), 'beginGrouping')
+		msg_void_f64(msg_id(get_class('NSAnimationContext'), 'currentContext'), 'setDuration:', 0.2)
+		msg_void_rect(msg_id(self, 'animator'), 'setFrame:', objc_rect(if right {
+			view_width(state.view) - 348
+		} else {
+			8
+		}, if bottom { view_height(state.view) - 50 } else { 8 }, 340, 42))
+		msg_void(get_class('NSAnimationContext'), 'endGrouping')
 	}
 }
 
@@ -467,15 +498,8 @@ fn action_draw(self ObjId, _cmd Sel, _rect ObjCRect) {
 	state := action_owner_state(self) or { return }
 	bounds := msg_rect(self, 'bounds')
 	if !state.healthy {
-		msg_void(msg_id(get_class('NSColor'), 'windowBackgroundColor'), 'setFill')
+		msg_void(native_color(state.visual_background, 1), 'setFill')
 		msg_void_rect(get_class('NSBezierPath'), 'fillRect:', bounds)
-	}
-	if state.bell && state.bell_border {
-		msg_void(msg_id(get_class('NSColor'), 'systemOrangeColor'), 'setStroke')
-		path := msg_id_rect(get_class('NSBezierPath'), 'bezierPathWithRect:', objc_rect(1, 1,
-			bounds.width - 2, bounds.height - 2))
-		msg_void_f64(path, 'setLineWidth:', 2)
-		msg_void(path, 'stroke')
 	}
 }
 
@@ -519,6 +543,7 @@ pub fn (mut state NativeActionSurface) ring_bell() {
 
 pub fn (mut state NativeActionSurface) begin_key_down() {
 	state.bell = false
+	state.publish_title()
 	state.refresh()
 }
 
@@ -546,6 +571,8 @@ fn action_progress_timer(self ObjId, _cmd Sel, _timer ObjId) {
 	if mut state := action_owner_state(self) {
 		state.progress_timer = nil_obj()
 		state.progress_active = false
+		state.progress_state = 0
+		state.progress = none
 		state.refresh()
 	}
 }
@@ -582,7 +609,11 @@ fn (mut state NativeActionSurface) show_popover(anchor ObjId, title string, text
 	msg_void(close, 'release')
 	msg_void1(controller, 'setView:', content)
 	msg_void1(state.popover, 'setContentViewController:', controller)
-	C.witty_action_show_popover(state.popover, anchor, 1)
+	C.witty_action_show_popover(state.popover, anchor, if anchor == state.key_badge {
+		if state.key_top { u64(1) } else { u64(3) }
+	} else {
+		u64(1)
+	})
 	msg_void(title_label, 'release')
 	msg_void(body, 'release')
 	msg_void(content, 'release')
@@ -609,10 +640,23 @@ fn action_popover_close(self ObjId, _cmd Sel, _sender ObjId) {
 }
 
 fn action_key_info(self ObjId, _cmd Sel, _sender ObjId) {
-	if mut state := action_owner_state(self) { state.show_popover(state.key_badge, 'Key State',
-			(if state.key_tables.len > 0 { 'A key table is a named set of keybindings, activated by some other key. Keys are interpreted using this table until it is deactivated.\n' } else { '' }) +(if state.key_sequence.len > 0 { 'A key sequence is a series of key presses that trigger an action. A pending key sequence is currently active.' } else { '' }),
+	if mut state := action_owner_state(self) {
+		state.show_popover(state.key_badge, if state.key_tables.len > 0 {
+			'Key Table'
+		} else {
+			'Key Sequence'
+		},
+			(if state.key_tables.len > 0 {
+				'A key table is a named set of keybindings, activated by some other key. Keys are interpreted using this table until it is deactivated.\n'
+			} else {
+				''
+			}) + (if state.key_sequence.len > 0 {
+				'A key sequence is a series of key presses that trigger an action. A pending key sequence is currently active.'
+			} else {
+				''
+			}),
 			false)
-	 }
+	}
 }
 
 fn action_secure_info(self ObjId, _cmd Sel, _sender ObjId) {
@@ -637,8 +681,14 @@ fn (mut state NativeActionSurface) refresh_progress() {
 	} else {
 		'controlAccentColor'
 	})
-	msg_void1(state.progress_track, 'setBackgroundColor:', msg_id(msg_id_f64(color,
-		'colorWithAlphaComponent:', 0.3), 'CGColor'))
+	determinate := state.progress != none || state.progress_state == 4
+	msg_void_bool(state.progress_track, 'setMasksToBounds:', true)
+	msg_void1(state.progress_track, 'setBackgroundColor:', if determinate {
+		nil_obj()
+	} else {
+		msg_id(msg_id_f64(color,
+			'colorWithAlphaComponent:', 0.3), 'CGColor')
+	})
 	msg_void1(state.progress_layer, 'setBackgroundColor:', msg_id(color, 'CGColor'))
 	msg_void_rect(state.progress_view, 'setFrame:', objc_rect(0, 0, width, 2))
 	value := if p := state.progress {
@@ -648,7 +698,24 @@ fn (mut state NativeActionSurface) refresh_progress() {
 	} else {
 		0.25
 	}
+	progress_value := if p := state.progress {
+		int(p)
+	} else if state.progress_state == 4 {
+		100
+	} else {
+		-1
+	}
+	msg_void(get_class('CATransaction'), 'begin')
+	msg_void_bool(get_class('CATransaction'), 'setDisableActions:', progress_value == state.last_progress_value)
+	msg_void_f64(get_class('CATransaction'), 'setAnimationDuration:', 0.2)
+	msg_void1(get_class('CATransaction'), 'setAnimationTimingFunction:', msg_id1(get_class('CAMediaTimingFunction'), 'functionWithName:', nsstring('easeInEaseOut')))
 	msg_void_rect(state.progress_layer, 'setFrame:', objc_rect(0, 0, width * value, 2))
+	msg_void(get_class('CATransaction'), 'commit')
+	state.last_progress_value = progress_value
+	if state.last_progress_width != width {
+		msg_void1(state.progress_layer, 'removeAnimationForKey:', nsstring('bounce'))
+		state.last_progress_width = width
+	}
 	if state.progress != none || state.progress_state == 4 {
 		msg_void1(state.progress_layer, 'removeAnimationForKey:', nsstring('bounce'))
 	} else if is_nil(msg_id1(state.progress_layer, 'animationForKey:', nsstring('bounce'))) {
@@ -671,6 +738,16 @@ fn (mut state NativeActionSurface) refresh_progress() {
 		3 { 'Terminal progress - In progress' }
 		else { 'Terminal progress' }
 	}))
+	msg_void1(state.progress_view, 'setAccessibilityValue:', nsstring(if progress_value >= 0 {
+		'${progress_value} percent complete'
+	} else {
+		match state.progress_state {
+			2 { 'Operation failed' }
+			4 { 'Operation paused at completion' }
+			3 { 'Operation in progress' }
+			else { 'Indeterminate progress' }
+		}
+	}))
 }
 
 pub fn (mut state NativeActionSurface) mouse_over_link(url string) {
@@ -684,7 +761,11 @@ pub fn (mut state NativeActionSurface) focus(focused bool) {
 		g_secure_scopes[u64(state.view)] = focused
 		secure_apply()
 	}
-	if focused { state.bell = false }
+	if focused {
+		state.bell = false
+		state.publish_title()
+		if pwd := state.pwd { state.set_pwd(pwd, state.proxy_icon) }
+	}
 	state.refresh()
 }
 
@@ -697,6 +778,7 @@ pub fn secure_set_global(mode int) {
 		!g_secure_global
 	}
 	secure_apply()
+	secure_refresh()
 }
 
 pub fn (mut state NativeActionSurface) secure_input(mode int) {
@@ -725,7 +807,11 @@ fn secure_desired() bool {
 
 fn secure_apply() {
 	if !app_is_active() || g_secure_enabled == secure_desired() { return }
-	status := if g_secure_enabled { C.DisableSecureEventInput() } else { C.EnableSecureEventInput() }
+	status := if g_secure_enabled {
+		C.DisableSecureEventInput()
+	} else {
+		C.EnableSecureEventInput()
+	}
 	if status == 0 {
 		g_secure_enabled = secure_desired()
 	} else {
@@ -749,13 +835,35 @@ fn secure_refresh() {
 	for _, mut state in g_action_surfaces {
 		state.refresh()
 	}
+	if item := g_config_menu_items['toggle_secure_input'] {
+		msg_void_u64(item, 'setState:', u64(if g_secure_global { 1 } else { 0 }))
+	}
 }
 
 pub fn set_cursor_visibility(visible bool) {
 	msg_void_bool(get_class('NSCursor'), 'setHiddenUntilMouseMoves:', !visible)
 }
 
-pub fn set_cursor_shape(view voidptr, shape int) {
+fn cursor_for_shape(shape int) ?ObjId {
+	cursor_class := get_class('NSCursor')
+	if C.witty_action_os_major() >= 15 {
+		if shape in [20, 22] {
+			return msg_id_u64(cursor_class, 'rowResizeCursorInDirections:', u64(if shape == 20 {
+				1
+			} else {
+				2
+			}))
+		}
+		if shape in [21, 23] {
+			return msg_id_u64(cursor_class, 'columnResizeCursorInDirections:', u64(if shape == 23 {
+				1
+			} else {
+				2
+			}))
+		}
+		if shape == 28 { return msg_id(cursor_class, 'columnResizeCursor') }
+		if shape == 29 { return msg_id(cursor_class, 'rowResizeCursor') }
+	}
 	selector := match shape {
 		0 { 'arrowCursor' }
 		1 { 'contextualMenuCursor' }
@@ -772,13 +880,20 @@ pub fn set_cursor_shape(view voidptr, shape int) {
 		23 { 'resizeLeftCursor' }
 		28 { 'resizeLeftRightCursor' }
 		29 { 'resizeUpDownCursor' }
-		else { return }
+		else { return none }
 	}
+	return msg_id(cursor_class, selector)
+}
 
-	cursor := msg_id(get_class('NSCursor'), selector)
+pub fn set_cursor_shape(view voidptr, shape int) {
+	cursor := cursor_for_shape(shape) or { return }
+	if surface := g_action_surfaces[u64(view)] {
+		if surface.scroll != unsafe { nil } {
+			msg_void1(surface.scroll.scroll, 'setDocumentCursor:', cursor)
+		}
+	}
 	msg_void(cursor, 'set')
-	// Cursor rects keep the translated shape after AppKit restores a cursor.
-	C.witty_macos_set_document_cursor(view, cursor)
+	msg_void1(view_window(view), 'invalidateCursorRectsForView:', view)
 }
 
 pub fn (mut state NativeActionSurface) refresh_config() { state.refresh() }

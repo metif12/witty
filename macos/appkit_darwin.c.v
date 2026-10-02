@@ -532,6 +532,7 @@ fn vt_app_did_become_active(_self ObjId, _cmd Sel, _notification ObjId) {
 	first_activation:=!g_application_has_become_active
 	g_application_has_become_active = true
 	g_app_was_hidden = false
+    clear_native_hidden_windows()
 	if g_app_focus_cb != unsafe { nil } {
 		g_app_focus_cb(true)
 	}
@@ -596,7 +597,7 @@ fn display_title_for_input(title string) string {
 	if title.len == 0 {
 		return 'Witty'
 	}
-	return abbrev_path(title)
+	return title
 }
 
 fn runtime_title_for_input(title string) string {
@@ -655,35 +656,10 @@ fn get_base_title(window ObjId) string {
 	return objc_utf8_string(value)
 }
 
-fn window_title_for_base(base string) string {
-	if base.len == 0 {
-		return 'Witty'
-	}
-	if base == 'Witty' || base.starts_with('Witty - ') {
-		return base
-	}
-	return 'Witty - ' + base
-}
-
-fn refresh_one_tab_label(tab ObjId, tab_count int, index int) {
-	mut base := get_base_title(tab)
-	url := msg_id(tab, 'representedURL')
-	if !is_nil(url) {
-		path_obj := msg_id(url, 'path')
-		path := objc_utf8_string(path_obj)
-		if path.len > 0 {
-			base = abbrev_path(path)
-		}
-	}
-	if base.len == 0 {
-		base = 'Witty'
-	}
-	mut label := window_title_for_base(base)
-	if tab_count > 1 {
-		tab_number := index + 1
-		label = label + '  Cmd' + tab_number.str()
-	}
-	msg_void1(tab, 'setTitle:', nsstring(label))
+fn refresh_one_tab_label(tab ObjId, _tab_count int, _index int) {
+ // TerminalController publishes the selected surface's title, independently
+ // of the working-directory proxy URL and tab-index titlebar accessories.
+ msg_void1(tab,'setTitle:',nsstring(get_base_title(tab)))
 }
 
 fn refresh_tab_labels(anchor_window ObjId) {
@@ -716,7 +692,8 @@ fn configure_window_common(window ObjId, base_title string) {
 		msg_void1(window, 'setDelegate:', g_delegate)
 	}
 	set_base_title(window, base_title)
-	msg_void1(window, 'setRepresentedURL:', url_for_title(base_title))
+	msg_void1(window, 'setRepresentedURL:', nil_obj())
+    apply_native_default_level(window)
 }
 
 fn menu_with_title(title string) ObjId {
@@ -779,12 +756,13 @@ fn install_menu_bar() {
 	menu_add_item(window_menu, 'Minimize', 'performMiniaturize:', 'm')
 	menu_add_item(window_menu, 'Zoom', 'performZoom:', '')
 	menu_add_separator(window_menu)
-	register_config_menu_item(voidptr(menu_add_item(window_menu, 'Show Previous Tab', 'selectPreviousTab:', '')), 'goto_tab:previous')
-	register_config_menu_item(voidptr(menu_add_item(window_menu, 'Show Next Tab', 'selectNextTab:', '')), 'goto_tab:next')
+	register_config_menu_item(voidptr(menu_add_item(window_menu, 'Show Previous Tab', 'selectPreviousTab:', '')), 'previous_tab')
+	register_config_menu_item(voidptr(menu_add_item(window_menu, 'Show Next Tab', 'selectNextTab:', '')), 'next_tab')
 	menu_add_separator(window_menu)
 	menu_add_item(window_menu, 'Bring All to Front', 'arrangeInFront:', '')
 	msg_void1(window_menu_item, 'setSubmenu:', window_menu)
 
+	install_native_action_menu(app_menu,file_menu,edit_menu,view_menu,window_menu)
 	app := shared_app()
 	msg_void1(app, 'setWindowsMenu:', window_menu)
 	msg_void1(app, 'setMainMenu:', menu_bar)
@@ -1387,7 +1365,6 @@ fn set_view_title_now(view voidptr, title string) {
 	}
 	base_title := runtime_title_for_input(title)
 	set_base_title(window, base_title)
-	msg_void1(window, 'setRepresentedURL:', url_for_title(base_title))
 	refresh_tab_labels(window)
 }
 

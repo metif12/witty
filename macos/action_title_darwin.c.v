@@ -50,6 +50,7 @@ fn action_title_fallback(self ObjId, _cmd Sel, _timer ObjId) {
 }
 
 fn (mut surface NativeActionSurface) publish_title() {
+	invalidate_native_restorable_state(surface.view)
 	if surface.title.len > 0 && !is_nil(surface.title_fallback) {
 		msg_void(surface.title_fallback, 'invalidate')
 		surface.title_fallback = nil_obj()
@@ -106,12 +107,13 @@ fn title_prompt_complete(context voidptr) {
 	if prompt.surface.closed || prompt.response != 1000 { return }
 	value := objc_utf8_string(msg_id(prompt.field, 'stringValue'))
 	if prompt.tab {
-		if prompt.surface.callbacks.tab_title != unsafe { nil } { prompt.surface.callbacks.tab_title(prompt.surface.userdata, if value.len > 0 {
+		if prompt.surface.callbacks.tab_title != unsafe { nil } {
+			prompt.surface.callbacks.tab_title(prompt.surface.userdata, if value.len > 0 {
 				?string(value)
 			} else {
 				none
 			})
-		 }
+		}
 	} else if value.len == 0 {
 		previous := prompt.surface.terminal_title or { '👻' }
 		prompt.surface.terminal_title = none
@@ -124,7 +126,9 @@ fn title_prompt_complete(context voidptr) {
 }
 
 pub fn (mut surface NativeActionSurface) set_pwd(pwd string, proxy_icon bool) {
+	surface.proxy_icon = proxy_icon
 	surface.pwd = pwd.clone()
+	invalidate_native_restorable_state(surface.view)
 	if surface.focused {
 		url := if proxy_icon {
 			msg_id1(get_class('NSURL'), 'fileURLWithPath:', nsstring(pwd))
@@ -141,24 +145,52 @@ pub fn native_window_title(view voidptr) string {
 
 // SurfaceView Codable retains whether terminal titles are currently overridden.
 pub fn (surface &NativeActionSurface) saved_surface_title() (?string, bool) {
- return if surface.title.len > 0 { ?string(surface.title) } else { none }, surface.terminal_title != none
+	return if surface.title.len > 0 { ?string(surface.title) } else { none }, surface.terminal_title != none
 }
+
 pub fn (mut surface NativeActionSurface) restore_surface_title(title ?string, user_set bool) {
- if value := title { surface.title = value.clone(); surface.terminal_title = if user_set { ?string(value.clone()) } else { none }; surface.publish_title() }
+	if value := title {
+		surface.title = value.clone()
+		surface.terminal_title = if user_set { ?string(value.clone()) } else { none }
+		surface.publish_title()
+	}
 }
+
 pub fn (surface &NativeActionSurface) saved_pwd() ?string { return surface.pwd }
+
 pub fn (mut surface NativeActionSurface) restore_pwd(pwd ?string, proxy_icon bool) {
- if value := pwd { surface.set_pwd(value, proxy_icon) }
+	if value := pwd { surface.set_pwd(value, proxy_icon) }
 }
+
 pub fn abbreviated_pwd(pwd string) string {
- return objc_utf8_string(msg_id(nsstring(pwd), 'stringByAbbreviatingWithTildeInPath'))
+	return objc_utf8_string(msg_id(nsstring(pwd), 'stringByAbbreviatingWithTildeInPath'))
 }
+
 pub fn native_tab_display_color(view voidptr) ?voidptr {
- selector := match native_tab_color(view) {
- 1 { 'systemBlueColor' } 2 { 'systemPurpleColor' } 3 { 'systemPinkColor' }
- 4 { 'systemRedColor' } 5 { 'systemOrangeColor' } 6 { 'systemYellowColor' }
- 7 { 'systemGreenColor' } 8 { if msg_bool1(get_class('NSColor'), 'respondsToSelector:',sel('systemMintColor')) { 'systemMintColor' } else { 'systemTealColor' } }
- 9 { 'systemGrayColor' } else { return none }
- }
- return msg_id(get_class('NSColor'), selector)
+	selector := match native_tab_color(view) {
+		1 { 'systemBlueColor' }
+		2 { 'systemPurpleColor' }
+		3 { 'systemPinkColor' }
+		4 { 'systemRedColor' }
+		5 { 'systemOrangeColor' }
+		6 { 'systemYellowColor' }
+		7 { 'systemGreenColor' }
+		8 {
+			if msg_bool1(get_class('NSColor'), 'respondsToSelector:', sel('systemMintColor')) {
+				'systemMintColor'
+			} else {
+				'systemTealColor'
+			}
+		}
+		9 { 'systemGrayColor' }
+		else { return none }
+	}
+	return msg_id(get_class('NSColor'), selector)
+}
+
+pub fn (mut surface NativeActionSurface) configure_title(proxy_icon bool) {
+	surface.proxy_icon = proxy_icon
+	if surface.focused {
+		if pwd := surface.pwd { surface.set_pwd(pwd, proxy_icon) }
+	}
 }

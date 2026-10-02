@@ -115,7 +115,7 @@ fn create_surface(view voidptr, inherited apprt.SurfaceOptions) ?&TermState {
 		native_config: native_window_config(&runtime.app.config)
 	}
 	macos.view_set_userdata(view, voidptr(state))
-	state.actions = macos.new_action_surface(view, voidptr(state), macos.ActionCallbacks{inspector: native_inspector_callbacks(), size: on_resize, binding: native_binding_action, title: native_surface_title_changed, tab_title: native_tab_title_changed})
+	state.actions = macos.new_action_surface(view, voidptr(state), macos.ActionCallbacks{inspector: native_inspector_callbacks(), size: on_resize, binding: native_binding_action, title: native_surface_title_changed, tab_title: native_tab_title_changed, present: native_present_view})
 	state.actions.bell_border = runtime.app.config.bell_features.border()
 	state.actions.secure_indication = runtime.app.config.macos_secure_input_indication
     native_action_config(state,&runtime.app.config)
@@ -478,7 +478,7 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 		}
 		.present_terminal {
 			if current := state {
-				macos.present_view(current.view)
+				native_present_view(voidptr(current), current.view)
 				return true
 			}
 		}
@@ -544,6 +544,7 @@ fn main() {
 	}
 
 	macos.app_init()
+    macos.set_native_application_action(native_menu_application_action)
 	macos.start_native_updater(native_update_config(&config)) or { eprintln('error starting updater: ${err}') }
 	defer { macos.stop_native_updater() }
 	macos.set_draw_callback(on_draw)
@@ -632,6 +633,7 @@ fn on_focus(userdata voidptr, focused bool) {
 			state.controller.focused = state
 			if mut quick := macos.quick_terminal_for_view(state.view) { quick.view = state.view }
 			sync_native_window(state)
+			if state.actions != unsafe { nil } { native_surface_title_changed(userdata, state.actions.title) }
 		}
 	}
 }

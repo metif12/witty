@@ -22,21 +22,128 @@ fn runtime_native_action(app &apprt.App, state ?&TermState, action apprt.Runtime
 			return true
 		}
 	}
-	current := state or { return false }
+	if action.action == .check_for_updates {
+		macos.native_update_check()
+		return true
+	}
+	if action.action == .toggle_visibility {
+		macos.toggle_native_visibility()
+		return true
+	}
+	if action.action == .goto_window {
+		data := action.data
+		if data is apprt.GotoWindow { return macos.goto_native_window(int(data)) != none }
+	}
+	if action.action == .prompt_title && state == none {
+		data := action.data
+		if data is apprt.PromptTitle {
+			if data == .tab {
+				view := macos.main_terminal_view()
+				if current := state_from_userdata(macos.view_get_userdata(view)) {
+					if current.controller != unsafe { nil } {
+						current.actions.prompt_title(true, current.controller.title_override or { macos.native_window_title(view) })
+						return true
+					}
+				}
+			}
+		}
+		return false
+	}
+	mut current := state or {
+		// Source void handlers warn for app targets, then action returns true.
+		if action.action in [.start_search, .end_search, .search_total, .search_selected,
+			.key_sequence, .key_table, .progress_report, .readonly, .ring_bell, .renderer_health,
+			.mouse_shape, .mouse_visibility, .mouse_over_link, .desktop_notification, .float_window,
+			.pwd, .reset_window_size, .inspector, .render_inspector, .toggle_command_palette,
+			.scrollbar, .color_change, .render, .set_title, .initial_size, .cell_size,
+			.equalize_splits, .toggle_fullscreen, .close_tab, .close_window, .toggle_maximize,
+			.toggle_background_opacity] {
+			eprintln('${action.action} does nothing with an app target')
+			return true
+		}
+		return false
+	}
+
 	if current.closed || current.actions == unsafe { nil } { return false }
 	mut overlay := current.actions
 	data := action.data
 	match action.action {
+		.toggle_command_palette {
+			overlay.toggle_command_palette(native_command_options(app))
+			return true
+		}
 		.prompt_title {
-            if data is apprt.PromptTitle {
-                overlay.prompt_title(data == .tab, if data == .tab && current.controller != unsafe { nil } { current.controller.title_override or { macos.native_window_title(current.view) } } else { overlay.title })
-                return true
-            }
-        }
-        .pwd { if data is apprt.PwdValue { overlay.set_pwd(data.pwd,current.native_config.proxy_icon); return true } }
-        .scrollbar { if data is terminal.Scrollbar { overlay.set_scrollbar(data.total,data.offset,data.len); return true } }
-        .inspector { if data is apprt.InspectorAction { overlay.control_inspector(int(data)); return true } }
-        .render_inspector { overlay.render_inspector(); return true }
+			if data is apprt.PromptTitle {
+				if data == .tab && current.controller == unsafe { nil } { return false }
+				overlay.prompt_title(data == .tab, if data == .tab {
+					current.controller.title_override or {
+						macos.native_window_title(current.view)
+					}
+				} else {
+					overlay.title
+				})
+				return true
+			}
+		}
+		.pwd {
+			if data is apprt.PwdValue {
+				overlay.set_pwd(data.pwd, current.native_config.proxy_icon)
+				return true
+			}
+		}
+		.move_tab {
+			if data is apprt.MoveTab {
+				if current.controller != unsafe { nil } && current.controller.focused != current {
+					return true
+				}
+				return macos.move_native_tab(current.view, data.amount)
+			}
+		}
+		.float_window {
+			if data is apprt.FloatWindow {
+				macos.float_native_window(current.view, int(data))
+				return true
+			}
+		}
+		.reset_window_size { return do_reset_window_size(current) }
+		.color_change {
+			if data is apprt.ColorChange {
+				if data.kind == .background {
+					mut writable := unsafe { &TermState(current) }
+					writable.background_color = (u32(data.r) << 16) | (u32(data.g) << 8) | u32(data.b)
+					sync_native_window(current)
+				}
+				return true
+			}
+		}
+		.toggle_maximize {
+			macos.maximize_native_window(current.view)
+			return true
+		}
+		.toggle_background_opacity {
+			if current.controller != unsafe { nil } {
+				mut controller := current.controller
+				controller.force_opaque = !controller.force_opaque
+				sync_native_window(current)
+			}
+			return true
+		}
+		.inspector {
+			if data is apprt.InspectorAction {
+				overlay.control_inspector(int(data))
+				return true
+			}
+		}
+		.render_inspector {
+			overlay.render_inspector()
+			return true
+		}
+		.scrollbar {
+			if data is terminal.Scrollbar {
+				overlay.set_scrollbar(data.total, data.offset, data.len)
+				return true
+			}
+		}
 		.desktop_notification {
 			if data is apprt.DesktopNotificationValue {
 				overlay.desktop_notification(data.title, data.body)
@@ -68,7 +175,13 @@ fn runtime_native_action(app &apprt.App, state ?&TermState, action apprt.Runtime
 		.key_sequence {
 			if data is apprt.KeySequence {
 				match data {
-					input.Trigger { overlay.set_key_sequence(true, data.format()) }
+					input.Trigger {
+						if shortcut := macos.shortcut_description(data) {
+							overlay.set_key_sequence(true, shortcut)
+						} else {
+							eprintln('unable to convert trigger to keyboard shortcut')
+						}
+					}
 					apprt.KeySequenceEnd { overlay.set_key_sequence(false, '') }
 				}
 
@@ -100,6 +213,7 @@ fn runtime_native_action(app &apprt.App, state ?&TermState, action apprt.Runtime
 		}
 		.ring_bell {
 			overlay.ring_bell()
+			native_surface_title_changed(voidptr(current), overlay.title)
 			overlay.bell_notification(app.config.bell_features.system(),
 				app.config.bell_features.attention())
 			return true
@@ -158,15 +272,94 @@ fn native_tab_title_changed(userdata voidptr, title ?string) {
 	mut state := state_from_userdata(userdata) or { return }
 	if state.closed || state.controller == unsafe { nil } { return }
 	state.controller.title_override = title
+	macos.invalidate_native_restorable_state(state.view)
 	native_surface_title_changed(userdata, state.actions.title)
 }
 
-fn native_action_config(current &TermState,config &configpkg.Config) {
- if current.closed || current.actions == unsafe { nil } { return }
- mut actions := current.actions
- actions.bell_border = config.bell_features.border()
- actions.secure_indication = config.macos_secure_input_indication
- color := config.background
- actions.configure_scroll(config.scrollbar == .never, (0.299*f64(color.r)+0.587*f64(color.g)+0.114*f64(color.b))/255 > 0.5)
- actions.refresh_config()
+fn native_command_options(app &apprt.App) []macos.NativeCommandOption {
+	mut options := []macos.NativeCommandOption{}
+	for state in standalone_runtime().states {
+		if state.closed || state.surface == unsafe { nil } {
+			continue
+		}
+		title := if state.actions.title.len > 0 {
+			state.actions.title
+		} else {
+			macos.native_window_title(state.view)
+		}
+		shown := if title.len > 0 { title } else { 'Untitled' }
+		pwd := macos.abbreviated_pwd(state.actions.saved_pwd() or { '' })
+		options << macos.NativeCommandOption{
+			title:         'Focus: ${shown}'
+			subtitle:      if pwd.len > 0 && !shown.contains(pwd) { pwd } else { '' }
+			focus_view:    state.view
+			sort_key:      u64(state.view)
+			leading_color: macos.native_tab_display_color(state.view)
+			leading_icon:  'rectangle.on.rectangle'
+		}
+	}
+	for command in app.config.command_palette_entry.items {
+		if command.action.tag() in [.toggle_tab_overview, .toggle_window_decorations,
+			.show_gtk_inspector] {
+			continue
+		}
+		options << macos.NativeCommandOption{
+			title:       command.title
+			description: command.description
+			action:      command.action.format()
+		}
+	}
+	mut updates := []macos.NativeCommandOption{}
+	if macos.native_update_is_installable() {
+		updates << macos.NativeCommandOption{ title: if macos.native_update_is_available() {
+			'Update Ghostty and Restart'
+		} else {
+			macos.native_update_text()
+		}, invoke: macos.native_update_install, description: macos.native_update_description(), leading_icon: macos.native_update_icon_name() or { 'shippingbox.fill' }, badge: macos.native_update_badge(), emphasis: true }
+		updates << macos.NativeCommandOption{ title: 'Cancel or Skip Update', description: 'Dismiss the current update process', invoke: macos.native_update_cancel }
+	}
+	updates << macos.sorted_command_options(options)
+	return updates
+}
+
+fn native_present_view(_userdata voidptr, view voidptr) {
+	state := state_from_userdata(macos.view_get_userdata(view)) or { return }
+	if state.closed { return }
+	if state.controller != unsafe { nil } {
+		mut host := state.controller.host
+		if host.tree.zoomed != unsafe { nil } {
+			host.replace_tree(macos.NativeSplitTree{
+				root: host.tree.root
+			})
+		}
+	}
+	macos.present_view(view)
+	state.actions.presented()
+}
+
+fn native_action_config(current &TermState, config &configpkg.Config) {
+	if current.closed || current.actions == unsafe { nil } { return }
+	mut actions := current.actions
+	actions.bell_border = config.bell_features.border()
+	actions.secure_indication = config.macos_secure_input_indication
+	actions.configure_title(config.macos_titlebar_proxy_icon == .visible)
+	color := config.background
+	actions.visual_background = (u32(color.r) << 16) | (u32(color.g) << 8) | u32(color.b)
+	actions.configure_scroll(config.scrollbar == .never, (0.299 * f64(color.r) + 0.587 * f64(color.g) + 0.114 * f64(color.b)) / 255 > 0.5)
+	actions.refresh_config()
+}
+
+fn native_menu_application_action(action string) bool {
+	runtime := standalone_runtime()
+	if runtime.app == unsafe { nil } { return false }
+	kind := match action {
+		'new_window' { apprt.ActionKey.new_window }
+		'close_all_windows' { .close_all_windows }
+		'undo' { .undo }
+		'redo' { .redo }
+		'toggle_quick_terminal' { .toggle_quick_terminal }
+		'toggle_visibility' { .toggle_visibility }
+		else { return false }
+	}
+	return runtime_action(runtime.app, apprt.AppTarget{}, apprt.RuntimeAction{ action: kind, data: apprt.ActionVoid{} })
 }
