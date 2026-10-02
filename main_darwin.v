@@ -133,7 +133,12 @@ fn create_surface(view voidptr, inherited apprt.SurfaceOptions) ?&TermState {
 		state.controller = &TerminalController{host: macos.create_split_host(view), focused: state, restorable: (inherited.command or { '' }) == ''}
 		macos.apply_native_window_config(view, state.native_config, true, state.native_config.background, state.native_config.opacity, false)
 		state.controller.initial_frame = macos.native_window_frame(view)
-		if runtime.app.config.maximize || (state.initial_width>0 && state.initial_height>0) { macos.reset_native_window_size(view,runtime.app.config.maximize,state.controller.initial_frame,state.initial_width,state.initial_height); state.controller.initial_frame=macos.native_window_frame(view) }
+		if runtime.app.config.maximize {
+			macos.reset_native_window_size(view,true,state.controller.initial_frame,state.initial_width,state.initial_height)
+			state.controller.initial_frame=macos.native_window_frame(view)
+		} else if state.initial_width>0 && state.initial_height>0 {
+			macos.dispatch_after(0.01,apply_initial_native_content_size,voidptr(state.controller))
+		}
 		runtime.controllers << state.controller
 		macos.configure_native_restoration(view, state.controller.restorable)
 		macos.detach_automatic_native_tab(view)

@@ -199,3 +199,11 @@ fn do_reset_window_size(current &TermState) bool {
 	macos.reset_native_window_size(current.view, config.maximize, current.controller.initial_frame, current.initial_width, current.initial_height)
 	return true
 }
+fn apply_initial_native_content_size(context voidptr) {
+	controller:=unsafe { &TerminalController(context) }
+	if controller.closed || controller.quick || controller.focused == unsafe { nil } { return }
+	state:=controller.focused
+	if state.closed || state.initial_width<=0 || state.initial_height<=0 { return }
+	macos.reset_native_window_size(state.view,false,controller.initial_frame,state.initial_width,state.initial_height)
+	macos.adjust_native_window_origin_after_default_size(state.view,state.native_config.position_x,state.native_config.position_y)
+}

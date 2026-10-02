@@ -1,5 +1,9 @@
 module macos
 
+import math
+
+fn C.witty_macos_set_frame_origin(window ObjId,point ObjCPoint)
+
 // TerminalController.UndoState and DefaultSize use native AppKit window state.
 pub struct NativeWindowFrame {
 pub:
@@ -78,13 +82,28 @@ pub fn reset_native_window_size(view voidptr, maximize bool, initial NativeWindo
 		msg_void_size(window, 'setContentSize:', objc_size(width,height))
 		mut screen := msg_id(window, 'screen'); if is_nil(screen) { screen = msg_id(get_class('NSScreen'), 'mainScreen') }
 		if !is_nil(screen) {
-			mut frame := msg_rect(window, 'frame'); visible := msg_rect(screen,'visibleFrame')
+			old:=msg_rect(window,'frame')
+			mut frame := old; visible := msg_rect(screen,'visibleFrame')
 			// NSWindow.constrainToScreen from the source extension.
 			frame.width = if frame.width > visible.width { visible.width } else { frame.width }
 			frame.height = if frame.height > visible.height { visible.height } else { frame.height }
 			frame.x = if frame.x < visible.x { visible.x } else if frame.x+frame.width > visible.x+visible.width { visible.x+visible.width-frame.width } else { frame.x }
 			frame.y = if frame.y < visible.y { visible.y } else if frame.y+frame.height > visible.y+visible.height { visible.y+visible.height-frame.height } else { frame.y }
-			C.witty_macos_msg_void_rect_bool(window,sel('setFrame:display:'),frame,true)
+			if frame!=old { C.witty_macos_msg_void_rect_bool(window,sel('setFrame:display:'),frame,true) }
 		}
 	} else { apply_native_window_frame(view, initial) }
+}
+// TerminalController.adjustForWindowPosition after the deferred intrinsic-size
+// application, using NSScreen.origin(fromTopLeftOffsetX:offsetY:windowSize:).
+pub fn adjust_native_window_origin_after_default_size(view voidptr,x ?i16,y ?i16) {
+	x_offset:=x or { return }
+	y_offset:=y or { return }
+	window:=msg_id(view,'window')
+	mut screen:=msg_id(window,'screen')
+	if is_nil(screen) { screen=msg_id(get_class('NSScreen'),'mainScreen') }
+	if is_nil(screen) { return }
+	frame:=msg_rect(window,'frame')
+	vf:=msg_rect(screen,'visibleFrame')
+	position:=native_window_position(SplitBounds{width:frame.width,height:frame.height},SplitBounds{x:vf.x,y:vf.y,width:vf.width,height:vf.height},x_offset,y_offset)
+	C.witty_macos_set_frame_origin(window,ObjCPoint{x:math.min(math.max(position.x,vf.x),vf.x+vf.width-frame.width),y:math.min(math.max(position.y,vf.y),vf.y+vf.height-frame.height)})
 }

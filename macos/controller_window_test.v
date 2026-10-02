@@ -54,3 +54,20 @@ fn test_new_tab_refuses_non_native_fullscreen_with_real_warning_sheet() {
 	msg_void(window,'close')
 	msg_void(window,'release')
 }
+fn test_default_content_size_repositions_and_clamps_configured_native_origin() {
+	app_init()
+	view:=create_restorable_window(160,100,'default size probe')
+	window:=msg_id(view,'window')
+	reset_native_window_size(view,false,native_window_frame(view),240,160)
+	adjust_native_window_origin_after_default_size(view,-30000,-30000)
+	frame:=msg_rect(window,'frame')
+	visible:=msg_rect(msg_id(window,'screen'),'visibleFrame')
+	assert frame.x==visible.x
+	assert frame.y==visible.y+visible.height-frame.height
+	adjust_native_window_origin_after_default_size(view,30000,30000)
+	clamped:=msg_rect(window,'frame')
+	assert clamped.x==visible.x+visible.width-clamped.width
+	assert clamped.y==visible.y
+	msg_void(window,'close')
+	msg_void(window,'release')
+}
