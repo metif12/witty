@@ -1203,6 +1203,7 @@ fn vt_app_did_finish_launching(_self ObjId, _cmd Sel, _notification ObjId) {
 }
 
 fn vt_app_did_become_active(_self ObjId, _cmd Sel, _notification ObjId) {
+	g_application_has_become_active = true
 	if g_app_focus_cb != unsafe { nil } {
 		g_app_focus_cb(true)
 	}
@@ -1250,7 +1251,7 @@ fn vt_app_should_terminate(_self ObjId, _cmd Sel, _app ObjId) u64 {
 
 fn vt_app_should_handle_reopen(_self ObjId, _cmd Sel, _app ObjId, has_visible_windows bool) bool {
 	if has_visible_windows {
-		return false
+		return true
 	}
 	if g_reopen_cb != unsafe { nil } {
 		return g_reopen_cb()

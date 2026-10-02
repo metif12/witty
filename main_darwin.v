@@ -199,14 +199,20 @@ fn on_should_quit_after_last_window() bool {
 
 fn on_should_terminate() bool {
 	runtime := standalone_runtime()
-	if runtime.app == unsafe { nil } || !apprt.ghostty_app_needs_confirm_quit(runtime.app) {
+	if runtime.app == unsafe { nil } || !macos.termination_requires_confirmation(apprt.ghostty_app_needs_confirm_quit(runtime.app)) {
 		return true
 	}
 	return macos.confirm_quit()
 }
 
 fn on_reopen() bool {
-	return do_new_window(none)
+	runtime := standalone_runtime()
+	controllers := runtime.states.filter(!it.closed).len
+	if !macos.should_create_reopen_window(false, controllers, macos.application_has_become_active()) {
+		return true
+	}
+	do_new_window(none)
+	return false
 }
 
 fn runtime_read_clipboard(userdata voidptr, clipboard_type int, request &apprt.ClipboardRequest) {
