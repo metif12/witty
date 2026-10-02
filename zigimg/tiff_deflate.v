@@ -453,3 +453,29 @@ fn tiff_zlib_stream(mut input ReadStream, mut output WriteStream) ! {
 		}
 	}
 }
+
+// Decompress.init's indirect reader followed by Reader.appendRemaining with a
+// limited allocating writer (Zig 0.15.2). The fixed history window may read
+// ahead, but the owned result never grows past limit. appendRemaining rejects
+// an exactly full limit without probing for EOF.
+pub fn decode_zlib_bounded(data []u8, limit usize) ![]u8 {
+	mut input := ReadStream.init_memory(data)
+	mut decoder := TiffFlate{}
+	mut result := []u8{}
+	mut remaining := limit
+	for remaining > 0 {
+		if decoder.end > decoder.seek {
+			available := usize(decoder.end - decoder.seek)
+			count := if available < remaining { available } else { remaining }
+			result << decoder.window[decoder.seek..decoder.seek + int(count)]
+			decoder.seek += int(count)
+			remaining -= count
+		} else {
+			decoder.fill_window(mut input) or {
+				if err.msg() == 'EndOfStream' && decoder.state == .end { return result }
+				return error('ReadFailed')
+			}
+		}
+	}
+	return error('StreamTooLong')
+}
