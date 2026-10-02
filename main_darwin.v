@@ -482,7 +482,11 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 		.goto_tab {
 			if current := state {
 				data := action.data
-				if data is apprt.GotoTab { return macos.goto_native_tab(current.view, int(data)) }
+				if data is apprt.GotoTab {
+					if macos.native_window_tabs(current.view).len <= 1 { return false }
+					if current.controller == unsafe { nil } || current.controller.focused != current { return true }
+					return macos.goto_native_tab(current.view, int(data))
+				}
 			}
 		}
 		.present_terminal {
