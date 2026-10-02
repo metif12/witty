@@ -276,15 +276,14 @@ fn draw_pagelist_inspector(context cimgui.Context, mut pages terminal.PageList) 
 			// We use our location as the ID so that even if reallocations
 			// happen we remain open if we're open already.
 			context.push_id_int(int(index))
-			mut label := 'Page ${index} (rows ${row_offset}..${row_offset + usize(page.size.rows) - 1})'
-			if voidptr(page_node) == voidptr(active_pin.node) {
-				label += ' active'
-			}
-			if voidptr(page_node) == voidptr(viewport_pin.node) {
-				label += ' viewport'
-			}
-			if context.tree_node(label) {
-				draw_page_inspector(context, page)
+			if tree_node(context, PageTreeNodeState{
+				page: page
+				index: index
+				row_range: [row_offset, row_offset + usize(page.size.rows) - 1]!
+				active: voidptr(page_node) == voidptr(active_pin.node)
+				viewport: voidptr(page_node) == voidptr(viewport_pin.node)
+			}) {
+				inspector(context, page)
 				context.tree_pop()
 			}
 			context.pop_id()
@@ -376,31 +375,50 @@ fn draw_tracked_pins(context cimgui.Context, pages &terminal.PageList) {
 		context.text_disabled('(no tracked pins)')
 		return
 	}
-	if !context.begin_table('tracked_pins', 3, cimgui.table_flags_inner_v_row_bg_sizing_fixed_fit) {
+	if !context.begin_table('tracked_pins', 5, cimgui.table_flags_inner_v_row_bg_sizing_fixed_fit) {
 		return
 	}
-	defer {
-		context.end_table()
+	defer { context.end_table() }
+	for label in ['Index', 'Pin', 'Context', 'Dirty', 'State'] {
+		context.table_setup_column(label, cimgui.table_column_width_fixed, 0)
 	}
-	context.table_setup_column('Pin', cimgui.table_column_width_fixed, 0)
-	context.table_setup_column('Screen', cimgui.table_column_width_fixed, 0)
-	context.table_setup_column('State', cimgui.table_column_width_stretch, 0)
 	context.table_headers_row()
-	for index, pin in pins {
+	active_pin := pages.get_top_left(.active)
+	viewport_pin := pages.get_top_left(.viewport)
+	for index, tracked in pins {
+		pin := *tracked
 		context.table_next_row()
 		context.table_set_column(0)
 		context.text(index.str())
 		context.table_set_column(1)
-		if point := pages.point_from_pin(.screen, *pin) {
-			context.text('(${point.coord().x}, ${point.coord().y})')
+		if pin.garbage {
+			context.text_colored(cimgui.Color{ r: 1.0, g: 0.5, b: 0.3 }, '(${pin.x}, ${pin.y})')
 		} else {
-			context.text_disabled('(none)')
+			context.text('(${pin.x}, ${pin.y})')
 		}
 		context.table_set_column(2)
-		if pin.garbage {
-			context.text_disabled('garbage')
+		if point := pages.point_from_pin(.screen, pin) {
+			context.text('screen (${point.coord().x}, ${point.coord().y})')
 		} else {
-			context.text('live')
+			context.text_disabled('screen (out of range)')
+		}
+		context.table_set_column(3)
+		if pin.is_dirty() {
+			context.text_colored(cimgui.Color{ r: 1.0, g: 0.4, b: 0.4 }, 'dirty')
+		} else {
+			context.text_disabled('clean')
+		}
+		context.table_set_column(4)
+		if pin.eql(active_pin) {
+			context.text_colored(cimgui.Color{ r: 0.4, g: 0.9, b: 0.4 }, 'active top')
+		} else if pin.eql(viewport_pin) {
+			context.text_colored(cimgui.Color{ r: 0.4, g: 0.8, b: 1.0 }, 'viewport top')
+		} else if pin.garbage {
+			context.text_colored(cimgui.Color{ r: 1.0, g: 0.5, b: 0.3 }, 'garbage')
+		} else if voidptr(tracked) == voidptr(pages.viewport_pin) {
+			context.text('viewport pin')
+		} else {
+			context.text_disabled('tracked')
 		}
 	}
 }
