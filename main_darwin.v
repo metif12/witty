@@ -540,7 +540,7 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 		else {}
 	}
 
-	return runtime_native_action(app, state, action)
+	return runtime_native_action(app, target, state, action)
 }
 
 fn main() {

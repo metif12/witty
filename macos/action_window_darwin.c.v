@@ -132,9 +132,12 @@ pub fn goto_native_window(direction int) ?voidptr {
 	return none
 }
 
+pub fn native_view_has_window(view voidptr) bool { return !is_nil(view_window(view)) }
+
 pub fn float_native_window(view voidptr, mode int) {
+	if mode !in [0, 1, 2] { return }
 	window := view_window(view)
-	if is_nil(window) { return }
+	if !msg_bool1(window, 'isKindOfClass:', get_class('VTTerminalWindow')) { return }
 	level := if mode == 0 {
 		3
 	} else if mode == 1 {

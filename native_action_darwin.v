@@ -8,16 +8,32 @@ import osc
 import renderer
 import terminal
 
+// Ghostty.App.action reports true after every recognized void handler, including
+// its early guards. Only the source's explicit Bool handlers report performability.
+fn native_action_is_void(action apprt.ActionKey) bool {
+	return action in [.start_search, .end_search, .search_total, .search_selected, .key_sequence,
+		.key_table, .progress_report, .readonly, .ring_bell, .renderer_health, .mouse_shape,
+		.mouse_visibility, .mouse_over_link, .desktop_notification, .float_window, .pwd,
+		.reset_window_size, .inspector, .render_inspector, .toggle_command_palette, .scrollbar,
+		.color_change, .set_title, .initial_size, .cell_size, .equalize_splits,
+		.toggle_fullscreen, .close_tab, .close_window, .toggle_maximize, .toggle_background_opacity,
+		.secure_input, .check_for_updates, .toggle_visibility]
+}
+
 // Native consumers of Ghostty.App.action. Core actions are produced by the
 // translated embedded runtime; these handlers present the source native state.
-fn runtime_native_action(app &apprt.App, state ?&TermState, action apprt.RuntimeAction) bool {
+fn runtime_native_action(app &apprt.App, target apprt.Target, state ?&TermState, action apprt.RuntimeAction) bool {
+	is_app := target is apprt.AppTarget
 	if action.action == .secure_input {
 		data := action.data
 		if data is apprt.SecureInput {
-			if mut current := state {
-				if app.config.macos_auto_secure_input { current.actions.secure_input(int(data)) }
-			} else {
+			if int(data) !in [0, 1, 2] { return true }
+			if is_app {
 				macos.secure_set_global(int(data))
+			} else if mut current := state {
+				if !current.closed && current.actions != unsafe { nil } && app.config.macos_auto_secure_input {
+					current.actions.secure_input(int(data))
+				}
 			}
 			return true
 		}
@@ -34,7 +50,7 @@ fn runtime_native_action(app &apprt.App, state ?&TermState, action apprt.Runtime
 		data := action.data
 		if data is apprt.GotoWindow { return macos.goto_native_window(int(data)) != none }
 	}
-	if action.action == .prompt_title && state == none {
+	if action.action == .prompt_title && is_app {
 		data := action.data
 		if data is apprt.PromptTitle {
 			if data == .tab {
@@ -50,21 +66,16 @@ fn runtime_native_action(app &apprt.App, state ?&TermState, action apprt.Runtime
 		return false
 	}
 	mut current := state or {
-		// Source void handlers warn for app targets, then action returns true.
-		if action.action in [.start_search, .end_search, .search_total, .search_selected,
-			.key_sequence, .key_table, .progress_report, .readonly, .ring_bell, .renderer_health,
-			.mouse_shape, .mouse_visibility, .mouse_over_link, .desktop_notification, .float_window,
-			.pwd, .reset_window_size, .inspector, .render_inspector, .toggle_command_palette,
-			.scrollbar, .color_change, .render, .set_title, .initial_size, .cell_size,
-			.equalize_splits, .toggle_fullscreen, .close_tab, .close_window, .toggle_maximize,
-			.toggle_background_opacity] {
-			eprintln('${action.action} does nothing with an app target')
+		if native_action_is_void(action.action) {
+			if is_app { eprintln('${action.action} does nothing with an app target') }
 			return true
 		}
 		return false
 	}
 
-	if current.closed || current.actions == unsafe { nil } { return false }
+	if current.closed || current.actions == unsafe { nil } {
+		return native_action_is_void(action.action)
+	}
 	mut overlay := current.actions
 	data := action.data
 	match action.action {
@@ -74,7 +85,9 @@ fn runtime_native_action(app &apprt.App, state ?&TermState, action apprt.Runtime
 		}
 		.prompt_title {
 			if data is apprt.PromptTitle {
-				if data == .tab && current.controller == unsafe { nil } { return false }
+				if data == .tab && (current.controller == unsafe { nil } || !macos.native_view_has_window(current.view)) {
+					return false
+				}
 				overlay.prompt_title(data == .tab, if data == .tab {
 					current.controller.title_override or {
 						macos.native_window_title(current.view)
@@ -93,6 +106,7 @@ fn runtime_native_action(app &apprt.App, state ?&TermState, action apprt.Runtime
 		}
 		.move_tab {
 			if data is apprt.MoveTab {
+				if macos.native_window_tabs(current.view).len <= 1 { return false }
 				if current.controller != unsafe { nil } && current.controller.focused != current {
 					return true
 				}
@@ -105,7 +119,10 @@ fn runtime_native_action(app &apprt.App, state ?&TermState, action apprt.Runtime
 				return true
 			}
 		}
-		.reset_window_size { return do_reset_window_size(current) }
+		.reset_window_size {
+			do_reset_window_size(current)
+			return true
+		}
 		.color_change {
 			if data is apprt.ColorChange {
 				if data.kind == .background {
@@ -232,7 +249,7 @@ fn runtime_native_action(app &apprt.App, state ?&TermState, action apprt.Runtime
 		}
 		.mouse_visibility {
 			if data is apprt.MouseVisibility {
-				macos.set_cursor_visibility(data == .visible)
+				if data in [.visible, .hidden] { macos.set_cursor_visibility(data == .visible) }
 				return true
 			}
 		}
@@ -245,7 +262,7 @@ fn runtime_native_action(app &apprt.App, state ?&TermState, action apprt.Runtime
 		else {}
 	}
 
-	return false
+	return native_action_is_void(action.action)
 }
 
 fn native_begin_key_down(userdata voidptr) {
@@ -311,11 +328,18 @@ fn native_command_options(app &apprt.App) []macos.NativeCommandOption {
 	}
 	mut updates := []macos.NativeCommandOption{}
 	if macos.native_update_is_installable() {
-		updates << macos.NativeCommandOption{ title: if macos.native_update_is_available() {
-			'Update Ghostty and Restart'
-		} else {
-			macos.native_update_text()
-		}, invoke: macos.native_update_install, description: macos.native_update_description(), leading_icon: macos.native_update_icon_name() or { 'shippingbox.fill' }, badge: macos.native_update_badge(), emphasis: true }
+		updates << macos.NativeCommandOption{
+			title:        if macos.native_update_is_available() {
+				'Update Ghostty and Restart'
+			} else {
+				macos.native_update_text()
+			}
+			invoke:       macos.native_update_install
+			description:  macos.native_update_description()
+			leading_icon: macos.native_update_icon_name() or { 'shippingbox.fill' }
+			badge:        macos.native_update_badge()
+			emphasis:     true
+		}
 		updates << macos.NativeCommandOption{ title: 'Cancel or Skip Update', description: 'Dismiss the current update process', invoke: macos.native_update_cancel }
 	}
 	updates << macos.sorted_command_options(options)
