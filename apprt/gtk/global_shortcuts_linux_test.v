@@ -93,7 +93,7 @@ fn test_global_shortcuts_accepts_absent_dbus_connection() {
 
 fn test_global_shortcuts_colliding_portal_ids_replace_the_previous_action() {
 	mut inner := configpkg.Config{}
-	inner.keybind.parse_cli('global:physical:a=new_window')!
+	inner.keybind.parse_cli('global:key_a=new_window')!
 	inner.keybind.parse_cli('global:a=quit')!
 	mut cfg := config_new(inner)
 	mut shortcuts := GlobalShortcuts{config: cfg}
