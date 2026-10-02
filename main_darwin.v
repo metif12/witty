@@ -256,7 +256,7 @@ fn runtime_write_clipboard(userdata voidptr, clipboard_type int, contents []appr
 	}
 }
 
-fn reload_runtime_config(app &apprt.App, soft bool) bool {
+fn reload_runtime_config(app &apprt.App, target ?&TermState, soft bool) bool {
 	mut runtime_app := unsafe { &apprt.App(app) }
 	mut config := if soft {
 		runtime_app.config.clone()
@@ -269,7 +269,14 @@ fn reload_runtime_config(app &apprt.App, soft bool) bool {
 	defer {
 		config.deinit()
 	}
-	apprt.ghostty_app_update_config(mut runtime_app, &config)
+	if mut state := target {
+		if state.closed || state.surface == unsafe { nil } {
+			return false
+		}
+		apprt.ghostty_surface_update_config(mut state.surface, &config)
+	} else {
+		apprt.ghostty_app_update_config(mut runtime_app, &config)
+	}
 	return true
 }
 
@@ -367,7 +374,7 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 		.reload_config {
 			data := action.data
 			soft := if data is apprt.ReloadConfig { data.soft } else { false }
-			return reload_runtime_config(app, soft)
+			return reload_runtime_config(app, state, soft)
 		}
 		.config_change, .cell_size, .size_limit, .quit_timer {
 			return true
