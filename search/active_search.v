@@ -59,7 +59,7 @@ pub fn (mut self ActiveSearch) update(list &terminal.PageList) ?&terminal.PageNo
 	overlap_needed := self.window.needle.len - 1
 	for {
 		current := node or { break }
-		if !current.data.get_row(usize(current.data.size.rows - 1)).wrap {
+		if !current.data.get_row(usize(current.data.size.rows - 1)).header.wrap {
 			break
 		}
 		added := self.window.append(current)

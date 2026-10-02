@@ -1,6 +1,7 @@
 module terminal
 
 import math.bits
+import lib_allocator
 
 // A relatively naive bitmap allocator that uses bitmaps to track
 // which chunks of memory are free or in use.
@@ -34,7 +35,9 @@ pub:
 // free chunks.
 pub struct BitmapAllocator {
 pub mut:
-	chunk_size int
+	chunk_size    int
+	bitmap_offset Offset
+	chunks_offset Offset
 	// The bitmap of available chunks. Each bit represents a chunk. A
 	// 1 means the chunk is free and a 0 means it's used.
 	bitmaps []u64
@@ -69,7 +72,7 @@ pub fn bitmap_allocator_layout(cap usize, chunk_size int) BitmapAllocatorLayout 
 	total := chunks_end
 
 	return BitmapAllocatorLayout{
-		total_size: total
+		total_size:   total
 		bitmap_count: bm_count
 		bitmap_start: bitmap_start
 		chunks_start: chunks_start
@@ -89,9 +92,32 @@ pub fn BitmapAllocator.init(chunk_size int, l BitmapAllocatorLayout) BitmapAlloc
 
 	return BitmapAllocator{
 		chunk_size: chunk_size
-		bitmaps: bms
-		chunks: chk
+		bitmaps:    bms
+		chunks:     chk
 	}
+}
+
+// Bind the source bitmap and chunk offsets to caller-owned storage.
+pub fn BitmapAllocator.init_buf(chunk_size int, buf OffsetBuf, layout BitmapAllocatorLayout) BitmapAllocator {
+	assert chunk_size > 0 && (chunk_size & (chunk_size - 1)) == 0
+	assert usize(buf.start()) % 8 == 0
+	bitmap := buf.member(layout.bitmap_start)
+	chunks := buf.member(layout.chunks_start)
+	mut result := BitmapAllocator{ chunk_size: chunk_size, bitmap_offset: bitmap, chunks_offset: chunks }
+	result.rebind(buf.base)
+	for i in 0 .. result.bitmaps.len { result.bitmaps[i] = ~u64(0) }
+	return result
+}
+
+fn (mut self BitmapAllocator) rebind(base &u8) {
+	count := if self.bitmaps.len > 0 {
+		self.bitmaps.len
+	} else {
+		int((self.chunks_offset.offset - self.bitmap_offset.offset) / 8)
+	}
+	self.bitmaps = lib_allocator.borrowed_array[u64](self.bitmap_offset.ptr(base), count, count)
+	bytes := count * 64 * self.chunk_size
+	self.chunks = lib_allocator.borrowed_array[u8](self.chunks_offset.ptr(base), bytes, bytes)
 }
 
 // reset releases every allocation while retaining the allocator's backing

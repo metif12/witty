@@ -1,6 +1,5 @@
 module terminal
 
-import fastmem
 import strings
 import tripwire
 
@@ -1868,7 +1867,7 @@ import tripwire
 // Resize
 // Resize
 // Resize
-// try testing.expect(!rac.row.wrap);
+// try testing.expect(!rac.row.header.wrap);
 // This test is a bit convoluted so I want to explain: what we are trying
 // to verify here is that when we increase cols such that our rows per page
 // shrinks, we don't fragment our rows across many pages because this ends
@@ -2376,8 +2375,8 @@ pub enum IterDirection as u8 {
 
 pub enum PageViewport as u8 {
 	active // Pinned to active area (bottom)
-	top // Pinned to top of scrollback
-	pin // Pinned to a tracked pin
+	top    // Pinned to top of scrollback
+	pin    // Pinned to a tracked pin
 }
 
 // ============================================================
@@ -2387,8 +2386,8 @@ pub enum PageViewport as u8 {
 pub struct Pin {
 pub mut:
 	node    &PageNode = unsafe { nil }
-	y       u16 // Row index within the page
-	x       u16 // Column index within the row
+	y       u16  // Row index within the page
+	x       u16  // Column index within the row
 	garbage bool // Set true if tracked pin was pruned
 }
 
@@ -2407,7 +2406,7 @@ pub fn (self Pin) row_and_cell() RowAndCell {
 	assert self.x < self.node.data.size.cols
 	row := unsafe { &self.node.data.rows[int(self.y)] }
 	return RowAndCell{
-		row: row
+		row:  row
 		cell: unsafe { &row.cells[int(self.x)] }
 	}
 }
@@ -2449,13 +2448,13 @@ pub fn (self Pin) cell_data() &CellData {
 
 // Returns true if the row at this pin is dirty.
 pub fn (self Pin) is_dirty() bool {
-	return self.node.data.dirty || self.node.data.rows[int(self.y)].dirty
+	return self.node.data.dirty || self.node.data.rows[int(self.y)].header.dirty
 }
 
 // Mark the row at this pin as dirty.
 pub fn (self Pin) mark_dirty() {
 	unsafe {
-		self.node.data.rows[int(self.y)].dirty = true
+		self.node.data.rows[int(self.y)].header.dirty = true
 	}
 }
 
@@ -2659,8 +2658,8 @@ pub fn (self Pin) down_overflow(n usize) DownOverflowResult {
 		return DownOverflowOffset{
 			pin: Pin{
 				node: node
-				y: u16(y + rem)
-				x: self.x
+				y:    u16(y + rem)
+				x:    self.x
 			}
 		}
 	}
@@ -2672,10 +2671,10 @@ pub fn (self Pin) down_overflow(n usize) DownOverflowResult {
 	for {
 		nd := next or {
 			return DownOverflowOverflow{
-				end: Pin{
+				end:       Pin{
 					node: last_node
-					y: u16(last_node.data.size.rows - 1)
-					x: self.x
+					y:    u16(last_node.data.size.rows - 1)
+					x:    self.x
 				}
 				remaining: rem
 			}
@@ -2684,8 +2683,8 @@ pub fn (self Pin) down_overflow(n usize) DownOverflowResult {
 			return DownOverflowOffset{
 				pin: Pin{
 					node: nd
-					y: u16(rem - 1)
-					x: self.x
+					y:    u16(rem - 1)
+					x:    self.x
 				}
 			}
 		}
@@ -2697,10 +2696,10 @@ pub fn (self Pin) down_overflow(n usize) DownOverflowResult {
 	}
 	// unreachable
 	return DownOverflowOverflow{
-		end: Pin{
+		end:       Pin{
 			node: last_node
-			y: u16(last_node.data.size.rows - 1)
-			x: self.x
+			y:    u16(last_node.data.size.rows - 1)
+			x:    self.x
 		}
 		remaining: rem
 	}
@@ -2730,8 +2729,8 @@ pub fn (self Pin) up_overflow(n usize) UpOverflowResult {
 		return UpOverflowOffset{
 			pin: Pin{
 				node: self.node
-				y: u16(y - rem)
-				x: self.x
+				y:    u16(y - rem)
+				x:    self.x
 			}
 		}
 	}
@@ -2743,10 +2742,10 @@ pub fn (self Pin) up_overflow(n usize) UpOverflowResult {
 	for {
 		nd := prev or {
 			return UpOverflowOverflow{
-				end: Pin{
+				end:       Pin{
 					node: first_node
-					y: 0
-					x: self.x
+					y:    0
+					x:    self.x
 				}
 				remaining: rem
 			}
@@ -2755,8 +2754,8 @@ pub fn (self Pin) up_overflow(n usize) UpOverflowResult {
 			return UpOverflowOffset{
 				pin: Pin{
 					node: nd
-					y: u16(usize(nd.data.size.rows) - rem)
-					x: self.x
+					y:    u16(usize(nd.data.size.rows) - rem)
+					x:    self.x
 				}
 			}
 		}
@@ -2767,10 +2766,10 @@ pub fn (self Pin) up_overflow(n usize) UpOverflowResult {
 		prev = nd.prev
 	}
 	return UpOverflowOverflow{
-		end: Pin{
+		end:       Pin{
 			node: first_node
-			y: 0
-			x: self.x
+			y:    0
+			x:    self.x
 		}
 		remaining: rem
 	}
@@ -2792,9 +2791,9 @@ pub fn (self Pin) page_iterator(direction IterDirection, limit ?Pin) PageIterato
 		}
 	}
 	return PageIterator{
-		row: self
+		row:       self
 		direction: direction
-		limit: if lim := limit {
+		limit:     if lim := limit {
 			PageIteratorLimit(PageIteratorLimitRow{
 				pin: lim
 			})
@@ -2813,8 +2812,8 @@ pub fn (self Pin) row_iterator(direction IterDirection, limit ?Pin) RowIterator 
 	}
 	return RowIterator{
 		page_it: page_it
-		chunk: chunk
-		offset: match direction {
+		chunk:   chunk
+		offset:  match direction {
 			.right_down { chunk.start }
 			.left_up { chunk.end - 1 }
 		}
@@ -2831,14 +2830,14 @@ pub fn (self Pin) cell_iterator(direction IterDirection, limit ?Pin) CellIterato
 	cell.x = self.x
 	return CellIterator{
 		row_it: row_it
-		cell: cell
+		cell:   cell
 	}
 }
 
 pub fn (self Pin) prompt_iterator(direction IterDirection, limit ?Pin) PromptIterator {
 	return PromptIterator{
-		current: self
-		limit: limit
+		current:   self
+		limit:     limit
 		direction: direction
 	}
 }
@@ -2850,7 +2849,7 @@ pub fn (self Pin) prompt_iterator(direction IterDirection, limit ?Pin) PromptIte
 pub struct PageCell {
 pub:
 	node    &PageNode = unsafe { nil }
-	row     &RowData = unsafe { nil }
+	row     &RowData  = unsafe { nil }
 	cell    &CellData = unsafe { nil }
 	row_idx u16
 	col_idx u16
@@ -2861,7 +2860,7 @@ pub:
 // This is not very performant; it is primarily used for assertions and
 // testing.
 pub fn (self &PageCell) is_dirty() bool {
-	return self.node.data.dirty || self.row.dirty
+	return self.node.data.dirty || self.row.header.dirty
 }
 
 // Get the cell style.
@@ -2890,8 +2889,8 @@ pub fn (self &PageCell) screen_point() Point {
 	}
 
 	return Point.new(.screen, Coordinate{
-			x: self.col_idx
-			y: u32(y)
+		x: self.col_idx
+		y: u32(y)
 	})
 }
 
@@ -2942,9 +2941,9 @@ pub:
 }
 
 pub const scrollbar_zero = Scrollbar{
-	total: 0
+	total:  0
 	offset: 0
-	len: 0
+	len:    0
 }
 
 // Sync with ghostty_action_scrollbar_s.
@@ -2957,9 +2956,9 @@ pub:
 
 pub fn (self Scrollbar) cval() ScrollbarC {
 	return ScrollbarC{
-		total: u64(self.total)
+		total:  u64(self.total)
 		offset: u64(self.offset)
-		len: u64(self.len)
+		len:    u64(self.len)
 	}
 }
 
@@ -3063,7 +3062,7 @@ pub type PageIteratorLimit = PageIteratorLimitNone | PageIteratorLimitCount | Pa
 pub struct PageIterator {
 pub mut:
 	row       ?Pin
-	direction IterDirection = .right_down
+	direction IterDirection     = .right_down
 	limit     PageIteratorLimit = PageIteratorLimit(PageIteratorLimitNone{})
 }
 
@@ -3119,16 +3118,16 @@ fn (mut self PageIterator) next_down() ?PageChunk {
 			self.row = if next := node.next {
 				Pin{
 					node: next
-					y: 0
-					x: 0
+					y:    0
+					x:    0
 				}
 			} else {
 				none
 			}
 			return PageChunk{
-				node: node
+				node:  node
 				start: start
-				end: page_rows
+				end:   page_rows
 			}
 		}
 		PageIteratorLimitCount {
@@ -3142,9 +3141,9 @@ fn (mut self PageIterator) next_down() ?PageChunk {
 				self.row = none
 			}
 			return PageChunk{
-				node: node
+				node:  node
 				start: start
-				end: start + u16(len)
+				end:   start + u16(len)
 			}
 		}
 		PageIteratorLimitRow {
@@ -3159,25 +3158,25 @@ fn (mut self PageIterator) next_down() ?PageChunk {
 					return none
 				}
 				return PageChunk{
-					node: node
+					node:  node
 					start: start
-					end: end
+					end:   end
 				}
 			}
 			// Different page, consume to end
 			self.row = if next := node.next {
 				Pin{
 					node: next
-					y: 0
-					x: 0
+					y:    0
+					x:    0
 				}
 			} else {
 				none
 			}
 			return PageChunk{
-				node: node
+				node:  node
 				start: start
-				end: page_rows
+				end:   page_rows
 			}
 		}
 	}
@@ -3194,16 +3193,16 @@ fn (mut self PageIterator) next_up() ?PageChunk {
 			self.row = if prev := node.prev {
 				Pin{
 					node: prev
-					y: u16(prev.data.size.rows - 1)
-					x: 0
+					y:    u16(prev.data.size.rows - 1)
+					x:    0
 				}
 			} else {
 				none
 			}
 			return PageChunk{
-				node: node
+				node:  node
 				start: 0
-				end: end
+				end:   end
 			}
 		}
 		PageIteratorLimitCount {
@@ -3217,9 +3216,9 @@ fn (mut self PageIterator) next_up() ?PageChunk {
 				self.row = none
 			}
 			return PageChunk{
-				node: node
+				node:  node
 				start: cur.y - u16(len)
-				end: cur.y - 1
+				end:   cur.y - 1
 			}
 		}
 		PageIteratorLimitRow {
@@ -3233,24 +3232,24 @@ fn (mut self PageIterator) next_up() ?PageChunk {
 					return none
 				}
 				return PageChunk{
-					node: node
+					node:  node
 					start: start
-					end: end
+					end:   end
 				}
 			}
 			self.row = if prev := node.prev {
 				Pin{
 					node: prev
-					y: u16(prev.data.size.rows - 1)
-					x: 0
+					y:    u16(prev.data.size.rows - 1)
+					x:    0
 				}
 			} else {
 				none
 			}
 			return PageChunk{
-				node: node
+				node:  node
 				start: 0
-				end: end
+				end:   end
 			}
 		}
 	}
@@ -3269,8 +3268,8 @@ pub fn (mut self RowIterator) next() ?Pin {
 	ch := self.chunk or { return none }
 	result := Pin{
 		node: ch.node
-		y: self.offset
-		x: 0
+		y:    self.offset
+		x:    0
 	}
 
 	match self.page_it.direction {
@@ -3364,7 +3363,7 @@ pub fn (mut self PromptIterator) next_right_down() ?Pin {
 	for {
 		p := current or { break }
 		at_limit := if limit := self.limit { limit.eql(p) } else { false }
-		match p.row_data().semantic_prompt {
+		match p.row_data().header.semantic_prompt {
 			.unknown {
 				if at_limit {
 					break
@@ -3379,7 +3378,7 @@ pub fn (mut self PromptIterator) next_right_down() ?Pin {
 				mut end_pin := p
 				for {
 					next_pin := end_pin.down(1) or { break }
-					match next_pin.row_data().semantic_prompt {
+					match next_pin.row_data().header.semantic_prompt {
 						.prompt_continuation {
 							if limit := self.limit {
 								if limit.eql(next_pin) {
@@ -3411,7 +3410,7 @@ pub fn (mut self PromptIterator) next_left_up() ?Pin {
 	for {
 		p := current or { break }
 		at_limit := if limit := self.limit { limit.eql(p) } else { false }
-		match p.row_data().semantic_prompt {
+		match p.row_data().header.semantic_prompt {
 			.unknown {
 				if at_limit {
 					break
@@ -3435,7 +3434,7 @@ pub fn (mut self PromptIterator) next_left_up() ?Pin {
 							break
 						}
 					}
-					match prior.row_data().semantic_prompt {
+					match prior.row_data().header.semantic_prompt {
 						.unknown {
 							self.current = prior
 							return end_pin.left(end_pin.x)
@@ -3488,7 +3487,7 @@ pub mut:
 
 	// Viewport state.
 	viewport                PageViewport = .active
-	viewport_pin            &Pin = unsafe { nil }
+	viewport_pin            &Pin         = unsafe { nil }
 	viewport_pin_row_offset ?usize
 
 	// Current desired screen dimensions.
@@ -3537,7 +3536,7 @@ struct PageListInitialPages {
 	pages       PageNodeList
 	page_serial u64
 	page_size   usize
-	total_rows usize
+	total_rows  usize
 }
 
 fn cleanup_initial_pages(pages PageNodeList) {
@@ -3573,7 +3572,10 @@ fn init_pages(cols u16, rows u16) !PageListInitialPages {
 			cleanup_initial_pages(page_list)
 			return err
 		}
-		node.data = Page.init(cap)
+		node.data = Page.init(cap) or {
+			cleanup_initial_pages(page_list)
+			return err
+		}
 		use := if rem < cap.rows { rem } else { cap.rows }
 		node.data.size.rows = use
 		rem -= use
@@ -3584,10 +3586,10 @@ fn init_pages(cols u16, rows u16) !PageListInitialPages {
 	}
 	assert page_list.first != none
 	return PageListInitialPages{
-		pages: page_list
+		pages:       page_list
 		page_serial: page_serial
-		page_size: page_size
-		total_rows: total_rows
+		page_size:   page_size
+		total_rows:  total_rows
 	}
 }
 
@@ -3616,18 +3618,18 @@ pub fn PageList.init(cols u16, rows u16, max_size ?usize) !PageList {
 	}
 
 	result := PageList{
-		cols: cols
-		rows: rows
-		pages: initial.pages
-		page_serial: initial.page_serial
-		page_serial_min: 0
-		page_size: initial.page_size
-		explicit_max_size: max_size or { max_usize }
-		min_max_size: mms
-		total_rows: initial.total_rows
-		tracked_pins_storage: [viewport_pin]
-		viewport: .active
-		viewport_pin: viewport_pin
+		cols:                    cols
+		rows:                    rows
+		pages:                   initial.pages
+		page_serial:             initial.page_serial
+		page_serial_min:         0
+		page_size:               initial.page_size
+		explicit_max_size:       max_size or { max_usize }
+		min_max_size:            mms
+		total_rows:              initial.total_rows
+		tracked_pins_storage:    [viewport_pin]
+		viewport:                .active
+		viewport_pin:            viewport_pin
 		viewport_pin_row_offset: none
 	}
 	result.assert_integrity()
@@ -3668,7 +3670,7 @@ pub fn (mut self PageList) reset() {
 	mut rem := self.rows
 	for rem > 0 {
 		mut node := &PageNode{
-			data: Page.init(cap)
+			data:   Page.init(cap) or { panic(err) }
 			serial: page_serial
 		}
 		use := if rem < cap.rows { rem } else { cap.rows }
@@ -3746,10 +3748,10 @@ pub fn (self &PageList) max_size() usize {
 // Page creation / destruction
 // ============================================================
 
-fn (mut self PageList) create_page(cap PageCapacity) &PageNode {
+fn (mut self PageList) create_page(cap PageCapacity) !&PageNode {
 	assert Page.layout(cap).total_size <= usize(max_page_size)
 	mut node := &PageNode{
-		data: Page.init(cap)
+		data:   Page.init(cap)!
 		serial: self.page_serial
 	}
 	// Page itself initializes at full size. PageList's createPageExt source
@@ -3769,12 +3771,18 @@ fn (mut self PageList) destroy_node(node &PageNode) {
 	}
 }
 
+// V cannot compose Result and Option return types directly.
+pub struct PageNodeOption {
+pub:
+	node ?&PageNode
+}
+
 // ============================================================
 // Grow
 // ============================================================
 
 // Grow the active area by one row. Returns the new node if one was allocated.
-pub fn (mut self PageList) grow() ?&PageNode {
+pub fn (mut self PageList) grow() !PageNodeOption {
 	defer { self.assert_integrity() }
 	// Fast path: last page has capacity
 	mut last_page := self.pages.last or { panic('page list has no last page') }
@@ -3782,7 +3790,7 @@ pub fn (mut self PageList) grow() ?&PageNode {
 		last_page.data.size.rows += 1
 		last_page.data.assert_integrity()
 		self.total_rows += 1
-		return none
+		return PageNodeOption{}
 	}
 
 	// Need a new page
@@ -3843,7 +3851,7 @@ pub fn (mut self PageList) grow() ?&PageNode {
 				self.total_rows += 1
 				pruned.data.assert_integrity()
 
-				return pruned
+				return PageNodeOption{ node: pruned }
 			}
 
 			// A non-standard page cannot enter Ghostty's fixed-size pool. Its
@@ -3853,19 +3861,19 @@ pub fn (mut self PageList) grow() ?&PageNode {
 	}
 
 	// Allocate new page
-	mut new_node := self.create_page(cap)
+	mut new_node := self.create_page(cap)!
 	new_node.data.size.rows = 1
 	self.pages.append(new_node)
 	self.total_rows += 1
 	new_node.data.assert_integrity()
 
-	return new_node
+	return PageNodeOption{ node: new_node }
 }
 
 // Grow by n rows (convenience for tests).
-pub fn (mut self PageList) grow_rows(n usize) {
+pub fn (mut self PageList) grow_rows(n usize) ! {
 	for _ in 0 .. n {
-		self.grow() or {}
+		_ = self.grow()!
 	}
 }
 
@@ -3879,8 +3887,8 @@ pub fn (self &PageList) get_top_left(tag PointTag) Pin {
 			node := self.pages.first or { panic('page list has no first page') }
 			return Pin{
 				node: node
-				y: 0
-				x: 0
+				y:    0
+				x:    0
 			}
 		}
 		.viewport {
@@ -3899,8 +3907,8 @@ pub fn (self &PageList) get_top_left(tag PointTag) Pin {
 				if usize(n.data.size.rows) >= rem {
 					return Pin{
 						node: n
-						y: u16(usize(n.data.size.rows) - rem)
-						x: 0
+						y:    u16(usize(n.data.size.rows) - rem)
+						x:    0
 					}
 				}
 				rem -= usize(n.data.size.rows)
@@ -3917,8 +3925,8 @@ pub fn (self &PageList) get_bottom_right(tag PointTag) ?Pin {
 			last := self.pages.last or { panic('page list has no last page') }
 			return Pin{
 				node: last
-				y: u16(last.data.size.rows - 1)
-				x: last.data.size.cols - 1
+				y:    u16(last.data.size.rows - 1)
+				x:    last.data.size.cols - 1
 			}
 		}
 		.viewport {
@@ -3928,8 +3936,8 @@ pub fn (self &PageList) get_bottom_right(tag PointTag) ?Pin {
 			}
 			return Pin{
 				node: p.node
-				y: p.y
-				x: p.node.data.size.cols - 1
+				y:    p.y
+				x:    p.node.data.size.cols - 1
 			}
 		}
 		.history {
@@ -3937,8 +3945,8 @@ pub fn (self &PageList) get_bottom_right(tag PointTag) ?Pin {
 			p := active_tl.up(1) or { return none }
 			return Pin{
 				node: p.node
-				y: p.y
-				x: p.node.data.size.cols - 1
+				y:    p.y
+				x:    p.node.data.size.cols - 1
 			}
 		}
 	}
@@ -4003,7 +4011,7 @@ pub fn (self &PageList) diagram() !string {
 
 			skipped = false
 			out.write_string('${y:5} ')
-			out.write_string(if row.wrap_continuation { '…' } else { '|' })
+			out.write_string(if row.header.wrap_continuation { '…' } else { '|' })
 			if row_has_content {
 				for x, cell in cells {
 					if cell.wide == .spacer_tail {
@@ -4026,7 +4034,7 @@ pub fn (self &PageList) diagram() !string {
 			} else {
 				out.write_string(' '.repeat(int(cols)))
 			}
-			out.write_string(if row.wrap { '…' } else { '|' })
+			out.write_string(if row.header.wrap { '…' } else { '|' })
 			if active {
 				out.write_string(' | ${active_index}')
 				active_index += 1
@@ -4115,7 +4123,7 @@ pub fn (self &PageList) highlight_semantic_content(at Pin, content SemanticConte
 		.prompt {
 			mut result := PageSemanticHighlight{
 				start: at.left(at.x)
-				end: at
+				end:   at
 			}
 			mut it := at.cell_iterator(.right_down, zone_end)
 			for {
@@ -4164,7 +4172,7 @@ pub fn (self &PageList) highlight_semantic_content(at Pin, content SemanticConte
 			}
 			return PageSemanticHighlight{
 				start: result_start or { return none }
-				end: result_end
+				end:   result_end
 			}
 		}
 		.output {
@@ -4203,7 +4211,7 @@ pub fn (self &PageList) highlight_semantic_content(at Pin, content SemanticConte
 			}
 			return PageSemanticHighlight{
 				start: result_start or { return none }
-				end: result_end
+				end:   result_end
 			}
 		}
 	}
@@ -4219,9 +4227,9 @@ pub fn (mut self PageList) track_pin(p Pin) &Pin {
 		assert self.pin_is_valid(p)
 	}
 	tracked := &Pin{
-		node: p.node
-		y: p.y
-		x: p.x
+		node:    p.node
+		y:       p.y
+		x:       p.x
 		garbage: p.garbage
 	}
 	self.tracked_pins_storage << tracked
@@ -4275,8 +4283,8 @@ pub fn (self &PageList) point_from_pin(tag PointTag, p Pin) ?Point {
 			return none
 		}
 		return Point.new(tag, Coordinate{
-				x: p.x
-				y: u32(p.y - tl.y)
+			x: p.x
+			y: u32(p.y - tl.y)
 		})
 	}
 
@@ -4287,8 +4295,8 @@ pub fn (self &PageList) point_from_pin(tag PointTag, p Pin) ?Point {
 		node := cur or { return none }
 		if voidptr(node) == p_ptr {
 			return Point.new(tag, Coordinate{
-					x: p.x
-					y: y + u32(p.y)
+				x: p.x
+				y: y + u32(p.y)
 			})
 		}
 		y += u32(node.data.size.rows)
@@ -4333,9 +4341,9 @@ pub fn (self &PageList) get_cell(point Point) ?PageCell {
 	p := self.pin(point) or { return none }
 	rac := p.row_and_cell()
 	return PageCell{
-		node: p.node
-		row: rac.row
-		cell: rac.cell
+		node:    p.node
+		row:     rac.row
+		cell:    rac.cell
 		row_idx: p.y
 		col_idx: p.x
 	}
@@ -4441,7 +4449,7 @@ pub fn (mut self PageList) scroll(behavior PageScroll) {
 						unsafe {
 							*self.viewport_pin = Pin{
 								node: nd
-								y: rem
+								y:    rem
 							}
 						}
 						return
@@ -4463,7 +4471,7 @@ pub fn (mut self PageList) scroll(behavior PageScroll) {
 						unsafe {
 							*self.viewport_pin = Pin{
 								node: nd
-								y: nd.data.size.rows - rem
+								y:    nd.data.size.rows - rem
 							}
 						}
 						return
@@ -4654,7 +4662,7 @@ pub fn (mut self PageList) scroll_clear() ! {
 	}
 
 	for _ in 0 .. non_empty {
-		self.grow() or {}
+		_ = self.grow()!
 	}
 }
 
@@ -4665,15 +4673,15 @@ pub fn (mut self PageList) scroll_clear() ! {
 pub fn (mut self PageList) scrollbar() Scrollbar {
 	if self.explicit_max_size == 0 {
 		return Scrollbar{
-			total: usize(self.rows)
+			total:  usize(self.rows)
 			offset: 0
-			len: usize(self.rows)
+			len:    usize(self.rows)
 		}
 	}
 	return Scrollbar{
-		total: self.total_rows
+		total:  self.total_rows
 		offset: self.viewport_row_offset()
-		len: usize(self.rows)
+		len:    usize(self.rows)
 	}
 }
 
@@ -4725,7 +4733,7 @@ pub fn (mut self PageList) erase_row(point Point) ! {
 	// The rotate operation turns e.g. [ 0 1 2 3 ] in to [ 1 2 3 0 ], which
 	// works perfectly to move all of our elements where they belong.
 	mut rows := unsafe { node.data.rows[int(pn.y)..int(node.data.size.rows)] }
-	fastmem.rotate_once(mut rows)
+	rotate_row_views(mut rows, false)
 
 	// We adjust the tracked pins in this page, moving up any that were below
 	// the removed row.
@@ -4769,7 +4777,7 @@ pub fn (mut self PageList) erase_row(point Point) ! {
 		node = next
 
 		mut next_rows := unsafe { node.data.rows[..int(node.data.size.rows)] }
-		fastmem.rotate_once(mut next_rows)
+		rotate_row_views(mut next_rows, false)
 
 		// Mark the whole page as dirty.
 		node.data.dirty = true
@@ -4836,12 +4844,10 @@ pub fn (mut self PageList) erase_rows(tl Point, bl ?Point) {
 		// This is a cheap operation because we're just moving cell offsets,
 		// not the actual cell contents.
 		for i in 0 .. scroll_amount {
-			old_dst := page.rows[i]
-			page.rows[i] = page.rows[i + end]
-			page.rows[i + end] = old_dst
+			page.swap_rows(i, i + end)
 
 			// Mark the moved row as dirty.
-			page.rows[i].dirty = true
+			page.rows[i].header.dirty = true
 		}
 
 		// Clear our remaining cells that we didn't shift or swapped
@@ -4874,7 +4880,10 @@ pub fn (mut self PageList) erase_rows(tl Point, bl ?Point) {
 	// is that we always have full active space.
 	if tl.tag() == .active {
 		for _ in 0 .. erased {
-			self.grow() or { &PageNode(unsafe { nil }) }
+			_ = self.grow() or {
+				eprintln('failed to regrow active area after erase err=${err}')
+				return
+			}
 		}
 	}
 
@@ -4905,7 +4914,7 @@ pub fn (mut self PageList) split(p Pin) ! {
 	defer { self.assert_integrity() }
 
 	// Create new page with same capacity
-	new_node := self.create_page(page.capacity)
+	new_node := self.create_page(page.capacity)!
 	mut new_page := &new_node.data
 
 	y_start := p.y
@@ -4946,24 +4955,24 @@ pub fn (self &PageList) clone(opts PageCloneOpts) !PageList {
 
 	mut viewport_pin := &Pin{}
 	mut result := PageList{
-		cols: self.cols
-		rows: self.rows
-		pages: PageNodeList{}
-		page_serial: 0
-		page_serial_min: 0
-		page_size: 0
-		explicit_max_size: self.explicit_max_size
-		min_max_size: self.min_max_size
-		total_rows: 0
-		tracked_pins_storage: [viewport_pin]
-		viewport: .active
-		viewport_pin: viewport_pin
+		cols:                    self.cols
+		rows:                    self.rows
+		pages:                   PageNodeList{}
+		page_serial:             0
+		page_serial_min:         0
+		page_size:               0
+		explicit_max_size:       self.explicit_max_size
+		min_max_size:            self.min_max_size
+		total_rows:              0
+		tracked_pins_storage:    [viewport_pin]
+		viewport:                .active
+		viewport_pin:            viewport_pin
 		viewport_pin_row_offset: none
 	}
 
 	for {
 		chunk := it.next() or { break }
-		new_node := result.create_page(chunk.node.data.capacity)
+		new_node := result.create_page(chunk.node.data.capacity)!
 		mut new_page := &new_node.data
 		assert new_page.capacity.rows >= chunk.end - chunk.start
 		new_page.size.rows = chunk.end - chunk.start
@@ -4992,9 +5001,9 @@ pub fn (self &PageList) clone(opts PageCloneOpts) !PageList {
 					continue
 				}
 				new_pin := &Pin{
-					node: new_node
-					y: old_pin.y - chunk.start
-					x: old_pin.x
+					node:    new_node
+					y:       old_pin.y - chunk.start
+					x:       old_pin.x
 					garbage: old_pin.garbage
 				}
 				result.tracked_pins_storage << new_pin
@@ -5014,7 +5023,7 @@ pub fn (self &PageList) clone(opts PageCloneOpts) !PageList {
 	if result.total_rows < usize(result.rows) {
 		len := usize(result.rows) - result.total_rows
 		for _ in 0 .. len {
-			result.grow() or {}
+			_ = result.grow()!
 			mut last := result.pages.last or { panic('cloned page list is empty') }
 			last.data.clear_cells(last.data.size.rows - 1, 0, result.cols)
 		}
@@ -5046,13 +5055,13 @@ mut:
 
 fn ReflowCursor.init(node &PageNode) ReflowCursor {
 	return ReflowCursor{
-		x: 0
-		y: 0
+		x:            0
+		y:            0
 		pending_wrap: false
-		node: node
-		new_rows: 0
+		node:         node
+		new_rows:     0
 		// Initially whatever size our input node is.
-		total_rows: usize(node.data.size.rows)
+		total_rows:   usize(node.data.size.rows)
 	}
 }
 
@@ -5088,11 +5097,7 @@ fn (mut self ReflowCursor) cursor_scroll() {
 	assert self.y == self.node.data.size.rows - 1
 	assert self.node.data.size.rows < self.node.data.capacity.rows
 
-	// Increase our page size, ensuring a row slot exists.
 	mut page := &self.node.data
-	for page.rows.len <= int(page.size.rows) {
-		page.append_row()
-	}
 	page.size.rows += 1
 	self.pending_wrap = false
 	self.x = 0
@@ -5106,7 +5111,7 @@ fn (mut self ReflowCursor) cursor_new_page(mut list PageList, cap PageCapacity) 
 	// reinitializing our cursor on the new page.
 	new_rows := self.new_rows
 
-	mut node := list.create_page(cap)
+	mut node := list.create_page(cap)!
 	node.data.size.rows = 1
 	list.pages.insert_after(self.node, node)
 
@@ -5171,7 +5176,7 @@ fn (mut self ReflowCursor) increase_capacity(mut list PageList, adjustment ?Incr
 fn (self &ReflowCursor) count_trailing_empty_cells() usize {
 	row := &self.node.data.rows[int(self.y)]
 	// If the row is wrapped, all empty cells are meaningful.
-	if row.wrap {
+	if row.header.wrap {
 		return 0
 	}
 
@@ -5185,7 +5190,7 @@ fn (self &ReflowCursor) count_trailing_empty_cells() usize {
 
 	// A semantic prompt makes an otherwise blank row meaningful, so retain
 	// one cell and report every other trailing cell as empty.
-	if row.semantic_prompt != .unknown {
+	if row.header.semantic_prompt != .unknown {
 		return len - 1
 	}
 	return len
@@ -5193,7 +5198,7 @@ fn (self &ReflowCursor) count_trailing_empty_cells() usize {
 
 fn (mut self ReflowCursor) copy_row_metadata(other &RowData) {
 	mut page := &self.node.data
-	page.rows[int(self.y)].semantic_prompt = other.semantic_prompt
+	page.rows[int(self.y)].header.semantic_prompt = other.header.semantic_prompt
 }
 
 // Reflow the provided row into this cursor.
@@ -5206,7 +5211,7 @@ fn (mut self ReflowCursor) reflow_row(mut list PageList, row Pin) ! {
 	// Calculate the columns in this row. First up we trim non-semantic
 	// rightmost blanks.
 	mut cols_len := src_page.size.cols
-	if !src_row.wrap {
+	if !src_row.header.wrap {
 		for cols_len > 0 {
 			if !cells[int(cols_len) - 1].is_empty() {
 				break
@@ -5216,7 +5221,7 @@ fn (mut self ReflowCursor) reflow_row(mut list PageList, row Pin) ! {
 
 		// If the row has a semantic prompt then the blank row is meaningful
 		// so we just pretend the first cell of the row isn't empty.
-		if cols_len == 0 && src_row.semantic_prompt != .unknown {
+		if cols_len == 0 && src_row.header.semantic_prompt != .unknown {
 			cols_len = 1
 		}
 	}
@@ -5244,7 +5249,7 @@ fn (mut self ReflowCursor) reflow_row(mut list PageList, row Pin) ! {
 	if cols_len == 0 {
 		// If this blank row was a wrap continuation somehow then we won't
 		// need to write it since it should be part of the previous row.
-		if !src_row.wrap_continuation {
+		if !src_row.header.wrap_continuation {
 			self.new_rows += 1
 		}
 		return
@@ -5278,10 +5283,10 @@ fn (mut self ReflowCursor) reflow_row(mut list PageList, row Pin) ! {
 	mut x := 0
 	for x < int(cols_len) {
 		if self.pending_wrap {
-			self.node.data.rows[int(self.y)].wrap = true
+			self.node.data.rows[int(self.y)].header.wrap = true
 			self.cursor_scroll_or_new_page(mut list, cap)!
 			self.copy_row_metadata(src_row)
-			self.node.data.rows[int(self.y)].wrap_continuation = true
+			self.node.data.rows[int(self.y)].header.wrap_continuation = true
 		}
 
 		// Move any tracked pins from the source.
@@ -5337,7 +5342,7 @@ fn (mut self ReflowCursor) reflow_row(mut list PageList, row Pin) ! {
 	}
 
 	// If the source row isn't wrapped then we should scroll afterwards.
-	if !src_row.wrap {
+	if !src_row.header.wrap {
 		self.new_rows += 1
 	}
 }
@@ -5364,8 +5369,8 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 							// head and wrap before handling it.
 							page.rows[int(self.y)].cells[int(self.x)] = CellData{
 								content_tag: .codepoint
-								codepoint: 0
-								wide: .spacer_head
+								codepoint:   0
+								wide:        .spacer_head
 							}
 							// Move to the next row (this sets pending wrap
 							// which will cause us to wrap on the next iteration).
@@ -5381,8 +5386,8 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 						// cells.
 						page.rows[int(self.y)].cells[int(self.x)] = CellData{
 							content_tag: .codepoint
-							codepoint: 0
-							wide: .narrow
+							codepoint:   0
+							wide:        .narrow
 						}
 						self.cursor_forward()
 						// Skip spacer tail so it doesn't cause a wrap.
@@ -5423,7 +5428,7 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 
 	// Copy Kitty virtual placeholder status.
 	if cell.codepoint() == kitty_unicode_placeholder {
-		page.rows[int(self.y)].kitty_virtual_placeholder = true
+		page.rows[int(self.y)].header.kitty_virtual_placeholder = true
 	}
 
 	// Copy grapheme data through the page mapping. The inline slice carries the
@@ -5544,7 +5549,7 @@ fn (mut self ReflowCursor) write_cell(mut list PageList, cell &CellData, src_pag
 		if style_valid {
 			mut current_page := &self.node.data
 			current_page.rows[int(self.y)].cells[int(self.x)].style_id = id
-			current_page.rows[int(self.y)].styled = true
+			current_page.rows[int(self.y)].header.styled = true
 		}
 	}
 
@@ -5715,8 +5720,8 @@ fn (mut self PageList) fixup_viewport(removed usize) {
 		.pin {
 			vp := Pin{
 				node: self.viewport_pin.node
-				y: self.viewport_pin.y
-				x: self.viewport_pin.x
+				y:    self.viewport_pin.y
+				x:    self.viewport_pin.x
 			}
 			if self.pin_is_active(vp) {
 				self.viewport = .active
@@ -5799,7 +5804,7 @@ pub fn (mut self PageList) increase_capacity(node &PageNode, adjustment ?Increas
 		return error('OutOfSpace')
 	}
 
-	mut new_node := self.create_page(cap)
+	mut new_node := self.create_page(cap)!
 	mut new_page := &new_node.data
 	assert new_page.capacity.rows >= page.capacity.rows
 	assert new_page.capacity.cols >= page.capacity.cols
@@ -5828,7 +5833,7 @@ pub fn (mut self PageList) increase_capacity(node &PageNode, adjustment ?Increas
 //
 // The current design doesn't allow smaller-than-std pages, so if the node's
 // backing page is standard-size or smaller, no compaction occurs.
-pub fn (mut self PageList) compact(node &PageNode) ?&PageNode {
+pub fn (mut self PageList) compact(node &PageNode) !PageNodeOption {
 	mut page := &node.data
 	assert page.size.rows > 0
 
@@ -5836,30 +5841,26 @@ pub fn (mut self PageList) compact(node &PageNode) ?&PageNode {
 	// capacity to something smaller won't save memory.
 	old_size := page_backing_size(page.capacity)
 	if old_size <= standard_page_size() {
-		return none
+		return PageNodeOption{}
 	}
 
 	// Compute the minimum capacity required for this page's content.
 	req_cap := page.exact_row_capacity(0, usize(page.size.rows))
 	new_size := Page.layout(req_cap).total_size
 	if new_size >= old_size {
-		return none
+		return PageNodeOption{}
 	}
 
 	// Create the new smaller page.
-	mut new_node := self.create_page(req_cap)
+	mut new_node := self.create_page(req_cap)!
 	mut new_page := &new_node.data
 	new_page.size = page.size
 	new_page.dirty = page.dirty
-	// Ensure enough row slots.
-	for new_page.rows.len < int(page.size.rows) {
-		new_page.append_row()
-	}
 	new_page.clone_from(page, 0, page.size.rows) or {
 		// The requested capacity was computed from this exact content. Preserve
 		// the original page if a bounded clone nevertheless rejects it.
 		self.destroy_node(new_node)
-		return none
+		return PageNodeOption{}
 	}
 
 	// Fix up all tracked pins to point to the new page.
@@ -5874,7 +5875,7 @@ pub fn (mut self PageList) compact(node &PageNode) ?&PageNode {
 	self.pages.remove(node)
 	self.destroy_node(node)
 
-	return new_node
+	return PageNodeOption{ node: new_node }
 }
 
 // A variant of erase_row that shifts only a bounded number of following
@@ -5901,7 +5902,7 @@ pub fn (mut self PageList) erase_row_bounded(point Point, limit usize) ! {
 	if usize(node.data.size.rows - pn.y) > limit {
 		node.data.clear_cells(pn.y, 0, node.data.size.cols)
 		mut rows := unsafe { node.data.rows[int(pn.y)..int(pn.y) + int(limit) + 1] }
-		fastmem.rotate_once(mut rows)
+		rotate_row_views(mut rows, false)
 
 		// Mark the whole page as dirty.
 		//
@@ -5938,7 +5939,7 @@ pub fn (mut self PageList) erase_row_bounded(point Point, limit usize) ! {
 	}
 
 	mut rows := unsafe { node.data.rows[int(pn.y)..int(node.data.size.rows)] }
-	fastmem.rotate_once(mut rows)
+	rotate_row_views(mut rows, false)
 
 	// Mark the whole page as dirty.
 	//
@@ -5991,7 +5992,7 @@ pub fn (mut self PageList) erase_row_bounded(point Point, limit usize) ! {
 		if usize(node.data.size.rows) > shifted_limit {
 			node.data.clear_cells(0, 0, node.data.size.cols)
 			mut next_rows := unsafe { node.data.rows[..int(shifted_limit) + 1] }
-			fastmem.rotate_once(mut next_rows)
+			rotate_row_views(mut next_rows, false)
 
 			// Mark the whole page as dirty.
 			//
@@ -6027,7 +6028,7 @@ pub fn (mut self PageList) erase_row_bounded(point Point, limit usize) ! {
 		}
 
 		mut next_rows := unsafe { node.data.rows[..int(node.data.size.rows)] }
-		fastmem.rotate_once(mut next_rows)
+		rotate_row_views(mut next_rows, false)
 
 		// Mark the whole page as dirty.
 		node.data.dirty = true
@@ -6122,8 +6123,8 @@ pub fn (mut self PageList) resize(opts PageResizeOpts) ! {
 		// We first change our row count so that we have the proper amount
 		// we can use when shrinking our cols.
 		mut copy_opts := PageResizeOpts{
-			cols: self.cols
-			rows: opts.rows
+			cols:   self.cols
+			rows:   opts.rows
 			reflow: opts.reflow
 			cursor: opts.cursor
 		}
@@ -6143,8 +6144,8 @@ pub fn (mut self PageList) resize(opts PageResizeOpts) ! {
 	if self.viewport == .pin {
 		vp := Pin{
 			node: self.viewport_pin.node
-			y: self.viewport_pin.y
-			x: self.viewport_pin.x
+			y:    self.viewport_pin.y
+			x:    self.viewport_pin.x
 		}
 		if self.pin_is_active(vp) {
 			self.viewport = .active
@@ -6182,7 +6183,7 @@ fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) ! {
 			for {
 				next := row_it.next() or { break }
 				if int(next.y) < next.node.data.rows.len {
-					if next.node.data.rows[int(next.y)].wrap_continuation {
+					if next.node.data.rows[int(next.y)].header.wrap_continuation {
 						wrapped += 1
 					}
 				}
@@ -6211,7 +6212,7 @@ fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) ! {
 		c2.rows = if first_page.size.rows < c2.rows { first_page.size.rows } else { c2.rows }
 		c2
 	}
-	mut first_rewritten_node := self.create_page(first_cap)
+	mut first_rewritten_node := self.create_page(first_cap)!
 	first_rewritten_node.data.size.rows = 1
 
 	// We need to grab our row iterator now before we rewrite our
@@ -6269,7 +6270,7 @@ fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) ! {
 	}
 	if !enough {
 		for _ in total .. usize(self.rows) {
-			self.grow() or {}
+			_ = self.grow()!
 		}
 	}
 
@@ -6277,8 +6278,8 @@ fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) ! {
 	if have_preserved {
 		vp := Pin{
 			node: preserved_pin.node
-			y: preserved_pin.y
-			x: preserved_pin.x
+			y:    preserved_pin.y
+			x:    preserved_pin.x
 		}
 		active_pt := self.point_from_pin(.active, vp) or {
 			return
@@ -6294,7 +6295,7 @@ fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) ! {
 		for {
 			next := row_it.next() or { break }
 			if int(next.y) < next.node.data.rows.len {
-				if next.node.data.rows[int(next.y)].wrap_continuation {
+				if next.node.data.rows[int(next.y)].header.wrap_continuation {
 					wrapped += 1
 				}
 			}
@@ -6313,7 +6314,7 @@ fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) ! {
 		req_rows = if req_rows > current { req_rows - current } else { usize(0) }
 
 		for req_rows > 0 {
-			self.grow() or {}
+			_ = self.grow()!
 			req_rows -= 1
 		}
 	}
@@ -6412,7 +6413,7 @@ fn (mut self PageList) resize_without_reflow(opts PageResizeOpts) ! {
 					delta := rows - self.rows
 					self.rows = rows
 					for _ in 0 .. delta {
-						self.grow() or {}
+						_ = self.grow()!
 					}
 					handled = true
 				}
@@ -6442,7 +6443,7 @@ fn (mut self PageList) resize_without_reflow(opts PageResizeOpts) ! {
 				}
 				if !enough {
 					for _ in count .. usize(rows) {
-						self.grow() or {}
+						_ = self.grow()!
 					}
 				}
 
@@ -6451,8 +6452,8 @@ fn (mut self PageList) resize_without_reflow(opts PageResizeOpts) ! {
 				if self.viewport == .pin {
 					vp := Pin{
 						node: self.viewport_pin.node
-						y: self.viewport_pin.y
-						x: self.viewport_pin.x
+						y:    self.viewport_pin.y
+						x:    self.viewport_pin.x
 					}
 					if self.pin_is_active(vp) {
 						self.viewport = .active
@@ -6519,10 +6520,6 @@ fn (mut self PageList) resize_without_reflow_grow_cols(cols u16, chunk PageChunk
 			mut copied_all := true
 			for i in 0 .. int(len) {
 				dst_idx := prev_page.size.rows
-				// Ensure prev page has the row slot.
-				for prev_page.rows.len <= int(dst_idx) {
-					prev_page.append_row()
-				}
 				prev_page.size.rows += 1
 				prev_page.clone_row_from(page, dst_idx, u16(i)) or {
 					prev_page.size.rows -= 1
@@ -6549,7 +6546,7 @@ fn (mut self PageList) resize_without_reflow_grow_cols(cols u16, chunk PageChunk
 
 	// We need to loop because our col growth may force us to split pages.
 	for copied < page.size.rows {
-		mut new_node := self.create_page(cap)
+		mut new_node := self.create_page(cap)!
 		mut new_page := &new_node.data
 
 		// The length we can copy into the new page is at most the number
@@ -6559,10 +6556,6 @@ fn (mut self PageList) resize_without_reflow_grow_cols(cols u16, chunk PageChunk
 		// Perform the copy.
 		y_start := copied
 		for i in 0 .. int(len) {
-			// Ensure the destination row slot exists.
-			for new_page.rows.len <= i {
-				new_page.append_row()
-			}
 			new_page.size.rows += 1
 			new_page.clone_row_from(page, u16(i), u16(int(y_start) + i)) or {
 				// Ghostty safely cuts this page copy short. The next page gets a
@@ -6603,7 +6596,7 @@ pub fn (mut self PageList) clear_dirty() {
 		mut n := node or { break }
 		n.data.dirty = false
 		for y in 0 .. int(n.data.size.rows) {
-			n.data.rows[y].dirty = false
+			n.data.rows[y].header.dirty = false
 		}
 		node = n.next
 	}
@@ -6750,8 +6743,8 @@ pub fn (self &PageList) verify_integrity() ?PageListIntegrityError {
 	for p in self.tracked_pins_storage {
 		if !self.pin_is_valid(Pin{
 			node: p.node
-			y: p.y
-			x: p.x
+			y:    p.y
+			x:    p.x
 		}) {
 			return .tracked_pin_invalid
 		}

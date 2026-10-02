@@ -2364,7 +2364,7 @@ fn (mut self Terminal) print_cell(unmapped_c u32, wide CellWide) {
 
 		// Release the old style.
 		if cell.style_id != default_style_id {
-			assert self.screens.active.cursor.page_row.styled
+			assert self.screens.active.cursor.page_row.header.styled
 			page.styles.release(cell.style_id)
 		}
 	}
@@ -2393,14 +2393,14 @@ fn (mut self Terminal) print_cell(unmapped_c u32, wide CellWide) {
 		// Use the new style.
 		if cell.style_id != default_style_id {
 			page.styles.use_style(cell.style_id)
-			self.screens.active.cursor.page_row.styled = true
+			self.screens.active.cursor.page_row.header.styled = true
 		}
 	}
 
 	// If this is a Kitty unicode placeholder then we need to mark the
 	// row so that the renderer can lookup rows with these much faster.
 	if c == kitty_unicode_placeholder {
-		self.screens.active.cursor.page_row.kitty_virtual_placeholder = true
+		self.screens.active.cursor.page_row.header.kitty_virtual_placeholder = true
 	}
 
 	// We check for an active hyperlink first because setHyperlink
@@ -2456,7 +2456,7 @@ fn (mut self Terminal) print_wrap() ! {
 	// middle due to a right margin.
 	mark_wrap := self.screens.active.cursor.x == self.cols - 1
 	if mark_wrap {
-		self.screens.active.cursor.page_row.wrap = true
+		self.screens.active.cursor.page_row.header.wrap = true
 	}
 
 	// Get the old semantic prompt so we can extend it to the next
@@ -2475,14 +2475,14 @@ fn (mut self Terminal) print_wrap() ! {
 	match old_semantic {
 		.output, .input {}
 		.prompt {
-			self.screens.active.cursor.page_row.semantic_prompt = .prompt_continuation
+			self.screens.active.cursor.page_row.header.semantic_prompt = .prompt_continuation
 		}
 	}
 
 	if mark_wrap {
 		mut row := self.screens.active.cursor.page_row
 		// Always mark the row as a continuation
-		row.wrap_continuation = true
+		row.header.wrap_continuation = true
 	}
 
 	// Assure that our screen is consistent
@@ -2710,7 +2710,7 @@ pub fn (mut self Terminal) cursor_left(count_req usize) {
 		// If our previous line is not wrapped then we are done.
 		if wrap_mode != .reverse_extended {
 			prev_row := self.screens.active.cursor_row_up(1)
-			if !prev_row.wrap {
+			if !prev_row.header.wrap {
 				break
 			}
 		}
@@ -2820,7 +2820,7 @@ pub fn (self &Terminal) cursor_is_at_prompt() bool {
 
 	// If our page row is a prompt then we're always at a prompt
 	cursor := &self.screens.active.cursor
-	if cursor.page_row.semantic_prompt != .unknown {
+	if cursor.page_row.header.semantic_prompt != .unknown {
 		return true
 	}
 
@@ -2932,7 +2932,7 @@ pub fn (mut self Terminal) index() ! {
 				// This can be a false positive if the shell changes content
 				// type later and outputs something. We handle that in the
 				// semanticPrompt function.
-				screen.cursor.page_row.semantic_prompt = .prompt_continuation
+				screen.cursor.page_row.header.semantic_prompt = .prompt_continuation
 			}
 		} else {
 			// This should never be set in the output mode.
@@ -2968,7 +2968,7 @@ pub fn (mut self Terminal) index() ! {
 		}
 
 		// Slow path for left and right scrolling region margins.
-		if self.scrolling_region.left != 0 || self.scrolling_region.right != self.cols - 1 ||
+		if self.scrolling_region.left != 0 || self.scrolling_region.right != self.cols - 1 || 
 		// PERF(mitchellh): If we have an SGR background set then
 		// we need to preserve that background in our erased rows.
 		// scrollUp does that but eraseRowBounded below does not.
@@ -3358,10 +3358,10 @@ pub fn (mut self Terminal) insert_lines(count usize) {
 
 			// If our scrolling region is full width, then we unset wrap.
 			if !left_right {
-				off_row.wrap = false
-				cur_row.wrap = false
-				off_row.wrap_continuation = false
-				cur_row.wrap_continuation = false
+				off_row.header.wrap = false
+				cur_row.header.wrap = false
+				off_row.header.wrap_continuation = false
+				cur_row.header.wrap_continuation = false
 			}
 
 			if !self.shift_row(off_p, off_row, *cur_p, cur_row, left_right) {
@@ -3521,10 +3521,10 @@ pub fn (mut self Terminal) delete_lines(count usize) {
 
 			// If our scrolling region is full width, then we unset wrap.
 			if !left_right {
-				off_row.wrap = false
-				cur_row.wrap = false
-				off_row.wrap_continuation = false
-				cur_row.wrap_continuation = false
+				off_row.header.wrap = false
+				cur_row.header.wrap = false
+				off_row.header.wrap_continuation = false
+				cur_row.header.wrap_continuation = false
 			}
 
 			if !self.shift_row(off_p, off_row, *cur_p, cur_row, left_right) {
@@ -3888,7 +3888,7 @@ fn (self &Terminal) check_at_prompt_for_clear() bool {
 	for {
 		p := it.next() or { break }
 		row := p.row_and_cell().row
-		match row.semantic_prompt {
+		match row.header.semantic_prompt {
 			// If we're at a prompt or input area, then we are at a prompt.
 			.prompt, .prompt_continuation {
 				return true
@@ -3959,7 +3959,7 @@ pub fn (mut self Terminal) decaln() ! {
 		// If we have a ref-counted style, increase
 		if self.screens.active.cursor.style_id != default_style_id {
 			page.styles.use_multiple(self.screens.active.cursor.style_id, u16(cols))
-			row.styled = true
+			row.header.styled = true
 		}
 
 		// We messed with the page so assert its integrity here.
@@ -4418,9 +4418,9 @@ pub fn (mut self Terminal) semantic_prompt(cmd osc.SemanticPrompt) {
 			// when we get a newline with a prompt cursor that the new line is
 			// also a prompt. But fish changes to output on the newline, so if
 			// we're at col 0 we just assume we're overwriting the prompt.
-			if self.screens.active.cursor.page_row.semantic_prompt != .unknown
+			if self.screens.active.cursor.page_row.header.semantic_prompt != .unknown
 				&& self.screens.active.cursor.x == 0 {
-				self.screens.active.cursor.page_row.semantic_prompt = .unknown
+				self.screens.active.cursor.page_row.header.semantic_prompt = .unknown
 			}
 		}
 		.end_command {

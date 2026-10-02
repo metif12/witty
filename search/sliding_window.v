@@ -449,7 +449,7 @@ pub fn (mut self SlidingWindow) append(node &terminal.PageNode) int {
 	// PageFormatter trims trailing blank rows, so append the page boundary
 	// newline exactly when the final physical row is not soft-wrapped.
 	last_row := page.rows[int(page.size.rows) - 1]
-	if !last_row.wrap {
+	if !last_row.header.wrap {
 		encoded << u8(`\n`)
 		cell_map << if cell_map.len > 0 {
 			cell_map[cell_map.len - 1]

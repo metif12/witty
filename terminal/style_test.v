@@ -487,7 +487,7 @@ fn test_style_bg_cell_palette() {
 	}
 	cell := style.bg_cell() or { panic('expected cell') }
 	assert cell.content_tag == .bg_color_palette
-	assert cell.color_palette == 42
+	assert cell.color_palette() == 42
 }
 
 fn test_style_bg_cell_rgb() {
@@ -496,7 +496,7 @@ fn test_style_bg_cell_rgb() {
 	}
 	cell := style.bg_cell() or { panic('expected cell') }
 	assert cell.content_tag == .bg_color_rgb
-	assert cell.color_rgb_r == 10
-	assert cell.color_rgb_g == 20
-	assert cell.color_rgb_b == 30
+	assert cell.color_rgb_r() == 10
+	assert cell.color_rgb_g() == 20
+	assert cell.color_rgb_b() == 30
 }

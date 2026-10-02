@@ -373,7 +373,7 @@ pub fn (mut self RenderState) update(mut t Terminal) {
 			last_dirty_page = p
 			dirty = true
 		}
-		if !dirty && page_rac.row.dirty {
+		if !dirty && page_rac.row.header.dirty {
 			dirty = true
 		}
 
@@ -388,7 +388,7 @@ pub fn (mut self RenderState) update(mut t Terminal) {
 		// Clear our row dirty, we'll clear our page dirty later.
 		// We can't clear it now because we have more rows to go through.
 		mut row := page_rac.row
-		row.dirty = false
+		row.header.dirty = false
 
 		// Reset our cells if we're rebuilding this row.
 		self.row_data[y].selection = none
@@ -400,7 +400,7 @@ pub fn (mut self RenderState) update(mut t Terminal) {
 		assert page_cells.len == int(self.cols)
 
 		// Copy our raw row data
-		self.row_data[y].raw = *row
+		self.row_data[y].raw = row.snapshot()
 
 		// We always copy our raw cell data. In the case we have no
 		// managed memory, we can skip setting any other fields.
@@ -439,16 +439,16 @@ pub fn (mut self RenderState) update(mut t Terminal) {
 					self.row_data[y].cells[x].style = CellStyle{
 						bg_color: StyleColorRgb{
 							rgb: RGB{
-								r: page_cell.color_rgb_r
-								g: page_cell.color_rgb_g
-								b: page_cell.color_rgb_b
+								r: page_cell.color_rgb_r()
+								g: page_cell.color_rgb_g()
+								b: page_cell.color_rgb_b()
 							}
 						}
 					}
 				}
 				.bg_color_palette {
 					self.row_data[y].cells[x].style = CellStyle{
-						bg_color: StyleColorPalette{ index: page_cell.color_palette }
+						bg_color: StyleColorPalette{ index: page_cell.color_palette() }
 					}
 				}
 			}
@@ -759,7 +759,7 @@ pub fn (self &RenderState) string(mut writer strings.Builder, options ?RenderStr
 				}
 			}
 		}
-		if !row.raw.wrap {
+		if !row.raw.header.wrap {
 			writer.write_u8(u8(`\n`))
 			if string_map != unsafe { nil } {
 				unsafe {

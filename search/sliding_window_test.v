@@ -14,7 +14,7 @@ import terminal
 // CircBuf / DataBuf tests
 // ============================================================
 
-fn test_data_buf_basic() {
+fn test_data_buf_basic() ! {
 	mut buf := DataBuf.new()
 	assert buf.len() == 0
 	assert buf.capacity() == 0
@@ -30,7 +30,7 @@ fn test_data_buf_basic() {
 	assert slices.second.len == 0
 }
 
-fn test_data_buf_wrap_around() {
+fn test_data_buf_wrap_around() ! {
 	mut buf := DataBuf.new()
 	buf.ensure_unused_capacity(8)
 
@@ -55,7 +55,7 @@ fn test_data_buf_wrap_around() {
 	assert combined == 'efghijkl'.bytes()
 }
 
-fn test_data_buf_delete_oldest() {
+fn test_data_buf_delete_oldest() ! {
 	mut buf := DataBuf.new()
 	buf.ensure_unused_capacity(5)
 	buf.append_slice_assume_capacity('abcde'.bytes())
@@ -69,7 +69,7 @@ fn test_data_buf_delete_oldest() {
 	assert combined == 'cde'.bytes()
 }
 
-fn test_data_buf_empty_slices() {
+fn test_data_buf_empty_slices() ! {
 	mut buf := DataBuf.new()
 	slices := buf.get_ptr_slice(0, 0)
 	assert slices.first.len == 0
@@ -98,7 +98,7 @@ fn test_data_buf_append_full_delete_and_wrap() ! {
 	assert false, 'expected append to reject a full buffer'
 }
 
-fn test_data_buf_get_ptr_slice_advances_and_wraps() {
+fn test_data_buf_get_ptr_slice_advances_and_wraps() ! {
 	mut buf := DataBuf.new()
 	buf.resize(4)
 	mut initial := buf.get_ptr_slice(0, 3)
@@ -124,7 +124,7 @@ fn test_data_buf_get_ptr_slice_advances_and_wraps() {
 	assert all.second.len == 0
 }
 
-fn test_data_buf_resize_full() {
+fn test_data_buf_resize_full() ! {
 	mut buf := DataBuf.new()
 	buf.resize(4)
 	mut data := buf.get_ptr_slice(0, 4)
@@ -149,7 +149,7 @@ fn test_data_buf_resize_full() {
 	assert shrunk.first == [u8(1), 2, 3]
 }
 
-fn test_data_buf_zero_length_operations_are_noops() {
+fn test_data_buf_zero_length_operations_are_noops() ! {
 	mut buf := DataBuf.new()
 	buf.resize(5)
 	buf.append_slice_assume_capacity([]u8{})
@@ -161,7 +161,7 @@ fn test_data_buf_zero_length_operations_are_noops() {
 	assert *(buf.first() or { panic('missing first value') }) == `h`
 }
 
-fn test_meta_buf_basic() {
+fn test_meta_buf_basic() ! {
 	mut buf := MetaBuf.new()
 	assert buf.len() == 0
 
@@ -180,7 +180,7 @@ fn test_meta_buf_basic() {
 	assert m.cell_map[0].y == 2
 }
 
-fn test_meta_buf_delete_oldest() {
+fn test_meta_buf_delete_oldest() ! {
 	mut buf := MetaBuf.new()
 	buf.ensure_unused_capacity(3)
 
@@ -200,7 +200,7 @@ fn test_meta_buf_delete_oldest() {
 // Search helper tests
 // ============================================================
 
-fn test_index_of_ignore_case_basic() {
+fn test_index_of_ignore_case_basic() ! {
 	haystack := 'hello world'.bytes()
 	needle := 'world'.bytes()
 	idx := index_of_ignore_case(haystack, needle) or {
@@ -210,7 +210,7 @@ fn test_index_of_ignore_case_basic() {
 	assert idx == 6
 }
 
-fn test_index_of_ignore_case_case_insensitive() {
+fn test_index_of_ignore_case_case_insensitive() ! {
 	haystack := 'Hello World'.bytes()
 	needle := 'hello'.bytes()
 	idx := index_of_ignore_case(haystack, needle) or {
@@ -220,14 +220,14 @@ fn test_index_of_ignore_case_case_insensitive() {
 	assert idx == 0
 }
 
-fn test_index_of_ignore_case_no_match() {
+fn test_index_of_ignore_case_no_match() ! {
 	haystack := 'hello world'.bytes()
 	needle := 'xyz'.bytes()
 	result := index_of_ignore_case(haystack, needle)
 	assert result == none
 }
 
-fn test_index_of_ignore_case_empty_needle() {
+fn test_index_of_ignore_case_empty_needle() ! {
 	haystack := 'hello'.bytes()
 	needle := []u8{}
 	idx := index_of_ignore_case(haystack, needle) or {
@@ -237,26 +237,26 @@ fn test_index_of_ignore_case_empty_needle() {
 	assert idx == 0
 }
 
-fn test_index_of_ignore_case_needle_too_long() {
+fn test_index_of_ignore_case_needle_too_long() ! {
 	haystack := 'hi'.bytes()
 	needle := 'hello'.bytes()
 	result := index_of_ignore_case(haystack, needle)
 	assert result == none
 }
 
-fn test_reverse_bytes() {
+fn test_reverse_bytes() ! {
 	mut arr := 'abcde'.bytes()
 	reverse_bytes(mut arr)
 	assert arr == 'edcba'.bytes()
 }
 
-fn test_reverse_bytes_empty() {
+fn test_reverse_bytes_empty() ! {
 	mut arr := []u8{}
 	reverse_bytes(mut arr)
 	assert arr == []u8{}
 }
 
-fn test_reverse_bytes_single() {
+fn test_reverse_bytes_single() ! {
 	mut arr := [u8(`x`)]
 	reverse_bytes(mut arr)
 	assert arr == [u8(`x`)]
@@ -266,7 +266,7 @@ fn test_reverse_bytes_single() {
 // SlidingWindow basic tests
 // ============================================================
 
-fn test_sliding_window_empty_on_init() {
+fn test_sliding_window_empty_on_init() ! {
 	mut w := SlidingWindow.init(.forward, 'boo!'.bytes())
 	defer {
 		w.deinit()
@@ -275,7 +275,7 @@ fn test_sliding_window_empty_on_init() {
 	assert w.meta.len() == 0
 }
 
-fn test_sliding_window_init_reverse_needle() {
+fn test_sliding_window_init_reverse_needle() ! {
 	mut w := SlidingWindow.init(.reverse, 'abc'.bytes())
 	defer {
 		w.deinit()
@@ -284,7 +284,7 @@ fn test_sliding_window_init_reverse_needle() {
 	assert w.needle == 'cba'.bytes()
 }
 
-fn test_sliding_window_clear_and_retain_capacity() {
+fn test_sliding_window_clear_and_retain_capacity() ! {
 	mut w := SlidingWindow.init(.forward, 'test'.bytes())
 	defer {
 		w.deinit()
@@ -305,7 +305,7 @@ fn test_sliding_window_clear_and_retain_capacity() {
 	assert w.data_offset == 0
 }
 
-fn test_sliding_window_next_no_data() {
+fn test_sliding_window_next_no_data() ! {
 	mut w := SlidingWindow.init(.forward, 'test'.bytes())
 	defer {
 		w.deinit()
@@ -315,7 +315,7 @@ fn test_sliding_window_next_no_data() {
 	assert w.next() == none
 }
 
-fn test_sliding_window_next_data_shorter_than_needle() {
+fn test_sliding_window_next_data_shorter_than_needle() ! {
 	mut w := SlidingWindow.init(.forward, 'long needle'.bytes())
 	defer {
 		w.deinit()
@@ -340,7 +340,7 @@ fn sliding_test_node(lines []string, wraps []bool, cols u16, serial u64) &termin
 	mut page := terminal.Page.init(terminal.PageCapacity{
 		cols: cols
 		rows: u16(lines.len)
-	})
+	})!
 	page.size.rows = u16(lines.len)
 	for y, line in lines {
 		for x, cp in line.runes() {
@@ -350,8 +350,8 @@ fn sliding_test_node(lines []string, wraps []bool, cols u16, serial u64) &termin
 			page.rows[y].cells[x] = terminal.CellData.init(u32(cp))
 		}
 		if y < wraps.len {
-			page.rows[y].wrap = wraps[y]
-			page.rows[y].wrap_continuation = y > 0 && wraps[y - 1]
+			page.rows[y].header.wrap = wraps[y]
+			page.rows[y].header.wrap_continuation = y > 0 && wraps[y - 1]
 		}
 	}
 	return &terminal.PageNode{
@@ -371,7 +371,7 @@ fn sliding_assert_match(mut window SlidingWindow, start_x u16, start_y u16, end_
 	assert h.chunks[h.chunks.len - 1].end - 1 == end_y
 }
 
-fn test_sliding_window_single_append() {
+fn test_sliding_window_single_append() ! {
 	mut node := sliding_test_node(['hello. boo! hello. boo!'], [false], 80, 1)
 	defer { node.data.deinit() }
 	mut w := SlidingWindow.init(.forward, 'boo!'.bytes())
@@ -381,7 +381,7 @@ fn test_sliding_window_single_append() {
 	assert w.next() == none
 }
 
-fn test_sliding_window_highlight_uses_reusable_chunk_buffer() {
+fn test_sliding_window_highlight_uses_reusable_chunk_buffer() ! {
 	mut node := sliding_test_node(['hello. boo!'], [false], 80, 1)
 	defer { node.data.deinit() }
 	mut w := SlidingWindow.init(.forward, 'boo!'.bytes())
@@ -390,7 +390,7 @@ fn test_sliding_window_highlight_uses_reusable_chunk_buffer() {
 	assert h.chunks.data == w.chunk_buf.data
 }
 
-fn test_sliding_window_single_append_case_insensitive() {
+fn test_sliding_window_single_append_case_insensitive() ! {
 	mut node := sliding_test_node(['hello. boo!'], [false], 80, 1)
 	defer { node.data.deinit() }
 	mut w := SlidingWindow.init(.forward, 'Boo!'.bytes())
@@ -398,7 +398,7 @@ fn test_sliding_window_single_append_case_insensitive() {
 	sliding_assert_match(mut w, 7, 0, 10, 0)
 }
 
-fn test_sliding_window_single_append_single_char() {
+fn test_sliding_window_single_append_single_char() ! {
 	mut node := sliding_test_node(['aba'], [false], 8, 1)
 	defer { node.data.deinit() }
 	mut w := SlidingWindow.init(.forward, 'a'.bytes())
@@ -408,7 +408,7 @@ fn test_sliding_window_single_append_single_char() {
 	assert w.next() == none
 }
 
-fn test_sliding_window_single_append_no_match() {
+fn test_sliding_window_single_append_no_match() ! {
 	mut node := sliding_test_node(['hello. boo!'], [false], 80, 1)
 	defer { node.data.deinit() }
 	mut w := SlidingWindow.init(.forward, 'nope!'.bytes())
@@ -417,7 +417,7 @@ fn test_sliding_window_single_append_no_match() {
 	assert w.meta.len() == 1
 }
 
-fn test_sliding_window_two_pages() {
+fn test_sliding_window_two_pages() ! {
 	mut first := sliding_test_node(['first boo!'], [false], 20, 1)
 	mut second := sliding_test_node(['second boo!'], [false], 20, 2)
 	defer {
@@ -431,7 +431,7 @@ fn test_sliding_window_two_pages() {
 	sliding_assert_match(mut w, 7, 0, 10, 0)
 }
 
-fn test_sliding_window_two_pages_single_char() {
+fn test_sliding_window_two_pages_single_char() ! {
 	mut first := sliding_test_node(['abc'], [false], 8, 1)
 	mut second := sliding_test_node(['cab'], [false], 8, 2)
 	defer {
@@ -445,7 +445,7 @@ fn test_sliding_window_two_pages_single_char() {
 	sliding_assert_match(mut w, 2, 0, 2, 0)
 }
 
-fn test_sliding_window_two_pages_match_across_boundary() {
+fn test_sliding_window_two_pages_match_across_boundary() ! {
 	mut first := sliding_test_node(['hello'], [true], 8, 1)
 	mut second := sliding_test_node([', world!'], [false], 8, 2)
 	defer {
@@ -458,11 +458,11 @@ fn test_sliding_window_two_pages_match_across_boundary() {
 	sliding_assert_match(mut w, 0, 0, 6, 0)
 }
 
-fn test_sliding_window_two_pages_no_match_boundary_newline() {
+fn test_sliding_window_two_pages_no_match_boundary_newline() ! {
 	sliding_test_boundary_newline(.forward)
 }
 
-fn test_sliding_window_two_pages_no_match_boundary_newline_reverse() {
+fn test_sliding_window_two_pages_no_match_boundary_newline_reverse() ! {
 	sliding_test_boundary_newline(.reverse)
 }
 
@@ -484,11 +484,11 @@ fn sliding_test_boundary_newline(direction Direction) {
 	assert w.next() == none
 }
 
-fn test_sliding_window_two_pages_no_match_prunes_first() {
+fn test_sliding_window_two_pages_no_match_prunes_first() ! {
 	sliding_test_pruning(.forward, false)
 }
 
-fn test_sliding_window_two_pages_no_match_keeps_both() {
+fn test_sliding_window_two_pages_no_match_keeps_both() ! {
 	sliding_test_pruning(.forward, true)
 }
 
@@ -512,7 +512,7 @@ fn sliding_test_pruning(direction Direction, long_needle bool) {
 	assert w.meta.len() == if long_needle { 2 } else { 1 }
 }
 
-fn test_sliding_window_circ_buf_boundary() {
+fn test_sliding_window_circ_buf_boundary() ! {
 	sliding_test_circular_boundary(.forward)
 }
 
@@ -532,7 +532,7 @@ fn sliding_test_circular_boundary(direction Direction) {
 	sliding_assert_match(mut w, 19, 0, 21, 0)
 }
 
-fn test_sliding_window_match_on_boundary() {
+fn test_sliding_window_match_on_boundary() ! {
 	sliding_test_match_on_boundary(.forward)
 }
 
@@ -548,7 +548,7 @@ fn sliding_test_match_on_boundary(direction Direction) {
 	sliding_assert_match(mut w, 21, 0, 1, 0)
 }
 
-fn test_sliding_window_single_append_reversed() {
+fn test_sliding_window_single_append_reversed() ! {
 	mut node := sliding_test_node(['hello. boo! hello. boo!'], [false], 80, 1)
 	defer { node.data.deinit() }
 	mut w := SlidingWindow.init(.reverse, 'boo!'.bytes())
@@ -557,7 +557,7 @@ fn test_sliding_window_single_append_reversed() {
 	sliding_assert_match(mut w, 7, 0, 10, 0)
 }
 
-fn test_sliding_window_single_append_no_match_reversed() {
+fn test_sliding_window_single_append_no_match_reversed() ! {
 	mut node := sliding_test_node(['hello. boo!'], [false], 80, 1)
 	defer { node.data.deinit() }
 	mut w := SlidingWindow.init(.reverse, 'nope!'.bytes())
@@ -566,7 +566,7 @@ fn test_sliding_window_single_append_no_match_reversed() {
 	assert w.meta.len() == 1
 }
 
-fn test_sliding_window_two_pages_reversed() {
+fn test_sliding_window_two_pages_reversed() ! {
 	mut first := sliding_test_node(['first boo!'], [false], 20, 1)
 	mut second := sliding_test_node(['second boo!'], [false], 20, 2)
 	defer {
@@ -580,7 +580,7 @@ fn test_sliding_window_two_pages_reversed() {
 	sliding_assert_match(mut w, 6, 0, 9, 0)
 }
 
-fn test_sliding_window_two_pages_match_boundary_reversed() {
+fn test_sliding_window_two_pages_match_boundary_reversed() ! {
 	mut first := sliding_test_node(['hello'], [true], 8, 1)
 	mut second := sliding_test_node([', world!'], [false], 8, 2)
 	defer {
@@ -593,27 +593,27 @@ fn test_sliding_window_two_pages_match_boundary_reversed() {
 	sliding_assert_match(mut w, 0, 0, 6, 0)
 }
 
-fn test_sliding_window_two_pages_no_match_prunes_reversed() {
+fn test_sliding_window_two_pages_no_match_prunes_reversed() ! {
 	sliding_test_pruning(.reverse, false)
 }
 
-fn test_sliding_window_two_pages_no_match_keeps_both_reversed() {
+fn test_sliding_window_two_pages_no_match_keeps_both_reversed() ! {
 	sliding_test_pruning(.reverse, true)
 }
 
-fn test_sliding_window_circ_buf_boundary_reversed() {
+fn test_sliding_window_circ_buf_boundary_reversed() ! {
 	sliding_test_circular_boundary(.reverse)
 }
 
-fn test_sliding_window_match_on_boundary_reversed() {
+fn test_sliding_window_match_on_boundary_reversed() ! {
 	sliding_test_match_on_boundary(.reverse)
 }
 
-fn test_sliding_window_soft_wrapped() {
+fn test_sliding_window_soft_wrapped() ! {
 	sliding_test_soft_wrap(.forward)
 }
 
-fn test_sliding_window_soft_wrapped_reversed() {
+fn test_sliding_window_soft_wrapped_reversed() ! {
 	sliding_test_soft_wrap(.reverse)
 }
 
@@ -625,7 +625,7 @@ fn sliding_test_soft_wrap(direction Direction) {
 	sliding_assert_match(mut w, 2, 1, 1, 2)
 }
 
-fn test_sliding_window_whitespace_only_node() {
+fn test_sliding_window_whitespace_only_node() ! {
 	mut node := sliding_test_node([''], [true], 80, 1)
 	defer { node.data.deinit() }
 	mut w := SlidingWindow.init(.forward, 'x'.bytes())

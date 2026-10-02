@@ -48,12 +48,12 @@ fn create_shaper_with_font(font_req TestFont) !TestShaper {
 	mut collection := font.Collection.init()
 	collection.load_options = font.LoadOptions{
 		library: lib
-		size: font.DesiredSize{ points: 12, xdpi: 72, ydpi: 72 }
+		size:    font.DesiredSize{ points: 12, xdpi: 72, ydpi: 72 }
 	}
 	load_options := collection.load_options or { return error('missing load options') }
 	collection.add(font.Face.init_mem(lib, data, load_options.face_options())!, font.AddOptions{
-		style: .regular
-		fallback: false
+		style:           .regular
+		fallback:        false
 		size_adjustment: .none_
 	})!
 
@@ -62,22 +62,22 @@ fn create_shaper_with_font(font_req TestFont) !TestShaper {
 	mut discovery := font.Discover.init()
 	defer { discovery.deinit() }
 	mut iterator := discovery.discover(font.Descriptor{
-		family: 'Apple Color Emoji'
-		size: 12
+		family:    'Apple Color Emoji'
+		size:      12
 		monospace: false
 	})!
 	defer { iterator.deinit() }
 	emoji_value := iterator.next()!
 	if emoji_value.has_value {
 		collection.add_deferred(emoji_value.face, font.AddOptions{
-			style: .regular
-			fallback: false
+			style:           .regular
+			fallback:        false
 			size_adjustment: .none_
 		})!
 	}
 	collection.add(font.Face.init_mem(lib, font.embedded_emoji_text, load_options.face_options())!, font.AddOptions{
-		style: .regular
-		fallback: false
+		style:           .regular
+		fallback:        false
 		size_adjustment: .none_
 	})!
 	grid := font.SharedGrid.init(font.CodepointResolver{
@@ -88,9 +88,9 @@ fn create_shaper_with_font(font_req TestFont) !TestShaper {
 	})!
 
 	return TestShaper{
-		shp: shp
+		shp:  shp
 		grid: grid
-		lib: lib
+		lib:  lib
 	}
 }
 
@@ -100,13 +100,13 @@ fn create_shaper_with_discovered_font(font_req string) !TestShaper {
 	mut collection := font.Collection.init()
 	collection.load_options = font.LoadOptions{
 		library: lib
-		size: font.DesiredSize{ points: 12, xdpi: 72, ydpi: 72 }
+		size:    font.DesiredSize{ points: 12, xdpi: 72, ydpi: 72 }
 	}
 	mut discovery := font.Discover.init()
 	defer { discovery.deinit() }
 	mut iterator := discovery.discover(font.Descriptor{
-		family: font_req
-		size: 12
+		family:    font_req
+		size:      12
 		monospace: false
 	})!
 	defer { iterator.deinit() }
@@ -124,8 +124,8 @@ fn create_shaper_with_discovered_font(font_req string) !TestShaper {
 		return error('font not found: ${font_req}')
 	}
 	collection.add(face, font.AddOptions{
-		style: .regular
-		fallback: false
+		style:           .regular
+		fallback:        false
 		size_adjustment: .none_
 	})!
 	grid := font.SharedGrid.init(font.CodepointResolver{
@@ -136,9 +136,9 @@ fn create_shaper_with_discovered_font(font_req string) !TestShaper {
 	})!
 
 	return TestShaper{
-		shp: shp
+		shp:  shp
 		grid: grid
-		lib: lib
+		lib:  lib
 	}
 }
 
@@ -161,9 +161,9 @@ fn ct_render_row(input string, cols u16, graphemes bool) ![]terminal.RenderCell 
 	mut result := []terminal.RenderCell{cap: state.row_data[0].cells.len}
 	for cell in state.row_data[0].cells {
 		result << terminal.RenderCell{
-			raw: cell.raw
+			raw:      cell.raw
 			grapheme: cell.grapheme.clone()
-			style: cell.style
+			style:    cell.style
 		}
 	}
 	return result
@@ -172,10 +172,10 @@ fn ct_render_row(input string, cols u16, graphemes bool) ![]terminal.RenderCell 
 fn (mut td TestShaper) shape_render_cells(cells []terminal.RenderCell, selection ?[2]u16, cursor_x ?u16) !CtShapeResult {
 	mut result := CtShapeResult{}
 	mut iterator := td.shp.run_iterator(font.RunOptions{
-		grid: &td.grid
+		grid:         &td.grid
 		render_cells: cells
-		selection: selection
-		cursor_x: cursor_x
+		selection:    selection
+		cursor_x:     cursor_x
 	})
 	for {
 		run := (iterator.next()!).get() or { break }
@@ -224,7 +224,8 @@ fn test_run_iterator_empty_cells_with_bg() {
 	for i in 1 .. 3 {
 		cells[i].raw = terminal.CellData{
 			content_tag: .bg_color_rgb
-			color_rgb_r: 255
+
+			codepoint: u32(255) | (u32(0) << 8) | (u32(0) << 16)
 		}
 	}
 	result := td.shape_render_cells(cells, none, none) or { panic(err) }
@@ -669,8 +670,8 @@ fn test_special_font_shapes_codepoints() {
 	// Shape with sprite font index
 	cells := shp.shape(font.TextRun{
 		font_index: font.sprite_index
-		offset: 0
-		cells: 2
+		offset:     0
+		cells:      2
 	}) or { return }
 
 	assert cells.len == 2
@@ -696,8 +697,8 @@ fn test_special_font_skips_zero_codepoints() {
 	// Shape with sprite font index
 	cells := shp.shape(font.TextRun{
 		font_index: font.sprite_index
-		offset: 0
-		cells: 1
+		offset:     0
+		cells:      1
 	}) or { return }
 
 	// Should get 1 cell, not 2 (zero padding is skipped)
@@ -710,16 +711,16 @@ fn coretext_test_grid() !font.SharedGrid {
 	mut collection := font.Collection.init()
 	collection.load_options = font.LoadOptions{
 		library: font.Library.init()!
-		size: font.DesiredSize{
+		size:    font.DesiredSize{
 			points: 12
-			xdpi: 96
-			ydpi: 96
+			xdpi:   96
+			ydpi:   96
 		}
 	}
 	load_opts := collection.load_options or { return error('missing load options') }
 	collection.add(font.Face.init_mem(load_opts.library, font.embedded_regular, load_opts.face_options())!, font.AddOptions{
-		style: .regular
-		fallback: false
+		style:           .regular
+		fallback:        false
 		size_adjustment: .none_
 	})!
 	return font.SharedGrid.init(font.CodepointResolver{
@@ -750,7 +751,7 @@ fn test_coretext_shapes_real_glyph_run() {
 		mut shp := Shaper.init(font.ShaperOptions{}) or { panic(err) }
 		defer { shp.deinit() }
 		mut iterator := shp.run_iterator(font.RunOptions{
-			grid: &grid
+			grid:  &grid
 			cells: [u8(`A`), `B`, `C`]
 		})
 		run := (iterator.next()!).get() or { panic('expected a text run') }

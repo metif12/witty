@@ -419,7 +419,7 @@ pub fn (mut self PlacementIterator) next() ?VirtualPlacement {
 		mut row := self.row or { break }
 
 		// This row flag is set on rows that have the virtual placeholder
-		if !row.row_and_cell().row.kitty_virtual_placeholder {
+		if !row.row_and_cell().row.header.kitty_virtual_placeholder {
 			self.row = self.row_it.next()
 			continue
 		}

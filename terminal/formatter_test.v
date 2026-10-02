@@ -827,7 +827,7 @@ fn test_page_plain_with_prior_trailing_state_cells_with_wrap_continuation() ! {
 
 	// Surgically modify the first row to be a wrap continuation
 	mut row := page.get_row(0)
-	row.wrap_continuation = true
+	row.header.wrap_continuation = true
 
 	mut formatter := PageFormatter.init(page, FormatOptions{
 		emit:   .plain
@@ -4332,9 +4332,9 @@ fn test_format_styled() {
 	assert u8(Format.plain) == 0
 	assert u8(Format.vt) == 1
 	assert u8(Format.html) == 2
-	assert Format.plain.styled() == false
-	assert Format.vt.styled() == true
-	assert Format.html.styled() == true
+	assert Format.plain.header.styled() == false
+	assert Format.vt.header.styled() == true
+	assert Format.html.header.styled() == true
 }
 
 fn test_hex02() {

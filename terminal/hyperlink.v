@@ -39,7 +39,7 @@ pub fn (self &Hyperlink) deinit() {}
 
 pub fn (self &Hyperlink) dupe() Hyperlink {
 	return Hyperlink{
-		id: hyperlink_id_dupe(self.id)
+		id:  hyperlink_id_dupe(self.id)
 		uri: self.uri.clone()
 	}
 }
@@ -105,7 +105,7 @@ pub fn HyperlinkPageEntry.from_hyperlink(link &Hyperlink) HyperlinkPageEntry {
 		}
 	}
 	return HyperlinkPageEntry{
-		id: id
+		id:  id
 		uri: link.uri.clone()
 	}
 }
@@ -120,7 +120,7 @@ pub fn (self &HyperlinkPageEntry) hyperlink() Hyperlink {
 		}
 	}
 	return Hyperlink{
-		id: id
+		id:  id
 		uri: self.uri.clone()
 	}
 }
@@ -188,403 +188,200 @@ fn hyperlink_hash_put_slice(mut data []u8, value string) {
 	}
 }
 
-struct HyperlinkSetEntry {
+// PageEntry's source native representation: an offset slice/implicit ID
+// union plus its u1 tag (24 bytes), followed by the URI offset slice.
+struct StoredHyperlink {
 mut:
-	link            Hyperlink
-	uri_offset      ?usize
-	explicit_offset ?usize
-	bucket          u16 = max_u16
-	psl             u16
-	ref_count       u16
+	id_len      usize
+	id_offset   u32
+	id_padding  u32
+	id_tag      u8
+	padding     [7]u8
+	uri_len     usize
+	uri_offset  u32
+	uri_padding u32
 }
 
-// HyperlinkSet is the page-local ref-counted set. Dead slots are reused and
-// ID zero remains reserved, matching Ghostty's RefCountedSet specialization.
+fn borrowed_string(base &u8, offset u32, len usize) string {
+	return unsafe { string{ str: base + offset, len: int(len), is_lit: 1 } }
+}
+
+fn (entry StoredHyperlink) hyperlink(base &u8) Hyperlink {
+	id := if entry.id_tag == 0 {
+		HyperlinkIdKind(HyperlinkExplicitId{ value: borrowed_string(base, entry.id_offset, entry.id_len) })
+	} else {
+		HyperlinkIdKind(HyperlinkImplicitId{ offset: u32(entry.id_len) })
+	}
+	return Hyperlink{ id: id, uri: borrowed_string(base, entry.uri_offset, entry.uri_len) }
+}
+
+fn hyperlink_value_hash(link Hyperlink) u64 {
+	id := match link.id {
+		HyperlinkExplicitId {
+			HyperlinkPageEntryIdKind(HyperlinkPageEntryExplicitId{ value: link.id.value })
+		}
+		HyperlinkImplicitId {
+			HyperlinkPageEntryIdKind(HyperlinkPageEntryImplicitId{ offset: link.id.offset })
+		}
+	}
+	return HyperlinkPageEntry{ id: id, uri: link.uri }.hash()
+}
+
+struct StoredHyperlinkContext {
+	base        &u8 = unsafe { nil }
+	strings     BitmapAllocator
+	lookup_link ?Hyperlink
+}
+
+fn (context StoredHyperlinkContext) hash(entry StoredHyperlink) u64 {
+	link := context.lookup_link or { entry.hyperlink(context.base) }
+	return hyperlink_value_hash(link)
+}
+
+fn (context StoredHyperlinkContext) eql(a StoredHyperlink, b StoredHyperlink) bool {
+	left := context.lookup_link or { a.hyperlink(context.base) }
+	right := b.hyperlink(context.base)
+	return left.eql(&right)
+}
+
+fn (context StoredHyperlinkContext) deleted(entry StoredHyperlink) {
+	mut strings := context.strings
+	if entry.id_tag == 0 && entry.id_len > 0 {
+		strings.release(usize(entry.id_offset) - usize(strings.chunks_offset.offset), entry.id_len)
+	}
+	if entry.uri_len > 0 {
+		strings.release(usize(entry.uri_offset) - usize(strings.chunks_offset.offset), entry.uri_len)
+	}
+}
+
 pub struct HyperlinkSet {
 pub mut:
-	entries      []HyperlinkSetEntry
-	hash_table   []u16
-	max_psl      u16
-	psl_stats    [32]u16
-	living       usize
-	next_id      u16 = 1
+	set          GenericRefCountedSet[StoredHyperlink, u16, u16, StoredHyperlinkContext]
 	layout       PageSetLayout
 	string_alloc BitmapAllocator
+	base         &u8 = unsafe { nil }
+	// Compatibility standalone test initialization retains its backing owner.
+	owned []u64
 }
 
 pub fn HyperlinkSet.init() HyperlinkSet {
 	return HyperlinkSet.init_bounded(page_set_layout(16, hyperlink_set_item_size, 8), bitmap_allocator_layout(usize(string_bytes_default), string_chunk))
 }
 
-fn HyperlinkSet.init_bounded(set_layout PageSetLayout, string_layout BitmapAllocatorLayout) HyperlinkSet {
-	return HyperlinkSet{
-		entries: []HyperlinkSetEntry{len: int(set_layout.cap), init: HyperlinkSetEntry{}}
-		hash_table: []u16{len: int(set_layout.table_cap)}
-		layout: set_layout
-		string_alloc: BitmapAllocator.init(string_chunk, string_layout)
-	}
+fn HyperlinkSet.init_bounded(layout PageSetLayout, strings BitmapAllocatorLayout) HyperlinkSet {
+	start := page_align_forward(layout.total_size, 8)
+	owned := []u64{len: int((start + strings.total_size + 7) / 8)}
+	buf := OffsetBuf.init(unsafe { &u8(owned.data) })
+	mut result := hyperlink_set_init_buf(buf, layout, buf.add(start), strings)
+	result.owned = owned
+	return result
 }
 
-// reset removes every link while retaining all bounded backing arrays.
-fn (mut self HyperlinkSet) reset() {
-	for i in 0 .. self.entries.len {
-		self.entries[i] = HyperlinkSetEntry{}
-	}
-	if self.hash_table.len > 0 {
-		unsafe {
-			vmemset(self.hash_table.data, 0, self.hash_table.len * int(sizeof(u16)))
-		}
-	}
-	self.max_psl = 0
-	self.psl_stats = [32]u16{}
-	self.living = 0
-	self.next_id = 1
-	self.string_alloc.reset()
+fn hyperlink_set_init_buf(buf OffsetBuf, layout PageSetLayout, string_buf OffsetBuf, strings BitmapAllocatorLayout) HyperlinkSet {
+	assert sizeof(GenericRefSetItem[StoredHyperlink, u16, u16]) == hyperlink_set_item_size
+	allocator := BitmapAllocator.init_buf(string_chunk, string_buf, strings)
+	context := StoredHyperlinkContext{ base: buf.base, strings: allocator }
+	native := GenericRefSetLayout[u16]{ cap: layout.cap, table_cap: layout.table_cap, table_mask: u16(layout.table_mask), table_start: layout.table_start, items_start: layout.items_start, total_size: layout.total_size }
+	return HyperlinkSet{ set: generic_ref_set_init[StoredHyperlink, u16, u16, StoredHyperlinkContext](buf, native, context), layout: layout, string_alloc: allocator, base: buf.base }
 }
 
-pub fn (self &HyperlinkSet) clone() HyperlinkSet {
-	return HyperlinkSet{
-		entries: self.entries.clone()
-		hash_table: self.hash_table.clone()
-		max_psl: self.max_psl
-		psl_stats: self.psl_stats
-		living: self.living
-		next_id: self.next_id
-		layout: self.layout
-		string_alloc: BitmapAllocator{
-			chunk_size: self.string_alloc.chunk_size
-			bitmaps: self.string_alloc.bitmaps.clone()
-			chunks: self.string_alloc.chunks.clone()
-		}
-	}
+fn (mut self HyperlinkSet) rebind(base &u8) {
+	self.base = unsafe { base }
+	self.string_alloc.rebind(base)
+	self.set.context = StoredHyperlinkContext{ base: unsafe { base }, strings: self.string_alloc }
 }
 
-// add allocates the page-owned strings and adds the semantic hyperlink to the
-// bounded ref-counted set. The returned ID owns one reference.
-pub fn (mut self HyperlinkSet) add(link Hyperlink) !HyperlinkId {
-	mut entry := self.allocate_entry(link)!
-	for self.next_id > 1 && self.entries[int(self.next_id) - 1].ref_count == 0 {
-		self.next_id--
-		self.delete_item(self.next_id)
-	}
-
-	if id := self.lookup(&entry.link) {
-		self.free_entry_strings(mut entry)
-		self.entries[int(id)].ref_count++
-		return id
-	}
-
-	if self.psl_stats[31] > 0 {
-		self.free_entry_strings(mut entry)
-		return error('set out of memory')
-	}
-	if usize(self.next_id) >= self.layout.cap {
-		self.free_entry_strings(mut entry)
-		if self.living < usize(f64(self.layout.cap) * 0.9) {
-			return error('set needs rehash')
-		}
-		return error('set out of memory')
-	}
-
-	id := self.insert(entry, self.next_id)
-	self.entries[int(id)].ref_count++
-	assert self.entries[int(id)].ref_count == 1
-	self.living++
-	if id == self.next_id {
-		self.next_id++
-	}
-	return HyperlinkId(id)
-}
-
-// add_with_id adds a hyperlink while preferring the source page's ID. This is
-// used when cloning/reflowing pages so the common case keeps stable IDs. If
-// the requested slot is occupied by a different live link, normal allocation
-// and deduplication determine the returned ID.
-pub fn (mut self HyperlinkSet) add_with_id(link Hyperlink, preferred_id HyperlinkId) !HyperlinkId {
-	assert preferred_id > 0
-	mut entry := self.allocate_entry(link)!
-
-	if u16(preferred_id) < self.next_id {
-		if self.entries[int(preferred_id)].ref_count == 0 {
-			if self.psl_stats[31] > 0 {
-				self.free_entry_strings(mut entry)
-				return error('set out of memory')
-			}
-			self.delete_item(u16(preferred_id))
-			added_id := self.upsert(entry, u16(preferred_id))
-			self.entries[int(added_id)].ref_count++
-			self.living++
-			return HyperlinkId(added_id)
-		}
-		if self.entries[int(preferred_id)].link.eql(&entry.link) {
-			self.free_entry_strings(mut entry)
-			self.entries[int(preferred_id)].ref_count++
-			return preferred_id
-		}
-	}
-
-	self.free_entry_strings(mut entry)
-	return self.add(link)
-}
-
-pub fn (self &HyperlinkSet) lookup(link &Hyperlink) ?HyperlinkId {
-	if self.layout.table_cap == 0 {
-		return none
-	}
-	hash := HyperlinkPageEntry.from_hyperlink(link).hash()
-	for i in 0 .. int(self.max_psl) + 1 {
-		p := int((hash + u64(i)) & u64(self.layout.table_mask))
-		id := self.hash_table[p]
-		if id == 0 {
-			return none
-		}
-		entry := self.entries[int(id)]
-		if entry.psl < u16(i) {
-			return none
-		}
-		if entry.psl == u16(i) && entry.ref_count > 0 && entry.link.eql(link) {
-			return HyperlinkId(id)
-		}
-	}
-	return none
-}
-
-pub fn (mut self HyperlinkSet) use_link(id HyperlinkId) {
-	assert id > 0 && int(id) < self.entries.len
-	assert self.entries[int(id)].ref_count > 0
-	self.entries[int(id)].ref_count++
-}
-
-pub fn (mut self HyperlinkSet) release(id HyperlinkId) {
-	assert id > 0 && int(id) < self.entries.len
-	mut entry := &self.entries[int(id)]
-	assert entry.ref_count > 0
-	entry.ref_count--
-	if entry.ref_count == 0 {
-		self.living--
-	}
-}
-
-pub fn (self &HyperlinkSet) get(id HyperlinkId) Hyperlink {
-	assert id > 0 && int(id) < self.entries.len
-	assert self.entries[int(id)].ref_count > 0
-	return self.entries[int(id)].link
-}
-
-pub fn (self &HyperlinkSet) ref_count(id HyperlinkId) u16 {
-	assert id > 0
-	assert int(id) < self.entries.len
-	return self.entries[int(id)].ref_count
-}
-
-// live_ids returns the IDs of every hyperlink entry with a nonzero ref
-// count, in ID order. The inspector uses this to walk the page's table.
-pub fn (self &HyperlinkSet) live_ids() []HyperlinkId {
-	mut ids := []HyperlinkId{}
-	for id in 1 .. self.entries.len {
-		if self.entries[id].ref_count > 0 {
-			ids << HyperlinkId(id)
-		}
-	}
-	return ids
-}
-
-pub fn (self &HyperlinkSet) count() usize {
-	return self.living
-}
-
-pub fn (self &HyperlinkSet) capacity() usize {
-	if self.layout.cap == 0 {
-		return 0
-	}
-	return self.layout.cap - 1
-}
-
-pub fn (self &HyperlinkSet) string_capacity() usize {
-	return self.string_alloc.capacity_bytes()
-}
-
-pub fn (self &HyperlinkSet) string_used() usize {
-	return self.string_alloc.used_bytes()
-}
-
-fn (mut self HyperlinkSet) can_allocate_string_bytes(byte_count usize) bool {
-	if byte_count == 0 {
-		return true
-	}
-	offset := self.string_alloc.alloc(byte_count) or { return false }
-	self.string_alloc.release(offset, byte_count)
-	return true
-}
-
-fn (mut self HyperlinkSet) allocate_entry(link Hyperlink) !HyperlinkSetEntry {
-	mut entry := HyperlinkSetEntry{
-		link: link.dupe()
-	}
+fn (mut self HyperlinkSet) allocate_entry(link Hyperlink) !StoredHyperlink {
+	mut entry := StoredHyperlink{ id_tag: 1 }
 	if link.uri.len > 0 {
-		entry.uri_offset = self.string_alloc.alloc(usize(link.uri.len)) or {
-			return error('strings out of memory')
-		}
+		offset := self.string_alloc.alloc(usize(link.uri.len)) or { return error('strings out of memory') }
+		unsafe { vmemcpy(&self.string_alloc.chunks[offset], link.uri.str, link.uri.len) }
+		entry.uri_offset = u32(self.string_alloc.chunks_offset.offset) + u32(offset)
+		entry.uri_len = usize(link.uri.len)
 	}
 	match link.id {
+		HyperlinkImplicitId { entry.id_len = usize(link.id.offset) }
 		HyperlinkExplicitId {
+			entry.id_tag = 0
 			if link.id.value.len > 0 {
-				entry.explicit_offset = self.string_alloc.alloc(usize(link.id.value.len)) or {
-					self.free_entry_strings(mut entry)
+				offset := self.string_alloc.alloc(usize(link.id.value.len)) or {
+					self.set.context.deleted(entry)
 					return error('strings out of memory')
 				}
+				unsafe { vmemcpy(&self.string_alloc.chunks[offset], link.id.value.str, link.id.value.len) }
+				entry.id_offset = u32(self.string_alloc.chunks_offset.offset) + u32(offset)
+				entry.id_len = usize(link.id.value.len)
 			}
 		}
-		else {}
 	}
 	return entry
 }
 
-fn (mut self HyperlinkSet) free_entry_strings(mut entry HyperlinkSetEntry) {
-	if offset := entry.uri_offset {
-		self.string_alloc.release(offset, usize(entry.link.uri.len))
-		entry.uri_offset = none
-	}
-	match entry.link.id {
-		HyperlinkExplicitId {
-			if offset := entry.explicit_offset {
-				self.string_alloc.release(offset, usize(entry.link.id.value.len))
-				entry.explicit_offset = none
-			}
-		}
-		else {}
+fn hyperlink_set_error(err IError) IError {
+	return if err.msg() == 'needs rehash' {
+		error('set needs rehash')
+	} else {
+		error('set out of memory')
 	}
 }
 
-fn (mut self HyperlinkSet) delete_item(id u16) {
-	entry := self.entries[int(id)]
-	if int(entry.bucket) > int(self.layout.table_cap) {
-		return
-	}
-	assert self.hash_table[int(entry.bucket)] == id
-	mut removed := entry
-	self.free_entry_strings(mut removed)
-	self.psl_stats[int(entry.psl)]--
-	self.hash_table[int(entry.bucket)] = 0
-	self.entries[int(id)] = HyperlinkSetEntry{}
-
-	mut p := int(entry.bucket)
-	mut n := (p + 1) & int(self.layout.table_mask)
-	for self.hash_table[n] != 0 && self.entries[int(self.hash_table[n])].psl > 0 {
-		next_id := self.hash_table[n]
-		self.entries[int(next_id)].bucket = u16(p)
-		self.psl_stats[int(self.entries[int(next_id)].psl)]--
-		self.entries[int(next_id)].psl--
-		self.psl_stats[int(self.entries[int(next_id)].psl)]++
-		self.hash_table[p] = next_id
-		p = n
-		n = (p + 1) & int(self.layout.table_mask)
-	}
-	for self.max_psl > 0 && self.psl_stats[int(self.max_psl)] == 0 {
-		self.max_psl--
-	}
-	self.hash_table[p] = 0
+pub fn (mut self HyperlinkSet) add(link Hyperlink) !HyperlinkId {
+	entry := self.allocate_entry(link)!
+	return HyperlinkId(self.set.add(self.base, entry) or {
+		self.set.context.deleted(entry)
+		return hyperlink_set_error(err)
+	})
 }
 
-fn (mut self HyperlinkSet) upsert(entry HyperlinkSetEntry, new_id u16) u16 {
-	if id := self.lookup(&entry.link) {
-		mut duplicate := entry
-		self.free_entry_strings(mut duplicate)
-		return u16(id)
+pub fn (mut self HyperlinkSet) add_with_id(link Hyperlink, id HyperlinkId) !HyperlinkId {
+	assert id > 0
+	entry := self.allocate_entry(link)!
+	result := self.set.add_with_id(self.base, entry, u16(id)) or {
+		self.set.context.deleted(entry)
+		return hyperlink_set_error(err)
 	}
-	return self.insert(entry, new_id)
+	return HyperlinkId(result.id)
 }
 
-fn (mut self HyperlinkSet) insert(entry HyperlinkSetEntry, new_id u16) u16 {
-	$if !prod {
-		assert self.lookup(&entry.link) == none
-	}
-
-	hash := HyperlinkPageEntry.from_hyperlink(&entry.link).hash()
-	mut held_id := new_id
-	mut held_psl := u16(0)
-	mut held_ref := 0
-	mut chosen_id := new_id
-	mut new_bucket := u16(0)
-	mut new_psl := u16(0)
-
-	for i in 0 .. int(self.layout.table_cap) - 1 {
-		p := u16((hash + u64(i)) & u64(self.layout.table_mask))
-		id := self.hash_table[int(p)]
-		if id == 0 {
-			self.hash_table[int(p)] = held_id
-			if held_id == new_id {
-				new_bucket = p
-				new_psl = held_psl
-			} else {
-				self.entries[int(held_id)].bucket = p
-				self.entries[int(held_id)].psl = held_psl
-			}
-			self.psl_stats[int(held_psl)]++
-			if held_psl > self.max_psl {
-				self.max_psl = held_psl
-			}
-			break
-		}
-
-		item_ref := self.entries[int(id)].ref_count
-		item_psl := self.entries[int(id)].psl
-		if item_ref == 0 {
-			mut dead := self.entries[int(id)]
-			self.free_entry_strings(mut dead)
-			self.psl_stats[int(item_psl)]--
-			self.entries[int(id)] = HyperlinkSetEntry{}
-			if id < new_id {
-				chosen_id = id
-			}
-			self.hash_table[int(p)] = held_id
-			if held_id == new_id {
-				new_bucket = p
-				new_psl = held_psl
-			} else {
-				self.entries[int(held_id)].bucket = p
-				self.entries[int(held_id)].psl = held_psl
-			}
-			self.psl_stats[int(held_psl)]++
-			if held_psl > self.max_psl {
-				self.max_psl = held_psl
-			}
-			break
-		}
-
-		if item_psl < held_psl || (item_psl == held_psl && item_ref < held_ref) {
-			self.hash_table[int(p)] = held_id
-			if held_id == new_id {
-				new_bucket = p
-				new_psl = held_psl
-			} else {
-				self.entries[int(held_id)].bucket = p
-				self.entries[int(held_id)].psl = held_psl
-			}
-			self.psl_stats[int(held_psl)]++
-			if held_psl > self.max_psl {
-				self.max_psl = held_psl
-			}
-			held_id = id
-			held_ref = item_ref
-			self.psl_stats[int(item_psl)]--
-			held_psl = item_psl
-		}
-		held_psl++
-	}
-
-	self.hash_table[int(new_bucket)] = chosen_id
-	mut placed := entry
-	placed.bucket = new_bucket
-	placed.psl = new_psl
-	placed.ref_count = 0
-	self.entries[int(chosen_id)] = placed
-	return chosen_id
+pub fn (self &HyperlinkSet) lookup(link &Hyperlink) ?HyperlinkId {
+	context := StoredHyperlinkContext{ base: self.base, strings: self.string_alloc, lookup_link: *link }
+	id := self.set.lookup_context(self.base, StoredHyperlink{}, context) or { return none }
+	return HyperlinkId(id)
 }
 
-pub fn HyperlinkSet.capacity_for_count(count usize) usize {
-	return rcs_capacity_for_count(count)
+pub fn (mut self HyperlinkSet) use_link(id HyperlinkId) { self.set.use_item(self.base, u16(id)) }
+
+pub fn (mut self HyperlinkSet) release(id HyperlinkId) { self.set.release(self.base, u16(id)) }
+
+pub fn (self &HyperlinkSet) get(id HyperlinkId) Hyperlink {
+	return self.set.get(self.base, u16(id)).hyperlink(self.base)
 }
 
-// Pages use a sparse mapping from a cell offset to the page-local link ID.
-pub type HyperlinkMap = map[u64]HyperlinkId
+pub fn (self &HyperlinkSet) ref_count(id HyperlinkId) u16 {
+	return self.set.ref_count(self.base, u16(id))
+}
+
+pub fn (self &HyperlinkSet) live_ids() []HyperlinkId {
+	mut ids := []HyperlinkId{}
+	for id, item in self.set.items_view(self.base) {
+		if id > 0 && item.meta.ref_count > 0 { ids << HyperlinkId(id) }
+	}
+	return ids
+}
+
+pub fn (self &HyperlinkSet) count() usize { return self.set.count() }
+
+pub fn (self &HyperlinkSet) capacity() usize { return self.layout.cap }
+
+pub fn (self &HyperlinkSet) string_capacity() usize { return self.string_alloc.capacity_bytes() }
+
+pub fn (self &HyperlinkSet) string_used() usize { return self.string_alloc.used_bytes() }
+
+pub fn HyperlinkSet.capacity_for_count(count usize) usize { return rcs_capacity_for_count(count) }
+
+fn (mut self HyperlinkSet) can_allocate_string_bytes(bytes usize) bool {
+	if bytes == 0 { return true }
+	offset := self.string_alloc.alloc(bytes) or { return false }
+	self.string_alloc.release(offset, bytes)
+	return true
+}

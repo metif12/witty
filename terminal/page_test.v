@@ -2,7 +2,7 @@ module terminal
 
 // Tests for page.v, translated from Ghostty's terminal/page.zig tests.
 
-fn test_packed_cell_enum_storage() {
+fn test_packed_cell_enum_storage() ! {
 	assert $sizeof(CellWide) == 1
 	assert u8(CellWide.spacer_head) == 3
 	assert $sizeof(ContentTag) == 1
@@ -14,12 +14,12 @@ fn test_packed_cell_enum_storage() {
 }
 
 // Test that a page can be initialized.
-fn test_page_init() {
+fn test_page_init() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   120
 		rows:   80
 		styles: 32
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -28,12 +28,12 @@ fn test_page_init() {
 	assert page.rows.len == 80
 }
 
-fn test_page_pause_integrity_checks_is_nested() {
+fn test_page_pause_integrity_checks_is_nested() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   3
 		rows:   2
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -49,7 +49,7 @@ fn test_page_pause_integrity_checks_is_nested() {
 }
 
 // Test that CellData is zero by default.
-fn test_cell_is_zero_by_default() {
+fn test_cell_is_zero_by_default() ! {
 	cell := CellData.init(0)
 	assert cell.is_zero()
 	// The zero value should be output type for semantic content.
@@ -58,12 +58,12 @@ fn test_cell_is_zero_by_default() {
 }
 
 // Test reading and writing cells.
-fn test_page_read_and_write_cells() {
+fn test_page_read_and_write_cells() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -85,12 +85,12 @@ fn test_page_read_and_write_cells() {
 }
 
 // Test appending small graphemes.
-fn test_page_append_grapheme_small() {
+fn test_page_append_grapheme_small() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -105,7 +105,7 @@ fn test_page_append_grapheme_small() {
 	// One
 	page.append_grapheme(0, 0, 0x0A) or { panic(err) }
 	row0 := page.get_row(0)
-	assert row0.grapheme
+	assert row0.header.grapheme
 	assert page.rows[0].cells[0].has_grapheme()
 	assert page.grapheme_alloc.used_bytes() == grapheme_chunk
 	cps1 := page.lookup_grapheme_at(0, 0) or {
@@ -126,18 +126,18 @@ fn test_page_append_grapheme_small() {
 	// Clear it
 	page.clear_grapheme(0, 0)
 	page.update_row_grapheme_flag(page.get_row(0))
-	assert !page.rows[0].grapheme
+	assert !page.rows[0].header.grapheme
 	assert !page.rows[0].cells[0].has_grapheme()
 	assert page.grapheme_alloc.used_bytes() == 0
 }
 
 // Test appending graphemes larger than chunk.
-fn test_page_append_grapheme_larger_than_chunk() {
+fn test_page_append_grapheme_larger_than_chunk() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -166,12 +166,12 @@ fn test_page_append_grapheme_larger_than_chunk() {
 }
 
 // Test clearing graphemes when not all cells have them.
-fn test_page_clear_grapheme_not_all_cells() {
+fn test_page_clear_grapheme_not_all_cells() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -197,18 +197,18 @@ fn test_page_clear_grapheme_not_all_cells() {
 	page.clear_grapheme(0, 0)
 	page.update_row_grapheme_flag(page.get_row(0))
 	// Row should still be marked as having graphemes (second cell has one).
-	assert page.rows[0].grapheme
+	assert page.rows[0].header.grapheme
 	assert !page.rows[0].cells[0].has_grapheme()
 	assert page.rows[0].cells[1].has_grapheme()
 }
 
 // Test cloning a page.
-fn test_page_clone() {
+fn test_page_clone() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -224,7 +224,7 @@ fn test_page_clone() {
 	}
 
 	// Clone
-	mut page2 := page.clone()
+	mut page2 := page.clone()!
 	defer {
 		page2.deinit()
 	}
@@ -260,12 +260,12 @@ fn test_page_clone() {
 }
 
 // Test cloning a page with graphemes.
-fn test_page_clone_graphemes() {
+fn test_page_clone_graphemes() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -283,12 +283,12 @@ fn test_page_clone_graphemes() {
 	}
 
 	// Clone it.
-	mut page2 := page.clone()
+	mut page2 := page.clone()!
 	defer {
 		page2.deinit()
 	}
 	{
-		assert page2.rows[0].grapheme
+		assert page2.rows[0].header.grapheme
 		assert page2.rows[0].cells[0].has_grapheme()
 		cps := page2.lookup_grapheme_at(0, 0) or {
 			assert false, 'expected grapheme data'
@@ -299,12 +299,12 @@ fn test_page_clone_graphemes() {
 }
 
 // Test cloning a page with styles.
-fn test_page_clone_styles() {
+fn test_page_clone_styles() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -322,7 +322,7 @@ fn test_page_clone_styles() {
 		for x in 0 .. int(page.size.cols) {
 			mut rac := page.get_row_and_cell(x, 0)
 			unsafe {
-				rac.row.styled = true
+				rac.row.header.styled = true
 				rac.cell.content_tag = .codepoint
 				rac.cell.codepoint = u32(x + 1)
 				rac.cell.style_id = id
@@ -332,7 +332,7 @@ fn test_page_clone_styles() {
 	}
 
 	// Clone it.
-	mut page2 := page.clone()
+	mut page2 := page.clone()!
 	defer {
 		page2.deinit()
 	}
@@ -341,7 +341,7 @@ fn test_page_clone_styles() {
 
 		for x in 0 .. int(page.size.cols) {
 			rac := page.get_row_and_cell(x, 0)
-			assert rac.row.styled
+			assert rac.row.header.styled
 			assert rac.cell.style_id == id
 		}
 
@@ -350,12 +350,12 @@ fn test_page_clone_styles() {
 	}
 }
 
-fn test_page_clone_preserves_inline_managed_values() {
+fn test_page_clone_preserves_inline_managed_values() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   2
 		rows:   1
 		styles: 8
-	})
+	})!
 	defer { page.deinit() }
 	page.size.rows = 1
 
@@ -373,7 +373,7 @@ fn test_page_clone_preserves_inline_managed_values() {
 		uri: 'https://example.com/clone-inline'
 	}
 	link_id := page.insert_hyperlink(link) or { panic(err) }
-	page.rows[0].styled = true
+	page.rows[0].header.styled = true
 	page.rows[0].cells[0] = CellData{
 		content_tag: .codepoint
 		codepoint:   u32(`x`)
@@ -381,7 +381,7 @@ fn test_page_clone_preserves_inline_managed_values() {
 	}
 	page.set_hyperlink(0, 0, link_id) or { panic(err) }
 
-	mut cloned := page.clone()
+	mut cloned := page.clone()!
 	defer { cloned.deinit() }
 	cell := cloned.rows[0].cells[0]
 	assert cloned.styles.get(cell.style_id).eql(&style)
@@ -393,12 +393,12 @@ fn test_page_clone_preserves_inline_managed_values() {
 }
 
 // Test cloneFrom (copy between pages).
-fn test_page_clone_from() {
+fn test_page_clone_from() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -418,7 +418,7 @@ fn test_page_clone_from() {
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page2.deinit()
 	}
@@ -454,12 +454,12 @@ fn test_page_clone_from() {
 }
 
 // Test cloneFrom with shrunk columns.
-fn test_page_clone_from_shrink_columns() {
+fn test_page_clone_from_shrink_columns() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -479,7 +479,7 @@ fn test_page_clone_from_shrink_columns() {
 		cols:   5
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page2.deinit()
 	}
@@ -495,12 +495,12 @@ fn test_page_clone_from_shrink_columns() {
 }
 
 // Test cloneFrom with partial range.
-fn test_page_clone_from_partial() {
+fn test_page_clone_from_partial() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -520,7 +520,7 @@ fn test_page_clone_from_partial() {
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page2.deinit()
 	}
@@ -540,12 +540,12 @@ fn test_page_clone_from_partial() {
 }
 
 // Test cloneFrom with graphemes.
-fn test_page_clone_from_graphemes() {
+fn test_page_clone_from_graphemes() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -566,7 +566,7 @@ fn test_page_clone_from_graphemes() {
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page2.deinit()
 	}
@@ -577,7 +577,7 @@ fn test_page_clone_from_graphemes() {
 	for y in 0 .. int(page2.capacity.rows) {
 		rac := page2.get_row_and_cell(1, y)
 		assert rac.cell.codepoint == u32(y + 1)
-		assert page2.rows[y].grapheme
+		assert page2.rows[y].header.grapheme
 		assert page2.rows[y].cells[1].has_grapheme()
 		cps := page2.lookup_grapheme_at(y, 1) or {
 			assert false, 'expected grapheme data'
@@ -601,7 +601,7 @@ fn test_page_clone_from_graphemes() {
 	for y in 0 .. int(page2.capacity.rows) {
 		rac := page2.get_row_and_cell(1, y)
 		assert rac.cell.codepoint == u32(y + 1)
-		assert page2.rows[y].grapheme
+		assert page2.rows[y].header.grapheme
 		assert page2.rows[y].cells[1].has_grapheme()
 		cps := page2.lookup_grapheme_at(y, 1) or {
 			assert false, 'expected grapheme data'
@@ -618,12 +618,12 @@ fn test_page_clone_from_graphemes() {
 }
 
 // Test cloneFrom frees destination graphemes.
-fn test_page_clone_from_frees_dst_graphemes() {
+fn test_page_clone_from_frees_dst_graphemes() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -641,7 +641,7 @@ fn test_page_clone_from_frees_dst_graphemes() {
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page2.deinit()
 	}
@@ -662,19 +662,19 @@ fn test_page_clone_from_frees_dst_graphemes() {
 	for y in 0 .. int(page2.capacity.rows) {
 		rac := page2.get_row_and_cell(1, y)
 		assert rac.cell.codepoint == u32(y + 1)
-		assert !page2.rows[y].grapheme
+		assert !page2.rows[y].header.grapheme
 		assert !page2.rows[y].cells[1].has_grapheme()
 	}
 	assert page2.grapheme_count() == 0
 }
 
 // Test clone_partial_row_from.
-fn test_page_clone_row_from_partial() {
+fn test_page_clone_row_from_partial() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -696,7 +696,7 @@ fn test_page_clone_row_from_partial() {
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page2.deinit()
 	}
@@ -714,12 +714,12 @@ fn test_page_clone_row_from_partial() {
 }
 
 // Test clone_partial_row_from with grapheme in non-copied source region.
-fn test_page_clone_row_from_partial_grapheme_in_non_copied_source_region() {
+fn test_page_clone_row_from_partial_grapheme_in_non_copied_source_region() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -745,7 +745,7 @@ fn test_page_clone_row_from_partial_grapheme_in_non_copied_source_region() {
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page2.deinit()
 	}
@@ -760,18 +760,18 @@ fn test_page_clone_row_from_partial_grapheme_in_non_copied_source_region() {
 			assert rac.cell.codepoint == expected
 			assert !rac.cell.has_grapheme()
 		}
-		assert !page2.rows[0].grapheme
+		assert !page2.rows[0].header.grapheme
 	}
 	assert page2.grapheme_count() == 0
 }
 
 // Test clone_partial_row_from with grapheme in non-copied dest region.
-fn test_page_clone_row_from_partial_grapheme_in_non_copied_dest_region() {
+fn test_page_clone_row_from_partial_grapheme_in_non_copied_dest_region() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -794,7 +794,7 @@ fn test_page_clone_row_from_partial_grapheme_in_non_copied_dest_region() {
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page2.deinit()
 	}
@@ -822,18 +822,18 @@ fn test_page_clone_row_from_partial_grapheme_in_non_copied_dest_region() {
 			assert rac.cell.codepoint == expected
 		}
 		// Row should still have graphemes (from cols 0 and 9).
-		assert page2.rows[0].grapheme
+		assert page2.rows[0].header.grapheme
 	}
 	assert page2.grapheme_count() == 2
 }
 
 // Test moveCells with text-only rows.
-fn test_page_move_cells_text_only() {
+fn test_page_move_cells_text_only() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -864,12 +864,12 @@ fn test_page_move_cells_text_only() {
 }
 
 // Test moveCells with graphemes.
-fn test_page_move_cells_graphemes() {
+fn test_page_move_cells_graphemes() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -907,12 +907,12 @@ fn test_page_move_cells_graphemes() {
 	}
 }
 
-fn test_page_clone_partial_row_marks_kitty_virtual_placeholder() {
+fn test_page_clone_partial_row_marks_kitty_virtual_placeholder() ! {
 	mut src := Page.init(PageCapacity{
 		cols:   4
 		rows:   2
 		styles: 8
-	})
+	})!
 	defer { src.deinit() }
 	src.size.rows = 2
 	src.rows[0].cells[2] = CellData{
@@ -920,27 +920,27 @@ fn test_page_clone_partial_row_marks_kitty_virtual_placeholder() {
 		codepoint:   kitty_unicode_placeholder
 	}
 	src.set_graphemes(0, 2, [u32(0x0305)]) or { panic(err) }
-	src.rows[0].kitty_virtual_placeholder = true
+	src.rows[0].header.kitty_virtual_placeholder = true
 
 	mut dst := Page.init(PageCapacity{
 		cols:   4
 		rows:   2
 		styles: 8
-	})
+	})!
 	defer { dst.deinit() }
 	dst.size.rows = 2
 	dst.clone_partial_row_from(&src, 0, 0, 1, 3) or { panic(err) }
 
 	assert dst.rows[0].cells[2].codepoint == kitty_unicode_placeholder
-	assert dst.rows[0].kitty_virtual_placeholder
+	assert dst.rows[0].header.kitty_virtual_placeholder
 }
 
-fn test_page_move_cells_marks_kitty_virtual_placeholder() {
+fn test_page_move_cells_marks_kitty_virtual_placeholder() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   4
 		rows:   2
 		styles: 8
-	})
+	})!
 	defer { page.deinit() }
 	page.size.rows = 2
 	page.rows[0].cells[1] = CellData{
@@ -948,22 +948,22 @@ fn test_page_move_cells_marks_kitty_virtual_placeholder() {
 		codepoint:   kitty_unicode_placeholder
 	}
 	page.set_graphemes(0, 1, [u32(0x0305)]) or { panic(err) }
-	page.rows[0].kitty_virtual_placeholder = true
+	page.rows[0].header.kitty_virtual_placeholder = true
 
 	page.move_cells(0, 0, 1, 0, usize(page.size.cols))
 
-	assert !page.rows[0].kitty_virtual_placeholder
+	assert !page.rows[0].header.kitty_virtual_placeholder
 	assert page.rows[1].cells[1].codepoint == kitty_unicode_placeholder
-	assert page.rows[1].kitty_virtual_placeholder
+	assert page.rows[1].header.kitty_virtual_placeholder
 }
 
 // Test verifyIntegrity with good graphemes.
-fn test_page_verify_integrity_graphemes_good() {
+fn test_page_verify_integrity_graphemes_good() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -988,12 +988,12 @@ fn test_page_verify_integrity_graphemes_good() {
 }
 
 // Test verifyIntegrity with grapheme row not marked.
-fn test_page_verify_integrity_grapheme_row_not_marked() {
+fn test_page_verify_integrity_grapheme_row_not_marked() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -1010,19 +1010,19 @@ fn test_page_verify_integrity_grapheme_row_not_marked() {
 	}
 
 	// Make invalid by unmarking the row.
-	page.rows[0].grapheme = false
+	page.rows[0].header.grapheme = false
 
 	result := page.verify_integrity() or { return }
 	assert result == .unmarked_grapheme_row
 }
 
 // Test verifyIntegrity with good styles.
-fn test_page_verify_integrity_styles_good() {
+fn test_page_verify_integrity_styles_good() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -1040,7 +1040,7 @@ fn test_page_verify_integrity_styles_good() {
 	for x in 0 .. int(page.size.cols) {
 		mut rac := page.get_row_and_cell(x, 0)
 		unsafe {
-			rac.row.styled = true
+			rac.row.header.styled = true
 			rac.cell.content_tag = .codepoint
 			rac.cell.codepoint = u32(x + 1)
 			rac.cell.style_id = id
@@ -1057,12 +1057,12 @@ fn test_page_verify_integrity_styles_good() {
 }
 
 // Test verifyIntegrity with styles ref count mismatch.
-fn test_page_verify_integrity_styles_ref_count_mismatch() {
+fn test_page_verify_integrity_styles_ref_count_mismatch() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -1080,7 +1080,7 @@ fn test_page_verify_integrity_styles_ref_count_mismatch() {
 	for x in 0 .. int(page.size.cols) {
 		mut rac := page.get_row_and_cell(x, 0)
 		unsafe {
-			rac.row.styled = true
+			rac.row.header.styled = true
 			rac.cell.content_tag = .codepoint
 			rac.cell.codepoint = u32(x + 1)
 			rac.cell.style_id = id
@@ -1101,12 +1101,12 @@ fn test_page_verify_integrity_styles_ref_count_mismatch() {
 // Page styles use the same fixed-capacity ref-counted set as Ghostty. They
 // must report exhaustion so PageList can grow/split the page instead of
 // silently allocating an unbounded side array.
-fn test_page_style_set_honors_capacity() {
+fn test_page_style_set_honors_capacity() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   1
 		rows:   1
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -1128,12 +1128,12 @@ fn test_page_style_set_honors_capacity() {
 }
 
 // Test verifyIntegrity with zero rows.
-fn test_page_verify_integrity_zero_rows() {
+fn test_page_verify_integrity_zero_rows() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -1143,12 +1143,12 @@ fn test_page_verify_integrity_zero_rows() {
 }
 
 // Test verifyIntegrity with zero cols.
-fn test_page_verify_integrity_zero_cols() {
+fn test_page_verify_integrity_zero_cols() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -1159,12 +1159,12 @@ fn test_page_verify_integrity_zero_cols() {
 }
 
 // Test exactRowCapacity with empty rows.
-fn test_page_exact_row_capacity_empty_rows() {
+fn test_page_exact_row_capacity_empty_rows() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -1181,12 +1181,12 @@ fn test_page_exact_row_capacity_empty_rows() {
 }
 
 // Test exactRowCapacity with styles.
-fn test_page_exact_row_capacity_styles() {
+fn test_page_exact_row_capacity_styles() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -1208,7 +1208,7 @@ fn test_page_exact_row_capacity_styles() {
 	{
 		mut rac := page.get_row_and_cell(0, 0)
 		unsafe {
-			rac.row.styled = true
+			rac.row.header.styled = true
 			rac.cell.style_id = style1_id
 		}
 	}
@@ -1262,7 +1262,7 @@ fn test_page_exact_row_capacity_styles() {
 		}
 		mut rac := page.get_row_and_cell(0, 7)
 		unsafe {
-			rac.row.styled = true
+			rac.row.header.styled = true
 			rac.cell.style_id = style3_id
 		}
 	}
@@ -1280,7 +1280,7 @@ fn test_page_exact_row_capacity_styles() {
 	// Verify clone works with exact capacity and produces the same result.
 	{
 		cap := page.exact_row_capacity(0, 5)
-		mut cloned := Page.init(cap)
+		mut cloned := Page.init(cap)!
 		defer { cloned.deinit() }
 		for y in 0 .. 5 {
 			cloned.clone_row_from(&page, u16(y), u16(y)) or { panic(err) }
@@ -1291,12 +1291,12 @@ fn test_page_exact_row_capacity_styles() {
 }
 
 // Test exactRowCapacity with grapheme_bytes.
-fn test_page_exact_row_capacity_grapheme_bytes() {
+fn test_page_exact_row_capacity_grapheme_bytes() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -1379,7 +1379,7 @@ fn test_page_exact_row_capacity_grapheme_bytes() {
 	// Verify clone works with exact capacity and produces the same result.
 	{
 		cap := page.exact_row_capacity(0, 5)
-		mut cloned := Page.init(cap)
+		mut cloned := Page.init(cap)!
 		defer { cloned.deinit() }
 		for y in 0 .. 5 {
 			cloned.clone_row_from(&page, u16(y), u16(y)) or { panic(err) }
@@ -1390,12 +1390,12 @@ fn test_page_exact_row_capacity_grapheme_bytes() {
 }
 
 // Test exactRowCapacity with grapheme_bytes larger than chunk.
-fn test_page_exact_row_capacity_grapheme_bytes_larger_than_chunk() {
+fn test_page_exact_row_capacity_grapheme_bytes_larger_than_chunk() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -1418,7 +1418,7 @@ fn test_page_exact_row_capacity_grapheme_bytes_larger_than_chunk() {
 	assert cap.grapheme_bytes == 32
 
 	// Verify clone works with exact capacity and produces the same result.
-	mut cloned := Page.init(cap)
+	mut cloned := Page.init(cap)!
 	defer { cloned.deinit() }
 	cloned.clone_row_from(&page, 0, 0) or { panic(err) }
 	cloned_cap := cloned.exact_row_capacity(0, 1)
@@ -1439,7 +1439,7 @@ fn page_size_min_reference(darwin_arm64 usize, other usize) usize {
 
 // Reference values emitted by the pinned Zig implementation. These make the
 // logical V layout auditable byte-for-byte even though V uses GC-owned arrays.
-fn test_page_capacity_defaults_and_layout_reference() {
+fn test_page_capacity_defaults_and_layout_reference() ! {
 	cap := PageCapacity{
 		cols:   215
 		rows:   215
@@ -1481,7 +1481,7 @@ fn test_page_capacity_defaults_and_layout_reference() {
 	assert l.hyperlink_map_layout.capacity == 64
 }
 
-fn test_page_layout_small_and_zero_metadata_reference() {
+fn test_page_layout_small_and_zero_metadata_reference() ! {
 	l := Page.layout(PageCapacity{
 		cols:   80
 		rows:   128
@@ -1521,7 +1521,7 @@ fn test_page_layout_small_and_zero_metadata_reference() {
 	assert zero.hyperlink_map_layout.total_size == 16
 }
 
-fn test_standard_page_layout_and_capacity_adjust_reference() {
+fn test_standard_page_layout_and_capacity_adjust_reference() ! {
 	l := Page.layout(std_capacity)
 	assert l.total_size == page_size_min_reference(589824, 585728)
 	assert l.grapheme_alloc_start == 375520
@@ -1550,11 +1550,11 @@ fn test_standard_page_layout_and_capacity_adjust_reference() {
 	assert cap500.rows == u16(page_size_min_reference(94, 93))
 }
 
-fn test_page_managed_map_capacities_follow_layout() {
+fn test_page_managed_map_capacities_follow_layout() ! {
 	mut page := Page.init(PageCapacity{
 		cols: 10
 		rows: 10
-	})
+	})!
 	defer { page.deinit() }
 	assert page.grapheme_capacity() == 64
 	assert page.hyperlink_capacity() == 64
@@ -1564,18 +1564,18 @@ fn test_page_managed_map_capacities_follow_layout() {
 		rows:            1
 		grapheme_bytes:  0
 		hyperlink_bytes: 0
-	})
+	})!
 	defer { empty.deinit() }
 	assert empty.grapheme_capacity() == 0
 	assert empty.hyperlink_capacity() == 0
 }
 
-fn test_page_set_graphemes_enforces_map_capacity_and_rolls_back_allocation() {
+fn test_page_set_graphemes_enforces_map_capacity_and_rolls_back_allocation() ! {
 	mut page := Page.init(PageCapacity{
 		cols:           2
 		rows:           1
 		grapheme_bytes: 16
-	})
+	})!
 	defer { page.deinit() }
 	page.size.rows = 1
 	page.rows[0].cells[0] = CellData{
@@ -1598,11 +1598,11 @@ fn test_page_set_graphemes_enforces_map_capacity_and_rolls_back_allocation() {
 	assert !page.rows[0].cells[1].has_grapheme()
 }
 
-fn test_page_set_graphemes_enforces_allocator_capacity() {
+fn test_page_set_graphemes_enforces_allocator_capacity() ! {
 	mut page := Page.init(PageCapacity{
 		cols: 2
 		rows: 1
-	})
+	})!
 	defer { page.deinit() }
 	page.size.rows = 1
 	page.rows[0].cells[0] = CellData{
@@ -1625,11 +1625,11 @@ fn test_page_set_graphemes_enforces_allocator_capacity() {
 	assert !page.rows[0].cells[1].has_grapheme()
 }
 
-fn test_page_set_hyperlink_reports_full_map_without_mutating_cell() {
+fn test_page_set_hyperlink_reports_full_map_without_mutating_cell() ! {
 	mut page := Page.init(PageCapacity{
 		cols: 9
 		rows: 8
-	})
+	})!
 	defer { page.deinit() }
 	page.size.rows = page.capacity.rows
 	id := page.insert_hyperlink(Hyperlink{
@@ -1654,11 +1654,11 @@ fn test_page_set_hyperlink_reports_full_map_without_mutating_cell() {
 }
 
 // Translated from Ghostty's "Page cloneFrom hyperlinks exact capacity".
-fn test_page_clone_from_hyperlinks_exact_capacity() {
+fn test_page_clone_from_hyperlinks_exact_capacity() ! {
 	mut page := Page.init(PageCapacity{
 		cols: 50
 		rows: 50
-	})
+	})!
 	defer { page.deinit() }
 	page.size.rows = page.capacity.rows
 
@@ -1691,18 +1691,18 @@ fn test_page_clone_from_hyperlinks_exact_capacity() {
 	}
 	assert page.hyperlink_count() == page.hyperlink_capacity()
 
-	mut cloned := Page.init(page.capacity)
+	mut cloned := Page.init(page.capacity)!
 	defer { cloned.deinit() }
 	cloned.size.rows = page.size.rows
 	cloned.clone_from(&page, 0, page.size.rows) or { panic(err) }
 	assert cloned.hyperlink_count() == page.hyperlink_count()
 }
 
-fn test_page_insert_hyperlink_enforces_string_allocator_capacity() {
+fn test_page_insert_hyperlink_enforces_string_allocator_capacity() ! {
 	mut page := Page.init(PageCapacity{
 		cols: 2
 		rows: 1
-	})
+	})!
 	defer { page.deinit() }
 	page.size.rows = 1
 	_ := page.insert_hyperlink(Hyperlink{
@@ -1723,13 +1723,13 @@ fn test_page_insert_hyperlink_enforces_string_allocator_capacity() {
 	assert page.hyperlink_set.string_used() == usize(string_bytes_default)
 }
 
-fn test_page_capacity_adjust_no_columns_request() {
+fn test_page_capacity_adjust_no_columns_request() ! {
 	original := std_capacity
 	adjusted := original.adjust(PageCapacityAdjustment{})!
 	assert adjusted == original
 }
 
-fn test_page_capacity_adjust_zero_columns_is_not_noop() {
+fn test_page_capacity_adjust_zero_columns_is_not_noop() ! {
 	original := std_capacity
 	adjusted := original.adjust(PageCapacityAdjustment{ cols: u16(0) })!
 	assert adjusted.cols == 0
@@ -1737,7 +1737,7 @@ fn test_page_capacity_adjust_zero_columns_is_not_noop() {
 	assert Page.layout(adjusted).total_size == Page.layout(original).total_size
 }
 
-fn test_page_capacity_adjust_cols_sweep_preserves_total_size() {
+fn test_page_capacity_adjust_cols_sweep_preserves_total_size() ! {
 	mut cap := std_capacity
 	original_cols := cap.cols
 	original_size := Page.layout(cap).total_size
@@ -1751,7 +1751,7 @@ fn test_page_capacity_adjust_cols_sweep_preserves_total_size() {
 	}
 }
 
-fn test_page_capacity_max_cols_preserves_size_and_uses_one_row() {
+fn test_page_capacity_max_cols_preserves_size_and_uses_one_row() ! {
 	cap := std_capacity
 	max := cap.max_cols() or { panic('maxCols returned none') }
 	adjusted := cap.adjust(PageCapacityAdjustment{ cols: max })!
@@ -1760,7 +1760,7 @@ fn test_page_capacity_max_cols_preserves_size_and_uses_one_row() {
 }
 
 // Test capacity adjust cols down.
-fn test_page_capacity_adjust_cols_down() {
+fn test_page_capacity_adjust_cols_down() ! {
 	original := PageCapacity{
 		cols: 80
 		rows: 128
@@ -1781,7 +1781,7 @@ fn test_page_capacity_adjust_cols_down() {
 }
 
 // Test capacity adjust cols down to 1.
-fn test_page_capacity_adjust_cols_down_to_1() {
+fn test_page_capacity_adjust_cols_down_to_1() ! {
 	original := PageCapacity{
 		cols: 80
 		rows: 128
@@ -1796,7 +1796,7 @@ fn test_page_capacity_adjust_cols_down_to_1() {
 }
 
 // Test capacity adjust cols up.
-fn test_page_capacity_adjust_cols_up() {
+fn test_page_capacity_adjust_cols_up() ! {
 	original := PageCapacity{
 		cols: 80
 		rows: 128
@@ -1811,7 +1811,7 @@ fn test_page_capacity_adjust_cols_up() {
 }
 
 // Test capacity adjust cols too high.
-fn test_page_capacity_adjust_cols_too_high() {
+fn test_page_capacity_adjust_cols_too_high() ! {
 	original := PageCapacity{
 		cols: 80
 		rows: 128
@@ -1827,7 +1827,7 @@ fn test_page_capacity_adjust_cols_too_high() {
 }
 
 // Test capacity maxCols basic.
-fn test_capacity_max_cols_basic() {
+fn test_capacity_max_cols_basic() ! {
 	cap := PageCapacity{
 		cols: 80
 		rows: 128
@@ -1849,11 +1849,11 @@ fn test_capacity_max_cols_basic() {
 }
 
 // Test that isDirty works.
-fn test_page_is_dirty() {
+fn test_page_is_dirty() ! {
 	mut page := Page.init(PageCapacity{
 		cols: 10
 		rows: 10
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -1868,16 +1868,16 @@ fn test_page_is_dirty() {
 	page.dirty = false
 
 	// Setting a row dirty.
-	page.rows[0].dirty = true
+	page.rows[0].header.dirty = true
 	assert page.is_dirty()
 }
 
 // Test hyperlink operations.
-fn test_page_hyperlink_basic() {
+fn test_page_hyperlink_basic() ! {
 	mut page := Page.init(PageCapacity{
 		cols: 10
 		rows: 10
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -1892,7 +1892,7 @@ fn test_page_hyperlink_basic() {
 	// Set it on a cell.
 	page.set_hyperlink(0, 0, hl_id) or { panic(err) }
 	assert page.rows[0].cells[0].has_hyperlink
-	assert page.rows[0].hyperlink
+	assert page.rows[0].header.hyperlink
 
 	// Lookup.
 	found_id := page.lookup_hyperlink_at(0, 0) or {
@@ -1912,12 +1912,12 @@ fn test_page_hyperlink_basic() {
 }
 
 // Test clear_cells clears graphemes and styles.
-fn test_page_clear_cells() {
+fn test_page_clear_cells() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   10
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -1934,7 +1934,7 @@ fn test_page_clear_cells() {
 	for x in 0 .. int(page.size.cols) {
 		mut rac := page.get_row_and_cell(x, 0)
 		unsafe {
-			rac.row.styled = true
+			rac.row.header.styled = true
 			rac.cell.content_tag = .codepoint
 			rac.cell.codepoint = u32(x + 1)
 			rac.cell.style_id = id
@@ -1958,45 +1958,45 @@ fn test_page_clear_cells() {
 	assert page.grapheme_count() == 0
 }
 
-fn test_page_clear_cells_clears_false_positive_kitty_placeholder_flag() {
+fn test_page_clear_cells_clears_false_positive_kitty_placeholder_flag() ! {
 	mut page := Page.init(PageCapacity{
 		cols: 4
 		rows: 1
-	})
+	})!
 	defer { page.deinit() }
 	page.size.rows = 1
 
 	// The row aggregate is allowed to remain a false positive after some
 	// operations; a full clear repairs it when no placeholder cell exists.
-	page.rows[0].kitty_virtual_placeholder = true
+	page.rows[0].header.kitty_virtual_placeholder = true
 	page.rows[0].cells[0] = CellData.init(u32(`x`))
 	page.clear_cells(0, 0, page.size.cols)
-	assert !page.rows[0].kitty_virtual_placeholder
+	assert !page.rows[0].header.kitty_virtual_placeholder
 }
 
-fn test_page_clear_cells_preserves_dirty_state() {
+fn test_page_clear_cells_preserves_dirty_state() ! {
 	mut page := Page.init(PageCapacity{
 		cols: 4
 		rows: 1
-	})
+	})!
 	defer { page.deinit() }
 	page.size.rows = 1
 	page.rows[0].cells[0] = CellData.init(u32(`x`))
 
 	page.clear_cells(0, 0, page.size.cols)
-	assert !page.rows[0].dirty
+	assert !page.rows[0].header.dirty
 
-	page.rows[0].dirty = true
+	page.rows[0].header.dirty = true
 	page.clear_cells(0, 0, page.size.cols)
-	assert page.rows[0].dirty
+	assert page.rows[0].header.dirty
 }
 
 // Test swap_cells.
-fn test_page_swap_cells() {
+fn test_page_swap_cells() ! {
 	mut page := Page.init(PageCapacity{
 		cols: 10
 		rows: 10
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -2014,7 +2014,7 @@ fn test_page_swap_cells() {
 		flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none)
 	}) or { panic(err) }
 	page.rows[0].cells[0].style_id = style_id
-	page.rows[0].styled = true
+	page.rows[0].header.styled = true
 	page.set_graphemes(0, 0, [u32(0x0301)]) or { panic(err) }
 	link_id := page.insert_hyperlink(Hyperlink{
 		id:  HyperlinkExplicitId{
@@ -2045,7 +2045,7 @@ fn test_page_swap_cells() {
 	}
 }
 
-fn test_page_swap_cells_swaps_grapheme_and_hyperlink_mappings() {
+fn test_page_swap_cells_swaps_grapheme_and_hyperlink_mappings() ! {
 	mut page := Page.init(PageCapacity{
 		cols:            2
 		rows:            1
@@ -2053,7 +2053,7 @@ fn test_page_swap_cells_swaps_grapheme_and_hyperlink_mappings() {
 		hyperlink_bytes: 32 * 48
 		grapheme_bytes:  grapheme_chunk * 2
 		string_bytes:    64
-	})
+	})!
 	defer { page.deinit() }
 	page.rows[0].cells[0] = CellData.init(u32(`A`))
 	page.rows[0].cells[1] = CellData.init(u32(`B`))
@@ -2085,17 +2085,17 @@ fn test_page_swap_cells_swaps_grapheme_and_hyperlink_mappings() {
 }
 
 // Test reinit.
-fn test_page_reinit() {
+fn test_page_reinit() ! {
 	mut page := Page.init(PageCapacity{
 		cols: 10
 		rows: 10
-	})
+	})!
 	page.size.rows = u16(page.capacity.rows)
-	rows_data := voidptr(page.rows.data)
+	rows_data := voidptr(page.rows[0].header)
 	cells_data := voidptr(page.rows[0].cells.data)
-	styles_data := voidptr(page.styles.set.items.data)
+	styles_data := voidptr(page.styles.set.items_offset.ptr(page.styles.base))
 	grapheme_data := voidptr(page.grapheme_alloc.chunks.data)
-	hyperlink_data := voidptr(page.hyperlink_set.entries.data)
+	hyperlink_data := voidptr(page.hyperlink_set.set.items_offset.ptr(page.hyperlink_set.base))
 
 	// Write something.
 	{
@@ -2112,11 +2112,11 @@ fn test_page_reinit() {
 		cols: 10
 		rows: 10
 	}
-	assert voidptr(page.rows.data) == rows_data
+	assert voidptr(page.rows[0].header) == rows_data
 	assert voidptr(page.rows[0].cells.data) == cells_data
-	assert voidptr(page.styles.set.items.data) == styles_data
+	assert voidptr(page.styles.set.items_offset.ptr(page.styles.base)) == styles_data
 	assert voidptr(page.grapheme_alloc.chunks.data) == grapheme_data
-	assert voidptr(page.hyperlink_set.entries.data) == hyperlink_data
+	assert voidptr(page.hyperlink_set.set.items_offset.ptr(page.hyperlink_set.base)) == hyperlink_data
 	assert page.styles.count() == 0
 	assert page.grapheme_count() == 0
 	assert page.grapheme_alloc.used_bytes() == 0
@@ -2132,7 +2132,7 @@ fn test_page_reinit() {
 }
 
 // Test capacity adjust with same cols and larger cols.
-fn test_page_capacity_adjust() {
+fn test_page_capacity_adjust() ! {
 	cap := PageCapacity{
 		cols: 80
 		rows: 128
@@ -2159,11 +2159,11 @@ fn test_page_capacity_adjust() {
 
 // Test clone_partial_row_from with a hyperlink in the same page, where the
 // hyperlink cell IS within the copied range.
-fn test_page_clone_row_from_partial_hyperlink_in_same_page_copy() {
+fn test_page_clone_row_from_partial_hyperlink_in_same_page_copy() ! {
 	mut page := Page.init(PageCapacity{
 		cols: 10
 		rows: 10
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -2205,7 +2205,7 @@ fn test_page_clone_row_from_partial_hyperlink_in_same_page_copy() {
 		}
 		{
 			rac := page.get_row_and_cell(7, 1)
-			assert rac.row.hyperlink
+			assert rac.row.header.hyperlink
 			assert rac.cell.has_hyperlink
 		}
 	}
@@ -2214,11 +2214,11 @@ fn test_page_clone_row_from_partial_hyperlink_in_same_page_copy() {
 
 // Test clone_partial_row_from with a hyperlink in the same page, where the
 // hyperlink cell is OUTSIDE the copied range (omitted).
-fn test_page_clone_row_from_partial_hyperlink_in_same_page_omit() {
+fn test_page_clone_row_from_partial_hyperlink_in_same_page_omit() ! {
 	mut page := Page.init(PageCapacity{
 		cols: 10
 		rows: 10
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -2259,7 +2259,7 @@ fn test_page_clone_row_from_partial_hyperlink_in_same_page_omit() {
 		}
 		{
 			rac := page.get_row_and_cell(7, 1)
-			assert !rac.row.hyperlink
+			assert !rac.row.header.hyperlink
 			assert !rac.cell.has_hyperlink
 		}
 	}
@@ -2268,12 +2268,12 @@ fn test_page_clone_row_from_partial_hyperlink_in_same_page_omit() {
 
 // Regression test: verify a single style can be cloned with exact capacity.
 // This tests that capacity_for_count properly accounts for ID 0 being reserved.
-fn test_page_exact_row_capacity_single_style_clone() {
+fn test_page_exact_row_capacity_single_style_clone() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   10
 		rows:   2
 		styles: 8
-	})
+	})!
 	defer {
 		page.deinit()
 	}
@@ -2289,7 +2289,7 @@ fn test_page_exact_row_capacity_single_style_clone() {
 	{
 		mut rac := page.get_row_and_cell(0, 0)
 		unsafe {
-			rac.row.styled = true
+			rac.row.header.styled = true
 			rac.cell.style_id = style_id
 		}
 	}
@@ -2299,7 +2299,7 @@ fn test_page_exact_row_capacity_single_style_clone() {
 	assert cap.styles == StyleSet.capacity_for_count(1)
 
 	// Create a new page with exact capacity and clone.
-	mut cloned := Page.init(cap)
+	mut cloned := Page.init(cap)!
 	defer {
 		cloned.deinit()
 	}
@@ -2312,12 +2312,12 @@ fn test_page_exact_row_capacity_single_style_clone() {
 	assert cloned.rows[0].cells[0].style_id != default_style_id
 }
 
-fn test_page_clone_row_reports_bounded_style_failure() {
+fn test_page_clone_row_reports_bounded_style_failure() ! {
 	mut src := Page.init(PageCapacity{
 		cols:   1
 		rows:   1
 		styles: u16(StyleSet.capacity_for_count(1))
-	})
+	})!
 	defer { src.deinit() }
 	style_id := src.styles.add(CellStyle{ flags: StyleFlags.init(true, false, false, false, false, false, false, false, .none) }) or {
 		panic(err)
@@ -2327,13 +2327,13 @@ fn test_page_clone_row_reports_bounded_style_failure() {
 		codepoint:   u32(`a`)
 		style_id:    style_id
 	}
-	src.rows[0].styled = true
+	src.rows[0].header.styled = true
 
 	mut dst := Page.init(PageCapacity{
 		cols:   1
 		rows:   1
 		styles: 0
-	})
+	})!
 	defer { dst.deinit() }
 	mut reported := false
 	dst.clone_row_from(&src, 0, 0) or {
@@ -2342,7 +2342,7 @@ fn test_page_clone_row_reports_bounded_style_failure() {
 	assert reported
 }
 
-fn test_page_clone_row_preserves_integrity_after_late_managed_memory_failure() {
+fn test_page_clone_row_preserves_integrity_after_late_managed_memory_failure() ! {
 	mut src := Page.init(PageCapacity{
 		cols:            1
 		rows:            1
@@ -2350,7 +2350,7 @@ fn test_page_clone_row_preserves_integrity_after_late_managed_memory_failure() {
 		hyperlink_bytes: 32 * 48
 		grapheme_bytes:  grapheme_chunk
 		string_bytes:    128
-	})
+	})!
 	defer { src.deinit() }
 	src.rows[0].cells[0] = CellData.init(u32(`a`))
 	src.set_graphemes(0, 0, [u32(0x0301)]) or { panic(err) }
@@ -2367,7 +2367,7 @@ fn test_page_clone_row_preserves_integrity_after_late_managed_memory_failure() {
 		hyperlink_bytes: 32 * 48
 		grapheme_bytes:  grapheme_chunk
 		string_bytes:    0
-	})
+	})!
 	defer { dst.deinit() }
 	mut error_message := ''
 	dst.clone_row_from(&src, 0, 0) or { error_message = err.msg() }
@@ -2381,7 +2381,7 @@ fn test_page_clone_row_preserves_integrity_after_late_managed_memory_failure() {
 	assert dst.verify_integrity() == none
 }
 
-fn test_page_clone_partial_row_deduplicates_hyperlink_before_allocating_strings() {
+fn test_page_clone_partial_row_deduplicates_hyperlink_before_allocating_strings() ! {
 	link := Hyperlink{
 		id:  HyperlinkExplicitId{ value: 'same' }
 		uri: 'https://example.com'
@@ -2392,7 +2392,7 @@ fn test_page_clone_partial_row_deduplicates_hyperlink_before_allocating_strings(
 		styles:          0
 		hyperlink_bytes: 32 * 48
 		string_bytes:    64
-	})
+	})!
 	defer { src.deinit() }
 	src_id := src.insert_hyperlink(link) or { panic(err) }
 	src.set_hyperlink(0, 1, src_id) or { panic(err) }
@@ -2403,7 +2403,7 @@ fn test_page_clone_partial_row_deduplicates_hyperlink_before_allocating_strings(
 		styles:          0
 		hyperlink_bytes: 32 * 48
 		string_bytes:    64
-	})
+	})!
 	defer { dst.deinit() }
 	dst_id := dst.insert_hyperlink(link) or { panic(err) }
 	dst.set_hyperlink(0, 0, dst_id) or { panic(err) }
@@ -2418,13 +2418,13 @@ fn test_page_clone_partial_row_deduplicates_hyperlink_before_allocating_strings(
 	assert dst.verify_integrity() == none
 }
 
-fn test_page_clone_reports_grapheme_allocator_failure_before_map_failure() {
+fn test_page_clone_reports_grapheme_allocator_failure_before_map_failure() ! {
 	mut src := Page.init(PageCapacity{
 		cols:           1
 		rows:           1
 		styles:         0
 		grapheme_bytes: grapheme_chunk
-	})
+	})!
 	defer { src.deinit() }
 	src.rows[0].cells[0] = CellData.init(u32(`a`))
 	src.set_graphemes(0, 0, [u32(0x0301)]) or { panic(err) }
@@ -2434,7 +2434,7 @@ fn test_page_clone_reports_grapheme_allocator_failure_before_map_failure() {
 		rows:           2
 		styles:         0
 		grapheme_bytes: grapheme_chunk
-	})
+	})!
 	defer { dst.deinit() }
 	dst.rows[1].cells[0] = CellData.init(u32(`b`))
 	dst.set_graphemes(1, 0, [u32(0x0302)]) or { panic(err) }
@@ -2450,19 +2450,19 @@ fn test_page_clone_reports_grapheme_allocator_failure_before_map_failure() {
 }
 
 // Test exactRowCapacity styles with a maxed-out single row.
-fn test_page_exact_row_capacity_styles_max_single_row() {
+fn test_page_exact_row_capacity_styles_max_single_row() ! {
 	mut page := Page.init(PageCapacity{
 		cols:   1000
 		rows:   1
 		styles: max_u16
-	})
+	})!
 	defer {
 		page.deinit()
 	}
 	page.size.rows = u16(page.capacity.rows)
 
 	// Style our first row.
-	page.rows[0].styled = true
+	page.rows[0].header.styled = true
 
 	// Fill cells with styles until we get OOM, but limit to a reasonable count
 	// to avoid overflow when computing capacity_for_count near maxInt.
@@ -2494,14 +2494,14 @@ fn test_page_exact_row_capacity_styles_max_single_row() {
 	assert cap.styles == StyleSet.capacity_for_count(count)
 }
 
-fn test_page_exact_row_capacity_hyperlinks() {
+fn test_page_exact_row_capacity_hyperlinks() ! {
 	mut page := Page.init(PageCapacity{
 		cols:            10
 		rows:            10
 		styles:          8
 		hyperlink_bytes: 32 * 48
 		string_bytes:    512
-	})
+	})!
 	defer { page.deinit() }
 	page.size.rows = page.capacity.rows
 
@@ -2552,7 +2552,7 @@ fn test_page_exact_row_capacity_hyperlinks() {
 	assert full.hyperlink_bytes == u16(HyperlinkSet.capacity_for_count(3) * 48)
 	assert full.string_bytes == string_chunk * 4
 
-	mut cloned := Page.init(cap_two)
+	mut cloned := Page.init(cap_two)!
 	defer { cloned.deinit() }
 	cloned.size.rows = cap_two.rows
 	for y in 0 .. 5 {
@@ -2562,14 +2562,14 @@ fn test_page_exact_row_capacity_hyperlinks() {
 	assert cloned_cap == cap_two
 }
 
-fn test_page_exact_row_capacity_single_hyperlink_clone() {
+fn test_page_exact_row_capacity_single_hyperlink_clone() ! {
 	mut page := Page.init(PageCapacity{
 		cols:            10
 		rows:            2
 		styles:          8
 		hyperlink_bytes: 32 * 48
 		string_bytes:    512
-	})
+	})!
 	defer { page.deinit() }
 	page.size.rows = page.capacity.rows
 
@@ -2583,14 +2583,14 @@ fn test_page_exact_row_capacity_single_hyperlink_clone() {
 	cap := page.exact_row_capacity(0, 1)
 	assert cap.hyperlink_bytes == u16(HyperlinkSet.capacity_for_count(1) * 48)
 
-	mut cloned := Page.init(cap)
+	mut cloned := Page.init(cap)!
 	defer { cloned.deinit() }
 	cloned.size.rows = cap.rows
 	cloned.clone_row_from(&page, 0, 0) or { panic(err) }
 	assert cloned.rows[0].cells[0].has_hyperlink
 }
 
-fn test_page_exact_row_capacity_hyperlink_map_for_many_cells() {
+fn test_page_exact_row_capacity_hyperlink_map_for_many_cells() ! {
 	cols := u16(50)
 	mut page := Page.init(PageCapacity{
 		cols:            cols
@@ -2598,7 +2598,7 @@ fn test_page_exact_row_capacity_hyperlink_map_for_many_cells() {
 		styles:          8
 		hyperlink_bytes: 32 * 48
 		string_bytes:    512
-	})
+	})!
 	defer { page.deinit() }
 	page.size.rows = page.capacity.rows
 
@@ -2618,7 +2618,7 @@ fn test_page_exact_row_capacity_hyperlink_map_for_many_cells() {
 	min_for_map := (int(cols) + hyperlink_cell_multiplier - 1) / hyperlink_cell_multiplier
 	assert cap.hyperlink_bytes >= u16(min_for_map * 48)
 
-	mut cloned := Page.init(cap)
+	mut cloned := Page.init(cap)!
 	defer { cloned.deinit() }
 	cloned.size.rows = cap.rows
 	cloned.clone_row_from(&page, 0, 0) or { panic(err) }

@@ -1,6 +1,5 @@
 module terminal
 
-import fastmem
 import osc
 import tripwire
 import unicode
@@ -2443,12 +2442,12 @@ pub fn (mut self Screen) increase_capacity(node &PageNode, adjustment ?IncreaseC
 
 pub fn (mut self Screen) cursor_cell_right(n u32) &CellData {
 	assert self.cursor.x + n < u32(self.pages.cols)
-	return unsafe { self.cursor.page_cell + n }
+	return unsafe { &CellData(&u8(self.cursor.page_cell) + usize(n) * sizeof(CellData)) }
 }
 
 pub fn (mut self Screen) cursor_cell_left(n u32) &CellData {
 	assert self.cursor.x >= n
-	return unsafe { self.cursor.page_cell - n }
+	return unsafe { &CellData(&u8(self.cursor.page_cell) - usize(n) * sizeof(CellData)) }
 }
 
 pub fn (mut self Screen) cursor_cell_end_of_prev() &CellData {
@@ -2466,7 +2465,7 @@ pub fn (mut self Screen) cursor_right(n u32) {
 	assert self.cursor.x + n < u32(self.pages.cols)
 	defer { self.assert_integrity() }
 
-	self.cursor.page_cell = unsafe { self.cursor.page_cell + n }
+	self.cursor.page_cell = unsafe { &CellData(&u8(self.cursor.page_cell) + usize(n) * sizeof(CellData)) }
 	self.cursor.page_pin.x += u16(n)
 	self.cursor.x += n
 }
@@ -2476,7 +2475,7 @@ pub fn (mut self Screen) cursor_left(n u32) {
 	assert self.cursor.x >= n
 	defer { self.assert_integrity() }
 
-	self.cursor.page_cell = unsafe { self.cursor.page_cell - n }
+	self.cursor.page_cell = unsafe { &CellData(&u8(self.cursor.page_cell) - usize(n) * sizeof(CellData)) }
 	self.cursor.page_pin.x -= u16(n)
 	self.cursor.x -= n
 }
@@ -2648,7 +2647,7 @@ pub fn (mut self Screen) cursor_down_scroll() ! {
 
 		// Grow our pages by one row. The PageList will handle if we need to
 		// allocate, prune scrollback, whatever.
-		_ = self.pages.grow()
+		_ = self.pages.grow()!.node
 
 		// If our pin page change it means that the page that the pin
 		// was on was pruned. In this case, grow() moves the pin to
@@ -2701,10 +2700,10 @@ pub fn (mut self Screen) cursor_down_scroll() ! {
 // @memset(cells[0..cols], blank_cell) over the cursor row, starting from
 // the cursor cell minus the cursor x as the source does.
 fn (mut self Screen) cursor_row_memset(blank_cell CellData) {
-	cells := unsafe { self.cursor.page_cell - self.cursor.x }
+	cells := unsafe { &CellData(&u8(self.cursor.page_cell) - usize(self.cursor.x) * sizeof(CellData)) }
 	for x in 0 .. u32(self.pages.cols) {
 		unsafe {
-			*(cells + x) = blank_cell
+			*(&CellData(&u8(cells) + usize(x) * sizeof(CellData))) = blank_cell
 		}
 	}
 }
@@ -2738,7 +2737,7 @@ pub fn (mut self Screen) cursor_scroll_above() ! {
 	//  lot cheaper in 99% of cases.
 
 	old_pin := *self.cursor.page_pin
-	if _ := self.pages.grow() {
+	if _ := self.pages.grow()!.node {
 		self.cursor_scroll_above_rotate()!
 	} else {
 		// In this case, it means grow() didn't allocate a new page.
@@ -2764,7 +2763,7 @@ pub fn (mut self Screen) cursor_scroll_above() ! {
 			// Rotate the rows so that the newly created empty row is at the
 			// beginning. e.g. [ 0 1 2 3 ] in to [ 3 0 1 2 ].
 			mut rows := unsafe { page.rows[int(pin.y)..int(page.size.rows)] }
-			fastmem.rotate_once_r(mut rows)
+			rotate_row_views(mut rows, true)
 
 			// Mark the whole page as dirty.
 			//
@@ -2825,7 +2824,7 @@ fn (mut self Screen) cursor_scroll_above_rotate() ! {
 
 		// Rotate the pages down: [ 0 1 2 3 ] => [ 3 0 1 2 ]
 		mut cur_rows := unsafe { cur_page.rows[..int(cur_page.size.rows)] }
-		fastmem.rotate_once_r(mut cur_rows)
+		rotate_row_views(mut cur_rows, true)
 
 		// Copy the last row of the previous page to the top of current.
 		cur_page.clone_row_from(prev_page, 0, prev_page.size.rows - 1)!
@@ -2842,7 +2841,7 @@ fn (mut self Screen) cursor_scroll_above_rotate() ! {
 	mut cur_page := &current.data
 	y := int(self.cursor.page_pin.y)
 	mut cur_rows := unsafe { cur_page.rows[y..int(cur_page.size.rows)] }
-	fastmem.rotate_once_r(mut cur_rows)
+	rotate_row_views(mut cur_rows, true)
 	mut row := unsafe { &cur_page.rows[y] }
 	mut cells := cur_page.get_cells(row)
 	self.clear_cells(mut cur_page, mut row, mut cells)
@@ -3021,7 +3020,7 @@ fn (mut self Screen) cursor_change_pin(new Pin) {
 // Mark the cursor position as dirty.
 // TODO: test
 pub fn (mut self Screen) cursor_mark_dirty() {
-	self.cursor.page_row.dirty = true
+	self.cursor.page_row.header.dirty = true
 }
 
 // Reset the cursor row's soft-wrap state and the cursor's pending wrap.
@@ -3038,16 +3037,16 @@ pub fn (mut self Screen) cursor_reset_wrap() {
 
 	mut page_row := self.cursor.page_row
 
-	if !page_row.wrap {
+	if !page_row.header.wrap {
 		return
 	}
 
 	// This row does not wrap and the next row is not wrapped to
-	page_row.wrap = false
+	page_row.header.wrap = false
 
 	if next_row := self.cursor.page_pin.down(1) {
 		mut row := next_row.row_and_cell().row
-		row.wrap_continuation = false
+		row.header.wrap_continuation = false
 	}
 
 	// If the last cell in the row is a spacer head we need to clear it.
@@ -3129,7 +3128,7 @@ pub fn (mut self Screen) clear_rows(tl Point, bl ?Point, protected bool) {
 		mut page := &chunk.node.data
 		for y in int(chunk.start) .. int(chunk.end) {
 			mut row := unsafe { &page.rows[y] }
-			cells_offset := row.cells_offset
+			cells_offset := row.header.cells_offset
 			row_cells := row.cells
 			mut cells := unsafe { row.cells[..int(self.pages.cols)] }
 
@@ -3139,18 +3138,15 @@ pub fn (mut self Screen) clear_rows(tl Point, bl ?Point, protected bool) {
 				// We need to preserve other row attributes since we only
 				// cleared unprotected cells.
 				row.cells = row_cells
-				row.cells_offset = cells_offset
+				row.header.cells_offset = cells_offset
 			} else {
 				self.clear_cells(mut page, mut row, mut cells)
 				unsafe {
-					*row = RowData{
-						cells:        row_cells
-						cells_offset: cells_offset
-					}
+					*row.header = PageRowHeader{ cells_offset: cells_offset }
 				}
 			}
 
-			row.dirty = true
+			row.header.dirty = true
 		}
 	}
 }
@@ -3183,7 +3179,7 @@ pub fn (mut self Screen) clear_cells(mut page Page, mut row RowData, mut cells [
 
 	// If we have managed memory (styles, graphemes, or hyperlinks)
 	// in this row then we go cell by cell and clear them if present.
-	if row.grapheme {
+	if row.header.grapheme {
 		for i, cell in cells {
 			if cell.has_grapheme() {
 				page.clear_grapheme(row_idx, left + usize(i))
@@ -3194,13 +3190,13 @@ pub fn (mut self Screen) clear_cells(mut page Page, mut row RowData, mut cells [
 		// that we've cleared all the graphemes, so we clear the
 		// flag, otherwise we ask the page to update the flag.
 		if cells.len == int(self.pages.cols) {
-			row.grapheme = false
+			row.header.grapheme = false
 		} else {
 			page.update_row_grapheme_flag(row)
 		}
 	}
 
-	if row.hyperlink {
+	if row.header.hyperlink {
 		for i, cell in cells {
 			if cell.has_hyperlink {
 				page.clear_hyperlink(row_idx, left + usize(i))
@@ -3211,13 +3207,13 @@ pub fn (mut self Screen) clear_cells(mut page Page, mut row RowData, mut cells [
 		// that we've cleared all the hyperlinks, so we clear the
 		// flag, otherwise we ask the page to update the flag.
 		if cells.len == int(self.pages.cols) {
-			row.hyperlink = false
+			row.header.hyperlink = false
 		} else {
 			page.update_row_hyperlink_flag(row)
 		}
 	}
 
-	if row.styled {
+	if row.header.styled {
 		for cell in cells {
 			if cell.has_styling() {
 				page.styles.release(cell.style_id)
@@ -3228,13 +3224,13 @@ pub fn (mut self Screen) clear_cells(mut page Page, mut row RowData, mut cells [
 		// that we've cleared all the styles, so we clear the
 		// flag, otherwise we ask the page to update the flag.
 		if cells.len == int(self.pages.cols) {
-			row.styled = false
+			row.header.styled = false
 		} else {
 			page.update_row_styled_flag(row)
 		}
 	}
 
-	if row.kitty_virtual_placeholder && cells.len == int(self.pages.cols) {
+	if row.header.kitty_virtual_placeholder && cells.len == int(self.pages.cols) {
 		mut found := false
 		for c in cells {
 			if c.codepoint() == kitty_unicode_placeholder {
@@ -3243,7 +3239,7 @@ pub fn (mut self Screen) clear_cells(mut page Page, mut row RowData, mut cells [
 			}
 		}
 		if !found {
-			row.kitty_virtual_placeholder = false
+			row.header.kitty_virtual_placeholder = false
 		}
 	}
 
@@ -3328,7 +3324,7 @@ pub fn (mut self Screen) split_cell_boundary(x u32) {
 	// [ A B C D E F|]
 	//              ^ Boundary between final cell and row end.
 	if x == cols {
-		if !self.cursor.page_row.wrap {
+		if !self.cursor.page_row.header.wrap {
 			return
 		}
 
@@ -3353,7 +3349,7 @@ pub fn (mut self Screen) split_cell_boundary(x u32) {
 	//
 	// First cell may be a wrapped wide cell with a spacer
 	// head on the previous row that needs to be cleared.
-	if (x == 0 || x == 1) && self.cursor.page_row.wrap_continuation {
+	if (x == 0 || x == 1) && self.cursor.page_row.header.wrap_continuation {
 		cells := self.cursor.page_pin.cells(.all)
 
 		// If the first cell in a row is wide the previous row
@@ -4092,7 +4088,7 @@ pub fn (mut self Screen) cursor_set_semantic_content(t CursorSemanticContent) {
 			self.semantic_prompt.seen = true
 			self.cursor.semantic_content = .prompt
 			self.cursor.semantic_content_clear_eol = false
-			self.cursor.page_row.semantic_prompt = match t.kind {
+			self.cursor.page_row.header.semantic_prompt = match t.kind {
 				.initial, .right { SemanticPromptType.prompt }
 				.continuation, .secondary { SemanticPromptType.prompt_continuation }
 			}
@@ -4248,7 +4244,7 @@ fn select_line_start_pin(opts SelectLine, semantic_prompt_state ?SemanticContent
 		p := it.next() or { break }
 		row := p.row_and_cell().row
 
-		if !row.wrap {
+		if !row.header.wrap {
 			mut copy := it_prev
 			copy.x = 0
 			return copy
@@ -4318,7 +4314,7 @@ fn select_line_end_pin(opts SelectLine, semantic_prompt_state ?SemanticContent) 
 			}
 		}
 
-		if !row.wrap {
+		if !row.header.wrap {
 			mut copy := p
 			copy.x = p.node.data.size.cols - 1
 			return copy
@@ -4473,7 +4469,7 @@ fn select_word_end(pin Pin, boundary_codepoints []u32, expect_boundary bool) Pin
 
 		// If we are going to the next row and it isn't wrapped, we
 		// return the previous.
-		if p.x == p.node.data.size.cols - 1 && !rac.row.wrap {
+		if p.x == p.node.data.size.cols - 1 && !rac.row.header.wrap {
 			return p
 		}
 
@@ -4494,7 +4490,7 @@ fn select_word_start(pin Pin, boundary_codepoints []u32, expect_boundary bool) P
 
 		// If we are going to the next row and it isn't wrapped, we
 		// return the previous.
-		if p.x == p.node.data.size.cols - 1 && !rac.row.wrap {
+		if p.x == p.node.data.size.cols - 1 && !rac.row.header.wrap {
 			return prev
 		}
 
@@ -4650,7 +4646,7 @@ fn (mut self Screen) prompt_click_line(click_pin Pin) PromptClickMove {
 
 			// If this is not the cursor row, verify it's still part of the
 			// continuation of our starting prompt.
-			if !is_cursor_row && rac.row.semantic_prompt != .prompt_continuation {
+			if !is_cursor_row && rac.row.header.semantic_prompt != .prompt_continuation {
 				break
 			}
 
@@ -4681,7 +4677,7 @@ fn (mut self Screen) prompt_click_line(click_pin Pin) PromptClickMove {
 			// If this row isn't soft-wrapped, we need to break out
 			// because line based moving only handles single lines.
 			// We're done!
-			if !rac.row.wrap {
+			if !rac.row.header.wrap {
 				// If we never found our pin, that means we clicked further
 				// right/beyond it. If we're already on a non-empty input cell
 				// then we add one so we can move to the newest, empty cell
@@ -4741,7 +4737,7 @@ fn (mut self Screen) prompt_click_line(click_pin Pin) PromptClickMove {
 		}
 
 		// If this row is not a wrap continuation, then break out
-		if !rac.row.wrap_continuation {
+		if !rac.row.header.wrap_continuation {
 			break
 		}
 	}
@@ -4847,7 +4843,7 @@ pub fn (mut self Screen) test_write_string(text string) ! {
 				match self.cursor.semantic_content {
 					.output {}
 					.prompt, .input {
-						self.cursor.page_row.semantic_prompt = .prompt_continuation
+						self.cursor.page_row.header.semantic_prompt = .prompt_continuation
 					}
 				}
 			}
@@ -4877,14 +4873,14 @@ pub fn (mut self Screen) test_write_string(text string) ! {
 		if self.cursor.pending_wrap {
 			assert self.cursor.x == u32(self.pages.cols) - 1
 			self.cursor.pending_wrap = false
-			self.cursor.page_row.wrap = true
+			self.cursor.page_row.header.wrap = true
 			self.cursor_down_or_scroll()!
 			self.cursor_horizontal_absolute(0)
-			self.cursor.page_row.wrap_continuation = true
+			self.cursor.page_row.header.wrap_continuation = true
 			match self.cursor.semantic_content {
 				.output {}
 				.input, .prompt {
-					self.cursor.page_row.semantic_prompt = .prompt_continuation
+					self.cursor.page_row.header.semantic_prompt = .prompt_continuation
 				}
 			}
 		}
@@ -4906,7 +4902,7 @@ pub fn (mut self Screen) test_write_string(text string) ! {
 				if self.cursor.style_id != default_style_id {
 					mut page := &self.cursor.page_pin.node.data
 					page.styles.use_style(self.cursor.style_id)
-					self.cursor.page_row.styled = true
+					self.cursor.page_row.header.styled = true
 				}
 
 				// If we have a hyperlink, add it to the cell.
@@ -4932,10 +4928,10 @@ pub fn (mut self Screen) test_write_string(text string) ! {
 						self.cursor_set_hyperlink()!
 					}
 
-					self.cursor.page_row.wrap = true
+					self.cursor.page_row.header.wrap = true
 					self.cursor_down_or_scroll()!
 					self.cursor_horizontal_absolute(0)
-					self.cursor.page_row.wrap_continuation = true
+					self.cursor.page_row.header.wrap_continuation = true
 				}
 
 				// Write our wide char
@@ -4977,7 +4973,7 @@ pub fn (mut self Screen) test_write_string(text string) ! {
 					mut page := &self.cursor.page_pin.node.data
 					page.styles.use_style(self.cursor.style_id)
 					page.styles.use_style(self.cursor.style_id)
-					self.cursor.page_row.styled = true
+					self.cursor.page_row.header.styled = true
 				}
 			}
 			else {

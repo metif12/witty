@@ -124,13 +124,13 @@ fn cell_hyperlink_at(t &Terminal, x int, y int) ?Hyperlink {
 // Helper: read whether a row (active-area y) is soft-wrapped.
 fn row_wrap_at(t &Terminal, y int) bool {
 	list_cell := t.screens.active.pages.get_cell(active_point(0, y)) or { return false }
-	return list_cell.row.wrap
+	return list_cell.row.header.wrap
 }
 
 // Helper: read a row's (active-area y) semantic prompt type.
 fn row_semantic_prompt_at(t &Terminal, y int) SemanticPromptType {
 	list_cell := t.screens.active.pages.get_cell(active_point(0, y)) or { return .unknown }
-	return list_cell.row.semantic_prompt
+	return list_cell.row.header.semantic_prompt
 }
 
 // ============================================================
@@ -890,9 +890,9 @@ fn test_delete_lines_resets_soft_wrap_rows() {
 	assert (t.plain_string() or { '' }) == 'XBC\n\nDEF'
 	for y in 0 .. int(t.rows) {
 		row := active_row(&t, y)
-		assert !row.wrap
+		assert !row.header.wrap
 		if y < 2 {
-			assert !row.wrap_continuation
+			assert !row.header.wrap_continuation
 		}
 	}
 }
@@ -1195,8 +1195,8 @@ fn test_protected_erases_update_managed_row_flags() {
 		t.print(u32(`x`)) or { assert false }
 		t.print(0x0301) or { assert false }
 		row := active_row(&t, y)
-		assert row.grapheme
-		assert row.hyperlink
+		assert row.header.grapheme
+		assert row.header.hyperlink
 	}
 	t.screens.active.end_hyperlink()
 	t.set_cursor_pos(1, 1)
@@ -1206,14 +1206,14 @@ fn test_protected_erases_update_managed_row_flags() {
 	t.screens.active.protected_mode = .iso
 	t.erase_chars(1)
 	row0 := active_row(&t, 0)
-	assert !row0.grapheme
-	assert !row0.hyperlink
+	assert !row0.header.grapheme
+	assert !row0.header.hyperlink
 
 	t.set_cursor_pos(2, 1)
 	t.erase_line(.right, false)
 	row1 := active_row(&t, 1)
-	assert !row1.grapheme
-	assert !row1.hyperlink
+	assert !row1.header.grapheme
+	assert !row1.header.hyperlink
 }
 
 // ============================================================
@@ -1785,9 +1785,9 @@ fn test_decaln_preserves_color() {
 	assert str == '\nEEE\nEEE'
 	cell := cell_at(&t, 0, 0)
 	assert cell.content_tag == .bg_color_rgb
-	assert cell.color_rgb_r == 0xff
-	assert cell.color_rgb_g == 0
-	assert cell.color_rgb_b == 0
+	assert cell.color_rgb_r() == 0xff
+	assert cell.color_rgb_g() == 0
+	assert cell.color_rgb_b() == 0
 }
 
 fn test_decaln_resets_graphemes_with_protected_mode() {
@@ -1804,7 +1804,7 @@ fn test_decaln_resets_graphemes_with_protected_mode() {
 	for cp in [u32(0x1f468), 0x200d, 0x1f469, 0x200d, 0x1f467] {
 		t.print(cp) or { assert false }
 	}
-	assert active_row(&t, 0).grapheme
+	assert active_row(&t, 0).header.grapheme
 
 	t.decaln() or { assert false }
 
@@ -1814,8 +1814,8 @@ fn test_decaln_resets_graphemes_with_protected_mode() {
 	assert t.screens.active.protected_mode == .iso
 	for y in 0 .. int(t.rows) {
 		row := active_row(&t, y)
-		assert row.dirty
-		assert !row.grapheme
+		assert row.header.dirty
+		assert !row.header.grapheme
 		for cell in row.cells {
 			assert cell.codepoint() == u32(`E`)
 			assert !cell.has_grapheme()
@@ -2142,7 +2142,7 @@ fn test_resize_less_cols_wraps_wide_char() {
 
 	assert (t.plain_string() or { '' }) == 'x\n😀'
 	assert cell_at(&t, 1, 0).wide == .spacer_head
-	assert active_row(&t, 0).wrap
+	assert active_row(&t, 0).header.wrap
 	assert cell_at(&t, 0, 1).wide == .wide
 	assert cell_at(&t, 1, 1).wide == .spacer_tail
 }
@@ -2213,12 +2213,12 @@ fn test_resize_reflow_preserves_kitty_unicode_placeholder_row_flag() {
 	t.modes.set(.wraparound, true)
 	t.print(kitty_unicode_placeholder) or { assert false }
 	t.print_string('ab') or { assert false }
-	assert active_row(&t, 0).kitty_virtual_placeholder
+	assert active_row(&t, 0).header.kitty_virtual_placeholder
 
 	t.resize(2, 2) or { assert false }
 
 	assert cell_at(&t, 0, 0).codepoint == kitty_unicode_placeholder
-	assert active_row(&t, 0).kitty_virtual_placeholder
+	assert active_row(&t, 0).header.kitty_virtual_placeholder
 }
 
 // https://github.com/mitchellh/ghostty/issues/723
@@ -3081,7 +3081,7 @@ fn test_print_kitty_unicode_placeholder_marks_row() {
 	assert t.screens.active.cursor.y == 0
 	assert t.screens.active.cursor.x == 1
 	assert cell_at(&t, 0, 0).codepoint == kitty_unicode_placeholder
-	assert active_row(&t, 0).kitty_virtual_placeholder
+	assert active_row(&t, 0).header.kitty_virtual_placeholder
 	assert t.is_dirty(active_point(0, 0))
 }
 
@@ -5263,7 +5263,7 @@ fn test_scroll_up_left_right_region_preserves_hyperlink_flags() {
 
 	assert (t.plain_string() or { '' }) == 'AEF423\nDHI756\nG   89'
 	row0 := active_row(&t, 0)
-	assert row0.hyperlink
+	assert row0.header.hyperlink
 	for x in 1 .. 4 {
 		assert row0.cells[x].has_hyperlink
 		link := cell_hyperlink_at(&t, x, 0) or { panic('cell hyperlink is missing') }
@@ -5285,23 +5285,23 @@ fn test_insert_delete_lines_preserve_full_row_metadata() {
 	t.print(kitty_unicode_placeholder) or { assert false }
 	t.screens.active.end_hyperlink()
 	source := active_row(&t, 1)
-	assert source.semantic_prompt == .prompt
-	assert source.hyperlink
-	assert source.kitty_virtual_placeholder
+	assert source.header.semantic_prompt == .prompt
+	assert source.header.hyperlink
+	assert source.header.kitty_virtual_placeholder
 
 	t.set_cursor_pos(1, 1)
 	t.insert_lines(1)
 	moved_down := active_row(&t, 2)
-	assert moved_down.semantic_prompt == .prompt
-	assert moved_down.hyperlink
-	assert moved_down.kitty_virtual_placeholder
+	assert moved_down.header.semantic_prompt == .prompt
+	assert moved_down.header.hyperlink
+	assert moved_down.header.kitty_virtual_placeholder
 
 	t.set_cursor_pos(2, 1)
 	t.delete_lines(1)
 	moved_up := active_row(&t, 1)
-	assert moved_up.semantic_prompt == .prompt
-	assert moved_up.hyperlink
-	assert moved_up.kitty_virtual_placeholder
+	assert moved_up.header.semantic_prompt == .prompt
+	assert moved_up.header.hyperlink
+	assert moved_up.header.kitty_virtual_placeholder
 }
 
 fn test_line_shift_recomputes_grapheme_flag_after_wide_boundary_split() {
@@ -5320,7 +5320,7 @@ fn test_line_shift_recomputes_grapheme_flag_after_wide_boundary_split() {
 	assert row_before.cells[2].wide == .wide
 	assert row_before.cells[2].has_grapheme()
 	assert row_before.cells[3].wide == .spacer_tail
-	assert row_before.grapheme
+	assert row_before.header.grapheme
 
 	// Splitting the left boundary at the wide tail clears the only grapheme.
 	t.scrolling_region.left = 3
@@ -5332,7 +5332,7 @@ fn test_line_shift_recomputes_grapheme_flag_after_wide_boundary_split() {
 	assert !row_after.cells[2].has_grapheme()
 	assert row_after.cells[2].wide == .narrow
 	assert row_after.cells[3].wide == .narrow
-	assert !row_after.grapheme
+	assert !row_after.header.grapheme
 }
 
 fn test_scroll_up_preserves_pending_wrap() {
@@ -6219,7 +6219,7 @@ fn test_delete_chars_with_a_spacer_head_at_the_end() {
 
 	t.print_string('0123橋123') or { assert false }
 	assert cell_at(&t, 4, 0).wide == .spacer_head
-	assert active_row(&t, 0).wrap
+	assert active_row(&t, 0).header.wrap
 
 	t.set_cursor_pos(1, 1)
 	t.delete_chars(1)
@@ -6439,13 +6439,13 @@ fn test_insert_blanks_deleting_graphemes() {
 	for cp in [u32(0x1F468), 0x200D, 0x1F469, 0x200D, 0x1F467] {
 		t.print(cp) or { assert false }
 	}
-	assert active_row(&t, 0).grapheme
+	assert active_row(&t, 0).header.grapheme
 
 	t.set_cursor_pos(1, 1)
 	t.insert_blanks(4)
 	assert t.plain_string() or { '' } == '    A'
 	row := active_row(&t, 0)
-	assert !row.grapheme
+	assert !row.header.grapheme
 	for cell in row.cells {
 		assert !cell.has_grapheme()
 	}
@@ -6468,7 +6468,7 @@ fn test_insert_blanks_shifts_graphemes() {
 
 	assert t.plain_string() or { '' } == ' A👨‍👩‍👧'
 	row := active_row(&t, 0)
-	assert row.grapheme
+	assert row.header.grapheme
 	assert row.cells[2].has_grapheme()
 }
 
@@ -6499,7 +6499,7 @@ fn test_insert_blanks_shifts_hyperlinks() {
 	assert t.plain_string() or { '' } == '  ABC'
 
 	row := active_row(&t, 0)
-	assert row.hyperlink
+	assert row.header.hyperlink
 	for x in 0 .. 2 {
 		assert !row.cells[x].has_hyperlink
 	}
@@ -6524,7 +6524,7 @@ fn test_insert_blanks_pushes_hyperlink_off_end_completely() {
 	assert t.plain_string() or { 'not empty' } == ''
 
 	row := active_row(&t, 0)
-	assert !row.hyperlink
+	assert !row.header.hyperlink
 	for cell in row.cells {
 		assert !cell.has_hyperlink
 	}
@@ -6544,9 +6544,9 @@ fn test_insert_blanks_pushes_hyperlink_off_end_completely() {
 fn assert_bg_rgb(t &Terminal, x int, y int, r u8, g u8, b u8) {
 	cell := cell_at(t, x, y)
 	assert cell.content_tag == .bg_color_rgb
-	assert cell.color_rgb_r == r
-	assert cell.color_rgb_g == g
-	assert cell.color_rgb_b == b
+	assert cell.color_rgb_r() == r
+	assert cell.color_rgb_g() == g
+	assert cell.color_rgb_b() == b
 }
 
 fn test_erase_chars_preserves_background_sgr() {
@@ -6905,7 +6905,7 @@ fn test_print_wraps_at_right_margin() {
 	t.print_string('XY') or { assert false }
 
 	assert (t.plain_string() or { '' }) == '1234X6789\n  Y'
-	assert !active_row(&t, 0).wrap
+	assert !active_row(&t, 0).header.wrap
 }
 
 fn test_print_right_margin_wrap_dirty_tracking() {
@@ -6984,7 +6984,7 @@ fn test_print_wide_char_at_right_margin_has_no_spacer_head() {
 	old_margin := cell_at(&t, 4, 0)
 	assert old_margin.codepoint == 0
 	assert old_margin.wide == .narrow
-	assert !active_row(&t, 0).wrap
+	assert !active_row(&t, 0).header.wrap
 	wide := cell_at(&t, 2, 1)
 	assert wide.codepoint == 0x1f600
 	assert wide.wide == .wide
@@ -7024,7 +7024,7 @@ fn test_print_with_hyperlink() {
 	t.screens.active.start_hyperlink('http://example.com', none) or { assert false }
 	t.print_string('123456') or { assert false }
 	row := active_row(&t, 0)
-	assert row.hyperlink
+	assert row.header.hyperlink
 	for x in 0 .. 6 {
 		assert row.cells[x].has_hyperlink
 		link := cell_hyperlink_at(&t, x, 0) or { panic('cell hyperlink is missing') }
@@ -7046,7 +7046,7 @@ fn test_print_over_cell_with_same_hyperlink() {
 	t.set_cursor_pos(1, 1)
 	t.print_string('123456') or { assert false }
 	row := active_row(&t, 0)
-	assert row.hyperlink
+	assert row.header.hyperlink
 	for x in 0 .. 6 {
 		assert row.cells[x].has_hyperlink
 		link := cell_hyperlink_at(&t, x, 0) or { panic('cell hyperlink is missing') }
@@ -7067,7 +7067,7 @@ fn test_print_and_end_hyperlink() {
 	t.screens.active.end_hyperlink()
 	t.print_string('456') or { assert false }
 	row := active_row(&t, 0)
-	assert row.hyperlink
+	assert row.header.hyperlink
 	for x in 0 .. 3 {
 		assert row.cells[x].has_hyperlink
 		link := cell_hyperlink_at(&t, x, 0) or { panic('cell hyperlink is missing') }
@@ -7117,7 +7117,7 @@ fn test_overwrite_hyperlink_clears_row_flag() {
 	t.screens.active.end_hyperlink()
 	t.print_string('456') or { assert false }
 	row := active_row(&t, 0)
-	assert !row.hyperlink
+	assert !row.header.hyperlink
 	for x in 0 .. 3 {
 		assert !row.cells[x].has_hyperlink
 	}

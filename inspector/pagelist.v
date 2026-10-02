@@ -163,15 +163,15 @@ fn draw_cell_info_row(context cimgui.Context, label string, help string, value s
 }
 
 fn draw_row_flags(context cimgui.Context, row terminal.RowData) {
-	if !row.wrap && !row.wrap_continuation && !row.grapheme && !row.styled && !row.hyperlink {
+	if !row.header.wrap && !row.header.wrap_continuation && !row.header.grapheme && !row.header.styled && !row.header.hyperlink {
 		context.text_disabled('(none)')
 		return
 	}
-	draw_inline_flag(context, row.wrap, 'wrap', cimgui.Color{ r: 0.4, g: 0.8, b: 1.0 })
-	draw_inline_flag(context, row.wrap_continuation, 'cont', cimgui.Color{ r: 0.4, g: 0.8, b: 1.0 })
-	draw_inline_flag(context, row.grapheme, 'grapheme', cimgui.Color{ r: 0.9, g: 0.7, b: 0.3 })
-	draw_inline_flag(context, row.styled, 'styled', cimgui.Color{ r: 0.7, g: 0.9, b: 0.5 })
-	draw_inline_flag(context, row.hyperlink, 'link', cimgui.Color{ r: 0.8, g: 0.6, b: 1.0 })
+	draw_inline_flag(context, row.header.wrap, 'wrap', cimgui.Color{ r: 0.4, g: 0.8, b: 1.0 })
+	draw_inline_flag(context, row.header.wrap_continuation, 'cont', cimgui.Color{ r: 0.4, g: 0.8, b: 1.0 })
+	draw_inline_flag(context, row.header.grapheme, 'grapheme', cimgui.Color{ r: 0.9, g: 0.7, b: 0.3 })
+	draw_inline_flag(context, row.header.styled, 'styled', cimgui.Color{ r: 0.7, g: 0.9, b: 0.5 })
+	draw_inline_flag(context, row.header.hyperlink, 'link', cimgui.Color{ r: 0.8, g: 0.6, b: 1.0 })
 }
 
 fn draw_inline_flag(context cimgui.Context, enabled bool, label string, color cimgui.Color) {
@@ -612,21 +612,21 @@ fn draw_page_rows(context cimgui.Context, page &terminal.Page) {
 			context.text(text_cells.str())
 		}
 		context.table_set_column(2)
-		draw_flag_cell(context, row.dirty)
+		draw_flag_cell(context, row.header.dirty)
 		context.table_set_column(3)
-		draw_flag_cell(context, row.wrap)
+		draw_flag_cell(context, row.header.wrap)
 		context.table_set_column(4)
-		draw_flag_cell(context, row.wrap_continuation)
+		draw_flag_cell(context, row.header.wrap_continuation)
 		context.table_set_column(5)
-		draw_flag_cell(context, row.styled)
+		draw_flag_cell(context, row.header.styled)
 		context.table_set_column(6)
-		draw_flag_cell(context, row.grapheme)
+		draw_flag_cell(context, row.header.grapheme)
 		context.table_set_column(7)
-		draw_flag_cell(context, row.hyperlink)
+		draw_flag_cell(context, row.header.hyperlink)
 		context.table_set_column(8)
-		context.text(row.semantic_prompt.str())
+		context.text(row.header.semantic_prompt.str())
 		context.table_set_column(9)
-		draw_flag_cell(context, row.kitty_virtual_placeholder)
+		draw_flag_cell(context, row.header.kitty_virtual_placeholder)
 	}
 }
 

@@ -9,7 +9,7 @@ pub fn never_extend_bg(row terminal.RowData, cells []terminal.CellData, styles [
 	// Any semantic prompts should not have their background extended
 	// because prompts often contain special formatting (such as
 	// powerline) that looks bad when extended.
-	match row.semantic_prompt {
+	match row.header.semantic_prompt {
 		.prompt, .prompt_continuation { return true }
 		else {}
 	}
@@ -51,13 +51,13 @@ pub fn never_extend_bg(row terminal.RowData, cells []terminal.CellData, styles [
 fn resolve_bg(cell terminal.CellData, s terminal.CellStyle, palette [256]terminal.RGB) ?terminal.RGB {
 	match cell.content_tag {
 		.bg_color_palette {
-			return palette[cell.color_palette]
+			return palette[cell.color_palette()]
 		}
 		.bg_color_rgb {
 			return terminal.RGB{
-				r: cell.color_rgb_r
-				g: cell.color_rgb_g
-				b: cell.color_rgb_b
+				r: cell.color_rgb_r()
+				g: cell.color_rgb_g()
+				b: cell.color_rgb_b()
 			}
 		}
 		.codepoint, .codepoint_grapheme {

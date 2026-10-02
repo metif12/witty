@@ -100,11 +100,11 @@ fn test_screen_read_and_write_scrollback() ! {
 	defer { s.deinit() }
 
 	s.test_write_string('hello\nworld\ntest')!
-	{
+	if true {
 		str := s.dump_string_alloc(.screen)!
 		assert str == 'hello\nworld\ntest'
 	}
-	{
+	if true {
 		str := s.dump_string_alloc(.active)!
 		assert str == 'world\ntest'
 	}
@@ -115,11 +115,11 @@ fn test_screen_read_and_write_no_scrollback_small() ! {
 	defer { s.deinit() }
 
 	s.test_write_string('hello\nworld\ntest')!
-	{
+	if true {
 		str := s.dump_string_alloc(.screen)!
 		assert str == 'world\ntest'
 	}
-	{
+	if true {
 		str := s.dump_string_alloc(.active)!
 		assert str == 'world\ntest'
 	}
@@ -134,7 +134,7 @@ fn test_screen_read_and_write_no_scrollback_large() ! {
 	}
 	s.test_write_string('1000')!
 
-	{
+	if true {
 		str := s.dump_string_alloc(.screen)!
 		assert str == '999\n1000'
 	}
@@ -154,7 +154,7 @@ fn test_screen_cursor_copy_x_y() ! {
 	assert s2.cursor.y == 3
 	s2.test_write_string('Hello')!
 
-	{
+	if true {
 		str := s2.dump_string_alloc(.screen)!
 		assert str == '\n\n\n  Hello'
 	}
@@ -526,22 +526,22 @@ fn test_screen_erase_rows_history() ! {
 
 	s.test_write_string('1\n2\n3\n4\n5\n6')!
 
-	{
+	if true {
 		str := s.dump_string_alloc(.active)!
 		assert str == '2\n3\n4\n5\n6'
 	}
-	{
+	if true {
 		str := s.dump_string_alloc(.screen)!
 		assert str == '1\n2\n3\n4\n5\n6'
 	}
 
 	s.erase_rows(history_pt(0, 0), none)
 
-	{
+	if true {
 		str := s.dump_string_alloc(.active)!
 		assert str == '2\n3\n4\n5\n6'
 	}
-	{
+	if true {
 		str := s.dump_string_alloc(.screen)!
 		assert str == '2\n3\n4\n5\n6'
 	}
@@ -553,22 +553,22 @@ fn test_screen_erase_rows_history_with_more_lines() ! {
 
 	s.test_write_string('A\nB\nC\n1\n2\n3\n4\n5\n6')!
 
-	{
+	if true {
 		str := s.dump_string_alloc(.active)!
 		assert str == '2\n3\n4\n5\n6'
 	}
-	{
+	if true {
 		str := s.dump_string_alloc(.screen)!
 		assert str == 'A\nB\nC\n1\n2\n3\n4\n5\n6'
 	}
 
 	s.erase_rows(history_pt(0, 0), none)
 
-	{
+	if true {
 		str := s.dump_string_alloc(.active)!
 		assert str == '2\n3\n4\n5\n6'
 	}
-	{
+	if true {
 		str := s.dump_string_alloc(.screen)!
 		assert str == '2\n3\n4\n5\n6'
 	}
@@ -580,18 +580,18 @@ fn test_screen_erase_rows_active_partial() ! {
 
 	s.test_write_string('1\n2\n3')!
 
-	{
+	if true {
 		str := s.dump_string_alloc(.active)!
 		assert str == '1\n2\n3'
 	}
 
 	s.erase_rows(active_pt(0, 0), active_pt(0, 1))
 
-	{
+	if true {
 		str := s.dump_string_alloc(.active)!
 		assert str == '3'
 	}
-	{
+	if true {
 		str := s.dump_string_alloc(.screen)!
 		assert str == '3'
 	}
@@ -614,21 +614,21 @@ fn test_screen_cursor_down_across_pages_preserves_style() ! {
 	// We need our page to change for this test o make sense. If this
 	// assertion fails then the bug is in the test: we should be scrolling
 	// above enough for a new page to show up.
-	{
+	if true {
 		page := &s.cursor.page_pin.node.data
 		assert !same_page(start_page, page)
 	}
 
 	// Scroll back to the previous page
 	s.cursor_up(1)
-	{
+	if true {
 		page := &s.cursor.page_pin.node.data
 		assert same_page(start_page, page)
 	}
 
 	// Go back up, set a style
 	s.set_attribute(SgrBold{})!
-	{
+	if true {
 		page := &s.cursor.page_pin.node.data
 		styleval := page.styles.get(s.cursor.style_id)
 		assert styleval.flags.bold()
@@ -636,7 +636,7 @@ fn test_screen_cursor_down_across_pages_preserves_style() ! {
 
 	// Go back down into the next page and we should have that style
 	s.cursor_down(1)
-	{
+	if true {
 		page := &s.cursor.page_pin.node.data
 		styleval := page.styles.get(s.cursor.style_id)
 		assert styleval.flags.bold()
@@ -660,14 +660,14 @@ fn test_screen_cursor_up_across_pages_preserves_style() ! {
 	// We need our page to change for this test o make sense. If this
 	// assertion fails then the bug is in the test: we should be scrolling
 	// above enough for a new page to show up.
-	{
+	if true {
 		page := &s.cursor.page_pin.node.data
 		assert !same_page(start_page, page)
 	}
 
 	// Go back up, set a style
 	s.set_attribute(SgrBold{})!
-	{
+	if true {
 		page := &s.cursor.page_pin.node.data
 		styleval := page.styles.get(s.cursor.style_id)
 		assert styleval.flags.bold()
@@ -675,7 +675,7 @@ fn test_screen_cursor_up_across_pages_preserves_style() ! {
 
 	// Go back down into the prev page and we should have that style
 	s.cursor_up(1)
-	{
+	if true {
 		page := &s.cursor.page_pin.node.data
 		assert same_page(start_page, page)
 
@@ -701,14 +701,14 @@ fn test_screen_cursor_absolute_across_pages_preserves_style() ! {
 	// We need our page to change for this test o make sense. If this
 	// assertion fails then the bug is in the test: we should be scrolling
 	// above enough for a new page to show up.
-	{
+	if true {
 		page := &s.cursor.page_pin.node.data
 		assert !same_page(start_page, page)
 	}
 
 	// Go back up, set a style
 	s.set_attribute(SgrBold{})!
-	{
+	if true {
 		page := &s.cursor.page_pin.node.data
 		styleval := page.styles.get(s.cursor.style_id)
 		assert styleval.flags.bold()
@@ -716,7 +716,7 @@ fn test_screen_cursor_absolute_across_pages_preserves_style() ! {
 
 	// Go back down into the prev page and we should have that style
 	s.cursor_absolute(1, 1)
-	{
+	if true {
 		page := &s.cursor.page_pin.node.data
 		assert same_page(start_page, page)
 
@@ -755,7 +755,7 @@ fn test_screen_cursor_absolute_to_page_with_insufficient_capacity() ! {
 	assert !same_page(start_page, new_page)
 
 	// Add styles to the start page until it reaches capacity.
-	{
+	if true {
 		// Pause integrity checks because they're slow and
 		// we're not testing this, this is just setup.
 		start_node.data.pause_integrity_checks(true)
@@ -781,14 +781,14 @@ fn test_screen_cursor_absolute_to_page_with_insufficient_capacity() ! {
 
 	// Set a style on the cursor.
 	s.set_attribute(SgrBold{})!
-	{
+	if true {
 		styleval := new_page.styles.get(s.cursor.style_id)
 		assert styleval.flags.bold()
 	}
 
 	// Go back up into the start page and we should still have that style.
 	s.cursor_absolute(1, 1)
-	{
+	if true {
 		cur_page := &s.cursor.page_pin.node.data
 		// The page we're on now should NOT equal start_page, since its
 		// capacity should have been adjusted, which invalidates our ptr.
@@ -812,17 +812,17 @@ fn test_screen_scrolling() ! {
 
 	// Scroll down, should still be bottom
 	s.cursor_down_scroll()!
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '2EFGH\n3IJKL'
 	}
-	{
+	if true {
 		list_cell := must_cell(s, active_pt(0, 2))
 		cell := list_cell.cell
 		assert cell.content_tag == .bg_color_rgb
-		assert cell.color_rgb_r == u8(155)
-		assert cell.color_rgb_g == u8(0)
-		assert cell.color_rgb_b == u8(0)
+		assert cell.color_rgb_r() == u8(155)
+		assert cell.color_rgb_g() == u8(0)
+		assert cell.color_rgb_b() == u8(0)
 	}
 
 	// Everything is dirty because we have no scrollback
@@ -833,7 +833,7 @@ fn test_screen_scrolling() ! {
 	// Scrolling to the bottom does nothing
 	s.scroll(ScrollActive{})
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '2EFGH\n3IJKL'
 	}
@@ -846,7 +846,7 @@ fn test_screen_scrolling_with_a_single_row_screen_no_scrollback() ! {
 
 	// Scroll down, should still be bottom
 	s.cursor_down_scroll()!
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == ''
 	}
@@ -862,7 +862,7 @@ fn test_screen_scrolling_with_a_single_row_screen_with_scrollback() ! {
 
 	// Scroll down, should still be bottom
 	s.cursor_down_scroll()!
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == ''
 	}
@@ -874,7 +874,7 @@ fn test_screen_scrolling_with_a_single_row_screen_with_scrollback() ! {
 	assert s.pages.is_dirty(screen_pt(0, 0))
 
 	s.scroll(ScrollDeltaRow{ delta: -1 })
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '1ABCD'
 	}
@@ -915,7 +915,7 @@ fn test_screen_scroll_down_from_0() ! {
 	s.scroll(ScrollDeltaRow{ delta: -1 })
 	assert s.pages.viewport == .active
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '1ABCD\n2EFGH\n3IJKL'
 	}
@@ -927,14 +927,14 @@ fn test_screen_scrollback_various_cases() ! {
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL')!
 	s.cursor_down_scroll()!
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '2EFGH\n3IJKL'
 	}
 
 	// Scrolling to the bottom
 	s.scroll(ScrollActive{})
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '2EFGH\n3IJKL'
 	}
@@ -942,49 +942,49 @@ fn test_screen_scrollback_various_cases() ! {
 	// Scrolling back should make it visible again
 	s.scroll(ScrollDeltaRow{ delta: -1 })
 	assert s.pages.viewport != .active
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '1ABCD\n2EFGH\n3IJKL'
 	}
 
 	// Scrolling back again should do nothing
 	s.scroll(ScrollDeltaRow{ delta: -1 })
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '1ABCD\n2EFGH\n3IJKL'
 	}
 
 	// Scrolling to the bottom
 	s.scroll(ScrollActive{})
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '2EFGH\n3IJKL'
 	}
 
 	// Scrolling forward with no grow should do nothing
 	s.scroll(ScrollDeltaRow{ delta: 1 })
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '2EFGH\n3IJKL'
 	}
 
 	// Scrolling to the top should work
 	s.scroll(ScrollTop{})
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '1ABCD\n2EFGH\n3IJKL'
 	}
 
 	// Should be able to easily clear active area only
 	s.clear_rows(active_pt(0, 0), none, false)
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '1ABCD'
 	}
 
 	// Scrolling to the bottom
 	s.scroll(ScrollActive{})
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == ''
 	}
@@ -997,7 +997,7 @@ fn test_screen_scrollback_with_multi_row_delta() ! {
 
 	// Scroll to top
 	s.scroll(ScrollTop{})
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '1ABCD\n2EFGH\n3IJKL'
 	}
@@ -1005,7 +1005,7 @@ fn test_screen_scrollback_with_multi_row_delta() ! {
 	// Scroll down multiple
 	s.scroll(ScrollDeltaRow{ delta: 5 })
 	assert s.pages.viewport == .active
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '4ABCD\n5EFGH\n6IJKL'
 	}
@@ -1016,7 +1016,7 @@ fn test_screen_scrollback_empty() ! {
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL')!
 	s.scroll(ScrollDeltaRow{ delta: 1 })
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '1ABCD\n2EFGH\n3IJKL'
 	}
@@ -1029,7 +1029,7 @@ fn test_screen_scrollback_doesnt_move_viewport_if_not_at_bottom() ! {
 
 	// First test: we scroll up by 1, so we're not at the bottom anymore.
 	s.scroll(ScrollDeltaRow{ delta: -1 })
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '2EFGH\n3IJKL\n4ABCD'
 	}
@@ -1037,7 +1037,7 @@ fn test_screen_scrollback_doesnt_move_viewport_if_not_at_bottom() ! {
 	// Next, we scroll back down by 1, this grows the scrollback but we
 	// shouldn't move.
 	s.cursor_down_scroll()!
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '2EFGH\n3IJKL\n4ABCD'
 	}
@@ -1045,7 +1045,7 @@ fn test_screen_scrollback_doesnt_move_viewport_if_not_at_bottom() ! {
 	// Scroll again, this clears scrollback so we should move viewports
 	// but still see the same thing since our original view fits.
 	s.cursor_down_scroll()!
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '2EFGH\n3IJKL\n4ABCD'
 	}
@@ -1064,13 +1064,13 @@ fn test_screen_scrolling_moves_selection() ! {
 	s.cursor_down_scroll()!
 
 	// Our selection should've moved up
-	{
+	if true {
 		sel := s.selection or { panic('no selection') }
 		assert must_point(s, .active, sel.start()) == active_pt(0, 0)
 		assert must_point(s, .active, sel.end()) == active_pt(int(s.pages.cols) - 1, 0)
 	}
 
-	{
+	if true {
 		// Test our contents rotated
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '2EFGH\n3IJKL'
@@ -1080,13 +1080,13 @@ fn test_screen_scrolling_moves_selection() ! {
 	s.scroll(ScrollActive{})
 
 	// Our selection should've stayed the same
-	{
+	if true {
 		sel := s.selection or { panic('no selection') }
 		assert must_point(s, .active, sel.start()) == active_pt(0, 0)
 		assert must_point(s, .active, sel.end()) == active_pt(int(s.pages.cols) - 1, 0)
 	}
 
-	{
+	if true {
 		// Test our contents rotated
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '2EFGH\n3IJKL'
@@ -1095,14 +1095,14 @@ fn test_screen_scrolling_moves_selection() ! {
 	// Scroll up again
 	s.cursor_down_scroll()!
 
-	{
+	if true {
 		// Test our contents rotated
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '3IJKL'
 	}
 
 	// Our selection should be null because it left the screen.
-	{
+	if true {
 		sel := s.selection or { panic('no selection') }
 		assert s.pages.point_from_pin(.active, sel.start()) == none
 		assert s.pages.point_from_pin(.active, sel.end()) == none
@@ -1116,13 +1116,13 @@ fn test_screen_scrolling_moves_viewport() ! {
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL')!
 	s.scroll(ScrollDeltaRow{ delta: -2 })
 
-	{
+	if true {
 		// Test our contents rotated
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '2EFGH\n3IJKL\n1ABCD'
 	}
 
-	{
+	if true {
 		assert must_point(s, .screen, s.pages.get_top_left(.viewport)) == screen_pt(0, 1)
 	}
 }
@@ -1144,7 +1144,7 @@ fn test_screen_scrolling_when_viewport_is_pruned() ! {
 	}
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL')!
 
-	{
+	if true {
 		assert must_point(s, .screen, s.pages.get_top_left(.viewport)) == screen_pt(0, 0)
 	}
 }
@@ -1154,17 +1154,17 @@ fn test_screen_scroll_and_clear_full_screen() ! {
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL')!
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '1ABCD\n2EFGH\n3IJKL'
 	}
 
 	s.scroll_clear()!
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == ''
 	}
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == '1ABCD\n2EFGH\n3IJKL'
 	}
@@ -1175,17 +1175,17 @@ fn test_screen_scroll_and_clear_partial_screen() ! {
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH')!
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '1ABCD\n2EFGH'
 	}
 
 	s.scroll_clear()!
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == ''
 	}
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == '1ABCD\n2EFGH'
 	}
@@ -1195,11 +1195,11 @@ fn test_screen_scroll_and_clear_empty_screen() ! {
 	mut s := Screen.init(10, 3, 5)!
 	defer { s.deinit() }
 	s.scroll_clear()!
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == ''
 	}
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == ''
 	}
@@ -1210,7 +1210,7 @@ fn test_screen_scroll_and_clear_ignore_blank_lines() ! {
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH')!
 	s.scroll_clear()!
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == ''
 	}
@@ -1220,13 +1220,13 @@ fn test_screen_scroll_and_clear_ignore_blank_lines() ! {
 
 	// Write and clear
 	s.test_write_string('3ABCD\n')!
-	{
+	if true {
 		contents := s.dump_string_alloc(.active)!
 		assert contents == '3ABCD'
 	}
 
 	s.scroll_clear()!
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == ''
 	}
@@ -1235,7 +1235,7 @@ fn test_screen_scroll_and_clear_ignore_blank_lines() ! {
 	s.cursor_absolute(0, 0)
 	s.test_write_string('X')!
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == '1ABCD\n2EFGH\n3ABCD\nX'
 	}
@@ -1273,17 +1273,17 @@ fn test_screen_scroll_above_same_page() ! {
 
 	// try s.pages.diagram(std.io.getStdErr().writer());
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '2EFGH\n\n3IJKL'
 	}
-	{
+	if true {
 		list_cell := must_cell(s, active_pt(0, 1))
 		cell := list_cell.cell
 		assert cell.content_tag == .bg_color_rgb
-		assert cell.color_rgb_r == u8(155)
-		assert cell.color_rgb_g == u8(0)
-		assert cell.color_rgb_b == u8(0)
+		assert cell.color_rgb_r() == u8(155)
+		assert cell.color_rgb_g() == u8(0)
+		assert cell.color_rgb_b() == u8(0)
 	}
 
 	// Page 0 row 1 (active row 0) is dirty because the cursor moved off of it.
@@ -1350,17 +1350,17 @@ fn test_screen_scroll_above_same_page_but_cursor_on_previous_page() ! {
 
 	// try s.pages.diagram(std.io.getStdErr().writer());
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '2B\n\n3C\n4D\n5E'
 	}
-	{
+	if true {
 		list_cell := must_cell(s, active_pt(0, 1))
 		cell := list_cell.cell
 		assert cell.content_tag == .bg_color_rgb
-		assert cell.color_rgb_r == u8(155)
-		assert cell.color_rgb_g == u8(0)
-		assert cell.color_rgb_b == u8(0)
+		assert cell.color_rgb_r() == u8(155)
+		assert cell.color_rgb_g() == u8(0)
+		assert cell.color_rgb_b() == u8(0)
 	}
 
 	// Page 0's penultimate row is dirty because the cursor moved off of it.
@@ -1428,17 +1428,17 @@ fn test_screen_scroll_above_same_page_but_cursor_on_previous_page_last_row() ! {
 
 	// try s.pages.diagram(std.io.getStdErr().writer());
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '2B\n\n3C\n4D\n5E'
 	}
-	{
+	if true {
 		list_cell := must_cell(s, active_pt(0, 1))
 		cell := list_cell.cell
 		assert cell.content_tag == .bg_color_rgb
-		assert cell.color_rgb_r == u8(155)
-		assert cell.color_rgb_g == u8(0)
-		assert cell.color_rgb_b == u8(0)
+		assert cell.color_rgb_r() == u8(155)
+		assert cell.color_rgb_g() == u8(0)
+		assert cell.color_rgb_b() == u8(0)
 	}
 
 	// Page 0's final row is dirty because the cursor moved off of it.
@@ -1507,17 +1507,17 @@ fn test_screen_scroll_above_creates_new_page() ! {
 
 	// try s.pages.diagram(std.io.getStdErr().writer());
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '2EFGH\n\n3IJKL'
 	}
-	{
+	if true {
 		list_cell := must_cell(s, active_pt(0, 1))
 		cell := list_cell.cell
 		assert cell.content_tag == .bg_color_rgb
-		assert cell.color_rgb_r == u8(155)
-		assert cell.color_rgb_g == u8(0)
-		assert cell.color_rgb_b == u8(0)
+		assert cell.color_rgb_r() == u8(155)
+		assert cell.color_rgb_g() == u8(0)
+		assert cell.color_rgb_b() == u8(0)
 	}
 
 	// Page 0's penultimate row is dirty because the cursor moved off of it.
@@ -1581,17 +1581,17 @@ fn test_screen_scroll_above_with_cursor_on_non_final_row() ! {
 	//     +-------------+
 	// try s.pages.diagram(std.io.getStdErr().writer());
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '2BC\n\n3DE\n4FG'
 	}
-	{
+	if true {
 		list_cell := must_cell(s, active_pt(0, 1))
 		cell := list_cell.cell
 		assert cell.content_tag == .bg_color_rgb
-		assert cell.color_rgb_r == u8(155)
-		assert cell.color_rgb_g == u8(0)
-		assert cell.color_rgb_b == u8(0)
+		assert cell.color_rgb_r() == u8(155)
+		assert cell.color_rgb_g() == u8(0)
+		assert cell.color_rgb_b() == u8(0)
 	}
 
 	// Page 0's penultimate row is dirty because the cursor moved off of it.
@@ -1643,17 +1643,17 @@ fn test_screen_scroll_above_no_scrollback_bottom_of_page() ! {
 
 	// try s.pages.diagram(std.io.getStdErr().writer());
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '2EFGH\n\n3IJKL'
 	}
-	{
+	if true {
 		list_cell := must_cell(s, active_pt(0, 1))
 		cell := list_cell.cell
 		assert cell.content_tag == .bg_color_rgb
-		assert cell.color_rgb_r == u8(155)
-		assert cell.color_rgb_g == u8(0)
-		assert cell.color_rgb_b == u8(0)
+		assert cell.color_rgb_r() == u8(155)
+		assert cell.color_rgb_g() == u8(0)
+		assert cell.color_rgb_b() == u8(0)
 	}
 
 	// Page 0 row 1 (active row 0) is dirty because the cursor moved off of it.
@@ -1668,7 +1668,7 @@ fn test_screen_clone() ! {
 	mut s := Screen.init(10, 3, 10)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH')!
-	{
+	if true {
 		contents := s.dump_string_alloc(.active)!
 		assert contents == '1ABCD\n2EFGH'
 	}
@@ -1678,7 +1678,7 @@ fn test_screen_clone() ! {
 	// Clone
 	mut s2 := s.clone(active_pt(0, 0), none)!
 	defer { s2.deinit() }
-	{
+	if true {
 		contents := s2.dump_string_alloc(.active)!
 		assert contents == '1ABCD\n2EFGH'
 	}
@@ -1687,11 +1687,11 @@ fn test_screen_clone() ! {
 
 	// Write to s1, should not be in s2
 	s.test_write_string('\n34567')!
-	{
+	if true {
 		contents := s.dump_string_alloc(.active)!
 		assert contents == '1ABCD\n2EFGH\n34567'
 	}
-	{
+	if true {
 		contents := s2.dump_string_alloc(.active)!
 		assert contents == '1ABCD\n2EFGH'
 	}
@@ -1703,7 +1703,7 @@ fn test_screen_clone_partial() ! {
 	mut s := Screen.init(10, 3, 10)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH')!
-	{
+	if true {
 		contents := s.dump_string_alloc(.active)!
 		assert contents == '1ABCD\n2EFGH'
 	}
@@ -1713,7 +1713,7 @@ fn test_screen_clone_partial() ! {
 	// Clone
 	mut s2 := s.clone(active_pt(0, 1), none)!
 	defer { s2.deinit() }
-	{
+	if true {
 		contents := s2.dump_string_alloc(.active)!
 		assert contents == '2EFGH'
 	}
@@ -1727,7 +1727,7 @@ fn test_screen_clone_partial_cursor_out_of_bounds() ! {
 	mut s := Screen.init(10, 3, 10)!
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH')!
-	{
+	if true {
 		contents := s.dump_string_alloc(.active)!
 		assert contents == '1ABCD\n2EFGH'
 	}
@@ -1737,7 +1737,7 @@ fn test_screen_clone_partial_cursor_out_of_bounds() ! {
 	// Clone
 	mut s2 := s.clone(active_pt(0, 0), active_pt(0, 0))!
 	defer { s2.deinit() }
-	{
+	if true {
 		contents := s2.dump_string_alloc(.active)!
 		assert contents == '1ABCD'
 	}
@@ -1761,7 +1761,7 @@ fn test_screen_clone_contains_full_selection() ! {
 	defer { s2.deinit() }
 
 	// Our selection should remain valid
-	{
+	if true {
 		sel := s2.selection or { panic('no selection') }
 		assert must_point(s2, .active, sel.start()) == active_pt(0, 1)
 		assert must_point(s2, .active, sel.end()) == active_pt(int(s2.pages.cols) - 1, 1)
@@ -1799,7 +1799,7 @@ fn test_screen_clone_contains_selection_start_cutoff() ! {
 	defer { s2.deinit() }
 
 	// Our selection should remain valid
-	{
+	if true {
 		sel := s2.selection or { panic('no selection') }
 		assert must_point(s2, .active, sel.start()) == active_pt(0, 0)
 		assert must_point(s2, .active, sel.end()) == active_pt(int(s2.pages.cols) - 1, 0)
@@ -1820,7 +1820,7 @@ fn test_screen_clone_contains_selection_end_cutoff() ! {
 	defer { s2.deinit() }
 
 	// Our selection should remain valid
-	{
+	if true {
 		sel := s2.selection or { panic('no selection') }
 		assert must_point(s2, .active, sel.start()) == active_pt(0, 1)
 		assert must_point(s2, .active, sel.end()) == active_pt(int(s2.pages.cols) - 1, 2)
@@ -1841,7 +1841,7 @@ fn test_screen_clone_contains_selection_end_cutoff_reversed() ! {
 	defer { s2.deinit() }
 
 	// Our selection should remain valid
-	{
+	if true {
 		sel := s2.selection or { panic('no selection') }
 		assert must_point(s2, .active, sel.start()) == active_pt(0, 1)
 		assert must_point(s2, .active, sel.end()) == active_pt(int(s2.pages.cols) - 1, 2)
@@ -1862,7 +1862,7 @@ fn test_screen_clone_contains_subset_of_selection() ! {
 	defer { s2.deinit() }
 
 	// Our selection should remain valid
-	{
+	if true {
 		sel := s2.selection or { panic('no selection') }
 		assert must_point(s2, .active, sel.start()) == active_pt(0, 0)
 		assert must_point(s2, .active, sel.end()) == active_pt(int(s2.pages.cols) - 1, 3)
@@ -1885,7 +1885,7 @@ fn test_screen_clone_contains_subset_of_rectangle_selection() ! {
 	// Our selection should remain valid and be properly clipped
 	// preserving the columns of the start and end points of the
 	// selection.
-	{
+	if true {
 		sel := s2.selection or { panic('no selection') }
 		assert must_point(s2, .active, sel.start()) == active_pt(1, 0)
 		assert must_point(s2, .active, sel.end()) == active_pt(3, 3)
@@ -1897,7 +1897,7 @@ fn test_screen_clone_basic() ! {
 	defer { s.deinit() }
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL')!
 
-	{
+	if true {
 		mut s2 := s.clone(active_pt(0, 1), active_pt(0, 1))!
 		defer { s2.deinit() }
 
@@ -1906,7 +1906,7 @@ fn test_screen_clone_basic() ! {
 		assert contents == '2EFGH'
 	}
 
-	{
+	if true {
 		mut s2 := s.clone(active_pt(0, 1), active_pt(0, 2))!
 		defer { s2.deinit() }
 
@@ -1920,7 +1920,7 @@ fn test_screen_clone_empty_viewport() ! {
 	mut s := Screen.init(10, 3, 0)!
 	defer { s.deinit() }
 
-	{
+	if true {
 		mut s2 := s.clone(viewport_pt(0, 0), viewport_pt(0, 0))!
 		defer { s2.deinit() }
 
@@ -1935,7 +1935,7 @@ fn test_screen_clone_one_line_viewport() ! {
 	defer { s.deinit() }
 	s.test_write_string('1ABC')!
 
-	{
+	if true {
 		mut s2 := s.clone(viewport_pt(0, 0), viewport_pt(0, 0))!
 		defer { s2.deinit() }
 
@@ -1949,7 +1949,7 @@ fn test_screen_clone_empty_active() ! {
 	mut s := Screen.init(10, 3, 0)!
 	defer { s.deinit() }
 
-	{
+	if true {
 		mut s2 := s.clone(active_pt(0, 0), active_pt(0, 0))!
 		defer { s2.deinit() }
 
@@ -1964,7 +1964,7 @@ fn test_screen_clone_one_line_active_with_extra_space() ! {
 	defer { s.deinit() }
 	s.test_write_string('1ABC')!
 
-	{
+	if true {
 		mut s2 := s.clone(active_pt(0, 0), none)!
 		defer { s2.deinit() }
 
@@ -1981,12 +1981,12 @@ fn test_screen_clear_history_with_no_history() ! {
 	assert s.pages.viewport == .active
 	s.erase_rows(history_pt(0, 0), none)
 	assert s.pages.viewport == .active
-	{
+	if true {
 		// Test our contents rotated
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '4ABCD\n5EFGH\n6IJKL'
 	}
-	{
+	if true {
 		// Test our contents rotated
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == '4ABCD\n5EFGH\n6IJKL'
@@ -2001,7 +2001,7 @@ fn test_screen_clear_history() ! {
 
 	// Scroll to top
 	s.scroll(ScrollTop{})
-	{
+	if true {
 		// Test our contents rotated
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '1ABCD\n2EFGH\n3IJKL'
@@ -2009,12 +2009,12 @@ fn test_screen_clear_history() ! {
 
 	s.erase_rows(history_pt(0, 0), none)
 	assert s.pages.viewport == .active
-	{
+	if true {
 		// Test our contents rotated
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '4ABCD\n5EFGH\n6IJKL'
 	}
-	{
+	if true {
 		// Test our contents rotated
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == '4ABCD\n5EFGH\n6IJKL'
@@ -2026,11 +2026,11 @@ fn test_screen_clear_above_cursor() ! {
 	defer { s.deinit() }
 	s.test_write_string('4ABCD\n5EFGH\n6IJKL')!
 	s.clear_rows(active_pt(0, 0), active_pt(0, int(s.cursor.y) - 1), false)
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '\n\n6IJKL'
 	}
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == '\n\n6IJKL'
 	}
@@ -2045,11 +2045,11 @@ fn test_screen_clear_above_cursor_with_history() ! {
 	s.test_write_string('1ABCD\n2EFGH\n3IJKL\n')!
 	s.test_write_string('4ABCD\n5EFGH\n6IJKL')!
 	s.clear_rows(active_pt(0, 0), active_pt(0, int(s.cursor.y) - 1), false)
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '\n\n6IJKL'
 	}
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == '1ABCD\n2EFGH\n3IJKL\n\n\n6IJKL'
 	}
@@ -2066,7 +2066,7 @@ fn test_screen_resize_no_reflow_more_rows() ! {
 
 	// Resize
 	s.resize(ScreenResize{ cols: 10, rows: 10, reflow: false })!
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == str
 	}
@@ -2085,7 +2085,7 @@ fn test_screen_resize_no_reflow_less_rows() ! {
 	assert s.cursor.x == 5
 	assert s.cursor.y == 1
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '2EFGH\n3IJKL'
 	}
@@ -2104,9 +2104,8 @@ fn test_screen_resize_no_reflow_less_rows_trims_blank_lines() ! {
 		unsafe {
 			*cell = CellData{
 				content_tag: .bg_color_rgb
-				color_rgb_r: 0xFF
-				color_rgb_g: 0
-				color_rgb_b: 0
+
+				codepoint: u32(0xFF) | (u32(0) << 8) | (u32(0) << 16)
 			}
 		}
 	}
@@ -2118,7 +2117,7 @@ fn test_screen_resize_no_reflow_less_rows_trims_blank_lines() ! {
 	assert s.cursor.x == cursor.x
 	assert s.cursor.y == cursor.y
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '1ABCD'
 	}
@@ -2137,9 +2136,8 @@ fn test_screen_resize_no_reflow_more_rows_trims_blank_lines() ! {
 		unsafe {
 			*cell = CellData{
 				content_tag: .bg_color_rgb
-				color_rgb_r: 0xFF
-				color_rgb_g: 0
-				color_rgb_b: 0
+
+				codepoint: u32(0xFF) | (u32(0) << 8) | (u32(0) << 16)
 			}
 		}
 	}
@@ -2151,7 +2149,7 @@ fn test_screen_resize_no_reflow_more_rows_trims_blank_lines() ! {
 	assert s.cursor.x == cursor.x
 	assert s.cursor.y == cursor.y
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '1ABCD'
 	}
@@ -2164,7 +2162,7 @@ fn test_screen_resize_no_reflow_more_cols() ! {
 	s.test_write_string(str)!
 	s.resize(ScreenResize{ cols: 20, rows: 3, reflow: false })!
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == str
 	}
@@ -2177,7 +2175,7 @@ fn test_screen_resize_no_reflow_less_cols() ! {
 	s.test_write_string(str)!
 	s.resize(ScreenResize{ cols: 4, rows: 3, reflow: false })!
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := '1ABC\n2EFG\n3IJK'
 		assert contents == expected
@@ -2191,7 +2189,7 @@ fn test_screen_resize_no_reflow_more_rows_with_scrollback_cursor_end() ! {
 	s.test_write_string(str)!
 	s.resize(ScreenResize{ cols: 7, rows: 10, reflow: false })!
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == str
 	}
@@ -2204,7 +2202,7 @@ fn test_screen_resize_no_reflow_less_rows_with_scrollback() ! {
 	s.test_write_string(str)!
 	s.resize(ScreenResize{ cols: 7, rows: 2, reflow: false })!
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := '4ABCD\n5EFGH'
 		assert contents == expected
@@ -2226,7 +2224,7 @@ fn test_screen_resize_no_reflow_less_rows_with_empty_trailing() ! {
 	assert s.cursor.x == cursor.x
 	assert s.cursor.y == cursor.y
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == 'A\nB'
 	}
@@ -2243,12 +2241,12 @@ fn test_screen_resize_no_reflow_more_rows_with_soft_wrapping() ! {
 		list_cell := must_cell(s, screen_pt(0, y))
 		row := list_cell.row
 		wrapped := (y % 2 == 0)
-		assert row.wrap == wrapped
+		assert row.header.wrap == wrapped
 	}
 
 	// Resize
 	s.resize(ScreenResize{ cols: 2, rows: 10, reflow: false })!
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := '1A\n2B\n3C\n4E\n5F\n6G'
 		assert contents == expected
@@ -2259,7 +2257,7 @@ fn test_screen_resize_no_reflow_more_rows_with_soft_wrapping() ! {
 		list_cell := must_cell(s, screen_pt(0, y))
 		row := list_cell.row
 		wrapped := (y % 2 == 0)
-		assert row.wrap == wrapped
+		assert row.header.wrap == wrapped
 	}
 }
 
@@ -2275,11 +2273,11 @@ fn test_screen_resize_more_rows_no_scrollback() ! {
 	assert s.cursor.x == cursor.x
 	assert s.cursor.y == cursor.y
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == str
 	}
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == str
 	}
@@ -2297,11 +2295,11 @@ fn test_screen_resize_more_rows_with_empty_scrollback() ! {
 	assert s.cursor.x == cursor.x
 	assert s.cursor.y == cursor.y
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == str
 	}
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == str
 	}
@@ -2312,7 +2310,7 @@ fn test_screen_resize_more_rows_with_populated_scrollback() ! {
 	defer { s.deinit() }
 	str := '1ABCD\n2EFGH\n3IJKL\n4ABCD\n5EFGH'
 	s.test_write_string(str)!
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := '3IJKL\n4ABCD\n5EFGH'
 		assert contents == expected
@@ -2320,7 +2318,7 @@ fn test_screen_resize_more_rows_with_populated_scrollback() ! {
 
 	// Set our cursor to be on the "4"
 	s.cursor_absolute(0, 1)
-	{
+	if true {
 		list_cell := must_cell(s, active_pt(int(s.cursor.x), int(s.cursor.y)))
 		assert list_cell.cell.codepoint == u32(`4`)
 	}
@@ -2329,12 +2327,12 @@ fn test_screen_resize_more_rows_with_populated_scrollback() ! {
 	s.resize(ScreenResize{ cols: 5, rows: 10 })!
 
 	// Cursor should still be on the "4"
-	{
+	if true {
 		list_cell := must_cell(s, active_pt(int(s.cursor.x), int(s.cursor.y)))
 		assert list_cell.cell.codepoint == u32(`4`)
 	}
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := '3IJKL\n4ABCD\n5EFGH'
 		assert contents == expected
@@ -2354,11 +2352,11 @@ fn test_screen_resize_more_cols_no_reflow() ! {
 	assert s.cursor.x == cursor.x
 	assert s.cursor.y == cursor.y
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == str
 	}
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == str
 	}
@@ -2372,7 +2370,7 @@ fn test_screen_resize_more_cols_perfect_split() ! {
 	s.test_write_string(str)!
 	s.resize(ScreenResize{ cols: 10, rows: 3 })!
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == '1ABCD2EFGH\n3IJKL'
 	}
@@ -2390,13 +2388,13 @@ fn test_screen_resize_no_reflow_more_cols_with_scrollback_scrolled_up() ! {
 	assert s.cursor.y == 2
 
 	s.scroll(ScrollDeltaRow{ delta: -4 })
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '2\n3\n4'
 	}
 
 	s.resize(ScreenResize{ cols: 8, rows: 3 })!
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == str
 	}
@@ -2418,17 +2416,17 @@ fn test_screen_resize_no_reflow_less_cols_with_scrollback_scrolled_up() ! {
 	assert s.cursor.y == 2
 
 	s.scroll(ScrollDeltaRow{ delta: -4 })
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '2\n3\n4'
 	}
 
 	s.resize(ScreenResize{ cols: 4, rows: 3 })!
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == str
 	}
-	{
+	if true {
 		contents := s.dump_string_alloc(.active)!
 		assert contents == '6\n7\n8'
 	}
@@ -2460,27 +2458,27 @@ fn test_screen_resize_more_cols_no_reflow_preserves_semantic_prompt() ! {
 	s.resize(ScreenResize{ cols: 10, rows: 3, reflow: false })!
 
 	expected := '1ABCD\n2EFGH\n3IJKL'
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == expected
 	}
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == expected
 	}
 
 	// Our one row should still be a semantic prompt, the others should not.
-	{
+	if true {
 		list_cell := must_cell(s, active_pt(0, 0))
-		assert list_cell.row.semantic_prompt == .unknown
+		assert list_cell.row.header.semantic_prompt == .unknown
 	}
-	{
+	if true {
 		list_cell := must_cell(s, active_pt(0, 1))
-		assert list_cell.row.semantic_prompt == .prompt
+		assert list_cell.row.header.semantic_prompt == .prompt
 	}
-	{
+	if true {
 		list_cell := must_cell(s, active_pt(0, 2))
-		assert list_cell.row.semantic_prompt == .unknown
+		assert list_cell.row.header.semantic_prompt == .unknown
 	}
 }
 
@@ -2491,7 +2489,7 @@ fn test_screen_resize_more_cols_with_reflow_that_fits_full_width() ! {
 	s.test_write_string(str)!
 
 	// Verify we soft wrapped
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := '1ABCD\n2EFGH\n3IJKL'
 		assert contents == expected
@@ -2499,14 +2497,14 @@ fn test_screen_resize_more_cols_with_reflow_that_fits_full_width() ! {
 
 	// Let's put our cursor on row 2, where the soft wrap is
 	s.cursor_absolute(0, 1)
-	{
+	if true {
 		list_cell := must_cell(s, active_pt(int(s.cursor.x), int(s.cursor.y)))
 		assert list_cell.cell.codepoint == u32(`2`)
 	}
 
 	// Resize and verify we undid the soft wrap because we have space now
 	s.resize(ScreenResize{ cols: 10, rows: 3 })!
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == str
 	}
@@ -2523,7 +2521,7 @@ fn test_screen_resize_more_cols_with_reflow_that_ends_in_newline() ! {
 	s.test_write_string(str)!
 
 	// Verify we soft wrapped
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := '1ABCD2\nEFGH\n3IJKL'
 		assert contents == expected
@@ -2531,20 +2529,20 @@ fn test_screen_resize_more_cols_with_reflow_that_ends_in_newline() ! {
 
 	// Let's put our cursor on the last row
 	s.cursor_absolute(0, 2)
-	{
+	if true {
 		list_cell := must_cell(s, active_pt(int(s.cursor.x), int(s.cursor.y)))
 		assert list_cell.cell.codepoint == u32(`3`)
 	}
 
 	// Resize and verify we undid the soft wrap because we have space now
 	s.resize(ScreenResize{ cols: 10, rows: 3 })!
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == str
 	}
 
 	// Our cursor should still be on the 3
-	{
+	if true {
 		list_cell := must_cell(s, active_pt(int(s.cursor.x), int(s.cursor.y)))
 		assert list_cell.cell.codepoint == u32(`3`)
 	}
@@ -2558,13 +2556,13 @@ fn test_screen_resize_more_cols_with_reflow_that_forces_more_wrapping() ! {
 
 	// Let's put our cursor on row 2, where the soft wrap is
 	s.cursor_absolute(0, 1)
-	{
+	if true {
 		list_cell := must_cell(s, active_pt(int(s.cursor.x), int(s.cursor.y)))
 		assert list_cell.cell.codepoint == u32(`2`)
 	}
 
 	// Verify we soft wrapped
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := '1ABCD\n2EFGH\n3IJKL'
 		assert contents == expected
@@ -2572,7 +2570,7 @@ fn test_screen_resize_more_cols_with_reflow_that_forces_more_wrapping() ! {
 
 	// Resize and verify we undid the soft wrap because we have space now
 	s.resize(ScreenResize{ cols: 7, rows: 3 })!
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := '1ABCD2E\nFGH\n3IJKL'
 		assert contents == expected
@@ -2591,13 +2589,13 @@ fn test_screen_resize_more_cols_with_reflow_that_unwraps_multiple_times() ! {
 
 	// Let's put our cursor on row 2, where the soft wrap is
 	s.cursor_absolute(0, 2)
-	{
+	if true {
 		list_cell := must_cell(s, active_pt(int(s.cursor.x), int(s.cursor.y)))
 		assert list_cell.cell.codepoint == u32(`3`)
 	}
 
 	// Verify we soft wrapped
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := '1ABCD\n2EFGH\n3IJKL'
 		assert contents == expected
@@ -2605,7 +2603,7 @@ fn test_screen_resize_more_cols_with_reflow_that_unwraps_multiple_times() ! {
 
 	// Resize and verify we undid the soft wrap because we have space now
 	s.resize(ScreenResize{ cols: 15, rows: 3 })!
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := '1ABCD2EFGH3IJKL'
 		assert contents == expected
@@ -2621,7 +2619,7 @@ fn test_screen_resize_more_cols_with_populated_scrollback() ! {
 	defer { s.deinit() }
 	str := '1ABCD\n2EFGH\n3IJKL\n4ABCD5EFGH'
 	s.test_write_string(str)!
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := '3IJKL\n4ABCD\n5EFGH'
 		assert contents == expected
@@ -2629,21 +2627,21 @@ fn test_screen_resize_more_cols_with_populated_scrollback() ! {
 
 	// // Set our cursor to be on the "5"
 	s.cursor_absolute(0, 2)
-	{
+	if true {
 		list_cell := must_cell(s, active_pt(int(s.cursor.x), int(s.cursor.y)))
 		assert list_cell.cell.codepoint == u32(`5`)
 	}
 
 	// Resize
 	s.resize(ScreenResize{ cols: 10, rows: 3 })!
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := '2EFGH\n3IJKL\n4ABCD5EFGH'
 		assert contents == expected
 	}
 
 	// Cursor should still be on the "5"
-	{
+	if true {
 		list_cell := must_cell(s, active_pt(int(s.cursor.x), int(s.cursor.y)))
 		assert list_cell.cell.codepoint == u32(`5`)
 	}
@@ -2657,13 +2655,13 @@ fn test_screen_resize_more_cols_with_reflow() ! {
 
 	// Let's put our cursor on row 2, where the soft wrap is
 	s.cursor_absolute(0, 2)
-	{
+	if true {
 		list_cell := must_cell(s, active_pt(int(s.cursor.x), int(s.cursor.y)))
 		assert list_cell.cell.codepoint == u32(`E`)
 	}
 
 	// Verify we soft wrapped
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := 'BC\n4D\nEF'
 		assert contents == expected
@@ -2671,7 +2669,7 @@ fn test_screen_resize_more_cols_with_reflow() ! {
 
 	// Resize and verify we undid the soft wrap because we have space now
 	s.resize(ScreenResize{ cols: 7, rows: 3 })!
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		expected := '1ABC\n2DEF\n3ABC\n4DEF'
 		assert contents == expected
@@ -2687,7 +2685,7 @@ fn test_screen_resize_more_rows_and_cols_with_wrapping() ! {
 	defer { s.deinit() }
 	str := '1A2B\n3C4D'
 	s.test_write_string(str)!
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := '1A\n2B\n3C\n4D'
 		assert contents == expected
@@ -2699,11 +2697,11 @@ fn test_screen_resize_more_rows_and_cols_with_wrapping() ! {
 	assert s.cursor.x == 3
 	assert s.cursor.y == 1
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == str
 	}
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == str
 	}
@@ -2723,12 +2721,12 @@ fn test_screen_resize_less_rows_no_scrollback() ! {
 	assert s.cursor.x == cursor.x
 	assert s.cursor.y == cursor.y
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := '3IJKL'
 		assert contents == expected
 	}
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		expected := '3IJKL'
 		assert contents == expected
@@ -2743,7 +2741,7 @@ fn test_screen_resize_less_rows_moving_cursor() ! {
 
 	// Put our cursor on the last line
 	s.cursor_absolute(1, 2)
-	{
+	if true {
 		list_cell := must_cell(s, active_pt(int(s.cursor.x), int(s.cursor.y)))
 		assert list_cell.cell.codepoint == u32(`I`)
 	}
@@ -2751,12 +2749,12 @@ fn test_screen_resize_less_rows_moving_cursor() ! {
 	// Resize
 	s.resize(ScreenResize{ cols: 5, rows: 1 })!
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := '3IJKL'
 		assert contents == expected
 	}
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		expected := '3IJKL'
 		assert contents == expected
@@ -2774,11 +2772,11 @@ fn test_screen_resize_less_rows_with_empty_scrollback() ! {
 	s.test_write_string(str)!
 	s.resize(ScreenResize{ cols: 5, rows: 1 })!
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == str
 	}
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := '3IJKL'
 		assert contents == expected
@@ -2790,7 +2788,7 @@ fn test_screen_resize_less_rows_with_populated_scrollback() ! {
 	defer { s.deinit() }
 	str := '1ABCD\n2EFGH\n3IJKL\n4ABCD\n5EFGH'
 	s.test_write_string(str)!
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := '3IJKL\n4ABCD\n5EFGH'
 		assert contents == expected
@@ -2799,11 +2797,11 @@ fn test_screen_resize_less_rows_with_populated_scrollback() ! {
 	// Resize
 	s.resize(ScreenResize{ cols: 5, rows: 1 })!
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == str
 	}
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := '5EFGH'
 		assert contents == expected
@@ -2815,7 +2813,7 @@ fn test_screen_resize_less_rows_with_full_scrollback() ! {
 	defer { s.deinit() }
 	str := '00000\n1ABCD\n2EFGH\n3IJKL\n4ABCD\n5EFGH'
 	s.test_write_string(str)!
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := '3IJKL\n4ABCD\n5EFGH'
 		assert contents == expected
@@ -2832,12 +2830,12 @@ fn test_screen_resize_less_rows_with_full_scrollback() ! {
 	assert s.cursor.x == u32(4)
 	assert s.cursor.y == u32(1)
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		expected := '00000\n1ABCD\n2EFGH\n3IJKL\n4ABCD\n5EFGH'
 		assert contents == expected
 	}
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := '4ABCD\n5EFGH'
 		assert contents == expected
@@ -2858,11 +2856,11 @@ fn test_screen_resize_less_cols_no_reflow() ! {
 	assert s.cursor.x == cursor.x
 	assert s.cursor.y == cursor.y
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == str
 	}
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == str
 	}
@@ -2876,18 +2874,18 @@ fn test_screen_resize_less_cols_with_reflow_but_row_space() ! {
 
 	// Put our cursor on the end
 	s.cursor_absolute(4, 0)
-	{
+	if true {
 		list_cell := must_cell(s, active_pt(int(s.cursor.x), int(s.cursor.y)))
 		assert list_cell.cell.codepoint == u32(`D`)
 	}
 
 	s.resize(ScreenResize{ cols: 3, rows: 3 })!
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := '1AB\nCD'
 		assert contents == expected
 	}
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		expected := '1AB\nCD'
 		assert contents == expected
@@ -2905,12 +2903,12 @@ fn test_screen_resize_less_cols_with_reflow_with_trimmed_rows() ! {
 	s.test_write_string(str)!
 	s.resize(ScreenResize{ cols: 3, rows: 3 })!
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := 'CD\n5EF\nGH'
 		assert contents == expected
 	}
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		expected := 'CD\n5EF\nGH'
 		assert contents == expected
@@ -2924,12 +2922,12 @@ fn test_screen_resize_less_cols_with_reflow_with_trimmed_rows_and_scrollback() !
 	s.test_write_string(str)!
 	s.resize(ScreenResize{ cols: 3, rows: 3 })!
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := 'CD\n5EF\nGH'
 		assert contents == expected
 	}
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		expected := '3IJ\nKL\n4AB\nCD\n5EF\nGH'
 		assert contents == expected
@@ -2943,7 +2941,7 @@ fn test_screen_resize_less_cols_with_reflow_previously_wrapped() ! {
 	s.test_write_string(str)!
 
 	// Check
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		expected := '3IJKL\n4ABCD\n5EFGH'
 		assert contents == expected
@@ -2957,7 +2955,7 @@ fn test_screen_resize_less_cols_with_reflow_previously_wrapped() ! {
 	//     const expected = "CD\n5EF\nGH";
 	//     try testing.expectEqualStrings(expected, contents);
 	// }
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		expected := 'ABC\nD5E\nFGH'
 		assert contents == expected
@@ -2972,14 +2970,14 @@ fn test_screen_resize_less_cols_with_reflow_and_scrollback() ! {
 
 	// Put our cursor on the end
 	s.cursor_absolute(1, u32(s.pages.rows) - 1)
-	{
+	if true {
 		list_cell := must_cell(s, active_pt(int(s.cursor.x), int(s.cursor.y)))
 		assert list_cell.cell.codepoint == u32(`E`)
 	}
 
 	s.resize(ScreenResize{ cols: 3, rows: 3 })!
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := '3C\n4D\n5E'
 		assert contents == expected
@@ -2997,7 +2995,7 @@ fn test_screen_resize_less_cols_with_reflow_previously_wrapped_and_scrollback() 
 	s.test_write_string(str)!
 
 	// Check
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := '3IJKL\n4ABCD\n5EFGH'
 		assert contents == expected
@@ -3005,19 +3003,19 @@ fn test_screen_resize_less_cols_with_reflow_previously_wrapped_and_scrollback() 
 
 	// Put our cursor on the end
 	s.cursor_absolute(u32(s.pages.cols) - 1, u32(s.pages.rows) - 1)
-	{
+	if true {
 		list_cell := must_cell(s, active_pt(int(s.cursor.x), int(s.cursor.y)))
 		assert list_cell.cell.codepoint == u32(`H`)
 	}
 
 	s.resize(ScreenResize{ cols: 3, rows: 3 })!
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := 'CD5\nEFG\nH'
 		assert contents == expected
 	}
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		expected := '1AB\nCD2\nEFG\nH3I\nJKL\n4AB\nCD5\nEFG\nH'
 		assert contents == expected
@@ -3026,7 +3024,7 @@ fn test_screen_resize_less_cols_with_reflow_previously_wrapped_and_scrollback() 
 	// Cursor should be on the last line
 	assert s.cursor.x == u32(0)
 	assert s.cursor.y == u32(2)
-	{
+	if true {
 		list_cell := must_cell(s, active_pt(int(s.cursor.x), int(s.cursor.y)))
 		assert list_cell.cell.codepoint == u32(`H`)
 	}
@@ -3046,7 +3044,7 @@ fn test_screen_resize_less_cols_with_scrollback_keeps_cursor_row() ! {
 
 	s.resize(ScreenResize{ cols: 3, rows: 3 })!
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := ''
 		assert contents == expected
@@ -3063,12 +3061,12 @@ fn test_screen_resize_more_rows_less_cols_with_reflow_with_scrollback() ! {
 	str := '1ABCD\n2EFGH3IJKL\n4MNOP'
 	s.test_write_string(str)!
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		expected := '1ABCD\n2EFGH\n3IJKL\n4MNOP'
 		assert contents == expected
 	}
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := '2EFGH\n3IJKL\n4MNOP'
 		assert contents == expected
@@ -3076,12 +3074,12 @@ fn test_screen_resize_more_rows_less_cols_with_reflow_with_scrollback() ! {
 
 	s.resize(ScreenResize{ cols: 2, rows: 10 })!
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := 'BC\nD\n2E\nFG\nH3\nIJ\nKL\n4M\nNO\nP'
 		assert contents == expected
 	}
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		expected := '1A\nBC\nD\n2E\nFG\nH3\nIJ\nKL\n4M\nNO\nP'
 		assert contents == expected
@@ -3099,33 +3097,33 @@ fn test_screen_resize_more_rows_then_shrink_again() ! {
 
 	// Grow
 	s.resize(ScreenResize{ cols: 5, rows: 10 })!
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == str
 	}
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == str
 	}
 
 	// Shrink
 	s.resize(ScreenResize{ cols: 5, rows: 3 })!
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == str
 	}
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == str
 	}
 
 	// Grow again
 	s.resize(ScreenResize{ cols: 5, rows: 10 })!
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == str
 	}
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == str
 	}
@@ -3136,11 +3134,11 @@ fn test_screen_resize_less_cols_to_eliminate_wide_char() ! {
 	defer { s.deinit() }
 	str := '😀'
 	s.test_write_string(str)!
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == str
 	}
-	{
+	if true {
 		list_cell := must_cell(s, screen_pt(0, 0))
 		cell := list_cell.cell
 		assert cell.wide == CellWide.wide
@@ -3149,11 +3147,11 @@ fn test_screen_resize_less_cols_to_eliminate_wide_char() ! {
 
 	// Resize to 1 column can't fit a wide char. So it should be deleted.
 	s.resize(ScreenResize{ cols: 1, rows: 1 })!
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == ''
 	}
-	{
+	if true {
 		list_cell := must_cell(s, screen_pt(0, 0))
 		cell := list_cell.cell
 		assert cell.codepoint == u32(0)
@@ -3166,32 +3164,32 @@ fn test_screen_resize_less_cols_to_wrap_wide_char() ! {
 	defer { s.deinit() }
 	str := 'x😀'
 	s.test_write_string(str)!
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == str
 	}
-	{
+	if true {
 		list_cell := must_cell(s, screen_pt(1, 0))
 		cell := list_cell.cell
 		assert cell.wide == CellWide.wide
 		assert cell.codepoint == u32(`😀`)
 	}
-	{
+	if true {
 		list_cell := must_cell(s, screen_pt(2, 0))
 		cell := list_cell.cell
 		assert cell.wide == CellWide.spacer_tail
 	}
 
 	s.resize(ScreenResize{ cols: 2, rows: 3 })!
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == 'x\n😀'
 	}
-	{
+	if true {
 		list_cell := must_cell(s, screen_pt(1, 0))
 		cell := list_cell.cell
 		assert cell.wide == CellWide.spacer_head
-		assert list_cell.row.wrap
+		assert list_cell.row.header.wrap
 	}
 }
 
@@ -3200,24 +3198,24 @@ fn test_screen_resize_less_cols_to_eliminate_wide_char_with_row_space() ! {
 	defer { s.deinit() }
 	str := '😀'
 	s.test_write_string(str)!
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == str
 	}
-	{
+	if true {
 		list_cell := must_cell(s, screen_pt(0, 0))
 		cell := list_cell.cell
 		assert cell.wide == CellWide.wide
 		assert cell.codepoint == u32(`😀`)
 	}
-	{
+	if true {
 		list_cell := must_cell(s, screen_pt(1, 0))
 		cell := list_cell.cell
 		assert cell.wide == CellWide.spacer_tail
 	}
 
 	s.resize(ScreenResize{ cols: 1, rows: 2 })!
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == ''
 	}
@@ -3228,7 +3226,7 @@ fn test_screen_resize_more_cols_with_wide_spacer_head() ! {
 	defer { s.deinit() }
 	str := '  😀'
 	s.test_write_string(str)!
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == '  \n😀'
 	}
@@ -3237,34 +3235,34 @@ fn test_screen_resize_more_cols_with_wide_spacer_head() ! {
 	// the end of row 1, then the emoji, then a wide spacer tail on row 2.
 	// We should expect that if we resize to more cols, the wide spacer
 	// head is replaced with the emoji.
-	{
+	if true {
 		list_cell := must_cell(s, screen_pt(2, 0))
 		cell := list_cell.cell
 		assert cell.wide == CellWide.spacer_head
 	}
-	{
+	if true {
 		list_cell := must_cell(s, screen_pt(0, 1))
 		cell := list_cell.cell
 		assert cell.wide == CellWide.wide
 	}
-	{
+	if true {
 		list_cell := must_cell(s, screen_pt(1, 1))
 		cell := list_cell.cell
 		assert cell.wide == CellWide.spacer_tail
 	}
 
 	s.resize(ScreenResize{ cols: 4, rows: 2 })!
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == str
 	}
-	{
+	if true {
 		list_cell := must_cell(s, screen_pt(2, 0))
 		cell := list_cell.cell
 		assert cell.wide == CellWide.wide
 		assert cell.codepoint == u32(`😀`)
 	}
-	{
+	if true {
 		list_cell := must_cell(s, screen_pt(3, 0))
 		cell := list_cell.cell
 		assert cell.wide == CellWide.spacer_tail
@@ -3276,41 +3274,41 @@ fn test_screen_resize_more_cols_with_wide_spacer_head_multiple_lines() ! {
 	defer { s.deinit() }
 	str := 'xxxyy😀'
 	s.test_write_string(str)!
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == 'xxx\nyy\n😀'
 	}
 
 	// Similar to the "wide spacer head" test, but this time we'er going
 	// to increase our columns such that multiple rows are unwrapped.
-	{
+	if true {
 		list_cell := must_cell(s, screen_pt(2, 1))
 		cell := list_cell.cell
 		assert cell.wide == CellWide.spacer_head
 	}
-	{
+	if true {
 		list_cell := must_cell(s, screen_pt(0, 2))
 		cell := list_cell.cell
 		assert cell.wide == CellWide.wide
 	}
-	{
+	if true {
 		list_cell := must_cell(s, screen_pt(1, 2))
 		cell := list_cell.cell
 		assert cell.wide == CellWide.spacer_tail
 	}
 
 	s.resize(ScreenResize{ cols: 8, rows: 2 })!
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == str
 	}
-	{
+	if true {
 		list_cell := must_cell(s, screen_pt(5, 0))
 		cell := list_cell.cell
 		assert cell.wide == CellWide.wide
 		assert cell.codepoint == u32(`😀`)
 	}
-	{
+	if true {
 		list_cell := must_cell(s, screen_pt(6, 0))
 		cell := list_cell.cell
 		assert cell.wide == CellWide.spacer_tail
@@ -3322,16 +3320,16 @@ fn test_screen_resize_more_cols_requiring_a_wide_spacer_head() ! {
 	defer { s.deinit() }
 	str := 'xx😀'
 	s.test_write_string(str)!
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == 'xx\n😀'
 	}
-	{
+	if true {
 		list_cell := must_cell(s, screen_pt(0, 1))
 		cell := list_cell.cell
 		assert cell.wide == CellWide.wide
 	}
-	{
+	if true {
 		list_cell := must_cell(s, screen_pt(1, 1))
 		cell := list_cell.cell
 		assert cell.wide == CellWide.spacer_tail
@@ -3341,22 +3339,22 @@ fn test_screen_resize_more_cols_requiring_a_wide_spacer_head() ! {
 	// char to enter row 1. But we need to mark the wide spacer head on the
 	// end of the first row since we're wrapping to the next row.
 	s.resize(ScreenResize{ cols: 3, rows: 2 })!
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == 'xx\n😀'
 	}
-	{
+	if true {
 		list_cell := must_cell(s, screen_pt(2, 0))
 		cell := list_cell.cell
 		assert cell.wide == CellWide.spacer_head
 	}
-	{
+	if true {
 		list_cell := must_cell(s, screen_pt(0, 1))
 		cell := list_cell.cell
 		assert cell.wide == CellWide.wide
 		assert cell.codepoint == u32(`😀`)
 	}
-	{
+	if true {
 		list_cell := must_cell(s, screen_pt(1, 1))
 		cell := list_cell.cell
 		assert cell.wide == CellWide.spacer_tail
@@ -3375,7 +3373,7 @@ fn test_screen_resize_more_cols_with_cursor_at_prompt() ! {
 	s.test_write_string('echo')!
 	// zig fmt: on
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := 'ABCDE\n> echo'
 		assert contents == expected
@@ -3391,7 +3389,7 @@ fn test_screen_resize_more_cols_with_cursor_at_prompt() ! {
 	assert s.cursor.x == 6
 	assert s.cursor.y == 1
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := 'ABCDE'
 		assert contents == expected
@@ -3411,7 +3409,7 @@ fn test_screen_resize_more_cols_with_cursor_not_at_prompt() ! {
 	s.test_write_string('output')!
 	// zig fmt: on
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := 'ABCDE\n> echo\noutput'
 		assert contents == expected
@@ -3427,7 +3425,7 @@ fn test_screen_resize_more_cols_with_cursor_not_at_prompt() ! {
 	assert s.cursor.x == 6
 	assert s.cursor.y == 2
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := 'ABCDE\n> echo\noutput'
 		assert contents == expected
@@ -3447,7 +3445,7 @@ fn test_screen_resize_with_prompt_redraw_last_clears_only_one_line() ! {
 	s.test_write_string('world')!
 	// zig fmt: on
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := 'ABCDE\n> hello\nworld'
 		assert contents == expected
@@ -3461,7 +3459,7 @@ fn test_screen_resize_with_prompt_redraw_last_clears_only_one_line() ! {
 	})!
 
 	// With .last, only the current line where cursor is should be cleared
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := 'ABCDE\n> hello'
 		assert contents == expected
@@ -3482,7 +3480,7 @@ fn test_screen_resize_with_prompt_redraw_last_multiline_prompt_clears_only_last_
 	s.test_write_string('line3')!
 	// zig fmt: on
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := 'line1\nline2\nline3'
 		assert contents == expected
@@ -3496,7 +3494,7 @@ fn test_screen_resize_with_prompt_redraw_last_multiline_prompt_clears_only_last_
 	})!
 
 	// With .last, only line3 (where cursor is) should be cleared
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		expected := 'line1\nline2'
 		assert contents == expected
@@ -3521,7 +3519,7 @@ fn test_screen_select_all() ! {
 	mut s := Screen.init(10, 10, 0)!
 	defer { s.deinit() }
 
-	{
+	if true {
 		s.test_write_string('ABC  DEF\n 123\n456')!
 		sel := s.select_all() or { panic('no selection') }
 		defer { sel.deinit(mut s) }
@@ -3529,7 +3527,7 @@ fn test_screen_select_all() ! {
 		assert must_point(s, .screen, sel.end()) == screen_pt(2, 2)
 	}
 
-	{
+	if true {
 		s.test_write_string('\nFOO\n BAR\n BAZ\n QWERTY\n 12345678')!
 		sel := s.select_all() or { panic('no selection') }
 		defer { sel.deinit(mut s) }
@@ -3548,7 +3546,7 @@ fn test_screen_select_line() ! {
 	// try testing.expect(s.selectLine(.{ .x = 0, .y = 5 }) == null);
 
 	// Going forward
-	{
+	if true {
 		sel := s.select_line(SelectLine{ pin: must_pin(s, active_pt(0, 0)) }) or {
 			panic('no line selection')
 		}
@@ -3558,7 +3556,7 @@ fn test_screen_select_line() ! {
 	}
 
 	// Going backward
-	{
+	if true {
 		sel := s.select_line(SelectLine{ pin: must_pin(s, active_pt(7, 0)) }) or {
 			panic('no line selection')
 		}
@@ -3568,7 +3566,7 @@ fn test_screen_select_line() ! {
 	}
 
 	// Going forward and backward
-	{
+	if true {
 		sel := s.select_line(SelectLine{ pin: must_pin(s, active_pt(3, 0)) }) or {
 			panic('no line selection')
 		}
@@ -3578,7 +3576,7 @@ fn test_screen_select_line() ! {
 	}
 
 	// Outside active area
-	{
+	if true {
 		sel := s.select_line(SelectLine{ pin: must_pin(s, active_pt(9, 0)) }) or {
 			panic('no line selection')
 		}
@@ -3594,7 +3592,7 @@ fn test_screen_select_line_across_soft_wrap() ! {
 	s.test_write_string(' 12 34012   \n 123')!
 
 	// Going forward
-	{
+	if true {
 		sel := s.select_line(SelectLine{ pin: must_pin(s, active_pt(1, 0)) }) or {
 			panic('no line selection')
 		}
@@ -3609,7 +3607,7 @@ fn test_screen_select_line_across_full_soft_wrap() ! {
 	defer { s.deinit() }
 	s.test_write_string('1ABCD2EFGH\n3IJKL')!
 
-	{
+	if true {
 		sel := s.select_line(SelectLine{ pin: must_pin(s, active_pt(2, 1)) }) or {
 			panic('no line selection')
 		}
@@ -3625,7 +3623,7 @@ fn test_screen_select_line_across_soft_wrap_ignores_blank_lines() ! {
 	s.test_write_string(' 12 34012             \n 123')!
 
 	// Going forward
-	{
+	if true {
 		sel := s.select_line(SelectLine{ pin: must_pin(s, active_pt(1, 0)) }) or {
 			panic('no line selection')
 		}
@@ -3635,7 +3633,7 @@ fn test_screen_select_line_across_soft_wrap_ignores_blank_lines() ! {
 	}
 
 	// Going backward
-	{
+	if true {
 		sel := s.select_line(SelectLine{ pin: must_pin(s, active_pt(1, 1)) }) or {
 			panic('no line selection')
 		}
@@ -3645,7 +3643,7 @@ fn test_screen_select_line_across_soft_wrap_ignores_blank_lines() ! {
 	}
 
 	// Going forward and backward
-	{
+	if true {
 		sel := s.select_line(SelectLine{ pin: must_pin(s, active_pt(3, 0)) }) or {
 			panic('no line selection')
 		}
@@ -3661,7 +3659,7 @@ fn test_screen_select_line_disabled_whitespace_trimming() ! {
 	s.test_write_string(' 12 34012   \n 123')!
 
 	// Going forward
-	{
+	if true {
 		sel := s.select_line(SelectLine{
 			pin:        must_pin(s, active_pt(1, 0))
 			whitespace: none
@@ -3672,7 +3670,7 @@ fn test_screen_select_line_disabled_whitespace_trimming() ! {
 	}
 
 	// Non-wrapped
-	{
+	if true {
 		sel := s.select_line(SelectLine{
 			pin:        must_pin(s, active_pt(1, 3))
 			whitespace: none
@@ -3689,7 +3687,7 @@ fn test_screen_select_line_with_scrollback() ! {
 	s.test_write_string('1A\n2B\n3C\n4D\n5E')!
 
 	// Selecting first line
-	{
+	if true {
 		sel := s.select_line(SelectLine{ pin: must_pin(s, active_pt(0, 0)) }) or {
 			panic('no line selection')
 		}
@@ -3699,7 +3697,7 @@ fn test_screen_select_line_with_scrollback() ! {
 	}
 
 	// Selecting last line
-	{
+	if true {
 		sel := s.select_line(SelectLine{ pin: must_pin(s, active_pt(0, 2)) }) or {
 			panic('no line selection')
 		}
@@ -3719,13 +3717,13 @@ fn test_screen_select_line_semantic_prompt_boundary() ! {
 	s.cursor_set_semantic_content(CursorSemanticOutput{})
 	s.test_write_string('> ')!
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == 'ABCDE\nA    \n> '
 	}
 
 	// Selecting output stops at the prompt even if soft-wrapped
-	{
+	if true {
 		sel := s.select_line(SelectLine{ pin: must_pin(s, active_pt(1, 1)) }) or {
 			panic('no line selection')
 		}
@@ -3734,7 +3732,7 @@ fn test_screen_select_line_semantic_prompt_boundary() ! {
 		expected := 'A'
 		assert contents == expected
 	}
-	{
+	if true {
 		sel := s.select_line(SelectLine{ pin: must_pin(s, active_pt(1, 2)) }) or {
 			panic('no line selection')
 		}
@@ -3756,7 +3754,7 @@ fn test_screen_select_line_semantic_prompt_to_input_boundary() ! {
 	s.test_write_string('command')!
 
 	// Selecting from prompt should only select prompt
-	{
+	if true {
 		sel := s.select_line(SelectLine{ pin: must_pin(s, active_pt(0, 0)) }) or {
 			panic('no line selection')
 		}
@@ -3766,7 +3764,7 @@ fn test_screen_select_line_semantic_prompt_to_input_boundary() ! {
 	}
 
 	// Selecting from input should only select input
-	{
+	if true {
 		sel := s.select_line(SelectLine{ pin: must_pin(s, active_pt(5, 0)) }) or {
 			panic('no line selection')
 		}
@@ -3788,7 +3786,7 @@ fn test_screen_select_line_semantic_input_to_output_boundary() ! {
 	s.test_write_string('file.txt')!
 
 	// Selecting from input should only select input
-	{
+	if true {
 		sel := s.select_line(SelectLine{ pin: must_pin(s, active_pt(2, 0)) }) or {
 			panic('no line selection')
 		}
@@ -3798,7 +3796,7 @@ fn test_screen_select_line_semantic_input_to_output_boundary() ! {
 	}
 
 	// Selecting from output should only select output
-	{
+	if true {
 		sel := s.select_line(SelectLine{ pin: must_pin(s, active_pt(2, 1)) }) or {
 			panic('no line selection')
 		}
@@ -3822,7 +3820,7 @@ fn test_screen_select_line_semantic_mid_row_boundary() ! {
 	s.test_write_string('cmd')!
 
 	// Selecting from output should stop at prompt
-	{
+	if true {
 		sel := s.select_line(SelectLine{ pin: must_pin(s, active_pt(1, 0)) }) or {
 			panic('no line selection')
 		}
@@ -3832,7 +3830,7 @@ fn test_screen_select_line_semantic_mid_row_boundary() ! {
 	}
 
 	// Selecting from prompt should only select prompt
-	{
+	if true {
 		sel := s.select_line(SelectLine{ pin: must_pin(s, active_pt(3, 0)) }) or {
 			panic('no line selection')
 		}
@@ -3842,7 +3840,7 @@ fn test_screen_select_line_semantic_mid_row_boundary() ! {
 	}
 
 	// Selecting from input should only select input
-	{
+	if true {
 		sel := s.select_line(SelectLine{ pin: must_pin(s, active_pt(6, 0)) }) or {
 			panic('no line selection')
 		}
@@ -3866,13 +3864,13 @@ fn test_screen_select_line_semantic_boundary_soft_wrap_with_mid_row_transition()
 	s.test_write_string('out')!
 
 	// Verify layout
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == '$ cmd\n12out'
 	}
 
 	// Selecting from input on row 0 should get all input across soft-wrap
-	{
+	if true {
 		sel := s.select_line(SelectLine{ pin: must_pin(s, active_pt(3, 0)) }) or {
 			panic('no line selection')
 		}
@@ -3882,7 +3880,7 @@ fn test_screen_select_line_semantic_boundary_soft_wrap_with_mid_row_transition()
 	}
 
 	// Selecting from input on row 1 should get all input across soft-wrap
-	{
+	if true {
 		sel := s.select_line(SelectLine{ pin: must_pin(s, active_pt(0, 1)) }) or {
 			panic('no line selection')
 		}
@@ -3892,7 +3890,7 @@ fn test_screen_select_line_semantic_boundary_soft_wrap_with_mid_row_transition()
 	}
 
 	// Selecting from output should only get output
-	{
+	if true {
 		sel := s.select_line(SelectLine{ pin: must_pin(s, active_pt(3, 1)) }) or {
 			panic('no line selection')
 		}
@@ -3913,7 +3911,7 @@ fn test_screen_select_line_semantic_boundary_disabled() ! {
 	s.test_write_string('command')!
 
 	// With semantic_prompt_boundary = false, should select entire line
-	{
+	if true {
 		sel := s.select_line(SelectLine{
 			pin:                      must_pin(s, active_pt(0, 0))
 			semantic_prompt_boundary: false
@@ -3936,14 +3934,14 @@ fn test_screen_select_line_semantic_boundary_first_cell_of_row() ! {
 	s.test_write_string('ABCDE')!
 
 	// Verify soft-wrap happened
-	{
+	if true {
 		pin := must_pin(s, active_pt(0, 0))
 		row := pin.row_and_cell().row
-		assert row.wrap
+		assert row.header.wrap
 	}
 
 	// Selecting from input should stop before output on row 1
-	{
+	if true {
 		sel := s.select_line(SelectLine{ pin: must_pin(s, active_pt(2, 0)) }) or {
 			panic('no line selection')
 		}
@@ -3953,7 +3951,7 @@ fn test_screen_select_line_semantic_boundary_first_cell_of_row() ! {
 	}
 
 	// Selecting from output should only get output
-	{
+	if true {
 		sel := s.select_line(SelectLine{ pin: must_pin(s, active_pt(2, 1)) }) or {
 			panic('no line selection')
 		}
@@ -3972,13 +3970,13 @@ fn test_screen_select_line_semantic_all_same_content() ! {
 	s.test_write_string('prompt text')!
 
 	// Verify soft-wrap
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == 'promp\nt tex\nt'
 	}
 
 	// Should select all prompt content across soft-wraps
-	{
+	if true {
 		sel := s.select_line(SelectLine{ pin: must_pin(s, active_pt(2, 1)) }) or {
 			panic('no line selection')
 		}
@@ -4003,7 +4001,7 @@ fn test_screen_select_word() ! {
 	// try testing.expect(s.selectWord(.{ .x = 0, .y = 5 }) == null);
 
 	// Going forward
-	{
+	if true {
 		sel := s.select_word(must_pin(s, active_pt(0, 0)), boundary_codepoints) or {
 			panic('no word selection')
 		}
@@ -4013,7 +4011,7 @@ fn test_screen_select_word() ! {
 	}
 
 	// Going backward
-	{
+	if true {
 		sel := s.select_word(must_pin(s, active_pt(2, 0)), boundary_codepoints) or {
 			panic('no word selection')
 		}
@@ -4023,7 +4021,7 @@ fn test_screen_select_word() ! {
 	}
 
 	// Going forward and backward
-	{
+	if true {
 		sel := s.select_word(must_pin(s, active_pt(1, 0)), boundary_codepoints) or {
 			panic('no word selection')
 		}
@@ -4033,7 +4031,7 @@ fn test_screen_select_word() ! {
 	}
 
 	// Whitespace
-	{
+	if true {
 		sel := s.select_word(must_pin(s, active_pt(3, 0)), boundary_codepoints) or {
 			panic('no word selection')
 		}
@@ -4043,7 +4041,7 @@ fn test_screen_select_word() ! {
 	}
 
 	// Whitespace single char
-	{
+	if true {
 		sel := s.select_word(must_pin(s, active_pt(0, 1)), boundary_codepoints) or {
 			panic('no word selection')
 		}
@@ -4053,7 +4051,7 @@ fn test_screen_select_word() ! {
 	}
 
 	// End of screen
-	{
+	if true {
 		sel := s.select_word(must_pin(s, active_pt(1, 2)), boundary_codepoints) or {
 			panic('no word selection')
 		}
@@ -4073,13 +4071,13 @@ fn test_screen_select_word_across_soft_wrap() ! {
 		u32(`|`), u32(`:`), u32(`;`), u32(`,`), u32(`(`), u32(`)`), u32(`[`), u32(`]`), u32(`{`),
 		u32(`}`), u32(`<`), u32(`>`), u32(`$`)]
 
-	{
+	if true {
 		contents := s.dump_string_alloc(.screen)!
 		assert contents == ' 1234\n012\n 123'
 	}
 
 	// Going forward
-	{
+	if true {
 		sel := s.select_word(must_pin(s, active_pt(1, 0)), boundary_codepoints) or {
 			panic('no word selection')
 		}
@@ -4089,7 +4087,7 @@ fn test_screen_select_word_across_soft_wrap() ! {
 	}
 
 	// Going backward
-	{
+	if true {
 		sel := s.select_word(must_pin(s, active_pt(1, 1)), boundary_codepoints) or {
 			panic('no word selection')
 		}
@@ -4099,7 +4097,7 @@ fn test_screen_select_word_across_soft_wrap() ! {
 	}
 
 	// Going forward and backward
-	{
+	if true {
 		sel := s.select_word(must_pin(s, active_pt(3, 0)), boundary_codepoints) or {
 			panic('no word selection')
 		}
@@ -4120,7 +4118,7 @@ fn test_screen_select_word_whitespace_across_soft_wrap() ! {
 		u32(`}`), u32(`<`), u32(`>`), u32(`$`)]
 
 	// Going forward
-	{
+	if true {
 		sel := s.select_word(must_pin(s, active_pt(1, 0)), boundary_codepoints) or {
 			panic('no word selection')
 		}
@@ -4130,7 +4128,7 @@ fn test_screen_select_word_whitespace_across_soft_wrap() ! {
 	}
 
 	// Going backward
-	{
+	if true {
 		sel := s.select_word(must_pin(s, active_pt(1, 1)), boundary_codepoints) or {
 			panic('no word selection')
 		}
@@ -4140,7 +4138,7 @@ fn test_screen_select_word_whitespace_across_soft_wrap() ! {
 	}
 
 	// Going forward and backward
-	{
+	if true {
 		sel := s.select_word(must_pin(s, active_pt(3, 0)), boundary_codepoints) or {
 			panic('no word selection')
 		}
@@ -4256,32 +4254,32 @@ fn test_screen_select_output() ! {
 	s.test_write_string('output3')!
 
 	// First output block (rows 0-1), should select those rows
-	{
+	if true {
 		sel := s.select_output(must_pin(s, active_pt(1, 1))) or { panic('no output selection') }
 		defer { sel.deinit(mut s) }
 		contents := s.selection_string(SelectionString{ sel: sel, trim: false })!
 		assert contents == 'output1\noutput1'
 	}
 	// Second output block (rows 4-7)
-	{
+	if true {
 		sel := s.select_output(must_pin(s, active_pt(3, 7))) or { panic('no output selection') }
 		defer { sel.deinit(mut s) }
 		contents := s.selection_string(SelectionString{ sel: sel, trim: false })!
 		assert contents == 'output2output2output2output2\noutput2'
 	}
 	// Third output block (rows 9-11)
-	{
+	if true {
 		sel := s.select_output(must_pin(s, active_pt(2, 10))) or { panic('no output selection') }
 		defer { sel.deinit(mut s) }
 		assert must_point(s, .active, sel.start()) == active_pt(0, 9)
 		assert must_point(s, .active, sel.end()) == active_pt(6, 11)
 	}
 	// Click on prompt should return null
-	{
+	if true {
 		assert s.select_output(must_pin(s, active_pt(1, 8))) == none
 	}
 	// Click on input should return null
-	{
+	if true {
 		assert s.select_output(must_pin(s, active_pt(5, 8))) == none
 	}
 }
@@ -4292,7 +4290,7 @@ fn test_screen_selection_string_basic() ! {
 	str := '1ABCD\n2EFGH\n3IJKL'
 	s.test_write_string(str)!
 
-	{
+	if true {
 		sel := Selection.init(must_pin(s, screen_pt(0, 1)), must_pin(s, screen_pt(2, 2)),
 			false)
 		contents := s.selection_string(SelectionString{
@@ -4310,7 +4308,7 @@ fn test_screen_selection_string_start_outside_of_written_area() ! {
 	str := '1ABCD\n2EFGH\n3IJKL'
 	s.test_write_string(str)!
 
-	{
+	if true {
 		sel := Selection.init(must_pin(s, screen_pt(0, 5)), must_pin(s, screen_pt(2, 6)),
 			false)
 		contents := s.selection_string(SelectionString{
@@ -4328,7 +4326,7 @@ fn test_screen_selection_string_end_outside_of_written_area() ! {
 	str := '1ABCD\n2EFGH\n3IJKL'
 	s.test_write_string(str)!
 
-	{
+	if true {
 		sel := Selection.init(must_pin(s, screen_pt(0, 2)), must_pin(s, screen_pt(2, 6)),
 			false)
 		contents := s.selection_string(SelectionString{
@@ -4349,7 +4347,7 @@ fn test_screen_selection_string_trim_space() ! {
 	sel := Selection.init(must_pin(s, screen_pt(0, 0)), must_pin(s, screen_pt(2, 1)),
 		false)
 
-	{
+	if true {
 		contents := s.selection_string(SelectionString{
 			sel:  sel
 			trim: true
@@ -4359,7 +4357,7 @@ fn test_screen_selection_string_trim_space() ! {
 	}
 
 	// No trim
-	{
+	if true {
 		contents := s.selection_string(SelectionString{
 			sel:  sel
 			trim: false
@@ -4378,7 +4376,7 @@ fn test_screen_selection_string_trim_empty_line() ! {
 	sel := Selection.init(must_pin(s, screen_pt(0, 0)), must_pin(s, screen_pt(2, 2)),
 		false)
 
-	{
+	if true {
 		contents := s.selection_string(SelectionString{
 			sel:  sel
 			trim: true
@@ -4388,7 +4386,7 @@ fn test_screen_selection_string_trim_empty_line() ! {
 	}
 
 	// No trim
-	{
+	if true {
 		contents := s.selection_string(SelectionString{
 			sel:  sel
 			trim: false
@@ -4404,7 +4402,7 @@ fn test_screen_selection_string_soft_wrap() ! {
 	str := '1ABCD2EFGH3IJKL'
 	s.test_write_string(str)!
 
-	{
+	if true {
 		sel := Selection.init(must_pin(s, screen_pt(0, 1)), must_pin(s, screen_pt(2, 2)),
 			false)
 		contents := s.selection_string(SelectionString{
@@ -4422,7 +4420,7 @@ fn test_screen_selection_string_wide_char() ! {
 	str := '1A⚡'
 	s.test_write_string(str)!
 
-	{
+	if true {
 		sel := Selection.init(must_pin(s, screen_pt(0, 0)), must_pin(s, screen_pt(3, 0)),
 			false)
 		contents := s.selection_string(SelectionString{
@@ -4433,7 +4431,7 @@ fn test_screen_selection_string_wide_char() ! {
 		assert contents == expected
 	}
 
-	{
+	if true {
 		sel := Selection.init(must_pin(s, screen_pt(0, 0)), must_pin(s, screen_pt(2, 0)),
 			false)
 		contents := s.selection_string(SelectionString{
@@ -4444,7 +4442,7 @@ fn test_screen_selection_string_wide_char() ! {
 		assert contents == expected
 	}
 
-	{
+	if true {
 		sel := Selection.init(must_pin(s, screen_pt(3, 0)), must_pin(s, screen_pt(3, 0)),
 			false)
 		contents := s.selection_string(SelectionString{
@@ -4462,7 +4460,7 @@ fn test_screen_selection_string_wide_char_with_header() ! {
 	str := '1ABC⚡'
 	s.test_write_string(str)!
 
-	{
+	if true {
 		sel := Selection.init(must_pin(s, screen_pt(0, 0)), must_pin(s, screen_pt(4, 0)),
 			false)
 		contents := s.selection_string(SelectionString{
@@ -4489,7 +4487,7 @@ fn test_screen_selection_string_empty_with_soft_wrap() ! {
 	s.test_write_string('👨')!
 	s.test_write_string('      ')!
 
-	{
+	if true {
 		sel := Selection.init(must_pin(s, screen_pt(1, 0)), must_pin(s, screen_pt(2, 0)),
 			false)
 		contents := s.selection_string(SelectionString{
@@ -4508,7 +4506,7 @@ fn test_screen_selection_string_with_zero_width_joiner() ! {
 	s.test_write_string(str)!
 
 	// Integrity check
-	{
+	if true {
 		pin := must_pin(s, screen_pt(0, 0))
 		cell := pin.row_and_cell().cell
 		assert cell.codepoint == u32(0x1F468)
@@ -4518,7 +4516,7 @@ fn test_screen_selection_string_with_zero_width_joiner() ! {
 	}
 
 	// The real test
-	{
+	if true {
 		sel := Selection.init(must_pin(s, screen_pt(0, 0)), must_pin(s, screen_pt(1, 0)),
 			false)
 		contents := s.selection_string(SelectionString{
@@ -4600,7 +4598,7 @@ fn test_screen_selection_string_multi_page() ! {
 
 	s.test_write_string('123456789\n!@#$%^&*(\n123456789')!
 
-	{
+	if true {
 		sel := Selection.init(must_pin(s, active_pt(0, 0)), must_pin(s, active_pt(2, 2)),
 			false)
 		contents := s.selection_string(SelectionString{
@@ -4620,7 +4618,7 @@ fn test_screen_line_iterator() ! {
 
 	// Test the line iterator
 	mut iter := s.line_iterator(must_pin(s, viewport_pt(0, 0)))
-	{
+	if true {
 		sel := iter.next() or { panic('line iterator ended early') }
 		actual := s.selection_string(SelectionString{
 			sel:  sel
@@ -4628,7 +4626,7 @@ fn test_screen_line_iterator() ! {
 		})!
 		assert actual == '1ABCD'
 	}
-	{
+	if true {
 		sel := iter.next() or { panic('line iterator ended early') }
 		actual := s.selection_string(SelectionString{
 			sel:  sel
@@ -4646,7 +4644,7 @@ fn test_screen_line_iterator_soft_wrap() ! {
 
 	// Test the line iterator
 	mut iter := s.line_iterator(must_pin(s, viewport_pt(0, 0)))
-	{
+	if true {
 		sel := iter.next() or { panic('line iterator ended early') }
 		actual := s.selection_string(SelectionString{
 			sel:  sel
@@ -4654,7 +4652,7 @@ fn test_screen_line_iterator_soft_wrap() ! {
 		})!
 		assert actual == '1ABCD2EFGH'
 	}
-	{
+	if true {
 		sel := iter.next() or { panic('line iterator ended early') }
 		actual := s.selection_string(SelectionString{
 			sel:  sel
@@ -4669,21 +4667,21 @@ fn test_screen_hyperlink_start_end() ! {
 	mut s := Screen.init(5, 5, 0)!
 	defer { s.deinit() }
 	assert s.cursor.hyperlink_id == 0
-	{
+	if true {
 		page := &s.cursor.page_pin.node.data
 		assert page.hyperlink_set.count() == usize(0)
 	}
 
 	s.start_hyperlink('http://example.com', none)!
 	assert s.cursor.hyperlink_id != 0
-	{
+	if true {
 		page := &s.cursor.page_pin.node.data
 		assert page.hyperlink_set.count() == usize(1)
 	}
 
 	s.end_hyperlink()
 	assert s.cursor.hyperlink_id == 0
-	{
+	if true {
 		page := &s.cursor.page_pin.node.data
 		assert page.hyperlink_set.count() == usize(0)
 	}
@@ -4694,7 +4692,7 @@ fn test_screen_hyperlink_reuse() ! {
 	defer { s.deinit() }
 
 	assert s.cursor.hyperlink_id == 0
-	{
+	if true {
 		page := &s.cursor.page_pin.node.data
 		assert page.hyperlink_set.count() == usize(0)
 	}
@@ -4707,14 +4705,14 @@ fn test_screen_hyperlink_reuse() ! {
 	// Reuse the same hyperlink, expect we have the same ID
 	s.start_hyperlink('http://example.com', none)!
 	assert s.cursor.hyperlink_id == id
-	{
+	if true {
 		page := &s.cursor.page_pin.node.data
 		assert page.hyperlink_set.count() == usize(1)
 	}
 
 	s.end_hyperlink()
 	assert s.cursor.hyperlink_id == 0
-	{
+	if true {
 		page := &s.cursor.page_pin.node.data
 		assert page.hyperlink_set.count() == usize(0)
 	}
@@ -4731,7 +4729,7 @@ fn test_screen_hyperlink_cursor_state_on_resize() ! {
 	// Start a hyperlink
 	s.start_hyperlink('http://example.com', none)!
 	assert s.cursor.hyperlink_id != 0
-	{
+	if true {
 		page := &s.cursor.page_pin.node.data
 		assert page.hyperlink_set.count() == usize(1)
 	}
@@ -4739,14 +4737,14 @@ fn test_screen_hyperlink_cursor_state_on_resize() ! {
 	// Resize. Any column growth will trigger a page to be reallocated.
 	s.resize(ScreenResize{ cols: 10, rows: 10 })!
 	assert s.cursor.hyperlink_id != 0
-	{
+	if true {
 		page := &s.cursor.page_pin.node.data
 		assert page.hyperlink_set.count() == usize(1)
 	}
 
 	s.end_hyperlink()
 	assert s.cursor.hyperlink_id == 0
-	{
+	if true {
 		page := &s.cursor.page_pin.node.data
 		assert page.hyperlink_set.count() == usize(0)
 	}
@@ -4795,7 +4793,7 @@ fn test_screen_increase_capacity_cursor_style_ref_count_preserved() ! {
 
 	old_style := s.cursor.style
 
-	{
+	if true {
 		page := &last_node(s).data
 		// 5 chars + cursor = 6 refs
 		assert page.styles.ref_count(s.cursor.style_id) == u16(6)
@@ -4814,11 +4812,11 @@ fn test_screen_increase_capacity_cursor_style_ref_count_preserved() ! {
 
 	// Style should be preserved
 	assert s.cursor.style.eql(&old_style)
-	assert s.cursor.style_id != (default_style_id)
+	assert s.cursor.style_id != default_style_id
 
 	// After increaseCapacity, the 5 chars are cloned (5 refs) and
 	// the cursor's style is re-added (1 ref) = 6 total.
-	{
+	if true {
 		page := &last_node(s).data
 		ref_count := page.styles.ref_count(s.cursor.style_id)
 		assert ref_count == u16(6)
@@ -4835,7 +4833,7 @@ fn test_screen_increase_capacity_cursor_hyperlink_ref_count_preserved() ! {
 	assert voidptr(first_node(s)) == voidptr(last_node(s))
 	assert voidptr(first_node(s)) == voidptr(s.cursor.page_pin.node)
 
-	{
+	if true {
 		page := &last_node(s).data
 		// Cursor has the hyperlink active = 1 count in hyperlink_set
 		assert page.hyperlink_set.count() == usize(1)
@@ -4853,7 +4851,7 @@ fn test_screen_increase_capacity_cursor_hyperlink_ref_count_preserved() ! {
 	assert link.uri == 'https://example.com/'
 
 	// After increaseCapacity, the hyperlink is re-added to the new page.
-	{
+	if true {
 		page := &last_node(s).data
 		assert page.hyperlink_set.count() == usize(1)
 	}
@@ -4876,7 +4874,7 @@ fn test_screen_increase_capacity_cursor_with_both_style_and_hyperlink_preserved(
 
 	old_style := s.cursor.style
 
-	{
+	if true {
 		page := &last_node(s).data
 		// 5 chars + cursor = 6 refs for bold style
 		assert page.styles.ref_count(s.cursor.style_id) == u16(6)
@@ -4901,7 +4899,7 @@ fn test_screen_increase_capacity_cursor_with_both_style_and_hyperlink_preserved(
 	assert link.uri == 'https://example.com/'
 
 	// After increaseCapacity, both style and hyperlink are re-added to the new page.
-	{
+	if true {
 		page := &last_node(s).data
 		ref_count := page.styles.ref_count(s.cursor.style_id)
 		assert ref_count == u16(6)
@@ -4937,10 +4935,10 @@ fn test_screen_increase_capacity_non_cursor_page_returns_early() ! {
 	first_page_node.data.pause_integrity_checks(true)
 	grow_count := int(first_page_node.data.capacity.rows - first_page_node.data.size.rows)
 	for _ in 0 .. grow_count {
-		s.pages.grow() or {}
+		_ = s.pages.grow()!
 	}
 	first_page_node.data.pause_integrity_checks(false)
-	s.pages.grow() or {}
+	_ = s.pages.grow()!
 
 	// Now we have two pages
 	assert voidptr(first_node(s)) != voidptr(last_node(s))
@@ -4967,7 +4965,7 @@ fn test_screen_increase_capacity_non_cursor_page_returns_early() ! {
 	assert s.cursor.style_id == old_style_id
 	// Ghostty compares the heap-allocated `?*Hyperlink` pointers; Witty stores
 	// the cursor hyperlink by value, so compare the values.
-	{
+	if true {
 		old_link := old_hyperlink or { panic('old cursor hyperlink was null') }
 		cur_link := s.cursor.hyperlink_state or { panic('cursor hyperlink is null') }
 		assert cur_link.eql(old_link)
@@ -5014,7 +5012,7 @@ fn test_screen_cursor_down_to_page_with_insufficient_capacity() ! {
 
 	// Fill new_page's style map to capacity. When we move INTO this page
 	// with a style set, adjustCapacity will be triggered.
-	{
+	if true {
 		new_node.data.pause_integrity_checks(true)
 		defer { new_node.data.pause_integrity_checks(false) }
 		defer { new_node.data.assert_integrity() }
@@ -5088,7 +5086,7 @@ fn test_screen_set_attribute_increases_capacity_when_style_map_is_full() ! {
 
 	// Fill the style map to capacity using the StyleSet's layout capacity
 	// which accounts for the load factor
-	{
+	if true {
 		page.pause_integrity_checks(true)
 		defer { page.pause_integrity_checks(false) }
 		defer { page.assert_integrity() }
@@ -5149,7 +5147,7 @@ fn test_screen_set_attribute_splits_page_on_out_of_space_at_max_styles() ! {
 
 	// Fill the style map to capacity using the StyleSet's layout capacity
 	// which accounts for the load factor
-	{
+	if true {
 		page.pause_integrity_checks(true)
 		defer { page.pause_integrity_checks(false) }
 		defer { page.assert_integrity() }
@@ -5307,7 +5305,7 @@ fn test_screen_prompt_click_move_line_right_soft_wrapped_line() ! {
 	s.test_write_string('ij')!
 
 	// Verify soft wrap occurred
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '> abcdefgh\nij'
 	}
@@ -5401,7 +5399,7 @@ fn test_screen_prompt_click_move_line_right_stops_at_non_continuation_row() ! {
 	s.test_write_string('again')!
 
 	// Verify content
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '> hello\nworld\n> again'
 	}
@@ -5489,7 +5487,7 @@ fn test_screen_prompt_click_move_line_left_soft_wrapped_line() ! {
 	s.test_write_string('ij')!
 
 	// Verify soft wrap occurred
-	{
+	if true {
 		contents := s.dump_string_alloc(.viewport)!
 		assert contents == '> abcdefgh\nij'
 	}
@@ -5920,16 +5918,16 @@ fn test_screen_cursor_reset_wrap_clears_wide_spacer_head() ! {
 	defer { s.deinit() }
 	mut row0 := witty_active_row(s, 0)
 	mut row1 := witty_active_row(s, 1)
-	row0.wrap = true
+	row0.header.wrap = true
 	witty_set_active_cell(s, 4, 0, CellData{
 		wide: .spacer_head
 	})
-	row1.wrap_continuation = true
+	row1.header.wrap_continuation = true
 
 	s.cursor_reset_wrap()
 
-	assert !witty_active_row(s, 0).wrap
-	assert !witty_active_row(s, 1).wrap_continuation
+	assert !witty_active_row(s, 0).header.wrap
+	assert !witty_active_row(s, 1).header.wrap_continuation
 	assert must_cell(s, active_pt(4, 0)).cell.is_zero()
 }
 
@@ -5937,18 +5935,18 @@ fn test_screen_cursor_reset_wrap_preserves_next_row_without_wrap() ! {
 	mut s := Screen.init(5, 5, 0)!
 	defer { s.deinit() }
 	mut row1 := witty_active_row(s, 1)
-	row1.wrap_continuation = true
+	row1.header.wrap_continuation = true
 
 	s.cursor_reset_wrap()
 
-	assert witty_active_row(s, 1).wrap_continuation
+	assert witty_active_row(s, 1).header.wrap_continuation
 }
 
 fn test_screen_split_cell_boundary_clears_wrapped_wide_spacer_head() ! {
 	mut s := Screen.init(5, 3, 0)!
 	defer { s.deinit() }
 	mut row0 := witty_active_row(s, 0)
-	row0.wrap = true
+	row0.header.wrap = true
 	witty_set_active_cell(s, 4, 0, CellData{
 		wide: .spacer_head
 	})
@@ -5963,7 +5961,7 @@ fn test_screen_split_cell_boundary_clears_previous_wrapped_wide_spacer_head() ! 
 	defer { s.deinit() }
 	s.cursor_absolute(0, 1)
 	mut row1 := witty_active_row(s, 1)
-	row1.wrap_continuation = true
+	row1.header.wrap_continuation = true
 	witty_set_active_cell(s, 0, 1, CellData{
 		codepoint: u32(0x1f600)
 		wide:      .wide
@@ -6001,7 +5999,7 @@ fn test_screen_cursor_set_semantic_content_union() ! {
 	s.cursor_set_semantic_content(CursorSemanticPrompt{ kind: .continuation })
 	assert s.semantic_prompt.seen
 	assert s.cursor.semantic_content == .prompt
-	assert witty_active_row(s, 0).semantic_prompt == .prompt_continuation
+	assert witty_active_row(s, 0).header.semantic_prompt == .prompt_continuation
 
 	s.cursor_set_semantic_content(CursorSemanticInput{ clear: .clear_eol })
 	assert s.cursor.semantic_content == .input
@@ -6063,7 +6061,7 @@ fn test_screen_cursor_set_hyperlink_updates_cursor_cell_and_row() ! {
 
 	s.cursor_set_hyperlink()!
 
-	assert witty_active_row(s, 1).hyperlink
+	assert witty_active_row(s, 1).header.hyperlink
 	list_cell := must_cell(s, active_pt(2, 1))
 	assert list_cell.cell.has_hyperlink
 	page := &list_cell.node.data
@@ -6083,7 +6081,7 @@ fn test_screen_append_grapheme_updates_cursor_row_cell() ! {
 	s.append_grapheme(s.cursor.page_cell, u32(0x0301))!
 
 	list_cell := must_cell(s, active_pt(2, 1))
-	assert list_cell.row.grapheme
+	assert list_cell.row.header.grapheme
 	assert list_cell.cell.content_tag == .codepoint_grapheme
 	assert list_cell.cell.has_grapheme()
 	graphemes := list_cell.node.data.lookup_grapheme(list_cell.cell) or { []u32{} }
@@ -6106,7 +6104,7 @@ fn test_screen_test_write_string_wide_and_grapheme() ! {
 	graphemes := cell1.node.data.lookup_grapheme(cell1.cell) or { []u32{} }
 	assert graphemes == [u32(0x0301)]
 	assert cell2.wide == .spacer_tail
-	assert row.grapheme
+	assert row.header.grapheme
 	assert s.cursor.x == 3
 }
 
@@ -6118,8 +6116,8 @@ fn test_screen_test_write_string_wide_wraps_with_spacer_head() ! {
 	first := witty_active_row(s, 0)
 	second := witty_active_row(s, 1)
 	assert must_cell(s, active_pt(2, 0)).cell.wide == .spacer_head
-	assert first.wrap
-	assert second.wrap_continuation
+	assert first.header.wrap
+	assert second.header.wrap_continuation
 	assert must_cell(s, active_pt(0, 1)).cell.codepoint == u32(`界`)
 	assert must_cell(s, active_pt(0, 1)).cell.wide == .wide
 	assert must_cell(s, active_pt(1, 1)).cell.wide == .spacer_tail
@@ -6139,8 +6137,8 @@ fn test_screen_test_write_string_preserves_style_and_hyperlink() ! {
 	s.start_hyperlink('https://example.com/', 'test')!
 	s.test_write_string('AB')!
 	row := witty_active_row(s, 0)
-	assert row.styled
-	assert row.hyperlink
+	assert row.header.styled
+	assert row.header.hyperlink
 	assert must_cell(s, active_pt(0, 0)).style().flags.bold()
 	assert must_cell(s, active_pt(1, 0)).style().flags.bold()
 	assert must_cell(s, active_pt(0, 0)).cell.has_hyperlink
@@ -6234,7 +6232,7 @@ fn test_screen_clone_deep_copies_managed_cells_and_resets_cursor_state() ! {
 
 	mut cloned := s.clone(screen_pt(0, 0), none)!
 	defer { cloned.deinit() }
-	{
+	if true {
 		list_cell := must_cell(cloned, active_pt(0, 0))
 		page := &list_cell.node.data
 		assert list_cell.cell.codepoint == u32(`x`)
@@ -6262,7 +6260,7 @@ fn test_screen_clone_deep_copies_managed_cells_and_resets_cursor_state() ! {
 	// Clearing the source must not affect the clone's page memory.
 	s.clear_rows(active_pt(0, 0), none, false)
 	assert s.dump_string_alloc(.screen)! == ''
-	{
+	if true {
 		list_cell := must_cell(cloned, active_pt(0, 0))
 		page := &list_cell.node.data
 		assert list_cell.cell.codepoint == u32(`x`)

@@ -281,7 +281,7 @@ fn test_renderer_rebuilds_reuses_and_removes_inspector_overlay() ! {
 			row_data: [
 				terminal.RenderRow{
 					raw:   terminal.RowData{
-						hyperlink: true
+						header: &terminal.PageRowHeader{ hyperlink: true }
 					}
 					cells: [
 						terminal.RenderCell{},

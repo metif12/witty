@@ -177,13 +177,13 @@ pub fn (self StyleColor) eql(other StyleColor) bool {
 pub fn (self &CellStyle) bg(cell &CellData, palette [256]RGB) ?RGB {
 	return match cell.content_tag {
 		.bg_color_palette {
-			palette[int(cell.color_palette)]
+			palette[int(cell.color_palette())]
 		}
 		.bg_color_rgb {
 			RGB{
-				r: cell.color_rgb_r
-				g: cell.color_rgb_g
-				b: cell.color_rgb_b
+				r: cell.color_rgb_r()
+				g: cell.color_rgb_g()
+				b: cell.color_rgb_b()
 			}
 		}
 		else {

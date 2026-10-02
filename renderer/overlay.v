@@ -29,9 +29,9 @@ pub mut:
 
 // The colors we use for overlays.
 pub enum OverlayColor as u8 {
-	hyperlink // light blue
+	hyperlink       // light blue
 	semantic_prompt // orange/gold
-	semantic_input // cyan
+	semantic_input  // cyan
 }
 
 pub struct OverlayRGB {
@@ -134,9 +134,9 @@ pub fn Overlay.init(sz Size) !Overlay {
 	}
 	total := int(u64(w) * u64(h) * 4)
 	return Overlay{
-		pixels: []u8{len: total}
-		width: w
-		height: h
+		pixels:    []u8{len: total}
+		width:     w
+		height:    h
 		cell_size: sz.cell
 	}
 }
@@ -148,10 +148,10 @@ pub fn (mut self Overlay) deinit() {
 // Returns a pending image that can be used to copy, convert, upload, etc.
 pub fn (self &Overlay) pending_image() PendingImage {
 	return PendingImage{
-		width: self.width
-		height: self.height
+		width:        self.width
+		height:       self.height
 		pixel_format: .rgba
-		data: self.pixels.clone()
+		data:         self.pixels.clone()
 	}
 }
 
@@ -184,7 +184,7 @@ pub fn (mut self Overlay) apply_features(state &terminal.RenderState, features [
 // later.
 fn (mut self Overlay) highlight_hyperlinks(state &terminal.RenderState) {
 	for y, row in state.row_data {
-		if !row.raw.hyperlink {
+		if !row.raw.header.hyperlink {
 			continue
 		}
 
@@ -211,7 +211,7 @@ fn (mut self Overlay) highlight_semantic_prompts(state &terminal.RenderState) {
 	// Highlight the row-level prompt bars, joining continuation rows.
 	mut y := 0
 	for y < state.row_data.len {
-		if state.row_data[y].raw.semantic_prompt == .unknown {
+		if state.row_data[y].raw.header.semantic_prompt == .unknown {
 			y++
 			continue
 		}
@@ -219,7 +219,7 @@ fn (mut self Overlay) highlight_semantic_prompts(state &terminal.RenderState) {
 		start_y := y
 		y++
 		for y < state.row_data.len
-			&& state.row_data[y].raw.semantic_prompt == .prompt_continuation {
+			&& state.row_data[y].raw.header.semantic_prompt == .prompt_continuation {
 			y++
 		}
 		bar_width := if self.cell_size.width < 5 { int(self.cell_size.width) } else { 5 }

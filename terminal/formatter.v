@@ -1662,13 +1662,13 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 
 		// If we're not wrapped, we always add a newline so after
 		// the row is printed we can add a newline.
-		if !row.wrap || !self.opts.unwrap {
+		if !row.header.wrap || !self.opts.unwrap {
 			blank_rows += 1
 		}
 
 		// If the row doesn't continue a wrap then we need to reset
 		// our blank cell count.
-		if !row.wrap_continuation || !self.opts.unwrap {
+		if !row.header.wrap_continuation || !self.opts.unwrap {
 			blank_cells = 0
 		}
 
@@ -1890,16 +1890,16 @@ fn (self PageFormatter) cell_style(cell CellData) CellStyle {
 		}
 		.bg_color_palette {
 			CellStyle{
-				bg_color: StyleColorPalette{ index: cell.color_palette }
+				bg_color: StyleColorPalette{ index: cell.color_palette() }
 			}
 		}
 		.bg_color_rgb {
 			CellStyle{
 				bg_color: StyleColorRgb{
 					rgb: RGB{
-						r: cell.color_rgb_r
-						g: cell.color_rgb_g
-						b: cell.color_rgb_b
+						r: cell.color_rgb_r()
+						g: cell.color_rgb_g()
+						b: cell.color_rgb_b()
 					}
 				}
 			}

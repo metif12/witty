@@ -80,7 +80,7 @@ pub fn managed_memory(context cimgui.Context, page &terminal.Page) {
 	managed_memory_row(context, 'Rows', 'Number of rows in this page.', usize(page.size.rows),
 		usize(page.capacity.rows))
 	managed_memory_row(context, 'Styles', 'Unique text styles (colors, attributes) currently in use.',
-		page.styles.set.count(), page.styles.set.layout.cap)
+		page.styles.count(), page.styles.capacity())
 	managed_memory_row(context, 'Graphemes', 'Extended grapheme clusters for multi-codepoint characters.',
 		page.grapheme_count(), page.grapheme_capacity())
 	managed_memory_row(context, 'Strings (bytes)', 'String storage for hyperlink URIs and other text data.',
@@ -139,26 +139,26 @@ fn rows_table(context cimgui.Context, page &terminal.Page) {
 			context.text(text_cells.str())
 		}
 		context.table_set_column(2)
-		flag_cell(context, row.dirty)
+		flag_cell(context, row.header.dirty)
 		context.table_set_column(3)
-		flag_cell(context, row.wrap)
+		flag_cell(context, row.header.wrap)
 		context.table_set_column(4)
-		flag_cell(context, row.wrap_continuation)
+		flag_cell(context, row.header.wrap_continuation)
 		context.table_set_column(5)
-		flag_cell(context, row.styled)
+		flag_cell(context, row.header.styled)
 		context.table_set_column(6)
-		flag_cell(context, row.grapheme)
+		flag_cell(context, row.header.grapheme)
 		context.table_set_column(7)
-		flag_cell(context, row.hyperlink)
+		flag_cell(context, row.header.hyperlink)
 		context.table_set_column(8)
-		context.text(row.semantic_prompt.str())
+		context.text(row.header.semantic_prompt.str())
 		context.table_set_column(9)
-		flag_cell(context, row.kitty_virtual_placeholder)
+		flag_cell(context, row.header.kitty_virtual_placeholder)
 	}
 }
 
 fn styles_list(context cimgui.Context, page &terminal.Page) {
-	items := page.styles.set.items
+	items := page.styles.items()
 	mut count := 0
 	for index, item in items {
 		if index > 0 && item.meta.ref_count > 0 {

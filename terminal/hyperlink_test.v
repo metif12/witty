@@ -6,14 +6,14 @@ fn test_hyperlink_id_uses_source_width() {
 
 fn implicit_link(offset u32, uri string) Hyperlink {
 	return Hyperlink{
-		id: HyperlinkImplicitId{ offset: offset }
+		id:  HyperlinkImplicitId{ offset: offset }
 		uri: uri
 	}
 }
 
 fn explicit_link(id string, uri string) Hyperlink {
 	return Hyperlink{
-		id: HyperlinkExplicitId{ value: id }
+		id:  HyperlinkExplicitId{ value: id }
 		uri: uri
 	}
 }
@@ -219,6 +219,6 @@ fn test_hyperlink_set_robin_hood_displacement_updates_stored_psl() {
 
 	assert set.lookup(&first) or { panic('first hyperlink missing') } == first_id
 	assert set.lookup(&colliding) or { panic('colliding hyperlink missing') } == colliding_id
-	assert set.entries[int(displaced_id)].psl == 1
+	assert set.set.items_view(set.base)[int(displaced_id)].meta.psl == 1
 	assert set.lookup(&displaced) or { panic('displaced hyperlink missing') } == displaced_id
 }

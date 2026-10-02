@@ -52,9 +52,8 @@ fn test_overlay_rectangle_matches_z2d_0_10_fill_and_hairline_bytes() {
 			alpha << overlay_pixel(&overlay, x, y)[3]
 		}
 	}
-	assert alpha == [u8(0), 0, 0, 0, 0, 0, 0, 248, 221, 221, 244, 0, 0, 221, 96,
-		96, 200, 0, 0, 221, 96, 96, 200, 0, 0, 244, 200, 200, 244, 0, 0, 0, 0, 0,
-		0, 0]
+	assert alpha == [u8(0), 0, 0, 0, 0, 0, 0, 248, 221, 221, 244, 0, 0, 221, 96, 96, 200, 0, 0,
+		221, 96, 96, 200, 0, 0, 244, 200, 200, 244, 0, 0, 0, 0, 0, 0, 0]
 	assert overlay_pixel(&overlay, 1, 1) == [u8(174), 174, 247, 248]!
 	assert overlay_pixel(&overlay, 2, 1) == [u8(155), 155, 220, 221]!
 	assert overlay_pixel(&overlay, 4, 1) == [u8(171), 171, 243, 244]!
@@ -80,11 +79,11 @@ fn test_overlay_degenerate_rectangles_match_z2d_0_10_bytes() {
 fn overlay_for_grid(cols u32, rows u32, cell_width u32, cell_height u32) Overlay {
 	return Overlay.init(Size{
 		screen: ScreenSize{
-			width: cols * cell_width
+			width:  cols * cell_width
 			height: rows * cell_height
 		}
-		cell: CellSize{
-			width: cell_width
+		cell:   CellSize{
+			width:  cell_width
 			height: cell_height
 		}
 	}) or { panic(err) }
@@ -99,7 +98,7 @@ fn overlay_pixel(overlay &Overlay, x int, y int) [4]u8 {
 fn test_overlay_rejects_dimensions_outside_source_raster_range() {
 	Overlay.init(Size{
 		screen: ScreenSize{
-			width: u32(2147483648)
+			width:  u32(2147483648)
 			height: 1
 		}
 	}) or {
@@ -132,7 +131,9 @@ fn test_overlay_highlights_contiguous_hyperlink_runs() {
 	mut overlay := overlay_for_grid(4, 1, 10, 10)
 	state := terminal.RenderState{
 		row_data: [terminal.RenderRow{
-			raw: terminal.RowData{ hyperlink: true }
+			raw:   terminal.RowData{
+				header: &terminal.PageRowHeader{ hyperlink: true }
+			}
 			cells: [render_cell_with_hyperlink(false), render_cell_with_hyperlink(true),
 				render_cell_with_hyperlink(true), render_cell_with_hyperlink(false)]
 		}]
@@ -152,9 +153,21 @@ fn test_overlay_joins_semantic_prompt_continuation_bars() {
 	mut overlay := overlay_for_grid(2, 3, 10, 10)
 	state := terminal.RenderState{
 		row_data: [
-			terminal.RenderRow{ raw: terminal.RowData{ semantic_prompt: .prompt } },
-			terminal.RenderRow{ raw: terminal.RowData{ semantic_prompt: .prompt_continuation } },
-			terminal.RenderRow{ raw: terminal.RowData{ semantic_prompt: .unknown } },
+			terminal.RenderRow{
+				raw: terminal.RowData{
+					header: &terminal.PageRowHeader{ semantic_prompt: .prompt }
+				}
+			},
+			terminal.RenderRow{
+				raw: terminal.RowData{
+					header: &terminal.PageRowHeader{ semantic_prompt: .prompt_continuation }
+				}
+			},
+			terminal.RenderRow{
+				raw: terminal.RowData{
+					header: &terminal.PageRowHeader{ semantic_prompt: .unknown }
+				}
+			},
 		]
 	}
 	overlay.apply_features(&state, [.semantic_prompts])

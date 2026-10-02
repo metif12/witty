@@ -50,31 +50,28 @@ pub enum SemanticContent as u8 {
 //
 // The zero value of this struct must be a valid cell representing empty,
 // since we zero initialize cells by default.
-pub struct CellData {
+#include "@VMODROOT/terminal/page_storage.h"
+pub struct C.WittyPageCell {
 pub mut:
-	// The codepoint that this cell contains. If content_tag is codepoint,
-	// then this is the only codepoint in the cell. If content_tag is
-	// codepoint_grapheme, then this is the first codepoint in the cluster.
-	codepoint u32
-	// The content tag dictates what kind of content this cell holds.
-	content_tag ContentTag = .codepoint
-	// The style ID to use for this cell within the style map. Zero
-	// is always the default style so no lookup is required.
-	style_id u32
-	// The wide property of this cell, for wide characters.
-	wide CellWide = .narrow
-	// Whether this was written with the protection flag set.
-	is_protected bool
-	// Whether this cell is a hyperlink.
-	has_hyperlink bool
-	// The semantic type of the content of this cell.
-	semantic_content SemanticContent = .output
-	// For bg_color content variants.
-	color_palette u8
-	color_rgb_r   u8
-	color_rgb_g   u8
-	color_rgb_b   u8
+	content_tag ContentTag
+	// Active u24 payload. Codepoint variants use its low 21 bits.
+	codepoint        u32
+	style_id         u32
+	wide             CellWide
+	is_protected     bool
+	has_hyperlink    bool
+	semantic_content SemanticContent
 }
+
+pub type CellData = C.WittyPageCell
+
+pub fn (self CellData) color_palette() u8 { return u8(self.codepoint) }
+
+pub fn (self CellData) color_rgb_r() u8 { return u8(self.codepoint) }
+
+pub fn (self CellData) color_rgb_g() u8 { return u8(self.codepoint >> 8) }
+
+pub fn (self CellData) color_rgb_b() u8 { return u8(self.codepoint >> 16) }
 
 // Helper to make a cell that just has a codepoint.
 pub fn CellData.init(cp u32) CellData {
@@ -165,39 +162,27 @@ pub enum SemanticPromptType as u8 {
 }
 
 // RowData is the data for a single row in the terminal grid.
+pub struct C.WittyPageRow {
+pub mut:
+	cells_offset              u32
+	wrap                      bool
+	wrap_continuation         bool
+	grapheme                  bool
+	styled                    bool
+	hyperlink                 bool
+	semantic_prompt           SemanticPromptType
+	kitty_virtual_placeholder bool
+	dirty                     bool
+}
+
+pub type PageRowHeader = C.WittyPageRow
+
+// A transient view. Authoritative row flags and offsets live in packed page
+// memory; cells borrows the block addressed by that row's offset.
 pub struct RowData {
 pub mut:
-	cells []CellData
-	// The row's cell block within its page. Ghostty's Row holds an offset to
-	// its cells in page memory, so moving a row within the page moves its
-	// cells and their grapheme and hyperlink entries with it. V keeps each
-	// row's cells in their own array; this is the equivalent handle, and the
-	// page keys its managed-memory maps by it rather than by row index.
-	cells_offset u32
-	// True if this row is soft-wrapped. The first cell of the next
-	// row is a continuation of this row.
-	wrap bool
-	// True if the previous row to this one is soft-wrapped and
-	// this row is a continuation of that row.
-	wrap_continuation bool
-	// True if any of the cells in this row have multi-codepoint
-	// grapheme clusters. If this is true, some fast paths are not
-	// possible because erasing for example may need to clear existing
-	// grapheme data.
-	grapheme bool
-	// True if any of the cells in this row have a ref-counted style.
-	// This can have false positives but never a false negative.
-	styled bool
-	// True if any of the cells in this row are part of a hyperlink.
-	// Similar to styled: can have false positives but never false negatives.
-	hyperlink bool
-	// The semantic prompt state for this row.
-	semantic_prompt SemanticPromptType = .unknown
-	// True if this row contains a virtual placeholder for the Kitty
-	// graphics protocol. (U+10EEEE)
-	kitty_virtual_placeholder bool
-	// True if this row is dirty and requires a redraw.
-	dirty bool
+	header &PageRowHeader = &PageRowHeader{}
+	cells  []CellData
 }
 
 // Initialize a new row with the given number of columns.
@@ -211,7 +196,11 @@ pub fn RowData.init(cols u32) RowData {
 // row structure (graphemes, styles, hyperlinks).
 pub fn (self &RowData) managed_memory() bool {
 	// Ordered on purpose for likelihood.
-	return self.styled || self.hyperlink || self.grapheme
+	return self.header.styled || self.header.hyperlink || self.header.grapheme
+}
+
+pub fn (self &RowData) snapshot() RowData {
+	return RowData{ header: &PageRowHeader{ ...*self.header }, cells: self.cells }
 }
 
 // ============================================================
@@ -362,24 +351,12 @@ pub fn (self &CellStyle) default() bool {
 // cell tagged as background-only content, so no style-map lookup is needed.
 pub fn (self &CellStyle) bg_cell() ?CellData {
 	return match self.bg_color {
-		StyleColorNone {
-			none
-		}
+		StyleColorNone { none }
 		StyleColorPalette {
-			color := self.bg_color as StyleColorPalette
-			CellData{
-				content_tag:   .bg_color_palette
-				color_palette: color.index
-			}
+			CellData{ content_tag: .bg_color_palette, codepoint: u32(self.bg_color.index) }
 		}
 		StyleColorRgb {
-			color := self.bg_color as StyleColorRgb
-			CellData{
-				content_tag: .bg_color_rgb
-				color_rgb_r: color.rgb.r
-				color_rgb_g: color.rgb.g
-				color_rgb_b: color.rgb.b
-			}
+			CellData{ content_tag: .bg_color_rgb, codepoint: u32(self.bg_color.rgb.r) | (u32(self.bg_color.rgb.g) << 8) | (u32(self.bg_color.rgb.b) << 16) }
 		}
 	}
 }

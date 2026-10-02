@@ -1,0 +1,33 @@
+const std=@import("std");
+const page=@import("terminal/page.zig");
+const style=@import("terminal/style.zig");
+const size=@import("terminal/size.zig");
+const fastmem=@import("fastmem.zig");
+pub fn main() !void {
+ const capacity=page.Capacity{.cols=4,.rows=2,.styles=16};
+ var source=try page.Page.init(capacity);
+ defer source.deinit();
+ const row=source.getRow(0);
+ const cell=source.getRowAndCell(0,0).cell;
+ cell.*=page.Cell.init('A');
+ cell.wide=.wide;cell.protected=true;cell.semantic_content=.prompt;
+ row.wrap=true;row.semantic_prompt=.prompt;row.dirty=true;
+ std.debug.print("packed={x}/{x} sizes={d}/{d} total={d}\n", .{@as(u64,@bitCast(cell.*)),@as(u64,@bitCast(row.*)),@sizeOf(page.Cell),@sizeOf(page.Row),source.memory.len});
+ const id=try source.styles.add(source.memory,.{.fg_color=.{.palette=42},.flags=.{.bold=true}});
+ cell.style_id=id;row.styled=true;
+ try source.appendGrapheme(row,cell,0x301);
+ const link_id=try source.insertHyperlink(.{.id=.{.implicit=0x11223344},.uri="https://example.com"});
+ try source.setHyperlink(row,cell,link_id);
+ var cloned=try source.clone();defer cloned.deinit();
+ const original=source.memory.ptr;
+ std.debug.assert(original!=cloned.memory.ptr);
+ fastmem.rotateOnce(page.Row,cloned.rows.ptr(cloned.memory)[0..2]);
+ const moved=cloned.getRowAndCell(0,1);
+ std.debug.assert(moved.cell.codepoint()=='A');
+ std.debug.assert(cloned.lookupGrapheme(moved.cell).?[0]==0x301);
+ const link=cloned.hyperlink_set.get(cloned.memory,cloned.lookupHyperlink(moved.cell).?);
+ std.debug.assert(link.id.implicit==0x11223344);
+ std.debug.assert(std.mem.eql(u8,link.uri.slice(cloned.memory),"https://example.com"));
+ std.debug.assert(cloned.styles.get(cloned.memory,id).fg_color.palette==42);
+ std.debug.print("relocated={d}/{d}/{d} offsets={d}/{d} source={d}\n", .{id,link_id,cloned.lookupGrapheme(moved.cell).?[0],moved.row.cells.offset,@intFromPtr(moved.cell)-@intFromPtr(cloned.memory.ptr),source.getRowAndCell(0,0).cell.codepoint()});
+}

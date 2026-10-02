@@ -43,13 +43,13 @@ fn create_hb_shaper_with_font(font_req HbTestFont) !HbTestShaper {
 	mut collection := font.Collection.init()
 	collection.load_options = font.LoadOptions{
 		library: lib
-		size: font.DesiredSize{ points: 12, xdpi: 72, ydpi: 72 }
+		size:    font.DesiredSize{ points: 12, xdpi: 72, ydpi: 72 }
 	}
 	load_options := collection.load_options or { return error('missing load options') }
 	for face_data in [data, font.embedded_emoji, font.embedded_emoji_text] {
 		collection.add(font.Face.init_mem(lib, face_data, load_options.face_options())!, font.AddOptions{
-			style: .regular
-			fallback: false
+			style:           .regular
+			fallback:        false
 			size_adjustment: .none_
 		})!
 	}
@@ -61,9 +61,9 @@ fn create_hb_shaper_with_font(font_req HbTestFont) !HbTestShaper {
 	})!
 
 	return HbTestShaper{
-		shp: shp
+		shp:  shp
 		grid: grid
-		lib: lib
+		lib:  lib
 	}
 }
 
@@ -73,13 +73,13 @@ fn create_hb_shaper_with_discovered_font(font_req string) !HbTestShaper {
 	mut collection := font.Collection.init()
 	collection.load_options = font.LoadOptions{
 		library: lib
-		size: font.DesiredSize{ points: 12, xdpi: 72, ydpi: 72 }
+		size:    font.DesiredSize{ points: 12, xdpi: 72, ydpi: 72 }
 	}
 	mut discovery := font.Discover.init()
 	defer { discovery.deinit() }
 	mut iterator := discovery.discover(font.Descriptor{
-		family: font_req
-		size: 12
+		family:    font_req
+		size:      12
 		monospace: false
 	})!
 	defer { iterator.deinit() }
@@ -97,8 +97,8 @@ fn create_hb_shaper_with_discovered_font(font_req string) !HbTestShaper {
 		return error('font not found: ${font_req}')
 	}
 	collection.add(face, font.AddOptions{
-		style: .regular
-		fallback: false
+		style:           .regular
+		fallback:        false
 		size_adjustment: .none_
 	})!
 	grid := font.SharedGrid.init(font.CodepointResolver{
@@ -109,9 +109,9 @@ fn create_hb_shaper_with_discovered_font(font_req string) !HbTestShaper {
 	})!
 
 	return HbTestShaper{
-		shp: shp
+		shp:  shp
 		grid: grid
-		lib: lib
+		lib:  lib
 	}
 }
 
@@ -135,9 +135,9 @@ fn hb_render_row_with_graphemes(input string, cols u16, graphemes bool) ![]termi
 	mut result := []terminal.RenderCell{cap: state.row_data[0].cells.len}
 	for cell in state.row_data[0].cells {
 		result << terminal.RenderCell{
-			raw: cell.raw
+			raw:      cell.raw
 			grapheme: cell.grapheme.clone()
-			style: cell.style
+			style:    cell.style
 		}
 	}
 	return result
@@ -150,10 +150,10 @@ fn hb_render_row(input string, cols u16) ![]terminal.RenderCell {
 fn (mut td HbTestShaper) shape_render_cells(cells []terminal.RenderCell, selection ?[2]u16, cursor_x ?u16) !HbShapeResult {
 	mut result := HbShapeResult{}
 	mut iterator := td.shp.run_iterator(font.RunOptions{
-		grid: &td.grid
+		grid:         &td.grid
 		render_cells: cells
-		selection: selection
-		cursor_x: cursor_x
+		selection:    selection
+		cursor_x:     cursor_x
 	})
 	for {
 		run := (iterator.next()!).get() or { break }
@@ -216,7 +216,8 @@ fn test_hb_run_iterator_empty_cells_with_bg() {
 	for i in 1 .. 3 {
 		cells[i].raw = terminal.CellData{
 			content_tag: .bg_color_rgb
-			color_rgb_r: 255
+
+			codepoint: u32(255) | (u32(0) << 8) | (u32(0) << 16)
 		}
 	}
 	result := td.shape_render_cells(cells, none, none) or { panic(err) }
@@ -761,8 +762,8 @@ fn test_hb_shape_empty_buffer() {
 	// Special fonts bypass shaping, so an empty buffer returns empty without a grid.
 	cells := shp.shape(font.TextRun{
 		font_index: font.sprite_index
-		offset: 0
-		cells: 0
+		offset:     0
+		cells:      0
 	}) or { return }
 	assert cells.len == 0
 }
@@ -800,18 +801,24 @@ fn test_harfbuzz_shape_holds_run_grid_exclusive_lock() {
 	mut done := chan bool{}
 	fixture.grid.lock.lock()
 	worker := spawn hb_shape_after_signal(&fixture.shp, font.TextRun{
-		grid: &fixture.grid
+		grid:       &fixture.grid
 		font_index: font.Index.init(.regular, 250)
 	}, ready, done)
 	_ := <-ready
 	select {
-		_ := <-done { assert false, 'shape bypassed the grid lock' }
-		50 * time.millisecond {}
+		_ := <-done {
+			assert false, 'shape bypassed the grid lock'
+		}
+		50 * time.millisecond {
+		}
 	}
 	fixture.grid.lock.unlock()
 	select {
-		_ := <-done {}
-		time.second { assert false, 'shape did not release after grid unlock' }
+		_ := <-done {
+		}
+		time.second {
+			assert false, 'shape did not release after grid unlock'
+		}
 	}
 	worker.wait()
 }
