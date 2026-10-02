@@ -40,7 +40,7 @@ pub fn compile_options(root string, mode Mode, artifact Artifact, explicit_versi
 		'git_changes=${git.changes}',
 	]
 	match mode {
-		.debug { args << '-g' }
+		.debug { args << '-cg' }
 		.release_safe { args << ['-d', 'release_safe', '-cflags', '-O2'] }
 		.release_fast { args << '-prod' }
 		.release_small { args << ['-prod', '-d', 'release_small', '-no-prod-options', '-cflags',

@@ -35,7 +35,7 @@ pub fn (d Driver) host_tool(name string, folder string) !string {
 	return output
 }
 
-fn (d Driver) install_tree(source string, relative string, excluded_extensions []string) ! {
+pub fn (d Driver) install_tree(source string, relative string, excluded_extensions []string) ! {
 	for entry in os.ls(source)! {
 		path := os.join_path(source, entry)
 		destination := os.join_path(relative, entry)
