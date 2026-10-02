@@ -10,10 +10,16 @@ mut:
 	config configpkg.Config
 	target ?&TermState
 }
-fn native_config_change(app &apprt.App, target ?&TermState, config &configpkg.Config) bool {
+fn native_config_change(app &apprt.App, action_target apprt.Target, target ?&TermState, config &configpkg.Config) bool {
 	if config == unsafe { nil } { return false }
-	owned := config.clone()
-	if target == none {
+	mut owned := config.clone()
+	// App.swift takes ownership before inspecting the target. An unresolved
+	// surface still has surface scope and must never replace the app config.
+	if action_target is apprt.SurfaceTarget && target == none {
+		owned.deinit()
+		return false
+	}
+	if action_target is apprt.AppTarget {
 		mut host_app := unsafe { &apprt.App(app) }
 		host_app.config.deinit()
 		host_app.config = owned.clone()

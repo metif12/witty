@@ -521,7 +521,7 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 		}
 		.config_change {
 			data := action.data
-			if data is apprt.ConfigChange { native_config_change(app, state, data.config) }
+			if data is apprt.ConfigChange { native_config_change(app, target, state, data.config) }
 			return true
 		}
 		.cell_size {
