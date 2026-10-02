@@ -2,6 +2,7 @@ module inspector
 
 import cimgui
 import osc
+import lib_allocator
 import terminal
 
 const max_vt_events = 100
@@ -265,11 +266,19 @@ fn vt_action_metadata(action terminal.ParserAction) map[string]string {
 	return result
 }
 
+struct KittyColorMetadataSource {
+	list       []osc.KittyColorRequest
+	terminator osc.Terminator
+}
+
 // The V sum type wraps Zig's string/void/union payloads in named structs.
 // Unwrap those representations before translating the source reflection.
 fn encode_metadata[T](mut metadata map[string]string, value T) {
 	$if T is string {
 		metadata['data'] = value.clone()
+	} $else $if T is osc.KittyColorOSC {
+		// The V allocation owner is storage, outside the source OSC payload.
+		encode_metadata(mut metadata, KittyColorMetadataSource{ list: value.list, terminator: value.terminator })
 	} $else $if T is osc.ConEmuChangeTabTitle {
 		metadata['data'] = match value.title {
 			osc.ConEmuTabTitleReset { 'reset' }
@@ -328,9 +337,9 @@ fn encode_metadata_single[T](mut metadata map[string]string, key string, value T
 		metadata[key] = value.str()
 	} $else $if T is string {
 		metadata[key] = value.clone()
-	} $else $if T is []osc.ColorRequest {
+	} $else $if T is []osc.ColorRequest || T is lib_allocator.SegmentedList[osc.ColorRequest] {
 		metadata[key] = 'segmented_list.SegmentedList(terminal.osc.parsers.color.Request,2)'
-	} $else $if T is []osc.KittyColorRequest {
+	} $else $if T is []osc.KittyColorRequest || T is lib_allocator.ArrayList[osc.KittyColorRequest] {
 		metadata[key] = 'array_list.Aligned(terminal.kitty.color.OSC.Request,null)'
 	} $else $if T is $struct {
 		metadata[key] = typeof(value).name

@@ -419,7 +419,9 @@ fn test_reflected_metadata_retains_source_container_type_names() {
 	metadata := vt_action_metadata(color)
 	assert metadata['requests'] == 'segmented_list.SegmentedList(terminal.osc.parsers.color.Request,2)'
 	kitty := terminal.ParserAction(osc.Command(osc.KittyColorOSC{}))
-	assert vt_action_metadata(kitty)['list'] == 'array_list.Aligned(terminal.kitty.color.OSC.Request,null)'
+	kitty_metadata := vt_action_metadata(kitty)
+	assert kitty_metadata['list'] == 'array_list.Aligned(terminal.kitty.color.OSC.Request,null)'
+	assert 'allocated' !in kitty_metadata
 	progress := terminal.ParserAction(osc.Command(osc.ProgressReport{
 		state:    .set
 		progress: u8(42)
