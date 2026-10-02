@@ -27,7 +27,11 @@ fn do_goto_split(current &TermState, direction apprt.GotoSplit) bool {
 	node := host.tree.root.find(current.view) or { return false }
 	view := host.tree.focus_target(match direction { .previous { macos.SplitFocusDirection.previous } .next { .next } .left { .left } .right { .right } .up { .up } .down { .down } }, node) or { return false }
 	if host.tree.zoomed != unsafe { nil } {
-		host.replace_tree(macos.NativeSplitTree{root: host.tree.root, zoomed: if current.native_config.preserve_split_zoom { host.tree.root.find(view) or { unsafe { &macos.NativeSplitNode(nil) } } } else { unsafe { &macos.NativeSplitNode(nil) } }})
+        mut zoomed := unsafe { &macos.NativeSplitNode(nil) }
+        if current.native_config.preserve_split_zoom {
+            if selected := host.tree.root.find(view) { zoomed = selected }
+        }
+        host.replace_tree(macos.NativeSplitTree{root:host.tree.root,zoomed:zoomed})
 	}
 	macos.invalidate_native_restorable_state(host.container)
 	macos.dispatch_main(focus_controller_view,view)
