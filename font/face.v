@@ -1522,9 +1522,6 @@ pub fn (self Face) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOpt
 		x = math.round(x)
 		y = math.round(y)
 	}
-	if width <= 0.0 || height <= 0.0 {
-		return Glyph{}
-	}
 
 	mut bitmap := freetype.Bitmap{}
 	freetype.bitmap_init(mut bitmap)
