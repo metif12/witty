@@ -1,39 +1,16 @@
+@[has_globals]
 module gtk
 
 import ascii
 import log
-// command_palette_linux.v - The GTK command palette.
-//
-// Translated from ghostty/src/apprt/gtk/class/command_palette.zig.
-//
-// A searchable command palette shown as an `adw.Dialog` modal over a window.
-// Ghostty builds the widget from a blueprint and GObject list model; Witty
-// constructs the same controls directly and keeps the command model in V. The
-// palette collects two kinds of commands from the config:
-//
-//   * "jump" commands (one per open surface, "Focus: <title>"), and
-//   * "regular" commands from `command-palette-entry`, filtered by
-//     `isActionSupportedOnGtk`.
-//
-// It sorts them (case-insensitive, colon-normalized), filters against either
-// title or action key, and on activation either presents the jumped-to surface
-// or dispatches the selected action to the owning window.
-//
-// Reuses: `input.Command` / `input.Action` (input/command.v, input/binding.v),
-// `Config` (window_linux.v), `SurfaceWidget` (surface_class_linux.v),
-// `Window` (window_linux.v), `WeakRef` (weak_ref_linux.v),
-// and `accel_from_trigger` (key_linux.v).
-
+// Translated Ghostty native command objects, list/filter model, and signal.
+// The live UI loads the unchanged compiled source blueprint from GResource.
 import input
 
 // --- New C bindings unique to this file -----------------------------------
 //
 // `AdwDialog` and `adw_dialog_present` are declared in dialog_linux.v and
 // reused here (grep-checked to avoid redeclaration).
-
-pub type GtkListBox = voidptr
-
-pub type GtkListBoxRow = voidptr
 
 fn C.adw_dialog_new() AdwDialog
 
@@ -50,26 +27,6 @@ fn C.gtk_search_entry_new() GtkSearchEntry
 fn C.gtk_scrolled_window_new() GtkScrolledWindow
 
 fn C.gtk_scrolled_window_set_min_content_height(scrolled GtkScrolledWindow, height int)
-
-fn C.gtk_list_box_new() GtkListBox
-
-fn C.gtk_list_box_append(box GtkListBox, child GtkWidget)
-
-fn C.gtk_list_box_remove(box GtkListBox, child GtkWidget)
-
-fn C.gtk_list_box_set_activate_on_single_click(box GtkListBox, single bool)
-
-fn C.gtk_list_box_set_selection_mode(box GtkListBox, mode int)
-
-fn C.gtk_list_box_set_show_separators(box GtkListBox, show bool)
-
-fn C.gtk_list_box_get_row_at_index(box GtkListBox, index int) GtkListBoxRow
-
-fn C.gtk_list_box_get_selected_row(box GtkListBox) GtkListBoxRow
-
-fn C.gtk_list_box_select_row(box GtkListBox, row GtkListBoxRow)
-
-fn C.gtk_list_box_row_get_index(row GtkListBoxRow) int
 
 fn C.gtk_widget_get_first_child(widget GtkWidget) GtkWidget
 
@@ -88,6 +45,215 @@ fn C.adw_dialog_close(dialog AdwDialog) bool
 fn C.gtk_widget_get_realized(widget GtkWidget) bool
 
 fn C.g_object_is_floating(object GObject) bool
+
+pub type GtkListView = voidptr
+pub type GtkSingleSelection = voidptr
+pub type GListStore = voidptr
+
+fn C.gtk_builder_new() voidptr
+fn C.gtk_builder_set_scope(voidptr, voidptr)
+fn C.gtk_builder_cscope_new() voidptr
+fn C.gtk_builder_cscope_add_callback_symbol(voidptr, &char, voidptr)
+fn C.gtk_builder_set_translation_domain(voidptr, &char)
+fn C.gtk_builder_add_from_resource(voidptr, &char, &voidptr) u32
+fn C.gtk_builder_get_object(voidptr, &char) GObject
+fn C.g_list_store_append(GListStore, GObject)
+fn C.g_list_store_remove_all(GListStore)
+fn C.g_list_model_get_item(voidptr, u32) GObject
+fn C.g_list_model_get_n_items(voidptr) u32
+fn C.gtk_single_selection_get_selected(GtkSingleSelection) u32
+
+__global g_command_type = GType(0)
+__global g_command_parent = voidptr(unsafe { nil })
+__global g_command_palette_type = GType(0)
+__global g_command_palette_parent = voidptr(unsafe { nil })
+const command_wrapper_key = 'ghostty-command-wrapper'
+
+fn command_from_object(obj GObject) ?&Command {
+	if isnil(obj) { return none }
+	wrapper := native_wrapper_get(obj, command_wrapper_key)
+	if isnil(wrapper) { return none }
+	return unsafe { &Command(wrapper) }
+}
+
+fn command_native_get_property(obj voidptr, id u32, value voidptr, _ voidptr) {
+	mut self := command_from_object(GObject(obj)) or { return }
+	if id == 1 {
+		C.g_value_set_object(value,
+			if isnil(self.config) { unsafe { nil } } else { self.config.obj })
+		return
+	}
+	text := match id {
+		2 { self.prop_get_action_key() }
+		3 { self.prop_get_action() }
+		4 { self.prop_get_title() }
+		5 { self.prop_get_description() }
+		else { none }
+	}
+
+	if string_value := text {
+		C.g_value_set_string(value, &char(string_value.str))
+	} else {
+		C.g_value_set_string(value, unsafe { nil })
+	}
+}
+
+fn command_native_set_property(obj voidptr, id u32, value voidptr, _ voidptr) {
+	if id != 1 { return }
+	mut self := command_from_object(GObject(obj)) or { return }
+	config_obj := C.g_value_get_object(value)
+	mut config := &Config(unsafe { nil })
+	if !isnil(config_obj) {
+		priv := config_priv(config_obj)
+		if !isnil(priv.wrapper) { config = unsafe { &Config(priv.wrapper) } }
+	}
+	if self.config == config { return }
+	if !isnil(config) { config = config_ref(config) }
+	if !isnil(self.config) { self.config.unref() }
+	self.config = config
+}
+
+fn command_native_dispose(obj voidptr) {
+	if mut self := command_from_object(GObject(obj)) { self.dispose_state() }
+	C.witty_imgui_parent_dispose(g_command_parent, obj)
+}
+
+fn command_native_finalize(obj voidptr) {
+	if mut self := command_from_object(GObject(obj)) {
+		self.obj = unsafe { nil }
+		native_wrapper_set(GObject(obj), command_wrapper_key, unsafe { nil })
+	}
+	C.witty_gobject_call_parent_finalize(obj)
+}
+
+fn command_native_class_init(klass voidptr, _ voidptr) {
+	g_command_parent = C.g_type_class_peek_parent(klass)
+	C.witty_gobject_class_set_get_property(klass, voidptr(command_native_get_property))
+	C.witty_gobject_class_set_set_property(klass, voidptr(command_native_set_property))
+	C.witty_gobject_class_set_dispose(klass, voidptr(command_native_dispose))
+	C.witty_gobject_class_set_finalize(klass, voidptr(command_native_finalize))
+	C.g_object_class_install_property(klass, 1, C.g_param_spec_object(c'config', c'config',
+		c'config', config_get_type(), g_param_readwrite))
+	for index, name in ['action-key', 'action', 'title', 'description'] {
+		C.g_object_class_install_property(klass, u32(index + 2), C.g_param_spec_string(&char(name.str),
+			&char(name.str), &char(name.str), unsafe { nil }, g_param_readable))
+	}
+}
+
+pub fn command_get_type() GType {
+	if g_command_type == GType(0) {
+		parent := C.g_object_get_type()
+		mut query := C.GTypeQuery{}
+		C.g_type_query(parent, &query)
+		info := C.GTypeInfo{
+			class_size:    u16(query.class_size)
+			instance_size: u16(query.instance_size)
+			class_init:    voidptr(command_native_class_init)
+		}
+		g_command_type = C.g_type_register_static(parent, c'GhosttyCommand', &info, 0)
+	}
+	return g_command_type
+}
+
+fn (mut self Command) attach_native() {
+	self.obj = GObject(C.g_object_new(command_get_type(), &char(unsafe { nil })))
+	self.native_owner = true
+	native_wrapper_set(self.obj, command_wrapper_key, voidptr(&self))
+}
+
+fn command_palette_native_get_property(obj voidptr, id u32, value voidptr, _ voidptr) {
+	if id != 1 { return }
+	self := command_palette_from_object(GObject(obj)) or { return }
+	C.g_value_set_object(value, if isnil(self.config) { unsafe { nil } } else { self.config.obj })
+}
+
+fn command_palette_native_set_property(obj voidptr, id u32, value voidptr, _ voidptr) {
+	if id != 1 { return }
+	mut self := command_palette_from_object(GObject(obj)) or { return }
+	config_obj := C.g_value_get_object(value)
+	if isnil(config_obj) {
+		self.set_config_reference(unsafe { nil })
+		return
+	}
+	priv := config_priv(config_obj)
+	if !isnil(priv.wrapper) { self.set_config_reference(unsafe { &Config(priv.wrapper) }) }
+}
+
+fn command_palette_native_dispose(obj voidptr) {
+	if mut self := command_palette_from_object(GObject(obj)) { self.finalize_state() }
+	C.witty_imgui_parent_dispose(g_command_palette_parent, obj)
+}
+
+fn command_palette_native_class_init(klass voidptr, _ voidptr) {
+	g_command_palette_parent = C.g_type_class_peek_parent(klass)
+	_ = command_get_type()
+	C.witty_gobject_class_set_get_property(klass, voidptr(command_palette_native_get_property))
+	C.witty_gobject_class_set_set_property(klass, voidptr(command_palette_native_set_property))
+	C.witty_gobject_class_set_dispose(klass, voidptr(command_palette_native_dispose))
+	C.g_object_class_install_property(klass, 1, C.g_param_spec_object(c'config', c'config',
+		c'config', config_get_type(), g_param_readwrite))
+	C.g_signal_new(c'trigger', g_command_palette_type, g_signal_run_last, 0, unsafe { nil },
+		unsafe { nil }, unsafe { nil }, g_type_none, 1, g_type_pointer)
+}
+
+pub fn command_palette_get_type() GType {
+	if g_command_palette_type == GType(0) {
+		parent := C.adw_bin_get_type()
+		mut query := C.GTypeQuery{}
+		C.g_type_query(parent, &query)
+		info := C.GTypeInfo{
+			class_size:    u16(query.class_size)
+			instance_size: u16(query.instance_size)
+			class_init:    voidptr(command_palette_native_class_init)
+			instance_init: voidptr(command_palette_native_instance_init)
+		}
+		g_command_palette_type =
+			C.g_type_register_static(parent, c'GhosttyCommandPalette', &info, 0)
+	}
+	return g_command_palette_type
+}
+
+fn command_palette_native_instance_init(obj voidptr, _ voidptr) {
+	builder := C.gtk_builder_new()
+	scope := C.gtk_builder_cscope_new()
+	C.gtk_builder_cscope_add_callback_symbol(scope, c'closed',
+		voidptr(command_palette_dialog_closed_cb))
+	C.gtk_builder_cscope_add_callback_symbol(scope, c'search_stopped',
+		voidptr(command_palette_search_stopped_cb))
+	C.gtk_builder_cscope_add_callback_symbol(scope, c'search_activated',
+		voidptr(command_palette_search_activated_cb))
+	C.gtk_builder_cscope_add_callback_symbol(scope, c'row_activated',
+		voidptr(command_palette_row_activated_cb))
+	C.gtk_builder_set_scope(builder, scope)
+	object_unref(GObject(scope))
+	C.gtk_builder_set_translation_domain(builder, c'com.mitchellh.ghostty')
+	mut failure := voidptr(unsafe { nil })
+	if C.gtk_builder_add_from_resource(builder,
+		c'/com/mitchellh/ghostty/ui/1.5/command-palette.ui', &failure) == 0 {
+		message := error_message(GError(failure)).clone()
+		if !isnil(failure) { C.g_error_free(failure) }
+		object_unref(GObject(builder))
+		panic('unable to initialize GhosttyCommandPalette blueprint: ${message}')
+	}
+	mut self := &CommandPalette{
+		widget: GtkWidget(obj)
+		dialog: AdwDialog(C.gtk_builder_get_object(builder, c'dialog'))
+		search: GtkSearchEntry(C.gtk_builder_get_object(builder, c'search'))
+		list:   GtkListView(C.gtk_builder_get_object(builder, c'view'))
+		model:  GtkSingleSelection(C.gtk_builder_get_object(builder, c'model'))
+		source: GListStore(C.gtk_builder_get_object(builder, c'source'))
+	}
+	// The original template owns its standalone dialog; retain that native
+	// owner after releasing the construction-only GtkBuilder.
+	object_ref(GObject(self.dialog))
+	for object in [GObject(obj), GObject(self.dialog), GObject(self.search), GObject(self.list)] {
+		native_wrapper_set(object, command_palette_wrapper_key, voidptr(self))
+	}
+	C.g_signal_connect_data(obj, c'notify::config',
+		GCallback(voidptr(command_palette_notify_config_cb)), voidptr(self), unsafe { nil }, 0)
+	object_unref(GObject(builder))
+	C.g_object_weak_ref(GObject(obj), voidptr(command_palette_native_finalize_cb), voidptr(self))
+}
 
 // --- CommandData ----------------------------------------------------------
 
@@ -119,6 +285,8 @@ pub type CommandData = JumpData | RegularData
 @[heap]
 pub struct Command {
 pub mut:
+	obj          GObject = unsafe { nil }
+	native_owner bool
 	// The config this command was built from. nil means "unset".
 	config &Config = unsafe { nil }
 
@@ -136,6 +304,7 @@ pub fn Command.new(config &Config, command input.Command) &Command {
 	if !isnil(config) {
 		self.config = config_ref(config)
 	}
+	self.attach_native()
 	return self
 }
 
@@ -155,6 +324,7 @@ pub fn Command.new_jump(config &Config, surface &SurfaceWidget) &Command {
 	if !isnil(config) {
 		self.config = config_ref(config)
 	}
+	self.attach_native()
 	return self
 }
 
@@ -325,6 +495,17 @@ fn (mut self Command) present_jump_surface() bool {
 // dispose releases the config reference and clears the weak surface ref.
 // Mirrors the `dispose` virtual method.
 pub fn (mut self Command) dispose() {
+	if !isnil(self.obj) {
+		if self.native_owner {
+			self.native_owner = false
+			object_unref(self.obj)
+		}
+		return
+	}
+	self.dispose_state()
+}
+
+fn (mut self Command) dispose_state() {
 	if !isnil(self.config) {
 		self.config.unref()
 		self.config = unsafe { nil }
@@ -340,12 +521,12 @@ pub fn (mut self Command) dispose() {
 
 // --- CommandPalette -------------------------------------------------------
 
-// CommandPalette is the V-owned model and GTK widget set corresponding to
-// Ghostty's `GhosttyCommandPalette` GObject class.
+// The wrapper retains the native GhosttyCommandPalette instance and the
+// source blueprint's GObject model hierarchy.
 @[heap]
 pub struct CommandPalette {
 pub mut:
-	// The dialog widget used as this instance's root.
+	// The native GhosttyCommandPalette AdwBin instance.
 	widget GtkWidget = unsafe { nil }
 
 	// The configuration this palette is using. nil means "unset".
@@ -357,17 +538,16 @@ pub mut:
 	// The search input text field.
 	search GtkSearchEntry = unsafe { nil }
 
-	// Programmatic equivalent of the blueprint list view. GtkListBox preserves
-	// the same row activation and single-selection behavior while V owns the
-	// command wrappers directly.
-	list GtkListBox = unsafe { nil }
+	// The original list view, filtered single-selection model and list store.
+	list   GtkListView        = unsafe { nil }
+	model  GtkSingleSelection = unsafe { nil }
+	source GListStore         = unsafe { nil }
 
-	// The command list and indices currently visible after filtering.
-	commands         []&Command
-	visible_commands []int
-	window           &Window      = unsafe { nil }
-	app              &Application = unsafe { nil }
-	disposed         bool
+	// Temporary command ownership used for source collection/sorting.
+	commands []&Command
+	window   &Window      = unsafe { nil }
+	app      &Application = unsafe { nil }
+	disposed bool
 }
 
 const command_palette_wrapper_key = 'witty-command-palette-wrapper'
@@ -377,58 +557,18 @@ const command_palette_wrapper_key = 'witty-command-palette-wrapper'
 // self-reference, released by dialog_closed, and the returned wrapper owns one
 // additional caller reference.
 pub fn new_command_palette() &CommandPalette {
-	dialog := C.adw_dialog_new()
-	// Ghostty's AdwBin is initially floating. AdwDialog is the programmatic
-	// root used by this translation and can be returned as an ordinary
-	// transfer-full GObject, so only sink it when it is actually floating. In
-	// either case the initial reference becomes the close-time self-reference.
-	if C.g_object_is_floating(GObject(dialog)) {
-		C.g_object_ref_sink(GObject(dialog))
+	obj := GObject(C.g_object_new(command_palette_get_type(), &char(unsafe { nil })))
+	C.g_object_ref_sink(obj)
+	object_ref(obj)
+	return command_palette_from_object(obj) or {
+		panic('native palette instance did not initialize')
 	}
-	C.adw_dialog_set_content_width(dialog, 700)
-
-	toolbar := C.adw_toolbar_view_new()
-	C.adw_toolbar_view_set_top_bar_style(toolbar, int(AdwToolbarStyle.flat))
-	header := C.adw_header_bar_new()
-	search := C.gtk_search_entry_new()
-	C.gtk_widget_set_hexpand(search, 1)
-	C.g_object_set(GObject(search), c'placeholder-text', c'Execute a command…', unsafe { nil })
-	C.gtk_widget_add_css_class(search, c'command-palette-search')
-	C.adw_header_bar_set_title_widget(header, search)
-	C.adw_toolbar_view_add_top_bar(toolbar, header)
-
-	scrolled := C.gtk_scrolled_window_new()
-	C.gtk_scrolled_window_set_min_content_height(scrolled, 300)
-	list := C.gtk_list_box_new()
-	C.gtk_list_box_set_selection_mode(list, 1)
-	C.gtk_list_box_set_activate_on_single_click(list, true)
-	C.gtk_list_box_set_show_separators(list, true)
-	C.gtk_widget_add_css_class(GtkWidget(list), c'rich-list')
-	C.gtk_scrolled_window_set_child(scrolled, GtkWidget(list))
-	C.adw_toolbar_view_set_content(toolbar, GtkWidget(scrolled))
-	C.adw_dialog_set_child(dialog, GtkWidget(toolbar))
-
-	mut self := &CommandPalette{
-		widget: GtkWidget(dialog)
-		dialog: dialog
-		search: search
-		list:   list
-	}
-	C.g_object_set_data(GObject(dialog), &char(command_palette_wrapper_key.str), voidptr(self))
-	C.g_object_weak_ref(GObject(dialog), voidptr(command_palette_native_finalize_cb), voidptr(self))
-	C.g_signal_connect_data(dialog, c'closed', GCallback(voidptr(command_palette_dialog_closed_cb)), self, unsafe { nil }, 0)
-	C.g_signal_connect_data(search, c'stop-search', GCallback(voidptr(command_palette_search_stopped_cb)), self, unsafe { nil }, 0)
-	C.g_signal_connect_data(search, c'activate', GCallback(voidptr(command_palette_search_activated_cb)), self, unsafe { nil }, 0)
-	C.g_signal_connect_data(search, c'search-changed', GCallback(voidptr(command_palette_search_changed_cb)), self, unsafe { nil }, 0)
-	C.g_signal_connect_data(list, c'row-activated', GCallback(voidptr(command_palette_row_activated_cb)), self, unsafe { nil }, 0)
-	object_ref(GObject(dialog))
-	return self
 }
 
 // ref returns a new caller-owned reference to the palette.
 pub fn (mut self CommandPalette) ref() &CommandPalette {
-	if !isnil(self.dialog) {
-		object_ref(GObject(self.dialog))
+	if !isnil(self.widget) {
+		object_ref(GObject(self.widget))
 	}
 	return self
 }
@@ -436,16 +576,16 @@ pub fn (mut self CommandPalette) ref() &CommandPalette {
 // ref_sink adopts a floating palette reference or adds a reference when the
 // native object is already owned, matching Common.refSink.
 pub fn (mut self CommandPalette) ref_sink() &CommandPalette {
-	if !isnil(self.dialog) {
-		C.g_object_ref_sink(GObject(self.dialog))
+	if !isnil(self.widget) {
+		C.g_object_ref_sink(GObject(self.widget))
 	}
 	return self
 }
 
 // unref releases one caller or self reference.
 pub fn (mut self CommandPalette) unref() {
-	if !isnil(self.dialog) {
-		object_unref(GObject(self.dialog))
+	if !isnil(self.widget) {
+		object_unref(GObject(self.widget))
 	}
 }
 
@@ -453,20 +593,42 @@ pub fn (mut self CommandPalette) unref() {
 // WeakRef(CommandPalette).get. The returned wrapper borrows the caller's
 // strong native-object reference.
 fn command_palette_from_object(obj GObject) ?&CommandPalette {
-	if isnil(obj) || C.g_type_check_instance_is_a(obj, C.adw_dialog_get_type()) == 0 {
+	if isnil(obj) || C.g_type_check_instance_is_a(obj, command_palette_get_type()) == 0 {
 		return none
 	}
-	wrapper := C.g_object_get_data(obj, &char(command_palette_wrapper_key.str))
+	wrapper := native_wrapper_get(obj, command_palette_wrapper_key)
 	if isnil(wrapper) {
 		return none
 	}
 	return unsafe { &CommandPalette(wrapper) }
 }
 
+fn command_palette_from_child(obj GObject) ?&CommandPalette {
+	if isnil(obj) { return none }
+	wrapper := native_wrapper_get(obj, command_palette_wrapper_key)
+	if isnil(wrapper) { return none }
+	self := unsafe { &CommandPalette(wrapper) }
+	if self.disposed { return none }
+	return self
+}
+
 // set_config applies the ownership and notification behavior of the native
 // `config` GObject property. The palette owns its own reference independently
 // of the commands rebuilt by prop_config.
 pub fn (mut self CommandPalette) set_config(config &Config) {
+	if !isnil(self.widget) {
+		C.g_object_set(GObject(self.widget), c'config', if isnil(config) {
+			voidptr(unsafe { nil })
+		} else {
+			voidptr(config.obj)
+		}, unsafe { nil })
+		return
+	}
+	self.set_config_reference(config)
+	self.prop_config()
+}
+
+fn (mut self CommandPalette) set_config_reference(config &Config) {
 	if self.config == config {
 		return
 	}
@@ -475,7 +637,6 @@ pub fn (mut self CommandPalette) set_config(config &Config) {
 		self.config.unref()
 	}
 	self.config = new_config
-	self.prop_config()
 }
 
 // prop_config is the config-changed handler: it clears and rebuilds the command
@@ -486,7 +647,8 @@ pub fn (mut self CommandPalette) prop_config() {
 		return
 	}
 
-	// Clear existing entries.
+	// Native model objects and their constructor references are independent.
+	if !isnil(self.source) { C.g_list_store_remove_all(self.source) }
 	for mut command in self.commands {
 		command.dispose()
 	}
@@ -508,7 +670,12 @@ pub fn (mut self CommandPalette) prop_config() {
 		return 0
 	})
 
-	self.refresh_visible_commands('')
+	if !isnil(self.source) {
+		for mut command in self.commands {
+			C.g_list_store_append(self.source, command.obj)
+			command.dispose()
+		}
+	}
 }
 
 // collect_regular_commands collects regular commands from the config's
@@ -594,10 +761,12 @@ fn compare_commands(mut a Command, mut b Command) bool {
 		RegularData { return false }
 		JumpData { a.data.sort_key }
 	}
+
 	b_sort_key := match b.data {
 		RegularData { return false }
 		JumpData { b.data.sort_key }
 	}
+
 	return a_sort_key < b_sort_key
 }
 
@@ -654,192 +823,62 @@ pub fn (mut self CommandPalette) row_activated(pos u32) {
 // position: jump commands present their surface, regular commands emit the
 // `trigger` signal with the action. Mirrors `activated`.
 fn (mut self CommandPalette) activated(pos u32) {
-	// Ghostty obtains a strong reference to the selected model object before
-	// closing. Here the palette owns its V command wrappers, so keep their
-	// native owner alive until activation has finished.
-	mut cmd := &Command(unsafe { nil })
-	if pos < u32(self.visible_commands.len) {
-		command_index := self.visible_commands[pos]
-		if command_index >= 0 && command_index < self.commands.len {
-			cmd = self.commands[command_index]
-		}
-	}
-	if !isnil(cmd) {
-		self.ref()
+	// SelectionModel.getItem returns a strong command reference, retained
+	// across close exactly as in the source activated handler.
+	obj := if isnil(self.model) {
+		GObject(unsafe { nil })
+	} else {
+		C.g_list_model_get_item(self.model, pos)
 	}
 	defer {
-		if !isnil(cmd) {
-			self.unref()
-		}
+		if !isnil(obj) { object_unref(obj) }
 	}
-
-	// Close before running the action so a follow-up dialog (e.g. the change
-	// title dialog) doesn't displace us before we register as closed.
 	self.close()
-	if isnil(cmd) {
+	mut command := command_from_object(obj) or { return }
+	if command.is_jump() {
+		command.present_jump_surface()
 		return
 	}
-
-	// Jump commands present their surface.
-	if cmd.is_jump() {
-		cmd.present_jump_surface()
-		return
-	}
-
-	// Regular command: emit the trigger signal with the action.
-	action := cmd.get_action() or { return }
+	action := command.get_action() or { return }
 	self.emit_trigger(action)
 }
 
-// model_selected returns the currently selected position in the selection
-// model. Mirrors `priv.model.getSelected()`.
 fn (self &CommandPalette) model_selected() u32 {
-	if isnil(self.list) {
-		return u32(-1)
-	}
-	row := C.gtk_list_box_get_selected_row(self.list)
-	if isnil(row) {
-		return u32(-1)
-	}
-	return u32(C.gtk_list_box_row_get_index(row))
+	return if isnil(self.model) { u32(-1) } else { C.gtk_single_selection_get_selected(self.model) }
 }
 
-// emit_trigger emits the "trigger" signal with the selected action. Mirrors the
-// `signals.trigger.impl.emit(...)` call.
 fn (self &CommandPalette) emit_trigger(action input.Action) {
-	if !isnil(self.window) {
-		mut window := unsafe { self.window }
-		window.perform_binding_action(action)
-	}
+	C.g_signal_emit_by_name(self.widget, c'trigger', &action)
 }
 
-fn (mut self CommandPalette) refresh_visible_commands(query string) {
-	if isnil(self.list) {
-		return
-	}
-	for {
-		child := C.gtk_widget_get_first_child(GtkWidget(self.list))
-		if isnil(child) {
-			break
-		}
-		C.gtk_list_box_remove(self.list, child)
-	}
-
-	self.visible_commands = self.filter(query)
-	for command_index in self.visible_commands {
-		mut command := self.commands[command_index]
-		row := C.gtk_box_new(0, 10)
-		labels := C.gtk_box_new(1, 0)
-		C.gtk_widget_set_hexpand(labels, 1)
-
-		title := command.prop_get_title() or { '' }
-		title_label := C.gtk_label_new(&char(title.str))
-		C.gtk_label_set_xalign(title_label, 0)
-		C.gtk_label_set_ellipsize(title_label, 3)
-		C.gtk_label_set_single_line_mode(title_label, true)
-		C.gtk_widget_add_css_class(title_label, c'title')
-		C.gtk_box_append(labels, title_label)
-
-		action_key := command.prop_get_action_key() or { '' }
-		if action_key.len > 0 {
-			action_label := C.gtk_label_new(&char(action_key.str))
-			C.gtk_label_set_xalign(action_label, 0)
-			C.gtk_label_set_ellipsize(action_label, 3)
-			C.gtk_label_set_single_line_mode(action_label, true)
-			C.gtk_widget_add_css_class(action_label, c'subtitle')
-			C.gtk_widget_add_css_class(action_label, c'monospace')
-			C.gtk_box_append(labels, action_label)
-		}
-		C.gtk_box_append(row, labels)
-
-		accelerator := command.prop_get_action() or { '' }
-		if accelerator.len > 0 {
-			shortcut := C.gtk_shortcut_label_new(&char(accelerator.str))
-			C.gtk_box_append(row, shortcut)
-		}
-		if description := command.prop_get_description() {
-			C.gtk_widget_set_tooltip_text(row, &char(description.str))
-		}
-		C.gtk_list_box_append(self.list, row)
-	}
-	if self.visible_commands.len > 0 {
-		first := C.gtk_list_box_get_row_at_index(self.list, 0)
-		C.gtk_list_box_select_row(self.list, first)
-	}
-}
-
-fn command_palette_dialog_closed_cb(dialog AdwDialog, data voidptr) {
-	_ = dialog
+fn command_palette_notify_config_cb(_ GObject, _ voidptr, data voidptr) {
 	if !isnil(data) {
 		mut self := unsafe { &CommandPalette(data) }
-		self.dialog_closed()
+		self.prop_config()
 	}
 }
 
-fn command_palette_native_finalize_cb(data voidptr, object GObject) {
-	_ = object
+fn command_palette_dialog_closed_cb(dialog AdwDialog, _ voidptr) {
+	if mut self := command_palette_from_child(GObject(dialog)) { self.dialog_closed() }
+}
+
+fn command_palette_native_finalize_cb(data voidptr, _ GObject) {
 	if !isnil(data) {
 		mut self := unsafe { &CommandPalette(data) }
-		self.finalize_state()
+		self.widget = unsafe { nil }
 	}
 }
 
-fn command_palette_search_stopped_cb(search GtkSearchEntry, data voidptr) {
-	_ = search
-	if !isnil(data) {
-		self := unsafe { &CommandPalette(data) }
-		self.search_stopped()
-	}
+fn command_palette_search_stopped_cb(search GtkSearchEntry, _ voidptr) {
+	if self := command_palette_from_child(GObject(search)) { self.search_stopped() }
 }
 
-fn command_palette_search_activated_cb(search GtkSearchEntry, data voidptr) {
-	_ = search
-	if !isnil(data) {
-		mut self := unsafe { &CommandPalette(data) }
-		self.search_activated()
-	}
+fn command_palette_search_activated_cb(search GtkSearchEntry, _ voidptr) {
+	if mut self := command_palette_from_child(GObject(search)) { self.search_activated() }
 }
 
-fn command_palette_search_changed_cb(search GtkSearchEntry, data voidptr) {
-	if isnil(search) || isnil(data) {
-		return
-	}
-	text_ptr := C.gtk_editable_get_text(GtkWidget(search))
-	mut query := ''
-	if !isnil(text_ptr) {
-		query = unsafe { cstring_to_vstring(text_ptr) }
-	}
-	mut self := unsafe { &CommandPalette(data) }
-	self.refresh_visible_commands(query)
-}
-
-fn command_palette_row_activated_cb(list GtkListBox, row GtkListBoxRow, data voidptr) {
-	_ = list
-	if isnil(row) || isnil(data) {
-		return
-	}
-	mut self := unsafe { &CommandPalette(data) }
-	self.row_activated(u32(C.gtk_list_box_row_get_index(row)))
-}
-
-// filter mirrors the blueprint's GtkAnyFilter of two default GtkStringFilters:
-// a command remains visible when the case-insensitive query occurs in either
-// its title or its serialized action key. Source ordering is preserved.
-pub fn (mut self CommandPalette) filter(query string) []int {
-	needle := query.to_lower()
-	mut result := []int{cap: self.commands.len}
-	for i, mut command in self.commands {
-		if needle.len == 0 {
-			result << i
-			continue
-		}
-		title := command.prop_get_title() or { '' }
-		action_key := command.prop_get_action_key() or { '' }
-		if title.to_lower().contains(needle) || action_key.to_lower().contains(needle) {
-			result << i
-		}
-	}
-	return result
+fn command_palette_row_activated_cb(view GtkListView, position u32, _ voidptr) {
+	if mut self := command_palette_from_child(GObject(view)) { self.row_activated(position) }
 }
 
 // finalize_state mirrors the palette dispose vfunc after the final native
@@ -850,11 +889,11 @@ fn (mut self CommandPalette) finalize_state() {
 		return
 	}
 	self.disposed = true
+	if !isnil(self.source) { C.g_list_store_remove_all(self.source) }
 	for mut command in self.commands {
 		command.dispose()
 	}
 	self.commands.clear()
-	self.visible_commands.clear()
 	if !isnil(self.config) {
 		self.config.unref()
 	}
@@ -862,7 +901,10 @@ fn (mut self CommandPalette) finalize_state() {
 	self.window = unsafe { nil }
 	self.app = unsafe { nil }
 	self.widget = unsafe { nil }
+	if !isnil(self.dialog) { object_unref(GObject(self.dialog)) }
 	self.dialog = unsafe { nil }
 	self.search = unsafe { nil }
 	self.list = unsafe { nil }
+	self.model = unsafe { nil }
+	self.source = unsafe { nil }
 }

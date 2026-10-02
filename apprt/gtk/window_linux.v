@@ -11,7 +11,6 @@ module gtk
 // implementation. The blueprint widget graph is built programmatically with
 // the same AdwTabOverview / AdwTabBar / AdwTabView / AdwToolbarView /
 // AdwToastOverlay hierarchy and signal contract as the pinned Zig source.
-
 import configpkg
 import core
 import input
@@ -252,10 +251,23 @@ const g_signal_match_data = u32(1 << 4)
 
 fn window_titlebar_style_get_type() GType {
 	if g_window_titlebar_style_type == GType(0) {
-		g_window_titlebar_style_values[0] = C.GEnumValue{ value: int(configpkg.GtkTitlebarStyle.native), value_name: c'native', value_nick: c'native' }
-		g_window_titlebar_style_values[1] = C.GEnumValue{ value: int(configpkg.GtkTitlebarStyle.tabs), value_name: c'tabs', value_nick: c'tabs' }
-		g_window_titlebar_style_values[2] = C.GEnumValue{ value: 0, value_name: &char(unsafe { nil }), value_nick: &char(unsafe { nil }) }
-		g_window_titlebar_style_type = C.g_enum_register_static(c'GhosttyGtkTitlebarStyle', &g_window_titlebar_style_values[0])
+		g_window_titlebar_style_values[0] = C.GEnumValue{
+			value:      int(configpkg.GtkTitlebarStyle.native)
+			value_name: c'native'
+			value_nick: c'native'
+		}
+		g_window_titlebar_style_values[1] = C.GEnumValue{
+			value:      int(configpkg.GtkTitlebarStyle.tabs)
+			value_name: c'tabs'
+			value_nick: c'tabs'
+		}
+		g_window_titlebar_style_values[2] = C.GEnumValue{
+			value:      0
+			value_name: &char(unsafe { nil })
+			value_nick: &char(unsafe { nil })
+		}
+		g_window_titlebar_style_type = C.g_enum_register_static(c'GhosttyGtkTitlebarStyle',
+			&g_window_titlebar_style_values[0])
 	}
 	return g_window_titlebar_style_type
 }
@@ -375,26 +387,44 @@ fn window_class_init(klass voidptr, class_data voidptr) {
 	readable := g_param_readable | window_param_static_strings
 	readwrite := g_param_readwrite | window_param_static_strings
 	nil_str := &char(unsafe { nil })
-	g_window_pspec_active_surface = C.g_param_spec_object(c'active-surface', nil_str, nil_str, terminal_surface_get_type(), readable)
-	g_window_pspec_config = C.g_param_spec_object(c'config', nil_str, nil_str, config_get_type(), readwrite)
-	g_window_pspec_debug = C.g_param_spec_boolean(c'debug', nil_str, nil_str, $if debug { 1 } $else { 0 }, readable)
-	g_window_pspec_headerbar_visible = C.g_param_spec_boolean(c'headerbar-visible', nil_str, nil_str, 1, readable)
-	g_window_pspec_quick_terminal = C.g_param_spec_boolean(c'quick-terminal', nil_str, nil_str, 1, readwrite)
-	g_window_pspec_tabs_autohide = C.g_param_spec_boolean(c'tabs-autohide', nil_str, nil_str, 1, readable)
-	g_window_pspec_tabs_visible = C.g_param_spec_boolean(c'tabs-visible', nil_str, nil_str, 1, readable)
+	g_window_pspec_active_surface = C.g_param_spec_object(c'active-surface', nil_str, nil_str,
+		terminal_surface_get_type(), readable)
+	g_window_pspec_config = C.g_param_spec_object(c'config', nil_str, nil_str, config_get_type(),
+		readwrite)
+	g_window_pspec_debug = C.g_param_spec_boolean(c'debug', nil_str, nil_str, $if debug {
+		1
+	} $else {
+		0
+	}, readable)
+	g_window_pspec_headerbar_visible = C.g_param_spec_boolean(c'headerbar-visible', nil_str,
+		nil_str, 1, readable)
+	g_window_pspec_quick_terminal = C.g_param_spec_boolean(c'quick-terminal', nil_str, nil_str, 1,
+		readwrite)
+	g_window_pspec_tabs_autohide = C.g_param_spec_boolean(c'tabs-autohide', nil_str, nil_str, 1,
+		readable)
+	g_window_pspec_tabs_visible = C.g_param_spec_boolean(c'tabs-visible', nil_str, nil_str, 1,
+		readable)
 	g_window_pspec_tabs_wide = C.g_param_spec_boolean(c'tabs-wide', nil_str, nil_str, 1, readable)
-	g_window_pspec_toolbar_style = C.g_param_spec_enum(c'toolbar-style', nil_str, nil_str, C.adw_toolbar_style_get_type(), int(AdwToolbarStyle.raised), readable)
-	g_window_pspec_titlebar_style = C.g_param_spec_enum(c'titlebar-style', nil_str, nil_str, window_titlebar_style_get_type(), int(configpkg.GtkTitlebarStyle.native), readable)
-	C.g_object_class_install_property(klass, window_prop_active_surface, g_window_pspec_active_surface)
+	g_window_pspec_toolbar_style = C.g_param_spec_enum(c'toolbar-style', nil_str, nil_str,
+		C.adw_toolbar_style_get_type(), int(AdwToolbarStyle.raised), readable)
+	g_window_pspec_titlebar_style = C.g_param_spec_enum(c'titlebar-style', nil_str, nil_str,
+		window_titlebar_style_get_type(), int(configpkg.GtkTitlebarStyle.native), readable)
+	C.g_object_class_install_property(klass, window_prop_active_surface,
+		g_window_pspec_active_surface)
 	C.g_object_class_install_property(klass, window_prop_config, g_window_pspec_config)
 	C.g_object_class_install_property(klass, window_prop_debug, g_window_pspec_debug)
-	C.g_object_class_install_property(klass, window_prop_headerbar_visible, g_window_pspec_headerbar_visible)
-	C.g_object_class_install_property(klass, window_prop_quick_terminal, g_window_pspec_quick_terminal)
-	C.g_object_class_install_property(klass, window_prop_tabs_autohide, g_window_pspec_tabs_autohide)
+	C.g_object_class_install_property(klass, window_prop_headerbar_visible,
+		g_window_pspec_headerbar_visible)
+	C.g_object_class_install_property(klass, window_prop_quick_terminal,
+		g_window_pspec_quick_terminal)
+	C.g_object_class_install_property(klass, window_prop_tabs_autohide,
+		g_window_pspec_tabs_autohide)
 	C.g_object_class_install_property(klass, window_prop_tabs_visible, g_window_pspec_tabs_visible)
 	C.g_object_class_install_property(klass, window_prop_tabs_wide, g_window_pspec_tabs_wide)
-	C.g_object_class_install_property(klass, window_prop_toolbar_style, g_window_pspec_toolbar_style)
-	C.g_object_class_install_property(klass, window_prop_titlebar_style, g_window_pspec_titlebar_style)
+	C.g_object_class_install_property(klass, window_prop_toolbar_style,
+		g_window_pspec_toolbar_style)
+	C.g_object_class_install_property(klass, window_prop_titlebar_style,
+		g_window_pspec_titlebar_style)
 }
 
 fn window_instance_init(instance voidptr, klass voidptr) {
@@ -414,7 +444,8 @@ pub fn window_get_type() GType {
 			instance_init: voidptr(window_instance_init)
 		}
 		g_window_type = C.g_type_register_static(parent, c'GhosttyWindow', &info, 0)
-		g_window_priv_offset = C.g_type_add_instance_private(g_window_type, sizeof(C.GhosttyWindowPrivate))
+		g_window_priv_offset = C.g_type_add_instance_private(g_window_type,
+			sizeof(C.GhosttyWindowPrivate))
 	}
 	return g_window_type
 }
@@ -586,7 +617,8 @@ fn window_split_button_new(menu GMenu, flat bool, self &Window) GtkWidget {
 	C.adw_split_button_set_menu_model(button, GMenuModel(menu))
 	C.gtk_widget_set_focusable(button, 0)
 	C.gtk_widget_set_focus_on_click(button, 0)
-	C.g_signal_connect_data(button, c'clicked', GCallback(voidptr(window_new_tab_button_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(button, c'clicked', GCallback(voidptr(window_new_tab_button_cb)),
+		voidptr(self), unsafe { nil }, 0)
 	return button
 }
 
@@ -600,7 +632,8 @@ fn window_overview_toggle_new(flat bool, self &Window) GtkWidget {
 	C.gtk_widget_set_tooltip_text(button, &char(tooltip.str))
 	C.gtk_widget_set_focusable(button, 0)
 	C.gtk_widget_set_focus_on_click(button, 0)
-	C.g_signal_connect_data(button, c'toggled', GCallback(voidptr(window_overview_toggle_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(button, c'toggled', GCallback(voidptr(window_overview_toggle_cb)),
+		voidptr(self), unsafe { nil }, 0)
 	return button
 }
 
@@ -614,7 +647,8 @@ fn window_menu_button_new(menu GMenu, flat bool, self &Window) GtkWidget {
 	tooltip := i18n_('Main Menu')
 	C.gtk_widget_set_tooltip_text(button, &char(tooltip.str))
 	C.gtk_widget_set_focusable(button, 0)
-	C.g_signal_connect_data(button, c'notify::active', GCallback(voidptr(window_menu_active_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(button, c'notify::active', GCallback(voidptr(window_menu_active_cb)),
+		voidptr(self), unsafe { nil }, 0)
 	return button
 }
 
@@ -706,22 +740,38 @@ pub fn Window.new(app &Application) &Window {
 	self.overview_tab_toggle = overview_tab_toggle
 	C.gtk_window_set_default_size(self.as_window(), 800, 600)
 	C.gtk_window_set_handle_menubar_accel(self.as_window(), 0)
-	C.g_signal_connect_data(self.obj, c'close-request', GCallback(voidptr(window_close_request_cb)), voidptr(self), unsafe { nil }, 0)
-	C.g_signal_connect_data(self.obj, c'realize', GCallback(voidptr(window_realize_cb)), voidptr(self), unsafe { nil }, 0)
-	C.g_signal_connect_data(self.tab_view, c'notify::n-pages', GCallback(voidptr(window_n_pages_cb)), voidptr(self), unsafe { nil }, 0)
-	C.g_signal_connect_data(self.tab_view, c'notify::selected-page', GCallback(voidptr(window_selected_page_cb)), voidptr(self), unsafe { nil }, 0)
-	C.g_signal_connect_data(self.tab_view, c'close-page', GCallback(voidptr(window_close_page_cb)), voidptr(self), unsafe { nil }, 0)
-	C.g_signal_connect_data(self.tab_view, c'page-attached', GCallback(voidptr(window_page_attached_cb)), voidptr(self), unsafe { nil }, 0)
-	C.g_signal_connect_data(self.tab_view, c'page-detached', GCallback(voidptr(window_page_detached_cb)), voidptr(self), unsafe { nil }, 0)
-	C.g_signal_connect_data(self.tab_view, c'create-window', GCallback(voidptr(window_create_window_cb)), voidptr(self), unsafe { nil }, 0)
-	C.g_signal_connect_data(self.tab_overview, c'create-tab', GCallback(voidptr(window_overview_create_tab_cb)), voidptr(self), unsafe { nil }, 0)
-	C.g_signal_connect_data(self.tab_overview, c'notify::open', GCallback(voidptr(window_overview_open_cb)), voidptr(self), unsafe { nil }, 0)
-	C.g_signal_connect_data(self.obj, c'notify::config', GCallback(voidptr(window_notify_config_cb)), voidptr(self), unsafe { nil }, 0)
-	C.g_signal_connect_data(self.obj, c'notify::fullscreened', GCallback(voidptr(window_notify_fullscreened_cb)), voidptr(self), unsafe { nil }, 0)
-	C.g_signal_connect_data(self.obj, c'notify::is-active', GCallback(voidptr(window_notify_is_active_cb)), voidptr(self), unsafe { nil }, 0)
-	C.g_signal_connect_data(self.obj, c'notify::maximized', GCallback(voidptr(window_notify_maximized_cb)), voidptr(self), unsafe { nil }, 0)
-	C.g_signal_connect_data(self.obj, c'notify::quick-terminal', GCallback(voidptr(window_notify_quick_terminal_cb)), voidptr(self), unsafe { nil }, 0)
-	C.g_signal_connect_data(self.obj, c'notify::scale-factor', GCallback(voidptr(window_notify_scale_factor_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.obj, c'close-request',
+		GCallback(voidptr(window_close_request_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.obj, c'realize', GCallback(voidptr(window_realize_cb)),
+		voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.tab_view, c'notify::n-pages',
+		GCallback(voidptr(window_n_pages_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.tab_view, c'notify::selected-page',
+		GCallback(voidptr(window_selected_page_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.tab_view, c'close-page', GCallback(voidptr(window_close_page_cb)),
+		voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.tab_view, c'page-attached',
+		GCallback(voidptr(window_page_attached_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.tab_view, c'page-detached',
+		GCallback(voidptr(window_page_detached_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.tab_view, c'create-window',
+		GCallback(voidptr(window_create_window_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.tab_overview, c'create-tab',
+		GCallback(voidptr(window_overview_create_tab_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.tab_overview, c'notify::open',
+		GCallback(voidptr(window_overview_open_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.obj, c'notify::config',
+		GCallback(voidptr(window_notify_config_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.obj, c'notify::fullscreened',
+		GCallback(voidptr(window_notify_fullscreened_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.obj, c'notify::is-active',
+		GCallback(voidptr(window_notify_is_active_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.obj, c'notify::maximized',
+		GCallback(voidptr(window_notify_maximized_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.obj, c'notify::quick-terminal',
+		GCallback(voidptr(window_notify_quick_terminal_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.obj, c'notify::scale-factor',
+		GCallback(voidptr(window_notify_scale_factor_cb)), voidptr(self), unsafe { nil }, 0)
 	self.init(app)
 	return self
 }
@@ -909,8 +959,10 @@ fn window_close_page_cb(view AdwTabView, page AdwTabPage, user_data voidptr) int
 		return 1
 	}
 	mut dialog := close_confirmation_dialog_new(.tab)
-	C.g_signal_connect_data(dialog.dialog.obj, c'close-request', GCallback(voidptr(window_close_tab_confirmed_cb)), page, unsafe { nil }, 0)
-	C.g_signal_connect_data(dialog.dialog.obj, c'cancel', GCallback(voidptr(window_close_tab_cancelled_cb)), page, unsafe { nil }, 0)
+	C.g_signal_connect_data(dialog.dialog.obj, c'close-request',
+		GCallback(voidptr(window_close_tab_confirmed_cb)), page, unsafe { nil }, 0)
+	C.g_signal_connect_data(dialog.dialog.obj, c'cancel',
+		GCallback(voidptr(window_close_tab_cancelled_cb)), page, unsafe { nil }, 0)
 	dialog.present(tab.widget)
 	return 1
 }
@@ -966,9 +1018,11 @@ fn window_page_detached_cb(view AdwTabView, page AdwTabPage, position int, user_
 	child := C.adw_tab_page_get_child(page)
 	for i, mut tab in self.tabs {
 		if tab.widget == child {
-			C.g_signal_handlers_disconnect_matched(tab.widget, g_signal_match_data, 0, 0, unsafe { nil }, unsafe { nil }, voidptr(self))
+			C.g_signal_handlers_disconnect_matched(tab.widget, g_signal_match_data, 0, 0,
+				unsafe { nil }, unsafe { nil }, voidptr(self))
 			if !isnil(tab.split_tree) {
-				C.g_signal_handlers_disconnect_matched(tab.split_tree.widget, g_signal_match_data, 0, 0, unsafe { nil }, unsafe { nil }, voidptr(self))
+				C.g_signal_handlers_disconnect_matched(tab.split_tree.widget, g_signal_match_data,
+					0, 0, unsafe { nil }, unsafe { nil }, voidptr(self))
 			}
 			if tree := tab.get_surface_tree() {
 				self.disconnect_surface_handlers(tree)
@@ -998,8 +1052,10 @@ fn window_page_attached_cb(view AdwTabView, page AdwTabPage, position int, user_
 	tab.window = self
 	if !isnil(tab.split_tree) {
 		tab.split_tree.window = self
-		C.g_signal_handlers_disconnect_matched(tab.split_tree.widget, g_signal_match_data, 0, 0, unsafe { nil }, unsafe { nil }, voidptr(self))
-		C.g_signal_connect_data(tab.split_tree.widget, c'changed', GCallback(voidptr(window_tab_split_tree_changed_cb)), voidptr(self), unsafe { nil }, 0)
+		C.g_signal_handlers_disconnect_matched(tab.split_tree.widget, g_signal_match_data, 0, 0,
+			unsafe { nil }, unsafe { nil }, voidptr(self))
+		C.g_signal_connect_data(tab.split_tree.widget, c'changed',
+			GCallback(voidptr(window_tab_split_tree_changed_cb)), voidptr(self), unsafe { nil }, 0)
 	}
 	mut found := false
 	for candidate in self.tabs {
@@ -1015,8 +1071,10 @@ fn window_page_attached_cb(view AdwTabView, page AdwTabPage, position int, user_
 			self.tabs << tab
 		}
 	}
-	C.g_signal_handlers_disconnect_matched(tab.widget, g_signal_match_data, 0, 0, unsafe { nil }, unsafe { nil }, voidptr(self))
-	C.g_signal_connect_data(tab.widget, c'close-request', GCallback(voidptr(window_tab_close_request_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_handlers_disconnect_matched(tab.widget, g_signal_match_data, 0, 0, unsafe { nil },
+		unsafe { nil }, voidptr(self))
+	C.g_signal_connect_data(tab.widget, c'close-request',
+		GCallback(voidptr(window_tab_close_request_cb)), voidptr(self), unsafe { nil }, 0)
 	if tree := tab.get_surface_tree() {
 		self.connect_surface_handlers(tree)
 	}
@@ -1107,7 +1165,8 @@ fn window_overview_open_cb(overview AdwTabOverview, pspec voidptr, user_data voi
 	if self.tab_overview_focus_timer != 0 {
 		C.g_source_remove(self.tab_overview_focus_timer)
 	}
-	self.tab_overview_focus_timer = C.g_timeout_add(500, voidptr(window_overview_focus_timer_cb), voidptr(self))
+	self.tab_overview_focus_timer = C.g_timeout_add(500, voidptr(window_overview_focus_timer_cb),
+		voidptr(self))
 }
 
 fn window_overview_focus_timer_cb(user_data voidptr) int {
@@ -1147,8 +1206,12 @@ fn window_action_cb(action GSimpleAction, parameter GVariant, data voidptr) {
 	name := unsafe { cstring_to_vstring(name_ptr) }
 	mut self := unsafe { &Window(data) }
 	match name {
-		'about' { self.action_about() }
-		'close' { self.action_close() }
+		'about' {
+			self.action_about()
+		}
+		'close' {
+			self.action_close()
+		}
 		'close-tab' {
 			if isnil(parameter) {
 				log.warn('win.close-tab called without a parameter')
@@ -1176,21 +1239,45 @@ fn window_action_cb(action GSimpleAction, parameter GVariant, data voidptr) {
 				}
 			}
 		}
-		'new-tab' { self.action_new_tab() }
-		'new-window' { self.action_new_window() }
-		'ring-bell' { self.action_ring_bell() }
-		'split-right' { self.action_split_right() }
-		'split-left' { self.action_split_left() }
-		'split-up' { self.action_split_up() }
-		'split-down' { self.action_split_down() }
-		'copy' { self.action_copy() }
-		'paste' { self.action_paste() }
-		'reset' { self.action_reset() }
-		'clear' { self.action_clear() }
+		'new-tab' {
+			self.action_new_tab()
+		}
+		'new-window' {
+			self.action_new_window()
+		}
+		'ring-bell' {
+			self.action_ring_bell()
+		}
+		'split-right' {
+			self.action_split_right()
+		}
+		'split-left' {
+			self.action_split_left()
+		}
+		'split-up' {
+			self.action_split_up()
+		}
+		'split-down' {
+			self.action_split_down()
+		}
+		'copy' {
+			self.action_copy()
+		}
+		'paste' {
+			self.action_paste()
+		}
+		'reset' {
+			self.action_reset()
+		}
+		'clear' {
+			self.action_clear()
+		}
 		'toggle-command-palette' {
 			self.toggle_command_palette()
 		}
-		'toggle-inspector' { self.toggle_inspector() }
+		'toggle-inspector' {
+			self.toggle_inspector()
+		}
 		else {}
 	}
 }
@@ -1214,9 +1301,18 @@ fn (mut self Window) toggle_command_palette() {
 		palette.unref()
 	}
 	palette.app = self.app
-	palette.set_config(self.config)
-	self.command_palette.set(GObject(palette.dialog))
+	C.g_object_bind_property(self.obj, c'config', palette.widget, c'config', 2)
+	C.g_signal_connect_data(palette.widget, c'trigger',
+		GCallback(voidptr(window_command_palette_trigger_cb)), voidptr(&self), unsafe { nil }, 0)
+	self.command_palette.set(GObject(palette.widget))
 	palette.toggle(self)
+}
+
+fn window_command_palette_trigger_cb(_ GObject, action &input.Action, data voidptr) {
+	if !isnil(action) && !isnil(data) {
+		mut self := unsafe { &Window(data) }
+		self.perform_binding_action(*action)
+	}
 }
 
 // --- Winproto -------------------------------------------------------------
@@ -1271,6 +1367,7 @@ fn (mut self Window) new_tab_page(parent ?&core.Surface, context apprt.NewSurfac
 			adw_tab_view_get_n_pages(tab_view)
 		}
 	}
+
 	// Add the page and select it.
 	page := adw_tab_view_insert(tab_view, tab.widget, position)
 	tab.sync_from_active_surface()
@@ -1365,14 +1462,22 @@ fn (mut self Window) connect_surface_handlers(tree &datastruct.SplitTree[Surface
 	for {
 		entry := it.next() or { break }
 		surface := entry.view
-		C.g_signal_handlers_disconnect_matched(surface.widget, g_signal_match_data, 0, 0, unsafe { nil }, unsafe { nil }, voidptr(self))
-		C.g_signal_connect_data(surface.widget, c'present-request', GCallback(voidptr(window_surface_present_request_cb)), voidptr(self), unsafe { nil }, 0)
-		C.g_signal_connect_data(surface.widget, c'clipboard-write', GCallback(voidptr(window_surface_clipboard_write_cb)), voidptr(self), unsafe { nil }, 0)
-		C.g_signal_connect_data(surface.widget, c'menu', GCallback(voidptr(window_surface_menu_cb)), voidptr(self), unsafe { nil }, 0)
-		C.g_signal_connect_data(surface.widget, c'toggle-fullscreen', GCallback(voidptr(window_surface_toggle_fullscreen_cb)), voidptr(self), unsafe { nil }, 0)
-		C.g_signal_connect_data(surface.widget, c'toggle-maximize', GCallback(voidptr(window_surface_toggle_maximize_cb)), voidptr(self), unsafe { nil }, 0)
+		C.g_signal_handlers_disconnect_matched(surface.widget, g_signal_match_data, 0, 0,
+			unsafe { nil }, unsafe { nil }, voidptr(self))
+		C.g_signal_connect_data(surface.widget, c'present-request',
+			GCallback(voidptr(window_surface_present_request_cb)), voidptr(self), unsafe { nil }, 0)
+		C.g_signal_connect_data(surface.widget, c'clipboard-write',
+			GCallback(voidptr(window_surface_clipboard_write_cb)), voidptr(self), unsafe { nil }, 0)
+		C.g_signal_connect_data(surface.widget, c'menu',
+			GCallback(voidptr(window_surface_menu_cb)), voidptr(self), unsafe { nil }, 0)
+		C.g_signal_connect_data(surface.widget, c'toggle-fullscreen',
+			GCallback(voidptr(window_surface_toggle_fullscreen_cb)), voidptr(self), unsafe { nil },
+			0)
+		C.g_signal_connect_data(surface.widget, c'toggle-maximize',
+			GCallback(voidptr(window_surface_toggle_maximize_cb)), voidptr(self), unsafe { nil }, 0)
 		if !self.surface_init {
-			C.g_signal_connect_data(surface.widget, c'init', GCallback(voidptr(window_surface_init_cb)), voidptr(self), unsafe { nil }, 0)
+			C.g_signal_connect_data(surface.widget, c'init',
+				GCallback(voidptr(window_surface_init_cb)), voidptr(self), unsafe { nil }, 0)
 		}
 	}
 }
@@ -1381,7 +1486,8 @@ fn (mut self Window) disconnect_surface_handlers(tree &datastruct.SplitTree[Surf
 	mut it := tree.iterator()
 	for {
 		entry := it.next() or { break }
-		C.g_signal_handlers_disconnect_matched(entry.view.widget, g_signal_match_data, 0, 0, unsafe { nil }, unsafe { nil }, voidptr(self))
+		C.g_signal_handlers_disconnect_matched(entry.view.widget, g_signal_match_data, 0, 0,
+			unsafe { nil }, unsafe { nil }, voidptr(self))
 	}
 }
 
@@ -1516,9 +1622,14 @@ pub fn (mut self Window) select_tab(selection SelectTab) bool {
 				return false
 			}
 			n_int := int(selection.n)
-			if n_int - 1 < total - 1 { n_int - 1 } else { total - 1 }
+			if n_int - 1 < total - 1 {
+				n_int - 1
+			} else {
+				total - 1
+			}
 		}
 	}
+
 	assert target >= 0
 	assert target < total
 
@@ -1753,8 +1864,7 @@ fn (mut self Window) bind_application_config(app &Application) {
 	if isnil(app) || isnil(app.obj) || isnil(self.obj) {
 		return
 	}
-	self.config_binding = GObject(C.g_object_bind_property(app.obj, c'config', self.obj,
-		c'config', 0))
+	self.config_binding = GObject(C.g_object_bind_property(app.obj, c'config', self.obj, c'config', 0))
 }
 
 fn (self &Window) notify_property(pspec &C.GParamSpec) {
@@ -1847,6 +1957,7 @@ pub fn (mut self Window) toggle_window_decorations() {
 		// Anything non-none to none.
 		.auto, .client, .server { configpkg.WindowDecoration.none_ }
 	}
+
 	self.set_window_decoration(new_deco)
 }
 
@@ -2057,8 +2168,10 @@ pub fn (mut self Window) window_realize(mut app Application) {
 
 	gdk_surface := C.gtk_native_get_surface(self.as_native())
 	if !isnil(gdk_surface) {
-		C.g_signal_connect_data(gdk_surface, c'notify::width', GCallback(voidptr(window_gdk_surface_resize_cb)), voidptr(self), unsafe { nil }, 0)
-		C.g_signal_connect_data(gdk_surface, c'notify::height', GCallback(voidptr(window_gdk_surface_resize_cb)), voidptr(self), unsafe { nil }, 0)
+		C.g_signal_connect_data(gdk_surface, c'notify::width',
+			GCallback(voidptr(window_gdk_surface_resize_cb)), voidptr(self), unsafe { nil }, 0)
+		C.g_signal_connect_data(gdk_surface, c'notify::height',
+			GCallback(voidptr(window_gdk_surface_resize_cb)), voidptr(self), unsafe { nil }, 0)
 	}
 
 	// When we are realized we always setup our appearance since this calls
@@ -2101,9 +2214,7 @@ fn (mut self Window) surface_clipboard_write(clipboard_type apprt.Clipboard, tex
 // prop_gdk_surface_resize reacts to a GdkSurface width/height change (X11 blur
 // fix). Mirrors `propGdkSurfaceWidth`/`propGdkSurfaceHeight`.
 pub fn (mut self Window) prop_gdk_surface_resize() {
-	self.winproto.resize_event() or {
-		log.warn('winproto resize event failed error=${err}')
-	}
+	self.winproto.resize_event() or { log.warn('winproto resize event failed error=${err}') }
 }
 
 // prop_is_active reacts to the window active state changing. Mirrors
@@ -2122,9 +2233,7 @@ pub fn (mut self Window) prop_is_active() {
 		return
 	}
 
-	self.winproto.set_urgent(false) or {
-		log.warn('winproto failed to reset urgency=${err}')
-	}
+	self.winproto.set_urgent(false) or { log.warn('winproto failed to reset urgency=${err}') }
 }
 
 // prop_fullscreened reacts to the fullscreen state changing. Mirrors
@@ -2172,7 +2281,8 @@ pub fn (mut self Window) prop_quick_terminal(mut app Application) {
 pub fn (mut self Window) window_close_request() bool {
 	if self.get_needs_confirm_quit() {
 		mut dialog := close_confirmation_dialog_new(.window)
-		C.g_signal_connect_data(dialog.dialog.obj, c'close-request', GCallback(voidptr(window_close_confirmed_cb)), voidptr(self), unsafe { nil }, 0)
+		C.g_signal_connect_data(dialog.dialog.obj, c'close-request',
+			GCallback(voidptr(window_close_confirmed_cb)), voidptr(self), unsafe { nil }, 0)
 		dialog.present(self.as_widget())
 		return true
 	}
@@ -2208,10 +2318,11 @@ pub fn (mut self Window) tab_view_n_pages() {
 pub fn (mut self Window) action_about() {
 	developer_name := internal_os.translate('Ghostty Developers')
 	if supports_dialogs() {
-		C.adw_show_about_dialog(self.as_widget(), c'application-name', c'Ghostty', c'developer-name',
-			&char(developer_name.str), c'application-icon', c'com.mitchellh.ghostty', c'version',
-			&char(build_meta.version_string.str), c'issue-url', c'https://github.com/ghostty-org/ghostty/issues',
-			c'website', c'https://ghostty.org', unsafe { nil })
+		C.adw_show_about_dialog(self.as_widget(), c'application-name', c'Ghostty',
+			c'developer-name', &char(developer_name.str), c'application-icon',
+			c'com.mitchellh.ghostty', c'version', &char(build_meta.version_string.str),
+			c'issue-url', c'https://github.com/ghostty-org/ghostty/issues', c'website',
+			c'https://ghostty.org', unsafe { nil })
 		return
 	}
 
@@ -2288,9 +2399,7 @@ pub fn (mut self Window) action_ring_bell() {
 		if C.gtk_window_is_active(self.as_window()) != 0 {
 			return
 		}
-		self.winproto.set_urgent(true) or {
-			log.warn('winproto failed to set urgency=${err}')
-		}
+		self.winproto.set_urgent(true) or { log.warn('winproto failed to set urgency=${err}') }
 	}
 }
 
@@ -2306,9 +2415,11 @@ fn (mut self Window) dispose_resources() {
 		self.tab_overview_focus_timer = 0
 	}
 	for mut tab in self.tabs {
-		C.g_signal_handlers_disconnect_matched(tab.widget, g_signal_match_data, 0, 0, unsafe { nil }, unsafe { nil }, voidptr(self))
+		C.g_signal_handlers_disconnect_matched(tab.widget, g_signal_match_data, 0, 0,
+			unsafe { nil }, unsafe { nil }, voidptr(self))
 		if !isnil(tab.split_tree) {
-			C.g_signal_handlers_disconnect_matched(tab.split_tree.widget, g_signal_match_data, 0, 0, unsafe { nil }, unsafe { nil }, voidptr(self))
+			C.g_signal_handlers_disconnect_matched(tab.split_tree.widget, g_signal_match_data, 0,
+				0, unsafe { nil }, unsafe { nil }, voidptr(self))
 			if tree := tab.get_surface_tree() {
 				self.disconnect_surface_handlers(tree)
 			}

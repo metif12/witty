@@ -5,13 +5,15 @@ fn C.g_type_name(GType) &char
 
 struct ImguiWidgetCallbackCounts {
 mut:
-	setup int
+	setup  int
 	render int
 }
+
 fn count_imgui_setup(data voidptr) {
 	mut counts := unsafe { &ImguiWidgetCallbackCounts(data) }
 	counts.setup++
 }
+
 fn count_imgui_render(data voidptr) {
 	mut counts := unsafe { &ImguiWidgetCallbackCounts(data) }
 	counts.render++
@@ -30,7 +32,8 @@ fn test_imgui_widget_native_virtual_methods_dispatch_the_inspector_override() {
 	if !C.gtk_init_check() { return }
 	C.adw_init()
 	mut counts := &ImguiWidgetCallbackCounts{}
-	mut widget := new_imgui_widget_type(inspector_widget_get_type(), count_imgui_setup, count_imgui_render, voidptr(counts))
+	mut widget := new_imgui_widget_type(inspector_widget_get_type(), count_imgui_setup,
+		count_imgui_render, voidptr(counts))
 	widget.ref_sink()
 	widget.setup()
 	widget.render()
@@ -39,7 +42,7 @@ fn test_imgui_widget_native_virtual_methods_dispatch_the_inspector_override() {
 	assert counts.render == 2
 	// Avoid invoking the inspector surface lifecycle with synthetic user_data.
 	object := GObject(widget.widget)
-	C.g_object_set_data(object, &char(imgui_widget_wrapper_key.str), unsafe { nil })
+	native_wrapper_set(object, imgui_widget_wrapper_key, unsafe { nil })
 	widget.deinit()
 	object_unref(object)
 }

@@ -71,7 +71,9 @@ fn test_command_data_retains_only_the_active_payload() {
 fn test_command_palette_action_key_uses_full_action_format() {
 	mut cfg := config_new(configpkg.Config{})
 	mut command := Command.new(cfg, input.Command{
-		action: input.ActionText{ value: 'hello world' }
+		action: input.ActionText{
+			value: 'hello world'
+		}
 		title:  'Type Text'
 	})
 
@@ -81,30 +83,69 @@ fn test_command_palette_action_key_uses_full_action_format() {
 	cfg.unref()
 }
 
-fn test_command_palette_filter_matches_title_or_action_key() {
-	mut palette := &CommandPalette{}
-	palette.commands = [
-		&Command{
-			data: RegularData{
-				command: input.Command{
-					action: input.ActionNewWindow{}
-					title:  'Open a Window'
-				}
-			}
-		},
-		&Command{
-			data: RegularData{
-				command: input.Command{
-					action: input.ActionCopyToClipboard{}
-					title:  'Copy Selection'
-				}
-			}
-		},
-	]
+fn C.gtk_single_selection_get_model(GtkSingleSelection) voidptr
+fn C.gtk_filter_list_model_get_pending(voidptr) u32
 
-	assert palette.filter('OPEN') == [0]
-	assert palette.filter('copy_to_clipboard') == [1]
-	assert palette.filter('missing').len == 0
+fn settle_palette_filter(palette &CommandPalette) {
+	model := C.gtk_single_selection_get_model(palette.model)
+	for C.gtk_filter_list_model_get_pending(model) > 0 {
+		C.g_main_context_iteration(unsafe { nil }, true)
+	}
+}
+
+fn test_command_palette_native_filter_matches_title_or_action_key() {
+	if !C.gtk_init_check() { return }
+	C.adw_init()
+	mut cfg := config_new(configpkg.Config{})
+	mut palette := new_command_palette()
+	palette.commands = [
+		Command.new(cfg, input.Command{ action: input.ActionNewWindow{}, title: 'Open a Window' }),
+		Command.new(cfg, input.Command{
+			action: input.ActionCopyToClipboard{}
+			title:  'Copy Selection'
+		}),
+	]
+	for command in palette.commands {
+		C.g_list_store_append(palette.source, command.obj)
+	}
+	for query, title in {
+		'OPEN':              'Open a Window'
+		'copy_to_clipboard': 'Copy Selection'
+	} {
+		C.gtk_editable_set_text(GtkWidget(palette.search), &char(query.str))
+		settle_palette_filter(palette)
+		assert C.g_list_model_get_n_items(palette.model) == 1
+		obj := C.g_list_model_get_item(palette.model, 0)
+		mut command := command_from_object(obj)?
+		assert command.prop_get_title()? == title
+		object_unref(obj)
+	}
+	C.gtk_editable_set_text(GtkWidget(palette.search), c'missing')
+	settle_palette_filter(palette)
+	assert C.g_list_model_get_n_items(palette.model) == 0
+	palette.unref()
+	palette.dialog_closed()
+	cfg.unref()
+}
+
+fn palette_trigger_probe(_ GObject, action &input.Action, data voidptr) {
+	mut result := unsafe { &input.Action(data) }
+	unsafe {
+		*result = *action
+	}
+}
+
+fn test_command_palette_emits_native_trigger_signal() {
+	if !C.gtk_init_check() { return }
+	C.adw_init()
+	mut palette := new_command_palette()
+	mut received := input.Action(input.ActionIgnore{})
+	C.g_signal_connect_data(palette.widget, c'trigger', GCallback(voidptr(palette_trigger_probe)),
+		voidptr(&received), unsafe { nil }, 0)
+	palette.emit_trigger(input.ActionNewWindow{})
+	assert received == input.Action(input.ActionNewWindow{})
+	palette.unref()
+	palette.dialog_closed()
 }
 
 fn test_command_palette_uses_configured_entries() {
@@ -124,7 +165,7 @@ fn test_command_palette_uses_configured_entries() {
 	mut cfg := config_new(inner)
 	mut palette := new_command_palette()
 	mut weak := weak_ref_empty()
-	weak.set(GObject(palette.dialog))
+	weak.set(GObject(palette.widget))
 	acquired := weak.get()
 	assert !isnil(acquired)
 	assert command_palette_from_object(acquired) or { panic('missing command palette wrapper') } == palette

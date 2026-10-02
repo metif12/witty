@@ -3,7 +3,6 @@ module gtk
 
 // Translated GhosttyImguiWidget native subclass and virtual-method contract.
 // The GL/input tree below expands the corresponding source blueprint.
-
 import cimgui
 import input
 import log
@@ -34,17 +33,22 @@ fn imgui_native_instance_init(instance voidptr, _ voidptr) {
 	_ = new_imgui_widget_instance(GtkWidget(instance))
 }
 
-fn imgui_default_setup(_ voidptr) { log.warn('default Dear ImGui setup called, this is a bug.') }
-fn imgui_default_render(_ voidptr) { log.warn('default Dear ImGui render called, this is a bug.') }
+fn imgui_default_setup(_ voidptr) {
+	log.warn('default Dear ImGui setup called, this is a bug.')
+}
+
+fn imgui_default_render(_ voidptr) {
+	log.warn('default Dear ImGui render called, this is a bug.')
+}
 
 fn imgui_native_dispose(obj voidptr) {
 	// Parent disposal unrealizes the GLArea before its context is destroyed.
 	C.witty_imgui_parent_dispose(g_imgui_widget_parent, obj)
-	wrapper := C.g_object_get_data(GObject(obj), &char(imgui_widget_wrapper_key.str))
+	wrapper := native_wrapper_get(GObject(obj), imgui_widget_wrapper_key)
 	if !isnil(wrapper) {
 		mut self := unsafe { &ImguiWidget(wrapper) }
 		self.deinit()
-		C.g_object_set_data(GObject(obj), &char(imgui_widget_wrapper_key.str), unsafe { nil })
+		native_wrapper_set(GObject(obj), imgui_widget_wrapper_key, unsafe { nil })
 	}
 }
 
@@ -54,9 +58,9 @@ pub fn imgui_widget_get_type() GType {
 		mut query := C.GTypeQuery{}
 		C.g_type_query(parent, &query)
 		info := C.GTypeInfo{
-			class_size: u16(C.witty_imgui_class_size())
+			class_size:    u16(C.witty_imgui_class_size())
 			instance_size: u16(query.instance_size)
-			class_init: voidptr(imgui_widget_class_init)
+			class_init:    voidptr(imgui_widget_class_init)
 			instance_init: voidptr(imgui_native_instance_init)
 		}
 		g_imgui_widget_type = C.g_type_register_static(parent, c'GhosttyImguiWidget', &info, 0)
@@ -65,7 +69,7 @@ pub fn imgui_widget_get_type() GType {
 }
 
 fn imgui_native_wrapper(obj voidptr) ?&ImguiWidget {
-	wrapper := C.g_object_get_data(GObject(obj), &char(imgui_widget_wrapper_key.str))
+	wrapper := native_wrapper_get(GObject(obj), imgui_widget_wrapper_key)
 	if isnil(wrapper) { return none }
 	return unsafe { &ImguiWidget(wrapper) }
 }
@@ -100,7 +104,9 @@ pub fn new_imgui_widget(setup_fn ImguiWidgetCallback, render_fn ImguiWidgetCallb
 
 fn new_imgui_widget_type(native_type GType, setup_fn ImguiWidgetCallback, render_fn ImguiWidgetCallback, user_data voidptr) &ImguiWidget {
 	widget := GtkWidget(C.g_object_new(native_type, &char(unsafe { nil })))
-	mut self := imgui_native_wrapper(widget) or { panic('native ImGui instance did not initialize') }
+	mut self := imgui_native_wrapper(widget) or {
+		panic('native ImGui instance did not initialize')
+	}
 	if setup_fn != unsafe { nil } { self.setup_fn = setup_fn }
 	if render_fn != unsafe { nil } { self.render_fn = render_fn }
 	if !isnil(user_data) { self.user_data = user_data }
@@ -126,37 +132,51 @@ fn new_imgui_widget_instance(widget GtkWidget) &ImguiWidget {
 		gl_area:    gl_area
 		im_context: C.gtk_im_multicontext_new()
 	}
-	C.g_object_set_data(GObject(widget), &char(imgui_widget_wrapper_key.str), voidptr(self))
-	C.g_signal_connect_data(gl_area, c'realize', GCallback(voidptr(imgui_glarea_realize_cb)), voidptr(self), unsafe { nil }, 0)
-	C.g_signal_connect_data(gl_area, c'unrealize', GCallback(voidptr(imgui_glarea_unrealize_cb)), voidptr(self), unsafe { nil }, 0)
-	C.g_signal_connect_data(gl_area, c'resize', GCallback(voidptr(imgui_glarea_resize_cb)), voidptr(self), unsafe { nil }, 0)
-	C.g_signal_connect_data(gl_area, c'render', GCallback(voidptr(imgui_glarea_render_cb)), voidptr(self), unsafe { nil }, 0)
+	native_wrapper_set(GObject(widget), imgui_widget_wrapper_key, voidptr(self))
+	C.g_signal_connect_data(gl_area, c'realize', GCallback(voidptr(imgui_glarea_realize_cb)),
+		voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(gl_area, c'unrealize', GCallback(voidptr(imgui_glarea_unrealize_cb)),
+		voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(gl_area, c'resize', GCallback(voidptr(imgui_glarea_resize_cb)),
+		voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(gl_area, c'render', GCallback(voidptr(imgui_glarea_render_cb)),
+		voidptr(self), unsafe { nil }, 0)
 
 	focus := C.gtk_event_controller_focus_new()
-	C.g_signal_connect_data(focus, c'enter', GCallback(voidptr(imgui_focus_enter_cb)), voidptr(self), unsafe { nil }, 0)
-	C.g_signal_connect_data(focus, c'leave', GCallback(voidptr(imgui_focus_leave_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(focus, c'enter', GCallback(voidptr(imgui_focus_enter_cb)),
+		voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(focus, c'leave', GCallback(voidptr(imgui_focus_leave_cb)),
+		voidptr(self), unsafe { nil }, 0)
 	C.gtk_widget_add_controller(GtkWidget(gl_area), focus)
 
 	key := C.gtk_event_controller_key_new()
-	C.g_signal_connect_data(key, c'key-pressed', GCallback(voidptr(imgui_key_pressed_cb)), voidptr(self), unsafe { nil }, 0)
-	C.g_signal_connect_data(key, c'key-released', GCallback(voidptr(imgui_key_released_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(key, c'key-pressed', GCallback(voidptr(imgui_key_pressed_cb)),
+		voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(key, c'key-released', GCallback(voidptr(imgui_key_released_cb)),
+		voidptr(self), unsafe { nil }, 0)
 	C.gtk_widget_add_controller(GtkWidget(gl_area), key)
 
 	click := C.gtk_gesture_click_new()
 	C.gtk_gesture_single_set_button(click, 0)
-	C.g_signal_connect_data(click, c'pressed', GCallback(voidptr(imgui_mouse_pressed_cb)), voidptr(self), unsafe { nil }, 0)
-	C.g_signal_connect_data(click, c'released', GCallback(voidptr(imgui_mouse_released_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(click, c'pressed', GCallback(voidptr(imgui_mouse_pressed_cb)),
+		voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(click, c'released', GCallback(voidptr(imgui_mouse_released_cb)),
+		voidptr(self), unsafe { nil }, 0)
 	C.gtk_widget_add_controller(GtkWidget(gl_area), click)
 
 	motion := C.gtk_event_controller_motion_new()
-	C.g_signal_connect_data(motion, c'motion', GCallback(voidptr(imgui_mouse_motion_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(motion, c'motion', GCallback(voidptr(imgui_mouse_motion_cb)),
+		voidptr(self), unsafe { nil }, 0)
 	C.gtk_widget_add_controller(GtkWidget(gl_area), motion)
 
-	scroll := C.gtk_event_controller_scroll_new(gtk_event_controller_scroll_vertical | gtk_event_controller_scroll_horizontal)
-	C.g_signal_connect_data(scroll, c'scroll', GCallback(voidptr(imgui_mouse_scroll_cb)), voidptr(self), unsafe { nil }, 0)
+	scroll :=
+		C.gtk_event_controller_scroll_new(gtk_event_controller_scroll_vertical | gtk_event_controller_scroll_horizontal)
+	C.g_signal_connect_data(scroll, c'scroll', GCallback(voidptr(imgui_mouse_scroll_cb)),
+		voidptr(self), unsafe { nil }, 0)
 	C.gtk_widget_add_controller(GtkWidget(gl_area), scroll)
 
-	C.g_signal_connect_data(self.im_context, c'commit', GCallback(voidptr(imgui_im_commit_cb)), voidptr(self), unsafe { nil }, 0)
+	C.g_signal_connect_data(self.im_context, c'commit', GCallback(voidptr(imgui_im_commit_cb)),
+		voidptr(self), unsafe { nil }, 0)
 	return self
 }
 
@@ -227,7 +247,8 @@ fn (mut self ImguiWidget) realize() {
 	_ = self.context.opengl_init()
 	self.context_ready = true
 	self.setup()
-	self.tick_callback_id = C.gtk_widget_add_tick_callback(self.widget, voidptr(imgui_tick_cb), voidptr(self), unsafe { nil })
+	self.tick_callback_id = C.gtk_widget_add_tick_callback(self.widget, voidptr(imgui_tick_cb),
+		voidptr(self), unsafe { nil })
 }
 
 fn (mut self ImguiWidget) unrealize() {
