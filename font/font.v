@@ -1380,7 +1380,8 @@ pub enum Sprite as u32 {
 // Shaper
 // ============================================================
 
-// Shaper performs text shaping (converting codepoints to positioned glyphs).
+// HarfBuzz adapter retained for the module-level API. The production source
+// backend switch is font.shaper.NativeShaper, used by Renderer.
 pub struct Shaper {
 mut:
 	features   []string
@@ -1852,6 +1853,17 @@ fn (mut it RunIterator) next_render_cells() !TextRunValue {
 	hasher.put_u64(u64(j - start))
 	hasher.put_u16(current_font.int())
 	it.i = j
+	mut web_canvas_face := &WebCanvasFace(unsafe { nil })
+	if it.opts.grid.backend() == .web_canvas && current_font.special() == none {
+		mut grid := unsafe { it.opts.grid }
+		grid.lock.rlock()
+		face := grid.resolver.collection.get_face(current_font) or {
+			grid.lock.runlock()
+			return err
+		}
+		web_canvas_face = &face.web_canvas
+		grid.lock.runlock()
+	}
 	return TextRunValue{
 		has_value: true
 		value:     TextRun{
@@ -1860,6 +1872,7 @@ fn (mut it RunIterator) next_render_cells() !TextRunValue {
 			offset:     u16(start)
 			cells:      u16(j - start)
 			grid:       it.opts.grid
+			web_canvas_face: web_canvas_face
 		}
 	}
 }

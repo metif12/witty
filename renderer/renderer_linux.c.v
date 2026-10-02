@@ -4,13 +4,16 @@ module renderer
 // GenericRenderer with OpenGL on Linux at compile time; these are the parts of
 // the translated renderer that only that instantiation compiles.
 import font
+import font.shaper as fontshaper
 import highlight
 import log
 import sync
 import terminal
 
 fn Renderer.init_opengl(opts RendererOpts) !Renderer {
-	mut font_shaper := font.Shaper.init(font.ShaperOptions{})!
+	mut font_shaper := fontshaper.NativeShaper.init_backend(opts.font_grid.backend(), font.ShaperOptions{
+		features: opts.config.font_features
+	})!
 	mut api := OpenGLAPI.init(RendererOptions{
 		config:    opts.config
 		font_grid: opts.font_grid

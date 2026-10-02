@@ -3,18 +3,22 @@ module font
 // Tests for CodepointResolver (translated from ghostty/src/font/CodepointResolver.zig)
 //
 fn make_regular_collection() !Collection {
+	return make_regular_collection_backend(Backend.selected_())
+}
+
+fn make_regular_collection_backend(backend Backend) !Collection {
 	mut c := Collection.init()
 	c.load_options = LoadOptions{
-		library: Library.init()!
-		size: DesiredSize{
+		library: Library.init_backend(backend)!
+		size:    DesiredSize{
 			points: 12
-			xdpi: 96
-			ydpi: 96
+			xdpi:   96
+			ydpi:   96
 		}
 	}
 	lo := c.load_options or { return error('missing load options') }
 	c.add(Face.init_mem(lo.library, embedded_regular, lo.face_options())!, AddOptions{
-		style: .regular
+		style:           .regular
 		size_adjustment: .none_
 	})!
 	return c
@@ -56,7 +60,9 @@ fn test_descriptor_cache_basic() {
 		dc.deinit()
 	}
 
-	desc := Descriptor{ family: 'TestFont' }
+	desc := Descriptor{
+		family: 'TestFont'
+	}
 	idx := Index.init(.regular, 0)
 
 	// Initially not cached.
@@ -81,7 +87,9 @@ fn test_descriptor_cache_negative() {
 		dc.deinit()
 	}
 
-	desc := Descriptor{ family: 'NotFound' }
+	desc := Descriptor{
+		family: 'NotFound'
+	}
 
 	// Add negative entry (font not found).
 	dc.put(desc, none)
@@ -96,7 +104,10 @@ fn test_descriptor_cache_negative() {
 
 fn test_sprite_face_has_codepoint() {
 	sf := SpriteFace{
-		metrics: Metrics{ cell_width: 10, cell_height: 20 }
+		metrics: Metrics{
+			cell_width:  10
+			cell_height: 20
+		}
 	}
 
 	// Box drawing characters should be handled.
@@ -131,16 +142,20 @@ fn test_codepoint_resolver_init_deinit() {
 fn test_get_index_basic() {
 	mut c := make_regular_collection() or { panic(err) }
 	lo := c.load_options or { panic('missing load options') }
-	c.add(Face.init_mem(lo.library, embedded_emoji, lo.face_options()) or { panic(err) }, AddOptions{
-		style: .regular
-		size_adjustment: .none_
-	}) or { panic(err) }
+	if !lo.library.backend.has_coretext() {
+		c.add(Face.init_mem(lo.library, embedded_emoji, lo.face_options()) or { panic(err) }, AddOptions{
+			style:           .regular
+			size_adjustment: .none_
+		}) or { panic(err) }
+	}
 	c.add(Face.init_mem(lo.library, embedded_emoji_text, lo.face_options()) or { panic(err) }, AddOptions{
-		style: .regular
+		style:           .regular
 		size_adjustment: .none_
 	}) or { panic(err) }
 
-	mut r := CodepointResolver{ collection: c }
+	mut r := CodepointResolver{
+		collection: c
+	}
 	defer { r.deinit() }
 	for cp := u32(32); cp < 127; cp++ {
 		idx := r.get_index(cp, .regular, none) or { panic('missing ASCII U+${cp:04X}') }
@@ -150,7 +165,11 @@ fn test_get_index_basic() {
 	emoji := r.get_index(0x1f978, .regular, none) or { panic('missing emoji face') }
 	assert emoji.idx() == 1
 	text := r.get_index(0x270c, .regular, Presentation.text) or { panic('missing text emoji') }
-	assert text.idx() == 2
+	assert text.idx() == if lo.library.backend.has_coretext() {
+		u16(1)
+	} else {
+		u16(2)
+	}
 	graphical := r.get_index(0x270c, .regular, Presentation.emoji) or {
 		panic('missing graphical emoji')
 	}
@@ -163,11 +182,13 @@ fn test_get_index_disabled_font_style() {
 	lo := c.load_options or { panic('missing load options') }
 	for style in [Style.bold, .italic] {
 		c.add(Face.init_mem(lo.library, embedded_regular, lo.face_options()) or { panic(err) }, AddOptions{
-			style: style
+			style:           style
 			size_adjustment: .none_
 		}) or { panic(err) }
 	}
-	mut r := CodepointResolver{ collection: c }
+	mut r := CodepointResolver{
+		collection: c
+	}
 	defer { r.deinit() }
 	r.styles.set(.bold, false)
 
@@ -187,13 +208,13 @@ fn test_get_index_box_glyph() {
 	c := Collection.init()
 	mut r := CodepointResolver{
 		collection: c
-		sprite: SpriteFace{
+		sprite:     SpriteFace{
 			metrics: Metrics.calc(FaceMetrics{
-				px_per_em: 30.0
+				px_per_em:  30.0
 				cell_width: 18.0
-				ascent: 30.0
-				descent: -6.0
-				line_gap: 0.0
+				ascent:     30.0
+				descent:    -6.0
+				line_gap:   0.0
 			})
 		}
 	}
@@ -216,9 +237,9 @@ fn test_get_index_with_sprite() {
 	// Test that sprite face is used for box drawing characters.
 	mut r := CodepointResolver{
 		collection: Collection.init()
-		sprite: SpriteFace{
+		sprite:     SpriteFace{
 			metrics: Metrics{
-				cell_width: 10
+				cell_width:  10
 				cell_height: 20
 			}
 		}
@@ -239,7 +260,9 @@ fn test_get_index_with_sprite() {
 
 fn test_get_index_style_fallback() {
 	c := make_regular_collection() or { panic(err) }
-	mut r := CodepointResolver{ collection: c }
+	mut r := CodepointResolver{
+		collection: c
+	}
 	defer { r.deinit() }
 	idx := r.get_index(0x41, .bold, none) or { panic('missing regular style fallback') }
 	assert idx.style() == .regular
@@ -247,13 +270,17 @@ fn test_get_index_style_fallback() {
 }
 
 fn test_get_presentation() {
-	mut c := make_regular_collection() or { panic(err) }
+	mut c := make_regular_collection_backend(.fontconfig_freetype) or { panic(err) }
 	lo := c.load_options or { panic('missing load options') }
-	emoji_idx := c.add(Face.init_mem(lo.library, embedded_emoji, lo.face_options()) or { panic(err) }, AddOptions{
-		style: .regular
+	emoji_idx := c.add(Face.init_mem(lo.library, embedded_emoji, lo.face_options()) or {
+		panic(err)
+	}, AddOptions{
+		style:           .regular
 		size_adjustment: .none_
 	}) or { panic(err) }
-	mut r := CodepointResolver{ collection: c }
+	mut r := CodepointResolver{
+		collection: c
+	}
 	defer { r.deinit() }
 	assert r.get_presentation(Index.init_special(.sprite), 0x2500) or { panic(err) } == .text
 	regular_face := r.collection.get_face(Index{}) or { panic(err) }
@@ -266,7 +293,9 @@ fn test_get_presentation() {
 
 fn test_render_glyph() {
 	c := make_regular_collection() or { panic(err) }
-	mut r := CodepointResolver{ collection: c }
+	mut r := CodepointResolver{
+		collection: c
+	}
 	defer { r.deinit() }
 	mut face := r.collection.get_face(Index{}) or { panic(err) }
 	glyph_index := face.glyph_index(0x41) or { panic('missing A') }

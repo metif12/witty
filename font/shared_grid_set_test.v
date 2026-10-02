@@ -59,12 +59,12 @@ fn test_gridset_key_hash_matches_source() {
 	mut key := Key.init(&cfg, DesiredSize{ points: 12 })!
 	defer { key.deinit() }
 
-	// Independently calculated with Zig 0.15.2 for the source's FreeType key
-	// layout. DesiredSize defaults to 72 DPI on macOS and 96 elsewhere.
+	// Independently calculated with Zig 0.15.2 for the source's FreeType and
+	// CoreText (void FreeType flags) key layouts. DesiredSize defaults to 72 DPI on macOS and 96 elsewhere.
 	$if macos {
-		assert key.hashcode() == u64(0x3a322c8692e38d75)
+		assert key.hashcode() == if Backend.selected_().has_freetype() { u64(0x3a322c8692e38d75) } else { u64(0x9c528e55acd4539d) }
 	} $else {
-		assert key.hashcode() == u64(0xc78b44b38c1a7e47)
+		assert key.hashcode() == if Backend.selected_().has_freetype() { u64(0xc78b44b38c1a7e47) } else { u64(0xf43e656d384883da) }
 	}
 	mut hasher := SourceHash{}
 	key.hash(mut hasher)
@@ -84,9 +84,9 @@ fn test_gridset_key_metric_key_tags_match_source() {
 	// Metrics.Key is generated from source declaration order: thickness is
 	// tag 10 and height is tag 11. The values were calculated by Zig 0.15.2.
 	$if macos {
-		assert key.hashcode() == u64(0x7ed58b28da079a17)
+		assert key.hashcode() == if Backend.selected_().has_freetype() { u64(0x7ed58b28da079a17) } else { u64(0x4e1a6cac06c0e8aa) }
 	} $else {
-		assert key.hashcode() == u64(0x0626e065a30c30bb)
+		assert key.hashcode() == if Backend.selected_().has_freetype() { u64(0x0626e065a30c30bb) } else { u64(0x637b756d071d3817) }
 	}
 }
 
@@ -278,4 +278,12 @@ fn test_shared_grid_set_ref_deref() {
 
 	set.deref(key1)
 	assert set.count() == 0
+}
+
+fn test_gridset_key_ignores_freetype_flags_without_freetype_backend() ! {
+	mut first := Key.init(&DerivedConfig{}, DesiredSize{ points: 12 })!
+	defer { first.deinit() }
+	mut second := Key.init(&DerivedConfig{ freetype_load_flags: FreetypeLoadFlags.init(false, true, true, false, false) }, DesiredSize{ points: 12 })!
+	defer { second.deinit() }
+	assert (first.hashcode() != second.hashcode()) == Backend.selected_().has_freetype()
 }

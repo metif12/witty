@@ -140,7 +140,7 @@ fn test_coretext_in_memory_font() {
 			}
 		}) or { panic(err) }
 		defer { face.deinit() }
-		assert face.hb_font.ptr != unsafe { nil }
+		assert (face.hb_font.ptr != unsafe { nil }) == Backend.selected_().has_harfbuzz()
 		assert face.glyph_index(u32(`A`)) != none
 		mut atlas := Atlas.init(128, .grayscale)!
 		defer { atlas.deinit() }
@@ -262,7 +262,7 @@ fn test_coretext_deferred_face_queries_and_load() {
 		}) or { panic(err) }
 		defer { loaded.deinit() }
 		assert loaded.glyph_index(u32(`A`)) != none
-		mut lib := Library.init() or { panic(err) }
+		mut lib := Library.init_backend(.coretext_freetype) or { panic(err) }
 		defer { lib.deinit() }
 		mut freetype_face := deferred.load_freetype(lib, FaceOptions{
 			size: DesiredSize{

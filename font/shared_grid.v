@@ -544,3 +544,9 @@ fn glyph_cache_put(mut cache map[u64][]GlyphCacheEntry, hash u64, key GlyphKey, 
 fn (k GlyphKey) hash_key() u64 {
 	return internal_hash.int_u64(k.packed_key())
 }
+
+// The library is shared by every face in a grid and carries the build backend.
+pub fn (self SharedGrid) backend() Backend {
+	if options := self.resolver.collection.load_options { return options.library.backend }
+	return Backend.selected_()
+}

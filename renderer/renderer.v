@@ -747,6 +747,7 @@ module renderer
 // --- Original Ghostty Comments End: src/renderer/generic.zig
 import terminal
 import font
+import font.shaper as fontshaper
 import input
 import time
 import configpkg
@@ -903,7 +904,7 @@ pub mut:
 
 	// The font structures.
 	font_grid         &font.SharedGrid = unsafe { nil }
-	font_shaper       font.Shaper
+	font_shaper       fontshaper.NativeShaper
 	font_shaper_cache font.ShaperCache
 
 	// Whether or not we have custom shaders.
@@ -1533,7 +1534,7 @@ pub fn (mut self Renderer) change_config(config &DerivedConfig) ! {
 	// We always redo the font shaper in case font features changed. We
 	// could check to see if there was an actual config change but this is
 	// easier and rare enough to not cause performance issues.
-	mut font_shaper := font.Shaper.init(font.ShaperOptions{
+	mut font_shaper := fontshaper.NativeShaper.init_backend(self.font_shaper.backend, font.ShaperOptions{
 		features: config.font_features
 	})!
 	self.font_shaper.deinit()

@@ -76,7 +76,7 @@ pub mut:
 
 // True if our build is using Harfbuzz. If we're not, we can avoid
 // some Harfbuzz-specific code paths.
-pub const coretext_harfbuzz_shaper = true
+pub const coretext_harfbuzz_shaper = Backend.selected_().has_harfbuzz()
 
 // The matrix applied to a regular font to auto-italicize it.
 // This is an affine transform with a shear of approximately tan(15 degrees).
@@ -101,10 +101,10 @@ pub:
 
 // The italic skew transform as a struct.
 pub const italic_skew = AffineTransform{
-	a: italic_skew_a
-	b: italic_skew_b
-	c: italic_skew_c
-	d: italic_skew_d
+	a:  italic_skew_a
+	b:  italic_skew_b
+	c:  italic_skew_c
+	d:  italic_skew_d
 	tx: italic_skew_tx
 	ty: italic_skew_ty
 }
@@ -165,15 +165,17 @@ pub fn CoreTextFace.init_font(ct_font voidptr, opts FaceOptions) !CoreTextFace {
 
 	mut hb_font := harfbuzz.Font{}
 	$if macos {
-		hb_font = harfbuzz.Font.create_coretext(ct_font) or {
-			if c := color {
-				c.deinit()
+		if (opts.backend or { Backend.selected_() }).has_harfbuzz() {
+			hb_font = harfbuzz.Font.create_coretext(ct_font) or {
+				if c := color {
+					c.deinit()
+				}
+				release_coretext_font(ct_font)
+				return err
 			}
-			release_coretext_font(ct_font)
-			return err
+			pixels := opentype.F26Dot6.from(opts.size.pixels())
+			hb_font.set_scale(u32(pixels.raw), u32(pixels.raw))
 		}
-		pixels := opentype.F26Dot6.from(opts.size.pixels())
-		hb_font.set_scale(u32(pixels.raw), u32(pixels.raw))
 	} $else {
 		if c := color {
 			c.deinit()
@@ -184,8 +186,8 @@ pub fn CoreTextFace.init_font(ct_font voidptr, opts FaceOptions) !CoreTextFace {
 	mut result := CoreTextFace{
 		ct_font: ct_font
 		hb_font: hb_font
-		color: color
-		size: opts.size
+		color:   color
+		size:    opts.size
 	}
 	result.quirks_disable_default_font_features = quirks.disable_default_font_features(&result)
 
@@ -430,10 +432,10 @@ fn coretext_glyph_layout(bounds GlyphSize, sbix bool, synthetic_bold ?f64, opts 
 	cell_width := f64(metrics.cell_width)
 	cell_height := f64(metrics.cell_height)
 	glyph_size := opts.constraint.constrain(GlyphSize{
-		width: rect.width
+		width:  rect.width
 		height: rect.height
-		x: rect.x
-		y: rect.y + f64(metrics.cell_baseline)
+		x:      rect.x
+		y:      rect.y + f64(metrics.cell_baseline)
 	}, metrics, opts.constraint_width)
 	mut x := glyph_size.x
 	mut y := glyph_size.y
@@ -462,15 +464,15 @@ fn coretext_glyph_layout(bounds GlyphSize, sbix bool, synthetic_bold ?f64, opts 
 	px_width := u32(math.ceil(width + frac_x)) + 2 * canvas_padding
 	px_height := u32(math.ceil(height + frac_y)) + 2 * canvas_padding
 	return CoreTextGlyphLayout{
-		rect: rect
-		px_width: px_width
-		px_height: px_height
-		offset_x: px_x
-		offset_y: px_y + i32(px_height)
+		rect:        rect
+		px_width:    px_width
+		px_height:   px_height
+		offset_x:    px_x
+		offset_y:    px_y + i32(px_height)
 		translate_x: frac_x + f64(canvas_padding)
 		translate_y: frac_y + f64(canvas_padding)
-		scale_x: width / rect.width
-		scale_y: height / rect.height
+		scale_x:     width / rect.width
+		scale_y:     height / rect.height
 	}
 }
 
@@ -480,15 +482,16 @@ pub fn (self CoreTextFace) render_glyph(mut atlas Atlas, glyph_index u32, opts R
 	mut bounds := GlyphSize{}
 	$if macos {
 		native_font := unsafe { &macos.CTFont(self.ct_font) }
-		rect := native_font.get_bounding_rects_for_glyphs(.horizontal,
-			[macos.CGGlyph(glyph_index)], []macos.CGRect{})
+		rect := native_font.get_bounding_rects_for_glyphs(.horizontal, [
+			macos.CGGlyph(glyph_index),
+		], []macos.CGRect{})
 		if rect.is_null() {
 			return error('CoreText: failed to get glyph bounds')
 		}
 		bounds = GlyphSize{
-			x: rect.origin.x
-			y: rect.origin.y
-			width: rect.size.width
+			x:      rect.origin.x
+			y:      rect.origin.y
+			width:  rect.size.width
 			height: rect.size.height
 		}
 	} $else {
@@ -496,9 +499,7 @@ pub fn (self CoreTextFace) render_glyph(mut atlas Atlas, glyph_index u32, opts R
 	}
 	is_color := self.is_color_glyph(glyph_index)
 	sbix := if color := self.color { is_color && color.sbix } else { false }
-	layout := coretext_glyph_layout(bounds, sbix, self.synthetic_bold, opts) or {
-		return Glyph{}
-	}
+	layout := coretext_glyph_layout(bounds, sbix, self.synthetic_bold, opts) or { return Glyph{} }
 	depth := if is_color { u32(4) } else { u32(1) }
 	if atlas.format.depth() != depth {
 		log.warn('font atlas color depth doesn\'t equal font color depth atlas=${atlas.format.depth()} font=${depth}')
@@ -514,13 +515,12 @@ pub fn (self CoreTextFace) render_glyph(mut atlas Atlas, glyph_index u32, opts R
 
 		mut pixels := []u8{len: int(usize(layout.px_width) * usize(layout.px_height) * usize(depth))}
 		context_opts := if is_color {
-			u32(macos.CGBitmapInfo.byte_order_32_little) |
-				u32(macos.CGImageAlphaInfo.premultiplied_first)
+			u32(macos.CGBitmapInfo.byte_order_32_little) | u32(macos.CGImageAlphaInfo.premultiplied_first)
 		} else {
 			u32(macos.CGImageAlphaInfo.only)
 		}
-		bitmap := macos.CGBitmapContext.create(pixels, usize(layout.px_width), usize(layout.px_height),
-			8, usize(layout.px_width * depth), color_space, context_opts)!
+		bitmap := macos.CGBitmapContext.create(pixels, usize(layout.px_width),
+			usize(layout.px_height), 8, usize(layout.px_width * depth), color_space, context_opts)!
 		context := bitmap.as_context()
 		defer { context.release() }
 
@@ -556,10 +556,12 @@ pub fn (self CoreTextFace) render_glyph(mut atlas Atlas, glyph_index u32, opts R
 		context.translate_ctm(layout.translate_x, layout.translate_y)
 		context.scale_ctm(layout.scale_x, layout.scale_y)
 		ct_font := unsafe { &macos.CTFont(self.ct_font) }
-		ct_font.draw_glyphs([macos.CGGlyph(glyph_index)], [macos.CGPoint{
-			x: -layout.rect.x
-			y: -layout.rect.y
-		}], context)
+		ct_font.draw_glyphs([macos.CGGlyph(glyph_index)], [
+			macos.CGPoint{
+				x: -layout.rect.x
+				y: -layout.rect.y
+			},
+		], context)
 
 		region := atlas.reserve(layout.px_width, layout.px_height)!
 		atlas.set(region, pixels)
@@ -628,9 +630,9 @@ pub fn (mut self CoreTextFace) get_metrics() FaceMetrics {
 		native_font := unsafe { &macos.CTFont(self.ct_font) }
 		rect := native_font.get_bounding_rects_for_glyphs(.horizontal, glyphs, []macos.CGRect{})
 		ascii_bounds = GlyphSize{
-			x: rect.origin.x
-			y: rect.origin.y
-			width: rect.size.width
+			x:      rect.origin.x
+			y:      rect.origin.y
+			width:  rect.size.width
 			height: rect.size.height
 		}
 	}
@@ -650,9 +652,9 @@ pub fn (mut self CoreTextFace) get_metrics() FaceMetrics {
 			rect := native_font.get_bounding_rects_for_glyphs(.horizontal, water_glyphs[..],
 				[]macos.CGRect{})
 			water_bounds = GlyphSize{
-				x: rect.origin.x
-				y: rect.origin.y
-				width: rect.size.width
+				x:      rect.origin.x
+				y:      rect.origin.y
+				width:  rect.size.width
 				height: rect.size.height
 			}
 		}
@@ -666,19 +668,19 @@ pub fn (mut self CoreTextFace) get_metrics() FaceMetrics {
 	}
 
 	base := FaceMetrics{
-		px_per_em: px_per_em
-		cell_width: cell_width
-		ascent: ascent
-		descent: -raw_descent
-		line_gap: line_gap
-		underline_position: none
-		underline_thickness: none
-		strikethrough_position: none
+		px_per_em:               px_per_em
+		cell_width:              cell_width
+		ascent:                  ascent
+		descent:                 -raw_descent
+		line_gap:                line_gap
+		underline_position:      none
+		underline_thickness:     none
+		strikethrough_position:  none
 		strikethrough_thickness: none
-		cap_height: cap_height
-		ex_height: ex_height
-		ascii_height: ascii_bounds.height
-		ic_width: ic_width
+		cap_height:              cap_height
+		ex_height:               ex_height
+		ascii_height:            ascii_bounds.height
+		ic_width:                ic_width
 	}
 
 	head := self.parse_head_table()
@@ -699,9 +701,7 @@ pub fn (mut self CoreTextFace) get_metrics() FaceMetrics {
 }
 
 fn (self CoreTextFace) parse_head_table() ?opentype.Head {
-	data := self.copy_table('head') or {
-		self.copy_table('bhed') or { return none }
-	}
+	data := self.copy_table('head') or { self.copy_table('bhed') or { return none } }
 	return opentype.Head.init(data) or {
 		log.warn('error parsing head table: ${err}')
 		none
@@ -860,8 +860,8 @@ pub fn ColorState.init(ct_font voidptr) !ColorState {
 			svg = opentype.SVG.init(svg_data)!
 		}
 		return ColorState{
-			sbix: sbix
-			svg: svg
+			sbix:     sbix
+			svg:      svg
 			svg_data: svg_data
 		}
 	} $else {
@@ -1030,6 +1030,7 @@ pub fn (self CoreTextDeferredFace) load(lib Library, opts FaceOptions) !CoreText
 // load_freetype loads a CoreText deferred face through FreeType instead.
 // This is for the coretext_freetype backend.
 pub fn (self CoreTextDeferredFace) load_freetype(lib Library, opts FaceOptions) !Face {
+	assert lib.backend.has_freetype()
 	// Steps:
 	// 1. Get the URL for the font so we can get the filepath:
 	//    url = ct_font.copyAttribute(.url) or return error
@@ -1053,8 +1054,7 @@ pub fn (self CoreTextDeferredFace) load_freetype(lib Library, opts FaceOptions) 
 		defer { path_string.release() }
 		blank := macos.CFString.create_with_bytes([], .utf8, false)!
 		defer { blank.release() }
-		decoded := macos.CFURL.create_string_by_replacing_percent_escapes(path_string,
-			blank)!
+		decoded := macos.CFURL.create_string_by_replacing_percent_escapes(path_string, blank)!
 		defer { decoded.release() }
 		mut path_buf := []u8{len: 1024}
 		path_ptr := decoded.cstring(mut path_buf[..1023], .utf8) or {

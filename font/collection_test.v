@@ -196,7 +196,7 @@ fn test_has_codepoint() {
 }
 
 fn test_has_codepoint_emoji_default_graphical() {
-	mut lib := Library.init() or { panic(err) }
+	mut lib := Library.init_backend(.fontconfig_freetype) or { panic(err) }
 	defer { lib.deinit() }
 	mut c := Collection.init()
 	defer { c.deinit() }

@@ -489,12 +489,10 @@ import quirks
 // via a Collection in order to store it in an Atlas.
 //
 // Translated from ghostty/src/font/face/freetype.zig
-
 import freetype
 import fontconfig
 import harfbuzz
 import log
-import macos
 import math
 import os
 import stb
@@ -504,25 +502,38 @@ import sync
 // Library
 // ============================================================
 
-// Library wraps the FreeType library with a mutex for thread safety.
+// Library owns the selected backend library. FreeType uses a shared mutex;
+// CoreText and WebCanvas have no native library object.
 // A Library can be shared across multiple faces and surfaces.
 pub struct Library {
 pub mut:
-	lib   freetype.Library
-	mutex &sync.Mutex = unsafe { nil }
+	backend Backend = Backend.selected_()
+	lib     freetype.Library
+	mutex   &sync.Mutex = unsafe { nil }
 }
 
 // init creates a new font Library.
 pub fn Library.init() !Library {
+	return Library.init_backend(Backend.selected_())
+}
+
+// Explicit backend initialization is used for source backend tests and build
+// variants; the application calls init with the selected build backend.
+pub fn Library.init_backend(backend Backend) !Library {
+	if backend.has_freetype() {
+		return Library{
+			backend: backend
+			lib:     freetype.Library.init()!
+			mutex:   &sync.Mutex{}
+		}
+	}
 	return Library{
-		lib: freetype.Library.init()!
-		mutex: &sync.Mutex{}
+		backend: backend
 	}
 }
 
-// deinit destroys the library and releases resources.
 pub fn (mut l Library) deinit() {
-	l.lib.deinit()
+	if l.backend.has_freetype() { l.lib.deinit() }
 }
 
 // ============================================================
@@ -584,11 +595,27 @@ pub fn (flags FreetypeLoadFlags) int_val() u8 {
 
 // format_entry preserves Config.FreetypeLoadFlags's packed-field order.
 pub fn (f FreetypeLoadFlags) format_entry() string {
-	return [if f.hinting() { 'hinting' } else { 'no-hinting' },
-		if f.force_autohint() { 'force-autohint' } else { 'no-force-autohint' },
-		if f.monochrome() { 'monochrome' } else { 'no-monochrome' },
-		if f.autohint() { 'autohint' } else { 'no-autohint' },
-		if f.light() { 'light' } else { 'no-light' }].join(',')
+	return [if f.hinting() {
+		'hinting'
+	} else {
+		'no-hinting'
+	}, if f.force_autohint() {
+		'force-autohint'
+	} else {
+		'no-force-autohint'
+	}, if f.monochrome() {
+		'monochrome'
+	} else {
+		'no-monochrome'
+	}, if f.autohint() {
+		'autohint'
+	} else {
+		'no-autohint'
+	}, if f.light() {
+		'light'
+	} else {
+		'no-light'
+	}].join(',')
 }
 
 // Default load flags.
@@ -601,6 +628,7 @@ pub const freetype_load_flags_default = FreetypeLoadFlags{}
 // FaceOptions holds options for creating or resizing a font face.
 pub struct FaceOptions {
 pub mut:
+	backend ?Backend
 	// The desired font size.
 	size DesiredSize
 	// Freetype load flags to use when loading glyphs.
@@ -778,9 +806,7 @@ pub fn (m FaceMetrics) underline_position() f64 {
 // not defined in the font, we center it at half the ex height, so that it's
 // perfectly centered on lower case text.
 pub fn (m FaceMetrics) strikethrough_position() f64 {
-	return m.strikethrough_position or {
-		(m.ex_height() + m.strikethrough_thickness()) * 0.5
-	}
+	return m.strikethrough_position or { (m.ex_height() + m.strikethrough_thickness()) * 0.5 }
 }
 
 // ============================================================
@@ -798,7 +824,8 @@ pub mut:
 	fontconfig_pattern &fontconfig.Pattern = unsafe { nil }
 	fontconfig_charset &fontconfig.CharSet = unsafe { nil }
 	fontconfig_langset &fontconfig.LangSet = unsafe { nil }
-	coretext            CoreTextDeferredFace
+	coretext           CoreTextDeferredFace
+	web_canvas         WebCanvasDeferredFace
 	// Portable fallback metadata for file-backed deferred values constructed
 	// without native discovery. Native Fontconfig/CoreText paths above bypass
 	// these fields for metadata and coverage.
@@ -860,6 +887,9 @@ pub fn (mut d DeferredFace) deinit() {
 
 // load fully loads this deferred face into a Face.
 pub fn (d DeferredFace) load(lib Library, opts FaceOptions) !Face {
+	if lib.backend == .web_canvas {
+		return Face.from_web_canvas(lib, d.web_canvas.load(opts)!)
+	}
 	if !isnil(d.fontconfig_pattern) {
 		path := (d.fontconfig_pattern.get(.file, 0)! as fontconfig.ValueString).value
 		face_index := (d.fontconfig_pattern.get(.index, 0)! as fontconfig.ValueInteger).value
@@ -873,7 +903,13 @@ pub fn (d DeferredFace) load(lib Library, opts FaceOptions) !Face {
 		return face
 	}
 	if !isnil(d.coretext.ct_font) {
-		return d.coretext.load_freetype(lib, opts)
+		if lib.backend.has_freetype() {
+			return d.coretext.load_freetype(lib, opts)
+		}
+		return Face.from_coretext(lib, d.coretext.load(lib, FaceOptions{
+			...opts
+			backend: lib.backend
+		})!)
 	}
 	if d.path.len == 0 {
 		return error('deferred face has no file path')
@@ -903,8 +939,7 @@ pub fn (d DeferredFace) has_codepoint(cp u32, presentation ?Presentation) bool {
 			return false
 		}
 		if expected := presentation {
-			actual := if !isnil(d.fontconfig_langset)
-				&& d.fontconfig_langset.has_lang('und-zsye') {
+			actual := if !isnil(d.fontconfig_langset) && d.fontconfig_langset.has_lang('und-zsye') {
 				Presentation.emoji
 			} else {
 				Presentation.text
@@ -973,9 +1008,12 @@ fn (mut synthetic FaceSynthetic) set_bold(value bool) {
 	}
 }
 
-// Face represents a single font face backed by FreeType.
+// Face delegates to the implementation selected by font/face.zig.
 pub struct Face {
 pub mut:
+	backend    Backend = Backend.selected_()
+	coretext   CoreTextFace
+	web_canvas WebCanvasFace
 	// Our Library.
 	lib Library
 	// Our font face.
@@ -1000,44 +1038,64 @@ pub mut:
 
 // init_file initializes a new font face from a file path.
 pub fn Face.init_file(lib Library, path string, index i32, opts FaceOptions) !Face {
-	if isnil(lib.mutex) {
-		return error('font library is not initialized')
+	if !lib.backend.has_freetype() {
+		return Face.init_mem(lib, os.read_bytes(path)!, opts)
 	}
+	assert !isnil(lib.mutex)
 	lib.mutex.lock()
-	defer {
-		lib.mutex.unlock()
-	}
+	defer { lib.mutex.unlock() }
 	mut ft_face := lib.lib.init_face(path, index)!
-	mut result := init_freetype_face(lib, mut ft_face, opts)!
-	$if macos {
-		if source := os.read_bytes(path) {
-			if mut core_face := CoreTextFace.init(lib, source, opts) {
-				result.ct_font = core_face.ct_font
-				core_face.ct_font = unsafe { nil }
-			}
-		}
-	}
-	return result
+	return init_freetype_face(lib, mut ft_face, opts)
 }
 
-// init_mem initializes a new font face from in-memory data.
 pub fn Face.init_mem(lib Library, source []u8, opts FaceOptions) !Face {
-	if isnil(lib.mutex) {
-		return error('font library is not initialized')
-	}
-	lib.mutex.lock()
-	defer {
-		lib.mutex.unlock()
-	}
-	mut ft_face := lib.lib.init_memory_face(source, 0)!
-	mut result := init_freetype_face(lib, mut ft_face, opts)!
-	$if macos {
-		if mut core_face := CoreTextFace.init(lib, source, opts) {
-			result.ct_font = core_face.ct_font
-			core_face.ct_font = unsafe { nil }
+	if !lib.backend.has_freetype() {
+		if lib.backend == .web_canvas {
+			return error('WebCanvas fonts use init_named rather than embedded font files')
 		}
+		return Face.from_coretext(lib, CoreTextFace.init(lib, source, FaceOptions{
+			...opts
+			backend: lib.backend
+		})!)
 	}
-	return result
+	assert !isnil(lib.mutex)
+	lib.mutex.lock()
+	defer { lib.mutex.unlock() }
+	mut ft_face := lib.lib.init_memory_face(source, 0)!
+	return init_freetype_face(lib, mut ft_face, opts)
+}
+
+pub fn Face.init_named(lib Library, name string, presentation Presentation, opts FaceOptions) !Face {
+	assert lib.backend == .web_canvas
+	return Face.from_web_canvas(lib, WebCanvasFace.init_named(name, opts.size, presentation)!)
+}
+
+fn Face.from_coretext(lib Library, native CoreTextFace) Face {
+	return Face{
+		backend:                              lib.backend
+		lib:                                  lib
+		coretext:                             native
+		ct_font:                              native.ct_font
+		hb_font:                              native.hb_font
+		quirks_disable_default_font_features: native.quirks_disable_default_font_features
+		size:                                 native.size
+	}
+}
+
+fn Face.from_web_canvas(lib Library, native WebCanvasFace) Face {
+	return Face{
+		backend:    lib.backend
+		lib:        lib
+		web_canvas: native
+		size:       native.size
+	}
+}
+
+fn (mut self Face) update_coretext_aliases() {
+	self.ct_font = self.coretext.ct_font
+	self.hb_font = self.coretext.hb_font
+	self.quirks_disable_default_font_features = self.coretext.quirks_disable_default_font_features
+	self.size = self.coretext.size
 }
 
 fn init_freetype_face(lib Library, mut ft_face freetype.Face, opts FaceOptions) !Face {
@@ -1054,12 +1112,13 @@ fn init_freetype_face(lib Library, mut ft_face freetype.Face, opts FaceOptions) 
 		return err
 	}
 	mut result := Face{
-		lib: lib
-		face: ft_face
-		hb_font: hb_font
-		ft_mutex: &sync.Mutex{}
+		backend:    lib.backend
+		lib:        lib
+		face:       ft_face
+		hb_font:    hb_font
+		ft_mutex:   &sync.Mutex{}
 		load_flags: opts.freetype_load_flags
-		size: opts.size
+		size:       opts.size
 	}
 	result.quirks_disable_default_font_features = quirks.disable_default_font_features(&result)
 
@@ -1096,6 +1155,15 @@ fn init_freetype_face(lib Library, mut ft_face freetype.Face, opts FaceOptions) 
 
 // deinit destroys this face and releases all resources.
 pub fn (mut self Face) deinit() {
+	if self.backend == .web_canvas {
+		self.web_canvas.deinit()
+		return
+	}
+	if !self.backend.has_freetype() {
+		self.coretext.deinit()
+		self.update_coretext_aliases()
+		return
+	}
 	if !isnil(self.lib.mutex) {
 		self.lib.mutex.lock()
 		self.face.deinit()
@@ -1104,12 +1172,6 @@ pub fn (mut self Face) deinit() {
 		self.face.deinit()
 	}
 	self.hb_font.destroy()
-	$if macos {
-		if !isnil(self.ct_font) {
-			macos.cf_release(self.ct_font)
-			self.ct_font = unsafe { nil }
-		}
-	}
 }
 
 // name returns the font name. Reads the SFNT name table to find
@@ -1118,6 +1180,8 @@ pub fn (mut self Face) deinit() {
 // If allocation is required, buf will be used, but sometimes
 // allocation isn't required and a static string is returned.
 pub fn (self &Face) name(mut buf []u8) !string {
+	if self.backend == .web_canvas { return self.web_canvas.font_str }
+	if !self.backend.has_freetype() { return self.coretext.name(mut buf) }
 	count := self.face.get_sfnt_name_count()
 
 	// We look for the font family entry.
@@ -1179,14 +1243,15 @@ fn decode_utf16_be(data []u8) ?string {
 // synthetic_bold_face returns a new face that is the same as this but
 // also has synthetic bold applied.
 pub fn (self &Face) synthetic_bold_face(opts FaceOptions) !Face {
+	if !self.backend.has_freetype() {
+		return Face.from_coretext(self.lib, self.coretext.synthetic_bold(FaceOptions{
+			...opts
+			backend: self.backend
+		})!)
+	}
 	self.face.ref()
 	mut ft_face := self.face
 	mut f := init_freetype_face(self.lib, mut ft_face, opts)!
-	$if macos {
-		if !isnil(self.ct_font) {
-			f.ct_font = macos.cf_retain(self.ct_font)
-		}
-	}
 	f.synthetic = self.synthetic
 	f.synthetic.set_bold(true)
 	return f
@@ -1195,14 +1260,15 @@ pub fn (self &Face) synthetic_bold_face(opts FaceOptions) !Face {
 // synthetic_italic_face returns a new face that is the same as this but
 // has a transformation matrix applied to italicize it.
 pub fn (self &Face) synthetic_italic_face(opts FaceOptions) !Face {
+	if !self.backend.has_freetype() {
+		return Face.from_coretext(self.lib, self.coretext.synthetic_italic(FaceOptions{
+			...opts
+			backend: self.backend
+		})!)
+	}
 	self.face.ref()
 	mut ft_face := self.face
 	mut f := init_freetype_face(self.lib, mut ft_face, opts)!
-	$if macos {
-		if !isnil(self.ct_font) {
-			f.ct_font = macos.cf_retain(self.ct_font)
-		}
-	}
 	f.synthetic = self.synthetic
 	f.synthetic.set_italic(true)
 	return f
@@ -1211,15 +1277,17 @@ pub fn (self &Face) synthetic_italic_face(opts FaceOptions) !Face {
 // set_face_size resizes the font in-place. If this succeeds, the caller
 // is responsible for clearing any glyph caches, font atlas data, etc.
 pub fn (mut self Face) set_face_size(opts FaceOptions) ! {
-	set_freetype_size(self.face, opts.size)!
-	$if macos {
-		if !isnil(self.ct_font) {
-			mut resized := CoreTextFace.init_font_copy(self.ct_font, opts)!
-			macos.cf_release(self.ct_font)
-			self.ct_font = resized.ct_font
-			resized.ct_font = unsafe { nil }
-		}
+	if self.backend == .web_canvas {
+		self.web_canvas.set_size(opts.size)!
+		self.size = opts.size
+		return
 	}
+	if !self.backend.has_freetype() {
+		self.coretext.set_size(FaceOptions{ ...opts, backend: self.backend })!
+		self.update_coretext_aliases()
+		return
+	}
+	set_freetype_size(self.face, opts.size)!
 	self.size = opts.size
 }
 
@@ -1251,6 +1319,12 @@ fn select_size_nearest(face freetype.Face, size u32) ! {
 // set_variations sets the variation axes for this font.
 // This will modify this font in-place.
 pub fn (mut self Face) set_variations(vs []Variation, opts FaceOptions) ! {
+	if self.backend == .web_canvas { return }
+	if !self.backend.has_freetype() {
+		self.coretext.set_variations(vs, FaceOptions{ ...opts, backend: self.backend })!
+		self.update_coretext_aliases()
+		return
+	}
 	_ = opts
 
 	// If this font doesn't support variations, we can't do anything.
@@ -1294,17 +1368,23 @@ pub fn (mut self Face) set_variations(vs []Variation, opts FaceOptions) ! {
 // glyph_index returns the glyph index for the given Unicode code point.
 // If this face doesn't support this glyph, none is returned.
 pub fn (self Face) glyph_index(cp u32) ?u32 {
+	if self.backend == .web_canvas { return self.web_canvas.glyph_index(cp) }
+	if !self.backend.has_freetype() { return self.coretext.glyph_index(cp) }
 	return self.face.get_char_index(cp)
 }
 
 // has_color returns true if this font is colored. This can be used by
 // callers to determine what kind of atlas to pass in.
 pub fn (self Face) has_color() bool {
+	if self.backend == .web_canvas { return self.web_canvas.presentation == .emoji }
+	if !self.backend.has_freetype() { return self.coretext.has_color() }
 	return self.face.has_color()
 }
 
 // is_color_glyph returns true if the given glyph ID is colorized.
 pub fn (self &Face) is_color_glyph(glyph_id u32) bool {
+	if self.backend == .web_canvas { return self.web_canvas.presentation == .emoji }
+	if !self.backend.has_freetype() { return self.coretext.is_color_glyph(glyph_id) }
 	assert !isnil(self.ft_mutex)
 	self.ft_mutex.lock()
 	defer {
@@ -1372,17 +1452,17 @@ fn get_glyph_size(glyph &freetype.GlyphSlotRec) GlyphSize {
 		freetype.outline_get_bbox(&glyph.outline, mut bbox)
 
 		return GlyphSize{
-			x: freetype.f26dot6_to_f64(bbox.x_min)
-			y: freetype.f26dot6_to_f64(bbox.y_min)
-			width: freetype.f26dot6_to_f64(bbox.x_max - bbox.x_min)
+			x:      freetype.f26dot6_to_f64(bbox.x_min)
+			y:      freetype.f26dot6_to_f64(bbox.y_min)
+			width:  freetype.f26dot6_to_f64(bbox.x_max - bbox.x_min)
 			height: freetype.f26dot6_to_f64(bbox.y_max - bbox.y_min)
 		}
 	}
 
 	return GlyphSize{
-		x: freetype.f26dot6_to_f64(glyph.metrics.hori_bearing_x)
-		y: freetype.f26dot6_to_f64(glyph.metrics.hori_bearing_y - glyph.metrics.height)
-		width: freetype.f26dot6_to_f64(glyph.metrics.width)
+		x:      freetype.f26dot6_to_f64(glyph.metrics.hori_bearing_x)
+		y:      freetype.f26dot6_to_f64(glyph.metrics.hori_bearing_y - glyph.metrics.height)
+		width:  freetype.f26dot6_to_f64(glyph.metrics.width)
 		height: freetype.f26dot6_to_f64(glyph.metrics.height)
 	}
 }
@@ -1390,6 +1470,12 @@ fn get_glyph_size(glyph &freetype.GlyphSlotRec) GlyphSize {
 // render_glyph renders a glyph using the glyph index. The rendered glyph
 // is stored in the given texture atlas.
 pub fn (self Face) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOptions) !Glyph {
+	if self.backend == .web_canvas {
+		return self.web_canvas.render_glyph(mut atlas, glyph_index, opts)
+	}
+	if !self.backend.has_freetype() {
+		return self.coretext.render_glyph(mut atlas, glyph_index, opts)
+	}
 	assert !isnil(self.ft_mutex)
 	self.ft_mutex.lock()
 	defer {
@@ -1416,10 +1502,10 @@ pub fn (self Face) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOpt
 	cell_height := f64(metrics.cell_height)
 	cell_baseline := f64(metrics.cell_baseline)
 	glyph_size := opts.constraint.constrain(GlyphSize{
-		width: rect.width
+		width:  rect.width
 		height: rect.height
-		x: rect.x
-		y: rect.y + cell_baseline
+		x:      rect.x
+		y:      rect.y + cell_baseline
 	}, metrics, opts.constraint_width)
 	mut width := glyph_size.width
 	mut height := glyph_size.height
@@ -1492,19 +1578,18 @@ pub fn (self Face) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOpt
 			h := u32(math.round(height))
 			pitch := w * atlas.format.depth()
 			mut scaled := []u8{len: int(pitch * h)}
-			if source.buffer == unsafe { nil }
-				|| !unsafe {
-					stb.stbir_resize_uint8(source.buffer, int(source.width), int(source.rows), int(source.pitch), &scaled[0], int(w), int(h), int(pitch), int(atlas.format.depth())) != 0
-				} {
+			if source.buffer == unsafe { nil } || !unsafe {
+				stb.stbir_resize_uint8(source.buffer, int(source.width), int(source.rows), int(source.pitch), &scaled[0], int(w), int(h), int(pitch), int(atlas.format.depth())) != 0
+			} {
 				return error('glyph bitmap resize failed')
 			}
 			scaled_bitmap := freetype.Bitmap{
-				buffer: unsafe { &scaled[0] }
-				width: w
-				rows: h
-				pitch: i32(pitch)
+				buffer:     unsafe { &scaled[0] }
+				width:      w
+				rows:       h
+				pitch:      i32(pitch)
 				pixel_mode: source.pixel_mode
-				num_grays: source.num_grays
+				num_grays:  source.num_grays
 			}
 			freetype.bitmap_copy(self.lib.lib, &scaled_bitmap, mut bitmap)!
 			bitmap_top = i32(math.floor(y - cell_baseline + height))
@@ -1556,12 +1641,12 @@ pub fn (self Face) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOpt
 	atlas.set(region, pixels)
 	px_y := bitmap_top + i32(metrics.cell_baseline) - i32(px_height)
 	return Glyph{
-		width: px_width
-		height: px_height
+		width:    px_width
+		height:   px_height
 		offset_x: bitmap_left
 		offset_y: px_y + i32(px_height)
-		atlas_x: region.x
-		atlas_y: region.y
+		atlas_x:  region.x
+		atlas_y:  region.y
 	}
 }
 
@@ -1569,10 +1654,7 @@ pub fn (self Face) render_glyph(mut atlas Atlas, glyph_index u32, opts RenderOpt
 // y-scale factor of the current font size.
 fn (self Face) units_to_px_y(units i32) i32 {
 	metrics := self.face.size_metrics() or { panic('FreeType face has no size metrics') }
-	return i32(freetype.mul_fix(
-		units,
-		i32(metrics.y_scale),
-	) >> 6)
+	return i32(freetype.mul_fix(units, i32(metrics.y_scale)) >> 6)
 }
 
 // get_metrics returns the FaceMetrics for this face.
@@ -1593,6 +1675,10 @@ fn (self Face) units_to_px_y(units i32) i32 {
 //
 // IC width is measured from '水' (U+6C34).
 pub fn (mut self Face) get_metrics() FaceMetrics {
+	// The pinned WebCanvas face exposes cell metrics, not getMetrics. Native
+	// Collection has no supported WebCanvas instantiation in that revision.
+	assert self.backend != .web_canvas
+	if !self.backend.has_freetype() { return self.coretext.get_metrics() }
 	face := self.face
 	size_metrics := face.size_metrics() or { panic('FreeType face has no size metrics') }
 
@@ -1750,36 +1836,20 @@ pub fn (mut self Face) get_metrics() FaceMetrics {
 	// ideograph bounding box is wider than its advance.
 	mut ic_width := self.measure_ic_width()
 
-	$if macos {
-		// CoreText shaping uses unhinted native advances and bounds. Preserve
-		// the table-derived vertical metrics above, but measure horizontal
-		// layout through the exact CTFont used by the shaper.
-		if !isnil(self.ct_font) {
-			mut core_face := CoreTextFace{
-				ct_font: self.ct_font
-				size: self.size
-			}
-			core_metrics := core_face.get_metrics()
-			cell_width = core_metrics.cell_width
-			ascii_height = core_metrics.ascii_height
-			ic_width = core_metrics.ic_width
-		}
-	}
-
 	return FaceMetrics{
-		px_per_em: px_per_em
-		cell_width: cell_width
-		ascent: ascent
-		descent: descent
-		line_gap: line_gap
-		underline_position: underline_position
-		underline_thickness: underline_thickness
-		strikethrough_position: strikethrough_position
+		px_per_em:               px_per_em
+		cell_width:              cell_width
+		ascent:                  ascent
+		descent:                 descent
+		line_gap:                line_gap
+		underline_position:      underline_position
+		underline_thickness:     underline_thickness
+		strikethrough_position:  strikethrough_position
 		strikethrough_thickness: strikethrough_thickness
-		cap_height: cap_height
-		ex_height: ex_height
-		ascii_height: ascii_height
-		ic_width: ic_width
+		cap_height:              cap_height
+		ex_height:               ex_height
+		ascii_height:            ascii_height
+		ic_width:                ic_width
 	}
 }
 
@@ -1817,6 +1887,13 @@ fn (self &Face) measure_ic_width() ?f64 {
 
 // copy_table copies the optional font table data for the given tag.
 pub fn (self Face) copy_table(tag string) !freetype.SfntTableValue {
+	if !self.backend.has_freetype() {
+		data := self.coretext.copy_table(tag) or { return freetype.SfntTableValue{} }
+		return freetype.SfntTableValue{
+			has_value: true
+			data:      data
+		}
+	}
 	return self.face.load_sfnt_table(freetype.Tag.init(tag))
 }
 
@@ -1872,7 +1949,11 @@ fn (self Constraint) constrain_inner(glyph GlyphSize, metrics Metrics, constrain
 	} else {
 		// @min(self.max_constraint_width, constraint_width)
 		mcw := u32(self.max_constraint_width)
-		if mcw < constraint_width { mcw } else { constraint_width }
+		if mcw < constraint_width {
+			mcw
+		} else {
+			constraint_width
+		}
 	}
 
 	// The bounding box for the glyph's scale group. Scaling and alignment
@@ -1880,10 +1961,10 @@ fn (self Constraint) constrain_inner(glyph GlyphSize, metrics Metrics, constrain
 	group_width := glyph.width / self.relative_width
 	group_height := glyph.height / self.relative_height
 	mut group := GlyphSize{
-		width: group_width
+		width:  group_width
 		height: group_height
-		x: glyph.x - (group_width * self.relative_x)
-		y: glyph.y - (group_height * self.relative_y)
+		x:      glyph.x - (group_width * self.relative_x)
+		y:      glyph.y - (group_height * self.relative_y)
 	}
 
 	// Apply prescribed scaling, preserving the
@@ -1907,10 +1988,10 @@ fn (self Constraint) constrain_inner(glyph GlyphSize, metrics Metrics, constrain
 
 	// Transfer the scaling and alignment back to the glyph and return.
 	return GlyphSize{
-		width: width_factor * glyph.width
+		width:  width_factor * glyph.width
 		height: height_factor * glyph.height
-		x: group.x + (group.width * self.relative_x)
-		y: group.y + (group.height * self.relative_y)
+		x:      group.x + (group.width * self.relative_x)
+		y:      group.y + (group.height * self.relative_y)
 	}
 }
 
@@ -1930,7 +2011,6 @@ fn (self Constraint) scale_factors(group GlyphSize, metrics Metrics, min_constra
 		.cell {
 			metrics.face_height
 		}
-
 		// Like font-patcher, the icon constraint height depends on the
 		// constraint width. Unlike font-patcher, the multi-cell icon_height
 		// may be different from face_height due to the `adjust-icon-height`
@@ -2058,7 +2138,6 @@ fn (self Constraint) aligned_x(group GlyphSize, metrics Metrics, min_constraint_
 		.center {
 			math.max(start_x, (start_x + end_x) / 2)
 		}
-
 		// NOTE: .center1 implements the font_patcher rule of centering in the
 		// first cell even for multi-cell constraints. Since glyphs are not
 		// allowed to protrude to the left, this results in left-alignment like

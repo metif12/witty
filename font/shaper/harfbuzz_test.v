@@ -39,7 +39,7 @@ fn create_hb_shaper_with_font(font_req HbTestFont) !HbTestShaper {
 		.monaspace_neon { font.embedded_monaspace_neon }
 		.arabic { font.embedded_arabic }
 	}
-	mut lib := font.Library.init()!
+	mut lib := font.Library.init_backend(.freetype)!
 	mut collection := font.Collection.init()
 	collection.load_options = font.LoadOptions{
 		library: lib
@@ -69,7 +69,7 @@ fn create_hb_shaper_with_font(font_req HbTestFont) !HbTestShaper {
 
 // Return a fully initialized shaper by discovering a named font on the system.
 fn create_hb_shaper_with_discovered_font(font_req string) !HbTestShaper {
-	mut lib := font.Library.init()!
+	mut lib := font.Library.init_backend(.freetype)!
 	mut collection := font.Collection.init()
 	collection.load_options = font.LoadOptions{
 		library: lib

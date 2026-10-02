@@ -103,10 +103,10 @@ pub fn (mut self NoopShaper) shape(run font.TextRun) ![]font.ShapeCell {
 	// Go through the run and map each codepoint to a glyph index.
 	self.cell_buf.clear()
 
-	if self.grid == unsafe { nil } {
+	if run.grid == unsafe { nil } {
 		return error('noop shaper has no font grid')
 	}
-	mut grid := unsafe { self.grid }
+	mut grid := unsafe { run.grid }
 	face := grid.resolver.collection.get_face(run.font_index)!
 	for entry in state.codepoints {
 		glyph_index := face.glyph_index(entry.codepoint) or {

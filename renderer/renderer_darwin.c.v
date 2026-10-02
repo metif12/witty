@@ -4,6 +4,7 @@ module renderer
 // GenericRenderer with Metal on Apple platforms at compile time; these are the
 // parts of the translated renderer that only that instantiation compiles.
 import font
+import font.shaper as fontshaper
 import highlight
 import log
 import macos
@@ -13,7 +14,9 @@ import xev
 
 fn Renderer.init_metal(opts RendererOpts) !Renderer {
 	// Create the font shaper
-	mut font_shaper := font.Shaper.init(font.ShaperOptions{})!
+	mut font_shaper := fontshaper.NativeShaper.init_backend(opts.font_grid.backend(), font.ShaperOptions{
+		features: opts.config.font_features
+	})!
 
 	mut metal := if opts.metal_view != unsafe { nil } {
 		MetalAPI.init_from_view(opts.metal_view, opts.content_scale) or {
@@ -426,9 +429,7 @@ fn renderer_metal_layer_display_callback(context voidptr) {
 		return
 	}
 	mut render := unsafe { &Renderer(context) }
-	render.draw_frame(true) or {
-		log.warn('Error drawing frame in display callback, err=${err}')
-	}
+	render.draw_frame(true) or { log.warn('Error drawing frame in display callback, err=${err}') }
 }
 
 fn renderer_display_link_callback(display_link voidptr, now voidptr, output_time voidptr, flags_in u64, flags_out &u64, context voidptr) int {

@@ -47,7 +47,7 @@ pub fn SharedGridSet.init() !SharedGridSet {
 
 	return SharedGridSet{
 		font_lib: font_lib
-		lock: sync.new_mutex()
+		lock:     sync.new_mutex()
 	}
 }
 
@@ -120,15 +120,18 @@ pub fn (mut self SharedGridSet) ref(config &DerivedConfig, font_size DesiredSize
 	styles.set(.bold_italic, !config.font_style_bold_italic.is_false())
 
 	// Init our resolver which just requires setting fields.
-	mut discover := self.discover() or {
-		c.deinit()
-		key.deinit()
-		return err
+	mut discover := &Discover(unsafe { nil })
+	if self.font_lib.backend.has_coretext() || self.font_lib.backend.has_fontconfig() {
+		discover = self.discover() or {
+			c.deinit()
+			key.deinit()
+			return err
+		}
 	}
 	mut resolver := CodepointResolver{
-		collection: c
-		styles: styles
-		discover: discover
+		collection:    c
+		styles:        styles
+		discover:      discover
 		codepoint_map: key.codepoint_map
 	}
 
@@ -140,9 +143,9 @@ pub fn (mut self SharedGridSet) ref(config &DerivedConfig, font_size DesiredSize
 	grid := &sg
 
 	self.grids << ReffedGridEntry{
-		key: key
-		hashcode: hashcode
-		grid: grid
+		key:       key
+		hashcode:  hashcode
+		grid:      grid
 		ref_count: 1
 	}
 
@@ -157,8 +160,8 @@ fn (mut self SharedGridSet) collection(key &Key, size DesiredSize, config &Deriv
 	// - metric_modifiers is owned by the key which is freed only when
 	//   the ref count for this grid reaches zero.
 	load_options := LoadOptions{
-		library: self.font_lib
-		size: size
+		library:             self.font_lib
+		size:                size
 		freetype_load_flags: key.freetype_load_flags
 	}
 
@@ -172,35 +175,39 @@ fn (mut self SharedGridSet) collection(key &Key, size DesiredSize, config &Deriv
 	c.load_options = load_options
 	c.metric_modifiers = key.metric_modifiers
 
-	// Search configured families in priority order for every style.
-	mut disco := self.discover()!
-	for style in [Style.regular, .bold, .italic, .bold_italic] {
-		for desc in key.descriptors_for_style(style) {
-			if add_discovered_face(mut c, disco, desc, AddOptions{
-					style: style
-					fallback: false
+	if self.font_lib.backend.has_coretext() || self.font_lib.backend.has_fontconfig() {
+		// Search configured families in priority order for every style.
+		mut disco := self.discover()!
+		for style in [Style.regular, .bold, .italic, .bold_italic] {
+			for desc in key.descriptors_for_style(style) {
+				if add_discovered_face(mut c, disco, desc, AddOptions{
+					style:           style
+					fallback:        false
 					size_adjustment: .none_
-				})! {
-				continue
-			}
-
-			// Variable fonts sometimes omit the bold/italic symbolic trait even
-			// though their axes can produce the requested style. Retry without
-			// the trait filter in that case, exactly as Ghostty does.
-			if style != .regular && desc.variations.len > 0 {
-				mut retry := desc.clone()
-				retry.bold = false
-				retry.italic = false
-				if add_discovered_face(mut c, disco, retry, AddOptions{
-						style: style
-						fallback: false
-						size_adjustment: .none_
-					})! {
+				})!
+				{
 					continue
 				}
-			}
 
-			log.warn('font-family ${style} not found: ${desc.family or { '' }}')
+				// Variable fonts sometimes omit the bold/italic symbolic trait even
+				// though their axes can produce the requested style. Retry without
+				// the trait filter in that case, exactly as Ghostty does.
+				if style != .regular && desc.variations.len > 0 {
+					mut retry := desc.clone()
+					retry.bold = false
+					retry.italic = false
+					if add_discovered_face(mut c, disco, retry, AddOptions{
+						style:           style
+						fallback:        false
+						size_adjustment: .none_
+					})!
+					{
+						continue
+					}
+				}
+
+				log.warn('font-family ${style} not found: ${desc.family or { '' }}')
+			}
 		}
 	}
 
@@ -212,49 +219,54 @@ fn (mut self SharedGridSet) collection(key &Key, size DesiredSize, config &Deriv
 
 	// Our built-in font will be used as a backup
 	_ = c.add(Face.init_mem(self.font_lib, embedded_variable, load_options.face_options())!, AddOptions{
-		style: .regular
-		fallback: true
+		style:           .regular
+		fallback:        true
 		size_adjustment: default_fallback_adjustment
 	})!
 
 	// Bold variant with weight=700
 	bold_idx := c.add(Face.init_mem(self.font_lib, embedded_variable, load_options.face_options())!, AddOptions{
-		style: .bold
-		fallback: true
+		style:           .bold
+		fallback:        true
 		size_adjustment: default_fallback_adjustment
 	})!
 	mut bold_face := c.get_face(bold_idx)!
-	bold_face.set_variations([Variation{
-		id: VariationId{
-			value: u32(`w`) << 24 | u32(`g`) << 16 | u32(`h`) << 8 | u32(`t`)
-		}
-		value: 700
-	}], load_options.face_options())!
+	bold_face.set_variations([
+		Variation{
+			id:    VariationId{
+				value: u32(`w`) << 24 | u32(`g`) << 16 | u32(`h`) << 8 | u32(`t`)
+			}
+			value: 700
+		},
+	], load_options.face_options())!
 
 	// Italic variant
 	_ = c.add(Face.init_mem(self.font_lib, embedded_variable_italic, load_options.face_options())!, AddOptions{
-		style: .italic
-		fallback: true
+		style:           .italic
+		fallback:        true
 		size_adjustment: default_fallback_adjustment
 	})!
 
 	// Bold-italic variant with weight=700
-	bold_italic_idx := c.add(Face.init_mem(self.font_lib, embedded_variable_italic, load_options.face_options())!, AddOptions{
-		style: .bold_italic
-		fallback: true
+	bold_italic_idx := c.add(Face.init_mem(self.font_lib, embedded_variable_italic,
+		load_options.face_options())!, AddOptions{
+		style:           .bold_italic
+		fallback:        true
 		size_adjustment: default_fallback_adjustment
 	})!
 	mut bold_italic_face := c.get_face(bold_italic_idx)!
-	bold_italic_face.set_variations([Variation{
-		id: VariationId{
-			value: u32(`w`) << 24 | u32(`g`) << 16 | u32(`h`) << 8 | u32(`t`)
-		}
-		value: 700
-	}], load_options.face_options())!
+	bold_italic_face.set_variations([
+		Variation{
+			id:    VariationId{
+				value: u32(`w`) << 24 | u32(`g`) << 16 | u32(`h`) << 8 | u32(`t`)
+			}
+			value: 700
+		},
+	], load_options.face_options())!
 
 	// Nerd-font symbols fallback.
 	_ = c.add(Face.init_mem(self.font_lib, embedded_symbols_nerd_font, load_options.face_options())!, AddOptions{
-		style: .regular
+		style:    .regular
 		fallback: true
 		// No size adjustment for the symbols font.
 		size_adjustment: .none_
@@ -262,37 +274,42 @@ fn (mut self SharedGridSet) collection(key &Key, size DesiredSize, config &Deriv
 
 	// Prefer the platform emoji face on macOS. Other targets use the
 	// bundled color and text emoji faces.
+	mut add_embedded_emoji := true
 	$if macos {
-		mut emoji_it := disco.discover(Descriptor{
-			family: 'Apple Color Emoji'
-			size: size.points
-		})!
-		defer { emoji_it.deinit() }
-		emoji_value := emoji_it.next()!
-		if emoji_value.has_value {
-			mut deferred := emoji_value.face
-			c.add_deferred(deferred, AddOptions{
-				style: .regular
-				fallback: true
-				size_adjustment: .none_
-			}) or {
-				deferred.deinit()
-				return err
+		if self.font_lib.backend.has_coretext() || self.font_lib.backend.has_fontconfig() {
+			add_embedded_emoji = false
+			mut disco := self.discover()!
+			mut emoji_it := disco.discover(Descriptor{
+				family: 'Apple Color Emoji'
+				size:   size.points
+			})!
+			defer { emoji_it.deinit() }
+			emoji_value := emoji_it.next()!
+			if emoji_value.has_value {
+				mut deferred := emoji_value.face
+				c.add_deferred(deferred, AddOptions{
+					style:           .regular
+					fallback:        true
+					size_adjustment: .none_
+				}) or {
+					deferred.deinit()
+					return err
+				}
 			}
 		}
-	} $else {
+	}
+	if add_embedded_emoji {
 		_ = c.add(Face.init_mem(self.font_lib, embedded_emoji, load_options.face_options())!, AddOptions{
-			style: .regular
-			fallback: true
+			style:           .regular
+			fallback:        true
 			size_adjustment: .none_
 		})!
 		_ = c.add(Face.init_mem(self.font_lib, embedded_emoji_text, load_options.face_options())!, AddOptions{
-			style: .regular
-			fallback: true
+			style:           .regular
+			fallback:        true
 			size_adjustment: .none_
 		})!
 	}
-
 	complete = true
 	return c
 }
@@ -301,7 +318,7 @@ fn (mut self SharedGridSet) collection(key &Key, size DesiredSize, config &Deriv
 // particular is not safe to repeatedly tear down and initialize.
 fn (mut self SharedGridSet) discover() !&Discover {
 	if !self.font_discover_initialized {
-		self.font_discover = Discover.init()
+		self.font_discover = Discover.init_backend(self.font_lib.backend)
 		self.font_discover_initialized = true
 	}
 	return &self.font_discover
@@ -417,65 +434,65 @@ pub mut:
 pub fn DerivedConfig.init[T](config &T) !DerivedConfig {
 	$if T is DerivedConfig {
 		return DerivedConfig{
-			font_family: config.font_family.clone()
-			font_family_bold: config.font_family_bold.clone()
-			font_family_italic: config.font_family_italic.clone()
-			font_family_bold_italic: config.font_family_bold_italic.clone()
-			font_style: config.font_style.clone()
-			font_style_bold: config.font_style_bold.clone()
-			font_style_italic: config.font_style_italic.clone()
-			font_style_bold_italic: config.font_style_bold_italic.clone()
-			font_variation: config.font_variation.clone()
-			font_variation_bold: config.font_variation_bold.clone()
-			font_variation_italic: config.font_variation_italic.clone()
-			font_variation_bold_italic: config.font_variation_bold_italic.clone()
-			font_codepoint_map: config.font_codepoint_map.clone()
-			font_synthetic_style: config.font_synthetic_style
-			adjust_cell_width: config.adjust_cell_width
-			adjust_cell_height: config.adjust_cell_height
-			adjust_font_baseline: config.adjust_font_baseline
-			adjust_underline_position: config.adjust_underline_position
-			adjust_underline_thickness: config.adjust_underline_thickness
-			adjust_strikethrough_position: config.adjust_strikethrough_position
+			font_family:                    config.font_family.clone()
+			font_family_bold:               config.font_family_bold.clone()
+			font_family_italic:             config.font_family_italic.clone()
+			font_family_bold_italic:        config.font_family_bold_italic.clone()
+			font_style:                     config.font_style.clone()
+			font_style_bold:                config.font_style_bold.clone()
+			font_style_italic:              config.font_style_italic.clone()
+			font_style_bold_italic:         config.font_style_bold_italic.clone()
+			font_variation:                 config.font_variation.clone()
+			font_variation_bold:            config.font_variation_bold.clone()
+			font_variation_italic:          config.font_variation_italic.clone()
+			font_variation_bold_italic:     config.font_variation_bold_italic.clone()
+			font_codepoint_map:             config.font_codepoint_map.clone()
+			font_synthetic_style:           config.font_synthetic_style
+			adjust_cell_width:              config.adjust_cell_width
+			adjust_cell_height:             config.adjust_cell_height
+			adjust_font_baseline:           config.adjust_font_baseline
+			adjust_underline_position:      config.adjust_underline_position
+			adjust_underline_thickness:     config.adjust_underline_thickness
+			adjust_strikethrough_position:  config.adjust_strikethrough_position
 			adjust_strikethrough_thickness: config.adjust_strikethrough_thickness
-			adjust_overline_position: config.adjust_overline_position
-			adjust_overline_thickness: config.adjust_overline_thickness
-			adjust_cursor_thickness: config.adjust_cursor_thickness
-			adjust_cursor_height: config.adjust_cursor_height
-			adjust_box_thickness: config.adjust_box_thickness
-			adjust_icon_height: config.adjust_icon_height
-			freetype_load_flags: config.freetype_load_flags
+			adjust_overline_position:       config.adjust_overline_position
+			adjust_overline_thickness:      config.adjust_overline_thickness
+			adjust_cursor_thickness:        config.adjust_cursor_thickness
+			adjust_cursor_height:           config.adjust_cursor_height
+			adjust_box_thickness:           config.adjust_box_thickness
+			adjust_icon_height:             config.adjust_icon_height
+			freetype_load_flags:            config.freetype_load_flags
 		}
 	} $else {
 		return DerivedConfig{
-			font_family: config.font_family.clone()
-			font_family_bold: config.font_family_bold.clone()
-			font_family_italic: config.font_family_italic.clone()
-			font_family_bold_italic: config.font_family_bold_italic.clone()
-			font_style: config.font_style.clone()
-			font_style_bold: config.font_style_bold.clone()
-			font_style_italic: config.font_style_italic.clone()
-			font_style_bold_italic: config.font_style_bold_italic.clone()
-			font_variation: config.font_variation.list.clone()
-			font_variation_bold: config.font_variation_bold.list.clone()
-			font_variation_italic: config.font_variation_italic.list.clone()
-			font_variation_bold_italic: config.font_variation_bold_italic.list.clone()
-			font_codepoint_map: config.font_codepoint_map.map.clone()
-			font_synthetic_style: config.font_synthetic_style
-			adjust_cell_width: config.adjust_cell_width
-			adjust_cell_height: config.adjust_cell_height
-			adjust_font_baseline: config.adjust_font_baseline
-			adjust_underline_position: config.adjust_underline_position
-			adjust_underline_thickness: config.adjust_underline_thickness
-			adjust_strikethrough_position: config.adjust_strikethrough_position
+			font_family:                    config.font_family.clone()
+			font_family_bold:               config.font_family_bold.clone()
+			font_family_italic:             config.font_family_italic.clone()
+			font_family_bold_italic:        config.font_family_bold_italic.clone()
+			font_style:                     config.font_style.clone()
+			font_style_bold:                config.font_style_bold.clone()
+			font_style_italic:              config.font_style_italic.clone()
+			font_style_bold_italic:         config.font_style_bold_italic.clone()
+			font_variation:                 config.font_variation.list.clone()
+			font_variation_bold:            config.font_variation_bold.list.clone()
+			font_variation_italic:          config.font_variation_italic.list.clone()
+			font_variation_bold_italic:     config.font_variation_bold_italic.list.clone()
+			font_codepoint_map:             config.font_codepoint_map.map.clone()
+			font_synthetic_style:           config.font_synthetic_style
+			adjust_cell_width:              config.adjust_cell_width
+			adjust_cell_height:             config.adjust_cell_height
+			adjust_font_baseline:           config.adjust_font_baseline
+			adjust_underline_position:      config.adjust_underline_position
+			adjust_underline_thickness:     config.adjust_underline_thickness
+			adjust_strikethrough_position:  config.adjust_strikethrough_position
 			adjust_strikethrough_thickness: config.adjust_strikethrough_thickness
-			adjust_overline_position: config.adjust_overline_position
-			adjust_overline_thickness: config.adjust_overline_thickness
-			adjust_cursor_thickness: config.adjust_cursor_thickness
-			adjust_cursor_height: config.adjust_cursor_height
-			adjust_box_thickness: config.adjust_box_thickness
-			adjust_icon_height: config.adjust_icon_height
-			freetype_load_flags: config.freetype_load_flags
+			adjust_overline_position:       config.adjust_overline_position
+			adjust_overline_thickness:      config.adjust_overline_thickness
+			adjust_cursor_thickness:        config.adjust_cursor_thickness
+			adjust_cursor_height:           config.adjust_cursor_height
+			adjust_box_thickness:           config.adjust_box_thickness
+			adjust_icon_height:             config.adjust_icon_height
+			freetype_load_flags:            config.freetype_load_flags
 		}
 	}
 }
@@ -537,9 +554,9 @@ pub fn Key.init(config_src &DerivedConfig, font_size DesiredSize) !Key {
 	// Regular family descriptors
 	for family in config_src.font_family {
 		descriptors << Descriptor{
-			family: family
-			style: config_src.font_style.name_value()
-			size: font_size.points
+			family:     family
+			style:      config_src.font_style.name_value()
+			size:       font_size.points
 			variations: config_src.font_variation
 		}
 	}
@@ -556,10 +573,10 @@ pub fn Key.init(config_src &DerivedConfig, font_size DesiredSize) !Key {
 	for family in config_src.font_family_bold {
 		bold_style := config_src.font_style_bold.name_value()
 		descriptors << Descriptor{
-			family: family
-			style: bold_style
-			size: font_size.points
-			bold: bold_style == none
+			family:     family
+			style:      bold_style
+			size:       font_size.points
+			bold:       bold_style == none
 			variations: config_src.font_variation_bold
 		}
 	}
@@ -568,10 +585,10 @@ pub fn Key.init(config_src &DerivedConfig, font_size DesiredSize) !Key {
 	for family in config_src.font_family_italic {
 		italic_style := config_src.font_style_italic.name_value()
 		descriptors << Descriptor{
-			family: family
-			style: italic_style
-			size: font_size.points
-			italic: italic_style == none
+			family:     family
+			style:      italic_style
+			size:       font_size.points
+			italic:     italic_style == none
 			variations: config_src.font_variation_italic
 		}
 	}
@@ -580,11 +597,11 @@ pub fn Key.init(config_src &DerivedConfig, font_size DesiredSize) !Key {
 	for family in config_src.font_family_bold_italic {
 		bi_style := config_src.font_style_bold_italic.name_value()
 		descriptors << Descriptor{
-			family: family
-			style: bi_style
-			size: font_size.points
-			bold: bi_style == none
-			italic: bi_style == none
+			family:     family
+			style:      bi_style
+			size:       font_size.points
+			bold:       bi_style == none
+			italic:     bi_style == none
 			variations: config_src.font_variation_bold_italic
 		}
 	}
@@ -644,11 +661,11 @@ pub fn Key.init(config_src &DerivedConfig, font_size DesiredSize) !Key {
 	bold_italic_offset := italic_offset + usize(config_src.font_family_bold_italic.len)
 
 	return Key{
-		descriptors: descriptors
-		style_offsets: [regular_offset, bold_offset, italic_offset, bold_italic_offset]!
-		codepoint_map: codepoint_map
-		metric_modifiers: metric_modifiers
-		font_size: font_size
+		descriptors:         descriptors
+		style_offsets:       [regular_offset, bold_offset, italic_offset, bold_italic_offset]!
+		codepoint_map:       codepoint_map
+		metric_modifiers:    metric_modifiers
+		font_size:           font_size
 		freetype_load_flags: config_src.freetype_load_flags
 	}
 }
@@ -696,8 +713,7 @@ pub fn (self &Key) hash(mut hasher SourceHash) {
 	hasher.put_u64(u64(self.metric_modifiers.count()))
 
 	// Ghostty hashes this packed struct as one byte in declaration order.
-	hasher.put_u8(self.freetype_load_flags.int_val())
-
+	if Backend.selected_().has_freetype() { hasher.put_u8(self.freetype_load_flags.int_val()) }
 	// Hash metric modifier values
 	if self.metric_modifiers.count() > 0 {
 		$for enum_value in MetricsKey.values {
@@ -805,13 +821,19 @@ pub fn MetricsModifier.parse(input string) !MetricsModifier {
 		percent /= 100.0
 
 		if percent <= -1.0 {
-			return MetricsModifier(MetricsModifierPercent{ value: 0 })
+			return MetricsModifier(MetricsModifierPercent{
+				value: 0
+			})
 		}
-		return MetricsModifier(MetricsModifierPercent{ value: 1.0 + percent })
+		return MetricsModifier(MetricsModifierPercent{
+			value: 1.0 + percent
+		})
 	}
 
 	n := parse_metrics_i32(input) or { return error('invalid format') }
-	return MetricsModifier(MetricsModifierAbsolute{ value: n })
+	return MetricsModifier(MetricsModifierAbsolute{
+		value: n
+	})
 }
 
 // parse_cli is the optional-value adapter used by the configuration parser.

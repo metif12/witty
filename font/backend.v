@@ -56,15 +56,10 @@ pub fn Backend.default_() Backend {
 // has_freetype returns true if this backend uses FreeType for rendering.
 pub fn (b Backend) has_freetype() bool {
 	return match b {
-		.freetype,
-		.fontconfig_freetype,
-		.coretext_freetype {
+		.freetype, .fontconfig_freetype, .coretext_freetype {
 			true
 		}
-		.coretext,
-		.coretext_harfbuzz,
-		.coretext_noshape,
-		.web_canvas {
+		.coretext, .coretext_harfbuzz, .coretext_noshape, .web_canvas {
 			false
 		}
 	}
@@ -73,15 +68,10 @@ pub fn (b Backend) has_freetype() bool {
 // has_coretext returns true if this backend uses CoreText.
 pub fn (b Backend) has_coretext() bool {
 	return match b {
-		.coretext,
-		.coretext_freetype,
-		.coretext_harfbuzz,
-		.coretext_noshape {
+		.coretext, .coretext_freetype, .coretext_harfbuzz, .coretext_noshape {
 			true
 		}
-		.freetype,
-		.fontconfig_freetype,
-		.web_canvas {
+		.freetype, .fontconfig_freetype, .web_canvas {
 			false
 		}
 	}
@@ -93,11 +83,7 @@ pub fn (b Backend) has_fontconfig() bool {
 		.fontconfig_freetype {
 			true
 		}
-		.freetype,
-		.coretext,
-		.coretext_freetype,
-		.coretext_harfbuzz,
-		.coretext_noshape,
+		.freetype, .coretext, .coretext_freetype, .coretext_harfbuzz, .coretext_noshape,
 		.web_canvas {
 			false
 		}
@@ -107,16 +93,24 @@ pub fn (b Backend) has_fontconfig() bool {
 // has_harfbuzz returns true if this backend uses HarfBuzz for shaping.
 pub fn (b Backend) has_harfbuzz() bool {
 	return match b {
-		.freetype,
-		.fontconfig_freetype,
-		.coretext_freetype,
-		.coretext_harfbuzz {
+		.freetype, .fontconfig_freetype, .coretext_freetype, .coretext_harfbuzz {
 			true
 		}
-		.coretext,
-		.coretext_noshape,
-		.web_canvas {
+		.coretext, .coretext_noshape, .web_canvas {
 			false
 		}
 	}
+}
+
+// Source build options select one renderer/discovery/shaper combination. The
+// V build exposes the same alternatives through -d font_backend_<backend>.
+pub fn Backend.selected_() Backend {
+	$if font_backend_freetype ? { return .freetype }
+	$if font_backend_fontconfig_freetype ? { return .fontconfig_freetype }
+	$if font_backend_coretext ? { return .coretext }
+	$if font_backend_coretext_freetype ? { return .coretext_freetype }
+	$if font_backend_coretext_harfbuzz ? { return .coretext_harfbuzz }
+	$if font_backend_coretext_noshape ? { return .coretext_noshape }
+	$if font_backend_web_canvas ? { return .web_canvas }
+	return Backend.default_()
 }
