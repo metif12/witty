@@ -84,6 +84,23 @@ pub fn (mut stream ReadStream) read_slice_short(mut destination []u8) !usize {
 	return usize(count)
 }
 
+// Private operations shared by the fixed-memory and buffered PNG flate inputs.
+fn (mut stream ReadStream) flate_fill_word() ! {
+	stream.peek(int(sizeof(usize)))!
+}
+
+fn (stream ReadStream) flate_buffered_len() int {
+	return stream.buffer.len - stream.position
+}
+
+fn (mut stream ReadStream) flate_read_vec(mut destination []u8) !int {
+	remaining := stream.flate_buffered_len()
+	count := if remaining < destination.len { remaining } else { destination.len }
+	if count == 0 && destination.len > 0 { return error('EndOfStream') }
+	copy(mut destination, stream.take(count)!)
+	return count
+}
+
 // std.Io.Reader.discardAll consumes the available prefix before reporting EOF.
 pub fn (mut stream ReadStream) discard_all(count usize) ! {
 	remaining := usize(stream.buffer.len - stream.position)

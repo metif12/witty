@@ -120,7 +120,7 @@ fn tiff_flate_word(bytes []u8) u64 {
 	return result
 }
 
-fn (mut decoder TiffFlate) take_bits(mut input ReadStream, count int) !u64 {
+fn (mut decoder TiffFlate) take_bits[R](mut input R, count int) !u64 {
 	mask := (u64(1) << count) - 1
 	if decoder.remaining_bits >= count {
 		result := decoder.bits & mask
@@ -128,8 +128,9 @@ fn (mut decoder TiffFlate) take_bits(mut input ReadStream, count int) !u64 {
 		decoder.remaining_bits -= count
 		return result
 	}
+	input.flate_fill_word() or { if err.msg() != 'EndOfStream' { return err } }
 	word_size := int(sizeof(usize))
-	available := input.buffer.len - input.position
+	available := input.flate_buffered_len()
 	read_size := if available >= word_size { word_size } else { available }
 	needed := count - decoder.remaining_bits
 	if read_size * 8 < needed { return error('EndOfStream') }
@@ -140,11 +141,12 @@ fn (mut decoder TiffFlate) take_bits(mut input ReadStream, count int) !u64 {
 	return result
 }
 
-fn (decoder TiffFlate) peek_bits(input ReadStream, count int) !u64 {
+fn (decoder TiffFlate) peek_bits[R](mut input R, count int) !u64 {
 	mask := (u64(1) << count) - 1
 	if decoder.remaining_bits >= count { return decoder.bits & mask }
+	input.flate_fill_word() or { if err.msg() != 'EndOfStream' { return err } }
 	word_size := int(sizeof(usize))
-	available := input.buffer.len - input.position
+	available := input.flate_buffered_len()
 	mut read_size := word_size
 	if available < word_size {
 		needed := (count - decoder.remaining_bits + 7) / 8
@@ -155,14 +157,15 @@ fn (decoder TiffFlate) peek_bits(input ReadStream, count int) !u64 {
 	return ((word << decoder.remaining_bits) | decoder.bits) & mask
 }
 
-fn (mut decoder TiffFlate) toss_bits(mut input ReadStream, count int) ! {
+fn (mut decoder TiffFlate) toss_bits[R](mut input R, count int) ! {
 	if decoder.remaining_bits >= count {
 		decoder.bits >>= count
 		decoder.remaining_bits -= count
 		return
 	}
+	input.flate_fill_word() or { if err.msg() != 'EndOfStream' { return err } }
 	word_size := int(sizeof(usize))
-	available := input.buffer.len - input.position
+	available := input.flate_buffered_len()
 	read_size := if available >= word_size { word_size } else { available }
 	if read_size == 0 { return error('EndOfStream') }
 	needed := count - decoder.remaining_bits
@@ -171,27 +174,27 @@ fn (mut decoder TiffFlate) toss_bits(mut input ReadStream, count int) ! {
 	decoder.remaining_bits = if read_size * 8 > needed { read_size * 8 - needed } else { 0 }
 }
 
-fn (mut decoder TiffFlate) runtime_bits(mut input ReadStream, count int) !int {
-	value := decoder.peek_bits(input, 16)!
+fn (mut decoder TiffFlate) runtime_bits[R](mut input R, count int) !int {
+	value := decoder.peek_bits(mut input, 16)!
 	result := int(value & ((u64(1) << count) - 1))
 	decoder.toss_bits(mut input, count)!
 	return result
 }
 
-fn (mut decoder TiffFlate) align_bits(mut input ReadStream) {
+fn (mut decoder TiffFlate) align_bits[R](mut input R) {
 	input.position -= decoder.remaining_bits / 8
 	decoder.remaining_bits = 0
 	decoder.bits = 0
 }
 
-fn (mut decoder TiffFlate) symbol(mut input ReadStream, tree TiffFlateTree) !TiffFlateSymbol {
-	peeked := decoder.peek_bits(input, tree.max_bits)!
+fn (mut decoder TiffFlate) symbol[R](mut input R, tree TiffFlateTree) !TiffFlateSymbol {
+	peeked := decoder.peek_bits(mut input, tree.max_bits)!
 	symbol := tree.find(tiff_flate_reverse(peeked, tree.max_bits))!
 	decoder.toss_bits(mut input, int(symbol.bits))!
 	return symbol
 }
 
-fn (mut decoder TiffFlate) length(mut input ReadStream, code int) !int {
+fn (mut decoder TiffFlate) length[R](mut input R, code int) !int {
 	if code > 28 { return error('InvalidCode') }
 	extra := tiff_flate_length_extra[code]
 	return tiff_flate_length_base[code] + if extra == 0 {
@@ -201,7 +204,7 @@ fn (mut decoder TiffFlate) length(mut input ReadStream, code int) !int {
 	}
 }
 
-fn (mut decoder TiffFlate) distance(mut input ReadStream, code int) !int {
+fn (mut decoder TiffFlate) distance[R](mut input R, code int) !int {
 	if code > 29 { return error('InvalidCode') }
 	extra := tiff_flate_distance_extra[code]
 	return tiff_flate_distance_base[code] + if extra == 0 {
@@ -225,7 +228,7 @@ fn (mut decoder TiffFlate) write_match(length int, distance int) ! {
 	}
 }
 
-fn (mut decoder TiffFlate) fixed_code(mut input ReadStream) !int {
+fn (mut decoder TiffFlate) fixed_code[R](mut input R) !int {
 	code := int(tiff_flate_reverse(decoder.take_bits(mut input, 7)!, 7))
 	if code <= 23 { return code + 256 }
 	if code <= 95 { return code * 2 + int(decoder.take_bits(mut input, 1)!) - 48 }
@@ -233,7 +236,7 @@ fn (mut decoder TiffFlate) fixed_code(mut input ReadStream) !int {
 	return (code - 100) * 4 + int(tiff_flate_reverse(decoder.take_bits(mut input, 2)!, 2)) + 144
 }
 
-fn (mut decoder TiffFlate) dynamic_header(mut input ReadStream) ! {
+fn (mut decoder TiffFlate) dynamic_header[R](mut input R) ! {
 	hlit := int(decoder.take_bits(mut input, 5)!) + 257
 	hdist := int(decoder.take_bits(mut input, 5)!) + 1
 	hclen := int(decoder.take_bits(mut input, 4)!) + 4
@@ -279,7 +282,7 @@ fn (mut decoder TiffFlate) dynamic_header(mut input ReadStream) ! {
 	decoder.distance_tree = tiff_flate_tree(lengths[hlit..hlit + hdist], 30, 15)!
 }
 
-fn (mut decoder TiffFlate) fill_window(mut input ReadStream) ! {
+fn (mut decoder TiffFlate) fill_window[R](mut input R) ! {
 	if decoder.window.len - decoder.end < 32768 {
 		discard := if decoder.seek < decoder.end - 32768 {
 			decoder.seek
@@ -334,13 +337,8 @@ fn (mut decoder TiffFlate) fill_window(mut input ReadStream) ! {
 				} else {
 					remaining
 				}
-				available := input.buffer.len - input.position
-				if count > 0 && available == 0 { return error('EndOfStream') }
-				read_count := if available < count { available } else { count }
-				bytes := input.take(read_count)!
-				for index, byte in bytes {
-					decoder.window[decoder.end + index] = byte
-				}
+				mut target := unsafe { decoder.window[decoder.end..decoder.end + count] }
+				read_count := input.flate_read_vec(mut target)!
 				decoder.end += read_count
 				decoder.stored_length -= read_count
 				decoder.state = if decoder.stored_length == 0 {
