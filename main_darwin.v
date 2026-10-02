@@ -460,13 +460,15 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 			if mut current := state {
 				data := action.data
 				if data is apprt.InitialSize {
-					scale := macos.view_backing_scale(current.view)
-					current.initial_width = f64(data.width) / scale
-					current.initial_height = f64(data.height) / scale
-					do_reset_window_size(current)
+					// Surface.recomputeInitialSize has already projected these
+					// dimensions into points. App.setInitialSize only stores them;
+					// TerminalController applies its deferred default-size branch.
+					current.initial_width = f64(data.width)
+					current.initial_height = f64(data.height)
 				}
-				return true
 			}
+			if target is apprt.AppTarget { eprintln('initial size does nothing with an app target') }
+			return true
 		}
 		.toggle_quick_terminal { do_toggle_quick_terminal(app); return true }
 		.toggle_fullscreen {
