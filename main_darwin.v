@@ -112,7 +112,7 @@ fn create_surface(view voidptr, inherited apprt.SurfaceOptions) ?&TermState {
 		native_config: native_window_config(&runtime.app.config)
 	}
 	macos.view_set_userdata(view, voidptr(state))
-	state.actions = macos.new_action_surface(view, voidptr(state), macos.ActionCallbacks{size: on_resize, binding: native_binding_action, title: native_surface_title_changed, tab_title: native_tab_title_changed})
+	state.actions = macos.new_action_surface(view, voidptr(state), macos.ActionCallbacks{inspector: native_inspector_callbacks(), size: on_resize, binding: native_binding_action, title: native_surface_title_changed, tab_title: native_tab_title_changed})
 	state.actions.bell_border = runtime.app.config.bell_features.border()
 	state.actions.secure_indication = runtime.app.config.macos_secure_input_indication
     native_action_config(state,&runtime.app.config)

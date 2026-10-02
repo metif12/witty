@@ -17,6 +17,7 @@ fn C.witty_action_repeat_forever(animation voidptr)
 
 pub struct ActionCallbacks {
 pub:
+    inspector NativeInspectorCallbacks
     size      fn (voidptr, f64, f64) = unsafe { nil }
 	binding   fn (voidptr, string) bool = unsafe { nil }
 	title     fn (voidptr, string)      = unsafe { nil }
@@ -60,6 +61,7 @@ pub mut:
 	progress                 ?u8
 	progress_active          bool
 mut:
+    inspector &NativeInspectorView = unsafe { nil }
     scroll &NativeSurfaceScroll = unsafe { nil }
 	title_timer      ObjId
 	title_fallback   ObjId
@@ -210,6 +212,7 @@ pub fn new_action_surface(view voidptr, userdata voidptr, callbacks ActionCallba
 
 pub fn (mut state NativeActionSurface) deinit() {
 	if state.closed { return }
+    state.hide_inspector()
 	state.closed = true
 	state.remove_notifications()
 	for timer in [state.search_timer, state.progress_timer, state.pulse_timer, state.title_timer,

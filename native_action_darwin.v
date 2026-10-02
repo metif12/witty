@@ -35,6 +35,8 @@ fn runtime_native_action(app &apprt.App, state ?&TermState, action apprt.Runtime
         }
         .pwd { if data is apprt.PwdValue { overlay.set_pwd(data.pwd,current.native_config.proxy_icon); return true } }
         .scrollbar { if data is terminal.Scrollbar { overlay.set_scrollbar(data.total,data.offset,data.len); return true } }
+        .inspector { if data is apprt.InspectorAction { overlay.control_inspector(int(data)); return true } }
+        .render_inspector { overlay.render_inspector(); return true }
 		.desktop_notification {
 			if data is apprt.DesktopNotificationValue {
 				overlay.desktop_notification(data.title, data.body)
