@@ -4,6 +4,11 @@ const style=@import("terminal/style.zig");
 const size=@import("terminal/size.zig");
 const fastmem=@import("fastmem.zig");
 pub fn main() !void {
+ var union_cell: page.Cell = .{.content_tag=.bg_color_rgb,.content=.{.color_rgb=.{.r=0x56,.g=0x34,.b=0xE2}}};
+ union_cell.content_tag=.codepoint;
+ union_cell.content.codepoint=65;
+ const union_word:u64=@bitCast(union_cell);
+ std.debug.print("union={x}\n", .{(union_word >> 2) & 0xFFFFFF});
  const capacity=page.Capacity{.cols=4,.rows=2,.styles=16};
  var source=try page.Page.init(capacity);
  defer source.deinit();

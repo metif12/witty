@@ -2102,11 +2102,7 @@ fn test_screen_resize_no_reflow_less_rows_trims_blank_lines() ! {
 		list_cell := must_cell(s, active_pt(0, y))
 		mut cell := list_cell.cell
 		unsafe {
-			*cell = CellData{
-				content_tag: .bg_color_rgb
-
-				codepoint: u32(0xFF) | (u32(0) << 8) | (u32(0) << 16)
-			}
+			*cell = CellData.from_color_payload(.bg_color_rgb, u32(0xFF) | (u32(0) << 8) | (u32(0) << 16))
 		}
 	}
 
@@ -2134,11 +2130,7 @@ fn test_screen_resize_no_reflow_more_rows_trims_blank_lines() ! {
 		list_cell := must_cell(s, active_pt(0, y))
 		mut cell := list_cell.cell
 		unsafe {
-			*cell = CellData{
-				content_tag: .bg_color_rgb
-
-				codepoint: u32(0xFF) | (u32(0) << 8) | (u32(0) << 16)
-			}
+			*cell = CellData.from_color_payload(.bg_color_rgb, u32(0xFF) | (u32(0) << 8) | (u32(0) << 16))
 		}
 	}
 

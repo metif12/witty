@@ -4839,11 +4839,7 @@ fn test_page_list_resize_no_reflow_more_rows_extends_blank_lines() ! {
 	}
 	// Fill remaining lines with a background color (still blank).
 	for y in u16(1) .. 3 {
-		page.rows[int(y)].cells[0] = CellData{
-			content_tag: .bg_color_rgb
-
-			codepoint: u32(0xFF) | (u32(0) << 8) | (u32(0) << 16)
-		}
+		page.rows[int(y)].cells[0] = CellData.from_color_payload(.bg_color_rgb, u32(0xFF) | (u32(0) << 8) | (u32(0) << 16))
 	}
 
 	s.resize(PageResizeOpts{ rows: 7, reflow: false }) or { panic(err) }
@@ -4876,11 +4872,7 @@ fn test_page_list_resize_no_reflow_less_rows_trims_blank_lines() ! {
 	}
 	// Fill remaining lines with a background color (still blank).
 	for y in u16(1) .. 5 {
-		page.rows[int(y)].cells[0] = CellData{
-			content_tag: .bg_color_rgb
-
-			codepoint: u32(0xFF) | (u32(0) << 8) | (u32(0) << 16)
-		}
+		page.rows[int(y)].cells[0] = CellData.from_color_payload(.bg_color_rgb, u32(0xFF) | (u32(0) << 8) | (u32(0) << 16))
 	}
 
 	p := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 0, y: 0 })) or {
@@ -5011,11 +5003,7 @@ fn test_page_list_resize_no_reflow_less_rows_trims_blank_lines_cursor_in_blank_l
 		codepoint:   u32(`A`)
 	}
 	for y in u16(1) .. 5 {
-		page.rows[int(y)].cells[0] = CellData{
-			content_tag: .bg_color_rgb
-
-			codepoint: u32(0xFF) | (u32(0) << 8) | (u32(0) << 16)
-		}
+		page.rows[int(y)].cells[0] = CellData.from_color_payload(.bg_color_rgb, u32(0xFF) | (u32(0) << 8) | (u32(0) << 16))
 	}
 
 	// Tracked pin in a blank line.

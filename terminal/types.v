@@ -54,7 +54,7 @@ pub enum SemanticContent as u8 {
 pub struct C.WittyPageCell {
 pub mut:
 	content_tag ContentTag
-	// Active u24 payload. Codepoint variants use its low 21 bits.
+	// Source packed union codepoint member has exactly 21 active bits.
 	codepoint        u32
 	style_id         u32
 	wide             CellWide
@@ -65,13 +65,26 @@ pub mut:
 
 pub type CellData = C.WittyPageCell
 
-pub fn (self CellData) color_palette() u8 { return u8(self.codepoint) }
+fn C.witty_cell_content(&CellData) u32
+fn C.witty_cell_set_content(&CellData, u32)
 
-pub fn (self CellData) color_rgb_r() u8 { return u8(self.codepoint) }
+pub fn (self CellData) color_palette() u8 { return u8(C.witty_cell_content(&self)) }
 
-pub fn (self CellData) color_rgb_g() u8 { return u8(self.codepoint >> 8) }
+pub fn (self CellData) color_rgb_r() u8 { return u8(C.witty_cell_content(&self)) }
 
-pub fn (self CellData) color_rgb_b() u8 { return u8(self.codepoint >> 16) }
+pub fn (self CellData) color_rgb_g() u8 { return u8(C.witty_cell_content(&self) >> 8) }
+
+pub fn (self CellData) color_rgb_b() u8 { return u8(C.witty_cell_content(&self) >> 16) }
+
+// Initialize the active palette/RGB union member without overlapping V
+// designated initializers overwriting a different packed union member.
+pub fn CellData.from_color_payload(tag ContentTag, payload u32) CellData {
+	assert tag in [.bg_color_palette, .bg_color_rgb]
+	assert payload <= if tag == .bg_color_palette { u32(255) } else { u32(0xFFFFFF) }
+	mut cell := CellData{ content_tag: tag }
+	C.witty_cell_set_content(&cell, payload)
+	return cell
+}
 
 // Helper to make a cell that just has a codepoint.
 pub fn CellData.init(cp u32) CellData {
@@ -83,9 +96,7 @@ pub fn CellData.init(cp u32) CellData {
 
 // Returns true if this cell represents all zeroes.
 pub fn (self &CellData) is_zero() bool {
-	return self.codepoint == 0 && self.content_tag == .codepoint && self.style_id == 0
-		&& self.wide == .narrow && !self.is_protected
-		&& !self.has_hyperlink && self.semantic_content == .output
+	return unsafe { *(&u64(self)) == 0 }
 }
 
 // Returns true if the cell has displayable text.
@@ -353,10 +364,10 @@ pub fn (self &CellStyle) bg_cell() ?CellData {
 	return match self.bg_color {
 		StyleColorNone { none }
 		StyleColorPalette {
-			CellData{ content_tag: .bg_color_palette, codepoint: u32(self.bg_color.index) }
+			CellData.from_color_payload(.bg_color_palette, u32(self.bg_color.index))
 		}
 		StyleColorRgb {
-			CellData{ content_tag: .bg_color_rgb, codepoint: u32(self.bg_color.rgb.r) | (u32(self.bg_color.rgb.g) << 8) | (u32(self.bg_color.rgb.b) << 16) }
+			CellData.from_color_payload(.bg_color_rgb, u32(self.bg_color.rgb.r) | (u32(self.bg_color.rgb.g) << 8) | (u32(self.bg_color.rgb.b) << 16))
 		}
 	}
 }

@@ -214,11 +214,7 @@ fn test_hb_run_iterator_empty_cells_with_bg() {
 	}
 	mut cells := hb_render_row('\x1b[48;2;255;0;0mA', 5) or { panic(err) }
 	for i in 1 .. 3 {
-		cells[i].raw = terminal.CellData{
-			content_tag: .bg_color_rgb
-
-			codepoint: u32(255) | (u32(0) << 8) | (u32(0) << 16)
-		}
+		cells[i].raw = terminal.CellData.from_color_payload(.bg_color_rgb, u32(255) | (u32(0) << 8) | (u32(0) << 16))
 	}
 	result := td.shape_render_cells(cells, none, none) or { panic(err) }
 	assert result.runs.len == 1

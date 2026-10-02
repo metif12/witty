@@ -69,3 +69,17 @@ fn test_page_native_mmap_error_and_packed_sizes() {
 	assert sizeof(GenericRefSetItem[StoredHyperlink, u16, u16]) == 48
 	assert isnil(C.witty_page_mmap(~usize(0)))
 }
+
+fn test_page_cell_union_members_have_original_bit_widths() {
+	mut cell := CellData.from_color_payload(.bg_color_rgb, 0xE23456)
+	assert cell.color_rgb_r() == 0x56 && cell.color_rgb_g() == 0x34 && cell.color_rgb_b() == 0xE2
+	// Writing the u21 codepoint member preserves the union's upper three bits.
+	cell.content_tag = .codepoint
+	cell.codepoint = 65
+	assert cell.codepoint() == 65
+	cell.codepoint = 0
+	assert !cell.is_zero()
+	cell.codepoint = 65
+	word := unsafe { *(&u64(&cell)) }
+	assert (word >> 2) & 0xFFFFFF == 0xE00041
+}
