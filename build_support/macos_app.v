@@ -87,7 +87,7 @@ fn (d Driver) build_macos_app_with_framework(native_only bool, framework_ready b
 	checked_process_env(d.cfg.root, ['xcrun', 'actool', '--compile', os.join_path(contents, 'Resources'),
 		'--platform', 'macosx', '--minimum-deployment-target', '13.0', '--app-icon', 'Ghostty',
 		'--accent-color', 'AccentColor', '--output-partial-info-plist', d.cache_path('macos', 'assets.plist'),
-		os.join_path(asset_root, 'Assets.xcassets')], environment, true)!
+		os.join_path(asset_root, 'Assets.xcassets'), os.join_path(asset_root, 'Ghostty.icon')], environment, true)!
 	asset_plist := d.cache_path('macos', 'assets.plist')
 	checked_process(d.cfg.root, ['/usr/libexec/PlistBuddy', '-c', 'Merge ' + asset_plist, info])!
 	for resource in ['bat', 'fish', 'ghostty', 'locale', 'man', 'nvim', 'terminfo', 'vim', 'zsh', 'bash-completion'] {
