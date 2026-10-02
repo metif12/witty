@@ -19,3 +19,10 @@ pub fn Backend.default_() Backend {
 		return .opengl
 	}
 }
+
+pub fn Backend.selected_() Backend {
+	$if renderer_opengl ? { return .opengl }
+	$if renderer_metal ? { return .metal }
+	$if renderer_webgl ? { return .webgl }
+	return Backend.default_()
+}

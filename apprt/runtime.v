@@ -26,3 +26,9 @@ pub fn Runtime.default() Runtime {
 		return Runtime.none_
 	}
 }
+
+pub fn Runtime.selected() Runtime {
+	$if app_runtime_none ? { return .none_ }
+	$if app_runtime_gtk ? { return .gtk }
+	return Runtime.default()
+}

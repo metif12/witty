@@ -13,9 +13,9 @@ fn test_version_output_reports_translated_build_metadata() {
 	assert output.contains('  - version: ${build_meta.version_string}\n')
 	assert output.contains('  - channel: ${build_meta.release_channel}\n')
 	assert output.contains('  - V version     : ${vversion.v_version}\n')
-	assert output.contains('  - app runtime   : ${runtime_name(apprt.Runtime.default())}\n')
-	assert output.contains('  - font engine   : ${font.Backend.default_()}\n')
-	assert output.contains('  - renderer      : ${renderer.Backend.default_()}\n')
+	assert output.contains('  - app runtime   : ${runtime_name(apprt.Runtime.selected())}\n')
+	assert output.contains('  - font engine   : ${font.Backend.selected_()}\n')
+	assert output.contains('  - renderer      : ${renderer.Backend.selected_()}\n')
 	assert output.contains('  - libxev        : ${xev.backend()}\n')
 	assert !output.contains(@VEXE)
 }

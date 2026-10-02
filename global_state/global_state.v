@@ -321,8 +321,10 @@ pub fn (mut self GlobalState) init_args(args []string) ! {
 	// are initialized, but before any subsystem initialization can fail.
 	log.info('ghostty version=${build_meta.version_string}')
 	optimize := buildcfg.mode_string
-	runtime := $if linux || freebsd { 'gtk' } $else { 'none' }
-	renderer_backend := $if macos || ios {
+	runtime := $if app_runtime_none ? { 'none' } $else $if app_runtime_gtk ? { 'gtk' }
+		$else $if linux || freebsd { 'gtk' } $else { 'none' }
+	renderer_backend := $if renderer_opengl ? { 'opengl' } $else $if renderer_metal ? { 'metal' }
+		$else $if renderer_webgl ? { 'webgl' } $else $if macos || ios {
 		'metal'
 	} $else $if wasm32 {
 		'webgl'
@@ -331,7 +333,7 @@ pub fn (mut self GlobalState) init_args(args []string) ! {
 	}
 	log.info('ghostty build optimize=${optimize}')
 	log.info('runtime=${runtime}')
-	font_backend := font.Backend.default_()
+	font_backend := font.Backend.selected_()
 	log.info('font_backend=${font_backend}')
 	if font_backend.has_harfbuzz() {
 		log.info('dependency harfbuzz=${harfbuzz.version_string()}')
