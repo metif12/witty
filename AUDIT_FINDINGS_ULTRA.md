@@ -1507,11 +1507,11 @@ Ten isolated worker checkouts are used in waves: this environment permits three 
 | T08 | Implemented | `9834594` | 990 unchanged Ghostty encoder differential cases matched |
 | T09 | Implemented | `0bc93b8` | Absent versus invalid progress; parser regression |
 | T10 | Implemented | `3e3a56d, 284e6b7` | All 242 key-table rows and native columns; table tests |
-| T11 | Queued | worker08 | Pending implementation/integration |
-| T12 | Queued | worker08 | Pending implementation/integration |
+| T11 | In progress | worker08 | Packed contiguous backing and pool translation still required |
+| T12 | Implemented | `cdad202` | Generic caller-backed offset map/refcount set; original layouts, relocation, contexts and independent integer widths tested |
 | T13 | Implemented | `defa489` | Caller allocator reaches payload, ArrayList and SegmentedList; allocation failure, reset, OSC/terminal/C tests |
 | T14 | Implemented | `c3267ae` | Original Oniguruma grammar and failure handling; tmux tests |
-| R01 | Queued | worker10 | Pending implementation/integration |
+| R01 | In progress | worker10 | Windows ConPTY/Exec/termio translation active |
 | R02 | Implemented | `0329051` | Nullable strings write NULL successfully; config ABI tests |
 | R03 | Implemented | `ede5f8d` | Notification error is warned/caught; mailbox regression |
 | R04 | Implemented | `0740574` | Exclusive atomic file, permissions and exact bound; cache tests |
@@ -1523,30 +1523,30 @@ Ten isolated worker checkouts are used in waves: this environment permits three 
 | RF-01 | Implemented | `bb72641` | Production selected backend; all 24 font files/Metal alternatives tested |
 | RF-02 | Implemented | `dcfd8a5` | Run grid lock held during shaping; blocking concurrency regression |
 | RF-04 | Implemented | `fb7870d` | Live shaper uses translated feature parser; feature tests |
-| RF-05 | In progress | `822384b`; worker09 | Linked locked glslang/SPIRV-Cross pipeline tested; root clean rebuild exposed missing header closure, correction pending |
+| RF-05 | Implemented | `822384b, e805710, db6bd89, 6f5c6e4` | Actual locked libraries, complete header closure, clean root rebuild; native SPIRV/GLSL/MSL and failure probes |
 | RF-06 | Implemented | `36a9461` | Glass alpha zero; renderer tests |
 | RF-07 | Implemented | `cf23a2a` | Lazy row shaping/preedit catch-up; renderer regressions |
 | RF-08 | Implemented | `b03a939` | Live page widget and five tracked-pin columns; real ImGui frame tests |
 | RF-09 | Implemented | `6c7149a` | Public key detail renderer, bounded error path, Debug demo; real ImGui tests |
 | RF-10 | Implemented | `f41e9f2, 3b189cf, d52b838` | Optionals and narrow inputs; face/Nerd Font/boundary tests |
 | RF-11 | Implemented | `cac7626, 3277fc6, 4da3d9c` | Original atlas/sprite/FreeType invariant traps; native probes |
-| RF-12 | Queued | worker09 | Pending implementation/integration |
+| RF-12 | Implemented | `a729075, 70ced6a` | Native bounded ImGui filter/input, reflected original metadata; original Zig fixture and inspector tests |
 | S01 | Implemented | `bef54e9` | Unchanged native SIMD dependencies plus translated scalar algorithm; native/scalar tests |
 | S02 | Implemented | `227ebde` | Checked empty/all-padding traps and InvalidPadding warning; subprocess probes |
 | S03 | Implemented | `6cea9e6` | Source aligned libc allocation/in-place remap; alignment 1–65536 and over-32-bit growth tests |
-| S04 | Queued | worker09 | Pending implementation/integration |
+| S04 | Implemented | `6166ffc, ef531fb` | Exact native SDK/Breakpad build; real SIGSEGV minidump and restart local transport; clean tracked-only build |
 | S05 | In progress | `ced0309, 30b6d21, a49c083, 40daa4e`; root | Config/retarget/options; standalone generators and terminfo/shell/theme/docs/locale install paths; native dependency/artifact/package graph still required |
 | S06 | In progress | `3277fc6, 38b8900, f012e5e`; root | GitVersion, channel, artifact and all four modes; ABI/version tests; production build-driver wiring still required |
 | S07 | In progress | worker05 | Pending implementation/integration |
 | S08 | Implemented | `af434d2` | Original startup messages and status 1; executable probes; timer subclaim corrected below |
 | S09 | Implemented | `2b553c8` | ConEmu nominal limit is not a writer-capacity rejection; regression |
 | S10 | Implemented | `2c4b036` | Xoshiro/random selection/streaming; 756 unchanged Zig differential cases matched |
-| S11 | In progress | worker07 | Pending implementation/integration |
+| S11 | Implemented | `bf0e21d, 60d05b4` | 32 image suites; 132 native rows matched; 8 inherited undefined-state trap cases excluded and documented |
 | S12 | Implemented | `695dedc` | Original 9-bit lookahead, sorted alphabet and linked fallback; Huffman/codec tests |
-| S13 | Queued | worker10 | Pending implementation/integration |
-| S14 | In progress | worker07 | Pending implementation/integration |
-| S15 | Queued | worker08 | Pending implementation/integration |
-| S16 | Queued | worker09 | Pending implementation/integration |
+| S13 | In progress | worker10 | IOCP and WASI translation active; native platform execution unavailable here |
+| S14 | Implemented | `9b1dc71` | Decoded image path/memory loading, premultiplied conversion, transmission; V tests and native conversion probe |
+| S15 | Implemented | `4242ed4` | Actual C-backed V type factories; compiled enum holes, layout/defaults/alignment/padding/nested/zero-size cases |
+| S16 | Implemented | `930e186` | Build-time SDK/minimum-version mapping and embedding; helper tests pass; actual Apple Metal compiler unavailable |
 | SH01 | Implemented | `c7c4d5a` | Immutable split tree and native controls; model tests/host typecheck |
 | SH02 | In progress | worker05 | Pending implementation/integration |
 | SH03 | In progress | worker05 | Pending implementation/integration |
@@ -1554,11 +1554,11 @@ Ten isolated worker checkouts are used in waves: this environment permits three 
 | SH05 | Implemented | `617f532` | Four fullscreen styles and source restoration; native contract tests/typecheck |
 | SH06 | In progress | worker05 | Termination/reopen guards integrated (`c66db29`); source updater-install producer still being translated |
 | SB-01 | Implemented | `450725b` | Native text-input client, IME and key responder; native contract tests |
-| SB-02 | In progress | worker04 | Pending implementation/integration |
+| SB-02 | Implemented | `a938d46, 26c0fa6` | Native Services, drag/drop, accessibility and Swift-compatible Unicode range/grapheme cases; worker and root native tests |
 | SB-03 | In progress | `3bd3844, 0ebfcc5`; worker06 | Live search/key context/progress/bell/health/readonly/secure input/cursor/link and notification families; AppKit/control/delegate tests; remaining action families pending |
-| SB-04 | Implemented | `d566e33` | Matching-window display ID and backing refresh; AppKit tests |
+| SB-04 | Implemented | `d566e33, 6bec729` | Matching-window display ID, backing refresh and true zeroing weak view lifetime; AppKit tests |
 | SB-05 | Implemented | `c56924a` | Configuration-driven menu conversion/apply/clear; native menu tests |
-| SB-06 | Implemented | `b988d4f` | Surface-targeted reload preserves target; host typecheck |
+| SB-06 | Implemented | `b988d4f, eb109ee` | Surface-targeted reload preserves target and rejects unresolved surfaces; native host regression |
 | PH01 | Implemented | `938dd7e` | Embedding argv snapshot consumed on Linux/FreeBSD; config/argv tests |
 
 ### Source-backed corrections and remaining validation limits
