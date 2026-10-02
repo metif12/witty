@@ -1,6 +1,7 @@
 module inspector
 
 import cimgui
+import buildcfg
 import font
 import input
 import renderer
@@ -111,6 +112,7 @@ pub mut:
 	terminal_info   TerminalInfo
 	vt_stream       VTStream
 	renderer        RendererInfo
+	show_demo_window bool = true
 }
 
 pub struct InspectorMouse {
@@ -272,6 +274,10 @@ pub fn (mut self Inspector) render(context_handle voidptr, surface_info SurfaceI
 	open_renderer := context.begin_window('Renderer')
 	self.renderer.draw(context, open_renderer)
 	context.end_window()
+
+	if buildcfg.slow_runtime_safety && self.show_demo_window {
+		self.show_demo_window = context.show_demo_window(self.show_demo_window)
+	}
 
 	if first_render {
 		// Ghostty focuses the terminal panel when the complete dockspace is first

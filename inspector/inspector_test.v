@@ -370,3 +370,28 @@ fn test_imgui_text_filter_semantics() {
 	assert !imgui_text_filter_pass('abc', 'xyz')
 	assert !imgui_text_filter_pass('file', 'FİLE')
 }
+
+fn test_public_key_detail_renders_native_readonly_fields_and_bindings() {
+	if !cimgui.available() { return }
+	context := cimgui.Context.create()!
+	defer { context.destroy() }
+	setup(context)
+	context.set_size(800, 600)
+	assert context.build_font_atlas()
+	context.begin_frame(1.0 / 60.0)
+	_ = context.begin_window('Key Detail')
+	mut event := KeyEvent.init(input.KeyEvent{
+		key: .key_a
+		utf8: 'é'
+		composing: true
+		mods: input.Mods.init(true, true, true, true, false, false, input.SideInfo{})
+	})
+	event.binding = [input.ActionCopyToClipboard{}]
+	event.pty = [u8(0x1b), `a`, u8(0)]
+	event.render(context)
+	// The source public renderer handles a fixed-buffer formatting error.
+	event.event.utf8 = 'a'.repeat(1024)
+	event.render(context)
+	context.end_window()
+	context.render_frame()
+}
