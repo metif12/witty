@@ -272,7 +272,7 @@ fn on_should_terminate() bool {
 
 fn on_reopen() bool {
 	runtime := standalone_runtime()
-	controllers := runtime.controllers.filter(!it.closed).len
+	controllers := runtime.controllers.filter(!it.closed && !it.quick).len
 	if !macos.should_create_reopen_window(false, controllers, macos.application_has_become_active()) {
 		return true
 	}
