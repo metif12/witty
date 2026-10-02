@@ -161,7 +161,7 @@ fn quick_animate_change(context voidptr, animation_context voidptr) {
 fn quick_focus_retry(context voidptr) {
 	mut q := unsafe { &NativeQuickTerminal(context) }
 	if !q.visible { return }
-	view := terminal_view_for_window(q.window)
+	view := ObjId(q.view)
 	if msg_id(view, 'window') != q.window { return }
 	msg_void1(q.window, 'makeKeyAndOrderFront:', nil_obj())
 	msg_bool1(q.window, 'makeFirstResponder:', view)

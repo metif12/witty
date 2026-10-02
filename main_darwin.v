@@ -608,7 +608,11 @@ fn on_focus(userdata voidptr, focused bool) {
 	if !state.closed && state.surface != unsafe { nil } {
 		apprt.ghostty_surface_set_focus(mut state.surface, focused)
 		if state.actions != unsafe { nil } { state.actions.focus(focused) }
-		if focused && state.controller != unsafe { nil } { state.controller.focused = state; sync_native_window(state) }
+		if focused && state.controller != unsafe { nil } {
+			state.controller.focused = state
+			if mut quick := macos.quick_terminal_for_view(state.view) { quick.view = state.view }
+			sync_native_window(state)
+		}
 	}
 }
 
