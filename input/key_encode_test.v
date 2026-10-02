@@ -967,3 +967,10 @@ fn test_strict_source_utf8_validation_boundaries() {
 		assert !source_utf8_validate(text)
 	}
 }
+
+fn test_modify_other_keys_rejects_invalid_utf8_before_codepoint_encoding() {
+	for text in ['\xff', '\xc0\x80', '\xed\xa0\x80'] {
+		assert encode(KeyEvent{key: .unidentified, mods: Mods.from_int(1), utf8: text},
+			Options{modify_other_keys_state_2: true}) == text
+	}
+}

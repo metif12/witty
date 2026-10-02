@@ -332,7 +332,7 @@ fn legacy_encode(event KeyEvent, opts Options) string {
 
 	// In modify other keys state 2, we send the CSI 27 sequence
 	// for any char with a modifier.
-	if opts.modify_other_keys_state_2 {
+	if opts.modify_other_keys_state_2 && source_utf8_validate(utf8) {
 		runes := utf8.runes()
 		if runes.len == 1 {
 			codepoint := u32(runes[0])
