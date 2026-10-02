@@ -3,7 +3,7 @@ typedef struct witty_macos_edge_insets { double top, left, bottom, right; } witt
 static inline witty_macos_edge_insets witty_macos_screen_insets(void* screen) {
     return ((witty_macos_edge_insets (*)(id, SEL))objc_msgSend)((id)screen, sel_registerName("safeAreaInsets"));
 }
-static inline macos_rect witty_macos_msg_rect_rect(void* obj, void* selector, macos_rect value) {
+static inline macos_rect witty_fullscreen_msg_rect_rect(void* obj, void* selector, macos_rect value) {
     return ((macos_rect (*)(id, SEL, macos_rect))objc_msgSend)((id)obj, (SEL)selector, value);
 }
 static inline void witty_macos_msg_void_rect_bool(void* obj, void* selector, macos_rect value, bool display) {

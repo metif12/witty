@@ -7,7 +7,7 @@ import math
 fn C.witty_macos_objc_msg_void3(obj voidptr, selector voidptr, a voidptr, b voidptr, c voidptr)
 fn C.witty_macos_screen_insets(screen voidptr) C.witty_macos_edge_insets
 struct C.witty_macos_edge_insets { top f64 left f64 bottom f64 right f64 }
-fn C.witty_macos_msg_rect_rect(obj voidptr, selector voidptr, value ObjCRect) ObjCRect
+fn C.witty_fullscreen_msg_rect_rect(obj voidptr, selector voidptr, value ObjCRect) ObjCRect
 fn C.witty_macos_msg_void_rect_bool(obj voidptr, selector voidptr, value ObjCRect, display bool)
 fn C.CGSMainConnectionID() i32
 fn C.CGSGetActiveSpace(connection i32) usize
@@ -156,7 +156,7 @@ fn (mut s FullscreenState) enter() {
 	s.tab_index = -1
 	tabs := msg_id(s.tab_group, 'windows')
 	for i in 0 .. int(msg_u64(tabs, 'count')) { if msg_id_u64(tabs, 'objectAtIndex:', u64(i)) == s.window { s.tab_index = i; break } }
-	s.content_frame = C.witty_macos_msg_rect_rect(s.window, sel('convertRectToScreen:'), msg_rect(content, 'frame'))
+	s.content_frame = C.witty_fullscreen_msg_rect_rect(s.window, sel('convertRectToScreen:'), msg_rect(content, 'frame'))
 	s.style = msg_u64(s.window, 'styleMask')
 	s.toolbar = msg_id(msg_id(s.window, 'toolbar'), 'retain')
 	s.toolbar_style = msg_u64(s.window, 'toolbarStyle')
@@ -190,7 +190,7 @@ fn (mut s FullscreenState) exit() {
 	if s.dock { presentation_release(1) }
 	if s.mode != .visible_menu && s.menu { presentation_release(u64(1 << 2)) }
 	msg_void_u64(s.window, 'setStyleMask:', s.style)
-	frame := C.witty_macos_msg_rect_rect(s.window, sel('frameRectForContentRect:'), s.content_frame)
+	frame := C.witty_fullscreen_msg_rect_rect(s.window, sel('frameRectForContentRect:'), s.content_frame)
 	C.witty_macos_msg_void_rect_bool(s.window, sel('setFrame:display:'), frame, true)
 	for accessory in s.accessories {
 		// AppKit's NSTitlebarAccessoryViewController tab bar must not be restored.
