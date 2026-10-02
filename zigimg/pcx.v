@@ -279,7 +279,7 @@ fn pcx_read_palette(mut stream ReadStream, mut palette []Rgba32, header PCXHeade
 		}
 	}
 	if !vga { return }
-	end := stream.get_end_pos()
+	end := stream.get_end_pos()!
 	assert end >= 769
 	stream.seek_to(end - 769)!
 	if stream.take_byte()! != 0x0c { return error('InvalidData') }

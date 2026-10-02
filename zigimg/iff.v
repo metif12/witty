@@ -273,7 +273,7 @@ pub fn (mut codec IFF) read(mut stream ReadStream) !PixelStorage {
 }
 
 pub fn (mut codec IFF) decode_chunks(mut stream ReadStream) !PixelStorage {
-	end := stream.get_end_pos()
+	end := stream.get_end_pos()!
 	for {
 		chunk := iff_take_chunk(mut stream)!
 		if chunk.type_ == iff_chunk_abit.id || chunk.type_ == iff_chunk_body.id {

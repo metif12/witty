@@ -362,7 +362,7 @@ fn tga_extension_bytes(extension TGAExtension) []u8 {
 
 pub fn TGA.format_detect(mut stream ReadStream) !bool {
 	defer { stream.seek_to(0) or {} }
-	end := stream.get_end_pos()
+	end := stream.get_end_pos()!
 	if end > 26 {
 		stream.seek_to(end - 26)!
 		footer := tga_footer_read(stream.peek(26)!)
@@ -423,7 +423,7 @@ fn (codec TGA) palette_end() int {
 }
 
 pub fn (mut codec TGA) read(mut stream ReadStream) !PixelStorage {
-	end := stream.get_end_pos()
+	end := stream.get_end_pos()!
 	if end < 26 { return error('InvalidData') }
 	stream.seek_to(end - 26)!
 	footer := tga_footer_read(stream.take(26)!)

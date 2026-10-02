@@ -42,10 +42,9 @@ fn image_detect_format(mut stream ReadStream) !Format {
 	return error('Unsupported')
 }
 
-// JPEG's source detector is a private callback; its reader/state remain open.
+// The registry uses the same JPEG codec detector as its read interface.
 fn jpeg_format_detect(mut stream ReadStream) !bool {
-	magic := stream.peek(2)!
-	return magic == [u8(0xff), 0xd8]
+	return JPEG.format_detect(mut stream)
 }
 
 fn tiff_format_detect(mut stream ReadStream) !bool {

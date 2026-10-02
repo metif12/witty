@@ -129,7 +129,7 @@ fn test_pcx_indexed8_palette_is_read_from_the_end_and_dummy_bytes_are_discarded(
 	image := PCX.read_image(mut reader)!
 	assert image.width == 3 && image.height == 2
 	assert image.raw_bytes() == [u8(1), 2, 3, 4, 5, 6]
-	assert reader.get_pos() == reader.get_end_pos()
+	assert reader.get_pos() == reader.get_end_pos()!
 	match image.pixels {
 		IndexedStorage8 {
 			assert image.pixels.palette.len == 256

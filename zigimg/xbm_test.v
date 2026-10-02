@@ -18,7 +18,7 @@ fn test_xbm_continuous_lsb_first_bits_palette_and_extra_data() {
 		}
 	}
 
-	assert reader.get_pos() == reader.get_end_pos()
+	assert reader.get_pos() == reader.get_end_pos()!
 	reader = ReadStream.init_memory('#define a 8\n#define b 2\n{0X55, 0xaa};\n'.bytes())
 	image := XBM.read_image(mut reader)!
 	assert image.raw_bytes() == [u8(1), 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1]
@@ -90,7 +90,7 @@ fn test_xbm_errors_leave_codec_fields_at_source_assignment_boundary_and_writer_i
 	codec.read(mut reader) or {
 		assert err.msg() == 'InvalidData'
 		assert codec.width == 8 && codec.height == 1
-		assert reader.get_pos() == reader.get_end_pos()
+		assert reader.get_pos() == reader.get_end_pos()!
 	}
 	mut output := []u8{}
 	mut writer := WriteStream.init_memory(mut output)

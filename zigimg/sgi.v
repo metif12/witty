@@ -112,7 +112,7 @@ pub fn (mut codec SGI) uncompress_bitmap(mut stream ReadStream, mut buffer []u8)
 			rows := height * usize(codec.header.z_size)
 			mut tables := []u8{len: int(rows * 8)}
 			stream.read_slice_all(mut tables)!
-			mut data := []u8{len: int(stream.get_end_pos() - stream.get_pos())}
+			mut data := []u8{len: int(stream.get_end_pos()! - stream.get_pos())}
 			data_start := usize(512 + tables.len)
 			stream.read_slice_all(mut data)!
 			// Table offsets are absolute file offsets, even when reading from

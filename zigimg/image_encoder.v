@@ -1,5 +1,7 @@
 module zigimg
 
+import os
+
 // ImageUnmanaged.Format's declaration order in the locked dependency.
 pub enum Format as u8 {
 	bmp
@@ -157,4 +159,23 @@ fn (image ImageUnmanaged) internal_write(mut stream WriteStream, options Encoder
 			XBM.write_image(mut stream, image)!
 		}
 	}
+}
+
+pub fn (image ImageUnmanaged) write_to_file(file os.File, mut write_buffer []u8, options EncoderOptions) ! {
+	mut stream := WriteStream.init_file(file, mut write_buffer)
+	image.internal_write(mut stream, options)!
+}
+
+pub fn (image ImageUnmanaged) write_to_file_path(path string, mut write_buffer []u8, options EncoderOptions) ! {
+	mut file := os.create(path)!
+	defer { file.close() }
+	image.write_to_file(file, mut write_buffer, options)!
+}
+
+pub fn (image Image) write_to_file(file os.File, mut write_buffer []u8, options EncoderOptions) ! {
+	image.to_unmanaged().write_to_file(file, mut write_buffer, options)!
+}
+
+pub fn (image Image) write_to_file_path(path string, mut write_buffer []u8, options EncoderOptions) ! {
+	image.to_unmanaged().write_to_file_path(path, mut write_buffer, options)!
 }
