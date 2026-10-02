@@ -97,17 +97,19 @@ fn create_surface(view voidptr, inherited apprt.SurfaceOptions) ?&TermState {
 	mut state := &TermState{
 		view: view
 	}
-	opts := surface_options(view, voidptr(state), inherited)
-	mut app := runtime.app
-	state.surface = apprt.ghostty_surface_new(mut app, &opts) or {
-		state.closed = true
-		macos.close_tab(view)
-		return none
-	}
 	macos.view_set_userdata(view, voidptr(state))
 	state.actions = macos.new_action_surface(view, voidptr(state), macos.ActionCallbacks{binding: native_binding_action})
 	state.actions.bell_border = runtime.app.config.bell_features.border()
 	state.actions.secure_indication = runtime.app.config.macos_secure_input_indication
+	opts := surface_options(view, voidptr(state), inherited)
+	mut app := runtime.app
+	state.surface = apprt.ghostty_surface_new(mut app, &opts) or {
+		state.closed = true
+		state.actions.deinit()
+		macos.view_set_userdata(view, unsafe { nil })
+		macos.close_tab(view)
+		return none
+	}
 	runtime.states << state
 	if macos.view_window(view) != unsafe { nil } {
 		state.controller = &TerminalController{host: macos.create_split_host(view), focused: state}
@@ -515,6 +517,8 @@ fn main() {
 	macos.app_run()
 
 	for mut state in runtime.states {
+		state.closed = true
+		if state.actions != unsafe { nil } { state.actions.deinit() }
 		macos.view_set_userdata(state.view, unsafe { nil })
 		state.surface = unsafe { nil }
 		state.closed = true

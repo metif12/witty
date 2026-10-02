@@ -199,6 +199,7 @@ pub fn (mut surface NativeActionSurface) remove_notifications() {
 
 fn notification_expiration(self ObjId, _cmd Sel, timer ObjId) {
 	mut surface := action_owner_state(self) or { return }
+	if surface.closed { return }
 	id := objc_utf8_string(msg_id(timer, 'userInfo'))
 	surface.notification_identifiers = surface.notification_identifiers.filter(it != id)
 	msg_void1(notification_center(), 'removeDeliveredNotificationsWithIdentifiers:', msg_id1(get_class('NSArray'),
