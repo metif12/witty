@@ -113,7 +113,7 @@ module terminal
 // RenderPlacement (placement rendering information) types.
 import os
 import time
-import compress.zlib
+import zigimg
 import log
 import wuffs.png as wuffs_png
 
@@ -528,11 +528,9 @@ fn (mut self LoadingImage) decompress() ! {
 }
 
 fn (mut self LoadingImage) decompress_zlib() ! {
-	decompressed := zlib.decompress(self.data) or {
-		return error('decompression failed: ${err.msg()}')
-	}
-	if decompressed.len > max_image_size {
-		return error('decompression failed: image data too large')
+	decompressed := zigimg.decode_zlib_bounded(self.data, usize(max_image_size)) or {
+		log.warn('failed to read decompressed data: ${err}')
+		return error('DecompressionFailed')
 	}
 	self.data = decompressed
 	self.image.compression = .none_
