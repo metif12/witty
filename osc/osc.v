@@ -1,5 +1,7 @@
 module osc
 
+import lib_allocator
+
 // --- Original Ghostty Comments Start: src/terminal/osc.zig
 //
 // Source: /Users/alexander/code/3rd/ghostty/src/terminal/osc.zig
@@ -340,7 +342,7 @@ pub:
 pub struct ColorOperationCommand {
 pub:
 	op         ColorOperation
-	requests   []ColorRequest
+	requests   lib_allocator.SegmentedList[ColorRequest]
 	terminator Terminator = .st
 }
 
@@ -519,10 +521,13 @@ enum OscWriter as u8 {
 // the appropriate sub-parser on end().
 pub struct Parser {
 pub mut:
-	// Whether the source parser was initialized with an allocator. V's arrays
-	// are GC-managed, but the flag preserves Ghostty's allocation-free parser
-	// contract for commands whose result itself requires allocation.
+	// Optional source allocator. Payload and parsed result ownership remains
+	// with this allocator, including C embedding callbacks and their failures.
 	has_allocator bool
+	allocator lib_allocator.Allocator
+	fixed [2048]u8
+	allocated_buffer voidptr
+	allocated_capacity usize
 
 	// Current state of the parser.
 	state OscParserState = .start
@@ -537,11 +542,19 @@ pub mut:
 	command Command = InvalidCommand{}
 }
 
-// init creates a new OSC Parser. V owns storage through its GC, while the
-// allocator's presence still controls the same source parser capabilities.
+// init retains the existing untyped V entry point. The historical value 1
+// selects the default allocator; other nonnull values point to an Allocator.
+// C entry points use init_allocator and pass the actual selected allocator.
 pub fn Parser.init(allocator voidptr) Parser {
+	if isnil(allocator) { return Parser{} }
+	if usize(allocator) == 1 { return Parser.init_allocator(lib_allocator.default(none)) }
+	return Parser.init_allocator(unsafe { *(&lib_allocator.Allocator(allocator)) })
+}
+
+pub fn Parser.init_allocator(allocator lib_allocator.Allocator) Parser {
 	return Parser{
-		has_allocator: unsafe { allocator != nil }
+		has_allocator: true
+		allocator: allocator
 	}
 }
 
@@ -552,6 +565,15 @@ pub fn (mut self Parser) deinit() {
 
 // reset resets the parser state.
 pub fn (mut self Parser) reset() {
+	if !isnil(self.allocated_buffer) {
+		self.allocator.free_bytes(self.allocated_buffer, self.allocated_capacity, 0, 0)
+	}
+	if self.command is KittyColorOSC {
+		mut list := self.command.allocated
+		list.deinit(self.allocator)
+	}
+	self.allocated_buffer = unsafe { nil }
+	self.allocated_capacity = 0
 	self.state = .start
 	self.buf = []
 	self.writer = .none
@@ -574,11 +596,14 @@ fn (mut self Parser) write_to_fixed() {
 	self.buf = []
 }
 
-// write_to_allocating selects Ghostty's allocating writer. V's backing array
-// already grows dynamically, so only the writer identity needs translation.
 fn (mut self Parser) write_to_allocating() {
-	self.writer = if self.has_allocator { .allocating } else { .fixed }
-	self.buf = []
+	if !self.has_allocator { self.write_to_fixed(); return }
+	raw := self.allocator.alloc_bytes(2048, 0, 0)
+	if isnil(raw) { self.write_to_fixed(); return }
+	self.allocated_buffer = raw
+	self.allocated_capacity = 2048
+	self.writer = .allocating
+	self.buf = lib_allocator.borrowed_array[u8](raw, 0, 2048)
 }
 
 // next processes the next byte of OSC data.
@@ -865,22 +890,44 @@ pub fn (mut self Parser) write_byte(b u8) {
 		self.state = .invalid
 		return
 	}
-	if self.writer == .fixed && self.buf.len >= max_buf {
-		self.state = .invalid
+	length := self.buf.len
+	if self.writer == .fixed {
+		if length >= max_buf { self.state = .invalid; return }
+		self.fixed[length] = b
+		self.buf = lib_allocator.borrowed_array[u8](&self.fixed[0], length + 1, max_buf)
 		return
 	}
-	self.buf << b
+	if usize(length) == self.allocated_capacity {
+		// Writer.Allocating.drain calls ensureUnusedCapacity(bytes.len +
+		// splat_len + 1): writing one byte needs length + 3 capacity.
+		mut capacity := self.allocated_capacity
+		for capacity < usize(length) + 3 { capacity += capacity / 2 + 64 }
+		mut raw := self.allocator.remap_bytes(self.allocated_buffer, self.allocated_capacity, 0, capacity, 0)
+		if isnil(raw) {
+			raw = self.allocator.alloc_bytes(capacity, 0, 0)
+			if isnil(raw) { self.state = .invalid; return }
+			unsafe { vmemcpy(raw, self.allocated_buffer, length) }
+			self.allocator.free_bytes(self.allocated_buffer, self.allocated_capacity, 0, 0)
+		}
+		self.allocated_buffer = raw
+		self.allocated_capacity = capacity
+	}
+	unsafe { (&u8(self.allocated_buffer))[length] = b }
+	self.buf = lib_allocator.borrowed_array[u8](self.allocated_buffer, length + 1, int(self.allocated_capacity))
 }
 
 // finish_zero_terminated mirrors parsers that append a sentinel byte before
 // exposing a source sentinel-terminated slice. V strings do not retain that
 // sentinel, but the fixed writer must still have room for it.
 fn (mut self Parser) finish_zero_terminated() ?[]u8 {
-	if self.writer == .none || (self.writer == .fixed && self.buf.len >= max_buf) {
+	if self.writer == .none {
 		self.state = .invalid
 		return none
 	}
-	return self.buf
+	length := self.buf.len
+	self.write_byte(0)
+	if self.state == .invalid { return none }
+	return self.buf[..length]
 }
 
 // end finalizes parsing and returns the command, if any.

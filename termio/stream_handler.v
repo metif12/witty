@@ -6,6 +6,7 @@ import configpkg
 import datastruct
 import internal_os
 import log
+import lib_allocator
 import osc
 import renderer
 import terminal
@@ -1431,14 +1432,15 @@ fn (mut self StreamHandler) report_pwd(url string) ! {
 
 // color_operation applies the already-parsed OSC color requests. Parsing is
 // performed once by osc.Parser, matching Ghostty's typed stream action.
-fn (mut self StreamHandler) color_operation(op osc.ColorOperation, requests []osc.ColorRequest, terminator osc.Terminator) ! {
+fn (mut self StreamHandler) color_operation(op osc.ColorOperation, requests lib_allocator.SegmentedList[osc.ColorRequest], terminator osc.Terminator) ! {
 	_ = op
 	if requests.len == 0 {
 		return
 	}
 
 	mut response := ''
-	for request in requests {
+	for request_index in 0 .. requests.len {
+		request := requests.at(request_index)
 		match request {
 			osc.ColorRequestSet {
 				color := terminal_rgb(request.color)

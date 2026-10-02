@@ -316,7 +316,7 @@ mut:
 // Create a new OSC parser.
 pub fn osc_new() OscParser {
 	return OscParser{
-		parser: osc.Parser.init(voidptr(1))
+		parser: osc.Parser.init_allocator(lib_allocator.default(none))
 	}
 }
 
@@ -327,9 +327,10 @@ pub fn osc_new_alloc(allocator ?&lib_allocator.Allocator) (Result, &OscParser) {
 		return Result.out_of_memory, unsafe { nil }
 	}
 	mut parser := unsafe { &OscParser(raw) }
+	lib_allocator.register_value_storage(raw, sizeof(OscParser))
 	unsafe {
 		*parser = OscParser{
-			parser:    osc.Parser.init(voidptr(1))
+			parser:    osc.Parser.init_allocator(selected)
 			allocator: selected
 			allocated: true
 		}
@@ -348,6 +349,7 @@ pub fn osc_free_alloc(mut parser OscParser) {
 	parser.parser.deinit()
 	parser.allocated = false
 	if allocated {
+		lib_allocator.unregister_value_storage(ptr, sizeof(OscParser))
 		allocator.free_bytes(ptr, sizeof(OscParser), object_alignment, 0)
 	}
 }

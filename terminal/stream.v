@@ -3,6 +3,7 @@ module terminal
 import encoding.utf8.validate
 import osc
 import simd
+import lib_allocator
 
 // --- Original Ghostty Comments Start: src/terminal/stream.zig
 //
@@ -518,7 +519,7 @@ pub:
 pub struct ActionColorOperation {
 pub:
 	op         osc.ColorOperation
-	requests   []osc.ColorRequest
+	requests   lib_allocator.SegmentedList[osc.ColorRequest]
 	terminator osc.Terminator
 }
 

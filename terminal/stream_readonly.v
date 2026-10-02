@@ -1,6 +1,7 @@
 module terminal
 
 import osc
+import lib_allocator
 
 // --- Original Ghostty Comments Start: src/terminal/stream_readonly.zig
 //
@@ -545,9 +546,10 @@ fn (mut self ReadonlyHandler) horizontal_tab_back(count u16) {
 }
 
 // color_operation applies the parsed request list emitted by osc.Parser.
-fn (mut self ReadonlyHandler) color_operation(op osc.ColorOperation, requests []osc.ColorRequest) {
+fn (mut self ReadonlyHandler) color_operation(op osc.ColorOperation, requests lib_allocator.SegmentedList[osc.ColorRequest]) {
 	_ = op
-	for request in requests {
+	for request_index in 0 .. requests.len {
+		request := requests.at(request_index)
 		match request {
 			osc.ColorRequestSet {
 				color := RGB{

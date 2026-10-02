@@ -1,5 +1,7 @@
 module osc
 
+import lib_allocator
+
 // Parse OSC 21 - Kitty color protocol.
 // https://sw.kovidgoyal.net/kitty/color-stack/#id1
 //
@@ -89,6 +91,7 @@ pub struct KittyColorOSC {
 pub mut:
 	// list of requests
 	list []KittyColorRequest
+	allocated lib_allocator.ArrayList[KittyColorRequest]
 	// We must reply with the same string terminator (ST) as used in the
 	// request.
 	terminator Terminator = .st
@@ -104,6 +107,7 @@ fn parse_kitty_color_protocol(mut parser Parser, terminator_ch ?u8) ?Command {
 	mut request := KittyColorOSC{
 		terminator: Terminator.init(terminator_ch)
 	}
+	defer { parser.command = request }
 	data := parser.buffered().bytestr()
 	for kv in data.split(';') {
 		if request.list.len >= kitty_color_kind_max * 2 {
@@ -123,22 +127,23 @@ fn parse_kitty_color_protocol(mut parser Parser, terminator_ch ?u8) ?Command {
 		}
 		value := if eq >= 0 { kv[eq + 1..].trim(' ') } else { '' }
 		if value.len == 0 {
-			request.list << KittyColorReset{
+			request.allocated.append(parser.allocator, KittyColorRequest(KittyColorReset{
 				key: key
-			}
+			})) or { continue }
 		} else if value == '?' {
-			request.list << KittyColorQuery{
+			request.allocated.append(parser.allocator, KittyColorRequest(KittyColorQuery{
 				key: key
-			}
+			})) or { continue }
 		} else {
-			request.list << KittyColorSet{
+			request.allocated.append(parser.allocator, KittyColorRequest(KittyColorSet{
 				key:   key
 				color: parse_rgb(value) or {
 					// invalid color format in kitty color protocol
 					continue
 				}
-			}
+			})) or { continue }
 		}
+		request.list = request.allocated.items
 	}
 	parser.command = request
 	return parser.command

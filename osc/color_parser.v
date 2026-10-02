@@ -2,6 +2,7 @@ module osc
 
 import x11rgb
 import zig_fmt
+import lib_allocator
 
 // --- Original Ghostty Comments Start: src/terminal/osc/parsers/color.zig
 //
@@ -401,7 +402,9 @@ fn parse_color_operation(mut parser Parser, terminator_ch ?u8) ?Command {
 	// Parse the color data based on operation type. This mirrors Ghostty's
 	// parseColor which produces a SegmentedList(Request). Here we produce a
 	// []ColorRequest and store it directly on the command.
-	requests := parse_color_data(op, data_str)
+	requests := parse_color_data_alloc(parser.allocator, op, data_str) or {
+		lib_allocator.SegmentedList[ColorRequest]{}
+	}
 
 	parser.command = ColorOperationCommand{
 		op: op
@@ -413,32 +416,32 @@ fn parse_color_operation(mut parser Parser, terminator_ch ?u8) ?Command {
 
 // parse_color_data parses the color data string based on operation type.
 // Returns a list of parsed color requests.
-fn parse_color_data(op ColorOperation, data string) []ColorRequest {
+fn parse_color_data_alloc(allocator lib_allocator.Allocator, op ColorOperation, data string) !lib_allocator.SegmentedList[ColorRequest] {
 	return match op {
-		.osc_4 { parse_get_set_ansi_color(.osc_4, data) }
-		.osc_5 { parse_get_set_ansi_color(.osc_5, data) }
-		.osc_104 { parse_reset_ansi_color(.osc_104, data) }
-		.osc_105 { parse_reset_ansi_color(.osc_105, data) }
-		.osc_10 { parse_get_set_dynamic_color(.foreground, data) }
-		.osc_11 { parse_get_set_dynamic_color(.background, data) }
-		.osc_12 { parse_get_set_dynamic_color(.cursor, data) }
-		.osc_13 { parse_get_set_dynamic_color(.pointer_foreground, data) }
-		.osc_14 { parse_get_set_dynamic_color(.pointer_background, data) }
-		.osc_15 { parse_get_set_dynamic_color(.tektronix_foreground, data) }
-		.osc_16 { parse_get_set_dynamic_color(.tektronix_background, data) }
-		.osc_17 { parse_get_set_dynamic_color(.highlight_background, data) }
-		.osc_18 { parse_get_set_dynamic_color(.tektronix_cursor, data) }
-		.osc_19 { parse_get_set_dynamic_color(.highlight_foreground, data) }
-		.osc_110 { parse_reset_dynamic_color(.foreground, data) }
-		.osc_111 { parse_reset_dynamic_color(.background, data) }
-		.osc_112 { parse_reset_dynamic_color(.cursor, data) }
-		.osc_113 { parse_reset_dynamic_color(.pointer_foreground, data) }
-		.osc_114 { parse_reset_dynamic_color(.pointer_background, data) }
-		.osc_115 { parse_reset_dynamic_color(.tektronix_foreground, data) }
-		.osc_116 { parse_reset_dynamic_color(.tektronix_background, data) }
-		.osc_117 { parse_reset_dynamic_color(.highlight_background, data) }
-		.osc_118 { parse_reset_dynamic_color(.tektronix_cursor, data) }
-		.osc_119 { parse_reset_dynamic_color(.highlight_foreground, data) }
+		.osc_4 { parse_get_set_ansi_color_alloc(allocator, .osc_4, data)! }
+		.osc_5 { parse_get_set_ansi_color_alloc(allocator, .osc_5, data)! }
+		.osc_104 { parse_reset_ansi_color_alloc(allocator, .osc_104, data)! }
+		.osc_105 { parse_reset_ansi_color_alloc(allocator, .osc_105, data)! }
+		.osc_10 { parse_get_set_dynamic_color_alloc(allocator, .foreground, data)! }
+		.osc_11 { parse_get_set_dynamic_color_alloc(allocator, .background, data)! }
+		.osc_12 { parse_get_set_dynamic_color_alloc(allocator, .cursor, data)! }
+		.osc_13 { parse_get_set_dynamic_color_alloc(allocator, .pointer_foreground, data)! }
+		.osc_14 { parse_get_set_dynamic_color_alloc(allocator, .pointer_background, data)! }
+		.osc_15 { parse_get_set_dynamic_color_alloc(allocator, .tektronix_foreground, data)! }
+		.osc_16 { parse_get_set_dynamic_color_alloc(allocator, .tektronix_background, data)! }
+		.osc_17 { parse_get_set_dynamic_color_alloc(allocator, .highlight_background, data)! }
+		.osc_18 { parse_get_set_dynamic_color_alloc(allocator, .tektronix_cursor, data)! }
+		.osc_19 { parse_get_set_dynamic_color_alloc(allocator, .highlight_foreground, data)! }
+		.osc_110 { parse_reset_dynamic_color_alloc(allocator, .foreground, data)! }
+		.osc_111 { parse_reset_dynamic_color_alloc(allocator, .background, data)! }
+		.osc_112 { parse_reset_dynamic_color_alloc(allocator, .cursor, data)! }
+		.osc_113 { parse_reset_dynamic_color_alloc(allocator, .pointer_foreground, data)! }
+		.osc_114 { parse_reset_dynamic_color_alloc(allocator, .pointer_background, data)! }
+		.osc_115 { parse_reset_dynamic_color_alloc(allocator, .tektronix_foreground, data)! }
+		.osc_116 { parse_reset_dynamic_color_alloc(allocator, .tektronix_background, data)! }
+		.osc_117 { parse_reset_dynamic_color_alloc(allocator, .highlight_background, data)! }
+		.osc_118 { parse_reset_dynamic_color_alloc(allocator, .tektronix_cursor, data)! }
+		.osc_119 { parse_reset_dynamic_color_alloc(allocator, .highlight_foreground, data)! }
 	}
 }
 
@@ -454,10 +457,10 @@ fn color_tokens(data string) []string {
 }
 
 // OSC 4/5: Get/Set ANSI colors
-fn parse_get_set_ansi_color(op ColorOperation, data string) []ColorRequest {
+fn parse_get_set_ansi_color_alloc(allocator lib_allocator.Allocator, op ColorOperation, data string) !lib_allocator.SegmentedList[ColorRequest] {
 	// Note: in ANY error scenario below we return the accumulated results.
 	// This matches the xterm behavior (see misc.c ChangeAnsiColorRequest)
-	mut result := []ColorRequest{}
+	mut result := lib_allocator.SegmentedList[ColorRequest]{}
 	tokens := color_tokens(data)
 	mut offset := 0
 	for offset < tokens.len {
@@ -506,29 +509,41 @@ fn parse_get_set_ansi_color(op ColorOperation, data string) []ColorRequest {
 
 		// "?" always results in a query.
 		if spec_str == '?' {
-			result << ColorRequestQuery{ target: target }
+			result.append(allocator, ColorRequest(ColorRequestQuery{ target: target })) or {
+				result.deinit(allocator)
+				return err
+			}
 			continue
 		}
 
 		rgb := parse_rgb(spec_str) or { return result }
-		result << ColorRequestSet{
+		result.append(allocator, ColorRequest(ColorRequestSet{
 			target: target
 			color: rgb
+		})) or {
+			result.deinit(allocator)
+			return err
 		}
 	}
 	return result
 }
 
 // OSC 104/105: Reset ANSI Colors
-fn parse_reset_ansi_color(op ColorOperation, data string) []ColorRequest {
-	mut result := []ColorRequest{}
+fn parse_reset_ansi_color_alloc(allocator lib_allocator.Allocator, op ColorOperation, data string) !lib_allocator.SegmentedList[ColorRequest] {
+	mut result := lib_allocator.SegmentedList[ColorRequest]{}
 
 	if data.len == 0 {
 		// If no parameters are given, we reset the full table.
 		if op == .osc_104 {
-			result << ColorRequestResetPalette{}
+			result.append(allocator, ColorRequest(ColorRequestResetPalette{})) or {
+			result.deinit(allocator)
+			return err
+		}
 		} else {
-			result << ColorRequestResetSpecial{}
+			result.append(allocator, ColorRequest(ColorRequestResetSpecial{})) or {
+			result.deinit(allocator)
+			return err
+		}
 		}
 		return result
 	}
@@ -565,15 +580,24 @@ fn parse_reset_ansi_color(op ColorOperation, data string) []ColorRequest {
 			}
 		}
 
-		result << ColorRequestReset{ target: target }
+		result.append(allocator, ColorRequest(ColorRequestReset{ target: target })) or {
+			result.deinit(allocator)
+			return err
+		}
 	}
 
 	// If nothing was parsed (all invalid), reset the full table
 	if result.len == 0 {
 		if op == .osc_104 {
-			result << ColorRequestResetPalette{}
+			result.append(allocator, ColorRequest(ColorRequestResetPalette{})) or {
+			result.deinit(allocator)
+			return err
+		}
 		} else {
-			result << ColorRequestResetSpecial{}
+			result.append(allocator, ColorRequest(ColorRequestResetSpecial{})) or {
+			result.deinit(allocator)
+			return err
+		}
 		}
 	}
 
@@ -581,22 +605,28 @@ fn parse_reset_ansi_color(op ColorOperation, data string) []ColorRequest {
 }
 
 // OSC 10-19: Get/Set Dynamic Colors
-fn parse_get_set_dynamic_color(start DynamicColor, data string) []ColorRequest {
+fn parse_get_set_dynamic_color_alloc(allocator lib_allocator.Allocator, start DynamicColor, data string) !lib_allocator.SegmentedList[ColorRequest] {
 	// Note: in ANY error scenario below we return the accumulated results.
 	// This matches the xterm behavior (see misc.c ChangeColorsRequest)
-	mut result := []ColorRequest{}
+	mut result := lib_allocator.SegmentedList[ColorRequest]{}
 	mut color := start
 	for spec_str in color_tokens(data) {
 		target := ColorTarget(ColorTargetDynamic{ color: color })
 
 		if spec_str == '?' {
-			result << ColorRequestQuery{ target: target }
+			result.append(allocator, ColorRequest(ColorRequestQuery{ target: target })) or {
+			result.deinit(allocator)
+			return err
+		}
 		} else {
 			rgb := parse_rgb(spec_str) or { return result }
-			result << ColorRequestSet{
+			result.append(allocator, ColorRequest(ColorRequestSet{
 				target: target
 				color: rgb
-			}
+			})) or {
+			result.deinit(allocator)
+			return err
+		}
 		}
 
 		// Each successive value uses the next color so long as it exists.
@@ -606,8 +636,8 @@ fn parse_get_set_dynamic_color(start DynamicColor, data string) []ColorRequest {
 }
 
 // OSC 110-119: Reset Dynamic Colors
-fn parse_reset_dynamic_color(color DynamicColor, data string) []ColorRequest {
-	mut result := []ColorRequest{}
+fn parse_reset_dynamic_color_alloc(allocator lib_allocator.Allocator, color DynamicColor, data string) !lib_allocator.SegmentedList[ColorRequest] {
+	mut result := lib_allocator.SegmentedList[ColorRequest]{}
 	// xterm behavior: only semicolons are ignored (trailing semicolons ok).
 	// Any other content (including whitespace) means the command is invalid.
 	if data.len > 0 {
@@ -619,9 +649,57 @@ fn parse_reset_dynamic_color(color DynamicColor, data string) []ColorRequest {
 			}
 		}
 	}
-	result << ColorRequestReset{
+	result.append(allocator, ColorRequest(ColorRequestReset{
 		target: ColorTargetDynamic{ color: color }
-	}
+	})) or {
+			result.deinit(allocator)
+			return err
+		}
+	return result
+}
+
+fn parse_color_data(op ColorOperation, data string) []ColorRequest {
+	allocator := lib_allocator.default(none)
+	mut list := parse_color_data_alloc(allocator, op, data) or { return []ColorRequest{} }
+	defer { list.deinit(allocator) }
+	mut result := []ColorRequest{cap: list.len}
+	for i in 0 .. list.len { result << list.at(i) }
+	return result
+}
+
+fn parse_get_set_ansi_color(op ColorOperation, data string) []ColorRequest {
+	allocator := lib_allocator.default(none)
+	mut list := parse_get_set_ansi_color_alloc(allocator, op, data) or { return []ColorRequest{} }
+	defer { list.deinit(allocator) }
+	mut result := []ColorRequest{cap: list.len}
+	for i in 0 .. list.len { result << list.at(i) }
+	return result
+}
+
+fn parse_reset_ansi_color(op ColorOperation, data string) []ColorRequest {
+	allocator := lib_allocator.default(none)
+	mut list := parse_reset_ansi_color_alloc(allocator, op, data) or { return []ColorRequest{} }
+	defer { list.deinit(allocator) }
+	mut result := []ColorRequest{cap: list.len}
+	for i in 0 .. list.len { result << list.at(i) }
+	return result
+}
+
+fn parse_get_set_dynamic_color(start DynamicColor, data string) []ColorRequest {
+	allocator := lib_allocator.default(none)
+	mut list := parse_get_set_dynamic_color_alloc(allocator, start, data) or { return []ColorRequest{} }
+	defer { list.deinit(allocator) }
+	mut result := []ColorRequest{cap: list.len}
+	for i in 0 .. list.len { result << list.at(i) }
+	return result
+}
+
+fn parse_reset_dynamic_color(color DynamicColor, data string) []ColorRequest {
+	allocator := lib_allocator.default(none)
+	mut list := parse_reset_dynamic_color_alloc(allocator, color, data) or { return []ColorRequest{} }
+	defer { list.deinit(allocator) }
+	mut result := []ColorRequest{cap: list.len}
+	for i in 0 .. list.len { result << list.at(i) }
 	return result
 }
 

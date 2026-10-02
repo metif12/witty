@@ -1333,7 +1333,7 @@ fn test_stream_preserves_osc_terminator_for_color_responses() ! {
 		assert color.terminator == .bel
 		assert color.op == .osc_10
 		assert color.requests.len == 1
-		request := color.requests[0]
+		request := color.requests.at(0)
 		assert request is osc.ColorRequestQuery
 		if request is osc.ColorRequestQuery {
 			assert request.target is osc.ColorTargetDynamic
