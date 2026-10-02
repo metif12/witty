@@ -35,7 +35,10 @@ pub fn (d Driver) v_arguments(artifact Artifact, deps NativeDeps) ![]string {
 		args << ['-cflags', compiler_argument(argument)]
 	}
 	for archive in deps.archives {
-		args << ['-ldflags', compiler_argument(archive)]
+		// V's C builder leaves -x c active for linker flags whose quoted path
+		// it cannot classify. Pass archive files directly to the linker so
+		// neither the C frontend nor shell reparses them as source inputs.
+		args << ['-ldflags', '-Xlinker ' + compiler_argument(archive)]
 	}
 	for flag in deps.link_flags {
 		args << ['-ldflags', compiler_argument(flag)]
@@ -84,9 +87,9 @@ pub fn (d Driver) build_vt() !string {
 	} else if d.cfg.target.os == 'windows' {
 		'.dll'
 	} else if d.cfg.target.darwin() {
-		'.dylib'
+		'.0.1.0.dylib'
 	} else {
-		'.so'
+		'.so.0.1.0'
 	}
 	output := d.cache_path('artifacts', 'libghostty-vt' + extension)
 	os.mkdir_all(os.dir(output))!
@@ -94,13 +97,25 @@ pub fn (d Driver) build_vt() !string {
 		object := output + '.o'
 		args << ['-is_o', '-cflags', '-fPIC', '-o', object, source]
 		checked_process(d.cfg.root, args)!
-		d.link_library(object, output, deps)!
+		d.link_library(object, output, deps, true)!
 	} else {
 		args << ['-o', output, source]
 		checked_process(d.cfg.root, args)!
 	}
 	if !d.cfg.target.wasm() {
 		d.install_file(output, 'lib/' + os.base(output))!
+		if d.cfg.target.os != 'windows' {
+			names := if d.cfg.target.darwin() {
+				['libghostty-vt.dylib', 'libghostty-vt.0.dylib']
+			} else {
+				['libghostty-vt.so', 'libghostty-vt.so.0']
+			}
+			for name in names {
+				path := os.join_path(d.cfg.prefix, 'lib', name)
+				if os.exists(path) || os.is_link(path) { os.rm(path)! }
+				os.symlink(os.base(output), path)!
+			}
+		}
 		d.install_tree(os.join_path(d.cfg.root, 'include', 'ghostty'), 'include/ghostty', [])!
 		pc :=
 			'prefix=${d.cfg.prefix}\nincludedir=\x24{prefix}/include\nlibdir=\x24{prefix}/lib\n\n' +
@@ -134,7 +149,7 @@ pub fn (d Driver) build_library(deps NativeDeps, static_ bool) !string {
 			'.so'
 		}
 		output := d.cache_path('artifacts', 'libghostty' + extension)
-		d.link_library(object, output, deps)!
+		d.link_library(object, output, deps, false)!
 		if d.cfg.target.darwin() {
 			checked_process(d.cfg.root, ['dsymutil', output, '-o', output + '.dSYM'])!
 		}
@@ -177,10 +192,19 @@ pub fn (d Driver) build_executable(deps NativeDeps) !string {
 	return output
 }
 
-fn (d Driver) link_library(object string, output string, deps NativeDeps) ! {
+fn (d Driver) link_library(object string, output string, deps NativeDeps, vt bool) ! {
 	mut command := [os.getenv_opt('CC') or { 'clang' }]
 	command << d.cfg.sdk_arguments()!
 	command << [if d.cfg.target.darwin() { '-dynamiclib' } else { '-shared' }, '-o', output, object]
+	if d.cfg.target.darwin() {
+		command << ['-install_name', '@rpath/' +
+			if vt { 'libghostty-vt.0.dylib' } else { os.base(output) }]
+		if vt { command << ['-current_version', '0.1.0', '-compatibility_version', '0.1.0'] }
+	} else if vt && d.cfg.target.os != 'windows' {
+		command << '-Wl,-soname,libghostty-vt.so.0'
+	} else if d.cfg.target.os == 'windows' {
+		command << '-Wl,--export-all-symbols'
+	}
 	command << deps.archives
 	command << deps.link_flags
 	command << d.runtime_archive()!
