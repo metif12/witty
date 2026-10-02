@@ -63,7 +63,11 @@ pub fn (props Properties) zig_format() string {
 	return '.{\n    .width= ${props.width()},\n    .grapheme_break= .${props.grapheme_break()},\n    .emoji_vs_base= ${props.emoji_vs_base()},\n}'
 }
 
-const table_data = $embed_file('@VMODROOT/unicode/tables.bin').to_bytes()
+$if generated_unicode_tables ? {
+	const table_data = $embed_file('@VMODROOT/.witty-build/generated/unicode-tables.bin').to_bytes()
+} $else {
+	const table_data = $embed_file('@VMODROOT/unicode/tables.bin').to_bytes()
+}
 
 const props_stage1_offset = 0
 const props_stage1_len = 8192

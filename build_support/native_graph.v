@@ -53,6 +53,8 @@ pub fn (d Driver) build_native_dependencies(vt_only bool) !NativeDeps {
 		arguments: d.cfg.sdk_arguments()!
 	}
 	mut deps := NativeDeps{}
+	d.generate_unicode_tables()!
+	deps.defines << 'generated_unicode_tables'
 	if d.cfg.simd {
 		deps.archives << d.build_simd(cxx)!
 		for name, pkg in {
@@ -66,6 +68,8 @@ pub fn (d Driver) build_native_dependencies(vt_only bool) !NativeDeps {
 		deps.link_flags << if d.cfg.target.darwin() { '-lc++' } else { '-lstdc++' }
 	}
 	if vt_only { return deps }
+	d.generate_help_strings()!
+	deps.defines << 'generated_help_strings'
 	frames := d.frame_data()!
 	generated := d.cache_path('generated', 'framedata.compressed')
 	if frames != generated {

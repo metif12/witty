@@ -3,7 +3,11 @@ module cli
 import cli_args
 
 const action_help_requested_message = 'ActionHelpRequested'
-const action_help_data = $embed_file('cli_action_help.txt').to_string()
+$if generated_help_strings ? {
+	const action_help_data = $embed_file('@VMODROOT/.witty-build/generated/cli_action_help.txt').to_string()
+} $else {
+	const action_help_data = $embed_file('cli_action_help.txt').to_string()
+}
 
 pub fn generated_action_help_data() string {
 	return action_help_data

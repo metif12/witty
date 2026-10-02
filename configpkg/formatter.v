@@ -8,7 +8,11 @@ import fontstyle
 // Generated from the documentation comments in the pinned Ghostty
 // config/Config.zig. Records are separated by ASCII record separators so the
 // Markdown remains byte-for-byte data rather than V string literals.
-const config_help_data = $embed_file('config_help.txt').to_string()
+$if generated_help_strings ? {
+	const config_help_data = $embed_file('@VMODROOT/.witty-build/generated/config_help.txt').to_string()
+} $else {
+	const config_help_data = $embed_file('config_help.txt').to_string()
+}
 
 pub fn generated_config_help_data() string {
 	return config_help_data

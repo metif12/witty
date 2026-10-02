@@ -114,18 +114,18 @@ pub fn (self &LutTables[T]) write_zig(mut writer io.Writer) ! {
 	lut_write_all(mut writer, ('//! This file is auto-generated. Do not edit.\n\n'
 		+ 'pub fn Tables(comptime Elem: type) type {\n'
 		+ '    return struct {\n'
-		+ 'pub const stage1: [${self.stage1.len}]u16 = .{\n').bytes())!
+		+ 'pub const stage1: [${self.stage1.len}]u16 = .{').bytes())!
 	for entry in self.stage1 {
 		lut_write_all(mut writer, '${entry},'.bytes())!
 	}
 
-	lut_write_all(mut writer, ('\n};\n\npub const stage2: [${self.stage2.len}]u16 = .{\n').bytes())!
+	lut_write_all(mut writer, ('\n};\n\npub const stage2: [${self.stage2.len}]u16 = .{').bytes())!
 	for entry in self.stage2 {
 		lut_write_all(mut writer, '${entry},'.bytes())!
 	}
 	lut_write_all(mut writer, '};'.bytes())!
 
-	lut_write_all(mut writer, ('\n\npub const stage3: [${self.stage3.len}]Elem = .{\n').bytes())!
+	lut_write_all(mut writer, ('\npub const stage3: [${self.stage3.len}]Elem = .{').bytes())!
 	for entry in self.stage3 {
 		lut_write_all(mut writer, '${lut_zig_value(entry)},'.bytes())!
 	}

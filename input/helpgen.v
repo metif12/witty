@@ -2,7 +2,11 @@ module input
 
 import strings
 
-const binding_action_help_data = $embed_file('keybind_action_help.txt').to_string()
+$if generated_help_strings ? {
+	const binding_action_help_data = $embed_file('@VMODROOT/.witty-build/generated/keybind_action_help.txt').to_string()
+} $else {
+	const binding_action_help_data = $embed_file('keybind_action_help.txt').to_string()
+}
 
 pub fn generated_action_help_data() string {
 	return binding_action_help_data
