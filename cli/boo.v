@@ -4,7 +4,11 @@ import compress.deflate
 import vaxis
 import vaxis.vxfw
 
-const boo_compressed = $embed_file('framedata.compressed')
+const boo_compressed = $if generated_framedata ? {
+	$embed_file('@VMODROOT/.witty-build/generated/framedata.compressed')
+} $else {
+	$embed_file('framedata.compressed')
+}
 const boo_frame_width = 100
 const boo_frame_height = 41
 const boo_frame_rate = u32(1000 / 30)
