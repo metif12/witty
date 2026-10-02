@@ -80,3 +80,18 @@ fn test_default_allocator_and_nullable_boundaries() {
 	round_trip := value.zig()
 	assert !isnil(round_trip.vtable)
 }
+
+fn test_default_allocator_preserves_alignment_and_remap_contract() {
+	allocator := default(none)
+	for alignment in [u8(0), 3, 6, 12, 16] {
+		ptr := allocator.alloc_bytes(24, alignment, 0)
+		assert !isnil(ptr)
+		assert usize(ptr) % (usize(1) << alignment) == 0
+		unsafe { (&u8(ptr))[0] = 0xa5 }
+		assert allocator.remap_bytes(ptr, 24, alignment, 12, 0) == ptr
+		// The source's CAllocator may grow only into usable malloc space.
+		assert isnil(allocator.remap_bytes(ptr, 24, alignment, usize(1) << 40, 0))
+		unsafe { assert (&u8(ptr))[0] == 0xa5 }
+		allocator.free_bytes(ptr, 12, alignment, 0)
+	}
+}

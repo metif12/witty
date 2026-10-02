@@ -9,6 +9,12 @@
 @[has_globals]
 module lib_allocator
 
+#include "@VMODROOT/lib_allocator/c_allocator.h"
+
+fn C.witty_c_aligned_alloc(usize, u8) voidptr
+fn C.witty_c_aligned_free(voidptr)
+fn C.witty_c_aligned_size(voidptr) usize
+
 pub type AllocFn = fn (ctx voidptr, len usize, alignment u8, ret_addr usize) voidptr
 
 pub type ResizeFn = fn (ctx voidptr, memory voidptr, memory_len usize, alignment u8, new_len usize, ret_addr usize) bool
@@ -99,28 +105,26 @@ pub fn default(allocator ?&Allocator) Allocator {
 	return c_allocator
 }
 
-fn c_alloc(_ voidptr, len usize, _ u8, _ usize) voidptr {
-	size := if len == 0 { usize(1) } else { len }
-	return unsafe { malloc(size) }
+fn c_alloc(_ voidptr, len usize, alignment u8, _ usize) voidptr {
+	assert len > 0
+	return C.witty_c_aligned_alloc(len, alignment)
 }
 
 fn c_resize(_ voidptr, memory voidptr, memory_len usize, _ u8, new_len usize, _ usize) bool {
-	_ = memory
-	// libc cannot promise that a growing realloc remains in place. Shrinking
-	// can always retain the original region while exposing the shorter length.
-	return new_len > 0 && new_len <= memory_len
+	return new_len <= memory_len || new_len <= C.witty_c_aligned_size(memory)
 }
 
-fn c_remap(_ voidptr, memory voidptr, memory_len usize, _ u8, new_len usize, _ usize) voidptr {
-	if isnil(memory) || new_len == 0 {
-		return unsafe { nil }
+fn c_remap(ctx voidptr, memory voidptr, memory_len usize, alignment u8, new_len usize, ret_addr usize) voidptr {
+	// Source CAllocator never calls realloc: it would lose the alignment.
+	if c_resize(ctx, memory, memory_len, alignment, new_len, ret_addr) {
+		return memory
 	}
-	return unsafe { realloc_data(&u8(memory), int(memory_len), int(new_len)) }
+	return unsafe { nil }
 }
 
 fn c_free(_ voidptr, memory voidptr, _ usize, _ u8, _ usize) {
 	if !isnil(memory) {
-		unsafe { free(memory) }
+		C.witty_c_aligned_free(memory)
 	}
 }
 
