@@ -1222,7 +1222,7 @@ fn vt_keyboard_selection_did_change(_self ObjId, _cmd Sel, _notification ObjId) 
 }
 
 fn vt_window_should_close(_self ObjId, _cmd Sel, window ObjId) bool {
-	view := msg_id(window, 'contentView')
+	view := terminal_view_for_window(window)
 	if is_nil(view) || g_action_cb == unsafe { nil } {
 		return true
 	}

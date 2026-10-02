@@ -16,9 +16,17 @@ import macos
 struct TermState {
 mut:
 	view    voidptr
+	controller &TerminalController = unsafe { nil }
 	surface &apprt.Surface = unsafe { nil }
 	closing bool
 	closed  bool
+}
+
+@[heap]
+struct TerminalController {
+mut:
+	host &macos.NativeSplitHost = unsafe { nil }
+	focused &TermState = unsafe { nil }
 }
 
 struct StandaloneRuntime {
@@ -97,6 +105,9 @@ fn create_surface(view voidptr, inherited apprt.SurfaceOptions) ?&TermState {
 	}
 	macos.view_set_userdata(view, voidptr(state))
 	runtime.states << state
+	if macos.view_window(view) != unsafe { nil } {
+		state.controller = &TerminalController{host: macos.create_split_host(view), focused: state}
+	}
 
 	scale := macos.view_backing_scale(view)
 	apprt.ghostty_surface_set_size(mut state.surface, u32(macos.view_width(view) * scale),
@@ -137,7 +148,16 @@ fn close_state_now(mut state TermState) {
 		apprt.ghostty_surface_free(mut state.surface)
 		state.surface = unsafe { nil }
 	}
-	macos.close_tab(state.view)
+	if state.controller != unsafe { nil } && state.controller.host.tree.root.leaves().len > 1 {
+		mut controller := state.controller
+		old_tree := controller.host.tree
+		node := old_tree.root.find(state.view) or { return }
+		next := old_tree.focus_target(if old_tree.root.leaves()[0] == state.view { macos.SplitFocusDirection.next } else { macos.SplitFocusDirection.previous }, node)
+		controller.host.replace_tree(old_tree.removing(node))
+		if view := next { macos.focus_split_view(view) }
+	} else {
+		macos.close_tab(state.view)
+	}
 }
 
 fn close_state_main(userdata voidptr) {
@@ -298,6 +318,37 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 		}
 		.new_window {
 			return do_new_window(state)
+		}
+		.new_split {
+			if current := state {
+				data := action.data
+				if data is apprt.SplitDirection { return do_new_split(current, data) }
+			}
+		}
+		.goto_split {
+			if current := state {
+				data := action.data
+				if data is apprt.GotoSplit { return do_goto_split(current, data) }
+			}
+		}
+		.resize_split {
+			if current := state {
+				data := action.data
+				if data is apprt.ResizeSplit { return do_resize_split(current, data) }
+			}
+		}
+		.equalize_splits {
+			if current := state { if current.controller != unsafe { nil } { mut host := current.controller.host; host.replace_tree(host.tree.equalized()); return true } }
+		}
+		.toggle_split_zoom {
+			if current := state {
+				if current.controller != unsafe { nil } {
+					mut host := current.controller.host
+					node := host.tree.root.find(current.view) or { return false }
+					host.replace_tree(macos.NativeSplitTree{root: host.tree.root, zoomed: if host.tree.zoomed == unsafe { nil } { node } else { unsafe { &macos.NativeSplitNode(nil) } }})
+					return true
+				}
+			}
 		}
 		.new_tab {
 			return if state != none { do_new_tab(state) } else { do_new_window(none) }
@@ -490,6 +541,7 @@ fn on_focus(userdata voidptr, focused bool) {
 	mut state := state_from_userdata(userdata) or { return }
 	if !state.closed && state.surface != unsafe { nil } {
 		apprt.ghostty_surface_set_focus(mut state.surface, focused)
+		if focused && state.controller != unsafe { nil } { state.controller.focused = state }
 	}
 }
 
