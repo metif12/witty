@@ -78,6 +78,14 @@ fn replace_controller_tree(controller &TerminalController, tree macos.NativeSpli
 	register_controller_undo(&ControllerUndo{kind: .tree, controller: c, tree: old_tree, focus: old_focus, opposite_focus: new_focus, name: name}, voidptr(c))
 }
 fn focus_controller_view(view voidptr) { macos.focus_split_view(view) }
+// Close-other/right undo queues the controller, then resolves its window on
+// the next main-queue turn. Runtime.controllers retains the controller; a
+// closed controller has already released its native host and window.
+fn refocus_controller_window(context voidptr) {
+	controller := unsafe { &TerminalController(context) }
+	if controller.closed { return }
+	macos.focus_native_window(macos.view_window(controller.host.container))
+}
 fn controller_undo_state(controller &TerminalController) ?ControllerUndoState {
 	views := controller.host.tree.root.leaves()
 	if views.len == 0 { return none }
@@ -174,7 +182,7 @@ fn perform_controller_undo(context voidptr) {
 		.close { if record.mode != .this { close_selected_tabs_immediately(record.controller, record.mode) } else { close_controller_immediately(record.controller, record.close_window) } }
 		.focus {
 			if record.controller.closed { return }
-			macos.dispatch_main(focus_controller_view, record.controller.focused.view)
+			macos.dispatch_main(refocus_controller_window, voidptr(record.controller))
 			register_controller_undo(&ControllerUndo{kind: .close, controller: record.controller, mode: record.mode, name: record.name}, voidptr(record.controller))
 		}
 		.new_close {
