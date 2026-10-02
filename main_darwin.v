@@ -398,7 +398,10 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 		}
 		.toggle_fullscreen {
 			if current := state {
-				macos.toggle_fullscreen(current.view)
+				data := action.data
+				if data is apprt.Fullscreen {
+					macos.toggle_fullscreen_mode(current.view, match data { .native { macos.NativeFullscreenMode.native } .macos_non_native { .non_native } .macos_non_native_visible_menu { .visible_menu } .macos_non_native_padded_notch { .padded_notch } })
+				}
 				return true
 			}
 		}
