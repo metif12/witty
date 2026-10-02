@@ -334,17 +334,7 @@ fn (state &NativeActionSurface) perform(action string) bool {
 }
 
 fn composed_character_count(text string) int {
-	str := nsstring(text)
-	end := usize(msg_u64(str, 'length'))
-	mut offset := usize(0)
-	mut count := 0
-	for offset < end {
-		range := C.witty_macos_msg_range_u64(str, sel('rangeOfComposedCharacterSequenceAtIndex:'),
-			u64(offset))
-		offset = range.location + range.length
-		count++
-	}
-	return count
+	return int(native_character_count(nsstring(text)))
 }
 
 fn (mut state NativeActionSurface) set_search_needle(needle string) {

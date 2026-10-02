@@ -209,7 +209,7 @@ fn ghostty_characters(event ObjId) ?string {
 	if is_nil(obj) { return none }
 	text := objc_utf8_string(obj)
 	// Swift String.count counts composed characters rather than UTF-16 units.
-	if text.len > 0 && composed_character_count(obj) == 1 {
+	if text.len > 0 && native_character_count(obj) == 1 {
 		cp := text.runes()[0]
 		if cp < 0x20 {
 			flags := msg_u64(event, 'modifierFlags') & ~ns_event_modifier_flag_control

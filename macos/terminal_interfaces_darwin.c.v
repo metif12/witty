@@ -162,7 +162,7 @@ fn terminal_accessibility_selected(self ObjId, _cmd Sel) ObjId {
 // Swift String.count/prefix use extended grapheme clusters (UAX #29). The
 // legacy NSString composed-character API differs for CRLF and Prepend; use
 // the macOS Unicode character-break iterator for those standard-library ops.
-fn composed_character_prefix(text ObjId, count isize) usize {
+fn native_character_prefix(text ObjId, count isize) usize {
 	if count < 0 { panic('String.prefix requires a nonnegative length') }
 	length := int(msg_u64(text, 'length'))
 	characters := []u16{len: length}
@@ -182,7 +182,7 @@ fn composed_character_prefix(text ObjId, count isize) usize {
 	}
 	return usize(offset)
 }
-fn composed_character_count(text ObjId) isize {
+fn native_character_count(text ObjId) isize {
 	length := int(msg_u64(text, 'length'))
 	characters := []u16{len: length}
 	C.witty_macos_copy_characters(voidptr(text), characters.data, usize(length))
@@ -195,11 +195,11 @@ fn composed_character_count(text ObjId) isize {
 	for C.ubrk_next(iterator) >= 0 { count++ }
 	return count
 }
-fn terminal_accessibility_count(self ObjId, _cmd Sel) isize { return composed_character_count(nsstring(terminal_screen_contents(self))) }
+fn terminal_accessibility_count(self ObjId, _cmd Sel) isize { return native_character_count(nsstring(terminal_screen_contents(self))) }
 fn terminal_accessibility_visible(self ObjId, _cmd Sel) C.witty_macos_range { return C.witty_macos_range{length: usize(terminal_accessibility_count(self, nil_obj()))} }
 fn terminal_accessibility_line(self ObjId, _cmd Sel, index isize) isize {
 	text := nsstring(terminal_screen_contents(self))
-	length := composed_character_prefix(text, index)
+	length := native_character_prefix(text, index)
 	prefix := ObjId(C.witty_macos_msg_id_range(voidptr(text), voidptr(sel('substringWithRange:')), C.witty_macos_range{length: length}))
 	mut lines := isize(0)
 	for scalar in objc_utf8_string(prefix).runes() { if scalar in [`\n`, `\r`, `\u0085`, `\u2028`, `\u2029`, `\v`, `\f`] { lines++ } }
