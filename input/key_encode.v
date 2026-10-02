@@ -165,7 +165,8 @@ fn kitty_encode(event KeyEvent, opts Options) string {
 
 			// Send plain-text non-modified text directly to the terminal.
 			// We don't send release events because those are specially encoded.
-			if event.utf8.len > 0 && binding_mods.empty() && event.action != .release {
+			if event.utf8.len > 0 && binding_mods.empty() && event.action != .release
+				&& source_utf8_validate(event.utf8) {
 				// We only do this for printable characters.
 				mut all_printable := true
 				runes := event.utf8.runes()
@@ -204,7 +205,7 @@ fn kitty_encode(event KeyEvent, opts Options) string {
 		}
 	}
 
-	if opts.kitty_flags.report_alternates() {
+	if opts.kitty_flags.report_alternates() && source_utf8_validate(event.utf8) {
 		// Break early if this is a control key
 		if !is_control(seq.key_code) {
 			runes := event.utf8.runes()
@@ -399,7 +400,7 @@ fn legacy_encode(event KeyEvent, opts Options) string {
 	// Let's see if we should apply fixterms to this codepoint.
 	// At this stage of key processing, we only need to apply fixterms
 	// to unicode codepoints if we have ctrl set.
-	if event.mods.ctrl() {
+	if event.mods.ctrl() && source_utf8_validate(event.utf8) {
 		// Important: we want to use the original mods here, not the
 		// effective mods.
 		runes := event.utf8.runes()
@@ -863,7 +864,7 @@ fn (s KittySequence) encode_full() string {
 	}
 
 	// Text section
-	if s.text.len > 0 {
+	if s.text.len > 0 && source_utf8_validate(s.text) {
 		runes := s.text.runes()
 		mut count := 0
 		for r in runes {

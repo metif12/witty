@@ -946,3 +946,24 @@ fn test_ctrlseq_right_ctrl_c() {
 	assert seq != none
 	assert seq or { 0 } == u8(0x03)
 }
+
+// Original Utf8View.init rejects these strings in every Kitty path.
+fn test_invalid_utf8_is_absent_in_kitty_text_and_alternates() {
+	for text in ['\xff', '\xc0\x80', '\xed\xa0\x80', '\xf4\x90\x80\x80', '\xe2\x82'] {
+		for flags in [u8(1), 9, 13, 25] {
+			assert encode(KeyEvent{key: .key_a, unshifted_codepoint: 97, utf8: text},
+				Options{kitty_flags: KittyFlags.from_int(flags)}) == '\x1b[97u'
+		}
+	}
+	// Invalid UTF-8 must not synthesize a base alternate for a different layout.
+	opts := Options{kitty_flags: KittyFlags.from_int(13)}
+	assert encode(KeyEvent{key: .key_a, unshifted_codepoint: 1092, utf8: '\xff'}, opts) == '\x1b[1092u'
+	assert encode(KeyEvent{key: .key_a, unshifted_codepoint: 1092, utf8: ''}, opts) == '\x1b[1092::97u'
+}
+
+fn test_strict_source_utf8_validation_boundaries() {
+	for text in ['', 'ascii', 'Ж', '☺', '\xf4\x8f\xbf\xbf'] { assert source_utf8_validate(text) }
+	for text in ['\xc0', '\x80', '\xc0\x80', '\xed\xa0\x80', '\xed\xbf\xbf', '\xf4\x90\x80\x80', '\xf7\xbf\xbf\xbf'] {
+		assert !source_utf8_validate(text)
+	}
+}
