@@ -278,6 +278,7 @@ fn reload_runtime_config(app &apprt.App, target ?&TermState, soft bool) bool {
 		apprt.ghostty_surface_update_config(mut state.surface, &config)
 	} else {
 		apprt.ghostty_app_update_config(mut runtime_app, &config)
+		sync_config_menu(&config)
 	}
 	return true
 }
@@ -438,6 +439,7 @@ fn main() {
 		exit(1)
 	}
 	apprt.ghostty_app_set_focus(mut runtime.app, macos.app_is_active())
+	sync_config_menu(&config)
 
 	if config.initial_window {
 		do_new_window(none)

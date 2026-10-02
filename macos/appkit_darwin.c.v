@@ -351,6 +351,7 @@ __global (
 	g_delegate             ObjId
 	g_selection_pasteboard ObjId
 	g_base_title_key       int
+	g_config_menu_items    map[string]ObjId
 )
 
 @[inline]
@@ -1420,22 +1421,22 @@ fn install_menu_bar() {
 	msg_void_u64(hide_others, 'setKeyEquivalentModifierMask:', ns_event_modifier_flag_command | ns_event_modifier_flag_option)
 	menu_add_item(app_menu, 'Show All', 'unhideAllApplications:', '')
 	menu_add_separator(app_menu)
-	menu_add_item(app_menu, 'Quit Witty', 'terminate:', 'q')
+	register_config_menu_item(voidptr(menu_add_item(app_menu, 'Quit Witty', 'terminate:', '')), 'quit')
 	msg_void1(app_menu_item, 'setSubmenu:', app_menu)
 
 	file_menu_item := menu_item()
 	msg_void1(menu_bar, 'addItem:', file_menu_item)
 	file_menu := menu_with_title('File')
-	menu_add_item(file_menu, 'New Tab', 'vtNewTab:', 't')
-	menu_add_item(file_menu, 'Close Tab', 'vtCloseTab:', 'w')
+	register_config_menu_item(voidptr(menu_add_item(file_menu, 'New Tab', 'vtNewTab:', '')), 'new_tab')
+	register_config_menu_item(voidptr(menu_add_item(file_menu, 'Close Tab', 'vtCloseTab:', '')), 'close_tab')
 	msg_void1(file_menu_item, 'setSubmenu:', file_menu)
 
 	edit_menu_item := menu_item()
 	msg_void1(menu_bar, 'addItem:', edit_menu_item)
 	edit_menu := menu_with_title('Edit')
-	menu_add_item(edit_menu, 'Copy', 'copy:', 'c')
-	menu_add_item(edit_menu, 'Paste', 'paste:', 'v')
-	menu_add_item(edit_menu, 'Select All', 'selectAll:', 'a')
+	register_config_menu_item(voidptr(menu_add_item(edit_menu, 'Copy', 'copy:', '')), 'copy_to_clipboard')
+	register_config_menu_item(voidptr(menu_add_item(edit_menu, 'Paste', 'paste:', '')), 'paste_from_clipboard')
+	register_config_menu_item(voidptr(menu_add_item(edit_menu, 'Select All', 'selectAll:', '')), 'select_all')
 	msg_void1(edit_menu_item, 'setSubmenu:', edit_menu)
 
 	view_menu_item := menu_item()
@@ -1451,10 +1452,8 @@ fn install_menu_bar() {
 	menu_add_item(window_menu, 'Minimize', 'performMiniaturize:', 'm')
 	menu_add_item(window_menu, 'Zoom', 'performZoom:', '')
 	menu_add_separator(window_menu)
-	prev_tab := menu_add_item(window_menu, 'Show Previous Tab', 'selectPreviousTab:', '[')
-	msg_void_u64(prev_tab, 'setKeyEquivalentModifierMask:', ns_event_modifier_flag_command)
-	next_tab := menu_add_item(window_menu, 'Show Next Tab', 'selectNextTab:', ']')
-	msg_void_u64(next_tab, 'setKeyEquivalentModifierMask:', ns_event_modifier_flag_command)
+	register_config_menu_item(voidptr(menu_add_item(window_menu, 'Show Previous Tab', 'selectPreviousTab:', '')), 'goto_tab:previous')
+	register_config_menu_item(voidptr(menu_add_item(window_menu, 'Show Next Tab', 'selectNextTab:', '')), 'goto_tab:next')
 	menu_add_separator(window_menu)
 	menu_add_item(window_menu, 'Bring All to Front', 'arrangeInFront:', '')
 	msg_void1(window_menu_item, 'setSubmenu:', window_menu)
