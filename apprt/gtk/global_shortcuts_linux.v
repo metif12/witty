@@ -292,8 +292,8 @@ mut:
 	// as triggers are unique in the keymap. Mirrors `Private.map`.
 	//
 	// NOTE: ghostty keeps this in a per-refresh arena; V is GC-managed so we
-	// just reset the slice on each refresh.
-	map []ShortcutMapEntry
+	// reset the map on each refresh.
+	map map[string]input.Action
 
 	// The handle of the current global shortcuts portal session, as a D-Bus
 	// object path. Empty means "no session". Mirrors `Private.handle`.
@@ -374,7 +374,7 @@ fn (mut self GlobalShortcuts) close() {
 	}
 
 	// Our map lived in the (now-released) refresh arena in ghostty; reset it.
-	self.map = []ShortcutMapEntry{}
+	self.map = map[string]input.Action{}
 }
 
 // refresh rebuilds the id->action map from the config keybinds and, if there
@@ -390,13 +390,13 @@ fn (mut self GlobalShortcuts) refresh() {
 	}
 
 	// Our map starts out empty again.
-	mut new_map := []ShortcutMapEntry{}
+	mut new_map := map[string]input.Action{}
 
 	// Update the map from the keybind set, keeping only global, single-action
 	// leaves whose trigger can be represented as an XDG shortcut string.
 	self.refresh_map_from_bindings(mut new_map)
 
-	self.map = new_map
+	self.map = new_map.move()
 
 	// Create our session if we have any global shortcuts.
 	if self.map.len > 0 {
@@ -407,7 +407,7 @@ fn (mut self GlobalShortcuts) refresh() {
 // refresh_map_from_bindings is the translated body of ghostty's binding loop in
 // `refresh`. It iterates the config keybind set, keeps global single-action
 // leaves, and maps each such binding's XDG shortcut string to its action.
-fn (mut self GlobalShortcuts) refresh_map_from_bindings(mut new_map []ShortcutMapEntry) {
+fn (mut self GlobalShortcuts) refresh_map_from_bindings(mut new_map map[string]input.Action) {
 	if isnil(self.config) {
 		return
 	}
@@ -431,7 +431,7 @@ fn (mut self GlobalShortcuts) refresh_map_from_bindings(mut new_map []ShortcutMa
 				}
 			}
 		}
-		new_map << mapped
+		new_map[mapped.id] = mapped.action
 	}
 }
 
@@ -550,18 +550,18 @@ fn (mut self GlobalShortcuts) make_payload(method Method, request_token string) 
 
 			// The bind array is built from `self.map`; the action description is
 			// the action's full serialized form.
-			for entry in self.map {
+			for id, action in self.map {
 				details := variant_string_dict([
 					VariantStringEntry{
 						key:   'description'
-						value: action_to_string(entry.action)
+						value: action_to_string(action)
 					},
 					VariantStringEntry{
 						key:   'preferred_trigger'
-						value: entry.id
+						value: id
 					},
 				])
-				mut bind_children := [C.g_variant_new_string(&char(entry.id.str)), details]
+				mut bind_children := [C.g_variant_new_string(&char(id.str)), details]
 				bind := C.g_variant_new_tuple(unsafe { &bind_children[0] }, usize(bind_children.len))
 				C.g_variant_builder_add_value(binds, bind)
 			}
@@ -878,12 +878,7 @@ fn (mut self GlobalShortcuts) shortcut_activated(shortcut_id string) {
 // action_for_id returns the action bound to a shortcut id, or `none`. Mirrors
 // the `priv.map.get(shortcut_id)` lookup.
 fn (self &GlobalShortcuts) action_for_id(id string) ?input.Action {
-	for entry in self.map {
-		if entry.id == id {
-			return entry.action
-		}
-	}
-	return none
+	return self.map[id] or { return none }
 }
 
 // emit_trigger emits the "trigger" signal carrying the activated action.

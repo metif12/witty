@@ -17,8 +17,8 @@ fn test_global_shortcuts_refreshes_map_from_config_bindings() {
 	shortcuts.refresh()
 
 	assert shortcuts.map.len == 1
-	assert shortcuts.map[0].id == 'SHIFT+CTRL+a'
-	assert shortcuts.map[0].action == input.Action(input.ActionNewWindow{})
+	assert 'SHIFT+CTRL+a' in shortcuts.map
+	assert shortcuts.map['SHIFT+CTRL+a'] == input.Action(input.ActionNewWindow{})
 	assert shortcuts.action_for_id('SHIFT+CTRL+a') or { panic('missing shortcut action') } == input.Action(input.ActionNewWindow{})
 	assert shortcuts.action_for_id('CTRL+x') == none
 
@@ -41,10 +41,7 @@ fn test_global_shortcut_portal_payload_types() {
 	C.g_variant_unref(create_payload)
 
 	shortcuts.handle = '/org/freedesktop/portal/desktop/session/1_2/ghostty_7654321'
-	shortcuts.map = [ShortcutMapEntry{
-		id:     'CTRL+a'
-		action: input.Action.parse('text:hello')!
-	}]
+	shortcuts.map = {'CTRL+a': input.Action.parse('text:hello')!}
 	bind_payload := shortcuts.make_payload(.bind_shortcuts, 'ghostty_1234567') or {
 		assert false, 'expected bind-shortcuts payload'
 		return
@@ -81,10 +78,7 @@ fn record_global_shortcut(action input.Action, user_data voidptr) {
 fn test_global_shortcut_trigger_handler_receives_action() {
 	mut received := input.Action(input.ActionIgnore{})
 	mut shortcuts := GlobalShortcuts{
-		map: [ShortcutMapEntry{
-			id:     'CTRL+n'
-			action: input.ActionNewWindow{}
-		}]
+		map: {'CTRL+n': input.Action(input.ActionNewWindow{})}
 	}
 	shortcuts.set_trigger_handler(record_global_shortcut, voidptr(&received))
 	shortcuts.shortcut_activated('CTRL+n')
@@ -95,4 +89,20 @@ fn test_global_shortcuts_accepts_absent_dbus_connection() {
 	mut shortcuts := GlobalShortcuts{}
 	shortcuts.set_dbus_connection(none)
 	assert isnil(shortcuts.dbus_connection)
+}
+
+fn test_global_shortcuts_colliding_portal_ids_replace_the_previous_action() {
+	mut inner := configpkg.Config{}
+	inner.keybind.parse_cli('global:physical:a=new_window')!
+	inner.keybind.parse_cli('global:a=quit')!
+	mut cfg := config_new(inner)
+	mut shortcuts := GlobalShortcuts{config: cfg}
+	mut mapped := map[string]input.Action{}
+	shortcuts.refresh_map_from_bindings(mut mapped)
+	assert mapped.len == 1
+	assert mapped['a'] == input.Action(input.ActionQuit{})
+	shortcuts.map = mapped.move()
+	assert shortcuts.action_for_id('a')? == input.Action(input.ActionQuit{})
+	shortcuts.dispose()
+	cfg.unref()
 }
