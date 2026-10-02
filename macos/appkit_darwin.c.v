@@ -187,6 +187,7 @@ fn C.witty_macos_objc_msg_void_clear_color(obj ObjId, selector Sel, color MetalC
 fn C.witty_macos_set_window_background_blur(window voidptr, radius int)
 
 fn C.witty_macos_observe(center voidptr, observer voidptr, selector voidptr, name voidptr, object voidptr)
+fn C.witty_macos_dispatch_main_weak(view voidptr, callback voidptr)
 
 fn C.witty_metal_new_buffer_length(device voidptr, length usize, options u64) voidptr
 
@@ -1483,9 +1484,10 @@ fn vt_view_screen_did_change(self ObjId, _cmd Sel, notification ObjId) {
 		return
 	}
 	if g_display_cb != unsafe { nil } {
-		g_display_cb(view_userdata(self), view_display_id(self))
+		g_display_cb(view_userdata(self), view_display_id(voidptr(self)))
 	}
-	dispatch_main(refresh_screen_backing, self)
+	// Preserve DispatchQueue.main.async's [weak self] capture from Swift.
+	C.witty_macos_dispatch_main_weak(voidptr(self), voidptr(refresh_screen_backing))
 }
 
 pub fn view_display_id(view voidptr) u32 {

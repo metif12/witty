@@ -826,3 +826,28 @@ static inline void witty_macos_copy_characters(void* string, uint16_t* output, u
 	witty_macos_range range = {0, length};
 	((void (*)(id, SEL, uint16_t*, witty_macos_range))objc_msgSend)((id)string, sel_registerName("getCharacters:range:"), output, range);
 }
+/* Swift [weak self] capture across a main-queue callback. */
+extern id objc_initWeak(id*, id);
+extern id objc_loadWeakRetained(id*);
+extern void objc_destroyWeak(id*);
+typedef struct witty_macos_weak_task {
+	id object;
+	dispatch_function_t callback;
+} witty_macos_weak_task;
+static void witty_macos_weak_task_run(void* raw) {
+	witty_macos_weak_task* task = raw;
+	id object = objc_loadWeakRetained(&task->object);
+	if (object) {
+		task->callback((void*)object);
+		((void (*)(id, SEL))objc_msgSend)(object, sel_registerName("release"));
+	}
+	objc_destroyWeak(&task->object);
+	free(task);
+}
+static inline void witty_macos_dispatch_main_weak(void* object, void* callback) {
+	witty_macos_weak_task* task = calloc(1, sizeof(*task));
+	if (!task) abort();
+	objc_initWeak(&task->object, (id)object);
+	task->callback = (dispatch_function_t)callback;
+	dispatch_async_f(dispatch_get_main_queue(), task, witty_macos_weak_task_run);
+}
