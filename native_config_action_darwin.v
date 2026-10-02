@@ -57,6 +57,7 @@ fn native_config_change_main(context voidptr) {
 			// TerminalController only applies app appearance when its tree is empty.
 			if controller.host != unsafe { nil } && controller.host.tree.root == unsafe { nil } {
 				created := controller.creation_config
+				macos.set_native_window_title_font(controller.host.container, projection.window_title_font_family)
 				empty := macos.NativeWindowConfig{...created,shadow:projection.shadow,theme:projection.theme,background:projection.background,opacity:projection.opacity,blur:projection.blur}
 				macos.apply_native_window_config(controller.host.container,empty,false,created.background,created.opacity,controller.force_opaque)
 				if macos.native_window_is_visible(macos.view_window(controller.host.container)) { sync_native_surface_color_scheme(mut controller) }

@@ -5,7 +5,7 @@ import macos
 
 fn native_window_config(config &configpkg.Config) macos.NativeWindowConfig {
 	c := config.background
-	return macos.NativeWindowConfig{title: if title := config.title { title.clone() } else { none }, decorations: config.window_decoration != .none_, position_x: config.window_position_x, position_y: config.window_position_y, buttons_hidden: config.macos_window_buttons == .hidden, shadow: config.macos_window_shadow, titlebar_style: int(config.macos_titlebar_style), theme: int(config.window_theme), background: u32(c.r) << 16 | u32(c.g) << 8 | c.b, opacity: config.background_opacity, blur: config.background_blur.cval(), step_resize: config.window_step_resize, proxy_icon: config.macos_titlebar_proxy_icon == .visible, preserve_split_zoom: config.split_preserve_zoom.navigation(), focus_follows_mouse: config.focus_follows_mouse, maximize: config.maximize}
+	return macos.NativeWindowConfig{title: if title := config.title { title.clone() } else { none }, window_title_font_family: if family := config.window_title_font_family { family.clone() } else { none }, decorations: config.window_decoration != .none_, position_x: config.window_position_x, position_y: config.window_position_y, buttons_hidden: config.macos_window_buttons == .hidden, shadow: config.macos_window_shadow, titlebar_style: int(config.macos_titlebar_style), theme: int(config.window_theme), background: u32(c.r) << 16 | u32(c.g) << 8 | c.b, opacity: config.background_opacity, blur: config.background_blur.cval(), step_resize: config.window_step_resize, proxy_icon: config.macos_titlebar_proxy_icon == .visible, preserve_split_zoom: config.split_preserve_zoom.navigation(), focus_follows_mouse: config.focus_follows_mouse, maximize: config.maximize}
 }
 fn native_controller_config(current &TermState) macos.NativeWindowConfig {
 	if current.controller != unsafe { nil } { return current.controller.app_config }
@@ -16,7 +16,7 @@ fn native_surface_appearance_config(current &TermState) macos.NativeWindowConfig
 	// TerminalWindow captures its own configuration on creation. Its controller
 	// syncAppearance consumes only the focused SurfaceView.DerivedConfig fields.
 	base := current.controller.creation_config
-	return macos.NativeWindowConfig{...base, shadow: current.native_config.shadow, theme: current.native_config.theme, background: current.native_config.background, opacity: current.native_config.opacity, blur: current.native_config.blur}
+	return macos.NativeWindowConfig{...base, window_title_font_family: current.native_config.window_title_font_family, shadow: current.native_config.shadow, theme: current.native_config.theme, background: current.native_config.background, opacity: current.native_config.opacity, blur: current.native_config.blur}
 }
 fn sync_native_window(current &TermState) {
 	if current.controller == unsafe { nil } { return }
@@ -39,6 +39,9 @@ fn sync_native_window(current &TermState) {
 		}
 	}
 	background := chosen.background_color or { chosen.native_config.background }
+	// TerminalController.syncAppearance assigns the focused surface's family
+	// before invoking TerminalWindow.syncAppearance, including while invisible.
+	macos.set_native_window_title_font(focused.view, focused.native_config.window_title_font_family)
 	macos.apply_native_window_config(focused.view, native_surface_appearance_config(focused), false, background, chosen.native_config.opacity, current.controller.force_opaque)
 	// TerminalWindow's defer occurs after its isVisible guard; Quick Terminal
 	// publishes before that guard instead.

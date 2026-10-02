@@ -137,6 +137,7 @@ fn create_surface(view voidptr, inherited apprt.SurfaceOptions) ?&TermState {
 	if macos.view_window(view) != unsafe { nil } {
 		app_config := native_window_config(&runtime.app.config)
 		state.controller = &TerminalController{host: macos.create_split_host(view), focused: state, app_config: app_config, creation_config: app_config, restorable: (inherited.command or { '' }) == ''}
+		macos.set_native_window_title_font(view, state.native_config.window_title_font_family)
 		macos.apply_native_window_config(view, state.native_config, true, state.native_config.background, state.native_config.opacity, false)
 		state.controller.initial_frame = macos.native_window_frame(view)
 		if runtime.app.config.maximize {

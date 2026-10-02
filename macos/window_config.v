@@ -7,6 +7,7 @@ import math
 pub struct NativeWindowConfig {
 pub:
 	title ?string
+	window_title_font_family ?string
 	decorations bool = true
 	position_x ?i16
 	position_y ?i16

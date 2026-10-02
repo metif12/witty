@@ -47,6 +47,7 @@ fn native_window_key_changed(self ObjId,cmd Sel) {
 			msg_void_bool(data.title_label,'setHidden:',false)
 		}
 		update_native_zoom_views(mut data)
+		if data.config.titlebar_style == 2 { refresh_native_window_title_attributes(self) }
 	}
 	update_native_titlebar(self)
 }
@@ -88,7 +89,8 @@ fn register_native_window_class() {
 	add_method(cls, 'canBecomeKeyWindow', voidptr(native_window_can_become_key), 'B@:')
 	add_method(cls, 'canBecomeMainWindow', voidptr(native_window_can_become_key), 'B@:')
 	register_native_zoom_window_methods(cls)
-	for selector in ['becomeKey','resignKey'] { add_method(cls,selector,voidptr(native_window_key_changed),'v@:') }
+	register_window_font_methods(cls)
+	for selector in ['becomeKeyWindow','resignKeyWindow'] { add_method(cls,selector,voidptr(native_window_key_changed),'v@:') }
 	add_method(cls, 'addTitlebarAccessoryViewController:', voidptr(native_window_add_accessory), 'v@:@')
 	add_method(cls, 'removeTitlebarAccessoryViewControllerAtIndex:', voidptr(native_window_remove_accessory), 'v@:Q')
 	for selector in ['update', 'layoutIfNeeded', 'updateConstraintsIfNeeded'] { add_method(cls, selector, voidptr(native_window_update), 'v@:') }
@@ -393,6 +395,8 @@ fn create_terminal_toolbar(mut data NativeWindowData) ObjId {
 		C.macos_objc_register_class_pair(label_cls)
 	}
 	data.title_label = msg_id_rect(alloc('VTCenteredDynamicLabel'), 'initWithFrame:', objc_rect(0, 0, 100, 22))
+	font := window_title_font(data.window)
+	msg_void1(data.title_label, 'setFont:', if is_nil(font) { msg_id_f64(get_class('NSFont'), 'titleBarFontOfSize:', msg_f64(get_class('NSFont'), 'systemFontSize')) } else { font })
 	msg_void1(data.title_label, 'setStringValue:', msg_id(data.window, 'title'))
 	toolbar := msg_id1(msg_id(toolbar_cls, 'alloc'), 'initWithIdentifier:', nsstring('Toolbar'))
 	g_toolbar_windows[u64(toolbar)] = data.window

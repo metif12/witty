@@ -95,6 +95,7 @@ fn attach_restored_controller(view voidptr,saved NativeRestoredController,quick 
 	}
 	if controller.focused != unsafe { nil } {
 		state:=controller.focused
+		if !quick { macos.set_native_window_title_font(state.view, state.native_config.window_title_font_family) }
 		macos.apply_native_window_config(state.view,native_surface_appearance_config(state),true,state.background_color or { state.native_config.background },state.native_config.opacity,false)
 		macos.configure_native_restoration(state.view,!quick)
 		macos.set_native_tab_color(state.view,saved.tab_color)

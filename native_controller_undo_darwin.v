@@ -113,6 +113,7 @@ fn restore_controller_state(snapshot ControllerUndoState) &TerminalController {
 	}
 	if controller.focused != unsafe { nil } {
 		state := controller.focused
+		macos.set_native_window_title_font(state.view, state.native_config.window_title_font_family)
 		macos.apply_native_window_config(state.view, native_surface_appearance_config(state), true, state.background_color or { state.native_config.background }, state.native_config.opacity, false)
 		macos.apply_native_window_frame(state.view, snapshot.frame)
 		macos.configure_native_restoration(state.view, true)

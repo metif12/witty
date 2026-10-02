@@ -1,3 +1,4 @@
+@[has_globals]
 module macos
 
 #insert "@VMODROOT/macos/window_font_test_abi.h"
@@ -8,11 +9,11 @@ fn C.object_setClass(object ObjId, cls ObjId) ObjId
 fn font_fixture_fullscreen(_self ObjId, _cmd Sel) u64 { return u64(1 << 14) }
 fn font_fixture_toolbar_name(_self ObjId, _cmd Sel) ObjId { return nsstring('NSToolbarFullScreenWindow') }
 fn font_fixture_container_name(_self ObjId, _cmd Sel) ObjId { return nsstring('NSTitlebarContainerView') }
-fn font_fixture_key_window(_self ObjId, _cmd Sel) bool { return true }
+__global font_fixture_is_key = false
+fn font_fixture_key_window(_self ObjId, _cmd Sel) bool { return font_fixture_is_key }
 
 fn test_source_window_title_font_and_native_tab_title_updates() {
 	app_init()
-	register_window_font_methods(native_window_class())
 	first := create_window(640, 480, 'first')
 	second := new_tab(640, 480, 'second')
 	defer { close_tab(first); close_tab(second) }
@@ -55,8 +56,17 @@ fn test_source_window_title_font_and_native_tab_title_updates() {
 	msg_void1(probe, 'setTitle:', nsstring('subclass title'))
 	assert objc_utf8_string(msg_id(probe, 'title')) == 'subclass title'
 	C.macos_set_associated_object(probe, voidptr(&native_title_font_key), font, usize(1))
+	g_native_windows[u64(probe)] = &NativeWindowData{window:probe,config:NativeWindowConfig{titlebar_style:2}}
+	font_fixture_is_key = false
 	refresh_native_window_title_attributes(probe)
+	assert C.witty_window_font_test_attribute(msg_id(msg_id(probe, 'tab'), 'attributedTitle'), nsstring('NSColor')) == msg_id(get_class('NSColor'), 'secondaryLabelColor')
+	font_fixture_is_key = true
+	msg_void(probe,'becomeKeyWindow')
 	assert C.witty_window_font_test_attribute(msg_id(msg_id(probe, 'tab'), 'attributedTitle'), nsstring('NSColor')) == msg_id(get_class('NSColor'), 'labelColor')
+	font_fixture_is_key = false
+	msg_void(probe,'resignKeyWindow')
+	assert C.witty_window_font_test_attribute(msg_id(msg_id(probe, 'tab'), 'attributedTitle'), nsstring('NSColor')) == msg_id(get_class('NSColor'), 'secondaryLabelColor')
+	g_native_windows.delete(u64(probe))
 	msg_void(probe, 'release')
 }
 
