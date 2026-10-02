@@ -26,6 +26,13 @@ fn runtime_native_action(app &apprt.App, state ?&TermState, action apprt.Runtime
 	mut overlay := current.actions
 	data := action.data
 	match action.action {
+		.prompt_title {
+            if data is apprt.PromptTitle {
+                overlay.prompt_title(data == .tab, if data == .tab && current.controller != unsafe { nil } { current.controller.title_override or { macos.native_window_title(current.view) } } else { overlay.title })
+                return true
+            }
+        }
+        .pwd { if data is apprt.PwdValue { overlay.set_pwd(data.pwd,current.native_config.proxy_icon); return true } }
 		.desktop_notification {
 			if data is apprt.DesktopNotificationValue {
 				overlay.desktop_notification(data.title, data.body)
@@ -127,4 +134,25 @@ fn native_begin_key_down(userdata voidptr) {
 	if mut state := state_from_userdata(userdata) {
 		if !state.closed && state.actions != unsafe { nil } { state.actions.begin_key_down() }
 	}
+}
+
+fn native_surface_title_changed(userdata voidptr, title string) {
+	state := state_from_userdata(userdata) or { return }
+	if state.closed || state.controller == unsafe { nil } || state.controller.focused != state {
+		return
+	}
+	value := state.controller.title_override or { title }
+	macos.set_view_title(state.view, if state.actions.bell
+		&& standalone_runtime().app.config.bell_features.title() {
+		'🔔 ${value}'
+	} else {
+		value
+	})
+}
+
+fn native_tab_title_changed(userdata voidptr, title ?string) {
+	mut state := state_from_userdata(userdata) or { return }
+	if state.closed || state.controller == unsafe { nil } { return }
+	state.controller.title_override = title
+	native_surface_title_changed(userdata, state.actions.title)
 }

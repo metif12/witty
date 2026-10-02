@@ -17,7 +17,9 @@ fn C.witty_action_repeat_forever(animation voidptr)
 
 pub struct ActionCallbacks {
 pub:
-	binding fn (voidptr, string) bool = unsafe { nil }
+	binding   fn (voidptr, string) bool = unsafe { nil }
+	title     fn (voidptr, string)      = unsafe { nil }
+	tab_title fn (voidptr, ?string)     = unsafe { nil }
 }
 
 pub enum SearchCorner {
@@ -30,6 +32,8 @@ pub enum SearchCorner {
 @[heap]
 pub struct NativeActionSurface {
 pub mut:
+	terminal_title           ?string
+	pwd                      ?string
 	uuid                     string
 	title                    string
 	notification_identifiers []string
@@ -55,6 +59,9 @@ pub mut:
 	progress                 ?u8
 	progress_active          bool
 mut:
+	title_timer      ObjId
+	title_fallback   ObjId
+	pending_title    string
 	progress_view    ObjId
 	owner            ObjId
 	overlay          ObjId
@@ -99,6 +106,7 @@ fn action_owner(surface &NativeActionSurface) ObjId {
 		cls = C.macos_objc_allocate_class_pair(get_class('NSObject'), cstr('WittyActionOwner'), 0)
 		add_ptr_ivar(cls, 'state')
 		register_action_notification_methods(cls)
+		register_action_title_methods(cls)
 		add_method(cls, 'controlTextDidChange:', voidptr(action_search_edit), 'v@:@')
 		add_method(cls, 'control:textView:doCommandBySelector:', voidptr(action_search_command),
 			'B@:@@:')
@@ -148,6 +156,8 @@ pub fn new_action_surface(view voidptr, userdata voidptr, callbacks ActionCallba
 		callbacks: callbacks
 	}
 	state.owner = action_owner(state)
+	state.title_fallback = C.witty_action_timer(0.5, state.owner, sel('titleFallback:'), nil_obj(),
+		false)
 	mut cls := get_class('WittyActionOverlay')
 	if is_nil(cls) {
 		cls = C.macos_objc_allocate_class_pair(get_class('NSView'), cstr('WittyActionOverlay'), 0)
@@ -199,7 +209,8 @@ pub fn (mut state NativeActionSurface) deinit() {
 	if state.closed { return }
 	state.closed = true
 	state.remove_notifications()
-	for timer in [state.search_timer, state.progress_timer, state.pulse_timer] {
+	for timer in [state.search_timer, state.progress_timer, state.pulse_timer, state.title_timer,
+		state.title_fallback] {
 		if !is_nil(timer) { msg_void(timer, 'invalidate') }
 	}
 	g_secure_scopes.delete(u64(state.view))
