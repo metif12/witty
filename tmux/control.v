@@ -9,7 +9,8 @@ module tmux
 // here but this is not meant to be a comprehensive source of protocol
 // documentation.
 
-import regex
+import oniguruma
+import log
 
 // ============================================================
 // Notification - possible notification types from tmux control mode
@@ -251,19 +252,7 @@ pub fn (mut self ControlParser) put(byte u8) !ControlParserPutValue {
 		// complete notification we need to parse.
 		.notification {
 			if byte == `\n` {
-				// We have a complete notification, parse it.
-				notification := self.parse_notification() or {
-					// If parsing failed, then we do not mark the state
-					// as broken because we may be able to continue parsing
-					// other types of notifications.
-					//
-					// In the future we may want to emit a notification
-					// here about unknown or unsupported notifications.
-					return ControlParserPutValue{}
-				}
-				return ControlParserPutValue{
-					notification: notification
-				}
+				return self.parse_notification()!
 			}
 		}
 
@@ -312,7 +301,7 @@ pub fn (mut self ControlParser) put(byte u8) !ControlParserPutValue {
 	return ControlParserPutValue{}
 }
 
-fn (mut self ControlParser) parse_notification() ?Notification {
+fn (mut self ControlParser) parse_notification() !ControlParserPutValue {
 	assert self.state == .notification
 
 	mut line := self.buffer.bytestr()
@@ -334,34 +323,54 @@ fn (mut self ControlParser) parse_notification() ?Notification {
 		// and want to accumulate the data.
 		self.state = .block
 		self.buffer = []
-		return none
+		return ControlParserPutValue{}
 	} else if cmd == '%output' {
 		// Parse: %output %<pane_id> <data>
-		mut re := regex.regex_opt(r'^%output %(\d+) (.+)$') or {
-			return none
+		mut options := oniguruma.Options{}
+		options.set_capture_group(true)
+		mut re := oniguruma.Regex.init(r'^%output %([0-9]+) (.+)$', options, oniguruma.Encoding.utf8(),
+			oniguruma.Syntax.default_(), none) or {
+			log.warn('regex init failed error=${err}')
+			return error('RegexError')
 		}
-		re.match_string(line)
-		if re.groups.len >= 4 {
-			pane_id := parse_usize(line[re.groups[0]..re.groups[1]]) or { panic(err) }
-			data := line[re.groups[2]..re.groups[3]]
+		defer { re.deinit() }
+		if region_ := re.search(line, oniguruma.Options{}) {
+			mut region := region_
+			defer { region.deinit() }
+			starts := region.starts()
+			ends := region.ends()
+			pane_id := parse_usize(line[starts[1]..ends[1]]) or { panic(err) }
+			data := line[starts[2]..ends[2]]
 
 			// Important: do not clear buffer here since data points to it.
 			self.state = .idle
-			return Notification(NotifOutput{ pane_id: pane_id, data: data })
+			return ControlParserPutValue{notification: Notification(NotifOutput{ pane_id: pane_id, data: data })}
+		} else {
+			log.warn('failed to match notification cmd=${cmd} line="${line}" err=${err}')
 		}
 	} else if cmd == '%session-changed' {
 		// Parse: %session-changed $<id> <name>
-		mut re := regex.regex_opt(r'^%session-changed [$](\d+) (.+)$') or {
-			return none
+		mut options := oniguruma.Options{}
+		options.set_capture_group(true)
+		mut re := oniguruma.Regex.init(r'^%session-changed \$([0-9]+) (.+)$', options, oniguruma.Encoding.utf8(),
+			oniguruma.Syntax.default_(), none) or {
+			log.warn('regex init failed error=${err}')
+			return error('RegexError')
 		}
-		re.match_string(line)
-		if re.groups.len >= 4 {
-			id := parse_usize(line[re.groups[0]..re.groups[1]]) or { panic(err) }
-			name := line[re.groups[2]..re.groups[3]]
+		defer { re.deinit() }
+		if region_ := re.search(line, oniguruma.Options{}) {
+			mut region := region_
+			defer { region.deinit() }
+			starts := region.starts()
+			ends := region.ends()
+			id := parse_usize(line[starts[1]..ends[1]]) or { panic(err) }
+			name := line[starts[2]..ends[2]]
 
 			// Important: do not clear buffer here since name points to it.
 			self.state = .idle
-			return Notification(NotifSessionChanged{ id: id, name: name })
+			return ControlParserPutValue{notification: Notification(NotifSessionChanged{ id: id, name: name })}
+		} else {
+			log.warn('failed to match notification cmd=${cmd} line="${line}" err=${err}')
 		}
 	} else if cmd == '%sessions-changed' {
 		if line != '%sessions-changed' {
@@ -369,104 +378,164 @@ fn (mut self ControlParser) parse_notification() ?Notification {
 		} else {
 			self.buffer = []
 			self.state = .idle
-			return Notification(NotifSessionsChanged{})
+			return ControlParserPutValue{notification: Notification(NotifSessionsChanged{})}
 		}
 	} else if cmd == '%layout-change' {
 		// Parse: %layout-change @<window_id> <layout> <visible_layout> <flags>
-		mut re := regex.regex_opt(r'^%layout-change @(\d+) (\S+) (\S+) (.*)$') or {
-			return none
+		mut options := oniguruma.Options{}
+		options.set_capture_group(true)
+		mut re := oniguruma.Regex.init(r'^%layout-change @([0-9]+) (.+) (.+) (.*)$', options, oniguruma.Encoding.utf8(),
+			oniguruma.Syntax.default_(), none) or {
+			log.warn('regex init failed error=${err}')
+			return error('RegexError')
 		}
-		re.match_string(line)
-		if re.groups.len >= 8 {
-			id := parse_usize(line[re.groups[0]..re.groups[1]]) or { panic(err) }
-			layout := line[re.groups[2]..re.groups[3]]
-			visible_layout := line[re.groups[4]..re.groups[5]]
-			raw_flags := line[re.groups[6]..re.groups[7]]
+		defer { re.deinit() }
+		if region_ := re.search(line, oniguruma.Options{}) {
+			mut region := region_
+			defer { region.deinit() }
+			starts := region.starts()
+			ends := region.ends()
+			id := parse_usize(line[starts[1]..ends[1]]) or { panic(err) }
+			layout := line[starts[2]..ends[2]]
+			visible_layout := line[starts[3]..ends[3]]
+			raw_flags := line[starts[4]..ends[4]]
 
 			// Important: do not clear buffer here since layout strings point to it.
 			self.state = .idle
-			return Notification(NotifLayoutChange{
+			return ControlParserPutValue{notification: Notification(NotifLayoutChange{
 				window_id: id
 				layout: layout
 				visible_layout: visible_layout
 				raw_flags: raw_flags
-			})
+			})}
+		} else {
+			log.warn('failed to match notification cmd=${cmd} line="${line}" err=${err}')
 		}
 	} else if cmd == '%window-add' {
 		// Parse: %window-add @<id>
-		mut re := regex.regex_opt(r'^%window-add @(\d+)$') or {
-			return none
+		mut options := oniguruma.Options{}
+		options.set_capture_group(true)
+		mut re := oniguruma.Regex.init(r'^%window-add @([0-9]+)$', options, oniguruma.Encoding.utf8(),
+			oniguruma.Syntax.default_(), none) or {
+			log.warn('regex init failed error=${err}')
+			return error('RegexError')
 		}
-		re.match_string(line)
-		if re.groups.len >= 2 {
-			id := parse_usize(line[re.groups[0]..re.groups[1]]) or { panic(err) }
+		defer { re.deinit() }
+		if region_ := re.search(line, oniguruma.Options{}) {
+			mut region := region_
+			defer { region.deinit() }
+			starts := region.starts()
+			ends := region.ends()
+			id := parse_usize(line[starts[1]..ends[1]]) or { panic(err) }
 
 			self.buffer = []
 			self.state = .idle
-			return Notification(NotifWindowAdd{ id: id })
+			return ControlParserPutValue{notification: Notification(NotifWindowAdd{ id: id })}
+		} else {
+			log.warn('failed to match notification cmd=${cmd} line="${line}" err=${err}')
 		}
 	} else if cmd == '%window-renamed' {
 		// Parse: %window-renamed @<id> <name>
-		mut re := regex.regex_opt(r'^%window-renamed @(\d+) (.+)$') or {
-			return none
+		mut options := oniguruma.Options{}
+		options.set_capture_group(true)
+		mut re := oniguruma.Regex.init(r'^%window-renamed @([0-9]+) (.+)$', options, oniguruma.Encoding.utf8(),
+			oniguruma.Syntax.default_(), none) or {
+			log.warn('regex init failed error=${err}')
+			return error('RegexError')
 		}
-		re.match_string(line)
-		if re.groups.len >= 4 {
-			id := parse_usize(line[re.groups[0]..re.groups[1]]) or { panic(err) }
-			name := line[re.groups[2]..re.groups[3]]
+		defer { re.deinit() }
+		if region_ := re.search(line, oniguruma.Options{}) {
+			mut region := region_
+			defer { region.deinit() }
+			starts := region.starts()
+			ends := region.ends()
+			id := parse_usize(line[starts[1]..ends[1]]) or { panic(err) }
+			name := line[starts[2]..ends[2]]
 
 			// Important: do not clear buffer here since name points to it.
 			self.state = .idle
-			return Notification(NotifWindowRenamed{ id: id, name: name })
+			return ControlParserPutValue{notification: Notification(NotifWindowRenamed{ id: id, name: name })}
+		} else {
+			log.warn('failed to match notification cmd=${cmd} line="${line}" err=${err}')
 		}
 	} else if cmd == '%window-pane-changed' {
 		// Parse: %window-pane-changed @<window_id> %<pane_id>
-		mut re := regex.regex_opt(r'^%window-pane-changed @(\d+) %(\d+)$') or {
-			return none
+		mut options := oniguruma.Options{}
+		options.set_capture_group(true)
+		mut re := oniguruma.Regex.init(r'^%window-pane-changed @([0-9]+) %([0-9]+)$', options, oniguruma.Encoding.utf8(),
+			oniguruma.Syntax.default_(), none) or {
+			log.warn('regex init failed error=${err}')
+			return error('RegexError')
 		}
-		re.match_string(line)
-		if re.groups.len >= 4 {
-			window_id := parse_usize(line[re.groups[0]..re.groups[1]]) or { panic(err) }
-			pane_id := parse_usize(line[re.groups[2]..re.groups[3]]) or { panic(err) }
+		defer { re.deinit() }
+		if region_ := re.search(line, oniguruma.Options{}) {
+			mut region := region_
+			defer { region.deinit() }
+			starts := region.starts()
+			ends := region.ends()
+			window_id := parse_usize(line[starts[1]..ends[1]]) or { panic(err) }
+			pane_id := parse_usize(line[starts[2]..ends[2]]) or { panic(err) }
 
 			self.buffer = []
 			self.state = .idle
-			return Notification(NotifWindowPaneChanged{
+			return ControlParserPutValue{notification: Notification(NotifWindowPaneChanged{
 				window_id: window_id
 				pane_id: pane_id
-			})
+			})}
+		} else {
+			log.warn('failed to match notification cmd=${cmd} line="${line}" err=${err}')
 		}
 	} else if cmd == '%client-detached' {
 		// Parse: %client-detached <client>
-		mut re := regex.regex_opt(r'^%client-detached (.+)$') or {
-			return none
+		mut options := oniguruma.Options{}
+		options.set_capture_group(true)
+		mut re := oniguruma.Regex.init(r'^%client-detached (.+)$', options, oniguruma.Encoding.utf8(),
+			oniguruma.Syntax.default_(), none) or {
+			log.warn('regex init failed error=${err}')
+			return error('RegexError')
 		}
-		re.match_string(line)
-		if re.groups.len >= 2 {
-			client := line[re.groups[0]..re.groups[1]]
+		defer { re.deinit() }
+		if region_ := re.search(line, oniguruma.Options{}) {
+			mut region := region_
+			defer { region.deinit() }
+			starts := region.starts()
+			ends := region.ends()
+			client := line[starts[1]..ends[1]]
 
 			// Important: do not clear buffer here since client points to it.
 			self.state = .idle
-			return Notification(NotifClientDetached{ client: client })
+			return ControlParserPutValue{notification: Notification(NotifClientDetached{ client: client })}
+		} else {
+			log.warn('failed to match notification cmd=${cmd} line="${line}" err=${err}')
 		}
 	} else if cmd == '%client-session-changed' {
 		// Parse: %client-session-changed <client> $<session_id> <name>
-		mut re := regex.regex_opt(r'^%client-session-changed (.+) [$](\d+) (.+)$') or {
-			return none
+		mut options := oniguruma.Options{}
+		options.set_capture_group(true)
+		mut re := oniguruma.Regex.init(r'^%client-session-changed (.+) \$([0-9]+) (.+)$', options, oniguruma.Encoding.utf8(),
+			oniguruma.Syntax.default_(), none) or {
+			log.warn('regex init failed error=${err}')
+			return error('RegexError')
 		}
-		re.match_string(line)
-		if re.groups.len >= 6 {
-			client := line[re.groups[0]..re.groups[1]]
-			session_id := parse_usize(line[re.groups[2]..re.groups[3]]) or { panic(err) }
-			name := line[re.groups[4]..re.groups[5]]
+		defer { re.deinit() }
+		if region_ := re.search(line, oniguruma.Options{}) {
+			mut region := region_
+			defer { region.deinit() }
+			starts := region.starts()
+			ends := region.ends()
+			client := line[starts[1]..ends[1]]
+			session_id := parse_usize(line[starts[2]..ends[2]]) or { panic(err) }
+			name := line[starts[3]..ends[3]]
 
 			// Important: do not clear buffer here since client/name point to it.
 			self.state = .idle
-			return Notification(NotifClientSessionChanged{
+			return ControlParserPutValue{notification: Notification(NotifClientSessionChanged{
 				client: client
 				session_id: session_id
 				name: name
-			})
+			})}
+		} else {
+			log.warn('failed to match notification cmd=${cmd} line="${line}" err=${err}')
 		}
 	}
 
@@ -474,7 +543,7 @@ fn (mut self ControlParser) parse_notification() ?Notification {
 	self.buffer = []
 	self.state = .idle
 
-	return none
+	return ControlParserPutValue{}
 }
 
 // Mark the tmux state as broken.

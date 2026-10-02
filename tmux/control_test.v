@@ -315,3 +315,20 @@ fn test_tmux_buffer_limit_returns_error_once() {
 	}
 	assert after.notification == none
 }
+
+fn test_tmux_layout_change_preserves_oniguruma_greedy_captures() {
+	mut parser := ControlParser{}
+	defer { parser.deinit() }
+	command := feed_string(mut parser, '%layout-change @1 a b c d\n') or { panic('expected layout notification') }
+	assert command is NotifLayoutChange
+	change := command as NotifLayoutChange
+	assert change.window_id == 1
+	assert change.layout == 'a b'
+	assert change.visible_layout == 'c'
+	assert change.raw_flags == 'd'
+	// Empty fields fail .+, and a malformed notification is discarded before
+	// the next valid line, matching the source search-failure path.
+	assert feed_string(mut parser, '%layout-change @1  b c\n') == none
+	next := feed_string(mut parser, '%window-add @2\n') or { panic('expected next notification') }
+	assert next is NotifWindowAdd
+}
