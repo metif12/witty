@@ -1,5 +1,6 @@
 module main
 
+import os
 import apprt
 import cli
 import configpkg
@@ -98,7 +99,8 @@ fn create_surface(view voidptr, inherited apprt.SurfaceOptions) ?&TermState {
 	runtime.states << state
 
 	scale := macos.view_backing_scale(view)
-	apprt.ghostty_surface_set_size(mut state.surface, u32(macos.view_width(view) * scale), u32(macos.view_height(view) * scale))
+	apprt.ghostty_surface_set_size(mut state.surface, u32(macos.view_width(view) * scale),
+		u32(macos.view_height(view) * scale))
 	apprt.ghostty_surface_set_focus(mut state.surface, true)
 	return state
 }
@@ -381,14 +383,15 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 		}
 		else {}
 	}
+
 	return false
 }
 
 fn main() {
 	mut global := global_state.get_state_mut()
 	global.init() or {
-		eprintln('invalid CLI invocation: ${err}')
-		return
+		eprintln(startup_error_message(err))
+		exit(1)
 	}
 	defer {
 		global.deinit()
@@ -397,7 +400,7 @@ fn main() {
 
 	mut config := configpkg.Config.load_args(global.cli_args) or {
 		eprintln('error loading config: ${err}')
-		return
+		exit(1)
 	}
 	defer {
 		config.deinit()
@@ -432,7 +435,7 @@ fn main() {
 		close_surface_cb:             runtime_close_surface
 	}, &config) or {
 		eprintln('application initialization failed')
-		return
+		exit(1)
 	}
 	apprt.ghostty_app_set_focus(mut runtime.app, macos.app_is_active())
 
@@ -602,7 +605,9 @@ fn on_mouse(userdata voidptr, event_type int, x f64, y f64, modflags u64, button
 		mouse_left_up {
 			apprt.ghostty_surface_mouse_button(mut state.surface, .release, .left, mods)
 		}
-		mouse_left_dragged { false }
+		mouse_left_dragged {
+			false
+		}
 		mouse_right_down {
 			apprt.ghostty_surface_mouse_button(mut state.surface, .press, .right, mods)
 		}
@@ -610,12 +615,16 @@ fn on_mouse(userdata voidptr, event_type int, x f64, y f64, modflags u64, button
 			apprt.ghostty_surface_mouse_button(mut state.surface, .release, .right, mods)
 		}
 		5 {
-			apprt.ghostty_surface_mouse_button(mut state.surface, .press, mouse_button_from_number(button_number), mods)
+			apprt.ghostty_surface_mouse_button(mut state.surface, .press,
+				mouse_button_from_number(button_number), mods)
 		}
 		6 {
-			apprt.ghostty_surface_mouse_button(mut state.surface, .release, mouse_button_from_number(button_number), mods)
+			apprt.ghostty_surface_mouse_button(mut state.surface, .release,
+				mouse_button_from_number(button_number), mods)
 		}
-		else { false }
+		else {
+			false
+		}
 	}
 }
 

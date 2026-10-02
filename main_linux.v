@@ -4,7 +4,6 @@ module main
 // after global state and CLI actions (handled elsewhere), it creates the
 // core App, initializes the apprt runtime App with it, and runs the GUI
 // event loop. On Linux the runtime is GTK.
-
 import core
 import apprt.gtk
 import global_state
@@ -12,8 +11,8 @@ import global_state
 fn main() {
 	mut state := global_state.get_state_mut()
 	state.init() or {
-		eprintln('invalid CLI invocation: ${err}')
-		return
+		eprintln(startup_error_message(err))
+		exit(1)
 	}
 	defer { state.deinit() }
 	ghostty_cli_try_action()
@@ -21,7 +20,7 @@ fn main() {
 	// Create our app state.
 	mut app := core.App.create() or {
 		eprintln('failed to create app: ${err}')
-		return
+		exit(1)
 	}
 	defer {
 		app.destroy()
@@ -31,19 +30,18 @@ fn main() {
 	mut app_runtime := gtk.App{}
 	app_runtime.init(app) or {
 		eprintln('failed to initialize runtime app: ${err}')
-		return
+		exit(1)
 	}
 	defer {
 		app_runtime.terminate()
 	}
 
-	// Ghostty starts the quit timer here if the apprt exposes it
-	// (`@hasDecl(apprt.App, "startQuitTimer")`). The GTK App adapter does
-	// not expose it, so like the comptime check being false, we skip it.
+	// The reference GTK App adapter has no startQuitTimer declaration;
+	// main_ghostty.zig's @hasDecl check is false for this runtime.
 
 	// Run the GUI event loop.
 	app_runtime.run() or {
 		eprintln('runtime app failed: ${err}')
-		return
+		exit(1)
 	}
 }
