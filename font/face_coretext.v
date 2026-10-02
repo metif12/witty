@@ -192,55 +192,53 @@ pub fn CoreTextFace.init_font(ct_font voidptr, opts FaceOptions) !CoreTextFace {
 	result.quirks_disable_default_font_features = quirks.disable_default_font_features(&result)
 
 	// In debug mode, output the available variation axes when they exist.
-	$if macos || ios {
-		$if debug {
-			native_font := unsafe { &macos.CTFont(ct_font) }
-			if axes_ptr := native_font.copy_attribute(.variation_axes) {
-				axes := unsafe { &macos.CFArray(axes_ptr) }
-				defer { axes.release() }
-				mut name_buf := []u8{len: 1024}
-				font_name := result.name(mut name_buf) or {
-					result.deinit()
-					return err
+	$if (macos || ios) && debug {
+		native_font := unsafe { &macos.CTFont(ct_font) }
+		if axes_ptr := native_font.copy_attribute(.variation_axes) {
+			axes := unsafe { &macos.CFArray(axes_ptr) }
+			defer { axes.release() }
+			mut name_buf := []u8{len: 1024}
+			font_name := result.name(mut name_buf) or {
+				result.deinit()
+				return err
+			}
+			log.debug('variation axes font=${font_name}')
+			for i in 0 .. axes.get_count() {
+				axis_ptr := axes.get_value_at_index(i)
+				assert !isnil(axis_ptr)
+				axis := unsafe { &macos.CFDictionary(axis_ptr) }
+				name_ptr := axis.get_value(macos.CTFontVariationAxisKey.name.key())
+				identifier_ptr := axis.get_value(macos.CTFontVariationAxisKey.identifier.key())
+				minimum_ptr := axis.get_value(macos.CTFontVariationAxisKey.minimum_value.key())
+				maximum_ptr := axis.get_value(macos.CTFontVariationAxisKey.maximum_value.key())
+				default_ptr := axis.get_value(macos.CTFontVariationAxisKey.default_value.key())
+				assert !isnil(name_ptr)
+				assert !isnil(identifier_ptr)
+				assert !isnil(minimum_ptr)
+				assert !isnil(maximum_ptr)
+				assert !isnil(default_ptr)
+				name_string := unsafe { &macos.CFString(name_ptr) }
+				identifier_number := unsafe { &macos.CFNumber(identifier_ptr) }
+				minimum_number := unsafe { &macos.CFNumber(minimum_ptr) }
+				maximum_number := unsafe { &macos.CFNumber(maximum_ptr) }
+				default_number := unsafe { &macos.CFNumber(default_ptr) }
+				axis_name := if name_cstr := name_string.cstring(mut name_buf, .utf8) {
+					unsafe { cstring_to_vstring(name_cstr) }
+				} else {
+					''
 				}
-				log.debug('variation axes font=${font_name}')
-				for i in 0 .. axes.get_count() {
-					axis_ptr := axes.get_value_at_index(i)
-					assert !isnil(axis_ptr)
-					axis := unsafe { &macos.CFDictionary(axis_ptr) }
-					name_ptr := axis.get_value(macos.CTFontVariationAxisKey.name.key())
-					identifier_ptr := axis.get_value(macos.CTFontVariationAxisKey.identifier.key())
-					minimum_ptr := axis.get_value(macos.CTFontVariationAxisKey.minimum_value.key())
-					maximum_ptr := axis.get_value(macos.CTFontVariationAxisKey.maximum_value.key())
-					default_ptr := axis.get_value(macos.CTFontVariationAxisKey.default_value.key())
-					assert !isnil(name_ptr)
-					assert !isnil(identifier_ptr)
-					assert !isnil(minimum_ptr)
-					assert !isnil(maximum_ptr)
-					assert !isnil(default_ptr)
-					name_string := unsafe { &macos.CFString(name_ptr) }
-					identifier_number := unsafe { &macos.CFNumber(identifier_ptr) }
-					minimum_number := unsafe { &macos.CFNumber(minimum_ptr) }
-					maximum_number := unsafe { &macos.CFNumber(maximum_ptr) }
-					default_number := unsafe { &macos.CFNumber(default_ptr) }
-					axis_name := if name_cstr := name_string.cstring(mut name_buf, .utf8) {
-						unsafe { cstring_to_vstring(name_cstr) }
-					} else {
-						''
-					}
-					mut identifier := i32(0)
-					mut minimum := f64(0)
-					mut maximum := f64(0)
-					mut default_value := f64(0)
-					identifier_number.get_value(.int_type, voidptr(&identifier))
-					minimum_number.get_value(.double_, voidptr(&minimum))
-					maximum_number.get_value(.double_, voidptr(&maximum))
-					default_number.get_value(.double_, voidptr(&default_value))
-					id := VariationId{
-						value: u32(identifier)
-					}
-					log.debug('variation axis: name=${axis_name} id=${id.str()} min=${minimum} max=${maximum} def=${default_value}')
+				mut identifier := i32(0)
+				mut minimum := f64(0)
+				mut maximum := f64(0)
+				mut default_value := f64(0)
+				identifier_number.get_value(.int_type, voidptr(&identifier))
+				minimum_number.get_value(.double_, voidptr(&minimum))
+				maximum_number.get_value(.double_, voidptr(&maximum))
+				default_number.get_value(.double_, voidptr(&default_value))
+				id := VariationId{
+					value: u32(identifier)
 				}
+				log.debug('variation axis: name=${axis_name} id=${id.str()} min=${minimum} max=${maximum} def=${default_value}')
 			}
 		}
 	}
@@ -258,8 +256,7 @@ pub fn (mut self CoreTextFace) deinit() {
 		c.deinit()
 	}
 	self.color = none
-	// ColorState holds no owned CoreText data in this port (its SVG data
-	// pointer is always null), so there's nothing to release there.
+	// ColorState owns cloned SVG table bytes; V manages their lifetime.
 }
 
 // Return a new face that is the same as this but has a transformation
