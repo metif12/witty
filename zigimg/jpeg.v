@@ -1,5 +1,7 @@
 module zigimg
 
+import buildcfg
+
 // Locked zigimg/src/formats/jpeg.zig. GC owns the tables/frame allocations;
 // the parser, segment dispatch, scan algorithms, and codec registry stay V.
 @[heap]
@@ -73,6 +75,11 @@ pub fn (mut jpeg JPEG) read(mut stream ReadStream, mut pixels_opt JpegPixels) !&
 	if marker != 0xffd8 { return error('InvalidData') }
 	for marker != 0xffd9 {
 		marker = jpeg_u16(mut stream)!
+		// The source converts this u16 to its exhaustive Markers enum before
+		// dispatch. Unknown enum values trap in checked builds.
+		if buildcfg.runtime_safety && !jpeg_marker_defined(marker) {
+			panic('invalid JPEG marker enum value')
+		}
 		match marker {
 			0xffc0, 0xffc2 {
 				if jpeg.frame != none { return error('Unsupported') }
@@ -106,6 +113,11 @@ pub fn (mut jpeg JPEG) read(mut stream ReadStream, mut pixels_opt JpegPixels) !&
 	pixels_opt.value = pixels
 	succeeded = true
 	return frame
+}
+
+fn jpeg_marker_defined(marker u16) bool {
+	return (marker >= 0xffc0 && marker <= 0xffef && marker != 0xffc8)
+		|| marker == 0xfff0 || marker == 0xfffe
 }
 
 pub fn JPEG.format_detect(mut stream ReadStream) !bool { return jpeg_u16_peek(mut stream)! == 0xffd8 }
