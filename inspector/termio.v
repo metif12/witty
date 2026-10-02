@@ -1,6 +1,5 @@
 module inspector
 
-import ascii
 import cimgui
 import osc
 import terminal
@@ -59,6 +58,7 @@ mut:
 	current_seq             usize = 1
 	filter_exclude          [11]bool
 	filter_text             string
+	filter_native           cimgui.TextFilter
 	selected_event_seq      ?u32
 	need_scroll_to_selected bool
 	is_keyboard_selection   bool
@@ -69,6 +69,7 @@ pub fn VTStream.init() VTStream {
 		events:        []VTEvent{cap: 2}
 		parser_stream: terminal.Stream.init_alloc[VTHandler](voidptr(1), VTHandler{})
 	}
+	result.filter_native = cimgui.TextFilter.create('')
 	result.filter_exclude[int(terminal.ParserActionType.print_action)] = true
 	return result
 }
@@ -76,6 +77,7 @@ pub fn VTStream.init() VTStream {
 pub fn (mut self VTStream) deinit() {
 	self.clear()
 	self.parser_stream.deinit()
+	self.filter_native.destroy()
 }
 
 // record_pty_read advances the parallel parser across one PTY read. Event
@@ -158,14 +160,15 @@ pub fn (mut self VTStream) vt_raw(action terminal.ParserAction, term &terminal.T
 		cursor.hyperlink_state = hyperlink.dupe()
 	}
 	mut event := VTEvent{
-		seq: seq
-		kind: vt_kind(action.tag())
-		raw_description: encode_vt_action(action)
-		cursor: cursor
+		seq:              seq
+		kind:             vt_kind(action.tag())
+		raw_description:  encode_vt_action(action)
+		cursor:           cursor
 		scrolling_region: term.scrolling_region
-		metadata: vt_action_metadata(action)
+		metadata:         vt_action_metadata(action)
 	}
-	if !event.pass_filter(self.filter_text) {
+	self.filter_native.set(self.filter_text)
+	if !event.pass_native_filter(self.filter_native) {
 		event.deinit()
 		return true
 	}
@@ -253,77 +256,87 @@ fn encode_esc_action(action terminal.ESCAction) string {
 
 fn vt_action_metadata(action terminal.ParserAction) map[string]string {
 	mut result := map[string]string{}
-	if action !is osc.Command {
-		return result
-	}
-	cmd := action as osc.Command
-	match cmd {
-		osc.ChangeWindowTitle, osc.ChangeWindowIcon, osc.ReportPwd, osc.MouseShape,
-		osc.ConEmuShowMessageBox, osc.ConEmuGuiMacro, osc.ConEmuRunProcess,
-		osc.ConEmuOutputEnvironmentVariable, osc.ConEmuComment {
-			result['data'] = cmd.value.clone()
+	if action is osc.Command {
+		cmd := action as osc.Command
+		$for variant in osc.Command.variants {
+			if cmd is variant { encode_metadata(mut result, cmd) }
 		}
-		osc.SemanticPrompt {
-			result['action'] = cmd.action.str()
-			result['options_unvalidated'] = cmd.options_unvalidated.clone()
-		}
-		osc.ClipboardContents {
-			result['kind'] = cmd.kind.str()
-			result['data'] = cmd.data.clone()
-		}
-		osc.ColorOperationCommand {
-			result['op'] = cmd.op.str()
-			result['requests'] = cmd.requests.len.str()
-			result['terminator'] = cmd.terminator.str()
-		}
-		osc.KittyColorOSC {
-			result['list'] = cmd.list.len.str()
-			result['terminator'] = cmd.terminator.str()
-		}
-		osc.DesktopNotification {
-			result['title'] = cmd.title.clone()
-			result['body'] = cmd.body.clone()
-		}
-		osc.HyperlinkStart {
-			result['id'] = cmd.id or { '(unset)' }
-			result['uri'] = cmd.uri.clone()
-		}
-		osc.ConEmuSleep {
-			result['duration_ms'] = cmd.duration_ms.str()
-		}
-		osc.ConEmuChangeTabTitle {
-			result['data'] = match cmd.title {
-				osc.ConEmuTabTitleReset { 'reset' }
-				string { 'value=${cmd.title}' }
-			}
-		}
-		osc.ProgressReport {
-			result['state'] = cmd.state.str()
-			result['progress'] = if progress := cmd.progress { progress.str() } else { '(unset)' }
-		}
-		osc.ConEmuXtermEmulation {
-			result['keyboard'] = optional_bool_string(cmd.keyboard)
-			result['output'] = optional_bool_string(cmd.output)
-		}
-		osc.KittyTextSizing {
-			result['scale'] = cmd.scale.str()
-			result['width'] = cmd.width.str()
-			result['numerator'] = cmd.numerator.str()
-			result['denominator'] = cmd.denominator.str()
-			result['valign'] = cmd.valign.str()
-			result['halign'] = cmd.halign.str()
-			result['text'] = cmd.text.clone()
-		}
-		osc.InvalidCommand, osc.HyperlinkEnd, osc.ConEmuWaitInput {}
 	}
 	return result
 }
 
-fn optional_bool_string(value ?bool) string {
-	if unwrapped := value {
-		return unwrapped.str()
+// The V sum type wraps Zig's string/void/union payloads in named structs.
+// Unwrap those representations before translating the source reflection.
+fn encode_metadata[T](mut metadata map[string]string, value T) {
+	$if T is string {
+		metadata['data'] = value.clone()
+	} $else $if T is osc.ConEmuChangeTabTitle {
+		metadata['data'] = match value.title {
+			osc.ConEmuTabTitleReset { 'reset' }
+			string { 'value=${value.title}' }
+		}
+	} $else $if T is $struct {
+		$for field in T.fields {
+			key := if field.name == 'value' { 'data' } else { field.name }
+			$if field.typ is $option {
+				$if field.typ is ?bool {
+					encode_metadata_optional_bool(mut metadata, key, ?bool(value.$(field.name)))
+				} $else $if field.typ is ?u8 {
+					encode_metadata_optional_u8(mut metadata, key, ?u8(value.$(field.name)))
+				} $else $if field.typ is ?string {
+					encode_metadata_optional_string(mut metadata, key, ?string(value.$(field.name)))
+				} $else {
+					$compile_error('unsupported OSC optional metadata type')
+				}
+			} $else {
+				encode_metadata_single(mut metadata, key, value.$(field.name))
+			}
+		}
+	} $else {
+		$compile_error('unsupported OSC metadata payload')
 	}
-	return '(unset)'
+}
+
+// Specializations avoid V 0.5.2 reusing one option temporary across generic
+// instantiations; dispatch still follows the reflected field's actual type.
+fn encode_metadata_optional_bool(mut metadata map[string]string, key string, value ?bool) {
+	if item := value {
+		metadata[key] = item.str()
+	} else {
+		metadata[key] = '(unset)'
+	}
+}
+
+fn encode_metadata_optional_u8(mut metadata map[string]string, key string, value ?u8) {
+	if item := value {
+		metadata[key] = item.str()
+	} else {
+		metadata[key] = '(unset)'
+	}
+}
+
+fn encode_metadata_optional_string(mut metadata map[string]string, key string, value ?string) {
+	if item := value {
+		metadata[key] = item.clone()
+	} else {
+		metadata[key] = '(unset)'
+	}
+}
+
+fn encode_metadata_single[T](mut metadata map[string]string, key string, value T) {
+	$if T is bool || T is $enum || T is $int {
+		metadata[key] = value.str()
+	} $else $if T is string {
+		metadata[key] = value.clone()
+	} $else $if T is []osc.ColorRequest {
+		metadata[key] = 'segmented_list.SegmentedList(terminal.osc.parsers.color.Request,2)'
+	} $else $if T is []osc.KittyColorRequest {
+		metadata[key] = 'array_list.Aligned(terminal.kitty.color.OSC.Request,null)'
+	} $else $if T is $struct {
+		metadata[key] = typeof(value).name
+	} $else {
+		panic('unsupported OSC metadata field ${key} type=${typeof(value).name}')
+	}
 }
 
 pub fn (self &VTEvent) pass_filter(filter string) bool {
@@ -334,6 +347,14 @@ pub fn (self &VTEvent) pass_filter(filter string) bool {
 		if imgui_text_filter_pass(filter, key) || imgui_text_filter_pass(filter, value) {
 			return true
 		}
+	}
+	return false
+}
+
+fn (self &VTEvent) pass_native_filter(filter cimgui.TextFilter) bool {
+	if filter.pass(self.raw_description) { return true }
+	for key, value in self.metadata {
+		if filter.pass(key) || filter.pass(value) { return true }
 	}
 	return false
 }
@@ -366,32 +387,11 @@ pub fn event_table(context cimgui.Context, events []VTEvent) {
 	}
 }
 
-// This mirrors ImGuiTextFilter.PassFilter: comma-separated positive terms are
-// alternatives, negative terms exclude, matching is ASCII case-insensitive,
-// and an all-negative filter has an implicit wildcard.
+// Reuse the pinned native ImGuiTextFilter parser rather than a V substitute.
 fn imgui_text_filter_pass(filter string, text string) bool {
-	if filter.len == 0 {
-		return true
-	}
-	text_lower := ascii.lower_string(text)
-	mut positive_count := 0
-	for raw_term in filter.split(',') {
-		term := raw_term.trim_space()
-		if term.len == 0 {
-			continue
-		}
-		if term[0] == `-` {
-			if text_lower.contains(ascii.lower_string(term[1..])) {
-				return false
-			}
-		} else {
-			positive_count++
-			if text_lower.contains(ascii.lower_string(term)) {
-				return true
-			}
-		}
-	}
-	return positive_count == 0
+	native := cimgui.TextFilter.create(filter)
+	defer { native.destroy() }
+	return native.pass(text)
 }
 
 pub fn (mut self VTStream) draw(context cimgui.Context, palette [256]terminal.RGB) {
@@ -419,7 +419,8 @@ pub fn (mut self VTStream) draw(context cimgui.Context, palette [256]terminal.RG
 }
 
 fn (mut self VTStream) draw_events(context cimgui.Context, palette [256]terminal.RGB) {
-	if !context.begin_table('table_vt_events', 3, cimgui.table_flags_borders_row_bg_sizing_fixed_fit) {
+	if !context.begin_table('table_vt_events', 3,
+		cimgui.table_flags_borders_row_bg_sizing_fixed_fit) {
 		return
 	}
 	defer {
@@ -511,7 +512,9 @@ fn (mut self VTStream) navigate(action VTKeyAction) {
 						self.selected_event_seq = u32(self.events[index + 1].seq)
 					}
 				}
-				.none_ { panic('unreachable') }
+				.none_ {
+					panic('unreachable')
+				}
 			}
 		}
 	} else {
@@ -574,7 +577,9 @@ fn (mut self VTStream) draw_filter(context cimgui.Context) {
 	}
 	context.separator()
 	context.text('Filter by string. Empty displays all, "abc" finds lines\ncontaining "abc", "abc,xyz" finds lines containing "abc"\nor "xyz", "-abc" excludes lines containing "abc".')
-	_, self.filter_text = context.input_text('##filter_text', self.filter_text)
+	self.filter_native.set(self.filter_text)
+	context.draw_text_filter(self.filter_native, '##filter_text')
+	self.filter_text = self.filter_native.get()
 	context.separator()
 	if context.button('Close') {
 		context.close_current_popup()

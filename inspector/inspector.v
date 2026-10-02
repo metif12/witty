@@ -75,30 +75,23 @@ pub fn (event &KeyEvent) label() string {
 
 // utf8_codepoints formats the event text exactly as the key detail widget.
 pub fn (event &KeyEvent) utf8_codepoints() string {
-	if !validate.utf8_string(event.event.utf8) {
-		return '(invalid utf-8)'
+	mut writer := FixedDiagnosticWriter{
+		data: []u8{len: 1024}
 	}
-	mut result := ''
-	for codepoint in event.event.utf8.runes() {
-		result += 'U+${u32(codepoint):X} '
+	if validate.utf8_string(event.event.utf8) {
+		for cp in event.event.utf8.runes() {
+			writer.write('U+${u32(cp):X} ') or { break }
+		}
+	} else {
+		writer.write('(invalid utf-8)') or {}
 	}
-	return result
+	writer.write('\x00') or {}
+	return writer.written_text()
 }
 
-// pty_text formats encoded PTY bytes exactly as the key detail widget: ESC is
-// named, printable ASCII is literal, and other bytes are hexadecimal.
+// PTY text uses the source stream's 256-byte diagnostic writer.
 pub fn (event &KeyEvent) pty_text() string {
-	mut result := ''
-	for byte in event.pty {
-		if byte == 0x1b {
-			result += 'ESC '
-		} else if byte > 0x20 && byte < 0x7f {
-			result += byte.ascii_str()
-		} else {
-			result += '0x${byte:X} '
-		}
-	}
-	return result
+	return event.pty_table_text()
 }
 
 // Inspector owns the inspection streams associated with one terminal surface.
@@ -106,12 +99,12 @@ pub struct Inspector {
 pub mut:
 	// This must remain the first field: renderer.RenderState treats its opaque
 	// inspector pointer as this cycle-breaking bridge prefix.
-	renderer_bridge renderer.InspectorOverlayBridge
-	key_events      []KeyEvent
-	mouse           InspectorMouse
-	terminal_info   TerminalInfo
-	vt_stream       VTStream
-	renderer        RendererInfo
+	renderer_bridge  renderer.InspectorOverlayBridge
+	key_events       []KeyEvent
+	mouse            InspectorMouse
+	terminal_info    TerminalInfo
+	vt_stream        VTStream
+	renderer         RendererInfo
 	show_demo_window bool = true
 }
 
@@ -504,14 +497,14 @@ fn (mut self Inspector) draw_key_stream(context cimgui.Context, open bool) {
 		if event.pty.len == 0 {
 			context.text_disabled('-')
 		} else {
-			context.text(event.pty_text())
+			context.text(event.pty_table_text())
 		}
 
 		context.table_set_column(5)
 		if event.binding.len == 0 {
 			context.text_disabled('-')
 		} else {
-			context.text(event.binding.map(it.tag().str()).join(', '))
+			context.text(event.binding_table_text())
 		}
 
 		row_max_y := context.cursor_screen_y()
@@ -666,12 +659,45 @@ fn rgba_color(value u32) cimgui.Color {
 }
 
 fn (event &KeyEvent) utf8_table_codepoints() string {
-	if !validate.utf8_string(event.event.utf8) {
-		return '?'
+	mut writer := FixedDiagnosticWriter{
+		data: []u8{len: 128}
 	}
-	mut result := ''
-	for codepoint in event.event.utf8.runes() {
-		result += 'U+${u32(codepoint):X} '
+	if validate.utf8_string(event.event.utf8) {
+		for cp in event.event.utf8.runes() {
+			writer.write('U+${u32(cp):X} ') or { break }
+		}
+	} else {
+		writer.write('?') or {}
 	}
-	return result
+	writer.write('\x00') or {}
+	return writer.written_text()
+}
+
+fn (event &KeyEvent) pty_table_text() string {
+	mut writer := FixedDiagnosticWriter{
+		data: []u8{len: 256}
+	}
+	for byte in event.pty {
+		if byte == 0x1b {
+			writer.write('ESC ') or { break }
+		} else if byte > 0x20 && byte < 0x7f {
+			writer.write(byte.ascii_str()) or { break }
+		} else {
+			writer.write('0x${byte:X} ') or { break }
+		}
+	}
+	writer.write('\x00') or {}
+	return writer.written_text()
+}
+
+fn (event &KeyEvent) binding_table_text() string {
+	mut writer := FixedDiagnosticWriter{
+		data: []u8{len: 256}
+	}
+	for index, action in event.binding {
+		if index > 0 { writer.write(', ') or { break } }
+		writer.write(action.tag().str()) or { break }
+	}
+	writer.write('\x00') or {}
+	return writer.written_text()
 }

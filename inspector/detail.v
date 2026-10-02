@@ -10,7 +10,9 @@ pub fn (event &KeyEvent) render(context cimgui.Context) {
 	if event.binding.len > 0 {
 		detail_row(context, 'Triggered Binding')
 		if context.begin_bindings_list('##bindings', usize(event.binding.len)) {
-			for action in event.binding { _ = context.selectable(action.tag().str(), false) }
+			for action in event.binding {
+				_ = context.selectable(action.tag().str(), false)
+			}
 			context.end_list_box()
 		}
 	}
@@ -53,22 +55,28 @@ fn detail_row(context cimgui.Context, label string) {
 struct FixedDiagnosticWriter {
 mut:
 	data []u8
-	pos int
+	pos  int
 }
 
 fn (mut writer FixedDiagnosticWriter) write(text string) ! {
 	// Zig fixedBufferStream.writeAll retains the prefix before NoSpaceLeft.
 	available := writer.data.len - writer.pos
 	count := if text.len < available { text.len } else { available }
-	for index in 0 .. count { writer.data[writer.pos + index] = text[index] }
+	for index in 0 .. count {
+		writer.data[writer.pos + index] = text[index]
+	}
 	writer.pos += count
 	if count != text.len { return error('NoSpaceLeft') }
 }
 
 fn (event &KeyEvent) render_utf8(context cimgui.Context) ! {
-	mut writer := FixedDiagnosticWriter{ data: []u8{len: 1024} }
+	mut writer := FixedDiagnosticWriter{
+		data: []u8{len: 1024}
+	}
 	if validate.utf8_string(event.event.utf8) {
-		for cp in event.event.utf8.runes() { writer.write('U+${u32(cp):X} ')! }
+		for cp in event.event.utf8.runes() {
+			writer.write('U+${u32(cp):X} ')!
+		}
 	} else {
 		writer.write('(invalid utf-8)')!
 	}
@@ -77,12 +85,29 @@ fn (event &KeyEvent) render_utf8(context cimgui.Context) ! {
 }
 
 fn (event &KeyEvent) render_pty(context cimgui.Context) ! {
-	mut writer := FixedDiagnosticWriter{ data: []u8{len: 1024} }
+	mut writer := FixedDiagnosticWriter{
+		data: []u8{len: 1024}
+	}
 	for byte in event.pty {
-		if byte == 0x1b { writer.write('ESC ')!; continue }
-		if byte > 0x20 && byte < 0x7f { writer.write(byte.ascii_str())!; continue }
+		if byte == 0x1b {
+			writer.write('ESC ')!
+			continue
+		}
+		if byte > 0x20 && byte < 0x7f {
+			writer.write(byte.ascii_str())!
+			continue
+		}
 		writer.write('0x${byte:X} ')!
 	}
 	writer.write('\x00')!
 	context.readonly_text('##pty', mut writer.data[..writer.pos])
+}
+
+fn (writer &FixedDiagnosticWriter) written_text() string {
+	end := if writer.pos > 0 && writer.data[writer.pos - 1] == 0 {
+		writer.pos - 1
+	} else {
+		writer.pos
+	}
+	return writer.data[..end].bytestr()
 }

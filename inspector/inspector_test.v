@@ -228,29 +228,29 @@ fn test_vt_event_encodings_match_pinned_ghostty() {
 	assert encode_vt_action(terminal.ParserAction(terminal.ParserExecute{ code: 0x07 })) == 'BEL (0x7)'
 	assert encode_vt_action(terminal.ParserAction(terminal.ParserExecute{ code: 0x19 })) == '? (0x19)'
 	assert encode_vt_action(terminal.ParserAction(terminal.CSIAction{
-			intermediates: [u8(`?`)]
-			params:        [u16(1), 4]
-			final_byte:    u8(`h`)
-		})) == '? 1;4 h'
+		intermediates: [u8(`?`)]
+		params:        [u16(1), 4]
+		final_byte:    u8(`h`)
+	})) == '? 1;4 h'
 	assert encode_vt_action(terminal.ParserAction(terminal.ESCAction{
-			intermediates: [u8(`(`)]
-			final_byte:    u8(`B`)
-		})) == '( B'
+		intermediates: [u8(`(`)]
+		final_byte:    u8(`B`)
+	})) == '( B'
 	osc_action := terminal.ParserAction(osc.Command(osc.HyperlinkStart{
-			uri: 'https://example.com'
-			id:  'link-id'
-		}))
+		uri: 'https://example.com'
+		id:  'link-id'
+	}))
 	assert encode_vt_action(osc_action) == 'hyperlink_start '
 	assert vt_action_metadata(osc_action) == {
 		'id':  'link-id'
 		'uri': 'https://example.com'
 	}
 	kitty_sizing := terminal.ParserAction(osc.Command(osc.KittyTextSizing{
-			scale:  2
-			width:  3
-			valign: .bottom
-			text:   'hello'
-		}))
+		scale:  2
+		width:  3
+		valign: .bottom
+		text:   'hello'
+	}))
 	assert vt_action_metadata(kitty_sizing) == {
 		'scale':       '2'
 		'width':       '3'
@@ -381,10 +381,10 @@ fn test_public_key_detail_renders_native_readonly_fields_and_bindings() {
 	context.begin_frame(1.0 / 60.0)
 	_ = context.begin_window('Key Detail')
 	mut event := KeyEvent.init(input.KeyEvent{
-		key: .key_a
-		utf8: 'é'
+		key:       .key_a
+		utf8:      'é'
 		composing: true
-		mods: input.Mods.init(true, true, true, true, false, false, input.SideInfo{})
+		mods:      input.Mods.init(true, true, true, true, false, false, input.SideInfo{})
 	})
 	event.binding = [input.ActionCopyToClipboard{}]
 	event.pty = [u8(0x1b), `a`, u8(0)]
@@ -394,4 +394,43 @@ fn test_public_key_detail_renders_native_readonly_fields_and_bindings() {
 	event.render(context)
 	context.end_window()
 	context.render_frame()
+}
+
+fn test_key_diagnostics_stop_at_source_fixed_buffer_capacity() {
+	mut event := KeyEvent.init(input.KeyEvent{ utf8: 'a'.repeat(100) })
+	event.pty = []u8{len: 300, init: `a`}
+	event.binding = []input.Action{len: 40, init: input.ActionCopyToClipboard{}}
+	assert event.utf8_table_codepoints().len == 128
+	assert event.utf8_table_codepoints() == 'U+61 '.repeat(25) + 'U+6'
+	assert event.pty_text() == 'a'.repeat(256)
+	assert event.binding_table_text().len == 256
+}
+
+fn test_native_filter_retains_imgui_blank_rules_and_input_capacity() {
+	assert !imgui_text_filter_pass('\nabc\n', 'abc')
+	assert imgui_text_filter_pass('\tabc\t', 'ABC')
+	assert !imgui_text_filter_pass('a'.repeat(256) + ',xyz', 'xyz')
+	assert imgui_text_filter_pass('abc,-abc', 'abc')
+	assert !imgui_text_filter_pass('-abc,abc', 'abc')
+}
+
+fn test_reflected_metadata_retains_source_container_type_names() {
+	color := terminal.ParserAction(osc.Command(osc.ColorOperationCommand{}))
+	metadata := vt_action_metadata(color)
+	assert metadata['requests'] == 'segmented_list.SegmentedList(terminal.osc.parsers.color.Request,2)'
+	kitty := terminal.ParserAction(osc.Command(osc.KittyColorOSC{}))
+	assert vt_action_metadata(kitty)['list'] == 'array_list.Aligned(terminal.kitty.color.OSC.Request,null)'
+	progress := terminal.ParserAction(osc.Command(osc.ProgressReport{
+		state:    .set
+		progress: u8(42)
+	}))
+	assert vt_action_metadata(progress)['progress'] == '42'
+	missing := terminal.ParserAction(osc.Command(osc.ProgressReport{}))
+	assert vt_action_metadata(missing)['progress'] == '(unset)'
+	bools := terminal.ParserAction(osc.Command(osc.ConEmuXtermEmulation{
+		keyboard: false
+		output:   true
+	}))
+	assert vt_action_metadata(bools)['keyboard'] == 'false'
+	assert vt_action_metadata(bools)['output'] == 'true'
 }
