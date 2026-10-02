@@ -50,6 +50,7 @@ pub fn build(repo_root string, options Options) ![]string {
 			objects << object
 		}
 		archive := archive_path(repo_root, library)
+		if os.exists(archive) { os.rm(archive)! }
 		mut args := ['rcs', archive]
 		args << objects
 		run('ar', args)!
