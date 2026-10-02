@@ -16,6 +16,8 @@ import macos
 struct TermState {
 mut:
 	view    voidptr
+	native_config macos.NativeWindowConfig
+	background_color ?u32
 	actions &macos.NativeActionSurface = unsafe { nil }
 	controller &TerminalController = unsafe { nil }
 	surface &apprt.Surface = unsafe { nil }
@@ -28,6 +30,7 @@ struct TerminalController {
 mut:
 	host &macos.NativeSplitHost = unsafe { nil }
 	focused &TermState = unsafe { nil }
+	force_opaque bool
 }
 
 struct StandaloneRuntime {
@@ -96,6 +99,7 @@ fn create_surface(view voidptr, inherited apprt.SurfaceOptions) ?&TermState {
 
 	mut state := &TermState{
 		view: view
+		native_config: native_window_config(&runtime.app.config)
 	}
 	macos.view_set_userdata(view, voidptr(state))
 	state.actions = macos.new_action_surface(view, voidptr(state), macos.ActionCallbacks{binding: native_binding_action})
@@ -113,6 +117,7 @@ fn create_surface(view voidptr, inherited apprt.SurfaceOptions) ?&TermState {
 	runtime.states << state
 	if macos.view_window(view) != unsafe { nil } {
 		state.controller = &TerminalController{host: macos.create_split_host(view), focused: state}
+		macos.apply_native_window_config(view, state.native_config, true, state.native_config.background, state.native_config.opacity, false)
 	}
 
 	scale := macos.view_backing_scale(view)
@@ -561,7 +566,7 @@ fn on_focus(userdata voidptr, focused bool) {
 	if !state.closed && state.surface != unsafe { nil } {
 		apprt.ghostty_surface_set_focus(mut state.surface, focused)
 		if state.actions != unsafe { nil } { state.actions.focus(focused) }
-		if focused && state.controller != unsafe { nil } { state.controller.focused = state }
+		if focused && state.controller != unsafe { nil } { state.controller.focused = state; sync_native_window(state) }
 	}
 }
 

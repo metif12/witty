@@ -1609,7 +1609,7 @@ pub fn create_window(w int, h int, title string) voidptr {
 	style := ns_window_style_titled | ns_window_style_closable | ns_window_style_miniaturizable | ns_window_style_resizable
 	base_title := display_title_for_input(title)
 
-	window := msg_id_rect_u64_u64_bool(alloc('NSWindow'), 'initWithContentRect:styleMask:backing:defer:', frame, style, ns_backing_store_buffered, false)
+	window := msg_id_rect_u64_u64_bool(msg_id(native_window_class(), 'alloc'), 'initWithContentRect:styleMask:backing:defer:', frame, style, ns_backing_store_buffered, false)
 	g_window = window
 	configure_window_common(window, base_title)
 
@@ -1995,7 +1995,7 @@ pub fn new_tab(w int, h int, title string) voidptr {
 
 	style := ns_window_style_titled | ns_window_style_closable | ns_window_style_miniaturizable | ns_window_style_resizable
 	base_title := display_title_for_input(title)
-	window := msg_id_rect_u64_u64_bool(alloc('NSWindow'), 'initWithContentRect:styleMask:backing:defer:', frame, style, ns_backing_store_buffered, false)
+	window := msg_id_rect_u64_u64_bool(msg_id(native_window_class(), 'alloc'), 'initWithContentRect:styleMask:backing:defer:', frame, style, ns_backing_store_buffered, false)
 	configure_window_common(window, base_title)
 
 	view := create_terminal_view(frame)

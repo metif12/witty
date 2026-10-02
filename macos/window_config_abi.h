@@ -1,0 +1,11 @@
+static inline void* witty_macos_color_rgba(double r, double g, double b, double a) {
+    return ((id (*)(id,SEL,double,double,double,double))objc_msgSend)((id)objc_getClass("NSColor"),sel_registerName("colorWithSRGBRed:green:blue:alpha:"),r,g,b,a);
+}
+static inline void* witty_macos_msg_id_obj_f64(void* obj, void* selector, void* value, double amount) { return ((id (*)(id,SEL,id,double))objc_msgSend)((id)obj,(SEL)selector,(id)value,amount); }
+static inline void witty_macos_msg_super_void_u64(void* obj, void* selector, unsigned long long value) {
+    struct objc_super super = {(id)obj,class_getSuperclass(object_getClass((id)obj))};
+    ((void (*)(struct objc_super*,SEL,unsigned long long))objc_msgSendSuper)(&super,(SEL)selector,value);
+}
+static inline void* witty_macos_array(void** objects, size_t count) { return ((id (*)(id,SEL,const id*,size_t))objc_msgSend)((id)objc_getClass("NSArray"),sel_registerName("arrayWithObjects:count:"),(const id*)objects,count); }
+static inline witty_macos_size witty_macos_text_size(void* obj) { return ((witty_macos_size (*)(id, SEL))objc_msgSend)((id)obj,sel_registerName("size")); }
+static inline void witty_macos_priority(void* obj, void* selector, float priority, unsigned long long axis) { ((void (*)(id,SEL,float,unsigned long long))objc_msgSend)((id)obj,(SEL)selector,priority,axis); }

@@ -1,0 +1,40 @@
+module macos
+
+import math
+
+// TerminalWindow.DerivedConfig and SurfaceView.DerivedConfig. Primitive values
+// keep this native projection independent of the core configuration module.
+pub struct NativeWindowConfig {
+pub:
+	title ?string
+	decorations bool = true
+	position_x ?i16
+	position_y ?i16
+	buttons_hidden bool
+	shadow bool = true
+	titlebar_style int
+	theme int
+	background u32
+	opacity f64 = 1
+	blur i16
+	step_resize bool
+	proxy_icon bool = true
+}
+pub fn native_color_luminance(color u32) f64 {
+	return (0.299 * f64((color >> 16) & 255) + 0.587 * f64((color >> 8) & 255) + 0.114 * f64(color & 255)) / 255
+}
+pub fn native_window_position(frame SplitBounds, visible SplitBounds, x i16, y i16) SplitBounds {
+	return SplitBounds{x: visible.x + x, y: visible.y + visible.height - y - frame.height, width: frame.width, height: frame.height}
+}
+pub fn native_window_transparent(config NativeWindowConfig, native_fullscreen bool, force_opaque bool) bool {
+	return !native_fullscreen && !force_opaque && (config.opacity < 1 || config.blur < 0)
+}
+
+pub fn restore_last_native_window_position(frame SplitBounds, visible SplitBounds, x f64, y f64) SplitBounds {
+	mut result := SplitBounds{x: x, y: y, width: frame.width, height: frame.height}
+	if x < visible.x || x > visible.x + visible.width || y < visible.y || y > visible.y + visible.height {
+		result.x = math.max(visible.x, math.min(visible.x + visible.width - frame.width, x))
+		result.y = math.max(visible.y, math.min(visible.y + visible.height - frame.height, y))
+	}
+	return result
+}

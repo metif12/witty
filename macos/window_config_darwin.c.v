@@ -1,0 +1,338 @@
+@[has_globals]
+module macos
+
+import math
+
+#insert "@VMODROOT/macos/window_config_abi.h"
+fn C.witty_macos_color_rgba(r f64, g f64, b f64, a f64) ObjId
+fn C.witty_macos_msg_id_obj_f64(obj ObjId, selector Sel, value ObjId, amount f64) ObjId
+fn C.witty_macos_msg_super_void_u64(obj ObjId, selector Sel, value u64)
+fn C.witty_macos_array(objects &voidptr, count usize) ObjId
+
+@[heap]
+struct NativeWindowData {
+mut:
+	config NativeWindowConfig
+	window ObjId
+	titlebar_color ObjId
+	light bool
+	effect_hidden bool
+	backdrop ObjId
+	drag_handle ObjId
+	title_label ObjId
+	new_tab_image_layer ObjId
+	backdrop_overlay ObjId
+}
+__global ( g_native_windows map[u64]&NativeWindowData )
+fn native_window_data(window ObjId) ?&NativeWindowData { return g_native_windows[u64(window)] }
+fn native_window_can_become_key(_self ObjId, _cmd Sel) bool { return true }
+fn native_window_update(self ObjId, cmd Sel) { msg_super_void(self, unsafe { C.sel_getName(cmd).vstring() }); update_native_titlebar(self) }
+fn C.sel_getName(selector Sel) &char
+fn native_window_add_accessory(self ObjId, _cmd Sel, controller ObjId) {
+	if data := native_window_data(self) {
+		if data.config.titlebar_style == 2 && is_tab_bar_accessory(controller) {
+			msg_void_u64(controller, 'setLayoutAttribute:', 2)
+			msg_void_u64(self, 'setTitleVisibility:', 1)
+			msg_void1(controller, 'setIdentifier:', nsstring('_ghosttyTabBar'))
+		}
+	}
+	msg_super_void1(self, 'addTitlebarAccessoryViewController:', controller)
+	if is_tab_bar_accessory(controller) { dispatch_main(push_native_tabs, self) }
+}
+fn native_window_remove_accessory(self ObjId, _cmd Sel, index u64) {
+	array := msg_id(self, 'titlebarAccessoryViewControllers')
+	controller := msg_id_u64(array, 'objectAtIndex:', index)
+	was_tabbar := is_tab_bar_accessory(controller)
+	C.witty_macos_msg_super_void_u64(self, sel('removeTitlebarAccessoryViewControllerAtIndex:'), index)
+	if was_tabbar { if data := native_window_data(self) { msg_void_bool(data.backdrop, 'setHidden:', true); msg_void_bool(data.drag_handle, 'setHidden:', true); msg_void_bool(data.title_label, 'setHidden:', false) } }
+}
+fn native_drag_down(self ObjId, _cmd Sel, event ObjId) {
+	if msg_u64(event, 'type') == 1 && msg_u64(event, 'clickCount') == 1 { msg_void1(msg_id(self, 'window'), 'performWindowDragWithEvent:', event); msg_void(msg_id(get_class('NSCursor'), 'closedHandCursor'), 'set') }
+	else { msg_super_void1(self, 'mouseDown:', event) }
+}
+fn native_drag_enter(self ObjId, _cmd Sel, event ObjId) { msg_super_void1(self, 'mouseEntered:', event); msg_void(msg_id(self, 'window'), 'disableCursorRects'); msg_void(msg_id(get_class('NSCursor'), 'openHandCursor'), 'set') }
+fn native_drag_exit(self ObjId, _cmd Sel, event ObjId) { msg_super_void1(self, 'mouseExited:', event); msg_void(msg_id(self, 'window'), 'enableCursorRects'); msg_void(msg_id(get_class('NSCursor'), 'arrowCursor'), 'set') }
+fn vibrant_filter(self ObjId, _cmd Sel) ObjId { return nsstring(if msg_u64(self, 'vtAppearance') == 0 { 'plusD' } else { 'plusL' }) }
+fn vibrant_appearance(self ObjId, _cmd Sel) u64 { return u64(C.macos_objc_get_ptr_ivar(self, cstr('vtType'))) }
+fn register_native_window_class() {
+	if !is_nil(get_class('VTTerminalWindow')) { return }
+	cls := C.macos_objc_allocate_class_pair(get_class('NSWindow'), cstr('VTTerminalWindow'), 0)
+	add_method(cls, 'close', voidptr(native_window_close), 'v@:')
+	add_method(cls, 'canBecomeKeyWindow', voidptr(native_window_can_become_key), 'B@:')
+	add_method(cls, 'canBecomeMainWindow', voidptr(native_window_can_become_key), 'B@:')
+	add_method(cls, 'addTitlebarAccessoryViewController:', voidptr(native_window_add_accessory), 'v@:@')
+	add_method(cls, 'removeTitlebarAccessoryViewControllerAtIndex:', voidptr(native_window_remove_accessory), 'v@:Q')
+	for selector in ['update', 'layoutIfNeeded', 'updateConstraintsIfNeeded'] { add_method(cls, selector, voidptr(native_window_update), 'v@:') }
+	C.macos_objc_register_class_pair(cls)
+	drag_cls := C.macos_objc_allocate_class_pair(get_class('NSView'), cstr('VTWindowDragView'), 0)
+	add_method(drag_cls, 'mouseDown:', voidptr(native_drag_down), 'v@:@')
+	add_method(drag_cls, 'mouseEntered:', voidptr(native_drag_enter), 'v@:@')
+	add_method(drag_cls, 'mouseExited:', voidptr(native_drag_exit), 'v@:@')
+	C.macos_objc_register_class_pair(drag_cls)
+	layer_cls := C.macos_objc_allocate_class_pair(get_class('CALayer'), cstr('VTVibrantLayer'), 0)
+	C.macos_class_add_ivar(layer_cls, cstr('vtType'), sizeof(voidptr), 3, cstr('^v'))
+	add_method(layer_cls, 'vtAppearance', voidptr(vibrant_appearance), 'Q@:')
+	add_method(layer_cls, 'compositingFilter', voidptr(vibrant_filter), '@@:')
+	C.macos_objc_register_class_pair(layer_cls)
+}
+fn native_window_class() ObjId { register_native_window_class(); return get_class('VTTerminalWindow') }
+fn native_color(color u32, alpha f64) ObjId { return C.witty_macos_color_rgba(f64((color >> 16) & 255) / 255, f64((color >> 8) & 255) / 255, f64(color & 255) / 255, alpha) }
+fn titlebar_container(window ObjId) ObjId {
+	content := msg_id(window, 'contentView')
+	root := msg_id(content, 'superview')
+	return first_descendant(root, 'NSTitlebarContainerView')
+}
+fn first_descendant(view ObjId, class_name string) ObjId {
+	if is_nil(view) { return nil_obj() }
+	if objc_utf8_string(msg_id(view, 'className')) == class_name { return view }
+	children := msg_id(view, 'subviews')
+	for i in 0 .. int(msg_u64(children, 'count')) { found := first_descendant(msg_id_u64(children, 'objectAtIndex:', u64(i)), class_name); if !is_nil(found) { return found } }
+	return nil_obj()
+}
+fn hide_descendants(view ObjId, class_name string) {
+	if is_nil(view) { return }
+	if objc_utf8_string(msg_id(view, 'className')) == class_name { msg_void_bool(view, 'setHidden:', true) }
+	children := msg_id(view, 'subviews')
+	for i in 0 .. int(msg_u64(children, 'count')) { hide_descendants(msg_id_u64(children, 'objectAtIndex:', u64(i)), class_name) }
+}
+fn constrain(view ObjId, anchor string, other ObjId, other_anchor string, constant f64) {
+	lhs := msg_id(view, anchor)
+	rhs := msg_id(other, other_anchor)
+	constraint := C.witty_macos_msg_id_obj_f64(lhs, sel('constraintEqualToAnchor:constant:'), rhs, constant)
+	msg_void_bool(constraint, 'setActive:', true)
+}
+fn push_native_tabs(context voidptr) {
+	window := ObjId(context)
+	mut data := native_window_data(window) or { return }
+	if data.config.titlebar_style != 2 || msg_u64(window, 'styleMask') & ns_window_style_titled == 0 { return }
+	controllers := msg_id(window, 'titlebarAccessoryViewControllers')
+	mut controller := nil_obj()
+	for i in 0 .. int(msg_u64(controllers, 'count')) { value := msg_id_u64(controllers, 'objectAtIndex:', u64(i)); if is_tab_bar_accessory(value) { controller = value; break } }
+	if is_nil(controller) { return }
+	if is_nil(msg_id(window, 'toolbar')) {
+		toolbar := create_terminal_toolbar(mut data)
+		msg_void1(window, 'setToolbar:', toolbar)
+		msg_void_u64(window, 'setToolbarStyle:', 4)
+	}
+	accessory := msg_id(controller, 'view')
+	clip := msg_id(accessory, 'superview')
+	titlebar := msg_id(clip, 'superview')
+	if objc_utf8_string(msg_id(titlebar, 'className')) != 'NSTitlebarView' { return }
+	toolbar := first_descendant(titlebar, 'NSToolbarView')
+	if is_nil(toolbar) { return }
+	if msg_id(data.backdrop, 'superview') != titlebar {
+		msg_void(data.backdrop, 'removeFromSuperview')
+		data.backdrop = msg_id_rect(alloc('NSView'), 'initWithFrame:', objc_rect(0, 0, 0, 0))
+		msg_void1(data.backdrop, 'setIdentifier:', nsstring('_windowButtonsBackdrop'))
+		msg_void1(titlebar, 'addSubview:', data.backdrop)
+		msg_void_bool(data.backdrop, 'setWantsLayer:', true)
+		data.backdrop_overlay = msg_id(alloc('VTVibrantLayer'), 'init')
+		msg_void1(data.backdrop_overlay, 'setBackgroundColor:', msg_id(native_color(0xf2f2f2, 1), 'CGColor'))
+		msg_void_u64(data.backdrop_overlay, 'setAutoresizingMask:', 18)
+		msg_void1(msg_id(data.backdrop, 'layer'), 'addSublayer:', data.backdrop_overlay)
+		msg_void_bool(data.backdrop, 'setTranslatesAutoresizingMaskIntoConstraints:', false)
+		constrain(data.backdrop, 'leftAnchor', toolbar, 'leftAnchor', 0)
+		constrain(data.backdrop, 'rightAnchor', toolbar, 'leftAnchor', if data.config.buttons_hidden { 0 } else { 78 })
+		constrain(data.backdrop, 'topAnchor', toolbar, 'topAnchor', 0)
+		constrain(data.backdrop, 'heightAnchor', toolbar, 'heightAnchor', 0)
+	}
+	parent := msg_id(titlebar, 'superview')
+	if msg_id(data.drag_handle, 'superview') != parent {
+		msg_void(data.drag_handle, 'removeFromSuperview')
+		data.drag_handle = msg_id_rect(alloc('VTWindowDragView'), 'initWithFrame:', objc_rect(0, 0, 0, 0))
+		msg_void1(data.drag_handle, 'setIdentifier:', nsstring('_windowDragHandle'))
+		msg_void1(parent, 'addSubview:', data.drag_handle)
+		msg_void_bool(data.drag_handle, 'setTranslatesAutoresizingMaskIntoConstraints:', false)
+		constrain(data.drag_handle, 'leftAnchor', toolbar, 'leftAnchor', 0)
+		constrain(data.drag_handle, 'rightAnchor', toolbar, 'rightAnchor', 0)
+		constrain(data.drag_handle, 'topAnchor', toolbar, 'topAnchor', 0)
+		constrain(data.drag_handle, 'bottomAnchor', toolbar, 'topAnchor', 12)
+	}
+	msg_void_bool(data.backdrop, 'setHidden:', false)
+	msg_void_bool(data.drag_handle, 'setHidden:', false)
+	msg_void_bool(data.title_label, 'setHidden:', true)
+	for view in [clip, accessory] {
+		msg_void_bool(view, 'setTranslatesAutoresizingMaskIntoConstraints:', false)
+		parent_view := if view == clip { toolbar } else { clip }
+		constrain(view, 'leftAnchor', if view == clip { data.backdrop } else { clip }, if view == clip { 'rightAnchor' } else { 'leftAnchor' }, 0)
+		constrain(view, 'rightAnchor', parent_view, 'rightAnchor', 0)
+		constrain(view, 'topAnchor', parent_view, 'topAnchor', 0)
+		constrain(view, 'heightAnchor', parent_view, 'heightAnchor', 0)
+		msg_void_bool(view, 'setNeedsLayout:', true)
+	}
+	update_native_titlebar(window)
+}
+fn update_native_titlebar(window ObjId) {
+	mut data := native_window_data(window) or { return }
+	container := titlebar_container(window)
+	if is_nil(container) { return }
+	msg_void_bool(container, 'setWantsLayer:', true)
+	msg_void1(msg_id(container, 'layer'), 'setBackgroundColor:', msg_id(data.titlebar_color, 'CGColor'))
+	if data.config.titlebar_style == 2 {
+		hide_descendants(container, 'NSTitlebarSeparatorView')
+		hide_descendants(container, 'NSToolbarClippedItemsIndicatorViewer')
+		msg_void_u64(window, 'setTitlebarSeparatorStyle:', 1)
+		if !data.effect_hidden { msg_void_bool(first_descendant(container, 'NSVisualEffectView'), 'setHidden:', true); data.effect_hidden = true }
+		button := first_descendant(container, 'NSTabBarNewTabButton')
+		image_view := first_descendant(button, 'NSImageView')
+		msg_void_f64(image_view, 'setAlphaValue:', if msg_bool(window, 'isKeyWindow') { 1 } else { 0.5 })
+		image := msg_id(image_view, 'image')
+		if !is_nil(image) {
+			if is_nil(data.new_tab_image_layer) { data.new_tab_image_layer = msg_id(alloc('VTVibrantLayer'), 'init') }
+			C.macos_objc_set_ptr_ivar(data.new_tab_image_layer, cstr('vtType'), voidptr(if data.light { 0 } else { 1 }))
+			b := msg_rect(button, 'bounds'); size := C.witty_macos_text_size(image)
+			msg_void_rect(data.new_tab_image_layer, 'setFrame:', objc_rect(b.x + (b.width - size.width) / 2, b.y + (b.height - size.height) / 2, size.width, size.height))
+			msg_void1(data.new_tab_image_layer, 'setContentsGravity:', nsstring('resizeAspect'))
+			msg_void_f64(data.new_tab_image_layer, 'setOpacity:', 0.5)
+			msg_void1(data.new_tab_image_layer, 'setContents:', image)
+			msg_void(data.new_tab_image_layer, 'removeFromSuperlayer')
+			msg_void1(msg_id(button, 'layer'), 'addSublayer:', data.new_tab_image_layer)
+		}
+		group := msg_id(window, 'tabGroup'); windows := msg_id(group, 'windows')
+		highlighted := msg_id_u64(windows, 'objectAtIndex:', 0) == window
+		msg_void_rect(data.backdrop_overlay, 'setFrame:', msg_rect(data.backdrop, 'bounds'))
+		if data.light {
+			msg_void_bool(data.backdrop_overlay, 'setHidden:', highlighted)
+			msg_void1(msg_id(data.backdrop, 'layer'), 'setBackgroundColor:', msg_id(native_color(0, 0), 'CGColor'))
+		} else {
+			msg_void_bool(data.backdrop_overlay, 'setHidden:', true)
+			very_dark := native_color_luminance(data.config.background) < 0.05
+			color := if highlighted { if very_dark { msg_id(window, 'backgroundColor') } else { native_color(0, 0) } } else { native_color(0, 0.45) }
+			msg_void1(msg_id(data.backdrop, 'layer'), 'setBackgroundColor:', msg_id(color, 'CGColor'))
+		}
+		if native_color_luminance(data.config.background) < 0.05 {
+			color := if msg_bool(group, 'isTabBarVisible') { msg_id_f64(data.titlebar_color, 'highlightWithLevel:', 0.14) } else { data.titlebar_color }
+			msg_void1(msg_id(container, 'layer'), 'setBackgroundColor:', msg_id(color, 'CGColor'))
+		}
+	}
+}
+pub fn apply_native_window_config(view voidptr, config NativeWindowConfig, initial bool, preferred_background u32, preferred_opacity f64, force_opaque bool) {
+	window := msg_id(view, 'window')
+	if is_nil(window) { return }
+	mut data := native_window_data(window) or { &NativeWindowData{window: window} }
+	g_native_windows[u64(window)] = data
+	data.config = config
+	msg_void1(data.title_label, 'setStringValue:', msg_id(window, 'title'))
+	data.light = native_color_luminance(preferred_background) > 0.5
+	data.titlebar_color = native_color(preferred_background, math.max(0.001, math.min(1.0, preferred_opacity)))
+	if initial {
+		if title := config.title { set_view_title_now(view, title) }
+		if !config.decorations { msg_void_u64(window, 'setStyleMask:', msg_u64(window, 'styleMask') & ~ns_window_style_titled) }
+		x := config.position_x
+		y := config.position_y
+		if x != none && y != none {
+			mut screen := msg_id(window, 'screen')
+			if is_nil(screen) { screen = msg_id_u64(msg_id(get_class('NSScreen'), 'screens'), 'objectAtIndex:', 0) }
+			if !is_nil(screen) {
+				frame := msg_rect(window, 'frame'); visible := msg_rect(screen, 'visibleFrame')
+				pos := native_window_position(SplitBounds{width: frame.width, height: frame.height}, SplitBounds{x: visible.x, y: visible.y, width: visible.width, height: visible.height}, x, y)
+				C.witty_macos_msg_void_rect_bool(window, sel('setFrame:display:'), objc_rect(pos.x, pos.y, pos.width, pos.height), true)
+			}
+		} else if !restore_last_window_position(window) { msg_void(window, 'center') }
+		for button in [u64(0), 1, 2] { msg_void_bool(msg_id_u64(window, 'standardWindowButton:', button), 'setHidden:', config.buttons_hidden) }
+	}
+	if !msg_bool(window, 'isVisible') { return }
+	appearance_name := if config.titlebar_style == 2 || config.theme == 0 { if data.light { 'NSAppearanceNameAqua' } else { 'NSAppearanceNameDarkAqua' } } else if config.theme == 2 { 'NSAppearanceNameAqua' } else if config.theme == 3 { 'NSAppearanceNameDarkAqua' } else { '' }
+	msg_void1(window, 'setAppearance:', if appearance_name.len > 0 { msg_id1(get_class('NSAppearance'), 'appearanceNamed:', nsstring(appearance_name)) } else { nil_obj() })
+	msg_void_bool(window, 'setHasShadow:', config.shadow)
+	transparent := native_window_transparent(config, msg_u64(window, 'styleMask') & u64(1 << 14) != 0, force_opaque)
+	msg_void_bool(window, 'setOpaque:', !transparent)
+	msg_void1(window, 'setBackgroundColor:', if transparent { native_color(0xffffff, 0.001) } else { native_color(preferred_background, 1) })
+	if transparent && config.blur >= 0 { C.witty_macos_set_window_background_blur(window, int(config.blur)) }
+	msg_void_bool(window, 'setTitlebarAppearsTransparent:', config.titlebar_style == 1)
+	msg_void_u64(window, 'setTitleVisibility:', u64(if config.titlebar_style in [2, 3] { 1 } else { 0 }))
+	if !config.proxy_icon { msg_void1(window, 'setRepresentedURL:', nil_obj()) }
+	update_native_titlebar(window)
+	if config.titlebar_style == 2 { dispatch_main(push_native_tabs, window) }
+}
+
+fn native_window_close(self ObjId, _cmd Sel) {
+	frame := msg_rect(self, 'frame')
+	points := [voidptr(msg_id_f64(get_class('NSNumber'), 'numberWithDouble:', frame.x)), voidptr(msg_id_f64(get_class('NSNumber'), 'numberWithDouble:', frame.y))]
+	array := C.witty_macos_array(points.data, usize(points.len))
+	msg_void2(msg_id(get_class('NSUserDefaults'), 'standardUserDefaults'), 'setObject:forKey:', array, nsstring('NSWindowLastPosition'))
+	msg_void2(msg_id(get_class('NSNotificationCenter'), 'defaultCenter'), 'postNotificationName:object:', nsstring('TerminalWindowWillClose'), self)
+	msg_super_void(self, 'close')
+}
+fn restore_last_window_position(window ObjId) bool {
+	points := msg_id1(msg_id(get_class('NSUserDefaults'), 'standardUserDefaults'), 'arrayForKey:', nsstring('NSWindowLastPosition'))
+	if msg_u64(points, 'count') != 2 { return false }
+	mut screen := msg_id(window, 'screen')
+	if is_nil(screen) { screen = msg_id(get_class('NSScreen'), 'mainScreen') }
+	if is_nil(screen) { return false }
+	frame := msg_rect(window, 'frame'); visible := msg_rect(screen, 'visibleFrame')
+	x := msg_f64(msg_id_u64(points, 'objectAtIndex:', 0), 'doubleValue')
+	y := msg_f64(msg_id_u64(points, 'objectAtIndex:', 1), 'doubleValue')
+	pos := restore_last_native_window_position(SplitBounds{width: frame.width, height: frame.height}, SplitBounds{x: visible.x, y: visible.y, width: visible.width, height: visible.height}, x, y)
+	C.witty_macos_msg_void_rect_bool(window, sel('setFrame:display:'), objc_rect(pos.x, pos.y, pos.width, pos.height), true)
+	return true
+}
+
+fn C.witty_macos_text_size(obj ObjId) ObjCSize
+fn C.witty_macos_priority(obj ObjId, selector Sel, priority f32, axis u64)
+__global ( g_toolbar_windows map[u64]ObjId )
+fn native_title_label_moved(self ObjId, _cmd Sel) {
+	msg_void_bool(self, 'setEditable:', false)
+	msg_void_bool(self, 'setBordered:', false)
+	msg_void_bool(self, 'setDrawsBackground:', false)
+	msg_void_u64(self, 'setAlignment:', 2)
+	msg_void_u64(self, 'setLineBreakMode:', 4)
+	msg_void_bool(msg_id(self, 'cell'), 'setTruncatesLastVisibleLine:', true)
+	msg_void_bool(self, 'setTranslatesAutoresizingMaskIntoConstraints:', false)
+	C.witty_macos_priority(self, sel('setContentHuggingPriority:forOrientation:'), 250, 0)
+	C.witty_macos_priority(self, sel('setContentCompressionResistancePriority:forOrientation:'), 750, 0)
+}
+fn native_title_label_draw(self ObjId, _cmd Sel, _dirty ObjCRect) {
+	text := msg_id(msg_id(self, 'attributedStringValue'), 'mutableCopy')
+	if is_nil(text) { return }
+	size := C.witty_macos_text_size(text)
+	bounds := msg_rect(self, 'bounds')
+	msg_void_rect(text, 'drawInRect:', objc_rect(bounds.x, bounds.y + (bounds.height - size.height) / 2 - 1, bounds.width, size.height))
+	msg_void(text, 'release')
+}
+fn toolbar_array(names []string) ObjId {
+	mut objects := []voidptr{}
+	for name in names { objects << voidptr(nsstring(name)) }
+	return C.witty_macos_array(objects.data, usize(objects.len))
+}
+fn native_toolbar_allowed(_self ObjId, _cmd Sel, _toolbar ObjId) ObjId {
+	return toolbar_array(['TitleText', 'NSToolbarFlexibleSpaceItem', 'NSToolbarSpaceItem', 'ResetZoom'])
+}
+fn native_toolbar_defaults(_self ObjId, _cmd Sel, _toolbar ObjId) ObjId {
+	return toolbar_array(['NSToolbarFlexibleSpaceItem', 'TitleText', 'NSToolbarFlexibleSpaceItem'])
+}
+fn native_toolbar_item(self ObjId, _cmd Sel, _toolbar ObjId, identifier ObjId, _inserted bool) ObjId {
+	window := g_toolbar_windows[u64(self)] or { return nil_obj() }
+	data := native_window_data(window) or { return nil_obj() }
+	item := msg_id1(alloc('NSToolbarItem'), 'initWithItemIdentifier:', identifier)
+	if objc_utf8_string(identifier) == 'TitleText' {
+		msg_void1(item, 'setView:', data.title_label)
+		msg_void_u64(item, 'setVisibilityPriority:', 2000)
+		height := msg_id_f64(msg_id(data.title_label, 'heightAnchor'), 'constraintEqualToConstant:', 22)
+		msg_void_bool(height, 'setActive:', true)
+		msg_void_bool(item, 'setEnabled:', true)
+	}
+	return item
+}
+fn create_terminal_toolbar(mut data NativeWindowData) ObjId {
+	mut toolbar_cls := get_class('VTTerminalToolbar')
+	if is_nil(toolbar_cls) {
+		toolbar_cls = C.macos_objc_allocate_class_pair(get_class('NSToolbar'), cstr('VTTerminalToolbar'), 0)
+		C.macos_class_add_protocol(toolbar_cls, get_protocol('NSToolbarDelegate'))
+		add_method(toolbar_cls, 'toolbarAllowedItemIdentifiers:', voidptr(native_toolbar_allowed), '@@:@')
+		add_method(toolbar_cls, 'toolbarDefaultItemIdentifiers:', voidptr(native_toolbar_defaults), '@@:@')
+		add_method(toolbar_cls, 'toolbar:itemForItemIdentifier:willBeInsertedIntoToolbar:', voidptr(native_toolbar_item), '@@:@@B')
+		C.macos_objc_register_class_pair(toolbar_cls)
+		label_cls := C.macos_objc_allocate_class_pair(get_class('NSTextField'), cstr('VTCenteredDynamicLabel'), 0)
+		add_method(label_cls, 'viewDidMoveToSuperview', voidptr(native_title_label_moved), 'v@:')
+		add_method(label_cls, 'drawRect:', voidptr(native_title_label_draw), 'v@:{CGRect={CGPoint=dd}{CGSize=dd}}')
+		C.macos_objc_register_class_pair(label_cls)
+	}
+	data.title_label = msg_id_rect(alloc('VTCenteredDynamicLabel'), 'initWithFrame:', objc_rect(0, 0, 100, 22))
+	msg_void1(data.title_label, 'setStringValue:', msg_id(data.window, 'title'))
+	toolbar := msg_id1(msg_id(toolbar_cls, 'alloc'), 'initWithIdentifier:', nsstring('Toolbar'))
+	g_toolbar_windows[u64(toolbar)] = data.window
+	msg_void1(toolbar, 'setDelegate:', toolbar)
+	msg_void1(toolbar, 'setCenteredItemIdentifiers:', msg_id1(get_class('NSSet'), 'setWithObject:', nsstring('TitleText')))
+	return toolbar
+}
