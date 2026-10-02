@@ -107,7 +107,11 @@ pub fn (d Driver) build_native_dependencies(vt_only bool) !NativeDeps {
 	}
 
 	// Dependents precede their own dependencies in the linker arguments.
-	if d.cfg.font_backend == 'fontconfig_freetype' {
+	// V stores the source's compile-time backend alternatives in runtime
+	// tagged values. Their live destructors/dispatch retain Fontconfig and
+	// HarfBuzz references even when CoreText is selected; link the unchanged
+	// source native packages for those compiler-retained branches.
+	if !d.cfg.target.wasm() {
 		fc := if d.cfg.system_libraries['fontconfig'] { '' } else { d.build_fontconfig(cc)! }
 		d.add_package(mut deps, 'fontconfig', 'fontconfig', fc)!
 		if !d.cfg.system_libraries['fontconfig'] {
@@ -118,8 +122,7 @@ pub fn (d Driver) build_native_dependencies(vt_only bool) !NativeDeps {
 			if d.cfg.target.darwin() { deps.link_flags << '-liconv' }
 		}
 	}
-	if d.cfg.font_backend in ['freetype', 'fontconfig_freetype', 'coretext_freetype',
-		'coretext_harfbuzz'] {
+	if !d.cfg.target.wasm() {
 		hb := if d.cfg.system_libraries['harfbuzz'] { '' } else { d.build_harfbuzz(cxx)! }
 		d.add_package(mut deps, 'harfbuzz', 'harfbuzz', hb)!
 	}

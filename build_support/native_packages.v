@@ -147,7 +147,8 @@ pub fn (d Driver) build_harfbuzz(options NativeCompileOptions) !string {
 	if d.cfg.target.os != 'windows' {
 		flags << ['-DHAVE_UNISTD_H', '-DHAVE_SYS_MMAN_H', '-DHAVE_PTHREAD=1']
 	}
-	if d.cfg.font_backend in ['freetype', 'fontconfig_freetype', 'coretext_freetype'] {
+	// Retain the native entry points used by V's runtime backend values.
+	if !d.cfg.target.wasm() {
 		flags << ['-DHAVE_FREETYPE=1', '-DHAVE_FT_GET_VAR_BLEND_COORDINATES=1',
 			'-DHAVE_FT_SET_VAR_BLEND_COORDINATES=1', '-DHAVE_FT_DONE_MM_VAR=1',
 			'-DHAVE_FT_GET_TRANSFORM=1']
@@ -158,7 +159,7 @@ pub fn (d Driver) build_harfbuzz(options NativeCompileOptions) !string {
 			flags << output.trim_space().split(' ').filter(it.len > 0)
 		}
 	}
-	if d.cfg.font_backend in ['coretext_freetype', 'coretext_harfbuzz'] {
+	if d.cfg.target.darwin() {
 		flags << '-DHAVE_CORETEXT=1'
 	}
 	flags << '-std=c++17'
