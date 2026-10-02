@@ -242,432 +242,308 @@ module input
 // The code_to_key map resolves W3C DOM code strings to Key enum values.
 
 // KeycodeFullEntry contains the USB code, native keycode, W3C DOM code,
-// and corresponding Key for the current platform (macOS).
+// and corresponding Key for the current platform for the current platform.
 pub struct KeycodeFullEntry {
 pub:
 	key    Key // input key enum
 	usb    u32 // USB HID usage code
-	native u32 // native keycode (macOS virtual key code)
+	native u32 // native keycode of the current platform
 	code   string // W3C DOM code
 }
 
-// keycodes_entries is the full list of keycode entries for macOS.
-// Each entry maps a macOS native virtual key code to a Key.
-// Entries with native == 0xffff are unmapped on macOS but included
-// for completeness (they will never match a real keycode).
-//
-// The format is derived from the raw_entries table in keycodes.zig.
-// For macOS the native column is index 4 (Mac virtual key codes).
-pub const keycodes_entries = [
-	// USB       evdev  XKB    Win    Mac    Code
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x000000 ""
-	//
-	// =========================================
-	// Non-USB codes
-	// =========================================
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x000010 "Hyper"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x000011 "Super"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x000012 "Fn"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x000013 "FnLock"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x000014 "Suspend"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x000015 "Resume"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x000016 "Turbo"
-	//
-	// =========================================
-	// USB Usage Page 0x01: Generic Desktop Page
-	// =========================================
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x010082 "Sleep"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x010083 "WakeUp"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0100a9 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0100b5 "DisplayToggleIntExt"
-	//
-	// =========================================
-	// USB Usage Page 0x07: Keyboard/Keypad Page
-	// =========================================
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x070000 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x070001 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x070002 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x070003 ""
-	KeycodeEntry{ native: 0x0000, key: .key_a }, // 0x070004 "KeyA"
-	KeycodeEntry{ native: 0x000b, key: .key_b }, // 0x070005 "KeyB"
-	KeycodeEntry{ native: 0x0008, key: .key_c }, // 0x070006 "KeyC"
-	KeycodeEntry{ native: 0x0002, key: .key_d }, // 0x070007 "KeyD"
-	KeycodeEntry{ native: 0x000e, key: .key_e }, // 0x070008 "KeyE"
-	KeycodeEntry{ native: 0x0003, key: .key_f }, // 0x070009 "KeyF"
-	KeycodeEntry{ native: 0x0005, key: .key_g }, // 0x07000a "KeyG"
-	KeycodeEntry{ native: 0x0004, key: .key_h }, // 0x07000b "KeyH"
-	KeycodeEntry{ native: 0x0022, key: .key_i }, // 0x07000c "KeyI"
-	KeycodeEntry{ native: 0x0026, key: .key_j }, // 0x07000d "KeyJ"
-	KeycodeEntry{ native: 0x0028, key: .key_k }, // 0x07000e "KeyK"
-	KeycodeEntry{ native: 0x0025, key: .key_l }, // 0x07000f "KeyL"
-	KeycodeEntry{ native: 0x002e, key: .key_m }, // 0x070010 "KeyM"
-	KeycodeEntry{ native: 0x002d, key: .key_n }, // 0x070011 "KeyN"
-	KeycodeEntry{ native: 0x001f, key: .key_o }, // 0x070012 "KeyO"
-	KeycodeEntry{ native: 0x0023, key: .key_p }, // 0x070013 "KeyP"
-	KeycodeEntry{ native: 0x000c, key: .key_q }, // 0x070014 "KeyQ"
-	KeycodeEntry{ native: 0x000f, key: .key_r }, // 0x070015 "KeyR"
-	KeycodeEntry{ native: 0x0001, key: .key_s }, // 0x070016 "KeyS"
-	KeycodeEntry{ native: 0x0011, key: .key_t }, // 0x070017 "KeyT"
-	KeycodeEntry{ native: 0x0020, key: .key_u }, // 0x070018 "KeyU"
-	KeycodeEntry{ native: 0x0009, key: .key_v }, // 0x070019 "KeyV"
-	KeycodeEntry{ native: 0x000d, key: .key_w }, // 0x07001a "KeyW"
-	KeycodeEntry{ native: 0x0007, key: .key_x }, // 0x07001b "KeyX"
-	KeycodeEntry{ native: 0x0010, key: .key_y }, // 0x07001c "KeyY"
-	KeycodeEntry{ native: 0x0006, key: .key_z }, // 0x07001d "KeyZ"
-	KeycodeEntry{ native: 0x0012, key: .digit_1 }, // 0x07001e "Digit1"
-	KeycodeEntry{ native: 0x0013, key: .digit_2 }, // 0x07001f "Digit2"
-	KeycodeEntry{ native: 0x0014, key: .digit_3 }, // 0x070020 "Digit3"
-	KeycodeEntry{ native: 0x0015, key: .digit_4 }, // 0x070021 "Digit4"
-	KeycodeEntry{ native: 0x0017, key: .digit_5 }, // 0x070022 "Digit5"
-	KeycodeEntry{ native: 0x0016, key: .digit_6 }, // 0x070023 "Digit6"
-	KeycodeEntry{ native: 0x001a, key: .digit_7 }, // 0x070024 "Digit7"
-	KeycodeEntry{ native: 0x001c, key: .digit_8 }, // 0x070025 "Digit8"
-	KeycodeEntry{ native: 0x0019, key: .digit_9 }, // 0x070026 "Digit9"
-	KeycodeEntry{ native: 0x001d, key: .digit_0 }, // 0x070027 "Digit0"
-	KeycodeEntry{ native: 0x0024, key: .enter }, // 0x070028 "Enter"
-	KeycodeEntry{ native: 0x0035, key: .escape }, // 0x070029 "Escape"
-	KeycodeEntry{ native: 0x0033, key: .backspace }, // 0x07002a "Backspace"
-	KeycodeEntry{ native: 0x0030, key: .tab }, // 0x07002b "Tab"
-	KeycodeEntry{ native: 0x0031, key: .space }, // 0x07002c "Space"
-	KeycodeEntry{ native: 0x001b, key: .minus }, // 0x07002d "Minus"
-	KeycodeEntry{ native: 0x0018, key: .equal }, // 0x07002e "Equal"
-	KeycodeEntry{ native: 0x0021, key: .bracket_left }, // 0x07002f "BracketLeft"
-	KeycodeEntry{ native: 0x001e, key: .bracket_right }, // 0x070030 "BracketRight"
-	KeycodeEntry{ native: 0x002a, key: .backslash }, // 0x070031 "Backslash"
-	KeycodeEntry{ native: 0x0029, key: .semicolon }, // 0x070033 "Semicolon"
-	KeycodeEntry{ native: 0x0027, key: .quote }, // 0x070034 "Quote"
-	KeycodeEntry{ native: 0x0032, key: .backquote }, // 0x070035 "Backquote"
-	KeycodeEntry{ native: 0x002b, key: .comma }, // 0x070036 "Comma"
-	KeycodeEntry{ native: 0x002f, key: .period }, // 0x070037 "Period"
-	KeycodeEntry{ native: 0x002c, key: .slash }, // 0x070038 "Slash"
-	KeycodeEntry{ native: 0x0039, key: .caps_lock }, // 0x070039 "CapsLock"
-	KeycodeEntry{ native: 0x007a, key: .f1 }, // 0x07003a "F1"
-	KeycodeEntry{ native: 0x0078, key: .f2 }, // 0x07003b "F2"
-	KeycodeEntry{ native: 0x0063, key: .f3 }, // 0x07003c "F3"
-	KeycodeEntry{ native: 0x0076, key: .f4 }, // 0x07003d "F4"
-	KeycodeEntry{ native: 0x0060, key: .f5 }, // 0x07003e "F5"
-	KeycodeEntry{ native: 0x0061, key: .f6 }, // 0x07003f "F6"
-	KeycodeEntry{ native: 0x0062, key: .f7 }, // 0x070040 "F7"
-	KeycodeEntry{ native: 0x0064, key: .f8 }, // 0x070041 "F8"
-	KeycodeEntry{ native: 0x0065, key: .f9 }, // 0x070042 "F9"
-	KeycodeEntry{ native: 0x006d, key: .f10 }, // 0x070043 "F10"
-	KeycodeEntry{ native: 0x0067, key: .f11 }, // 0x070044 "F11"
-	KeycodeEntry{ native: 0x006f, key: .f12 }, // 0x070045 "F12"
-	KeycodeEntry{ native: 0xffff, key: .print_screen }, // 0x070046 "PrintScreen"
-	KeycodeEntry{ native: 0xffff, key: .scroll_lock }, // 0x070047 "ScrollLock"
-	KeycodeEntry{ native: 0xffff, key: .pause }, // 0x070048 "Pause"
-	KeycodeEntry{ native: 0x0072, key: .insert }, // 0x070049 "Insert"
-	KeycodeEntry{ native: 0x0073, key: .home }, // 0x07004a "Home"
-	KeycodeEntry{ native: 0x0074, key: .page_up }, // 0x07004b "PageUp"
-	KeycodeEntry{ native: 0x0075, key: .delete }, // 0x07004c "Delete"
-	KeycodeEntry{ native: 0x0077, key: .end }, // 0x07004d "End"
-	KeycodeEntry{ native: 0x0079, key: .page_down }, // 0x07004e "PageDown"
-	KeycodeEntry{ native: 0x007c, key: .arrow_right }, // 0x07004f "ArrowRight"
-	KeycodeEntry{ native: 0x007b, key: .arrow_left }, // 0x070050 "ArrowLeft"
-	KeycodeEntry{ native: 0x007d, key: .arrow_down }, // 0x070051 "ArrowDown"
-	KeycodeEntry{ native: 0x007e, key: .arrow_up }, // 0x070052 "ArrowUp"
-	KeycodeEntry{ native: 0x0047, key: .num_lock }, // 0x070053 "NumLock"
-	KeycodeEntry{ native: 0x004b, key: .numpad_divide }, // 0x070054 "NumpadDivide"
-	KeycodeEntry{ native: 0x0043, key: .numpad_multiply }, // 0x070055 "NumpadMultiply"
-	KeycodeEntry{ native: 0x004e, key: .numpad_subtract }, // 0x070056 "NumpadSubtract"
-	KeycodeEntry{ native: 0x0045, key: .numpad_add }, // 0x070057 "NumpadAdd"
-	KeycodeEntry{ native: 0x004c, key: .numpad_enter }, // 0x070058 "NumpadEnter"
-	KeycodeEntry{ native: 0x0053, key: .numpad_1 }, // 0x070059 "Numpad1"
-	KeycodeEntry{ native: 0x0054, key: .numpad_2 }, // 0x07005a "Numpad2"
-	KeycodeEntry{ native: 0x0055, key: .numpad_3 }, // 0x07005b "Numpad3"
-	KeycodeEntry{ native: 0x0056, key: .numpad_4 }, // 0x07005c "Numpad4"
-	KeycodeEntry{ native: 0x0057, key: .numpad_5 }, // 0x07005d "Numpad5"
-	KeycodeEntry{ native: 0x0058, key: .numpad_6 }, // 0x07005e "Numpad6"
-	KeycodeEntry{ native: 0x0059, key: .numpad_7 }, // 0x07005f "Numpad7"
-	KeycodeEntry{ native: 0x005b, key: .numpad_8 }, // 0x070060 "Numpad8"
-	KeycodeEntry{ native: 0x005c, key: .numpad_9 }, // 0x070061 "Numpad9"
-	KeycodeEntry{ native: 0x0052, key: .numpad_0 }, // 0x070062 "Numpad0"
-	KeycodeEntry{ native: 0x0041, key: .numpad_decimal }, // 0x070063 "NumpadDecimal"
-	KeycodeEntry{ native: 0x000a, key: .unidentified }, // 0x070064 "IntlBackslash"
-	KeycodeEntry{ native: 0x006e, key: .context_menu }, // 0x070065 "ContextMenu"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x070066 "Power"
-	KeycodeEntry{ native: 0x0051, key: .numpad_equal }, // 0x070067 "NumpadEqual"
-	KeycodeEntry{ native: 0x0069, key: .f13 }, // 0x070068 "F13"
-	KeycodeEntry{ native: 0x006b, key: .f14 }, // 0x070069 "F14"
-	KeycodeEntry{ native: 0x0071, key: .f15 }, // 0x07006a "F15"
-	KeycodeEntry{ native: 0x006a, key: .f16 }, // 0x07006b "F16"
-	KeycodeEntry{ native: 0x0040, key: .f17 }, // 0x07006c "F17"
-	KeycodeEntry{ native: 0x004f, key: .f18 }, // 0x07006d "F18"
-	KeycodeEntry{ native: 0x0050, key: .f19 }, // 0x07006e "F19"
-	KeycodeEntry{ native: 0x005a, key: .f20 }, // 0x07006f "F20"
-	KeycodeEntry{ native: 0xffff, key: .f21 }, // 0x070070 "F21"
-	KeycodeEntry{ native: 0xffff, key: .f22 }, // 0x070071 "F22"
-	KeycodeEntry{ native: 0xffff, key: .f23 }, // 0x070072 "F23"
-	KeycodeEntry{ native: 0xffff, key: .f24 }, // 0x070073 "F24"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x070074 "Open"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x070075 "Help"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x070077 "Select"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x070079 "Again"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x07007a "Undo"
-	KeycodeEntry{ native: 0xffff, key: .cut }, // 0x07007b "Cut"
-	KeycodeEntry{ native: 0xffff, key: .copy }, // 0x07007c "Copy"
-	KeycodeEntry{ native: 0xffff, key: .paste }, // 0x07007d "Paste"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x07007e "Find"
-	KeycodeEntry{ native: 0x004a, key: .unidentified }, // 0x07007f "AudioVolumeMute"
-	KeycodeEntry{ native: 0x0048, key: .unidentified }, // 0x070080 "AudioVolumeUp"
-	KeycodeEntry{ native: 0x0049, key: .unidentified }, // 0x070081 "AudioVolumeDown"
-	KeycodeEntry{ native: 0x005f, key: .unidentified }, // 0x070085 "NumpadComma"
-	KeycodeEntry{ native: 0x005e, key: .unidentified }, // 0x070087 "IntlRo"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x070088 "KanaMode"
-	KeycodeEntry{ native: 0x005d, key: .unidentified }, // 0x070089 "IntlYen"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x07008a "Convert"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x07008b "NonConvert"
-	KeycodeEntry{ native: 0x0068, key: .unidentified }, // 0x070090 "Lang1"
-	KeycodeEntry{ native: 0x0066, key: .unidentified }, // 0x070091 "Lang2"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x070092 "Lang3"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x070093 "Lang4"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x070094 "Lang5"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x07009b "Abort"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0700a3 "Props"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0700b6 "NumpadParenLeft"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0700b7 "NumpadParenRight"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0700bb "NumpadBackspace"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0700d0 "NumpadMemoryStore"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0700d1 "NumpadMemoryRecall"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0700d2 "NumpadMemoryClear"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0700d3 "NumpadMemoryAdd"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0700d4 "NumpadMemorySubtract"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0700d7 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0700d8 "NumpadClear"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0700d9 "NumpadClearEntry"
-	KeycodeEntry{ native: 0x003b, key: .control_left }, // 0x0700e0 "ControlLeft"
-	KeycodeEntry{ native: 0x0038, key: .shift_left }, // 0x0700e1 "ShiftLeft"
-	KeycodeEntry{ native: 0x003a, key: .alt_left }, // 0x0700e2 "AltLeft"
-	KeycodeEntry{ native: 0x0037, key: .meta_left }, // 0x0700e3 "MetaLeft"
-	KeycodeEntry{ native: 0x003e, key: .control_right }, // 0x0700e4 "ControlRight"
-	KeycodeEntry{ native: 0x003c, key: .shift_right }, // 0x0700e5 "ShiftRight"
-	KeycodeEntry{ native: 0x003d, key: .alt_right }, // 0x0700e6 "AltRight"
-	KeycodeEntry{ native: 0x0036, key: .meta_right }, // 0x0700e7 "MetaRight"
-	//
-	// ==================================
-	// USB Usage Page 0x0c: Consumer Page
-	// ==================================
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0060 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0061 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c006f "BrightnessUp"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0070 "BrightnessDown"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0072 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0073 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0074 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0075 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0079 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c007a ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c007c ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0083 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c008c ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c008d ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0094 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c009c ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c009d ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c00b0 "MediaPlay"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c00b1 "MediaPause"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c00b2 "MediaRecord"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c00b3 "MediaFastForward"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c00b4 "MediaRewind"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c00b5 "MediaTrackNext"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c00b6 "MediaTrackPrevious"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c00b7 "MediaStop"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c00b8 "Eject"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c00cd "MediaPlayPause"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c00cf ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c00d8 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c00d9 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c00e5 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0183 "MediaSelect"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0184 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0186 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c018a "LaunchMail"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c018d ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c018e ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0192 "LaunchApp2"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0194 "LaunchApp1"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0196 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c019C ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c019e ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c019f "LaunchControlPanel"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c01a2 "SelectTask"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c01a7 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c01ab ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c01ae ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c01b1 "LaunchScreenSaver"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c01cb "LaunchAssistant"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c01b7 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0201 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0203 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0207 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0208 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0221 "BrowserSearch"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0223 "BrowserHome"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0224 "BrowserBack"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0225 "BrowserForward"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0226 "BrowserStop"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0227 "BrowserRefresh"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c022a "BrowserFavorites"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c022d ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c022e ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0232 "ZoomToggle"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0279 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c0289 "MailReply"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c028b "MailForward"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c028c "MailSend"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c029d "KeyboardLayoutSelect"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c029f "ShowAllWindows"
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c02a2 ""
-	KeycodeEntry{ native: 0xffff, key: .unidentified }, // 0x0c02d0 ""
-]
-
-// xkb_keycode_to_key maps an XKB native keycode to a Key enum value. This is
-// the Linux/FreeBSD native column from Ghostty's pinned raw_entries table.
-pub fn xkb_keycode_to_key(native u32) Key {
-	return match native {
-		u32(0x0026) { .key_a } // 0x070004 "KeyA"
-		u32(0x0038) { .key_b } // 0x070005 "KeyB"
-		u32(0x0036) { .key_c } // 0x070006 "KeyC"
-		u32(0x0028) { .key_d } // 0x070007 "KeyD"
-		u32(0x001a) { .key_e } // 0x070008 "KeyE"
-		u32(0x0029) { .key_f } // 0x070009 "KeyF"
-		u32(0x002a) { .key_g } // 0x07000a "KeyG"
-		u32(0x002b) { .key_h } // 0x07000b "KeyH"
-		u32(0x001f) { .key_i } // 0x07000c "KeyI"
-		u32(0x002c) { .key_j } // 0x07000d "KeyJ"
-		u32(0x002d) { .key_k } // 0x07000e "KeyK"
-		u32(0x002e) { .key_l } // 0x07000f "KeyL"
-		u32(0x003a) { .key_m } // 0x070010 "KeyM"
-		u32(0x0039) { .key_n } // 0x070011 "KeyN"
-		u32(0x0020) { .key_o } // 0x070012 "KeyO"
-		u32(0x0021) { .key_p } // 0x070013 "KeyP"
-		u32(0x0018) { .key_q } // 0x070014 "KeyQ"
-		u32(0x001b) { .key_r } // 0x070015 "KeyR"
-		u32(0x0027) { .key_s } // 0x070016 "KeyS"
-		u32(0x001c) { .key_t } // 0x070017 "KeyT"
-		u32(0x001e) { .key_u } // 0x070018 "KeyU"
-		u32(0x0037) { .key_v } // 0x070019 "KeyV"
-		u32(0x0019) { .key_w } // 0x07001a "KeyW"
-		u32(0x0035) { .key_x } // 0x07001b "KeyX"
-		u32(0x001d) { .key_y } // 0x07001c "KeyY"
-		u32(0x0034) { .key_z } // 0x07001d "KeyZ"
-		u32(0x000a) { .digit_1 } // 0x07001e "Digit1"
-		u32(0x000b) { .digit_2 } // 0x07001f "Digit2"
-		u32(0x000c) { .digit_3 } // 0x070020 "Digit3"
-		u32(0x000d) { .digit_4 } // 0x070021 "Digit4"
-		u32(0x000e) { .digit_5 } // 0x070022 "Digit5"
-		u32(0x000f) { .digit_6 } // 0x070023 "Digit6"
-		u32(0x0010) { .digit_7 } // 0x070024 "Digit7"
-		u32(0x0011) { .digit_8 } // 0x070025 "Digit8"
-		u32(0x0012) { .digit_9 } // 0x070026 "Digit9"
-		u32(0x0013) { .digit_0 } // 0x070027 "Digit0"
-		u32(0x0024) { .enter } // 0x070028 "Enter"
-		u32(0x0009) { .escape } // 0x070029 "Escape"
-		u32(0x0016) { .backspace } // 0x07002a "Backspace"
-		u32(0x0017) { .tab } // 0x07002b "Tab"
-		u32(0x0041) { .space } // 0x07002c "Space"
-		u32(0x0014) { .minus } // 0x07002d "Minus"
-		u32(0x0015) { .equal } // 0x07002e "Equal"
-		u32(0x0022) { .bracket_left } // 0x07002f "BracketLeft"
-		u32(0x0023) { .bracket_right } // 0x070030 "BracketRight"
-		u32(0x0033) { .backslash } // 0x070031 "Backslash"
-		u32(0x002f) { .semicolon } // 0x070033 "Semicolon"
-		u32(0x0030) { .quote } // 0x070034 "Quote"
-		u32(0x0031) { .backquote } // 0x070035 "Backquote"
-		u32(0x003b) { .comma } // 0x070036 "Comma"
-		u32(0x003c) { .period } // 0x070037 "Period"
-		u32(0x003d) { .slash } // 0x070038 "Slash"
-		u32(0x0042) { .caps_lock } // 0x070039 "CapsLock"
-		u32(0x0043) { .f1 } // 0x07003a "F1"
-		u32(0x0044) { .f2 } // 0x07003b "F2"
-		u32(0x0045) { .f3 } // 0x07003c "F3"
-		u32(0x0046) { .f4 } // 0x07003d "F4"
-		u32(0x0047) { .f5 } // 0x07003e "F5"
-		u32(0x0048) { .f6 } // 0x07003f "F6"
-		u32(0x0049) { .f7 } // 0x070040 "F7"
-		u32(0x004a) { .f8 } // 0x070041 "F8"
-		u32(0x004b) { .f9 } // 0x070042 "F9"
-		u32(0x004c) { .f10 } // 0x070043 "F10"
-		u32(0x005f) { .f11 } // 0x070044 "F11"
-		u32(0x0060) { .f12 } // 0x070045 "F12"
-		u32(0x006b) { .print_screen } // 0x070046 "PrintScreen"
-		u32(0x004e) { .scroll_lock } // 0x070047 "ScrollLock"
-		u32(0x007f) { .pause } // 0x070048 "Pause"
-		u32(0x0076) { .insert } // 0x070049 "Insert"
-		u32(0x006e) { .home } // 0x07004a "Home"
-		u32(0x0070) { .page_up } // 0x07004b "PageUp"
-		u32(0x0077) { .delete } // 0x07004c "Delete"
-		u32(0x0073) { .end } // 0x07004d "End"
-		u32(0x0075) { .page_down } // 0x07004e "PageDown"
-		u32(0x0072) { .arrow_right } // 0x07004f "ArrowRight"
-		u32(0x0071) { .arrow_left } // 0x070050 "ArrowLeft"
-		u32(0x0074) { .arrow_down } // 0x070051 "ArrowDown"
-		u32(0x006f) { .arrow_up } // 0x070052 "ArrowUp"
-		u32(0x004d) { .num_lock } // 0x070053 "NumLock"
-		u32(0x006a) { .numpad_divide } // 0x070054 "NumpadDivide"
-		u32(0x003f) { .numpad_multiply } // 0x070055 "NumpadMultiply"
-		u32(0x0052) { .numpad_subtract } // 0x070056 "NumpadSubtract"
-		u32(0x0056) { .numpad_add } // 0x070057 "NumpadAdd"
-		u32(0x0068) { .numpad_enter } // 0x070058 "NumpadEnter"
-		u32(0x0057) { .numpad_1 } // 0x070059 "Numpad1"
-		u32(0x0058) { .numpad_2 } // 0x07005a "Numpad2"
-		u32(0x0059) { .numpad_3 } // 0x07005b "Numpad3"
-		u32(0x0053) { .numpad_4 } // 0x07005c "Numpad4"
-		u32(0x0054) { .numpad_5 } // 0x07005d "Numpad5"
-		u32(0x0055) { .numpad_6 } // 0x07005e "Numpad6"
-		u32(0x004f) { .numpad_7 } // 0x07005f "Numpad7"
-		u32(0x0050) { .numpad_8 } // 0x070060 "Numpad8"
-		u32(0x0051) { .numpad_9 } // 0x070061 "Numpad9"
-		u32(0x005a) { .numpad_0 } // 0x070062 "Numpad0"
-		u32(0x005b) { .numpad_decimal } // 0x070063 "NumpadDecimal"
-		u32(0x0087) { .context_menu } // 0x070065 "ContextMenu"
-		u32(0x007d) { .numpad_equal } // 0x070067 "NumpadEqual"
-		u32(0x00bf) { .f13 } // 0x070068 "F13"
-		u32(0x00c0) { .f14 } // 0x070069 "F14"
-		u32(0x00c1) { .f15 } // 0x07006a "F15"
-		u32(0x00c2) { .f16 } // 0x07006b "F16"
-		u32(0x00c3) { .f17 } // 0x07006c "F17"
-		u32(0x00c4) { .f18 } // 0x07006d "F18"
-		u32(0x00c5) { .f19 } // 0x07006e "F19"
-		u32(0x00c6) { .f20 } // 0x07006f "F20"
-		u32(0x00c7) { .f21 } // 0x070070 "F21"
-		u32(0x00c8) { .f22 } // 0x070071 "F22"
-		u32(0x00c9) { .f23 } // 0x070072 "F23"
-		u32(0x00ca) { .f24 } // 0x070073 "F24"
-		u32(0x0091) { .cut } // 0x07007b "Cut"
-		u32(0x008d) { .copy } // 0x07007c "Copy"
-		u32(0x008f) { .paste } // 0x07007d "Paste"
-		u32(0x0025) { .control_left } // 0x0700e0 "ControlLeft"
-		u32(0x0032) { .shift_left } // 0x0700e1 "ShiftLeft"
-		u32(0x0040) { .alt_left } // 0x0700e2 "AltLeft"
-		u32(0x0085) { .meta_left } // 0x0700e3 "MetaLeft"
-		u32(0x0069) { .control_right } // 0x0700e4 "ControlRight"
-		u32(0x003e) { .shift_right } // 0x0700e5 "ShiftRight"
-		u32(0x006c) { .alt_right } // 0x0700e6 "AltRight"
-		u32(0x0086) { .meta_right } // 0x0700e7 "MetaRight"
-		else { .unidentified }
-	}
+// Source raw_entries: USB, evdev, XKB, Windows, macOS, W3C code.
+// Keys are the source code_to_key lookup; unknown codes stay unidentified.
+struct RawKeycodeEntry {
+	usb u32
+	evdev u32
+	xkb u32
+	windows u32
+	mac u32
+	code string
+	key Key
 }
 
-// native_keycode_to_key selects the same OS-specific native column as
-// Ghostty's compile-time keycodes.entries construction.
+const raw_keycodes_entries = [
+	RawKeycodeEntry{usb: 0x000000, evdev: 0x0000, xkb: 0x0000, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x000010, evdev: 0x0000, xkb: 0x0000, windows: 0x0000, mac: 0xffff, code: "Hyper", key: .unidentified},
+	RawKeycodeEntry{usb: 0x000011, evdev: 0x0000, xkb: 0x0000, windows: 0x0000, mac: 0xffff, code: "Super", key: .unidentified},
+	RawKeycodeEntry{usb: 0x000012, evdev: 0x0000, xkb: 0x0000, windows: 0x0000, mac: 0xffff, code: "Fn", key: .unidentified},
+	RawKeycodeEntry{usb: 0x000013, evdev: 0x0000, xkb: 0x0000, windows: 0x0000, mac: 0xffff, code: "FnLock", key: .unidentified},
+	RawKeycodeEntry{usb: 0x000014, evdev: 0x0000, xkb: 0x0000, windows: 0x0000, mac: 0xffff, code: "Suspend", key: .unidentified},
+	RawKeycodeEntry{usb: 0x000015, evdev: 0x0000, xkb: 0x0000, windows: 0x0000, mac: 0xffff, code: "Resume", key: .unidentified},
+	RawKeycodeEntry{usb: 0x000016, evdev: 0x0000, xkb: 0x0000, windows: 0x0000, mac: 0xffff, code: "Turbo", key: .unidentified},
+	RawKeycodeEntry{usb: 0x010082, evdev: 0x008e, xkb: 0x0096, windows: 0xe05f, mac: 0xffff, code: "Sleep", key: .unidentified},
+	RawKeycodeEntry{usb: 0x010083, evdev: 0x008f, xkb: 0x0097, windows: 0xe063, mac: 0xffff, code: "WakeUp", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0100a9, evdev: 0x00f8, xkb: 0x0100, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0100b5, evdev: 0x00e3, xkb: 0x00eb, windows: 0x0000, mac: 0xffff, code: "DisplayToggleIntExt", key: .unidentified},
+	RawKeycodeEntry{usb: 0x070000, evdev: 0x0000, xkb: 0x0000, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x070001, evdev: 0x0000, xkb: 0x0000, windows: 0x00ff, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x070002, evdev: 0x0000, xkb: 0x0000, windows: 0x00fc, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x070003, evdev: 0x0000, xkb: 0x0000, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x070004, evdev: 0x001e, xkb: 0x0026, windows: 0x001e, mac: 0x0000, code: "KeyA", key: .key_a},
+	RawKeycodeEntry{usb: 0x070005, evdev: 0x0030, xkb: 0x0038, windows: 0x0030, mac: 0x000b, code: "KeyB", key: .key_b},
+	RawKeycodeEntry{usb: 0x070006, evdev: 0x002e, xkb: 0x0036, windows: 0x002e, mac: 0x0008, code: "KeyC", key: .key_c},
+	RawKeycodeEntry{usb: 0x070007, evdev: 0x0020, xkb: 0x0028, windows: 0x0020, mac: 0x0002, code: "KeyD", key: .key_d},
+	RawKeycodeEntry{usb: 0x070008, evdev: 0x0012, xkb: 0x001a, windows: 0x0012, mac: 0x000e, code: "KeyE", key: .key_e},
+	RawKeycodeEntry{usb: 0x070009, evdev: 0x0021, xkb: 0x0029, windows: 0x0021, mac: 0x0003, code: "KeyF", key: .key_f},
+	RawKeycodeEntry{usb: 0x07000a, evdev: 0x0022, xkb: 0x002a, windows: 0x0022, mac: 0x0005, code: "KeyG", key: .key_g},
+	RawKeycodeEntry{usb: 0x07000b, evdev: 0x0023, xkb: 0x002b, windows: 0x0023, mac: 0x0004, code: "KeyH", key: .key_h},
+	RawKeycodeEntry{usb: 0x07000c, evdev: 0x0017, xkb: 0x001f, windows: 0x0017, mac: 0x0022, code: "KeyI", key: .key_i},
+	RawKeycodeEntry{usb: 0x07000d, evdev: 0x0024, xkb: 0x002c, windows: 0x0024, mac: 0x0026, code: "KeyJ", key: .key_j},
+	RawKeycodeEntry{usb: 0x07000e, evdev: 0x0025, xkb: 0x002d, windows: 0x0025, mac: 0x0028, code: "KeyK", key: .key_k},
+	RawKeycodeEntry{usb: 0x07000f, evdev: 0x0026, xkb: 0x002e, windows: 0x0026, mac: 0x0025, code: "KeyL", key: .key_l},
+	RawKeycodeEntry{usb: 0x070010, evdev: 0x0032, xkb: 0x003a, windows: 0x0032, mac: 0x002e, code: "KeyM", key: .key_m},
+	RawKeycodeEntry{usb: 0x070011, evdev: 0x0031, xkb: 0x0039, windows: 0x0031, mac: 0x002d, code: "KeyN", key: .key_n},
+	RawKeycodeEntry{usb: 0x070012, evdev: 0x0018, xkb: 0x0020, windows: 0x0018, mac: 0x001f, code: "KeyO", key: .key_o},
+	RawKeycodeEntry{usb: 0x070013, evdev: 0x0019, xkb: 0x0021, windows: 0x0019, mac: 0x0023, code: "KeyP", key: .key_p},
+	RawKeycodeEntry{usb: 0x070014, evdev: 0x0010, xkb: 0x0018, windows: 0x0010, mac: 0x000c, code: "KeyQ", key: .key_q},
+	RawKeycodeEntry{usb: 0x070015, evdev: 0x0013, xkb: 0x001b, windows: 0x0013, mac: 0x000f, code: "KeyR", key: .key_r},
+	RawKeycodeEntry{usb: 0x070016, evdev: 0x001f, xkb: 0x0027, windows: 0x001f, mac: 0x0001, code: "KeyS", key: .key_s},
+	RawKeycodeEntry{usb: 0x070017, evdev: 0x0014, xkb: 0x001c, windows: 0x0014, mac: 0x0011, code: "KeyT", key: .key_t},
+	RawKeycodeEntry{usb: 0x070018, evdev: 0x0016, xkb: 0x001e, windows: 0x0016, mac: 0x0020, code: "KeyU", key: .key_u},
+	RawKeycodeEntry{usb: 0x070019, evdev: 0x002f, xkb: 0x0037, windows: 0x002f, mac: 0x0009, code: "KeyV", key: .key_v},
+	RawKeycodeEntry{usb: 0x07001a, evdev: 0x0011, xkb: 0x0019, windows: 0x0011, mac: 0x000d, code: "KeyW", key: .key_w},
+	RawKeycodeEntry{usb: 0x07001b, evdev: 0x002d, xkb: 0x0035, windows: 0x002d, mac: 0x0007, code: "KeyX", key: .key_x},
+	RawKeycodeEntry{usb: 0x07001c, evdev: 0x0015, xkb: 0x001d, windows: 0x0015, mac: 0x0010, code: "KeyY", key: .key_y},
+	RawKeycodeEntry{usb: 0x07001d, evdev: 0x002c, xkb: 0x0034, windows: 0x002c, mac: 0x0006, code: "KeyZ", key: .key_z},
+	RawKeycodeEntry{usb: 0x07001e, evdev: 0x0002, xkb: 0x000a, windows: 0x0002, mac: 0x0012, code: "Digit1", key: .digit_1},
+	RawKeycodeEntry{usb: 0x07001f, evdev: 0x0003, xkb: 0x000b, windows: 0x0003, mac: 0x0013, code: "Digit2", key: .digit_2},
+	RawKeycodeEntry{usb: 0x070020, evdev: 0x0004, xkb: 0x000c, windows: 0x0004, mac: 0x0014, code: "Digit3", key: .digit_3},
+	RawKeycodeEntry{usb: 0x070021, evdev: 0x0005, xkb: 0x000d, windows: 0x0005, mac: 0x0015, code: "Digit4", key: .digit_4},
+	RawKeycodeEntry{usb: 0x070022, evdev: 0x0006, xkb: 0x000e, windows: 0x0006, mac: 0x0017, code: "Digit5", key: .digit_5},
+	RawKeycodeEntry{usb: 0x070023, evdev: 0x0007, xkb: 0x000f, windows: 0x0007, mac: 0x0016, code: "Digit6", key: .digit_6},
+	RawKeycodeEntry{usb: 0x070024, evdev: 0x0008, xkb: 0x0010, windows: 0x0008, mac: 0x001a, code: "Digit7", key: .digit_7},
+	RawKeycodeEntry{usb: 0x070025, evdev: 0x0009, xkb: 0x0011, windows: 0x0009, mac: 0x001c, code: "Digit8", key: .digit_8},
+	RawKeycodeEntry{usb: 0x070026, evdev: 0x000a, xkb: 0x0012, windows: 0x000a, mac: 0x0019, code: "Digit9", key: .digit_9},
+	RawKeycodeEntry{usb: 0x070027, evdev: 0x000b, xkb: 0x0013, windows: 0x000b, mac: 0x001d, code: "Digit0", key: .digit_0},
+	RawKeycodeEntry{usb: 0x070028, evdev: 0x001c, xkb: 0x0024, windows: 0x001c, mac: 0x0024, code: "Enter", key: .enter},
+	RawKeycodeEntry{usb: 0x070029, evdev: 0x0001, xkb: 0x0009, windows: 0x0001, mac: 0x0035, code: "Escape", key: .escape},
+	RawKeycodeEntry{usb: 0x07002a, evdev: 0x000e, xkb: 0x0016, windows: 0x000e, mac: 0x0033, code: "Backspace", key: .backspace},
+	RawKeycodeEntry{usb: 0x07002b, evdev: 0x000f, xkb: 0x0017, windows: 0x000f, mac: 0x0030, code: "Tab", key: .tab},
+	RawKeycodeEntry{usb: 0x07002c, evdev: 0x0039, xkb: 0x0041, windows: 0x0039, mac: 0x0031, code: "Space", key: .space},
+	RawKeycodeEntry{usb: 0x07002d, evdev: 0x000c, xkb: 0x0014, windows: 0x000c, mac: 0x001b, code: "Minus", key: .minus},
+	RawKeycodeEntry{usb: 0x07002e, evdev: 0x000d, xkb: 0x0015, windows: 0x000d, mac: 0x0018, code: "Equal", key: .equal},
+	RawKeycodeEntry{usb: 0x07002f, evdev: 0x001a, xkb: 0x0022, windows: 0x001a, mac: 0x0021, code: "BracketLeft", key: .bracket_left},
+	RawKeycodeEntry{usb: 0x070030, evdev: 0x001b, xkb: 0x0023, windows: 0x001b, mac: 0x001e, code: "BracketRight", key: .bracket_right},
+	RawKeycodeEntry{usb: 0x070031, evdev: 0x002b, xkb: 0x0033, windows: 0x002b, mac: 0x002a, code: "Backslash", key: .backslash},
+	RawKeycodeEntry{usb: 0x070033, evdev: 0x0027, xkb: 0x002f, windows: 0x0027, mac: 0x0029, code: "Semicolon", key: .semicolon},
+	RawKeycodeEntry{usb: 0x070034, evdev: 0x0028, xkb: 0x0030, windows: 0x0028, mac: 0x0027, code: "Quote", key: .quote},
+	RawKeycodeEntry{usb: 0x070035, evdev: 0x0029, xkb: 0x0031, windows: 0x0029, mac: 0x0032, code: "Backquote", key: .backquote},
+	RawKeycodeEntry{usb: 0x070036, evdev: 0x0033, xkb: 0x003b, windows: 0x0033, mac: 0x002b, code: "Comma", key: .comma},
+	RawKeycodeEntry{usb: 0x070037, evdev: 0x0034, xkb: 0x003c, windows: 0x0034, mac: 0x002f, code: "Period", key: .period},
+	RawKeycodeEntry{usb: 0x070038, evdev: 0x0035, xkb: 0x003d, windows: 0x0035, mac: 0x002c, code: "Slash", key: .slash},
+	RawKeycodeEntry{usb: 0x070039, evdev: 0x003a, xkb: 0x0042, windows: 0x003a, mac: 0x0039, code: "CapsLock", key: .caps_lock},
+	RawKeycodeEntry{usb: 0x07003a, evdev: 0x003b, xkb: 0x0043, windows: 0x003b, mac: 0x007a, code: "F1", key: .f1},
+	RawKeycodeEntry{usb: 0x07003b, evdev: 0x003c, xkb: 0x0044, windows: 0x003c, mac: 0x0078, code: "F2", key: .f2},
+	RawKeycodeEntry{usb: 0x07003c, evdev: 0x003d, xkb: 0x0045, windows: 0x003d, mac: 0x0063, code: "F3", key: .f3},
+	RawKeycodeEntry{usb: 0x07003d, evdev: 0x003e, xkb: 0x0046, windows: 0x003e, mac: 0x0076, code: "F4", key: .f4},
+	RawKeycodeEntry{usb: 0x07003e, evdev: 0x003f, xkb: 0x0047, windows: 0x003f, mac: 0x0060, code: "F5", key: .f5},
+	RawKeycodeEntry{usb: 0x07003f, evdev: 0x0040, xkb: 0x0048, windows: 0x0040, mac: 0x0061, code: "F6", key: .f6},
+	RawKeycodeEntry{usb: 0x070040, evdev: 0x0041, xkb: 0x0049, windows: 0x0041, mac: 0x0062, code: "F7", key: .f7},
+	RawKeycodeEntry{usb: 0x070041, evdev: 0x0042, xkb: 0x004a, windows: 0x0042, mac: 0x0064, code: "F8", key: .f8},
+	RawKeycodeEntry{usb: 0x070042, evdev: 0x0043, xkb: 0x004b, windows: 0x0043, mac: 0x0065, code: "F9", key: .f9},
+	RawKeycodeEntry{usb: 0x070043, evdev: 0x0044, xkb: 0x004c, windows: 0x0044, mac: 0x006d, code: "F10", key: .f10},
+	RawKeycodeEntry{usb: 0x070044, evdev: 0x0057, xkb: 0x005f, windows: 0x0057, mac: 0x0067, code: "F11", key: .f11},
+	RawKeycodeEntry{usb: 0x070045, evdev: 0x0058, xkb: 0x0060, windows: 0x0058, mac: 0x006f, code: "F12", key: .f12},
+	RawKeycodeEntry{usb: 0x070046, evdev: 0x0063, xkb: 0x006b, windows: 0xe037, mac: 0xffff, code: "PrintScreen", key: .print_screen},
+	RawKeycodeEntry{usb: 0x070047, evdev: 0x0046, xkb: 0x004e, windows: 0x0046, mac: 0xffff, code: "ScrollLock", key: .scroll_lock},
+	RawKeycodeEntry{usb: 0x070048, evdev: 0x0077, xkb: 0x007f, windows: 0x0045, mac: 0xffff, code: "Pause", key: .pause},
+	RawKeycodeEntry{usb: 0x070049, evdev: 0x006e, xkb: 0x0076, windows: 0xe052, mac: 0x0072, code: "Insert", key: .insert},
+	RawKeycodeEntry{usb: 0x07004a, evdev: 0x0066, xkb: 0x006e, windows: 0xe047, mac: 0x0073, code: "Home", key: .home},
+	RawKeycodeEntry{usb: 0x07004b, evdev: 0x0068, xkb: 0x0070, windows: 0xe049, mac: 0x0074, code: "PageUp", key: .page_up},
+	RawKeycodeEntry{usb: 0x07004c, evdev: 0x006f, xkb: 0x0077, windows: 0xe053, mac: 0x0075, code: "Delete", key: .delete},
+	RawKeycodeEntry{usb: 0x07004d, evdev: 0x006b, xkb: 0x0073, windows: 0xe04f, mac: 0x0077, code: "End", key: .end},
+	RawKeycodeEntry{usb: 0x07004e, evdev: 0x006d, xkb: 0x0075, windows: 0xe051, mac: 0x0079, code: "PageDown", key: .page_down},
+	RawKeycodeEntry{usb: 0x07004f, evdev: 0x006a, xkb: 0x0072, windows: 0xe04d, mac: 0x007c, code: "ArrowRight", key: .arrow_right},
+	RawKeycodeEntry{usb: 0x070050, evdev: 0x0069, xkb: 0x0071, windows: 0xe04b, mac: 0x007b, code: "ArrowLeft", key: .arrow_left},
+	RawKeycodeEntry{usb: 0x070051, evdev: 0x006c, xkb: 0x0074, windows: 0xe050, mac: 0x007d, code: "ArrowDown", key: .arrow_down},
+	RawKeycodeEntry{usb: 0x070052, evdev: 0x0067, xkb: 0x006f, windows: 0xe048, mac: 0x007e, code: "ArrowUp", key: .arrow_up},
+	RawKeycodeEntry{usb: 0x070053, evdev: 0x0045, xkb: 0x004d, windows: 0xe045, mac: 0x0047, code: "NumLock", key: .num_lock},
+	RawKeycodeEntry{usb: 0x070054, evdev: 0x0062, xkb: 0x006a, windows: 0xe035, mac: 0x004b, code: "NumpadDivide", key: .numpad_divide},
+	RawKeycodeEntry{usb: 0x070055, evdev: 0x0037, xkb: 0x003f, windows: 0x0037, mac: 0x0043, code: "NumpadMultiply", key: .numpad_multiply},
+	RawKeycodeEntry{usb: 0x070056, evdev: 0x004a, xkb: 0x0052, windows: 0x004a, mac: 0x004e, code: "NumpadSubtract", key: .numpad_subtract},
+	RawKeycodeEntry{usb: 0x070057, evdev: 0x004e, xkb: 0x0056, windows: 0x004e, mac: 0x0045, code: "NumpadAdd", key: .numpad_add},
+	RawKeycodeEntry{usb: 0x070058, evdev: 0x0060, xkb: 0x0068, windows: 0xe01c, mac: 0x004c, code: "NumpadEnter", key: .numpad_enter},
+	RawKeycodeEntry{usb: 0x070059, evdev: 0x004f, xkb: 0x0057, windows: 0x004f, mac: 0x0053, code: "Numpad1", key: .numpad_1},
+	RawKeycodeEntry{usb: 0x07005a, evdev: 0x0050, xkb: 0x0058, windows: 0x0050, mac: 0x0054, code: "Numpad2", key: .numpad_2},
+	RawKeycodeEntry{usb: 0x07005b, evdev: 0x0051, xkb: 0x0059, windows: 0x0051, mac: 0x0055, code: "Numpad3", key: .numpad_3},
+	RawKeycodeEntry{usb: 0x07005c, evdev: 0x004b, xkb: 0x0053, windows: 0x004b, mac: 0x0056, code: "Numpad4", key: .numpad_4},
+	RawKeycodeEntry{usb: 0x07005d, evdev: 0x004c, xkb: 0x0054, windows: 0x004c, mac: 0x0057, code: "Numpad5", key: .numpad_5},
+	RawKeycodeEntry{usb: 0x07005e, evdev: 0x004d, xkb: 0x0055, windows: 0x004d, mac: 0x0058, code: "Numpad6", key: .numpad_6},
+	RawKeycodeEntry{usb: 0x07005f, evdev: 0x0047, xkb: 0x004f, windows: 0x0047, mac: 0x0059, code: "Numpad7", key: .numpad_7},
+	RawKeycodeEntry{usb: 0x070060, evdev: 0x0048, xkb: 0x0050, windows: 0x0048, mac: 0x005b, code: "Numpad8", key: .numpad_8},
+	RawKeycodeEntry{usb: 0x070061, evdev: 0x0049, xkb: 0x0051, windows: 0x0049, mac: 0x005c, code: "Numpad9", key: .numpad_9},
+	RawKeycodeEntry{usb: 0x070062, evdev: 0x0052, xkb: 0x005a, windows: 0x0052, mac: 0x0052, code: "Numpad0", key: .numpad_0},
+	RawKeycodeEntry{usb: 0x070063, evdev: 0x0053, xkb: 0x005b, windows: 0x0053, mac: 0x0041, code: "NumpadDecimal", key: .numpad_decimal},
+	RawKeycodeEntry{usb: 0x070064, evdev: 0x0056, xkb: 0x005e, windows: 0x0056, mac: 0x000a, code: "IntlBackslash", key: .unidentified},
+	RawKeycodeEntry{usb: 0x070065, evdev: 0x007f, xkb: 0x0087, windows: 0xe05d, mac: 0x006e, code: "ContextMenu", key: .context_menu},
+	RawKeycodeEntry{usb: 0x070066, evdev: 0x0074, xkb: 0x007c, windows: 0xe05e, mac: 0xffff, code: "Power", key: .unidentified},
+	RawKeycodeEntry{usb: 0x070067, evdev: 0x0075, xkb: 0x007d, windows: 0x0059, mac: 0x0051, code: "NumpadEqual", key: .numpad_equal},
+	RawKeycodeEntry{usb: 0x070068, evdev: 0x00b7, xkb: 0x00bf, windows: 0x0064, mac: 0x0069, code: "F13", key: .f13},
+	RawKeycodeEntry{usb: 0x070069, evdev: 0x00b8, xkb: 0x00c0, windows: 0x0065, mac: 0x006b, code: "F14", key: .f14},
+	RawKeycodeEntry{usb: 0x07006a, evdev: 0x00b9, xkb: 0x00c1, windows: 0x0066, mac: 0x0071, code: "F15", key: .f15},
+	RawKeycodeEntry{usb: 0x07006b, evdev: 0x00ba, xkb: 0x00c2, windows: 0x0067, mac: 0x006a, code: "F16", key: .f16},
+	RawKeycodeEntry{usb: 0x07006c, evdev: 0x00bb, xkb: 0x00c3, windows: 0x0068, mac: 0x0040, code: "F17", key: .f17},
+	RawKeycodeEntry{usb: 0x07006d, evdev: 0x00bc, xkb: 0x00c4, windows: 0x0069, mac: 0x004f, code: "F18", key: .f18},
+	RawKeycodeEntry{usb: 0x07006e, evdev: 0x00bd, xkb: 0x00c5, windows: 0x006a, mac: 0x0050, code: "F19", key: .f19},
+	RawKeycodeEntry{usb: 0x07006f, evdev: 0x00be, xkb: 0x00c6, windows: 0x006b, mac: 0x005a, code: "F20", key: .f20},
+	RawKeycodeEntry{usb: 0x070070, evdev: 0x00bf, xkb: 0x00c7, windows: 0x006c, mac: 0xffff, code: "F21", key: .f21},
+	RawKeycodeEntry{usb: 0x070071, evdev: 0x00c0, xkb: 0x00c8, windows: 0x006d, mac: 0xffff, code: "F22", key: .f22},
+	RawKeycodeEntry{usb: 0x070072, evdev: 0x00c1, xkb: 0x00c9, windows: 0x006e, mac: 0xffff, code: "F23", key: .f23},
+	RawKeycodeEntry{usb: 0x070073, evdev: 0x00c2, xkb: 0x00ca, windows: 0x0076, mac: 0xffff, code: "F24", key: .f24},
+	RawKeycodeEntry{usb: 0x070074, evdev: 0x0086, xkb: 0x008e, windows: 0x0000, mac: 0xffff, code: "Open", key: .unidentified},
+	RawKeycodeEntry{usb: 0x070075, evdev: 0x008a, xkb: 0x0092, windows: 0xe03b, mac: 0xffff, code: "Help", key: .unidentified},
+	RawKeycodeEntry{usb: 0x070077, evdev: 0x0084, xkb: 0x008c, windows: 0x0000, mac: 0xffff, code: "Select", key: .unidentified},
+	RawKeycodeEntry{usb: 0x070079, evdev: 0x0081, xkb: 0x0089, windows: 0x0000, mac: 0xffff, code: "Again", key: .unidentified},
+	RawKeycodeEntry{usb: 0x07007a, evdev: 0x0083, xkb: 0x008b, windows: 0xe008, mac: 0xffff, code: "Undo", key: .unidentified},
+	RawKeycodeEntry{usb: 0x07007b, evdev: 0x0089, xkb: 0x0091, windows: 0xe017, mac: 0xffff, code: "Cut", key: .cut},
+	RawKeycodeEntry{usb: 0x07007c, evdev: 0x0085, xkb: 0x008d, windows: 0xe018, mac: 0xffff, code: "Copy", key: .copy},
+	RawKeycodeEntry{usb: 0x07007d, evdev: 0x0087, xkb: 0x008f, windows: 0xe00a, mac: 0xffff, code: "Paste", key: .paste},
+	RawKeycodeEntry{usb: 0x07007e, evdev: 0x0088, xkb: 0x0090, windows: 0x0000, mac: 0xffff, code: "Find", key: .unidentified},
+	RawKeycodeEntry{usb: 0x07007f, evdev: 0x0071, xkb: 0x0079, windows: 0xe020, mac: 0x004a, code: "AudioVolumeMute", key: .unidentified},
+	RawKeycodeEntry{usb: 0x070080, evdev: 0x0073, xkb: 0x007b, windows: 0xe030, mac: 0x0048, code: "AudioVolumeUp", key: .unidentified},
+	RawKeycodeEntry{usb: 0x070081, evdev: 0x0072, xkb: 0x007a, windows: 0xe02e, mac: 0x0049, code: "AudioVolumeDown", key: .unidentified},
+	RawKeycodeEntry{usb: 0x070085, evdev: 0x0079, xkb: 0x0081, windows: 0x007e, mac: 0x005f, code: "NumpadComma", key: .unidentified},
+	RawKeycodeEntry{usb: 0x070087, evdev: 0x0059, xkb: 0x0061, windows: 0x0073, mac: 0x005e, code: "IntlRo", key: .unidentified},
+	RawKeycodeEntry{usb: 0x070088, evdev: 0x005d, xkb: 0x0065, windows: 0x0070, mac: 0xffff, code: "KanaMode", key: .unidentified},
+	RawKeycodeEntry{usb: 0x070089, evdev: 0x007c, xkb: 0x0084, windows: 0x007d, mac: 0x005d, code: "IntlYen", key: .unidentified},
+	RawKeycodeEntry{usb: 0x07008a, evdev: 0x005c, xkb: 0x0064, windows: 0x0079, mac: 0xffff, code: "Convert", key: .unidentified},
+	RawKeycodeEntry{usb: 0x07008b, evdev: 0x005e, xkb: 0x0066, windows: 0x007b, mac: 0xffff, code: "NonConvert", key: .unidentified},
+	RawKeycodeEntry{usb: 0x070090, evdev: 0x007a, xkb: 0x0082, windows: 0x0072, mac: 0x0068, code: "Lang1", key: .unidentified},
+	RawKeycodeEntry{usb: 0x070091, evdev: 0x007b, xkb: 0x0083, windows: 0x0071, mac: 0x0066, code: "Lang2", key: .unidentified},
+	RawKeycodeEntry{usb: 0x070092, evdev: 0x005a, xkb: 0x0062, windows: 0x0078, mac: 0xffff, code: "Lang3", key: .unidentified},
+	RawKeycodeEntry{usb: 0x070093, evdev: 0x005b, xkb: 0x0063, windows: 0x0077, mac: 0xffff, code: "Lang4", key: .unidentified},
+	RawKeycodeEntry{usb: 0x070094, evdev: 0x0055, xkb: 0x005d, windows: 0x0000, mac: 0xffff, code: "Lang5", key: .unidentified},
+	RawKeycodeEntry{usb: 0x07009b, evdev: 0x0000, xkb: 0x0000, windows: 0x0000, mac: 0xffff, code: "Abort", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0700a3, evdev: 0x0000, xkb: 0x0000, windows: 0x0000, mac: 0xffff, code: "Props", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0700b6, evdev: 0x00b3, xkb: 0x00bb, windows: 0x0000, mac: 0xffff, code: "NumpadParenLeft", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0700b7, evdev: 0x00b4, xkb: 0x00bc, windows: 0x0000, mac: 0xffff, code: "NumpadParenRight", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0700bb, evdev: 0x0000, xkb: 0x0000, windows: 0x0000, mac: 0xffff, code: "NumpadBackspace", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0700d0, evdev: 0x0000, xkb: 0x0000, windows: 0x0000, mac: 0xffff, code: "NumpadMemoryStore", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0700d1, evdev: 0x0000, xkb: 0x0000, windows: 0x0000, mac: 0xffff, code: "NumpadMemoryRecall", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0700d2, evdev: 0x0000, xkb: 0x0000, windows: 0x0000, mac: 0xffff, code: "NumpadMemoryClear", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0700d3, evdev: 0x0000, xkb: 0x0000, windows: 0x0000, mac: 0xffff, code: "NumpadMemoryAdd", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0700d4, evdev: 0x0000, xkb: 0x0000, windows: 0x0000, mac: 0xffff, code: "NumpadMemorySubtract", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0700d7, evdev: 0x0076, xkb: 0x007e, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0700d8, evdev: 0x0000, xkb: 0x0000, windows: 0x0000, mac: 0xffff, code: "NumpadClear", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0700d9, evdev: 0x0000, xkb: 0x0000, windows: 0x0000, mac: 0xffff, code: "NumpadClearEntry", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0700e0, evdev: 0x001d, xkb: 0x0025, windows: 0x001d, mac: 0x003b, code: "ControlLeft", key: .control_left},
+	RawKeycodeEntry{usb: 0x0700e1, evdev: 0x002a, xkb: 0x0032, windows: 0x002a, mac: 0x0038, code: "ShiftLeft", key: .shift_left},
+	RawKeycodeEntry{usb: 0x0700e2, evdev: 0x0038, xkb: 0x0040, windows: 0x0038, mac: 0x003a, code: "AltLeft", key: .alt_left},
+	RawKeycodeEntry{usb: 0x0700e3, evdev: 0x007d, xkb: 0x0085, windows: 0xe05b, mac: 0x0037, code: "MetaLeft", key: .meta_left},
+	RawKeycodeEntry{usb: 0x0700e4, evdev: 0x0061, xkb: 0x0069, windows: 0xe01d, mac: 0x003e, code: "ControlRight", key: .control_right},
+	RawKeycodeEntry{usb: 0x0700e5, evdev: 0x0036, xkb: 0x003e, windows: 0x0036, mac: 0x003c, code: "ShiftRight", key: .shift_right},
+	RawKeycodeEntry{usb: 0x0700e6, evdev: 0x0064, xkb: 0x006c, windows: 0xe038, mac: 0x003d, code: "AltRight", key: .alt_right},
+	RawKeycodeEntry{usb: 0x0700e7, evdev: 0x007e, xkb: 0x0086, windows: 0xe05c, mac: 0x0036, code: "MetaRight", key: .meta_right},
+	RawKeycodeEntry{usb: 0x0c0060, evdev: 0x0166, xkb: 0x016e, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0061, evdev: 0x0172, xkb: 0x017a, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c006f, evdev: 0x00e1, xkb: 0x00e9, windows: 0x0000, mac: 0xffff, code: "BrightnessUp", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0070, evdev: 0x00e0, xkb: 0x00e8, windows: 0x0000, mac: 0xffff, code: "BrightnessDown", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0072, evdev: 0x01af, xkb: 0x01b7, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0073, evdev: 0x0250, xkb: 0x0258, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0074, evdev: 0x0251, xkb: 0x0259, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0075, evdev: 0x00f4, xkb: 0x00fc, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0079, evdev: 0x00e6, xkb: 0x00ee, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c007a, evdev: 0x00e5, xkb: 0x00ed, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c007c, evdev: 0x00e4, xkb: 0x00ec, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0083, evdev: 0x0195, xkb: 0x019d, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c008c, evdev: 0x00a9, xkb: 0x00b1, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c008d, evdev: 0x016a, xkb: 0x0172, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0094, evdev: 0x00ae, xkb: 0x00b6, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c009c, evdev: 0x019a, xkb: 0x01a2, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c009d, evdev: 0x019b, xkb: 0x01a3, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c00b0, evdev: 0x00cf, xkb: 0x00d7, windows: 0x0000, mac: 0xffff, code: "MediaPlay", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c00b1, evdev: 0x00c9, xkb: 0x00d1, windows: 0x0000, mac: 0xffff, code: "MediaPause", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c00b2, evdev: 0x00a7, xkb: 0x00af, windows: 0x0000, mac: 0xffff, code: "MediaRecord", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c00b3, evdev: 0x00d0, xkb: 0x00d8, windows: 0x0000, mac: 0xffff, code: "MediaFastForward", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c00b4, evdev: 0x00a8, xkb: 0x00b0, windows: 0x0000, mac: 0xffff, code: "MediaRewind", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c00b5, evdev: 0x00a3, xkb: 0x00ab, windows: 0xe019, mac: 0xffff, code: "MediaTrackNext", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c00b6, evdev: 0x00a5, xkb: 0x00ad, windows: 0xe010, mac: 0xffff, code: "MediaTrackPrevious", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c00b7, evdev: 0x00a6, xkb: 0x00ae, windows: 0xe024, mac: 0xffff, code: "MediaStop", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c00b8, evdev: 0x00a1, xkb: 0x00a9, windows: 0xe02c, mac: 0xffff, code: "Eject", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c00cd, evdev: 0x00a4, xkb: 0x00ac, windows: 0xe022, mac: 0xffff, code: "MediaPlayPause", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c00cf, evdev: 0x0246, xkb: 0x024e, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c00d8, evdev: 0x024a, xkb: 0x0252, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c00d9, evdev: 0x0249, xkb: 0x0251, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c00e5, evdev: 0x00d1, xkb: 0x00d9, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0183, evdev: 0x00ab, xkb: 0x00b3, windows: 0xe06d, mac: 0xffff, code: "MediaSelect", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0184, evdev: 0x01a5, xkb: 0x01ad, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0186, evdev: 0x01a7, xkb: 0x01af, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c018a, evdev: 0x009b, xkb: 0x00a3, windows: 0xe06c, mac: 0xffff, code: "LaunchMail", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c018d, evdev: 0x01ad, xkb: 0x01b5, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c018e, evdev: 0x018d, xkb: 0x0195, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0192, evdev: 0x008c, xkb: 0x0094, windows: 0xe021, mac: 0xffff, code: "LaunchApp2", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0194, evdev: 0x0090, xkb: 0x0098, windows: 0xe06b, mac: 0xffff, code: "LaunchApp1", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0196, evdev: 0x0096, xkb: 0x009e, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c019e, evdev: 0x0098, xkb: 0x00a0, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c019f, evdev: 0x0243, xkb: 0x024b, windows: 0x0000, mac: 0xffff, code: "LaunchControlPanel", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c01a2, evdev: 0x0244, xkb: 0x024c, windows: 0x0000, mac: 0xffff, code: "SelectTask", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c01a7, evdev: 0x00eb, xkb: 0x00f3, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c01ab, evdev: 0x01b0, xkb: 0x01b8, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c01ae, evdev: 0x0176, xkb: 0x017e, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c01b1, evdev: 0x0245, xkb: 0x024d, windows: 0x0000, mac: 0xffff, code: "LaunchScreenSaver", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c01cb, evdev: 0x0247, xkb: 0x024f, windows: 0x0000, mac: 0xffff, code: "LaunchAssistant", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c01b7, evdev: 0x0188, xkb: 0x0190, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0201, evdev: 0x00b5, xkb: 0x00bd, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0203, evdev: 0x00ce, xkb: 0x00d6, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0207, evdev: 0x00ea, xkb: 0x00f2, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0208, evdev: 0x00d2, xkb: 0x00da, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0221, evdev: 0x00d9, xkb: 0x00e1, windows: 0xe065, mac: 0xffff, code: "BrowserSearch", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0223, evdev: 0x00ac, xkb: 0x00b4, windows: 0xe032, mac: 0xffff, code: "BrowserHome", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0224, evdev: 0x009e, xkb: 0x00a6, windows: 0xe06a, mac: 0xffff, code: "BrowserBack", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0225, evdev: 0x009f, xkb: 0x00a7, windows: 0xe069, mac: 0xffff, code: "BrowserForward", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0226, evdev: 0x0080, xkb: 0x0088, windows: 0xe068, mac: 0xffff, code: "BrowserStop", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0227, evdev: 0x00ad, xkb: 0x00b5, windows: 0xe067, mac: 0xffff, code: "BrowserRefresh", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c022a, evdev: 0x009c, xkb: 0x00a4, windows: 0xe066, mac: 0xffff, code: "BrowserFavorites", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c022d, evdev: 0x01a2, xkb: 0x01aa, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c022e, evdev: 0x01a3, xkb: 0x01ab, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0232, evdev: 0x0174, xkb: 0x017c, windows: 0x0000, mac: 0xffff, code: "ZoomToggle", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0279, evdev: 0x00b6, xkb: 0x00be, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c0289, evdev: 0x00e8, xkb: 0x00f0, windows: 0x0000, mac: 0xffff, code: "MailReply", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c028b, evdev: 0x00e9, xkb: 0x00f1, windows: 0x0000, mac: 0xffff, code: "MailForward", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c028c, evdev: 0x00e7, xkb: 0x00ef, windows: 0x0000, mac: 0xffff, code: "MailSend", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c029d, evdev: 0x0248, xkb: 0x0250, windows: 0x0000, mac: 0xffff, code: "KeyboardLayoutSelect", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c029f, evdev: 0x0078, xkb: 0x0080, windows: 0x0000, mac: 0xffff, code: "ShowAllWindows", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c02a2, evdev: 0x00cc, xkb: 0x00d4, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+	RawKeycodeEntry{usb: 0x0c02d0, evdev: 0x0279, xkb: 0x0281, windows: 0x0000, mac: 0xffff, code: "", key: .unidentified},
+ ]
+
+// The same OS-specific native column selected by Ghostty's entries builder.
+pub const keycodes_entries = native_keycodes_entries()
+
+fn native_keycodes_entries() []KeycodeFullEntry {
+	mut result := []KeycodeFullEntry{cap: raw_keycodes_entries.len}
+	for raw in raw_keycodes_entries {
+		native := $if windows { raw.windows } $else $if linux || freebsd { raw.xkb } $else { raw.mac }
+		result << KeycodeFullEntry{key: raw.key, usb: raw.usb, native: native, code: raw.code}
+	}
+	return result
+}
+
 pub fn native_keycode_to_key(native u32) Key {
-	$if linux || freebsd {
-		return xkb_keycode_to_key(native)
-	} $else {
-		return mac_keycode_to_key(native)
+	for entry in keycodes_entries {
+		if entry.native == native { return entry.key }
 	}
+	return .unidentified
 }
 
-// mac_keycode_to_key maps a macOS virtual key code to a Key enum value.
-// Returns .unidentified if the keycode is not recognized.
-// Mac virtual key codes range from 0x00 to 0x7e, so a linear scan
-// of the keycodes_entries table is used (same approach as apprt).
+pub fn xkb_keycode_to_key(native u32) Key {
+	for raw in raw_keycodes_entries {
+		if raw.xkb == native { return raw.key }
+	}
+	return .unidentified
+}
+
+pub fn windows_keycode_to_key(native u32) Key {
+	for raw in raw_keycodes_entries {
+		if raw.windows == native { return raw.key }
+	}
+	return .unidentified
+}
+
 pub fn mac_keycode_to_key(native u32) Key {
-	for entry in keycodes_entries {
-		if entry.native == native {
-			return entry.key
-		}
+	for raw in raw_keycodes_entries {
+		if raw.mac == native { return raw.key }
 	}
 	return .unidentified
 }
