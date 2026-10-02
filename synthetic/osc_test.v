@@ -98,17 +98,17 @@ fn test_osc_generator_invalid_output_is_rejected() {
 	}
 }
 
-fn test_osc_generator_reports_fixed_writer_overflow() {
-	mut rng := rand.new_default(seed_: [u32(0xc0ffeeee), 0xeeeeeeee])
+fn test_osc_conemu_progress_preserves_source_limit_behavior() {
+	mut rng := rand.new_default(seed_: [u32(0), 0])
 	defer { rng.free() }
 	mut generator := Osc.init(rng)
-	generator.p_valid = 0
-	generator.p_invalid_kind = [f64(0), 1]!
-	generator.next(3) or {
-		assert err.msg() == 'WriteFailed'
-		return
-	}
-	assert false, 'expected the fixed OSC writer boundary to fail'
+	mut weights := [13]f64{}
+	weights[int(OscValidKind.conemu_progress)] = 1
+	generator.p_valid_kind = weights
+	sequence := generator.next(3)!
+	assert sequence.len > 3
+	assert sequence[..4] == [u8(0x1b), `]`, `9`, `;`]
+	assert sequence.last() == 0x07
 }
 
 fn test_osc_validity_uses_source_comparison() {

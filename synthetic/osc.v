@@ -40,7 +40,9 @@ pub mut:
 }
 
 pub fn Osc.init(rng &rand.PRNG) Osc {
-	return Osc{ rng: unsafe { rng } }
+	return Osc{
+		rng: unsafe { rng }
+	}
 }
 
 pub fn (mut self Osc) generator() Generator {
@@ -53,9 +55,6 @@ pub fn (mut self Osc) next(max_len usize) ![]u8 {
 	}
 	assert max_len >= 3
 	payload := self.next_unwrapped(max_len - 3)!
-	if usize(payload.len) > max_len - 3 {
-		return error('WriteFailed')
-	}
 	mut result := [u8(0x1b), `]`]
 	result << payload
 	result << u8(0x07)
@@ -136,7 +135,8 @@ fn (mut self Osc) next_unwrapped_valid_exact(kind OscValidKind, max_len usize) !
 				return result
 			}
 			result << '22;'.bytes()
-			result << self.random_bytes(synthetic_min_usize(32, max_len - 3), osc_alphabetic_alphabet)!
+			result << self.random_bytes(synthetic_min_usize(32, max_len - 3),
+				osc_alphabetic_alphabet)!
 		}
 		.rxvt_notify {
 			prefix := '777;notify;'
@@ -183,7 +183,8 @@ fn (mut self Osc) next_unwrapped_valid_exact(kind OscValidKind, max_len usize) !
 			for _ in 0 .. count {
 				result << `/`
 				remaining--
-				component := self.random_bytes(synthetic_min_usize(16, remaining), osc_alphanumeric_alphabet)!
+				component := self.random_bytes(synthetic_min_usize(16, remaining),
+					osc_alphanumeric_alphabet)!
 				result << component
 				remaining -= usize(component.len)
 			}
@@ -224,12 +225,15 @@ fn (mut self Osc) next_unwrapped_valid_exact(kind OscValidKind, max_len usize) !
 			result << self.random_bytes(max_len - 3, osc_ascii_alphabet)!
 		}
 	}
+
 	return result
 }
 
 fn (mut self Osc) next_unwrapped_invalid_exact(kind OscInvalidKind, max_len usize) ![]u8 {
 	return match kind {
-		.random { self.random_bytes(max_len, [])! }
+		.random {
+			self.random_bytes(max_len, [])!
+		}
 		.good_prefix {
 			mut result := '133;'.bytes()
 			if max_len > 4 {
