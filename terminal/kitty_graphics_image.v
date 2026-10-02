@@ -561,7 +561,7 @@ fn (mut self LoadingImage) decode_png() ! {
 }
 
 // Returns true if path appears to be in a temporary directory.
-// Copies logic from Kitty: checks common temp dirs and TMPDIR env.
+// Copies the upstream checks and the selected OS temporary directory.
 fn is_path_in_temp_dir(path string) bool {
 	if path.starts_with('/tmp') {
 		return true
@@ -570,23 +570,20 @@ fn is_path_in_temp_dir(path string) bool {
 		return true
 	}
 
-	// Candidate temporary directories. For each we check both the raw
-	// prefix and its resolved (realpath) prefix, since the temporary dir
-	// is sometimes a symlink. On macOS, for example, /tmp is
-	// /private/tmp and $TMPDIR is under /private/var/...
-	mut candidates := ['/tmp', '/var/tmp']
-	tmpdir := os.getenv('TMPDIR')
-	if tmpdir.len > 0 {
-		candidates << tmpdir
+	// src/os/file.zig chooses TMPDIR, then TMP, then /tmp on POSIX.
+	// Only that selected directory has its realpath checked.
+	mut selected := ?string(none)
+	$if windows {
+		selected = os.getenv_opt('TMP')
+	} $else {
+		selected = os.getenv_opt('TMPDIR')
+		if selected == none { selected = os.getenv_opt('TMP') }
+		if selected == none { selected = '/tmp' }
 	}
-	for dir in candidates {
-		if path.starts_with(dir) {
-			return true
-		}
+	if dir := selected {
+		if path.starts_with(dir) { return true }
 		real_dir := os.real_path(dir)
-		if real_dir.len > 0 && path.starts_with(real_dir) {
-			return true
-		}
+		if path.starts_with(real_dir) { return true }
 	}
 
 	return false

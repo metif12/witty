@@ -297,7 +297,7 @@ fn test_image_load_temporary_file_without_correct_path() {
 		assert false, 'failed to write temp file: ${err}'
 		return
 	}
-	path := os.real_path(tmp)
+	path := tmp
 	defer {
 		os.rm(path) or {}
 	}
@@ -336,7 +336,7 @@ fn test_image_load_rgb_not_compressed_temporary_file() {
 		assert false, 'failed to write temp file: ${err}'
 		return
 	}
-	path := os.real_path(tmp)
+	path := tmp
 
 	cmd := Command{
 		control: Control(ControlTransmit{
@@ -383,7 +383,7 @@ fn test_image_load_rgb_not_compressed_regular_file() {
 		assert false, 'failed to write temp file: ${err}'
 		return
 	}
-	path := os.real_path(tmp)
+	path := tmp
 	defer {
 		os.rm(path) or {}
 	}
@@ -431,7 +431,7 @@ fn test_image_load_png_not_compressed_regular_file() {
 		assert false, 'failed to write temp file: ${err}'
 		return
 	}
-	path := os.real_path(tmp)
+	path := tmp
 	defer {
 		os.rm(path) or {}
 	}
@@ -492,4 +492,27 @@ fn test_kitty_file_read_preserves_reader_limit_and_offset_contract() ! {
 	mut beyond := LoadingImage{}
 	beyond.read_file(.file, Transmission{offset: 99, size: 4}, path)!
 	assert beyond.data.len == 0
+}
+
+fn test_kitty_temp_dir_uses_source_selection_and_realpath() ! {
+	original_tmpdir := os.getenv_opt('TMPDIR')
+	original_tmp := os.getenv_opt('TMP')
+	defer {
+		if value := original_tmpdir { os.setenv('TMPDIR', value, true) } else { os.unsetenv('TMPDIR') }
+		if value := original_tmp { os.setenv('TMP', value, true) } else { os.unsetenv('TMP') }
+	}
+	os.unsetenv('TMPDIR')
+	os.setenv('TMP', '/witty-selected-temp', true)
+	assert is_path_in_temp_dir('/witty-selected-temp/tty-graphics-protocol')
+	assert !is_path_in_temp_dir('/var/tmp/tty-graphics-protocol')
+	os.setenv('TMPDIR', '/witty-preferred-temp', true)
+	assert is_path_in_temp_dir('/witty-preferred-temp/tty-graphics-protocol')
+	assert !is_path_in_temp_dir('/witty-selected-temp/tty-graphics-protocol')
+	assert is_path_in_temp_dir('/tmp/tty-graphics-protocol')
+	assert is_path_in_temp_dir('/dev/shm/tty-graphics-protocol')
+	os.setenv('TMPDIR', '', true)
+	// The source tests presence, so a present empty directory matches every prefix.
+	assert is_path_in_temp_dir('/arbitrary/tty-graphics-protocol')
+	os.setenv('TMPDIR', '/tmp', true)
+	assert is_path_in_temp_dir(os.real_path('/tmp') + '/tty-graphics-protocol')
 }
