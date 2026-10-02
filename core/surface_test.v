@@ -2030,3 +2030,22 @@ fn action_value[T](v apprt.ActionValue) T {
 	}
 	panic('action value is not the expected variant')
 }
+
+fn command_finished_failure_probe(_ voidptr, action apprt.RuntimeAction) !bool {
+	if action.action == .command_finished {
+		return error('notification callback failed')
+	}
+	return true
+}
+
+fn test_command_finished_notification_failure_does_not_abort_message_dispatch() ! {
+	mut runtime := apprt.RuntimeApp{ action_fn: command_finished_failure_probe }
+	mut surf := make_test_surface()
+	surf.rt_app = &runtime
+	surf.handle_message(apprt.SurfaceMessageStartCommand{})!
+	surf.handle_message(apprt.SurfaceMessageStopCommand{ exit_code: 7 })!
+	assert surf.command_timer == none
+	// Later mailbox work must remain processable after a best-effort notification.
+	surf.handle_message(apprt.SurfaceMessageSearchTotal{ total: 9 })!
+	assert surf.command_timer == none
+}

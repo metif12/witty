@@ -2571,7 +2571,9 @@ pub fn (mut self Surface) handle_message(msg apprt.SurfaceMessage) ! {
 							exit_code: msg.exit_code
 							duration: configpkg.Duration{ duration: duration }
 						}),
-				)!
+				) or {
+					log.warn('apprt failed to notify command finish=${err}')
+				}
 			}
 		}
 		apprt.SurfaceMessageSearchTotal {
