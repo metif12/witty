@@ -8,6 +8,8 @@ fn C.witty_macos_msg_void_f32(obj ObjId, selector Sel, value f32)
 fn C.witty_macos_color_rgba(r f64, g f64, b f64, a f64) ObjId
 fn C.witty_macos_msg_id_obj_f64(obj ObjId, selector Sel, value ObjId, amount f64) ObjId
 fn C.witty_macos_msg_super_void_u64(obj ObjId, selector Sel, value u64)
+fn C.witty_macos_window_super_void0(obj ObjId, selector Sel)
+fn C.witty_macos_window_super_void1(obj ObjId, selector Sel, value ObjId)
 fn C.witty_macos_array(objects &voidptr, count usize) ObjId
 
 @[heap]
@@ -30,7 +32,7 @@ fn native_window_data(window ObjId) ?&NativeWindowData { return g_native_windows
 pub fn native_tab_color(view voidptr) int { if data := native_window_data(msg_id(view,'window')) { return data.tab_color }; return 0 }
 pub fn set_native_tab_color(view voidptr, color int) { if mut data := native_window_data(msg_id(view,'window')) { data.tab_color = color; msg_void(data.window,'invalidateRestorableState') } }
 fn native_window_can_become_key(_self ObjId, _cmd Sel) bool { return true }
-fn native_window_update(self ObjId, cmd Sel) { msg_super_void(self, unsafe { C.sel_getName(cmd).vstring() }); update_native_titlebar(self) }
+fn native_window_update(self ObjId, cmd Sel) { C.witty_macos_window_super_void0(self, cmd); update_native_titlebar(self) }
 fn C.sel_getName(selector Sel) &char
 fn native_window_add_accessory(self ObjId, _cmd Sel, controller ObjId) {
 	if data := native_window_data(self) {
@@ -40,7 +42,7 @@ fn native_window_add_accessory(self ObjId, _cmd Sel, controller ObjId) {
 			msg_void1(controller, 'setIdentifier:', nsstring('_ghosttyTabBar'))
 		}
 	}
-	msg_super_void1(self, 'addTitlebarAccessoryViewController:', controller)
+	C.witty_macos_window_super_void1(self, sel('addTitlebarAccessoryViewController:'), controller)
 	if is_tab_bar_accessory(controller) { dispatch_main(push_native_tabs, self) }
 }
 fn native_window_remove_accessory(self ObjId, _cmd Sel, index u64) {
@@ -257,7 +259,7 @@ fn native_window_close(self ObjId, _cmd Sel) {
 	array := C.witty_macos_array(points.data, usize(points.len))
 	msg_void2(msg_id(get_class('NSUserDefaults'), 'standardUserDefaults'), 'setObject:forKey:', array, nsstring('NSWindowLastPosition'))
 	msg_void2(msg_id(get_class('NSNotificationCenter'), 'defaultCenter'), 'postNotificationName:object:', nsstring('TerminalWindowWillClose'), self)
-	msg_super_void(self, 'close')
+	C.witty_macos_window_super_void0(self, sel('close'))
 }
 fn restore_last_window_position(window ObjId) bool {
 	points := msg_id1(msg_id(get_class('NSUserDefaults'), 'standardUserDefaults'), 'arrayForKey:', nsstring('NSWindowLastPosition'))
