@@ -193,6 +193,7 @@ fn register_classes() {
 		}
 		add_method(delegate_cls, 'applicationDidFinishLaunching:', voidptr(vt_app_did_finish_launching), 'v@:@')
 		add_method(delegate_cls, 'applicationDidBecomeActive:', voidptr(vt_app_did_become_active), 'v@:@')
+		add_method(delegate_cls, 'applicationDidHide:', voidptr(vt_app_did_hide), 'v@:@')
 		add_method(delegate_cls, 'applicationDidResignActive:', voidptr(vt_app_did_resign_active), 'v@:@')
 		add_method(delegate_cls, 'vtKeyboardSelectionDidChange:', voidptr(vt_keyboard_selection_did_change), 'v@:@')
 		add_method(delegate_cls, 'applicationShouldTerminateAfterLastWindowClosed:', voidptr(vt_app_should_terminate_after_last_window_closed), 'B@:@')
@@ -526,6 +527,7 @@ fn vt_app_did_finish_launching(_self ObjId, _cmd Sel, _notification ObjId) {
 
 fn vt_app_did_become_active(_self ObjId, _cmd Sel, _notification ObjId) {
 	g_application_has_become_active = true
+	g_app_was_hidden = false
 	if g_app_focus_cb != unsafe { nil } {
 		g_app_focus_cb(true)
 	}

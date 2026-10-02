@@ -33,6 +33,7 @@ mut:
 	host &macos.NativeSplitHost = unsafe { nil }
 	focused &TermState = unsafe { nil }
 	force_opaque bool
+	quick bool
 }
 
 struct StandaloneRuntime {
@@ -146,6 +147,7 @@ fn do_new_window(source ?&TermState) bool {
 }
 
 fn do_new_tab(source ?&TermState) bool {
+	if current := source { if macos.quick_terminal_deny_tab(current.view) { return true } }
 	view := macos.new_tab(800, 600, '')
 	return create_surface(view, inherited_options(source, .tab)) != none
 }
@@ -169,6 +171,9 @@ fn close_state_now(mut state TermState) {
 		next := old_tree.focus_target(if old_tree.root.leaves()[0] == state.view { macos.SplitFocusDirection.next } else { macos.SplitFocusDirection.previous }, node)
 		controller.host.replace_tree(old_tree.removing(node))
 		if view := next { macos.focus_split_view(view) }
+	} else if mut quick := macos.quick_terminal_for_view(state.view) {
+		quick.hide()
+		if state.controller != unsafe { nil } { state.controller.host.replace_tree(macos.NativeSplitTree{}) }
 	} else {
 		macos.close_tab(state.view)
 	}
@@ -189,6 +194,9 @@ fn request_close_state(mut state TermState) {
 
 fn runtime_close_surface(userdata voidptr, confirm bool) {
 	mut state := state_from_userdata(userdata) or { return }
+	if mut q := macos.quick_terminal_for_view(state.view) {
+		if state.controller.host.tree.root.leaves().len == 1 && !apprt.ghostty_surface_process_exited(state.surface) { q.hide(); return }
+	}
 	if confirm && !macos.confirm_close(state.view) {
 		return
 	}
@@ -413,8 +421,10 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 				return true
 			}
 		}
+		.toggle_quick_terminal { return do_toggle_quick_terminal(app) }
 		.toggle_fullscreen {
 			if current := state {
+				if mut q := macos.quick_terminal_for_view(current.view) { q.toggle_fullscreen(); return true }
 				data := action.data
 				if data is apprt.Fullscreen {
 					macos.toggle_fullscreen_mode(current.view, match data { .native { macos.NativeFullscreenMode.native } .macos_non_native { .non_native } .macos_non_native_visible_menu { .visible_menu } .macos_non_native_padded_notch { .padded_notch } })

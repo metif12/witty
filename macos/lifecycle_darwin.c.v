@@ -4,6 +4,7 @@ module macos
 __global (
 	g_application_has_become_active bool
 	g_update_is_installing bool
+	g_app_was_hidden bool
 )
 
 pub fn set_update_is_installing(installing bool) {
@@ -30,3 +31,5 @@ pub fn termination_requires_confirmation(core_needs_confirm bool) bool {
 	return should_confirm_termination(count, visible, g_update_is_installing,
 		u32(msg_u64(why, 'typeCodeValue')), core_needs_confirm)
 }
+
+fn vt_app_did_hide(_self ObjId, _cmd Sel, _notification ObjId) { g_app_was_hidden = true }

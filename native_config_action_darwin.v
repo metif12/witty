@@ -33,6 +33,7 @@ fn native_config_change_main(context voidptr) {
 		}
 	} else {
 		sync_config_menu(&task.config)
+		macos.update_quick_terminal_config(native_quick_config(&task.config))
 		mut runtime := standalone_runtime()
 		for mut current in runtime.states {
 			if current.closed { continue }
