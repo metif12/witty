@@ -1,6 +1,9 @@
 static inline void* witty_macos_color_rgba(double r, double g, double b, double a) {
     return ((id (*)(id,SEL,double,double,double,double))objc_msgSend)((id)objc_getClass("NSColor"),sel_registerName("colorWithSRGBRed:green:blue:alpha:"),r,g,b,a);
 }
+static inline void witty_macos_color_components(void* color, double* r, double* g, double* b, double* a) {
+    ((void (*)(id,SEL,double*,double*,double*,double*))objc_msgSend)((id)color,sel_registerName("getRed:green:blue:alpha:"),r,g,b,a);
+}
 static inline void* witty_macos_msg_id_obj_f64(void* obj, void* selector, void* value, double amount) { return ((id (*)(id,SEL,id,double))objc_msgSend)((id)obj,(SEL)selector,(id)value,amount); }
 static inline void witty_macos_msg_super_void_u64(void* obj, void* selector, unsigned long long value) {
     struct objc_super super = {(id)obj,class_getSuperclass((Class)objc_getClass("VTTerminalWindow"))};

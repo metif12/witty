@@ -6,6 +6,7 @@ import math
 #insert "@VMODROOT/macos/window_config_abi.h"
 fn C.witty_macos_msg_void_f32(obj ObjId, selector Sel, value f32)
 fn C.witty_macos_color_rgba(r f64, g f64, b f64, a f64) ObjId
+fn C.witty_macos_color_components(color ObjId, r &f64, g &f64, b &f64, a &f64)
 fn C.witty_macos_msg_id_obj_f64(obj ObjId, selector Sel, value ObjId, amount f64) ObjId
 fn C.witty_macos_msg_super_void_u64(obj ObjId, selector Sel, value u64)
 fn C.witty_macos_window_super_void0(obj ObjId, selector Sel)
@@ -105,6 +106,17 @@ fn register_native_window_class() {
 }
 fn native_window_class() ObjId { register_native_window_class(); return get_class('VTTerminalWindow') }
 fn native_color(color u32, alpha f64) ObjId { return C.witty_macos_color_rgba(f64((color >> 16) & 255) / 255, f64((color >> 8) & 255) / 255, f64(color & 255) / 255, alpha) }
+// OSColor.luminance converts the native color to sRGB before reading components.
+fn native_color_object_luminance(color ObjId) f64 {
+	rgb := msg_id1(color, 'colorUsingColorSpace:', msg_id(get_class('NSColorSpace'), 'sRGBColorSpace'))
+	if is_nil(rgb) { return 0 }
+	mut r := f64(0)
+	mut g := f64(0)
+	mut b := f64(0)
+	mut a := f64(0)
+	C.witty_macos_color_components(rgb, &r, &g, &b, &a)
+	return 0.299 * r + 0.587 * g + 0.114 * b
+}
 fn titlebar_container(window ObjId) ObjId {
 	content := msg_id(window, 'contentView')
 	root := msg_id(content, 'superview')
@@ -224,11 +236,11 @@ fn update_native_titlebar(window ObjId) {
 			msg_void1(msg_id(data.backdrop, 'layer'), 'setBackgroundColor:', msg_id(native_color(0, 0), 'CGColor'))
 		} else {
 			msg_void_bool(data.backdrop_overlay, 'setHidden:', true)
-			very_dark := native_color_luminance(data.config.background) < 0.05
+			very_dark := native_color_object_luminance(msg_id(window, 'backgroundColor')) < 0.05
 			color := if highlighted { if very_dark { msg_id(window, 'backgroundColor') } else { native_color(0, 0) } } else { native_color(0, 0.45) }
 			msg_void1(msg_id(data.backdrop, 'layer'), 'setBackgroundColor:', msg_id(color, 'CGColor'))
 		}
-		if native_color_luminance(data.config.background) < 0.05 {
+		if native_color_object_luminance(msg_id(window, 'backgroundColor')) < 0.05 {
 			color := if msg_bool(group, 'isTabBarVisible') { msg_id_f64(data.titlebar_color, 'highlightWithLevel:', 0.14) } else { data.titlebar_color }
 			msg_void1(msg_id(container, 'layer'), 'setBackgroundColor:', msg_id(color, 'CGColor'))
 		}
@@ -241,7 +253,9 @@ pub fn apply_native_window_config(view voidptr, config NativeWindowConfig, initi
 	g_native_windows[u64(window)] = data
 	data.config = config
 	msg_void1(data.title_label, 'setStringValue:', msg_id(window, 'title'))
-	data.light = native_color_luminance(preferred_background) > 0.5
+	// Ventura chrome follows the surface config; its appearance override
+	// separately follows the preferred dynamic border background.
+	data.light = native_color_luminance(config.background) > 0.5
 	data.titlebar_color = native_color(preferred_background, math.max(0.001, math.min(1.0, preferred_opacity)))
 	if initial {
 		if title := config.title { set_view_title_now(view, title) }
@@ -266,7 +280,7 @@ pub fn apply_native_window_config(view voidptr, config NativeWindowConfig, initi
 	}
 	update_native_zoom_views(mut data)
 	if !msg_bool(window, 'isVisible') { return }
-	appearance_name := if config.titlebar_style == 2 || config.theme == 0 { if data.light { 'NSAppearanceNameAqua' } else { 'NSAppearanceNameDarkAqua' } } else if config.theme == 2 { 'NSAppearanceNameAqua' } else if config.theme == 3 { 'NSAppearanceNameDarkAqua' } else { '' }
+	appearance_name := if config.titlebar_style == 2 { if native_color_luminance(preferred_background) > 0.5 { 'NSAppearanceNameAqua' } else { 'NSAppearanceNameDarkAqua' } } else if config.theme == 0 { if data.light { 'NSAppearanceNameAqua' } else { 'NSAppearanceNameDarkAqua' } } else if config.theme == 2 { 'NSAppearanceNameAqua' } else if config.theme == 3 { 'NSAppearanceNameDarkAqua' } else { '' }
 	msg_void1(window, 'setAppearance:', if appearance_name.len > 0 { msg_id1(get_class('NSAppearance'), 'appearanceNamed:', nsstring(appearance_name)) } else { nil_obj() })
 	msg_void_bool(window, 'setHasShadow:', config.shadow)
 	transparent := native_window_transparent(config, msg_u64(window, 'styleMask') & u64(1 << 14) != 0, force_opaque)
