@@ -15,6 +15,8 @@ module gtk
 // signatures.
 
 #flag linux -DGTK_APPRT
+#flag linux -I @VMODROOT/.witty-build/gtk
+#flag linux @VMODROOT/.witty-build/gtk/ghostty_resources.c
 #pkgconfig gtk4
 #pkgconfig libadwaita-1
 

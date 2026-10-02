@@ -171,7 +171,6 @@ fn application_interface_color_scheme(scheme apprt.ColorScheme) GtkInterfaceColo
 
 const gtk_style_provider_priority_application = u32(600)
 const gtk_style_provider_priority_user = u32(800)
-const application_style_css = $embed_file('style.css').to_string()
 
 // --- GApplicationFlags ----------------------------------------------------
 //
@@ -572,7 +571,7 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 		winproto:         winproto
 		css_provider:     css_provider
 	}
-	obj := C.g_object_new(ghostty_application_get_type(), c'application-id', &char(app_id.str), c'flags', GApplicationFlags(app_flags), &char(unsafe { nil }))
+	obj := C.g_object_new(ghostty_application_get_type(), c'application-id', &char(app_id.str), c'flags', GApplicationFlags(app_flags), c'resource-base-path', c'/com/mitchellh/ghostty', &char(unsafe { nil }))
 	if isnil(obj) {
 		self.deinit()
 		return error('failed to create AdwApplication')
@@ -586,7 +585,6 @@ pub fn Application.new(rt_app &App, core_app &core.App) !&Application {
 	self.runtime_bridge.user_data = self
 	self.runtime_bridge.action_fn = application_runtime_action_cb
 	self.runtime_bridge.wakeup_fn = application_runtime_wakeup_cb
-	C.g_application_set_resource_base_path(self.obj, c'/com/mitchellh/ghostty')
 	C.g_signal_connect_data(self.obj, c'notify::config', GCallback(voidptr(application_config_notify_cb)), voidptr(self), unsafe { nil }, 0)
 
 	C.g_signal_connect_data(css_provider, c'parsing-error', GCallback(voidptr(application_css_parsing_error_cb)), voidptr(self), unsafe { nil }, 0)
@@ -1022,10 +1020,10 @@ fn (mut self Application) prop_config() {
 }
 
 // application_runtime_css translates loadRuntimeCss, including both GTK
-// version branches. The shipped stylesheet is prepended because Witty does
-// not use Ghostty's compiled GResource autoloading.
+// version branches. Adwaita loads the four compiled stylesheet variants
+// automatically from the application resource-base-path, as in Ghostty.
 fn application_runtime_css(config &configpkg.Config, gtk_416 bool) string {
-	mut css := application_style_css + '\n'
+	mut css := ''
 	background := config.window_titlebar_background or { config.background }
 	foreground := config.window_titlebar_foreground or { config.foreground }
 
