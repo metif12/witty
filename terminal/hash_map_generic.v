@@ -88,7 +88,41 @@ fn auto_hash_eql[K](a K, b K) bool {
 // Source std.hash.autoHash hashes shallow pointer addresses, field values,
 // active tagged payloads, and present optional payloads. Dynamic arrays and
 // strings require an explicit context; floating-point keys are rejected.
+// std.meta.hasUniqueRepresentation over the actual V storage type. Explicit
+// option/error adapters keep their selected-payload visitor. V has no Zig
+// comptime fields or bit-width reflection for C packed fields.
+fn auto_hash_has_unique_representation[K](key K) bool {
+	$if K is $option {
+		return false
+	} $else $if K.unaliased_typ is $int || K.unaliased_typ is $enum || K.unaliased_typ is $pointer
+		|| K.unaliased_typ is $function {
+		return true
+	} $else $if K.unaliased_typ is $array_fixed {
+		return auto_hash_array_has_unique_representation(key[..])
+	} $else $if K.unaliased_typ is $struct {
+		$for method in K.methods {
+			$if method.name == 'source_auto_hash_bytes' { return false }
+		}
+		mut sum_size := usize(0)
+		$for field in K.fields {
+			if !auto_hash_has_unique_representation(key.$(field.name)) { return false }
+			sum_size += sizeof(field.typ)
+		}
+		return sizeof(K) == sum_size
+	} $else {
+		return false
+	}
+}
+
 fn auto_hash_bytes[K](key K) []u8 {
+	$if K is $option {
+		// Optional values use the explicit payload projection below.
+	} $else $if K.unaliased_typ is $struct || K.unaliased_typ is $int || K.unaliased_typ is $enum {
+		if auto_hash_has_unique_representation(key) {
+			return unsafe { (&u8(&key)).vbytes(int(sizeof(K))).clone() }
+		}
+	}
+
 	$if K is $option {
 		return auto_hash_direct_optional_bytes(key)
 	} $else $if K.unaliased_typ is $pointer || K.unaliased_typ is $function {
@@ -159,7 +193,17 @@ fn auto_hash_direct_optional_bytes[T](key ?T) []u8 {
 	}
 }
 
+fn auto_hash_array_has_unique_representation[T](values []T) bool {
+	for element in values {
+		return auto_hash_has_unique_representation(element)
+	}
+	return true
+}
+
 fn auto_hash_fixed_array_bytes[T](values []T) []u8 {
+	if values.len > 0 && auto_hash_has_unique_representation(values[0]) {
+		return unsafe { (&u8(values.data)).vbytes(values.len * int(sizeof(T))).clone() }
+	}
 	mut bytes := []u8{}
 	for element in values {
 		bytes << auto_hash_bytes(element)

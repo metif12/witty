@@ -20,7 +20,7 @@ expected = dict(scalar=4378133365921508531, fixed=9630118702735392078,
     error=4180067508479897175, success=4378133365921508531,
     failure=4180067508479897175, null_pointer=16624905383039181106,
     padded=13689850338909966510, enum=15579651072214242561,
-    bool=15398492003712018733, signed=2743915450954940543)
+    bool=15398492003712018733, signed=2743915450954940543, unique=13742470547990004151)
 result = subprocess.run([args.zig, 'run', str(pathlib.Path(__file__).with_name('main.zig')),
     '-target', 'aarch64-macos.14.0', '-lc'], capture_output=True, text=True, check=True)
 actual = dict((name, int(value)) for name, value in

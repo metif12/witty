@@ -3,6 +3,7 @@ fn hash(key: anytype) u64 {return std.hash_map.AutoContext(@TypeOf(key)).hash(.{
 const Payload = struct {value:u32};
 const Tagged = union(enum) {empty:struct{},payload:Payload};
 const Padded = struct {small:u8,large:u32};
+const Unique = extern struct {first:u32,second:u16,third:u8,fourth:u8};
 const Tag = enum(u8) {zero=0,high=127};
 pub fn main() void {
     const value:u32 = 0x11223344;
@@ -19,6 +20,8 @@ pub fn main() void {
         hash(value),hash([2]u16{0x1122,0x3344}),hash(present),hash(absent),hash(empty),hash(tagged),
         hash(error_id),hash(successful),hash(failed),hash(null_pointer),hash(Padded{.small=7,.large=42}),hash(Tag.high),hash(true),hash(@as(i16,-7)),
     });
+    std.debug.print("unique={d}\n", .{hash(Unique{.first=0x11223344,.second=0x5566,.third=0x77,.fourth=0x88})});
+    std.debug.assert(std.meta.hasUniqueRepresentation(Unique));
     std.debug.assert(hash(&value)==hash(@intFromPtr(&value)));
     std.debug.assert(hash(pointer)==hash(@intFromPtr(&value)));
     std.debug.assert(std.hash_map.AutoContext(anyerror).eql(.{},error_id,@errorFromInt(1)));

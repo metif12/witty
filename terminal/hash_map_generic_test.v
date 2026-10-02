@@ -244,3 +244,24 @@ fn test_auto_hash_function_addresses_and_shallow_nested_slices() {
 	assert auto_hash_eql(source_optional, source_hash_optional(?string(same_storage)))
 	assert !auto_hash_eql(source_optional, source_hash_optional(?string(other_storage)))
 }
+
+struct HashUniqueFields {
+	first  u32
+	second u16
+	third  u8
+	fourth u8
+}
+
+fn test_auto_hash_original_unique_representation_branch() {
+	key := HashUniqueFields{
+		first:  0x11223344
+		second: 0x5566
+		third:  0x77
+		fourth: 0x88
+	}
+	assert sizeof(HashUniqueFields) == 8
+	assert auto_hash_has_unique_representation(key)
+	assert !auto_hash_has_unique_representation(PaddedMapKey{ small: 7, large: 42 })
+	assert !auto_hash_has_unique_representation(true)
+	assert AutoHashContext[HashUniqueFields]{}.hash(key) == u64(13742470547990004151)
+}
