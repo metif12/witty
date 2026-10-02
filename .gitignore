@@ -2,3 +2,5 @@ Witty
 Witty.exe
 
 .witty-build/
+macos/build/
+macos/GhosttyKit.xcframework/

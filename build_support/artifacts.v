@@ -17,8 +17,9 @@ pub fn (d Driver) v_arguments(artifact Artifact, deps NativeDeps) ![]string {
 	for define in deps.defines {
 		args << ['-d', define]
 	}
-	os_name := if d.cfg.target.os == 'ios' { 'ios' } else { d.cfg.target.os }
-	args << ['-os', os_name]
+	if !d.cfg.target.wasm() {
+		args << ['-os', d.cfg.target.os]
+	}
 	if d.cfg.target.arch in ['aarch64', 'x86_64', 'x86'] {
 		args << ['-arch', match d.cfg.target.arch {
 			'aarch64' { 'arm64' }
@@ -170,11 +171,21 @@ pub fn (d Driver) build_library(deps NativeDeps, static_ bool) !string {
 }
 
 pub fn (d Driver) build_executable(deps NativeDeps) !string {
+	d.prepare_gtk_resources()!
 	if d.cfg.target.os == 'linux' && d.cfg.target.arch == host_target().arch
 		&& os.exists('/etc/NIXOS') && os.getenv_opt('IN_NIX_SHELL') == none {
 		return error('Detected building on and for NixOS outside of the Nix shell environment. Run nix develop -c v run tools/build.')
 	}
 	mut args := d.v_arguments(.exe, deps)!
+	if d.cfg.target.os == 'windows' {
+		resource := d.cache_path('artifacts', 'ghostty-resource.o')
+		os.mkdir_all(os.dir(resource))!
+		checked_process(d.cfg.root, [os.getenv_opt('WINDRES') or { 'windres' },
+			'-I', os.join_path(d.cfg.root, 'build_assets', 'dist', 'windows'),
+			'-i', os.join_path(d.cfg.root, 'build_assets', 'dist', 'windows', 'ghostty.rc'),
+			'-o', resource])!
+		args << ['-ldflags', '-Xlinker ' + compiler_argument(resource), '-ldflags', '-Wl,--subsystem,windows']
+	}
 	output := d.cache_path('artifacts', 'ghostty' + if d.cfg.target.os == 'windows' {
 		'.exe'
 	} else {
