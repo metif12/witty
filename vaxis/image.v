@@ -2,6 +2,8 @@ module vaxis
 
 import encoding.base64
 import strings
+import zigimg
+import buildcfg
 
 pub enum ImageTransmitFormat as u8 {
 	rgb
@@ -32,6 +34,53 @@ pub struct ImageTransmission {
 pub:
 	image    Image
 	sequence string
+}
+
+pub struct ImageSourcePath {
+pub:
+	path string
+}
+
+pub struct ImageSourceMemory {
+pub:
+	bytes []u8
+}
+
+// Image.Source's path/memory union in pinned vaxis.
+pub type ImageSource = ImageSourcePath | ImageSourceMemory
+
+// Vaxis.zig transmitImage. The existing V IoWriter adapter returns the exact
+// transmission bytes so callers can write them through their terminal writer.
+pub fn (mut vx Vaxis) transmit_image(mut image zigimg.Image, format ImageTransmitFormat) !ImageTransmission {
+	if !vx.caps.kitty_graphics { return error('NoGraphicsCapability') }
+	bytes := match format {
+		.png {
+			// Preserve the original fixed allocation of imageByteSize, including
+			// WriteFailed for PNG output that does not fit that capacity.
+			mut buffer := []u8{len: int(image.image_byte_size())}
+			image.write_to_memory(mut buffer, zigimg.PngEncoderOptions{})!
+		}
+		.rgb { image.convert(.rgb24)!; image.raw_bytes() }
+		.rgba { image.convert(.rgba32)!; image.raw_bytes() }
+	}
+	encoded := base64.encode(bytes)
+	if buildcfg.runtime_safety && (image.width > 65535 || image.height > 65535) {
+		panic('vaxis image dimensions do not fit u16')
+	}
+	return vx.transmit_pre_encoded_image(encoded, u16(image.width), u16(image.height), format)
+}
+
+// Vaxis.zig loadImage: capability check precedes decoding; the path reader
+// uses the source's 1 MiB buffer; decoded pixels are released after transmit.
+pub fn (mut vx Vaxis) load_image(source ImageSource) !ImageTransmission {
+	if !vx.caps.kitty_graphics { return error('NoGraphicsCapability') }
+	mut read_buffer := []u8{len: 1024 * 1024}
+	mut image := match source {
+		ImageSourcePath { zigimg.Image.from_file_path(source.path, mut read_buffer)! }
+		ImageSourceMemory { zigimg.Image.from_memory(source.bytes)! }
+	}
+	defer { image.deinit() }
+	return vx.transmit_image(mut image, .png)
 }
 
 pub fn (img Image) draw(win Window, opts ImageDrawOptions) ! {
