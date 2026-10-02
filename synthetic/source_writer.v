@@ -1,6 +1,7 @@
 module synthetic
 
 import io
+import source_file_writer
 
 // std.Io.Writer.fixed/fixedDrain: preserve the prefix on WriteFailed.
 pub struct FixedWriter {
@@ -35,19 +36,16 @@ fn (mut writer CollectingWriter) write(data []u8) !int {
 
 // std.Io.Writer.writeAll; error timing remains at each source write operation.
 fn source_write_all(mut writer io.Writer, data []u8) ! {
-	mut index := 0
-	for index < data.len {
-		count := writer.write(data[index..]) or { return error('WriteFailed') }
-		index += count
-	}
+	source_file_writer.write_all(mut writer, data)!
 }
 
 fn source_url_percent_encode(mut writer io.Writer, data []u8) ! {
 	hex := '0123456789ABCDEF'
 	mut start := 0
 	for index, byte in data {
-		if byte >= 0x20 && byte <= 0x7e && byte !in [` `, `;`, `=`] { continue
-		 }
+		if byte >= 0x20 && byte <= 0x7e && byte !in [` `, `;`, `=`] {
+			continue
+		}
 		source_write_all(mut writer, data[start..index])!
 		source_write_all(mut writer, '%'.bytes())!
 		source_write_all(mut writer, [hex[int(byte >> 4)], hex[int(byte & 15)]])!
