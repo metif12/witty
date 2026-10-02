@@ -137,3 +137,41 @@ fn test_parse_ssh_cache_options() {
 		assert false, 'expected an edge underscore to fail'
 	}
 }
+
+fn test_ssh_atomic_file_uses_exclusive_private_names_and_cleans_unfinished_writes() ! {
+	dir := os.join_path(os.temp_dir(), 'witty-ssh-atomic-${os.getpid()}')
+	os.mkdir_all(dir)!
+	defer { os.rmdir_all(dir) or {} }
+	path := os.join_path(dir, 'ssh_cache')
+	mut first := SshAtomicFile.init(path)!
+	mut second := SshAtomicFile.init(path)!
+	assert first.name.len == 16
+	assert first.name != second.name
+	$if !windows {
+		assert os.stat(os.join_path(dir, first.name))!.mode & 0o777 == 0o600
+	}
+	first.write('first|1|xterm-ghostty\n')!
+	first.finish()!
+	first.deinit()
+	second.deinit()
+	assert os.ls(dir)! == ['ssh_cache']
+	assert os.read_file(path)! == 'first|1|xterm-ghostty\n'
+}
+
+fn test_ssh_cache_read_rejects_reaching_source_bound() ! {
+	dir := os.join_path(os.temp_dir(), 'witty-ssh-bound-${os.getpid()}')
+	os.mkdir_all(dir)!
+	defer { os.rmdir_all(dir) or {} }
+	path := os.join_path(dir, 'ssh_cache')
+	cache := SshDiskCache{path: path}
+	os.write_file(path, 'x'.repeat(max_ssh_cache_size - 1))!
+	assert cache.list()!.len == 0
+	for size in [max_ssh_cache_size, max_ssh_cache_size + 1] {
+		os.write_file(path, 'x'.repeat(size))!
+		cache.list() or {
+			assert err.msg() == 'StreamTooLong'
+			continue
+		}
+		assert false, 'reaching the source read limit must fail'
+	}
+}

@@ -3,6 +3,7 @@ module cli
 import internal_os
 import net
 import os
+import math
 import os.filelock
 import time
 import zig_fmt
@@ -159,11 +160,7 @@ fn (cache SshDiskCache) ensure_file() ! {
 		return error('invalid cache path')
 	}
 	os.mkdir_all(dir)!
-	if !os.exists(cache.path) {
-		mut file := os.create(cache.path)!
-		file.close()
-	}
-	os.chmod(cache.path, 0o600)!
+	ssh_create_file(cache.path)!
 }
 
 fn (cache SshDiskCache) read_entries() !map[string]SshCacheEntry {
@@ -171,10 +168,28 @@ fn (cache SshDiskCache) read_entries() !map[string]SshCacheEntry {
 	if !os.exists(cache.path) {
 		return result
 	}
-	if os.file_size(cache.path) > max_ssh_cache_size {
-		return error('cache exceeds maximum size')
+	mut file := os.open(cache.path)!
+	defer { file.close() }
+	mut bytes := []u8{cap: max_ssh_cache_size}
+	mut chunk := []u8{len: 4096}
+	for bytes.len < max_ssh_cache_size {
+		count := math.min(chunk.len, max_ssh_cache_size - bytes.len)
+		read := $if windows {
+			isize(C._read(file.fd, chunk.data, u32(count)))
+		} $else {
+			C.read(file.fd, chunk.data, usize(count))
+		}
+		if read < 0 {
+			if C.errno == C.EINTR { continue }
+			return os.error_posix()
+		}
+		if read == 0 { break }
+		bytes << chunk[..int(read)]
 	}
-	content := os.read_file(cache.path)!
+	// Reader.allocRemaining(.limited(n)) rejects reaching the bound,
+	// including an exactly-n-byte stream, without reading beyond it.
+	if bytes.len == max_ssh_cache_size { return error('StreamTooLong') }
+	content := bytes.bytestr()
 	for line in content.split_into_lines() {
 		entry := SshCacheEntry.parse(line) or { continue }
 		if existing := result[entry.hostname] {
@@ -192,22 +207,14 @@ fn (cache SshDiskCache) write_entries(entries map[string]SshCacheEntry, expire_d
 	if dir.len == 0 || dir == '.' {
 		return error('invalid cache path')
 	}
-	os.mkdir_all(dir)!
-	temporary := '${cache.path}.tmp-${os.getpid()}'
-	defer {
-		if os.exists(temporary) {
-			os.rm(temporary) or {}
-		}
-	}
-	mut output := ''
+	mut atomic_file := SshAtomicFile.init(cache.path)!
+	defer { atomic_file.deinit() }
 	for _, entry in entries {
 		if !entry.is_expired(expire_days) {
-			output += entry.format()
+			atomic_file.write(entry.format())!
 		}
 	}
-	os.write_file(temporary, output)!
-	os.chmod(temporary, 0o600)!
-	os.rename(temporary, cache.path)!
+	atomic_file.finish()!
 }
 
 pub fn valid_ssh_cache_key(key string) bool {
