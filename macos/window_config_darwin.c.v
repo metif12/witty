@@ -4,6 +4,7 @@ module macos
 import math
 
 #insert "@VMODROOT/macos/window_config_abi.h"
+fn C.witty_macos_msg_void_f32(obj ObjId, selector Sel, value f32)
 fn C.witty_macos_color_rgba(r f64, g f64, b f64, a f64) ObjId
 fn C.witty_macos_msg_id_obj_f64(obj ObjId, selector Sel, value ObjId, amount f64) ObjId
 fn C.witty_macos_msg_super_void_u64(obj ObjId, selector Sel, value u64)
@@ -132,7 +133,7 @@ fn push_native_tabs(context voidptr) {
 		msg_void1(msg_id(data.backdrop, 'layer'), 'addSublayer:', data.backdrop_overlay)
 		msg_void_bool(data.backdrop, 'setTranslatesAutoresizingMaskIntoConstraints:', false)
 		constrain(data.backdrop, 'leftAnchor', toolbar, 'leftAnchor', 0)
-		constrain(data.backdrop, 'rightAnchor', toolbar, 'leftAnchor', if data.config.buttons_hidden { 0 } else { 78 })
+		constrain(data.backdrop, 'rightAnchor', toolbar, 'leftAnchor', if native_has_window_buttons(window) { 78 } else { 0 })
 		constrain(data.backdrop, 'topAnchor', toolbar, 'topAnchor', 0)
 		constrain(data.backdrop, 'heightAnchor', toolbar, 'heightAnchor', 0)
 	}
@@ -183,7 +184,7 @@ fn update_native_titlebar(window ObjId) {
 			b := msg_rect(button, 'bounds'); size := C.witty_macos_text_size(image)
 			msg_void_rect(data.new_tab_image_layer, 'setFrame:', objc_rect(b.x + (b.width - size.width) / 2, b.y + (b.height - size.height) / 2, size.width, size.height))
 			msg_void1(data.new_tab_image_layer, 'setContentsGravity:', nsstring('resizeAspect'))
-			msg_void_f64(data.new_tab_image_layer, 'setOpacity:', 0.5)
+			C.witty_macos_msg_void_f32(data.new_tab_image_layer, sel('setOpacity:'), 0.5)
 			msg_void1(data.new_tab_image_layer, 'setContents:', image)
 			msg_void(data.new_tab_image_layer, 'removeFromSuperlayer')
 			msg_void1(msg_id(button, 'layer'), 'addSublayer:', data.new_tab_image_layer)
@@ -242,6 +243,7 @@ pub fn apply_native_window_config(view voidptr, config NativeWindowConfig, initi
 	msg_void_bool(window, 'setTitlebarAppearsTransparent:', config.titlebar_style == 1)
 	msg_void_u64(window, 'setTitleVisibility:', u64(if config.titlebar_style in [2, 3] { 1 } else { 0 }))
 	if !config.proxy_icon { msg_void1(window, 'setRepresentedURL:', nil_obj()) }
+	reapply_hidden_native_window_style(window)
 	update_native_titlebar(window)
 	if config.titlebar_style == 2 { dispatch_main(push_native_tabs, window) }
 }
@@ -335,4 +337,24 @@ fn create_terminal_toolbar(mut data NativeWindowData) ObjId {
 	msg_void1(toolbar, 'setDelegate:', toolbar)
 	msg_void1(toolbar, 'setCenteredItemIdentifiers:', msg_id1(get_class('NSSet'), 'setWithObject:', nsstring('TitleText')))
 	return toolbar
+}
+
+fn native_has_window_buttons(window ObjId) bool {
+	for kind in [u64(0), 1, 2] {
+		button := msg_id_u64(window, 'standardWindowButton:', kind)
+		if !is_nil(button) && !msg_bool(button, 'isHiddenOrHasHiddenAncestor') { return true }
+	}
+	return false
+}
+fn reapply_hidden_native_window_style(window ObjId) {
+	data := native_window_data(window) or { return }
+	if data.config.titlebar_style != 3 { return }
+	if state := g_fullscreen_states[u64(window)] { if state.is_active() { return } }
+	mask := ns_window_style_titled | ns_window_style_resizable | ns_window_style_closable | ns_window_style_miniaturizable | u64(1 << 15) | (msg_u64(window, 'styleMask') & u64(1 << 14))
+	msg_void_u64(window, 'setStyleMask:', mask)
+	msg_void_u64(window, 'setTitleVisibility:', 1)
+	msg_void_bool(window, 'setTitlebarAppearsTransparent:', true)
+	for kind in [u64(0), 1, 2] { msg_void_bool(msg_id_u64(window, 'standardWindowButton:', kind), 'setHidden:', true) }
+	msg_void_u64(window, 'setTabbingMode:', 2)
+	msg_void_bool(titlebar_container(window), 'setHidden:', true)
 }

@@ -9,3 +9,4 @@ static inline void witty_macos_msg_super_void_u64(void* obj, void* selector, uns
 static inline void* witty_macos_array(void** objects, size_t count) { return ((id (*)(id,SEL,const id*,size_t))objc_msgSend)((id)objc_getClass("NSArray"),sel_registerName("arrayWithObjects:count:"),(const id*)objects,count); }
 static inline witty_macos_size witty_macos_text_size(void* obj) { return ((witty_macos_size (*)(id, SEL))objc_msgSend)((id)obj,sel_registerName("size")); }
 static inline void witty_macos_priority(void* obj, void* selector, float priority, unsigned long long axis) { ((void (*)(id,SEL,float,unsigned long long))objc_msgSend)((id)obj,(SEL)selector,priority,axis); }
+static inline void witty_macos_msg_void_f32(void* obj, void* selector, float value) { ((void (*)(id,SEL,float))objc_msgSend)((id)obj,(SEL)selector,value); }

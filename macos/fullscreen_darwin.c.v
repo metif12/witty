@@ -90,6 +90,7 @@ fn fullscreen_state_from_observer(observer ObjId) ?&FullscreenState {
 }
 fn fullscreen_post(state &FullscreenState, entered bool) {
 	center := msg_id(get_class('NSNotificationCenter'), 'defaultCenter')
+	if !entered { reapply_hidden_native_window_style(state.window) }
 	msg_void2(center, 'postNotificationName:object:', nsstring(if entered { 'com.mitchellh.fullscreenDidEnter' } else { 'com.mitchellh.fullscreenDidExit' }), state.observer)
 }
 fn fullscreen_screen_changed(observer ObjId, _cmd Sel, notification ObjId) {
