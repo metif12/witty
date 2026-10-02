@@ -392,13 +392,16 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 			return true
 		}
 		.new_window {
-			return do_new_window(state)
+			if target is apprt.AppTarget || state != none { do_new_window(state) }
+			return true
 		}
 		.new_split {
 			if current := state {
 				data := action.data
-				if data is apprt.SplitDirection { return do_new_split(current, data) }
+				if data is apprt.SplitDirection { do_new_split(current, data) }
 			}
+			if target is apprt.AppTarget { eprintln('new split does nothing with an app target') }
+			return true
 		}
 		.goto_split {
 			if current := state {
@@ -420,24 +423,25 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 			if current := state { return do_toggle_split_zoom(current) }
 		}
 		.new_tab {
-			return if state != none { do_new_tab(state) } else { do_new_window(none) }
+			// App.swift posts an object-less notification for an app target;
+			// the source AppDelegate/Quick listeners require a surface view.
+			if current := state { do_new_tab(current) }
+			return true
 		}
 		.close_tab, .close_window {
 			if current := state {
 				data := action.data
 				mode := if data is apprt.CloseTabMode { data } else { apprt.CloseTabMode.this }
-				return do_close_controller(current, action.action == .close_window, mode)
+				do_close_controller(current, action.action == .close_window, mode)
 			}
+			return true
 		}
 		.close_all_windows {
-			return do_close_all_controllers()
+			do_close_all_controllers()
+			return true
 		}
-		.render {
-			if current := state {
-				macos.request_display(current.view)
-				return true
-			}
-		}
+		// The source native App.action switch has no render arm.
+		.render { return false }
 		.set_title {
 			if mut current := state {
 				data := action.data
@@ -459,7 +463,7 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 				return true
 			}
 		}
-		.toggle_quick_terminal { return do_toggle_quick_terminal(app) }
+		.toggle_quick_terminal { do_toggle_quick_terminal(app); return true }
 		.toggle_fullscreen {
 			if current := state {
 				if mut q := macos.quick_terminal_for_view(current.view) { q.toggle_fullscreen(); return true }
@@ -495,15 +499,17 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 		}
 		.reload_config {
 			if target is apprt.SurfaceTarget && state == none {
-				return false
+				return true
 			}
 			data := action.data
 			soft := if data is apprt.ReloadConfig { data.soft } else { false }
-			return reload_runtime_config(app, state, soft)
+			reload_runtime_config(app, state, soft)
+			return true
 		}
 		.config_change {
 			data := action.data
-			if data is apprt.ConfigChange { return native_config_change(app, state, data.config) }
+			if data is apprt.ConfigChange { native_config_change(app, state, data.config) }
+			return true
 		}
 		.cell_size {
 			if current := state {
@@ -515,8 +521,13 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 			return true
 		}
 		.size_limit, .quit_timer { return false }
-		.undo { return macos.native_undo() }
-		.redo { return macos.native_redo() }
+		.undo, .redo {
+			if target is apprt.SurfaceTarget {
+				current := state or { return false }
+				if macos.view_window(current.view) == unsafe { nil } { return false }
+			}
+			return if action.action == .undo { macos.native_undo() } else { macos.native_redo() }
+		}
 		else {}
 	}
 
