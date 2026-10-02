@@ -1509,7 +1509,7 @@ Ten isolated worker checkouts are used in waves: this environment permits three 
 | T10 | Implemented | `3e3a56d, 284e6b7` | All 242 key-table rows and native columns; table tests |
 | T11 | Queued | worker08 | Pending implementation/integration |
 | T12 | Queued | worker08 | Pending implementation/integration |
-| T13 | Queued | worker08 | Pending implementation/integration |
+| T13 | Implemented | `defa489` | Caller allocator reaches payload, ArrayList and SegmentedList; allocation failure, reset, OSC/terminal/C tests |
 | T14 | Implemented | `c3267ae` | Original Oniguruma grammar and failure handling; tmux tests |
 | R01 | Queued | worker10 | Pending implementation/integration |
 | R02 | Implemented | `0329051` | Nullable strings write NULL successfully; config ABI tests |
@@ -1523,20 +1523,20 @@ Ten isolated worker checkouts are used in waves: this environment permits three 
 | RF-01 | Implemented | `bb72641` | Production selected backend; all 24 font files/Metal alternatives tested |
 | RF-02 | Implemented | `dcfd8a5` | Run grid lock held during shaping; blocking concurrency regression |
 | RF-04 | Implemented | `fb7870d` | Live shaper uses translated feature parser; feature tests |
-| RF-05 | Queued | worker09 | Pending implementation/integration |
+| RF-05 | In progress | `822384b`; worker09 | Linked locked glslang/SPIRV-Cross pipeline tested; root clean rebuild exposed missing header closure, correction pending |
 | RF-06 | Implemented | `36a9461` | Glass alpha zero; renderer tests |
 | RF-07 | Implemented | `cf23a2a` | Lazy row shaping/preedit catch-up; renderer regressions |
-| RF-08 | Queued | worker09 | Pending implementation/integration |
-| RF-09 | Queued | worker09 | Pending implementation/integration |
+| RF-08 | Implemented | `b03a939` | Live page widget and five tracked-pin columns; real ImGui frame tests |
+| RF-09 | Implemented | `6c7149a` | Public key detail renderer, bounded error path, Debug demo; real ImGui tests |
 | RF-10 | Implemented | `f41e9f2, 3b189cf, d52b838` | Optionals and narrow inputs; face/Nerd Font/boundary tests |
 | RF-11 | Implemented | `cac7626, 3277fc6, 4da3d9c` | Original atlas/sprite/FreeType invariant traps; native probes |
 | RF-12 | Queued | worker09 | Pending implementation/integration |
 | S01 | Implemented | `bef54e9` | Unchanged native SIMD dependencies plus translated scalar algorithm; native/scalar tests |
 | S02 | Implemented | `227ebde` | Checked empty/all-padding traps and InvalidPadding warning; subprocess probes |
-| S03 | Queued | worker08 | Pending implementation/integration |
+| S03 | Implemented | `6cea9e6` | Source aligned libc allocation/in-place remap; alignment 1–65536 and over-32-bit growth tests |
 | S04 | Queued | worker09 | Pending implementation/integration |
-| S05 | In progress | root | Pending implementation/integration |
-| S06 | In progress | root | GitVersion/options, artifact and runtime safety translated (`3277fc6`, `38b8900`); build-driver wiring still required |
+| S05 | In progress | `ced0309, 30b6d21, a49c083, 40daa4e`; root | Config/retarget/options; standalone generators and terminfo/shell/theme/docs/locale install paths; native dependency/artifact/package graph still required |
+| S06 | In progress | `3277fc6, 38b8900, f012e5e`; root | GitVersion, channel, artifact and all four modes; ABI/version tests; production build-driver wiring still required |
 | S07 | In progress | worker05 | Pending implementation/integration |
 | S08 | Implemented | `af434d2` | Original startup messages and status 1; executable probes; timer subclaim corrected below |
 | S09 | Implemented | `2b553c8` | ConEmu nominal limit is not a writer-capacity rejection; regression |
@@ -1555,7 +1555,7 @@ Ten isolated worker checkouts are used in waves: this environment permits three 
 | SH06 | In progress | worker05 | Termination/reopen guards integrated (`c66db29`); source updater-install producer still being translated |
 | SB-01 | Implemented | `450725b` | Native text-input client, IME and key responder; native contract tests |
 | SB-02 | In progress | worker04 | Pending implementation/integration |
-| SB-03 | Queued | worker06 | Pending implementation/integration |
+| SB-03 | In progress | `3bd3844, 0ebfcc5`; worker06 | Live search/key context/progress/bell/health/readonly/secure input/cursor/link and notification families; AppKit/control/delegate tests; remaining action families pending |
 | SB-04 | Implemented | `d566e33` | Matching-window display ID and backing refresh; AppKit tests |
 | SB-05 | Implemented | `c56924a` | Configuration-driven menu conversion/apply/clear; native menu tests |
 | SB-06 | Implemented | `b988d4f` | Surface-targeted reload preserves target; host typecheck |
@@ -1568,3 +1568,5 @@ S08's initial GTK quit-timer subclaim was incorrect. The pinned `src/apprt/gtk/A
 The pinned browser font implementation itself lacks Collection-required metrics/name/color APIs. RF-01 preserves that original unsupported path and connects existing browser/backend logic; browser execution remains unverified. GTK native class/portal tests currently have Linux typechecking evidence, not an executed GTK desktop session on this macOS host. Windows/FreeBSD branches likewise need their native environments to establish execution parity.
 
 The large fixed-Huffman flate match-at-64KiB trap is confirmed in the actual pinned Zig decompressor with the same 200,000-byte fixture and small output bound. It is retained as inherited checked-source behavior, rather than silently replaced. The source fixture and native log are recorded in `/tmp/witty-ultra-fixes/image-flate-probe/`.
+
+The S05 resource install was exercised through the translated driver into an isolated prefix. All completions and terminfo matched recorded original hashes, every locked theme matched its source bytes, all 25 gettext catalogs were compiled/installed, and the Darwin documentation placeholder matched. Sparkle 2.8.0 was resolved from the original SwiftPM lock and its binary archive matched the original Package.swift SHA-256. Main install/library/packaging orchestration is still pending and is not certified by these resource checks.
