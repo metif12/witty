@@ -30,27 +30,30 @@ pub enum SearchCorner {
 @[heap]
 pub struct NativeActionSurface {
 pub mut:
-	view              voidptr
-	userdata          voidptr
-	callbacks         ActionCallbacks
-	closed            bool
-	focused           bool = true
-	search_active     bool
-	search_needle     string
-	search_selected   ?usize
-	search_total      ?usize
-	search_corner     SearchCorner = .top_right
-	key_sequence      []string
-	key_tables        []string
-	readonly          bool
-	bell              bool
-	healthy           bool = true
-	password_input    bool
-	secure_indication bool = true
-	bell_border       bool
-	progress_state    int
-	progress          ?u8
-	progress_active   bool
+	uuid                     string
+	title                    string
+	notification_identifiers []string
+	view                     voidptr
+	userdata                 voidptr
+	callbacks                ActionCallbacks
+	closed                   bool
+	focused                  bool = true
+	search_active            bool
+	search_needle            string
+	search_selected          ?usize
+	search_total             ?usize
+	search_corner            SearchCorner = .top_right
+	key_sequence             []string
+	key_tables               []string
+	readonly                 bool
+	bell                     bool
+	healthy                  bool = true
+	password_input           bool
+	secure_indication        bool = true
+	bell_border              bool
+	progress_state           int
+	progress                 ?u8
+	progress_active          bool
 mut:
 	progress_view    ObjId
 	owner            ObjId
@@ -95,6 +98,7 @@ fn action_owner(surface &NativeActionSurface) ObjId {
 	if is_nil(cls) {
 		cls = C.macos_objc_allocate_class_pair(get_class('NSObject'), cstr('WittyActionOwner'), 0)
 		add_ptr_ivar(cls, 'state')
+		register_action_notification_methods(cls)
 		add_method(cls, 'controlTextDidChange:', voidptr(action_search_edit), 'v@:@')
 		add_method(cls, 'control:textView:doCommandBySelector:', voidptr(action_search_command),
 			'B@:@@:')
@@ -138,6 +142,7 @@ fn action_button(surface &NativeActionSurface, text string, selector string, fra
 
 pub fn new_action_surface(view voidptr, userdata voidptr, callbacks ActionCallbacks) &NativeActionSurface {
 	mut state := &NativeActionSurface{
+		uuid:      objc_utf8_string(msg_id(msg_id(get_class('NSUUID'), 'UUID'), 'UUIDString'))
 		view:      view
 		userdata:  userdata
 		callbacks: callbacks
@@ -193,6 +198,7 @@ pub fn new_action_surface(view voidptr, userdata voidptr, callbacks ActionCallba
 pub fn (mut state NativeActionSurface) deinit() {
 	if state.closed { return }
 	state.closed = true
+	state.remove_notifications()
 	for timer in [state.search_timer, state.progress_timer, state.pulse_timer] {
 		if !is_nil(timer) { msg_void(timer, 'invalidate') }
 	}

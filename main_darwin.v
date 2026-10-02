@@ -202,6 +202,7 @@ fn runtime_tick_main(userdata voidptr) {
 
 fn on_app_focus(focused bool) {
 	macos.secure_app_focus(focused)
+	macos.notification_app_focus(focused)
 	mut runtime := standalone_runtime()
 	if runtime.app != unsafe { nil } {
 		apprt.ghostty_app_set_focus(mut runtime.app, focused)
@@ -385,9 +386,10 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 			}
 		}
 		.set_title {
-			if current := state {
+			if mut current := state {
 				data := action.data
 				if data is apprt.SetTitle {
+					current.actions.title = data.title
 					macos.set_view_title(current.view, data.title)
 				}
 				return true

@@ -26,6 +26,12 @@ fn runtime_native_action(app &apprt.App, state ?&TermState, action apprt.Runtime
 	mut overlay := current.actions
 	data := action.data
 	match action.action {
+		.desktop_notification {
+			if data is apprt.DesktopNotificationValue {
+				overlay.desktop_notification(data.title, data.body)
+				return true
+			}
+		}
 		.start_search {
 			if data is apprt.StartSearch {
 				overlay.start_search(data.needle)
@@ -83,6 +89,8 @@ fn runtime_native_action(app &apprt.App, state ?&TermState, action apprt.Runtime
 		}
 		.ring_bell {
 			overlay.ring_bell()
+			overlay.bell_notification(app.config.bell_features.system(),
+				app.config.bell_features.attention())
 			return true
 		}
 		.renderer_health {
