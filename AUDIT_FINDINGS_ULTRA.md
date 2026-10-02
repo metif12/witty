@@ -1508,10 +1508,10 @@ Ten isolated worker checkouts are used in waves: this environment permits three 
 | T09 | Implemented | `0bc93b8` | Absent versus invalid progress; parser regression |
 | T10 | Implemented | `3e3a56d, 284e6b7` | All 242 key-table rows and native columns; table tests |
 | T11 | Implemented | `4ddfe66, 154f46e, ec1ce0c, e49db79, 06262b5, faf49b1, 00f8a38, 4956cdb, a606e15, 9281161, c80b7e1`; workers08/01 | Contiguous packed mmap storage, source arena pools/free lists/retained reset, pooled pins/pointer identity/remap and allocator failure cleanup; native Page/53 allocator events/5 PageList snapshots and full ReleaseSafe consumer suites pass |
-| T12 | In progress | `cdad202, b4d9170`; worker08 | Caller-backed generic maps/refcount sets and source AutoHash pointer/fixed array/selected union/optional/error/equality/rejection contracts pass native comparisons; final unique-representation fast path being verified |
+| T12 | Implemented | `cdad202, b4d9170, bfebcb4`; worker08 | Caller-backed generic maps/refcount sets, source AutoHash pointer/fixed array/selected union/optional/error/equality/rejection and unique-representation raw-byte branches; 15 unchanged Zig hash comparisons and five paired rejection checks pass |
 | T13 | Implemented | `defa489` | Caller allocator reaches payload, ArrayList and SegmentedList; allocation failure, reset, OSC/terminal/C tests |
 | T14 | Implemented | `c3267ae` | Original Oniguruma grammar and failure handling; tmux tests |
-| R01 | Implemented | `b2db4d1, 203eecb` | ConPTY/read/write HANDLE lifecycle, cancellation and NT cwd access; Darwin PTY/Exec tests and Windows COFF ABI compile pass; full Windows termio check awaits renderer target glue; Windows execution unverified |
+| R01 | Implemented | `b2db4d1, 203eecb` | ConPTY/read/write HANDLE lifecycle, cancellation and NT cwd access; Darwin PTY/Exec tests and Windows COFF ABI compile pass; full Windows termio check passes after renderer target glue; Windows execution unverified |
 | R02 | Implemented | `0329051` | Nullable strings write NULL successfully; config ABI tests |
 | R03 | Implemented | `ede5f8d` | Notification error is warned/caught; mailbox regression |
 | R04 | Implemented | `0740574` | Exclusive atomic file, permissions and exact bound; cache tests |
@@ -1548,14 +1548,14 @@ Ten isolated worker checkouts are used in waves: this environment permits three 
 | S15 | Implemented | `4242ed4` | Actual C-backed V type factories; compiled enum holes, layout/defaults/alignment/padding/nested/zero-size cases |
 | S16 | Implemented | `930e186` | Build-time SDK/minimum-version mapping and embedding; helper tests pass; actual Apple Metal compiler unavailable |
 | SH01 | Implemented | `c7c4d5a` | Immutable split tree and native controls; model tests/host typecheck |
-| SH02 | In progress | `4882e78`; worker05 | Native Quick Terminal panel/lazy surface, sizing/screen/cache/focus/Space/Dock/previous-app/animation lifecycle implemented and native geometry/cache tests pass; saved-tree restoration is being integrated with SH03 |
-| SH03 | In progress | worker05 | Pending implementation/integration |
-| SH04 | Implemented | `8de10ae, d245a1f, 26053a2`; worker05 | Configured geometry/decorations/shadow/theme/opacity/blur/buttons/fullscreen exception and source Ventura titlebar/accessory layout; native window tests and host check pass; missing native config correctly remains none |
+| SH02 | Implemented | `4882e78, 7462457`; worker05 | Native Quick Terminal panel/lazy surface, sizing/screen/cache/focus/Space/Dock/previous-app/animation lifecycle and saved-tree restoration; native geometry/cache tests and original Swift screen-cache archive comparisons in both directions pass |
+| SH03 | Implemented | `e393c79, 7462457`; worker05 | Actual NSUndoManager/timed weak targets and retained terminal trees; secure nested NSKeyedArchiver/window/versioned split/Quick restoration and AppKit restoration callbacks; native undo/expiry/window tests and unchanged Swift archive decoding in both directions pass |
+| SH04 | Implemented | `8de10ae, d245a1f, 26053a2, 55940bc`; worker05 | Configured geometry/decorations/shadow/theme/opacity/blur/buttons/fullscreen exception and source Ventura titlebar/accessory layout; native window tests and host check pass; missing native config correctly remains none |
 | SH05 | Implemented | `617f532` | Four fullscreen styles and source restoration; native contract tests/typecheck |
-| SH06 | In progress | worker05 | Termination/reopen guards integrated (`c66db29`); source updater-install producer still being translated |
+| SH06 | In progress | `c66db29, df7be78`; workers05/09 | Termination/reopen guards and live Sparkle updater/driver/model/install-subscription producer integrated; native state/lifecycle tests pass; final source updater badge/accessory presentation under validation |
 | SB-01 | Implemented | `450725b` | Native text-input client, IME and key responder; native contract tests |
 | SB-02 | Implemented | `a938d46, 26c0fa6` | Native Services, drag/drop, accessibility and Swift-compatible Unicode range/grapheme cases; worker and root native tests |
-| SB-03 | In progress | `3bd3844, 0ebfcc5, bf6684b`; worker06 | Search/key context/progress/bell/health/readonly/secure input/cursor/link/notifications and action-state cleanup integrated; remaining source native window/title/palette/inspector/scrollbar/overlay consumers active |
+| SB-03 | In progress | `3bd3844, 0ebfcc5, bf6684b, a708706, 751b462, 469d0dc`; worker06 | Search/key context/progress/bell/health/readonly/secure input/cursor/link/notifications plus delayed title/prompts, native scrollback wrapper and live MTKView inspector consumers integrated; native title/scroll/inspector tests pass; final window/palette/menu/overlay family active |
 | SB-04 | Implemented | `d566e33, 6bec729` | Matching-window display ID, backing refresh and true zeroing weak view lifetime; AppKit tests |
 | SB-05 | Implemented | `c56924a` | Configuration-driven menu conversion/apply/clear; native menu tests |
 | SB-06 | Implemented | `b988d4f, eb109ee` | Surface-targeted reload preserves target and rejects unresolved surfaces; native host regression |
@@ -1606,3 +1606,11 @@ The actual `tools/build install` step ran into an isolated prefix with help and 
 The Unicode input was independently regenerated by the unchanged pinned uucode dependency generator with the original Ghostty build configuration. Its two-stage buildtime input matched 72,192 bytes and SHA-256 `756ffe2c8f8778509a3a37706f7767f9c8cfdcf02d436bb90f46f29136cc9f40`; the V generator did not read the finished runtime properties/symbol table to produce its output. The full u21 dependency-input/runtime-output comparison, generated runtime Unicode suite, generated CLI help suite, native plist metadata/Services check, and production driver config/version tests passed.
 
 The macOS V bundle compiler adaptation preserves source resources, Icon Composer input, project plist values, entitlements, architecture choices, signing/copy operations and run environment. Native V contract tests replace the Swift XCTest compiler step. A full app/Metal/asset-catalog/XCFramework build requires Xcode tools absent from this CLT-only environment, and is not certified by the successful plist/library tests. Direct V Wasm compilation has also exposed compiler/runtime module limitations; the artifact integration remains under investigation.
+
+### Further native host integration
+
+Close undo uses the actual NSUndoManager and timer expiry, retaining terminal views/Core surfaces for the original undo lifetime. Native window overrides dispatch superclass calls from the defining class; real AppKit dynamic subclasses exposed a recursion defect that was corrected in `55940bc`.
+
+Secure restoration encodes the original nested NSKeyedArchiver NSData and versioned keys. The original Swift SplitTree and QuickTerminalScreenStateCache decoders read the V archives; V reads the unchanged Swift fixtures. Native title publication retains the original 75 ms delay and 500 ms fallback; native scrollback and 30 fps MTKView inspector event producers are live.
+
+The full OpenGL/CoreText embedding library compiled and linked against the locked native packages. Its first actual C metadata/init consumer run exposed an alignment-1 opaque mutex buffer in the selected V compiler's `os` runtime, before Ghostty initialization. The build-local compiler runtime adaptation preserves its 128-byte capacity and operations while providing native alignment; the rebuilt native consumer remains under validation. Runtime font backend dispatch in V also retains Fontconfig/HarfBuzz references, so the full native graph now includes those unchanged packages in `c6af427`.
