@@ -9,6 +9,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+static inline void witty_macos_observe(void* center, void* observer, void* selector, void* name, void* object) {
+	((void (*)(id, SEL, id, SEL, id, id))objc_msgSend)((id)center, sel_registerName("addObserver:selector:name:object:"), (id)observer, (SEL)selector, (id)name, (id)object);
+}
+
 typedef struct witty_macos_point {
 	double x;
 	double y;

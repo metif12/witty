@@ -407,6 +407,7 @@ fn main() {
 	macos.set_draw_callback(on_draw)
 	macos.set_key_callback(on_key)
 	macos.set_resize_callback(on_resize)
+	macos.set_display_callback(on_display)
 	macos.set_paste_callback(on_paste)
 	macos.set_action_callback(on_action)
 	macos.set_mouse_callback(on_mouse)
@@ -465,6 +466,13 @@ fn on_resize(userdata voidptr, width f64, height f64) {
 	scale := macos.view_backing_scale(state.view)
 	apprt.ghostty_surface_set_content_scale(mut state.surface, scale, scale)
 	apprt.ghostty_surface_set_size(mut state.surface, u32(width * scale), u32(height * scale))
+}
+
+fn on_display(userdata voidptr, display_id u32) {
+	mut state := state_from_userdata(userdata) or { return }
+	if !state.closed && state.surface != unsafe { nil } {
+		apprt.ghostty_surface_set_display_id(mut state.surface, display_id)
+	}
 }
 
 fn on_focus(userdata voidptr, focused bool) {

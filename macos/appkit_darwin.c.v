@@ -34,6 +34,8 @@ pub type KeyCallback = fn (userdata voidptr, event voidptr, action input.KeyActi
 
 pub type ResizeCallback = fn (userdata voidptr, width f64, height f64)
 
+pub type DisplayCallback = fn (userdata voidptr, display_id u32)
+
 pub type ReadyCallback = fn ()
 
 pub type PasteCallback = fn (userdata voidptr, text &u8, len int)
@@ -184,6 +186,8 @@ fn C.witty_macos_objc_msg_void_clear_color(obj ObjId, selector Sel, color MetalC
 
 fn C.witty_macos_set_window_background_blur(window voidptr, radius int)
 
+fn C.witty_macos_observe(center voidptr, observer voidptr, selector voidptr, name voidptr, object voidptr)
+
 fn C.witty_metal_new_buffer_length(device voidptr, length usize, options u64) voidptr
 
 fn C.witty_metal_new_buffer_bytes(device voidptr, bytes voidptr, length usize, options u64) voidptr
@@ -328,6 +332,7 @@ __global (
 	g_draw_cb              DrawCallback
 	g_key_cb               KeyCallback
 	g_resize_cb            ResizeCallback
+	g_display_cb           DisplayCallback
 	g_ready_cb             ReadyCallback
 	g_paste_cb             PasteCallback
 	g_action_cb            ActionCallback
@@ -842,6 +847,7 @@ fn register_classes() {
 		add_method(view_cls, 'scrollWheel:', voidptr(vt_view_scroll_wheel), 'v@:@')
 		add_method(view_cls, 'pressureChangeWithEvent:', voidptr(vt_view_pressure_change), 'v@:@')
 		add_method(view_cls, 'vtFrameDidChange:', voidptr(vt_view_frame_did_change), 'v@:@')
+		add_method(view_cls, 'vtScreenDidChange:', voidptr(vt_view_screen_did_change), 'v@:@')
 		add_method(view_cls, 'copy:', voidptr(vt_view_copy), 'v@:@')
 		add_method(view_cls, 'paste:', voidptr(vt_view_paste), 'v@:@')
 		add_method(view_cls, 'selectAll:', voidptr(vt_view_select_all), 'v@:@')
@@ -1461,7 +1467,38 @@ fn install_menu_bar() {
 fn setup_view_notifications(view ObjId) {
 	msg_void_bool(view, 'setPostsFrameChangedNotifications:', true)
 	center := msg_id(get_class('NSNotificationCenter'), 'defaultCenter')
-	msg_id_obj_sel_obj(center, 'addObserver:selector:name:object:', view, sel('vtFrameDidChange:'), nsstring('NSViewFrameDidChangeNotification'))
+	C.witty_macos_observe(center, view, sel('vtFrameDidChange:'), nsstring('NSViewFrameDidChangeNotification'), view)
+	C.witty_macos_observe(center, view, sel('vtScreenDidChange:'), nsstring('NSWindowDidChangeScreenNotification'), nil_obj())
+}
+
+fn refresh_screen_backing(view voidptr) {
+	vt_view_backing_changed(ObjId(view), nil_obj())
+}
+
+fn vt_view_screen_did_change(self ObjId, _cmd Sel, notification ObjId) {
+	window := msg_id(self, 'window')
+	if is_nil(window) || msg_id(notification, 'object') != window {
+		return
+	}
+	screen := msg_id(window, 'screen')
+	if is_nil(screen) || is_nil(view_userdata(self)) {
+		return
+	}
+	if g_display_cb != unsafe { nil } {
+		g_display_cb(view_userdata(self), view_display_id(self))
+	}
+	dispatch_main(refresh_screen_backing, self)
+}
+
+pub fn view_display_id(view voidptr) u32 {
+	screen := msg_id(msg_id(ObjId(view), 'window'), 'screen')
+	device := msg_id(screen, 'deviceDescription')
+	value := msg_id1(device, 'objectForKey:', nsstring('NSScreenNumber'))
+	return u32(msg_u64(value, 'unsignedIntValue'))
+}
+
+pub fn set_display_callback(cb DisplayCallback) {
+	g_display_cb = cb
 }
 
 fn setup_view_metal(view ObjId) {
