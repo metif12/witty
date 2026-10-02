@@ -738,3 +738,54 @@ static inline bool witty_metal_iosurface_layer_set_surface(void* layer, void* su
 	}
 	return true;
 }
+
+/* ABI adapters for NSTextInputClient and NSEvent. Policy lives in V. */
+typedef struct witty_macos_range { unsigned long location, length; } witty_macos_range;
+static inline witty_macos_range witty_macos_msg_range(void* obj, void* selector) {
+	return ((witty_macos_range (*)(id, SEL))objc_msgSend)((id)obj, (SEL)selector);
+}
+static inline void* witty_macos_msg_id_range(void* obj, void* selector, witty_macos_range range) {
+	return ((void* (*)(id, SEL, witty_macos_range))objc_msgSend)((id)obj, (SEL)selector, range);
+}
+static inline void* witty_macos_msg_super_id2(void* obj, void* selector, void* a, void* b) {
+	struct objc_super info = {(id)obj, witty_macos_objc_superclass(obj)};
+	return ((void* (*)(struct objc_super*, SEL, id, id))objc_msgSendSuper)(&info, (SEL)selector, (id)a, (id)b);
+}
+static inline macos_rect witty_macos_msg_rect_rect_obj(void* obj, void* selector, macos_rect rect, void* other) {
+	return ((macos_rect (*)(id, SEL, macos_rect, id))objc_msgSend)((id)obj, (SEL)selector, rect, (id)other);
+}
+static inline macos_rect witty_macos_msg_rect_rect(void* obj, void* selector, macos_rect rect) {
+	return ((macos_rect (*)(id, SEL, macos_rect))objc_msgSend)((id)obj, (SEL)selector, rect);
+}
+static inline void* witty_macos_key_event(void* original, unsigned long long flags, void* chars, void* ignoring) {
+	id event = (id)original;
+	return ((void* (*)(id, SEL, unsigned long long, witty_macos_point, unsigned long long, double, long long, id, id, id, bool, unsigned short))objc_msgSend)(
+		(id)objc_getClass("NSEvent"), sel_registerName("keyEventWithType:location:modifierFlags:timestamp:windowNumber:context:characters:charactersIgnoringModifiers:isARepeat:keyCode:"),
+		((unsigned long long (*)(id, SEL))objc_msgSend)(event, sel_registerName("type")),
+		((witty_macos_point (*)(id, SEL))objc_msgSend)(event, sel_registerName("locationInWindow")), flags,
+		((double (*)(id, SEL))objc_msgSend)(event, sel_registerName("timestamp")),
+		((long long (*)(id, SEL))objc_msgSend)(event, sel_registerName("windowNumber")), nil, (id)chars, (id)ignoring,
+		((bool (*)(id, SEL))objc_msgSend)(event, sel_registerName("isARepeat")),
+		((unsigned short (*)(id, SEL))objc_msgSend)(event, sel_registerName("keyCode")));
+}
+
+typedef void* (*witty_event_monitor_callback)(void*);
+typedef struct witty_event_monitor_block {
+	void* isa; int flags; int reserved;
+	void* (*invoke)(struct witty_event_monitor_block*, void*);
+	const witty_block_descriptor* descriptor;
+	witty_event_monitor_callback callback;
+} witty_event_monitor_block;
+static void* witty_event_monitor_invoke(witty_event_monitor_block* block, void* event) { return block->callback(event); }
+static const witty_block_descriptor witty_event_monitor_descriptor = {0, sizeof(witty_event_monitor_block)};
+static inline void* witty_macos_monitor_key_releases(void* callback) {
+	witty_event_monitor_block block = {_NSConcreteStackBlock, 0, 0, witty_event_monitor_invoke, &witty_event_monitor_descriptor, (witty_event_monitor_callback)callback};
+	return ((void* (*)(id, SEL, unsigned long long, void*))objc_msgSend)((id)objc_getClass("NSEvent"), sel_registerName("addLocalMonitorForEventsMatchingMask:handler:"), 1ULL << 11, &block);
+}
+static inline void witty_macos_msg_super_from_void0(void* obj, void* defining_class, void* selector) {
+	struct objc_super info = {(id)obj, class_getSuperclass((Class)defining_class)};
+	((void (*)(struct objc_super*, SEL))objc_msgSendSuper)(&info, (SEL)selector);
+}
+static inline witty_macos_range witty_macos_msg_range_u64(void* obj, void* selector, unsigned long long index) {
+	return ((witty_macos_range (*)(id, SEL, unsigned long long))objc_msgSend)((id)obj, (SEL)selector, index);
+}

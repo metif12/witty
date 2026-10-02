@@ -409,7 +409,6 @@ fn main() {
 
 	macos.app_init()
 	macos.set_draw_callback(on_draw)
-	macos.set_key_callback(on_key)
 	macos.set_resize_callback(on_resize)
 	macos.set_display_callback(on_display)
 	macos.set_paste_callback(on_paste)
@@ -420,6 +419,7 @@ fn main() {
 	macos.set_focus_callback(on_focus)
 	macos.set_app_focus_callback(on_app_focus)
 	macos.set_keyboard_changed_callback(on_keyboard_changed)
+	install_native_input_callbacks()
 	macos.set_should_quit_after_last_window_callback(on_should_quit_after_last_window)
 	macos.set_should_terminate_callback(on_should_terminate)
 	macos.set_reopen_callback(on_reopen)
@@ -485,55 +485,6 @@ fn on_focus(userdata voidptr, focused bool) {
 	if !state.closed && state.surface != unsafe { nil } {
 		apprt.ghostty_surface_set_focus(mut state.surface, focused)
 	}
-}
-
-fn key_event_text(event voidptr, translated_mods int, fallback string) string {
-	mut text := macos.event_characters(event, translated_mods)
-	if text.len == 0 {
-		text = fallback
-	}
-	runes := text.runes()
-	if runes.len == 1 {
-		codepoint := u32(runes[0])
-		if codepoint < 0x20 {
-			return macos.event_characters(event, translated_mods & ~2)
-		}
-		if codepoint >= 0xf700 && codepoint <= 0xf8ff {
-			return ''
-		}
-	}
-	return text
-}
-
-fn key_event_fallback(chars &u8, len int) string {
-	if len <= 0 {
-		return ''
-	}
-	unsafe {
-		return tos(chars, len)
-	}
-}
-
-fn on_key(userdata voidptr, event voidptr, key_action input.KeyAction, keycode u16, modflags u64, chars &u8, len int, _uchars &u8, _ulen int) {
-	mut state := state_from_userdata(userdata) or { return }
-	if state.closed || state.surface == unsafe { nil } {
-		return
-	}
-
-	mods := int(macos.input_mods(modflags).int())
-	translation_mods := apprt.ghostty_surface_key_translation_mods(state.surface, mods)
-	fallback := key_event_fallback(chars, len)
-	text := key_event_text(event, translation_mods, fallback)
-	unshifted := macos.event_characters(event, 0).runes()
-	apprt.ghostty_surface_key(mut state.surface, apprt.CAPIKeyEvent{
-		action:              key_action
-		mods:                mods
-		consumed_mods:       translation_mods & ~(2 | 8 | 128 | 512)
-		keycode:             u32(keycode)
-		text:                if text.len > 0 { text } else { none }
-		unshifted_codepoint: if unshifted.len > 0 { u32(unshifted[0]) } else { u32(0) }
-		composing:           false
-	})
 }
 
 const vt_action_copy = 1

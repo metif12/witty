@@ -854,6 +854,7 @@ fn register_classes() {
 		add_method(view_cls, 'selectAll:', voidptr(vt_view_select_all), 'v@:@')
 		add_method(view_cls, 'vtNewTab:', voidptr(vt_view_new_tab), 'v@:@')
 		add_method(view_cls, 'vtCloseTab:', voidptr(vt_view_close_tab), 'v@:@')
+		register_input_methods(view_cls)
 		C.macos_objc_register_class_pair(view_cls)
 	}
 
@@ -882,7 +883,8 @@ fn register_classes() {
 }
 
 fn vt_view_is_flipped(_self ObjId, _cmd Sel) bool {
-	return true
+	// SurfaceView_AppKit inherits NSView's bottom-left coordinate system.
+	return false
 }
 
 fn vt_view_accepts_first_responder(_self ObjId, _cmd Sel) bool {
@@ -959,23 +961,18 @@ fn vt_view_draw_rect(self ObjId, _cmd Sel, _dirty_rect ObjCRect) {
 }
 
 fn vt_view_key_down(self ObjId, _cmd Sel, event ObjId) {
-	action := if msg_bool(event, 'isARepeat') {
-		input.KeyAction.repeat
-	} else {
-		input.KeyAction.press
-	}
-	dispatch_key(self, event, action)
+	input_key_down(self, event)
 }
 
 fn vt_view_key_up(self ObjId, _cmd Sel, event ObjId) {
-	dispatch_key(self, event, .release)
+	input_key_action(self, event, event, .release, none, false)
 }
 
 fn vt_view_flags_changed(self ObjId, _cmd Sel, event ObjId) {
 	keycode := u16(msg_u64(event, 'keyCode'))
 	flags := msg_u64(event, 'modifierFlags')
 	action := modifier_key_action(keycode, flags) or { return }
-	dispatch_key(self, event, action)
+	input_key_action(self, event, event, action, none, false)
 }
 
 // modifier_key_action translates AppKit's flagsChanged event into a press or
@@ -1139,7 +1136,7 @@ fn dispatch_mouse_at(view ObjId, event ObjId, event_type int, x f64, y f64) bool
 fn dispatch_mouse(view ObjId, event ObjId, event_type int) bool {
 	window_point := msg_point(event, 'locationInWindow')
 	point := msg_point_point_obj(view, 'convertPoint:fromView:', window_point, nil_obj())
-	return dispatch_mouse_at(view, event, event_type, point.x, point.y)
+	return dispatch_mouse_at(view, event, event_type, point.x, msg_rect(view, 'frame').height - point.y)
 }
 
 fn vt_view_frame_did_change(self ObjId, _cmd Sel, _notification ObjId) {
@@ -1575,10 +1572,11 @@ pub fn app_init() {
 	msg_void_u64(app, 'setActivationPolicy:', ns_application_activation_policy_regular)
 	msg_void_bool(get_class('NSWindow'), 'setAllowsAutomaticWindowTabbing:', true)
 	install_menu_bar()
+	install_command_release_monitor()
 	g_delegate = msg_id(alloc('VTAppDelegate'), 'init')
 	msg_void1(app, 'setDelegate:', g_delegate)
 	center := msg_id(get_class('NSNotificationCenter'), 'defaultCenter')
-	msg_id_obj_sel_obj(center, 'addObserver:selector:name:object:', g_delegate, sel('vtKeyboardSelectionDidChange:'), nsstring('NSTextInputContextKeyboardSelectionDidChangeNotification'))
+	C.witty_macos_observe(center, g_delegate, sel('vtKeyboardSelectionDidChange:'), nsstring('NSTextInputContextKeyboardSelectionDidChangeNotification'), nil_obj())
 }
 
 pub fn app_run() {
