@@ -1,7 +1,6 @@
 module crash
 
 import os
-import rand
 import internal_os
 
 #include "@VMODROOT/crash/mtime.h"
@@ -44,42 +43,15 @@ pub fn thread_state() ?ThreadState {
 		return none
 	}
 	return ThreadState{
-		kind: unsafe { ThreadType(kind) }
+		kind:    unsafe { ThreadType(kind) }
 		surface: surface
 	}
 }
 
-// Process-wide crash reporter lifecycle. The pinned Ghostty implementation
-// returns immediately when its optional Sentry build flag is disabled. Witty
-// does not link the Sentry native SDK, so these are that exact disabled-build
-// path while still preserving the global lifecycle API.
-pub fn initialize() ! {}
+// Process-wide native crash capture, selected by the source Sentry build flag.
+pub fn initialize() ! { initialize_with_info(BuildInfo{})! }
 
-pub fn shutdown() {}
-
-// persist_sentry_envelope is the translated local-only Sentry transport. It
-// discards envelopes without an event, and stores crash envelopes under a
-// random filename without sending any data over the network.
-struct PersistSentryEnvelopeResult {
-	path ?string
-}
-
-fn persist_sentry_envelope(data []u8, dir Dir) !PersistSentryEnvelopeResult {
-	mut envelope := Envelope.parse(data)!
-	defer {
-		envelope.deinit()
-	}
-	if sentry_envelope_should_discard(&envelope) {
-		return PersistSentryEnvelopeResult{}
-	}
-
-	os.mkdir_all(dir.path)!
-	path := os.join_path(dir.path, '${rand.uuid_v4()}.ghosttycrash')
-	os.write_file_array(path, data)!
-	return PersistSentryEnvelopeResult{
-		path: path
-	}
-}
+pub fn shutdown() { sentry_shutdown() }
 
 fn sentry_envelope_should_discard(envelope &Envelope) bool {
 	for item in envelope.items {
@@ -130,7 +102,7 @@ pub fn default_dir() !Dir {
 // missing or unreadable directory behaves like an empty report directory.
 pub fn (dir &Dir) iterator() !ReportIterator {
 	return ReportIterator{
-		path: dir.path
+		path:    dir.path
 		entries: os.ls(dir.path) or { []string{} }
 	}
 }
@@ -159,7 +131,7 @@ pub fn (mut self ReportIterator) next() !ReportIteratorNext {
 		}
 		return ReportIteratorNext{
 			value: Report{
-				name: name
+				name:  name
 				mtime: mtime
 			}
 		}

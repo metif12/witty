@@ -1,10 +1,11 @@
 module crash
 
 import os
+import rand
 
 fn read_thread_state(result chan ThreadState) {
 	set_thread_state(ThreadState{
-		kind: .io
+		kind:    .io
 		surface: voidptr(usize(0x5678))
 	})
 	state := thread_state() or { ThreadState{} }
@@ -14,7 +15,7 @@ fn read_thread_state(result chan ThreadState) {
 
 fn test_thread_state_is_installed_and_cleared() {
 	state := ThreadState{
-		kind: .renderer
+		kind:    .renderer
 		surface: voidptr(usize(0x1234))
 	}
 	set_thread_state(state)
@@ -30,10 +31,10 @@ fn test_thread_state_is_installed_and_cleared() {
 
 fn test_thread_state_is_thread_local() {
 	set_thread_state(ThreadState{
-		kind: .main
+		kind:    .main
 		surface: voidptr(usize(0x1234))
 	})
-	result := chan ThreadState{ cap: 1 }
+	result := chan ThreadState{cap: 1}
 	worker := spawn read_thread_state(result)
 	worker_state := <-result
 	worker.wait()
@@ -87,7 +88,7 @@ fn test_crash_report_iterator_propagates_metadata_errors() {
 		os.rmdir_all(root) or {}
 	}
 	mut iter := ReportIterator{
-		path: root
+		path:    root
 		entries: ['vanished.dmp']
 	}
 	if _ := iter.next() {
@@ -132,4 +133,27 @@ fn test_sentry_transport_persists_event_envelopes_locally() {
 	}
 	assert stored.ends_with('.ghosttycrash')
 	assert os.read_bytes(stored)! == data
+}
+
+// Compatibility helper for envelope unit tests. Production capture uses the
+// native SDK transport in sentry_sdk.v.
+struct PersistSentryEnvelopeResult {
+	path ?string
+}
+
+fn persist_sentry_envelope(data []u8, dir Dir) !PersistSentryEnvelopeResult {
+	mut envelope := Envelope.parse(data)!
+	defer {
+		envelope.deinit()
+	}
+	if sentry_envelope_should_discard(&envelope) {
+		return PersistSentryEnvelopeResult{}
+	}
+
+	os.mkdir_all(dir.path)!
+	path := os.join_path(dir.path, '${rand.uuid_v4()}.ghosttycrash')
+	os.write_file_array(path, data)!
+	return PersistSentryEnvelopeResult{
+		path: path
+	}
 }

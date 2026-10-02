@@ -2044,6 +2044,7 @@ fn (self &Surface) has_terminal() bool {
 
 // init creates a new surface. This must be called from the main thread.
 pub fn (mut self Surface) init(config_original &Config, mut app App, rt_app &apprt.RuntimeApp, rt_surface &apprt.RuntimeSurface) ! {
+	crash.set_dimensions_reader(crash_surface_dimensions)
 	// V has no errdefer. Each source errdefer is a reached defer that runs
 	// only while this flag is false, i.e. when initialization fails.
 	mut init_ok := false
@@ -6664,4 +6665,17 @@ fn mouse_selection(click_pin Pin, drag_pin Pin, click_x u32, drag_x u32, mods in
 		return none
 	}
 	return TermSelection.init(start_pin, end_pin, rectangle)
+}
+
+fn crash_surface_dimensions(surface_ptr voidptr) crash.Dimensions {
+	surface := unsafe { &Surface(surface_ptr) }
+	grid := surface.size.grid()
+	return crash.Dimensions{
+		screen_width: surface.size.screen.width
+		screen_height: surface.size.screen.height
+		grid_columns: u32(grid.columns)
+		grid_rows: u32(grid.rows)
+		cell_width: surface.size.cell.width
+		cell_height: surface.size.cell.height
+	}
 }

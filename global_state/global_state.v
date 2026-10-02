@@ -321,10 +321,8 @@ pub fn (mut self GlobalState) init_args(args []string) ! {
 	// are initialized, but before any subsystem initialization can fail.
 	log.info('ghostty version=${build_meta.version_string}')
 	optimize := buildcfg.mode_string
-	runtime := $if app_runtime_none ? { 'none' } $else $if app_runtime_gtk ? { 'gtk' }
-		$else $if linux || freebsd { 'gtk' } $else { 'none' }
-	renderer_backend := $if renderer_opengl ? { 'opengl' } $else $if renderer_metal ? { 'metal' }
-		$else $if renderer_webgl ? { 'webgl' } $else $if macos || ios {
+	runtime := $if app_runtime_none ? { 'none' } $else $if app_runtime_gtk ? { 'gtk' } $else $if linux || freebsd { 'gtk' } $else { 'none' }
+	renderer_backend := $if renderer_opengl ? { 'opengl' } $else $if renderer_metal ? { 'metal' } $else $if renderer_webgl ? { 'webgl' } $else $if macos || ios {
 		'metal'
 	} $else $if wasm32 {
 		'webgl'
@@ -347,9 +345,14 @@ pub fn (mut self GlobalState) init_args(args []string) ! {
 	// As early as possible, initialize our resource limits.
 	self.rlimits = ResourceLimits.new()
 
-	// Initialize crash reporting. This is a no-op for builds such as Witty
-	// that do not link Ghostty's optional Sentry native SDK.
-	crash.initialize() or { log.warn('sentry init failed, no crash capture available err=${err}') }
+	// Initialize the source native local-only crash capture.
+	crash.initialize_with_info(crash.BuildInfo{
+		release:      build_meta.version_string
+		mode:         optimize
+		app_runtime:  runtime
+		font_backend: font_backend.str()
+		renderer:     renderer_backend
+	}) or { log.warn('sentry init failed, no crash capture available err=${err}') }
 
 	// Locale affects libc, gettext, and every child shell, so initialize it
 	// before loading translated resources or starting an application runtime.
