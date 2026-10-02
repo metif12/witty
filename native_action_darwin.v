@@ -1,5 +1,6 @@
 module main
 
+import configpkg
 import apprt
 import input
 import macos
@@ -33,6 +34,7 @@ fn runtime_native_action(app &apprt.App, state ?&TermState, action apprt.Runtime
             }
         }
         .pwd { if data is apprt.PwdValue { overlay.set_pwd(data.pwd,current.native_config.proxy_icon); return true } }
+        .scrollbar { if data is terminal.Scrollbar { overlay.set_scrollbar(data.total,data.offset,data.len); return true } }
 		.desktop_notification {
 			if data is apprt.DesktopNotificationValue {
 				overlay.desktop_notification(data.title, data.body)
@@ -155,4 +157,14 @@ fn native_tab_title_changed(userdata voidptr, title ?string) {
 	if state.closed || state.controller == unsafe { nil } { return }
 	state.controller.title_override = title
 	native_surface_title_changed(userdata, state.actions.title)
+}
+
+fn native_action_config(current &TermState,config &configpkg.Config) {
+ if current.closed || current.actions == unsafe { nil } { return }
+ mut actions := current.actions
+ actions.bell_border = config.bell_features.border()
+ actions.secure_indication = config.macos_secure_input_indication
+ color := config.background
+ actions.configure_scroll(config.scrollbar == .never, (0.299*f64(color.r)+0.587*f64(color.g)+0.114*f64(color.b))/255 > 0.5)
+ actions.refresh_config()
 }

@@ -29,6 +29,7 @@ fn native_config_change_main(context voidptr) {
 	if mut current := task.target {
 		if !current.closed {
 			current.native_config = projection
+            native_action_config(current,&task.config)
 			sync_native_window(current)
 		}
 	} else {
@@ -38,6 +39,7 @@ fn native_config_change_main(context voidptr) {
 		for mut current in runtime.states {
 			if current.closed { continue }
 			current.native_config = projection
+            native_action_config(current,&task.config)
 			sync_native_window(current)
 		}
 	}
@@ -55,6 +57,7 @@ fn native_cell_size_main(context voidptr) {
 	scale := macos.view_backing_scale(current.view)
 	current.cell_width = f64(task.width) / scale
 	current.cell_height = f64(task.height) / scale
+    current.actions.set_scroll_cell_height(current.cell_height)
 	if current.controller != unsafe { nil } && current.controller.focused == current {
 		macos.set_native_cell_size(current.view, current.cell_width, current.cell_height, current.native_config.step_resize)
 		mut host := current.controller.host

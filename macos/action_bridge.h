@@ -18,3 +18,30 @@ static inline void witty_action_show_popover(void* popover, void* view, unsigned
 static inline void witty_action_repeat_forever(void* animation) {
  ((void(*)(id,SEL,float))objc_msgSend)((id)animation,sel_registerName("setRepeatCount:"),__builtin_inff());
 }
+static inline long long witty_action_compare(void* a, void* b) {
+ return ((long long(*)(id,SEL,id))objc_msgSend)((id)a,sel_registerName("localizedCaseInsensitiveCompare:"),(id)b);
+}
+static inline void witty_action_scroll_rect(void* view,double x,double y,double width,double height) {
+ ((void(*)(id,SEL,CGRect))objc_msgSend)((id)view,sel_registerName("scrollRectToVisible:"),(CGRect){{x,y},{width,height}});
+}
+
+typedef struct witty_action_insets { double top,left,bottom,right; } witty_action_insets;
+typedef struct witty_action_os_version { long major,minor,patch; } witty_action_os_version;
+static inline witty_action_os_version witty_action_os_current(void) {
+ id info = ((id(*)(id,SEL))objc_msgSend)((id)objc_getClass("NSProcessInfo"),sel_registerName("processInfo"));
+ return ((witty_action_os_version(*)(id,SEL))objc_msgSend)(info,sel_registerName("operatingSystemVersion"));
+}
+static inline long witty_action_os_major(void) { return witty_action_os_current().major; }
+static inline long witty_action_os_minor(void) { return witty_action_os_current().minor; }
+static inline double witty_action_content_height(void* scroll) { return ((CGSize(*)(id,SEL))objc_msgSend)((id)scroll,sel_registerName("contentSize")).height; }
+static inline double witty_action_content_width(void* scroll) { return ((CGSize(*)(id,SEL))objc_msgSend)((id)scroll,sel_registerName("contentSize")).width; }
+static inline void witty_action_scroll_point(void* clip,double y) { ((void(*)(id,SEL,CGPoint))objc_msgSend)((id)clip,sel_registerName("scrollToPoint:"),(CGPoint){0,y}); }
+
+typedef struct witty_action_inspector_size { double width,height; } witty_action_inspector_size;
+static inline void* witty_action_inspector_new(void* cls,void* device,double width,double height) {
+ id obj = ((id(*)(id,SEL))objc_msgSend)((id)cls,sel_registerName("alloc"));
+ return ((id(*)(id,SEL,CGRect,id))objc_msgSend)(obj,sel_registerName("initWithFrame:device:"),(CGRect){{0,0},{width,height}},(id)device);
+}
+static inline witty_action_inspector_size witty_action_to_backing(void* view,double width,double height) {
+ CGRect rect=((CGRect(*)(id,SEL,CGRect))objc_msgSend)((id)view,sel_registerName("convertRectToBacking:"),(CGRect){{0,0},{width,height}}); return (witty_action_inspector_size){rect.size.width,rect.size.height};
+}

@@ -17,6 +17,7 @@ fn C.witty_action_repeat_forever(animation voidptr)
 
 pub struct ActionCallbacks {
 pub:
+    size      fn (voidptr, f64, f64) = unsafe { nil }
 	binding   fn (voidptr, string) bool = unsafe { nil }
 	title     fn (voidptr, string)      = unsafe { nil }
 	tab_title fn (voidptr, ?string)     = unsafe { nil }
@@ -59,6 +60,7 @@ pub mut:
 	progress                 ?u8
 	progress_active          bool
 mut:
+    scroll &NativeSurfaceScroll = unsafe { nil }
 	title_timer      ObjId
 	title_fallback   ObjId
 	pending_title    string
@@ -201,6 +203,7 @@ pub fn new_action_surface(view voidptr, userdata voidptr, callbacks ActionCallba
 	msg_void1(state.overlay, 'addSubview:', state.secure_badge)
 	state.hover_label = action_label('', objc_rect(0, 0, 320, 24))
 	msg_void1(state.overlay, 'addSubview:', state.hover_label)
+	state.scroll = new_surface_scroll(state)
 	state.refresh()
 	return state
 }
@@ -219,6 +222,7 @@ pub fn (mut state NativeActionSurface) deinit() {
 	msg_void(state.overlay, 'removeFromSuperview')
 	msg_void(state.overlay, 'release')
 	msg_void(state.owner, 'release')
+    if state.scroll != unsafe { nil } { state.scroll.deinit() }
 }
 
 fn action_passive_hit(_self ObjId, _cmd Sel, _point ObjCPoint) ObjId {
@@ -773,3 +777,5 @@ pub fn set_cursor_shape(view voidptr, shape int) {
 	// Cursor rects keep the translated shape after AppKit restores a cursor.
 	C.witty_macos_set_document_cursor(view, cursor)
 }
+
+pub fn (mut state NativeActionSurface) refresh_config() { state.refresh() }

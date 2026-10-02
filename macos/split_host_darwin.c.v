@@ -46,7 +46,7 @@ pub fn create_split_host(view voidptr) &NativeSplitHost {
 	// The immutable tree owns the views just as the Swift SurfaceTree does.
 	msg_void(view, 'retain')
 	msg_void1(window, 'setContentView:', container)
-	msg_void1(container, 'addSubview:', view)
+	msg_void1(container, 'addSubview:', surface_container(view))
 	msg_void1(window, 'setInitialFirstResponder:', view)
 	msg_bool1(window, 'makeFirstResponder:', view)
 	msg_void(view, 'release')
@@ -62,21 +62,23 @@ pub fn (mut host NativeSplitHost) replace_tree(tree NativeSplitTree) {
 pub fn (mut host NativeSplitHost) layout() {
 	bounds := msg_rect(host.container, 'bounds')
 	leaves := host.tree.root.leaves()
+    containers := leaves.map(surface_container(it))
 	children := msg_id(host.container, 'subviews')
 	for i := int(msg_u64(children, 'count')) - 1; i >= 0; i-- {
 		child := msg_id_u64(children, 'objectAtIndex:', u64(i))
-		if voidptr(child) !in leaves { msg_void(child, 'removeFromSuperview') }
+		if voidptr(child) !in containers { msg_void(child, 'removeFromSuperview') }
 	}
 	for view in leaves {
-		if msg_id(view, 'superview') != host.container { msg_void1(host.container, 'addSubview:', view) }
-		msg_void_bool(view, 'setHidden:', host.tree.zoomed != unsafe { nil } && !host.tree.zoomed.leaves().contains(view))
+		container := surface_container(view)
+        if msg_id(container, 'superview') != host.container { msg_void1(host.container, 'addSubview:', container) }
+		msg_void_bool(container, 'setHidden:', host.tree.zoomed != unsafe { nil } && !host.tree.zoomed.leaves().contains(view))
 	}
 	root := if host.tree.zoomed == unsafe { nil } { host.tree.root } else { host.tree.zoomed }
 	msg_void_bool(host.container, 'setNeedsDisplay:', true)
 	for slot in native_split_layout(root, SplitBounds{width: bounds.width, height: bounds.height}, host.increment_width, host.increment_height) {
 		b := slot.bounds
-		msg_void_rect(slot.node.view, 'setFrame:', objc_rect(b.x, b.y, b.width, b.height))
-		vt_view_frame_did_change(ObjId(slot.node.view), nil_obj(), nil_obj())
+		msg_void_rect(surface_container(slot.node.view), 'setFrame:', objc_rect(b.x, b.y, b.width, b.height))
+		surface_container_layout(slot.node.view)
 	}
 }
 pub fn view_window(view voidptr) voidptr { return msg_id(view, 'window') }
