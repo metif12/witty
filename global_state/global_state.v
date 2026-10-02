@@ -9,6 +9,7 @@ import harfbuzz
 import internal_os
 import cli_args
 import crash
+import glslang
 import log
 import oniguruma
 import xev
@@ -351,6 +352,9 @@ pub fn (mut self GlobalState) init_args(args []string) ! {
 	// Locale affects libc, gettext, and every child shell, so initialize it
 	// before loading translated resources or starting an application runtime.
 	internal_os.ensure_locale()!
+
+	// Initialize linked glslang before any custom-shader compilation.
+	glslang.initialize()!
 
 	// Initialize Oniguruma for regular-expression link matching.
 	oniguruma.init([oniguruma.Encoding.utf8()])!

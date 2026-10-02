@@ -2,7 +2,9 @@ module renderer
 
 import configpkg
 import os
-import time
+import glslang
+import spirv_cross as _
+import log
 
 const shadertoy_prefix = $embed_file('shaders/shadertoy_prefix.glsl').to_string()
 const max_shader_size = 4 * 1024 * 1024
@@ -35,6 +37,7 @@ pub fn load_from_files(paths configpkg.RepeatablePath, target Target) ![]string 
 			configpkg.PathOptional { item.path }
 			configpkg.PathRequired { item.path }
 		}
+
 		optional := item is configpkg.PathOptional
 		shader := load_from_file(path, target) or {
 			if optional && is_missing_file_error(err) {
@@ -53,11 +56,27 @@ pub fn load_from_file(path string, target Target) !string {
 	if !os.exists(path) {
 		return error('shader file not found: ${path}')
 	}
-	src := os.read_file(path) or { return error('unable to read shader ${path}: ${err}') }
-	if src.len > max_shader_size {
-		return error('shader exceeds 4 MiB limit: ${path}')
+	mut file := os.open(path) or { return error('unable to read shader ${path}: ${err}') }
+	defer { file.close() }
+	mut bytes := []u8{}
+	mut buffer := []u8{len: 4096}
+	for {
+		count := file.read(mut buffer) or { return err }
+		if count == 0 { break
+		 }
+		if count > max_shader_size - bytes.len {
+			return error('shader exceeds 4 MiB limit: ${path}')
+		}
+		bytes << buffer[..count]
 	}
-	spv := spirv_from_glsl(glsl_from_shader(src))!
+	mut diagnostics := SpirvLog{}
+	defer { diagnostics.deinit() }
+	spv := spirv_from_glsl_logged(glsl_from_shader(bytes.bytestr()), mut diagnostics) or {
+		if diagnostics.info.len > 0 || diagnostics.debug.len > 0 {
+			log.warn('spirv error path=${path} info=${diagnostics.info} debug=${diagnostics.debug}')
+		}
+		return err
+	}
 	return match target {
 		.glsl { glsl_from_spv(spv)! }
 		.msl { msl_from_spv(spv)! }
@@ -76,120 +95,98 @@ pub fn glsl_from_shader(src string) string {
 
 // Convert a GLSL shader into SPIR-V assembly.
 pub fn spirv_from_glsl(src string) ![]u8 {
-	input_path, output_path := shader_temp_paths('frag', 'spv')
-	defer {
-		remove_shader_temp(input_path)
-		remove_shader_temp(output_path)
-	}
-	os.write_file(input_path, src) or { return error('unable to write temporary GLSL: ${err}') }
-	run_shader_tool('glslangValidator', [
-		'-V',
-		'--target-env',
-		'vulkan1.2',
-		'-S',
-		'frag',
-		'-o',
-		output_path,
-		input_path,
-	])!
-	spv := os.read_file_array[u8](output_path)
-	if spv.len == 0 {
-		return error('glslangValidator produced empty SPIR-V')
-	}
-	return spv
+	mut diagnostics := SpirvLog{}
+	return spirv_from_glsl_logged(src, mut diagnostics)
 }
 
-// Convert SPIR-V binary to MSL.
+// Direct translation of the source shader/program API sequence and logs.
+pub fn spirv_from_glsl_logged(src string, mut diagnostics SpirvLog) ![]u8 {
+	$if test { glslang.initialize()! }
+	input := C.glslang_input_t{
+		language:                C.GLSLANG_SOURCE_GLSL
+		stage:                   C.GLSLANG_STAGE_FRAGMENT
+		client:                  C.GLSLANG_CLIENT_VULKAN
+		client_version:          C.GLSLANG_TARGET_VULKAN_1_2
+		target_language:         C.GLSLANG_TARGET_SPV
+		target_language_version: C.GLSLANG_TARGET_SPV_1_5
+		code:                    &char(src.str)
+		default_version:         100
+		default_profile:         C.GLSLANG_NO_PROFILE
+		messages:                C.GLSLANG_MSG_DEFAULT_BIT
+		resource:                C.glslang_default_resource()
+	}
+	shader := C.glslang_shader_create(&input)
+	if isnil(shader) { return error('OutOfMemory') }
+	defer { C.glslang_shader_delete(shader) }
+	if C.glslang_shader_preprocess(shader, &input) == 0
+		|| C.glslang_shader_parse(shader, &input) == 0 {
+		diagnostics.info = unsafe { cstring_to_vstring(C.glslang_shader_get_info_log(shader)).clone() }
+		diagnostics.debug = unsafe { cstring_to_vstring(C.glslang_shader_get_info_debug_log(shader)).clone() }
+		return error('GlslangFailed')
+	}
+	program := C.glslang_program_create()
+	if isnil(program) { return error('OutOfMemory') }
+	defer { C.glslang_program_delete(program) }
+	C.glslang_program_add_shader(program, shader)
+	if C.glslang_program_link(program, C.GLSLANG_MSG_SPV_RULES_BIT | C.GLSLANG_MSG_VULKAN_RULES_BIT) == 0 {
+		diagnostics.info = unsafe { cstring_to_vstring(C.glslang_program_get_info_log(program)).clone() }
+		diagnostics.debug = unsafe { cstring_to_vstring(C.glslang_program_get_info_debug_log(program)).clone() }
+		return error('GlslangFailed')
+	}
+	C.glslang_program_SPIRV_generate(program, C.GLSLANG_STAGE_FRAGMENT)
+	size := C.glslang_program_SPIRV_get_size(program)
+	ptr := C.glslang_program_SPIRV_get_ptr(program)
+	return unsafe { (&u8(ptr)).vbytes(int(size * 4)).clone() }
+}
+
 pub fn msl_from_spv(spv []u8) !string {
 	return source_from_spv(spv, .msl)
 }
 
-// Convert SPIR-V binary to GLSL.
 pub fn glsl_from_spv(spv []u8) !string {
 	return source_from_spv(spv, .glsl)
 }
 
+fn spirv_cross_error(_ voidptr, message &char) {
+	log.warn('spirv-cross error message=${unsafe { cstring_to_vstring(message) }}')
+}
+
 fn source_from_spv(spv []u8, target Target) !string {
-	if spv.len == 0 || spv.len % 4 != 0 {
-		return error('invalid SPIR-V byte length: ${spv.len}')
+	if spv.len % 4 != 0 { return error('SpirvInvalid') }
+	mut context := voidptr(unsafe { nil })
+	if C.spvc_context_create(&context) != C.SPVC_SUCCESS { return error('SpvcFailed') }
+	defer { C.spvc_context_destroy(context) }
+	C.spvc_context_set_error_callback(context, spirv_cross_error, unsafe { nil })
+	mut ir := voidptr(unsafe { nil })
+	if C.spvc_context_parse_spirv(context, &u32(spv.data), usize(spv.len / 4), &ir) != C.SPVC_SUCCESS {
+		return error('SpvcFailed')
 	}
-	input_path, output_path := shader_temp_paths('spv', match target {
-		.glsl { 'glsl' }
-		.msl { 'metal' }
-	})
-	defer {
-		remove_shader_temp(input_path)
-		remove_shader_temp(output_path)
+	mut compiler := voidptr(unsafe { nil })
+	backend := if target == .msl { C.SPVC_BACKEND_MSL } else { C.SPVC_BACKEND_GLSL }
+	if C.spvc_context_create_compiler(context, backend, ir, C.SPVC_CAPTURE_MODE_TAKE_OWNERSHIP,
+		&compiler) != C.SPVC_SUCCESS {
+		return error('SpvcFailed')
 	}
-	os.write_file_array(input_path, spv) or { return error('unable to write temporary SPIR-V: ${err}') }
-	mut args := [input_path]
-	match target {
-		.glsl {
-			args << ['--version', '430']
+	mut options := voidptr(unsafe { nil })
+	if C.spvc_compiler_create_compiler_options(compiler, &options) != C.SPVC_SUCCESS {
+		return error('SpvcFailed')
+	}
+	if target == .msl {
+		if C.spvc_compiler_options_set_bool(options,
+			C.SPVC_COMPILER_OPTION_MSL_ENABLE_DECORATION_BINDING, true) != C.SPVC_SUCCESS {
+			return error('SpvcFailed')
 		}
-		.msl {
-			args << ['--msl', '--msl-decoration-binding']
+	} else {
+		if C.spvc_compiler_options_set_uint(options, C.SPVC_COMPILER_OPTION_GLSL_VERSION, 430) != C.SPVC_SUCCESS {
+			return error('SpvcFailed')
 		}
 	}
-	args << ['--output', output_path]
-	run_shader_tool('spirv-cross', args)!
-	result := os.read_file(output_path) or {
-		return error('unable to read spirv-cross output: ${err}')
+	if C.spvc_compiler_install_compiler_options(compiler, options) != C.SPVC_SUCCESS {
+		return error('SpvcFailed')
 	}
-	if result.len == 0 {
-		return error('spirv-cross produced empty shader source')
-	}
-	return result
-}
-
-fn run_shader_tool(name string, args []string) !string {
-	executable := os.find_abs_path_of_executable(name) or {
-		return error('${name} is required to compile custom shaders')
-	}
-	mut process := os.new_process(executable)
-	process.set_args(args)
-	process.set_redirect_stdio()
-	process.run()
-	mut output := ''
-	mut diagnostics := ''
-	for process.is_alive() {
-		if process.is_pending(.stdout) {
-			output += process.stdout_read()
-		}
-		if process.is_pending(.stderr) {
-			diagnostics += process.stderr_read()
-		}
-		time.sleep(time.millisecond)
-	}
-	output += process.stdout_slurp()
-	diagnostics += process.stderr_slurp()
-	process.wait()
-	code := process.code
-	process.close()
-	if code != 0 {
-		mut message := output
-		if message.len > 0 && diagnostics.len > 0 {
-			message += '\n'
-		}
-		message = (message + diagnostics).trim_space()
-		if message.len > 0 {
-			return error('${name} failed (${code}): ${message}')
-		}
-		return error('${name} failed with exit code ${code}')
-	}
-	return output
-}
-
-fn shader_temp_paths(input_extension string, output_extension string) (string, string) {
-	stamp := time.sys_mono_now()
-	base := 'witty-shader-${os.getpid()}-${stamp}'
-	return os.join_path(os.temp_dir(), '${base}.${input_extension}'), os.join_path(os.temp_dir(), '${base}.${output_extension}')
-}
-
-fn remove_shader_temp(path string) {
-	if os.exists(path) {
-		os.rm(path) or {}
-	}
+	mut result := &char(unsafe { nil })
+	if C.spvc_compiler_compile(compiler, &result) != C.SPVC_SUCCESS { return error('SpvcFailed') }
+	return unsafe { cstring_to_vstring(result).clone() }
 }
 
 fn is_missing_file_error(err IError) bool {
