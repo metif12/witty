@@ -53,10 +53,12 @@ fn test_pointer_hash_map_growth_failure_keeps_source_table() ! {
 		remap:   pointer_map_test_remap
 		free_fn: pointer_map_test_free
 	}
-	allocator := unsafe { Allocator{
-		ctx:    &state
-		vtable: &vtable
-	} }
+	allocator := unsafe {
+		Allocator{
+			ctx:    &state
+			vtable: &vtable
+		}
+	}
 	mut table := PointerHashMap.init[voidptr, voidptr](allocator)
 	defer { table.deinit() }
 	for i in 1 .. 7 {
@@ -73,4 +75,26 @@ fn test_pointer_hash_map_growth_failure_keeps_source_table() ! {
 		return
 	}
 	assert false
+}
+
+struct EqualPointerMapValue {
+	value int
+}
+
+fn test_pointer_hash_map_compares_struct_pointer_identity() ! {
+	value1 := &EqualPointerMapValue{
+		value: 42
+	}
+	value2 := &EqualPointerMapValue{
+		value: 42
+	}
+	mut table := PointerHashMap[&EqualPointerMapValue, voidptr]{
+		allocator: c_allocator
+	}
+	defer { table.deinit() }
+	table.put_no_clobber(value1, unsafe { voidptr(1) })!
+	table.put_no_clobber(value2, unsafe { voidptr(2) })!
+	assert table.count() == 2
+	assert table.get(value1)? == unsafe { voidptr(1) }
+	assert table.get(value2)? == unsafe { voidptr(2) }
 }

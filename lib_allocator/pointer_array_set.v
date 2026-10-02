@@ -63,10 +63,12 @@ fn (set &PointerArraySet[T]) index_capacity() usize {
 fn (set &PointerArraySet[T]) slot(index usize) ArraySetSlot {
 	ptr := unsafe { &u8(usize(set.header) + 4 + (index & (set.index_len() - 1)) * set.width() * 2) }
 	return if set.bit_index <= 8 {
-		unsafe { ArraySetSlot{
-			entry:    usize(ptr[0])
-			distance: usize(ptr[1])
-		} }
+		unsafe {
+			ArraySetSlot{
+				entry:    usize(ptr[0])
+				distance: usize(ptr[1])
+			}
+		}
 	} else if set.bit_index <= 16 {
 		ArraySetSlot{
 			entry:    usize(unsafe { *(&u16(ptr)) })
@@ -184,7 +186,9 @@ fn (set &PointerArraySet[T]) find_slot(key T) ?usize {
 	for _ in 0 .. set.index_len() {
 		slot := set.slot(index)
 		if slot.entry == set.sentinel() || slot.distance < distance { return none }
-		if set.keys[int(slot.entry)] == key { return index & (set.index_len() - 1) }
+		if voidptr(set.keys[int(slot.entry)]) == voidptr(key) {
+			return index & (set.index_len() - 1)
+		}
 		index++
 		distance++
 	}
@@ -194,7 +198,7 @@ fn (set &PointerArraySet[T]) find_slot(key T) ?usize {
 pub fn (set &PointerArraySet[T]) get_index(key T) ?usize {
 	if isnil(set.header) {
 		for i, existing in set.keys {
-			if existing == key { return usize(i) }
+			if voidptr(existing) == voidptr(key) { return usize(i) }
 		}
 		return none
 	}

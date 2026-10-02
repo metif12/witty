@@ -30,10 +30,12 @@ fn array_set_test_free(ctx voidptr, ptr voidptr, len usize, alignment u8, _ usiz
 }
 
 fn array_set_test_allocator(state &ArraySetTestState, vtable &VTable) Allocator {
-	return unsafe { Allocator{
-		ctx:    state
-		vtable: vtable
-	} }
+	return unsafe {
+		Allocator{
+			ctx:    state
+			vtable: vtable
+		}
+	}
 }
 
 fn test_pointer_array_set_index_width_growth_and_swap_removal() ! {
@@ -79,4 +81,24 @@ fn test_pointer_array_set_failure_retains_existing_entries() ! {
 		return
 	}
 	assert false, 'source index allocation failure must be propagated'
+}
+
+struct EqualPointerSetValue {
+	value int
+}
+
+fn test_pointer_array_set_compares_struct_pointer_identity() ! {
+	value1 := &EqualPointerSetValue{
+		value: 42
+	}
+	value2 := &EqualPointerSetValue{
+		value: 42
+	}
+	mut set := PointerArraySet[&EqualPointerSetValue]{}
+	defer { set.deinit(c_allocator) }
+	set.put_no_clobber(c_allocator, value1)!
+	set.put_no_clobber(c_allocator, value2)!
+	assert set.keys.len == 2
+	assert set.get_index(value1)? == 0
+	assert set.get_index(value2)? == 1
 }

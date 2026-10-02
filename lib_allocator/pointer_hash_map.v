@@ -102,7 +102,7 @@ fn (table &PointerHashMap[K, V]) get_index(key K) ?usize {
 	for unsafe { table.metadata[index] != 0 } && limit != 0 {
 		meta := unsafe { table.metadata[index] }
 		if meta & 0x80 != 0 && meta & 0x7f == fingerprint {
-			if unsafe { keys[index] == key } { return index }
+			if unsafe { voidptr(keys[index]) == voidptr(key) } { return index }
 		}
 		limit--
 		index = (index + 1) & mask
@@ -139,7 +139,7 @@ fn (mut table PointerHashMap[K, V]) grow(capacity u32) ! {
 	new_capacity := if capacity < 8 { u32(8) } else { capacity }
 	if buildcfg.runtime_safety { assert new_capacity > table.capacity()
 	 }
-	mut next := PointerHashMap.init[K, V](table.allocator)
+	mut next := PointerHashMap[K, V]{allocator: table.allocator}
 	next.allocate(new_capacity)!
 	unsafe { vmemset(next.metadata, 0, int(new_capacity)) }
 	next.available = u32(u64(new_capacity) * 80 / 100)
