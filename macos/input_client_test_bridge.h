@@ -11,3 +11,7 @@ static inline void witty_input_test_insert(void* view, const char* text) {
 static inline void* witty_input_test_swizzle_current_event(void* implementation) {
 	return method_setImplementation(class_getInstanceMethod([NSApplication class], @selector(currentEvent)), (IMP)implementation);
 }
+static inline void witty_input_test_run_main_for(double seconds) {
+	[[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:seconds]];
+}
+static inline void* witty_input_test_pasteboard(void) { return [NSPasteboard pasteboardWithUniqueName]; }

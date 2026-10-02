@@ -13,6 +13,8 @@ fn install_native_input_callbacks() {
 		preedit: native_preedit
 		text: native_text
 		selection: native_selection
+		has_selection: native_has_selection
+		screen_text: native_screen_text
 		font: native_selection_font
 		ime_rect: native_ime_rect
 		binding_action: native_binding_action
@@ -71,6 +73,21 @@ fn native_selection(userdata voidptr) ?macos.NativeText {
 	if !apprt.ghostty_surface_read_selection(mut state.surface, mut text) { return none }
 	defer { apprt.ghostty_surface_free_text(mut text) }
 	return macos.NativeText{text: text.text or { '' }, offset_start: text.offset_start, offset_len: text.offset_len, tl_px_x: text.tl_px_x, tl_px_y: text.tl_px_y}
+}
+
+fn native_has_selection(userdata voidptr) bool {
+	state := state_from_userdata(userdata) or { return false }
+	return !state.closed && state.surface != unsafe { nil } && apprt.ghostty_surface_has_selection(state.surface)
+}
+
+fn native_screen_text(userdata voidptr) string {
+	mut state := state_from_userdata(userdata) or { return '' }
+	if state.closed || state.surface == unsafe { nil } { return '' }
+	mut text := apprt.CAPIText{}
+	selection := apprt.CAPISelection{tl: apprt.CAPIPoint{tag: .screen, coord_tag: .top_left}, br: apprt.CAPIPoint{tag: .screen, coord_tag: .bottom_right}}
+	if !apprt.ghostty_surface_read_text(mut state.surface, selection, mut text) { return '' }
+	defer { apprt.ghostty_surface_free_text(mut text) }
+	return text.text or { '' }
 }
 
 fn native_selection_font(userdata voidptr) voidptr {

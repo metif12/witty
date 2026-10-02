@@ -41,6 +41,8 @@ pub:
 	preedit fn (voidptr, ?string) = unsafe { nil }
 	text fn (voidptr, string) = unsafe { nil }
 	selection fn (voidptr) ?NativeText = unsafe { nil }
+	has_selection fn (voidptr) bool = unsafe { nil }
+	screen_text fn (voidptr) string = unsafe { nil }
 	font fn (voidptr) voidptr = unsafe { nil }
 	ime_rect fn (voidptr) NativeImeRect = unsafe { nil }
 	binding_action fn (voidptr, string) bool = unsafe { nil }
@@ -55,6 +57,8 @@ mut:
 	last_perform ?f64
 	key_sequence bool
 	key_tables bool
+	screen_contents ?string
+	cache_timer voidptr
 }
 
 __global (
@@ -143,7 +147,8 @@ fn register_input_methods(cls ObjId) {
 }
 
 fn input_view_dealloc(self ObjId, _cmd Sel) {
-	if state := g_input_views[u64(self)] {
+	if mut state := g_input_views[u64(self)] {
+		input_cancel_screen_cache(mut state)
 		msg_void(state.marked, 'release')
 		g_input_views.delete(u64(self))
 	}
@@ -204,7 +209,7 @@ fn ghostty_characters(event ObjId) ?string {
 	if is_nil(obj) { return none }
 	text := objc_utf8_string(obj)
 	// Swift String.count counts composed characters rather than UTF-16 units.
-	if text.len > 0 && C.witty_macos_msg_range_u64(voidptr(obj), voidptr(sel('rangeOfComposedCharacterSequenceAtIndex:')), 0).length == usize(msg_u64(obj, 'length')) {
+	if text.len > 0 && composed_character_count(obj) == 1 {
 		cp := text.runes()[0]
 		if cp < 0x20 {
 			flags := msg_u64(event, 'modifierFlags') & ~ns_event_modifier_flag_control

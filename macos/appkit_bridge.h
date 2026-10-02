@@ -789,3 +789,40 @@ static inline void witty_macos_msg_super_from_void0(void* obj, void* defining_cl
 static inline witty_macos_range witty_macos_msg_range_u64(void* obj, void* selector, unsigned long long index) {
 	return ((witty_macos_range (*)(id, SEL, unsigned long long))objc_msgSend)((id)obj, (SEL)selector, index);
 }
+
+typedef struct witty_cache_timer_context {
+	dispatch_source_t timer;
+	void (*callback)(void*);
+	void* context;
+} witty_cache_timer_context;
+static void witty_cache_timer_cancelled(void* raw) { free(raw); }
+static void witty_cache_timer_fired(void* raw) {
+	witty_cache_timer_context* ctx = raw;
+	ctx->callback(ctx->context);
+	dispatch_source_cancel(ctx->timer);
+	dispatch_release(ctx->timer);
+}
+static inline void* witty_macos_cache_timer(unsigned long long duration, void* callback, void* context) {
+	dispatch_source_t timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
+	witty_cache_timer_context* ctx = malloc(sizeof(*ctx));
+	ctx->timer = timer; ctx->callback = callback; ctx->context = context;
+	dispatch_set_context(timer, ctx);
+	dispatch_source_set_event_handler_f(timer, witty_cache_timer_fired);
+	dispatch_source_set_cancel_handler_f(timer, witty_cache_timer_cancelled);
+	dispatch_source_set_timer(timer, dispatch_time(DISPATCH_TIME_NOW, duration), DISPATCH_TIME_FOREVER, 0);
+	dispatch_resume(timer);
+	return timer;
+}
+static inline void witty_macos_cancel_timer(void* timer) {
+	if (timer) { dispatch_source_cancel((dispatch_source_t)timer); dispatch_release((dispatch_source_t)timer); }
+}
+/* Public ICU character-break API exported by the macOS libicucore SDK. */
+typedef struct UBreakIterator UBreakIterator;
+extern UBreakIterator* ubrk_open(int32_t, const char*, const uint16_t*, int32_t, int32_t*);
+extern int32_t ubrk_first(UBreakIterator*);
+extern int32_t ubrk_next(UBreakIterator*);
+extern void ubrk_close(UBreakIterator*);
+static inline void witty_macos_copy_characters(void* string, uint16_t* output, unsigned long length) {
+	witty_macos_range range = {0, length};
+	((void (*)(id, SEL, uint16_t*, witty_macos_range))objc_msgSend)((id)string, sel_registerName("getCharacters:range:"), output, range);
+}

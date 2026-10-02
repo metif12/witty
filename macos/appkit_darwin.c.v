@@ -855,6 +855,7 @@ fn register_classes() {
 		add_method(view_cls, 'vtNewTab:', voidptr(vt_view_new_tab), 'v@:@')
 		add_method(view_cls, 'vtCloseTab:', voidptr(vt_view_close_tab), 'v@:@')
 		register_input_methods(view_cls)
+		register_terminal_interfaces(view_cls)
 		C.macos_objc_register_class_pair(view_cls)
 	}
 
@@ -1519,6 +1520,7 @@ fn setup_view_metal(view ObjId) {
 
 fn create_terminal_view(frame ObjCRect) ObjId {
 	view := msg_id_rect(alloc('VTTerminalView'), 'initWithFrame:', frame)
+	setup_terminal_interfaces(view)
 	setup_view_metal(view)
 	setup_view_notifications(view)
 	setup_view_tracking(view)
