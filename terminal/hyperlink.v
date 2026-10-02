@@ -371,7 +371,7 @@ pub fn (self &HyperlinkSet) live_ids() []HyperlinkId {
 
 pub fn (self &HyperlinkSet) count() usize { return self.set.count() }
 
-pub fn (self &HyperlinkSet) capacity() usize { return self.layout.cap }
+pub fn (self &HyperlinkSet) capacity() usize { return self.layout.cap - 1 }
 
 pub fn (self &HyperlinkSet) string_capacity() usize { return self.string_alloc.capacity_bytes() }
 

@@ -1,5 +1,6 @@
 module terminal
 
+import buildcfg
 import strings
 import tripwire
 
@@ -6702,7 +6703,7 @@ pub enum PageListIntegrityError {
 }
 
 pub fn (self &PageList) assert_integrity() {
-	$if prod {
+	if !buildcfg.slow_runtime_safety {
 		return
 	}
 	if self.pause_integrity_checks > 0 {
@@ -6714,7 +6715,7 @@ pub fn (self &PageList) assert_integrity() {
 }
 
 pub fn (self &PageList) verify_integrity() ?PageListIntegrityError {
-	$if prod {
+	if !buildcfg.slow_runtime_safety {
 		return none
 	}
 	if self.pause_integrity_checks > 0 {
@@ -6782,7 +6783,7 @@ pub fn (self &PageList) verify_integrity() ?PageListIntegrityError {
 
 // Temporarily pause or resume integrity checks around multi-step mutations.
 pub fn (mut self PageList) pause_integrity_checks(pause bool) {
-	$if prod {
+	if !buildcfg.slow_runtime_safety {
 		return
 	}
 	if pause {

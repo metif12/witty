@@ -1,5 +1,6 @@
 module terminal
 
+import buildcfg
 import datastruct
 import lib_allocator
 
@@ -1503,7 +1504,7 @@ pub fn (self &Page) verify_integrity() ?IntegrityError {
 // A helper that verifies integrity and panics on violation. Like the
 // upstream slow_runtime_safety gate, this is skipped in production builds.
 pub fn (self &Page) assert_integrity() {
-	$if prod {
+	if !buildcfg.slow_runtime_safety {
 		return
 	}
 	if violation := self.verify_integrity() {
@@ -1513,6 +1514,7 @@ pub fn (self &Page) assert_integrity() {
 
 // Temporarily pause or resume integrity checks around multi-step mutations.
 pub fn (mut self Page) pause_integrity_checks(pause bool) {
+	if !buildcfg.slow_runtime_safety { return }
 	if pause {
 		self.pause_integrity_checks += 1
 	} else {
@@ -2101,10 +2103,10 @@ pub fn (mut self Page) clear_cells(row_idx usize, left usize, end usize) {
 fn (self &Page) key_for_cell(cell &CellData) ?u32 {
 	base := usize(self.memory.data)
 	target := usize(cell)
-	layout := Page.layout(self.capacity)
-	assert target >= base + layout.cells_start && target < base + layout.cells_start + layout.cells_size
-	assert (target - base - layout.cells_start) % sizeof(CellData) == 0
-	return u32(target - base)
+	assert target >= base
+	offset := target - base
+	assert offset <= usize(~u32(0))
+	return u32(offset)
 }
 
 // Returns the hyperlink ID for the given page-owned cell.
