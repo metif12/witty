@@ -504,6 +504,8 @@ fn main() {
 	}
 
 	macos.app_init()
+	macos.start_native_updater(native_update_config(&config)) or { eprintln('error starting updater: ${err}') }
+	defer { macos.stop_native_updater() }
 	macos.set_draw_callback(on_draw)
 	macos.set_resize_callback(on_resize)
 	macos.set_display_callback(on_display)
