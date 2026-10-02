@@ -491,7 +491,6 @@ fn (mut self SearchThread) thread_main_() ! {
 		class := internal_os.QosClass.utility
 		internal_os.set_qos_class(class) or {
 			log.warn('error setting QoS class err=${err}')
-			return
 		}
 		log.debug('thread QoS class set class=${class}')
 	}
