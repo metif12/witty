@@ -172,6 +172,22 @@ pub:
 
 pub type Args = CliArgs | StringArgs
 
+// src/main_bench.zig and benchmark/cli.zig: detect one +action before
+// dispatching the existing options/implementation/once-mode lifecycle.
+pub fn main() ! {
+	mut selected := ?Action(none)
+	for argument in os.args {
+		if !argument.starts_with('+') { continue
+		 }
+		if _ := selected { return error('MultipleActions') }
+		selected = parse_action(argument[1..]) or {
+			return error('InvalidAction')
+		}
+	}
+	action := selected or { return error('NoAction') }
+	main_action(action, CliArgs{})!
+}
+
 // run_cli parses the action options, constructs its implementation, and runs
 // it once, matching benchmark.cli.mainAction as invoked by CApi.zig.
 pub fn run_cli(action_name string, argument_string string) ! {
@@ -196,7 +212,9 @@ pub fn main_action(action Action, args_source Args) ! {
 			}
 			values
 		}
-		StringArgs { parse_argument_string(args_source.value) }
+		StringArgs {
+			parse_argument_string(args_source.value)
+		}
 	}
 
 	match action {
