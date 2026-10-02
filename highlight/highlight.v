@@ -65,8 +65,8 @@ pub fn (mut self Flattened) deinit() {
 pub fn (self &Flattened) clone() Flattened {
 	return Flattened{
 		chunks: self.chunks.clone()
-		top_x: self.top_x
-		bot_x: self.bot_x
+		top_x:  self.top_x
+		bot_x:  self.bot_x
 	}
 }
 
@@ -78,16 +78,16 @@ pub fn Flattened.init(start terminal.Pin, end terminal.Pin) Flattened {
 	for {
 		chunk := iterator.next() or { break }
 		chunks << Chunk{
-			node: chunk.node
+			node:   chunk.node
 			serial: chunk.node.serial
-			start: chunk.start
-			end: chunk.end
+			start:  chunk.start
+			end:    chunk.end
 		}
 	}
 	return Flattened{
 		chunks: chunks
-		top_x: start.x
-		bot_x: end.x
+		top_x:  start.x
+		bot_x:  end.x
 	}
 }
 
@@ -96,8 +96,8 @@ pub fn (self &Flattened) start_pin() terminal.Pin {
 	first := self.chunks[0]
 	return terminal.Pin{
 		node: first.node
-		y: first.start
-		x: self.top_x
+		y:    first.start
+		x:    self.top_x
 	}
 }
 
@@ -106,8 +106,8 @@ pub fn (self &Flattened) end_pin() terminal.Pin {
 	last := self.chunks[self.chunks.len - 1]
 	return terminal.Pin{
 		node: last.node
-		y: last.end - 1
-		x: self.bot_x
+		y:    last.end - 1
+		x:    self.bot_x
 	}
 }
 
@@ -118,13 +118,13 @@ pub fn (self &Flattened) untracked() Untracked {
 	return Untracked{
 		start: terminal.Pin{
 			node: first.node
-			x: self.top_x
-			y: first.start
+			x:    self.top_x
+			y:    first.start
 		}
-		end: terminal.Pin{
+		end:   terminal.Pin{
 			node: last.node
-			x: self.bot_x
-			y: last.end - 1
+			x:    self.bot_x
+			y:    last.end - 1
 		}
 	}
 }
@@ -147,17 +147,20 @@ pub fn (self Untracked) eql(other Untracked) bool {
 }
 
 // Track this highlight by creating tracked pins in its backing page list.
-pub fn (self &Untracked) track(mut list terminal.PageList) Tracked {
-	return Tracked.init(mut list, self.start, self.end)
+pub fn (self &Untracked) track(mut list terminal.PageList) !Tracked {
+	return Tracked.init(mut list, self.start, self.end)!
 }
 
 // Initialize a tracked highlight by registering both pins with the page list.
-pub fn Tracked.init(mut list terminal.PageList, start terminal.Pin, end terminal.Pin) Tracked {
-	start_pin := list.track_pin(start)
-	end_pin := list.track_pin(end)
+pub fn Tracked.init(mut list terminal.PageList, start terminal.Pin, end terminal.Pin) !Tracked {
+	start_pin := list.track_pin(start)!
+	end_pin := list.track_pin(end) or {
+		list.untrack_pin(start_pin)
+		return err
+	}
 	return Tracked{
 		start: start_pin
-		end: end_pin
+		end:   end_pin
 	}
 }
 
@@ -169,7 +172,7 @@ pub fn Tracked.init_assume(start &terminal.Pin, end &terminal.Pin) Tracked {
 	unsafe {
 		return Tracked{
 			start: start
-			end: end
+			end:   end
 		}
 	}
 }

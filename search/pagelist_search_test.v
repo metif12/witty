@@ -8,7 +8,7 @@ fn write_pagelist_search_text(node &terminal.PageNode, x int, y int, text string
 		for i, ch in text.runes() {
 			mutable_node.data.rows[y].cells[x + i] = terminal.CellData{
 				content_tag: .codepoint
-				codepoint: u32(ch)
+				codepoint:   u32(ch)
 			}
 		}
 	}
@@ -34,7 +34,7 @@ fn test_pagelist_search_initial_page_and_feed() ! {
 	write_pagelist_search_text(first_node, 0, 0, 'Fizz')
 	write_pagelist_search_text(last_node, 0, 0, 'Fizz')
 
-	mut finder := PageListSearch.init('Fizz'.bytes(), &list, last_node)
+	mut finder := PageListSearch.init('Fizz'.bytes(), &list, last_node)!
 	defer { finder.deinit() }
 	start_y := finder.pin.y
 	start_x := finder.pin.x

@@ -76,9 +76,9 @@ pub mut:
 // Initialize a new selection with the given untracked bounds.
 pub fn Selection.init(start_pin Pin, end_pin Pin, rectangle bool) Selection {
 	return Selection{
-		bounds: SelectionUntrackedBounds{
+		bounds:    SelectionUntrackedBounds{
 			start: start_pin
-			end: end_pin
+			end:   end_pin
 		}
 		rectangle: rectangle
 	}
@@ -147,14 +147,17 @@ pub fn (self &Selection) tracked() bool {
 
 // Convert this selection to a tracked selection. The receiver must be an
 // untracked selection.
-pub fn (self &Selection) track(mut s Screen) Selection {
+pub fn (self &Selection) track(mut s Screen) !Selection {
 	assert !self.tracked()
-	tracked_start := s.pages.track_pin(self.start())
-	tracked_end := s.pages.track_pin(self.end())
+	tracked_start := s.pages.track_pin(self.start())!
+	tracked_end := s.pages.track_pin(self.end()) or {
+		s.pages.untrack_pin(tracked_start)
+		return err
+	}
 	return Selection{
-		bounds: SelectionTrackedBounds{
+		bounds:    SelectionTrackedBounds{
 			start: tracked_start
-			end: tracked_end
+			end:   tracked_end
 		}
 		rectangle: self.rectangle
 	}

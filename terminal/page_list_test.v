@@ -231,7 +231,7 @@ fn test_page_list_increase_capacity_rehashes_without_growing() ! {
 		return
 	}
 	old_capacity := first.data.capacity
-	tracked := s.track_pin(Pin{ node: first, y: 1, x: 1 })
+	tracked := s.track_pin(Pin{ node: first, y: 1, x: 1 })!
 	new_node := s.increase_capacity(first, none) or {
 		assert false, err.msg()
 		return
@@ -354,7 +354,7 @@ fn test_page_list_increase_capacity_tracked_pins() ! {
 	tracked := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 1, y: 1 })) or {
 		assert false
 		return
-	})
+	})!
 	assert voidptr(old_node) == voidptr(tracked.node)
 
 	new_node := s.increase_capacity(old_node, .styles) or { panic(err) }
@@ -554,7 +554,7 @@ fn test_page_list_compact_oversized_page() ! {
 		node: first
 		x:    5
 		y:    10
-	})
+	})!
 
 	mut node := first
 	for page_backing_size(node.data.capacity) <= standard_page_size() {
@@ -675,7 +675,7 @@ fn test_page_list_tracked_pin_accessors_and_diagram() ! {
 		assert false
 		return
 	}
-	tracked := s.track_pin(pin)
+	tracked := s.track_pin(pin)!
 	assert s.count_tracked_pins() == 2
 	view := s.tracked_pins()
 	assert view.len == 2
@@ -1213,7 +1213,7 @@ fn test_page_list_grow_reuses_non_standard_page_without_leak() ! {
 	last := s.pages.last or { return }
 	assert last.data.size.rows == last.data.capacity.rows
 
-	tracked := s.track_pin(Pin{ node: first_page })
+	tracked := s.track_pin(Pin{ node: first_page })!
 	_ = s.grow()!
 	assert voidptr(s.pages.first or { return }) != voidptr(first_page)
 	assert voidptr(s.pages.last or { return }) != voidptr(first_page)
@@ -1716,7 +1716,7 @@ fn test_page_list_track_pin() ! {
 		return
 	}
 
-	tp := s.track_pin(p)
+	tp := s.track_pin(p)!
 	assert tp.x == 5
 	assert tp.y == p.y
 
@@ -1858,11 +1858,11 @@ fn test_page_list_point_pin_and_partial_active_erase() ! {
 	}
 	tracked_survivor := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 2, y: 4 })) or {
 		panic('missing survivor pin')
-	})
+	})!
 	defer { s.untrack_pin(tracked_survivor) }
 	tracked_erased := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 3, y: 2 })) or {
 		panic('missing erased pin')
-	})
+	})!
 	defer { s.untrack_pin(tracked_erased) }
 
 	s.erase_rows(Point.new(.active, Coordinate{}), Point.new(.active, Coordinate{ y: 3 }))
@@ -1978,7 +1978,7 @@ fn test_page_list_erase_row_with_tracked_pin() ! {
 		assert false, 'get_pin failed'
 		return
 	}
-	tp := s.track_pin(p)
+	tp := s.track_pin(p)!
 
 	// Erase row 0 (before tracked pin)
 	s.erase_row(Point.new(.active, Coordinate{})) or { panic(err) }
@@ -2067,7 +2067,7 @@ fn test_page_list_erase_row_moves_managed_cell_and_pin_across_page_boundary() ! 
 		uri: 'https://example.com/boundary'
 	}) or { panic(err) }
 	second_page.set_hyperlink(0, 1, hyperlink_id) or { panic(err) }
-	tracked := s.track_pin(Pin{ node: second, y: 0, x: 1 })
+	tracked := s.track_pin(Pin{ node: second, y: 0, x: 1 })!
 
 	s.erase_row(Point.new(.active, Coordinate{ y: 1 })) or { panic(err) }
 
@@ -2192,7 +2192,7 @@ fn test_page_list_split_moves_tracked_pins() ! {
 		assert false, 'get_pin failed'
 		return
 	}
-	tp := s.track_pin(p)
+	tp := s.track_pin(p)!
 
 	first := s.pages.first or {
 		assert false, 'no first page'
@@ -2230,7 +2230,7 @@ fn test_page_list_split_tracked_pin_before_split_unchanged() ! {
 		assert false, 'get_pin failed'
 		return
 	}
-	tp := s.track_pin(p)
+	tp := s.track_pin(p)!
 
 	first := s.pages.first or {
 		assert false, 'no first page'
@@ -2264,7 +2264,7 @@ fn test_page_list_split_tracked_pin_at_split_point() ! {
 		assert false, 'get_pin failed'
 		return
 	}
-	tp := s.track_pin(p)
+	tp := s.track_pin(p)!
 
 	first := s.pages.first or {
 		assert false, 'no first page'
@@ -2514,7 +2514,7 @@ fn test_page_list_clone_remap_tracked_pin() ! {
 	tracked := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 0, y: 6 })) or {
 		assert false
 		return
-	})
+	})!
 
 	mut remap := PageTrackedPinsRemap.init()
 	defer { remap.deinit() }
@@ -2542,7 +2542,7 @@ fn test_page_list_clone_remap_tracked_pin_not_in_cloned_area() ! {
 	tracked := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 0, y: 3 })) or {
 		assert false
 		return
-	})
+	})!
 
 	mut remap := PageTrackedPinsRemap.init()
 	defer { remap.deinit() }
@@ -2724,7 +2724,7 @@ fn test_page_list_resize_no_reflow_less_cols_pin_in_trimmed() ! {
 		assert false, 'get_pin failed'
 		return
 	}
-	tp := s.track_pin(p)
+	tp := s.track_pin(p)!
 
 	s.resize(PageResizeOpts{
 		cols:   5
@@ -2905,7 +2905,7 @@ fn test_page_list_reset_moves_tracked_pins() ! {
 		assert false, 'get_pin failed'
 		return
 	}
-	tp := s.track_pin(p)
+	tp := s.track_pin(p)!
 
 	s.reset()
 
@@ -4363,7 +4363,7 @@ fn test_page_list_reset_moves_tracked_pins_and_marks_garbage() ! {
 		assert false, 'get_pin failed'
 		return
 	}
-	tp := s.track_pin(p)
+	tp := s.track_pin(p)!
 
 	s.reset()
 
@@ -4407,15 +4407,15 @@ fn test_page_list_erase_row_bounded_less_than_full_row() ! {
 	p_top := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 0, y: 5 })) or {
 		assert false, 'get_pin failed'
 		return
-	})
+	})!
 	p_bot := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 0, y: 8 })) or {
 		assert false, 'get_pin failed'
 		return
-	})
+	})!
 	p_out := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 0, y: 9 })) or {
 		assert false, 'get_pin failed'
 		return
-	})
+	})!
 
 	// Erase only a few rows in our active.
 	s.erase_row_bounded(Point.new(.active, Coordinate{ y: 5 }), 3) or { panic(err) }
@@ -4515,7 +4515,7 @@ fn test_page_list_erase_row_bounded_exact_page_boundary() ! {
 		uri: 'https://example.com/exact-boundary'
 	}) or { panic(err) }
 	second_page.set_hyperlink(0, 2, hyperlink_id) or { panic(err) }
-	tracked := s.track_pin(Pin{ node: second, y: 0, x: 2 })
+	tracked := s.track_pin(Pin{ node: second, y: 0, x: 2 })!
 
 	// One row remains in the first page. A limit of one must pull the next
 	// page's first row across the boundary, then blank that source row.
@@ -4546,7 +4546,7 @@ fn test_page_list_erase_row_bounded_with_pin_at_top() ! {
 	p_top := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 5, y: 0 })) or {
 		assert false, 'get_pin failed'
 		return
-	})
+	})!
 
 	s.erase_row_bounded(Point.new(.active, Coordinate{}), 3) or { panic(err) }
 	assert s.total_rows == usize(s.rows)
@@ -4569,11 +4569,11 @@ fn test_page_list_erase_row_bounded_full_rows_single_page() ! {
 	p_in := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 0, y: 7 })) or {
 		assert false, 'get_pin failed'
 		return
-	})
+	})!
 	p_out := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 0, y: 9 })) or {
 		assert false, 'get_pin failed'
 		return
-	})
+	})!
 
 	s.erase_row_bounded(Point.new(.active, Coordinate{ y: 5 }), 10) or { panic(err) }
 	assert s.total_rows == usize(s.rows)
@@ -4622,19 +4622,19 @@ fn test_page_list_erase_row_bounded_full_rows_two_pages() ! {
 	p_first := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 0, y: 4 })) or {
 		assert false, 'get_pin failed'
 		return
-	})
+	})!
 	p_first_out := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 0, y: 3 })) or {
 		assert false, 'get_pin failed'
 		return
-	})
+	})!
 	p_in := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 0, y: 8 })) or {
 		assert false, 'get_pin failed'
 		return
-	})
+	})!
 	p_out := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 0, y: 9 })) or {
 		assert false, 'get_pin failed'
 		return
-	})
+	})!
 
 	// Verify initial pin placement.
 	assert voidptr(p_first.node) == voidptr(prev)
@@ -4730,7 +4730,7 @@ fn test_page_list_resize_no_reflow_less_rows_cursor_on_bottom() ! {
 	p := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 0, y: 9 })) or {
 		assert false, 'get_pin failed'
 		return
-	})
+	})!
 
 	s.resize(PageResizeOpts{ rows: 5, reflow: false }) or { panic(err) }
 	assert s.rows == 5
@@ -4775,7 +4775,7 @@ fn test_page_list_resize_no_reflow_less_rows_cursor_in_scrollback() ! {
 	p := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 0, y: 2 })) or {
 		assert false, 'get_pin failed'
 		return
-	})
+	})!
 
 	s.resize(PageResizeOpts{ rows: 5, reflow: false }) or { panic(err) }
 	assert s.rows == 5
@@ -4878,7 +4878,7 @@ fn test_page_list_resize_no_reflow_less_rows_trims_blank_lines() ! {
 	p := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 0, y: 0 })) or {
 		assert false, 'get_pin failed'
 		return
-	})
+	})!
 
 	s.resize(PageResizeOpts{ rows: 2, reflow: false }) or { panic(err) }
 	assert s.rows == 2
@@ -5010,7 +5010,7 @@ fn test_page_list_resize_no_reflow_less_rows_trims_blank_lines_cursor_in_blank_l
 	p := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 0, y: 3 })) or {
 		assert false, 'get_pin failed'
 		return
-	})
+	})!
 
 	s.resize(PageResizeOpts{ rows: 2, reflow: false }) or { panic(err) }
 	assert s.rows == 2
@@ -5224,7 +5224,7 @@ fn test_page_list_resize_no_reflow_more_cols_remaps_pins_in_backfill_path() ! {
 		node: second_page
 		x:    0
 		y:    0
-	})
+	})!
 	marker := u32(`X`)
 	mut rac := tracked.row_and_cell()
 	rac.cell.content_tag = .codepoint
@@ -5281,7 +5281,7 @@ fn test_page_list_resize_no_reflow_more_rows_adds_blank_rows_if_cursor_at_bottom
 	p := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 0, y: u16(s.rows - 2) })) or {
 		assert false, 'get_pin failed'
 		return
-	})
+	})!
 	original_cursor := s.point_from_pin(.active, Pin{ node: p.node, y: p.y, x: p.x }) or {
 		assert false, 'point_from_pin failed'
 		return
@@ -5565,7 +5565,7 @@ fn test_page_list_resize_reflow_more_cols_wrap_across_page_boundary_cursor_in_se
 			codepoint:   u32(x)
 		}
 	}
-	tracked := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 1, y: 9 })) or { return })
+	tracked := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 1, y: 9 })) or { return })!
 	assert voidptr(tracked.node) == voidptr(last)
 	end_rows := s.total_rows - 1
 
@@ -5605,7 +5605,7 @@ fn test_page_list_resize_reflow_less_cols_wrap_across_page_boundary_cursor_in_se
 			codepoint:   u32(x)
 		}
 	}
-	tracked := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 2, y: 5 })) or { return })
+	tracked := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 2, y: 5 })) or { return })!
 	assert voidptr(tracked.node) == voidptr(last)
 	assert tracked.y == 0
 
@@ -5726,7 +5726,7 @@ fn test_page_list_resize_reflow_more_cols_cursor_in_wrapped_row() ! {
 	p := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 1, y: 1 })) or {
 		assert false, 'get_pin failed'
 		return
-	})
+	})!
 
 	s.resize(PageResizeOpts{ cols: 4, reflow: true }) or { panic(err) }
 	assert s.cols == 4
@@ -5770,7 +5770,7 @@ fn test_page_list_resize_reflow_more_cols_cursor_in_not_wrapped_row() ! {
 	p := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 1, y: 0 })) or {
 		assert false, 'get_pin failed'
 		return
-	})
+	})!
 
 	s.resize(PageResizeOpts{ cols: 4, reflow: true }) or { panic(err) }
 	assert s.cols == 4
@@ -5824,7 +5824,7 @@ fn test_page_list_resize_reflow_more_cols_cursor_in_wrapped_row_that_isnt_unwrap
 	p := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 1, y: 2 })) or {
 		assert false, 'get_pin failed'
 		return
-	})
+	})!
 
 	s.resize(PageResizeOpts{ cols: 4, reflow: true }) or { panic(err) }
 	assert s.cols == 4
@@ -6295,7 +6295,7 @@ fn test_page_list_resize_reflow_less_cols_cursor_in_wrapped_row() ! {
 	p := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 2, y: 1 })) or {
 		assert false, 'get_pin failed'
 		return
-	})
+	})!
 
 	s.resize(PageResizeOpts{ cols: 2, reflow: true }) or { panic(err) }
 	assert s.cols == 2
@@ -6326,7 +6326,7 @@ fn reflow_cursor_cell_helper(init_cols u16, new_cols u16, pin_x u16, exp_x u32, 
 		}
 	}
 
-	p := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: pin_x, y: 0 })) or { return })
+	p := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: pin_x, y: 0 })) or { return })!
 
 	s.resize(PageResizeOpts{ cols: new_cols, reflow: true }) or { panic(err) }
 	assert s.cols == new_cols
@@ -6473,7 +6473,7 @@ fn test_page_list_resize_reflow_less_cols_cursor_goes_to_scrollback() ! {
 	p := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 2, y: 0 })) or {
 		assert false, 'get_pin failed'
 		return
-	})
+	})!
 
 	s.resize(PageResizeOpts{ cols: 2, reflow: true }) or { panic(err) }
 	assert s.cols == 2
@@ -7019,7 +7019,7 @@ fn test_page_list_resize_reflow_less_cols_cursor_not_on_last_line_preserves_loca
 	p := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 0, y: 0 })) or {
 		assert false, 'get_pin failed'
 		return
-	})
+	})!
 
 	s.resize(PageResizeOpts{
 		cols:   4
@@ -7388,7 +7388,7 @@ fn test_page_list_erase_row_with_tracked_pin_resets_to_top_left() ! {
 	assert s.total_rows > usize(s.rows)
 
 	// Put a tracked pin in the history.
-	p := s.track_pin(s.get_top_left(.history))
+	p := s.track_pin(s.get_top_left(.history))!
 
 	// Erase the entire history; we should be back to just our active set.
 	s.erase_rows(Point.new(.history, Coordinate{}), none)
@@ -7414,7 +7414,7 @@ fn test_page_list_erase_row_with_tracked_pin_shifts() ! {
 		assert false, 'active pin missing'
 		return
 	}
-	p := s.track_pin(pin)
+	p := s.track_pin(pin)!
 	s.erase_rows(Point.new(.active, Coordinate{}), Point.new(.active, Coordinate{ y: 3 }))
 	assert s.total_rows == usize(s.rows)
 	first := s.pages.first or {
@@ -7435,7 +7435,7 @@ fn test_page_list_erase_row_with_tracked_pin_is_erased() ! {
 		assert false, 'active pin missing'
 		return
 	}
-	p := s.track_pin(pin)
+	p := s.track_pin(pin)!
 	s.erase_rows(Point.new(.active, Coordinate{}), Point.new(.active, Coordinate{ y: 3 }))
 	assert s.total_rows == usize(s.rows)
 	first := s.pages.first or {
@@ -7642,10 +7642,10 @@ fn test_page_list_split_multiple_tracked_pins_across_regions() ! {
 		return
 	}
 
-	pin_before := s.track_pin(Pin{ node: original, y: 1, x: 0 })
-	pin_at_split := s.track_pin(Pin{ node: original, y: 5, x: 2 })
-	pin_after1 := s.track_pin(Pin{ node: original, y: 7, x: 3 })
-	pin_after2 := s.track_pin(Pin{ node: original, y: 9, x: 8 })
+	pin_before := s.track_pin(Pin{ node: original, y: 1, x: 0 })!
+	pin_at_split := s.track_pin(Pin{ node: original, y: 5, x: 2 })!
+	pin_after1 := s.track_pin(Pin{ node: original, y: 7, x: 3 })!
+	pin_after2 := s.track_pin(Pin{ node: original, y: 9, x: 8 })!
 
 	s.split(Pin{ node: original, y: 5, x: 0 }) or {
 		assert false, 'split failed: ${err}'

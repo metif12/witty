@@ -58,7 +58,7 @@ pub:
 	placement_id PlacementId
 }
 
-fn (a PlacementKey) ==(b PlacementKey) bool {
+fn (a PlacementKey) == (b PlacementKey) bool {
 	return a.image_id == b.image_id && a.placement_id.int_val() == b.placement_id.int_val()
 }
 
@@ -202,10 +202,10 @@ pub fn (self &Placement) rect(image Image, t &Terminal) ?Rect {
 		DownOverflowOverflow { overflow.end }
 	}
 	br.x = u16(math.min(
-		// We need to sub one here because the x value is
-		// one width already. So if the image is width "1"
-		// then we add zero to X because X itself is width 1.
-		u32(pin.x) + (grid_cols - 1), u32(t.cols) - 1))
+	// We need to sub one here because the x value is
+	// one width already. So if the image is width "1"
+	// then we add zero to X because X itself is width 1.
+	u32(pin.x) + (grid_cols - 1), u32(t.cols) - 1))
 
 	return Rect{
 		top_left:     *pin
@@ -353,7 +353,7 @@ pub fn (mut self ImageStorage) add_placement(image_id u32, placement_id u32, p P
 	// an external placement ID and we can only have one placement
 	// per (image id, placement id) pair.
 	key := PlacementKey{
-		image_id: image_id
+		image_id:     image_id
 		placement_id: if placement_id == 0 {
 			pid := self.next_internal_placement_id
 			self.next_internal_placement_id += 1
@@ -373,7 +373,7 @@ pub fn (mut self ImageStorage) add_placement(image_id u32, placement_id u32, p P
 	}
 
 	self.placements << PlacementEntry{
-		key: key
+		key:   key
 		value: p
 	}
 	self.dirty = true
@@ -468,8 +468,8 @@ pub fn (mut self ImageStorage) delete(mut t Terminal, cmd Delete) {
 		}
 		DeleteIntersectCursor {
 			self.delete_intersecting(mut t, Point.new(.active, Coordinate{
-					x: u16(t.screens.active.cursor.x)
-					y: t.screens.active.cursor.y
+				x: u16(t.screens.active.cursor.x)
+				y: t.screens.active.cursor.y
 			}), cmd.delete, none)
 		}
 		DeleteIntersectCell {
@@ -480,8 +480,8 @@ pub fn (mut self ImageStorage) delete(mut t Terminal, cmd Delete) {
 				return
 			}
 			self.delete_intersecting(mut t, Point.new(.active, Coordinate{
-					x: u16(cmd.x - 1)
-					y: cmd.y - 1
+				x: u16(cmd.x - 1)
+				y: cmd.y - 1
 			}), cmd.delete, none)
 		}
 		DeleteIntersectCellZ {
@@ -492,8 +492,8 @@ pub fn (mut self ImageStorage) delete(mut t Terminal, cmd Delete) {
 				return
 			}
 			self.delete_intersecting(mut t, Point.new(.active, Coordinate{
-					x: u16(cmd.x - 1)
-					y: cmd.y - 1
+				x: u16(cmd.x - 1)
+				y: cmd.y - 1
 			}), cmd.delete, cmd.z)
 		}
 		DeleteColumn {
@@ -534,7 +534,7 @@ pub fn (mut self ImageStorage) delete(mut t Terminal, cmd Delete) {
 				return
 			}
 			target_pin := t.screens.active.pages.pin(Point.new(.active, Coordinate{
-					y: cmd.y - 1
+				y: cmd.y - 1
 			})) or { return }
 
 			mut i := 0
@@ -630,7 +630,7 @@ fn (mut self ImageStorage) delete_by_id(mut s Screen, image_id u32, placement_id
 		}
 	} else {
 		target_key := PlacementKey{
-			image_id: image_id
+			image_id:     image_id
 			placement_id: PlacementId.init(.external, placement_id)
 		}
 		mut i := 0
@@ -731,7 +731,7 @@ fn (mut self ImageStorage) evict_image(req usize) bool {
 			}
 		}
 		candidates << EvictCandidate{
-			id: img.id
+			id:   img.id
 			time: img.transmit_time
 			used: used
 		}
@@ -827,7 +827,7 @@ struct EvictCandidate {
 // ============================================================
 
 // Our pin for the placement
-fn track_pin(mut t Terminal, pt Coordinate) &Pin {
+fn track_pin(mut t Terminal, pt Coordinate) !&Pin {
 	return t.screens.active.pages.track_pin(t.screens.active.pages.pin(Point.new(.active,
-		pt)) or { panic('placement point is outside the active area') })
+		pt)) or { panic('placement point is outside the active area') })!
 }

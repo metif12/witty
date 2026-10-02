@@ -46,7 +46,7 @@ fn test_untracked_highlight_track_uses_tracked_init() ! {
 	mut tracked := (Untracked{
 		start: start
 		end: end
-	}).track(mut list)
+	}).track(mut list)!
 	assert list.count_tracked_pins() == initial_tracked + 2
 	tracked.deinit(mut list)
 	assert list.count_tracked_pins() == initial_tracked

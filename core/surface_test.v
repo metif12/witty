@@ -50,7 +50,7 @@ fn test_desktop_notification_digest_matches_source_wyhash_stream() {
 fn test_apprt_color_change_matches_source_supported_targets() {
 	palette := apprt_color_change(osc.ColoredTarget{
 		target: osc.ColorTargetPalette{ index: 42 }
-		color: osc.RGB{ r: 1, g: 2, b: 3 }
+		color:  osc.RGB{ r: 1, g: 2, b: 3 }
 	}) or { panic('palette color change must be supported') }
 	assert int(palette.kind) == 42
 	assert palette.r == 1
@@ -59,7 +59,7 @@ fn test_apprt_color_change_matches_source_supported_targets() {
 
 	dynamic := apprt_color_change(osc.ColoredTarget{
 		target: osc.ColorTargetDynamic{ color: .cursor }
-		color: osc.RGB{ r: 4, g: 5, b: 6 }
+		color:  osc.RGB{ r: 4, g: 5, b: 6 }
 	}) or { panic('cursor color change must be supported') }
 	assert dynamic.kind == .cursor
 	assert dynamic.r == 4
@@ -84,9 +84,9 @@ fn test_surface_crash_thread_state_carries_main_surface() {
 // Test helper: sets up a 10x5 cell grid with 10x20px cells and 5px padding on all sides.
 fn make_test_size() rendererpkg.Size {
 	return rendererpkg.Size{
-		cell: rendererpkg.CellSize{ width: 10, height: 20 }
+		cell:    rendererpkg.CellSize{ width: 10, height: 20 }
 		padding: rendererpkg.Padding{ left: 5, top: 5, right: 5, bottom: 5 }
-		screen: rendererpkg.ScreenSize{ width: 110, height: 110 }
+		screen:  rendererpkg.ScreenSize{ width: 110, height: 110 }
 	}
 }
 
@@ -94,7 +94,7 @@ fn make_test_size() rendererpkg.Size {
 fn make_test_surface() Surface {
 	mut t := terminal.Terminal.init(terminal.Options{ cols: 80, rows: 24 }) or { panic(err) }
 	return Surface{
-		renderer_state: RendererState{
+		renderer_state:  RendererState{
 			mutex:     sync.new_mutex()
 			terminal_: &t
 		}
@@ -141,7 +141,7 @@ fn test_search_callback_routes_owned_results_and_ui_state() {
 		app.mailbox.destroy()
 	}
 	mut surface := Surface{
-		app: &app
+		app:             &app
 		renderer_thread: make_test_renderer_thread()
 	}
 
@@ -157,7 +157,7 @@ fn test_search_callback_routes_owned_results_and_ui_state() {
 
 	search_callback(searchpkg.EventSelectedMatch{
 		selected: searchpkg.ThreadSelectedMatch{
-			idx: 4
+			idx:       4
 			highlight: highlight.Flattened.empty()
 		}
 	}, voidptr(&surface))
@@ -327,7 +327,7 @@ fn test_surface_key_binding_applies_modifier_remap() {
 	mut cfg := configpkg.Config.default_config()
 	cfg.keybind.set = input.Set{}
 	cfg.keybind.set.put(input.Trigger{
-		key: input.TriggerKeyUnicode{ codepoint: u32(`q`) }
+		key:  input.TriggerKeyUnicode{ codepoint: u32(`q`) }
 		mods: input.Mods.init(false, false, false, true, false, false, input.SideInfo{})
 	}, input.ActionQuit{})
 	cfg.key_remap.parse('ctrl=super')!
@@ -336,10 +336,10 @@ fn test_surface_key_binding_applies_modifier_remap() {
 	mut surf := make_test_surface()
 	surf.config = DerivedConfig.from_config(&cfg)!
 	flags := surf.key_event_is_binding(input.KeyEvent{
-		key: .key_q
+		key:    .key_q
 		action: .press
-		mods: input.Mods.init(false, true, false, false, false, false, input.SideInfo.init(.left, .left, .left, .left))
-		utf8: 'q'
+		mods:   input.Mods.init(false, true, false, false, false, false, input.SideInfo.init(.left, .left, .left, .left))
+		utf8:   'q'
 	}) or {
 		assert false, 'remapped binding was not found'
 		return
@@ -352,9 +352,9 @@ fn test_surface_inspector_records_owned_key_and_pty_data() {
 	surf.activate_inspector()!
 
 	mut event := input.KeyEvent{
-		action: .press
-		key: .key_x
-		utf8: 'x'
+		action:              .press
+		key:                 .key_x
+		utf8:                'x'
 		unshifted_codepoint: u32(`x`)
 	}
 	assert surf.key_callback(event)! == .consumed
@@ -624,9 +624,9 @@ fn test_grid_size_basic() {
 
 fn test_grid_size_large_padding() {
 	s := rendererpkg.Size{
-		cell: rendererpkg.CellSize{ width: 10, height: 10 }
+		cell:    rendererpkg.CellSize{ width: 10, height: 10 }
 		padding: rendererpkg.Padding{ left: 50, top: 50, right: 50, bottom: 50 }
-		screen: rendererpkg.ScreenSize{ width: 100, height: 100 }
+		screen:  rendererpkg.ScreenSize{ width: 100, height: 100 }
 	}
 	g := s.grid()
 	// Ghostty's renderer grid always retains at least one cell per axis.
@@ -759,10 +759,10 @@ fn test_needs_confirm_quit_config_false() {
 
 fn test_scaled_padding() {
 	cfg := DerivedConfig{
-		window_padding_top: 10
+		window_padding_top:    10
 		window_padding_bottom: 20
-		window_padding_left: 15
-		window_padding_right: 5
+		window_padding_left:   15
+		window_padding_right:  5
 	}
 	// At 72 DPI, scaling factor is 1.0 (72/72)
 	p := cfg.scaled_padding(72.0, 72.0)
@@ -774,10 +774,10 @@ fn test_scaled_padding() {
 
 fn test_scaled_padding_2x() {
 	cfg := DerivedConfig{
-		window_padding_top: 10
+		window_padding_top:    10
 		window_padding_bottom: 20
-		window_padding_left: 15
-		window_padding_right: 5
+		window_padding_left:   15
+		window_padding_right:  5
 	}
 	// At 144 DPI, scaling factor is 2.0 (144/72)
 	p := cfg.scaled_padding(144.0, 144.0)
@@ -862,7 +862,7 @@ fn test_mouse_pressure_deep_selects_word_at_original_click_pin() ! {
 	surf.renderer_state.terminal_.print_string('left right') or { panic(err) }
 	surf.mouse.click_state[int(input.MouseButton.left)] = .press
 	surf.mouse.left_click_pin = surf.renderer_state.terminal_.screens.active.pages.track_pin(surface_active_pin(&surf,
-		1, 0))
+		1, 0))!
 
 	surf.mouse_pressure_callback(.deep, 0.9)!
 	selection := surf.renderer_state.terminal_.screens.active.selection or {
@@ -894,10 +894,10 @@ fn test_focus_callback_releases_pressed_key_and_modifiers() ! {
 	surf.rt_surface = &runtime_surface
 	surf.focused = true
 	surf.pressed_key = KeyEvent{
-		key: .key_a
+		key:    .key_a
 		action: .press
-		mods: input.Mods.init(true, true, false, false, false, false, input.SideInfo{})
-		utf8: ''
+		mods:   input.Mods.init(true, true, false, false, false, false, input.SideInfo{})
+		utf8:   ''
 	}
 	surf.focus_callback(false)!
 	assert surf.pressed_key == none
@@ -909,13 +909,13 @@ fn test_key_release_preserves_held_modifiers_for_focus_loss() ! {
 	mut surf := make_test_surface()
 	surf.rt_surface = &runtime_surface
 	surf.pressed_key = KeyEvent{
-		key: .key_a
+		key:  .key_a
 		mods: input.Mods.init(true, false, false, false, false, false, input.SideInfo{})
 	}
 	effect := surf.key_callback(KeyEvent{
-		key: .key_a
+		key:    .key_a
 		action: .release
-		mods: input.Mods.init(true, false, false, false, false, false, input.SideInfo{})
+		mods:   input.Mods.init(true, false, false, false, false, false, input.SideInfo{})
 	})!
 	assert effect == .ignored
 	pending := surf.pressed_key or {
@@ -933,7 +933,7 @@ fn test_modifier_key_updates_mouse_shape() ! {
 	surf.config.mouse_shift_capture = .always
 	surf.renderer_state.terminal_.flags.set_mouse_event(.normal)
 	effect := surf.key_callback(KeyEvent{
-		key: .shift_left
+		key:  .shift_left
 		mods: input.Mods.init(true, false, false, false, false, false, input.SideInfo{})
 	})!
 	assert effect == .ignored
@@ -953,9 +953,9 @@ fn test_modifier_key_refreshes_link_hover() ! {
 	surf.rt_surface = &runtime_surface
 	surf.config.link_previews = .true_
 	surf.config.links = [DerivedConfigLink{
-		regex: oniguruma.Regex.init(r'http://a', oniguruma.Options{}, oniguruma.Encoding.utf8(),
+		regex:     oniguruma.Regex.init(r'http://a', oniguruma.Options{}, oniguruma.Encoding.utf8(),
 			oniguruma.Syntax.default_(), none)!
-		action: .open
+		action:    .open
 		highlight: input.LinkHighlightHover{}
 	}]
 	defer { surf.config.links[0].regex.deinit() }
@@ -965,7 +965,7 @@ fn test_modifier_key_refreshes_link_hover() ! {
 	mods := input.ctrl_or_super_mods(input.Mods{})
 	key := if mods.super_() { input.Key.meta_left } else { input.Key.control_left }
 	effect := surf.key_callback(KeyEvent{
-		key: key
+		key:  key
 		mods: mods
 	})!
 	assert effect == .ignored
@@ -1003,7 +1003,7 @@ fn test_size_callback_no_change() ! {
 	mut surf := make_test_surface()
 	surf.size = rendererpkg.Size{
 		screen: rendererpkg.ScreenSize{ width: 800, height: 600 }
-		cell: rendererpkg.CellSize{ width: 10, height: 20 }
+		cell:   rendererpkg.CellSize{ width: 10, height: 20 }
 	}
 	// Same size should be a no-op (no error)
 	surf.size_callback(apprt.SurfaceSize{ width: 800, height: 600 })!
@@ -1063,7 +1063,7 @@ fn test_child_exited_no_wait() {
 	surf.rt_app = &app_runtime
 	surf.rt_surface = &surface_runtime
 	surf.config = DerivedConfig{
-		wait_after_command: false
+		wait_after_command:               false
 		abnormal_command_exit_runtime_ms: 500
 	}
 	assert surf.child_exited == false
@@ -1083,13 +1083,13 @@ fn test_child_exited_abnormal_native_banner_stops_fallback() {
 	surf.rt_app = &app_runtime
 	surf.rt_surface = &surface_runtime
 	surf.config = DerivedConfig{
-		wait_after_command: false
+		wait_after_command:               false
 		abnormal_command_exit_runtime_ms: 500
 	}
 	surf.child_exited_handler(apprt.ChildExited{ runtime_ms: 100, exit_code: 127 })
 	assert app_runtime.actions.len == 1
 	assert action_value[apprt.ChildExited](app_runtime.actions[0].data) == apprt.ChildExited{
-		exit_code: 127
+		exit_code:  127
 		runtime_ms: 100
 	}
 	assert !surface_runtime.closed
@@ -1126,7 +1126,7 @@ fn test_child_exited_retains_u64_runtime() ! {
 	surf.rt_app = &app_runtime
 	surf.rt_surface = &surface_runtime
 	surf.config = DerivedConfig{
-		wait_after_command: true
+		wait_after_command:               true
 		abnormal_command_exit_runtime_ms: 500
 	}
 	// Truncating this runtime to 32 bits would make it look like a 100 ms
@@ -1341,8 +1341,8 @@ fn test_balance_padding_if_needed_disabled() {
 
 fn test_balance_padding_basic() {
 	mut s := rendererpkg.Size{
-		screen: rendererpkg.ScreenSize{ width: 120, height: 120 }
-		cell: rendererpkg.CellSize{ width: 10, height: 20 }
+		screen:  rendererpkg.ScreenSize{ width: 120, height: 120 }
+		cell:    rendererpkg.CellSize{ width: 10, height: 20 }
 		padding: rendererpkg.Padding{}
 	}
 	explicit := rendererpkg.Padding{ left: 5, top: 5, right: 5, bottom: 5 }
@@ -1624,9 +1624,9 @@ fn test_encode_key_copies_pty_data_to_inspector_event() {
 	mut surf := make_test_surface()
 	mut inspector_event := inspectorpkg.KeyEvent{}
 	req := surf.encode_key(KeyEvent{
-		key: .key_a
+		key:    .key_a
 		action: .press
-		utf8: 'a'
+		utf8:   'a'
 	}, true, mut inspector_event) or {
 		assert false, 'expected write req'
 		return
@@ -1637,9 +1637,9 @@ fn test_encode_key_copies_pty_data_to_inspector_event() {
 fn test_encode_key_text() {
 	mut surf := make_test_surface()
 	ev := KeyEvent{
-		key: .key_a
+		key:    .key_a
 		action: .press
-		utf8: 'a'
+		utf8:   'a'
 	}
 	req := encode_test_key(mut surf, ev) or {
 		assert false, 'expected write req'
@@ -1652,9 +1652,9 @@ fn test_encode_key_text() {
 fn test_encode_key_escape() {
 	mut surf := make_test_surface()
 	ev := KeyEvent{
-		key: .escape
+		key:    .escape
 		action: .press
-		utf8: ''
+		utf8:   ''
 	}
 	req := encode_test_key(mut surf, ev) or {
 		assert false, 'expected write req'
@@ -1667,9 +1667,9 @@ fn test_encode_key_escape() {
 fn test_encode_key_no_output() {
 	mut surf := make_test_surface()
 	ev := KeyEvent{
-		key: .shift_left
+		key:    .shift_left
 		action: .press
-		utf8: ''
+		utf8:   ''
 	}
 	req := encode_test_key(mut surf, ev)
 	assert req == none
@@ -1680,7 +1680,7 @@ fn test_encode_key_honors_ignore_keypad_with_numlock_mode() {
 	surf.renderer_state.terminal_.modes.set(.keypad_keys, true)
 	surf.renderer_state.terminal_.modes.set(.ignore_keypad_with_numlock, true)
 	req := encode_test_key(mut surf, KeyEvent{
-		key: .numpad_1
+		key:  .numpad_1
 		utf8: '1'
 	}) or {
 		assert false, 'expected write req'
@@ -1694,7 +1694,7 @@ fn test_scroll_callback_uses_precision_multiplier_and_accumulates_pixels() {
 	surf.size.cell = rendererpkg.CellSize{ width: 10, height: 10 }
 	surf.config.mouse_scroll_multiplier = configpkg.MouseScrollMultiplier{
 		precision: 2
-		discrete: 3
+		discrete:  3
 	}
 	surf.scroll_callback(0, 2, input.ScrollMods.init(true, .none_))!
 	assert surf.mouse.pending_scroll_y == 4
@@ -1773,9 +1773,9 @@ fn test_copy_url_to_clipboard_uses_configured_trailing_space_policy() ! {
 	surf.size = make_test_size()
 	surf.config.clipboard_trim_trailing_spaces = false
 	surf.config.links = [DerivedConfigLink{
-		regex: oniguruma.Regex.init(r'http://a   ', oniguruma.Options{}, oniguruma.Encoding.utf8(),
+		regex:     oniguruma.Regex.init(r'http://a   ', oniguruma.Options{}, oniguruma.Encoding.utf8(),
 			oniguruma.Syntax.default_(), none)!
-		action: .open
+		action:    .open
 		highlight: input.LinkHighlightHover{}
 	}]
 	defer { surf.config.links[0].regex.deinit() }
@@ -1797,15 +1797,15 @@ fn test_copy_url_to_clipboard_absorbs_runtime_failure() ! {
 	mut surf := make_test_surface()
 	surf.size = make_test_size()
 	surf.config.links = [DerivedConfigLink{
-		regex: oniguruma.Regex.init(r'http://a', oniguruma.Options{}, oniguruma.Encoding.utf8(),
+		regex:     oniguruma.Regex.init(r'http://a', oniguruma.Options{}, oniguruma.Encoding.utf8(),
 			oniguruma.Syntax.default_(), none)!
-		action: .open
+		action:    .open
 		highlight: input.LinkHighlightHover{}
 	}]
 	defer { surf.config.links[0].regex.deinit() }
 	surf.mouse.over_link = true
 	mut runtime := apprt.RuntimeSurface{
-		cursor_pos: apprt.CursorPos{ x: 6, y: 6 }
+		cursor_pos:       apprt.CursorPos{ x: 6, y: 6 }
 		set_clipboard_fn: clipboard_set_failure_probe
 	}
 	surf.rt_surface = &runtime
@@ -1818,7 +1818,7 @@ fn test_copy_url_to_clipboard_absorbs_runtime_failure() ! {
 fn test_copy_title_to_clipboard_absorbs_runtime_failure_as_handled() ! {
 	mut surf := make_test_surface()
 	mut runtime := apprt.RuntimeSurface{
-		title: 'title'
+		title:            'title'
 		set_clipboard_fn: clipboard_set_failure_probe
 	}
 	surf.rt_surface = &runtime
@@ -1831,9 +1831,9 @@ fn test_mouse_link_preview_forwards_untrimmed_url() ! {
 	surf.size = make_test_size()
 	surf.config.link_previews = .true_
 	surf.config.links = [DerivedConfigLink{
-		regex: oniguruma.Regex.init(r'http://a   ', oniguruma.Options{}, oniguruma.Encoding.utf8(),
+		regex:     oniguruma.Regex.init(r'http://a   ', oniguruma.Options{}, oniguruma.Encoding.utf8(),
 			oniguruma.Syntax.default_(), none)!
-		action: .open
+		action:    .open
 		highlight: input.LinkHighlightHover{}
 	}]
 	defer { surf.config.links[0].regex.deinit() }
@@ -1856,9 +1856,9 @@ fn test_process_links_does_not_apply_clipboard_trimming() ! {
 	surf.size = make_test_size()
 	surf.config.clipboard_trim_trailing_spaces = true
 	surf.config.links = [DerivedConfigLink{
-		regex: oniguruma.Regex.init(r'http://a   ', oniguruma.Options{}, oniguruma.Encoding.utf8(),
+		regex:     oniguruma.Regex.init(r'http://a   ', oniguruma.Options{}, oniguruma.Encoding.utf8(),
 			oniguruma.Syntax.default_(), none)!
-		action: .open
+		action:    .open
 		highlight: input.LinkHighlightHover{}
 	}]
 	defer { surf.config.links[0].regex.deinit() }
@@ -1965,11 +1965,11 @@ fn test_runtime_callbacks_override_headless_storage() ! {
 	assert app.actions.len == 0
 
 	mut surface := apprt.RuntimeSurface{
-		user_data: &probe
-		close_fn: runtime_close_probe
-		content_scale_fn: runtime_scale_probe
+		user_data:             &probe
+		close_fn:              runtime_close_probe
+		content_scale_fn:      runtime_scale_probe
 		supports_clipboard_fn: runtime_supports_clipboard_probe
-		default_env_fn: runtime_env_probe
+		default_env_fn:        runtime_env_probe
 	}
 	surface.close(true)
 	assert probe.closed
@@ -2000,7 +2000,7 @@ fn test_open_url_preserves_content_kind_for_runtime() ! {
 	surface.rt_app = &runtime
 	surface.open_url(apprt.OpenUrl{
 		kind: .html
-		url: '/tmp/export.html'
+		url:  '/tmp/export.html'
 	})!
 
 	assert runtime.actions.len == 1

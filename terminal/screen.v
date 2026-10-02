@@ -2141,7 +2141,10 @@ pub fn Screen.init(cols u32, rows u32, max_scrollback usize) !Screen {
 	first := pages.pages.first or { panic('page list has no pages') }
 	page_pin := pages.track_pin(Pin{
 		node: first
-	})
+	}) or {
+		pages.deinit()
+		return err
+	}
 	page_rac := page_pin.row_and_cell()
 
 	return Screen{
@@ -2295,7 +2298,10 @@ pub fn (self &Screen) clone(top Point, bot ?Point) !Screen {
 		first := pages.pages.first or { panic('cloned page list has no pages') }
 		mut page_pin := pages.track_pin(Pin{
 			node: first
-		})
+		}) or {
+			pages.deinit()
+			return err
+		}
 		page_rac := page_pin.row_and_cell()
 		cursor = Cursor{
 			x:         0
@@ -2309,7 +2315,10 @@ pub fn (self &Screen) clone(top Point, bot ?Point) !Screen {
 	// Preserve our selection if we have one.
 	mut sel := ?Selection(none)
 	if existing := self.selection {
-		sel = self.clone_selection(existing, top, mut pages, pin_remap)
+		sel = (self.clone_selection(existing, top, mut pages, pin_remap) or {
+			pages.deinit()
+			return err
+		}).selection
 	}
 
 	result := Screen{
@@ -2326,7 +2335,11 @@ pub fn (self &Screen) clone(top Point, bot ?Point) !Screen {
 // Remap a tracked selection into a cloned page list. This is the selection
 // block of Ghostty's Screen.clone, split out because V has no labeled
 // block expressions.
-fn (self &Screen) clone_selection(sel Selection, top Point, mut pages PageList, pin_remap &PageTrackedPinsRemap) ?Selection {
+struct SelectionCloneOption {
+	selection ?Selection
+}
+
+fn (self &Screen) clone_selection(sel Selection, top Point, mut pages PageList, pin_remap &PageTrackedPinsRemap) !SelectionCloneOption {
 	assert sel.tracked()
 	bounds := sel.bounds as SelectionTrackedBounds
 
@@ -2347,15 +2360,15 @@ fn (self &Screen) clone_selection(sel Selection, top Point, mut pages PageList, 
 			// cloned area, in either of these cases it means that
 			// the selection is fully out of bounds, so we have no
 			// selection in the cloned area and break out now.
-			clone_top := self.pages.pin(top) or { return none }
-			clone_top_y := (self.pages.point_from_pin(.screen, clone_top) or { return none }).coord().y
-			br_y := (self.pages.point_from_pin(.screen, *br) or { return none }).coord().y
+			clone_top := self.pages.pin(top) or { return SelectionCloneOption{} }
+			clone_top_y := (self.pages.point_from_pin(.screen, clone_top) or { return SelectionCloneOption{} }).coord().y
+			br_y := (self.pages.point_from_pin(.screen, *br) or { return SelectionCloneOption{} }).coord().y
 			if br_y < clone_top_y {
-				return none
+				return SelectionCloneOption{}
 			}
-			tl_y := (self.pages.point_from_pin(.screen, *tl) or { return none }).coord().y
+			tl_y := (self.pages.point_from_pin(.screen, *tl) or { return SelectionCloneOption{} }).coord().y
 			if tl_y > clone_top_y {
-				return none
+				return SelectionCloneOption{}
 			}
 		}
 
@@ -2364,7 +2377,7 @@ fn (self &Screen) clone_selection(sel Selection, top Point, mut pages PageList, 
 		pages.track_pin(Pin{
 			node: first
 			x:    if sel.rectangle { tl.x } else { 0 }
-		})
+		})!
 	}
 
 	// If we got to this point it means that the selection is not
@@ -2376,15 +2389,17 @@ fn (self &Screen) clone_selection(sel Selection, top Point, mut pages PageList, 
 			node: last
 			x:    if sel.rectangle { br.x } else { pages.cols - 1 }
 			y:    last.data.size.rows - 1
-		})
+		})!
 	}
 
-	return Selection{
-		bounds:    SelectionTrackedBounds{
-			start: start_pin
-			end:   end_pin
+	return SelectionCloneOption{
+		selection: Selection{
+			bounds:    SelectionTrackedBounds{
+				start: start_pin
+				end:   end_pin
+			}
+			rectangle: sel.rectangle
 		}
-		rectangle: sel.rectangle
 	}
 }
 
@@ -3466,7 +3481,7 @@ pub fn (mut self Screen) resize(opts ScreenResize) ! {
 			y: sc.y
 		}))
 		{
-			saved_cursor_pin = self.pages.track_pin(pin)
+			saved_cursor_pin = self.pages.track_pin(pin)!
 		}
 	}
 	defer {
@@ -4113,7 +4128,7 @@ pub fn (mut self Screen) select(sel_ ?Selection) ! {
 	}
 
 	// If this selection is untracked then we track it.
-	tracked_sel := if sel.tracked() { sel } else { sel.track(mut self) }
+	tracked_sel := if sel.tracked() { sel } else { sel.track(mut self)! }
 
 	// Untrack prior selection
 	if old := self.selection {

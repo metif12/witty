@@ -462,12 +462,12 @@ pub mut:
 // state (and set up history if the screen has scrollback).
 pub fn ScreenSearch.init(mut screen terminal.Screen, needle []u8) !ScreenSearch {
 	mut result := ScreenSearch{
-		screen: &screen
-		rows: screen.pages.rows
-		cols: screen.pages.cols
-		active_search: ActiveSearch.init(needle)
+		screen:         &screen
+		rows:           screen.pages.rows
+		cols:           screen.pages.cols
+		active_search:  ActiveSearch.init(needle)
 		history_search: none
-		state: .active
+		state:          .active
 	}
 
 	// Update our initial active area state.
@@ -735,9 +735,9 @@ pub fn (mut self ScreenSearch) reload_active() ! {
 		}
 	}
 	defer {
-			if select_prev {
-				self.do_select(.prev) or {
-					log.info('reload failed to reset search selection err=${err}')
+		if select_prev {
+			self.do_select(.prev) or {
+				log.info('reload failed to reset search selection err=${err}')
 			}
 		}
 	}
@@ -775,11 +775,11 @@ pub fn (mut self ScreenSearch) reload_active() ! {
 		if mut m := self.selected {
 			active_len := self.active_results.len
 			if m.idx >= usize(active_len) {
-					m.deinit(mut self.screen.pages)
-					self.selected = none
-					self.do_select(.prev) or {
-						log.info('reload failed to reset search selection err=${err}')
-					}
+				m.deinit(mut self.screen.pages)
+				self.selected = none
+				self.do_select(.prev) or {
+					log.info('reload failed to reset search selection err=${err}')
+				}
 			}
 		}
 	}
@@ -851,16 +851,15 @@ pub fn (mut self ScreenSearch) reload_active() ! {
 				}
 				if !found {
 					// No match, just go back to the first match.
-						m.deinit(mut self.screen.pages)
-						self.selected = none
-						self.do_select(.next) or {
-							log.info('reload failed to reset search selection err=${err}')
-						}
+					m.deinit(mut self.screen.pages)
+					self.selected = none
+					self.do_select(.next) or {
+						log.info('reload failed to reset search selection err=${err}')
+					}
 				}
 			}
 		}
 	}
-
 }
 
 // Handle the history-diffing branch of reload_active when active.update
@@ -897,12 +896,15 @@ fn (mut self ScreenSearch) reload_active_history(history_node &terminal.PageNode
 			return
 		}
 		mut mutable_list := &self.screen.pages
-		mut searcher := PageListSearch.init(self.needle(), mutable_list, history_node)
+		mut searcher := PageListSearch.init(self.needle(), mutable_list, history_node)!
 		pin := mutable_list.track_pin(terminal.Pin{
 			node: unsafe { &terminal.PageNode(history_node) }
-		})
+		}) or {
+			searcher.deinit()
+			return err
+		}
 		self.history_search = HistorySearch{
-			searcher: searcher
+			searcher:  searcher
 			start_pin: pin
 		}
 		// We don't need to update any history since we had no history
@@ -1061,12 +1063,12 @@ pub fn (mut self ScreenSearch) do_select(to Select) !bool {
 	self.reload_active()!
 	self.prune_history()
 	return match to {
-		.next { self.select_next() }
-		.prev { self.select_prev() }
+		.next { self.select_next()! }
+		.prev { self.select_prev()! }
 	}
 }
 
-fn (mut self ScreenSearch) select_next() bool {
+fn (mut self ScreenSearch) select_next() !bool {
 	// Get our previous match so we can change it. If we have no
 	// prior match, we have the easy task of getting the first.
 	if mut prev := self.selected {
@@ -1084,12 +1086,12 @@ fn (mut self ScreenSearch) select_next() bool {
 		}
 
 		// Pin it so we can track any movement.
-		tracked := hl.untracked().track(mut self.screen.pages)
+		tracked := hl.untracked().track(mut self.screen.pages)!
 
 		// Free our previous match and setup our new selection.
 		prev.deinit(mut self.screen.pages)
 		self.selected = SelectedMatch{
-			idx: next_idx
+			idx:       next_idx
 			highlight: tracked
 		}
 		return true
@@ -1107,18 +1109,18 @@ fn (mut self ScreenSearch) select_next() bool {
 		}
 
 		// Pin it so we can track any movement.
-		tracked := hl.untracked().track(mut self.screen.pages)
+		tracked := hl.untracked().track(mut self.screen.pages)!
 
 		// Our selection is index zero since we just started.
 		self.selected = SelectedMatch{
-			idx: 0
+			idx:       0
 			highlight: tracked
 		}
 		return true
 	}
 }
 
-fn (mut self ScreenSearch) select_prev() bool {
+fn (mut self ScreenSearch) select_prev() !bool {
 	// Get our previous match so we can change it. If we have no
 	// prior match, we have the easy task of getting the last.
 	if mut prev := self.selected {
@@ -1137,12 +1139,12 @@ fn (mut self ScreenSearch) select_prev() bool {
 		}
 
 		// Pin it so we can track any movement.
-		tracked := hl.untracked().track(mut self.screen.pages)
+		tracked := hl.untracked().track(mut self.screen.pages)!
 
 		// Free our previous match and setup our new selection.
 		prev.deinit(mut self.screen.pages)
 		self.selected = SelectedMatch{
-			idx: next_idx
+			idx:       next_idx
 			highlight: tracked
 		}
 		return true
@@ -1162,11 +1164,11 @@ fn (mut self ScreenSearch) select_prev() bool {
 		}
 
 		// Pin it so we can track any movement.
-		tracked := hl.untracked().track(mut self.screen.pages)
+		tracked := hl.untracked().track(mut self.screen.pages)!
 
 		// Our selection is the last index since we started from oldest.
 		self.selected = SelectedMatch{
-			idx: usize(active_len + history_len - 1)
+			idx:       usize(active_len + history_len - 1)
 			highlight: tracked
 		}
 		return true

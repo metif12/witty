@@ -1846,53 +1846,57 @@ pub fn DerivedConfig.from_config(config &Config) !DerivedConfig {
 			return err
 		}
 		links << DerivedConfigLink{
-			regex: regex
-			action: link.action
+			regex:     regex
+			action:    link.action
 			highlight: link.highlight
 		}
 	}
 	return DerivedConfig{
-		original_font_size: config.font_size
-		keybind: config.keybind.clone()
-		key_remaps: config.key_remap.clone()
+		original_font_size:               config.font_size
+		keybind:                          config.keybind.clone()
+		key_remaps:                       config.key_remap.clone()
 		abnormal_command_exit_runtime_ms: config.abnormal_command_exit_runtime
-		clipboard_read: config.clipboard_read
-		clipboard_write: config.clipboard_write
-		clipboard_trim_trailing_spaces: config.clipboard_trim_trailing_spaces
-		clipboard_paste_protection: config.clipboard_paste_protection
-		clipboard_paste_bracketed_safe: config.clipboard_paste_bracketed_safe
-		clipboard_codepoint_map: config.clipboard_codepoint_map.clone()
-		copy_on_select: config.copy_on_select
-		confirm_close_surface: config.confirm_close_surface
-		cursor_click_to_move: config.cursor_click_to_move
-		desktop_notifications: config.desktop_notifications
-		right_click_action: config.right_click_action
-		mouse_interval: u64(config.click_repeat_interval) * u64(time.millisecond)
-		mouse_hide_while_typing: config.mouse_hide_while_typing
-		mouse_reporting: config.mouse_reporting
-		mouse_scroll_multiplier: config.mouse_scroll_multiplier
-		mouse_shift_capture: config.mouse_shift_capture
-		macos_non_native_fullscreen: config.macos_non_native_fullscreen
-		macos_option_as_alt: config.macos_option_as_alt
-		selection_clear_on_copy: config.selection_clear_on_copy
-		selection_clear_on_typing: config.selection_clear_on_typing
-		selection_word_chars: config.selection_word_chars.codepoints.clone()
-		vt_kam_allowed: config.vt_kam_allowed
-		wait_after_command: config.wait_after_command
-		command: if command := config.command { command.string_val().clone() } else { '' }
-		window_padding_top: config.window_padding_y.top_left
-		window_padding_bottom: config.window_padding_y.bottom_right
-		window_padding_left: config.window_padding_x.top_left
-		window_padding_right: config.window_padding_x.bottom_right
-		window_padding_balance: config.window_padding_balance
-		window_height: config.window_height
-		window_width: config.window_width
-		title: config.title
-		title_report: config.title_report
-		links: links
-		link_previews: config.link_previews
-		scroll_to_bottom_keystroke: config.scroll_to_bottom.keystroke()
-		font: font.DerivedConfig.init(config)!
+		clipboard_read:                   config.clipboard_read
+		clipboard_write:                  config.clipboard_write
+		clipboard_trim_trailing_spaces:   config.clipboard_trim_trailing_spaces
+		clipboard_paste_protection:       config.clipboard_paste_protection
+		clipboard_paste_bracketed_safe:   config.clipboard_paste_bracketed_safe
+		clipboard_codepoint_map:          config.clipboard_codepoint_map.clone()
+		copy_on_select:                   config.copy_on_select
+		confirm_close_surface:            config.confirm_close_surface
+		cursor_click_to_move:             config.cursor_click_to_move
+		desktop_notifications:            config.desktop_notifications
+		right_click_action:               config.right_click_action
+		mouse_interval:                   u64(config.click_repeat_interval) * u64(time.millisecond)
+		mouse_hide_while_typing:          config.mouse_hide_while_typing
+		mouse_reporting:                  config.mouse_reporting
+		mouse_scroll_multiplier:          config.mouse_scroll_multiplier
+		mouse_shift_capture:              config.mouse_shift_capture
+		macos_non_native_fullscreen:      config.macos_non_native_fullscreen
+		macos_option_as_alt:              config.macos_option_as_alt
+		selection_clear_on_copy:          config.selection_clear_on_copy
+		selection_clear_on_typing:        config.selection_clear_on_typing
+		selection_word_chars:             config.selection_word_chars.codepoints.clone()
+		vt_kam_allowed:                   config.vt_kam_allowed
+		wait_after_command:               config.wait_after_command
+		command:                          if command := config.command {
+			command.string_val().clone()
+		} else {
+			''
+		}
+		window_padding_top:               config.window_padding_y.top_left
+		window_padding_bottom:            config.window_padding_y.bottom_right
+		window_padding_left:              config.window_padding_x.top_left
+		window_padding_right:             config.window_padding_x.bottom_right
+		window_padding_balance:           config.window_padding_balance
+		window_height:                    config.window_height
+		window_width:                     config.window_width
+		title:                            config.title
+		title_report:                     config.title_report
+		links:                            links
+		link_previews:                    config.link_previews
+		scroll_to_bottom_keystroke:       config.scroll_to_bottom.keystroke()
+		font:                             font.DerivedConfig.init(config)!
 	}
 }
 
@@ -1913,10 +1917,10 @@ fn (self &DerivedConfig) scaled_padding(x_dpi f32, y_dpi f32) rendererpkg.Paddin
 	left := u32(math.floor(f32(self.window_padding_left) * x_dpi / 72.0))
 	right := u32(math.floor(f32(self.window_padding_right) * x_dpi / 72.0))
 	return rendererpkg.Padding{
-		top: top
+		top:    top
 		bottom: bottom
-		left: left
-		right: right
+		left:   left
+		right:  right
 	}
 }
 
@@ -1942,7 +1946,7 @@ fn termio_surface_message_push(app_ptr voidptr, surface_ptr voidptr, msg apprt.S
 fn (self &Surface) surface_mailbox() apprt.SurfaceMailbox {
 	return apprt.SurfaceMailbox{
 		surface: voidptr(self)
-		app: voidptr(self.app)
+		app:     voidptr(self.app)
 		push_fn: termio_surface_message_push
 	}
 }
@@ -1990,8 +1994,8 @@ fn closing_action(action input.Action) bool {
 
 pub struct Surface {
 pub mut:
-	app        &App = unsafe { nil }
-	rt_app     &apprt.RuntimeApp = unsafe { nil }
+	app        &App                  = unsafe { nil }
+	rt_app     &apprt.RuntimeApp     = unsafe { nil }
 	rt_surface &apprt.RuntimeSurface = unsafe { nil }
 
 	font_grid_key      FontGridKey
@@ -2110,8 +2114,8 @@ pub fn (mut self Surface) init(config_original &Config, mut app App, rt_app &app
 	// The font size we desire along with the DPI determined for the surface
 	self.font_size = DesiredSize{
 		points: derived_config.original_font_size
-		xdpi: u16(x_dpi)
-		ydpi: u16(y_dpi)
+		xdpi:   u16(x_dpi)
+		ydpi:   u16(y_dpi)
 	}
 
 	// Setup our font group. This will reuse an existing font group if
@@ -2126,11 +2130,11 @@ pub fn (mut self Surface) init(config_original &Config, mut app App, rt_app &app
 	font_cell_size := font_grid.cell_size()
 	self.size = rendererpkg.Size{
 		screen: rendererpkg.ScreenSize{
-			width: surface_size.width
+			width:  surface_size.width
 			height: surface_size.height
 		}
-		cell: rendererpkg.CellSize{
-			width: font_cell_size.width
+		cell:   rendererpkg.CellSize{
+			width:  font_cell_size.width
 			height: font_cell_size.height
 		}
 	}
@@ -2144,14 +2148,14 @@ pub fn (mut self Surface) init(config_original &Config, mut app App, rt_app &app
 	// Create our terminal grid with the initial size
 	renderer_config := rendererpkg.DerivedConfig.init(config)!
 	self.renderer = Renderer.init(rendererpkg.RendererOpts{
-		metal_view: rt_surface.renderer_view
-		content_scale: f64(content_scale.x)
-		font_grid: font_grid
-		config: renderer_config
-		size: self.size
+		metal_view:      rt_surface.renderer_view
+		content_scale:   f64(content_scale.x)
+		font_grid:       font_grid
+		config:          renderer_config
+		size:            self.size
 		surface_mailbox: rendererpkg.SurfaceMailbox{
 			user_data: voidptr(&self)
-			push_fn: renderer_surface_event_push
+			push_fn:   renderer_surface_event_push
 		}
 	})!
 	defer {
@@ -2207,15 +2211,15 @@ pub fn (mut self Surface) init(config_original &Config, mut app App, rt_app &app
 
 	// Initialize our IO backend
 	mut io_exec := termiopkg.Exec.init(termiopkg.ExecConfig{
-		command: command
-		env: env
-		env_override: config.env
-		shell_integration: config.shell_integration
+		command:                    command
+		env:                        env
+		env_override:               config.env
+		shell_integration:          config.shell_integration
 		shell_integration_features: config.shell_integration_features
-		working_directory: config.working_directory
-		resources_dir: global_state.get_state().resources_dir.host()
-		term: config.term
-		linux_cgroup: rt_surface.linux_cgroup
+		working_directory:          config.working_directory
+		resources_dir:              global_state.get_state().resources_dir.host()
+		term:                       config.term
+		linux_cgroup:               rt_surface.linux_cgroup
 	})!
 	mut io_owned := false
 	defer {
@@ -2233,17 +2237,17 @@ pub fn (mut self Surface) init(config_original &Config, mut app App, rt_app &app
 	}
 
 	self.io.impl.init(termiopkg.TermioOpts{
-		size: self.size
-		full_config: unsafe { config }
-		config: termiopkg.DerivedConfig.init(config)!
-		backend: termiopkg.Backend{ exec: io_exec }
-		mailbox: io_mailbox
-		renderer_state: &self.renderer_state
-		renderer_wakeup: self.renderer_thread.wakeup
+		size:             self.size
+		full_config:      unsafe { config }
+		config:           termiopkg.DerivedConfig.init(config)!
+		backend:          termiopkg.Backend{ exec: io_exec }
+		mailbox:          io_mailbox
+		renderer_state:   &self.renderer_state
+		renderer_wakeup:  self.renderer_thread.wakeup
 		renderer_mailbox: self.renderer_thread.mailbox
-		surface_mailbox: apprt.SurfaceMailbox{
+		surface_mailbox:  apprt.SurfaceMailbox{
 			surface: voidptr(&self)
-			app: voidptr(&app)
+			app:     voidptr(&app)
 			push_fn: termio_surface_message_push
 		}
 	})!
@@ -2263,18 +2267,18 @@ pub fn (mut self Surface) init(config_original &Config, mut app App, rt_app &app
 		apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 		.cell_size,
 		apprt.ActionValue(apprt.CellSize{
-				width: self.size.cell.width
-				height: self.size.cell.height
-			}),
+			width:  self.size.cell.width
+			height: self.size.cell.height
+		}),
 	)!
 
 	self.rt_app.perform_action(
 		apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 		.size_limit,
 		apprt.ActionValue(apprt.SizeLimit{
-				min_width: self.size.cell.width * min_window_width_cells
-				min_height: self.size.cell.height * min_window_height_cells
-			}),
+			min_width:  self.size.cell.width * min_window_width_cells
+			min_height: self.size.cell.height * min_window_height_cells
+		}),
 	)!
 
 	// Call our size callback which handles all our retina setup
@@ -2569,9 +2573,9 @@ pub fn (mut self Surface) handle_message(msg apprt.SurfaceMessage) ! {
 					apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 					.command_finished,
 					apprt.ActionValue(apprt.CommandFinished{
-							exit_code: msg.exit_code
-							duration: configpkg.Duration{ duration: duration }
-						}),
+						exit_code: msg.exit_code
+						duration:  configpkg.Duration{ duration: duration }
+					}),
 				) or {
 					log.warn('apprt failed to notify command finish=${err}')
 				}
@@ -2613,9 +2617,9 @@ fn apprt_color_change(value osc.ColoredTarget) ?apprt.ColorChange {
 	}
 	return apprt.ColorChange{
 		kind: kind
-		r: value.color.r
-		g: value.color.g
-		b: value.color.b
+		r:    value.color.r
+		g:    value.color.g
+		b:    value.color.b
 	}
 }
 
@@ -2706,27 +2710,27 @@ pub fn (mut self Surface) render_inspector(context_handle voidptr) {
 	grid := self.size.grid()
 	mut term := self.renderer_state.terminal_
 	insp.render(context_handle, inspectorpkg.SurfaceInfo{
-		screen_width: self.size.screen.width
-		screen_height: self.size.screen.height
-		grid_columns: grid.columns
-		grid_rows: grid.rows
-		cell_width: self.size.cell.width
-		cell_height: self.size.cell.height
-		padding_top: self.size.padding.top
-		padding_bottom: self.size.padding.bottom
-		padding_left: self.size.padding.left
-		padding_right: self.size.padding.right
-		font_points: self.font_size.points
-		font_pixels: self.font_size.pixels()
-		hover_grid_x: hover_grid_x
-		hover_grid_y: hover_grid_y
+		screen_width:     self.size.screen.width
+		screen_height:    self.size.screen.height
+		grid_columns:     grid.columns
+		grid_rows:        grid.rows
+		cell_width:       self.size.cell.width
+		cell_height:      self.size.cell.height
+		padding_top:      self.size.padding.top
+		padding_bottom:   self.size.padding.bottom
+		padding_left:     self.size.padding.left
+		padding_right:    self.size.padding.right
+		font_points:      self.font_size.points
+		font_pixels:      self.font_size.pixels()
+		hover_grid_x:     hover_grid_x
+		hover_grid_y:     hover_grid_y
 		hover_terminal_x: i64(insp.mouse.last_xpos - f64(self.size.padding.left))
 		hover_terminal_y: i64(insp.mouse.last_ypos - f64(self.size.padding.top))
-		click_pressed: click_pressed
-		click_grid_x: click_grid_x
-		click_grid_y: click_grid_y
-		left_click_xpos: self.mouse.left_click_xpos
-		left_click_ypos: self.mouse.left_click_ypos
+		click_pressed:    click_pressed
+		click_grid_x:     click_grid_x
+		click_grid_y:     click_grid_y
+		left_click_xpos:  self.mouse.left_click_xpos
+		left_click_ypos:  self.mouse.left_click_ypos
 	}, mut term)
 	self.renderer_state.mutex.unlock()
 	self.queue_render() or {}
@@ -2883,9 +2887,9 @@ pub fn (self &Surface) ime_point() apprt.IMEPos {
 	}
 
 	return apprt.IMEPos{
-		x: x
-		y: y
-		width: w
+		x:      x
+		y:      y
+		width:  w
 		height: height
 	}
 }
@@ -2900,15 +2904,15 @@ pub fn (mut self Surface) set_font_size(size DesiredSize) ! {
 	// Update cell size
 	font_cell_size := font_grid.cell_size()
 	self.set_cell_size(rendererpkg.CellSize{
-		width: font_cell_size.width
+		width:  font_cell_size.width
 		height: font_cell_size.height
 	})!
 
 	// Notify our render thread of the new font stack. The renderer
 	// MUST accept the new font grid and deref the old.
 	_ = self.renderer_thread.mailbox.push(rendererpkg.RendererMessage(rendererpkg.FontGridMessage{
-		grid: font_grid
-		set: &self.app.font_grid_set
+		grid:    font_grid
+		set:     &self.app.font_grid_set
 		old_key: self.font_grid_key
 		new_key: font_grid_key
 	}), datastruct.blocking_queue_forever)
@@ -2937,7 +2941,7 @@ pub fn (mut self Surface) size_callback(size apprt.SurfaceSize) ! {
 	}
 
 	new_screen := rendererpkg.ScreenSize{
-		width: size.width
+		width:  size.width
 		height: size.height
 	}
 	if self.size.screen.equals(new_screen) {
@@ -3150,11 +3154,11 @@ pub fn (mut self Surface) key_callback(event_orig KeyEvent) !apprt.InputEffect {
 
 	if shape := (SurfaceMouse{
 		physical_key: event.key
-		mouse_event: self.renderer_state.terminal_.flags.mouse_event()
-		mouse_shape: self.renderer_state.terminal_.mouse_shape
-		mods: self.mouse.mods
-		over_link: self.mouse.over_link
-		hidden: self.mouse.hidden
+		mouse_event:  self.renderer_state.terminal_.flags.mouse_event()
+		mouse_shape:  self.renderer_state.terminal_.mouse_shape
+		mods:         self.mouse.mods
+		over_link:    self.mouse.over_link
+		hidden:       self.mouse.hidden
 	}).key_to_mouse_shape() {
 		self.rt_app.perform_action(
 			apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
@@ -3623,8 +3627,8 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 		pos := self.rt_surface.get_cursor_pos()!
 		vp := self.pos_to_viewport(f64(pos.x), f64(pos.y))
 		if pin := screen.pages.pin(terminal.Point.new(.viewport, terminal.Coordinate{
-				x: u16(vp.x)
-				y: u32(vp.y)
+			x: u16(vp.x)
+			y: u32(vp.y)
 		})) {
 			// If we move our cursor too much between clicks then we reset the
 			// multi-click state.
@@ -3646,7 +3650,7 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 			}
 
 			// Store it
-			self.mouse.left_click_pin = screen.pages.track_pin(pin)
+			self.mouse.left_click_pin = screen.pages.track_pin(pin)!
 			self.mouse.left_click_screen = self.renderer_state.terminal_.screens.active_key
 			self.mouse.left_click_xpos = pos.x
 			self.mouse.left_click_ypos = pos.y
@@ -3722,8 +3726,8 @@ pub fn (mut self Surface) mouse_button_callback(button_action input.MouseButtonS
 		}
 		vp := self.pos_to_viewport(f64(pos.x), f64(pos.y))
 		pin := screen.pages.pin(terminal.Point.new(.viewport, terminal.Coordinate{
-				x: u16(vp.x)
-				y: u32(vp.y)
+			x: u16(vp.x)
+			y: u32(vp.y)
 		})) or {
 			self.renderer_state.mutex.unlock()
 			return false
@@ -4224,7 +4228,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				.open {
 					// For regex links, get the text from the selection.
 					self.renderer_state.terminal_.screens.active.selection_string(terminal.SelectionString{
-						sel: link_info.selection
+						sel:  link_info.selection
 						trim: self.config.clipboard_trim_trailing_spaces
 					}) or {
 						log.error('error reading url string err=${err}')
@@ -4441,9 +4445,9 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.resize_split,
 				apprt.ActionValue(apprt.ResizeSplit{
-						direction: resize_dir_from_input(action.value.direction)
-						amount: action.value.amount
-					}),
+					direction: resize_dir_from_input(action.value.direction)
+					amount:    action.value.amount
+				}),
 			)!
 		}
 		input.ActionEqualizeSplits {
@@ -4804,7 +4808,7 @@ fn (mut self Surface) activate_key_table(name string, once bool) !bool {
 
 	// Add the table to the stack.
 	self.keyboard.table_stack << KeyTableEntry{
-		set: set
+		set:  set
 		once: once
 		name: name
 	}
@@ -4861,7 +4865,7 @@ fn (mut self Surface) mouse_refresh_links(pos apprt.CursorPos, pos_vp Coordinate
 	match link.action {
 		.open {
 			url = self.renderer_state.terminal_.screens.active.selection_string(terminal.SelectionString{
-				sel: link.selection
+				sel:  link.selection
 				trim: false
 			}) or {
 				self.clear_link_hover(over_link)!
@@ -5226,7 +5230,6 @@ fn (mut self Surface) queue_io(msg termiopkg.Message, mutex termiopkg.MutexState
 	self.io.queue_message(msg, mutex)
 }
 
-
 fn (mut self Surface) recompute_initial_size() ! {
 	if self.config.window_height <= 0 || self.config.window_width <= 0 {
 		return
@@ -5490,7 +5493,7 @@ fn (mut self Surface) notify_config_conditional_state() {
 
 fn (self &Surface) crash_thread_state() crash.ThreadState {
 	return crash.ThreadState{
-		kind: .main
+		kind:    .main
 		surface: voidptr(self)
 	}
 }
@@ -5799,7 +5802,6 @@ fn (mut self Surface) maybe_handle_binding(event KeyEvent, inspecting bool, mut 
 	return MaybeHandleBindingResult{}
 }
 
-
 fn (mut self Surface) encode_key(event KeyEvent, inspecting bool, mut inspector_event inspectorpkg.KeyEvent) ?termiopkg.WriteReq {
 	// Build our encoding options, which requires the lock.
 	opts := self.encode_key_opts()
@@ -5884,7 +5886,7 @@ fn (mut self Surface) process_links(pos apprt.CursorPos) !bool {
 	match link.action {
 		.open {
 			url := self.renderer_state.terminal_.screens.active.selection_string(terminal.SelectionString{
-				sel: link.selection
+				sel:  link.selection
 				trim: false
 			})!
 			// Try resolving as local path first.
@@ -5973,12 +5975,12 @@ fn (mut self Surface) write_screen_file(loc WriteScreenLoc, write_screen input.W
 		.html { terminal.Format.html }
 	}
 	mut formatter := terminal.ScreenFormatter.init(screen, terminal.FormatOptions{
-		emit: format
-		unwrap: true
-		trim: false
+		emit:       format
+		unwrap:     true
+		trim:       false
 		background: self.renderer_state.terminal_.colors.background.get()
 		foreground: self.renderer_state.terminal_.colors.foreground.get()
-		palette: self.renderer_state.terminal_.colors.palette.current[..]
+		palette:    self.renderer_state.terminal_.colors.palette.current[..]
 	})
 	formatter.content = terminal.ScreenContent(terminal.ScreenContentSelection{
 		sel: sel.ordered(screen, .forward)
@@ -6122,9 +6124,9 @@ fn (mut self Surface) show_desktop_notification(title string, body string) ! {
 		apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 		.desktop_notification,
 		apprt.ActionValue(apprt.DesktopNotificationValue{
-				title: title
-				body: body
-			}),
+			title: title
+			body:  body
+		}),
 	)!
 }
 
@@ -6138,13 +6140,13 @@ fn desktop_notification_digest(title string, body string) u64 {
 fn (mut self Surface) copy_selection_to_clipboards(sel TermSelection, clipboards []apprt.Clipboard, format input.CopyToClipboard) ! {
 	screen := self.renderer_state.terminal_.screens.active
 	base_opts := terminal.FormatOptions{
-		emit: .plain
-		unwrap: true
-		trim: self.config.clipboard_trim_trailing_spaces
+		emit:          .plain
+		unwrap:        true
+		trim:          self.config.clipboard_trim_trailing_spaces
 		codepoint_map: self.config.clipboard_codepoint_map.map.list
-		background: self.renderer_state.terminal_.colors.background.get()
-		foreground: self.renderer_state.terminal_.colors.foreground.get()
-		palette: self.renderer_state.terminal_.colors.palette.current[..]
+		background:    self.renderer_state.terminal_.colors.background.get()
+		foreground:    self.renderer_state.terminal_.colors.foreground.get()
+		palette:       self.renderer_state.terminal_.colors.palette.current[..]
 	}
 	mut contents := []apprt.ClipboardContent{}
 	match format {
@@ -6184,7 +6186,7 @@ fn (mut self Surface) copy_selection_to_clipboards(sel TermSelection, clipboards
 			// Second, generate HTML without codepoint mappings
 			formatter = terminal.ScreenFormatter.init(screen, terminal.FormatOptions{
 				...base_opts
-				emit: .html
+				emit:       .html
 				// We purposely don't emit background/foreground for mixed
 				// mode because the HTML contents is often used for rich text
 				// input and with trimmed spaces it looks pretty bad.
@@ -6295,7 +6297,7 @@ fn (self &Surface) link_at_pos(pos apprt.CursorPos) ?Link {
 		if uri := self.osc8_uri(pin) {
 			_ = uri
 			return Link{
-				action: .open_osc8
+				action:    .open_osc8
 				selection: terminal.Selection.init(pin, pin, false)
 			}
 		}
@@ -6310,15 +6312,15 @@ fn (self &Surface) link_at_pin(pin Pin, mouse_mods ?input.Mods) ?Link {
 	}
 	screen := self.renderer_state.terminal_.screens.active
 	line := screen.select_line(terminal.SelectLine{
-		pin: pin
-		whitespace: none
+		pin:                      pin
+		whitespace:               none
 		semantic_prompt_boundary: false
 	}) or { return none }
 	mut strmap := terminal.StringMap{}
 	_ := screen.selection_string(terminal.SelectionString{
-		sel: line
+		sel:  line
 		trim: false
-		map: &strmap
+		map:  &strmap
 	}) or { return none }
 	defer {
 		strmap.deinit()
@@ -6342,7 +6344,7 @@ fn (self &Surface) link_at_pin(pin Pin, mouse_mods ?input.Mods) ?Link {
 			matched.deinit()
 			if sel.contains(screen, pin) {
 				return Link{
-					action: link_cfg.action
+					action:    link_cfg.action
 					selection: sel
 				}
 			}
@@ -6368,8 +6370,8 @@ fn (mut self Surface) maybe_prompt_click() !bool {
 	pos := self.rt_surface.get_cursor_pos()!
 	pos_vp := self.pos_to_viewport(f64(pos.x), f64(pos.y))
 	click_pin := screen.pages.pin(terminal.Point.new(.viewport, terminal.Coordinate{
-			x: u16(pos_vp.x)
-			y: u32(pos_vp.y)
+		x: u16(pos_vp.x)
+		y: u32(pos_vp.y)
 	})) or { return false }
 
 	// Get our cursor's most current prompt.
@@ -6563,10 +6565,12 @@ fn (self &Surface) dump_text_viewport(sel TermSelection) ?TextViewport {
 	br_coord := br_pt.coord()
 
 	// Our sizes are all scaled so we need to send the unscaled values back.
-	content_scale := self.rt_surface.get_content_scale() or { apprt.ContentScale{
-		x: 1.0
-		y: 1.0
-	} }
+	content_scale := self.rt_surface.get_content_scale() or {
+		apprt.ContentScale{
+			x: 1.0
+			y: 1.0
+		}
+	}
 
 	// Simple x * cell width gives the left
 	mut x := f64(u32(tl_coord.x) * self.size.cell.width)

@@ -6190,7 +6190,7 @@ fn (mut self PageList) resize_cols(cols u16, cursor ?PageResizeCursor) ! {
 				}
 			}
 
-			preserved_pin = self.track_pin(p)
+			preserved_pin = self.track_pin(p)!
 			preserved_remaining = usize(self.rows) - usize(c.y) - 1
 			preserved_wrapped = wrapped
 			have_preserved = true

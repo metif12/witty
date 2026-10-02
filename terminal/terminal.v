@@ -3334,7 +3334,10 @@ pub fn (mut self Terminal) insert_lines(count usize) {
 	// so that if we need to adjust capacity it will be properly tracked.
 	mut cur_p := self.screens.active.pages.track_pin(self.screens.active.cursor.page_pin.down(rem - 1) or {
 		panic('insertLines region extends past the page list')
-	})
+	}) or {
+		eprintln('insertLines trackPin error err=${err}')
+		panic('insertLines trackPin OOM')
+	}
 	defer { self.screens.active.pages.untrack_pin(cur_p) }
 
 	// Our current y position relative to the cursor
@@ -3497,7 +3500,10 @@ pub fn (mut self Terminal) delete_lines(count usize) {
 
 	// Create a new tracked pin which we'll use to navigate the page list
 	// so that if we need to adjust capacity it will be properly tracked.
-	mut cur_p := self.screens.active.pages.track_pin(*self.screens.active.cursor.page_pin)
+	mut cur_p := self.screens.active.pages.track_pin(*self.screens.active.cursor.page_pin) or {
+		eprintln('deleteLines trackPin error err=${err}')
+		panic('deleteLines trackPin OOM')
+	}
 	defer { self.screens.active.pages.untrack_pin(cur_p) }
 
 	// Our current y position relative to the cursor

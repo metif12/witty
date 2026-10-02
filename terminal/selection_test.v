@@ -628,8 +628,8 @@ fn test_selection_contained_row() ! {
 		// End line
 		sel_test_expect_equal(Selection.init(sel_test_pin(&s, 0, 3), sel.end(), false),
 			sel.contained_row(&s, sel_test_pin(&s, 2, 3)) or {
-			panic('contained_row returned none')
-		})
+				panic('contained_row returned none')
+			})
 
 		// Middle line
 		sel_test_expect_equal(Selection.init(sel_test_pin(&s, 0, 2), sel_test_pin(&s,
@@ -725,7 +725,7 @@ fn test_selection_bounds_access_tracking_and_equality() ! {
 	assert sel_test_screen_point(4, 3) == sel_test_point(&s, sel.end())
 
 	base_tracked := s.pages.count_tracked_pins()
-	mut tracked := sel.track(mut s)
+	mut tracked := sel.track(mut s)!
 	assert tracked.tracked()
 	assert s.pages.count_tracked_pins() == base_tracked + 2
 	mut tracked_start := tracked.start_ptr()
