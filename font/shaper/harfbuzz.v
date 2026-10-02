@@ -150,19 +150,19 @@ pub fn (mut self HbShaper) shape(run font.TextRun) ![]font.ShapeCell {
 	// We only do shaping if the font is not a special-case. For special-case
 	// fonts, the codepoint == glyph_index so we don't need to run any shaping.
 	if !is_special_font(run.font_index) {
-		if self.grid == unsafe { nil } {
+		if run.grid == unsafe { nil } {
 			return error('HarfBuzz shaping requires a run iterator grid')
 		}
-		mut grid := unsafe { self.grid }
+		mut grid := unsafe { run.grid }
+		grid.lock.lock()
+		defer { grid.lock.unlock() }
 		face := grid.resolver.collection.get_face(run.font_index)!
 		feature_start := if face.quirks_disable_default_font_features {
 			default_features.len
 		} else {
 			0
 		}
-		face.ft_mutex.lock()
 		harfbuzz.shape(face.hb_font, self.hb_buf, self.hb_feats[feature_start..])
-		face.ft_mutex.unlock()
 	}
 
 	// If our buffer is empty, we short-circuit the rest of the work

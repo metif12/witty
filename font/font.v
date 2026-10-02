@@ -1445,16 +1445,19 @@ pub fn (mut s Shaper) shape(run TextRun) ![]ShapeCell {
 	if s.hb_buf.get_length() == 0 {
 		return []ShapeCell{}
 	}
-	grid_ptr := if run.grid != unsafe { nil } { run.grid } else { s.grid }
-	if grid_ptr == unsafe { nil } {
+	if run.grid == unsafe { nil } {
 		return error('font shaper has no grid')
 	}
-	mut grid := unsafe { grid_ptr }
-	face := grid.resolver.collection.get_face(run.font_index)!
-	feature_start := if face.quirks_disable_default_font_features { feature_parser.default_features.len } else { 0 }
-	face.ft_mutex.lock()
-	harfbuzz.shape(face.hb_font, s.hb_buf, s.hb_feats[feature_start..])
-	face.ft_mutex.unlock()
+	{
+		mut grid := unsafe { run.grid }
+		// The collection lookup may load a deferred face, and FreeType shaping
+		// mutates native state. The source protects both with the grid lock.
+		grid.lock.lock()
+		defer { grid.lock.unlock() }
+		face := grid.resolver.collection.get_face(run.font_index)!
+		feature_start := if face.quirks_disable_default_font_features { feature_parser.default_features.len } else { 0 }
+		harfbuzz.shape(face.hb_font, s.hb_buf, s.hb_feats[feature_start..])
+	}
 
 	info := s.hb_buf.get_glyph_infos()
 	positions := s.hb_buf.get_glyph_positions() or { return error('HarfBuzz returned no positions') }

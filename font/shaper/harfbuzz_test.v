@@ -3,6 +3,7 @@ module shaper
 import font
 import harfbuzz
 import terminal
+import time
 
 // ============================================================
 // Test helpers
@@ -783,4 +784,34 @@ fn test_is_special_font() {
 	assert is_special_font(font.sprite_index) == true
 	assert is_special_font(font.Index.init(.regular, 1)) == false
 	assert is_special_font(font.Index.init(.regular, 42)) == false
+}
+
+fn hb_shape_after_signal(shaper_ptr &HbShaper, run font.TextRun, ready chan bool, done chan bool) {
+	mut shaper := unsafe { shaper_ptr }
+	ready <- true
+	shaper.shape(run) or {}
+	done <- true
+}
+
+fn test_harfbuzz_shape_holds_run_grid_exclusive_lock() {
+	mut fixture := create_hb_shaper()!
+	defer { fixture.deinit() }
+	mut ready := chan bool{}
+	mut done := chan bool{}
+	fixture.grid.lock.lock()
+	worker := spawn hb_shape_after_signal(&fixture.shp, font.TextRun{
+		grid: &fixture.grid
+		font_index: font.Index.init(.regular, 250)
+	}, ready, done)
+	_ := <-ready
+	select {
+		_ := <-done { assert false, 'shape bypassed the grid lock' }
+		50 * time.millisecond {}
+	}
+	fixture.grid.lock.unlock()
+	select {
+		_ := <-done {}
+		time.second { assert false, 'shape did not release after grid unlock' }
+	}
+	worker.wait()
 }
