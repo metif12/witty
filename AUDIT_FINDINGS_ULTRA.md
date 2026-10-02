@@ -1487,3 +1487,84 @@ The 36 files below are at least 500 physical lines in the local libxev/vaxis/loc
 | `vaxis/src/vxfw/Text.zig` | 508 | `vaxis/vxfw/text.v` | inventory-only | unverified |
 
 This audit adds only `AUDIT_FINDINGS_ULTRA.md` to the requested work. Existing production changes were preserved. No production fix, commit, or pull request was made.
+
+
+## Fix resolution ledger
+
+The original findings above describe the audited snapshot and remain historical evidence. This ledger records subsequent implementation and validation against Ghostty `6c0e02d1138d5376e4ac2f5e311b225494514a97`. “Implemented” means the finding's code change has been integrated; validation remains limited to the evidence listed. It does not certify unexecuted native platform branches or whole-file parity. Pending entries remain required work.
+
+Ten isolated worker checkouts are used in waves: this environment permits three active workers alongside the integrating agent. Each fix is committed separately; the hashes below refer to the main checkout after integration.
+
+| Finding | State | Main commits / assigned worker | Evidence |
+|---|---|---|---|
+| T01 | Implemented | `81711ba, d3a40fe` | Bounded file acceptance; unsigned size cap regressions |
+| T02 | Implemented | `c7e7b6f, 78ca2de` | Bound applies while expanding; bounded zlib and Kitty tests |
+| T03 | Implemented | `5cdce9d, a76d02b` | Selected TMPDIR/TMP policy and fixture tests |
+| T04 | Implemented | `92a6a4b, 3d506f5` | Strict UTF-8 validation; encoder regressions |
+| T05 | Implemented | `5f1b2d2` | Nonfatal QoS failure continues search startup |
+| T06 | Implemented | `d1c73e9` | u21 truncation at C boundary; regression |
+| T07 | Implemented | `ac40ca6, 8c528ec, 3277fc6` | Enum checks before C dispatch; checked/production tests |
+| T08 | Implemented | `9834594` | 990 unchanged Ghostty encoder differential cases matched |
+| T09 | Implemented | `0bc93b8` | Absent versus invalid progress; parser regression |
+| T10 | Implemented | `3e3a56d, 284e6b7` | All 242 key-table rows and native columns; table tests |
+| T11 | Queued | worker08 | Pending implementation/integration |
+| T12 | Queued | worker08 | Pending implementation/integration |
+| T13 | Queued | worker08 | Pending implementation/integration |
+| T14 | Implemented | `c3267ae` | Original Oniguruma grammar and failure handling; tmux tests |
+| R01 | Queued | worker10 | Pending implementation/integration |
+| R02 | Implemented | `0329051` | Nullable strings write NULL successfully; config ABI tests |
+| R03 | Implemented | `ede5f8d` | Notification error is warned/caught; mailbox regression |
+| R04 | Implemented | `0740574` | Exclusive atomic file, permissions and exact bound; cache tests |
+| R05 | In progress | worker03 | Pending implementation/integration |
+| R06 | Implemented | `289b3da, c38a060` | Unique portal-ID map replacement; Linux typecheck/collision tests |
+| R07 | Implemented | `56a2ec3` | Pinned gettext canonicalizer/archive; enabled and disabled i18n tests |
+| R08 | In progress | worker03 | Pending implementation/integration |
+| R09 | Implemented | `0b40e1c` | Native ImGui/Inspector virtual classes; Linux typecheck |
+| RF-01 | Implemented | `bb72641` | Production selected backend; all 24 font files/Metal alternatives tested |
+| RF-02 | Implemented | `dcfd8a5` | Run grid lock held during shaping; blocking concurrency regression |
+| RF-04 | Implemented | `fb7870d` | Live shaper uses translated feature parser; feature tests |
+| RF-05 | Queued | worker09 | Pending implementation/integration |
+| RF-06 | Implemented | `36a9461` | Glass alpha zero; renderer tests |
+| RF-07 | Implemented | `cf23a2a` | Lazy row shaping/preedit catch-up; renderer regressions |
+| RF-08 | Queued | worker09 | Pending implementation/integration |
+| RF-09 | Queued | worker09 | Pending implementation/integration |
+| RF-10 | Implemented | `f41e9f2, 3b189cf, d52b838` | Optionals and narrow inputs; face/Nerd Font/boundary tests |
+| RF-11 | Implemented | `cac7626, 3277fc6, 4da3d9c` | Original atlas/sprite/FreeType invariant traps; native probes |
+| RF-12 | Queued | worker09 | Pending implementation/integration |
+| S01 | Implemented | `bef54e9` | Unchanged native SIMD dependencies plus translated scalar algorithm; native/scalar tests |
+| S02 | Implemented | `227ebde` | Checked empty/all-padding traps and InvalidPadding warning; subprocess probes |
+| S03 | Queued | worker08 | Pending implementation/integration |
+| S04 | Queued | worker09 | Pending implementation/integration |
+| S05 | In progress | root | Pending implementation/integration |
+| S06 | In progress | root | GitVersion/options, artifact and runtime safety translated (`3277fc6`, `38b8900`); build-driver wiring still required |
+| S07 | In progress | worker05 | Pending implementation/integration |
+| S08 | Implemented | `af434d2` | Original startup messages and status 1; executable probes; timer subclaim corrected below |
+| S09 | Implemented | `2b553c8` | ConEmu nominal limit is not a writer-capacity rejection; regression |
+| S10 | Implemented | `2c4b036` | Xoshiro/random selection/streaming; 756 unchanged Zig differential cases matched |
+| S11 | In progress | worker07 | Pending implementation/integration |
+| S12 | Implemented | `695dedc` | Original 9-bit lookahead, sorted alphabet and linked fallback; Huffman/codec tests |
+| S13 | Queued | worker10 | Pending implementation/integration |
+| S14 | In progress | worker07 | Pending implementation/integration |
+| S15 | Queued | worker08 | Pending implementation/integration |
+| S16 | Queued | worker09 | Pending implementation/integration |
+| SH01 | Implemented | `c7c4d5a` | Immutable split tree and native controls; model tests/host typecheck |
+| SH02 | In progress | worker05 | Pending implementation/integration |
+| SH03 | In progress | worker05 | Pending implementation/integration |
+| SH04 | In progress | worker05 | Pending implementation/integration |
+| SH05 | Implemented | `617f532` | Four fullscreen styles and source restoration; native contract tests/typecheck |
+| SH06 | In progress | worker05 | Termination/reopen guards integrated (`c66db29`); source updater-install producer still being translated |
+| SB-01 | Implemented | `450725b` | Native text-input client, IME and key responder; native contract tests |
+| SB-02 | In progress | worker04 | Pending implementation/integration |
+| SB-03 | Queued | worker06 | Pending implementation/integration |
+| SB-04 | Implemented | `d566e33` | Matching-window display ID and backing refresh; AppKit tests |
+| SB-05 | Implemented | `c56924a` | Configuration-driven menu conversion/apply/clear; native menu tests |
+| SB-06 | Implemented | `b988d4f` | Surface-targeted reload preserves target; host typecheck |
+| PH01 | Implemented | `938dd7e` | Embedding argv snapshot consumed on Linux/FreeBSD; config/argv tests |
+
+### Source-backed corrections and remaining validation limits
+
+S08's initial GTK quit-timer subclaim was incorrect. The pinned `src/apprt/gtk/App.zig` has 99 lines and no `startQuitTimer` declaration; the method exists only on its private Application class. Thus `src/main_ghostty.zig`'s `@hasDecl(apprt.App, "startQuitTimer")` evaluates false for GTK, matching the V adapter. Adding that call would introduce behavior rather than translate the effective original. The separate startup diagnostic/exit-status discrepancy was fixed and tested in a compiled executable.
+
+The pinned browser font implementation itself lacks Collection-required metrics/name/color APIs. RF-01 preserves that original unsupported path and connects existing browser/backend logic; browser execution remains unverified. GTK native class/portal tests currently have Linux typechecking evidence, not an executed GTK desktop session on this macOS host. Windows/FreeBSD branches likewise need their native environments to establish execution parity.
+
+The large fixed-Huffman flate match-at-64KiB trap is confirmed in the actual pinned Zig decompressor with the same 200,000-byte fixture and small output bound. It is retained as inherited checked-source behavior, rather than silently replaced. The source fixture and native log are recorded in `/tmp/witty-ultra-fixes/image-flate-probe/`.
