@@ -331,7 +331,8 @@ fn test_image_load_rgb_not_compressed_temporary_file() {
 	}
 
 	// Write to a temp file whose name contains "tty-graphics-protocol".
-	tmp := os.join_path(os.temp_dir(), 'tty-graphics-protocol-witty-${os.getpid()}.data')
+	tmp := os.join_path(os.getenv_opt('TMPDIR') or { os.getenv_opt('TMP') or { '/tmp' } },
+		'tty-graphics-protocol-witty-${os.getpid()}.data')
 	os.write_file(tmp, data.bytestr()) or {
 		assert false, 'failed to write temp file: ${err}'
 		return
