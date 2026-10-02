@@ -333,10 +333,11 @@ fn exec_display(mut t Terminal, cmd &Command) Response {
 		PlacementLocation(PlacementVirtual{})
 	} else {
 		PlacementLocation(PlacementPin{
-			pin: track_pin(mut t, Coordinate{
-				x: u16(t.screens.active.cursor.x)
-				y: t.screens.active.cursor.y
-			})!
+			pin: t.screens.active.pages.track_pin(*t.screens.active.cursor.page_pin) or {
+				eprintln('failed to create pin for Kitty graphics err=${err}')
+				result.message = 'EINVAL: failed to prepare terminal state'
+				return result
+			}
 		})
 	}
 
