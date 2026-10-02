@@ -104,7 +104,7 @@ fn resources_dir_from_exe(exe_path string) ResourcesDir {
 		}
 		exe = dir
 
-		$if macos {
+		$if macos || ios {
 			for sentinel in resources_sentinels {
 				if v := maybe_dir(dir, 'Contents/Resources', sentinel) {
 					return ResourcesDir{

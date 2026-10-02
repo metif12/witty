@@ -11,7 +11,7 @@ fn C.setlocale(category int, locale &char) &char
 // UTF-8 locale used by Ghostty as its fallback.
 pub fn ensure_locale() ! {
 	lang := getenv('LANG')
-	$if macos {
+	$if macos || ios {
 		mut needs_cocoa_locale := true
 		if value := lang {
 			needs_cocoa_locale = value.len == 0

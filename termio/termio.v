@@ -1152,7 +1152,7 @@ fn (mut self Thread) thread_main_(mut io Termio) ! {
 	// Right now, on Darwin, `std.Thread.setName` can only name the current
 	// thread, and we have no way to get the current thread from within it,
 	// so instead we use this code to name the thread instead.
-	$if macos {
+	$if macos || ios {
 		internal_os.set_thread_name('io')
 	}
 

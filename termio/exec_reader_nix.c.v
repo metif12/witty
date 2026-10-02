@@ -16,7 +16,7 @@ pub fn thread_main_posix(fd int, quit int, io &Termio) {
 		C.close(quit)
 	}
 
-	$if macos {
+	$if macos || ios {
 		internal_os.set_thread_name('io-reader')
 	}
 

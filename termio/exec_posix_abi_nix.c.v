@@ -80,7 +80,7 @@ fn kill_pid(pid int) ! {
 		if C.killpg(pgid, sig_hup) != 0 {
 			errno := C.errno
 			mut ignore := false
-			$if macos {
+			$if macos || ios {
 				// killpg failed with EPERM, expected on Darwin and ignoring
 				ignore = errno == C.EPERM
 				if ignore {

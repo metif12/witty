@@ -648,7 +648,7 @@ pub fn Subprocess.init(cfg ExecConfig) !Subprocess {
 			env['TERMINFO'] = '${parent}/terminfo'
 		}
 	} else {
-		$if macos {
+		$if macos || ios {
 			log.warn('ghostty terminfo not found, using xterm-256color')
 			log.warn('the terminfo SHOULD exist on macos, please ensure')
 			log.warn("you're using a valid app bundle.")
@@ -663,7 +663,7 @@ pub fn Subprocess.init(cfg ExecConfig) !Subprocess {
 
 	// On macOS, export additional data directories from our
 	// application bundle.
-	$if macos {
+	$if macos || ios {
 		if resources_dir := cfg.resources_dir {
 			data_dir := '${resources_dir}/..'
 			xdg_data_dirs_key := 'XDG_DATA_DIRS'
@@ -1078,7 +1078,7 @@ fn exec_command(command configpkg.Command) ![]string {
 	// If we're on macOS, we have to use `login(1)` to get all of
 	// the proper environment variables set, a login shell, and proper
 	// hushlogin behavior.
-	$if macos {
+	$if macos || ios {
 		passwd := internal_os.get() or {
 			log.warn('failed to read passwd, not using a login shell err=${err}')
 			return exec_command_posix(command)
