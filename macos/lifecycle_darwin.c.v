@@ -3,6 +3,7 @@ module macos
 
 __global (
 	g_application_has_become_active bool
+	g_first_active_callback ReadyCallback
 	g_update_is_installing bool
 	g_app_was_hidden bool
 )
@@ -14,6 +15,7 @@ pub fn set_update_is_installing(installing bool) {
 pub fn application_has_become_active() bool {
 	return g_application_has_become_active
 }
+pub fn set_first_active_callback(callback ReadyCallback) { g_first_active_callback=callback }
 
 pub fn termination_requires_confirmation(core_needs_confirm bool) bool {
 	windows := msg_id(shared_app(), 'windows')

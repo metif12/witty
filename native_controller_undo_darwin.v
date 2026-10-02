@@ -50,6 +50,7 @@ fn collect_detached_surfaces() {
 		mut retained := false
 		for controller in runtime.controllers { if !controller.closed && controller.host.tree.root.find(state.view) != none { retained = true; break } }
 		if !retained {
+			if pending := runtime.pending_quick { if pending.tree.root.find(state.view) != none { retained = true } }
 			for record in runtime.undos {
 				if record.tree.root.find(state.view) != none { retained = true; break }
 				for snapshot in record.states { if snapshot.tree.root.find(state.view) != none { retained = true; break } }
@@ -103,6 +104,7 @@ fn restore_controller_state(snapshot ControllerUndoState) &TerminalController {
 		state := controller.focused
 		macos.apply_native_window_config(state.view, state.native_config, false, state.background_color or { state.native_config.background }, state.native_config.opacity, false)
 		macos.apply_native_window_frame(state.view, snapshot.frame)
+		macos.configure_native_restoration(state.view, true)
 		macos.restore_native_tab(state.view, snapshot.tab_group.object(), snapshot.tab_index)
 		macos.set_native_tab_color(state.view, snapshot.tab_color)
 		if title := snapshot.title_override { macos.set_view_title(state.view, title) }

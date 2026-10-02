@@ -39,6 +39,7 @@ mut:
 	closed bool
 	initial_frame macos.NativeWindowFrame
 	title_override ?string
+	restorable bool = true
 }
 
 struct StandaloneRuntime {
@@ -47,6 +48,7 @@ mut:
 	states []&TermState
 	controllers []&TerminalController
 	undos []&ControllerUndo
+	pending_quick ?NativeRestoredController
 }
 
 struct StandaloneRuntimeSingleton {
@@ -127,10 +129,11 @@ fn create_surface(view voidptr, inherited apprt.SurfaceOptions) ?&TermState {
 	}
 	runtime.states << state
 	if macos.view_window(view) != unsafe { nil } {
-		state.controller = &TerminalController{host: macos.create_split_host(view), focused: state}
+		state.controller = &TerminalController{host: macos.create_split_host(view), focused: state, restorable: (inherited.command or { '' }) == ''}
 		macos.apply_native_window_config(view, state.native_config, true, state.native_config.background, state.native_config.opacity, false)
 		state.controller.initial_frame = macos.native_window_frame(view)
 		runtime.controllers << state.controller
+		macos.configure_native_restoration(view, state.controller.restorable)
 	}
 
 	scale := macos.view_backing_scale(view)
@@ -245,6 +248,13 @@ fn on_should_quit_after_last_window() bool {
 		return false
 	}
 	return runtime.app.config.quit_after_last_window_closed
+}
+fn on_first_active() {
+	runtime:=standalone_runtime()
+	if runtime.app == unsafe { nil } || !runtime.app.config.initial_window || runtime.controllers.any(!it.closed && !it.quick) { return }
+	macos.native_undo_disable()
+	do_new_window(none)
+	macos.native_undo_enable()
 }
 
 fn on_should_terminate() bool {
@@ -521,6 +531,7 @@ fn main() {
 	macos.set_should_quit_after_last_window_callback(on_should_quit_after_last_window)
 	macos.set_should_terminate_callback(on_should_terminate)
 	macos.set_reopen_callback(on_reopen)
+	macos.set_first_active_callback(on_first_active)
 
 	mut runtime := standalone_runtime()
 	runtime.app = apprt.ghostty_app_new(&apprt.AppOptions{
@@ -538,10 +549,9 @@ fn main() {
 	}
 	apprt.ghostty_app_set_focus(mut runtime.app, macos.app_is_active())
 	sync_config_menu(&config)
+	macos.set_native_restoration_callbacks(encode_native_controller, decode_native_controller, native_restoration_allowed)
+	macos.apply_native_save_state(int(config.window_save_state))
 
-	if config.initial_window {
-		do_new_window(none)
-	}
 	macos.app_run()
 	macos.clear_native_undo()
 

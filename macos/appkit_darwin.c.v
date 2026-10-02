@@ -202,6 +202,7 @@ fn register_classes() {
 		add_method(delegate_cls, 'applicationWillTerminate:', voidptr(vt_app_will_terminate), 'v@:@')
 		add_method(delegate_cls, 'windowShouldClose:', voidptr(vt_window_should_close), 'B@:@')
 		register_native_undo_methods(delegate_cls)
+		register_native_restoration_methods(delegate_cls)
 		C.macos_objc_register_class_pair(delegate_cls)
 	}
 }
@@ -527,11 +528,13 @@ fn vt_app_did_finish_launching(_self ObjId, _cmd Sel, _notification ObjId) {
 }
 
 fn vt_app_did_become_active(_self ObjId, _cmd Sel, _notification ObjId) {
+	first_activation:=!g_application_has_become_active
 	g_application_has_become_active = true
 	g_app_was_hidden = false
 	if g_app_focus_cb != unsafe { nil } {
 		g_app_focus_cb(true)
 	}
+	if first_activation && g_first_active_callback != unsafe { nil } { g_first_active_callback() }
 }
 
 fn vt_app_did_resign_active(_self ObjId, _cmd Sel, _notification ObjId) {
@@ -920,6 +923,10 @@ pub fn app_is_active() bool {
 }
 
 pub fn create_window(w int, h int, title string) voidptr {
+	return create_native_window(w,h,title,true)
+}
+pub fn create_restorable_window(w int,h int,title string) voidptr { return create_native_window(w,h,title,false) }
+fn create_native_window(w int,h int,title string,show bool) voidptr {
 	register_classes()
 	frame := objc_rect(100, 100, f64(w), f64(h))
 	style := ns_window_style_titled | ns_window_style_closable | ns_window_style_miniaturizable | ns_window_style_resizable
@@ -933,7 +940,7 @@ pub fn create_window(w int, h int, title string) voidptr {
 	msg_void1(window, 'setContentView:', view)
 	msg_void1(window, 'setInitialFirstResponder:', view)
 	msg_bool1(window, 'makeFirstResponder:', view)
-	msg_void1(window, 'makeKeyAndOrderFront:', nil_obj())
+	if show { msg_void1(window, 'makeKeyAndOrderFront:', nil_obj()) }
 	refresh_tab_labels(window)
 	return view
 }
