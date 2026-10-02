@@ -467,3 +467,29 @@ fn test_image_load_png_not_compressed_regular_file() {
 	assert img.format == .rgba
 	assert os.exists(path)
 }
+
+// Zig Reader.appendRemaining(.limited(n)) rejects a reached limit, not
+// merely streams larger than it. These fixtures reproduce the audit probe.
+fn test_kitty_file_read_preserves_reader_limit_and_offset_contract() ! {
+	path := os.join_path(os.temp_dir(), 'witty-kitty-reader-${os.getpid()}')
+	os.write_file(path, '1234')!
+	defer { os.rm(path) or {} }
+	for size in [u32(1), 3, 4] {
+		mut loading := LoadingImage{}
+		loading.read_file(.file, Transmission{size: size}, path) or {
+			assert err.msg().starts_with('InvalidData')
+			assert loading.data.len == 0
+			continue
+		}
+		assert false, 'a reached source reader limit must fail'
+	}
+	mut loading := LoadingImage{}
+	loading.read_file(.file, Transmission{size: 5}, path)!
+	assert loading.data == '1234'.bytes()
+	mut offset := LoadingImage{}
+	offset.read_file(.file, Transmission{offset: 1, size: 4}, path)!
+	assert offset.data == '234'.bytes()
+	mut beyond := LoadingImage{}
+	beyond.read_file(.file, Transmission{offset: 99, size: 4}, path)!
+	assert beyond.data.len == 0
+}

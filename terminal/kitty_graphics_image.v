@@ -421,21 +421,33 @@ fn (mut self LoadingImage) read_file(medium TransmissionMedium, t Transmission, 
 		return error('invalid data: not a regular file ${path}')
 	}
 
-	// Read the file, honoring the offset and limiting the total size.
-	start := u64(t.offset)
+	// Mirror the source file.reader buffer and appendRemaining(.limited(size)).
+	// Reaching the limit is StreamTooLong even when it coincides with EOF.
 	size := if t.size > 0 {
 		if int(t.size) < max_image_size { int(t.size) } else { max_image_size }
 	} else {
 		max_image_size
 	}
-	f := os.open(path) or { return error('invalid data: failed to open file ${path}') }
-	data := f.read_bytes_at(size, start)
-	unsafe {
-		mut fm := &f
-		fm.close()
+	mut f := os.open(path) or { return error('InvalidData: failed to open file ${path}') }
+	defer { f.close() }
+	if t.offset > 0 {
+		f.seek(i64(t.offset), .start) or { return error('InvalidData: failed to seek file') }
 	}
-	// Set our data
-	self.data << data
+	mut data := []u8{}
+	mut buffer := []u8{len: 4096}
+	for {
+		remaining := size - data.len
+		if remaining == 0 {
+			return error('InvalidData: stream too long')
+		}
+		count := f.read(mut buffer[..if remaining < buffer.len { remaining } else { buffer.len }]) or {
+			if err is os.Eof { break }
+			return error('InvalidData: failed to read file')
+		}
+		data << buffer[..count]
+	}
+	assert self.data.len == 0
+	self.data = data
 }
 
 // Adds a chunk of data to the image. Use this if the image
