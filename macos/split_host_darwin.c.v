@@ -84,10 +84,7 @@ pub fn (mut host NativeSplitHost) layout() {
 }
 pub fn view_window(view voidptr) voidptr { return msg_id(view, 'window') }
 pub fn focus_split_view(view voidptr) {
-	window := msg_id(view, 'window')
-	msg_bool1(window, 'makeFirstResponder:', view)
-	msg_void1(window, 'makeKeyAndOrderFront:', nil_obj())
-	if !app_is_active() { msg_void_bool(shared_app(), 'activateIgnoringOtherApps:', true) }
+	move_focus(view, unsafe { nil }, none)
 }
 
 fn terminal_view_for_window(window ObjId) ObjId {

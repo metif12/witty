@@ -18,7 +18,6 @@ fn do_new_split(current &TermState, direction apprt.SplitDirection) bool {
 	}
 	replace_controller_tree(controller, new_tree, view, current.view, 'New Split')
 	controller.focused = added
-	macos.focus_split_view(view)
 	return true
 }
 fn do_goto_split(current &TermState, direction apprt.GotoSplit) bool {
@@ -36,7 +35,7 @@ fn do_goto_split(current &TermState, direction apprt.GotoSplit) bool {
         host.replace_tree(macos.NativeSplitTree{root:host.tree.root,zoomed:zoomed})
 	}
 	macos.invalidate_native_restorable_state(host.container)
-	macos.dispatch_main(focus_controller_view,view)
+	macos.move_focus(view, current.view, none)
 	return true
 }
 fn do_resize_split(current &TermState, data apprt.ResizeSplit) bool {
@@ -60,6 +59,6 @@ fn do_toggle_split_zoom(current &TermState) bool {
 	host.replace_tree(macos.NativeSplitTree{root:host.tree.root,zoomed:if host.tree.zoomed==node { unsafe { &macos.NativeSplitNode(nil) } } else { node }})
 	macos.invalidate_native_restorable_state(host.container)
 	macos.focus_native_window(macos.view_window(host.container))
-	macos.dispatch_main(focus_controller_view, current.view)
+	macos.move_focus(current.view, unsafe { nil }, none)
 	return true
 }

@@ -346,7 +346,7 @@ pub fn (mut surface NativeActionSurface) presented() {
 
 fn action_present_again(self ObjId, _cmd Sel, _timer ObjId) {
 	if surface := action_owner_state(self) {
-		if !surface.closed { present_view(surface.view) }
+		if !surface.closed { move_focus(surface.view, unsafe { nil }, none) }
 	}
 }
 

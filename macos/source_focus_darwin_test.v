@@ -1,0 +1,66 @@
+@[has_globals]
+module macos
+
+__global focus_fixture_resigns = 0
+
+fn focus_fixture_resign(_self ObjId, _cmd Sel) bool {
+	focus_fixture_resigns++
+	return true
+}
+
+fn focus_fixture_pump(seconds f64) {
+	msg_void1(msg_id(get_class('NSRunLoop'), 'currentRunLoop'), 'runUntilDate:',
+		msg_id_f64(get_class('NSDate'), 'dateWithTimeIntervalSinceNow:', seconds))
+}
+
+fn test_source_focus_async_does_not_key_or_activate_other_window() {
+	app_init()
+	msg_void(shared_app(), 'finishLaunching')
+	first := create_window(640, 480, 'first')
+	second := create_window(640, 480, 'second')
+	defer { close_tab(first); close_tab(second) }
+	focus_native_window(view_window(first))
+	focus_fixture_pump(0.1)
+	key := msg_id(shared_app(), 'keyWindow')
+	active := app_is_active()
+	cls := C.macos_objc_allocate_class_pair(get_class('NSView'), cstr('WittySourceFocusFixture'), 0)
+	add_method(cls, 'resignFirstResponder', voidptr(focus_fixture_resign), 'B@:')
+	C.macos_objc_register_class_pair(cls)
+	from := msg_id(alloc('WittySourceFocusFixture'), 'init')
+	defer { msg_void(from, 'release') }
+	focus_fixture_resigns = 0
+	move_focus(second, voidptr(from), none)
+	assert focus_fixture_resigns == 0
+	focus_fixture_pump(0.03)
+	assert focus_fixture_resigns == 1
+	assert msg_id(view_window(second), 'firstResponder') == second
+	assert msg_id(shared_app(), 'keyWindow') == key
+	assert app_is_active() == active
+}
+
+fn test_source_focus_retries_unattached_view_and_releases_captures() {
+	app_init()
+	msg_void(shared_app(), 'finishLaunching')
+	window_view := create_window(640, 480, 'retry')
+	to := create_terminal_view(objc_rect(0, 0, 40, 40))
+	defer { msg_void(to, 'release'); close_tab(window_view) }
+	initial := g_native_focus_tasks.len
+	move_focus(voidptr(to), unsafe { nil }, none)
+	assert g_native_focus_tasks.len == initial + 1
+	focus_fixture_pump(0.02)
+	assert g_native_focus_tasks.len == initial + 1
+	assert (g_native_focus_tasks.last().delay or { 0 }) == 0.05
+	msg_void1(window_view, 'addSubview:', to)
+	focus_fixture_pump(0.06)
+	assert g_native_focus_tasks.len == initial
+	assert msg_id(view_window(window_view), 'firstResponder') == to
+	msg_void(to, 'removeFromSuperview')
+	retained := msg_u64(to, 'retainCount')
+	move_focus(voidptr(to), unsafe { nil }, none)
+	assert msg_u64(to, 'retainCount') == retained + 1
+	focus_fixture_pump(0.8)
+	assert g_native_focus_tasks.len == initial
+	assert msg_u64(to, 'retainCount') == retained
+	move_focus(voidptr(to), unsafe { nil }, 0.5)
+	assert g_native_focus_tasks.len == initial
+}

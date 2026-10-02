@@ -349,16 +349,9 @@ fn native_command_options(app &apprt.App) []macos.NativeCommandOption {
 fn native_present_view(_userdata voidptr, view voidptr) {
 	state := state_from_userdata(macos.view_get_userdata(view)) or { return }
 	if state.closed { return }
-	if state.controller != unsafe { nil } {
-		mut host := state.controller.host
-		if host.tree.zoomed != unsafe { nil } {
-			host.replace_tree(macos.NativeSplitTree{
-				root: host.tree.root
-			})
-		}
-	}
+	if state.controller == unsafe { nil } || state.controller.host.tree.root.find(view) == none { return }
 	macos.present_view(view)
-	state.actions.presented()
+	if state.actions != unsafe { nil } { state.actions.presented() }
 }
 
 fn native_action_config(current &TermState, config &configpkg.Config) {

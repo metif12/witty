@@ -1122,7 +1122,7 @@ pub fn present_view(view voidptr) {
 	window := msg_id(ObjId(view), 'window')
 	if !is_nil(window) {
 		msg_void1(window, 'makeKeyAndOrderFront:', nil_obj())
-		msg_bool1(window, 'makeFirstResponder:', ObjId(view))
+		move_focus(view, unsafe { nil }, none)
 	}
 }
 

@@ -201,6 +201,10 @@ pub fn (mut surface NativeActionSurface) toggle_command_palette(options []Native
 	msg_bool1(view_window(surface.view), 'makeFirstResponder:', palette.field)
 }
 
+pub fn (surface &NativeActionSurface) command_palette_is_showing() bool {
+	return surface.palette != unsafe { nil }
+}
+
 fn (mut palette NativeCommandPalette) layout() {
 	width := math.min(500.0, view_width(palette.surface.view) - 32)
 	msg_void_rect(palette.container, 'setFrame:', objc_rect((view_width(palette.surface.view) - width) / 2,
