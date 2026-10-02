@@ -12,8 +12,11 @@ pub fn run_process(root string, args []string) !os.Result {
 	process.set_work_folder(root)
 	process.set_redirect_stdio()
 	process.run()
+	// Drain stderr alongside stdout. Compiler diagnostics can fill the pipe
+	// before the child exits, so serial slurping can deadlock the build.
+	errors := spawn process.stderr_slurp()
 	output := process.stdout_slurp()
-	stderr := process.stderr_slurp()
+	stderr := errors.wait()
 	process.wait()
 	code := process.code
 	process.close()
