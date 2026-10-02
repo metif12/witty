@@ -445,6 +445,9 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 			return false
 		}
 		.reload_config {
+			if target is apprt.SurfaceTarget && state == none {
+				return false
+			}
 			data := action.data
 			soft := if data is apprt.ReloadConfig { data.soft } else { false }
 			return reload_runtime_config(app, state, soft)
