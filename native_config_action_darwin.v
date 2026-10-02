@@ -47,7 +47,13 @@ fn native_config_change_main(context voidptr) {
 		for mut controller in runtime.controllers {
 			if controller.closed { continue }
 			controller.app_config = projection
-			if controller.quick && controller.focused != unsafe { nil } { sync_native_window(controller.focused) }
+			// QuickTerminalWindow is an NSPanel, so the regular TerminalWindow
+			// empty-tree branch is excluded regardless of focusedSurface.
+			if controller.quick {
+				macos.sync_quick_terminal_appearance(controller.force_opaque)
+				sync_native_surface_color_scheme(mut controller)
+				continue
+			}
 			// TerminalController only applies app appearance when its tree is empty.
 			if controller.host != unsafe { nil } && controller.host.tree.root == unsafe { nil } {
 				created := controller.creation_config
