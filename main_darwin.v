@@ -163,11 +163,41 @@ fn do_new_window(source ?&TermState) bool {
 fn new_controller_with_options(source ?&TermState,options apprt.SurfaceOptions,tab bool) bool {
 	mut parent:=voidptr(unsafe { nil })
 	if current:=source { if tab { if macos.quick_terminal_deny_tab(current.view) { return true }; parent=macos.view_window(current.view) } }
-	view := macos.create_window(800, 600, '')
+	is_tab:=tab && parent != unsafe { nil }
+	if parent == unsafe { nil } { parent=macos.preferred_terminal_window() }
+	view := macos.create_restorable_window(800, 600, '')
 	state := create_surface(view, options) or { return false }
-	if tab && parent != unsafe { nil } { macos.attach_native_new_tab(parent,state.view,standalone_runtime().app.config.window_new_tab_position == .end) }
-	register_new_controller_undo(state, source, tab, options)
+	if is_tab { macos.attach_native_new_tab(parent,state.view,standalone_runtime().app.config.window_new_tab_position == .end) }
+	if !is_tab && parent != unsafe { nil } {
+		config:=standalone_runtime().app.config
+		if macos.native_window_is_fullscreen(parent) { macos.toggle_fullscreen_mode(state.view,.native) }
+		else if config.fullscreen {
+			mode:=match config.macos_non_native_fullscreen { .false_ { macos.NativeFullscreenMode.native } .true_ { .non_native } .visible_menu { .visible_menu } .padded_notch { .padded_notch } }
+			if mode==.native { macos.toggle_fullscreen_mode(state.view,mode) }
+			else { macos.dispatch_main(show_configured_new_fullscreen,voidptr(&NewControllerShowTask{controller:state.controller,mode:mode})) }
+		}
+	}
+	macos.dispatch_main(show_new_controller,voidptr(&NewControllerShowTask{controller:state.controller,tab:is_tab}))
+	register_new_controller_undo(state, source, is_tab, options)
 	return true
+}
+
+@[heap]
+struct NewControllerShowTask {
+	controller &TerminalController
+	tab bool
+	mode macos.NativeFullscreenMode
+}
+fn show_configured_new_fullscreen(context voidptr) {
+	task:=unsafe { &NewControllerShowTask(context) }
+	if task.controller.closed { return }
+	macos.toggle_fullscreen_mode(task.controller.host.container,task.mode)
+}
+fn show_new_controller(context voidptr) {
+	task:=unsafe { &NewControllerShowTask(context) }
+	if task.controller.closed { return }
+	macos.show_new_terminal_window(task.controller.host.container,task.tab)
+	if task.controller.focused != unsafe { nil } { sync_native_window(task.controller.focused) }
 }
 
 fn do_new_tab(source ?&TermState) bool {

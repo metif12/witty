@@ -43,7 +43,6 @@ pub fn attach_native_new_tab(parent voidptr,view voidptr,at_end bool) {
 		if at_end { latest:=msg_id(msg_id(parent,'tabGroup'),'windows'); count:=msg_u64(latest,'count'); if count>0 { anchor=msg_id_u64(latest,'objectAtIndex:',count-1) } }
 		msg_void2(anchor,'addTabbedWindow:ordered:',window,ObjId(1))
 	}
-	msg_void1(window,'makeKeyAndOrderFront:',nil_obj())
 }
 pub fn detach_automatic_native_tab(view voidptr) {
 	window:=msg_id(view,'window')

@@ -261,9 +261,10 @@ fn save_native_window_position(self ObjId) {
 	msg_void2(msg_id(get_class('NSUserDefaults'), 'standardUserDefaults'), 'setObject:forKey:', array, nsstring('NSWindowLastPosition'))
 }
 fn native_window_did_move(_self ObjId,_cmd Sel,notification ObjId) { window:=msg_id(notification,'object'); if msg_bool1(window,'isKindOfClass:',get_class('VTTerminalWindow')) { save_native_window_position(window) } }
-fn register_native_window_delegate_methods(cls ObjId) { add_method(cls,'windowDidMove:',voidptr(native_window_did_move),'v@:@') }
+fn register_native_window_delegate_methods(cls ObjId) { add_method(cls,'windowDidMove:',voidptr(native_window_did_move),'v@:@'); register_terminal_cascade_delegate_methods(cls) }
 fn native_window_close(self ObjId,_cmd Sel) {
 	save_native_window_position(self)
+	terminal_window_will_close(self)
 	msg_void2(msg_id(get_class('NSNotificationCenter'), 'defaultCenter'), 'postNotificationName:object:', nsstring('TerminalWindowWillClose'), self)
 	C.witty_macos_window_super_void0(self, sel('close'))
 	g_native_windows.delete(u64(self))
