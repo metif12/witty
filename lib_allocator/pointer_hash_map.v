@@ -66,9 +66,8 @@ fn (mut table PointerHashMap[K, V]) allocate(capacity u32) ! {
 	raw := table.allocator.alloc_bytes(total, alignment, 0)
 	if isnil(raw) { return error('OutOfMemory') }
 	register_value_storage(raw, total)
-	mut header := unsafe { &PointerMapHeader(raw) }
 	unsafe {
-		*header = PointerMapHeader{
+		*(&PointerMapHeader(raw)) = PointerMapHeader{
 			keys:     voidptr(usize(raw) + keys_start)
 			values:   voidptr(usize(raw) + values_start)
 			capacity: capacity
