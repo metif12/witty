@@ -80,7 +80,13 @@ fn runtime_native_action(app &apprt.App, target apprt.Target, state ?&TermState,
 	data := action.data
 	match action.action {
 		.toggle_command_palette {
-			overlay.toggle_command_palette(native_command_options(app))
+			if current.controller != unsafe { nil } && current.controller.host.tree.root.find(current.view) != none {
+				focused := current.controller.focused
+				if focused != unsafe { nil } && !focused.closed && focused.actions != unsafe { nil } {
+					mut palette_surface := focused.actions
+					palette_surface.toggle_command_palette(native_command_options(app))
+				}
+			}
 			return true
 		}
 		.prompt_title {
@@ -134,11 +140,13 @@ fn runtime_native_action(app &apprt.App, target apprt.Target, state ?&TermState,
 			}
 		}
 		.toggle_maximize {
-			macos.maximize_native_window(current.view)
+			if current.controller != unsafe { nil } && current.controller.host.tree.root.find(current.view) != none {
+				macos.maximize_native_window(current.controller.host.container)
+			}
 			return true
 		}
 		.toggle_background_opacity {
-			if current.controller != unsafe { nil } {
+			if current.controller != unsafe { nil } && macos.native_view_has_window(current.view) {
 				mut controller := current.controller
 				controller.force_opaque = !controller.force_opaque
 				sync_native_window(current)

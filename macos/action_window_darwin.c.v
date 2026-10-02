@@ -121,7 +121,7 @@ pub fn goto_native_window(direction int) ?voidptr {
 			msg_void1(candidate, 'makeKeyAndOrderFront:', nil_obj())
 			for _, surface in g_action_surfaces {
 				if !surface.closed && surface.focused && view_window(surface.view) == candidate {
-					present_view(surface.view)
+					move_focus(surface.view, unsafe { nil }, none)
 					return surface.view
 				}
 			}

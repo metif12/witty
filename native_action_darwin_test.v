@@ -78,6 +78,12 @@ fn test_native_fullscreen_and_split_dispatch_source_predicates() {
 	mut current := &TermState{ view: first, actions: first_actions, controller: controller }
 	other := &TermState{ view: second, actions: second_actions, controller: controller }
 	controller.focused = other
+	app := &apprt.App{ config: configpkg.Config.default() }
+	assert runtime_action(app, native_dispatch_target(current), apprt.RuntimeAction{ action: .toggle_command_palette })
+	assert !first_actions.command_palette_is_showing()
+	assert second_actions.command_palette_is_showing()
+	assert runtime_action(app, native_dispatch_target(current), apprt.RuntimeAction{ action: .toggle_command_palette })
+	assert !second_actions.command_palette_is_showing()
 	defer {
 		first_actions.deinit()
 		second_actions.deinit()
@@ -128,6 +134,11 @@ fn test_native_fullscreen_and_split_dispatch_source_predicates() {
 	assert host.tree.zoomed == before.zoomed
 	current.view = unsafe { nil }
 	assert !runtime_action(unsafe { nil }, target, apprt.RuntimeAction{ action: .toggle_split_zoom })
+	assert runtime_action(app, target, apprt.RuntimeAction{ action: .toggle_command_palette })
+	assert !first_actions.command_palette_is_showing()
+	assert !second_actions.command_palette_is_showing()
+	assert runtime_action(app, target, apprt.RuntimeAction{ action: .toggle_background_opacity })
+	assert !controller.force_opaque
 }
 
 fn native_dispatch_quick_created(_view voidptr) bool { return true }
