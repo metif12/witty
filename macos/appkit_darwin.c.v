@@ -934,6 +934,9 @@ fn create_native_window(w int,h int,title string,show bool) voidptr {
 	base_title := display_title_for_input(title)
 
 	window := msg_id_rect_u64_u64_bool(msg_id(native_window_class(), 'alloc'), 'initWithContentRect:styleMask:backing:defer:', frame, style, ns_backing_store_buffered, false)
+	// NSWindowController owns this lifetime in the source. The translated host
+	// releases the allocated window after close_one_controller detaches its tree.
+	msg_void_bool(window,'setReleasedWhenClosed:',false)
 	g_window = window
 	configure_window_common(window, base_title)
 

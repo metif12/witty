@@ -14,23 +14,23 @@ fn restoration_allowed() bool { return g_restoration_allowed != unsafe { nil } &
 fn native_supports_secure_restoration(_self ObjId,_cmd Sel,_app ObjId) bool { return true }
 fn native_app_encode_restoration(_self ObjId,_cmd Sel,_app ObjId,coder ObjId) {
 	if !restoration_allowed() || g_controller_encoder == unsafe { nil } { return }
-	if value := g_controller_encoder(unsafe { nil },true) { encode_native_restorable(coder,value,1) }
+	if value := g_controller_encoder(unsafe { nil },true) { encode_native_restorable(voidptr(coder),value,1) }
 }
 fn native_app_decode_restoration(_self ObjId,_cmd Sel,_app ObjId,coder ObjId) {
 	if !restoration_allowed() || g_controller_decoder == unsafe { nil } { return }
-	if value := decode_native_restorable(coder,1) { g_controller_decoder(value,true) }
+	if value := decode_native_restorable(voidptr(coder),1) { g_controller_decoder(value,true) }
 }
 fn native_window_encode_restoration(_self ObjId,_cmd Sel,window ObjId,coder ObjId) {
 	if g_controller_encoder == unsafe { nil } { return }
 	view := terminal_view_for_window(window)
-	if value := g_controller_encoder(view,false) { encode_native_restorable(coder,value,7) }
+	if value := g_controller_encoder(voidptr(view),false) { encode_native_restorable(voidptr(coder),value,7) }
 }
 fn restoration_error(code int) ObjId { return msg_id3(get_class('NSError'),'errorWithDomain:code:userInfo:',nsstring('Ghostty.TerminalRestoreError'),ObjId(code),nil_obj()) }
 fn native_restore_window(_self ObjId,_cmd Sel,identifier ObjId,coder ObjId,completion voidptr) {
 	if objc_utf8_string(identifier) != 'TerminalWindowRestoration' { C.witty_restoration_complete(completion,nil_obj(),restoration_error(1)); return }
 	if g_controller_decoder == unsafe { nil } { C.witty_restoration_complete(completion,nil_obj(),restoration_error(0)); return }
 	if !restoration_allowed() { C.witty_restoration_complete(completion,nil_obj(),nil_obj()); return }
-	value := decode_native_restorable(coder,7) or { C.witty_restoration_complete(completion,nil_obj(),restoration_error(2)); return }
+	value := decode_native_restorable(voidptr(coder),7) or { C.witty_restoration_complete(completion,nil_obj(),restoration_error(2)); return }
 	window := g_controller_decoder(value,false) or { C.witty_restoration_complete(completion,nil_obj(),restoration_error(3)); return }
 	C.witty_restoration_complete(completion,window,nil_obj())
 }
