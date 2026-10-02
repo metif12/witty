@@ -2152,11 +2152,6 @@ enum CellSelected as u8 {
 	search_selected
 }
 
-struct RowShapedGlyph {
-	cell       font.ShapeCell
-	font_index font.Index
-}
-
 // Rebuild a single row's cells: shaping, selection/highlight classification,
 // color computation, glyph emission, and text decorations.
 fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range ?PreeditRange, links &terminal.CellSet) ! {
@@ -2178,10 +2173,7 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 		cells_style << c.style
 	}
 
-	// Shape the row into glyphs before emitting individual cell layers. Runs
-	// split on style, selection, cursor, and font boundaries; multiple glyphs
-	// may share one cell for ligatures and combining marks.
-	mut shaped := [][]RowShapedGlyph{len: cells_len}
+	// Iterate text runs in order, shaping only when foreground emission needs them.
 	cursor_x := if viewport := state.cursor.viewport {
 		if viewport.y == y {
 			?u16(viewport.x)
@@ -2199,29 +2191,10 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 	}
 	run_opts.apply_break_config(self.config.font_shaping_break.cursor())
 	mut run_iter := self.font_shaper.run_iterator(run_opts)
-	for {
-		next_run := run_iter.next()!
-		if !next_run.has_value {
-			break
-		}
-		run := next_run.value
-		shaped_cells := self.font_shaper_cache.get(run) or {
-			new_cells := self.font_shaper.shape(run)!
-			self.font_shaper_cache.put(run, new_cells) or {
-				log.warn('error caching font shaping results err=${err}')
-			}
-			new_cells
-		}
-		for shaped_cell in shaped_cells {
-			x := int(u32(run.offset) + shaped_cell.x)
-			if x >= 0 && x < shaped.len {
-				shaped[x] << RowShapedGlyph{
-					cell:       shaped_cell
-					font_index: run.font_index
-				}
-			}
-		}
-	}
+	first_run := run_iter.next()!
+	mut shaper_run := first_run.get()
+	mut shaper_cells := ?[]font.ShapeCell(none)
+	mut shaper_cells_i := 0
 
 	// On primary screen, we still apply vertical padding extension under
 	// certain conditions we feel are safe.
@@ -2243,14 +2216,38 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 	for x in 0 .. cells_len {
 		cell := &row.cells[x].raw
 
-		// If this cell falls within our preedit range then we skip it
-		// because preedits are setup separately.
+		// Preedit glyphs are emitted separately. Catch up the run/cell positions
+		// once on leaving the range, exactly as generic.zig rebuildRow does.
 		if range := preedit_range {
-			if range.y == y {
-				// We're in or around the preedit range.
-				if u16(x) >= range.x[0] && u16(x) <= range.x[1] {
-					// We're in the preedit range, skip this cell.
+			if range.y == y && u16(x) >= range.x[0] {
+				if u16(x) <= range.x[1] {
 					continue
+				}
+				if x == int(range.x[1]) + 1 {
+					for {
+						run := shaper_run or { break }
+						if int(run.offset) + int(run.cells) > x { break }
+						next := run_iter.next()!
+						shaper_run = next.get()
+						shaper_cells = none
+						shaper_cells_i = 0
+					}
+					if run := shaper_run {
+						new_shaper_cells := shaper_cells or {
+							self.font_shaper_cache.get(run) or {
+								new_cells := self.font_shaper.shape(run)!
+								self.font_shaper_cache.put(run, new_cells) or {
+									log.warn('error caching font shaping results err=${err}')
+								}
+								new_cells
+							}
+						}
+						shaper_cells = unsafe { new_shaper_cells }
+						shaped_cells := shaper_cells or { panic('preedit run was not shaped') }
+						for int(run.offset) + int(shaped_cells[shaper_cells_i].x) < x {
+							shaper_cells_i++
+						}
+					}
 				}
 			}
 		}
@@ -2349,11 +2346,40 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 			}
 		}
 
-		for shaped_glyph in shaped[x] {
-			self.add_glyph(u16(x), y, fg, alpha, shaped_glyph.cell.glyph_index,
-				shaped_glyph.font_index, shaped_glyph.cell.x_offset, shaped_glyph.cell.y_offset,
-				u32(cell.grid_width()), cells_raw, x, cells_len) or {
-				log.warn('error adding glyph to cell, will be invalid x=${x} y=${y}, err=${err}')
+		if current_cells := shaper_cells {
+			if shaper_cells_i >= current_cells.len {
+				next := run_iter.next()!
+				shaper_run = next.get()
+				shaper_cells = none
+				shaper_cells_i = 0
+			}
+		}
+		if run := shaper_run {
+			new_shaper_cells := shaper_cells or {
+				self.font_shaper_cache.get(run) or {
+					new_cells := self.font_shaper.shape(run)!
+					self.font_shaper_cache.put(run, new_cells) or {
+						log.warn('error caching font shaping results err=${err}')
+					}
+					new_cells
+				}
+			}
+			shaper_cells = unsafe { new_shaper_cells }
+			if shaped_cells := shaper_cells {
+				if shaped_cells.len > 0 {
+					// This source invariant excludes moving backwards or splitting a
+					// single cell across more than one shaping run.
+					assert int(run.offset) + int(shaped_cells[shaper_cells_i].x) >= x
+					for shaper_cells_i < shaped_cells.len && int(run.offset) + int(shaped_cells[shaper_cells_i].x) == x {
+						shape_cell := shaped_cells[shaper_cells_i]
+						self.add_glyph(u16(x), y, fg, alpha, shape_cell.glyph_index,
+							run.font_index, shape_cell.x_offset, shape_cell.y_offset,
+							u32(cell.grid_width()), cells_raw, x, cells_len) or {
+							log.warn('error adding glyph to cell, will be invalid x=${x} y=${y}, err=${err}')
+						}
+						shaper_cells_i++
+					}
+				}
 			}
 		}
 

@@ -940,6 +940,24 @@ fn test_rebuild_row_shapes_and_renders_text() ! {
 	}
 	assert grid.glyphs.len == 3
 
+	// Runs completely covered by preedit are not shaped or cached.
+	cache_count := render.font_shaper_cache.count()
+	preedit_row := terminal.RenderRow{
+		cells: [
+			terminal.RenderCell{ raw: terminal.CellData.init(u32(`D`)) },
+			terminal.RenderCell{ raw: terminal.CellData.init(u32(`E`)) },
+			terminal.RenderCell{ raw: terminal.CellData.init(u32(`F`)) },
+		]
+	}
+	render.rebuild_row(0, &preedit_row, PreeditRange{ y: 0, x: [u16(0), 2]! }, &links)!
+	assert render.font_shaper_cache.count() == cache_count
+	assert grid.glyphs.len == 3
+
+	// Leaving preedit in the middle of a run advances the shared cell position.
+	render.rebuild_row(0, &preedit_row, PreeditRange{ y: 0, x: [u16(0), 0]! }, &links)!
+	assert render.font_shaper_cache.count() == cache_count + 1
+	assert grid.glyphs.len == 5
+
 	// Exercise the complete off-screen Metal frame path with the exact cells
 	// produced above. This compiles/binds all resources, draws the background
 	// and glyph instances, commits the command buffer, and waits for the GPU.
