@@ -5,7 +5,8 @@ module main
 import configpkg
 import input
 import log
-import os
+import cli_args
+import internal_os
 
 // ConfigDiagnostic mirrors ghostty_diagnostic_s.
 pub struct ConfigDiagnostic {
@@ -67,9 +68,18 @@ pub fn ghostty_config_clone(config &configpkg.Config) ?&configpkg.Config {
 // ghostty_config_load_cli_args loads the process arguments, matching the C API
 // whose signature intentionally takes no explicit argv.
 pub fn ghostty_config_load_cli_args(mut config configpkg.Config) {
-	args := if os.args.len > 1 { os.args[1..] } else { []string{} }
-	config.load_cli_args(args) or {
-		log.error('error loading config err=${err}')
+	$if linux || freebsd {
+		config.load_cli_argv(internal_os.process_args()) or {
+			log.error('error loading config err=${err}')
+		}
+	} $else {
+		mut iter := cli_args.args_iterator()
+		defer { iter.deinit() }
+		mut args := []string{}
+		for { args << iter.next() or { break } }
+		config.load_cli_args(args) or {
+			log.error('error loading config err=${err}')
+		}
 	}
 }
 

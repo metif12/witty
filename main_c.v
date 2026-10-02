@@ -110,17 +110,10 @@ pub fn (str GhosttyString) deinit() {
 	}
 }
 
-// ghostty_init initializes ghostty global state. In Ghostty's C API this
-// receives (argc, argv) from the embedder; in V we rely on `os.args` which
-// is already populated. The signature is kept so it can be called from a
-// host that wants to pass through process args. Returns 0 on success and
-// 1 on initialization failure (matching the Zig return).
+// ghostty_init initializes the process state using the embedding caller's argv.
+// Darwin configuration deliberately uses NSProcessInfo.arguments, as in Ghostty.
 pub fn ghostty_init(argc int, argv []string) int {
-	// Ghostty's Zig version sets `std.os.argv = argv[0..argc]` here before
-	// initializing global state. V's `os.args` is populated automatically
-	// from libc and exposed as an immutable const, so we don't reassign it;
-	// any embedder that needs a different argv should set it through env
-	// inheritance instead.
+	internal_os.set_process_args(argv[..min_int(if argc < 0 { 0 } else { argc }, argv.len)])
 	mut state := global_state.get_state_mut()
 	args := if argc > 1 && argv.len > 1 {
 		argv[1..min_int(argc, argv.len)]

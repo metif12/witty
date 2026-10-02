@@ -7454,7 +7454,7 @@ fn (mut self ReplayIterator) next() ?string {
 // arguments, recursively referenced files, and finalization order.
 pub fn Config.load() !Config {
 	$if linux || freebsd {
-		return Config.load_argv(os.args)
+		return Config.load_argv(internal_os.process_args())
 	} $else $if windows {
 		return Config.load_args([])
 	} $else {
@@ -7557,6 +7557,19 @@ fn write_config_template(path string) ! {
 		os.mkdir_all(directory)!
 	}
 	os.write_file(path, config_template.replace('{[path]s}', path))!
+}
+
+// load_cli_argv preserves loadCliArgs' Linux/FreeBSD std.os.argv fast path
+// and xdg-terminal-exec argv[0] dispatch for both executable and C callers.
+pub fn (mut c Config) load_cli_argv(argv []string) ! {
+	$if linux || freebsd {
+		if argv.len <= 1 { return }
+		if command_args := internal_os.parse_terminal_exec(argv) {
+			c.load_xdg_terminal_exec_args(command_args)
+			return
+		}
+	}
+	c.load_cli_args(if argv.len > 1 { argv[1..] } else { []string{} })!
 }
 
 // load_cli_args applies Ghostty's `--key=value` configuration syntax and the

@@ -19,3 +19,9 @@ fn test_c_get_nullable_strings_write_null_and_succeed() {
 	assert config.c_get('background-opacity', voidptr(&scalar))
 	assert scalar == 0.5
 }
+
+fn test_load_cli_argv_consumes_embedding_vector_after_argv_zero() ! {
+	mut config := Config.default_config()
+	config.load_cli_argv(['embedding-host', '--font-size=17'])!
+	assert config.font_size == 17
+}

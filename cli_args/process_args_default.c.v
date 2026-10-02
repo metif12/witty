@@ -1,7 +1,7 @@
 module cli_args
 
-import os
+import internal_os
 
 fn process_args_snapshot() []string {
-	return os.args.clone()
+	return internal_os.process_args()
 }
