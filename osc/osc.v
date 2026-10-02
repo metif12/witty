@@ -1,6 +1,8 @@
 module osc
 
 import lib_allocator
+import log
+$if ghostty_wasm_module ? { import wasm_log }
 
 // --- Original Ghostty Comments Start: src/terminal/osc.zig
 //
@@ -586,6 +588,10 @@ fn (mut self Parser) ensure_allocator() bool {
 	if self.has_allocator {
 		return true
 	}
+	name := self.state.str()
+	state := if name.starts_with('s_') { name[2..] } else { name }
+	message := 'An allocator is required to process OSC ${state} but none was provided.'
+	$if ghostty_wasm_module ? { wasm_log.write(.warn, 'osc', message) } $else { log.warn(message) }
 	self.state = .invalid
 	return false
 }
