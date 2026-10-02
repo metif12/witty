@@ -7,8 +7,12 @@ module xev
 // `any` and `in` are V type/keyword names, so those fields carry a trailing
 // underscore; `any()` returns the pointer libxev takes as `&addr.any`.
 
-#include <netinet/in.h>
-#include <sys/socket.h>
+$if windows {
+	#include <winsock2.h>
+} $else {
+	#include <netinet/in.h>
+	#include <sys/socket.h>
+}
 
 fn C.htons(host u16) u16
 

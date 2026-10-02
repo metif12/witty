@@ -127,6 +127,10 @@ pub enum ErrorKind {
 	out_of_memory
 	mapping_already_exists
 	// libxev dynamic API
+	invalid_parameter
+	already_exists
+	batch_full
+	invalid_op
 	no_available_backends
 }
 
