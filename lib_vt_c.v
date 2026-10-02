@@ -162,6 +162,7 @@ fn ghostty_key_encoder_setopt_export(raw voidptr, option terminal_c.KeyEncoderOp
 	if isnil(raw) || isnil(value) {
 		return
 	}
+	if !terminal_c.key_encoder_option_valid(option) { return }
 	mut encoder := unsafe { &terminal_c.KeyEncoder(raw) }
 	match option {
 		.cursor_key_application, .keypad_key_application, .ignore_keypad_with_numlock, .alt_esc_prefix, .modify_other_keys_state_2 {

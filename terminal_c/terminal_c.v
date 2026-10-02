@@ -242,6 +242,7 @@ pub fn key_encoder_free(mut encoder KeyEncoder) {
 }
 
 pub fn (mut self KeyEncoder) setopt(option KeyEncoderOption, value KeyEncoderOptionValue) {
+	if !key_encoder_option_valid(option) { return }
 	match value {
 		bool {
 			match option {
@@ -692,4 +693,15 @@ mut:
 fn (mut writer KeyDiscardingWriter) write(data []u8) !int {
 	writer.count += usize(data.len)
 	return data.len
+}
+
+// Check before reading the option-specific C value, as setopt does upstream.
+pub fn key_encoder_option_valid(option KeyEncoderOption) bool {
+	$if !prod {
+		if !c_enum_valid(option) {
+			log.warn('setopt invalid option value=${i32(option)}')
+			return false
+		}
+	}
+	return true
 }

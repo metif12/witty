@@ -436,3 +436,12 @@ fn test_key_encoder_short_buffers_keep_source_emitted_prefix() {
 		}
 	}
 }
+
+fn test_key_encoder_rejects_invalid_option_before_setting_a_value() {
+	invalid := i32(99)
+	option := unsafe { *(&KeyEncoderOption(&invalid)) }
+	mut encoder := key_encoder_new()
+	encoder.setopt(option, true)
+	assert !encoder.opts.alt_esc_prefix
+	$if !prod { assert !key_encoder_option_valid(option) }
+}
