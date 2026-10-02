@@ -1097,7 +1097,7 @@ struct ThreadPoolSpawnConfig {
 }
 
 // std.Thread.Futex. V's sync module has no futex, so the minimal behavior of
-// Zig's DarwinImpl and LinuxImpl (wait without timeout, wake) is translated.
+// Zig's DarwinImpl, LinuxImpl and FreebsdImpl (wait without timeout, wake) are translated.
 @[c_extern]
 fn C.__ulock_wait2(operation u32, addr voidptr, value u64, timeout_ns u64, value2 u64) int
 
@@ -1118,7 +1118,7 @@ const thread_pool_futex_wake_private = 1 | 128
 // - The caller is unblocked by a matching `wake()`.
 // - The caller is unblocked spuriously ("at random").
 fn thread_pool_futex_wait(ptr &ThreadPoolAtomic[u32], expect u32) {
-	$if macos {
+	$if macos || ios {
 		// Zig uses __ulock_wait2 when targeting macOS 11+; timeout 0 means no timeout.
 		flags := thread_pool_ul_compare_and_wait | thread_pool_ulf_no_errno
 		status := C.__ulock_wait2(flags, voidptr(&ptr.raw), u64(expect), 0, 0)
@@ -1153,6 +1153,8 @@ fn thread_pool_futex_wait(ptr &ThreadPoolAtomic[u32], expect u32) {
 				panic('unreachable')
 			}
 		}
+	} $else $if freebsd {
+		thread_pool_freebsd_futex_wait(ptr, expect)
 	} $else $if windows {
 		thread_pool_windows_futex_wait(ptr, expect)
 	} $else $if wasm32_wasi {
@@ -1169,7 +1171,7 @@ fn thread_pool_futex_wake(ptr &ThreadPoolAtomic[u32], max_waiters u32) {
 		return
 	}
 
-	$if macos {
+	$if macos || ios {
 		mut flags := thread_pool_ul_compare_and_wait | thread_pool_ulf_no_errno
 		if max_waiters > 1 {
 			flags |= thread_pool_ulf_wake_all
@@ -1203,6 +1205,8 @@ fn thread_pool_futex_wake(ptr &ThreadPoolAtomic[u32], max_waiters u32) {
 				panic('unreachable')
 			}
 		}
+	} $else $if freebsd {
+		thread_pool_freebsd_futex_wake(ptr, max_waiters)
 	} $else $if windows {
 		thread_pool_windows_futex_wake(ptr, max_waiters)
 	} $else $if wasm32_wasi {
