@@ -498,9 +498,10 @@ struct GlyphCacheEntry {
 }
 
 fn (k GlyphKey) packed_key() u64 {
-	assert k.opts.cell_width <= 3
+	cell_width := k.opts.cell_width or { u8(0) }
+	assert cell_width <= 3
 	assert k.opts.constraint_width <= 3
-	mut packed_opts := u16(k.opts.cell_width)
+	mut packed_opts := u16(cell_width)
 	if k.opts.thicken {
 		packed_opts |= u16(1) << 2
 	}

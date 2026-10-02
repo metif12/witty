@@ -1234,13 +1234,13 @@ pub:
 pub struct RenderOptions {
 pub mut:
 	// Ghostty stores this as ?u2 and packs null as zero in glyph cache keys.
-	// V uses zero as the equivalent sentinel; render call sites set 1 or 2.
-	cell_width       u32
+	// V has no u2; entry points validate the same two-bit range.
+	cell_width       ?u8
 	grid_metrics     Metrics
 	thicken          bool
 	thicken_strength u8 = 255
 	constraint       Constraint
-	constraint_width u32 = 1
+	constraint_width u8 = 1
 }
 
 // Constraint controls how a glyph is constrained to fit its cell.
@@ -1268,8 +1268,8 @@ pub mut:
 	relative_x      f64
 	relative_y      f64
 	// Maximum aspect ratio (width/height) to allow when stretching.
-	// 0 means no limit.
-	max_xy_ratio f64
+	// None means no limit; a present zero remains an active constraint.
+	max_xy_ratio ?f64
 	// Maximum number of cells horizontally to use.
 	max_constraint_width u8 = 2
 	// What to use as the height metric when constraining the glyph

@@ -89,7 +89,7 @@ pub fn sprite_face_render_glyph(mut atlas Atlas, cp u32, metrics Metrics, opts R
 		metrics: sprite_metrics(metrics)
 	}
 	rendered := face.render_glyph(cp, spritepkg.RenderOptions{
-		cell_width: opts.cell_width
+		cell_width: u32(opts.cell_width or { u8(1) })
 	})!
 	mut canvas := rendered.canvas
 	region := canvas.write_atlas(mut atlas)!

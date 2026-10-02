@@ -1843,6 +1843,8 @@ pub fn (self Face) copy_table(tag string) !freetype.SfntTableValue {
 //
 // Translated from ghostty/src/font/face.zig RenderOptions.Constraint.constrain
 pub fn (self Constraint) constrain(glyph GlyphSize, metrics Metrics, constraint_width u32) GlyphSize {
+	assert constraint_width <= 3
+	assert self.max_constraint_width <= 3
 	if !self.does_anything() {
 		return glyph
 	}
@@ -1985,9 +1987,8 @@ fn (self Constraint) scale_factors(group GlyphSize, metrics Metrics, min_constra
 		}
 	}
 
-	// Reduce aspect ratio if required. 0 means no limit.
-	if self.max_xy_ratio > 0 {
-		ratio := self.max_xy_ratio
+	// Reduce aspect ratio if required.
+	if ratio := self.max_xy_ratio {
 		if group.width * width_factor > group.height * height_factor * ratio {
 			width_factor = group.height * height_factor * ratio / group.width
 		}

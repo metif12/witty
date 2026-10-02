@@ -425,3 +425,13 @@ fn test_constraints() {
 		}, constraint.constrain(glyph_e0c0, metrics, 2))
 	}
 }
+
+fn test_constraint_optional_ratio_preserves_present_zero_and_negative() {
+	metrics := Metrics{ cell_width: 10, cell_height: 20, face_width: 10 }
+	glyph := GlyphSize{ width: 10, height: 10 }
+	assert Constraint{}.constrain(glyph, metrics, 1).width == 10
+	assert Constraint{ size: .stretch, max_xy_ratio: 0.0 }.constrain(glyph, metrics, 1).width == 0
+	assert Constraint{ size: .stretch, max_xy_ratio: -1.0 }.constrain(glyph, metrics, 1).width == -20
+	assert RenderOptions{}.cell_width == none
+	assert (RenderOptions{ cell_width: 0 }.cell_width or { u8(255) }) == 0
+}

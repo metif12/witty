@@ -6,7 +6,7 @@ import opentype
 
 fn test_coretext_render_options_match_source_defaults() {
 	opts := RenderOptions{}
-	assert opts.cell_width == 0
+	assert opts.cell_width == none
 	assert opts.constraint_width == 1
 	assert opts.thicken_strength == 255
 }

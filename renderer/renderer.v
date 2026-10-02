@@ -2554,9 +2554,9 @@ fn (mut self Renderer) add_glyph(x u16, y u16, color terminal.RGB, alpha u8, gly
 		grid_metrics:     self.grid_metrics
 		thicken:          self.config.font_thicken
 		thicken_strength: self.config.font_thicken_strength
-		cell_width:       cell_width
+		cell_width:       u8(cell_width)
 		constraint:       constraint
-		constraint_width: u32(constraint_width(raw_cells, raw_x, cols))
+		constraint_width: u8(constraint_width(raw_cells, raw_x, cols))
 	})!
 
 	// If the glyph is 0 width or height, it will be invisible
@@ -2604,7 +2604,7 @@ fn (mut self Renderer) add_cursor(cursor_state &terminal.RenderCursor, cursor_st
 
 	render := if cursor_style == .lock {
 		value := self.font_grid.render_codepoint(0xf023, .regular, .text, font.RenderOptions{
-			cell_width: if wide { u32(2) } else { u32(1) }
+			cell_width: if wide { u8(2) } else { u8(1) }
 			grid_metrics: self.grid_metrics
 		}) or {
 			log.warn('error rendering cursor glyph err=${err}')
@@ -2624,7 +2624,7 @@ fn (mut self Renderer) add_cursor(cursor_state &terminal.RenderCursor, cursor_st
 			.lock { panic('unreachable lock cursor') }
 		}
 		self.font_grid.render_glyph(font.Index.init_special(.sprite), u32(sprite), font.RenderOptions{
-			cell_width: if wide { u32(2) } else { u32(1) }
+			cell_width: if wide { u8(2) } else { u8(1) }
 			grid_metrics: self.grid_metrics
 		}) or {
 			log.warn('error rendering cursor glyph err=${err}')
