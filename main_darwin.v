@@ -162,7 +162,7 @@ fn do_new_window(source ?&TermState) bool {
 }
 fn new_controller_with_options(source ?&TermState,options apprt.SurfaceOptions,tab bool) bool {
 	mut parent:=voidptr(unsafe { nil })
-	if current:=source { if tab { if macos.quick_terminal_deny_tab(current.view) { return true }; parent=macos.view_window(current.view) } }
+	if current:=source { if tab { if macos.quick_terminal_deny_tab(current.view) || macos.native_tab_creation_denied(current.view) { return true }; parent=macos.view_window(current.view) } }
 	is_tab:=tab && parent != unsafe { nil }
 	if parent == unsafe { nil } { parent=macos.preferred_terminal_window() }
 	view := macos.create_restorable_window(800, 600, '')

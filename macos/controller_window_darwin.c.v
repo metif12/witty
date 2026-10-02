@@ -44,6 +44,22 @@ pub fn attach_native_new_tab(parent voidptr,view voidptr,at_end bool) {
 		msg_void2(anchor,'addTabbedWindow:ordered:',window,ObjId(1))
 	}
 }
+pub fn native_tab_creation_denied(view voidptr) bool {
+	window:=msg_id(view,'window')
+	if state:=g_fullscreen_states[u64(window)] {
+		if state.is_active() && state.mode!=.native {
+			alert:=msg_id(alloc('NSAlert'),'init')
+			msg_void1(alert,'setMessageText:',nsstring('Cannot Create New Tab'))
+			msg_void1(alert,'setInformativeText:',nsstring('New tabs are unsupported while in non-native fullscreen. Exit fullscreen and try again.'))
+			msg_id1(alert,'addButtonWithTitle:',nsstring('OK'))
+			msg_void_u64(alert,'setAlertStyle:',0)
+			msg_void2(alert,'beginSheetModalForWindow:completionHandler:',window,nil_obj())
+			msg_void(alert,'release')
+			return true
+		}
+	}
+	return false
+}
 pub fn detach_automatic_native_tab(view voidptr) {
 	window:=msg_id(view,'window')
 	if msg_u64(window,'styleMask') & u64(1<<14)!=0 { return }

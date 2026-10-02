@@ -39,3 +39,18 @@ fn test_native_restoration_class_and_secure_archive_protocol_are_live() {
 	assert !msg_bool(window,'isRestorable')
 	msg_void(window,'close')
 }
+fn test_new_tab_refuses_non_native_fullscreen_with_real_warning_sheet() {
+	app_init()
+	view:=create_window(160,100,'fullscreen tab probe')
+	window:=msg_id(view,'window')
+	assert !native_tab_creation_denied(view)
+	g_fullscreen_states[u64(window)]=&FullscreenState{window:window,mode:.non_native,saved:true}
+	assert native_tab_creation_denied(view)
+	sheet:=msg_id(window,'attachedSheet')
+	assert !is_nil(sheet)
+	msg_void1(window,'endSheet:',sheet)
+	msg_void1(sheet,'orderOut:',nil_obj())
+	g_fullscreen_states.delete(u64(window))
+	msg_void(window,'close')
+	msg_void(window,'release')
+}
