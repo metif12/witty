@@ -72,6 +72,9 @@ fn test_renderer_emits_health_transitions_and_dirty_scrollbar() {
 	assert capture.health_events == [.unhealthy, .healthy]
 	assert capture.health_timeouts == [.forever, .forever]
 
+	// Metal's offscreen API reports zero size without a view. OpenGL queries
+	// GL_VIEWPORT and needs a configured runtime context for a draw attempt.
+	$if renderer_metal ? || ((macos || ios) && !renderer_opengl ?) {
 	// A zero-sized renderer exits before GPU work, but the source renderer's
 	// deferred scrollbar delivery still runs for that draw attempt.
 	render.draw_frame(false)!
@@ -79,6 +82,7 @@ fn test_renderer_emits_health_transitions_and_dirty_scrollbar() {
 	assert capture.scrollbar_events[0].eql(render.scrollbar)
 	assert capture.scrollbar_timeouts == [.instant]
 	assert !render.scrollbar_dirty
+	}
 }
 
 fn test_frame_completion_always_releases_swap_chain_slot() {
@@ -860,6 +864,7 @@ fn test_balance_padding_caps_top_and_moves_excess_to_bottom() {
 
 // Verify the production row path shapes codepoints, rasterizes their glyphs,
 // and emits foreground cells backed by the shared font atlases.
+$if renderer_metal ? || ((macos || ios) && !renderer_opengl ?) {
 fn test_rebuild_row_shapes_and_renders_text() ! {
 	// The OpenGL renderer creates its frame buffers and shaders during init,
 	// so it needs a current GL context, which only GtkGLArea supplies. Metal
@@ -971,6 +976,8 @@ fn test_rebuild_row_shapes_and_renders_text() ! {
 	assert render.frame_index == 1
 	assert render.frames[1].target.width == 300
 	assert render.frames[1].target.height == 100
+}
+
 }
 
 fn test_background_color_alpha_uses_native_glass_material() {

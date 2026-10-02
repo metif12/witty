@@ -1033,9 +1033,11 @@ pub fn (mut self TerminalInspector) init(mut surface Surface) ! {
 // deinit destroys the inspector.
 pub fn (mut self TerminalInspector) deinit() {
 	self.surface.core_surface.deactivate_inspector()
+	$if macos || ios {
 	if self.metal_active {
 		self.context.metal_shutdown()
 		self.metal_active = false
+	}
 	}
 	self.context.destroy()
 	self.context = cimgui.Context{}
@@ -1046,6 +1048,7 @@ pub fn (mut self TerminalInspector) queue_render() {
 	self.surface.queue_inspector_render()
 }
 
+$if macos || ios {
 // init_metal initializes the inspector for a metal backend.
 pub fn (mut self TerminalInspector) init_metal(device voidptr) bool {
 	if self.metal_active {
@@ -1077,6 +1080,8 @@ pub fn (mut self TerminalInspector) render_metal(command_buffer voidptr, desc vo
 	}
 
 	self.context.metal_render(command_buffer, desc)
+}
+
 }
 
 // update_content_scale updates the inspector's content scale.
@@ -1927,6 +1932,7 @@ pub fn ghostty_surface_quicklook_word(mut surface Surface, mut result CAPIText) 
 	return read_text_locked(mut surface, selection, mut result)
 }
 
+$if macos || ios {
 // ghostty_inspector_metal_init initializes the inspector Metal backend.
 pub fn ghostty_inspector_metal_init(mut insp TerminalInspector, device voidptr) bool {
 	return insp.init_metal(device)
@@ -1946,4 +1952,6 @@ pub fn ghostty_inspector_metal_shutdown(mut insp TerminalInspector) {
 		insp.context.metal_shutdown()
 		insp.metal_active = false
 	}
+}
+
 }

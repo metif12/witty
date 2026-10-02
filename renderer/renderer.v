@@ -945,7 +945,7 @@ pub mut:
 
 // Initialize the renderer.
 pub fn Renderer.init(opts RendererOpts) !Renderer {
-	$if macos {
+	$if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 		return Renderer.init_metal(opts)
 	} $else {
 		return Renderer.init_opengl(opts)
@@ -991,6 +991,8 @@ pub fn (mut self Renderer) deinit() {
 			self.display_link.release()
 			self.display_link = unsafe { nil }
 		}
+	}
+	$if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 		self.deinit_metal_swap_chain()
 	} $else {
 		self.deinit_opengl_swap_chain()
@@ -1432,7 +1434,7 @@ pub fn (mut self Renderer) draw_frame(sync_ bool) ! {
 			self.scrollbar_dirty = false
 		}
 	}
-	$if macos {
+	$if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 		self.draw_frame_metal(sync_)!
 	} $else {
 		self.draw_frame_opengl(sync_)!
@@ -1610,8 +1612,7 @@ fn (mut self Renderer) update_screen_size_uniforms() {
 		self.size.screen.blank_padding(self.size.padding, self.cells.size, self.size.cell).add(self.size.padding)
 
 	// Setup our uniforms
-	self.uniforms.projection_matrix = mathutil.ortho2d(-1 * f32(self.size.padding.left), f32(
-		terminal_size.width + self.size.padding.right), f32(terminal_size.height +
+	self.uniforms.projection_matrix = mathutil.ortho2d(-1 * f32(self.size.padding.left), f32(terminal_size.width + self.size.padding.right), f32(terminal_size.height +
 		self.size.padding.bottom), -1 * f32(self.size.padding.top))
 	self.uniforms.grid_padding = [
 		f32(blank.top),
@@ -1811,13 +1812,13 @@ fn (mut self Renderer) update_custom_shader_uniforms_for_frame() ! {
 		mut pixel_x := f32(u32(cursor.grid_pos[0]) * cell.width + padding.left)
 		// Top edge of the cell the cursor is in
 		mut pixel_y := f32(u32(cursor.grid_pos[1]) * cell.height + padding.top)
-		$if !macos {
+		$if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 			pixel_y = f32(screen.height) - pixel_y
 		}
 
 		// Add the X bearing to get the left edge of the cursor
 		pixel_x += f32(cursor.bearings[0])
-		$if macos {
+		$if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 			pixel_y += f32(cell.height)
 			pixel_y -= f32(cursor.bearings[1])
 			pixel_y += f32(cursor.glyph_size[1])
@@ -2533,9 +2534,9 @@ fn (mut self Renderer) add_underline(x u16, y u16, style terminal.UnderlineStyle
 fn (mut self Renderer) add_overline(x u16, y u16, color terminal.RGB, alpha u8) ! {
 	render := self.font_grid.render_glyph(font.Index.init_special(.sprite),
 		u32(font.Sprite.overline), font.RenderOptions{
-		cell_width:   1
-		grid_metrics: self.grid_metrics
-	})!
+			cell_width:   1
+			grid_metrics: self.grid_metrics
+		})!
 
 	self.cells.add(.overline, CellText{
 		atlas:      .grayscale
@@ -2551,9 +2552,9 @@ fn (mut self Renderer) add_overline(x u16, y u16, color terminal.RGB, alpha u8) 
 fn (mut self Renderer) add_strikethrough(x u16, y u16, color terminal.RGB, alpha u8) ! {
 	render := self.font_grid.render_glyph(font.Index.init_special(.sprite),
 		u32(font.Sprite.strikethrough), font.RenderOptions{
-		cell_width:   1
-		grid_metrics: self.grid_metrics
-	})!
+			cell_width:   1
+			grid_metrics: self.grid_metrics
+		})!
 
 	self.cells.add(.strikethrough, CellText{
 		atlas:      .grayscale
@@ -2631,7 +2632,7 @@ fn (mut self Renderer) add_cursor(cursor_state &terminal.RenderCursor, cursor_st
 
 	render := if cursor_style == .lock {
 		value := self.font_grid.render_codepoint(0xf023, .regular, .text, font.RenderOptions{
-			cell_width: if wide { u8(2) } else { u8(1) }
+			cell_width:   if wide { u8(2) } else { u8(1) }
 			grid_metrics: self.grid_metrics
 		}) or {
 			log.warn('error rendering cursor glyph err=${err}')
@@ -2651,7 +2652,7 @@ fn (mut self Renderer) add_cursor(cursor_state &terminal.RenderCursor, cursor_st
 			.lock { panic('unreachable lock cursor') }
 		}
 		self.font_grid.render_glyph(font.Index.init_special(.sprite), u32(sprite), font.RenderOptions{
-			cell_width: if wide { u8(2) } else { u8(1) }
+			cell_width:   if wide { u8(2) } else { u8(1) }
 			grid_metrics: self.grid_metrics
 		}) or {
 			log.warn('error rendering cursor glyph err=${err}')
@@ -2721,7 +2722,7 @@ fn (mut self Renderer) add_preedit_cell(cp PreeditCodepoint, coord terminal.View
 // RendererOpts holds initialization options for the Renderer.
 pub struct RendererOpts {
 pub:
-	// Native NSView used for IOSurface presentation. Nil creates an off-screen
+	// Native NSView/UIView used for IOSurface presentation. Nil creates an off-screen
 	// Metal renderer, which is also used by focused renderer tests.
 	metal_view voidptr = unsafe { nil }
 	// Horizontal scale factor of the surface that owns metal_view.
@@ -2773,7 +2774,7 @@ pub enum Health as int {
 
 // This is called early right after surface creation.
 pub fn surface_init() ! {
-	$if linux {
+	$if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 		OpenGLAPI.surface_init()!
 	}
 }
@@ -2781,30 +2782,31 @@ pub fn surface_init() ! {
 // This is called just prior to spinning up the renderer thread for
 // final main thread setup requirements.
 pub fn (r &Renderer) finalize_surface_init() ! {
-	$if !macos {
+	$if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 		r.api.finalize_surface_init()!
 	}
 }
 
 // Callback called by renderer.Thread when it begins.
 pub fn (r &Renderer) thread_enter() ! {
-	$if !macos {
+	$if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 		r.api.thread_enter()!
 	}
 }
 
 // Callback called by renderer.Thread when it exits.
 pub fn (r &Renderer) thread_exit() {
-	$if !macos {
+	$if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 		r.api.thread_exit()
 	}
 }
 
 // Called by renderer.Thread when it starts the main loop.
 pub fn (mut r Renderer) loop_enter(render_thread &RendererThread) ! {
-	$if macos {
-		// If our API has to do things on loop enter, let it.
+	$if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 		r.api.loop_enter(&r)
+	}
+	$if macos {
 		if r.display_link == unsafe { nil } {
 			return
 		}
@@ -2829,7 +2831,7 @@ pub fn (mut r Renderer) loop_exit() {
 // reinitialized due to any of the events mentioned in
 // the doc comment for display_unrealized.
 pub fn (mut r Renderer) display_realized() ! {
-	$if macos {
+	$if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 		r.mark_dirty()
 		return
 	} $else {
@@ -2868,7 +2870,7 @@ pub fn (mut r Renderer) display_realized() ! {
 // This can happen because the surface is being closed but also when
 // moving the window between displays or splitting.
 pub fn (mut r Renderer) display_unrealized() {
-	$if !macos {
+	$if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 		if r.draw_mutex != unsafe { nil } {
 			r.draw_mutex.lock()
 			defer {

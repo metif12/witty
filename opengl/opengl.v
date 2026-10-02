@@ -26,6 +26,12 @@ import log
 
 #flag linux -ldl
 
+#flag freebsd -lGL
+
+#flag freebsd -ldl
+
+#flag windows -lopengl32
+
 #flag -I @VMODROOT/opengl
 
 $if !managed_native ? {

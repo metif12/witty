@@ -200,7 +200,8 @@ pub fn (d Driver) build_cimgui(options NativeCompileOptions) !string {
 	}
 	if d.cfg.target.os == 'macos' {
 		sources << 'vendor/imgui/backends/imgui_impl_osx.mm'
-	} else {
+	}
+	if d.cfg.renderer == 'opengl' {
 		sources << ['vendor/imgui/backends/imgui_impl_opengl3.cpp', 'opengl_bridge.cpp']
 	}
 	return d.compile_native('dcimgui', root, sources, options, flags)

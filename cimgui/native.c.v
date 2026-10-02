@@ -1,29 +1,35 @@
 module cimgui
 
 #flag -DIMGUI_USE_WCHAR32=1
-
 #flag -DIMGUI_DISABLE_OBSOLETE_FUNCTIONS=1
-
 #flag -I@VMODROOT/cimgui
-
 #flag -I@VMODROOT/cimgui/vendor/imgui
-
 #flag -I@VMODROOT/cimgui/vendor/dear_bindings
 
 $if !managed_native ? {
-	#flag @VMODROOT/cimgui/lib/libdcimgui_linux.a
+	$if macos {
+		#flag @VMODROOT/cimgui/lib/libdcimgui_darwin.a
+		#flag -L/opt/homebrew/lib
+		#flag -lfreetype
+	} $else $if linux {
+		#flag @VMODROOT/cimgui/lib/libdcimgui_linux.a
+		#pkgconfig freetype2
+	} $else {
+		$compile_error('this target requires the native archive graph (-d managed_native)')
+	}
 }
-
-$if !managed_native ? {
-	#pkgconfig freetype2
+$if macos || ios {
+	#flag -lc++
+	#flag -lobjc
+	#flag -framework Foundation
+	#flag -framework QuartzCore
+} $else {
+	#flag -lstdc++
+	#flag -lm
+	$if !windows {
+		#flag -ldl
+	}
 }
-
-#flag -lstdc++
-
-#flag -ldl
-
-// Dear ImGui calls libm, which glibc keeps in a separate library.
-#flag -lm
 
 #include "bridge.h"
 
@@ -246,14 +252,6 @@ fn C.witty_cimgui_tooltip(context voidptr, value &char)
 fn C.witty_cimgui_cursor_screen_y(context voidptr) f32
 
 fn C.witty_cimgui_mouse_y(context voidptr) f32
-
-fn C.witty_cimgui_opengl_init(context voidptr) bool
-
-fn C.witty_cimgui_opengl_shutdown(context voidptr)
-
-fn C.witty_cimgui_opengl_new_frame(context voidptr)
-
-fn C.witty_cimgui_opengl_render(context voidptr)
 
 pub fn available() bool {
 	return true
@@ -719,40 +717,4 @@ pub fn (ctx Context) cursor_screen_y() f32 {
 
 pub fn (ctx Context) mouse_y() f32 {
 	return C.witty_cimgui_mouse_y(ctx.handle)
-}
-
-pub fn (ctx Context) opengl_init() bool {
-	return C.witty_cimgui_opengl_init(ctx.handle)
-}
-
-pub fn (ctx Context) opengl_shutdown() {
-	C.witty_cimgui_opengl_shutdown(ctx.handle)
-}
-
-pub fn (ctx Context) opengl_new_frame() {
-	C.witty_cimgui_opengl_new_frame(ctx.handle)
-}
-
-pub fn (ctx Context) opengl_render() {
-	C.witty_cimgui_opengl_render(ctx.handle)
-}
-
-// The embedded C API exposes Metal entry points on every target even though
-// they are only usable on macOS. Keep that cross-platform API shape while the
-// Linux inspector uses the OpenGL methods above.
-pub fn (ctx Context) metal_init(device voidptr) bool {
-	_ = ctx
-	_ = device
-	return false
-}
-
-pub fn (ctx Context) metal_shutdown() {}
-
-pub fn (ctx Context) metal_new_frame(descriptor voidptr) {
-	_ = descriptor
-}
-
-pub fn (ctx Context) metal_render(command_buffer voidptr, descriptor voidptr) {
-	_ = command_buffer
-	_ = descriptor
 }
