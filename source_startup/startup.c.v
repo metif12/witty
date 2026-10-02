@@ -7,5 +7,6 @@ module source_startup
 fn C.witty_source_startup_sigpipe() int
 
 pub fn prepare() {
-	assert C.witty_source_startup_sigpipe() == 0
+	status := C.witty_source_startup_sigpipe()
+	if status != 0 { panic('unreachable sigaction failure') }
 }
