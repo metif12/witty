@@ -8,7 +8,6 @@ import buildcfg
 import build_meta
 import command as commandpkg
 import configpkg
-import crash
 import datastruct
 import internal_os
 import log
@@ -20,67 +19,6 @@ import time
 import xev
 
 #include "@VMODROOT/command_exec.h"
-
-// C interop declarations for process management.
-#include <signal.h>
-
-#include <unistd.h>
-
-#include <poll.h>
-
-#include <fcntl.h>
-
-#include <sys/wait.h>
-
-fn C.pipe(fds voidptr) int
-
-fn C.close(fd int) int
-
-fn C.access(path &char, mode int) int
-
-fn C.witty_read_retry(fd int, buf voidptr, count usize) int
-
-fn C.witty_read_error_kind() int
-
-fn C.write(fd int, buf voidptr, count usize) int
-
-fn C.poll(fds voidptr, nfds u32, timeout int) int
-
-fn C.fcntl(fd i32, cmd i32, arg ...voidptr) i32
-
-fn C.kill(pid int, sig int) int
-
-fn C.killpg(pgrp int, sig int) int
-
-fn C.getpgid(pid int) int
-
-fn C.waitpid(pid int, status &int, options int) int
-
-fn C._exit(status int)
-
-// Signal constants
-const sig_hup = int(C.SIGHUP)
-
-// fcntl constants
-const f_getfl = int(C.F_GETFL)
-const f_setfl = int(C.F_SETFL)
-const o_nonblock = int(C.O_NONBLOCK)
-const f_ok = int(C.F_OK)
-
-// poll event flags
-const pollin = i16(int(C.POLLIN))
-const pollhup = i16(int(C.POLLHUP))
-
-// waitpid options
-const wnohang = int(C.WNOHANG)
-
-// pollfd struct for C.poll()
-struct PollFd {
-mut:
-	fd      int
-	events  i16
-	revents i16
-}
 
 const log_tag = 'io_exec'
 
@@ -167,7 +105,13 @@ pub fn (mut self Exec) thread_enter(mut io Termio, mut td ThreadData) ! {
 	match process_value {
 		SubprocessForkExec {
 			pid := process_value.command.pid or { return error('ProcessNoPid') }
-			process = xev.Process.init(pid)!
+			$if windows {
+				// The source process watcher takes the process HANDLE, not its
+				// numeric process ID. Command retains both for its public ABI.
+				process = xev.Process.init(process_value.command.process_handle)!
+			} $else {
+				process = xev.Process.init(pid)!
+			}
 		}
 		SubprocessFlatpak {
 			// The host process cannot be watched through the local process API.
@@ -190,8 +134,8 @@ pub fn (mut self Exec) thread_enter(mut io Termio, mut td ThreadData) ! {
 	pipe := internal_os.pipe()!
 	defer {
 		if !ok {
-			C.close(pipe[0])
-			C.close(pipe[1])
+			pty.close_fd(pty.Fd(pipe[0]))
+			pty.close_fd(pty.Fd(pipe[1]))
 		}
 	}
 
@@ -214,7 +158,7 @@ pub fn (mut self Exec) thread_enter(mut io Termio, mut td ThreadData) ! {
 	}
 
 	// Start our read thread
-	read_thread := spawn thread_main_posix(pty_fds.read, pipe[0], io)
+	read_thread := spawn_reader(pty_fds.read, pipe[0], io)
 	ok = true
 
 	// Setup our threadata backend state to be our own
@@ -226,7 +170,7 @@ pub fn (mut self Exec) thread_enter(mut io Termio, mut td ThreadData) ! {
 			write_req_pool:   datastruct.SegmentedPool.init[xev.WriteRequest](exec_write_req_prealloc)
 			write_buf_pool:   datastruct.SegmentedPool.init[ExecWriteBuf](exec_write_req_prealloc)
 			read_thread:      read_thread
-			read_thread_pipe: pipe[1]
+			read_thread_pipe: pty.Fd(pipe[1])
 			read_thread_fd:   pty_fds.read
 			termios_timer:    termios_timer
 		}
@@ -267,13 +211,27 @@ pub fn (mut self Exec) thread_exit(mut td ThreadData) {
 	// Quit our read thread after exiting the subprocess so that
 	// we don't get stuck waiting for data to stop flowing if it is
 	// a particularly noisy process.
-	quit_byte := [u8(`x`)]
-	if C.write(exec.read_thread_pipe, quit_byte.data, 1) < 0 {
-		// BrokenPipe means that our read thread is closed already,
-		// which is completely fine since that is what we were trying
-		// to achieve.
-		if C.errno != C.EPIPE {
-			log.warn('error writing to read thread quit pipe err=${os.posix_get_error_msg(C.errno)}')
+	$if windows {
+		mut written := u32(0)
+		quit_byte := u8(`x`)
+		if !C.WriteFile(exec.read_thread_pipe, &quit_byte, 1, &written, unsafe { nil }) {
+			code := C.GetLastError()
+			if code != 109 { // ERROR_BROKEN_PIPE
+				log.warn('error writing to read thread quit pipe err=${code}')
+			}
+		}
+		// Interrupt the blocking ReadFile before joining so the reader can
+		// inspect the quit pipe. ERROR_NOT_FOUND means no request is pending.
+		if C.CancelIoEx(exec.read_thread_fd, unsafe { nil }) == 0 {
+			code := C.GetLastError()
+			if code != 1168 { log.warn('error interrupting read thread err=${code}') }
+		}
+	} $else {
+		quit_byte := [u8(`x`)]
+		if C.write(exec.read_thread_pipe, quit_byte.data, 1) < 0 {
+			if C.errno != C.EPIPE {
+				log.warn('error writing to read thread quit pipe err=${os.posix_get_error_msg(C.errno)}')
+			}
 		}
 	}
 
@@ -530,8 +488,8 @@ pub mut:
 
 	// Reader thread state
 	read_thread      ?thread
-	read_thread_pipe int = -1
-	read_thread_fd   int = -1
+	read_thread_pipe pty.Fd
+	read_thread_fd   pty.Fd
 
 	// The timer to detect termios state changes.
 	termios_timer         xev.Timer
@@ -544,7 +502,7 @@ pub mut:
 }
 
 pub fn (mut self ExecThreadData) deinit() {
-	C.close(self.read_thread_pipe)
+	pty.close_fd(self.read_thread_pipe)
 
 	// Clear our write pools. We know we aren't ever going to do
 	// any more IO since we stop our data stream below so we can just
@@ -818,7 +776,7 @@ pub fn (mut self Subprocess) start() !PtyFds {
 	mut started := false
 	defer {
 		if !in_child && !started {
-			p.close_slave()
+			$if !windows { p.close_slave() }
 			p.deinit()
 			self.pty_ = none
 		}
@@ -879,7 +837,7 @@ pub fn (mut self Subprocess) start() !PtyFds {
 					command: command
 				})
 				log.info('started subcommand on host via flatpak API path=${self.args[0]} pid=${pid}')
-				p.close_slave()
+				$if !windows { p.close_slave() }
 				self.env = none
 				started = true
 				return PtyFds{
@@ -894,17 +852,22 @@ pub fn (mut self Subprocess) start() !PtyFds {
 	// backend. Command owns the fork/exec, environment, descriptor, cgroup,
 	// working-directory, and pre-exec contracts.
 	mut cmd := commandpkg.Command{
-		path:         self.args[0]
-		args:         self.args
-		env:          self.env
-		cwd:          if cwd.len > 0 { cwd } else { none }
-		stdin_fd:     p.slave
-		stdout_fd:    p.slave
-		stderr_fd:    p.slave
-		pre_exec:     subprocess_child_pre_exec
+		path: self.args[0]
+		args: self.args
+		env: self.env
+		cwd: if cwd.len > 0 { cwd } else { none }
 		linux_cgroup: self.linux_cgroup
-		data:         voidptr(self)
+		data: voidptr(self)
 	}
+	$if windows {
+		cmd.pseudo_console = p.pseudo_console
+	} $else {
+		cmd.stdin_fd = p.slave
+		cmd.stdout_fd = p.slave
+		cmd.stderr_fd = p.slave
+		cmd.pre_exec = subprocess_child_pre_exec
+	}
+
 	cmd.start() or {
 		if commandpkg.is_exec_failed_in_child(err) {
 			in_child = true
@@ -922,15 +885,16 @@ pub fn (mut self Subprocess) start() !PtyFds {
 
 	// Close the slave fd in the parent. The child has already
 	// inherited it via fork and duped it to stdin/stdout/stderr.
-	p.close_slave()
+	$if !windows { p.close_slave() }
 
 	// We can free the env now that the child has it.
 	self.env = none
 	started = true
 
-	return PtyFds{
-		read:  p.master
-		write: p.master
+	$if windows {
+		return PtyFds{read: p.out_pipe, write: p.in_pipe}
+	} $else {
+		return PtyFds{read: p.master, write: p.master}
 	}
 }
 
@@ -973,110 +937,22 @@ pub fn (mut self Subprocess) stop() {
 // exit code.
 fn kill_command(command commandpkg.Command) ! {
 	if pid := command.pid {
-		kill_pid(pid)!
-	}
-}
-
-fn kill_pid(pid int) ! {
-	pgid := subprocess_getpgid(pid) or { return }
-
-	// It is possible to send a killpg between the time that
-	// our child process calls setsid but before or simultaneous
-	// to calling execve. In this case, the direct child dies
-	// but grandchildren survive. To work around this, we loop
-	// and repeatedly kill the process group until all
-	// descendents are well and truly dead. We will not rest
-	// until the entire family tree is obliterated.
-	for {
-		if C.killpg(pgid, sig_hup) != 0 {
-			errno := C.errno
-			mut ignore := false
-			$if macos {
-				// killpg failed with EPERM, expected on Darwin and ignoring
-				ignore = errno == C.EPERM
-				if ignore {
-					log.debug('killpg failed with EPERM, expected on Darwin and ignoring')
-				}
+		$if windows {
+			if C.TerminateProcess(command.process_handle, 0) == 0 {
+				return error('Unexpected: ${C.GetLastError()}')
 			}
-			if !ignore {
-				log.warn('error killing process group pgid=${pgid} err=${errno}')
-				return error('KillFailed')
-			}
-		} else {
-			log.debug('process group killed pgid=${pgid}')
+			mut cmd := command
+			_ = cmd.wait(false)!
+		} $else {
+			kill_pid(pid)!
 		}
-
-		// See Command.zig wait for why we specify WNOHANG.
-		// The gist is that it lets us detect when children
-		// are still alive without blocking so that we can
-		// kill them again.
-		mut status := 0
-		res := C.waitpid(pid, &status, wnohang)
-		log.debug('waitpid result=${res}')
-		if res != 0 {
-			break
-		}
-		time.sleep(10 * time.millisecond)
 	}
-}
-
-fn subprocess_getpgid(pid int) ?int {
-	// Get our process group ID. Before the child pid calls setsid
-	// the pgid will be ours because we forked it. Its possible that
-	// we may be calling this before setsid if we are killing a surface
-	// VERY quickly after starting it.
-	my_pgid := C.getpgid(0)
-
-	// We loop while pgid == my_pgid. The expectation if we have a valid
-	// pid is that setsid will eventually be called because it is the
-	// FIRST thing the child process does and as far as I can tell,
-	// setsid cannot fail. I'm sure that's not true, but I'd rather
-	// have a bug reported than defensively program against it now.
-	for {
-		pgid := C.getpgid(pid)
-		if pgid == my_pgid {
-			log.warn('pgid is our own, retrying')
-			time.sleep(10 * time.millisecond)
-			continue
-		}
-
-		// Don't know why it would be zero but its not a valid pid
-		if pgid == 0 {
-			return none
-		}
-
-		// If the pid doesn't exist then... we're done!
-		if pgid == C.ESRCH {
-			return none
-		}
-
-		// If we have an error we're done.
-		if pgid < 0 {
-			log.warn('error getting pgid for kill')
-			return none
-		}
-
-		return pgid
-	}
-	return none
 }
 
 // Kill the underlying process started via Flatpak host command.
 // This sends a signal via the Flatpak API.
 fn kill_command_flatpak(mut command internal_os.FlatpakHostCommand) ! {
 	command.signal(u8(sig_hup), true)!
-}
-
-// This runs in the forked child after Command has redirected the standard
-// descriptors and before it replaces the process image.
-fn subprocess_child_pre_exec(mut cmd commandpkg.Command) {
-	mut subprocess := unsafe { &Subprocess(cmd.get_data()) }
-	subprocess.child_pre_exec() or { log.error('error initializing child: ${err}') }
-}
-
-fn (self &Subprocess) child_pre_exec() ! {
-	p := self.pty_ or { return error('subprocess pty is unavailable') }
-	p.child_pre_exec()!
 }
 
 // Resize the pty subprocess. This is safe to call anytime.
@@ -1133,121 +1009,6 @@ pub struct ReadThread {}
 //
 // io may be null (e.g. in tests / non-wired usage) in which case data is
 // simply drained.
-pub fn thread_main_posix(fd int, quit int, io &Termio) {
-	// Always close our end of the pipe when we exit.
-	defer {
-		C.close(quit)
-	}
-
-	$if macos {
-		internal_os.set_thread_name('io-reader')
-	}
-
-	has_crash_state := io != unsafe { nil }
-	if has_crash_state {
-		crash.set_thread_state(crash.ThreadState{
-			kind:    .io
-			surface: io.surface_mailbox.surface
-		})
-	}
-	defer {
-		if has_crash_state {
-			crash.clear_thread_state()
-		}
-	}
-
-	// Take a mutable alias to the Termio so we can call process_output.
-	mut tio := unsafe { io }
-
-	// Set the fd to non-blocking so we can try to read in a tight loop
-	// and only fall back to poll when there's no data.
-	flags := C.fcntl(fd, f_getfl, 0)
-	if flags >= 0 {
-		if C.fcntl(fd, f_setfl, flags | o_nonblock) < 0 {
-			log.warn('read thread failed to set flags err=${os.posix_get_error_msg(C.errno)}')
-			log.warn("this isn't a fatal error, but may cause performance issues")
-		}
-	} else {
-		log.warn('read thread failed to get flags err=${os.posix_get_error_msg(C.errno)}')
-		log.warn("this isn't a fatal error, but may cause performance issues")
-	}
-
-	// Build up the list of fds we're going to poll. We watch for data
-	// on the pty fd and our quit notification pipe.
-	mut pollfds := [2]PollFd{}
-	pollfds[0] = PollFd{
-		fd:      fd
-		events:  pollin
-		revents: 0
-	}
-	pollfds[1] = PollFd{
-		fd:      quit
-		events:  pollin
-		revents: 0
-	}
-
-	mut buf := [1024]u8{}
-	for {
-		// Inner loop: try to read as much as possible without blocking.
-		// We only check the quit fd when the main fd blocks. This optimizes
-		// for the realistic scenario that data will eventually stop while
-		// we're trying to quit.
-		for {
-			n := C.witty_read_retry(fd, &buf[0], usize(1024))
-			if n < 0 {
-				match C.witty_read_error_kind() {
-					// No more data, fall back to poll and check for exit
-					// conditions.
-					1 {
-						break
-					}
-					// The pty is closed. We're probably gracefully shutting down.
-					2 {
-						log.info('io reader exiting')
-						return
-					}
-					// The pinned implementation treats all other read errors as
-					// unreachable because continuing would hide an IO failure.
-					else {
-						log.error('io reader error err=${os.posix_get_error_msg(C.errno)}')
-						panic('unexpected pty read error')
-					}
-				}
-			}
-			if n == 0 {
-				// EOF - this happens on macOS when the child process dies.
-				break
-			}
-			// Successfully read data. Forward it to the Termio for
-			// processing (escape-code parsing + terminal state mutation).
-			if tio != unsafe { nil } {
-				chunk := unsafe { buf[..int(n)].clone() }
-				tio.process_output(chunk)
-			}
-		}
-
-		// Wait for data using poll with infinite timeout (-1).
-		pollfds[0].revents = 0
-		pollfds[1].revents = 0
-		poll_result := C.poll(&pollfds[0], u32(2), -1)
-		if poll_result < 0 {
-			log.warn('poll failed on read thread, exiting early err=${os.posix_get_error_msg(C.errno)}')
-			return
-		}
-
-		// If our quit fd is readable, we're done.
-		if pollfds[1].revents & pollin != 0 {
-			log.info('read thread got quit signal')
-			return
-		}
-
-		// If the pty fd has HUP, the child process has closed the pty.
-		if pollfds[0].revents & pollhup != 0 {
-			log.info('pty fd closed, read thread exiting')
-			return
-		}
-	}
-}
 
 fn exec_flatpak_exit(td_ voidptr, _ &xev.Loop, _ &internal_os.FlatpakCompletion, r ?IError, exit_code u8) {
 	if _ := r {
