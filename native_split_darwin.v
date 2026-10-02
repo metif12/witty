@@ -22,19 +22,23 @@ fn do_new_split(current &TermState, direction apprt.SplitDirection) bool {
 fn do_goto_split(current &TermState, direction apprt.GotoSplit) bool {
 	if current.controller == unsafe { nil } { return false }
 	mut host := current.controller.host
+	if host.tree.root == unsafe { nil } || host.tree.root.is_leaf() { return false }
 	node := host.tree.root.find(current.view) or { return false }
-	view := host.tree.focus_target(match direction { .previous { macos.SplitFocusDirection.previous } .next { .next } .left { .left } .right { .right } .up { .up } .down { .down } }, node) or { return true }
+	view := host.tree.focus_target(match direction { .previous { macos.SplitFocusDirection.previous } .next { .next } .left { .left } .right { .right } .up { .up } .down { .down } }, node) or { return false }
 	if host.tree.zoomed != unsafe { nil } {
-		host.replace_tree(macos.NativeSplitTree{root: host.tree.root, zoomed: host.tree.root.find(view) or { unsafe { &macos.NativeSplitNode(nil) } }})
+		host.replace_tree(macos.NativeSplitTree{root: host.tree.root, zoomed: if current.native_config.preserve_split_zoom { host.tree.root.find(view) or { unsafe { &macos.NativeSplitNode(nil) } } } else { unsafe { &macos.NativeSplitNode(nil) } }})
 	}
-	macos.focus_split_view(view)
+	macos.invalidate_native_restorable_state(host.container)
+	macos.dispatch_main(focus_controller_view,view)
 	return true
 }
 fn do_resize_split(current &TermState, data apprt.ResizeSplit) bool {
 	if current.controller == unsafe { nil } { return false }
 	mut host := current.controller.host
+	if host.tree.root == unsafe { nil } || host.tree.root.is_leaf() { return false }
 	node := host.tree.root.find(current.view) or { return false }
-	tree := host.tree.resizing(node, data.amount, match data.direction { .left { macos.SplitFocusDirection.left } .right { .right } .up { .up } .down { .down } }, macos.SplitBounds{width: macos.view_width(host.container), height: macos.view_height(host.container)}) or { return false }
+	tree := host.tree.resizing(node, data.amount, match data.direction { .left { macos.SplitFocusDirection.left } .right { .right } .up { .up } .down { .down } }, macos.SplitBounds{width: macos.view_width(host.container), height: macos.view_height(host.container)}) or { return true }
 	host.replace_tree(tree)
+	macos.invalidate_native_restorable_state(host.container)
 	return true
 }

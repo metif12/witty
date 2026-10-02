@@ -19,6 +19,7 @@ pub:
 	blur i16
 	step_resize bool
 	proxy_icon bool = true
+	preserve_split_zoom bool
 }
 pub fn native_color_luminance(color u32) f64 {
 	return (0.299 * f64((color >> 16) & 255) + 0.587 * f64((color >> 8) & 255) + 0.114 * f64(color & 255)) / 255

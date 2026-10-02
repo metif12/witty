@@ -379,14 +379,18 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 			}
 		}
 		.equalize_splits {
-			if current := state { if current.controller != unsafe { nil } { mut host := current.controller.host; host.replace_tree(host.tree.equalized()); return true } }
+			if current := state { if current.controller != unsafe { nil } && current.controller.host.tree.root.find(current.view) != none { mut host := current.controller.host; host.replace_tree(host.tree.equalized()); macos.invalidate_native_restorable_state(host.container) } }
+			return true
 		}
 		.toggle_split_zoom {
 			if current := state {
 				if current.controller != unsafe { nil } {
 					mut host := current.controller.host
+					if host.tree.root == unsafe { nil } || host.tree.root.is_leaf() { return false }
 					node := host.tree.root.find(current.view) or { return false }
-					host.replace_tree(macos.NativeSplitTree{root: host.tree.root, zoomed: if host.tree.zoomed == unsafe { nil } { node } else { unsafe { &macos.NativeSplitNode(nil) } }})
+					host.replace_tree(macos.NativeSplitTree{root: host.tree.root, zoomed: if host.tree.zoomed == node { unsafe { &macos.NativeSplitNode(nil) } } else { node }})
+					macos.invalidate_native_restorable_state(host.container)
+					macos.focus_native_window(macos.view_window(host.container))
 					return true
 				}
 			}
