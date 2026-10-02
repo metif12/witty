@@ -6,28 +6,229 @@ import internal_hash
 pub struct AutoHashContext[K] {}
 
 pub fn (_ AutoHashContext[K]) hash(key K) u64 {
-	return internal_hash.wyhash(auto_hash_bytes(key), 0)
+	validate_auto_hash_key[K](key)
+	return internal_hash.wyhash(auto_hash_bytes[K](key), 0)
 }
 
 pub fn (_ AutoHashContext[K]) eql(a K, b K) bool {
-	return a == b
+	return auto_hash_eql[K](a, b)
 }
 
-// std.hash.autoHash visits struct fields individually, excluding padding.
-// Slices/strings require an explicit context, just as in the source factory.
+// std.hash.autoHash's typeContainsSlice intentionally descends only into
+// structs and tagged unions. Optionals and fixed arrays use shallow slices.
+fn validate_auto_hash_key[K](key K) {
+	$if K is $option {
+		return
+	} $else $if K.unaliased_typ is $array_fixed {
+		return
+	} $else $if K.unaliased_typ is string || K.unaliased_typ is $array {
+		$compile_error('source std.hash.autoHash rejects slices; supply an explicit context')
+	} $else $if K.unaliased_typ is $struct {
+		$for method in K.methods {
+			$if method.name == 'source_auto_hash_bytes' { return }
+		}
+		$for field in K.fields {
+			validate_auto_hash_key(key.$(field.name))
+		}
+	} $else $if K.unaliased_typ is $sumtype {
+		$for variant in K.variants {
+			if key is variant {
+				value := key
+				validate_auto_hash_key(value)
+			}
+		}
+	}
+}
+
+fn auto_hash_eql[K](a K, b K) bool {
+	$if K is $option {
+		if av := a {
+			if bv := b { return auto_hash_eql(av, bv) }
+			return false
+		}
+		return b == none
+	} $else $if K.unaliased_typ is IError {
+		return a.code() == b.code()
+	} $else $if K.unaliased_typ is $pointer || K.unaliased_typ is $function {
+		return usize(voidptr(a)) == usize(voidptr(b))
+	} $else $if K.unaliased_typ is string {
+		return a.str == b.str && a.len == b.len
+	} $else $if K.unaliased_typ is $array_fixed {
+		for i, array_value in a {
+			if !auto_hash_eql(array_value, b[i]) { return false }
+		}
+		return true
+	} $else $if K.unaliased_typ is $array {
+		return a.data == b.data && a.len == b.len
+	} $else $if K.unaliased_typ is $struct {
+		$for method in K.methods {
+			$if method.name == 'source_auto_hash_eql' { return a.source_auto_hash_eql(b) }
+		}
+		$for field in K.fields {
+			if !auto_hash_eql(a.$(field.name), b.$(field.name)) { return false }
+		}
+		return true
+	} $else $if K.unaliased_typ is $sumtype {
+		$for variant in K.variants {
+			if a is variant {
+				if b is variant {
+					union_a := a
+					union_b := b
+					return auto_hash_eql(union_a, union_b)
+				}
+				return false
+			}
+		}
+		panic('invalid tagged union')
+	} $else {
+		return a == b
+	}
+}
+
+// Source std.hash.autoHash hashes shallow pointer addresses, field values,
+// active tagged payloads, and present optional payloads. Dynamic arrays and
+// strings require an explicit context; floating-point keys are rejected.
 fn auto_hash_bytes[K](key K) []u8 {
-	$if K is $struct {
+	$if K is $option {
+		return auto_hash_direct_optional_bytes(key)
+	} $else $if K.unaliased_typ is $pointer || K.unaliased_typ is $function {
+		address := usize(voidptr(key))
+		return auto_hash_bytes(address)
+	} $else $if K.unaliased_typ is string {
+		mut bytes := auto_hash_bytes(usize(key.str))
+		bytes << auto_hash_bytes(usize(key.len))
+		return bytes
+	} $else $if K.unaliased_typ is $array_fixed {
+		return auto_hash_fixed_array_bytes(key[..])
+	} $else $if K.unaliased_typ is $array {
+		mut bytes := auto_hash_bytes(usize(key.data))
+		bytes << auto_hash_bytes(usize(key.len))
+		return bytes
+	} $else $if K.unaliased_typ is $struct {
+		$for method in K.methods {
+			$if method.name == 'source_auto_hash_bytes' { return key.source_auto_hash_bytes() }
+		}
 		mut bytes := []u8{}
 		$for field in K.fields {
 			bytes << auto_hash_bytes(key.$(field.name))
 		}
 		return bytes
-	} $else $if K is $int || K is $float || K is $enum || K is bool {
+	} $else $if K.unaliased_typ is $sumtype {
+		mut count := usize(0)
+		$for _ in K.variants {
+			count++
+		}
+		mut index := usize(0)
+		$for variant in K.variants {
+			if key is variant {
+				mut tag := []u8{}
+				mut remaining := count - 1
+				mut ordinal := index
+				for remaining > 0 {
+					tag << u8(ordinal)
+					ordinal >>= 8
+					remaining >>= 8
+				}
+				union_value := key
+				tag << auto_hash_bytes(union_value)
+				return tag
+			}
+			index++
+		}
+		panic('invalid tagged union')
+	} $else $if K.unaliased_typ is IError {
+		code := key.code()
+		assert code > 0 && code <= 65535, 'source ErrorSet requires a nonzero u16 numeric error ID'
+		numeric := u16(code)
+		return unsafe { (&u8(&numeric)).vbytes(2).clone() }
+	} $else $if K.unaliased_typ is $int || K.unaliased_typ is $enum || K.unaliased_typ is bool {
 		return unsafe { (&u8(&key)).vbytes(int(sizeof(K))).clone() }
 	} $else {
-		$compile_error('AutoOffsetHashMap requires an explicit context for pointer/slice/union keys')
+		$compile_error('AutoOffsetHashMap key type is rejected by source std.hash.autoHash; supply an explicit context')
 		return []u8{}
 	}
+}
+
+fn auto_hash_direct_optional_bytes[T](key ?T) []u8 {
+	$if T.unaliased_typ is $pointer {
+		if key != none { return auto_hash_bytes(usize(key)) }
+		return auto_hash_bytes(usize(0))
+	} $else {
+		if key != none { return auto_hash_bytes[T](key) }
+		return []u8{}
+	}
+}
+
+fn auto_hash_fixed_array_bytes[T](values []T) []u8 {
+	mut bytes := []u8{}
+	for element in values {
+		bytes << auto_hash_bytes(element)
+	}
+	return bytes
+}
+
+// The pinned V compiler strips ?T from nested generic context arguments and
+// rejects pointers to optional generic keys. Keep source optionals as ordinary
+// first-class values at the map boundary; their hash/equality use only the
+// selected payload. Callers infer T by passing a direct ?T value.
+pub struct SourceHashOptional[T] {
+pub:
+	value   T
+	is_some bool
+}
+
+pub fn source_hash_optional[T](value ?T) SourceHashOptional[T] {
+	if value != none { return SourceHashOptional[T]{
+			value:   value
+			is_some: true
+		} }
+	return SourceHashOptional[T]{}
+}
+
+fn (key SourceHashOptional[T]) source_auto_hash_bytes() []u8 {
+	$if T.unaliased_typ is $pointer {
+		if key.is_some { return auto_hash_bytes(usize(key.value)) }
+		return auto_hash_bytes(usize(0))
+	} $else {
+		if key.is_some { return auto_hash_bytes(key.value) }
+		return []u8{}
+	}
+}
+
+fn (key SourceHashOptional[T]) source_auto_hash_eql(other SourceHashOptional[T]) bool {
+	if key.is_some != other.is_some { return false }
+	if !key.is_some { return true }
+	return auto_hash_eql(key.value, other.value)
+}
+
+pub fn auto_offset_optional_hash_map_inferred[T, V](buf OffsetBuf, capacity u32, key ?T, value V) GenericOffsetHashMap[SourceHashOptional[T], V, AutoHashContext[SourceHashOptional[T]]] {
+	_ = key
+	_ = value
+	return auto_offset_hash_map_init[SourceHashOptional[T], V](buf,
+		generic_hash_map_layout[SourceHashOptional[T], V](capacity))
+}
+
+// V has no first-class Result value. This adapter follows std.hash.hash's
+// error_union case: numeric error ID on failure, payload on success.
+pub struct SourceHashResult[T] {
+pub:
+	is_error   bool
+	error_code u16
+	value      T
+}
+
+fn (key SourceHashResult[T]) source_auto_hash_bytes() []u8 {
+	if key.is_error {
+		assert key.error_code > 0
+		return auto_hash_bytes(key.error_code)
+	}
+	return auto_hash_bytes(key.value)
+}
+
+fn (key SourceHashResult[T]) source_auto_hash_eql(other SourceHashResult[T]) bool {
+	if key.is_error != other.is_error { return false }
+	if key.is_error { return key.error_code == other.error_code }
+	return auto_hash_eql(key.value, other.value)
 }
 
 pub fn auto_offset_hash_map_init[K, V](buf OffsetBuf, layout HashMapLayout) GenericOffsetHashMap[K, V, AutoHashContext[K]] {
