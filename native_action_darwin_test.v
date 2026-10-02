@@ -121,6 +121,19 @@ fn test_native_fullscreen_and_split_dispatch_source_predicates() {
 	})
 	assert host.tree.root == before.root
 	assert host.tree.zoomed == before.zoomed
+	// BaseTerminalController owns the app-level navigation preservation policy;
+	// the focused SurfaceView's local configuration does not override it.
+	controller.app_config = macos.NativeWindowConfig{ preserve_split_zoom: true }
+	current.native_config = macos.NativeWindowConfig{ preserve_split_zoom: false }
+	first_node := host.tree.root.find(first) or { panic('missing first split') }
+	second_node := host.tree.root.find(second) or { panic('missing second split') }
+	host.replace_tree(macos.NativeSplitTree{ root: before.root, zoomed: first_node })
+	assert runtime_action(unsafe { nil }, target, apprt.RuntimeAction{ action: .goto_split, data: apprt.GotoSplit.next })
+	assert host.tree.zoomed == second_node
+	controller.app_config = macos.NativeWindowConfig{ preserve_split_zoom: false }
+	current.native_config = macos.NativeWindowConfig{ preserve_split_zoom: true }
+	assert runtime_action(unsafe { nil }, target, apprt.RuntimeAction{ action: .goto_split, data: apprt.GotoSplit.next })
+	assert host.tree.zoomed == unsafe { nil }
 	// App.swift's resize/zoom checks require a split window, while their
 	// notification consumers separately ignore an absent tree node.
 	current.view = host.container
