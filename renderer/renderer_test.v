@@ -954,3 +954,14 @@ fn test_rebuild_row_shapes_and_renders_text() ! {
 	assert render.frames[1].target.width == 300
 	assert render.frames[1].target.height == 100
 }
+
+fn test_background_color_alpha_uses_native_glass_material() {
+	assert background_color_alpha(0.5, configpkg.BackgroundBlurFalse{}) == 128
+	$if macos {
+		assert background_color_alpha(0.5, configpkg.BackgroundBlurMacosGlassRegular{}) == 0
+		assert background_color_alpha(0.5, configpkg.BackgroundBlurMacosGlassClear{}) == 0
+	} $else {
+		assert background_color_alpha(0.5, configpkg.BackgroundBlurMacosGlassRegular{}) == 128
+		assert background_color_alpha(0.5, configpkg.BackgroundBlurMacosGlassClear{}) == 128
+	}
+}

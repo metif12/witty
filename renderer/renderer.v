@@ -1252,7 +1252,7 @@ pub fn (mut self Renderer) update_frame(state &RenderState, cursor_blink_visible
 	}
 
 	// Update our background color.
-	bg_alpha := background_opacity_alpha(self.config.background_opacity)
+	bg_alpha := background_color_alpha(self.config.background_opacity, self.config.background_blur)
 	self.uniforms.bg_color = [
 		self.terminal_state.colors.background.r,
 		self.terminal_state.colors.background.g,
@@ -1281,6 +1281,16 @@ pub fn (mut self Renderer) update_frame(state &RenderState, cursor_blink_visible
 // uniforms. Ghostty rounds here rather than truncating the fractional byte.
 fn background_opacity_alpha(opacity f64) u8 {
 	return u8(math.round(opacity * 255.0))
+}
+
+// Glass materials draw their own background on macOS (generic.zig).
+fn background_color_alpha(opacity f64, blur configpkg.BackgroundBlur) u8 {
+	$if macos {
+		if blur is configpkg.BackgroundBlurMacosGlassRegular || blur is configpkg.BackgroundBlurMacosGlassClear {
+			return 0
+		}
+	}
+	return background_opacity_alpha(opacity)
 }
 
 // The critical area of update_frame, run while holding state.mutex. Returns
