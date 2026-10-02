@@ -1,12 +1,14 @@
 module simd
 
+import log
+
 // Base64 routines translated from src/simd/base64.zig.
 
 // base64_scalar_input removes trailing padding so the scalar decoder has the
 // same output behavior as Ghostty's SIMD implementation.
 fn base64_scalar_input(input []u8) []u8 {
 	mut end := input.len
-	for end > 0 && input[end - 1] == `=` {
+	for input[end - 1] == `=` {
 		end--
 	}
 	return input[..end]
@@ -23,7 +25,10 @@ pub fn max_len(input []u8) usize {
 
 fn max_len_scalar(input []u8) usize {
 	scalar := base64_scalar_input(input)
-	return calc_size_for_slice(scalar) or { 0 }
+	return calc_size_for_slice(scalar) or {
+		log.warn('failed to calculate base64 size for payload: ${err}')
+		return 0
+	}
 }
 
 // decode decodes input into caller-owned storage and returns the used prefix.
