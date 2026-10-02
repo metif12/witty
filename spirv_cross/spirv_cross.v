@@ -1,7 +1,11 @@
 module spirv_cross
 
-#flag -I@VMODROOT/thirdparty/spirv-cross
-#flag @VMODROOT/.witty-build/native/libspirv_cross.a
+$if !system_spirv_cross ? {
+	#flag -I@VMODROOT/thirdparty/spirv-cross
+}
+$if !managed_native ? {
+	#flag @VMODROOT/.witty-build/native/libspirv_cross.a
+}
 #flag darwin -lc++
 #flag linux -lstdc++
 #flag freebsd -lstdc++

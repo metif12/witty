@@ -1,7 +1,9 @@
 module cimgui
 
 $if macos || linux {
-	#flag @VMODROOT/cimgui/detail.o
+	$if !managed_native ? {
+		#flag @VMODROOT/cimgui/detail.o
+	}
 	#include "@VMODROOT/cimgui/detail.h"
 }
 fn C.witty_cimgui_show_demo(context voidptr, open &bool)

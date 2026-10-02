@@ -1,8 +1,12 @@
 module glslang
 
-#flag -I@VMODROOT/thirdparty/glslang
-#flag -I@VMODROOT/thirdparty/glslang/override
-#flag @VMODROOT/.witty-build/native/libglslang.a
+$if !system_glslang ? {
+	#flag -I@VMODROOT/thirdparty/glslang
+	#flag -I@VMODROOT/thirdparty/glslang/override
+}
+$if !managed_native ? {
+	#flag @VMODROOT/.witty-build/native/libglslang.a
+}
 #flag darwin -lc++
 #flag linux -lstdc++
 #flag freebsd -lstdc++

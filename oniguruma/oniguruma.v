@@ -2,7 +2,9 @@ module oniguruma
 
 // Ghostty uses the same system dependency when system integration is enabled.
 $if managed_native ? {
-	#flag -I@VMODROOT/.witty-build/deps/oniguruma/src
+	$if !system_oniguruma ? {
+		#flag -I@VMODROOT/.witty-build/deps/oniguruma/src
+	}
 } $else {
 	#flag darwin -I/opt/homebrew/include
 	#flag darwin -L/opt/homebrew/lib

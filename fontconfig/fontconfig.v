@@ -12,7 +12,9 @@ module fontconfig
 
 // C compiler flags for the fontconfig library.
 $if managed_native ? {
-	#flag -I@VMODROOT/.witty-build/deps/fontconfig
+	$if !system_fontconfig ? {
+		#flag -I@VMODROOT/.witty-build/deps/fontconfig
+	}
 } $else {
 	#flag darwin -I/opt/homebrew/include
 	#flag darwin -L/opt/homebrew/lib

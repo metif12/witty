@@ -18,7 +18,10 @@ pub mut:
 // corresponding function bodies. Stage the original public headers separately
 // from choosing which native libraries to compile and link.
 fn (d Driver) stage_native_headers() ! {
-	for name in ['freetype', 'harfbuzz', 'fontconfig', 'oniguruma'] { d.native_package(name)! }
+	for name in ['freetype', 'harfbuzz', 'fontconfig', 'oniguruma'] {
+		if !d.cfg.system_libraries[name] { d.native_package(name)! }
+	}
+	if d.cfg.system_libraries['harfbuzz'] { return }
 	hb := os.join_path(d.cache_path('deps', 'harfbuzz'), 'src')
 	include := d.cache_path('include', 'harfbuzz')
 	os.mkdir_all(include)!
@@ -31,6 +34,8 @@ fn (d Driver) add_package(mut deps NativeDeps, name string, system_name string, 
 	if d.cfg.system_libraries[name] {
 		flags := checked_process(d.cfg.root, ['pkg-config', '--libs', system_name])!
 		deps.link_flags << flags.trim_space().split(' ').filter(it.len > 0)
+		deps.compiler_flags << checked_process(d.cfg.root, ['pkg-config', '--cflags', system_name])!.trim_space().split(' ').filter(it.len > 0)
+		deps.defines << 'system_' + name.replace('-', '_')
 	} else {
 		deps.archives << archive
 	}
@@ -39,8 +44,14 @@ fn (d Driver) add_package(mut deps NativeDeps, name string, system_name string, 
 // SharedDeps.add chooses native libraries from the artifact's font/runtime/
 // renderer options. Static archive paths are retained for libtool composition.
 pub fn (d Driver) build_native_dependencies(vt_only bool) !NativeDeps {
-	cc := NativeCompileOptions{ compiler: os.getenv_opt('CC') or { 'clang' }, arguments: d.cfg.sdk_arguments()! }
-	cxx := NativeCompileOptions{ compiler: os.getenv_opt('CXX') or { 'clang++' }, arguments: d.cfg.sdk_arguments()! }
+	cc := NativeCompileOptions{
+		compiler:  os.getenv_opt('CC') or { 'clang' }
+		arguments: d.cfg.sdk_arguments()!
+	}
+	cxx := NativeCompileOptions{
+		compiler:  os.getenv_opt('CXX') or { 'clang++' }
+		arguments: d.cfg.sdk_arguments()!
+	}
 	mut deps := NativeDeps{}
 	if d.cfg.simd {
 		deps.archives << d.build_simd(cxx)!
@@ -55,18 +66,40 @@ pub fn (d Driver) build_native_dependencies(vt_only bool) !NativeDeps {
 		deps.link_flags << if d.cfg.target.darwin() { '-lc++' } else { '-lstdc++' }
 	}
 	if vt_only { return deps }
+	frames := d.frame_data()!
+	generated := d.cache_path('generated', 'framedata.compressed')
+	if frames != generated {
+		os.mkdir_all(os.dir(generated))!
+		os.cp(frames, generated)!
+	}
+	deps.defines << 'generated_framedata'
 	if d.cfg.renderer == 'metal' {
-		native_metallib.build(d.cfg.root, native_metallib.Options{ os_tag: d.cfg.target.os, simulator: d.cfg.target.abi == 'simulator', minimum_version: d.cfg.target.minimum })!
+		native_metallib.build(d.cfg.root, native_metallib.Options{
+			os_tag:          d.cfg.target.os
+			simulator:       d.cfg.target.abi == 'simulator'
+			minimum_version: d.cfg.target.minimum
+		})!
 		deps.defines << 'compiled_metallib'
 	}
 	d.stage_native_headers()!
-	deps.archives << d.compile_native('wuffs', os.join_path(d.cfg.root, 'wuffs'), ['wuffs_bridge.c'], cc, [])!
-	deps.archives << d.compile_native('stb', os.join_path(d.cfg.root, 'stb'), ['stb_bridge.c'], cc, [])!
+	deps.archives << d.compile_native('wuffs', os.join_path(d.cfg.root, 'wuffs'), [
+		'wuffs_bridge.c',
+	], cc, [])!
+	deps.archives << d.compile_native('stb', os.join_path(d.cfg.root, 'stb'), [
+		'stb_bridge.c',
+	], cc, [])!
 	if d.cfg.renderer == 'opengl' {
-		deps.archives << d.compile_native('glad', os.join_path(d.cfg.root, 'opengl'), ['glad.c'], cc, ['-I' + os.join_path(d.cfg.root, 'opengl')])!
+		deps.archives << d.compile_native('glad', os.join_path(d.cfg.root, 'opengl'), [
+			'glad.c',
+		], cc, ['-I' + os.join_path(d.cfg.root, 'opengl')])!
 	}
 	if d.cfg.sentry && d.cfg.target.os != 'windows' {
-		deps.archives << native_sentry.build(d.cfg.root, native_sentry.Options{ c_compiler: cc.compiler, cpp_compiler: cxx.compiler, compiler_args: cc.arguments, os_tag: d.cfg.target.os })!
+		deps.archives << native_sentry.build(d.cfg.root, native_sentry.Options{
+			c_compiler:    cc.compiler
+			cpp_compiler:  cxx.compiler
+			compiler_args: cc.arguments
+			os_tag:        d.cfg.target.os
+		})!
 	}
 
 	// Dependents precede their own dependencies in the linker arguments.
@@ -87,6 +120,17 @@ pub fn (d Driver) build_native_dependencies(vt_only bool) !NativeDeps {
 		d.add_package(mut deps, 'harfbuzz', 'harfbuzz', hb)!
 	}
 	deps.archives << d.build_cimgui(cxx)!
+	if d.cfg.target.darwin() {
+		deps.link_flags << '-lobjc'
+		for framework in ['Foundation', 'CoreFoundation', 'CoreGraphics', 'CoreText', 'CoreVideo',
+			'QuartzCore', 'IOSurface', 'Metal'] {
+			deps.link_flags << ['-framework', framework]
+		}
+		if d.cfg.target.os == 'macos' { deps.link_flags << ['-framework', 'AppKit', '-framework',
+				'Carbon'] }
+		if d.cfg.renderer == 'opengl' { deps.link_flags << ['-framework', 'OpenGL'] }
+	}
+	deps.link_flags << if d.cfg.target.darwin() { '-lc++' } else { '-lstdc++' }
 	ft := if d.cfg.system_libraries['freetype'] { '' } else { d.build_freetype(cc)! }
 	d.add_package(mut deps, 'freetype', 'freetype2', ft)!
 	if d.cfg.system_libraries['freetype'] { deps.link_flags << '-lbz2' }
@@ -96,29 +140,25 @@ pub fn (d Driver) build_native_dependencies(vt_only bool) !NativeDeps {
 	d.add_package(mut deps, 'zlib', 'zlib', z)!
 	onig := if d.cfg.system_libraries['oniguruma'] { '' } else { d.build_oniguruma(cc)! }
 	d.add_package(mut deps, 'oniguruma', 'oniguruma', onig)!
-	if d.cfg.system_libraries['glslang'] || d.cfg.system_libraries['spirv-cross'] {
-		// Each system integration choice is independent; building the locked pair
-		// also supplies the archive for whichever library was not selected system.
-		built := native_shaders.build(d.cfg.root, native_shaders.Options{
-			compiler:      cxx.compiler
-			compiler_args: cxx.arguments
-			os_tag:        d.cfg.target.os
-			musl:          d.cfg.target.abi == 'musl'
-		})!
-		for i, name in ['glslang', 'spirv-cross'] {
-			if d.cfg.system_libraries[name] {
-				deps.link_flags << checked_process(d.cfg.root, ['pkg-config', '--libs', name])!.trim_space().split(' ').filter(it.len > 0)
-			} else {
-				deps.archives << built[i]
-			}
+	deps.archives << native_shaders.build(d.cfg.root, native_shaders.Options{
+		compiler:      cxx.compiler
+		compiler_args: cxx.arguments
+		os_tag:        d.cfg.target.os
+		musl:          d.cfg.target.abi == 'musl'
+		glslang:       !d.cfg.system_libraries['glslang']
+		spirv_cross:   !d.cfg.system_libraries['spirv-cross']
+	})!
+	for name, packages in {
+		'glslang':     ['glslang', 'glslang-default-resource-limits']
+		'spirv-cross': ['spirv-cross-c-shared']
+	} {
+		if !d.cfg.system_libraries[name] { continue
+		 }
+		deps.defines << 'system_' + name.replace('-', '_')
+		for package in packages {
+			deps.link_flags << checked_process(d.cfg.root, ['pkg-config', '--libs', package])!.trim_space().split(' ').filter(it.len > 0)
+			deps.compiler_flags << checked_process(d.cfg.root, ['pkg-config', '--cflags', package])!.trim_space().split(' ').filter(it.len > 0)
 		}
-	} else {
-		deps.archives << native_shaders.build(d.cfg.root, native_shaders.Options{
-			compiler:      cxx.compiler
-			compiler_args: cxx.arguments
-			os_tag:        d.cfg.target.os
-			musl:          d.cfg.target.abi == 'musl'
-		})!
 	}
 	if d.cfg.target.darwin() && d.cfg.i18n {
 		deps.archives << native_libintl.build(d.cfg.root, cc.compiler, cc.arguments)!
@@ -131,12 +171,15 @@ pub fn (d Driver) build_cimgui(options NativeCompileOptions) !string {
 	mut sources := ['vendor/imgui/imgui_demo.cpp', 'vendor/imgui/imgui_draw.cpp',
 		'vendor/imgui/imgui_tables.cpp', 'vendor/imgui/imgui_widgets.cpp', 'vendor/imgui/imgui.cpp',
 		'vendor/imgui/misc/freetype/imgui_freetype.cpp', 'vendor/dear_bindings/dcimgui.cpp',
-		'vendor/dear_bindings/dcimgui_internal.cpp', 'ext.cpp']
+		'vendor/dear_bindings/dcimgui_internal.cpp', 'ext.cpp', 'text_filter.cpp', 'detail.cpp']
 	mut flags := ['-std=c++17', '-DIMGUI_HAS_DOCK=1', '-DIMGUI_USE_WCHAR32=1',
 		'-DIMGUI_DISABLE_OBSOLETE_FUNCTIONS=1', '-DIMGUI_ENABLE_FREETYPE=1',
-		'-I' + os.join_path(root, 'vendor', 'imgui'),
-		'-I' + os.join_path(root, 'vendor', 'imgui', 'backends'),
-		'-I' + os.join_path(root, 'vendor', 'dear_bindings')]
+		'-I' +
+			os.join_path(root, 'vendor', 'imgui'),
+		'-I' +
+			os.join_path(root, 'vendor', 'imgui', 'backends'),
+		'-I' +
+			os.join_path(root, 'vendor', 'dear_bindings')]
 	flags << if d.cfg.target.os == 'windows' {
 		'-DIMGUI_IMPL_API=extern\t"C"\t__declspec(dllexport)'
 	} else {
@@ -166,8 +209,10 @@ pub fn (d Driver) build_simd(options NativeCompileOptions) ![]string {
 	mut flags := include.clone()
 	flags << '-std=c++17'
 	if d.cfg.target.arch == 'x86_64' { flags << '-DHWY_DISABLED_TARGETS=472' }
-	mut result := [d.compile_native('ghostty-simd', root, ['simd/base64.cpp', 'simd/codepoint_width.cpp',
-		'simd/index_of.cpp', 'simd/vt.cpp'], options, flags)!]
+	mut result := [
+		d.compile_native('ghostty-simd', root, ['simd/base64.cpp', 'simd/codepoint_width.cpp',
+			'simd/index_of.cpp', 'simd/vt.cpp'], options, flags)!,
+	]
 	if !d.cfg.system_libraries['simdutf'] {
 		mut utf_flags := include.clone()
 		utf_flags << ['-DSIMDUTF_IMPLEMENTATION_ICELAKE=0', '-fno-sanitize=undefined',
@@ -188,8 +233,8 @@ pub fn (d Driver) build_simd(options NativeCompileOptions) ![]string {
 		if d.cfg.target.os == 'freebsd' || d.cfg.target.abi == 'musl' { hwy << '-fPIC' }
 		if d.cfg.target.os != 'windows' { hwy << ['-fmath-errno', '-fno-exceptions'] }
 		result << d.compile_native('highway', root, ['highway_bridge.cpp', 'abort.cpp',
-			'aligned_allocator.cpp', 'nanobenchmark.cpp', 'per_target.cpp', 'print.cpp', 'targets.cpp',
-			'timer.cpp'], options, hwy)!
+			'aligned_allocator.cpp', 'nanobenchmark.cpp', 'per_target.cpp', 'print.cpp',
+			'targets.cpp', 'timer.cpp'], options, hwy)!
 	}
 	return result
 }

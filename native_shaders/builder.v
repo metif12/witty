@@ -8,6 +8,8 @@ pub:
 	compiler_args []string
 	os_tag        string = os.user_os()
 	musl          bool
+	glslang       bool = true
+	spirv_cross   bool = true
 }
 
 pub fn archive_path(repo_root string, library string) string {
@@ -19,6 +21,10 @@ pub fn archive_path(repo_root string, library string) string {
 pub fn build(repo_root string, options Options) ![]string {
 	mut result := []string{}
 	for library in ['glslang', 'spirv_cross'] {
+		if library == 'glslang' && !options.glslang { continue
+		 }
+		if library == 'spirv_cross' && !options.spirv_cross { continue
+		 }
 		root := os.join_path(repo_root, 'thirdparty', library.replace('_', '-'))
 		out := os.join_path(repo_root, '.witty-build', 'native', library + '-objects')
 		os.mkdir_all(out)!

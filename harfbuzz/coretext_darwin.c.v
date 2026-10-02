@@ -9,7 +9,7 @@ $if managed_native ? {
 }
 #flag darwin -framework CoreText
 
-#include <harfbuzz/hb-coretext.h>
+#include <hb-coretext.h>
 
 fn C.hb_coretext_font_create(ct_font voidptr) &C.hb_font_t
 

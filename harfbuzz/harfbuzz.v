@@ -11,10 +11,15 @@ module harfbuzz
 
 // C compiler flags for HarfBuzz library.
 $if managed_native ? {
-	#flag -I@VMODROOT/.witty-build/include
-	#flag -I@VMODROOT/.witty-build/deps/freetype/include
+	$if !system_harfbuzz ? {
+		#flag -I@VMODROOT/.witty-build/include/harfbuzz
+	}
+	$if !system_freetype ? {
+		#flag -I@VMODROOT/.witty-build/deps/freetype/include
+	}
 } $else {
 	#flag darwin -I/opt/homebrew/include
+	#flag darwin -I/opt/homebrew/include/harfbuzz
 	#flag darwin -I/opt/homebrew/include/freetype2
 	#flag darwin -L/opt/homebrew/lib
 	#flag linux -I/usr/include/harfbuzz
@@ -22,8 +27,8 @@ $if managed_native ? {
 	#flag -lharfbuzz
 }
 
-#include <harfbuzz/hb.h>
-#include <harfbuzz/hb-ft.h>
+#include <hb.h>
+#include <hb-ft.h>
 
 // === Opaque C types ===
 

@@ -1,7 +1,9 @@
 module cimgui
 
 $if macos || linux {
-	#flag @VMODROOT/cimgui/text_filter.o
+	$if !managed_native ? {
+		#flag @VMODROOT/cimgui/text_filter.o
+	}
 	#include "@VMODROOT/cimgui/text_filter.h"
 }
 fn C.witty_cimgui_filter_create(text &char) voidptr

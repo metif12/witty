@@ -147,7 +147,9 @@ pub fn error_kind_of(err IError) ErrorKind {
 // C compiler flags for the FreeType library. FreeType installs its headers
 // under a `freetype2` subdirectory, so we add that to the include path.
 $if managed_native ? {
-	#flag -I@VMODROOT/.witty-build/deps/freetype/include
+	$if !system_freetype ? {
+		#flag -I@VMODROOT/.witty-build/deps/freetype/include
+	}
 } $else {
 	#flag darwin -I/opt/homebrew/include/freetype2
 	#flag darwin -I/opt/homebrew/opt/freetype/include/freetype2
