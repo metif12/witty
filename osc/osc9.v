@@ -187,13 +187,15 @@ fn parse_osc9(mut parser Parser, _ ?u8) ?Command {
 				}
 			}
 
-			mut progress := ?u8(none)
+			mut progress := if pstate == .set { ?u8(u8(0)) } else { ?u8(none) }
 
 			// For states that accept a progress value, parse it
 			match pstate {
 				.remove, .indeterminate {}
 				.set, .err_state, .pause {
 					if data.len >= 4 && data[3] == `;` {
+						// A present value replaces the initial default, including on failure.
+						progress = none
 						rest := data[4..].bytestr()
 						if parsed := parse_unsigned_decimal(rest, max_usize_value) {
 							clamped := if parsed > 100 { u8(100) } else { u8(parsed) }
@@ -203,10 +205,6 @@ fn parse_osc9(mut parser Parser, _ ?u8) ?Command {
 				}
 			}
 
-			// Special case: set state with no progress defaults to 0
-			if pstate == .set && progress == none {
-				progress = u8(0)
-			}
 
 			parser.command = ProgressReport{
 				state: pstate

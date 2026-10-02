@@ -217,8 +217,8 @@ fn test_osc9_conemu_progress_set_double_digit() {
 
 fn test_osc9_conemu_progress_matches_zig_unsigned_parsing() {
 	assert parse_osc_input('9;4;1;1__0').progress? == 10
-	assert parse_osc_input('9;4;1;+10').progress? == 0
-	assert parse_osc_input('9;4;1;18446744073709551616').progress? == 0
+	assert parse_osc_input('9;4;1;+10').progress == none
+	assert parse_osc_input('9;4;1;18446744073709551616').progress == none
 }
 
 fn test_osc9_conemu_progress_remove_no_progress() {
@@ -452,4 +452,12 @@ fn test_osc9_conemu_mark_prompt_start_2() {
 	cmd := parse_osc_input('9;12;abc')
 	assert cmd is SemanticPrompt
 	assert (cmd as SemanticPrompt).action == .fresh_line_new_prompt
+}
+
+fn test_progress_defaults_only_when_value_is_absent() {
+	assert parse_osc_input('9;4;1').progress? == 0
+	assert parse_osc_input('9;4;1x').progress? == 0
+	for input in ['9;4;1;', '9;4;1;bad', '9;4;1;+10', '9;4;1;18446744073709551616'] {
+		assert parse_osc_input(input).progress == none
+	}
 }
