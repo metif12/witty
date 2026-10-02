@@ -4,6 +4,7 @@ import apprt
 import macos
 
 fn do_new_split(current &TermState, direction apprt.SplitDirection) bool {
+	if int(direction) !in [0, 1, 2, 3] { return false }
 	if current.controller == unsafe { nil } || current.closed { return false }
 	mut controller := current.controller
 	if _ := controller.host.tree.root.find(current.view) {} else { return false }
@@ -21,7 +22,8 @@ fn do_new_split(current &TermState, direction apprt.SplitDirection) bool {
 	return true
 }
 fn do_goto_split(current &TermState, direction apprt.GotoSplit) bool {
-	if current.controller == unsafe { nil } { return false }
+	if int(direction) !in [0, 1, 2, 3, 4, 5] { return false }
+	if current.controller == unsafe { nil } || !macos.native_view_has_window(current.view) { return false }
 	mut host := current.controller.host
 	if host.tree.root == unsafe { nil } || host.tree.root.is_leaf() { return false }
 	node := host.tree.root.find(current.view) or { return false }
@@ -38,20 +40,23 @@ fn do_goto_split(current &TermState, direction apprt.GotoSplit) bool {
 	return true
 }
 fn do_resize_split(current &TermState, data apprt.ResizeSplit) bool {
-	if current.controller == unsafe { nil } { return false }
+	if int(data.direction) !in [0, 1, 2, 3] { return false }
+	if current.controller == unsafe { nil } || !macos.native_view_has_window(current.view) { return false }
 	mut host := current.controller.host
 	if host.tree.root == unsafe { nil } || host.tree.root.is_leaf() { return false }
-	node := host.tree.root.find(current.view) or { return false }
+	// App.swift acknowledges a valid request once the window has splits.
+	// The receiver may subsequently ignore a target absent from its tree.
+	node := host.tree.root.find(current.view) or { return true }
 	tree := host.tree.resizing(node, data.amount, match data.direction { .left { macos.SplitFocusDirection.left } .right { .right } .up { .up } .down { .down } }, macos.SplitBounds{width: macos.view_width(host.container), height: macos.view_height(host.container)}) or { return true }
 	host.replace_tree(tree)
 	macos.invalidate_native_restorable_state(host.container)
 	return true
 }
 fn do_toggle_split_zoom(current &TermState) bool {
-	if current.controller == unsafe { nil } { return false }
+	if current.controller == unsafe { nil } || !macos.native_view_has_window(current.view) { return false }
 	mut host:=current.controller.host
 	if host.tree.root == unsafe { nil } || host.tree.root.is_leaf() { return false }
-	node:=host.tree.root.find(current.view) or { return false }
+	node:=host.tree.root.find(current.view) or { return true }
 	host.replace_tree(macos.NativeSplitTree{root:host.tree.root,zoomed:if host.tree.zoomed==node { unsafe { &macos.NativeSplitNode(nil) } } else { node }})
 	macos.invalidate_native_restorable_state(host.container)
 	macos.focus_native_window(macos.view_window(host.container))

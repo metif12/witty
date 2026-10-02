@@ -436,8 +436,17 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 		.close_tab, .close_window {
 			if current := state {
 				data := action.data
-				mode := if data is apprt.CloseTabMode { data } else { apprt.CloseTabMode.this }
-				do_close_controller(current, action.action == .close_window, mode)
+				if action.action == .close_window {
+					do_close_controller(current, true, .this)
+				} else if data is apprt.CloseTabMode {
+					if int(data) in [0, 1, 2] {
+						// QuickTerminalController only observes ghosttyCloseTab;
+						// the other/right notifications belong to TerminalController.
+						if data == .this || macos.quick_terminal_for_view(current.view) == none {
+							do_close_controller(current, false, data)
+						}
+					}
+				}
 			}
 			return true
 		}
@@ -450,7 +459,7 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 		.set_title {
 			if mut current := state {
 				data := action.data
-				if data is apprt.SetTitle {
+				if data is apprt.SetTitle && !current.closed && current.actions != unsafe { nil } {
 					current.actions.set_title(data.title)
 				}
 				return true
@@ -473,10 +482,17 @@ fn runtime_action(app &apprt.App, target apprt.Target, action apprt.RuntimeActio
 		.toggle_quick_terminal { do_toggle_quick_terminal(app); return true }
 		.toggle_fullscreen {
 			if current := state {
-				if mut q := macos.quick_terminal_for_view(current.view) { q.toggle_fullscreen(); return true }
 				data := action.data
 				if data is apprt.Fullscreen {
-					macos.toggle_fullscreen_mode(current.view, match data { .native { macos.NativeFullscreenMode.native } .macos_non_native { .non_native } .macos_non_native_visible_menu { .visible_menu } .macos_non_native_padded_notch { .padded_notch } })
+					// App.swift validates the raw mode before notifying either
+					// controller; both consumers require the focused split.
+					if int(data) !in [0, 1, 2, 3] { return true }
+					if current.controller == unsafe { nil } || current.controller.focused != current { return true }
+					if mut q := macos.quick_terminal_for_view(current.view) {
+						q.toggle_fullscreen()
+					} else {
+						macos.toggle_fullscreen_mode(current.view, match data { .native { macos.NativeFullscreenMode.native } .macos_non_native { .non_native } .macos_non_native_visible_menu { .visible_menu } .macos_non_native_padded_notch { .padded_notch } })
+					}
 				}
 				return true
 			}
