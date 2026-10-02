@@ -1,6 +1,7 @@
 module terminal
 
 import osc
+import lib_allocator
 import tripwire
 import unicode
 
@@ -2265,12 +2266,17 @@ pub fn (mut self Screen) reset() {
 //     be filled in at the bottom.
 //
 pub fn (self &Screen) clone(top Point, bot ?Point) !Screen {
+	return self.clone_alloc(self.pages.pool.alloc, top, bot)
+}
+
+pub fn (self &Screen) clone_alloc(allocator lib_allocator.Allocator, top Point, bot ?Point) !Screen {
 	// Create a tracked pin remapper for our selection and cursor. Note
 	// that we may want to expose this generally in the future but at the
 	// time of doing this we don't need to.
-	mut pin_remap := PageTrackedPinsRemap{}
+	mut pin_remap := PageTrackedPinsRemap.init_alloc(allocator)
+	defer { pin_remap.deinit() }
 
-	mut pages := self.pages.clone(PageCloneOpts{
+	mut pages := self.pages.clone_alloc(allocator, PageCloneOpts{
 		top:          top
 		bot:          bot
 		tracked_pins: &pin_remap
