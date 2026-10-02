@@ -486,6 +486,11 @@ fn test_kitty_file_read_preserves_reader_limit_and_offset_contract() ! {
 	mut loading := LoadingImage{}
 	loading.read_file(.file, Transmission{size: 5}, path)!
 	assert loading.data == '1234'.bytes()
+	for size in [u32(0x80000000), 0xffffffff] {
+		mut huge := LoadingImage{}
+		huge.read_file(.file, Transmission{size: size}, path)!
+		assert huge.data == '1234'.bytes()
+	}
 	mut offset := LoadingImage{}
 	offset.read_file(.file, Transmission{offset: 1, size: 4}, path)!
 	assert offset.data == '234'.bytes()

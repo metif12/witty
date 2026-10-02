@@ -424,7 +424,7 @@ fn (mut self LoadingImage) read_file(medium TransmissionMedium, t Transmission, 
 	// Mirror the source file.reader buffer and appendRemaining(.limited(size)).
 	// Reaching the limit is StreamTooLong even when it coincides with EOF.
 	size := if t.size > 0 {
-		if int(t.size) < max_image_size { int(t.size) } else { max_image_size }
+		if usize(t.size) < usize(max_image_size) { int(t.size) } else { max_image_size }
 	} else {
 		max_image_size
 	}
