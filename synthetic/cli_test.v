@@ -4,13 +4,13 @@ import encoding.binary
 import encoding.utf8
 import rand
 
-struct FixedWriter {
+struct TestFixedWriter {
 	capacity int
 pub mut:
 	data []u8
 }
 
-fn (mut writer FixedWriter) write(data []u8) !int {
+fn (mut writer TestFixedWriter) write(data []u8) !int {
 	if data.len > writer.capacity - writer.data.len {
 		return error('WriteFailed')
 	}
@@ -35,7 +35,7 @@ fn test_synthetic_action_detection() {
 
 fn test_ascii_cli_lifecycle_and_output() {
 	mut rng := rand.new_default(seed_: [u32(0), 1])
-	mut writer := FixedWriter{
+	mut writer := TestFixedWriter{
 		capacity: 1024
 	}
 	mut implementation := AsciiCli.create(AsciiOptions{})
@@ -51,7 +51,7 @@ fn test_ascii_cli_lifecycle_and_output() {
 
 fn test_utf8_cli_lifecycle_and_output() {
 	mut rng := rand.new_default(seed_: [u32(0), 1])
-	mut writer := FixedWriter{
+	mut writer := TestFixedWriter{
 		capacity: 1024
 	}
 	mut implementation := Utf8Cli.create(Utf8Options{})
@@ -65,7 +65,7 @@ fn test_utf8_cli_lifecycle_and_output() {
 
 fn test_osc_cli_streaming_output() {
 	mut rng := rand.new_default(seed_: [u32(0), 1])
-	mut writer := FixedWriter{
+	mut writer := TestFixedWriter{
 		capacity: 1024
 	}
 	mut implementation := OscCli.create(OscOptions{
@@ -84,7 +84,7 @@ fn test_osc_cli_streaming_output() {
 
 fn test_osc_cli_parser_output_has_native_length_prefix() {
 	mut rng := rand.new_default(seed_: [u32(0), 1])
-	mut writer := FixedWriter{
+	mut writer := TestFixedWriter{
 		capacity: 2048
 	}
 	mut implementation := OscCli.create(OscOptions{
@@ -109,7 +109,7 @@ fn test_synthetic_main_action_retains_source_argument_variants() {
 	assert Args(CliArgs{}) is CliArgs
 	assert Args(StringArgs{}) is StringArgs
 	mut rng := rand.new_default(seed_: [u32(0), 1])
-	mut writer := FixedWriter{
+	mut writer := TestFixedWriter{
 		capacity: 1024
 	}
 	main_action_impl(.osc, StringArgs{
@@ -120,7 +120,7 @@ fn test_synthetic_main_action_retains_source_argument_variants() {
 
 fn test_synthetic_main_action_preserves_parse_errors() {
 	mut rng := rand.new_default(seed_: [u32(0), 1])
-	mut writer := FixedWriter{
+	mut writer := TestFixedWriter{
 		capacity: 1024
 	}
 	if _ := main_action_impl(.osc, StringArgs{ value: '--style=invalid' }, mut writer, rng) {

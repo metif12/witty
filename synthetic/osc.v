@@ -1,7 +1,7 @@
 module synthetic
 
-import internal_os
 import rand
+import io
 
 pub enum OscValidKind as u8 {
 	change_window_title
@@ -50,210 +50,208 @@ pub fn (mut self Osc) generator() Generator {
 }
 
 pub fn (mut self Osc) next(max_len usize) ![]u8 {
-	if isnil(self.rng) {
-		return error('random generator is not initialized')
-	}
+	mut writer := CollectingWriter{}
+	self.next_writer(mut writer, max_len)!
+	return writer.data
+}
+
+pub fn (mut self Osc) next_writer(mut writer io.Writer, max_len usize) ! {
 	assert max_len >= 3
-	payload := self.next_unwrapped(max_len - 3)!
-	mut result := [u8(0x1b), `]`]
-	result << payload
-	result << u8(0x07)
-	return result
+	source_write_all(mut writer, [u8(0x1b), `]`])!
+	self.next_unwrapped_writer(mut writer, max_len - 3)!
+	source_write_all(mut writer, [u8(7)])!
 }
 
 fn (mut self Osc) next_unwrapped(max_len usize) ![]u8 {
-	return match self.choose_validity() {
+	mut writer := CollectingWriter{}
+	self.next_unwrapped_writer(mut writer, max_len)!
+	return writer.data
+}
+
+fn (mut self Osc) next_unwrapped_writer(mut writer io.Writer, max_len usize) ! {
+	match self.choose_validity() {
 		.valid {
-			idx := osc_weighted_index(mut self.rng, self.p_valid_kind[..])!
-			self.next_unwrapped_valid_exact(unsafe { OscValidKind(idx) }, max_len)!
+			idx := source_weighted_index(mut self.rng, self.p_valid_kind[..])
+			self.next_unwrapped_valid_writer(mut writer, unsafe { OscValidKind(idx) }, max_len)!
 		}
 		.invalid {
-			idx := osc_weighted_index(mut self.rng, self.p_invalid_kind[..])!
-			self.next_unwrapped_invalid_exact(unsafe { OscInvalidKind(idx) }, max_len)!
+			idx := source_weighted_index(mut self.rng, self.p_invalid_kind[..])
+			self.next_unwrapped_invalid_writer(mut writer, unsafe { OscInvalidKind(idx) }, max_len)!
 		}
 	}
 }
 
 fn (mut self Osc) next_unwrapped_valid_exact(kind OscValidKind, max_len usize) ![]u8 {
-	mut result := []u8{}
+	mut writer := CollectingWriter{}
+	self.next_unwrapped_valid_writer(mut writer, kind, max_len)!
+	return writer.data
+}
+
+fn (mut self Osc) next_unwrapped_valid_writer(mut writer io.Writer, kind OscValidKind, max_len usize) ! {
 	match kind {
 		.change_window_title {
-			if max_len < 3 {
-				return result
-			}
-			result << '0;'.bytes()
-			result << self.random_bytes(max_len - 3, [])!
+			if max_len < 3 { return }
+			source_write_all(mut writer, '0;'.bytes())!
+			self.write_bytes(mut writer, max_len - 3, osc_alphabet)!
 		}
 		.prompt_start {
-			if max_len < 4 {
-				return result
+			if max_len < 4 { return }
+			mut remaining := max_len
+			source_write_all(mut writer, '133;A'.bytes())!
+			remaining -= 4
+			if self.random_bool() {
+				if remaining >= 6 {
+					source_write_all(mut writer, ';aid='.bytes())!
+					remaining -= 5
+					remaining -= self.write_bytes(mut writer, synthetic_min_usize(16, remaining),
+						osc_kv_alphabet)!
+				}
 			}
-			result << '133;A'.bytes()
-			mut remaining := max_len - 4
-			if self.random_bool() && remaining >= 6 {
-				result << ';aid='.bytes()
-				remaining -= 5
-				aid := self.random_bytes(synthetic_min_usize(16, remaining), osc_kv_alphabet)!
-				result << aid
-				remaining -= usize(aid.len)
-			}
-			if self.random_bool() && remaining >= 9 {
-				result << ';redraw='.bytes()
-				result << if self.random_bool() { `1` } else { `0` }
+			if self.random_bool() {
+				if remaining >= 9 {
+					source_write_all(mut writer, ';redraw='.bytes())!
+					source_write_all(mut writer, if self.random_bool() {
+						'1'.bytes()
+					} else {
+						'0'.bytes()
+					})!
+					remaining -= 9
+				}
 			}
 		}
 		.prompt_end {
-			if max_len >= 4 {
-				result << '133;B'.bytes()
-			}
+			if max_len < 4 { return }
+			source_write_all(mut writer, '133;B'.bytes())!
 		}
 		.end_of_input {
-			if max_len < 5 {
-				return result
-			}
-			result << '133;C'.bytes()
-			mut remaining := max_len - 5
-			prefix := ';cmdline_url='
-			if self.random_bool() && remaining >= usize(prefix.len) + 1 {
-				result << prefix.bytes()
+			if max_len < 5 { return }
+			mut remaining := max_len
+			source_write_all(mut writer, '133;C'.bytes())!
+			remaining -= 5
+			if self.random_bool() {
+				prefix := ';cmdline_url='
+				if remaining < usize(prefix.len + 1) { return }
+				source_write_all(mut writer, prefix.bytes())!
 				remaining -= usize(prefix.len)
-				raw := self.random_bytes(synthetic_min_usize(remaining, 128), osc_ascii_alphabet)!
-				result << internal_os.url_percent_encode(raw).bytes()
+				mut fixed := FixedWriter{
+					buffer: []u8{len: 128}
+				}
+				self.write_bytes(mut fixed, synthetic_min_usize(remaining, 128), osc_ascii_alphabet)!
+				source_url_percent_encode(mut writer, fixed.buffer[..fixed.end])!
+				remaining -= usize(fixed.end)
 			}
 		}
 		.end_of_command {
-			if max_len < 4 {
-				return result
-			}
-			result << '133;D'.bytes()
-			if self.random_bool() && max_len >= 7 {
-				result << ';${self.rng.u8()}'.bytes()
+			if max_len < 4 { return }
+			source_write_all(mut writer, '133;D'.bytes())!
+			if self.random_bool() {
+				if max_len < 7 { return }
+				code := source_uint(mut self.rng, 8)
+				source_write_all(mut writer, ';${code}'.bytes())!
 			}
 		}
 		.mouse_shape {
-			if max_len < 4 {
-				return result
-			}
-			result << '22;'.bytes()
-			result << self.random_bytes(synthetic_min_usize(32, max_len - 3),
+			if max_len < 4 { return }
+			source_write_all(mut writer, '22;'.bytes())!
+			self.write_bytes(mut writer, synthetic_min_usize(32, max_len - 3),
 				osc_alphabetic_alphabet)!
 		}
 		.rxvt_notify {
 			prefix := '777;notify;'
-			if max_len < usize(prefix.len) {
-				return result
-			}
-			result << prefix.bytes()
-			mut remaining := max_len - usize(prefix.len)
-			if remaining < 3 {
-				return result
-			}
-			title := self.random_bytes(synthetic_min_usize(remaining - 2, 32), osc_kv_alphabet)!
-			result << title
-			remaining -= usize(title.len)
-			result << `;`
-			remaining--
-			result << self.random_bytes(remaining, osc_alphabet)!
+			if max_len < usize(prefix.len) { return }
+			mut remaining := max_len
+			source_write_all(mut writer, prefix.bytes())!
+			remaining -= usize(prefix.len)
+			remaining -= self.write_bytes(mut writer,
+				synthetic_min_usize(source_sub(remaining, 2), 32), osc_kv_alphabet)!
+			source_write_all(mut writer, ';'.bytes())!
+			remaining = source_sub(remaining, 1)
+			remaining -= self.write_bytes(mut writer, remaining, osc_alphabet)!
 		}
 		.clipboard_operation {
-			if max_len < 4 {
-				return result
-			}
-			result << '52;'.bytes()
-			mut remaining := max_len - 3
+			source_write_all(mut writer, '52;'.bytes())!
+			mut remaining := source_sub(max_len, 3)
 			if self.random_bool() {
-				selection := self.random_bytes(1, osc_alphabetic_alphabet)!
-				result << selection
-				remaining -= usize(selection.len)
+				remaining -= self.write_bytes(mut writer, 1, osc_alphabetic_alphabet)!
 			}
-			result << `;`
-			remaining--
-			if self.random_bool() && remaining > 0 {
-				result << self.random_bytes(remaining, osc_alphabet)!
+			source_write_all(mut writer, ';'.bytes())!
+			remaining = source_sub(remaining, 1)
+			if self.random_bool() {
+				remaining -= self.write_bytes(mut writer, remaining, osc_alphabet)!
 			}
 		}
 		.report_pwd {
 			prefix := '7;file://localhost'
-			if max_len < usize(prefix.len) {
-				return result
-			}
-			result << prefix.bytes()
-			mut remaining := max_len - usize(prefix.len)
-			count := synthetic_random_inclusive(mut self.rng, 2, 5)!
-			for _ in 0 .. count {
-				result << `/`
-				remaining--
-				component := self.random_bytes(synthetic_min_usize(16, remaining),
+			if max_len < usize(prefix.len) { return }
+			mut remaining := max_len
+			source_write_all(mut writer, prefix.bytes())!
+			remaining -= usize(prefix.len)
+			count := source_range(mut self.rng, 2, 5, int(sizeof(usize) * 8))
+			for _ in u64(0) .. count {
+				source_write_all(mut writer, '/'.bytes())!
+				remaining = source_sub(remaining, 1)
+				remaining -= self.write_bytes(mut writer, synthetic_min_usize(16, remaining),
 					osc_alphanumeric_alphabet)!
-				result << component
-				remaining -= usize(component.len)
 			}
 		}
 		.hyperlink_start {
-			result << '8;'.bytes()
+			source_write_all(mut writer, '8;'.bytes())!
 			if self.random_bool() {
-				result << 'id='.bytes()
-				result << self.random_bytes(16, osc_alphanumeric_alphabet)!
+				source_write_all(mut writer, 'id='.bytes())!
+				self.write_bytes(mut writer, 16, osc_alphanumeric_alphabet)!
 			}
-			result << ';https://localhost'.bytes()
-			count := synthetic_random_inclusive(mut self.rng, 2, 5)!
-			for _ in 0 .. count {
-				result << `/`
-				result << self.random_bytes(16, osc_alphanumeric_alphabet)!
+			source_write_all(mut writer, ';https://localhost'.bytes())!
+			count := source_range(mut self.rng, 2, 5, int(sizeof(usize) * 8))
+			for _ in u64(0) .. count {
+				source_write_all(mut writer, '/'.bytes())!
+				self.write_bytes(mut writer, 16, osc_alphanumeric_alphabet)!
 			}
 		}
 		.hyperlink_end {
-			if max_len >= 3 {
-				result << '8;;'.bytes()
-			}
+			if max_len < 3 { return }
+			source_write_all(mut writer, '8;;'.bytes())!
 		}
 		.conemu_progress {
-			result << '9;'.bytes()
-			value := synthetic_random_inclusive(mut self.rng, 0, 4)!
-			if value == 0 || value == 3 || self.random_bool() {
-				result << ';${value}'.bytes()
+			source_write_all(mut writer, '9;'.bytes())!
+			code := source_range(mut self.rng, 0, 4, 3)
+			if code == 0 || code == 3 {
+				source_write_all(mut writer, ';${code}'.bytes())!
+			} else if self.random_bool() {
+				source_write_all(mut writer, ';${code}'.bytes())!
 			} else {
-				progress := synthetic_random_inclusive(mut self.rng, 0, 100)!
-				result << ';${value};${progress}'.bytes()
+				progress := source_range(mut self.rng, 0, 100, 8)
+				source_write_all(mut writer, ';${code};${progress}'.bytes())!
 			}
 		}
 		.iterm2_notification {
-			if max_len < 3 {
-				return result
-			}
-			result << '9;_'.bytes()
-			result << self.random_bytes(max_len - 3, osc_ascii_alphabet)!
+			if max_len < 3 { return }
+			source_write_all(mut writer, '9;_'.bytes())!
+			self.write_bytes(mut writer, max_len - 3, osc_ascii_alphabet)!
 		}
 	}
-
-	return result
 }
 
 fn (mut self Osc) next_unwrapped_invalid_exact(kind OscInvalidKind, max_len usize) ![]u8 {
-	return match kind {
+	mut writer := CollectingWriter{}
+	self.next_unwrapped_invalid_writer(mut writer, kind, max_len)!
+	return writer.data
+}
+
+fn (mut self Osc) next_unwrapped_invalid_writer(mut writer io.Writer, kind OscInvalidKind, max_len usize) ! {
+	match kind {
 		.random {
-			self.random_bytes(max_len, [])!
+			self.write_bytes(mut writer, max_len, osc_alphabet)!
 		}
 		.good_prefix {
-			mut result := '133;'.bytes()
-			if max_len > 4 {
-				result << self.random_bytes(max_len - 4, [])!
-			}
-			result
+			source_write_all(mut writer, '133;'.bytes())!
+			self.write_bytes(mut writer, source_sub(max_len, 4), osc_alphabet)!
 		}
 	}
 }
 
-fn (mut self Osc) random_bytes(max_len usize, alphabet []u8) ![]u8 {
-	if max_len < 1 {
-		return []u8{}
-	}
-	mut bytes := self.bytes()
-	if alphabet.len > 0 {
-		bytes.alphabet = alphabet
-	}
-	mut bounded := bytes.at_most(max_len)
-	return bounded.write()
+fn (mut self Osc) write_bytes(mut writer io.Writer, max_len usize, alphabet []u8) !usize {
+	mut bytes := self.bytes().new_alphabet(alphabet).at_most(max_len)
+	return bytes.write_writer(mut writer)
 }
 
 fn (self &Osc) bytes() Bytes {
@@ -263,33 +261,15 @@ fn (self &Osc) bytes() Bytes {
 }
 
 fn (mut self Osc) choose_validity() Validity {
-	return if self.rng.f64() > self.p_valid { .invalid } else { .valid }
+	return if source_float(mut self.rng) > self.p_valid { .invalid } else { .valid }
 }
 
 fn (mut self Osc) random_bool() bool {
-	return self.rng.u8() & 1 == 1
+	return source_uint(mut self.rng, 1) != 0
 }
 
 fn osc_weighted_index(mut rng rand.PRNG, weights []f64) !int {
-	mut total := f64(0)
-	for weight in weights {
-		if weight < 0 {
-			return error('OSC weights must be non-negative')
-		}
-		total += weight
-	}
-	if total <= 0 {
-		return error('at least one OSC weight must be positive')
-	}
-	pick := rng.f64() * total
-	mut cumulative := f64(0)
-	for i, weight in weights {
-		cumulative += weight
-		if pick < cumulative {
-			return i
-		}
-	}
-	return weights.len - 1
+	return source_weighted_index(mut rng, weights)
 }
 
 fn osc_kv_byte(byte u8) bool {

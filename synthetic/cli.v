@@ -4,6 +4,7 @@ import cli_args
 import io
 import os
 import rand
+import time
 
 // Action is the set of generators exposed by ghostty-gen.
 pub enum Action as u8 {
@@ -133,8 +134,7 @@ pub fn (mut self AsciiCli) run(mut writer io.Writer, rng &rand.PRNG) ! {
 	generator.min_len = 1024
 	generator.max_len = 1024
 	for {
-		data := generator.write()!
-		write_all(mut writer, data) or {
+		generator.write_writer(mut writer) or {
 			if output_closed(err) {
 				return
 			}
@@ -149,7 +149,11 @@ pub fn (mut self OscCli) run(mut writer io.Writer, rng &rand.PRNG) ! {
 	mut generator := Osc.init(rng)
 	generator.p_valid = self.opts.p_valid
 	for {
-		data := generator.next(1024)!
+		mut fixed := FixedWriter{
+			buffer: []u8{len: 1024}
+		}
+		generator.next_writer(mut fixed, 1024)!
+		data := fixed.buffer[..fixed.end]
 		match self.opts.style {
 			.streaming {
 				write_all(mut writer, data) or {
@@ -187,8 +191,7 @@ pub fn (mut self Utf8Cli) run(mut writer io.Writer, rng &rand.PRNG) ! {
 	_ = self
 	mut generator := Utf8.init(rng)
 	for {
-		data := generator.next(1024)!
-		write_all(mut writer, data) or {
+		generator.next_writer(mut writer, 1024) or {
 			if output_closed(err) {
 				return
 			}
@@ -200,10 +203,9 @@ pub fn (mut self Utf8Cli) run(mut writer io.Writer, rng &rand.PRNG) ! {
 // main_action is the source public dispatcher. It parses before constructing
 // the selected implementation, seeds the PRNG, streams to stdout, and flushes.
 pub fn main_action(action Action, args_source Args) ! {
-	mut stdout := os.stdout()
-	mut rng := rand.new_default()
-	main_action_impl(action, args_source, mut stdout, rng)!
-	stdout.flush()
+	mut stdout := FileWriter{}
+	main_action_impl(action, args_source, mut stdout, unsafe { nil })!
+	stdout.flush() or { return }
 }
 
 fn main_action_impl(action Action, args_source Args, mut writer io.Writer, rng &rand.PRNG) ! {
@@ -232,7 +234,12 @@ fn main_action_impl(action Action, args_source Args, mut writer io.Writer, rng &
 			defer {
 				implementation.destroy()
 			}
-			implementation.run(mut writer, rng)!
+			selected_rng := if isnil(rng) {
+				new_source_random(u64(time.now().unix_nano()))
+			} else {
+				rng
+			}
+			implementation.run(mut writer, selected_rng)!
 		}
 		.osc {
 			mut opts := OscOptions{}
@@ -241,7 +248,12 @@ fn main_action_impl(action Action, args_source Args, mut writer io.Writer, rng &
 			defer {
 				implementation.destroy()
 			}
-			implementation.run(mut writer, rng)!
+			selected_rng := if isnil(rng) {
+				new_source_random(u64(time.now().unix_nano()))
+			} else {
+				rng
+			}
+			implementation.run(mut writer, selected_rng)!
 		}
 		.utf8 {
 			mut opts := Utf8Options{}
@@ -250,20 +262,18 @@ fn main_action_impl(action Action, args_source Args, mut writer io.Writer, rng &
 			defer {
 				implementation.destroy()
 			}
-			implementation.run(mut writer, rng)!
+			selected_rng := if isnil(rng) {
+				new_source_random(u64(time.now().unix_nano()))
+			} else {
+				rng
+			}
+			implementation.run(mut writer, selected_rng)!
 		}
 	}
 }
 
 fn write_all(mut writer io.Writer, data []u8) ! {
-	mut offset := 0
-	for offset < data.len {
-		written := writer.write(data[offset..])!
-		if written <= 0 {
-			return error('WriteFailed')
-		}
-		offset += written
-	}
+	source_write_all(mut writer, data)!
 }
 
 fn output_closed(err IError) bool {

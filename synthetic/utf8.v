@@ -1,6 +1,7 @@
 module synthetic
 
 import rand
+import io
 
 pub enum Utf8Len as u8 {
 	one   = 1
@@ -20,7 +21,9 @@ pub mut:
 }
 
 pub fn Utf8.init(rng &rand.PRNG) Utf8 {
-	return Utf8{ rng: unsafe { rng } }
+	return Utf8{
+		rng: unsafe { rng }
+	}
 }
 
 pub fn (mut self Utf8) generator() Generator {
@@ -28,57 +31,38 @@ pub fn (mut self Utf8) generator() Generator {
 }
 
 pub fn (mut self Utf8) next(max_len usize) ![]u8 {
-	if isnil(self.rng) {
-		return error('random generator is not initialized')
-	}
-	if self.max_len < self.min_len {
-		return error('invalid UTF-8 length range')
-	}
-	random_len := synthetic_random_inclusive(mut self.rng, self.min_len, self.max_len)!
-	len := synthetic_min_usize(random_len, max_len)
-	if len > usize(2147483647) {
-		return error('UTF-8 length exceeds V array capacity')
-	}
-	mut result := []u8{cap: int(len)}
-	for usize(result.len) < len {
-		remaining := len - usize(result.len)
+	mut writer := CollectingWriter{}
+	self.next_writer(mut writer, max_len)!
+	return writer.data
+}
+
+// src/synthetic/Utf8.zig next. A surrogate retries without writing or reducing
+// remaining length; the next random operation remains in the same order.
+pub fn (mut self Utf8) next_writer(mut writer io.Writer, max_len usize) ! {
+	len := synthetic_min_usize(usize(source_range_biased(mut self.rng, u64(self.min_len),
+		u64(self.max_len), int(sizeof(usize) * 8))), max_len)
+	mut remaining := len
+	for remaining > 0 {
 		mut utf8_len := self.choose_length()!
 		for usize(utf8_len) > remaining {
 			utf8_len = unsafe { Utf8Len(int(utf8_len) - 1) }
 		}
-
 		cp := match utf8_len {
-			.one { synthetic_random_inclusive(mut self.rng, 0x00, 0x7f)! }
-			.two { synthetic_random_inclusive(mut self.rng, 0x80, 0x7ff)! }
-			.three { synthetic_random_inclusive(mut self.rng, 0x800, 0xffff)! }
-			.four { synthetic_random_inclusive(mut self.rng, 0x10000, 0x10ffff)! }
+			.one { source_range_biased(mut self.rng, 0, 0x7f, 21) }
+			.two { source_range_biased(mut self.rng, 0x80, 0x7ff, 21) }
+			.three { source_range_biased(mut self.rng, 0x800, 0xffff, 21) }
+			.four { source_range_biased(mut self.rng, 0x10000, 0x10ffff, 21) }
 		}
-		if cp >= 0xd800 && cp <= 0xdfff {
-			continue
-		}
-		result << rune(cp).str().bytes()
+
+		if cp >= 0xd800 && cp <= 0xdfff { continue
+		 }
+		encoded := rune(cp).str().bytes()
+		assert encoded.len == int(utf8_len)
+		source_write_all(mut writer, encoded)!
+		remaining -= usize(encoded.len)
 	}
-	return result
 }
 
 fn (mut self Utf8) choose_length() !Utf8Len {
-	mut total := f64(0)
-	for weight in self.p_length {
-		if weight < 0 {
-			return error('UTF-8 length weights must be non-negative')
-		}
-		total += weight
-	}
-	if total <= 0 {
-		return error('at least one UTF-8 length weight must be positive')
-	}
-	pick := self.rng.f64() * total
-	mut cumulative := f64(0)
-	for i, weight in self.p_length {
-		cumulative += weight
-		if pick < cumulative {
-			return unsafe { Utf8Len(i + 1) }
-		}
-	}
-	return .four
+	return unsafe { Utf8Len(source_weighted_index(mut self.rng, self.p_length[..]) + 1) }
 }

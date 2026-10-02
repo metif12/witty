@@ -4,7 +4,7 @@ import encoding.utf8.validate
 import rand
 
 fn test_utf8_length_storage() {
-	assert $sizeof(Utf8Len) == 1
+	assert sizeof(Utf8Len) == 1
 	assert u8(Utf8Len.one) == 1
 	assert u8(Utf8Len.four) == 4
 }
