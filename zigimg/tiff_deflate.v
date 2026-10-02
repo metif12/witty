@@ -27,14 +27,60 @@ enum TiffFlateState {
 	end
 }
 
+// Decompress.Symbol and HuffmanDecoder(alphabet, max_code_bits, lookup_bits).
+// V has no u4/u2 fields; bits/kind retain the source ranges.
 struct TiffFlateSymbol {
+mut:
 	value int
-	bits  u8
+	bits u8
+	kind u8
+	code u16
+	next u16
 }
 
 struct TiffFlateTree {
 	max_bits int
-	lookup   []TiffFlateSymbol
+	lookup_bits int
+	symbols []TiffFlateSymbol
+	lookup []TiffFlateSymbol
+}
+
+fn tiff_flate_symbol_asc(a TiffFlateSymbol, b TiffFlateSymbol) bool {
+	if a.bits == b.bits {
+		if a.kind == b.kind { return a.value < b.value }
+		return a.kind < b.kind
+	}
+	return a.bits < b.bits
+}
+
+// std.sort.heapContext/siftDown from the same pinned Zig standard library.
+fn tiff_flate_sift_down(mut symbols []TiffFlateSymbol, target int, end int) {
+	mut current := target
+	for {
+		mut child := current * 2 + 1
+		if child >= end { break }
+		next_child := child + 1
+		if next_child < end && tiff_flate_symbol_asc(symbols[child], symbols[next_child]) {
+			child = next_child
+		}
+		if tiff_flate_symbol_asc(symbols[child], symbols[current]) { break }
+		symbols[child], symbols[current] = symbols[current], symbols[child]
+		current = child
+	}
+}
+
+fn tiff_flate_heap(mut symbols []TiffFlateSymbol) {
+	mut i := symbols.len / 2
+	for i > 0 {
+		i--
+		tiff_flate_sift_down(mut symbols, i, symbols.len)
+	}
+	i = symbols.len
+	for i > 0 {
+		i--
+		symbols[0], symbols[i] = symbols[i], symbols[0]
+		tiff_flate_sift_down(mut symbols, 0, i)
+	}
 }
 
 fn tiff_flate_tree(lengths []u8, alphabet int, max_bits int) !TiffFlateTree {
@@ -42,8 +88,7 @@ fn tiff_flate_tree(lengths []u8, alphabet int, max_bits int) !TiffFlateTree {
 	mut counts := []int{len: max_bits + 1}
 	mut longest := 0
 	for length in lengths {
-		if length == 0 { continue
-		 }
+		if length == 0 { continue }
 		if int(length) > longest { longest = int(length) }
 		counts[int(length)]++
 	}
@@ -58,34 +103,59 @@ fn tiff_flate_tree(lengths []u8, alphabet int, max_bits int) !TiffFlateTree {
 			return error('IncompleteHuffmanTree')
 		}
 	}
-	// Canonical codes have the same order as Symbol.asc (length, kind, symbol).
-	// A full table replaces the source's small lookup and linked-list fallback.
-	mut lookup := []TiffFlateSymbol{len: 1 << max_bits}
-	mut code := 0
-	for length in 1 .. max_bits + 1 {
-		for symbol in 0 .. alphabet {
-			if symbol >= lengths.len || lengths[symbol] != length { continue
-			 }
-			span := 1 << (max_bits - length)
-			for index in code .. code + span {
-				lookup[index] = TiffFlateSymbol{
-					value: symbol
-					bits:  u8(length)
-				}
-			}
-			code += span
+	lookup_bits := if max_bits == 7 { 7 } else { 9 }
+	lookup_shift := max_bits - lookup_bits
+	mut symbols := []TiffFlateSymbol{len: alphabet}
+	for i in 0 .. alphabet {
+		cb := if i < lengths.len { lengths[i] } else { u8(0) }
+		symbols[i] = TiffFlateSymbol{
+			value: i
+			bits: cb
+			kind: if i < 256 { u8(0) } else if i == 256 { u8(1) } else { u8(2) }
 		}
+	}
+	tiff_flate_heap(mut symbols)
+	mut lookup := []TiffFlateSymbol{len: 1 << lookup_bits}
+	mut code := u16(0)
+	mut idx := u16(0)
+	for pos in 0 .. symbols.len {
+		if symbols[pos].bits == 0 { continue }
+		symbols[pos].code = code
+		next_code := u32(code) + (u32(1) << (max_bits - int(symbols[pos].bits)))
+		// Source codes are u16; accepted trees never overflow this expression.
+		assert next_code <= 65535
+		next_idx := int(next_code >> lookup_shift)
+		if next_idx > lookup.len || int(idx) >= lookup.len { break }
+		if int(symbols[pos].bits) <= lookup_bits {
+			for j in int(idx) .. next_idx { lookup[j] = symbols[pos] }
+		} else {
+			root_next := lookup[int(idx)].next
+			lookup[int(idx)].next = u16(pos)
+			symbols[pos].next = root_next
+		}
+		idx = u16(next_idx)
+		code = u16(next_code)
 	}
 	return TiffFlateTree{
 		max_bits: max_bits
-		lookup:   lookup
+		lookup_bits: lookup_bits
+		symbols: symbols
+		lookup: lookup
 	}
 }
 
 fn (tree TiffFlateTree) find(code u64) !TiffFlateSymbol {
-	symbol := tree.lookup[int(code)]
-	if symbol.bits == 0 { return error('InvalidCode') }
-	return symbol
+	idx := int(code >> (tree.max_bits - tree.lookup_bits))
+	symbol := tree.lookup[idx]
+	if symbol.bits != 0 { return symbol }
+	mut pos := symbol.next
+	for pos > 0 {
+		linked := tree.symbols[int(pos)]
+		shift := tree.max_bits - int(linked.bits)
+		if (code ^ u64(linked.code)) >> shift == 0 { return linked }
+		pos = linked.next
+	}
+	return error('InvalidCode')
 }
 
 struct TiffFlate {
