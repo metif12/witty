@@ -10068,11 +10068,10 @@ pub fn (mut c Config) finalize() ! {
 		c.window_height = 4
 	}
 
-	// The source cannot express the build channel as a struct initializer. This
-	// pinned translation tracks Ghostty's tip build, so apply that build value
-	// during finalization when the user did not select a channel.
+	// Config.zig takes the compiled build_config.release_channel here, after
+	// preserving any user selection. The build driver supplies that live value.
 	if c.auto_update_channel == none {
-		c.auto_update_channel = .tip
+		c.auto_update_channel = buildcfg.release_channel
 	}
 
 	// Sided mappings must be ordered before their unsided counterparts so

@@ -7,6 +7,18 @@ import cli_args
 import buildcfg
 import font
 
+fn test_finalize_auto_update_channel_uses_compiled_channel_and_preserves_override() {
+	mut automatic := Config.default_config()
+	assert automatic.auto_update_channel == none
+	automatic.finalize()!
+	assert automatic.auto_update_channel? == buildcfg.release_channel
+	mut explicit := Config.default_config()
+	explicit.auto_update_channel = if buildcfg.release_channel == .stable { .tip } else { .stable }
+	expected := explicit.auto_update_channel?
+	explicit.finalize()!
+	assert explicit.auto_update_channel? == expected
+}
+
 fn assert_metric_modifier_absolute(modifier ?font.MetricsModifier, expected i32) {
 	value := modifier or { panic('missing metrics modifier') }
 	assert value is font.MetricsModifierAbsolute
