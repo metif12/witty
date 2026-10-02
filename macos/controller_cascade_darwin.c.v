@@ -32,7 +32,7 @@ fn terminal_window_became_main(window ObjId) {
 	if !is_regular_terminal_window(window) { return }
 	save_native_window_position(window)
 	if g_terminal_last_main != unsafe { nil } { g_terminal_last_main.deinit() }
-	g_terminal_last_main=new_native_weak_object(window)
+	g_terminal_last_main=new_native_weak_object(voidptr(window))
 }
 fn native_window_did_become_main(_self ObjId,_cmd Sel,notification ObjId) { terminal_window_became_main(msg_id(notification,'object')) }
 fn register_terminal_cascade_delegate_methods(cls ObjId) { add_method(cls,'windowDidBecomeMain:',voidptr(native_window_did_become_main),'v@:@') }
@@ -55,7 +55,7 @@ pub fn native_window_is_fullscreen(window voidptr) bool { return msg_u64(window,
 pub fn show_new_terminal_window(view voidptr,tab bool) {
 	window:=msg_id(view,'window')
 	if is_nil(window) { return }
-	if !native_window_is_fullscreen(window) && (!tab || msg_u64(msg_id(msg_id(window,'tabGroup'),'windows'),'count')<=1) {
+	if !native_window_is_fullscreen(voidptr(window)) && (!tab || msg_u64(msg_id(msg_id(window,'tabGroup'),'windows'),'count')<=1) {
 		g_terminal_cascade_point=C.witty_macos_cascade_top_left(window,g_terminal_cascade_point)
 	}
 	msg_void1(window,'makeKeyAndOrderFront:',nil_obj())
