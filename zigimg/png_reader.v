@@ -274,6 +274,7 @@ fn png_read_all_data(mut stream ReadStream, header &PngHeaderData, palette []Rgb
 		}
 	}
 	mut extra := []u8{len: 8}
-	assert png_decode_short(mut decoder, mut input, mut extra)! == 0
+	should_be_zero := png_decode_short(mut decoder, mut input, mut extra)!
+	assert should_be_zero == 0
 	return result
 }

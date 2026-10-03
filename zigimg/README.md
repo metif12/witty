@@ -1,14 +1,14 @@
 This is an incremental V translation of zigimg revision
 `d7b7ab0ba0899643831ef042bd73289510b39906`, the dependency locked by pinned
 vaxis. It currently covers the pixel-format words, storage variants, raw and
-indexed storage, memory and bit streams, crop/flip editing, pixel iteration,
-QOI, farbfeld, PBM, PGM, PPM, PAM, Sun raster, SGI, XBM, PCX, BMP, IFF, GIF, and TGA codecs,
+indexed storage, memory/file and bit streams, crop/flip editing, pixel iteration,
+QOI, farbfeld, PBM, PGM, PPM, PAM, Sun raster, SGI, XBM, PCX, BMP, IFF, GIF, TGA, and JPEG codecs,
 PackBits/LZW/CCITT compression helpers, the octree palette quantizer, pixel-format
 conversion, managed image construction/editing methods, image-wide encoder options,
-fixed-memory image writing, in-memory format detection, TIFF metadata/IFDs/decoding,
-PNG header/filter/processor foundations and information diagnostics, and the
-pinned PNG writer. It does not yet provide the complete image library or vaxis
-loading.
+memory/file image writing, format detection and loading, TIFF metadata/IFDs/decoding,
+PNG header/filter/processors, complete IDAT/Adam7 reading and information
+diagnostics, and the pinned PNG writer. Vaxis now uses these loaders. The
+complete library and its allocator/representation contracts remain open.
 
 The PNG writer in this exact revision emits only the eight-byte signature;
 its chunk-writing bodies are commented out. Native reference execution and V
@@ -21,8 +21,15 @@ follow the source. The heuristic's whole-row stride and omitted final run,
 gray16 transparency's byte-index comparisons, repeated tRNS replacement,
 and palette RGBA8 writes for BGRA32/RGBA64 destinations are preserved. The
 RGB24 direct processor API also retains its zero-stride loop for grayscale
-alpha destinations. Full PNG loading, IDAT buffering, Adam7,
-ZlibCompressor, and chunk-writer interfaces remain untranslated. GC/opaque
+alpha destinations. Complete PNG loading uses the pinned 4-KiB buffered
+consecutive-IDAT reader and shared zlib decoder, including CRC read-ahead and
+processor notification timing. Later IDAT notifications keep the initial
+chunk's length; IEND ignores its length/CRC, and unknown critical chunks are
+not automatically skipped. Adam7 retains its byte-sized destination-row
+overflow; repeated 16-bit tRNS can shrink the format and trap. Small file
+buffers can rebase while reading IHDR's CRC, overwrite the borrowed payload,
+and reject a valid image; native/V tests preserve that source behavior.
+ZlibCompressor and chunk-writer interfaces remain untranslated. GC/opaque
 callbacks replace allocators and generated vtables; allocator selection and
 root DefaultPngOptions overrides are absent. Undefined native initial storage,
 failed scalar union assignments, and unwritten alpha tails are excluded from
@@ -35,7 +42,7 @@ iTXt is printed raw; zTXt method zero uses the pinned buffered zlib reader.
 Unknown zTXt methods leave the rest unread. Ancillary CRCs are ignored, and
 writer failures return success with the current input position, which can
 leave payload/CRC bytes unconsumed. Delimiter, field, enum-name, and counter
-bounds retain checked traps. Writers are currently limited to fixed memory;
+bounds retain checked traps. Memory/file writers use the translated streams;
 GC scratch and format strings replace stack storage and streaming formatting.
 
 The pinned Sun raster writer succeeds without writing bytes. Its decoder
@@ -166,9 +173,8 @@ animation frames unchanged. Native hashes match 18,432 format-pair cases and
 
 V arrays and GC replace allocator slices. Sub-byte scalar values use byte
 storage or packed backing words. Allocation errors, the full color convenience
-methods, file streams and image file methods, PNG/JPEG decoding,
-automatic image loading/reader dispatch, and the FormatInterface callback
-surface still require translation.
+methods, the FormatInterface callback surface, and the remaining image API
+and allocator contracts still require translation.
 
 Managed images support creation, copied raw pixels, metadata, conversion,
 editing, iteration, and conversion to/from unmanaged views. Those views copy
@@ -195,10 +201,11 @@ byte-order marker without checking the version; TGA can take precedence over
 TIFF through its header or footer. Unknown inputs without a newline can fail
 at the final XBM delimiter peek; a leading define line preserves its
 non-advancing loop. Registry dispatch uses direct V matches rather than the
-source's reflected callback array. JPEG's helper here covers detection;
-its codec state/read APIs remain untranslated. A native hash matches
+source's reflected callback array. A native hash matches
 589,824 prefix/length cases, and separate bounded processes compare the XBM
-loop through both image APIs.
+loop through both image APIs. JPEG's frame/table/scan APIs now decode
+baseline/progressive/restart inputs; the separate reference runner documents
+eight excluded cases involving undefined source coefficient state.
 
 TIFF metadata preserves its packed 6/12/10-byte records, all 32 tag IDs,
 IFD parsing, bitmap defaults, sample/palette fields, format selection, and
@@ -229,9 +236,10 @@ The private TIFF zlib adapter follows Zig 0.15.2's buffered reader with a
 64 KiB window and 32 KiB history. It preserves stored/fixed/dynamic yield
 points, partial output on errors, word-sized read-ahead, and the consumed
 trailer. The source ignores FCHECK, FDICT, and Adler32 validation. Fixed matches
-crossing the window retain its unreachable-rebase trap. Full lookup tables
-replace the source's small Huffman tables and linked fallback; GC owns them.
-This is the memory/zlib path required by TIFF, not the full Zig flate API.
+crossing the window retain its unreachable-rebase trap. Huffman decoding now
+uses the source's small lookup, sorted alphabet and linked fallback; GC owns
+them. Generic input supports memory, files, and PNG's buffered IDAT reader.
+This is the zlib path required by the codecs, not the full Zig flate API.
 The unchanged-source runner compares 39,707 cases across helpers and complete
 TIFF reads, including output, errors, positions, partial writes, palettes,
 predictors, and byte orders. Fifteen isolated probes compare checked traps.
@@ -394,6 +402,23 @@ also guards the pinned formatter files:
 python3 zigimg/verify_png_info_reference.py \
   /path/to/locked-zigimg /path/to/zig-0.15.2/zig /path/to/v-0.5.2
 ```
+
+The complete PNG decoder runner builds both probes after checking the same
+source/compiler hashes. It compares pixel/palette bytes, statuses, dimensions,
+stream positions, tRNS/PLTE state, information output, and callback ordering
+through 60,760 memory/file cases and five file-buffer sizes, then checks eight
+isolated traps:
+
+```sh
+python3 zigimg/verify_png_decode_reference.py \
+  /path/to/locked-zigimg /path/to/zig-0.15.2/zig /path/to/v-0.5.2
+```
+
+Fixtures cover all 15 color/depth combinations, every filter, Adam7,
+stored/fixed/dynamic compression, IDAT splits/CRCs/empty chunks, truncations,
+metadata/chunk walking, and large rows/windows. Python generates inputs only;
+the unchanged native decoder defines expected results. The dedicated
+`png_reader_test.v` also checks pixel values and loading through the registry.
 
 IFF checked bounds use separate process probes. Build the V executable from
 `zigimg/reference_probes/iff_bounds` and the locked-source Zig executable from
