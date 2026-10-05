@@ -1,5 +1,37 @@
 module zigimg
 
+fn test_crop_box_and_zero_pixel_dimensions_keep_native_usize_boundaries() {
+	assert Box{
+		width:  ~usize(0)
+		height: ~usize(0)
+	}.clamp(8, 9) == Box{
+		width:  8
+		height: 9
+	}
+	assert Box{
+		x:      8
+		y:      9
+		width:  2
+		height: 3
+	}.clamp(8, 9) == Box{
+		x: 8
+		y: 9
+	}
+	assert Box{
+		x: ~usize(0)
+		y: ~usize(0)
+	}.clamp(~usize(0), ~usize(0)) == Box{
+		x: ~usize(0)
+		y: ~usize(0)
+	}
+	wide := ImageUnmanaged.create(~usize(0), 0, .invalid)!
+	assert wide.width == ~usize(0) && wide.height == 0
+	assert wide.pixels.len() == 0
+	tall := Image.create(0, ~usize(0), .invalid)!
+	assert tall.width == 0 && tall.height == ~usize(0)
+	assert tall.pixels.len() == 0
+}
+
 fn test_vertical_flip_mutates_borrowed_rows_and_keeps_animation_and_palette() {
 	mut bytes := []u8{len: 18, init: u8(index + 1)}
 	image := ImageUnmanaged.from_raw_pixels_owned(2, 3, bytes, .rgb24)!

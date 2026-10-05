@@ -76,21 +76,17 @@ pub fn Window.new(screen &Screen) Window {
 
 fn (w Window) init_child(x_off int, y_off int, maybe_width ?u16, maybe_height ?u16) Window {
 	// V has no i17 storage; enforce the source's signed range on every child.
-	assert x_off >= -0x10000 && x_off <= 0xffff
-	assert y_off >= -0x10000 && y_off <= 0xffff
+	if x_off < -0x10000 || x_off > 0xffff { panic('integer cast truncated bits') }
+	if y_off < -0x10000 || y_off > 0xffff { panic('integer cast truncated bits') }
 	max_height := max_int(int(w.height) - y_off, 0)
 	max_width := max_int(int(w.width) - x_off, 0)
-	assert max_height <= 0xffff && max_width <= 0xffff
+	if max_height > 0xffff || max_width > 0xffff { panic('integer overflow') }
 	width := if value := maybe_width { int(value) } else { max_width }
 	height := if value := maybe_height { int(value) } else { max_height }
-	abs_x := x_off + w.x_off
-	abs_y := y_off + w.y_off
-	parent_x := min_int(w.parent_x_off + x_off, 0)
-	parent_y := min_int(w.parent_y_off + y_off, 0)
-	assert abs_x >= -0x10000 && abs_x <= 0xffff
-	assert abs_y >= -0x10000 && abs_y <= 0xffff
-	assert parent_x >= -0x10000 && parent_x <= 0xffff
-	assert parent_y >= -0x10000 && parent_y <= 0xffff
+	abs_x := window_i17_add(x_off, w.x_off)
+	abs_y := window_i17_add(y_off, w.y_off)
+	parent_x := min_int(window_i17_add(w.parent_x_off, x_off), 0)
+	parent_y := min_int(window_i17_add(w.parent_y_off, y_off), 0)
 	return Window{
 		x_off:        abs_x
 		y_off:        abs_y
@@ -100,6 +96,12 @@ fn (w Window) init_child(x_off int, y_off int, maybe_width ?u16, maybe_height ?u
 		height:       u16(min_int(height, max_height))
 		screen:       w.screen
 	}
+}
+
+fn window_i17_add(first int, second int) int {
+	value := i64(first) + i64(second)
+	if value < -0x10000 || value > 0xffff { panic('integer overflow') }
+	return int(value)
 }
 
 pub fn (w Window) child(opts WindowChildOptions) Window {
@@ -226,20 +228,24 @@ pub fn (w Window) child(opts WindowChildOptions) Window {
 }
 
 pub fn (w Window) write_cell(col u16, row u16, cell Cell) {
-	if row >= w.height || col >= w.width || w.x_off + int(col) < 0 || w.y_off + int(row) < 0
-		|| w.parent_x_off + int(col) < 0 || w.parent_y_off + int(row) < 0 {
+	if row >= w.height || col >= w.width || window_i17_add(w.x_off, int(col)) < 0
+		|| window_i17_add(w.y_off, int(row)) < 0 || window_i17_add(w.parent_x_off, int(col)) < 0
+		|| window_i17_add(w.parent_y_off, int(row)) < 0 {
 		return
 	}
 	mut screen := unsafe { w.screen }
-	screen.write_cell(u16(w.x_off + int(col)), u16(w.y_off + int(row)), cell)
+	screen.write_cell(u16(window_i17_add(w.x_off, int(col))),
+		u16(window_i17_add(w.y_off, int(row))), cell)
 }
 
 pub fn (w Window) read_cell(col u16, row u16) ?Cell {
-	if row >= w.height || col >= w.width || w.x_off + int(col) < 0 || w.y_off + int(row) < 0
-		|| w.parent_x_off + int(col) < 0 || w.parent_y_off + int(row) < 0 {
+	if row >= w.height || col >= w.width || window_i17_add(w.x_off, int(col)) < 0
+		|| window_i17_add(w.y_off, int(row)) < 0 || window_i17_add(w.parent_x_off, int(col)) < 0
+		|| window_i17_add(w.parent_y_off, int(row)) < 0 {
 		return none
 	}
-	return w.screen.read_cell(u16(w.x_off + int(col)), u16(w.y_off + int(row)))
+	return w.screen.read_cell(u16(window_i17_add(w.x_off, int(col))), u16(window_i17_add(w.y_off,
+		int(row))))
 }
 
 pub fn (w Window) clear() {
@@ -283,13 +289,14 @@ pub fn (w Window) hide_cursor() {
 }
 
 pub fn (w Window) show_cursor(col u16, row u16) {
-	if w.x_off + int(col) < 0 || w.y_off + int(row) < 0 || row >= w.height || col >= w.width {
+	if window_i17_add(w.x_off, int(col)) < 0 || window_i17_add(w.y_off, int(row)) < 0
+		|| row >= w.height || col >= w.width {
 		return
 	}
 	mut screen := unsafe { w.screen }
 	screen.cursor_vis = true
-	screen.cursor_row = u16(w.y_off + int(row))
-	screen.cursor_col = u16(w.x_off + int(col))
+	screen.cursor_row = u16(window_i17_add(w.y_off, int(row)))
+	screen.cursor_col = u16(window_i17_add(w.x_off, int(col)))
 }
 
 pub fn (w Window) set_cursor_shape(shape CursorShape) {

@@ -14,6 +14,10 @@ current implementations and verification are checked again.
 
 | Area | Bug | Fix |
 |---|---|---|
+| vaxis shared Unicode APIs | Public width and grapheme helpers decoded through V runes and lost malformed-byte consumption, checked width totals, and source borrowing/prefetch timing. | Reuse the locked byte decoder for the public helpers and expose borrowed Grapheme spans and initialized iterators. DrawContext initializes its decoder at the factory call. Ordinary and production comparisons match 72,225 records, fourteen strict traps and both required-span-field omission checks; the original TextInput matrix retains its hash. Opaque iterator state and V string call shapes remain documented adaptations. |
+| vaxis vxfw TextField | Insertion/navigation/drawing normalized raw bytes, count/width/draw arithmetic lost checked source bounds in production, caller-buffer copying omitted alias checks, and rendered graphemes copied the gap buffer. | Use the shared byte decoder, explicit checked arithmetic and borrowed buffer views. Preserve callback mutation/error ordering and retained previous-value snapshots. Ordinary and production source comparisons match 18,911 returning records and sixteen strict trap pairs. Six focused tests pass. The unused u4 scroll field remains a measured wider-storage constructor boundary. |
+| vaxis framework surfaces and delegated Window coordinates | Surface indexing widened source u16 operations, production erased invariant checks, rendering restricted valid i17 offsets to i16, and delegated coordinate sums lost checked arithmetic and short-circuit order. | Restore explicit u16/i17 checks, borrowed trimming, source-wide offsets, and checked child/cell/cursor coordinates. Ordinary and production comparisons match 11,162 records and twenty-eight strict traps; four focused consumers pass. The comparison covers initialized surface methods and delegated Window methods, with constructor/allocator and wider backing-field limits recorded separately. |
+| zigimg SIMD helpers and image dimension checks | All six public array/vector helpers were absent, and production optimization erased image pixel-count and crop-box assertions. | Add fixed-array load, byte load, compatible numeric/boolean/struct/pointer stores, integer/float conversion and fallback permutation helpers with checked casts, per-lane bounds, named lane types and pointer inputs. Enforce source assignment widths, signedness and numeric categories explicitly for aliases. Preserve partial stores and the pinned ARM64 NaN result. Replace image dimension assertions with explicit checked operations in source order. Both build modes match 60,109 records, twenty-two strict traps and thirty-five ordinary compiler pairs. Native vector layout/overlap, AVX2 indexing, comptime lengths, zero-length arrays and the pinned pointer-alias constructor defect retain documented boundaries. |
 | zigimg complete PNG reader verification | The integrated reader lacked a committed complete-image differential runner and dedicated decoder tests; its final decompression call was inside an assertion. | Evaluate final decompression once, then assert its result as in the source. Add unchanged-source comparisons for memory/file loading, all 15 color/depth pairs, every filter, Adam7, stored/fixed/dynamic zlib, consecutive IDAT lengths/read-ahead/CRCs, metadata, truncation, callback order/failures, and large rows/windows. Isolate pixel-count, extra-output, Adam7 byte-row, skip-length, palette-alpha, and repeated-16-bit-tRNS traps. Dedicated tests cover pixel values, processor state, registry loading, and the inherited small-file-buffer IHDR CRC failure. Allocator/root-option and representation boundaries remain below. |
 | zigimg PNG information processor | The pinned diagnostic processor and its options wrapper were absent. | Translate every chunk/palette diagnostic, IDAT counters, binary byte-size formatting, text-field truncation, and zTXt buffered decompression using the pinned zlib dependency. Preserve raw compressed iTXt output, unknown-zTXt-method positioning, ignored ancillary CRCs, suppressed writer failures with partially consumed chunks, exact spelling/spacing, and checked delimiter/tag/counter traps. The unchanged source matches 51,223 cases and twelve isolated traps. All 28 image test files, native/Linux checks, and Windows DLL/focused-test compilation pass. The complete reader and file streams were subsequently integrated; allocator/root-option and representation boundaries remain open. |
 | zigimg PNG header, filtering, and processors | Header loading, scanline filtering/defiltering/spreading, and the reader processor/options surface were absent. | Translate chunk IDs/headers, IHDR validation and CRC, all five filters and the pinned heuristic, opaque-context callbacks, borrowed generic option storage, and tRNS/PLTE processors. Preserve open compression/filter bytes, error positions, first ancillary versus all critical callbacks, callback state after failure, repeated tRNS replacement, gray16 byte-index comparisons, and RGBA palette writes independent of destination channel order/width. Unchanged-source matrices match 74,260 defined cases; fourteen checked traps and the inherited zero-stride loop match in isolated processes. All 27 image test files, native/Linux checks, and Windows DLL/focused-test compilation pass. The later complete-reader checkpoint is below; allocator/root-option and representation/undefined-memory boundaries remain open. |
@@ -1093,6 +1097,18 @@ an item here does not mean its full module has been certified yet.
   routing/layout/timer tests and a PTY application smoke pass; Windows runtime
   behavior remains untested. These representation limits do not certify
   identical layouts or lifetime/failure contracts.
+- **vaxis framework checked state:** ListView and ScrollView still store the
+  source's `i17` scroll offsets and pending-line counts in `i32` and perform
+  unchecked scroll additions/subtractions. Spinner's `u4` frame increment
+  still uses an unchecked `u8` increment. These are concrete arithmetic gaps,
+  separate from the GC and atomic representation adaptations above. The
+  source's global-TTY `recover` and panic-handler exports also have no public
+  V counterparts; their cleanup integration remains open.
+  Framework constructor omissions also remain: Widget userdata, Surface
+  size/widget/buffer/children, Point and RelativePoint row/col, CursorState
+  row/col, and SubSurface origin/surface do not yet enforce the corresponding
+  source required fields. The surface matrix uses complete source fixtures;
+  its initialized-method checks do not close those constructor contracts.
 - **Fixed-array type aliases:** the pinned V compiler accepts a public alias
   declaration for Ghostty's `[256]RGB` `color.Palette` but emits invalid C as
   soon as that alias is used as a field or parameter type. Witty therefore
@@ -1652,8 +1668,9 @@ values. Ordinary and production comparisons match 14,346 records and 22 checked
 traps, SHA-256
 `4003872debd68d8f2886119b492cc0d14ac1c5692a049662b043074cb67aaaf0`.
 Six focused consumer tests pass. Source u16 count/width overflow and malformed
-combining-mark underflow remain inherited traps. The byte iterator and width
-helper are private to TextInput; global width/grapheme APIs remain unchanged.
+combining-mark underflow remain inherited traps. At this checkpoint the byte
+iterator and width helper were private to TextInput; the subsequent shared
+Unicode continuation is recorded below.
 GC ownership and int-sized-array limits remain documented in
 `vaxis/reference_probes/text_input/README.md`.
 
@@ -1842,3 +1859,64 @@ Repository-wide test state, for honesty about what the gates actually cover:
   treating as suspicious rather than as runner noise: two such reports this
   session turned out to be a V compiler segfault, one of them masking a real
   generic-instantiation defect in `SplitTree.new`.
+
+The shared Unicode continuation compares public spans, all three width methods,
+DrawContext adapters, borrowed addresses and mutable-caller prefetch timing.
+Ordinary and V-production/source-ReleaseSafe builds match 72,225 records,
+fourteen strict traps, one complete Grapheme constructor and two paired
+required-field omission errors, SHA-256
+`f7555397b8c48374500b4558a166e5701f30ad7f2b35d056a4d5c56297913f4c`.
+The original 72,065-record prefix retains its separately checked hash. Six
+focused consumers pass. V keeps iterator state opaque and requires an init
+factory; it does not expose arbitrary source iterator state literals. The
+existing TextInput comparison again matches all 14,442 records and 24 traps
+with its previous hash. Reproduction and limits are in
+`vaxis/reference_probes/unicode_gwidth/README.md`.
+
+TextField's public insertion, navigation, drawing, widget callbacks and
+caller-buffer copy match 18,911 unchanged-source records and sixteen strict
+trap pairs in ordinary and production builds, SHA-256
+`c9a34b722a8b37cf2d7916679118d07dae1a2bbd11a3bd68ccfe7fdf1dd93be3`.
+The matrix includes change/submit errors and mutations, context flags, state
+reset order, raw UTF-8, large zero-width iteration, and 1,824 borrowed-draw
+pointer/mutation records. Six focused consumers pass. Source rejects the unused
+scroll field's literal value 16 while V's u8 backing accepts it; the runner
+measures this boundary separately. GC, allocator errors and readonly slice
+enforcement remain adaptations. Reproduction is in
+`vaxis/reference_probes/vxfw_text_field/README.md`.
+
+Surface/SubSurface and their delegated Window child/cell/cursor methods match
+11,162 unchanged-source records and twenty-eight strict traps in ordinary and
+V-production/source-ReleaseSafe builds, SHA-256
+`852eb3f3eae04a383dd8af7fc2055971d9fc1bd1f49760135457cc4d5c6bc265`.
+Four focused consumers pass. The matrix separates u16 multiplication/addition,
+i17 endpoint/max-size/absolute/parent sums and neighboring short-circuit paths;
+it also checks borrowed trim buffers/children, cursor reset, clipped rendering,
+stable sorting and hit routing before/after render. Window fill/print, arbitrary
+source state constructors and allocator failures remain outside this proof.
+Reproduction is in `vaxis/reference_probes/vxfw_surface/README.md`.
+
+The six zigimg SIMD lane helpers and Box/image dimension guards match 60,109
+unchanged-source records, twenty-two strict trap pairs, thirty-five ordinary
+compiler-rejection pairs and one panic-visible store-prefix pair in ordinary
+and V-production/source-ReleaseSafe builds. SHA-256:
+`d67067e84ac4022693c27f755806a944c51909088df51a144f1438be1679f51e`.
+Eight focused consumers pass in both modes. Native integer/f32/f64 lanes,
+aliases, widening, raw floating-point bits, 7,500 pointer conversion records,
+boolean/struct stores and source-ordered dimension checks are included.
+Stores preserve prior writes on a short destination. Four measured boundaries
+cover source comptime lengths, zero-length arrays, array/vector overlap, and
+the pinned V fixed-array pointer-alias constructor's uninitialized-pointer
+copy. Valid pointer aliases use typed views of pointer bits; the runner checks
+the broken constructor's generated C without executing undefined behavior.
+The native ARM64 NaN result is preserved; other CPUs, AVX2 permutation behavior,
+vector ABI and non-native source numeric/tuple carriers remain outside this
+proof. Reproduction is in `zigimg/reference_probes/simd/README.md`.
+
+The final integrated runs pass all 36 Vaxis and 44 image test files. Native and
+Linux module checks, native/Linux whole-application checks, both Windows DLL
+cross builds and the four new focused Windows test builds pass. The Vaxis
+Linux shared module also links as an x86_64 ELF with GC disabled for that build.
+These are compilation/link checks for the cross targets; no new Linux/Windows
+runtime parity, allocator/GC lifetime or complete dependency coverage is
+claimed. The framework arithmetic/constructor gaps recorded above remain open.

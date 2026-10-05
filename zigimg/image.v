@@ -72,7 +72,9 @@ pub fn ImageUnmanaged.create(width usize, height usize, format PixelFormat) !Ima
 }
 
 fn image_pixel_count(width usize, height usize) usize {
-	assert height == 0 || width <= ~usize(0) / height
+	if height != 0 && width > ~usize(0) / height {
+		panic('integer overflow')
+	}
 	return width * height
 }
 

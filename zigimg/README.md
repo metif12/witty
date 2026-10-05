@@ -7,8 +7,21 @@ PackBits/LZW/CCITT compression helpers, the octree palette quantizer, pixel-form
 conversion, managed image construction/editing methods, image-wide encoder options,
 memory/file image writing, format detection and loading, TIFF metadata/IFDs/decoding,
 PNG header/filter/processors, complete IDAT/Adam7 reading and information
-diagnostics, and the pinned PNG writer. Vaxis now uses these loaders. The
-complete library and its allocator/representation contracts remain open.
+diagnostics, the pinned PNG writer, and the public SIMD lane helpers. Vaxis now
+uses these loaders. The complete library and its allocator/representation
+contracts remain open.
+
+The lane helpers are `simd_load`, `simd_load_bytes`, `simd_store`,
+`simd_int_to_float`, `simd_float_to_int`, and `simd_vpermd`. Output lanes use a
+directly named fixed-array type, such as `type FourWords = [4]u16`; a load or
+store length of zero selects the whole array. Numeric operations support V's
+native integer types and f32/f64, including aliases and borrowed pointer inputs
+for conversions. Stores also accept compatible boolean and struct arrays.
+Bounds and float-cast checks remain active in production builds, and short
+stores retain the written prefix. Fixed-array stores preserve the source's
+propagating overlap behavior; native vector overlap and layout, AVX2 selection,
+comptime lengths and zero-length arrays retain the limits described in the
+[source comparison](reference_probes/simd/README.md).
 
 The PNG writer in this exact revision emits only the eight-byte signature;
 its chunk-writing bodies are commented out. Native reference execution and V

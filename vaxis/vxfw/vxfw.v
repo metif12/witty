@@ -215,7 +215,8 @@ pub fn (ctx DrawContext) string_width(text string) usize {
 
 pub fn (ctx DrawContext) grapheme_iterator(text string) GraphemeIterator {
 	return GraphemeIterator{
-		text: text
+		text:  text
+		inner: vaxis.grapheme_iterator(text)
 	}
 }
 
@@ -230,14 +231,14 @@ pub fn (ctx DrawContext) with_constraints(min Size, max MaxSize) DrawContext {
 pub struct GraphemeIterator {
 	text string
 mut:
-	index int
+	inner ?vaxis.GraphemeIterator
 }
 
 pub fn (mut iter GraphemeIterator) next() ?string {
-	if iter.index >= iter.text.len { return none }
-	start := iter.index
-	iter.index += vaxis.first_grapheme_byte_length(iter.text[start..])
-	return iter.text[start..iter.index]
+	mut inner := iter.inner or { vaxis.grapheme_iterator(iter.text) }
+	defer { iter.inner = inner }
+	span := inner.next() or { return none }
+	return span.bytes(iter.text)
 }
 
 pub type EventHandler = fn (voidptr, mut EventContext, Event) !
@@ -323,9 +324,15 @@ pub fn Surface.empty(widget Widget) Surface {
 }
 
 pub fn Surface.create_buffer(size Size) []vaxis.Cell {
-	return []vaxis.Cell{len: int(size.width) * int(size.height), init: vaxis.Cell{
+	return []vaxis.Cell{len: surface_u16_product(size.width, size.height), init: vaxis.Cell{
 		default_: true
 	}}
+}
+
+fn surface_u16_product(width u16, height u16) int {
+	// Check before the signed int multiplication can overflow for large sizes.
+	if u32(width) * u32(height) > 0xffff { panic('integer overflow') }
+	return int(width) * int(height)
 }
 
 pub fn Surface.init(widget Widget, size Size) Surface {
@@ -347,35 +354,43 @@ pub fn Surface.init_with_children(widget Widget, size Size, children []SubSurfac
 
 pub fn (surface Surface) write_cell(col u16, row u16, cell vaxis.Cell) {
 	if col >= surface.size.width || row >= surface.size.height { return }
-	index := int(row) * int(surface.size.width) + int(col)
-	assert index < surface.buffer.len
+	row_start := surface_u16_product(row, surface.size.width)
+	if int(col) > 0xffff - row_start { panic('integer overflow') }
+	index := row_start + int(col)
+	if index >= surface.buffer.len { panic('Assertion failed') }
 	unsafe {
 		surface.buffer[index] = cell
 	}
 }
 
 pub fn (surface Surface) read_cell(col usize, row usize) vaxis.Cell {
-	assert col < usize(surface.size.width) && row < usize(surface.size.height)
-	index := int(row * usize(surface.size.width) + col)
-	assert index < surface.buffer.len
-	return surface.buffer[index]
+	if col >= usize(surface.size.width) || row >= usize(surface.size.height) {
+		panic('Assertion failed')
+	}
+	index := row * usize(surface.size.width) + col
+	if index >= usize(surface.buffer.len) { panic('Assertion failed') }
+	return surface.buffer[int(index)]
 }
 
 pub fn (surface Surface) trim_height(height u16) Surface {
-	assert height <= surface.size.height
+	if height > surface.size.height { panic('Assertion failed') }
+	length := surface_u16_product(surface.size.width, height)
+	if length > surface.buffer.len { panic('index out of bounds') }
 	return Surface{
 		size:     Size{
 			width:  surface.size.width
 			height: height
 		}
 		widget:   surface.widget
-		buffer:   surface.buffer[..int(surface.size.width) * int(height)]
+		buffer:   surface.buffer[..length]
 		children: surface.children
 	}
 }
 
 pub fn (surface Surface) hit_test(mut list []HitResult, point Point) {
-	assert point.col < surface.size.width && point.row < surface.size.height
+	if point.col >= surface.size.width || point.row >= surface.size.height {
+		panic('Assertion failed')
+	}
 	if surface.widget.event_handler != none || surface.widget.capture_handler != none {
 		list << HitResult{
 			local:  point
@@ -394,7 +409,9 @@ pub fn (surface Surface) hit_test(mut list []HitResult, point Point) {
 
 pub fn (surface Surface) render(win vaxis.Window, focused Widget) {
 	if surface.buffer.len > 0 {
-		assert surface.buffer.len == int(surface.size.width) * int(surface.size.height)
+		if surface.buffer.len != surface_u16_product(surface.size.width, surface.size.height) {
+			panic('Assertion failed')
+		}
 		for index, cell in surface.buffer {
 			win.write_cell(u16(index % int(surface.size.width)),
 				u16(index / int(surface.size.width)), cell)
@@ -417,8 +434,6 @@ pub fn (surface Surface) render(win vaxis.Window, focused Widget) {
 		}
 	}
 	for child in children {
-		assert child.origin.col >= -32768 && child.origin.col <= 32767
-		assert child.origin.row >= -32768 && child.origin.row <= 32767
 		child_win := win.child(vaxis.WindowChildOptions{
 			x_off:  child.origin.col
 			y_off:  child.origin.row
@@ -447,6 +462,12 @@ pub fn SubSurface.less_than(lhs SubSurface, rhs SubSurface) bool {
 
 pub fn (sub SubSurface) contains_point(point Point) bool {
 	return i32(point.col) >= sub.origin.col && i32(point.row) >= sub.origin.row
-		&& i32(point.col) < sub.origin.col + i32(sub.surface.size.width)
-		&& i32(point.row) < sub.origin.row + i32(sub.surface.size.height)
+		&& i32(point.col) < surface_i17_end(sub.origin.col, sub.surface.size.width)
+		&& i32(point.row) < surface_i17_end(sub.origin.row, sub.surface.size.height)
+}
+
+fn surface_i17_end(origin i32, size u16) i32 {
+	limit := i64(origin) + i64(size)
+	if limit < -0x10000 || limit > 0xffff { panic('integer overflow') }
+	return i32(limit)
 }

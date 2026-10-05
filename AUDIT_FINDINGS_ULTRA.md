@@ -1798,9 +1798,10 @@ movement and large public cursor values. Ordinary and production comparisons
 match 14,346 returning records and 22 checked traps, SHA-256
 `4003872debd68d8f2886119b492cc0d14ac1c5692a049662b043074cb67aaaf0`.
 Six focused consumers pass. Source count/width overflow and malformed combining
-mark underflow remain checked traps. The private iterator/width helper leaves
-the module's global APIs unchanged; GC ownership, string call shapes and
-int-sized arrays remain documented representation limits.
+mark underflow remain checked traps. At this checkpoint the iterator/width
+helper left the module's global APIs unchanged; the subsequent shared Unicode
+continuation is recorded below. GC ownership, string call shapes and int-sized
+arrays remain documented representation limits.
 
 The classic Terminal key encoder matches 59,072 returning cases and all 31
 nonzero Kitty press traps in Debug and V-production/source-ReleaseSafe builds,
@@ -1992,3 +1993,67 @@ module checks and the Windows DLL cross build were repeated after the math
 integration and pass. These checks establish the recorded implementation
 paths; allocator contracts, unsupported original helpers, unexecuted platform
 runtimes and interactive native packaging retain the limits described above.
+
+The shared Unicode continuation exposes borrowed Grapheme spans and initialized
+iterators, and routes public width/grapheme helpers through the locked byte
+decoder. DrawContext factories preserve source prefetch timing. Ordinary and
+V-production/source-ReleaseSafe runs match 72,225 records, fourteen strict
+traps, one complete span constructor and two paired missing-field rejections,
+SHA-256 `f7555397b8c48374500b4558a166e5701f30ad7f2b35d056a4d5c56297913f4c`.
+The original 72,065-record prefix retains its hash independently. The additional
+160 mutation traces verify all three factories and previously returned borrowed
+views. Six focused consumers pass, and the full original TextInput comparison
+retains its 14,442-record/24-trap hash. Iterator state remains opaque in V;
+source state literals, allocator lifetime and aggregate ABI are outside this
+comparison. Reproduction is in
+`vaxis/reference_probes/unicode_gwidth/README.md`.
+
+TextField now uses the shared raw-byte iterator, preserves checked count/width/
+draw arithmetic under production optimization, and borrows both caller-buffer
+prefixes and rendered gap-buffer graphemes. Ordinary and V-production/source-
+ReleaseSafe comparisons match 18,911 records and sixteen strict trap pairs,
+SHA-256 `c9a34b722a8b37cf2d7916679118d07dae1a2bbd11a3bd68ccfe7fdf1dd93be3`.
+Six focused tests pass. Callback mutation/error timing, previous-value snapshots,
+state reset order and 1,824 additional pointer/mutation records are included.
+The unused source u4 scroll field still has wider u8 storage; its source-only
+literal rejection/V acceptance is measured separately. Allocator, GC and
+readonly-slice contracts retain the limits in
+`vaxis/reference_probes/vxfw_text_field/README.md`.
+
+The Surface/SubSurface continuation restores checked u16 buffer/index
+arithmetic and invariant checks that survive production builds, source-wide
+i17 clipping, and checked delegated Window child/cell/cursor sums. Ordinary
+and V-production/source-ReleaseSafe comparisons match 11,162 records and
+twenty-eight strict traps, SHA-256
+`852eb3f3eae04a383dd8af7fc2055971d9fc1bd1f49760135457cc4d5c6bc265`.
+Four focused consumers pass. Borrowed trimming and child storage, cursor reset,
+stable render order and pre/post-render hit routing are included. Remaining
+framework constructor requirements, scroll i17 arithmetic and Spinner u4
+overflow are recorded in the live audit; this method proof does not certify
+those state contracts or the unmodified Window fill/print paths. Reproduction
+is in `vaxis/reference_probes/vxfw_surface/README.md`.
+
+The six zigimg SIMD lane helpers now support named native numeric lane arrays,
+checked load/store assignment, raw-byte loading, integer/float conversion and
+the non-AVX2 permutation. Stores also support compatible boolean, struct and
+pointer arrays, preserve array overlap and retain the written prefix on bounds
+failure. Box clamping and image pixel counts use explicit checks in source
+order that survive production optimization. Both ordinary and V-production/
+source-ReleaseSafe comparisons match 60,109 records, twenty-two strict trap
+pairs, thirty-five ordinary compiler pairs and one panic-visible prefix pair,
+SHA-256 `d67067e84ac4022693c27f755806a944c51909088df51a144f1438be1679f51e`.
+Eight focused consumers pass in both modes. Four measured boundaries retain
+source comptime length rejection, zero-length array support, native vector
+overlap, and the pinned V pointer-alias constructor defect. The last is checked
+in generated C without executing undefined behavior; valid alias values use
+typed pointer-bit views. The ARM64 NaN cast result is measured in both source
+modes. Other CPU NaN behavior, AVX2 indexing, native vector ABI and non-native
+source numeric/tuple carriers remain outside this proof. Reproduction and
+examples are in `zigimg/reference_probes/simd/README.md`.
+
+Final integration passes 36/36 Vaxis and 44/44 image test files, native/Linux
+module and whole-application checks, both Windows DLL cross builds and the
+four new focused Windows test builds. The Vaxis Linux shared module also
+links as x86_64 ELF with GC disabled for compilation/link verification. Cross
+runtime behavior and allocator/lifetime parity remain unverified; the live
+audit retains the open framework arithmetic and constructor requirements.

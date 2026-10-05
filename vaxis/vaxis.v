@@ -2042,77 +2042,9 @@ fn eaw_to_width(cp u32) int {
 	return if width_property(cp, 0) { 2 } else { 1 }
 }
 
-// gwidth translates vaxis/src/gwidth.zig using the locked uucode properties.
+// gwidth translates vaxis/src/gwidth.zig using the locked uucode byte decoder.
 pub fn gwidth(value string, method GWidthMethod) u16 {
-	match method {
-		.wcwidth {
-			mut total := u16(0)
-			for cp in value.runes() {
-				codepoint := u32(cp)
-				w := if codepoint >= 0x1f3fb && codepoint <= 0x1f3ff { 2 } else { eaw_to_width(codepoint) }
-				if w > 0 {
-					total += u16(w)
-				}
-			}
-			return total
-		}
-		.no_zwj {
-			mut total := u16(0)
-			for part in value.split('\u200d') {
-				total += gwidth(part, .unicode)
-			}
-			return total
-		}
-		.unicode {
-			mut total := u16(0)
-			mut offset := 0
-			for offset < value.len {
-				length := first_grapheme_byte_length(value[offset..])
-				if length == 0 {
-					break
-				}
-				grapheme := value[offset..offset + length]
-				offset += length
-				mut width := 0
-				mut emoji_vs := false
-				mut text_vs := false
-				mut emoji_presentation := false
-				mut ri_count := 0
-				for cp in grapheme.runes() {
-					codepoint := u32(cp)
-					if codepoint == 0xfe0f {
-						emoji_vs = true
-						continue
-					}
-					if codepoint == 0xfe0e {
-						text_vs = true
-						continue
-					}
-					if width_property(codepoint, 2) {
-						emoji_presentation = true
-					}
-					if codepoint >= 0x1f1e6 && codepoint <= 0x1f1ff {
-						ri_count++
-					}
-					w := eaw_to_width(codepoint)
-					if w > width {
-						width = w
-					}
-				}
-				if text_vs {
-					if width < 1 {
-						width = 1
-					}
-				} else if emoji_vs || emoji_presentation || ri_count == 2 {
-					if width < 2 {
-						width = 2
-					}
-				}
-				total += u16(width)
-			}
-			return total
-		}
-	}
+	return text_input_gwidth(value, method)
 }
 
 pub fn (mut t TextInput) clear_and_free() {
@@ -2207,25 +2139,7 @@ pub fn (mut t TextInput) delete_word_after() {
 }
 
 pub fn first_grapheme_byte_length(text string) int {
-	if text.len == 0 {
-		return 0
-	}
-	runes := text.runes()
-	if runes.len == 0 {
-		return 0
-	}
-	mut length := runes[0].str().len
-	mut previous := u32(runes[0])
-	mut state := unicode.BreakState.default
-	for i in 1 .. runes.len {
-		current := u32(runes[i])
-		if vaxis_grapheme_break(previous, current, &state) {
-			break
-		}
-		length += runes[i].str().len
-		previous = current
-	}
-	return length
+	return text_input_first_grapheme_byte_length(text)
 }
 
 // The two pinned uucode revisions share Unicode 16 data, but Ghostty tailors
@@ -2257,20 +2171,7 @@ fn vaxis_grapheme_break(cp1 u32, cp2 u32, state &unicode.BreakState) bool {
 }
 
 fn last_grapheme_byte_length(text string) int {
-	if text.len == 0 {
-		return 0
-	}
-	mut offset := 0
-	mut last_length := 0
-	for offset < text.len {
-		length := first_grapheme_byte_length(text[offset..])
-		if length == 0 {
-			break
-		}
-		last_length = length
-		offset += length
-	}
-	return last_length
+	return text_input_last_grapheme_byte_length(text)
 }
 
 fn grapheme_count(text string) int {

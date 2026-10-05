@@ -124,10 +124,27 @@ pub fn (mut field TextField) insert_slice_at_cursor(text string) {
 }
 
 pub fn (field &TextField) slice_to_cursor(mut bytes []u8) []u8 {
-	assert bytes.len >= int(field.buf.cursor)
+	if usize(bytes.len) < field.buf.cursor { panic('Assertion failed') }
 	first := field.buf.first_half()
-	copy(mut bytes[..int(field.buf.cursor)], first)
-	return bytes[..int(field.buf.cursor)]
+	span := usize(first.len)
+	source_address := usize(first.data)
+	destination_address := usize(bytes.data)
+	if span > 0 && source_address < destination_address + span
+		&& destination_address < source_address + span {
+		panic('@memcpy arguments alias')
+	}
+	copy(mut bytes[..first.len], first)
+	return unsafe { bytes[..first.len] }
+}
+
+fn text_field_checked_u16_add(value u16, extra int) u16 {
+	if extra > 0xffff - int(value) { panic('integer overflow') }
+	return value + u16(extra)
+}
+
+fn text_field_checked_u8(value usize) u8 {
+	if value > 0xff { panic('integer does not fit in destination type') }
+	return u8(value)
 }
 
 pub fn (field &TextField) width_to_cursor(ctx DrawContext) u16 {
@@ -135,10 +152,12 @@ pub fn (field &TextField) width_to_cursor(ctx DrawContext) u16 {
 	mut iter := GraphemeIterator{
 		text: field.buf.first_half().bytestr()
 	}
-	mut i := u16(0)
+	mut i := usize(0)
 	for {
 		grapheme := iter.next() or { break }
-		if i >= field.draw_offset { width += u16(ctx.string_width(grapheme)) }
+		if i >= field.draw_offset {
+			width = text_field_checked_u16_add(width, int(ctx.string_width(grapheme)))
+		}
 		i++
 	}
 	return width
@@ -171,7 +190,7 @@ pub fn (field &TextField) graphemes_before_cursor() u16 {
 	mut count := u16(0)
 	for {
 		_ := iter.next() or { break }
-		count++
+		count = text_field_checked_u16_add(count, 1)
 	}
 	return count
 }
@@ -188,9 +207,10 @@ pub fn (mut field TextField) draw(ctx DrawContext) !Surface {
 		field.draw_offset = 0
 		field.prev_cursor_col = 0
 	}
+	height := math.max(ctx.min.height, u16(1))
 	mut surface := Surface.init(field.widget(), Size{
 		width:  width
-		height: math.max(ctx.min.height, u16(1))
+		height: height
 	})
 	for i in 0 .. surface.buffer.len {
 		surface.buffer[i] = vaxis.Cell{
@@ -213,16 +233,17 @@ pub fn (mut field TextField) draw(ctx DrawContext) !Surface {
 	mut index := u16(0)
 	for half_index, half in [field.buf.first_half(), field.buf.second_half()] {
 		mut iter := GraphemeIterator{
-			text: half.bytestr()
+			text: if half.len == 0 { '' } else { unsafe { tos(half.data, half.len) } }
 		}
 		for {
 			grapheme := iter.next() or { break }
 			if index < field.draw_offset {
-				index++
+				index = text_field_checked_u16_add(index, 1)
 				continue
 			}
-			w := u8(ctx.string_width(grapheme))
-			if (half_index == 0 && col + w >= width) || (half_index == 1 && col + w > width) {
+			w := text_field_checked_u8(ctx.string_width(grapheme))
+			next_col := text_field_checked_u16_add(col, int(w))
+			if (half_index == 0 && next_col >= width) || (half_index == 1 && next_col > width) {
 				surface.write_cell(width - 1, 0, vaxis.Cell{
 					char_: vaxis.CellCharacter{
 						grapheme: '…'
@@ -239,8 +260,8 @@ pub fn (mut field TextField) draw(ctx DrawContext) !Surface {
 				}
 				style: field.style
 			})
-			col += w
-			index++
+			col = next_col
+			index = text_field_checked_u16_add(index, 1)
 			if index == cursor_idx { field.prev_cursor_col = col }
 		}
 	}

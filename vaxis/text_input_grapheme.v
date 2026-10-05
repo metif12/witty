@@ -2,8 +2,8 @@ module vaxis
 
 import unicode
 
-// TextInput insertion uses the unchanged unicode.zig wrapper around the locked
-// uucode UTF-8/grapheme iterators, including malformed-byte consumption.
+// Shared byte decoder for unicode.zig and the widgets that use its iterators,
+// including the locked uucode iterator's malformed-byte consumption.
 struct TextInputGrapheme {
 	start int
 	limit int
@@ -20,7 +20,7 @@ mut:
 
 fn text_input_grapheme_iterator(text string) TextInputGraphemeIterator {
 	mut inner := InputUtf8Iterator{
-		bytes: text.bytes()
+		bytes: unsafe { text.str.vbytes(text.len) }
 	}
 	next_cp := inner.next()
 	return TextInputGraphemeIterator{
@@ -87,8 +87,7 @@ fn text_input_checked_u16_add(a int, b int) int {
 	return a + b
 }
 
-// Keep TextInput's source width calculations on the same locked byte decoder.
-// Other consumers retain the module's existing public gwidth call shape.
+// Width calculations use the same locked byte decoder as grapheme iteration.
 fn text_input_gwidth(value string, method GWidthMethod) u16 {
 	match method {
 		.wcwidth {

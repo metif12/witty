@@ -12,14 +12,22 @@ pub mut:
 
 pub fn (area Box) clamp(image_width usize, image_height usize) Box {
 	mut box := area
-	assert box.width <= ~usize(0) - box.x
-	assert box.height <= ~usize(0) - box.y
+	if box.width > ~usize(0) - box.x {
+		panic('integer overflow')
+	}
 	if box.x + box.width > image_width {
-		assert box.x <= image_width
+		if box.x > image_width {
+			panic('integer overflow')
+		}
 		box.width = image_width - box.x
 	}
+	if box.height > ~usize(0) - box.y {
+		panic('integer overflow')
+	}
 	if box.y + box.height > image_height {
-		assert box.y <= image_height
+		if box.y > image_height {
+			panic('integer overflow')
+		}
 		box.height = image_height - box.y
 	}
 	return box
