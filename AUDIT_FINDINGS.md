@@ -1067,9 +1067,11 @@ an item here does not mean its full module has been certified yet.
   allocation failures are not reproduced. Sub-byte scalar fields/indices use
   bytes or backing words, sum variants have named V wrappers, and nested
   declarations use module-level names. The shared inline `FixedStorage` helper
-  has 8- and 256-element specializations because V cannot express
-  an integer-parameterized type factory; SGI's private header debug logger is
-  not exposed. Bit streams support V's native integer
+  has 8- and 256-element specializations and a general FixedStorage[T, B]
+  inline-array API: a storage type replaces the integer factory parameter.
+  Empty slices represent zero capacity. SGI/IFF header and TIFF metadata
+  debug hooks use the standard V logger and generic struct rendering, whose
+  type names/enum names/presentation differ from Zig's. Bit streams support V's native integer
   and floating point scalars, with type markers for compile-time endianness;
   Zig arbitrary-width integers and other bit-castable types are not reproduced.
   Compression helpers use wider backing values for the source's `u13`, `u4`,
@@ -1506,6 +1508,17 @@ destination capacities, errors, stream positions and complete output bytes.
 PNG/TGA wrong-option access retains two isolated checked traps. Focused
 tests cover callback detection/loading and cross-option defaults. The live
 registry also retains the 6,528-case encoder and 589,824-case detector hashes.
+
+General `FixedStorage[T, B]` exposes the source's inline storage and borrowed
+resize API, with the fixed-array type replacing its integer factory argument.
+`verify_fixed_storage_reference.py` matches 2,373 returning resize cases and
+the checked bound against unchanged source. SHA-256:
+`ba652143ec8ea584ce4522ed61dc6605986e90185c524ce8b13281b40b642c0b`.
+Six capacities, u8/u16/RGBA elements, pointer identity, old views after resize,
+active bytes and retained storage bytes are compared. The existing production
+8/256 specializations remain available. SGI/IFF and TIFF debug hooks now expose
+the source logger operations with V's language-specific generic rendering;
+exact cross-language diagnostic presentation is not claimed.
 
 The focused tests and compile gates named in each audit session are expected to
 pass at the recorded commit. A repository-wide build is not proof that every

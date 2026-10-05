@@ -57,9 +57,12 @@ the raw-byte copying quirk for one-bit indexed images.
 SGI preserves planar channels, bottom-up rows, and both RLE channel widths.
 The source's RGBA64 alpha branch reads and endian-swaps a single byte at an
 unscaled channel offset; its 16-bit grayscale branch still selects grayscale8.
-The writer succeeds without emitting bytes. The shared inline fixed storage
-has a 256-element specialization; the private SGI header debug logger remains
-unexposed.
+The writer succeeds without emitting bytes. Shared inline fixed storage has
+8- and 256-element specializations plus a general `FixedStorage[T, B]`, where
+`B` is the fixed-array storage type. Empty slices stand for zero capacity.
+Resizing borrows that inline storage and retains old views. Header debug hooks
+for SGI/IFF and TIFF metadata use V's standard logger/struct presentation;
+language-specific type/enum names and formatting differ from Zig's rendering.
 
 PAM preserves the pinned header parser, sample scaling, little-endian 16-bit
 samples, monochrome-alpha AND, image sequences, and encoder comments. Only
@@ -99,7 +102,7 @@ its public header helper returns zeros without consuming bytes. The writer
 emits no bytes. The source leaves default IFF headers, inactive palette entries,
 and temporary planes unwritten by short PackBits input undefined. V initializes
 that storage; comparisons cover defined outputs. Public header debug hooks
-remain untranslated.
+are available through the standard logger.
 
 GIF preserves both versions, palette/extension records, LZW sub-blocks, frame
 grouping and filtering, independent rendering with first-frame sharing,
@@ -228,9 +231,10 @@ samples-per-pixel value that row sizing uses. One-bit row sizing rounds down.
 Native hashes match 3,072 table
 mutations, 38,400 bitmap/row cases, and 4,224 metadata/palette cases. Thirteen
 separate probes compare checked enum, capacity, component, arithmetic, and
-palette traps. Fixed storage has eight- and 256-element specializations;
-GC replaces reclamation, V initializes undefined source fields/storage,
-and the remaining general-purpose map API and debug formatter stay open.
+palette traps. Fixed storage has eight- and 256-element specializations and
+a general inline-array variant. GC replaces reclamation, V initializes
+undefined source fields/storage, and the remaining general-purpose map API
+stays open.
 TIFF read/readImage and strips now decode grayscale1/grayscale8/indexed8/RGB24/
 RGBA32 with uncompressed, PackBits, CCITT RLE, LZW, DEFLATE, and Pixar DEFLATE.
 Versions are ignored, only the first IFD is used, and compressed byte counts
@@ -374,6 +378,18 @@ python3 zigimg/verify_format_interface_reference.py \
 
 Result SHA-256:
 `578f0de4bdaac7c2b67f294de64a2694c069cbb2fde6d2c43ca68494c6ca94eb`.
+
+The generic fixed-storage runner compares 2,373 resize/borrow/retained-view
+cases for six capacities and byte, word and RGBA elements, then verifies the
+checked resize bound:
+
+```sh
+python3 zigimg/verify_fixed_storage_reference.py \
+  /path/to/locked-zigimg /path/to/zig-0.15.2/zig /path/to/v-0.5.2
+```
+
+Result SHA-256:
+`ba652143ec8ea584ce4522ed61dc6605986e90185c524ce8b13281b40b642c0b`.
 
 The TIFF metadata runner verifies the same unchanged locked source tree:
 
