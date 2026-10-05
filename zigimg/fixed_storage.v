@@ -12,8 +12,9 @@ pub mut:
 
 pub fn (mut buffer FixedStorage[T, B]) resize[T, B](size usize) {
 	$if B.unaliased_typ is []T {
-		assert buffer.storage.len == 0
-		assert size == 0
+		if buffer.storage.len != 0 || size != 0 {
+			panic('FixedStorage resize exceeds inline capacity')
+		}
 		buffer.data = unsafe { buffer.storage[..] }
 	} $else $if B.unaliased_typ is $array {
 		element := buffer.storage[0]
@@ -22,7 +23,9 @@ pub fn (mut buffer FixedStorage[T, B]) resize[T, B](size usize) {
 		} $else {
 			$compile_error('FixedStorage requires an inline array of its element type')
 		}
-		assert size <= usize(sizeof(B) / sizeof(T))
+		if size > usize(sizeof(B) / sizeof(T)) {
+			panic('FixedStorage resize exceeds inline capacity')
+		}
 		mut data := []T{}
 		unsafe {
 			data.data = &buffer.storage
@@ -44,7 +47,7 @@ pub mut:
 }
 
 pub fn (mut buffer FixedStorage8[T]) resize[T](size usize) {
-	assert size <= 8
+	if size > 8 { panic('FixedStorage resize exceeds inline capacity') }
 	mut data := []T{}
 	unsafe {
 		data.data = &buffer.storage[0]
@@ -64,7 +67,7 @@ pub mut:
 }
 
 pub fn (mut buffer FixedStorage256[T]) resize[T](size usize) {
-	assert size <= 256
+	if size > 256 { panic('FixedStorage resize exceeds inline capacity') }
 	mut data := []T{}
 	unsafe {
 		data.data = &buffer.storage[0]

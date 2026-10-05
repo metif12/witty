@@ -7,12 +7,12 @@ fn mix(mut hash []u64, value u64) {
 	hash[0] = (hash[0] ^ value) * u64(1099511628211)
 }
 
-fn run[T, B](storage B, value T, capacity int) {
+fn run[T, B](storage B, value T, capacity int, trap bool) {
 	_ = value
 	mut buffer := zigimg.FixedStorage[T, B]{
 		storage: storage
 	}
-	if os.args.len > 1 {
+	if trap {
 		buffer.resize(usize(capacity + 1))
 		eprintln('UNEXPECTED')
 		return
@@ -45,22 +45,35 @@ fn run[T, B](storage B, value T, capacity int) {
 }
 
 fn main() {
-	run([]u8{}, u8(0), 0)
-	run([1]u8{}, u8(0), 1)
-	run([7]u8{}, u8(0), 7)
-	run([8]u8{}, u8(0), 8)
-	run([256]u8{}, u8(0), 256)
-	run([513]u8{}, u8(0), 513)
-	run([]u16{}, u16(0), 0)
-	run([1]u16{}, u16(0), 1)
-	run([7]u16{}, u16(0), 7)
-	run([8]u16{}, u16(0), 8)
-	run([256]u16{}, u16(0), 256)
-	run([513]u16{}, u16(0), 513)
-	run([]zigimg.Rgba32{}, zigimg.Rgba32{}, 0)
-	run([1]zigimg.Rgba32{}, zigimg.Rgba32{}, 1)
-	run([7]zigimg.Rgba32{}, zigimg.Rgba32{}, 7)
-	run([8]zigimg.Rgba32{}, zigimg.Rgba32{}, 8)
-	run([256]zigimg.Rgba32{}, zigimg.Rgba32{}, 256)
-	run([513]zigimg.Rgba32{}, zigimg.Rgba32{}, 513)
+	if os.args.len > 1 && os.args[1] == 'special8' {
+		mut buffer := zigimg.FixedStorage8[u16]{}
+		buffer.resize(9)
+		eprintln('UNEXPECTED')
+		return
+	}
+	if os.args.len > 1 && os.args[1] == 'special256' {
+		mut buffer := zigimg.FixedStorage256[u16]{}
+		buffer.resize(257)
+		eprintln('UNEXPECTED')
+		return
+	}
+	selected := if os.args.len > 1 { os.args[1].int() } else { -1 }
+	run([]u8{}, u8(0), 0, selected == 0)
+	run([1]u8{}, u8(0), 1, selected == 1)
+	run([7]u8{}, u8(0), 7, selected == 2)
+	run([8]u8{}, u8(0), 8, selected == 3)
+	run([256]u8{}, u8(0), 256, selected == 4)
+	run([513]u8{}, u8(0), 513, selected == 5)
+	run([]u16{}, u16(0), 0, selected == 6)
+	run([1]u16{}, u16(0), 1, selected == 7)
+	run([7]u16{}, u16(0), 7, selected == 8)
+	run([8]u16{}, u16(0), 8, selected == 9)
+	run([256]u16{}, u16(0), 256, selected == 10)
+	run([513]u16{}, u16(0), 513, selected == 11)
+	run([]zigimg.Rgba32{}, zigimg.Rgba32{}, 0, selected == 12)
+	run([1]zigimg.Rgba32{}, zigimg.Rgba32{}, 1, selected == 13)
+	run([7]zigimg.Rgba32{}, zigimg.Rgba32{}, 7, selected == 14)
+	run([8]zigimg.Rgba32{}, zigimg.Rgba32{}, 8, selected == 15)
+	run([256]zigimg.Rgba32{}, zigimg.Rgba32{}, 256, selected == 16)
+	run([513]zigimg.Rgba32{}, zigimg.Rgba32{}, 513, selected == 17)
 }

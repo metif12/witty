@@ -1512,11 +1512,14 @@ registry also retains the 6,528-case encoder and 589,824-case detector hashes.
 General `FixedStorage[T, B]` exposes the source's inline storage and borrowed
 resize API, with the fixed-array type replacing its integer factory argument.
 `verify_fixed_storage_reference.py` matches 2,373 returning resize cases and
-the checked bound against unchanged source. SHA-256:
+twenty checked bounds against unchanged source in ordinary and production V
+builds. Explicit guards retain the source's checked slice behavior when V
+removes assertions. SHA-256:
 `ba652143ec8ea584ce4522ed61dc6605986e90185c524ce8b13281b40b642c0b`.
 Six capacities, u8/u16/RGBA elements, pointer identity, old views after resize,
-active bytes and retained storage bytes are compared. The existing production
-8/256 specializations remain available. SGI/IFF and TIFF debug hooks now expose
+active bytes and retained storage bytes are compared. Each capacity/type and
+the existing 8/256 specializations receive a separate oversized-resize probe.
+SGI/IFF and TIFF debug hooks now expose
 the source logger operations with V's language-specific generic rendering;
 exact cross-language diagnostic presentation is not claimed.
 
@@ -1537,6 +1540,13 @@ and two checked shift traps, SHA-256
 Struct types must preserve native field widths/layout/padding. Both source
 struct writers fail to compile with Zig 0.15.2 because their declared error
 type uses the removed `std.io.StreamSource`; the runner confirms that boundary.
+Ordinary and production V builds retain the same records and both oversized
+signature traps through explicit shift guards. A further 54,528 cases compare
+endian, scalar, exhaustive/non-exhaustive enum, byte-array and nested-struct
+aliases, invalid enum consumption and short reads, SHA-256
+`5a841a2f84a10641b1ebf1268d6e60326576459bafc54b84fb732287096032e6`.
+Four ordinary compile probes reject wider inline arrays and dynamic byte
+slices, including aliases, at the source's unsupported field boundary.
 
 Scientific CIE XYZ/Lab/Luv/LCh, HSLuv and Oklab conversions match 6,961
 unchanged-source cases, SHA-256

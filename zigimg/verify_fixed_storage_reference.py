@@ -21,6 +21,7 @@ def main():
     parser.add_argument("zig", type=Path)
     parser.add_argument("v", type=Path)
     parser.add_argument("--target", default="aarch64-macos.14.0")
+    parser.add_argument("--v-prod", action="store_true", help="use V production optimization")
     args = parser.parse_args()
     source = args.source.resolve() / "src"
     digest = hashlib.sha256()
@@ -37,7 +38,8 @@ def main():
         shutil.copyfile(probe / "reference.zig", root / "reference.zig")
         subprocess.run([str(args.zig.resolve()), "build-exe", "-target", args.target,
                         "-lc", f"-femit-bin={root / 'native'}", str(root / "reference.zig")], check=True)
-        subprocess.run([str(args.v.resolve()), "-o", str(root / "translated"), str(probe / "main.v")],
+        v_options = ["-prod"] if args.v_prod else []
+        subprocess.run([str(args.v.resolve()), *v_options, "-o", str(root / "translated"), str(probe / "main.v")],
                        env=dict(os.environ, VEXE=str(args.v.resolve()), V_C_ERROR_BUG_REPORT_DISABLED="1"), check=True)
         outputs = [subprocess.run([str(root / executable)], capture_output=True, check=True, timeout=60).stdout.splitlines()
                    for executable in ("native", "translated")]
@@ -49,7 +51,7 @@ def main():
                 raise AssertionError(f"native={native!r}, V={translated!r}")
         digest = hashlib.sha256(b"\n".join(outputs[0])).hexdigest()
         print(f"FixedStorage: {expected} returning cases, SHA256 {digest}")
-        for boundary in ("bounds",):
+        for boundary in (*map(str, range(18)), "special8", "special256"):
             for executable in ("native", "translated"):
                 result = subprocess.run([str(root / executable), boundary], capture_output=True, timeout=5, preexec_fn=no_core)
                 lines = result.stderr.splitlines() + result.stdout.splitlines()
@@ -57,7 +59,7 @@ def main():
                     marker in result.stderr for marker in (b"panic:", b"Assertion failed", b"slice:")
                 ):
                     raise AssertionError((boundary, executable, result.returncode, result.stdout, result.stderr))
-        print("FixedStorage: resize bounds trap matched")
+        print("FixedStorage: twenty resize bounds traps matched")
 
 
 if __name__ == "__main__":

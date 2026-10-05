@@ -27,8 +27,95 @@ struct Header {
 	bytes        [2]u8
 }
 
+type AliasLittle = zigimg.LittleEndian
+type AliasBig = zigimg.BigEndian
+type AliasCode = Code
+type AliasByte = u8
+type AliasBytes = [2]AliasByte
+type AliasWord = u16
+type AliasFlag = bool
+type AliasCompression = zigimg.PngCompressionMethod
+type AliasFilter = zigimg.PngFilterMethod
+
+struct AliasInnerFields {
+	code  AliasCode
+	flag  AliasFlag
+	bytes AliasBytes
+}
+
+type AliasInner = AliasInnerFields
+
+struct AliasHeaderFields {
+	number      AliasWord
+	inner       AliasInner
+	compression AliasCompression
+	filter      AliasFilter
+}
+
+type AliasHeader = AliasHeaderFields
+
+fn aliases() {
+	for length in 0 .. 5 {
+		for seed in 0 .. 256 {
+			mut bytes := []u8{len: length}
+			for index in 0 .. length {
+				bytes[index] = u8(seed + index * 71)
+			}
+			println('am:${length}:${seed}|${zigimg.to_magic_number(bytes, AliasLittle{}):08x}:${zigimg.to_magic_number(bytes, AliasBig{}):08x}')
+		}
+	}
+	assert sizeof(AliasHeader) == 10
+	for compression in 0 .. 256 {
+		for code in [u16(0), 1, 0x1234, 0xabcd] {
+			for length in 0 .. 13 {
+				mut bytes := []u8{len: 12, init: u8(compression + index * 37)}
+				bytes[2] = u8(code >> 8)
+				bytes[3] = u8(code)
+				bytes[4] = u8(compression & 1)
+				bytes[8] = u8(compression)
+				bytes[9] = u8(255 - compression)
+				for mode in 0 .. 4 {
+					mut reader := zigimg.ReadStream.init_memory(bytes[..length])
+					mut value := AliasHeader{}
+					mut status := 'ok'
+					if mode == 0 {
+						value = zigimg.take_struct_native[AliasHeader](mut reader) or {
+							status = err.msg()
+							AliasHeader{}
+						}
+					} else if mode == 1 {
+						value = zigimg.take_struct_foreign[AliasHeader](mut reader) or {
+							status = err.msg()
+							AliasHeader{}
+						}
+					} else if mode == 2 {
+						value = zigimg.take_struct[AliasHeader, AliasBig](mut reader, AliasBig{}) or {
+							status = err.msg()
+							AliasHeader{}
+						}
+					} else {
+						value = zigimg.take_struct[AliasHeader, AliasLittle](mut reader, AliasLittle{}) or {
+							status = err.msg()
+							AliasHeader{}
+						}
+					}
+					if status == 'ok' {
+						println('as:${compression}:${code}:${length}:${mode}|${reader.get_pos()}:${u16(value.number)}:${u16(value.inner.code)}:${bool(value.inner.flag)}:${u8(value.inner.bytes[0])}:${u8(value.inner.bytes[1])}:${u8(value.compression)}:${u8(value.filter)}')
+					} else {
+						println('as:${compression}:${code}:${length}:${mode}|${reader.get_pos()}:${status}')
+					}
+				}
+			}
+		}
+	}
+}
+
 fn main() {
 	if os.args.len > 1 {
+		if os.args[1] == 'aliases' {
+			aliases()
+			return
+		}
 		bytes := []u8{len: 5}
 		if os.args[1] == 'native' {
 			zigimg.to_magic_number_native(bytes)

@@ -1684,6 +1684,20 @@ V's language-specific logger/struct rendering. Native-layout read callers
 must provide corresponding widths, alignment and padding. Original struct
 writers reference the removed `std.io.StreamSource` and remain unsupported.
 
+The continuing utility review found that V production optimization removed
+the magic-number and inline-storage assertions. Explicit guards now retain
+both oversized-signature traps and twenty independent resize traps, including
+all eighteen generic capacity/type combinations and both specialized buffers.
+The existing 20,992 and 2,373 returning-case hashes remain unchanged in
+ordinary and production V builds. Endian and native-layout field aliases now
+follow their underlying types; 54,528 additional source cases match in both
+builds, SHA-256
+`5a841a2f84a10641b1ebf1268d6e60326576459bafc54b84fb732287096032e6`.
+The alias matrix covers exhaustive and non-exhaustive enums, nested structs,
+byte arrays, scalar fields, short input and read positions. Wider inline
+arrays and dynamic byte slices, with and without aliases, retain four ordinary
+source compile rejections.
+
 `6d38e29` applies Swift's repairing first-NUL C-string projection to native
 config title/font and command title/description consumers. The extracted
 unchanged getters/initializer match 20 records (40 getter results and 38

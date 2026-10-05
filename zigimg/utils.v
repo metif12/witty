@@ -5,8 +5,8 @@ module zigimg
 pub fn to_magic_number_native(magic []u8) u32 {
 	mut result := u32(0)
 	for index, byte in magic {
+		if index > 3 { panic('magic number shift exceeds u32 width') }
 		shift := index * 8
-		assert shift <= 31
 		result |= u32(byte) << shift
 	}
 	return result
@@ -15,21 +15,22 @@ pub fn to_magic_number_native(magic []u8) u32 {
 pub fn to_magic_number_foreign(magic []u8) u32 {
 	mut result := u32(0)
 	for index, byte in magic {
-		shift := (magic.len - 1 - index) * 8
-		assert shift <= 31
+		remaining := magic.len - 1 - index
+		if remaining > 3 { panic('magic number shift exceeds u32 width') }
+		shift := remaining * 8
 		result |= u32(byte) << shift
 	}
 	return result
 }
 
 pub fn to_magic_number[E](magic []u8, endian E) u32 {
-	$if E is BigEndian {
+	$if E.unaliased_typ is BigEndian {
 		$if little_endian {
 			return to_magic_number_foreign(magic)
 		} $else {
 			return to_magic_number_native(magic)
 		}
-	} $else $if E is LittleEndian {
+	} $else $if E.unaliased_typ is LittleEndian {
 		$if little_endian {
 			return to_magic_number_native(magic)
 		} $else {
@@ -54,7 +55,7 @@ pub fn take_struct_native[T](mut reader ReadStream) !T {
 fn check_enum_field[T](value T) ! {
 	// The source's non-exhaustive PNG enums accept unnamed values. V carries
 	// that property explicitly for these two translated enum types.
-	$if T is PngCompressionMethod || T is PngFilterMethod {
+	$if T.unaliased_typ is PngCompressionMethod || T.unaliased_typ is PngFilterMethod {
 		return
 	} $else {
 		mut valid := false
@@ -67,9 +68,9 @@ fn check_enum_field[T](value T) ! {
 
 fn check_struct_enum_fields[T](value T) ! {
 	$for field in T.fields {
-		$if field.typ is $enum {
+		$if field.unaliased_typ is $enum {
 			check_enum_field(value.$(field.name))!
-		} $else $if field.typ is $struct {
+		} $else $if field.unaliased_typ is $struct {
 			check_struct_enum_fields(value.$(field.name))!
 		}
 	}
@@ -77,7 +78,7 @@ fn check_struct_enum_fields[T](value T) ! {
 
 fn swap_struct_field_bytes[T](mut value T) ! {
 	$for field in T.fields {
-		$if field.typ is $int || field.typ is $enum {
+		$if field.unaliased_typ is $int || field.unaliased_typ is $enum {
 			mut bytes := struct_field_bytes(unsafe { &value.$(field.name) },
 				int(sizeof(value.$(field.name))))
 			for index in 0 .. bytes.len / 2 {
@@ -86,14 +87,14 @@ fn swap_struct_field_bytes[T](mut value T) ! {
 				bytes[index] = bytes[opposite]
 				bytes[opposite] = temporary
 			}
-			$if field.typ is $enum { check_enum_field(value.$(field.name))! }
-		} $else $if field.typ is $struct {
+			$if field.unaliased_typ is $enum { check_enum_field(value.$(field.name))! }
+		} $else $if field.unaliased_typ is $struct {
 			mut nested := value.$(field.name)
 			swap_struct_field_bytes(mut nested)!
 			unsafe { vmemcpy(&value.$(field.name), &nested, sizeof(nested)) }
-		} $else $if field.typ is bool {
+		} $else $if field.unaliased_typ is bool {
 			// Source bool fields are unchanged.
-		} $else $if field.typ is $array {
+		} $else $if field.unaliased_typ is $array {
 			check_struct_byte_array(value.$(field.name))
 		} $else {
 			$compile_error('unsupported take_struct_foreign field type')
@@ -114,13 +115,13 @@ pub fn take_struct_foreign[T](mut reader ReadStream) !T {
 }
 
 pub fn take_struct[T, E](mut reader ReadStream, endian E) !T {
-	$if E is BigEndian {
+	$if E.unaliased_typ is BigEndian {
 		$if little_endian {
 			return take_struct_foreign[T](mut reader)
 		} $else {
 			return take_struct_native[T](mut reader)
 		}
-	} $else $if E is LittleEndian {
+	} $else $if E.unaliased_typ is LittleEndian {
 		$if little_endian {
 			return take_struct_native[T](mut reader)
 		} $else {
@@ -133,14 +134,17 @@ pub fn take_struct[T, E](mut reader ReadStream, endian E) !T {
 }
 
 fn check_struct_byte_array[B](value B) {
-	$if B.unaliased_typ is []u8 {
+	$if B.unaliased_typ is $array_dynamic {
 		$compile_error('take_struct_foreign requires inline byte arrays')
 	} $else {
-		element := value[0]
-		$if element is u8 {
-			_ = element
-		} $else {
-			$compile_error('take_struct_foreign only supports byte arrays')
-		}
+		check_struct_byte(value[0])
+	}
+}
+
+fn check_struct_byte[T](value T) {
+	$if T.unaliased_typ is u8 {
+		_ = value
+	} $else {
+		$compile_error('take_struct_foreign only supports byte arrays')
 	}
 }

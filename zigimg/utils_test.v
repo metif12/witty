@@ -20,6 +20,33 @@ struct UtilityHeader {
 	bytes        [2]u8
 }
 
+type UtilityBigAlias = BigEndian
+type UtilityLittleAlias = LittleEndian
+type UtilityCodeAlias = UtilityEnum16
+type UtilityByteAlias = u8
+type UtilityBytesAlias = [2]UtilityByteAlias
+type UtilityWordAlias = u16
+type UtilityBoolAlias = bool
+type UtilityCompressionAlias = PngCompressionMethod
+type UtilityFilterAlias = PngFilterMethod
+
+struct UtilityAliasedInner {
+	code  UtilityCodeAlias
+	flag  UtilityBoolAlias
+	bytes UtilityBytesAlias
+}
+
+type UtilityInnerAlias = UtilityAliasedInner
+
+struct UtilityAliasedHeader {
+	number      UtilityWordAlias
+	inner       UtilityInnerAlias
+	compression UtilityCompressionAlias
+	filter      UtilityFilterAlias
+}
+
+type UtilityHeaderAlias = UtilityAliasedHeader
+
 fn test_magic_number_endian_and_short_signatures() {
 	assert to_magic_number_native([]u8{}) == 0
 	assert to_magic_number_foreign([]u8{}) == 0
@@ -70,4 +97,37 @@ fn test_struct_read_preserves_non_exhaustive_png_enums() {
 	result := take_struct[PngHeaderData, BigEndian](mut reader, BigEndian{}) or { panic(err) }
 	assert u8(result.compression_method) == 173
 	assert u8(result.filter_method) == 199
+}
+
+fn test_struct_read_accepts_aliases_and_validates_nested_aliased_enums() {
+	assert to_magic_number('abc'.bytes(), UtilityBigAlias{}) == 0x616263
+	assert to_magic_number('abc'.bytes(), UtilityLittleAlias{}) == 0x636261
+	assert sizeof(UtilityHeaderAlias) == 10
+	mut bytes := [u8(0x12), 0x34, 0x12, 0x34, 1, 9, 8, 0x80, 173, 199]
+	mut reader := ReadStream.init_memory(bytes)
+	value := take_struct[UtilityHeaderAlias, UtilityBigAlias](mut reader, UtilityBigAlias{}) or {
+		panic(err)
+	}
+	assert u16(value.number) == 0x1234 && u16(value.inner.code) == 0x1234
+	assert bool(value.inner.flag) && u8(value.inner.bytes[0]) == 9 && u8(value.inner.bytes[1]) == 8
+	assert u8(value.compression) == 173 && u8(value.filter) == 199
+	assert reader.get_pos() == 10
+	assert unsafe { (&u8(&value)).vbytes(10)[7] } == 0x80
+	bytes[2] = 0xab
+	bytes[3] = 0xcd
+	mut invalid := ReadStream.init_memory(bytes)
+	mut failed := false
+	take_struct_foreign[UtilityHeaderAlias](mut invalid) or {
+		failed = true
+		assert err.msg() == 'InvalidData'
+		assert invalid.get_pos() == 10
+	}
+	assert failed
+	mut short := ReadStream.init_memory(bytes[..9])
+	failed = false
+	take_struct_native[UtilityHeaderAlias](mut short) or {
+		failed = true
+		assert err.msg() == 'EndOfStream' && short.get_pos() == 0
+	}
+	assert failed
 }
