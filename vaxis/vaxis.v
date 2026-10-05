@@ -1603,22 +1603,37 @@ pub fn (mut b TextInputBuffer) deinit() {
 }
 
 pub fn (b &TextInputBuffer) first_half() []u8 {
-	return b.buffer[..b.cursor]
+	if b.cursor > usize(b.buffer.len) {
+		panic('index out of bounds')
+	}
+	return b.buffer[..int(b.cursor)]
 }
 
 pub fn (b &TextInputBuffer) second_half() []u8 {
-	return b.buffer[b.cursor + b.gap_size..]
+	start := widget_checked_add(b.cursor, b.gap_size)
+	if start > usize(b.buffer.len) {
+		panic('index out of bounds')
+	}
+	return b.buffer[int(start)..]
 }
 
 pub fn (mut b TextInputBuffer) grow(n usize) {
-	new_size := b.buffer.len + int(n) + 512
+	new_length := widget_checked_add(widget_checked_add(usize(b.buffer.len), n), 512)
+	if new_length > usize(0x7fffffff) {
+		panic('TextInputBuffer allocation exceeds V array capacity')
+	}
+	new_size := int(new_length)
 	mut new_memory := []u8{len: new_size}
 	first := b.first_half()
 	second := b.second_half()
 	copy(mut new_memory[..first.len], first)
 	copy(mut new_memory[new_size - second.len..], second)
 	b.buffer = new_memory
-	b.gap_size = usize(new_size - second.len) - b.cursor
+	remaining := usize(new_size - second.len)
+	if b.cursor > remaining {
+		panic('integer overflow')
+	}
+	b.gap_size = remaining - b.cursor
 }
 
 pub fn (mut b TextInputBuffer) insert_slice_at_cursor(data string) {
@@ -1628,47 +1643,62 @@ pub fn (mut b TextInputBuffer) insert_slice_at_cursor(data string) {
 	if b.gap_size <= usize(data.len) {
 		b.grow(usize(data.len))
 	}
-	copy(mut b.buffer[int(b.cursor)..int(b.cursor) + data.len], data.bytes())
-	b.cursor += usize(data.len)
+	limit := widget_checked_add(b.cursor, usize(data.len))
+	if limit > usize(b.buffer.len) {
+		panic('index out of bounds')
+	}
+	copy(mut b.buffer[int(b.cursor)..int(limit)], data.bytes())
+	b.cursor = limit
+	if b.gap_size < usize(data.len) {
+		panic('integer overflow')
+	}
 	b.gap_size -= usize(data.len)
 }
 
 pub fn (mut b TextInputBuffer) move_gap_left(n usize) {
 	new_index := if n > b.cursor { usize(0) } else { b.cursor - n }
-	count := int(b.cursor - new_index)
-	if count > 0 {
-		destination := int(new_index + b.gap_size)
-		source := int(new_index)
-		for i in 0 .. count {
-			b.buffer[destination + i] = b.buffer[source + i]
-		}
+	destination := widget_checked_add(new_index, b.gap_size)
+	if destination > usize(b.buffer.len) || b.cursor > usize(b.buffer.len) {
+		panic('index out of bounds')
+	}
+	count := b.cursor - new_index
+	if count > usize(b.buffer.len) - destination {
+		panic('index out of bounds')
+	}
+	for i in 0 .. int(count) {
+		b.buffer[int(destination) + i] = b.buffer[int(new_index) + i]
 	}
 	b.cursor = new_index
 }
 
 pub fn (mut b TextInputBuffer) move_gap_right(n usize) {
-	second_len := usize(b.second_half().len)
-	delta := if n > second_len { second_len } else { n }
-	count := int(delta)
-	if count > 0 {
-		destination := int(b.cursor)
-		source := int(b.cursor + b.gap_size)
-		for i in 0 .. count {
-			b.buffer[destination + i] = b.buffer[source + i]
-		}
+	new_index := widget_checked_add(b.cursor, n)
+	if b.cursor > usize(b.buffer.len) {
+		panic('start index ${u64(b.cursor).str()} is larger than end index ${b.buffer.len}')
 	}
-	b.cursor += delta
+	source := widget_checked_add(b.cursor, b.gap_size)
+	limit := widget_checked_add(new_index, b.gap_size)
+	if source > limit || limit > usize(b.buffer.len) {
+		panic('index out of bounds')
+	}
+	for i in 0 .. int(n) {
+		b.buffer[int(b.cursor) + i] = b.buffer[int(source) + i]
+	}
+	b.cursor = new_index
 }
 
 pub fn (mut b TextInputBuffer) grow_gap_left(n usize) {
-	delta := if n > b.cursor { b.cursor } else { n }
-	b.gap_size += delta
-	b.cursor -= delta
+	b.gap_size = widget_checked_add(b.gap_size, n)
+	b.cursor = widget_saturating_sub(b.cursor, n)
 }
 
 pub fn (mut b TextInputBuffer) grow_gap_right(n usize) {
+	new_gap := widget_checked_add(b.gap_size, n)
+	if b.cursor > usize(b.buffer.len) {
+		panic('integer overflow')
+	}
 	maximum := usize(b.buffer.len) - b.cursor
-	b.gap_size = if b.gap_size + n > maximum { maximum } else { b.gap_size + n }
+	b.gap_size = if new_gap > maximum { maximum } else { new_gap }
 }
 
 pub fn (mut b TextInputBuffer) clear_and_free() {
@@ -1704,8 +1734,7 @@ pub fn (b &TextInputBuffer) string() string {
 // TextInput implements vaxis' cursor-aware editing behavior.
 pub struct TextInput {
 pub mut:
-	buf TextInputBuffer
-mut:
+	buf             TextInputBuffer
 	draw_offset     u16
 	prev_cursor_col u16
 	prev_cursor_idx u16
@@ -1763,7 +1792,11 @@ pub fn (mut t TextInput) update(key Key) {
 }
 
 pub fn (mut t TextInput) insert_slice_at_cursor(data string) {
-	t.buf.insert_slice_at_cursor(data)
+	mut iter := text_input_grapheme_iterator(data)
+	for {
+		grapheme := iter.next() or { break }
+		t.buf.insert_slice_at_cursor(data[grapheme.start..grapheme.limit])
+	}
 }
 
 pub fn (t &TextInput) slice_to_cursor() string {
@@ -1771,17 +1804,23 @@ pub fn (t &TextInput) slice_to_cursor() string {
 }
 
 pub fn (mut t TextInput) cursor_left() {
-	length := last_grapheme_byte_length(t.buf.first_half().bytestr())
+	length := text_input_last_grapheme_byte_length(t.buf.first_half().bytestr())
 	t.buf.move_gap_left(usize(length))
 }
 
 pub fn (mut t TextInput) cursor_right() {
-	length := first_grapheme_byte_length(t.buf.second_half().bytestr())
+	length := text_input_first_grapheme_byte_length(t.buf.second_half().bytestr())
 	t.buf.move_gap_right(usize(length))
 }
 
 pub fn (t &TextInput) graphemes_before_cursor() u16 {
-	return u16(grapheme_count(t.buf.first_half().bytestr()))
+	mut iter := text_input_grapheme_iterator(t.buf.first_half().bytestr())
+	mut count := 0
+	for {
+		iter.next() or { break }
+		count = text_input_checked_u16_add(count, 1)
+	}
+	return u16(count)
 }
 
 // TextInputDraw is the cell-level result of drawing the source widget into a
@@ -1818,7 +1857,9 @@ pub fn (mut t TextInput) draw_with_style_method(width int, style Style, method G
 		t.draw_offset = cursor_idx
 	}
 	if width <= 0 {
-		return TextInputDraw{ style: style }
+		return TextInputDraw{
+			style: style
+		}
 	}
 
 	for {
@@ -1836,58 +1877,69 @@ pub fn (mut t TextInput) draw_with_style_method(width int, style Style, method G
 	mut col := 0
 	mut i := 0
 	first := t.buf.first_half().bytestr()
-	mut offset := 0
-	for offset < first.len {
-		length := first_grapheme_byte_length(first[offset..])
-		if length == 0 {
-			break
-		}
-		grapheme := first[offset..offset + length]
-		offset += length
+	mut first_iter := text_input_grapheme_iterator(first)
+	for {
+		value := first_iter.next() or { break }
+		grapheme := first[value.start..value.limit]
 		if i < int(t.draw_offset) {
-			i++
+			i = text_input_checked_u16_add(i, 1)
 			continue
 		}
-		w := int(gwidth(grapheme, method))
-		if col + w >= width {
-			cells << TextInputCell{ col: u16(width - 1), text: '…' }
+		w := int(text_input_gwidth(grapheme, method))
+		next_col := text_input_checked_u16_add(col, w)
+		if next_col >= width {
+			cells << TextInputCell{
+				col:  u16(width - 1)
+				text: '…'
+			}
 			break
 		}
-		cells << TextInputCell{ col: u16(col), text: grapheme }
-		col += w
-		i++
+		if w > 0xff { panic('integer does not fit in destination type') }
+		cells << TextInputCell{
+			col:  u16(col)
+			text: grapheme
+		}
+		col = next_col
+		i = text_input_checked_u16_add(i, 1)
 		if i == int(cursor_idx) {
 			t.prev_cursor_col = u16(col)
 		}
 	}
 
 	second := t.buf.second_half().bytestr()
-	offset = 0
-	for offset < second.len {
-		length := first_grapheme_byte_length(second[offset..])
-		if length == 0 {
-			break
-		}
-		grapheme := second[offset..offset + length]
-		offset += length
+	mut second_iter := text_input_grapheme_iterator(second)
+	for {
+		value := second_iter.next() or { break }
+		grapheme := second[value.start..value.limit]
 		if i < int(t.draw_offset) {
-			i++
+			i = text_input_checked_u16_add(i, 1)
 			continue
 		}
-		w := int(gwidth(grapheme, method))
-		if col + w > width {
-			cells << TextInputCell{ col: u16(width - 1), text: '…' }
+		w := int(text_input_gwidth(grapheme, method))
+		next_col := text_input_checked_u16_add(col, w)
+		if next_col > width {
+			cells << TextInputCell{
+				col:  u16(width - 1)
+				text: '…'
+			}
 			break
 		}
-		cells << TextInputCell{ col: u16(col), text: grapheme }
-		col += w
-		i++
+		if w > 0xff { panic('integer does not fit in destination type') }
+		cells << TextInputCell{
+			col:  u16(col)
+			text: grapheme
+		}
+		col = next_col
+		i = text_input_checked_u16_add(i, 1)
 		if i == int(cursor_idx) {
 			t.prev_cursor_col = u16(col)
 		}
 	}
 	if t.draw_offset > 0 {
-		cells << TextInputCell{ col: 0, text: '…' }
+		cells << TextInputCell{
+			col:  0
+			text: '…'
+		}
 	}
 	return TextInputDraw{
 		cells:      cells
@@ -1902,18 +1954,15 @@ pub fn (t &TextInput) width_to_cursor() int {
 
 pub fn (t &TextInput) width_to_cursor_method(method GWidthMethod) int {
 	first := t.buf.first_half().bytestr()
-	mut offset := 0
+	mut iter := text_input_grapheme_iterator(first)
 	mut i := 0
 	mut width := 0
-	for offset < first.len {
-		length := first_grapheme_byte_length(first[offset..])
-		if length == 0 {
-			break
-		}
+	for {
+		value := iter.next() or { break }
 		if i >= int(t.draw_offset) {
-			width += int(gwidth(first[offset..offset + length], method))
+			width = text_input_checked_u16_add(width, int(text_input_gwidth(first[value.start..value.limit],
+				method)))
 		}
-		offset += length
 		i++
 	}
 	return width
@@ -2083,12 +2132,12 @@ pub fn (mut t TextInput) delete_to_start() {
 }
 
 pub fn (mut t TextInput) delete_before_cursor() {
-	length := last_grapheme_byte_length(t.buf.first_half().bytestr())
+	length := text_input_last_grapheme_byte_length(t.buf.first_half().bytestr())
 	t.buf.grow_gap_left(usize(length))
 }
 
 pub fn (mut t TextInput) delete_after_cursor() {
-	length := first_grapheme_byte_length(t.buf.second_half().bytestr())
+	length := text_input_first_grapheme_byte_length(t.buf.second_half().bytestr())
 	t.buf.grow_gap_right(usize(length))
 }
 

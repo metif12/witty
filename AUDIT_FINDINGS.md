@@ -1644,6 +1644,27 @@ the V APIs retain those boundaries. GC allocation, arbitrary custom-composite
 formatting and undefined subset-header adaptations remain documented in
 `vaxis/reference_probes/table/README.md`.
 
+TextInput now inserts one source grapheme at a time, preserving its 512-byte
+gap growth geometry, malformed UTF-8 consumption and zero-width draw ordering.
+All buffer slice, allocation, movement and growth checks remain active under
+production optimization, including zero-count movement and large public cursor
+values. Ordinary and production comparisons match 14,346 records and 22 checked
+traps, SHA-256
+`4003872debd68d8f2886119b492cc0d14ac1c5692a049662b043074cb67aaaf0`.
+Six focused consumer tests pass. Source u16 count/width overflow and malformed
+combining-mark underflow remain inherited traps. The byte iterator and width
+helper are private to TextInput; global width/grapheme APIs remain unchanged.
+GC ownership and int-sized-array limits remain documented in
+`vaxis/reference_probes/text_input/README.md`.
+
+The classic Terminal key encoder matches 59,072 returning records and all 31
+nonzero Kitty press traps in Debug and V-production/source-ReleaseSafe builds,
+SHA-256 `fef07475371a26194ffa5a396745016d36ef5eb33b005ef1a47f115888a96d6a`.
+Two consumer tests cover generated text precedence, decimal CTRL+ALT output,
+modifier masking, release-empty behavior and partial write failures. The source
+only implements legacy presses; protocol TODOs and unsupported-key behavior
+remain intact. Reproduction is in `vaxis/reference_probes/terminal/key/README.md`.
+
 Scientific CIE XYZ/Lab/Luv/LCh, HSLuv and Oklab conversions match 6,961
 unchanged-source cases, SHA-256
 `d97550d49bb60cf224fc60999d3603d6199aa9c99702a7c79b8d7ca9f10e8566`.

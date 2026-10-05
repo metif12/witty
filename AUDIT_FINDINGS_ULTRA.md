@@ -1790,6 +1790,27 @@ translated APIs retain these compile boundaries. GC ownership, custom `{any}`
 formatting and source-undefined subset header limits remain in
 `vaxis/reference_probes/table/README.md`.
 
+The TextInput continuation preserves per-grapheme insertion and gap geometry,
+malformed UTF-8 consumption, zero-width drawing order, and the public u16
+draw/count/width boundaries. Explicit Buffer guards cover growth, slices,
+insertion, both movements and both gap growth operations, including zero-count
+movement and large public cursor values. Ordinary and production comparisons
+match 14,346 returning records and 22 checked traps, SHA-256
+`4003872debd68d8f2886119b492cc0d14ac1c5692a049662b043074cb67aaaf0`.
+Six focused consumers pass. Source count/width overflow and malformed combining
+mark underflow remain checked traps. The private iterator/width helper leaves
+the module's global APIs unchanged; GC ownership, string call shapes and
+int-sized arrays remain documented representation limits.
+
+The classic Terminal key encoder matches 59,072 returning cases and all 31
+nonzero Kitty press traps in Debug and V-production/source-ReleaseSafe builds,
+SHA-256 `fef07475371a26194ffa5a396745016d36ef5eb33b005ef1a47f115888a96d6a`.
+Two focused consumers pass. Source legacy-only presses, decimal CTRL+ALT
+lowercase output, generated text precedence, modifier masking, empty releases,
+unsupported keys and partial writer failures are retained. The exact source
+tree and locked Unicode dependency are verified by the committed runner in
+`vaxis/reference_probes/terminal/key/README.md`.
+
 The complete PNG decoding matrix was repeated after the stream changes and
 retains all 60,760 returning records and eight checked traps, SHA-256
 `96ee46b18345684842d8ae9cd64290f7c5e9b86228458a83386a602bbd646e9c`.
