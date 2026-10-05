@@ -145,6 +145,26 @@ def corpus():
     return cases
 
 
+def streaming_corpus():
+    cases = []
+    for capacity in (1, 2, 4, 8, 16, 64):
+        for length in (0, 1, 2, 7, 8, 9, 16, 31, 64):
+            data = bytes((index * 37 + length) % 256 for index in range(length))
+            actions = f"e,g,s0,p1,g,t1,g,e,y-1,b,x{length + 1},g,e,s0,y-1,b,e"
+            cases.append((f"streaming-reader-{capacity}-{length}",
+                          f"9|0|0|{capacity}|{data.hex()}|{actions}"))
+            actions = "e,g,p1,g,h100,g,e,s0,y-1,b,e"
+            cases.append((f"streaming-reader-eof-{capacity}-{length}",
+                          f"9|0|0|{capacity}|{data.hex()}|{actions}"))
+    for capacity in (0, 1, 2, 4, 8, 16, 64):
+        for length in (0, 1, 2, 7, 8, 9, 16, 31, 64):
+            data = bytes((index * 71 + length) % 256 for index in range(length))
+            actions = f"w{data.hex()},b255,f,s0,a01020304,f,s2,b170,f"
+            cases.append((f"streaming-writer-{capacity}-{length}",
+                          f"10|0|0|{capacity}||{actions}"))
+    return cases
+
+
 def traps():
     names = ["memory-seek-add-overflow", "little-byte-read-width", "little-final-read-width",
              "big-byte-write-width", "big-buffered-write-width", "reader-toss-past-end",
@@ -176,6 +196,8 @@ def main():
     parser.add_argument("v", type=Path)
     parser.add_argument("--target", default="aarch64-macos.14.0")
     parser.add_argument("--v-prod", action="store_true")
+    parser.add_argument("--streaming-only", action="store_true",
+                        help="compare only streaming constructors and buffered length")
     args = parser.parse_args()
     source = args.source.resolve() / "src"
     digest = hashlib.sha256()
@@ -187,7 +209,7 @@ def main():
         parser.error("src differs from locked zigimg")
     probe = Path(__file__).resolve().parent / "reference_probes/streams"
     module_root = probe.parents[2]
-    cases = corpus()
+    cases = streaming_corpus() if args.streaming_only else corpus() + streaming_corpus()
     env = dict(os.environ, VEXE=str(args.v.resolve()), V_C_ERROR_BUG_REPORT_DISABLED="1")
     with tempfile.TemporaryDirectory(prefix="witty-streams-") as directory:
         root = Path(directory)
@@ -208,14 +230,16 @@ def main():
         for (label, data), expected, actual in zip(cases, *outputs):
             if expected != actual:
                 raise AssertionError(f"{label} ({data}): {expected[:500]!r} != {actual[:500]!r}")
-        for label, data in traps():
+        checked_traps = [] if args.streaming_only else traps()
+        checked_boundaries = [] if args.streaming_only else compile_boundaries()
+        for label, data in checked_traps:
             corpus_path.write_text(data + "\n")
             for executable in ("native", "translated"):
                 result = subprocess.run([str(root / executable), str(corpus_path)], capture_output=True,
                                         timeout=10, preexec_fn=disable_core_dumps)
                 if result.returncode == 0 or b"UNEXPECTED" in result.stdout + result.stderr or not any(marker in result.stderr for marker in (b"panic:", b"Assertion failed")):
                     raise AssertionError(f"{label}: {executable} did not produce a checked trap: {result.returncode}, {result.stdout!r}, {result.stderr[:300]!r}")
-        for label, native_statements, translated_statements in compile_boundaries():
+        for label, native_statements, translated_statements in checked_boundaries:
             native_path = root / f"{label}.zig"
             native_path.write_text('const io = @import("src/io.zig");\npub fn main() !void { var data: [8]u8 = @splat(0); var input = io.ReadStream.initMemory(&data); var output = io.WriteStream.initMemory(&data); _ = &input; _ = &output; ' + native_statements + ' }\n')
             translated_path = root / f"{label}.v"
@@ -230,7 +254,15 @@ def main():
                 if result.returncode == 0 or result.returncode < 0 or b"error:" not in diagnostics or any(marker in diagnostics.lower() for marker in (b"segmentation fault", b"panic:", b"compiler bug", b"c error found")):
                     raise AssertionError(f"{label}: {executable} did not produce an ordinary compiler rejection: {result.returncode}, {diagnostics[:500]!r}")
         result_hash = hashlib.sha256(b"\n".join(outputs[0])).hexdigest()
-        print(f"Streams: {len(cases)} returning cases, {len(traps())} isolated traps, {len(compile_boundaries())} compile boundaries; SHA256 {result_hash}")
+        if not args.streaming_only:
+            baseline_count = len(corpus())
+            baseline_hash = hashlib.sha256(b"\n".join(outputs[0][:baseline_count])).hexdigest()
+            if baseline_hash != "f1aa0b894555ca0ee8864ce10e7605112cc2ccfeaa1ae6b21a07e3573cbc99dc":
+                raise AssertionError(f"original stream corpus changed: {baseline_hash}")
+            streaming_hash = hashlib.sha256(b"\n".join(outputs[0][baseline_count:])).hexdigest()
+            print(f"Original {baseline_count} records retain SHA256 {baseline_hash}; "
+                  f"streaming {len(cases) - baseline_count} records SHA256 {streaming_hash}")
+        print(f"Streams: {len(cases)} returning cases, {len(checked_traps)} isolated traps, {len(checked_boundaries)} compile boundaries; SHA256 {result_hash}")
 
 
 if __name__ == "__main__":

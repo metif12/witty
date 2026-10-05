@@ -1622,6 +1622,28 @@ State, errors, positions, bytes and file contents are compared against unchanged
 locked source. Borrowed ownership, native scalar widths and platform limits
 are recorded in `zigimg/reference_probes/streams/README.md`.
 
+Streaming file reader/writer constructors now preserve the descriptor's live
+position and avoid the initial positional-I/O mode transition. EOF replaces
+the streaming reader's cached size error; backward absolute seeks stay
+unavailable. The expanded Debug corpus matches 37,133 records, SHA-256
+`d5d4aadd97fafef40388dd894267e0b09d6db36b902c2f4356d4fb287eab8eeb`.
+Its original 36,962-record hash is unchanged. The 171 added constructor and
+buffered-length cases also match under V production optimization, SHA-256
+`37175ccb3eb0e9b5b36005a5c2443f6f59b1ee2cbd7de2fd1336c2761a8bcfab`.
+
+The classic Vaxis Table now retains all four width styles, context defaults,
+the runnable MultiArrayList row snapshot, cell rendering, selection, callback
+errors and live callback mutations. The unchanged source and locked uucode
+dependency match 7,058 returning records, fourteen checked traps and four
+ordinary compile boundaries in Debug and V-production/source-ReleaseSafe
+builds, SHA-256
+`a9aa2c68decee1101f62bfc02cd52ccbfceed8142377c1919c9a60c194c91a82`.
+Five consumer tests and a Windows focused-test cross build pass. Source slice
+inputs and direct/optional string-slice fields fail to compile with Zig 0.15.2;
+the V APIs retain those boundaries. GC allocation, arbitrary custom-composite
+formatting and undefined subset-header adaptations remain documented in
+`vaxis/reference_probes/table/README.md`.
+
 Scientific CIE XYZ/Lab/Luv/LCh, HSLuv and Oklab conversions match 6,961
 unchanged-source cases, SHA-256
 `d97550d49bb60cf224fc60999d3603d6199aa9c99702a7c79b8d7ca9f10e8566`.

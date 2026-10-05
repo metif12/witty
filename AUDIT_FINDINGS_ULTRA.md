@@ -1769,6 +1769,27 @@ test cross builds pass. Windows execution and Zig's non-native scalar widths
 retain their documented limits. Reproduction and ownership rules are in
 `zigimg/reference_probes/streams/README.md`.
 
+Streaming file constructors now start at the descriptor's current position.
+The reader exposes buffered length, initially reports `Streaming` for file
+size, then retains EOF's discovered size and unavailable backward seeks.
+The expanded Debug matrix matches 37,133 records, SHA-256
+`d5d4aadd97fafef40388dd894267e0b09d6db36b902c2f4356d4fb287eab8eeb`;
+the original 36,962-record hash remains unchanged. The 171 streaming records
+also match with V production optimization, SHA-256
+`37175ccb3eb0e9b5b36005a5c2443f6f59b1ee2cbd7de2fd1336c2761a8bcfab`.
+
+The classic Vaxis Table translation preserves its width styles, context
+defaults, allocated row snapshots, repeated N-by-N columns, screen rendering,
+callback errors and callback mutations. Debug and V-production/source-
+ReleaseSafe comparisons match 7,058 returning records, fourteen checked traps
+and four ordinary compiler failures, SHA-256
+`a9aa2c68decee1101f62bfc02cd52ccbfceed8142377c1919c9a60c194c91a82`.
+Five consumer tests and a Windows focused-test build pass. Zig 0.15.2 rejects
+source slice inputs and direct/optional string-slice field formatting; the
+translated APIs retain these compile boundaries. GC ownership, custom `{any}`
+formatting and source-undefined subset header limits remain in
+`vaxis/reference_probes/table/README.md`.
+
 The complete PNG decoding matrix was repeated after the stream changes and
 retains all 60,760 returning records and eight checked traps, SHA-256
 `96ee46b18345684842d8ae9cd64290f7c5e9b86228458a83386a602bbd646e9c`.

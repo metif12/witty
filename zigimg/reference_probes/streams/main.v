@@ -5,6 +5,9 @@ import os
 import strings
 import zigimg
 
+fn C.witty_image_file_seek(int, u64) int
+fn C.witty_image_file_write(int, u64, &u8, usize, &u8, usize, &int) isize
+
 #flag -I @VMODROOT/zigimg/reference_probes/streams
 #include "fixture_shims.h"
 
@@ -245,11 +248,16 @@ fn byte_reads(mut out strings.Builder, mode int, data []u8, capacity int, action
 	mut file := os.File{}
 	mut closed := true
 	mut stream := zigimg.ReadStream.init_memory(data)
-	if mode == 3 {
+	if mode == 3 || mode == 9 {
 		os.write_file_array(path, data) or { panic(err) }
 		file = os.open(path) or { panic(err) }
 		closed = false
-		stream = zigimg.ReadStream.init_file(file, mut buffer)
+		if mode == 9 {
+			if C.witty_image_file_seek(file.fd, 1) != 0 { panic('Cannot seek fixture descriptor') }
+			stream = zigimg.ReadStream.init_file_streaming(file, mut buffer)
+		} else {
+			stream = zigimg.ReadStream.init_file(file, mut buffer)
+		}
 	}
 	defer {
 		if !closed { file.close() }
@@ -329,6 +337,9 @@ fn byte_reads(mut out strings.Builder, mode int, data []u8, capacity int, action
 				closed = true
 				out.write_string(status)
 			}
+			`g` {
+				out.write_string(reader.buffered_len().str())
+			}
 			`e` {
 				out.write_string(status)
 			}
@@ -346,10 +357,19 @@ fn byte_writes(mut out strings.Builder, mode int, capacity int, actions string, 
 	mut file := os.File{}
 	mut closed := true
 	mut stream := zigimg.WriteStream.init_memory(mut buffer)
-	if mode == 5 {
+	if mode == 5 || mode == 10 {
 		file = os.create(path) or { panic(err) }
 		closed = false
-		stream = zigimg.WriteStream.init_file(file, mut buffer)
+		if mode == 10 {
+			prefix := [u8(`~`)]
+			mut streaming := 1
+			if C.witty_image_file_write(file.fd, 0, prefix.data, 1, unsafe { nil }, 0, &streaming) != 1 {
+				panic('Cannot seed fixture descriptor')
+			}
+			stream = zigimg.WriteStream.init_file_streaming(file, mut buffer)
+		} else {
+			stream = zigimg.WriteStream.init_file(file, mut buffer)
+		}
 	}
 	defer {
 		if !closed { file.close() }
@@ -396,7 +416,7 @@ fn byte_writes(mut out strings.Builder, mode int, capacity int, actions string, 
 		out.write_string('@')
 		out.write_string(stream.get_pos().str())
 		out.write_string(':${hex.encode(writer.buffered())}:')
-		if mode == 5 {
+		if mode == 5 || mode == 10 {
 			contents := os.read_bytes(path) or { panic(err) }
 			out.write_string(hex.encode(contents))
 		} else {
@@ -702,7 +722,7 @@ fn main() {
 				2 { dispatch[AliasBig](mut out, mode, kind, data, capacity, actions) }
 				else { dispatch[AliasLittle](mut out, mode, kind, data, capacity, actions) }
 			}
-		} else if mode <= 3 {
+		} else if mode <= 3 || mode == 9 {
 			byte_reads(mut out, mode, data, capacity, actions, path)
 		} else {
 			byte_writes(mut out, mode, capacity, actions, path)

@@ -43,6 +43,21 @@ pub fn ReadStream.init_file(file os.File, mut buffer []u8) ReadStream {
 	}
 }
 
+// std.fs.File.Reader.initStreaming starts at the descriptor's live position
+// and caches the unavailable size until a read observes EOF.
+pub fn ReadStream.init_file_streaming(file os.File, mut buffer []u8) ReadStream {
+	return ReadStream{
+		buffer:          unsafe { buffer }
+		file:            file
+		streaming:       1
+		file_size_error: 'Streaming'
+	}
+}
+
+pub fn (stream ReadStream) buffered_len() int {
+	return stream.end - stream.position
+}
+
 // The adapter borrows the live buffer and position, as io.ReadStream.reader
 // does. Keep the owning stream alive while using this pointer.
 pub fn (mut stream ReadStream) reader() &ReadStream {
@@ -75,6 +90,7 @@ pub fn (mut stream ReadStream) seek_to(offset u64) ! {
 		size := stream.get_end_pos() or { return error('Unseekable') }
 		if offset >= size { return error('Unseekable') }
 		logical := stream.get_pos()
+		if stream.streaming != 0 && offset < logical { return error('Unseekable') }
 		if offset < logical || offset >= stream.file_pos {
 			stream.position = 0
 			stream.end = 0
@@ -354,6 +370,14 @@ pub fn WriteStream.init_file(file os.File, mut buffer []u8) WriteStream {
 	return WriteStream{
 		buffer: unsafe { buffer }
 		file:   file
+	}
+}
+
+pub fn WriteStream.init_file_streaming(file os.File, mut buffer []u8) WriteStream {
+	return WriteStream{
+		buffer:    unsafe { buffer }
+		file:      file
+		streaming: 1
 	}
 }
 

@@ -14,14 +14,28 @@ The expected SHA-256 is
 from revision `d7b7ab0ba0899643831ef042bd73289510b39906`.
 The default native target is `aarch64-macos.14.0`, linked with libc.
 
-The corpus has 36,962 returning cases, 17 isolated checked traps and four
+The corpus has 37,133 returning cases, 17 isolated checked traps and four
 ordinary compile rejections. Its output SHA-256 is
+`d5d4aadd97fafef40388dd894267e0b09d6db36b902c2f4356d4fb287eab8eeb`.
+The original 36,962 cases retain
 `f1aa0b894555ca0ee8864ce10e7605112cc2ccfeaa1ae6b21a07e3573cbc99dc`.
+The 171 streaming-constructor cases match independently in ordinary and
+production builds, SHA-256
+`37175ccb3eb0e9b5b36005a5c2443f6f59b1ee2cbd7de2fd1336c2761a8bcfab`;
+`--streaming-only` runs this extension alone.
 It compares emitted bytes, values, errors, positions, buffering and underlying
 file contents. Cases cover both endian orders, native signed/unsigned and
 floating bit representations, aliases, buffered/partial reads and writes,
 EOF and shrinking/growing files, closed descriptors, delimiters, seeks,
 integer reader/writer helpers and pipe mode transitions.
+
+`init_file_streaming` starts at the descriptor's current position rather than
+using positional I/O. The reader initially reports `Streaming` for its size;
+observing EOF replaces that error with the discovered size. Backward absolute
+seeks remain unavailable. `buffered_len()` exposes bytes waiting in the reader.
+The fixtures set the descriptor position through system calls, avoiding V's
+stdio buffering. A focused consumer test exchanges bytes through actual pipe
+reader/writer adapters.
 
 On Darwin, Zig 0.15.2 implements positional vector writes through `pwrite` and
 returns after the first nonempty vector. The translated shim keeps that pending

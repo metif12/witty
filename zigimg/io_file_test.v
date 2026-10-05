@@ -195,6 +195,49 @@ fn test_pipe_writer_flush_retries_mode_transition_with_pending_bytes() {
 	}
 }
 
+fn test_streaming_adapters_exchange_pipe_bytes_without_positional_transition() {
+	$if !windows {
+		mut fds := [2]int{}
+		assert C.witty_stream_probe_pipe(&fds[0]) == 0
+		mut output_closed := false
+		defer {
+			C.witty_stream_probe_close(fds[0])
+			if !output_closed { C.witty_stream_probe_close(fds[1]) }
+		}
+		mut output_buffer := []u8{len: 2}
+		mut output := WriteStream.init_file_streaming(os.File{ fd: fds[1] }, mut output_buffer)
+		assert output.write('abc'.bytes())! == 3
+		output.flush()!
+		assert output.get_pos() == 3
+		assert C.witty_stream_probe_close(fds[1]) == 0
+		output_closed = true
+		mut input_buffer := []u8{len: 8}
+		mut input := ReadStream.init_file_streaming(os.File{ fd: fds[0] }, mut input_buffer)
+		mut missing_size := false
+		input.get_end_pos() or {
+			missing_size = true
+			assert err.msg() == 'Streaming'
+		}
+		assert missing_size
+		assert input.peek(1)!.bytestr() == 'a'
+		assert input.buffered_len() == 3
+		assert input.take(3)!.bytestr() == 'abc'
+		assert input.buffered_len() == 0
+		mut reached_end := false
+		input.take_byte() or {
+			reached_end = true
+			assert err.msg() == 'EndOfStream'
+		}
+		assert reached_end && input.get_end_pos()! == 3
+		mut unseekable := false
+		input.seek_to(0) or {
+			unseekable = true
+			assert err.msg() == 'Unseekable'
+		}
+		assert unseekable && input.get_pos() == 3
+	}
+}
+
 fn test_file_writer_position_accepts_last_representable_pending_byte() {
 	path := os.join_path(os.temp_dir(), 'witty-zigimg-write-position-${os.getpid()}')
 	defer { os.rm(path) or {} }

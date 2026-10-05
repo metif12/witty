@@ -217,11 +217,14 @@ fn byteReads(writer: *std.Io.Writer, mode: u8, data: []const u8, capacity: usize
     var file: std.fs.File = undefined;
     var closed = true;
     var input = io.ReadStream.initMemory(data);
-    if (mode == 3) {
+    if (mode == 3 or mode == 9) {
         file = try std.fs.cwd().createFile(path, .{ .read = true });
         try file.writeAll(data);
         closed = false;
-        input = io.ReadStream.initFile(file, buffer);
+        if (mode == 9) {
+            try file.seekTo(1);
+            input = .{ .file = file.readerStreaming(buffer) };
+        } else input = io.ReadStream.initFile(file, buffer);
     }
     defer if (!closed) file.close();
     const reader = input.reader();
@@ -308,6 +311,7 @@ fn byteReads(writer: *std.Io.Writer, mode: u8, data: []const u8, capacity: usize
                 closed = true;
                 try writer.writeAll(status);
             },
+            'g' => try writer.print("{d}", .{reader.bufferedLen()}),
             'e' => try writer.writeAll(status),
             else => return error.InvalidReadAction,
         }
@@ -321,10 +325,13 @@ fn byteWrites(writer: *std.Io.Writer, mode: u8, capacity: usize, actions: []cons
     var file: std.fs.File = undefined;
     var closed = true;
     var output = io.WriteStream.initMemory(buffer);
-    if (mode == 5) {
+    if (mode == 5 or mode == 10) {
         file = try std.fs.cwd().createFile(path, .{ .read = true });
         closed = false;
-        output = io.WriteStream.initFile(file, buffer);
+        if (mode == 10) {
+            try file.writeAll("~");
+            output = .{ .file = file.writerStreaming(buffer) };
+        } else output = io.WriteStream.initFile(file, buffer);
     }
     defer if (!closed) file.close();
     const adapter = output.writer();
@@ -373,7 +380,7 @@ fn byteWrites(writer: *std.Io.Writer, mode: u8, capacity: usize, actions: []cons
         try writer.print("@{d}:", .{output.getPos()});
         try hex(writer, adapter.buffered());
         try writer.writeByte(':');
-        if (mode == 5) {
+        if (mode == 5 or mode == 10) {
             try hex(writer, try std.fs.cwd().readFileAlloc(allocator, path, 1024 * 1024));
         } else try hex(writer, buffer);
         try writer.writeByte(';');
@@ -565,7 +572,7 @@ pub fn main() !void {
         }
         if (mode <= 1) {
             if (endian == 0 or endian == 2) try dispatch(.big, writer, mode, kind, data, capacity, actions) else try dispatch(.little, writer, mode, kind, data, capacity, actions);
-        } else if (mode <= 3) try byteReads(writer, mode, data, capacity, actions, path) else try byteWrites(writer, mode, capacity, actions, path);
+        } else if (mode <= 3 or mode == 9) try byteReads(writer, mode, data, capacity, actions, path) else try byteWrites(writer, mode, capacity, actions, path);
         try writer.writeByte('\n');
     }
 }
