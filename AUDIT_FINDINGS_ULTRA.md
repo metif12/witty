@@ -1698,6 +1698,20 @@ byte arrays, scalar fields, short input and read positions. Wider inline
 arrays and dynamic byte slices, with and without aliases, retain four ordinary
 source compile rejections.
 
+The live native clipboard paths now share the source's URL-first opinionated
+pasteboard reader, map MIME types through UTType, declare write types before
+setting values, and project callback strings through the same repairing or
+strict first-NUL conversions as Swift. Confirmed writes publish only approved
+plain text; malformed UTF-8 and unknown read-request tags retain the source
+early return without completion. An actual module-main AppKit fixture uses a
+unique named pasteboard and injected alert results. All 21 records match the
+unchanged pinned Swift helpers, app callbacks and controller completion method.
+The runner checks each extracted/compiled source file against its pinned Git
+contents. The fixture validates content and cleanup policy; synchronous alert
+presentation remains a V adaptation, and source SwiftUI sheet rendering/timing
+is not certified. All tested MIME names yield UTTypes, so the translated raw
+MIME fallback after a nil lookup remains unexercised on this host.
+
 `6d38e29` applies Swift's repairing first-NUL C-string projection to native
 config title/font and command title/description consumers. The extracted
 unchanged getters/initializer match 20 records (40 getter results and 38

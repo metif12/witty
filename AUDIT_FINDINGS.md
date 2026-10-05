@@ -1548,6 +1548,19 @@ aliases, invalid enum consumption and short reads, SHA-256
 Four ordinary compile probes reject wider inline arrays and dynamic byte
 slices, including aliases, at the source's unsupported field boundary.
 
+The live macOS clipboard callbacks now use the source URL-first pasteboard
+reader, Uniform Type Identifier mapping for MIME types, and repairing first-NUL
+C-string conversion. Writes declare all types before storing values; approved
+confirmation publishes only the plain text shown to the user. Read confirmation
+retains strict UTF-8 and request-discriminator guards. The actual module-main
+native fixture uses an isolated named pasteboard and injected alert results.
+Its 21 records match unchanged pinned Swift helper/app/controller bodies through
+`build_support/reference_probes/clipboard/run.py`, which verifies each source
+file against the pinned Git revision before extraction. This establishes content
+and completion/cleanup policy, without certifying SwiftUI sheet rendering or
+asynchronous timing. The raw MIME fallback after a nil UTType is translated;
+all tested host MIME names produce a known or dynamic UTI.
+
 Scientific CIE XYZ/Lab/Luv/LCh, HSLuv and Oklab conversions match 6,961
 unchanged-source cases, SHA-256
 `d97550d49bb60cf224fc60999d3603d6199aa9c99702a7c79b8d7ca9f10e8566`.

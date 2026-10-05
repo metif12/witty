@@ -327,7 +327,9 @@ fn runtime_read_clipboard(userdata voidptr, clipboard_type int, request &apprt.C
 	if state.closed || state.surface == unsafe { nil } {
 		return
 	}
-	text := macos.clipboard_get_text_for(clipboard_type) or { '' }
+	// The source sends the Swift pasteboard string through withCString before
+	// the core consumes it, so only the prefix before the first NUL participates.
+	text := macos.source_c_utf8_repair(macos.clipboard_get_text_for(clipboard_type) or { '' })
 	apprt.ghostty_surface_complete_clipboard_request(mut state.surface, text, request, false)
 }
 
@@ -336,9 +338,12 @@ fn runtime_confirm_read_clipboard(userdata voidptr, value string, request &apprt
 	if state.closed || state.surface == unsafe { nil } {
 		return
 	}
-	confirmed := macos.confirm_clipboard(value, int(request_type))
+	// confirmReadClipboard uses the strict UTF-8 C-string initializer.
+	text := macos.source_c_utf8(value) or { return }
+	if request_type !in [.paste, .osc_52_read, .osc_52_write] { return }
+	confirmed := macos.confirm_clipboard(text, int(request_type))
 	apprt.ghostty_surface_complete_clipboard_request(mut state.surface, if confirmed {
-		value
+		text
 	} else {
 		''
 	}, request, true)
@@ -346,13 +351,20 @@ fn runtime_confirm_read_clipboard(userdata voidptr, value string, request &apprt
 
 fn runtime_write_clipboard(userdata voidptr, clipboard_type int, contents []apprt.ClipboardContent, confirm bool) {
 	state := state_from_userdata(userdata) or { return }
-	if state.closed || contents.len == 0 {
+	if state.closed || contents.len == 0 || clipboard_type !in [0, 1] {
 		return
 	}
+	// Ghostty.ClipboardContent.from repairs the C-string prefixes before either
+	// choosing the confirmation text or mapping MIME types.
+	mut values := contents.map(apprt.ClipboardContent{
+		mime: macos.source_c_utf8_repair(it.mime)
+		data: macos.source_c_utf8_repair(it.data)
+	})
+	assert values.filter(it.mime == 'text/plain').len <= 1
 	if confirm {
 		mut text := ''
 		mut found := false
-		for content in contents {
+		for content in values {
 			if content.mime == 'text/plain' {
 				text = content.data
 				found = true
@@ -362,11 +374,13 @@ fn runtime_write_clipboard(userdata voidptr, clipboard_type int, contents []appr
 		if !found || !macos.confirm_clipboard(text, int(apprt.ClipboardRequestType.osc_52_write)) {
 			return
 		}
+		// The confirmation controller only publishes the approved plain text.
+		values = [apprt.ClipboardContent{ mime: 'text/plain', data: text }]
 	}
-	if !macos.clipboard_clear(clipboard_type) {
+	if !macos.clipboard_declare_types(clipboard_type, values.map(it.mime)) {
 		return
 	}
-	for content in contents {
+	for content in values {
 		macos.clipboard_set_value(clipboard_type, content.mime, content.data)
 	}
 }

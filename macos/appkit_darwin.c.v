@@ -1015,12 +1015,24 @@ pub fn clipboard_set_value(clipboard_type int, mime string, data string) bool {
 	if is_nil(pasteboard) {
 		return false
 	}
-	type_name := match mime {
-		'text/plain' { 'public.utf8-plain-text' }
-		'text/html' { 'public.html' }
-		else { mime }
-	}
-	return msg_bool2(pasteboard, 'setString:forType:', nsstring(data), nsstring(type_name))
+	return msg_bool2(pasteboard, 'setString:forType:', nsstring(data), clipboard_type_for_mime(mime))
+}
+
+pub fn clipboard_declare_types(clipboard_type int, mimes []string) bool {
+	pasteboard := clipboard_for(clipboard_type)
+	if is_nil(pasteboard) { return false }
+	types := msg_id(msg_id(alloc('NSMutableArray'), 'init'), 'autorelease')
+	for mime in mimes { msg_void1(types, 'addObject:', clipboard_type_for_mime(mime)) }
+	msg_id2(pasteboard, 'declareTypes:owner:', types, nil_obj())
+	return true
+}
+
+// NSPasteboard.PasteboardType(mimeType:) prefers the Uniform Type Identifier
+// for any recognized MIME type, including dynamically generated identifiers.
+fn clipboard_type_for_mime(mime string) ObjId {
+	if mime == 'text/plain' { return nsstring('public.utf8-plain-text') }
+	type_ := msg_id1(get_class('UTType'), 'typeWithMIMEType:', nsstring(mime))
+	return if is_nil(type_) { nsstring(mime) } else { msg_id(type_, 'identifier') }
 }
 
 pub fn clipboard_set_text(text string) {
@@ -1035,11 +1047,7 @@ pub fn clipboard_get_text_for(clipboard_type int) ?string {
 	if is_nil(pasteboard) {
 		return none
 	}
-	text_obj := msg_id1(pasteboard, 'stringForType:', nsstring('public.utf8-plain-text'))
-	if is_nil(text_obj) {
-		return none
-	}
-	return objc_utf8_string(text_obj)
+	return opinionated_pasteboard_contents(pasteboard)
 }
 
 pub fn clipboard_get_text() ?string {
