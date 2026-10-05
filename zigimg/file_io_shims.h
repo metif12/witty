@@ -12,6 +12,15 @@ static int witty_image_file_size(int fd, uint64_t *size) {
     *size = (uint64_t)result.QuadPart;
     return 0;
 }
+static int witty_image_file_seek(int fd, uint64_t pos) {
+    LARGE_INTEGER offset;
+    offset.QuadPart = (LONGLONG)pos;
+    if (SetFilePointerEx((HANDLE)_get_osfhandle(fd), offset, NULL, FILE_BEGIN)) return 0;
+    DWORD err = GetLastError();
+    if (err == ERROR_ACCESS_DENIED) return 2;
+    if (err == ERROR_INVALID_FUNCTION || err == ERROR_INVALID_PARAMETER) return 1;
+    return 3;
+}
 static intptr_t witty_image_file_read(int fd, uint64_t pos, unsigned char *buf, size_t count, int *streaming) {
     DWORD n;
     OVERLAPPED overlap = {0};
@@ -50,6 +59,12 @@ static int witty_image_file_size(int fd, uint64_t *size) {
     *size = st.st_size;
     return 0;
 }
+static int witty_image_file_seek(int fd, uint64_t pos) {
+    if (lseek(fd, (off_t)pos, SEEK_SET) >= 0) return 0;
+    if (errno == ESPIPE || errno == EINVAL || errno == EOVERFLOW || errno == ENXIO) return 1;
+    if (errno == EBADF) return 4;
+    return 3;
+}
 static intptr_t witty_image_file_read(int fd, uint64_t pos, unsigned char *buf, size_t count, int *streaming) {
     ssize_t n;
     do {
@@ -75,15 +90,30 @@ static intptr_t witty_image_file_read_vec(int fd, uint64_t pos, unsigned char *a
     return n;
 }
 static intptr_t witty_image_file_write(int fd, uint64_t pos, const unsigned char *a, size_t alen, const unsigned char *b, size_t blen, int *streaming) {
+    if (*streaming < 0) return -1;
     struct iovec vectors[2] = {{(void *)a, alen}, {(void *)b, blen}};
     ssize_t n;
     do {
-        n = *streaming ? writev(fd, vectors, 2) : pwritev(fd, vectors, 2, (off_t)pos);
+        if (*streaming) {
+            n = writev(fd, vectors, 2);
+        } else {
+#if defined(__APPLE__) || defined(__HAIKU__)
+            /* Zig 0.15.2's std.posix.pwritev uses pwrite on these targets and
+               deliberately returns after the first nonempty vector. */
+            n = pwrite(fd, alen ? a : b, alen ? alen : blen, (off_t)pos);
+#else
+            n = pwritev(fd, vectors, 2, (off_t)pos);
+#endif
+        }
     } while (n < 0 && errno == EINTR);
     if (n < 0 && errno == ESPIPE && !*streaming) {
         *streaming = 1;
-        if (pos != 0) return -1;
-        do { n = writev(fd, vectors, 2); } while (n < 0 && errno == EINTR);
+        if (pos != 0 && lseek(fd, (off_t)pos, SEEK_SET) < 0) {
+            *streaming = -1;
+            return -1;
+        }
+        /* The source exposes this zero-progress mode transition to write(). */
+        return 0;
     }
     return n;
 }

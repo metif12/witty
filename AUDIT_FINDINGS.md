@@ -1581,6 +1581,32 @@ void from an optional Cell function; its V method remains unavailable and both
 compile rejections are verified. API mappings, source hash and coordinate/
 allocation adaptations are in `vaxis/reference_probes/widgets/README.md`.
 
+The octree quantizer now keeps its checked accumulation, averaging, capacity,
+reduction and level arithmetic in production builds. Sixteen strict trap probes
+close a previous false positive caused by panicking on a returned domain error.
+The original 2,160 tree/palette/index and 336,128 normalization hashes remain
+`fb25faff7d5b5837` and `2e3cf0cdc340afc4` in Debug and V-production/source-
+ReleaseSafe builds. Aliases of all eleven RGB(A) types match 2,816 additional
+records, SHA-256
+`9c9d1fc6249abb82c5ce2d642655a4f6b6b7789e7ad540a9c65993a47cea09d3`.
+The verifier checks the full pinned source tree and V-computed hashes
+independently of assertions. Deliberate reduction wrapping and GC/root/private
+context adaptations remain documented in the probe.
+
+The image streams now expose borrowed reader/writer adapters and native-width
+integer helpers, including scalar/endian aliases. File EOF refreshes cached
+size after truncation; Darwin positional vector writes preserve the source's
+first-vector return and pending bytes. Pipe writes retain the initial
+zero-progress mode transition, retry it during flush, and cache seek failures.
+Explicit seek, capacity, buffered-count and bit-shift guards survive production
+optimization. `verify_streams_reference.py` matches 36,962 returning records,
+17 strict checked traps and four ordinary compile rejections in ordinary and
+production V builds, SHA-256
+`f1aa0b894555ca0ee8864ce10e7605112cc2ccfeaa1ae6b21a07e3573cbc99dc`.
+State, errors, positions, bytes and file contents are compared against unchanged
+locked source. Borrowed ownership, native scalar widths and platform limits
+are recorded in `zigimg/reference_probes/streams/README.md`.
+
 Scientific CIE XYZ/Lab/Luv/LCh, HSLuv and Oklab conversions match 6,961
 unchanged-source cases, SHA-256
 `d97550d49bb60cf224fc60999d3603d6199aa9c99702a7c79b8d7ca9f10e8566`.

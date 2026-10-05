@@ -36,15 +36,15 @@ pub fn (mut stream BitReader[E]) read_bits_tuple[E, T](num u16) !(T, u16) {
 			if err.msg() == 'EndOfStream' { return bit_value_from_bits[T](out), out_count }
 			return err
 		}
-		$if E is BigEndian {
+		$if E.unaliased_typ is BigEndian {
 			if sizeof(T) == 1 {
 				out = 0
 			} else {
 				out <<= 8
 			}
 			out |= byte
-		} $else $if E is LittleEndian {
-			assert out_count < sizeof(T) * 8
+		} $else $if E.unaliased_typ is LittleEndian {
+			if out_count >= sizeof(T) * 8 { panic('BitReader shift exceeds scalar width') }
 			out |= u64(byte) << out_count
 		} $else {
 			$compile_error('BitReader requires BigEndian or LittleEndian')
@@ -58,13 +58,13 @@ pub fn (mut stream BitReader[E]) read_bits_tuple[E, T](num u16) !(T, u16) {
 		if err.msg() == 'EndOfStream' { return bit_value_from_bits[T](out), out_count }
 		return err
 	}
-	$if E is BigEndian {
-		assert bits_left < sizeof(T) * 8
+	$if E.unaliased_typ is BigEndian {
+		if bits_left >= sizeof(T) * 8 { panic('BitReader shift exceeds scalar width') }
 		out <<= bits_left
 		out |= final_byte >> keep
 		stream.bits = final_byte & bit_mask(keep)
-	} $else $if E is LittleEndian {
-		assert out_count < sizeof(T) * 8
+	} $else $if E.unaliased_typ is LittleEndian {
+		if out_count >= sizeof(T) * 8 { panic('BitReader shift exceeds scalar width') }
 		out |= u64(final_byte & bit_mask(u8(bits_left))) << out_count
 		stream.bits = final_byte >> bits_left
 	}
@@ -73,17 +73,18 @@ pub fn (mut stream BitReader[E]) read_bits_tuple[E, T](num u16) !(T, u16) {
 }
 
 fn (mut stream BitReader[E]) remove_bits[E](num u8) u8 {
-	assert num <= stream.count
+	if num > stream.count { panic('BitReader buffered count underflow') }
 	if num == 8 {
 		stream.count = 0
 		return stream.bits
 	}
 	keep := stream.count - num
 	mut bits := u8(0)
-	$if E is BigEndian {
+	$if E.unaliased_typ is BigEndian {
+		if keep >= 8 { panic('BitReader byte shift exceeds width') }
 		bits = stream.bits >> keep
 		stream.bits &= bit_mask(keep)
-	} $else $if E is LittleEndian {
+	} $else $if E.unaliased_typ is LittleEndian {
 		bits = stream.bits & bit_mask(num)
 		stream.bits >>= num
 	}
@@ -108,6 +109,7 @@ pub fn (mut stream BitWriter[E]) write_bits[E, T](value T, num u16) ! {
 	if sizeof(T) < 8 { input &= (u64(1) << (sizeof(T) * 8)) - 1 }
 	mut in_count := num
 	if stream.count > 0 {
+		if stream.count > 8 { panic('BitWriter buffered count underflow') }
 		bits_free := u8(8 - stream.count)
 		if num < bits_free {
 			stream.add_bits(u8(input), u8(num))
@@ -117,10 +119,12 @@ pub fn (mut stream BitWriter[E]) write_bits[E, T](value T, num u16) ! {
 			stream.add_bits(u8(input), u8(num))
 			return stream.flush_bits()
 		}
-		$if E is BigEndian {
-			assert in_count - bits_free < sizeof(T) * 8
+		$if E.unaliased_typ is BigEndian {
+			if in_count - bits_free >= sizeof(T) * 8 {
+				panic('BitWriter shift exceeds scalar width')
+			}
 			stream.add_bits(u8(input >> (in_count - bits_free)), bits_free)
-		} $else $if E is LittleEndian {
+		} $else $if E.unaliased_typ is LittleEndian {
 			stream.add_bits(u8(input), bits_free)
 			input >>= bits_free
 		} $else {
@@ -131,10 +135,10 @@ pub fn (mut stream BitWriter[E]) write_bits[E, T](value T, num u16) ! {
 	}
 	full_bytes_left := in_count / 8
 	for _ in 0 .. full_bytes_left {
-		$if E is BigEndian {
-			assert in_count - 8 < sizeof(T) * 8
+		$if E.unaliased_typ is BigEndian {
+			if in_count - 8 >= sizeof(T) * 8 { panic('BitWriter shift exceeds scalar width') }
 			stream.writer.write_byte(u8(input >> (in_count - 8)))!
-		} $else $if E is LittleEndian {
+		} $else $if E.unaliased_typ is LittleEndian {
 			stream.writer.write_byte(u8(input))!
 			if sizeof(T) == 1 {
 				input = 0
@@ -148,43 +152,47 @@ pub fn (mut stream BitWriter[E]) write_bits[E, T](value T, num u16) ! {
 }
 
 fn (mut stream BitWriter[E]) add_bits[E](bits u8, num u8) {
-	assert num <= 8
+	if num > 8 { panic('BitWriter byte count exceeds width') }
 	if num == 8 {
 		stream.bits = bits
 	} else {
-		$if E is BigEndian {
+		$if E.unaliased_typ is BigEndian {
 			stream.bits <<= num
 			stream.bits |= bits & bit_mask(num)
-		} $else $if E is LittleEndian {
+		} $else $if E.unaliased_typ is LittleEndian {
 			// The source deliberately does not mask the provided value here.
+			if stream.count >= 8 { panic('BitWriter byte shift exceeds width') }
 			stream.bits |= u8(bits << stream.count)
 		}
 	}
 	stream.count += num
-	assert stream.count < 16
+	if stream.count >= 16 { panic('BitWriter buffered count overflow') }
 }
 
 pub fn (mut stream BitWriter[E]) flush_bits[E]() ! {
 	if stream.count == 0 { return }
-	$if E is BigEndian { stream.bits <<= 8 - stream.count }
+	$if E.unaliased_typ is BigEndian {
+		if stream.count > 8 { panic('BitWriter buffered count underflow') }
+		stream.bits <<= 8 - stream.count
+	}
 	stream.writer.write_byte(stream.bits)!
 	stream.bits = 0
 	stream.count = 0
 }
 
 fn bit_mask(count u8) u8 {
-	assert count <= 8
+	if count > 8 { panic('Bit stream mask exceeds byte width') }
 	return u8((u16(1) << count) - 1)
 }
 
 // Zig's bit APIs reinterpret the result/input, including floating point types.
 fn bit_value_from_bits[T](value u64) T {
-	$if T is f32 {
+	$if T.unaliased_typ is f32 {
 		word := u32(value)
-		return unsafe { *(&f32(&word)) }
-	} $else $if T is f64 {
-		return unsafe { *(&f64(&value)) }
-	} $else $if T is $int {
+		return T(unsafe { *(&f32(&word)) })
+	} $else $if T.unaliased_typ is f64 {
+		return T(unsafe { *(&f64(&value)) })
+	} $else $if T.unaliased_typ is $int {
 		return T(value)
 	} $else {
 		$compile_error('Bit streams currently support native integer and float scalars')
@@ -192,11 +200,11 @@ fn bit_value_from_bits[T](value u64) T {
 }
 
 fn bit_value_to_bits[T](value T) u64 {
-	$if T is f32 {
+	$if T.unaliased_typ is f32 {
 		return unsafe { *(&u32(&value)) }
-	} $else $if T is f64 {
+	} $else $if T.unaliased_typ is f64 {
 		return unsafe { *(&u64(&value)) }
-	} $else $if T is $int {
+	} $else $if T.unaliased_typ is $int {
 		return u64(value)
 	} $else {
 		$compile_error('Bit streams currently support native integer and float scalars')

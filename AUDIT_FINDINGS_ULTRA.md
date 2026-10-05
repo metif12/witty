@@ -1737,6 +1737,21 @@ The runner verifies the complete locked source tree and V-computed hashes
 independently of assertions. Deliberate removeLeaves wrapping and the existing
 GC/root/private-context adaptations remain unchanged.
 
+The continuing stream comparison restores borrowed reader/writer adapters and
+native integer helpers, including aliases. File truncation updates cached EOF;
+Darwin positional vector writes return after the source's first nonempty
+vector. Pipe writes expose the initial zero-progress transition, while flush
+retries it; streaming seeks retain cached failures. Checked seek additions,
+positions, capacities and bit/count shifts remain explicit in production.
+The source-hashed runner matches 36,962 returning cases, 17 strict checked
+traps and four ordinary compile rejections in both V build modes, SHA-256
+`f1aa0b894555ca0ee8864ce10e7605112cc2ccfeaa1ae6b21a07e3573cbc99dc`.
+Both focused test files pass in ordinary and production builds. The integrated
+43-file image suite, native/Linux module checks, Windows DLL and both focused
+test cross builds pass. Windows execution and Zig's non-native scalar widths
+retain their documented limits. Reproduction and ownership rules are in
+`zigimg/reference_probes/streams/README.md`.
+
 `6d38e29` applies Swift's repairing first-NUL C-string projection to native
 config title/font and command title/description consumers. The extracted
 unchanged getters/initializer match 20 records (40 getter results and 38

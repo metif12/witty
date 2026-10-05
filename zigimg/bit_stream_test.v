@@ -146,3 +146,41 @@ fn test_bit_stream_reinterprets_floating_point_values() {
 	}
 	assert read_le.read_bits_no_eof[LittleEndian, f64](64)! == 1.0
 }
+
+type BitAliasFloat = f32
+type BitAliasDouble = f64
+type BitAliasSigned = i16
+type BitAliasWord = u64
+type BitAliasBigEndian = BigEndian
+
+fn test_bit_stream_native_scalar_aliases_reinterpret_bits_and_share_adapters() {
+	mut bytes := []u8{len: 16}
+	mut output := WriteStream.init_memory(mut bytes)
+	mut writer := BitWriter[BitAliasBigEndian]{
+		writer: output.writer()
+	}
+	writer.write_bits[BitAliasBigEndian, BitAliasFloat](BitAliasFloat(-2.5), 32)!
+	writer.write_bits[BitAliasBigEndian, BitAliasSigned](BitAliasSigned(-2), 16)!
+	writer.write_bits[BitAliasBigEndian, BitAliasWord](BitAliasWord(0xfedcba9876543210), 64)!
+	assert output.get_pos() == 14
+	assert output.buffered() == [u8(0xc0), 0x20, 0, 0, 0xff, 0xfe, 0xfe, 0xdc, 0xba, 0x98, 0x76,
+		0x54, 0x32, 0x10]
+	mut input := ReadStream.init_memory(output.buffered())
+	mut reader := BitReader[BitAliasBigEndian]{
+		reader: input.reader()
+	}
+	assert reader.read_bits_no_eof[BitAliasBigEndian, BitAliasFloat](32)! == BitAliasFloat(-2.5)
+	assert reader.read_bits_no_eof[BitAliasBigEndian, BitAliasSigned](16)! == BitAliasSigned(-2)
+	assert reader.read_bits_no_eof[BitAliasBigEndian, BitAliasWord](64)! == BitAliasWord(0xfedcba9876543210)
+	assert input.get_pos() == 14
+	output.seek_to(0)!
+	mut little_writer := BitWriter[LittleEndian]{
+		writer: output.writer()
+	}
+	little_writer.write_bits[LittleEndian, BitAliasDouble](BitAliasDouble(1.0), 64)!
+	input = ReadStream.init_memory(output.buffered())
+	mut little_reader := BitReader[LittleEndian]{
+		reader: input.reader()
+	}
+	assert little_reader.read_bits_no_eof[LittleEndian, BitAliasDouble](64)! == BitAliasDouble(1.0)
+}
