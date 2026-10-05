@@ -1,6 +1,6 @@
 # Ghostty → V source-fidelity audit
 
-Audit date: **2026-10-02**. Result: **the requested fidelity criterion is not met**. The current tree contains implemented upstream branches with no translation, replacement algorithms, disconnected translated implementations, and observable behavior differences. This report records evidence; it does not certify complete equivalence or fix the production implementation.
+Audit date: **2026-10-02**. Initial audited snapshot result: **the requested fidelity criterion was not met**. That snapshot contained upstream branches with no translation, replacement algorithms, disconnected translated implementations, and observable behavior differences. The findings and inventories below retain that historical evidence; the fix resolution ledger records the subsequent source translations, separate commits, executed checks, and remaining validation limits. Neither the original audit nor the finding fixes certify complete repository equivalence.
 
 Four agents worked in parallel on terminal/protocol/input/data structures; runtime/configuration/subprocess/CLI/OS; renderer/font/sprite/inspector; and supporting/build/dependency code. They read current originals and V counterparts, traced relevant live callers, and used targeted native reference probes. A separate cross-review corrected claims about inherited unsupported macOS actions, native dependency linking, and compiler/module-path failures before publication.
 
@@ -46,7 +46,7 @@ Primary review-level counts: **branch-reviewed: 11**, **inventory-only: 207**, *
 
 **`no-discrepancy-observed` is scoped to the examined paths. It is not an approval or a whole-file fidelity certificate.** `gap-confirmed` records omitted source behavior; `divergence-confirmed` records a replacement or changed contract; `unverified` identifies remaining uncertainty. Namespace relocation, consolidation, generated data, or V syntax alone is not evidence of a rewrite. Conversely, a same-named file or passing counterpart-only test is not proof that the original algorithm is live or faithfully translated.
 
-Source placeholders and GC-only cleanup were checked against the original before classification. A no-op inherited from Ghostty is faithful to that original limitation. An empty body that discards an implemented enabled-feature branch is a gap. Explicit safety improvements, different libraries, subprocess replacements, and defensive checks are still divergences under the user’s strict preservation requirement, even when independently reasonable changes. No production fixes were made as part of this audit.
+Source placeholders and GC-only cleanup were checked against the original before classification. A no-op inherited from Ghostty is faithful to that original limitation. An empty body that discards an implemented enabled-feature branch is a gap. Explicit safety improvements, different libraries, subprocess replacements, and defensive checks are still divergences under the user’s strict preservation requirement, even when independently reasonable changes. No production fixes were made during the initial audit.
 
 The native follow-up directly targeted **all 13 large Swift originals (16,338 physical lines)** and the **1,160-line public embedding header**. Two additional large stb headers (**10,621 lines**) are byte-identical reused source. Together with the three Python/Metal originals already in the additional-source inventory, this accounts for **19 large non-Zig/native/public-header originals** outside the 99-primary-Zig set: **118 large originals** in the selected core/native/API source scope. Targeted native comparisons establish the recorded gaps; they do not certify all Swift branches or all external dependency source.
 
@@ -1486,14 +1486,14 @@ The 36 files below are at least 500 physical lines in the local libxev/vaxis/loc
 | `vaxis/src/widgets/terminal/Screen.zig` | 514 | `vaxis/screen.v` | inventory-only | unverified |
 | `vaxis/src/vxfw/Text.zig` | 508 | `vaxis/vxfw/text.v` | inventory-only | unverified |
 
-This audit adds only `AUDIT_FINDINGS_ULTRA.md` to the requested work. Existing production changes were preserved. No production fix, commit, or pull request was made.
+The initial audit added only `AUDIT_FINDINGS_ULTRA.md` and preserved existing production changes. The subsequent requested fixes and commits are recorded below. No pull request was requested or created.
 
 
 ## Fix resolution ledger
 
 The original findings above describe the audited snapshot and remain historical evidence. This ledger records subsequent implementation and validation against Ghostty `6c0e02d1138d5376e4ac2f5e311b225494514a97`. “Implemented” means the finding's code change has been integrated; validation remains limited to the evidence listed. It does not certify unexecuted native platform branches or whole-file parity. Pending entries remain required work.
 
-Ten isolated worker checkouts are used in waves: this environment permits three active workers alongside the integrating agent. Each fix is committed separately; the hashes below refer to the main checkout after integration.
+Ten isolated worker checkouts were used in parallel waves: this environment permits three active workers alongside the integrating agent. Each fix is committed separately; the hashes below refer to the main checkout after integration.
 
 | Finding | State | Main commits / assigned worker | Evidence |
 |---|---|---|---|
@@ -1509,9 +1509,9 @@ Ten isolated worker checkouts are used in waves: this environment permits three 
 | T10 | Implemented | `3e3a56d, 284e6b7` | All 242 key-table rows and native columns; table tests |
 | T11 | Implemented | `4ddfe66, 154f46e, ec1ce0c, e49db79, 06262b5, faf49b1, 00f8a38, 4956cdb, a606e15, 9281161, c80b7e1`; workers08/01 | Contiguous packed mmap storage, source arena pools/free lists/retained reset, pooled pins/pointer identity/remap and allocator failure cleanup; native Page/53 allocator events/5 PageList snapshots and full ReleaseSafe consumer suites pass |
 | T12 | Implemented | `cdad202, b4d9170, bfebcb4`; worker08 | Caller-backed generic maps/refcount sets, source AutoHash pointer/fixed array/selected union/optional/error/equality/rejection and unique-representation raw-byte branches; 15 unchanged Zig hash comparisons and five paired rejection checks pass |
-| T13 | Implemented | `defa489` | Caller allocator reaches payload, ArrayList and SegmentedList; allocation failure, reset, OSC/terminal/C tests |
+| T13 | Implemented | `defa489, 8daa873` | Caller allocator reaches payload, ArrayList and SegmentedList; allocation failure, reset, OSC/terminal/C tests and original missing-allocator warning |
 | T14 | Implemented | `c3267ae` | Original Oniguruma grammar and failure handling; tmux tests |
-| R01 | Implemented | `b2db4d1, 203eecb` | ConPTY/read/write HANDLE lifecycle, cancellation and NT cwd access; Darwin PTY/Exec tests and Windows COFF ABI compile pass; full Windows termio check passes after renderer target glue; Windows execution unverified |
+| R01 | Implemented | `b2db4d1, 203eecb, 3037638, 6dfc84c`; worker10 | ConPTY/read/write HANDLE lifecycle, cancellation and NT cwd access; source Linux fork selection and Darwin terminal branches include iOS; Darwin PTY/Exec tests, Windows COFF ABI compile and full Windows/iOS/FreeBSD termio checks pass; native Windows/iOS/FreeBSD execution unavailable |
 | R02 | Implemented | `0329051` | Nullable strings write NULL successfully; config ABI tests |
 | R03 | Implemented | `ede5f8d` | Notification error is warned/caught; mailbox regression |
 | R04 | Implemented | `0740574` | Exclusive atomic file, permissions and exact bound; cache tests |
@@ -1520,7 +1520,7 @@ Ten isolated worker checkouts are used in waves: this environment permits three 
 | R07 | Implemented | `56a2ec3` | Pinned gettext canonicalizer/archive; enabled and disabled i18n tests |
 | R08 | Implemented | `7b847ba` | Original CSS/icon/Blueprint resources and actual gresource generation/compilation paths; resource tests and Linux GTK typecheck pass; native resource compilation/display unavailable here |
 | R09 | Implemented | `0b40e1c` | Native ImGui/Inspector virtual classes; Linux typecheck |
-| RF-01 | Implemented | `bb72641` | Production selected backend; all 24 font files/Metal alternatives tested |
+| RF-01 | Implemented | `bb72641, a7862f3` | Production selected backend; all 24 font files/Metal alternatives tested; native debug CoreText axes/variation/SVG tests pass after preserving its deferred cleanup under a single combined platform/debug condition |
 | RF-02 | Implemented | `dcfd8a5` | Run grid lock held during shaping; blocking concurrency regression |
 | RF-04 | Implemented | `fb7870d` | Live shaper uses translated feature parser; feature tests |
 | RF-05 | Implemented | `822384b, e805710, db6bd89, 6f5c6e4` | Actual locked libraries, complete header closure, clean root rebuild; native SPIRV/GLSL/MSL and failure probes |
@@ -1535,30 +1535,30 @@ Ten isolated worker checkouts are used in waves: this environment permits three 
 | S02 | Implemented | `227ebde` | Checked empty/all-padding traps and InvalidPadding warning; subprocess probes |
 | S03 | Implemented | `6cea9e6` | Source aligned libc allocation/in-place remap; alignment 1–65536 and over-32-bit growth tests |
 | S04 | Implemented | `6166ffc, ef531fb` | Exact native SDK/Breakpad build; real SIGSEGV minidump and restart local transport; clean tracked-only build |
-| S05 | In progress | `ced0309, 30b6d21, a49c083, fe11b40, b33c55b, 1b9bc49, d163a1e, ef1f85e, 0574201, 7100753, ea111be, d024dab, 7adea4d, 4dc9980, c6af427, ac1b819, 9b96b00`; root/workers02/10 | Real install/run/test/native dependencies/generators/resources/distribution/retargeted XCFramework/V native bundle graph; installed VT C examples/generated hashes/full native C library consumer and Wasm 50-export API probe pass; final iOS/FreeBSD source platform glue checks active |
+| S05 | Implemented | `ced0309, 30b6d21, a49c083, fe11b40, b33c55b, 1b9bc49, d163a1e, ef1f85e, 0574201, 7100753, ea111be, d024dab, 7adea4d, 4dc9980, c6af427, ac1b819, 9b96b00, a651c96, 3037638, 6dfc84c`; root/workers02/10 | Real install/run/test/native dependencies/generators/resources/distribution/retargeted XCFramework/V native bundle graph; installed VT C examples/generated hashes/full native C library consumer and rebuilt Wasm 50-export API probe pass; full iOS/FreeBSD termio checks and production FreeBSD native ABI compilation pass; Xcode/Metal/GTK packaging execution unavailable |
 | S06 | Implemented | `3277fc6, 38b8900, f012e5e, ea111be, 4dc9980, a02674a`; root | Current GitVersion/channel and four-mode/artifact options reach production artifacts/host generators/tests; full native C consumer reports ReleaseSafe/version 1.3.0 and initializes/configures successfully; finalized updater defaults use the live compiled channel, with stable/tip/explicit override regressions passing |
-| S07 | Implemented | `8c24731`; worker05 | Actual borrowed config clone and scoped main-thread projection, logical cell-size/layout updates, source numeric/last/relative tab navigation and rejected size_limit/quit_timer; native tab tests and host typecheck pass |
+| S07 | Implemented | `8c24731, a2e85b9, 5fd055c, ba265aa, 41e8b32, 0ef9c19, 8c01e7b, 0b9f876, 8607472, 6d38e29`; workers02/05/06 | Actual borrowed config clone and scoped main-thread projection, clone-before-guard unresolved Surface isolation, distinct controller/app and per-surface configuration, original host 1-point increments and logical cell-size window resizing, initial-size points without immediate resizing, source focus-follows-mouse guards, numeric/last/relative tab navigation, app appearance KVO, cached per-surface color publication and hidden/empty Quick class guards; native scope/opposite split-zoom policy/full dispatcher/scale-2 window/appearance/font tests and host typecheck pass; 20 unchanged Swift config/command string records and full native title/font consumers match |
 | S08 | Implemented | `af434d2` | Original startup messages and status 1; executable probes; timer subclaim corrected below |
 | S09 | Implemented | `2b553c8` | ConEmu nominal limit is not a writer-capacity rejection; regression |
 | S10 | Implemented | `2c4b036` | Xoshiro/random selection/streaming; 756 unchanged Zig differential cases matched |
-| S11 | Implemented | `bf0e21d, 60d05b4` | 32 image suites; 132 native rows matched; 8 inherited undefined-state trap cases excluded and documented |
+| S11 | Implemented | `bf0e21d, 60d05b4, b55e129, 51ee537, 9653064, 58eabe2, c3aa316, b3c548d, ef04635, 0274965, a5cd41f, da5df5a` | 43 image suites; complete pinned PNG decoder/chunk writer, format interfaces, inline storage, color models/scientific spaces/named and general matrices, constructors/getters and native-layout utilities have committed unchanged-source matrices; optimized color/math hashes retained; inherited undefined state and unsupported legacy APIs remain documented |
 | S12 | Implemented | `695dedc` | Original 9-bit lookahead, sorted alphabet and linked fallback; Huffman/codec tests |
-| S13 | Implemented | `7aab070` | Locked source IOCP/WASI loops, cancellation/timers/completions and native thread/futex paths; Darwin regressions, source batch/ABI tests, Windows COFF compile and both WASI feature typechecks pass; native Windows/WASI execution unverified |
+| S13 | Implemented | `7aab070, a651c96`; worker10 | Locked source IOCP/WASI and shared macOS/iOS/FreeBSD kqueue selection, cancellation/timers/completions and native thread/futex paths; Darwin regressions, source batch/ABI tests, Windows COFF and production AArch64 FreeBSD ELF compile, independent Zig/native FreeBSD ABI assertions and both WASI feature typechecks pass; native Windows/WASI/iOS/FreeBSD execution unavailable |
 | S14 | Implemented | `9b1dc71` | Decoded image path/memory loading, premultiplied conversion, transmission; V tests and native conversion probe |
 | S15 | Implemented | `4242ed4` | Actual C-backed V type factories; compiled enum holes, layout/defaults/alignment/padding/nested/zero-size cases |
 | S16 | Implemented | `930e186` | Build-time SDK/minimum-version mapping and embedding; helper tests pass; actual Apple Metal compiler unavailable |
-| SH01 | Implemented | `c7c4d5a` | Immutable split tree and native controls; model tests/host typecheck |
-| SH02 | Implemented | `4882e78, 7462457`; worker05 | Native Quick Terminal panel/lazy surface, sizing/screen/cache/focus/Space/Dock/previous-app/animation lifecycle and saved-tree restoration; native geometry/cache tests and original Swift screen-cache archive comparisons in both directions pass |
-| SH03 | Implemented | `e393c79, 7462457, f4d0e80, 770c8f5`; worker05 | Actual NSUndoManager/timed weak targets and retained terminal trees; secure nested NSKeyedArchiver/window/versioned split/Quick restoration and AppKit restoration callbacks; native undo/expiry/window tests and unchanged Swift archive decoding in both directions pass |
-| SH04 | Implemented | `8de10ae, d245a1f, 26053a2, 55940bc`; worker05 | Configured geometry/decorations/shadow/theme/opacity/blur/buttons/fullscreen exception and source Ventura titlebar/accessory layout; native window tests and host check pass; missing native config correctly remains none |
-| SH05 | Implemented | `617f532` | Four fullscreen styles and source restoration; native contract tests/typecheck |
+| SH01 | Implemented | `c7c4d5a, 0974804, adf1233, 053c282`; worker05/root | Immutable split tree and native controls, source performability/resize/zoom navigation, insertion failure cleanup, focused-tab observer guards and asynchronous zoom focus restoration; model/native controller tests and host typecheck pass |
+| SH02 | Implemented | `4882e78, 7462457, cbbb804, 95665ee, f353557`; worker05 | Native Quick Terminal panel/lazy surface, sizing/screen/cache/focus/Space/Dock/previous-app/animation lifecycle and saved-tree restoration; selected-surface focus retries and source alert/reference lifetime; native geometry/cache tests and original Swift screen-cache archive comparisons in both directions pass |
+| SH03 | Implemented | `e393c79, 7462457, f4d0e80, 770c8f5, 8147453, d4c9263, 7c5e8c3, c7102f9, d27d149, d8a17f5`; workers05/06 | Actual NSUndoManager/timed weak targets and retained terminal trees; secure nested NSKeyedArchiver/window/versioned split/Quick restoration and AppKit restoration callbacks; source async cascade, weak parent/group references, deferred intrinsic size/clamped origin, native window ownership and queued window-only sibling-tab undo; native undo/expiry/window/cascade/key-call tests and unchanged Swift archive decoding in both directions pass; captured-tree undo/redo, live deferred focus and retained explicit-from native regression passes; inherited terminal/inspector subclass responder dispatch also passes |
+| SH04 | Implemented | `8de10ae, d245a1f, 26053a2, 55940bc, cd30e95, f78f0c8, e2e9b27, 0b9f876, 8607472, 4f7fb99`; workers02/05/06 | Configured geometry/decorations/shadow/theme/opacity/blur/buttons/fullscreen exception, source Ventura titlebar/accessory layout and tab/titlebar/toolbar zoom controls, live scoped title/tab/toolbar fonts, native key/resign selector hooks and distinct config/preferred/actual-window color roles; real native opposite-color/opaque/transparent/threshold, font scope/key attributes, zoom-button and fullscreen parent probes pass; selected Tahoe model/toolbar/layout/KVO/event/hot-reload branch and native focused new-tab route; five native fixtures and ten unchanged Swift records match |
+| SH05 | Implemented | `617f532, 6eff167`; worker05 | Four fullscreen styles, source restoration and active non-native fullscreen new-tab warning/refusal; native contract/window tests and typecheck pass |
 | SH06 | Implemented | `c66db29, df7be78, 63ce485, 1d92aca, f0a8987`; workers05/09/root | Termination/reopen guards, real Sparkle updater/driver/model/install producer, titlebar/overlay badge and weak delayed ownership; native tests including real updater startup in a private bundle pass; four unchanged original Swift files match 14 states and install/cancel lifecycle |
-| SB-01 | Implemented | `450725b` | Native text-input client, IME and key responder; native contract tests |
+| SB-01 | Implemented | `450725b, 0558262` | Native text-input client, IME and key responder; explicit typed split-zoom optional preserves behavior with the pinned C compiler; native contract and full dispatcher tests |
 | SB-02 | Implemented | `a938d46, 26c0fa6` | Native Services, drag/drop, accessibility and Swift-compatible Unicode range/grapheme cases; worker and root native tests |
-| SB-03 | In progress | `3bd3844, 0ebfcc5, bf6684b, a708706, 751b462, 469d0dc`; worker06 | Search/key context/progress/bell/health/readonly/secure input/cursor/link/notifications plus delayed title/prompts, native scrollback wrapper and live MTKView inspector consumers integrated; native title/scroll/inspector tests pass; final window/palette/menu/overlay family active |
+| SB-03 | Implemented | `3bd3844, 0ebfcc5, bf6684b, a708706, 751b462, 469d0dc, 1ab9fd0, 2f566f6, bf3ac6c, a6740b0, c41f849, 06c1c14, 5f60b96, 9074fd7, ded9c35, 576e844, 058abf2, 1ce17a4, 19646d3, 5ad3ea3, ea27ec4, a50bd7b`; workers06/09/root | Live window/palette/menu/search/key/progress/bell/health/readonly/secure input/cursor/link/notifications, retained main-queue notification delegate, delayed title/prompts, native scrollback and MTKView inspector, source void/Bool/target/raw-enum guards and queued focus/retry; 85 unchanged Swift URL/config routes and 88 string projections match; real full dispatcher/string-consumer/inspector/focus/overlay probes pass |
 | SB-04 | Implemented | `d566e33, 6bec729` | Matching-window display ID, backing refresh and true zeroing weak view lifetime; AppKit tests |
 | SB-05 | Implemented | `c56924a` | Configuration-driven menu conversion/apply/clear; native menu tests |
-| SB-06 | Implemented | `b988d4f, eb109ee` | Surface-targeted reload preserves target and rejects unresolved surfaces; native host regression |
+| SB-06 | Implemented | `b988d4f, eb109ee, 0ff0fdc` | Surface-targeted reload preserves target; unresolved surfaces leave app config untouched while acknowledging the original void handler with true; full native host reload regression compiles, links and executes |
 | PH01 | Implemented | `938dd7e` | Embedding argv snapshot consumed on Linux/FreeBSD; config/argv tests |
 
 ### Source-backed corrections and remaining validation limits
@@ -1595,7 +1595,7 @@ Its freshly generated compressed bytes match `cli/framedata.compressed`
 (SHA-256 `cda4389141fa7a180dd78b7c8f6742c118273ef7bd3e449ef322a9e85e3dc8c6`).
 Generator/benchmark native CLI checks pass, including source SIGPIPE startup
 needed for successful generator shutdown when stdout closes. Full macOS/GTK
-packaging and native target execution remain separate pending checks; Apple
+packaging and native target execution are validation limits: Apple
 Metal/Xcode tools, GTK runtime and Windows/WASI execution are unavailable on
 this macOS Command Line Tools host.
 
@@ -1622,3 +1622,158 @@ The full managed OpenGL/CoreText ReleaseSafe library was rebuilt through the tra
 `9b96b00` installs the actual Wasm VT binary and Emscripten runtime loader with all 50 original exports, including the 12 allocation helpers. Node executes the installed artifact and checks source Kitty encoding, OSC title/reset, Kakoune SGR values, paste safety, checked warning paths, every paired allocation/free family and memory growth. The source custom logger calls `env.log`; default/scoped prefixes, log levels and 2048-byte stack/allocation fallback match the unchanged original Wasm implementation in Debug, ReleaseSafe, ReleaseFast and ReleaseSmall. Reproducible probes and compiler adaptation details are in `build_support/reference_probes/wasm_vt`. Browser execution is unverified.
 
 The Wasm C backend preserves the source VT import boundary instead of importing native key tables, ImGui and process APIs. Emscripten supplies its real compiler runtime imports. Link-time static data starts at 64 KiB to respect this selected V runtime's low-address memory-operation guard. Emscripten musl supplies its unchanged decimal-dot float parser where locale-specific variants are unavailable. No OS/import placeholder functions were used to make the module instantiate. `ca48737` also disables the selected compiler's automatic remote C-error diagnostic submission in the build driver; the one diagnostic record emitted during the initial failed Wasm experiment was removed successfully.
+
+### Final platform and native action verification
+
+`a651c96`, `3037638` and `6dfc84c` connect the source iOS/FreeBSD kqueue and Darwin terminal branches. Full managed termio checks pass for iOS OpenGL, iOS Metal and FreeBSD OpenGL. Production-generated V xev C compiles to AArch64 FreeBSD ELF with the real SDK headers; independent unchanged Zig `std.c` assertions agree with native C assertions on kevent, socket and private umtx layouts. Native macOS kqueue, Mach Async, Process, ThreadPool and Exec regressions also pass. No iOS SDK link or native FreeBSD execution is claimed.
+
+The locked libxev FreeBSD internal Wakeup lifecycle is resource-free, and its wakeup operation explicitly panics. Its thread-pool completion wake and public MachPort conversion retain macOS-only source guards, including the original iOS limitation. The source WASI Process/threaded Async types are empty; the original WASI pool retains its allocator-required thread failure. These inherited source omissions remain documented in `xev/PLATFORM_TRANSLATION.md`; filling them with new algorithms would violate source preservation.
+
+The native window, command palette, menus, search/key/progress/bell/cursor/secure-input/renderer-health overlays and notification producers now have live consumers. Notification delegate callbacks retain native objects and completion blocks across main-queue dispatch. The dispatcher preserves the original distinction between void acknowledgements and explicit Bool performability, including unsupported `.render`, missing Surface targets, App new-tab behavior and undo/redo window guards. Full `native_action_darwin_test.v` and `reload_target_darwin_test.v` compiled, linked against the managed native packages, and executed successfully.
+
+The last source comparisons corrected config-change target ambiguity and initial sizing. `a2e85b9` retains the original clone-before-guard ordering and releases the clone for an unresolved Surface target, preventing app-wide config replacement. `5fd055c` stores initial-size values directly as points because the source Core producer already divides by content scale; it preserves deferred controller sizing. The full dispatcher regression uses a real AppKit window reporting backing scale 2, verifies 800×600 remains 800×600, and checks that the window frame stays unchanged by that action.
+
+Native AppKit probes exercise actual windows, tab groups, sheets, buttons/accessories, undo managers, timers, archives, MTKView and user-notification content/delegate contracts. Interactive whole-application appearance, multi-screen/Space/Dock animation, user-driven fullscreen/inspector sessions, real notification authorization/delivery and outer archive migration from an installed Swift app remain unexecuted. The unchanged Swift probes establish inner split/cache archive compatibility in both directions, and the actual Sparkle updater starts in a private app fixture; they do not certify those separate interactions.
+
+The native URL/config consumer preserves Foundation parsing, UTType/editor selection and explicit-length NSString decoding (`19646d3`, `1ce17a4`). Extracted unchanged Swift wrappers, the original open-URL handler and NSWorkspace extension match all 85 recorded routes. The shared NSString bridge preserves embedded NUL, multibyte and astral characters (`5ad3ea3`). The source string wrappers distinguish strict first-NUL C decoding, repairing Swift C decoding and bounded UTF-8 decoding (`ea27ec4`); all 22 malformed/valid/NUL boundary fixtures match the unchanged Swift results for each of four projections. These native/source probes are reproducible from `build_support/reference_probes/{open_url,source_strings}` and the corresponding `macos` tests.
+
+`a50bd7b` connects those conversions to title, pwd, notification, search, key-table and hover actions. The real full module-main `native_string_darwin_test.v` compiles, links and executes against the managed native packages in ordinary and `-cg` debug builds: invalid title/pwd leave prior values intact, invalid notification title/body returns before authorization, search repairs malformed bytes, and bounded key-table strings preserve embedded NUL. The test also verifies a valid C prefix with malformed bytes beyond its first NUL.
+
+Controller config and surface config are separate source notification scopes (`ba265aa`). App updates affect controller policy/global surface settings while individual surface appearance waits for its surface-targeted update. Focus-follows-mouse follows the original key-window, palette and focused-surface guards. Host split layout retains the source 1-point increments; window step sizing uses logical cell dimensions. The actual native config-scope fixture passes, and conflicting controller/surface preserve-split-zoom values in both directions verify that navigation reads controller policy (`41e8b32`).
+
+`0ef9c19` connects original `.new`/`.initial` observations of NSApplication.effectiveAppearance after app initialization, applies app config appearance independently of surface config, and publishes the app's effective color scheme to all controller tree surfaces with the source cache. Actual native KVO initial/change/removal/auto/system tests and full module-main app/two-surface API publication/cache/hidden regular-window/empty-tree tests pass. The Quick Terminal source places publication before its visibility guard; regular TerminalWindow places it after that guard.
+
+Native focus operations retain captured views, queue the first attempt and use the original delayed attachment retry/backoff (`06c1c14`). Palette/maximize handlers select the containing controller and its focused view (`5f60b96`); inspector presentation explicitly resigns the terminal responder before queued inspector focus (`ded9c35`). Unknown inspector control is ignored, unknown progress state removes progress, and raw split/close/fullscreen modes follow the original wrapper guards (`9074fd7`, `c41f849`). Real AppKit split, Quick Terminal, palette, queued-focus, presentation and MTKView first-responder fixtures pass.
+
+The selected V compiler emits unmatched C preprocessor directives for CoreText's `defer` nested inside separate platform and debug conditions. `a7862f3` combines the equivalent conditions without changing the source axes logging, assertions, error cleanup or deferred CFArray release. Native `font/face_coretext_test.v` compiles and executes with `-cg`, including variable-font axes/variation and SVG cases; its generated C has 1,166 matched conditional pairs. The full host string-dispatch debug test also compiles, links and executes; its generated C has 4,779 matched conditional pairs. The compiler installation is unchanged.
+
+`f78f0c8` and `e2e9b27` preserve native optional title fonts, default/invalid-family fallback, single-line title handling, attributed tab titles and their active/inactive colors, Ventura toolbar label fonts and the original fullscreen toolbar-window parent filter. Real AppKit probes verify font/color attribute values, subclass title dispatch, actual toolbar labels and the parent filter. The fullscreen-parent fixture supplies the source private class-name/style predicates on native windows; it does not claim an interactive fullscreen transition.
+
+`8c01e7b` preserves Quick Terminal's NSPanel class guard and color publication while hidden, with empty or populated trees and no focused surface. `0b9f876` connects title fonts at startup/restoration/undo and config notification scopes: a populated regular tree keeps its focused surface's family until a Surface update; an empty regular tree uses the App-derived family through the source private `syncAppearance` overload. The live class uses Objective-C `becomeKeyWindow`/`resignKeyWindow`, the actual selectors imported into Swift as `becomeKey`/`resignKey`. Full native font-scope and automatic class/key-hook fixtures pass.
+
+`8607472` separates focused config luminance for normal automatic appearance and Ventura chrome, preferred border color for Ventura's appearance override, and native NSWindow.backgroundColor for both very-dark-background paths. The latter follows the unchanged source sRGB conversion/component read, so a transparent white-alpha window is not classified from a black configured terminal background. Native opposite-color, opaque, transparent, forced-opaque and threshold tests pass; restoring each former predicate independently fails its relevant regression. On macOS 26 the Ventura backdrop test uses an attached native NSView/CALayer fixture where the old accessory-parent class guard cannot attach it; the actual window/tab group/titlebar and native appearance/color values are exercised.
+
+`c7102f9` preserves sibling-tab undo's outer queued window key/order call without changing first responder, accepts a missing focused surface and avoids an already-closed controller's released native window. The actual NSUndoManager/native fixture checks async call order, native selector forwarding, retained controller lifetime and responder preservation. Its key predicate matches a direct source-call baseline on the same command-line native window; it does not certify OS foreground activation.
+
+The final selected-path review found that the original TerminalController factory selects `TerminalTabsTitlebarTahoe` for compiler >= 6.2 on macOS >= 26. The host has Swift 6.3.3 and macOS 26.5, so that source branch is reachable; configured tabs are not filtered out by `Ghostty.Config`. The V host's unconditional Ventura path omits Tahoe-specific tab constraints/reset observation, main-window title model, event forwarding and toolbar item behavior. This branch is now integrated and validated by five native fixtures and ten unchanged Swift model/toolbar records, as described below.
+
+
+### Continued image API and native focus verification
+
+`b55e129` verifies complete PNG loading against unchanged source with 60,760
+returning cases and eight isolated traps. Its matrix covers all fifteen valid
+color/depth pairs, all filters, Adam7, IDAT fragmentation, CRC failures,
+truncation, callbacks and buffered memory/file reads. The result SHA-256 is
+`96ee46b18345684842d8ae9cd64290f7c5e9b86228458a83386a602bbd646e9c`.
+Small file-buffer rebasing, repeated transparency chunks and the tall Adam7
+row-counter trap retain their inherited behavior.
+
+`51ee537` finishes the pinned direct PNG chunk writer. Its 5,960 returning
+cases and two isolated traps match unchanged zigimg, including empty chunks,
+oversized unframed writes and buffered state after partial failure. The
+original `writer()` and zlib-compressor helpers still fail to compile with
+Zig 0.15.2; the audit retains those unsupported source boundaries.
+
+`9653064`, `58eabe2`, `c3aa316` and `b3c548d` add the 17 codec callback
+interfaces, general inline fixed storage, codec debug hooks, HSL/HSV/CMYK and
+float grayscale models, predefined colors, vector/matrix APIs, magic numbers
+and deprecated enum-checked struct readers. Their unchanged-source matrices
+match 49,344, 2,373, 31,167, 12,419 and 20,992 returning cases respectively,
+with the associated option, resize and shift traps. Codec diagnostics retain
+V's language-specific logger/struct rendering. Native-layout read callers
+must provide corresponding widths, alignment and padding. Original struct
+writers reference the removed `std.io.StreamSource` and remain unsupported.
+
+`6d38e29` applies Swift's repairing first-NUL C-string projection to native
+config title/font and command title/description consumers. The extracted
+unchanged getters/initializer match 20 records (40 getter results and 38
+command fields); full native module-main title/font consumers pass.
+
+`d27d149` preserves the source's captured replacement tree for redo, the outer
+queued focus closure, explicit old-view retention and deferred focused-view
+lookup. The actual NSUndoManager/terminal-view regression mutates tree/focus
+between registration and invocation and passes. Pending focus captures and
+both undo trees keep detached surfaces alive. `d8a17f5` dispatches terminal
+and inspector superclass methods from their defining classes; real further
+native subclasses execute inherited responder/tracking/backing hooks without
+recursion and preserve the expected focus callbacks.
+
+
+The selected macOS 26 Tahoe branch now follows the entire original titlebar
+class and its inherited transparent appearance/KVO paths. Native title/font
+updates retain the asynchronous source model, independent repeated toolbar
+item views, empty-title spacing, main-window color, the one-by-one tab
+placeholder, eight tab constraints, frame observation/reset and click
+forwarding. The window class remains fixed across config hot reloads: tab
+accessories receive right layout before AppKit, titles stay hidden and update
+pills stay outside accessories. The inherited glass-style predicate uses the
+current derived config. Native new-tab buttons dispatch the focused surface's
+source core binding. Full native action, title-font and updater fixtures and
+explicit Ventura appearance/font/zoom regressions pass.
+
+The unchanged 342-line Tahoe class and traversal helpers match ten extracted
+model/toolbar records. V renders the source SwiftUI title through AppKit text
+and container views; this establishes model/API behavior, not identical
+SwiftUI typography or interactive fullscreen/context-menu behavior. The
+reproducible source probe and limitations are in
+`build_support/reference_probes/window_tahoe/README.md`.
+
+The latest image suite passes all 43 test files. Native and Linux image-module
+checks and the Windows DLL cross build pass; Windows execution remains
+untested here. Both Vaxis image consumer test files also pass.
+The managed OpenGL test driver also rebuilds locked Debug native packages and
+passes both new tree-focus cases:
+
+```sh
+VEXE=/path/to/v-0.5.2 V_C_ERROR_BUG_REPORT_DISABLED=1 \
+  /path/to/v-0.5.2 -path "$PWD|@vlib|@vmodules" run tools/build test \
+  -Drenderer=opengl -Dsentry=false \
+  -Dtest-filter=tree_replacement_captures_explicit_from_before_outer_queue \
+  -Dtest-filter=tree_undo_redo_use_captured_tree_and_live_focus
+```
+
+A default Metal bundle build still requires the unavailable Xcode Metal
+compiler. The executed managed OpenGL checks do not certify that separate
+packaging path or a full interactive application session.
+
+
+`ef04635` and `0274965` complete the exported scientific color-model and
+RGB-colorspace functions. The 6,961 primitive and 5,792 colorspace cases
+retain their hashes under V production optimization. Separate sine/cosine
+calls prevent Apple clang's combined routine from changing final rounding.
+The source HSLuvAlpha Float4 type typo is preserved. The color-space corpus
+covers all eleven presets, twenty-nine whitepoints, default initialization,
+Bradford adaptation, gamma functions and sixteen copied/in-place alpha
+slice families. Copy allocation and compile-time namespaces use the documented
+V runtime/type adaptations.
+
+`a5cd41f` completes built-in RGB(A) constructors/getters, unsigned numeric
+scaling, HTML parsing and premultiplication. Target conversions retain custom
+factory dispatch, and packed/grayscale aliases retain their logical widths.
+The unchanged-source comparison matches 35,362 returning cases, four checked
+component-limit traps and twenty-one ordinary compiler rejections in both
+ordinary and production builds. Its SHA-256 is
+`d0e9543322de17f813724ff1ed5b51793a68277be165a96bf4266ae17461adf3`.
+V static methods replace source namespaces, and explicitly typed scaling
+replaces comptime integer inference. Focused private-factory extensions for
+custom mixed-precision colors remain V adaptations; the recorded source
+comparisons cover built-ins, public custom factory delegation and aliases.
+
+`da5df5a` adds the general square f32 `Matrix[B]` factory, preserving inline
+values, scalar/vector arithmetic and elimination without pivoting. Its 6,467
+unchanged-source cases across dimensions 1, 2, 3, 4, 5 and 8 retain SHA-256
+`f303b568d8901d722b61cb805d2ccd212e57c10a758d2b530f15ab4d710e9c0f`
+in ordinary and production builds. Three explicit shape guards survive
+optimization, protecting bounded direct indexing around the compiler's
+generic bounds-metadata defect. The existing 12,419-case math matrix retains
+its prior hash in both modes. Direct named storage arrays replace the Zig
+type factory; zero-length arrays, extra alias layers and forwarding static
+factories through enclosing generics remain pinned V boundaries. Storage uses
+V's array ABI. Examples and limits are recorded in
+`zigimg/reference_probes/math_generic/README.md`.
+
+The final integrated `v test zigimg` run passes 43/43 files. Native/Linux
+module checks and the Windows DLL cross build were repeated after the math
+integration and pass. These checks establish the recorded implementation
+paths; allocator contracts, unsupported original helpers, unexecuted platform
+runtimes and interactive native packaging retain the limits described above.
