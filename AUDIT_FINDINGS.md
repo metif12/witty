@@ -1538,6 +1538,14 @@ Struct types must preserve native field widths/layout/padding. Both source
 struct writers fail to compile with Zig 0.15.2 because their declared error
 type uses the removed `std.io.StreamSource`; the runner confirms that boundary.
 
+Scientific CIE XYZ/Lab/Luv/LCh, HSLuv and Oklab conversions match 6,961
+unchanged-source cases, SHA-256
+`d97550d49bb60cf224fc60999d3603d6199aa9c99702a7c79b8d7ca9f10e8566`.
+The scientific, HSL/HSV/CMYK and matrix runners also pass with V production
+optimization and retain their hashes. Independent sine/cosine calls preserve
+native rounding when Apple clang would otherwise select a combined routine.
+The source's HSLuvAlpha Float4 factory/argument type typo remains unchanged.
+
 The focused tests and compile gates named in each audit session are expected to
 pass at the recorded commit. A repository-wide build is not proof that every
 Ghostty file and function has been translated, and no 100% claim is made.

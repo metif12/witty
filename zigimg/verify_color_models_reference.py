@@ -52,6 +52,7 @@ def main():
     parser.add_argument("zig", type=Path)
     parser.add_argument("v", type=Path)
     parser.add_argument("--target", default="aarch64-macos.14.0")
+    parser.add_argument("--v-prod", action="store_true", help="use V production optimization")
     args = parser.parse_args()
     source = args.source.resolve() / "src"
     digest = hashlib.sha256()
@@ -71,8 +72,9 @@ def main():
         corpus_path.write_text("\n".join(case[1] for case in cases) + "\n")
         subprocess.run([str(args.zig.resolve()), "build-exe", "-target", args.target, "-lc",
                         f"-femit-bin={root / 'native'}", str(root / "reference.zig")], check=True)
-        subprocess.run([str(args.v.resolve()), "-o", str(root / "translated"), str(probe / "main.v")],
-                       env=dict(os.environ, VEXE=str(args.v.resolve())), check=True)
+        v_options = ["-prod"] if args.v_prod else []
+        subprocess.run([str(args.v.resolve()), *v_options, "-o", str(root / "translated"), str(probe / "main.v")],
+                       env=dict(os.environ, VEXE=str(args.v.resolve()), V_C_ERROR_BUG_REPORT_DISABLED="1"), check=True)
         outputs = [subprocess.run([str(root / executable), str(corpus_path)], capture_output=True,
                                   check=True, timeout=60).stdout.splitlines()
                    for executable in ("native", "translated")]

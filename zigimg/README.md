@@ -201,6 +201,16 @@ inverse, multiplication, transpose and clamps. Inversion retains zero-pivot
 and singular behavior without added pivoting; dot products begin at negative
 zero. The 12,419-case matrix comparison also checks caller immutability.
 
+CIE XYZ/Lab/Luv/LCh, HSLuv and Oklab models retain scalar, alpha and Float4
+conversion APIs. The 6,961-case comparison preserves every non-NaN output
+bit and NaN occurrence, including zero whitepoint denominators and unusual
+component values. Private f32 cube-root, angle and power helpers follow the
+pinned Zig 0.15.2 algorithms; their license notices are retained in
+`LICENSE_color_math`. Separate sine/cosine calls avoid Apple's optimized
+combined routine and retain the same output bits in ordinary and production
+builds. The inherited HSLuvAlpha Float4 factory returns CIELuvAlpha, as in
+the source.
+
 V arrays and GC replace allocator slices. Sub-byte scalar values use byte
 storage or packed backing words. Allocation errors, the full color convenience
 methods and allocator contracts still require translation.
@@ -433,11 +443,16 @@ python3 zigimg/verify_color_models_reference.py \
   /path/to/locked-zigimg /path/to/zig-0.15.2/zig /path/to/v-0.5.2
 python3 zigimg/verify_math_reference.py \
   /path/to/locked-zigimg /path/to/zig-0.15.2/zig /path/to/v-0.5.2
+python3 zigimg/verify_color_science_reference.py \
+  /path/to/locked-zigimg /path/to/zig-0.15.2/zig /path/to/v-0.5.2
 ```
 
 Their result SHA-256 values are
 `dc4e15c78150f3ce178a6fa9eab1f953d5ea3647239753ea7eb18648a805504f`
-and `23be1b2c20e279a493dda64087e1916b58e6fdbc8bdcb76469c15b7231a4fb31`.
+`23be1b2c20e279a493dda64087e1916b58e6fdbc8bdcb76469c15b7231a4fb31`
+and `d97550d49bb60cf224fc60999d3603d6199aa9c99702a7c79b8d7ca9f10e8566`.
+Appending `--v-prod` to these three runners retains the same hashes with
+V's production optimization.
 
 The TIFF metadata runner verifies the same unchanged locked source tree:
 
