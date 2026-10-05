@@ -1724,6 +1724,23 @@ unavailable, verified by paired compile probes. The locked source tree hash
 and flattened API mapping are documented with the probe. These widgets are
 separate from the previously translated `vxfw` implementations.
 
+Classic View and LineNumbers are now translated, along with TextView's runnable
+data/style/borrowed-adapter/input/draw APIs and CodeView's configuration/input.
+The exact locked uucode package is recovered and hashed; its unchanged table
+generator runs through the original dependency module graph. Ordinary and
+production V comparisons match 18,307 cases, 17 checked traps and four ordinary
+compile rejections, SHA-256
+`8f1e7d605790217fc5d8426f487cced18a5998d945da9ec50b92ed57c8b6750e`.
+Retained image/scale/cell/style fields, Unicode clusters, render origins,
+scrolling, byte-indexed styles and adapter pointers are compared. View keeps
+checked i17 offsets, direct copying and alias traps. LineNumbers keeps its
+exclusive endpoint and zero digits above 99,999,999. TextView append/update/
+writer-write inherit the source error-union subtraction failure; CodeView.draw
+inherits a usize-to-optional-u16 width error. The methods remain unavailable,
+verified by paired compile probes. Five shared consumer tests pass, and native/
+Linux module checks pass. GC destruction and source-undefined reuse limits
+are recorded in `vaxis/reference_probes/widgets_classic/README.md`.
+
 The quantizer's accumulation, averaging, capacity, reduction and level checks
 now survive V production optimization. Sixteen subprocess probes reject both
 successful returns and returned domain errors; this closes a previous verifier

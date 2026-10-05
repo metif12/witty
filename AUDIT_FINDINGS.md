@@ -1581,6 +1581,21 @@ void from an optional Cell function; its V method remains unavailable and both
 compile rejections are verified. API mappings, source hash and coordinate/
 allocation adaptations are in `vaxis/reference_probes/widgets/README.md`.
 
+The classic View and LineNumbers APIs are translated, together with TextView's
+runnable buffer/styling/adapters/input/draw paths and CodeView's defaults/input.
+An unchanged-source comparison using the exact locked uucode package matches
+18,307 cases, 17 checked traps and four ordinary compile rejections in ordinary
+and production builds, SHA-256
+`8f1e7d605790217fc5d8426f487cced18a5998d945da9ec50b92ed57c8b6750e`.
+The corpus compares retained cells/styles/images/scales, Unicode clusters,
+render origins, byte-indexed styling, adapters and scrolling. View retains
+direct-copy i17 arithmetic and overlapping-copy traps; LineNumbers retains
+its exclusive endpoint and eight-digit ceiling. TextView append/update/writer
+write fail in the pinned source at an error-union subtraction, and CodeView
+draw fails at a usize-to-optional-u16 child width. Those methods remain
+unavailable. Exact mappings, dependency hashes and GC destruction adaptations
+are in `vaxis/reference_probes/widgets_classic/README.md`.
+
 The octree quantizer now keeps its checked accumulation, averaging, capacity,
 reduction and level arithmetic in production builds. Sixteen strict trap probes
 close a previous false positive caused by panicking on a returned domain error.
