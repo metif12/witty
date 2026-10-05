@@ -222,7 +222,11 @@ def main():
     parser.add_argument("zig", type=Path)
     parser.add_argument("v", type=Path)
     parser.add_argument("--target", default="aarch64-macos.14.0")
+    parser.add_argument("--timeout", type=int, default=180,
+                        help="seconds allowed for each complete corpus run (default: 180)")
     args = parser.parse_args()
+    if args.timeout <= 0:
+        parser.error("--timeout must be positive")
     source = args.source.resolve()/"src"
     digest = hashlib.sha256()
     for path in sorted(source.rglob("*")):
@@ -250,7 +254,14 @@ def main():
         subprocess.run([str(args.v.resolve()), "-o", str(root/"translated"), str(probe/"main.v")], env=dict(os.environ, VEXE=str(args.v.resolve())), check=True)
         outputs = []
         for executable in ("native", "translated"):
-            result = subprocess.run([str(root/executable), str(corpus_path)], capture_output=True, timeout=180, preexec_fn=no_core)
+            try:
+                result = subprocess.run([str(root/executable), str(corpus_path)], capture_output=True,
+                                        timeout=args.timeout, preexec_fn=no_core)
+            except subprocess.TimeoutExpired as err:
+                count = (err.stdout or b"").count(b"\n")
+                label = cases[min(count, len(cases)-1)][0]
+                raise AssertionError(f"{executable} timed out after {args.timeout}s, "
+                                     f"completed {count}/{len(cases)} cases; next: {label}") from err
             if result.returncode:
                 count = len(result.stdout.splitlines())
                 label = cases[min(count, len(cases)-1)][0]

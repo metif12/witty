@@ -1769,6 +1769,13 @@ test cross builds pass. Windows execution and Zig's non-native scalar widths
 retain their documented limits. Reproduction and ownership rules are in
 `zigimg/reference_probes/streams/README.md`.
 
+The complete PNG decoding matrix was repeated after the stream changes and
+retains all 60,760 returning records and eight checked traps, SHA-256
+`96ee46b18345684842d8ae9cd64290f7c5e9b86228458a83386a602bbd646e9c`.
+Its runner now accepts a positive `--timeout` in seconds and reports completed
+cases plus the next case on a deadline failure. The default remains 180 seconds;
+the integrated rerun uses `--timeout 600` on this busy host.
+
 `6d38e29` applies Swift's repairing first-NUL C-string projection to native
 config title/font and command title/description consumers. The extracted
 unchanged getters/initializer match 20 records (40 getter results and 38
