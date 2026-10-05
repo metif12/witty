@@ -3,7 +3,7 @@ module main
 import apprt
 import macos
 
-enum ControllerUndoKind { tree restore close focus new_close new_redo }
+enum ControllerUndoKind { tree tree_redo restore close focus new_close new_redo }
 struct ControllerUndoState {
 	tree macos.NativeSplitTree
 	frame macos.NativeWindowFrame
@@ -19,6 +19,7 @@ mut:
 	kind ControllerUndoKind
 	controller &TerminalController = unsafe { nil }
 	tree macos.NativeSplitTree
+	opposite_tree macos.NativeSplitTree
 	focus voidptr
 	opposite_focus voidptr
 	states []ControllerUndoState
@@ -35,6 +36,8 @@ mut:
 fn undo_expiration() f64 { return f64(standalone_runtime().app.config.undo_timeout.duration) / 1e9 }
 fn register_controller_undo(record &ControllerUndo, target voidptr) {
 	mut runtime := standalone_runtime()
+	macos.retain_native_object(record.focus)
+	macos.retain_native_object(record.opposite_focus)
 	runtime.undos << record
 	if !macos.register_expiring_undo(target, undo_expiration(), voidptr(record), record.name, perform_controller_undo, release_controller_undo) { release_controller_undo(voidptr(record)) }
 }
@@ -42,6 +45,8 @@ fn release_controller_undo(context voidptr) {
 	mut runtime := standalone_runtime()
 	record := unsafe { &ControllerUndo(context) }
 	for i, item in runtime.undos { if item == record { runtime.undos.delete(i); break } }
+	macos.release_native_object(record.focus)
+	macos.release_native_object(record.opposite_focus)
 	for snapshot in record.states { mut group:=snapshot.tab_group; group.deinit() }
 	collect_detached_surfaces()
 }
@@ -50,11 +55,16 @@ fn collect_detached_surfaces() {
 	for mut state in runtime.states {
 		if state.closed { continue }
 		mut retained := false
-		for controller in runtime.controllers { if !controller.closed && controller.host.tree.root.find(state.view) != none { retained = true; break } }
+		for controller in runtime.controllers { if !controller.closed && (controller.host.tree.root.find(state.view) != none || controller.focused == state) { retained = true; break } }
 		if !retained {
+			for task in controller_tree_focus_instance.tasks {
+				if task.to == state.view || task.from == state.view { retained = true; break }
+				if task.from_controller != unsafe { nil } && task.from_controller.focused == state { retained = true; break }
+			}
+			if macos.native_focus_retains_view(state.view) { retained = true }
 			if pending := runtime.pending_quick { if pending.tree.root.find(state.view) != none { retained = true } }
 			for record in runtime.undos {
-				if record.tree.root.find(state.view) != none { retained = true; break }
+				if record.tree.root.find(state.view) != none || record.opposite_tree.root.find(state.view) != none || record.focus == state.view || record.opposite_focus == state.view { retained = true; break }
 				for snapshot in record.states { if snapshot.tree.root.find(state.view) != none { retained = true; break } }
 				if retained { break }
 			}
@@ -73,9 +83,48 @@ fn replace_controller_tree(controller &TerminalController, tree macos.NativeSpli
 	old_tree := controller.host.tree
 	mut c := unsafe { &TerminalController(controller) }
 	c.host.replace_tree(tree)
+	if tree.root == unsafe { nil } { c.focused = unsafe { nil } }
 	macos.invalidate_native_restorable_state(c.host.container)
-	if new_focus != unsafe { nil } { macos.dispatch_main(focus_controller_view, new_focus) }
-	register_controller_undo(&ControllerUndo{kind: .tree, controller: c, tree: old_tree, focus: old_focus, opposite_focus: new_focus, name: name}, voidptr(c))
+	if new_focus != unsafe { nil } { queue_controller_tree_focus(new_focus, old_focus, unsafe { nil }) }
+	register_controller_undo(&ControllerUndo{kind: .tree, controller: c, tree: old_tree, opposite_tree: tree, focus: old_focus, opposite_focus: new_focus, name: name}, voidptr(c))
+}
+@[heap]
+struct ControllerTreeFocus {
+	to voidptr
+	from voidptr
+	from_controller &TerminalController = unsafe { nil }
+}
+struct ControllerTreeFocusTasks {
+mut:
+	tasks []&ControllerTreeFocus
+}
+const controller_tree_focus_instance = &ControllerTreeFocusTasks{}
+
+// replaceSurfaceTree adds an outer main-queue closure before moveFocus's own
+// work item. The closure owns both explicit views; undo reads focusedSurface
+// from its captured controller when that outer closure runs.
+fn queue_controller_tree_focus(to voidptr, from voidptr, from_controller &TerminalController) {
+	task := &ControllerTreeFocus{to: to, from: from, from_controller: from_controller}
+	macos.retain_native_object(task.to)
+	macos.retain_native_object(task.from)
+	mut tasks := unsafe { &controller_tree_focus_instance.tasks }
+	tasks << task
+	macos.dispatch_main(controller_tree_focus_main, voidptr(task))
+}
+fn controller_tree_focus_main(context voidptr) {
+	task := unsafe { &ControllerTreeFocus(context) }
+	mut from := task.from
+	if task.from_controller != unsafe { nil } {
+		from = unsafe { nil }
+		if task.from_controller.focused != unsafe { nil } { from = task.from_controller.focused.view }
+	}
+	macos.move_focus(task.to, from, none)
+	macos.release_native_object(task.to)
+	macos.release_native_object(task.from)
+	mut tasks := unsafe { &controller_tree_focus_instance.tasks }
+	for i, pending in controller_tree_focus_instance.tasks {
+		if pending == task { tasks.delete(i); break }
+	}
 }
 fn focus_controller_view(view voidptr) { macos.focus_split_view(view) }
 // Close-other/right undo queues the controller, then resolves its window on
@@ -133,6 +182,7 @@ fn close_one_controller(controller &TerminalController) {
 	if c.closed { return }
 	window := macos.view_window(c.host.container)
 	c.closed = true
+	c.focused = unsafe { nil }
 	macos.remove_native_undo(voidptr(c))
 	c.host.replace_tree(macos.NativeSplitTree{})
 	macos.close_native_window(window)
@@ -165,11 +215,18 @@ fn perform_controller_undo(context voidptr) {
 		.tree {
 			if record.controller.closed { return }
 			mut c := record.controller
-			current := c.host.tree
 			c.host.replace_tree(record.tree)
+			if record.tree.root == unsafe { nil } { c.focused = unsafe { nil } }
 			macos.invalidate_native_restorable_state(c.host.container)
-			if record.focus != unsafe { nil } { macos.dispatch_main(focus_controller_view, record.focus) }
-			register_controller_undo(&ControllerUndo{kind: .tree, controller: c, tree: current, focus: record.opposite_focus, opposite_focus: record.focus, name: record.name}, voidptr(c))
+			if record.focus != unsafe { nil } { queue_controller_tree_focus(record.focus, unsafe { nil }, c) }
+			register_controller_undo(&ControllerUndo{kind: .tree_redo, controller: c, tree: record.opposite_tree, focus: record.opposite_focus, name: record.name}, voidptr(c))
+		}
+		.tree_redo {
+			if record.controller.closed { return }
+			c := record.controller
+			mut from := voidptr(unsafe { nil })
+			if c.focused != unsafe { nil } { from = c.focused.view }
+			replace_controller_tree(c, record.tree, record.focus, from, record.name)
 		}
 		.restore {
 			mut restored := []&TerminalController{}

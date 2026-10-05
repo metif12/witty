@@ -13,6 +13,15 @@ mut:
 
 __global g_native_focus_tasks = []&NativeFocusTask{}
 
+// Captured SurfaceViews keep their embedded surface alive while the queued
+// focus work owns them, including delayed attachment retries.
+pub fn native_focus_retains_view(view voidptr) bool {
+	for task in g_native_focus_tasks {
+		if task.to == view || task.from == view { return true }
+	}
+	return false
+}
+
 pub fn move_focus(to voidptr, from voidptr, delay ?f64) {
 	if is_nil(to) || !((delay or { 0.0 }) < 0.5) { return }
 	task := &NativeFocusTask{ to: ObjId(to), from: ObjId(from), delay: delay }
