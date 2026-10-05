@@ -221,9 +221,21 @@ V typed transfer values replace compile-time namespaces, and callback fields
 have a `_fn` suffix to coexist with the corresponding methods. Copying APIs
 use V allocation in place of the source's caller-selected allocator.
 
+All eleven built-in RGB(A) types expose typed constructors and getters for
+colors, grayscale, packed integers, arrays, Float4 values and HTML hex strings,
+plus premultiplied alpha. Public `scale_value[O, I]` retains unsigned-width
+scaling and float rounding. V static/receiver methods replace the source's
+zero-sized `from`/`to` namespaces; `NoColorAlpha` represents its void argument.
+Receiver `to_color[T]()` retains the target's conversion behavior and delegates
+custom target types to their static `from_color` factory.
+Mixed-width array and unsupported HTML methods retain source compile failures.
+Private source factories do not expose arbitrary user-defined color namespaces;
+V's generic helper adaptations and their focused checks are separate from the
+unchanged-source built-in comparisons.
+
 V arrays and GC replace allocator slices. Sub-byte scalar values use byte
-storage or packed backing words. Allocation errors, the full color convenience
-methods and allocator contracts still require translation.
+storage or packed backing words. Caller-selected allocation, allocation failures
+and allocator reclamation remain runtime adaptations.
 
 Managed images support creation, copied raw pixels, metadata, conversion,
 editing, iteration, and conversion to/from unmanaged views. Those views copy
@@ -446,7 +458,7 @@ python3 zigimg/verify_utils_reference.py \
 Result SHA-256:
 `92204900e01795200a4b2585d19fb2ec6476f17ab099c4e3cfac3e6036346c3f`.
 
-Color-model and matrix source comparisons:
+Color and matrix source comparisons:
 
 ```sh
 python3 zigimg/verify_color_models_reference.py \
@@ -457,14 +469,23 @@ python3 zigimg/verify_color_science_reference.py \
   /path/to/locked-zigimg /path/to/zig-0.15.2/zig /path/to/v-0.5.2
 python3 zigimg/verify_color_space_reference.py \
   /path/to/locked-zigimg /path/to/zig-0.15.2/zig /path/to/v-0.5.2
+python3 zigimg/verify_color_methods_reference.py \
+  /path/to/locked-zigimg /path/to/zig-0.15.2/zig /path/to/v-0.5.2
 ```
 
 Their result SHA-256 values are
 `dc4e15c78150f3ce178a6fa9eab1f953d5ea3647239753ea7eb18648a805504f`
 `23be1b2c20e279a493dda64087e1916b58e6fdbc8bdcb76469c15b7231a4fb31`
 `d97550d49bb60cf224fc60999d3603d6199aa9c99702a7c79b8d7ca9f10e8566`
-and `262e3417fd251373234d20d0b06d7fe53adc63028db4a708a71d99677cf9d6a0`.
-Appending `--v-prod` to these four runners retains the same hashes with
+`262e3417fd251373234d20d0b06d7fe53adc63028db4a708a71d99677cf9d6a0`
+and `d0e9543322de17f813724ff1ed5b51793a68277be165a96bf4266ae17461adf3`.
+The color-method runner includes custom target constructors, packed aliases,
+mixed numeric inputs, all built-in constructors/getters and premultiplication
+across 35,362 returning cases.
+It also verifies four checked component-width traps and twenty-one ordinary
+compile rejections, including unsupported float-to-wide-integer scaling.
+
+Appending `--v-prod` to these runners retains the same hashes with
 V's production optimization.
 
 The TIFF metadata runner verifies the same unchanged locked source tree:

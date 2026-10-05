@@ -1061,8 +1061,8 @@ an item here does not mean its full module has been certified yet.
   Public FormatInterface callbacks and all 17 codec factories now drive the
   live detection/loading/writing registry. The source's reflected factory
   table becomes an explicit V table; allocator callback arguments remain
-  omitted under GC ownership. Full color convenience methods and allocator
-  contracts remain open.
+  omitted under GC ownership. Public built-in color constructors/getters and
+  scaling are translated; caller-selected allocator contracts remain adapted.
   Arrays use GC ownership and V length fields in place of allocator slices;
   allocation failures are not reproduced. Sub-byte scalar fields/indices use
   bytes or backing words, sum variants have named V wrappers, and nested
@@ -1553,6 +1553,20 @@ unchanged-source rows in ordinary and production builds, SHA-256
 Comparisons include borrowed output identity and input mutation. V typed
 values replace compile-time gamma namespaces, callback fields use a `_fn`
 suffix and copying slices use V allocation instead of the supplied allocator.
+
+All eleven built-in RGB(A) types expose source constructors/getters, unsigned
+scaling and premultiplication. Custom target conversions delegate to the target
+factory; packed and grayscale aliases retain logical widths. The source-hashed
+`verify_color_methods_reference.py` matches 35,362 returning cases, four checked
+component-limit traps and twenty-one ordinary compile rejections. SHA-256:
+`d0e9543322de17f813724ff1ed5b51793a68277be165a96bf4266ae17461adf3`.
+The production build retains these records and checked traps. V static methods
+replace zero-sized source namespaces, and callers specify scaling input/output
+types. Source comptime integer casts require explicit V casts. Focused custom
+mixed-precision helpers adapt private source factories; their V checks do not
+claim unchanged-source factory parity. Known built-in target delegation avoids
+the pinned compiler's generic static dispatch cache defect; custom targets use
+inferred static calls.
 
 The focused tests and compile gates named in each audit session are expected to
 pass at the recorded commit. A repository-wide build is not proof that every
