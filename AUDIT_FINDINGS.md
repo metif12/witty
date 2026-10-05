@@ -1546,6 +1546,14 @@ optimization and retain their hashes. Independent sine/cosine calls preserve
 native rounding when Apple clang would otherwise select a combined routine.
 The source's HSLuvAlpha Float4 factory/argument type typo remains unchanged.
 
+RGB colorspaces, all sixteen alpha-slice APIs, Bradford conversion matrices,
+eleven presets, twenty-nine whitepoints and gamma transfers match 5,792
+unchanged-source rows in ordinary and production builds, SHA-256
+`262e3417fd251373234d20d0b06d7fe53adc63028db4a708a71d99677cf9d6a0`.
+Comparisons include borrowed output identity and input mutation. V typed
+values replace compile-time gamma namespaces, callback fields use a `_fn`
+suffix and copying slices use V allocation instead of the supplied allocator.
+
 The focused tests and compile gates named in each audit session are expected to
 pass at the recorded commit. A repository-wide build is not proof that every
 Ghostty file and function has been translated, and no 100% claim is made.

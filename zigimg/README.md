@@ -211,6 +211,16 @@ combined routine and retain the same output bits in ordinary and production
 builds. The inherited HSLuvAlpha Float4 factory returns CIELuvAlpha, as in
 the source.
 
+RGB color spaces expose all scalar model conversions, the sixteen copying and
+in-place alpha-slice APIs, conversion matrices and Bradford whitepoint
+adaptation. Eleven presets, twenty-nine CIE whitepoints, gamma parameters and
+transfer functions retain their source values and branches. The 5,792-case
+runner compares all preset/default pairs, scalar outputs, copied slices,
+borrowed pointer identity and mutation in ordinary and production builds.
+V typed transfer values replace compile-time namespaces, and callback fields
+have a `_fn` suffix to coexist with the corresponding methods. Copying APIs
+use V allocation in place of the source's caller-selected allocator.
+
 V arrays and GC replace allocator slices. Sub-byte scalar values use byte
 storage or packed backing words. Allocation errors, the full color convenience
 methods and allocator contracts still require translation.
@@ -445,13 +455,16 @@ python3 zigimg/verify_math_reference.py \
   /path/to/locked-zigimg /path/to/zig-0.15.2/zig /path/to/v-0.5.2
 python3 zigimg/verify_color_science_reference.py \
   /path/to/locked-zigimg /path/to/zig-0.15.2/zig /path/to/v-0.5.2
+python3 zigimg/verify_color_space_reference.py \
+  /path/to/locked-zigimg /path/to/zig-0.15.2/zig /path/to/v-0.5.2
 ```
 
 Their result SHA-256 values are
 `dc4e15c78150f3ce178a6fa9eab1f953d5ea3647239753ea7eb18648a805504f`
 `23be1b2c20e279a493dda64087e1916b58e6fdbc8bdcb76469c15b7231a4fb31`
-and `d97550d49bb60cf224fc60999d3603d6199aa9c99702a7c79b8d7ca9f10e8566`.
-Appending `--v-prod` to these three runners retains the same hashes with
+`d97550d49bb60cf224fc60999d3603d6199aa9c99702a7c79b8d7ca9f10e8566`
+and `262e3417fd251373234d20d0b06d7fe53adc63028db4a708a71d99677cf9d6a0`.
+Appending `--v-prod` to these four runners retains the same hashes with
 V's production optimization.
 
 The TIFF metadata runner verifies the same unchanged locked source tree:
