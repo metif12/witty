@@ -1530,6 +1530,14 @@ APIs across 12,419 cases, including singular/zero-pivot inverses, negative-zero
 dot-product initialization, clamps and caller immutability. SHA-256:
 `23be1b2c20e279a493dda64087e1916b58e6fdbc8bdcb76469c15b7231a4fb31`.
 
+Public magic-number and deprecated enum-checked struct readers are translated
+against unchanged `utils.zig`. The differential runner matches 20,992 cases
+and two checked shift traps, SHA-256
+`92204900e01795200a4b2585d19fb2ec6476f17ab099c4e3cfac3e6036346c3f`.
+Struct types must preserve native field widths/layout/padding. Both source
+struct writers fail to compile with Zig 0.15.2 because their declared error
+type uses the removed `std.io.StreamSource`; the runner confirms that boundary.
+
 The focused tests and compile gates named in each audit session are expected to
 pass at the recorded commit. A repository-wide build is not proof that every
 Ghostty file and function has been translated, and no 100% claim is made.

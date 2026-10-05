@@ -64,6 +64,17 @@ Resizing borrows that inline storage and retains old views. Header debug hooks
 for SGI/IFF and TIFF metadata use V's standard logger/struct presentation;
 language-specific type/enum names and formatting differ from Zig's rendering.
 
+Public magic-number helpers preserve the source's shift order and target-endian
+dispatch, including checked shifts for signatures longer than four bytes.
+The deprecated struct-read helpers copy native-layout bytes, validate nested
+exhaustive enums, and swap foreign integer/enum fields. Struct definitions must
+retain the source's native field widths, layout and padding; V does not generate
+Zig layouts automatically. PNG's non-exhaustive compression/filter enums accept
+unnamed values. Invalid enums consume the struct, while short input stays
+unconsumed. The source struct-write helpers fail to compile with Zig 0.15.2
+because their shared error type references the removed `std.io.StreamSource`.
+Their unsupported source boundary is retained.
+
 PAM preserves the pinned header parser, sample scaling, little-endian 16-bit
 samples, monochrome-alpha AND, image sequences, and encoder comments. Only
 subsequent images become animation frames; the reader compares dimensions
@@ -401,6 +412,19 @@ python3 zigimg/verify_fixed_storage_reference.py \
 
 Result SHA-256:
 `ba652143ec8ea584ce4522ed61dc6605986e90185c524ce8b13281b40b642c0b`.
+
+The utility runner compares 20,992 magic-number and native-layout struct-read
+cases, including nested byte/word enums, both byte orders, invalid enum
+consumption, truncated input and non-exhaustive PNG fields. It also checks two
+shift traps and confirms both inherited struct-writer compilation failures:
+
+```sh
+python3 zigimg/verify_utils_reference.py \
+  /path/to/locked-zigimg /path/to/zig-0.15.2/zig /path/to/v-0.5.2
+```
+
+Result SHA-256:
+`92204900e01795200a4b2585d19fb2ec6476f17ab099c4e3cfac3e6036346c3f`.
 
 Color-model and matrix source comparisons:
 
