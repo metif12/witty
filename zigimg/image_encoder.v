@@ -106,59 +106,8 @@ pub fn (image Image) write_to_memory(mut buffer []u8, options EncoderOptions) ![
 }
 
 fn (image ImageUnmanaged) internal_write(mut stream WriteStream, options EncoderOptions) ! {
-	match options {
-		BmpEncoderOptions {
-			BMP.write_image(mut stream, image, options)!
-		}
-		FarbfeldEncoderOptions {
-			Farbfeld.write_image(mut stream, image)!
-		}
-		GifEncoderOptions {
-			GIF.write_image(mut stream, image)!
-		}
-		IffEncoderOptions {
-			IFF.write_image(mut stream, image)!
-		}
-		JpegEncoderOptions {
-			// JPEG.writeImage in the source is private and succeeds without output.
-		}
-		PamEncoderOptions {
-			PAM.write_image(mut stream, image, options)!
-		}
-		PbmEncoderOptions {
-			PBM.write_image(mut stream, image, NetpbmEncoderOptions{ binary: options.binary })!
-		}
-		PcxEncoderOptions {
-			PCX.write_image(mut stream, image, options)!
-		}
-		PgmEncoderOptions {
-			PGM.write_image(mut stream, image, NetpbmEncoderOptions{ binary: options.binary })!
-		}
-		PngEncoderOptions {
-			PNG.write_image(mut stream, image, options)!
-		}
-		PpmEncoderOptions {
-			PPM.write_image(mut stream, image, NetpbmEncoderOptions{ binary: options.binary })!
-		}
-		QoiEncoderOptions {
-			QOI.write_image(mut stream, image, options)!
-		}
-		RasEncoderOptions {
-			RAS.write_image(mut stream, image)!
-		}
-		SgiEncoderOptions {
-			SGI.write_image(mut stream, image)!
-		}
-		TgaEncoderOptions {
-			TGA.write_image(mut stream, image, options)!
-		}
-		TiffEncoderOptions {
-			TIFF.write_image(mut stream, image, options)!
-		}
-		XbmEncoderOptions {
-			XBM.write_image(mut stream, image)!
-		}
-	}
+	codec := options.format().format_interface()
+	codec.write_image(mut stream, image, options)!
 }
 
 pub fn (image ImageUnmanaged) write_to_file(file os.File, mut write_buffer []u8, options EncoderOptions) ! {

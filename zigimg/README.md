@@ -35,8 +35,7 @@ framing after a flush. Its default buffer is 16 KiB; an empty byte slice
 represents the source's zero-capacity specialization. The unchanged legacy
 `writer()` adapter and `ZlibCompressor` do not compile with Zig 0.15.2 because
 their standard-library APIs were removed; these unsupported boundaries remain.
-GC/opaque
-callbacks replace allocators and generated vtables; allocator selection and
+GC/opaque callbacks replace allocators and generated vtables; allocator selection and
 root DefaultPngOptions overrides are absent. Undefined native initial storage,
 failed scalar union assignments, and unwritten alpha tails are excluded from
 comparisons; V storage initializes. The wasm branch has not run locally.
@@ -179,8 +178,7 @@ animation frames unchanged. Native hashes match 18,432 format-pair cases and
 
 V arrays and GC replace allocator slices. Sub-byte scalar values use byte
 storage or packed backing words. Allocation errors, the full color convenience
-methods, the FormatInterface callback surface, and the remaining image API
-and allocator contracts still require translation.
+methods and allocator contracts still require translation.
 
 Managed images support creation, copied raw pixels, metadata, conversion,
 editing, iteration, and conversion to/from unmanaged views. Those views copy
@@ -206,8 +204,12 @@ can block an otherwise valid later signature. TIFF accepts only the II/MM
 byte-order marker without checking the version; TGA can take precedence over
 TIFF through its header or footer. Unknown inputs without a newline can fail
 at the final XBM delimiter peek; a leading define line preserves its
-non-advancing loop. Registry dispatch uses direct V matches rather than the
-source's reflected callback array. A native hash matches
+non-advancing loop. Public `FormatInterface` callbacks and each codec's
+`format_interface()` factory drive detection, loading and writing through the
+source's ordered 17-factory registry. V spells that table explicitly instead
+of reflecting namespace declarations. Callback allocator parameters are
+omitted under the existing GC adaptation. Cross-codec encoder options preserve
+each writer's fallback or checked union-arm access. A native hash matches
 589,824 prefix/length cases, and separate bounded processes compare the XBM
 loop through both image APIs. JPEG's frame/table/scan APIs now decode
 baseline/progressive/restart inputs; the separate reference runner documents
@@ -359,6 +361,19 @@ then compare both image APIs:
 python3 zigimg/reference_probes/image_detection/verify.py \
   /path/to/v-detection-probe /path/to/zig-detection-probe
 ```
+
+The direct format-interface runner checks 49,344 returning cases across all
+17 callbacks, every encoder-options tag, eight storage profiles, three option
+variants and eight output capacities. It compares error, position and all
+destination bytes, then isolates PNG/TGA's wrong-option traps:
+
+```sh
+python3 zigimg/verify_format_interface_reference.py \
+  /path/to/locked-zigimg /path/to/zig-0.15.2/zig /path/to/v-0.5.2
+```
+
+Result SHA-256:
+`578f0de4bdaac7c2b67f294de64a2694c069cbb2fde6d2c43ca68494c6ca94eb`.
 
 The TIFF metadata runner verifies the same unchanged locked source tree:
 

@@ -15,29 +15,10 @@ pub fn Image.detect_format_from_memory(buffer []u8) !Format {
 fn image_detect_format(mut stream ReadStream) !Format {
 	// The pinned registry seeks before every detector and propagates its errors.
 	// A short earlier signature check can therefore prevent a later match.
-	for format in image_supported_formats {
+	for index, factory in image_format_interfaces {
+		codec := factory()
 		stream.seek_to(0)!
-		found := match format {
-			.bmp { BMP.format_detect(mut stream)! }
-			.farbfeld { Farbfeld.format_detect(mut stream)! }
-			.gif { GIF.format_detect(mut stream)! }
-			.iff { IFF.format_detect(mut stream)! }
-			.jpeg { jpeg_format_detect(mut stream)! }
-			.pam { PAM.format_detect(mut stream)! }
-			.pbm { PBM.format_detect(mut stream)! }
-			.pcx { PCX.format_detect(mut stream)! }
-			.pgm { PGM.format_detect(mut stream)! }
-			.png { PNG.format_detect(mut stream)! }
-			.ppm { PPM.format_detect(mut stream)! }
-			.qoi { QOI.format_detect(mut stream)! }
-			.ras { RAS.format_detect(mut stream)! }
-			.sgi { SGI.format_detect(mut stream)! }
-			.tga { TGA.format_detect(mut stream)! }
-			.tiff { tiff_format_detect(mut stream)! }
-			.xbm { XBM.format_detect(mut stream)! }
-		}
-
-		if found { return format }
+		if codec.format_detect(mut stream)! { return image_supported_formats[index] }
 	}
 	return error('Unsupported')
 }

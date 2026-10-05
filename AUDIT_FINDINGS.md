@@ -1058,9 +1058,11 @@ an item here does not mean its full module has been certified yet.
   arbitrary std.Io.Writer interfaces remain absent. GC
   scratch/format strings replace stack storage and streaming format calls;
   allocation errors and the general Zig formatting API are not reproduced.
-  The FormatInterface callback surface, full color convenience methods, and
-  the remaining image API/allocator contracts remain open. The registry's
-  direct V dispatch replaces source function-pointer/reflection representation.
+  Public FormatInterface callbacks and all 17 codec factories now drive the
+  live detection/loading/writing registry. The source's reflected factory
+  table becomes an explicit V table; allocator callback arguments remain
+  omitted under GC ownership. Full color convenience methods and allocator
+  contracts remain open.
   Arrays use GC ownership and V length fields in place of allocator slices;
   allocation failures are not reproduced. Sub-byte scalar fields/indices use
   bytes or backing words, sum variants have named V wrappers, and nested
@@ -1494,6 +1496,16 @@ call ordering and destination bytes. Two isolated checked traps match, and
 the unchanged legacy Writer and ZlibCompressor compilation failures are
 verified separately. Focused tests additionally cover custom chunk IDs,
 fixed-array aliases and native-width signed/unsigned endian writes.
+
+`zigimg/verify_format_interface_reference.py` compares 49,344 returning direct
+callback cases against the unchanged locked source. SHA-256:
+`578f0de4bdaac7c2b67f294de64a2694c069cbb2fde6d2c43ca68494c6ca94eb`.
+All 17 codec interfaces accept each source-supported encoder-options tag;
+the matrix covers eight storage profiles, three option variants, eight
+destination capacities, errors, stream positions and complete output bytes.
+PNG/TGA wrong-option access retains two isolated checked traps. Focused
+tests cover callback detection/loading and cross-option defaults. The live
+registry also retains the 6,528-case encoder and 589,824-case detector hashes.
 
 The focused tests and compile gates named in each audit session are expected to
 pass at the recorded commit. A repository-wide build is not proof that every
