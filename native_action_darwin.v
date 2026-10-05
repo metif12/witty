@@ -333,8 +333,8 @@ fn native_command_options(app &apprt.App) []macos.NativeCommandOption {
 			continue
 		}
 		options << macos.NativeCommandOption{
-			title:       command.title
-			description: command.description
+			title:       macos.source_c_utf8_repair(command.title)
+			description: macos.source_c_utf8_repair(command.description)
 			action:      command.action.format()
 		}
 	}
