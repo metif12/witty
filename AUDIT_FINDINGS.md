@@ -1334,10 +1334,18 @@ palette/index/tree-count cases and 336,128 input normalization cases, including
 complete packed-color ranges, all 8-bit alpha/color pairs, 16-bit alpha
 round-trips, and sampled float bit patterns. Direct cases compare node list
 registration, wrapping merges, floor averages, palette borrowing, zero budgets,
-missing colors, and all translated RGB(A) input types. Six subprocess probes in
+missing colors, and all translated RGB(A) input types. Sixteen subprocess probes in
 `zigimg/reference_probes/quantizer_bounds` compare palette capacity, repeated
 reduction, component/reference overflow, average casts, and invalid color
-levels. The module passes Linux checking, and its DLL and focused test
+levels. Explicit guards retain these checks in V production builds, while
+removeLeaves additions still wrap. The probes reject returned domain errors,
+fixing the former false positive for an erased color-level check. The runner
+compares V-computed baseline hashes independently of test assertions and
+verifies the complete locked source tree before copying it. Another 2,816
+records compare one-layer aliases of all eleven built-in RGB(A) input types;
+ordinary V/Debug source and production V/ReleaseSafe source both match, SHA-256
+`9c9d1fc6249abb82c5ce2d642655a4f6b6b7789e7ad540a9c65993a47cea09d3`.
+The module passes Linux checking, and its DLL and focused test
 executable cross compile with MinGW; Windows runtime remains untested.
 
 The private converter's source-hash-verified runner is

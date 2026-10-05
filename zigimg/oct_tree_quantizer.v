@@ -28,7 +28,7 @@ pub fn (quantizer &OctTreeQuantizer) allocate_node() !&OctTreeNode {
 }
 
 pub fn (mut quantizer OctTreeQuantizer) add_level_node(level i32, mut node OctTreeNode) {
-	assert level >= 0 && level < 8
+	if level < 0 || level >= 8 { panic('quantizer level out of range') }
 	node.level_next = quantizer.levels[level]
 	quantizer.levels[level] = unsafe { &node }
 }
@@ -50,7 +50,7 @@ pub fn (mut quantizer OctTreeQuantizer) make_palette(color_count u32, mut palett
 		for node != unsafe { nil } {
 			removed := node.remove_leaves()
 			// @intCast(i32 -> usize), followed by checked unsigned subtraction.
-			assert removed >= 0 && usize(removed) <= leaf_count
+			if removed < 0 || usize(removed) > leaf_count { panic('quantizer leaf count overflow') }
 			leaf_count -= usize(removed)
 			if leaf_count <= usize(color_count) {
 				break
@@ -98,11 +98,11 @@ pub fn (node &OctTreeNode) is_leaf() bool {
 }
 
 pub fn (node &OctTreeNode) get_color() Rgba32 {
-	assert node.reference_count != 0
+	if node.reference_count == 0 { panic('quantizer division by zero') }
 	red := node.red / node.reference_count
 	green := node.green / node.reference_count
 	blue := node.blue / node.reference_count
-	assert red <= 255 && green <= 255 && blue <= 255
+	if red > 255 || green > 255 || blue > 255 { panic('quantizer average does not fit u8') }
 	return Rgba32{
 		r: u8(red)
 		g: u8(green)
@@ -116,13 +116,13 @@ pub fn (mut node OctTreeNode) add_color[T](color T, level i32, mut parent OctTre
 
 fn (mut node OctTreeNode) add_rgb(color Rgb24, level i32, mut parent OctTreeQuantizer) ! {
 	if level >= 8 {
-		assert node.red <= 0xffffffff - u32(color.r)
+		if node.red > 0xffffffff - u32(color.r) { panic('quantizer red overflow') }
 		node.red += color.r
-		assert node.green <= 0xffffffff - u32(color.g)
+		if node.green > 0xffffffff - u32(color.g) { panic('quantizer green overflow') }
 		node.green += color.g
-		assert node.blue <= 0xffffffff - u32(color.b)
+		if node.blue > 0xffffffff - u32(color.b) { panic('quantizer blue overflow') }
 		node.blue += color.b
-		assert node.reference_count != 0xffffffff
+		if node.reference_count == 0xffffffff { panic('quantizer reference count overflow') }
 		node.reference_count++
 		return
 	}
@@ -160,7 +160,11 @@ pub fn (node &OctTreeNode) count_leaf_nodes() usize {
 	if node.is_leaf() { return 1 }
 	mut count := usize(0)
 	for child in node.children {
-		if child != unsafe { nil } { count += child.count_leaf_nodes() }
+		if child != unsafe { nil } {
+			child_count := child.count_leaf_nodes()
+			if child_count > ~usize(0) - count { panic('quantizer leaf count overflow') }
+			count += child_count
+		}
 	}
 	return count
 }
@@ -168,6 +172,7 @@ pub fn (node &OctTreeNode) count_leaf_nodes() usize {
 pub fn (mut node OctTreeNode) make_palette(mut context OctTreePaletteContext) {
 	if node.is_leaf() {
 		if context.palette_index >= context.color_count { return }
+		if usize(context.palette_index) >= usize(context.palette.len) { panic('quantizer palette capacity exceeded') }
 		context.palette[context.palette_index] = node.get_color()
 		node.palette_index = context.palette_index
 		context.palette_index++
@@ -195,7 +200,7 @@ pub fn (mut node OctTreeNode) remove_leaves() i32 {
 }
 
 fn OctTreeNode.get_color_index[T](color T, level i32) usize {
-	assert level >= 0 && level < 8
+	if level < 0 || level >= 8 { panic('quantizer color level out of range') }
 	rgb := quantizer_rgb24(color)
 	mask := u8(128 >> level)
 	mut index := usize(0)
@@ -216,64 +221,64 @@ fn quantizer_scale_float(value f32, maximum u32) u32 {
 
 fn quantizer_scale_small(value u16, bits u8) u8 {
 	maximum := (u32(1) << bits) - 1
-	assert u32(value) <= maximum
+	if u32(value) > maximum { panic('quantizer packed component out of range') }
 	return u8((u32(value) * 255 + maximum / 2) / maximum)
 }
 
 fn quantizer_rgb24[T](color T) Rgb24 {
-	$if T is Rgb24 {
-		return color
-	} $else $if T is Bgr24 {
+	$if T.unaliased_typ is Rgb24 {
+		return Rgb24(color)
+	} $else $if T.unaliased_typ is Bgr24 {
 		return Rgb24{
 			r: color.r
 			g: color.g
 			b: color.b
 		}
-	} $else $if T is Rgb48 {
+	} $else $if T.unaliased_typ is Rgb48 {
 		return Rgb24{
 			r: u8(color.r >> 8)
 			g: u8(color.g >> 8)
 			b: u8(color.b >> 8)
 		}
-	} $else $if T is Rgb332 {
+	} $else $if T.unaliased_typ is Rgb332 {
 		return Rgb24{
 			r: quantizer_scale_small(u16(color.raw & 7), 3)
 			g: quantizer_scale_small(u16((color.raw >> 3) & 7), 3)
 			b: quantizer_scale_small(u16(color.raw >> 6), 2)
 		}
-	} $else $if T is Rgb555 {
+	} $else $if T.unaliased_typ is Rgb555 {
 		return Rgb24{
 			r: quantizer_scale_small((color.raw >> 10) & 31, 5)
 			g: quantizer_scale_small((color.raw >> 5) & 31, 5)
 			b: quantizer_scale_small(color.raw & 31, 5)
 		}
-	} $else $if T is Bgr555 {
+	} $else $if T.unaliased_typ is Bgr555 {
 		return Rgb24{
 			r: quantizer_scale_small(color.raw & 31, 5)
 			g: quantizer_scale_small((color.raw >> 5) & 31, 5)
 			b: quantizer_scale_small((color.raw >> 10) & 31, 5)
 		}
-	} $else $if T is Rgb565 {
+	} $else $if T.unaliased_typ is Rgb565 {
 		return Rgb24{
 			r: quantizer_scale_small(color.raw >> 11, 5)
 			g: quantizer_scale_small((color.raw >> 5) & 63, 6)
 			b: quantizer_scale_small(color.raw & 31, 5)
 		}
-	} $else $if T is Rgba32 || T is Bgra32 {
+	} $else $if T.unaliased_typ is Rgba32 || T.unaliased_typ is Bgra32 {
 		alpha := f32(color.a) / 255
 		return Rgb24{
 			r: u8(quantizer_scale_float(f32(color.r) / 255 * alpha, 255))
 			g: u8(quantizer_scale_float(f32(color.g) / 255 * alpha, 255))
 			b: u8(quantizer_scale_float(f32(color.b) / 255 * alpha, 255))
 		}
-	} $else $if T is Rgba64 {
+	} $else $if T.unaliased_typ is Rgba64 {
 		alpha := f32(color.a) / 65535
 		return Rgb24{
 			r: u8(quantizer_scale_float(f32(color.r) / 65535 * alpha, 65535) >> 8)
 			g: u8(quantizer_scale_float(f32(color.g) / 65535 * alpha, 65535) >> 8)
 			b: u8(quantizer_scale_float(f32(color.b) / 65535 * alpha, 65535) >> 8)
 		}
-	} $else $if T is Colorf32 {
+	} $else $if T.unaliased_typ is Colorf32 {
 		return Rgb24{
 			r: u8(quantizer_scale_float(color.r * color.a, 255))
 			g: u8(quantizer_scale_float(color.g * color.a, 255))

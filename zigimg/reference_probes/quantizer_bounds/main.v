@@ -23,6 +23,14 @@ fn main() {
 			quantizer.root_node.red = 0xffffffff
 			quantizer.root_node.add_color(zigimg.Rgb24{ r: 1 }, 8, mut quantizer) or { panic(err) }
 		}
+		'green_overflow' {
+			quantizer.root_node.green = 0xffffffff
+			quantizer.root_node.add_color(zigimg.Rgb24{ g: 1 }, 8, mut quantizer) or { panic(err) }
+		}
+		'blue_overflow' {
+			quantizer.root_node.blue = 0xffffffff
+			quantizer.root_node.add_color(zigimg.Rgb24{ b: 1 }, 8, mut quantizer) or { panic(err) }
+		}
 		'reference_overflow' {
 			quantizer.root_node.reference_count = 0xffffffff
 			quantizer.root_node.add_color(zigimg.Rgb24{}, 8, mut quantizer) or { panic(err) }
@@ -32,8 +40,48 @@ fn main() {
 			quantizer.root_node.reference_count = 1
 			quantizer.root_node.get_color()
 		}
+		'green_average_cast' {
+			quantizer.root_node.green = 256
+			quantizer.root_node.reference_count = 1
+			quantizer.root_node.get_color()
+		}
+		'blue_average_cast' {
+			quantizer.root_node.blue = 256
+			quantizer.root_node.reference_count = 1
+			quantizer.root_node.get_color()
+		}
+		'zero_average' { quantizer.root_node.get_color() }
 		'color_level' {
-			quantizer.root_node.get_palette_index(zigimg.Rgb24{}, 8) or { panic(err) }
+			quantizer.root_node.get_palette_index(zigimg.Rgb24{}, 8) or {
+				eprintln('UNEXPECTED: returned error ${err}')
+				return
+			}
+		}
+		'negative_color_level' {
+			quantizer.root_node.get_palette_index(zigimg.Rgb24{}, -1) or {
+				eprintln('UNEXPECTED: returned error ${err}')
+				return
+			}
+		}
+		'negative_level' {
+			mut node := zigimg.OctTreeNode{}
+			quantizer.add_level_node(-1, mut node)
+		}
+		'high_level' {
+			mut node := zigimg.OctTreeNode{}
+			quantizer.add_level_node(8, mut node)
+		}
+		'leaf_count_underflow' {
+			mut node := quantizer.allocate_node() or { panic(err) }
+			node.children[0] = quantizer.allocate_node() or { panic(err) }
+			node.children[1] = quantizer.allocate_node() or { panic(err) }
+			quantizer.levels[7] = node
+			quantizer.make_palette(0, mut storage)
+		}
+		'palette_context_capacity' {
+			quantizer.root_node.reference_count = 1
+			mut context := zigimg.OctTreePaletteContext{ palette: unsafe { storage }, palette_index: 1, color_count: 2 }
+			quantizer.root_node.make_palette(mut context)
 		}
 		else {
 			panic('unknown case')

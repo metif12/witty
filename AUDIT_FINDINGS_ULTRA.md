@@ -1724,6 +1724,19 @@ unavailable, verified by paired compile probes. The locked source tree hash
 and flattened API mapping are documented with the probe. These widgets are
 separate from the previously translated `vxfw` implementations.
 
+The quantizer's accumulation, averaging, capacity, reduction and level checks
+now survive V production optimization. Sixteen subprocess probes reject both
+successful returns and returned domain errors; this closes a previous verifier
+false positive where an outer panic masked an erased color-level guard.
+The original 2,160 tree/palette/index and 336,128 normalization hashes remain
+`fb25faff7d5b5837` and `2e3cf0cdc340afc4` in Debug and V-production/source-
+ReleaseSafe builds. A further 2,816 records compare aliases of all eleven
+supported RGB(A) types, SHA-256
+`9c9d1fc6249abb82c5ce2d642655a4f6b6b7789e7ad540a9c65993a47cea09d3`.
+The runner verifies the complete locked source tree and V-computed hashes
+independently of assertions. Deliberate removeLeaves wrapping and the existing
+GC/root/private-context adaptations remain unchanged.
+
 `6d38e29` applies Swift's repairing first-NUL C-string projection to native
 config title/font and command title/description consumers. The extracted
 unchanged getters/initializer match 20 records (40 getter results and 38
