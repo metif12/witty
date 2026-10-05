@@ -31,6 +31,22 @@ mut:
 	zoom_tab_button ObjId
 	zoom_toolbar_button ObjId
 	zoom_accessory ObjId
+	tabs_tahoe bool
+	tahoe_title_view ObjId
+	tahoe_title_views []ObjId
+	tahoe_title_labels []ObjId
+	tahoe_title string = '👻 Ghostty'
+	tahoe_title_font ObjId
+	tahoe_has_tab_bar bool
+	tahoe_main bool = true
+	tahoe_frame_observer ObjId
+	tahoe_group_observer ObjId
+	tahoe_group ObjId
+	tahoe_last_config bool
+	preferred_background u32
+	preferred_opacity f64 = 1
+	force_opaque bool
+	focused_view ObjId
 }
 __global ( g_native_windows map[u64]&NativeWindowData )
 fn native_window_data(window ObjId) ?&NativeWindowData { return g_native_windows[u64(window)] or { none } }
@@ -41,7 +57,7 @@ fn native_window_update(self ObjId, cmd Sel) { C.witty_macos_window_super_void0(
 fn native_window_key_changed(self ObjId,cmd Sel) {
 	C.witty_macos_window_super_void0(self,cmd)
 	if mut data:=native_window_data(self) {
-		if msg_bool(self,'isKeyWindow') && msg_u64(msg_id(msg_id(self,'tabGroup'),'windows'),'count')<2 {
+		if !data.tabs_tahoe && msg_bool(self,'isKeyWindow') && msg_u64(msg_id(msg_id(self,'tabGroup'),'windows'),'count')<2 {
 			msg_void_bool(data.backdrop,'setHidden:',true)
 			msg_void_bool(data.drag_handle,'setHidden:',true)
 			msg_void_bool(data.title_label,'setHidden:',false)
@@ -53,8 +69,14 @@ fn native_window_key_changed(self ObjId,cmd Sel) {
 }
 fn C.sel_getName(selector Sel) &char
 fn native_window_add_accessory(self ObjId, _cmd Sel, controller ObjId) {
+	if mut data := native_window_data(self) {
+		if data.tabs_tahoe {
+			if is_tab_bar_accessory(controller) { clear_tahoe_frame_observer(mut data) }
+			else { set_tahoe_has_tab_bar(mut data, false) }
+		}
+	}
 	if data := native_window_data(self) {
-		if data.config.titlebar_style == 2 && is_tab_bar_accessory(controller) {
+		if (data.tabs_tahoe || data.config.titlebar_style == 2) && is_tab_bar_accessory(controller) {
 			msg_void_u64(controller, 'setLayoutAttribute:', 2)
 			msg_void_u64(self, 'setTitleVisibility:', 1)
 			msg_void1(controller, 'setIdentifier:', nsstring('_ghosttyTabBar'))
@@ -63,14 +85,16 @@ fn native_window_add_accessory(self ObjId, _cmd Sel, controller ObjId) {
 	C.witty_macos_window_super_void1(self, sel('addTitlebarAccessoryViewController:'), controller)
 	if is_tab_bar_accessory(controller) {
 		if data:=native_window_data(self) { set_zoom_accessory_attached(data,false) }
+		if data := native_window_data(self) { if data.tabs_tahoe { queue_tahoe_window(self, .setup, true, false, 0); return } }
 		dispatch_main(push_native_tabs, voidptr(self))
 	}
 }
 fn native_window_remove_accessory(self ObjId, _cmd Sel, index u64) {
 	array := msg_id(self, 'titlebarAccessoryViewControllers')
-	controller := msg_id_u64(array, 'objectAtIndex:', index)
+	controller := if index < msg_u64(array, 'count') { msg_id_u64(array, 'objectAtIndex:', index) } else { nil_obj() }
 	was_tabbar := is_tab_bar_accessory(controller)
 	C.witty_macos_msg_super_void_u64(self, sel('removeTitlebarAccessoryViewControllerAtIndex:'), index)
+	if was_tabbar { if mut data := native_window_data(self) { if data.tabs_tahoe { clear_tahoe_frame_observer(mut data); queue_tahoe_window(self, .tab_bar, true, false, 0) } } }
 	if was_tabbar { if data := native_window_data(self) { msg_void_bool(data.backdrop, 'setHidden:', true); msg_void_bool(data.drag_handle, 'setHidden:', true); msg_void_bool(data.title_label, 'setHidden:', false) } }
 	if was_tabbar { if data:=native_window_data(self) { set_zoom_accessory_attached(data,true) } }
 }
@@ -90,6 +114,7 @@ fn register_native_window_class() {
 	add_method(cls, 'canBecomeMainWindow', voidptr(native_window_can_become_key), 'B@:')
 	register_native_zoom_window_methods(cls)
 	register_window_font_methods(cls)
+	register_tahoe_window_methods(cls)
 	for selector in ['becomeKeyWindow','resignKeyWindow'] { add_method(cls,selector,voidptr(native_window_key_changed),'v@:') }
 	add_method(cls, 'addTitlebarAccessoryViewController:', voidptr(native_window_add_accessory), 'v@:@')
 	add_method(cls, 'removeTitlebarAccessoryViewControllerAtIndex:', voidptr(native_window_remove_accessory), 'v@:Q')
@@ -146,6 +171,7 @@ fn constrain(view ObjId, anchor string, other ObjId, other_anchor string, consta
 fn push_native_tabs(context voidptr) {
 	window := ObjId(context)
 	mut data := native_window_data(window) or { return }
+	if data.tabs_tahoe { setup_tahoe_tab_bar(window); return }
 	if data.config.titlebar_style != 2 || msg_u64(window, 'styleMask') & ns_window_style_titled == 0 { return }
 	controllers := msg_id(window, 'titlebarAccessoryViewControllers')
 	mut controller := nil_obj()
@@ -206,6 +232,7 @@ fn push_native_tabs(context voidptr) {
 }
 fn update_native_titlebar(window ObjId) {
 	mut data := native_window_data(window) or { return }
+	if data.tabs_tahoe { update_tahoe_titlebar(data); return }
 	container := titlebar_container(window)
 	if is_nil(container) { return }
 	msg_void_bool(container, 'setWantsLayer:', true)
@@ -251,10 +278,16 @@ fn update_native_titlebar(window ObjId) {
 pub fn apply_native_window_config(view voidptr, config NativeWindowConfig, initial bool, preferred_background u32, preferred_opacity f64, force_opaque bool) {
 	window := msg_id(view, 'window')
 	if is_nil(window) { return }
-	mut data := native_window_data(window) or { &NativeWindowData{window: window} }
+	mut data := native_window_data(window) or { &NativeWindowData{window: window, tabs_tahoe: config.decorations && config.titlebar_style == 2 && C.witty_native_os_at_least(26, 0, 0)} }
 	g_native_windows[u64(window)] = data
 	data.config = config
-	msg_void1(data.title_label, 'setStringValue:', msg_id(window, 'title'))
+	data.preferred_background = preferred_background
+	data.preferred_opacity = preferred_opacity
+	data.force_opaque = force_opaque
+	// syncAppearance receives the controller's focused SurfaceView. Keep it
+	// when an inspector/palette later becomes the window's first responder.
+	if msg_bool1(view, 'isKindOfClass:', get_class('VTTerminalView')) { data.focused_view = ObjId(view) }
+	if !data.tabs_tahoe { msg_void1(data.title_label, 'setStringValue:', msg_id(window, 'title')) }
 	// Ventura chrome follows the surface config; its appearance override
 	// separately follows the preferred dynamic border background.
 	data.light = native_color_luminance(config.background) > 0.5
@@ -281,16 +314,25 @@ pub fn apply_native_window_config(view voidptr, config NativeWindowConfig, initi
 		msg_void_u64(window,'setToolbarStyle:',4)
 	}
 	update_native_zoom_views(mut data)
-	if !msg_bool(window, 'isVisible') { return }
-	appearance_name := if config.titlebar_style == 2 { if native_color_luminance(preferred_background) > 0.5 { 'NSAppearanceNameAqua' } else { 'NSAppearanceNameDarkAqua' } } else if config.theme == 0 { if data.light { 'NSAppearanceNameAqua' } else { 'NSAppearanceNameDarkAqua' } } else if config.theme == 2 { 'NSAppearanceNameAqua' } else if config.theme == 3 { 'NSAppearanceNameDarkAqua' } else { '' }
+	if data.tabs_tahoe { data.tahoe_last_config = true; observe_tahoe_tab_group(mut data) }
+	if !msg_bool(window, 'isVisible') {
+		if data.tabs_tahoe {
+			msg_void1(window, 'setAppearance:', msg_id1(get_class('NSAppearance'), 'appearanceNamed:', nsstring(if native_color_luminance(preferred_background) > 0.5 { 'NSAppearanceNameAqua' } else { 'NSAppearanceNameDarkAqua' })))
+			msg_void_bool(window, 'setTitlebarAppearsTransparent:', true)
+			msg_void_u64(window, 'setTitleVisibility:', 1)
+			update_tahoe_titlebar(data)
+		}
+		return
+	}
+	appearance_name := if data.tabs_tahoe || config.titlebar_style == 2 { if native_color_luminance(preferred_background) > 0.5 { 'NSAppearanceNameAqua' } else { 'NSAppearanceNameDarkAqua' } } else if config.theme == 0 { if data.light { 'NSAppearanceNameAqua' } else { 'NSAppearanceNameDarkAqua' } } else if config.theme == 2 { 'NSAppearanceNameAqua' } else if config.theme == 3 { 'NSAppearanceNameDarkAqua' } else { '' }
 	msg_void1(window, 'setAppearance:', if appearance_name.len > 0 { msg_id1(get_class('NSAppearance'), 'appearanceNamed:', nsstring(appearance_name)) } else { nil_obj() })
 	msg_void_bool(window, 'setHasShadow:', config.shadow)
 	transparent := native_window_transparent(config, msg_u64(window, 'styleMask') & u64(1 << 14) != 0, force_opaque)
 	msg_void_bool(window, 'setOpaque:', !transparent)
 	msg_void1(window, 'setBackgroundColor:', if transparent { native_color(0xffffff, 0.001) } else { native_color(preferred_background, 1) })
 	if transparent && config.blur >= 0 { C.witty_macos_set_window_background_blur(window, int(config.blur)) }
-	msg_void_bool(window, 'setTitlebarAppearsTransparent:', config.titlebar_style == 1)
-	msg_void_u64(window, 'setTitleVisibility:', u64(if config.titlebar_style in [2, 3] { 1 } else { 0 }))
+	msg_void_bool(window, 'setTitlebarAppearsTransparent:', config.titlebar_style == 1 || data.tabs_tahoe)
+	msg_void_u64(window, 'setTitleVisibility:', u64(if data.tabs_tahoe || config.titlebar_style in [2, 3] { 1 } else { 0 }))
 	reapply_hidden_native_window_style(window)
 	update_native_titlebar(window)
 	if config.titlebar_style == 2 { dispatch_main(push_native_tabs, voidptr(window)) }
@@ -310,7 +352,7 @@ fn native_window_close(self ObjId,_cmd Sel) {
 	terminal_window_will_close(self)
 	msg_void2(msg_id(get_class('NSNotificationCenter'), 'defaultCenter'), 'postNotificationName:object:', nsstring('TerminalWindowWillClose'), self)
 	C.witty_macos_window_super_void0(self, sel('close'))
-	if data:=native_window_data(self) { release_native_zoom_views(data) }
+	if mut data:=native_window_data(self) { release_tahoe_window(mut data); release_native_zoom_views(data) }
 	g_native_windows.delete(u64(self))
 }
 fn restore_last_window_position(window ObjId) bool {
@@ -354,24 +396,34 @@ fn toolbar_array(names []string) ObjId {
 	for name in names { objects << voidptr(nsstring(name)) }
 	return C.witty_macos_array(objects.data, usize(objects.len))
 }
-fn native_toolbar_allowed(_self ObjId, _cmd Sel, _toolbar ObjId) ObjId {
+fn native_toolbar_allowed(self ObjId, _cmd Sel, _toolbar ObjId) ObjId {
+	if window := g_toolbar_windows[u64(self)] { if data := native_window_data(window) { if data.tabs_tahoe { return toolbar_array(['Title', 'NSToolbarFlexibleSpaceItem', 'NSToolbarSpaceItem']) } } }
 	return toolbar_array(['TitleText', 'NSToolbarFlexibleSpaceItem', 'NSToolbarSpaceItem', 'ResetZoom'])
 }
-fn native_toolbar_defaults(_self ObjId, _cmd Sel, _toolbar ObjId) ObjId {
+fn native_toolbar_defaults(self ObjId, _cmd Sel, _toolbar ObjId) ObjId {
+	if window := g_toolbar_windows[u64(self)] { if data := native_window_data(window) { if data.tabs_tahoe { return toolbar_array(['NSToolbarFlexibleSpaceItem', 'Title', 'NSToolbarFlexibleSpaceItem']) } } }
 	return toolbar_array(['NSToolbarFlexibleSpaceItem', 'TitleText', 'NSToolbarFlexibleSpaceItem'])
 }
 fn native_toolbar_item(self ObjId, _cmd Sel, _toolbar ObjId, identifier ObjId, _inserted bool) ObjId {
 	window := g_toolbar_windows[u64(self)] or { return nil_obj() }
 	mut data := native_window_data(window) or { return nil_obj() }
 	item := msg_id1(alloc('NSToolbarItem'), 'initWithItemIdentifier:', identifier)
-	if objc_utf8_string(identifier) == 'TitleText' {
+	if data.tabs_tahoe && objc_utf8_string(identifier) == 'Title' {
+		create_tahoe_title_view(mut data)
+		msg_void1(item, 'setView:', data.tahoe_title_view)
+		C.witty_macos_priority(data.tahoe_title_view, sel('setContentCompressionResistancePriority:forOrientation:'), 1000, 0)
+		msg_void_u64(item, 'setVisibilityPriority:', 2000)
+		msg_void_bool(item, 'setEnabled:', true)
+		msg_void_bool(item, 'setBordered:', false)
+	}
+	if !data.tabs_tahoe && objc_utf8_string(identifier) == 'TitleText' {
 		msg_void1(item, 'setView:', data.title_label)
 		msg_void_u64(item, 'setVisibilityPriority:', 2000)
 		height := msg_id_f64(msg_id(data.title_label, 'heightAnchor'), 'constraintEqualToConstant:', 22)
 		msg_void_bool(height, 'setActive:', true)
 		msg_void_bool(item, 'setEnabled:', true)
 	}
-	if objc_utf8_string(identifier)=='ResetZoom' {
+	if !data.tabs_tahoe && objc_utf8_string(identifier)=='ResetZoom' {
 		prepare_native_zoom_views(mut data)
 		msg_void1(item,'setView:',data.zoom_toolbar_button)
 		msg_void1(data.zoom_toolbar_button,'removeConstraints:',msg_id(data.zoom_toolbar_button,'constraints'))
@@ -381,6 +433,7 @@ fn native_toolbar_item(self ObjId, _cmd Sel, _toolbar ObjId, identifier ObjId, _
 	return item
 }
 fn create_terminal_toolbar(mut data NativeWindowData) ObjId {
+	if data.tabs_tahoe { return create_tahoe_terminal_toolbar(mut data) }
 	mut toolbar_cls := get_class('VTTerminalToolbar')
 	if is_nil(toolbar_cls) {
 		toolbar_cls = C.macos_objc_allocate_class_pair(get_class('NSToolbar'), cstr('VTTerminalToolbar'), 0)

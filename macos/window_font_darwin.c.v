@@ -59,6 +59,7 @@ fn window_font_title_changed(self ObjId, _cmd Sel, title ObjId) {
 	C.witty_window_font_super_set_title(self, title)
 	refresh_native_window_title_attributes(self)
 	window_font_single_line(self)
+	if data := native_window_data(self) { if data.tabs_tahoe { queue_tahoe_window(self, .title, false, false, 0) } }
 }
 
 fn register_window_font_methods(cls ObjId) {
@@ -77,7 +78,10 @@ pub fn set_native_window_title_font(view voidptr, family ?string) {
 	msg_void1(window_font_title_field(window), 'setFont:', display_font)
 	// TitlebarTabsVenturaTerminalWindow.titlebarFont also projects the font to
 	// TerminalToolbar's centered label when that custom toolbar exists.
-	if data := native_window_data(window) { msg_void1(data.title_label, 'setFont:', display_font) }
+	if data := native_window_data(window) {
+		if data.tabs_tahoe { queue_tahoe_window(window, .font, false, false, 0) }
+		else { msg_void1(data.title_label, 'setFont:', display_font) }
+	}
 	window_font_single_line(window)
 	refresh_native_window_title_attributes(window)
 }

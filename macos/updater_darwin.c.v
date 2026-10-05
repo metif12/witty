@@ -484,7 +484,7 @@ fn (mut controller NativeUpdateController) refresh_presentation() {
 		width := C.witty_update_text_width(nsstring(controller.state.max_width_text()), font) + 36
 		bounds := msg_rect(content, 'bounds')
 		mut supports_accessory := true
-		if data := native_window_data(window) { supports_accessory = data.config.titlebar_style in [0, 1] && data.config.decorations }
+		if data := native_window_data(window) { supports_accessory = !data.tabs_tahoe && data.config.titlebar_style in [0, 1] && data.config.decorations }
 		if msg_bool1(window, 'isKindOfClass:', get_class('VTQuickTerminalWindow')) { supports_accessory = false }
 		mut fullscreen := (msg_u64(window, 'styleMask') & u64(1 << 14)) != 0
 		if state := g_fullscreen_states[u64(window)] { fullscreen = fullscreen || state.saved }

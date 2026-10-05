@@ -56,7 +56,7 @@ pub fn move_native_tab(view voidptr, amount isize) bool {
 	}
 	if C.witty_action_os_major() >= 26 {
 		if config := native_window_data(window) {
-			if config.config.titlebar_style == 2 {
+			if config.tabs_tahoe {
 				msg_void1(group, 'removeWindow:', selected)
 				C.witty_action_add_tab(target, selected, if amount < 0 { -1 } else { 1 })
 				msg_void(selected, 'retain')

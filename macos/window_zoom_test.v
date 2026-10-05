@@ -9,6 +9,8 @@ fn test_native_zoom_projection_has_real_tab_and_titlebar_controls() {
 	view:=create_window(160,100,'zoom probe')
 	window:=msg_id(view,'window')
 	msg_void_bool(window,'setReleasedWhenClosed:',false)
+	// ResetZoom belongs to the Ventura toolbar delegate, so select that class.
+	g_native_windows[u64(window)] = &NativeWindowData{window: window}
 	apply_native_window_config(view,NativeWindowConfig{decorations:true,titlebar_style:2,opacity:1},true,0x202020,1,false)
 	data:=native_window_data(window) or { panic('native metadata missing') }
 	previous_action:=g_action_cb

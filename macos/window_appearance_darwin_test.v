@@ -82,6 +82,9 @@ fn test_ventura_dark_chrome_uses_actual_native_window_color() {
 		msg_void(other_window, 'release')
 	}
 	for tab in [view, other] {
+		// This regression exercises the pre-Tahoe Ventura class explicitly.
+		tab_window := msg_id(tab, 'window')
+		g_native_windows[u64(tab_window)] = &NativeWindowData{window: tab_window}
 		apply_native_window_config(tab, NativeWindowConfig{ titlebar_style: 2 }, true, 0, 1, false)
 	}
 	add_native_tab(view, other)
