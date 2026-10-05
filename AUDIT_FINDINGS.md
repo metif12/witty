@@ -1561,6 +1561,18 @@ and completion/cleanup policy, without certifying SwiftUI sheet rendering or
 asynchronous timing. The raw MIME fallback after a nil UTType is translated;
 all tested host MIME names produce a known or dynamic UTI.
 
+The omitted classic Window-based Vaxis alignment, Scrollbar and ScrollView
+APIs are now translated independently of `vxfw`. Their unchanged-source runner
+matches 41,649 cases in ordinary and production V builds, SHA-256
+`12bc9172a2cf6e8e65d9e410ae3902aa35ab546b8e58814a11f04249e53c7308`.
+The matrix compares retained cells/styles, clipping, all five alignments,
+input saturation, restrictions, bounds predicates and content writes, including
+64-bit boundaries. Three source arithmetic/cast traps remain active. The
+source's ScrollView.readCell fails Zig 0.15.2 compilation because it returns
+void from an optional Cell function; its V method remains unavailable and both
+compile rejections are verified. API mappings, source hash and coordinate/
+allocation adaptations are in `vaxis/reference_probes/widgets/README.md`.
+
 Scientific CIE XYZ/Lab/Luv/LCh, HSLuv and Oklab conversions match 6,961
 unchanged-source cases, SHA-256
 `d97550d49bb60cf224fc60999d3603d6199aa9c99702a7c79b8d7ca9f10e8566`.

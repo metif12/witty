@@ -1712,6 +1712,18 @@ presentation remains a V adaptation, and source SwiftUI sheet rendering/timing
 is not certified. All tested MIME names yield UTTypes, so the translated raw
 MIME fallback after a nil lookup remains unexercised on this host.
 
+The classic Vaxis alignment, Scrollbar and ScrollView implementations now expose
+their runnable Window-based source APIs. All 41,649 cases match an unchanged
+source-tree copy in ordinary and production V builds, SHA-256
+`12bc9172a2cf6e8e65d9e410ae3902aa35ab546b8e58814a11f04249e53c7308`.
+Retained cell/style data, clipping, five alignments, saturated input and bounds,
+reserved scrollbar padding and content writes are compared. Three overflow/
+coordinate-cast traps remain explicit. The original optional-return readCell
+method fails to compile with Zig 0.15.2; V leaves that inherited boundary
+unavailable, verified by paired compile probes. The locked source tree hash
+and flattened API mapping are documented with the probe. These widgets are
+separate from the previously translated `vxfw` implementations.
+
 `6d38e29` applies Swift's repairing first-NUL C-string projection to native
 config title/font and command title/description consumers. The extracted
 unchanged getters/initializer match 20 records (40 getter results and 38
