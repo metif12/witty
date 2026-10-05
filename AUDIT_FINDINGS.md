@@ -1568,6 +1568,18 @@ claim unchanged-source factory parity. Known built-in target delegation avoids
 the pinned compiler's generic static dispatch cache defect; custom targets use
 inferred static calls.
 
+General `Matrix[B]` adapts the source factory to directly named square f32
+arrays. It exposes flat construction, identity, determinant, inverse,
+transpose and matrix/fixed-vector multiplication. The unchanged-source runner
+matches 6,467 cases across dimensions 1, 2, 3, 4, 5 and 8 in ordinary and
+production builds, SHA-256
+`f303b568d8901d722b61cb805d2ccd212e57c10a758d2b530f15ab4d710e9c0f`.
+Three explicit shape checks remain active under production optimization.
+The existing 12,419-case named-matrix corpus retains its hash after the bounded
+direct-index workaround. Zero-length fixed arrays, further alias layers and
+generic forwarding of static factories remain V 0.5.2 boundaries; storage uses
+the V array ABI rather than Zig's SIMD-vector layout.
+
 The focused tests and compile gates named in each audit session are expected to
 pass at the recorded commit. A repository-wide build is not proof that every
 Ghostty file and function has been translated, and no 100% claim is made.

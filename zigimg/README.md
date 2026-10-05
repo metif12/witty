@@ -201,6 +201,17 @@ inverse, multiplication, transpose and clamps. Inversion retains zero-pivot
 and singular behavior without added pivoting; dot products begin at negative
 zero. The 12,419-case matrix comparison also checks caller immutability.
 
+General `Matrix[B]` uses a named `[N][N]f32` storage type and supports flat
+construction, identity, determinant, inverse, transpose, matrix multiplication
+and fixed-vector multiplication. Its 6,467-case comparison covers dimensions
+1, 2, 3, 4, 5 and 8, including named matrix types and custom storage names.
+Explicit shape checks protect the bounded direct indexing needed to avoid
+V 0.5.2's generic bounds-cache defect and remain active in production.
+Zero-length arrays, extra alias layers and generic forwarding of static
+factories remain pinned compiler boundaries; storage uses V's array ABI.
+Examples and limits are in
+[the generic matrix probe](reference_probes/math_generic/README.md).
+
 CIE XYZ/Lab/Luv/LCh, HSLuv and Oklab models retain scalar, alpha and Float4
 conversion APIs. The 6,961-case comparison preserves every non-NaN output
 bit and NaN occurrence, including zero whitepoint denominators and unusual
@@ -471,19 +482,25 @@ python3 zigimg/verify_color_space_reference.py \
   /path/to/locked-zigimg /path/to/zig-0.15.2/zig /path/to/v-0.5.2
 python3 zigimg/verify_color_methods_reference.py \
   /path/to/locked-zigimg /path/to/zig-0.15.2/zig /path/to/v-0.5.2
+python3 zigimg/verify_math_generic_reference.py \
+  /path/to/locked-zigimg /path/to/zig-0.15.2/zig /path/to/v-0.5.2
 ```
 
-Their result SHA-256 values are
-`dc4e15c78150f3ce178a6fa9eab1f953d5ea3647239753ea7eb18648a805504f`
-`23be1b2c20e279a493dda64087e1916b58e6fdbc8bdcb76469c15b7231a4fb31`
-`d97550d49bb60cf224fc60999d3603d6199aa9c99702a7c79b8d7ca9f10e8566`
-`262e3417fd251373234d20d0b06d7fe53adc63028db4a708a71d99677cf9d6a0`
-and `d0e9543322de17f813724ff1ed5b51793a68277be165a96bf4266ae17461adf3`.
+| Runner | Returning cases | Result SHA-256 |
+|---|---:|---|
+| Color models | 31,167 | `dc4e15c78150f3ce178a6fa9eab1f953d5ea3647239753ea7eb18648a805504f` |
+| Named matrices | 12,419 | `23be1b2c20e279a493dda64087e1916b58e6fdbc8bdcb76469c15b7231a4fb31` |
+| Scientific colors | 6,961 | `d97550d49bb60cf224fc60999d3603d6199aa9c99702a7c79b8d7ca9f10e8566` |
+| RGB colorspaces | 5,792 | `262e3417fd251373234d20d0b06d7fe53adc63028db4a708a71d99677cf9d6a0` |
+| Color methods | 35,362 | `d0e9543322de17f813724ff1ed5b51793a68277be165a96bf4266ae17461adf3` |
+| General matrices | 6,467 | `f303b568d8901d722b61cb805d2ccd212e57c10a758d2b530f15ab4d710e9c0f` |
+
 The color-method runner includes custom target constructors, packed aliases,
 mixed numeric inputs, all built-in constructors/getters and premultiplication
 across 35,362 returning cases.
 It also verifies four checked component-width traps and twenty-one ordinary
 compile rejections, including unsupported float-to-wide-integer scaling.
+The general matrix runner also checks three invalid input shapes.
 
 Appending `--v-prod` to these runners retains the same hashes with
 V's production optimization.

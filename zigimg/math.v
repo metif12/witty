@@ -151,6 +151,11 @@ pub fn clamp4(value Float4, minimum f32, maximum f32) Float4 {
 	return result
 }
 
+// Every helper receives the dimension of its inline square storage. Generic
+// Matrix entry points check storage and input shapes before reaching these
+// bounded loops. Pinned V 0.5.2 otherwise reuses another specialization's
+// fixed-array index guard lengths; direct access avoids that Cgen cache bug.
+@[direct_array_access]
 fn matrix_identity[T](dimension int) T {
 	mut result := T{}
 	for diagonal in 0 .. dimension {
@@ -159,10 +164,13 @@ fn matrix_identity[T](dimension int) T {
 	return result
 }
 
+@[direct_array_access]
 fn matrix_determinant[T](value T, dimension int) f32 {
 	if dimension == 2 {
-		left := value.matrix[0][0] * value.matrix[1][1]
-		right := value.matrix[0][1] * value.matrix[1][0]
+		zero := 0
+		one := 1
+		left := value.matrix[zero][zero] * value.matrix[one][one]
+		right := value.matrix[zero][one] * value.matrix[one][zero]
 		return left - right
 	}
 	mut temporary := value
@@ -182,6 +190,7 @@ fn matrix_determinant[T](value T, dimension int) f32 {
 	return result
 }
 
+@[direct_array_access]
 fn matrix_inverse[T](value T, dimension int) T {
 	mut temporary := value
 	mut result := matrix_identity[T](dimension)
@@ -215,6 +224,7 @@ fn matrix_inverse[T](value T, dimension int) T {
 	return result
 }
 
+@[direct_array_access]
 fn matrix_mul_vector[T, V](value T, vector V, dimension int) V {
 	mut result := vector
 	for row in 0 .. dimension {
@@ -228,6 +238,7 @@ fn matrix_mul_vector[T, V](value T, vector V, dimension int) V {
 	return result
 }
 
+@[direct_array_access]
 fn matrix_mul[T](value T, right T, dimension int) T {
 	mut result := T{}
 	transposed_right := matrix_transpose(right, dimension)
@@ -244,6 +255,7 @@ fn matrix_mul[T](value T, right T, dimension int) T {
 	return result
 }
 
+@[direct_array_access]
 fn matrix_transpose[T](value T, dimension int) T {
 	mut result := T{}
 	for row in 0 .. dimension {
