@@ -1824,6 +1824,19 @@ After streaming constructors, the image suite again passes all 43 files,
 native/Linux checking, Windows DLL compilation and the focused file-I/O cross
 build. Cross builds do not establish platform runtime behavior.
 
+The classic Terminal Parser and ANSI helpers match 140,489 returning records
+and sixteen checked arithmetic traps in Debug and V-production/source-
+ReleaseSafe builds, SHA-256
+`d161050f1a033fd4f73a1e4cff01a7a61b6100f50773a40d8528e82f1ef1bf53`.
+The matrix compares events/errors, raw bytes, borrowed buffer reuse, reader
+positions/buffering, pending controls, formatting and typed iterator/lookahead
+state. DCS/SOS/PM skip only the ESC delimiter; OSC/APC discard the following
+byte without extra prefetch and propagate cutoff EOF. Five ordinary compiler
+boundaries and three focused consumers pass. Generic missing-`bytes` omission
+is explicitly measured as source rejection/V acceptance; the pinned V compiler
+ignores the required annotation for that generic field. The runner counts this
+adaptation separately and does not claim whole terminal runtime parity.
+
 The complete PNG decoding matrix was repeated after the stream changes and
 retains all 60,760 returning records and eight checked traps, SHA-256
 `96ee46b18345684842d8ae9cd64290f7c5e9b86228458a83386a602bbd646e9c`.

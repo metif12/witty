@@ -1679,6 +1679,20 @@ fourteen paired omission rejections. After the streaming constructor additions,
 all 43 image test files, native/Linux checks, Windows DLL and focused file-I/O
 test cross builds pass.
 
+The classic Terminal Parser and ANSI helpers now preserve buffered print
+batching, pending controls, raw UTF-8 bytes, partial errors, borrowed event
+storage, CSI formatting and typed parameter/lookahead state. Skipped control
+strings consume only their ESC delimiter; OSC/APC consume one following byte
+without prefetching and propagate cutoff EOF. The unchanged source matches
+140,489 returning records and sixteen arithmetic traps in Debug and
+V-production/source-ReleaseSafe builds, SHA-256
+`d161050f1a033fd4f73a1e4cff01a7a61b6100f50773a40d8528e82f1ef1bf53`.
+Five ordinary compiler boundaries and three focused consumers pass. The pinned
+V compiler accepts an empty generic iterator despite its required `bytes`
+annotation; the runner measures that separately from paired failures. GC
+allocation, native integer widths and other limits remain documented in
+`vaxis/reference_probes/terminal/parser/README.md`.
+
 Scientific CIE XYZ/Lab/Luv/LCh, HSLuv and Oklab conversions match 6,961
 unchanged-source cases, SHA-256
 `d97550d49bb60cf224fc60999d3603d6199aa9c99702a7c79b8d7ca9f10e8566`.
