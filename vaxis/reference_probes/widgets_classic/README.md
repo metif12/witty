@@ -88,3 +88,10 @@ python3 vaxis/verify_widgets_classic_reference.py /path/to/vaxis /path/to/zig /p
 Use `--uucode /path/to/extracted/locked/package` if it is not in the default Zig
 cache, and `--v-prod` to check optimized V. The target defaults to native macOS
 ARM64 version 14.0, consistently with the other source comparisons.
+
+The public Scrollbar, View config, TextView content/style, ScrollView content
+size and bounding-box inputs retain their required fields. Run
+`python3 vaxis/verify_widget_contracts_reference.py /path/to/vaxis /path/to/zig /path/to/v`
+to check six complete constructors and fourteen paired omission errors against
+the unchanged source. The runner rejects compiler crashes and generated-C
+failures. Flattened V sum-type payload wrappers remain representation adapters.

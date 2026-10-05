@@ -8,14 +8,14 @@ pub:
 
 pub struct TextViewBufferContent {
 pub:
-	bytes string
+	bytes string @[required]
 }
 
 pub struct TextViewBufferStyle {
 pub:
-	begin usize
-	end   usize
-	style Style
+	begin usize @[required]
+	end   usize @[required]
+	style Style @[required]
 }
 
 @[heap]

@@ -197,7 +197,7 @@ fn trap(mode string) {
 		}
 		'trap_style' {
 			mut buffer := vaxis.TextViewBuffer{}
-			buffer.update_style(vaxis.TextViewBufferStyle{ begin: 1, end: 0 }) or { panic(err) }
+			buffer.update_style(vaxis.TextViewBufferStyle{ begin: 1, end: 0, style: vaxis.Style{} }) or { panic(err) }
 		}
 		else {
 			panic('unknown trap')

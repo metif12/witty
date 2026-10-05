@@ -164,6 +164,11 @@ fn trap(mode string) {
 	} else if mode == 'trap_insert_add' {
 		input.buf.cursor = ~usize(0)
 		input.buf.insert_slice_at_cursor('x')
+	} else if mode == 'trap_slice_short' {
+		mut output := []u8{len: 2}
+		input.slice_to_cursor_into(mut output)
+	} else if mode == 'trap_slice_alias' {
+		input.slice_to_cursor_into(mut input.buf.buffer)
 	} else if mode == 'trap_unicode' {
 		input.insert_slice_at_cursor(bytes('ffcc81'))
 	}
@@ -193,6 +198,13 @@ fn main() {
 				input.buf.move_gap_right(uint(parts, 3))
 				input.buf.grow_gap_right(uint(parts, 5))
 				input.buf.grow_gap_left(uint(parts, 4))
+			}
+			'S' {
+				input.buf.insert_slice_at_cursor(bytes(parts[1]))
+				input.buf.move_gap_left(uint(parts, 2))
+				mut buffer := []u8{len: int(input.buf.cursor + uint(parts, 3)), init: 0xa5}
+				prefix := input.slice_to_cursor_into(mut buffer)
+				output.write_string('${u8(usize(prefix.data) == usize(buffer.data))};${hex.encode(prefix)};${hex.encode(buffer)};')
 			}
 			'D' {
 				input.insert_slice_at_cursor(bytes(parts[1]))

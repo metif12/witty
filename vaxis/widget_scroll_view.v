@@ -27,8 +27,8 @@ pub mut:
 
 pub struct ScrollViewContentSize {
 pub:
-	cols usize
-	rows usize
+	cols usize @[required]
+	rows usize @[required]
 }
 
 // Window-based widgets/ScrollView.zig, distinct from the vxfw widget.
@@ -93,10 +93,10 @@ pub fn (mut view ScrollView) draw(parent Window, content_size ScrollViewContentS
 
 pub struct ScrollViewBoundingBox {
 pub:
-	x1 usize
-	y1 usize
-	x2 usize
-	y2 usize
+	x1 usize @[required]
+	y1 usize @[required]
+	x2 usize @[required]
+	y2 usize @[required]
 }
 
 pub fn (box ScrollViewBoundingBox) below(row usize) bool {

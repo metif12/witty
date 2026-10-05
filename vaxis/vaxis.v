@@ -1803,6 +1803,21 @@ pub fn (t &TextInput) slice_to_cursor() string {
 	return t.buf.first_half().bytestr()
 }
 
+// Source sliceToCursor copies into caller storage and returns its borrowed prefix.
+pub fn (t &TextInput) slice_to_cursor_into(mut bytes []u8) []u8 {
+	if usize(bytes.len) < t.buf.cursor { panic('Assertion failed') }
+	first := t.buf.first_half()
+	span := usize(first.len)
+	source_address := usize(first.data)
+	destination_address := usize(bytes.data)
+	if span > 0 && source_address < destination_address + span
+		&& destination_address < source_address + span {
+		panic('@memcpy arguments alias')
+	}
+	copy(mut bytes[..first.len], first)
+	return unsafe { bytes[..first.len] }
+}
+
 pub fn (mut t TextInput) cursor_left() {
 	length := text_input_last_grapheme_byte_length(t.buf.first_half().bytestr())
 	t.buf.move_gap_left(usize(length))

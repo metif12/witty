@@ -112,6 +112,11 @@ fn trap(mode: []const u8) !void {
     } else if (std.mem.eql(u8, mode, "trap_insert_add")) {
         input.buf.cursor = std.math.maxInt(usize);
         try input.buf.insertSliceAtCursor("x");
+    } else if (std.mem.eql(u8, mode, "trap_slice_short")) {
+        var output: [2]u8 = undefined;
+        _ = input.sliceToCursor(&output);
+    } else if (std.mem.eql(u8, mode, "trap_slice_alias")) {
+        _ = input.sliceToCursor(input.buf.buffer);
     } else if (std.mem.eql(u8, mode, "trap_unicode")) try input.insertSliceAtCursor("\xff\xcc\x81");
     std.debug.print("UNEXPECTED\n", .{});
 }
@@ -154,6 +159,19 @@ pub fn main() !void {
                 input.buf.moveGapRight(try uint(parts, 3));
                 input.buf.growGapRight(try uint(parts, 5));
                 input.buf.growGapLeft(try uint(parts, 4));
+            },
+            'S' => {
+                try input.buf.insertSliceAtCursor(text);
+                input.buf.moveGapLeft(try uint(parts, 2));
+                const output = try allocator.alloc(u8, input.buf.cursor + try uint(parts, 3));
+                defer allocator.free(output);
+                @memset(output, 0xa5);
+                const prefix = input.sliceToCursor(output);
+                try writer.print("{d};", .{@intFromBool(prefix.ptr == output.ptr)});
+                for (prefix) |byte| try writer.print("{x:0>2}", .{byte});
+                try writer.writeByte(';');
+                for (output) |byte| try writer.print("{x:0>2}", .{byte});
+                try writer.writeByte(';');
             },
             'D' => {
                 try input.insertSliceAtCursor(text);

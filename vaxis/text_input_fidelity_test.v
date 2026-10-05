@@ -95,3 +95,20 @@ fn test_text_input_preserves_last_returning_grapheme_count() {
 	assert input.width_to_cursor() == 1
 	input.deinit()
 }
+
+fn test_text_input_caller_buffer_keeps_tail_and_borrows_returned_prefix() {
+	mut input := TextInput.new()
+	input.insert_slice_at_cursor('ab界c')
+	input.cursor_left()
+	mut bytes := []u8{len: 9, init: 0xa5}
+	mut prefix := input.slice_to_cursor_into(mut bytes)
+	assert prefix.bytestr() == 'ab界'
+	assert usize(prefix.data) == usize(bytes.data)
+	assert bytes[5..] == [u8(0xa5), 0xa5, 0xa5, 0xa5]
+	prefix[0] = `X`
+	assert bytes[0] == `X` && input.get_text() == 'ab界c'
+	input.buf.move_gap_left(input.buf.cursor)
+	assert input.slice_to_cursor_into(mut bytes).len == 0
+	assert bytes[0] == `X`
+	input.deinit()
+}

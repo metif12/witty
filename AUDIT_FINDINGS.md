@@ -1665,6 +1665,20 @@ modifier masking, release-empty behavior and partial write failures. The source
 only implements legacy presses; protocol TODOs and unsupported-key behavior
 remain intact. Reproduction is in `vaxis/reference_probes/terminal/key/README.md`.
 
+The caller-buffer TextInput API is now exposed as `slice_to_cursor_into`,
+preserving the borrowed prefix, untouched buffer tail, insufficient-capacity
+assertion and aliasing-copy trap. The full Debug matrix matches 14,442 records
+and 24 traps, SHA-256
+`d334fced0a688b98041dc3d197722ecfb4fb54dca8b1c6baf20b4e11cbc51b9b`;
+its original 14,346-record hash remains unchanged. The 96-case/two-trap extension
+also passes production optimization, SHA-256
+`4ea3a4ac46f14ef27d6583ab094004525b0af9e5a0e2356d91cfc1c738a5e149`.
+Seven consumers pass. Six classic widget input types now require their source
+fields; a source-hashed compile runner checks six complete constructors and
+fourteen paired omission rejections. After the streaming constructor additions,
+all 43 image test files, native/Linux checks, Windows DLL and focused file-I/O
+test cross builds pass.
+
 Scientific CIE XYZ/Lab/Luv/LCh, HSLuv and Oklab conversions match 6,961
 unchanged-source cases, SHA-256
 `d97550d49bb60cf224fc60999d3603d6199aa9c99702a7c79b8d7ca9f10e8566`.

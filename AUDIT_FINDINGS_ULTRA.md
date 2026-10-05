@@ -1811,6 +1811,19 @@ unsupported keys and partial writer failures are retained. The exact source
 tree and locked Unicode dependency are verified by the committed runner in
 `vaxis/reference_probes/terminal/key/README.md`.
 
+TextInput's caller-buffer copy now returns the borrowed caller prefix, leaves
+trailing bytes intact and retains capacity/aliasing traps. The full Debug corpus
+matches 14,442 records and 24 traps, SHA-256
+`d334fced0a688b98041dc3d197722ecfb4fb54dca8b1c6baf20b4e11cbc51b9b`;
+the original 14,346-record hash is unchanged. The 96 additional records and two
+traps also pass V production optimization, SHA-256
+`4ea3a4ac46f14ef27d6583ab094004525b0af9e5a0e2356d91cfc1c738a5e149`.
+Seven consumer tests pass. A separate source-hashed constructor runner checks
+six complete classic widget inputs and fourteen paired missing-field errors.
+After streaming constructors, the image suite again passes all 43 files,
+native/Linux checking, Windows DLL compilation and the focused file-I/O cross
+build. Cross builds do not establish platform runtime behavior.
+
 The complete PNG decoding matrix was repeated after the stream changes and
 retains all 60,760 returning records and eight checked traps, SHA-256
 `96ee46b18345684842d8ae9cd64290f7c5e9b86228458a83386a602bbd646e9c`.

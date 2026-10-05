@@ -2,8 +2,8 @@ module vaxis
 
 pub struct ViewConfig {
 pub:
-	width  u16
-	height u16
+	width  u16 @[required]
+	height u16 @[required]
 }
 
 @[heap]

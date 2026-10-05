@@ -9,8 +9,8 @@ pub mut:
 	}
 	style     Style
 	top       usize
-	total     usize
-	view_size usize
+	total     usize @[required]
+	view_size usize @[required]
 }
 
 pub fn (bar Scrollbar) draw(win Window) {

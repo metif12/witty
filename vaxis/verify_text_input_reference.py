@@ -53,6 +53,13 @@ def corpus():
         add('E',('a'*count).encode().hex(),0,4,1,65535,0,1)
     return cases
 
+def slice_corpus():
+    cases = []
+    raw = [b'', b'abc', b'a\x00b', 'ab界c'.encode(), 'é👩\u200d🚀'.encode(), bytes.fromhex('ffcc8161'), bytes(range(32)), b'a' * 513]
+    for text, left, extra in itertools.product(raw, (0, 1, 3, 1000), (0, 1, 8)):
+        cases.append(f'S|{text.hex()}|{left}|{extra}')
+    return cases
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('source', type=Path)
@@ -61,13 +68,14 @@ def main():
     parser.add_argument('--uucode', type=Path, default=Path.home() / '.cache/zig/p' / UUCODE_PACKAGE)
     parser.add_argument('--target', default='aarch64-macos.14.0')
     parser.add_argument('--v-prod', action='store_true')
+    parser.add_argument('--slice-only', action='store_true', help='compare caller-buffer sliceToCursor alone')
     parser.add_argument('--v-path', help=argparse.SUPPRESS)
     args = parser.parse_args()
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     source = args.source.resolve() / 'src'
     if tree_hash(source) != VAXIS_SHA256:
         parser.error('vaxis src differs from the recorded local source')
-    cases = corpus()
+    cases = slice_corpus() if args.slice_only else corpus() + slice_corpus()
     with tempfile.TemporaryDirectory(prefix='witty-text-input-') as directory:
         root = Path(directory)
         shutil.copytree(source, root / 'src')
@@ -95,12 +103,20 @@ def main():
         traps.update(dict.fromkeys(('trap_grow', 'trap_second_half', 'trap_left_add', 'trap_gap_right_add', 'trap_gap_right_sub', 'trap_insert_add'), 'integer overflow'))
         traps.update(dict.fromkeys(('trap_first_half', 'trap_left_zero'), 'index out of bounds'))
         traps['trap_left_zero'] = ('is larger than end index', 'index out of bounds')
+        slice_traps = {'trap_slice_short': ('reached unreachable code', 'Assertion failed'), 'trap_slice_alias': '@memcpy arguments alias'}
+        traps = slice_traps if args.slice_only else dict(traps, **slice_traps)
         for (mode, message) in traps.items():
             messages = message if isinstance(message, tuple) else (message, message)
             for executable, expected in zip(('native', 'translated'), messages):
                 result = subprocess.run([str(root / executable), mode], capture_output=True, timeout=10)
                 if result.returncode == 0 or b'UNEXPECTED' in result.stderr + result.stdout or expected.encode() not in result.stderr + result.stdout:
                     raise AssertionError(f'{mode}: {executable} did not retain the checked trap: ' + (result.stderr + result.stdout).decode(errors='replace'))
+        if not args.slice_only:
+            baseline_count = len(corpus())
+            baseline_hash = hashlib.sha256(b'\n'.join(outputs[0][:baseline_count])).hexdigest()
+            if baseline_hash != '4003872debd68d8f2886119b492cc0d14ac1c5692a049662b043074cb67aaaf0':
+                raise AssertionError(f'original TextInput corpus changed: {baseline_hash}')
+            print(f'Original {baseline_count} records retain SHA256 {baseline_hash}')
         print(f'TextInput: {len(cases)} cases, {len(traps)} traps, SHA256 ' + hashlib.sha256(b'\n'.join(outputs[0])).hexdigest())
 if __name__ == '__main__':
     main()
