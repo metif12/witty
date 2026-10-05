@@ -1520,6 +1520,16 @@ active bytes and retained storage bytes are compared. The existing production
 the source logger operations with V's language-specific generic rendering;
 exact cross-language diagnostic presentation is not claimed.
 
+HSL/HSV/CMYK, floating grayscale and predefined colors now expose source
+conversion APIs. The source-hashed `verify_color_models_reference.py` matches
+31,167 cases, preserving signed zero and every non-NaN output bit; NaN
+payloads are canonicalized. SHA-256:
+`dc4e15c78150f3ce178a6fa9eab1f953d5ea3647239753ea7eb18648a805504f`.
+`verify_math_reference.py` matches all 2/3/4-component vector and square-matrix
+APIs across 12,419 cases, including singular/zero-pivot inverses, negative-zero
+dot-product initialization, clamps and caller immutability. SHA-256:
+`23be1b2c20e279a493dda64087e1916b58e6fdbc8bdcb76469c15b7231a4fb31`.
+
 The focused tests and compile gates named in each audit session are expected to
 pass at the recorded commit. A repository-wide build is not proof that every
 Ghostty file and function has been translated, and no 100% claim is made.

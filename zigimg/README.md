@@ -179,6 +179,17 @@ and freeing. Image convert/convertNoFree replace only the main pixels and leave
 animation frames unchanged. Native hashes match 18,432 format-pair cases and
 6,066,176 precision conversions.
 
+HSL/HSV/CMYK models, float grayscale types and the eight predefined colors
+for the eleven translated RGB(A) types now expose their source conversions.
+They preserve out-of-range channels, signed zeros, ignored RGB alpha, the
+CMYK epsilon cutoff and HSV white-to-HSL NaN saturation. The color-model
+runner compares 31,167 cases, preserving every non-NaN output bit and NaN
+occurrence (payloads are canonicalized). Vector/matrix helpers expose the
+source's Float2/3/4 and 2x2/3x3/4x4 identity, construction, determinant,
+inverse, multiplication, transpose and clamps. Inversion retains zero-pivot
+and singular behavior without added pivoting; dot products begin at negative
+zero. The 12,419-case matrix comparison also checks caller immutability.
+
 V arrays and GC replace allocator slices. Sub-byte scalar values use byte
 storage or packed backing words. Allocation errors, the full color convenience
 methods and allocator contracts still require translation.
@@ -390,6 +401,19 @@ python3 zigimg/verify_fixed_storage_reference.py \
 
 Result SHA-256:
 `ba652143ec8ea584ce4522ed61dc6605986e90185c524ce8b13281b40b642c0b`.
+
+Color-model and matrix source comparisons:
+
+```sh
+python3 zigimg/verify_color_models_reference.py \
+  /path/to/locked-zigimg /path/to/zig-0.15.2/zig /path/to/v-0.5.2
+python3 zigimg/verify_math_reference.py \
+  /path/to/locked-zigimg /path/to/zig-0.15.2/zig /path/to/v-0.5.2
+```
+
+Their result SHA-256 values are
+`dc4e15c78150f3ce178a6fa9eab1f953d5ea3647239753ea7eb18648a805504f`
+and `23be1b2c20e279a493dda64087e1916b58e6fdbc8bdcb76469c15b7231a4fb31`.
 
 The TIFF metadata runner verifies the same unchanged locked source tree:
 
