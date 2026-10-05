@@ -1038,7 +1038,11 @@ an item here does not mean its full module has been certified yet.
   16-bit tRNS chunks can shrink the chosen format and trap. File buffers that
   rebase while reading IHDR's CRC can overwrite the borrowed header payload
   and reject a valid image; the 16/31-byte fixture reproduces this in both
-  implementations. PNG ZlibCompressor and chunk-writer interfaces remain open.
+  implementations. PNG's direct generic chunk writer now preserves fixed
+  inline storage, empty flushes, oversized writes that bypass framing after a
+  flush, call order, and retained buffers on partial failures. The unchanged
+  legacy writer() adapter and ZlibCompressor fail to compile with Zig 0.15.2's
+  removed standard-library APIs; those inherited unsupported boundaries remain.
   PNG information diagnostics now translate every known/unknown chunk branch,
   palette counts, IDAT totals, and shortest f64 binary byte-size formatting.
   Text/iTXt inspection retains a 1,024-byte limit and zTXt an 81-byte initial
@@ -1478,6 +1482,18 @@ matrices were also rerun after the other sessions' Huffman/stream changes:
 39,707 plus 51,223 cases and fifteen plus twelve traps retain their prior
 hashes. Windows runtime, custom allocator/lifetime behavior, root options,
 and whole-library equivalence remain unverified or untranslated as above.
+
+The direct PNG chunk-writer runner at
+`zigimg/verify_png_chunk_writer_reference.py` checks those same source/compiler
+hashes and compares 5,960 cases. Result SHA-256:
+`934ba176552e9370b30073ea1f648fab7dcb4ca85424296097b173f4d298115e`.
+It covers capacities 0/1/4/16/16384, full/partial writes, empty and repeated
+flushes, oversized unframed writes, every framing-stage failure, and retries.
+The comparison includes write counts, buffered payloads, output positions,
+call ordering and destination bytes. Two isolated checked traps match, and
+the unchanged legacy Writer and ZlibCompressor compilation failures are
+verified separately. Focused tests additionally cover custom chunk IDs,
+fixed-array aliases and native-width signed/unsigned endian writes.
 
 The focused tests and compile gates named in each audit session are expected to
 pass at the recorded commit. A repository-wide build is not proof that every

@@ -323,6 +323,21 @@ pub fn (mut stream WriteStream) write_all(bytes []u8) ! {
 
 pub fn (mut stream WriteStream) write_byte(byte u8) ! { stream.write_all([byte])! }
 
+// std.Io.Writer.writeInt delegates to writeAll after encoding a native-width
+// integer. Type markers retain Zig's comptime endian argument.
+pub fn (mut stream WriteStream) write_int[T, E](value T, endian E) ! {
+	$if T is $int {
+		mut bytes := []u8{len: int(sizeof(T))}
+		word := u64(value)
+		for i in 0 .. bytes.len {
+			$if E is BigEndian { bytes[i] = u8(word >> ((bytes.len - 1 - i) * 8)) }
+			$else $if E is LittleEndian { bytes[i] = u8(word >> (i * 8)) }
+			$else { $compile_error('write_int requires BigEndian or LittleEndian') }
+		}
+		stream.write_all(bytes)!
+	} $else { $compile_error('write_int requires a native integer type') }
+}
+
 pub fn (mut stream WriteStream) flush() ! {
 	if stream.file == none { return }
 	file := stream.file or { return }

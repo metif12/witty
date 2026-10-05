@@ -29,7 +29,13 @@ not automatically skipped. Adam7 retains its byte-sized destination-row
 overflow; repeated 16-bit tRNS can shrink the format and trap. Small file
 buffers can rebase while reading IHDR's CRC, overwrite the borrowed payload,
 and reject a valid image; native/V tests preserve that source behavior.
-ZlibCompressor and chunk-writer interfaces remain untranslated. GC/opaque
+The generic chunk writer now preserves inline fixed-byte buffers, partial
+flush failures, repeated empty chunks, and oversized writes that bypass
+framing after a flush. Its default buffer is 16 KiB; an empty byte slice
+represents the source's zero-capacity specialization. The unchanged legacy
+`writer()` adapter and `ZlibCompressor` do not compile with Zig 0.15.2 because
+their standard-library APIs were removed; these unsupported boundaries remain.
+GC/opaque
 callbacks replace allocators and generated vtables; allocator selection and
 root DefaultPngOptions overrides are absent. Undefined native initial storage,
 failed scalar union assignments, and unwritten alpha tails are excluded from
@@ -419,6 +425,18 @@ stored/fixed/dynamic compression, IDAT splits/CRCs/empty chunks, truncations,
 metadata/chunk walking, and large rows/windows. Python generates inputs only;
 the unchanged native decoder defines expected results. The dedicated
 `png_reader_test.v` also checks pixel values and loading through the registry.
+
+The chunk-writer runner compares 5,960 direct-method cases, call ordering,
+buffered state, partial failures and oversized-write counts, then checks two
+traps and both inherited helper compilation failures:
+
+```sh
+python3 zigimg/verify_png_chunk_writer_reference.py \
+  /path/to/locked-zigimg /path/to/zig-0.15.2/zig /path/to/v-0.5.2
+```
+
+The result SHA-256 is
+`934ba176552e9370b30073ea1f648fab7dcb4ca85424296097b173f4d298115e`.
 
 IFF checked bounds use separate process probes. Build the V executable from
 `zigimg/reference_probes/iff_bounds` and the locked-source Zig executable from
