@@ -1589,13 +1589,17 @@ fn parsed_key_text(codepoint u32, text string, mods Modifiers, consumed int) Par
 // cursor/gap behavior.
 pub struct TextInputBuffer {
 pub mut:
-	buffer   []u8
-	cursor   usize
-	gap_size usize
+	buffer   []u8  @[required]
+	cursor   usize @[required]
+	gap_size usize @[required]
 }
 
 pub fn TextInputBuffer.new() TextInputBuffer {
-	return TextInputBuffer{}
+	return TextInputBuffer{
+		buffer:   []u8{}
+		cursor:   0
+		gap_size: 0
+	}
 }
 
 pub fn (mut b TextInputBuffer) deinit() {
@@ -1734,7 +1738,7 @@ pub fn (b &TextInputBuffer) string() string {
 // TextInput implements vaxis' cursor-aware editing behavior.
 pub struct TextInput {
 pub mut:
-	buf             TextInputBuffer
+	buf             TextInputBuffer @[required]
 	draw_offset     u16
 	prev_cursor_col u16
 	prev_cursor_idx u16

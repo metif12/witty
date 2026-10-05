@@ -2,8 +2,8 @@ module vaxis
 
 pub struct TextViewGrapheme {
 pub:
-	len    u16
-	offset u32
+	len    u16 @[required]
+	offset u32 @[required]
 }
 
 pub struct TextViewBufferContent {
@@ -65,7 +65,7 @@ pub fn (mut buffer TextViewBuffer) update_style(style TextViewBufferStyle) ! {
 
 pub struct TextViewBufferWriter {
 pub:
-	buffer &TextViewBuffer = unsafe { nil }
+	buffer &TextViewBuffer @[required]
 }
 
 // The allocator and std.io.GenericWriter context are folded into the borrowed

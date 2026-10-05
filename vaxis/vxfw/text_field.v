@@ -11,7 +11,7 @@ pub mut:
 	userdata        voidptr
 	on_change       ?TextFieldHandler
 	on_submit       ?TextFieldHandler
-	buf             vaxis.TextInputBuffer
+	buf             vaxis.TextInputBuffer @[required]
 	draw_offset     u16
 	prev_cursor_col u16
 	prev_cursor_idx u16

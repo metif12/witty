@@ -1673,9 +1673,12 @@ and 24 traps, SHA-256
 its original 14,346-record hash remains unchanged. The 96-case/two-trap extension
 also passes production optimization, SHA-256
 `4ea3a4ac46f14ef27d6583ab094004525b0af9e5a0e2356d91cfc1c738a5e149`.
-Seven consumers pass. Six classic widget input types now require their source
-fields; a source-hashed compile runner checks six complete constructors and
-fourteen paired omission rejections. After the streaming constructor additions,
+Seven consumers pass. The classic widgets and vxfw TextField retain their source
+required fields; a source-hashed compile runner checks twelve complete
+constructors and twenty-three paired omission rejections. Source allocator
+members are supplied separately and excluded from omission comparisons.
+TextField's consumer explicitly initializes its buffer and passes after the
+required-field change. After the streaming constructor additions,
 all 43 image test files, native/Linux checks, Windows DLL and focused file-I/O
 test cross builds pass.
 
@@ -1692,6 +1695,60 @@ V compiler accepts an empty generic iterator despite its required `bytes`
 annotation; the runner measures that separately from paired failures. GC
 allocation, native integer widths and other limits remain documented in
 `vaxis/reference_probes/terminal/parser/README.md`.
+
+The classic Terminal Screen translation now exposes every public screen, cell,
+cursor and scrolling-region operation. Debug and V-production/source-ReleaseSafe
+comparisons match 6,414 returning records, fourteen checked traps, a separate
+inherited insert-line hang, two complete constructors and five paired omission
+rejections. SHA-256:
+`9700325e0d87d1893e34375f5d8951eb5eadd2c469734b9cce078c52f7e183a4`.
+Eight focused consumers pass. Equal-width reads, first-row character deletion,
+dirty-copy omissions, self-copy clearing and narrow counter overflow retain
+the measured source behavior. Borrowing the fixture's serializer removes
+quadratic GC root tracking without changing production screen operations.
+GC strings, undefined cursor URI initialization and array-capacity limits are
+documented in `vaxis/reference_probes/terminal_screen/README.md`.
+
+The classic Terminal core now translates public controls, drawing, key input,
+writer borrowing and descriptor/process cleanup, plus Linux PTY construction,
+spawning, resizing and the VT thread. Debug and V-production/source-ReleaseSafe
+comparisons match 12,394 returning records and five checked traps, SHA-256
+`6be3faff0915dedb07e6d0d65983f526a2b2a5d283d66fb6b9d2647359c2143e`.
+Three focused consumers pass in both V modes. Three complete constructor pairs
+and fourteen ordinary missing-field pairs preserve required PTY, Command and
+Terminal inputs. Six lifecycle APIs retain ordinary source/V macOS compiler
+rejections; unchanged-source Linux consumers and translated Linux checking pass.
+Linux C compilation and linking also pass, but PTY/process/thread runtime has
+not been compared on this macOS host. GC ownership and global registry/thread
+adapters remain documented in `vaxis/reference_probes/terminal/core/README.md`.
+The separate three-record Debug registry fixture confirms the source's count
+remains two while its live entries decrease from two to zero. V exposes that
+count through `globals.count`; its map length reports live entries. SHA-256:
+`fffc0c277b830839c956ad90dff7fef86557ecb03194fffd50b602ac9ef928fb`.
+
+A separate private-loop fixture compares 1,767 returning records, ten exact
+checked-trap categories, an inherited insert-line hang and ordinary external
+private-access rejection in Debug and V-production/source-ReleaseSafe builds.
+SHA-256: `e7dc5af0356c8a4f074b5b94114cb70addee9c1fc5c638d9d40c2ebd5ab43b0b`.
+It executes CSI/OSC/C0 handling, malformed print bytes, replies, ordered events,
+all three screens, streaming EOF position and mutex release. The fixture appends
+one visibility helper to a copied source file; every original byte remains an
+identical prefix and every other source file is unchanged. The V fixture runs
+inside an isolated module snapshot without adding a public API. Exact provenance
+and capacity/lifecycle limits are in
+`vaxis/reference_probes/terminal/private_run/README.md`.
+
+After integrating the screen and core, all 33 Vaxis test files pass. Native and
+Linux compiler checks, a Linux C shared-library link with GC disabled, the
+Windows DLL and focused Screen/Parser test cross builds pass. Cross compilation
+does not establish PTY/process/thread runtime behavior on those platforms.
+
+All ten classic widget exports now have V counterparts for their runnable
+public methods. The five measured source compilation failures remain explicit:
+ScrollView `readCell`, TextView buffer `append`/`update`, its writer's `write`,
+and CodeView `draw`. Table input/format boundaries, inherited protocol and
+scrollback TODOs, and GC representation limits remain in the individual probe
+records; this closure is scoped to the classic widget slice.
 
 Scientific CIE XYZ/Lab/Luv/LCh, HSLuv and Oklab conversions match 6,961
 unchanged-source cases, SHA-256

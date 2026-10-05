@@ -161,6 +161,7 @@ fn test_text_field_change_submit_grapheme_navigation_and_resize() {
 	DrawContext.init(.unicode)
 	mut values := FieldValues{}
 	mut field := TextField{
+		buf:       vaxis.TextInputBuffer.new()
 		userdata:  &values
 		on_change: field_change
 		on_submit: field_submit

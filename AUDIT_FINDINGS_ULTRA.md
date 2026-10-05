@@ -1819,7 +1819,10 @@ the original 14,346-record hash is unchanged. The 96 additional records and two
 traps also pass V production optimization, SHA-256
 `4ea3a4ac46f14ef27d6583ab094004525b0af9e5a0e2356d91cfc1c738a5e149`.
 Seven consumer tests pass. A separate source-hashed constructor runner checks
-six complete classic widget inputs and fourteen paired missing-field errors.
+twelve complete classic/vxfw widget inputs and twenty-three paired missing-field
+errors. Source allocators are supplied separately and excluded from omission
+comparisons. The vxfw TextField consumer explicitly initializes its required
+buffer and passes after the marker change.
 After streaming constructors, the image suite again passes all 43 files,
 native/Linux checking, Windows DLL compilation and the focused file-I/O cross
 build. Cross builds do not establish platform runtime behavior.
@@ -1836,6 +1839,58 @@ boundaries and three focused consumers pass. Generic missing-`bytes` omission
 is explicitly measured as source rejection/V acceptance; the pinned V compiler
 ignores the required annotation for that generic field. The runner counts this
 adaptation separately and does not claim whole terminal runtime parity.
+
+The classic Terminal Screen translation matches 6,414 returning records and
+fourteen checked traps in Debug and V-production/source-ReleaseSafe builds,
+SHA-256 `9700325e0d87d1893e34375f5d8951eb5eadd2c469734b9cce078c52f7e183a4`.
+A separate inherited insert-line hang, two complete constructors and five
+paired omission rejections also pass. Eight focused consumers cover screen,
+cell, cursor and region contracts. The source's equal-width reads, first-row
+character deletion, dirty-copy omissions, self-copy clearing and u16 counter
+traps remain intact. Borrowed fixture serialization avoids optimized quadratic
+GC root tracking while retaining the exact records. Undefined cursor URI,
+allocator/capacity and GC limits are in
+`vaxis/reference_probes/terminal_screen/README.md`.
+
+The classic Terminal core matches 12,394 public-control/draw/input/cleanup
+records and five checked traps in Debug and V-production/source-ReleaseSafe,
+SHA-256 `6be3faff0915dedb07e6d0d65983f526a2b2a5d283d66fb6b9d2647359c2143e`.
+Three focused consumers pass in both V modes. Three complete constructors and
+fourteen ordinary omission pairs retain required PTY, Command and Terminal
+fields. Six lifecycle APIs retain source/V macOS compiler rejections, while
+unchanged-source Linux consumers and translated Linux compiler checks pass.
+The Linux PTY/process/thread translation also compiles and links as an ELF
+shared library; no Linux lifecycle runtime comparison is claimed on this host.
+Source allocator omission, registry and thread adapters are documented in
+`vaxis/reference_probes/terminal/core/README.md`.
+Its separate three-record Debug fixture confirms the source registry's stale
+count of two while live entries decrease from two to zero; V exposes source
+count through `globals.count` and live entries through map length. SHA-256:
+`fffc0c277b830839c956ad90dff7fef86557ecb03194fffd50b602ac9ef928fb`.
+
+The fixture-exposed private Terminal loop matches 1,767 returning records,
+ten exact checked-trap categories, an inherited insert-line timeout pair and
+ordinary external private-access rejection in Debug and V-production/source-
+ReleaseSafe builds. SHA-256:
+`e7dc5af0356c8a4f074b5b94114cb70addee9c1fc5c638d9d40c2ebd5ab43b0b`.
+One helper is appended to a copied source file, preserving every original byte
+as an identical prefix and every other source file unchanged. The isolated V
+module fixture adds no public API. Cases compare CSI/OSC/C0 processing, malformed
+print bytes, replies, events, three complete screens, streaming EOF position
+and released mutex state. Provenance and capacity/lifecycle limits are in
+`vaxis/reference_probes/terminal/private_run/README.md`.
+
+The integrated Vaxis suite passes all 33 test files. Native/Linux checking,
+Linux generated-C linking as a shared library with GC disabled, the Windows
+DLL and focused Screen/Parser test cross builds also pass. These compile gates
+do not certify cross-platform PTY/process/thread runtime behavior.
+
+The ten classic widget exports now have counterparts for their runnable public
+methods. Five source compilation failures remain explicit: ScrollView `readCell`,
+TextView buffer `append`/`update`, its writer's `write`, and CodeView `draw`.
+Table input/format boundaries, source protocol/scrollback TODOs and GC limits
+remain recorded separately. This closes the identified live method omissions
+in the classic widget slice without certifying whole-repository equivalence.
 
 The complete PNG decoding matrix was repeated after the stream changes and
 retains all 60,760 returning records and eight checked traps, SHA-256

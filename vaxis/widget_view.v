@@ -9,7 +9,7 @@ pub:
 @[heap]
 pub struct View {
 pub mut:
-	screen Screen
+	screen Screen @[required]
 }
 
 pub fn View.init(config ViewConfig) View {

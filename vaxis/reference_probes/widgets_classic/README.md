@@ -89,9 +89,17 @@ Use `--uucode /path/to/extracted/locked/package` if it is not in the default Zig
 cache, and `--v-prod` to check optimized V. The target defaults to native macOS
 ARM64 version 14.0, consistently with the other source comparisons.
 
-The public Scrollbar, View config, TextView content/style, ScrollView content
-size and bounding-box inputs retain their required fields. Run
+The Scrollbar, View/config, TextInput/buffer, TextView content/style/grapheme/
+writer, ScrollView content-size/bounding-box and vxfw TextField inputs retain
+their required fields. Run
 `python3 vaxis/verify_widget_contracts_reference.py /path/to/vaxis /path/to/zig /path/to/v`
-to check six complete constructors and fourteen paired omission errors against
-the unchanged source. The runner rejects compiler crashes and generated-C
+to check twelve complete constructors and twenty-three paired omission errors
+against the unchanged source. The runner rejects compiler crashes and generated-C
 failures. Flattened V sum-type payload wrappers remain representation adapters.
+
+The private source Grapheme type is inferred from the public TextView buffer's
+`grapheme.get(0)` return type; its original declaration remains unchanged. Source
+View, TextInput buffer and TextView writer allocators are always supplied in the
+fixtures and excluded from omission comparisons because V manages their storage.
+TextView writer checks require the borrowed buffer explicitly without calling the
+source writer methods that already fail compilation on Zig 0.15.2.
