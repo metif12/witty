@@ -117,11 +117,11 @@ pub fn (surface &NativeActionSurface) render_inspector() {
 }
 fn inspector_accepts(_self ObjId,_cmd Sel) bool { return true }
 fn inspector_become(self ObjId,_cmd Sel) bool {
- result := msg_super_bool(self,'becomeFirstResponder')
+ result := view_super_bool(self,'WittyInspectorView','becomeFirstResponder')
  if state := inspector_state(self) { if result && state.valid() && state.surface.callbacks.inspector.focus != unsafe{nil} { state.surface.callbacks.inspector.focus(state.backend,true) } }; return result
 }
 fn inspector_resign(self ObjId,_cmd Sel) bool {
- result := msg_super_bool(self,'resignFirstResponder')
+ result := view_super_bool(self,'WittyInspectorView','resignFirstResponder')
  if state := inspector_state(self) { if result && state.valid() && state.surface.callbacks.inspector.focus != unsafe{nil} { state.surface.callbacks.inspector.focus(state.backend,false) } }; return result
 }
 fn inspector_update_size(state &NativeInspectorView) {
@@ -131,7 +131,7 @@ fn inspector_update_size(state &NativeInspectorView) {
  backing := C.witty_action_to_backing(state.view,frame.width,frame.height)
  if state.surface.callbacks.inspector.size != unsafe{nil} { state.surface.callbacks.inspector.size(state.backend,u32(backing.width),u32(backing.height),backing.width/frame.width,backing.height/frame.height) }
 }
-fn inspector_backing(self ObjId,_cmd Sel) { msg_super_void(self,'viewDidChangeBackingProperties'); if state := inspector_state(self) { inspector_update_size(state) } }
+fn inspector_backing(self ObjId,_cmd Sel) { view_super_void(self,'WittyInspectorView','viewDidChangeBackingProperties'); if state := inspector_state(self) { inspector_update_size(state) } }
 fn inspector_draw(self ObjId,_cmd Sel,_dirty ObjCRect) {
  state := inspector_state(self) or{return}
  command := msg_id(state.queue,'commandBuffer')

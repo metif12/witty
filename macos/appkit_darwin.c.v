@@ -232,7 +232,7 @@ fn dispatch_focus(view ObjId, focused bool) {
 }
 
 fn vt_view_become_first_responder(self ObjId, _cmd Sel) bool {
-	result := msg_super_bool(self, 'becomeFirstResponder')
+	result := view_super_bool(self, 'VTTerminalView', 'becomeFirstResponder')
 	if result {
 		dispatch_focus(self, true)
 	}
@@ -240,7 +240,7 @@ fn vt_view_become_first_responder(self ObjId, _cmd Sel) bool {
 }
 
 fn vt_view_resign_first_responder(self ObjId, _cmd Sel) bool {
-	result := msg_super_bool(self, 'resignFirstResponder')
+	result := view_super_bool(self, 'VTTerminalView', 'resignFirstResponder')
 	if result {
 		dispatch_focus(self, false)
 	}
@@ -263,12 +263,12 @@ fn setup_view_tracking(view ObjId) {
 }
 
 fn vt_view_update_tracking_areas(self ObjId, _cmd Sel) {
-	msg_super_void(self, 'updateTrackingAreas')
+	view_super_void(self, 'VTTerminalView', 'updateTrackingAreas')
 	setup_view_tracking(self)
 }
 
 fn vt_view_backing_changed(self ObjId, _cmd Sel) {
-	msg_super_void(self, 'viewDidChangeBackingProperties')
+	view_super_void(self, 'VTTerminalView', 'viewDidChangeBackingProperties')
 	vt_view_frame_did_change(self, unsafe { nil }, unsafe { nil })
 }
 
@@ -361,13 +361,13 @@ fn vt_view_mouse_dragged(self ObjId, _cmd Sel, event ObjId) {
 
 fn vt_view_right_mouse_down(self ObjId, _cmd Sel, event ObjId) {
 	if !dispatch_mouse(self, event, 3) {
-		msg_super_void1(self, 'rightMouseDown:', event)
+		view_super_void1(self, 'VTTerminalView', 'rightMouseDown:', event)
 	}
 }
 
 fn vt_view_right_mouse_up(self ObjId, _cmd Sel, event ObjId) {
 	if !dispatch_mouse(self, event, 4) {
-		msg_super_void1(self, 'rightMouseUp:', event)
+		view_super_void1(self, 'VTTerminalView', 'rightMouseUp:', event)
 	}
 }
 
@@ -380,7 +380,7 @@ fn vt_view_other_mouse_up(self ObjId, _cmd Sel, event ObjId) {
 }
 
 fn vt_view_mouse_entered(self ObjId, _cmd Sel, event ObjId) {
-	msg_super_void1(self, 'mouseEntered:', event)
+	view_super_void1(self, 'VTTerminalView', 'mouseEntered:', event)
 	dispatch_mouse(self, event, 2)
 }
 
