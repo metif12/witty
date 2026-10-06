@@ -10,12 +10,12 @@ pub struct ColorDefault {}
 
 pub struct ColorIndex {
 pub:
-	index u8
+	index u8 @[required]
 }
 
 pub struct ColorRgb {
 pub:
-	rgb [3]u8
+	rgb [3]u8 @[required]
 }
 
 // Color is vaxis' default/index/RGB tagged union.
@@ -42,6 +42,10 @@ pub fn (a Color) eql(b Color) bool {
 }
 
 pub fn color_rgb_from_uint(value u32) Color {
+	// Source takes u24; V uses a checked u32 carrier for the missing width.
+	if value > 0xffffff {
+		panic('integer does not fit in destination type')
+	}
 	return ColorRgb{
 		rgb: [u8(value >> 16), u8(value >> 8), u8(value)]!
 	}
@@ -62,7 +66,7 @@ pub enum Scheme as u8 {
 
 // Style represents text styling attributes.
 pub struct Style {
-pub:
+pub mut:
 	fg            Color          = ColorDefault{}
 	bg            Color          = ColorDefault{}
 	ul            Color          = ColorDefault{}
@@ -1032,10 +1036,12 @@ fn parse_color_spec(spec string) ![3]u8 {
 		return error('InvalidColorSpec')
 	}
 	mut result := [3]u8{}
-	for i, channel in channels[..3] {
+	for channel in channels[..3] {
 		if channel.len != 4 {
 			return error('InvalidColorSpec')
 		}
+	}
+	for i, channel in channels[..3] {
 		result[i] = u8(parse_input_unsigned(channel[2..], 16, 8)!)
 	}
 	return result

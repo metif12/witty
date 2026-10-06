@@ -2334,3 +2334,67 @@ Cross-target runtime is unexecuted. Existing ordinary PNG reader/info matrices
 retain their 60,760/51,223 case hashes; older substring-based trap checks are
 historical evidence separate from the new strict proof scopes. Allocator/GC,
 packed ABI, undefined Source storage and remaining repository gaps stay open.
+
+## Public image, Style, packed-scale and TIFF records
+
+Image fit/contain uses usize geometry instead of overflowing signed-int pixel
+products. Mutable Image/CellSize and placement/offset records require nine
+represented fields; two read-only path/memory wrappers additionally require their
+payload. Deferred transmission ID increments preserve checked overflow and
+PathTooLong ordering in production, with capability checks first. Managed casts
+follow conversion/PNG writing; PNG's header assertion is explicit before writes.
+The V-only ImageTransmission default and the Source signature-only PNG writer
+remain unchanged in behavior.
+
+Style fields are mutable, Color payloads are required, and the u32 constructor
+checks the Source u24 domain. RGB spec parsing validates every channel length
+before hexadecimal parsing, including the shared OSC path. Style equality proves
+nondefault self/copy equality and every single-field distinction. Boxed read-only
+payloads, unsafe shared-copy behavior, native layouts and wider/compiler literal
+domains remain measured adaptations.
+
+CellScale exposes checked setters and raw bits while retaining its 13-bit packed
+value in u16. Numeric carriers are u64 to avoid V's pre-call literal narrowing.
+Raw alignment 3 survives packed construction/copies, but numeric enum 3 traps;
+enum 4 fails its two-bit cast first. Failed setters preserve the original bits.
+Source packed field syntax, compile-time construction and narrow integer types
+remain separate compiler/API domains.
+
+TIFF adds eleven required represented fields, explicit IFD.init map and explicit
+outer zero Header/nil-stream IFD defaults. Bitmap defaults and metadata/decoder
+algorithms retain their Source behavior. Source outer undefined state, allocator
+fields, const/non-null pointers and V inherited-alias markers are documented
+constructor boundaries.
+
+Both Debug/ordinary and ReleaseSafe/production pass the new public comparisons:
+
+| Scope | Returning | Strict traps | SHA-256 |
+| --- | ---: | ---: | --- |
+| Image | 5,506 | 8 | `e58eae6f7ede06b34fc86cfab106ec0a8f106162693f3f06ab0ae5bab3c6157e` |
+| Style/Color | 175,302 | 4 | `8b7ea385d053e6b5fc140b221d6b87c7d026464bff628b613e31d49c8c61dc9c` |
+| CellScale | 24,580 | 44 | `1cd11fb0acef78afd31bb32546989e382fda9688b3275387855b0f3609b89a52` |
+| TIFF records | 343 | 0 | `e58e21e70207affb3ec52c115ad2cd73af652ce6f14d81ae0385e9f8bf4dea26` |
+
+Complete mutable constructors and exact ordinary rejection diagnostics accompany
+the runtime matrices. Eleven TIFF, nine Image and two Color omission pairs match;
+CellScale additionally pairs six ordinary type failures. V-only wrappers,
+Source-only constant/builtin rules, alias loss and pointer/GC differences are
+separately measured. All packed bit patterns and independent mutation traces are
+covered; retained-state hashes are recorded in the main audit and probe READMEs.
+Image pins the complete zigimg package and its root entrypoint as well as src,
+Vaxis/uucode and selected unchanged standard-library sources. Exact commands,
+raw outputs, fixture provenance and unchanged dependency postchecks are retained.
+
+Image panic observers compare ID and initialized pixel format/raw length. They
+do not observe equivalent writer side effects: Source may flush a packet before
+its ID-overflow defer traps, while V's string adapter never returns it. Failed
+writer/flush/partial output, aggregate/union ABI, allocator ownership, arbitrary
+unsafe copies and Source undefined storage are excluded. See
+`vaxis/reference_probes/{image,style_color,cell_scale}/README.md` and
+`zigimg/reference_probes/tiff_records/README.md` for reproduction and boundaries.
+
+Integration passes 45 image and 58 Vaxis files, focused ordinary/production
+consumers, Boo and native/Linux checks. Historical metadata/decoder/Parser proofs
+retain their preceding hashes in both modes. Three Windows DLLs and five focused
+test executables compile; image/Vaxis link as Linux shared libraries. Cross-target
+runtime and remaining repository translation contracts are not certified.

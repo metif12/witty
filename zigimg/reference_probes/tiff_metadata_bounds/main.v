@@ -30,8 +30,9 @@ fn returning() {
 		for length in 0 .. 9 {
 			mut stream := zigimg.ReadStream.init_memory(bytes[..length])
 			tag := zigimg.TiffTagField{
-				data_type:  5
-				data_count: 1
+				data_offset: 0
+				data_type:   5
+				data_count:  1
 			}
 			mut status := 'ok'
 			mut values := [u32(0), 0]!
@@ -75,9 +76,11 @@ fn main() {
 			} else {
 				zigimg.TiffTagId.resolution_unit
 			}
-			codec.ifd.tags_map.put(key, zigimg.TiffTagField{ data_type: 3, data_count: 1 }) or {
-				panic(err)
-			}
+			codec.ifd.tags_map.put(key, zigimg.TiffTagField{
+				data_offset: 0
+				data_type:   3
+				data_count:  1
+			}) or { panic(err) }
 			codec.decode_bitmap(mut stream) or { panic(err) }
 		}
 		'bits_capacity', 'extra_capacity' {
@@ -86,9 +89,11 @@ fn main() {
 			} else {
 				zigimg.TiffTagId.extra_samples
 			}
-			codec.ifd.tags_map.put(key, zigimg.TiffTagField{ data_type: 3, data_count: 9 }) or {
-				panic(err)
-			}
+			codec.ifd.tags_map.put(key, zigimg.TiffTagField{
+				data_offset: 0
+				data_type:   3
+				data_count:  9
+			}) or { panic(err) }
 			codec.decode_bitmap(mut stream) or { panic(err) }
 		}
 		'empty_bits' {
@@ -110,8 +115,9 @@ fn main() {
 		}
 		'byte_overflow', 'array_type' {
 			tag := zigimg.TiffTagField{
-				data_type:  if name == 'byte_overflow' { u16(4) } else { u16(5) }
-				data_count: if name == 'byte_overflow' { u32(0xffffffff) } else { u32(2) }
+				data_offset: 0
+				data_type:   if name == 'byte_overflow' { u16(4) } else { u16(5) }
+				data_count:  if name == 'byte_overflow' { u32(0xffffffff) } else { u32(2) }
 			}
 			_ = tag.read_tag_data(mut stream, .little) or { panic(err) }
 		}
@@ -124,8 +130,9 @@ fn main() {
 				}) or { panic(err) }
 			}
 			codec.ifd.tags_map.put(.color_map, zigimg.TiffTagField{
-				data_type:  3
-				data_count: if name == 'short_palette' { u32(1) } else { u32(768) }
+				data_offset: 0
+				data_type:   3
+				data_count:  if name == 'short_palette' { u32(1) } else { u32(768) }
 			}) or { panic(err) }
 			codec.decode_bitmap(mut stream) or { panic(err) }
 		}

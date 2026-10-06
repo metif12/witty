@@ -4,9 +4,16 @@ module zigimg
 pub struct TIFF {
 pub mut:
 	endianess TiffEndian
-	header    TiffHeader
-	ifd       TiffIFD
-	bitmap    TiffBitmapDescriptor
+	// Source defaults these records to undefined; V retains zero initialization.
+	header TiffHeader = TiffHeader{
+		version:    0
+		idf_offset: 0
+	}
+	ifd    TiffIFD = TiffIFD{
+		tags_map:    TiffTagMap{}
+		read_stream: unsafe { nil }
+	}
+	bitmap TiffBitmapDescriptor
 }
 
 pub fn (codec TIFF) width() usize {

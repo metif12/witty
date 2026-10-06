@@ -34,6 +34,8 @@ fn test_tiff_records_inline_data_and_rational_positions() {
 		tiff_test_append(mut bytes, 0x87654321, 4, endianess)
 		stream = ReadStream.init_memory(bytes)
 		rational := TiffTagField{
+			data_type:   0
+			data_count:  0
 			data_offset: 1
 		}.read_rational(mut stream, endianess)!
 		assert rational == [u32(0x12345678), 0x87654321]!
@@ -60,7 +62,9 @@ fn test_tiff_tag_arrays_count_zero_and_endian_decoding() {
 		}
 		mut stream := ReadStream.init_memory([u8(0)])
 		assert TiffTagField{
-			data_type: 5
+			data_count:  0
+			data_offset: 0
+			data_type:   5
 		}.read_tag_data(mut stream, endianess)!.len == 0
 		assert stream.get_pos() == 0
 		mut partial := [u8(0)]
@@ -84,7 +88,11 @@ fn test_tiff_ifd_matches_native_hashmap_growth_duplicates_and_iteration() {
 		mut table := TiffTagMap{}
 		for iteration in 0 .. 96 {
 			key := tiff_tag_ids[(iteration * 13 + seed * 7) % tiff_tag_ids.len]
-			table.put(key, TiffTagField{ data_offset: u32(iteration + seed * 100) })!
+			table.put(key, TiffTagField{
+				data_type:   0
+				data_count:  0
+				data_offset: u32(iteration + seed * 100)
+			})!
 			tiff_test_mix(mut hash, table.capacity())
 			tiff_test_mix(mut hash, table.count())
 			mut iterator := table.key_iterator()
@@ -212,7 +220,7 @@ fn test_tiff_metadata_keeps_defaults_ignored_tags_and_inline_short_words() {
 		data_count:  1
 		data_offset: 2 << 16
 	})!
-	codec.ifd.tags_map.put(.orientation, TiffTagField{ data_offset: 42 })!
+	codec.ifd.tags_map.put(.orientation, TiffTagField{ data_type: 0, data_count: 0, data_offset: 42 })!
 	codec.ifd.tags_map.put(.new_subfile_type, TiffTagField{
 		data_type:   3
 		data_count:  1
@@ -272,7 +280,7 @@ fn test_tiff_metadata_component_arrays_truncate_and_ignore_sample_count_for_sele
 			mut codec := TIFF{
 				endianess: endianess
 			}
-			codec.ifd.tags_map.put(key, TiffTagField{ data_type: 3, data_count: 2 })!
+			codec.ifd.tags_map.put(key, TiffTagField{ data_offset: 0, data_type: 3, data_count: 2 })!
 			mut failed := false
 			codec.decode_bitmap(mut stream) or {
 				assert err.msg() == 'Unsupported'

@@ -1,0 +1,86 @@
+const std = @import("std");
+const types = @import("src/formats/tiff/types.zig");
+const TIFF = @import("src/formats/tiff.zig").TIFF;
+const io = @import("src/io.zig");
+
+pub fn main() !void {
+    var output = std.fs.File.stdout().writer(&.{});
+    const writer = &output.interface;
+    const words = [_]u16{ 0, 1, 32768, 65535 };
+    const longs = [_]u32{ 0, 1, 2147483648, 4294967295 };
+    for (words) |version| for (longs) |offset| {
+        var original = types.Header{ .version = version, .idf_offset = offset };
+        const copied = original;
+        original.version = 42;
+        original.idf_offset = 17;
+        try writer.print("H|{d}|{d}|{d}|{d}|{d}\n", .{ @sizeOf(types.Header), copied.version, copied.idf_offset, original.version, original.idf_offset });
+    };
+    for (words) |tag_id| for (words) |data_type| for (longs) |count| for (longs) |offset| {
+        var original = types.PackedTag{ .tag_id = tag_id, .data_type = data_type, .data_count = count, .data_offset = offset };
+        const copied = original;
+        original.tag_id = 256;
+        original.data_type = 3;
+        original.data_count = 1;
+        original.data_offset = 7;
+        try writer.print("P|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}\n", .{ @sizeOf(types.PackedTag), copied.tag_id, copied.data_type, copied.data_count, copied.data_offset, original.tag_id, original.data_type, original.data_count, original.data_offset });
+    };
+    for ([_]u16{ 0, 3, 4, 65535 }) |data_type| for (longs) |count| for (longs) |offset| {
+        var original = types.TagField{ .data_type = data_type, .data_count = count, .data_offset = offset };
+        const copied = original;
+        original.data_type = 4;
+        original.data_count = 1;
+        original.data_offset = 9;
+        try writer.print("T|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}\n", .{ @sizeOf(types.TagField), copied.data_type, copied.data_count, copied.data_offset, copied.toLong(), copied.toShort(.big), copied.toShort(.little), copied.toLongOrShort(.big), copied.toLongOrShort(.little), original.data_type, original.data_count, original.data_offset });
+    };
+    const bitmap = types.BitmapDescriptor{};
+    try writer.print("D|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}\n", .{ @intFromEnum(bitmap.compression), bitmap.image_width, bitmap.image_height, bitmap.photometric_interpretation, bitmap.rows_per_strip, @intFromBool(bitmap.strip_offsets == null), @intFromBool(bitmap.strip_byte_counts == null), bitmap.x_resolution[0], bitmap.x_resolution[1], bitmap.y_resolution[0], bitmap.y_resolution[1], @intFromEnum(bitmap.resolution_unit), bitmap.bits_per_sample.data.len, bitmap.new_subfile_type, bitmap.color_map.data.len, bitmap.samples_per_pixel, bitmap.fill_order, bitmap.extra_samples.data.len, bitmap.planar_configuration, bitmap.predictor });
+    const allocator = std.heap.page_allocator;
+    var stream = io.ReadStream.initMemory(&.{ 1, 2, 3, 4 });
+    var directory = types.IFD{ .allocator = allocator, .tags_map = std.AutoHashMap(types.TagId, types.TagField).init(allocator), .read_stream = &stream };
+    defer directory.deinit();
+    try writer.print("I|{d}|{d}|{d}|{d}|{d}|{d}\n", .{ directory.ifd_offset, directory.num_tag_entries, directory.next_ifd_offset, directory.tags_map.count(), directory.tags_map.capacity(), @intFromBool(directory.read_stream == &stream) });
+    var initialized = try types.IFD.init(allocator, &stream, 17);
+    defer initialized.deinit();
+    try writer.print("N|{d}|{d}|{d}|{d}|{d}\n", .{ initialized.ifd_offset, initialized.num_tag_entries, initialized.next_ifd_offset, initialized.tags_map.count(), @intFromBool(initialized.read_stream == &stream) });
+    try directory.tags_map.put(.image_width, .{ .data_type = 4, .data_count = 1, .data_offset = 100 });
+    var directory_copy = directory;
+    directory_copy.ifd_offset = 9;
+    directory_copy.num_tag_entries = 2;
+    directory_copy.next_ifd_offset = 11;
+    try directory_copy.read_stream.seekTo(2);
+    try directory.tags_map.put(.image_width, .{ .data_type = 4, .data_count = 1, .data_offset = 200 });
+    try writer.print("C|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}\n", .{ directory.ifd_offset, directory.num_tag_entries, directory.next_ifd_offset, directory_copy.ifd_offset, directory_copy.num_tag_entries, directory_copy.next_ifd_offset, stream.getPos(), directory.read_stream.getPos(), directory_copy.read_stream.getPos(), directory.tags_map.get(.image_width).?.data_offset, directory_copy.tags_map.get(.image_width).?.data_offset });
+    var offsets = [_]u32{ 3, 4 };
+    var counts = [_]u32{ 5, 6 };
+    var original = types.BitmapDescriptor{ .image_width = 100, .strip_offsets = &offsets, .strip_byte_counts = &counts };
+    original.bits_per_sample.resize(2);
+    @memcpy(original.bits_per_sample.data, &[_]u16{ 7, 8 });
+    original.extra_samples.resize(1);
+    original.extra_samples.data[0] = 2;
+    original.color_map.resize(1);
+    original.color_map.data[0] = .{ .r = 1, .g = 2, .b = 3, .a = 255 };
+    var copied = original;
+    original.image_width = 101;
+    offsets[1] = 42;
+    counts[0] = 43;
+    original.bits_per_sample.data[0] = 9;
+    original.extra_samples.data[0] = 1;
+    original.color_map.data[0].r = 44;
+    copied.strip_offsets = copied.strip_offsets.?[0..1];
+    try writer.print("B|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}|{d}\n", .{ original.image_width, copied.image_width, original.strip_offsets.?.len, copied.strip_offsets.?.len, original.strip_offsets.?[1], copied.strip_byte_counts.?[0], copied.bits_per_sample.data[0], copied.bits_per_sample.storage[0], copied.extra_samples.data[0], copied.extra_samples.storage[0], copied.color_map.data[0].r, copied.color_map.storage[0].r });
+    copied.bits_per_sample.resize(1);
+    copied.extra_samples.resize(1);
+    copied.color_map.resize(1);
+    copied.bits_per_sample.data[0] = 10;
+    copied.extra_samples.data[0] = 3;
+    copied.color_map.data[0].r = 45;
+    try writer.print("R|{d}|{d}|{d}|{d}|{d}|{d}\n", .{ original.bits_per_sample.data[0], copied.bits_per_sample.data[0], original.extra_samples.data[0], copied.extra_samples.data[0], original.color_map.data[0].r, copied.color_map.data[0].r });
+    // Constructor-only observation: every undefined TIFF field is replaced first.
+    var codec = TIFF{};
+    codec.endianess = .little;
+    codec.header = .{ .version = 42, .idf_offset = 17 };
+    codec.ifd = directory;
+    codec.bitmap = .{ .image_width = 12, .image_height = 13 };
+    try writer.print("F|{d}|{d}|{d}|{d}\n", .{ codec.header.version, codec.header.idf_offset, codec.width(), codec.height() });
+    try writer.flush();
+}

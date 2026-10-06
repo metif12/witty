@@ -2480,3 +2480,101 @@ ordinary native PNG reader and information hashes for 60,760 and 51,223 cases;
 their older substring-based trap checks remain historical evidence, separate
 from this continuation's strict classifiers. These are bounded checkpoints,
 not full repository translation or whole-library equivalence.
+
+## Public image, Style, packed-scale and TIFF record continuation
+
+Image drawing now uses Source's `usize` pixel geometry throughout fit/contain
+selection. A 65,535-pixel cell multiplied by a 65,535-cell window previously
+overflowed V's signed 32-bit intermediate and selected the wrong scaling axis.
+Image and CellSize fields are mutable and required; placement and pixel offset
+also require their represented fields. The two path/memory sum wrappers require
+their payload. The V-only combined ImageTransmission record retains its existing
+zero-image default.
+
+Transmission IDs advance in an exit defer after the capability check, including
+the PathTooLong error path. Explicit u32 overflow checks preserve Source's fatal
+boundary in production, without changing the retained ID. Local-path length is
+checked before base64 allocation. Managed dimension casts occur after conversion
+or PNG writing and before entering the transmission helper. PNG's header-validity
+assertion now survives production compilation and still precedes buffer writing.
+The locked PNG writer continues to emit only its eight-byte signature.
+
+Style fields are public and mutable. Color index/RGB payloads are required and
+remain read-only boxed variants. The u32 RGB constructor carrier explicitly checks
+Source's u24 range. Color parsing validates all three channel lengths before any
+hexadecimal suffix; `rgb:00ZZ/bad/cccc` therefore returns InvalidColorSpec.
+The shared OSC parser retains its historical comparison hash. Every Style field
+is independently tested in equality, alongside positive nondefault self/copy
+equality and safe replacement after copying.
+
+CellScale retains one packed 13-bit pattern in a u16, with checked field setters,
+raw bits/from_bits and numeric VerticalAlignment construction. Numeric carriers
+are u64 and validate before narrowing: the pinned V compiler can otherwise warn
+and truncate literals before a u8 parameter reaches its guard. Source raw packed
+alignment 3 remains representable and copyable; numeric enum conversion of 3
+traps as an invalid enum, while 4 fails its two-bit cast first. Failed setters
+leave the original packed value unchanged. Direct Source packed fields, compile
+time builtins, narrow integer types and native layout remain API adaptations.
+
+TIFF Header, PackedTag, TagField and IFD now require eleven represented fields.
+IFD.init supplies its empty map explicitly. BitmapDescriptor retains every Source
+default. The outer TIFF's Source undefined defaults remain V zero/default state,
+with explicit zero Header and nil-stream/empty-map IFD. Existing callers spell
+out previously implicit zero fields; decoding and metadata algorithms are unchanged.
+
+New unchanged-source comparisons pass Debug/V ordinary and ReleaseSafe/V production:
+
+| Scope | Returning records | Strict trap pairs | Returning SHA-256 |
+| --- | ---: | ---: | --- |
+| Image geometry and transmission | 5,506 | 8 | `e58eae6f7ede06b34fc86cfab106ec0a8f106162693f3f06ab0ae5bab3c6157e` |
+| Color constructors/parsing/equality and Style mutation/equality | 175,302 | 4 | `8b7ea385d053e6b5fc140b221d6b87c7d026464bff628b613e31d49c8c61dc9c` |
+| CellScale packed construction/mutation/copies | 24,580 | 44 | `1cd11fb0acef78afd31bb32546989e382fda9688b3275387855b0f3609b89a52` |
+| TIFF defined records/defaults/borrows | 343 | 0 | `e58e21e70207affb3ec52c115ad2cd73af652ce6f14d81ae0385e9f8bf4dea26` |
+
+Image includes all four scale modes, zero/u16-extreme geometry, preserved caller
+options, overwritten cell fields, all transmission formats/media, raw bytes,
+capability/error precedence, exact packet boundaries and post-conversion casts.
+An exact 4,096-byte payload emits only the initial m=1 packet, as Source does.
+Its eight strict failures retain next ID and initialized pixel format/raw size;
+state SHA-256 is
+`89e0105b69174290783306c5ecf88ff4b3ea6fbe07429fe0c5420524a3e77897`.
+CellScale covers all 8,192 packed patterns, all field combinations including raw
+alignment 3, and 8,192 independent mutation traces. Its 44 strict failures retain
+state SHA-256
+`3b12f3ab7fac4930f479b2ec9f320ddbe9ef18c293a1fee9e6f4d13b69430172`.
+
+Compiler consumers require ordinary errors with the expected diagnostics; compiler
+crashes and backend failures cannot satisfy them. Image pairs nine field omissions
+and four fully mutable complete records, with two additional V-only payload wrapper
+checks. Color pairs two payload omissions. TIFF pairs eleven omissions and one
+immutable-header mutation rejection. CellScale pairs six type rejections and six
+complete consumers. Alias-marker loss, Source-only constant/builtin boundaries,
+nil/const stream pointers, omitted allocator, and boxed-copy/layout observations
+are recorded separately. V aliases still omit inherited required fields, while
+the corresponding Source aliases reject.
+
+The Image runner pins both the complete recovered zigimg package and its root
+entrypoint, which lies outside the src hash, alongside Vaxis/uucode and selected
+Zig math/base64/writer sources. All runners retain exact commands, provenance,
+raw diagnostics, inputs and unchanged-source postchecks. Fixtures do not change
+dependency bodies or private visibility. Reproduction and precise exclusions are
+in `vaxis/reference_probes/{image,style_color,cell_scale}/README.md` and
+`zigimg/reference_probes/tiff_records/README.md`.
+
+Source can write and flush a packet before a deferred ID increment traps; V's
+complete-string adapter never returns that packet. ID/pixel panic observers do
+not establish partial-output, failed-writer or flush-timing parity. Read-only
+boxed Color and image-source payloads, unsafe shared Color copies, mutable union
+headers, packed/aggregate ABI, allocator/GC lifetime, oversized primitive literals
+and undefined Source storage remain separate limits. The pinned PNG writer's
+commented encoder bodies and Zig 0.15.2-incompatible legacy helper APIs remain
+documented source/compiler boundaries, not translated replacement algorithms.
+
+Integration passes 45 image test files and 58 Vaxis test files, the focused
+ordinary/production consumers, Boo's four consumers and native/Linux application
+checks. Historical TIFF metadata (86/15), decoder (39,707/17) and Parser
+(79,299/19) comparisons retain their preceding hashes in both modes. Windows
+cross builds pass the three dependency DLLs and five affected/new test executables;
+image and Vaxis link as x86_64 Linux shared libraries. Cross-target runtime is
+unexecuted. These results close the listed contracts and remain bounded evidence
+for the larger translation effort.

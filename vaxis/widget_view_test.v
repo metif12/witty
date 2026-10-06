@@ -27,7 +27,8 @@ fn test_view_copies_retained_cells_and_bounds_render_origin() {
 		wrapped: true
 		scale:   CellScale.init(2, 3, 4, .center)
 		image:   ImagePlacement{
-			img_id: 7
+			img_id:  7
+			options: ImageDrawOptions{}
 		}
 		link:    CellHyperlink{
 			uri:    'u'

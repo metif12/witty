@@ -50,21 +50,40 @@ pub enum VerticalAlignment as u8 {
 	center
 }
 
+// Source's enum(u2) numeric construction checks the width before the tag.
+pub fn VerticalAlignment.from_int(value u64) VerticalAlignment {
+	if value > 3 { panic('integer does not fit in destination type') }
+	if value == 3 { panic('invalid enum value') }
+	return unsafe { VerticalAlignment(value) }
+}
+
 // Source Scale is packed into thirteen bits. V stores that bit pattern in a
-// u16 so equality and the four exposed fields keep the source representation.
+// u16; setters adapt Source's mutable packed fields without changing getters.
 pub struct CellScale {
 mut:
 	value u16 = 0x089
 }
 
-pub fn CellScale.init(scale u8, numerator u8, denominator u8, alignment VerticalAlignment) CellScale {
-	assert scale < 8
-	assert numerator < 16
-	assert denominator < 16
-	assert u8(alignment) < 4
+pub fn CellScale.init(scale u64, numerator u64, denominator u64, alignment VerticalAlignment) CellScale {
+	if scale > 7 { panic('integer does not fit in destination type') }
+	if numerator > 15 { panic('integer does not fit in destination type') }
+	if denominator > 15 { panic('integer does not fit in destination type') }
+	if u8(alignment) > 3 { panic('integer does not fit in destination type') }
 	return CellScale{
 		value: u16(scale) | (u16(numerator) << 3) | (u16(denominator) << 7) | (u16(alignment) << 11)
 	}
+}
+
+// Source @bitCast permits every u13 pattern, including raw alignment bits 3.
+pub fn CellScale.from_bits(value u64) CellScale {
+	if value > 0x1fff { panic('integer does not fit in destination type') }
+	return CellScale{
+		value: u16(value)
+	}
+}
+
+pub fn (s CellScale) bits() u16 {
+	return s.value
 }
 
 pub fn (s CellScale) scale() u8 {
@@ -83,14 +102,34 @@ pub fn (s CellScale) vertical_alignment() VerticalAlignment {
 	return unsafe { VerticalAlignment((s.value >> 11) & 3) }
 }
 
+pub fn (mut s CellScale) set_scale(value u64) {
+	if value > 7 { panic('integer does not fit in destination type') }
+	s.value = (s.value & ~u16(7)) | u16(value)
+}
+
+pub fn (mut s CellScale) set_numerator(value u64) {
+	if value > 15 { panic('integer does not fit in destination type') }
+	s.value = (s.value & ~u16(15 << 3)) | (u16(value) << 3)
+}
+
+pub fn (mut s CellScale) set_denominator(value u64) {
+	if value > 15 { panic('integer does not fit in destination type') }
+	s.value = (s.value & ~u16(15 << 7)) | (u16(value) << 7)
+}
+
+pub fn (mut s CellScale) set_vertical_alignment(value VerticalAlignment) {
+	if u8(value) > 3 { panic('integer does not fit in destination type') }
+	s.value = (s.value & ~u16(3 << 11)) | (u16(value) << 11)
+}
+
 pub fn (a CellScale) eql(b CellScale) bool {
 	return a.value == b.value
 }
 
 pub struct ImagePixelOffset {
 pub mut:
-	x u16
-	y u16
+	x u16 @[required]
+	y u16 @[required]
 }
 
 pub struct ImageClipRegion {
@@ -125,8 +164,8 @@ pub mut:
 
 pub struct ImagePlacement {
 pub mut:
-	img_id  u32
-	options ImageDrawOptions
+	img_id  u32              @[required]
+	options ImageDrawOptions @[required]
 }
 
 pub struct Cell {

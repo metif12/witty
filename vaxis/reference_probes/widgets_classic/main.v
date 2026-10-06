@@ -246,7 +246,8 @@ fn main() {
 							u8(index % 16), unsafe { vaxis.VerticalAlignment(index % 3) })
 						image:    if index % 2 == 0 {
 							vaxis.ImagePlacement{
-								img_id: 7
+								img_id:  7
+								options: vaxis.ImageDrawOptions{}
 							}
 						} else {
 							none

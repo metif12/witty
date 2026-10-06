@@ -83,8 +83,8 @@ pub enum TiffTagType as u16 {
 @[packed]
 pub struct TiffHeader {
 pub mut:
-	version    u16
-	idf_offset u32
+	version    u16 @[required]
+	idf_offset u32 @[required]
 }
 
 pub const tiff_little_endian_magic = 'II'
@@ -93,18 +93,18 @@ pub const tiff_big_endian_magic = 'MM'
 @[packed]
 pub struct TiffPackedTag {
 pub mut:
-	tag_id      u16
-	data_type   u16
-	data_count  u32
-	data_offset u32
+	tag_id      u16 @[required]
+	data_type   u16 @[required]
+	data_count  u32 @[required]
+	data_offset u32 @[required]
 }
 
 @[packed]
 pub struct TiffTagField {
 pub mut:
-	data_type   u16
-	data_count  u32
-	data_offset u32
+	data_type   u16 @[required]
+	data_count  u32 @[required]
+	data_offset u32 @[required]
 }
 
 pub fn (tag TiffTagField) to_long() u32 {
@@ -291,15 +291,16 @@ pub struct TiffIFD {
 pub mut:
 	ifd_offset      u32
 	num_tag_entries u16
-	tags_map        TiffTagMap
+	tags_map        TiffTagMap @[required]
 	next_ifd_offset u32
-	read_stream     &ReadStream = unsafe { nil }
+	read_stream     &ReadStream @[required]
 }
 
 pub fn TiffIFD.init(stream &ReadStream, ifd_offset u32) !TiffIFD {
 	return TiffIFD{
 		read_stream: unsafe { stream }
 		ifd_offset:  ifd_offset
+		tags_map:    TiffTagMap{}
 	}
 }
 
