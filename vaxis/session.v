@@ -259,8 +259,8 @@ pub fn (vx &Vaxis) translate_mouse(mouse Mouse) Mouse {
 		return mouse
 	}
 	if vx.state.pixel_mouse {
-		assert mouse.xoffset == 0
-		assert mouse.yoffset == 0
+		if mouse.xoffset != 0 { panic('Assertion failed') }
+		if mouse.yoffset != 0 { panic('Assertion failed') }
 		xextra := vx.screen.width_pix % vx.screen.width
 		yextra := vx.screen.height_pix % vx.screen.height
 		xcell := (vx.screen.width_pix - xextra) / vx.screen.width

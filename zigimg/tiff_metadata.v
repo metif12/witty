@@ -26,7 +26,7 @@ fn tiff_compression(value u16) TiffCompressionType {
 }
 
 fn tiff_resolution_unit(value u16) TiffResolutionUnit {
-	assert value in [u16(1), 2, 3]
+	if value !in [u16(1), 2, 3] { panic('invalid TIFF resolution enum') }
 	return unsafe { TiffResolutionUnit(value) }
 }
 
@@ -52,7 +52,7 @@ pub fn (mut codec TIFF) decode_bitmap(mut stream ReadStream) ! {
 			.color_map {
 				palette := tag.read_tag_data(mut stream, endianess)!
 				bits := bitmap.bits_per_sample.data[0]
-				assert bits < 16
+				if bits >= 16 { panic('attempt to unwrap error: Overflow') }
 				colors := u16(1) << bits
 				bitmap.color_map.resize(usize(colors))
 				for index in 0 .. int(colors) {
@@ -128,7 +128,7 @@ pub fn (codec TIFF) cal_row_byte_size() !usize {
 	mut bits := usize(0)
 	for index in 0 .. int(codec.bitmap.samples_per_pixel) {
 		value := usize(codec.bitmap.bits_per_sample.data[index])
-		assert bits <= ~usize(0) - value
+		if bits > ~usize(0) - value { panic('integer overflow') }
 		bits += value
 	}
 	if bits == 1 { return usize(codec.bitmap.image_width >> 3) }

@@ -11,24 +11,23 @@ pub fn (mut vx Vaxis) pretty_print() !string {
 	mut out := strings.new_builder(vx.screen.buf.len * 2 + 64)
 	out.write_string('\x1b[?25l\x1b[?2026h\x1b[m')
 	mut reposition := false
-	mut row := 0
-	mut col := 0
+	mut row := u16(0)
+	mut col := u16(0)
 	mut cursor_style := Style{}
 	mut link := CellHyperlink{}
-	mut cursor_pos_row := 0
-	mut cursor_pos_col := 0
-	mut i := 0
-	for i < vx.screen.buf.len {
-		cell := vx.screen.buf[i]
+	mut cursor_pos_row := u16(0)
+	mut cursor_pos_col := u16(0)
+	mut i := u16(0)
+	for usize(i) < usize(vx.screen.buf.len) {
+		cell := vx.screen.buf[int(i)]
 		w := if cell.char_.width != 0 {
-			int(cell.char_.width)
+			u16(cell.char_.width)
 		} else {
-			max_int(1,
-				gwidth(cell.char_.grapheme, vx.caps.unicode))
+			u16(max_int(1, gwidth(cell.char_.grapheme, vx.caps.unicode)))
 		}
-		assert w > 0
-		if col >= int(vx.screen.width) {
-			row++
+		if w == 0 { panic('Assertion failed') }
+		if col >= vx.screen.width {
+			row = session_u16_add(row, 1)
 			col = 0
 			if !cell.wrapped {
 				reposition = true
@@ -41,12 +40,12 @@ pub fn (mut vx Vaxis) pretty_print() !string {
 				reposition = false
 				link = CellHyperlink{}
 				if cursor_pos_row == row {
-					n := col - cursor_pos_col
+					n := session_u16_sub(col, cursor_pos_col)
 					if n > 0 {
 						out.write_string('\x1b[${n}C')
 					}
 				} else {
-					n := row - cursor_pos_row
+					n := session_u16_sub(row, cursor_pos_row)
 					for _ in 0 .. n {
 						out.write_u8(`\n`)
 					}
@@ -66,16 +65,21 @@ pub fn (mut vx Vaxis) pretty_print() !string {
 				out.write_string('\x1b]8;${params};${cell.link.uri}\x1b\\')
 			}
 			out.write_string(cell.char_.grapheme)
-			cursor_pos_col = col + w
+			cursor_pos_col = session_u16_add(col, w)
 			cursor_pos_row = row
 			cursor_style = cell.style
 			link = cell.link
 		}
-		for j in i + 1 .. min_int(i + w, vx.screen_last.buf.len) {
-			vx.screen_last.buf[j].skipped = true
+		mut j := session_u16_add(i, 1)
+		for j < session_u16_add(i, w) {
+			if usize(j) >= usize(vx.screen_last.buf.len) {
+				break
+			}
+			vx.screen_last.buf[int(j)].skipped = true
+			j = session_u16_add(j, 1)
 		}
-		col += w
-		i += w
+		col = session_u16_add(col, w)
+		i = session_u16_add(i, w)
 	}
 	out.write_string('\r\n\x1b[m\x1b[?2026l')
 	return out.str()

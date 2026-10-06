@@ -53,11 +53,11 @@ fn Tty.open_posix() !Tty {
 		return error('tcgetattr failed')
 	}
 	mut raw := original
-	raw.c_iflag &= termios.invert(termios.flag(int(C.IGNBRK) | int(C.BRKINT) | int(C.PARMRK) |
-		int(C.ISTRIP) | int(C.INLCR) | int(C.IGNCR) | int(C.ICRNL) | int(C.IXON)))
+	raw.c_iflag &=
+		termios.invert(termios.flag(int(C.IGNBRK) | int(C.BRKINT) | int(C.PARMRK) | int(C.ISTRIP) | int(C.INLCR) | int(C.IGNCR) | int(C.ICRNL) | int(C.IXON)))
 	raw.c_oflag &= termios.invert(termios.flag(int(C.OPOST)))
-	raw.c_lflag &= termios.invert(termios.flag(int(C.ECHO) | int(C.ECHONL) | int(C.ICANON) |
-		int(C.ISIG) | int(C.IEXTEN)))
+	raw.c_lflag &=
+		termios.invert(termios.flag(int(C.ECHO) | int(C.ECHONL) | int(C.ICANON) | int(C.ISIG) | int(C.IEXTEN)))
 	raw.c_cflag &= termios.invert(termios.flag(int(C.CSIZE) | int(C.PARENB)))
 	raw.c_cflag |= termios.flag(int(C.CS8))
 	raw.c_cc[int(C.VMIN)] = 1
@@ -92,8 +92,10 @@ pub fn (mut tty Tty) deinit() {
 		}
 		$if !macos {
 			C.close(tty.fd)
+			tty.fd = -1
 		}
-		tty.fd = -1
+		// Source leaves /dev/tty open on macOS; repeated deinit restores the
+		// retained original state and its writer remains usable.
 	}
 }
 

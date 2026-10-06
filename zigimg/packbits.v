@@ -3,7 +3,7 @@ module zigimg
 // Pinned compressions/packbits.zig. Output is deliberately not clipped and
 // reaching the declared compressed length inside a literal succeeds early.
 pub fn packbits_decode(mut stream ReadStream, mut destination []u8, length u32) ! {
-	assert length > 0
+	if length == 0 { panic('integer overflow') }
 	mut output_offset := u32(0)
 	mut input_offset := u32(0)
 	for input_offset < length - 1 {

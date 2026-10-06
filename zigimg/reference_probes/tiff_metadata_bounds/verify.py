@@ -1,18 +1,18 @@
-"""Compare the locked TIFF metadata's checked traps in already-built probes."""
+"""Strictly compare already-built TIFF probes; this helper does not verify provenance."""
+from pathlib import Path
 import subprocess
 import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from verify_tiff_metadata_bounds_reference import BOUNDS
+from verify_tiff_decode_reference import checked_trap, no_core
 
 if len(sys.argv) != 3:
     raise SystemExit("usage: verify.py V_PROBE ZIG_PROBE")
 
-cases = ("unknown_tag", "compression_enum", "resolution_enum", "bits_capacity", "extra_capacity", "empty_bits", "missing_alpha", "row_components", "byte_overflow", "array_type", "palette_capacity", "palette_power", "short_palette")
-for case in cases:
-    for executable in sys.argv[1:]:
-        result = subprocess.run([executable, case], capture_output=True, timeout=5)
-        first_line = result.stderr.splitlines()[0] if result.stderr else b""
-        if result.returncode == 0 or b"UNEXPECTED" in first_line:
-            raise SystemExit(f"{executable} {case} did not trap: {result.stderr!r}")
-        if not any(marker in result.stderr for marker in (b"panic:", b"Assertion failed", b"array.get:")):
-            raise SystemExit(f"{executable} {case} failed without a checked trap: {result.stderr!r}")
+for case, categories in BOUNDS.items():
+    for executable, category in zip(sys.argv[1:], reversed(categories)):
+        result = subprocess.run([executable, case], capture_output=True, timeout=5, preexec_fn=no_core)
+        checked_trap(result, executable + " " + case, category)
 
-print(f"PASS: V and unchanged locked TIFF enum, capacity, component, arithmetic, and palette checks ({len(cases)} probes)")
+print(f"PASS: TIFF checked categories in supplied binaries ({len(BOUNDS)} probes; provenance not checked)")

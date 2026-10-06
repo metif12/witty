@@ -25,7 +25,17 @@ fn test_posix_tty_raw_mode_and_restore() {
 		assert raw.c_cc[int(C.VTIME)] == 0
 		assert (tty.get_winsize() or { panic(err) }).cols > 0
 		original := tty.original_state
+		original_fd := tty.fd
 		tty.deinit()
+		$if macos {
+			assert tty.fd == original_fd
+			assert (tty.get_winsize() or { panic(err) }).cols > 0
+			// A second restoration must still use the live source descriptor.
+			mut changed := original
+			changed.c_lflag &= termios.invert(termios.flag(int(C.ECHO)))
+			assert termios.tcsetattr(tty.fd, C.TCSANOW, mut changed) == 0
+			tty.deinit()
+		}
 		probe_fd := C.open(c'/dev/tty', C.O_RDWR, 0)
 		assert probe_fd >= 0
 		defer { C.close(probe_fd) }

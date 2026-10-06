@@ -8,8 +8,10 @@ pub fn (mut vx Vaxis) render() string {
 	defer {
 		vx.refresh = false
 	}
-	assert vx.screen.buf.len == int(vx.screen.width) * int(vx.screen.height)
-	assert vx.screen.buf.len == vx.screen_last.buf.len
+	if usize(vx.screen.buf.len) != usize(vx.screen.width) * usize(vx.screen.height) {
+		panic('Assertion failed')
+	}
+	if vx.screen.buf.len != vx.screen_last.buf.len { panic('Assertion failed') }
 	mut out := strings.new_builder(vx.screen.buf.len * 2 + 128)
 	out.write_string('\x1b[?2026h\x1b[?25l')
 	if vx.state.alt_screen {
@@ -22,56 +24,59 @@ pub fn (mut vx Vaxis) render() string {
 	}
 	out.write_string('\x1b[m')
 	mut reposition := false
-	mut row := 0
-	mut col := 0
+	mut row := u16(0)
+	mut col := u16(0)
 	mut cursor_style := Style{}
 	mut link := CellHyperlink{}
-	mut cursor_pos_row := 0
-	mut cursor_pos_col := 0
+	mut cursor_pos_row := u16(0)
+	mut cursor_pos_col := u16(0)
 	if vx.caps.kitty_graphics {
 		out.write_string('\x1b_Ga=d\x1b\\')
 	}
 	for mut last_cell in vx.screen_last.buf {
 		last_cell.skip = false
 	}
-	mut i := 0
-	for i < vx.screen.buf.len {
-		cell := vx.screen.buf[i]
+	mut i := usize(0)
+	for i < usize(vx.screen.buf.len) {
+		cell := vx.screen.buf[int(i)]
 		w := if cell.char_.width != 0 {
-			int(cell.char_.width)
+			u16(cell.char_.width)
 		} else {
-			max_int(1,
-				gwidth(cell.char_.grapheme, vx.caps.unicode))
+			u16(max_int(1, gwidth(cell.char_.grapheme, vx.caps.unicode)))
 		}
-		assert w > 0
-		if col >= int(vx.screen.width) {
-			row++
+		if w == 0 { panic('Assertion failed') }
+		if col >= vx.screen.width {
+			row = session_u16_add(row, 1)
 			col = 0
 			if !cell.wrapped {
 				reposition = true
 			}
 		}
-		last := vx.screen_last.buf[i]
-		if (!vx.refresh && last.eql(cell) && !last.skipped && cell.image == none)
-			|| last.skip {
+		last := vx.screen_last.buf[int(i)]
+		if (!vx.refresh && last.eql(cell) && !last.skipped && cell.image == none) || last.skip {
 			reposition = true
 			if link.uri.len > 0 {
 				out.write_string('\x1b]8;;\x1b\\')
 			}
 		} else {
-			vx.screen_last.buf[i].skipped = false
-			vx.screen_last.write_cell(u16(col), u16(row), cell)
+			vx.screen_last.buf[int(i)].skipped = false
+			vx.screen_last.write_cell(col, row, cell)
 			if vx.caps.scaled_text && cell.scale.scale() > 1 {
-				assert cell.char_.width > 0
-				cols := int(cell.scale.scale()) * int(cell.char_.width)
+				if cell.char_.width == 0 { panic('Assertion failed') }
+				cols := session_u8_mul(cell.scale.scale(), cell.char_.width)
 				rows := int(cell.scale.scale())
 				for skipped_row in 0 .. rows {
-					for skipped_col in 0 .. cols {
+					for skipped_col in 0 .. int(cols) {
 						if skipped_row == 0 && skipped_col == 0 {
 							continue
 						}
-						skipped_i := (skipped_row + row) * int(vx.screen_last.width) + skipped_col + col
-						vx.screen_last.buf[skipped_i].skip = true
+						skipped_i := session_usize_add(session_usize_mul(session_usize_add(usize(skipped_row),
+							usize(row)), usize(vx.screen_last.width)), session_usize_add(usize(skipped_col),
+							usize(col)))
+						if skipped_i >= usize(vx.screen_last.buf.len) {
+							panic('index out of bounds')
+						}
+						vx.screen_last.buf[int(skipped_i)].skip = true
 					}
 				}
 			}
@@ -79,14 +84,14 @@ pub fn (mut vx Vaxis) render() string {
 				reposition = false
 				link = CellHyperlink{}
 				if vx.state.alt_screen {
-					out.write_string('\x1b[${row + 1};${col + 1}H')
+					out.write_string('\x1b[${session_u16_add(row, 1)};${session_u16_add(col, 1)}H')
 				} else if cursor_pos_row == row {
-					n := col - cursor_pos_col
+					n := session_u16_sub(col, cursor_pos_col)
 					if n > 0 {
 						out.write_string('\x1b[${n}C')
 					}
 				} else {
-					n := row - cursor_pos_row
+					n := session_u16_sub(row, cursor_pos_row)
 					for _ in 0 .. n {
 						out.write_u8(`\n`)
 					}
@@ -107,13 +112,13 @@ pub fn (mut vx Vaxis) render() string {
 			}
 			if vx.caps.scaled_text && !cell.scale.eql(CellScale{}) {
 				scale := cell.scale
-				assert scale.denominator() != 0
+				if scale.denominator() == 0 { panic('reached unreachable code') }
 				if scale.denominator() == 1 {
 					out.write_string('\x1b]66;s=${scale.scale()}:w=${w};${cell.char_.grapheme}\x1b\\')
 				} else {
 					out.write_string('\x1b]66;s=${scale.scale()}:w=${w}:n=${scale.numerator()}:d=${scale.denominator()}:v=${u8(scale.vertical_alignment())};${cell.char_.grapheme}\x1b\\')
 				}
-				cursor_pos_col = col + w * int(scale.scale())
+				cursor_pos_col = session_u16_add(col, session_u16_mul(w, u16(scale.scale())))
 				cursor_pos_row = row
 			} else {
 				if vx.caps.explicit_width && w > 1 {
@@ -121,29 +126,35 @@ pub fn (mut vx Vaxis) render() string {
 				} else {
 					out.write_string(cell.char_.grapheme)
 				}
-				cursor_pos_col = col + w
+				cursor_pos_col = session_u16_add(col, w)
 				cursor_pos_row = row
 			}
 			cursor_style = cell.style
 			link = cell.link
 		}
-		for j in i + 1 .. min_int(i + w, vx.screen_last.buf.len) {
-			vx.screen_last.buf[j].skipped = true
+		mut j := session_usize_add(i, 1)
+		for j < session_usize_add(i, usize(w)) {
+			if j >= usize(vx.screen_last.buf.len) {
+				break
+			}
+			vx.screen_last.buf[int(j)].skipped = true
+			j = session_usize_add(j, 1)
 		}
-		col += w
-		i += w
+		col = session_u16_add(col, w)
+		i = session_usize_add(i, usize(w))
 	}
 	if vx.screen.cursor_vis {
 		if vx.state.alt_screen {
-			out.write_string('\x1b[${vx.screen.cursor_row + 1};${vx.screen.cursor_col + 1}H')
+			out.write_string('\x1b[${session_u16_add(vx.screen.cursor_row, 1)};${session_u16_add(vx.screen.cursor_col,
+				1)}H')
 		} else {
 			out.write_u8(`\r`)
-			if int(vx.screen.cursor_row) >= cursor_pos_row {
-				for _ in 0 .. int(vx.screen.cursor_row) - cursor_pos_row {
+			if vx.screen.cursor_row >= cursor_pos_row {
+				for _ in 0 .. int(session_u16_sub(vx.screen.cursor_row, cursor_pos_row)) {
 					out.write_u8(`\n`)
 				}
 			} else {
-				for _ in 0 .. cursor_pos_row - int(vx.screen.cursor_row) {
+				for _ in 0 .. int(session_u16_sub(cursor_pos_row, vx.screen.cursor_row)) {
 					out.write_string('\x1bM')
 				}
 			}
@@ -155,11 +166,11 @@ pub fn (mut vx Vaxis) render() string {
 		vx.state.cursor.col = vx.screen.cursor_col
 		out.write_string('\x1b[?25h')
 	} else {
-		vx.state.cursor.row = u16(cursor_pos_row)
-		vx.state.cursor.col = u16(cursor_pos_col)
+		vx.state.cursor.row = cursor_pos_row
+		vx.state.cursor.col = cursor_pos_col
 	}
 	if vx.screen.mouse_shape != vx.screen_last.mouse_shape {
-		out.write_string('\x1b]22;${vx.screen.mouse_shape.str()}\x1b\\')
+		out.write_string('\x1b]22;${session_mouse_shape_name(vx.screen.mouse_shape)}\x1b\\')
 		vx.screen_last.mouse_shape = vx.screen.mouse_shape
 	}
 	if vx.screen.cursor_shape != vx.screen_last.cursor_shape {
@@ -197,6 +208,7 @@ fn render_color(color Color, channel int, sgr SgrMode, workarounds bool) string 
 		1 { 40 }
 		else { 0 }
 	}
+
 	return match color {
 		ColorDefault {
 			'\x1b[${match channel {
@@ -217,6 +229,7 @@ fn render_color(color Color, channel int, sgr SgrMode, workarounds bool) string 
 					1 { 48 }
 					else { 58 }
 				}
+
 				if sgr == .standard {
 					'\x1b[${prefix}:5:${idx}m'
 				} else {
@@ -231,6 +244,7 @@ fn render_color(color Color, channel int, sgr SgrMode, workarounds bool) string 
 				1 { 48 }
 				else { 58 }
 			}
+
 			if channel == 2 && workarounds {
 				'\x1b[58:2::${rgb[0]}:${rgb[1]}:${rgb[2]}m'
 			} else if sgr == .standard {

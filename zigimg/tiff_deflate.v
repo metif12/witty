@@ -32,17 +32,17 @@ enum TiffFlateState {
 struct TiffFlateSymbol {
 mut:
 	value int
-	bits u8
-	kind u8
-	code u16
-	next u16
+	bits  u8
+	kind  u8
+	code  u16
+	next  u16
 }
 
 struct TiffFlateTree {
-	max_bits int
+	max_bits    int
 	lookup_bits int
-	symbols []TiffFlateSymbol
-	lookup []TiffFlateSymbol
+	symbols     []TiffFlateSymbol
+	lookup      []TiffFlateSymbol
 }
 
 fn tiff_flate_symbol_asc(a TiffFlateSymbol, b TiffFlateSymbol) bool {
@@ -58,12 +58,16 @@ fn tiff_flate_sift_down(mut symbols []TiffFlateSymbol, target int, end int) {
 	mut current := target
 	for {
 		mut child := current * 2 + 1
-		if child >= end { break }
+		if child >= end {
+			break
+		}
 		next_child := child + 1
 		if next_child < end && tiff_flate_symbol_asc(symbols[child], symbols[next_child]) {
 			child = next_child
 		}
-		if tiff_flate_symbol_asc(symbols[child], symbols[current]) { break }
+		if tiff_flate_symbol_asc(symbols[child], symbols[current]) {
+			break
+		}
 		symbols[child], symbols[current] = symbols[current], symbols[child]
 		current = child
 	}
@@ -88,7 +92,9 @@ fn tiff_flate_tree(lengths []u8, alphabet int, max_bits int) !TiffFlateTree {
 	mut counts := []int{len: max_bits + 1}
 	mut longest := 0
 	for length in lengths {
-		if length == 0 { continue }
+		if length == 0 {
+			continue
+		}
 		if int(length) > longest { longest = int(length) }
 		counts[int(length)]++
 	}
@@ -110,8 +116,14 @@ fn tiff_flate_tree(lengths []u8, alphabet int, max_bits int) !TiffFlateTree {
 		cb := if i < lengths.len { lengths[i] } else { u8(0) }
 		symbols[i] = TiffFlateSymbol{
 			value: i
-			bits: cb
-			kind: if i < 256 { u8(0) } else if i == 256 { u8(1) } else { u8(2) }
+			bits:  cb
+			kind:  if i < 256 {
+				u8(0)
+			} else if i == 256 {
+				u8(1)
+			} else {
+				u8(2)
+			}
 		}
 	}
 	tiff_flate_heap(mut symbols)
@@ -119,15 +131,21 @@ fn tiff_flate_tree(lengths []u8, alphabet int, max_bits int) !TiffFlateTree {
 	mut code := u16(0)
 	mut idx := u16(0)
 	for pos in 0 .. symbols.len {
-		if symbols[pos].bits == 0 { continue }
+		if symbols[pos].bits == 0 {
+			continue
+		}
 		symbols[pos].code = code
 		next_code := u32(code) + (u32(1) << (max_bits - int(symbols[pos].bits)))
 		// Source codes are u16; accepted trees never overflow this expression.
-		assert next_code <= 65535
+		if next_code > 65535 { panic('integer overflow') }
 		next_idx := int(next_code >> lookup_shift)
-		if next_idx > lookup.len || int(idx) >= lookup.len { break }
+		if next_idx > lookup.len || int(idx) >= lookup.len {
+			break
+		}
 		if int(symbols[pos].bits) <= lookup_bits {
-			for j in int(idx) .. next_idx { lookup[j] = symbols[pos] }
+			for j in int(idx) .. next_idx {
+				lookup[j] = symbols[pos]
+			}
 		} else {
 			root_next := lookup[int(idx)].next
 			lookup[int(idx)].next = u16(pos)
@@ -137,10 +155,10 @@ fn tiff_flate_tree(lengths []u8, alphabet int, max_bits int) !TiffFlateTree {
 		code = u16(next_code)
 	}
 	return TiffFlateTree{
-		max_bits: max_bits
+		max_bits:    max_bits
 		lookup_bits: lookup_bits
-		symbols: symbols
-		lookup: lookup
+		symbols:     symbols
+		lookup:      lookup
 	}
 }
 
@@ -198,7 +216,9 @@ fn (mut decoder TiffFlate) take_bits[R](mut input R, count int) !u64 {
 		decoder.remaining_bits -= count
 		return result
 	}
-	input.flate_fill_word() or { if err.msg() != 'EndOfStream' { return err } }
+	input.flate_fill_word() or {
+		if err.msg() != 'EndOfStream' { return err }
+	}
 	word_size := int(sizeof(usize))
 	available := input.flate_buffered_len()
 	read_size := if available >= word_size { word_size } else { available }
@@ -214,7 +234,9 @@ fn (mut decoder TiffFlate) take_bits[R](mut input R, count int) !u64 {
 fn (decoder TiffFlate) peek_bits[R](mut input R, count int) !u64 {
 	mask := (u64(1) << count) - 1
 	if decoder.remaining_bits >= count { return decoder.bits & mask }
-	input.flate_fill_word() or { if err.msg() != 'EndOfStream' { return err } }
+	input.flate_fill_word() or {
+		if err.msg() != 'EndOfStream' { return err }
+	}
 	word_size := int(sizeof(usize))
 	available := input.flate_buffered_len()
 	mut read_size := word_size
@@ -233,7 +255,9 @@ fn (mut decoder TiffFlate) toss_bits[R](mut input R, count int) ! {
 		decoder.remaining_bits -= count
 		return
 	}
-	input.flate_fill_word() or { if err.msg() != 'EndOfStream' { return err } }
+	input.flate_fill_word() or {
+		if err.msg() != 'EndOfStream' { return err }
+	}
 	word_size := int(sizeof(usize))
 	available := input.flate_buffered_len()
 	read_size := if available >= word_size { word_size } else { available }
@@ -290,7 +314,7 @@ fn (mut decoder TiffFlate) write_match(length int, distance int) ! {
 	}
 	// The source's indirect writer uses unreachableRebase, including when a
 	// fixed-block match straddles the end of the 64 KiB window.
-	assert length <= decoder.window.len - decoder.end
+	if length > decoder.window.len - decoder.end { panic('reached unreachable code') }
 	start := decoder.end
 	decoder.end += length
 	for index in 0 .. length {
@@ -401,7 +425,7 @@ fn (mut decoder TiffFlate) fill_window[R](mut input R) ! {
 				}
 			}
 			.stored_block {
-				assert decoder.end < decoder.window.len
+				if decoder.end >= decoder.window.len { panic('reached unreachable code') }
 				count := if decoder.stored_length < remaining {
 					decoder.stored_length
 				} else {
@@ -441,7 +465,7 @@ fn (mut decoder TiffFlate) fill_window[R](mut input R) ! {
 						distance := decoder.distance(mut input,
 							int(tiff_flate_reverse(decoder.take_bits(mut input, 5)!, 5)))!
 						decoder.write_match(length, distance)!
-						assert remaining >= length
+						if remaining < length { panic('integer overflow') }
 						remaining -= length
 					} else {
 						return error('InvalidCode')
@@ -475,7 +499,7 @@ fn (mut decoder TiffFlate) fill_window[R](mut input R) ! {
 				}
 			}
 			.dynamic_block_literal {
-				assert remaining > 0
+				if remaining == 0 { panic('Assertion failed') }
 				decoder.window[decoder.end] = decoder.literal
 				decoder.end++
 				remaining--

@@ -1,8 +1,11 @@
 """Compare TIFF pixels, failures, partial writes, and positions with locked source."""
 import argparse
+from contextlib import contextmanager
 import hashlib
+import json
 import os
 from pathlib import Path
+import re
 import resource
 import shutil
 import struct
@@ -17,6 +20,90 @@ PINNED_FLATE_SHA256 = "e8898fcced291d899efc9ebacf42762954ac5a1e088283cee0f1f261a
 FLATE_SOURCES = ["compress/flate.zig", "compress/flate/Decompress.zig",
                  "compress/flate/Token.zig", "compress/flate/HuffmanEncoder.zig",
                  "Io/Reader.zig", "Io/Writer.zig"]
+EXPECTED_ROWS = 39707
+EXPECTED_SHA256 = "22c929806d09ca615c320574abc8bb2be684f3d5596ba940f220164977fd6698"
+BOUNDS = {
+    **{name: ("integer overflow", "integer overflow") for name in
+       ("sum_overflow", "sum_underflow", "ccitt_run", "pixel_overflow", "packbits_zero")},
+    **{name: ("division by zero", "division by zero") for name in
+       ("zero_rows", "empty_height")},
+    "missing_counts": ("attempt to use null value", "missing TIFF strip byte counts"),
+    "missing_offsets": ("attempt to use null value", "missing TIFF strip offsets"),
+    **{name: ("index out of bounds", ("index out of bounds", "array.get: index out of range",
+                                    "array.set: index out of range")) for name in
+       ("short_counts", "short_offsets", "zero_pixels", "rgb_stride", "palette_bounds",
+        "packbits_overrun")},
+    "fixed_window": ("reached unreachable code", "reached unreachable code"),
+    "ccitt_padding": ("integer does not fit in destination type", "integer does not fit in destination type"),
+}
+
+
+def tree_hash(source):
+    digest = hashlib.sha256()
+    for path in sorted(source.rglob("*")):
+        if path.is_file():
+            digest.update(path.relative_to(source).as_posix().encode() + b"\0")
+            digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+def no_core():
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+
+
+@contextmanager
+def work_directory(path, prefix):
+    if path is None:
+        with tempfile.TemporaryDirectory(prefix=prefix) as directory:
+            yield Path(directory)
+    else:
+        root = path.resolve()
+        if root.exists() and any(root.iterdir()):
+            raise ValueError("--workdir must be absent or empty: " + str(root))
+        root.mkdir(parents=True, exist_ok=True)
+        yield root
+
+
+class ProofLog:
+    def __init__(self, root):
+        self.root = root
+        self.commands = []
+
+    def run(self, argv, label, *, env=None, timeout=180, check=True):
+        prefix = f"{len(self.commands):03d}-{label}"
+        record = {"label": label, "argv": list(map(str, argv)), "cwd": os.getcwd(),
+                  "timeout": timeout}
+        if env:
+            record["environment"] = {key: env[key] for key in
+                                     ("VEXE", "V_C_ERROR_BUG_REPORT_DISABLED") if key in env}
+        self.commands.append(record)
+        try:
+            result = subprocess.run(argv, capture_output=True, env=env, timeout=timeout,
+                                    preexec_fn=no_core)
+        except subprocess.TimeoutExpired as error:
+            record["timed_out"] = True
+            (self.root / f"{prefix}.stdout").write_bytes(error.stdout or b"")
+            (self.root / f"{prefix}.stderr").write_bytes(error.stderr or b"")
+            (self.root / "commands.json").write_text(json.dumps(self.commands, indent=2) + "\n")
+            raise AssertionError(f"{label} timed out after {timeout}s") from error
+        record["returncode"] = result.returncode
+        (self.root / f"{prefix}.stdout").write_bytes(result.stdout)
+        (self.root / f"{prefix}.stderr").write_bytes(result.stderr)
+        (self.root / "commands.json").write_text(json.dumps(self.commands, indent=2) + "\n")
+        if check and result.returncode:
+            raise AssertionError(f"{label}: command failed ({result.returncode})\n"
+                                 + (result.stdout + result.stderr).decode(errors="replace"))
+        return result
+
+
+def checked_trap(result, label, category):
+    categories = (category,) if isinstance(category, str) else category
+    messages = [match.group(1) for line in result.stderr.decode(errors="replace").splitlines()
+                if (match := re.fullmatch(r"(?:thread \d+ |V )?panic:\s*(.*)", line.strip()))]
+    if (result.returncode == 0 or result.stdout or b"UNEXPECTED" in result.stdout + result.stderr
+            or not any(message.startswith(expected) for message in messages for expected in categories)):
+        raise AssertionError(f"{label}: expected checked panic {categories}, got {result.returncode}\n"
+                             + (result.stdout + result.stderr).decode(errors="replace"))
 
 
 def pack_codes(codes, width=9):
@@ -205,14 +292,17 @@ def main():
     parser.add_argument("zig", type=Path)
     parser.add_argument("v", type=Path)
     parser.add_argument("--target", default="aarch64-macos.14.0")
+    parser.add_argument("--v-prod", action="store_true", help="compile V with -prod; defaults Zig to ReleaseSafe")
+    parser.add_argument("--zig-mode", choices=("Debug", "ReleaseSafe"))
+    parser.add_argument("--workdir", type=Path, help="retain sources, corpus, binaries, commands and diagnostics in an empty directory")
+    parser.add_argument("--timeout", type=int, default=180, help="seconds allowed for each complete corpus run")
+    parser.add_argument("--bounds-only", action="store_true", help="build and verify isolated failures without running the returning corpus")
     args = parser.parse_args()
+    args.zig_mode = args.zig_mode or ("ReleaseSafe" if args.v_prod else "Debug")
+    if args.timeout <= 0:
+        parser.error("--timeout must be positive")
     source = args.source.resolve() / "src"
-    digest = hashlib.sha256()
-    for path in sorted(source.rglob("*")):
-        if path.is_file():
-            digest.update(path.relative_to(source).as_posix().encode() + b"\0")
-            digest.update(path.read_bytes())
-    if digest.hexdigest() != PINNED_SOURCE_SHA256:
+    if tree_hash(source) != PINNED_SOURCE_SHA256:
         parser.error("src differs from locked zigimg")
     standard_library = args.zig.resolve().parent / "lib/std"
     digest = hashlib.sha256()
@@ -221,42 +311,64 @@ def main():
         digest.update((standard_library / name).read_bytes())
     if digest.hexdigest() != PINNED_FLATE_SHA256:
         parser.error("DEFLATE/reader/writer sources differ from Zig 0.15.2")
-    cases = corpus()
-    probe = Path(__file__).parent / "reference_probes/tiff_decode"
-    with tempfile.TemporaryDirectory(prefix="witty-tiff-decode-") as directory:
-        root = Path(directory)
+    cases = [] if args.bounds_only else corpus()
+    if not args.bounds_only and len(cases) != EXPECTED_ROWS:
+        raise AssertionError(f"returning corpus changed: {len(cases)} != {EXPECTED_ROWS}")
+    probe = Path(__file__).resolve().parent / "reference_probes/tiff_decode"
+    with work_directory(args.workdir, "witty-tiff-decode-") as root:
+        proof = ProofLog(root)
         shutil.copytree(source, root / "src")
+        if tree_hash(root / "src") != PINNED_SOURCE_SHA256:
+            raise AssertionError("copied source differs from pinned source")
         shutil.copyfile(probe / "reference.zig", root / "reference.zig")
+        shutil.copyfile(probe / "main.v", root / "main.v")
+        (root / "provenance.json").write_text(json.dumps({
+            "source_sha256": PINNED_SOURCE_SHA256, "flate_sha256": PINNED_FLATE_SHA256,
+            "source_revision": "d7b7ab0ba0899643831ef042bd73289510b39906",
+            "zig_mode": args.zig_mode, "v_prod": args.v_prod, "target": args.target,
+            "reference_fixture_sha256": hashlib.sha256((root / "reference.zig").read_bytes()).hexdigest(),
+            "v_fixture_sha256": hashlib.sha256((root / "main.v").read_bytes()).hexdigest(),
+        }, indent=2) + "\n")
         input_path = root / "corpus.txt"
         input_path.write_text("\n".join(case[1] for case in cases) + "\n")
-        subprocess.run([str(args.zig.resolve()), "build-exe", "-target", args.target, "-lc", f"-femit-bin={root / 'native'}", str(root / "reference.zig")], check=True)
-        env = dict(os.environ, VEXE=str(args.v.resolve()))
-        subprocess.run([str(args.v.resolve()), "-o", str(root / "translated"), str(probe / "main.v")], env=env, check=True)
-        native = subprocess.run([str(root / "native"), str(input_path)], capture_output=True, text=True, check=True).stdout.splitlines()
-        translated = subprocess.run([str(root / "translated"), str(input_path)], capture_output=True, text=True, check=True).stdout.splitlines()
-        if len(native) != len(cases) or len(translated) != len(cases):
-            raise AssertionError((len(cases), len(native), len(translated)))
-        for (label, _), expected, actual in zip(cases, native, translated):
-            if expected != actual:
-                raise AssertionError(f"{label}: native={expected}, V={actual}")
-        print(f"TIFF decoding: {len(cases)} cases, SHA256 {hashlib.sha256(chr(10).join(native).encode()).hexdigest()}")
+        print(f"Building TIFF source {args.zig_mode} and V {'production' if args.v_prod else 'ordinary'}", flush=True)
+        proof.run([str(args.zig.resolve()), "build-exe", "-target", args.target, "-lc", "-O", args.zig_mode,
+                   f"-femit-bin={root / 'native'}", str(root / "reference.zig")], "build-source")
+        env = dict(os.environ, VEXE=str(args.v.resolve()), V_C_ERROR_BUG_REPORT_DISABLED="1")
+        repo = Path(__file__).resolve().parent.parent
+        proof.run([str(args.v.resolve()), *(["-prod"] if args.v_prod else []), "-path",
+                   f"{repo}|@vlib|@vmodules", "-o", str(root / "translated"), str(root / "main.v")],
+                  "build-v", env=env)
+        if not args.bounds_only:
+            print(f"Comparing {len(cases)} returning TIFF cases", flush=True)
+            outputs = [proof.run([str(root / executable), str(input_path)], f"corpus-{executable}",
+                                 timeout=args.timeout).stdout.splitlines()
+                       for executable in ("native", "translated")]
+            if any(len(rows) != len(cases) for rows in outputs):
+                raise AssertionError((len(cases), *map(len, outputs)))
+            for (label, _), expected, actual in zip(cases, *outputs):
+                if expected != actual:
+                    raise AssertionError(f"{label}: native={expected!r}, V={actual!r}")
+            digest = hashlib.sha256(b"\n".join(outputs[0])).hexdigest()
+            if digest != EXPECTED_SHA256:
+                raise AssertionError(f"historical output changed: {digest} != {EXPECTED_SHA256}")
+            print(f"TIFF decoding: {len(cases)} cases, SHA256 {digest}", flush=True)
         encoder = zlib.compressobj(6, zlib.DEFLATED, 15, 8, zlib.Z_FIXED)
         fixed_path = root / "fixed.zlib"
         fixed_path.write_bytes(encoder.compress(b"A" * 70000) + encoder.flush())
-        boundaries = ["sum_overflow", "sum_underflow", "zero_rows", "empty_height",
-                      "missing_counts", "missing_offsets", "short_counts", "short_offsets",
-                      "zero_pixels", "rgb_stride", "palette_bounds", "packbits_overrun",
-                      "ccitt_run", "fixed_window", "pixel_overflow"]
-        def no_core():
-            resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-        for boundary in boundaries:
-            for executable in ("native", "translated"):
-                result = subprocess.run([str(root / executable), "--bounds", boundary, str(fixed_path)],
-                                        capture_output=True, text=True, timeout=10, preexec_fn=no_core)
-                first_line = result.stderr.splitlines()[0] if result.stderr else ""
-                if not result.returncode or "UNEXPECTED" in first_line or not any(marker in result.stderr for marker in ("panic", "Assertion failed", "array.get")):
-                    raise AssertionError(f"{boundary}, {executable}: {result.returncode}: {result.stderr}")
-        print(f"TIFF decoding: {len(boundaries)} checked traps matched")
+        for boundary, categories in BOUNDS.items():
+            for executable, category in zip(("native", "translated"), categories):
+                label = f"trap-{executable}-{boundary}"
+                result = proof.run([str(root / executable), "--bounds", boundary, str(fixed_path)],
+                                   label, timeout=10, check=False)
+                checked_trap(result, label, category)
+        print(f"TIFF decoding: {len(BOUNDS)} strict checked trap pairs matched", flush=True)
+        if tree_hash(source) != PINNED_SOURCE_SHA256 or tree_hash(root / "src") != PINNED_SOURCE_SHA256:
+            raise AssertionError("source changed during the proof")
+        (root / "result.json").write_text(json.dumps({"returning_cases": len(cases),
+            "sha256": None if args.bounds_only else EXPECTED_SHA256,
+            "strict_trap_pairs": len(BOUNDS), "zig_mode": args.zig_mode,
+            "v_prod": args.v_prod}, indent=2) + "\n")
     return 0
 
 

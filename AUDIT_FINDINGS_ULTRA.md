@@ -2262,3 +2262,75 @@ native/Linux whole-application checks. Both Windows DLLs, all three App test
 executables and an x86_64 Linux shared-library link pass. Cross-target runtime
 was not executed; the unchanged image module retains its preceding 44-file
 test result.
+
+## TIFF checked failures and terminal input/lifecycle continuation
+
+TIFF metadata, strip arithmetic, CCITT, zero-length PackBits and shared DEFLATE
+checks now use explicit production guards in source order. Three old production
+metadata consumers returned when unchanged Source traps; their enum, parallel-loop
+and palette-power boundaries are restored. HashMap destination cast and
+power-of-two overflow have separate native categories. V-only signed-int array
+limits remain separate from Source allocation domains.
+
+Modern source-hashed public proofs retain complete commands/diagnostics and match
+both Debug/V ordinary and ReleaseSafe/V production: 86 metadata records plus
+fifteen strict traps, SHA-256
+`c22c2516d50b6861d84f15605a3904f2a4fc935e45c8b3583ca0ead0c76f1346`,
+and the unchanged 39,707 decoder records plus seventeen strict traps, SHA-256
+`22c929806d09ca615c320574abc8bb2be684f3d5596ba940f220164977fd6698`.
+The decoder adds zero PackBits length and invalid CCITT padding and initializes
+palette cells needed before its destination trap. Panic classification uses
+actual anchored headers, nonzero exit and empty ordinary output; host diagnostic
+mappings do not assert panic ABI. Reproduction and allocation/undefined-memory
+limits are in `zigimg/reference_probes/tiff_metadata_bounds/README.md` and
+`zigimg/reference_probes/tiff_decode/README.md`. All five public image codec
+debug hooks already exist; generic rendering and runtime logger policy remain
+host adaptations. The older live metadata-formatter absence claim is corrected.
+
+Parser.buf is public and mutable; both Result fields are mutable and required.
+APC slicing, DA1, mouse enum/byte arithmetic, optional clipboard allocation and
+whole-input delimiter lookup now retain Source boundaries. UTF-8 capacity precedes
+surrogate rejection; out-of-range Unicode still rejects first. Both modes match
+79,299 records and nineteen strict traps, SHA-256
+`526ddb882d3040c927af9264ffe7ce70cfe5e33fa269ef9f224a6b3b0d2e0502`.
+Seeded scratch, partial writes, borrowed input/buffer text and later mutations are
+observed. One mutable/copy constructor and two direct required omissions match;
+a Result alias separately measures Source rejection versus the pinned V compiler's
+lost required markers. Source initial undefined scratch, packed ABI, GC/allocator
+failure and clipboard boolean adaptation remain separate. See
+`vaxis/reference_probes/input_parser/README.md`.
+
+macOS TTY deinit retains its live descriptor, as Source does. Both modes match
+forty real PTY records for initial raw mode, repeated restoration, post-deinit
+writes/size queries and exact terminal bytes, SHA-256
+`e07ae36d87128e0f3b4a1a18f47dede10a8083e6f5eab232f23d39649472f810`.
+Termios is observed while the child is alive; Source uses a zero-length writer
+buffer. All 112 post-deinit size queries per mode must succeed without fallback.
+Configurable buffered output, fd/writer layout, other POSIX runtime,
+signal internals and recovery snapshots remain separate contracts. Per-case
+raw/state artifacts and reproduction are described in
+`vaxis/reference_probes/tty_deinit/README.md`.
+
+URI reports now use the pinned raw-byte host/path escaping, including uppercase
+percent escapes and percent re-escaping. Resize mouse output uses Source tag
+names. Render/pretty-print counters and scaled dimensions retain their native
+u16/u8/usize checks; offset assertions stay after the zero-size mouse return.
+Both modes match 16,088 public URI/mouse/pretty/render records, SHA-256
+`23bf5bd5b3a2cd33d463591ab4fea0fa798b2427f8bb0502d6b14ab9ef18eb1d`,
+and twelve strict failures with identical retained-state observers, state hash
+`bdd32c1eb11f17c697dfae72d1cb5ce0c0cfffe8edcb0147572fec3adcde4780`.
+The unchanged-source success comparison uses an allocating writer. Source writer
+failures can retain partial output, execute iteration defers and commit state at
+flush points; V's existing string-return APIs remain a separate adapter.
+No failure-state/partial-output/flush parity is claimed. Public fixture-only
+panic observers do not change Source statements or resume execution.
+See `vaxis/reference_probes/session/README.md`.
+
+Integration passes 44 image and 55 current Vaxis test files (54-file module run
+plus the new session regression file), Boo's four consumers and native/Linux
+application checks. Three Windows DLLs and all six affected/new focused test
+executables compile; image and Vaxis link as x86_64 Linux shared libraries.
+Cross-target runtime is unexecuted. Existing ordinary PNG reader/info matrices
+retain their 60,760/51,223 case hashes; older substring-based trap checks are
+historical evidence separate from the new strict proof scopes. Allocator/GC,
+packed ABI, undefined Source storage and remaining repository gaps stay open.

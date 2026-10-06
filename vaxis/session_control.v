@@ -2,6 +2,7 @@ module vaxis
 
 import encoding.base64
 import os
+import strings
 
 // These return the bytes written to the pinned Vaxis IoWriter.
 pub fn (vx &Vaxis) notify(title ?string, body string) string {
@@ -82,5 +83,25 @@ pub fn (vx &Vaxis) set_terminal_working_directory(path string) !string {
 }
 
 fn terminal_working_directory_sequence(path string, hostname string) string {
-	return '\x1b]7;file://${hostname}${path}\x1b\\'
+	return '\x1b]7;file://${terminal_uri_component(hostname, false)}${terminal_uri_component(path,
+		true)}\x1b\\'
+}
+
+fn terminal_uri_component(value string, path bool) string {
+	mut out := strings.new_builder(value.len)
+	for byte in value {
+		unreserved := (byte >= `A` && byte <= `Z`) || (byte >= `a` && byte <= `z`)
+			|| (byte >= `0` && byte <= `9`) || byte in [`-`, `.`, `_`, `~`]
+		sub_delimiter := byte in [`!`, `$`, `&`, `'`, `(`, `)`, `*`, `+`, `,`, `;`, `=`]
+		allowed := unreserved || sub_delimiter || byte == `:`
+			|| (path && byte in [`/`, `@`]) || (!path && byte in [`[`, `]`])
+		if allowed {
+			out.write_u8(byte)
+		} else {
+			out.write_u8(`%`)
+			out.write_u8('0123456789ABCDEF'[int(byte >> 4)])
+			out.write_u8('0123456789ABCDEF'[int(byte & 0xf)])
+		}
+	}
+	return out.str()
 }

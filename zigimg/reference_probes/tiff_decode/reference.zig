@@ -83,10 +83,20 @@ fn boundary(name: []const u8, fixed_path: []const u8) !void {
         pixels = try color.PixelStorage.init(allocator, .indexed8, 1);
         pixels.indexed8.palette = pixels.indexed8.palette[0..1];
         codec.bitmap.color_map.resize(2);
+        @memset(codec.bitmap.color_map.data, .{ .r = 1, .g = 2, .b = 3, .a = 255 });
     } else if (std.mem.eql(u8, name, "packbits_overrun")) {
         codec.bitmap.compression = .packbits;
         codec.bitmap.strip_byte_counts = @constCast(&[_]u32{2});
         stream = io.ReadStream.initMemory(&.{ 0, 0x82, 0x7e });
+    } else if (std.mem.eql(u8, name, "packbits_zero")) {
+        codec.bitmap.compression = .packbits;
+        codec.bitmap.strip_byte_counts = @constCast(&[_]u32{0});
+    } else if (std.mem.eql(u8, name, "ccitt_padding")) {
+        stream = io.ReadStream.initMemory(&.{0x9a});
+        var destination = [1]u8{0};
+        try codec.uncompressCCITT(&stream, &destination, 8, 1);
+        std.debug.print("UNEXPECTED: CCITT padding returned\n", .{});
+        return;
     } else if (std.mem.eql(u8, name, "ccitt_run")) {
         stream = io.ReadStream.initMemory(&.{0x98});
         var destination: [1]u8 = undefined;

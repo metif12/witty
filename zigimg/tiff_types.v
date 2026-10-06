@@ -143,8 +143,11 @@ pub fn (tag TiffTagField) read_rational(mut stream ReadStream, endianess TiffEnd
 
 pub fn (tag TiffTagField) read_tag_data(mut stream ReadStream, endianess TiffEndian) ![]u32 {
 	stride := if tag.data_type == u16(TiffTagType.short) { u32(2) } else { u32(4) }
-	assert tag.data_count <= u32(0xffffffff) / stride
+	if tag.data_count > u32(0xffffffff) / stride { panic('integer overflow') }
 	byte_size := tag.data_count * stride
+	if tag.data_count > 0x7fffffff || byte_size > 0x7fffffff {
+		panic('TIFF tag array length exceeds V array limit')
+	}
 	mut result := []u32{len: int(tag.data_count)}
 	if tag.data_count == 1 {
 		// Source returns the raw inline word even for a big-endian SHORT.
@@ -158,7 +161,9 @@ pub fn (tag TiffTagField) read_tag_data(mut stream ReadStream, endianess TiffEnd
 	count := if remaining < byte_size { int(remaining) } else { int(byte_size) }
 	copy(mut bytes, stream.take(count)!)
 	actual_stride := if tag.data_type == u16(TiffTagType.long) { 4 } else { 2 }
-	assert bytes.len / actual_stride == int(tag.data_count)
+	if bytes.len / actual_stride != int(tag.data_count) {
+		panic('for loop over objects with non-equal lengths')
+	}
 	for i in 0 .. result.len {
 		result[i] = if actual_stride == 4 {
 			tiff_u32(bytes[i * 4..], endianess)
@@ -236,11 +241,13 @@ fn (mut table TiffTagMap) grow(capacity int) {
 pub fn (mut table TiffTagMap) ensure_total_capacity(size u32) ! {
 	if u64(size) <= u64(table.slots.len) * 80 / 100 { return }
 	required := u64(size) * 100 / 80 + 1
-	assert required <= 0x80000000
+	if required > 0xffffffff { panic('integer does not fit in destination type') }
+	if required > 0x80000000 { panic('attempt to unwrap error: Overflow') }
 	mut capacity := u64(8)
 	for capacity < required {
 		capacity *= 2
 	}
+	if capacity > 0x7fffffff { panic('TIFF tag map capacity exceeds V array limit') }
 	table.grow(int(capacity))
 }
 

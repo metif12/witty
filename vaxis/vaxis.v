@@ -890,10 +890,11 @@ fn parse_apc(data []u8) ?ParsedInput {
 		return none
 	}
 	sequence_end := find_byte(data, 2, u8(escape))
-	if sequence_end < 0 || data.len < sequence_end + 2 {
+	if sequence_end < 0 {
 		return none
 	}
 	consumed := sequence_end + 2
+	input_parser_slice(data, 0, consumed)
 	if data[2] == `G` {
 		return ParsedInput{
 			event:    InputEvent(CapabilityEvent{
@@ -938,7 +939,7 @@ fn parse_osc(data []u8, clipboard bool) !ParsedInput {
 		sequence_end = bel + 1
 	}
 	semicolon := find_byte(data, 2, `;`)
-	if semicolon < 0 || semicolon >= sequence_end {
+	if semicolon < 0 {
 		return ParsedInput{
 			consumed: sequence_end
 		}
@@ -951,7 +952,7 @@ fn parse_osc(data []u8, clipboard bool) !ParsedInput {
 	content_end := if bel_terminated { sequence_end - 1 } else { sequence_end - 2 }
 	if ps == 4 {
 		color_delimiter := find_byte(data, semicolon + 1, `;`)
-		if color_delimiter < 0 || color_delimiter >= content_end {
+		if color_delimiter < 0 {
 			return ParsedInput{
 				consumed: sequence_end
 			}
@@ -961,7 +962,8 @@ fn parse_osc(data []u8, clipboard bool) !ParsedInput {
 				consumed: sequence_end
 			}
 		}
-		rgb := parse_color_spec(data[color_delimiter + 1..content_end].bytestr())!
+		rgb :=
+			parse_color_spec(input_parser_slice(data, color_delimiter + 1, content_end).bytestr())!
 		return ParsedInput{
 			event:    InputEvent(ColorReport{
 				kind:  ColorReportKind(ColorReportIndex{
@@ -973,14 +975,22 @@ fn parse_osc(data []u8, clipboard bool) !ParsedInput {
 		}
 	}
 	if ps == 10 || ps == 11 || ps == 12 {
-		rgb := parse_color_spec(data[semicolon + 1..content_end].bytestr())!
+		rgb := parse_color_spec(input_parser_slice(data, semicolon + 1, content_end).bytestr())!
 		kind := match ps {
-			10 { ColorReportKind(ColorReportFg{}) }
-			11 { ColorReportKind(ColorReportBg{}) }
-			12 { ColorReportKind(ColorReportCursor{}) }
-			else { return ParsedInput{
+			10 {
+				ColorReportKind(ColorReportFg{})
+			}
+			11 {
+				ColorReportKind(ColorReportBg{})
+			}
+			12 {
+				ColorReportKind(ColorReportCursor{})
+			}
+			else {
+				return ParsedInput{
 					consumed: sequence_end
-				} }
+				}
+			}
 		}
 
 		return ParsedInput{
@@ -992,13 +1002,14 @@ fn parse_osc(data []u8, clipboard bool) !ParsedInput {
 		}
 	}
 	if ps == 52 {
-		if semicolon + 1 >= content_end || data[semicolon + 1] != `c` {
+		if data[semicolon + 1] != `c` {
 			return ParsedInput{
 				consumed: sequence_end
 			}
 		}
-		assert clipboard // Source requires a present system clipboard allocator.
-		text := decode_clipboard_base64(data[semicolon + 3..content_end])!
+		payload := input_parser_slice(data, semicolon + 3, content_end)
+		if !clipboard { panic('attempt to use null value') }
+		text := decode_clipboard_base64(payload)!
 		return ParsedInput{
 			event:    InputEvent(Paste{
 				text: text
@@ -1113,20 +1124,44 @@ fn parse_csi(data []u8, mut parser Parser) ?ParsedInput {
 
 	if final in [`A`, `B`, `C`, `D`, `E`, `F`, `H`, `P`, `Q`, `R`, `S`] {
 		code := match final {
-			`A` { up }
-			`B` { down }
-			`C` { right }
-			`D` { left }
-			`E` { kp_begin }
-			`F` { end }
-			`H` { home }
-			`P` { f1 }
-			`Q` { f2 }
-			`R` { f3 }
-			`S` { f4 }
-			else { return ParsedInput{
+			`A` {
+				up
+			}
+			`B` {
+				down
+			}
+			`C` {
+				right
+			}
+			`D` {
+				left
+			}
+			`E` {
+				kp_begin
+			}
+			`F` {
+				end
+			}
+			`H` {
+				home
+			}
+			`P` {
+				f1
+			}
+			`Q` {
+				f2
+			}
+			`R` {
+				f3
+			}
+			`S` {
+				f4
+			}
+			else {
+				return ParsedInput{
 					consumed: sequence.len
-				} }
+				}
+			}
 		}
 
 		mut key := Key{
@@ -1185,28 +1220,68 @@ fn parse_csi(data []u8, mut parser Parser) ?ParsedInput {
 			}
 		}
 		code := match number {
-			2 { insert }
-			3 { delete }
-			5 { page_up }
-			6 { page_down }
-			7 { home }
-			8 { end }
-			11 { f1 }
-			12 { f2 }
-			13 { f3 }
-			14 { f4 }
-			15 { f5 }
-			17 { f6 }
-			18 { f7 }
-			19 { f8 }
-			20 { f9 }
-			21 { f10 }
-			23 { f11 }
-			24 { f12 }
-			57427 { kp_begin }
-			else { return ParsedInput{
+			2 {
+				insert
+			}
+			3 {
+				delete
+			}
+			5 {
+				page_up
+			}
+			6 {
+				page_down
+			}
+			7 {
+				home
+			}
+			8 {
+				end
+			}
+			11 {
+				f1
+			}
+			12 {
+				f2
+			}
+			13 {
+				f3
+			}
+			14 {
+				f4
+			}
+			15 {
+				f5
+			}
+			17 {
+				f6
+			}
+			18 {
+				f7
+			}
+			19 {
+				f8
+			}
+			20 {
+				f9
+			}
+			21 {
+				f10
+			}
+			23 {
+				f11
+			}
+			24 {
+				f12
+			}
+			57427 {
+				kp_begin
+			}
+			else {
+				return ParsedInput{
 					consumed: sequence.len
-				} }
+				}
+			}
 		}
 
 		mut key := Key{
@@ -1257,7 +1332,8 @@ fn parse_csi(data []u8, mut parser Parser) ?ParsedInput {
 		}
 	}
 	if final == `c` {
-		if sequence.len >= 4 && sequence[2] == `?` {
+		if sequence.len < 4 { panic('Assertion failed: sequence.len >= 4') }
+		if sequence[2] == `?` {
 			return ParsedInput{
 				event:    InputEvent(CapabilityEvent{
 					capability: .da1
@@ -1271,19 +1347,27 @@ fn parse_csi(data []u8, mut parser Parser) ?ParsedInput {
 	}
 	if final == `n` {
 		if sequence.len >= 3 && sequence[2] == `?` {
-			if delimiter := sequence.index_after(';', 3) {
-				ps := parse_input_unsigned(sequence[3..delimiter], 10, 16) or {
+			delimiter := find_byte(data, 3, `;`)
+			if delimiter >= 0 {
+				ps := parse_input_unsigned(data[3..delimiter].bytestr(), 10, 16) or {
 					return ParsedInput{
 						consumed: sequence.len
 					}
 				}
-				if ps == 997 && delimiter + 1 < sequence.len - 1 {
+				if ps == 997 {
+					if delimiter + 1 >= sequence.len { panic('index out of bounds') }
 					scheme := match sequence[delimiter + 1] {
-						`1` { Scheme.dark }
-						`2` { Scheme.light }
-						else { return ParsedInput{
+						`1` {
+							Scheme.dark
+						}
+						`2` {
+							Scheme.light
+						}
+						else {
+							return ParsedInput{
 								consumed: sequence.len
-							} }
+							}
+						}
 					}
 
 					return ParsedInput{
@@ -1408,24 +1492,32 @@ fn parse_csi(data []u8, mut parser Parser) ?ParsedInput {
 	}
 
 	if final == `y` {
-		if delimiter := sequence.index_after(';', 3) {
-			ps := parse_input_unsigned(sequence[3..delimiter], 10, 16) or {
+		delimiter := find_byte(data, 3, `;`)
+		if delimiter >= 0 {
+			ps := parse_input_unsigned(data[3..delimiter].bytestr(), 10, 16) or {
 				return ParsedInput{
 					consumed: sequence.len
 				}
 			}
-			pm := parse_input_unsigned(sequence[delimiter + 1..sequence.len - 2], 10, 8) or {
-				return ParsedInput{
-					consumed: sequence.len
-				}
-			}
+			pm := parse_input_unsigned(input_parser_slice(data, delimiter + 1, sequence.len - 2).bytestr(),
+				10, 8) or { return ParsedInput{
+				consumed: sequence.len
+			} }
 			capability := match ps {
-				1016 { Capability.sgr_pixels }
-				2027 { Capability.unicode }
-				2031 { Capability.color_scheme_updates }
-				else { return ParsedInput{
+				1016 {
+					Capability.sgr_pixels
+				}
+				2027 {
+					Capability.unicode
+				}
+				2031 {
+					Capability.color_scheme_updates
+				}
+				else {
+					return ParsedInput{
 						consumed: sequence.len
-					} }
+					}
+				}
 			}
 
 			if pm != 0 && pm != 4 {
@@ -1495,9 +1587,9 @@ fn parse_mouse(data []u8, sequence string) ?ParsedInput {
 			}
 		}
 		xterm = true
-		button_mask = u64(data[3] - 32)
-		px = u16(data[4] - 32)
-		py = u16(data[5] - 32)
+		button_mask = u64(input_parser_sub32(data[3]))
+		px = input_parser_sub32(data[4])
+		py = input_parser_sub32(data[5])
 	} else if sequence.len >= 4 && sequence[2] == `<` {
 		parts := sequence[3..sequence.len - 1].split(';')
 		if parts.len != 3 {
@@ -1527,7 +1619,9 @@ fn parse_mouse(data []u8, sequence string) ?ParsedInput {
 			consumed: if xterm { 6 } else { sequence.len }
 		}
 	}
-	button := unsafe { MouseButton(u8(button_mask & 0xc3)) }
+	button_value := u8(button_mask & 0xc3)
+	if button_value >= 192 { panic('invalid enum value') }
+	button := unsafe { MouseButton(button_value) }
 	motion := button_mask & 0x20 != 0
 	type_ := if motion && button != .none_ {
 		MouseType.drag

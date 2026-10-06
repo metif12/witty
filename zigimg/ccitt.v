@@ -23,7 +23,7 @@ pub mut:
 }
 
 pub fn CcittDecoder.init(width usize, num_rows usize, white_value u8) !CcittDecoder {
-	assert white_value <= 1
+	if white_value > 1 { panic('integer does not fit in destination type') }
 	return CcittDecoder{
 		width:       width
 		num_rows:    num_rows
@@ -32,7 +32,7 @@ pub fn CcittDecoder.init(width usize, num_rows usize, white_value u8) !CcittDeco
 }
 
 pub fn (mut decoder CcittDecoder) get_make_up_code(code u16, length u8) ?u16 {
-	assert code <= 8191
+	if code > 8191 { panic('integer does not fit in destination type') }
 	for makeup in ccitt_additional_make_up_codes {
 		if makeup.code == code && makeup.code_length == length { return makeup.run_length }
 	}
@@ -49,7 +49,7 @@ pub fn (mut decoder CcittDecoder) get_make_up_code(code u16, length u8) ?u16 {
 }
 
 pub fn (mut decoder CcittDecoder) get_terminating_code(code u16, length u8) ?u16 {
-	assert code <= 8191
+	if code > 8191 { panic('integer does not fit in destination type') }
 	if decoder.current_color == .white {
 		for terminating in ccitt_white_terminating_codes {
 			if terminating.code == code && terminating.code_length == length {
@@ -84,18 +84,19 @@ pub fn (mut decoder CcittDecoder) decode(mut reader ReadStream, mut writer Write
 	mut code := u16(0)
 	mut decoded_bits := u16(0)
 	mut bits_read := u16(0)
-	for row := usize(0); row < decoder.num_rows; row++ {
+	rows := decoder.num_rows
+	for row := usize(0); row < rows; row++ {
 		mut pixels_to_decode := decoder.width
 		for pixels_to_decode > 0 && code_length < 14 {
 			code = (code << 1) & 0x1fff
 			code |= bit_reader.read_bits[BigEndian, u8](1, &bits_read)!
 			code_length++
 			if run := decoder.get_run_length(code, code_length) {
-				assert pixels_to_decode >= run
+				if pixels_to_decode < run { panic('integer overflow') }
 				pixels_to_decode -= run
-				assert u32(decoded_bits) + code_length <= 65535
+				if u32(decoded_bits) + code_length > 65535 { panic('integer overflow') }
 				decoded_bits += code_length
-				assert decoder.white_value <= 1
+				if decoder.white_value > 1 { panic('integer does not fit in destination type') }
 				value := if decoder.current_color == .white {
 					decoder.white_value
 				} else {
@@ -121,7 +122,7 @@ pub fn (mut decoder CcittDecoder) decode(mut reader ReadStream, mut writer Write
 		remainder := decoded_bits % 8
 		if remainder > 0 {
 			padding := bit_reader.read_bits[BigEndian, u8](8 - remainder, &bits_read)!
-			assert padding <= 1
+			if padding > 1 { panic('integer does not fit in destination type') }
 		}
 		if pixels_to_decode != 0 { return error('InvalidData') }
 	}

@@ -3,20 +3,20 @@ module vaxis
 // Pinned Parser owns the scratch storage for CSI text-as-codepoints. Ground
 // key text borrows the input; CSI text borrows buf until the next parse call.
 pub struct Parser {
-mut:
+pub mut:
 	buf [128]u8
 }
 
 pub struct ParserResult {
-pub:
-	event ?InputEvent
-	n     usize
+pub mut:
+	event ?InputEvent @[required]
+	n     usize       @[required]
 }
 
 // clipboard represents the source's optional paste allocator. Allocation
 // itself uses V ownership, but an OSC 52 reply still requires it to be enabled.
 pub fn (mut parser Parser) parse(input []u8, clipboard bool) !ParserResult {
-	assert input.len > 0
+	if input.len == 0 { panic('Assertion failed: input.len > 0') }
 	parsed := if input.len > 1 && input[0] == 27 && input[1] == `]` {
 		parse_osc(input, clipboard)!
 	} else {
@@ -32,15 +32,38 @@ fn (mut parser Parser) parse_codepoint_text(raw string) ?string {
 	mut total := 0
 	for part in raw.split(':') {
 		cp := parse_param_u21(part) or { return none }
-		if cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff) { return none }
+		if cp > 0x10ffff { return none }
+		// utf8Encode checks the output capacity before rejecting surrogate halves.
+		length := if cp < 0x80 {
+			1
+		} else if cp < 0x800 {
+			2
+		} else if cp < 0x10000 {
+			3
+		} else {
+			4
+		}
+		if length > parser.buf.len - total { panic('Assertion failed: out.len >= length') }
+		if cp >= 0xd800 && cp <= 0xdfff { return none }
 		encoded := rune(cp).str()
-		assert total + encoded.len <= parser.buf.len
 		for i in 0 .. encoded.len {
 			parser.buf[total + i] = encoded[i]
 		}
 		total += encoded.len
 	}
 	return unsafe { tos(&parser.buf[0], total) }
+}
+
+// Keep the source's checked slice boundaries in production builds as well.
+fn input_parser_slice(input []u8, start int, end int) []u8 {
+	if start > end { panic('start index is larger than end index') }
+	if start < 0 || end > input.len { panic('index out of bounds') }
+	return input[start..end]
+}
+
+fn input_parser_sub32(value u8) u16 {
+	if value < 32 { panic('integer overflow') }
+	return u16(value - 32)
 }
 
 // std.fmt.parseUnsigned's fixed-base path, including embedded underscores,

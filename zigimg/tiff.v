@@ -21,16 +21,19 @@ pub fn (codec TIFF) uncompress_ccitt(mut stream ReadStream, mut destination []u8
 pub fn (codec TIFF) read_strips(mut stream ReadStream, mut pixels PixelStorage) ! {
 	bitmap := &codec.bitmap
 	// Both operands of the source's strip-count expression are u32.
-	assert bitmap.image_height <= u32(0xffffffff) - bitmap.rows_per_strip
+	if bitmap.image_height > u32(0xffffffff) - bitmap.rows_per_strip {
+		panic('integer overflow')
+	}
 	sum := bitmap.image_height + bitmap.rows_per_strip
-	assert sum > 0 && bitmap.rows_per_strip > 0
+	if sum == 0 { panic('integer overflow') }
+	if bitmap.rows_per_strip == 0 { panic('division by zero') }
 	total_strips := (sum - 1) / bitmap.rows_per_strip
 	byte_counts := bitmap.strip_byte_counts or { panic('missing TIFF strip byte counts') }
 	offsets := bitmap.strip_offsets or { panic('missing TIFF strip offsets') }
 	width := bitmap.image_width
 	height := bitmap.image_height
 	rows := if bitmap.rows_per_strip < height { bitmap.rows_per_strip } else { height }
-	assert rows > 0
+	if rows == 0 { panic('division by zero') }
 	remainder := height % rows
 	last_rows := if height > rows && remainder > 0 { remainder } else { rows }
 	row_bytes := codec.cal_row_byte_size()!
@@ -41,6 +44,7 @@ pub fn (codec TIFF) read_strips(mut stream ReadStream, mut pixels PixelStorage) 
 		offset := offsets[int(index)]
 		// Source allocator memory and pixels left unwritten are undefined. V's
 		// zero initialization is a recorded representation boundary.
+		if byte_count > 0x7fffffff { panic('TIFF strip length exceeds V array limit') }
 		mut strip := []u8{len: int(byte_count)}
 		mut pixel_index := image_pixel_count(image_pixel_count(index, usize(rows)), usize(width))
 		stream.seek_to(offset)!
@@ -190,8 +194,10 @@ pub fn (mut codec TIFF) read(mut stream ReadStream) !PixelStorage {
 	codec.ifd.read_tags(codec.endianess)!
 	codec.decode_bitmap(mut stream)!
 	format := codec.bitmap.guess_pixel_format()!
-	assert codec.bitmap.image_height == 0
-		|| codec.bitmap.image_width <= u32(0xffffffff) / codec.bitmap.image_height
+	if codec.bitmap.image_height != 0
+		&& codec.bitmap.image_width > u32(0xffffffff) / codec.bitmap.image_height {
+		panic('integer overflow')
+	}
 	count := codec.bitmap.image_width * codec.bitmap.image_height
 	mut pixels := PixelStorage.init(format, usize(count))!
 	codec.read_strips(mut stream, mut pixels)!

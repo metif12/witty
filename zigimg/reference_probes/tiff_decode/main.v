@@ -163,11 +163,33 @@ fn boundary(name string, fixed_path string) {
 			pixels = zigimg.PixelStorage.init(.indexed8, 1) or { panic(err) }
 			pixels.resize_palette(1)
 			codec.bitmap.color_map.resize(2)
+			for index in 0 .. codec.bitmap.color_map.data.len {
+				codec.bitmap.color_map.data[index] = zigimg.Rgba32{
+					r: 1
+					g: 2
+					b: 3
+					a: 255
+				}
+			}
 		}
 		'packbits_overrun' {
 			codec.bitmap.compression = .packbits
 			codec.bitmap.strip_byte_counts = [u32(2)]
 			stream = zigimg.ReadStream.init_memory([u8(0), 0x82, 0x7e])
+		}
+		'packbits_zero' {
+			codec.bitmap.compression = .packbits
+			codec.bitmap.strip_byte_counts = [u32(0)]
+		}
+		'ccitt_padding' {
+			stream = zigimg.ReadStream.init_memory([u8(0x9a)])
+			mut destination := []u8{len: 1}
+			codec.uncompress_ccitt(mut stream, mut destination, 8, 1) or {
+				eprintln('UNEXPECTED: CCITT padding error ${err.msg()}')
+				return
+			}
+			eprintln('UNEXPECTED: CCITT padding returned')
+			return
 		}
 		'ccitt_run' {
 			stream = zigimg.ReadStream.init_memory([u8(0x98)])

@@ -14,6 +14,9 @@ current implementations and verification are checked again.
 
 | Area | Bug | Fix |
 |---|---|---|
+| vaxis URI reports and rendering arithmetic | Working-directory reports interpolated raw host/path bytes, resize mouse names used V enum spelling, and widened counters/assertions lost checked render/pretty-print boundaries. | Translate the pinned URI byte predicates and uppercase percent escapes, use source mouse names, and retain u16/u8/usize arithmetic, invariant and pixel-offset failures explicitly. Public comparisons cover successful output and retained state; failing-writer defers, partial output and flush ordering remain boundaries of the existing string-return adapter. |
+| vaxis input Parser and macOS TTY lifecycle | Public Parser storage was private, Result fields defaulted, malformed APC/DA1/mouse/clipboard input and UTF-8 capacity ordering diverged, and production removed checks. macOS TTY deinit invalidated a descriptor that the source leaves usable. | Restore mutable Parser/required Result records, checked input boundaries and partial scratch order. Preserve the macOS descriptor and repeated terminal restoration. Both build modes match 79,299 Parser records, nineteen strict trap pairs, direct constructor contracts and forty real PTY records; alias-required markers, packed carriers, GC and configurable writer buffers remain measured boundaries. |
+| zigimg TIFF production checks | Assertions disappeared in optimized V builds, allowing invalid metadata enums, tag-array mismatch and palette powers to return; strip, CCITT, PackBits and shared DEFLATE checks also depended on assertions. | Preserve explicit checked failures in source order, distinguish HashMap cast and power overflow, and guard V-only array length limits separately. Modernize the decoder proof and add a provenance-checked metadata proof with strict panic categories, retained commands/diagnostics and ordinary/production modes. Their defined returning results retain the source hashes. |
 | vaxis App public state and event pipeline | Required state fields were private or defaulted, production erased command/focus checks, callback errors skipped per-event reset, and adding a timer sorted only the last item even when callers reordered the public list. | Restore public mutable required fields and explicit init payloads, preserve runtime invariants and zero-size division traps, defer per-event reset, and stably sort the complete timer list. Separate unchanged-source record and public PTY comparisons cover supported copies, lifecycle, routing, commands, timers and callback failures; allocator, buffered TTY output, alias markers and cross-target runtime remain documented boundaries. |
 | vaxis shared Unicode APIs | Public width and grapheme helpers decoded through V runes and lost malformed-byte consumption, checked width totals, and source borrowing/prefetch timing. | Reuse the locked byte decoder for the public helpers and expose borrowed Grapheme spans and initialized iterators. DrawContext initializes its decoder at the factory call. Ordinary and production comparisons match 72,225 records, fourteen strict traps and both required-span-field omission checks; the original TextInput matrix retains its hash. Opaque iterator state and V string call shapes remain documented adaptations. |
 | vaxis vxfw TextField | Insertion/navigation/drawing normalized raw bytes, count/width/draw arithmetic lost checked source bounds in production, caller-buffer copying omitted alias checks, and rendered graphemes copied the gap buffer. | Use the shared byte decoder, explicit checked arithmetic and borrowed buffer views. Preserve callback mutation/error ordering and retained previous-value snapshots. Ordinary and production source comparisons match 18,911 returning records and sixteen strict trap pairs. Six focused tests pass. The unused u4 scroll field remains a measured wider-storage constructor boundary. |
@@ -23,7 +26,7 @@ current implementations and verification are checked again.
 | zigimg PNG information processor | The pinned diagnostic processor and its options wrapper were absent. | Translate every chunk/palette diagnostic, IDAT counters, binary byte-size formatting, text-field truncation, and zTXt buffered decompression using the pinned zlib dependency. Preserve raw compressed iTXt output, unknown-zTXt-method positioning, ignored ancillary CRCs, suppressed writer failures with partially consumed chunks, exact spelling/spacing, and checked delimiter/tag/counter traps. The unchanged source matches 51,223 cases and twelve isolated traps. All 28 image test files, native/Linux checks, and Windows DLL/focused-test compilation pass. The complete reader and file streams were subsequently integrated; allocator/root-option and representation boundaries remain open. |
 | zigimg PNG header, filtering, and processors | Header loading, scanline filtering/defiltering/spreading, and the reader processor/options surface were absent. | Translate chunk IDs/headers, IHDR validation and CRC, all five filters and the pinned heuristic, opaque-context callbacks, borrowed generic option storage, and tRNS/PLTE processors. Preserve open compression/filter bytes, error positions, first ancillary versus all critical callbacks, callback state after failure, repeated tRNS replacement, gray16 byte-index comparisons, and RGBA palette writes independent of destination channel order/width. Unchanged-source matrices match 74,260 defined cases; fourteen checked traps and the inherited zero-stride loop match in isolated processes. All 27 image test files, native/Linux checks, and Windows DLL/focused-test compilation pass. The later complete-reader checkpoint is below; allocator/root-option and representation/undefined-memory boundaries remain open. |
 | zigimg TIFF decoder | The pinned strip reader, compression wrappers, and read/readImage APIs were absent. | Translate all five accepted pixel storage paths and all six accepted compression kinds, including the Zig 0.15.2 zlib buffered-reader dependency. Preserve unchecked TIFF versions, ignored compressed byte counts outside PackBits, floor-rounded one-bit rows, wrapping predictors for every value other than one, CCITT photometric truncation, linear clipping, partial writes, and read-ahead/error positions. An unchanged-source differential run matches 39,707 cases and fifteen checked traps. All 25 image test files, native/Linux checks, and Windows DLL/test compilation pass. Undefined-memory/GC/ABI boundaries, diagnostics, automatic loading, and the remaining codecs/interfaces stay open below. |
-| zigimg TIFF metadata | The pinned packed records, IFD/tag model, bitmap metadata processing, format selection, and row sizing were absent. | Translate all 32 tag IDs, both byte orders, SHORT/LONG and rational access, duplicate-tag replacement, Zig 0.15.2 hash-table placement/growth/iteration, bitmap defaults, palette planes, and pixel-format constraints. Preserve raw inline SHORT words, ignored fill-order/orientation tags, partial tag-array reads, capacity-dependent palette processing order, and floor-rounded one-bit row sizes. Native hashes match 3,072 table mutations, 38,400 format/row cases, and 4,224 metadata/palette cases. Thirteen checked-trap probes, all 24 image test files, native/Linux checks, and Windows DLL/test compilation pass. The debug formatter, the remaining generic map API, allocator reclamation, and undefined-memory/aggregate representation limits remain below. |
+| zigimg TIFF metadata | The pinned packed records, IFD/tag model, bitmap metadata processing, format selection, and row sizing were absent. | Translate all 32 tag IDs, both byte orders, SHORT/LONG and rational access, duplicate-tag replacement, Zig 0.15.2 hash-table placement/growth/iteration, bitmap defaults, palette planes, and pixel-format constraints. Preserve raw inline SHORT words, ignored fill-order/orientation tags, partial tag-array reads, capacity-dependent palette processing order, and floor-rounded one-bit row sizes. Native hashes match 3,072 table mutations, 38,400 format/row cases, and 4,224 metadata/palette cases. Thirteen checked-trap probes, all 24 image test files, native/Linux checks, and Windows DLL/test compilation pass. Host-specific logger/rendering, the remaining generic map API, allocator reclamation, and undefined-memory/aggregate representation limits remain below. |
 | zigimg in-memory format detection | Both image APIs lacked the pinned 17-detector registry and JPEG/TIFF signature checks. | Translate ordered detection with seeking before each check and propagated detector errors. Preserve short-input blocking, TIFF's byte-order-only acceptance and swallowed peek errors, TGA precedence over TIFF, and the inherited XBM non-advancing loop. The unchanged native source matches 589,824 prefix/length cases; direct tests cover every returning format, both image APIs, detector positions, and ambiguous signatures. Separate process timeouts verify the XBM loop through both image APIs. Twenty-three image test files, native/Linux checking, and Windows DLL/test compilation pass. Automatic loading, reader dispatch, file methods, and the remaining codec/interface surfaces stay open. |
 | zigimg managed images and encoder dispatch | Managed image construction/editing methods, image-wide encoder options, managed/unmanaged views, and fixed-memory image writers were absent. Image dimensions could wrap in creation/cropping and zero-height row/flip operations lacked explicit checked traps. | Translate creation/raw copying, metadata, editing, live iteration, conversion, shallow views, lifecycle hooks, all 17 option tags, and fixed-buffer dispatch. Views copy slice headers while sharing pixels, palettes, and frame arrays. Preserve partial writes and the pinned JPEG/TIFF no-op writers. Twenty-two image test files pass; an unchanged-source native matrix matches 6,528 managed/unmanaged writer cases, and eight subprocess probes verify dimension overflow and zero-height traps. Linux checking and Windows DLL/test compilation pass. File I/O, loading/detection, allocator reclamation, read-only slice enforcement, and aggregate ABI boundaries remain below. |
 | zigimg pixel-format converter | The locked conversion table and unmanaged-image conversion methods were absent. | Translate all 460 table entries through their source conversion groups, including indexed quantization, integer scaling, weighted f32 grayscale, and alpha handling. Preserve omitted pairs, nine BGR555 wrong-union traps, straight rgba-to-RGB332, premultiplied indexed-to-RGB332/rgba64-to-BGRA32, full returned palettes despite local slice shortening, four empty alignment traps, and SIMD-prefix truncation versus scalar-tail rounding. Twenty-one image test files pass; unchanged native hashes match 18,432 format-pair cases and 6,066,176 precision conversions. Separate probes verify nineteen traps and the pinned ARM64 NaN-prefix result; Linux checking and Windows DLL/test compilation pass. Allocator, CPU-feature/float-cast, and remaining image API boundaries are recorded below. |
@@ -975,8 +978,9 @@ an item here does not mean its full module has been certified yet.
   and fingerprints. The source's full general-purpose HashMap API is not
   exposed. Endian uses byte backing for
   the source's u1 tag. Undefined default TIFF fields/fixed storage initialize
-  in V; the metadata debug formatter remains untranslated. These aggregate
-  and lifetime boundaries are not ABI certification.
+  in V. Metadata and SGI/IFF header debug hooks are available through the V
+  logger, with host-specific generic rendering and logger selection. These
+  aggregate, diagnostic and lifetime boundaries are not ABI certification.
   TIFF's read/readImage and strip paths now cover grayscale1/grayscale8/indexed8/
   RGB24/RGBA32 with uncompressed, PackBits, CCITT RLE, LZW, DEFLATE, and Pixar
   DEFLATE. Versions are read without validation; only the first IFD is decoded.
@@ -1086,7 +1090,7 @@ an item here does not mean its full module has been certified yet.
   calls from generic functions, where the pinned V compiler mis-specializes
   the static constructor; concrete static calls remain available.
   This is an incremental dependency translation, not certification of the
-  full library or every vaxis image-loading branch.
+full library or every vaxis image-loading branch.
 - **vaxis widget framework representation:** All pinned `vxfw` widgets and
   the `boo` widget pipeline are translated. Frame buffers, command arrays, and
   layout temporaries use V GC ownership in place of explicit allocators and
@@ -2352,3 +2356,127 @@ checks. Both Windows DLLs and all three new App focused test executables compile
 Vaxis links as an x86_64 Linux ELF shared library with GC disabled for that cross
 build. Cross-target runtime was not executed. The image implementation is
 unchanged and retains its preceding 44-file test result.
+
+## TIFF production checks and terminal input/lifecycle continuation
+
+Explicit TIFF guards now retain the source's checked enum, arithmetic, tag-array,
+palette and strip failures in production builds. Before the change, production
+metadata probes for invalid resolution, mismatched tag-array type and overflowing
+palette power returned successfully; the unchanged source traps. Strip sum
+addition and subtraction precede division, optional arrays precede height modulo,
+and tag-byte multiplication precedes allocation and parallel-loop validation.
+HashMap capacity first checks the u64-to-u32 cast, then the checked power-of-two
+ceiling. These are distinct native failure categories. Shared DEFLATE fixed-window
+rebasing traps before changing the writer end; CCITT and zero-length PackBits also
+retain their checked source boundaries. V's signed-int allocation limits have
+separate explicit guards and are not paired giant-allocation source results.
+
+The TIFF proofs now pin the full dependency source, selected unchanged Zig 0.15.2
+standard-library bodies, target and build mode. They retain exact commands,
+consumer hashes, copied source, corpus and complete stdout/stderr with
+`--workdir`. Public fixtures do not alter source bodies or visibility. Both
+Source Debug/V ordinary and Source ReleaseSafe/V production pass:
+
+| Scope | Returning records | Strict trap pairs | Output SHA-256 |
+| --- | ---: | ---: | --- |
+| TIFF public metadata/scalar/array/rational reads | 86 | 15 | `c22c2516d50b6861d84f15605a3904f2a4fc935e45c8b3583ca0ead0c76f1346` |
+| TIFF decoder, compression helpers and stream positions | 39,707 | 17 | `22c929806d09ca615c320574abc8bb2be684f3d5596ba940f220164977fd6698` |
+| Vaxis public input Parser | 79,299 | 19 | `526ddb882d3040c927af9264ffe7ce70cfe5e33fa269ef9f224a6b3b0d2e0502` |
+| macOS TTY restoration/post-deinit writes, real PTY | 40 | 0 | `e07ae36d87128e0f3b4a1a18f47dede10a8083e6f5eab232f23d39649472f810` |
+
+TIFF retains its historical decoder corpus/hash, adds zero PackBits length and
+invalid CCITT padding traps, and initializes palette cells used by the destination
+trap. Metadata covers both byte orders, count-one raw words for fourteen tag
+types, empty/SHORT/LONG arrays, scalar reads and all rational input cutoffs without
+observing undefined tails. Strict checks require nonzero exit, empty stdout and
+an anchored expected panic category. TIFF additionally rejects any unexpected
+fixture marker in either stream. Existing V enum/null/array diagnostics have
+explicit mappings; panic text, stack, signal and cleanup equivalence is not
+claimed. Reproduction and exact exclusions are in
+`zigimg/reference_probes/tiff_metadata_bounds/README.md` and
+`zigimg/reference_probes/tiff_decode/README.md`.
+
+All five image codec debug hooks are present and their native counterparts run
+on the pinned compiler. SGI/IFF/TIFF use V's runtime logger and host struct
+rendering; RAS retains its explicit diagnostic schema. The source's default log
+selection changes with build mode, while V retains its runtime logger policy.
+The old metadata debug-formatter absence claim is corrected above. Generic
+rendering, mutable-pointer signatures, allocator/GC ownership and aggregate ABI
+remain adaptations.
+
+Parser storage is public and mutable, and both Result fields are mutable and
+required. Direct consumers preserve inline-buffer and Result value copies.
+Ground text borrows input; CSI codepoint text borrows the Parser's live buffer.
+The returning comparison initializes every scratch byte and observes successful
+and failed parses, seeded writes, retained text and later input/buffer mutation.
+Checks preserve APC slicing, DA1 assertions, invalid mouse enums, Xterm byte
+underflow, optional clipboard allocator failure and the source's whole-input
+delimiter lookup. UTF-8 output capacity is checked before surrogate rejection;
+out-of-range Unicode rejects first. Two direct required-field omissions reject
+in both languages. An empty Result alias is separately rejected by Source but
+accepted by the pinned V compiler, which drops inherited required markers.
+
+Parser traps require empty stdout, nonzero exit and a complete expected panic
+header; emitted line-start unexpected markers reject returned errors or success.
+Quoted fixture lines in native backtraces do not count as emitted markers. Packed
+event carriers, V strings, GC allocation and the clipboard-presence boolean remain
+representation boundaries. Undefined initial Source scratch bytes are excluded.
+Details are in `vaxis/reference_probes/input_parser/README.md`.
+
+On macOS, TTY deinit restores the saved termios and leaves the descriptor open as
+Source does. Repeated deinit after intervening terminal changes restores it again;
+writes and window-size queries remain usable. Query errors propagate through the
+fixtures; all 112 post-deinit queries per mode succeed. Forty public PTY cases in
+each mode observe raw mode, original/final termios while the child is alive, exact output,
+zero through eight deinitializations and four terminal dimensions. The Source
+writer has a zero-length caller buffer for this shared unbuffered domain. Larger
+Source buffers, public writer/fd layout, error diagnostics, signal internals and
+other POSIX runtime behavior remain separate. The runner drains output during
+`tcsetattr(.FLUSH)` and retains each raw/state observation; no terminal bytes are
+normalized. See `vaxis/reference_probes/tty_deinit/README.md`.
+
+URI reports now preserve raw bytes while applying the pinned host/path escape
+predicates and uppercase percent escapes. Existing percent characters are
+escaped again, and invalid UTF-8 and NUL path bytes are encoded without rune
+normalization. Hostname environment inputs exclude NUL, as environment variables
+do. Mouse shape output uses `ew-resize` and `ns-resize`. Rendering and pretty-print
+retain their different usize/u16 loop indices, u16 coordinates, u8 scaled-column
+product, checked cursor math, skip/write order and denominator/invariant traps.
+Pixel-mouse offset checks remain after the zero-dimension early return and survive
+production optimization.
+
+The public session comparison uses unchanged Source and an allocating writer for
+successful writes. Both modes match 16,088 returning records (2,383 URI, 4,619
+mouse, 4,415 pretty-print and 4,671 render), SHA-256
+`23bf5bd5b3a2cd33d463591ab4fea0fa798b2427f8bb0502d6b14ab9ef18eb1d`.
+Three-frame cases compare initial output, unchanged cache and later mutations,
+styles, links, images, Unicode byte inputs, capability combinations, all mouse
+shapes and cursor shapes. Large initialized screens distinguish pretty-print's
+u16 index from render's usize index. Twelve isolated public failures match strict
+panic categories and fixture-only retained-state observers, state SHA-256
+`bdd32c1eb11f17c697dfae72d1cb5ce0c0cfffe8edcb0147572fec3adcde4780`.
+Source statements and private visibility stay unchanged; observers write state
+and continue into the normal fatal panic, without resuming execution.
+
+The V session API returns complete strings. A failing Source writer can expose
+partial bytes, run iteration error defers and leave state before a flush, while
+V constructs state and output before an external write. Successful allocating
+writer observations and strict panic states do not establish failing-writer,
+partial-output, flush timing, allocator/GC, native ABI or broad aggregate ownership
+parity. The runner retains exact commands, selected child environment, raw
+outputs, fixture/source/Unicode provenance and unchanged-tree postchecks.
+See `vaxis/reference_probes/session/README.md`. Two focused public regressions
+cover raw URI bytes and repeated resize-mouse shape updates in ordinary and
+production V builds.
+
+Integration passes all 44 image test files and all 55 current Vaxis test files
+(the 54-file module run plus the new session regression file), Boo's four
+consumers, and native/Linux whole-application checks. Windows builds pass for
+image, Vaxis and Vxfw DLLs, all four affected TIFF/CCITT/PackBits focused test
+executables and the new Parser/session regression executables. Image and Vaxis
+link as x86_64 Linux shared libraries with GC disabled for those cross builds.
+Cross-target runtime was not executed. The shared DEFLATE changes also retain
+ordinary native PNG reader and information hashes for 60,760 and 51,223 cases;
+their older substring-based trap checks remain historical evidence, separate
+from this continuation's strict classifiers. These are bounded checkpoints,
+not full repository translation or whole-library equivalence.
