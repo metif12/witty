@@ -104,6 +104,31 @@ fn window_i17_add(first int, second int) int {
 	return int(value)
 }
 
+fn window_u16_add(first u16, second u16) u16 {
+	if second > u16(0xffff) - first { panic('integer overflow') }
+	return first + second
+}
+
+fn window_u8_cast(value u16) u8 {
+	if value > 0xff { panic('integer cast truncated bits') }
+	return u8(value)
+}
+
+fn window_usize_add(first usize, second usize) usize {
+	if second > ~usize(0) - first { panic('integer overflow') }
+	return first + second
+}
+
+fn window_usize_sub(first usize, second usize) usize {
+	if second > first { panic('integer overflow') }
+	return first - second
+}
+
+fn window_usize_mul(first usize, second usize) usize {
+	if first != 0 && second > ~usize(0) / first { panic('integer overflow') }
+	return first * second
+}
+
 pub fn (w Window) child(opts WindowChildOptions) Window {
 	result := w.init_child(opts.x_off, opts.y_off, opts.width, opts.height)
 	glyphs := match opts.border.glyphs {
@@ -257,30 +282,38 @@ pub fn (w Window) gwidth(text string) u16 {
 }
 
 pub fn (w Window) fill(cell Cell) {
-	if w.x_off + int(w.width) < 0 || w.y_off + int(w.height) < 0 || int(w.screen.width) < w.x_off
-		|| int(w.screen.height) < w.y_off {
+	if window_i17_add(w.x_off, int(w.width)) < 0 || window_i17_add(w.y_off, int(w.height)) < 0
+		|| int(w.screen.width) < w.x_off || int(w.screen.height) < w.y_off {
 		return
 	}
 	mut screen := unsafe { w.screen }
-	first_row := max_int(w.y_off, 0)
+	first_row := usize(max_int(w.y_off, 0))
+	buffer_len := usize(w.screen.buf.len)
 	if w.x_off == 0 && w.width == w.screen.width {
-		start := min_int(first_row * int(w.width), w.screen.buf.len)
-		fill_end := min_int(start + int(w.height) * int(w.width), w.screen.buf.len)
-		for i in start .. fill_end {
+		start := min_usize(window_usize_mul(first_row, usize(w.width)), buffer_len)
+		fill_end := min_usize(window_usize_add(start, window_usize_mul(usize(w.height),
+			usize(w.width))), buffer_len)
+		for i in int(start) .. int(fill_end) {
 			screen.buf[i] = cell
 		}
 	} else {
-		first_col := max_int(w.x_off, 0)
-		last_row := min_int(int(w.height) + w.y_off, int(w.screen.height))
-		for row := first_row; row < last_row; row++ {
-			start := min_int(first_col + row * int(w.screen.width), w.screen.buf.len)
-			mut fill_end := min_int(start + int(w.width), start + int(w.screen.width) - first_col)
-			fill_end = min_int(fill_end, w.screen.buf.len)
-			for i in start .. fill_end {
+		first_col := usize(max_int(w.x_off, 0))
+		last_row := min_int(window_i17_add(int(w.height), w.y_off), int(w.screen.height))
+		for row := first_row; row < usize(last_row); row++ {
+			start := min_usize(window_usize_add(first_col, window_usize_mul(row,
+				usize(w.screen.width))), buffer_len)
+			mut fill_end := min_usize(window_usize_add(start, usize(w.width)), window_usize_add(start, window_usize_sub(usize(w.screen.width),
+				first_col)))
+			fill_end = min_usize(fill_end, buffer_len)
+			for i in int(start) .. int(fill_end) {
 				screen.buf[i] = cell
 			}
 		}
 	}
+}
+
+fn min_usize(first usize, second usize) usize {
+	return if first < second { first } else { second }
 }
 
 pub fn (w Window) hide_cursor() {
@@ -332,22 +365,18 @@ pub fn (w Window) print(segments []CellSegment, opts PrintOptions) PrintResult {
 			mut col := opts.col_offset
 			mut overflow := false
 			grapheme_outer: for segment in segments {
-				mut offset := 0
-				for offset < segment.text.len {
+				mut chars := grapheme_iterator(segment.text)
+				for {
+					span := chars.next() or { break }
 					if col >= w.width {
-						row++
+						row = window_u16_add(row, 1)
 						col = 0
 					}
 					if row >= w.height {
 						overflow = true
 						break grapheme_outer
 					}
-					length := first_grapheme_byte_length(segment.text[offset..])
-					if length == 0 {
-						break
-					}
-					grapheme := segment.text[offset..offset + length]
-					offset += length
+					grapheme := span.bytes(segment.text)
 					if grapheme == '\n' {
 						row = saturating_u16_add(row, 1)
 						col = 0
@@ -361,18 +390,18 @@ pub fn (w Window) print(segments []CellSegment, opts PrintOptions) PrintResult {
 						w.write_cell(col, row, Cell{
 							char_:   CellCharacter{
 								grapheme: grapheme
-								width:    u8(width)
+								width:    window_u8_cast(width)
 							}
 							style:   segment.style
 							link:    segment.link
-							wrapped: int(col) + int(width) >= int(w.width)
+							wrapped: window_u16_add(col, width) >= w.width
 						})
 					}
-					col += width
+					col = window_u16_add(col, width)
 				}
 			}
 			if col >= w.width {
-				row++
+				row = window_u16_add(row, 1)
 				col = 0
 			}
 			return PrintResult{
@@ -405,7 +434,7 @@ pub fn (w Window) print(segments []CellSegment, opts PrintOptions) PrintResult {
 								for _ in 0 .. token.length {
 									if col >= w.width {
 										col = 0
-										row++
+										row = window_u16_add(row, 1)
 										break
 									}
 									if opts.commit {
@@ -415,43 +444,39 @@ pub fn (w Window) print(segments []CellSegment, opts PrintOptions) PrintResult {
 											link:  segment.link
 										})
 									}
-									col++
+									col = window_u16_add(col, 1)
 								}
 							}
 							WindowWord {
 								word_width := w.gwidth(token.text)
-								if int(word_width) + int(col) > int(w.width) && word_width < w.width {
-									row++
+								if window_u16_add(word_width, col) > w.width && word_width < w.width {
+									row = window_u16_add(row, 1)
 									col = 0
 								}
-								mut offset := 0
-								for offset < token.text.len {
+								mut chars := grapheme_iterator(token.text)
+								for {
+									span := chars.next() or { break }
 									soft_wrapped = false
 									if row >= w.height {
 										overflow = true
 										stop = true
 										break
 									}
-									length := first_grapheme_byte_length(token.text[offset..])
-									if length == 0 {
-										break
-									}
-									grapheme := token.text[offset..offset + length]
-									offset += length
+									grapheme := span.bytes(token.text)
 									width := w.gwidth(grapheme)
 									if opts.commit {
 										w.write_cell(col, row, Cell{
 											char_: CellCharacter{
 												grapheme: grapheme
-												width:    u8(width)
+												width:    window_u8_cast(width)
 											}
 											style: segment.style
 											link:  segment.link
 										})
 									}
-									col += width
+									col = window_u16_add(col, width)
 									if col >= w.width {
-										row++
+										row = window_u16_add(row, 1)
 										col = 0
 										soft_wrapped = true
 									}
@@ -465,7 +490,7 @@ pub fn (w Window) print(segments []CellSegment, opts PrintOptions) PrintResult {
 					}
 					if line_iter.has_break {
 						soft_wrapped = false
-						row++
+						row = window_u16_add(row, 1)
 						col = 0
 					}
 					if stop {
@@ -483,18 +508,14 @@ pub fn (w Window) print(segments []CellSegment, opts PrintOptions) PrintResult {
 			mut col := opts.col_offset
 			mut overflow := false
 			none_outer: for segment in segments {
-				mut offset := 0
-				for offset < segment.text.len {
+				mut chars := grapheme_iterator(segment.text)
+				for {
+					span := chars.next() or { break }
 					if col >= w.width {
 						overflow = true
 						break none_outer
 					}
-					length := first_grapheme_byte_length(segment.text[offset..])
-					if length == 0 {
-						break
-					}
-					grapheme := segment.text[offset..offset + length]
-					offset += length
+					grapheme := span.bytes(segment.text)
 					if grapheme == '\n' {
 						overflow = true
 						break none_outer
@@ -507,7 +528,7 @@ pub fn (w Window) print(segments []CellSegment, opts PrintOptions) PrintResult {
 						w.write_cell(col, row, Cell{
 							char_: CellCharacter{
 								grapheme: grapheme
-								width:    u8(width)
+								width:    window_u8_cast(width)
 							}
 							style: segment.style
 							link:  segment.link
@@ -578,7 +599,7 @@ fn (mut iter WindowLineIterator) next() ?string {
 			iter.has_break = false
 		}
 		iter.index = iter.buf.len
-		return iter.buf[start..]
+		return iter.buf.substr_unsafe(start, iter.buf.len)
 	}
 	iter.index = range_end
 	if iter.index < iter.buf.len && iter.buf[iter.index] == `\r` {
@@ -587,7 +608,7 @@ fn (mut iter WindowLineIterator) next() ?string {
 	if iter.index < iter.buf.len && iter.buf[iter.index] == `\n` {
 		iter.index++
 	}
-	return iter.buf[start..range_end]
+	return iter.buf.substr_unsafe(start, range_end)
 }
 
 struct WindowWhitespace {
@@ -631,7 +652,7 @@ fn (mut iter WindowWhitespaceTokenizer) next() ?WindowToken {
 		iter.index++
 	}
 	return WindowWord{
-		text: iter.buf[start..iter.index]
+		text: iter.buf.substr_unsafe(start, iter.index)
 	}
 }
 

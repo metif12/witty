@@ -43,6 +43,11 @@ fn vxfw_u16_sub(first u16, second u16) u16 {
 	return first - second
 }
 
+fn vxfw_u16_mul(first u16, second u16) u16 {
+	if first != 0 && second > u16(0xffff) / first { panic('integer overflow') }
+	return first * second
+}
+
 fn vxfw_u16_cast(value u64) u16 {
 	if value > 0xffff { panic('integer cast truncated bits') }
 	return u16(value)
@@ -61,4 +66,9 @@ fn vxfw_usize_add(first usize, second usize) usize {
 fn vxfw_usize_sub(first usize, second usize) usize {
 	if second > first { panic('integer overflow') }
 	return first - second
+}
+
+fn vxfw_usize_mul(first usize, second usize) usize {
+	if first != 0 && second > ~usize(0) / first { panic('integer overflow') }
+	return first * second
 }

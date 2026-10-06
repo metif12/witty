@@ -17,7 +17,7 @@ pub mut:
 
 pub struct CellSegment {
 pub mut:
-	text  string
+	text  string @[required]
 	style Style
 	link  CellHyperlink
 }

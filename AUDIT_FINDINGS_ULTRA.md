@@ -2120,3 +2120,47 @@ new focused widget/recovery test executables compile, and Vaxis links as an
 x86_64 Linux shared library with GC disabled for that cross build. Cross-target
 runtime parity and the live audit's remaining layout/iterator/lifecycle
 boundaries remain unverified.
+
+## Vaxis layout, text and Window output continuation
+
+Layout widgets now preserve checked dimensions, proportions and callback order,
+including captured Flex iteration slices alongside live distribution checks.
+Text/RichText retain checked widths, rows, columns and usize cursors, source
+saturation/truncation distinctions, borrowed graphemes and iterator reset order.
+Window fill uses source-wide i17 endpoints and usize buffer products; all print
+wrap modes use checked arithmetic and borrowed raw-byte grapheme views.
+
+Both unchanged-source Debug/V ordinary and ReleaseSafe/V production comparisons
+match 27,963 layout records/37 strict traps, 7,562 Text records/15 traps,
+22,366 RichText records/11 traps and 33,215 Window records/15 traps. Their output
+SHA-256 values are, respectively:
+
+- `7530b735b2181ad9675dbf776110002b759a5fd3c60df25f2e794f553984c164`
+- `d6f81838ac48054b14f76b3f3d607c13ca1e3153f1fb9959902596d47f0facac`
+- `82d672df1b109891fa701681f003009fc56e1d28acfc32cfe27c946502342b48`
+- `d97f410c29c874baeee7e5506ce5e55dd68bbdb2740061d1f7b2ea5a037d617b`
+
+Text/RichText iterator records now require their source payload fields and retain
+usize indices. Separate constructor probes measure source-private/V-public
+iterator adapters and the GC arena adaptation. Plain CellSegment requires text;
+the pinned V compiler still ignores this marker through TextSpan, whose compatible
+alias remains. Source-only allocator outcomes are measured separately, and
+undefined FlexRow cache reads are excluded from parity. Inherited CR/tab/Unicode
+failures are isolated, and nonadvancing wide-glyph wrapping is retained. Private
+heap shells avoid quadratic production keepalive
+scans while retaining public values and borrowed storage; valid 65,535-cell draws
+are included. The sixteen large RichText production cases now finish in 1.43
+seconds on the measured host, replacing a timeout; timing is not a pass threshold.
+
+Exact scope, reproduction and focused tests are in
+`vaxis/reference_probes/vxfw_layout`, `vxfw_text`, `vxfw_rich_text` and
+`window_output`. Source allocator/arena lifetime, readonly types, int-sized V
+lengths, native ABI, App lifecycle and Window scroll/mouse/border contracts remain
+outside this proof. Cross-target builds do not establish runtime parity.
+
+Final integration passes 44/44 Vaxis test files, Boo's four focused tests and
+native/Linux whole-application checks. Both Windows DLLs, all four new focused
+test executables and the x86_64 Linux shared-library link pass. The unchanged
+image module retains its preceding 44-file test result; it was not rerun for
+this checkpoint. The existing constructor gate retains its 38 complete pairs,
+57 omission pairs, 79 defaults and historical hash in both build modes.

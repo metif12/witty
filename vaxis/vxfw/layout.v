@@ -20,8 +20,12 @@ fn center_draw(ptr voidptr, ctx DrawContext) !Surface {
 }
 
 pub fn (center &Center) draw(ctx DrawContext) !Surface {
+	if ctx.max.width == none { panic('Assertion failed') }
+	if ctx.max.height == none { panic('Assertion failed') }
 	size := ctx.max.size()
 	child := center.child.draw(ctx.with_constraints(Size{}, ctx.max))!
+	x := vxfw_u16_sub(size.width, child.size.width) / 2
+	y := vxfw_u16_sub(size.height, child.size.height) / 2
 	return Surface{
 		buffer:   []vaxis.Cell{}
 		size:     size
@@ -29,8 +33,8 @@ pub fn (center &Center) draw(ctx DrawContext) !Surface {
 		children: [
 			SubSurface{
 				origin:  RelativePoint{
-					row: (size.height - child.size.height) / 2
-					col: (size.width - child.size.width) / 2
+					row: y
+					col: x
 				}
 				surface: child
 			},
@@ -88,12 +92,10 @@ fn padding_draw(ptr voidptr, ctx DrawContext) !Surface {
 
 pub fn (padding &Padding) draw(ctx DrawContext) !Surface {
 	pad := padding.padding
-	if pad.left > 0 || pad.right > 0 { assert ctx.max.width != none
-	 }
-	if pad.top > 0 || pad.bottom > 0 { assert ctx.max.height != none
-	 }
-	horizontal := pad.left + pad.right
-	vertical := pad.top + pad.bottom
+	if (pad.left > 0 || pad.right > 0) && ctx.max.width == none { panic('Assertion failed') }
+	if (pad.top > 0 || pad.bottom > 0) && ctx.max.height == none { panic('Assertion failed') }
+	horizontal := vxfw_u16_add(pad.right, pad.left)
+	vertical := vxfw_u16_add(pad.top, pad.bottom)
 	min_size := Size{
 		width:  sat_sub(ctx.min.width, horizontal)
 		height: sat_sub(ctx.min.height, vertical)
@@ -106,8 +108,8 @@ pub fn (padding &Padding) draw(ctx DrawContext) !Surface {
 	return Surface{
 		buffer:   []vaxis.Cell{}
 		size:     Size{
-			width:  child.size.width + horizontal
-			height: child.size.height + vertical
+			width:  vxfw_u16_add(child.size.width, horizontal)
+			height: vxfw_u16_add(child.size.height, vertical)
 		}
 		widget:   padding.widget()
 		children: [
@@ -195,8 +197,8 @@ pub fn (border &Border) draw(ctx DrawContext) !Surface {
 	}
 	child := border.child.draw(ctx.with_constraints(ctx.min, max_size))!
 	size := Size{
-		width:  child.size.width + 2
-		height: child.size.height + 2
+		width:  vxfw_u16_add(child.size.width, 2)
+		height: vxfw_u16_add(child.size.height, 2)
 	}
 	surface := Surface.init_with_children(border.widget(), size, [
 		SubSurface{
@@ -243,28 +245,34 @@ pub fn (border &Border) draw(ctx DrawContext) !Surface {
 		surface.write_cell(right, row, cell)
 	}
 	for label in border.labels {
-		length := u16(ctx.string_width(label.text))
+		length := vxfw_u16_cast(u64(ctx.string_width(label.text)))
 		if length == 0 { continue
 		 }
 		row := if label.alignment in [.top_left, .top_center, .top_right] { u16(0) } else { bottom }
 		mut col := match label.alignment {
-			.top_left, .bottom_left { u16(1) }
-			.top_center, .bottom_center { math.max((size.width - length) / 2, u16(1)) }
-			.top_right, .bottom_right { math.max(size.width - 1 - length, u16(1)) }
+			.top_left, .bottom_left {
+				u16(1)
+			}
+			.top_center, .bottom_center {
+				math.max(vxfw_u16_sub(size.width, length) / 2, u16(1))
+			}
+			.top_right, .bottom_right {
+				math.max(vxfw_u16_sub(vxfw_u16_sub(size.width, 1), length), u16(1))
+			}
 		}
 
 		mut chars := ctx.grapheme_iterator(label.text)
 		for {
 			grapheme := chars.next() or { break }
-			width := u16(ctx.string_width(grapheme))
+			width := vxfw_u16_cast(u64(ctx.string_width(grapheme)))
 			surface.write_cell(col, row, vaxis.Cell{
 				char_: vaxis.CellCharacter{
 					grapheme: grapheme
-					width:    u8(width)
+					width:    vxfw_u8_cast(u64(width))
 				}
 				style: border.style
 			})
-			col += width
+			col = vxfw_u16_add(col, width)
 		}
 	}
 	return surface
@@ -287,29 +295,34 @@ fn flex_column_draw(ptr voidptr, ctx DrawContext) !Surface {
 }
 
 pub fn (flex &FlexColumn) draw(ctx DrawContext) !Surface {
+	if ctx.max.height == none { panic('Assertion failed') }
+	if ctx.max.width == none { panic('Assertion failed') }
 	max_size := ctx.max.size()
 	if flex.children.len == 0 { return Surface.init(flex.widget(), ctx.min) }
 	mut sizes := []u16{len: flex.children.len}
 	mut first_height := u16(0)
 	mut total_flex := u16(0)
-	for i, child in flex.children {
+	first_pass := flex.children
+	for i, child in first_pass {
 		surface :=
 			child.widget.draw(ctx.with_constraints(Size{}, MaxSize{ width: max_size.width }))!
+		first_height = vxfw_u16_add(first_height, surface.size.height)
+		total_flex = vxfw_u16_add(total_flex, u16(child.flex))
 		sizes[i] = surface.size.height
-		first_height += surface.size.height
-		total_flex += child.flex
 	}
-	remaining := max_size.height - first_height
+	remaining := vxfw_u16_sub(max_size.height, first_height)
 	mut height := u16(0)
 	mut width := u16(0)
 	mut children := []SubSurface{}
-	for i, child in flex.children {
+	second_pass := flex.children
+	for i, child in second_pass {
 		child_height := if child.flex == 0 {
 			sizes[i]
 		} else if i == flex.children.len - 1 {
-			max_size.height - height
+			vxfw_u16_sub(max_size.height, height)
 		} else {
-			sizes[i] + (remaining * child.flex) / total_flex
+			vxfw_u16_add(sizes[i], layout_u16_div(vxfw_u16_mul(remaining, u16(child.flex)),
+				total_flex))
 		}
 		surface := child.widget.draw(ctx.with_constraints(Size{ height: child_height }, MaxSize{
 			width:  max_size.width
@@ -323,7 +336,7 @@ pub fn (flex &FlexColumn) draw(ctx DrawContext) !Surface {
 			surface: surface
 		}
 		width = math.max(width, surface.size.width)
-		height += surface.size.height
+		height = vxfw_u16_add(height, surface.size.height)
 	}
 	return Surface{
 		buffer:   []vaxis.Cell{}
@@ -353,32 +366,36 @@ fn flex_row_draw(ptr voidptr, ctx DrawContext) !Surface {
 }
 
 pub fn (flex &FlexRow) draw(ctx DrawContext) !Surface {
+	if ctx.max.height == none { panic('Assertion failed') }
+	if ctx.max.width == none { panic('Assertion failed') }
 	max_size := ctx.max.size()
 	if flex.children.len == 0 { return Surface.init(flex.widget(), ctx.min) }
 	mut sizes := []u16{len: flex.children.len}
 	mut first_width := u16(0)
 	mut total_flex := u16(0)
-	for i, child in flex.children {
+	first_pass := flex.children
+	for i, child in first_pass {
 		if child.flex == 0 {
 			surface := child.widget.draw(ctx.with_constraints(Size{}, MaxSize{
 				height: max_size.height
 			}))!
 			sizes[i] = surface.size.width
-			first_width += surface.size.width
+			first_width = vxfw_u16_add(first_width, surface.size.width)
 		}
-		total_flex += child.flex
+		total_flex = vxfw_u16_add(total_flex, u16(child.flex))
 	}
 	remaining := sat_sub(max_size.width, first_width)
 	mut width := u16(0)
 	mut height := u16(0)
 	mut children := []SubSurface{}
-	for i, child in flex.children {
+	second_pass := flex.children
+	for i, child in second_pass {
 		child_width := if child.flex == 0 {
 			sizes[i]
 		} else if i == flex.children.len - 1 {
 			sat_sub(max_size.width, width)
 		} else {
-			(remaining * child.flex) / total_flex
+			layout_u16_div(vxfw_u16_mul(remaining, u16(child.flex)), total_flex)
 		}
 		surface := child.widget.draw(ctx.with_constraints(Size{ width: child_width }, MaxSize{
 			width:  child_width
@@ -392,7 +409,7 @@ pub fn (flex &FlexRow) draw(ctx DrawContext) !Surface {
 			surface: surface
 		}
 		height = math.max(height, surface.size.height)
-		width += surface.size.width
+		width = vxfw_u16_add(width, surface.size.width)
 	}
 	return Surface{
 		buffer:   []vaxis.Cell{}
@@ -403,4 +420,9 @@ pub fn (flex &FlexRow) draw(ctx DrawContext) !Surface {
 		widget:   flex.widget()
 		children: children
 	}
+}
+
+fn layout_u16_div(numerator u16, denominator u16) u16 {
+	if denominator == 0 { panic('division by zero') }
+	return numerator / denominator
 }

@@ -1108,12 +1108,21 @@ an item here does not mean its full module has been certified yet.
   is excluded from defined-behavior parity and V retains managed storage.
   Core and widget constructor checks are scoped to field presence and defaults,
   excluding allocator arguments, pointer nullability and readonly slice types.
-  App manual lifecycle construction and Text/RichText iterator records remain
-  outside that constructor proof. Other framework layout arithmetic remains
-  unverified: Padding's horizontal/vertical sums and returned dimensions,
-  Border's child dimensions plus two, and Flex's u16 accumulation/proportion
-  operations still lack source checked-arithmetic guards. Window fill/print
-  paths also retain their previous verification limits. Terminal recovery
+  App manual lifecycle construction remains outside that constructor proof.
+  Separate layout and Text/RichText matrices now verify checked arithmetic,
+  public iterator payload requirements and usize indices, callback ordering,
+  and borrowed drawing state. A FlexRow callback that changes an initially
+  positive weight to zero can make the source read an uninitialized size-cache
+  slot; that undefined branch is excluded. Text/RichText iterator methods are
+  private in source and public V adapters. The pinned V compiler ignores the
+  inherited required text field through the TextSpan alias, although plain
+  CellSegment construction enforces it; the alias remains compatible with
+  shared segment inputs. Allocator/arena failures, readonly slice types and
+  lengths beyond V's int-sized carriers remain distinct contracts. Window
+  fill/print now have separate arithmetic and borrowed-output comparisons;
+  arbitrary Window/PrintResult constructors, scroll copy ranges/overlap, mouse
+  endpoint arithmetic and border behavior remain outside those matrices.
+  Terminal recovery
   comparison covers the existing unbuffered Tty adapter; source buffered output,
   public global-variable access, panic-runtime stack/address handling and
   cross-platform runtime behavior are distinct remaining contracts, not certified
@@ -2026,3 +2035,89 @@ ELF shared library with GC disabled for that cross build. These cross-target
 checks establish compilation/link success rather than platform runtime parity.
 The remaining layout arithmetic and iterator/lifecycle construction boundaries
 are retained in the live audit above.
+
+## Vaxis layout, text and Window output continuation
+
+Center, Padding, Border, FlexColumn and FlexRow now retain source checked
+geometry, dimension and proportion operations in V production builds. Text and
+RichText likewise check row/column, width/cast and usize cursor operations, while
+preserving source saturation and intentional truncation. Window fill checks i17
+endpoints before clipping and performs buffer products in usize; print uses
+checked u16 arithmetic and borrowed raw-byte grapheme iterators. All four new
+runners hash and copy the complete pinned Vaxis source and locked uucode graph
+unchanged, reaching the source through public draw/widget or Window methods.
+Both native Source Debug/V ordinary and Source ReleaseSafe/V production match:
+
+| Scope | Returning records | Strict trap pairs | Output SHA-256 |
+| --- | ---: | ---: | --- |
+| Layout widgets | 27,963 | 37 | `7530b735b2181ad9675dbf776110002b759a5fd3c60df25f2e794f553984c164` |
+| Text | 7,562 | 15 | `d6f81838ac48054b14f76b3f3d607c13ca1e3153f1fb9959902596d47f0facac` |
+| RichText | 22,366 | 11 | `82d672df1b109891fa701681f003009fc56e1d28acfc32cfe27c946502342b48` |
+| Window output | 33,215 | 15 | `d97f410c29c874baeee7e5506ce5e55dd68bbdb2740061d1f7b2ea5a037d617b` |
+
+Layout callbacks can mutate current/later weights, child sizes, parent fields
+and labels, or replace the child field during either Flex pass. Borrowed header
+locals preserve the source loops' captured slices; distribution branches still
+read the live child-field length. Column measures every item and checks its
+remainder subtraction, while Row measures zero-flex items and saturates the
+remainder. Error and state-update order, borrowed border labels, contradictory
+constraints, empty layouts and inherited dimension behavior are covered.
+Changing an initially positive Row weight to zero before its second visit can
+read uninitialized source cache storage; that branch remains excluded, with
+V's existing zero-initialized cache retained.
+
+Text/RichText surfaces retain borrowed caller graphemes, copied styles and source
+iterator/reset order. Public iterator payloads require context/input/line fields
+as applicable, require both wrapped-line fields, and expose usize cursors. Text
+checks three complete constructors, five paired omission rejections and three
+source-private/V-public method boundaries. RichText checks four complete
+constructors, seven omission pairs, four private-method adapters, two measured
+constructor adaptations and eight source-only allocator observations. Plain
+CellSegment now requires text; pinned V still ignores that inherited marker
+through TextSpan, whose alias is retained for shared segment compatibility.
+The missing arena parameter is a GC adaptation. Private source iterator bodies
+are compared through public drawing, without source wrappers or visibility
+changes. Unused source Text consumeCR/consumeLF helpers reference a nonexistent
+field and are not exposed as speculative translated APIs.
+
+Source leading-tab underflow, RichText standalone-CR underflow/range failures,
+nonadvancing oversized wrapped graphemes, and malformed-byte Unicode underflow
+are isolated and retained. Text's nonwrapped container width intentionally
+truncates; RichText hard-line widths saturate. Zero maximum width returns before
+decoding or allocation. Large valid draws include the 65,535-cell boundary.
+Private heap shells for Surface and RichText iterator/line headers avoid pinned
+V production's recursive keepalive enumeration of the entire cell arrays on
+every write. Public values and borrowed storage remain unchanged. The formerly
+timed-out RichText producer completes all sixteen large production cases in
+1.43 seconds on the measured host; timing is an observation, not a gate or a
+claim about general rendering throughput.
+
+Window records compare all three wrap/width methods, clipping and measurement,
+split segments, style/link metadata, borrowed pointer offsets and post-draw input
+mutation. Fill retains the source's negative-y contiguous behavior and ignored
+parent offsets. Buffer products near 65,535 squared are computed before clamping
+without signed-int overflow. Grapheme iteration occurs before column checks,
+preserving inherited malformed-input failures even in zero-width unwrapped
+printing. Valid UTF-8 splits use codepoint boundaries; malformed-unit splits use
+endpoints, so arbitrary malformed byte-split state is not exhaustively covered.
+
+Reproduction, focused consumers and exact limits are in
+`vaxis/reference_probes/vxfw_layout/README.md`,
+`vaxis/reference_probes/vxfw_text/README.md`,
+`vaxis/reference_probes/vxfw_rich_text/README.md` and
+`vaxis/reference_probes/window_output/README.md`. GC/allocator failures, arena
+lifetime, readonly slices, native ABI, int-bounded V strings/arrays and arbitrary
+uninitialized/dangling source state remain outside parity. App manual lifecycle,
+Window scroll/mouse/border and cross-platform runtime contracts remain in the
+live audit.
+
+Final integration passes all 44 Vaxis test files, Boo's four focused tests and
+native/Linux whole-application checks. Both Windows DLLs and the four new focused
+test executables compile. Vaxis also links as an x86_64 Linux ELF shared library
+with GC disabled for that cross build. These cross-target checks establish
+compilation/link success; Windows/Linux runtime behavior was not executed.
+The existing constructor gate also passes in both modes, retaining 38 complete
+pairs, 57 paired omission rejections and 79 defaults with its historical
+`2917ca5cdc672d99b1c440daed7882a2da028cc5a1325097b444ce88a501dbbd` hash.
+The image implementation is unchanged in this checkpoint; its preceding 44-file
+test pass remains recorded in the previous continuation.

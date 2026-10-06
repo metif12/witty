@@ -35,9 +35,13 @@ pub fn (text &RichText) draw(ctx DrawContext) !Surface {
 				widget:   text.widget()
 			} }
 	}
-	mut iter := RichSoftwrapIterator.new(text.text, ctx)
+	mut iter := &RichSoftwrapIterator{
+		...RichSoftwrapIterator.new(text.text, ctx)
+	}
 	size := text.find_container_size(mut iter)
-	mut surface := Surface.init(text.widget(), size)
+	mut surface := &Surface{
+		...Surface.init(text.widget(), size)
+	}
 	for i in 0 .. surface.buffer.len {
 		surface.buffer[i] = vaxis.Cell{
 			style: text.base_style
@@ -46,35 +50,35 @@ pub fn (text &RichText) draw(ctx DrawContext) !Surface {
 	mut row := u16(0)
 	if text.softwrap {
 		for {
-			line := iter.next() or { break }
+			line := rich_draw_next(mut iter) or { break }
 			if ctx.max.outside_height(row) { break
 			 }
 			mut col := match text.text_align {
 				.left { u16(0) }
-				.center { (size.width - line.width) / 2 }
-				.right { size.width - line.width }
+				.center { vxfw_u16_sub(size.width, line.width) / 2 }
+				.right { vxfw_u16_sub(size.width, line.width) }
 			}
 
 			for cell in line.cells {
 				surface.write_cell(col, row, cell)
-				col += cell.char_.width
+				col = vxfw_u16_add(col, u16(cell.char_.width))
 			}
-			row++
+			row = vxfw_u16_add(row, 1)
 		}
 	} else {
 		for {
-			line := iter.next_hard_break() or { break }
+			line := rich_draw_next_hard(mut iter) or { break }
 			if ctx.max.outside_height(row) { break
 			 }
-			width := rich_line_width(line, true)
+			width := rich_line_width(line.cells, true)
 			mut col := match text.text_align {
 				.left { u16(0) }
 				.center { sat_sub(size.width, width) / 2 }
 				.right { sat_sub(size.width, width) }
 			}
 
-			for cell in line {
-				if col + cell.char_.width >= size.width && width > size.width
+			for cell in line.cells {
+				if vxfw_u16_add(col, u16(cell.char_.width)) >= size.width && width > size.width
 					&& text.overflow == .ellipsis {
 					surface.write_cell(col, row, vaxis.Cell{
 						char_: vaxis.CellCharacter{
@@ -87,12 +91,32 @@ pub fn (text &RichText) draw(ctx DrawContext) !Surface {
 					continue
 				}
 				surface.write_cell(col, row, cell)
-				col += cell.char_.width
+				col = vxfw_u16_add(col, u16(cell.char_.width))
 			}
-			row++
+			row = vxfw_u16_add(row, 1)
 		}
 	}
 	return surface.trim_height(math.max(row, ctx.min.height))
+}
+
+// Keep GC ownership in heap shells during drawing. The source line arrays stay
+// borrowed; this avoids repeated recursive production keepalive scans per cell.
+struct RichDrawCells {
+	cells []vaxis.Cell
+}
+
+fn rich_draw_next(mut iter RichSoftwrapIterator) ?&RichWrappedLine {
+	value := iter.next() or { return none }
+	return &RichWrappedLine{
+		...value
+	}
+}
+
+fn rich_draw_next_hard(mut iter RichSoftwrapIterator) ?&RichDrawCells {
+	cells := iter.next_hard_break() or { return none }
+	return &RichDrawCells{
+		cells: cells
+	}
 }
 
 fn rich_line_width(line []vaxis.Cell, saturating bool) u16 {
@@ -101,7 +125,7 @@ fn rich_line_width(line []vaxis.Cell, saturating bool) u16 {
 		if saturating {
 			width = u16(math.min(u32(width) + cell.char_.width, u32(0xffff)))
 		} else {
-			width += cell.char_.width
+			width = vxfw_u16_add(width, u16(cell.char_.width))
 		}
 	}
 	return width
@@ -117,7 +141,7 @@ fn (text RichText) find_container_size(mut iter RichSoftwrapIterator) Size {
 			if iter.ctx.max.outside_height(row) { break
 			 }
 			width = math.max(width, line.width)
-			row++
+			row = vxfw_u16_add(row, 1)
 		}
 	} else {
 		for {
@@ -125,7 +149,7 @@ fn (text RichText) find_container_size(mut iter RichSoftwrapIterator) Size {
 			if iter.ctx.max.outside_height(row) { break
 			 }
 			width = math.max(width, rich_line_width(line, true))
-			row++
+			row = vxfw_u16_add(row, 1)
 		}
 	}
 	return Size{
@@ -134,7 +158,7 @@ fn (text RichText) find_container_size(mut iter RichSoftwrapIterator) Size {
 				if max_width := iter.ctx.max.width { math.min(max_width, width) } else { width }
 			}
 			.parent {
-				iter.ctx.max.width or { panic('parent width must be bounded') }
+				iter.ctx.max.width or { panic('Assertion failed') }
 			}
 		}
 		height: math.max(row, iter.ctx.min.height)
@@ -143,17 +167,24 @@ fn (text RichText) find_container_size(mut iter RichSoftwrapIterator) Size {
 
 pub struct RichWrappedLine {
 pub mut:
-	width u16
-	cells []vaxis.Cell
+	width u16          @[required]
+	cells []vaxis.Cell @[required]
 }
 
+// The allocator is GC-owned in V; the source cell slices and usize cursors stay
+// borrowed public payloads. Methods are V adapters for the source-private ones.
 pub struct RichSoftwrapIterator {
-	ctx  DrawContext
-	text []vaxis.Cell
-mut:
-	line       []vaxis.Cell
-	index      int
-	hard_index int
+pub mut:
+	ctx        DrawContext  @[required]
+	text       []vaxis.Cell @[required]
+	line       []vaxis.Cell @[required]
+	index      usize
+	hard_index usize
+}
+
+fn rich_cells_slice(cells []vaxis.Cell, start usize, end usize) []vaxis.Cell {
+	if start > end || end > usize(cells.len) { panic('index out of bounds') }
+	return cells[int(start)..int(end)]
 }
 
 pub fn RichSoftwrapIterator.new(spans []TextSpan, ctx DrawContext) RichSoftwrapIterator {
@@ -179,7 +210,7 @@ pub fn RichSoftwrapIterator.new(spans []TextSpan, ctx DrawContext) RichSoftwrapI
 			cells << vaxis.Cell{
 				char_: vaxis.CellCharacter{
 					grapheme: grapheme
-					width:    u8(ctx.string_width(grapheme))
+					width:    vxfw_u8_cast(u64(ctx.string_width(grapheme)))
 				}
 				style: span.style
 				link:  span.link
@@ -189,6 +220,7 @@ pub fn RichSoftwrapIterator.new(spans []TextSpan, ctx DrawContext) RichSoftwrapI
 	return RichSoftwrapIterator{
 		ctx:  ctx
 		text: cells
+		line: []vaxis.Cell{}
 	}
 }
 
@@ -199,27 +231,27 @@ pub fn (mut iter RichSoftwrapIterator) reset() {
 }
 
 pub fn (mut iter RichSoftwrapIterator) next_hard_break() ?[]vaxis.Cell {
-	if iter.hard_index >= iter.text.len { return none }
+	if iter.hard_index >= usize(iter.text.len) { return none }
 	start := iter.hard_index
 	mut saw_cr := false
-	for iter.hard_index < iter.text.len {
-		cell := iter.text[iter.hard_index]
+	for iter.hard_index < usize(iter.text.len) {
+		cell := iter.text[int(iter.hard_index)]
 		if cell.char_.grapheme == '\r' { saw_cr = true }
 		if cell.char_.grapheme == '\n' {
-			iter.hard_index++
-			return iter.text[start..iter.hard_index - if saw_cr {
-				2
-			} else {
-				1
-			}]
+			iter.hard_index = vxfw_usize_add(iter.hard_index, 1)
+			end := vxfw_usize_sub(iter.hard_index, if saw_cr { usize(2) } else { usize(1) })
+			if start > end { panic('index out of bounds') }
+			return rich_cells_slice(iter.text, start, end)
 		}
 		if saw_cr {
-			iter.hard_index--
-			return iter.text[start..iter.hard_index - 1]
+			iter.hard_index = vxfw_usize_sub(iter.hard_index, 1)
+			end := vxfw_usize_sub(iter.hard_index, 1)
+			if start > end { panic('index out of bounds') }
+			return rich_cells_slice(iter.text, start, end)
 		}
-		iter.hard_index++
+		iter.hard_index = vxfw_usize_add(iter.hard_index, 1)
 	}
-	return iter.text[start..]
+	return rich_cells_slice(iter.text, start, usize(iter.text.len))
 }
 
 fn rich_whitespace(cell vaxis.Cell) bool {
@@ -227,7 +259,7 @@ fn rich_whitespace(cell vaxis.Cell) bool {
 }
 
 pub fn (mut iter RichSoftwrapIterator) next() ?RichWrappedLine {
-	if iter.index == iter.line.len {
+	if iter.index == usize(iter.line.len) {
 		iter.line = iter.next_hard_break() or { return none }
 		mut end := iter.line.len
 		for end > 0 && rich_whitespace(iter.line[end - 1]) {
@@ -237,23 +269,24 @@ pub fn (mut iter RichSoftwrapIterator) next() ?RichWrappedLine {
 		iter.index = 0
 	}
 	max_width := iter.ctx.max.width or {
-		iter.index = iter.line.len
+		width := rich_line_width(iter.line, false)
+		iter.index = usize(iter.line.len)
 		return RichWrappedLine{
-			width: rich_line_width(iter.line, false)
+			width: width
 			cells: iter.line
 		}
 	}
 
 	start := iter.index
 	mut width := u16(0)
-	for iter.index < iter.line.len {
+	for iter.index < usize(iter.line.len) {
 		idx := iter.next_wrap()
-		word := iter.line[iter.index..idx]
+		word := rich_cells_slice(iter.line, iter.index, idx)
 		mut next_width := usize(0)
 		for cell in word {
-			next_width += cell.char_.width
+			next_width = vxfw_usize_add(next_width, usize(cell.char_.width))
 		}
-		if usize(width) + next_width > max_width {
+		if vxfw_usize_add(usize(width), next_width) > usize(max_width) {
 			mut trim := 0
 			for trim < word.len && rich_whitespace(word[trim]) {
 				trim++
@@ -265,37 +298,37 @@ pub fn (mut iter RichSoftwrapIterator) next() ?RichWrappedLine {
 			}
 			if trimmed_width > max_width {
 				for cell in word {
-					if width + cell.char_.width > max_width { return RichWrappedLine{
+					if vxfw_u16_add(width, u16(cell.char_.width)) > max_width { return RichWrappedLine{
 							width: width
-							cells: iter.line[start..iter.index]
+							cells: rich_cells_slice(iter.line, start, iter.index)
 						} }
-					width += cell.char_.width
-					iter.index++
+					width = vxfw_u16_add(width, u16(cell.char_.width))
+					iter.index = vxfw_usize_add(iter.index, 1)
 				}
 			}
 			end := iter.index
-			iter.index += trim
+			iter.index = vxfw_usize_add(iter.index, usize(trim))
 			return RichWrappedLine{
 				width: width
-				cells: iter.line[start..end]
+				cells: rich_cells_slice(iter.line, start, end)
 			}
 		}
 		iter.index = idx
-		width += u16(next_width)
+		width = vxfw_u16_add(width, vxfw_u16_cast(u64(next_width)))
 	}
 	return RichWrappedLine{
 		width: width
-		cells: iter.line[start..]
+		cells: rich_cells_slice(iter.line, start, usize(iter.line.len))
 	}
 }
 
-fn (iter RichSoftwrapIterator) next_wrap() int {
+fn (iter RichSoftwrapIterator) next_wrap() usize {
 	mut i := iter.index
-	for i < iter.line.len && rich_whitespace(iter.line[i]) {
-		i++
+	for i < usize(iter.line.len) && rich_whitespace(iter.line[int(i)]) {
+		i = vxfw_usize_add(i, 1)
 	}
-	for i < iter.line.len && !rich_whitespace(iter.line[i]) {
-		i++
+	for i < usize(iter.line.len) && !rich_whitespace(iter.line[int(i)]) {
+		i = vxfw_usize_add(i, 1)
 	}
 	return i
 }

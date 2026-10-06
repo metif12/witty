@@ -49,23 +49,35 @@ The widget extension covers every widget exported by `src/vxfw/vxfw.zig`:
 | ScrollBuilder | ScrollView.Builder | userdata, build_fn (`buildFn`) |
 | ScrollSlice | ScrollView.Source slice arm | widgets (required slice payload) |
 
-This proves constructor field presence and selected defaults, not widget layout
-arithmetic. Padding's u16 padding sums, child-size additions and assertion guards,
-and Border's size additions, label-width casts and subtractions remain separate
-unchecked translation gaps in `vxfw/layout.v`.
+This historical runner proves constructor field presence and selected defaults.
+The separate [layout comparison](../vxfw_layout/README.md) now verifies checked
+arithmetic, assertions, child errors and callback ordering in Center, Padding,
+Border, FlexColumn and FlexRow, plus the SizedBox widget adapter. Borrowed label
+storage and captured Flex child slices are covered. The source FlexRow branch
+that reads an uninitialized size cache remains excluded from defined parity.
 
-Other public record construction is outside this extension. Source
-`Text.LineIterator` requires `buf`; `Text.SoftwrapIterator` requires `ctx` and
-`hard_iter`; its `Line` requires `width` and `bytes`. V `LineIterator`,
-`SoftwrapIterator` and `WrappedLine` currently permit omitted state. V keeps the
-softwrap context and iterator state private and exposes public `new`/`next`
-methods, while Source's iterator `init`/`next` methods are private.
-Source `RichText.SoftwrapIterator` requires `arena`, `ctx`, `text` and `line`, and
-its `Line` requires `width` and `cells`. V `RichSoftwrapIterator` omits the arena,
-keeps context/text/state private, and supplies managed storage through `new`;
-`RichWrappedLine` fields currently have defaults. Iterator indices use V int
-in place of Source usize. The `RichText.TextSpan` alias maps Source Segment to
-`vaxis.CellSegment`; Segment's required `text` field is not part of this proof.
+Additional iterator payload contracts are covered by the new
+[Text](../vxfw_text/README.md) and [RichText](../vxfw_rich_text/README.md) probes,
+without changing this runner's counts or output hash. V `LineIterator.buf`,
+`SoftwrapIterator.ctx/hard_iter` and `WrappedLine.width/bytes` now require explicit
+fields. `RichSoftwrapIterator.ctx/text/line` and `RichWrappedLine.width/cells`
+likewise require fields. Their payloads are public and their indices use Source
+usize, with borrowed string and cell views. Source iterator methods remain
+private; the existing public V `new`, `reset`, `next_hard_break` and `next` methods
+are measured convenience adapters where applicable. Native behavior is compared
+through unchanged public draw methods, while private-access rejections and V
+adapter calls are checked separately.
+
+Source allocator and RichText arena ownership map to V GC storage. Private heap
+shells preserve borrowed data and draw/reset order while avoiding repeated
+production keepalive scans; supplied-allocator failure and ABI parity remain
+outside the V comparison. The `RichText.TextSpan` alias retains compatibility
+with `vaxis.CellSegment`. Direct `CellSegment{}` rejects omitted required text,
+but pinned V ignores the inherited marker on `TextSpan{}` and accepts an empty
+string. This measured compiler boundary remains documented separately. The
+[Window output comparison](../window_output/README.md) also covers delegated
+fill/print arithmetic, operation order and borrowed tokenizer/grapheme views;
+its broader representation limits remain explicit.
 
 Source App's manual state requires `allocator`, `tty`, `vx`, `timers`,
 `wants_focus` and `buffer`. V `App.init()` returns a managed pointer, omits the
