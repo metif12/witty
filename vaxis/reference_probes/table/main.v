@@ -44,7 +44,17 @@ fn trap(mode string) {
 	headers := ['x']; mut screen := vaxis.Screen.new(vaxis.Winsize{ cols: 4, rows: 3 }); win := vaxis.Window.new(&screen)
 	mut ctx := vaxis.TableContext{ selected_bg: vaxis.ColorDefault{}, active_bg: vaxis.ColorDefault{} }
 	match mode {
-		'width_zero' { vaxis.table_calc_col_width(0, headers, vaxis.TableWidthDynamicFill{}, vaxis.Window{}) or { eprintln('UNEXPECTED: ${err}'); return } }
+		'width_zero' {
+			vaxis.table_calc_col_width(0, headers, vaxis.TableWidthDynamicFill{}, vaxis.Window{
+				x_off:        0
+				y_off:        0
+				parent_x_off: 0
+				parent_y_off: 0
+				width:        0
+				height:       0
+				screen:       unsafe { nil }
+			}) or { eprintln('UNEXPECTED: ${err}'); return }
+		}
 		'heads_zero' { vaxis.table_calc_col_width(0, []string{}, vaxis.TableWidthDynamicFill{}, win) or { eprintln('UNEXPECTED: ${err}'); return } }
 		'heads_cast' { vaxis.table_calc_col_width(0, []string{len: 65536}, vaxis.TableWidthDynamicFill{}, win) or { eprintln('UNEXPECTED: ${err}'); return } }
 		'header_cast' { vaxis.table_calc_col_width(0, ['x'.repeat(65536)], vaxis.TableWidthDynamicHeaderLen{}, win) or { eprintln('UNEXPECTED: ${err}'); return } }
@@ -87,7 +97,15 @@ fn main() {
 		}
 		if p[0] == 'W' {
 			headers := []string{len: int(number(p, 3)), init: 'h'.repeat(int(number(p, 6)))}
-			result := vaxis.table_calc_col_width(number(p, 4), headers, width_style(number(p, 1), number(p, 5), headers.len), vaxis.Window{ width: number(p, 2) }) or { b.write_string('E:${err.msg()}\n'); continue }
+			result := vaxis.table_calc_col_width(number(p, 4), headers, width_style(number(p, 1), number(p, 5), headers.len), vaxis.Window{
+				x_off:        0
+				y_off:        0
+				parent_x_off: 0
+				parent_y_off: 0
+				width:        number(p, 2)
+				height:       0
+				screen:       unsafe { nil }
+			}) or { b.write_string('E:${err.msg()}\n'); continue }
 			b.write_string('${result}\n'); continue
 		}
 		mut screen := vaxis.Screen.new(vaxis.Winsize{ cols: if p[0] == 'D' { if number(p, 1) >= 4 { u16(144) } else { u16(8) } } else { number(p, 1) }, rows: if p[0] == 'D' { u16(4) } else { number(p, 2) } }); win := vaxis.Window.new(&screen)

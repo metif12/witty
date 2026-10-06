@@ -1119,9 +1119,12 @@ an item here does not mean its full module has been certified yet.
   CellSegment construction enforces it; the alias remains compatible with
   shared segment inputs. Allocator/arena failures, readonly slice types and
   lengths beyond V's int-sized carriers remain distinct contracts. Window
-  fill/print now have separate arithmetic and borrowed-output comparisons;
-  arbitrary Window/PrintResult constructors, scroll copy ranges/overlap, mouse
-  endpoint arithmetic and border behavior remain outside those matrices.
+  fill/print, scroll/mouse and borders now have separate checked-arithmetic,
+  borrowed-state and failure-order comparisons. Window/PrintResult field
+  presence, defaults and public mutation are checked separately. Wider explicit
+  i17 literals, inherited required fields through V aliases, explicit nil
+  pointers and boxed border-carrier copies remain measured differences;
+  logical flags do not certify packed layout or native ABI.
   Terminal recovery
   comparison covers the existing unbuffered Tty adapter; source buffered output,
   public global-variable access, panic-runtime stack/address handling and
@@ -2121,3 +2124,128 @@ pairs, 57 paired omission rejections and 79 defaults with its historical
 `2917ca5cdc672d99b1c440daed7882a2da028cc5a1325097b444ce88a501dbbd` hash.
 The image implementation is unchanged in this checkpoint; its preceding 44-file
 test pass remains recorded in the previous continuation.
+
+## Vaxis Window, cell storage and grapheme cache continuation
+
+Window scroll now checks its u16 copy arithmetic, slice bounds and memcpy
+overlap before copying. Mouse hit testing checks i17 endpoints in the source's
+Boolean short-circuit order. Child borders draw complete top, bottom, left and
+right edges before corners, preserving the cells already written when a later
+operation fails. Public Window records restore mutable fields and required
+payloads; callers now supply the required offsets, dimensions and PrintResult
+overflow field. Screen cell indexing uses usize products and explicit bounds
+invariants before narrowing to V array indices. These checks survive production
+optimization.
+
+Each new runner hashes and copies the complete pinned Vaxis source and locked
+uucode graph unchanged, then calls public source methods. Native Source Debug/V
+ordinary and Source ReleaseSafe/V production match the following observations:
+
+| Scope | Returning records | Strict trap pairs | Output SHA-256 |
+| --- | ---: | ---: | --- |
+| Window scroll/mouse | 170,387 | 16 | `a10c9f8d70ece1a016a387f25c12c11bf2840224afc3e2e8e839fcb0523985f9` |
+| Window child borders | 19,963 | 16 | `816665627ba1720864c64e93842e7270044f2019add2d181f3ff53f40e5d158f` |
+| Window record contracts | 311 | 0 | `016aff5f7db4b2c5d9ba08210bc93d0e150a7c99244051cffdb800c93d54cc8d` |
+| Screen cells | 7,088 | 12 | `56a76ac5d4b010ce3cef8fa8f65b5ca92e30d99c440b5432027fac6bd46d983a` |
+| AllocatingScreen/InternalScreen | 6,570 | 19 | `c51b3c3a72977c3b02a883b513817c51ec2aec1c66ab3f9bfdd6129a32602404` |
+| GraphemeCache | 32,932 | 10 | `331f02b2216d319c23197da6e34213dcfc0dc19bf6208a9ad89706f6a94d9b4d` |
+
+The record-contract and cache hashes include their final newline; the other
+hashes join records without a final newline. Traps require an anchored expected panic,
+nonzero exit, no ordinary stdout and no unexpected-return marker. Bounds,
+assertion, integer and alias failures are separate categories. Source bodies
+and visibility are unchanged.
+
+Scroll retains the source's absolute starting row and height-relative stopping
+row, ignored parent clipping and over-height early return. Equal or overlapping
+nonempty copies retain the inherited memcpy alias panic, including zero-count
+scrolling that enters the copy loop. The corpus includes valid 65,025–65,535-cell
+copies and caller-byte mutation after scroll. Mouse returns the original event
+value and checks no Screen state; nonzero modifiers remain outside this matrix.
+
+Border records cover every location arm and flag combination, borrowed custom
+raw glyphs of forced width one, clipping, degenerate corners and saturating
+interiors. Sixteen separate failure-state observations also match SHA-256
+`98f463b314e182b3d60ac994303f0fe3900b05b7f5cbeef79f571d4da03181ed`.
+The fixture-only native FullPanic observer saves cells before defaultPanic; V's
+exit observer saves cells during the ordinary panic exit path. Neither resumes
+execution or changes source statements. This proves edge-write order without
+asserting panic-runtime or stack-trace parity.
+
+Window contracts check seven complete constructors, eleven required-field
+omission pairs, two invalid fixed-glyph lengths, thirteen selected defaults and
+public record mutation/copy behavior. Twelve wider V i17 initializers, three
+alias-required omissions and explicit nil Screen pointers are measured
+differences. Source packed Locations layout and union ABI differ from V records.
+Two separate carrier-copy observations show V's boxed border sum payloads share
+mutable headers/flags, while direct payload record copies remain independent.
+Those sum-carrier copies are outside logical copy parity. Screen cell records
+include complete styles, hyperlinks, image options, scale, borrowed storage,
+clipping before indexing and clearing oversized backing buffers; tiny seeded
+arrays exercise indices beyond signed 32-bit range without huge allocations.
+
+GraphemeCache preserves its inline 8 KiB buffer and independent value copies,
+exposes the public mutable buffer/index, checks usize addition before wrapping,
+checks destination bounds before aliasing, and advances only after copying.
+Returned mutable views remain attached to cache storage, including after later
+wrapping writes. Its matrix checks every initial index from zero through 8192,
+large lengths, native usize endpoints, disjoint internal views and empty puts.
+Ten fixture-only panic-state observations also match the actual index and full
+initialized buffer at failure. Two constructor/public-state pairs check the
+default index, written prefix and native inline size. Unwritten Source default
+bytes are undefined and excluded; V retains its initialized fixed array.
+
+InternalScreen, adapting Source's public AllocatingScreen export, now owns
+retained grapheme/URI/ID bytes so caller changes can be detected on the next
+frame. Initial space buffers are independently owned. Private byte buffers
+preserve capacity-fit reuse and current/older borrowed read views, including
+an old view's retained length after a shorter write. Writes use usize indices;
+reads retain checked source u16 indices and both methods retain the inherited
+strict-greater-than coordinate guards. The default equality fastpath and
+omission of width/image/wrapped/scale from retained equality remain unchanged.
+Public buffer construction is required.
+
+Four alias traps also match separately observed failure state, SHA-256
+`c649a7f33f7162d839dd233c1e9883e5395d540dd09d102d178e96c4a8ee6d1a`.
+Character, URI and ID writes occur in source order: each public view is cleared,
+capacity is ensured and incoming length becomes visible before memcpy. Style
+and default state update only after all copies. Fixture-only panic/exit hooks
+verify preceding writes, the failing field's length and unchanged flags. Two
+supplied-allocator differences remain measured: Source init can fail with
+OutOfMemory, and an append failure clears that field, logs and continues with
+the other fields. V's managed API exposes neither supplied allocator behavior.
+One V-only array-length trap and one complete/omission constructor pair are
+checked separately. Capacity growth/remapping addresses, old-view validity
+across growth, direct ArrayList payload APIs and post-deinit Source undefined
+storage remain managed-storage boundaries.
+
+Reproduction and precise scope are in
+`vaxis/reference_probes/window_state/README.md`,
+`vaxis/reference_probes/window_border/README.md`,
+`vaxis/reference_probes/window_contracts/README.md` and
+`vaxis/reference_probes/screen_cells/README.md`, with cache reproduction in
+`vaxis/reference_probes/grapheme_cache/README.md` and retained-cell reproduction in
+`vaxis/reference_probes/internal_screen/README.md`.
+
+Allocator/GC failures, readonly/nullability type contracts, int-sized V
+carriers, native ABI and arbitrary dangling or uninitialized Source state
+remain outside these scoped comparisons. App manual lifecycle construction
+and production assertions in its private command/focus pipeline require their
+own public run/PTY verification; public init/deinit/run are translated, and a
+commented Source destroy helper is not an implemented API to reproduce.
+
+Final integration passes all 50 Vaxis test files, Boo's four focused consumers
+and native/Linux whole-application checks. Both Windows DLLs and all six new
+focused test executables compile, and Vaxis links as an x86_64 Linux ELF shared
+library with GC disabled for that cross build. Cross-target runtime behavior
+was not executed. The image module is unchanged; its preceding 44-file test
+pass remains recorded in the previous continuation.
+
+The affected WindowOutput, Surface, Table, Classic Widgets and Widgets runners
+also retain all five historical hashes in both modes, totaling 111,391 returning
+records per mode. Classic/Widgets legacy runners choose Source Debug internally;
+this additional optimized check used a fixture-only Zig command wrapper that
+adds `-O ReleaseSafe` to each native build-exe invocation, with delegated commands
+recorded separately. No Source body changed. Their historical substring-based
+trap checks remain historical evidence; WindowOutput/Surface retain strict
+checks, and the new matrices above use strict failure classification.

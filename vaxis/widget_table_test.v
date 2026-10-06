@@ -107,12 +107,34 @@ fn test_table_active_callback_runs_without_active_color_and_retains_partial_erro
 fn test_table_column_width_modes_preserve_source_rounding_and_errors() {
 	headers := ['a', 'three', 'long heading']
 	win := Window{
-		width: 14
+		x_off:        0
+		y_off:        0
+		parent_x_off: 0
+		parent_y_off: 0
+		width:        14
+		height:       0
+		screen:       unsafe { nil }
 	}
 	assert table_calc_col_width(0, headers, TableWidthDynamicFill{}, win)! == 5
-	assert table_calc_col_width(65535, headers, TableWidthDynamicFill{}, Window{ width: 15 })! == 6
+	assert table_calc_col_width(65535, headers, TableWidthDynamicFill{}, Window{
+		x_off:        0
+		y_off:        0
+		parent_x_off: 0
+		parent_y_off: 0
+		width:        15
+		height:       0
+		screen:       unsafe { nil }
+	})! == 6
 	assert table_calc_col_width(1, headers, TableWidthDynamicHeaderLen{ padding: 2 }, win)! == 9
-	assert table_calc_col_width(65535, []string{}, TableWidthStaticAll{ width: 17 }, Window{})! == 17
+	assert table_calc_col_width(65535, []string{}, TableWidthStaticAll{ width: 17 }, Window{
+		x_off:        0
+		y_off:        0
+		parent_x_off: 0
+		parent_y_off: 0
+		width:        0
+		height:       0
+		screen:       unsafe { nil }
+	})! == 17
 	assert table_calc_col_width(2, headers, TableWidthStaticIndividual{ widths: [
 		u16(1),
 		2,

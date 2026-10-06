@@ -1,18 +1,18 @@
 module vaxis
 
 pub struct Window {
-pub:
-	x_off        int
-	y_off        int
-	parent_x_off int
-	parent_y_off int
-	width        u16
-	height       u16
-	screen       &Screen = unsafe { nil }
+pub mut:
+	x_off        int     @[required]
+	y_off        int     @[required]
+	parent_x_off int     @[required]
+	parent_y_off int     @[required]
+	width        u16     @[required]
+	height       u16     @[required]
+	screen       &Screen @[required]
 }
 
 pub struct WindowChildOptions {
-pub:
+pub mut:
 	x_off  int
 	y_off  int
 	width  ?u16
@@ -33,7 +33,7 @@ pub struct BorderBottom {}
 pub struct BorderLeft {}
 
 pub struct BorderLocations {
-pub:
+pub mut:
 	top    bool
 	right  bool
 	bottom bool
@@ -53,14 +53,14 @@ pub struct BorderSingleRounded {}
 pub struct BorderSingleSquare {}
 
 pub struct BorderCustom {
-pub:
-	glyphs [6]string
+pub mut:
+	glyphs [6]string @[required]
 }
 
 pub type BorderGlyphs = BorderSingleRounded | BorderSingleSquare | BorderCustom
 
 pub struct WindowBorderOptions {
-pub:
+pub mut:
 	style  Style
 	where_ BorderWhere  = BorderNone{}
 	glyphs BorderGlyphs = BorderSingleRounded{}
@@ -68,9 +68,13 @@ pub:
 
 pub fn Window.new(screen &Screen) Window {
 	return Window{
-		width:  screen.width
-		height: screen.height
-		screen: screen
+		x_off:        0
+		y_off:        0
+		parent_x_off: 0
+		parent_y_off: 0
+		width:        screen.width
+		height:       screen.height
+		screen:       screen
 	}
 }
 
@@ -109,6 +113,11 @@ fn window_u16_add(first u16, second u16) u16 {
 	return first + second
 }
 
+fn window_u16_mul(first u16, second u16) u16 {
+	if first != 0 && second > u16(0xffff) / first { panic('integer overflow') }
+	return first * second
+}
+
 fn window_u8_cast(value u16) u8 {
 	if value > 0xff { panic('integer cast truncated bits') }
 	return u8(value)
@@ -136,6 +145,34 @@ pub fn (w Window) child(opts WindowChildOptions) Window {
 		BorderSingleSquare { ['┌', '─', '┐', '│', '┘', '└']! }
 		BorderCustom { opts.border.glyphs.glyphs }
 	}
+
+	top_left := CellCharacter{
+		grapheme: glyphs[0]
+		width:    1
+	}
+	horizontal := CellCharacter{
+		grapheme: glyphs[1]
+		width:    1
+	}
+	top_right := CellCharacter{
+		grapheme: glyphs[2]
+		width:    1
+	}
+	vertical := CellCharacter{
+		grapheme: glyphs[3]
+		width:    1
+	}
+	bottom_right := CellCharacter{
+		grapheme: glyphs[4]
+		width:    1
+	}
+	bottom_left := CellCharacter{
+		grapheme: glyphs[5]
+		width:    1
+	}
+	style := opts.border.style
+	h := result.height
+	border_width := result.width
 
 	locations := match opts.border.where_ {
 		BorderNone {
@@ -174,81 +211,71 @@ pub fn (w Window) child(opts WindowChildOptions) Window {
 		}
 	}
 
-	style := opts.border.style
-	for i := u16(0); i < result.width; i++ {
-		if locations.top {
+	if locations.top {
+		for i := u16(0); i < border_width; i = window_u16_add(i, 1) {
 			result.write_cell(i, 0, Cell{
-				char_: CellCharacter{
-					grapheme: glyphs[1]
-				}
-				style: style
-			})
-		}
-		if locations.bottom {
-			result.write_cell(i, u16(max_int(int(result.height) - 1, 0)), Cell{
-				char_: CellCharacter{
-					grapheme: glyphs[1]
-				}
+				char_: horizontal
 				style: style
 			})
 		}
 	}
-	for i := u16(0); i < result.height; i++ {
-		if locations.left {
-			result.write_cell(0, i, Cell{
-				char_: CellCharacter{
-					grapheme: glyphs[3]
-				}
+	if locations.bottom {
+		for i := u16(0); i < border_width; i = window_u16_add(i, 1) {
+			result.write_cell(i, u16(max_int(int(h) - 1, 0)), Cell{
+				char_: horizontal
 				style: style
 			})
 		}
-		if locations.right {
-			result.write_cell(u16(max_int(int(result.width) - 1, 0)), i, Cell{
-				char_: CellCharacter{
-					grapheme: glyphs[3]
-				}
+	}
+	if locations.left {
+		for i := u16(0); i < h; i = window_u16_add(i, 1) {
+			result.write_cell(0, i, Cell{
+				char_: vertical
+				style: style
+			})
+		}
+	}
+	if locations.right {
+		for i := u16(0); i < h; i = window_u16_add(i, 1) {
+			result.write_cell(u16(max_int(int(border_width) - 1, 0)), i, Cell{
+				char_: vertical
 				style: style
 			})
 		}
 	}
 	if locations.top && locations.left {
 		result.write_cell(0, 0, Cell{
-			char_: CellCharacter{
-				grapheme: glyphs[0]
-			}
+			char_: top_left
 			style: style
 		})
 	}
 	if locations.top && locations.right {
-		result.write_cell(u16(max_int(int(result.width) - 1, 0)), 0, Cell{
-			char_: CellCharacter{
-				grapheme: glyphs[2]
-			}
+		result.write_cell(u16(max_int(int(border_width) - 1, 0)), 0, Cell{
+			char_: top_right
 			style: style
 		})
 	}
 	if locations.bottom && locations.left {
-		result.write_cell(0, u16(max_int(int(result.height) - 1, 0)), Cell{
-			char_: CellCharacter{
-				grapheme: glyphs[5]
-			}
+		result.write_cell(0, u16(max_int(int(h) - 1, 0)), Cell{
+			char_: bottom_left
 			style: style
 		})
 	}
 	if locations.bottom && locations.right {
-		result.write_cell(u16(max_int(int(result.width) - 1, 0)), u16(max_int(int(result.height) - 1,
-			0)), Cell{
-			char_: CellCharacter{
-				grapheme: glyphs[4]
-			}
+		result.write_cell(u16(max_int(int(border_width) - 1, 0)), u16(max_int(int(h) - 1, 0)), Cell{
+			char_: bottom_right
 			style: style
 		})
 	}
 	child_x := if locations.left { 1 } else { 0 }
 	child_y := if locations.top { 1 } else { 0 }
-	child_width := max_int(int(result.width) - child_x - (if locations.right { 1 } else { 0 }), 0)
 	child_height :=
-		max_int(int(result.height) - child_y - (if locations.bottom { 1 } else { 0 }), 0)
+		max_int(max_int(int(h) - child_y, 0) - (if locations.bottom { 1 } else { 0 }), 0)
+	child_width := max_int(max_int(int(border_width) - child_x, 0) - (if locations.right {
+		1
+	} else {
+		0
+	}), 0)
 	return result.init_child(child_x, child_y, u16(child_width), u16(child_height))
 }
 
@@ -344,7 +371,7 @@ pub enum PrintWrap as u8 {
 }
 
 pub struct PrintOptions {
-pub:
+pub mut:
 	row_offset u16
 	col_offset u16
 	wrap       PrintWrap = .grapheme
@@ -352,10 +379,10 @@ pub:
 }
 
 pub struct PrintResult {
-pub:
-	col      u16
-	row      u16
-	overflow bool
+pub mut:
+	col      u16  @[required]
+	row      u16  @[required]
+	overflow bool @[required]
 }
 
 pub fn (w Window) print(segments []CellSegment, opts PrintOptions) PrintResult {
@@ -558,14 +585,21 @@ pub fn (w Window) scroll(n u16) {
 	mut row := u16(max_int(w.y_off, 0))
 	first_col := u16(max_int(w.x_off, 0))
 	for row < w.height - n {
-		dst_start := int(row) * int(w.screen.width) + int(first_col)
-		src_start := (int(row) + int(n)) * int(w.screen.width) + int(first_col)
-		assert dst_start + int(w.width) <= screen.buf.len
-		assert src_start + int(w.width) <= screen.buf.len
-		for col in 0 .. int(w.width) {
-			screen.buf[dst_start + col] = screen.buf[src_start + col]
+		dst_start := window_u16_add(window_u16_mul(row, w.screen.width), first_col)
+		dst_end := window_u16_add(dst_start, w.width)
+		src_start := window_u16_add(window_u16_mul(window_u16_add(row, n), w.screen.width),
+			first_col)
+		src_end := window_u16_add(src_start, w.width)
+		if int(dst_end) > screen.buf.len || int(src_end) > screen.buf.len {
+			panic('index out of bounds')
 		}
-		row++
+		if w.width != 0 && src_start < dst_end {
+			panic('@memcpy arguments alias')
+		}
+		for col in 0 .. int(w.width) {
+			screen.buf[int(dst_start) + col] = screen.buf[int(src_start) + col]
+		}
+		row = window_u16_add(row, 1)
 	}
 	last_row := w.child(WindowChildOptions{ y_off: int(w.height - n) })
 	last_row.clear()
@@ -658,8 +692,8 @@ fn (mut iter WindowWhitespaceTokenizer) next() ?WindowToken {
 
 pub fn (w Window) has_mouse(mouse ?Mouse) ?Mouse {
 	if event := mouse {
-		if int(event.col) >= w.x_off && int(event.col) < w.x_off + int(w.width)
-			&& int(event.row) >= w.y_off && int(event.row) < w.y_off + int(w.height) {
+		if int(event.col) >= w.x_off && int(event.col) < window_i17_add(w.x_off, int(w.width))
+			&& int(event.row) >= w.y_off && int(event.row) < window_i17_add(w.y_off, int(w.height)) {
 			return event
 		}
 	}

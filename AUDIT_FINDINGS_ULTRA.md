@@ -2164,3 +2164,45 @@ test executables and the x86_64 Linux shared-library link pass. The unchanged
 image module retains its preceding 44-file test result; it was not rerun for
 this checkpoint. The existing constructor gate retains its 38 complete pairs,
 57 omission pairs, 79 defaults and historical hash in both build modes.
+
+## Vaxis Window and retained storage continuation
+
+Window scroll/mouse operations now preserve checked copy/endpoint arithmetic,
+overlap failures and source short circuits. Child borders retain complete edge
+order before corners, including the cells written before a later failure.
+Window records restore mutable fields and required payloads. Screen cell
+methods use usize indices and explicit bounds checks before narrowing.
+
+InternalScreen owns prior-frame character/link bytes, preserves capacity-fit
+reuse and borrowed reads, and follows Source's public header/copy update order.
+Initial spaces are independently allocated. Source's strict coordinate guards,
+u16 read indices and equality fastpath remain intact. GraphemeCache retains its
+inline 8 KiB/by-value storage with public mutable fields, checked usize sums,
+wrapping, alias guards and mutable borrowed returns.
+
+The six new unchanged-source comparisons pass in ordinary/Debug and
+production/ReleaseSafe: 170,387 scroll/mouse records/16 strict traps, 19,963
+border records/16 traps, 311 record-contract observations, 7,088 Screen
+records/12 traps, 6,570 InternalScreen records/19 traps and 32,932 cache
+records/10 traps. Total returning records are 237,251 with 73 strict trap pairs.
+Separate fixture-only panic/exit observers match 16 border, four retained-cell
+and ten cache failure states without changing Source statements or resuming
+execution. Hashes and reproduction commands are in the corresponding
+`vaxis/reference_probes/window_state`, `window_border`, `window_contracts`,
+`screen_cells`, `internal_screen` and `grapheme_cache` README files.
+
+Window constructor probes separately check seven complete pairs, eleven
+required omissions and two invalid fixed-array lengths. Wider i17 V literals,
+required fields through aliases, explicit nil pointers, packed ABI and boxed
+border-carrier copies remain measured differences. InternalScreen measures two
+supplied-allocator differences and a V-only array limit; capacity-growth
+remapping, ArrayList payload APIs and post-deinit Source state remain separate
+contracts. Undefined unwritten cache defaults are excluded. These scopes do not
+certify allocator/GC, readonly/nullability, native ABI, oversized V carriers or
+the remaining App lifecycle/private pipeline behavior.
+
+Integration passes 50/50 Vaxis test files, Boo's four focused consumers and
+native/Linux application checks. Both Windows DLLs, all six new focused test
+executables and an x86_64 Linux shared-library link pass. Cross-target runtime
+was not exercised; the unchanged image module retains its preceding 44-file
+test result.

@@ -197,7 +197,9 @@ fn trap(mode string) {
 		}
 		'trap_style' {
 			mut buffer := vaxis.TextViewBuffer{}
-			buffer.update_style(vaxis.TextViewBufferStyle{ begin: 1, end: 0, style: vaxis.Style{} }) or { panic(err) }
+			buffer.update_style(vaxis.TextViewBufferStyle{ begin: 1, end: 0, style: vaxis.Style{} }) or {
+				panic(err)
+			}
 		}
 		else {
 			panic('unknown trap')
@@ -256,11 +258,13 @@ fn main() {
 					rows: u16(uint(parts, 4))
 				})
 				win := vaxis.Window{
-					x_off:  parts[5].int()
-					y_off:  parts[6].int()
-					width:  u16(uint(parts, 7))
-					height: u16(uint(parts, 8))
-					screen: &screen
+					parent_x_off: 0
+					parent_y_off: 0
+					x_off:        parts[5].int()
+					y_off:        parts[6].int()
+					width:        u16(uint(parts, 7))
+					height:       u16(uint(parts, 8))
+					screen:       &screen
 				}
 				if parts[0] == 'D' {
 					view.draw(win, vaxis.ViewDrawOptions{

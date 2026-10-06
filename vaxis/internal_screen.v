@@ -1,10 +1,11 @@
 module vaxis
 
 // InternalCell is the retained previous-frame representation from pinned
-// InternalScreen.zig. V strings replace its arena-owned ArrayLists.
+// InternalScreen.zig. Public strings borrow private owned byte buffers,
+// retaining Source ArrayList fit reuse and borrowed-view mutation behavior.
 pub struct InternalCell {
 pub mut:
-	char_    string = ' '
+	char_    string
 	style    Style
 	uri      string
 	uri_id   string
@@ -12,6 +13,10 @@ pub mut:
 	default_ bool = true
 	skip     bool
 	scale    CellScale = CellScale{}
+mut:
+	char_storage   []u8
+	uri_storage    []u8
+	uri_id_storage []u8
 }
 
 pub fn (old InternalCell) eql(cell Cell) bool {
@@ -27,7 +32,7 @@ pub struct InternalScreen {
 pub mut:
 	width        u16
 	height       u16
-	buf          []InternalCell
+	buf          []InternalCell @[required]
 	cursor_row   u16
 	cursor_col   u16
 	cursor_vis   bool
@@ -35,12 +40,26 @@ pub mut:
 	mouse_shape  MouseShape  = .default
 }
 
+// Source allocates usize cells; V arrays use signed int lengths.
+fn internal_screen_cell_count(width u16, height u16) int {
+	count := usize(width) * usize(height)
+	if count > usize(2147483647) { panic('V array length limit') }
+	return int(count)
+}
+
 pub fn InternalScreen.new(width u16, height u16) InternalScreen {
-	return InternalScreen{
+	// A heap owner keeps pinned V's production GC from repeatedly scanning a
+	// scoped aggregate while populating its per-cell owned strings.
+	mut screen := &InternalScreen{
 		width:  width
 		height: height
-		buf:    []InternalCell{len: int(width) * int(height), init: InternalCell{}}
+		buf:    []InternalCell{len: internal_screen_cell_count(width, height)}
 	}
+	for i in 0 .. screen.buf.len {
+		screen.buf[i].char_storage = [u8(32)]
+		screen.buf[i].char_ = unsafe { tos(screen.buf[i].char_storage.data, 1) }
+	}
+	return *screen
 }
 
 pub fn (mut s InternalScreen) deinit() {
@@ -51,22 +70,25 @@ pub fn (mut s InternalScreen) write_cell(col u16, row u16, cell Cell) {
 	if s.width < col || s.height < row {
 		return
 	}
-	index := int(row) * int(s.width) + int(col)
-	assert index < s.buf.len
-	s.buf[index].char_ = cell.char_.grapheme
-	s.buf[index].uri = cell.link.uri
-	s.buf[index].uri_id = cell.link.params
-	s.buf[index].style = cell.style
-	s.buf[index].default_ = cell.default_
+	index := usize(row) * usize(s.width) + usize(col)
+	if index >= usize(s.buf.len) { panic('Assertion failed') }
+	internal_screen_retained_write(mut s.buf[int(index)], 0, cell.char_.grapheme)
+	internal_screen_retained_write(mut s.buf[int(index)], 1, cell.link.uri)
+	internal_screen_retained_write(mut s.buf[int(index)], 2, cell.link.params)
+	s.buf[int(index)].style = cell.style
+	s.buf[int(index)].default_ = cell.default_
 }
 
 pub fn (s &InternalScreen) read_cell(col u16, row u16) ?Cell {
 	if s.width < col || s.height < row {
 		return none
 	}
-	index := int(row) * int(s.width) + int(col)
-	assert index < s.buf.len
-	cell := s.buf[index]
+	product := u32(row) * u32(s.width)
+	if product > 65535 { panic('integer overflow') }
+	index := product + u32(col)
+	if index > 65535 { panic('integer overflow') }
+	if usize(index) >= usize(s.buf.len) { panic('Assertion failed') }
+	cell := s.buf[int(index)]
 	return Cell{
 		char_:    CellCharacter{
 			grapheme: cell.char_
@@ -77,5 +99,69 @@ pub fn (s &InternalScreen) read_cell(col u16, row u16) ?Cell {
 			params: cell.uri_id
 		}
 		default_: cell.default_
+	}
+}
+
+// Source ArrayList(u8).growCapacity uses std.atomic.cache_line as its byte
+// increment. This covers the native/cross targets supported by this port.
+fn internal_screen_growth_increment() usize {
+	$if amd64 || arm64 { return 128 }
+	$if arm32 { return 32 }
+	return 64
+}
+
+// Public header updates follow clearRetainingCapacity, ensureTotalCapacity,
+// then appendSliceAssumeCapacity: new length is visible before the memcpy.
+fn internal_screen_retained_write(mut cell InternalCell, field int, text string) {
+	match field {
+		0 {
+			cell.char_ = unsafe { tos(cell.char_.str, 0) }
+			internal_screen_retained_prepare(mut cell.char_storage, text.len)
+			cell.char_ = internal_screen_retained_view(cell.char_storage, text.len)
+			internal_screen_retained_copy(cell.char_storage, text)
+		}
+		1 {
+			cell.uri = unsafe { tos(cell.uri.str, 0) }
+			internal_screen_retained_prepare(mut cell.uri_storage, text.len)
+			cell.uri = internal_screen_retained_view(cell.uri_storage, text.len)
+			internal_screen_retained_copy(cell.uri_storage, text)
+		}
+		else {
+			cell.uri_id = unsafe { tos(cell.uri_id.str, 0) }
+			internal_screen_retained_prepare(mut cell.uri_id_storage, text.len)
+			cell.uri_id = internal_screen_retained_view(cell.uri_id_storage, text.len)
+			internal_screen_retained_copy(cell.uri_id_storage, text)
+		}
+	}
+}
+
+fn internal_screen_retained_prepare(mut storage []u8, length int) {
+	if storage.len < length {
+		mut capacity := usize(storage.len)
+		for capacity < usize(length) {
+			capacity += capacity / 2 + internal_screen_growth_increment()
+			if capacity > usize(2147483647) { panic('V array length limit') }
+		}
+		// Source has already cleared its old list length before growth; copying
+		// unused old bytes is unnecessary. Allocator remapping/address behavior
+		// across growth remains a managed-storage representation boundary.
+		storage = []u8{len: int(capacity)}
+	}
+}
+
+fn internal_screen_retained_view(storage []u8, length int) string {
+	if storage.len == 0 { return '' }
+	return unsafe { tos(storage.data, length) }
+}
+
+fn internal_screen_retained_copy(storage []u8, text string) {
+	if text.len > 0 {
+		dst := usize(storage.data)
+		src := usize(text.str)
+		length := usize(text.len)
+		if (dst <= src && src - dst < length) || (src < dst && dst - src < length) {
+			panic('@memcpy arguments alias')
+		}
+		unsafe { vmemcpy(storage.data, text.str, text.len) }
 	}
 }

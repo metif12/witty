@@ -71,9 +71,13 @@ fn hit(mut out strings.Builder, surface fw.Surface, point fw.Point) {
 
 fn window_root(screen &vaxis.Screen) vaxis.Window {
 	return vaxis.Window{
-		width:  screen.width
-		height: screen.height
-		screen: screen
+		x_off:        0
+		y_off:        0
+		parent_x_off: 0
+		parent_y_off: 0
+		width:        screen.width
+		height:       screen.height
+		screen:       screen
 	}
 }
 
@@ -170,9 +174,13 @@ fn trap(mode string) {
 		mut x := 0
 		mut y := 0
 		win = vaxis.Window{
-			width:  1
-			height: 1
-			screen: &screen
+			x_off:        0
+			y_off:        0
+			parent_x_off: 0
+			parent_y_off: 0
+			width:        1
+			height:       1
+			screen:       &screen
 		}
 		if mode.ends_with('max_x') {
 			x = -65536
@@ -228,6 +236,9 @@ fn trap(mode string) {
 	} else if mode.starts_with('trap_window_') {
 		win = if mode.ends_with('parent') {
 			vaxis.Window{
+				x_off:        0
+				y_off:        0
+				parent_y_off: 0
 				width:        2
 				height:       2
 				parent_x_off: 65535
@@ -235,10 +246,13 @@ fn trap(mode string) {
 			}
 		} else {
 			vaxis.Window{
-				width:  2
-				height: 2
-				x_off:  65535
-				screen: &screen
+				y_off:        0
+				parent_x_off: 0
+				parent_y_off: 0
+				width:        2
+				height:       2
+				x_off:        65535
+				screen:       &screen
 			}
 		}
 		if mode.contains('write') {

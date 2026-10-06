@@ -162,9 +162,13 @@ fn main() {
 			'G' {
 				mut screen := vaxis.Screen{}
 				parent := vaxis.Window{
-					width:  u16(uint(parts, 1))
-					height: u16(uint(parts, 2))
-					screen: &screen
+					x_off:        0
+					y_off:        0
+					parent_x_off: 0
+					parent_y_off: 0
+					width:        u16(uint(parts, 1))
+					height:       u16(uint(parts, 2))
+					screen:       &screen
 				}
 				mut view := vaxis.ScrollView{
 					scroll:             vaxis.ScrollViewScroll{

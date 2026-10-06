@@ -89,18 +89,26 @@ fn test_window_print_grapheme_and_none_wrap_contract() {
 		commit: false
 	}
 	assert win.print_segment(CellSegment{ text: 'a' }, grapheme_opts) == PrintResult{
+		overflow: false
+
 		col: 1
 		row: 0
 	}
 	assert win.print_segment(CellSegment{ text: 'abcd' }, grapheme_opts) == PrintResult{
+		overflow: false
+
 		col: 0
 		row: 1
 	}
 	assert win.print_segment(CellSegment{ text: 'abcde' }, grapheme_opts) == PrintResult{
+		overflow: false
+
 		col: 1
 		row: 1
 	}
 	assert win.print_segment(CellSegment{ text: 'abcdefgh' }, grapheme_opts) == PrintResult{
+		overflow: false
+
 		col: 0
 		row: 2
 	}
@@ -110,6 +118,8 @@ fn test_window_print_grapheme_and_none_wrap_contract() {
 		overflow: true
 	}
 	assert win.print_segment(CellSegment{ text: '👩‍🚀x' }, grapheme_opts) == PrintResult{
+		overflow: false
+
 		col: 3
 		row: 0
 	}
@@ -118,6 +128,8 @@ fn test_window_print_grapheme_and_none_wrap_contract() {
 		commit: false
 	}
 	assert win.print_segment(CellSegment{ text: 'abcd' }, none_opts) == PrintResult{
+		overflow: false
+
 		col: 4
 		row: 0
 	}
@@ -141,22 +153,32 @@ fn test_window_print_word_wrap_source_cases() {
 		commit: false
 	}
 	assert win.print_segment(CellSegment{ text: 'a b' }, opts) == PrintResult{
+		overflow: false
+
 		col: 3
 		row: 0
 	}
 	assert win.print_segment(CellSegment{ text: 'hello ti' }, opts) == PrintResult{
+		overflow: false
+
 		col: 0
 		row: 2
 	}
 	assert win.print_segment(CellSegment{ text: 'he\n\n' }, opts) == PrintResult{
+		overflow: false
+
 		col: 0
 		row: 2
 	}
 	assert win.print_segment(CellSegment{ text: 'not now' }, opts) == PrintResult{
+		overflow: false
+
 		col: 3
 		row: 1
 	}
 	assert win.print_segment(CellSegment{ text: 'note now' }, opts) == PrintResult{
+		overflow: false
+
 		col: 3
 		row: 1
 	}
@@ -164,6 +186,8 @@ fn test_window_print_word_wrap_source_cases() {
 		CellSegment{ text: 'note ' },
 		CellSegment{ text: 'now' },
 	], opts) == PrintResult{
+		overflow: false
+
 		col: 3
 		row: 1
 	}

@@ -174,18 +174,18 @@ pub fn (mut s Screen) write_cell(col u16, row u16, cell Cell) {
 	if col >= s.width || row >= s.height {
 		return
 	}
-	index := int(row) * int(s.width) + int(col)
-	assert index < s.buf.len
-	s.buf[index] = cell
+	index := usize(row) * usize(s.width) + usize(col)
+	if index >= usize(s.buf.len) { panic('Assertion failed') }
+	s.buf[int(index)] = cell
 }
 
 pub fn (s &Screen) read_cell(col u16, row u16) ?Cell {
 	if col >= s.width || row >= s.height {
 		return none
 	}
-	index := int(row) * int(s.width) + int(col)
-	assert index < s.buf.len
-	return s.buf[index]
+	index := usize(row) * usize(s.width) + usize(col)
+	if index >= usize(s.buf.len) { panic('Assertion failed') }
+	return s.buf[int(index)]
 }
 
 pub fn (mut s Screen) clear() {

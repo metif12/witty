@@ -69,4 +69,7 @@ The source allocator versus V GC, slice readonly types, i17 backing-field
 widths, native ABI and inputs beyond V's int-sized string/array lengths remain
 representation boundaries. Arbitrary Window/PrintResult construction contracts,
 Window scroll/mouse/border behavior and non-native runtime targets remain
-outside this matrix; prior Surface/delegated-Window verification is unchanged.
+outside this matrix. Subsequent comparisons cover record contracts in
+`../window_contracts/README.md`, scroll/mouse in `../window_state/README.md`, and
+child borders in `../window_border/README.md`; prior Surface/delegated-Window
+verification is unchanged.

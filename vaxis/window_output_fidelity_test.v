@@ -22,10 +22,13 @@ fn test_window_full_width_fill_retains_source_negative_row_behavior() {
 	mut screen := Screen.new(Winsize{ cols: 2, rows: 3 })
 
 	Window{
-		width:  2
-		height: 2
-		y_off:  -1
-		screen: &screen
+		x_off:        0
+		parent_x_off: 0
+		parent_y_off: 0
+		width:        2
+		height:       2
+		y_off:        -1
+		screen:       &screen
 	}.fill(Cell{
 		char_: CellCharacter{
 			grapheme: 'x'
@@ -44,16 +47,23 @@ fn test_window_fill_keeps_usize_products_before_buffer_clamping() {
 	}
 
 	Window{
-		width:  65535
-		height: 0
-		y_off:  65535
-		screen: &screen
+		x_off:        0
+		parent_x_off: 0
+		parent_y_off: 0
+		width:        65535
+		height:       0
+		y_off:        65535
+		screen:       &screen
 	}.clear()
 
 	Window{
-		width:  65535
-		height: 65535
-		screen: &screen
+		x_off:        0
+		y_off:        0
+		parent_x_off: 0
+		parent_y_off: 0
+		width:        65535
+		height:       65535
+		screen:       &screen
 	}.clear()
 	assert screen.buf.len == 0
 }
@@ -67,11 +77,13 @@ fn test_window_fill_left_clip_short_circuits_vertical_overflow() {
 	before := screen.buf.clone()
 
 	Window{
-		width:  0
-		height: 1
-		x_off:  -1
-		y_off:  65535
-		screen: &screen
+		parent_x_off: 0
+		parent_y_off: 0
+		width:        0
+		height:       1
+		x_off:        -1
+		y_off:        65535
+		screen:       &screen
 	}.clear()
 	assert screen.buf == before
 }
@@ -81,9 +93,13 @@ fn test_window_unwrapped_columns_saturate_and_measurement_skips_writes() {
 		width_method: .unicode
 	}
 	window := Window{
-		width:  65535
-		height: 1
-		screen: &screen
+		x_off:        0
+		y_off:        0
+		parent_x_off: 0
+		parent_y_off: 0
+		width:        65535
+		height:       1
+		screen:       &screen
 	}
 	result := window.print_segment(CellSegment{ text: '界' }, PrintOptions{
 		wrap:       .none
