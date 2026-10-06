@@ -6,7 +6,9 @@ fn test_center_border_padding_and_sized_box_source_constraints() {
 		text: 'abc'
 	}
 	ctx := DrawContext{
-		max: MaxSize{
+		min:       Size{}
+		cell_size: Size{}
+		max:       MaxSize{
 			width:  10
 			height: 10
 		}
@@ -31,6 +33,7 @@ fn test_center_border_padding_and_sized_box_source_constraints() {
 		height: 1
 	}
 	assert pad.children[0].origin == RelativePoint{
+		row: 0
 		col: 1
 	}
 	assert pad.buffer.len == 0
@@ -63,7 +66,9 @@ fn test_center_border_padding_and_sized_box_source_constraints() {
 		}
 	}
 	boxed := box.widget().draw(DrawContext{
-		max: MaxSize{
+		min:       Size{}
+		cell_size: Size{}
+		max:       MaxSize{
 			width:  8
 			height: 8
 		}
@@ -92,7 +97,9 @@ fn test_pinned_flex_row_and_column_distribute_different_inherent_sizes() {
 	children := [FlexItem.init(a.widget(), 0), FlexItem.init(b.widget(), 1),
 		FlexItem.init(c.widget(), 1), FlexItem.init(d.widget(), 1)]
 	ctx := DrawContext{
-		max: MaxSize{
+		min:       Size{}
+		cell_size: Size{}
+		max:       MaxSize{
 			width:  16
 			height: 16
 		}

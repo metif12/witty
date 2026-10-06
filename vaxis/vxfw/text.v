@@ -19,7 +19,7 @@ pub enum WidthBasis {
 
 pub struct Text {
 pub mut:
-	text        string
+	text        string @[required]
 	style       vaxis.Style
 	text_align  TextAlign    = .left
 	softwrap    bool         = true
@@ -42,8 +42,10 @@ fn text_draw(ptr voidptr, ctx DrawContext) !Surface {
 pub fn (text &Text) draw(ctx DrawContext) !Surface {
 	if width := ctx.max.width {
 		if width == 0 { return Surface{
-				size:   ctx.min
-				widget: text.widget()
+				buffer:   []vaxis.Cell{}
+				children: []SubSurface{}
+				size:     ctx.min
+				widget:   text.widget()
 			} }
 	}
 	size := text.find_container_size(ctx)

@@ -2056,4 +2056,67 @@ module and whole-application checks, both Windows DLL cross builds and the
 four new focused Windows test builds. The Vaxis Linux shared module also
 links as x86_64 ELF with GC disabled for compilation/link verification. Cross
 runtime behavior and allocator/lifetime parity remain unverified; the live
-audit retains the open framework arithmetic and constructor requirements.
+audit retains the remaining framework limits; subsequent scoped verification
+is recorded below.
+
+## Vaxis framework continuation
+
+ListView/ScrollView checked scroll, origin, cursor and dimension operations now
+survive V production optimization. The unchanged-source ordinary/Debug and
+production/ReleaseSafe comparisons match 5,284 ListView records/twenty trap pairs
+and 14,353 ScrollView records/twenty-two trap pairs. Output hashes are
+`1c0060888edc4691761a3d3e2e5d9751c4a673b181457850c147cf9f104c9a9e` and
+`013c5025c4b6192747e19df33a046090b3d0e2781f33f7a70d8824571a05625f`.
+Each checks two isolated inherited builder loops and constructor omissions.
+Source deinit-then-append child-list reuse is measured separately as undefined
+storage, with V retaining its GC array adaptation. Wider i32 initializer storage
+is disclosed separately; no out-of-domain state equivalence is claimed.
+
+Spinner embeds atomic values for independent by-value copies and preserves
+checked u4 increments, frame indexing, atomic wrapping/saturation and tick state
+ordering. Both modes match 15,183 records and six strict traps, SHA-256
+`91e0cf4dd5aee36836a99662a3271b4f9c38b8dfdbb044a88e193e69d1f74acc`.
+Concurrent starts, one wider-u8 constructor boundary and three source-only
+allocator-error cases are included. Stronger V atomic ordering, allocator failures
+and arbitrary concurrent interleavings remain separate contracts.
+
+The previous Unicode, TextField and Surface returning hashes remain unchanged in
+both modes after explicit required-field caller updates. Reproduction, focused
+consumer coverage and precise state limits are in the new
+`vaxis/reference_probes/vxfw_list_view`, `vxfw_scroll_view` and `vxfw_spinner`
+README files, with remaining layout arithmetic and iterator/lifecycle constructor
+contracts recorded in the live audit.
+
+The constructor continuation restores required fields for every exported
+framework widget and its public builder/slice payloads, plus core contexts,
+commands, widgets, surfaces and coordinates. Both modes pass 38 complete
+constructor pairs, 57 paired ordinary omission rejections and 79 default-value
+comparisons, SHA-256
+`2917ca5cdc672d99b1c440daed7882a2da028cc5a1325097b444ce88a501dbbd`.
+Source allocator arguments, pointer nullability/readonly types,
+iterator records, Segment aliases and App manual lifecycle construction remain
+explicitly outside this proof. Reproduction and exact excluded fields are in
+`vaxis/reference_probes/vxfw_constructors/README.md`.
+
+Recovery now registers a successful Tty initialization by value and exposes
+`recover`, `panic_handler` and `Panic.call`. It emits the exact reset sequence,
+restores terminal state even on write failure and preserves the saved snapshot
+across repeated calls. The native macOS ordinary/Debug and production/ReleaseSafe
+comparisons match 56 returning PTY records and fourteen explicit panic/order
+pairs, SHA-256
+`4101322a2b3636fd13ba3fa721e6bcedc928df711057799a2a46688d8d0dd645`.
+Two focused consumer tests pass. Forty-eight source-only buffered observations,
+SHA-256 `336343f9e968444519d30154bd7c1d6fed3e0451066c9f19f03b581da34db850`,
+measure the separate buffered-source/unbuffered-V boundary. Six ordinary compiler
+pairs record the removed Zig 0.15.2 `FormattedPanic` aliases; public-global access
+is a separate measured adaptation. These digests include the fixture's macOS
+termios representation. Writer state, global-variable access, panic stack/address
+handling and cross-platform runtime parity remain excluded. Reproduction and
+exact limitations are in `vaxis/reference_probes/recovery/README.md`.
+
+Final integration passes 40/40 Vaxis and 44/44 image test files, Boo's focused
+tests and native/Linux whole-application checks. Both Windows DLLs and all four
+new focused widget/recovery test executables compile, and Vaxis links as an
+x86_64 Linux shared library with GC disabled for that cross build. Cross-target
+runtime parity and the live audit's remaining layout/iterator/lifecycle
+boundaries remain unverified.

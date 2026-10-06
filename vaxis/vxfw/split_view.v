@@ -9,13 +9,13 @@ pub enum SplitConstraint {
 }
 pub struct SplitView {
 pub mut:
-	lhs            Widget
-	rhs            Widget
+	lhs            Widget @[required]
+	rhs            Widget @[required]
 	constrain      SplitConstraint = .lhs
 	style          vaxis.Style
 	min_width      u16
 	max_width      ?u16
-	width          u16
+	width          u16 @[required]
 	last_max_width ?u16
 	pressed        bool
 	mouse_set      bool
@@ -100,6 +100,10 @@ fn split_draw(ptr voidptr, ctx DrawContext) !Surface {
 	mut children := []SubSurface{cap: 2}
 	if lhs_size.width > 0 && lhs_size.height > 0 {
 		children << SubSurface{
+			origin:  RelativePoint{
+				row: 0
+				col: 0
+			}
 			surface: split.lhs.draw(ctx.with_constraints(lhs_size, MaxSize.from_size(lhs_size)))!
 		}
 	}
@@ -107,6 +111,7 @@ fn split_draw(ptr voidptr, ctx DrawContext) !Surface {
 		children << SubSurface{
 			surface: split.rhs.draw(ctx.with_constraints(rhs_size, MaxSize.from_size(rhs_size)))!
 			origin:  RelativePoint{
+				row: 0
 				col: lhs_size.width + 1
 			}
 		}

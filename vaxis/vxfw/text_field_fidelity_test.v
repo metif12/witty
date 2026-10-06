@@ -37,6 +37,7 @@ fn test_text_field_change_error_keeps_snapshot_and_context_order() {
 	field.userdata = &spy
 	field.on_change = fidelity_callback
 	mut ctx := EventContext{
+		cmds:   []Command{}
 		redraw: false
 	}
 	mut failed := false
@@ -75,6 +76,7 @@ fn test_text_field_submit_clears_and_resets_before_callback() {
 	field.userdata = &spy
 	field.on_submit = fidelity_callback
 	mut ctx := EventContext{
+		cmds:   []Command{}
 		redraw: false
 	}
 	mut failed := false
@@ -119,20 +121,36 @@ fn test_text_field_raw_graphemes_and_context_width_methods() {
 	assert field.buf.string().bytes() == [u8(0xff), `A`]
 	assert field.graphemes_before_cursor() == 2
 	DrawContext.init(.unicode)
-	assert field.width_to_cursor(DrawContext{}) == 2
+	assert field.width_to_cursor(DrawContext{
+		min:       Size{}
+		max:       MaxSize{}
+		cell_size: Size{}
+	}) == 2
 	field.clear_and_free()
 	field.insert_slice_at_cursor('T👍🏽')
 	assert field.graphemes_before_cursor() == 2
 	DrawContext.init(.wcwidth)
-	assert field.width_to_cursor(DrawContext{}) == 5
+	assert field.width_to_cursor(DrawContext{
+		min:       Size{}
+		max:       MaxSize{}
+		cell_size: Size{}
+	}) == 5
 	field.draw_offset = 1
-	assert field.width_to_cursor(DrawContext{}) == 4
+	assert field.width_to_cursor(DrawContext{
+		min:       Size{}
+		max:       MaxSize{}
+		cell_size: Size{}
+	}) == 4
 	field.cursor_left()
 	assert field.buf.first_half().bytestr() == 'T'
 	assert field.buf.second_half().bytestr() == '👍🏽'
 	field.cursor_right()
 	DrawContext.init(.unicode)
-	assert field.width_to_cursor(DrawContext{}) == 2
+	assert field.width_to_cursor(DrawContext{
+		min:       Size{}
+		max:       MaxSize{}
+		cell_size: Size{}
+	}) == 2
 }
 
 fn test_text_field_width_iteration_retains_usize_count() {
@@ -140,7 +158,11 @@ fn test_text_field_width_iteration_retains_usize_count() {
 	field.buf.insert_slice_at_cursor('a'.repeat(65537))
 	field.draw_offset = 65535
 	DrawContext.init(.unicode)
-	assert field.width_to_cursor(DrawContext{}) == 2
+	assert field.width_to_cursor(DrawContext{
+		min:       Size{}
+		max:       MaxSize{}
+		cell_size: Size{}
+	}) == 2
 }
 
 fn test_text_field_draw_borrows_buffer_graphemes() {
@@ -149,7 +171,9 @@ fn test_text_field_draw_borrows_buffer_graphemes() {
 	field.buf.move_gap_left(1)
 	DrawContext.init(.unicode)
 	surface := field.draw(DrawContext{
-		max: MaxSize{
+		min:       Size{}
+		cell_size: Size{}
+		max:       MaxSize{
 			width: 8
 		}
 	})!

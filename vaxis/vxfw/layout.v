@@ -5,7 +5,7 @@ import math
 
 pub struct Center {
 pub mut:
-	child Widget
+	child Widget @[required]
 }
 
 pub fn (center &Center) widget() Widget {
@@ -23,6 +23,7 @@ pub fn (center &Center) draw(ctx DrawContext) !Surface {
 	size := ctx.max.size()
 	child := center.child.draw(ctx.with_constraints(Size{}, ctx.max))!
 	return Surface{
+		buffer:   []vaxis.Cell{}
 		size:     size
 		widget:   center.widget()
 		children: [
@@ -47,7 +48,7 @@ pub mut:
 
 pub struct Padding {
 pub mut:
-	child   Widget
+	child   Widget @[required]
 	padding PadValues
 }
 
@@ -103,6 +104,7 @@ pub fn (padding &Padding) draw(ctx DrawContext) !Surface {
 	}
 	child := padding.child.draw(ctx.with_constraints(min_size, max_size))!
 	return Surface{
+		buffer:   []vaxis.Cell{}
 		size:     Size{
 			width:  child.size.width + horizontal
 			height: child.size.height + vertical
@@ -126,8 +128,8 @@ fn sat_sub(value u16, amount u16) u16 {
 
 pub struct SizedBox {
 pub mut:
-	child Widget
-	size  Size
+	child Widget @[required]
+	size  Size   @[required]
 }
 
 pub fn (box &SizedBox) widget() Widget {
@@ -164,13 +166,13 @@ pub enum BorderAlignment {
 }
 pub struct BorderLabel {
 pub mut:
-	text      string
-	alignment BorderAlignment
+	text      string          @[required]
+	alignment BorderAlignment @[required]
 }
 
 pub struct Border {
 pub mut:
-	child  Widget
+	child  Widget @[required]
 	style  vaxis.Style
 	labels []BorderLabel
 }
@@ -270,7 +272,7 @@ pub fn (border &Border) draw(ctx DrawContext) !Surface {
 
 pub struct FlexColumn {
 pub mut:
-	children []FlexItem
+	children []FlexItem @[required]
 }
 
 pub fn (flex &FlexColumn) widget() Widget {
@@ -315,6 +317,7 @@ pub fn (flex &FlexColumn) draw(ctx DrawContext) !Surface {
 		}))!
 		children << SubSurface{
 			origin:  RelativePoint{
+				col: 0
 				row: height
 			}
 			surface: surface
@@ -323,6 +326,7 @@ pub fn (flex &FlexColumn) draw(ctx DrawContext) !Surface {
 		height += surface.size.height
 	}
 	return Surface{
+		buffer:   []vaxis.Cell{}
 		size:     Size{
 			width:  width
 			height: height
@@ -334,7 +338,7 @@ pub fn (flex &FlexColumn) draw(ctx DrawContext) !Surface {
 
 pub struct FlexRow {
 pub mut:
-	children []FlexItem
+	children []FlexItem @[required]
 }
 
 pub fn (flex &FlexRow) widget() Widget {
@@ -382,6 +386,7 @@ pub fn (flex &FlexRow) draw(ctx DrawContext) !Surface {
 		}))!
 		children << SubSurface{
 			origin:  RelativePoint{
+				row: 0
 				col: width
 			}
 			surface: surface
@@ -390,6 +395,7 @@ pub fn (flex &FlexRow) draw(ctx DrawContext) !Surface {
 		width += surface.size.width
 	}
 	return Surface{
+		buffer:   []vaxis.Cell{}
 		size:     Size{
 			width:  width
 			height: height

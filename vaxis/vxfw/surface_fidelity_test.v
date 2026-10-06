@@ -32,6 +32,7 @@ fn test_surface_accepts_full_source_signed_origin_range_when_clipped() {
 	}
 	for offset in [-32769, 32768] {
 		surface := Surface{
+			buffer:   []vaxis.Cell{}
 			size:     Size{
 				width:  2
 				height: 2
@@ -62,6 +63,7 @@ fn test_surface_render_changes_later_hit_routing_to_stable_sorted_order() {
 		draw_fn:  surface_fidelity_draw
 	}
 	surface := Surface{
+		buffer:   []vaxis.Cell{}
 		size:     Size{
 			width:  2
 			height: 2
@@ -74,28 +76,39 @@ fn test_surface_render_changes_later_hit_routing_to_stable_sorted_order() {
 					row: -1
 				}
 				surface: Surface{
-					size:   Size{
+					buffer:   []vaxis.Cell{}
+					children: []SubSurface{}
+					size:     Size{
 						width:  2
 						height: 2
 					}
-					widget: first
+					widget:   first
 				}
 				z_index: 2
 			},
 			SubSurface{
+				origin:  RelativePoint{
+					row: 0
+					col: 0
+				}
 				surface: Surface{
-					size:   Size{
+					buffer:   []vaxis.Cell{}
+					children: []SubSurface{}
+					size:     Size{
 						width:  2
 						height: 2
 					}
-					widget: second
+					widget:   second
 				}
 				z_index: 1
 			},
 		]
 	}
 	mut before := []HitResult{}
-	surface.hit_test(mut before, Point{})
+	surface.hit_test(mut before, Point{
+		row: 0
+		col: 0
+	})
 	assert before.len == 2
 	assert before[0].widget.eql(first)
 	assert before[0].local == Point{
@@ -106,7 +119,10 @@ fn test_surface_render_changes_later_hit_routing_to_stable_sorted_order() {
 	mut screen := vaxis.Screen.new(vaxis.Winsize{ cols: 2, rows: 2 })
 	surface.render(vaxis.Window.new(&screen), root_widget)
 	mut after := []HitResult{}
-	surface.hit_test(mut after, Point{})
+	surface.hit_test(mut after, Point{
+		row: 0
+		col: 0
+	})
 	assert after.len == 2
 	assert after[0].widget.eql(second)
 	assert after[1].widget.eql(first)
@@ -133,7 +149,15 @@ fn test_surface_last_representable_buffer_keeps_cell_styles() {
 }
 
 fn test_surface_trim_resets_cursor_and_retains_both_borrowed_arrays() {
-	children := [SubSurface{ surface: Surface.empty(surface_fidelity_widget(1)) }]
+	children := [
+		SubSurface{
+			origin:  RelativePoint{
+				row: 0
+				col: 0
+			}
+			surface: Surface.empty(surface_fidelity_widget(1))
+		},
+	]
 	mut original := Surface.init_with_children(surface_fidelity_widget(0), Size{ width: 2, height: 2 },
 		children)
 	original.cursor = CursorState{

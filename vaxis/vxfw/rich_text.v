@@ -7,7 +7,7 @@ pub type TextSpan = vaxis.CellSegment
 
 pub struct RichText {
 pub mut:
-	text        []TextSpan
+	text        []TextSpan @[required]
 	text_align  TextAlign = .left
 	base_style  vaxis.Style
 	softwrap    bool         = true
@@ -29,8 +29,10 @@ fn rich_text_draw(ptr voidptr, ctx DrawContext) !Surface {
 pub fn (text &RichText) draw(ctx DrawContext) !Surface {
 	if width := ctx.max.width {
 		if width == 0 { return Surface{
-				size:   ctx.min
-				widget: text.widget()
+				buffer:   []vaxis.Cell{}
+				children: []SubSurface{}
+				size:     ctx.min
+				widget:   text.widget()
 			} }
 	}
 	mut iter := RichSoftwrapIterator.new(text.text, ctx)

@@ -31,7 +31,7 @@ pub mut:
 
 pub struct Button {
 pub mut:
-	label      string
+	label      string       @[required]
 	on_click   ClickHandler @[required]
 	userdata   voidptr
 	style      ButtonStyle

@@ -55,7 +55,7 @@ pub mut:
 			}
 		}
 	}
-	scroll_view                      ScrollView
+	scroll_view                      ScrollView @[required]
 	last_frame_size                  Size
 	last_frame_max_content_width     u32
 	mouse_offset_into_thumb          u8
@@ -218,9 +218,14 @@ pub fn (mut bars ScrollBars) draw(ctx DrawContext) !Surface {
 	mut children := []SubSurface{}
 	if !bars.draw_vertical_scrollbar && !bars.draw_horizontal_scrollbar {
 		children << SubSurface{
+			origin:  RelativePoint{
+				row: 0
+				col: 0
+			}
 			surface: bars.scroll_view.draw(ctx)!
 		}
 		return Surface{
+			buffer:   []vaxis.Cell{}
 			size:     ctx.max.size()
 			widget:   bars.widget()
 			children: children
@@ -233,6 +238,10 @@ pub fn (mut bars ScrollBars) draw(ctx DrawContext) !Surface {
 		height: sat_sub(size.height, u16(bars.draw_horizontal_scrollbar))
 	}))!
 	children << SubSurface{
+		origin:  RelativePoint{
+			row: 0
+			col: 0
+		}
 		surface: view
 	}
 	if bars.draw_vertical_scrollbar && !(bars.scroll_view.scroll.top == 0
@@ -270,6 +279,7 @@ pub fn (mut bars ScrollBars) draw(ctx DrawContext) !Surface {
 		bars.vertical_thumb_bottom_row = end
 		children << SubSurface{
 			origin:  RelativePoint{
+				row: 0
 				col: sat_sub(size.width, 1)
 			}
 			surface: bar
@@ -306,12 +316,14 @@ pub fn (mut bars ScrollBars) draw(ctx DrawContext) !Surface {
 		bars.horizontal_thumb_end_col = end
 		children << SubSurface{
 			origin:  RelativePoint{
+				col: 0
 				row: sat_sub(size.height, 1)
 			}
 			surface: bar
 		}
 	}
 	return Surface{
+		buffer:   []vaxis.Cell{}
 		size:     size
 		widget:   bars.widget()
 		children: children

@@ -9,10 +9,11 @@ const spinner_time_lapse = u32(1000 / 12)
 
 pub struct Spinner {
 pub mut:
-	style        vaxis.Style
-	count        &stdatomic.AtomicVal[u16] = stdatomic.new_atomic(u16(0))
+	style vaxis.Style
+	// Store atomic values in the widget so ordinary value copies remain independent.
+	count        stdatomic.AtomicVal[u16] = *stdatomic.new_atomic(u16(0))
 	frame        u8
-	was_spinning &stdatomic.AtomicVal[bool] = stdatomic.new_atomic(false)
+	was_spinning stdatomic.AtomicVal[bool] = *stdatomic.new_atomic(false)
 }
 
 pub fn (spinner &Spinner) widget() Widget {
@@ -51,6 +52,8 @@ pub fn (mut spinner Spinner) handle_event(mut ctx EventContext, event Event) ! {
 			}
 			return
 		}
+		// The source frame is u4; keep its checked increment in production builds.
+		if spinner.frame >= 15 { panic('integer overflow') }
 		spinner.frame++
 		if spinner.frame >= spinner_frames.len { spinner.frame = 0 }
 		ctx.tick(spinner_time_lapse, spinner.widget())
@@ -74,6 +77,7 @@ pub fn (mut spinner Spinner) draw(ctx DrawContext) !Surface {
 		}
 	}
 	if spinner.count.load() == 0 { return surface }
+	if spinner.frame >= spinner_frames.len { panic('index out of bounds') }
 	surface.write_cell(0, 0, vaxis.Cell{
 		char_: vaxis.CellCharacter{
 			grapheme: spinner_frames[spinner.frame]

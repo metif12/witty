@@ -12,7 +12,11 @@ fn trap(mode string) {
 		mut iter := vaxis.grapheme_iterator('\xff\xcc\x81')
 		iter.next()
 	} else if mode == 'trap_context_underflow' {
-		context := vxfw.DrawContext{}
+		context := vxfw.DrawContext{
+			min:       vxfw.Size{}
+			max:       vxfw.MaxSize{}
+			cell_size: vxfw.Size{}
+		}
 		mut iter := context.grapheme_iterator('\xff\xcc\x81')
 		iter.next()
 	} else if mode.starts_with('trap_width_underflow_') {
@@ -86,7 +90,11 @@ fn mutable_row(number int, original string, initial string, later string) {
 	text := if backing.len > 0 { unsafe { tos(backing.data, backing.len) } } else { '' }
 	mut iter := vaxis.GraphemeIterator.init(text)
 	mut factory := vaxis.grapheme_iterator(text)
-	context := vxfw.DrawContext{}
+	context := vxfw.DrawContext{
+		min:       vxfw.Size{}
+		max:       vxfw.MaxSize{}
+		cell_size: vxfw.Size{}
+	}
 	mut framework := context.grapheme_iterator(text)
 	mutate(mut backing, initial)
 	first := span_bytes(iter.next(), text)
@@ -131,7 +139,11 @@ fn main() {
 			.no_zwj)}|')
 		mut iter := vaxis.GraphemeIterator.init(text)
 		mut other := vaxis.grapheme_iterator(text)
-		context := vxfw.DrawContext{}
+		context := vxfw.DrawContext{
+			min:       vxfw.Size{}
+			max:       vxfw.MaxSize{}
+			cell_size: vxfw.Size{}
+		}
 		mut framework := context.grapheme_iterator(text)
 		for method in [vaxis.GWidthMethod.unicode, .wcwidth, .no_zwj] {
 			vxfw.DrawContext.init(method)

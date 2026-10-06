@@ -3,12 +3,16 @@ module vxfw
 import vaxis
 
 fn empty_draw(_ voidptr, _ DrawContext) !Surface {
-	return Surface.empty(Widget{ draw_fn: empty_draw })
+	return Surface.empty(Widget{
+		userdata: unsafe { nil }
+		draw_fn:  empty_draw
+	})
 }
 
 fn test_surface_source_constraints_and_hit_bounds() {
 	widget := Widget{
-		draw_fn: empty_draw
+		userdata: unsafe { nil }
+		draw_fn:  empty_draw
 	}
 	surface := Surface.init(widget, Size{ width: 10, height: 10 })
 	assert surface.satisfies_constraints(Size{ width: 1, height: 1 }, Size{
@@ -42,7 +46,8 @@ fn test_surface_source_constraints_and_hit_bounds() {
 
 fn test_surface_trim_preserves_source_buffer_view() {
 	widget := Widget{
-		draw_fn: empty_draw
+		userdata: unsafe { nil }
+		draw_fn:  empty_draw
 	}
 	surface := Surface.init(widget, Size{ width: 3, height: 3 })
 	trimmed := surface.trim_height(1)
@@ -56,13 +61,19 @@ fn test_surface_trim_preserves_source_buffer_view() {
 }
 
 fn test_draw_context_global_width_and_command_defaults() {
-	ctx := DrawContext{}
+	ctx := DrawContext{
+		min:       Size{}
+		max:       MaxSize{}
+		cell_size: Size{}
+	}
 	DrawContext.init(.unicode)
 	assert ctx.string_width('👩\u200d💻') == 2
 	DrawContext.init(.no_zwj)
 	assert ctx.string_width('👩\u200d💻') == 4
 	DrawContext.init(.unicode)
-	mut events := EventContext{}
+	mut events := EventContext{
+		cmds: []Command{}
+	}
 	assert events.phase == .at_target
 	assert events.redraw
 	assert !events.consume_event
@@ -72,7 +83,8 @@ fn test_draw_context_global_width_and_command_defaults() {
 
 fn test_surface_render_stable_z_order_clipping_and_focused_cursor() {
 	widget := Widget{
-		draw_fn: empty_draw
+		userdata: unsafe { nil }
+		draw_fn:  empty_draw
 	}
 	mut vx := vaxis.Vaxis.new(vaxis.VaxisOptions{})
 	defer { vx.deinit() }
@@ -90,6 +102,7 @@ fn test_surface_render_stable_z_order_clipping_and_focused_cursor() {
 		}
 	})
 	second.cursor = CursorState{
+		row:   0
 		col:   1
 		shape: .beam
 	}
@@ -100,6 +113,7 @@ fn test_surface_render_stable_z_order_clipping_and_focused_cursor() {
 		}
 	})
 	surface := Surface{
+		buffer:   []vaxis.Cell{}
 		size:     Size{
 			width:  3
 			height: 2
@@ -107,14 +121,26 @@ fn test_surface_render_stable_z_order_clipping_and_focused_cursor() {
 		widget:   widget
 		children: [
 			SubSurface{
+				origin:  RelativePoint{
+					row: 0
+					col: 0
+				}
 				surface: first
 				z_index: 1
 			},
 			SubSurface{
+				origin:  RelativePoint{
+					row: 0
+					col: 0
+				}
 				surface: second
 				z_index: 1
 			},
 			SubSurface{
+				origin:  RelativePoint{
+					row: 0
+					col: 0
+				}
 				surface: back
 				z_index: 0
 			},

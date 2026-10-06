@@ -98,12 +98,13 @@ fn trap(mode string) {
 	mut screen := vaxis.Screen{}
 	mut win := window_root(&screen)
 	mut surface := fw.Surface{
-		size:   fw.Size{
+		children: []fw.SubSurface{}
+		size:     fw.Size{
 			width:  1
 			height: 1
 		}
-		widget: widget(0)
-		buffer: [vaxis.Cell{}]
+		widget:   widget(0)
+		buffer:   [vaxis.Cell{}]
 	}
 	if mode == 'trap_create' {
 		fw.Surface.create_buffer(fw.Size{ width: 256, height: 256 })
@@ -272,11 +273,13 @@ fn main() {
 					row: i32(num(p, 2))
 				}
 				surface: fw.Surface{
-					size:   fw.Size{
+					buffer:   []vaxis.Cell{}
+					children: []fw.SubSurface{}
+					size:     fw.Size{
 						width:  unsigned(p, 3)
 						height: unsigned(p, 4)
 					}
-					widget: widget(0)
+					widget:   widget(0)
 				}
 			}
 			out.write_string('${int(sub.contains_point(fw.Point{
@@ -310,7 +313,10 @@ fn main() {
 			surface := fw.Surface.init(widget(1), size)
 			children := [
 				fw.SubSurface{
-					origin:  fw.RelativePoint{}
+					origin:  fw.RelativePoint{
+						row: 0
+						col: 0
+					}
 					surface: fw.Surface.empty(widget(2))
 				},
 			]
@@ -328,7 +334,10 @@ fn main() {
 		} else if p[0] == 'O' {
 			children := [
 				fw.SubSurface{
-					origin:  fw.RelativePoint{}
+					origin:  fw.RelativePoint{
+						row: 0
+						col: 0
+					}
 					surface: fw.Surface.empty(widget(2))
 				},
 			]
@@ -396,7 +405,10 @@ fn main() {
 					z_index: u8(num(p, 8))
 				},
 				fw.SubSurface{
-					origin:  fw.RelativePoint{}
+					origin:  fw.RelativePoint{
+						row: 0
+						col: 0
+					}
 					surface: c3
 					z_index: u8(num(p, 8))
 				},

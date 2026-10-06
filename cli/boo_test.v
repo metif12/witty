@@ -44,7 +44,9 @@ fn test_boo_surface_centers_borrowed_cells_and_wraps_small_screen_warning() {
 	}
 	boo.update_frame()
 	surface := boo.widget().draw(vxfw.DrawContext{
-		max: vxfw.MaxSize{
+		min:       vxfw.Size{}
+		cell_size: vxfw.Size{}
+		max:       vxfw.MaxSize{
 			width:  102
 			height: 43
 		}
@@ -72,7 +74,9 @@ fn test_boo_surface_centers_borrowed_cells_and_wraps_small_screen_warning() {
 	})
 	assert boo.buffer[0].char_.grapheme == 'x'
 	warning := boo.widget().draw(vxfw.DrawContext{
-		max: vxfw.MaxSize{
+		min:       vxfw.Size{}
+		cell_size: vxfw.Size{}
+		max:       vxfw.MaxSize{
 			width:  80
 			height: 24
 		}
@@ -88,7 +92,9 @@ fn test_boo_surface_centers_borrowed_cells_and_wraps_small_screen_warning() {
 	}
 	assert warning.children[0].surface.buffer.map(it.char_.grapheme).join('') == 'Screen must be at least 100w x 41h'
 	narrow := boo.widget().draw(vxfw.DrawContext{
-		max: vxfw.MaxSize{
+		min:       vxfw.Size{}
+		cell_size: vxfw.Size{}
+		max:       vxfw.MaxSize{
 			width:  20
 			height: 24
 		}
@@ -102,6 +108,7 @@ fn test_boo_init_tick_and_exit_keys_use_widget_events() {
 	}
 	widget := boo.widget()
 	mut ctx := vxfw.EventContext{
+		cmds:   []vxfw.Command{}
 		redraw: false
 	}
 	widget.handle_event(mut ctx, vxfw.Event(vxfw.InitEvent{}))!

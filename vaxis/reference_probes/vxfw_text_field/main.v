@@ -261,7 +261,9 @@ fn main() {
 				if spy.mode in [usize(1), 3, 4, 6, 7, 8, 9] { input.on_change = change }
 				if spy.mode in [usize(2), 3, 5, 6, 7, 8, 9] { input.on_submit = submit }
 				flags := uint(parts, 9)
-				mut ctx := vxfw.EventContext{redraw: flags & 1 != 0, consume_event: flags & 2 != 0, quit: flags & 4 != 0}
+				mut ctx := vxfw.EventContext{
+cmds: []vxfw.Command{}
+redraw: flags & 1 != 0, consume_event: flags & 2 != 0, quit: flags & 4 != 0}
 				keytext := if parts[5] == 'none' { ?string(none) } else { ?string(bytes(parts[5])) }
 				key := vaxis.Key{codepoint: codes[int(uint(parts, 3))], mods: vaxis.Modifiers.from_int(u8(uint(parts, 4))), text: keytext}
 				event := match uint(parts, 6) {

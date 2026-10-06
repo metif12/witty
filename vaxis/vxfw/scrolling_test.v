@@ -27,12 +27,16 @@ fn test_list_view_pinned_variable_height_scroll_and_cursor_sequence() {
 		wheel_scroll: 1
 	}
 	ctx := DrawContext{
-		max: MaxSize{
+		min:       Size{}
+		cell_size: Size{}
+		max:       MaxSize{
 			width:  16
 			height: 4
 		}
 	}
-	mut event_ctx := EventContext{}
+	mut event_ctx := EventContext{
+		cmds: []Command{}
+	}
 	mut surface := list.draw(ctx)!
 	assert surface.size == Size{
 		width:  16
@@ -81,12 +85,16 @@ fn test_scroll_view_pinned_out_of_view_children_and_horizontal_scroll() {
 		wheel_scroll: 1
 	}
 	ctx := DrawContext{
-		max: MaxSize{
+		min:       Size{}
+		cell_size: Size{}
+		max:       MaxSize{
 			width:  3
 			height: 4
 		}
 	}
-	mut event_ctx := EventContext{}
+	mut event_ctx := EventContext{
+		cmds: []Command{}
+	}
 	mut surface := view.draw(ctx)!
 	assert surface.children.len == 2
 	assert view.scroll.has_more_vertical && view.scroll.has_more_horizontal
@@ -133,7 +141,9 @@ fn test_scrollbars_pinned_visibility_and_drag_capture() {
 		estimated_content_width:  5
 	}
 	ctx := DrawContext{
-		max: MaxSize{
+		min:       Size{}
+		cell_size: Size{}
+		max:       MaxSize{
 			width:  3
 			height: 4
 		}
@@ -150,6 +160,7 @@ fn test_scrollbars_pinned_visibility_and_drag_capture() {
 	bars.draw_vertical_scrollbar = true
 	bars.draw(ctx)!
 	mut event_ctx := EventContext{
+		cmds:   []Command{}
 		redraw: false
 	}
 	bars.handle_event(mut event_ctx, Event(vaxis.Mouse{

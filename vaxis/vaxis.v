@@ -728,9 +728,13 @@ mut:
 
 pub fn Tty.new() !Tty {
 	$if windows {
-		return Tty.open_windows()
+		tty := Tty.open_windows()!
+		register_recovery_tty(tty)
+		return tty
 	} $else {
-		return Tty.open_posix()
+		tty := Tty.open_posix()!
+		register_recovery_tty(tty)
+		return tty
 	}
 }
 

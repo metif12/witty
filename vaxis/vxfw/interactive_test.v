@@ -21,7 +21,9 @@ fn test_button_source_press_release_leave_key_and_centered_label() {
 		userdata: &count
 		on_click: count_click
 	}
-	mut ctx := EventContext{}
+	mut ctx := EventContext{
+		cmds: []Command{}
+	}
 	button.handle_event(mut ctx, Event(vaxis.Mouse{
 		type_:  .press
 		button: .left
@@ -47,7 +49,9 @@ fn test_button_source_press_release_leave_key_and_centered_label() {
 	}))!
 	assert count.clicks == 2
 	surface := button.draw(DrawContext{
-		max: MaxSize{
+		min:       Size{}
+		cell_size: Size{}
+		max:       MaxSize{
 			width:  13
 			height: 3
 		}
@@ -69,13 +73,18 @@ fn test_spinner_counter_rearm_and_final_clear_tick() {
 	assert spinner.start() == none
 	assert spinner.count.load() == 2
 	mut ctx := EventContext{
+		cmds:   []Command{}
 		redraw: false
 	}
 	spinner.handle_event(mut ctx, Event(TickEvent{}))!
 	assert spinner.frame == 1
 	assert ctx.cmds.len == 1
 	assert !ctx.redraw // Pinned handler only explicitly redraws its stopping tick.
-	surface := spinner.draw(DrawContext{})!
+	surface := spinner.draw(DrawContext{
+		min:       Size{}
+		max:       MaxSize{}
+		cell_size: Size{}
+	})!
 	assert surface.size == Size{
 		width:  1
 		height: 1
@@ -88,7 +97,11 @@ fn test_spinner_counter_rearm_and_final_clear_tick() {
 	spinner.handle_event(mut ctx, Event(TickEvent{}))!
 	assert ctx.redraw
 	assert !spinner.was_spinning()
-	assert spinner.draw(DrawContext{})!.buffer[0].char_.grapheme == ' '
+	assert spinner.draw(DrawContext{
+		min:       Size{}
+		max:       MaxSize{}
+		cell_size: Size{}
+	})!.buffer[0].char_.grapheme == ' '
 }
 
 fn test_split_view_source_separator_drag_and_rhs_constraint() {
@@ -105,7 +118,9 @@ fn test_split_view_source_separator_drag_and_rhs_constraint() {
 		width: 8
 	}
 	ctx := DrawContext{
-		max: MaxSize{
+		min:       Size{}
+		cell_size: Size{}
+		max:       MaxSize{
 			width:  16
 			height: 16
 		}
@@ -117,7 +132,9 @@ fn test_split_view_source_separator_drag_and_rhs_constraint() {
 	}
 	assert surface.children[0].surface.size.width == 8
 	assert surface.read_cell(8, 0).char_.grapheme == '│'
-	mut events := EventContext{}
+	mut events := EventContext{
+		cmds: []Command{}
+	}
 	split.widget().handle_event(mut events, Event(vaxis.Mouse{
 		col:    8
 		type_:  .press
@@ -166,7 +183,9 @@ fn test_text_field_change_submit_grapheme_navigation_and_resize() {
 		on_change: field_change
 		on_submit: field_submit
 	}
-	mut ctx := EventContext{}
+	mut ctx := EventContext{
+		cmds: []Command{}
+	}
 	field.handle_event(mut ctx, Event(vaxis.Key{
 		codepoint: u32(`a`)
 		text:      'a👩\u200d💻b'
@@ -188,14 +207,18 @@ fn test_text_field_change_submit_grapheme_navigation_and_resize() {
 	mut bytes := []u8{len: 32}
 	assert field.slice_to_cursor(mut bytes).bytestr() == 'hello, wo'
 	narrow := field.draw(DrawContext{
-		max: MaxSize{
+		min:       Size{}
+		cell_size: Size{}
+		max:       MaxSize{
 			width: 5
 		}
 	})!
 	assert narrow.buffer[0].char_.grapheme == '…'
 	assert narrow.cursor or { panic('cursor') }.col < 5
 	wide := field.draw(DrawContext{
-		max: MaxSize{
+		min:       Size{}
+		cell_size: Size{}
+		max:       MaxSize{
 			width: 20
 		}
 	})!

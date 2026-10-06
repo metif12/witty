@@ -7,7 +7,7 @@ import vaxis
 // Event variants and widget contracts from pinned vaxis/src/vxfw/vxfw.zig.
 pub struct UserEvent {
 pub mut:
-	name string
+	name string @[required]
 	data voidptr
 }
 
@@ -36,8 +36,8 @@ pub type Event = vaxis.Key
 
 pub struct Tick {
 pub mut:
-	deadline_ms i64
-	widget      Widget
+	deadline_ms i64    @[required]
+	widget      Widget @[required]
 }
 
 pub fn Tick.less_than(lhs Tick, rhs Tick) bool {
@@ -53,35 +53,35 @@ pub fn Tick.@in(ms u32, widget Widget) Command {
 
 pub struct SetMouseShape {
 pub mut:
-	shape vaxis.MouseShape
+	shape vaxis.MouseShape @[required]
 }
 
 pub struct RequestFocus {
 pub mut:
-	widget Widget
+	widget Widget @[required]
 }
 
 pub struct CopyToClipboard {
 pub mut:
-	content string
+	content string @[required]
 }
 
 pub struct SetTitle {
 pub mut:
-	title string
+	title string @[required]
 }
 
 pub struct QueueRefresh {}
 
 pub struct Notification {
 pub mut:
-	title ?string
-	body  string
+	title ?string @[required]
+	body  string  @[required]
 }
 
 pub struct QueryColor {
 pub mut:
-	kind vaxis.ColorReportKind
+	kind vaxis.ColorReportKind @[required]
 }
 
 pub type CommandList = []Command
@@ -104,7 +104,7 @@ pub enum Phase as u8 {
 pub struct EventContext {
 pub mut:
 	phase         Phase = .at_target
-	cmds          []Command
+	cmds          []Command @[required]
 	consume_event bool
 	redraw        bool = true
 	quit          bool
@@ -200,9 +200,9 @@ __global draw_width_method = vaxis.GWidthMethod.unicode
 
 pub struct DrawContext {
 pub mut:
-	min       Size
-	max       MaxSize
-	cell_size Size
+	min       Size    @[required]
+	max       MaxSize @[required]
+	cell_size Size    @[required]
 }
 
 pub fn DrawContext.init(method vaxis.GWidthMethod) {
@@ -247,7 +247,7 @@ pub type DrawFn = fn (voidptr, DrawContext) !Surface
 
 pub struct Widget {
 pub mut:
-	userdata        voidptr
+	userdata        voidptr @[required]
 	capture_handler ?EventHandler
 	event_handler   ?EventHandler
 	draw_fn         DrawFn @[required]
@@ -271,7 +271,7 @@ pub fn (widget Widget) eql(other Widget) bool {
 
 pub struct FlexItem {
 pub mut:
-	widget Widget
+	widget Widget @[required]
 	flex   u8 = 1
 }
 
@@ -284,42 +284,45 @@ pub fn FlexItem.init(child Widget, flex u8) FlexItem {
 
 pub struct Point {
 pub mut:
-	row u16
-	col u16
+	row u16 @[required]
+	col u16 @[required]
 }
 
 // Source signed i17 coordinates require a signed container in V.
 pub struct RelativePoint {
 pub mut:
-	row i32
-	col i32
+	row i32 @[required]
+	col i32 @[required]
 }
 
 pub struct HitResult {
 pub mut:
-	local  Point
-	widget Widget
+	local  Point  @[required]
+	widget Widget @[required]
 }
 
 pub struct CursorState {
 pub mut:
-	row   u16
-	col   u16
+	row   u16 @[required]
+	col   u16 @[required]
 	shape vaxis.CursorShape = .default
 }
 
 pub struct Surface {
 pub mut:
-	size     Size
-	widget   Widget
+	size     Size   @[required]
+	widget   Widget @[required]
 	cursor   ?CursorState
-	buffer   []vaxis.Cell
-	children []SubSurface
+	buffer   []vaxis.Cell @[required]
+	children []SubSurface @[required]
 }
 
 pub fn Surface.empty(widget Widget) Surface {
 	return Surface{
-		widget: widget
+		size:     Size{}
+		widget:   widget
+		buffer:   []vaxis.Cell{}
+		children: []SubSurface{}
 	}
 }
 
@@ -337,9 +340,10 @@ fn surface_u16_product(width u16, height u16) int {
 
 pub fn Surface.init(widget Widget, size Size) Surface {
 	return Surface{
-		size:   size
-		widget: widget
-		buffer: Surface.create_buffer(size)
+		size:     size
+		widget:   widget
+		buffer:   Surface.create_buffer(size)
+		children: []SubSurface{}
 	}
 }
 
@@ -451,8 +455,8 @@ pub fn (surface Surface) satisfies_constraints(min Size, max Size) bool {
 
 pub struct SubSurface {
 pub mut:
-	origin  RelativePoint
-	surface Surface
+	origin  RelativePoint @[required]
+	surface Surface       @[required]
 	z_index u8
 }
 

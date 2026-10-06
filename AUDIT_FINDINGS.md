@@ -1097,18 +1097,29 @@ an item here does not mean its full module has been certified yet.
   routing/layout/timer tests and a PTY application smoke pass; Windows runtime
   behavior remains untested. These representation limits do not certify
   identical layouts or lifetime/failure contracts.
-- **vaxis framework checked state:** ListView and ScrollView still store the
-  source's `i17` scroll offsets and pending-line counts in `i32` and perform
-  unchecked scroll additions/subtractions. Spinner's `u4` frame increment
-  still uses an unchecked `u8` increment. These are concrete arithmetic gaps,
-  separate from the GC and atomic representation adaptations above. The
-  source's global-TTY `recover` and panic-handler exports also have no public
-  V counterparts; their cleanup integration remains open.
-  Framework constructor omissions also remain: Widget userdata, Surface
-  size/widget/buffer/children, Point and RelativePoint row/col, CursorState
-  row/col, and SubSurface origin/surface do not yet enforce the corresponding
-  source required fields. The surface matrix uses complete source fixtures;
-  its initialized-method checks do not close those constructor contracts.
+- **vaxis framework remaining boundaries:** ListView/ScrollView retain wider
+  `i32` storage for source `i17` values, with explicit checked operations;
+  Spinner retains a `u8` carrier for source `u4`, with checked increments and
+  indexing. Wider explicit initializers remain representation differences.
+  Spinner atomic values are embedded so ordinary copies are independent, but
+  V's stronger atomic ordering and raw-field API do not reproduce the source
+  atomic interface or ABI. Both scrolling widgets inherit empty-builder loops
+  and a source branch that deinitializes then reuses its child list; the latter
+  is excluded from defined-behavior parity and V retains managed storage.
+  Core and widget constructor checks are scoped to field presence and defaults,
+  excluding allocator arguments, pointer nullability and readonly slice types.
+  App manual lifecycle construction and Text/RichText iterator records remain
+  outside that constructor proof. Other framework layout arithmetic remains
+  unverified: Padding's horizontal/vertical sums and returned dimensions,
+  Border's child dimensions plus two, and Flex's u16 accumulation/proportion
+  operations still lack source checked-arithmetic guards. Window fill/print
+  paths also retain their previous verification limits. Terminal recovery
+  comparison covers the existing unbuffered Tty adapter; source buffered output,
+  public global-variable access, panic-runtime stack/address handling and
+  cross-platform runtime behavior are distinct remaining contracts, not certified
+  by these framework matrices. The six source FormattedPanic aliases cannot
+  compile unchanged with Zig 0.15.2; that removed standard-library bundle is an
+  unsupported source boundary rather than a runnable V implementation gap.
 - **Fixed-array type aliases:** the pinned V compiler accepts a public alias
   declaration for Ghostty's `[256]RGB` `color.Palette` but emits invalid C as
   soon as that alias is used as a field or parameter type. Witty therefore
@@ -1919,4 +1930,99 @@ cross builds and the four new focused Windows test builds pass. The Vaxis
 Linux shared module also links as an x86_64 ELF with GC disabled for that build.
 These are compilation/link checks for the cross targets; no new Linux/Windows
 runtime parity, allocator/GC lifetime or complete dependency coverage is
-claimed. The framework arithmetic/constructor gaps recorded above remain open.
+claimed. The subsequent framework continuation is recorded below; the live
+audit retains the remaining layout, iterator and representation boundaries.
+
+## Vaxis framework state, construction and recovery continuation
+
+ListView and ScrollView now check source i17/u32/u16/usize operations and source
+assertions explicitly, including pending-scroll arithmetic, accumulated origins,
+cursor subtraction/indexing, width calculations and state update order. Both
+preserve source short circuits, captured builders, callback mutation/error timing
+and inherited empty-builder navigation loops. Their native Source Debug/V ordinary
+and Source ReleaseSafe/V-production matrices match, respectively:
+
+| Scope | Returning records | Strict trap pairs | Output SHA-256 |
+| --- | ---: | ---: | --- |
+| ListView | 5,284 | 20 | `1c0060888edc4691761a3d3e2e5d9751c4a673b181457850c147cf9f104c9a9e` |
+| ScrollView | 14,353 | 22 | `013c5025c4b6192747e19df33a046090b3d0e2781f33f7a70d8824571a05625f` |
+| Spinner | 15,183 | 6 | `91e0cf4dd5aee36836a99662a3271b4f9c38b8dfdbb044a88e193e69d1f74acc` |
+
+Each scrolling runner checks two isolated inherited loops and its complete
+constructor/payload omission contracts. Both independently measure the source
+branch that deinitializes then appends to a child list; its undefined storage is
+excluded from parity, while V retains the managed-array replacement. ScrollView
+also measures two wider-i32 literal acceptance boundaries. Its computed viewport
+indexes remain unused, and the source's repeated post-insertion offset assignment
+remains intact. Reproduction and scope are recorded in
+`vaxis/reference_probes/vxfw_list_view/README.md` and
+`vaxis/reference_probes/vxfw_scroll_view/README.md`.
+
+Spinner now embeds atomic values so ordinary copies have independent counters.
+It preserves source wrapping start increments, saturating load/subtract/store
+stops, remembered-state clearing on stopped ticks, 83ms rearming, and checked u4
+increments/indexing even under V production optimization. The runner compares
+concurrent starts through u16 wraparound and independently measures its wider-u8
+initializer boundary and three source-only allocator-error order cases. V atomic
+ordering remains stronger than source and allocation failures remain absent from
+the managed-storage adapter. No arbitrary-interleaving or atomic ABI equivalence
+is claimed. Eight focused consumers pass in both modes; the ListView and
+ScrollView consumers add five and four focused cases. Reproduction is in
+`vaxis/reference_probes/vxfw_spinner/README.md`.
+
+The constructor callers and prior Unicode, TextField and Surface probes now
+provide the source-required fields explicitly. Their ordinary and production
+returning hashes remain `f7555397b8c48374500b4558a166e5701f30ad7f2b35d056a4d5c56297913f4c`,
+`c9a34b722a8b37cf2d7916679118d07dae1a2bbd11a3bd68ccfe7fdf1dd93be3` and
+`852eb3f3eae04a383dd8af7fc2055971d9fc1bd1f49760135457cc4d5c6bc265`.
+This preserves their previous scoped verification while restoring constructor
+requirements; it does not close the other layout/iterator contracts in the live
+audit.
+
+Required constructor fields now cover all exported framework widgets as well as
+core context, widget, surface, coordinate and command records. The unchanged-source
+constructor runner passes 38 complete pairs and 57 paired ordinary omission
+rejections in both modes, comparing sixteen core and sixty-three widget default
+values, SHA-256
+`2917ca5cdc672d99b1c440daed7882a2da028cc5a1325097b444ce88a501dbbd`.
+This includes nullable-but-required notification titles, callback and
+slice payloads, BorderLabel, size/width constraints and builder user data. Existing
+application, Boo and focused consumers now supply explicit values. Source
+allocator arguments, non-null/readonly pointer types, iterator records, Segment
+aliases and App's manual lifecycle state remain outside this constructor proof;
+their specific fields and API differences are listed in
+`vaxis/reference_probes/vxfw_constructors/README.md`.
+
+Terminal recovery now registers an independent value snapshot after every
+successful Tty initialization, retains the previous snapshot on initialization
+failure, writes the exact source reset sequence and restores terminal state even
+when that write fails. `recover`, `panic_handler` and `Panic.call` are available;
+the panic entry points restore state before handing the message to V's runtime.
+Repeated recovery retains the saved source value despite V deinit mutating its
+receiver. Two focused tests cover absent registration and independent replacement.
+The native macOS Source Debug/V ordinary and Source ReleaseSafe/V-production
+comparisons match 56 returning PTY records and fourteen explicit panic/order
+pairs, SHA-256
+`4101322a2b3636fd13ba3fa721e6bcedc928df711057799a2a46688d8d0dd645`.
+The returning digest includes the fixture's macOS termios representation.
+
+Forty-eight source-only buffered observations in both modes have SHA-256
+`336343f9e968444519d30154bd7c1d6fed3e0451066c9f19f03b581da34db850`.
+They explicitly retain a source boundary: a 48-byte buffer can hold the first
+complete reset sequence without emitting it, while V's existing Tty adapter is
+unbuffered. Six paired ordinary compiler checks independently demonstrate that
+the source `Panic` aliases reference the removed Zig 0.15.2 `FormattedPanic`
+bundle; V leaves those unsupported entry points absent. A separate probe records
+source public-global access versus V's private registry. Writer state, direct
+global-variable access, panic stack/return-address handling and other platform
+runtimes remain outside parity. Reproduction and fixture details are in
+`vaxis/reference_probes/recovery/README.md`.
+
+The final integrated run passes all 40 Vaxis test files, and all 44 image test
+files pass. Boo's focused tests and native/Linux whole-application checks also
+pass. Both Windows DLLs and the four new ListView, ScrollView, Spinner and
+recovery test executables compile, and the Vaxis module links as an x86_64 Linux
+ELF shared library with GC disabled for that cross build. These cross-target
+checks establish compilation/link success rather than platform runtime parity.
+The remaining layout arithmetic and iterator/lifecycle construction boundaries
+are retained in the live audit above.

@@ -107,14 +107,16 @@ fn boo_draw(ptr voidptr, ctx vxfw.DrawContext) !vxfw.Surface {
 		buffer.flags = .nofree
 	}
 	child := vxfw.Surface{
-		size:   vxfw.Size{
+		children: []vxfw.SubSurface{}
+		size:     vxfw.Size{
 			width:  boo_frame_width
 			height: boo_frame_height
 		}
-		widget: boo.widget()
-		buffer: buffer
+		widget:   boo.widget()
+		buffer:   buffer
 	}
 	return vxfw.Surface{
+		buffer:   []vaxis.Cell{}
 		size:     size
 		widget:   boo.widget()
 		children: [

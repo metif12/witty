@@ -273,6 +273,7 @@ pub fn (mut field TextField) draw(ctx DrawContext) !Surface {
 			style: field.style
 		}) }
 	surface.cursor = CursorState{
+		row: 0
 		col: field.prev_cursor_col
 	}
 	return surface

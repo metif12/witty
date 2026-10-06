@@ -73,12 +73,24 @@ fn test_focus_capture_includes_target_and_bubble_excludes_target() {
 		log:  log
 	}
 	mut focus := FocusHandler.new(root.widget())
-	mut ctx := EventContext{}
+	mut ctx := EventContext{
+		cmds: []Command{}
+	}
 	focus.focus_widget(mut ctx, child.widget())!
 	assert log.items == ['root:at_target:focus_out', 'child:at_target:focus_in']
 	focus.update(Surface{
+		size:     Size{}
+		buffer:   []vaxis.Cell{}
 		widget:   root.widget()
-		children: [SubSurface{ surface: Surface.empty(child.widget()) }]
+		children: [
+			SubSurface{
+				origin:  RelativePoint{
+					row: 0
+					col: 0
+				}
+				surface: Surface.empty(child.widget())
+			},
+		]
 	})
 	log.items.clear()
 	focus.handle_event(mut ctx, Event(vaxis.Key{
@@ -110,8 +122,11 @@ fn test_mouse_routes_local_coordinates_and_excludes_target_capture() {
 		vx: vaxis.Vaxis.new(vaxis.VaxisOptions{})
 	}
 	defer { app.vx.deinit() }
-	mut ctx := EventContext{}
+	mut ctx := EventContext{
+		cmds: []Command{}
+	}
 	mouse.last_frame = Surface{
+		buffer:   []vaxis.Cell{}
 		size:     Size{
 			width:  10
 			height: 10
@@ -124,11 +139,13 @@ fn test_mouse_routes_local_coordinates_and_excludes_target_capture() {
 					col: 3
 				}
 				surface: Surface{
-					size:   Size{
+					buffer:   []vaxis.Cell{}
+					children: []SubSurface{}
+					size:     Size{
 						width:  3
 						height: 3
 					}
-					widget: child.widget()
+					widget:   child.widget()
 				}
 			},
 		]
@@ -142,11 +159,13 @@ fn test_mouse_routes_local_coordinates_and_excludes_target_capture() {
 	assert mouse.last_hit_list.len == 2 // Source keeps the list on focus loss.
 	log.items.clear()
 	mouse.update_mouse(mut app, Surface{
-		size:   Size{
+		buffer:   []vaxis.Cell{}
+		children: []SubSurface{}
+		size:     Size{
 			width:  10
 			height: 10
 		}
-		widget: root.widget()
+		widget:   root.widget()
 	}, mut ctx)!
 	assert log.items == ['child:bubbling:leave']
 }
@@ -173,7 +192,9 @@ fn test_timers_descending_stable_order_and_deferred_rearm() {
 	app.add_tick(Tick{ deadline_ms: 1, widget: a.widget() })
 	app.add_tick(Tick{ deadline_ms: time.now().unix_milli() + 60000, widget: c.widget() })
 	app.add_tick(Tick{ deadline_ms: 1, widget: b.widget() })
-	mut ctx := EventContext{}
+	mut ctx := EventContext{
+		cmds: []Command{}
+	}
 	app.check_timers(mut ctx)!
 	assert log.items == ['b:at_target:tick', 'a:at_target:tick']
 	assert app.timers.len == 2

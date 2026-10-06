@@ -29,14 +29,20 @@ fn test_pinned_softwrap_words_leading_spaces_and_long_words() {
 		['Hello,        \n world', 'Hello,| world'],
 	] {
 		mut iter := SoftwrapIterator.new(pair[0], DrawContext{
-			max: MaxSize{
+			min:       Size{}
+			cell_size: Size{}
+			max:       MaxSize{
 				width: 7
 			}
 		})
 		mut lines := []string{}
 		for {
 			line := iter.next() or { break }
-			assert line.width == DrawContext{}.string_width(line.bytes)
+			assert line.width == DrawContext{
+				min:       Size{}
+				max:       MaxSize{}
+				cell_size: Size{}
+			}.string_width(line.bytes)
 			lines << line.bytes
 		}
 		assert lines.join('|') == pair[1]
@@ -58,11 +64,12 @@ fn test_text_styles_tabs_alignment_and_ellipsis() {
 		text_align: .center
 	}
 	ctx := DrawContext{
-		min: Size{
+		cell_size: Size{}
+		min:       Size{
 			width:  7
 			height: 2
 		}
-		max: MaxSize{
+		max:       MaxSize{
 			width:  7
 			height: 2
 		}
@@ -80,7 +87,9 @@ fn test_text_styles_tabs_alignment_and_ellipsis() {
 		text:     'abcdefg'
 		softwrap: false
 	}.draw(DrawContext{
-		max: MaxSize{
+		min:       Size{}
+		cell_size: Size{}
+		max:       MaxSize{
 			width: 4
 		}
 	})!
@@ -88,7 +97,9 @@ fn test_text_styles_tabs_alignment_and_ellipsis() {
 	tabs := Text{
 		text: 'a\tb'
 	}.draw(DrawContext{
-		max: MaxSize{
+		min:       Size{}
+		cell_size: Size{}
+		max:       MaxSize{
 			width: 20
 		}
 	})!
@@ -96,10 +107,11 @@ fn test_text_styles_tabs_alignment_and_ellipsis() {
 	assert tabs.read_cell(0, 0).char_.grapheme == 'a'
 	assert tabs.read_cell(1, 0).char_.grapheme == ' '
 	zero := text.draw(DrawContext{
-		min: Size{
+		cell_size: Size{}
+		min:       Size{
 			height: 2
 		}
-		max: MaxSize{
+		max:       MaxSize{
 			width: 0
 		}
 	})!
@@ -128,7 +140,9 @@ fn test_rich_text_preserves_span_styles_links_and_expands_tabs() {
 		]
 	}
 	surface := text.draw(DrawContext{
-		max: MaxSize{
+		min:       Size{}
+		cell_size: Size{}
+		max:       MaxSize{
 			width:  8
 			height: 8
 		}
@@ -144,7 +158,11 @@ fn test_rich_text_preserves_span_styles_links_and_expands_tabs() {
 	assert surface.read_cell(0, 1).link.uri == 'https://example.org'
 	tabs := RichText{
 		text: [TextSpan{ text: 'a\tb' }]
-	}.draw(DrawContext{})!
+	}.draw(DrawContext{
+		min:       Size{}
+		max:       MaxSize{}
+		cell_size: Size{}
+	})!
 	assert tabs.size.width == 10
 	assert tabs.buffer.map(it.char_.grapheme).join('') == 'a        b'
 }

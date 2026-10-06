@@ -56,6 +56,7 @@ pub fn (mut app App) run(widget Widget, opts AppOptions) ! {
 	focus.path_to_focused << widget
 	mut next_frame_ms := time.now().unix_milli()
 	mut ctx := EventContext{
+		cmds:   []Command{}
 		phase:  .capturing
 		redraw: false
 	}
@@ -129,6 +130,7 @@ fn (mut app App) handle_event(event Event, mut mouse MouseHandler, mut focus Foc
 fn (app &App) do_layout(widget Widget) !Surface {
 	screen := app.vx.screen
 	return widget.draw(DrawContext{
+		min:       Size{}
 		max:       MaxSize{
 			width:  screen.width
 			height: screen.height
@@ -241,6 +243,10 @@ fn mouse_hits(surface Surface, mouse vaxis.Mouse) []HitResult {
 		col: mouse.col
 	}
 	if (SubSurface{
+		origin:  RelativePoint{
+			row: 0
+			col: 0
+		}
 		surface: surface
 	}).contains_point(point)
 	{

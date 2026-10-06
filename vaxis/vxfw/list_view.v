@@ -7,7 +7,7 @@ pub type ListBuildFn = fn (voidptr, usize, usize) ?Widget
 
 pub struct ListBuilder {
 pub mut:
-	userdata voidptr
+	userdata voidptr     @[required]
 	build_fn ListBuildFn @[required]
 }
 
@@ -17,7 +17,7 @@ pub fn (builder ListBuilder) item_at_idx(index usize, cursor usize) ?Widget {
 
 pub struct ListSlice {
 pub mut:
-	widgets []Widget
+	widgets []Widget @[required]
 }
 
 pub type ListSource = ListSlice | ListBuilder
@@ -33,19 +33,19 @@ pub mut:
 
 pub fn (mut scroll ListScroll) lines_down(n u8) bool {
 	if !scroll.has_more { return false }
-	scroll.pending_lines += n
+	scroll.pending_lines = vxfw_i17_add(scroll.pending_lines, i32(n))
 	return true
 }
 
 pub fn (mut scroll ListScroll) lines_up(n u8) bool {
 	if scroll.top == 0 && scroll.offset == 0 { return false }
-	scroll.pending_lines -= n
+	scroll.pending_lines = vxfw_i17_sub(scroll.pending_lines, i32(n))
 	return true
 }
 
 pub struct ListView {
 pub mut:
-	children     ListSource
+	children     ListSource @[required]
 	draw_cursor  bool = true
 	wheel_scroll u8   = 3
 	cursor       u32
@@ -103,10 +103,11 @@ pub fn (mut view ListView) handle_event(mut ctx EventContext, event Event) ! {
 }
 
 pub fn (mut view ListView) draw(ctx DrawContext) !Surface {
-	assert ctx.max.width != none && ctx.max.height != none
+	if ctx.max.width == none { panic('Assertion failed') }
+	if ctx.max.height == none { panic('Assertion failed') }
 	match view.children {
 		ListSlice {
-			view.item_count = u32(view.children.widgets.len)
+			view.item_count = vxfw_u32_cast(u64(view.children.widgets.len))
 			builder := &ListSlice{
 				widgets: view.children.widgets
 			}
@@ -134,20 +135,21 @@ pub fn (mut view ListView) next_item(mut ctx EventContext) {
 			ctx.consume_event()
 			return
 		}
-		view.cursor++
+		view.cursor = vxfw_u32_add(view.cursor, 1)
 	} else {
 		match view.children {
 			ListSlice {
-				view.item_count = u32(view.children.widgets.len)
-				if view.cursor == u32(view.children.widgets.len - 1) {
+				view.item_count = vxfw_u32_cast(u64(view.children.widgets.len))
+				if view.children.widgets.len == 0 { panic('integer overflow') }
+				if usize(view.cursor) == usize(view.children.widgets.len) - 1 {
 					ctx.consume_event()
 					return
 				}
-				view.cursor++
+				view.cursor = vxfw_u32_add(view.cursor, 1)
 			}
 			ListBuilder {
 				previous := view.cursor
-				view.cursor++
+				view.cursor = vxfw_u32_add(view.cursor, 1)
 				for view.children.item_at_idx(view.cursor, view.cursor) == none {
 					if view.cursor > 0 { view.cursor-- }
 				}
@@ -168,12 +170,14 @@ pub fn (mut view ListView) prev_item(mut ctx EventContext) {
 		return
 	}
 	if count := view.item_count {
-		view.cursor = math.min(view.cursor - 1, count - 1)
+		view.cursor = math.min(vxfw_u32_sub(view.cursor, 1), vxfw_u32_sub(count, 1))
 	} else {
 		match view.children {
 			ListSlice {
-				view.item_count = u32(view.children.widgets.len)
-				view.cursor = math.min(view.cursor - 1, u32(view.children.widgets.len - 1))
+				view.item_count = vxfw_u32_cast(u64(view.children.widgets.len))
+				previous := vxfw_u32_sub(view.cursor, 1)
+				if view.children.widgets.len == 0 { panic('integer overflow') }
+				view.cursor = u32(math.min(usize(previous), usize(view.children.widgets.len) - 1))
 			}
 			ListBuilder {
 				previous := view.cursor
@@ -202,17 +206,17 @@ pub fn (mut view ListView) ensure_scroll() {
 }
 
 fn (mut view ListView) insert_children(ctx DrawContext, builder ListBuilder, mut children []SubSurface, add_height i32) ! {
-	assert view.scroll.top > 0
-	view.scroll.top--
+	if view.scroll.top == 0 { panic('Assertion failed') }
+	view.scroll.top = vxfw_u32_sub(view.scroll.top, 1)
 	mut upheight := add_height
 	for {
 		child := builder.item_at_idx(view.scroll.top, view.cursor) or { break }
 		offset := if view.draw_cursor { u16(2) } else { u16(0) }
 		size := ctx.max.size()
-		surface := child.draw(ctx.with_constraints(Size{ width: size.width - offset }, MaxSize{
-			width: size.width - offset
+		surface := child.draw(ctx.with_constraints(Size{ width: vxfw_u16_sub(size.width, offset) }, MaxSize{
+			width: vxfw_u16_sub(size.width, offset)
 		}))!
-		upheight -= surface.size.height
+		upheight = vxfw_i17_sub(upheight, i32(surface.size.height))
 		children.insert(0, SubSurface{
 			origin:  RelativePoint{
 				col: offset
@@ -220,9 +224,10 @@ fn (mut view ListView) insert_children(ctx DrawContext, builder ListBuilder, mut
 			}
 			surface: surface
 		})
-		if upheight <= 0 || view.scroll.top == 0 { break
-		 }
-		view.scroll.top--
+		if upheight <= 0 || view.scroll.top == 0 {
+			break
+		}
+		view.scroll.top = vxfw_u32_sub(view.scroll.top, 1)
 	}
 	view.scroll.offset = upheight
 	if view.scroll.top == 0 && upheight > 0 {
@@ -230,7 +235,7 @@ fn (mut view ListView) insert_children(ctx DrawContext, builder ListBuilder, mut
 		mut row := i32(0)
 		for mut child in children {
 			child.origin.row = row
-			row += child.surface.size.height
+			row = vxfw_i17_add(row, i32(child.surface.size.height))
 		}
 	}
 	view.scroll.offset = upheight
@@ -239,7 +244,7 @@ fn (mut view ListView) insert_children(ctx DrawContext, builder ListBuilder, mut
 fn total_height(children []SubSurface) usize {
 	mut height := usize(0)
 	for child in children {
-		height += child.surface.size.height
+		height = vxfw_usize_add(height, usize(child.surface.size.height))
 	}
 	return height
 }
@@ -248,13 +253,15 @@ fn (mut view ListView) draw_builder(ctx DrawContext, builder ListBuilder) !Surfa
 	defer { view.scroll.wants_cursor = false }
 	size := ctx.max.size()
 	mut surface := Surface{
-		size:   size
-		widget: view.widget()
+		size:     size
+		widget:   view.widget()
+		buffer:   []vaxis.Cell{}
+		children: []SubSurface{}
 	}
 	if view.draw_cursor { surface.buffer = Surface.create_buffer(size) }
 	view.scroll.has_more = true
 	mut children := []SubSurface{}
-	mut height := -(view.scroll.offset + view.scroll.pending_lines)
+	mut height := vxfw_i17_sub(0, vxfw_i17_add(view.scroll.offset, view.scroll.pending_lines))
 	view.scroll.pending_lines = 0
 	mut index := usize(view.scroll.top)
 	if height > 0 && view.scroll.top == 0 {
@@ -263,8 +270,9 @@ fn (mut view ListView) draw_builder(ctx DrawContext, builder ListBuilder) !Surfa
 	}
 	if height > 0 {
 		view.insert_children(ctx, builder, mut children, height)!
-		last := children.last()
-		height = last.origin.row + last.surface.size.height
+		last_index := vxfw_usize_sub(usize(children.len), 1)
+		last := children[int(last_index)]
+		height = vxfw_i17_add(last.origin.row, i32(last.surface.size.height))
 	}
 	offset := if view.draw_cursor { u16(2) } else { u16(0) }
 	for {
@@ -275,7 +283,10 @@ fn (mut view ListView) draw_builder(ctx DrawContext, builder ListBuilder) !Surfa
 		child_width := sat_sub(size.width, offset)
 		child_surface := child.draw(ctx.with_constraints(Size{ width: child_width }, MaxSize{
 			width: child_width
-		}))!
+		})) or {
+			index = vxfw_usize_add(index, 1)
+			return err
+		}
 		children << SubSurface{
 			origin:  RelativePoint{
 				col: offset
@@ -283,30 +294,34 @@ fn (mut view ListView) draw_builder(ctx DrawContext, builder ListBuilder) !Surfa
 			}
 			surface: child_surface
 		}
-		height += child_surface.size.height
+		height = vxfw_i17_add(height, i32(child_surface.size.height))
 		current := index
-		index++
-		if view.scroll.wants_cursor && current < view.cursor { continue
-		 }
-		if height >= size.height { break
-		 }
+		index = vxfw_usize_add(index, 1)
+		if view.scroll.wants_cursor && current < view.cursor {
+			continue
+		}
+		if height >= size.height {
+			break
+		}
 	}
 	mut content_height := total_height(children)
 	if !view.scroll.has_more && content_height < size.height && view.scroll.top > 0 {
-		view.insert_children(ctx, builder, mut children, i32(usize(size.height) - content_height))!
+		view.insert_children(ctx, builder, mut children,
+			vxfw_i17_cast(i64(usize(size.height) - content_height)))!
 		content_height = total_height(children)
 	}
 	if view.draw_cursor && view.cursor >= view.scroll.top {
-		cursor_index := int(view.cursor - view.scroll.top)
-		if cursor_index < children.len {
-			child := children[cursor_index]
+		cursor_index := usize(vxfw_u32_sub(view.cursor, view.scroll.top))
+		if cursor_index < usize(children.len) {
+			child := children[int(cursor_index)]
 			cursor_surface := Surface.init_with_children(view.widget(), Size{
-				width:  offset + child.surface.size.width
+				width:  vxfw_u16_add(offset, child.surface.size.width)
 				height: child.surface.size.height
 			}, [
 				SubSurface{
 					origin:  RelativePoint{
 						col: offset
+						row: 0
 					}
 					surface: child.surface
 				},
@@ -319,53 +334,64 @@ fn (mut view ListView) draw_builder(ctx DrawContext, builder ListBuilder) !Surfa
 					}
 				})
 			}
-			children[cursor_index] = SubSurface{
+			children[int(cursor_index)] = SubSurface{
 				origin:  RelativePoint{
 					row: child.origin.row
+					col: 0
 				}
 				surface: cursor_surface
 			}
 		}
 	}
 	if view.scroll.wants_cursor {
-		cursor_index := int(view.cursor - view.scroll.top)
-		sub := children[cursor_index]
-		bottom := sub.origin.row + sub.surface.size.height
+		cursor_index := usize(vxfw_u32_sub(view.cursor, view.scroll.top))
+		if cursor_index >= usize(children.len) { panic('index out of bounds') }
+		sub := children[int(cursor_index)]
+		bottom := vxfw_i17_add(sub.origin.row, i32(sub.surface.size.height))
 		if bottom > size.height {
 			mut origin := i32(size.height)
-			for idx := cursor_index; idx >= 0; idx-- {
-				origin -= children[idx].surface.size.height
+			for idx := int(cursor_index); idx >= 0; idx-- {
+				origin = vxfw_i17_sub(origin, i32(children[idx].surface.size.height))
 				children[idx].origin.row = origin
 			}
 		} else if sub.surface.size.height >= size.height {
 			view.scroll.top = view.cursor
 			view.scroll.offset = 0
-			children = [SubSurface{ surface: sub.surface }]
+			children = [
+				SubSurface{
+					origin:  RelativePoint{
+						row: 0
+						col: 0
+					}
+					surface: sub.surface
+				},
+			]
 			content_height = sub.surface.size.height
 		}
 	}
 	if !view.scroll.has_more && content_height < size.height {
-		assert view.scroll.top == 0
+		if view.scroll.top != 0 { panic('Assertion failed') }
 		view.scroll.offset = 0
 		mut origin := i32(0)
 		for mut child in children {
 			child.origin.row = origin
-			origin += child.surface.size.height
+			origin = vxfw_i17_add(origin, i32(child.surface.size.height))
 		}
 	} else if !view.scroll.has_more {
 		mut origin := i32(size.height)
 		for idx := children.len - 1; idx >= 0; idx-- {
-			origin -= children[idx].surface.size.height
+			origin = vxfw_i17_sub(origin, i32(children[idx].surface.size.height))
 			children[idx].origin.row = origin
 		}
 	}
 	mut start := 0
 	mut end := children.len
 	for idx, child in children {
-		if child.origin.row <= 0 && child.origin.row + child.surface.size.height > 0 {
+		if child.origin.row <= 0
+			&& vxfw_i17_add(child.origin.row, i32(child.surface.size.height)) > 0 {
 			start = idx
-			view.scroll.offset = -child.origin.row
-			view.scroll.top += u32(idx)
+			view.scroll.offset = vxfw_i17_sub(0, child.origin.row)
+			view.scroll.top = vxfw_u32_add(view.scroll.top, vxfw_u32_cast(u64(idx)))
 		}
 		if child.origin.row > size.height {
 			end = idx
