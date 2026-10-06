@@ -14,6 +14,7 @@ current implementations and verification are checked again.
 
 | Area | Bug | Fix |
 |---|---|---|
+| vaxis App public state and event pipeline | Required state fields were private or defaulted, production erased command/focus checks, callback errors skipped per-event reset, and adding a timer sorted only the last item even when callers reordered the public list. | Restore public mutable required fields and explicit init payloads, preserve runtime invariants and zero-size division traps, defer per-event reset, and stably sort the complete timer list. Separate unchanged-source record and public PTY comparisons cover supported copies, lifecycle, routing, commands, timers and callback failures; allocator, buffered TTY output, alias markers and cross-target runtime remain documented boundaries. |
 | vaxis shared Unicode APIs | Public width and grapheme helpers decoded through V runes and lost malformed-byte consumption, checked width totals, and source borrowing/prefetch timing. | Reuse the locked byte decoder for the public helpers and expose borrowed Grapheme spans and initialized iterators. DrawContext initializes its decoder at the factory call. Ordinary and production comparisons match 72,225 records, fourteen strict traps and both required-span-field omission checks; the original TextInput matrix retains its hash. Opaque iterator state and V string call shapes remain documented adaptations. |
 | vaxis vxfw TextField | Insertion/navigation/drawing normalized raw bytes, count/width/draw arithmetic lost checked source bounds in production, caller-buffer copying omitted alias checks, and rendered graphemes copied the gap buffer. | Use the shared byte decoder, explicit checked arithmetic and borrowed buffer views. Preserve callback mutation/error ordering and retained previous-value snapshots. Ordinary and production source comparisons match 18,911 returning records and sixteen strict trap pairs. Six focused tests pass. The unused u4 scroll field remains a measured wider-storage constructor boundary. |
 | vaxis framework surfaces and delegated Window coordinates | Surface indexing widened source u16 operations, production erased invariant checks, rendering restricted valid i17 offsets to i16, and delegated coordinate sums lost checked arithmetic and short-circuit order. | Restore explicit u16/i17 checks, borrowed trimming, source-wide offsets, and checked child/cell/cursor coordinates. Ordinary and production comparisons match 11,162 records and twenty-eight strict traps; four focused consumers pass. The comparison covers initialized surface methods and delegated Window methods, with constructor/allocator and wider backing-field limits recorded separately. |
@@ -1108,7 +1109,12 @@ an item here does not mean its full module has been certified yet.
   is excluded from defined-behavior parity and V retains managed storage.
   Core and widget constructor checks are scoped to field presence and defaults,
   excluding allocator arguments, pointer nullability and readonly slice types.
-  App manual lifecycle construction remains outside that constructor proof.
+  The original core/widget constructor proof excludes App. A separate App
+  matrix now verifies mutable options, required represented fields, public
+  pending focus, and timer item borrowing with independent copied list headers.
+  Source allocator and buffered-writer storage have no V fields; the pinned V
+  compiler also ignores required markers through an App alias. TTY copies and
+  full Vaxis resource ownership remain outside that record proof.
   Separate layout and Text/RichText matrices now verify checked arithmetic,
   public iterator payload requirements and usize indices, callback ordering,
   and borrowed drawing state. A FlexRow callback that changes an initially
@@ -2249,3 +2255,100 @@ adds `-O ReleaseSafe` to each native build-exe invocation, with delegated comman
 recorded separately. No Source body changed. Their historical substring-based
 trap checks remain historical evidence; WindowOutput/Surface retain strict
 checks, and the new matrices above use strict failure classification.
+
+## Vaxis App public contracts and runtime continuation
+
+AppOptions is publicly mutable. App's four represented fields (`tty`, `vx`,
+`timers`, `wants_focus`) are publicly mutable and required, matching the source's
+field presence; init and manual callers supply them explicitly. Init preserves
+Vaxis initialization before TTY initialization, empty timers, no pending focus,
+clipboard support and all five Kitty keyboard flags. Both command-list and both
+focus invariants now use explicit panic guards, retaining them in production.
+Layout checks zero terminal dimensions before division and before invoking the
+draw callback. Per-event context reset uses a defer, so callback errors reset
+phase/consumption as in the source while leaving other fields and pending
+commands intact.
+
+Adding a timer now performs the source's stable descending insertion sort on
+the complete public list, including existing entries reordered by callers.
+The regression failed before the fix with deadlines firing in order 1, 2, 0;
+the corrected/source order is 0, 1, 2. Equal deadlines retain arrival order.
+
+Each new runner hash-checks and copies the complete pinned Vaxis source and
+locked uucode graph unchanged. No private source methods are exposed or wrapped.
+Source Debug/V ordinary and Source ReleaseSafe/V production match:
+
+| Scope | Returning observations | Strict trap pairs | Output SHA-256 |
+| --- | ---: | ---: | --- |
+| App public record contracts | 5,377 | 0 | `4f65eaf15452bc86bc3df2276c3007e1a50a55d192d98022bb9c5055d7512270` |
+| App init/run/deinit, controlled macOS PTY | 32 traces | 7 | `4947fb0e0877a64f4f62d3cf52b83d4833e0d1a2e4b5dcc8755678d3fcc4cc9e` |
+
+Record comparisons cover all 256 framerates, the default, supported Vaxis scalar
+projections, mutable pending focus, extreme signed timer deadlines and by-value
+timer-list headers sharing item storage. Changing an item through a copied list
+changes the original item; shortening the copied header leaves the original
+length intact. Two complete constructor types compile in one batched consumer,
+and four plain App required-field omissions reject independently in both
+languages. Source-only allocator/buffer omissions and the two unavailable V
+fields are measured separately. The source rejects an alias that omits timers;
+the pinned V type checker accepts that alias, retaining the known required-marker
+boundary.
+
+The PTY fixture calls unchanged public App.init, App.run and App.deinit on a real
+controlling terminal. It observes init defaults before preseeding the actual PTY
+size through public resize, removing initial-reader scheduling variation from
+the published dimensions. Callback barriers control input; a terminal controller
+answers DA1 and DSR queries. All returning cases restore the complete initial
+termios state, observed while the child is still alive. Scenarios cover initial
+events and early quit, root/child focus, capture/target consumption, command
+batches, equal timers and deferred rearming, manually seeded sorted/unsorted
+timer lists and sorting after a new command, redraw, focus reports, local mouse
+coordinates and exit behavior,
+resize and callback errors. Framerates 0, 60 and 255 are exercised for basic and
+timer scenarios. This establishes callback/state behavior rather than a
+wall-clock timing or throughput guarantee.
+
+Seven isolated public failures retain their pre-trap callback traces and anchored
+panic categories: focus without a handler, a focused widget absent from the next
+layout, zero width/height, an invalid render buffer, surface dimension overflow,
+and commands added by a draw callback through its borrowed live EventContext.
+The last case reaches the post-layout command invariant. The preceding
+command-list invariant is retained by source review but is not separately
+reached by this public corpus. Strict checks require nonzero exit, the expected
+panic line and no ordinary return, DONE or unexpected fixture marker. These
+checks do not certify panic stack traces, cleanup on panic or panic runtimes.
+
+Three new focused V test files add ten consumers. Private-adapter checks retain
+focus transition/capture error state, the inherited empty focus path, mouse
+enter/leave error ordering, pending commands, retained hit lists, consumption
+and repeated exits. Both focus assertions also have strict isolated V checks in
+ordinary and production builds. The per-event defer has a focused callback-error
+consumer; no source EventContext is inspected after App.run returns, since that
+would extend its lifetime. Pixel cell dimensions retain floor division.
+An additional regression in the existing routing test checks timer firing after
+adding a command to a caller-reordered public list.
+An isolated V snapshot containing only the previous add_tick body also reproduces
+the public PTY mismatch: unchanged Source fires nodes 1, 3, 2, while that old V
+body fires 3, 2, 1. This snapshot is separate from the shared implementation and
+does not change a Source statement.
+
+Raw terminal streams are retained with their byte lengths and hashes separately
+from callback/state equality. Initial queued resize can place screen-clear bytes
+before or after init commands, or be skipped on early callback failure. A held
+public raw TTY write proves Source's 1,024-byte buffer delays a marker that V's
+unbuffered adapter already emits. No normalized or complete terminal-output
+parity is claimed. Allocator/GC failure, per-frame arena lifetime, copied TTY
+resources and full Vaxis aggregate ownership, App's heap-pointer versus source
+value return, ArrayList payload APIs, native ABI, dangling/uninitialized source
+state and cross-platform runtime remain separate contracts. These real-clock
+cases do not certify signed/unsigned timestamp extremes or arbitrary thread
+scheduling.
+
+Reproduction and exact scope are in
+`vaxis/reference_probes/vxfw_app_contracts/README.md` and
+`vaxis/reference_probes/app_run/README.md`. Final integration passes all 53
+Vaxis test files, Boo's four focused tests and native/Linux whole-application
+checks. Both Windows DLLs and all three new App focused test executables compile;
+Vaxis links as an x86_64 Linux ELF shared library with GC disabled for that cross
+build. Cross-target runtime was not executed. The image implementation is
+unchanged and retains its preceding 44-file test result.

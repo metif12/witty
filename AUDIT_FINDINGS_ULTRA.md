@@ -2206,3 +2206,59 @@ native/Linux application checks. Both Windows DLLs, all six new focused test
 executables and an x86_64 Linux shared-library link pass. Cross-target runtime
 was not exercised; the unchanged image module retains its preceding 44-file
 test result.
+
+## Vaxis App contracts and public runtime continuation
+
+AppOptions and all four represented App fields are public and mutable; App
+fields are required and init/manual callers supply them explicitly. Command-list
+and focus invariants survive production optimization. Zero terminal dimensions
+trap before drawing, and a per-event defer resets phase/consumption on callback
+errors while preserving pending commands and the other context fields.
+
+Adding a timer sorts the complete public list with the source's stable
+descending insertion sort. This corrects firing order after callers reorder
+existing entries; the new routing regression failed before the fix with
+deadlines 1, 2, 0 instead of 0, 1, 2.
+
+Unchanged-source Debug/V ordinary and ReleaseSafe/V production comparisons
+match 5,377 App record/default/copy observations, SHA-256
+`4f65eaf15452bc86bc3df2276c3007e1a50a55d192d98022bb9c5055d7512270`,
+and 32 public init/run/deinit PTY traces plus seven strict public traps, SHA-256
+`4947fb0e0877a64f4f62d3cf52b83d4833e0d1a2e4b5dcc8755678d3fcc4cc9e`.
+Source trees and locked Unicode dependencies are hash-checked and unchanged;
+private source handlers are not exposed. Four plain required-field omissions
+reject in both languages. Allocator/buffer field absence and V's ignored
+required marker through an App alias remain measured differences.
+
+Record comparisons preserve shared timer items and independent copied headers,
+pending focus and selected Vaxis scalars. PTY cases cover command batches,
+stable equal timers, deferred rearming, manually seeded lists, focus and mouse
+routing, consumption, resize, redraw and callback failures. All returning cases
+restore complete initial termios while the child is held alive. Public resize
+preseeds actual terminal dimensions after observing init defaults, excluding the
+reader's initial resize scheduling from the reported dimensions. The traps
+retain expected callback prefixes and anchored failure categories, including
+the public post-layout command invariant. The earlier command invariant is
+retained by review without a separate public trap fixture.
+
+Three new focused test files add ten consumers for supported copies, callback
+reset, floor-divided pixel dimensions and private focus/mouse error state.
+The private-adapter tests and source review support the reset change; no source
+EventContext is read after App.run returns. Two strict isolated V focus checks
+also pass ordinary and production builds.
+
+Raw terminal bytes are retained separately; initial queued resize ordering can
+change screen-clear placement. A held public raw TTY write measures the source's
+buffered output versus V's immediate output. No full or normalized terminal
+stream parity is claimed. Allocator/GC/arena ownership, copied terminal resources,
+full Vaxis aggregate ownership, source value/V heap-pointer init return,
+ArrayList payload APIs, timestamp extremes, native ABI and arbitrary scheduling
+remain separate contracts. Reproduction and scope are in
+`vaxis/reference_probes/vxfw_app_contracts/README.md` and
+`vaxis/reference_probes/app_run/README.md`.
+
+Integration passes 53/53 Vaxis test files, Boo's four focused tests and
+native/Linux whole-application checks. Both Windows DLLs, all three App test
+executables and an x86_64 Linux shared-library link pass. Cross-target runtime
+was not executed; the unchanged image module retains its preceding 44-file
+test result.

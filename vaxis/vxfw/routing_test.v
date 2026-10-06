@@ -119,7 +119,10 @@ fn test_mouse_routes_local_coordinates_and_excludes_target_capture() {
 	}
 	mut mouse := MouseHandler.new(root.widget())
 	mut app := App{
-		vx: vaxis.Vaxis.new(vaxis.VaxisOptions{})
+		tty:         vaxis.Tty{}
+		vx:          vaxis.Vaxis.new(vaxis.VaxisOptions{})
+		timers:      []Tick{}
+		wants_focus: none
 	}
 	defer { app.vx.deinit() }
 	mut ctx := EventContext{
@@ -186,7 +189,10 @@ fn test_timers_descending_stable_order_and_deferred_rearm() {
 		log:  log
 	}
 	mut app := App{
-		vx: vaxis.Vaxis.new(vaxis.VaxisOptions{})
+		tty:         vaxis.Tty{}
+		vx:          vaxis.Vaxis.new(vaxis.VaxisOptions{})
+		timers:      []Tick{}
+		wants_focus: none
 	}
 	defer { app.vx.deinit() }
 	app.add_tick(Tick{ deadline_ms: 1, widget: a.widget() })
@@ -201,4 +207,36 @@ fn test_timers_descending_stable_order_and_deferred_rearm() {
 	assert app.timers[0].widget.eql(c.widget())
 	assert app.timers[1].widget.eql(b.widget())
 	assert b.ticks == 1
+}
+
+fn test_queued_timer_resorts_public_timer_list_before_firing() {
+	mut log := &RoutingLog{}
+	a := &RoutingWidget{
+		name: 'a'
+		log:  log
+	}
+	b := &RoutingWidget{
+		name: 'b'
+		log:  log
+	}
+	c := &RoutingWidget{
+		name: 'c'
+		log:  log
+	}
+	mut app := App{
+		tty:         vaxis.Tty{}
+		vx:          vaxis.Vaxis.new(vaxis.VaxisOptions{})
+		timers:      [Tick{ deadline_ms: 0, widget: a.widget() },
+			Tick{ deadline_ms: 2, widget: b.widget() }, Tick{ deadline_ms: 1, widget: c.widget() }]
+		wants_focus: none
+	}
+	defer { app.vx.deinit() }
+	app.add_tick(Tick{ deadline_ms: 9223372036854775807, widget: a.widget() })
+	mut ctx := EventContext{
+		cmds: []Command{}
+	}
+	app.check_timers(mut ctx)!
+	assert log.items == ['a:at_target:tick', 'c:at_target:tick', 'b:at_target:tick']
+	assert app.timers.len == 1
+	assert app.timers[0].deadline_ms == 9223372036854775807
 }

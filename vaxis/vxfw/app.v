@@ -4,26 +4,28 @@ import time
 import vaxis
 
 pub struct AppOptions {
-pub:
+pub mut:
 	framerate u8 = 60
 }
 
 @[heap]
 pub struct App {
 pub mut:
-	tty vaxis.Tty
-	vx  vaxis.Vaxis
-mut:
-	timers      []Tick
-	wants_focus ?Widget
+	tty         vaxis.Tty   @[required]
+	vx          vaxis.Vaxis @[required]
+	timers      []Tick      @[required]
+	wants_focus ?Widget     @[required]
 }
 
 pub fn App.init() !&App {
 	mut app := &App{
-		vx: vaxis.Vaxis.new(vaxis.VaxisOptions{
+		tty:         vaxis.Tty{}
+		vx:          vaxis.Vaxis.new(vaxis.VaxisOptions{
 			system_clipboard:     true
 			kitty_keyboard_flags: vaxis.KittyFlags.init(true, true, true, true, true)
 		})
+		timers:      []Tick{}
+		wants_focus: none
 	}
 	app.tty = vaxis.Tty.new()!
 	return app
@@ -79,7 +81,7 @@ pub fn (mut app App) run(widget Widget, opts AppOptions) ! {
 		if !ctx.redraw { continue
 		 }
 		ctx.redraw = false
-		assert ctx.cmds.len == 0
+		if ctx.cmds.len != 0 { panic('Assertion failed') }
 		mut surface := app.do_layout(widget)!
 		mouse.update_mouse(mut app, surface, mut ctx)!
 		if wants := app.wants_focus {
@@ -87,7 +89,7 @@ pub fn (mut app App) run(widget Widget, opts AppOptions) ! {
 			app.handle_commands(mut ctx.cmds)
 			app.wants_focus = none
 		}
-		assert ctx.cmds.len == 0
+		if ctx.cmds.len != 0 { panic('Assertion failed') }
 		if ctx.redraw { surface = app.do_layout(widget)! }
 		mouse.last_frame = surface
 		focus.update(surface)
@@ -101,12 +103,15 @@ fn (mut app App) drain_events(mut loop vaxis.Loop[Event], mut mouse MouseHandler
 	for {
 		event := loop.queue.drain() or { break }
 		app.handle_event(event, mut mouse, mut focus, mut ctx)!
-		ctx.consume_event = false
-		ctx.phase = .capturing
 	}
 }
 
 fn (mut app App) handle_event(event Event, mut mouse MouseHandler, mut focus FocusHandler, mut ctx EventContext) ! {
+	// Source's per-event defer runs on callback errors as well as success.
+	defer {
+		ctx.consume_event = false
+		ctx.phase = .capturing
+	}
 	match event {
 		vaxis.FocusOut {
 			mouse.mouse_exit(mut app, mut ctx)!
@@ -129,6 +134,7 @@ fn (mut app App) handle_event(event Event, mut mouse MouseHandler, mut focus Foc
 
 fn (app &App) do_layout(widget Widget) !Surface {
 	screen := app.vx.screen
+	if screen.width == 0 || screen.height == 0 { panic('division by zero') }
 	return widget.draw(DrawContext{
 		min:       Size{}
 		max:       MaxSize{
@@ -156,11 +162,14 @@ fn (mut app App) render(surface Surface, focused Widget) ! {
 
 fn (mut app App) add_tick(tick Tick) {
 	app.timers << tick
-	// Stable insertion sort, descending. Equal deadlines keep their arrival order.
-	mut i := app.timers.len - 1
-	for i > 0 && app.timers[i].deadline_ms > app.timers[i - 1].deadline_ms {
-		app.timers[i], app.timers[i - 1] = app.timers[i - 1], app.timers[i]
-		i--
+	// Source sorts the entire public list, including caller-reordered timers.
+	// Equal deadlines keep their arrival order.
+	for index in 1 .. app.timers.len {
+		mut i := index
+		for i > 0 && app.timers[i].deadline_ms > app.timers[i - 1].deadline_ms {
+			app.timers[i], app.timers[i - 1] = app.timers[i - 1], app.timers[i]
+			i--
+		}
 	}
 }
 
@@ -358,7 +367,7 @@ fn (mut handler FocusHandler) child_has_focus(surface Surface) bool {
 }
 
 fn (mut handler FocusHandler) focus_widget(mut ctx EventContext, widget Widget) ! {
-	assert widget.event_handler != none
+	if widget.event_handler == none { panic('Assertion failed') }
 	if handler.focused_widget.eql(widget) { return }
 	ctx.phase = .at_target
 	handler.focused_widget.handle_event(mut ctx, Event(vaxis.FocusOut{}))!
@@ -368,7 +377,7 @@ fn (mut handler FocusHandler) focus_widget(mut ctx EventContext, widget Widget) 
 
 fn (handler &FocusHandler) handle_event(mut ctx EventContext, event Event) ! {
 	path := handler.path_to_focused
-	assert path.len > 0
+	if path.len == 0 { panic('Assertion failed') }
 	ctx.phase = .capturing
 	for widget in path {
 		widget.capture_event(mut ctx, event)!
