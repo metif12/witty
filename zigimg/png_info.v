@@ -4,7 +4,7 @@ import strconv
 
 pub struct PngInfoProcessor {
 pub mut:
-	writer     &WriteStream = unsafe { nil }
+	writer     &WriteStream @[required]
 	idat_count u32
 	idat_size  u64
 }
@@ -73,7 +73,7 @@ fn png_info_zero(bytes []u8) int {
 	for index, byte in bytes {
 		if byte == 0 { return index }
 	}
-	panic('missing PNG text delimiter')
+	panic('attempt to use null value')
 }
 
 fn png_info_read_short(mut decoder TiffFlate, mut input ReadStream, mut destination []u8) !int {
@@ -156,6 +156,7 @@ pub fn (mut processor PngInfoProcessor) process_chunk(mut data PngChunkProcessDa
 					} else {
 						if !processor.print('            Compressed: No\n') { return format }
 					}
+					if text.len < 2 { panic('start index 2 is larger than end index ${text.len}') }
 					text = unsafe { text[2..] }
 					language_end := png_info_zero(text)
 					if !processor.print('          Language Tag: ${text[..language_end].bytestr()}\n') {
@@ -346,20 +347,22 @@ pub fn (mut processor PngInfoProcessor) process_chunk(mut data PngChunkProcessDa
 			return format
 		}
 		if !processor.print('Bit Depth: ${data.header.bit_depth}\n') { return format }
-		assert u8(data.header.color_type) in [u8(0), 2, 3, 4, 6]
+		// Source @tagName evaluates before this print, after earlier prints succeed.
+		if u8(data.header.color_type) !in [u8(0), 2, 3, 4, 6] { panic('invalid enum value') }
 		if !processor.print('Color Type: ${data.header.color_type}\n') { return format }
-		assert u8(data.header.compression_method) == 0
+		if u8(data.header.compression_method) != 0 { panic('invalid enum value') }
 		if !processor.print('Compression Method: deflate\n') { return format }
-		assert u8(data.header.filter_method) == 0
+		if u8(data.header.filter_method) != 0 { panic('invalid enum value') }
 		if !processor.print('Filter Method: adaptive\n') { return format }
-		assert u8(data.header.interlace_method) <= 1
+		if u8(data.header.interlace_method) > 1 { panic('invalid enum value') }
 		if !processor.print('Interlace Method: ${data.header.interlace_method}\n\n') {
 			return format
 		}
 	} else if data.chunk_id == png_chunk_idat.id {
-		assert processor.idat_count < u32(0xffffffff)
+		// The count addition precedes the size addition, including on overflow.
+		if processor.idat_count == u32(0xffffffff) { panic('integer overflow') }
 		processor.idat_count++
-		assert processor.idat_size <= ~u64(0) - data.chunk_length
+		if processor.idat_size > ~u64(0) - data.chunk_length { panic('integer overflow') }
 		processor.idat_size += data.chunk_length
 	} else if data.chunk_id == png_chunk_iend.id {
 		if !processor.print('IDAT Count: ${processor.idat_count}, Total Size: ${png_info_byte_size(processor.idat_size)}\n') {

@@ -141,3 +141,39 @@ fn test_write_stream_integer_encoding_retains_partial_write_semantics() {
 	output.write_int(u32(0x12345678), BigEndian{}) or { failure = err.msg() }
 	assert failure == 'WriteFailed' && short == [u8(0x12), 0x34, 0x56] && output.get_pos() == 3
 }
+
+fn test_png_chunk_writer_accepts_empty_and_adjacent_borrowed_buffer_ranges() {
+	mut destination := []u8{len: 32, init: 0xa5}
+	mut writer := png_chunk_writer_with_buffer([u8(1), 2, 3, 4]!,
+		WriteStream.init_memory(mut destination), [u8(`I`), `D`, `A`, `T`]!)
+	mut storage := png_chunk_buffer_bytes(mut writer.buf)
+	empty := unsafe { storage[..0] }
+	empty_count := writer.write(empty)!
+	assert empty_count == 0
+	writer.end = 2
+	adjacent := unsafe { storage[..2] }
+	adjacent_count := writer.write(adjacent)!
+	assert adjacent_count == 2
+	assert writer.buf == [u8(1), 2, 1, 2]!
+	assert writer.end == 4
+	full_empty := unsafe { storage[4..4] }
+	full_empty_count := writer.write(full_empty)!
+	assert full_empty_count == 0
+	assert writer.end == 4 && writer.unbuffered_writer.get_pos() == 0
+}
+
+fn test_png_chunk_writer_defers_payload_bounds_until_header_writes_succeed() {
+	for capacity in 0 .. 8 {
+		mut destination := []u8{len: capacity, init: 0xa5}
+		mut writer := png_chunk_writer_with_buffer([u8(1), 2, 3, 4]!,
+			WriteStream.init_memory(mut destination), [u8(`I`), `D`, `A`, `T`]!)
+		writer.end = 5
+		mut failure := ''
+		writer.flush() or { failure = err.msg() }
+		assert failure == 'WriteFailed'
+		assert writer.end == 5 && writer.buf == [u8(1), 2, 3, 4]!
+		assert writer.unbuffered_writer.get_pos() == u64(capacity)
+		prefix := [u8(0), 0, 0, 5, `I`, `D`, `A`, `T`]
+		assert destination == prefix[..capacity]
+	}
+}

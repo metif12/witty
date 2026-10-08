@@ -94,7 +94,7 @@ fn png_call_chunk_processors(processors []PngReaderProcessor, mut data PngChunkP
 	for processor in processors {
 		if processor.id == id || processor.id == png_chunk_any.id {
 			format := processor.process_chunk(mut data)!
-			assert format.pixel_stride() >= data.current_format.pixel_stride()
+			png_reader_assert(format.pixel_stride() >= data.current_format.pixel_stride())
 			data.current_format = format
 			if !processed {
 				processed = true
@@ -103,8 +103,7 @@ fn png_call_chunk_processors(processors []PngReaderProcessor, mut data PngChunkP
 		}
 	}
 	if !processed {
-		assert data.chunk_length <= u32(0xffffffff) - 4
-		data.read_stream.seek_by(i64(data.chunk_length + 4))!
+		data.read_stream.seek_by(i64(png_reader_u32_add(data.chunk_length, 4)))!
 	}
 }
 
@@ -177,8 +176,7 @@ pub fn (mut processor PngTrnsProcessor) processor() PngReaderProcessor {
 pub fn (mut processor PngTrnsProcessor) process_chunk(mut data PngChunkProcessData) !PixelFormat {
 	mut format := data.current_format
 	if processor.processed {
-		assert data.chunk_length <= u32(0xffffffff) - 4
-		data.read_stream.seek_by(i64(data.chunk_length + 4))!
+		data.read_stream.seek_by(i64(png_reader_u32_add(data.chunk_length, 4)))!
 		return format
 	}
 	mut stream := data.read_stream
@@ -239,6 +237,7 @@ pub fn (mut processor PngTrnsProcessor) process_palette(mut data PngPaletteProce
 	match processor.trns_data {
 		PngTrnsIndexAlpha {
 			for index, alpha in processor.trns_data.data {
+				if index >= data.palette.len { panic('index out of bounds') }
 				data.palette[index].a = alpha
 			}
 		}
@@ -277,16 +276,17 @@ pub fn (mut processor PngTrnsProcessor) process_data_row(mut data PngRowProcessD
 		else { return data.src_format }
 	}
 
-	mut position := 0
+	mut pixel_position := u32(0)
 	match processor.trns_data {
 		PngTrnsGray {
 			gray := processor.trns_data.value
 			match data.src_format {
 				.grayscale1, .grayscale2, .grayscale4, .grayscale8 {
-					for position + 1 < data.dest_row.len {
+					for u64(png_reader_u32_add(pixel_position, 1)) < u64(data.dest_row.len) {
+						position := int(pixel_position)
 						difference := data.dest_row[position] ^ u8(gray)
 						$if wasm32 {
-							assert difference <= 1
+							if difference > 1 { panic('integer overflow') }
 							data.dest_row[position + 1] = difference * u8(255)
 						} $else {
 							data.dest_row[position + 1] = if difference == 0 {
@@ -295,30 +295,31 @@ pub fn (mut processor PngTrnsProcessor) process_data_row(mut data PngRowProcessD
 								u8(255)
 							}
 						}
-						position += stride
+						pixel_position = png_reader_u32_add(pixel_position, u32(stride))
 					}
 					return .grayscale8_alpha
 				}
 				.grayscale16 {
-					assert data.dest_row.len % 2 == 0
-					for position + 1 < data.dest_row.len / 2 {
+					if data.dest_row.len % 2 != 0 { panic('exact division produced remainder') }
+					for u64(png_reader_u32_add(pixel_position, 1)) < u64(data.dest_row.len / 2) {
+						position := int(pixel_position)
 						// The source compares a byte at the u16 sample index, including
 						// previously written alpha bytes; it does not read the gray u16.
 						difference := u16(data.dest_row[position]) ^ gray
 						mut alpha := u16(0)
 						$if wasm32 {
-							assert difference <= 1
+							if difference > 1 { panic('integer overflow') }
 							alpha = difference * u16(65535)
 						} $else {
 							alpha = if difference == 0 { u16(0) } else { u16(65535) }
 						}
 						png_store_native_u16(mut data.dest_row, (position + 1) * 2, alpha)
-						position += stride
+						pixel_position = png_reader_u32_add(pixel_position, u32(stride))
 					}
 					return .grayscale16_alpha
 				}
 				else {
-					panic('invalid PNG gray transparency source')
+					panic('reached unreachable code')
 				}
 			}
 		}
@@ -326,9 +327,10 @@ pub fn (mut processor PngTrnsProcessor) process_data_row(mut data PngRowProcessD
 			color := processor.trns_data.color
 			match data.src_format {
 				.rgb24 {
-					assert data.dest_row.len % 4 == 0
+					if data.dest_row.len % 4 != 0 { panic('exact division produced remainder') }
 					stride /= 4
-					for position < data.dest_row.len / 4 {
+					for u64(pixel_position) < u64(data.dest_row.len / 4) {
+						position := int(pixel_position)
 						at := position * 4
 						data.dest_row[at + 3] = if data.dest_row[at] == color.r
 							&& data.dest_row[at + 1] == color.g && data.dest_row[at + 2] == color.b {
@@ -336,13 +338,14 @@ pub fn (mut processor PngTrnsProcessor) process_data_row(mut data PngRowProcessD
 						} else {
 							u8(255)
 						}
-						position += stride
+						pixel_position = png_reader_u32_add(pixel_position, u32(stride))
 					}
 					return .rgba32
 				}
 				.rgb48 {
-					assert data.dest_row.len % 8 == 0
-					for position < data.dest_row.len / 8 {
+					if data.dest_row.len % 8 != 0 { panic('exact division produced remainder') }
+					for u64(pixel_position) < u64(data.dest_row.len / 8) {
+						position := int(pixel_position)
 						at := position * 8
 						r := png_native_u16(data.dest_row[at..at + 2])
 						g := png_native_u16(data.dest_row[at + 2..at + 4])
@@ -353,17 +356,17 @@ pub fn (mut processor PngTrnsProcessor) process_data_row(mut data PngRowProcessD
 						} else {
 							u16(65535)
 						})
-						position++
+						pixel_position = png_reader_u32_add(pixel_position, 1)
 					}
 					return .rgba64
 				}
 				else {
-					panic('invalid PNG RGB transparency source')
+					panic('reached unreachable code')
 				}
 			}
 		}
 		else {
-			panic('invalid PNG transparency data')
+			panic('reached unreachable code')
 		}
 	}
 }
@@ -416,20 +419,28 @@ pub fn (mut processor PngPlteProcessor) process_data_row(mut data PngRowProcessD
 		else { return data.src_format }
 	}
 
-	mut position := 0
-	for position + 3 < data.dest_row.len {
+	// The source switches on the format before entering either row loop, so an
+	// unsupported indexed format traps even for an empty destination row.
+	if data.src_format !in [.indexed1, .indexed2, .indexed4, .indexed8, .indexed16] {
+		panic('reached unreachable code')
+	}
+
+	mut pixel_position := u32(0)
+	for u64(png_reader_u32_add(pixel_position, 3)) < u64(data.dest_row.len) {
+		position := int(pixel_position)
 		index := match data.src_format {
 			.indexed1, .indexed2, .indexed4, .indexed8 { u16(data.dest_row[position]) }
 			.indexed16 { png_native_u16(data.dest_row[position..position + 2]) }
-			else { panic('invalid PNG indexed transparency source') }
+			else { panic('reached unreachable code') }
 		}
 
+		if int(index) >= processor.palette.len { panic('index out of bounds') }
 		entry := processor.palette[int(index)]
 		data.dest_row[position] = entry.r
 		data.dest_row[position + 1] = entry.g
 		data.dest_row[position + 2] = entry.b
 		data.dest_row[position + 3] = entry.a
-		position += stride
+		pixel_position = png_reader_u32_add(pixel_position, u32(stride))
 	}
 	return .rgba32
 }

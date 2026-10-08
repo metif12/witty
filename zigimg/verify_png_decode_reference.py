@@ -7,12 +7,14 @@ import argparse
 import hashlib
 import os
 from pathlib import Path
-import resource
 import shutil
 import struct
-import subprocess
-import tempfile
 import zlib
+import json
+import re
+import sys
+
+from verify_tiff_decode_reference import ProofLog, tree_hash, work_directory
 
 from verify_png_foundation_reference import PINNED_SOURCE_SHA256, PINNED_FLATE_SHA256, FLATE_SOURCES
 from verify_png_info_reference import FORMAT_SOURCES, PINNED_FORMAT_SHA256
@@ -20,6 +22,16 @@ from verify_png_info_reference import FORMAT_SOURCES, PINNED_FORMAT_SHA256
 MAGIC = b"\x89PNG\r\n\x1a\n"
 FORMATS = [(0, d) for d in (1, 2, 4, 8, 16)] + [(3, d) for d in (1, 2, 4, 8)] + [(c, d) for c in (2, 4, 6) for d in (8, 16)]
 PASSES = [(0, 0, 8, 8), (4, 0, 8, 8), (0, 4, 4, 8), (2, 0, 4, 4), (0, 2, 2, 4), (1, 0, 2, 2), (0, 1, 1, 2)]
+EXPECTED_ROWS = 60760
+EXPECTED_SHA256 = "96ee46b18345684842d8ae9cd64290f7c5e9b86228458a83386a602bbd646e9c"
+EXPECTED_PROCESSOR_ROWS = 64395
+EXPECTED_PROCESSOR_SHA256 = "09ac13edac49df9819661dccd6625541d1e4590d0e3935e4738bf01bb447d6af"
+EXPECTED_TRAPS = 26
+EXPECTED_STATE_SHA256 = "f2c3d51b1acd37f3f435e2ac9399ae936ce897ff59a34426164bebba2ac8be35"
+PIXEL_FORMATS = [0, 1, 2, 4, 8, 16, 0x101, 0x102, 0x104, 0x108, 0x110, 0x208, 0x210,
+                 0x303, 0x305, 0x3305, 0x308, 0x408, 0x1305, 0x1308, 0x1408, 0x310, 0x410, 0x2420]
+INDEXED = [0, 1, 2, 4, 8, 16]
+ALPHA_DEST = [0x208, 0x210, 0x408, 0x1408, 0x410]
 
 
 def chunk(name, payload=b"", *, length=None, crc=None):
@@ -209,11 +221,94 @@ def bounds():
         ("ancillary-skip-overflow", 0, prefix+struct.pack(">I", 0xffffffff)+b"abCd"+data+end),
         ("post-plte-skip-overflow", 0, prefix+data+struct.pack(">I", 0xffffffff)+b"PLTE"+end),
         ("trns-palette-bounds", 1, MAGIC+header(3, 3, 3, 8)+chunk(b"PLTE", bytes(3))+chunk(b"tRNS", bytes(2))+data+end),
+        ("spread16-short-source", 14, image(width=1, height=1, color=2, depth=16, interlace=1, trns=False)),
+        ("spread16-short-destination", 15, image(width=1, height=1, color=0, depth=16, trns=False)),
     ] + [(f"repeat-trns-stride-{color}", 1, MAGIC+header(3, 3, color, 16)+transparency(color, 16, 1)+transparency(color, 16, 0)+data+end) for color in (0, 2)]
 
 
-def no_core():
-    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+def checked_trap(result, label, category):
+    lines = (result.stdout + result.stderr).decode(errors="replace").splitlines()
+    unexpected = any(re.match(r"^(?:UNEXPECTED\b|(?:thread \d+ |V )?panic:\s*UNEXPECTED\b)", line.strip())
+                     for line in lines)
+    messages = [match.group(1) for line in result.stderr.decode(errors="replace").splitlines()
+                if (match := re.fullmatch(r"(?:thread \d+ |V )?panic:\s*(.*)", line.strip()))]
+    if (result.returncode == 0 or result.stdout or unexpected or not messages
+            or not messages[0].startswith(category)):
+        raise AssertionError(f"{label}: expected checked panic {category}, got {result.returncode}\n"
+                             + (result.stdout + result.stderr).decode(errors="replace"))
+
+
+def processor_cases():
+    cases = []
+    def add(label, *values):
+        cases.append((label, "|".join(map(str, values))))
+    for op in (0, 1):  # Concrete and public erased-callback entry points.
+        for arm in range(4):
+            for src in PIXEL_FORMATS:
+                for dest in ALPHA_DEST + [0, 0x308]:
+                    for length in range(17):
+                        bypass = arm == 0 or src in INDEXED or dest not in ALPHA_DEST
+                        if not bypass:
+                            if arm == 1:
+                                if src not in [0x101, 0x102, 0x104, 0x108, 0x110] or (src == 0x110 and length % 2):
+                                    continue
+                            elif arm == 2:
+                                if src not in [0x308, 0x310] or length % (4 if src == 0x308 else 8):
+                                    continue
+                                if src == 0x308 and dest in [0x208, 0x210] and length >= 4:
+                                    continue  # Inherited zero-increment loop, checked separately.
+                            else:
+                                continue  # Non-indexed index_alpha reaches Source unreachable.
+                        for seed in (0, 7):
+                            add(f"trns-row-{op}-{arm}-{src}-{dest}-{length}-{seed}", op, src, dest, arm, length, seed, 0)
+    for src in PIXEL_FORMATS:
+        for dest in ALPHA_DEST + [0, 0x308]:
+            for size in (0, 1, 4, 257):
+                if src == 0 and size and dest in [0x408, 0x1408, 0x410]:
+                    continue  # Source switch traps even with an empty destination.
+                for length in range(20):
+                    for adapter in (0, 1):
+                        seed = min(size - 1, 65535) if size else 0
+                        add(f"plte-row-{src}-{dest}-{size}-{length}-{adapter}", 2, src, dest, size, length, seed, adapter)
+    for arm in range(4):
+        for length in range(5):
+            for size in range(5):
+                if arm == 3 and length > size:
+                    continue
+                for adapter in (0, 1):
+                    add(f"trns-palette-{arm}-{length}-{size}-{adapter}", 3, arm, length, size, 0, 0, adapter)
+    for color, depth in FORMATS:
+        for fmt in (0, 0x108, 0x110, 0x308, 0x310, 0x408):
+            for length in (0, 1, 2, 3, 4, 6, 7, 16):
+                for processed in (0, 1):
+                    for available in (0, 1, 4, 8, 16, 64):
+                        add(f"trns-chunk-{color}-{depth}-{fmt}-{length}-{processed}-{available}", 4, color, depth, fmt, length, processed, available)
+    for fmt in PIXEL_FORMATS:
+        for processed in (0, 1):
+            add(f"plte-chunk-{fmt}-{processed}", 5, 3, 8, fmt, 0xffffffff, processed, 64)
+    for method in range(3):
+        add(f"empty-adapter-{method}", 6, method, 0, 0, 0, 0, 0)
+    return cases
+
+
+PROCESSOR_TRAPS = {
+    "processed-trns-skip-overflow": ("4|0|8|264|4294967295|1|64", "integer overflow"),
+    "gray16-short-byte-row": ("0|272|528|1|3|7|0", "exact division produced remainder"),
+    "rgb24-short-byte-row": ("1|776|1032|2|3|7|0", "exact division produced remainder"),
+    "rgb48-short-byte-row": ("0|784|1040|2|7|7|0", "exact division produced remainder"),
+    "gray-invalid-source": ("0|776|1032|1|0|7|0", "reached unreachable code"),
+    "rgb-invalid-source": ("1|264|1032|2|0|7|0", "reached unreachable code"),
+    "indexed-alpha-nonindexed-row": ("0|264|1032|3|0|7|0", "reached unreachable code"),
+    "trns-palette-prefix": ("3|3|2|1|0|0|0", "index out of bounds"),
+    "trns-adapter-palette-prefix": ("3|3|2|1|0|0|1", "index out of bounds"),
+    "plte-byte-index-bounds": ("2|8|1032|1|4|1|0", "index out of bounds"),
+    "plte-u16-index-bounds": ("2|16|1032|1|4|256|1", "index out of bounds"),
+    "plte-row-prefix": ("2|8|1032|1|8|0|2", "index out of bounds"),
+    "plte-invalid-empty-row": ("2|0|1032|1|0|0|0", "reached unreachable code"),
+    "zero-width-header": ("7|0|1|0|0|0|0", "division by zero"),
+    "zero-height-header": ("7|1|0|0|0|0|0", "division by zero"),
+    "zero-size-header": ("7|0|0|0|0|0|0", "division by zero"),
+}
 
 
 def main():
@@ -222,68 +317,158 @@ def main():
     parser.add_argument("zig", type=Path)
     parser.add_argument("v", type=Path)
     parser.add_argument("--target", default="aarch64-macos.14.0")
+    parser.add_argument("--v-prod", action="store_true", help="compile V with -prod; defaults Zig to ReleaseSafe")
+    parser.add_argument("--zig-mode", choices=("Debug", "ReleaseSafe"))
+    parser.add_argument("--workdir", type=Path, help="retain source, fixtures, inputs, binaries, exact commands and diagnostics in an empty directory")
+    parser.add_argument("--zig-cache", type=Path, help="optional reusable task-specific global Zig cache")
+    parser.add_argument("--bounds-only", action="store_true", help="verify isolated failures and inherited loop without returning corpora")
     parser.add_argument("--timeout", type=int, default=180,
                         help="seconds allowed for each complete corpus run (default: 180)")
     args = parser.parse_args()
+    args.zig_mode = args.zig_mode or ("ReleaseSafe" if args.v_prod else "Debug")
     if args.timeout <= 0:
         parser.error("--timeout must be positive")
-    source = args.source.resolve()/"src"
-    digest = hashlib.sha256()
-    for path in sorted(source.rglob("*")):
-        if path.is_file():
-            digest.update(path.relative_to(source).as_posix().encode()+b"\0")
-            digest.update(path.read_bytes())
-    if digest.hexdigest() != PINNED_SOURCE_SHA256:
+    source = args.source.resolve() / "src"
+    if tree_hash(source) != PINNED_SOURCE_SHA256:
         parser.error("src differs from locked zigimg")
-    for names, expected in ((FLATE_SOURCES, PINNED_FLATE_SHA256), (FORMAT_SOURCES, PINNED_FORMAT_SHA256)):
+    std = args.zig.resolve().parent / "lib/std"
+    dependencies = ((FLATE_SOURCES, PINNED_FLATE_SHA256),
+                    (FORMAT_SOURCES, PINNED_FORMAT_SHA256),
+                    (["mem.zig", "debug.zig"], "d8e33d24ad79f9e3cf7694a9914bcf8023d5125b15f1b51930fab0e91114e65e"))
+    def std_hash(names):
         digest = hashlib.sha256()
         for name in names:
-            digest.update(name.encode()+b"\0")
-            digest.update((args.zig.resolve().parent/"lib/std"/name).read_bytes())
-        if digest.hexdigest() != expected:
-            parser.error("reader/decompressor/formatter sources differ from Zig 0.15.2")
-    cases = corpus()
-    probe = Path(__file__).resolve().parent/"reference_probes/png_decode"
-    with tempfile.TemporaryDirectory(prefix="witty-png-decode-") as directory:
-        root = Path(directory)
-        shutil.copytree(source, root/"src")
-        shutil.copyfile(probe/"reference.zig", root/"reference.zig")
-        corpus_path = root/"corpus.txt"
-        corpus_path.write_text("\n".join(case[1] for case in cases)+"\n")
-        subprocess.run([str(args.zig.resolve()), "build-exe", "-target", args.target, "-lc", f"-femit-bin={root/'native'}", str(root/"reference.zig")], check=True)
-        subprocess.run([str(args.v.resolve()), "-o", str(root/"translated"), str(probe/"main.v")], env=dict(os.environ, VEXE=str(args.v.resolve())), check=True)
-        outputs = []
-        for executable in ("native", "translated"):
-            try:
-                result = subprocess.run([str(root/executable), str(corpus_path)], capture_output=True,
-                                        timeout=args.timeout, preexec_fn=no_core)
-            except subprocess.TimeoutExpired as err:
-                count = (err.stdout or b"").count(b"\n")
-                label = cases[min(count, len(cases)-1)][0]
-                raise AssertionError(f"{executable} timed out after {args.timeout}s, "
-                                     f"completed {count}/{len(cases)} cases; next: {label}") from err
-            if result.returncode:
-                count = len(result.stdout.splitlines())
-                label = cases[min(count, len(cases)-1)][0]
-                raise AssertionError(f"{executable} stopped at {label}: {result.returncode}: {result.stderr.decode(errors='replace')}")
-            outputs.append(result.stdout.splitlines())
-        native, translated = outputs
-        if len(native) != len(cases) or len(translated) != len(cases):
-            raise AssertionError((len(cases), len(native), len(translated)))
-        for (label, _), expected, actual in zip(cases, native, translated):
-            if expected != actual:
-                raise AssertionError(f"{label}: native={expected!r}, V={actual!r}")
-        output_digest = hashlib.sha256(b"\n".join(native)).hexdigest()
-        print(f"PNG decoding: {len(cases)} cases, SHA256 {output_digest}")
+            digest.update(name.encode() + b"\0")
+            digest.update((std / name).read_bytes())
+        return digest.hexdigest()
+    for names, expected in dependencies:
+        if std_hash(names) != expected:
+            parser.error("reader/decompressor/formatter/memory/debug sources differ from Zig 0.15.2")
+    cases = [] if args.bounds_only else corpus()
+    extra = [] if args.bounds_only else processor_cases()
+    if not args.bounds_only and len(cases) != EXPECTED_ROWS:
+        raise AssertionError(f"returning corpus changed: {len(cases)} != {EXPECTED_ROWS}")
+    if not args.bounds_only and len(extra) != EXPECTED_PROCESSOR_ROWS:
+        raise AssertionError(f"processor corpus changed: {len(extra)} != {EXPECTED_PROCESSOR_ROWS}")
+    probe = Path(__file__).resolve().parent / "reference_probes/png_decode"
+    repo = Path(__file__).resolve().parent.parent
+    with work_directory(args.workdir, "witty-png-decode-") as root:
+        proof = ProofLog(root)
+        shutil.copytree(source, root / "src")
+        if tree_hash(root / "src") != PINNED_SOURCE_SHA256:
+            raise AssertionError("copied source differs from pinned source")
+        fixtures = ("reference.zig", "main.v", "processors.zig", "processors.v")
+        for name in fixtures:
+            shutil.copyfile(probe / name, root / name)
+        metadata = {"source_sha256": PINNED_SOURCE_SHA256,
+                    "source_revision": "d7b7ab0ba0899643831ef042bd73289510b39906",
+                    "runner_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                    "zig_mode": args.zig_mode, "v_prod": args.v_prod, "target": args.target,
+                    "fixture_sha256": {name: hashlib.sha256((root / name).read_bytes()).hexdigest() for name in fixtures},
+                    "std_sha256": {",".join(names): expected for names, expected in dependencies},
+                    "implementation_sha256": {name: hashlib.sha256((repo / "zigimg" / name).read_bytes()).hexdigest()
+                                             for name in ("png_reader.v", "png_processors.v")}}
+        (root / "provenance.json").write_text(json.dumps(metadata, indent=2) + "\n")
+        input_path = root / "corpus.txt"
+        input_path.write_text("\n".join(case[1] for case in cases) + "\n")
+        processor_path = root / "processors.txt"
+        processor_path.write_text("\n".join(case[1] for case in extra) + "\n")
+        cache = args.zig_cache.resolve() if args.zig_cache else root / "zig-cache"
+        print(f"Building PNG source {args.zig_mode} and V {'production' if args.v_prod else 'ordinary'}", flush=True)
+        env = dict(os.environ, VEXE=str(args.v.resolve()), V_C_ERROR_BUG_REPORT_DISABLED="1")
+        for fixture, executable in (("reference.zig", "native"), ("processors.zig", "processors-native")):
+            proof.run([str(args.zig.resolve()), "build-exe", "--global-cache-dir", str(cache),
+                       "-target", args.target, "-lc", "-O", args.zig_mode,
+                       f"-femit-bin={root / executable}", str(root / fixture)], "build-" + executable)
+        for fixture, executable in (("main.v", "translated"), ("processors.v", "processors-v")):
+            proof.run([str(args.v.resolve()), "-enable-globals", *(["-prod"] if args.v_prod else []),
+                       "-path", f"{repo}|@vlib|@vmodules", "-o", str(root / executable), str(root / fixture)],
+                      "build-" + executable, env=env)
+        hashes = []
+        if not args.bounds_only:
+            for rows, path, executables, label in ((cases, input_path, ("native", "translated"), "decode"),
+                                                   (extra, processor_path, ("processors-native", "processors-v"), "processors")):
+                print(f"Comparing {len(rows)} returning PNG {label} cases", flush=True)
+                outputs = [proof.run([str(root / executable), str(path)], "corpus-" + executable,
+                                     timeout=args.timeout).stdout.splitlines() for executable in executables]
+                if any(len(output) != len(rows) for output in outputs):
+                    raise AssertionError((len(rows), *map(len, outputs)))
+                for (case_label, _), expected, actual in zip(rows, *outputs):
+                    if expected != actual:
+                        raise AssertionError(f"{case_label}: native={expected!r}, V={actual!r}")
+                digest = hashlib.sha256(b"\n".join(outputs[0])).hexdigest()
+                hashes.append(digest)
+                if label == "decode" and digest != EXPECTED_SHA256:
+                    raise AssertionError(f"historical output changed: {digest} != {EXPECTED_SHA256}")
+                if label == "processors" and digest != EXPECTED_PROCESSOR_SHA256:
+                    raise AssertionError(f"processor output changed: {digest} != {EXPECTED_PROCESSOR_SHA256}")
+                print(f"PNG {label}: {len(rows)} cases, SHA256 {digest}", flush=True)
+        states = []
+        def compare_trap(label, line, category, path, executables):
+            path.write_text(line + "\n")
+            pair = []
+            for executable in executables:
+                state_path = root / f"state-{label}-{executable}.txt"
+                result = proof.run([str(root / executable), str(path), str(state_path)],
+                                   f"trap-{executable}-{label}", timeout=10, check=False)
+                checked_trap(result, f"{label}, {executable}", category)
+                state = state_path.read_bytes()
+                if len(state) != 17 or not all(byte in b"0123456789abcdef" for byte in state[:16]) or state[-1:] != b"\n":
+                    raise AssertionError(f"invalid/missing state observation: {label}, {executable}: {state!r}")
+                pair.append(state)
+            if pair[0] != pair[1]:
+                raise AssertionError(f"{label}: native state={pair[0]!r}, V state={pair[1]!r}")
+            states.append(label.encode() + b"|" + pair[0].rstrip(b"\n"))
+            print(f"{label}: strict panic and initialized retained state match", flush=True)
         for label, mode, data in bounds():
-            corpus_path.write_text(f"{mode}|{data.hex()}\n")
-            for executable in ("native", "translated"):
-                result = subprocess.run([str(root/executable), str(corpus_path)], capture_output=True, timeout=5, preexec_fn=no_core)
-                first_line = result.stderr.splitlines()[0] if result.stderr else b""
-                if result.returncode == 0 or b"UNEXPECTED" in first_line or not any(marker in result.stderr for marker in (b"panic:", b"Assertion failed", b"array.get:", b"slice:")):
-                    raise AssertionError(f"{label}, {executable}: {result.returncode}: {result.stdout!r}: {result.stderr!r}")
-        print(f"PNG decoding: {len(bounds())} checked traps matched")
+            category = ("exact division produced remainder" if label.startswith("spread16-") else
+                        "index out of bounds" if label == "trns-palette-bounds" else
+                        "reached unreachable code" if label.startswith("repeat-trns") or label == "extra-inflated-data" else
+                        "integer overflow")
+            compare_trap(label, f"{mode}|{data.hex()}", category, input_path, ("native", "translated"))
+        for label, (line, category) in PROCESSOR_TRAPS.items():
+            compare_trap(label, line, category, processor_path, ("processors-native", "processors-v"))
+        # This four-byte case cannot legitimately take one second to return.
+        # A timeout establishes the inherited zero-increment loop separately
+        # from checked failures; output or diagnostics invalidate that claim.
+        processor_path.write_text("0|776|520|2|4|7|0\n")
+        for executable in ("processors-native", "processors-v"):
+            try:
+                proof.run([str(root / executable), str(processor_path)], "loop-" + executable, timeout=1)
+            except AssertionError:
+                if not proof.commands[-1].get("timed_out"):
+                    raise
+                prefix = f"{len(proof.commands)-1:03d}-loop-{executable}"
+                if (root / f"{prefix}.stdout").read_bytes() or (root / f"{prefix}.stderr").read_bytes():
+                    raise AssertionError(f"{executable}: inherited loop emitted unexpected output")
+            else:
+                raise AssertionError(f"{executable}: inherited zero-increment loop returned")
+        if tree_hash(source) != PINNED_SOURCE_SHA256 or tree_hash(root / "src") != PINNED_SOURCE_SHA256:
+            raise AssertionError("source changed during the proof")
+        for names, expected in dependencies:
+            if std_hash(names) != expected:
+                raise AssertionError("compiler dependency changed during the proof")
+        for name, expected in metadata["fixture_sha256"].items():
+            if hashlib.sha256((root / name).read_bytes()).hexdigest() != expected or hashlib.sha256((probe / name).read_bytes()).hexdigest() != expected:
+                raise AssertionError("fixture changed during the proof: " + name)
+        for name, expected in metadata["implementation_sha256"].items():
+            if hashlib.sha256((repo / "zigimg" / name).read_bytes()).hexdigest() != expected:
+                raise AssertionError("owned implementation changed during the proof: " + name)
+        if hashlib.sha256(Path(__file__).read_bytes()).hexdigest() != metadata["runner_sha256"]:
+            raise AssertionError("runner changed during the proof")
+        state_digest = hashlib.sha256(b"\n".join(states)).hexdigest()
+        if len(states) != EXPECTED_TRAPS or state_digest != EXPECTED_STATE_SHA256:
+            raise AssertionError(f"panic states changed: {len(states)}, {state_digest}")
+        result = {"returning_cases": len(cases), "sha256": hashes[0] if hashes else None,
+                  "processor_cases": len(extra), "processor_sha256": hashes[1] if hashes else None,
+                  "strict_trap_pairs": len(bounds()) + len(PROCESSOR_TRAPS), "panic_state_pairs": len(states),
+                  "state_sha256": state_digest, "inherited_loop_pairs": 1,
+                  "zig_mode": args.zig_mode, "v_prod": args.v_prod}
+        (root / "result.json").write_text(json.dumps(result, indent=2) + "\n")
+        print(f"PNG decoding: {result['strict_trap_pairs']} strict checked traps and retained states, "
+              f"one inherited loop; state SHA256 {state_digest}", flush=True)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

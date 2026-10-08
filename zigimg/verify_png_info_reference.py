@@ -2,17 +2,36 @@
 import argparse
 import hashlib
 import os
+import json
 from pathlib import Path
-import resource
+import re
 import shutil
-import subprocess
-import tempfile
 import zlib
+
+from verify_tiff_decode_reference import ProofLog, checked_trap, tree_hash, work_directory
 
 from verify_png_foundation_reference import PINNED_SOURCE_SHA256, PINNED_FLATE_SHA256, FLATE_SOURCES
 
 FORMAT_SOURCES = ["fmt.zig", "fmt/float.zig"]
 PINNED_FORMAT_SHA256 = "9ad2e71bc2e950a01e29eec9d20a6e9674097602774399a5451839a23c4b278b"
+EXPECTED_ROWS = 51223
+EXPECTED_CHECKED_ROWS = 1041
+EXPECTED_CHECKED_SHA256 = "05946f5a7cbbcdc928e51c71edb9d4d6ee25c208ef21611cd4562bf6c91bcff8"
+EXPECTED_CONSTRUCTOR_SHA256 = "4915f0abe0141219e84b1fdf33fbe144f55ef9379143743f5a5cee6176b08a1a"
+EXPECTED_STATE_SHA256 = "529d510c5be49ae7fa2e42b35e70ec2c0786cc88e77e1d87c57c79f7e470445a"
+EXPECTED_SHA256 = "87adba8bfd33b6f94e620ef6b277496fe1303c0fc80ca07a261f22fae0af7d4a"
+BOUNDS = {
+    **{name: ("integer overflow", "integer overflow") for name in
+       ("count_overflow", "size_overflow", "both_overflow")},
+    **{name: ("invalid enum value", "invalid enum value") for name in
+       ("compression_tag", "filter_tag", "color_tag", "interlace_tag")},
+    **{name: ("attempt to use null value", "attempt to use null value") for name in
+       ("text_null", "ztxt_null", "itxt_language", "itxt_translation")},
+    **{name: ("index out of bounds", ("index out of bounds", "array.get: index out of range"))
+       for name in ("ztxt_method", "itxt_flags", "itxt_one_yes")},
+    **{name: ("start index 2 is larger than end index 1", "start index 2 is larger than end index 1")
+       for name in ("itxt_one_no", "itxt_one_unknown")},
+}
 
 
 def corpus():
@@ -83,8 +102,76 @@ def corpus():
     return cases
 
 
-def no_core():
-    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+def checked_corpus():
+    cases = []
+    def add(label, name, length, data, capacities, color=0, count=0, size=0, compression=0, filtering=0, interlace=1):
+        for capacity in capacities:
+            fields = [int.from_bytes(name.encode(), "big"), length, color, 8, capacity,
+                      data.hex(), count, size, 0, compression, filtering, interlace]
+            cases.append((f"{label}-cap{capacity}", "|".join(map(str, fields))))
+    dimensions = b"Dimensions: 17x3\nBit Depth: 8\n"
+    color = b"Color Type: grayscale\n"
+    compression = b"Compression Method: deflate\n"
+    filtering = b"Filter Method: adaptive\n"
+    # Invalid enum tagName arguments are evaluated only after preceding prints succeed.
+    for tag in (1, 255):
+        add(f"suppressed-color-{tag}", "IHDR", 13, b"", range(len(dimensions)), color=tag)
+        add(f"suppressed-compression-{tag}", "IHDR", 13, b"", range(len(dimensions+color)), compression=tag)
+        add(f"suppressed-filter-{tag}", "IHDR", 13, b"", range(len(dimensions+color+compression)), filtering=tag)
+    for tag in (2, 255):
+        add(f"suppressed-interlace-{tag}", "IHDR", 13, b"", range(len(dimensions+color+compression+filtering)), interlace=tag)
+    for name, data, prefix in (
+        ("tEXt", b"abc", b"tEXt Length 3B:\n"),
+        ("zTXt", b"abc", b"zTXt Length 3B:\n"),
+        ("zTXt", b"key\0", b"zTXt Length 4B:\n               Keyword: key\n"),
+        ("iTXt", b"key\0", b"iTXt Length 4B:\n               Keyword: key\n"),
+        ("iTXt", b"key\0\1", b"iTXt Length 5B:\n               Keyword: key\n"),
+        ("iTXt", b"key\0\0", b"iTXt Length 5B:\n               Keyword: key\n            Compressed: No\n"),
+        ("iTXt", b"key\0\2", b"iTXt Length 5B:\n               Keyword: key\n            Compressed: No\n"),
+        ("iTXt", b"key\0\0\0x", b"iTXt Length 7B:\n               Keyword: key\n            Compressed: No\n"),
+        ("iTXt", b"key\0\0\0\0x", b"iTXt Length 8B:\n               Keyword: key\n            Compressed: No\n          Language Tag: \n"),
+    ):
+        add(f"suppressed-fields-{name}-{data.hex()}", name, len(data), data,
+            range(len(prefix)))
+    for length in (0, 1, 0xffffffff):
+        for count in (0, 0xfffffffe):
+            for size in (0, (1 << 64)-1-length):
+                add(f"idat-limit-{length}-{count}-{size}", "IDAT", length, b"", (0, 1, 256), count=count, size=size)
+    return cases
+
+
+def ordinary_rejection(result, label, expression):
+    diagnostic = (result.stdout + result.stderr).decode(errors="replace")
+    if (result.returncode <= 0 or any(word in diagnostic.lower() for word in
+            ("panic:", "compiler bug", "internal compiler error", "c error found", "segmentation fault"))
+            or not re.search(r"^(?:[^\n]*:\d+:\d+: )?" + expression + r"$", diagnostic, re.M)):
+        raise AssertionError(f"{label}: expected ordinary compiler rejection\n{diagnostic}")
+
+
+def constructor_boundaries(proof, root, args, env, repo):
+    fixtures = {
+        "required_writer": ('const x: Info = .{}; _ = x;', 'x := zigimg.PngInfoProcessor{}\n _ = x',
+                            r"error: missing struct field: writer", r"error: reference field `zigimg.PngInfoProcessor.writer` must be initialized"),
+        "nil_writer": ('const x = Info.init(null); _ = x;', 'x := zigimg.PngInfoProcessor.init(unsafe { nil })\n _ = x',
+                       r"error: expected type \'.*Writer\', found \'@TypeOf\(null\)\'", None),
+        "readonly_writer": ('const w = std.Io.Writer.fixed(&.{}); const x = Info.init(&w); _ = x;',
+                            'w := zigimg.WriteStream.init_memory(mut bytes)\n x := zigimg.PngInfoProcessor.init(&w)\n _ = x',
+                            r"error: expected type \'.*Writer\', found \'\*const .*Writer\'", None),
+    }
+    for label, (zig_body, v_body, zig_error, v_error) in fixtures.items():
+        z = root / (label + ".zig")
+        v = root / (label + ".v")
+        z.write_text('const std = @import("std"); const Info = @import("src/formats/png/InfoProcessor.zig"); pub fn main() void { ' + zig_body + ' }\n')
+        v.write_text('module main\nimport zigimg\nfn main() {\n mut bytes := []u8{}\n _ = bytes\n' + v_body + '\n}\n')
+        result = proof.run([str(args.zig.resolve()), "build-exe", "--global-cache-dir", str(root / "zig-global-cache"), "-target", args.target, "-O", args.zig_mode,
+                            "-lc", "-fno-emit-bin", str(z)], "ctor-source-" + label, check=False)
+        ordinary_rejection(result, label + " Source", zig_error)
+        result = proof.run([str(args.v.resolve()), *(["-prod"] if args.v_prod else []), "-path",
+                            f"{repo}|@vlib|@vmodules", "-check", str(v)], "ctor-v-" + label, env=env, check=False)
+        if v_error:
+            ordinary_rejection(result, label + " V", v_error)
+        elif result.returncode or re.search(rb"(?:^|\n).*error:", result.stdout + result.stderr):
+            raise AssertionError(f"{label}: expected measured V-only constructor acceptance")
 
 
 def main():
@@ -93,53 +180,105 @@ def main():
     parser.add_argument("zig", type=Path)
     parser.add_argument("v", type=Path)
     parser.add_argument("--target", default="aarch64-macos.14.0")
+    parser.add_argument("--v-prod", action="store_true", help="compile V with -prod; defaults Zig to ReleaseSafe")
+    parser.add_argument("--zig-mode", choices=("Debug", "ReleaseSafe"))
+    parser.add_argument("--workdir", type=Path, help="retain proof artifacts in an absent or empty directory")
+    parser.add_argument("--timeout", type=int, default=180)
+    parser.add_argument("--bounds-only", action="store_true")
     args = parser.parse_args()
+    args.zig_mode = args.zig_mode or ("ReleaseSafe" if args.v_prod else "Debug")
+    if args.timeout <= 0:
+        parser.error("--timeout must be positive")
     source = args.source.resolve() / "src"
-    digest = hashlib.sha256()
-    for path in sorted(source.rglob("*")):
-        if path.is_file():
-            digest.update(path.relative_to(source).as_posix().encode() + b"\0")
-            digest.update(path.read_bytes())
-    if digest.hexdigest() != PINNED_SOURCE_SHA256:
+    if tree_hash(source) != PINNED_SOURCE_SHA256:
         parser.error("src differs from locked zigimg")
-    digest = hashlib.sha256()
-    for name in FLATE_SOURCES:
-        digest.update(name.encode() + b"\0")
-        digest.update((args.zig.resolve().parent / "lib/std" / name).read_bytes())
-    if digest.hexdigest() != PINNED_FLATE_SHA256:
-        parser.error("DEFLATE/reader/writer sources differ from Zig 0.15.2")
-    digest = hashlib.sha256()
-    for name in FORMAT_SOURCES:
-        digest.update(name.encode() + b"\0")
-        digest.update((args.zig.resolve().parent / "lib/std" / name).read_bytes())
-    if digest.hexdigest() != PINNED_FORMAT_SHA256:
-        parser.error("formatter sources differ from Zig 0.15.2")
-    cases = corpus()
-    probe = Path(__file__).parent / "reference_probes/png_info"
-    with tempfile.TemporaryDirectory(prefix="witty-png-info-") as directory:
-        root = Path(directory)
+    for names, expected, label in ((FLATE_SOURCES, PINNED_FLATE_SHA256, "DEFLATE/reader/writer"),
+                                  (FORMAT_SOURCES, PINNED_FORMAT_SHA256, "format/float")):
+        digest = hashlib.sha256()
+        for name in names:
+            digest.update(name.encode() + b"\0")
+            digest.update((args.zig.resolve().parent / "lib/std" / name).read_bytes())
+        if digest.hexdigest() != expected:
+            parser.error(label + " sources differ from Zig 0.15.2")
+    cases = [] if args.bounds_only else corpus()
+    extra = [] if args.bounds_only else checked_corpus()
+    if not args.bounds_only and (len(cases) != EXPECTED_ROWS or len(extra) != EXPECTED_CHECKED_ROWS):
+        raise AssertionError("historical returning corpus changed")
+    probe = Path(__file__).resolve().parent / "reference_probes/png_info"
+    repo = Path(__file__).resolve().parent.parent
+    env = dict(os.environ, VEXE=str(args.v.resolve()), V_C_ERROR_BUG_REPORT_DISABLED="1")
+    with work_directory(args.workdir, "witty-png-info-") as root:
+        proof = ProofLog(root)
         shutil.copytree(source, root / "src")
-        shutil.copyfile(probe / "reference.zig", root / "reference.zig")
-        corpus_path = root / "corpus.txt"
-        corpus_path.write_text("\n".join(case[1] for case in cases) + "\n")
-        subprocess.run([str(args.zig.resolve()), "build-exe", "-target", args.target, "-lc", f"-femit-bin={root / 'native'}", str(root / "reference.zig")], check=True)
-        subprocess.run([str(args.v.resolve()), "-o", str(root / "translated"), str(probe / "main.v")], env=dict(os.environ, VEXE=str(args.v.resolve())), check=True)
-        native = subprocess.run([str(root / "native"), str(corpus_path)], capture_output=True, text=True, check=True).stdout.splitlines()
-        translated = subprocess.run([str(root / "translated"), str(corpus_path)], capture_output=True, text=True, check=True).stdout.splitlines()
-        if len(native) != len(cases) or len(translated) != len(cases):
-            raise AssertionError((len(cases), len(native), len(translated)))
-        for (label, _), expected, actual in zip(cases, native, translated):
-            if expected != actual:
-                raise AssertionError(f"{label}: native={expected}, V={actual}")
-        print(f"PNG info: {len(cases)} cases, SHA256 {hashlib.sha256(chr(10).join(native).encode()).hexdigest()}")
-        bounds = ("count_overflow", "size_overflow", "compression_tag", "filter_tag", "color_tag", "interlace_tag", "text_null", "ztxt_null", "ztxt_method", "itxt_flags", "itxt_language", "itxt_translation")
-        for boundary in bounds:
-            for executable in ("native", "translated"):
-                result = subprocess.run([str(root / executable), "--bounds", boundary], capture_output=True, timeout=5, preexec_fn=no_core)
-                first_line = result.stderr.splitlines()[0] if result.stderr else b""
-                if not result.returncode or b"UNEXPECTED" in first_line or not any(marker in result.stderr for marker in (b"panic:", b"Assertion failed", b"array.get:")):
-                    raise AssertionError(f"{boundary}, {executable}: {result.returncode}: {result.stderr!r}")
-        print(f"PNG info: {len(bounds)} checked traps matched")
+        if tree_hash(root / "src") != PINNED_SOURCE_SHA256:
+            raise AssertionError("copied source changed")
+        for name in ("reference.zig", "main.v"):
+            shutil.copyfile(probe / name, root / name)
+        provenance = {"source_sha256": PINNED_SOURCE_SHA256, "flate_sha256": PINNED_FLATE_SHA256,
+                      "formatter_sha256": PINNED_FORMAT_SHA256, "zig_mode": args.zig_mode,
+                      "v_prod": args.v_prod, "target": args.target,
+                      "fixtures": {name: hashlib.sha256((root/name).read_bytes()).hexdigest()
+                                   for name in ("reference.zig", "main.v")}}
+        (root / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
+        print(f"Building PNG info Source {args.zig_mode} and V {'production' if args.v_prod else 'ordinary'}", flush=True)
+        proof.run([str(args.zig.resolve()), "build-exe", "--global-cache-dir", str(root / "zig-global-cache"), "-target", args.target, "-O", args.zig_mode, "-lc",
+                   f"-femit-bin={root / 'native'}", str(root / "reference.zig")], "build-source")
+        proof.run([str(args.v.resolve()), "-enable-globals", *(["-prod"] if args.v_prod else []), "-path",
+                   f"{repo}|@vlib|@vmodules", "-o", str(root / "translated"), str(root / "main.v")], "build-v", env=env)
+        hashes = {}
+        for label, rows, expected in (("historical", cases, EXPECTED_SHA256), ("checked", extra, EXPECTED_CHECKED_SHA256)):
+            if args.bounds_only: continue
+            path = root / (label + "-corpus.txt")
+            path.write_text("\n".join(row[1] for row in rows) + "\n")
+            print(f"Comparing {len(rows)} {label} returning cases", flush=True)
+            results = [proof.run([str(root / executable), str(path)], label + "-" + executable, timeout=args.timeout)
+                       for executable in ("native", "translated")]
+            outputs = [result.stdout.splitlines() for result in results]
+            if any(result.stderr for result in results) or any(len(output) != len(rows) for output in outputs):
+                raise AssertionError(f"{label}: unexpected diagnostics or row count")
+            for (name, _), wanted, actual in zip(rows, *outputs):
+                if wanted != actual:
+                    raise AssertionError(f"{name}: Source={wanted!r}, V={actual!r}")
+            digest = hashlib.sha256(b"\n".join(outputs[0])).hexdigest()
+            if expected and digest != expected:
+                raise AssertionError(f"{label}: historical hash changed: {digest}")
+            hashes[label] = digest
+            print(f"PNG info {label}: {len(rows)} records SHA256 {digest}", flush=True)
+        outputs = [proof.run([str(root / executable), "--contracts"], "contracts-" + executable).stdout
+                   for executable in ("native", "translated")]
+        if outputs[0] != outputs[1] or len(outputs[0].splitlines()) != 1:
+            raise AssertionError(f"supported constructors/copy/borrow differ: {outputs}")
+        hashes["constructors"] = hashlib.sha256(outputs[0].rstrip(b"\n")).hexdigest()
+        if hashes["constructors"] != EXPECTED_CONSTRUCTOR_SHA256:
+            raise AssertionError("supported constructor/copy/borrow output changed")
+        constructor_boundaries(proof, root, args, env, repo)
+        states = []
+        for boundary, categories in BOUNDS.items():
+            observations = []
+            for executable, category in zip(("native", "translated"), categories):
+                path = root / (executable + "-" + boundary + ".state")
+                label = f"trap-{executable}-{boundary}"
+                result = proof.run([str(root / executable), "--bounds", boundary, str(path)], label, timeout=10, check=False)
+                checked_trap(result, label, category)
+                state = path.read_bytes()
+                if not re.fullmatch(rb"\d+\|\d+\|\d+\|\d+\|[0-9a-f]{16}", state):
+                    raise AssertionError(label + ": missing or invalid panic state")
+                observations.append(state)
+            if observations[0] != observations[1]:
+                raise AssertionError(f"{boundary}: retained state differs: {observations}")
+            states.append(boundary.encode() + b"|" + observations[0])
+        hashes["panic_states"] = hashlib.sha256(b"\n".join(states)).hexdigest()
+        if hashes["panic_states"] != EXPECTED_STATE_SHA256:
+            raise AssertionError("retained panic state changed")
+        if tree_hash(source) != PINNED_SOURCE_SHA256 or tree_hash(root / "src") != PINNED_SOURCE_SHA256:
+            raise AssertionError("source changed during proof")
+        result = {"historical_records": len(cases), "checked_returning_records": len(extra), "hashes": hashes,
+                  "strict_trap_pairs": len(BOUNDS), "panic_states": len(states),
+                  "complete_constructors": 2, "required_omission_pairs": 1,
+                  "source_only_constructor_rejections": 2, "zig_mode": args.zig_mode, "v_prod": args.v_prod}
+        (root / "result.json").write_text(json.dumps(result, indent=2) + "\n")
+        print(f"PNG info: {len(BOUNDS)} strict traps and matching panic states; constructors/defaults/copy/borrow checked", flush=True)
+        print(json.dumps(hashes, sort_keys=True), flush=True)
 
 
 if __name__ == "__main__":

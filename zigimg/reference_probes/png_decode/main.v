@@ -4,6 +4,47 @@ import encoding.hex
 import os
 import zigimg
 
+__global (
+	observed_path    string
+	observed_stream  = &zigimg.ReadStream(unsafe { nil })
+	observed_trns    = &zigimg.PngTrnsProcessor(unsafe { nil })
+	observed_plte    = &zigimg.PngPlteProcessor(unsafe { nil })
+	observed_tracker = &Tracker(unsafe { nil })
+	observed_palette []zigimg.Rgba32
+)
+
+fn state_hash() u64 {
+	mut hash := [u64(14695981039346656037)]
+	if observed_stream != unsafe { nil } { mix(mut hash, observed_stream.get_pos()) }
+	if observed_trns != unsafe { nil } { mix(mut hash, u64(observed_trns.processed)) }
+	if observed_plte != unsafe { nil } { mix(mut hash, u64(observed_plte.processed)) }
+	if observed_tracker != unsafe { nil } { mix(mut hash, observed_tracker.hash[0]) }
+	mix(mut hash, u64(observed_palette.len))
+	for entry in observed_palette {
+		for byte in [entry.r, entry.g, entry.b, entry.a] {
+			mix(mut hash, byte)
+		}
+	}
+	return hash[0]
+}
+
+fn observe_exit() {
+	if observed_path != '' {
+		os.write_file(observed_path, '${state_hash():016x}\n') or {
+			eprintln('OBSERVER ERROR: ${err}')
+		}
+	}
+}
+
+fn observe_palette(_ voidptr, mut data zigimg.PngPaletteProcessData) ! {
+	observed_palette = unsafe { data.palette[..] }
+}
+
+fn observe_row(_ voidptr, mut data zigimg.PngRowProcessData) !zigimg.PixelFormat {
+	// Keep the row's source format unchanged while the observer visits it.
+	return data.src_format
+}
+
 fn mix(mut hash []u64, value u64) {
 	hash[0] = (hash[0] ^ value) * u64(1099511628211)
 }
@@ -45,7 +86,11 @@ fn track_chunk(context voidptr, mut data zigimg.PngChunkProcessData) !zigimg.Pix
 	if !zigimg.png_is_chunk_critical(data.chunk_id) {
 		data.read_stream.seek_by(i64(data.chunk_length) + 4)!
 	}
-	return data.current_format
+	return if tracker.mode == 15 && data.chunk_id == zigimg.png_chunk_ihdr.id {
+		zigimg.PixelFormat.rgb24
+	} else {
+		data.current_format
+	}
 }
 
 fn track_palette(context voidptr, mut data zigimg.PngPaletteProcessData) ! {
@@ -69,10 +114,15 @@ fn track_row(context voidptr, mut data zigimg.PngRowProcessData) !zigimg.PixelFo
 		mix(mut tracker.hash, byte)
 	}
 	if tracker.mode == 11 { return error('Unsupported') }
+	if tracker.mode == 14 { data.dest_row = unsafe { data.dest_row[..1] } }
 	return if tracker.mode == 13 { zigimg.PixelFormat.invalid } else { data.dest_format }
 }
 
 fn main() {
+	if os.args.len > 2 {
+		observed_path = os.args[2]
+		at_exit(observe_exit) or { panic(err) }
+	}
 	for line in os.read_lines(os.args[1]) or { panic(err) } {
 		fields := line.split('|')
 		transport := fields[0].int() / 100
@@ -94,6 +144,14 @@ fn main() {
 		mut options := zigimg.PngReaderOptions{}
 		mut tracker := Tracker{
 			mode: mode
+		}
+		if observed_path != '' {
+			observed_stream = &stream
+			observed_trns = &trns
+			observed_plte = &plte
+			observed_tracker = &tracker
+			options.processors << zigimg.PngReaderProcessor.init(0, unsafe { nil }, none,
+				observe_palette, observe_row)
 		}
 		if mode in [1, 3, 7] { options.processors << trns.processor() }
 		if mode in [2, 3] { options.processors << plte.processor() }

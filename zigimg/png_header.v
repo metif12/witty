@@ -9,7 +9,8 @@ pub:
 }
 
 pub fn PngChunk.init(name string) PngChunk {
-	assert name.len == 4
+	// Source's *const [4:0]u8 parameter enforces this at the caller boundary.
+	if name.len != 4 { panic('PNG chunk name must contain four bytes') }
 	return PngChunk{
 		id:   read_be_u32(name.bytes())
 		name: name

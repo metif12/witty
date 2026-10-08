@@ -4,6 +4,20 @@ import encoding.hex
 import os
 import zigimg
 
+__global (
+	observed_processor = &zigimg.PngInfoProcessor(unsafe { nil })
+	observed_writer    = &zigimg.WriteStream(unsafe { nil })
+	observed_input     = &zigimg.ReadStream(unsafe { nil })
+	observed_bytes     []u8
+	observed_path      string
+)
+
+fn observe() {
+	if observed_processor == unsafe { nil } { return }
+	os.write_file(observed_path,
+		'${observed_processor.idat_count}|${observed_processor.idat_size}|${observed_input.get_pos()}|${observed_writer.get_pos()}|${buffer_hash(observed_bytes):016x}') or {}
+}
+
 fn buffer_hash(bytes []u8) u64 {
 	mut hash := u64(14695981039346656037)
 	for byte in bytes {
@@ -12,16 +26,17 @@ fn buffer_hash(bytes []u8) u64 {
 	return hash
 }
 
-fn bounds(name string) {
+fn bounds(name string, path string) {
 	unknown := u8('255'.int())
 	mut bytes := []u8{len: 4096}
 	mut writer := zigimg.WriteStream.init_memory(mut bytes)
 	mut input := zigimg.ReadStream.init_memory([]u8{len: 20, init: 1})
 	mut processor := zigimg.PngInfoProcessor.init(&writer)
 	mut header := zigimg.PngHeaderData{
-		width:     1
-		height:    1
-		bit_depth: 8
+		width:            17
+		height:           3
+		bit_depth:        8
+		interlace_method: .adam7
 	}
 	mut data := zigimg.PngChunkProcessData{
 		read_stream:    &input
@@ -32,6 +47,12 @@ fn bounds(name string) {
 		'count_overflow' {
 			data.chunk_id = zigimg.png_chunk_idat.id
 			processor.idat_count = 0xffffffff
+		}
+		'both_overflow' {
+			data.chunk_id = zigimg.png_chunk_idat.id
+			data.chunk_length = 1
+			processor.idat_count = 0xffffffff
+			processor.idat_size = ~u64(0)
 		}
 		'size_overflow' {
 			data.chunk_id = zigimg.png_chunk_idat.id
@@ -67,6 +88,18 @@ fn bounds(name string) {
 			data.chunk_length = 1
 			input = zigimg.ReadStream.init_memory([u8(0), 0, 0, 0, 0, 0])
 		}
+		'itxt_one_no', 'itxt_one_yes', 'itxt_one_unknown' {
+			data.chunk_id = zigimg.png_chunk_itxt.id
+			data.chunk_length = 2
+			input = zigimg.ReadStream.init_memory([u8(0),
+				u8(if name == 'itxt_one_yes' {
+					1
+				} else if name == 'itxt_one_no' {
+					0
+				} else {
+					2
+				})])
+		}
 		'itxt_flags', 'itxt_language', 'itxt_translation' {
 			data.chunk_id = zigimg.png_chunk_itxt.id
 			contents := if name == 'itxt_flags' {
@@ -85,7 +118,14 @@ fn bounds(name string) {
 		}
 	}
 
-	_ = processor.process_chunk(mut data) or {
+	observed_processor = unsafe { &processor }
+	observed_writer = unsafe { &writer }
+	observed_input = unsafe { &input }
+	observed_bytes = unsafe { bytes }
+	observed_path = path
+	at_exit(observe) or { panic(err) }
+	callback := processor.processor()
+	_ = callback.process_chunk(mut data) or {
 		eprintln('UNEXPECTED: ${err}')
 		return
 	}
@@ -94,12 +134,16 @@ fn bounds(name string) {
 
 fn main() {
 	if os.args[1] == '--bounds' {
-		bounds(os.args[2])
+		bounds(os.args[2], os.args[3])
+		return
+	}
+	if os.args[1] == '--contracts' {
+		contracts()
 		return
 	}
 	for line in os.read_lines(os.args[1]) or { panic(err) } {
 		fields := line.split('|')
-		assert fields.len == 9
+		assert fields.len == 9 || fields.len == 12
 		mut bytes := []u8{len: fields[4].int(), init: 0xa5}
 		mut writer := zigimg.WriteStream.init_memory(mut bytes)
 		mut input := zigimg.ReadStream.init_memory(hex.decode(fields[5]) or { panic(err) })
@@ -107,11 +151,31 @@ fn main() {
 		processor.idat_count = fields[6].u32()
 		processor.idat_size = fields[7].u64()
 		mut header := zigimg.PngHeaderData{
-			width:            17
-			height:           3
-			bit_depth:        u8(fields[3].int())
-			color_type:       unsafe { zigimg.PngColorType(fields[2].int()) }
-			interlace_method: .adam7
+			width:              17
+			height:             3
+			bit_depth:          u8(fields[3].int())
+			color_type:         unsafe { zigimg.PngColorType(fields[2].int()) }
+			compression_method: unsafe {
+				zigimg.PngCompressionMethod(if fields.len == 12 {
+					fields[9].int()
+				} else {
+					0
+				})
+			}
+			filter_method:      unsafe {
+				zigimg.PngFilterMethod(if fields.len == 12 {
+					fields[10].int()
+				} else {
+					0
+				})
+			}
+			interlace_method:   unsafe {
+				zigimg.PngInterlaceMethod(if fields.len == 12 {
+					fields[11].int()
+				} else {
+					1
+				})
+			}
 		}
 		callback := processor.processor()
 		mut status := 'ok'
@@ -136,4 +200,37 @@ fn main() {
 		}
 		println('${status}|${input.get_pos()}|${u32(result)}|${processor.idat_count}|${processor.idat_size}|${writer.get_pos()}|${buffer_hash(bytes):016x}')
 	}
+}
+
+fn contracts() {
+	mut bytes := []u8{len: 256, init: 0xa5}
+	mut writer := zigimg.WriteStream.init_memory(mut bytes)
+	mut original := zigimg.PngInfoProcessor{
+		writer: &writer
+	}
+	initialized := zigimg.PngInfoProcessor.init(&writer)
+	mut result := '${original.idat_count}|${original.idat_size}|${initialized.idat_count}|${initialized.idat_size}|${int(original.writer == initialized.writer)}|'
+	original.idat_count = 17
+	original.idat_size = 23
+	mut copy := original
+	mut input := zigimg.ReadStream.init_memory([]u8{})
+	mut header := zigimg.PngHeaderData{
+		width:            17
+		height:           3
+		bit_depth:        8
+		interlace_method: .adam7
+	}
+	mut data := zigimg.PngChunkProcessData{
+		read_stream:    &input
+		header:         &header
+		chunk_id:       zigimg.png_chunk_idat.id
+		chunk_length:   7
+		current_format: .grayscale8
+	}
+	callback := copy.processor()
+	callback.process_chunk(mut data) or { panic(err) }
+	data.chunk_id = zigimg.png_chunk_iend.id
+	callback.process_chunk(mut data) or { panic(err) }
+	result += '${original.idat_count}|${original.idat_size}|${copy.idat_count}|${copy.idat_size}|${int(copy.writer == original.writer)}|${writer.get_pos()}|${buffer_hash(bytes):016x}'
+	println(result)
 }

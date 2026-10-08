@@ -2398,3 +2398,49 @@ consumers, Boo and native/Linux checks. Historical metadata/decoder/Parser proof
 retain their preceding hashes in both modes. Three Windows DLLs and five focused
 test executables compile; image/Vaxis link as Linux shared libraries. Cross-target
 runtime and remaining repository translation contracts are not certified.
+
+## PNG checks in production — 2026-10-08
+
+PNG headers, decoding, transparency/palette processing, filtering, information
+diagnostics and direct chunk writing now preserve checked arithmetic and failure
+order under V -prod. Header operations retain u8/u32 widths; invalid depths
+retain Source unreachable branches. Reader checks preserve divisions, casts,
+Adam7 counters, palette prefix writes and processed state. Filtering retains
+slice bounds, memcpy lengths, source-before-destination exact row division and
+unsupported formats. Chunk writes check addition/aliasing and preserve output
+before a flush bounds failure. Info requires its writer and preserves successful
+count increments before size overflow, malformed text/name checks and suppression
+by earlier failed prints.
+
+Debug/ordinary and ReleaseSafe/production both pass 286,037 returning records and
+69 strict panic pairs across the unchanged public Source APIs:
+
+| Scope | Returning | Panic pairs | SHA-256 |
+| --- | ---: | ---: | --- |
+| Headers/names/loadHeader | 59,241 | 11 | `4c45f77f60ecc57f4c0a02c7c666d514eb3112b49bc35bd5d0cba65f2073db0d` |
+| Historical decoder | 60,760 | 10 | `96ee46b18345684842d8ae9cd64290f7c5e9b86228458a83386a602bbd646e9c` |
+| Public processors | 64,395 | 16 | `09ac13edac49df9819661dccd6625541d1e4590d0e3935e4738bf01bb447d6af` |
+| Historical Info | 51,223 | 16 combined | `87adba8bfd33b6f94e620ef6b277496fe1303c0fc80ca07a261f22fae0af7d4a` |
+| Added Info limits/suppression | 1,041 | — | `05946f5a7cbbcdc928e51c71edb9d4d6ee25c208ef21611cd4562bf6c91bcff8` |
+| Filtering | 43,389 | 10 | `ba128302912d022c765fd89f37431e3961ffbe5b5c35cd6c9d140862401a9c7d` |
+| Historical chunk writer | 5,960 | 6 combined | `934ba176552e9370b30073ea1f648fab7dcb4ca85424296097b173f4d298115e` |
+| Added chunk cases | 28 | — | `4632f854f9f77422d2de7a764c23a1a4fd81ff8223c310bcfb53f8032841e317` |
+
+Header, Info and decoder panic observers compare initialized retained state;
+writer traps also check call prefixes. A panic requires an actual anchored
+category, failure exit and no unexpected output; backtrace mentions or signals
+alone cannot pass. One inherited transparency loop is checked separately.
+Private spread checks are reached through public reader callbacks. Full copied
+Source hashes, selected compiler-library pins, provenance, commands, inputs and
+raw diagnostics are retained. Three Source name-length type errors/five V adapter
+traps, required Info writer, Source-only nil/const writer boundaries and helper
+build failures are separately measured. Historical foundation hashes retain
+their previous values in both modes using their legacy failure gate.
+
+All 49 image and 58 Vaxis files, focused ordinary/production consumers, Boo and
+native/Linux application checks pass. Three Windows DLLs/six PNG test programs
+compile; image/Vaxis link as Linux shared libraries. Cross runtime, giant V arrays,
+undefined/error storage, allocator/OOM/GC, ABI, const enforcement and remaining
+constructors are excluded. Commented PNG encoder bodies and Zig 0.15.2-incompatible
+legacy writer()/ZlibCompressor remain explicit Source boundaries. Reproduction and
+precise limits are in `zigimg/reference_probes/{png_header,png_decode,png_info,png_filtering,png_chunk_writer}/README.md`.

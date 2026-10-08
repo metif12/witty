@@ -15,7 +15,7 @@ pub mut:
 
 pub fn png_chunk_writer_with_buffer[B, W](buffer B, underlying W, section_id [4]u8) PngChunkWriter[B, W] {
 	$if B.unaliased_typ is []u8 {
-		assert buffer.len == 0
+		if buffer.len != 0 { panic('PNG chunk slice storage must have zero capacity') }
 	} $else $if B.unaliased_typ is $array {
 		element := buffer[0]
 		$if element is u8 {
@@ -40,7 +40,7 @@ pub type PngChunkBuffer16K = [16384]u8
 
 pub fn png_chunk_writer[W](underlying W, id string) PngChunkWriter[PngChunkBuffer16K, W] {
 	// The source rejects an invalid comptime id. V strings are runtime values.
-	assert id.len == 4
+	if id.len != 4 { panic('PNG chunk id must be 4 characters') }
 	mut section_id := [4]u8{}
 	for i in 0 .. 4 {
 		section_id[i] = id[i]
@@ -53,7 +53,7 @@ pub fn png_chunk_writer[W](underlying W, id string) PngChunkWriter[PngChunkBuffe
 // slices. Build the borrowed byte header from sizeof(B) instead.
 fn png_chunk_buffer_bytes[B](mut buffer B) []u8 {
 	$if B.unaliased_typ is []u8 {
-		assert buffer.len == 0
+		if buffer.len != 0 { panic('PNG chunk slice storage must have zero capacity') }
 		return unsafe { buffer[..] }
 	} $else $if B.unaliased_typ is $array {
 		element := buffer[0]
@@ -73,7 +73,7 @@ pub fn (mut writer PngChunkWriter[B, W]) flush[B, W]() ! {
 	mut crc := crc32.sum(section)
 	writer.unbuffered_writer.write_all(section)!
 	mut storage := png_chunk_buffer_bytes[B](mut writer.buf)
-	assert writer.end <= usize(storage.len)
+	if writer.end > usize(storage.len) { panic('index out of bounds') }
 	mut payload := unsafe { storage[..int(writer.end)] }
 	crc = png_reader_crc.update(crc, payload)
 	writer.unbuffered_writer.write_all(payload)!
@@ -83,7 +83,7 @@ pub fn (mut writer PngChunkWriter[B, W]) flush[B, W]() ! {
 
 pub fn (mut writer PngChunkWriter[B, W]) write[B, W](bytes []u8) !usize {
 	mut storage := png_chunk_buffer_bytes[B](mut writer.buf)
-	assert writer.end <= ~usize(0) - usize(bytes.len)
+	if writer.end > ~usize(0) - usize(bytes.len) { panic('integer overflow') }
 	if writer.end + usize(bytes.len) > usize(storage.len) {
 		writer.flush()!
 		// The pinned helper bypasses chunk framing for an oversized write,
@@ -91,6 +91,17 @@ pub fn (mut writer PngChunkWriter[B, W]) write[B, W](bytes []u8) !usize {
 		if bytes.len > storage.len { return writer.unbuffered_writer.write(bytes) }
 	}
 	mut target := unsafe { storage[int(writer.end)..int(writer.end) + bytes.len] }
+	// Source @memcpy rejects identical and partially overlapping nonempty
+	// ranges. Pointer differences avoid overflowing an address + length.
+	if bytes.len > 0 {
+		source_address := usize(bytes.data)
+		target_address := usize(target.data)
+		if (source_address <= target_address && target_address - source_address < usize(bytes.len))
+			|| (target_address < source_address
+			&& source_address - target_address < usize(target.len)) {
+			panic('@memcpy arguments alias')
+		}
+	}
 	copy(mut target, bytes)
 	writer.end += usize(bytes.len)
 	return usize(bytes.len)

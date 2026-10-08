@@ -101,22 +101,28 @@ pub fn (header PngHeaderData) channel_count() u8 {
 
 pub fn (header PngHeaderData) pixel_bits() u8 {
 	channels := header.channel_count()
-	assert header.bit_depth <= u8(255) / channels
+	if header.bit_depth > u8(255) / channels { panic('integer overflow') }
 	return header.bit_depth * channels
 }
 
 pub fn (header PngHeaderData) line_bytes() u32 {
-	bits := u64(header.pixel_bits()) * header.width
-	assert bits + 7 <= 0xffffffff
-	return u32((bits + 7) / 8)
+	pixel_bits := u32(header.pixel_bits())
+	if pixel_bits != 0 && header.width > u32(0xffffffff) / pixel_bits {
+		panic('integer overflow')
+	}
+	bits := pixel_bits * header.width
+	if bits > u32(0xffffffff) - 7 { panic('integer overflow') }
+	return (bits + 7) / 8
 }
 
 pub fn (header PngHeaderData) get_pixel_format() PixelFormat {
-	assert match header.color_type {
+	valid_depth := match header.color_type {
 		.grayscale { header.bit_depth in [u8(1), 2, 4, 8, 16] }
 		.indexed { header.bit_depth in [u8(1), 2, 4, 8] }
 		else { header.bit_depth in [u8(8), 16] }
 	}
+
+	if !valid_depth { panic('reached unreachable code') }
 
 	return match header.color_type {
 		.grayscale {

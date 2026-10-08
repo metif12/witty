@@ -2578,3 +2578,95 @@ cross builds pass the three dependency DLLs and five affected/new test executabl
 image and Vaxis link as x86_64 Linux shared libraries. Cross-target runtime is
 unexecuted. These results close the listed contracts and remain bounded evidence
 for the larger translation effort.
+
+## PNG production checks and strict native comparisons — 2026-10-08
+
+The PNG header, reader, processors, filtering and direct chunk writer now retain
+the pinned Source's checked arithmetic and failure ordering in V production
+builds. Checks that previously relied on removed assertions are explicit.
+Header pixel multiplication remains u8; line multiplication and rounding remain
+u32, including pixel overflow before multiplication by zero. Unsupported pixel
+depths retain Source unreachable branches. Dynamic Chunk names require four
+bytes at the V adapter boundary.
+
+Reader and transparency arithmetic preserves u8/u32 products, additions,
+division, casts and exact row division. Assertions retain the Source panic
+category. Palette processing checks the unsupported format before an empty row,
+preserves successful prefix writes before a bad palette index, and sets processed
+state before failing where Source does. Filtering preserves source slice bounds,
+eight-bit memcpy length checks, sixteen-bit exact division and unsupported format
+branches. The spread helper converts the source row before the destination row.
+Direct chunk writing checks addition overflow and memcpy aliasing, writes the
+length and section before a flush slice failure, and retains inherited empty
+flushes, oversized unframed writes and buffered bytes after returning write errors.
+
+InfoProcessor now requires its writer and preserves tag-name, delimiter, slice
+and IDAT arithmetic checks. Count increments before size addition; a size overflow
+therefore leaves the incremented count. Earlier failed prints can suppress later
+malformed header/text checks. The one-byte iTXt flag cases retain Source's distinct
+indexed-access versus slice-range failure order.
+
+The unchanged-source proofs pass both Source Debug/V ordinary and Source
+ReleaseSafe/V production. Python constructs inputs; actual Source calls define
+the expected output. The following 286,037 returning records and 69 strict panic
+pairs exclude constructor controls, V-only adapter traps and the separate
+historical foundation rerun:
+
+| Public scope | Returning records | Strict panic pairs | Returning SHA-256 |
+| --- | ---: | ---: | --- |
+| Header helpers, borrowed names and loadHeader | 59,241 | 11 | `4c45f77f60ecc57f4c0a02c7c666d514eb3112b49bc35bd5d0cba65f2073db0d` |
+| Complete decoder, unchanged corpus | 60,760 | 10 | `96ee46b18345684842d8ae9cd64290f7c5e9b86228458a83386a602bbd646e9c` |
+| Direct processors and callback adapters | 64,395 | 16 | `09ac13edac49df9819661dccd6625541d1e4590d0e3935e4738bf01bb447d6af` |
+| Information diagnostics, unchanged corpus | 51,223 | 16 together with next row | `87adba8bfd33b6f94e620ef6b277496fe1303c0fc80ca07a261f22fae0af7d4a` |
+| Information suppression and limit cases | 1,041 | — | `05946f5a7cbbcdc928e51c71edb9d4d6ee25c208ef21611cd4562bf6c91bcff8` |
+| Filtering, including historical 43,200 | 43,389 | 10 | `ba128302912d022c765fd89f37431e3961ffbe5b5c35cd6c9d140862401a9c7d` |
+| Direct chunk writing, unchanged corpus | 5,960 | 6 together with next row | `934ba176552e9370b30073ea1f648fab7dcb4ca85424296097b173f4d298115e` |
+| Chunk overlap, copies and failure order | 28 | — | `4632f854f9f77422d2de7a764c23a1a4fd81ff8223c310bcfb53f8032841e317` |
+
+The two complete-decoder additions reach sixteen-bit spread checks through public
+callbacks; no private Source helpers are exposed. Decoder/processor panic state
+SHA-256 is
+`f2c3d51b1acd37f3f435e2ac9399ae936ce897ff59a34426164bebba2ac8be35`.
+Header state retains all seven initialized fields, SHA-256
+`64d5b333aa2818162757b169e3a17bc82bdcd5fbeaab6291577b4981b4875797`.
+Info state includes counters, input/output position and the entire initialized
+output buffer, SHA-256
+`529d510c5be49ae7fa2e42b35e70ec2c0786cc88e77e1d87c57c79f7e470445a`.
+Filtering checks the actual panic category; chunk failures additionally check
+the emitted writer-call prefix. Signals, returned errors, unexpected normal
+output or category words occurring only in a backtrace cannot satisfy these
+strict gates. The inherited RGB24 transparency zero-increment loop is isolated
+and checked by timeout separately from panics.
+
+Header tests cover safe depth/channel products and u32 boundaries, zero/extreme
+dimensions, all 24 represented pixel formats, all four borrowed-name byte positions,
+header bit flips/truncation, closed enum tags, open method tags, CRC errors and
+13/16/17/31/33/64-byte file buffers. They retain the borrowed-IHDR overwrite/CRC
+rejection behavior. Three wrong-length names are ordinary Source type rejections
+and separate V runtime guards. Info adds a paired missing-writer rejection and
+complete direct/init/copy/borrow controls; explicit nil and immutable writer
+references remain Source-only rejections. Chunk writing separately checks two V
+adapter guards, Source's compile-time invalid ID and two unchanged unsupported
+helper diagnostics.
+
+Every proof pins the complete Source src tree, checks it before/after execution,
+and retains commands, fixture provenance, inputs, diagnostics and result metadata
+in a supplied work directory. Relevant Zig 0.15.2 reader/writer, DEFLATE, formatting,
+memory, debug or CRC files are pinned as appropriate. Fresh per-proof global caches
+avoid stale shared cache references. Reproduction and precise exclusions are in
+`zigimg/reference_probes/{png_header,png_decode,png_info,png_filtering,png_chunk_writer}/README.md`.
+
+The historical foundation comparison also retains all five hashes in both modes:
+headers `8cb5945cdde99fe7`, filtering `809cede448778a71`, rows `2ad35f81b5cd96cd`,
+processors `b0a838ddd9ac9218` and transparency `0975e75ee48838d7`. Its older
+14-failure/zero-stride-loop classifier is supplementary to the strict new gates.
+
+Focused consumers pass ordinary and production; all 49 image and 58 Vaxis test
+files, Boo, native/Linux application checks, three Windows dependency DLLs and six
+PNG test executables pass. Image and Vaxis link as x86_64 Linux shared libraries.
+Cross-target runtime remains unexecuted. Required header/chunk fields, mutable
+Chunk fields, const-pointer enforcement, allocator ownership, arbitrary unsafe
+carriers, undefined Source storage, aggregate ABI and oversized V array domains
+remain separate limits. The pinned encoder bodies remain commented; legacy
+writer() and ZlibCompressor remain incompatible with Zig 0.15.2. No replacement
+encoder/compressor was invented to make those Source boundaries compile.

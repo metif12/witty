@@ -36,13 +36,13 @@ fn png_filter_choice_heuristic(scanline []u8, previous_scanline []u8) PngFilterT
 		for filter_index, filter in filters {
 			byte := png_filter_byte(filter, sample, 0, above, 0)
 			if byte == previous_bytes[filter_index] {
-				assert combos[filter_index] < ~usize(0)
+				if combos[filter_index] == ~usize(0) { panic('integer overflow') }
 				combos[filter_index]++
 			} else {
 				combo := combos[filter_index]
-				assert combo == 0 || combo <= ~usize(0) / combo
+				if combo != 0 && combo > ~usize(0) / combo { panic('integer overflow') }
 				score := combo * combo
-				assert scores[filter_index] <= ~usize(0) - score
+				if scores[filter_index] > ~usize(0) - score { panic('integer overflow') }
 				scores[filter_index] += score
 				combos[filter_index] = 0
 				previous_bytes[filter_index] = byte
@@ -62,9 +62,18 @@ fn png_filter_choice_heuristic(scanline []u8, previous_scanline []u8) PngFilterT
 
 fn png_fill_scanline(pixels PixelStorage, mut scanline []u8, y usize, width usize) {
 	begin := image_pixel_count(y, width)
-	assert y < ~usize(0)
+	if y == ~usize(0) { panic('integer overflow') }
 	end := image_pixel_count(y + 1, width)
+	// Source PixelStorage.slice checks its native-width bounds before bytes
+	// are borrowed. Keep that check ahead of V's narrower slice indexes.
+	if pixels !is InvalidPixels && (begin > end || end > pixels.len()) {
+		panic('index out of bounds')
+	}
 	source := pixels.slice(begin, end).as_const_bytes()
+	// These two source bitsPerChannel branches are explicitly unreachable.
+	if pixels.pixel_format() in [PixelFormat.rgb332, .rgb565] {
+		panic('reached unreachable code')
+	}
 	depth := pixels.pixel_format().bits_per_channel()
 	match depth {
 		1, 2, 4 {
@@ -86,11 +95,14 @@ fn png_fill_scanline(pixels PixelStorage, mut scanline []u8, y usize, width usiz
 			}
 		}
 		8 {
-			assert scanline.len == source.len
+			if scanline.len != source.len {
+				panic('source and destination arguments have non-equal lengths')
+			}
 			copy(mut scanline, source)
 		}
 		16 {
-			assert source.len % 2 == 0 && scanline.len % 2 == 0
+			if source.len % 2 != 0 { panic('exact division produced remainder') }
+			if scanline.len % 2 != 0 { panic('exact division produced remainder') }
 			for index in 0 .. scanline.len / 2 {
 				$if little_endian {
 					scanline[index * 2] = source[index * 2 + 1]
@@ -109,7 +121,7 @@ fn png_fill_scanline(pixels PixelStorage, mut scanline []u8, y usize, width usiz
 // call it in the pinned revision, whose writeData body is commented out.
 pub fn png_filter(mut writer WriteStream, pixels PixelStorage, choice PngFilterChoice, header PngHeaderData) ! {
 	line_bytes := header.line_bytes()
-	assert line_bytes <= u32(0xffffffff) / 2
+	if line_bytes > u32(0xffffffff) / 2 { panic('integer overflow') }
 	mut previous := []u8{len: int(line_bytes)}
 	mut current := []u8{len: int(line_bytes)}
 	pixel_len := int(pixels.pixel_format().pixel_stride())
@@ -134,6 +146,7 @@ pub fn png_filter(mut writer WriteStream, pixels PixelStorage, choice PngFilterC
 }
 
 fn png_defilter(mut current []u8, previous []u8, stride u8) ! {
+	if stride == 0 { panic('integer overflow') }
 	filter := current[int(stride) - 1]
 	if filter > 4 { return error('InvalidData') }
 	current[int(stride) - 1] = 0
@@ -177,7 +190,9 @@ fn png_spread_row_data(mut destination []u8, source []u8, depth u8, channels u8,
 			}
 		}
 		16 {
-			assert destination.len % 2 == 0 && source.len % 2 == 0
+			// Source converts the current row before the destination row.
+			if source.len % 2 != 0 { panic('exact division produced remainder') }
+			if destination.len % 2 != 0 { panic('exact division produced remainder') }
 			stride16 := int(stride / 2)
 			for dest_index < destination.len / 2 {
 				for channel in 0 .. int(channels) {
@@ -191,7 +206,7 @@ fn png_spread_row_data(mut destination []u8, source []u8, depth u8, channels u8,
 			}
 		}
 		else {
-			panic('invalid PNG sample depth')
+			panic('reached unreachable code')
 		}
 	}
 }
