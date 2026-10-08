@@ -2,6 +2,10 @@ module zigimg
 
 fn test_png_header_zero_depth_and_checked_line_limit_returning_neighbors() {
 	mut header := PngHeaderData{
+		compression_method: .deflate
+		filter_method:      .adaptive
+		interlace_method:   .none
+
 		width:      0xffffffff
 		height:     0
 		bit_depth:  0

@@ -31,14 +31,14 @@ pub struct PngTryAll {}
 pub struct PngHeuristic {}
 
 pub struct PngSpecified {
-pub:
-	filter PngFilterType
+pub mut:
+	filter PngFilterType @[required]
 }
 
 pub type PngFilterChoice = PngHeuristic | PngSpecified | PngTryAll
 
 pub struct PngEncoderOptions {
-pub:
+pub mut:
 	interlaced    bool
 	filter_choice PngFilterChoice = PngHeuristic{}
 }
@@ -66,13 +66,13 @@ pub fn PngColorType.from_pixel_format(format PixelFormat) !PngColorType {
 @[packed]
 pub struct PngHeaderData {
 pub mut:
-	width              u32
-	height             u32
-	bit_depth          u8
-	color_type         PngColorType
-	compression_method PngCompressionMethod
-	filter_method      PngFilterMethod
-	interlace_method   PngInterlaceMethod
+	width              u32                  @[required]
+	height             u32                  @[required]
+	bit_depth          u8                   @[required]
+	color_type         PngColorType         @[required]
+	compression_method PngCompressionMethod @[required]
+	filter_method      PngFilterMethod      @[required]
+	interlace_method   PngInterlaceMethod   @[required]
 }
 
 pub fn (header PngHeaderData) is_valid() bool {
@@ -184,6 +184,9 @@ pub fn PNG.ensure_writable(image ImageUnmanaged) ! {
 pub fn PNG.write_image(mut stream WriteStream, image ImageUnmanaged, options PngEncoderOptions) ! {
 	PNG.ensure_writable(image)!
 	header := PngHeaderData{
+		compression_method: .deflate
+		filter_method:      .adaptive
+
 		width:            u32(image.width)
 		height:           u32(image.height)
 		bit_depth:        image.pixel_format().bits_per_channel()

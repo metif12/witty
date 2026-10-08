@@ -10,6 +10,11 @@ fn main() {
 	mut writer := zigimg.WriteStream.init_memory(mut bytes)
 	mut stream := zigimg.ReadStream.init_memory(bytes)
 	mut header := zigimg.PngHeaderData{
+		color_type:         .grayscale
+		compression_method: .deflate
+		filter_method:      .adaptive
+		interlace_method:   .none
+
 		width:     1
 		height:    1
 		bit_depth: 8
@@ -66,6 +71,9 @@ fn main() {
 				processed: true
 			}
 			mut data := zigimg.PngChunkProcessData{
+				chunk_id:       0
+				current_format: .invalid
+
 				read_stream:  &stream
 				header:       &header
 				chunk_length: 0xffffffff
@@ -80,6 +88,16 @@ fn main() {
 				palette: [zigimg.Rgba32{}]
 			}
 			mut data := zigimg.PngRowProcessData{
+				header: &zigimg.PngHeaderData{
+					width:              0
+					height:             0
+					bit_depth:          0
+					color_type:         .grayscale
+					compression_method: .deflate
+					filter_method:      .adaptive
+					interlace_method:   .none
+				}
+
 				src_format:  .indexed8
 				dest_format: .rgba32
 				dest_row:    [u8(1), 0, 0, 0]
@@ -96,6 +114,16 @@ fn main() {
 				}
 			}
 			mut data := zigimg.PngRowProcessData{
+				header: &zigimg.PngHeaderData{
+					width:              0
+					height:             0
+					bit_depth:          0
+					color_type:         .grayscale
+					compression_method: .deflate
+					filter_method:      .adaptive
+					interlace_method:   .none
+				}
+
 				src_format:  .rgb24
 				dest_format: .rgba32
 				dest_row:    [u8(0), 0, 0, 0]

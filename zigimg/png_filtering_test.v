@@ -9,6 +9,11 @@ fn test_png_filter_accepts_source_sixteen_bit_shorter_destination_row() {
 	// Source fills a two-byte row from the first native u16; it does not
 	// require matching lengths for the sixteen-bit path.
 	png_filter(mut writer, pixels, PngSpecified{ filter: .none }, PngHeaderData{
+		color_type:         .grayscale
+		compression_method: .deflate
+		filter_method:      .adaptive
+		interlace_method:   .none
+
 		width:     2
 		height:    1
 		bit_depth: 8
@@ -22,12 +27,22 @@ fn test_png_filter_empty_rows_and_zero_height_choice_order() {
 	mut bytes := []u8{len: 8, init: 0xa5}
 	mut writer := WriteStream.init_memory(mut bytes)
 	png_filter(mut writer, pixels, PngTryAll{}, PngHeaderData{
+		color_type:         .grayscale
+		compression_method: .deflate
+		filter_method:      .adaptive
+		interlace_method:   .none
+
 		width:     17
 		height:    0
 		bit_depth: 8
 	})!
 	assert writer.get_pos() == 0
 	png_filter(mut writer, pixels, PngSpecified{ filter: .up }, PngHeaderData{
+		color_type:         .grayscale
+		compression_method: .deflate
+		filter_method:      .adaptive
+		interlace_method:   .none
+
 		width:     0
 		height:    3
 		bit_depth: 8
@@ -41,6 +56,11 @@ fn test_png_filter_unsupported_source_format_empty_row_has_defined_noop() {
 	mut bytes := []u8{len: 4, init: 0xa5}
 	mut writer := WriteStream.init_memory(mut bytes)
 	png_filter(mut writer, InvalidPixels{}, PngSpecified{ filter: .none }, PngHeaderData{
+		color_type:         .grayscale
+		compression_method: .deflate
+		filter_method:      .adaptive
+		interlace_method:   .none
+
 		width:     1
 		height:    3
 		bit_depth: 0

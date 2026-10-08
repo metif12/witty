@@ -95,7 +95,7 @@ pub fn (format PixelFormat) pixel_stride() u8 {
 }
 
 pub fn (format PixelFormat) bits_per_channel() u8 {
-	assert format !in [.rgb332, .rgb565]
+	if format in [.rgb332, .rgb565] { panic('reached unreachable code') }
 	return format.info().bits_per_channel()
 }
 

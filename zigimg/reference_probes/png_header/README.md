@@ -53,5 +53,6 @@ The tests establish defined runtime behavior on initialized storage. They do
 not certify constructor field omissions, direct mutable Chunk fields, const
 borrow enforcement, sentinel lifetime, pointer/allocator ownership, aggregate
 ABI, arbitrary invalid enum construction, undefined Source storage or execution
-on other targets. HeaderData/Chunk records still admit V defaults; Source's
-non-exhaustive compression/filter enums remain unsafe V numeric adapters.
+on other targets. The separate `../png_records/README.md` proof covers required
+fields, public mutation and copying, including measured V alias/sum-type limits.
+Source's non-exhaustive compression/filter enums remain unsafe V numeric adapters.

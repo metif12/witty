@@ -33,12 +33,19 @@ fn bounds(name string, path string) {
 	mut input := zigimg.ReadStream.init_memory([]u8{len: 20, init: 1})
 	mut processor := zigimg.PngInfoProcessor.init(&writer)
 	mut header := zigimg.PngHeaderData{
+		color_type:         .grayscale
+		compression_method: .deflate
+		filter_method:      .adaptive
+
 		width:            17
 		height:           3
 		bit_depth:        8
 		interlace_method: .adam7
 	}
 	mut data := zigimg.PngChunkProcessData{
+		chunk_id:     0
+		chunk_length: 0
+
 		read_stream:    &input
 		header:         &header
 		current_format: .grayscale8
@@ -215,6 +222,10 @@ fn contracts() {
 	mut copy := original
 	mut input := zigimg.ReadStream.init_memory([]u8{})
 	mut header := zigimg.PngHeaderData{
+		color_type:         .grayscale
+		compression_method: .deflate
+		filter_method:      .adaptive
+
 		width:            17
 		height:           3
 		bit_depth:        8

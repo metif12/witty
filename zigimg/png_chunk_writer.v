@@ -7,21 +7,29 @@ import hash.crc32
 // V rejects [0]u8, so the zero-capacity specialization uses an empty []u8.
 pub struct PngChunkWriter[B, W] {
 pub mut:
-	unbuffered_writer W
+	unbuffered_writer W @[required]
 	buf               B
 	end               usize
-	section_id        [4]u8
+	section_id        [4]u8 @[required]
+}
+
+fn png_chunk_check_element[E](element E) {
+	// Pinned V's unaliased type categories look through pointers; preserve the
+	// byte-only constraint while accepting scalar aliases of u8.
+	$if E.indirections > 0 || ((int(E.unaliased_typ) >> 16) & 0xff) > 0 {
+		$compile_error('PNG chunk storage requires a fixed byte array')
+	} $else $if E.unaliased_typ is u8 {
+		_ = element
+	} $else {
+		$compile_error('PNG chunk storage requires a fixed byte array')
+	}
 }
 
 pub fn png_chunk_writer_with_buffer[B, W](buffer B, underlying W, section_id [4]u8) PngChunkWriter[B, W] {
 	$if B.unaliased_typ is []u8 {
 		if buffer.len != 0 { panic('PNG chunk slice storage must have zero capacity') }
-	} $else $if B.unaliased_typ is $array {
-		element := buffer[0]
-		$if element is u8 {
-		} $else {
-			$compile_error('PNG chunk storage requires a fixed byte array')
-		}
+	} $else $if B.unaliased_typ is $array_fixed {
+		png_chunk_check_element(buffer[0])
 	} $else {
 		$compile_error('PNG chunk storage requires a fixed byte array')
 	}
@@ -55,12 +63,8 @@ fn png_chunk_buffer_bytes[B](mut buffer B) []u8 {
 	$if B.unaliased_typ is []u8 {
 		if buffer.len != 0 { panic('PNG chunk slice storage must have zero capacity') }
 		return unsafe { buffer[..] }
-	} $else $if B.unaliased_typ is $array {
-		element := buffer[0]
-		$if element is u8 {
-		} $else {
-			$compile_error('PNG chunk storage requires a fixed byte array')
-		}
+	} $else $if B.unaliased_typ is $array_fixed {
+		png_chunk_check_element(buffer[0])
 		return unsafe { (&u8(&buffer)).vbytes(int(sizeof(B))) }
 	} $else {
 		$compile_error('PNG chunk storage requires a fixed byte array')

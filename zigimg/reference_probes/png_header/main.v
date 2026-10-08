@@ -80,7 +80,15 @@ fn record(a []string, id int, file_path string) string {
 		h := p.png_load_header(mut stream) or {
 			out += 'E${err.msg()}'
 			valid = false
-			p.PngHeaderData{}
+			p.PngHeaderData{
+				width:              0
+				height:             0
+				bit_depth:          0
+				color_type:         .grayscale
+				compression_method: .deflate
+				filter_method:      .adaptive
+				interlace_method:   .none
+			}
 		}
 		if valid { out += 'OK|' + fields(h) }
 		out += '|${stream.get_pos()}'
@@ -91,6 +99,11 @@ fn record(a []string, id int, file_path string) string {
 
 fn trap(name string, path string) {
 	mut h := &p.PngHeaderData{
+		color_type:         .grayscale
+		compression_method: .deflate
+		filter_method:      .adaptive
+		interlace_method:   .none
+
 		width:     1
 		height:    1
 		bit_depth: 8

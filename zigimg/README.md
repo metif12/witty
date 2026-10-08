@@ -27,6 +27,18 @@ The PNG writer in this exact revision emits only the eight-byte signature;
 its chunk-writing bodies are commented out. Native reference execution and V
 tests preserve that behavior, including fixed-buffer failures.
 
+PNG header, chunk, processor and writer records now declare the represented
+Source-required fields and expose mutable Source fields. Existing callers
+initialize every required field explicitly. Separate native comparisons cover
+[header/chunk/encoder records](reference_probes/png_records/README.md),
+[processor records](reference_probes/png_processor_records/README.md), and
+[chunk-writer records](reference_probes/png_chunk_records/README.md).
+Pinned V can omit required fields through aliases or generic records, and
+copied sum-type payloads share boxed storage; these measured differences remain
+outside the equivalent record cases. The [PixelFormat comparison](reference_probes/pixel_format/README.md)
+also covers every named format and the defined packed-info carrier, preserving the
+RGB332/RGB565 bits-per-channel unreachable checks in production.
+
 PNG header loading validates IHDR fields and CRC while accepting unnamed
 compression/filter bytes. Scanline filtering, defiltering, sample spreading,
 reader callbacks, borrowed one/two-processor options, and tRNS/PLTE processors

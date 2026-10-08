@@ -79,6 +79,11 @@ fn main() {
 		op := p[0]
 		mut bytes := []u8{len: 64, init: u8(index * 13 + 7)}
 		mut header := z.PngHeaderData{
+			color_type:         .grayscale
+			compression_method: .deflate
+			filter_method:      .adaptive
+			interlace_method:   .none
+
 			width:     1
 			height:    1
 			bit_depth: 8
@@ -97,11 +102,13 @@ fn main() {
 		mut row := []u8{len: row_len, init: u8(u32(index * 13) + p[5])}
 		alpha := []u8{len: 16, init: u8(index * 17 + 3)}
 		mut state := &State{
-			stream:  z.ReadStream.init_memory(unsafe { bytes[..if op == 4 {
-				int(p[6])
-			} else {
-				bytes.len
-			}] })
+			stream:  z.ReadStream.init_memory(unsafe {
+				bytes[..if op == 4 {
+					int(p[6])
+				} else {
+					bytes.len
+				}]
+			})
 			plte:    z.PngPlteProcessor{
 				palette: unsafe { palette[..] }
 			}
@@ -122,21 +129,31 @@ fn main() {
 			u32(0)
 		}
 		state.trns.trns_data = match arm {
-			0 { z.PngTrnsData(z.PngTrnsUnset{}) }
-			1 { z.PngTrnsData(z.PngTrnsGray{
+			0 {
+				z.PngTrnsData(z.PngTrnsUnset{})
+			}
+			1 {
+				z.PngTrnsData(z.PngTrnsGray{
 					value: 7
-				}) }
-			2 { z.PngTrnsData(z.PngTrnsRGB{
+				})
+			}
+			2 {
+				z.PngTrnsData(z.PngTrnsRGB{
 					color: z.Rgb48{
 						r: 7
 						g: 18
 						b: 29
 					}
-				}) }
-			3 { z.PngTrnsData(z.PngTrnsIndexAlpha{
+				})
+			}
+			3 {
+				z.PngTrnsData(z.PngTrnsIndexAlpha{
 					data: unsafe { alpha[..if op == 3 { int(p[2]) } else { 2 }] }
-				}) }
-			else { panic('invalid fixture arm') }
+				})
+			}
+			else {
+				panic('invalid fixture arm')
+			}
 		}
 
 		if op == 2 && palette.len > 0 {

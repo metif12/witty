@@ -18,6 +18,10 @@ fn png_reference_bytes(mut hash []u64, bytes []u8) {
 
 fn png_reference_header(format PixelFormat, width u32, height u32) !PngHeaderData {
 	return PngHeaderData{
+		compression_method: .deflate
+		filter_method:      .adaptive
+		interlace_method:   .none
+
 		width:      width
 		height:     height
 		bit_depth:  format.bits_per_channel()
@@ -41,7 +45,15 @@ fn png_reference_header_hash(mut hash []u64, bytes []u8) {
 	mut failure := ''
 	header := png_load_header(mut stream) or {
 		failure = err.msg()
-		PngHeaderData{}
+		PngHeaderData{
+			width:              0
+			height:             0
+			bit_depth:          0
+			color_type:         .grayscale
+			compression_method: .deflate
+			filter_method:      .adaptive
+			interlace_method:   .none
+		}
 	}
 	if failure == '' {
 		png_reference_mix(mut hash, 0)
@@ -272,6 +284,16 @@ fn test_png_native_processor_matrix() {
 						value: u16(seed * 19)
 					}) }
 				mut data := PngRowProcessData{
+					header: &PngHeaderData{
+						width:              0
+						height:             0
+						bit_depth:          0
+						color_type:         .grayscale
+						compression_method: .deflate
+						filter_method:      .adaptive
+						interlace_method:   .none
+					}
+
 					dest_row:    unsafe { row[..] }
 					src_format:  source
 					dest_format: destination
@@ -320,7 +342,20 @@ fn test_png_native_processor_matrix() {
 			mut processor := PngPlteProcessor{
 				processed: processed
 			}
+			mut unused_stream := ReadStream.init_memory([]u8{})
 			mut data := PngChunkProcessData{
+				read_stream:  &unused_stream
+				chunk_length: 0
+				header:       &PngHeaderData{
+					width:              0
+					height:             0
+					bit_depth:          0
+					color_type:         .grayscale
+					compression_method: .deflate
+					filter_method:      .adaptive
+					interlace_method:   .none
+				}
+
 				current_format: format
 				chunk_id:       png_chunk_plte.id
 			}
@@ -351,6 +386,16 @@ fn test_png_native_processor_matrix() {
 				processor.process_palette(mut palette_data)!
 				callback := processor.processor()
 				mut data := PngRowProcessData{
+					header: &PngHeaderData{
+						width:              0
+						height:             0
+						bit_depth:          0
+						color_type:         .grayscale
+						compression_method: .deflate
+						filter_method:      .adaptive
+						interlace_method:   .none
+					}
+
 					dest_row:    unsafe { row[..] }
 					src_format:  source
 					dest_format: destination

@@ -29,7 +29,15 @@ fn test_png_header_crc_exhaustive_and_open_enums_and_positions() {
 				mut failure := ''
 				_ = png_load_header(mut stream) or {
 					failure = err.msg()
-					PngHeaderData{}
+					PngHeaderData{
+						width:              0
+						height:             0
+						bit_depth:          0
+						color_type:         .grayscale
+						compression_method: .deflate
+						filter_method:      .adaptive
+						interlace_method:   .none
+					}
 				}
 				assert failure == 'EndOfStream'
 				assert stream.get_pos() == if cut < 8 {
@@ -50,7 +58,15 @@ fn test_png_header_crc_exhaustive_and_open_enums_and_positions() {
 		mut failure := ''
 		_ = png_load_header(mut stream) or {
 			failure = err.msg()
-			PngHeaderData{}
+			PngHeaderData{
+				width:              0
+				height:             0
+				bit_depth:          0
+				color_type:         .grayscale
+				compression_method: .deflate
+				filter_method:      .adaptive
+				interlace_method:   .none
+			}
 		}
 		assert failure == 'InvalidData' && stream.get_pos() == 29
 	}
@@ -60,7 +76,15 @@ fn test_png_header_crc_exhaustive_and_open_enums_and_positions() {
 	mut failure := ''
 	_ = png_load_header(mut stream) or {
 		failure = err.msg()
-		PngHeaderData{}
+		PngHeaderData{
+			width:              0
+			height:             0
+			bit_depth:          0
+			color_type:         .grayscale
+			compression_method: .deflate
+			filter_method:      .adaptive
+			interlace_method:   .none
+		}
 	}
 	assert failure == 'InvalidData' && stream.get_pos() == 33
 }
@@ -68,6 +92,8 @@ fn test_png_header_crc_exhaustive_and_open_enums_and_positions() {
 fn test_png_chunk_names_borrow_native_field_and_critical_bit() {
 	assert sizeof(PngChunkHeader) == 8
 	mut header := PngChunkHeader{
+		length: 0
+
 		chunk_type: png_chunk_ihdr.id
 	}
 	name := header.name()
@@ -100,6 +126,10 @@ fn test_png_filtering_16_bit_rows_packing_and_failed_prefix() {
 	}
 
 	header := PngHeaderData{
+		compression_method: .deflate
+		filter_method:      .adaptive
+		interlace_method:   .none
+
 		width:      4
 		height:     2
 		bit_depth:  16
@@ -118,6 +148,11 @@ fn test_png_filtering_16_bit_rows_packing_and_failed_prefix() {
 	bytes = []u8{len: 3}
 	writer = WriteStream.init_memory(mut bytes)
 	png_filter(mut writer, pixels, PngSpecified{ filter: .none }, PngHeaderData{
+		color_type:         .grayscale
+		compression_method: .deflate
+		filter_method:      .adaptive
+		interlace_method:   .none
+
 		width:     9
 		height:    1
 		bit_depth: 1
@@ -154,6 +189,16 @@ fn test_png_trns_gray16_retains_byte_index_comparison() {
 	}
 	mut bytes := [u8(0x34), 0x12, 0, 0, 0x34, 0x12, 0, 0, 0x34, 0x12, 0, 0]
 	mut data := PngRowProcessData{
+		header: &PngHeaderData{
+			width:              0
+			height:             0
+			bit_depth:          0
+			color_type:         .grayscale
+			compression_method: .deflate
+			filter_method:      .adaptive
+			interlace_method:   .none
+		}
+
 		src_format:  .grayscale16
 		dest_format: .grayscale16_alpha
 		dest_row:    unsafe { bytes[..] }
@@ -188,6 +233,16 @@ fn test_png_processor_callbacks_options_borrowing_and_palette_order() {
 	assert options.processor2.palette[1].r == 9
 	mut row := [u8(1), 0xa5, 0xa5, 0xa5]
 	mut data := PngRowProcessData{
+		header: &PngHeaderData{
+			width:              0
+			height:             0
+			bit_depth:          0
+			color_type:         .grayscale
+			compression_method: .deflate
+			filter_method:      .adaptive
+			interlace_method:   .none
+		}
+
 		src_format:  .indexed8
 		dest_format: .rgba32
 		dest_row:    unsafe { row[..] }
@@ -241,6 +296,16 @@ fn test_png_dispatch_critical_notifications_first_ancillary_and_row_error_state(
 	]
 	mut stream := ReadStream.init_memory([]u8{len: 20})
 	mut chunk := PngChunkProcessData{
+		header: &PngHeaderData{
+			width:              0
+			height:             0
+			bit_depth:          0
+			color_type:         .grayscale
+			compression_method: .deflate
+			filter_method:      .adaptive
+			interlace_method:   .none
+		}
+
 		read_stream:    &stream
 		chunk_id:       png_chunk_trns.id
 		chunk_length:   2
@@ -257,6 +322,17 @@ fn test_png_dispatch_critical_notifications_first_ancillary_and_row_error_state(
 	assert stream.get_pos() == 6
 	second.fail = true
 	mut row := PngRowProcessData{
+		dest_row: []u8{}
+		header:   &PngHeaderData{
+			width:              0
+			height:             0
+			bit_depth:          0
+			color_type:         .grayscale
+			compression_method: .deflate
+			filter_method:      .adaptive
+			interlace_method:   .none
+		}
+
 		src_format:  .grayscale8
 		dest_format: .rgba32
 	}
@@ -282,7 +358,20 @@ fn test_png_critical_processor_matching_keeps_the_initial_chunk_id() {
 		PngReaderProcessor.init(png_chunk_idat.id, unsafe { voidptr(&second) }, png_test_chunk,
 			none, none),
 	]
+	mut unused_stream := ReadStream.init_memory([]u8{})
 	mut data := PngChunkProcessData{
+		read_stream:  &unused_stream
+		chunk_length: 0
+		header:       &PngHeaderData{
+			width:              0
+			height:             0
+			bit_depth:          0
+			color_type:         .grayscale
+			compression_method: .deflate
+			filter_method:      .adaptive
+			interlace_method:   .none
+		}
+
 		chunk_id:       png_chunk_idat.id
 		current_format: .grayscale8
 	}

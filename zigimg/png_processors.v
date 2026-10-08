@@ -3,24 +3,24 @@ module zigimg
 // Allocator fields are omitted: GC owns the translated temporary storage.
 pub struct PngChunkProcessData {
 pub mut:
-	read_stream    &ReadStream = unsafe { nil }
-	chunk_id       u32
-	chunk_length   u32
-	current_format PixelFormat
-	header         &PngHeaderData = unsafe { nil }
+	read_stream    &ReadStream    @[required]
+	chunk_id       u32            @[required]
+	chunk_length   u32            @[required]
+	current_format PixelFormat    @[required]
+	header         &PngHeaderData @[required]
 }
 
 pub struct PngPaletteProcessData {
 pub mut:
-	palette []Rgba32
+	palette []Rgba32 @[required]
 }
 
 pub struct PngRowProcessData {
 pub mut:
-	dest_row    []u8
-	src_format  PixelFormat
-	dest_format PixelFormat
-	header      &PngHeaderData = unsafe { nil }
+	dest_row    []u8           @[required]
+	src_format  PixelFormat    @[required]
+	dest_format PixelFormat    @[required]
+	header      &PngHeaderData @[required]
 }
 
 pub type PngChunkProcessorFn = fn (voidptr, mut PngChunkProcessData) !PixelFormat
@@ -30,17 +30,17 @@ pub type PngPaletteProcessorFn = fn (voidptr, mut PngPaletteProcessData) !
 pub type PngDataRowProcessorFn = fn (voidptr, mut PngRowProcessData) !PixelFormat
 
 pub struct PngReaderProcessorVTable {
-pub:
-	chunk_processor    ?PngChunkProcessorFn
-	palette_processor  ?PngPaletteProcessorFn
-	data_row_processor ?PngDataRowProcessorFn
+pub mut:
+	chunk_processor    ?PngChunkProcessorFn   @[required]
+	palette_processor  ?PngPaletteProcessorFn @[required]
+	data_row_processor ?PngDataRowProcessorFn @[required]
 }
 
 pub struct PngReaderProcessor {
 pub mut:
-	id      u32
-	context voidptr
-	vtable  &PngReaderProcessorVTable = unsafe { nil }
+	id      u32                       @[required]
+	context voidptr                   @[required]
+	vtable  &PngReaderProcessorVTable @[required]
 }
 
 // V callback signatures take an explicit erased context in place of Zig's
@@ -131,18 +131,18 @@ fn png_call_row_processors(processors []PngReaderProcessor, mut data PngRowProce
 pub struct PngTrnsUnset {}
 
 pub struct PngTrnsGray {
-pub:
-	value u16
+pub mut:
+	value u16 @[required]
 }
 
 pub struct PngTrnsRGB {
-pub:
-	color Rgb48
+pub mut:
+	color Rgb48 @[required]
 }
 
 pub struct PngTrnsIndexAlpha {
 pub mut:
-	data []u8
+	data []u8 @[required]
 }
 
 pub type PngTrnsData = PngTrnsUnset | PngTrnsGray | PngTrnsRGB | PngTrnsIndexAlpha
@@ -447,7 +447,7 @@ pub fn (mut processor PngPlteProcessor) process_data_row(mut data PngRowProcessD
 
 pub struct PngCustomReaderOptions1[P] {
 pub mut:
-	processor  P
+	processor  P @[required]
 	processors [1]PngReaderProcessor
 }
 
@@ -477,8 +477,8 @@ pub fn (mut options PngCustomReaderOptions1[P]) get[P]() PngReaderOptions {
 
 pub struct PngCustomReaderOptions2[P, Q] {
 pub mut:
-	processor1 P
-	processor2 Q
+	processor1 P @[required]
+	processor2 Q @[required]
 	processors [2]PngReaderProcessor
 }
 

@@ -22,6 +22,11 @@ fn pixels_for(format zigimg.PixelFormat, count usize, seed int) zigimg.PixelStor
 
 fn trapped(name string) {
 	mut header := zigimg.PngHeaderData{
+		color_type:         .grayscale
+		compression_method: .deflate
+		filter_method:      .adaptive
+		interlace_method:   .none
+
 		width:     1
 		height:    1
 		bit_depth: 8
@@ -101,6 +106,10 @@ fn main() {
 		p := line.split('|').map(it.u64())
 		pixels := pixels_for(formats[int(p[0])], usize(p[3]), int(p[6]))
 		header := zigimg.PngHeaderData{
+			compression_method: .deflate
+			filter_method:      .adaptive
+			interlace_method:   .none
+
 			width:      u32(p[1])
 			height:     u32(p[2])
 			bit_depth:  u8(p[4])

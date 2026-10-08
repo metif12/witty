@@ -49,6 +49,10 @@ fn test_png_writer_rejects_interlace_and_unsupported_pixel_formats() {
 
 fn test_png_header_dimension_depth_and_format_helpers() {
 	mut header := PngHeaderData{
+		compression_method: .deflate
+		filter_method:      .adaptive
+		interlace_method:   .none
+
 		width:      3
 		height:     2
 		bit_depth:  8

@@ -167,7 +167,15 @@ fn main() {
 		if mode in [6, 7] {
 			mut header := zigimg.png_load_header(mut stream) or {
 				status = err.msg()
-				zigimg.PngHeaderData{}
+				zigimg.PngHeaderData{
+					width:              0
+					height:             0
+					bit_depth:          0
+					color_type:         .grayscale
+					compression_method: .deflate
+					filter_method:      .adaptive
+					interlace_method:   .none
+				}
 			}
 			if status == 'ok' {
 				width = usize(header.width)

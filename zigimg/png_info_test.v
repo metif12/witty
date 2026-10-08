@@ -3,6 +3,9 @@ module zigimg
 fn png_info_test_chunk(mut processor PngInfoProcessor, id u32, length u32, bytes []u8, color PngColorType) !u64 {
 	mut stream := ReadStream.init_memory(bytes)
 	mut header := PngHeaderData{
+		compression_method: .deflate
+		filter_method:      .adaptive
+
 		width:            17
 		height:           3
 		bit_depth:        8
@@ -41,6 +44,17 @@ fn test_png_info_header_idat_palette_and_borrowed_options() {
 	configured.processors[0].process_palette(mut data)!
 	assert writer.buffered().bytestr().ends_with('PLTE with 3 entries\n')
 	mut row := PngRowProcessData{
+		dest_row: []u8{}
+		header:   &PngHeaderData{
+			width:              0
+			height:             0
+			bit_depth:          0
+			color_type:         .grayscale
+			compression_method: .deflate
+			filter_method:      .adaptive
+			interlace_method:   .none
+		}
+
 		src_format:  .grayscale8
 		dest_format: .rgba32
 	}

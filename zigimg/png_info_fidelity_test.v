@@ -3,6 +3,9 @@ module zigimg
 fn png_info_fidelity_chunk(mut processor PngInfoProcessor, id u32, length u32, bytes []u8, color PngColorType) !u64 {
 	mut stream := ReadStream.init_memory(bytes)
 	mut header := PngHeaderData{
+		compression_method: .deflate
+		filter_method:      .adaptive
+
 		width:            17
 		height:           3
 		bit_depth:        8
@@ -48,6 +51,10 @@ fn test_png_info_writer_failure_precedes_invalid_header_tag_names() {
 			mut processor := PngInfoProcessor.init(&writer)
 			mut input := ReadStream.init_memory([]u8{})
 			mut header := PngHeaderData{
+				color_type:         .grayscale
+				compression_method: .deflate
+				filter_method:      .adaptive
+
 				width:            17
 				height:           3
 				bit_depth:        8

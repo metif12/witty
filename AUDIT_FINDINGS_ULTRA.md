@@ -2444,3 +2444,68 @@ undefined/error storage, allocator/OOM/GC, ABI, const enforcement and remaining
 constructors are excluded. Commented PNG encoder bodies and Zig 0.15.2-incompatible
 legacy writer()/ZlibCompressor remain explicit Source boundaries. Reproduction and
 precise limits are in `zigimg/reference_probes/{png_header,png_decode,png_info,png_filtering,png_chunk_writer}/README.md`.
+
+## PNG public records and PixelFormat — 2026-10-08
+
+PNG declares 36 represented Source-required fields across header/chunk/filter,
+processor/vtable/payload/custom-option and chunk-writer records. Callers now
+initialize all fields explicitly. Source-mutable fields are public and mutable,
+ChunkHeader.name requires a mutable receiver, and defined encoder/reader/writer
+defaults remain unchanged. Fixed chunk buffers now accept scalar u8 aliases
+while excluding pointer elements/carriers. PixelFormat RGB332/RGB565 retains
+Source's unreachable bits-per-channel failure in production.
+
+Both modes pass 208,590 new equivalent returning observations:
+
+| Scope | Returning | SHA-256 |
+| --- | ---: | --- |
+| Header/chunk/encoder records | 10,451 | `9cc70d9461b1b38135ca9ed12406d7016c9278e646074cf91277957908a24e03` |
+| Chunk-writer records/aliases | 163 | `54fe144e5a027d6259fa65b01ae19169fd5470bf14f350593635306bd6dd9ec9` |
+| Processor records/callbacks/views | 199 | `75975f75febf19e8a3a7085652494075707bef6323eba6455002c39998da2c32` |
+| Named PixelFormat/packed-info carrier | 197,777 | `9eeaca0cd04514798359ff079b7f9d7f80fd838a8b53bde663154f317a87d349` |
+
+Header/chunk constructors add eleven paired required-field rejections, one
+specified-payload rejection and three const controls. Eleven matching V aliases
+ignore markers. Processor records add fourteen complete/default pairs, nineteen
+paired required-field rejections and two readonly pairs; three generic omissions,
+DefaultOptions alias omission and two const-pointee writes are separate Source
+rejections/V acceptances. Private Source field types are inferred from public
+records, with no dependency body/visibility changes.
+
+Generic chunk records measure six Source omissions against six fully running V
+acceptances, five paired storage rejections, Source-only lazy scalar-W records
+versus V eager-method rejection, and V dynamic-byte-alias rejection. Byte views
+borrow live inline storage; copied inline state remains independent; returned
+local buffers remain owned; copied pointer writers share underlying state.
+Source undefined buffers/palette/processor arrays are excluded until seeded.
+
+Boxed V sum-type copies differ in twenty of 25 specified-filter observations
+and all twelve transparency-payload mutations. They are excluded from returning
+parity, with separate native/V hashes retained in the main audit and READMEs.
+Whole-arm replacement preserves independent scalar/slice-header copies; slice
+contents continue to borrow shared caller data in both languages. Const borrowed
+bytes, dynamic chunk-name strings and unified header/filter enums also retain
+their separately measured type adaptations.
+
+PixelFormat covers all 24 named formats, every low 16-bit info pattern under
+three padding values, edge words, defaults, raw borrows/copies and 1,024 actual
+comptime packing calls. Two strict unreachable panic pairs pass. Seven Source
+width/field/comptime rejections, four V field-shape rejections, runtime packing
+acceptance and two V wide variants are separate from scalar numeric parity.
+Arbitrary invalid closed enums never enter returning cases.
+
+Full unchanged Source hashes, compiler versions, selected library pins,
+before/after source/fixture/runner provenance, relevant implementation hashes, commands and raw results
+are retained. Ordinary rejection gates exclude compiler crashes/backend failures.
+All preceding PNG strict matrix and five historical V goldens retain their
+previous hashes in both modes. Two test-only streams use named locals to avoid a
+pinned V generated-C issue. Reproduction and exact exclusions are in
+`zigimg/reference_probes/{png_records,png_processor_records,png_chunk_records,pixel_format}/README.md`.
+
+All 53 image/58 Vaxis files, focused ordinary/production consumers, Boo and
+native/Linux application checks pass. Three Windows DLLs/four new test programs
+compile; image/Vaxis link as Linux shared libraries. Cross runtime, alias/generic
+marker enforcement, boxed payload copies, const/sentinel/comptime types, arbitrary
+writers, packed ABI, allocator/GC/OOM and undefined Source storage remain limits.
+Commented PNG encoder bodies and Zig 0.15.2 legacy writer()/ZlibCompressor failures
+remain Source boundaries, with no invented replacements.

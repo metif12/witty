@@ -2670,3 +2670,117 @@ carriers, undefined Source storage, aggregate ABI and oversized V array domains
 remain separate limits. The pinned encoder bodies remain commented; legacy
 writer() and ZlibCompressor remain incompatible with Zig 0.15.2. No replacement
 encoder/compressor was invented to make those Source boundaries compile.
+
+## PNG public records and PixelFormat contracts — 2026-10-08
+
+PNG now marks 36 represented Source-required fields across HeaderData, Chunk,
+ChunkHeader, specified filters, processor data/vtables/payloads/custom options,
+and the generic chunk writer. Existing production callers, tests and native
+comparison consumers explicitly initialize those fields. Header/Chunk/EncoderOptions,
+standalone processor vtables and transparency payloads expose the Source's
+mutable fields. ChunkHeader.name requires a mutable receiver and still borrows
+the native-endian numeric type field. Defaults remain false/heuristic for encoder
+options, empty processor lists, unset/unprocessed transparency and end=0 for
+chunk writing. Source undefined palette, generic processor-array and chunk-buffer
+storage is initialized in V and excluded until seeded by the consumers.
+
+The chunk writer now accepts fixed arrays whose byte element is an alias of u8.
+Pointer elements and pointer-to-array carriers remain rejected before byte alias
+normalization. Inline buffers retain value copies and survive construction from
+local storage; copied pointer writers share their underlying writer state.
+PixelFormat.bits_per_channel preserves the Source unreachable branch for the
+named RGB332/RGB565 values in production instead of relying on a removed assertion.
+
+New unchanged-Source comparisons pass Debug/ordinary and ReleaseSafe/production:
+
+| Public scope | Returning observations | SHA-256 |
+| --- | ---: | --- |
+| Header, Chunk, ChunkHeader and encoder records | 10,451 | `9cc70d9461b1b38135ca9ed12406d7016c9278e646074cf91277957908a24e03` |
+| Chunk-writer records, inline bytes and aliases | 163 | `54fe144e5a027d6259fa65b01ae19169fd5470bf14f350593635306bd6dd9ec9` |
+| Processor records, callbacks and option views | 199 | `75975f75febf19e8a3a7085652494075707bef6323eba6455002c39998da2c32` |
+| Named PixelFormat methods and packed-info carriers | 197,777 | `9eeaca0cd04514798359ff079b7f9d7f80fd838a8b53bde663154f317a87d349` |
+
+These are 208,590 new returning observations, excluding compiler controls,
+separately measured representation differences and the preceding PNG reruns.
+
+The header/chunk proof tests all eleven required fields with paired ordinary
+omission rejections, a paired specified-payload rejection and three paired const
+rejections. Its matching eleven V aliases accept omissions while Source aliases
+reject them. Source rejects a direct short Chunk name and writable const-borrow
+bytes; V's string/view adapters accept both. Source's header/filtering filter
+enum types are nominally distinct; the translation uses one PngFilterType.
+
+Twenty of 25 copied specified-payload mutations differ because V sum types box
+payloads and share them on copying, while Source copies its union payload by
+value. These separate observations have Source SHA-256
+`1469df14428bc421bcc4aff834e1f6a6cf634da1a3ab3a82c5b8f8e053ef753b`
+and V SHA-256
+`d7f2fe6c87190cd8191c99c70372a837aba9f1320edd828762c815f08a7c52eb`.
+They are excluded from the equivalent returning records. Whole-arm replacement
+preserves the demonstrated independent record-copy behavior; direct payload
+mutation remains a representation boundary.
+
+Processor records add fourteen complete/default constructor pairs, nineteen
+paired required-field omission rejections and two paired readonly rejections.
+Three custom-option generic omissions and the DefaultOptions alias are ordinary
+Source rejections and V acceptances. Two Source const-pointee rejections record
+V's writable vtable/header pointer adapters. Runtime cases cover all callback
+presence masks, callback failures with prior writes, copied data and shared
+streams/context/header/palette/row storage, mutable standalone vtables, option
+slice reslicing and custom-option get() views that borrow the owner's processor
+array and refresh erased contexts. Native private vtable/payload types are
+inferred from public field types without changing Source visibility.
+
+Twelve direct transparency-payload member-copy mutations all differ separately:
+Source SHA-256
+`1ed0619962c4a745aa5c91bf340171ab52b454383daed56cf4c71ca11e407498`,
+V SHA-256
+`e396b5a8aec0e3d4362120be0d7127180cb55f1eb939a398a1916565c04ec456`.
+Scalar/RGB payload fields and indexed slice headers share V boxed storage on
+copying. Shared slice contents remain shared in both languages; whole-arm
+replacement preserves independent descriptors in the equivalent cases.
+
+The generic chunk record separately produces six ordinary Source omission
+rejections and six fully built/running V omission acceptances. Pinned V ignores
+required attributes on that generic record. Five paired storage rejections
+cover word arrays, pointer arrays, pointer aliases, scalar storage and array
+pointers. Source permits a record-only scalar W without instantiating writer
+methods; V eagerly checks them and rejects it. An additional V control rejects
+dynamic arrays of scalar byte aliases. Capacity zero retains V's empty []u8
+adapter because V cannot declare a zero-length fixed array. Undefined default
+Source buffer bytes are never observed.
+
+PixelFormat covers all 24 named enum members and every low 16-bit info pattern
+with three representative padding values, plus full-width edge words, defaults,
+mutations, copies, live raw-word borrowing and 1,024 actual Source comptime packing
+calls. Two isolated RGB332/RGB565 calls require Source's exact unreachable panic
+category in both modes. Invalid closed-enum values never enter returning cases.
+Source Info has u8/u4/open-u4/u16 mutable fields; V uses a raw u32 carrier and
+projections. Seven Source-only width/field/comptime rejections, four V field-shape
+rejections, one V runtime-packing acceptance and two V-only wide-variant values
+measure those adaptations separately from numeric parity.
+
+Each comparison pins the complete unchanged Source src tree, preserves private
+visibility, verifies compiler versions and checks source/fixture/runner provenance
+before and after execution. Selected compiler library files are pinned where the
+semantics depend on them. Commands, inputs, raw output/diagnostics and result
+metadata are retained. Constructor rejection gates exclude signals, compiler
+crashes and backend/linker failures. Reproduction and exact limits are in
+`zigimg/reference_probes/{png_records,png_processor_records,png_chunk_records,pixel_format}/README.md`.
+
+The preceding PNG header, decoder/processors, information, filtering and direct writer comparisons
+retain all returning and strict-failure hashes in both modes. The five historical
+V goldens also retain headers `8cb5945cdde99fe7`, filtering `809cede448778a71`,
+rows `2ad35f81b5cd96cd`, processors `b0a838ddd9ac9218` and transparency
+`0975e75ee48838d7`. Two test-only empty-stream constructors now use named locals
+to avoid a pinned V generated-C failure; this changes no observed algorithm.
+
+All 53 image and 58 Vaxis test files, the new focused ordinary/production
+consumers, Boo's four consumers and native/Linux application checks pass. Windows
+builds the three dependency DLLs and four new test executables; image and Vaxis
+link as x86_64 Linux shared libraries. Cross-target execution remains untested.
+Alias/generic required-field enforcement, boxed payload copies, const/sentinel
+typing, comptime-only helpers, arbitrary writer specialization, packed/aggregate
+ABI, allocator/GC/OOM and undefined Source storage remain explicit limits.
+The pinned PNG encoder bodies are commented and legacy writer()/ZlibCompressor
+remain Zig 0.15.2 compiler boundaries; no substitute implementations were added.

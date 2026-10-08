@@ -3,9 +3,9 @@ module zigimg
 import hash.crc32
 
 pub struct PngChunk {
-pub:
-	id   u32
-	name string
+pub mut:
+	id   u32    @[required]
+	name string @[required]
 }
 
 pub fn PngChunk.init(name string) PngChunk {
@@ -38,13 +38,13 @@ pub const png_chunk_any = PngChunk.init('_ANY')
 @[packed]
 pub struct PngChunkHeader {
 pub mut:
-	length     u32
-	chunk_type u32
+	length     u32 @[required]
+	chunk_type u32 @[required]
 }
 
 // Source ChunkHeader.name exposes the native-endian bytes of its numeric
 // type field, rather than converting them back to the original chunk name.
-pub fn (header &PngChunkHeader) name() []u8 {
+pub fn (mut header PngChunkHeader) name() []u8 {
 	return unsafe { (&u8(&header.chunk_type)).vbytes(4) }
 }
 

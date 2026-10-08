@@ -11,7 +11,15 @@ fn test_png_transparency_keeps_native_sample_index_behavior() {
 		dest_row:    unsafe { bytes[..] }
 		src_format:  .grayscale16
 		dest_format: .grayscale16_alpha
-		header:      &PngHeaderData{}
+		header:      &PngHeaderData{
+			width:              0
+			height:             0
+			bit_depth:          0
+			color_type:         .grayscale
+			compression_method: .deflate
+			filter_method:      .adaptive
+			interlace_method:   .none
+		}
 	}
 	assert processor.process_data_row(mut row)! == .grayscale16_alpha
 	assert processor.processed && row.src_format == .grayscale16
@@ -37,7 +45,15 @@ fn test_png_processor_palette_views_follow_mutable_consumer_storage() {
 		dest_row:    unsafe { bytes[..] }
 		src_format:  .indexed8
 		dest_format: .rgba64
-		header:      &PngHeaderData{}
+		header:      &PngHeaderData{
+			width:              0
+			height:             0
+			bit_depth:          0
+			color_type:         .grayscale
+			compression_method: .deflate
+			filter_method:      .adaptive
+			interlace_method:   .none
+		}
 	}
 	assert adapter.process_data_row(mut row)! == .rgba32
 	assert processor.processed && row.src_format == .indexed8
@@ -80,7 +96,15 @@ fn test_png_processor_row_bypass_precedes_incompatible_transparency_arm() {
 		dest_row:    unsafe { bytes[..] }
 		src_format:  .rgb24
 		dest_format: .rgb24
-		header:      &PngHeaderData{}
+		header:      &PngHeaderData{
+			width:              0
+			height:             0
+			bit_depth:          0
+			color_type:         .grayscale
+			compression_method: .deflate
+			filter_method:      .adaptive
+			interlace_method:   .none
+		}
 	}
 	assert processor.process_data_row(mut row)! == .rgb24
 	assert processor.processed && bytes == [u8(1), 2, 3]

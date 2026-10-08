@@ -288,6 +288,8 @@ fn png_read_all_data(mut stream ReadStream, header &PngHeaderData, palette []Rgb
 	stride := u8(result_line_bytes / width)
 	png_reader_assert(stride == format.pixel_stride())
 	mut row := PngRowProcessData{
+		dest_row: []u8{}
+
 		src_format:  header.get_pixel_format()
 		dest_format: format
 		header:      unsafe { header }
