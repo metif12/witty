@@ -368,6 +368,19 @@ VEXE=/Users/alex/.cache/v/v1-fallback/0.5.2/v \
   /Users/alex/.cache/v/v1-fallback/0.5.2/v test zigimg
 ```
 
+The JPEG contract comparison covers 15,805 returning observations, thirty strict
+panic/state pairs, three inherited file-discard loops and reader constructors in
+ordinary/production builds:
+
+```sh
+python3 zigimg/verify_jpeg_contracts_reference.py \
+  /path/to/locked-zigimg /path/to/zig-0.15.2/zig /path/to/v-0.5.2
+```
+
+Append `--v-prod` for production. Reproduction, hashes and the separate inherited
+quantization-header compiler boundary are documented in
+[the JPEG probe notes](reference_probes/jpeg_contracts/README.md).
+
 The standalone reference harness accepts the unmodified dependency as a Zig
 module. With Zig 0.15.2 on macOS, a 14.0 target avoids linking against an SDK
 version newer than that compiler supports:

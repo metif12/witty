@@ -8,9 +8,9 @@ import argparse
 import hashlib
 import os
 from pathlib import Path
-import subprocess
-import tempfile
+import re
 from PIL import Image
+from verify_tiff_decode_reference import ProofLog, tree_hash, work_directory, PINNED_SOURCE_SHA256
 
 
 def main():
@@ -18,12 +18,16 @@ def main():
     parser.add_argument('--zig', required=True)
     parser.add_argument('--source', required=True)
     parser.add_argument('--v', required=True)
+    parser.add_argument('--v-prod', action='store_true')
+    parser.add_argument('--workdir', type=Path)
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
     source = Path(args.source)
+    if tree_hash(source / 'src') != PINNED_SOURCE_SHA256:
+        parser.error('src differs from pinned zigimg')
     probes = root / 'zigimg/reference_probes/jpeg_decode'
-    with tempfile.TemporaryDirectory(prefix='witty-jpeg-reference-') as tmp:
-        tmp = Path(tmp)
+    with work_directory(args.workdir, 'witty-jpeg-reference-') as tmp:
+        proof = ProofLog(tmp)
         files = []
         for width, height in [(8, 8), (17, 3), (31, 17), (32, 32)]:
             for mode in ['L', 'RGB']:
@@ -51,17 +55,31 @@ def main():
             files.append(path)
         native = tmp / 'native'
         translated = tmp / 'translated'
-        subprocess.run([args.zig, 'build-exe', '-target', 'aarch64-macos.14.0', '-lc',
+        proof.run([args.zig, 'build-exe', '--global-cache-dir', str(tmp / 'zig-cache'),
+            '-O', 'ReleaseSafe' if args.v_prod else 'Debug',
+            '-target', 'aarch64-macos.14.0', '-lc',
             '--dep', 'zigimg', f'-Mroot={probes / "main.zig"}',
-            f'-Mzigimg={source / "zigimg.zig"}', f'-femit-bin={native}'], check=True)
-        subprocess.run([args.v, '-path', f'{root}|@vlib|@vmodules', '-o', str(translated),
-                        str(probes / 'main.v')], check=True, env={**os.environ, 'VEXE': args.v})
+            f'-Mzigimg={source / "zigimg.zig"}', f'-femit-bin={native}'], 'build-source')
+        proof.run([args.v, *(['-prod'] if args.v_prod else []), '-path', f'{root}|@vlib|@vmodules', '-o', str(translated),
+                  str(probes / 'main.v')], 'build-v', env={**os.environ, 'VEXE': args.v})
         matched = 0
         traps = []
+        marker_traps = []
         for path in files:
-            n = subprocess.run([native, path], capture_output=True, timeout=5)
-            v = subprocess.run([translated, path], capture_output=True, timeout=5)
+            n = proof.run([str(native), str(path)], path.stem + '-Source', timeout=5, check=False)
+            v = proof.run([str(translated), str(path)], path.stem + '-V', timeout=5, check=False)
             if n.returncode != 0:
+                messages = re.findall(rb'(?:thread \d+ )?panic: ([^\n]+)', n.stderr)
+                if messages == [b'invalid enum value']:
+                    v_messages = re.findall(rb'V panic: ([^\n]+)', v.stderr)
+                    prefix = b''.join(line + b'\n' for line in n.stderr.splitlines()
+                                      if line.startswith(path.name.encode() + b'|'))
+                    if v.returncode == 0 or v_messages != messages or v.stdout != prefix:
+                        raise AssertionError(('marker trap mismatch', path.name, n.stderr, v.stdout, v.stderr))
+                    marker_traps.append(path.name)
+                    continue
+                if not any(m in (b'integer overflow', b'integer does not fit in destination type') for m in messages):
+                    raise AssertionError(('unexpected Source termination', path.name, n.returncode, n.stderr))
                 traps.append(path.name)
                 continue
             if v.returncode != 0 or n.stderr != v.stdout:
@@ -71,8 +89,11 @@ def main():
         for path in sorted((source / 'src/formats/jpeg').glob('*.zig')):
             hashes.update(path.read_bytes())
         hashes.update((source / 'src/formats/jpeg.zig').read_bytes())
+        if tree_hash(source / 'src') != PINNED_SOURCE_SHA256:
+            raise AssertionError('Source changed during historical comparison')
         print(f'{matched} native/V result rows matched; {len(traps)} source checked traps excluded')
         print('Source checked traps:', ', '.join(traps))
+        print(f'{len(marker_traps)} paired marker traps:', ', '.join(marker_traps))
         print('JPEG source SHA-256 (sorted support files then jpeg.zig):', hashes.hexdigest())
 
 

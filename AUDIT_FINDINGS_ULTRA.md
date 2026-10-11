@@ -2509,3 +2509,46 @@ marker enforcement, boxed payload copies, const/sentinel/comptime types, arbitra
 writers, packed ABI, allocator/GC/OOM and undefined Source storage remain limits.
 Commented PNG encoder bodies and Zig 0.15.2 legacy writer()/ZlibCompressor failures
 remain Source boundaries, with no invented replacements.
+
+### JPEG checked decoding and Huffman borrowing follow-up — 2026-10-11
+
+The JPEG implementation now preserves Source marker/density enum traps, segment
+subtraction and DRI failure order, frame/scan invariants, destination/selector
+bounds, entropy-buffer/consumption checks and checked i32 prediction, refinement,
+dequantization, IDCT and grayscale arithmetic in V production builds. Inactive
+q8 access is checked during actual sample multiplication after destination
+indexing, preserving successful empty q16 images.
+
+Huffman readers borrow stable tables rather than copying inline acceleration
+arrays. Caller table/length changes remain visible; reader state is public/mutable
+with a required stream. Table-null access follows the Source read/lookup order,
+so insufficient input can return before attempting to unwrap the table.
+
+The unchanged-Source ordinary/production comparison passes **15,805 returning
+observations**, **thirty exact panic/state pairs**, **three bounded inherited
+file-discard loops**, and complete/omitted-stream constructor controls. Returning
+SHA-256 is `c351ba2c35413cc9ff5951a77206a0b6aa3ed55f9a495d6c4f94505e5caa7ae4`;
+failure-state SHA-256 is
+`d7ddad1f92a7f409a59c64e289a68f9084f8590666d99563990a07640d9c402e`.
+Full unchanged Source, selected compiler-library sources, compiler versions,
+fixtures, runner, historical inputs and V image implementation are checked for
+provenance before/after. Commands, inputs, raw output, diagnostics and state
+observers are retained. Ordinary rejection gates exclude crashes/backend failures.
+
+The native quantization Header.read helper independently fails to compile under
+Zig 0.15.2 due to u8-to-u4 assignment; one ordinary rejection and two separate V
+controls measure this boundary. The decoder's own compiling table parser is
+covered without changing Source. The historical S11 comparison still matches 132
+returning rows in both modes, excludes seven cases reading undefined coefficient
+storage, and now pairs the eighth former exclusion as an exact marker-enum trap.
+Its commands/artifacts are retained and unexpected Source terminations rejected.
+
+All 54 image/58 Vaxis test files, focused ordinary/production JPEG tests and
+native/Linux application checks pass. Three Windows dependency DLLs build;
+image/Vaxis link as x86_64 Linux shared libraries from V-generated C using Zig cc
+with `-gc none`. The new focused JPEG test executable builds for Windows in both
+modes with `-skip-running`. Cross-target runtime, allocator/OOM/GC/lifetime, undefined Source
+coefficients, remaining public JPEG record/Frame APIs, byte/comptime/const typing,
+union/map/ABI representation and arbitrary SIMD selection remain boundaries.
+Reproduction and exclusions are in `zigimg/reference_probes/jpeg_contracts/README.md`.
+The no-op JPEG writer remains unchanged.

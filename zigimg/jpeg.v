@@ -1,7 +1,5 @@
 module zigimg
 
-import buildcfg
-
 // Locked zigimg/src/formats/jpeg.zig. GC owns the tables/frame allocations;
 // the parser, segment dispatch, scan algorithms, and codec registry stay V.
 @[heap]
@@ -10,12 +8,15 @@ pub mut:
 	frame ?&JpegFrame
 mut:
 	quantization_tables []?JpegQuantizationTable = []?JpegQuantizationTable{len: 4}
-	dc_huffman_tables []?JpegHuffmanTable = []?JpegHuffmanTable{len: 4}
-	ac_huffman_tables []?JpegHuffmanTable = []?JpegHuffmanTable{len: 4}
-	restart_interval u16
+	dc_huffman_tables   []?JpegHuffmanTable      = []?JpegHuffmanTable{len: 4}
+	ac_huffman_tables   []?JpegHuffmanTable      = []?JpegHuffmanTable{len: 4}
+	restart_interval    u16
 }
 
-pub fn JPEG.init() JPEG { return JPEG{} }
+pub fn JPEG.init() JPEG {
+	return JPEG{}
+}
+
 pub fn (mut jpeg JPEG) deinit() {
 	// Drop the owned frame/table graph at the explicit source cleanup point.
 	// V GC performs the backing allocation release.
@@ -27,7 +28,7 @@ pub fn (mut jpeg JPEG) deinit() {
 
 fn (mut jpeg JPEG) parse_quantization_tables(mut stream ReadStream) ! {
 	mut segment_size := int(jpeg_u16(mut stream)!)
-	assert segment_size >= 2
+	if segment_size < 2 { panic('integer overflow') }
 	segment_size -= 2
 	for segment_size > 0 {
 		precision_destination := stream.take_byte()!
@@ -35,7 +36,7 @@ fn (mut jpeg JPEG) parse_quantization_tables(mut stream ReadStream) ! {
 		destination := precision_destination & 3
 		table := JpegQuantizationTable.read(precision, mut stream)!
 		consumed := if precision == 0 { 65 } else { 129 }
-		assert segment_size >= consumed
+		if segment_size < consumed { panic('integer overflow') }
 		segment_size -= consumed
 		jpeg.quantization_tables[int(destination)] = table
 	}
@@ -43,66 +44,94 @@ fn (mut jpeg JPEG) parse_quantization_tables(mut stream ReadStream) ! {
 
 fn (mut jpeg JPEG) parse_huffman_tables(mut stream ReadStream) ! {
 	mut segment_size := int(jpeg_u16(mut stream)!)
-	assert segment_size >= 2
+	if segment_size < 2 { panic('integer overflow') }
 	segment_size -= 2
 	for segment_size > 0 {
 		class_destination := stream.take_byte()!
 		table_class := class_destination >> 4
 		destination := int(class_destination & 15)
 		table := JpegHuffmanTable.read(table_class, mut stream)!
-		if table_class == 0 { jpeg.dc_huffman_tables[destination] = table }
-		else { jpeg.ac_huffman_tables[destination] = table }
+		if destination >= 4 { panic('index out of bounds: index ${destination}, len 4') }
+		if table_class == 0 {
+			jpeg.dc_huffman_tables[destination] = table
+		} else {
+			jpeg.ac_huffman_tables[destination] = table
+		}
 		consumed := 17 + table.code_map.len
-		assert segment_size >= consumed
+		if segment_size < consumed { panic('integer overflow') }
 		segment_size -= consumed
 	}
 }
 
 fn (mut jpeg JPEG) parse_restart_interval(mut stream ReadStream) ! {
 	length := jpeg_u16(mut stream)!
-	assert length == 4
+	if length < 4 { panic('integer overflow') }
+	if length != 4 { panic('reached unreachable code') }
 	jpeg.restart_interval = jpeg_u16(mut stream)!
 }
 
 // Mutable optional sum types require a wrapper in V 0.5.2 to preserve the
 // caller's optional storage rather than passing only its payload address.
-pub struct JpegPixels { pub mut: value ?PixelStorage }
+pub struct JpegPixels {
+pub mut:
+	value ?PixelStorage
+}
 
 pub fn (mut jpeg JPEG) read(mut stream ReadStream, mut pixels_opt JpegPixels) !&JpegFrame {
 	mut succeeded := false
-	defer { if !succeeded { pixels_opt.value = none } }
+	defer {
+		if !succeeded { pixels_opt.value = none }
+	}
 	mut marker := jpeg_u16(mut stream)!
 	if marker != 0xffd8 { return error('InvalidData') }
 	for marker != 0xffd9 {
 		marker = jpeg_u16(mut stream)!
 		// The source converts this u16 to its exhaustive Markers enum before
 		// dispatch. Unknown enum values trap in checked builds.
-		if buildcfg.runtime_safety && !jpeg_marker_defined(marker) {
-			panic('invalid JPEG marker enum value')
+		if !jpeg_marker_defined(marker) {
+			panic('invalid enum value')
 		}
 		match marker {
 			0xffc0, 0xffc2 {
 				if jpeg.frame != none { return error('Unsupported') }
 				mut frame := jpeg_frame_read(&jpeg, marker, mut stream)!
 				jpeg.frame = frame
-				format := match frame.frame_header.components.len { 1 { PixelFormat.grayscale8 } 3 { PixelFormat.rgb24 } else { panic('unreachable JPEG components') } }
-				pixels_opt.value = PixelStorage.init(format, usize(frame.frame_header.width) * usize(frame.frame_header.height))!
+				format := match frame.frame_header.components.len {
+					1 { PixelFormat.grayscale8 }
+					3 { PixelFormat.rgb24 }
+					else { panic('unreachable JPEG components') }
+				}
+
+				pixels_opt.value = PixelStorage.init(format,
+					usize(frame.frame_header.width) * usize(frame.frame_header.height))!
 			}
-			0xffc1, 0xffc3, 0xffc5, 0xffc6, 0xffc7, 0xffc9, 0xffca, 0xffcb, 0xffcd, 0xffce, 0xffcf { return error('Unsupported') }
-			0xffc4 { jpeg.parse_huffman_tables(mut stream)! }
+			0xffc1, 0xffc3, 0xffc5, 0xffc6, 0xffc7, 0xffc9, 0xffca, 0xffcb, 0xffcd, 0xffce, 0xffcf {
+				return error('Unsupported')
+			}
+			0xffc4 {
+				jpeg.parse_huffman_tables(mut stream)!
+			}
 			0xffda {
 				mut frame := jpeg.frame or { return error('InvalidData') }
 				jpeg_perform_scan(mut frame, jpeg.restart_interval, mut stream)!
 			}
-			0xffdb { jpeg.parse_quantization_tables(mut stream)! }
+			0xffdb {
+				jpeg.parse_quantization_tables(mut stream)!
+			}
 			0xfffe, 0xffe0...0xffef {
 				length := jpeg_u16(mut stream)!
-				assert length >= 2
+				if length < 2 { panic('integer overflow') }
 				stream.seek_by(i64(length) - 2)!
 			}
-			0xffdd { jpeg.parse_restart_interval(mut stream)! }
-			0xffd0...0xffd7, 0xffd9 { continue }
-			else { return error('InvalidData') }
+			0xffdd {
+				jpeg.parse_restart_interval(mut stream)!
+			}
+			0xffd0...0xffd7, 0xffd9 {
+				continue
+			}
+			else {
+				return error('InvalidData')
+			}
 		}
 	}
 	mut frame := jpeg.frame or { return error('InvalidData') }
@@ -120,14 +149,26 @@ fn jpeg_marker_defined(marker u16) bool {
 		|| marker == 0xfff0 || marker == 0xfffe
 }
 
-pub fn JPEG.format_detect(mut stream ReadStream) !bool { return jpeg_u16_peek(mut stream)! == 0xffd8 }
-fn jpeg_u16_peek(mut stream ReadStream) !u16 { bytes := stream.peek(2)!; return u16(bytes[0]) << 8 | bytes[1] }
+pub fn JPEG.format_detect(mut stream ReadStream) !bool {
+	return jpeg_u16_peek(mut stream)! == 0xffd8
+}
+
+fn jpeg_u16_peek(mut stream ReadStream) !u16 {
+	bytes := stream.peek(2)!
+	return u16(bytes[0]) << 8 | bytes[1]
+}
 
 pub fn JPEG.read_image(mut stream ReadStream) !ImageUnmanaged {
 	mut jpeg := JPEG.init()
 	defer { jpeg.deinit() }
 	mut pixels := JpegPixels{}
-	frame := jpeg.read(mut stream, mut pixels) or { pixels.value = none; return err }
-	return ImageUnmanaged{ width: usize(frame.frame_header.width), height: usize(frame.frame_header.height),
-		pixels: pixels.value or { return error('InvalidData') } }
+	frame := jpeg.read(mut stream, mut pixels) or {
+		pixels.value = none
+		return err
+	}
+	return ImageUnmanaged{
+		width:  usize(frame.frame_header.width)
+		height: usize(frame.frame_header.height)
+		pixels: pixels.value or { return error('InvalidData') }
+	}
 }
