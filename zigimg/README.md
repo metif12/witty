@@ -381,6 +381,18 @@ Append `--v-prod` for production. Reproduction, hashes and the separate inherite
 quantization-header compiler boundary are documented in
 [the JPEG probe notes](reference_probes/jpeg_contracts/README.md).
 
+JPEG public record construction, mutation, header-slice aliases and tagged
+quantization tables match 17,747 additional returning observations in both modes:
+
+```sh
+python3 zigimg/verify_jpeg_records_reference.py \
+  /path/to/locked-zigimg /path/to/zig-0.15.2/zig /path/to/v-0.5.2
+```
+
+Append `--v-prod` for production. Required-field and immutable-binding rejections,
+the tagged-table API, and measured boxed-copy/const-slice/wider-carrier differences
+are documented in [the JPEG record notes](reference_probes/jpeg_records/README.md).
+
 The standalone reference harness accepts the unmodified dependency as a Zig
 module. With Zig 0.15.2 on macOS, a 14.0 target avoids linking against an SDK
 version newer than that compiler supports:

@@ -31,8 +31,8 @@ mut:
 
 fn jpeg_frame_read(owner &JPEG, frame_type u16, mut stream ReadStream) !&JpegFrame {
 	header := JpegFrameHeader.read(mut stream)!
-	horizontal := header.max_horizontal_sampling_factor()
-	vertical := header.max_vertical_sampling_factor()
+	horizontal := int(header.max_horizontal_sampling_factor())
+	vertical := int(header.max_vertical_sampling_factor())
 	mcu_width := 8 * horizontal
 	mcu_height := 8 * vertical
 	width_actual := ((int(header.width) + mcu_width - 1) / mcu_width) * mcu_width
@@ -200,11 +200,11 @@ fn (mut frame JpegFrame) dequantize_blocks() ! {
 								// The source checks the active union field only when a
 								// sample is multiplied, after indexing its destination.
 								value := frame.block_storage[id].blocks[ci].values[si]
-								if table.precision != 0 {
+								if table !is JpegQuantization8 {
 									panic("access of union field 'q8' while field 'q16' is active")
 								}
 								frame.block_storage[id].blocks[ci].values[si] = jpeg_mul_i32(value,
-									int(table.q8[si]))
+									int((table as JpegQuantization8).values[si]))
 							}
 						}
 					}

@@ -5,11 +5,11 @@ module zigimg
 @[heap]
 pub struct JpegHuffmanTable {
 pub mut:
-	code_counts [16]u8
-	code_map    map[u32]u8
-	fast_table  [512]u8
-	fast_size   [512]u8
-	table_class u8
+	code_counts [16]u8     @[required]
+	code_map    map[u32]u8 @[required]
+	fast_table  [512]u8    @[required]
+	fast_size   [512]u8    @[required]
+	table_class u8         @[required]
 }
 
 pub fn JpegHuffmanTable.read(table_class u8, mut stream ReadStream) !JpegHuffmanTable {
@@ -48,6 +48,9 @@ pub fn JpegHuffmanTable.read(table_class u8, mut stream ReadStream) !JpegHuffman
 		table_class: table_class
 	}
 }
+
+// GC reclaims the map backing storage; Source's deinitialized map is undefined.
+pub fn (mut table JpegHuffmanTable) deinit() {}
 
 pub struct JpegHuffmanReader {
 pub mut:

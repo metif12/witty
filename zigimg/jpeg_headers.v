@@ -11,14 +11,14 @@ fn jpeg_u16(mut stream ReadStream) !u16 {
 }
 
 pub struct JpegComponent {
-pub:
-	id                         u8
-	horizontal_sampling_factor u8
-	vertical_sampling_factor   u8
-	quantization_table_id      u8
+pub mut:
+	id                         u8 @[required]
+	horizontal_sampling_factor u8 @[required]
+	vertical_sampling_factor   u8 @[required]
+	quantization_table_id      u8 @[required]
 }
 
-fn jpeg_component_read(mut stream ReadStream) !JpegComponent {
+pub fn JpegComponent.read(mut stream ReadStream) !JpegComponent {
 	id := stream.take_byte()!
 	sampling := stream.take_byte()!
 	quantization_table_id := stream.take_byte()!
@@ -36,11 +36,11 @@ fn jpeg_component_read(mut stream ReadStream) !JpegComponent {
 }
 
 pub struct JpegFrameHeader {
-pub:
-	sample_precision u8
-	height           u16
-	width            u16
-	components       []JpegComponent
+pub mut:
+	sample_precision u8              @[required]
+	height           u16             @[required]
+	width            u16             @[required]
+	components       []JpegComponent @[required]
 }
 
 pub fn JpegFrameHeader.read(mut stream ReadStream) !JpegFrameHeader {
@@ -52,7 +52,7 @@ pub fn JpegFrameHeader.read(mut stream ReadStream) !JpegFrameHeader {
 	if count != 1 && count != 3 { return error('InvalidData') }
 	mut components := []JpegComponent{len: int(count)}
 	for i in 0 .. int(count) {
-		components[i] = jpeg_component_read(mut stream)!
+		components[i] = JpegComponent.read(mut stream)!
 	}
 	if int(segment_size) != 8 + 3 * int(count) { panic('reached unreachable code') }
 	return JpegFrameHeader{
@@ -63,64 +63,73 @@ pub fn JpegFrameHeader.read(mut stream ReadStream) !JpegFrameHeader {
 	}
 }
 
-pub fn (header JpegFrameHeader) max_horizontal_sampling_factor() int {
-	mut result := 0
+// GC owns the component allocation. Like Source, this cleanup hook does not
+// replace the caller's header or its slice descriptor.
+pub fn (mut header JpegFrameHeader) deinit() {}
+
+pub fn (header JpegFrameHeader) max_horizontal_sampling_factor() usize {
+	mut result := usize(0)
 	for component in header.components {
-		if result < int(component.horizontal_sampling_factor) {
-			result = int(component.horizontal_sampling_factor)
+		if result < usize(component.horizontal_sampling_factor) {
+			result = usize(component.horizontal_sampling_factor)
 		}
 	}
 	return result
 }
 
-pub fn (header JpegFrameHeader) max_vertical_sampling_factor() int {
-	mut result := 0
+pub fn (header JpegFrameHeader) max_vertical_sampling_factor() usize {
+	mut result := usize(0)
 	for component in header.components {
-		if result < int(component.vertical_sampling_factor) {
-			result = int(component.vertical_sampling_factor)
+		if result < usize(component.vertical_sampling_factor) {
+			result = usize(component.vertical_sampling_factor)
 		}
 	}
 	return result
 }
 
-pub struct JpegQuantizationTable {
-pub:
-	precision u8
-	q8        [64]u8
-	q16       [64]u16
+pub struct JpegQuantization8 {
+pub mut:
+	values [64]u8 @[required]
 }
+
+pub struct JpegQuantization16 {
+pub mut:
+	values [64]u16 @[required]
+}
+
+pub type JpegQuantizationTable = JpegQuantization8 | JpegQuantization16
 
 pub fn JpegQuantizationTable.read(precision u8, mut stream ReadStream) !JpegQuantizationTable {
-	mut q8 := [64]u8{}
-	mut q16 := [64]u16{}
 	match precision {
 		0 {
+			mut q8 := [64]u8{}
 			for offset in 0 .. 64 {
 				q8[jpeg_zigzag_offsets[offset]] = stream.take_byte()!
 			}
+			return JpegQuantization8{
+				values: q8
+			}
 		}
 		1 {
+			mut q16 := [64]u16{}
 			for offset in 0 .. 64 {
 				q16[jpeg_zigzag_offsets[offset]] = jpeg_u16(mut stream)!
+			}
+			return JpegQuantization16{
+				values: q16
 			}
 		}
 		else {
 			return error('InvalidData')
 		}
 	}
-
-	return JpegQuantizationTable{
-		precision: precision
-		q8:        q8
-		q16:       q16
-	}
 }
 
 pub struct JpegQuantizationHeader {
-pub:
-	table_precision   u8
-	table_destination u8
-	table             JpegQuantizationTable
+pub mut:
+	table_precision   u8                    @[required]
+	table_destination u8                    @[required]
+	table             JpegQuantizationTable @[required]
 }
 
 pub fn JpegQuantizationHeader.read(mut stream ReadStream) !JpegQuantizationHeader {
@@ -141,11 +150,11 @@ pub enum JpegDensityUnit as u8 {
 }
 
 pub struct JpegJfifHeader {
-pub:
-	jfif_revision u16
-	density_unit  JpegDensityUnit
-	x_density     u16
-	y_density     u16
+pub mut:
+	jfif_revision u16             @[required]
+	density_unit  JpegDensityUnit @[required]
+	x_density     u16             @[required]
+	y_density     u16             @[required]
 }
 
 pub fn JpegJfifHeader.read(mut stream ReadStream) !JpegJfifHeader {

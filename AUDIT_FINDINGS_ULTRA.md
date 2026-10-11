@@ -2552,3 +2552,40 @@ coefficients, remaining public JPEG record/Frame APIs, byte/comptime/const typin
 union/map/ABI representation and arbitrary SIMD selection remain boundaries.
 Reproduction and exclusions are in `zigimg/reference_probes/jpeg_contracts/README.md`.
 The no-op JPEG writer remains unchanged.
+
+
+### JPEG public header/table record follow-up — 2026-10-11
+
+JPEG component/header/Huffman records now require represented fields and allow
+mutation. Public component reading, usize sampling maxima and cleanup hooks are
+available. Quantization uses required fixed-array tagged payloads rather than a
+precision record holding both arms; decoder inactive-arm timing remains intact.
+
+The unchanged-Source proof matches **17,747 returning observations** in both modes,
+with SHA-256
+`924be5dd9166431cce22672eead65ce550a96e1d48fc570078d35f145ca2323d`.
+Seven complete constructors, twenty-two omission pairs, seven immutable-binding
+pairs, two invalid-tag pairs and two cleanup compile controls pass. Source and
+compiler-library/version pins, before/after fixtures/runner/implementation hashes
+and retained commands/results/diagnostics protect provenance. Ordinary rejection
+gates exclude crashes and backend/linker failures.
+
+Eighteen boxed payload-copy differences, one const-slice pointee difference and
+five byte-carrier construction differences are recorded separately. Whole-table
+replacement and mutable header slice sharing match. Boxed Source/V hashes are
+`7ddf49db31a6257661b6d7046a12f24466f517b43e4846a896cb176e5d485936` /
+`22607c4ce6f4ad8ac93484824f0ecb3c5004ea4f0957dc823c05bfe570aebbca`.
+
+All 55 image/58 Vaxis files, focused production record tests and native/Linux
+application checks pass. Three Windows DLLs and the new test executable in both
+modes build; two Linux shared libraries link with -gc none. Temporary disk-space
+failures were resolved by moving compiler files to the artifact volume and
+rerunning affected checks. Existing 15,805-row decoder output and thirty failure
+states retain their hashes; historical 132-row JPEG results and the marker trap
+are unchanged, with seven undefined-coefficient cases still excluded.
+
+Remaining Frame/Scan/decoder public APIs, allocator/OOM/GC/lifetime, undefined
+Source storage, boxed copies, const/narrow integer/key typing, map layout/order,
+ABI, generic as-cast diagnostics and arbitrary SIMD/cross runtime remain limits.
+The Source quantization.Header.read compiler failure and pinned no-op writer
+remain unchanged. Reproduction is in zigimg/reference_probes/jpeg_records/README.md.

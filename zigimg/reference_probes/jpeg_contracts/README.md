@@ -80,7 +80,9 @@ These comparisons do not certify allocator/OOM/lifetime behavior, undefined
 coefficient storage, every JPEG record constructor or public Frame method, packed
 ABI, const typing, arbitrary CPU SIMD selection, or wider V backing-field values.
 The reader exposes one borrowed ReadStream pointer in place of Source's separate
-reader/stream pointers. Source u5 fields use byte carriers, Huffman keys use u32
-packed pairs and a V map, and quantization's union remains a precision-tagged
-record. Callers must keep borrowed tables and streams alive. JPEG's source no-op
-writer remains unchanged.
+reader/stream pointers. Source u5 fields use byte carriers, and Huffman keys use
+u32 packed pairs and a V map. The later [public record proof](../jpeg_records/README.md)
+restores required mutable headers/tables and tagged quantization arms, measuring
+boxed payload-copy, const-slice and wider-carrier differences separately. Callers
+must keep borrowed tables and streams alive. JPEG's source no-op writer remains
+unchanged.

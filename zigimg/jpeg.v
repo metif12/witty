@@ -7,7 +7,7 @@ pub struct JPEG {
 pub mut:
 	frame ?&JpegFrame
 mut:
-	quantization_tables []?JpegQuantizationTable = []?JpegQuantizationTable{len: 4}
+	quantization_tables []?JpegQuantizationTable = []?JpegQuantizationTable{len: 4, init: none}
 	dc_huffman_tables   []?JpegHuffmanTable      = []?JpegHuffmanTable{len: 4}
 	ac_huffman_tables   []?JpegHuffmanTable      = []?JpegHuffmanTable{len: 4}
 	restart_interval    u16

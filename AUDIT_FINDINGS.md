@@ -14,6 +14,7 @@ current implementations and verification are checked again.
 
 | Area | Bug | Fix |
 |---|---|---|
+| zigimg JPEG public headers and tables | Header fields were immutable/defaulted, Huffman constructors silently omitted required fields, component reading and cleanup hooks were private/absent, sampling maxima used int, and quantization records admitted both union arms. | Restore required mutable represented fields, expose component reading and cleanup hooks, return usize maxima and use tagged fixed-array quantization payloads. Both modes match 17,747 returning observations, 22 omission pairs, seven immutable-binding pairs and two invalid-tag constructor pairs. Eighteen boxed payload-copy differences, one const-slice difference and five wider-carrier construction differences remain measured adaptations. Decoder hashes and failure states remain unchanged. |
 | zigimg JPEG checked decoding and Huffman borrowing | Production removed segment/header/entropy checks and marker validation, coefficient arithmetic wrapped, the reader copied its table, and eager table unwrapping changed short-input failure order. | Preserve explicit source panic categories and checked i32 intermediates, borrow stable mutable table storage, defer optional-table access until the source does, and check the q8 arm only during actual sample multiplication. Both build modes match 15,805 returning observations, thirty strict panic/state pairs, three inherited discard loops and reader constructor controls; the historical 132-row matrix retains its results. Undefined coefficients, remaining record/allocator/ABI contracts and the source quantization-header compiler failure remain separate limits. |
 | vaxis URI reports and rendering arithmetic | Working-directory reports interpolated raw host/path bytes, resize mouse names used V enum spelling, and widened counters/assertions lost checked render/pretty-print boundaries. | Translate the pinned URI byte predicates and uppercase percent escapes, use source mouse names, and retain u16/u8/usize arithmetic, invariant and pixel-offset failures explicitly. Public comparisons cover successful output and retained state; failing-writer defers, partial output and flush ordering remain boundaries of the existing string-return adapter. |
 | vaxis input Parser and macOS TTY lifecycle | Public Parser storage was private, Result fields defaulted, malformed APC/DA1/mouse/clipboard input and UTF-8 capacity ordering diverged, and production removed checks. macOS TTY deinit invalidated a descriptor that the source leaves usable. | Restore mutable Parser/required Result records, checked input boundaries and partial scratch order. Preserve the macOS descriptor and repeated terminal restoration. Both build modes match 79,299 Parser records, nineteen strict trap pairs, direct constructor contracts and forty real PTY records; alias-required markers, packed carriers, GC and configurable writer buffers remain measured boundaries. |
@@ -957,7 +958,13 @@ an item here does not mean its full module has been certified yet.
   cases, thirty panic/state pairs and three file-discard loops in both modes.
   Quantization Header.read itself has an inherited u8-to-u4 compilation failure
   under Zig 0.15.2; the decoder's actual table parser compiles and is covered.
-  This does not certify undefined-memory behavior or the entire JPEG record API.
+  Public component/header/Huffman records now have required mutable represented
+  fields, component reading and cleanup hooks, usize sampling maxima and tagged
+  quantization arrays. A further comparison matches 17,747 observations and
+  constructor controls in both modes. Eighteen boxed-copy differences, one
+  const-slice difference and five wider-carrier controls remain separate.
+  This does not certify undefined-memory behavior or the remaining public
+  Frame/Scan/decoder record APIs.
   TIFF now has its packed 6/12/10-byte records, all 32 tag IDs, IFD parsing,
   bitmap metadata processing, format selection, and row-byte sizing. IFDs
   preserve duplicate replacement, next-directory offsets, and partial-read
@@ -2862,3 +2869,67 @@ ordinary/production modes with `-skip-running`. Reproduction and the boundary li
 typing, one stream pointer in place of Source's reader/stream pair, remaining JPEG
 record/Frame APIs, quantization union representation, map layout, SIMD selection,
 allocator/GC/OOM/lifetime and aggregate ABI remain explicit limits.
+
+
+## JPEG public header and table contracts — 2026-10-11
+
+Public JPEG components, frame/JFIF/quantization headers and Huffman tables now
+require their represented Source fields and permit caller mutation. Component
+reading is public, maximum sampling projections return usize, and header/table
+cleanup hooks are available with GC reclamation. Header copies retain independent
+scalar fields and component-slice lengths while sharing component storage.
+
+Quantization uses a tagged V sum type with JpegQuantization8/JpegQuantization16
+fixed-array payloads, each requiring its values field. This replaces the flattened
+precision/q8/q16 record and excludes simultaneous arms. The decoder retains its
+explicit Source inactive-q8 check at actual multiplication after sample indexing;
+empty q16 images still succeed. Existing consumers use the tagged representation.
+
+The new unchanged-Source proof zigimg/verify_jpeg_records_reference.py matches
+**17,747 returning observations** in ordinary and production builds: 12,288 public
+component reads/truncations, 3,072 component/header mutation and copy observations,
+768 quantization-array element/replacement observations, 1,536 quantization-header
+field/replacement observations, eighteen JFIF copies, sixty-four Huffman inline
+copies/map-value aliases/borrowed reader observations, and empty sampling maxima.
+Returning SHA-256 is
+`924be5dd9166431cce22672eead65ce550a96e1d48fc570078d35f145ca2323d`.
+
+Seven complete constructors compile; twenty-two field omissions, seven mutations
+through immutable bindings and two invalid tagged-table constructors receive
+ordinary compiler rejections in both languages. Two cleanup compile controls
+inspect no freed Source memory. The proof obtains private Source component/map-key
+types through existing public fields and return types, without changing Source
+visibility. Full Source/compiler-library/version pins and before/after fixture,
+runner and V image implementation hashes retain provenance, commands, generated
+consumers, raw results, diagnostics and summaries. Crash/backend/linker failures
+cannot satisfy rejection checks.
+
+Eighteen separately hashed observations expose V sum types sharing boxed array
+payloads while Source copies them by value, including a table in a copied header.
+Whole-table replacement preserves copies and is part of the matching corpus.
+Source accepts const-header mutable-slice pointee mutation where V rejects it;
+one compile pair measures this. Five further pairs record byte carriers accepting
+constructor values rejected by Source u4/u5 fields. Source and V boxed output
+SHA-256 respectively are
+`7ddf49db31a6257661b6d7046a12f24466f517b43e4846a896cb176e5d485936` and
+`22607c4ce6f4ad8ac93484824f0ecb3c5004ea4f0957dc823c05bfe570aebbca`.
+These differences are excluded from returning equivalence counts.
+
+The decoder comparison retains 15,805 returning rows and thirty exact panic/state
+pairs in both modes, including the prior output/state hashes. The historical
+132-row comparison and marker trap are unchanged; seven undefined-coefficient
+inputs remain excluded. All 55 image/58 Vaxis test files, the focused record test
+in production and native/Linux application checks pass. Three Windows dependency
+DLLs and the new test executable in both modes build; image/Vaxis link as Linux
+shared libraries from generated C. Compiler temporary files were moved to the
+artifact volume after disk-space failures; affected checks passed on rerun.
+Cross builds use -gc none and do not certify cross-target runtime.
+
+Remaining public Frame/Scan/decoder records and methods, allocator/GC/OOM/lifetime,
+undefined coefficient storage, boxed copies, const/narrow integer/key typing,
+map layout/order/capacity, aggregate ABI and arbitrary SIMD selection remain
+limits. Source quantization.Header.read still has its inherited u8-to-u4 compiler
+failure under Zig 0.15.2; the actual decoder parser compiles. The generic V as-cast
+failure category differs from Source union-field access; the decoder uses its
+explicit Source check. The pinned JPEG no-op writer is unchanged. Reproduction
+and exact boundaries are in zigimg/reference_probes/jpeg_records/README.md.

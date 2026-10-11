@@ -4,7 +4,11 @@ fn test_jpeg_huffman_table_is_borrowed_and_reader_state_is_retained() {
 	mut stream := ReadStream.init_memory([u8(0), 0])
 	mut reader := JpegHuffmanReader.init(mut stream)
 	mut table := JpegHuffmanTable{
-		fast_table: [512]u8{init: 255}
+		code_counts: [16]u8{}
+		code_map:    map[u32]u8{}
+		fast_table:  [512]u8{init: 255}
+		fast_size:   [512]u8{}
+		table_class: 0
 	}
 	table.fast_table[0] = 42
 	table.fast_size[0] = 1

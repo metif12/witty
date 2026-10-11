@@ -110,7 +110,9 @@ fn record(a []string, id int, file_path string) string {
 			out += '${h.jfif_revision},${u8(h.density_unit)},${h.x_density},${h.y_density}'
 		}
 		'Q', 'X' {
-			mut t := p.JpegQuantizationTable{}
+			mut t := p.JpegQuantizationTable(p.JpegQuantization8{
+				values: [64]u8{}
+			})
 			if a[0] == 'Q' {
 				t = p.JpegQuantizationTable.read(u8(a[3].int()), mut stream) or {
 					return out + 'E${err.msg()}|${stream.get_pos()}\n'
@@ -122,9 +124,13 @@ fn record(a []string, id int, file_path string) string {
 				t = h.table
 				out += '${h.table_precision},${h.table_destination}|'
 			}
-			out += '${t.precision}|'
+			out += '${if t is p.JpegQuantization8 { 0 } else { 1 }}|'
 			for i in 0 .. 64 {
-				out += '${if t.precision == 0 { u16(t.q8[i]) } else { t.q16[i] }},'
+				out += '${if t is p.JpegQuantization8 {
+					u16(t.values[i])
+				} else {
+					(t as p.JpegQuantization16).values[i]
+				}},'
 			}
 		}
 		'T' {
@@ -138,7 +144,11 @@ fn record(a []string, id int, file_path string) string {
 			r.bit_buffer = a[3].u32()
 			r.bit_count = u8(a[4].int())
 			mut t := p.JpegHuffmanTable{
-				fast_table: [512]u8{init: 255}
+				code_counts: [16]u8{}
+				code_map:    map[u32]u8{}
+				fast_table:  [512]u8{init: 255}
+				fast_size:   [512]u8{}
+				table_class: 0
 			}
 			if a[0] == 'B' {
 				t.fast_table[0] = u8(a[6].int())
