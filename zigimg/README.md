@@ -393,6 +393,20 @@ Append `--v-prod` for production. Required-field and immutable-binding rejection
 the tagged-table API, and measured boxed-copy/const-slice/wider-carrier differences
 are documented in [the JPEG record notes](reference_probes/jpeg_records/README.md).
 
+The public JPEG Frame API now has mutable blocks, fixed borrowed table records,
+u32 dimensions, usize sampling factors and value-returning reads. Its direct
+rendering, chroma, dequantization and IDCT comparison matches 10,697 observations,
+35 exact panic/state pairs and three inherited zero-step loops in both modes:
+
+```sh
+python3 zigimg/verify_jpeg_frame_reference.py \
+  /path/to/locked-zigimg /path/to/zig-0.15.2/zig /path/to/v-0.5.2
+```
+
+Append `--v-prod` for production. Constructor checks, copy/borrow behavior,
+table wrapper usage and measured representation limits are documented in
+[the JPEG Frame notes](reference_probes/jpeg_frame/README.md).
+
 The standalone reference harness accepts the unmodified dependency as a Zig
 module. With Zig 0.15.2 on macOS, a 14.0 target avoids linking against an SDK
 version newer than that compiler supports:

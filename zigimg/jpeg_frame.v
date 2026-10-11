@@ -3,52 +3,107 @@ module zigimg
 // Locked zigimg/jpeg/Frame.zig. Fixed arrays represent Block and its three
 // component lanes. The row operations below retain the source's eight-lane
 // f32 arithmetic, permutation indices, and descending alias-safe traversal.
-struct JpegBlock {
-mut:
-	values [64]int
+pub struct JpegBlock {
+pub mut:
+	values [64]int @[required]
 }
 
-struct JpegBlockComponents {
-mut:
-	blocks [3]JpegBlock
+pub struct JpegBlockComponents {
+pub mut:
+	blocks [3]JpegBlock @[required]
+}
+
+// Heap records give Source's borrowed pointers to fixed table arrays stable
+// pointees in V. The four optional slots retain their fixed cardinality.
+@[heap]
+pub struct JpegQuantizationTables {
+pub mut:
+	values [4]?JpegQuantizationTable @[required]
+}
+
+@[heap]
+pub struct JpegHuffmanTables {
+pub mut:
+	values [4]?JpegHuffmanTable @[required]
 }
 
 @[heap]
 pub struct JpegFrame {
 pub mut:
-	frame_header JpegFrameHeader
-	frame_type   u16
-mut:
-	owner                          &JPEG = unsafe { nil }
-	block_storage                  []JpegBlockComponents
-	block_height                   int
-	block_width                    int
-	block_width_actual             int
-	block_height_actual            int
-	horizontal_sampling_factor_max int
-	vertical_sampling_factor_max   int
+	frame_header                   JpegFrameHeader         @[required]
+	quantization_tables            &JpegQuantizationTables @[required]
+	dc_huffman_tables              &JpegHuffmanTables      @[required]
+	ac_huffman_tables              &JpegHuffmanTables      @[required]
+	block_storage                  []JpegBlockComponents   @[required]
+	frame_type                     u16
+	block_height                   u32
+	block_width                    u32
+	block_width_actual             u32
+	block_height_actual            u32
+	horizontal_sampling_factor_max usize
+	vertical_sampling_factor_max   usize
 }
 
-fn jpeg_frame_read(owner &JPEG, frame_type u16, mut stream ReadStream) !&JpegFrame {
+pub fn JpegFrame.read(frame_type u16, quantization_tables &JpegQuantizationTables,
+	dc_huffman_tables &JpegHuffmanTables, ac_huffman_tables &JpegHuffmanTables,
+	mut stream ReadStream) !JpegFrame {
+	if !jpeg_marker_defined(frame_type) { panic('invalid enum value') }
 	header := JpegFrameHeader.read(mut stream)!
-	horizontal := int(header.max_horizontal_sampling_factor())
-	vertical := int(header.max_vertical_sampling_factor())
+	horizontal := header.max_horizontal_sampling_factor()
+	vertical := header.max_vertical_sampling_factor()
 	mcu_width := 8 * horizontal
 	mcu_height := 8 * vertical
-	width_actual := ((int(header.width) + mcu_width - 1) / mcu_width) * mcu_width
-	height_actual := ((int(header.height) + mcu_height - 1) / mcu_height) * mcu_height
-	return &JpegFrame{
-		owner:                          owner
+	width_actual := ((usize(header.width) + mcu_width - 1) / mcu_width) * mcu_width
+	height_actual := ((usize(header.height) + mcu_height - 1) / mcu_height) * mcu_height
+	storage := []JpegBlockComponents{len: int(width_actual * height_actual / 64)}
+	// These source additions use the header's u16, after allocating storage.
+	if header.height > 65528 { panic('integer overflow') }
+	block_height := (u32(header.height) + 7) / 8
+	if header.width > 65528 { panic('integer overflow') }
+	return JpegFrame{
+		quantization_tables:            quantization_tables
+		dc_huffman_tables:              dc_huffman_tables
+		ac_huffman_tables:              ac_huffman_tables
 		frame_header:                   header
 		frame_type:                     frame_type
-		block_storage:                  []JpegBlockComponents{len: width_actual * height_actual / 64}
-		block_height_actual:            (height_actual + 7) / 8
-		block_width_actual:             (width_actual + 7) / 8
-		block_height:                   (int(header.height) + 7) / 8
-		block_width:                    (int(header.width) + 7) / 8
+		block_storage:                  storage
+		block_height_actual:            u32((height_actual + 7) / 8)
+		block_width_actual:             u32((width_actual + 7) / 8)
+		block_height:                   block_height
+		block_width:                    (u32(header.width) + 7) / 8
 		horizontal_sampling_factor_max: horizontal
 		vertical_sampling_factor_max:   vertical
 	}
+}
+
+pub fn (mut frame JpegFrame) deinit() {
+	// GC reclaims the backing graph; do not reset Source's record descriptors.
+	frame.frame_header.deinit()
+}
+
+fn jpeg_add_usize(a usize, b usize) usize {
+	if b > ~usize(0) - a { panic('integer overflow') }
+	return a + b
+}
+
+fn jpeg_mul_usize(a usize, b usize) usize {
+	if b != 0 && a > ~usize(0) / b { panic('integer overflow') }
+	return a * b
+}
+
+fn jpeg_div_usize(a usize, b usize) usize {
+	if b == 0 { panic('division by zero') }
+	return a / b
+}
+
+fn jpeg_index(index usize, length int) int {
+	if index >= usize(length) { panic('index out of bounds: index ${index}, len ${length}') }
+	return int(index)
+}
+
+fn jpeg_rgb_byte(value int) u8 {
+	if value < 0 || value > 255 { panic('integer does not fit in destination type') }
+	return u8(value)
 }
 
 fn jpeg_clamp_i32(value int, lower int, upper int) int {
@@ -71,167 +126,252 @@ fn jpeg_clamp_f32(value f32, lower f32, upper f32) f32 {
 	}
 }
 
-fn (mut frame JpegFrame) render_to_pixels(mut pixels PixelStorage) ! {
+pub fn (mut frame JpegFrame) render_to_pixels(mut pixels PixelStorage) ! {
 	match frame.frame_header.components.len {
 		1 {
-			mut gray := pixels as Grayscale8Pixels
-			for by in 0 .. frame.block_height {
-				for bx in 0 .. frame.block_width {
-					block_index := by * frame.block_width_actual + bx
-					for y in 0 .. 8 {
-						for x in 0 .. 8 {
-							py := by * 8 + y
-							px := bx * 8 + x
-							if py >= int(frame.frame_header.height) || px >= int(frame.frame_header.width) { continue
-							 }
-							value := frame.block_storage[block_index].blocks[0].values[y * 8 + x]
-							gray.data[py * int(frame.frame_header.width) + px] = Grayscale8{
-								value: u8(jpeg_clamp_i32(jpeg_add_i32(value, 128), 0, 255))
-							}
-						}
-					}
-				}
+			if pixels !is Grayscale8Pixels {
+				panic("access of union field 'grayscale8' while field '${pixels.pixel_format()}' is active")
 			}
-			pixels = gray
+			mut gray := pixels as Grayscale8Pixels
+			frame.render_to_pixels_grayscale(mut gray.data)!
 		}
 		3 {
-			frame.ycbcr_to_rgb()
+			frame.ycbcr_to_rgb()!
+			if pixels !is Rgb24Pixels {
+				panic("access of union field 'rgb24' while field '${pixels.pixel_format()}' is active")
+			}
 			mut rgb := pixels as Rgb24Pixels
-			for by in 0 .. frame.block_height {
-				for bx in 0 .. frame.block_width {
-					index := by * frame.block_width_actual + bx
-					for y in 0 .. 8 {
-						for x in 0 .. 8 {
-							py := by * 8 + y
-							px := bx * 8 + x
-							if py >= int(frame.frame_header.height) || px >= int(frame.frame_header.width) { continue
-							 }
-							rgb.data[py * int(frame.frame_header.width) + px] = Rgb24{
-								r: u8(frame.block_storage[index].blocks[0].values[y * 8 + x])
-								g: u8(frame.block_storage[index].blocks[1].values[y * 8 + x])
-								b: u8(frame.block_storage[index].blocks[2].values[y * 8 + x])
-							}
-						}
+			frame.render_to_pixels_rgb(mut rgb.data)!
+		}
+		else {
+			panic('reached unreachable code')
+		}
+	}
+}
+
+fn (mut frame JpegFrame) render_to_pixels_grayscale(mut pixels []Grayscale8) ! {
+	mut by := usize(0)
+	for by < usize(frame.block_height) {
+		py := jpeg_mul_usize(by, 8)
+		mut bx := usize(0)
+		for bx < usize(frame.block_width) {
+			block_index := jpeg_add_usize(jpeg_mul_usize(by, usize(frame.block_width_actual)), bx)
+			px := jpeg_mul_usize(bx, 8)
+			for y in 0 .. 8 {
+				for x in 0 .. 8 {
+					pixel_y := jpeg_add_usize(py, usize(y))
+					if pixel_y >= usize(frame.frame_header.height) { continue
+					 }
+					pixel_x := jpeg_add_usize(px, usize(x))
+					if pixel_x >= usize(frame.frame_header.width) { continue
+					 }
+					pixel_index := jpeg_add_usize(jpeg_mul_usize(pixel_y,
+						usize(frame.frame_header.width)), pixel_x)
+					value := frame.block_storage[jpeg_index(block_index, frame.block_storage.len)].blocks[0].values[
+						y * 8 + x]
+					target := jpeg_index(pixel_index, pixels.len)
+					sample := jpeg_rgb_byte(jpeg_clamp_i32(jpeg_add_i32(value, 128), 0, 255))
+					pixels[target] = Grayscale8{
+						value: sample
 					}
 				}
 			}
-			pixels = rgb
+			bx++
 		}
-		else {
-			panic('unreachable JPEG pixel format')
-		}
+		by++
 	}
 }
 
-fn (mut frame JpegFrame) ycbcr_to_rgb_block(y_index int, cbcr_index int, v int, h int) {
+pub fn (mut frame JpegFrame) render_to_pixels_rgb(mut pixels []Rgb24) ! {
+	mut by := usize(0)
+	for by < usize(frame.block_height) {
+		py := jpeg_mul_usize(by, 8)
+		mut bx := usize(0)
+		for bx < usize(frame.block_width) {
+			block_index := jpeg_add_usize(jpeg_mul_usize(by, usize(frame.block_width_actual)), bx)
+			px := jpeg_mul_usize(bx, 8)
+			for y in 0 .. 8 {
+				for x in 0 .. 8 {
+					pixel_y := jpeg_add_usize(py, usize(y))
+					if pixel_y >= usize(frame.frame_header.height) { continue
+					 }
+					pixel_x := jpeg_add_usize(px, usize(x))
+					if pixel_x >= usize(frame.frame_header.width) { continue
+					 }
+					pixel_index := jpeg_add_usize(jpeg_mul_usize(pixel_y,
+						usize(frame.frame_header.width)), pixel_x)
+					target := jpeg_index(pixel_index, pixels.len)
+					b := jpeg_index(block_index, frame.block_storage.len)
+					// Zig lowers this struct assignment to ordered field stores. A bad
+					// green/blue cast leaves the preceding channels written in place.
+					pixels[target].r = jpeg_rgb_byte(frame.block_storage[b].blocks[0].values[
+						y * 8 + x])
+					pixels[target].g = jpeg_rgb_byte(frame.block_storage[b].blocks[1].values[
+						y * 8 + x])
+					pixels[target].b = jpeg_rgb_byte(frame.block_storage[b].blocks[2].values[
+						y * 8 + x])
+				}
+			}
+			bx++
+		}
+		by++
+	}
+}
+
+pub fn (mut frame JpegFrame) ycbcr_to_rgb_block(mut y_block JpegBlockComponents,
+	cbcr_block &JpegBlockComponents, v usize, h usize) {
 	y_step := frame.vertical_sampling_factor_max
 	x_step := frame.horizontal_sampling_factor_max
-	mut y := 8
+	if x_step > usize(2147483647) { panic('integer does not fit in destination type') }
+	offset := jpeg_mul_usize(jpeg_div_usize(8, x_step), h)
+	if offset > usize(2147483647) { panic('integer does not fit in destination type') }
+	mut mask := [8]int{}
+	for lane in 0 .. 8 {
+		mask[lane] = jpeg_add_i32(lane / int(x_step), int(offset))
+	}
+	mut y := usize(8)
 	for y > 0 {
 		y--
-		// Load every lane before storing, since the Y and CbCr blocks may alias.
-		mut y_lanes := [8]f32{}
-		mut cb_lanes := [8]f32{}
-		mut cr_lanes := [8]f32{}
-		cbcr_y := y / y_step + (8 / y_step) * v
+		mut ys := [8]f32{}
 		for lane in 0 .. 8 {
-			mask := lane / x_step + (8 / x_step) * h
-			y_lanes[lane] = f32(frame.block_storage[y_index].blocks[0].values[y * 8 + lane])
-			cb_lanes[lane] = f32(frame.block_storage[cbcr_index].blocks[1].values[cbcr_y * 8 + mask])
-			cr_lanes[lane] = f32(frame.block_storage[cbcr_index].blocks[2].values[cbcr_y * 8 + mask])
+			ys[lane] = f32(y_block.blocks[0].values[int(y) * 8 + lane])
+		}
+		cbcr_y := jpeg_add_usize(jpeg_div_usize(y, y_step),
+			jpeg_mul_usize(jpeg_div_usize(8, y_step), v))
+		start := jpeg_mul_usize(cbcr_y, 8)
+		end := jpeg_add_usize(start, 8)
+		if end > 64 { panic('index out of bounds: index ${end}, len 64') }
+		mut cb := [8]int{}
+		for lane in 0 .. 8 {
+			cb[lane] = cbcr_block.blocks[1].values[int(start) + lane]
+		}
+		mut cbs := [8]f32{}
+		for lane in 0 .. 8 {
+			cbs[lane] = f32(cb[jpeg_index(usize(mask[lane]), 8)])
+		}
+		mut cr := [8]int{}
+		for lane in 0 .. 8 {
+			cr[lane] = cbcr_block.blocks[2].values[int(start) + lane]
+		}
+		mut crs := [8]f32{}
+		for lane in 0 .. 8 {
+			crs[lane] = f32(cr[jpeg_index(usize(mask[lane]), 8)])
+		}
+		mut rs := [8]int{}
+		mut gs := [8]int{}
+		mut bs := [8]int{}
+		for lane in 0 .. 8 {
+			r := ys[lane] + crs[lane] * f32(1.402) + f32(128)
+			b := ys[lane] + cbs[lane] * f32(1.772) + f32(128)
+			g := ys[lane] - f32(0.344) * cbs[lane] - f32(0.714) * crs[lane] + f32(128)
+			rs[lane] = int(jpeg_clamp_f32(r, 0, 255))
+			gs[lane] = int(jpeg_clamp_f32(g, 0, 255))
+			bs[lane] = int(jpeg_clamp_f32(b, 0, 255))
 		}
 		for lane in 0 .. 8 {
-			r := y_lanes[lane] + cr_lanes[lane] * f32(1.402) + f32(128)
-			b := y_lanes[lane] + cb_lanes[lane] * f32(1.772) + f32(128)
-			g := y_lanes[lane] - f32(0.344) * cb_lanes[lane] - f32(0.714) * cr_lanes[lane] +
-				f32(128)
-			frame.block_storage[y_index].blocks[0].values[y * 8 + lane] = int(jpeg_clamp_f32(r, 0, 255))
-			frame.block_storage[y_index].blocks[1].values[y * 8 + lane] = int(jpeg_clamp_f32(g, 0, 255))
-			frame.block_storage[y_index].blocks[2].values[y * 8 + lane] = int(jpeg_clamp_f32(b, 0, 255))
+			y_block.blocks[0].values[int(y) * 8 + lane] = rs[lane]
+		}
+		for lane in 0 .. 8 {
+			y_block.blocks[1].values[int(y) * 8 + lane] = gs[lane]
+		}
+		for lane in 0 .. 8 {
+			y_block.blocks[2].values[int(y) * 8 + lane] = bs[lane]
 		}
 	}
 }
 
-fn (mut frame JpegFrame) ycbcr_to_rgb() {
-	mut y := 0
-	for y < frame.block_height {
-		mut x := 0
-		for x < frame.block_width {
-			cbcr_index := y * frame.block_width_actual + x
+pub fn (mut frame JpegFrame) ycbcr_to_rgb() ! {
+	mut y := usize(0)
+	for y < usize(frame.block_height) {
+		mut x := usize(0)
+		for x < usize(frame.block_width) {
+			cbcr_index := jpeg_index(jpeg_add_usize(jpeg_mul_usize(y,
+				usize(frame.block_width_actual)), x), frame.block_storage.len)
 			mut v := frame.vertical_sampling_factor_max
 			for v > 0 {
 				v--
 				mut h := frame.horizontal_sampling_factor_max
 				for h > 0 {
 					h--
-					if y + v >= frame.block_height || x + h >= frame.block_width { continue
+					block_y := jpeg_add_usize(y, v)
+					if block_y >= usize(frame.block_height) { continue
 					 }
-					frame.ycbcr_to_rgb_block((y + v) * frame.block_width_actual + x + h,
-						cbcr_index, v, h)
+					block_x := jpeg_add_usize(x, h)
+					if block_x >= usize(frame.block_width) { continue
+					 }
+					index := jpeg_index(jpeg_add_usize(jpeg_mul_usize(block_y,
+						usize(frame.block_width_actual)), block_x), frame.block_storage.len)
+					frame.ycbcr_to_rgb_block(mut frame.block_storage[index],
+						&frame.block_storage[cbcr_index], v, h)
 				}
 			}
-			x += frame.horizontal_sampling_factor_max
+			x = jpeg_add_usize(x, frame.horizontal_sampling_factor_max)
 		}
-		y += frame.vertical_sampling_factor_max
+		y = jpeg_add_usize(y, frame.vertical_sampling_factor_max)
 	}
 }
 
-fn (mut frame JpegFrame) dequantize_blocks() ! {
+pub fn (mut frame JpegFrame) dequantize_blocks() ! {
 	for component in frame.frame_header.components {
-		if frame.owner.quantization_tables[int(component.quantization_table_id)] == none {
+		if frame.quantization_tables.values[jpeg_index(usize(component.quantization_table_id), 4)] == none {
 			return error('InvalidData')
 		}
 	}
-	mut y := 0
-	for y < frame.block_height {
-		mut x := 0
-		for x < frame.block_width {
+	mut y := usize(0)
+	for y < usize(frame.block_height) {
+		mut x := usize(0)
+		for x < usize(frame.block_width) {
 			for ci, component in frame.frame_header.components {
-				table := frame.owner.quantization_tables[int(component.quantization_table_id)] or {
-					return error('InvalidData')
-				}
+				entry := frame.quantization_tables.values[jpeg_index(usize(component.quantization_table_id), 4)]
+				table := entry or { panic('attempt to use null value') }
 				for v in 0 .. int(component.vertical_sampling_factor) {
 					for h in 0 .. int(component.horizontal_sampling_factor) {
-						id := (y + v) * frame.block_width_actual + x + h
-						if y + v >= frame.block_height {
-							frame.block_storage[id].blocks[ci].values = [64]int{}
+						block_y := jpeg_add_usize(y, usize(v))
+						block_x := jpeg_add_usize(x, usize(h))
+						id := jpeg_add_usize(jpeg_mul_usize(block_y,
+							usize(frame.block_width_actual)), block_x)
+						index := jpeg_index(id, frame.block_storage.len)
+						if ci >= 3 { panic('index out of bounds: index ${ci}, len 3') }
+						if block_y >= usize(frame.block_height) {
+							frame.block_storage[index].blocks[ci].values = [64]int{}
 						} else {
 							for si in 0 .. 64 {
-								// The source checks the active union field only when a
-								// sample is multiplied, after indexing its destination.
-								value := frame.block_storage[id].blocks[ci].values[si]
+								value := frame.block_storage[index].blocks[ci].values[si]
 								if table !is JpegQuantization8 {
 									panic("access of union field 'q8' while field 'q16' is active")
 								}
-								frame.block_storage[id].blocks[ci].values[si] = jpeg_mul_i32(value,
+								frame.block_storage[index].blocks[ci].values[si] = jpeg_mul_i32(value,
 									int((table as JpegQuantization8).values[si]))
 							}
 						}
 					}
 				}
 			}
-			x += frame.horizontal_sampling_factor_max
+			x = jpeg_add_usize(x, frame.horizontal_sampling_factor_max)
 		}
-		y += frame.vertical_sampling_factor_max
+		y = jpeg_add_usize(y, frame.vertical_sampling_factor_max)
 	}
 }
 
-fn (mut frame JpegFrame) idct_blocks() {
-	mut y := 0
-	for y < frame.block_height {
-		mut x := 0
-		for x < frame.block_width {
+pub fn (mut frame JpegFrame) idct_blocks() {
+	mut y := usize(0)
+	for y < usize(frame.block_height) {
+		mut x := usize(0)
+		for x < usize(frame.block_width) {
 			for ci, component in frame.frame_header.components {
 				for v in 0 .. int(component.vertical_sampling_factor) {
 					for h in 0 .. int(component.horizontal_sampling_factor) {
-						id := (y + v) * frame.block_width_actual + x + h
-						jpeg_idct_block(mut frame.block_storage[id].blocks[ci])
+						id := jpeg_add_usize(jpeg_mul_usize(jpeg_add_usize(y, usize(v)),
+							usize(frame.block_width_actual)), jpeg_add_usize(x, usize(h)))
+						index := jpeg_index(id, frame.block_storage.len)
+						if ci >= 3 { panic('index out of bounds: index ${ci}, len 3') }
+						jpeg_idct_block(mut frame.block_storage[index].blocks[ci])
 					}
 				}
 			}
-			x += frame.horizontal_sampling_factor_max
+			x = jpeg_add_usize(x, frame.horizontal_sampling_factor_max)
 		}
-		y += frame.vertical_sampling_factor_max
+		y = jpeg_add_usize(y, frame.vertical_sampling_factor_max)
 	}
 }
 

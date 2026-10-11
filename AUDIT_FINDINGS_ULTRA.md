@@ -2589,3 +2589,50 @@ Source storage, boxed copies, const/narrow integer/key typing, map layout/order,
 ABI, generic as-cast diagnostics and arbitrary SIMD/cross runtime remain limits.
 The Source quantization.Header.read compiler failure and pinned no-op writer
 remain unchanged. Reproduction is in zigimg/reference_probes/jpeg_records/README.md.
+
+### JPEG public Frame operations and copy contracts — 2026-10-11
+
+Frame/block fields are now public/mutable with represented required payloads,
+u32 dimensions and usize sampling maxima. Fixed four-slot heap table records
+replace the owner-JPEG pointer and preserve direct borrows. Public Frame read,
+render, chroma, dequantization, IDCT and cleanup entry points are available. Frame
+and JPEG reads return values and JPEG.frame holds an optional value: metadata
+copies independently while coefficient storage and table borrows remain shared.
+JPEG copies keep independent inline table slots, with the previously measured
+boxed quantization payload difference still separate.
+
+The unchanged-Source proof matches **10,697 returning observations** in ordinary
+and production builds, including direct operations, aliased chroma storage,
+cropping, u32 metadata controls and decoded returned/stored Frame copies.
+Returning SHA-256:
+`02bea61a685969480894de6596bfd0f16c132107369c1bc4ed2f895d4e2509f0`.
+Thirty-five exact panic/state pairs preserve stream position, metadata, initialized
+coefficients and pixels; state SHA-256:
+`73fbe0b116d37d3721a82529cfdf615cd69ecc2308879180a9a953e1d97791ea`.
+Production checks include u16 dimension arithmetic, native-width/i32 overflow,
+chroma division/lane/final-row-end bounds and RGB casts. Ordered channel stores
+retain partial writes before a later cast failure; competing pixel/coefficient
+failures follow Source's evaluation order.
+
+Five complete constructor pairs, nine omission pairs and five immutable-binding
+rejection pairs pass, including execution of the six Frame zero defaults. Three
+separate zero-step loop pairs time out without output. One const table-pointee
+and one wider enum-carrier construction difference remain separately measured;
+Source's undefined default marker is not observed. Full tree/library/version pins,
+before/after fixture/runner/implementation hashes and retained generated consumers,
+commands/results/diagnostics/state preserve provenance. Ordinary rejection checks
+exclude crashes and backend/linker failures.
+
+All 56 image/58 Vaxis files, focused production Frame tests and native/Linux
+application checks pass. Three Windows DLLs, the new Windows test executable in
+both modes and two Linux shared libraries build with -gc none. Existing JPEG
+decoder/record/historical proofs retain their hashes and exclusions in both modes.
+
+Source read allocations and unused grayscale channels are undefined and excluded
+from observations. Allocator/OOM/GC/lifetime, ABI, const-pointer typing, boxed
+quantization payload copies, u4/u5 and map typing/layout/order, remaining public
+Scan APIs/arithmetic on caller-mutated records, arbitrary SIMD selection and
+cross-target runtime remain limits. This
+proof selects Source's non-AVX2 aarch64 permutation path. Source's inherited
+quantization.Header.read compiler failure and no-op writer remain unchanged.
+Reproduction is in zigimg/reference_probes/jpeg_frame/README.md.

@@ -45,7 +45,9 @@ fn test_jpeg_i32_checked_arithmetic_valid_boundaries_and_idct_zero_block() {
 	assert jpeg_add_i32(2147483646, 1) == 2147483647
 	assert jpeg_sub_i32(-2147483647, 1) == -2147483648
 	assert jpeg_mul_i32(-8388608, 256) == -2147483648
-	mut block := JpegBlock{}
+	mut block := JpegBlock{
+		values: [64]int{}
+	}
 	jpeg_idct_block(mut block)
 	assert block.values == [64]int{}
 }

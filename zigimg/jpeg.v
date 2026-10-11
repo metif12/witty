@@ -5,11 +5,16 @@ module zigimg
 @[heap]
 pub struct JPEG {
 pub mut:
-	frame ?&JpegFrame
-mut:
-	quantization_tables []?JpegQuantizationTable = []?JpegQuantizationTable{len: 4, init: none}
-	dc_huffman_tables   []?JpegHuffmanTable      = []?JpegHuffmanTable{len: 4}
-	ac_huffman_tables   []?JpegHuffmanTable      = []?JpegHuffmanTable{len: 4}
+	frame               ?JpegFrame
+	quantization_tables JpegQuantizationTables = JpegQuantizationTables{
+		values: unsafe { [4]?JpegQuantizationTable{init: none} }
+	}
+	dc_huffman_tables   JpegHuffmanTables = JpegHuffmanTables{
+		values: [4]?JpegHuffmanTable{init: none}
+	}
+	ac_huffman_tables   JpegHuffmanTables = JpegHuffmanTables{
+		values: [4]?JpegHuffmanTable{init: none}
+	}
 	restart_interval    u16
 }
 
@@ -18,12 +23,7 @@ pub fn JPEG.init() JPEG {
 }
 
 pub fn (mut jpeg JPEG) deinit() {
-	// Drop the owned frame/table graph at the explicit source cleanup point.
-	// V GC performs the backing allocation release.
-	jpeg.frame = none
-	jpeg.quantization_tables.clear()
-	jpeg.dc_huffman_tables.clear()
-	jpeg.ac_huffman_tables.clear()
+	if mut frame := jpeg.frame { frame.deinit() }
 }
 
 fn (mut jpeg JPEG) parse_quantization_tables(mut stream ReadStream) ! {
@@ -38,7 +38,7 @@ fn (mut jpeg JPEG) parse_quantization_tables(mut stream ReadStream) ! {
 		consumed := if precision == 0 { 65 } else { 129 }
 		if segment_size < consumed { panic('integer overflow') }
 		segment_size -= consumed
-		jpeg.quantization_tables[int(destination)] = table
+		jpeg.quantization_tables.values[int(destination)] = table
 	}
 }
 
@@ -53,9 +53,9 @@ fn (mut jpeg JPEG) parse_huffman_tables(mut stream ReadStream) ! {
 		table := JpegHuffmanTable.read(table_class, mut stream)!
 		if destination >= 4 { panic('index out of bounds: index ${destination}, len 4') }
 		if table_class == 0 {
-			jpeg.dc_huffman_tables[destination] = table
+			jpeg.dc_huffman_tables.values[destination] = table
 		} else {
-			jpeg.ac_huffman_tables[destination] = table
+			jpeg.ac_huffman_tables.values[destination] = table
 		}
 		consumed := 17 + table.code_map.len
 		if segment_size < consumed { panic('integer overflow') }
@@ -77,7 +77,7 @@ pub mut:
 	value ?PixelStorage
 }
 
-pub fn (mut jpeg JPEG) read(mut stream ReadStream, mut pixels_opt JpegPixels) !&JpegFrame {
+pub fn (mut jpeg JPEG) read(mut stream ReadStream, mut pixels_opt JpegPixels) !JpegFrame {
 	mut succeeded := false
 	defer {
 		if !succeeded { pixels_opt.value = none }
@@ -94,7 +94,8 @@ pub fn (mut jpeg JPEG) read(mut stream ReadStream, mut pixels_opt JpegPixels) !&
 		match marker {
 			0xffc0, 0xffc2 {
 				if jpeg.frame != none { return error('Unsupported') }
-				mut frame := jpeg_frame_read(&jpeg, marker, mut stream)!
+				mut frame := JpegFrame.read(marker, &jpeg.quantization_tables,
+					&jpeg.dc_huffman_tables, &jpeg.ac_huffman_tables, mut stream)!
 				jpeg.frame = frame
 				format := match frame.frame_header.components.len {
 					1 { PixelFormat.grayscale8 }

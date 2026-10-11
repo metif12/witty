@@ -963,8 +963,12 @@ an item here does not mean its full module has been certified yet.
   quantization arrays. A further comparison matches 17,747 observations and
   constructor controls in both modes. Eighteen boxed-copy differences, one
   const-slice difference and five wider-carrier controls remain separate.
-  This does not certify undefined-memory behavior or the remaining public
-  Frame/Scan/decoder record APIs.
+  Public Frame records and operations now match another 10,697 observations,
+  35 exact panic/state pairs and three inherited zero-step loops in both modes.
+  Frame copies preserve value metadata and borrowed coefficient/table storage;
+  table records expose fixed four-slot arrays. This does not certify undefined
+  memory, allocator/lifetime behavior or the remaining public Scan APIs. Frame
+  const-pointer and marker-carrier differences are recorded separately.
   TIFF now has its packed 6/12/10-byte records, all 32 tag IDs, IFD parsing,
   bitmap metadata processing, format selection, and row-byte sizing. IFDs
   preserve duplicate replacement, next-directory offsets, and partial-read
@@ -2933,3 +2937,67 @@ failure under Zig 0.15.2; the actual decoder parser compiles. The generic V as-c
 failure category differs from Source union-field access; the decoder uses its
 explicit Source check. The pinned JPEG no-op writer is unchanged. Reproduction
 and exact boundaries are in zigimg/reference_probes/jpeg_records/README.md.
+
+## JPEG public Frame operations and value copies — 2026-10-11
+
+JpegFrame now exposes required mutable header, borrowed quantization/DC/AC table
+records and coefficient storage, with u32 block dimensions and usize sampling
+maxima. Public block wrappers retain fixed 64-sample and three-component arrays;
+heap table wrappers expose fixed four-slot optional arrays through values. Frame
+read, RGB rendering, chroma conversion, dequantization, IDCT and cleanup hooks are
+public. The owner-JPEG pointer is replaced with direct table borrows. Frame.read
+and JPEG.read return values, and JPEG.frame stores an optional value: scalar
+metadata copies independently while coefficient slices and borrowed tables alias.
+JPEG copies retain independent inline table slots; the prior boxed quantization
+payload-copy limitation remains separate.
+
+Checked operations preserve Source u16 header-dimension overflow after allocation,
+native-width coordinate overflow/division and bounds, i32 chroma masks and RGB
+casts, including production builds. RGB writes channels in Source order, retaining
+red/green writes when a later cast traps. Destination bounds precede RGB sample
+casts. Grayscale loads its coefficient before destination bounds and the checked
+level addition. Chained chroma slices check the final eight-lane end against 64;
+rows and component stores retain descending alias traversal and f32 arithmetic.
+JPEG cleanup keeps record descriptors; GC handles backing reclamation.
+
+The new unchanged-Source proof zigimg/verify_jpeg_frame_reference.py matches
+**10,697 returning observations** in both modes: 6,952 Frame read/dimension/header
+controls, 2,048 separate/aliased chroma blocks, 256 full conversion/dispatch cases,
+640 dequantization/IDCT cases, 784 cropped RGB/grayscale renderings, five constructed
+record-copy/full-u32 carrier observations and twelve decoded returned/stored frame
+copies. Returning SHA-256 is
+`02bea61a685969480894de6596bfd0f16c132107369c1bc4ed2f895d4e2509f0`.
+Thirty-five exact panic pairs also match stream position, frame metadata, all
+initialized coefficients and pixel bytes; failure-state SHA-256 is
+`73fbe0b116d37d3721a82529cfdf615cd69ecc2308879180a9a953e1d97791ea`.
+
+Five complete constructor pairs compile, including execution of six zero defaults.
+Nine represented field/payload omissions and five immutable-binding mutations
+receive ordinary compiler rejections with actual error-line checks that exclude
+crashes and backend/linker errors. Three separately bounded process pairs retain
+inherited zero-horizontal-step loops in full chroma conversion, dequantization
+and IDCT, timing out without output. Source const Frame table-pointee mutation
+accepted where V rejects it, and a V u16 marker value rejected by Source's enum,
+are recorded as two separate construction adaptations. Source's undefined default
+marker is not read. Full Source/compiler-library/version pins and before/after
+fixture/runner/implementation hashes protect retained commands, diagnostics,
+generated consumers, output, observer state, provenance and summaries.
+
+The existing 15,805-row decoder and thirty panic/state pairs retain their prior
+hashes, as do its three file-discard loops and the 17,747-row records/boxed-copy
+proof. Historical JPEG checks retain 132 rows and the marker trap in both modes;
+seven undefined-coefficient inputs remain excluded. All 56 image and 58 Vaxis test
+files, focused production Frame tests and native/Linux application checks pass.
+Three Windows dependency DLLs, the new Windows test executable in both modes and
+two Linux shared libraries build with -gc none. Cross-target runtime is unverified.
+
+Frame.read checks inspect metadata/allocation count, never undefined Source
+coefficients. Decoded grayscale copy checks inspect only an explicitly written
+active sample, excluding unused Source channels. Allocator/OOM/GC/lifetime,
+aggregate ABI, const-pointer typing, boxed quantization copies, u4/u5 and map key
+typing/layout/order, remaining public Scan APIs, Scan arithmetic on caller-mutated
+records and arbitrary SIMD targets remain limits. Chroma bounds are compared with
+Source's non-AVX2 aarch64 path; AVX2 mask
+behavior is different. Source quantization.Header.read still has its inherited
+Zig 0.15.2 compiler failure, and the pinned JPEG no-op writer is unchanged.
+Reproduction and boundaries are in zigimg/reference_probes/jpeg_frame/README.md.

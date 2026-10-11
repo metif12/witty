@@ -59,13 +59,18 @@ fn test_jpeg_quantization_tags_and_whole_table_replacement() {
 fn test_jpeg_mutable_quantization_table_reaches_frame_arithmetic() {
 	mut jpeg := JPEG.init()
 	mut stream := ReadStream.init_memory([u8(0), 11, 8, 0, 8, 0, 8, 1, 1, 0x11, 0])
-	mut frame := jpeg_frame_read(&jpeg, 0xffc0, mut stream)!
+	mut frame := JpegFrame.read(0xffc0, &jpeg.quantization_tables, &jpeg.dc_huffman_tables,
+		&jpeg.ac_huffman_tables, mut stream)!
 	mut table := JpegQuantization8{
 		values: [64]u8{init: 1}
 	}
 	table.values[0] = 2
-	jpeg.quantization_tables[0] = table
-	frame.block_storage[0] = JpegBlockComponents{}
+	jpeg.quantization_tables.values[0] = table
+	frame.block_storage[0] = JpegBlockComponents{
+		blocks: [3]JpegBlock{init: JpegBlock{
+			values: [64]int{}
+		}}
+	}
 	frame.block_storage[0].blocks[0].values[0] = 8
 	frame.dequantize_blocks()!
 	assert frame.block_storage[0].blocks[0].values[0] == 16

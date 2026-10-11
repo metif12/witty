@@ -52,8 +52,8 @@ fn jpeg_scan_init(mut frame JpegFrame, mut stream ReadStream) !JpegScan {
 		if component.dc_table_selector >= 4 {
 			panic('index out of bounds: index ${component.dc_table_selector}, len 4')
 		}
-		if frame.owner.dc_huffman_tables[int(component.dc_table_selector)] != none { valid = true }
-		if frame.owner.ac_huffman_tables[int(component.ac_table_selector)] != none { valid = true }
+		if frame.dc_huffman_tables.values[int(component.dc_table_selector)] != none { valid = true }
+		if frame.ac_huffman_tables.values[int(component.ac_table_selector)] != none { valid = true }
 		if !valid { return error('InvalidData') }
 	}
 	start := int(stream.take_byte()!)
@@ -84,14 +84,14 @@ fn jpeg_perform_scan(mut frame JpegFrame, restart_interval u16, mut stream ReadS
 	mut skips := JpegScanSkips{}
 	first := scan.components[0] or { panic('missing JPEG scan component') }
 	noninterleaved := scan.component_count == 1 && first.component_id == 1
-	y_step := if noninterleaved { 1 } else { frame.vertical_sampling_factor_max }
-	x_step := if noninterleaved { 1 } else { frame.horizontal_sampling_factor_max }
-	mut y := 0
-	for y < frame.block_height {
-		mut x := 0
-		for x < frame.block_width {
-			mcu_id := y * frame.block_width_actual + x
-			if restart_interval != 0 && mcu_id % (int(restart_interval) * y_step * x_step) == 0 {
+	y_step := if noninterleaved { usize(1) } else { frame.vertical_sampling_factor_max }
+	x_step := if noninterleaved { usize(1) } else { frame.horizontal_sampling_factor_max }
+	mut y := usize(0)
+	for y < usize(frame.block_height) {
+		mut x := usize(0)
+		for x < usize(frame.block_width) {
+			mcu_id := y * usize(frame.block_width_actual) + x
+			if restart_interval != 0 && mcu_id % (usize(restart_interval) * y_step * x_step) == 0 {
 				scan.reader.flush_bits()
 				scan.prediction_values = [3]int{}
 				skips.value = 0
@@ -114,15 +114,16 @@ fn jpeg_perform_scan(mut frame JpegFrame, restart_interval u16, mut stream ReadS
 				if component_index < 0 { panic('undefined JPEG scan component') }
 				for v in 0 .. v_max {
 					for h in 0 .. h_max {
-						id := (y + v) * frame.block_width_actual + x + h
+						id := (y + usize(v)) * usize(frame.block_width_actual) + x + usize(h)
 						scan.reader.fill_bits(24) or {}
 						if frame.frame_type == 0xffc0 {
 							scan.decode_block_baseline(component, mut
-								frame.block_storage[id].blocks[component_index], component_index)!
+								frame.block_storage[int(id)].blocks[component_index],
+								component_index)!
 						} else if frame.frame_type == 0xffc2 {
 							scan.decode_block_progressive(component, mut
-								frame.block_storage[id].blocks[component_index], component_index, mut
-								skips)!
+								frame.block_storage[int(id)].blocks[component_index],
+								component_index, mut skips)!
 						}
 					}
 				}
@@ -134,16 +135,16 @@ fn jpeg_perform_scan(mut frame JpegFrame, restart_interval u16, mut stream ReadS
 }
 
 fn (mut scan JpegScan) dc_table(component JpegScanComponentSpec) {
-	table := scan.frame.owner.dc_huffman_tables[int(component.dc_table_selector)] or {
-		panic('attempt to use null value')
-	}
+	entry := scan.frame.dc_huffman_tables.values[int(component.dc_table_selector)]
+	table := entry or { panic('attempt to use null value') }
+
 	scan.reader.set_huffman_table(table)
 }
 
 fn (mut scan JpegScan) ac_table(component JpegScanComponentSpec) {
-	table := scan.frame.owner.ac_huffman_tables[int(component.ac_table_selector)] or {
-		panic('attempt to use null value')
-	}
+	entry := scan.frame.ac_huffman_tables.values[int(component.ac_table_selector)]
+	table := entry or { panic('attempt to use null value') }
+
 	scan.reader.set_huffman_table(table)
 }
 
