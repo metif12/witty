@@ -4877,3 +4877,37 @@ visibility are unchanged.
 Sub-byte and wider-than-native integers, unrepresented generic types/callers,
 physical ABI and allocation/lifetime remain boundaries. Details and reproduction
 are in [the generic grayscale proof](zigimg/reference_probes/grayscale_generic/README.md).
+
+### Compact image enum storage checkpoint
+
+`PostConversionBehavior`, `NetpbmFormat` and `PamTupleType` used V's default
+four-byte enum storage. Explicit u8 backing and native ordinals now restore
+their initialized one-byte storage and alignment. Source's inferred tag integer
+widths remain u1/u2/u3; V's carrier is wider.
+
+The unchanged-source proof matches **3,584 returning records** in each
+corresponding compiler mode, SHA-256
+`9009c28f3efdd4db457b134de4c62873ee83534cf7837b3c89a73b3071a49fee`.
+Both public enums cover size/alignment, every named tag, copied values, by-value
+returns, initialized array bytes, independent clones and borrowed-byte mutation.
+Six PAM records compare with size/alignment/names/ordinals extracted from the
+original decoder's native debug metadata. Private Source names remain private.
+
+Two mutable controls and two immutable-assignment rejection pairs pass per
+mode. Source rejects two unnamed constant literals; ordinary V accepts them,
+while production V rejects them. Two private-name controls retain the existing
+public V PAM adapter difference. Invalid runtime enum values and their failure
+timing are excluded from the valid-value comparison.
+
+The complete Netpbm/PAM matrices retain their returning and retained-failure-state
+hashes in both modes (137,226/74,189 returns and 969/1,723 strict failure pairs).
+The 5,792-case colorspace comparison retains both corresponding-mode hashes
+with zero differences. All 61 image and 58 Vaxis test files pass, along with
+nineteen production/platform commands. Complete Source/library/math/SDK/compiler
+pins, metadata-tool versions and before/after implementation/runner/fixture/input/
+consumer hashes protect the proof. Source implementation and visibility are
+unchanged.
+
+Enclosing record layout/padding, undefined storage, arbitrary ABI, allocation/
+lifetime and unrepresented callers remain boundaries. Details and reproduction
+are in [the compact enum proof](zigimg/reference_probes/compact_enums/README.md).

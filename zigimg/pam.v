@@ -3,13 +3,13 @@ module zigimg
 import strconv
 import zig_fmt
 
-pub enum PamTupleType {
-	mono
-	mono_a
-	gray
-	gray_a
-	rgb
-	rgb_a
+pub enum PamTupleType as u8 {
+	mono   = 0
+	mono_a = 1
+	gray   = 2
+	gray_a = 3
+	rgb    = 4
+	rgb_a  = 5
 }
 
 pub fn PamTupleType.from_string(value string) !PamTupleType {

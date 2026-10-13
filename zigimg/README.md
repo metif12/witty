@@ -370,6 +370,12 @@ V typed transfer values replace compile-time namespaces, and callback fields
 have a `_fn` suffix to coexist with the corresponding methods. Copying APIs
 use V allocation in place of the source's caller-selected allocator.
 
+`PostConversionBehavior`, `NetpbmFormat` and `PamTupleType` retain native ordinals
+and one-byte storage/alignment. The 3,584-case public-enum byte/copy comparison
+and six PAM native-debug-metadata observations pass in both modes. Source's
+private PAM names and V's mode-dependent unsafe literal checks remain measured
+adaptations. Details are in [the compact enum proof](reference_probes/compact_enums/README.md).
+
 All eleven built-in RGB(A) types expose typed constructors and getters for
 colors, grayscale, packed integers, arrays, Float4 values and HTML hex strings,
 plus premultiplied alpha. Public `scale_value[O, I]` retains unsigned-width

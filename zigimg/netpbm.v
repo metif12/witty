@@ -3,10 +3,10 @@ module zigimg
 // The pinned implementation adapts Felix Queissner's zig-gamedev-lib Netpbm
 // reader with his permission. See the original attribution in netpbm.zig.
 
-pub enum NetpbmFormat {
-	bitmap
-	grayscale
-	rgb
+pub enum NetpbmFormat as u8 {
+	bitmap    = 0
+	grayscale = 1
+	rgb       = 2
 }
 
 pub struct NetpbmHeader {

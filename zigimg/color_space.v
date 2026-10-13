@@ -1,8 +1,8 @@
 module zigimg
 
-pub enum PostConversionBehavior {
-	none
-	clamp
+pub enum PostConversionBehavior as u8 {
+	none  = 0
+	clamp = 1
 }
 
 pub struct RgbColorspaceInitArgs {
