@@ -114,7 +114,7 @@ pub fn (mut jpeg JPEG) read(mut stream ReadStream, mut pixels_opt JpegPixels) !J
 			}
 			0xffda {
 				mut frame := jpeg.frame or { return error('InvalidData') }
-				jpeg_perform_scan(mut frame, jpeg.restart_interval, mut stream)!
+				JpegScan.perform_scan(&frame, jpeg.restart_interval, mut stream)!
 			}
 			0xffdb {
 				jpeg.parse_quantization_tables(mut stream)!

@@ -2636,3 +2636,40 @@ cross-target runtime remain limits. This
 proof selects Source's non-AVX2 aarch64 permutation path. Source's inherited
 quantization.Header.read compiler failure and no-op writer remain unchanged.
 Reproduction is in zigimg/reference_probes/jpeg_frame/README.md.
+
+### JPEG public Scan records and traversal contracts — 2026-10-13
+
+Scan/component records now have required mutable represented fields and fixed
+component/prediction arrays. Public component reading, init and perform_scan retain
+Frame/stream borrows, with the decoder using the public entry point. Source's OR
+validity rule, two-bit AC mask, spectral checks and late length assertion remain.
+Checked native-width MCU/block/restart arithmetic and loop increments survive
+production. Block/component bounds now precede entropy fill, preserving consumed
+bytes even for Frame markers without a decode branch.
+
+The unchanged-Source proof matches **76,400 returning observations** in both modes
+with SHA-256
+`22ff0ced5a3fb14f5f80f8ff99e012a7f2bb78d38b34e92baf202990342408c8`.
+Twenty-seven exact panic/state pairs retain stream position and initialized
+coefficients; state SHA-256:
+`26a190953880f66299ebb8834f75b8ad3603c881efa5285386a06543b17fd46e`.
+Two complete constructors, twelve omission pairs and two immutable-binding pairs
+pass ordinary rejection gates. Four wider u4 carrier and one const Frame pointer
+construction differences remain separate. Two zero-step loop pairs time out without
+output. Full Source/library/version pins, before/after hashes and retained commands,
+corpus/state/results/diagnostics/consumers protect provenance.
+
+Record copies preserve independent component slots, predictions, scalar fields and
+reader bits while sharing Frame/stream targets. Optional struct payload changes
+use explicit slot writeback in V; named entries avoid the pinned compiler's direct
+fixed-array option unwrapping C backend error. All 57 image/58 Vaxis files, focused
+Scan tests in both modes, native/Linux checks, three Windows DLLs, the new Windows
+test executable in both modes and two Linux shared libraries pass. Cross builds
+use -gc none. Existing JPEG proof hashes and exclusions remain unchanged.
+
+All direct coefficient lanes and padding are initialized. Unknown components
+accepted by the OR rule have undefined performScan indexes and are covered in init
+only. Allocator/OOM/GC/lifetime, undefined Source storage, ABI, const/u4/key typing,
+map layout/order/capacity, boxed quantization copies, arbitrary SIMD and cross-target
+runtime remain limits. Source's quantization-header compiler failure and no-op
+writer remain unchanged. Reproduction: zigimg/reference_probes/jpeg_scan/README.md.

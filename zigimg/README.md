@@ -407,6 +407,20 @@ Append `--v-prod` for production. Constructor checks, copy/borrow behavior,
 table wrapper usage and measured representation limits are documented in
 [the JPEG Frame notes](reference_probes/jpeg_frame/README.md).
 
+JPEG Scan now exposes its required mutable records, fixed component slots,
+component reader, initializer and scan operation. Direct parsing, record copies,
+baseline/progressive scans and failure order match 76,400 observations and 27
+panic/state pairs in ordinary and production builds:
+
+```sh
+python3 zigimg/verify_jpeg_scan_reference.py \
+  /path/to/locked-zigimg /path/to/zig-0.15.2/zig /path/to/v-0.5.2
+```
+
+Append `--v-prod` for production. Required-field checks, V optional-slot update
+syntax, measured const/u4 differences and undefined Source boundaries are
+documented in [the JPEG Scan notes](reference_probes/jpeg_scan/README.md).
+
 The standalone reference harness accepts the unmodified dependency as a Zig
 module. With Zig 0.15.2 on macOS, a 14.0 target avoids linking against an SDK
 version newer than that compiler supports:

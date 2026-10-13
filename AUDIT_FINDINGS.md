@@ -967,8 +967,10 @@ an item here does not mean its full module has been certified yet.
   35 exact panic/state pairs and three inherited zero-step loops in both modes.
   Frame copies preserve value metadata and borrowed coefficient/table storage;
   table records expose fixed four-slot arrays. This does not certify undefined
-  memory, allocator/lifetime behavior or the remaining public Scan APIs. Frame
-  const-pointer and marker-carrier differences are recorded separately.
+  memory or allocator/lifetime behavior. Public Scan records and entry points
+  now match 76,400 further observations and 27 panic/state pairs in both modes,
+  including destination bounds before entropy fill and checked MCU/restart
+  arithmetic. Const-pointer and wider integer carrier differences remain separate.
   TIFF now has its packed 6/12/10-byte records, all 32 tag IDs, IFD parsing,
   bitmap metadata processing, format selection, and row-byte sizing. IFDs
   preserve duplicate replacement, next-directory offsets, and partial-read
@@ -3001,3 +3003,62 @@ Source's non-AVX2 aarch64 path; AVX2 mask
 behavior is different. Source quantization.Header.read still has its inherited
 Zig 0.15.2 compiler failure, and the pinned JPEG no-op writer is unchanged.
 Reproduction and boundaries are in zigimg/reference_probes/jpeg_frame/README.md.
+
+## JPEG public Scan records and checked traversal — 2026-10-13
+
+JpegScanComponentSpec and JpegScan now expose mutable required fields; component
+slots are fixed [4] optionals, and count/spectral fields retain Source u8 widths.
+The public component reader, Scan.init and Scan.perform_scan preserve Source's
+Frame/stream borrows. JPEG.read uses the public scan entry point. Source's OR
+component/table validity rule, two-bit AC selector mask, spectral checks and late
+length assertion remain intact. Native-width MCU identity, grouped block
+coordinates, restart products and loop increments are checked explicitly in
+production too. Destination block/component bounds precede the swallowed entropy
+fill attempt, fixing consumed bytes on malformed caller-built Frames, including
+markers without a decode branch.
+
+The unchanged-Source proof zigimg/verify_jpeg_scan_reference.py matches **76,400
+returning observations** in ordinary and production builds: 65,541 direct component
+reads/truncations, 6,795 Scan initialization/validation/position controls, 1,024
+public record mutation/copy/borrow observations and 3,040 direct scan operations.
+Returning SHA-256 is
+`22ff0ced5a3fb14f5f80f8ff99e012a7f2bb78d38b34e92baf202990342408c8`.
+All scan coefficient lanes and padding are initialized before comparison. Direct
+scan tables are explicitly constructed public records; canonical table construction
+and decoding retain their separate existing comparisons.
+
+Twenty-seven exact panic pairs also match consumed stream bytes and coefficient
+state: selector/late-length checks, block/component bounds before fill, restart
+overflow/division and missing DC/AC tables. Failure-state SHA-256 is
+`26a190953880f66299ebb8834f75b8ad3603c881efa5285386a06543b17fd46e`.
+Two complete constructors, twelve field-omission pairs and two immutable-binding
+rejection pairs pass with actual error-line checks excluding compiler crashes,
+backend and linker errors. Four separate pairs measure V byte carriers accepting
+16 where Source u4 selectors/approximation fields reject it. One pair measures V
+allowing scalar mutation through Scan's Frame pointer where Source's *const Frame
+rejects it. Source const pointee typing is not encoded in the V pointer carrier.
+Two bounded process pairs retain zero-horizontal/vertical-step loops without
+output when component sampling and restart processing permit them.
+
+Fixed component/prediction arrays, scalar metadata and reader bit state copy by
+value; Frame and stream targets remain shared. V optional struct unwrapping
+produces a local value, so payload updates require explicit slot replacement.
+The pinned V compiler also requires a named option entry before or-unwrapping a
+fixed-array element; direct syntax produces a C backend error. The probe and
+focused test use the compiling named-entry/writeback idiom. Source and selected
+compiler-library/version pins, before/after fixture/runner/implementation hashes,
+retained commands/diagnostics/corpus/state/consumers and summaries protect provenance.
+
+Existing Frame/record/decoder/historical JPEG comparisons keep their prior hashes
+and exclusions in both modes. All 57 image and 58 Vaxis test files, focused
+ordinary/production Scan tests and native/Linux application checks pass. Three
+Windows dependency DLLs, the new Windows test executable in both modes and two
+Linux shared libraries build with -gc none. Cross-target runtime is unverified.
+
+Unknown components accepted by Source's OR rule leave performScan indexes/sampling
+undefined and are compared in init only. Allocator/OOM/GC/lifetime, undefined
+coefficient storage, ABI, const/narrow integer/key typing, map layout/order/capacity,
+boxed quantization payload copies and arbitrary SIMD targets remain limits. The
+Source quantization.Header.read compiler failure and pinned no-op JPEG writer are
+unchanged. Reproduction, syntax and exact scope are in
+zigimg/reference_probes/jpeg_scan/README.md.

@@ -1,13 +1,14 @@
 module zigimg
 
 // Locked zigimg/jpeg/Scan.zig, retaining both baseline and progressive scans.
-struct JpegScanComponentSpec {
-	component_id      u8
-	dc_table_selector u8
-	ac_table_selector u8
+pub struct JpegScanComponentSpec {
+pub mut:
+	component_id      u8 @[required]
+	dc_table_selector u8 @[required]
+	ac_table_selector u8 @[required]
 }
 
-fn jpeg_scan_component_read(mut stream ReadStream) !JpegScanComponentSpec {
+pub fn JpegScanComponentSpec.read(mut stream ReadStream) !JpegScanComponentSpec {
 	id := stream.take_byte()!
 	selectors := stream.take_byte()!
 	return JpegScanComponentSpec{
@@ -22,26 +23,27 @@ mut:
 	value u32
 }
 
-struct JpegScan {
-mut:
-	frame                       &JpegFrame = unsafe { nil }
-	reader                      JpegHuffmanReader
-	components                  []?JpegScanComponentSpec = []?JpegScanComponentSpec{len: 4}
-	component_count             int
-	start_of_spectral_selection int
-	end_of_spectral_selection   int
-	approximation_high          u8
-	approximation_low           u8
-	prediction_values           [3]int
+@[heap]
+pub struct JpegScan {
+pub mut:
+	frame                       &JpegFrame                @[required]
+	reader                      JpegHuffmanReader         @[required]
+	components                  [4]?JpegScanComponentSpec @[required]
+	component_count             u8                        @[required]
+	start_of_spectral_selection u8                        @[required]
+	end_of_spectral_selection   u8                        @[required]
+	approximation_high          u8                        @[required]
+	approximation_low           u8                        @[required]
+	prediction_values           [3]int                    @[required]
 }
 
-fn jpeg_scan_init(mut frame JpegFrame, mut stream ReadStream) !JpegScan {
+pub fn JpegScan.init(frame &JpegFrame, mut stream ReadStream) !JpegScan {
 	segment_size := jpeg_u16(mut stream)!
-	count := int(stream.take_byte()!)
+	count := stream.take_byte()!
 	if count < 1 || count > 4 { return error('InvalidData') }
-	mut components := []?JpegScanComponentSpec{len: 4}
-	for i in 0 .. count {
-		component := jpeg_scan_component_read(mut stream)!
+	mut components := [4]?JpegScanComponentSpec{init: none}
+	for i in 0 .. int(count) {
+		component := JpegScanComponentSpec.read(mut stream)!
 		components[i] = component
 		mut valid := false
 		for frame_component in frame.frame_header.components {
@@ -56,8 +58,8 @@ fn jpeg_scan_init(mut frame JpegFrame, mut stream ReadStream) !JpegScan {
 		if frame.ac_huffman_tables.values[int(component.ac_table_selector)] != none { valid = true }
 		if !valid { return error('InvalidData') }
 	}
-	start := int(stream.take_byte()!)
-	end := int(stream.take_byte()!)
+	start := stream.take_byte()!
+	end := stream.take_byte()!
 	if start > 63 || end > 63 || end < start { return error('InvalidData') }
 	if frame.frame_type == 0xffc0 && (start != 0 || end != 63) { return error('InvalidData') }
 	if frame.frame_type == 0xffc2 {
@@ -66,9 +68,9 @@ fn jpeg_scan_init(mut frame JpegFrame, mut stream ReadStream) !JpegScan {
 		if any_zero && !both_zero { return error('InvalidData') }
 	}
 	approximation := stream.take_byte()!
-	if int(segment_size) != 2 * count + 6 { panic('reached unreachable code') }
+	if int(segment_size) != 2 * int(count) + 6 { panic('reached unreachable code') }
 	return JpegScan{
-		frame:                       &frame
+		frame:                       frame
 		reader:                      JpegHuffmanReader.init(mut stream)
 		components:                  components
 		component_count:             count
@@ -76,13 +78,15 @@ fn jpeg_scan_init(mut frame JpegFrame, mut stream ReadStream) !JpegScan {
 		end_of_spectral_selection:   end
 		approximation_high:          approximation >> 4
 		approximation_low:           approximation & 15
+		prediction_values:           [3]int{}
 	}
 }
 
-fn jpeg_perform_scan(mut frame JpegFrame, restart_interval u16, mut stream ReadStream) ! {
-	mut scan := jpeg_scan_init(mut frame, mut stream)!
+pub fn JpegScan.perform_scan(frame &JpegFrame, restart_interval u16, mut stream ReadStream) ! {
+	mut scan := JpegScan.init(frame, mut stream)!
 	mut skips := JpegScanSkips{}
-	first := scan.components[0] or { panic('missing JPEG scan component') }
+	entry := scan.components[0]
+	first := entry or { panic('attempt to use null value') }
 	noninterleaved := scan.component_count == 1 && first.component_id == 1
 	y_step := if noninterleaved { usize(1) } else { frame.vertical_sampling_factor_max }
 	x_step := if noninterleaved { usize(1) } else { frame.horizontal_sampling_factor_max }
@@ -90,14 +94,21 @@ fn jpeg_perform_scan(mut frame JpegFrame, restart_interval u16, mut stream ReadS
 	for y < usize(frame.block_height) {
 		mut x := usize(0)
 		for x < usize(frame.block_width) {
-			mcu_id := y * usize(frame.block_width_actual) + x
-			if restart_interval != 0 && mcu_id % (usize(restart_interval) * y_step * x_step) == 0 {
+			mcu_id := jpeg_add_usize(jpeg_mul_usize(y, usize(frame.block_width_actual)), x)
+			mut restart := false
+			if restart_interval != 0 {
+				interval := jpeg_mul_usize(jpeg_mul_usize(usize(restart_interval), y_step), x_step)
+				if interval == 0 { panic('division by zero') }
+				restart = mcu_id % interval == 0
+			}
+			if restart {
 				scan.reader.flush_bits()
 				scan.prediction_values = [3]int{}
 				skips.value = 0
 			}
-			for index in 0 .. scan.component_count {
-				component := scan.components[index] or { panic('missing JPEG scan component') }
+			for index in 0 .. int(scan.component_count) {
+				component_entry := scan.components[index]
+				component := component_entry or { panic('attempt to use null value') }
 				mut component_index := -1
 				mut v_max := 0
 				mut h_max := 0
@@ -114,35 +125,41 @@ fn jpeg_perform_scan(mut frame JpegFrame, restart_interval u16, mut stream ReadS
 				if component_index < 0 { panic('undefined JPEG scan component') }
 				for v in 0 .. v_max {
 					for h in 0 .. h_max {
-						id := (y + usize(v)) * usize(frame.block_width_actual) + x + usize(h)
+						id := jpeg_add_usize(jpeg_mul_usize(jpeg_add_usize(y, usize(v)),
+							usize(frame.block_width_actual)), jpeg_add_usize(x, usize(h)))
+						block_index := jpeg_index(id, frame.block_storage.len)
+						if component_index >= 3 {
+							panic('index out of bounds: index ${component_index}, len 3')
+						}
+						// Source takes this block pointer before attempting entropy fill.
 						scan.reader.fill_bits(24) or {}
 						if frame.frame_type == 0xffc0 {
 							scan.decode_block_baseline(component, mut
-								frame.block_storage[int(id)].blocks[component_index],
+								scan.frame.block_storage[block_index].blocks[component_index],
 								component_index)!
 						} else if frame.frame_type == 0xffc2 {
 							scan.decode_block_progressive(component, mut
-								frame.block_storage[int(id)].blocks[component_index],
+								scan.frame.block_storage[block_index].blocks[component_index],
 								component_index, mut skips)!
 						}
 					}
 				}
 			}
-			x += x_step
+			x = jpeg_add_usize(x, x_step)
 		}
-		y += y_step
+		y = jpeg_add_usize(y, y_step)
 	}
 }
 
 fn (mut scan JpegScan) dc_table(component JpegScanComponentSpec) {
-	entry := scan.frame.dc_huffman_tables.values[int(component.dc_table_selector)]
+	entry := scan.frame.dc_huffman_tables.values[jpeg_index(usize(component.dc_table_selector), 4)]
 	table := entry or { panic('attempt to use null value') }
 
 	scan.reader.set_huffman_table(table)
 }
 
 fn (mut scan JpegScan) ac_table(component JpegScanComponentSpec) {
-	entry := scan.frame.ac_huffman_tables.values[int(component.ac_table_selector)]
+	entry := scan.frame.ac_huffman_tables.values[jpeg_index(usize(component.ac_table_selector), 4)]
 	table := entry or { panic('attempt to use null value') }
 
 	scan.reader.set_huffman_table(table)
@@ -200,9 +217,9 @@ fn (mut scan JpegScan) decode_block_progressive(component JpegScanComponentSpec,
 	} else {
 		scan.ac_table(component)
 		if scan.approximation_high == 0 {
-			mut ac := scan.start_of_spectral_selection
+			mut ac := int(scan.start_of_spectral_selection)
 			if skips.value == 0 {
-				for ac <= scan.end_of_spectral_selection {
+				for ac <= int(scan.end_of_spectral_selection) {
 					mut coefficient := 0
 					run_magnitude := scan.reader.read_code()!
 					zero_run := run_magnitude >> 4
@@ -227,16 +244,16 @@ fn (mut scan JpegScan) decode_block_progressive(component JpegScanComponentSpec,
 			}
 			if skips.value > 0 {
 				skips.value--
-				for ac <= scan.end_of_spectral_selection {
+				for ac <= int(scan.end_of_spectral_selection) {
 					block.values[jpeg_zigzag_offsets[ac]] = 0
 					ac++
 				}
 			}
 		} else {
 			bit := int(1) << scan.approximation_low
-			mut ac := scan.start_of_spectral_selection
+			mut ac := int(scan.start_of_spectral_selection)
 			if skips.value == 0 {
-				for ac <= scan.end_of_spectral_selection {
+				for ac <= int(scan.end_of_spectral_selection) {
 					mut coefficient := 0
 					run_magnitude := scan.reader.read_code()!
 					mut zero_run := run_magnitude >> 4
@@ -250,7 +267,7 @@ fn (mut scan JpegScan) decode_block_progressive(component JpegScanComponentSpec,
 					} else {
 						coefficient = if scan.reader.read_bits(1)! == 1 { bit } else { -bit }
 					}
-					for ac <= scan.end_of_spectral_selection {
+					for ac <= int(scan.end_of_spectral_selection) {
 						if block.values[jpeg_zigzag_offsets[ac]] == 0 {
 							if zero_run > 0 {
 								zero_run--
@@ -274,7 +291,7 @@ fn (mut scan JpegScan) decode_block_progressive(component JpegScanComponentSpec,
 				}
 			}
 			if skips.value > 0 {
-				for ac <= scan.end_of_spectral_selection {
+				for ac <= int(scan.end_of_spectral_selection) {
 					if block.values[jpeg_zigzag_offsets[ac]] != 0 && scan.reader.read_bits(1)! != 0 {
 						block.values[jpeg_zigzag_offsets[ac]] = jpeg_add_i32(block.values[jpeg_zigzag_offsets[ac]], if block.values[jpeg_zigzag_offsets[ac]] > 0 {
 							bit
