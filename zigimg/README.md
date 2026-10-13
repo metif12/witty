@@ -555,6 +555,12 @@ larger than the file buffer and preserving its read-ahead state. The
 records / 22,460 calls and 108 exact panic/state pairs, including 1,380 complete
 image reads. Short-array observations exclude undefined unread/partial words.
 
+The [strip bounds comparison](reference_probes/tiff_strips/README.md) covers 3,260
+returning controls and 655 exact panic/state pairs. Native-width guards preserve
+complete index/length and null diagnostics, including destination validation
+before RGB/RGBA channel evaluation. Initialized caller pixels, palette backing,
+earlier strip writes and buffer state match Source through failures.
+
 TIFF read/readImage and strips now decode grayscale1/grayscale8/indexed8/RGB24/
 RGBA32 with uncompressed, PackBits, CCITT RLE, LZW, DEFLATE, and Pixar DEFLATE.
 Versions are ignored, only the first IFD is used, and compressed byte counts

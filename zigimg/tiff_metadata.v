@@ -134,6 +134,7 @@ pub fn (mut codec TIFF) decode_bitmap(mut stream ReadStream) ! {
 pub fn (codec TIFF) cal_row_byte_size() !usize {
 	mut bits := usize(0)
 	for index in 0 .. int(codec.bitmap.samples_per_pixel) {
+		tiff_check_index(usize(index), codec.bitmap.bits_per_sample.data.len)
 		value := usize(codec.bitmap.bits_per_sample.data[index])
 		if bits > ~usize(0) - value { panic('integer overflow') }
 		bits += value

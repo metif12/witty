@@ -1,5 +1,10 @@
 module zigimg
 
+@[inline]
+fn tiff_check_index(index usize, length int) {
+	if index >= usize(length) { panic('index out of bounds: index ${index}, len ${length}') }
+}
+
 pub fn (codec TIFF) uncompress_deflate(mut stream ReadStream, mut destination []u8) ! {
 	mut writer := WriteStream.init_memory(mut destination)
 	tiff_zlib_stream(mut stream, mut writer) or { return error('InvalidData') }
@@ -28,8 +33,8 @@ pub fn (codec TIFF) read_strips(mut stream ReadStream, mut pixels PixelStorage) 
 	if sum == 0 { panic('integer overflow') }
 	if bitmap.rows_per_strip == 0 { panic('division by zero') }
 	total_strips := (sum - 1) / bitmap.rows_per_strip
-	byte_counts := bitmap.strip_byte_counts or { panic('missing TIFF strip byte counts') }
-	offsets := bitmap.strip_offsets or { panic('missing TIFF strip offsets') }
+	byte_counts := bitmap.strip_byte_counts or { panic('attempt to use null value') }
+	offsets := bitmap.strip_offsets or { panic('attempt to use null value') }
 	width := bitmap.image_width
 	height := bitmap.image_height
 	rows := if bitmap.rows_per_strip < height { bitmap.rows_per_strip } else { height }
@@ -40,7 +45,9 @@ pub fn (codec TIFF) read_strips(mut stream ReadStream, mut pixels PixelStorage) 
 	for index := usize(0); index < total_strips; index++ {
 		current_rows := if total_strips > 1 && index < total_strips - 1 { rows } else { last_rows }
 		byte_count := image_pixel_count(usize(current_rows), row_bytes)
+		tiff_check_index(index, byte_counts.len)
 		compressed_count := byte_counts[int(index)]
+		tiff_check_index(index, offsets.len)
 		offset := offsets[int(index)]
 		// Source allocator memory and pixels left unwritten are undefined. V's
 		// zero initialization is a recorded representation boundary.
@@ -75,6 +82,7 @@ pub fn (codec TIFF) read_strips(mut stream ReadStream, mut pixels PixelStorage) 
 				for byte in strip {
 					for bit in 0 .. 8 {
 						value := (byte >> (7 - bit)) & 1
+						tiff_check_index(pixel_index, pixels.data.len)
 						pixels.data[int(pixel_index)].value = if bitmap.photometric_interpretation == 1 {
 							value
 						} else {
@@ -92,6 +100,7 @@ pub fn (codec TIFF) read_strips(mut stream ReadStream, mut pixels PixelStorage) 
 			}
 			Grayscale8Pixels {
 				for byte in strip {
+					tiff_check_index(pixel_index, pixels.data.len)
 					value := if bitmap.predictor == 1 || pixel_index % width == 0 {
 						byte
 					} else {
@@ -105,9 +114,11 @@ pub fn (codec TIFF) read_strips(mut stream ReadStream, mut pixels PixelStorage) 
 			}
 			IndexedStorage8 {
 				for color_index, color in bitmap.color_map.data {
+					tiff_check_index(usize(color_index), pixels.palette.len)
 					pixels.palette[color_index] = color
 				}
 				for byte in strip {
+					tiff_check_index(pixel_index, pixels.indices.len)
 					value := if bitmap.predictor == 1 || pixel_index % width == 0 {
 						byte
 					} else {
@@ -122,13 +133,20 @@ pub fn (codec TIFF) read_strips(mut stream ReadStream, mut pixels PixelStorage) 
 			Rgb24Pixels {
 				for strip_index := 0; strip_index < strip.len; strip_index += 3 {
 					if bitmap.predictor == 1 || pixel_index % width == 0 {
+						tiff_check_index(pixel_index, pixels.data.len)
+						tiff_check_index(usize(strip_index) + 1, strip.len)
+						tiff_check_index(usize(strip_index) + 2, strip.len)
 						pixels.data[int(pixel_index)] = Rgb24{
 							r: strip[strip_index]
 							g: strip[strip_index + 1]
 							b: strip[strip_index + 2]
 						}
 					} else {
+						tiff_check_index(pixel_index - 1, pixels.data.len)
 						previous := pixels.data[int(pixel_index - 1)]
+						tiff_check_index(pixel_index, pixels.data.len)
+						tiff_check_index(usize(strip_index) + 1, strip.len)
+						tiff_check_index(usize(strip_index) + 2, strip.len)
 						pixels.data[int(pixel_index)] = Rgb24{
 							r: previous.r + strip[strip_index]
 							g: previous.g + strip[strip_index + 1]
@@ -143,6 +161,10 @@ pub fn (codec TIFF) read_strips(mut stream ReadStream, mut pixels PixelStorage) 
 			Rgba32Pixels {
 				for strip_index := 0; strip_index < strip.len; strip_index += 4 {
 					if bitmap.predictor == 1 || pixel_index % width == 0 {
+						tiff_check_index(pixel_index, pixels.data.len)
+						tiff_check_index(usize(strip_index) + 1, strip.len)
+						tiff_check_index(usize(strip_index) + 2, strip.len)
+						tiff_check_index(usize(strip_index) + 3, strip.len)
 						pixels.data[int(pixel_index)] = Rgba32{
 							r: strip[strip_index]
 							g: strip[strip_index + 1]
@@ -150,7 +172,12 @@ pub fn (codec TIFF) read_strips(mut stream ReadStream, mut pixels PixelStorage) 
 							a: strip[strip_index + 3]
 						}
 					} else {
+						tiff_check_index(pixel_index - 1, pixels.data.len)
 						previous := pixels.data[int(pixel_index - 1)]
+						tiff_check_index(pixel_index, pixels.data.len)
+						tiff_check_index(usize(strip_index) + 1, strip.len)
+						tiff_check_index(usize(strip_index) + 2, strip.len)
+						tiff_check_index(usize(strip_index) + 3, strip.len)
 						pixels.data[int(pixel_index)] = Rgba32{
 							r: previous.r + strip[strip_index]
 							g: previous.g + strip[strip_index + 1]

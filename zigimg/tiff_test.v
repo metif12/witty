@@ -185,6 +185,44 @@ fn test_tiff_read_both_endians_multiple_strips_and_unvalidated_version() {
 	}
 }
 
+fn test_tiff_strip_rgb_conversion_retains_initialized_gaps_between_strips() {
+	path := os.join_path(os.temp_dir(), 'witty-tiff-rgb-gaps-${os.getpid()}')
+	defer { os.rm(path) or {} }
+	bytes := [u8(99), 3, 8, 13, 18, 23, 28]
+	for capacity in [0, 4, 8, 16] {
+		mut stream := ReadStream.init_memory(bytes)
+		mut buffer := []u8{len: capacity, init: 165}
+		mut file := os.File{}
+		if capacity > 0 {
+			os.write_file_array(path, bytes)!
+			file = os.open(path)!
+			stream = ReadStream.init_file(file, mut buffer)
+		}
+		mut codec := TIFF{
+			bitmap: TiffBitmapDescriptor{
+				image_width:       3
+				image_height:      2
+				rows_per_strip:    1
+				predictor:         2
+				strip_offsets:     [u32(1), 4]
+				strip_byte_counts: [u32(0), 0]
+			}
+		}
+		codec.bitmap.bits_per_sample.resize(1)
+		codec.bitmap.bits_per_sample.data[0] = 8
+		mut pixels := PixelStorage.init(.rgb24, 6)!
+		mut initial := pixels.as_bytes()
+		for i in 0 .. initial.len {
+			initial[i] = 165
+		}
+		codec.read_strips(mut stream, mut pixels)!
+		assert pixels.as_const_bytes() == [u8(3), 8, 13, 165, 165, 165, 165, 165, 165, 18, 23,
+			28, 165, 165, 165, 165, 165, 165]
+		assert stream.get_pos() == 7
+		if capacity > 0 { file.close() }
+	}
+}
+
 fn test_tiff_one_bit_floor_rows_polarity_and_short_defined_prefix() {
 	for photo in [u16(0), 1] {
 		mut codec := TIFF{

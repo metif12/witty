@@ -44,8 +44,14 @@ rebase trap. Palette cells read before the palette-destination trap are
 explicitly initialized in both consumers. A failure requires nonzero exit,
 empty stdout, no `UNEXPECTED` marker anywhere and the expected category in an
 actual panic header. Returned errors and incidental source/backtrace text
-cannot pass. Explicit V null/array diagnostic mappings preserve existing host
-messages without asserting panic ABI or byte-for-byte diagnostic parity.
+cannot pass. Existing category checks permit host-specific messages and do not
+assert panic ABI or byte-for-byte diagnostic parity.
+
+Strip null and bounds guards now preserve Source's complete diagnostics. The
+[strip failure proof](../tiff_strips/README.md) additionally checks exact messages,
+destination/channel evaluation order, retained caller pixels/palettes, earlier
+strip writes and memory/file buffer state. This older runner retains its category
+checks and unchanged returning golden.
 
 Undefined allocator tails/unwritten pixels, giant allocations beyond V's
 signed-int array representation, allocator failures/reclamation, ABI, complete

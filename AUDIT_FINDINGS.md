@@ -5659,3 +5659,61 @@ Source's assertion. Source/library/version and before/after implementation,
 fixture, runner, helper and corpus hashes protect the proof. Pinned TIFF encoding
 still emits no bytes. Scope and reproduction are in
 [the buffered TIFF array proof](zigimg/reference_probes/tiff_arrays/README.md).
+
+
+### TIFF strip failure order and retained caller pixels checkpoint — 2026-10-14
+
+Missing strip arrays used custom null messages, while row samples, strip arrays,
+pixels, palettes and RGB/RGBA channels relied on V's generic bounds diagnostics.
+RGB/RGBA assignments also evaluated source channels before checking a short
+destination, unlike Source's direct assignment order. Native-width guards now
+preserve the full offending index/length, exact null message and evaluation order
+in ordinary and production builds. Predictor branches retain the previous-color
+read before destination validation; successful conversion and clipping are
+unchanged.
+
+Both modes match **3,260 returning controls**, SHA-256
+`8a6553fe35a72b05568327affd1f3d47a6daf6eb21e77f5c2d424d2900a89b69`, and
+**655 exact panic/state pairs**, SHA-256
+`30a332c0c8eae15fb682a521ebe56eab10b1cfbd13457d02008247b4d289833c`.
+Memory and 4/8/16/64-byte file buffers cover five handled pixel layouts and
+unsupported grayscale16 storage, raw/LZW/PackBits/DEFLATE/Pixar DEFLATE, multiple
+row spans, predictors, first-strip clipping, initialized gaps, zero-byte strips
+and recoverable unsupported/seek errors. Failures cover null/arithmetic ordering,
+row samples before strip indexing, shorter count/offset arrays after earlier
+writes, palette copying before pixels, destination/channel combinations and
+partial last-strip channels. Actual compiled unchanged Source supplies each full
+diagnostic and state oracle; no bodies or private visibility are modified.
+
+Snapshots retain position, buffered length, initialized caller file buffers,
+format/length and every caller pixel, active palette length and all 256 initialized
+backing entries. Complete initialized bitmap scalars/rationals, optional arrays
+(including null/present-empty), active fixed-storage lengths and all backing
+entries are retained. Grayscale1 observes semantic values; unused undefined
+header/IFD fields and private failed strips are excluded. Prior completed strips
+and partially copied palettes remain observable through failures.
+
+The initial pre-fix comparison matched 3,320 returning controls before rejecting
+the custom null diagnostic. Separate compiled controls establish destination
+bounds before channel bounds and retain equal caller snapshots. Nominal zero-bit
+unsupported controls were replaced with actual zero-byte strips. An intermediate
+wide fixture argument overflowed its u32 parser before reaching the codec; that
+error remains separate from corrected proofs. The module golden retains RGB
+gaps between memory/file strips.
+
+All 61 image and 58 Vaxis test files pass, with eighteen production/platform and
+four final formatting/diff/Python checks. Historical metadata's 86-record hash and
+fifteen trap pairs, arrays' 18,820-record and 108-state hashes, and the decoder's
+39,707-case hash and seventeen trap pairs remain unchanged in both modes. The
+older decoder's null categories now require the aligned messages. Previous proof
+archives were fully read back and verified before pruning expanded duplicates
+to recover disk space.
+
+Undefined short-strip bytes, unwritten codec-owned pixels, unused header/IFD
+state, private failed allocations, arbitrary larger extents, V's signed-int array
+limit, OOM/GC/lifetime, forged/invalid storage, custom/nonseekable readers,
+physical/narrow/const representation, other-target runtime and portable ABI remain
+boundaries. File DEFLATE still requires a native-word-sized buffer. Source/library/
+version and before/after implementation, fixture, runner, helper and corpus hashes
+protect the proof. Pinned TIFF encoding still emits no bytes. Reproduction and
+scope are in [the strip failure proof](zigimg/reference_probes/tiff_strips/README.md).

@@ -27,8 +27,8 @@ BOUNDS = {
        ("sum_overflow", "sum_underflow", "ccitt_run", "pixel_overflow", "packbits_zero")},
     **{name: ("division by zero", "division by zero") for name in
        ("zero_rows", "empty_height")},
-    "missing_counts": ("attempt to use null value", "missing TIFF strip byte counts"),
-    "missing_offsets": ("attempt to use null value", "missing TIFF strip offsets"),
+    "missing_counts": ("attempt to use null value", "attempt to use null value"),
+    "missing_offsets": ("attempt to use null value", "attempt to use null value"),
     **{name: ("index out of bounds", ("index out of bounds", "array.get: index out of range",
                                     "array.set: index out of range")) for name in
        ("short_counts", "short_offsets", "zero_pixels", "rgb_stride", "palette_bounds",
