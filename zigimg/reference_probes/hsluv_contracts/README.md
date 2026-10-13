@@ -40,20 +40,19 @@ All five previously recorded scientific production differences are closed.
 
 The 5,792-row colorspace history remains exact in ordinary mode, hash
 `262e3417fd251373234d20d0b06d7fe53adc63028db4a708a71d99677cf9d6a0`.
-Production closes sixteen of its former 32 differences and retains **16
-cylindrical-conversion differences**. Source ReleaseSafe hash is
-`f5cd4a24f8ea84428809ee7d55725c652f38d25add39f402276b1b62949fd5ba`; V production
-hash is `2043e0e258e164d0671082d5a356d5a80c2f993580dee63aae38c8258e6d79cd`.
-The remaining difference hash is
-`e32e3f667c6a3c4e437f9fd658f7f3e10a3f32f67b835f944d958ca9ae5064d1`.
-Every mismatch retains its full input and both outputs; any changed result,
-additional mismatch or missing case fails verification.
+At the HSLuv checkpoint, production closed sixteen of the former 32 differences.
+The subsequent cylindrical RGB consumer pass closes the remaining sixteen.
+Production now matches Source ReleaseSafe exactly, hash
+`f5cd4a24f8ea84428809ee7d55725c652f38d25add39f402276b1b62949fd5ba`.
+All corresponding-mode color result pins require zero differences. The larger
+50,832-record proof and consumer-specific evaluation are documented in
+[the cylindrical colorspace probe](../cylindrical_colorspace/README.md).
 
 A broad paired-call preview introduced 109 scientific mismatches while the
 Source ReleaseSafe public roundtrips retained separate-call results. This is
 consistent with caller-dependent LLVM selection, rather than a uniform rule
-for all cylindrical APIs. That preview was discarded. Exact optimized parity
-for the remaining colorspace cases is not claimed. Cross-mode observations
+for all cylindrical APIs. That preview was discarded. The later consumer-specific pass establishes exact parity for its represented
+colorspace paths, while retaining standalone scientific results. Cross-mode observations
 (Source ReleaseSafe versus ordinary V) remain separate controls in the matrix
 runner; they do not count as corresponding-mode regressions.
 

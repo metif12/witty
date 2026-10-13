@@ -319,8 +319,8 @@ payloads after cell, row and whole-field mutation. Three required-field and
 eighteen immutable-field rejection pairs pass. V 0.5.2 still ignores the required
 attribute on generic `Matrix[B]`; its six omission controls record that limitation.
 The historical arithmetic and ordinary color hashes remain unchanged. The color histories
-now use corresponding Source modes. Scientific production matches ReleaseSafe;
-16 optimized colorspace differences remain. Details, compiler limits
+now use corresponding Source modes. Scientific and colorspace production match
+ReleaseSafe exactly. Details, compiler limits
 and reproduction are in
 [the matrix contract probe](reference_probes/matrix_contracts/README.md).
 
@@ -329,10 +329,18 @@ Their 9,424-record contract comparison matches Source Debug/ordinary V and
 ReleaseSafe/production V, with seven required-field and seven immutable-field
 rejection pairs. Darwin production uses the native paired trig primitive for
 HSLuv ray evaluation. This closes all five scientific and sixteen colorspace
-differences from the preceding checkpoint; sixteen cylindrical-conversion
-differences remain separately pinned. The float4 signature typos are preserved.
+differences from its preceding checkpoint; the later cylindrical consumer pass
+closes the remaining sixteen differences. The float4 signature typos are preserved.
 Reproduction and limits are in
 [the HSLuv contract probe](reference_probes/hsluv_contracts/README.md).
+
+All six cylindrical RGB entry points evaluate their polar components together
+before matrix conversion. The 50,832-case comparison covers all presets,
+Lab/Luv/Oklab families, alpha variants, clamp modes, unusual float values and
+unchanged caller inputs in both corresponding compiler modes. The full 5,792-row
+colorspace history now matches Source Debug and ReleaseSafe exactly; standalone
+scientific-color results are preserved. Reproduction and limits are in
+[the cylindrical colorspace probe](reference_probes/cylindrical_colorspace/README.md).
 
 CIE XYZ/Lab/Luv/LCh, HSLuv and Oklab models retain scalar, alpha and Float4
 conversion APIs. The 6,961-case comparison preserves every non-NaN output

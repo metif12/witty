@@ -46,13 +46,11 @@ Ordinary mode retains all original matching hashes:
 All histories now use corresponding Source Debug/ReleaseSafe modes. Named and
 generic math retain their hashes in production. Scientific production matches
 `0f89855f7a8b779c3c40600a456fe34c9f88e8a006fb1702ce0d1906b7a939a8` exactly.
-Production colorspaces match 5,776 records and retain sixteen differences,
-Source hash `f5cd4a24f8ea84428809ee7d55725c652f38d25add39f402276b1b62949fd5ba`,
-V hash `2043e0e258e164d0671082d5a356d5a80c2f993580dee63aae38c8258e6d79cd`,
-difference hash `e32e3f667c6a3c4e437f9fd658f7f3e10a3f32f67b835f944d958ca9ae5064d1`.
-The HSLuv ray change closes the five scientific and sixteen colorspace production
-differences originally recorded by this probe; details are in
-[the HSLuv probe](../hsluv_contracts/README.md).
+Production colorspaces match all 5,792 records exactly, hash
+`f5cd4a24f8ea84428809ee7d55725c652f38d25add39f402276b1b62949fd5ba`.
+The HSLuv and cylindrical RGB consumer passes close all previously recorded
+corresponding-mode color differences. Result pins now require zero differences;
+details are in [the cylindrical colorspace probe](../cylindrical_colorspace/README.md).
 Arithmetic comparisons canonicalize NaN payloads, retaining all other bits.
 The three V shape guards remain active in production.
 
@@ -61,7 +59,8 @@ retain the original five scientific and 32 colorspace differences. They describe
 build-mode effects, not corresponding-mode regressions. The ordinary Source/ V
 binaries use separate sin/cos symbols; corresponding production binaries import
 Apple's combined `___sincosf_stret`. Full inputs and both differing outputs are
-retained with exact counts/hashes, without claiming full optimized color parity.
+retained with exact counts/hashes. Corresponding-mode parity is established for
+the represented corpora; other compiler/SDK/caller paths remain unproven.
 
 Source/stdlib/compiler versions and before/after implementation, runner, fixture,
 corpus-generator, input and consumer hashes protect the proof. Complete Source

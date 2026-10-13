@@ -4728,3 +4728,47 @@ Undefined storage, floating-point exception flags, physical ABI, lifetime/alloca
 other compiler/SDK implementations and unrepresented caller optimizations remain
 boundaries. Constructor examples, result pins and reproduction are in
 [the HSLuv contract probe](zigimg/reference_probes/hsluv_contracts/README.md).
+
+### Cylindrical RGB consumer rounding checkpoint
+
+The remaining sixteen optimized colorspace differences came from Lab/Luv/Oklab
+cylindrical RGB consumers. Source inlines their polar components before matrix
+conversion; V previously routed them through standalone methods with independent
+trig calls. The six plain/alpha RGB entry points now use three private V helpers
+that evaluate both components together through the existing corresponding-mode
+math primitive. Alpha is copied explicitly; RGB conversion, matrix arithmetic and
+clamp order remain source-shaped. Public standalone cylindrical methods retain
+their behavior, preserving the scientific-color consumers.
+
+`verify_cylindrical_colorspace_reference.py` matches **50,832 new records** in each
+mode: ordinary V/Source Debug SHA-256
+`28d84845b25575f8818f23627bc011f621bb44fd3c0cb8af508eca9a15f8fe71`, and production
+V/Source ReleaseSafe SHA-256
+`3d1e90958a919819ccf65ddc2d0d2abbdb460d34892411d61c2b13e375ce4173`.
+All presets, three cylindrical families, plain/alpha variants and both clamp
+behaviors receive boundary and random inputs. Output non-NaN bits/NaN occurrence
+and every retained caller-input bit match. Signed zero, subnormals, large angles,
+infinities, NaNs and unusual alpha values are included.
+
+The **5,792-row colorspace history now matches corresponding modes exactly**:
+ordinary retains its previous hash, and production matches native ReleaseSafe
+`f5cd4a24f8ea84428809ee7d55725c652f38d25add39f402276b1b62949fd5ba`.
+All sixteen preceding corresponding-mode differences are closed; result pins
+require zero differences. The 6,961 scientific-color and 9,424 HSLuv records
+retain both mode hashes. HSLuv frontend controls and the 6,208 matrix-copy,
+12,419 named-math and 6,467 generic-math hashes remain unchanged. The three
+production shape guards and six generic required-field adaptation controls remain.
+Cross-mode ordinary/ReleaseSafe observations are distinct from regressions.
+
+All 61 image and 58 Vaxis test files, seventeen production/platform commands and
+four standalone color-runner invocations pass. Source/library/math/SDK/compiler
+pins and before/after implementation/runner/fixture/input hashes protect the new
+proof. Unchanged Source at original visibility is the numeric oracle; no model
+supplies expected values. Original mismatches and before-change implementations
+are retained with the verified artifact.
+
+Undefined storage, physical ABI, floating-point exception flags, allocation/lifetime,
+other compiler/SDK math implementations and unrepresented callers remain boundaries.
+Exact results are scoped to the represented native consumer paths; cross builds
+establish compilation coverage. Details and reproduction are in
+[the cylindrical colorspace probe](zigimg/reference_probes/cylindrical_colorspace/README.md).

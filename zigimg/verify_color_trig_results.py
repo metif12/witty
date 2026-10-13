@@ -1,4 +1,4 @@
-"""Exact historical color pins and retained caller-optimization differences."""
+"""Exact corresponding-mode historical color result pins."""
 import hashlib
 
 EMPTY_SHA256 = hashlib.sha256(b'').hexdigest()
@@ -15,8 +15,7 @@ COLOR_RESULTS = {
         '262e3417fd251373234d20d0b06d7fe53adc63028db4a708a71d99677cf9d6a0', 0, EMPTY_SHA256),
     ('color_space', True): (5792,
         'f5cd4a24f8ea84428809ee7d55725c652f38d25add39f402276b1b62949fd5ba',
-        '2043e0e258e164d0671082d5a356d5a80c2f993580dee63aae38c8258e6d79cd',
-        16, 'e32e3f667c6a3c4e437f9fd658f7f3e10a3f32f67b835f944d958ca9ae5064d1'),
+        'f5cd4a24f8ea84428809ee7d55725c652f38d25add39f402276b1b62949fd5ba', 0, EMPTY_SHA256),
 }
 
 

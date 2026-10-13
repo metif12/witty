@@ -195,7 +195,7 @@ pub fn (space RgbColorspace) to_oklab_alpha(value Colorf32) OklabAlpha {
 }
 
 pub fn (space RgbColorspace) from_lchab(value CIELCHab, behavior PostConversionBehavior) Colorf32 {
-	return space.from_lab(value.to_lab(), behavior)
+	return space.from_lab(science_lchab_for_rgb(value), behavior)
 }
 
 pub fn (space RgbColorspace) to_lchab(value Colorf32) CIELCHab {
@@ -203,7 +203,9 @@ pub fn (space RgbColorspace) to_lchab(value Colorf32) CIELCHab {
 }
 
 pub fn (space RgbColorspace) from_lchab_alpha(value CIELCHabAlpha, behavior PostConversionBehavior) Colorf32 {
-	return space.from_lab_alpha(value.to_lab_alpha(), behavior)
+	color := science_lchab_for_rgb(value.to_lchab())
+	return space.from_lab_alpha(CIELabAlpha{ l: color.l, a: color.a, b: color.b, alpha: value.alpha },
+		behavior)
 }
 
 pub fn (space RgbColorspace) to_lchab_alpha(value Colorf32) CIELCHabAlpha {
@@ -211,7 +213,7 @@ pub fn (space RgbColorspace) to_lchab_alpha(value Colorf32) CIELCHabAlpha {
 }
 
 pub fn (space RgbColorspace) from_lchuv(value CIELCHuv, behavior PostConversionBehavior) Colorf32 {
-	return space.from_luv(value.to_luv(), behavior)
+	return space.from_luv(science_lchuv_for_rgb(value), behavior)
 }
 
 pub fn (space RgbColorspace) to_lchuv(value Colorf32) CIELCHuv {
@@ -219,7 +221,9 @@ pub fn (space RgbColorspace) to_lchuv(value Colorf32) CIELCHuv {
 }
 
 pub fn (space RgbColorspace) from_lchuv_alpha(value CIELCHuvAlpha, behavior PostConversionBehavior) Colorf32 {
-	return space.from_luv_alpha(value.to_luv_alpha(), behavior)
+	color := science_lchuv_for_rgb(value.to_lchuv())
+	return space.from_luv_alpha(CIELuvAlpha{ l: color.l, u: color.u, v: color.v, alpha: value.alpha },
+		behavior)
 }
 
 pub fn (space RgbColorspace) to_lchuv_alpha(value Colorf32) CIELCHuvAlpha {
@@ -227,7 +231,7 @@ pub fn (space RgbColorspace) to_lchuv_alpha(value Colorf32) CIELCHuvAlpha {
 }
 
 pub fn (space RgbColorspace) from_ok_lch(value OkLCh, behavior PostConversionBehavior) Colorf32 {
-	return space.from_oklab(value.to_oklab(), behavior)
+	return space.from_oklab(science_ok_lch_for_rgb(value), behavior)
 }
 
 pub fn (space RgbColorspace) to_ok_lch(value Colorf32) OkLCh {
@@ -235,7 +239,9 @@ pub fn (space RgbColorspace) to_ok_lch(value Colorf32) OkLCh {
 }
 
 pub fn (space RgbColorspace) from_ok_lch_alpha(value OkLChAlpha, behavior PostConversionBehavior) Colorf32 {
-	return space.from_oklab_alpha(value.to_oklab_alpha(), behavior)
+	color := science_ok_lch_for_rgb(value.to_ok_lch())
+	return space.from_oklab_alpha(OklabAlpha{ l: color.l, a: color.a, b: color.b, alpha: value.alpha },
+		behavior)
 }
 
 pub fn (space RgbColorspace) to_ok_lch_alpha(value Colorf32) OkLChAlpha {
@@ -256,6 +262,36 @@ pub fn (space RgbColorspace) from_hsluv_alpha(value HSLuvAlpha, behavior PostCon
 
 pub fn (space RgbColorspace) to_hsluv_alpha(value Colorf32) HSLuvAlpha {
 	return HSLuvAlpha.from_cielchuv_alpha(space.to_lchuv_alpha(value), space.xyza_to_rgba)
+}
+
+// Source inlines both polar components into colorspace conversion before its
+// matrix operations. Preserve the paired Darwin production intrinsic here;
+// standalone cylindrical records retain their independent scalar calls.
+fn science_lchab_for_rgb(value CIELCHab) CIELab {
+	sine, cosine := color_sincos_f32(value.h)
+	return CIELab{
+		l: value.l
+		a: value.c * cosine
+		b: value.c * sine
+	}
+}
+
+fn science_lchuv_for_rgb(value CIELCHuv) CIELuv {
+	sine, cosine := color_sincos_f32(value.h)
+	return CIELuv{
+		l: value.l
+		u: value.c * cosine
+		v: value.c * sine
+	}
+}
+
+fn science_ok_lch_for_rgb(value OkLCh) Oklab {
+	sine, cosine := color_sincos_f32(value.h)
+	return Oklab{
+		l: value.l
+		a: value.c * cosine
+		b: value.c * sine
+	}
 }
 
 // Source slice APIs reinterpret the same four-float records. The borrowed
