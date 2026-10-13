@@ -83,9 +83,11 @@ pairs retain both hashes. TIFF/PNG regression hashes remain unchanged. Native
 module tests and platform build checks pass; cross builds provide build coverage.
 
 The [boolean extension](../bitstream_bool/README.md) separately covers bool and
-its V aliases, including checked one-bit results.
+its V aliases, including checked one-bit results. The
+[packed RGB extension](../bitstream_packed/README.md) covers all four packed color
+records, their aliases and 15-bit working arithmetic.
 
-Source's non-native scalar widths, packed values, u4 field typing, required
+Source's other non-native scalar widths, arbitrary packed values, u4 field typing, required
 marker enforcement, underlying std.Io interfaces, allocation/GC/lifetime/OOM,
 file-platform runtime, physical layout and portable ABI remain boundaries.
 Source visibility and implementation are unchanged. Complete Source-tree SHA-256

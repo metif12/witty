@@ -524,10 +524,13 @@ PBM/PGM/PPM preserve the pinned parser's comments, 16-byte number buffer,
 single raster delimiter, bitmap polarity/padding, and format-specific sample
 scaling. Both per-codec and image-wide options are available. The bit streams
 specialize on `BigEndian` or
-`LittleEndian` and support bool, V's native integer and floating point scalar types;
+`LittleEndian` and support bool, V's native integer and floating point scalar types,
+and the four packed RGB color records;
 Zig's arbitrary-width integers and other bit-castable types remain a boundary.
 The [boolean comparison](reference_probes/bitstream_bool/README.md) covers one-bit
-result checks, aliases, padding and retained failure state in both modes.
+result checks, aliases, padding and retained failure state in both modes. The
+[packed RGB comparison](reference_probes/bitstream_packed/README.md) covers every
+logical color word and the 555 types' 15-bit shifts, padding and failure state.
 
 Run the V checks with the repository's pinned compiler:
 

@@ -5059,3 +5059,36 @@ underlying std.Io interfaces, allocation/lifetime, file-platform runtime and
 portable ABI remain boundaries. Details, compiler/library pins, reproduction and
 retained artifacts are in
 [the boolean bit-stream proof](zigimg/reference_probes/bitstream_bool/README.md).
+
+### Packed RGB bit-stream translation checkpoint — 2026-10-13
+
+Public bit-stream reads/writes now accept Rgb332, Rgb555, Rgb565, Bgr555 and
+aliases. RGB555/BGR555 retain u15 working arithmetic despite V's u16 raw
+carrier. Reads truncate after each shift/OR, writes ignore the padding bit, and
+shift 15 retains `shift amount is greater than the type size` separately from
+larger shift arguments' checked cast failures. Checks stay active in production.
+
+The unchanged-source proof matches **273,066 returning/error observations** and
+**567 exact failure/state pairs** in both corresponding modes. Return SHA-256 is
+`d39aa4c766ca640e07beda5a21f1ea596762ea6761fd085d1951eba159eafd98`; state SHA-256 is
+`4f357b8f6c9d5c4f42e145368dbf10de2ec446c0ed0f44ff9f55b1d585d8c6f5`.
+Every logical packed value is read and written; dense cases alternate endian
+order, while boundary, continuation and seeded random cases instantiate both
+orders, types and aliases. Buffered bits, EOF, copies, borrowed input mutation,
+capacities, oversized operations, padding, continuation and flush retries retain
+Source behavior. Forty-eight accepted consumer pairs pass per mode. Shared
+fixtures add packed dispatch without altering Source bodies or visibility.
+
+Historical scalar (136,889 records/1,064 failure pairs) and boolean (22,849
+records/1,049 failure pairs) hashes stay unchanged in both modes. All 61 image
+and 58 Vaxis test files pass, with twenty-three production/platform checks
+including Windows/Linux builds of the extended fixture. Two 180-second
+production compile timeouts are retained; both comparisons passed with a
+600-second command limit and unchanged compiler options.
+
+Other non-native integer widths, arbitrary packed callers, undefined native
+padding, physical layout, arbitrary endian types, generic required fields,
+u4 field typing, underlying std.Io interfaces, allocation/lifetime,
+file-platform runtime and portable ABI remain boundaries. Details, reproduction,
+pins and retained artifacts are in
+[the packed RGB bit-stream proof](zigimg/reference_probes/bitstream_packed/README.md).

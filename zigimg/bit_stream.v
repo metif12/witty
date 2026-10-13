@@ -44,11 +44,12 @@ pub fn (mut stream BitReader[E]) read_bits_tuple[E, T](num u16) !(T, u16) {
 			}
 			out |= byte
 		} $else $if E.unaliased_typ is LittleEndian {
-			if out_count >= sizeof(T) * 8 { panic('integer does not fit in destination type') }
+			bit_check_shift[T](out_count)
 			out |= u64(byte) << out_count
 		} $else {
 			$compile_error('BitReader requires BigEndian or LittleEndian')
 		}
+		out = bit_working_value[T](out)
 		out_count += 8
 	}
 	bits_left := num - out_count
@@ -59,17 +60,17 @@ pub fn (mut stream BitReader[E]) read_bits_tuple[E, T](num u16) !(T, u16) {
 		return err
 	}
 	$if E.unaliased_typ is BigEndian {
-		if bits_left >= sizeof(T) * 8 { panic('integer does not fit in destination type') }
+		bit_check_shift[T](bits_left)
 		out <<= bits_left
 		out |= final_byte >> keep
 		stream.bits = final_byte & bit_mask(keep)
 	} $else $if E.unaliased_typ is LittleEndian {
-		if out_count >= sizeof(T) * 8 { panic('integer does not fit in destination type') }
+		bit_check_shift[T](out_count)
 		out |= u64(final_byte & bit_mask(u8(bits_left))) << out_count
 		stream.bits = final_byte >> bits_left
 	}
 	stream.count = keep
-	return bit_value_from_bits[T](out), num
+	return bit_value_from_bits[T](bit_working_value[T](out)), num
 }
 
 fn (mut stream BitReader[E]) remove_bits[E](num u8) u8 {
@@ -121,13 +122,11 @@ pub fn (mut stream BitWriter[E]) write_bits[E, T](value T, num u16) ! {
 			return stream.flush_bits()
 		}
 		$if E.unaliased_typ is BigEndian {
-			if in_count - bits_free >= sizeof(T) * 8 {
-				panic('integer does not fit in destination type')
-			}
+			bit_check_shift[T](in_count - bits_free)
 			stream.add_bits(u8(input >> (in_count - bits_free)), bits_free)
 		} $else $if E.unaliased_typ is LittleEndian {
 			stream.add_bits(u8(input), bits_free)
-			if bits_free >= sizeof(T) * 8 { panic('integer does not fit in destination type') }
+			bit_check_shift[T](u16(bits_free))
 			input >>= bits_free
 		} $else {
 			$compile_error('BitWriter requires BigEndian or LittleEndian')
@@ -138,7 +137,7 @@ pub fn (mut stream BitWriter[E]) write_bits[E, T](value T, num u16) ! {
 	full_bytes_left := in_count / 8
 	for _ in 0 .. full_bytes_left {
 		$if E.unaliased_typ is BigEndian {
-			if in_count - 8 >= sizeof(T) * 8 { panic('integer does not fit in destination type') }
+			bit_check_shift[T](in_count - 8)
 			stream.writer.write_byte(u8(input >> (in_count - 8)))!
 		} $else $if E.unaliased_typ is LittleEndian {
 			stream.writer.write_byte(u8(input))!
@@ -187,9 +186,44 @@ fn bit_mask(count u8) u8 {
 	return u8((u16(1) << count) - 1)
 }
 
+// Source uses u15 for its two 555 packed records, with a u4 shift argument.
+// A shift of 15 fits that argument but still exceeds the working type's width.
+fn bit_check_shift[T](amount u16) {
+	$if T.unaliased_typ is Rgb555 || T.unaliased_typ is Bgr555 {
+		if amount > 15 { panic('integer does not fit in destination type') }
+		if amount == 15 { panic('shift amount is greater than the type size') }
+	} $else {
+		if amount >= sizeof(T) * 8 { panic('integer does not fit in destination type') }
+	}
+}
+
+fn bit_working_value[T](value u64) u64 {
+	$if T.unaliased_typ is Rgb555 || T.unaliased_typ is Bgr555 {
+		return value & 0x7fff
+	} $else {
+		return value
+	}
+}
+
 // Zig's bit APIs reinterpret the result/input, including floating point types.
 fn bit_value_from_bits[T](value u64) T {
-	$if T.unaliased_typ is bool {
+	$if T.unaliased_typ is Rgb332 {
+		return T(Rgb332{
+			raw: u8(value)
+		})
+	} $else $if T.unaliased_typ is Rgb555 {
+		return T(Rgb555{
+			raw: u16(value)
+		})
+	} $else $if T.unaliased_typ is Rgb565 {
+		return T(Rgb565{
+			raw: u16(value)
+		})
+	} $else $if T.unaliased_typ is Bgr555 {
+		return T(Bgr555{
+			raw: u16(value)
+		})
+	} $else $if T.unaliased_typ is bool {
 		// Source computes sub-byte results in u8, then checks the cast to u1.
 		// Keep that check after the reader's byte and buffered-bit mutations.
 		if value > 1 { panic('integer does not fit in destination type') }
@@ -202,12 +236,16 @@ fn bit_value_from_bits[T](value u64) T {
 	} $else $if T.unaliased_typ is $int {
 		return T(value)
 	} $else {
-		$compile_error('Bit streams currently support bool, native integer and float scalars')
+		$compile_error('Bit streams currently support packed RGB colors, bool, native integer and float scalars')
 	}
 }
 
 fn bit_value_to_bits[T](value T) u64 {
-	$if T.unaliased_typ is bool {
+	$if T.unaliased_typ is Rgb332 || T.unaliased_typ is Rgb565 {
+		return u64(value.raw)
+	} $else $if T.unaliased_typ is Rgb555 || T.unaliased_typ is Bgr555 {
+		return u64(value.raw & 0x7fff)
+	} $else $if T.unaliased_typ is bool {
 		return if value { u64(1) } else { u64(0) }
 	} $else $if T.unaliased_typ is f32 {
 		return unsafe { *(&u32(&value)) }
@@ -216,6 +254,6 @@ fn bit_value_to_bits[T](value T) u64 {
 	} $else $if T.unaliased_typ is $int {
 		return u64(value)
 	} $else {
-		$compile_error('Bit streams currently support bool, native integer and float scalars')
+		$compile_error('Bit streams currently support packed RGB colors, bool, native integer and float scalars')
 	}
 }

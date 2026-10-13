@@ -1,6 +1,41 @@
 module zigimg
 
 type BitStreamBool = bool
+type BitStreamRgb555 = Rgb555
+
+fn test_packed_color_bit_streams_preserve_words_and_ignore_555_padding() {
+	check_packed_bit_order[BigEndian, Rgb332](Rgb332{ raw: 0xd5 }, 8, [u8(0xd5)], 0xd5)!
+	check_packed_bit_order[LittleEndian, Rgb332](Rgb332{ raw: 0xd5 }, 8, [u8(0xd5)], 0xd5)!
+	check_packed_bit_order[BigEndian, Rgb565](Rgb565{ raw: 0xe6aa }, 16, [u8(0xe6), 0xaa], 0xe6aa)!
+	check_packed_bit_order[LittleEndian, Rgb565](Rgb565{ raw: 0xe6aa }, 16, [u8(0xaa), 0xe6],
+		0xe6aa)!
+	check_packed_bit_order[BigEndian, Rgb555](Rgb555{ raw: 0xf1a3 }, 16, [u8(0x71), 0xa3], 0x71a3)!
+	check_packed_bit_order[LittleEndian, BitStreamRgb555](BitStreamRgb555{ raw: 0xf1a3 }, 16, [
+		u8(0xa3),
+		0x71,
+	], 0x71a3)!
+	check_packed_bit_order[BigEndian, Bgr555](Bgr555{ raw: 0xf1a3 }, 16, [u8(0x71), 0xa3], 0x71a3)!
+	check_packed_bit_order[LittleEndian, Bgr555](Bgr555{ raw: 0xf1a3 }, 16, [u8(0xa3), 0x71],
+		0x71a3)!
+}
+
+fn check_packed_bit_order[E, T](value T, num u16, expected []u8, raw u16) ! {
+	mut bytes := []u8{len: expected.len}
+	mut writer := WriteStream.init_memory(mut bytes)
+	mut bits := BitWriter[E]{
+		writer: unsafe { &writer }
+	}
+	bits.write_bits[E, T](value, num)!
+	bits.flush_bits()!
+	assert bytes == expected
+	mut reader := ReadStream.init_memory(bytes)
+	mut input := BitReader[E]{
+		reader: unsafe { &reader }
+	}
+	result, count := input.read_bits_tuple[E, T](num)!
+	assert count == num
+	assert u16(result.raw) == raw
+}
 
 fn test_boolean_bit_streams_preserve_order_padding_and_partial_eof() {
 	check_boolean_bit_order[BigEndian, bool]([u8(0xa6), 0x80])!

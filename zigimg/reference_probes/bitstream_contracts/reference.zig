@@ -1,5 +1,6 @@
 const std = @import("std");
 const p = @import("src/io.zig");
+const color = @import("src/color.zig");
 const a = std.heap.page_allocator;
 const W = std.Io.Writer;
 pub const panic = std.debug.FullPanic(observe);
@@ -98,6 +99,10 @@ fn dispatch(comptime endian: std.builtin.Endian, f: [9][]const u8, out: *W) !voi
   10, 22 => try run(endian,f32,f,out),
   11, 23 => try run(endian,f64,f,out),
   24, 25 => try run(endian,bool,f,out),
+  26, 30 => try run(endian,color.Rgb332,f,out),
+  27, 31 => try run(endian,color.Rgb555,f,out),
+  28, 32 => try run(endian,color.Rgb565,f,out),
+  29, 33 => try run(endian,color.Bgr555,f,out),
   else => unreachable,
  }
 }

@@ -36,9 +36,29 @@ type Alias9 = isize
 type Alias10 = f32
 type Alias11 = f64
 type AliasBool = bool
+type AliasRgb332 = p.Rgb332
+type AliasRgb555 = p.Rgb555
+type AliasRgb565 = p.Rgb565
+type AliasBgr555 = p.Bgr555
 
 fn value_from_bits[T](value u64) T {
-	$if T.unaliased_typ is bool {
+	$if T.unaliased_typ is p.Rgb332 {
+		return T(p.Rgb332{
+			raw: u8(value)
+		})
+	} $else $if T.unaliased_typ is p.Rgb555 {
+		return T(p.Rgb555{
+			raw: u16(value)
+		})
+	} $else $if T.unaliased_typ is p.Rgb565 {
+		return T(p.Rgb565{
+			raw: u16(value)
+		})
+	} $else $if T.unaliased_typ is p.Bgr555 {
+		return T(p.Bgr555{
+			raw: u16(value)
+		})
+	} $else $if T.unaliased_typ is bool {
 		return T(value & 1 != 0)
 	} $else $if T.unaliased_typ is f32 {
 		word := u32(value)
@@ -51,7 +71,11 @@ fn value_from_bits[T](value u64) T {
 }
 
 fn value_bits[T](value T) u64 {
-	$if T.unaliased_typ is bool {
+	$if T.unaliased_typ is p.Rgb332 || T.unaliased_typ is p.Rgb565 {
+		return u64(value.raw)
+	} $else $if T.unaliased_typ is p.Rgb555 || T.unaliased_typ is p.Bgr555 {
+		return u64(value.raw & 0x7fff)
+	} $else $if T.unaliased_typ is bool {
 		return if value { u64(1) } else { u64(0) }
 	} $else $if T.unaliased_typ is f32 {
 		return unsafe { *(&u32(&value)) }
@@ -247,6 +271,14 @@ fn dispatch[E](f []string) {
 		23 { run[E, Alias11](f) }
 		24 { run[E, bool](f) }
 		25 { run[E, AliasBool](f) }
+		26 { run[E, p.Rgb332](f) }
+		27 { run[E, p.Rgb555](f) }
+		28 { run[E, p.Rgb565](f) }
+		29 { run[E, p.Bgr555](f) }
+		30 { run[E, AliasRgb332](f) }
+		31 { run[E, AliasRgb555](f) }
+		32 { run[E, AliasRgb565](f) }
+		33 { run[E, AliasBgr555](f) }
 		else { panic('invalid type') }
 	}
 }

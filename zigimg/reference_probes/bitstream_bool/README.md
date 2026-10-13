@@ -72,7 +72,7 @@ library SHA-256 is
 `ed900ae630673721b5aca890da4d432f4f1bfbbb201d5e450861b8111ab9a27d`.
 Compiler versions and before/after Source/library/implementation/runner/shared
 model/fixture/input/consumer hashes protect the retained proof. Boolean physical
-layout, packed caller-defined values, non-native integer widths, arbitrary endian
+layout, arbitrary packed caller-defined values, other non-native integer widths, arbitrary endian
 types, generic required-field enforcement, u4 field typing, underlying std.Io
 interfaces, allocation/lifetime, file-platform runtime and portable ABI remain
 boundaries.
