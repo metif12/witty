@@ -306,7 +306,9 @@ fn main() {
 		emit(mut output, f32(space.slice_from_oklab_alpha_in_place(mut oklab_empty, .clamp).len))
 		for transfer in [zigimg.srgb_transfer_functions, zigimg.rec601_transfer_functions,
 			zigimg.rec709_transfer_functions, zigimg.bt2020_transfer_functions,
-			zigimg.prophoto_rgb_transfer_functions, zigimg.NonLinearGammaTransferFunctions{}] {
+			zigimg.prophoto_rgb_transfer_functions, zigimg.NonLinearGammaTransferFunctions{
+				parameters: zigimg.GammaFunctionsParameters{}
+			}] {
 			emit(mut output, transfer.to_gamma(value.r))
 			emit(mut output, transfer.to_gamma_fast(value.r))
 			emit(mut output, transfer.to_linear(value.r))

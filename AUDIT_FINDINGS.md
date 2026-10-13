@@ -4990,3 +4990,40 @@ implementation/runner/fixture/input/consumer hashes protect the proof. Native
 namespace/value layout, allocation/lifetime, arbitrary callbacks and unrepresented
 callers remain boundaries. Details and reproduction are in
 [the predefined color proof](zigimg/reference_probes/predefined_generic/README.md).
+
+### Gamma transfer factory construction checkpoint
+
+The two V gamma-transfer adapters allowed omitted arguments that Source's
+factories require. `NonLinearGammaTransferFunctions.parameters` and
+`CurveGammaTransferFunctions.gamma` are now required. The historical colorspace
+fixture supplies its previously implicit default parameter record explicitly,
+matching the existing Source factory call. Defaults and explicit zero gamma
+remain accepted.
+
+The unchanged-source proof matches **24,192 returning records** in each
+corresponding compiler mode, SHA-256
+`75aa55611500c1763b7ae71e7150805173730abdca1db0b85e3fc87cb15c3c86`.
+Twenty-eight parameter sets and thirty-six inputs cover defaults, presets,
+thresholds, zeros/subnormals, finite extremes, infinities and NaNs. All six
+parameter fields cover mutation, independent copies, by-value returns and whole
+replacement. Parameter bits compare exactly, including NaN payloads. Captures
+remain stable after caller mutation; all four nonlinear methods, four curve
+methods and scalar gamma helpers retain every non-NaN output bit. Arithmetic
+NaNs compare by occurrence rather than payload.
+
+One default-parameter pair, six mutable-field pairs, six immutable-field
+rejection pairs, two complete factory pairs and two omission pairs pass per
+mode. Two V-only controls enforce immutable captures. Two Source runtime-argument
+rejections remain V acceptance under the existing compile-time-namespace/runtime-
+value adapter. The initial native fixture's missing-comptime diagnostic is
+retained. Source implementation and visibility are unchanged.
+
+The existing 5,792-case colorspace comparison retains both corresponding-mode
+hashes with zero differences. All 61 image and 58 Vaxis test files pass, with
+twenty-three production/platform checks including the new fixture's Windows and
+Linux builds. Complete Source/library/math/SDK/compiler pins and before/after
+implementation/runner/fixture/generated-input/consumer hashes protect the proof.
+Namespace/type identity, physical layout, arbitrary parameters, arithmetic NaN
+payloads, allocation/lifetime and unrepresented callers remain boundaries.
+Details and reproduction are in
+[the gamma contract proof](zigimg/reference_probes/gamma_contracts/README.md).

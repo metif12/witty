@@ -370,6 +370,13 @@ V typed transfer values replace compile-time namespaces, and callback fields
 have a `_fn` suffix to coexist with the corresponding methods. Copying APIs
 use V allocation in place of the source's caller-selected allocator.
 
+Gamma-transfer construction requires explicit parameters or gamma, including
+explicit default parameter records. The 24,192-case comparison verifies all
+parameter fields, independent copies, stable captures and every transfer method
+in both modes. Source's compile-time namespaces and V's runtime typed values
+remain distinct; arithmetic NaNs compare by occurrence. Details are in
+[the gamma contract proof](reference_probes/gamma_contracts/README.md).
+
 `PostConversionBehavior`, `NetpbmFormat` and `PamTupleType` retain native ordinals
 and one-byte storage/alignment. The 3,584-case public-enum byte/copy comparison
 and six PAM native-debug-metadata observations pass in both modes. Source's

@@ -21,7 +21,7 @@ pub mut:
 // V represents the source's compile-time namespace factory as a typed value.
 pub struct NonLinearGammaTransferFunctions {
 pub:
-	parameters GammaFunctionsParameters
+	parameters GammaFunctionsParameters @[required]
 }
 
 pub fn (transfer NonLinearGammaTransferFunctions) to_gamma(value f32) f32 {
@@ -47,7 +47,7 @@ pub fn (transfer NonLinearGammaTransferFunctions) to_linear_fast(value f32) f32 
 
 pub struct CurveGammaTransferFunctions {
 pub:
-	gamma f32
+	gamma f32 @[required]
 }
 
 pub fn (transfer CurveGammaTransferFunctions) to_gamma(value f32) f32 {
