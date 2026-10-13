@@ -895,7 +895,8 @@ an item here does not mean its full module has been certified yet.
   Input normalization preserves the f32 round-trip for integer alpha,
   intermediate 16-bit quantization before narrowing, packed channel scaling,
   and NaN upper clamping. GC replaces the arena and allocation failures;
-  the root uses a stable heap address in place of the source's inline node.
+  the root now remains inline, preserving independent copied root metadata
+  with borrowed child and level pointers.
   Source `allocateNode` returns uninitialized storage until `Node.init`, while
   V allocation initializes it. Generic input covers translated RGB(A) types,
   rather than arbitrary caller structs with Zig's color-method namespaces.
@@ -4387,3 +4388,63 @@ checkpoints; their original checksum-verified archives and manifests remain.
 Source/library/version pins and before/after fixture/input/consumer/runner/
 implementation hashes protect the new proof. Exact scope, counts and reproduction
 are in [the CCITT probe](zigimg/reference_probes/ccitt_contracts/README.md).
+
+## Quantizer inline-root copies and exact mutation failures — 2026-10-13
+
+The octree quantizer stored its root behind a shared pointer, so copying the
+quantizer shared root metadata where Source retains an inline value. The root is
+now inline; quantizer/node copies preserve independent scalar metadata and borrowed
+children. Palette contexts require their palette field, with independent copied
+counters and shared palette storage. Complete context and inline-root construction
+passes in both compilers, and both reject direct palette omission. Source's required
+arena field remains a measured GC constructor adaptation.
+
+Checked quantizer failures now retain exact Source cast, arithmetic, division and
+level/palette bounds diagnostics. Node initialization resets fields before invalid
+registration; leaf additions retain component/reference mutation order. Wrapping
+child removal/clearing precedes reduction's negative cast or unsigned subtraction.
+Palette bounds precede color conversion and palette/node/context assignment.
+Leaf lookup bypasses level validation, and normal lookup keeps first-child fallback.
+The bounded new graph cannot reach usize leaf-sum overflow; its guard remains
+without a manufactured runtime observation.
+
+`verify_quantizer_contracts_reference.py` imports unchanged complete Source and
+compares Debug/ordinary and ReleaseSafe/production. Both modes match **4,594
+returning/error records** over byte averages, checked leaf addition, level lists,
+node reset, wrapping removal, palette indices, budgets, contexts, borrowed output,
+mutable/copy records and factory scalar state. Return SHA-256:
+`5a383dd64249c960f2d3698bc7a6fefc693daba1f196c3b462aab7c9594332ab`.
+
+**1,134 exact panic/state pairs** cover 30 division failures, 584 casts, 284
+arithmetic failures and 236 exact bounds. Names and exact diagnostics join context
+counters, initialized fields/child/next links of five caller-owned nodes, all eight
+level heads and the complete initialized RGBA palette in SHA-256
+`b69ded40574ad13007fb9d03ff10b0f6ac7a43334fb207ffad0d249e7fe593dc`.
+Canonical pointer IDs use address identity, with no raw-address/layout comparison.
+The first fixture used V's pointed-value equality; its diagnostic and correction
+are retained. The model only partitions cases; compiled unchanged Source supplies
+every compared result. Source private Node/Context types are inferred through
+public fields/function types without changing visibility.
+
+Caller-owned roots are initialized at stable caller addresses. Factory controls
+observe scalar root defaults and null level heads one through seven; the captured
+level-zero root pointer and returned-record relocation/lifetime remain excluded.
+Reduction skips level zero. Copied arenas are not allocated through or freed twice.
+Private contexts, undefined freshly allocated Source nodes, freed arena bytes and
+post-deinit state are unobserved. GC/arena/OOM/allocation/deinit, broader generic
+color namespaces, larger graph extents, file-platform runtime, physical layout and
+portable ABI remain boundaries.
+
+All 61 image and 58 Vaxis test files pass, as do production quantizer/converter/
+image-API tests, historical GIF/image-API/compression assertions in both modes,
+native/Linux application checks, three Windows DLLs, both Windows quantizer test
+executables and two Linux shared libraries. Historical quantizer hashes retain
+2,160 tree/palette/index cases, 336,128 normalization cases and 2,816 alias records
+in both modes. Cross builds establish build coverage only.
+
+Proof artifacts retain the pointer-ID fixture failure and diagnostic/compiler
+attempts. Verified prior archives retain the duplicate expanded proof files and
+regenerable caches removed to recover disk space. Source/library/version pins and
+before/after fixture/input/consumer/runner/implementation hashes protect the proof.
+Exact scope, counts and reproduction are in
+[the quantizer probe](zigimg/reference_probes/quantizer_contracts/README.md).

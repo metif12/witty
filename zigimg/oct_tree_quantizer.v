@@ -2,18 +2,16 @@ module zigimg
 
 import math
 
-// Locked OctTreeQuantizer. GC replaces the arena; the root has a stable heap
-// address rather than the source's inline field. Lists retain source ordering.
+// Locked OctTreeQuantizer. GC replaces the arena; inline root metadata and
+// borrowed child/level pointers retain the source's value-copy behavior.
 pub struct OctTreeQuantizer {
 pub mut:
-	root_node &OctTreeNode = unsafe { nil }
+	root_node OctTreeNode
 	levels    [8]&OctTreeNode
 }
 
 pub fn OctTreeQuantizer.init() OctTreeQuantizer {
-	mut result := OctTreeQuantizer{
-		root_node: &OctTreeNode{}
-	}
+	mut result := OctTreeQuantizer{}
 	result.root_node.init(0, mut result)
 	return result
 }
@@ -28,7 +26,8 @@ pub fn (quantizer &OctTreeQuantizer) allocate_node() !&OctTreeNode {
 }
 
 pub fn (mut quantizer OctTreeQuantizer) add_level_node(level i32, mut node OctTreeNode) {
-	if level < 0 || level >= 8 { panic('quantizer level out of range') }
+	if level < 0 { panic('integer does not fit in destination type') }
+	if level >= 8 { panic('index out of bounds: index ${level}, len 8') }
 	node.level_next = quantizer.levels[level]
 	quantizer.levels[level] = unsafe { &node }
 }
@@ -50,7 +49,8 @@ pub fn (mut quantizer OctTreeQuantizer) make_palette(color_count u32, mut palett
 		for node != unsafe { nil } {
 			removed := node.remove_leaves()
 			// @intCast(i32 -> usize), followed by checked unsigned subtraction.
-			if removed < 0 || usize(removed) > leaf_count { panic('quantizer leaf count overflow') }
+			if removed < 0 { panic('integer does not fit in destination type') }
+			if usize(removed) > leaf_count { panic('integer overflow') }
 			leaf_count -= usize(removed)
 			if leaf_count <= usize(color_count) {
 				break
@@ -72,7 +72,7 @@ pub fn (mut quantizer OctTreeQuantizer) make_palette(color_count u32, mut palett
 
 pub struct OctTreePaletteContext {
 pub mut:
-	palette       []Rgba32
+	palette       []Rgba32 @[required]
 	palette_index u32
 	color_count   u32
 }
@@ -98,11 +98,11 @@ pub fn (node &OctTreeNode) is_leaf() bool {
 }
 
 pub fn (node &OctTreeNode) get_color() Rgba32 {
-	if node.reference_count == 0 { panic('quantizer division by zero') }
+	if node.reference_count == 0 { panic('division by zero') }
 	red := node.red / node.reference_count
 	green := node.green / node.reference_count
 	blue := node.blue / node.reference_count
-	if red > 255 || green > 255 || blue > 255 { panic('quantizer average does not fit u8') }
+	if red > 255 || green > 255 || blue > 255 { panic('integer does not fit in destination type') }
 	return Rgba32{
 		r: u8(red)
 		g: u8(green)
@@ -116,13 +116,13 @@ pub fn (mut node OctTreeNode) add_color[T](color T, level i32, mut parent OctTre
 
 fn (mut node OctTreeNode) add_rgb(color Rgb24, level i32, mut parent OctTreeQuantizer) ! {
 	if level >= 8 {
-		if node.red > 0xffffffff - u32(color.r) { panic('quantizer red overflow') }
+		if node.red > 0xffffffff - u32(color.r) { panic('integer overflow') }
 		node.red += color.r
-		if node.green > 0xffffffff - u32(color.g) { panic('quantizer green overflow') }
+		if node.green > 0xffffffff - u32(color.g) { panic('integer overflow') }
 		node.green += color.g
-		if node.blue > 0xffffffff - u32(color.b) { panic('quantizer blue overflow') }
+		if node.blue > 0xffffffff - u32(color.b) { panic('integer overflow') }
 		node.blue += color.b
-		if node.reference_count == 0xffffffff { panic('quantizer reference count overflow') }
+		if node.reference_count == 0xffffffff { panic('integer overflow') }
 		node.reference_count++
 		return
 	}
@@ -162,7 +162,7 @@ pub fn (node &OctTreeNode) count_leaf_nodes() usize {
 	for child in node.children {
 		if child != unsafe { nil } {
 			child_count := child.count_leaf_nodes()
-			if child_count > ~usize(0) - count { panic('quantizer leaf count overflow') }
+			if child_count > ~usize(0) - count { panic('integer overflow') }
 			count += child_count
 		}
 	}
@@ -172,7 +172,9 @@ pub fn (node &OctTreeNode) count_leaf_nodes() usize {
 pub fn (mut node OctTreeNode) make_palette(mut context OctTreePaletteContext) {
 	if node.is_leaf() {
 		if context.palette_index >= context.color_count { return }
-		if usize(context.palette_index) >= usize(context.palette.len) { panic('quantizer palette capacity exceeded') }
+		if usize(context.palette_index) >= usize(context.palette.len) {
+			panic('index out of bounds: index ${context.palette_index}, len ${context.palette.len}')
+		}
 		context.palette[context.palette_index] = node.get_color()
 		node.palette_index = context.palette_index
 		context.palette_index++
@@ -200,7 +202,7 @@ pub fn (mut node OctTreeNode) remove_leaves() i32 {
 }
 
 fn OctTreeNode.get_color_index[T](color T, level i32) usize {
-	if level < 0 || level >= 8 { panic('quantizer color level out of range') }
+	if level < 0 || level >= 8 { panic('integer does not fit in destination type') }
 	rgb := quantizer_rgb24(color)
 	mask := u8(128 >> level)
 	mut index := usize(0)

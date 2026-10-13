@@ -258,8 +258,11 @@ to the buffer's length. A sufficient budget leaves the tree intact. Reduction
 does not process level zero; a zero budget emits no palette entries, while
 lookup still returns default indices. Repeating reduction can trap on an
 already collapsed node. Native hashes match 2,160 palette/tree/index cases and
-336,128 color-normalization cases. GC replaces the arena and the root uses a
-stable heap address. Generic input accepts the translated RGB(A) storage types;
+336,128 color-normalization cases. GC replaces the arena; the root is inline,
+so copied quantizers retain independent root metadata and borrowed child pointers.
+The [record/state comparison](reference_probes/quantizer_contracts/README.md) matches
+4,594 returning records and 1,134 exact failure/state pairs in both modes.
+Generic input accepts the translated RGB(A) storage types;
 arbitrary caller types with Zig color-method namespaces remain a boundary.
 The pinned V compiler cannot format recursive fixed pointer arrays; pointer
 assertions use `voidptr` to avoid its invalid generated formatter.
