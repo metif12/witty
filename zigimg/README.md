@@ -373,8 +373,12 @@ non-advancing loop. Public `FormatInterface` callbacks and each codec's
 `format_interface()` factory drive detection, loading and writing through the
 source's ordered 17-factory registry. V spells that table explicitly instead
 of reflecting namespace declarations. Callback allocator parameters are
-omitted under the existing GC adaptation. Cross-codec encoder options preserve
-each writer's fallback or checked union-arm access. A native hash matches
+omitted under the existing GC adaptation. All three callback fields are required
+and mutable; copied interface records retain independent callback choices.
+Cross-codec encoder options preserve each writer's fallback or checked union-arm
+access. PNG/TGA keep exact wrong-tag panics in production before image validation.
+The [interface contract proof](reference_probes/format_interface_contracts/README.md)
+compares callback copies and full initialized state at these failures. A native hash matches
 589,824 prefix/length cases, and separate bounded processes compare the XBM
 loop through both image APIs. JPEG's frame/table/scan APIs now decode
 baseline/progressive/restart inputs; the separate reference runner documents

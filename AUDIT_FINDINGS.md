@@ -4448,3 +4448,55 @@ regenerable caches removed to recover disk space. Source/library/version pins an
 before/after fixture/input/consumer/runner/implementation hashes protect the proof.
 Exact scope, counts and reproduction are in
 [the quantizer probe](zigimg/reference_probes/quantizer_contracts/README.md).
+
+## Mutable codec interfaces and exact option-tag failures — 2026-10-13
+
+FormatInterface's three required callback fields now permit replacement in mutable
+records, matching Source. Copies retain independent callback choices. Complete
+construction and three mutable-field assignments compile in both languages;
+three separate omission pairs and three constant-record mutation pairs reject.
+Callback allocator parameters remain omitted under V's existing GC adaptation.
+
+PNG/TGA interface writers now report the exact Source inactive-union-arm diagnostic,
+including both field names, before image validation or output. Explicit guards
+preserve that contract in production. Other codec fallbacks, no-op writers,
+registry ordering and encoder algorithms are unchanged.
+
+`verify_format_interface_contracts_reference.py` imports unchanged complete Source
+and compares Debug/ordinary with ReleaseSafe/production. Both modes match **43,200
+returning/error records** over all 27 callback combinations, eight field-replacement
+masks, four original/copy mutation-and-dispatch controls, five input lengths,
+five output capacities and two starting-position controls. All 17 encoder-option
+tags occur. Callback traces, boolean/image/error results, shared stream positions,
+initialized image fields and full input/output bytes match. Return SHA-256:
+`64ea2c6c5dcf3d0539e780a5acf86c390c3a35cd0c321f61202bec27d59c69dd`.
+
+**1,024 exact panic/state pairs** cover PNG/TGA against every incorrect option tag,
+four image profiles, four destination capacities and two writer-position controls.
+Invalid, RGB24, grayscale8 and zero-height RGB24 images preserve option-access
+failure priority. Names and exact diagnostics join image width/height/pixel-format,
+all active initialized pixel bytes, writer position and complete initialized output
+in SHA-256 `a5ec291c7761806756669c623761e922bef79b0349f448b0dd7f482f6a8c8c4e`.
+Each pair requires the exact panic, failing exit, no stdout and matching nonempty
+state. The unchanged historical 17-codec writer fixture also matches **49,344
+returning/error records** in both modes, retaining SHA-256
+`578f0de4bdaac7c2b67f294de64a2694c069cbb2fde6d2c43ca68494c6ca94eb`.
+
+The new returning matrix uses custom callbacks to isolate record behavior from
+codec behavior. Function identity, closures, arbitrary callback implementations,
+null/dangling pointers, allocation/OOM/deinit/lifetime, file-platform runtime,
+physical layout and portable ABI remain boundaries. No undefined/private storage,
+palette or allocator internals are observed. Encoder-option boxed payload copying,
+V's wider Format carrier and the existing pinned-source encoder compile boundaries
+remain as recorded above.
+
+All 61 image and 58 Vaxis test files pass, together with production interface/PNG/
+TGA/image-API tests, unchanged historical image-API/GIF/compression assertions in
+both modes, native/Linux application checks, three Windows DLLs, both Windows
+interface test executables and two Linux shared libraries. Cross builds establish
+build coverage only.
+
+Proof artifacts retain development compiler diagnostics and the panic-fixture
+formatting correction. Source/library/version pins and before/after fixture/input/
+consumer/runner/implementation hashes protect the proof. Exact scope, counts and
+reproduction are in [the interface contract probe](zigimg/reference_probes/format_interface_contracts/README.md).

@@ -11,7 +11,7 @@ pub type WriteImageFn = fn (mut WriteStream, ImageUnmanaged, EncoderOptions) !
 pub type FormatInterfaceFn = fn () FormatInterface
 
 pub struct FormatInterface {
-pub:
+pub mut:
 	format_detect FormatDetectFn @[required]
 	read_image    ReadImageFn    @[required]
 	write_image   WriteImageFn   @[required]
@@ -192,7 +192,9 @@ pub fn PNG.format_interface() FormatInterface {
 
 fn png_interface_write(mut stream WriteStream, image ImageUnmanaged, options EncoderOptions) ! {
 	// The source accesses the union arm before validating the image.
-	assert options is PngEncoderOptions
+	if options !is PngEncoderOptions {
+		panic("access of union field 'png' while field '${options.format()}' is active")
+	}
 	PNG.write_image(mut stream, image, options as PngEncoderOptions)!
 }
 
@@ -264,7 +266,9 @@ pub fn TGA.format_interface() FormatInterface {
 
 fn tga_interface_write(mut stream WriteStream, image ImageUnmanaged, options EncoderOptions) ! {
 	// The source accesses the union arm before validating the image.
-	assert options is TgaEncoderOptions
+	if options !is TgaEncoderOptions {
+		panic("access of union field 'tga' while field '${options.format()}' is active")
+	}
 	TGA.write_image(mut stream, image, options as TgaEncoderOptions)!
 }
 

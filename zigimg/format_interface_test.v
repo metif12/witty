@@ -1,5 +1,68 @@
 module zigimg
 
+fn interface_detect_false(mut stream ReadStream) !bool {
+	_ = stream
+	return false
+}
+
+fn interface_detect_true(mut stream ReadStream) !bool {
+	_ = stream
+	return true
+}
+
+fn interface_read_first(mut stream ReadStream) !ImageUnmanaged {
+	_ = stream
+	return ImageUnmanaged{
+		width: 1
+	}
+}
+
+fn interface_read_second(mut stream ReadStream) !ImageUnmanaged {
+	_ = stream
+	return ImageUnmanaged{
+		width: 2
+	}
+}
+
+fn interface_write_first(mut stream WriteStream, image ImageUnmanaged, options EncoderOptions) ! {
+	_ = image
+	_ = options
+	stream.write_byte(0x11)!
+}
+
+fn interface_write_second(mut stream WriteStream, image ImageUnmanaged, options EncoderOptions) ! {
+	_ = image
+	_ = options
+	stream.write_byte(0x22)!
+}
+
+fn test_format_interface_mutable_callbacks_and_independent_copies() {
+	mut codec := FormatInterface{
+		format_detect: interface_detect_false
+		read_image:    interface_read_first
+		write_image:   interface_write_first
+	}
+	mut copied := codec
+	codec.format_detect = interface_detect_true
+	codec.read_image = interface_read_second
+	codec.write_image = interface_write_second
+	mut reader := ReadStream.init_memory([]u8{})
+	assert codec.format_detect(mut reader)!
+	assert !copied.format_detect(mut reader)!
+	loaded := codec.read_image(mut reader)!
+	old_loaded := copied.read_image(mut reader)!
+	assert loaded.width == 2 && old_loaded.width == 1
+	mut output := []u8{len: 2}
+	mut writer := WriteStream.init_memory(mut output)
+	codec.write_image(mut writer, ImageUnmanaged{}, QoiEncoderOptions{})!
+	copied.write_image(mut writer, ImageUnmanaged{}, QoiEncoderOptions{})!
+	assert output == [u8(0x22), 0x11]
+	copied.read_image = interface_read_second
+	codec.read_image = interface_read_first
+	independent := copied.read_image(mut reader)!
+	assert independent.width == 2
+}
+
 fn test_format_interface_qoi_default_options_and_direct_loading() {
 	image := ImageUnmanaged.from_raw_pixels(1, 1, [u8(12), 34, 56, 78], .rgba32)!
 	codec := QOI.format_interface()
