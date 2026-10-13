@@ -184,6 +184,7 @@ fn test_pcx_writers_preserve_header_stride_packing_partial_bytes_and_planar_rle(
 		PcxWriteCase{
 			width:  8
 			pixels: IndexedStorage1{
+				palette: []Rgba32{}
 				indices: []u8{len: 8, init: 1}
 			}
 			bpp:    1
@@ -193,6 +194,7 @@ fn test_pcx_writers_preserve_header_stride_packing_partial_bytes_and_planar_rle(
 		PcxWriteCase{
 			width:  9
 			pixels: IndexedStorage1{
+				palette: []Rgba32{}
 				indices: []u8{len: 9, init: 1}
 			}
 			bpp:    1
@@ -202,6 +204,7 @@ fn test_pcx_writers_preserve_header_stride_packing_partial_bytes_and_planar_rle(
 		PcxWriteCase{
 			width:  10
 			pixels: IndexedStorage1{
+				palette: []Rgba32{}
 				indices: []u8{len: 10, init: 1}
 			}
 			bpp:    1
@@ -211,6 +214,7 @@ fn test_pcx_writers_preserve_header_stride_packing_partial_bytes_and_planar_rle(
 		PcxWriteCase{
 			width:  17
 			pixels: IndexedStorage1{
+				palette: []Rgba32{}
 				indices: []u8{len: 17, init: 1}
 			}
 			bpp:    1
@@ -220,6 +224,7 @@ fn test_pcx_writers_preserve_header_stride_packing_partial_bytes_and_planar_rle(
 		PcxWriteCase{
 			width:  4
 			pixels: IndexedStorage4{
+				palette: []Rgba32{}
 				indices: [u8(1), 2, 3, 4]
 			}
 			bpp:    4
@@ -229,6 +234,7 @@ fn test_pcx_writers_preserve_header_stride_packing_partial_bytes_and_planar_rle(
 		PcxWriteCase{
 			width:  3
 			pixels: IndexedStorage4{
+				palette: []Rgba32{}
 				indices: [u8(15), 1, 2]
 			}
 			bpp:    4
@@ -300,6 +306,7 @@ fn test_pcx_indexed8_encoder_writes_active_palette_and_uses_entire_even_index_sl
 		width:  2
 		height: 1
 		pixels: IndexedStorage8{
+			palette: []Rgba32{}
 			indices: [u8(1), 2, 3, 4]
 		}
 	}, PcxEncoderOptions{})!
@@ -309,6 +316,7 @@ fn test_pcx_indexed8_encoder_writes_active_palette_and_uses_entire_even_index_sl
 		width:  3
 		height: 2
 		pixels: IndexedStorage8{
+			palette: []Rgba32{}
 			indices: []u8{len: 6, init: 5}
 		}
 	}, PcxEncoderOptions{})!
@@ -443,6 +451,7 @@ fn test_pcx_errors_preserve_header_assignment_run_and_palette_boundaries() {
 		width:  8
 		height: 1
 		pixels: IndexedStorage1{
+			palette: []Rgba32{}
 			indices: []u8{len: 8, init: 1}
 		}
 	}

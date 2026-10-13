@@ -3252,3 +3252,62 @@ Cross-target runtime, allocator/OOM/GC/lifetime, array-list growth, portable ABI
 const/narrow/nonexhaustive enum typing, wider cursors and the complete decoder state
 space remain boundaries. Reproduction and exact scope are in
 zigimg/reference_probes/gif_records/README.md.
+
+## Indexed constructors and raw PixelStorage production checks — 2026-10-13
+
+All five indexed V records accepted omitted palette/index fields that Source
+requires. Five constructor capacity checks and four remaining resize checks used
+assertions erased by production compilation. Raw storage likewise lost its
+exact-division and alignment checks in production and checked the original input
+address even for empty slices, whereas Source's bytesAsSlice discards that address.
+
+Both indexed fields are now required. Capacity checks trap explicitly before
+allocation or active-length mutation, including maximum usize values. Raw views
+check byte divisibility before alignment and retain Source's four aligned formats;
+empty input bypasses the input-address check. Nine existing PCX fixtures explicitly
+provide their previously implicit empty palette without changing expected bytes.
+The existing float32 empty-pointer adaptation is retained. Source empty-slice
+pointers are undefined: observing the Debug compiler's poison address does not
+establish a pointer contract, so the proof excludes those pointer observations.
+
+`verify_pixel_storage_reference.py` compares unchanged pinned Source Debug with
+ordinary V and Source ReleaseSafe with production V. Both modes match **4,393
+returning observations**: 1,168 indexed constructors, 25 initialized palette/copy/
+slice records, 2,192 raw borrowed-storage cases and 1,008 unsupported controls.
+Constructor cases inspect only active opaque palettes and explicitly initialized
+indices; resize cases initialize the full allocation before shrinking/regrowing.
+Raw cases include all tags, four byte patterns and offsets, empty inputs, pointer
+identity for nonempty data, shared byte mutation and valid storage slices.
+Returning SHA-256:
+`8967f88d0296ceb0499e115b004ce6579c8fe87682fc6bd2b40b1f4f36a2823e`.
+
+Ninety-seven strict panic/state pairs cover 45 capacity failures through
+constructors/direct/union resizes, all 44 nonzero raw stride remainders and eight
+odd-address alignment failures. Observers compare unchanged active palette lengths
+and initialized bytes, or untouched raw input; odd-address remainder controls
+verify division failure precedes alignment. State SHA-256:
+`bc8fdb7c1c467f766f59bd7490211ddb0666cf8e4426fa2b2077fa4a3a506849`.
+Five complete constructors, ten field omissions and five immutable resize controls
+verify acceptance/rejection. Three narrow-index literal pairs, five constant-record
+slice-pointee pairs and one const-byte-view pair record remaining type differences.
+
+Five separate runtime controls confirm the indexed PixelStorage boxed-copy limit:
+resizing an original union palette to one also changes the V copy's descriptor,
+while Source's copy retains lengths 2/4/16/256/65536. Direct indexed record copies
+retain independent lengths and share element storage in both languages. Generic
+IndexedStorage/PaletteSize members and direct indexed allocator/deinit interfaces
+remain without matching V APIs. Invalid PixelStorage.slice ranges are outside this
+valid-range proof. Inactive/uninitialized/freed storage, empty pointers, wider V
+array extents, allocator/OOM/GC/lifetime and portable ABI remain boundaries.
+Full tree/library/version pins and before/after fixture/runner/implementation
+hashes protect retained binaries, diagnostics, snapshots and proof summaries.
+Reproduction and exact scope are in
+zigimg/reference_probes/pixel_storage/README.md.
+
+All 61 image and 58 Vaxis test files pass, together with focused production pixel
+storage, PCX and converter tests. Historical native converter assertions pass in
+Debug and ReleaseSafe. Existing PNG decoder/processor and buffered TGA decoder/
+vector/failure-state proofs retain all prior hashes in both modes. Native/Linux
+application checks, three Windows DLLs, the pixel-storage Windows test executable
+in both modes and two Linux shared libraries build successfully. Cross builds use
+-gc none and do not establish cross-target runtime behavior.

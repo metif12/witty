@@ -154,6 +154,13 @@ and accessors; GC replaces arenas and record reclamation. Source undefined
 magic/version, unread palette entries, incomplete comment records, and pixels
 unwritten by short LZW input share the initialization boundary above.
 
+The [pixel storage proof](reference_probes/pixel_storage/README.md) requires both
+indexed constructor fields and retains palette-capacity, raw-byte divisibility
+and alignment checks in production. Empty raw input bypasses input alignment.
+Both modes match 4,393 returning observations and 97 panic/state pairs. Boxed
+sum-type copies, narrow/const carriers and undefined empty pointers are recorded
+separately; the matrix uses initialized palettes and valid storage slices.
+
 The [GIF record proof](reference_probes/gif_records/README.md) adds thirteen
 packed-field setters and requires Source comment/application constructor fields.
 Byte-count overflow and indexed-background casts remain checked in production.

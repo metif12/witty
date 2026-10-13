@@ -58,6 +58,16 @@ fn test_raw_storage_borrows_and_slices_native_channel_bytes() {
 	}
 }
 
+fn test_empty_raw_storage_accepts_misaligned_input_pointer() {
+	bytes := []u8{len: 32}
+	odd := if usize(bytes.data) % 2 == 0 { 1 } else { 0 }
+	for format in [PixelFormat.grayscale16_alpha, .rgb555, .rgb565, .bgr555] {
+		storage := PixelStorage.init_raw_pixels(bytes[odd..odd], format)!
+		assert storage.len() == 0
+		assert storage.as_bytes().len == 0
+	}
+}
+
 fn test_palette_capacity_and_storage_slice_share_source_palette() {
 	mut indexed := IndexedStorage2.init_palette_size(3, 2)
 	assert indexed.palette.len == 2

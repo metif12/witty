@@ -95,8 +95,8 @@ pub mut:
 
 pub struct IndexedStorage1 {
 pub mut:
-	palette []Rgba32
-	indices []u8
+	palette []Rgba32 @[required]
+	indices []u8     @[required]
 }
 
 pub fn IndexedStorage1.init(pixel_count usize) IndexedStorage1 {
@@ -104,7 +104,7 @@ pub fn IndexedStorage1.init(pixel_count usize) IndexedStorage1 {
 }
 
 pub fn IndexedStorage1.init_palette_size(pixel_count usize, palette_size usize) IndexedStorage1 {
-	assert palette_size <= 2
+	if palette_size > 2 { panic('reached unreachable code') }
 	mut palette := []Rgba32{len: 2}
 	for i in 0 .. int(palette_size) {
 		palette[i] = Rgba32{
@@ -118,7 +118,7 @@ pub fn IndexedStorage1.init_palette_size(pixel_count usize, palette_size usize) 
 }
 
 pub fn (mut storage IndexedStorage1) resize_palette(size usize) {
-	assert size <= 2
+	if size > 2 { panic('reached unreachable code') }
 	// Source resizes the slice, retaining the full original allocation.
 	unsafe {
 		storage.palette.len = int(size)
@@ -127,8 +127,8 @@ pub fn (mut storage IndexedStorage1) resize_palette(size usize) {
 
 pub struct IndexedStorage2 {
 pub mut:
-	palette []Rgba32
-	indices []u8
+	palette []Rgba32 @[required]
+	indices []u8     @[required]
 }
 
 pub fn IndexedStorage2.init(pixel_count usize) IndexedStorage2 {
@@ -136,7 +136,7 @@ pub fn IndexedStorage2.init(pixel_count usize) IndexedStorage2 {
 }
 
 pub fn IndexedStorage2.init_palette_size(pixel_count usize, palette_size usize) IndexedStorage2 {
-	assert palette_size <= 4
+	if palette_size > 4 { panic('reached unreachable code') }
 	mut palette := []Rgba32{len: 4}
 	for i in 0 .. int(palette_size) {
 		palette[i] = Rgba32{
@@ -150,7 +150,7 @@ pub fn IndexedStorage2.init_palette_size(pixel_count usize, palette_size usize) 
 }
 
 pub fn (mut storage IndexedStorage2) resize_palette(size usize) {
-	assert size <= 4
+	if size > 4 { panic('reached unreachable code') }
 	// Source resizes the slice, retaining the full original allocation.
 	unsafe {
 		storage.palette.len = int(size)
@@ -159,8 +159,8 @@ pub fn (mut storage IndexedStorage2) resize_palette(size usize) {
 
 pub struct IndexedStorage4 {
 pub mut:
-	palette []Rgba32
-	indices []u8
+	palette []Rgba32 @[required]
+	indices []u8     @[required]
 }
 
 pub fn IndexedStorage4.init(pixel_count usize) IndexedStorage4 {
@@ -168,7 +168,7 @@ pub fn IndexedStorage4.init(pixel_count usize) IndexedStorage4 {
 }
 
 pub fn IndexedStorage4.init_palette_size(pixel_count usize, palette_size usize) IndexedStorage4 {
-	assert palette_size <= 16
+	if palette_size > 16 { panic('reached unreachable code') }
 	mut palette := []Rgba32{len: 16}
 	for i in 0 .. int(palette_size) {
 		palette[i] = Rgba32{
@@ -182,7 +182,7 @@ pub fn IndexedStorage4.init_palette_size(pixel_count usize, palette_size usize) 
 }
 
 pub fn (mut storage IndexedStorage4) resize_palette(size usize) {
-	assert size <= 16
+	if size > 16 { panic('reached unreachable code') }
 	// Source resizes the slice, retaining the full original allocation.
 	unsafe {
 		storage.palette.len = int(size)
@@ -191,8 +191,8 @@ pub fn (mut storage IndexedStorage4) resize_palette(size usize) {
 
 pub struct IndexedStorage8 {
 pub mut:
-	palette []Rgba32
-	indices []u8
+	palette []Rgba32 @[required]
+	indices []u8     @[required]
 }
 
 pub fn IndexedStorage8.init(pixel_count usize) IndexedStorage8 {
@@ -200,7 +200,7 @@ pub fn IndexedStorage8.init(pixel_count usize) IndexedStorage8 {
 }
 
 pub fn IndexedStorage8.init_palette_size(pixel_count usize, palette_size usize) IndexedStorage8 {
-	assert palette_size <= 256
+	if palette_size > 256 { panic('reached unreachable code') }
 	mut palette := []Rgba32{len: 256}
 	for i in 0 .. int(palette_size) {
 		palette[i] = Rgba32{
@@ -223,8 +223,8 @@ pub fn (mut storage IndexedStorage8) resize_palette(size usize) {
 
 pub struct IndexedStorage16 {
 pub mut:
-	palette []Rgba32
-	indices []u16
+	palette []Rgba32 @[required]
+	indices []u16    @[required]
 }
 
 pub fn IndexedStorage16.init(pixel_count usize) IndexedStorage16 {
@@ -232,7 +232,7 @@ pub fn IndexedStorage16.init(pixel_count usize) IndexedStorage16 {
 }
 
 pub fn IndexedStorage16.init_palette_size(pixel_count usize, palette_size usize) IndexedStorage16 {
-	assert palette_size <= 65536
+	if palette_size > 65536 { panic('reached unreachable code') }
 	mut palette := []Rgba32{len: 65536}
 	for i in 0 .. int(palette_size) {
 		palette[i] = Rgba32{
@@ -246,7 +246,7 @@ pub fn IndexedStorage16.init_palette_size(pixel_count usize, palette_size usize)
 }
 
 pub fn (mut storage IndexedStorage16) resize_palette(size usize) {
-	assert size <= 65536
+	if size > 65536 { panic('reached unreachable code') }
 	// Source resizes the slice, retaining the full original allocation.
 	unsafe {
 		storage.palette.len = int(size)
@@ -499,14 +499,16 @@ pub fn PixelStorage.init_raw_pixels(bytes []u8, format PixelFormat) !PixelStorag
 }
 
 fn pixel_array_view[T](bytes []u8, check_alignment bool) []T {
-	assert usize(bytes.len) % sizeof(T) == 0
-	if check_alignment { assert usize(bytes.data) % 2 == 0
-	 }
+	if usize(bytes.len) % sizeof(T) != 0 { panic('exact division produced remainder') }
+	if bytes.len != 0 && check_alignment && usize(bytes.data) % 2 != 0 {
+		panic('incorrect alignment')
+	}
 	mut result := []T{}
 	unsafe {
 		result.data = bytes.data
 		$if T is Colorf32 {
-			// std.mem.bytesAsSlice discards the input pointer for empty slices.
+			// Empty Source slices carry an undefined pointer; retain the existing
+			// deterministic sentinel adaptation for the float converter.
 			if bytes.len == 0 { result.data = voidptr(~usize(0)) }
 		}
 		result.len = int(usize(bytes.len) / sizeof(T))
