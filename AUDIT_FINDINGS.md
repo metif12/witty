@@ -848,8 +848,9 @@ an item here does not mean its full module has been certified yet.
   Source default IFF headers and inactive palette entries are undefined;
   incomplete PackBits input can also leave temporary planes unwritten. V
   initializes this storage, so comparisons certify defined outputs only.
-  IFF's public header debug hooks still require the source logging/formatter
-  infrastructure and are not translated.
+  IFF's public header debug hooks now preserve the pinned anonymous-record
+  payload syntax and field/enum presentation through V's logger. Default levels,
+  logger routing/prefixes and allocation remain host-language adaptations.
   GIF preserves frame grouping by animation extensions, filtering of frames
   without graphic controls when any control exists, independent rendered
   frames with the image sharing its first frame, and all disposal methods.
@@ -5229,3 +5230,33 @@ layout, portable ABI, arena/GC/OOM, factory root relocation and file-platform
 runtime remain boundaries. Source/library/version and before/after implementation,
 fixture, runner, helper, input and consumer hashes protect the proof. Scope and
 reproduction are in [the getter width proof](zigimg/reference_probes/quantizer_getter_width/README.md).
+
+
+### IFF header diagnostic payload checkpoint — 2026-10-13
+
+The IFF debug hooks existed but rendered their header pointers through V's generic
+formatter, producing V type names and field syntax. BmhdHeader/DgblHeader now
+send the pinned Source's anonymous-record payloads to the host logger: exact
+punctuation/spacing, declaration order, signed decimal values, dotted enum labels
+and `x_asoect` spelling. The private union dispatcher continues to use these
+methods. SGI/TIFF and RAS diagnostics and all decoder bodies are unchanged.
+
+Both corresponding modes match **142,912 records**, SHA-256
+`893786350ccb1081f99146384847741efd45b9f7a0e180a417c153ddea79591a`.
+Each configured enabled/suppressed logger runs 71,456 records over full signed
+coordinate and unsigned dimension domains, all byte values and enum choices,
+zero through three repeats and seeded fields. Observations retain every payload
+byte, debug/default classification, callback count and all caller fields before
+and after logging. Unchanged Source public methods supply the expected text;
+no alternate formatter model or widened visibility is used.
+
+All 61 image and 58 Vaxis test files pass, including four Source-observed payload
+regressions, with eighteen production/platform checks. Source logger thresholds
+are configured at compile time; V's capture logger is configured at runtime.
+Default levels, prefixes/timestamps, routing, ownership/synchronization, eager
+versus lazy formatting, allocation/OOM, custom scopes, physical layout and logger
+ABI remain adaptations. Invalid enum representations and undefined fields are
+excluded. Source/library/version and before/after implementation, fixture, runner,
+helper, settings/input, V logger and pinned formatter/logging hashes protect the
+proof. Scope and reproduction are in
+[the IFF debug proof](zigimg/reference_probes/iff_debug/README.md).

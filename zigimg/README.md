@@ -283,6 +283,12 @@ Aliases of getter result types and arbitrary alias chains remain boundaries.
 The pinned V compiler cannot format recursive fixed pointer arrays; pointer
 assertions use `voidptr` to avoid its invalid generated formatter.
 
+IFF header debug hooks retain the pinned anonymous-record syntax, field order,
+signed values and enum labels through V's standard logger. The
+[diagnostic comparison](reference_probes/iff_debug/README.md) matches 142,912
+enabled/suppressed observations in both modes. Logger routing, prefixes and
+default-level behavior remain host-language adaptations.
+
 The converter preserves all 460 pinned table entries, including unavailable
 indexed-to-gray/RGB-to-grayscale16 pairs and nine BGR555 entries that trap on
 the wrong union arm. Alpha handling retains the table's straight rgba-to-RGB332,

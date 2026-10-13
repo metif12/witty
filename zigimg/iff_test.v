@@ -441,3 +441,32 @@ fn test_iff_partial_input_chunk_errors_and_noop_writer() {
 	IFF.write_image(mut writer, ImageUnmanaged{ width: 999, height: 123 })!
 	assert writer.get_pos() == 0
 }
+
+fn test_iff_debug_payload_matches_source_record_syntax() {
+	assert iff_bmhd_debug_message(&BmhdHeader{}) == '.{ .width = 0, .height = 0, .x = 0, .y = 0, .planes = 0, .mask_type = .none, .compression_type = .none, .pad = 0, .transparent_color = 0, .x_asoect = 0, .y_aspect = 0, .page_width = 0, .page_height = 0 }'
+	header := BmhdHeader{
+		width:             65535
+		height:            1
+		x:                 -32768
+		y:                 32767
+		planes:            255
+		mask_type:         .has_lasso
+		compression_type:  .byterun2
+		pad:               7
+		transparent_color: 65535
+		x_asoect:          3
+		y_aspect:          5
+		page_width:        31
+		page_height:       37
+	}
+	assert iff_bmhd_debug_message(&header) == '.{ .width = 65535, .height = 1, .x = -32768, .y = 32767, .planes = 255, .mask_type = .has_lasso, .compression_type = .byterun2, .pad = 7, .transparent_color = 65535, .x_asoect = 3, .y_aspect = 5, .page_width = 31, .page_height = 37 }'
+	assert iff_dgbl_debug_message(&DgblHeader{}) == '.{ .width = 0, .height = 0, .compression_type = .none, .x_aspect = 0, .y_aspect = 0 }'
+	deep := DgblHeader{
+		width:            65535
+		height:           7
+		compression_type: .dynamic_chuff
+		x_aspect:         19
+		y_aspect:         23
+	}
+	assert iff_dgbl_debug_message(&deep) == '.{ .width = 65535, .height = 7, .compression_type = .dynamic_chuff, .x_aspect = 19, .y_aspect = 23 }'
+}
