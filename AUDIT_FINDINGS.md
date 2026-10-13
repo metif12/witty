@@ -3556,3 +3556,64 @@ regenerable compiler caches were cleared to recover disk space. Source visibilit
 implementation remain unchanged. Full tree/library/version pins and before/after
 fixture/runner/implementation hashes protect retained proof artifacts. Reproduction
 and exact scope are in zigimg/reference_probes/bmp_contracts/README.md.
+
+## Image editing production checks and retained mutation state — 2026-10-13
+
+Both image APIs' row-size checks and the editor's zero-height flip check used
+assertions erased by production builds. Explicit guards now preserve Source's
+division-by-zero diagnostics. Crop offsets previously wrapped or narrowed to int
+before source bounds checks; products/sums now check usize arithmetic in Source
+order and ranges are validated before narrowing. Invalid-storage palette unwraps
+retain Source's null-value diagnostic, including for zero-sized crops.
+
+Native inspection also exposed overlapping rows during malformed flips. Source
+uses floor byte rows and can complete outer swaps before a checked memcpy alias
+failure on the inner rows. V now traps at that same point and preserves completed
+mutations. A five-byte buffer at height two still keeps its middle byte; a nonempty
+buffer whose byte row size is zero still loops without advancing. Width and pixel
+stride do not replace Source's byte-based flip behavior. Crop still copies active
+palettes before its zero-dimension early return and discards animation in results.
+
+`verify_image_editor_contracts_reference.py` compares unchanged pinned Source
+Debug with ordinary V and Source ReleaseSafe with production V. Both modes match
+**42,034 returning observations**: one Box default/copy record, 8,100 clamps,
+3,120 row-size records, 13,122 double-flip records, 17,664 crop/mutation records and
+27 wide empty-crop/clamp controls. Row/flip cases cover all 24 storage variants;
+crop cases cover all 23 data variants. Inputs initialize full pixel bytes and
+active palettes, respect narrow carriers and compare float storage as raw bytes.
+Returning flips observe both swaps; crop records compare independent nonempty
+allocation pointers, changed result bytes/palettes and unchanged source storage.
+Main-output SHA-256:
+`6e4fbba5bf6989991bc3265f8853403464eea19843ed7056094ece7414d1faa3`.
+Control SHA-256:
+`9ad6adc71fc4b52ef25731150dbd38ec3571611a5e1a673f54874026c9661c91`.
+
+**524 strict panic/state pairs** cover 144 zero-height flips, 96 zero-height row
+sizes, 69 short crop sources after a privately copied first row, 138 crop offsets
+above 2^31/2^32, 24 overlapping flips, 15 crop offset arithmetic failures, nine
+crop count products, nine invalid palette unwraps, five direct clamp failures and
+15 matching crop-clamp failures. Snapshots compare public input dimensions,
+storage, active palettes, loop counts, duration bits, shared first-frame pixels,
+independent second-frame pixels and caller boxes. Failed crops exclude private
+destination writes; failed flips preserve and expose earlier completed swaps.
+State SHA-256:
+`913682a5a4bf69433ecdf609cf1e39b27a194d7c61291f0b2cb2bc7b3cf243cd`.
+Three separate Source/V timeout pairs confirm inherited zero-row loops through
+direct/unmanaged/managed entry points in each mode; they are counted separately.
+
+All 61 image and 58 Vaxis test files pass, along with production editor/image-API
+tests. The unchanged historical native image-API harness passes Debug/ReleaseSafe,
+retaining its 6,528-case encoder FNV e49e6984a209c47b and 589,824-case detection
+FNV ac90c12c037cfaf4. Existing pixel-view and PNG decoder/processor/failure-state
+proofs retain all previous hashes in both modes. Native/Linux application checks,
+three Windows DLLs, editor Windows test executables in both modes and two Linux
+shared libraries build successfully. Cross builds use -gc none and do not
+establish cross-target runtime behavior.
+
+Allocator/OOM/GC/lifetime, private flip temporaries/crop destinations, undefined
+empty pointer identities, uninitialized/freed storage, boxed sum-type copies,
+narrow/const typing, wider allocated extents and portable ABI remain boundaries.
+Source visibility/implementation remain unchanged. Full tree/library/version
+pins and before/after fixture/runner/implementation hashes protect retained proof
+artifacts. Reproduction and exact scope are in
+zigimg/reference_probes/image_editor_contracts/README.md.

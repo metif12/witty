@@ -91,8 +91,9 @@ pub fn (image ImageUnmanaged) image_byte_size() usize {
 }
 
 pub fn (image ImageUnmanaged) row_byte_size() usize {
-	assert image.height != 0
-	return image.image_byte_size() / image.height
+	size := image.image_byte_size()
+	if image.height == 0 { panic('division by zero') }
+	return size / image.height
 }
 
 pub fn (image ImageUnmanaged) is_animation() bool {

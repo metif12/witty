@@ -36,8 +36,9 @@ pub fn (image Image) raw_bytes() []u8 {
 }
 
 pub fn (image Image) row_byte_size() usize {
-	assert image.height != 0
-	return image.image_byte_size() / image.height
+	size := image.image_byte_size()
+	if image.height == 0 { panic('division by zero') }
+	return size / image.height
 }
 
 pub fn (image Image) image_byte_size() usize {

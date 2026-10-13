@@ -186,6 +186,12 @@ bounds in production. Both modes match 11,378 returning observations and 152
 panic/state pairs, including partial output and header/cursor failure order.
 Negative-dimension outputs compare metadata only when Source pixels are unwritten.
 
+The [image editing proof](reference_probes/image_editor_contracts/README.md)
+preserves production row/flip division traps, partially completed flips before
+overlapping-row failure, and crop arithmetic/bounds before narrowing wide offsets.
+Both modes match 42,034 returning observations and 524 panic/state pairs across
+direct and both image APIs. Three inherited zero-row loops remain documented.
+
 The [GIF record proof](reference_probes/gif_records/README.md) adds thirteen
 packed-field setters and requires Source comment/application constructor fields.
 Byte-count overflow and indexed-background casts remain checked in production.

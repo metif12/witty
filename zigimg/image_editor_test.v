@@ -1,5 +1,34 @@
 module zigimg
 
+fn test_flip_uses_floor_byte_rows_and_keeps_the_remaining_middle_byte() {
+	mut bytes := [u8(1), 2, 3, 4, 5]
+	image := ImageUnmanaged.from_raw_pixels_owned(99, 2, bytes, .grayscale8)!
+	assert image.row_byte_size() == 2 && image.to_managed().row_byte_size() == 2
+	image.flip_vertically()!
+	assert bytes == [u8(4), 5, 3, 1, 2]
+	image.flip_vertically()!
+	assert bytes == [u8(1), 2, 3, 4, 5]
+}
+
+fn test_empty_crop_skips_wide_offsets_after_copying_the_active_palette() {
+	mut indexed := IndexedStorage8.init_palette_size(1, 2)
+	indexed.palette[1] = Rgba32{
+		r: 37
+		a: 99
+	}
+	image := ImageUnmanaged{
+		width:  ~usize(0)
+		height: ~usize(0)
+		pixels: indexed
+	}
+	cropped := image.crop(Box{ x: ~usize(0), y: ~usize(0) })!
+	assert cropped.width == 0 && cropped.height == 0 && cropped.pixels.len() == 0
+	palette := cropped.pixels.get_palette() or { panic('missing palette') }
+	assert palette == indexed.palette
+	indexed.palette[1].r = 81
+	assert palette[1].r == 37
+}
+
 fn test_crop_box_and_zero_pixel_dimensions_keep_native_usize_boundaries() {
 	assert Box{
 		width:  ~usize(0)
