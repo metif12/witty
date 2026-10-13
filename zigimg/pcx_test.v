@@ -1,5 +1,7 @@
 module zigimg
 
+import os
+
 fn test_pcx_dimension_arithmetic_preserves_u16_boundaries() {
 	codec := PCX{
 		header: PCXHeader{
@@ -494,5 +496,47 @@ fn test_pcx_errors_preserve_header_assignment_run_and_palette_boundaries() {
 			continue
 		}
 		assert false
+	}
+}
+
+fn test_pcx_file_buffers_preserve_palette_seek_and_padded_rgb_rows() {
+	path := os.join_path(os.temp_dir(), 'witty-pcx-buffer-${os.getpid()}.pcx')
+	defer { os.rm(path) or {} }
+	indexed_header := PCXHeader{
+		bpp:    8
+		xmax:   2
+		ymax:   1
+		planes: 1
+		stride: 4
+	}
+	rgb_header := PCXHeader{
+		bpp:    8
+		xmax:   2
+		ymax:   1
+		planes: 3
+		stride: 4
+	}
+	mut indexed := [u8(1), 2, 3, 87, 4, 5, 6, 87, 99, 98]
+	indexed << pcx_fixture_palette()
+	rgb := [u8(1), 2, 3, 0, 4, 5, 6, 0, 7, 8, 9, 0, 10, 11, 12, 0, 13, 14, 15, 0, 16, 17, 18, 0]
+	for data in [pcx_fixture(indexed_header, indexed), pcx_fixture(rgb_header, rgb)] {
+		mut memory := ReadStream.init_memory(data)
+		mut expected_codec := PCX{}
+		expected := expected_codec.read(mut memory)!
+		os.write_file_array(path, data)!
+		for capacity in [128, 129, 131, 257, 1024] {
+			mut file := os.open(path)!
+			mut buffer := []u8{len: capacity, init: u8(165)}
+			mut stream := ReadStream.init_file(file, mut buffer)
+			mut codec := PCX{}
+			actual := codec.read(mut stream)!
+			assert codec.header == expected_codec.header
+			assert actual.as_bytes() == expected.as_bytes()
+			assert stream.get_pos() == memory.get_pos()
+			if actual_palette := actual.get_palette() {
+				assert actual_palette == expected.get_palette()?
+			}
+			file.close()
+		}
 	}
 }

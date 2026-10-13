@@ -183,6 +183,12 @@ including header/cursor failure order. Both modes match 135,766 returning
 observations and 41 panic/state pairs using initialized memory streams. Source
 unwritten pixels and private failed allocations remain outside the comparison.
 
+The [PCX buffered decoder proof](reference_probes/pcx_decode/README.md) extends
+coverage to VGA palette seeking, planar/dummy-byte rows, runs and retries across
+five file-buffer sizes. Both modes match 21,480 records / 25,896 read attempts and
+204 exact panic/state pairs. RGB destination bounds retain Source's index/length
+message after byte decoding, including EOF precedence.
+
 The [BMP contract proof](reference_probes/bmp_contracts/README.md) retains signed
 dimension/scanline arithmetic, image-size arithmetic, integer casts and pixel
 bounds in production. Both modes match 11,378 returning observations and 152

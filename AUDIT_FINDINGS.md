@@ -5397,3 +5397,39 @@ private Source storage remain boundaries. Source/library/version and before/afte
 implementation, fixture, runner, helper and input hashes protect the proof.
 Scope and reproduction are in
 [the indexed TGA palette proof](zigimg/reference_probes/tga_palette/README.md).
+
+
+### PCX buffered decoding and exact RGB bounds checkpoint — 2026-10-14
+
+The planar decoder relied on V's generic array-access diagnostic for a nonzero
+last-row dummy byte. An explicit guard now preserves Source's complete offending
+index/length message in ordinary and production builds. It follows RLE decoding
+and applies only to the three component assignments, preserving zero skips and
+EOF-before-destination failure order. Successful decoding is unchanged.
+
+Both corresponding modes match **21,480 records / 25,896 read attempts**, SHA-256
+`c5140357c6cdcd568260ef8f8def66a7b596de669070d3e98f2e8f2046d346cb`, and
+**204 exact panic/state pairs**, SHA-256
+`fbcc36d2d1b2bfd331bdde3f4280c1055fa9bea02ee9aa6b9ac2fc13f5214f7d`.
+Memory and five file-buffer capacities cover indexed shapes/padding, fully written
+planar/dummy-byte rows, RLE runs across rows and discards, byte prefixes, retries,
+header validation, end-relative VGA palette seeking and ordered failures. Success
+compares complete pixel/palette bytes. Public header, stream position, buffered
+length and initialized caller buffers are retained on returns and failures. Failed
+private pixel/palette/RLE storage is excluded. Actual unchanged compiled Source
+supplies all expected decoder outputs and diagnostics.
+
+All 61 image and 58 Vaxis test files pass, including a file-palette/planar regression,
+with seventeen production/platform checks. The previous 135,766 returning and 41
+arithmetic panic/state observations retain every hash in both modes. Initial
+fixture-prefix failure and the corrected pre-fix diagnostic mismatch remain
+separate from completed proofs; the latter matched every returning record and
+its first public failure snapshot before the diagnostic fix.
+
+Undefined/unwritten Source pixels, private failed allocations, buffers below the
+128-byte header requirement, nonseekable/streaming/custom readers, arbitrary larger
+strides/extents, allocator/OOM/GC/lifetime, enum/narrow/const typing, physical layout
+and portable ABI remain boundaries. Source/library/version and before/after
+fixture, runner, helper, implementation and corpus hashes protect the proof.
+Scope and reproduction are in
+[the PCX buffered decoder proof](zigimg/reference_probes/pcx_decode/README.md).

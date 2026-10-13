@@ -234,10 +234,16 @@ pub fn (mut codec PCX) read(mut stream ReadStream) !PixelStorage {
 					}
 					pixel_x := offset % actual_width
 					current_color := offset / actual_width
+					// Source checks the destination after decoding the byte, and
+					// only for one of the three component assignments.
+					index := y_stride + pixel_x
+					if current_color < 3 && index >= usize(pixels.data.len) {
+						panic('index out of bounds: index ${index}, len ${pixels.data.len}')
+					}
 					match current_color {
-						0 { pixels.data[int(y_stride + pixel_x)].r = byte }
-						1 { pixels.data[int(y_stride + pixel_x)].g = byte }
-						2 { pixels.data[int(y_stride + pixel_x)].b = byte }
+						0 { pixels.data[int(index)].r = byte }
+						1 { pixels.data[int(index)].g = byte }
+						2 { pixels.data[int(index)].b = byte }
 						else {}
 					}
 

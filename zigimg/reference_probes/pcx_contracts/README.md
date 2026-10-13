@@ -99,3 +99,8 @@ library SHA-256
 `ed900ae630673721b5aca890da4d432f4f1bfbbb201d5e450861b8111ab9a27d`, compiler
 versions (Zig 0.15.2 and V 0.5.2), and before/after fixture, runner and implementation
 hashes. Source visibility and implementation are unchanged.
+
+The later [PCX buffered decoder proof](../pcx_decode/README.md) separately compares
+fully written larger planar/dummy-byte shapes and five file-buffer capacities,
+including exact RGB bounds messages. It supplements this memory-only matrix;
+Source-unwritten pixel storage remains excluded.
