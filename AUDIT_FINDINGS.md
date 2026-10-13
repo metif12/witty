@@ -3305,6 +3305,11 @@ hashes protect retained binaries, diagnostics, snapshots and proof summaries.
 Reproduction and exact scope are in
 zigimg/reference_probes/pixel_storage/README.md.
 
+The later [public indexed factory checkpoint](zigimg/reference_probes/indexed_generic/README.md)
+adds represented generic factories, capacity access and GC cleanup. Its measured
+generic-constructor, type-identity and capacity boundaries are separate from
+this earlier named/raw-storage matrix.
+
 All 61 image and 58 Vaxis test files pass, together with focused production pixel
 storage, PCX and converter tests. Historical native converter assertions pass in
 Debug and ReleaseSafe. Existing PNG decoder/processor and buffered TGA decoder/
@@ -4911,3 +4916,42 @@ unchanged.
 Enclosing record layout/padding, undefined storage, arbitrary ABI, allocation/
 lifetime and unrepresented callers remain boundaries. Details and reproduction
 are in [the compact enum proof](zigimg/reference_probes/compact_enums/README.md).
+
+### Public indexed storage factory checkpoint
+
+The public `IndexedStorage(T)` factory, its `PaletteSize` member and direct
+cleanup interfaces were absent from V. `IndexedStorage[T]` now supplies mutable
+palette/index slices, default/full and explicit palette constructors, static
+capacity lookup and static palette resizing. Five named records also expose
+capacity lookup and cleanup. V GC owns the allocations; Source allocator
+selection, allocation failures, reclamation and lifetime remain adaptations.
+
+The unchanged-source comparison matches **2,384 returning records** in each
+corresponding compiler mode, SHA-256
+`c0b156d0c049b331e851d03790c796d6e7f10fbb5dcc4ca699928c6ebac6a554`.
+Bool, native signed/unsigned 8/16-bit values and aliases cover initialized opaque
+palettes, initialized indices, shrink/regrow, shared element mutation,
+independent copied lengths, by-value returns and whole-record replacement.
+Five named capacity/cleanup records and three 32-bit capacity records match.
+Thirty-two strict capacity failure/state pairs match, state SHA-256
+`de4f2c99de990d467f02db399ebdc050189e8b85575dcbd0cc59dcb3040a53fd`.
+
+Eight constructor/cleanup pairs, eight immutable-resize rejection pairs, three
+wide direct-record pairs and three unrepresentable capacity conversion pairs
+pass. Sixteen generic field omissions remain V acceptance, and two native
+built-in aliases remain distinct V nominal records. Four V-only array-length
+guards fail explicitly before allocation; native oversized allocations are
+excluded. Generic capacity forms beyond represented scalars, native sub-byte
+index typing, undefined/inactive/freed storage and physical ABI remain boundaries.
+
+An explicitly typed fixture local avoids V 0.5.2 generating locals with the last
+instantiated generic index type. The returning proof covers that call pattern;
+the original compiler errors are retained. The existing named/raw-storage proof
+retains all 4,393 returns and 97 strict failure pairs in both modes. All 61 image
+and 58 Vaxis test files pass, with 23 production/platform checks including the
+new generic fixture's Windows and Linux builds. Complete Source/library/observer/
+compiler pins and before/after implementation/runner/fixture/input/consumer
+hashes protect the proof. Source implementation and visibility are unchanged.
+
+Details and reproduction are in
+[the indexed factory proof](zigimg/reference_probes/indexed_generic/README.md).

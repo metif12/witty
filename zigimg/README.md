@@ -405,6 +405,14 @@ pass. Generic omissions, direct-literal alpha defaults and distinct built-in
 type identities remain measured V adaptations. Examples and reproduction are in
 [the generic grayscale proof](reference_probes/grayscale_generic/README.md).
 
+Public `IndexedStorage[T]` factories expose default/explicit palette construction,
+`palette_size()`, static `resize_palette(mut storage, size)` and GC cleanup.
+All five named indexed records also expose capacity lookup and cleanup. The
+2,384-record comparison verifies initialized palettes/indices, shared elements
+and independent copied lengths in both modes. Generic omission/type-identity
+differences and wider capacity/array limits are recorded in
+[the indexed factory proof](reference_probes/indexed_generic/README.md).
+
 V arrays and GC replace allocator slices. Sub-byte scalar values use byte
 storage or packed backing words. Caller-selected allocation, allocation failures
 and allocator reclamation remain runtime adaptations.
