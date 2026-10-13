@@ -679,6 +679,11 @@ pub fn (mut storage PixelStorage) resize_palette(size usize) {
 }
 
 pub fn (storage PixelStorage) slice(begin usize, end usize) PixelStorage {
+	if storage !is InvalidPixels {
+		// Source checks the range order before checking its end, using usize.
+		if begin > end { panic('start index ${begin} is larger than end index ${end}') }
+		if end > storage.len() { panic('index out of bounds: index ${end}, len ${storage.len()}') }
+	}
 	return match storage {
 		InvalidPixels {
 			storage

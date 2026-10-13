@@ -3311,3 +3311,65 @@ vector/failure-state proofs retain all prior hashes in both modes. Native/Linux
 application checks, three Windows DLLs, the pixel-storage Windows test executable
 in both modes and two Linux shared libraries build successfully. Cross builds use
 -gc none and do not establish cross-target runtime behavior.
+
+## Checked PixelStorage slices and live iterator bounds — 2026-10-13
+
+PixelStorage.slice used unsafe V slicing without Source's reversed-range/end
+checks. PixelStorageIterator narrowed its public usize cursor to int before
+array access, so wide cursors could wrap into valid elements. Indexed palette
+lookups relied on V array diagnostics instead of Source's checked index/length
+failure contract.
+
+Slices now check start/end order before the end bound, using the original usize
+values in ordinary and production builds. Invalid storage still ignores all
+bounds. The iterator checks its captured end before accessing its borrowed storage,
+then checks the live data extent before narrowing the cursor, and checks indexed
+palette bounds before conversion. Failed calls preserve the cursor; successful
+calls increment once. Invalid variants with manually extended ends continue to
+return opaque black, including at the last representable cursor. Initialization
+continues to borrow the storage address and capture only its original length.
+
+`verify_pixel_views_reference.py` compares unchanged pinned Source Debug with
+ordinary V and Source ReleaseSafe with production V. Both modes match **18,028
+returning observations**: 15,840 slice/mutation/color records, 864 independent
+iterator copies, 1,152 live replacements across all 24 initial/replacement tags,
+144 exhaustion controls, 25 invalid-storage wide-bound controls and three default/
+wide-cursor controls. Inputs initialize full pixel bytes and active palettes,
+respect narrow Source carriers and compare exact native color bytes, including
+signed zero, infinities and quiet/signaling float NaN payloads. Pointer identity
+uses integer addresses because V reference equality may compare pointed-to values.
+Returning SHA-256:
+`3fc36e2d20b78dd224bb160ad63b2c89a4c60203be140cab6bdb8d8173690f99`.
+
+**1,039 strict panic/state pairs** cover 621 reversed/end slice bounds, 345 iterator
+data indices, 46 replacements with shorter live storage and 27 active palette
+lookup failures. Controls include combined range failures, values beyond 2^31/2^32
+and maximum usize. Full Source start/end or index/length diagnostic prefixes match.
+Observers compare the live variant, count, initialized pixel/palette bytes and
+iterator cursor/end; replacement observers exclude the freed old allocation.
+State SHA-256:
+`e486145175e57fc2962952fea09e5292f443be38d460a45c5b0ccf8475dae528`.
+Two compile acceptance pairs cover defaults and immutable storage passed through
+init; four rejection pairs cover immutable next/field mutation. One separate
+constructor pair records Source's const-pointer field versus V's mutable-reference
+field: direct immutable borrowing is rejected by the V record initializer, while
+the public init adapter supports that borrowed use case.
+
+The earlier indexed/raw proof retains both output/state hashes and its separate
+boxed sum-type copy differences. Its valid-range scope is supplemented by this
+new checked-range proof. Generic factories/PaletteSize/direct indexed allocator/
+deinit interfaces, const/narrow carriers, wider allocated array extents,
+allocator/OOM/GC/lifetime and portable ABI remain boundaries. Default exhausted
+iterators never inspect the undefined Source pixels pointer. Undefined empty
+allocation/byte-view pointers and uninitialized/freed storage remain excluded;
+empty slices of nonempty allocations retain defined borrowed pointers. Source
+visibility and implementation remain unchanged. Tree/library/version pins and
+before/after fixture/runner/implementation hashes protect retained proof artifacts.
+Reproduction and exact scope are in zigimg/reference_probes/pixel_views/README.md.
+
+All 61 image and 58 Vaxis files pass, along with production storage/iterator/
+converter tests. Existing PNG decoder/processor/state matrices and the preceding
+indexed/raw proof retain all previous hashes in both modes. Native/Linux app
+checks, three Windows DLLs, both focused Windows test executables in ordinary and
+production modes, and two Linux shared libraries build successfully. Cross builds
+use -gc none and do not establish runtime behavior on those targets.

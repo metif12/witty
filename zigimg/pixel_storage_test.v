@@ -102,3 +102,14 @@ fn test_image_raw_pixel_copy_and_owned_initialization_do_not_infer_dimensions() 
 	assert owned.raw_bytes()[0] == 7
 	assert duplicate.raw_bytes()[0] == 1
 }
+
+fn test_invalid_storage_slice_ignores_all_bounds() {
+	invalid := PixelStorage(InvalidPixels{})
+	for begin in [usize(0), 1, ~usize(0)] {
+		for end in [usize(0), 1, ~usize(0)] {
+			view := invalid.slice(begin, end)
+			assert view.pixel_format() == .invalid
+			assert view.len() == 0
+		}
+	}
+}

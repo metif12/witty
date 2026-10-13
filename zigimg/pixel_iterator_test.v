@@ -232,3 +232,36 @@ fn test_iterator_retains_live_storage_and_captures_only_initial_length() {
 	empty.end = 1
 	assert (empty.next() or { panic('missing invalid pixel') }) == Colorf32{}
 }
+
+fn test_iterator_copies_keep_independent_cursors_and_borrow_live_elements() {
+	mut pixels := PixelStorage(Rgb24Pixels{
+		data: [Rgb24{ r: 1 }, Rgb24{ r: 2 }]
+	})
+	mut iter := PixelStorageIterator.init(&pixels)
+	mut copied := iter
+	_ = iter.next() or { panic('missing pixel') }
+	assert iter.current_index == 1
+	assert copied.current_index == 0
+	match mut pixels {
+		Rgb24Pixels { pixels.data[0].r = 255 }
+		else { assert false }
+	}
+
+	assert (copied.next() or { panic('missing copied pixel') }).r == 1
+	assert iter.current_index == 1 && copied.current_index == 1
+}
+
+fn test_iterator_exhaustion_precedes_pointer_access_and_invalid_tag_keeps_wide_cursor() {
+	mut empty := PixelStorageIterator{}
+	assert empty.next() == none
+	empty.current_index = ~usize(0)
+	empty.end = ~usize(0)
+	assert empty.next() == none
+	invalid := PixelStorage(InvalidPixels{})
+	mut iter := PixelStorageIterator.init(&invalid)
+	iter.current_index = ~usize(0) - 1
+	iter.end = ~usize(0)
+	assert (iter.next() or { panic('missing invalid pixel') }) == Colorf32{}
+	assert iter.current_index == ~usize(0)
+	assert iter.next() == none
+}
