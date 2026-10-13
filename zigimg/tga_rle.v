@@ -74,16 +74,14 @@ fn (mut input TgaInput) stream(mut source ReadStream, limit int) ![]u8 {
 					input.state = .read_header
 					continue
 				}
-				available := source.buffer.len - source.position
-				// Fixed Reader.stream reports EOF even for a zero limit at EOF.
-				if available == 0 { return error('EndOfStream') }
-				mut count := if remaining < input.repeat_count {
+				chunk_limit := if remaining < input.repeat_count {
 					remaining
 				} else {
 					input.repeat_count
 				}
-				if available < count { count = available }
-				bytes << source.take(count)!
+				chunk := source.tga_stream(chunk_limit)!
+				count := chunk.len
+				bytes << chunk
 				input.repeat_count -= count
 				remaining -= count
 				if input.repeat_count == 0 && remaining > 0 {

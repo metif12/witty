@@ -180,6 +180,14 @@ Ordinary/production comparisons match 274,453 returning observations and 24
 checked panic/state pairs. Narrow literal typing, const ID-slice typing and
 sentinel logical lengths are measured separately as representation differences.
 
+The [buffered TGA decoder proof](reference_probes/tga_decode/README.md) covers
+21,032 read attempts across memory/file packets, truncation, retries and alpha
+extensions. Raw RLE reads now use available buffered bytes and preserve file
+refills and the Source zero-progress transition. The shared file shim follows
+Zig's macOS first-vector positional-read fallback; 48 direct observations compare
+destination bytes, positions and buffered lengths. Decoder rows and 15 failure-state
+pairs match in both modes. Indexed palette file decoding remains outside this matrix.
+
 PackBits preserves declared-length truncation, unclipped runs, and its unread
 final lone control byte. LZW retains endian selection, clear/end codes, early
 change, dictionary mutation order, partial-input state, and source handling of

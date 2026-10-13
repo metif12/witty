@@ -19,14 +19,15 @@ pub const default_buffer_size = 4096
 @[heap]
 pub struct ReadStream {
 mut:
-	buffer          []u8
-	position        int
-	end             int
-	file            ?os.File
-	file_pos        u64
-	file_size       ?u64
-	file_size_error string
-	streaming       int
+	buffer             []u8
+	position           int
+	end                int
+	file               ?os.File
+	file_pos           u64
+	file_size          ?u64
+	file_size_error    string
+	streaming          int
+	tga_stream_reading bool
 }
 
 pub fn ReadStream.init_memory(buffer []u8) ReadStream {
@@ -315,6 +316,28 @@ fn (stream ReadStream) flate_buffered_len() int {
 
 fn (mut stream ReadStream) flate_read_vec(mut destination []u8) !int {
 	return stream.read_vec(mut destination)
+}
+
+// Reader.stream into TargaRLEDecoder's fixed output writer. Unlike readVec,
+// buffered data returns immediately; a file first switches from sendFile to
+// positional/streaming reads without making progress. Keep that transition
+// on the owning stream so repeated TGA reads retain it.
+fn (mut stream ReadStream) tga_stream(limit int) ![]u8 {
+	available := stream.end - stream.position
+	count := if limit < available { limit } else { available }
+	if count > 0 { return stream.take(count) }
+	// A fixed Reader's callback reports EOF even for a zero limit.
+	if stream.file == none { return error('EndOfStream') }
+	if !stream.tga_stream_reading {
+		stream.tga_stream_reading = true
+		return []u8{}
+	}
+	// File.Reader asks the fixed writer for at least one writable byte before
+	// limiting its slice. Writer exhaustion reaches defaultReadVec's trap.
+	if limit == 0 { panic('reached unreachable code') }
+	mut destination := []u8{len: limit}
+	read := stream.read_vec(mut destination)!
+	return destination[..read]
 }
 
 pub fn (mut stream ReadStream) discard_all(count usize) ! {

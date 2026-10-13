@@ -80,7 +80,19 @@ static intptr_t witty_image_file_read(int fd, uint64_t pos, unsigned char *buf, 
 static intptr_t witty_image_file_read_vec(int fd, uint64_t pos, unsigned char *a, size_t alen, unsigned char *b, size_t blen, int *streaming) {
     struct iovec vectors[2] = {{a, alen}, {b, blen}};
     ssize_t n;
-    do { n = *streaming ? readv(fd, vectors, 2) : preadv(fd, vectors, 2, (off_t)pos); }
+    do {
+        if (*streaming) {
+            n = readv(fd, vectors, 2);
+        } else {
+#if defined(__APPLE__) || defined(__HAIKU__) || defined(__serenity__)
+            /* Zig 0.15.2's std.posix.preadv reads only its first vector on
+               targets without the native positional vector operation. */
+            n = pread(fd, alen ? a : b, alen ? alen : blen, (off_t)pos);
+#else
+            n = preadv(fd, vectors, 2, (off_t)pos);
+#endif
+        }
+    }
     while (n < 0 && errno == EINTR);
     if (n < 0 && errno == ESPIPE && !*streaming) {
         *streaming = 1;

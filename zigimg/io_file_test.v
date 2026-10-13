@@ -30,8 +30,12 @@ fn test_file_reader_preserves_positional_start_read_ahead_and_seek_by_workaround
 	mut destination := []u8{len: 3}
 	assert reader.read_slice_short(mut destination)! == 3
 	assert destination.bytestr() == '012'
-	$if !windows { assert reader.file_pos == 11 && reader.end == 8
-	 }
+	$if macos || ios || haiku || serenity {
+		// Source preadv reads only the destination vector on these targets.
+		assert reader.file_pos == 3 && reader.end == 0
+	} $else $if !windows {
+		assert reader.file_pos == 11 && reader.end == 8
+	}
 	reader.seek_to(25)!
 	mut short := []u8{len: 3, init: 0xa5}
 	reader.read_slice_all(mut short) or { assert err.msg() == 'EndOfStream' }

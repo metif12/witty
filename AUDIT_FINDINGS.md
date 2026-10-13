@@ -3152,3 +3152,53 @@ modes and two Linux shared libraries build successfully with cross builds using
 undefined/freed storage, sentinel/const/narrow typing and arbitrary SIMD remain
 boundaries. Reproduction and exact scope are in
 zigimg/reference_probes/tga_records/README.md.
+
+## TGA buffered RLE and positional file vector reads — 2026-10-13
+
+TGA's raw RLE path used input buffer capacity as its available-byte count. This
+could request more bytes than a file buffer could hold, use an unread capacity
+suffix, or stop at a refill boundary. Source `Reader.stream` returns a buffered
+prefix immediately and preserves File.Reader's zero-progress transition from
+unsupported send-file streaming to direct reads. The translated adapter now
+uses that behavior and retains the transition on the owning stream for retries.
+
+The unchanged native comparison also exposed 62 stream-position differences
+despite matching pixel bytes. Zig 0.15.2's macOS `posix.preadv` uses only its first
+vector, whereas the C shim consumed both destination and read-ahead vectors.
+The shim now follows Source on Apple/Haiku/Serenity positional fallback paths,
+retaining streaming/native-vector behavior. The file test's former macOS
+read-ahead expectation was corrected against Source; direct native comparisons
+now verify this buffer state. Runtime certification here is native macOS only.
+
+`verify_tga_decode_reference.py` matches **20,576 decoder rows containing 21,032
+read attempts** in ordinary/production modes against unchanged Source
+Debug/ReleaseSafe. The corpus covers four pixel widths, both row orders,
+raw/repeated/mixed packets, zero dimensions, packet truncation, retries on the same
+codec/stream, format failures and alpha extensions. Memory and seekable files
+use 26/31/64/128/512/4096-byte buffers, plus 495-byte extension controls.
+Successful defined pixels, formats, positions, headers, initialized active ID
+storage and retained extensions match. Returning SHA-256:
+`cacb26414a35edad54b8c5a41d39b951a5c50cb48ffc26a9544b5c14e381615c`.
+
+Forty-eight separate positional vector-read observations compare byte counts,
+destination bytes, positions and buffered lengths, including consecutive reads
+and EOF. SHA-256:
+`d9028cc6d0c1cb767a3739f9a4da6a994338cfcf11b752a6c3a6ad5a4a11fc2e`.
+Fifteen panic/state pairs cover footer/extension capacity and pixel-byte overflow;
+state SHA-256:
+`62c58cd4c95bfb8d3f1ac53c9d2ba87b8a67be00fd97ef637b5f6c17933079d2`.
+The proof pins the complete Source tree, selected compiler libraries including
+`posix.zig`, versions, fixtures, runner and V/C implementations, with before/after
+checks and retained commands, raw results, diagnostics, state and provenance.
+Only successfully initialized pixels and active ID data are observed; Source
+RGB555 padding is masked. Private RLE state, indexed palette file decoding,
+custom/nonseekable reader modes, allocator/OOM/GC/lifetime, portable ABI and
+undefined/freed Source memory remain outside this matrix.
+
+Existing stream/TGA record/PNG decoder-and-processor/JPEG retained-state proofs
+retain their hashes in both modes. Historical TGA encoder/decoder tests retain
+their 2,016/1,120-case hashes. All 60 image/58 Vaxis files and focused production
+TGA/file tests pass. Native/Linux application checks, three Windows DLLs, the new
+Windows test executable in both modes and two Linux shared libraries build with
+cross builds using -gc none; cross-target runtime is unverified. Reproduction and
+exact scope are in zigimg/reference_probes/tga_decode/README.md.
