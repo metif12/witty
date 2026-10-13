@@ -10,17 +10,18 @@ pub mut:
 	end_information_code u16
 	next_code            u16
 	previous_code        ?u16
-	dictionary           map[u16][]u8
+	dictionary           map[u16][]u8 @[required]
 	remaining_data       ?u16
 	remaining_bits       u8
 	early_change         u8
 }
 
 pub fn lzw_decoder_init[E](initial_code_size u8, early_change u8) !LzwDecoder[E] {
-	// Larger initial dictionaries eventually overflow the source's u13 index.
-	assert initial_code_size <= 12
-	root := u16(1) << initial_code_size
+	if initial_code_size > 15 { panic('integer does not fit in destination type') }
+	if initial_code_size >= 13 { panic('shift amount is greater than the type size') }
+	root := (u16(1) << initial_code_size) & 0x1fff
 	mut decoder := LzwDecoder[E]{
+		dictionary:           map[u16][]u8{}
 		code_size:            initial_code_size
 		initial_code_size:    initial_code_size
 		clear_code:           root
@@ -43,19 +44,24 @@ pub fn (mut decoder LzwDecoder[E]) deinit[E]() {
 fn (mut decoder LzwDecoder[E]) reset_dictionary[E]() ! {
 	decoder.dictionary.clear()
 	decoder.code_size = decoder.initial_code_size
-	decoder.next_code = (u16(1) << decoder.initial_code_size) + 2
-	for index := u16(0); index < u16(1) << decoder.code_size; index++ {
-		decoder.dictionary[index] = [u8(index)]
+	if decoder.initial_code_size > 15 { panic('integer does not fit in destination type') }
+	if decoder.initial_code_size >= 13 { panic('shift amount is greater than the type size') }
+	decoder.next_code = ((u16(1) << decoder.initial_code_size) & 0x1fff) + 2
+	roots_size := usize(1) << decoder.code_size
+	for index := usize(0); index < roots_size; index++ {
+		decoder.dictionary[u16(index)] = [u8(index)]
 	}
 	// The pinned reset leaves previous_code and the partial-input fields alone.
 }
 
 fn (mut decoder LzwDecoder[E]) advance_code[E](bits_to_read u8) u8 {
-	assert decoder.next_code < 8191
+	if decoder.next_code == 8191 { panic('integer overflow') }
 	decoder.next_code++
-	assert decoder.code_size + 1 < 16
+	if decoder.code_size == 255 { panic('integer overflow') }
+	if decoder.code_size + 1 > 15 { panic('integer does not fit in destination type') }
+	if decoder.code_size + 1 >= 13 { panic('shift amount is greater than the type size') }
 	max_code := u16((u16(1) << (decoder.code_size + 1)) & 0x1fff)
-	assert max_code >= decoder.early_change
+	if max_code < decoder.early_change { panic('integer overflow') }
 	if decoder.next_code == max_code - decoder.early_change && decoder.code_size + 1 < 12 {
 		decoder.code_size++
 		return bits_to_read + 1
@@ -67,20 +73,24 @@ pub fn (mut decoder LzwDecoder[E]) decode[E](mut reader ReadStream, mut writer W
 	mut bit_reader := BitReader[E]{
 		reader: unsafe { &reader }
 	}
-	assert decoder.code_size < 255
+	if decoder.code_size == 255 { panic('integer overflow') }
 	mut bits_to_read := decoder.code_size + 1
 	mut read_size := u16(0)
 	mut read_code := u16(0)
 	if remaining_data := decoder.remaining_data {
-		rest := u16(bit_reader.read_bits[E, u16](decoder.remaining_bits, &read_size)!)
+		rest := lzw_read_bits(mut bit_reader, decoder.remaining_bits, &read_size)!
 		if read_size > 0 {
-			$if E is LittleEndian {
-				assert bits_to_read >= decoder.remaining_bits
+			$if E.unaliased_typ is LittleEndian {
+				if bits_to_read < decoder.remaining_bits { panic('integer overflow') }
 				shift := bits_to_read - decoder.remaining_bits
-				assert shift < 16
+				if shift > 15 { panic('integer does not fit in destination type') }
+				if shift >= 13 { panic('shift amount is greater than the type size') }
 				read_code = (remaining_data | (rest << shift)) & 0x1fff
-			} $else $if E is BigEndian {
-				assert decoder.remaining_bits < 16
+			} $else $if E.unaliased_typ is BigEndian {
+				if decoder.remaining_bits > 15 { panic('integer does not fit in destination type') }
+				if decoder.remaining_bits >= 13 {
+					panic('shift amount is greater than the type size')
+				}
 				read_code = ((remaining_data << decoder.remaining_bits) | rest) & 0x1fff
 			} $else {
 				$compile_error('LzwDecoder requires BigEndian or LittleEndian')
@@ -88,8 +98,7 @@ pub fn (mut decoder LzwDecoder[E]) decode[E](mut reader ReadStream, mut writer W
 		}
 		decoder.remaining_data = none
 	} else {
-		read_code = bit_reader.read_bits[E, u16](bits_to_read, &read_size)!
-		assert read_code <= 0x1fff
+		read_code = lzw_read_bits(mut bit_reader, bits_to_read, &read_size)!
 	}
 	for read_size > 0 {
 		if read_code in decoder.dictionary {
@@ -98,6 +107,7 @@ pub fn (mut decoder LzwDecoder[E]) decode[E](mut reader ReadStream, mut writer W
 			if previous_code := decoder.previous_code {
 				if previous_code in decoder.dictionary {
 					mut new_value := decoder.dictionary[previous_code].clone()
+					if value.len == 0 { panic('index out of bounds: index 0, len 0') }
 					new_value << value[0]
 					decoder.dictionary[decoder.next_code] = new_value
 					bits_to_read = decoder.advance_code(bits_to_read)
@@ -113,6 +123,7 @@ pub fn (mut decoder LzwDecoder[E]) decode[E](mut reader ReadStream, mut writer W
 			if previous_code in decoder.dictionary {
 				previous_value := decoder.dictionary[previous_code]
 				mut new_value := previous_value.clone()
+				if previous_value.len == 0 { panic('index out of bounds: index 0, len 0') }
 				new_value << previous_value[0]
 				// In this source branch the dictionary is updated before writing,
 				// but its next code and size advance only after a successful write.
@@ -122,13 +133,71 @@ pub fn (mut decoder LzwDecoder[E]) decode[E](mut reader ReadStream, mut writer W
 			}
 		}
 		decoder.previous_code = read_code
-		read_code = bit_reader.read_bits[E, u16](bits_to_read, &read_size)!
-		assert read_code <= 0x1fff
+		read_code = lzw_read_bits(mut bit_reader, bits_to_read, &read_size)!
 		if read_size != bits_to_read {
 			decoder.remaining_data = read_code
+			if u16(bits_to_read) - read_size > 15 {
+				panic('integer does not fit in destination type')
+			}
 			decoder.remaining_bits = u8(u16(bits_to_read) - read_size)
-			assert decoder.remaining_bits < 16
 			return
 		}
 	}
+}
+
+// io.BitReader reads LZW codes into u13. Keep its truncation at every shift,
+// including partial/oversized reads, before using the wider V carrier.
+fn lzw_read_bits[E](mut bits BitReader[E], num u16, out_bits &u16) !u16 {
+	if num <= bits.count {
+		value := u16(bits.remove_bits(u8(num)))
+		unsafe { *out_bits = num }
+		return value
+	}
+	mut count := u16(bits.count)
+	mut value := u16(bits.remove_bits(bits.count))
+	full_bytes := (num - count) / 8
+	for _ in 0 .. full_bytes {
+		byte := bits.reader.take_byte() or {
+			if err.msg() == 'EndOfStream' {
+				unsafe { *out_bits = count }
+				return value
+			}
+			return err
+		}
+		$if E.unaliased_typ is BigEndian {
+			value = ((value << 8) | byte) & 0x1fff
+		} $else $if E.unaliased_typ is LittleEndian {
+			if count > 15 { panic('integer does not fit in destination type') }
+			if count >= 13 { panic('shift amount is greater than the type size') }
+			value = (value | (u16(byte) << count)) & 0x1fff
+		} $else {
+			$compile_error('LzwDecoder requires BigEndian or LittleEndian')
+		}
+		count += 8
+	}
+	left := num - count
+	if left == 0 {
+		unsafe { *out_bits = count }
+		return value
+	}
+	byte := bits.reader.take_byte() or {
+		if err.msg() == 'EndOfStream' {
+			unsafe { *out_bits = count }
+			return value
+		}
+		return err
+	}
+	keep := u8(8 - left)
+	$if E.unaliased_typ is BigEndian {
+		value = ((value << left) | (byte >> keep)) & 0x1fff
+		bits.bits = byte & bit_mask(keep)
+	} $else $if E.unaliased_typ is LittleEndian {
+		if count > 15 { panic('integer does not fit in destination type') }
+		if count >= 13 { panic('shift amount is greater than the type size') }
+		value = (value | (u16(byte & bit_mask(u8(left))) << count)) & 0x1fff
+		bits.bits = byte >> left
+	}
+	bits.count = keep
+	unsafe { *out_bits = num }
+	return value
 }

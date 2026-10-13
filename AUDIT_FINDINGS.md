@@ -4211,3 +4211,66 @@ Source/library/version pins, an additional fmt.zig pin and before/after fixture/
 input/runner/implementation checks protect this proof. Exact scope, counts,
 limitations and reproduction are in
 [the XBM probe](zigimg/reference_probes/xbm_contracts/README.md).
+
+## LZW u13 bit reads, production traps and retained dictionary state — 2026-10-13
+
+LZW used assertion-only checks and native-u16 reads where Source uses u13. The
+private reader now truncates at each Source u13 shift, retains narrow shift/cast
+failure order after input consumption and preserves partial/oversized reads.
+Pending resumes retain their subtraction, shift and clear order; remaining_data
+is committed before a failing u4 remaining_bits cast. The shared BitReader and
+other compression algorithms remain unchanged.
+
+Factory/reset u4 casts and u13 shifts now retain their exact production failures.
+Reset clears the dictionary and assigns code_size before computing next_code.
+Dictionary insertion precedes next-code overflow and max-code shift checks;
+early-change subtraction retains its checked failure. Empty values preserve
+index-zero bounds after the corresponding writer/allocation boundary. Clear/end,
+known/absent codes, partial initial codes and empty-resume behavior remain intact.
+The dictionary field is marked required and factories initialize it explicitly;
+the pinned V compiler accepts its omission in this generic record, so constructor
+enforcement is a measured adaptation rather than a claimed fix.
+
+`verify_lzw_contracts_reference.py` imports unchanged Source and compares Debug
+with ordinary V and ReleaseSafe with production V. Both modes match **22,016
+returning/error records** covering all constructor/code-size bytes, arbitrary input
+bytes, both endian markers, growth/early-change, previous/next fields, empty and
+borrowed values, pending bits/data, segmented resumes, short output and initial
+cursors. Return SHA-256:
+`ed8bb6c09434dfe1e443322d20f2995deee8a18ebfb2fd35af8568866ca18f36`.
+
+**3,772 exact panic/state pairs** cover 2,030 cast failures, 1,256 arithmetic
+failures, 450 shift failures and 36 empty-value bounds failures. Names and exact
+diagnostics join initialized scalar/optional fields, segment/input cursor, writer
+cursor, unchanged current input, full initialized output and canonical dictionary
+contents in SHA-256
+`0fe9b3c86c939dbbf71d079c9f9800ea2c779f3c03960e196e68f99506b60fd7`.
+Dictionary hashes sort keys and include every key, length and byte. They do not
+establish map placement, iteration/capacity, allocator or copy equivalence.
+Factory failures exclude the private partially constructed decoder. Failed new
+values, bit-reader scratch, unused map capacity, freed arena bytes and post-deinit
+state are unobserved. Borrowed caller bytes are changed before decode to verify
+live values. Source visibility/implementation remain unchanged; the model only
+partitions cases and compiled Source supplies every comparison.
+
+The complete constructor passes both compilers. Nine separate controls measure
+V's generic dictionary omission acceptance, absent arena field, five wider code
+carriers, wider remaining-bit storage and mutable dictionary values. Source
+u13/u4 typing, readonly slices, arena/GC/OOM/growth/lifetime, broader map APIs and
+copy/layout, file streams, wider extents and portable ABI remain boundaries.
+These adaptations are excluded from the returning count.
+
+All 61 image and 58 Vaxis test files pass, as do production LZW/GIF/TIFF/image-API
+tests, historical GIF/image-API/compression assertions in both modes, native/Linux
+application checks, three Windows DLLs, both Windows LZW test executables and two
+Linux shared libraries. TIFF's 39,707 records and seventeen trap pairs retain
+their historical results, and existing PNG decoder/processor/26 retained-state
+hashes remain unchanged in both modes. Cross builds establish build coverage.
+
+Artifacts retain development failures, constructor-control diagnostics and the
+attempts stopped to record the V enforcement limit. Only regenerable compiler
+caches from previously verified checkpoints were removed to recover disk space;
+their verified archives and proof records remain. Source/library/version pins and
+before/after fixture/input/consumer/runner/implementation hashes protect this proof.
+Exact scope, counts and reproduction are in
+[the LZW probe](zigimg/reference_probes/lzw_contracts/README.md).
