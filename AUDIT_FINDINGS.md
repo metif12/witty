@@ -5153,3 +5153,43 @@ arena/GC allocation/OOM, factory root relocation and file-platform runtime remai
 boundaries. Version/source/library and before/after implementation, fixture,
 runner, input and consumer hashes protect the proof. Scope and reproduction are in
 [the custom getter proof](zigimg/reference_probes/quantizer_custom/README.md).
+
+
+### Quantizer custom alpha getter checkpoint — 2026-10-13
+
+Custom colors with an `a` marker now call `premultiplied_alpha()` and the returned
+value's `to_u32_rgba()` method at each tree level. These receiver methods represent
+Source's corresponding `.to` namespaces. The marker's value/type does not replace
+the custom getter. The returned word supplies RGB directly; its alpha byte is
+ignored without a second premultiplication. Leaf lookup skips both callbacks and
+level checks. Invalid levels and partial leaf overflows retain callback and
+mutation order. Built-in normalization retains its existing path.
+
+Both corresponding modes match **19,968 returning/error records**, SHA-256
+`7653a7e51e6d1e8e00b5f3d4ef335dbbc93ee434b3e2d6038d2f5def96c0fa41`, and
+**1,200 exact panic/state pairs**, SHA-256
+`54f0e42d2d108ae9cabfd20a4ef52a6b0fab07acbb3ada79e90c6bf867558513`.
+Four color records/direct aliases return RGBA32, RGBA64, float colors and an
+aliased custom intermediate. Pure/stateful callback traces join full initialized
+tree/palette state, reduction, lookup and ordered partial failure snapshots.
+Thirty-two accepted compiler pairs and sixteen ordinary rejection pairs pass.
+The complete Source tree and private type visibility remain unchanged.
+
+Four Source-accepted/V-rejected controls retain the pinned compiler's private
+alpha-only marker limitation. A public `a` works with an alpha-only getter;
+a private marker works when an RGB getter is also present, although that getter
+is uncalled. A generic helper prevents V from dropping intermediate getter bodies
+referenced through reflected branches. Initial direct-field/offset/code-generation
+attempts and the pre-golden comparison remain in retained evidence.
+
+All 61 image and 58 Vaxis test files pass, including a new alpha callback/alias/
+leaf regression, together with eighteen production/platform checks. Existing RGB,
+quantizer contract and historical normalization/tree/alias hashes remain unchanged
+in both modes. The RGB runner now accepts its four alpha controls.
+
+Private alpha-only markers, arbitrary alias chains, pointer colors, unsupported
+getter result types, mutable input receivers, physical layout, portable ABI,
+arena/GC/OOM, factory root relocation and file-platform runtime remain boundaries.
+Source/library/version and before/after implementation, fixture, runner, helper,
+input and consumer hashes protect the new proof. Scope and reproduction are in
+[the alpha getter proof](zigimg/reference_probes/quantizer_alpha/README.md).

@@ -80,22 +80,70 @@ fn quantizer_expect_normalized[T](color T, expected Rgba32) ! {
 }
 
 fn test_quantizer_alias_inputs_reach_palette_and_node_consumers() {
-	quantizer_expect_normalized(QuantizerAliasRgb24{ r: 1, g: 2, b: 3 }, Rgba32{ r: 1, g: 2, b: 3 })!
-	quantizer_expect_normalized(QuantizerAliasBgr24{ r: 1, g: 2, b: 3 }, Rgba32{ r: 1, g: 2, b: 3 })!
-	quantizer_expect_normalized(QuantizerAliasRgb48{ r: 0x1234, g: 0x5678, b: 0x9abc }, Rgba32{ r: 0x12, g: 0x56, b: 0x9a })!
-	quantizer_expect_normalized(QuantizerAliasRgb332{ raw: 5 | 3 << 3 | 2 << 6 }, Rgba32{ r: 182, g: 109, b: 170 })!
-	quantizer_expect_normalized(QuantizerAliasRgb555{ raw: 17 << 10 | 9 << 5 | 3 }, Rgba32{ r: 140, g: 74, b: 25 })!
-	quantizer_expect_normalized(QuantizerAliasBgr555{ raw: 3 << 10 | 9 << 5 | 17 }, Rgba32{ r: 140, g: 74, b: 25 })!
-	quantizer_expect_normalized(QuantizerAliasRgb565{ raw: 17 << 11 | 33 << 5 | 3 }, Rgba32{ r: 140, g: 134, b: 25 })!
-	quantizer_expect_normalized(QuantizerAliasRgba32{ r: 101, g: 151, b: 201, a: 128 }, Rgba32{ r: 51, g: 76, b: 101 })!
-	quantizer_expect_normalized(QuantizerAliasBgra32{ r: 101, g: 151, b: 201, a: 128 }, Rgba32{ r: 51, g: 76, b: 101 })!
-	quantizer_expect_normalized(QuantizerAliasRgba64{ r: 32768, g: 12345, b: 65535, a: 32768 }, Rgba32{ r: 64, g: 24, b: 128 })!
-	quantizer_expect_normalized(QuantizerAliasColorf32{ r: 0.5, g: 0.25, b: 2, a: 0.5 }, Rgba32{ r: 64, g: 32, b: 255 })!
+	quantizer_expect_normalized(QuantizerAliasRgb24{ r: 1, g: 2, b: 3 }, Rgba32{
+		r: 1
+		g: 2
+		b: 3
+	})!
+	quantizer_expect_normalized(QuantizerAliasBgr24{ r: 1, g: 2, b: 3 }, Rgba32{
+		r: 1
+		g: 2
+		b: 3
+	})!
+	quantizer_expect_normalized(QuantizerAliasRgb48{ r: 0x1234, g: 0x5678, b: 0x9abc }, Rgba32{
+		r: 0x12
+		g: 0x56
+		b: 0x9a
+	})!
+	quantizer_expect_normalized(QuantizerAliasRgb332{ raw: 5 | 3 << 3 | 2 << 6 }, Rgba32{
+		r: 182
+		g: 109
+		b: 170
+	})!
+	quantizer_expect_normalized(QuantizerAliasRgb555{ raw: 17 << 10 | 9 << 5 | 3 }, Rgba32{
+		r: 140
+		g: 74
+		b: 25
+	})!
+	quantizer_expect_normalized(QuantizerAliasBgr555{ raw: 3 << 10 | 9 << 5 | 17 }, Rgba32{
+		r: 140
+		g: 74
+		b: 25
+	})!
+	quantizer_expect_normalized(QuantizerAliasRgb565{ raw: 17 << 11 | 33 << 5 | 3 }, Rgba32{
+		r: 140
+		g: 134
+		b: 25
+	})!
+	quantizer_expect_normalized(QuantizerAliasRgba32{ r: 101, g: 151, b: 201, a: 128 }, Rgba32{
+		r: 51
+		g: 76
+		b: 101
+	})!
+	quantizer_expect_normalized(QuantizerAliasBgra32{ r: 101, g: 151, b: 201, a: 128 }, Rgba32{
+		r: 51
+		g: 76
+		b: 101
+	})!
+	quantizer_expect_normalized(QuantizerAliasRgba64{ r: 32768, g: 12345, b: 65535, a: 32768 }, Rgba32{
+		r: 64
+		g: 24
+		b: 128
+	})!
+	quantizer_expect_normalized(QuantizerAliasColorf32{ r: 0.5, g: 0.25, b: 2, a: 0.5 }, Rgba32{
+		r: 64
+		g: 32
+		b: 255
+	})!
 	mut quantizer := OctTreeQuantizer.init()
 	mut node := OctTreeNode{}
 	// The source's add branch deliberately accepts levels at or above eight.
 	node.add_color(QuantizerAliasRgb24{ r: 1, g: 2, b: 3 }, 100, mut quantizer)!
-	assert node.get_color() == Rgba32{ r: 1, g: 2, b: 3 }
+	assert node.get_color() == Rgba32{
+		r: 1
+		g: 2
+		b: 3
+	}
 	// Valid additions at the checked integer limits still succeed.
 	node.red = 0xfffffffe
 	node.green = 0xfffffffd
@@ -104,7 +152,11 @@ fn test_quantizer_alias_inputs_reach_palette_and_node_consumers() {
 	node.add_color(QuantizerAliasRgb24{ r: 1, g: 2, b: 3 }, 8, mut quantizer)!
 	assert node.red == 0xffffffff && node.green == 0xffffffff && node.blue == 0xffffffff
 	assert node.reference_count == 0xffffffff
-	assert node.get_color() == Rgba32{ r: 1, g: 1, b: 1 }
+	assert node.get_color() == Rgba32{
+		r: 1
+		g: 1
+		b: 1
+	}
 }
 
 fn test_quantizer_all_color_storage_types_alpha_round_trip_and_float_limits() {
@@ -464,4 +516,76 @@ fn test_quantizer_normalization_hash_full_packed_ranges_and_alpha_values() {
 	if output := os.getenv_opt('WITTY_QUANTIZER_NORMALIZATION_OUTPUT') {
 		os.write_file(output, '${cases},${hash.hex()}') or { panic(err) }
 	}
+}
+
+struct QuantizerAlphaTrace {
+mut:
+	events []u8
+}
+
+struct QuantizerCustomAlpha {
+	a     bool
+	word  u32
+	trace &QuantizerAlphaTrace
+}
+
+struct QuantizerCustomPacked {
+	word  u32
+	trace &QuantizerAlphaTrace
+}
+
+type QuantizerCustomAlphaAlias = QuantizerCustomAlpha
+
+pub fn (color QuantizerCustomAlpha) premultiplied_alpha() QuantizerCustomPacked {
+	mut trace := unsafe { color.trace }
+	trace.events << u8(1)
+	return QuantizerCustomPacked{
+		word:  color.word
+		trace: color.trace
+	}
+}
+
+pub fn (color QuantizerCustomAlpha) to_u32_rgb() u32 {
+	panic('Alpha colors must use the premultiplied RGBA getter')
+}
+
+pub fn (color QuantizerCustomPacked) to_u32_rgba() u32 {
+	mut trace := unsafe { color.trace }
+	trace.events << u8(2)
+	return color.word
+}
+
+fn test_quantizer_custom_alpha_orders_callbacks_and_ignores_packed_alpha() {
+	mut trace := QuantizerAlphaTrace{}
+	color := QuantizerCustomAlphaAlias{
+		a:     true
+		word:  0x12345607
+		trace: &trace
+	}
+	mut quantizer := OctTreeQuantizer{}
+	quantizer.root_node.init(0, mut quantizer)
+	quantizer.add_color(color)!
+	assert trace.events == []u8{len: 18, init: if index % 2 == 0 {
+		u8(1)
+	} else {
+		u8(2)
+	}}
+	assert quantizer.root_node.count_leaf_nodes() == 1
+	assert quantizer.get_palette_index(color)! == 0
+	assert trace.events == []u8{len: 34, init: if index % 2 == 0 {
+		u8(1)
+	} else {
+		u8(2)
+	}}
+	mut leaf := OctTreeNode{
+		reference_count: 1
+		palette_index:   23
+	}
+	assert leaf.get_palette_index(color, -1)! == 23
+	assert trace.events.len == 34
+	leaf.add_color(color, 8, mut quantizer)!
+	assert trace.events[34..] == [u8(1), 2]
+	assert leaf.red == 0x12 && leaf.green == 0x34 && leaf.blue == 0x56
+	assert leaf.reference_count == 2
+	assert color.word == 0x12345607
 }

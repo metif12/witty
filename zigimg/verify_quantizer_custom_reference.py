@@ -164,11 +164,10 @@ def main():
                 pair(f'accepted-{int(alias)}-{int(swizzle)}-{name}', zdecl, vdecl, zcall, vcall)
         for name, zcall, vcall in calls:
             pair('missing-getter-' + name, 'const Color=struct{};', 'struct Color {}', zcall, vcall,
-                 "no field named 'to'", 'unknown method')
+                 "no field named 'to'", 'has no field named `a`')
             pair('custom-alpha-' + name,
                  'const Getter=struct{pub fn premultipliedAlpha(_: @This()) c.Rgba32{return c.Rgba32.from.rgba(1,2,3,4);}};const Color=struct{a:u8=4,to:Getter=.{}};',
-                 'struct Color {a u8}\npub fn (value Color) to_u32_rgb() u32 {return 0x123456}', zcall, vcall,
-                 None, 'Custom quantizer alpha colors are not represented')
+                 'struct Color {pub: a u8}\npub fn (value Color) premultiplied_alpha() p.Rgba32 {return p.Rgba32.rgba(1,2,3,4)}', zcall, vcall)
         (root / 'input_sha256.json').write_text(json.dumps(inputs, indent=2) + '\n')
         (root / 'consumer_sha256.json').write_text(json.dumps(consumers, indent=2) + '\n')
         for name, expected in {**inputs, **consumers}.items():
@@ -185,7 +184,7 @@ def main():
                        return_sha256=returns.hexdigest(), paired_traps=len(traps),
                        failure_groups=dict(Counter(g for g, _, _, _ in traps)),
                        panic_categories=dict(Counter(m for _, _, _, m in traps)), state_sha256=states.hexdigest(),
-                       accepted_operation_pairs=16, missing_getter_pairs=4, custom_alpha_boundaries=4)
+                       accepted_operation_pairs=16, missing_getter_pairs=4, custom_alpha_acceptance_pairs=4)
         (root / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
         print(json.dumps(summary, indent=2), flush=True)
         if (len(rows) != EXPECTED_RETURNS or len(traps) != EXPECTED_TRAPS

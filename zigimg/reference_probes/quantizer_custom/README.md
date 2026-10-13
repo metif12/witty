@@ -49,9 +49,11 @@ Ordered partial red/green/blue/reference updates remain visible.
 
 Sixteen accepted compiler pairs cover quantizer/node insertion and lookup with
 both record shapes and direct aliases. Four missing-getter pairs reject in both
-languages with ordinary compiler errors. Four custom-alpha controls compile in
-Source and explicitly reject in V: a custom field named `a` selects Source's
-premultiplication namespace and must not silently use the RGB getter.
+languages with ordinary compiler errors. Four custom-alpha controls now compile in both languages through a public marker
+and premultiplication getter. The
+[alpha proof](../quantizer_alpha/README.md) covers callback ordering, custom
+intermediates and the pinned compiler’s private-marker limitation. At the original
+RGB checkpoint, these four controls measured Source acceptance and V rejection.
 
 All 61 image and 58 Vaxis test files pass, together with eighteen production and
 platform checks. These include production quantizer/converter/image-API tests,
@@ -62,8 +64,8 @@ The historical 2,160 tree cases, 336,128 normalization cases and 2,816 alias rec
 retain their hashes in both modes. The existing 4,594 quantizer contract records
 and 1,134 exact panic/state pairs also retain both hashes.
 
-Custom alpha namespaces, arbitrary alias chains, getter return types other than
-u32, pointer colors, namespace/receiver physical layout, portable ABI, arena/GC
+Private alpha-only markers, arbitrary alias chains, unsupported getter result
+types, pointer colors, namespace/receiver physical layout, portable ABI, arena/GC
 allocation and OOM remain boundaries. Getter side effects in this proof mutate
 borrowed trace storage; mutation of the input record through a mutable receiver
 is outside this value-color protocol. Caller-owned roots are initialized at

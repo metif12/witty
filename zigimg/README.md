@@ -270,7 +270,12 @@ Generic input also accepts caller structs without an `a` field through a public
 leaf lookup bypassing the getter. The
 [custom getter comparison](reference_probes/quantizer_custom/README.md) matches
 9,984 returning records and 600 exact failure/state pairs in both modes.
-Custom alpha namespaces and arbitrary alias chains remain boundaries.
+Custom alpha records use `premultiplied_alpha()` and the returned value’s
+`to_u32_rgba()` method. The
+[alpha getter comparison](reference_probes/quantizer_alpha/README.md) matches
+19,968 returning records and 1,200 exact failure/state pairs in both modes.
+Alpha-only records need a public `a` marker with the pinned V compiler; private
+markers work with an additional RGB getter. Arbitrary alias chains remain a boundary.
 The pinned V compiler cannot format recursive fixed pointer arrays; pointer
 assertions use `voidptr` to avoid its invalid generated formatter.
 

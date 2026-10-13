@@ -2,6 +2,10 @@ module zigimg
 
 import math
 
+interface QuantizerRgbGetter {
+	to_u32_rgb() u32
+}
+
 // Locked OctTreeQuantizer. GC replaces the arena; inline root metadata and
 // borrowed child/level pointers retain the source's value-copy behavior.
 pub struct OctTreeQuantizer {
@@ -263,6 +267,14 @@ fn quantizer_scale_small(value u16, bits u8) u8 {
 	return u8((u32(value) * 255 + maximum / 2) / maximum)
 }
 
+fn quantizer_premultiplied_rgb24[T](color T) Rgb24 {
+	return Rgb24.from_u32_rgba(color.to_u32_rgba())
+}
+
+fn quantizer_require_alpha_field[T](color T) {
+	_ = color.a
+}
+
 fn quantizer_rgb24[T](color T) Rgb24 {
 	$if T.unaliased_typ is Rgb24 {
 		return Rgb24(color)
@@ -325,11 +337,18 @@ fn quantizer_rgb24[T](color T) Rgb24 {
 	} $else {
 		$for field in T.fields {
 			$if field.name == 'a' {
-				$compile_error('Custom quantizer alpha colors are not represented')
+				premultiplied := color.premultiplied_alpha()
+				return quantizer_premultiplied_rgb24(premultiplied)
 			}
 		}
 		// V receiver methods represent Source's zero-sized .to namespace.
-		return Rgb24.from_u32_rgb(color.to_u32_rgb())
+		$if T is QuantizerRgbGetter {
+			return Rgb24.from_u32_rgb(color.to_u32_rgb())
+		} $else {
+			// The alpha field branch above returns for valid alpha colors.
+			// Reject records that provide neither represented color protocol.
+			quantizer_require_alpha_field(color)
+		}
 	}
 	return Rgb24{}
 }
