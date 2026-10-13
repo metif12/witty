@@ -84,7 +84,8 @@ All native imports retain Source visibility and implementation.
 This checkpoint covers header/record/palette contracts and bounded defined public
 reads. The later [planar/ByteRun2 checkpoint](../iff_planar/README.md) covers those
 direct conversion and RLE contracts. Chunk traversal and RGB/HAM conversion
-arithmetic/bounds/production checks remain separate work. Default Source codec
+arithmetic/bounds/production checks are covered in the later
+[pixel/chunk checkpoint](../iff_pixels/README.md). Default Source codec
 header/format fields and inactive palette storage are undefined and unobserved.
 Allocator/OOM/GC/lifetime, const/narrow typing, boxed copies, physical chunk/sum/
 slice layout, wider allocated extents, file streams, debug-logger presentation,

@@ -61,8 +61,8 @@ a complete matching snapshot and no core dump. Case names, exact messages and
 caller state join SHA-256
 `da83479790fc43626a5326117ebad8ea0defbafe86d853389c32fb1188bc0328`.
 
-Chunk traversal, RGB/HAM pixel conversion and their production arithmetic checks
-remain separate work. Allocation failure, GC/lifetime, physical slice/record/sum
+The later [pixel/chunk checkpoint](../iff_pixels/README.md) covers fixed-memory
+chunk traversal and RGB/HAM conversion checks. Allocation failure, GC/lifetime, physical slice/record/sum
 layout, readonly/narrow V typing, boxed header copies, extents beyond V array
 limits, file streams, big-endian runtime and portable ABI remain boundaries.
 Cross compilation establishes build coverage only.

@@ -4099,3 +4099,68 @@ streams, big-endian runtime and portable ABI remain boundaries. Full Source-tree
 selected library and compiler-version pins and before/after fixture/input/runner/
 implementation hashes protect this proof. Exact scope and reproduction are in
 [the planar/ByteRun2 probe](zigimg/reference_probes/iff_planar/README.md).
+
+## IFF chunk traversal, RGB/HAM and PackBits failure order — 2026-10-13
+
+The pixel decoder now preserves the zero-pitch assertion before format selection
+or input in production. RGB padding subtraction retains the Source's u8 overflow
+before loops, even for empty images; an empty HAM palette retains division by zero.
+Explicit chunky-buffer bounds preserve the full Source index before narrowing.
+Existing HAM row reset, previous-color updates, component/shift truncation and the
+24-plane RGB branch remain unchanged. EHB extension still precedes HAM reduction
+when the active-palette condition holds, including palette mutations before a
+later conversion failure. Unreachable storage branches keep explicit traps.
+
+The shared PackBits decoder now checks destinations before literal reads and
+after consuming repeated values, preserving exact overrun diagnostics and cursor
+order. Its declared-length early success and partial-output behavior remain.
+ACBM still reads raw data for its byterun tag. Raw/ByteRun2 paths ignore declared
+body length, and direct pixel decoding ignores the chunk ID. Traversal keeps the
+complete-header read, strict seek-to-end rejection, ignored FORM/CAMG lengths,
+unconsumed CMAP remainder and missing odd-chunk padding. The explicit zero-end
+subtraction guard represents Source's checked u64 arithmetic; after a complete
+chunk it is unreachable for these fixed-memory streams. File/cache/streaming
+coverage remains outside this proof.
+
+`verify_iff_pixels_reference.py` compares unchanged Source Debug with ordinary V
+and ReleaseSafe with production V. Both modes match **18,248 returning/error
+records**, including all representable HAM6/HAM8 indices over bit/palette choices,
+all u8 RGB padding counts, reduction/viewport precedence, previous-color/row reset,
+all format/compression branches, raw/PackBits/ByteRun2 body prefixes and public
+reads, complete public HAM/EHB reads, chunk traversal and nonzero initial cursors.
+Return SHA-256: `72ba805b4d37c4c51ba1f75703c63a514cdb1cef621227beac12a209047e450b`.
+
+**1,561 exact panic/state pairs** cover 973 arithmetic failures, 243 assertion/
+unreachable failures, 228 bounds failures, 101 zero-divisor failures and sixteen
+wrong-header-arm accesses. Names and exact diagnostics join cursor, initialized
+public codec/header fields, active palette and unchanged input in SHA-256
+`848258baaaf14b0ec8c50981c29e19c2a7af845961039f077db65da397e0fdb5`.
+All 256 caller palette backing entries are initialized before shrinking the active
+view; only active bytes are observed. Returned pixel/palette copies retain their
+independence after mutation. Default readImage private codec state and failed/
+freed private buffers are excluded. The model partitions cases; unchanged compiled
+Source supplies every output and snapshot, with its original visibility.
+
+Thirty-seven successful partial PackBits controls would expose uninitialized
+private plane bytes, and 37 default EHB controls would read uninitialized base
+colors. They are excluded and counted separately. V allocation initialization
+remains a representation boundary, alongside allocator/OOM/GC/lifetime, readonly/
+narrow typing, boxed headers, physical layouts, extents beyond V array limits,
+file streams, logger presentation, big-endian runtime and portable ABI. Pinned
+DEEP/encoder stubs remain unchanged. Unreachable branches are not assigned
+manufactured runtime observations.
+
+All 61 image and 58 Vaxis test files pass, as do production IFF/image-API tests,
+unchanged historical IFF/image-API/compression assertions in both modes,
+native/Linux application checks, three Windows DLLs, both Windows IFF test
+executables and two Linux shared libraries. The shared-helper TIFF regression
+passes 39,707 records with its existing hash and seventeen strict trap pairs in
+both modes. Existing PNG decoder/processor/26 retained-state hashes are unchanged.
+A missing shared Zig cache archive interrupted the first TIFF build; the retained
+retry uses an isolated cache and passes. Cross builds establish build coverage.
+
+Proof artifacts, including the failed cache attempt, are retained in the task-owned
+persistent cache with artifact hashes. Full Source/library/math/version pins and
+before/after fixture/input/runner/implementation checks protect the new proof.
+Exact scope, boundaries, counts and reproduction are in
+[the pixel/chunk probe](zigimg/reference_probes/iff_pixels/README.md).

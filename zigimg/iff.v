@@ -289,7 +289,7 @@ pub fn (mut codec IFF) decode_chunks(mut stream ReadStream) !PixelStorage {
 		} else {
 			stream.seek_by(i64(chunk.length))!
 		}
-		assert end > 0
+		if end == 0 { panic('integer overflow') }
 		if stream.get_pos() >= end - 1 {
 			break
 		}
@@ -468,7 +468,7 @@ pub fn (mut codec IFF) reduce_ham_palette() {
 }
 
 pub fn (mut codec IFF) decode_ilbm_pixel_chunk(mut stream ReadStream, chunk IffChunkHeader) !PixelStorage {
-	assert codec.pitch != 0
+	if codec.pitch == 0 { panic('reached unreachable code') }
 	format := codec.pixel_format()!
 	header := codec.header.bmhd()
 	width := codec.width()
@@ -512,32 +512,35 @@ pub fn (mut codec IFF) decode_ilbm_pixel_chunk(mut stream ReadStream, chunk IffC
 		}
 		Rgb24Pixels {
 			ham := IffViewportMode.is_ham(codec.viewport_mode)
-			assert codec.cmap_bits <= 8
+			if codec.cmap_bits > 8 { panic('integer overflow') }
 			cmap_bits := codec.cmap_bits & 7
 			pad_bits := (u8(8) - codec.cmap_bits) & 7
 			pixel_size := if header.planes / 8 > 1 { usize(header.planes / 8) } else { usize(1) }
 			for row := usize(0); row < height; row++ {
 				mut previous := Rgb24{}
 				for col := usize(0); col < width; col++ {
-					index := int(width * row * pixel_size + col * pixel_size)
+					index := width * row * pixel_size + col * pixel_size
+					iff_check_index(index, chunky.len)
 					if header.planes == 24 {
+						iff_check_index(index + 1, chunky.len)
+						iff_check_index(index + 2, chunky.len)
 						previous = Rgb24{
-							r: chunky[index]
-							g: chunky[index + 1]
-							b: chunky[index + 2]
+							r: chunky[int(index)]
+							g: chunky[int(index + 1)]
+							b: chunky[int(index + 2)]
 						}
-					} else if chunky[index] < codec.palette.data.len {
-						color := codec.palette.data[chunky[index]]
+					} else if chunky[int(index)] < codec.palette.data.len {
+						color := codec.palette.data[chunky[int(index)]]
 						previous = Rgb24{
 							r: color.r
 							g: color.g
 							b: color.b
 						}
 					} else if ham {
-						control := (chunky[index] >> cmap_bits) & 3
+						control := (chunky[int(index)] >> cmap_bits) & 3
 						palette_len := u8(codec.palette.data.len)
-						assert palette_len > 0
-						component := u8((chunky[index] % palette_len) << pad_bits)
+						if palette_len == 0 { panic('division by zero') }
+						component := u8((chunky[int(index)] % palette_len) << pad_bits)
 						if control == 1 {
 							previous.b = component
 						} else if control == 2 {
@@ -546,14 +549,14 @@ pub fn (mut codec IFF) decode_ilbm_pixel_chunk(mut stream ReadStream, chunk IffC
 							previous.g = component
 						}
 					} else {
-						assert false
+						panic('reached unreachable code')
 					}
 					pixels.data[int(row * width + col)] = previous
 				}
 			}
 		}
 		else {
-			assert false
+			panic('reached unreachable code')
 		}
 	}
 
