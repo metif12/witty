@@ -29,9 +29,12 @@ pub mut:
 }
 
 pub fn (header &RasHeader) debug() {
-	// Preserve the source's debug-print enum labels.
-	eprint(
-		'size: ${header.width}x${header.height} (d=${header.depth})\nlen=${header.length}\n' + 'type=.${header.type_}\ncmap=.${header.color_map_type}\n' + 'cmap_len=${header.color_map_length}\n')
+	eprint(ras_debug_message(header))
+}
+
+// RAS diagnostics print directly regardless of the standard logger's threshold.
+fn ras_debug_message(header &RasHeader) string {
+	return 'size: ${header.width}x${header.height} (d=${header.depth})\nlen=${header.length}\ntype=.${header.type_}\ncmap=.${header.color_map_type}\ncmap_len=${header.color_map_length}\n'
 }
 
 pub struct RAS {

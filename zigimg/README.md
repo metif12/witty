@@ -296,7 +296,12 @@ arrays, nested buffer data/backing words, palette abbreviations at Source's defa
 formatter depth and the trailing newline. Their
 [comparison](reference_probes/tiff_debug/README.md) matches 3,708 observations in
 both modes with initialized state and borrowed-view fingerprints. Custom formatter
-depths and the existing readonly V receiver remain surface adaptations.
+depths and the existing readonly V receiver remain surface adaptations. RAS
+header diagnostics retain their direct stderr route at both debug/info logger
+thresholds. Their [expanded comparison](reference_probes/ras_debug/README.md)
+matches 13,494 observations and 15,190 messages in both modes, including scalar
+boundaries, repeated calls and unchanged initialized headers. Output locking,
+flush ordering and failed streams remain host adaptations.
 
 The converter preserves all 460 pinned table entries, including unavailable
 indexed-to-gray/RGB-to-grayscale16 pairs and nine BGR555 entries that trap on

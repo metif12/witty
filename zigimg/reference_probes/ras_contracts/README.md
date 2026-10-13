@@ -47,6 +47,8 @@ Decoder/control SHA-256:
 Another **21 debug-print controls** compare all valid compression/map tag pairs,
 including their exact enum labels, on stderr. Debug SHA-256:
 `e6dc540b17c9a8383a48e25b22e44b27b0ce638a73c1fc64e10a9422992f9c96`.
+The [expanded diagnostic proof](../ras_debug/README.md) adds scalar boundaries,
+repeated calls, logger independence and unchanged header observations.
 
 The public decoding matrix uses depths 0/1/2/8/16/24/32, all seven compression
 tags, widths 0/1/2/3/7/8/9/15/16/17, heights 0/1/2, map types and lengths. It

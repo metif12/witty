@@ -6,7 +6,8 @@ anonymous-record payload to V's standard debug logger. The payload retains
 dotted enum labels and Source's `x_asoect` spelling. It includes neither a type
 name nor an address. The private IffHeader dispatcher uses these same hooks.
 [SGI](../sgi_debug/README.md) and [TIFF](../tiff_debug/README.md) payloads have
-separate comparisons. RAS direct printing remains unchanged.
+separate comparisons. RAS direct printing has an
+[expanded comparison](../ras_debug/README.md) and retains its existing payload.
 
 `verify_iff_debug_reference.py` imports the complete unchanged Source tree at
 original visibility. Its root log callback captures the actual payload supplied

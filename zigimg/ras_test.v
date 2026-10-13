@@ -252,3 +252,26 @@ fn test_ras_unsupported_depth_compression_and_color_map_errors() {
 	}
 	assert false
 }
+
+fn test_ras_debug_payload_keeps_source_labels_unsigned_fields_and_five_lines() {
+	zero := RasHeader{
+		width:            0
+		height:           0
+		depth:            0
+		length:           0
+		type_:            .old
+		color_map_type:   .no_color_map
+		color_map_length: 0
+	}
+	assert ras_debug_message(&zero) == 'size: 0x0 (d=0)\nlen=0\ntype=.old\ncmap=.no_color_map\ncmap_len=0\n'
+	maximum := RasHeader{
+		width:            4294967295
+		height:           2147483648
+		depth:            4294967295
+		length:           4294967295
+		type_:            .experimental
+		color_map_type:   .raw_color_map
+		color_map_length: 4294967295
+	}
+	assert ras_debug_message(&maximum) == 'size: 4294967295x2147483648 (d=4294967295)\nlen=4294967295\ntype=.experimental\ncmap=.raw_color_map\ncmap_len=4294967295\n'
+}

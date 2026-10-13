@@ -5328,3 +5328,35 @@ the proof. The first comparison's fixture storage copy and a dependency discover
 attempt remain separate from completed proofs. The previous archive was verified
 before duplicate pruning. Scope and reproduction are in
 [the TIFF debug proof](zigimg/reference_probes/tiff_debug/README.md).
+
+
+### Sun Raster direct diagnostic verification checkpoint — 2026-10-14
+
+RAS already printed the correct Source labels and header text directly to stderr.
+A private payload helper now supports two native-observed module goldens without
+changing the public hook's output or any decoder body. The new proof extends the
+existing 21 enum-pair controls to full unsigned formatting boundaries, repeats,
+zero calls, initialized header immutability and logger independence.
+
+Both corresponding modes match **13,494 records** and **15,190 direct messages**,
+SHA-256 `5851cec9d8d4540cdba6c32cb4b769b08d122c4100f05735b7f759d3f58c0734`.
+Each configured info/debug logger runs 6,747 cases over every valid type/map pair,
+byte patterns, individual u32 decimal/width boundaries, zero through three calls
+and seeded headers. Rejecting logger callbacks remain uncalled; raw stderr carries
+all five message lines with exact punctuation/newlines. Every caller field is
+compared before/after and against the fixture inputs. Actual unchanged Source
+methods alone supply expected text; private Header visibility remains unchanged.
+The full comparison before refactoring has the same hash.
+
+All 61 image and 58 Vaxis test files pass, with nineteen production/platform checks.
+Historical RAS header/writer, decoder and 21-message debug hashes remain unchanged
+in both modes. The historical panic matrix is not rerun for this formatting-only
+refactor. Single-process open-stderr output is measured; interleaving/locking,
+stdout flush ordering, failed/closed streams, signal safety, custom flags/platform
+sinks, allocation/OOM, physical layout and portable ABI remain adaptations or
+excluded. Invalid enums and undefined Source default fields are unobserved.
+
+Source/library/version and before/after implementation, fixture, runner, helper,
+settings/input, pinned Source formatter/debug/logging and V printing/logger hashes
+protect the proof. Scope and reproduction are in
+[the RAS debug proof](zigimg/reference_probes/ras_debug/README.md).
