@@ -7,10 +7,12 @@ module zigimg
 // V cannot express zero-length fixed arrays. Pinned V 0.5.2 also cannot
 // inspect an extra alias layer or reliably forward these static factory
 // calls from an enclosing generic function; use explicit named types.
+// The source requires matrix storage. V 0.5.2 ignores required attributes
+// on this generic field; callers must still provide it explicitly.
 // Shapes are checked before bounded arithmetic, also in production builds.
 pub struct Matrix[B] {
 pub mut:
-	matrix B
+	matrix B @[required]
 }
 
 fn matrix_dimension[B](storage B) int {
@@ -34,7 +36,7 @@ fn matrix_dimension[B](storage B) int {
 
 pub fn Matrix.identity[B]() Matrix[B] {
 	storage := B{}
-	return matrix_identity[Matrix[B]](matrix_dimension(storage))
+	return matrix_identity(Matrix[B]{ matrix: storage }, matrix_dimension(storage))
 }
 
 @[direct_array_access]
@@ -47,7 +49,9 @@ pub fn Matrix.from_array[B, A](values A) Matrix[B] {
 			if values.len != dimension * dimension {
 				panic('Matrix.from_array requires N*N components')
 			}
-			mut result := Matrix[B]{}
+			mut result := Matrix[B]{
+				matrix: storage
+			}
 			for row in 0 .. dimension {
 				for column in 0 .. dimension {
 					result.matrix[row][column] = values[row * dimension + column]

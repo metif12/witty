@@ -8,11 +8,13 @@ pub type Float2 = [2]f32
 
 pub struct Float2x2 {
 pub mut:
-	matrix [2][2]f32
+	matrix [2][2]f32 @[required]
 }
 
 pub fn Float2x2.from_array(values [4]f32) Float2x2 {
-	mut result := Float2x2{}
+	mut result := Float2x2{
+		matrix: [2][2]f32{}
+	}
 	for row in 0 .. 2 {
 		for column in 0 .. 2 {
 			result.matrix[row][column] = values[row * 2 + column]
@@ -22,7 +24,7 @@ pub fn Float2x2.from_array(values [4]f32) Float2x2 {
 }
 
 pub fn Float2x2.identity() Float2x2 {
-	return matrix_identity[Float2x2](2)
+	return matrix_identity(Float2x2{ matrix: [2][2]f32{} }, 2)
 }
 
 pub fn (value Float2x2) determinant() f32 {
@@ -57,11 +59,13 @@ pub type Float3 = [3]f32
 
 pub struct Float3x3 {
 pub mut:
-	matrix [3][3]f32
+	matrix [3][3]f32 @[required]
 }
 
 pub fn Float3x3.from_array(values [9]f32) Float3x3 {
-	mut result := Float3x3{}
+	mut result := Float3x3{
+		matrix: [3][3]f32{}
+	}
 	for row in 0 .. 3 {
 		for column in 0 .. 3 {
 			result.matrix[row][column] = values[row * 3 + column]
@@ -71,7 +75,7 @@ pub fn Float3x3.from_array(values [9]f32) Float3x3 {
 }
 
 pub fn Float3x3.identity() Float3x3 {
-	return matrix_identity[Float3x3](3)
+	return matrix_identity(Float3x3{ matrix: [3][3]f32{} }, 3)
 }
 
 pub fn (value Float3x3) determinant() f32 {
@@ -106,11 +110,13 @@ pub type Float4 = [4]f32
 
 pub struct Float4x4 {
 pub mut:
-	matrix [4][4]f32
+	matrix [4][4]f32 @[required]
 }
 
 pub fn Float4x4.from_array(values [16]f32) Float4x4 {
-	mut result := Float4x4{}
+	mut result := Float4x4{
+		matrix: [4][4]f32{}
+	}
 	for row in 0 .. 4 {
 		for column in 0 .. 4 {
 			result.matrix[row][column] = values[row * 4 + column]
@@ -120,7 +126,7 @@ pub fn Float4x4.from_array(values [16]f32) Float4x4 {
 }
 
 pub fn Float4x4.identity() Float4x4 {
-	return matrix_identity[Float4x4](4)
+	return matrix_identity(Float4x4{ matrix: [4][4]f32{} }, 4)
 }
 
 pub fn (value Float4x4) determinant() f32 {
@@ -156,10 +162,14 @@ pub fn clamp4(value Float4, minimum f32, maximum f32) Float4 {
 // bounded loops. Pinned V 0.5.2 otherwise reuses another specialization's
 // fixed-array index guard lengths; direct access avoids that Cgen cache bug.
 @[direct_array_access]
-fn matrix_identity[T](dimension int) T {
-	mut result := T{}
-	for diagonal in 0 .. dimension {
-		result.matrix[diagonal][diagonal] = 1
+fn matrix_identity[T](value T, dimension int) T {
+	// Construct from an initialized record and overwrite every component;
+	// generic T{} would omit the source's required matrix field.
+	mut result := value
+	for row in 0 .. dimension {
+		for column in 0 .. dimension {
+			result.matrix[row][column] = if row == column { f32(1) } else { f32(0) }
+		}
 	}
 	return result
 }
@@ -193,7 +203,7 @@ fn matrix_determinant[T](value T, dimension int) f32 {
 @[direct_array_access]
 fn matrix_inverse[T](value T, dimension int) T {
 	mut temporary := value
-	mut result := matrix_identity[T](dimension)
+	mut result := matrix_identity(value, dimension)
 	for row in 0 .. dimension {
 		inverse_pivot := f32(1) / temporary.matrix[row][row]
 		for column in 0 .. dimension {
@@ -240,7 +250,7 @@ fn matrix_mul_vector[T, V](value T, vector V, dimension int) V {
 
 @[direct_array_access]
 fn matrix_mul[T](value T, right T, dimension int) T {
-	mut result := T{}
+	mut result := value
 	transposed_right := matrix_transpose(right, dimension)
 	for row in 0 .. dimension {
 		for column in 0 .. dimension {
@@ -257,7 +267,7 @@ fn matrix_mul[T](value T, right T, dimension int) T {
 
 @[direct_array_access]
 fn matrix_transpose[T](value T, dimension int) T {
-	mut result := T{}
+	mut result := value
 	for row in 0 .. dimension {
 		for column in 0 .. dimension {
 			result.matrix[row][column] = value.matrix[column][row]

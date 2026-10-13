@@ -39,6 +39,13 @@ pub fn RgbColorspace.init(args RgbColorspaceInitArgs) RgbColorspace {
 		green: args.green
 		blue:  args.blue
 		white: args.white
+		// Source leaves these temporary caches undefined and replaces them before use.
+		rgba_to_xyza: Float4x4{
+			matrix: [4][4]f32{}
+		}
+		xyza_to_rgba: Float4x4{
+			matrix: [4][4]f32{}
+		}
 	}
 	matrix := space.to_xyz_conversion_matrix()
 	return RgbColorspace{

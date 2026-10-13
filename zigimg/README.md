@@ -312,6 +312,18 @@ factories remain pinned compiler boundaries; storage uses V's array ABI.
 Examples and limits are in
 [the generic matrix probe](reference_probes/math_generic/README.md).
 
+Named matrix records require explicit `matrix` storage, matching Source.
+The constructor/copy comparison matches 6,208 records in ordinary V/Source Debug
+and production V/Source ReleaseSafe, including full retained storage and NaN
+payloads after cell, row and whole-field mutation. Three required-field and
+eighteen immutable-field rejection pairs pass. V 0.5.2 still ignores the required
+attribute on generic `Matrix[B]`; its six omission controls record that limitation.
+The historical arithmetic and color hashes remain unchanged. The color histories
+use Source Debug against both V modes; separate Source ReleaseSafe controls
+retain five scientific and 32 colorspace differences. Details, compiler limits
+and reproduction are in
+[the matrix contract probe](reference_probes/matrix_contracts/README.md).
+
 CIE XYZ/Lab/Luv/LCh, HSLuv and Oklab models retain scalar, alpha and Float4
 conversion APIs. The 6,961-case comparison preserves every non-NaN output
 bit and NaN occurrence, including zero whitepoint denominators and unusual

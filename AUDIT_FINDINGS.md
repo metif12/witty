@@ -4616,3 +4616,60 @@ The previous checkpoint's archive was read back before pruning duplicate expande
 proofs and regenerable caches. Source/library/version pins and before/after fixture/
 input/consumer/runner/implementation hashes protect the proof. Exact scope, counts
 and reproduction are in [the fixed-buffer contract probe](zigimg/reference_probes/fixed_storage_contracts/README.md).
+
+### Matrix constructor and inline-copy checkpoint
+
+Pinned `src/math.zig` requires its inline `matrix` field; the V named records
+previously allowed omission. `Float2x2`, `Float3x3` and `Float4x4` now mark it
+required. Factories initialize storage explicitly. Private identity, multiplication
+and transpose helpers start with an initialized record and overwrite every result
+component, preserving the source algorithms and arithmetic. RGB colorspace setup
+initializes its temporary matrix placeholders, then replaces both before use;
+Source's explicitly undefined temporary caches are not observed.
+
+`verify_matrix_contracts_reference.py` matches **6,208 new records** in ordinary
+V/Source Debug and production V/Source ReleaseSafe, SHA-256
+`1e940bc5ea0d199b792cd64c703e955fc6aae99f6c37596f2398d72021358525`.
+Named records and generic dimensions 1/2/3/4/5/8 retain independent values after
+cell, row and whole-storage replacement, mutation of caller storage and flat input,
+by-value returns and mutation of transposed results. Every initialized component,
+retained original and identity is recorded. Signed zero, subnormals, infinities and
+NaN payloads match bit for bit; this copy corpus does not canonicalize NaNs.
+
+Both modes check nine accepted explicit constructor pairs, three named required-field
+rejection pairs and eighteen immutable cell/storage rejection pairs. Six generic
+omission controls record Source rejection versus V acceptance: V 0.5.2 ignores
+`@[required]` on `Matrix[B].matrix`. The annotation states the required field;
+actual generic enforcement remains a compiler boundary.
+
+All **31,639 historical records** retain their four hashes: named math (12,419),
+generic math (6,467), scientific colors (6,961) and colorspaces (5,792). Matrix
+arithmetic matches corresponding Source Debug/ReleaseSafe modes. The two color
+histories use their original Source Debug oracle against both V modes. Three V
+shape guards remain active in production; historical arithmetic still compares
+non-NaN bits and canonicalized NaN occurrence.
+
+Separate Source ReleaseSafe color controls expose **five scientific and 32
+colorspace differences**, retained with full inputs/outputs and locked hashes.
+The scientific differences affect HSLuv saturation/chroma. Optimized native binaries
+import Apple's combined `___sincosf_stret`, while Debug/V binaries use separate
+sine/cosine calls. The proof checks symbol selection without claiming it explains
+all colorspace differences. Previous production color claims establish V production
+versus Source Debug parity, not complete native ReleaseSafe parity. No optimized
+color-equivalence claim is made here.
+
+All 61 image and 58 Vaxis test files pass. Production math/generic-math/colorspace/
+scientific-color tests, native/Linux application checks, three Windows dependency
+DLLs, four ordinary/production Windows matrix test executables and two Linux shared
+libraries pass (17 platform commands). Cross builds establish build coverage.
+Source/stdlib/compiler versions and before/after implementation, runner, fixture,
+corpus-generator, input and consumer hashes are retained. Initial incomplete
+production comparisons and development fixtures are archived separately.
+An intermediate V compiler control exhausted temporary disk space. Its diagnostics
+are retained, and the final proof uses task-owned V temporaries with pinned color
+std.math helpers checked before/after; module/platform tests required no changes.
+
+Undefined storage, padding/SIMD ABI, zero-length arrays, extra alias layers,
+generic factory forwarding, allocation/lifetime and unrepresented shapes remain
+boundaries. Reproduction, historical/difference hashes and constructor examples
+are in [the matrix contract probe](zigimg/reference_probes/matrix_contracts/README.md).
