@@ -8,7 +8,9 @@ premultiplying again. The marker's value and type do not supply the alpha value
 for a custom getter. The caller defines premultiplication.
 
 A public `a` marker supports alpha-only records. A private marker works when the
-record also supplies `to_u32_rgb() u32`; that getter remains uncalled. The pinned
+record also supplies `to_u32_rgb()` returning native u8/u16/u32; that getter
+remains uncalled. The [width proof](../quantizer_getter_width/README.md) builds
+and executes eight narrow-getter alpha controls. The pinned
 V compiler checks the fallback's field-presence constraint even after the
 reflected alpha branch returns, causing four measured Source-accepted/V-rejected
 controls for private alpha-only records. Built-in colors retain their existing

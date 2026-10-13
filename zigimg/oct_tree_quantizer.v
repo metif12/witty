@@ -6,6 +6,14 @@ interface QuantizerRgbGetter {
 	to_u32_rgb() u32
 }
 
+interface QuantizerRgb8Getter {
+	to_u32_rgb() u8
+}
+
+interface QuantizerRgb16Getter {
+	to_u32_rgb() u16
+}
+
 // Locked OctTreeQuantizer. GC replaces the arena; inline root metadata and
 // borrowed child/level pointers retain the source's value-copy behavior.
 pub struct OctTreeQuantizer {
@@ -342,7 +350,7 @@ fn quantizer_rgb24[T](color T) Rgb24 {
 			}
 		}
 		// V receiver methods represent Source's zero-sized .to namespace.
-		$if T is QuantizerRgbGetter {
+		$if T is QuantizerRgbGetter || T is QuantizerRgb8Getter || T is QuantizerRgb16Getter {
 			return Rgb24.from_u32_rgb(color.to_u32_rgb())
 		} $else {
 			// The alpha field branch above returns for valid alpha colors.

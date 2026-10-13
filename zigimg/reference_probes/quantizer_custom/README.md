@@ -1,10 +1,13 @@
 # Custom RGB quantizer getters
 
 The quantizer accepts caller structs without a field named `a` when they provide
-`pub fn (value Color) to_u32_rgb() u32`. This receiver method represents Source's
-`value.to.u32Rgb()` namespace. RGB comes from the packed getter result, including
+a public `to_u32_rgb()` method returning native u8/u16/u32. This receiver method
+represents Source's `value.to.u32Rgb()` namespace. RGB comes from the packed getter result, including
 when unrelated `r`, `g` and `b` fields exist; the high byte is ignored.
-Direct aliases work. Built-in RGB(A) normalization keeps its existing path.
+Direct color aliases work. The
+[width comparison](../quantizer_getter_width/README.md) verifies narrow result
+widening and records the getter-result alias limit. Built-in RGB(A) normalization
+keeps its existing path.
 
 Custom getters run at each insertion level and once at the leaf, and at each
 nonleaf lookup level. Leaf lookup returns the stored index without calling the

@@ -266,7 +266,8 @@ so copied quantizers retain independent root metadata and borrowed child pointer
 The [record/state comparison](reference_probes/quantizer_contracts/README.md) matches
 4,594 returning records and 1,134 exact failure/state pairs in both modes.
 Generic input also accepts caller structs without an `a` field through a public
-`to_u32_rgb() u32` receiver method. Custom getters run at each tree level, with
+`to_u32_rgb()` receiver method returning native u8/u16/u32. Narrow words widen
+before RGB unpacking. Custom getters run at each tree level, with
 leaf lookup bypassing the getter. The
 [custom getter comparison](reference_probes/quantizer_custom/README.md) matches
 9,984 returning records and 600 exact failure/state pairs in both modes.
@@ -275,7 +276,10 @@ Custom alpha records use `premultiplied_alpha()` and the returned value’s
 [alpha getter comparison](reference_probes/quantizer_alpha/README.md) matches
 19,968 returning records and 1,200 exact failure/state pairs in both modes.
 Alpha-only records need a public `a` marker with the pinned V compiler; private
-markers work with an additional RGB getter. Arbitrary alias chains remain a boundary.
+markers work with an additional represented RGB getter. The
+[getter width comparison](reference_probes/quantizer_getter_width/README.md) matches
+15,012 returning records and 864 exact failure/state pairs in both modes.
+Aliases of getter result types and arbitrary alias chains remain boundaries.
 The pinned V compiler cannot format recursive fixed pointer arrays; pointer
 assertions use `voidptr` to avoid its invalid generated formatter.
 

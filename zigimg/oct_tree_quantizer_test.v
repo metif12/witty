@@ -589,3 +589,47 @@ fn test_quantizer_custom_alpha_orders_callbacks_and_ignores_packed_alpha() {
 	assert leaf.reference_count == 2
 	assert color.word == 0x12345607
 }
+
+struct QuantizerNarrow8 {
+	word u8
+}
+
+struct QuantizerNarrow16 {
+	word u16
+}
+
+type QuantizerNarrow8Alias = QuantizerNarrow8
+type QuantizerNarrow16Alias = QuantizerNarrow16
+
+pub fn (color QuantizerNarrow8) to_u32_rgb() u8 {
+	return color.word
+}
+
+pub fn (color QuantizerNarrow16) to_u32_rgb() u16 {
+	return color.word
+}
+
+fn test_quantizer_narrow_rgb_getters_widen_before_tree_selection() {
+	mut quantizer := OctTreeQuantizer{}
+	quantizer.root_node.init(0, mut quantizer)
+	byte_color := QuantizerNarrow8Alias{
+		word: 255
+	}
+	short_color := QuantizerNarrow16Alias{
+		word: 0x0102
+	}
+	quantizer.add_color(byte_color)!
+	quantizer.add_color(short_color)!
+	mut palette := []Rgba32{len: 4}
+	assert quantizer.make_palette(4, mut palette) == [Rgba32{ g: 1, b: 2 },
+		Rgba32{ b: 255 }]
+	assert quantizer.get_palette_index(byte_color)! == 1
+	assert quantizer.get_palette_index(short_color)! == 0
+	mut leaf := OctTreeNode{}
+	leaf.add_color(short_color, 8, mut quantizer)!
+	assert leaf.get_color() == Rgba32{
+		g: 1
+		b: 2
+	}
+	assert leaf.get_palette_index(byte_color, -1)! == 0
+}

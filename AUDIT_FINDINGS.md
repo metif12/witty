@@ -5193,3 +5193,39 @@ arena/GC/OOM, factory root relocation and file-platform runtime remain boundarie
 Source/library/version and before/after implementation, fixture, runner, helper,
 input and consumer hashes protect the new proof. Scope and reproduction are in
 [the alpha getter proof](zigimg/reference_probes/quantizer_alpha/README.md).
+
+
+### Quantizer unsigned getter widening checkpoint — 2026-10-13
+
+The V custom RGB constraint accepted only methods declared to return u32.
+Source's `Rgb24.from.u32Rgb()` call also accepts u8/u16 getter results through
+implicit widening. Two additional structural interfaces now admit those native
+unsigned widths before RGB unpacking. Signed, u64, boolean and float results remain
+compile-time rejections. Direct color aliases work; tree mutation and built-in
+normalization code is unchanged. Alpha selection still precedes the RGB path.
+
+Both corresponding modes match **15,012 returning/error records**, SHA-256
+`a42d9d71684d4e710d460a54f48c1fd93de9452e830855e65a2081939e4807fd`, and
+**864 exact panic/state pairs**, SHA-256
+`23c05fb50943d60a7dbf64fcff1ac189ed1811815ab5549cd08fdb5fbbc3a068`.
+Three result widths and direct color aliases cover pure/stateful getter traces,
+full initialized tree/palette state, reduction, lookup and partial failures.
+Zero channels at component limits correctly return instead of manufacturing
+an overflow. Twenty-four accepted operation pairs and twenty-eight invalid-width
+rejection pairs pass. Eight private-alpha pairs build and execute without invoking
+the narrow RGB getter that would panic if called.
+
+Twelve Source-accepted/V-rejected controls measure the existing alias-return
+signature limitation in V's interface matching. They differ from direct aliases
+of the caller color, which are supported. The pinned complete Source tree and
+private Node visibility remain unchanged. All 61 image and 58 Vaxis test files
+pass with the mixed-width module regression, alongside eighteen production/platform
+checks. Existing RGB/alpha and historical tree/normalization/alias hashes remain
+unchanged in both modes.
+
+Getter-result aliases, arbitrary alias chains, non-native Zig integer widths,
+private alpha-only markers, pointer colors, mutable input receivers, physical
+layout, portable ABI, arena/GC/OOM, factory root relocation and file-platform
+runtime remain boundaries. Source/library/version and before/after implementation,
+fixture, runner, helper, input and consumer hashes protect the proof. Scope and
+reproduction are in [the getter width proof](zigimg/reference_probes/quantizer_getter_width/README.md).
