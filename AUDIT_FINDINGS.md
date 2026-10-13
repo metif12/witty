@@ -3787,3 +3787,59 @@ boundaries. Source visibility/implementation remain unchanged. Full tree/library
 version pins and before/after generated-input/consumer, fixture, runner and
 implementation hashes protect retained proof artifacts. Reproduction and exact
 scope are in zigimg/reference_probes/qoi_contracts/README.md.
+
+## Sun Raster required headers, palette bounds and parsed enum traps — 2026-10-13
+
+Sun Raster's header omitted Source's required fields and its big-endian reader
+accepted enum values that Source rejects while swapping on little-endian targets.
+Required constructors and the parsed-header checks are restored, preserving the
+previous initialized public header after consuming a complete malformed header.
+Palette capacity checks now retain Source's full slice-end diagnostic before
+resize, allocation or input; one-bit indexed reads retain the source-buffer slice
+diagnostic before copying. Existing tests now initialize all required fields.
+
+`verify_ras_contracts_reference.py` compares unchanged pinned Source Debug with
+ordinary V and Source ReleaseSafe with production V. Both modes match **42,905
+returning records**: native layout, dimensions/header copies, all-tag format
+dispatch, no-op writers, raw/RLE/palette helpers, public decoding, truncation,
+wide zero extents and validation order. **21 debug-print controls** preserve exact
+enum labels. Header/dispatch/writer SHA-256:
+`5eb7d5959e413859877b0343cb222f90f2555ccf0a80176cb7612508328f0583`.
+Decoder/control SHA-256:
+`9844e90533766c19eb07668ba6d0f3b9ad46947360dcb233e561161a1d53d493`.
+Debug SHA-256:
+`e6dc540b17c9a8383a48e25b22e44b27b0ce638a73c1fc64e10a9422992f9c96`.
+
+**576 strict panic/state pairs** cover 448 one-bit indexed slice failures, 60
+palette-capacity failures through u32 maximum length and 68 parsed enum failures.
+Full diagnostics and case names join reader cursors, initialized public headers,
+active palettes, caller output and unchanged input in SHA-256
+`960db8d79a310328d870cefb371f62730d47fc48a4f74ecd8bf09b291afb41c8`.
+All inline palette backing entries are initialized through public slices before
+shrinking the active view; expanded active slices after short reads remain
+defined. Palette resize precedes reading, and component assignments follow a full
+planar-buffer read. Failed private/freed storage is excluded. Returning pixels/
+palettes remain independent after mutation; input and codec palette stay unchanged.
+One complete constructor, seven field omissions and default codec acceptance pass
+compile controls. The private header type is inferred without visibility changes.
+
+All 61 image and 58 Vaxis test files pass, as do production RAS/image-API tests
+and the unchanged historical native RAS and image-API harnesses in Debug and
+ReleaseSafe. Existing PNG decoder, processor and 26 retained failure-state hashes
+remain unchanged in both modes. Native/Linux application checks, three Windows
+DLLs, Windows RAS test executables in both modes and two Linux shared libraries
+build successfully. Checks used a task-owned RAM disk; completed artifacts were
+archived before detaching it. Cross builds use -gc none and do not establish
+runtime parity.
+
+One-bit padding/polarity and raw indexed copying, absent padding for other depths,
+opaque 32-bit conversion, palette-length dispatch, ignored declared image length,
+RLE escape/clipping/trailing-input behavior and successful no-op writing remain.
+Default Source headers/inactive storage, the unobserved V header placeholder,
+direct invalid typed enums, big-endian runtime, allocator/OOM/GC/lifetime, wider
+allocated extents, boxed storage copies, pointer/slice layout, const/narrow typing,
+file streams and portable ABI remain boundaries. Source implementation remains
+unchanged. Full tree/library/version pins and before/after generated-input/
+consumer, fixture, runner and implementation hashes protect retained artifacts.
+Reproduction and exact scope are in
+zigimg/reference_probes/ras_contracts/README.md.

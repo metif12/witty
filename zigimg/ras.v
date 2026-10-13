@@ -19,13 +19,13 @@ pub enum RasColorMapType as u32 {
 @[packed]
 pub struct RasHeader {
 pub mut:
-	width            u32
-	height           u32
-	depth            u32
-	length           u32
-	type_            RasType
-	color_map_type   RasColorMapType
-	color_map_length u32
+	width            u32             @[required]
+	height           u32             @[required]
+	depth            u32             @[required]
+	length           u32             @[required]
+	type_            RasType         @[required]
+	color_map_type   RasColorMapType @[required]
+	color_map_length u32             @[required]
 }
 
 pub fn (header &RasHeader) debug() {
@@ -36,7 +36,16 @@ pub fn (header &RasHeader) debug() {
 
 pub struct RAS {
 pub mut:
-	header  RasHeader
+	// Source leaves the header undefined until read or explicit initialization.
+	header  RasHeader = RasHeader{
+		width:            0
+		height:           0
+		depth:            0
+		length:           0
+		type_:            .old
+		color_map_type:   .no_color_map
+		color_map_length: 0
+	}
 	palette FixedStorage256[Rgba32]
 }
 
@@ -132,6 +141,8 @@ pub fn (mut codec RAS) uncompress_bitmap(mut stream ReadStream, mut buffer []u8)
 pub fn (mut codec RAS) read_palette(mut stream ReadStream) ! {
 	if codec.header.color_map_type != .rgb_color_map { return error('Unsupported') }
 	colors := usize(codec.header.color_map_length / 3)
+	// FixedStorage's source slice checks the requested end before resizing.
+	if colors > 256 { panic('index out of bounds: index ${colors}, len 256') }
 	codec.palette.resize(colors)
 	mut buffer := []u8{len: int(codec.header.color_map_length)}
 	stream.read_slice_all(mut buffer)!
@@ -148,13 +159,22 @@ pub fn (mut codec RAS) read(mut stream ReadStream) !PixelStorage {
 	if !RAS.format_detect(mut stream)! { return error('InvalidData') }
 	stream.take(4)!
 	bytes := stream.take(28) or { return error('InvalidData') }
+	type_value := read_be_u32(bytes[16..20])
+	map_value := read_be_u32(bytes[20..24])
+	$if little_endian {
+		// Source's takeStruct validates enums while swapping fields, before
+		// assigning the parsed header to the codec.
+		if type_value !in [u32(0), 1, 2, 3, 4, 5, 0xffff] || map_value > 2 {
+			panic('invalid enum value')
+		}
+	}
 	codec.header = RasHeader{
 		width:            read_be_u32(bytes[..4])
 		height:           read_be_u32(bytes[4..8])
 		depth:            read_be_u32(bytes[8..12])
 		length:           read_be_u32(bytes[12..16])
-		type_:            unsafe { RasType(read_be_u32(bytes[16..20])) }
-		color_map_type:   unsafe { RasColorMapType(read_be_u32(bytes[20..24])) }
+		type_:            unsafe { RasType(type_value) }
+		color_map_type:   unsafe { RasColorMapType(map_value) }
 		color_map_length: read_be_u32(bytes[24..28])
 	}
 	format := codec.pixel_format()!
@@ -191,6 +211,9 @@ pub fn (mut codec RAS) read(mut stream ReadStream) !PixelStorage {
 		}
 		IndexedStorage8 {
 			// Source copies raw bytes here even for a one-bit image with a palette.
+			if pixels.indices.len > buffer.len {
+				panic('index out of bounds: index ${pixels.indices.len}, len ${buffer.len}')
+			}
 			copy(mut pixels.indices, buffer[..pixels.indices.len])
 			pixels.resize_palette(usize(codec.palette.data.len))
 			for i, color in codec.palette.data {
