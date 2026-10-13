@@ -939,3 +939,9 @@ capacity/toss and arithmetic diagnostics, including rebasing and failed cursor
 order. Both modes match 994 returning controls and 155 panic/state pairs. Existing
 stream, GIF and buffered TGA hashes remain unchanged; wider failed cursors retain
 their documented V representation limit.
+
+The [PNG filtering bounds proof](reference_probes/png_filter_bounds/README.md)
+preserves exact pixel-range, packed-byte and word-index diagnostics, including
+conversion before output and retained earlier rows. Both modes match 12,076
+returning records and 967 panic/state pairs. Historical filtering hashes and
+Source's packed clipping/shorter word destinations remain unchanged.

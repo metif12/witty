@@ -62,3 +62,8 @@ Source allocators/OOM, wider slice/index representations, undefined initial
 current-row bytes for unsupported sample depths, and inaccessible private
 helper states are excluded. GC-backed V arrays initialize storage; parity is
 claimed only for source-defined observations.
+
+The later [exact filtering bounds proof](../png_filter_bounds/README.md) supplements
+this matrix with complete pixel/packed-byte/native-word diagnostics and retained
+writer/input snapshots. Both modes retain the returning SHA-256 and historical
+FNV64 above; Source-undefined private row storage remains excluded.

@@ -64,11 +64,7 @@ fn png_fill_scanline(pixels PixelStorage, mut scanline []u8, y usize, width usiz
 	begin := image_pixel_count(y, width)
 	if y == ~usize(0) { panic('integer overflow') }
 	end := image_pixel_count(y + 1, width)
-	// Source PixelStorage.slice checks its native-width bounds before bytes
-	// are borrowed. Keep that check ahead of V's narrower slice indexes.
-	if pixels !is InvalidPixels && (begin > end || end > pixels.len()) {
-		panic('index out of bounds')
-	}
+	// PixelStorage.slice preserves Source's native-width range diagnostics.
 	source := pixels.slice(begin, end).as_const_bytes()
 	// These two source bitsPerChannel branches are explicitly unreachable.
 	if pixels.pixel_format() in [PixelFormat.rgb332, .rgb565] {
@@ -84,6 +80,9 @@ fn png_fill_scanline(pixels PixelStorage, mut scanline []u8, y usize, width usiz
 			mut shift := 8 - int(depth)
 			mask := u8((u16(1) << depth) - 1)
 			for byte in source {
+				if destination_index >= scanline.len {
+					panic('index out of bounds: index ${destination_index}, len ${scanline.len}')
+				}
 				scanline[destination_index] |= (byte & mask) << shift
 				shift -= int(depth)
 				if shift < 0 {
@@ -104,6 +103,10 @@ fn png_fill_scanline(pixels PixelStorage, mut scanline []u8, y usize, width usiz
 			if source.len % 2 != 0 { panic('exact division produced remainder') }
 			if scanline.len % 2 != 0 { panic('exact division produced remainder') }
 			for index in 0 .. scanline.len / 2 {
+				// Source indexes native u16 slices before loading their bytes.
+				if index >= source.len / 2 {
+					panic('index out of bounds: index ${index}, len ${source.len / 2}')
+				}
 				$if little_endian {
 					scanline[index * 2] = source[index * 2 + 1]
 					scanline[index * 2 + 1] = source[index * 2]

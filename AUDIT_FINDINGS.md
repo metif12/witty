@@ -5511,3 +5511,42 @@ messages do not imply matching unrepresentable state. Source/library/version and
 before/after fixture, implementation, runner, helper and corpus hashes protect
 the proof. Reproduction and scope are in
 [the stream guard proof](zigimg/reference_probes/stream_guards/README.md).
+
+
+### PNG filtering exact bounds and retained output checkpoint — 2026-10-14
+
+Row filling used a generic range panic that masked `PixelStorage.slice`'s full
+Source diagnostic, while packed/word conversion relied on V's byte-array messages.
+Pixel ranges now use the checked storage view directly. Packed destination bytes
+are checked before modification; sixteen-bit source indexes are checked against
+native word lengths before loading their bytes. Exact-division checks retain
+precedence, all guards remain active in production, and successful filtering,
+packed clipping and shorter word destinations are unchanged.
+
+Both corresponding modes match **12,076 returning records**, SHA-256
+`c1c523a2bf3693e10088e1476b6d31841d1eb0e855bc78106445e925c99177e3`, and
+**967 exact panic/state pairs**, SHA-256
+`b710976b02b6955cfb609aa85612ab3696bb2270629092d9cb42b980a1aa3126`.
+Sixteen indexed/gray/RGB/RGBA layouts cover matched rows, shorter/empty word rows,
+zero-height try-all and short output before later range failure. Failure cases
+cover short storage, empty packed destinations, short word sources, odd word
+rows and unequal byte copies before choice/output. Snapshots compare writer
+position, full initialized caller output and unchanged input pixels, including
+rows already emitted. Private failed row buffers and uninitialized palettes are
+excluded. Compiled unchanged public Source filtering supplies every oracle;
+private helper visibility and Source bodies remain unchanged.
+
+All 61 image and 58 Vaxis test files pass, with nineteen production/platform checks.
+A module golden and separate compiled Source control retain packed clipping. The
+historical 43,389-record SHA-256, 43,200-record FNV64 and ten trap pairs pass in
+both modes. Initial fixture pointer construction errors and the corrected pre-fix
+diagnostic mismatch remain separate from completed proofs.
+
+Undefined current scanlines at unsupported depths, private failed rows, inactive/
+uninitialized palettes, arbitrary wide allocation/indices, heuristic large-count
+overflow, allocator/OOM/GC/lifetime, const/narrow/union typing, arbitrary targets/
+SIMD, file writers and portable ABI remain boundaries. Pinned PNG encoding still
+omits its commented-out data body. Source/library/version and before/after fixture,
+implementation, runner, helper and input hashes protect retained artifacts.
+Scope and reproduction are in
+[the exact PNG filtering bounds proof](zigimg/reference_probes/png_filter_bounds/README.md).
