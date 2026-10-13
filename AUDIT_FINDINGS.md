@@ -5027,3 +5027,35 @@ Namespace/type identity, physical layout, arbitrary parameters, arithmetic NaN
 payloads, allocation/lifetime and unrepresented callers remain boundaries.
 Details and reproduction are in
 [the gamma contract proof](zigimg/reference_probes/gamma_contracts/README.md).
+
+### Boolean bit-stream translation checkpoint — 2026-10-13
+
+The public bit-stream API now accepts bool and aliases, matching pinned Source's
+one-bit bitcasts. Its working carrier remains u8. Reads check the final one-bit
+cast after consuming bytes and updating buffered state; values above one retain
+`integer does not fit in destination type` in ordinary and production builds.
+Writes retain byte-carrier shifts, padding and partial-writer behavior.
+
+The unchanged-source boolean comparison matches **22,849 returning/error records**
+and **1,049 exact failure/state pairs** in each corresponding compiler mode.
+Return SHA-256 is
+`8621064b96eb5c32c47a381bfb9d81c9807d3bbb670bc296a66d9da69468d838`; failure/state
+SHA-256 is
+`96601684c22c4529d17c5181d5a2796a3c118b97778b8f4032302a31f7287413`.
+All bytes, native/aliased booleans and endian markers, read APIs, zero/one-bit
+requests, buffered bits, EOF, oversized operations, copied buffers, borrowed
+streams, caller mutations, capacities, padding, continuation and flush retries
+are covered. Twelve paired accepted consumers pass per mode. The shared historical
+fixtures add boolean dispatch without changing Source implementation or visibility.
+
+The historical native-scalar matrix keeps all **136,889 returning records** and
+**1,064 exact failure/state pairs**, with both previous hashes unchanged in both
+modes. All 61 image and 58 Vaxis test files pass, together with twenty-three
+production/platform checks. The extended fixture builds on Windows and Linux.
+
+Non-native integer widths, packed caller values, arbitrary endian types,
+generic required-field enforcement, u4 field typing, physical layout,
+underlying std.Io interfaces, allocation/lifetime, file-platform runtime and
+portable ABI remain boundaries. Details, compiler/library pins, reproduction and
+retained artifacts are in
+[the boolean bit-stream proof](zigimg/reference_probes/bitstream_bool/README.md).

@@ -189,7 +189,12 @@ fn bit_mask(count u8) u8 {
 
 // Zig's bit APIs reinterpret the result/input, including floating point types.
 fn bit_value_from_bits[T](value u64) T {
-	$if T.unaliased_typ is f32 {
+	$if T.unaliased_typ is bool {
+		// Source computes sub-byte results in u8, then checks the cast to u1.
+		// Keep that check after the reader's byte and buffered-bit mutations.
+		if value > 1 { panic('integer does not fit in destination type') }
+		return T(value != 0)
+	} $else $if T.unaliased_typ is f32 {
 		word := u32(value)
 		return T(unsafe { *(&f32(&word)) })
 	} $else $if T.unaliased_typ is f64 {
@@ -197,18 +202,20 @@ fn bit_value_from_bits[T](value u64) T {
 	} $else $if T.unaliased_typ is $int {
 		return T(value)
 	} $else {
-		$compile_error('Bit streams currently support native integer and float scalars')
+		$compile_error('Bit streams currently support bool, native integer and float scalars')
 	}
 }
 
 fn bit_value_to_bits[T](value T) u64 {
-	$if T.unaliased_typ is f32 {
+	$if T.unaliased_typ is bool {
+		return if value { u64(1) } else { u64(0) }
+	} $else $if T.unaliased_typ is f32 {
 		return unsafe { *(&u32(&value)) }
 	} $else $if T.unaliased_typ is f64 {
 		return unsafe { *(&u64(&value)) }
 	} $else $if T.unaliased_typ is $int {
 		return u64(value)
 	} $else {
-		$compile_error('Bit streams currently support native integer and float scalars')
+		$compile_error('Bit streams currently support bool, native integer and float scalars')
 	}
 }

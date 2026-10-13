@@ -82,7 +82,10 @@ their results in both modes. LZW's 22,016 returning and 3,772 exact failure/stat
 pairs retain both hashes. TIFF/PNG regression hashes remain unchanged. Native
 module tests and platform build checks pass; cross builds provide build coverage.
 
-Source's non-native scalar widths, bool/packed values, u4 field typing, required
+The [boolean extension](../bitstream_bool/README.md) separately covers bool and
+its V aliases, including checked one-bit results.
+
+Source's non-native scalar widths, packed values, u4 field typing, required
 marker enforcement, underlying std.Io interfaces, allocation/GC/lifetime/OOM,
 file-platform runtime, physical layout and portable ABI remain boundaries.
 Source visibility and implementation are unchanged. Complete Source-tree SHA-256

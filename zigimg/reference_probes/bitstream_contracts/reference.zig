@@ -97,6 +97,7 @@ fn dispatch(comptime endian: std.builtin.Endian, f: [9][]const u8, out: *W) !voi
   9, 21 => try run(endian,isize,f,out),
   10, 22 => try run(endian,f32,f,out),
   11, 23 => try run(endian,f64,f,out),
+  24, 25 => try run(endian,bool,f,out),
   else => unreachable,
  }
 }

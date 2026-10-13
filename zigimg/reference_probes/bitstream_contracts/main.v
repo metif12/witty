@@ -35,9 +35,12 @@ type Alias8 = usize
 type Alias9 = isize
 type Alias10 = f32
 type Alias11 = f64
+type AliasBool = bool
 
 fn value_from_bits[T](value u64) T {
-	$if T.unaliased_typ is f32 {
+	$if T.unaliased_typ is bool {
+		return T(value & 1 != 0)
+	} $else $if T.unaliased_typ is f32 {
 		word := u32(value)
 		return T(unsafe { *(&f32(&word)) })
 	} $else $if T.unaliased_typ is f64 {
@@ -48,7 +51,9 @@ fn value_from_bits[T](value u64) T {
 }
 
 fn value_bits[T](value T) u64 {
-	$if T.unaliased_typ is f32 {
+	$if T.unaliased_typ is bool {
+		return if value { u64(1) } else { u64(0) }
+	} $else $if T.unaliased_typ is f32 {
 		return unsafe { *(&u32(&value)) }
 	} $else $if T.unaliased_typ is f64 {
 		return unsafe { *(&u64(&value)) }
@@ -240,6 +245,8 @@ fn dispatch[E](f []string) {
 		21 { run[E, Alias9](f) }
 		22 { run[E, Alias10](f) }
 		23 { run[E, Alias11](f) }
+		24 { run[E, bool](f) }
+		25 { run[E, AliasBool](f) }
 		else { panic('invalid type') }
 	}
 }

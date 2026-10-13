@@ -1,5 +1,42 @@
 module zigimg
 
+type BitStreamBool = bool
+
+fn test_boolean_bit_streams_preserve_order_padding_and_partial_eof() {
+	check_boolean_bit_order[BigEndian, bool]([u8(0xa6), 0x80])!
+	check_boolean_bit_order[LittleEndian, BitStreamBool]([u8(0x65), 0x01])!
+}
+
+fn check_boolean_bit_order[E, T](expected []u8) ! {
+	values := [true, false, true, false, false, true, true, false, true]
+	mut bytes := []u8{len: 2}
+	mut writer := WriteStream.init_memory(mut bytes)
+	mut bits := BitWriter[E]{
+		writer: unsafe { &writer }
+	}
+	for value in values {
+		bits.write_bits[E, T](T(value), 1)!
+	}
+	bits.flush_bits()!
+	assert bytes == expected
+	mut reader := ReadStream.init_memory(bytes)
+	mut input := BitReader[E]{
+		reader: unsafe { &reader }
+	}
+	for value in values {
+		assert input.read_bits_no_eof[E, T](1)! == T(value)
+	}
+	input.align_to_byte()
+	mut count := u16(777)
+	assert input.read_bits[E, T](1, &count)! == T(false)
+	assert count == 0
+	input.read_bits_no_eof[E, T](1) or {
+		assert err.msg() == 'EndOfStream'
+		return
+	}
+	assert false
+}
+
 fn test_bit_reader_and_writer_match_pinned_byte_order() {
 	check_bit_order[BigEndian]([u8(0xcd), 0x0b])!
 	check_bit_order[LittleEndian]([u8(0x1d), 0x95])!
