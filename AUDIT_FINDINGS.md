@@ -4164,3 +4164,50 @@ persistent cache with artifact hashes. Full Source/library/math/version pins and
 before/after fixture/input/runner/implementation checks protect the new proof.
 Exact scope, boundaries, counts and reproduction are in
 [the pixel/chunk probe](zigimg/reference_probes/iff_pixels/README.md).
+
+## XBM production arithmetic and parsing contracts — 2026-10-13
+
+The non-advancing detector's u32 counter check now retains integer overflow in
+production. Native-usize width/height multiplication and expected-byte rounding
+also have explicit Source-order guards, after public field assignment and after
+pixel allocation/palette initialization respectively. Bounded u32 dimensions
+cannot overflow these usize expressions on the verified native 64-bit target.
+Four detector loop pairs keep running over a half-second bounded interval with
+matching initialized ready states. They intentionally do not reach the counter's
+four-billion-iteration boundary; no dynamic arithmetic-trap or 32-bit-runtime
+observations are claimed for these guards.
+
+`verify_xbm_contracts_reference.py` imports the unchanged complete Source tree.
+Debug/ordinary and ReleaseSafe/production both match **15,337 returning/error
+records** covering all byte patterns, odd/continuous rows, lexical delimiters and
+byte tokens, low-two-byte word truncation, signed/underscore/overflow numbers,
+ordered definitions and zero-sentinel hotspots, prefixes/CRLF/EOF/initial cursors,
+zero-area maximal dimensions, detector controls and default/mutable/scalar-copy
+records. SHA-256:
+`6544506d5e8c60983270a840d0b278fb9419c4690e7c7d1e8235040527065e0e`.
+
+Errors retain Source's field-assignment and reader-cursor boundaries. Returned
+pixels and white/black palettes match before/after mutation and remain independent
+of unchanged input. Caller codec fields are fully initialized. Default readImage
+private codec fields, empty pointer identities, failed/freed private storage and
+unused byte-list capacity are excluded. Private helper visibility is unchanged.
+The first pixel line's trimming, later CR tokens, ignored define names, rejection
+of malformed ignored defines, extra-token acceptance, unterminated final lines,
+continuous bit order and no-op writer remain intact.
+
+All 61 image and 58 Vaxis test files pass, as do production XBM/image-API tests,
+unchanged historical XBM/image-API/compression assertions in both modes,
+native/Linux application checks, three Windows DLLs, Windows XBM tests in both
+modes and two Linux shared libraries. Existing PNG decoder/processor and 26
+retained-state hashes remain unchanged in both modes. Cross compilation provides
+build coverage only. Proof artifacts, including the development fixture's initial
+readonly rawBytes compiler rejection, are retained with artifact hashes; the final
+fixture uses Source's public mutable PixelStorage view.
+
+Allocator/OOM/GC/lifetime, growth/capacity, generic interfaces and ignored writer
+options, readonly/narrow typing, physical layout, extents beyond V array limits,
+file streams, big-endian/32-bit runtime and portable ABI remain boundaries. Full
+Source/library/version pins, an additional fmt.zig pin and before/after fixture/
+input/runner/implementation checks protect this proof. Exact scope, counts,
+limitations and reproduction are in
+[the XBM probe](zigimg/reference_probes/xbm_contracts/README.md).

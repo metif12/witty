@@ -15,10 +15,10 @@ pub fn XBM.format_detect(mut stream ReadStream) !bool {
 	mut found_non_define := false
 	for !found_non_define {
 		// The pinned source peeks without advancing: a leading #define line
-		// is examined repeatedly until its debug-build u32 counter overflows.
+		// is examined repeatedly until its checked u32 counter overflows.
 		line := stream.peek_delimiter_inclusive(`\n`)!
 		if xbm_is_define_line(line) {
-			assert define_line_count < u32(0xffffffff)
+			if define_line_count == u32(0xffffffff) { panic('integer overflow') }
 			define_line_count++
 		} else {
 			found_non_define = true
@@ -55,8 +55,9 @@ fn xbm_collect_hex_bytes(line []u8, mut bytes []u8) {
 			index++
 		}
 		token := line[start..index]
-		if token.len < 2 || token[0] != `0` || token[1] !in [u8(`x`), `X`] { continue
-		 }
+		if token.len < 2 || token[0] != `0` || token[1] !in [u8(`x`), `X`] {
+			continue
+		}
 		value := zig_fmt.parse_int_unsigned(token[2..].bytestr(), 32, 16) or { continue }
 		bytes << u8(value & 0xff)
 		if value > 0xff { bytes << u8((value >> 8) & 0xff) }
@@ -100,6 +101,9 @@ pub fn (mut codec XBM) read(mut stream ReadStream) !PixelStorage {
 	codec.height = height or { panic('unreachable') }
 	codec.hotspot_x = hotspot_x
 	codec.hotspot_y = hotspot_y
+	if codec.width != 0 && usize(codec.height) > ~usize(0) / usize(codec.width) {
+		panic('integer overflow')
+	}
 	pixel_count := usize(codec.width) * usize(codec.height)
 	mut pixels := PixelStorage.init(.indexed1, pixel_count)!
 	mut indexed := pixels as IndexedStorage1
@@ -115,13 +119,15 @@ pub fn (mut codec XBM) read(mut stream ReadStream) !PixelStorage {
 		b: 0
 		a: 255
 	}
+	if pixel_count > ~usize(0) - 7 { panic('integer overflow') }
 	expected_bytes := (pixel_count + 7) / 8
 	mut bytes := []u8{cap: int(expected_bytes)}
 	if have_first_pixel_line { xbm_collect_hex_bytes(first_pixel_line, mut bytes) }
 	for {
 		line := stream.take_delimiter_inclusive(`\n`) or {
-			if err.msg() == 'EndOfStream' { break
-			 }
+			if err.msg() == 'EndOfStream' {
+				break
+			}
 			return err
 		}
 		xbm_collect_hex_bytes(line, mut bytes)
