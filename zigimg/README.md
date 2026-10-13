@@ -532,6 +532,12 @@ result checks, aliases, padding and retained failure state in both modes. The
 [packed RGB comparison](reference_probes/bitstream_packed/README.md) covers every
 logical color word and the 555 types' 15-bit shifts, padding and failure state.
 
+Bit-stream operations and record construction reject unsupported endian markers,
+including pointer markers. Native markers and direct aliases retain alignment,
+padding and failure state. The
+[endian contract comparison](reference_probes/endian_contracts/README.md) records
+valid behavior and the pinned compiler's second-alias-layer limit.
+
 Run the V checks with the repository's pinned compiler:
 
 ```sh

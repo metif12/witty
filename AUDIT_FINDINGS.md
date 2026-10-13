@@ -5092,3 +5092,29 @@ u4 field typing, underlying std.Io interfaces, allocation/lifetime,
 file-platform runtime and portable ABI remain boundaries. Details, reproduction,
 pins and retained artifacts are in
 [the packed RGB bit-stream proof](zigimg/reference_probes/bitstream_packed/README.md).
+
+### Bit-stream endian contracts checkpoint — 2026-10-13
+
+The translated alignment and flush APIs previously accepted arbitrary endian
+markers; flushing silently used the little-endian path. A shared compile-time
+constraint now accepts only BigEndian/LittleEndian and direct aliases, protecting
+all public bit-stream operations and represented record construction, including
+zero-bit operations and pointer markers. Source bodies and visibility are unchanged.
+
+Both corresponding modes match **71,680 returning/error records**, SHA-256
+`4151f02c6b6aca387075822982c0d3d48dac17eeeb1602a6c2014d07178ffb2c`.
+All buffered byte values, every Source u4 alignment count, flush counts 0..8,
+capacities 0/1/2, repeated alignment/flush, exact padding, copied metadata,
+borrowed stream identity, seeking and retained writer failures are covered.
+Twenty-four accepted operation pairs, forty-two invalid-operation rejection pairs,
+and two invalid-record rejection pairs pass per mode. Six separate controls
+retain the pinned compiler's second-alias-layer limit: Source accepts the
+corresponding endian choice while V rejects the nested alias.
+
+All 61 image and 58 Vaxis test files pass, together with seventeen
+production/platform checks. The new fixture builds on Windows and Linux.
+
+Generic required fields, arbitrary alias chains, u4 field typing, physical
+layout, underlying std.Io interfaces, allocation/lifetime, file-platform runtime
+and portable ABI remain boundaries. Details and reproduction are in
+[the endian contract proof](zigimg/reference_probes/endian_contracts/README.md).

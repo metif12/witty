@@ -5,6 +5,16 @@ pub struct BigEndian {}
 
 pub struct LittleEndian {}
 
+fn bit_check_endian[E]() {
+	$if E.indirections > 0 || ((int(E.unaliased_typ) >> 16) & 0xff) > 0 {
+		$compile_error('Bit streams require BigEndian or LittleEndian')
+	} $else $if E.unaliased_typ is BigEndian || E.unaliased_typ is LittleEndian {
+		// Real aliases of the two marker types preserve the Source choices.
+	} $else {
+		$compile_error('Bit streams require BigEndian or LittleEndian')
+	}
+}
+
 pub struct BitReader[E] {
 pub mut:
 	reader &ReadStream @[required]
@@ -27,6 +37,7 @@ pub fn (mut stream BitReader[E]) read_bits[E, T](num u16, out_bits &u16) !T {
 }
 
 pub fn (mut stream BitReader[E]) read_bits_tuple[E, T](num u16) !(T, u16) {
+	bit_check_endian[E]()
 	if num <= stream.count { return bit_value_from_bits[T](stream.remove_bits(u8(num))), num }
 	mut out_count := u16(stream.count)
 	mut out := u64(stream.remove_bits(stream.count))
@@ -95,6 +106,7 @@ fn (mut stream BitReader[E]) remove_bits[E](num u8) u8 {
 }
 
 pub fn (mut stream BitReader[E]) align_to_byte[E]() {
+	bit_check_endian[E]()
 	stream.bits = 0
 	stream.count = 0
 }
@@ -107,6 +119,7 @@ pub mut:
 }
 
 pub fn (mut stream BitWriter[E]) write_bits[E, T](value T, num u16) ! {
+	bit_check_endian[E]()
 	mut input := bit_value_to_bits[T](value)
 	if sizeof(T) < 8 { input &= (u64(1) << (sizeof(T) * 8)) - 1 }
 	mut in_count := num
@@ -171,6 +184,7 @@ fn (mut stream BitWriter[E]) add_bits[E](bits u8, num u8) {
 }
 
 pub fn (mut stream BitWriter[E]) flush_bits[E]() ! {
+	bit_check_endian[E]()
 	if stream.count == 0 { return }
 	$if E.unaliased_typ is BigEndian {
 		if stream.count > 8 { panic('integer overflow') }

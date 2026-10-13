@@ -87,8 +87,12 @@ its V aliases, including checked one-bit results. The
 [packed RGB extension](../bitstream_packed/README.md) covers all four packed color
 records, their aliases and 15-bit working arithmetic.
 
-Source's other non-native scalar widths, arbitrary packed values, u4 field typing, required
-marker enforcement, underlying std.Io interfaces, allocation/GC/lifetime/OOM,
+The [endian contract comparison](../endian_contracts/README.md) rejects invalid
+markers at operations and represented record construction, including align/flush
+paths that previously accepted them. Native markers and direct aliases match.
+
+Source's other non-native scalar widths, arbitrary packed values, u4 field typing, generic required-field
+enforcement, underlying std.Io interfaces, allocation/GC/lifetime/OOM,
 file-platform runtime, physical layout and portable ABI remain boundaries.
 Source visibility and implementation are unchanged. Complete Source-tree SHA-256
 is `ca759a44a902143a60f42f0810dc90df7250c0f92804cf201353f0141650eb6b`; selected Zig
