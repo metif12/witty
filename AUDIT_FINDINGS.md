@@ -4557,3 +4557,62 @@ pruning duplicate expanded proofs and regenerable caches. Source/library/version
 pins and before/after fixture/input/consumer/runner/implementation hashes protect
 the proof. Exact scope, counts and reproduction are in
 [the animation contract probe](zigimg/reference_probes/animation_contracts/README.md).
+
+## Exact fixed-buffer resize diagnostics and retained views — 2026-10-13
+
+Generic FixedStorage and its 8/256-element specializations now retain the exact
+Source `index out of bounds: index N, len L` diagnostic before replacing data.
+The generic implementation keeps its sizeof-based capacity calculation. An initial
+attempt to use storage.len reported three after shrinking a seven-element buffer,
+failing the existing ordinary/production tests. It was corrected before the final
+proofs. The zero-capacity V array adapter retains its empty-storage guard; a nonempty
+adapter has no corresponding Source zero-capacity array value. Separate V-only
+guard checks pass in both modes, outside the matching observations.
+
+`verify_fixed_storage_contracts_reference.py` imports unchanged complete Source and
+compares Debug/ordinary with ReleaseSafe/production. Both modes match **11,508
+returning records** and **1,320 exact panic/state pairs**. Three element types (u8,
+u16, public Rgba32), six generic capacities and both real specializations cover
+default/inline/full-external/offset-external data descriptors, old lengths, two byte
+patterns, zero/one/half/full resizes, capacity plus one and native usize maximum.
+Copies preserve independent inline arrays and descriptor headers while retaining
+borrowed targets. Resize rebinds copied data to its own inline storage. Old views,
+external descriptors and mutations preceding failure retain Source ordering.
+
+Snapshots join both live data descriptors, the retained old view, both complete
+initialized inline arrays and four initialized external elements. Canonical origin
+and element offsets compare nonempty aliases without raw addresses. Empty identities
+are omitted. Exact diagnostics and failing exits accompany nonempty matching panic
+snapshots and no stdout. Return SHA-256:
+`ca784ad0d6cf34998a7b78d16c63893daa7b6511fe6c8fb526973e2af64deb8d`.
+Panic/state SHA-256: `8cf452e2aa375778bb4f19266e1fcb02ff2e65ce1c554f0700a518322d1c5fb4`.
+
+Three paired acceptance controls cover default/initialized records and mutable
+operations. Three rejection pairs cover constant resize, constant inline mutation
+and mismatched array elements. A separate borrowed-pointee control measures Source
+constant-record acceptance and V rejection. No undefined default Source storage is
+observed. Undefined/inactive/freed data, record padding, empty identity, larger V
+array extents, broader generic element/capacity types, record relocation/lifetime,
+GC/allocation and portable ABI remain boundaries.
+
+The unchanged historical fixed-storage fixture retains **2,373 records** in both
+modes, SHA-256 `ba652143ec8ea584ce4522ed61dc6605986e90185c524ce8b13281b40b642c0b`.
+TIFF's metadata proof retains **86 records and 15 trap pairs**, SHA-256
+`c22c2516d50b6861d84f15605a3904f2a4fc935e45c8b3583ca0ead0c76f1346`.
+Its three capacity failures now require exact Source messages. Task-owned compiler
+caches replace the initial failed shared-cache archive lookup.
+
+All 61 image and 58 Vaxis test files pass, along with production fixed-storage/
+TIFF/GIF/image-API tests, unchanged historical image-API/GIF/compression assertions
+in both modes, native/Linux application checks, three Windows DLLs, both Windows
+fixed-storage test executables and two Linux shared libraries. Cross builds establish
+build coverage only.
+
+The V fixture uses concrete resize entry points after nested generic forwarding
+failed code generation. Its state observer reads live built-in array headers and
+fixed initialized extents; the initial generic record observer produced invalid
+reads and was replaced. Development compiler/observer/capacity failures are retained.
+The previous checkpoint's archive was read back before pruning duplicate expanded
+proofs and regenerable caches. Source/library/version pins and before/after fixture/
+input/consumer/runner/implementation hashes protect the proof. Exact scope, counts
+and reproduction are in [the fixed-buffer contract probe](zigimg/reference_probes/fixed_storage_contracts/README.md).

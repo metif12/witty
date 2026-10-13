@@ -85,7 +85,10 @@ unscaled channel offset; its 16-bit grayscale branch still selects grayscale8.
 The writer succeeds without emitting bytes. Shared inline fixed storage has
 8- and 256-element specializations plus a general `FixedStorage[T, B]`, where
 `B` is the fixed-array storage type. Empty slices stand for zero capacity.
-Resizing borrows that inline storage and retains old views. Header debug hooks
+Resizing borrows that inline storage and retains old views. All three forms
+preserve exact Source bounds diagnostics before replacing the data descriptor,
+including production builds. The [fixed-buffer contract proof](reference_probes/fixed_storage_contracts/README.md)
+compares independent inline copies, borrowed views and retained failure state. Header debug hooks
 for SGI/IFF and TIFF metadata use V's standard logger/struct presentation;
 language-specific type/enum names and formatting differ from Zig's rendering.
 

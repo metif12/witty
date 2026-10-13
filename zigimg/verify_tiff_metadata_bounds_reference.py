@@ -3,6 +3,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 
@@ -17,8 +18,9 @@ BOUNDS = {
     "unknown_tag": ("invalid enum value", "invalid TIFF tag enum"),
     "compression_enum": ("invalid enum value", "invalid TIFF compression enum"),
     "resolution_enum": ("invalid enum value", "invalid TIFF resolution enum"),
-    **{name: ("index out of bounds", "FixedStorage resize exceeds inline capacity") for name in
-       ("bits_capacity", "extra_capacity", "palette_capacity")},
+    "bits_capacity": ("index out of bounds: index 9, len 8",) * 2,
+    "extra_capacity": ("index out of bounds: index 9, len 8",) * 2,
+    "palette_capacity": ("index out of bounds: index 512, len 256",) * 2,
     **{name: ("index out of bounds", INDEX_CHECKS) for name in
        ("empty_bits", "missing_alpha", "row_components", "short_palette")},
     "byte_overflow": ("integer overflow", "integer overflow"),
@@ -70,6 +72,7 @@ def main():
         }, indent=2) + "\n")
         print(f"Building TIFF metadata source {args.zig_mode} and V {'production' if args.v_prod else 'ordinary'}", flush=True)
         proof.run([str(args.zig.resolve()), "build-exe", "-target", args.target, "-lc", "-O", args.zig_mode,
+                   "--global-cache-dir", str(root / "zig-global"), "--cache-dir", str(root / "zig-cache"),
                    f"-femit-bin={root / 'native'}", str(root / "reference.zig")], "build-source")
         environment = dict(os.environ, VEXE=str(args.v.resolve()), V_C_ERROR_BUG_REPORT_DISABLED="1")
         proof.run([str(args.v.resolve()), *(["-prod"] if args.v_prod else []), "-path",
@@ -91,6 +94,11 @@ def main():
                 label = f"trap-{executable}-{name}"
                 result = proof.run([str(root / executable), name], label, timeout=10, check=False)
                 checked_trap(result, label, category)
+                if name in ("bits_capacity", "extra_capacity", "palette_capacity"):
+                    messages = [match.group(1) for line in result.stderr.decode().splitlines()
+                                if (match := re.fullmatch(r"(?:thread \d+ |V )?panic:\s*(.*)", line.strip()))]
+                    if messages != [category]:
+                        raise AssertionError(f"{label}: exact capacity diagnostic changed: {messages}")
         print(f"TIFF metadata: {len(BOUNDS)} strict checked trap pairs matched", flush=True)
         if tree_hash(source) != PINNED_SOURCE_SHA256 or tree_hash(root / "src") != PINNED_SOURCE_SHA256:
             raise AssertionError("source changed during the proof")
