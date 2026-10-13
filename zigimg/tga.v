@@ -28,6 +28,27 @@ pub fn (value TGAImageType) pad1() u8 {
 	return value.raw >> 4
 }
 
+pub fn (mut value TGAImageType) set_indexed(indexed bool) {
+	value.raw = (value.raw & 0xfe) | u8(indexed)
+}
+
+pub fn (mut value TGAImageType) set_truecolor(truecolor bool) {
+	value.raw = (value.raw & 0xfd) | (u8(truecolor) << 1)
+}
+
+pub fn (mut value TGAImageType) set_pad0(pad bool) {
+	value.raw = (value.raw & 0xfb) | (u8(pad) << 2)
+}
+
+pub fn (mut value TGAImageType) set_run_length(run_length bool) {
+	value.raw = (value.raw & 0xf7) | (u8(run_length) << 3)
+}
+
+pub fn (mut value TGAImageType) set_pad1(pad u8) {
+	if pad > 15 { panic('integer does not fit in destination type') }
+	value.raw = (value.raw & 15) | (pad << 4)
+}
+
 @[packed]
 pub struct TGAColorMapSpec {
 pub mut:
@@ -56,6 +77,24 @@ pub fn (value TGADescriptor) top_to_bottom() bool {
 
 pub fn (value TGADescriptor) pad() u8 {
 	return value.raw >> 6
+}
+
+pub fn (mut value TGADescriptor) set_num_attributes_bit(bits u8) {
+	if bits > 15 { panic('integer does not fit in destination type') }
+	value.raw = (value.raw & 0xf0) | bits
+}
+
+pub fn (mut value TGADescriptor) set_right_to_left(right_to_left bool) {
+	value.raw = (value.raw & 0xef) | (u8(right_to_left) << 4)
+}
+
+pub fn (mut value TGADescriptor) set_top_to_bottom(top_to_bottom bool) {
+	value.raw = (value.raw & 0xdf) | (u8(top_to_bottom) << 5)
+}
+
+pub fn (mut value TGADescriptor) set_pad(pad u8) {
+	if pad > 3 { panic('integer does not fit in destination type') }
+	value.raw = (value.raw & 63) | (pad << 6)
 }
 
 @[packed]
@@ -167,7 +206,7 @@ pub mut:
 pub const tga_signature = 'TRUEVISION-XFILE'
 
 pub struct TgaEncoderOptions {
-pub:
+pub mut:
 	rle_compressed      bool = true
 	top_to_bottom_image bool = true
 	color_map_depth     u8   = 24
@@ -418,7 +457,7 @@ pub fn TGA.read_image(mut stream ReadStream) !ImageUnmanaged {
 fn (codec TGA) palette_end() int {
 	// The source adds the two u16 fields before assigning to usize.
 	end := u32(codec.header.color_map_spec.first_entry_index) + codec.header.color_map_spec.length
-	assert end <= 65535
+	if end > 65535 { panic('integer overflow') }
 	return int(end)
 }
 
@@ -445,7 +484,7 @@ pub fn (mut codec TGA) read(mut stream ReadStream) !PixelStorage {
 	input.compressed = codec.header.image_type.run_length()
 	if input.compressed {
 		// This expression is byte arithmetic in the locked source.
-		assert codec.header.image_spec.bit_per_pixel <= 248
+		if codec.header.image_spec.bit_per_pixel > 248 { panic('integer overflow') }
 		input.bytes_per_pixel = int((u16(codec.header.image_spec.bit_per_pixel) + 7) / 8)
 		input.repeat_data = []u8{len: input.bytes_per_pixel}
 	}
@@ -456,6 +495,8 @@ pub fn (mut codec TGA) read(mut stream ReadStream) !PixelStorage {
 			pixels.resize_palette(usize(codec.header.color_map_spec.length))
 			for index in int(codec.header.color_map_spec.first_entry_index) .. codec.palette_end() {
 				if depth == 24 {
+					// Source forms the palette destination before reading its byte.
+					if index >= pixels.palette.len { panic('index out of bounds') }
 					pixels.palette[index].b = stream.take_byte()!
 					pixels.palette[index].g = stream.take_byte()!
 					pixels.palette[index].r = stream.take_byte()!
@@ -521,8 +562,8 @@ pub fn TGA.write_image(mut stream WriteStream, image ImageUnmanaged, options Tga
 	mut codec := TGA{}
 	codec.header.image_spec.width = u16(image.width)
 	codec.header.image_spec.height = u16(image.height)
-	if options.rle_compressed { codec.header.image_type.raw |= 8 }
-	if options.top_to_bottom_image { codec.header.image_spec.descriptor.raw |= 32 }
+	codec.header.image_type.set_run_length(options.rle_compressed)
+	codec.header.image_spec.descriptor.set_top_to_bottom(options.top_to_bottom_image)
 	if options.image_id.len > 0 {
 		if options.image_id.len > 256 { return error('Unsupported') }
 		codec.header.id_length = u8(options.image_id.len)
@@ -549,11 +590,12 @@ pub fn TGA.write_image(mut stream WriteStream, image ImageUnmanaged, options Tga
 	}
 	match image.pixels {
 		Grayscale8Pixels {
-			codec.header.image_type.raw |= 3
+			codec.header.image_type.set_indexed(true)
+			codec.header.image_type.set_truecolor(true)
 			codec.header.image_spec.bit_per_pixel = 8
 		}
 		IndexedStorage8 {
-			codec.header.image_type.raw |= 1
+			codec.header.image_type.set_indexed(true)
 			codec.header.image_spec.bit_per_pixel = 8
 			codec.header.color_map_spec = TGAColorMapSpec{
 				length:    u16(image.pixels.palette.len)
@@ -562,17 +604,17 @@ pub fn TGA.write_image(mut stream WriteStream, image ImageUnmanaged, options Tga
 			codec.header.has_color_map = 1
 		}
 		Rgb555Pixels {
-			codec.header.image_type.raw |= 2
+			codec.header.image_type.set_truecolor(true)
 			codec.header.image_spec.bit_per_pixel = 16
 		}
 		Rgb24Pixels, Bgr24Pixels {
-			codec.header.image_type.raw |= 2
+			codec.header.image_type.set_truecolor(true)
 			codec.header.image_spec.bit_per_pixel = 24
 		}
 		Rgba32Pixels, Bgra32Pixels {
-			codec.header.image_type.raw |= 2
+			codec.header.image_type.set_truecolor(true)
 			codec.header.image_spec.bit_per_pixel = 32
-			codec.header.image_spec.descriptor.raw |= 8
+			codec.header.image_spec.descriptor.set_num_attributes_bit(8)
 			extension.attributes = .useful_alpha_channel
 		}
 		else {

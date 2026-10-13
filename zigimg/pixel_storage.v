@@ -214,7 +214,7 @@ pub fn IndexedStorage8.init_palette_size(pixel_count usize, palette_size usize) 
 }
 
 pub fn (mut storage IndexedStorage8) resize_palette(size usize) {
-	assert size <= 256
+	if size > 256 { panic('reached unreachable code') }
 	// Source resizes the slice, retaining the full original allocation.
 	unsafe {
 		storage.palette.len = int(size)

@@ -171,6 +171,15 @@ default footer signatures, and incomplete ID storage share the initialization
 boundary above. Native hashes compare 2,016 encoder cases and 1,120 decoder
 cases, including source positions; unused RGB555 padding is excluded.
 
+The [TGA record proof](reference_probes/tga_records/README.md) adds public packed
+flag setters and mutable encoder options, preserving unrelated bits and inline
+record copies. Explicit pixel-byte/palette-end overflow and indexed-8 capacity
+guards remain active in production. The 24-bit palette path checks its destination
+before consuming a byte, preserving the Source bounds-versus-EOF priority.
+Ordinary/production comparisons match 274,453 returning observations and 24
+checked panic/state pairs. Narrow literal typing, const ID-slice typing and
+sentinel logical lengths are measured separately as representation differences.
+
 PackBits preserves declared-length truncation, unclipped runs, and its unread
 final lone control byte. LZW retains endian selection, clear/end codes, early
 change, dictionary mutation order, partial-input state, and source handling of
@@ -706,3 +715,5 @@ python3 zigimg/reference_probes/tga_bounds/verify.py /path/to/v-probe /path/to/z
 They verify palette offset/capacity checks and overflow of palette-end and
 pixel-byte arithmetic against the unchanged locked source. Windows checks
 compile the module and focused test executable; runtime remains untested.
+The newer [record proof](reference_probes/tga_records/README.md) verifies these
+guards in both ordinary and production builds, with retained state and failure order.

@@ -3107,3 +3107,48 @@ or freed memory, ABI, const/narrow/key typing, map layout/order/capacity, boxed
 quantization payload copies and arbitrary SIMD remain limitations. The Source
 quantization-header compiler failure and no-op writer remain unchanged. Exact
 scope and reproduction are in zigimg/reference_probes/jpeg_state/README.md.
+
+## TGA public packed mutation and production failure order — 2026-10-13
+
+The TGA image-type/descriptor records exposed byte getters without counterparts
+for assigning their Source packed fields. Encoder options were immutable even
+through mutable bindings. Pixel-byte and palette-end checks used assertions
+removed by V production builds, as did the shared indexed-8 palette-capacity check.
+The 24-bit palette path consumed a byte before checking its destination index,
+unlike Source; the old trap-only probes did not compare this position.
+
+Nine public setters now preserve unrelated packed bits; u4/u2 setters check byte
+arguments before mutation in both modes. Encoder options are public/mutable and
+the writer uses these setters. Explicit guards preserve byte/palette-end overflow
+and indexed-8 capacity failures. The 24-bit reader checks its palette destination
+before reading a byte; the 16-bit path retains its read-before-index order.
+
+`verify_tga_records_reference.py` compares unchanged pinned Source Debug with
+ordinary V and Source ReleaseSafe with production V. Both modes match **274,453
+returning observations**: 6,144 image-type mutations, 6,144 descriptor mutations,
+262,144 header validations and 21 initialized record/default/copy/option rows.
+Returning SHA-256:
+`1a09cac1be76dea9fab61a3a330b4f0c484f4f67e5bc08e1cfe0e2f1e719ad36`.
+
+Twenty-four panic/state pairs compare invalid field casts, every overflowing pixel
+byte count, palette-end/capacity/index checks, an invalid index at EOF and competing
+failure priorities. Snapshots include the unchanged packed byte or stream position,
+header, active initialized ID bytes and retained initialized extension. State hash:
+`dc9cb7be7b9c8d24f9cbf71550f8deba334d670042f07ab523795fd328586880`.
+Twelve immutable-binding mutations receive actual compiler rejections. Three
+literal narrow-field and one const ID-pointee compile pairs record differences;
+Source sentinel logical lengths 40/40/40/80 versus V physical lengths 41/41/41/81
+are also recorded separately. The matching corpus never observes undefined ID,
+pixel or footer-signature storage; default Source footer signatures are explicitly
+initialized in the fixture. Full tree/library/version pins and before/after hashes
+protect the retained commands, fixtures, outputs, state, diagnostics and provenance.
+
+Historical TGA encoder/decoder hashes remain `44cd8ebeb8f84afc` (2,016 cases) and
+`04232c58bcb7f905` (1,120 cases) in both modes. All 59 image/58 Vaxis files and
+focused production TGA/record/pixel-storage tests pass. Native/Linux application
+checks, three Windows dependency DLLs, the new Windows test executable in both
+modes and two Linux shared libraries build successfully with cross builds using
+-gc none. Cross-target runtime, portable aggregate ABI, allocator/OOM/GC/lifetime,
+undefined/freed storage, sentinel/const/narrow typing and arbitrary SIMD remain
+boundaries. Reproduction and exact scope are in
+zigimg/reference_probes/tga_records/README.md.
