@@ -5,8 +5,8 @@ anonymous-record payload to V's standard debug logger. The payload retains
 `.{ .field = value, ... }` punctuation, declaration order, signed decimal values,
 dotted enum labels and Source's `x_asoect` spelling. It includes neither a type
 name nor an address. The private IffHeader dispatcher uses these same hooks.
-SGI payloads have a [separate comparison](../sgi_debug/README.md). TIFF generic
-debug rendering and RAS direct printing remain unchanged.
+[SGI](../sgi_debug/README.md) and [TIFF](../tiff_debug/README.md) payloads have
+separate comparisons. RAS direct printing remains unchanged.
 
 `verify_iff_debug_reference.py` imports the complete unchanged Source tree at
 original visibility. Its root log callback captures the actual payload supplied

@@ -2,7 +2,7 @@ module zigimg
 
 import log
 
-// The host logger handles routing and filtering. IFF/SGI payloads retain the
+// The host logger handles routing and filtering. Codec payloads retain the
 // pinned Zig formatter's anonymous-record syntax, field order and enum labels.
 pub fn (header &BmhdHeader) debug() {
 	log.debug(iff_bmhd_debug_message(header))
@@ -42,5 +42,38 @@ fn sgi_debug_bytes(bytes []u8) string {
 }
 
 pub fn (bitmap &TiffBitmapDescriptor) debug() {
-	log.debug('${bitmap}\n')
+	log.debug(tiff_debug_message(bitmap))
+}
+
+fn tiff_debug_message(bitmap &TiffBitmapDescriptor) string {
+	offsets := tiff_debug_optional_words(bitmap.strip_offsets)
+	counts := tiff_debug_optional_words(bitmap.strip_byte_counts)
+	x := tiff_debug_u32_values(bitmap.x_resolution[..])
+	y := tiff_debug_u32_values(bitmap.y_resolution[..])
+	bits := '.{ .data = ' + tiff_debug_u16_values(bitmap.bits_per_sample.data) + ', .storage = ' +
+		tiff_debug_u16_values(bitmap.bits_per_sample.storage[..]) + ' }'
+	extra := '.{ .data = ' + tiff_debug_u16_values(bitmap.extra_samples.data) + ', .storage = ' +
+		tiff_debug_u16_values(bitmap.extra_samples.storage[..]) + ' }'
+	colors := '.{ .data = ' + tiff_debug_palette(bitmap.color_map.data.len) + ', .storage = ' +
+		tiff_debug_palette(bitmap.color_map.storage.len) + ' }'
+	return '.{ .compression = .${bitmap.compression}, .image_width = ${bitmap.image_width}, .image_height = ${bitmap.image_height}, .photometric_interpretation = ${bitmap.photometric_interpretation}, .rows_per_strip = ${bitmap.rows_per_strip}, .strip_offsets = ${offsets}, .strip_byte_counts = ${counts}, .x_resolution = ${x}, .y_resolution = ${y}, .resolution_unit = .${bitmap.resolution_unit}, .bits_per_sample = ${bits}, .new_subfile_type = ${bitmap.new_subfile_type}, .color_map = ${colors}, .samples_per_pixel = ${bitmap.samples_per_pixel}, .fill_order = ${bitmap.fill_order}, .extra_samples = ${extra}, .planar_configuration = ${bitmap.planar_configuration}, .predictor = ${bitmap.predictor} }\n'
+}
+
+fn tiff_debug_optional_words(value ?[]u32) string {
+	if words := value { return tiff_debug_u32_values(words) }
+	return 'null'
+}
+
+fn tiff_debug_u32_values(values []u32) string {
+	return '{ ' + values.map(it.str()).join(', ') + ' }'
+}
+
+fn tiff_debug_u16_values(values []u16) string {
+	return '{ ' + values.map(it.str()).join(', ') + ' }'
+}
+
+// At Zig's default depth of three, nested palette entries elide their fields.
+fn tiff_debug_palette(count int) string {
+	if count == 0 { return '{  }' }
+	return '{ ' + '.{ ... }, '.repeat(count - 1) + '.{ ... } }'
 }

@@ -5290,3 +5290,41 @@ and pinned formatter/logging hashes protect the proof. A disk-space failure
 remains separate from final proofs; the previous archive was verified before
 pruning expanded duplicates. Scope and reproduction are in
 [the SGI debug proof](zigimg/reference_probes/sgi_debug/README.md).
+
+
+### TIFF bitmap diagnostic payload checkpoint — 2026-10-14
+
+TiffBitmapDescriptor.debug previously used V's generic record presentation.
+Its standard logger payload now preserves Source's anonymous-record syntax,
+field order, dotted enum labels and unsigned decimal values. Optional strip
+arrays distinguish absent from present empty; rational pairs and both data/backing
+words of fixed u16 buffers are complete. Palette data and all 256 backing entries
+retain `.{ ... }` abbreviations at Source's default formatter depth of three.
+The single payload newline remains. Decoder bodies are unchanged.
+
+Both corresponding modes match **3,708 records**, SHA-256
+`d2b914e99be534e8d5b9dd464680bafef5522f9a052b41695b6a1c217957cc48`.
+Each configured enabled/suppressed logger runs 1,854 cases over enum combinations,
+scalar decimal/width boundaries, buffer positions/windows, detached views larger
+than inline capacity, optional strip arrays, repeats and seeded full records.
+Every RGBA byte value appears at every palette backing position. Observations
+retain exact payload bytes, debug/default classification, callback counts and
+before/after fingerprints of every initialized field, backing/data value and
+logical nonempty alias. Independent input-state reconstruction validates those
+fingerprints; actual unchanged Source methods alone supply expected messages.
+
+The existing readonly V receiver remains: two mutable caller pairs compile/run,
+while two Source-rejected/V-accepted immutable caller controls record that surface
+difference separately. Custom formatter depths, host logger defaults/prefixes/
+routing/ownership/synchronization, eager versus lazy formatting, allocation/OOM,
+scopes, physical layout and logger ABI remain adaptations. Empty/external pointer
+identities, invalid enum representations and undefined Source storage are excluded.
+
+All 61 image and 58 Vaxis test files pass, including two native-observed payload
+goldens, with eighteen production/platform checks. Source/library/version and
+before/after implementation, fixture, runner, helper, settings/input, V logging/
+fingerprint/encoding and pinned Source formatter/logging/fingerprint hashes protect
+the proof. The first comparison's fixture storage copy and a dependency discovery
+attempt remain separate from completed proofs. The previous archive was verified
+before duplicate pruning. Scope and reproduction are in
+[the TIFF debug proof](zigimg/reference_probes/tiff_debug/README.md).

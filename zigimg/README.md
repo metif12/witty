@@ -89,8 +89,8 @@ Resizing borrows that inline storage and retains old views. All three forms
 preserve exact Source bounds diagnostics before replacing the data descriptor,
 including production builds. The [fixed-buffer contract proof](reference_probes/fixed_storage_contracts/README.md)
 compares independent inline copies, borrowed views and retained failure state.
-SGI/IFF header debug hooks preserve Source payloads through V's standard logger;
-TIFF metadata still uses V's generic struct presentation.
+SGI/IFF header and TIFF bitmap diagnostics preserve Source payloads through
+V's standard logger, with logger configuration remaining a host adaptation.
 
 Public magic-number helpers preserve the source's shift order and target-endian
 dispatch, including checked shifts for signatures longer than four bytes.
@@ -291,7 +291,12 @@ default-level behavior remain host-language adaptations. SGI preserves the same
 anonymous-record syntax and prints all 80 image-name and 404 padding bytes as
 decimal lists. Its [diagnostic comparison](reference_probes/sgi_debug/README.md)
 matches 6,470 observations in both modes, including every byte value at every
-array position and unchanged caller fields.
+array position and unchanged caller fields. TIFF bitmap diagnostics preserve optional
+arrays, nested buffer data/backing words, palette abbreviations at Source's default
+formatter depth and the trailing newline. Their
+[comparison](reference_probes/tiff_debug/README.md) matches 3,708 observations in
+both modes with initialized state and borrowed-view fingerprints. Custom formatter
+depths and the existing readonly V receiver remain surface adaptations.
 
 The converter preserves all 460 pinned table entries, including unavailable
 indexed-to-gray/RGB-to-grayscale16 pairs and nine BGR555 entries that trap on
