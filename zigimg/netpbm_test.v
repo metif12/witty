@@ -13,8 +13,11 @@ fn test_netpbm_specializations_expose_instance_header_read_and_write_methods() {
 	assert writer.buffered().bytestr() == 'P2\n# Created by zigimg\n2 1\n15\n3 9\n'
 	mut pbm := PBM{
 		header: NetpbmHeader{
-			width:  1
-			height: 1
+			format:    .bitmap
+			binary:    false
+			width:     1
+			height:    1
+			max_value: 0
 		}
 	}
 	writer.seek_to(0)!

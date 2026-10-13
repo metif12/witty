@@ -11,11 +11,11 @@ pub enum NetpbmFormat {
 
 pub struct NetpbmHeader {
 pub mut:
-	format    NetpbmFormat
-	binary    bool
-	width     usize
-	height    usize
-	max_value usize
+	format    NetpbmFormat @[required]
+	binary    bool         @[required]
+	width     usize        @[required]
+	height    usize        @[required]
+	max_value usize        @[required]
 }
 
 pub struct PbmKind {}
@@ -26,7 +26,14 @@ pub struct PpmKind {}
 
 pub struct Netpbm[T] {
 pub mut:
-	header NetpbmHeader
+	// Source leaves the header undefined until read or explicit initialization.
+	header NetpbmHeader = NetpbmHeader{
+		format:    .bitmap
+		binary:    false
+		width:     0
+		height:    0
+		max_value: 0
+	}
 }
 
 pub type PBM = Netpbm[PbmKind]
@@ -71,7 +78,7 @@ pub fn PPM.write_image(mut stream WriteStream, image ImageUnmanaged, options Net
 }
 
 pub struct NetpbmEncoderOptions {
-pub:
+pub mut:
 	binary bool = true
 }
 
@@ -152,7 +159,8 @@ pub fn (mut codec Netpbm[T]) read[T](mut stream ReadStream) !PixelStorage {
 	// The pinned generic reader accepts all P1..P6 headers, independently of T.
 	codec.header = parse_netpbm_header(mut stream)!
 	header := codec.header
-	mut pixels := PixelStorage.init(codec.pixel_format()!, header.width * header.height)!
+	format := codec.pixel_format()!
+	mut pixels := PixelStorage.init(format, netpbm_multiply(header.width, header.height))!
 	match mut pixels {
 		Grayscale1Pixels {
 			if header.binary {
@@ -205,9 +213,9 @@ pub fn (mut codec Netpbm[T]) read[T](mut stream ReadStream) !PixelStorage {
 					g := parse_netpbm_number(mut stream)!
 					b := parse_netpbm_number(mut stream)!
 					rgb = Rgb24{
-						r: u8(255 * r / header.max_value)
-						g: u8(255 * g / header.max_value)
-						b: u8(255 * b / header.max_value)
+						r: netpbm_linearize(r, header.max_value)
+						g: netpbm_linearize(g, header.max_value)
+						b: netpbm_linearize(b, header.max_value)
 					}
 				}
 			}
@@ -237,8 +245,21 @@ pub fn (mut codec Netpbm[T]) write[T](mut stream WriteStream, pixels PixelStorag
 					writer: unsafe { &stream }
 				}
 				for row := usize(0); row < header.height; row++ {
-					for i := row * header.width; i < (row + 1) * header.width; i++ {
-						value := samples.data[int(i)].value
+					// Source checks both slices for the complete row before writing
+					// any of its bits, including zero-width rows after the end.
+					start := netpbm_multiply(row, header.width)
+					length := usize(samples.data.len)
+					if start > length {
+						panic('start index ${start} is larger than end index ${length}')
+					}
+					remaining := length - start
+					if header.width > remaining {
+						// The pinned compiler combines these two slices and reports
+						// the end relative to the complete sample buffer.
+						panic('index out of bounds: index ${start + header.width}, len ${length}')
+					}
+					for i := usize(0); i < header.width; i++ {
+						value := samples.data[int(start + i)].value
 						assert value <= 1
 						bits.write_bits[BigEndian, u8](1 - value, 1)!
 					}
@@ -296,6 +317,8 @@ fn parse_netpbm_header(mut stream ReadStream) !NetpbmHeader {
 	mut header := NetpbmHeader{
 		binary:    magic[1] >= `4`
 		format:    unsafe { NetpbmFormat((magic[1] - `1`) % 3) }
+		width:     0
+		height:    0
 		max_value: 1
 	}
 	header.width = parse_netpbm_number(mut stream)!
@@ -368,5 +391,16 @@ fn read_netpbm_linearized(mut stream ReadStream, max_value usize) !u8 {
 	} else {
 		usize(stream.take_byte()!)
 	}
-	return u8(255 * value / max_value)
+	return netpbm_linearize(value, max_value)
+}
+
+fn netpbm_multiply(left usize, right usize) usize {
+	if right != 0 && left > ~usize(0) / right { panic('integer overflow') }
+	return left * right
+}
+
+fn netpbm_linearize(value usize, max_value usize) u8 {
+	numerator := netpbm_multiply(255, value)
+	if max_value == 0 { panic('division by zero') }
+	return u8(numerator / max_value)
 }

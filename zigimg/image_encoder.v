@@ -41,17 +41,17 @@ pub struct XbmEncoderOptions {}
 
 // Zig's three identical Netpbm option types need distinct V sum variants.
 pub struct PbmEncoderOptions {
-pub:
+pub mut:
 	binary bool = true
 }
 
 pub struct PgmEncoderOptions {
-pub:
+pub mut:
 	binary bool = true
 }
 
 pub struct PpmEncoderOptions {
-pub:
+pub mut:
 	binary bool = true
 }
 

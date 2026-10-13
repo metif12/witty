@@ -3843,3 +3843,70 @@ unchanged. Full tree/library/version pins and before/after generated-input/
 consumer, fixture, runner and implementation hashes protect retained artifacts.
 Reproduction and exact scope are in
 zigimg/reference_probes/ras_contracts/README.md.
+
+## Netpbm required headers, production arithmetic and complete-row bounds — 2026-10-13
+
+Netpbm's public header omitted five required fields, and both direct encoder
+options and the three registry wrappers made Source's mutable binary flag
+immutable. Required constructors and mutable options are restored. Image reads
+now check usize pixel-count multiplication after assigning the parsed header and
+choosing its format, before allocating. Sample normalization retains checked
+multiplication and zero-divisor failure after Source's reads; ASCII RGB consumes
+all three numeric tokens before normalization.
+
+Binary PBM writing previously checked each pixel separately, so a short row could
+emit bytes before failing. It now checks Source's complete row slices before any
+bits from that row. Native comparison established that the pinned compiler merges
+the nested slices and reports the absolute end against the full sample length.
+Previous flushed rows and writer-header failure precedence remain intact.
+
+`verify_netpbm_contracts_reference.py` compares unchanged pinned Source Debug with
+ordinary V and Source ReleaseSafe with production V. Both modes match **137,228
+returning records**, including two default/mutated option records: initialized header copies, all-tag format/storage/option dispatch,
+P1..P6 decoding, every binary byte value across scaling boundaries, ASCII numeric
+quirks, complete input prefixes, zero extents, detection, bounded partial output
+and wide dimensions independent of gray/RGB storage. Decoder/header/writer
+SHA-256:
+`4118a6e16700c47662af2df6322aaf95bc166def639588c2f87410785b4a9da9`.
+Option default/mutation SHA-256:
+`91d67440ca5ce2fee2309c9b5ca5e2a28b6ac2aa5ff927010127c0a911e10b73`.
+
+**969 strict panic/state pairs** cover 660 zero divisors after their required
+reads, 288 dimension multiplication failures before allocation and 21 complete-row
+failures across direct/static/interface PBM writers. Exact diagnostics and names
+join reader/writer cursors, initialized scalar headers, caller output and
+unchanged input in SHA-256
+`03232409ef93ef7c3ff22f197b43c67876c19dd9d0b1cb0ac22fc140e0a0aa09`.
+Successful decodes compare independently allocated, fully written pixels before/
+after valid mutation and unchanged input. Failed private/freed pixels and header
+padding are excluded. One complete header constructor, five field omissions,
+three default codecs, four mutable option controls and four immutable-binding
+rejections pass compiler controls.
+
+Reader specialization still does not restrict parsed format. Writer format
+rejection precedes output; unsupported storage follows the complete header.
+ASCII bitmap and gray/RGB writing still use the complete pixel slice independently
+of dimensions. Header/numeric comments, signed zero, repeated underscores, the
+16-byte token limit, single delimiter consumption, raster bitmap polarity and
+non-whitespace/comment-byte behavior, row padding, raw gray16, unscaled/truncated
+ASCII grayscale and truncating RGB normalization remain unchanged.
+
+All 61 image and 58 Vaxis test files pass, as do production Netpbm/image-API
+checks and unchanged historical native Netpbm/image-API assertions in Debug and
+ReleaseSafe. The image-API encoder and detection matrix hashes and existing PNG
+decoder/processor/26 retained failure-state hashes remain unchanged in both modes.
+Native/Linux application checks, three Windows DLLs, Windows Netpbm tests in both
+modes and two Linux shared libraries build successfully. Disk-interrupted platform
+checks were rerun with executable outputs and compiler temporaries on the owned
+RAM disk. Completed proof artifacts are preserved before detaching it. Cross
+builds use -gc none and do not establish runtime parity.
+
+Default Source headers and the unobserved V placeholder, enum widths, narrow/
+const typing, physical records/slices/unions, boxed copies, allocator/OOM/GC/
+lifetime, wider allocations, file streams, big-endian runtime and portable ABI
+remain boundaries. The largest native 16-digit sample fits normalization's
+64-bit multiplication; narrower-target overflow is outside native runtime proof.
+Source implementation/visibility remain unchanged. Full tree/library/version pins
+and before/after generated-input/consumer, fixture, runner and implementation
+hashes protect retained artifacts. Reproduction and exact scope are in
+zigimg/reference_probes/netpbm_contracts/README.md.
