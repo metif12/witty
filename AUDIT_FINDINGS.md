@@ -5360,3 +5360,40 @@ Source/library/version and before/after implementation, fixture, runner, helper,
 settings/input, pinned Source formatter/debug/logging and V printing/logger hashes
 protect the proof. Scope and reproduction are in
 [the RAS debug proof](zigimg/reference_probes/ras_debug/README.md).
+
+
+### Indexed TGA palette file and bounds checkpoint — 2026-10-14
+
+The 15/16-bit palette path relied on V's generic array-access diagnostic, and the
+24-bit explicit guard omitted Source's index/length detail. Both paths now emit
+the exact Source bounds message in ordinary and production builds. Word palettes
+consume their little-endian word before checking the destination; 24-bit palettes
+check before consuming a byte. Simultaneous EOF/index failures preserve that order.
+The existing record runner expects the new explicit category without changing its
+goldens. Successful decoding is unchanged.
+
+Both corresponding modes match **8,393 records / 11,102 read attempts**, SHA-256
+`9669a76dfbdbf5613f3c2c35663659d248d6219cd166e8339b90d6549cd6a592`, and
+**112 exact panic/state pairs**, SHA-256
+`8d1b6eeb5c2f893af80247f9e94137e06efb094d4a2548af25888eaf310d6c26`.
+Memory and six file-buffer capacities cover 15/16/24-bit palettes, lengths through
+256, raw/RLE indices, both row orders, word/high-bit boundaries, every u5 value,
+every byte prefix, retries, unsupported depths and ordered failures. Successful
+records compare all index/palette bytes. Caller header/ID/extension, position,
+buffered length and initialized buffer contents are retained on returns/failures.
+Private failed pixel/palette/RLE storage is excluded. Source bodies and visibility
+remain unchanged and provide the actual output/diagnostic oracle.
+
+All 61 image and 58 Vaxis test files pass, including a file-palette regression,
+with nineteen production/platform checks. Existing TGA record and buffered decoder
+output/state/vector hashes remain unchanged in both modes. The pre-fix returning
+comparison matched before its first exact diagnostic mismatch; that evidence and
+an initial fixture borrowing error are retained separately. Previous archives were
+verified before pruning duplicate files after a disk-space interruption.
+
+Allocator/OOM/GC/lifetime, inactive ID backing, empty pointer identities, portable
+ABI, arbitrary SIMD choices, nonseekable/custom file readers and undefined/freed
+private Source storage remain boundaries. Source/library/version and before/after
+implementation, fixture, runner, helper and input hashes protect the proof.
+Scope and reproduction are in
+[the indexed TGA palette proof](zigimg/reference_probes/tga_palette/README.md).

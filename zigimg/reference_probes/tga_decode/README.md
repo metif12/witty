@@ -75,8 +75,9 @@ initialized before reads, and fixture ID lengths stay within that initialized
 prefix. Footer fixtures are initialized; extension sentinel bytes are zero.
 Undefined or freed Source pixels and unused RGB555 padding are never certified.
 Private RLE state, allocator/OOM/GC/lifetime, portable aggregate ABI, caller-built
-custom file-reader modes, nonseekable sources, indexed palette file decoding and
-arbitrary SIMD choices remain outside this matrix.
+custom file-reader modes, nonseekable sources and arbitrary SIMD choices remain
+outside this matrix. Indexed palette file decoding has a
+[separate proof](../tga_palette/README.md), including exact ordered bounds failures.
 
 Existing stream, TGA record, PNG decoder/processor and JPEG retained-state proofs
 retain their prior hashes in both modes. The historical TGA encoder/decoder

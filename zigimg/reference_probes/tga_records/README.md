@@ -54,7 +54,9 @@ active initialized ID bytes and retained initialized extension. Byte arithmetic
 precedes palette capacity; capacity precedes palette-end arithmetic. The 24-bit
 palette destination is checked before consuming a byte, while the 16-bit path
 reads its word before checking the index. Overflow/capacity guards stay active
-in production, including the shared indexed-8 palette resize method.
+in production, including the shared indexed-8 palette resize method. The
+[indexed palette proof](../tga_palette/README.md) adds file buffering and exact
+index/length diagnostics to both palette destination paths.
 
 State SHA-256:
 `dc9cb7be7b9c8d24f9cbf71550f8deba334d670042f07ab523795fd328586880`.

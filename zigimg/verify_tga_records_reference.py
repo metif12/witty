@@ -34,7 +34,7 @@ def decode_cases():
         cases[f'palette-sum-{first}-{length}'] = (image(first=first, length=length), 'integer overflow', 'integer overflow')
     for depth in (16, 24):
         cases[f'palette-index-{depth}'] = (image(first=1, depth=depth), 'index out of bounds',
-                                         'index out of bounds' if depth == 24 else 'array.get: index out of range')
+                                         'index out of bounds')
     eof = image(first=1)[:26]
     eof[0] = 8
     cases['palette-index-before-eof'] = (eof, 'index out of bounds', 'index out of bounds')

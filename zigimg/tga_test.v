@@ -1,5 +1,7 @@
 module zigimg
 
+import os
+
 fn tga_test_header(kind u8, depth u8, width u16, height u16, descriptor u8) TGAHeader {
 	return TGAHeader{
 		image_type: TGAImageType{
@@ -692,4 +694,45 @@ fn test_tga_decoder_hash_matches_unchanged_locked_source() {
 	}
 	assert cases == 1120
 	assert hash == u64(0x04232c58bcb7f905)
+}
+
+fn test_tga_indexed_palette_file_refills_match_defined_memory_pixels() {
+	path := os.join_path(os.temp_dir(), 'witty-tga-indexed-${os.getpid()}')
+	defer { os.rm(path) or {} }
+	for depth in [u8(15), 16, 24] {
+		mut header := tga_test_header(1, 8, 2, 1, 32)
+		header.color_map_spec = TGAColorMapSpec{
+			length:    2
+			bit_depth: depth
+		}
+		body := if depth == 24 { [u8(3), 2, 1, 6, 5, 4, 1, 0] } else { [u8(0x23), 0xc5, 0xff, 0x7f,
+				1, 0] }
+		bytes := tga_fixture(header, body, none)
+		os.write_file_array(path, bytes)!
+		for capacity in [26, 27, 31, 64] {
+			mut file := os.open(path)!
+			mut buffer := []u8{len: capacity, init: 165}
+			mut stream := ReadStream.init_file(file, mut buffer)
+			mut codec := TGA{}
+			pixels := codec.read(mut stream)!
+			file.close()
+			match pixels {
+				IndexedStorage8 {
+					assert pixels.indices == [u8(1), 0] && pixels.palette.len == 2
+					if depth == 24 {
+						assert pixels.palette == [Rgba32{ r: 1, g: 2, b: 3 },
+							Rgba32{ r: 4, g: 5, b: 6 }]
+					} else {
+						assert pixels.palette == [Rgba32{ r: 140, g: 74, b: 25 },
+							Rgba32{ r: 255, g: 255, b: 255 }]
+					}
+				}
+				else {
+					assert false
+				}
+			}
+
+			assert codec.header == header && stream.get_pos() == usize(18 + body.len)
+		}
+	}
 }

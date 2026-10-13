@@ -496,13 +496,19 @@ pub fn (mut codec TGA) read(mut stream ReadStream) !PixelStorage {
 			for index in int(codec.header.color_map_spec.first_entry_index) .. codec.palette_end() {
 				if depth == 24 {
 					// Source forms the palette destination before reading its byte.
-					if index >= pixels.palette.len { panic('index out of bounds') }
+					if index >= pixels.palette.len {
+						panic('index out of bounds: index ${index}, len ${pixels.palette.len}')
+					}
 					pixels.palette[index].b = stream.take_byte()!
 					pixels.palette[index].g = stream.take_byte()!
 					pixels.palette[index].r = stream.take_byte()!
 					pixels.palette[index].a = 255
 				} else {
 					raw := tga_u16(stream.take(2)!, 0)
+					// Source consumes the word before checking its palette destination.
+					if index >= pixels.palette.len {
+						panic('index out of bounds: index ${index}, len ${pixels.palette.len}')
+					}
 					// Rounded ScaleValue(u8), rather than bit replication.
 					pixels.palette[index].r = u8((u32((raw >> 10) & 31) * 255 + 15) / 31)
 					pixels.palette[index].g = u8((u32((raw >> 5) & 31) * 255 + 15) / 31)

@@ -241,7 +241,11 @@ extensions. Raw RLE reads now use available buffered bytes and preserve file
 refills and the Source zero-progress transition. The shared file shim follows
 Zig's macOS first-vector positional-read fallback; 48 direct observations compare
 destination bytes, positions and buffered lengths. Decoder rows and 15 failure-state
-pairs match in both modes. Indexed palette file decoding remains outside this matrix.
+pairs match in both modes. A separate
+[indexed palette proof](reference_probes/tga_palette/README.md) covers memory/file
+palette refills, all active entries, retries and exact destination bounds text.
+Both modes match 8,393 records and 112 panic/state pairs. Word palettes consume
+their word before the index check; 24-bit palettes check before reading a byte.
 
 PackBits preserves declared-length truncation, unclipped runs, and its unread
 final lone control byte. LZW retains endian selection, clear/end codes, early
