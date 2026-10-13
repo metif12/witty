@@ -45,8 +45,10 @@ library SHA-256 is `ed900ae630673721b5aca890da4d432f4f1bfbbb201d5e450861b8111ab9
 Seven std.math files, the SDK math header, compiler versions and before/after
 implementation/runner/fixture/input/consumer hashes protect the proof. Undefined
 allocator storage, physical sub-byte representation, allocator/lifetime behavior,
-the source's arbitrary generic grayscale types and unrepresented callers remain
-boundaries. Source implementation and visibility are unchanged.
+unrepresented generic grayscale types and callers remain boundaries. Native
+numeric generic factories and their V call-shape/compiler adaptations are covered
+by [the subsequent generic proof](../grayscale_generic/README.md).
+Source implementation and visibility are unchanged.
 
 Run from the repository root, optionally adding `--v-prod`:
 

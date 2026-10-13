@@ -390,6 +390,15 @@ remain active in production. V's wider u8 carriers still accept invalid native
 u1/u2/u4 values at construction. Reproduction and the distinct width-failure
 boundaries are in [the grayscale record proof](reference_probes/grayscale_records/README.md).
 
+Public `Grayscale[T]` and `GrayscaleAlpha[T]` factories now support native numeric
+types and aliases. Use `GrayscaleAlpha.init(value)` for default alpha and the
+static `Grayscale.to_colorf32(value)` / `GrayscaleAlpha.to_colorf32(value)` calls
+for conversion. The 25,740-record comparison retains every channel/conversion
+bit in both modes. Signed construction and unsupported-conversion checks also
+pass. Generic omissions, direct-literal alpha defaults and distinct built-in
+type identities remain measured V adaptations. Examples and reproduction are in
+[the generic grayscale proof](reference_probes/grayscale_generic/README.md).
+
 V arrays and GC replace allocator slices. Sub-byte scalar values use byte
 storage or packed backing words. Caller-selected allocation, allocation failures
 and allocator reclamation remain runtime adaptations.

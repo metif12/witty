@@ -4839,3 +4839,41 @@ Undefined allocator storage, physical sub-byte representation, allocator/lifetim
 arbitrary source generic grayscale types and unrepresented callers remain
 boundaries. Details and reproduction are in
 [the grayscale record proof](zigimg/reference_probes/grayscale_records/README.md).
+
+### Public generic grayscale factory checkpoint
+
+The public `Grayscale(T)` and `GrayscaleAlpha(T)` type factories were absent from
+V. `Grayscale[T]` and `GrayscaleAlpha[T]` now retain mutable scalar storage and
+public conversion through Source-shaped scaling. `GrayscaleAlpha.init(value)`
+supplies the source integer-max or 1.0 default. Static conversion calls avoid
+V 0.5.2's eager generic receiver checking for signed records. The compiler also
+fails to resolve a type-dependent generic field initializer; explicit construction
+through `init` is the verified default-alpha path.
+
+The unchanged-source proof matches **25,740 returning records** in each
+corresponding compiler mode, SHA-256
+`65e24bc45804982251cc4a6fea67f6feb4f3501ad47c75aa33bcd51018c7aefa`.
+Unsigned native widths, f32/f64 and two aliases cover plain/alpha construction,
+default/explicit alpha, mutation, independent copies and by-value returns.
+Every channel and conversion bit matches, including f64-to-f32 NaN results.
+A separate native comparison observes five signed defaults and copied records.
+Eighteen numeric and ten signed constructor pairs pass, along with twenty-seven
+immutable-field and twelve unsupported-conversion rejection pairs.
+
+Eighteen Source omission rejections remain V acceptance because generic required
+markers are ignored. Nine direct generic alpha literals with omitted alpha retain
+zero rather than the Source default; their complete differing outputs remain
+retained. Six Source built-ins alias generic specializations while V keeps distinct
+nominal types to preserve named required-field checks. These construction and
+identity adaptations are measured separately from the returning comparisons.
+
+The named-record and existing color-model/constructor matrices retain both mode
+hashes. All 61 image and 58 Vaxis test files pass, with 23 production/platform
+commands, including the generic probe's Windows and Linux builds. Complete
+Source/library/math/SDK/compiler pins and before/after implementation, runner,
+fixture, input and consumer hashes protect the proof. Source implementation and
+visibility are unchanged.
+
+Sub-byte and wider-than-native integers, unrepresented generic types/callers,
+physical ABI and allocation/lifetime remain boundaries. Details and reproduction
+are in [the generic grayscale proof](zigimg/reference_probes/grayscale_generic/README.md).
