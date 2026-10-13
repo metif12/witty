@@ -305,19 +305,20 @@ pub fn (codec &IFF) decode_byte_run2(mut stream ReadStream, mut buffer []u8) ! {
 	for plane := usize(0); plane < header.planes; plane++ {
 		stream.discard_all(8)!
 		count_with_header := iff_take_u16(mut stream)!
-		assert count_with_header >= 2
+		if count_with_header < 2 { panic('integer overflow') }
 		mut commands := []u8{len: int(count_with_header - 2)}
 		stream.read_slice_all(mut commands)!
 		mut x := u32(0)
 		mut y := u32(0)
 		mut data_count := u16(0)
-		mut index := 0
+		mut index := usize(0)
 		plane_offset := plane * usize(header.height) * codec.pitch
 		for x < codec.pitch {
-			command := if commands[index] >= 128 {
-				int(commands[index]) - 256
+			iff_check_index(index, commands.len)
+			command := if commands[int(index)] >= 128 {
+				int(commands[int(index)]) - 256
 			} else {
-				int(commands[index])
+				int(commands[int(index)])
 			}
 			mut repeat := u16(0)
 			if command == 0 {
@@ -332,13 +333,17 @@ pub fn (codec &IFF) decode_byte_run2(mut stream ReadStream, mut buffer []u8) ! {
 				repeat = iff_take_u16(mut stream)!
 			}
 			for data_count > 0 && x < codec.pitch {
-				offset := int(plane_offset + usize(x) + usize(y * codec.pitch))
+				offset := plane_offset + usize(x) + usize(y * codec.pitch)
+				// Zig checks each destination before consuming its literal byte.
+				iff_check_index(offset, buffer.len)
 				if command >= 1 {
-					buffer[offset] = u8(repeat >> 8)
-					buffer[offset + 1] = u8(repeat)
+					buffer[int(offset)] = u8(repeat >> 8)
+					iff_check_index(offset + 1, buffer.len)
+					buffer[int(offset + 1)] = u8(repeat)
 				} else {
-					buffer[offset] = stream.take_byte()!
-					buffer[offset + 1] = stream.take_byte()!
+					buffer[int(offset)] = stream.take_byte()!
+					iff_check_index(offset + 1, buffer.len)
+					buffer[int(offset + 1)] = stream.take_byte()!
 				}
 				y++
 				if y >= header.height {
@@ -357,6 +362,17 @@ pub fn (codec &IFF) planar_to_chunky(bitplanes []u8, mut chunky []u8) ! {
 	planes := header.planes
 	pixel_size := if planes / 8 > 1 { usize(planes / 8) } else { usize(1) }
 	if codec.format_id == .pbm {
+		if chunky.len > bitplanes.len {
+			panic('index out of bounds: index ${chunky.len}, len ${bitplanes.len}')
+		}
+		if chunky.len > 0 {
+			source := usize(bitplanes.data)
+			destination := usize(chunky.data)
+			length := usize(chunky.len)
+			if source < destination + length && destination < source + length {
+				panic('@memcpy arguments alias')
+			}
+		}
 		copy(mut chunky, bitplanes[..chunky.len])
 		return
 	}
@@ -369,7 +385,7 @@ pub fn (codec &IFF) planar_to_chunky(bitplanes []u8, mut chunky []u8) ! {
 			for plane := usize(0); plane < planes; plane++ {
 				// The source evaluates pitch * planes as u16 before multiplying by y.
 				if !vertical {
-					assert u32(codec.pitch) * planes <= 65535
+					if u32(codec.pitch) * planes > 65535 { panic('integer overflow') }
 				}
 				base := if !vertical {
 					usize(u16(codec.pitch * planes)) * y + plane * codec.pitch
@@ -391,14 +407,20 @@ pub fn (codec &IFF) planar_to_chunky(bitplanes []u8, mut chunky []u8) ! {
 	}
 }
 
+fn iff_check_index(index usize, length int) {
+	if index >= usize(length) { panic('index out of bounds: index ${index}, len ${length}') }
+}
+
 fn iff_apply_plane(bitplanes []u8, mut chunky []u8, base usize, pitch usize, scanline usize, pixel_size usize, plane usize) {
 	plane_mask := u8(1) << u8(plane % 8)
 	for i := usize(0); i < pitch; i++ {
+		iff_check_index(base + i, bitplanes.len)
 		bits := bitplanes[int(base + i)]
 		for bit := usize(0); bit < 8; bit++ {
 			if bits & (u8(1) << u8(7 - bit)) != 0 {
 				x := i * 8 + bit
 				offset := scanline * pixel_size + x * pixel_size + plane / 8
+				iff_check_index(offset, chunky.len)
 				chunky[int(offset)] |= plane_mask
 			}
 		}

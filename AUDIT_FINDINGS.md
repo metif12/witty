@@ -4047,3 +4047,55 @@ Full Source-tree/library/version pins, a separate math.zig pin and before/after
 fixture, generated-input/consumer, runner and implementation hashes protect the
 proof artifacts. Reproduction and exact scope are in
 zigimg/reference_probes/iff_records/README.md.
+
+## IFF planar conversion and ByteRun2 failure contracts — 2026-10-13
+
+Direct planar conversion now preserves Source's complete PBM source-slice check
+and overlapping-copy panic before any output mutation. Other formats still clear
+the destination before reading live borrowed plane bytes; overlapping input/output
+views preserve that order. Horizontal ILBM retains its u16 pitch-times-plane
+overflow in production, including row zero. Explicit source/destination checks
+keep the Source index and length before narrowing to V's array index. Set padding
+bits and incomplete groups of eight planes retain the existing spill and bounds
+behavior. Vertical ILBM and the fallback plane-first traversal remain unchanged.
+
+ByteRun2 retains command-count u16 underflow after consuming the count and exact
+command/destination bounds in production. Literal assignments check each target
+before reading that byte; a successful high-byte write and cursor advance remain
+when the low-byte assignment fails. Repeat words are consumed before checking
+their destinations. Zero-count commands, signed -128, zero height, odd/zero pitch,
+plane boundaries, trailing data and shared stream/output backing preserve Source
+order and partial writes.
+
+`verify_iff_planar_reference.py` imports unchanged Source and compares Debug with
+ordinary V and ReleaseSafe with production V. Both modes match **31,017 returning
+or error records**, including every byte pattern, all five format branches and
+compression tags, the u8 plane domain, distinct row/plane layouts, borrowed aliases,
+all signed command bytes, prefixes, count boundaries and mixed command sequences.
+Return SHA-256: `74895e84f384182b4ddeb7f3ee1a6f615fca7b9319b129744bae26d114b2925b`.
+
+**1,225 exact panic/state pairs** cover 1,194 bounds failures, thirteen arithmetic
+failures, ten wrong BMHD-arm accesses and eight overlapping PBM copies. Reader
+cursor, full caller source/destination views and shared backing join names and
+diagnostics in SHA-256
+`da83479790fc43626a5326117ebad8ea0defbafe86d853389c32fb1188bc0328`.
+All observed bytes are initialized, including destination and shared backing.
+Private incomplete command arrays, inactive/default palette storage and freed or
+undefined fields are excluded. The model only partitions cases; compiled Source
+provides every compared output and failure state. Source visibility is unchanged.
+
+All 61 image and 58 Vaxis test files pass, as do production IFF/image-API tests,
+historical native IFF/image-API assertions in both modes, native/Linux application
+checks, three Windows DLLs, both Windows IFF test executables and two Linux shared
+libraries. PNG decoder/processor and 26 retained-state hashes remain unchanged in
+both modes. Cross compilation provides build coverage only. Proofs and compiler
+temporaries use the task-owned persistent cache; inputs, commands, outputs,
+snapshots, binaries and provenance are retained with artifact hashes.
+
+Chunk traversal and RGB/HAM conversion arithmetic/bounds/production checks remain
+separate work. Allocation/OOM/GC/lifetime, readonly/narrow typing, boxed header
+copies, physical slice/record/sum layout, extents beyond V array limits, file
+streams, big-endian runtime and portable ABI remain boundaries. Full Source-tree,
+selected library and compiler-version pins and before/after fixture/input/runner/
+implementation hashes protect this proof. Exact scope and reproduction are in
+[the planar/ByteRun2 probe](zigimg/reference_probes/iff_planar/README.md).

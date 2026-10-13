@@ -82,7 +82,8 @@ DBGL constant spelling, EHB alpha and palette replacement/reduction order remain
 All native imports retain Source visibility and implementation.
 
 This checkpoint covers header/record/palette contracts and bounded defined public
-reads. The broader planar, ByteRun2, chunk traversal and RGB/HAM conversion
+reads. The later [planar/ByteRun2 checkpoint](../iff_planar/README.md) covers those
+direct conversion and RLE contracts. Chunk traversal and RGB/HAM conversion
 arithmetic/bounds/production checks remain separate work. Default Source codec
 header/format fields and inactive palette storage are undefined and unobserved.
 Allocator/OOM/GC/lifetime, const/narrow typing, boxed copies, physical chunk/sum/
