@@ -31,7 +31,9 @@ fn main() {
 		}
 		'empty_palette' {
 			mut stream := zigimg.ReadStream.init_memory([]u8{})
-			codec.decode_cmap_chunk(mut stream, zigimg.IffChunkHeader{}) or { panic(err) }
+			codec.decode_cmap_chunk(mut stream, zigimg.IffChunkHeader{ type_: 0, length: 0 }) or {
+				panic(err)
+			}
 		}
 		'ham_bits' {
 			codec.header = zigimg.BmhdHeader{

@@ -2,12 +2,12 @@ module zigimg
 
 pub struct IffChunk {
 pub mut:
-	id   u32
-	name []u8
+	id   u32  @[required]
+	name []u8 @[required]
 }
 
 pub fn IffChunk.init(name []u8) IffChunk {
-	assert name.len == 4
+	if name.len != 4 { panic('reached unreachable code') }
 	return IffChunk{
 		id:   read_be_u32(name)
 		name: unsafe { name }
@@ -26,8 +26,8 @@ pub const iff_chunk_dloc = IffChunk.init('DLOC'.bytes())
 @[packed]
 pub struct IffChunkHeader {
 pub mut:
-	type_  u32
-	length u32
+	type_  u32 @[required]
+	length u32 @[required]
 }
 
 pub fn (header &IffChunkHeader) name() []u8 {
@@ -133,8 +133,7 @@ fn (header IffHeader) bmhd() BmhdHeader {
 			header
 		}
 		else {
-			assert false
-			BmhdHeader{}
+			panic("access of union field 'bmhd' while field 'dgbl' is active")
 		}
 	}
 }
@@ -179,6 +178,11 @@ pub fn decode_bmhd_chunk(mut stream ReadStream) !BmhdHeader {
 		return error('InvalidData')
 	}
 	bytes := stream.take(20)!
+	$if little_endian {
+		// Source validates both enums while swapping the complete header,
+		// before a caller assigns it to the codec.
+		if bytes[9] > 3 || bytes[10] > 2 { panic('invalid enum value') }
+	}
 	return BmhdHeader{
 		width:             iff_u16(bytes, 0)
 		height:            iff_u16(bytes, 2)
@@ -407,6 +411,7 @@ pub fn (mut codec IFF) decode_camg_chunk(mut stream ReadStream) ! {
 
 pub fn (mut codec IFF) decode_cmap_chunk(mut stream ReadStream, chunk IffChunkHeader) ! {
 	count := chunk.length / 3
+	if count > 256 { panic('index out of bounds: index ${count}, len 256') }
 	codec.palette.resize(usize(count))
 	for i in 0 .. int(count) {
 		bytes := stream.take(3)!
@@ -416,7 +421,7 @@ pub fn (mut codec IFF) decode_cmap_chunk(mut stream ReadStream, chunk IffChunkHe
 			b: bytes[2]
 		}
 	}
-	assert count > 0
+	if count == 0 { panic('reached unreachable code') }
 	mut bits := u8(0)
 	mut remaining := count - 1
 	for remaining > 0 {
@@ -430,11 +435,11 @@ pub fn (mut codec IFF) reduce_ham_palette() {
 	mut bits := codec.cmap_bits
 	planes := codec.header.bmhd().planes
 	if bits > planes {
-		assert u16(bits - planes) + 2 <= 255
+		if bits - planes > 253 { panic('integer overflow') }
 		reduction := (bits - planes) + 2
-		assert bits >= reduction
+		if bits < reduction { panic('integer overflow') }
 		bits -= reduction
-		assert bits >= 4
+		if bits < 4 { panic('reached unreachable code') }
 		codec.palette.resize(usize(codec.palette.data.len) >> (bits & u8(sizeof(usize) * 8 - 1)))
 		codec.cmap_bits = bits
 	}

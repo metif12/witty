@@ -3982,3 +3982,68 @@ Source visibility/implementation remain unchanged. Full tree/library/version pin
 and before/after generated-input/consumer, fixture, runner and implementation
 hashes protect retained artifacts. Reproduction and exact scope are in
 zigimg/reference_probes/pam_contracts/README.md.
+
+## IFF required chunks, parsed headers and palette contracts — 2026-10-13
+
+IFF chunk records omitted Source's required fields, Chunk.init's assertion was
+erased in production, and BMHD reads accepted malformed enum bytes. Both chunk
+constructors now require their represented fields and preserve the four-byte
+checked failure. Little-endian parsing validates the complete BMHD before
+assignment. Wrong BMHD-arm access retains the exact active-union diagnostic,
+while HAM pixel-format selection still short-circuits before that access.
+
+CMAP capacity checks preserve the full requested slice-end diagnostic before
+resize or reading. Empty CMAP resizes first, then retains the ceil-log2 assertion
+in production. Partial reads commit complete RGB entries and leave cmap_bits
+unchanged until all colors succeed. HAM reduction now preserves both u8 arithmetic
+failures and its minimum-bit assertion; public palette/bit state changes only on
+successful reduction, with the Source's native-width truncated shift.
+
+`verify_iff_records_reference.py` compares unchanged Source Debug with ordinary V
+and Source ReleaseSafe with production V. Both modes match **68,624 records**: fifteen native record/constant/flag/live-name controls,
+chunk borrowing/scalar copies, header arms, format precedence, valid/short/invalid
+header dispatch, CMAP/CAMG prefixes, EHB expansion and all 65,536 u8 HAM bit/plane
+pairs, additional palette/shift boundaries and defined public reads.
+Record SHA-256: `6cc1394883088df0aec445e92cbcb2da901e34d07b5fb11d47d968ecd6bea7ab`.
+Header/palette/control SHA-256: `162b7a0ebf1e170cff5bfbee121a5a425d629dfa67307d8d496033eb1a7907a3`.
+Failure-state SHA-256: `2a7fb4333d9a2214a69aefd5cd60bd4cc0db24db1b9a134aa2ca913d2a363b0a`.
+
+The strict matrix covers **4,449 panic/state pairs**: 2,040 parsed enum failures,
+1,184 assertions, 659 u8 arithmetic failures, 518 wrong-header union accesses and
+48 palette-capacity slice failures. Exact messages and names join reader cursors,
+initialized public codec/header fields, active palette bytes and unchanged input.
+All inline palette backing is initialized through public slices before shrinking
+its active view; inactive bytes and failed private/freed storage are unobserved.
+Returning pixels/palettes remain independent after mutation; caller input and
+codec palette remain unchanged. Default readImage private codec state is excluded.
+
+Two complete chunk constructors, four required-field omissions and grouped default
+header/codec construction are paired compiler controls. Two separate controls
+record Source's const name-slice rejections and V's mutable byte-view acceptance.
+A runtime adaptation records copied sum payloads sharing boxed storage in V where
+Source copies its header payload by value. These differences are excluded from
+the returning parity count. Native initialized header bytes/sizes and live name
+views do not establish portable record layout.
+
+DEEP loading remains a no-input zero-header stub. FORM length, CMAP remainders,
+CAMG declared length, native-endian header names, the DBGL constant spelling and
+EHB alpha remain unchanged. Broader planar conversion, ByteRun2, chunk traversal
+and RGB/HAM arithmetic/bounds/production checks remain separate work.
+
+All 61 image and 58 Vaxis test files pass, as do production IFF/image-API tests
+and unchanged historical native IFF/image-API assertions in Debug and ReleaseSafe.
+The image-API encoder/detection hashes and existing PNG decoder/processor/26
+retained failure-state hashes remain unchanged in both modes. Native/Linux
+application checks, three Windows DLLs, Windows IFF tests in both modes and two
+Linux shared libraries build successfully. Artifacts and compiler temporaries use
+the task-owned RAM disk; verified artifacts are preserved before detaching it.
+Cross builds use -gc none and do not establish runtime parity.
+
+Default Source header/format fields and inactive palette storage, allocator/OOM/
+GC/lifetime, const/narrow typing, boxed payloads, physical chunk/sum/slice layouts,
+wider allocated extents, file streams, logger presentation, big-endian runtime and
+portable ABI remain boundaries. Source visibility/implementation remain unchanged.
+Full Source-tree/library/version pins, a separate math.zig pin and before/after
+fixture, generated-input/consumer, runner and implementation hashes protect the
+proof artifacts. Reproduction and exact scope are in
+zigimg/reference_probes/iff_records/README.md.

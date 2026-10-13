@@ -57,7 +57,8 @@ fn test_iff_header_layout_detection_and_consumption() {
 	assert sizeof(IffChunkHeader) == 8 && sizeof(BmhdHeader) == 20 && sizeof(DgblHeader) == 8
 	assert iff_chunk_dgbl.name == 'DBGL'.bytes() && iff_chunk_bmhd.id == 0x424d4844
 	mut chunk := IffChunkHeader{
-		type_: iff_chunk_bmhd.id
+		type_:  iff_chunk_bmhd.id
+		length: 0
 	}
 	name := chunk.name()
 	$if little_endian {
@@ -375,7 +376,7 @@ fn test_iff_partial_input_chunk_errors_and_noop_writer() {
 		viewport_mode: 0x99
 	}
 	reader = ReadStream.init_memory([u8(1), 2, 3, 4, 5])
-	codec.decode_cmap_chunk(mut reader, IffChunkHeader{ length: 6 }) or {
+	codec.decode_cmap_chunk(mut reader, IffChunkHeader{ type_: 0, length: 6 }) or {
 		assert err.msg() == 'EndOfStream'
 	}
 	assert reader.get_pos() == 3 && codec.cmap_bits == 7 && codec.palette.data.len == 2
@@ -385,7 +386,7 @@ fn test_iff_partial_input_chunk_errors_and_noop_writer() {
 		b: 3
 	}
 	reader = ReadStream.init_memory([u8(1), 2, 3, 0xff])
-	codec.decode_cmap_chunk(mut reader, IffChunkHeader{ length: 4 })!
+	codec.decode_cmap_chunk(mut reader, IffChunkHeader{ type_: 0, length: 4 })!
 	assert reader.get_pos() == 3 && codec.cmap_bits == 0 && reader.take_byte()! == 0xff
 	reader = ReadStream.init_memory([u8(1), 2, 3])
 	codec.decode_camg_chunk(mut reader) or { assert err.msg() == 'EndOfStream' }
