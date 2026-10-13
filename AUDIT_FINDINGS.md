@@ -4274,3 +4274,60 @@ their verified archives and proof records remain. Source/library/version pins an
 before/after fixture/input/consumer/runner/implementation hashes protect this proof.
 Exact scope, counts and reproduction are in
 [the LZW probe](zigimg/reference_probes/lzw_contracts/README.md).
+
+## Shared bit-stream failure order and retained public state — 2026-10-13
+
+Native bit-stream shifts previously used V-specific diagnostics, mask bounds
+reported a generic width error, and the checked u4 writer-count addition tested
+only after assigning its wider V result. Reader/writer operations now retain
+Source's exact cast, arithmetic and mask-index failures, with count addition
+checked before assignment after bits mutation. The latter overflow is unreachable
+through the compared public native-width operations; no private helper runtime
+observation is claimed. Reader masks still precede little-endian shift casts,
+scalar-shift failures retain their consumed-byte/writer boundaries, and flush
+subtraction/padding retain Source order and repeated-failure state.
+
+Represented reader/writer pointers carry required markers and translated callers
+initialize them explicitly. The pinned V compiler accepts their omission in both
+native and alias generic records. These four compiler controls, plus two wider
+count-field controls, are recorded as adaptations rather than enforcement fixes.
+Complete reader and writer constructors pass both compilers.
+
+`verify_bitstream_contracts_reference.py` imports unchanged complete Source and
+compares Debug/ordinary and ReleaseSafe/production. Both modes match **136,889
+returning/error records**, covering every byte over buffered short operations,
+all native integer/float and actual V scalar aliases, aliased endian markers,
+the full u4 count domain, requests through 65,535, partial EOF, all three reader
+APIs, short output, repeated flushes, continuation, seek, scalar copies sharing a
+live stream, and caller input mutation. Raw float patterns include signed zero,
+infinities and quiet/signaling NaNs. Return SHA-256:
+`bf6c23faab2083f34c10fb5dbfc8c5422e967f13cb0d31f3c7e505d516c18108`.
+
+**1,064 exact panic/state pairs** cover 415 cast failures, 520 arithmetic failures
+and 129 mask-index bounds. Exact diagnostics and case names join initialized
+public bits/count, action index, both stream positions, the untouched/updated
+out_bits slot, complete current input and full initialized output in SHA-256
+`211259eb01a70a32820bfdd8b016c1c9056e97102ab9dda787acc2b130627a66`.
+Equivalent same-width scalar trap operations use their unsigned-carrier
+representative; returning native and alias specializations remain independently
+observed. The model partitions cases and unchanged compiled Source supplies every
+comparison. Private copied scratch, empty pointer identities and allocator state
+are excluded; source visibility/implementation are unchanged.
+
+All 61 image and 58 Vaxis test files pass, as do production bit-stream/LZW/CCITT/
+Netpbm/image-API tests, unchanged historical GIF/image-API/compression assertions
+in both modes, native/Linux application checks, three Windows DLLs, both Windows
+bit-stream test executables and two Linux shared libraries. The existing 37,133
+stream records retain their hash in both modes. LZW's 22,016 returning and 3,772
+exact failure/state pairs retain their hashes; TIFF's 39,707 records/seventeen
+traps and PNG decoder/processor/26 retained-state hashes remain unchanged. Cross
+builds establish build coverage only.
+
+Source non-native scalar widths, bool/packed bit carriers, u4 field typing, generic
+required enforcement, underlying std.Io interfaces, GC/OOM/allocation/lifetime,
+file-platform runtime, physical layout and portable ABI remain boundaries.
+Artifacts retain development failures, including the fixture's initial empty
+writer seek rejection, compiler controls and all final command records. Full
+Source/library/version pins and before/after fixture/input/consumer/runner/
+implementation hashes protect the proof. Exact scope, counts and reproduction
+are in [the bit-stream probe](zigimg/reference_probes/bitstream_contracts/README.md).
