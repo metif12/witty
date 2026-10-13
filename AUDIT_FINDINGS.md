@@ -5603,3 +5603,59 @@ Source/library/version and before/after implementation, fixture, runner, helper
 and corpus hashes protect the retained proof. Pinned TIFF encoding still emits no
 bytes. Scope and reproduction are in
 [the TIFF parsed enum proof](zigimg/reference_probes/tiff_enums/README.md).
+
+
+### TIFF destination array reads and buffered decoding checkpoint — 2026-10-14
+
+TIFF tag arrays queried the file's remaining size and used `take` for the whole
+array. This changed read-ahead/caller-buffer state and required valid arrays to
+fit the file buffer. The adapter now uses Source's destination-based
+`readSliceShort` path through the existing `read_slice_short` implementation.
+Byte-size checks, raw inline words, seek order, endian conversion and array-type
+length checks are unchanged. Short reads still return successfully, with unread
+Source allocator bytes excluded from comparison.
+
+Both modes match **18,820 returning records / 22,460 calls**, SHA-256
+`27985fbc03557dd3db0dc9311e89883f8bdd11bbf340734d76302ee655af5cfa`, and
+**108 exact panic/state pairs**, SHA-256
+`95b0fa680a35d1d8516ca1f2e709b637827c42e5adaf86a0f814881782c7f63a`.
+Memory and 4/8/16/64-byte file buffers cover both endian orders, SHORT/LONG
+counts through 256, offsets, empty/partial/complete arrays, inline values,
+metadata IFD prefixes and retries. Complete sample, strip-offset/count and
+palette arrays include a 1,536-byte palette through a four-byte buffer.
+The 1,380 complete image records cover five pixel layouts, raw/LZW/PackBits/
+DEFLATE/Pixar DEFLATE, multiple strip row spans and both predictors. Another
+13,800 image prefixes return before undefined body/strip storage is observable.
+
+Snapshots retain stream position, buffered length and every initialized caller
+buffer byte. Array/bitmap cases also retain complete initialized public metadata,
+map iteration, scalar/rational/strip arrays and fixed-storage backing/lengths.
+Image cases compare dimensions, format and every defined pixel/palette entry;
+freed/undefined codec fields and private failed allocations are excluded.
+Grayscale1 observes semantic values rather than native narrow-field padding.
+The 100 array-type and eight DEFLATE word-capacity failures require the exact sole
+panic message and matching retained state. Actual compiled unchanged Source
+provides every oracle without modifying bodies or private visibility.
+
+The pre-fix Source returned the complete corpus. V first changed caller-buffer
+contents on a partial read, then trapped on a five-byte request through a
+four-byte buffer after 226 records. The initial corpus variable-shadowing error
+and corrected pre-fix results are retained separately from completed proofs.
+Module regressions cover large file tag arrays, both byte orders, buffer sizes,
+multiple strips and seek/re-read through `read_image`.
+
+All 61 image and 58 Vaxis test files pass, with eighteen production/platform and
+four final formatting/diff/Python checks. Historical metadata's 86-record hash
+and fifteen trap pairs, parsed enums' 1,824-record hash and 276 panic/state pairs,
+and the decoder's 39,707-case hash and seventeen trap pairs remain unchanged in
+both modes. All compiler caches for these reruns belong to the task.
+
+Undefined unread/partial array words, short-strip unwritten pixels, undefined or
+freed Source codec state, private failed allocations, allocator/OOM/GC/lifetime,
+arbitrary larger extents/counts, custom/nonseekable readers, physical/narrow/const
+representation, other-target runtime and portable ABI remain boundaries. File
+DEFLATE still requires a native-word-sized buffer; smaller capacities retain
+Source's assertion. Source/library/version and before/after implementation,
+fixture, runner, helper and corpus hashes protect the proof. Pinned TIFF encoding
+still emits no bytes. Scope and reproduction are in
+[the buffered TIFF array proof](zigimg/reference_probes/tiff_arrays/README.md).

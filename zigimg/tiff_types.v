@@ -157,9 +157,7 @@ pub fn (tag TiffTagField) read_tag_data(mut stream ReadStream, endianess TiffEnd
 	mut bytes := []u8{len: int(byte_size)}
 	stream.seek_to(tag.data_offset)!
 	// readSliceShort permits partial input and leaves unread allocator bytes undefined.
-	remaining := stream.get_end_pos()! - stream.get_pos()
-	count := if remaining < byte_size { int(remaining) } else { int(byte_size) }
-	copy(mut bytes, stream.take(count)!)
+	stream.read_slice_short(mut bytes)!
 	actual_stride := if tag.data_type == u16(TiffTagType.long) { 4 } else { 2 }
 	if bytes.len / actual_stride != int(tag.data_count) {
 		panic('for loop over objects with non-equal lengths')

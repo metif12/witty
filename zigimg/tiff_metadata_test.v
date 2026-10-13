@@ -64,6 +64,38 @@ fn test_tiff_buffered_ifd_keeps_duplicates_and_inline_enum_halves_on_retry() {
 	}
 }
 
+fn test_tiff_file_tag_arrays_can_exceed_the_reader_buffer() {
+	path := os.join_path(os.temp_dir(), 'witty-tiff-arrays-${os.getpid()}')
+	defer { os.rm(path) or {} }
+	for endianess in [TiffEndian.big, .little] {
+		for datatype in [u16(3), 4] {
+			stride := if datatype == 3 { 2 } else { 4 }
+			values := []u32{len: 31, init: u32(index * 1973 + 0x1234)}
+			mut bytes := [u8(99)]
+			for value in values {
+				tiff_test_append(mut bytes, value, stride, endianess)
+			}
+			bytes << [u8(99), 88, 77]
+			os.write_file_array(path, bytes)!
+			for capacity in [4, 8, 16, 64] {
+				mut file := os.open(path)!
+				mut buffer := []u8{len: capacity, init: 165}
+				mut stream := ReadStream.init_file(file, mut buffer)
+				tag := TiffTagField{
+					data_type:   datatype
+					data_count:  31
+					data_offset: 1
+				}
+				for _ in 0 .. 2 {
+					assert tag.read_tag_data(mut stream, endianess)! == values
+					assert stream.get_pos() == u64(1 + 31 * stride)
+				}
+				file.close()
+			}
+		}
+	}
+}
+
 fn tiff_test_mix(mut hash []u64, value u64) {
 	hash[0] = (hash[0] ^ value) * u64(1099511628211)
 }

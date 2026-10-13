@@ -549,6 +549,12 @@ insertion, duplicate replacement, inline halfword quirks, EOF precedence, retrie
 and earlier bitmap mutations in hash iteration order. Snapshots retain complete
 initialized public metadata, fixed-storage backing and caller buffers.
 
+TIFF array reads use Source's destination-based short reader, allowing metadata
+larger than the file buffer and preserving its read-ahead state. The
+[buffered array comparison](reference_probes/tiff_arrays/README.md) covers 18,820
+records / 22,460 calls and 108 exact panic/state pairs, including 1,380 complete
+image reads. Short-array observations exclude undefined unread/partial words.
+
 TIFF read/readImage and strips now decode grayscale1/grayscale8/indexed8/RGB24/
 RGBA32 with uncompressed, PackBits, CCITT RLE, LZW, DEFLATE, and Pixar DEFLATE.
 Versions are ignored, only the first IFD is used, and compressed byte counts

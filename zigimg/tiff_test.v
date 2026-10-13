@@ -1,6 +1,7 @@
 module zigimg
 
 import encoding.hex
+import os
 
 fn test_tiff_deflate_fixed_header_footer_and_read_ahead() {
 	mut bytes := hex.decode('789ccb48cdc9c90700062c0215')!
@@ -155,20 +156,32 @@ fn tiff_decode_test_image(endianess TiffEndian) []u8 {
 }
 
 fn test_tiff_read_both_endians_multiple_strips_and_unvalidated_version() {
+	path := os.join_path(os.temp_dir(), 'witty-tiff-strips-${os.getpid()}')
+	defer { os.rm(path) or {} }
 	for endianess in [TiffEndian.big, .little] {
 		bytes := tiff_decode_test_image(endianess)
-		mut stream := ReadStream.init_memory(bytes)
-		mut codec := TIFF{}
-		pixels := codec.read(mut stream)!
-		assert codec.header.version == 43 && codec.header.idf_offset == 8
-		assert codec.endianess == endianess && codec.width() == 3 && codec.height() == 3
-		assert pixels.as_const_bytes() == [u8(250), 4, 6, 3, 7, 12, 1, 3, 6]
-		assert stream.get_pos() == 147
-		stream = ReadStream.init_memory(bytes)
-		image := TIFF.read_image(mut stream)!
-		assert image.width == 3 && image.height == 3
-		assert image.pixels.as_const_bytes() == pixels.as_const_bytes()
-		assert image.animation.frames.len == 0
+		for capacity in [0, 4, 8, 16, 64] {
+			mut stream := ReadStream.init_memory(bytes)
+			mut buffer := []u8{len: capacity, init: 165}
+			mut file := os.File{}
+			if capacity > 0 {
+				os.write_file_array(path, bytes)!
+				file = os.open(path)!
+				stream = ReadStream.init_file(file, mut buffer)
+			}
+			mut codec := TIFF{}
+			pixels := codec.read(mut stream)!
+			assert codec.header.version == 43 && codec.header.idf_offset == 8
+			assert codec.endianess == endianess && codec.width() == 3 && codec.height() == 3
+			assert pixels.as_const_bytes() == [u8(250), 4, 6, 3, 7, 12, 1, 3, 6]
+			assert stream.get_pos() == 147
+			stream.seek_to(0)!
+			image := TIFF.read_image(mut stream)!
+			assert image.width == 3 && image.height == 3
+			assert image.pixels.as_const_bytes() == pixels.as_const_bytes()
+			assert image.animation.frames.len == 0
+			if capacity > 0 { file.close() }
+		}
 	}
 }
 
