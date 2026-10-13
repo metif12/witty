@@ -138,7 +138,7 @@ pub fn (mut jpeg JPEG) read(mut stream ReadStream, mut pixels_opt JpegPixels) !J
 	mut frame := jpeg.frame or { return error('InvalidData') }
 	frame.dequantize_blocks()!
 	frame.idct_blocks()
-	mut pixels := pixels_opt.value or { panic('missing JPEG pixel allocation') }
+	mut pixels := pixels_opt.value or { panic('attempt to use null value') }
 	frame.render_to_pixels(mut pixels)!
 	pixels_opt.value = pixels
 	succeeded = true

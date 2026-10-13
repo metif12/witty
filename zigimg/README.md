@@ -421,6 +421,19 @@ Append `--v-prod` for production. Required-field checks, V optional-slot update
 syntax, measured const/u4 differences and undefined Source boundaries are
 documented in [the JPEG Scan notes](reference_probes/jpeg_scan/README.md).
 
+JPEG retained state across failed reads and retries matches 6,138 returning rows
+(6,408 read attempts) and 60 panic/state pairs in ordinary and production builds.
+The decoder preserves Source's null-pixel panic after coefficient finalization:
+
+```sh
+python3 zigimg/verify_jpeg_state_reference.py \
+  /path/to/locked-zigimg /path/to/zig-0.15.2/zig /path/to/v-0.5.2
+```
+
+Append `--v-prod` for production. Table installation order, pixel cleanup, caller
+reset controls and undefined/freed-memory exclusions are documented in
+[the JPEG state notes](reference_probes/jpeg_state/README.md).
+
 The standalone reference harness accepts the unmodified dependency as a Zig
 module. With Zig 0.15.2 on macOS, a 14.0 target avoids linking against an SDK
 version newer than that compiler supports:

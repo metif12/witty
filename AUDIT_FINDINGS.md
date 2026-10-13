@@ -3062,3 +3062,48 @@ boxed quantization payload copies and arbitrary SIMD targets remain limits. The
 Source quantization.Header.read compiler failure and pinned no-op JPEG writer are
 unchanged. Reproduction, syntax and exact scope are in
 zigimg/reference_probes/jpeg_scan/README.md.
+
+## JPEG retained decoder records and null-pixel failure — 2026-10-13
+
+JPEG.read now retains Source's exact attempt-to-use-null-value panic when a stored
+Frame finishes dequantization/IDCT with no optional pixel storage. The previous
+custom missing-pixel panic differed from Source. Earlier quantization/IDCT errors
+still take priority, and ordinary/production checks observe the transformed
+coefficients retained at the null access.
+
+The new unchanged-Source proof zigimg/verify_jpeg_state_reference.py compares
+**6,138 returning rows containing 6,408 read attempts** in both modes. Snapshots
+include restart interval, Frame metadata and initialized coefficients, all four
+tagged quantization slots, all eight Huffman slots and optional pixel tag/length/
+bytes. Memory streams and buffered files with 16/31-byte buffers are covered.
+Returning SHA-256:
+`846e18ebd6cccfb3d5d01147a2b2bede3041669033b573d02cec62de14fb3b76`.
+
+The matrix verifies stored-frame finalization, recoverable-error pixel cleanup,
+retained records, truncated/overwritten tables and retries with caller pixel-reset
+controls. Complete early tables remain installed when a later table is truncated.
+Quantization length underflow precedes installation, while Huffman length underflow
+follows installation. Duplicate-frame failure precedes header reads; restart
+updates survive subsequent failures. Sixty exact panic/state pairs compare position
+and all defined retained data, including missing pixels, earlier failure priority,
+wrong arms, short pixel buffers, unreachable component counts, marker/skip failures,
+table-installation order and restart lengths. State SHA-256:
+`5c752672755ff2581f89c69aa911b00cd30cb1eabfc8d532ebd1242f54c08060`.
+
+All constructed coefficient lanes and pixels are initialized. Fresh Source Frame
+storage and unused grayscale channels are omitted from hashes, as are bytes from
+fresh pixel allocations. Fresh returning inputs either fail before coefficient
+reads or contain a complete baseline scan. Freed pixel storage is never inspected
+after cleanup. Source remains unchanged; private component types come from public
+fields. Full tree/library/version pins and before/after fixture/runner/implementation
+hashes protect retained commands, corpus, output, diagnostics, state and provenance.
+
+Existing JPEG decoder/record/Frame/Scan/historical proofs retain their previous
+hashes and exclusions in both modes. All 58 image/58 Vaxis files, focused state
+tests in both modes and native/Linux checks pass. Three Windows DLLs, the new
+Windows test executable in both modes and two Linux shared libraries build with
+-gc none. Cross-target runtime is unverified. Allocator/OOM/GC/lifetime, undefined
+or freed memory, ABI, const/narrow/key typing, map layout/order/capacity, boxed
+quantization payload copies and arbitrary SIMD remain limitations. The Source
+quantization-header compiler failure and no-op writer remain unchanged. Exact
+scope and reproduction are in zigimg/reference_probes/jpeg_state/README.md.

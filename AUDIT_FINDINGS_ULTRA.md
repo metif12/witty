@@ -2673,3 +2673,33 @@ only. Allocator/OOM/GC/lifetime, undefined Source storage, ABI, const/u4/key typ
 map layout/order/capacity, boxed quantization copies, arbitrary SIMD and cross-target
 runtime remain limits. Source's quantization-header compiler failure and no-op
 writer remain unchanged. Reproduction: zigimg/reference_probes/jpeg_scan/README.md.
+
+### JPEG retained records and null-pixel panic — 2026-10-13
+
+JPEG.read preserves Source's attempt-to-use-null-value panic after dequantization/
+IDCT when a stored Frame has no pixels, including production builds. Earlier
+failures retain their priority and coefficient changes remain visible at the trap.
+
+The unchanged-Source proof matches **6,138 returning rows / 6,408 read attempts**
+in both modes, with SHA-256
+`846e18ebd6cccfb3d5d01147a2b2bede3041669033b573d02cec62de14fb3b76`.
+Snapshots include Frame metadata/initialized coefficients, all quantization and
+Huffman slots, restart interval and optional pixels. Sixty exact panic/state pairs
+retain position and all defined state; SHA-256:
+`5c752672755ff2581f89c69aa911b00cd30cb1eabfc8d532ebd1242f54c08060`.
+Memory and 16/31-byte buffered files are exercised. Partial installs, late length
+failure order, pixel cleanup, duplicate frames, restart retention and caller reset
+controls match. Quantization underflow precedes installation; Huffman underflow
+follows it. Source/library/version pins, before/after hashes and retained corpus/
+commands/results/diagnostics/state preserve provenance.
+
+Fresh undefined coefficients/unused channels/pixel bytes and freed pixel storage
+are excluded from observation. Fresh returning inputs use complete baseline scans
+or fail before coefficient reads. All 58 image/58 Vaxis files, focused state tests,
+native/Linux checks, three Windows DLLs, the new Windows test executable in both
+modes and two Linux shared libraries pass. Existing JPEG hashes/exclusions remain
+unchanged in both modes. Cross builds use -gc none. Allocator/OOM/GC/lifetime,
+undefined/freed memory, ABI, const/narrow/key typing, map layout/order/capacity,
+boxed quantization copies and arbitrary SIMD remain limits. Source's inherited
+quantization-header compiler failure and no-op writer remain unchanged.
+Reproduction: zigimg/reference_probes/jpeg_state/README.md.
