@@ -405,6 +405,13 @@ pass. Generic omissions, direct-literal alpha defaults and distinct built-in
 type identities remain measured V adaptations. Examples and reproduction are in
 [the generic grayscale proof](reference_probes/grayscale_generic/README.md).
 
+`predefined_colors[T]()` accepts built-in types/aliases and caller-defined types
+with a public static `from_color(Colorf32) T` conversion. Its read-only fields
+retain each factory's returned value. The 4,352-record comparison covers all
+canonical colors, custom mappings and copied values in both modes. Source's
+compile-time constants and V's runtime factory evaluation remain distinct;
+details are in [the predefined color proof](reference_probes/predefined_generic/README.md).
+
 Public `IndexedStorage[T]` factories expose default/explicit palette construction,
 `palette_size()`, static `resize_palette(mut storage, size)` and GC cleanup.
 All five named indexed records also expose capacity lookup and cleanup. The

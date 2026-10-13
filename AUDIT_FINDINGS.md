@@ -4955,3 +4955,38 @@ hashes protect the proof. Source implementation and visibility are unchanged.
 
 Details and reproduction are in
 [the indexed factory proof](zigimg/reference_probes/indexed_generic/README.md).
+
+### Public predefined color factory checkpoint
+
+V's predefined colors were restricted to eleven built-in RGB(A) types. Source
+also accepts caller-defined types with a public color-conversion namespace.
+`predefined_colors[T]()` now delegates built-ins and aliases to their canonical
+conversion and custom targets to public static `T.from_color(Colorf32) T`.
+The canonical input colors retain opaque alpha; custom returned values and
+alpha choices are preserved.
+
+The unchanged-source proof matches **4,352 returning records** in each
+corresponding compiler mode, SHA-256
+`6978b2a5f30c126670686d36fb0ebac319823591d12fb008e34bc0a6d3d0c11c`.
+Seventeen target cases cover every built-in, two aliases and four custom
+factories. All canonical/replacement pairs cover copies, mutation, by-value
+returns, whole replacement and unchanged original constants. Custom fixed-array
+copies remain independent, and all represented values/floating bits compare
+exactly, including signed zero and a NaN payload.
+
+Seventeen mutable-copy compiler pairs and seventeen immutable-constant rejection
+pairs pass in both modes. Two missing/incorrect conversion factory rejection
+pairs pass. Source evaluates namespace constants at compile time; V evaluates
+the typed value at runtime. A separate Source rejection/V acceptance pair and
+retained sixteen-callback runtime observation measure that adaptation. Pure
+returning factories do not establish side-effect or initialization-timing parity.
+Source implementation and visibility are unchanged.
+
+The existing 31,167-record color-model and 35,362-record constructor/getter
+comparisons retain both mode hashes. All 61 image and 58 Vaxis test files pass,
+with twenty-three production/platform checks including the new fixture's Windows
+and Linux builds. Complete Source/library/math/SDK/compiler pins and before/after
+implementation/runner/fixture/input/consumer hashes protect the proof. Native
+namespace/value layout, allocation/lifetime, arbitrary callbacks and unrepresented
+callers remain boundaries. Details and reproduction are in
+[the predefined color proof](zigimg/reference_probes/predefined_generic/README.md).
