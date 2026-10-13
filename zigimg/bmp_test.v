@@ -1,5 +1,37 @@
 module zigimg
 
+fn test_bmp_zero_height_preserves_maximum_signed_width() {
+	mut output := []u8{len: 138, init: 165}
+	mut writer := WriteStream.init_memory(mut output)
+	image := ImageUnmanaged{
+		width:  2147483647
+		height: 0
+		pixels: Bgr24Pixels{}
+	}
+	BMP.write_image(mut writer, image, BmpEncoderOptions{})!
+	mut reader := ReadStream.init_memory(writer.buffered())
+	decoded := BMP.read_image(mut reader)!
+	assert decoded.width == image.width && decoded.height == 0
+	assert decoded.pixels.len() == 0
+	assert writer.get_pos() == 122 && reader.get_pos() == 122
+}
+
+fn test_bmp_unsupported_pixels_precede_size_arithmetic() {
+	mut output := []u8{len: 138, init: 165}
+	mut writer := WriteStream.init_memory(mut output)
+	image := ImageUnmanaged{
+		width:  ~usize(0)
+		height: ~usize(0)
+		pixels: InvalidPixels{}
+	}
+	BMP.write_image(mut writer, image, BmpEncoderOptions{}) or {
+		assert err.msg() == 'InvalidData'
+		assert writer.get_pos() == 0 && output == []u8{len: 138, init: 165}
+		return
+	}
+	assert false
+}
+
 fn bmp_fixture(file BitmapFileHeader, info BitmapInfoHeader, data []u8) []u8 {
 	mut bytes := bmp_file_header_bytes(file)
 	match info {

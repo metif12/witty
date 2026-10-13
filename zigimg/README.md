@@ -180,6 +180,12 @@ including header/cursor failure order. Both modes match 135,766 returning
 observations and 41 panic/state pairs using initialized memory streams. Source
 unwritten pixels and private failed allocations remain outside the comparison.
 
+The [BMP contract proof](reference_probes/bmp_contracts/README.md) retains signed
+dimension/scanline arithmetic, image-size arithmetic, integer casts and pixel
+bounds in production. Both modes match 11,378 returning observations and 152
+panic/state pairs, including partial output and header/cursor failure order.
+Negative-dimension outputs compare metadata only when Source pixels are unwritten.
+
 The [GIF record proof](reference_probes/gif_records/README.md) adds thirteen
 packed-field setters and requires Source comment/application constructor fields.
 Byte-count overflow and indexed-background casts remain checked in production.

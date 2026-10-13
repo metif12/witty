@@ -3491,3 +3491,68 @@ parameters retain their documented V adapters. Source visibility/implementation
 remain unchanged. Full tree/library/version pins and before/after fixture/runner/
 implementation hashes protect retained proof artifacts. Reproduction and exact
 scope are in zigimg/reference_probes/pcx_contracts/README.md.
+
+## BMP production arithmetic, casts and public failure state — 2026-10-13
+
+BMP dimension/scanline products, minimum signed-height subtraction, image byte/
+file-size construction and integer casts relied on assertions erased by production
+builds. Explicit guards now retain Source's arithmetic-overflow and destination-
+type diagnostics in both modes. Pixel indexing checks signed addition, conversion
+and the active array extent before access, preserving Source index/length traps.
+
+The public image writer selects supported storage before size construction, and
+constructs file size before dimension casts or output. Direct writing emits the
+file header before rejecting Windows 3.1 headers, emits V4/V5 headers before
+rejecting unsupported pixels, and checks row arithmetic/bounds afterward. Partial
+memory writes therefore precede later arithmetic/bounds failures. Readers retain
+parsed headers, reject unsupported formats before arithmetic and preserve cursors.
+The Source's ignored offsets/masks, absent row padding, signed-dimension behavior
+and V5 writer masks remain intact.
+
+`verify_bmp_contracts_reference.py` compares unchanged pinned Source Debug with
+ordinary V and Source ReleaseSafe with production V. Both modes match **11,378
+returning observations**: one defined default-header/native-layout record, 75
+signed dimension accessor records, 240 format dispatches, 10,368 public image/
+direct writer cases, 654 direct/image decoder cases and 40 error-order controls.
+Writer cases cover BGR24/BGRA32 and unsupported grayscale8, three direct header
+variants plus image construction, six widths, four heights, three patterns and
+twelve output capacities. Status, cursor and every initialized output byte match.
+Main-output SHA-256:
+`9b413f62c620cdc82ad314065a403fde50455c7eb04bde405c3c0953aff8e064`.
+Decoder/control SHA-256:
+`2d19b419f20e31609996f7887a5fd9258e4036c2d5fe2172a728a2d7da9c406d`.
+
+Decoder cases include 480 fully written direct/image successes, 104 truncations,
+24 validation-order checks, 18 unknown header sizes and four Windows 3.1 rejections.
+Twenty-four negative-dimension direct reads compare lengths/headers/cursors only;
+Source-unwritten pixels are excluded. Zero height with maximum signed width still
+returns an empty image. Unsupported image pixels return before overflowing sizes.
+
+**152 strict panic/state pairs** cover 16 read products, 16 negative count casts,
+four minimum read heights, 24 negative image-reader dimensions, four minimum direct
+write heights, eight direct scanline products, 60 direct pixel bounds, 16 image
+size/dimension failures and four image bounds failures. Two of those image bounds
+cases establish fitting u32 file-size construction at the boundary before failure
+on an empty pixel slice. Diagnostics match complete expected prefixes. Observers
+compare direct public headers/read cursors, or write cursors/initialized output
+and direct headers. Image-reader observers expose only the public input cursor.
+State SHA-256:
+`59aacb757a0572b8742e645599d049965f7df9d2c7715abd1e075bb371510d89`.
+
+All 61 image and 58 Vaxis test files pass, together with production BMP/image-API
+tests. The unchanged historical native BMP harness passes Debug and ReleaseSafe.
+Existing PCX and PNG decoder/processor/failure-state proofs retain all prior hashes
+in both modes. Native/Linux application checks, three Windows DLLs, BMP Windows
+test executables in both modes and two Linux shared libraries build successfully.
+Cross builds use -gc none and do not establish cross-target runtime behavior.
+
+The proof uses public interfaces and initialized memory streams. Source's default
+BMP headers are undefined and excluded; all observed header fields and enum tags
+are defined. Private allocations/partially constructed images, unwritten/freed
+pixels, file streams, allocator/OOM/GC/lifetime, boxed union copies, enum/const
+typing, wider allocated extents and portable ABI remain boundaries. Completed
+proof binaries/logs/provenance and pinned sources/tools were retained while
+regenerable compiler caches were cleared to recover disk space. Source visibility/
+implementation remain unchanged. Full tree/library/version pins and before/after
+fixture/runner/implementation hashes protect retained proof artifacts. Reproduction
+and exact scope are in zigimg/reference_probes/bmp_contracts/README.md.

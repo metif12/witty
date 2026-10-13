@@ -293,8 +293,18 @@ fn bmp_info_header_bytes[T](header T) []u8 {
 
 fn bmp_checked_product(a i32, b i32) i32 {
 	product := i64(a) * b
-	assert product >= -2147483648 && product <= 2147483647
+	if product < -2147483648 || product > 2147483647 { panic('integer overflow') }
 	return i32(product)
+}
+
+fn bmp_checked_index(scanline i32, x i32, length int) int {
+	index := i64(scanline) + x
+	if index < -2147483648 || index > 2147483647 { panic('integer overflow') }
+	if index < 0 { panic('integer does not fit in destination type') }
+	if usize(index) >= usize(length) {
+		panic('index out of bounds: index ${index}, len ${length}')
+	}
+	return int(index)
 }
 
 pub fn (mut codec BMP) read(mut stream ReadStream) !PixelStorage {
@@ -312,14 +322,14 @@ pub fn (mut codec BMP) read(mut stream ReadStream) !PixelStorage {
 	width := codec.width()
 	height := codec.height()
 	count := bmp_checked_product(width, height)
-	assert count >= 0
+	if count < 0 { panic('integer does not fit in destination type') }
 	mut pixels := PixelStorage.init(format, usize(count))!
 	// The pinned reader ignores pixel_offset, color masks, and row padding.
-	assert height > -2147483648
+	if height == -2147483648 { panic('integer overflow') }
 	for y := height - 1; y >= 0; y-- {
 		scanline := bmp_checked_product(y, width)
 		for x := i32(0); x < width; x++ {
-			index := int(scanline + x)
+			index := bmp_checked_index(scanline, x, int(pixels.len()))
 			match mut pixels {
 				Bgr24Pixels {
 					bytes := stream.take(3)!
@@ -350,7 +360,7 @@ pub fn (mut codec BMP) read(mut stream ReadStream) !PixelStorage {
 pub fn BMP.read_image(mut stream ReadStream) !ImageUnmanaged {
 	mut codec := BMP{}
 	pixels := codec.read(mut stream)!
-	assert codec.width() >= 0 && codec.height() >= 0
+	if codec.width() < 0 || codec.height() < 0 { panic('integer does not fit in destination type') }
 	return ImageUnmanaged{
 		width:  usize(codec.width())
 		height: usize(codec.height())
@@ -359,12 +369,12 @@ pub fn BMP.read_image(mut stream ReadStream) !ImageUnmanaged {
 }
 
 fn bmp_image_sizes(image ImageUnmanaged, channels usize, header_size usize) (u32, u32) {
-	assert image.width == 0 || image.height <= ~usize(0) / image.width
+	if image.width != 0 && image.height > ~usize(0) / image.width { panic('integer overflow') }
 	pixels := image.width * image.height
-	assert pixels <= ~usize(0) / channels
+	if pixels > ~usize(0) / channels { panic('integer overflow') }
 	bytes := pixels * channels
-	assert bytes <= ~usize(0) - header_size
-	assert bytes + header_size <= 0xffffffff
+	if bytes > ~usize(0) - header_size { panic('integer overflow') }
+	if bytes + header_size > 0xffffffff { panic('integer does not fit in destination type') }
 	return u32(bytes), u32(bytes + header_size)
 }
 
@@ -374,7 +384,9 @@ pub fn BMP.write_image(mut stream WriteStream, image ImageUnmanaged, options Bmp
 	match image.pixels {
 		Bgr24Pixels {
 			raw_size, file_size := bmp_image_sizes(image, 3, 14 + 108)
-			assert image.width <= 2147483647 && image.height <= 2147483647
+			if image.width > 2147483647 || image.height > 2147483647 {
+				panic('integer does not fit in destination type')
+			}
 			codec.file_header = BitmapFileHeader{
 				size:         file_size
 				pixel_offset: 122
@@ -392,7 +404,9 @@ pub fn BMP.write_image(mut stream WriteStream, image ImageUnmanaged, options Bmp
 		}
 		Bgra32Pixels {
 			raw_size, file_size := bmp_image_sizes(image, 4, 14 + 124)
-			assert image.width <= 2147483647 && image.height <= 2147483647
+			if image.width > 2147483647 || image.height > 2147483647 {
+				panic('integer does not fit in destination type')
+			}
 			codec.file_header = BitmapFileHeader{
 				size:         file_size
 				pixel_offset: 138
@@ -432,11 +446,11 @@ pub fn (codec BMP) write(mut stream WriteStream, pixels PixelStorage) ! {
 	if pixels !is Bgr24Pixels && pixels !is Bgra32Pixels { return error('InvalidData') }
 	width := codec.width()
 	height := codec.height()
-	assert height > -2147483648
+	if height == -2147483648 { panic('integer overflow') }
 	for y := height - 1; y >= 0; y-- {
 		scanline := bmp_checked_product(y, width)
 		for x := i32(0); x < width; x++ {
-			index := int(scanline + x)
+			index := bmp_checked_index(scanline, x, int(pixels.len()))
 			match pixels {
 				Bgr24Pixels {
 					color := pixels.data[index]
