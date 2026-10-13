@@ -540,7 +540,8 @@ fn (codec &GIF) create_new_animation_frame(format PixelFormat) !AnimationFrame {
 		}
 	}
 	return AnimationFrame{
-		pixels: pixels
+		pixels:   pixels
+		duration: 0
 	}
 }
 

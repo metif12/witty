@@ -117,7 +117,7 @@ fn test_crop_copies_rows_clamps_size_and_discards_animation() {
 		height:    3
 		pixels:    PixelStorage.init_raw_pixels(bytes, .rgb24)!
 		animation: Animation{
-			frames:     [AnimationFrame{}]
+			frames:     [AnimationFrame{ pixels: InvalidPixels{}, duration: 0 }]
 			loop_count: 7
 		}
 	}

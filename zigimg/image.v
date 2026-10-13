@@ -4,8 +4,8 @@ pub const animation_loop_infinite = -1
 
 pub struct AnimationFrame {
 pub mut:
-	pixels   PixelStorage = InvalidPixels{}
-	duration f32
+	pixels   PixelStorage @[required]
+	duration f32          @[required]
 }
 
 pub fn (frame AnimationFrame) deinit() {

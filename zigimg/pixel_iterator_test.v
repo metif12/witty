@@ -210,9 +210,10 @@ fn test_iterator_retains_live_storage_and_captures_only_initial_length() {
 		animation: Animation{
 			frames: [
 				AnimationFrame{
-					pixels: Rgb24Pixels{
+					pixels:   Rgb24Pixels{
 						data: [Rgb24{ r: 255 }]
 					}
+					duration: 0
 				},
 			]
 		}

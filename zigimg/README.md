@@ -348,8 +348,12 @@ and allocator reclamation remain runtime adaptations.
 Managed images support creation, copied raw pixels, metadata, conversion,
 editing, iteration, and conversion to/from unmanaged views. Those views copy
 slice headers while sharing pixel, palette, and animation-frame backing data;
-their dimensions and loop counts remain independent. Iteration borrows the
-live image pixels. Lifecycle methods use GC in place of allocator reclamation,
+their dimensions and loop counts remain independent. AnimationFrame requires
+explicit pixel storage and duration; GIF initializes new durations to zero.
+The [animation contract proof](reference_probes/animation_contracts/README.md)
+compares duration bits, frame copies and shared frame-array elements, with boxed
+payload metadata differences recorded separately. Iteration borrows the live
+image pixels. Lifecycle methods use GC in place of allocator reclamation,
 including the source's skipped shared first animation frame. Managed images
 have no allocator field or ABI prefix cast. V arrays cannot enforce Zig's
 read-only slice type contract.

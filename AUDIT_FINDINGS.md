@@ -4500,3 +4500,60 @@ Proof artifacts retain development compiler diagnostics and the panic-fixture
 formatting correction. Source/library/version pins and before/after fixture/input/
 consumer/runner/implementation hashes protect the proof. Exact scope, counts and
 reproduction are in [the interface contract probe](zigimg/reference_probes/format_interface_contracts/README.md).
+
+## Required animation frames and retained copy behavior — 2026-10-13
+
+AnimationFrame now requires explicit pixels and duration, matching the public
+Source record. GIF's frame constructor initializes duration to positive zero
+explicitly, preserving Source's initialization. Existing editor/iterator fixtures
+spell both fields. Animation and managed/unmanaged image defaults are unchanged.
+Four paired acceptance controls cover complete frames, Source's managed frame
+alias, default records and mutable fields. Two independent omission pairs and
+three constant-record mutation pairs reject in both compilers.
+
+`verify_animation_contracts_reference.py` imports unchanged complete Source and
+compares Debug/ordinary with ReleaseSafe/production. Both modes match **20,992
+returning records**. The main 18,432 cases cover all 24 pixel-storage tags, counts
+0/1/3, eight duration patterns, frame-array lengths 0 through 3 and five i32 loop
+controls including both extrema. Another 2,560 cases cover every f32 sign/exponent
+with five mantissa controls, including signed zero, subnormals, infinities and
+quiet/signaling NaN payloads. Durations are assigned/copied without arithmetic.
+Return SHA-256: `3898e0c8d02443126eebf2be9b483dad48af2686e9bf58dd7673e105df52960f`.
+
+Snapshots compare duration bits, image dimensions/animation predicates, pixel tags/
+counts, complete initialized pixel/palette bytes, loop counts, frame-array lengths
+and every active frame. Frame scalar copies remain independent and borrow the same
+pixel/palette elements. Whole pixel-storage replacement keeps copied frame fields
+independent. Animation copies share mutable frame elements while retaining separate
+loop/count headers. Replacing a frame-array descriptor and managed/unmanaged view
+mutation preserve the represented Source behavior.
+
+Five separate runtime controls extend the previously measured indexed PixelStorage
+boxed-copy limit to frame copies. Resizing an original palette descriptor to one
+also changes V's copied descriptor. Source's copy retains two entries for indexed1
+and three for the other indexed tags; pixel counts remain three. These differences
+are excluded from the matching count and retained in SHA-256
+`e1bb37fc2732a1f753c59c9cdf48b1ef10c51f30307001a5cb5bb55e56feb623`.
+No automatic by-value sum-type payload metadata copying is claimed.
+
+All active caller storage is initialized, including every observed palette byte.
+Source arenas release allocations once after each case; copied frames, animations
+and managed/unmanaged views are not independently deinitialized. Inactive/freed
+storage, record padding, empty pointer identity, allocator internals and post-deinit
+state are unobserved. ArrayList capacity/growth/API, broader boxed metadata mutation,
+GC/allocation/OOM/deinit/lifetime, file-platform runtime, physical layout and portable
+ABI remain boundaries. V arrays and module-level types remain adapters for Source's
+FrameList and managed/unmanaged frame aliases.
+
+All 61 image and 58 Vaxis test files pass, as do production GIF/PAM/image-API/
+iterator/editor tests, unchanged historical GIF/image-API/compression assertions
+in both modes, native/Linux application checks, three Windows DLLs, both Windows
+image-API test executables and two Linux shared libraries. Cross builds establish
+build coverage only.
+
+Proof artifacts retain development compiler diagnostics and the corrected mutable-
+record fixture. The previous checkpoint's archive was read back and verified before
+pruning duplicate expanded proofs and regenerable caches. Source/library/version
+pins and before/after fixture/input/consumer/runner/implementation hashes protect
+the proof. Exact scope, counts and reproduction are in
+[the animation contract probe](zigimg/reference_probes/animation_contracts/README.md).
