@@ -181,17 +181,26 @@ pub fn (mut codec SGI) read(mut stream ReadStream) !PixelStorage {
 	if !SGI.format_detect(mut stream)! { return error('InvalidData') }
 	stream.take(2)!
 	bytes := stream.take(510) or { return error('InvalidData') }
+	dimension := sgi_read_be_u16(bytes, 2)
+	pixel_format := read_be_u32(bytes[102..106])
+	$if little_endian {
+		// Source validates enums while swapping the complete big-endian
+		// header, before replacing the codec's previous header.
+		if bytes[0] > 1 || dimension !in [u16(1), 2, 3] || pixel_format > 3 {
+			panic('invalid enum value')
+		}
+	}
 	codec.header = SgiHeader{
 		compression:       unsafe { SgiCompressionFlag(bytes[0]) }
 		bytes_per_channel: bytes[1]
-		dimension:         unsafe { SgiDimensions(sgi_read_be_u16(bytes, 2)) }
+		dimension:         unsafe { SgiDimensions(dimension) }
 		x_size:            sgi_read_be_u16(bytes, 4)
 		y_size:            sgi_read_be_u16(bytes, 6)
 		z_size:            sgi_read_be_u16(bytes, 8)
 		pix_min:           read_be_u32(bytes[10..14])
 		pix_max:           read_be_u32(bytes[14..18])
 		dummy1:            read_be_u32(bytes[18..22])
-		pixel_format:      unsafe { SgiPixelFormat(read_be_u32(bytes[102..106])) }
+		pixel_format:      unsafe { SgiPixelFormat(pixel_format) }
 	}
 	for i in 0 .. 80 {
 		codec.header.image_name[i] = bytes[22 + i]

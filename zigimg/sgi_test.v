@@ -1,5 +1,7 @@
 module zigimg
 
+import os
+
 fn test_sgi_rle_table_size_keeps_the_largest_u16_extent() {
 	mut tables := []u8{}
 	for _ in 0 .. 8191 {
@@ -345,4 +347,83 @@ fn test_sgi_debug_payload_preserves_source_arrays_and_unsigned_fields() {
 	before := h
 	assert sgi_debug_message(&h) == '.{ .compression = .rle, .bytes_per_channel = 0, .dimension = .multi_channel, .x_size = 0, .y_size = 0, .z_size = 0, .pix_min = 4294967295, .pix_max = 0, .dummy1 = 0, .image_name = { 0, 34, 92, 10, 128, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, .pixel_format = .cmap_only, .dummy2 = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255 } }'
 	assert h == before
+}
+
+fn test_sgi_file_buffers_preserve_raw_planes_and_rle_tables() {
+	path := os.join_path(os.temp_dir(), 'witty-sgi-buffer-${os.getpid()}.sgi')
+	defer { os.rm(path) or {} }
+	header := SgiHeader{
+		bytes_per_channel: 1
+		dimension:         .multi_channel
+		x_size:            3
+		y_size:            2
+		z_size:            3
+	}
+	raw := [u8(1), 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+	mut rows := [][]u8{}
+	for start := 0; start < raw.len; start += 3 {
+		mut packet := [u8(0x83)]
+		packet << raw[start..start + 3]
+		packet << 0
+		rows << packet
+	}
+	mut rle_header := header
+	rle_header.compression = .rle
+	for data in [sgi_fixture(header, raw), sgi_rle_fixture(rle_header, rows)] {
+		mut memory := ReadStream.init_memory(data)
+		mut expected_codec := SGI{}
+		expected := expected_codec.read(mut memory)!
+		os.write_file_array(path, data)!
+		for capacity in [510, 511, 512, 1024] {
+			mut file := os.open(path)!
+			mut buffer := []u8{len: capacity, init: u8(165)}
+			mut stream := ReadStream.init_file(file, mut buffer)
+			mut codec := SGI{}
+			actual := codec.read(mut stream)!
+			assert codec.header == expected_codec.header
+			assert actual.as_bytes() == expected.as_bytes()
+			assert stream.get_pos() == memory.get_pos()
+			file.close()
+		}
+	}
+}
+
+fn test_sgi_incomplete_header_and_wrong_magic_precede_enum_validation() {
+	initial := SgiHeader{
+		bytes_per_channel: 1
+		dimension:         .single_channel
+		x_size:            7
+		y_size:            9
+		z_size:            1
+	}
+	mut bytes := sgi_fixture(initial, [])
+	bytes[2] = 255
+	bytes[4] = 255
+	bytes[5] = 255
+	bytes[104] = 255
+	for length in [3, 6, 108, 511] {
+		mut stream := ReadStream.init_memory(bytes[..length])
+		mut codec := SGI{
+			header: initial
+		}
+		codec.read(mut stream) or {
+			assert err.msg() == 'InvalidData'
+			assert codec.header == initial
+			assert stream.get_pos() == 2
+			continue
+		}
+		assert false
+	}
+	bytes[0] = 0
+	mut stream := ReadStream.init_memory(bytes)
+	mut codec := SGI{
+		header: initial
+	}
+	codec.read(mut stream) or {
+		assert err.msg() == 'InvalidData'
+		assert codec.header == initial
+		assert stream.get_pos() == 0
+		return
+	}
+	assert false
 }

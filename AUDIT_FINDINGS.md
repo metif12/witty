@@ -5433,3 +5433,43 @@ and portable ABI remain boundaries. Source/library/version and before/after
 fixture, runner, helper, implementation and corpus hashes protect the proof.
 Scope and reproduction are in
 [the PCX buffered decoder proof](zigimg/reference_probes/pcx_decode/README.md).
+
+
+### SGI parsed-header validation and file decoding checkpoint — 2026-10-14
+
+SGI parsed compression, dimension and pixel-format fields used unsafe V enum
+casts. Source's little-endian big-header conversion validates each enum before
+assigning the parsed header. V now preserves the exact invalid-enum trap after
+consuming the complete header and before replacing the previous public header.
+Wrong magic and incomplete headers retain their earlier errors; valid unsupported
+tags still replace the header before returning Unsupported. Successful decoding
+is unchanged, and the explicit guards remain active in production.
+
+Both corresponding modes match **13,480 records / 22,040 read attempts**, SHA-256
+`7cc1b4dea92da390d91a189476efabbfbae527584ffab6f7e27a6dad8f231e5e`, and
+**964 exact panic/state pairs**, SHA-256
+`b04edf68a65629c73690152f3d022603dc28f2198ee9da27cf2cb51f625a6312`.
+Memory and four file-buffer capacities cover fully written raw/literal/repeated
+RLE planes, valid enum dispatch, prefixes, retries and ordered failures. Invalid
+wire tags include every invalid u8 compression value, dimension low-byte/endian
+boundaries, pixel-format low-byte/high-bit/u32 boundaries, simultaneous faults and
+validation before unsupported dispatch, arithmetic, table reads or body EOF.
+Success compares all pixel bytes. Snapshots retain the complete initialized
+header, all 256 initialized caller palette backing entries, active length, stream
+position, buffered length and caller buffer bytes. Private failed pixel/table/data
+allocations are excluded. Actual unchanged compiled Source provides every output
+and diagnostic oracle; its private header visibility remains unchanged.
+
+All 61 image and 58 Vaxis test files pass, including two file/precedence regressions,
+with seventeen production/platform checks. Previous SGI header/accessor/dispatch,
+returning and 636 arithmetic/bounds failure-state hashes remain unchanged in both
+modes. The initial generic fixed-array snapshot mismatch and corrected pre-fix
+invalid-compression success are retained separately from completed comparisons.
+
+Big-endian runtime, manually corrupted typed enums, undefined default/unwritten
+Source storage, physically invalid word reads, private failed allocations, small
+header buffers, streaming/nonseekable/custom readers, allocator/OOM/GC/lifetime,
+arbitrary larger extents, const/narrow/enum typing, physical layout and portable
+ABI remain boundaries. Source/library/version and before/after fixture, runner,
+helper, implementation and corpus hashes protect the proof. Reproduction and
+scope are in [the SGI parsed-header proof](zigimg/reference_probes/sgi_header/README.md).

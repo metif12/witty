@@ -207,6 +207,11 @@ Literal and repeated words retain Source failure order and partial output.
 Both modes match 795 returning observations and 636 panic/state pairs;
 word reads beyond Source's physical byte allocation remain excluded.
 
+The [SGI parsed-header proof](reference_probes/sgi_header/README.md) preserves
+invalid enum traps before header replacement on little-endian targets. Both modes
+match 13,480 memory/file records / 22,040 read attempts and 964 exact panic/state
+pairs, including incomplete-header precedence and all initialized caller buffers.
+
 The [GIF record proof](reference_probes/gif_records/README.md) adds thirteen
 packed-field setters and requires Source comment/application constructor fields.
 Byte-count overflow and indexed-background casts remain checked in production.

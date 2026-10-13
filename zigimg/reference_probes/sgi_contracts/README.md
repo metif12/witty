@@ -99,3 +99,8 @@ library SHA-256 is
 `ed900ae630673721b5aca890da4d432f4f1bfbbb201d5e450861b8111ab9a27d`. The runner
 checks Zig 0.15.2/V 0.5.2, generated inputs and before/after fixture, runner and
 implementation hashes. Source visibility and implementation are unchanged.
+
+The later [SGI parsed-header proof](../sgi_header/README.md) separately compares
+invalid wire enum tags, retained header/palette state and four file-buffer
+capacities. It supplements this valid-tag memory matrix; undefined Source pixel
+storage and physically invalid word reads remain excluded.
