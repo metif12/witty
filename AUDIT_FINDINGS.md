@@ -3681,3 +3681,53 @@ boundaries. Source visibility/implementation remain unchanged. Full tree/library
 version pins, generated input hashes and before/after fixture/runner/implementation
 hashes protect retained proof artifacts. Reproduction and exact scope are in
 zigimg/reference_probes/sgi_contracts/README.md.
+
+## Farbfeld production dimension casts and retained stream state — 2026-10-13
+
+Farbfeld's image writer used an assertion for narrowing image dimensions to u32.
+Production V erased it and silently truncated dimensions that pinned Source
+rejects. An explicit guard now preserves the checked cast before storage dispatch
+or output. Fitting zero/inconsistent/maximum dimensions, unsupported-storage
+rejection before header output, and writing the entire rgba64 slice remain intact.
+
+`verify_farbfeld_contracts_reference.py` compares unchanged pinned Source Debug
+with ordinary V and Source ReleaseSafe with production V. Both modes match
+**44,535 returning observations**: 26 initialized header/default/copy records,
+43,200 direct/image writes across all valid storage tags, 1,024 truncated-prefix
+reads, 16 trailing-input reads, eight wide zero-extent reads, 16 corrupted-magic
+reads, 182 detection controls and 63 fixed-buffer/cursor write controls. Header/
+write records have SHA-256
+`30e565c1698cf8f2571c3405cc15e428acd7036147fa212e996733267dea1b33`;
+the remaining records have SHA-256
+`37dc326a7a00abc25b65792b07f77531565d3208007ad1425e21df2a3d63db35`.
+
+**240 strict panic/state pairs** cover width/height/both casts above u32, values
+through usize maximum, supported and unsupported storage, output capacities and
+initial cursors. Exact panic text and case names join unchanged caller dimensions,
+pixel storage, writer cursor and initialized output in the state golden:
+`ac87959369cc8d77564382026061029c1d58bce6f7c6266cdd616e6a9ee5b287`.
+Read failures compare retained initialized public headers and input cursors;
+private failed/freed pixel allocations are excluded. Successful results compare
+native channel bytes, independent nonempty allocation and post-mutation result/
+input bytes. Header copies retain independent field mutation. No empty pointer
+identities or inactive palette bytes are observed.
+
+All 61 image and 58 Vaxis test files pass, as do production codec/image-API tests
+and the unchanged historical native image-API harness in Debug/ReleaseSafe. Its
+6,528-case encoder FNV e49e6984a209c47b and 589,824-case detection FNV
+ac90c12c037cfaf4 remain unchanged. Existing PNG decoder/processor/failure-state
+matrices retain their previous hashes in both modes. Native/Linux application
+checks, three Windows DLLs, Windows codec test executables in both modes and two
+Linux shared libraries build successfully. Disk-interrupted checks were rerun;
+the remaining comparisons used a task-owned RAM disk and their completed
+artifacts were archived before detaching it. Cross builds use -gc none and do not
+establish cross-target runtime behavior.
+
+Allocator/OOM/GC/lifetime, wider allocated extents, boxed storage copies,
+pointer/slice layout, file streams, big-endian bulk writes, Source allocator/
+ignored-options arguments and portable ABI remain boundaries. Native header bytes
+do not establish portable layout. Source visibility/implementation remain
+unchanged. Full tree/library/version pins and before/after generated-input,
+fixture, runner and implementation hashes protect retained proof artifacts.
+Reproduction and exact scope are in
+zigimg/reference_probes/farbfeld_contracts/README.md.

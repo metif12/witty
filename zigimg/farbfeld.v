@@ -27,7 +27,10 @@ pub fn Farbfeld.read_image(mut stream ReadStream) !ImageUnmanaged {
 }
 
 pub fn Farbfeld.write_image(mut stream WriteStream, image ImageUnmanaged) ! {
-	assert image.width <= 0xffffffff && image.height <= 0xffffffff
+	// Source casts both dimensions before checking the storage or writing bytes.
+	if image.width > 0xffffffff || image.height > 0xffffffff {
+		panic('integer does not fit in destination type')
+	}
 	codec := Farbfeld{
 		header: FarbfeldHeader{
 			width:  u32(image.width)
