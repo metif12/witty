@@ -21,16 +21,16 @@ pub type RgbColorspaceConversionMatrix = Float4x4
 
 pub struct RgbColorspace {
 pub mut:
-	red               CIExyY
-	green             CIExyY
-	blue              CIExyY
-	white             CIExyY
-	rgba_to_xyza      Float4x4
-	xyza_to_rgba      Float4x4
-	to_gamma_fn       fn (f32) f32 = gamma_no_transfer
-	to_gamma_fast_fn  fn (f32) f32 = gamma_no_transfer
-	to_linear_fn      fn (f32) f32 = gamma_no_transfer
-	to_linear_fast_fn fn (f32) f32 = gamma_no_transfer
+	red               CIExyY       @[required]
+	green             CIExyY       @[required]
+	blue              CIExyY       @[required]
+	white             CIExyY       @[required]
+	rgba_to_xyza      Float4x4     @[required]
+	xyza_to_rgba      Float4x4     @[required]
+	to_gamma_fn       fn (f32) f32 @[required]
+	to_gamma_fast_fn  fn (f32) f32 @[required]
+	to_linear_fn      fn (f32) f32 @[required]
+	to_linear_fast_fn fn (f32) f32 @[required]
 }
 
 pub fn RgbColorspace.init(args RgbColorspaceInitArgs) RgbColorspace {
@@ -40,12 +40,16 @@ pub fn RgbColorspace.init(args RgbColorspaceInitArgs) RgbColorspace {
 		blue:  args.blue
 		white: args.white
 		// Source leaves these temporary caches undefined and replaces them before use.
-		rgba_to_xyza: Float4x4{
+		rgba_to_xyza:      Float4x4{
 			matrix: [4][4]f32{}
 		}
-		xyza_to_rgba: Float4x4{
+		xyza_to_rgba:      Float4x4{
 			matrix: [4][4]f32{}
 		}
+		to_gamma_fn:       args.to_gamma
+		to_gamma_fast_fn:  args.to_gamma_fast
+		to_linear_fn:      args.to_linear
+		to_linear_fast_fn: args.to_linear_fast
 	}
 	matrix := space.to_xyz_conversion_matrix()
 	return RgbColorspace{

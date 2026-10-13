@@ -342,6 +342,14 @@ colorspace history now matches Source Debug and ReleaseSafe exactly; standalone
 scientific-color results are preserved. Reproduction and limits are in
 [the cylindrical colorspace probe](reference_probes/cylindrical_colorspace/README.md).
 
+`RgbColorspace` requires all ten represented record fields, including its four
+transfer callbacks. Factory arguments retain their zero chromaticity and identity
+callback defaults. The 7,920-record comparison verifies explicit/factory
+construction, independent copies, mutation, whole-field replacement, by-value
+returns and callback order in both corresponding modes. Ten required-field and
+ten immutable-binding rejection pairs pass. Reproduction and limits are in
+[the RGB colorspace record probe](reference_probes/colorspace_records/README.md).
+
 CIE XYZ/Lab/Luv/LCh, HSLuv and Oklab models retain scalar, alpha and Float4
 conversion APIs. The 6,961-case comparison preserves every non-NaN output
 bit and NaN occurrence, including zero whitepoint denominators and unusual

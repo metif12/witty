@@ -4772,3 +4772,35 @@ other compiler/SDK math implementations and unrepresented callers remain boundar
 Exact results are scoped to the represented native consumer paths; cross builds
 establish compilation coverage. Details and reproduction are in
 [the cylindrical colorspace probe](zigimg/reference_probes/cylindrical_colorspace/README.md).
+
+### RGB colorspace record construction checkpoint
+
+The pinned `RgbColorspace` requires all ten fields. V previously permitted omitted
+chromaticities and transfer callbacks through implicit or explicit defaults.
+All represented record fields now require explicit initialization; factory
+temporaries also receive all four callbacks. The separate `InitArgs` record keeps
+its source zero-chromaticity and identity-callback defaults.
+
+`verify_colorspace_records_reference.py` matches **7,920 returning records** in
+ordinary V/Source Debug and production V/Source ReleaseSafe, SHA-256
+`20d49e2104dc25aa362ce0ffc8347fa7b074c17c154fe7c5f5531412f9eba1ad` in both modes.
+Explicit/custom/default construction, all ten mutable fields, copied records,
+whole-field and whole-record replacement, by-value returns and later argument
+mutation retain the native results. Callback identifiers and raw argument bits
+verify selection, RGB channel order and count; alpha retains its exact bits.
+Each mode also passes three accepted consumers, ten required-field rejection
+pairs and ten immutable-binding rejection pairs. Temporary source factory matrices
+remain undefined until replacement and are excluded from observations.
+
+Matrix, scientific-color, colorspace, HSLuv and cylindrical comparisons retain
+their corresponding-mode hashes and frontend controls. All 61 image and 58 Vaxis
+test files pass, along with seventeen production/platform checks and four
+standalone color-runner invocations. Complete Source/library/math/SDK/compiler
+pins and before/after implementation/runner/fixture/input/consumer hashes protect
+the proof. The source implementation and visibility remain unchanged.
+
+Undefined storage, physical ABI and callback pointer addresses, floating-point
+exception flags, allocation/lifetime, other compiler/SDK implementations and
+unrepresented callers remain boundaries. Generic matrix required-field omissions
+remain a measured V compiler adaptation. Details and reproduction are in
+[the RGB colorspace record probe](zigimg/reference_probes/colorspace_records/README.md).
