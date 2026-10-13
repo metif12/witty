@@ -933,3 +933,9 @@ pixel-byte arithmetic against the unchanged locked source. Windows checks
 compile the module and focused test executable; runtime remains untested.
 The newer [record proof](reference_probes/tga_records/README.md) verifies these
 guards in both ordinary and production builds, with retained state and failure order.
+
+The [stream guard proof](reference_probes/stream_guards/README.md) preserves exact
+capacity/toss and arithmetic diagnostics, including rebasing and failed cursor
+order. Both modes match 994 returning controls and 155 panic/state pairs. Existing
+stream, GIF and buffered TGA hashes remain unchanged; wider failed cursors retain
+their documented V representation limit.

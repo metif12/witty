@@ -254,3 +254,25 @@ fn test_file_writer_position_accepts_last_representable_pending_byte() {
 	assert stream.get_pos() == u64(0xffffffffffffffff)
 	assert stream.buffered() == [u8(1)]
 }
+
+fn test_file_reader_rebases_before_refilling_without_consuming_peeked_bytes() {
+	path := os.join_path(os.temp_dir(), 'witty-reader-rebase-${os.getpid()}')
+	os.write_file(path, '012')!
+	defer { os.rm(path) or {} }
+	mut file := os.open(path)!
+	defer { file.close() }
+	mut buffer := []u8{len: 2, init: u8(165)}
+	mut stream := ReadStream.init_file(file, mut buffer)
+	assert stream.take_byte()! == `0`
+	assert stream.peek(2)!.bytestr() == '12'
+	assert stream.get_pos() == 1 && stream.buffered_len() == 2
+	assert buffer.bytestr() == '12'
+	assert stream.take(2)!.bytestr() == '12'
+	stream.peek(1) or {
+		assert err.msg() == 'EndOfStream'
+		assert stream.get_pos() == 3 && stream.buffered_len() == 0
+		assert buffer.bytestr() == '12'
+		return
+	}
+	assert false
+}

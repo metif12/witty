@@ -102,10 +102,10 @@ def traps():
     cases = {}
     data = image(body=packets(1, 'raw'))
     for capacity in (1, 17, 18, 25):
-        cases[f'footer-capacity-{capacity}'] = (f'{capacity}|1|{data.hex()}', 'reached unreachable code', 'Stream request exceeds buffer capacity')
+        cases[f'footer-capacity-{capacity}'] = (f'{capacity}|1|{data.hex()}', 'reached unreachable code', 'reached unreachable code')
     data = image(attributes=3)
     for capacity in (26, 31, 128):
-        cases[f'extension-capacity-{capacity}'] = (f'{capacity}|1|{data.hex()}', 'reached unreachable code', 'Stream request exceeds buffer capacity')
+        cases[f'extension-capacity-{capacity}'] = (f'{capacity}|1|{data.hex()}', 'reached unreachable code', 'reached unreachable code')
     for capacity, bits in itertools.product((0, 26, 31, 512), (249, 255)):
         data = image(width=0, body=b'', bits=bits)
         cases[f'pixel-byte-{capacity}-{bits}'] = (f'{capacity}|1|{data.hex()}', 'integer overflow', 'integer overflow')

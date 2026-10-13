@@ -86,3 +86,7 @@ All 60 image and 58 Vaxis test files pass. Focused TGA/file tests also pass in
 production. Native/Linux application checks, three Windows dependency DLLs,
 the new Windows test executable in both modes and two Linux shared libraries
 build with cross builds using `-gc none`; cross-target runtime remains unverified.
+
+The later [stream guard proof](../stream_guards/README.md) aligns shared capacity/
+toss and addition diagnostics with exact Source messages. Existing output/state
+hashes remain unchanged; wider failed cursor representation limits remain.

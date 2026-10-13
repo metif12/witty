@@ -132,7 +132,7 @@ fn stream_seek_position(position u64, offset i64) i64 {
 	maximum := i64(0x7fffffffffffffff)
 	if position > u64(maximum) { panic('Stream seek position does not fit i64') }
 	current := i64(position)
-	if offset > 0 && current > maximum - offset { panic('Stream seek integer overflow') }
+	if offset > 0 && current > maximum - offset { panic('integer overflow') }
 	return current + offset
 }
 
@@ -161,7 +161,7 @@ pub fn (mut stream ReadStream) peek(count int) ![]u8 {
 			}
 			stream.position = 0
 			stream.end = remaining
-			if count > stream.buffer.len { panic('Stream request exceeds buffer capacity') }
+			if count > stream.buffer.len { panic('reached unreachable code') }
 		}
 		for stream.end - stream.position < count {
 			mut target := unsafe { stream.buffer[stream.end..] }
@@ -373,10 +373,10 @@ pub fn (mut stream ReadStream) toss(count usize) {
 	// a failed offset beyond that carrier remains a representation boundary.
 	if count > ~usize(0) - usize(stream.position) { panic('integer overflow') }
 	if count > usize(0x7fffffff - stream.position) {
-		panic('Stream toss exceeds buffered bytes')
+		panic('reached unreachable code')
 	}
 	stream.position += int(count)
-	if stream.position > stream.end { panic('Stream toss exceeds buffered bytes') }
+	if stream.position > stream.end { panic('reached unreachable code') }
 }
 
 pub struct WriteStream {
@@ -417,7 +417,7 @@ pub fn (mut stream WriteStream) writer() &WriteStream {
 
 pub fn (stream WriteStream) get_pos() u64 {
 	if stream.file_pos > u64(0xffffffffffffffff) - u64(stream.position) {
-		panic('Stream write position integer overflow')
+		panic('integer overflow')
 	}
 	return stream.file_pos + u64(stream.position)
 }

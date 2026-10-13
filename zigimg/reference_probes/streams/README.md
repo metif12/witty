@@ -56,3 +56,7 @@ V slices, GC ownership, error strings and `os.File` replace the source's slice,
 allocator, error-set and file representations. Native comparisons establish the
 Darwin/POSIX behavior in this corpus. Linux checking and Windows cross builds
 do not certify runtime behavior on those platforms.
+
+The later [stream guard proof](../stream_guards/README.md) aligns shared capacity/
+toss and addition diagnostics with exact Source messages. Existing output/state
+hashes remain unchanged; wider failed cursor representation limits remain.

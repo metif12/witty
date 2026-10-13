@@ -45,7 +45,7 @@ def decode_cases():
         'plain-text-overflow': ('--decode', header + b'\x21\x01\x00\xff' + b'A' * 255 + b'\x00\x3b',
                                 'integer overflow', 'integer overflow'),
         'graphic-toss': ('--decode', header + b'\x21\xf9\x04\x00\x00\x00',
-                         'reached unreachable code', 'Stream toss exceeds buffered bytes'),
+                         'reached unreachable code', 'reached unreachable code'),
         'short-loop': ('--loop', b'', 'index out of bounds', 'array.get: index out of range'),
     }
     for bits, size in ((1, 0), (2, 1), (4, 3)):
@@ -135,7 +135,7 @@ def main():
             trap(name, [flag, data.hex()], zcategory, vcategory)
         for position, count in ((0, 5), (1, 4), (3, 33)):
             trap(f'toss-end-{position}-{count}', ['--toss', str(position), str(count)],
-                 'reached unreachable code', 'Stream toss exceeds buffered bytes')
+                 'reached unreachable code', 'reached unreachable code')
         for position in (1, 3):
             trap(f'toss-overflow-{position}', ['--toss', str(position), str(0xffffffffffffffff)],
                  'integer overflow', 'integer overflow')
@@ -184,7 +184,7 @@ def main():
              'x:=p.GifApplicationExtension{application_identifier:[8]u8{},authentification_code:[3]u8{},data:[]u8{}}\nx.deinit()')
         wide_states = []
         for exe, category, expected in (('native', 'reached unreachable code', b'18446744073709551615'),
-                                        ('translated', 'Stream toss exceeds buffered bytes', b'0')):
+                                        ('translated', 'reached unreachable code', b'0')):
             path = root / ('wide-toss-' + exe + '.state')
             r = proof.run([str(root / exe), '--toss', str(path), '0', '18446744073709551615'],
                           'wide-toss-' + exe, timeout=args.timeout, check=False)

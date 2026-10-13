@@ -5473,3 +5473,41 @@ arbitrary larger extents, const/narrow/enum typing, physical layout and portable
 ABI remain boundaries. Source/library/version and before/after fixture, runner,
 helper, implementation and corpus hashes protect the proof. Reproduction and
 scope are in [the SGI parsed-header proof](zigimg/reference_probes/sgi_header/README.md).
+
+
+### Shared stream guard diagnostics checkpoint — 2026-10-14
+
+File buffer-capacity and toss failures used custom V messages instead of Source's
+assertion diagnostic; relative-seek and pending writer-position additions likewise
+used custom overflow text. They now preserve the exact Source reached-unreachable
+and integer-overflow messages in ordinary and production builds. Guard conditions,
+I/O and cursor mutation order are unchanged. Existing GIF/TGA proof categories
+were updated to the aligned messages without changing their goldens.
+
+Both corresponding modes match **994 returning controls**, SHA-256
+`bd6c1a9360e9e336b09180e2f4d8be903e6e90b2841f9c7c2a6b830739b343a0`, and
+**155 exact panic/state pairs**, SHA-256
+`7fc070ee211fd87689aa75ed0f462ccbfe160e76a70c41f6059d0ec3cf6b2870`.
+Memory and file controls cover peek/EOF/capacity boundaries, relative seeks, valid
+tosses and largest fitting pending writer positions. Failures verify retained
+buffer rebasing before capacity assertion, memory cursor advancement before toss
+assertion, interface/physical seek additions and initialized pending writer bytes.
+Observers avoid getters whose own arithmetic fails after the primary trap. Actual
+unchanged compiled Source alone supplies expected outputs and diagnostics.
+
+All 61 image and 58 Vaxis test files pass, including a refill/EOF regression, with
+eighteen production/platform checks. The existing 37,133-record stream comparison,
+17 trap controls and four compiler rejection pairs pass in both modes with all
+full/original/streaming hashes unchanged. GIF record and TGA buffered-decoder
+output/state/vector hashes remain unchanged in both modes. The pre-fix diagnostic
+mismatch and initial historical-fixture `@VMODROOT` build error remain separate
+from completed proofs.
+
+Failed cursors beyond V's int carrier, invalid getters after failed tosses, forged/
+private stream state, V-only negative counts, other guard diagnostics, allocator/
+OOM/GC/lifetime, arbitrary custom readers/writers, cross-target runtime and portable
+ABI remain boundaries. GIF's wide failed toss cursor difference remains; matching
+messages do not imply matching unrepresentable state. Source/library/version and
+before/after fixture, implementation, runner, helper and corpus hashes protect
+the proof. Reproduction and scope are in
+[the stream guard proof](zigimg/reference_probes/stream_guards/README.md).
