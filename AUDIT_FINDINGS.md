@@ -3202,3 +3202,53 @@ TGA/file tests pass. Native/Linux application checks, three Windows DLLs, the ne
 Windows test executable in both modes and two Linux shared libraries build with
 cross builds using -gc none; cross-target runtime is unverified. Reproduction and
 exact scope are in zigimg/reference_probes/tga_decode/README.md.
+
+## GIF public packed records and production failure state — 2026-10-13
+
+GIF's header/descriptor/graphic-control flags exposed getters without methods
+for assigning Source packed fields. Comment/application constructors accepted
+omissions that Source rejects. Plain-text byte-count and indexed-background cast
+checks used assertions erased by V production builds. The buffered toss adapter
+also trapped before advancing its cursor, whereas Source advances then checks.
+
+Thirteen public setters now preserve other bits and check u3/u2 values before
+mutation. Source's nonexhaustive disposal tags 4..7 remain representable through
+V's unsafe enum carrier; values beyond seven trap. Comment data and all three
+application fields are required. The decoder explicitly initializes its partial
+comment placeholder, preserving the existing undefined-memory adaptation.
+Plain-text overflow and indexed background initialization/restoration casts now
+use explicit production guards. Shared toss preserves cursor mutation for offsets
+within V's `int` carrier and checks native usize overflow before assignment.
+
+`verify_gif_records_reference.py` compares unchanged pinned Source Debug with
+ordinary V and Source ReleaseSafe with production V. Both modes match **14,875
+returning observations**: 5,120 header, 4,608 descriptor and 5,120 graphic-control
+mutations plus 27 initialized record/default/copy/extension observations. Copies
+preserve inline values, optional controls, borrowed pixels/palettes, sub-image
+pointers and mutable extension slices. Returning SHA-256:
+`c440937a2fdf13c1e0d4842500aad5820a32d1e23d8680a32cfdbb12e712ffbe`.
+
+Thirty-five panic/state pairs cover invalid packed casts, plain-text overflow,
+graphic toss, short loop data, indexed1/2/4 background restorations and direct
+buffered-end/usize-overflow toss controls. Snapshots compare the flag byte, cursor,
+or defined decoder headers, palettes, frame records, applications and position.
+State SHA-256:
+`fff55be0cc9007627f8ec87bfea8aa6a12260f7a581ad909294dde3f1fda72c7`.
+Two complete constructors, four field omissions, thirteen immutable mutations
+and two cleanup compile controls verify the public contract. Five narrow-literal
+and one const-slice-pointee compile pairs record differences. A separate maximum
+usize toss records Source's failed cursor at `18446744073709551615` versus V's zero;
+wider failed cursor state remains outside V's array-index carrier. Source default
+magic/version arrays are initialized explicitly; undefined palette/comment/pixel
+storage and freed memory are excluded. Full tree/library/version pins and
+before/after fixture/runner/implementation hashes protect retained proof artifacts.
+
+Historical GIF Source/V decoder/renderer checks pass in both modes. Existing
+stream and PNG decoder/processor proofs retain prior hashes and exclusions.
+All 61 image/58 Vaxis files and focused production GIF/record/file tests pass.
+Native/Linux application checks, three Windows DLLs, the new Windows test executable
+in both modes and two Linux shared libraries build with cross builds using -gc none.
+Cross-target runtime, allocator/OOM/GC/lifetime, array-list growth, portable ABI,
+const/narrow/nonexhaustive enum typing, wider cursors and the complete decoder state
+space remain boundaries. Reproduction and exact scope are in
+zigimg/reference_probes/gif_records/README.md.

@@ -154,6 +154,14 @@ and accessors; GC replaces arenas and record reclamation. Source undefined
 magic/version, unread palette entries, incomplete comment records, and pixels
 unwritten by short LZW input share the initialization boundary above.
 
+The [GIF record proof](reference_probes/gif_records/README.md) adds thirteen
+packed-field setters and requires Source comment/application constructor fields.
+Byte-count overflow and indexed-background casts remain checked in production.
+Buffered toss advances a representable cursor before checking its end, preserving
+failure state. Both modes match 14,875 returning observations and 35 panic/state
+pairs; narrow literals, const-slice mutation, enum typing and wider failed cursor
+offsets remain documented representation boundaries.
+
 TGA preserves its packed records and 495-byte extension, grayscale/indexed/
 RGB555/BGR/BGRA decoding, all seven encoder storage formats, both row orders,
 raw and RLE packets, and the reader's 512-byte read-ahead into trailing data.

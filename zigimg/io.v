@@ -369,8 +369,14 @@ pub fn (mut stream ReadStream) discard_all(count usize) ! {
 }
 
 pub fn (mut stream ReadStream) toss(count usize) {
-	if count > usize(stream.end - stream.position) { panic('Stream toss exceeds buffered bytes') }
+	// Source updates seek before its end assertion. V array cursors use int;
+	// a failed offset beyond that carrier remains a representation boundary.
+	if count > ~usize(0) - usize(stream.position) { panic('integer overflow') }
+	if count > usize(0x7fffffff - stream.position) {
+		panic('Stream toss exceeds buffered bytes')
+	}
 	stream.position += int(count)
+	if stream.position > stream.end { panic('Stream toss exceeds buffered bytes') }
 }
 
 pub struct WriteStream {

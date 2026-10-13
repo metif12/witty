@@ -23,6 +23,24 @@ pub fn (flags GifHeaderFlags) use_global_color_table() bool {
 	return flags.raw & 0x80 != 0
 }
 
+pub fn (mut flags GifHeaderFlags) set_global_color_table_size(size u8) {
+	if size > 7 { panic('integer does not fit in destination type') }
+	flags.raw = (flags.raw & 0xf8) | size
+}
+
+pub fn (mut flags GifHeaderFlags) set_sorted(sorted bool) {
+	flags.raw = (flags.raw & 0xf7) | (u8(sorted) << 3)
+}
+
+pub fn (mut flags GifHeaderFlags) set_color_resolution(resolution u8) {
+	if resolution > 7 { panic('integer does not fit in destination type') }
+	flags.raw = (flags.raw & 0x8f) | (resolution << 4)
+}
+
+pub fn (mut flags GifHeaderFlags) set_use_global_color_table(use_table bool) {
+	flags.raw = (flags.raw & 0x7f) | (u8(use_table) << 7)
+}
+
 @[packed]
 pub struct GifHeader {
 pub mut:
@@ -59,6 +77,28 @@ pub fn (flags GifImageDescriptorFlags) is_interlaced() bool {
 
 pub fn (flags GifImageDescriptorFlags) has_local_color_table() bool {
 	return flags.raw & 0x80 != 0
+}
+
+pub fn (mut flags GifImageDescriptorFlags) set_local_color_table_size(size u8) {
+	if size > 7 { panic('integer does not fit in destination type') }
+	flags.raw = (flags.raw & 0xf8) | size
+}
+
+pub fn (mut flags GifImageDescriptorFlags) set_reserved(reserved u8) {
+	if reserved > 3 { panic('integer does not fit in destination type') }
+	flags.raw = (flags.raw & 0xe7) | (reserved << 3)
+}
+
+pub fn (mut flags GifImageDescriptorFlags) set_sort(sort bool) {
+	flags.raw = (flags.raw & 0xdf) | (u8(sort) << 5)
+}
+
+pub fn (mut flags GifImageDescriptorFlags) set_is_interlaced(interlaced bool) {
+	flags.raw = (flags.raw & 0xbf) | (u8(interlaced) << 6)
+}
+
+pub fn (mut flags GifImageDescriptorFlags) set_has_local_color_table(has_table bool) {
+	flags.raw = (flags.raw & 0x7f) | (u8(has_table) << 7)
 }
 
 @[packed]
@@ -101,6 +141,24 @@ pub fn (flags GifGraphicControlExtensionFlags) reserved() u8 {
 	return flags.raw >> 5
 }
 
+pub fn (mut flags GifGraphicControlExtensionFlags) set_has_transparent_color(transparent bool) {
+	flags.raw = (flags.raw & 0xfe) | u8(transparent)
+}
+
+pub fn (mut flags GifGraphicControlExtensionFlags) set_user_input(user_input bool) {
+	flags.raw = (flags.raw & 0xfd) | (u8(user_input) << 1)
+}
+
+pub fn (mut flags GifGraphicControlExtensionFlags) set_disposal_method(method GifDisposeMethod) {
+	if u8(method) > 7 { panic('integer does not fit in destination type') }
+	flags.raw = (flags.raw & 0xe3) | (u8(method) << 2)
+}
+
+pub fn (mut flags GifGraphicControlExtensionFlags) set_reserved(reserved u8) {
+	if reserved > 7 { panic('integer does not fit in destination type') }
+	flags.raw = (flags.raw & 31) | (reserved << 5)
+}
+
 @[packed]
 pub struct GifGraphicControlExtension {
 pub mut:
@@ -111,7 +169,7 @@ pub mut:
 
 pub struct GifCommentExtension {
 pub mut:
-	comment []u8
+	comment []u8 @[required]
 }
 
 pub fn (comment &GifCommentExtension) deinit() {
@@ -120,9 +178,9 @@ pub fn (comment &GifCommentExtension) deinit() {
 
 pub struct GifApplicationExtension {
 pub mut:
-	application_identifier [8]u8
-	authentification_code  [3]u8
-	data                   []u8
+	application_identifier [8]u8 @[required]
+	authentification_code  [3]u8 @[required]
+	data                   []u8  @[required]
 }
 
 pub fn (application &GifApplicationExtension) deinit() {
@@ -384,7 +442,7 @@ fn (mut codec GIF) read_graphic_rendering_block(mut stream ReadStream, mut conte
 			size := stream.take_byte()!
 			stream.discard_all(usize(size))!
 			sub_size := stream.take_byte()!
-			assert sub_size < 255
+			if sub_size == 255 { panic('integer overflow') }
 			stream.discard_all(usize(sub_size + 1))!
 		}
 		0x3b {}
@@ -409,7 +467,9 @@ fn gif_read_sub_blocks(mut stream ReadStream) ![]u8 {
 fn (mut codec GIF) read_special_purpose_block(mut stream ReadStream, mut context GifReaderContext, kind u8) ! {
 	match kind {
 		0xfe {
-			codec.comments << GifCommentExtension{}
+			codec.comments << GifCommentExtension{
+				comment: []u8{}
+			}
 			comment := gif_read_sub_blocks(mut stream)!
 			codec.comments[codec.comments.len - 1].comment = comment
 		}
@@ -531,7 +591,9 @@ fn gif_fill_background(mut frame AnimationFrame, colors []Rgb24, index u8) {
 	mut bytes := frame.pixels.as_bytes()
 	match mut frame.pixels {
 		IndexedStorage1, IndexedStorage2, IndexedStorage4, IndexedStorage8 {
-			assert usize(index) < usize(1) << format.bits_per_channel()
+			if usize(index) >= usize(1) << format.bits_per_channel() {
+				panic('integer does not fit in destination type')
+			}
 			for i in 0 .. bytes.len {
 				bytes[i] = index
 			}
@@ -572,8 +634,7 @@ fn gif_copy_frame(source &AnimationFrame, mut target AnimationFrame) {
 fn gif_store_index(mut frame AnimationFrame, target usize, index u8, checked bool) {
 	bits := frame.pixels.pixel_format().bits_per_channel()
 	mask := u8((u16(1) << bits) - 1)
-	if checked { assert index <= mask
-	 }
+	if checked && index > mask { panic('integer does not fit in destination type') }
 	mut bytes := frame.pixels.as_bytes()
 	bytes[int(target)] = index & mask
 }
