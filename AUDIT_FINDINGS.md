@@ -4331,3 +4331,59 @@ writer seek rejection, compiler controls and all final command records. Full
 Source/library/version pins and before/after fixture/input/consumer/runner/
 implementation hashes protect the proof. Exact scope, counts and reproduction
 are in [the bit-stream probe](zigimg/reference_probes/bitstream_contracts/README.md).
+
+## CCITT required records and retained decoder contracts — 2026-10-13
+
+CCITT code entries previously allowed omitted required fields and prevented
+mutation of copied records. Their represented run_length/code/code_length fields
+now require initialization and remain mutable, matching Source's table element
+record. The original Source type name is private; the fixture uses the inferred
+public table element type without changing visibility. V's named CcittCode remains
+an adapter. Three direct omission pairs reject in both compilers; complete code
+and default decoder construction passes. Both compilers reject direct mutation of
+the public constant code table, and scalar copies remain independent.
+
+`verify_ccitt_contracts_reference.py` imports unchanged complete Source and compares
+Debug/ordinary with ReleaseSafe/production. Both modes match **243,904 returning/
+error records**, covering all 195 table entries and their historical logical hash,
+every u13 code over both colors and seven length controls, every u8 length over
+193 distinct code/length pairs, all three lookup methods and reversal states,
+byte patterns, every table run, bounded output, prefixes and rows, continuation/
+write retries, zero dimensions, default/mutable/copy records and factory dimensions
+through native usize maximum. Return SHA-256:
+`b8944f0d9d04f1546416591d8afb61138d85f0022fb2312c72e6d6d855aba394`.
+
+**2,476 exact panic/state pairs** cover 310 narrowing casts and 2,166 arithmetic
+failures. Two u16 decoded_bits overflows are reached through alternating zero-
+pixel terminating codes. Exact diagnostics and names join initialized public
+decoder fields, segment/input/writer positions, unchanged current input and full
+initialized output in SHA-256
+`2ee32767c8af907f13cb06609c1a4d24102f4c17193aa22236ebe764e6b8cc46`.
+The proof preserves additional/make-up/terminating lookup priority, pending
+reversal before underflow/write errors, accumulated code lengths, narrow padding,
+EOF-as-zero, the invalid-code limit, unflushed partial output and decoder reuse.
+No decoder algorithm changes were needed for the represented returning/failure
+cases. The model partitions cases; unchanged compiled Source supplies every result.
+
+Private bit-reader/writer scratch, partially constructed factory records, empty
+pointer identities and allocator state are excluded. All observed caller storage
+is initialized. Maximal factory/record fields do not establish execution of huge
+row loops. Five separate compiler controls measure wider lookup arguments and
+factory/stored white values accepted by V; native u13/u1 typing, packed color,
+broader alias construction, underlying std.Io interfaces, GC/OOM/lifetime,
+physical layout, file-platform runtime and portable ABI remain boundaries.
+
+All 61 image and 58 Vaxis test files pass, as do production CCITT/TIFF/image-API
+tests, historical GIF/image-API/compression assertions in both modes, native/Linux
+application checks, three Windows DLLs, both Windows CCITT test executables and
+two Linux shared libraries. TIFF's 39,707 records and seventeen strict trap pairs
+retain their historical results in both modes. Cross builds establish build
+coverage only.
+
+Artifacts retain development fixture/compiler failures and the stopped proof used
+to correct the exact required-field diagnostic marker. Low disk space required
+pruning verified duplicate generated binaries and expanded proof files from prior
+checkpoints; their original checksum-verified archives and manifests remain.
+Source/library/version pins and before/after fixture/input/consumer/runner/
+implementation hashes protect the new proof. Exact scope, counts and reproduction
+are in [the CCITT probe](zigimg/reference_probes/ccitt_contracts/README.md).

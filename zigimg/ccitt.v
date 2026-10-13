@@ -2,10 +2,10 @@ module zigimg
 
 // Code tables copied mechanically from the unmodified locked CCITT source.
 pub struct CcittCode {
-pub:
-	run_length  u16
-	code        u16
-	code_length u8
+pub mut:
+	run_length  u16 @[required]
+	code        u16 @[required]
+	code_length u8  @[required]
 }
 
 pub enum CcittColor as u8 {
