@@ -382,6 +382,14 @@ Private source factories do not expose arbitrary user-defined color namespaces;
 V's generic helper adaptations and their focused checks are separate from the
 unchanged-source built-in comparisons.
 
+All nine grayscale records require an explicit value; alpha variants retain
+their opaque defaults. The 10,232-record native comparison covers construction,
+mutation, independent copies, by-value returns and exact conversion bits in both
+modes. Required/immutable constructor checks pass, and sub-byte conversion checks
+remain active in production. V's wider u8 carriers still accept invalid native
+u1/u2/u4 values at construction. Reproduction and the distinct width-failure
+boundaries are in [the grayscale record proof](reference_probes/grayscale_records/README.md).
+
 V arrays and GC replace allocator slices. Sub-byte scalar values use byte
 storage or packed backing words. Caller-selected allocation, allocation failures
 and allocator reclamation remain runtime adaptations.

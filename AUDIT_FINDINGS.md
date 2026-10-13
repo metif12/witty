@@ -4804,3 +4804,38 @@ exception flags, allocation/lifetime, other compiler/SDK implementations and
 unrepresented callers remain boundaries. Generic matrix required-field omissions
 remain a measured V compiler adaptation. Details and reproduction are in
 [the RGB colorspace record probe](zigimg/reference_probes/colorspace_records/README.md).
+
+### Grayscale required values and production conversion checks
+
+All nine pinned grayscale types require `value`, while V previously supplied an
+implicit zero when it was omitted. The nine represented fields now carry required
+markers. The three alpha defaults remain 255, 65535 and 1.0. The u1/u2/u4
+conversion adapters also use explicit width checks in place of assertions, so
+production builds reject out-of-range values in their wider carriers.
+
+`verify_grayscale_records_reference.py` matches **10,232 returning observations**
+in each corresponding compiler mode, SHA-256
+`dc6b5c8e04f277b0bd37a373851c553d46686d67092d95af8f7667b30d96b272`.
+Default/explicit alpha, every mutable field, copied records, whole-copy replacement
+and by-value returns retain all channel and public conversion bits, including
+signed zero and NaN payloads. Each mode passes nine accepted constructors, nine
+omitted-value rejection pairs and twelve immutable-field rejection pairs.
+
+Three compiler controls measure the remaining u8 carrier adaptation: V can
+construct values that Source's u1/u2/u4 fields reject. Six isolated failure pairs
+verify the checked integer-width panic category in both modes. Source fails at
+the input cast before record construction; V checks the retained wider value at
+conversion. Construction and failure timing for invalid channels remain distinct.
+
+Existing color-model and constructor/getter matrices retain both mode hashes.
+Matrix-copy, named/generic arithmetic, scientific-color and colorspace comparisons
+retain their corresponding results and compiler controls. All 61 image and 58
+Vaxis test files pass, with nineteen production/platform commands. Complete
+Source/library/math/SDK/compiler pins and before/after implementation, runner,
+fixture, input and consumer hashes protect the proof. The source implementation
+and visibility are unchanged.
+
+Undefined allocator storage, physical sub-byte representation, allocator/lifetime,
+arbitrary source generic grayscale types and unrepresented callers remain
+boundaries. Details and reproduction are in
+[the grayscale record proof](zigimg/reference_probes/grayscale_records/README.md).

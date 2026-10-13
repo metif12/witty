@@ -161,12 +161,12 @@ pub fn (color Cmykf32) to_colorf32() Colorf32 {
 
 pub struct Grayscalef32 {
 pub mut:
-	value f32
+	value f32 @[required]
 }
 
 pub struct Grayscalef32Alpha {
 pub mut:
-	value f32
+	value f32 @[required]
 	alpha f32 = 1
 }
 

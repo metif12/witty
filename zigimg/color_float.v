@@ -95,17 +95,17 @@ fn gray_colorf32(value f32, alpha f32) Colorf32 {
 }
 
 pub fn (gray Grayscale1) to_colorf32() Colorf32 {
-	assert gray.value <= 1
+	if gray.value > 1 { panic('integer does not fit in destination type') }
 	return gray_colorf32(f32(gray.value), 1)
 }
 
 pub fn (gray Grayscale2) to_colorf32() Colorf32 {
-	assert gray.value <= 3
+	if gray.value > 3 { panic('integer does not fit in destination type') }
 	return gray_colorf32(f32(gray.value) / 3, 1)
 }
 
 pub fn (gray Grayscale4) to_colorf32() Colorf32 {
-	assert gray.value <= 15
+	if gray.value > 15 { panic('integer does not fit in destination type') }
 	return gray_colorf32(f32(gray.value) / 15, 1)
 }
 

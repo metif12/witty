@@ -82,37 +82,37 @@ pub mut:
 
 pub struct Grayscale1 {
 pub mut:
-	value u8
+	value u8 @[required]
 }
 
 pub struct Grayscale2 {
 pub mut:
-	value u8
+	value u8 @[required]
 }
 
 pub struct Grayscale4 {
 pub mut:
-	value u8
+	value u8 @[required]
 }
 
 pub struct Grayscale8 {
 pub mut:
-	value u8
+	value u8 @[required]
 }
 
 pub struct Grayscale16 {
 pub mut:
-	value u16
+	value u16 @[required]
 }
 
 pub struct Grayscale8Alpha {
 pub mut:
-	value u8
+	value u8 @[required]
 	alpha u8 = 255
 }
 
 pub struct Grayscale16Alpha {
 pub mut:
-	value u16
+	value u16 @[required]
 	alpha u16 = 65535
 }
