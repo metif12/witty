@@ -1,5 +1,36 @@
 module zigimg
 
+fn test_pcx_dimension_arithmetic_preserves_u16_boundaries() {
+	codec := PCX{
+		header: PCXHeader{
+			xmin: 1
+			xmax: 65535
+			ymin: 65535
+			ymax: 65535
+		}
+	}
+	assert codec.width() == 65535
+	assert codec.height() == 1
+}
+
+fn test_pcx_oversized_dimension_rejection_precedes_zero_dimension_arithmetic() {
+	for dims in [[usize(0), 65536], [usize(65536), 0]] {
+		mut bytes := []u8{len: 128, init: 165}
+		mut stream := WriteStream.init_memory(mut bytes)
+		image := ImageUnmanaged{
+			width:  dims[0]
+			height: dims[1]
+		}
+		PCX.write_image(mut stream, image, PcxEncoderOptions{}) or {
+			assert err.msg() == 'Unsupported'
+			assert stream.get_pos() == 0
+			assert bytes == []u8{len: 128, init: 165}
+			continue
+		}
+		assert false
+	}
+}
+
 fn pcx_fixture(header PCXHeader, data []u8) []u8 {
 	mut bytes := pcx_header_bytes(header)
 	bytes << data

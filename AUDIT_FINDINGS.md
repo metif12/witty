@@ -3429,3 +3429,65 @@ alignment choices, undefined raw-empty pointers, narrow/const carriers, wider
 allocated array extents and arbitrary SIMD targets remain boundaries. Source
 visibility/implementation remain unchanged. Reproduction and exact scope are in
 zigimg/reference_probes/converter_contracts/README.md.
+
+## PCX production arithmetic and public failure state — 2026-10-13
+
+PCX coordinate checks, u16 scanline multiplication, end-relative VGA palette
+subtraction, zero image dimensions and odd-stride rounding used assertions erased
+by production builds. Explicit guards now preserve Source's integer-overflow
+traps in both modes. Inclusive dimensions use u16 arithmetic: spans of 65,535
+return normally; reversed coordinates and spans of 65,536 trap.
+
+Failure order remains intact. Oversized image dimensions return Unsupported
+before zero-dimension subtraction; zero dimensions trap before format rejection.
+Direct writing rejects unsupported pixel storage first, then emits the header
+before checking dimensions. Its even-width indexed8 path encodes the whole slice
+without evaluating height. Decoder scanline multiplication follows header/format/
+dimension checks and allocation. VGA offset underflow follows decoding and occurs
+before seeking. Existing indexed1/4 carrier assertions describe values Source's
+u1/u4 types cannot represent; they are outside this Source arithmetic repair.
+
+`verify_pcx_contracts_reference.py` compares unchanged pinned Source Debug with
+ordinary V and Source ReleaseSafe with production V. Both modes match **135,766
+returning observations**: 131,070 width/height records, one native header/default/
+fixed-array-copy record, 4,480 public image/direct writer cases, 207 decoder cases
+and eight return-order controls. Writer cases cover four supported layouts plus
+unsupported grayscale8, seven widths, two heights, four initialized patterns and
+eight memory capacities. Status, cursor and all visible output bytes match,
+including partial writes. Main-output SHA-256:
+`01a3c968e6dd94bc6b72e306cece9a095d71b27001f6fa88eb4ce6c991c82379`.
+Decoder/control SHA-256:
+`1ad4b52c6f7c2ecae9ba806bb86019a7182171bce87d3768f94d7cd9111a8633`.
+
+Decoder cases include 192 fully written small indexed/planar outputs with both
+compression flags, ignored zero-run markers and escaped high bytes, plus 15
+recoverable failures. They compare retained public headers/cursors and, only for
+successful fully initialized outputs, complete pixels and active palettes. Invalid
+headers and unsupported formats precede reversed-coordinate arithmetic.
+
+**41 strict panic/state pairs** cover eight direct coordinate failures, five read
+coordinate failures, three scanline products, five short VGA end offsets, ten zero
+image dimensions, two stride-rounding overflows and eight direct failures after
+header output. Strict integer-overflow diagnostics match; observers compare public
+header bytes and read cursors, or write cursors and initialized output buffers.
+State SHA-256:
+`622bc7a90a0f6de57f8e1cf369fdde0fde8aa892685ed79841b91feeb0cc949d`.
+
+All 61 image and 58 Vaxis test files pass, together with production PCX/image-API
+tests. The unchanged historical native PCX harness passes Debug and ReleaseSafe
+after its complete pinned test-import tree is copied into the temporary fixture.
+Existing PNG decoder/processor/failure-state matrices retain all prior hashes in
+both modes. Native/Linux application checks, three Windows DLLs, PCX Windows test
+executables in both modes and two Linux shared libraries build successfully.
+Cross builds use -gc none and do not establish cross-target runtime behavior.
+
+The proof uses public interfaces and initialized memory streams. Larger planar
+inputs, dummy-byte paths, Source-unwritten pixels, private allocated/freed failure
+state, file streams, allocator/OOM/GC/lifetime, enum/narrow/const typing, wider
+allocated extents and portable ABI remain boundaries. Source's nonexhaustive
+palette enum is represented with an explicit unsafe V carrier; compression values
+remain within Source's two valid tags. Header reserved-field naming and allocator
+parameters retain their documented V adapters. Source visibility/implementation
+remain unchanged. Full tree/library/version pins and before/after fixture/runner/
+implementation hashes protect retained proof artifacts. Reproduction and exact
+scope are in zigimg/reference_probes/pcx_contracts/README.md.

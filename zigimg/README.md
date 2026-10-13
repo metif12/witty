@@ -174,6 +174,12 @@ panic/state pairs. Historical matrix and precision hashes are checked independen
 of V assertions; undefined raw-empty pointers and private failed destination state
 remain outside the comparison.
 
+The [PCX contract proof](reference_probes/pcx_contracts/README.md) preserves
+coordinate, scanline, palette-offset and encoder arithmetic traps in production,
+including header/cursor failure order. Both modes match 135,766 returning
+observations and 41 panic/state pairs using initialized memory streams. Source
+unwritten pixels and private failed allocations remain outside the comparison.
+
 The [GIF record proof](reference_probes/gif_records/README.md) adds thirteen
 packed-field setters and requires Source comment/application constructor fields.
 Byte-count overflow and indexed-background casts remain checked in production.

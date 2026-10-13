@@ -43,14 +43,14 @@ pub mut:
 }
 
 pub fn (codec PCX) width() usize {
-	assert codec.header.xmax >= codec.header.xmin
-	assert codec.header.xmax - codec.header.xmin < 65535
+	if codec.header.xmax < codec.header.xmin { panic('integer overflow') }
+	if codec.header.xmax - codec.header.xmin == 65535 { panic('integer overflow') }
 	return usize(u16(codec.header.xmax - codec.header.xmin + 1))
 }
 
 pub fn (codec PCX) height() usize {
-	assert codec.header.ymax >= codec.header.ymin
-	assert codec.header.ymax - codec.header.ymin < 65535
+	if codec.header.ymax < codec.header.ymin { panic('integer overflow') }
+	if codec.header.ymax - codec.header.ymin == 65535 { panic('integer overflow') }
 	return usize(u16(codec.header.ymax - codec.header.ymin + 1))
 }
 
@@ -198,7 +198,7 @@ pub fn (mut codec PCX) read(mut stream ReadStream) !PixelStorage {
 	mut decoder := PcxRleDecoder{
 		reader: unsafe { &stream }
 	}
-	assert u32(codec.header.stride) * codec.header.planes <= 65535
+	if u32(codec.header.stride) * codec.header.planes > 65535 { panic('integer overflow') }
 	scanline_length := u16(codec.header.stride * codec.header.planes)
 	for y := usize(0); y < height; y++ {
 		mut offset := usize(0)
@@ -280,7 +280,7 @@ fn pcx_read_palette(mut stream ReadStream, mut palette []Rgba32, header PCXHeade
 	}
 	if !vga { return }
 	end := stream.get_end_pos()!
-	assert end >= 769
+	if end < 769 { panic('integer overflow') }
 	stream.seek_to(end - 769)!
 	if stream.take_byte()! != 0x0c { return error('InvalidData') }
 	for mut color in palette {
@@ -378,7 +378,7 @@ fn pcx_rle_fast_encode(source []u8, mut stream WriteStream) ! {
 pub fn PCX.write_image(mut stream WriteStream, image ImageUnmanaged, options PcxEncoderOptions) ! {
 	_ = options
 	if image.width > 65535 || image.height > 65535 { return error('Unsupported') }
-	assert image.width > 0 && image.height > 0
+	if image.width == 0 || image.height == 0 { panic('integer overflow') }
 	mut codec := PCX{
 		header: PCXHeader{
 			xmax: u16(image.width - 1)
@@ -410,7 +410,7 @@ pub fn PCX.write_image(mut stream WriteStream, image ImageUnmanaged, options Pcx
 	}
 
 	codec.header.stride = u16((f32(image.width) / 8.0) * f32(codec.header.bpp))
-	assert u32(codec.header.stride) + (codec.header.stride & 1) <= 65535
+	if u32(codec.header.stride) + (codec.header.stride & 1) > 65535 { panic('integer overflow') }
 	codec.header.stride += codec.header.stride & 1
 	codec.write(mut stream, image.pixels)!
 }
