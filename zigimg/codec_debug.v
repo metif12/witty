@@ -2,7 +2,7 @@ module zigimg
 
 import log
 
-// The host logger handles routing and filtering. IFF payloads retain the
+// The host logger handles routing and filtering. IFF/SGI payloads retain the
 // pinned Zig formatter's anonymous-record syntax, field order and enum labels.
 pub fn (header &BmhdHeader) debug() {
 	log.debug(iff_bmhd_debug_message(header))
@@ -28,7 +28,17 @@ fn (header IffHeader) debug() {
 }
 
 pub fn (header &SgiHeader) debug() {
-	log.debug('${header}')
+	log.debug(sgi_debug_message(header))
+}
+
+fn sgi_debug_message(header &SgiHeader) string {
+	name := sgi_debug_bytes(header.image_name[..])
+	padding := sgi_debug_bytes(header.dummy2[..])
+	return '.{ .compression = .${header.compression}, .bytes_per_channel = ${header.bytes_per_channel}, .dimension = .${header.dimension}, .x_size = ${header.x_size}, .y_size = ${header.y_size}, .z_size = ${header.z_size}, .pix_min = ${header.pix_min}, .pix_max = ${header.pix_max}, .dummy1 = ${header.dummy1}, .image_name = ${name}, .pixel_format = .${header.pixel_format}, .dummy2 = ${padding} }'
+}
+
+fn sgi_debug_bytes(bytes []u8) string {
+	return '{ ' + bytes.map(it.str()).join(', ') + ' }'
 }
 
 pub fn (bitmap &TiffBitmapDescriptor) debug() {

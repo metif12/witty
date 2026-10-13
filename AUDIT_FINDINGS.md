@@ -5260,3 +5260,33 @@ excluded. Source/library/version and before/after implementation, fixture, runne
 helper, settings/input, V logger and pinned formatter/logging hashes protect the
 proof. Scope and reproduction are in
 [the IFF debug proof](zigimg/reference_probes/iff_debug/README.md).
+
+
+### SGI header diagnostic payload checkpoint — 2026-10-13
+
+SgiHeader.debug previously used V's generic record presentation. It now sends
+Source's anonymous-record message to the standard host logger, preserving field
+order, punctuation/spacing, dotted enum labels and full unsigned decimal values.
+The 80-byte image name and all 404 padding bytes render as decimal lists,
+including zero/non-text bytes and the last padding element. No decoder body changes.
+
+Both corresponding modes match **6,470 records**, SHA-256
+`199f41511a424f50adaa8b631ea6aefeefb2bf8c903cbf58c728f736f951be47`.
+Each configured enabled/suppressed logger runs 3,235 cases covering every byte
+value at every array position, individual positions, enum combinations, scalar
+width/decimal boundaries, repeats and seeded full headers. Observations retain
+exact payload bytes, debug/default classification, callback counts and all caller
+fields before/after logging. The complete unchanged Source tree supplies the
+messages through its actual public debug method. The private header type is
+inferred from SGI.header without widening visibility or replacing formatting.
+
+All 61 image and 58 Vaxis test files pass, with two native-observed payload
+regressions and eighteen production/platform checks. Default logger levels,
+prefixes/routing/ownership/synchronization, eager versus lazy formatting,
+allocation/OOM, custom scopes, physical layout and logger ABI remain adaptations.
+Invalid enums and undefined fields are excluded. Source/library/version and
+before/after implementation, fixture, runner, helper, settings/input, V logger
+and pinned formatter/logging hashes protect the proof. A disk-space failure
+remains separate from final proofs; the previous archive was verified before
+pruning expanded duplicates. Scope and reproduction are in
+[the SGI debug proof](zigimg/reference_probes/sgi_debug/README.md).

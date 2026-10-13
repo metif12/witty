@@ -88,9 +88,9 @@ The writer succeeds without emitting bytes. Shared inline fixed storage has
 Resizing borrows that inline storage and retains old views. All three forms
 preserve exact Source bounds diagnostics before replacing the data descriptor,
 including production builds. The [fixed-buffer contract proof](reference_probes/fixed_storage_contracts/README.md)
-compares independent inline copies, borrowed views and retained failure state. Header debug hooks
-for SGI/IFF and TIFF metadata use V's standard logger/struct presentation;
-language-specific type/enum names and formatting differ from Zig's rendering.
+compares independent inline copies, borrowed views and retained failure state.
+SGI/IFF header debug hooks preserve Source payloads through V's standard logger;
+TIFF metadata still uses V's generic struct presentation.
 
 Public magic-number helpers preserve the source's shift order and target-endian
 dispatch, including checked shifts for signatures longer than four bytes.
@@ -287,7 +287,11 @@ IFF header debug hooks retain the pinned anonymous-record syntax, field order,
 signed values and enum labels through V's standard logger. The
 [diagnostic comparison](reference_probes/iff_debug/README.md) matches 142,912
 enabled/suppressed observations in both modes. Logger routing, prefixes and
-default-level behavior remain host-language adaptations.
+default-level behavior remain host-language adaptations. SGI preserves the same
+anonymous-record syntax and prints all 80 image-name and 404 padding bytes as
+decimal lists. Its [diagnostic comparison](reference_probes/sgi_debug/README.md)
+matches 6,470 observations in both modes, including every byte value at every
+array position and unchanged caller fields.
 
 The converter preserves all 460 pinned table entries, including unavailable
 indexed-to-gray/RGB-to-grayscale16 pairs and nine BGR555 entries that trap on
