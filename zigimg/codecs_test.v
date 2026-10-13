@@ -164,7 +164,10 @@ fn test_codec_output_failures_preserve_partial_fixed_buffer() {
 	mut writer := WriteStream.init_memory(mut buffer)
 	codec := QOI{
 		header: QoiHeader{
-			format: .rgb
+			width:      0
+			height:     0
+			format:     .rgb
+			colorspace: .srgb
 		}
 	}
 	codec.write(mut writer, Rgb24Pixels{}) or {

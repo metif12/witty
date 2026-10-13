@@ -3731,3 +3731,59 @@ unchanged. Full tree/library/version pins and before/after generated-input,
 fixture, runner and implementation hashes protect retained proof artifacts.
 Reproduction and exact scope are in
 zigimg/reference_probes/farbfeld_contracts/README.md.
+
+## QOI required records, color factories and parsed-header traps — 2026-10-13
+
+QOI color/header constructors omitted Source's required fields, encoder options
+were immutable, and pixel-format checking used an assertion erased by production.
+Required fields and mutable options are restored, with explicit exhaustive-format
+and unsupported-factory traps. The factory now recognizes transparent RGB24/RGBA32
+aliases while rejecting pointer inputs as Source does.
+
+Native comparison identified a separate parsed-header failure-order gap: Source's
+big-endian `takeStruct` validates both enum fields while swapping on little-endian
+targets, before assigning the public header. V now rejects malformed enum bytes
+at the same cursor with the previous initialized header intact. Full header reads
+still precede validation. Incomplete headers, wrong magic, bytewise packet failures
+and unconsumed/unvalidated decoder end markers retain their original behavior.
+Image dimensions intentionally truncate to u32, and encoding still uses the full
+pixel slice independently of header dimensions.
+
+`verify_qoi_contracts_reference.py` compares unchanged pinned Source Debug with
+ordinary V and Source ReleaseSafe with production V. Both modes match **198,560
+returning records**: 36,864 color/factory observations, three alias/options/layout
+records, 100 initialized header/dimension/format/copy records, 27,840 all-storage/
+encoder writes, 133,749 decoder/detection controls and four valid enum controls.
+Header/color/encoder SHA-256:
+`8f25ed18baa760e49e30af9e067589232b0b0c4e9a85ed20c0a91351015ace36`.
+Decoder/control SHA-256:
+`defd0517da4d75e5e2c29738aef5727c6a952721b330828c13f865d909dccf0e`.
+
+**677 strict panic/state pairs** cover every malformed format/colorspace byte,
+simultaneous enum failures before allocation arithmetic, direct/image entry points,
+initial cursors and five unsupported factory types. Exact panic text and names join
+initialized reader/header/input or actual caller-value snapshots in SHA-256
+`22a915f9007f737de8becde6d090e21e29d5ecc3541a5f145b303c0754e642e2`.
+Two complete constructors, seven field omissions, default codec acceptance,
+mutable options and const-option rejection pass compiler controls. Returning
+decodes compare changed independent result bytes and unchanged input; failures
+exclude private failed/freed storage. No empty pointer identities or inactive
+palette bytes are observed.
+
+All 61 image and 58 Vaxis test files pass, as do production codec/image-API tests
+and the unchanged historical native image-API harness in Debug/ReleaseSafe. Its
+encoder and detection matrix hashes remain unchanged. Existing PNG decoder,
+processor and 26 retained failure-state hashes remain unchanged in both modes.
+Native/Linux application checks, three Windows DLLs, Windows codec test
+executables in both modes and two Linux shared libraries build successfully.
+Checks used a task-owned RAM disk; completed artifacts were archived before
+detaching it. Cross builds use -gc none and do not establish runtime parity.
+
+Default Source QOI headers are undefined; the V placeholder is unobserved and
+outside the parity claim. Direct invalid typed enum values, big-endian runtime,
+allocator/OOM/GC/lifetime, wider allocated extents, boxed storage copies,
+pointer/slice layout, const/narrow typing, file streams and portable ABI remain
+boundaries. Source visibility/implementation remain unchanged. Full tree/library/
+version pins and before/after generated-input/consumer, fixture, runner and
+implementation hashes protect retained proof artifacts. Reproduction and exact
+scope are in zigimg/reference_probes/qoi_contracts/README.md.

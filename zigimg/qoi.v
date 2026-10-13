@@ -3,9 +3,9 @@ module zigimg
 @[packed]
 pub struct QoiColor {
 pub mut:
-	r u8
-	g u8
-	b u8
+	r u8 @[required]
+	g u8 @[required]
+	b u8 @[required]
 	a u8 = 255
 }
 
@@ -31,13 +31,15 @@ pub fn (color QoiColor) to_rgba32() Rgba32 {
 }
 
 pub fn QoiColor.from[T](pixel T) QoiColor {
-	$if T is Rgb24 {
+	$if T.unaliased_typ is &Rgb24 || T.unaliased_typ is &Rgba32 {
+		panic('reached unreachable code')
+	} $else $if T.unaliased_typ is Rgb24 {
 		return QoiColor{
 			r: pixel.r
 			g: pixel.g
 			b: pixel.b
 		}
-	} $else $if T is Rgba32 {
+	} $else $if T.unaliased_typ is Rgba32 {
 		return QoiColor{
 			r: pixel.r
 			g: pixel.g
@@ -45,7 +47,7 @@ pub fn QoiColor.from[T](pixel T) QoiColor {
 			a: pixel.a
 		}
 	} $else {
-		panic('unreachable')
+		panic('reached unreachable code')
 	}
 }
 
@@ -61,20 +63,26 @@ pub enum QoiFormat as u8 {
 @[packed]
 pub struct QoiHeader {
 pub mut:
-	width      u32
-	height     u32
-	format     QoiFormat
-	colorspace QoiColorspace
+	width      u32           @[required]
+	height     u32           @[required]
+	format     QoiFormat     @[required]
+	colorspace QoiColorspace @[required]
 }
 
 pub struct QoiEncoderOptions {
-pub:
+pub mut:
 	colorspace QoiColorspace = .srgb
 }
 
 pub struct QOI {
 pub mut:
-	header QoiHeader
+	// Source leaves this header undefined until read or explicitly initialized.
+	header QoiHeader = QoiHeader{
+		width:      0
+		height:     0
+		format:     .rgb
+		colorspace: .srgb
+	}
 }
 
 pub fn QOI.format_detect(mut stream ReadStream) !bool {
@@ -118,13 +126,20 @@ pub fn (codec QOI) height() usize {
 }
 
 pub fn (codec QOI) pixel_format() !PixelFormat {
-	assert u8(codec.header.format) in [u8(3), 4]
+	if u8(codec.header.format) !in [u8(3), 4] { panic('switch on corrupt value') }
 	return if codec.header.format == .rgb { PixelFormat.rgb24 } else { PixelFormat.rgba32 }
 }
 
 pub fn (mut codec QOI) read(mut stream ReadStream) !PixelStorage {
 	if stream.take(4)!.bytestr() != 'qoif' { return error('InvalidData') }
 	bytes := stream.take(10) or { return error('InvalidData') }
+	$if little_endian {
+		// Source's big-endian takeStruct checks enums while swapping fields,
+		// before assigning the parsed header to the codec.
+		if bytes[8] !in [u8(3), 4] || bytes[9] !in [u8(0), 1] {
+			panic('invalid enum value')
+		}
+	}
 	codec.header = QoiHeader{
 		width:      read_be_u32(bytes[..4])
 		height:     read_be_u32(bytes[4..8])
@@ -134,9 +149,15 @@ pub fn (mut codec QOI) read(mut stream ReadStream) !PixelStorage {
 	count := codec.width() * codec.height()
 	mut pixels := PixelStorage.init(codec.pixel_format()!, count)!
 	mut current := QoiColor{
+		r: 0
+		g: 0
+		b: 0
 		a: 255
 	}
 	mut lut := [64]QoiColor{init: QoiColor{
+		r: 0
+		g: 0
+		b: 0
 		a: 0
 	}}
 	mut index := usize(0)
@@ -214,9 +235,15 @@ fn qoi_hash(color QoiColor) int {
 
 fn qoi_write_data[T](mut stream WriteStream, data []T) ! {
 	mut lut := [64]QoiColor{init: QoiColor{
+		r: 0
+		g: 0
+		b: 0
 		a: 0
 	}}
 	mut previous := QoiColor{
+		r: 0
+		g: 0
+		b: 0
 		a: 255
 	}
 	mut run := 0
