@@ -539,6 +539,16 @@ palette traps. Fixed storage has eight- and 256-element specializations and
 a general inline-array variant. GC replaces reclamation, V initializes
 undefined source fields/storage, and the remaining general-purpose map API
 stays open.
+
+Invalid parsed TIFF tag IDs, compression and resolution units preserve Source's
+exact `invalid enum value` panic, including production builds. The
+[parsed enum comparison](reference_probes/tiff_enums/README.md) matches 1,824
+returning records / 3,648 attempts and 276 exact panic/state pairs in both modes.
+It covers both byte orders, memory/file streams, complete IFD consumption before
+insertion, duplicate replacement, inline halfword quirks, EOF precedence, retries
+and earlier bitmap mutations in hash iteration order. Snapshots retain complete
+initialized public metadata, fixed-storage backing and caller buffers.
+
 TIFF read/readImage and strips now decode grayscale1/grayscale8/indexed8/RGB24/
 RGBA32 with uncompressed, PackBits, CCITT RLE, LZW, DEFLATE, and Pixar DEFLATE.
 Versions are ignored, only the first IFD is used, and compressed byte counts

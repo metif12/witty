@@ -15,9 +15,8 @@ STDLIB_SOURCES = ("hash_map.zig", "math.zig", "math/pow.zig", "math/powi.zig")
 PINNED_STDLIB_SHA256 = "5fd6e9e31ace4bf2e70d2c01b131764cccfadef6f2ba9b287e072894826a3026"
 INDEX_CHECKS = ("index out of bounds", "array.get: index out of range", "array.set: index out of range")
 BOUNDS = {
-    "unknown_tag": ("invalid enum value", "invalid TIFF tag enum"),
-    "compression_enum": ("invalid enum value", "invalid TIFF compression enum"),
-    "resolution_enum": ("invalid enum value", "invalid TIFF resolution enum"),
+    **{name: ("invalid enum value",) * 2 for name in
+       ("unknown_tag", "compression_enum", "resolution_enum")},
     "bits_capacity": ("index out of bounds: index 9, len 8",) * 2,
     "extra_capacity": ("index out of bounds: index 9, len 8",) * 2,
     "palette_capacity": ("index out of bounds: index 512, len 256",) * 2,

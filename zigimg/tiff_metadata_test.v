@@ -1,5 +1,69 @@
 module zigimg
 
+import os
+
+fn test_tiff_buffered_ifd_keeps_duplicates_and_inline_enum_halves_on_retry() {
+	path := os.join_path(os.temp_dir(), 'witty-tiff-metadata-${os.getpid()}')
+	defer { os.rm(path) or {} }
+	for endianess in [TiffEndian.little, .big] {
+		mut bytes := [u8(99)]
+		tiff_test_append(mut bytes, 4, 2, endianess)
+		for tag in [
+			TiffPackedTag{
+				tag_id:      256
+				data_type:   4
+				data_count:  1
+				data_offset: 111
+			},
+			TiffPackedTag{
+				tag_id:      259
+				data_type:   5
+				data_count:  0
+				data_offset: if endianess == .little { u32(0xa35c8005) } else { u32(0x8005a35c) }
+			},
+			TiffPackedTag{
+				tag_id:      256
+				data_type:   4
+				data_count:  1
+				data_offset: 222
+			},
+			TiffPackedTag{
+				tag_id:      296
+				data_type:   0
+				data_count:  65535
+				data_offset: if endianess == .little { u32(0xa35c0002) } else { u32(0x0002a35c) }
+			},
+		] {
+			tiff_test_append(mut bytes, tag.tag_id, 2, endianess)
+			tiff_test_append(mut bytes, tag.data_type, 2, endianess)
+			tiff_test_append(mut bytes, tag.data_count, 4, endianess)
+			tiff_test_append(mut bytes, tag.data_offset, 4, endianess)
+		}
+		tiff_test_append(mut bytes, 0x12345678, 4, endianess)
+		os.write_file_array(path, bytes)!
+		mut file := os.open(path)!
+		mut buffer := []u8{len: 4, init: 165}
+		mut stream := ReadStream.init_file(file, mut buffer)
+		mut codec := TIFF{
+			endianess: endianess
+			ifd:       TiffIFD.init(&stream, 1)!
+		}
+		for _ in 0 .. 2 {
+			codec.ifd.read_tags(endianess)!
+			codec.decode_bitmap(mut stream)!
+			assert codec.ifd.num_tag_entries == 4
+			assert codec.ifd.next_ifd_offset == 0x12345678
+			assert codec.ifd.tags_map.count() == 3
+			assert codec.bitmap.image_width == 222
+			assert codec.bitmap.compression == .packbits
+			assert codec.bitmap.resolution_unit == .inch
+			assert codec.bitmap.bits_per_sample.data == [u16(1)]
+			assert stream.get_pos() == u64(bytes.len)
+		}
+		file.close()
+	}
+}
+
 fn tiff_test_mix(mut hash []u64, value u64) {
 	hash[0] = (hash[0] ^ value) * u64(1099511628211)
 }

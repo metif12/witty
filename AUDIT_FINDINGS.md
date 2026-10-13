@@ -5550,3 +5550,56 @@ omits its commented-out data body. Source/library/version and before/after fixtu
 implementation, runner, helper and input hashes protect retained artifacts.
 Scope and reproduction are in
 [the exact PNG filtering bounds proof](zigimg/reference_probes/png_filter_bounds/README.md).
+
+
+### TIFF parsed enum diagnostics and retained metadata checkpoint — 2026-10-14
+
+Invalid tag IDs, compression values and resolution units still used custom V
+panic messages. All three now preserve Source's exact `invalid enum value`
+diagnostic in ordinary and production builds. Validation predicates, inline
+conversion, reads and assignment order are unchanged. IFD parsing consumes the
+complete tag array and next-offset word before insertion; bitmap decoding resets
+its sample view and then assigns fields in Source-compatible HashMap order.
+
+Both modes match **1,824 returning records / 3,648 attempts**, SHA-256
+`b923196ab9bdec0916a6936a54fb956e2017c7022b3b51e9e5a0d29aaf0cedab`, and
+**276 exact panic/state pairs**, SHA-256
+`b1cbd56b09caa543790322bd7ad063130020c435b8a20eea7a4461e47ac3bd64`.
+Memory and 4/16/64-byte file buffers cover both endian orders, all 32 known tag
+IDs, every valid compression/resolution combination, high-valued enum neighbors,
+unknown tag positions, duplicate replacement, simultaneous faults, byte prefixes
+and retries. Compression/resolution inline conversion retains Source's ignored
+type/count and opposite-half behavior. Recoverable seek/EOF/unsupported errors
+keep their preceding mutations; complete invalid values trap before assignment.
+
+Snapshots retain stream position, buffered length and all caller buffer bytes;
+initialized header/IFD fields, complete map iteration and tag values; every bitmap
+scalar/rational/strip array, active fixed-storage length and initialized backing
+entry. Actual unchanged compiled Source provides every output and failure oracle.
+Private failed allocations, padding and addresses are excluded. The pre-fix proof
+matched every returning record and its first public failure snapshot before
+rejecting the custom diagnostic; it remains separate from completed comparisons.
+
+The buffered module regression covers duplicates, retry, high-valued compression
+and inline halfword conversion. Historical metadata enum categories now require
+the aligned messages while retaining their output golden. The first decoder
+rerun encountered a missing archive in the shared Zig compiler cache; its retry
+uses task-owned caches, and the failed attempt is retained separately.
+
+All 61 image and 58 Vaxis test files pass. Historical TIFF metadata retains its
+86-record hash and fifteen checked trap pairs in both modes. The 39,707-case
+decoder comparison likewise retains SHA-256
+`22c929806d09ca615c320574abc8bb2be684f3d5596ba940f220164977fd6698` and all
+seventeen checked trap pairs in both modes.
+Eighteen production/platform checks pass, including native/Linux application
+checks, Windows dependency libraries, both Linux shared libraries and the new
+fixture's Windows/Linux builds. Four final formatting/diff/Python checks pass.
+
+Manually corrupted typed enums, undefined/default Source storage, private failed
+allocations, allocator/OOM/GC/lifetime, physical packed views, arbitrary larger
+counts/extents, custom/nonseekable readers, null optional arrays in this fixture,
+const/narrow typing, other-target runtime and portable ABI remain boundaries.
+Source/library/version and before/after implementation, fixture, runner, helper
+and corpus hashes protect the retained proof. Pinned TIFF encoding still emits no
+bytes. Scope and reproduction are in
+[the TIFF parsed enum proof](zigimg/reference_probes/tiff_enums/README.md).

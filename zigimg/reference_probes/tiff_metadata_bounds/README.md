@@ -47,11 +47,17 @@ A failure requires a nonzero exit, empty stdout, no `UNEXPECTED` marker anywhere
 in either stream, and the expected category in an actual panic header. Ordinary
 errors and incidental backtrace text cannot satisfy a case; a later panic with
 the same category is not distinguished by this classifier alone. Existing V
-enum, FixedStorage and array diagnostics have explicit mappings
+FixedStorage and array diagnostics have explicit mappings
 to the source categories; this proves the checked boundary rather than exact
 diagnostic text, backtrace, signal or cleanup equivalence. `verify.py` is a
 strict auxiliary checker for already-built binaries and does not establish
 their provenance.
+
+Invalid TIFF tag/compression/resolution enums now use Source's exact
+`invalid enum value` message. The [parsed enum proof](../tiff_enums/README.md)
+checks the sole complete diagnostic together with retained public state and
+buffered EOF/assignment order. This older runner retains its category checks and
+unchanged returning golden.
 
 The full general-purpose HashMap API, allocator ownership/reclamation, allocation
 failure injection, ABI/layout and undefined storage remain outside this proof.

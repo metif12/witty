@@ -72,7 +72,7 @@ fn tiff_tag_id(value u16) TiffTagId {
 	for tag in tiff_tag_ids {
 		if u16(tag) == value { return tag }
 	}
-	panic('invalid TIFF tag enum')
+	panic('invalid enum value')
 }
 
 pub enum TiffTagType as u16 {

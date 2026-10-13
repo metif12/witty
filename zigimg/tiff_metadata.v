@@ -29,11 +29,11 @@ fn tiff_compression(value u16) TiffCompressionType {
 		.deflate, .uncompressed_old, .packbits, .pixar_deflate] {
 		if u16(kind) == value { return kind }
 	}
-	panic('invalid TIFF compression enum')
+	panic('invalid enum value')
 }
 
 fn tiff_resolution_unit(value u16) TiffResolutionUnit {
-	if value !in [u16(1), 2, 3] { panic('invalid TIFF resolution enum') }
+	if value !in [u16(1), 2, 3] { panic('invalid enum value') }
 	return unsafe { TiffResolutionUnit(value) }
 }
 
