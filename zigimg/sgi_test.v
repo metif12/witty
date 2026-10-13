@@ -1,5 +1,45 @@
 module zigimg
 
+fn test_sgi_rle_table_size_keeps_the_largest_u16_extent() {
+	mut tables := []u8{}
+	for _ in 0 .. 8191 {
+		append_be_u32(mut tables, 66040)
+	}
+	for _ in 0 .. 8191 {
+		append_be_u32(mut tables, 0)
+	}
+	mut stream := ReadStream.init_memory(tables)
+	mut codec := SGI{
+		header: SgiHeader{
+			compression:       .rle
+			bytes_per_channel: 1
+			y_size:            1
+			z_size:            8191
+		}
+	}
+	mut output := []u8{}
+	codec.uncompress_bitmap(mut stream, mut output)!
+	assert stream.get_pos() == 65528 && output.len == 0
+}
+
+fn test_sgi_rle_uses_two_byte_words_for_every_other_channel_width() {
+	for bpc in [u8(0), 2, 3, 255] {
+		mut stream := ReadStream.init_memory([u8(0), 0, 2, 8, 0, 0, 0, 4, 127, 1, 0x12, 0x34])
+		mut codec := SGI{
+			header: SgiHeader{
+				compression:       .rle
+				bytes_per_channel: bpc
+				x_size:            1
+				y_size:            1
+				z_size:            1
+			}
+		}
+		mut output := []u8{len: 2, init: 165}
+		codec.uncompress_bitmap(mut stream, mut output)!
+		assert output == [u8(0x12), 0x34] && stream.get_pos() == 12
+	}
+}
+
 fn sgi_fixture(header SgiHeader, data []u8) []u8 {
 	mut bytes := [u8(1), 0xda, u8(header.compression), header.bytes_per_channel]
 	for value in [u16(header.dimension), header.x_size, header.y_size, header.z_size] {
@@ -84,7 +124,8 @@ fn test_sgi_16_bit_channels_preserve_source_alpha_byte_index_and_byte_swap() {
 	}, [u8(0x11), 0x11, 0x22, 0x22, 0x33, 0x33, 0x44, 0x44, 0x55, 0x55, 0x66, 0x66]))
 	image := SGI.read_image(mut reader)!
 	match image.pixels {
-		Rgb48Pixels { assert image.pixels.data == [
+		Rgb48Pixels {
+			assert image.pixels.data == [
 				Rgb48{
 					r: 0x2222
 					g: 0x4444
@@ -95,8 +136,11 @@ fn test_sgi_16_bit_channels_preserve_source_alpha_byte_index_and_byte_swap() {
 					g: 0x3333
 					b: 0x5555
 				},
-			] }
-		else { assert false }
+			]
+		}
+		else {
+			assert false
+		}
 	}
 
 	reader = ReadStream.init_memory(sgi_fixture(SgiHeader{
@@ -112,15 +156,19 @@ fn test_sgi_16_bit_channels_preserve_source_alpha_byte_index_and_byte_swap() {
 	is_little := unsafe { (&u8(&word))[0] == 1 }
 	alpha := if is_little { u16(0x7800) } else { u16(0x78) }
 	match rgba.pixels {
-		Rgba64Pixels { assert rgba.pixels.data == [
+		Rgba64Pixels {
+			assert rgba.pixels.data == [
 				Rgba64{
 					r: 0x1234
 					g: 0x5678
 					b: 0x9abc
 					a: alpha
 				},
-			] }
-		else { assert false }
+			]
+		}
+		else {
+			assert false
+		}
 	}
 }
 
@@ -185,7 +233,8 @@ fn test_sgi_16_bit_rle_ignores_high_command_byte() {
 	}, rows))
 	image := SGI.read_image(mut reader)!
 	match image.pixels {
-		Rgb48Pixels { assert image.pixels.data == [
+		Rgb48Pixels {
+			assert image.pixels.data == [
 				Rgb48{
 					r: 0x1111
 					g: 0x4444
@@ -201,8 +250,11 @@ fn test_sgi_16_bit_rle_ignores_high_command_byte() {
 					g: 0x4444
 					b: 0x7777
 				},
-			] }
-		else { assert false }
+			]
+		}
+		else {
+			assert false
+		}
 	}
 }
 

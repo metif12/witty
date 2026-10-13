@@ -3617,3 +3617,67 @@ Source visibility/implementation remain unchanged. Full tree/library/version
 pins and before/after fixture/runner/implementation hashes protect retained proof
 artifacts. Reproduction and exact scope are in
 zigimg/reference_probes/image_editor_contracts/README.md.
+
+## SGI production RLE bounds and retained decoding state — 2026-10-13
+
+SGI's channel-size and absolute-offset checks used assertions erased by production
+builds. Its RLE table allocation also widened arithmetic that Source evaluates in
+u16. Explicit guards now preserve the largest fitting 8,191-row/65,528-byte table
+and trap on 8,192 rows before allocation or input consumption, retain u16 channel
+products and preserve absolute-offset underflow. Byte indices are checked against
+actual extents before narrowing to int, retaining full Source diagnostics.
+
+Native comparison identified a separate failure-order difference in repeated
+16-bit RLE words: V could write the high byte before failing to read the low byte.
+Both bytes are now read before output, as in Source. Literal assignments check the
+destination before reading each source byte; repeated assignments check each
+destination byte after the full source word is available. Partial writes and
+simultaneous source/destination failures retain Source behavior. Two-byte command
+words still ignore their high byte for every channel width other than one.
+
+`verify_sgi_contracts_reference.py` compares unchanged pinned Source Debug with
+ordinary V and Source ReleaseSafe with production V. Both modes match **795
+returning observations**: one initialized header/layout record, 25 dimension
+records, 360 format dispatches and 409 public decode/decompression controls.
+Controls cover initialized output capacities, packet prefixes, literal/repeated
+counts 0..2, early terminators, multiple rows/channels, reversed packet storage,
+trailing input, offsets, table boundaries, uncompressed/fully defined RLE reads
+and validation order. All fixture enum tags are valid Source values.
+Header/dimension/dispatch SHA-256:
+`5d61def8690c6c1546c829ce329e011797d9aa47f8a68f66cd20eedd89eae9cd`.
+Returning decoder SHA-256:
+`4cc111e3180b24ed9a7eb7601251324feb34c4ecde170b703759e0ced25ea41c`.
+
+**636 strict panic/state pairs** cover 549 packet bounds, 75 offset/data bounds,
+four table arithmetic failures, two channel products and six zero-channel public
+reads. Full panic text and case names are included in the state golden. Snapshots
+compare reader cursors, initialized public headers, four active inline palette
+entries and initialized caller output, including partially completed writes.
+Private table/data buffers and failed/freed pixel allocations remain excluded.
+State SHA-256:
+`3e8a57024951a8948a64b350aaa3859a88338ece93378485fa104b4dfc0e0dd9`.
+
+Source's word-view reinterpretation keeps the byte slice's original length. V
+now checks the same logical word index/length before reading defined word bytes.
+Source word reads beyond the physical byte allocation remain undefined and are
+excluded. RGBA64's byte-indexed/endian-swapped alpha, two-byte grayscale selecting
+grayscale8, unclipped RLE runs, absolute tables, complete compressed-input
+consumption and the no-op writer remain intact. The private header type is inferred
+through its public field without modifying Source visibility.
+
+All 61 image and 58 Vaxis files pass, as do production SGI/image-API tests and the
+unchanged historical native SGI harness in Debug/ReleaseSafe. Existing PNG decoder/
+processor/failure-state hashes remain unchanged in both modes. Native/Linux app
+checks, three Windows DLLs, SGI Windows test executables in both modes and two
+Linux shared libraries build successfully. Interrupted checks were rerun after
+clearing regenerable compiler caches and superseded discovery/development outputs;
+completed checkpoint proofs and pinned sources/tools were preserved. Cross builds
+use -gc none and do not establish cross-target runtime behavior.
+
+Default Source headers/inactive inline palettes, malformed successful reads with
+unwritten private data, allocator/OOM/GC/lifetime, pointer/slice layout, file
+streams, invalid enum tags, wider allocated extents and portable ABI remain
+boundaries. Source visibility/implementation remain unchanged. Full tree/library/
+version pins, generated input hashes and before/after fixture/runner/implementation
+hashes protect retained proof artifacts. Reproduction and exact scope are in
+zigimg/reference_probes/sgi_contracts/README.md.

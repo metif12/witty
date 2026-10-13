@@ -192,6 +192,12 @@ overlapping-row failure, and crop arithmetic/bounds before narrowing wide offset
 Both modes match 42,034 returning observations and 524 panic/state pairs across
 direct and both image APIs. Three inherited zero-row loops remain documented.
 
+The [SGI contract proof](reference_probes/sgi_contracts/README.md) restores u16
+RLE table arithmetic, channel-size/offset traps and byte bounds in production.
+Literal and repeated words retain Source failure order and partial output.
+Both modes match 795 returning observations and 636 panic/state pairs;
+word reads beyond Source's physical byte allocation remain excluded.
+
 The [GIF record proof](reference_probes/gif_records/README.md) adds thirteen
 packed-field setters and requires Source comment/application constructor fields.
 Byte-count overflow and indexed-background casts remain checked in production.
