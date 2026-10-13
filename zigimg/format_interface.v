@@ -128,8 +128,7 @@ pub fn PAM.format_interface() FormatInterface {
 }
 
 fn pam_interface_write(mut stream WriteStream, image ImageUnmanaged, options EncoderOptions) ! {
-	selected := if options is PamEncoderOptions { options } else { PamEncoderOptions{} }
-	PAM.write_image(mut stream, image, selected)!
+	PAM.write_image(mut stream, image, options)!
 }
 
 pub fn PBM.format_interface() FormatInterface {

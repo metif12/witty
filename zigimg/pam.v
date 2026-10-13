@@ -37,12 +37,12 @@ pub fn (tuple PamTupleType) to_string() string {
 
 pub struct PamHeader {
 pub mut:
-	width      usize
-	height     usize
-	depth      usize
-	maxval     u16
-	tuple_type PamTupleType
-	comments   []string
+	width      usize        @[required]
+	height     usize        @[required]
+	depth      usize        @[required]
+	maxval     u16          @[required]
+	tuple_type PamTupleType @[required]
+	comments   []string     @[required]
 }
 
 fn pam_whitespace(byte u8) bool {
@@ -72,7 +72,14 @@ fn pam_read_line(mut stream ReadStream) ![]u8 {
 }
 
 pub fn PamHeader.read(mut stream ReadStream) !PamHeader {
-	mut header := PamHeader{}
+	mut header := PamHeader{
+		width:      0
+		height:     0
+		depth:      0
+		maxval:     0
+		tuple_type: .mono
+		comments:   []
+	}
 	mut has_width := false
 	mut has_height := false
 	mut has_depth := false
@@ -225,8 +232,12 @@ pub fn (header PamHeader) init_image() !ImageUnmanaged {
 
 pub fn PamHeader.from_image(image ImageUnmanaged) !PamHeader {
 	mut header := PamHeader{
-		width:  image.width
-		height: image.height
+		width:      image.width
+		height:     image.height
+		depth:      0
+		maxval:     0
+		tuple_type: .mono
+		comments:   []
 	}
 	match image.pixel_format() {
 		.grayscale1 {
@@ -298,7 +309,7 @@ pub fn PamHeader.from_image(image ImageUnmanaged) !PamHeader {
 }
 
 pub struct PamEncoderOptions {
-pub:
+pub mut:
 	comments                []string
 	add_duration_as_comment bool
 }
@@ -422,15 +433,16 @@ fn pam_read_frame(mut stream ReadStream) !(ImageUnmanaged, bool) {
 	return image, true
 }
 
-pub fn PAM.write_image(mut stream WriteStream, image ImageUnmanaged, options PamEncoderOptions) ! {
-	mut comments := options.comments.clone()
-	if options.add_duration_as_comment && image.is_animation() {
+pub fn PAM.write_image(mut stream WriteStream, image ImageUnmanaged, options EncoderOptions) ! {
+	selected := if options is PamEncoderOptions { options } else { PamEncoderOptions{} }
+	mut comments := selected.comments.clone()
+	if selected.add_duration_as_comment && image.is_animation() {
 		comments << 'loop count: ${image.animation.loop_count}'
 	}
 	PAM.write_frame(mut stream, image, PamEncoderOptions{ comments: comments })!
-	if options.add_duration_as_comment && image.is_animation() { comments.pop() }
+	if selected.add_duration_as_comment && image.is_animation() { comments.pop() }
 	for frame in image.animation.frames {
-		if options.add_duration_as_comment {
+		if selected.add_duration_as_comment {
 			comments << 'duration: ${pam_format_duration(frame.duration)}'
 		}
 		frame_image := ImageUnmanaged{
@@ -439,75 +451,90 @@ pub fn PAM.write_image(mut stream WriteStream, image ImageUnmanaged, options Pam
 			height: image.height
 		}
 		PAM.write_frame(mut stream, frame_image, PamEncoderOptions{ comments: comments })!
-		if options.add_duration_as_comment { comments.pop() }
+		if selected.add_duration_as_comment { comments.pop() }
 	}
 	stream.flush()!
 }
 
-pub fn PAM.write_frame(mut stream WriteStream, image ImageUnmanaged, options PamEncoderOptions) ! {
+pub fn PAM.write_frame(mut stream WriteStream, image ImageUnmanaged, options EncoderOptions) ! {
 	mut header := PamHeader.from_image(image)!
-	header.comments = options.comments
+	if options !is PamEncoderOptions {
+		panic("access of union field 'pam' while field '${options.format()}' is active")
+	}
+	header.comments = (options as PamEncoderOptions).comments
 	header.write(mut stream)!
-	for index := 0; index < int(image.width * image.height); index++ {
-		match image.pixels {
-			Grayscale1Pixels {
-				assert image.pixels.data[index].value <= 1
-				stream.write_byte(image.pixels.data[index].value)!
+	for row := usize(0); row < image.height; row++ {
+		if image.width != 0 && row > ~usize(0) / image.width { panic('integer overflow') }
+		offset := row * image.width
+		for column := usize(0); column < image.width; column++ {
+			// Source's omitted grayscale2 arm traps before any pixel indexing.
+			if image.pixels is Grayscale2Pixels { panic('reached unreachable code') }
+			if column > ~usize(0) - offset { panic('integer overflow') }
+			position := offset + column
+			if position >= image.pixels.len() {
+				panic('index out of bounds: index ${position}, len ${image.pixels.len()}')
 			}
-			Grayscale4Pixels {
-				assert image.pixels.data[index].value <= 15
-				stream.write_byte(image.pixels.data[index].value)!
-			}
-			Grayscale8Pixels {
-				stream.write_byte(image.pixels.data[index].value)!
-			}
-			Grayscale16Pixels {
-				pam_write_u16(mut stream, image.pixels.data[index].value)!
-			}
-			Grayscale8AlphaPixels {
-				stream.write_byte(image.pixels.data[index].value)!
-				stream.write_byte(image.pixels.data[index].alpha)!
-			}
-			Grayscale16AlphaPixels {
-				pam_write_u16(mut stream, image.pixels.data[index].value)!
-				pam_write_u16(mut stream, image.pixels.data[index].alpha)!
-			}
-			Rgb555Pixels {
-				pixel := image.pixels.data[index]
-				stream.write_byte(u8((pixel.raw >> 10) & 31))!
-				stream.write_byte(u8((pixel.raw >> 5) & 31))!
-				stream.write_byte(u8(pixel.raw & 31))!
-			}
-			Bgr555Pixels {
-				pixel := image.pixels.data[index]
-				stream.write_byte(u8(pixel.raw & 31))!
-				stream.write_byte(u8((pixel.raw >> 5) & 31))!
-				stream.write_byte(u8((pixel.raw >> 10) & 31))!
-			}
-			Rgb24Pixels {
-				pam_write_rgb(mut stream, image.pixels.data[index])!
-			}
-			Bgr24Pixels {
-				pam_write_rgb(mut stream, image.pixels.data[index])!
-			}
-			Rgba32Pixels {
-				pam_write_rgb(mut stream, image.pixels.data[index])!
-				stream.write_byte(image.pixels.data[index].a)!
-			}
-			Bgra32Pixels {
-				pam_write_rgb(mut stream, image.pixels.data[index])!
-				stream.write_byte(image.pixels.data[index].a)!
-			}
-			Rgb48Pixels {
-				pam_write_rgb(mut stream, image.pixels.data[index])!
-			}
-			Rgba64Pixels {
-				pam_write_rgb(mut stream, image.pixels.data[index])!
-				pam_write_u16(mut stream, image.pixels.data[index].a)!
-			}
-			// Pinned fromImage accepts grayscale2, but writeFrame omits it.
-			else {
-				panic('unreachable')
+			index := int(position)
+			match image.pixels {
+				Grayscale1Pixels {
+					assert image.pixels.data[index].value <= 1
+					stream.write_byte(image.pixels.data[index].value)!
+				}
+				Grayscale4Pixels {
+					assert image.pixels.data[index].value <= 15
+					stream.write_byte(image.pixels.data[index].value)!
+				}
+				Grayscale8Pixels {
+					stream.write_byte(image.pixels.data[index].value)!
+				}
+				Grayscale16Pixels {
+					pam_write_u16(mut stream, image.pixels.data[index].value)!
+				}
+				Grayscale8AlphaPixels {
+					stream.write_byte(image.pixels.data[index].value)!
+					stream.write_byte(image.pixels.data[index].alpha)!
+				}
+				Grayscale16AlphaPixels {
+					pam_write_u16(mut stream, image.pixels.data[index].value)!
+					pam_write_u16(mut stream, image.pixels.data[index].alpha)!
+				}
+				Rgb555Pixels {
+					pixel := image.pixels.data[index]
+					stream.write_byte(u8((pixel.raw >> 10) & 31))!
+					stream.write_byte(u8((pixel.raw >> 5) & 31))!
+					stream.write_byte(u8(pixel.raw & 31))!
+				}
+				Bgr555Pixels {
+					pixel := image.pixels.data[index]
+					stream.write_byte(u8(pixel.raw & 31))!
+					stream.write_byte(u8((pixel.raw >> 5) & 31))!
+					stream.write_byte(u8((pixel.raw >> 10) & 31))!
+				}
+				Rgb24Pixels {
+					pam_write_rgb(mut stream, image.pixels.data[index])!
+				}
+				Bgr24Pixels {
+					pam_write_rgb(mut stream, image.pixels.data[index])!
+				}
+				Rgba32Pixels {
+					pam_write_rgb(mut stream, image.pixels.data[index])!
+					stream.write_byte(image.pixels.data[index].a)!
+				}
+				Bgra32Pixels {
+					pam_write_rgb(mut stream, image.pixels.data[index])!
+					stream.write_byte(image.pixels.data[index].a)!
+				}
+				Rgb48Pixels {
+					pam_write_rgb(mut stream, image.pixels.data[index])!
+				}
+				Rgba64Pixels {
+					pam_write_rgb(mut stream, image.pixels.data[index])!
+					pam_write_u16(mut stream, image.pixels.data[index].a)!
+				}
+				// Pinned fromImage accepts grayscale2, but writeFrame omits it.
+				else {
+					panic('reached unreachable code')
+				}
 			}
 		}
 	}

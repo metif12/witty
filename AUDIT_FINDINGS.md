@@ -3910,3 +3910,75 @@ Source implementation/visibility remain unchanged. Full tree/library/version pin
 and before/after generated-input/consumer, fixture, runner and implementation
 hashes protect retained artifacts. Reproduction and exact scope are in
 zigimg/reference_probes/netpbm_contracts/README.md.
+
+## PAM public option unions, production traversal and retained stream state — 2026-10-13
+
+PAM's public encoder options were immutable and its write methods accepted only
+the PAM payload instead of Source's complete option union. Both mutable fields
+and full-union calls are restored. Image writing defaults other option tags to
+empty comments/no duration metadata. Frame writing retains unsupported-format
+rejection before the exact PAM arm trap, then header output before traversal.
+The format interface now passes the original option union through directly.
+
+Frame writing flattened width × height into an int, changing wide extents and
+pixel-bounds failures. It now follows usize row/column loops and checked offsets,
+retaining complete earlier pixels/frames before the first missing pixel. Zero
+height bypasses traversal even with maximum width. Source's omitted grayscale2
+writer arm retains its production unreachable trap before indexing. Output
+capacity errors keep their precedence through partial headers and components.
+
+`verify_pam_contracts_reference.py` compares unchanged Source Debug with ordinary
+V and Source ReleaseSafe with production V. Both modes match
+**74,192 returning observations**, including three option borrow/copy/mutation
+records: all tuple/depth/max-value combinations, every byte component, wide
+little-endian samples, complete input prefixes, sequence compatibility, header
+validation and overflow precedence, detection, all 24 storage/17 option tags,
+partial output, wide dimensions and animation comments. Decoder/writer SHA-256:
+`6918abab3af429f8fd98f930b0e70b800f100dd20c0f62571c82c373d373834f`.
+Option SHA-256:
+`ce4a89a7351dd22af4ec69bfe6cd07b1810e24616ac54ab2bbc842d720b90af1`.
+
+**1,723 strict panic/state pairs** cover 960 wrong option arms, 368 pixel bounds,
+275 grayscale2 unreachable cases and 120 decoder dimension overflows. Full
+messages and names join reader/writer cursors, initialized caller output,
+main/frame metadata and bytes, comments and unchanged input in SHA-256
+`97974518c141b10b9c5952a4502ff89aa03a00c4e7015c0d91e9f203d5988908`.
+Successful decodes compare independently allocated, fully written pixels/frames
+before and after valid mutation. Failed private/freed decoder storage is excluded.
+Animation controls include signed loop counts, raw comment profiles, both flags
+and eleven f32 words through signed zero/subnormal/extrema/infinity/NaN.
+
+Default options, mutation of both fields and two immutable-binding rejections
+pass paired compiler controls. One separate adaptation records Source's const
+comment-slice element rejection and V's mutable-array acceptance. Borrowed caller
+arrays and replacement of whole option fields retain matching defined behavior.
+Source Header/TupleType remain private; a compiler control requires the actual
+visibility rejection. The exposed V header requires all six fields, with a full
+constructor and six omission controls recorded separately as V-only checks.
+Public Source encoding/decoding verifies header behavior without visibility edits;
+private helper constructors/layout and V builder placeholders are unobserved.
+
+Tuple inference/rest matching, duplicate numeric fields, raw comments, component
+validation/scaling, little-endian 16-bit samples, monochrome-alpha AND, short
+trailing magic retention, full-sequence compatibility and duration/loop defaults
+remain unchanged. Loop comments remain main-image-only; durations appear per
+frame, preserving the pinned decimal float formatter.
+
+All 61 image and 58 Vaxis test files pass, as do production PAM/image-API
+checks and unchanged historical native PAM/image-API assertions in Debug and
+ReleaseSafe. The historical 19,968-word duration matrix retains FNV
+721aeceda8f4ab7d. The image-API encoder/detection hashes and existing PNG decoder,
+processor and 26 retained failure-state hashes remain unchanged in both modes.
+Native/Linux application checks, three Windows DLLs, Windows PAM test executables
+in both modes and two Linux shared libraries build successfully. Proof/build
+outputs and compiler temporaries use the task-owned RAM disk; verified artifacts
+are preserved before detaching it. Cross builds use -gc none and do not establish
+runtime parity.
+
+Allocator/OOM/GC/lifetime, explicit reclamation, file streams, wider allocations,
+enum/narrow/const typing, exposed private helpers, physical records/slices/unions,
+boxed payload copies, big-endian runtime and portable ABI remain boundaries.
+Source visibility/implementation remain unchanged. Full tree/library/version pins
+and before/after generated-input/consumer, fixture, runner and implementation
+hashes protect retained artifacts. Reproduction and exact scope are in
+zigimg/reference_probes/pam_contracts/README.md.
