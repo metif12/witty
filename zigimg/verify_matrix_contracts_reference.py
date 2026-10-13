@@ -22,6 +22,7 @@ import verify_math_reference as named_math
 import verify_math_generic_reference as generic_math
 import verify_color_science_reference as science
 import verify_color_space_reference as colorspace
+import verify_color_trig_results as color_results
 
 MATH_HASHES = {'cbrt.zig': 'a4995a636473d996e6ffb75c8a2890ca24e9457110dbefe244c05b21440e24af', 'atan.zig': '14a8df19a689f837e78b9b22f3a375c69ec5cd4bb0443d37bc55be638701fe45', 'atan2.zig': 'ad6ac04bf60dbe2b88bb953080b0dcace55007dbce4eadccaa5a810baadcc76d', 'pow.zig': '5df36194e30a115dac017fbfff11eacc5ed7b44fe9e39404afe9c3bd30829591', 'frexp.zig': '2a9cf896243de2e7bf46513614eae704626b6a4898c54abc047df66759739080', 'ldexp.zig': '2c3c54f8e10fb9ebaae5443832bbc4ad3d87ff35a50e109b71c0d8844feaeeaa', 'modf.zig': '339b1dd9b92e0df04e9b0d57929f5390f032627dbd7af8699009322573439cdc'}
 
@@ -105,10 +106,11 @@ def main():
             raise AssertionError('unexpected compiler versions')
         implementations, runner_hash = implementation_hashes(repo), digest(Path(__file__))
         generators = {str(Path(item[1].__file__).relative_to(repo)): digest(Path(item[1].__file__)) for item in HISTORICAL}
+        generators[str(Path(color_results.__file__).relative_to(repo))] = digest(Path(color_results.__file__))
         (root / 'provenance.json').write_text(json.dumps(dict(
             source_sha256=PINNED_SOURCE_SHA256, stdlib_sha256=PINNED_STDLIB_SHA256, math_sha256=MATH_HASHES, versions=versions,
             target=args.target, zig_mode=mode, v_prod=args.v_prod, fixtures=fixtures, generators=generators,
-            historical_source_modes={name: 'Debug' if name in OPTIMIZED_COLORS else mode for name, *_ in HISTORICAL},
+            historical_source_modes={name: mode for name, *_ in HISTORICAL},
             implementation_sha256=implementations, runner_sha256=runner_hash), indent=2) + '\n')
         zbase = [str(zig), 'build-exe', '-target', args.target, '-lc', '-O', mode,
                  '--global-cache-dir', str(root / 'zig-global'), '--cache-dir', str(root / 'zig-cache')]
@@ -133,6 +135,11 @@ def main():
                 outputs.append(result.stdout.splitlines())
             if any(len(output) != expected_count for output in outputs) or len(cases) != expected_count:
                 raise AssertionError(f'{label}: count changed')
+            if label in OPTIMIZED_COLORS:
+                summary, differences = color_results.compare_color_records(label, cases, *outputs, args.v_prod)
+                (root / (label + '-differences.json')).write_text(json.dumps(differences, indent=2) + '\n')
+                print(f'{label}: {summary["matching_records"]} matching records, {len(differences)} retained differences', flush=True)
+                return summary
             h = hashlib.sha256()
             for case, native, translated in zip(cases, *outputs):
                 if native != translated:
@@ -148,16 +155,18 @@ def main():
         rows = corpus()
         result = compare('matrix_contracts', rows, EXPECTED_RETURNS, EXPECTED_RETURN_SHA256, named=True)
         groups = Counter(row[0] for row in rows)
-        historical = {name: compare(name, module.corpus(), count, expected_hash,
-                                   source_mode='Debug' if name in OPTIMIZED_COLORS else mode)
+        historical = {name: compare(name, module.corpus(), count, expected_hash)
                       for name, module, count, expected_hash in HISTORICAL}
-        # Both historical color oracles used Source Debug in both V modes.
-        # Retain them and measure Source optimization differences separately.
+        # Ordinary colors use their historical Debug oracle. Production now
+        # uses ReleaseSafe. Cross-mode observations remain separate controls.
         optimized_colors = {}
         for label, module, count, _ in HISTORICAL:
             if label not in OPTIMIZED_COLORS:
                 continue
             _, expected_hash, expected_differences, expected_difference_hash = OPTIMIZED_COLORS[label]
+            if args.v_prod:
+                expected_differences = color_results.COLOR_RESULTS[label, True][3]
+                expected_difference_hash = color_results.COLOR_RESULTS[label, True][4]
             build = zbase.copy()
             build[build.index('-O') + 1] = 'ReleaseSafe'
             exe = label + '-optimized-native'
@@ -172,7 +181,7 @@ def main():
             native, translated = optimized.stdout.splitlines(), baseline.stdout.splitlines()
             if (len(native) != count or len(translated) != count
                     or hashlib.sha256(b'\n'.join(native)).hexdigest() != expected_hash
-                    or hashlib.sha256(b'\n'.join(translated)).hexdigest() != historical[label]['sha256']):
+                    or hashlib.sha256(b'\n'.join(translated)).hexdigest() != historical[label]['v_sha256']):
                 raise AssertionError('color optimization output changed')
             differences, difference_hash = [], hashlib.sha256()
             for (name, row), expected, actual in zip(module.corpus(), native, translated):
@@ -187,7 +196,9 @@ def main():
             for name in (exe, label + '-native', label + '-translated'):
                 symbols[name] = proof.run(['nm', '-u', str(root / name)], 'symbols-' + name, timeout=args.timeout).stdout
             combined = b'___sincosf_stret'
-            if combined not in symbols[exe] or any(combined in symbols[name] for name in (label + '-native', label + '-translated')):
+            native_paired = combined in symbols[label + '-native']
+            v_paired = combined in symbols[label + '-translated']
+            if combined not in symbols[exe] or native_paired != args.v_prod or v_paired != args.v_prod:
                 raise AssertionError('color sin/cos symbol selection changed')
             optimized_colors[label] = dict(source_sha256=expected_hash, differing_records=len(differences),
                                           difference_sha256=difference_hash.hexdigest())

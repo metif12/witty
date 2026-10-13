@@ -33,31 +33,35 @@ generic := zigimg.Matrix[Rows5]{matrix: Rows5{}}
 identity := zigimg.Matrix.identity[Rows5]()
 ```
 
-The four unchanged historical corpora retain **31,639 matching records**:
+The four unchanged historical corpora contain **31,639 returning records**.
+Ordinary mode retains all original matching hashes:
 
-| Corpus | Records | SHA-256 |
+| Corpus | Records | Ordinary SHA-256 |
 | --- | ---: | --- |
 | Named math | 12,419 | `23be1b2c20e279a493dda64087e1916b58e6fdbc8bdcb76469c15b7231a4fb31` |
 | Generic math | 6,467 | `f303b568d8901d722b61cb805d2ccd212e57c10a758d2b530f15ab4d710e9c0f` |
 | Scientific colors | 6,961 | `d97550d49bb60cf224fc60999d3603d6199aa9c99702a7c79b8d7ca9f10e8566` |
 | RGB colorspaces | 5,792 | `262e3417fd251373234d20d0b06d7fe53adc63028db4a708a71d99677cf9d6a0` |
 
-Named/generic arithmetic uses Source Debug/ReleaseSafe with the corresponding
-V mode. Both color histories preserve their original **Source Debug oracle**
-against both V modes. Arithmetic comparisons canonicalize NaN payloads, retaining
-all other bits. The three V shape guards remain active in production.
+All histories now use corresponding Source Debug/ReleaseSafe modes. Named and
+generic math retain their hashes in production. Scientific production matches
+`0f89855f7a8b779c3c40600a456fe34c9f88e8a006fb1702ce0d1906b7a939a8` exactly.
+Production colorspaces match 5,776 records and retain sixteen differences,
+Source hash `f5cd4a24f8ea84428809ee7d55725c652f38d25add39f402276b1b62949fd5ba`,
+V hash `2043e0e258e164d0671082d5a356d5a80c2f993580dee63aae38c8258e6d79cd`,
+difference hash `e32e3f667c6a3c4e437f9fd658f7f3e10a3f32f67b835f944d958ca9ae5064d1`.
+The HSLuv ray change closes the five scientific and sixteen colorspace production
+differences originally recorded by this probe; details are in
+[the HSLuv probe](../hsluv_contracts/README.md).
+Arithmetic comparisons canonicalize NaN payloads, retaining all other bits.
+The three V shape guards remain active in production.
 
-Separate unchanged Source ReleaseSafe color controls retain **five scientific
-and 32 colorspace differences** against either V mode. Their native hashes are
-`0f89855f7a8b779c3c40600a456fe34c9f88e8a006fb1702ce0d1906b7a939a8` and
-`f5cd4a24f8ea84428809ee7d55725c652f38d25add39f402276b1b62949fd5ba`;
-difference hashes are `0bee6436f84cce99c39d3ce12ea0d2796f72f90536a4632046943507ef73574c`
-and `d8037c0389d0cac691c8e1efc9305e75dd348040e77cfefe3de30e3016f1e697`.
-The five scientific rows affect HSLuv saturation and returned chroma. Optimized
-native binaries import Apple's combined `___sincosf_stret`; Debug and V use
-separate calls. Symbol selection is checked, without asserting it explains every
-colorspace difference. Exact optimized color parity remains outside this checkpoint.
-Full inputs and both differing outputs are retained separately from matching records.
+Separate cross-mode controls compare Source ReleaseSafe with ordinary V and
+retain the original five scientific and 32 colorspace differences. They describe
+build-mode effects, not corresponding-mode regressions. The ordinary Source/ V
+binaries use separate sin/cos symbols; corresponding production binaries import
+Apple's combined `___sincosf_stret`. Full inputs and both differing outputs are
+retained with exact counts/hashes, without claiming full optimized color parity.
 
 Source/stdlib/compiler versions and before/after implementation, runner, fixture,
 corpus-generator, input and consumer hashes protect the proof. Complete Source
@@ -67,9 +71,10 @@ selected library SHA-256 is
 The seven inherited color std.math helper hashes are also checked before/after.
 Native imports retain original visibility. No Source implementation is substituted.
 
-Session artifacts are retained at
+The original checkpoint artifacts are retained at
 `/Users/alex/.cache/witty-matrix-contracts-20261013/verified-proofs.tar.gz`,
 with a SHA-256 checksum, per-file manifest and complete archive read-back.
+The updated corresponding-mode runs are in the HSLuv checkpoint artifact.
 Earlier fixtures/comparisons and the temporary-disk-space failure have separate
 verified archives inside that artifact. Final V/compiler caches and temporaries
 are task-owned and excluded from the retained manifest.

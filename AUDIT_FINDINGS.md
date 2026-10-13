@@ -4673,3 +4673,58 @@ Undefined storage, padding/SIMD ABI, zero-length arrays, extra alias layers,
 generic factory forwarding, allocation/lifetime and unrepresented shapes remain
 boundaries. Reproduction, historical/difference hashes and constructor examples
 are in [the matrix contract probe](zigimg/reference_probes/matrix_contracts/README.md).
+
+### HSLuv required fields and optimized ray evaluation
+
+`HSLuv` and `HSLuvAlpha` now require all seven represented fields, matching pinned
+`color.zig`. Public mutation and inline copies remain available. The source's
+float4 factory/argument signature typos remain intact and receive explicit
+accepted/rejected compiler controls.
+
+The HSLuv ray now evaluates its paired trig operations through the SDK primitive
+selected by Source ReleaseSafe on Darwin. Ordinary V retains separate calls.
+Only this primitive crosses the C boundary; the ray algorithm remains in V.
+A broad paired-call experiment introduced 109 scientific mismatches and was
+restricted to the ray calculation. Public cylindrical conversions retain their
+independent calls; the experiment is consistent with caller-dependent optimizer
+selection and does not establish one global optimization rule for those APIs.
+
+`verify_hsluv_contracts_reference.py` matches **9,424 new records** in each mode:
+ordinary V/Source Debug SHA-256
+`f07e05a03320b8b6fe232813a45686fd2b21d4ebb7767a812900c0bd11436762`, and production
+V/Source ReleaseSafe SHA-256
+`e26a6d77e9297e5e9e3224fda48e876eba468443deea92806b181bda37f766af`.
+Copies, replacement, by-value returns, retained originals, both conversion
+directions, alpha/plain views and the float4 bridge are observed with four
+matrices, every field target, threshold inputs and unusual f32 bit patterns.
+Copy/bridge bits preserve NaN payloads; arithmetic canonicalizes payloads only.
+Both modes pass three accepted consumer pairs, seven required-field rejection
+pairs, seven immutable-field rejection pairs and two preserved-typo rejection pairs.
+
+The **6,961 scientific-color records now match corresponding native modes**:
+ordinary retains its Debug hash; production matches the native ReleaseSafe hash
+`0f89855f7a8b779c3c40600a456fe34c9f88e8a006fb1702ce0d1906b7a939a8`. This closes
+all five scientific differences recorded in the previous checkpoint. Ordinary
+colorspaces remain exact across all 5,792 records. Production closes sixteen
+colorspace differences and retains **16 cylindrical-conversion differences**,
+V hash `2043e0e258e164d0671082d5a356d5a80c2f993580dee63aae38c8258e6d79cd`,
+difference hash `e32e3f667c6a3c4e437f9fd658f7f3e10a3f32f67b835f944d958ca9ae5064d1`.
+The native ReleaseSafe hash is unchanged. Full inputs/outputs and exact counts/hashes
+prevent additional differences from being accepted. The standalone color runners
+and retained matrix runner now compare corresponding compiler modes and report
+these limits explicitly. Ordinary/ReleaseSafe cross-mode controls are separate.
+
+The 6,208 matrix-copy, 12,419 named-math and 6,467 generic-math hashes remain
+unchanged. Matrix frontend controls and all three production shape guards remain
+active. All 61 image and 58 Vaxis test files pass; all 17 production/platform
+commands from the preceding checkpoint pass. Before/after Source/library/math/SDK,
+implementation, fixture, runner, input and consumer hashes protect the new proof.
+An initial development output write exhausted temporary disk space; its diagnostics
+remain retained, and inactive preview outputs were compressed after read-back checks.
+An additional retained production build also exhausted space; the complete final
+proof passed after space became available, with the failed run kept separately.
+
+Undefined storage, floating-point exception flags, physical ABI, lifetime/allocation,
+other compiler/SDK implementations and unrepresented caller optimizations remain
+boundaries. Constructor examples, result pins and reproduction are in
+[the HSLuv contract probe](zigimg/reference_probes/hsluv_contracts/README.md).

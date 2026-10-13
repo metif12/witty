@@ -3,17 +3,19 @@ module zigimg
 import math.bits
 
 #include <math.h>
+#include "@VMODROOT/zigimg/color_trig.h"
 
 fn C.sqrtf(f32) f32
 fn C.sinf(f32) f32
 fn C.cosf(f32) f32
+fn C.witty_color_sincosf(f32, &f32, &f32)
 fn C.expf(f32) f32
 fn C.logf(f32) f32
 fn C.truncf(f32) f32
 fn C.fabsf(f32) f32
 
-// Keep the source's independent trig calls. Apple clang otherwise combines
-// sinf/cosf at -O3 into a sincos routine with different final rounding.
+// Public cylindrical conversions retain independent source calls. LLVM may
+// pair them after inlining into a consumer; that depends on the caller.
 @[noinline]
 fn color_sin_f32(value f32) f32 {
 	return C.sinf(value)
@@ -22,6 +24,15 @@ fn color_sin_f32(value f32) f32 {
 @[noinline]
 fn color_cos_f32(value f32) f32 {
 	return C.cosf(value)
+}
+
+// Source Debug uses independent calls; Darwin ReleaseSafe selects a paired
+// intrinsic. The primitive wrapper follows the corresponding V build mode.
+fn color_sincos_f32(value f32) (f32, f32) {
+	mut sine := f32(0)
+	mut cosine := f32(0)
+	C.witty_color_sincosf(value, &sine, &cosine)
+	return sine, cosine
 }
 
 fn color_float_bits(value f32) u32 {

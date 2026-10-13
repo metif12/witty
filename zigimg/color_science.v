@@ -175,18 +175,18 @@ pub fn (value CIELCHuvAlpha) to_float4() Float4 {
 @[packed]
 pub struct HSLuv {
 pub mut:
-	h f32
-	s f32
-	l f32
+	h f32 @[required]
+	s f32 @[required]
+	l f32 @[required]
 }
 
 @[packed]
 pub struct HSLuvAlpha {
 pub mut:
-	h     f32
-	s     f32
-	l     f32
-	alpha f32
+	h     f32 @[required]
+	s     f32 @[required]
+	l     f32 @[required]
+	alpha f32 @[required]
 }
 
 @[packed]
@@ -729,8 +729,9 @@ struct HSLuvLine {
 }
 
 fn (value HSLuvLine) ray_length_until_intersect(angle f32) f32 {
-	product := value.a * color_cos_f32(angle)
-	return value.b / (color_sin_f32(angle) - product)
+	sine, cosine := color_sincos_f32(angle)
+	product := value.a * cosine
+	return value.b / (sine - product)
 }
 
 pub fn HSLuv.from_cielchuv(value CIELCHuv, xyz_to_rgb_matrix Float4x4) HSLuv {

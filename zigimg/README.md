@@ -318,11 +318,21 @@ and production V/Source ReleaseSafe, including full retained storage and NaN
 payloads after cell, row and whole-field mutation. Three required-field and
 eighteen immutable-field rejection pairs pass. V 0.5.2 still ignores the required
 attribute on generic `Matrix[B]`; its six omission controls record that limitation.
-The historical arithmetic and color hashes remain unchanged. The color histories
-use Source Debug against both V modes; separate Source ReleaseSafe controls
-retain five scientific and 32 colorspace differences. Details, compiler limits
+The historical arithmetic and ordinary color hashes remain unchanged. The color histories
+now use corresponding Source modes. Scientific production matches ReleaseSafe;
+16 optimized colorspace differences remain. Details, compiler limits
 and reproduction are in
 [the matrix contract probe](reference_probes/matrix_contracts/README.md).
+
+HSLuv and HSLuvAlpha require all seven fields and preserve mutable inline copies.
+Their 9,424-record contract comparison matches Source Debug/ordinary V and
+ReleaseSafe/production V, with seven required-field and seven immutable-field
+rejection pairs. Darwin production uses the native paired trig primitive for
+HSLuv ray evaluation. This closes all five scientific and sixteen colorspace
+differences from the preceding checkpoint; sixteen cylindrical-conversion
+differences remain separately pinned. The float4 signature typos are preserved.
+Reproduction and limits are in
+[the HSLuv contract probe](reference_probes/hsluv_contracts/README.md).
 
 CIE XYZ/Lab/Luv/LCh, HSLuv and Oklab models retain scalar, alpha and Float4
 conversion APIs. The 6,961-case comparison preserves every non-NaN output

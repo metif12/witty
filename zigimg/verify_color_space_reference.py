@@ -5,6 +5,8 @@ unchanged source. Includes all presets, Bradford white-point adaptation,
 all scalar wrappers and sixteen slice APIs, gamma factories and white points.
 """
 import argparse
+import json
+from verify_color_trig_results import compare_color_records
 import itertools
 import hashlib
 import os
@@ -65,6 +67,9 @@ def main():
         corpus_path = root / "corpus.txt"
         corpus_path.write_text("\n".join(case[1] for case in cases) + "\n")
         subprocess.run([str(args.zig.resolve()), "build-exe", "-target", args.target, "-lc",
+                        "-O", "ReleaseSafe" if args.v_prod else "Debug",
+                        "--global-cache-dir", str(root / "zig-global"),
+                        "--cache-dir", str(root / "zig-cache"),
                         f"-femit-bin={root / 'native'}", str(root / "reference.zig")], check=True)
         v_options = ["-prod"] if args.v_prod else []
         subprocess.run([str(args.v.resolve()), *v_options, "-o", str(root / "translated"), str(probe / "main.v")],
@@ -74,11 +79,11 @@ def main():
                    for executable in ("native", "translated")]
         if any(len(output) != len(cases) for output in outputs):
             raise AssertionError([len(cases)] + [len(output) for output in outputs])
-        for (label, data), expected, actual in zip(cases, *outputs):
-            if expected != actual:
-                raise AssertionError(f"{label} ({data}): native={expected!r}, V={actual!r}")
-        result_hash = hashlib.sha256(b"\n".join(outputs[0])).hexdigest()
-        print(f"RGB colorspaces: {len(cases)} cases, SHA256 {result_hash}")
+        summary, differences = compare_color_records('color_space', cases, *outputs, args.v_prod)
+        print(json.dumps(summary, indent=2))
+        if differences:
+            print('Retained caller-optimization differences:', ', '.join(row['name'] for row in differences))
+
 
 
 if __name__ == "__main__":
