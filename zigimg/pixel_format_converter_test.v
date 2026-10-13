@@ -303,3 +303,28 @@ fn test_converter_image_replacement_and_same_format() {
 	assert image.raw_bytes().data == before_failure.data
 	assert image.pixel_format() == .rgba64
 }
+
+fn test_converter_checks_dispatch_before_float_alignment() {
+	bytes := []u8{len: 32}
+	misaligned := if usize(bytes.data) % 4 == 0 { 1 } else { int(4 - usize(bytes.data) % 4) + 1 }
+	source := PixelStorage.init_raw_pixels(bytes[misaligned..misaligned + 16], .float32)!
+	for destination in [PixelFormat.float32, .grayscale16] {
+		PixelFormatConverter.convert(&source, destination) or {
+			assert err.msg() == if destination == .float32 {
+				'NoConversionNeeded'
+			} else {
+				'NoConversionAvailable'
+			}
+			continue
+		}
+		assert false
+	}
+	mut image := ImageUnmanaged{
+		width:  7
+		height: 3
+		pixels: source
+	}
+	image.convert(.float32)!
+	assert image.pixel_format() == .float32
+	assert image.width == 7 && image.height == 3
+}

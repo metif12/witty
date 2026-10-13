@@ -3373,3 +3373,59 @@ indexed/raw proof retain all previous hashes in both modes. Native/Linux app
 checks, three Windows DLLs, both focused Windows test executables in ordinary and
 production modes, and two Linux shared libraries build successfully. Cross builds
 use -gc none and do not establish runtime behavior on those targets.
+
+## Converter production alignment/cast guards and retained image state — 2026-10-13
+
+The converter's unconditional f32 alignment checks and SIMD-prefix float-to-byte
+bounds check used assertions erased by production builds. Indexed palette lookup
+relied on V's generic array diagnostic. Explicit guards now preserve Source's
+alignment, float integer-part bounds and indexed index/length traps in both modes.
+Dispatch order is unchanged: same-format and unavailable cases return their Source
+errors before alignment. Vector prefixes still truncate without clamping, while
+scalar tails round/clamp; finite fractional bounds and pinned ARM64 NaN behavior
+remain intact. Undefined empty raw pointers remain outside the comparison.
+
+`verify_converter_contracts_reference.py` compares unchanged pinned Source Debug
+with ordinary V and Source ReleaseSafe with production V. Both modes match **2,207
+returning observations**: 272 normalized float patterns, 1,088 per-channel finite/
+NaN/subnormal/boundary cases, 520 scalar-tail poison cases, 272 byte-to-float cases,
+54 dispatch/unaligned-scalar/empty-borrow controls and one native lane-count control.
+Cases cover lengths 1..17, repeated vector groups, RGBA/BGRA ordering, statuses,
+output bytes and unchanged inputs. Empty borrowed views are sliced from initialized
+nonempty allocations, preserving defined pointer alignment. Returning SHA-256:
+`4d268d80305ae604a4677384bdb4e952b31656e4f72db0a593afad442c5a12c4`.
+
+**488 strict panic/state pairs** cover 72 misaligned float buffers/views, 12 empty
+owned alignment casts, 54 inherited BGR555 inactive-union selections, 30 indexed
+palette failures and 320 invalid SIMD float casts. Direct converter and both
+unmanaged-image entry points preserve source pixels and active palettes; image
+observers also compare dimensions, animation loop count, frame duration and
+independent frame pixels. First/final prefix positions and all four channels are
+covered. Private failed destination writes and allocator effects are excluded.
+State SHA-256:
+`43494aae16df032ee5d9f187007f83cbc3c51ca2659806802b1473175f823292`.
+
+The unchanged historical native harness retains its 18,432-slot matrix FNV
+`e9de0fd7efd93e19` and 6,066,176-pixel precision FNV `9014fb50e8722857` in both
+modes. V's existing two historical test functions and helpers are extracted into
+an isolated module containing unchanged copies of implementation/header files.
+The fixture prints its computed counts/hashes before assertions; the runner checks
+those outputs independently in ordinary and production modes. Matrix slots retain
+the historical skipped-trap markers, RGB555 padding masks and indexed-widening
+palette scope; they are not counted as new returning cases. Original/generated
+fixtures and both original/copied implementations are hashed, and full Source tree,
+selected compiler library, versions and runner pins are checked before/after.
+
+All 61 image and 58 Vaxis files pass, as do production converter/image-API tests.
+The existing pixel-view and PNG decoder/processor/failure-state proofs retain
+all prior hashes in both modes. Native/Linux app checks, three Windows DLLs,
+converter test executables in both modes and two Linux shared libraries build.
+Interrupted build checks were rerun after removing duplicate generated development
+artifacts; completed proof directories and pinned sources/tools were preserved.
+Cross builds use -gc none and do not establish cross-target runtime behavior.
+
+Allocator/OOM/GC/lifetime, private failed vector destination state, allocator
+alignment choices, undefined raw-empty pointers, narrow/const carriers, wider
+allocated array extents and arbitrary SIMD targets remain boundaries. Source
+visibility/implementation remain unchanged. Reproduction and exact scope are in
+zigimg/reference_probes/converter_contracts/README.md.

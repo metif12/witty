@@ -25,12 +25,13 @@ pub fn PixelFormatConverter.convert(source &PixelStorage, destination_format Pix
 	source_bytes := source.as_bytes()
 	mut destination_bytes := destination.as_bytes()
 	// These casts run even for empty storage. Sliced empty float views can have
-	// an aligned pointer; allocated/raw-initialized empties retain Zig's sentinel.
+	// an aligned pointer; allocated empties retain Zig's sentinel. Raw empty
+	// pointers remain an undefined-Source representation boundary.
 	if source_format == .float32 && destination_format in [.rgba32, .bgra32] {
-		assert usize(source_bytes.data) % 4 == 0
+		if usize(source_bytes.data) % 4 != 0 { panic('incorrect alignment') }
 	}
 	if source_format in [.rgba32, .bgra32] && destination_format == .float32 {
-		assert usize(destination_bytes.data) % 4 == 0
+		if usize(destination_bytes.data) % 4 != 0 { panic('incorrect alignment') }
 	}
 	for index in 0 .. int(source.len()) {
 		color := converter_read(source, source_bytes, index)
@@ -119,7 +120,11 @@ fn converter_read(source &PixelStorage, bytes []u8, index int) ConversionColor {
 	format := source.pixel_format()
 	if format.is_indexed() {
 		palette := source.get_palette() or { panic('missing indexed palette') }
-		return converter_rgba(palette[converter_index(format, bytes, index)])
+		palette_index := converter_index(format, bytes, index)
+		if palette_index >= palette.len {
+			panic('index out of bounds: index ${palette_index}, len ${palette.len}')
+		}
+		return converter_rgba(palette[palette_index])
 	}
 	mut result := ConversionColor{
 		values: [u32(0), u32(0), u32(0), u32(255)]!
@@ -268,7 +273,9 @@ fn converter_write(input ConversionColor, source PixelFormat, destination PixelF
 				continue
 			}
 			truncated := math.trunc(f64(scaled))
-			assert truncated >= 0 && truncated <= 255
+			if truncated < 0 || truncated > 255 {
+				panic('integer part of floating point value out of bounds')
+			}
 			values[channel] = u32(truncated)
 		} else {
 			values[channel] = color.scaled(channel, channel_bits[channel])

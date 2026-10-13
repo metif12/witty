@@ -167,6 +167,13 @@ Both modes match 18,028 returning observations and 1,039 panic/state pairs acros
 all formats, shared views, copied cursors and replacement of live storage. Invalid
 storage keeps its Source behavior, and exhaustion precedes pointer access.
 
+The [converter contract proof](reference_probes/converter_contracts/README.md)
+retains alignment and SIMD float-cast traps in production, along with Source
+palette diagnostics. Both modes match 2,207 returning observations and 488
+panic/state pairs. Historical matrix and precision hashes are checked independently
+of V assertions; undefined raw-empty pointers and private failed destination state
+remain outside the comparison.
+
 The [GIF record proof](reference_probes/gif_records/README.md) adds thirteen
 packed-field setters and requires Source comment/application constructor fields.
 Byte-count overflow and indexed-background casts remain checked in production.
