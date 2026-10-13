@@ -33,12 +33,11 @@ pub fn (mut quantizer OctTreeQuantizer) add_level_node(level i32, mut node OctTr
 }
 
 pub fn (mut quantizer OctTreeQuantizer) add_color[T](color T) ! {
-	quantizer.root_node.add_rgb(quantizer_rgb24(color), 0, mut quantizer)!
+	quantizer.root_node.add_color(color, 0, mut quantizer)!
 }
 
 pub fn (quantizer &OctTreeQuantizer) get_palette_index[T](color T) !usize {
-	if quantizer.root_node.is_leaf() { return usize(quantizer.root_node.palette_index) }
-	return quantizer.root_node.get_rgb_index(quantizer_rgb24(color), 0)
+	return quantizer.root_node.get_palette_index(color, 0)
 }
 
 pub fn (mut quantizer OctTreeQuantizer) make_palette(color_count u32, mut palette []Rgba32) []Rgba32 {
@@ -111,7 +110,29 @@ pub fn (node &OctTreeNode) get_color() Rgba32 {
 }
 
 pub fn (mut node OctTreeNode) add_color[T](color T, level i32, mut parent OctTreeQuantizer) ! {
-	node.add_rgb(quantizer_rgb24(color), level, mut parent)!
+	$if T.unaliased_typ is Rgb24 || T.unaliased_typ is Bgr24 || T.unaliased_typ is Rgb48
+		|| T.unaliased_typ is Rgb332 || T.unaliased_typ is Rgb555 || T.unaliased_typ is Bgr555
+		|| T.unaliased_typ is Rgb565 || T.unaliased_typ is Rgba32 || T.unaliased_typ is Bgra32
+		|| T.unaliased_typ is Rgba64 || T.unaliased_typ is Colorf32 {
+		node.add_rgb(quantizer_rgb24(color), level, mut parent)!
+	} $else {
+		if level >= 8 {
+			node.add_rgb(quantizer_rgb24(color), level, mut parent)!
+			return
+		}
+		// Source evaluates custom getters at each level, including the leaf.
+		index := OctTreeNode.get_color_index(color, level)
+		if index >= 8 { return error('InvalidColorIndex') }
+		mut child := node.children[index]
+		if child != unsafe { nil } {
+			child.add_color(color, level + 1, mut parent)!
+		} else {
+			child = parent.allocate_node()!
+			child.init(level, mut parent)
+			child.add_color(color, level + 1, mut parent)!
+			node.children[index] = child
+		}
+	}
 }
 
 fn (mut node OctTreeNode) add_rgb(color Rgb24, level i32, mut parent OctTreeQuantizer) ! {
@@ -142,7 +163,22 @@ fn (mut node OctTreeNode) add_rgb(color Rgb24, level i32, mut parent OctTreeQuan
 
 pub fn (node &OctTreeNode) get_palette_index[T](color T, level i32) !usize {
 	if node.is_leaf() { return usize(node.palette_index) }
-	return node.get_rgb_index(quantizer_rgb24(color), level)
+	$if T.unaliased_typ is Rgb24 || T.unaliased_typ is Bgr24 || T.unaliased_typ is Rgb48
+		|| T.unaliased_typ is Rgb332 || T.unaliased_typ is Rgb555 || T.unaliased_typ is Bgr555
+		|| T.unaliased_typ is Rgb565 || T.unaliased_typ is Rgba32 || T.unaliased_typ is Bgra32
+		|| T.unaliased_typ is Rgba64 || T.unaliased_typ is Colorf32 {
+		return node.get_rgb_index(quantizer_rgb24(color), level)
+	} $else {
+		index := OctTreeNode.get_color_index(color, level)
+		child := node.children[index]
+		if child != unsafe { nil } { return child.get_palette_index(color, level + 1) }
+		for alternative in node.children {
+			if alternative != unsafe { nil } {
+				return alternative.get_palette_index(color, level + 1)
+			}
+		}
+		return error('ColorNotFound')
+	}
 }
 
 fn (node &OctTreeNode) get_rgb_index(color Rgb24, level i32) !usize {
@@ -202,8 +238,8 @@ pub fn (mut node OctTreeNode) remove_leaves() i32 {
 }
 
 fn OctTreeNode.get_color_index[T](color T, level i32) usize {
-	if level < 0 || level >= 8 { panic('integer does not fit in destination type') }
 	rgb := quantizer_rgb24(color)
+	if level < 0 || level >= 8 { panic('integer does not fit in destination type') }
 	mask := u8(128 >> level)
 	mut index := usize(0)
 	if rgb.r & mask != 0 { index |= 4 }
@@ -287,7 +323,13 @@ fn quantizer_rgb24[T](color T) Rgb24 {
 			b: u8(quantizer_scale_float(color.b * color.a, 255))
 		}
 	} $else {
-		$compile_error('Quantizer colors must have the pinned RGB(A) color surface')
+		$for field in T.fields {
+			$if field.name == 'a' {
+				$compile_error('Custom quantizer alpha colors are not represented')
+			}
+		}
+		// V receiver methods represent Source's zero-sized .to namespace.
+		return Rgb24.from_u32_rgb(color.to_u32_rgb())
 	}
 	return Rgb24{}
 }

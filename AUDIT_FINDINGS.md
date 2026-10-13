@@ -5118,3 +5118,38 @@ Generic required fields, arbitrary alias chains, u4 field typing, physical
 layout, underlying std.Io interfaces, allocation/lifetime, file-platform runtime
 and portable ABI remain boundaries. Details and reproduction are in
 [the endian contract proof](zigimg/reference_probes/endian_contracts/README.md).
+
+
+### Quantizer custom RGB getter checkpoint — 2026-10-13
+
+The quantizer previously rejected caller-defined color records. It now accepts
+structs without an `a` field through a public `to_u32_rgb() u32` receiver method,
+representing Source's `.to.u32Rgb()` namespace. Direct aliases work, and unrelated
+RGB fields do not override the getter. Custom conversion runs at every insertion
+level including the leaf and at every nonleaf lookup. Leaf lookup bypasses the
+getter and level validation; invalid nonleaf levels trap after conversion.
+Built-in normalization preserves its existing path.
+
+Both corresponding modes match **9,984 returning/error records**, SHA-256
+`b1194bf0c773e7d84e65679dfbe39601590d009286e8c7450223920a357e1095`, and
+**600 exact panic/state pairs**, SHA-256
+`22b5beca09fb157bc0ee4f44a92a8e31d87e558320fe98b1aeac611167cd534f`.
+Two custom shapes and direct aliases cover pure and stateful getters, boundary
+and seeded words, complete traces, initialized tree/palette state, reduction,
+missing-color fallback, leaf shortcuts and ordered partial accumulation failures.
+Sixteen accepted operation pairs and four missing-getter rejection pairs pass.
+Four Source-accepted custom-alpha controls explicitly reject in V, preserving
+that separate boundary without silently discarding alpha.
+
+The comparison uses the complete unchanged pinned Source tree and infers its
+private Node type through the public root field. Source bodies and visibility
+remain unchanged. All 61 image and 58 Vaxis test files pass, together with eighteen
+production/platform checks. Historical quantizer tree/normalization/alias hashes
+and the 4,594-record/1,134-failure contract hashes remain unchanged in both modes.
+
+Custom alpha namespaces, arbitrary alias chains, pointer colors, non-u32 getters,
+mutable input receivers, physical namespace/receiver layout, portable ABI,
+arena/GC allocation/OOM, factory root relocation and file-platform runtime remain
+boundaries. Version/source/library and before/after implementation, fixture,
+runner, input and consumer hashes protect the proof. Scope and reproduction are in
+[the custom getter proof](zigimg/reference_probes/quantizer_custom/README.md).

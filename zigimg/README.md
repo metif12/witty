@@ -265,8 +265,12 @@ already collapsed node. Native hashes match 2,160 palette/tree/index cases and
 so copied quantizers retain independent root metadata and borrowed child pointers.
 The [record/state comparison](reference_probes/quantizer_contracts/README.md) matches
 4,594 returning records and 1,134 exact failure/state pairs in both modes.
-Generic input accepts the translated RGB(A) storage types;
-arbitrary caller types with Zig color-method namespaces remain a boundary.
+Generic input also accepts caller structs without an `a` field through a public
+`to_u32_rgb() u32` receiver method. Custom getters run at each tree level, with
+leaf lookup bypassing the getter. The
+[custom getter comparison](reference_probes/quantizer_custom/README.md) matches
+9,984 returning records and 600 exact failure/state pairs in both modes.
+Custom alpha namespaces and arbitrary alias chains remain boundaries.
 The pinned V compiler cannot format recursive fixed pointer arrays; pointer
 assertions use `voidptr` to avoid its invalid generated formatter.
 
