@@ -1100,3 +1100,12 @@ Both modes match 328 records / 656 closes and 264 exact panic/state pairs. Consu
 regressions pin pending writer bytes, explicit delivery and retained reader
 read-ahead after closing a shared descriptor. Historical public open/exec and FIFO
 hashes remain unchanged; borrowed file ownership stays with the caller.
+
+The [image terminal proof](reference_probes/image_tty/README.md) preserves native
+POSIX ENXIO streaming fallback for slice reads, buffered reads and writes. Both
+modes match 853 records / 1,693 calls, twelve returning controls and 22 exact
+panic/state pairs. Isolated pseudo-terminal sessions verify reader O_NOCTTY,
+writer acquisition and descriptor cleanup; real calibration and a reversed
+NOCTTY branch confirm these paths are exercised. Historical FIFO and full stream
+hashes remain unchanged; Windows runtime and other terminal disciplines remain
+outside this native proof.

@@ -74,6 +74,10 @@ static int witty_image_file_close(int fd) {
     if (close(fd) == 0) return 0;
     return errno == EBADF ? 4 : -1;
 }
+/* Pinned std.posix pread/pwrite map these errors to Unseekable. */
+static int witty_image_file_unseekable(int code) {
+    return code == ESPIPE || code == ENXIO || code == EOVERFLOW;
+}
 static int witty_image_file_path_max(void) { return PATH_MAX; }
 static int witty_image_file_open_interrupted(int code) { return code == EINTR; }
 /* Names from pinned std.posix.openatZ; use the saved error code, not errno. */
@@ -121,7 +125,7 @@ static intptr_t witty_image_file_read(int fd, uint64_t pos, unsigned char *buf, 
     do {
         n = *streaming ? read(fd, buf, count) : pread(fd, buf, count, (off_t)pos);
     } while (n < 0 && errno == EINTR);
-    if (n < 0 && errno == ESPIPE && !*streaming) {
+    if (n < 0 && witty_image_file_unseekable(errno) && !*streaming) {
         *streaming = 1;
         if (pos != 0) return -1;
         do { n = read(fd, buf, count); } while (n < 0 && errno == EINTR);
@@ -145,7 +149,7 @@ static intptr_t witty_image_file_read_vec(int fd, uint64_t pos, unsigned char *a
         }
     }
     while (n < 0 && errno == EINTR);
-    if (n < 0 && errno == ESPIPE && !*streaming) {
+    if (n < 0 && witty_image_file_unseekable(errno) && !*streaming) {
         *streaming = 1;
         if (pos != 0) return -1;
         do { n = readv(fd, vectors, 2); } while (n < 0 && errno == EINTR);
@@ -169,7 +173,7 @@ static intptr_t witty_image_file_write(int fd, uint64_t pos, const unsigned char
 #endif
         }
     } while (n < 0 && errno == EINTR);
-    if (n < 0 && errno == ESPIPE && !*streaming) {
+    if (n < 0 && witty_image_file_unseekable(errno) && !*streaming) {
         *streaming = 1;
         if (pos != 0 && lseek(fd, (off_t)pos, SEEK_SET) < 0) {
             *streaming = -1;

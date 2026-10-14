@@ -7006,3 +7006,85 @@ big-endian/32-bit runtime and portable ABI remain boundaries. Borrowed public fi
 ownership stays with the caller. Cross builds establish compilation only. Scope
 and reproduction are in
 [the private image close proof](zigimg/reference_probes/image_close/README.md).
+
+### POSIX image terminal acquisition and ENXIO streaming — 2026-10-14
+
+Actual Darwin pseudo-terminal pread/pwrite returns ENXIO. Pinned std.posix maps
+NXIO, SPIPE and OVERFLOW to Unseekable, allowing streams to switch to sequential
+IO; V handled only ESPIPE. Native BMP encoding succeeded where V returned
+WriteFailed, and direct slice/buffered reads returned ReadFailed instead of the
+seeded byte. Original modules/binaries/raw records remain retained. The three
+POSIX positional IO paths now share ESPIPE/ENXIO/EOVERFLOW classification while
+keeping existing fallback/nonzero-position/error behavior. EINVAL stays outside
+that classification. EOVERFLOW alignment is source-based, without runtime injection;
+Windows IO stays unchanged.
+
+Both Debug/ordinary and ReleaseSafe/production match **853 returning records /
+1,693 calls**, SHA-256
+`40d7262b0449afa7959e672e0defc768b9595731d55de42dd441ac36c9fe8ca5`.
+The 816 writer records cover seventeen encoder arms, eight initialized 4×2
+storage profiles, default options, capacities 0/8/32 and both APIs; 24 reader
+records cover detection/decoding, both APIs/capacities and empty/signature input.
+Public calls repeat twice with retained buffers and the same owned session.
+Nine direct slice and four buffered take records cover actual ENXIO transitions,
+seeded lengths 0/1/7, logical positions, pending read-ahead and caller buffer tails.
+Public readers retain O_NOCTTY and reject their initial seek before consuming input.
+Writers acquire a controlling terminal before codec dispatch, even on unsupported/
+no-op paths; it remains acquired after temporary file close while the keeper is
+live. Normal states retain only that keeper. Pinned no-op/signature-only encoder
+boundaries are preserved.
+
+**12 returning controls**, SHA-256
+`63d9ebf8c8fd649b7b5e01762b386b24e84c4dee24b2ad4f111dc41987fde49f`,
+and **22 exact panic/state pairs**, SHA-256
+`05b5e362cc894a4db7146b09e2fa335cb27d80ee5399e5d176208c155c4216de`,
+cover zero-width PNG and short TGA storage. Every classification comes from
+Source: twelve PNG Unsupported returns, six PNG header panics and sixteen TGA
+storage panics. Failed exits, no stdout, one exact native diagnostic and equal
+nonempty initialized state are required. Panic observers see the acquired terminal
+and two slave references before teardown, preserving native lack of descriptor
+unwinding.
+
+Four libc open/close/ENXIO calibration records per binary, SHA-256
+`2cbdabd5f026297bde9cc44955d1780d728107a3107587945ed2c81b20313c3a`,
+and six deliberately altered V records / twelve calls, SHA-256
+`750d69c6f91b50c1678d39c69d66971c22d47d5f3f91a1e28cfd523f41b7fb91`,
+remain separate from parity counts. Reversing exactly the private NOCTTY condition
+in a copied module causes readers to acquire the terminal and writers to avoid it;
+IO outcomes/bytes otherwise remain unchanged. All other production files and v.mod
+are checked unchanged. These controls exercise actual open flags and positional
+errors without replacing image syscalls or modifying Source bodies/visibility.
+
+Every row runs in a private session/process with an owned raw pseudo-terminal
+pair and O_NOCTTY keeper. Observers normalize own-session/foreground-group ownership
+and count slave references among descriptors 0–127; raw identities, private cursors,
+inactive storage and allocator effects remain excluded. Input/output fits the queues.
+Only owned handles and the local SIGHUP handler change. Darwin session-leader
+TIOCNOTTY failure and the blocked diagnostic reopening `/dev/tty` after master
+destruction remain retained. Corrected teardown closes owned handles, restores the
+handler and leaves session release to process exit; it never queries the destroyed
+terminal. No unrelated terminal/process/cache was changed. Earlier fixture/smoke
+and the auxiliary checker's wrong RGB24 numeric-tag assumption remain retained
+separately; final comparisons use corrected evidence.
+
+The isolated consumer regression and ten compiled records / eighteen calls per
+mode pin direct/buffered fallback, untouched reader failures, PNG/GIF output and
+session ownership. All 62 image and 58 Vaxis test files pass with 22 focused
+production/application/platform/unit/fixture checks. Historical FIFO returning,
+control and panic-state hashes remain unchanged. The full stream suite retains
+all 37,133 observations and its full/baseline/171-streaming hashes, seventeen
+historical trap pairs and four compile-rejection pairs in both actual Source
+modes. Those historical checks retain their prior diagnostic scope. Formatting,
+diff and Python checks pass. Complete Source/library/DEFLATE/math/SIMD/fs.Dir/libc/
+version and before/after implementation/fixture/runner/helper/input hashes protect
+comparisons. Only golden assignments change after ordinary discovery. Independent
+replay checks raw records, failures, original ENXIO mismatches, exact NOCTTY
+mutation and provenance; persistent archives are read back member by member.
+
+Other terminal disciplines/devices, external session interactions, nonzero offsets,
+injected EOVERFLOW/other errors, interrupted IO/close, backpressure/timing/
+cancellation, durability/resource exhaustion, other options/capacities/images,
+Windows runtime, other CPU/vector selections, const/narrow/enum/boxed representations,
+physical layouts, big-endian/32-bit runtime and portable ABI remain boundaries.
+Cross builds establish compilation only. Scope and reproduction are in
+[the image terminal proof](zigimg/reference_probes/image_tty/README.md).
