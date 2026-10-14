@@ -6864,3 +6864,78 @@ and portable ABI remain boundaries. No timing/race equivalence is claimed. Cross
 builds establish compilation only; Windows runtime/path parity remains unclaimed.
 Scope and reproduction are in
 [the public image open-contract proof](zigimg/reference_probes/image_open/README.md).
+
+### Public image interrupted POSIX path opens — 2026-10-14
+
+Compiled unchanged pinned public APIs on owned FIFOs that initially have no open
+descriptors. A worker delivers one or three acknowledged SIGUSR1 signals to the
+calling thread, using a handler without SA_RESTART, before opening an owned keeper
+to release the blocking open. One-call libc calibrations return actual EINTR in
+both directions. An isolated copy of V with exactly its interrupted-open retry
+branch disabled returns Unexpected before codec dispatch across all six public
+routes. The real implementation needs no changes for these cases.
+
+Both Debug/ordinary and ReleaseSafe/production match **1,680 returning records /
+3,360 public calls**, SHA-256
+`855b29bfcdac9879e3c326cfc1a4a93316af1dbac5fa724da4af9709a4fc6119`.
+The 1,632 writer records cover all seventeen encoder arms, eight initialized 4×2
+storage profiles, default options, capacities 0/8/32, both APIs and both signal
+patterns. The 48 reader records cover reading/detection, both APIs/capacities/
+patterns and empty/signature-seeded FIFOs. Calls repeat twice with retained caller
+buffers; closing each keeper makes the next open block again. Native buffering,
+output/error order, initialized pixels/active palette and temporary descriptor
+cleanup match. Readers reject the initial seek as Unseekable before detection and
+leave supplied input/buffers untouched. No-op encoder and PNG signature-only
+boundaries remain pinned.
+
+**24 returning controls**, SHA-256
+`f58555e192da9baed2431dab4a4100caa79f84584820ce73601ac3e2aeca5fc8`,
+and **44 exact panic/state pairs**, SHA-256
+`60b7a7c09a3d40b4c7a6c5ef31f1e7cf4aa51d909a559fd9d4a8abc39fc3c1d2`,
+cover zero-width PNGs and one-pixel TGA storage after interrupted opens. Source
+classifies every control: 24 PNG Unsupported returns, 12 PNG header assertions
+and 32 TGA storage panics. Each failed pair requires failed exits, no stdout, one
+exact native diagnostic and equal initialized state, including prior delivery,
+retained buffers/pixels/palette, signal metrics and two live FIFO references before
+process exit. Returning states retain only the keeper.
+
+Four no-retry libc calibration records per binary, SHA-256
+`f8b0982971a5d9dbb2ba5befbedab4ebd0ae646dfc20ed216da7d235b89617c5`,
+and twelve deliberately altered V records / 24 calls, SHA-256
+`1f0593c557c9936967d064c271760a0ac2269d94603838600a2f59d6aa7bbb4a`,
+remain separate from parity observations. All unchanged V implementation files
+are hashed in that retained copy. No Source body/visibility or image syscall is
+changed/intercepted. Worker code only creates/signals/releases/observes owned OS
+resources. Its handler increments a lock-free atomic counter. Public comparisons
+require acknowledged delivery counts, no early return, no FIFO inode references
+before release and no helper error. Joined observers inspect buffers after worker
+completion and verify restored handler pointer, SA_RESTART bit and SIGUSR1 thread
+blockedness. Panic observers restore fixture state before recording, without
+changing production panic ownership. Raw identities, private cursors, inactive
+storage, allocator effects, action bits beyond those stated and syscall retry
+counts remain unobserved. No FIFO names survive completion.
+
+Two consumer regressions pin these public effects and actual EINTR calibration;
+sixteen focused compiled records / 32 calls match per mode. All 61 image and
+58 Vaxis test files pass with nineteen production/application/platform/unit/
+fixture checks. Historical FIFO records, returned controls and panic/state hashes
+remain unchanged in both actual Source modes. Formatting, diff and Python checks
+pass. Full Source/library/DEFLATE/math/SIMD/fs.Dir/libc/version and before/after
+implementation/fixture/runner/helper/input hashes protect comparisons. Ordinary
+observations supply production hashes; only golden assignments change afterward.
+Independent replay checks raw observations, deliberate retry removal, native
+classifications and provenance; persistent archives are read back member by
+member. The copied-fixture VMODROOT include rejection and the original production
+calibration failure remain retained. Ordinary V assertions had contained setup
+calls; production removed those expressions. The corrected fixture uses explicit
+setup checks, and both comparisons rerun with it. Earlier ordinary/calibration/
+smoke evidence stays separate from final observations.
+
+Other signal actions/masks/handlers, SA_RESTART semantics, exact syscall counts,
+timing/scheduling/cancellation, interrupted read/write/close, controlling TTYs,
+close failures, external descriptor/path mutation, backpressure, resource
+exhaustion, other options/capacities/images, Windows runtime/path parity, other
+CPU/vector selections, const/narrow/enum/boxed representations, physical layouts,
+big-endian/32-bit runtime and portable ABI remain boundaries. Cross builds prove
+compilation only. Scope and reproduction are in
+[the interrupted image open proof](zigimg/reference_probes/image_eintr/README.md).

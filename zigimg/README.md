@@ -1085,3 +1085,11 @@ creation modes, umasks and aliases. Both modes match 9,792 returning records,
 144 controls, 72 exact panic/state pairs and 48 bounded reader-loop pairs; real
 exec children confirm that private image descriptors are not inherited. Historical
 path-error and FIFO hashes remain unchanged.
+
+The [interrupted public path proof](reference_probes/image_eintr/README.md) checks
+actual SIGUSR1 interruptions of blocking POSIX FIFO opens across both public APIs.
+Both modes match 1,680 records / 3,360 calls, 24 returning controls and 44 exact
+panic/state pairs. Real EINTR calibrations and a retained V copy with its retry
+branch disabled demonstrate that the retry path is exercised. Consumer tests pin
+output, retained buffers and descriptor cleanup; these cases need no production
+changes, and historical FIFO hashes remain unchanged.

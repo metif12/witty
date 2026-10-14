@@ -29,6 +29,122 @@ fn C.witty_image_fifo_refs(int) int
 fn C.witty_image_fifo_write(int, &u8, usize) isize
 fn C.witty_image_fifo_read(int, &u8, usize) isize
 
+#include "reference_probes/image_eintr/fixture_shims.h"
+
+fn C.witty_image_eintr_create(&char) int
+fn C.witty_image_eintr_begin(&char, int, &u8, usize) int
+fn C.witty_image_eintr_finish() int
+fn C.witty_image_eintr_metric(int) int
+fn C.witty_image_eintr_raw(&char, int) int
+
+fn image_eintr_check_signal_state(signals int, early int) {
+	assert C.witty_image_eintr_metric(0) == signals
+	assert C.witty_image_eintr_metric(1) == early
+	assert C.witty_image_eintr_metric(2) == 0
+	assert C.witty_image_eintr_metric(3) == 1
+	assert C.witty_image_eintr_metric(4) == 1
+	assert C.witty_image_eintr_metric(5) == 0
+}
+
+fn image_eintr_check_public_path(op int, managed bool, signals int) ! {
+	path := os.join_path(os.temp_dir(), 'witty-zigimg-eintr-${os.getpid()}')
+	assert C.witty_image_eintr_create(path.str) == 0
+	defer { C.witty_image_fifo_remove(path.str) }
+	mut raw := []u8{len: 24}
+	for i in 0 .. raw.len {
+		raw[i] = u8(i * 37 + 19)
+	}
+	image := ImageUnmanaged.from_raw_pixels(4, 2, raw, .rgb24)!
+	seed := if op > 1 { png_magic_header[..] } else { []u8{} }
+	opts := if op == 1 {
+		EncoderOptions(GifEncoderOptions{})
+	} else {
+		EncoderOptions(PngEncoderOptions{})
+	}
+	mut buffer := []u8{len: 8, init: 165}
+	for attempt in 0 .. 2 {
+		assert C.witty_image_eintr_begin(path.str, signals, seed.data, usize(seed.len)) == 0
+		mut status := 'ok'
+		if op < 2 {
+			if managed {
+				image.to_managed().write_to_file_path(path, mut buffer, opts) or {
+					status = err.msg()
+				}
+			} else {
+				image.write_to_file_path(path, mut buffer, opts) or { status = err.msg() }
+			}
+		} else if op == 2 {
+			if managed {
+				Image.detect_format_from_file_path(path, mut buffer) or { status = err.msg() }
+			} else {
+				ImageUnmanaged.detect_format_from_file_path(path, mut buffer) or {
+					status = err.msg()
+				}
+			}
+		} else {
+			if managed {
+				Image.from_file_path(path, mut buffer) or { status = err.msg() }
+			} else {
+				ImageUnmanaged.from_file_path(path, mut buffer) or { status = err.msg() }
+			}
+		}
+		keeper := C.witty_image_eintr_finish()
+		assert keeper >= 0
+		image_eintr_check_signal_state(signals, 0)
+		assert status == if op < 2 {
+			'ok'
+		} else {
+			'Unseekable'
+		}
+		assert C.witty_image_fifo_refs(keeper) == 1
+		assert buffer == if op == 0 {
+			png_magic_header[..]
+		} else {
+			[]u8{len: 8, init: 165}
+		}
+		assert image.raw_bytes() == raw
+		mut bytes := []u8{len: 32}
+		n := C.witty_image_fifo_read(keeper, bytes.data, usize(bytes.len))
+		if op == 1 {
+			assert n == -1
+		} else {
+			assert n == 8 && bytes[..int(n)] == png_magic_header[..]
+		}
+		assert C.witty_image_fifo_read(keeper, bytes.data, usize(bytes.len)) == -1
+		assert C.witty_image_fifo_close(keeper) == 0
+	}
+}
+
+fn test_public_image_paths_retry_interrupted_opens_and_restore_signal_state() {
+	$if !windows {
+		for op in 0 .. 4 {
+			for managed in [false, true] {
+				for signals in [1, 3] {
+					image_eintr_check_public_path(op, managed, signals)!
+				}
+			}
+		}
+	}
+}
+
+fn test_interrupted_image_open_fixture_uses_nonrestarting_signals() {
+	$if !windows {
+		path := os.join_path(os.temp_dir(), 'witty-zigimg-eintr-calibration-${os.getpid()}')
+		for writing in 0 .. 2 {
+			for signals in [1, 3] {
+				assert C.witty_image_eintr_create(path.str) == 0
+				assert C.witty_image_eintr_begin(path.str, signals, unsafe { nil }, 0) == 0
+				interrupted := C.witty_image_eintr_raw(path.str, writing)
+				keeper := C.witty_image_eintr_finish()
+				assert interrupted == 1 && keeper >= 0
+				image_eintr_check_signal_state(signals, 1)
+				assert C.witty_image_fifo_close(keeper) == 0
+				assert C.witty_image_fifo_remove(path.str) == 0
+			}
+		}
+	}
+}
+
 fn image_fifo_check_public_reader(managed bool, decode bool) ! {
 	path := os.join_path(os.temp_dir(), 'witty-zigimg-fifo-reader-${os.getpid()}')
 	keeper := C.witty_image_fifo_open(path.str)
