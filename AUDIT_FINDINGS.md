@@ -6939,3 +6939,70 @@ CPU/vector selections, const/narrow/enum/boxed representations, physical layouts
 big-endian/32-bit runtime and portable ABI remain boundaries. Cross builds prove
 compilation only. Scope and reproduction are in
 [the interrupted image open proof](zigimg/reference_probes/image_eintr/README.md).
+
+### Private image POSIX close ownership and BADF traps — 2026-10-14
+
+Compared pinned std.fs.File.close/std.posix.close, used by public image path
+wrappers, with V's private image_close_file on owned paths. All 312 original valid
+records matched, but the first double close panicked in Source and returned normally
+in V. Original modules/binaries, raw records, native panic state and V output stay
+retained. The POSIX shim now classifies actual close failure before another syscall;
+BADF reaches the exact Source unreachable panic, including production. Successful
+and other-error closes retain pinned void behavior, without adding retries or a
+stream flush. Windows closing remains unchanged.
+
+Both Debug/ordinary and ReleaseSafe/production match **328 returning records /
+656 closes**, SHA-256
+`7a25a87d2f39b9644eefd873ac9a72b3f4ab0239909ca07e4c8daa11ca3004fc`.
+The 192 writer, 120 direct-reader and 16 buffered read-ahead records cover regular
+files, FIFOs, reader directories, relative symlinks and hard links; all nine valid
+access combinations, capacities 0/1/8/32, transfer lengths 0/1/7 and original/copy
+closing are represented. Writers include explicit flush/no flush. Fresh streams
+repeat twice with retained buffers. Initialized wire/output/buffer bytes, logical
+positions, pending bytes and descriptor ownership match. Close leaves pending
+writer data buffered and retains read-ahead in memory after closing the shared
+OS descriptor. Explicitly flushed bytes stay delivered. Source's direct Darwin
+slice-read first-vector behavior remains distinct from buffered take.
+
+**264 exact panic/state pairs**, SHA-256
+`2f59f51f2fd0faf9b77a9c4bd5b8428e5415a23403b1d7daffe45f80ee872221`,
+cover second close, original-then-copy close and prior raw invalidation: 234 direct
+read/write cases and 24 buffered-reader cases, plus six synthetic -1 descriptors.
+Source classifies every case as reached unreachable code. Failed exits, no stdout,
+one exact diagnostic and equal nonempty initialized states are required. Only the
+keeper remains live; caller bytes/output, pending bytes, logical position and prior
+delivery retain their native state. Copied file objects keep their descriptor value
+without extending the lifetime of the referenced OS resource.
+
+Native fixtures call unchanged pinned file/IO APIs. Exact copied V production files
+compile with a generated module-local test driver, exposing no new public API and
+changing no body/visibility. C only sets up/seeds/invalidates/observes owned OS
+resources; actual close/stream calls remain intact. Snapshots precede opening
+observer files and inspect inode references among descriptors 0–127. Raw identities,
+private physical offsets, stdio internals, inactive storage and allocator effects
+are excluded. FIFO prefixes are supplied each attempt; data fits the pipe and
+reader requests fit the seeded input. Only owned paths/keepers are removed; no
+case directories survive. Controlled invalidation does not certify race timing.
+
+Two consumer regressions and six focused compiled records / twelve closes pin
+pending writer bytes, explicit output, shared descriptor closure and retained
+read-ahead in both modes. All 61 image and 58 Vaxis test files pass with nineteen
+production/application/platform/unit/fixture checks. Historical public open/exec
+and FIFO suites retain every returning/control/failure/loop hash in both actual
+Source modes. Formatting, diff and Python checks pass. Full Source/selected
+library/math/SIMD/fs.Dir/libc/version and before/after implementation/copied-module/
+fixture/runner/helper/input hashes protect comparisons. Only golden assignments
+change after ordinary observations establish production hashes. Independent replay
+checks raw records, original mismatch, exact failures and provenance; persistent
+archives are read back member by member. Earlier fixture packaging and the failed
+read-ahead regression assumption remain retained. The driver is a test only in
+its isolated module copy, and buffered take forces the intended read-ahead.
+
+Interrupted/other close errors, EINTR cleanup/retries, concurrent descriptor/path
+mutation and reuse races, controlling TTYs, fsync/durability, resource exhaustion,
+backpressure, other capacities/transfers/operations, Windows runtime, other CPU/
+vector selections, const/narrow/enum/boxed representations, physical layouts,
+big-endian/32-bit runtime and portable ABI remain boundaries. Borrowed public file
+ownership stays with the caller. Cross builds establish compilation only. Scope
+and reproduction are in
+[the private image close proof](zigimg/reference_probes/image_close/README.md).

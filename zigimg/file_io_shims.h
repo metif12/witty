@@ -70,7 +70,10 @@ static int witty_image_file_open(const char *path, int writing, int *saved_error
     *saved_error = fd < 0 ? errno : 0;
     return fd;
 }
-static int witty_image_file_close(int fd) { return close(fd); }
+static int witty_image_file_close(int fd) {
+    if (close(fd) == 0) return 0;
+    return errno == EBADF ? 4 : -1;
+}
 static int witty_image_file_path_max(void) { return PATH_MAX; }
 static int witty_image_file_open_interrupted(int code) { return code == EINTR; }
 /* Names from pinned std.posix.openatZ; use the saved error code, not errno. */

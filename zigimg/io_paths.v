@@ -53,6 +53,7 @@ fn image_close_file(mut file os.File) {
 	$if windows {
 		file.close()
 	} $else {
-		C.witty_image_file_close(file.fd)
+		// Source std.posix.close treats an invalid descriptor as unreachable.
+		if C.witty_image_file_close(file.fd) == 4 { panic('reached unreachable code') }
 	}
 }

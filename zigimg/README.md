@@ -1093,3 +1093,10 @@ panic/state pairs. Real EINTR calibrations and a retained V copy with its retry
 branch disabled demonstrate that the retry path is exercised. Consumer tests pin
 output, retained buffers and descriptor cleanup; these cases need no production
 changes, and historical FIFO hashes remain unchanged.
+
+The [private image close proof](reference_probes/image_close/README.md) preserves
+native POSIX BADF traps after double/copy/invalidated closes, including production.
+Both modes match 328 records / 656 closes and 264 exact panic/state pairs. Consumer
+regressions pin pending writer bytes, explicit delivery and retained reader
+read-ahead after closing a shared descriptor. Historical public open/exec and FIFO
+hashes remain unchanged; borrowed file ownership stays with the caller.

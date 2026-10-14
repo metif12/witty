@@ -29,6 +29,59 @@ fn C.witty_image_fifo_refs(int) int
 fn C.witty_image_fifo_write(int, &u8, usize) isize
 fn C.witty_image_fifo_read(int, &u8, usize) isize
 
+fn test_private_image_close_preserves_pending_bytes_without_flushing() {
+	$if !windows {
+		path := os.join_path(os.temp_dir(), 'witty-zigimg-close-pending-${os.getpid()}')
+		defer { os.rm(path) or {} }
+		for flush in [false, true] {
+			mut file := image_open_file(path, true)!
+			mut copy := file
+			mut buffer := []u8{len: 8, init: 165}
+			mut stream := WriteStream.init_file(file, mut buffer)
+			stream.write_all('pending'.bytes())!
+			if flush { stream.flush()! }
+			before := buffer.clone()
+			pending := stream.buffered().clone()
+			position := stream.get_pos()
+			image_close_file(mut copy)
+			assert C.witty_image_pipe_valid(file.fd) == 0
+			assert copy.fd == file.fd
+			assert buffer == before && stream.buffered() == pending && stream.get_pos() == position
+			assert position == 7
+			assert pending == if flush {
+				[]u8{}
+			} else {
+				'pending'.bytes()
+			}
+			assert os.read_bytes(path)! == if flush {
+				'pending'.bytes()
+			} else {
+				[]u8{}
+			}
+		}
+	}
+}
+
+fn test_private_image_close_preserves_read_ahead_after_closing_a_copy() {
+	$if !windows {
+		path := os.join_path(os.temp_dir(), 'witty-zigimg-close-reader-${os.getpid()}')
+		data := '0123456789abcdef'.bytes()
+		os.write_file_array(path, data)!
+		defer { os.rm(path) or {} }
+		mut file := image_open_file(path, false)!
+		mut copy := file
+		mut buffer := []u8{len: 32, init: 165}
+		mut stream := ReadStream.init_file(file, mut buffer)
+		byte := stream.take(1)!
+		before := buffer.clone()
+		image_close_file(mut copy)
+		assert copy.fd == file.fd && C.witty_image_pipe_valid(file.fd) == 0
+		assert stream.get_pos() == 1 && stream.buffered_len() == 15
+		assert byte == data[..1] && buffer == before
+		assert os.read_bytes(path)! == data
+	}
+}
+
 #include "reference_probes/image_eintr/fixture_shims.h"
 
 fn C.witty_image_eintr_create(&char) int
