@@ -8406,3 +8406,98 @@ representation limits are boundaries. Native runtime uses little-endian 64-bit
 carriers. Windows/Linux and other CPU, big-endian and 32-bit runtime are outside
 this proof; cross builds establish compilation only. Reproduction and scope are
 in [the endian slice proof](zigimg/reference_probes/reader_slice_endian/README.md).
+
+### Allocated byte and endian slice reads — 2026-10-15
+
+`ReadStream.read_alloc` and `read_slice_endian_alloc` translate pinned
+Reader.readAlloc/readSliceEndianAlloc into GC-managed V arrays. Each successful
+nonempty read returns storage independent of the input and retained earlier
+results. Typed native integers and aliases are converted only after a complete
+read. EndOfStream/ReadFailed retain consumed reader progress, expose no partial
+allocation and preserve previous successful results. Zero counts succeed without
+IO. All previous reader and C adapter bodies remain unchanged.
+
+Source accepts an allocator, allocates uninitialized storage and uses errdefer
+to free failed allocations. V uses initialized arrays and GC; failed allocations
+become unreachable. Successful bytes and reader state agree in the observed
+cases. Allocator choice, OutOfMemory errors, immediate free timing, allocation
+reuse and empty-pointer identity are outside this mapping. Counts whose byte
+span exceeds maximum V int panic before allocation with Reader allocation
+exceeds V array length. Source supports larger spans; finite fixtures do not
+reach this V representation bound.
+
+Debug/ordinary and ReleaseSafe/production each match **27,585 returning records /
+82,755 allocated reads / 193,095 primary calls**, SHA-256
+`de092f84619d3966654e8beb1b7fcc7a06febb8f9f9cf8f21a3c0cbf64365b35`.
+Groups contain 15,795 basic, 6,912 every-byte, 3,888 prefilled and 990 mutation
+records with duplicate inputs retained once. Three reads, three caller
+consumptions and one relative seek run per record; setup/priming/observations
+are separate. Twenty native/alias integer carriers, both orders and marker
+aliases cover memory, positional and streaming files, lengths 0/1/7/8/17,
+capacities 0/1/8/32, offsets, zero/one/three-element counts, larger destinations,
+retained read-ahead, owned open/closed pipe replacement and failed reconciliation.
+Every byte runs through bytes and u8/i8/u16/i16 in both orders and all reader kinds.
+
+The fixture retains the latest successful allocation and first nonempty result.
+Snapshots compare their bytes/nonempty pointer alias, complete reader storage,
+pending bytes, positions, size/errors, references and untouched wire bytes.
+Mutating the current allocation affects the retained one only when it is the
+same result, never reader storage. Failed reads preserve both prior results;
+freed/undefined Source allocation bytes are never read. Successful intermediate
+allocations live for the bounded fixture; lifetime is excluded. An independent
+model checks mathematical endian values, progress, EOF, physical streaming
+progress separately from logical rewind, allocation retention, mutation/alias
+effects and zero-count no-IO behavior.
+
+The **264 controls** separate **96 returning records**, SHA-256
+`17278d55c05ea3acc324e9869abbbed9ee273db9883ae712bbac162dc265b822`,
+from **168 exact integer-overflow panic/state pairs**, SHA-256
+`8ebe110126543970be692cd35b4799b35bfb941dd29c64f4daf80a094400ef63`.
+Traps occur in public getPos after priming and before allocation. Both exits
+fail with empty stdout, one exact message and matching initialized state.
+Observers omit getPos and capture preceding status, size/errors, backing/pending
+bytes and owned references before opening state files. Source FullPanic and V
+at_exit clean up only owned resources.
+
+Twenty-one compiled consumer records / 63 reads / 147 primary calls per mode
+assert all three results for bytes, signed/high-bit values, aliases, independent
+storage, mutation, partial elements, retained results on short reads, zero-count
+EOF/no-read behavior, read-ahead, zero buffers, larger arrays, rewind and pipe
+EOF/ReadFailed with sticky buffered success. SHA-256:
+`b7ae7e4eba0997a8b169a37c3dd25458ffb5e28df0e38fc69f3f3abd5b28f09c`.
+Six paired compile rejections per mode cover floats/aliases, booleans, strings
+and invalid integer endian arguments/aliases. Three public regressions accompany
+the proof. All **75 image test files** pass in three batches, with **17 production/
+application/Windows/Linux checks**. Vaxis runtime sources/tests are unchanged and
+were not rerun here; its dependency builds pass. Historical endian-slice and
+full-stream hashes remain unchanged in both modes.
+
+The initial nested generic fixture helper caused V to emit an endian-array C
+result type for an integer-array API call. Concrete calls for all type/marker
+pairs avoid that compiler limit; public method bodies are unchanged. Initial
+failed build/probes/runner/diagnostics are retained separately. A formatter
+invocation without pinned VEXE was stopped and final formatting rerun with the
+pinned environment. Production/probe/runner/helper bodies remain frozen during
+final comparisons; only expected assignments change after ordinary discovery.
+
+Full unchanged Source, compiler versions/selected libraries, implementation,
+probes, shared fixtures, directly imported helpers and inputs are pinned before/
+after comparison. Source bodies, visibility and reader syscalls remain untouched.
+Fixtures use initialized unlinked owned files, reset offsets and owned nonblocking
+pipes/keepers. Independent replay checks values/progress, classifications, exact
+failures, consumers, ownership, binaries, modes and provenance. Parent-side
+lossless compression pins raw/compressed logs. Evidence is persisted from an
+owned RAM workspace and every retained archive member is read back before
+commit and release.
+
+Source's recursive aggregate-field swapping, arbitrary-width integers and
+endian-dependent support for other types remain outside the native integer
+mapping. The nested generic V caller code-generation limit remains; concrete
+calls compile in both modes. Other callbacks, input/output overlap, arbitrary
+constructor/copy sequences, other devices, larger arrays/offsets, concurrent
+reuse, syscall counts, timing/signals, injected errors, OOM/quotas, allocator
+lifetime, portable ABI and remaining V representation limits are boundaries.
+Runtime uses little-endian 64-bit macOS; Windows/Linux and other CPU, big-endian
+and 32-bit runtime remain outside the proof. Cross builds establish compilation
+only. Reproduction and scope are in
+[the allocated reader proof](zigimg/reference_probes/reader_alloc/README.md).

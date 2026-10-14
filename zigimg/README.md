@@ -1245,3 +1245,12 @@ covers 50,088 records / 150,264 reads per mode, 672 returning controls, 672 exac
 panic/state pairs, 21 consumer records and six paired compile rejections.
 Destination guards and partial updates match pinned Zig. Aggregate elements and
 byte spans beyond V's array length remain documented boundaries.
+
+`read_alloc` and `read_slice_endian_alloc` return GC-managed byte/integer arrays.
+Each successful nonempty result owns separate storage; failed reads retain
+reader progress and return no partial result. Typed reads convert byte order
+only after complete input. The [allocated reader comparison](reference_probes/reader_alloc/README.md)
+covers 27,585 records / 82,755 reads per mode, 96 returning controls, 168 exact
+panic/state pairs, 21 consumers and six paired compile rejections. Explicit
+allocator selection, OOM errors and immediate failure cleanup differ from Source
+and remain documented boundaries.

@@ -671,6 +671,32 @@ pub fn (mut stream ReadStream) read_slice_endian[T, E](mut destination []T, endi
 	}
 }
 
+// GC owns the returned allocation. Read failure retains reader progress and
+// leaves the incomplete allocation unreachable rather than returning its prefix.
+pub fn (mut stream ReadStream) read_alloc(count usize) ![]u8 {
+	if count > usize(0x7fffffff) { panic('Reader allocation exceeds V array length') }
+	mut destination := []u8{len: int(count)}
+	stream.read_slice_all(mut destination)!
+	return destination
+}
+
+pub fn (mut stream ReadStream) read_slice_endian_alloc[T, E](count usize, endian E) ![]T {
+	$if T.unaliased_typ is $int {
+		$if E.unaliased_typ is BigEndian || E.unaliased_typ is LittleEndian {
+			if count > usize(0x7fffffff) / usize(sizeof(T)) {
+				panic('Reader allocation exceeds V array length')
+			}
+			mut destination := []T{len: int(count)}
+			stream.read_slice_endian[T, E](mut destination, endian)!
+			return destination
+		} $else {
+			$compile_error('read_slice_endian_alloc requires BigEndian or LittleEndian')
+		}
+	} $else {
+		$compile_error('read_slice_endian_alloc requires a native integer type')
+	}
+}
+
 fn (mut stream ReadStream) flate_fill_word() ! {
 	stream.peek(int(sizeof(usize)))!
 }
