@@ -8595,3 +8595,99 @@ V representation limits remain boundaries. Runtime uses little-endian 64-bit
 macOS; Windows/Linux and other CPU, big-endian and 32-bit runtime are outside
 this proof. Cross builds establish compilation only. Reproduction and scope are
 in [the fixed-array reader proof](zigimg/reference_probes/reader_array/README.md).
+
+### Required sentinel slice reads — 2026-10-15
+
+`ReadStream.peek_sentinel` and `take_sentinel` translate pinned
+Reader.peekSentinel/takeSentinel. They require a matching byte and reject an
+unterminated EOF tail without consuming it. Peek does not consume the result;
+take consumes both prefix and sentinel, including an empty prefix. File buffers
+filled without a match return StreamTooLong even at actual EOF. Existing
+reader/C adapter bodies and native descriptor-reconciliation quirks are unchanged.
+
+The opaque `SentinelSlice` record adapts Source's sentinel-qualified slice.
+`bytes()` borrows the prefix; `with_sentinel()` borrows the full span, including
+the actual terminator. Their starts coincide even for an empty prefix. Caller
+and view mutation share the original storage; toss preserves it, while later
+fill/peek/take can rebase or overwrite it. Direct external construction/private
+storage access are rejected. Arbitrary constructor/alias/copy bypasses are outside
+these returned-view cases. V receives a runtime u8 rather than encoding the
+comptime marker in a slice type. Source dispatches all 256 comptime values in
+the fixture. Separate controls confirm Source rejects a runtime marker while V
+runs 0/255. Both reject -1; Source rejects 256 in both modes. Pinned V warns,
+compiles and truncates 256 to 0 in ordinary mode, but rejects it in production.
+That compiler conversion difference is separate from valid-byte equivalence.
+
+Debug/ordinary and ReleaseSafe/production each match **12,192 returning records /
+36,576 sentinel reads / 48,768 primary calls**, SHA-256
+`24d156384636b33317352082b3fd68a7a0f2b6300b7b55233f8e90ebac05a8c4`.
+Three reads and one relative seek run per record; setup/priming/observations are
+separate. Groups contain 8,208 basic, 1,536 every-sentinel and 2,448 replacement
+profiles, deduplicated by input. Memory, positional and streaming files cover
+lengths 0/1/7/8/9/31/32/33/64, capacities 0/1/8/32, start/EOF offsets,
+present/absent markers, empty prefixes, full/partial fills and relative seeks.
+Every sentinel byte runs both APIs in all reader kinds. Open/closed owned pipe
+replacement retains original read-ahead across seed/consumption/prime/toss
+choices. Complete backing storage, copied spans including terminators, pending
+bytes, positions, size/errors, references and untouched wire bytes match.
+An independent nonreplacement model checks first matches, counts/progress, EOF
+versus full-buffer failure and physical streaming progress separately from
+logical rewind. Native replacement observations preserve position changes from
+reconciliation rather than assuming a peek always preserves logical position.
+
+Another **3,120 borrowed records / 6,240 primary calls** assert prefix/full-span
+aliasing, exact buffer offsets, saved copies, caller-buffer XOR, view XOR,
+positions and retained bytes after toss. All marker bytes use empty/nonempty
+prefixes, with additional offsets and lengths in all reader kinds. Mutation
+preserves the actual terminator, keeping Source's sentinel contract valid.
+SHA-256:
+`dac10ac470a9d1c38d17383af20fe209dc452b3177fea44ddfdcfe15c82dda1d`.
+The **132 controls** classify as **48 returning records**, SHA-256
+`98bd55c52b3a4ff654d075287a96e18ca6affc11c54f5ba338dee77fcf602b94`,
+and **84 exact integer-overflow panic/state pairs**, SHA-256
+`409750f80c4727cbc6664d64fd0c0df30cc2aa568a09cfd3d665f27bfb4108b3`.
+Traps occur in public getPos after priming, before the sentinel call. Both failed
+exits have empty stdout, one exact message and matching initialized state.
+Observers omit getPos, capture bytes before opening state files and clean up
+only owned resources through Source FullPanic or V at_exit.
+
+Twenty-three consumers / 69 reads / 92 primary calls per mode assert empty
+prefix consumption, required EOF sentinels, offsets, zero/one-byte buffers, full
+file versus memory EOF, read-ahead, partial fills, high markers, rewind, pipe
+EOF/ReadFailed and sticky pending success/failure. SHA-256:
+`b69a05205090943cee5fa8e3d97da51abdbc7014a242e5b6f62d0e6cc9cd7b5a`.
+Compile/run controls distinguish literal constraints, direct record construction
+and storage privacy, runtime/comptime markers and mode-specific oversized-literal
+conversion. Three public regressions accompany the proof. All **77 image test
+files** pass in three batches, with **17 production/application/Windows/Linux
+checks**. Vaxis runtime sources/tests are unchanged and were not rerun here;
+dependency builds pass. Historical fixed-array and full-stream hashes remain
+unchanged in both modes.
+
+The initial independent model assumed replacement peeks preserved logical
+position. Native/V outputs already agreed for all records; the corrected model
+restricts that position prediction to nonreplacement records while retaining
+complete native replacement-state comparison. Compile diagnostics retain
+initial expectations of a hard ordinary oversized-literal rejection and
+ordinary-style production acceptance. Original scripts/fixtures/outputs remain
+separate from passing gates. Final production/probe/runner/helper bodies remain
+frozen; only expected assignments change after ordinary discovery.
+
+Full unchanged Source, compiler versions/selected libraries, implementation,
+probes, shared fixtures, directly imported helpers and inputs are pinned before /
+after comparison. Source bodies, visibility and reader syscalls remain untouched.
+Fixtures use initialized unlinked owned files, reset offsets and owned nonblocking
+pipes/keepers. Independent replay checks values/progress, sentinel-preserving
+mutations, classifications, exact failures, consumers, ownership, binaries,
+modes and provenance. Parent-side lossless compression pins raw/compressed logs.
+Evidence is persisted from an owned RAM workspace and every retained archive
+member is read back before commit and release.
+
+Sentinel-qualified typing is not represented in V. Invalidated views, changing
+the actual terminator, arbitrary constructed/copied records, other callbacks /
+devices, larger spans/buffers/offsets, concurrent reuse, syscall counts, timing /
+signals, injected errors, OOM/quotas, allocator lifetime, portable ABI and remaining
+V representation limits are boundaries. Runtime uses little-endian 64-bit macOS;
+Windows/Linux and other CPU, big-endian and 32-bit runtime remain outside the
+proof. Cross builds establish compilation only. Reproduction and scope are in
+[the sentinel reader proof](zigimg/reference_probes/reader_sentinel/README.md).

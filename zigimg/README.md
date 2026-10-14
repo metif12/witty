@@ -1262,3 +1262,11 @@ pending input. The [fixed-array reader comparison](reference_probes/reader_array
 covers 20,448 records, 1,252 mutation/alias records, 120 controls and 16 consumers
 per mode. V's fallible pointer result, zero-array and chained-alias limitations
 are documented with the mapping.
+
+`peek_sentinel` and `take_sentinel` require the requested byte, including at EOF.
+`SentinelSlice.bytes()` borrows the prefix; `with_sentinel()` includes its final
+byte. Taking an empty prefix consumes that sentinel. The
+[sentinel comparison](reference_probes/reader_sentinel/README.md) covers 12,192
+records, 3,120 mutation/alias records, 132 controls and 23 consumers per mode.
+V uses a runtime marker and an opaque record; comptime typing and oversized
+literal conversion differences are documented separately.

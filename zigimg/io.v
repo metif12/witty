@@ -563,6 +563,36 @@ pub fn (mut stream ReadStream) peek_delimiter_inclusive(delimiter u8) ![]u8 {
 	return error('StreamTooLong')
 }
 
+// V represents a sentinel-terminated slice with its complete borrowed span.
+// Only the reader constructs these views; bytes() omits the final sentinel.
+@[noinit]
+pub struct SentinelSlice {
+	storage []u8
+}
+
+pub fn (view SentinelSlice) bytes() []u8 {
+	return unsafe { view.storage[..view.storage.len - 1] }
+}
+
+pub fn (view SentinelSlice) with_sentinel() []u8 {
+	return unsafe { view.storage }
+}
+
+pub fn (mut stream ReadStream) peek_sentinel(sentinel u8) !SentinelSlice {
+	line := stream.peek_delimiter_inclusive(sentinel)!
+	return SentinelSlice{
+		storage: unsafe { line }
+	}
+}
+
+pub fn (mut stream ReadStream) take_sentinel(sentinel u8) !SentinelSlice {
+	line := stream.peek_delimiter_inclusive(sentinel)!
+	stream.toss(usize(line.len))
+	return SentinelSlice{
+		storage: unsafe { line }
+	}
+}
+
 pub fn (mut stream ReadStream) take_delimiter_inclusive(delimiter u8) ![]u8 {
 	line := stream.peek_delimiter_inclusive(delimiter)!
 	stream.position += line.len
