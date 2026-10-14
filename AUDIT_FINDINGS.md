@@ -6789,3 +6789,78 @@ user; module tests skip those cases under a privileged user. Windows runtime/pat
 error parity remains unclaimed, and cross builds establish compilation only.
 Scope and reproduction are in
 [the public image path-failure proof](zigimg/reference_probes/image_path/README.md).
+
+### Public image POSIX open flags and descriptor exec inheritance — 2026-10-14
+
+Compiled unchanged pinned public path APIs with owned new/existing/symlink/hard-link
+paths and controlled process umasks. The first RGB24 PNG assertion exposed a native
+FD_CLOEXEC descriptor while V's descriptor lacked that flag. Real fork/exec children
+confirmed Source closed the owned file and V inherited it. Both public reader
+operations showed the same difference while the inherited XBM detector loop kept
+the descriptor live. Original binaries, writer states and four reader loop pairs
+remain retained.
+
+The shared POSIX opener now uses actual open flags matching pinned fs.Dir defaults,
+including O_CLOEXEC, O_LARGEFILE where defined, and O_NOCTTY on readers. Flags apply
+at the open syscall; creation requests 0666 subject to caller umask. Existing path
+validation, saved-errno mapping and interrupted-open retries stay in front of codec
+dispatch. Private path streams use raw descriptors and close them directly on
+return/error, without a stdio buffer or final wrapper flush. Borrowed-file and
+Windows path ownership keep their earlier behavior.
+
+Both Debug/ordinary and ReleaseSafe/production match **9,792 returning records /
+19,584 public calls**, SHA-256
+`666e219554bee00361c39fc88e367143b44f1f7656813dee05e7e4af736121e0`.
+All seventeen encoders, eight initialized storage profiles, capacities 0/8/32,
+both APIs, four path kinds and umasks 000/022/077 are covered. Calls repeat twice
+without resetting buffers. New-file permissions follow 0666 and umask; existing
+files keep 0640. Link kinds, alias bytes, truncation-before-validation/no-op writes,
+retained buffers/image/pixels/palette and descriptor cleanup match.
+
+**144 returning controls**, SHA-256
+`aed2f32a9dd98f56f7ea0340764fff5445837c0a291a893bf5b8913500bf2c66`,
+and **72 exact panic/state pairs**, SHA-256
+`0fda43a6d11c4659af35eeb7c1a2a0b9431afb9beed8184bd9b85955b2dfa902`,
+cover zero-width PNGs with RGB24/BGR24/invalid storage. Source supplies all
+classifications: BGR24/invalid storage return Unsupported before header validation,
+while RGB24 asserts after opening/truncating the file. Panic states require failed
+exits, no stdout, the sole exact native diagnostic, equal initialized retained
+state, write-only/blocking/CLOEXEC flags and no owned-file inheritance after exec.
+
+**48 bounded reader-loop pairs**, initialized ready-state SHA-256
+`7aedf0063107a514c81a1573d529f2011fb0420febbbee72e2f5c9bfcceb1e77`,
+cover reading/detection, both APIs, capacities 32/128, existing files and both alias
+kinds, and umasks 000/022. Native XBM nonadvancing peek remains inherited. Watchers
+verify read-only/blocking/CLOEXEC descriptors and actual exec-child closure.
+Parents stay alive half a second after readiness without stdout/stderr, then are
+killed. These cases are separate from returning observations; successful XBM
+decoding remains blocked by the native detector loop.
+
+Source bodies/visibility remain unchanged. C creates/observes owned OS resources,
+with no image/stream replacement. Snapshots inspect target inode descriptors 3–127
+before opening observer files; descriptor/process/inode identities are excluded.
+Exec children compare inherited descriptors with the parent's owned inode before
+opening paths. Watchers omit caller/codec buffers to avoid asynchronous mutation
+observations. Only known owned paths are removed after loop termination; normal
+calls restore the process umask. No case directories survive completion. Private
+stream cursors, inactive storage and allocator effects remain unobserved.
+
+A consumer regression pins flags/access/modes and raw-descriptor buffered IO;
+twenty-four focused public PNG records / 48 calls match per mode. All 61 image
+and 58 Vaxis test files pass with nineteen production/application/platform/unit/
+fixture checks. Historical path-error and FIFO suites retain every previous
+returning/control/failure hash in both actual Source modes. Formatting, diff and
+Python checks pass. Full Source/library/DEFLATE/math/SIMD/fs.Dir/libc/version and
+before/after implementation/fixture/runner/helper/input hashes protect comparisons.
+Ordinary observations supply fixed production hashes; only golden assignments
+change afterward. Persistent evidence is independently replayed and archived with
+every member read back.
+
+Controlling-TTY acquisition, other flags/close failures, signal/EINTR injection,
+concurrent external descriptor/namespace mutation, other modes/ACLs/umasks/encodings,
+quotas/OOM/disk exhaustion, full-pipe backpressure, other CPU/vector selections,
+const/narrow/enum/boxed representations, physical layouts, big-endian/32-bit runtime
+and portable ABI remain boundaries. No timing/race equivalence is claimed. Cross
+builds establish compilation only; Windows runtime/path parity remains unclaimed.
+Scope and reproduction are in
+[the public image open-contract proof](zigimg/reference_probes/image_open/README.md).

@@ -16,7 +16,7 @@ pub fn ImageUnmanaged.from_file(file os.File, mut read_buffer []u8) !ImageUnmana
 
 pub fn ImageUnmanaged.from_file_path(path string, mut read_buffer []u8) !ImageUnmanaged {
 	mut file := image_open_file(path, false)!
-	defer { file.close() }
+	defer { image_close_file(mut file) }
 	return ImageUnmanaged.from_file(file, mut read_buffer)
 }
 
@@ -39,7 +39,7 @@ pub fn ImageUnmanaged.detect_format_from_file(file os.File, mut read_buffer []u8
 
 pub fn ImageUnmanaged.detect_format_from_file_path(path string, mut read_buffer []u8) !Format {
 	mut file := image_open_file(path, false)!
-	defer { file.close() }
+	defer { image_close_file(mut file) }
 	return ImageUnmanaged.detect_format_from_file(file, mut read_buffer)
 }
 

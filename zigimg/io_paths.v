@@ -8,6 +8,8 @@ import os
 fn C.witty_image_file_path_max() int
 fn C.witty_image_file_open_interrupted(int) int
 fn C.witty_image_file_open_error(int) &char
+fn C.witty_image_file_open(&char, int, &int) int
+fn C.witty_image_file_close(int) int
 
 fn image_file_open_error(err IError) IError {
 	$if windows {
@@ -31,23 +33,26 @@ fn image_open_file(path string, writing bool) !os.File {
 		if path.len >= C.witty_image_file_path_max() { return error('NameTooLong') }
 		if path.len == 0 { return error('FileNotFound') }
 		for {
-			if writing {
-				file := os.create(path) or {
-					if C.witty_image_file_open_interrupted(err.code()) == 1 {
-						continue
-					}
-					return image_file_open_error(err)
+			mut saved_error := 0
+			fd := C.witty_image_file_open(path.str, int(writing), &saved_error)
+			if fd >= 0 {
+				// Private path streams use only fd; no stdio buffer is attached.
+				return os.File{
+					fd: fd
 				}
-				return file
 			}
-			file := os.open(path) or {
-				if C.witty_image_file_open_interrupted(err.code()) == 1 {
-					continue
-				}
-				return image_file_open_error(err)
-			}
-			return file
+			if C.witty_image_file_open_interrupted(saved_error) == 1 { continue
+			 }
+			return image_file_open_error(error_with_code('', saved_error))
 		}
 	}
 	return error('Unexpected')
+}
+
+fn image_close_file(mut file os.File) {
+	$if windows {
+		file.close()
+	} $else {
+		C.witty_image_file_close(file.fd)
+	}
 }

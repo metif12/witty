@@ -53,6 +53,24 @@ static intptr_t witty_image_file_write(int fd, uint64_t pos, const unsigned char
 #include <sys/stat.h>
 #include <sys/uio.h>
 #include <limits.h>
+#include <fcntl.h>
+/* Match fs.Dir's default open/create flags at the actual descriptor open. */
+static int witty_image_file_open(const char *path, int writing, int *saved_error) {
+    int flags = writing ? O_WRONLY | O_CREAT | O_TRUNC : O_RDONLY;
+#ifdef O_CLOEXEC
+    flags |= O_CLOEXEC;
+#endif
+#ifdef O_LARGEFILE
+    flags |= O_LARGEFILE;
+#endif
+#ifdef O_NOCTTY
+    if (!writing) flags |= O_NOCTTY;
+#endif
+    int fd = open(path, flags, 0666);
+    *saved_error = fd < 0 ? errno : 0;
+    return fd;
+}
+static int witty_image_file_close(int fd) { return close(fd); }
 static int witty_image_file_path_max(void) { return PATH_MAX; }
 static int witty_image_file_open_interrupted(int code) { return code == EINTR; }
 /* Names from pinned std.posix.openatZ; use the saved error code, not errno. */

@@ -13,6 +13,63 @@ fn C.witty_image_path_mode(int) int
 fn C.witty_image_path_bytes(int, &u8, usize) isize
 fn C.witty_image_path_cleanup(&char, int) int
 
+#include "../image_open/fixture_shims.h"
+
+fn C.witty_image_open_setup(&char, int, &u8, usize) int
+fn C.witty_image_open_cleanup(&char) int
+fn C.witty_image_open_mask(int) int
+fn C.witty_image_open_mode(&char) int
+fn C.witty_image_open_bytes(&char, &u8, usize) isize
+fn C.witty_image_open_flag(int, int) int
+
+fn image_open_check_descriptor_and_mode(kind int, mask int) ! {
+	root := os.join_path(os.temp_dir(), 'witty-zigimg-open-${os.getpid()}')
+	seed := 'old bytes'.bytes()
+	assert C.witty_image_open_setup(root.str, kind, seed.data, usize(seed.len)) == 0
+	original := C.witty_image_open_mask(mask)
+	defer {
+		C.witty_image_open_mask(original)
+		assert C.witty_image_open_cleanup(root.str) == 0
+	}
+	path := root + '/target'
+	mut file := image_open_file(path, true)!
+	assert C.witty_image_open_flag(file.fd, 0) == 1
+	assert C.witty_image_open_flag(file.fd, 1) == 1
+	assert C.witty_image_open_flag(file.fd, 2) == 0
+	mut buffer := []u8{len: 8, init: 165}
+	mut stream := WriteStream.init_file(file, mut buffer)
+	stream.write_all('abc'.bytes())!
+	stream.flush()!
+	image_close_file(mut file)
+	assert C.witty_image_open_flag(file.fd, 0) == -1
+	assert C.witty_image_open_mode(path.str) == if kind == 0 {
+		438 & ~mask
+	} else {
+		416
+	}
+	mut bytes := []u8{len: 32}
+	n := C.witty_image_open_bytes(path.str, bytes.data, usize(bytes.len))
+	assert n == 3 && bytes[..int(n)].bytestr() == 'abc'
+	file = image_open_file(path, false)!
+	assert C.witty_image_open_flag(file.fd, 0) == 1
+	assert C.witty_image_open_flag(file.fd, 1) == 0
+	assert C.witty_image_open_flag(file.fd, 2) == 0
+	mut reader := ReadStream.init_file(file, mut buffer)
+	assert reader.take(3)!.bytestr() == 'abc'
+	image_close_file(mut file)
+	assert C.witty_image_open_flag(file.fd, 0) == -1
+}
+
+fn test_image_path_opener_keeps_flags_modes_and_raw_descriptor_io() {
+	$if !windows {
+		for kind in 0 .. 4 {
+			for mask in [0, 18, 63] {
+				image_open_check_descriptor_and_mode(kind, mask)!
+			}
+		}
+	}
+}
+
 fn image_path_check_open_failure(kind int, writer_error string, reader_error string) ! {
 	root := os.join_path(os.temp_dir(), 'witty-zigimg-path-${os.getpid()}')
 	seed := hex.decode('6661726266656c64000000010000000100130038005dffff')!

@@ -1078,3 +1078,10 @@ truncating files, including production builds. Both modes match 12,160 returning
 records, 264 returning controls and 224 exact panic/state pairs. Consumer tests
 pin error precedence and unchanged buffers/files; historical regular-file and
 FIFO path hashes remain unchanged. Windows path-error behavior remains separate.
+
+The [public image open-contract proof](reference_probes/image_open/README.md)
+preserves POSIX close-on-exec at the actual open and checks descriptor access,
+creation modes, umasks and aliases. Both modes match 9,792 returning records,
+144 controls, 72 exact panic/state pairs and 48 bounded reader-loop pairs; real
+exec children confirm that private image descriptors are not inherited. Historical
+path-error and FIFO hashes remain unchanged.
