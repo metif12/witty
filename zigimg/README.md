@@ -1201,3 +1201,11 @@ byte's bit pattern. The [buffered reader comparison](reference_probes/reader_buf
 covers 14,784 returning records / 59,136 calls per mode, 412 mutable borrow records,
 472 returning controls and 216 exact panic/state pairs. Historical delimiter and
 stream matrices retain their hashes.
+
+`fill_more` rebases for one extra byte and invokes the reader callback once.
+A positional-to-streaming transition can succeed without reading bytes; pending
+EOF tails and sticky failure cursors follow pinned Zig. The
+[single-callback fill comparison](reference_probes/reader_fill_more/README.md)
+covers 3,794 returning records / 11,382 fills per mode, 350 returning controls,
+226 exact panic/state pairs and 17 concrete consumer records. Existing scalar
+and vector helpers and historical stream hashes remain unchanged.

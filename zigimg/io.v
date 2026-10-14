@@ -9,6 +9,7 @@ fn C.witty_image_file_size(int, &u64) int
 fn C.witty_image_file_seek(int, u64) int
 fn C.witty_image_file_seek_by(int, u64) int
 fn C.witty_image_file_read(int, u64, &u8, usize, &int) isize
+fn C.witty_image_file_read_once(int, u64, &u8, usize, &int) isize
 fn C.witty_image_file_read_vec(int, u64, &u8, usize, &u8, usize, &int) isize
 fn C.witty_image_file_write(int, u64, &u8, usize, &u8, usize, &int) isize
 
@@ -292,6 +293,42 @@ pub fn (mut stream ReadStream) peek(count int) ![]u8 {
 
 pub fn (mut stream ReadStream) fill(count int) ! {
 	stream.peek(count)!
+}
+
+// Rebase for one additional byte, then invoke the reader once. Switching from
+// positional to streaming IO may succeed without adding any buffered bytes.
+pub fn (mut stream ReadStream) fill_more() ! {
+	if stream.file == none { return error('EndOfStream') }
+	if stream.end == stream.buffer.len {
+		remaining := stream.end - stream.position
+		for i in 0 .. remaining {
+			stream.buffer[i] = stream.buffer[stream.position + i]
+		}
+		stream.position = 0
+		stream.end = remaining
+		if remaining == stream.buffer.len { panic('reached unreachable code') }
+	}
+	if stream.position == stream.end && stream.streaming >= 0 {
+		stream.position = 0
+		stream.end = 0
+	}
+	mut target := unsafe { stream.buffer[stream.end..] }
+	if stream.streaming < 0 { return error('ReadFailed') }
+	file := stream.file or { return error('ReadFailed') }
+	read := C.witty_image_file_read_once(file.fd, stream.file_pos, target.data, usize(target.len),
+		&stream.streaming)
+	if read == -4 { return }
+	if read == -3 {
+		stream.file_prepare_streaming()!
+		return
+	}
+	if read < 0 { return error('ReadFailed') }
+	if read == 0 {
+		stream.file_size = stream.file_pos
+		return error('EndOfStream')
+	}
+	stream.file_pos += u64(read)
+	stream.end += int(read)
 }
 
 // Ensure the minimum, then borrow the whole pending span, including read-ahead.

@@ -7981,3 +7981,80 @@ Negative counts and usize values beyond V's int carrier remain separate from the
 Source unsigned count domain. Cross builds establish compilation only.
 Reproduction and scope are in
 [the buffered reader proof](zigimg/reference_probes/reader_buffered/README.md).
+
+### Single-callback reader fills — 2026-10-14
+
+`ReadStream.fill_more` translates pinned Reader.fillMore: rebase for one extra
+byte, then invoke the reader callback once. Fixed memory returns EndOfStream
+without consuming pending bytes. File buffers compact pending data before IO;
+a full unconsumed file buffer traps after rebase. EOF preserves its pending
+tail. A positional-to-streaming transition at offset zero returns success with
+zero progress and leaves queued input untouched. At nonzero offsets, successful
+forward discard reconciles the position and clears old read-ahead. Established
+streaming WouldBlock permits a later retry after reseeding; failed reconciliation
+remains sticky. Consumed short-buffer cursors survive sticky failure. One
+callback may involve multiple reconciliation syscalls.
+
+The initial scalar-helper implementation mismatched 195 native records by
+retrying zero-offset transitions immediately. Its frozen implementation, runner
+and diagnostics are retained separately. A dedicated read-once C helper exposes
+the callback boundary; all previous V bodies and scalar/vector C bodies remain
+unchanged. Full Source bodies, visibility and reader syscalls remain untouched.
+
+Debug/ordinary and ReleaseSafe/production each match **3,794 returning records /
+11,382 fills / 26,558 primary calls**, SHA-256
+`12dd485c887eac00bbbd73a11ee017b558af2367e50c35b648cd3adaf0188919`.
+Groups comprise 384 memory, 1,728 file, 68 retained-EOF, 504 empty-transition,
+756 prefilled-transition, 162 reseed, 96 failed-pending and 96 failed-consumed
+profiles. Three fills, three caller consumptions and one relative seek run per
+record; setup/priming/observations are separate. Memory, positional files and
+streaming-initialized files cover capacities 1/2/8/32, arithmetic payload lengths
+0/1/7/8/9/31/32/33/64, distinct initial offsets, consumption choices, relative
+seeks and controlled open/closed pipe replacements. Complete initialized
+storage, copied successful results, pending bytes, logical positions, size/errors,
+normalized ownership and untouched wire bytes match.
+
+The **576 distinct controls** separate **350 returning records**, SHA-256
+`98afd96ac4a10bafe0b94155609a1a13f2f468a97fd861f382d5ffe221a625bf`,
+from **226 exact panic/state pairs**, SHA-256
+`9a9e02daa7a6d12f6b289d97b995ee3d75f47f722ca54a7c7e47d585f81bce7e`.
+Four zero-capacity file profiles and eighteen each of full-second, full-rewind
+and full-prefill profiles panic with exactly reached unreachable code. Fixed
+zero-capacity memory returns EOF. Another 168 panic with exactly integer
+overflow in public getPos: 84 observations after priming before the new operation
+and 84 after fill_more returns ReadFailed. Both exits fail with empty stdout,
+one exact message and identical initialized state. Observers omit getPos,
+handle size errors and capture preceding/calling status, backing storage, saved
+results, pending spans and owned descriptor references before opening state files.
+
+Seventeen compiled consumer records / 51 fills / 119 primary calls per mode
+assert all three fill results and concrete memory/file spans, EOF retention,
+zero progress, untouched initial storage, prefilled compaction/discard, sticky
+pending/consumed/rewound state, retry recovery and one-byte fills. SHA-256:
+`d8314676dd60b5e0debe7c2f10d4962f49aec1da90178510850e22d7fba6f33e`.
+Four public unit regressions cover the principal contracts. All **70 image and
+58 Vaxis test files**, plus **46 production/application/platform/unit/fixture
+checks**, pass. Historical buffered, delimiter streaming/discard/nullable/
+exclusive/inclusive and full-stream hashes remain unchanged in both modes.
+
+Provenance checks cover full Source, compiler versions and selected libraries,
+implementation, probes, separately copied shared headers, directly imported
+helpers and inputs before/after each comparison. Only expected assignments
+change after final ordinary discovery. Fixtures use initialized unlinked owned
+files, reset live offsets and owned nonblocking pipes. Independent replay checks
+outputs, native classifications, exact failure states, consumers, ownership,
+binary hashes and actual build modes. Lossless parent-side log compression
+retains raw/compressed hashes. Interrupted development checks and disk-exhaustion
+failures remain separate from passing final gates. An owned RAM volume mounted
+at the same work path preserves argv; 7,200 transferred files were hash checked.
+Old expanded evidence is reclaimed only after archive/readback and per-file
+verification. Every retained member of this checkpoint's persistent archive is
+read back before committing and releasing the temporary volume.
+
+Arbitrary custom callbacks, overlapping storage, arbitrary constructor/copy
+sequences, other devices, larger buffers/offsets, concurrent reuse, syscall
+counts, timing/signals, injected errors, OOM/quotas, allocator lifetime, portable
+ABI and V representation limits remain boundaries. Windows runtime, other CPU
+selections and big-endian/32-bit runtime are outside the native proof; cross
+builds establish compilation only. Reproduction and precise scope are in
+[the single-callback fill proof](zigimg/reference_probes/reader_fill_more/README.md).

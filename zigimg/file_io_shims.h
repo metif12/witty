@@ -34,6 +34,9 @@ static intptr_t witty_image_file_read(int fd, uint64_t pos, unsigned char *buf, 
         return -1;
     }
 }
+static intptr_t witty_image_file_read_once(int fd, uint64_t pos, unsigned char *buf, size_t count, int *streaming) {
+    return witty_image_file_read(fd, pos, buf, count, streaming);
+}
 static intptr_t witty_image_file_read_vec(int fd, uint64_t pos, unsigned char *a, size_t alen, unsigned char *b, size_t blen, int *streaming) {
     (void)b; (void)blen;
     return witty_image_file_read(fd, pos, a, alen, streaming);
@@ -135,6 +138,18 @@ static intptr_t witty_image_file_read(int fd, uint64_t pos, unsigned char *buf, 
         *streaming = 1;
         if (pos != 0) return -3; /* Reader must reconcile the logical offset. */
         do { n = read(fd, buf, count); } while (n < 0 && errno == EINTR);
+    }
+    return n;
+}
+/* Expose one Reader.readVec callback, including its zero-progress transition. */
+static intptr_t witty_image_file_read_once(int fd, uint64_t pos, unsigned char *buf, size_t count, int *streaming) {
+    ssize_t n;
+    do {
+        n = *streaming ? read(fd, buf, count) : pread(fd, buf, count, (off_t)pos);
+    } while (n < 0 && errno == EINTR);
+    if (n < 0 && witty_image_file_unseekable(errno) && !*streaming) {
+        *streaming = 1;
+        return pos ? -3 : -4; /* Reconcile a nonzero offset; otherwise return zero progress. */
     }
     return n;
 }
