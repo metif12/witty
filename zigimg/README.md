@@ -1022,3 +1022,10 @@ The [IFF file-stream proof](reference_probes/iff_streams/README.md) compares
 and twenty bounded discard-loop pairs in both modes. Consumer regressions pin
 retained chunk/plane buffers and partial ByteRun2 output; historical IFF hashes
 remain unchanged. The existing implementation needs no changes for these cases.
+
+The [GIF file-stream proof](reference_probes/gif_streams/README.md) compares
+13,316 records / 26,632 calls, 2,634 returning controls, 738 exact panic/state
+pairs and twelve bounded plain-text discard-loop pairs in both modes. Consumer
+regressions pin frame/main-image sharing and retained buffers after incomplete
+application data. Historical GIF hashes remain unchanged; these cases require
+no production implementation changes.

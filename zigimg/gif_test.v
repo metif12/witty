@@ -1,5 +1,64 @@
 module zigimg
 
+import os
+import encoding.hex
+
+fn test_gif_file_frame_sharing_and_retained_buffer() {
+	data :=
+		hex.decode('4749463839610100010080004d13385d82a7cc21ff0b4e45545343415045322e30030107000021f90401250001002c00000000010001000002024c01003b')!
+	path := os.join_path(os.temp_dir(), 'witty-gif-frame-${os.getpid()}.bin')
+	os.write_file_array(path, data)!
+	defer { os.rm(path) or {} }
+	mut file := os.open(path)!
+	defer { file.close() }
+	file.seek(i64(data.len), .start)!
+	mut buffer := []u8{len: 13, init: 165}
+	mut reader := ReadStream.init_file(file, mut buffer)
+	mut image := GIF.read_image(mut reader)!
+	assert image.animation.loop_count == 7 && image.animation.frames.len == 1
+	assert image.animation.frames[0].duration == f32(37) * f32(0.01)
+	assert image.raw_bytes() == [u8(0)]
+	mut pixels := image.animation.frames[0].pixels.as_bytes()
+	pixels[0] ^= 1
+	assert image.raw_bytes() == [u8(1)]
+	mut palette := image.animation.frames[0].pixels.get_palette()?
+	palette[0].g ^= 85
+	assert image.pixels.get_palette()?[0] == Rgba32{
+		r: 19
+		g: 109
+		b: 93
+	}
+	assert reader.get_pos() == 62 && reader.buffered_len() == 0
+	assert buffer.hex() == '003b000000010001000002024c'
+	assert os.read_bytes(path)! == data
+}
+
+fn test_gif_file_short_application_is_not_appended_and_retry_retains_buffer() {
+	data := hex.decode('4749463839610100010080004d13385d82a7cc21ff0b4e45545343415045322e30030107')!
+	path := os.join_path(os.temp_dir(), 'witty-gif-application-${os.getpid()}.bin')
+	os.write_file_array(path, data)!
+	defer { os.rm(path) or {} }
+	mut file := os.open(path)!
+	defer { file.close() }
+	file.seek(i64(data.len), .start)!
+	mut buffer := []u8{len: 13, init: 165}
+	mut reader := ReadStream.init_file(file, mut buffer)
+	mut codec := GIF.init()
+	for _ in 0 .. 2 {
+		codec.read(mut reader) or {
+			assert err.msg() == 'EndOfStream'
+			assert reader.get_pos() == 36 && reader.buffered_len() == 0
+			assert buffer.hex() == '03010782a7cc21ff0b4e455453'
+			assert codec.application_infos.len == 0 && codec.frames.len == 0
+			assert codec.global_color_table.data == [Rgb24{ r: 19, g: 56, b: 93 },
+				Rgb24{ r: 130, g: 167, b: 204 }]
+			continue
+		}
+		assert false
+	}
+	assert os.read_bytes(path)! == data
+}
+
 fn test_gif_loop_count_uses_first_recognized_record_and_live_data() {
 	mut codec := GIF.init()
 	codec.application_infos << GifApplicationExtension{

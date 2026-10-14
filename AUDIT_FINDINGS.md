@@ -6293,3 +6293,67 @@ compilation only. Full Source/library/math/version and implementation/fixture/
 runner/helper/input hashes protect evidence, fully archived/read back persistently
 before RAM detachment. Scope and reproduction are in
 [the IFF stream proof](zigimg/reference_probes/iff_streams/README.md).
+
+### GIF buffered metadata and graphic parsing checkpoint — 2026-10-14
+
+Compiled unchanged pinned GIF and its File.Reader/std.Io.Reader paths. The
+existing implementation matches without production-code changes. Both
+Debug/ordinary and ReleaseSafe/production match **13,316 returning records /
+26,632 calls**, SHA-256
+`7d610f7bca4e240506ab9fe2662014f8c90ccd154b54b078fb017464a0940469`.
+
+Direct/static/interface reads cover every global palette size, five canvas shapes,
+comment sub-block sizes/patterns, header/comment prefixes with retries and all
+unknown extension labels. Detectors compare every first byte, accepted/partial
+signatures and initial discard. File buffers are 13/14/16/32/128, with six-byte
+detector and isolated undersized controls; descriptors start at EOF independently
+of positional cursors. Prefix/detection groups also start at offset three.
+
+**2,634 returning controls**, SHA-256
+`1ffece9b8732ef1e307735ac2b4aad0bcfbabb02ea2085d9bb021cfa7d0592a5`,
+compare recognized/unrecognized applications, ignored declared sizes, payload
+lengths and prefixes; graphic flags/size/terminator/delay/transparency; zero image
+extents/local/interlace flags; complete one-pixel LZW input; plain-text blocks;
+small buffers and initialized direct background casts. Native execution supplies
+the classification before V is checked. Successful pixels/palettes are compared
+before/after mutation, with static/interface main-image sharing observed too.
+
+**738 exact panic/state pairs**, SHA-256
+`2d97ecf1c18da35bd3e87addcebda9a98545986b6838d9118d2bcde927dd53a5`,
+cover short recognized loop data, application/graphic toss, indexed background
+casts, undersized buffers and plain-text arithmetic. Strict checks require failed
+exits, no stdout, the exact sole native message and equal nonempty snapshots.
+Caller buffers, public initialized header/palette/frame/application state, input
+and disk are retained. Failed comment payloads and partial local palette/pixel
+contents remain unobserved; comment counts retain their pre-read append behavior.
+
+The first truncated application control exposed a recursive observer failure:
+failed toss increments seek before its assertion, making bufferedLen underflow.
+Corrected observers omit that query and file getPos outside their Source API
+domain, preserving the memory cursor, caller buffer and initialized codec state.
+The original failure and two fixture compiler/setup rejections remain retained
+separately. Source algorithms and visibility are unchanged.
+
+**Twelve bounded plain-text discard-loop pairs**, entry SHA-256
+`b0ef0ce9fde8e40f35c018c36c095c1aa8ed5d03b58bbb7e80a1b7f237a892c9`,
+cover direct/static/interface paths, buffers 13/32 and both discard stages.
+Matching initialized entry snapshots and no output precede 0.5-second timeouts.
+They certify observed nontermination over that interval and entry state only.
+
+Native-observed thirteen-byte file regressions pin shared frame/main pixels and
+palettes, the retained buffer at position 62, and incomplete application data
+that never appends metadata, retaining its buffer at position 36 through a retry.
+Separate Source/V controls match their exact inputs in both modes. All 61 image
+and 58 Vaxis test files pass, with production GIF/file tests and nineteen
+application/platform/unit/fixture build checks. Historical GIF record/failure
+hashes and unchanged native assertions pass in both modes; formatting, diff and
+Python checks pass too.
+
+Undefined private/default/partial decode storage, inactive backing, pointer
+identities, allocator/OOM/GC/lifetime, custom/nonseekable streams, OS failures,
+const/narrow/boxed representation, wider dimensions, big-endian/32-bit runtime
+and portable ABI remain boundaries. Cross builds establish compilation only.
+Full Source/library/version and implementation/fixture/runner/helper/input hashes
+protect evidence, fully archived and read back persistently before RAM detachment.
+Scope and reproduction are in
+[the GIF stream proof](zigimg/reference_probes/gif_streams/README.md).
