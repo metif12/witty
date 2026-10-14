@@ -54,7 +54,7 @@ static intptr_t witty_image_file_write(int fd, uint64_t pos, const unsigned char
 #include <sys/uio.h>
 static int witty_image_file_size(int fd, uint64_t *size) {
     struct stat st;
-    if (fstat(fd, &st) != 0) return -1;
+    if (fstat(fd, &st) != 0) return errno == EBADF ? 4 : -1;
     if (!S_ISREG(st.st_mode)) return 1;
     *size = st.st_size;
     return 0;

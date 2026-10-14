@@ -6596,3 +6596,63 @@ vector selections, const/narrow/enum/boxed representations, physical layouts,
 big-endian/32-bit runtime and portable ABI remain boundaries. Cross builds establish
 compilation only. Scope and reproduction are in
 [the public image read proof](zigimg/reference_probes/image_read/README.md).
+
+### Public image pipe handles and POSIX descriptor failure order — 2026-10-14
+
+Compiled unchanged pinned public managed/unmanaged image handle APIs on actual
+POSIX pipes. The first descriptor -1 reader reached Source's std.posix.fstat BADF
+unreachable check while V returned Unseekable. The POSIX size shim now identifies
+BADF separately, and ReadStream.get_end_pos panics with exact native text before
+caching an error. Cached size/error and explicit streaming-reader paths retain
+their earlier order. The guard remains active in production; Windows size handling
+is unchanged.
+
+Both Debug/ordinary and ReleaseSafe/production match **7,344 returning records /
+14,688 public calls**, SHA-256
+`a289309d0b9f3819b79af0d483252020eec5487ffe6c288125cf34abed124f82`.
+The 6,528 live-pipe encoder cases cover all seventeen encoder arms, eight initialized
+storage profiles, three option variants, eight capacities zero through 1024 and
+both APIs. Pipes begin with a three-byte caller prefix; calls repeat twice with
+fresh private positional writers and the same caller buffer. Streaming transitions,
+actual wire output and retained buffers match. No-op encoders retain only the
+prefix; PNG flushes only its signature, and wrappers add no final flush.
+
+An additional 408 invalid-writer cases preserve validation/buffering before OS
+failure. Another 408 live-pipe read/detection cases cover all seventeen samples,
+both operations, six capacities and both managed states. The mandatory initial
+seek fails before detection or input consumption; external observation confirms
+unread data, untouched buffers and open borrowed endpoints through repeated calls.
+
+**384 returning controls**, SHA-256
+`6fb1a7e8675b13e3f2fbe08e65643bb40c8bafd11a07c44a51d7a49d9fbd0885`,
+and **600 exact panic/state pairs**, SHA-256
+`d9e4437c60c4e11f123c626559f9668f8ceb40d749a35ab0387a6ee4fb3adb07`,
+cover 408 invalid readers, 96 invalid generated PNG headers and 96 short TGA
+pixel/row failures. Source supplies every classification. Prior delivery, all
+caller bytes/pixels/active palette, descriptor validity and normalized cumulative
+pipe output match. Failed exits, no stdout, the sole exact native message and equal
+nonempty state are required. Observers snapshot before opening their state file;
+invalid descriptor -1 cannot be reused by the observer.
+
+New consumer regressions pin pipe read/detection rejection without consumption
+and repeated PNG writes retrying the streaming transition. Six exact compiled
+records / twelve calls match per mode. All 61 image and 58 Vaxis test files pass,
+with nineteen production/application/platform/unit/fixture checks. Historical
+37,133 stream records, seventeen trap pairs and four ordinary compiler rejection
+pairs retain full/original/streaming hashes in both actual Source optimization
+modes. Formatting, diff and Python checks pass.
+
+The original native stat panic versus V return with equal initialized retained
+bytes and the fixture include-path rejection remain preserved. Source bodies and
+visibility stay unchanged. Private wrapper cursors/pending lengths, codec state,
+inactive backing, identities and allocator effects remain unobserved. Full
+Source/library/DEFLATE/math/SIMD/version and before/after implementation/fixture/
+runner/helper/input hashes protect persistent evidence, independently replayed and
+archived with every member read back.
+
+Path/FIFO APIs, custom streams, full-pipe backpressure, nonblocking writers,
+reader closure/SIGPIPE, OS races/other failures, allocation/OOM/GC/lifetime, larger
+images, other CPU/vector selections, const/narrow/enum/boxed representations,
+physical layouts, big-endian/32-bit runtime and portable ABI remain boundaries.
+Cross builds establish compilation only. Scope and reproduction are in
+[the public image pipe proof](zigimg/reference_probes/image_pipe/README.md).

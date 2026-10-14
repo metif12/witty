@@ -1056,3 +1056,10 @@ managed/unmanaged file/path/memory reads and detection, borrowed descriptor
 ownership, repeated calls and retained buffers. It matches 18,040 returning
 records, 2,182 returning controls, 948 exact panic/state pairs and 40 bounded
 native XBM loop pairs in both modes; complete samples decode sixteen formats.
+
+The [public image pipe proof](reference_probes/image_pipe/README.md) compares
+managed/unmanaged encoders, detection and reading on actual POSIX pipes. Uncached
+invalid descriptor size queries retain Source's BADF unreachable panic in
+production. Both modes match 7,344 returning records, 384 returning controls and
+600 exact panic/state pairs, including repeated streaming transitions and
+unconsumed input after rejected reader seeks.

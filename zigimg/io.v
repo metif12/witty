@@ -76,6 +76,8 @@ pub fn (mut stream ReadStream) get_end_pos() !u64 {
 		if stream.file_size_error != '' { return error(stream.file_size_error) }
 		mut size := u64(0)
 		result := C.witty_image_file_size(file.fd, &size)
+		// Source std.posix.fstat treats a bad descriptor as unreachable.
+		if result == 4 { panic('reached unreachable code') }
 		if result != 0 {
 			stream.file_size_error = if result == 1 { 'Streaming' } else { 'Unexpected' }
 			return error(stream.file_size_error)

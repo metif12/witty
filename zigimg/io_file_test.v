@@ -1,6 +1,7 @@
 module zigimg
 
 import os
+import encoding.hex
 
 #flag -I @VMODROOT/zigimg/reference_probes/streams
 #include "fixture_shims.h"
@@ -8,6 +9,107 @@ import os
 fn C.witty_stream_probe_pipe(&int) int
 fn C.witty_stream_probe_close(int) int
 fn C.witty_stream_probe_read(int, &u8, usize) isize
+
+#flag -I @VMODROOT/zigimg
+#include "reference_probes/image_pipe/fixture_shims.h"
+
+fn C.witty_image_pipe_open(&int) int
+fn C.witty_image_pipe_close(int) int
+fn C.witty_image_pipe_valid(int) int
+fn C.witty_image_pipe_write(int, &u8, usize) isize
+fn C.witty_image_pipe_read(int, &u8, usize) isize
+
+fn image_pipe_check_public_reader(managed bool, decode bool) ! {
+	mut fds := [2]int{}
+	assert C.witty_image_pipe_open(&fds[0]) == 0
+	defer {
+		C.witty_image_pipe_close(fds[0])
+		C.witty_image_pipe_close(fds[1])
+	}
+	data := hex.decode('6661726266656c64000000010000000100130038005dffff')!
+	assert C.witty_image_pipe_write(fds[1], data.data, usize(data.len)) == data.len
+	file := os.File{
+		fd: fds[0]
+	}
+	mut buffer := []u8{len: 8, init: 165}
+	for attempt in 0 .. 2 {
+		mut status := 'ok'
+		if decode {
+			if managed {
+				Image.from_file(file, mut buffer) or { status = err.msg() }
+			} else {
+				ImageUnmanaged.from_file(file, mut buffer) or { status = err.msg() }
+			}
+		} else {
+			if managed {
+				Image.detect_format_from_file(file, mut buffer) or { status = err.msg() }
+			} else {
+				ImageUnmanaged.detect_format_from_file(file, mut buffer) or { status = err.msg() }
+			}
+		}
+		assert status == 'Unseekable' && buffer == []u8{len: 8, init: 165}
+		assert C.witty_image_pipe_valid(fds[0]) == 1 && C.witty_image_pipe_valid(fds[1]) == 1
+		mut remaining := []u8{len: 32}
+		n := C.witty_image_pipe_read(fds[0], remaining.data, usize(remaining.len))
+		if attempt == 0 {
+			assert n == data.len && remaining[..int(n)] == data
+		} else {
+			assert n == -1
+		}
+	}
+}
+
+fn test_public_image_pipe_readers_reject_seeks_without_consuming_input() {
+	$if !windows {
+		for managed in [false, true] {
+			for decode in [false, true] {
+				image_pipe_check_public_reader(managed, decode)!
+			}
+		}
+	}
+}
+
+fn test_public_image_pipe_png_retries_streaming_transition_each_call() {
+	$if !windows {
+		mut raw := []u8{len: 24}
+		for i in 0 .. raw.len {
+			raw[i] = u8(i * 37 + 19)
+		}
+		image := ImageUnmanaged.from_raw_pixels(4, 2, raw, .rgb24)!
+		managed := image.to_managed()
+		for use_managed in [false, true] {
+			mut fds := [2]int{}
+			assert C.witty_image_pipe_open(&fds[0]) == 0
+			prefix := 'xyz'.bytes()
+			assert C.witty_image_pipe_write(fds[1], prefix.data, usize(prefix.len)) == prefix.len
+			file := os.File{
+				fd: fds[1]
+			}
+			mut buffer := []u8{len: 8, init: 165}
+			for attempt in 0 .. 2 {
+				if use_managed {
+					managed.write_to_file(file, mut buffer, PngEncoderOptions{})!
+				} else {
+					image.write_to_file(file, mut buffer, PngEncoderOptions{})!
+				}
+				assert buffer == png_magic_header[..]
+				assert C.witty_image_pipe_valid(fds[0]) == 1
+					&& C.witty_image_pipe_valid(fds[1]) == 1
+				mut wire := []u8{len: 32}
+				n := C.witty_image_pipe_read(fds[0], wire.data, usize(wire.len))
+				if attempt == 0 {
+					assert n == 11 && wire[..3] == prefix && wire[3..11] == png_magic_header[..]
+				} else {
+					assert n == 8 && wire[..8] == png_magic_header[..]
+				}
+				assert C.witty_image_pipe_read(fds[0], wire.data, usize(wire.len)) == -1
+			}
+			C.witty_image_pipe_close(fds[0])
+			C.witty_image_pipe_close(fds[1])
+		}
+		assert image.raw_bytes() == raw
+	}
+}
 
 fn test_file_reader_preserves_positional_start_read_ahead_and_seek_by_workaround() {
 	path := os.join_path(os.temp_dir(), 'witty-zigimg-reader-${os.getpid()}')
