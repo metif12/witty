@@ -482,6 +482,51 @@ pub fn (mut stream ReadStream) take_leb128[T]() !T {
 	panic('reached unreachable code')
 }
 
+fn reader_array_length[A](value A) int {
+	$if A.indirections > 0 || ((int(A.unaliased_typ) >> 16) & 0xff) > 0 {
+		$compile_error('Reader array requires an inline fixed byte array')
+	} $else $if A.unaliased_typ is $array_fixed {
+		reader_array_byte(value[0])
+		return value.len
+	} $else {
+		$compile_error('Reader array requires an inline fixed byte array')
+	}
+}
+
+fn reader_array_byte[T](value T) {
+	$if T.indirections > 0 || ((int(T.unaliased_typ) >> 16) & 0xff) > 0 {
+		$compile_error('Reader array requires byte elements')
+	} $else $if T.unaliased_typ is u8 {
+		_ = value
+	} $else {
+		$compile_error('Reader array requires byte elements')
+	}
+}
+
+// A names a fixed byte array, such as `type HeaderBytes = [8]u8`.
+// The record carries the borrowed pointer through V's fallible return machinery.
+pub struct ReaderArray[A] {
+pub mut:
+	value &A
+}
+
+// The pointer remains valid until the next operation that can refill the reader.
+pub fn (mut stream ReadStream) peek_array[A]() !ReaderArray[A] {
+	shape := A{}
+	bytes := stream.peek(reader_array_length(shape))!
+	return ReaderArray[A]{
+		value: unsafe { voidptr(bytes.data) }
+	}
+}
+
+pub fn (mut stream ReadStream) take_array[A]() !ReaderArray[A] {
+	shape := A{}
+	bytes := stream.take(reader_array_length(shape))!
+	return ReaderArray[A]{
+		value: unsafe { voidptr(bytes.data) }
+	}
+}
+
 pub fn (mut stream ReadStream) peek_delimiter_inclusive(delimiter u8) ![]u8 {
 	for i in stream.position .. stream.end {
 		if stream.buffer[i] == delimiter { return unsafe { stream.buffer[stream.position..i + 1] } }

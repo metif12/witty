@@ -1254,3 +1254,11 @@ covers 27,585 records / 82,755 reads per mode, 96 returning controls, 168 exact
 panic/state pairs, 21 consumers and six paired compile rejections. Explicit
 allocator selection, OOM errors and immediate failure cleanup differ from Source
 and remain documented boundaries.
+
+`peek_array[A]` and `take_array[A]` expose borrowed fixed byte arrays through
+`ReaderArray[A].value`. Peek preserves position; take consumes only a complete
+array. Pointer mutation reaches the caller's buffer, and failed fills preserve
+pending input. The [fixed-array reader comparison](reference_probes/reader_array/README.md)
+covers 20,448 records, 1,252 mutation/alias records, 120 controls and 16 consumers
+per mode. V's fallible pointer result, zero-array and chained-alias limitations
+are documented with the mapping.

@@ -8501,3 +8501,97 @@ Runtime uses little-endian 64-bit macOS; Windows/Linux and other CPU, big-endian
 and 32-bit runtime remain outside the proof. Cross builds establish compilation
 only. Reproduction and scope are in
 [the allocated reader proof](zigimg/reference_probes/reader_alloc/README.md).
+
+### Borrowed fixed byte array reads — 2026-10-15
+
+`ReadStream.peek_array[A]` and `take_array[A]` translate pinned Reader.peekArray /
+takeArray for inline or directly named fixed byte arrays, including aliased byte
+elements. `ReaderArray[A].value` carries the borrowed pointer through V's
+fallible return. Peek preserves position; take advances only after a full array
+is available. EOF/ReadFailed preserve the fill's buffered progress and leave a
+short prefix unconsumed. Memory EOF can precede a capacity trap; file capacity
+traps remain active in production. All previous reader and C adapter bodies are
+unchanged.
+
+Pinned V emits invalid C for a direct generic array-pointer cast/fallible return,
+and its direct result extraction can copy an array through an uninitialized
+pointer. Returning a record with the pointer avoids these paths. Caller-buffer
+writes are visible through the result pointer; pointer writes reach the original
+buffer. Tossing pending bytes preserves the borrowed pointer's storage, while
+later fill/peek/take can rebase or overwrite it. Explicit dereference is required
+for V array-pointer access. A named shape local avoids inline array-constructor
+C-generation errors. Its initialized scratch shape and larger-shape limits are
+outside the finite runtime comparison.
+
+Debug/ordinary and ReleaseSafe/production each match **20,448 returning records /
+61,344 array reads / 81,792 primary calls**, SHA-256
+`4af50e662a770575ff766e3f9137b20ece1f8064feccb3c0a69581104f71de84`.
+Three reads and one relative seek run per record; setup/priming/observations are
+separate. Groups contain 16,032 basic, 1,536 every-byte and 2,880 replacement
+profiles, deduplicated by input. Six inline lengths 1/2/4/8/16/32, their directly
+named equivalents and two aliased byte elements run through memory, positional
+and streaming files. Lengths 0/1/7/8/9/31/32/33/64, capacities from 1 through 33,
+start/EOF offsets, partial fills and relative seeks are covered. Every byte runs
+both APIs in all reader kinds. Open/closed owned pipe replacement retains
+original read-ahead across failed reconciliation, seed/consumption/prime/toss
+choices. Complete reader backing bytes, copied successful results, pending spans,
+positions, size/errors, owned references and untouched wire bytes match. An
+independent nonreplacement model checks values/progress/EOF and tracks physical
+streaming reads separately from logical rewind.
+
+Another **1,252 borrowed records / 2,504 primary calls** assert exact pointer
+spans and offsets into the original buffer, saved copies, caller-buffer XOR,
+pointer XOR, positions and borrowed bytes retained after toss. SHA-256:
+`ed6c6c1edd1c60be14f9057f523ac3fb1c4453fa60c3cc1eb2b92a471bed5e20`.
+The **120 controls** classify into **40 returning records**, SHA-256
+`0756cb0fb62009cfbae066f6cd123be94d8afaa53da082ff8acca7477fbcb698`,
+and **80 exact panic/state pairs**, SHA-256
+`9e6705adab9ebaa5651b59e38100d7ac7ff6983acc90265be3ef03763c6d323d`.
+They cover empty/undersized capacity and checked getPos after failed priming.
+Both failed exits have empty stdout, one exact message and matching initialized
+state. Observers omit getPos, capture bytes before opening state files and clean
+up only owned resources through Source FullPanic or V at_exit.
+
+Sixteen compiled consumers / 48 reads / 64 primary calls per mode assert peek /
+take positions, named/element aliases, high bits, first/later short reads, rewind,
+read-ahead, partial refill and sticky buffered success/failure. SHA-256:
+`a80364ab584e75647c85ba2415bfb1774be9873b69354de2895f859c07d24ab2`.
+Ten V type rejections per mode cover dynamic arrays, scalars, strings, wider /
+pointer / nested elements, array pointers, fake len structs, chained array
+aliases and zero arrays. Source accepts/runs the zero-array and chained-alias
+counterparts; these are representation controls, not equivalent rejections.
+Three public regressions accompany the proof. All **76 image test files** pass
+in four batches, with **17 production/application/Windows/Linux checks**.
+Vaxis runtime sources/tests are unchanged and were not rerun here; dependency
+builds pass. Historical buffered-reader and full-stream hashes remain unchanged
+in both modes.
+
+Development diagnostics retain pointer-access syntax mistakes, chained-alias
+rejection, inline array/pointer-cast C-generation failures and incorrect direct
+pointer-result extraction. The wrapped result preserves observed aliasing and
+mutation. Compile fixtures use named candidate types after a parser diagnostic
+for inline pointer elements. The preformat ordinary comparison passed; both final
+comparisons reran after Zig fixture formatting and retain identical hashes.
+Original probes/implementation variants/scripts/outputs remain separate from
+passing gates. Final production/probe/runner/helper bodies stay frozen; only
+expected assignments change after ordinary discovery.
+
+Full unchanged Source, compiler versions/selected libraries, implementation,
+probes, shared fixtures, directly imported helpers and inputs are pinned before /
+after comparison. Source bodies, visibility and reader syscalls remain untouched.
+Fixtures use initialized unlinked owned files, reset offsets and owned nonblocking
+pipes/keepers. Independent replay checks values/progress, mutation/alias behavior,
+classifications, exact failures, consumers, ownership, binaries, modes and
+provenance. Parent-side lossless compression pins raw/compressed logs. Evidence
+is persisted from an owned RAM workspace and every retained archive member is
+read back before commit and release.
+
+V's one-level type reflection rejects chained array aliases; zero-length fixed
+arrays are unavailable. Source supports both. Arbitrary constructed/copied
+result records, borrowed pointers after invalidating reads, other callbacks /
+devices, larger shapes/buffers/offsets, concurrent reuse, syscall counts, timing /
+signals, injected errors, OOM/quotas, allocator lifetime, portable ABI and remaining
+V representation limits remain boundaries. Runtime uses little-endian 64-bit
+macOS; Windows/Linux and other CPU, big-endian and 32-bit runtime are outside
+this proof. Cross builds establish compilation only. Reproduction and scope are
+in [the fixed-array reader proof](zigimg/reference_probes/reader_array/README.md).
