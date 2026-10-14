@@ -1029,3 +1029,10 @@ pairs and twelve bounded plain-text discard-loop pairs in both modes. Consumer
 regressions pin frame/main-image sharing and retained buffers after incomplete
 application data. Historical GIF hashes remain unchanged; these cases require
 no production implementation changes.
+
+The [SGI direct file-stream proof](reference_probes/sgi_streams/README.md) compares
+16,076 records / 32,072 calls, 256 returning controls and 888 exact panic/state
+pairs in both modes. Initialized caller output extends malformed RLE coverage to
+small positional file buffers; consumer regressions pin unwritten output, retries
+and pending no-op writer bytes. Historical SGI hashes remain unchanged, with no
+production implementation changes needed for these cases.

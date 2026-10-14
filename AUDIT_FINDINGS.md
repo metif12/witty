@@ -6357,3 +6357,68 @@ Full Source/library/version and implementation/fixture/runner/helper/input hashe
 protect evidence, fully archived and read back persistently before RAM detachment.
 Scope and reproduction are in
 [the GIF stream proof](zigimg/reference_probes/gif_streams/README.md).
+
+### SGI direct positional RLE and no-op writer checkpoint — 2026-10-14
+
+Compiled unchanged pinned SGI and its File.Reader/std.Io.Reader paths. Existing
+implementation matches without production-code changes. Both Debug/ordinary and
+ReleaseSafe/production match **16,076 returning records / 32,072 calls**, SHA-256
+`855353b000ef513a541d58184cb84d2c12ce2cbfab7b55e1e64116b904aa7898`.
+
+Direct raw/RLE decoding runs memory and file buffers 0/1/2/3/4/8/16/32/510/512,
+with initialized caller output, raw/table prefixes, retries, reversed row tables,
+literal/repeated/early-terminating/zero-literal packets, two patterns and trailing
+bytes. Widths are 0/1/3/7, heights 0/1/2/3 and channels 0/1/3/4. Channel widths
+0/1/2/3/255 retain byte packets for one and words otherwise, including ignored
+command high bytes. Absolute offsets keep the 512-plus-table origin even after
+initial discard of three bytes. Descriptors begin at EOF independently of logical
+cursors. Detectors compare every first byte and partial magic through both APIs.
+
+**256 returning controls**, SHA-256
+`d6adf4149c24c6a2c1fa496203c86a4191d78518b5c6a995a0314ae12c926aaa`,
+compare 168 packet-prefix/output-capacity cases, 48 absolute-offset/size cases,
+eight largest-fitting table cases and 32 public-header/buffer cases. Source
+execution supplies every return/failure classification before V is checked.
+
+**888 exact panic/state pairs**, SHA-256
+`6a22149758feb854269baddd9f9f88ac66126c7e9a75d2157a789b8b6a4d0cd1`,
+cover 732 byte/word packet source/destination failures, 96 offset/compressed-data
+failures, sixteen u16 table arithmetic failures, forty small public-header buffer
+failures and four small detector-buffer failures. Literal destination checks
+precede source reads; repeated words read both source bytes before writing and
+check each output byte separately. Strict checks require failed exits, no stdout,
+the exact sole native message and equal nonempty initialized snapshots.
+
+Snapshots compare position, buffered/pending length, every caller buffer/output
+byte, fully initialized header, all 256 seeded palette entries, active palette
+length, input and disk. Source's private Header type is inferred through the public
+field without changing visibility. Failed/freed private table/data/pixel storage
+is unobserved. Initialized direct output permits terminating malformed packets
+to leave defined unwritten bytes; it does not expose undefined public pixels.
+
+Static/interface SGI writers remain no-ops across an initialized two-pixel RGB24
+image with dimensions 7×9, capacities zero through 510, starts zero/seven and a
+three-byte caller prefix. State is compared before encoding and after zero/one/
+three calls, then after caller flush. The interface uses SGI options; no encoder
+implementation is claimed. Writer setup/flush are excluded from the call count.
+
+Consumer regressions pin direct word output `12 34 a5 a5 a5 a5`, an unchanged
+three-byte caller buffer and EOF retry at position fourteen; plus repeated no-op
+writers retaining `11 12 13` pending at position ten, with disk changing only on
+explicit caller flush. Four exact compiled controls compare their inputs in both
+modes. All 61 image and 58 Vaxis test files pass, with nineteen application/
+platform/unit/fixture checks and four focused final test checks after strengthening
+the EOF assertion. Historical SGI contract and parsed-header hashes and unchanged
+native assertions pass in both modes; formatting, diff and Python checks pass.
+
+The initial Source fixture tried to initialize through Image's const raw byte
+view; the corrected fixture uses mutable PixelStorage bytes. That compiler
+rejection remains retained separately. Source algorithms and visibility stay
+unchanged. Undefined private/default/public partial decode storage, physically
+invalid word reads, pointer identities, allocator/OOM/GC/lifetime, custom/streaming/
+nonseekable readers, OS failures, const/narrow/enum/boxed representation, physical
+layouts, larger extents, big-endian/32-bit runtime and portable ABI remain
+boundaries. Cross builds establish compilation only. Full Source/library/version
+and implementation/fixture/runner/helper/input hashes protect evidence, archived
+and fully read back persistently before RAM detachment. Scope and reproduction
+are in [the SGI file-stream proof](zigimg/reference_probes/sgi_streams/README.md).

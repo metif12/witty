@@ -2,6 +2,83 @@ module zigimg
 
 import os
 
+fn test_sgi_direct_file_rle_retains_unwritten_output_and_retry_state() {
+	data := [u8(0), 0, 2, 8, 0, 0, 0, 6, 127, 129, 0x12, 0x34, 127, 0]
+	path := os.join_path(os.temp_dir(), 'witty-sgi-direct-${os.getpid()}.bin')
+	os.write_file_array(path, data)!
+	defer { os.rm(path) or {} }
+	mut file := os.open(path)!
+	defer { file.close() }
+	file.seek(i64(data.len), .start)!
+	mut buffer := []u8{len: 3, init: 165}
+	mut reader := ReadStream.init_file(file, mut buffer)
+	mut codec := SGI{
+		header: SgiHeader{
+			compression:       .rle
+			bytes_per_channel: 255
+			x_size:            3
+			y_size:            1
+			z_size:            1
+		}
+	}
+	mut output := []u8{len: 6, init: 165}
+	codec.uncompress_bitmap(mut reader, mut output)!
+	assert output == [u8(0x12), 0x34, 165, 165, 165, 165]
+	assert reader.get_pos() == 14 && reader.buffered_len() == 0
+	assert buffer == [u8(165), 165, 165]
+	mut failed := false
+	codec.uncompress_bitmap(mut reader, mut output) or {
+		assert err.msg() == 'EndOfStream'
+		failed = true
+	}
+	assert failed
+	assert output == [u8(0x12), 0x34, 165, 165, 165, 165]
+	assert reader.get_pos() == 14 && reader.buffered_len() == 0
+	assert buffer == [u8(165), 165, 165] && os.read_bytes(path)! == data
+}
+
+fn test_sgi_file_no_op_writers_preserve_pending_prefix_until_caller_flush() {
+	mut data := []u8{len: 39, init: `Z`}
+	for i in 0 .. 7 {
+		data[i] = `x`
+	}
+	path := os.join_path(os.temp_dir(), 'witty-sgi-noop-${os.getpid()}.bin')
+	os.write_file_array(path, data)!
+	defer { os.rm(path) or {} }
+	mut file := os.open_file(path, 'r+')!
+	defer { file.close() }
+	file.seek(i64(data.len), .start)!
+	mut buffer := []u8{len: 8, init: 165}
+	mut writer := WriteStream.init_file(file, mut buffer)
+	writer.seek_to(7)!
+	writer.write([u8(17), 18, 19])!
+	mut image := ImageUnmanaged{
+		width:  7
+		height: 9
+		pixels: PixelStorage.init(.rgb24, 2)!
+	}
+	mut raw := image.pixels.as_bytes()
+	for i in 0 .. raw.len {
+		raw[i] = u8(i * 37 + 19)
+	}
+	before := raw.clone()
+	iface := SGI.format_interface()
+	for _ in 0 .. 3 {
+		SGI.write_image(mut writer, image)!
+		iface.write_image(mut writer, image, SgiEncoderOptions{})!
+		assert writer.get_pos() == 10 && writer.buffered() == [u8(17), 18, 19]
+		assert buffer == [u8(17), 18, 19, 165, 165, 165, 165, 165]
+		assert os.read_bytes(path)! == data && image.raw_bytes() == before
+	}
+	writer.flush()!
+	data[7] = 17
+	data[8] = 18
+	data[9] = 19
+	assert os.read_bytes(path)! == data
+	assert writer.get_pos() == 10 && writer.buffered().len == 0
+	assert buffer == [u8(17), 18, 19, 165, 165, 165, 165, 165]
+}
+
 fn test_sgi_rle_table_size_keeps_the_largest_u16_extent() {
 	mut tables := []u8{}
 	for _ in 0 .. 8191 {
