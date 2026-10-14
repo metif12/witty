@@ -1209,3 +1209,12 @@ EOF tails and sticky failure cursors follow pinned Zig. The
 covers 3,794 returning records / 11,382 fills per mode, 350 returning controls,
 226 exact panic/state pairs and 17 concrete consumer records. Existing scalar
 and vector helpers and historical stream hashes remain unchanged.
+
+`peek_int` decodes a native integer without consuming bytes; `take_var_int`
+consumes a chosen width and zero-extends short representations, including into
+signed types. Zero-width reads succeed without IO, and excessive widths trap
+before filling. The [integer reader comparison](reference_probes/reader_integer/README.md)
+covers 56,640 returning records / 169,920 integer reads per mode, 808 returning
+controls, 1,048 exact panic/state pairs and 17 consumer records. Native integer
+and endian aliases are included; arbitrary-width Source integers remain a
+documented carrier boundary.

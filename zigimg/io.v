@@ -376,6 +376,48 @@ pub fn (mut stream ReadStream) take_int[T, E](endian E) !T {
 	}
 }
 
+// Read an integer without consuming its bytes, retaining any file read-ahead.
+pub fn (mut stream ReadStream) peek_int[T, E](endian E) !T {
+	$if T.unaliased_typ is $int {
+		bytes := stream.peek(int(sizeof(T)))!
+		mut word := u64(0)
+		for i, byte in bytes {
+			$if E.unaliased_typ is BigEndian {
+				word = word << 8 | u64(byte)
+			} $else $if E.unaliased_typ is LittleEndian {
+				word |= u64(byte) << (i * 8)
+			} $else {
+				$compile_error('peek_int requires BigEndian or LittleEndian')
+			}
+		}
+		return T(word)
+	} $else {
+		$compile_error('peek_int requires a native integer type')
+	}
+}
+
+// Short representations are zero-extended, including into signed types. Only
+// a representation occupying the full target width sets its signed high bit.
+pub fn (mut stream ReadStream) take_var_int[T, E](endian E, count usize) !T {
+	$if T.unaliased_typ is $int {
+		if count > usize(sizeof(T)) { panic('reached unreachable code') }
+		bytes := stream.take(int(count))!
+		mut word := u64(0)
+		for i, byte in bytes {
+			$if E.unaliased_typ is BigEndian {
+				word = word << 8 | u64(byte)
+			} $else $if E.unaliased_typ is LittleEndian {
+				word |= u64(byte) << (i * 8)
+			} $else {
+				$compile_error('take_var_int requires BigEndian or LittleEndian')
+			}
+		}
+		return T(word)
+	} $else {
+		$compile_error('take_var_int requires a native integer type')
+	}
+}
+
 pub fn (mut stream ReadStream) peek_delimiter_inclusive(delimiter u8) ![]u8 {
 	for i in stream.position .. stream.end {
 		if stream.buffer[i] == delimiter { return unsafe { stream.buffer[stream.position..i + 1] } }

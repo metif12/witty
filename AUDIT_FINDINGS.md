@@ -8058,3 +8058,85 @@ ABI and V representation limits remain boundaries. Windows runtime, other CPU
 selections and big-endian/32-bit runtime are outside the native proof; cross
 builds establish compilation only. Reproduction and precise scope are in
 [the single-callback fill proof](zigimg/reference_probes/reader_fill_more/README.md).
+
+### Integer peeks and variable-width reads — 2026-10-14
+
+`ReadStream.peek_int` and `take_var_int` translate pinned Reader.peekInt and
+Reader.takeVarInt. Peeks decode a native integer without consuming its bytes;
+variable reads consume the requested width on success. Short representations
+zero-extend into signed types, while full-width values retain their sign bit.
+Zero-width reads return zero without IO at EOF or after sticky failure. Excessive
+widths trap before filling or consuming, including in production. Native integer
+and endian marker aliases are supported. Previous V bodies and C adapters are unchanged.
+
+Debug/ordinary and ReleaseSafe/production each match **56,640 returning records /
+169,920 integer reads / 396,480 primary calls**, SHA-256
+`8f95f7708e71ef902ecec73fdc067b10c5ee3625c7a0f6fa25d9931562420a77`.
+Groups contain 25,344 basic, 12,288 every-byte and 19,008 prefilled profiles.
+Three integer operations, three caller consumptions and one relative seek run
+per record; setup/priming/observations are separate. Ten native carriers and
+their aliases run with both endian markers and marker aliases through memory,
+positional files and streaming-initialized files. Lengths 0/1/7/8/9/17 and
+distinct zero/one/end offsets cover every valid variable width, repeated peeks
+and EOF. Every byte runs in unsigned/signed byte types and aliases. Prefills
+cover capacities 8/32, offsets 0/1, consumption 1/7, open/closed owned pipes,
+seed/priming/toss choices and relative offsets -1/0/1. Decimal values, unsigned
+representations, copied results, initialized storage, pending spans, positions,
+size/errors, ownership and untouched wire bytes match. Peek values are decoded
+independently from pending bytes; signed representations are checked for every result.
+
+The **1,856 distinct controls** separate **808 returning records**, SHA-256
+`cfc8891571a3cd8a28c666dbd923f1db147a0292954ea8db3833de27400eba76`,
+from **1,048 exact panic/state pairs**, SHA-256
+`fd6261efd9ad3994720c9317ac6d0cc7f301f3bee64c0154e161108f7d1f2ac5`.
+There are 504 capacity/type-width and 96 pending-buffer failures with exactly
+reached unreachable code. Oversize type widths fail before IO/rebase; pending
+capacity failures compact before trapping. Another 448 fail with exactly integer
+overflow in public getPos observations after priming, before the requested
+integer operation. Both exits fail with empty stdout, one exact message and
+matching initialized state. Observers omit getPos, handle size errors and capture
+preceding/calling status, backing storage, copied output, pending spans and owned
+references before opening state files.
+
+Seventeen compiled consumer records / 51 integer reads / 119 primary calls per
+mode assert all three results for signed full/short values, aliases, zero-width
+EOF/no-read behavior, read-ahead, EOF tails, compaction, rewind, pipe transitions
+and sticky buffered successes/failures. SHA-256:
+`67bbdbfa89c6e8f8ea3c24a11012d779478883354e1bf22eb7002355ed7729c8`.
+Eight paired compile rejections per mode verify noninteger types and invalid
+endian markers, including aliases, for both methods. Three public regressions
+accompany the proof. All **71 image and 58 Vaxis test files**, plus **49 production/
+application/platform/unit/fixture checks**, pass. Historical buffered,
+single-callback fill and full-stream hashes remain unchanged in both modes.
+
+Initial fixture diagnostics retain an invalid string-to-usize method and a V
+C-generation error around generic results in an if expression. Explicit u64
+conversion and a named typed local resolve them. An initial consumer expectation
+assumed read-ahead during an already buffered take; the corrected case forces
+compaction. A stale harness expected 70 files although all 71 passed; its
+diagnostic is retained and the passing command reused. Disk exhaustion interrupted
+an audit write; the unchanged baseline and failure evidence are retained, and
+task-owned reserved space was released before completing documentation.
+Production/probe/runner/helper bodies remain frozen during final comparisons;
+only expected assignments change after ordinary discovery.
+
+Full Source, compiler versions/selected libraries, implementation, probes,
+shared fixtures, directly imported helpers and inputs are pinned before/after
+comparison. Source bodies, visibility and reader syscalls remain untouched.
+Fixtures use initialized unlinked owned files, reset offsets and nonblocking
+owned pipes/keepers. Independent replay checks semantics, native classifications,
+exact failures, consumers, ownership, binaries, modes and provenance. Lossless
+parent-side compression pins raw/compressed logs. A task-owned RAM workspace
+is created before compilation; retained evidence is persisted and every archive
+member read back before committing and releasing the volume.
+
+Source's arbitrary-width integers, including u0, non-byte widths and 128-bit
+types, remain outside the native V carrier mapping. usize/isize widths follow
+the target; this native comparison uses 64-bit carriers. Other APIs, custom
+callbacks, overlap, arbitrary constructor/copy sequences, other devices, larger
+buffers/offsets, unsigned counts beyond tested profiles, concurrent reuse,
+syscall counts, timing/signals, injected errors, OOM/quotas, allocator lifetime,
+portable ABI, V representation limits, Windows/Linux and other CPU, big-endian
+and 32-bit runtime remain boundaries. Cross builds establish compilation only.
+Reproduction and scope are in
+[the integer reader proof](zigimg/reference_probes/reader_integer/README.md).
