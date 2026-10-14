@@ -8223,3 +8223,91 @@ allocator lifetime, portable ABI, V representation limits, Windows/Linux and
 other CPU, big-endian and 32-bit runtime remain boundaries. Cross builds establish
 compilation only. Reproduction and scope are in
 [the LEB128 reader proof](zigimg/reference_probes/reader_leb128/README.md).
+
+### Short, remaining and 64-bit reader discards — 2026-10-15
+
+`ReadStream.discard_short`, `discard_remaining` and `discard_all64` translate
+pinned Reader.discardShort, discardRemaining and discardAll64. Short discard
+returns the consumed prefix when a callback discovers EOF; remaining discard
+returns its accumulated count at EOF. All64 requires each target-usize chunk,
+returning EndOfStream on a short chunk. ReadFailed retains consumed progress.
+Proposed-cursor overflow is checked before mutation, including in production;
+remaining-count accumulation is also checked. All64's zero count performs no IO.
+All previous V reader bodies and C adapters remain unchanged.
+
+Debug/ordinary and ReleaseSafe/production each match **24,400 returning records /
+73,200 discards / 170,800 primary calls**, SHA-256
+`ecc351a0a2d9bc3950ea56395b793ee57a386872bad3a785cc7a4eeba67a7c7f`.
+Three discards, three caller consumptions and one relative seek run per record;
+setup/priming/observations are separate. Groups contain 20,508 basic, 540 buffered,
+1,840 streaming-pipe and 1,512 failed-prefill profiles, with duplicate inputs
+retained once. Memory, positional and streaming-initialized files cover lengths
+0/1/7/8/9/31/32/33/127/128/129/257, capacities 0/1/8/32, distinct starting
+positions, counts through 512/maximum u64 where finite, and relative offsets
+-1/0/1. Prefills cover capacities 8/32, offsets 0/1, consumption 1/7, open/closed
+owned pipes, seed/priming/toss choices and retained failures. Complete initialized
+storage, saved successful counts, pending spans, positions, size/errors,
+ownership and untouched wire bytes match. An independent nonreplacement model
+checks counts and progress, tracking physical streaming descriptor progress
+separately from logical position and buffered rewind.
+
+The **204 distinct controls** separate **102 returning records**, SHA-256
+`ca5d8060fc2a563278f156c237cc7e17f6b71d4564f72b9ea6df0d357649f9ef`,
+from **102 exact integer-overflow panic/state pairs**, SHA-256
+`16372345d783cbd6f5a09a534e2238e5da3b006d4ab3544c483b58176eda1d31`.
+Six memory and twelve prefilled streaming controls overflow the proposed cursor
+before mutation. Another 84 fail in public getPos after priming, before discard.
+Both exits fail with empty stdout, one exact message and matching initialized
+state. Observers omit getPos and capture preceding/calling status, size/errors,
+backing storage, saved output, pending spans and owned references before opening
+state files. Source FullPanic and V at_exit clean up only owned resources.
+
+Source's cached positional callback can repeatedly return zero at EOF. The
+translation preserves the enclosing zero-progress loops. Twelve paired bounded
+observations per mode cover lengths 0/7, capacities 0/8 and all three APIs;
+short/all64 request length+1. Both owned children reach a checkpoint immediately
+before the operation, remain alive with empty stdout/stderr for at least one
+second, then are killed by their parent. State, binary hashes, argv, timing,
+signals and ownership receipts are replayed separately. This is a bounded
+observation, not a proof of indefinite execution. Positional remaining/oversize
+cases are excluded from the returning matrix.
+
+Twenty-one compiled consumer records / 63 discards / 147 primary calls per mode
+assert all three results for EOF prefixes, exact/zero/maximum counts, buffered
+and logical rewind, repeated streaming drains, 257-byte input, positional
+read-ahead, closed-pipe EOF, partial read failure and sticky buffered success.
+SHA-256: `7aa3f51f3edab2704ba2268780d6ed7c5f9c01b6c2a35708d6bcdca07b3c6986`.
+Three public regressions accompany the proof. All **73 image and 58 Vaxis test
+files**, plus **55 production/application/platform/unit/fixture checks**, pass.
+Historical callback-discard, buffered-reader and full-stream hashes remain
+unchanged in both modes.
+
+Initial development evidence retains a proposed-cursor overflow incorrectly
+placed in the returning corpus, and a model assertion that treated logical
+streaming rewind as descriptor movement. Native and translated records agreed
+in the model failure. Consumer diagnostics retain expectations corrected for
+buffered rewind and position changes during failed reconciliation. Original
+runners, outputs and diagnostics remain separate from passing gates. Production,
+probes, runner and helpers remain frozen during final comparisons; only expected
+assignments change after ordinary discovery.
+
+Full unchanged Source, compiler versions/selected libraries, implementation,
+probes, shared fixtures, directly imported helpers and inputs are pinned before/
+after comparison. Source bodies, visibility and reader syscalls remain untouched.
+Fixtures use initialized unlinked owned files, reset live offsets and nonblocking
+owned pipes/keepers. Independent replay checks counts/progress, native
+classifications, exact failures, consumers, bounded loop observations, ownership,
+binaries, modes and provenance. Lossless parent-side compression pins raw and
+compressed logs. Retained evidence is persisted from a task-owned RAM workspace;
+every archive member is read back before committing and releasing the volume.
+
+The native comparison uses 64-bit usize; multi-chunk all64 on 32-bit targets and
+remaining-count overflow are outside these runtime fixtures. Custom callbacks,
+overlap, arbitrary constructor/copy sequences, other devices, larger buffers/
+offsets, concurrent reuse, syscall counts, timing/signals beyond the stated
+bounded observations, injected errors, OOM/quotas, allocator lifetime, portable
+ABI and V representation limits remain boundaries. Existing scalar fallback
+syscall counts can differ from Source's vector trash reader. Windows/Linux and
+other CPU, big-endian and 32-bit runtime remain outside the native proof. Cross
+builds establish compilation only. Reproduction and scope are in
+[the short/remaining/64-bit discard proof](zigimg/reference_probes/reader_discard_short/README.md).

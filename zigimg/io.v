@@ -789,6 +789,53 @@ pub fn (mut stream ReadStream) stream_delimiter(mut writer WriteStream, delimite
 	return count
 }
 
+// Consume up to count bytes; EOF returns the consumed prefix, while read errors
+// retain progress and propagate. Source checks the proposed seek before mutation.
+pub fn (mut stream ReadStream) discard_short(count usize) !usize {
+	if count > ~usize(0) - usize(stream.position) { panic('integer overflow') }
+	proposed := usize(stream.position) + count
+	if proposed <= usize(stream.end) {
+		stream.position = int(proposed)
+		return count
+	}
+	mut remaining := count - usize(stream.end - stream.position)
+	stream.position = stream.end
+	for {
+		discarded := stream.file_discard(u64(remaining)) or {
+			if err.msg() == 'EndOfStream' { return count - remaining }
+			return err
+		}
+		remaining -= usize(discarded)
+		if remaining == 0 { return count }
+	}
+	panic('reached unreachable code')
+}
+
+// Drain pending bytes and then the callback until it discovers EOF. Preserve
+// Source's zero-progress loop when a cached positional size is exhausted.
+pub fn (mut stream ReadStream) discard_remaining() !usize {
+	mut offset := usize(stream.end - stream.position)
+	stream.position = stream.end
+	for {
+		discarded := stream.file_discard(u64(~usize(0))) or {
+			if err.msg() == 'EndOfStream' { return offset }
+			return err
+		}
+		if discarded > u64(~usize(0) - offset) { panic('integer overflow') }
+		offset += usize(discarded)
+	}
+	panic('reached unreachable code')
+}
+
+pub fn (mut stream ReadStream) discard_all64(count u64) ! {
+	mut remaining := count
+	for remaining > 0 {
+		chunk := if remaining < u64(~usize(0)) { usize(remaining) } else { ~usize(0) }
+		if stream.discard_short(chunk)! != chunk { return error('EndOfStream') }
+		remaining -= u64(chunk)
+	}
+}
+
 pub fn (mut stream ReadStream) discard_all(count usize) ! {
 	buffered := usize(stream.end - stream.position)
 	if count <= buffered {

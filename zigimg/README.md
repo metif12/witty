@@ -1226,3 +1226,13 @@ Truncated input or read failure retains consumed progress. The
 returning records / 216,090 decodes per mode, 192 returning controls, 272 exact
 panic/state pairs and 20 consumer cases. Mathematical value/progress checks cover
 every nonreplacement record, including the 70-bit intermediate for 64-bit types.
+
+`discard_short` returns the consumed prefix at EOF, `discard_remaining` drains
+until the callback reports EOF, and `discard_all64` requires the requested u64
+count in target-usize chunks. Partial read failures retain progress; checked
+cursor overflow traps before mutation. Source's cached positional EOF loops are
+preserved. The [short/remaining/64-bit discard comparison](reference_probes/reader_discard_short/README.md)
+covers 24,400 returning records / 73,200 discards per mode, 102 returning
+controls, 102 exact panic/state pairs, 12 bounded loop observations and 21
+consumer cases. Historical discard, buffered-reader and stream hashes remain
+unchanged.
