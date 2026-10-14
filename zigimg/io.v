@@ -324,7 +324,7 @@ pub fn (mut stream ReadStream) peek_delimiter_inclusive(delimiter u8) ![]u8 {
 		if stream.file == none { return error('EndOfStream') }
 		// Reader.fillMore requests one more byte. Retain the prefix in place
 		// while the tail has room; readVec resets an entirely consumed buffer.
-		if stream.position == stream.end {
+		if stream.position == stream.end && stream.streaming >= 0 {
 			stream.position = 0
 			stream.end = 0
 		} else if stream.end == stream.buffer.len {

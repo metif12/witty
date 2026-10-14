@@ -1150,3 +1150,9 @@ Both modes match 11,016 records / 33,048 primary operations, 264 returning contr
 and 216 exact position-panic/state pairs. Mixed original/pipe bytes, retained
 read-ahead, sticky retries and the pinned relative-seek workaround agree with Zig;
 historical stream matrices retain their hashes.
+
+The [delimiter failure proof](reference_probes/reader_delimiter/README.md) preserves
+consumed buffer cursors after a failed refill, allowing relative seeks to recover
+original bytes as pinned Zig does. Both modes match 9,764 records / 29,292 primary
+operations, 264 returning controls and 216 exact position-panic/state pairs.
+Historical stream and XBM hashes remain unchanged.

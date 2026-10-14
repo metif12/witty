@@ -7485,3 +7485,76 @@ injected errors, OOM/quotas/durability, Windows runtime, other CPU/vector select
 V representation/layout limits, big-endian/32-bit runtime and portable ABI remain
 boundaries. Cross builds establish compilation only. Scope and reproduction are
 in [the original-file read-ahead proof](zigimg/reference_probes/reader_prefill/README.md).
+
+### Delimiter failure cursors and recovered original bytes — 2026-10-14
+
+A failed delimiter refill on a reader with consumed original-file read-ahead
+returns before Source resets its buffer when tail space remains. V reset that
+cursor before checking failure. Both could initially report the same position,
+but the pinned public seekBy workaround then recovered bytes only in Source.
+The reset now respects failure mode in production. All **252 original differing
+records**, binaries and pre-fix production remain retained. The first mismatch,
+`0|8|0|1|0|7|0|0|-1|1|1`, restores original byte 16 (hex) after seekBy(-1) in Source;
+V loses it. With delimiter 22 (decimal), Source's next peek succeeds while V
+returns ReadFailed. No other production behavior changed.
+
+Both Debug/ordinary and ReleaseSafe/production match **9,764 returning records /
+29,292 primary operations**, SHA-256
+`9e48675c882667881e058bbe10c41bad83a4ce6eb134448970df3da78fc31f35`.
+The 7,740 ordinary-transition, 756 failed-pending, 756 failed-consumed and 512
+every-delimiter records use peek/take, capacities 1/8/32, offsets 0/1/7, distinct
+consumed prefixes 0/1/capacity-1/capacity and original/pipe/absent markers.
+Ordinary seeds are capacity or offset+2*capacity+3; primed failures use seed equal
+to pending length. Keepers remain open without refill, remain open with 64-byte
+refill or close before IO. Relative offsets are -1/0/1. Both APIs also cover every
+byte 0–255. Each record counts two delimiter calls and one relative seek; setup,
+prefill, optional failure priming/consumption and observer queries are excluded.
+Complete initialized caller buffers, copied results, pending spans, logical
+positions, cached sizes, status order, ownership and queued input match.
+
+**264 returning controls**, SHA-256
+`e953ff96c5268780593e0fe6c4cb318a897ad823e9ce45f3527aa234c80f9b4a`,
+and **216 exact position-panic/state pairs**, SHA-256
+`87f6fa3b0a377a66c68d279ebaee77ae5448782e91bdfdbf94d73dae93f8a6c0`,
+classify 480 cases from Source. Controls use both APIs, capacities 8/32, offsets
+0/1/7, consumed prefixes 1/capacity-1, absent delimiter zero, distinct seed lengths
+0/pending-1/pending/offset+capacity-1, actual EOF/WouldBlock and relative offsets
+-1/0/1. Delimiter ReadFailed and subsequent getPos overflow remain separate
+outcomes. Failed pairs require failed exits, no stdout, one exact integer-overflow
+diagnostic and equal nonempty initialized state. Observers omit getPos and record
+the preceding ReadFailed before opening state files. Targets remain valid; only
+owned keeper closure changes the normalized endpoint count.
+
+C creates/unlinks initialized O_EXCL/CLOEXEC regular files, creates nonblocking
+pipes, replaces only owned targets, seeds/closes owned input and observes queued
+bytes. Original and pipe patterns differ. Returned slices are copied before later
+calls invalidate them. No Source body/visibility or stream syscall is changed or
+intercepted. References count descriptors 0–127 across both owned identities once
+each; raw identities, private mode/error/cursors, inactive allocations and allocator
+effects are excluded. Only owned resources change and no case paths survive.
+Controlled replacement establishes no concurrent race equivalence.
+
+Consumer regressions cover recovered peek/take results under EOF/WouldBlock,
+sticky failures and StreamTooLong without consuming input. Nine compiled records /
+27 primary operations match per mode. All 68 image and 58 Vaxis test files pass,
+with 40 production/application/platform/unit/fixture checks. Historical stream,
+original read-ahead, writer-seek, discard, absolute-seek, transition and guard
+hashes remain unchanged. XBM's 87,419 records / 181,446 calls and 24 bounded detector
+loop pairs retain returning and ready-state hashes in both actual Source modes.
+Formatting/diff/Python checks pass. Complete Source/selected compiler libraries/
+math/SIMD/fs.Dir/libc/version and implementation/fixture/runner/helper/input hashes
+protect comparisons; only golden assignments change after ordinary discovery.
+Completed checks were reused when later CLI jobs were interrupted, with partial
+writer-check evidence retained separately. The XBM output save hit a full shared
+disk; its failure remains retained. Final XBM stdout logs use lossless compression,
+with raw-byte and compressed-file hashes checked during independent replay. Only
+this task's completed compiler caches were removed. Independent replay checks native
+classifications, exact failures, original cursor/result mismatches, ownership and
+actual modes. Persistent archives are read back member by member.
+
+Larger buffers/offsets, other devices, additional constructor/copy/stream-callback
+sequences, concurrent reuse, syscall counts, timing/backpressure/signals, injected
+errors, OOM/quotas/durability, Windows runtime, other CPU/vector selections,
+V representation/layout limits, big-endian/32-bit runtime and portable ABI remain
+boundaries. Cross builds establish compilation only. Scope and reproduction are
+in [the delimiter failure proof](zigimg/reference_probes/reader_delimiter/README.md).
