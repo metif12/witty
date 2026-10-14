@@ -7,6 +7,7 @@ import os
 
 fn C.witty_image_file_size(int, &u64) int
 fn C.witty_image_file_seek(int, u64) int
+fn C.witty_image_file_seek_by(int, u64) int
 fn C.witty_image_file_read(int, u64, &u8, usize, &int) isize
 fn C.witty_image_file_read_vec(int, u64, &u8, usize, &u8, usize, &int) isize
 fn C.witty_image_file_write(int, u64, &u8, usize, &u8, usize, &int) isize
@@ -26,6 +27,7 @@ mut:
 	file_pos           u64
 	file_size          ?u64
 	file_size_error    string
+	file_seek_error    string
 	streaming          int
 	tga_stream_reading bool
 }
@@ -92,6 +94,7 @@ pub fn (mut stream ReadStream) seek_to(offset u64) ! {
 	if stream.file != none {
 		size := stream.get_end_pos() or { return error('Unseekable') }
 		if offset >= size { return error('Unseekable') }
+		if stream.streaming < 0 { return error(stream.file_seek_error) }
 		logical := stream.get_pos()
 		if stream.streaming != 0 && offset < logical { return error('Unseekable') }
 		if offset < logical || offset >= stream.file_pos {
@@ -138,11 +141,51 @@ fn stream_seek_position(position u64, offset i64) i64 {
 	return current + offset
 }
 
+// A positional reader switching to streaming must first reach its old offset.
+// Source resets its position, seeks if possible, otherwise discards forward.
+// Failure preserves consumed progress and becomes sticky for later native reads.
+fn (mut stream ReadStream) file_prepare_streaming() ! {
+	$if !windows {
+		if stream.file_pos > u64(0x7fffffffffffffff) { panic('integer cast truncated bits') }
+		offset := stream.file_pos
+		stream.file_pos = 0
+		file := stream.file or { return error('ReadFailed') }
+		result := C.witty_image_file_seek_by(file.fd, offset)
+		if result == 4 { panic('reached unreachable code') }
+		if result == 0 {
+			stream.file_pos = offset
+		} else {
+			for stream.file_pos < offset {
+				remaining := offset - stream.file_pos
+				mut trash := []u8{len: if remaining < 128 { int(remaining) } else { 128 }}
+				n := C.witty_image_file_read(file.fd, 0, trash.data, usize(trash.len),
+					&stream.streaming)
+				if n <= 0 {
+					if n == 0 { stream.file_size = stream.file_pos }
+					stream.file_seek_error = if n == 0 { 'EndOfStream' } else { 'ReadFailed' }
+					stream.streaming = -1
+					return error('ReadFailed')
+				}
+				stream.file_pos += u64(n)
+			}
+		}
+		stream.position = 0
+		stream.end = 0
+		return
+	}
+	return error('ReadFailed')
+}
+
 fn (mut stream ReadStream) file_read(mut destination []u8) !int {
 	if destination.len == 0 { return 0 }
+	if stream.streaming < 0 { return error('ReadFailed') }
 	file := stream.file or { return error('ReadFailed') }
 	count := C.witty_image_file_read(file.fd, stream.file_pos, destination.data,
 		usize(destination.len), &stream.streaming)
+	if count == -3 {
+		stream.file_prepare_streaming()!
+		return 0
+	}
 	if count < 0 { return error('ReadFailed') }
 	if count == 0 {
 		stream.file_size = stream.file_pos
@@ -166,8 +209,14 @@ pub fn (mut stream ReadStream) peek(count int) ![]u8 {
 			if count > stream.buffer.len { panic('reached unreachable code') }
 		}
 		for stream.end - stream.position < count {
+			// File.Reader's native refill reuses the whole buffer after consuming it.
+			if stream.position == stream.end && stream.streaming >= 0 {
+				stream.position = 0
+				stream.end = 0
+			}
 			mut target := unsafe { stream.buffer[stream.end..] }
-			stream.end += stream.file_read(mut target)!
+			read := stream.file_read(mut target)!
+			stream.end += read
 		}
 	}
 	return unsafe { stream.buffer[stream.position..stream.position + count] }
@@ -257,6 +306,7 @@ fn (mut stream ReadStream) read_vec(mut destination []u8) !int {
 		if count == 0 { return error('EndOfStream') }
 		return count
 	}
+	if stream.streaming < 0 { return error('ReadFailed') }
 	file := stream.file or { return error('ReadFailed') }
 	mut target := unsafe { destination[count..] }
 	mut data_size := target.len
@@ -280,6 +330,10 @@ fn (mut stream ReadStream) read_vec(mut destination []u8) !int {
 		stream.end = 0
 		n = C.witty_image_file_read_vec(file.fd, stream.file_pos, target.data, usize(target.len),
 			stream.buffer.data, usize(stream.buffer.len), &stream.streaming)
+	}
+	if n == -3 {
+		stream.file_prepare_streaming()!
+		return count
 	}
 	if n < 0 { return error('ReadFailed') }
 	if n == 0 {

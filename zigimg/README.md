@@ -1109,3 +1109,12 @@ writer acquisition and descriptor cleanup; real calibration and a reversed
 NOCTTY branch confirm these paths are exercised. Historical FIFO and full stream
 hashes remain unchanged; Windows runtime and other terminal disciplines remain
 outside this native proof.
+
+The [forward stream transition proof](reference_probes/stream_transition/README.md)
+preserves nonzero reader offsets after an owned descriptor is replaced with a
+pipe, including partial discard progress, cached EOF size and sticky failure.
+It also restores whole-buffer refill after a short buffer is fully consumed.
+Both modes match 2,139 records / 4,278 primary operations; reader and writer retries,
+pending bytes and queued input agree with pinned Zig. Historical full stream,
+guard and terminal hashes remain unchanged. Controlled replacements leave
+concurrent descriptor reuse and Windows runtime outside this proof.

@@ -120,6 +120,11 @@ static int witty_image_file_seek(int fd, uint64_t pos) {
     if (errno == EBADF) return 4;
     return 3;
 }
+/* File.Reader first tries a relative seek before discarding a forward offset. */
+static int witty_image_file_seek_by(int fd, uint64_t pos) {
+    if (lseek(fd, (off_t)pos, SEEK_CUR) >= 0) return 0;
+    return errno == EBADF ? 4 : -1;
+}
 static intptr_t witty_image_file_read(int fd, uint64_t pos, unsigned char *buf, size_t count, int *streaming) {
     ssize_t n;
     do {
@@ -127,7 +132,7 @@ static intptr_t witty_image_file_read(int fd, uint64_t pos, unsigned char *buf, 
     } while (n < 0 && errno == EINTR);
     if (n < 0 && witty_image_file_unseekable(errno) && !*streaming) {
         *streaming = 1;
-        if (pos != 0) return -1;
+        if (pos != 0) return -3; /* Reader must reconcile the logical offset. */
         do { n = read(fd, buf, count); } while (n < 0 && errno == EINTR);
     }
     return n;
@@ -151,7 +156,7 @@ static intptr_t witty_image_file_read_vec(int fd, uint64_t pos, unsigned char *a
     while (n < 0 && errno == EINTR);
     if (n < 0 && witty_image_file_unseekable(errno) && !*streaming) {
         *streaming = 1;
-        if (pos != 0) return -1;
+        if (pos != 0) return -3; /* Reader must reconcile the logical offset. */
         do { n = readv(fd, vectors, 2); } while (n < 0 && errno == EINTR);
     }
     return n;

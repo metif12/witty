@@ -7088,3 +7088,74 @@ Windows runtime, other CPU/vector selections, const/narrow/enum/boxed representa
 physical layouts, big-endian/32-bit runtime and portable ABI remain boundaries.
 Cross builds establish compilation only. Scope and reproduction are in
 [the image terminal proof](zigimg/reference_probes/image_tty/README.md).
+
+### Nonzero reader streaming transitions and exhausted-buffer refill — 2026-10-14
+
+An initialized regular-file stream seeks to a valid offset, then an owned dup2
+replaces its descriptor with a nonblocking pipe endpoint without reconstructing
+the stream. Source handles positional Unseekable by resetting progress, trying a
+relative seek and discarding forward to the old offset. V instead returned
+ReadFailed at the old position and allowed later reads from the pipe start.
+Original files/binaries/raw records are retained; the first mismatch is offset
+one with no queued input. Both read shims now report nonzero transitions to the
+adapter, which preserves native discard progress, EOF size and sticky native-read
+failure when EOF/WouldBlock prevents reaching that offset. Cached seek failure
+is preserved. Existing writer transitions remain unchanged.
+
+An additional comparison found eighteen buffered refill differences after a
+short buffer had been fully consumed: Source reset the exhausted buffer and
+filled its entire capacity, while V appended into the tail. Peek now preserves
+that reset, with a named read count keeping refill mutation separate from the
+buffer-end update. Earlier mismatch records remain retained separately.
+
+Both Debug/ordinary and ReleaseSafe/production match **2,139 returning records /
+4,278 primary read/write operations**, SHA-256
+`a5fb388fa0b56a2886ffab8bca89af550c69db9782719e267d8353b10a1e450a`.
+The 1,068 slice and 783 buffered-reader records cover capacities 0/1/8/32,
+offsets 0/1/7/127/128/129, requests 0/1/7, distinct seed lengths around each offset,
+actual EOF/WouldBlock and optional input replenishment before the second call.
+All take requests fit their buffer. The 144 single-write and 144 writeAll records
+cover the same offsets/capacities/lengths and optional flush. Each record repeats
+twice with retained buffers. Logical position, cached reader size, live descriptor/
+endpoint references, initialized buffer/output/pending bytes and final queued
+bytes match. Primary-operation counts exclude seeks/setup/flush/observers.
+Failed forward transitions preserve partial progress and leave subsequently
+supplied bytes queued; ordinary zero-offset read errors can retry. Writer
+zero-progress switching, nonzero seek failure and later pending buffer appends
+remain pinned.
+
+C creates an initialized 2,048-byte private O_EXCL/CLOEXEC regular file and
+immediately unlinks it, creates nonblocking pipe ends, replaces only its owned
+descriptor, seeds/refills/closes owned input and observes output after both calls.
+Source bodies/visibility and actual stream syscalls remain unchanged. Normalized
+references count each matching descriptor once across both owned pipe identities;
+Darwin assigns distinct read/write endpoint identities. Only owned handles are
+closed and no case paths survive. Raw identities, private mode/error/cursor fields,
+inactive storage and allocator effects remain excluded. Controlled replacements
+establish no concurrent race equivalence. V's bounded scalar discard and native
+trash-vector reads are compared through effects; syscall counts/timing are excluded.
+Earlier reference normalization and a failed POSIX-section edit selection remain
+retained; the failed edit applied no production changes.
+
+Consumer regressions and nine compiled records / eighteen primary operations per
+mode pin successful forward reads, EOF/WouldBlock failure progress, sticky retries
+and exhausted-buffer refill. All 63 image and 58 Vaxis test files pass with
+25 production/application/platform/unit/fixture checks plus focused consumer
+checks. Historical full-stream, baseline and 171-streaming hashes remain unchanged,
+as do seventeen historical trap pairs and four compile boundaries in both actual
+Source modes. The 994 guard records/155 exact panic-state pairs and every prior
+terminal returning/control/failure/calibration/mutation hash remain unchanged.
+Formatting, diff and Python checks pass. Complete Source/selected library/math/
+SIMD/fs.Dir/libc/version and before/after implementation/fixture/runner/helper/input
+hashes protect comparisons. Only golden assignments change after ordinary
+discovery. Independent replay checks native observations, original offset/refill
+mismatches, ownership, actual modes and provenance; persistent archives are read
+back member by member.
+
+Concurrent replacement/reuse races, other devices, syscall counts, timing/
+backpressure/signals, offsets and seek sequences outside the matrix, prior buffered
+data at replacement, injected errors, OOM/quotas/durability, Windows runtime,
+other CPU/vector selections, const/narrow/enum/boxed representations, physical
+layouts, big-endian/32-bit runtime and portable ABI remain boundaries. Cross builds
+establish compilation only. Scope and reproduction are in
+[the forward stream transition proof](zigimg/reference_probes/stream_transition/README.md).
