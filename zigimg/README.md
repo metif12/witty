@@ -1016,3 +1016,9 @@ The [PCX file-writer proof](reference_probes/pcx_streams/README.md) compares
 pairs in both modes. Explicit writer bounds checks preserve Source diagnostics
 and partial output in production. A native-observed file regression pins retained
 header/body bytes and cross-block RLE runs; historical PCX hashes remain unchanged.
+
+The [IFF file-stream proof](reference_probes/iff_streams/README.md) compares
+44,982 records / 89,928 calls, 3,844 returning controls, 463 exact panic/state pairs
+and twenty bounded discard-loop pairs in both modes. Consumer regressions pin
+retained chunk/plane buffers and partial ByteRun2 output; historical IFF hashes
+remain unchanged. The existing implementation needs no changes for these cases.

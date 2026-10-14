@@ -41,6 +41,10 @@ explicit zero-end guard represents Source's checked u64 subtraction; that branch
 cannot be reached by the compared fixed-memory streams after a complete chunk.
 File/cache/streaming behavior is outside this proof.
 
+The later [IFF file-stream proof](../iff_streams/README.md) adds buffered chunk
+traversal, direct CMAP/CAMG and ByteRun2 output, exact panic state and bounded
+overlong-discard loops. This memory proof's historical hashes remain unchanged.
+
 The model partitions defined returns/errors and strict failures only; compiled,
 unchanged Source supplies every compared output and snapshot. Caller codec header
 and scalar fields and all 256 palette backing entries are initialized before its

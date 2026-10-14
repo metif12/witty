@@ -6229,3 +6229,67 @@ vector configurations, big-endian/32-bit runtime and portable ABI remain boundar
 Cross builds establish compilation coverage only. Task-owned RAM evidence is fully
 archived/read back on persistent storage before detaching. Reproduction and exact
 scope are in [the PCX writer proof](zigimg/reference_probes/pcx_streams/README.md).
+
+### IFF buffered chunk traversal and ByteRun2 discard checkpoint — 2026-10-14
+
+Compiled unchanged pinned IFF and its File.Reader/std.Io.Reader paths. The existing
+implementation matches the new buffered file comparison without production-code
+changes. Both Debug/ordinary and ReleaseSafe/production match **44,982 returning
+records / 89,928 calls**, SHA-256
+`22ab2116317663553204d1ed60cf4c4c289f354f871b3e08308b848262ede051`.
+
+Direct/static/interface readers cover ILBM/PBM/ACBM, raw/PackBits/ByteRun2,
+one/four/eight/24 planes, widths 1/3/16/17, heights 1/2, three patterns, complete
+CMAP data and header/palette/body prefixes with retries. Detectors compare every
+first byte plus static/interface, peek/take and initial-discard behavior. Direct
+CMAP/CAMG calls retain partial entries, palette lengths and remainder bytes.
+Public/body file buffers are 20/21/32/64/128/512, with detector/palette/viewport
+capacities matching their smaller requirements and isolated undersized controls.
+Descriptors start at EOF independently of logical cursors; initial discard also
+runs at offset three.
+
+**3,844 returning controls**, SHA-256
+`c317076d4a2abcbe3d15d80c17312c2c23369817337bf97af1ee9145aa9a5f48`,
+cover 3,640 unknown-chunk length/actual-size/dispatch/offset cases, eight small-buffer
+controls, six palette boundaries and 190 direct ByteRun2 output cases. Traversal
+keeps the pinned seekBy workaround's physical-position arithmetic after leaving
+the buffered range, ignored FORM/CAMG/raw-body lengths and absent odd padding.
+Source's respective file/memory results supply every expected status and cursor.
+
+**463 exact panic/state pairs**, SHA-256
+`f4c04686c03679405c437dca8df0000d07116b6260d2d13bee36b178d354c1b9`,
+cover undersized magic/header buffers, parsed enum order, zero pitch, empty/
+oversized palettes, ByteRun2 source/destination bounds and command-size arithmetic.
+Strict checks require failed exits, no stdout, the exact sole native message and
+equal nonempty initialized snapshots. Snapshots retain position, buffered length,
+all caller buffer/output bytes, public direct header/scalar/active-palette state,
+input and disk. Successful pixels/palettes are compared before/after mutation.
+
+The initial unpartitioned batch timed out at an inherited ByteRun2 file discard
+loop. Isolated native controls identify complete BODY headers followed by fewer
+than eight VDAT-header bytes. **2,304 such prefixes** leave returning coverage;
+complete direct file ByteRun2 cases make one call because their second call would
+loop. **Twenty bounded loop pairs**, entry SHA-256
+`894536978d1560d94b90e3ce5360d6c6a08415fa050b71807aa8174ee84ffad3`,
+publish matching initialized entry snapshots and emit no stdout/stderr before
+0.5-second timeouts. These establish observed nontermination over that interval
+and entry state only; post-discard state is unobserved. The original timed batch,
+isolated checks and manually stopped longer attempt remain retained separately.
+
+Consumer regressions preserve a 20-byte BODY/plane buffer after a successful
+unknown-chunk skip, and direct ByteRun2 output `12 00` plus retained buffer
+`12 03 ff` at position twelve on EOF. Separate compiled Source/V controls compare
+their stream inputs in both modes. All 61 image and 58 Vaxis test files pass, with
+production IFF/file tests and nineteen application/platform/unit/fixture build
+checks. Historical IFF pixel/chunk/failure hashes and unchanged native assertions
+pass in both modes; formatting, diff and Python checks pass too.
+
+Source visibility and algorithms are unchanged. Undefined default/private codec
+state, successful unwritten private planes, failed/freed allocations, inactive
+palette backing, pointer identities, allocator/OOM/GC/lifetime, custom/nonseekable
+streams, OS failures, narrow/const/boxed representation, wider extents, big-endian/
+32-bit runtime and portable ABI remain boundaries. Cross builds establish
+compilation only. Full Source/library/math/version and implementation/fixture/
+runner/helper/input hashes protect evidence, fully archived/read back persistently
+before RAM detachment. Scope and reproduction are in
+[the IFF stream proof](zigimg/reference_probes/iff_streams/README.md).

@@ -1,5 +1,87 @@
 module zigimg
 
+import os
+
+fn test_iff_file_chunk_skip_retains_native_header_and_plane_buffer() {
+	mut cmap := []u8{len: 96}
+	for i in 0 .. cmap.len {
+		cmap[i] = u8(i * 37 + 19)
+	}
+	body := [u8(128), 0, 128, 0, 0, 0, 0, 0, 128, 0, 0, 0, 0, 0, 0, 0]
+	mut chunks := iff_test_chunk('CMAP', 96, cmap)
+	chunks << iff_test_chunk('JUNK', 16, []u8{len: 16})
+	chunks << iff_test_chunk('BODY', 16, body)
+	mut data := iff_test_fixture('ILBM', BmhdHeader{
+		width:             1
+		height:            1
+		x:                 -7
+		y:                 -9
+		planes:            8
+		mask_type:         .has_lasso
+		pad:               19
+		transparent_color: 513
+		x_asoect:          23
+		y_aspect:          29
+		page_width:        31
+		page_height:       37
+	}, chunks)
+	for i in 4 .. 8 {
+		data[i] = 255
+	}
+	path := os.join_path(os.temp_dir(), 'witty-iff-chunks-${os.getpid()}.bin')
+	os.write_file_array(path, data)!
+	defer { os.rm(path) or {} }
+	mut file := os.open(path)!
+	defer { file.close() }
+	file.seek(i64(data.len), .start)!
+	mut buffer := []u8{len: 20, init: 165}
+	mut reader := ReadStream.init_file(file, mut buffer)
+	image := IFF.read_image(mut reader)!
+	assert image.width == 1 && image.height == 1 && image.pixel_format() == .indexed8
+	assert image.raw_bytes() == [u8(19)]
+	palette := image.pixels.get_palette() or { panic('missing palette') }
+	assert palette.len == 32 && palette[0] == Rgba32{
+		r: 19
+		g: 56
+		b: 93
+		a: 255
+	}
+	assert reader.get_pos() == 192 && reader.buffered_len() == 0
+	assert buffer == [u8(0x42), 0x4f, 0x44, 0x59, 0, 0, 0, 16, 128, 0, 128, 0, 0, 0, 0, 0, 128,
+		0, 0, 0]
+	assert os.read_bytes(path)! == data
+}
+
+fn test_iff_file_byte_run2_keeps_partial_output_before_eof() {
+	data := [u8(0), 0, 0, 0, 0, 0, 0, 0, 0, 3, 255, 18]
+	path := os.join_path(os.temp_dir(), 'witty-iff-byterun-${os.getpid()}.bin')
+	os.write_file_array(path, data)!
+	defer { os.rm(path) or {} }
+	mut file := os.open(path)!
+	defer { file.close() }
+	file.seek(i64(data.len), .start)!
+	mut buffer := []u8{len: 3, init: 165}
+	mut reader := ReadStream.init_file(file, mut buffer)
+	codec := IFF{
+		header: BmhdHeader{
+			width:  1
+			height: 1
+			planes: 1
+		}
+		pitch:  2
+	}
+	mut output := [u8(165), 165]
+	codec.decode_byte_run2(mut reader, mut output) or {
+		assert err.msg() == 'EndOfStream'
+		assert output == [u8(18), 0]
+		assert reader.get_pos() == 12 && reader.buffered_len() == 0
+		assert buffer == [u8(18), 3, 255]
+		assert os.read_bytes(path)! == data
+		return
+	}
+	assert false
+}
+
 fn iff_test_u16(mut bytes []u8, value u16) {
 	bytes << [u8(value >> 8), u8(value)]
 }
