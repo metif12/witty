@@ -86,9 +86,13 @@ Default Source headers and inactive inline palette storage are undefined. V uses
 an initialized header placeholder to preserve default codec construction; its
 contents are outside the parity claim. Direct invalid typed enum values,
 big-endian runtime behavior, allocator/OOM/GC/lifetime, wider allocated extents,
-boxed storage copies, pointer/slice layout, const/narrow typing, file streams and
+boxed storage copies, pointer/slice layout, const/narrow typing, custom file streams and
 portable ABI remain boundaries. Cross builds do not establish runtime parity.
 No Source visibility or implementation changes are made.
+
+The later [positional stream proof](../ras_streams/README.md) adds buffered file
+decoding, direct palette/RLE helpers, retries and exact capacity failure state.
+This proof's existing returning, diagnostic and failure hashes remain unchanged.
 
 Full Source-tree SHA-256 is
 `ca759a44a902143a60f42f0810dc90df7250c0f92804cf201353f0141650eb6b`; selected Zig

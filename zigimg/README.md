@@ -998,3 +998,9 @@ exact Source slice/load diagnostics for short recognized application data. Both
 modes match 160,902 returning records / 171,072 calls and 112 panic/state pairs,
 covering every 16-bit count, identifier/code bytes, first-match precedence and
 live data mutations. Historical GIF hashes remain unchanged.
+
+The [Raster stream proof](reference_probes/ras_streams/README.md) compares buffered
+file decoding, planar palettes, partial RLE output and repeated failures. Both
+modes match 112,257 returning records / 224,514 calls and 367 exact panic/state
+pairs. Native-observed consumer regressions cover retained output and palette
+assignment boundaries; historical Raster hashes remain unchanged.

@@ -6062,3 +6062,57 @@ portable ABI remain boundaries. Cross compilation establishes build coverage onl
 Task-owned RAM evidence is fully archived and read back on persistent storage
 before detaching. Reproduction and exact scope are in
 [the GIF loop-count proof](zigimg/reference_probes/gif_loop_count/README.md).
+
+### Sun Raster positional buffers and decoder retry checkpoint — 2026-10-14
+
+Compiled unchanged pinned RAS and its shared File.Reader/std.Io.Reader paths.
+The existing implementation matches the new buffered file comparison without
+codec changes. Both Debug/ordinary and ReleaseSafe/production match **112,257
+returning/error records / 224,514 calls**, SHA-256
+`24e88e917661659d42a811e1ac966007b1ab68e789e96b88991feac2e2b27cc2`.
+
+Direct palette/RLE helpers use memory and file buffers 0, 1, 3, 4, 8, 16, 28,
+32, 64 and 128. Public direct/static/interface readers use memory/file 28, 32,
+64 and 128, with smaller capacities checked separately. File descriptors start
+at EOF independently of the positional stream cursor. Every returning case
+makes two calls on the same stream/codec. All RLE flags/counts, escaped bytes,
+clipped runs, output lengths through 257, planar palette lengths/remainders,
+partial input, detector first bytes and public header/palette/body prefixes are
+covered. Depths 1/8/24/32, all compression tags, zero/odd dimensions, map dispatch,
+row padding/polarity, RGB/BGR selection, opaque RGBA conversion and ignored
+declared image length/trailing data retain Source behavior.
+
+**367 strict panic/state pairs**, SHA-256
+`d728a122e314600960d6ffbce39ff896bd24bef7e61f9d8c2c917f7ef55e28a4`,
+cover fifteen magic-buffer, twelve header-buffer, 27 parsed-enum, twenty direct
+and 180 public palette-capacity, 108 one-bit indexed slice and five zero-buffer
+RLE failures. Exact sole native messages, failed exits, no stdout and equal
+nonempty snapshots are required. A zero-capacity RLE reader traps before reading
+even at EOF; those cases are isolated from the returning corpus.
+
+Snapshots retain position, buffered length, every initialized caller buffer/output
+byte, unchanged input/disk, public direct header and active palette. Successful
+pixels/palettes are compared before/after mutation. All caller palette backing is
+initialized before resize; incomplete planar reads preserve prior colors while
+changing the active length. Grayscale1 uses semantic values to exclude padding.
+Default/private codec state, failed/freed decoder allocations, inactive capacity
+and pointer identities remain unobserved. Source algorithms and visibility are
+unchanged; its private header type is inferred through public fields.
+
+Consumer regressions compare a three-byte RLE buffer and retained earlier output
+after a retry reaches EOF, plus palette resize-before-read and assignment-only-
+after-complete-input boundaries. Their exact inputs also pass separate compiled
+Source/V comparisons in both modes. All 61 image and 58 Vaxis test files pass,
+with production Raster/file tests, native/Linux application checks, three Windows
+libraries, Windows unit tests and fixtures in both modes, Linux library/fixture
+builds, formatting, diff and Python checks. Historical Raster record, decoder,
+diagnostic and failure hashes and unchanged native assertions pass in both modes.
+
+Custom/nonseekable readers, operating-system I/O failures, larger allocated extents,
+allocator/OOM/GC/lifetime, const/narrow/boxed representation, physical layouts,
+big-endian/32-bit runtime and portable ABI remain boundaries. Cross builds prove
+compilation only. Before/after full Source/library/version, implementation,
+fixture, runner, helper and input hashes protect retained evidence; task-owned
+RAM artifacts are fully archived/read back persistently before detaching.
+Reproduction and exact scope are in
+[the Raster stream proof](zigimg/reference_probes/ras_streams/README.md).

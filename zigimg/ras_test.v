@@ -1,5 +1,70 @@
 module zigimg
 
+import os
+
+fn test_ras_file_rle_and_palette_errors_retain_native_caller_state() {
+	for index, data in [[u8(0x80), 2, 0x7e, 0x80, 0, 0xaa], [u8(1), 2, 3, 4, 5]] {
+		path := os.join_path(os.temp_dir(), 'witty-ras-state-${os.getpid()}-${index}.bin')
+		os.write_file_array(path, data)!
+		defer { os.rm(path) or {} }
+		mut file := os.open(path)!
+		defer { file.close() }
+		file.seek(i64(data.len), .start)!
+		mut buffer := []u8{len: if index == 0 { 3 } else { 4 }, init: 165}
+		mut reader := ReadStream.init_file(file, mut buffer)
+		mut codec := RAS{
+			header: RasHeader{
+				width:            7
+				height:           9
+				depth:            8
+				length:           123
+				type_:            if index == 0 { .byte_encoded } else { .old }
+				color_map_type:   if index == 0 { .no_color_map } else { .rgb_color_map }
+				color_map_length: if index == 0 { u32(0) } else { u32(6) }
+			}
+		}
+		if index == 0 {
+			mut output := []u8{len: 4, init: 165}
+			codec.uncompress_bitmap(mut reader, mut output)!
+			assert output == [u8(0x7e), 0x7e, 0x7e, 0x80]
+			assert reader.get_pos() == 5 && reader.buffered_len() == 1
+			assert buffer == [u8(0x80), 0, 0xaa]
+			codec.uncompress_bitmap(mut reader, mut output) or {
+				assert err.msg() == 'EndOfStream'
+				assert output == [u8(0xaa), 0x7e, 0x7e, 0x80]
+				assert reader.get_pos() == 6 && reader.buffered_len() == 0
+				assert buffer == [u8(0x80), 0, 0xaa]
+				assert os.read_bytes(path)! == data
+				continue
+			}
+		} else {
+			codec.palette.resize(4)
+			for i in 0 .. 4 {
+				codec.palette.data[i] = Rgba32{
+					r: u8(i * 31)
+					g: u8(i * 71)
+					b: u8(i * 47)
+					a: 99
+				}
+			}
+			for _ in 0 .. 2 {
+				codec.read_palette(mut reader) or {
+					assert err.msg() == 'EndOfStream'
+					assert reader.get_pos() == 5 && reader.buffered_len() == 0
+					assert buffer == [u8(165), 165, 165, 165]
+					assert codec.palette.data == [Rgba32{ a: 99 },
+						Rgba32{ r: 31, g: 71, b: 47, a: 99 }]
+					continue
+				}
+				assert false
+			}
+			assert os.read_bytes(path)! == data
+			continue
+		}
+		assert false
+	}
+}
+
 fn ras_fixture(header RasHeader, palette []u8, data []u8) []u8 {
 	mut bytes := [u8(0x59), 0xa6, 0x6a, 0x95]
 	for value in [header.width, header.height, header.depth, header.length, u32(header.type_),
