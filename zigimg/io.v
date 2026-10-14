@@ -69,7 +69,12 @@ pub fn (mut stream ReadStream) reader() &ReadStream {
 }
 
 pub fn (stream ReadStream) get_pos() u64 {
-	if stream.file != none { return stream.file_pos - u64(stream.end - stream.position) }
+	if stream.file != none {
+		pending := u64(stream.end - stream.position)
+		// Source checks this subtraction even after a failed streaming transition.
+		if stream.file_pos < pending { panic('integer overflow') }
+		return stream.file_pos - pending
+	}
 	return u64(stream.position)
 }
 

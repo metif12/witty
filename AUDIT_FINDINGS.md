@@ -7403,3 +7403,85 @@ signals, injected errors, OOM/quotas/durability, Windows runtime, other CPU/vect
 selections, V representation/layout limits, big-endian/32-bit runtime and portable
 ABI remain boundaries. Cross builds establish compilation only. Scope and
 reproduction are in [the writer seek proof](zigimg/reference_probes/writer_seek/README.md).
+
+### Original-file read-ahead and checked logical reader positions — 2026-10-14
+
+A buffered reader can retain original-file read-ahead across replacement with
+an owned pipe. An incomplete transition preserves those bytes while resetting
+physical progress and consuming less input than the pending span. The read
+returns ReadFailed; Source's subsequent public getPos query traps on unsigned
+subtraction. V previously wrapped that position. The retained witness has seven
+original bytes pending, zero physical progress and V position
+`18446744073709551609`, while Source reports `integer overflow`. The adapter now
+checks the subtraction explicitly in production. Original production/binaries,
+all matching returning records and the native trap/V return with equal initialized
+state after removing the wrapped position remain retained.
+
+Both Debug/ordinary and ReleaseSafe/production match **11,016 returning records /
+33,048 primary read/relative-seek operations**, SHA-256
+`ad50b8ebce3e3330db7e29937de9116ef3d56a1d6c136337efffc0ff1d5cd1c7`.
+The 4,104 slice, 3,456 take and 3,456 peek records cover capacities 1/8/32,
+offsets 0/1/7, distinct consumed prefixes 0/1/capacity-1/capacity, zero/one/
+remaining/next-byte requests, bounded take/peek and slice requests beyond capacity.
+Seed lengths are capacity or offset+capacity+request+capacity+3; keepers stay open
+without refill, stay open with 64-byte refill or close before reading. Relative
+offsets are -capacity/-1/0/1/capacity/capacity+1. Two reads and one relative seek
+count per record; setup, initial prefill/seek/consumption and observer queries are
+excluded. Complete caller/output/pending bytes, logical positions, cached sizes,
+status order, ownership and final queued input match.
+
+**264 returning controls**, SHA-256
+`f5a0289faff11059b3c0e97d22acc89ae70eea6a5f377f9f0da73f73f2e1c536`,
+and **216 exact position-panic/state pairs**, SHA-256
+`c7b00399cd5c848b7ce2694e3ae5f948b8c1e2652ccb04c84dcd1c1f817c6846`,
+classify 480 retained-buffer cases from Source. Controls cover take/peek,
+capacities 8/32, offsets 0/1/7, consumed prefixes 1/capacity-1, requests one larger
+than pending length, distinct seeds 0/pending-1/pending/offset+capacity-1, actual
+EOF/WouldBlock and relative offsets -1/0/1. Open keepers add 64 bytes if the first
+position query returns. Failed pairs require failed exits, no stdout, one exact
+native diagnostic and equal nonempty initialized state. Every panic snapshot
+records the preceding ReadFailed, cached size, valid target, live endpoint count
+and caller/output/pending bytes. The observer omits getPos to avoid repeating the
+failing query. The read error and arithmetic panic remain separate outcomes.
+
+Slice reads can copy an original prefix before switching to pipe bytes. Take/peek
+commit caller output only on success. Successful transitions clear old read-ahead;
+failed ones can preserve it with sticky native failure. Retained bytes remain
+readable without IO, and new input remains queued when failure prevents refill.
+The pinned public seekBy workaround can move within pending data or clear it and
+adjust physical progress, including failed readers, without reviving IO. These
+returning contracts already matched V and need no further production changes.
+
+C creates/unlinks an initialized O_EXCL/CLOEXEC regular file, creates nonblocking
+pipe endpoints, replaces only the owned target, seeds/closes owned input and
+observes final queued bytes. Original-file and pipe patterns are distinct. No
+Source bodies/visibility or stream syscalls are changed/intercepted. Normalized
+references count descriptors 0–127 across both owned identities once each; raw
+identities, private mode/error/cursors, inactive storage and allocator effects are
+excluded. Observers snapshot before opening state files. Only owned resources
+change and no case paths survive. Controlled replacement establishes no concurrent
+race equivalence; scalar/vector discard syscall counts and timing remain outside
+this public comparison.
+
+Three consumer regressions and nine compiled records / 27 primary operations per
+mode pin mixed output, retained original bytes, valid failure positions, sticky
+retries and relative seeks. The first compound byte-read assertion failures remain
+retained; final tests use named byte values before position checks. All 67 image
+and 58 Vaxis test files pass, with 37 production/application/platform/unit/fixture
+checks. Historical full-stream/baseline/171-streaming hashes remain unchanged;
+seventeen historical trap pairs and four compile boundaries still pass. Writer
+seek, discard, absolute-seek, forward-transition and guard matrices retain prior
+return/control/panic-state hashes in both actual Source modes. Formatting/diff/
+Python checks pass. Complete Source/selected compiler libraries/math/SIMD/fs.Dir/
+libc/version and before/after implementation/fixture/runner/helper/input hashes
+protect comparisons. Only golden assignments change after ordinary discovery.
+Independent replay checks native classifications, exact failures, the original
+wrapped position, ownership and actual modes. Persistent archives are read back
+member by member.
+
+Other devices, larger offsets/requests/buffers, additional constructor/copy/seek
+sequences, concurrent replacement/reuse races, timing/backpressure/signals,
+injected errors, OOM/quotas/durability, Windows runtime, other CPU/vector selections,
+V representation/layout limits, big-endian/32-bit runtime and portable ABI remain
+boundaries. Cross builds establish compilation only. Scope and reproduction are
+in [the original-file read-ahead proof](zigimg/reference_probes/reader_prefill/README.md).

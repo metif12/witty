@@ -1143,3 +1143,10 @@ failures after descriptor restoration and sticky writer failures with pending
 bytes. Both modes match 6,912 records / 34,560 primary operations, 196 returning
 controls and sixty exact panic/state pairs. Historical stream matrices retain
 their previous hashes.
+
+The [original-file read-ahead proof](reference_probes/reader_prefill/README.md)
+preserves checked logical-position subtraction after failed buffered transitions.
+Both modes match 11,016 records / 33,048 primary operations, 264 returning controls
+and 216 exact position-panic/state pairs. Mixed original/pipe bytes, retained
+read-ahead, sticky retries and the pinned relative-seek workaround agree with Zig;
+historical stream matrices retain their hashes.
