@@ -1156,3 +1156,12 @@ consumed buffer cursors after a failed refill, allowing relative seeks to recove
 original bytes as pinned Zig does. Both modes match 9,764 records / 29,292 primary
 operations, 264 returning controls and 216 exact position-panic/state pairs.
 Historical stream and XBM hashes remain unchanged.
+
+The reader adapter also exposes `peek_delimiter_exclusive` and
+`take_delimiter_exclusive`. Both return a nonempty EOF tail; exclusive takes
+leave a found delimiter unread, including successful empty results at the cursor.
+The [exclusive delimiter comparison](reference_probes/reader_exclusive/README.md)
+covers 22,244 returning records / 79,212 calls per mode, plus 264 returning
+controls and 216 exact position-panic/state pairs. Initialized buffers, copied
+results, pending bytes, failure order and controlled pipe ownership match the
+pinned Source. The nullable `takeDelimiter` API remains outside this checkpoint.

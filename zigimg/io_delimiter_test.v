@@ -88,3 +88,57 @@ fn test_full_original_buffer_reports_stream_too_long_without_consuming_pipe_inpu
 		assert queued[..32] == []u8{len: 32, init: u8(index * 31 + 7)}
 	}
 }
+
+fn test_exclusive_delimiters_borrow_prefix_and_leave_delimiter_unread() {
+	mut bytes := 'abc\ndef'.bytes()
+	mut reader := ReadStream.init_memory(bytes)
+	line := reader.peek_delimiter_exclusive(`\n`)!
+	assert line == 'abc'.bytes() && reader.get_pos() == 0
+	bytes[0] = `A`
+	assert line == 'Abc'.bytes()
+	taken := reader.take_delimiter_exclusive(`\n`)!
+	assert taken == 'Abc'.bytes() && reader.get_pos() == 3
+	empty := reader.take_delimiter_exclusive(`\n`)!
+	assert empty.len == 0 && reader.get_pos() == 3
+	marker := reader.take_byte()!
+	assert marker == `\n`
+	tail := reader.peek_delimiter_exclusive(`\n`)!
+	assert tail == 'def'.bytes() && reader.get_pos() == 4
+	last := reader.take_delimiter_exclusive(`\n`)!
+	assert last == 'def'.bytes() && reader.get_pos() == 7
+	mut status := 'ok'
+	reader.take_delimiter_exclusive(`\n`) or { status = err.msg() }
+	assert status == 'EndOfStream' && reader.get_pos() == 7
+}
+
+fn test_exclusive_file_delimiters_distinguish_eof_tail_and_full_capacity() {
+	$if !windows {
+		path := os.join_path(os.temp_dir(), 'witty-exclusive-eof-${os.getpid()}.owned')
+		os.write_file(path, 'abc')!
+		defer { os.rm(path) or {} }
+		for capacity in [3, 8] {
+			mut file := os.open(path)!
+			defer { file.close() }
+			mut buffer := []u8{len: capacity, init: 165}
+			mut reader := ReadStream.init_file(file, mut buffer)
+			mut status := 'ok'
+			mut output := []u8{}
+			line := reader.peek_delimiter_exclusive(`\n`) or {
+				status = err.msg()
+				[]u8{}
+			}
+			output = line.clone()
+			assert reader.get_pos() == 0 && reader.buffered_len() == 3
+			if capacity == 3 {
+				assert status == 'StreamTooLong' && output.len == 0
+			} else {
+				assert status == 'ok' && output == 'abc'.bytes()
+				taken := reader.take_delimiter_exclusive(`\n`)!
+				assert taken == 'abc'.bytes() && reader.get_pos() == 3
+				status = 'ok'
+				reader.peek_delimiter_exclusive(`\n`) or { status = err.msg() }
+				assert status == 'EndOfStream' && reader.get_pos() == 3
+			}
+		}
+	}
+}

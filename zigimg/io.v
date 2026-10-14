@@ -354,6 +354,24 @@ pub fn (mut stream ReadStream) take_delimiter_inclusive(delimiter u8) ![]u8 {
 	return line
 }
 
+// EOF supplies the remaining nonempty prefix for the exclusive APIs. A
+// delimiter at the current cursor succeeds with an empty borrowed slice.
+pub fn (mut stream ReadStream) peek_delimiter_exclusive(delimiter u8) ![]u8 {
+	line := stream.peek_delimiter_inclusive(delimiter) or {
+		if err.msg() != 'EndOfStream' { return err }
+		if stream.position == stream.end { return err }
+		return unsafe { stream.buffer[stream.position..stream.end] }
+	}
+	return unsafe { line[..line.len - 1] }
+}
+
+// Source advances only over the returned prefix, leaving its delimiter unread.
+pub fn (mut stream ReadStream) take_delimiter_exclusive(delimiter u8) ![]u8 {
+	line := stream.peek_delimiter_exclusive(delimiter)!
+	stream.position += line.len
+	return line
+}
+
 // std.Io.Reader.readVec with one destination vector, and File.Reader's
 // positional/streaming native scatter read including buffered read-ahead.
 fn (mut stream ReadStream) read_vec(mut destination []u8) !int {
