@@ -107,3 +107,8 @@ libraries build with cross builds using `-gc none`; cross-target runtime is unve
 The later [stream guard proof](../stream_guards/README.md) aligns shared capacity/
 toss and addition diagnostics with exact Source messages. Existing output/state
 hashes remain unchanged; wider failed cursor representation limits remain.
+
+The later [loop-count proof](../gif_loop_count/README.md) compares all 16-bit
+counts, metadata precedence and slice mutations. It replaces generic V array
+errors for short recognized data with exact Source slice/load diagnostics;
+this proof's returning and retained-state hashes remain unchanged.

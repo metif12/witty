@@ -46,7 +46,7 @@ def decode_cases():
                                 'integer overflow', 'integer overflow'),
         'graphic-toss': ('--decode', header + b'\x21\xf9\x04\x00\x00\x00',
                          'reached unreachable code', 'reached unreachable code'),
-        'short-loop': ('--loop', b'', 'index out of bounds', 'array.get: index out of range'),
+        'short-loop': ('--loop', b'', 'index out of bounds', 'index out of bounds'),
     }
     for bits, size in ((1, 0), (2, 1), (4, 3)):
         colors = bytes(i & 255 for i in range((1 << bits) * 3))

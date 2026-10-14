@@ -1,5 +1,42 @@
 module zigimg
 
+fn test_gif_loop_count_uses_first_recognized_record_and_live_data() {
+	mut codec := GIF.init()
+	codec.application_infos << GifApplicationExtension{
+		application_identifier: [u8(`U`), `N`, `K`, `N`, `O`, `W`, `N`, `!`]!
+		authentification_code:  [u8(`a`), `b`, `c`]!
+		data:                   []u8{}
+	}
+	codec.application_infos << GifApplicationExtension{
+		application_identifier: [u8(`N`), `E`, `T`, `S`, `C`, `A`, `P`, `E`]!
+		authentification_code:  [u8(`a`), `b`, `c`]!
+		data:                   [u8(1)]
+	}
+	assert codec.loop_count() == 0
+	codec.application_infos << GifApplicationExtension{
+		application_identifier: [u8(`A`), `N`, `I`, `M`, `E`, `X`, `T`, `S`]!
+		authentification_code:  [u8(`1`), `.`, `0`]!
+		data:                   [u8(99), 0, 0, 165]
+	}
+	codec.application_infos << GifApplicationExtension{
+		application_identifier: [u8(`N`), `E`, `T`, `S`, `C`, `A`, `P`, `E`]!
+		authentification_code:  [u8(`2`), `.`, `0`]!
+		data:                   []u8{}
+	}
+	assert codec.loop_count() == animation_loop_infinite
+	codec.application_infos[2].data[0] = 255
+	codec.application_infos[2].data[3] = 0
+	assert codec.loop_count() == animation_loop_infinite
+	codec.application_infos[2].data[1] = 255
+	codec.application_infos[2].data[2] = 255
+	assert codec.loop_count() == 65535
+	mut copied := codec.application_infos[2]
+	copied.application_identifier[0] = `X`
+	copied.data[1] = 17
+	assert codec.loop_count() == 65297
+	assert codec.application_infos[2].application_identifier[0] == `A`
+}
+
 fn gif_test_u16(mut bytes []u8, value u16) {
 	bytes << [u8(value), u8(value >> 8)]
 }

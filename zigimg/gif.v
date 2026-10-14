@@ -277,6 +277,10 @@ fn gif_animation_extension(info GifApplicationExtension) bool {
 pub fn (codec &GIF) loop_count() i32 {
 	for info in codec.application_infos {
 		if gif_animation_extension(info) {
+			// Source slices data[1..] before readPackedInt loads two bytes.
+			if info.data.len == 0 { panic('start index 1 is larger than end index 0') }
+			remaining := info.data.len - 1
+			if remaining < 2 { panic('index out of bounds: index 2, len ${remaining}') }
 			count := u16(info.data[1]) | u16(info.data[2]) << 8
 			return if count == 0 { animation_loop_infinite } else { i32(count) }
 		}

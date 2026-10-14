@@ -6013,3 +6013,52 @@ big-endian/32-bit runtime and portable ABI remain boundaries. Cross builds
 establish compilation coverage only. Task-owned RAM artifacts are fully archived
 and read back on the persistent filesystem before detaching. Reproduction and
 exact scope are in [the XBM stream proof](zigimg/reference_probes/xbm_streams/README.md).
+
+### GIF loop-count slice bounds and metadata precedence checkpoint — 2026-10-14
+
+Compiled unchanged pinned GIF `loopCount` and its `std.mem.readPackedInt` path.
+V previously indexed application data bytes one and two directly. Source first
+slices `data[1..]`, then loads a two-byte word from that slice. Empty data traps
+with `start index 1 is larger than end index 0`; one/two-byte data traps with
+`index out of bounds: index 2, len 0` / `len 1`. The translated accessor now
+checks these boundaries explicitly, preserving the exact messages in production.
+The historical GIF runner's short-loop expectation follows this diagnostic change;
+its returning and retained-state hashes remain unchanged.
+
+Both Debug/ordinary and ReleaseSafe/production match **160,902 returning records
+/ 171,072 calls**, SHA-256
+`ec13251605eb891bad0b2608663649fda9d7c1a20f64368775d96d491bda17e4`.
+The corpus covers all 65,536 counts for both recognized identifier/code pairs,
+every byte at each identifier/code position, varied data lengths, ignored first/
+trailing bytes, ordered metadata lists, earlier/later mutations and copied records.
+
+Only exact `NETSCAPE`/`2.0` and `ANIMEXTS`/`1.0` matches are recognized. The first
+matching record wins even when its data is malformed or its count is infinite;
+short unrecognized records and later matching records are ignored. Zero maps to
+the infinite animation constant, and other counts are returned unchanged. Mutable
+data slices remain shared through copied application records, while their fixed
+identifier/authentication arrays remain independent. A consumer regression checks
+these precedence and alias boundaries with an ignored later malformed record.
+
+**112 strict panic/state pairs**, SHA-256
+`97ff010dee4bb92007e127ad83d3a3e846eb4628271bbf17ae96f60986d04c56`,
+cover both recognized identities, seven short data patterns, four unrecognized
+prefix contexts and optional later valid records. Failures require a failing
+exit, no stdout, the exact sole message from compiled Source and equal nonempty
+snapshots of every initialized metadata array/data byte and ordered list length.
+Default undefined headers, unused fixed backing and pointer identities are not
+observed. Source algorithms and visibility remain unchanged.
+
+All 61 image and 58 Vaxis test files pass, along with production GIF/record tests,
+native/Linux application checks, three Windows libraries, Windows GIF/record tests
+and fixtures in both modes, Linux library/fixture builds, formatting, diff and
+Python checks. Historical GIF record/state hashes and unchanged decoder/renderer
+assertions pass in both modes. Complete Source, selected stdlib/fmt.zig, compiler
+versions, implementations, fixtures, runner, helpers and inputs are pinned.
+
+Full decoder/file-stream state space, allocator/OOM/GC/lifetime, const/narrow/boxed
+representation, physical layouts, wider extents, big-endian/32-bit runtime and
+portable ABI remain boundaries. Cross compilation establishes build coverage only.
+Task-owned RAM evidence is fully archived and read back on persistent storage
+before detaching. Reproduction and exact scope are in
+[the GIF loop-count proof](zigimg/reference_probes/gif_loop_count/README.md).

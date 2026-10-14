@@ -992,3 +992,9 @@ buffers when a delimiter refill has room at the tail. Both modes match 87,419
 returning records / 181,446 calls, with 24 bounded detector-loop pairs. Buffered
 file reads, retries, generic interfaces and pinned no-op writers are covered;
 historical XBM and stream hashes remain unchanged.
+
+The [GIF loop-count proof](reference_probes/gif_loop_count/README.md) preserves
+exact Source slice/load diagnostics for short recognized application data. Both
+modes match 160,902 returning records / 171,072 calls and 112 panic/state pairs,
+covering every 16-bit count, identifier/code bytes, first-match precedence and
+live data mutations. Historical GIF hashes remain unchanged.
