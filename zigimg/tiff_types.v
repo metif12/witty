@@ -354,17 +354,20 @@ pub fn (bitmap &TiffBitmapDescriptor) guess_pixel_format() !PixelFormat {
 	}
 	match bitmap.photometric_interpretation {
 		0, 1 {
+			tiff_check_index(0, bitmap.bits_per_sample.data.len)
 			bits := bitmap.bits_per_sample.data[0]
 			if bits == 1 && bitmap.fill_order == 1 && bitmap.predictor == 1 { return .grayscale1 }
 			if bits == 8 { return .grayscale8 }
 		}
 		3 {
+			tiff_check_index(0, bitmap.bits_per_sample.data.len)
 			if bitmap.bits_per_sample.data[0] == 8 { return .indexed8 }
 		}
 		2 {
 			bits := bitmap.bits_per_sample.data
 			if bits.len == 3 && bits[0] == 8 && bits[1] == 8 && bits[2] == 8 { return .rgb24 }
 			if bits.len == 4 {
+				tiff_check_index(0, bitmap.extra_samples.data.len)
 				extra := bitmap.extra_samples.data[0]
 				if bits[0] == 8 && bits[1] == 8 && bits[2] == 8 && bits[3] == 8
 					&& extra in [u16(1), 2] {

@@ -59,6 +59,11 @@ checks the sole complete diagnostic together with retained public state and
 buffered EOF/assignment order. This older runner retains its category checks and
 unchanged returning golden.
 
+Palette component and format-selection sample accesses also preserve complete
+Source bounds messages. The [palette/format proof](../tiff_palette/README.md)
+checks exact diagnostics, retained partial palette updates, inactive backing,
+map-order effects and unsupported-format precedence in both modes.
+
 The full general-purpose HashMap API, allocator ownership/reclamation, allocation
 failure injection, ABI/layout and undefined storage remain outside this proof.
 GC owns V allocations, and V arrays use signed-int lengths: large source

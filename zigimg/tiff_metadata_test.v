@@ -96,6 +96,63 @@ fn test_tiff_file_tag_arrays_can_exceed_the_reader_buffer() {
 	}
 }
 
+fn test_tiff_long_palette_words_truncate_channels_and_keep_inactive_backing() {
+	path := os.join_path(os.temp_dir(), 'witty-tiff-long-palette-${os.getpid()}')
+	defer { os.rm(path) or {} }
+	for endianess in [TiffEndian.big, .little] {
+		mut bytes := [u8(99)]
+		for value in [u32(0x12345678), 0xffffffff, 0x87654321, 0x00010000, 0x0000ff00, 0xff001200] {
+			tiff_test_append(mut bytes, value, 4, endianess)
+		}
+		bytes << [u8(99), 88, 77]
+		for capacity in [0, 4, 8, 16, 64] {
+			mut stream := ReadStream.init_memory(bytes)
+			mut buffer := []u8{len: capacity, init: 165}
+			mut file := os.File{}
+			if capacity > 0 {
+				os.write_file_array(path, bytes)!
+				file = os.open(path)!
+				stream = ReadStream.init_file(file, mut buffer)
+			}
+			mut codec := TIFF{
+				endianess: endianess
+			}
+			codec.bitmap.color_map.resize(3)
+			retained := Rgba32{
+				r: 19
+				g: 23
+				b: 29
+				a: 31
+			}
+			codec.bitmap.color_map.data[2] = retained
+			codec.ifd.tags_map.put(.color_map, TiffTagField{
+				data_type:   4
+				data_count:  6
+				data_offset: 1
+			})!
+			codec.decode_bitmap(mut stream)!
+			assert codec.bitmap.bits_per_sample.data == [u16(1)]
+			assert codec.bitmap.color_map.data == [
+				Rgba32{
+					r: 0x56
+					g: 0x43
+					b: 0xff
+					a: 255
+				},
+				Rgba32{
+					r: 0xff
+					g: 0
+					b: 0x12
+					a: 255
+				},
+			]
+			assert codec.bitmap.color_map.storage[2] == retained
+			assert stream.get_pos() == 25
+			if capacity > 0 { file.close() }
+		}
+	}
+}
+
 fn tiff_test_mix(mut hash []u64, value u64) {
 	hash[0] = (hash[0] ^ value) * u64(1099511628211)
 }

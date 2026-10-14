@@ -63,6 +63,9 @@ pub fn (mut codec TIFF) decode_bitmap(mut stream ReadStream) ! {
 				colors := u16(1) << bits
 				bitmap.color_map.resize(usize(colors))
 				for index in 0 .. int(colors) {
+					tiff_check_index(usize(index), palette.len)
+					tiff_check_index(usize(index) + usize(colors), palette.len)
+					tiff_check_index(usize(index) + usize(colors) * 2, palette.len)
 					bitmap.color_map.data[index] = Rgba32{
 						r: u8(palette[index] / 256)
 						g: u8(palette[index + int(colors)] / 256)

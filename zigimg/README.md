@@ -561,6 +561,12 @@ complete index/length and null diagnostics, including destination validation
 before RGB/RGBA channel evaluation. Initialized caller pixels, palette backing,
 earlier strip writes and buffer state match Source through failures.
 
+The [palette and format comparison](reference_probes/tiff_palette/README.md)
+matches 16,686 returning records / 33,372 calls and 276 exact panic/state pairs.
+Palette component bounds retain prior full-color writes, and format selection
+preserves compression-before-samples and extra-samples-before-channel-validation
+order. Complete initialized metadata and inactive palette backing are compared.
+
 TIFF read/readImage and strips now decode grayscale1/grayscale8/indexed8/RGB24/
 RGBA32 with uncompressed, PackBits, CCITT RLE, LZW, DEFLATE, and Pixar DEFLATE.
 Versions are ignored, only the first IFD is used, and compressed byte counts

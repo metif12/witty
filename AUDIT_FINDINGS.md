@@ -5717,3 +5717,57 @@ boundaries. File DEFLATE still requires a native-word-sized buffer. Source/libra
 version and before/after implementation, fixture, runner, helper and corpus hashes
 protect the proof. Pinned TIFF encoding still emits no bytes. Reproduction and
 scope are in [the strip failure proof](zigimg/reference_probes/tiff_strips/README.md).
+
+
+### TIFF palette and format-selection bounds checkpoint — 2026-10-14
+
+Palette component arrays and format-selection sample fields still used generic V
+bounds diagnostics. Explicit guards now preserve Source's full index/length
+messages for red/green/blue components, initial grayscale/indexed samples and
+required RGBA extra samples in ordinary and production builds. Palette arguments
+retain their order before assigning a complete color; compression remains checked
+before sample access, and RGBA extra samples before channel-depth validation.
+Successful palette conversion, resizing, bucket-order processing and format
+selection are unchanged.
+
+Both modes match **16,686 returning records / 33,372 calls**, SHA-256
+`b9dd13a23b6bb0b8919eafd5737ecfb9495ac84dc7964d58335e8961a9c08f9f`, and
+**276 exact panic/state pairs**, SHA-256
+`0974206cdeecb306fe4b8719edc3d1d47977c28c71b08f5450a97cee241e84af`.
+The 15,336 format controls cover every valid compression tag, photometric/sample
+shapes, empty/nonempty extra samples and fill/predictor combinations. The 800
+palette controls cover both endian orders, SHORT/LONG words including high bits,
+depths through eight, reservations 0/6/24/200, memory and 4/8/16/64-byte file
+buffers. Another 550 IFD prefixes retain preceding seek/EOF behavior. Complete
+input words avoid undefined short palette tails.
+
+The 240 short-palette failures preserve active length, inactive backing and any
+earlier complete color assignment; a five-word input writes the first color before
+failing on the second blue component. Eighteen empty-sample and eighteen missing
+RGBA-extra failures retain unchanged getter state, including wrong-depth RGBA
+cases that must access extra samples first. Snapshots compare initialized header/
+IFD fields and complete map iteration, every bitmap scalar/rational/strip array,
+fixed-storage active lengths/backing, position, buffered length and every caller
+buffer byte. Actual compiled unchanged Source provides every diagnostic and state
+oracle without private wrappers or body changes.
+
+The pre-fix returning comparison matched before rejecting the generic palette
+panic; its first failure snapshots remain equal and are retained separately.
+A module regression and native-observed control retain LONG channel truncation
+and inactive palette backing through a small file buffer. All 61 image and 58
+Vaxis test files pass, with eighteen production/platform and four final
+formatting/diff/Python checks.
+
+Historical metadata retains its 86-record hash and fifteen trap pairs in both
+modes. Buffered arrays retain their 18,820-record and 108-state hashes, and the
+complete decoder retains its 39,707-case hash and seventeen trap pairs in both
+modes. The explicit palette/getter diagnostics do not change those goldens.
+
+Undefined short-read component words, default Source state, private failed arrays,
+arbitrary larger counts/extents, allocation/OOM/GC/lifetime, forged enums/storage,
+physical/narrow/const representation, custom/nonseekable readers, other-target
+runtime and portable ABI remain boundaries. The getter's readonly V receiver
+remains a representation adaptation to Source's mutable receiver. Source/library/
+version and before/after implementation, fixture, runner, helper and corpus hashes
+protect retained evidence. Pinned TIFF encoding still emits no bytes. Scope and
+reproduction are in [the palette/format proof](zigimg/reference_probes/tiff_palette/README.md).
