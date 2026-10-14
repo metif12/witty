@@ -6170,3 +6170,62 @@ big-endian/32-bit runtime and portable ABI remain boundaries. Cross builds estab
 compilation coverage only. Task-owned RAM evidence is fully archived/read back on
 persistent storage before detaching. Reproduction and exact scope are in
 [the BMP stream proof](zigimg/reference_probes/bmp_streams/README.md).
+
+### PCX file writing and production pixel bounds checkpoint — 2026-10-14
+
+Compiled unchanged pinned PCX and its File.Writer/std.Io.Writer paths. The pre-fix
+comparison matched all **31,926 returning records / 63,852 calls** before its
+first short indexed1 write differed: Source reported `index out of bounds: index
+0, len 0`, while V reported its generic array access diagnostic. Explicit writer
+checks now preserve exact Source index/length messages for indexed1/indexed4/RGB24
+pixel reads and the odd indexed8 row slice in both ordinary and production builds.
+Checks follow header output and earlier RLE writes, retaining failure order/state.
+
+Both Debug/ordinary and ReleaseSafe/production match returning SHA-256
+`5aa80bb7a8cba801fa567fd16de6e7e424757fd3e077975c430a1fedb1311e5d`.
+Direct/static/interface writers cover memory capacities 0/1/127/128/129/160/256/
+1024 and file capacities 0/1/2/3/8/16/63/127/128/129/256/1024, widths 1..65 at
+selected packing/run boundaries, heights 1/2, indexed1/4/8, RGB24 and unsupported
+grayscale8. Active palette lengths, ignored alpha/direct metadata/interface
+options, oversized image rejection and ignored even-indexed8 height coordinates
+are compared. Selected whole-slice lengths 0..129 around sixteen-byte block and
+63-byte run boundaries preserve the fast encoder's cross-block accumulation.
+
+Each returning record makes two calls on one writer followed by caller flush.
+Offsets are 0/7 when memory capacity permits. File descriptors begin at EOF
+independently of positional cursors; initialized 1,024-byte files retain their
+extent or grow. Snapshots compare logical position, pending length, every caller
+buffer byte, initialized direct headers, caller image/pixel/palette state and disk.
+Static/interface private codec state, inactive storage, pointer identities and
+allocator effects remain excluded. Source visibility and bodies are unchanged.
+
+**523 exact panic/state pairs**, SHA-256
+`b7fc8e58519d7344a17c309b60ac76bcf633a69687386446dd732ce0ed338a87`,
+cover 249 short pixel/row slices, 180 zero-dimension failures before storage
+rejection, 24 odd-stride overflows before header output and seventy direct
+coordinate failures after header output. Strict checks require failed exits,
+no stdout, the exact sole native message and equal nonempty initialized snapshots.
+**67 returning controls**, SHA-256
+`7478420d1dbafe2e6bf577d14a9404151236ece9a3c1808d7bcf8ee90e572e29`,
+compare earlier bounded-write failures and successful even indexed8 short slices.
+
+The native-observed consumer regression writes a 32-byte indexed slice through
+a 128-byte file buffer at offset seven. The two distinct sixteen-byte blocks
+become one run of the second value, as Source specifies. Success returns at 150
+with no pending bytes; the caller buffer retains fifteen body/palette bytes and
+113 prior header bytes. Pixel/palette input remains unchanged. A separate compiled
+Source/V comparison checks the exact regression input in both modes.
+
+All 61 image and 58 Vaxis test files pass, with production PCX/file tests,
+native/Linux application checks, three Windows libraries, Windows unit tests and
+fixtures in both modes, Linux library/fixture builds, formatting, diff and Python
+checks. Historical PCX contract, buffered decoder and failure hashes and unchanged
+native assertions pass in both modes. Pre-fix/final Source/library/version,
+implementation, fixture, runner, helper and input hashes protect retained evidence.
+
+Custom/nonseekable streams, operating-system failures, allocator/OOM/GC/lifetime,
+narrow/const/enum/boxed representation, physical layouts, wider extents, other CPU
+vector configurations, big-endian/32-bit runtime and portable ABI remain boundaries.
+Cross builds establish compilation coverage only. Task-owned RAM evidence is fully
+archived/read back on persistent storage before detaching. Reproduction and exact
+scope are in [the PCX writer proof](zigimg/reference_probes/pcx_streams/README.md).

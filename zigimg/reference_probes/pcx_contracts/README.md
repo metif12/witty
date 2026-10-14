@@ -88,7 +88,7 @@ not Source arithmetic traps.
 
 This is a bounded memory-stream proof. Larger planar inputs, dummy-byte paths and
 Source pixels left unwritten by its decoder are not claimed by this matrix.
-File streams, allocator/OOM/GC/lifetime, enum/narrow/const typing, wider allocated
+Custom file streams, allocator/OOM/GC/lifetime, enum/narrow/const typing, wider allocated
 extents, arbitrary targets and portable ABI remain boundaries. Cross-target builds
 do not establish runtime parity. The historical native PCX harness also passes
 unchanged in Debug and ReleaseSafe; existing V PCX tests cover its defined fixtures.
@@ -104,3 +104,7 @@ The later [PCX buffered decoder proof](../pcx_decode/README.md) separately compa
 fully written larger planar/dummy-byte shapes and five file-buffer capacities,
 including exact RGB bounds messages. It supplements this memory-only matrix;
 Source-unwritten pixel storage remains excluded.
+
+The later [PCX file-writer proof](../pcx_streams/README.md) adds positional encoding,
+retained caller/disk buffers and exact short-storage panic state. This proof's
+returning, decoder/control and retained-state hashes remain unchanged.

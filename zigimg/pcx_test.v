@@ -2,6 +2,51 @@ module zigimg
 
 import os
 
+fn test_pcx_file_writer_retains_native_cross_block_run_and_header_buffer() {
+	path := os.join_path(os.temp_dir(), 'witty-pcx-writer-${os.getpid()}.bin')
+	os.write_file_array(path, []u8{len: 1024, init: 165})!
+	defer { os.rm(path) or {} }
+	mut file := os.open_file(path, 'r+')!
+	defer { file.close() }
+	file.seek(1024, .start)!
+	mut buffer := []u8{len: 128, init: 165}
+	mut writer := WriteStream.init_file(file, mut buffer)
+	writer.seek_to(7)!
+	mut pixels := PixelStorage.init(.indexed8, 32)!
+	mut indices := pixels.as_bytes()
+	for i in 0 .. indices.len {
+		indices[i] = u8(i / 16 + 1)
+	}
+	pixels.resize_palette(4)
+	mut palette := pixels.get_palette() or { panic('missing palette') }
+	for i in 0 .. palette.len {
+		palette[i] = Rgba32{
+			r: u8(i * 31)
+			g: u8(i * 71)
+			b: u8(i * 113)
+			a: u8(i * 47)
+		}
+	}
+	expected_indices := indices.clone()
+	expected_palette := palette.clone()
+	image := ImageUnmanaged{
+		width:  2
+		height: 1
+		pixels: pixels
+	}
+	PCX.write_image(mut writer, image, PcxEncoderOptions{})!
+	assert writer.get_pos() == 150 && writer.buffered().len == 0
+	disk := os.read_bytes(path)!
+	assert disk.len == 1024 && disk[..7] == []u8{len: 7, init: 165}
+	assert disk[150..] == []u8{len: 874, init: 165}
+	// Native's fast encoder carries the count across distinct sixteen-byte blocks.
+	body := [u8(0xe0), 2, 0x0c, 0, 0, 0, 31, 71, 113, 62, 142, 226, 93, 213, 83]
+	assert disk[135..150] == body && buffer[..15] == body
+	assert buffer[15..] == disk[22..135]
+	assert image.raw_bytes() == expected_indices
+	assert (image.pixels.get_palette() or { panic('missing palette') }) == expected_palette
+}
+
 fn test_pcx_dimension_arithmetic_preserves_u16_boundaries() {
 	codec := PCX{
 		header: PCXHeader{

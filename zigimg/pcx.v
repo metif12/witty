@@ -432,6 +432,13 @@ fn (mut codec PCX) fill_palette(palette []Rgba32) {
 	}
 }
 
+fn pcx_write_index(index usize, length int) int {
+	if index >= usize(length) {
+		panic('index out of bounds: index ${index}, len ${length}')
+	}
+	return int(index)
+}
+
 pub fn (codec PCX) write(mut stream WriteStream, pixels PixelStorage) ! {
 	if pixels !is IndexedStorage1 && pixels !is IndexedStorage4 && pixels !is IndexedStorage8
 		&& pixels !is Rgb24Pixels {
@@ -449,7 +456,7 @@ pub fn (codec PCX) write(mut stream WriteStream, pixels PixelStorage) ! {
 			for y := usize(0); y < height; y++ {
 				mut byte := u8(0)
 				for x := usize(0); x < width; x++ {
-					pixel := pixels.indices[int(y * width + x)]
+					pixel := pixels.indices[pcx_write_index(y * width + x, pixels.indices.len)]
 					assert pixel <= 1
 					bit := u8(7 - (x % 8))
 					byte |= pixel << bit
@@ -466,7 +473,7 @@ pub fn (codec PCX) write(mut stream WriteStream, pixels PixelStorage) ! {
 			mut byte := u8(0)
 			for y := usize(0); y < height; y++ {
 				for x := usize(0); x < width; x++ {
-					pixel := pixels.indices[int(y * width + x)]
+					pixel := pixels.indices[pcx_write_index(y * width + x, pixels.indices.len)]
 					assert pixel <= 15
 					if x & 1 == 1 {
 						byte |= pixel
@@ -484,7 +491,11 @@ pub fn (codec PCX) write(mut stream WriteStream, pixels PixelStorage) ! {
 				pcx_rle_fast_encode(pixels.indices, mut stream)!
 			} else {
 				for y := usize(0); y < height; y++ {
-					encoder.encode(mut stream, pixels.indices[int(y * width)..int((y + 1) * width)])!
+					end := (y + 1) * width
+					if end > usize(pixels.indices.len) {
+						panic('index out of bounds: index ${end}, len ${pixels.indices.len}')
+					}
+					encoder.encode(mut stream, pixels.indices[int(y * width)..int(end)])!
 					encoder.encode_byte(mut stream, 0)!
 				}
 				encoder.flush(mut stream)!
@@ -498,7 +509,7 @@ pub fn (codec PCX) write(mut stream WriteStream, pixels PixelStorage) ! {
 			for y := usize(0); y < height; y++ {
 				for plane in 0 .. 3 {
 					for x := usize(0); x < width; x++ {
-						pixel := pixels.data[int(y * width + x)]
+						pixel := pixels.data[pcx_write_index(y * width + x, pixels.data.len)]
 						byte := match plane {
 							0 { pixel.r }
 							1 { pixel.g }

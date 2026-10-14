@@ -1010,3 +1010,9 @@ file reads/writes, pending headers and retained caller buffers. Both modes match
 28,826 records / 57,652 calls and 188 exact panic/state pairs. Consumer regressions
 pin BGR/BGRA writer layouts, positional read-ahead and caller flush after errors;
 historical BMP hashes remain unchanged.
+
+The [PCX file-writer proof](reference_probes/pcx_streams/README.md) compares
+31,926 records / 63,852 calls, 67 returning controls and 523 exact panic/state
+pairs in both modes. Explicit writer bounds checks preserve Source diagnostics
+and partial output in production. A native-observed file regression pins retained
+header/body bytes and cross-block RLE runs; historical PCX hashes remain unchanged.
