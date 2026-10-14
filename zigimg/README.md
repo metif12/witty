@@ -1183,3 +1183,13 @@ byte or EOF. The [delimiter discard comparison](reference_probes/delimiter_disca
 covers 73,224 returning records / 263,604 calls per mode, 1,444 returning controls
 and 16 exact zero-capacity panic/state pairs. The `usize` limit adapts Source's
 `std.Io.Limit`; existing delimiter and stream hashes remain unchanged.
+
+`stream_delimiter`, `stream_delimiter_ending` and `stream_delimiter_limit` append
+a prefix into a writer and leave the delimiter unread. Each reader span advances
+only after its complete write succeeds, preserving partial output and unread
+input on writer failure. The required-delimiter method fails at EOF after writing
+the tail; ending and bounded methods return its count. Zero/exhausted bounds fail
+before checking input or output. The [delimiter streaming comparison](reference_probes/delimiter_stream/README.md)
+covers 49,500 returning records / 247,500 primary calls per mode, 84 returning
+controls and 120 exact panic/state pairs. Memory, files, nonblocking pipes and
+partial failures match pinned Zig; prior delimiter and stream hashes are unchanged.

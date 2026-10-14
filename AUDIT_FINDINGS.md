@@ -7795,3 +7795,96 @@ portable ABI, V representation limits, Windows runtime, other CPU selections and
 big-endian/32-bit runtime remain boundaries. Cross builds establish compilation
 only. Reproduction and scope are in
 [the delimiter discard proof](zigimg/reference_probes/delimiter_discard/README.md).
+
+### Delimiter prefixes streamed into writers — 2026-10-14
+
+The reader adapter now translates streamDelimiter, streamDelimiterEnding and
+streamDelimiterLimit as the corresponding snake-case methods, accepting a mutable
+WriteStream. They append and consume the prefix while leaving a found delimiter
+unread. The required-delimiter method returns EndOfStream after writing and
+consuming an unterminated EOF tail; ending and bounded methods return its count.
+The bounded usize argument adapts std.Io.Limit, with ~usize(0) representing
+unlimited scanning. Zero/exhausted limits return StreamTooLong before checking
+input, output or EOF. Each buffered span advances only after writeAll succeeds;
+partial writer failure can change output while leaving that span unread, with
+previously completed spans still consumed. Read errors retain prior output.
+All pre-existing method bodies remain unchanged.
+
+Debug/ordinary and ReleaseSafe/production match **49,500 returning records /
+148,500 delimiter-stream calls / 247,500 primary calls** per mode. Each record
+performs three streaming calls, a relative reader seek and a writer flush; setup
+calls are separate. Groups contain 26,775 basic, 1,485 line, 1,080 seek, 11,520
+all-delimiter and 8,640 replacement profiles. Reader constructors cover memory,
+positional files and streaming-initialized regular files. Memory uses its full
+payload; file capacities are 1/8/32. Payload lengths 0/1/7/8/9/33/64,
+present/absent delimiters, empty/adjacent/trailing lines, all 256 marker bytes,
+nonzero/end initial offsets and relative offsets -1/0/1 exercise counts, bounds,
+EOF and retries. Bounded profiles use distinct zero/one/length/length-plus-one/
+capacity/capacity-plus-one/unlimited limits.
+
+Writer profiles cover memory, positional/streaming regular files and empty/full
+nonblocking output pipes, with capacities 0/1/3/8/32 and empty/full prefills.
+Replacement profiles retain original-file read-ahead, consume distinct prefixes
+and switch owned reader descriptors to open/closed pipes seeded with zero, capacity or twice-capacity-plus-one bytes. Complete initialized reader/writer buffers, pending spans,
+logical positions, size/error observations, saved successful counts, normalized
+ownership, actual file output and remaining pipe bytes agree. Full output-pipe
+seed bytes are verified individually before being removed from the displayed
+wire, preserving visibility of any appended bytes. Output SHA-256:
+`1525e99b06bb47e5f627d13699e1c7c57f0aad1b39a5fd4e05f81858fcf17fdf`.
+
+**84 returning controls** match SHA-256
+`1fe9aad4034d0f0c3ff7318ead2bdd934fca35d64da61265a0ecfb8824b2c344`:
+twelve zero-capacity/zero-limit scans and 72 consumed-failure profiles.
+**120 exact panic/state pairs** match SHA-256
+`0829ace76ae607860124ece9fbfe5c357d5bb3a1ba8b8394486ae59b19b1320d`.
+Forty-eight positive zero-capacity file scans panic with exactly reached
+unreachable code before read/write activity. Seventy-two failed-prefill profiles
+panic with exactly integer overflow in the subsequent public getPos observation,
+which subtracts retained bytes from the smaller transitioned physical position.
+The delimiter-stream operation has not been invoked in these latter controls.
+Both failed exits have empty stdout, one exact diagnostic and identical initialized
+state. Observers omit reader getPos, handle size errors and capture reader/writer
+buffers, writer position/pending output, saved count and descriptor ownership
+before opening the observation file. Independent replay also verifies that output
+and initialized writer storage remain untouched in all these failed controls.
+
+Sixteen additional compiled consumer records / 80 primary calls per mode assert
+concrete marker, EOF, zero/exact-bound and full-writer-empty-prefix results,
+partial memory output, file-buffer-size dependent reader consumption and
+read/write failure order. Output SHA-256:
+`8646886bfa0458899c21079abdb6aef536ac5059005b946d4a23e1583a2d2f7d`.
+Four public unit regressions cover these contracts.
+All **68 image and 58 Vaxis test files** pass, with **40 production/application/
+platform/unit/fixture checks**. Historical discard, nullable/exclusive/inclusive
+delimiter and full stream hashes remain unchanged in both modes.
+
+The wrapper reuses separately copied/hashed exclusive payload, reader replacement
+and writer replacement fixture headers. C creates initialized unlinked
+O_EXCL/CLOEXEC files, resets owned offsets before reader/writer construction and
+operates only on owned nonblocking pipes. Full pipes are seeded until WouldBlock.
+No Source body, visibility or reader/writer syscall is modified or intercepted.
+Full Source, selected compiler libraries/versions, implementation, probes, shared
+headers, direct imports and input bytes are checked before/after comparison.
+Duplicate identical control inputs found during independent replay were removed;
+the corrected suites have 204 distinct control inputs. Both modes were rerun with
+the corrected frozen runner, followed only by expected-value assignments. Large logs use
+lossless parent-side compression with checked raw-byte/compressed-file hashes.
+Initial Source build, image-suite and Windows jobs exhausted disk space. A
+production fixture setup also aborted during that pressure; its unchanged binary
+and input pass on replay after reclamation. All interrupted diagnostics remain
+separate from the successful final jobs. A corrected-discovery input-manifest
+write also exhausted disk; its successful builds and parent failure are retained
+separately. Completed disposable caches and
+identical expanded evidence from earlier checkpoints were reclaimed only after
+archive/readback and per-file verification; the original archives remain intact.
+Independent replay verifies output, classifications, exact failures, consumer
+expectations, ownership, actual build modes and provenance. Every member of the
+new persistent archive is read back before the checkpoint is committed.
+
+Arbitrary custom writer callbacks, overlapping reader/writer backing buffers,
+other devices, larger requests/buffers/offsets, arbitrary constructor/copy
+sequences, concurrent reuse, syscall counts, timing/signals, injected errors,
+OOM/quotas, allocator lifetime, portable ABI, V representation limits, Windows
+runtime, other CPU selections and big-endian/32-bit runtime remain boundaries.
+Cross builds establish compilation only. Reproduction and precise scope are in
+[the delimiter streaming proof](zigimg/reference_probes/delimiter_stream/README.md).

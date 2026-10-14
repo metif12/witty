@@ -252,3 +252,85 @@ fn test_delimiter_discard_crosses_file_buffer_boundaries() {
 		}
 	}
 }
+
+fn test_stream_delimiter_retains_marker_and_distinguishes_eof() {
+	mut reader := ReadStream.init_memory('abc\nlast'.bytes())
+	mut bytes := []u8{len: 32, init: 90}
+	mut writer := WriteStream.init_memory(mut bytes)
+	mut adapter := reader.reader()
+	mut sink := writer.writer()
+	assert adapter.stream_delimiter(mut sink, `\n`)! == 3
+	assert reader.get_pos() == 3 && writer.buffered() == 'abc'.bytes()
+	assert adapter.stream_delimiter_ending(mut sink, `\n`)! == 0
+	assert reader.get_pos() == 3 && writer.get_pos() == 3
+	assert reader.take_byte()! == `\n`
+	mut status := 'ok'
+	reader.stream_delimiter(mut writer, `\n`) or { status = err.msg() }
+	assert status == 'EndOfStream' && reader.get_pos() == 8
+	assert writer.buffered() == 'abclast'.bytes()
+	assert reader.stream_delimiter_ending(mut writer, `\n`)! == 0
+}
+
+fn test_stream_delimiter_bound_precedes_eof_and_writer_failure() {
+	mut reader := ReadStream.init_memory('abc\n'.bytes())
+	mut bytes := []u8{len: 3, init: 90}
+	mut writer := WriteStream.init_memory(mut bytes)
+	mut status := 'ok'
+	reader.stream_delimiter_limit(mut writer, `\n`, 0) or { status = err.msg() }
+	assert status == 'StreamTooLong' && reader.get_pos() == 0 && writer.get_pos() == 0
+	status = 'ok'
+	reader.stream_delimiter_limit(mut writer, `\n`, 3) or { status = err.msg() }
+	assert status == 'StreamTooLong' && reader.get_pos() == 3 && writer.buffered() == 'abc'.bytes()
+	assert reader.stream_delimiter_limit(mut writer, `\n`, 1)! == 0
+	assert reader.get_pos() == 3 && writer.get_pos() == 3
+	mut tail := ReadStream.init_memory('xyz'.bytes())
+	mut target := []u8{len: 8}
+	mut output := WriteStream.init_memory(mut target)
+	status = 'ok'
+	tail.stream_delimiter_limit(mut output, `\n`, 3) or { status = err.msg() }
+	assert status == 'StreamTooLong' && tail.get_pos() == 3
+	assert tail.stream_delimiter_limit(mut output, `\n`, 1)! == 0
+	assert output.buffered() == 'xyz'.bytes()
+}
+
+fn test_stream_delimiter_partial_memory_write_leaves_reader_span_unconsumed() {
+	mut reader := ReadStream.init_memory('abcdef\n'.bytes())
+	mut bytes := []u8{len: 3, init: 90}
+	mut writer := WriteStream.init_memory(mut bytes)
+	for _ in 0 .. 2 {
+		mut status := 'ok'
+		reader.stream_delimiter(mut writer, `\n`) or { status = err.msg() }
+		assert status == 'WriteFailed' && reader.get_pos() == 0
+		assert reader.peek(7)! == 'abcdef\n'.bytes()
+		assert writer.buffered() == 'abc'.bytes() && writer.get_pos() == 3
+	}
+}
+
+fn test_stream_delimiter_file_failure_consumes_only_completed_spans() {
+	$if !windows {
+		path := os.join_path(os.temp_dir(), 'witty-delimiter-stream-${os.getpid()}.owned')
+		os.write_file(path, 'abcdef\n')!
+		defer { os.rm(path) or {} }
+		for capacity in [1, 8] {
+			mut file := os.open(path)!
+			defer { file.close() }
+			mut buffer := []u8{len: capacity, init: 165}
+			mut reader := ReadStream.init_file(file, mut buffer)
+			mut bytes := []u8{len: 3, init: 90}
+			mut writer := WriteStream.init_memory(mut bytes)
+			mut status := 'ok'
+			reader.stream_delimiter_ending(mut writer, `\n`) or { status = err.msg() }
+			assert status == 'WriteFailed' && writer.buffered() == 'abc'.bytes()
+			assert reader.get_pos() == if capacity == 1 {
+				u64(3)
+			} else {
+				u64(0)
+			}
+			assert reader.peek(reader.buffered_len())! == if capacity == 1 {
+				'd'.bytes()
+			} else {
+				'abcdef\n'.bytes()
+			}
+		}
+	}
+}

@@ -580,6 +580,45 @@ pub fn (mut stream ReadStream) discard_delimiter_inclusive(delimiter u8) !usize 
 	return count + 1
 }
 
+// Each span is consumed only after write_all succeeds. A failing writer may
+// retain a partial span while the same bytes remain buffered in the reader.
+pub fn (mut stream ReadStream) stream_delimiter_limit(mut writer WriteStream, delimiter u8, limit usize) !usize {
+	mut remaining := limit
+	for remaining != 0 {
+		stream.peek(1) or {
+			if err.msg() == 'EndOfStream' { return limit - remaining }
+			return err
+		}
+		available := usize(stream.end - stream.position)
+		count := if remaining < available { remaining } else { available }
+		for index in 0 .. int(count) {
+			if stream.buffer[stream.position + index] == delimiter {
+				writer.write_all(stream.buffer[stream.position..stream.position + index])!
+				stream.toss(usize(index))
+				remaining -= usize(index)
+				return limit - remaining
+			}
+		}
+		writer.write_all(stream.buffer[stream.position..stream.position + int(count)])!
+		stream.toss(count)
+		remaining -= count
+	}
+	return error('StreamTooLong')
+}
+
+pub fn (mut stream ReadStream) stream_delimiter_ending(mut writer WriteStream, delimiter u8) !usize {
+	return stream.stream_delimiter_limit(mut writer, delimiter, ~usize(0)) or {
+		if err.msg() == 'StreamTooLong' { panic('reached unreachable code') }
+		return err
+	}
+}
+
+pub fn (mut stream ReadStream) stream_delimiter(mut writer WriteStream, delimiter u8) !usize {
+	count := stream.stream_delimiter_ending(mut writer, delimiter)!
+	if stream.position == stream.end { return error('EndOfStream') }
+	return count
+}
+
 pub fn (mut stream ReadStream) discard_all(count usize) ! {
 	buffered := usize(stream.end - stream.position)
 	if count <= buffered {
