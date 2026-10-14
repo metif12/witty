@@ -54,6 +54,7 @@ pub fn ReadStream.init_file_streaming(file os.File, mut buffer []u8) ReadStream 
 		file:            file
 		streaming:       1
 		file_size_error: 'Streaming'
+		file_seek_error: 'Unseekable'
 	}
 }
 
@@ -95,14 +96,10 @@ pub fn (mut stream ReadStream) seek_to(offset u64) ! {
 		size := stream.get_end_pos() or { return error('Unseekable') }
 		if offset >= size { return error('Unseekable') }
 		if stream.streaming < 0 { return error(stream.file_seek_error) }
-		logical := stream.get_pos()
-		if stream.streaming != 0 && offset < logical { return error('Unseekable') }
-		if offset < logical || offset >= stream.file_pos {
-			stream.position = 0
-			stream.end = 0
-			stream.file_pos = offset
+		if stream.streaming != 0 {
+			stream.file_seek_streaming(offset)!
 		} else {
-			stream.position += int(offset - logical)
+			stream.file_set_logical_pos(offset)
 		}
 		return
 	}
@@ -141,6 +138,70 @@ fn stream_seek_position(position u64, offset i64) i64 {
 	return current + offset
 }
 
+fn (mut stream ReadStream) file_set_logical_pos(offset u64) {
+	logical := stream.get_pos()
+	if offset < logical || offset >= stream.file_pos {
+		stream.position = 0
+		stream.end = 0
+		stream.file_pos = offset
+	} else {
+		stream.position += int(offset - logical)
+	}
+}
+
+fn file_reader_seek_error(result int) string {
+	return match result {
+		1 { 'Unseekable' }
+		2 { 'AccessDenied' }
+		else { 'Unexpected' }
+	}
+}
+
+// File.Reader's streaming seek discards from the descriptor, then clears
+// buffered read-ahead. Preserve that behavior even for a zero forward delta.
+fn (mut stream ReadStream) file_seek_streaming(offset u64) ! {
+	logical := stream.get_pos()
+	file := stream.file or { return error('Unexpected') }
+	if offset < logical {
+		if stream.file_seek_error != '' { return error(stream.file_seek_error) }
+		result := C.witty_image_file_seek(file.fd, offset)
+		if result == 4 { panic('reached unreachable code') }
+		if result != 0 {
+			stream.file_seek_error = file_reader_seek_error(result)
+			return error(stream.file_seek_error)
+		}
+		stream.file_set_logical_pos(offset)
+		return
+	}
+	delta := offset - logical
+	if delta > u64(0x7fffffffffffffff) { panic('integer cast truncated bits') }
+	if stream.file_seek_error == '' {
+		mut result := 1
+		$if !windows { result = C.witty_image_file_seek_by(file.fd, delta) }
+		if result == 4 { panic('reached unreachable code') }
+		if result == 0 {
+			stream.file_set_logical_pos(offset)
+			return
+		}
+		stream.file_seek_error = file_reader_seek_error(result)
+	}
+	stream.file_discard_forward(delta)!
+	stream.position = 0
+	stream.end = 0
+}
+
+fn (mut stream ReadStream) file_discard_forward(count u64) ! {
+	mut remaining := count
+	for remaining > 0 {
+		mut trash := []u8{len: if remaining < 128 { int(remaining) } else { 128 }}
+		n := stream.file_read(mut trash) or {
+			stream.file_seek_error = err.msg()
+			return err
+		}
+		remaining -= u64(n)
+	}
+}
+
 // A positional reader switching to streaming must first reach its old offset.
 // Source resets its position, seeks if possible, otherwise discards forward.
 // Failure preserves consumed progress and becomes sticky for later native reads.
@@ -155,18 +216,10 @@ fn (mut stream ReadStream) file_prepare_streaming() ! {
 		if result == 0 {
 			stream.file_pos = offset
 		} else {
-			for stream.file_pos < offset {
-				remaining := offset - stream.file_pos
-				mut trash := []u8{len: if remaining < 128 { int(remaining) } else { 128 }}
-				n := C.witty_image_file_read(file.fd, 0, trash.data, usize(trash.len),
-					&stream.streaming)
-				if n <= 0 {
-					if n == 0 { stream.file_size = stream.file_pos }
-					stream.file_seek_error = if n == 0 { 'EndOfStream' } else { 'ReadFailed' }
-					stream.streaming = -1
-					return error('ReadFailed')
-				}
-				stream.file_pos += u64(n)
+			stream.file_seek_error = file_reader_seek_error(result)
+			stream.file_discard_forward(offset) or {
+				stream.streaming = -1
+				return error('ReadFailed')
 			}
 		}
 		stream.position = 0

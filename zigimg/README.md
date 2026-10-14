@@ -1118,3 +1118,11 @@ Both modes match 2,139 records / 4,278 primary operations; reader and writer ret
 pending bytes and queued input agree with pinned Zig. Historical full stream,
 guard and terminal hashes remain unchanged. Controlled replacements leave
 concurrent descriptor reuse and Windows runtime outside this proof.
+
+The [absolute streaming seek proof](reference_probes/stream_seek/README.md)
+preserves native forward discard, cleared read-ahead, cached seek errors and BADF
+traps after controlled descriptor replacement. Both modes match 3,723 records /
+18,615 primary operations, 54 returning controls and eighteen exact panic/state
+pairs. Partial EOF/WouldBlock seeks leave buffered bytes readable. Historical
+full-stream, guard and forward-transition hashes remain unchanged; concurrent
+reuse and Windows runtime remain outside this native proof.

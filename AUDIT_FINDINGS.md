@@ -7159,3 +7159,82 @@ other CPU/vector selections, const/narrow/enum/boxed representations, physical
 layouts, big-endian/32-bit runtime and portable ABI remain boundaries. Cross builds
 establish compilation only. Scope and reproduction are in
 [the forward stream transition proof](zigimg/reference_probes/stream_transition/README.md).
+
+### Absolute reader streaming seeks, caches and BADF traps — 2026-10-14
+
+An initialized regular-file reader caches size, then its owned descriptor is
+replaced with a nonblocking pipe. After its first real read, V changed only the
+logical cursor on absolute streaming seeks. Source tries a relative seek when
+uncached, otherwise discards forward from the live descriptor and clears
+read-ahead. The first retained mismatch seeks forward on an empty live pipe:
+Source returns ReadFailed at position zero, while V returns success at one.
+Original production files/binaries/raw records remain retained.
+
+Absolute seeks now preserve native discard, buffer and error-cache behavior.
+Successful forward seeks clear read-ahead even with zero delta. Source calculates
+the delta from logical position, discards from the descriptor and clears the
+buffer; its resulting position can exceed the requested target. This pinned
+behavior is preserved. Incomplete seeks retain consumed progress and buffered
+bytes, return ReadFailed/EndOfStream and cache errors without permanently failing
+ordinary streaming reads. Backward seeks use cached errors or the real absolute
+seek. Uncached BADF seeks retain the exact unreachable panic in production.
+Constructor/initial-transition caches match Source. Public seekBy's source-specific
+workaround and writer behavior remain unchanged.
+
+Both Debug/ordinary and ReleaseSafe/production match **3,723 returning records /
+18,615 primary seek/read operations**, SHA-256
+`f365c69739adcd9fa283f598ebae0e7b44d9373990dc31c5b59fd00cd52b17a9`.
+The 2,172 slice and 1,551 buffered-reader records cover capacities 0/1/8/32,
+initial offsets 0/1/7, requests 0/1/7, distinct queued lengths around those offsets,
+actual EOF/WouldBlock, optional 32-byte refill, and targets including backward,
+zero-delta, forward and the rejected cached-size boundary. Each record performs
+an initial read and two seek/read pairs with retained buffers; operation counts
+exclude setup/initial seek/replacement/observers. Logical position, cached size,
+initialized caller/output/pending bytes, endpoint ownership and final queued input
+match. Partial seek failures leave buffered bytes immediately readable.
+
+**54 returning controls**, SHA-256
+`8b8a116ddcdf4dd8bb4dc21b5683c93c1b241e7d3c93d886b2b4846f3a42ed54`,
+and **18 exact panic/state pairs**, SHA-256
+`9ba3deb229406c324040ccad45fa2942e76a058be21954b7a9b34e455fc5d932`,
+classify actual descriptor invalidation after the first read across both APIs,
+capacities 1/8/32, offsets 0/1/7 and targets 0/1/7/2,048. Every classification comes
+from Source. An uncached real seek on BADF panics; cached errors/size guards can
+return without seeking, and retained bytes can still be read. Failed pairs require
+failed exits, no stdout, one exact native diagnostic and equal nonempty initialized
+state: target invalid and only two keeper endpoints live. Original backward/
+forward native traps where V returned normally stay retained separately.
+
+C creates/unlinks an initialized private O_EXCL/CLOEXEC regular file, creates
+nonblocking pipe endpoints, replaces/invalidates only the owned target, seeds/
+closes owned input and observes final output. No Source body/visibility or stream
+syscall is changed/intercepted. Observers record state before opening state files;
+normalized endpoint references count descriptors 0–127 across both owned identities.
+Raw identities, private mode/error/cursor fields, inactive storage and allocator
+effects are excluded. Only owned handles change, and no case paths survive.
+Controlled replacement/invalidation establishes no concurrent race equivalence.
+Scalar/vector discard syscall counts and timing remain outside the comparison.
+The original missing-global-flag fixture build remains retained; final builds
+explicitly enable globals.
+
+Consumer regressions and nine compiled records / 45 primary operations per mode
+pin read-ahead clearing, partial EOF/WouldBlock progress and readable retained
+bytes. All 64 image and 58 Vaxis test files pass with 28 production/application/
+platform/unit/fixture checks. Historical full-stream/baseline/171-streaming hashes,
+seventeen historical trap pairs, four compile boundaries, 2,139 forward-transition
+records and 994 guard records/155 exact panic-state pairs retain prior hashes in
+both actual Source modes. Formatting, diff and Python checks pass. Complete Source/
+selected library/math/SIMD/fs.Dir/libc/version and before/after implementation/
+fixture/runner/helper/input hashes protect comparisons. Only golden assignments
+change after ordinary discovery. Independent replay checks native classifications,
+exact failures, original cursor/trap mismatches, ownership, actual modes and
+provenance; persistent archives are read back member by member.
+
+Other devices/successful OS seeks after streaming transitions, prior original-file
+read-ahead at replacement, additional seekBy/constructor/copy sequences, offsets
+outside the matrix, concurrent replacement/reuse races, syscall counts, timing/
+backpressure/signals, injected errors, OOM/quotas/durability, Windows runtime,
+other CPU/vector selections, const/narrow/enum/boxed representations, physical
+layouts, big-endian/32-bit runtime and portable ABI remain boundaries. Cross builds
+establish compilation only. Scope and reproduction are in
+[the absolute streaming seek proof](zigimg/reference_probes/stream_seek/README.md).

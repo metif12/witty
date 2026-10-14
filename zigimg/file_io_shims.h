@@ -123,7 +123,8 @@ static int witty_image_file_seek(int fd, uint64_t pos) {
 /* File.Reader first tries a relative seek before discarding a forward offset. */
 static int witty_image_file_seek_by(int fd, uint64_t pos) {
     if (lseek(fd, (off_t)pos, SEEK_CUR) >= 0) return 0;
-    return errno == EBADF ? 4 : -1;
+    if (errno == ESPIPE || errno == EINVAL || errno == EOVERFLOW || errno == ENXIO) return 1;
+    return errno == EBADF ? 4 : 3;
 }
 static intptr_t witty_image_file_read(int fd, uint64_t pos, unsigned char *buf, size_t count, int *streaming) {
     ssize_t n;
