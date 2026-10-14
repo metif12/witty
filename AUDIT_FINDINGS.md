@@ -7238,3 +7238,94 @@ other CPU/vector selections, const/narrow/enum/boxed representations, physical
 layouts, big-endian/32-bit runtime and portable ABI remain boundaries. Cross builds
 establish compilation only. Scope and reproduction are in
 [the absolute streaming seek proof](zigimg/reference_probes/stream_seek/README.md).
+
+### Reader discard cache selection and successful physical seeks — 2026-10-14
+
+After a reader switches from a regular file to an owned pipe, V always read
+streaming discard bytes. Source uses its cached size when both error caches are
+clear, attempts a real relative seek and falls back to reads after caching a failed
+seek. Restoring an empty regular descriptor exposed the first mismatch: Source
+discarded one byte successfully at position two, while V returned EndOfStream at
+one. Original production/binaries/raw records remain retained. The translated
+discard callbacks now preserve cache selection, physical seek, error cache,
+partial progress and later reads. Nonregular getSize also sets streaming mode
+as pinned Source does, preserving an already failed mode. Existing zero-progress
+behavior remains unchanged.
+
+Both Debug/ordinary and ReleaseSafe/production match **5,670 returning records /
+28,350 primary discard/read operations**, SHA-256
+`246d51acc2d05fe89a6e17b65045d2712a2190092ffce3dbda8b2dbea3eea1f7`.
+The 1,134 retained-pipe and 4,536 restored-file records cover slice/take readers,
+capacities 0/1/8/32, initial offsets 0/1/7, one-byte requests, sufficient initialized
+seeds, actual EOF/WouldBlock, optional 64-byte refill, restored lengths 0/1/7/32,
+and discards 0/1/7/8/31/32/127/128/129. Each record has an initial read and two
+discard/read pairs; counts exclude setup/initial seek/replacement/observers.
+Discard consumes read-ahead first, then leaves caller buffer bytes intact during
+native callbacks. Output/error order, logical position, cached size, pending bytes,
+ownership and final pipe bytes match. Cached-size seeks can pass the replacement
+file's actual EOF; a later native read records EOF at the reader's accumulated
+position. Restored rows use zero for the second discard to exclude Source's
+cached-size zero-progress loop from returning cases.
+
+**74 returning controls**, SHA-256
+`90fcdce2d152e8ee86ccf2070037b24437d4a22fb3bdcafa0d1b87d1ccf0ba27`,
+and **16 exact panic/state pairs**, SHA-256
+`7b0280bf2fed359b3beb86648617888810e6ab9405b368328e1da3c767e023e4`,
+classify actual invalidation after the first read across both APIs, capacities
+1/8/32, offsets 0/1/7 and discards 0/1/7/8/32. Source classifies every case.
+Buffered operations can return successfully, cached seek errors select ordinary
+bad-read failures, and uncached BADF relative seeks panic. Failed pairs require
+failed exits, no stdout, one exact native diagnostic and equal nonempty state:
+target invalid and only two keeper endpoints live. Original native traps where
+V returned normally remain retained. Ordinary discard read errors preserve the
+existing seek-error cache, including later backward seeks after invalidation.
+
+C creates/unlinks initialized O_EXCL/CLOEXEC regular files, creates nonblocking
+pipes, replaces/invalidates only the owned target, seeds/closes owned input and
+observes final pipe bytes. Restored files have a distinct initialized pattern and
+start at physical offset zero. No Source body/visibility or image syscall is
+changed/intercepted. Normalized references count descriptors 0–127 across both
+pipe identities; raw identities, private mode/error/cursors, inactive storage and
+allocator effects are excluded. Observers capture state before opening state files.
+Only owned handles change and no case paths survive. Controlled replacement/
+invalidation establishes no concurrent race equivalence. Scalar/vector discard
+syscall counts and timing remain outside this comparison.
+
+One supplemental native/V record per mode covers an uncached-size failed reader:
+read one regular-file byte, replace with an empty live pipe, enter ReadFailed,
+query size and receive Streaming, seed four bytes, then read again. Source's
+Mode.toStreaming preserves failure. Both implementations retain ReadFailed,
+logical position zero, caller byte 07 and all four queued bytes, exactly
+`ReadFailed|Streaming|ReadFailed|0|07|4:07264564`. The consumer regression and
+independent replay retain all eight commands, complete unchanged Source, fixture
+helpers, binaries, actual build modes and before/after implementation hashes.
+
+Consumer regressions and nine compiled records / 45 primary operations per mode
+pin cached-size seeks past actual EOF, failed-seek cache retention, buffered
+prefix consumption, partial failures and recovery. All 65 image and 58 Vaxis test
+files pass with 31 production/application/platform/unit/fixture checks. Historical
+full-stream/baseline/171-streaming hashes, seventeen historical trap pairs, four
+compile boundaries, 3,723 absolute-seek records/54 controls/18 exact panic-state
+pairs, 2,139 transition records and 994 guard records/155 exact panic-state pairs
+retain prior hashes in both actual Source modes. Formatting/diff/Python checks
+pass. Complete Source/selected library/math/SIMD/fs.Dir/libc/version and before/
+after implementation/fixture/runner/helper/input hashes protect comparisons.
+Only golden assignments change after ordinary discovery. Independent replay
+checks native classifications, exact failures, original EOF/trap mismatches,
+ownership, actual modes and provenance; persistent archives are read back member
+by member. The disk-full Windows check remains retained. Only this task's completed
+compiler temporaries were removed before rerunning failed/remaining checks; no
+unrelated process/cache was changed.
+
+The earlier passing archive before the failed-mode guard remains retained
+separately. All native comparisons, consumer/module tests and platform checks
+were rerun against the final guard, with final implementation hashes recorded.
+
+Overlong positional/cached-size loops, additional larger discard/seek/constructor/
+copy sequences, other size/error caches/devices, prior original-file read-ahead
+at replacement, concurrent replacement/reuse races, syscall counts, timing/
+backpressure/signals, injected errors, OOM/quotas/durability, Windows runtime,
+other CPU/vector selections, const/narrow/enum/boxed representations, physical
+layouts, big-endian/32-bit runtime and portable ABI remain boundaries. Cross builds
+establish compilation only. Scope and reproduction are in
+[the reader discard proof](zigimg/reference_probes/stream_discard/README.md).

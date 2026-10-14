@@ -1126,3 +1126,13 @@ traps after controlled descriptor replacement. Both modes match 3,723 records /
 pairs. Partial EOF/WouldBlock seeks leave buffered bytes readable. Historical
 full-stream, guard and forward-transition hashes remain unchanged; concurrent
 reuse and Windows runtime remain outside this native proof.
+
+The [reader discard proof](reference_probes/stream_discard/README.md) preserves
+cached-size physical seeks, failed-seek caches, read-ahead consumption and BADF
+traps after controlled descriptor replacement. Both modes match 5,670 records /
+28,350 primary operations, 74 returning controls and sixteen exact panic/state
+pairs. Actual EOF/WouldBlock failures retain progress, and seek-based discard can
+pass the replacement file's EOF as pinned Zig does. Historical stream, guard,
+transition and absolute-seek hashes remain unchanged. A supplemental native case
+and consumer regression confirm that a nonregular size query preserves an already
+failed reader, leaving subsequently queued bytes untouched.

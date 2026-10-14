@@ -82,6 +82,7 @@ pub fn (mut stream ReadStream) get_end_pos() !u64 {
 		// Source std.posix.fstat treats a bad descriptor as unreachable.
 		if result == 4 { panic('reached unreachable code') }
 		if result != 0 {
+			if result == 1 && stream.streaming >= 0 { stream.streaming = 1 }
 			stream.file_size_error = if result == 1 { 'Streaming' } else { 'Unexpected' }
 			return error(stream.file_size_error)
 		}
@@ -453,6 +454,41 @@ fn (mut stream ReadStream) tga_stream(limit int) ![]u8 {
 	return destination[..read]
 }
 
+// File.Reader's discard callback uses cached size only while both error caches
+// are clear. A failed physical seek selects read-based discard for later calls.
+fn (mut stream ReadStream) file_discard(count u64) !u64 {
+	if stream.file == none { return error('EndOfStream') }
+	if stream.streaming < 0 { return error('ReadFailed') }
+	if stream.streaming == 0 {
+		size := stream.get_end_pos() or {
+			stream.streaming = 1
+			return 0
+		}
+		available := size - stream.file_pos
+		delta := if count < available { count } else { available }
+		stream.file_pos += delta
+		return delta
+	}
+	if stream.file_size_error == '' && stream.file_seek_error == '' {
+		size := stream.get_end_pos() or { return 0 }
+		available := size - stream.file_pos
+		delta := if count < available { count } else { available }
+		limited := if delta < u64(0x7fffffffffffffff) { delta } else { u64(0x7fffffffffffffff) }
+		file := stream.file or { return error('ReadFailed') }
+		mut result := 1
+		$if !windows { result = C.witty_image_file_seek_by(file.fd, limited) }
+		if result == 4 { panic('reached unreachable code') }
+		if result != 0 {
+			stream.file_seek_error = file_reader_seek_error(result)
+			return 0
+		}
+		stream.file_pos += limited
+		return limited
+	}
+	mut trash := []u8{len: if count < 128 { int(count) } else { 128 }}
+	return u64(stream.file_read(mut trash)!)
+}
+
 pub fn (mut stream ReadStream) discard_all(count usize) ! {
 	buffered := usize(stream.end - stream.position)
 	if count <= buffered {
@@ -462,22 +498,9 @@ pub fn (mut stream ReadStream) discard_all(count usize) ! {
 	mut remaining := count - buffered
 	stream.position = stream.end
 	for remaining > 0 {
-		if stream.file == none { return error('EndOfStream') }
-		if stream.streaming == 0 {
-			size := stream.get_end_pos() or {
-				stream.streaming = 1
-				continue
-			}
-			available := size - stream.file_pos
-			delta := if u64(remaining) < available { u64(remaining) } else { available }
-			stream.file_pos += delta
-			remaining -= usize(delta)
-			// File.Reader.discard and Reader.discardShort preserve the original
-			// zero-progress behavior for an overlong positional discard.
-			continue
-		}
-		mut trash := []u8{len: if remaining < 128 { int(remaining) } else { 128 }}
-		remaining -= usize(stream.file_read(mut trash)!)
+		remaining -= usize(stream.file_discard(u64(remaining))!)
+		// Preserve Source's zero-progress loop when the positional/cached size
+		// is exhausted without a native read discovering end-of-stream.
 	}
 }
 
