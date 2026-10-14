@@ -110,6 +110,10 @@ and storage tags. Duration comments retain Zig decimal formatting and signs,
 verified against its native formatter across 19,968 float bit patterns.
 The source accepts grayscale2 in header construction but omits its pixel
 writer arm; writing nonempty grayscale2 images therefore traps.
+Header writes preserve the source's individual literals and arguments, including
+pending output and caller buffer bytes before a file flush or pixel failure.
+The [buffered PAM comparison](reference_probes/pam_streams/README.md) covers
+38,958 records and 90 exact failure states in ordinary and production builds.
 
 XBM preserves ordered defines, zero-sentinel hotspots, continuous LSB-first
 bits without row padding, its hexadecimal parsing quirks, and ignored

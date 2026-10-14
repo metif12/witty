@@ -5771,3 +5771,62 @@ remains a representation adaptation to Source's mutable receiver. Source/library
 version and before/after implementation, fixture, runner, helper and corpus hashes
 protect retained evidence. Pinned TIFF encoding still emits no bytes. Scope and
 reproduction are in [the palette/format proof](zigimg/reference_probes/tiff_palette/README.md).
+
+## PAM file header write boundaries and retained output — 2026-10-14
+
+The V PAM header writer combined comments and numeric fields into larger writes.
+Compiled unchanged Source emits each `Writer.print` literal and argument
+separately. The difference changed caller buffer bytes, pending output and actual
+on-disk contents before flush or a later pixel failure. A zero-sized monochrome
+frame with an eight-byte file buffer leaves its final eight header bytes pending
+in Source, while the previous V implementation wrote the entire header to disk.
+The header writer now preserves Source's individual write boundaries.
+
+`verify_pam_streams_reference.py` pairs Source Debug with ordinary V and Source
+ReleaseSafe with production V. Both modes pass **38,958 returning records**,
+containing **77,958 read/write/detection calls**, SHA-256
+`fbbcf91a8bf9670108461609b06039bbd00bb41481d4f24b58e85c7e5354c671`.
+They also pass **90 exact panic/state pairs**, SHA-256
+`2aad431028fa6420aca4f1515b665731c4fdadfeac9364c799e2ad72ef671ca7`.
+
+Readers cover memory and positional files with 3/4/8/16/64/129-byte buffers,
+all supported tuple/sample widths, complete and truncated rasters, long comments,
+duplicate fields, parser failures, tuple-rest matching, sequence compatibility,
+trailing bytes, repeated detection and retry consumption. Encoder controls cover
+all storage tags, zero/nonzero extents, three comment profiles, PAM/BMP options,
+offsets 0/7, repeated writes and final flush through file buffers
+0/1/2/3/4/8/16/32/64/128. Descriptors begin at EOF to verify the independent
+positional cursor. The decoder itself needs no change.
+
+Twelve undersized-reader, 36 option-arm, thirty short-pixel, six grayscale2 and
+six dimension-overflow failures retain the exact sole message from actual
+compiled Source. Snapshots compare logical position, buffered/pending length,
+every initialized caller buffer byte, unchanged input and actual disk contents;
+writer failures also retain caller image metadata and initialized pixels.
+Successful decodes compare complete pixels and animation metadata. Grayscale1
+uses semantic values to exclude narrow-field padding. Private/freed failed decoder
+storage and Source's private header remain unobserved.
+
+The retained pre-fix ordinary comparison finds 7,186 differing returning records;
+818 already differ in the first call's pending length and disk contents. A module
+regression checks native-observed pending tails, inactive caller buffer bytes and
+disk contents before/after flush. Its initial fixture exposed V 0.5.2 emitting a
+function-level deferred file removal before a fallible call inside an `if`
+expression. The fixture now uses a named local image; original fixture, generated
+C and failures remain retained separately.
+
+All 61 image and 58 Vaxis test files pass. Production PAM/file-stream tests,
+native/Linux application checks, three Windows dependency libraries, Windows PAM
+tests and stream fixtures in both modes, and Linux libraries/fixture builds pass.
+The historical PAM contracts retain all 74,192 observations and 1,723 exact
+failure-state pairs, including option, decoder/writer and failure-state hashes,
+in both modes. Formatting, diff and Python checks pass.
+
+Custom/nonseekable readers, streaming pipes, descriptor/native-write failures,
+allocator/OOM/GC/lifetime, arbitrary larger allocations, const/narrow/boxed
+representation, private helpers, physical records and portable ABI remain
+boundaries. Cross builds do not establish other-target runtime parity. Full
+Source/library/version and before/after implementation, fixture, runner, helper
+and input hashes protect retained evidence. Public Source visibility and bodies
+remain unchanged. Reproduction and exact scope are in
+[the PAM stream proof](zigimg/reference_probes/pam_streams/README.md).

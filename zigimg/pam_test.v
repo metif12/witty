@@ -1,5 +1,59 @@
 module zigimg
 
+import os
+
+fn test_pam_file_header_preserves_pending_tail_and_caller_buffer() {
+	path := os.join_path(os.temp_dir(), 'witty-pam-buffered-header-${os.getpid()}')
+	defer { os.rm(path) or {} }
+	for capacity in [8, 16] {
+		os.write_file_array(path, []u8{len: 256, init: 165})!
+		mut file := os.open_file(path, 'r+')!
+		file.seek(256, .start)!
+		mut buffer := []u8{len: capacity, init: 165}
+		mut writer := WriteStream.init_file(file, mut buffer)
+		mut image := ImageUnmanaged{
+			pixels: Grayscale1Pixels{
+				data: []
+			}
+			width:  0
+			height: 0
+		}
+		if capacity == 16 {
+			image = ImageUnmanaged{
+				pixels: Grayscale8Pixels{
+					data: [Grayscale8{ value: 19 }]
+				}
+				width:  1
+				height: 1
+			}
+		}
+		comments := if capacity == 8 { []string{} } else { ['one', 'two'] }
+		PAM.write_frame(mut writer, image, PamEncoderOptions{ comments: comments })!
+		expected := if capacity == 8 {
+			'P7\nWIDTH 0\nHEIGHT 0\nDEPTH 1\nMAXVAL 1\nTUPLTYPE BLACKANDWHITE\nENDHDR\n'.bytes()
+		} else {
+			'P7\n#one\n#two\nWIDTH 1\nHEIGHT 1\nDEPTH 1\nMAXVAL 255\nTUPLTYPE GRAYSCALE\nENDHDR\n\x13'.bytes()
+		}
+		pending := if capacity == 8 { 8 } else { 9 }
+		assert writer.get_pos() == u64(expected.len)
+		assert writer.buffered() == expected[expected.len - pending..]
+		assert buffer == if capacity == 8 {
+			'\nENDHDR\n'.bytes()
+		} else {
+			'\nENDHDR\n\x13YPE AL '.bytes()
+		}
+		before := os.read_bytes(path)!
+		assert before[..expected.len - pending] == expected[..expected.len - pending]
+		assert before[expected.len - pending..] == []u8{len: 256 - expected.len + pending, init: 165}
+		writer.flush()!
+		assert writer.buffered().len == 0
+		after := os.read_bytes(path)!
+		assert after[..expected.len] == expected
+		assert after[expected.len..] == []u8{len: 256 - expected.len, init: 165}
+		file.close()
+	}
+}
+
 fn pam_fixture(width usize, height usize, depth usize, maxval u16, tuple string, data []u8) []u8 {
 	mut bytes := 'P7\nWIDTH ${width}\nHEIGHT ${height}\nDEPTH ${depth}\nMAXVAL ${maxval}\n'.bytes()
 	if tuple != '' { bytes << 'TUPLTYPE ${tuple}\n'.bytes() }

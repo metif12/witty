@@ -94,7 +94,10 @@ Writer comments retain raw bytes/newlines, the loop comment only on the main ima
 and per-frame duration comments. Public sequence reads retain Source's frame
 compatibility rules and duration/loop defaults.
 
-Allocator/OOM/GC/lifetime, explicit reclamation, file streams, wider allocated
+File buffering and output retained before flush are checked separately by the
+[PAM stream proof](../pam_streams/README.md); this fixture uses memory streams.
+
+Allocator/OOM/GC/lifetime, explicit reclamation, wider allocated
 extents, enum/narrow/const typing, exposed private helpers, physical records/
 unions/slices, boxed payload copies, big-endian runtime and portable ABI remain
 boundaries. Native checks do not establish cross-target runtime parity.

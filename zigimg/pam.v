@@ -178,11 +178,23 @@ pub fn PamHeader.read(mut stream ReadStream) !PamHeader {
 pub fn (header PamHeader) write(mut stream WriteStream) ! {
 	stream.write_all('P7\n'.bytes())!
 	for comment in header.comments {
-		stream.write_all('#${comment}\n'.bytes())!
+		stream.write_all('#'.bytes())!
+		stream.write_all(comment.bytes())!
+		stream.write_all('\n'.bytes())!
 	}
-	stream.write_all(('WIDTH ${header.width}\nHEIGHT ${header.height}\n' +
-		'DEPTH ${header.depth}\nMAXVAL ${header.maxval}\n' +
-		'TUPLTYPE ${header.tuple_type.to_string()}\nENDHDR\n').bytes())!
+	// Writer.print emits each literal and argument separately. Preserve those
+	// boundaries for file buffers and output retained before a later failure.
+	stream.write_all('WIDTH '.bytes())!
+	stream.write_all(header.width.str().bytes())!
+	stream.write_all('\nHEIGHT '.bytes())!
+	stream.write_all(header.height.str().bytes())!
+	stream.write_all('\nDEPTH '.bytes())!
+	stream.write_all(header.depth.str().bytes())!
+	stream.write_all('\nMAXVAL '.bytes())!
+	stream.write_all(header.maxval.str().bytes())!
+	stream.write_all('\nTUPLTYPE '.bytes())!
+	stream.write_all(header.tuple_type.to_string().bytes())!
+	stream.write_all('\nENDHDR\n'.bytes())!
 }
 
 pub fn (header PamHeader) has_two_bytes_per_component() bool {
