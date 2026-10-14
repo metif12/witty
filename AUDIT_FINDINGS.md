@@ -6715,3 +6715,77 @@ other CPU/vector selections, const/narrow/enum/boxed representations, physical
 layouts, big-endian/32-bit runtime and portable ABI remain boundaries. Cross builds
 establish compilation only. Scope and reproduction are in
 [the public image FIFO proof](zigimg/reference_probes/image_fifo/README.md).
+
+### Public image POSIX path failures and NUL rejection order — 2026-10-14
+
+Compiled unchanged pinned public managed/unmanaged path APIs against owned missing,
+conflicting, inaccessible, symlink-loop and oversized paths. V previously returned
+OS messages instead of Source names. Embedded NULs also truncated libc paths:
+writing PNG replaced the prefix-named file with its signature, reading decoded
+that file, and an invalid PNG header panicked after truncation. Source asserted
+before opening or checking path length. Original binaries, raw outputs and
+initialized failure states are retained.
+
+All public path wrappers now share a POSIX opener. It rejects NULs first, applies
+PATH_MAX and empty-path handling, translates saved OS error codes to pinned
+std.posix.openatZ names and retries interrupted opens. Existing os.open/os.create
+ownership is preserved. The explicit NUL guard remains active in production;
+Windows open behavior is unchanged.
+
+Both Debug/ordinary and ReleaseSafe/production match **12,160 returning records /
+24,320 public calls**, SHA-256
+`36bd463ce8ce5ec452f0bea5e38b2860f818add39d93a90f480d9faf6cdf14b9`.
+The 11,968 writer cases cover all seventeen encoders, eight initialized storage
+profiles, capacities 0/1/8/32, both APIs and eleven path failures. Another 192
+read/detection cases cover both operations/APIs and twelve path kinds. Calls
+repeat twice with unchanged caller buffers and initialized disk/image bytes.
+FileNotFound/NotDir/IsDir/AccessDenied/SymLinkLoop/NameTooLong preserve native
+failure order; a successfully opened directory returns Unseekable at initial seek.
+Every returning wrapper closes its temporary descriptor.
+
+**264 returning controls**, SHA-256
+`d55f7627c54b82fc41b7d0986561a18bd6458c5a56c48f5d58df1d6bb7a79e0b`,
+prove path failures precede generated-header/storage validation for zero-width
+PNG/TGA images. **224 exact panic/state pairs**, SHA-256
+`681998441896c2156e3191f21f6eba9a40b8f7c06e5f4b58916833286c207117`,
+cover four NUL placements through all six managed/unmanaged path operations,
+normal/zero widths and empty/eight-byte buffers. NUL rejection precedes length
+validation, opening/truncation and codec selection. Source classifies every case;
+failed exits, no stdout, the sole exact native message and equal nonempty
+initialized snapshots are required.
+
+The fixture's pre-opened keeper permits observation after mode-000 permission
+changes. Snapshots compare descriptor validity/count changes among isolated slots
+0–127, permissions, caller buffers, initialized image/pixels/active palette and
+retained file bytes. Observers snapshot before creating their state file, then
+restore permissions and remove owned paths. No case directories survive completed
+proofs. Source bodies/visibility, private streams/codecs, inactive storage,
+identities and allocator effects remain outside observed state.
+
+One consumer regression pins repeated failures before invalid PNG headers and
+pinned no-op GIF writes, plus rejected reads/detection and descriptor cleanup.
+Eighty exact compiled records / 160 calls match per mode. All 61 image and 58
+Vaxis test files pass, with focused ordinary/production tests and nineteen
+production/application/platform/unit/fixture checks. Historical public file writes
+retain 19,584 returning records, 768 controls and 384 exact panic/state pairs;
+FIFO paths retain 6,960 returning records, 384 controls and 192 exact panic/state
+pairs. All six historical hashes remain unchanged in both actual Source modes.
+Formatting, diff and Python checks pass.
+
+The initial fixture shadow/link rejections and V conditional-loop return-check
+rejection remain separately retained. Complex C fixture setup compiles in a native
+C translation unit, with declaration-only imports. Full Source/library/DEFLATE/
+math/SIMD/fs.Dir/libc/version and before/after implementation/fixture/runner/helper/
+input hashes protect comparisons. Ordinary observations supply fixed production
+hashes; only golden assignments change afterward. Persistent evidence is
+independently replayed and archived with every member read back.
+
+Signals/EINTR injection, unobserved errno branches, quotas/OOM/disk exhaustion,
+other permissions/ACLs/encodings/path lengths, races, exec/descriptor inheritance
+flags, custom streams, larger images, other CPU/vector selections, const/narrow/
+enum/boxed representations, physical layouts, big-endian/32-bit runtime and portable
+ABI remain boundaries. Native permission proofs require an unprivileged POSIX
+user; module tests skip those cases under a privileged user. Windows runtime/path
+error parity remains unclaimed, and cross builds establish compilation only.
+Scope and reproduction are in
+[the public image path-failure proof](zigimg/reference_probes/image_path/README.md).

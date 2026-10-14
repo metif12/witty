@@ -52,6 +52,36 @@ static intptr_t witty_image_file_write(int fd, uint64_t pos, const unsigned char
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
+#include <limits.h>
+static int witty_image_file_path_max(void) { return PATH_MAX; }
+static int witty_image_file_open_interrupted(int code) { return code == EINTR; }
+/* Names from pinned std.posix.openatZ; use the saved error code, not errno. */
+static const char *witty_image_file_open_error(int code) {
+    switch (code) {
+        case EFAULT: case EBADF: return "_Unreachable";
+        case EINVAL: return "BadPathName";
+        case EACCES: return "AccessDenied";
+        case EFBIG: case EOVERFLOW: return "FileTooBig";
+        case EISDIR: return "IsDir";
+        case ELOOP: return "SymLinkLoop";
+        case EMFILE: return "ProcessFdQuotaExceeded";
+        case ENAMETOOLONG: return "NameTooLong";
+        case ENFILE: return "SystemFdQuotaExceeded";
+        case ENODEV: case ENXIO: return "NoDevice";
+        case ENOENT: return "FileNotFound";
+        case ESRCH: return "ProcessNotFound";
+        case ENOMEM: return "SystemResources";
+        case ENOSPC: return "NoSpaceLeft";
+        case ENOTDIR: return "NotDir";
+        case EPERM: return "PermissionDenied";
+        case EEXIST: return "PathAlreadyExists";
+        case EBUSY: return "DeviceBusy";
+        case EOPNOTSUPP: return "FileLocksNotSupported";
+        case EAGAIN: return "WouldBlock";
+        case ETXTBSY: return "FileBusy";
+        default: return "Unexpected";
+    }
+}
 static int witty_image_file_size(int fd, uint64_t *size) {
     struct stat st;
     if (fstat(fd, &st) != 0) return errno == EBADF ? 4 : -1;

@@ -116,7 +116,7 @@ pub fn (image ImageUnmanaged) write_to_file(file os.File, mut write_buffer []u8,
 }
 
 pub fn (image ImageUnmanaged) write_to_file_path(path string, mut write_buffer []u8, options EncoderOptions) ! {
-	mut file := os.create(path)!
+	mut file := image_open_file(path, true)!
 	defer { file.close() }
 	image.write_to_file(file, mut write_buffer, options)!
 }

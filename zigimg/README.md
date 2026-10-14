@@ -1071,3 +1071,10 @@ repeated streaming transitions. Both modes match 6,960 returning records, 384
 returning controls and 192 exact panic/state pairs. Consumer regressions pin
 unconsumed read failures, PNG signatures and pinned no-op GIF writes; existing
 pipe hashes remain unchanged. These cases need no production changes.
+
+The [public image path-failure proof](reference_probes/image_path/README.md)
+preserves POSIX open error names and rejects embedded NULs before opening or
+truncating files, including production builds. Both modes match 12,160 returning
+records, 264 returning controls and 224 exact panic/state pairs. Consumer tests
+pin error precedence and unchanged buffers/files; historical regular-file and
+FIFO path hashes remain unchanged. Windows path-error behavior remains separate.

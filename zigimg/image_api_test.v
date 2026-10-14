@@ -3,6 +3,98 @@ module zigimg
 import os
 import encoding.hex
 
+#flag -I @VMODROOT/zigimg/reference_probes/image_path
+#include "fixture_shims.h"
+
+fn C.witty_image_path_setup(&char, int, &u8, usize) int
+fn C.witty_image_path_permissions() int
+fn C.witty_image_path_count() int
+fn C.witty_image_path_mode(int) int
+fn C.witty_image_path_bytes(int, &u8, usize) isize
+fn C.witty_image_path_cleanup(&char, int) int
+
+fn image_path_check_open_failure(kind int, writer_error string, reader_error string) ! {
+	root := os.join_path(os.temp_dir(), 'witty-zigimg-path-${os.getpid()}')
+	seed := hex.decode('6661726266656c64000000010000000100130038005dffff')!
+	keeper := C.witty_image_path_setup(root.str, kind, seed.data, usize(seed.len))
+	assert keeper >= 0
+	defer { assert C.witty_image_path_cleanup(root.str, keeper) == 0 }
+	count := C.witty_image_path_count()
+	path := match kind {
+		0 { root + '/missing/child' }
+		1 { root + '/seed/child' }
+		2 { root + '/dir' }
+		3 { root + '/seed' }
+		4 { root + '/denied/child' }
+		5 { root + '/loop' }
+		6 { root + '/dangling' }
+		7 { root + '/' + 'a'.repeat(256) }
+		8 { 'a'.repeat(1024) }
+		else { '' }
+	}
+
+	mut raw := []u8{len: 24}
+	for i in 0 .. raw.len {
+		raw[i] = u8(i * 37 + 19)
+	}
+	mut image := ImageUnmanaged.from_raw_pixels(4, 2, raw, .rgb24)!
+	image.width = 0
+	for managed in [false, true] {
+		mut buffer := []u8{len: 8, init: 165}
+		for _ in 0 .. 2 {
+			for options in [EncoderOptions(PngEncoderOptions{}), EncoderOptions(GifEncoderOptions{})] {
+				mut status := 'ok'
+				if managed {
+					image.to_managed().write_to_file_path(path, mut buffer, options) or {
+						status = err.msg()
+					}
+				} else {
+					image.write_to_file_path(path, mut buffer, options) or { status = err.msg() }
+				}
+				assert status == writer_error
+			}
+			mut status := 'ok'
+			if managed {
+				Image.detect_format_from_file_path(path, mut buffer) or { status = err.msg() }
+			} else {
+				ImageUnmanaged.detect_format_from_file_path(path, mut buffer) or {
+					status = err.msg()
+				}
+			}
+			assert status == reader_error
+			status = 'ok'
+			if managed {
+				Image.from_file_path(path, mut buffer) or { status = err.msg() }
+			} else {
+				ImageUnmanaged.from_file_path(path, mut buffer) or { status = err.msg() }
+			}
+			assert status == reader_error
+			assert buffer == []u8{len: 8, init: 165} && image.raw_bytes() == raw
+			assert C.witty_image_path_count() == count
+			assert C.witty_image_path_mode(keeper) == if kind == 3 {
+				0
+			} else {
+				384
+			}
+			mut disk := []u8{len: 32}
+			n := C.witty_image_path_bytes(keeper, disk.data, usize(disk.len))
+			assert n == seed.len && disk[..int(n)] == seed
+		}
+	}
+}
+
+fn test_public_image_path_errors_precede_codecs_and_preserve_owned_state() {
+	$if !windows {
+		for kind, name in ['FileNotFound', 'NotDir', 'IsDir', 'AccessDenied', 'AccessDenied',
+			'SymLinkLoop', 'FileNotFound', 'NameTooLong', 'NameTooLong', 'FileNotFound'] {
+			if (kind == 3 || kind == 4) && C.witty_image_path_permissions() != 1 {
+				continue
+			}
+			image_path_check_open_failure(kind, name, if kind == 2 { 'Unseekable' } else { name })!
+		}
+	}
+}
+
 fn test_image_file_detection_keeps_earlier_signature_eof_before_pam() {
 	path := os.join_path(os.temp_dir(), 'zigimg-image-api-detect-${os.getpid()}.bin')
 	defer { os.rm(path) or {} }
