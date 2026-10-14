@@ -276,3 +276,24 @@ fn test_file_reader_rebases_before_refilling_without_consuming_peeked_bytes() {
 	}
 	assert false
 }
+
+fn test_file_delimiter_eof_preserves_consumed_bytes_when_tail_has_room() {
+	path := os.join_path(os.temp_dir(), 'witty-delimiter-eof-${os.getpid()}.bin')
+	os.write_file(path, 'a\nb')!
+	defer { os.rm(path) or {} }
+	mut file := os.open(path)!
+	defer { file.close() }
+	file.seek(3, .start)!
+	mut buffer := []u8{len: 8, init: 165}
+	mut stream := ReadStream.init_file(file, mut buffer)
+	assert stream.take_delimiter_inclusive(`\n`)!.bytestr() == 'a\n'
+	for _ in 0 .. 2 {
+		stream.take_delimiter_inclusive(`\n`) or {
+			assert err.msg() == 'EndOfStream'
+			assert stream.get_pos() == 2 && stream.buffered_len() == 1
+			assert buffer == [u8(`a`), `\n`, `b`, 165, 165, 165, 165, 165]
+			continue
+		}
+		assert false
+	}
+}

@@ -1,5 +1,7 @@
 module zigimg
 
+import os
+
 fn test_xbm_continuous_lsb_first_bits_palette_and_extra_data() {
 	mut reader := ReadStream.init_memory(('#define name_width 4\n#define name_height 4\n' +
 		'static unsigned char bits[] = {\n0x0F, 0x0F, 0xF0, 0xF0\n};\n').bytes())
@@ -123,5 +125,50 @@ fn test_xbm_detection_non_define_and_delimiter_peeks_do_not_advance() {
 	reader.take_delimiter_inclusive(`\n`) or {
 		assert err.msg() == 'EndOfStream'
 		assert reader.get_pos() == 4
+	}
+}
+
+fn test_xbm_file_errors_preserve_native_buffer_and_assignment_boundaries() {
+	for index, text in ['#define w 8\n#define h',
+		'#define w 8\n#define h 1\n{0xff}\n' + ' '.repeat(25) + '\n'] {
+		path := os.join_path(os.temp_dir(), 'witty-xbm-state-${os.getpid()}-${index}.bin')
+		os.write_file(path, text)!
+		defer { os.rm(path) or {} }
+		mut file := os.open(path)!
+		defer { file.close() }
+		file.seek(i64(text.len), .start)!
+		mut buffer := []u8{len: 24, init: 165}
+		mut reader := ReadStream.init_file(file, mut buffer)
+		mut codec := XBM{
+			width:     97
+			height:    89
+			hotspot_x: 77
+			hotspot_y: 66
+		}
+		codec.read(mut reader) or {
+			if index == 0 {
+				assert err.msg() == 'EndOfStream'
+				assert reader.get_pos() == 12 && reader.buffered_len() == 9
+				assert buffer[..text.len] == text.bytes()
+				assert buffer[text.len..] == [u8(165), 165, 165]
+				assert codec == XBM{
+					width:     97
+					height:    89
+					hotspot_x: 77
+					hotspot_y: 66
+				}
+			} else {
+				assert err.msg() == 'StreamTooLong'
+				assert reader.get_pos() == 31 && reader.buffered_len() == 24
+				assert buffer == ' '.repeat(24).bytes()
+				assert codec == XBM{
+					width:  8
+					height: 1
+				}
+			}
+			assert os.read_file(path)! == text
+			continue
+		}
+		assert false
 	}
 }

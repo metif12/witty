@@ -60,3 +60,8 @@ do not certify runtime behavior on those platforms.
 The later [stream guard proof](../stream_guards/README.md) aligns shared capacity/
 toss and addition diagnostics with exact Source messages. Existing output/state
 hashes remain unchanged; wider failed cursor representation limits remain.
+
+The later [XBM stream proof](../xbm_streams/README.md) corrects delimiter refills
+that unnecessarily moved retained bytes despite available tail capacity. It
+compares complete caller buffers and repeated failures; these historical stream
+hashes remain unchanged.

@@ -60,8 +60,12 @@ CR is not a hex delimiter, large words retain only their low two bytes, bits spa
 row boundaries, extra tokens are accepted and unterminated final lines remain
 unconsumed. The no-op writer remains unchanged. Generic interface/ignored writer
 options, readonly/narrow typing, native layout, allocation/OOM/GC, wider extents,
-file streams, big-endian/32-bit runtime and portable ABI remain boundaries. Cross
+custom file streams, big-endian/32-bit runtime and portable ABI remain boundaries. Cross
 compilation establishes build coverage only.
+
+The later [positional stream proof](../xbm_streams/README.md) compares buffered
+file reads, generic interfaces, no-op writers and primed detector-loop state.
+It corrects an unnecessary shared delimiter rebase while retaining this hash.
 
 Full Source-tree SHA-256 is
 `ca759a44a902143a60f42f0810dc90df7250c0f92804cf201353f0141650eb6b`; selected

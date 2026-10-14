@@ -5959,3 +5959,57 @@ runner, helper and input hashes protect retained evidence. Proof/build artifacts
 and temporaries use a task-owned RAM disk; a verified archive is preserved before
 detaching it. Reproduction and exact scope are in
 [the QOI/Farbfeld stream proof](zigimg/reference_probes/binary_codecs/README.md).
+
+### XBM positional delimiter buffers and no-op writer checkpoint — 2026-10-14
+
+Compiled unchanged pinned XBM and its shared std.Io.Reader/File.Reader paths.
+The new file-stream comparison found 1,884 returning records with different
+caller buffer contents: V rebased retained delimiter bytes before every refill,
+even when the unconsumed tail had room for another byte. Source `fillMore`
+requests one extra byte and rebases only when required; `readVec` resets an
+entirely consumed buffer. The translated shared delimiter helper now preserves
+those boundaries, without changing XBM parsing or the pinned empty writer.
+
+For `#define w 8\n#define h` in a 24-byte file buffer, both return `EndOfStream`
+at position 12 with nine bytes buffered and the original codec fields. Source
+keeps the first consumed line in place; the old translation overwrote its start
+with the unfinished second line. A separate long pixel-data line fails with
+`StreamTooLong` after the parsed width/height/hotspots have been assigned.
+Consumer regressions retain both buffer and assignment boundaries, plus repeated
+shared delimiter EOF errors while the descriptor begins independently at EOF.
+
+Both Debug/ordinary and ReleaseSafe/production match **87,419 returning/error
+records / 181,446 calls**, SHA-256
+`2387acb029df067d85d6dc60f14d55aa2fee2599887769738298879ba0d34b64`.
+Direct codec, static readImage and generic interfaces cover memory and file
+buffers 0, 1, 7, 11, 12, 13, 16, 24, 32, 64 and 128, every decoded byte,
+varied dimensions, all prefixes of retained examples, initial discard, repeated
+reads, malformed defines and first/pixel/trailing line lengths 0..131.
+
+Snapshots compare logical position, buffered length, every initialized caller
+buffer byte, unchanged input/disk, public direct codec fields, complete pixels
+and both palette entries before/after mutation. Private failed/freed storage,
+default readImage codec fields, pointer identities and inactive allocations are
+excluded. No Source visibility/body changes are made.
+
+Static/interface writers remain no-ops across pending caller bytes, positional
+offsets, repeated calls, native-usize dimensions and ignored BMP/QOI options.
+The fixture's explicit flush writes only setup bytes. **24 paired detector
+loops** are stopped after half a second with equal primed ready snapshots,
+SHA-256 `05322ee600feeba73130d3cfaaef0f8068a620379fd91bd191b86fbae0f3618d`.
+They preserve the inherited nonadvancing peek; the counter-overflow boundary
+four billion iterations later is not observed.
+
+All 61 image and 58 Vaxis test files pass. Production XBM/file-stream tests,
+native/Linux application checks, three Windows libraries, Windows XBM/file tests
+and fixtures in both modes, Linux libraries/fixture, formatting, diff and Python
+checks pass. Historical XBM and full/original/streaming hashes remain unchanged
+in both modes. Final evidence pins complete Source, selected stdlib and fmt.zig,
+compiler versions, implementation, fixtures, runner, helpers and generated inputs.
+
+Custom/nonseekable streams, operating-system I/O failures, allocator/OOM/GC,
+larger allocations, const/narrow/boxed representation, physical layouts,
+big-endian/32-bit runtime and portable ABI remain boundaries. Cross builds
+establish compilation coverage only. Task-owned RAM artifacts are fully archived
+and read back on the persistent filesystem before detaching. Reproduction and
+exact scope are in [the XBM stream proof](zigimg/reference_probes/xbm_streams/README.md).

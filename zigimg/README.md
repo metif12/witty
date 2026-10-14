@@ -986,3 +986,9 @@ preserves exact pixel-range, packed-byte and word-index diagnostics, including
 conversion before output and retained earlier rows. Both modes match 12,076
 returning records and 967 panic/state pairs. Historical filtering hashes and
 Source's packed clipping/shorter word destinations remain unchanged.
+
+The [XBM stream proof](reference_probes/xbm_streams/README.md) preserves caller
+buffers when a delimiter refill has room at the tail. Both modes match 87,419
+returning records / 181,446 calls, with 24 bounded detector-loop pairs. Buffered
+file reads, retries, generic interfaces and pinned no-op writers are covered;
+historical XBM and stream hashes remain unchanged.
