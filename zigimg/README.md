@@ -1063,3 +1063,11 @@ invalid descriptor size queries retain Source's BADF unreachable panic in
 production. Both modes match 7,344 returning records, 384 returning controls and
 600 exact panic/state pairs, including repeated streaming transitions and
 unconsumed input after rejected reader seeks.
+
+The [public image FIFO path proof](reference_probes/image_fifo/README.md) compares
+managed/unmanaged encoding, reading and detection through actual named POSIX FIFO
+paths, including fresh opens, descriptor cleanup, preserved queued prefixes and
+repeated streaming transitions. Both modes match 6,960 returning records, 384
+returning controls and 192 exact panic/state pairs. Consumer regressions pin
+unconsumed read failures, PNG signatures and pinned no-op GIF writes; existing
+pipe hashes remain unchanged. These cases need no production changes.

@@ -19,6 +19,126 @@ fn C.witty_image_pipe_valid(int) int
 fn C.witty_image_pipe_write(int, &u8, usize) isize
 fn C.witty_image_pipe_read(int, &u8, usize) isize
 
+#include "reference_probes/image_fifo/fixture_shims.h"
+
+fn C.witty_image_fifo_open(&char) int
+fn C.witty_image_fifo_close(int) int
+fn C.witty_image_fifo_remove(&char) int
+fn C.witty_image_fifo_kind(&char) int
+fn C.witty_image_fifo_refs(int) int
+fn C.witty_image_fifo_write(int, &u8, usize) isize
+fn C.witty_image_fifo_read(int, &u8, usize) isize
+
+fn image_fifo_check_public_reader(managed bool, decode bool) ! {
+	path := os.join_path(os.temp_dir(), 'witty-zigimg-fifo-reader-${os.getpid()}')
+	keeper := C.witty_image_fifo_open(path.str)
+	assert keeper >= 0
+	defer {
+		C.witty_image_fifo_close(keeper)
+		C.witty_image_fifo_remove(path.str)
+	}
+	data := hex.decode('6661726266656c64000000010000000100130038005dffff')!
+	assert C.witty_image_fifo_write(keeper, data.data, usize(data.len)) == data.len
+	mut buffer := []u8{len: 8, init: 165}
+	for attempt in 0 .. 2 {
+		mut status := 'ok'
+		if decode {
+			if managed {
+				Image.from_file_path(path, mut buffer) or { status = err.msg() }
+			} else {
+				ImageUnmanaged.from_file_path(path, mut buffer) or { status = err.msg() }
+			}
+		} else {
+			if managed {
+				Image.detect_format_from_file_path(path, mut buffer) or { status = err.msg() }
+			} else {
+				ImageUnmanaged.detect_format_from_file_path(path, mut buffer) or {
+					status = err.msg()
+				}
+			}
+		}
+		assert status == 'Unseekable' && buffer == []u8{len: 8, init: 165}
+		assert C.witty_image_fifo_kind(path.str) == 1 && C.witty_image_fifo_refs(keeper) == 1
+		mut remaining := []u8{len: 32}
+		n := C.witty_image_fifo_read(keeper, remaining.data, usize(remaining.len))
+		if attempt == 0 {
+			assert n == data.len && remaining[..int(n)] == data
+		} else {
+			assert n == -1
+		}
+	}
+}
+
+fn test_public_image_fifo_read_paths_close_owned_descriptors_without_consuming_input() {
+	$if !windows {
+		for managed in [false, true] {
+			for decode in [false, true] {
+				image_fifo_check_public_reader(managed, decode)!
+			}
+		}
+	}
+}
+
+fn image_fifo_check_public_writer(managed bool, noop bool) ! {
+	path := os.join_path(os.temp_dir(), 'witty-zigimg-fifo-writer-${os.getpid()}')
+	keeper := C.witty_image_fifo_open(path.str)
+	assert keeper >= 0
+	defer {
+		C.witty_image_fifo_close(keeper)
+		C.witty_image_fifo_remove(path.str)
+	}
+	prefix := 'xyz'.bytes()
+	assert C.witty_image_fifo_write(keeper, prefix.data, usize(prefix.len)) == prefix.len
+	mut raw := []u8{len: 24}
+	for i in 0 .. raw.len {
+		raw[i] = u8(i * 37 + 19)
+	}
+	image := ImageUnmanaged.from_raw_pixels(4, 2, raw, .rgb24)!
+	options := if noop {
+		EncoderOptions(GifEncoderOptions{})
+	} else {
+		EncoderOptions(PngEncoderOptions{})
+	}
+	mut buffer := []u8{len: 8, init: 165}
+	for attempt in 0 .. 2 {
+		if managed {
+			image.to_managed().write_to_file_path(path, mut buffer, options)!
+		} else {
+			image.write_to_file_path(path, mut buffer, options)!
+		}
+		assert C.witty_image_fifo_kind(path.str) == 1 && C.witty_image_fifo_refs(keeper) == 1
+		assert image.raw_bytes() == raw
+		mut wire := []u8{len: 32}
+		n := C.witty_image_fifo_read(keeper, wire.data, usize(wire.len))
+		if noop {
+			assert buffer == []u8{len: 8, init: 165}
+			if attempt == 0 {
+				assert n == 3 && wire[..int(n)] == prefix
+			} else {
+				assert n == -1
+			}
+		} else {
+			assert buffer == png_magic_header[..]
+			if attempt == 0 {
+				assert n == 11 && wire[..3] == prefix && wire[3..11] == png_magic_header[..]
+			} else {
+				assert n == 8 && wire[..8] == png_magic_header[..]
+			}
+		}
+		assert C.witty_image_fifo_read(keeper, wire.data, usize(wire.len)) == -1
+	}
+}
+
+fn test_public_image_fifo_write_paths_preserve_prefix_and_retry_each_open() {
+	$if !windows {
+		for managed in [false, true] {
+			for noop in [false, true] {
+				image_fifo_check_public_writer(managed, noop)!
+			}
+		}
+	}
+}
+
 fn image_pipe_check_public_reader(managed bool, decode bool) ! {
 	mut fds := [2]int{}
 	assert C.witty_image_pipe_open(&fds[0]) == 0

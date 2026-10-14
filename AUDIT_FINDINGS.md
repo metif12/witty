@@ -6656,3 +6656,62 @@ images, other CPU/vector selections, const/narrow/enum/boxed representations,
 physical layouts, big-endian/32-bit runtime and portable ABI remain boundaries.
 Cross builds establish compilation only. Scope and reproduction are in
 [the public image pipe proof](zigimg/reference_probes/image_pipe/README.md).
+
+### Public image FIFO paths and owned-descriptor cleanup — 2026-10-14
+
+Compiled unchanged pinned public managed/unmanaged image path APIs on actual named
+POSIX FIFOs. Both Debug/ordinary and ReleaseSafe/production match **6,960 returning
+records / 13,920 public calls**, SHA-256
+`2ce3c5e6de4d0a2a90d245b03f6ba970531f6a2b51172c9c359f3c675f24d722`.
+No production change was needed. The 6,528 encoder cases cover all seventeen arms,
+eight initialized storage profiles, three options, eight capacities zero through
+1024 and both APIs. Calls repeat twice with a fresh path open/private writer and
+the same caller buffer. Existing FIFO creation does not discard the queued caller
+prefix; actual cumulative output, streaming retries, errors and retained buffers
+match. Pinned no-op writers retain only that prefix, and PNG flushes its signature.
+
+Another 432 reader/detection cases cover all seventeen samples and empty input,
+both operations, six capacities and both managed states. Initial seek failure
+precedes detection, buffer-capacity checks and consumption. External reads verify
+unread input and untouched buffers, including the second call after observation
+has drained the FIFO. XBM's inherited detector loop is not entered.
+
+**384 returning controls**, SHA-256
+`95348a62e060bd57f7b8af123ffecda2c1a14eeaad82fe85ab16cd30f14f3f34`,
+and **192 exact panic/state pairs**, SHA-256
+`4f311214683495c1ae413d51e585051cb7c3cd773bd1bff1593b8c48238f82ce`,
+cover zero extents and short stored pixels for PNG/TGA. Source classifies every
+control: ninety-six invalid PNG headers and ninety-six short TGA pixel/row cases
+panic, with prior output and retained initialized state equal. Failed exits, no
+stdout, the sole exact native diagnostic and equal nonempty snapshots are required.
+
+The fixture's O_RDWR/O_NONBLOCK keeper lets real public blocking opens finish.
+Small public writes remain blocking. Snapshots compare FIFO kind, keeper validity,
+inode-reference counts among isolated descriptors 0–127, all caller bytes,
+initialized image/pixels/active palette and normalized cumulative FIFO output.
+Success and returned errors leave only the keeper; panic observers see the keeper
+and still-open public descriptor before process exit. Observer state is captured
+before opening its output file, then owned FIFOs are unlinked. No FIFO names remain
+at completion. Private streams/codecs, inactive storage, identities and allocator
+effects remain unobserved. Source bodies and visibility stay unchanged.
+
+Two consumer regressions pin rejected reads/detection without consumption, owned
+file cleanup, repeated PNG signatures and the pinned no-op GIF writer retaining
+queued bytes. Eight exact compiled records / sixteen calls match per mode.
+All 61 image and 58 Vaxis test files pass with nineteen production/application/
+platform/unit/fixture checks. The previous public pipe proof retains all 7,344
+returning records, 384 returning controls and 600 exact panic/state pairs with
+unchanged hashes in both actual Source optimization modes. Formatting, diff and
+Python checks pass.
+
+Full Source/library/DEFLATE/math/SIMD/version and before/after implementation/
+fixture/runner/helper/input hashes protect final comparisons. Ordinary observations
+supply fixed native goldens for production and reproduction; only those assignments
+change afterward. Persistent evidence is independently replayed and archived with
+every member read back. Full-pipe backpressure, opens without a keeper, nonblocking
+public writers, reader closure/SIGPIPE, path races/symlinks/permissions/missing files
+and other OS failures, allocation/OOM/GC/lifetime, larger images, custom streams,
+other CPU/vector selections, const/narrow/enum/boxed representations, physical
+layouts, big-endian/32-bit runtime and portable ABI remain boundaries. Cross builds
+establish compilation only. Scope and reproduction are in
+[the public image FIFO proof](zigimg/reference_probes/image_fifo/README.md).
