@@ -1193,3 +1193,11 @@ before checking input or output. The [delimiter streaming comparison](reference_
 covers 49,500 returning records / 247,500 primary calls per mode, 84 returning
 controls and 120 exact panic/state pairs. Memory, files, nonblocking pipes and
 partial failures match pinned Zig; prior delimiter and stream hashes are unchanged.
+
+The reader adapter now exposes `buffered`, `toss_buffered`, `fill`, `peek_greedy`,
+`peek_byte` and `take_byte_signed`. Pending-byte access and zero-count operations
+avoid reading, greedy peeks return all read-ahead, and signed takes preserve the
+byte's bit pattern. The [buffered reader comparison](reference_probes/reader_buffered/README.md)
+covers 14,784 returning records / 59,136 calls per mode, 412 mutable borrow records,
+472 returning controls and 216 exact panic/state pairs. Historical delimiter and
+stream matrices retain their hashes.

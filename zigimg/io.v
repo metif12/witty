@@ -62,6 +62,15 @@ pub fn (stream ReadStream) buffered_len() int {
 	return stream.end - stream.position
 }
 
+// Borrow the pending span without filling or advancing the reader.
+pub fn (stream ReadStream) buffered() []u8 {
+	return unsafe { stream.buffer[stream.position..stream.end] }
+}
+
+pub fn (mut stream ReadStream) toss_buffered() {
+	stream.position = stream.end
+}
+
 // The adapter borrows the live buffer and position, as io.ReadStream.reader
 // does. Keep the owning stream alive while using this pointer.
 pub fn (mut stream ReadStream) reader() &ReadStream {
@@ -279,6 +288,24 @@ pub fn (mut stream ReadStream) peek(count int) ![]u8 {
 		}
 	}
 	return unsafe { stream.buffer[stream.position..stream.position + count] }
+}
+
+pub fn (mut stream ReadStream) fill(count int) ! {
+	stream.peek(count)!
+}
+
+// Ensure the minimum, then borrow the whole pending span, including read-ahead.
+pub fn (mut stream ReadStream) peek_greedy(count int) ![]u8 {
+	stream.fill(count)!
+	return stream.buffered()
+}
+
+pub fn (mut stream ReadStream) peek_byte() !u8 {
+	return stream.peek(1)![0]
+}
+
+pub fn (mut stream ReadStream) take_byte_signed() !i8 {
+	return i8(stream.take_byte()!)
 }
 
 pub fn (mut stream ReadStream) take(count int) ![]u8 {

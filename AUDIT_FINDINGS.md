@@ -7888,3 +7888,96 @@ OOM/quotas, allocator lifetime, portable ABI, V representation limits, Windows
 runtime, other CPU selections and big-endian/32-bit runtime remain boundaries.
 Cross builds establish compilation only. Reproduction and precise scope are in
 [the delimiter streaming proof](zigimg/reference_probes/delimiter_stream/README.md).
+
+### Buffered reader access, greedy fills and signed bytes — 2026-10-14
+
+The reader adapter now translates buffered, tossBuffered, fill, peekGreedy,
+peekByte and takeByteSigned with corresponding snake-case methods. Buffered
+access borrows pending bytes without reading or consuming; tossBuffered consumes
+only that span. Fill ensures a minimum without consuming, and greedy peeks return
+the whole pending span after ensuring the minimum. Zero-count fills perform no
+read; zero-count greedy peeks return existing pending bytes, even after sticky
+ReadFailed. Byte peeks retain the cursor, while signed takes consume one byte and
+reinterpret all its bits as i8. Borrowed spans share caller storage and remain
+readable after toss until a later fill/peek invalidates them. Mutable V consumers
+use an explicit unsafe alias binding. Count arguments retain the existing int
+carrier from peek. All previously existing bodies and syscall adapters are unchanged.
+
+Debug/ordinary and ReleaseSafe/production match **14,784 returning records /
+59,136 primary calls** per mode. Three new-method calls and one relative seek
+run per record; setup calls are separate. Groups contain 9,984 basic, 1,536
+all-byte, 2,688 replacement, 288 failed-pending and 288 failed-consumed profiles.
+Constructors cover memory, positional files and streaming-initialized regular
+files, with file capacities 0/1/2/8/32. Memory uses the whole input and one
+capacity marker. Arithmetic payload lengths 0/1/7/8/9/31/32/33/64, distinct
+zero/one/half/end offsets, relative offsets -1/0/1 and distinct zero/one/
+capacity-minus-one/capacity counts compare read-ahead, compaction, pending spans,
+EOF tails, byte values and retries. Every unsigned/signed byte runs in each
+constructor. Controlled replacements preserve original-file read-ahead before
+switching owned descriptors to open/closed pipes; failed profiles retain or toss
+pending spans before retrying. Complete initialized buffers, copied successful
+results, pending bytes, positions, size/errors, normalized ownership and queued
+input match. Output SHA-256:
+`4104b891822a2dd76c7e96e63cf204477b1e86dfa815804b2d3625b50e75d4a3`.
+
+**412 borrow records / 824 primary calls** exercise buffered and peekGreedy
+through all three constructors. Every caller-buffer byte is mutated, followed by
+a mutation of the first aliased byte and a pending-span toss. Complete storage
+and live views match, saved copies retain their previous contents and old aliases
+remain readable after toss without another fill. SHA-256:
+`42309fdc2de38f70adaeda3a8abdce6ff28417248c9e73394f152df3b3162825`.
+The first borrow corpus requested a positive fill beyond the remaining payload
+after a positional seek. Source returned EndOfStream; that development input,
+frozen runner and diagnostic remain separate. Final borrowing inputs enforce
+actual remaining length. A subsequent frozen development pass and final discovery
+agree; only expected-value assignments change after final discovery.
+
+The **688 distinct control inputs** separate **472 returning records**, SHA-256
+`60f1c53c3b84c15493d1e5bff2f4766ec64b31e764abb63c5e9cb3739bfd3a2c`,
+from **216 exact panic/state pairs**, SHA-256
+`9205d55daef26b3c2d42fc037d408d97b5fa80185bedfc73f6ffdd35b4205164`.
+Sixteen positive zero-capacity scans/byte reads, sixteen oversize empty-buffer
+fills and sixteen oversize pending-buffer fills panic with exactly reached
+unreachable code. Pending oversize fills compact before the panic; independent
+replay verifies the expected retained whole backing buffer and pending prefix.
+Another 168 profiles panic with exactly integer overflow in the public getPos
+observation after failed prefill, before the requested new operation is invoked.
+Both exits fail with empty stdout, one exact message and identical initialized
+state. Observers omit getPos, handle size errors and capture preceding/calling
+status, buffers, copied results, descriptor validity and owned keeper references
+before opening observation files.
+
+Twenty-one additional compiled consumer records / 84 primary calls per mode
+assert concrete memory/file spans, no-read access, greedy read-ahead, retained
+short EOF tails, byte counts and sticky failure behavior before/after consuming
+pending data. Output SHA-256:
+`2304295f159b0778cf57095c1553c9abe989cb5fa65f68c34e4b384e7ab20c7b`.
+Four public unit regressions cover these contracts and all signed bit patterns.
+All **69 image and 58 Vaxis test files** pass, along with **43 production/
+application/platform/unit/fixture checks**. Historical delimiter streaming,
+discard, nullable/exclusive/inclusive delimiter and full stream hashes remain
+unchanged in both modes.
+
+The probe wrapper reuses separately copied/hashed exclusive-payload and reader
+replacement fixture headers. C initializes unlinked O_EXCL/CLOEXEC files, resets
+owned descriptor offsets before construction and operates only on owned
+nonblocking pipes. No Source body, visibility or reader syscall is modified or
+intercepted. Full Source, selected compiler libraries/versions, implementation,
+probes, shared headers, directly imported helpers and inputs are checked before/
+after comparison. Lossless parent-side log compression retains raw-byte and
+compressed-file hashes. Independent replay checks ordinary/production outputs,
+alias mutations, native classifications, exact failure states, ownership,
+consumer expectations, actual modes and provenance. Fully verified old expanded
+checkpoint evidence and completed disposable caches were reclaimed; original
+archives remain intact. Every member of the new persistent archive is read back
+before committing.
+
+Other reader APIs including fillMore, arbitrary custom read callbacks, overlapping
+storage, arbitrary constructor/copy sequences, other devices, larger counts/
+buffers/offsets, concurrent reuse, syscall counts, timing/signals, injected errors,
+OOM/quotas, allocator lifetime, portable ABI, V representation limits, Windows
+runtime, other CPU selections and big-endian/32-bit runtime remain boundaries.
+Negative counts and usize values beyond V's int carrier remain separate from the
+Source unsigned count domain. Cross builds establish compilation only.
+Reproduction and scope are in
+[the buffered reader proof](zigimg/reference_probes/reader_buffered/README.md).
