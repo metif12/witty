@@ -638,6 +638,39 @@ pub fn (mut stream ReadStream) read_slice_all(mut destination []u8) ! {
 	if count < usize(destination.len) { return error('EndOfStream') }
 }
 
+// Read the whole integer slice before converting byte order. A failed read
+// leaves its copied prefix in the caller's native storage without swapping.
+pub fn (mut stream ReadStream) read_slice_endian[T, E](mut destination []T, endian E) ! {
+	$if T.unaliased_typ is $int {
+		$if E.unaliased_typ is BigEndian || E.unaliased_typ is LittleEndian {
+			if destination.len > 0x7fffffff / int(sizeof(T)) {
+				panic('Reader byte span exceeds V array length')
+			}
+			mut bytes := unsafe { destination.data.vbytes(destination.len * int(sizeof(T))) }
+			stream.read_slice_all(mut bytes)!
+			mut swap := false
+			$if E.unaliased_typ is BigEndian {
+				$if little_endian { swap = true }
+			} $else {
+				$if big_endian { swap = true }
+			}
+			if swap {
+				width := int(sizeof(T))
+				for i in 0 .. destination.len {
+					for j in 0 .. width / 2 {
+						a, b := i * width + j, (i + 1) * width - 1 - j
+						bytes[a], bytes[b] = bytes[b], bytes[a]
+					}
+				}
+			}
+		} $else {
+			$compile_error('read_slice_endian requires BigEndian or LittleEndian')
+		}
+	} $else {
+		$compile_error('read_slice_endian requires a native integer type')
+	}
+}
+
 fn (mut stream ReadStream) flate_fill_word() ! {
 	stream.peek(int(sizeof(usize)))!
 }

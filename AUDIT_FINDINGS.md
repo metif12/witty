@@ -8311,3 +8311,98 @@ syscall counts can differ from Source's vector trash reader. Windows/Linux and
 other CPU, big-endian and 32-bit runtime remain outside the native proof. Cross
 builds establish compilation only. Reproduction and scope are in
 [the short/remaining/64-bit discard proof](zigimg/reference_probes/reader_discard_short/README.md).
+
+### Endian integer slice reads — 2026-10-15
+
+`ReadStream.read_slice_endian` translates pinned Reader.readSliceEndian for
+native integers and aliases. It reads into the caller's typed storage and
+converts byte order only after the entire read succeeds. EOF and ReadFailed
+retain consumed progress and the copied raw destination prefix without swapping.
+Zero-length slices succeed without IO. Signed bits, BigEndian/LittleEndian
+markers and marker aliases are preserved. A byte view borrows the destination;
+all previous V reader bodies and C adapters remain unchanged.
+
+Debug/ordinary and ReleaseSafe/production each match **50,088 returning records /
+150,264 slice reads / 350,616 primary calls**, SHA-256
+`0da1d967c4527eeb5e937d9a146fb8afd8e7e68450540c473cf80436f35cb59c`.
+Three reads, three caller consumptions and one relative seek run per record;
+setup/priming/observations are separate. Groups contain 26,880 basic, 6,144
+every-byte, 15,552 prefilled and 1,512 caller-consumption profiles, with duplicate
+inputs retained once. Twenty native/alias carriers, both orders and marker
+aliases cover memory, positional and streaming files. Lengths 0/1/7/8/9/17,
+capacities 0/1/8/32, zero/one/three-element slices, distinct starts, relative
+seek and destination offsets 0/1/2 cover empty, complete and partial reads.
+Every byte runs through u8/i8/u16/i16 in both orders and all reader kinds.
+Prefills retain pending input across owned pipe replacement and failed
+reconciliation, with priming/toss, seed and open/closed-writer choices.
+
+The same initialized typed destination is reused for all three reads. Two extra
+elements guard the selected slice; every byte begins with a distinct pattern.
+Complete destination/reader storage, pending spans, positions, size/errors,
+ownership and untouched wire bytes match. An independent nonreplacement model
+checks counts, progress, complete conversion and unswapped failed prefixes,
+tracking physical streaming progress separately from logical/buffered rewind.
+Guard preservation and zero-count behavior are checked on replacement records too.
+
+The **1,344 controls** separate **672 returning records**, SHA-256
+`9c90e60d49724bff739101761fa79a06250c8d84422df53fb94dbe5764eee3c6`,
+from **672 exact integer-overflow panic/state pairs**, SHA-256
+`49f3e328eb978aba67ee9db6d12d44f2a233339b19f818cf4be2b493dac91942`.
+Failures occur in public getPos after priming, before the requested slice read.
+Both exits fail with empty stdout, one exact message and matching initialized
+state. Observers omit getPos and capture preceding status, size/errors, reader
+and destination storage, pending spans and owned references before opening
+state files. Source FullPanic and V at_exit clean up only owned resources.
+
+Twenty-one compiled consumer records / 63 reads / 147 primary calls per mode
+assert all three results for signed/high-bit values, aliases, partial elements,
+zero-count EOF/no-read behavior, read-ahead, zero-capacity readers, larger
+destinations, rewind, guard offsets, pipe EOF/ReadFailed and an unswapped failure
+tail after buffered success. SHA-256:
+`ddbcf558a7a5491a150cb8b9fdc450579610fa036290df5a023cf4f853a9ec7e`.
+Six paired compile rejections per mode check floats/aliases, booleans, strings
+and invalid integer endian arguments/aliases. Three public regressions accompany
+the proof. All **74 image and 58 Vaxis test files**, plus **58 production/
+application/platform/unit/fixture checks**, pass. Historical integer, buffered
+and full-stream hashes remain unchanged in both modes.
+
+An initial Vaxis run passed 57 files and segfaulted in the layout fixture
+using temporary widget receivers and inline fallible assertions. An isolated
+debug build passed. The fixture now uses named widgets and results; production
+layout code is unchanged. The full rerun reached its 600-second limit after 45 files passed without
+failures. The remaining 13 files were verified in a separate batch; all 58 files
+are covered, while the single full invocation did not complete. Eight additional
+isolated repetitions pass in each mode. Initial diagnostics are retained separately.
+
+Consumer development diagnostics retain an unprimed read-ahead expectation and
+an incorrectly transcribed sticky pending byte pair. Native and translated
+outputs agreed; the final cases explicitly prime read-ahead and assert the
+correct bytes. V fmt required a second pass to expand the fixture match
+branches; both comparisons and consumers were rerun against the final formatted
+fixture. Original scripts, inputs, outputs and diagnostics remain separate from
+passing gates. Production/probe/runner/helper bodies remain frozen during
+final comparisons; only expected assignments change after ordinary discovery.
+
+Full unchanged Source, versions/selected libraries, implementation, probes,
+shared fixtures, directly imported helpers and inputs are pinned before/after
+comparison. Source bodies, visibility and reader syscalls remain untouched.
+Fixtures use initialized unlinked owned files, reset offsets and nonblocking
+owned pipes/keepers. Independent replay checks bytes/progress, classifications,
+exact retained failures, consumers, ownership, binaries, modes and provenance.
+Lossless parent-side compression pins raw/compressed logs. Retained evidence is
+persisted from a task-owned RAM workspace and every archive member is read back
+before committing and releasing the volume.
+
+The V API supports native integer elements. Source's recursive aggregate-field
+swapping, arbitrary-width integers and allocator-based slice reads remain
+outside this mapping; other types' Source support can depend on selected endian.
+Byte spans above maximum V int trap before constructing the borrowed byte view
+with Reader byte span exceeds V array length; Source can represent larger spans.
+This representation boundary is not reached by the finite fixtures. Custom
+callbacks, input/output overlap, arbitrary constructor/copy sequences, other
+devices, larger slices/offsets, concurrent reuse, syscall counts, timing/signals,
+injected errors, OOM/quotas, allocator lifetime, portable ABI and remaining V
+representation limits are boundaries. Native runtime uses little-endian 64-bit
+carriers. Windows/Linux and other CPU, big-endian and 32-bit runtime are outside
+this proof; cross builds establish compilation only. Reproduction and scope are
+in [the endian slice proof](zigimg/reference_probes/reader_slice_endian/README.md).

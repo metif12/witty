@@ -217,17 +217,20 @@ fn test_layout_padding_and_empty_flex_keep_source_constraint_quirks() {
 			height: 1
 		}
 	}
-	unbounded := Padding{
+	unbounded_padding := Padding{
 		child: child.widget()
-	}.draw(DrawContext{ min: Size{}, max: MaxSize{}, cell_size: Size{} })!
+	}
+	unbounded :=
+		unbounded_padding.draw(DrawContext{ min: Size{}, max: MaxSize{}, cell_size: Size{} })!
 	assert unbounded.size == child.size
-	padded := Padding{
+	bounded_padding := Padding{
 		child:   child.widget()
 		padding: PadValues{
 			left:  3
 			right: 4
 		}
-	}.draw(layout_fidelity_context(2, 2))!
+	}
+	padded := bounded_padding.draw(layout_fidelity_context(2, 2))!
 	assert spy.widths == [?u16(none), 0]
 	assert padded.size.width == 9
 	ctx := DrawContext{
@@ -241,10 +244,14 @@ fn test_layout_padding_and_empty_flex_keep_source_constraint_quirks() {
 		}
 		cell_size: Size{}
 	}
-	assert FlexRow{
+	row := FlexRow{
 		children: []
-	}.draw(ctx)!.size == ctx.min
-	assert FlexColumn{
+	}
+	column := FlexColumn{
 		children: []
-	}.draw(ctx)!.size == ctx.min
+	}
+	row_surface := row.draw(ctx)!
+	column_surface := column.draw(ctx)!
+	assert row_surface.size == ctx.min
+	assert column_surface.size == ctx.min
 }

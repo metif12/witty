@@ -1236,3 +1236,12 @@ covers 24,400 returning records / 73,200 discards per mode, 102 returning
 controls, 102 exact panic/state pairs, 12 bounded loop observations and 21
 consumer cases. Historical discard, buffered-reader and stream hashes remain
 unchanged.
+
+`read_slice_endian` fills a native integer slice before converting each element
+from the requested byte order. Failed reads retain the copied raw prefix without
+swapping; empty slices succeed without IO. Integer and endian aliases are
+supported. The [endian slice comparison](reference_probes/reader_slice_endian/README.md)
+covers 50,088 records / 150,264 reads per mode, 672 returning controls, 672 exact
+panic/state pairs, 21 consumer records and six paired compile rejections.
+Destination guards and partial updates match pinned Zig. Aggregate elements and
+byte spans beyond V's array length remain documented boundaries.
