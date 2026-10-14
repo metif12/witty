@@ -1218,3 +1218,11 @@ covers 56,640 returning records / 169,920 integer reads per mode, 808 returning
 controls, 1,048 exact panic/state pairs and 17 consumer records. Native integer
 and endian aliases are included; arbitrary-width Source integers remain a
 documented carrier boundary.
+
+`take_leb128` decodes signed or unsigned native integers, accepts valid overlong
+representations and consumes through the terminator before reporting overflow.
+Truncated input or read failure retains consumed progress. The
+[LEB128 comparison](reference_probes/reader_leb128/README.md) covers 72,030
+returning records / 216,090 decodes per mode, 192 returning controls, 272 exact
+panic/state pairs and 20 consumer cases. Mathematical value/progress checks cover
+every nonreplacement record, including the 70-bit intermediate for 64-bit types.

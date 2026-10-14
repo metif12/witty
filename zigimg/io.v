@@ -418,6 +418,70 @@ pub fn (mut stream ReadStream) take_var_int[T, E](endian E, count usize) !T {
 	}
 }
 
+// Decode through the terminator before reporting overflow. Preserve the wider
+// seven-bit grouping used by Source, including its 70-bit intermediate for u64.
+pub fn (mut stream ReadStream) take_leb128[T]() !T {
+	$if T.unaliased_typ is $int {
+		maximum_groups := (int(sizeof(T)) * 8 + 6) / 7
+		mut groups := 0
+		mut word := u64(0)
+		mut high := u8(0)
+		mut negative := false
+		mut fits := true
+		for {
+			bytes := stream.peek_greedy(1)!
+			for index, byte in bytes {
+				payload := byte & 0x7f
+				if groups < maximum_groups {
+					shift := groups * 7
+					if shift == 63 {
+						word |= u64(payload & 1) << 63
+						high = payload >> 1
+					} else {
+						word |= u64(payload) << shift
+					}
+					negative = payload & 0x40 != 0
+					groups++
+				} else if fits {
+					$if T.unaliased_typ is i8 || T.unaliased_typ is i16 || T.unaliased_typ is int
+						|| T.unaliased_typ is i64 || T.unaliased_typ is isize {
+						fits = payload == if negative { u8(0x7f) } else { u8(0) }
+					} $else {
+						fits = payload == 0
+					}
+				}
+				if byte & 0x80 != 0 { continue
+				 }
+				stream.toss(usize(index + 1))
+				if !fits { return error('Overflow') }
+				$if T.unaliased_typ is i8 || T.unaliased_typ is i16 || T.unaliased_typ is int
+					|| T.unaliased_typ is i64 || T.unaliased_typ is isize {
+					bits := groups * 7
+					if bits > 64 {
+						expected_high := if negative { u8(0x3f) } else { u8(0) }
+						if high != expected_high || (word >> 63 != 0) != negative {
+							return error('Overflow')
+						}
+					} else if negative {
+						word |= ~u64(0) << bits
+					}
+					value := T(word)
+					if i64(value) != i64(word) { return error('Overflow') }
+					return value
+				} $else {
+					value := T(word)
+					if high != 0 || u64(value) != word { return error('Overflow') }
+					return value
+				}
+			}
+			stream.toss(usize(bytes.len))
+		}
+	} $else {
+		$compile_error('take_leb128 requires a native integer type')
+	}
+	panic('reached unreachable code')
+}
+
 pub fn (mut stream ReadStream) peek_delimiter_inclusive(delimiter u8) ![]u8 {
 	for i in stream.position .. stream.end {
 		if stream.buffer[i] == delimiter { return unsafe { stream.buffer[stream.position..i + 1] } }

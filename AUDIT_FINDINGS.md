@@ -8140,3 +8140,86 @@ portable ABI, V representation limits, Windows/Linux and other CPU, big-endian
 and 32-bit runtime remain boundaries. Cross builds establish compilation only.
 Reproduction and scope are in
 [the integer reader proof](zigimg/reference_probes/reader_integer/README.md).
+
+### Signed and unsigned LEB128 reads — 2026-10-15
+
+`ReadStream.take_leb128` translates pinned Reader.takeLeb128 for native integers
+and aliases. It accepts valid overlong encodings and consumes through the
+terminator before reporting Overflow. Available continuation bytes are consumed
+before EndOfStream or ReadFailed; those errors take precedence over a value
+that would overflow if terminated. Signed extension and the extra six high bits
+of Source's 70-bit intermediate for 64-bit targets are preserved. All previous
+V reader bodies and C adapters remain unchanged.
+
+Debug/ordinary and ReleaseSafe/production each match **72,030 returning records /
+216,090 decodes / 504,210 primary calls**, SHA-256
+`cd8c8be7745c8f356e76451db3cfc18bb7b6577403ba51365c010adf6406dd73`.
+Three decodes, three caller consumptions and one relative seek run per record;
+setup/priming/observations are separate. Groups contain 15,360 every-byte,
+32,768 every-two-byte, 15,182 boundary, 6,128 wide-last-group and 2,592 prefilled
+profiles, with duplicate specifications retained once. Twenty native/alias
+carriers cover every byte through memory, positional files and streaming files.
+Both 8-bit signedness choices exhaust all 128×128 two-byte continuation/terminator
+combinations. Boundary cases cover canonical signed/unsigned representations,
+target limits and adjacent values, overlong extensions, truncation and file
+capacities 1/2/8/32. All 128 tenth payload groups run with zero/one-filled
+preceding groups for the four 64-bit carriers and aliases. Prefills cover
+capacities 8/32, offsets 0/1, consumption 1/7, open/closed owned pipes,
+seed/priming/toss choices and relative offsets -1/0/1. Values, unsigned
+representations, copied results, initialized storage, pending spans, positions,
+size/errors, ownership and untouched wire bytes match. An independent Python
+decoder uses arbitrary-precision mathematical values to verify every
+nonreplacement operation's result and consumed count.
+
+The **464 distinct controls** separate **192 returning records**, SHA-256
+`888fe8ed674c5f870353dfee371e93518cabe668c9b21237795c38c603a4b8b4`,
+from **272 exact panic/state pairs**, SHA-256
+`ab4f2eeb384be7db838caa736c4b776f0c4ea8917cd2104ac9972898cce51b86`.
+There are 160 zero-capacity file failures with exactly reached unreachable code;
+fixed memory returns results/EOF independently of that capacity marker. Another
+112 fail with exactly integer overflow in public getPos after priming, before
+the requested decode. Both exits fail with empty stdout, one exact message and
+matching initialized retained state. Observers omit getPos, handle size errors
+and capture preceding/calling status, backing storage, copied output, pending
+spans and owned references before opening state files.
+
+Twenty compiled consumer records / 60 decodes / 140 primary calls per mode assert
+all three results for classic values, 64-bit limits, aliases, overlong sign
+extension, overflow draining, truncated-overflow precedence, one-byte refills,
+read-ahead, rewind, pipe values and partial/sticky failures. SHA-256:
+`271dacd90e3ae378fbfee05ee4ed3b970309f452bfee5622106c46e2849db971`.
+Four paired compile rejections per mode verify noninteger floats, aliases,
+booleans and records are rejected. Three public regressions accompany the proof.
+All **72 image and 58 Vaxis test files**, plus **52 production/application/
+platform/unit/fixture checks**, pass. Historical integer, buffered and full-stream
+hashes remain unchanged in both modes.
+
+An initial V missing-return diagnostic requires an explicit unreachable fallback
+after the generic loop. Initial unit diagnostics retain a valid-255 encoding
+mistakenly labelled overflow and compound stateful assertions; the final tests
+use a genuine overflow and named local results. Shared disk exhaustion disrupted
+module/platform checks using /tmp and an external-script write; failed evidence
+is retained separately. Task-owned reserved space was released, affected checks
+rerun after space recovered, and successful earlier commands reused. Production,
+probes, runner and helpers remain frozen during final comparisons; only expected
+assignments change after ordinary discovery.
+
+Full unchanged Source, versions/selected compiler libraries, implementation,
+probes, shared fixtures, directly imported helpers and inputs are pinned before/
+after comparison. Source bodies, visibility and reader syscalls remain untouched.
+Fixtures use initialized unlinked owned files, reset offsets and nonblocking
+owned pipes/keepers. Independent replay checks mathematical semantics, native
+classifications, exact failures, consumers, ownership, binaries, modes and
+provenance. Lossless parent-side compression pins raw/compressed logs. A task-owned
+RAM workspace is created before compilation; retained evidence is persisted and
+every archive member read back before committing and releasing the volume.
+
+Source arbitrary-width integers, including zero/non-byte widths and widths above
+64, remain outside this V mapping. usize/isize follow target width; the native
+comparison uses 64-bit carriers. Other APIs, custom callbacks, overlap, arbitrary
+constructor/copy sequences, other devices, larger buffers/offsets/encodings,
+concurrent reuse, syscall counts, timing/signals, injected errors, OOM/quotas,
+allocator lifetime, portable ABI, V representation limits, Windows/Linux and
+other CPU, big-endian and 32-bit runtime remain boundaries. Cross builds establish
+compilation only. Reproduction and scope are in
+[the LEB128 reader proof](zigimg/reference_probes/reader_leb128/README.md).
