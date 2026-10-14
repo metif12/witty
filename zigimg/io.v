@@ -537,6 +537,49 @@ fn (mut stream ReadStream) file_discard(count u64) !u64 {
 	return u64(stream.file_read(mut trash)!)
 }
 
+// Scan every available buffered byte after filling to at least one byte.
+// Reaching the limit fails even if EOF or a delimiter is exactly next.
+pub fn (mut stream ReadStream) discard_delimiter_limit(delimiter u8, limit usize) !usize {
+	mut remaining := limit
+	for remaining != 0 {
+		stream.peek(1) or {
+			if err.msg() == 'EndOfStream' { return limit - remaining }
+			return err
+		}
+		available := usize(stream.end - stream.position)
+		count := if remaining < available { remaining } else { available }
+		for index in 0 .. int(count) {
+			if stream.buffer[stream.position + index] == delimiter {
+				stream.toss(usize(index))
+				remaining -= usize(index)
+				return limit - remaining
+			}
+		}
+		stream.toss(count)
+		remaining -= count
+	}
+	return error('StreamTooLong')
+}
+
+// EOF succeeds with the discarded prefix; a found delimiter stays unread.
+pub fn (mut stream ReadStream) discard_delimiter_exclusive(delimiter u8) !usize {
+	return stream.discard_delimiter_limit(delimiter, ~usize(0)) or {
+		if err.msg() == 'StreamTooLong' { panic('reached unreachable code') }
+		return err
+	}
+}
+
+// Unlike exclusive discard, absence of a delimiter fails after consuming the
+// EOF prefix. A found delimiter is counted and consumed.
+pub fn (mut stream ReadStream) discard_delimiter_inclusive(delimiter u8) !usize {
+	count := stream.discard_delimiter_exclusive(delimiter)!
+	if stream.position == stream.end { return error('EndOfStream') }
+	if stream.buffer[stream.position] != delimiter { panic('reached unreachable code') }
+	stream.toss(1)
+	if count == ~usize(0) { panic('integer overflow') }
+	return count + 1
+}
+
 pub fn (mut stream ReadStream) discard_all(count usize) ! {
 	buffered := usize(stream.end - stream.position)
 	if count <= buffered {

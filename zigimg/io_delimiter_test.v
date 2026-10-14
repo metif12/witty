@@ -198,3 +198,57 @@ fn test_nullable_file_delimiter_distinguishes_capacity_failure_from_eof() {
 		}
 	}
 }
+
+fn test_delimiter_discards_count_and_consume_the_source_prefix() {
+	mut reader := ReadStream.init_memory('abc\n\nlast'.bytes())
+	prefix := reader.discard_delimiter_exclusive(`\n`)!
+	assert prefix == 3 && reader.get_pos() == 3
+	at_marker := reader.discard_delimiter_exclusive(`\n`)!
+	assert at_marker == 0 && reader.get_pos() == 3
+	first_marker := reader.discard_delimiter_inclusive(`\n`)!
+	assert first_marker == 1 && reader.get_pos() == 4
+	second_marker := reader.discard_delimiter_inclusive(`\n`)!
+	assert second_marker == 1 && reader.get_pos() == 5
+	mut status := 'ok'
+	reader.discard_delimiter_inclusive(`\n`) or { status = err.msg() }
+	assert status == 'EndOfStream' && reader.get_pos() == 9
+	at_eof := reader.discard_delimiter_exclusive(`\n`)!
+	assert at_eof == 0 && reader.get_pos() == 9
+}
+
+fn test_bounded_delimiter_discard_checks_limit_before_next_byte_or_eof() {
+	mut reader := ReadStream.init_memory('abc\nlast'.bytes())
+	mut status := 'ok'
+	reader.discard_delimiter_limit(`\n`, 3) or { status = err.msg() }
+	assert status == 'StreamTooLong' && reader.get_pos() == 3
+	status = 'ok'
+	reader.discard_delimiter_limit(`\n`, 0) or { status = err.msg() }
+	assert status == 'StreamTooLong' && reader.get_pos() == 3
+	at_marker := reader.discard_delimiter_limit(`\n`, 1)!
+	assert at_marker == 0 && reader.get_pos() == 3
+	marker := reader.take_byte()!
+	assert marker == `\n`
+	status = 'ok'
+	reader.discard_delimiter_limit(`\n`, 4) or { status = err.msg() }
+	assert status == 'StreamTooLong' && reader.get_pos() == 8
+	after_eof := reader.discard_delimiter_limit(`\n`, 1)!
+	assert after_eof == 0 && reader.get_pos() == 8
+}
+
+fn test_delimiter_discard_crosses_file_buffer_boundaries() {
+	$if !windows {
+		path := os.join_path(os.temp_dir(), 'witty-discard-delimiter-${os.getpid()}.owned')
+		os.write_file(path, 'abcdefghijk\nlast')!
+		defer { os.rm(path) or {} }
+		for capacity in [1, 2, 8] {
+			mut file := os.open(path)!
+			defer { file.close() }
+			mut buffer := []u8{len: capacity, init: 165}
+			mut reader := ReadStream.init_file(file, mut buffer)
+			count := reader.discard_delimiter_inclusive(`\n`)!
+			assert count == 12 && reader.get_pos() == 12
+			tail := reader.discard_delimiter_exclusive(`\n`)!
+			assert tail == 4 && reader.get_pos() == 16
+		}
+	}
+}

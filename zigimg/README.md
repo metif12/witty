@@ -1173,3 +1173,13 @@ The [nullable delimiter comparison](reference_probes/reader_delimited/README.md)
 covers 25,052 returning records / 90,444 calls per mode, plus returning and exact
 failure controls. The result record adapts Source's error-union/optional-slice
 type; the proof documents V's mutable-alias extraction rule.
+
+`discard_delimiter_exclusive`, `discard_delimiter_inclusive` and
+`discard_delimiter_limit` now scan across buffer fills and return consumed counts.
+Exclusive discard leaves a found delimiter unread and succeeds at EOF; inclusive
+discard counts the delimiter and fails after consuming an unterminated EOF prefix.
+A bounded scan fails as soon as its limit is reached, before checking the next
+byte or EOF. The [delimiter discard comparison](reference_probes/delimiter_discard/README.md)
+covers 73,224 returning records / 263,604 calls per mode, 1,444 returning controls
+and 16 exact zero-capacity panic/state pairs. The `usize` limit adapts Source's
+`std.Io.Limit`; existing delimiter and stream hashes remain unchanged.

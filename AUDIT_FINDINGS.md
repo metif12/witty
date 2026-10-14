@@ -7716,3 +7716,82 @@ allocator lifetime, portable ABI, V representation limits, Windows runtime, othe
 CPU selections and big-endian/32-bit runtime remain boundaries. Cross builds
 establish compilation only. Reproduction and exact scope are in
 [the nullable delimiter proof](zigimg/reference_probes/reader_delimited/README.md).
+
+### Bounded and unbounded delimiter discard — 2026-10-14
+
+The reader adapter now translates discardDelimiterExclusive,
+discardDelimiterInclusive and discardDelimiterLimit as the three corresponding
+snake-case methods. Scans cross buffer fills. Exclusive discard leaves a found
+delimiter unread and returns the consumed prefix at EOF. Inclusive discard counts
+and consumes a found delimiter, but returns EndOfStream after consuming an
+unterminated EOF prefix. The bounded method takes usize, adapting std.Io.Limit;
+~usize(0) represents unlimited scanning. Zero or exhausted limits return
+StreamTooLong before checking the next byte or EOF. This preserves exact-bound
+failure even when the delimiter or EOF is immediately next. Read errors preserve
+consumed progress. All previously existing reader bodies remain unchanged.
+
+Debug/ordinary and ReleaseSafe/production match **73,224 returning records /
+263,604 primary calls** per mode. **43,932 memory/positional-file/streaming-file
+records** perform three discards and one relative seek. All three APIs cover
+capacities 1/2/8/32, arithmetic payload lengths 0/1/7/8/9/31/32/33/64, distinct
+zero/one/half-length/end offsets, present/absent markers and relative offsets
+-1/0/1. Bounded scans use distinct zero/one/length-minus-one/length/length-plus-one/
+capacity/capacity-plus-one/unlimited limits. Empty, newline-only, adjacent and
+trailing delimiters and unterminated text also run, with all delimiter bytes for
+each reader kind and API. Memory uses the whole input; capacity repeats those
+memory cases. Initialized buffers, statuses, pending bytes, logical positions,
+size/error observations and saved return counts match. Counts use initialized
+8-byte little-endian encodings; errors preserve the last successful count.
+SHA-256: `4872caee7f98f0efa3b85dba01bd3fda3554168a5b84c5b3ce3767eddb2f40d7`.
+
+**29,292 replacement records** perform two discards and one relative seek:
+23,220 ordinary-transition, 2,268 failed-pending, 2,268 failed-consumed and 1,536
+every-delimiter profiles. Original offsets 0/1/7, capacities 1/8/32, consumed
+prefixes, EOF/WouldBlock, optional reseeding and relative rewinds compare ordinary
+and sticky failures. Bounded profiles use zero/one/capacity-plus-one/unlimited.
+Buffers, saved counts, pending spans, positions, cached sizes, normalized ownership
+and queued input match. SHA-256:
+`c632666b0a2f9a886d3e02beb7138135ffc2766a9dc502a20173a0c4cffc859b`.
+
+**1,444 returning controls** match SHA-256
+`b35f6109eaae70e8c1c2edfcbc9934380d13748c94a20c947ceeaf0dc2066928`.
+All 1,440 retained position profiles return: discards consume their pending
+prefixes before further IO, unlike the earlier slice-returning delimiter methods.
+Four zero-capacity/zero-limit controls return StreamTooLong without IO.
+**16 exact zero-capacity panic/state pairs** match SHA-256
+`56df6f9d04465d0a390565032b5bdc4c2eef27d8aca8555c29b93579f1b205ff`.
+Positive scans on zero-capacity file readers panic before a read in both
+constructors and on empty/nonempty input. Failed exits, empty stdout, one exact
+reached-unreachable-code message and initialized state agree. Observers omit
+getPos and handle size errors while capturing calling status, valid descriptors
+and the two owned keeper references before opening output files.
+
+Thirteen additional compiled consumer records / 52 calls per mode assert concrete
+counts and positions for EOF prefixes, retained/consumed delimiters, zero/exact
+bounds and long scans through tiny buffers. Output SHA-256:
+`e4ca5e7adae3cad5e5ef72a1f4e4a17ad53f009e27e428770f57fb6f95de05cc`.
+Three unit regressions exercise these distinctions. All **68 image and 58 Vaxis
+test files** pass, with **40 production/application/platform/unit/fixture checks**.
+Historical nullable/exclusive/inclusive delimiter and full stream hashes remain
+unchanged in both modes.
+
+The probe wrapper reuses separately copied/hashed exclusive-payload and delimiter
+replacement headers. C initializes unlinked O_EXCL/CLOEXEC files, resets owned
+payload offsets before construction and operates only on owned nonblocking pipes
+and descriptors. No Source body, visibility or reader syscall is changed or
+intercepted. Full Source, selected compiler libraries/versions, implementation,
+probes, shared headers, directly imported helpers and inputs are checked
+before/after comparison. Only golden assignments change after ordinary discovery.
+Large logs use lossless parent-side compression with checked raw-byte and
+compressed-file hashes. Independent replay checks output, native classification,
+exact failures, ownership, modes and provenance. The previous checkpoint archive
+was fully read back before removing identical expanded copies; its evidence
+remains archived. The new archive is also read back member by member.
+
+Delimiter writer-streaming callbacks, arbitrary constructor/copy/callback
+sequences, other devices, larger requests/buffers/offsets, concurrent reuse,
+syscall counts, timing/signals, injected errors, OOM/quotas, allocator lifetime,
+portable ABI, V representation limits, Windows runtime, other CPU selections and
+big-endian/32-bit runtime remain boundaries. Cross builds establish compilation
+only. Reproduction and scope are in
+[the delimiter discard proof](zigimg/reference_probes/delimiter_discard/README.md).
