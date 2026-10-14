@@ -5830,3 +5830,73 @@ Source/library/version and before/after implementation, fixture, runner, helper
 and input hashes protect retained evidence. Public Source visibility and bodies
 remain unchanged. Reproduction and exact scope are in
 [the PAM stream proof](zigimg/reference_probes/pam_streams/README.md).
+
+## Netpbm partial file writes and retained encoding buffers — 2026-10-14
+
+The Netpbm writer combined Source's formatted header/RGB writes, retried comment
+and ASCII separator writes whose counts Source ignores, and split binary gray16
+words into byte writes. These differences changed pending and inactive caller
+buffer bytes, retained output on failure and final file contents. The translation
+now preserves individual literals/arguments, single comment/separator attempts
+and single-word gray16 writes.
+
+On Darwin, a positional vector write returns after its first nonempty vector.
+When that vector contains pending output, a single write can consume none of its
+new comment or separator. Source ignores that result. For example, a one-byte
+file buffer and a one-pixel ASCII bitmap produce `P1\n1 1\n1`, omitting the
+comment and final newline. These pinned-source behaviors are preserved without
+changing shared stream code or Source implementation.
+
+`verify_netpbm_streams_reference.py` pairs Source Debug with ordinary V and Source
+ReleaseSafe with production V. Both pass **55,434 returning records**, containing
+**110,994 read/write/detection calls**, SHA-256
+`aa52cfee6576b47ea915f11eb30023bddf503f837691f99970121c7a5691d375`, and
+**243 exact panic/state pairs**, SHA-256
+`0d71dc9e305c4e35bb05fc8be37e5c72b467749b2549350ce308545fcca7ef81`.
+The initial ordinary comparison retains 6,420 differing records; 6,376 still have
+different files after explicit flush. An intermediate correction separately
+records the remaining ignored-newline difference.
+
+Reader records cover memory and 2/3/4/8/16/64-byte positional file buffers,
+all P1..P6 headers through every codec specialization, sample widths,
+zero/nonzero shapes, prefixes/retries, long comments, numeric token limits,
+binary delimiters, discarded prefixes and repeated detection. Writers cover all
+24 storage tags, ASCII/binary modes, offsets 0/7, direct/static/interface calls,
+repeated writes, format rejection and PBM/PGM/PPM/BMP registry options through
+file buffers 0/1/2/3/4/8/16/32/64/128. Descriptors start at EOF to verify the
+stream's independent positional cursor.
+
+Twenty-four undersized-reader, 108 zero-divisor, 27 dimension-overflow and 84
+incomplete bitmap-row failures require the sole exact message from compiled
+Source, failing exit, no stdout and equal nonempty snapshots. Observations retain
+logical position, buffered/pending length, every initialized caller buffer byte,
+unchanged input, actual disk contents, direct-method public headers and caller
+image/pixel state. Successful reads compare fully written pixel/image values;
+grayscale1 uses semantic values to exclude narrow-field padding. Default undefined
+headers, failed/freed decoder buffers, unsupported palettes and pointer identities
+remain unobserved.
+
+The native-observed regression covers the omitted comment/final bitmap newline,
+gray16 word writes and ASCII RGB caller-buffer bytes. All 61 image and 58 Vaxis
+test files pass. Production Netpbm/file-stream tests, native/Linux application
+checks, three Windows libraries, Windows Netpbm tests and stream fixtures in both
+modes, and Linux library/fixture builds pass. The historical Netpbm proof retains
+137,228 observations and 969 exact failure-state pairs, including its three hashes,
+in both modes. Formatting, diff and Python checks pass.
+
+V 0.5.2 rejected generic fixture pointer/length inference and generated an invalid
+literal-membership declaration. Explicit lengths, pointer assignment and ordinary
+comparisons avoid those fixture patterns; original failures and generated C remain
+retained separately. A task-owned RAM disk holds proof/build output and compiler
+temporaries after disk space fell short. Completed earlier artifacts are fully
+archived/readback-verified before pruning duplicates; final evidence is preserved
+before the RAM disk is detached.
+
+Custom/nonseekable readers, streaming pipes, descriptor failures, short operating
+system writes, arbitrary larger allocations, allocator/OOM/GC/lifetime,
+const/narrow/boxed representation, physical layouts and portable ABI remain
+boundaries. Cross builds do not establish other-target runtime parity. Full
+Source/library/version and before/after implementation, fixture, runner, helper
+and input hashes protect evidence. Source visibility/bodies remain unchanged.
+Reproduction and exact scope are in
+[the Netpbm stream proof](zigimg/reference_probes/netpbm_streams/README.md).

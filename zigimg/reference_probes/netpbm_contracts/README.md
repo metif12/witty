@@ -84,10 +84,13 @@ so CRLF can leave LF as a binary sample. Numeric token capacity remains 16 bytes
 ASCII grayscale truncates without scaling, binary gray16 stays raw, and RGB
 normalization deliberately truncates its low byte.
 
+File buffering and partial write results are checked separately by the
+[Netpbm stream proof](../netpbm_streams/README.md); this fixture uses memory streams.
+
 Default Source codec headers are undefined. V's initialized placeholder is
 unobserved and outside the parity claim. Format enum width, narrow/const typing,
 physical record/union/slice layout, boxed copies, allocator/OOM/GC/lifetime,
-wider allocated extents, file streams, big-endian runtime and portable ABI remain
+wider allocated extents, big-endian runtime and portable ABI remain
 boundaries. The largest 16-digit ASCII sample does not overflow 64-bit multiplication
 by 255; narrower-target normalization overflow is outside the native runtime proof. Cross
 builds do not establish runtime parity. Source visibility/implementation remain

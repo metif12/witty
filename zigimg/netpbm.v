@@ -232,10 +232,20 @@ pub fn (mut codec Netpbm[T]) write[T](mut stream WriteStream, pixels PixelStorag
 	header := codec.header
 	if header.format != netpbm_kind[T]() { return error('Unsupported') }
 	number := int(header.format) + 1 + if header.binary { 3 } else { 0 }
-	stream.write_all('P${number}\n'.bytes())!
-	stream.write_all('# Created by zigimg\n'.bytes())!
-	stream.write_all('${header.width} ${header.height}\n'.bytes())!
-	if header.format != .bitmap { stream.write_all('${header.max_value}\n'.bytes())! }
+	// Writer.print emits its literals and arguments separately. The comment
+	// uses one write whose partial result Source ignores.
+	stream.write_all('P'.bytes())!
+	stream.write_all(number.str().bytes())!
+	stream.write_all('\n'.bytes())!
+	_ := stream.write('# Created by zigimg\n'.bytes())!
+	stream.write_all(header.width.str().bytes())!
+	stream.write_all(' '.bytes())!
+	stream.write_all(header.height.str().bytes())!
+	stream.write_all('\n'.bytes())!
+	if header.format != .bitmap {
+		stream.write_all(header.max_value.str().bytes())!
+		stream.write_all('\n'.bytes())!
+	}
 	match header.format {
 		.bitmap {
 			if pixels !is Grayscale1Pixels { return error('Unsupported') }
@@ -270,7 +280,7 @@ pub fn (mut codec Netpbm[T]) write[T](mut stream WriteStream, pixels PixelStorag
 					assert pixel.value <= 1
 					stream.write_all('${1 - pixel.value}'.bytes())!
 				}
-				stream.write_byte(`\n`)!
+				_ := stream.write('\n'.bytes())!
 			}
 		}
 		.grayscale {
@@ -289,7 +299,12 @@ pub fn (mut codec Netpbm[T]) write[T](mut stream WriteStream, pixels PixelStorag
 					stream.write_byte(pixel.g)!
 					stream.write_byte(pixel.b)!
 				} else {
-					stream.write_all('${pixel.r} ${pixel.g} ${pixel.b}\n'.bytes())!
+					stream.write_all(pixel.r.str().bytes())!
+					stream.write_all(' '.bytes())!
+					stream.write_all(pixel.g.str().bytes())!
+					stream.write_all(' '.bytes())!
+					stream.write_all(pixel.b.str().bytes())!
+					stream.write_all('\n'.bytes())!
 				}
 			}
 		}
@@ -301,14 +316,17 @@ pub fn (mut codec Netpbm[T]) write[T](mut stream WriteStream, pixels PixelStorag
 fn write_netpbm_gray[T](mut stream WriteStream, pixels []T, binary bool) ! {
 	for i, pixel in pixels {
 		if binary {
-			$if T is Grayscale16 { stream.write_byte(u8(pixel.value >> 8))! }
-			stream.write_byte(u8(pixel.value))!
+			$if T is Grayscale16 {
+				stream.write_int[u16, BigEndian](pixel.value, BigEndian{})!
+			} $else {
+				stream.write_byte(u8(pixel.value))!
+			}
 		} else {
 			stream.write_all('${pixel.value}'.bytes())!
-			if i != pixels.len - 1 { stream.write_byte(` `)! }
+			if i != pixels.len - 1 { _ := stream.write(' '.bytes())! }
 		}
 	}
-	if !binary { stream.write_byte(`\n`)! }
+	if !binary { _ := stream.write('\n'.bytes())! }
 }
 
 fn parse_netpbm_header(mut stream ReadStream) !NetpbmHeader {

@@ -1,5 +1,74 @@
 module zigimg
 
+import os
+
+fn test_netpbm_file_writes_preserve_partial_comment_delimiters_and_pixel_buffers() {
+	path := os.join_path(os.temp_dir(), 'witty-netpbm-buffered-${os.getpid()}')
+	defer { os.rm(path) or {} }
+	for capacity in [1, 4, 8] {
+		os.write_file_array(path, []u8{len: 256, init: 165})!
+		mut file := os.open_file(path, 'r+')!
+		file.seek(256, .start)!
+		mut buffer := []u8{len: capacity, init: 165}
+		mut writer := WriteStream.init_file(file, mut buffer)
+		mut expected := []u8{}
+		mut expected_buffer := []u8{}
+		if capacity == 1 {
+			mut codec := PBM{
+				header: NetpbmHeader{
+					format:    .bitmap
+					binary:    false
+					width:     1
+					height:    1
+					max_value: 1
+				}
+			}
+			codec.write(mut writer, Grayscale1Pixels{
+				data: [Grayscale1{ value: 0 }]
+			})!
+			expected = 'P1\n1 1\n1'.bytes()
+			expected_buffer = '1'.bytes()
+		} else if capacity == 4 {
+			mut codec := PGM{
+				header: NetpbmHeader{
+					format:    .grayscale
+					binary:    true
+					width:     1
+					height:    1
+					max_value: 1000
+				}
+			}
+			codec.write(mut writer, Grayscale16Pixels{
+				data: [Grayscale16{ value: 0x3813 }]
+			})!
+			expected = 'P5\n1 1\n1000\n\x38\x13'.bytes()
+			expected_buffer = [u8(10), 0x38, 0x13, `0`]
+		} else {
+			mut codec := PPM{
+				header: NetpbmHeader{
+					format:    .rgb
+					binary:    false
+					width:     1
+					height:    1
+					max_value: 1000
+				}
+			}
+			codec.write(mut writer, Rgb24Pixels{
+				data: [Rgb24{ r: 19, g: 56, b: 93 }]
+			})!
+			expected = 'P3\n1 1\n1000\n19 56 93\n'.bytes()
+			expected_buffer = '93\n 56 0'.bytes()
+		}
+		assert writer.get_pos() == u64(expected.len)
+		assert writer.buffered().len == 0
+		assert buffer == expected_buffer
+		bytes := os.read_bytes(path)!
+		assert bytes[..expected.len] == expected
+		assert bytes[expected.len..] == []u8{len: 256 - expected.len, init: 165}
+		file.close()
+	}
+}
+
 fn test_netpbm_specializations_expose_instance_header_read_and_write_methods() {
 	mut reader := ReadStream.init_memory('P2\n2 1\n15\n3 9\n'.bytes())
 	mut codec := PGM{}

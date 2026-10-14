@@ -602,7 +602,11 @@ premultiplying alpha and preserve floating point values.
 
 PBM/PGM/PPM preserve the pinned parser's comments, 16-byte number buffer,
 single raster delimiter, bitmap polarity/padding, and format-specific sample
-scaling. Both per-codec and image-wide options are available. The bit streams
+scaling. Both per-codec and image-wide options are available. The writers
+preserve the source's separate header/RGB writes, ignored partial comment and
+ASCII separator results, and single-word gray16 writes. The
+[buffered Netpbm comparison](reference_probes/netpbm_streams/README.md) covers
+55,434 records and 243 exact failure states in both modes. Bit streams
 specialize on `BigEndian` or
 `LittleEndian` and support bool, V's native integer and floating point scalar types,
 and the four packed RGB color records;
