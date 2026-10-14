@@ -6422,3 +6422,67 @@ boundaries. Cross builds establish compilation only. Full Source/library/version
 and implementation/fixture/runner/helper/input hashes protect evidence, archived
 and fully read back persistently before RAM detachment. Scope and reproduction
 are in [the SGI file-stream proof](zigimg/reference_probes/sgi_streams/README.md).
+
+### TGA positional encoder bounds and retained buffers checkpoint — 2026-10-14
+
+Compiled unchanged pinned TGA and its File.Writer/std.Io.Writer paths. The first
+short-storage control reached Source's exact `index out of bounds: index 1, len 0`
+after header/ID output while V emitted a generic slice error. Initialized retained
+state matched. Explicit row-range, converted RGB/RGBA element and palette guards
+now preserve Source diagnostics and failure order in ordinary and production
+builds. Row/index products stay in usize until the bounds check before narrowing.
+
+Both Debug/ordinary and ReleaseSafe/production match **25,624 returning records /
+51,248 encoder calls**, SHA-256
+`d251c2eb846597f3d5ca26fb0cac1c6a2b3bf1cdb9ee971f22aa515b9307bac7`.
+Direct/static/interface APIs cover grayscale8/indexed8/RGB555/BGR24/BGRA32/RGB24/
+RGBA32, shapes zero/1×1/3×2/17×2/129×1, four run patterns, compression and row
+orientation, ID/metadata/palette-depth options, every storage tag at zero extents,
+whole raw slices and wide public dimension rejection. Main file buffers are
+0/1/3/8/32/128, with additional 512-byte and bounded-memory controls. Descriptors
+start at EOF independently of the positional cursor; starts zero/seven, repeated
+calls, final flush, retained extents and file growth are compared.
+
+**1,060 returning controls**, SHA-256
+`c5b49c5e66bb284b516f647dd7993986bd909e41c4df551e60c6b50eb0b7b410`,
+include 729 short-storage cases returning before bounds or through raw whole-slice
+writing, 135 palette controls and 196 direct ID mismatches. Source alone supplies
+each classification before V is checked. ID length 256 retains its truncated zero
+header length and absent serialized ID; length 257 rejects before output. Raw
+top-to-bottom writing includes the whole slice even with zero header extents.
+
+**1,278 exact panic/state pairs**, SHA-256
+`63a9bfc5ca634b68d5d10a8648bb6a6d1022554599f8571c2c79ae311aee4f37`,
+cover 1,035 short pixel/row storage cases, 75 palette bounds/u16-end failures and
+168 maximum-u16 geometry cases. The latter use 65535×65535 with empty storage,
+all seven formats and all APIs, preserving full usize indices above the signed
+V array carrier. Earlier header/ID/palette output and bounded-write failures retain
+Source order. Strict checks require failed exits, no stdout, the exact sole native
+message and equal nonempty initialized snapshots.
+
+Snapshots retain position/pending length, every caller buffer byte, image/pixels/
+active palette, actual disk, and direct header/active initialized ID/extension
+presence. Other direct metadata fields, private static/interface codec state,
+inactive backing, pointer identities and allocator effects remain unobserved.
+Serialized extension/footer bytes and offsets are compared through actual output.
+Source visibility and bodies remain unchanged; RGB555 padding is explicitly clear.
+
+Native-observed regressions pin an eight-byte buffer `90 0a 05 00 0f 06 01 10`
+after bottom-up RGBA encoding at offset seven, position 559 and extension offset
+38; plus unsupported direct palette-depth retries that retain eighteen header
+bytes pending at positions 18/36, committing them on drain/caller flush. Separate
+compiled controls match these exact inputs in both modes. All 61 image and 58
+Vaxis test files pass, with production TGA/file tests and nineteen application/
+platform/unit/fixture checks. Historical record/decoder/palette/vector/failure
+hashes and native 2,016 encoder/1,120 decoder cases remain unchanged in both modes.
+Formatting, diff and Python checks pass.
+
+The original bounds mismatch and initial V fixture Option-propagation rejection
+remain retained separately. Full Source/library/math/SIMD/version and before/after
+implementation/fixture/runner/helper/input hashes protect evidence, archived and
+fully read back persistently before RAM detachment. Other CPU vector selections,
+large allocations, wide/sparse extension positions, custom/nonseekable writers,
+OS failures/short writes, allocator/OOM/GC/lifetime, const/narrow/enum/boxed typing,
+physical layouts, big-endian/32-bit runtime and portable ABI remain boundaries.
+Cross builds establish compilation only. Scope and reproduction are in
+[the TGA writer proof](zigimg/reference_probes/tga_writer/README.md).

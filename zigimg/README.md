@@ -1036,3 +1036,10 @@ pairs in both modes. Initialized caller output extends malformed RLE coverage to
 small positional file buffers; consumer regressions pin unwritten output, retries
 and pending no-op writer bytes. Historical SGI hashes remain unchanged, with no
 production implementation changes needed for these cases.
+
+The [TGA file-writer proof](reference_probes/tga_writer/README.md) compares
+25,624 records / 51,248 calls, 1,060 returning controls and 1,278 exact panic/state
+pairs in both modes. Explicit writer guards preserve Source diagnostics after
+partial output, including full usize row indices. Consumer regressions pin
+extension offsets, retained buffer tails and header retries before caller flush;
+historical TGA hashes remain unchanged.

@@ -2,6 +2,101 @@ module zigimg
 
 import os
 
+fn test_tga_file_encoding_preserves_extension_offsets_and_inactive_buffer_bytes() {
+	path := os.join_path(os.temp_dir(), 'witty-tga-writer-${os.getpid()}.bin')
+	os.write_file_array(path, []u8{len: 1024, init: 165})!
+	defer { os.rm(path) or {} }
+	mut file := os.open_file(path, 'r+')!
+	defer { file.close() }
+	file.seek(1024, .start)!
+	mut buffer := []u8{len: 8, init: 165}
+	mut writer := WriteStream.init_file(file, mut buffer)
+	writer.seek_to(7)!
+	mut image := ImageUnmanaged{
+		width:  17
+		height: 2
+		pixels: PixelStorage.init(.rgba32, 34)!
+	}
+	mut raw := image.pixels.as_bytes()
+	for i in 0 .. raw.len {
+		raw[i] = u8((i / 4) / 17 + (i % 4) * 5)
+	}
+	before := raw.clone()
+	TGA.write_image(mut writer, image, TgaEncoderOptions{
+		top_to_bottom_image: false
+		image_id:            'iii'.bytes()
+		author_name:         'author'
+		job_id:              'job'
+		software_id:         'V'
+		timestamp:           TGAExtensionTimestamp{
+			year: 2026
+		}
+		software_version:    TGAExtensionSoftwareVersion{
+			number: 123
+			letter: `b`
+		}
+	})!
+	assert writer.get_pos() == 559 && writer.buffered().len == 0
+	assert buffer == [u8(0x90), 10, 5, 0, 15, 6, 1, 16]
+	bytes := os.read_bytes(path)!
+	assert bytes.len == 1024 && bytes[..7] == []u8{len: 7, init: 165}
+	assert bytes[25..28] == 'iii'.bytes()
+	assert bytes[28..38] == [u8(0x90), 11, 6, 1, 16, 0x90, 10, 5, 0, 15]
+	assert tga_u32(bytes, 533) == 38 && tga_u16(bytes, 38) == 495
+	assert bytes[541..557] == tga_signature.bytes() && bytes[559..] == []u8{len: 465, init: 165}
+	assert image.raw_bytes() == before
+}
+
+fn test_tga_file_palette_rejection_keeps_pending_headers_through_retry_and_flush() {
+	path := os.join_path(os.temp_dir(), 'witty-tga-rejected-${os.getpid()}.bin')
+	mut expected := []u8{len: 1024, init: 165}
+	os.write_file_array(path, expected)!
+	defer { os.rm(path) or {} }
+	mut file := os.open_file(path, 'r+')!
+	defer { file.close() }
+	file.seek(1024, .start)!
+	mut buffer := []u8{len: 32, init: 165}
+	mut writer := WriteStream.init_file(file, mut buffer)
+	mut pixels := PixelStorage.init(.indexed8, 1)!
+	pixels.resize_palette(4)
+	codec := TGA{
+		header: TGAHeader{
+			has_color_map:  1
+			image_type:     TGAImageType{
+				raw: 9
+			}
+			color_map_spec: TGAColorMapSpec{
+				length: 4
+			}
+			image_spec:     TGAImageSpec{
+				origin_x:      37
+				origin_y:      11
+				width:         1
+				height:        1
+				bit_per_pixel: 8
+				descriptor:    TGADescriptor{
+					raw: 32
+				}
+			}
+		}
+	}
+	header := [u8(0), 1, 9, 0, 0, 4, 0, 0, 37, 0, 11, 0, 1, 0, 1, 0, 8, 32]
+	for attempt in 0 .. 2 {
+		mut failed := false
+		codec.write(mut writer, pixels) or {
+			assert err.msg() == 'Unsupported'
+			failed = true
+		}
+		assert failed && writer.get_pos() == u64((attempt + 1) * 18)
+		assert writer.buffered() == header && buffer[18..] == []u8{len: 14, init: 165}
+		assert os.read_bytes(path)! == expected
+		copy(mut expected[attempt * 18..(attempt + 1) * 18], header)
+	}
+	writer.flush()!
+	assert writer.get_pos() == 36 && writer.buffered().len == 0
+	assert os.read_bytes(path)! == expected
+}
+
 fn tga_test_header(kind u8, depth u8, width u16, height u16, descriptor u8) TGAHeader {
 	return TGAHeader{
 		image_type: TGAImageType{

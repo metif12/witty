@@ -643,6 +643,7 @@ pub fn (codec TGA) write(mut stream WriteStream, pixels PixelStorage) ! {
 			depth := codec.header.color_map_spec.bit_depth
 			if depth !in [u8(15), 16, 24] { return error('Unsupported') }
 			for i in int(codec.header.color_map_spec.first_entry_index) .. codec.palette_end() {
+				tga_writer_check_index(usize(i), pixels.palette.len)
 				color := pixels.palette[i]
 				if depth == 24 {
 					stream.write_all([color.b, color.g, color.r])!
@@ -688,7 +689,13 @@ fn (codec TGA) write_pixels(mut stream WriteStream, pixels PixelStorage) ! {
 	}
 	for y in 0 .. int(codec.height()) {
 		row := if top { y } else { int(codec.height()) - y - 1 }
-		line := bytes[row * stride..(row + 1) * stride]
+		start := usize(row) * usize(stride)
+		end := (usize(row) + 1) * usize(stride)
+		// Source validates the complete byte range before entering the encoder.
+		if end > usize(bytes.len) {
+			panic('index out of bounds: index ${end}, len ${bytes.len}')
+		}
+		line := bytes[int(start)..int(end)]
 		if !compressed {
 			stream.write_all(line)!
 		} else if bpp == 3 {
@@ -710,15 +717,16 @@ fn (codec TGA) write_converted(mut stream WriteStream, pixels PixelStorage) ! {
 			int(codec.height()) - y - 1
 		}
 		for x in 0 .. width {
-			i := row * width + x
+			i := usize(row) * usize(width) + usize(x)
+			tga_writer_check_index(i, int(pixels.len()))
 			mut bytes := []u8{}
 			match pixels {
 				Rgb24Pixels {
-					color := pixels.data[i]
+					color := pixels.data[int(i)]
 					bytes = [color.b, color.g, color.r]
 				}
 				Rgba32Pixels {
-					color := pixels.data[i]
+					color := pixels.data[int(i)]
 					bytes = [color.b, color.g, color.r, color.a]
 				}
 				else {
@@ -736,4 +744,10 @@ fn (codec TGA) write_converted(mut stream WriteStream, pixels PixelStorage) ! {
 		}
 	}
 	if compressed { rle.flush(mut stream)! }
+}
+
+fn tga_writer_check_index(index usize, length int) {
+	if index >= usize(length) {
+		panic('index out of bounds: index ${index}, len ${length}')
+	}
 }
