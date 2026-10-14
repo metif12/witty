@@ -1050,3 +1050,9 @@ repeated positional writes, path truncation, live borrowed descriptors and
 initialized caller buffers. PNG invalid-header failures preserve the exact native
 panic in production. The proof matches 19,584 returning records, 768 returning
 controls and 384 exact panic/state pairs in both compiler modes.
+
+The [public image read proof](reference_probes/image_read/README.md) compares
+managed/unmanaged file/path/memory reads and detection, borrowed descriptor
+ownership, repeated calls and retained buffers. It matches 18,040 returning
+records, 2,182 returning controls, 948 exact panic/state pairs and 40 bounded
+native XBM loop pairs in both modes; complete samples decode sixteen formats.

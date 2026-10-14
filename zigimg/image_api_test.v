@@ -1,6 +1,101 @@
 module zigimg
 
 import os
+import encoding.hex
+
+fn test_image_file_detection_keeps_earlier_signature_eof_before_pam() {
+	path := os.join_path(os.temp_dir(), 'zigimg-image-api-detect-${os.getpid()}.bin')
+	defer { os.rm(path) or {} }
+	data := 'P7\n'.bytes()
+	os.write_file_array(path, data)!
+	mut direct := ReadStream.init_memory(data)
+	assert PAM.format_detect(mut direct)!
+	for route in 0 .. 4 {
+		mut file := os.open(path)!
+		file.seek(i64(data.len), .start)!
+		mut buffer := []u8{len: 32, init: 165}
+		for _ in 0 .. 2 {
+			mut status := 'ok'
+			match route {
+				0 {
+					ImageUnmanaged.detect_format_from_file(file, mut buffer) or {
+						status = err.msg()
+					}
+				}
+				1 {
+					Image.detect_format_from_file(file, mut buffer) or { status = err.msg() }
+				}
+				2 {
+					ImageUnmanaged.detect_format_from_file_path(path, mut buffer) or {
+						status = err.msg()
+					}
+				}
+				else {
+					Image.detect_format_from_file_path(path, mut buffer) or { status = err.msg() }
+				}
+			}
+
+			assert status == 'EndOfStream'
+			status = 'ok'
+			match route {
+				0 { ImageUnmanaged.from_file(file, mut buffer) or { status = err.msg() } }
+				1 { Image.from_file(file, mut buffer) or { status = err.msg() } }
+				2 { ImageUnmanaged.from_file_path(path, mut buffer) or { status = err.msg() } }
+				else { Image.from_file_path(path, mut buffer) or { status = err.msg() } }
+			}
+
+			assert status == 'EndOfStream' && file.tell()! == u64(data.len)
+			assert buffer[..data.len] == data
+			assert buffer[data.len..] == []u8{len: 32 - data.len, init: 165}
+			assert os.read_bytes(path)! == data
+		}
+		file.close()
+	}
+}
+
+fn test_image_file_gif_routes_preserve_frames_and_borrowed_descriptor() {
+	path := os.join_path(os.temp_dir(), 'zigimg-image-api-gif-${os.getpid()}.bin')
+	defer { os.rm(path) or {} }
+	data :=
+		hex.decode('4749463839610100010080004d13385d82a7cc21ff0b4e45545343415045322e30030107000021f90400250000002c00000000010001000002024c01003b')!
+	os.write_file_array(path, data)!
+	for route in 0 .. 4 {
+		mut file := os.open(path)!
+		file.seek(i64(data.len), .start)!
+		mut buffer := []u8{len: 128, init: 165}
+		for _ in 0 .. 2 {
+			mut image := ImageUnmanaged{}
+			match route {
+				0 {
+					image = ImageUnmanaged.from_file(file, mut buffer)!
+				}
+				1 {
+					managed := Image.from_file(file, mut buffer)!
+					image = managed.to_unmanaged()
+				}
+				2 {
+					image = ImageUnmanaged.from_file_path(path, mut buffer)!
+				}
+				else {
+					managed := Image.from_file_path(path, mut buffer)!
+					image = managed.to_unmanaged()
+				}
+			}
+
+			assert image.width == 1 && image.height == 1 && image.pixel_format() == .indexed1
+			assert image.raw_bytes() == [u8(1)]
+			assert image.animation.loop_count == 7 && image.animation.frames.len == 1
+			assert image.animation.frames[0].pixels.as_bytes() == [u8(1)]
+			assert image.animation.frames[0].duration == f32(37) * f32(0.01)
+			assert file.tell()! == u64(data.len)
+			assert buffer[..data.len] == data
+			assert buffer[data.len..] == []u8{len: 128 - data.len, init: 165}
+			assert os.read_bytes(path)! == data
+			image.deinit()
+		}
+		file.close()
+	}
+}
 
 fn test_image_file_routes_restart_png_at_zero_and_keep_borrowed_descriptor() {
 	path := os.join_path(os.temp_dir(), 'zigimg-image-api-png-${os.getpid()}.bin')

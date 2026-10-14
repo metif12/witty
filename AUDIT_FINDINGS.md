@@ -6540,3 +6540,59 @@ other CPU vector selections, const/narrow/enum/boxed representations, physical
 layouts, big-endian/32-bit runtime and portable ABI remain boundaries. Cross builds
 establish compilation only. Scope and reproduction are in
 [the public image file proof](zigimg/reference_probes/image_files/README.md).
+
+### Public image read/detection routes checkpoint — 2026-10-14
+
+Compiled unchanged pinned public Image/ImageUnmanaged read and detection APIs
+through managed/unmanaged file handles, paths and memory. No production change
+was needed. Both Debug/ordinary and ReleaseSafe/production match **18,040 returning
+records / 36,080 public calls**, SHA-256
+`2b0e3abd67907e90dee44af4969652acb1a99a2c8a302a2f1f1848467171eafd`.
+Sixteen complete samples successfully decode; detector/decoder prefixes, all
+256 first bytes and short-signature order preserve native registry dispatch.
+Files contain the exact input, borrowed descriptors start and remain at EOF,
+positional readers start at zero, and each API is invoked twice without resetting
+caller buffers. Path calls close their own descriptor and leave disk unchanged.
+
+**2,182 returning controls**, SHA-256
+`fe7af7f48f4e178f124528b064f1b332316945b360f44ee2d27ec85764e934ca`,
+and **948 exact panic/state pairs**, SHA-256
+`9c108992c26ef38c818f6b827b98f65668aa1aa704158e7bf6577cf3d4d2ea09`,
+cover capacities zero through 512, isolated GIF/TGA prefixes and indexed PCX EOF
+palette seek order. Source supplies every classification. Failed exits, no stdout,
+the sole exact native diagnostic and equal nonempty snapshots are required.
+
+**40 bounded XBM loop pairs**, initialized ready-state SHA-256
+`0f2daf83f99d0dba7096f4d4c933da9d653415d5aa9345df7556964678174477`,
+cover a define line and a complete sample, both operations and all six routes.
+The native detector peeks the first define without consuming it. Both processes
+remain active for 0.5 seconds after equal readiness, with no other output/errors,
+then are killed. Public XBM decoding is blocked by that inherited detector loop;
+these cases are reported separately from returning observations.
+
+Snapshots compare borrowed descriptor position, all caller buffer/input bytes
+and unchanged disk. Complete decoded samples compare dimensions/storage/count,
+all pixel bytes, animation loop/frame counts, frame pixels and f32 duration bits.
+Prefix/control pixel bytes, palettes, inactive backing/padding, pointer identities,
+allocator effects and private stream/codec state remain unobserved. JPEG uses a
+frozen fully initialized baseline grayscale sample. Source bodies and visibility
+stay unchanged. New regressions pin the early public PAM EOF and repeated indexed1
+GIF loads through all four file/path routes; twelve exact compiled consumer
+records / 24 calls match per mode.
+
+All 61 image and 58 Vaxis test files pass with nineteen production/application/
+platform/unit/fixture checks. Historical file-writer hashes and native public image
+API encoder/detection assertions remain unchanged in both modes. Formatting,
+diff and Python checks pass. The pinned V compiler's premature test cleanup in a
+propagated `match` expression is recorded with generated C and failed unit output;
+named assignments avoid it. An interrupted RAM-backed proof was discarded; final
+persistent evidence is independently replayed and archived with every member
+read back. Full Source/library/DEFLATE/math/SIMD/fmt/version and before/after
+implementation/fixture/runner/helper/input hashes protect the comparisons.
+
+Custom/nonseekable streams, OS failures/short reads, path races/symlinks, allocation/
+OOM/GC/lifetime, larger dimensions or malformed successful pixel tails, other CPU
+vector selections, const/narrow/enum/boxed representations, physical layouts,
+big-endian/32-bit runtime and portable ABI remain boundaries. Cross builds establish
+compilation only. Scope and reproduction are in
+[the public image read proof](zigimg/reference_probes/image_read/README.md).
