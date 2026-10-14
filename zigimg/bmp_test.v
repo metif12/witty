@@ -1,5 +1,90 @@
 module zigimg
 
+import os
+
+fn test_bmp_file_writes_retain_native_buffers_and_positional_roundtrip() {
+	for format in [PixelFormat.bgr24, .bgra32] {
+		path := os.join_path(os.temp_dir(), 'witty-bmp-buffer-${os.getpid()}-${u32(format)}.bin')
+		os.write_file_array(path, []u8{len: 256, init: 165})!
+		defer { os.rm(path) or {} }
+		mut file := os.open_file(path, 'r+')!
+		defer { file.close() }
+		file.seek(256, .start)!
+		mut buffer := []u8{len: 128, init: 165}
+		mut writer := WriteStream.init_file(file, mut buffer)
+		writer.seek_to(7)!
+		mut image := ImageUnmanaged.create(1, 1, format)!
+		mut raw := image.raw_bytes()
+		expected := if format == .bgr24 { [u8(19), 56, 93] } else { [u8(19), 56, 93, 130] }
+		copy(mut raw, expected)
+		BMP.write_image(mut writer, image, BmpEncoderOptions{})!
+		end := if format == .bgr24 { 132 } else { 149 }
+		assert writer.get_pos() == u64(end) && writer.buffered().len == 0
+		disk := os.read_bytes(path)!
+		assert disk.len == 256 && disk[..7] == []u8{len: 7, init: 165}
+		assert disk[end..] == []u8{len: 256 - end, init: 165}
+		if format == .bgr24 {
+			assert buffer[..125] == disk[7..132]
+			assert buffer[125..] == [u8(165), 165, 165]
+		} else {
+			assert buffer == disk[21..149]
+		}
+		mut input_buffer := []u8{len: 124, init: 165}
+		mut reader := ReadStream.init_file(file, mut input_buffer)
+		reader.discard_all(7)!
+		decoded := BMP.read_image(mut reader)!
+		assert decoded.width == 1 && decoded.height == 1 && decoded.pixel_format() == format
+		assert decoded.raw_bytes() == expected
+		assert reader.get_pos() == u64(end)
+		assert reader.buffered_len() == if format == .bgr24 {
+			121
+		} else {
+			107
+		}
+	}
+}
+
+fn test_bmp_unsupported_file_storage_keeps_headers_pending_until_caller_flushes() {
+	path := os.join_path(os.temp_dir(), 'witty-bmp-pending-${os.getpid()}.bin')
+	os.write_file_array(path, []u8{len: 256, init: 165})!
+	defer { os.rm(path) or {} }
+	mut file := os.open_file(path, 'r+')!
+	defer { file.close() }
+	file.seek(256, .start)!
+	mut buffer := []u8{len: 256, init: 165}
+	mut writer := WriteStream.init_file(file, mut buffer)
+	writer.seek_to(7)!
+	codec := BMP{
+		file_header: BitmapFileHeader{
+			magic_header: [u8(`X`), `Y`]!
+			size:         1
+			reserved:     0x12345678
+			pixel_offset: 9000
+		}
+		info_header: BitmapInfoHeaderV4{
+			header_size:           108
+			width:                 1
+			height:                1
+			bit_count:             99
+			compression_method:    .png
+			horizontal_resolution: 17
+		}
+	}
+	pixels := PixelStorage.init(.grayscale8, 1)!
+	codec.write(mut writer, pixels) or {
+		assert err.msg() == 'InvalidData'
+		assert writer.get_pos() == 129 && writer.buffered().len == 122
+		assert os.read_bytes(path)! == []u8{len: 256, init: 165}
+		writer.flush()!
+		disk := os.read_bytes(path)!
+		assert disk[7..129] == buffer[..122]
+		assert disk[..7] == []u8{len: 7, init: 165} && disk[129..] == []u8{len: 127, init: 165}
+		assert writer.get_pos() == 129 && writer.buffered().len == 0
+		return
+	}
+	assert false
+}
+
 fn test_bmp_zero_height_preserves_maximum_signed_width() {
 	mut output := []u8{len: 138, init: 165}
 	mut writer := WriteStream.init_memory(mut output)

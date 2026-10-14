@@ -6116,3 +6116,57 @@ fixture, runner, helper and input hashes protect retained evidence; task-owned
 RAM artifacts are fully archived/read back persistently before detaching.
 Reproduction and exact scope are in
 [the Raster stream proof](zigimg/reference_probes/ras_streams/README.md).
+
+### BMP positional encoding, pending headers and read-ahead checkpoint — 2026-10-14
+
+Compiled unchanged pinned BMP and its File.Reader/File.Writer paths. The existing
+codec matches the new buffered file comparison without implementation changes.
+Both Debug/ordinary and ReleaseSafe/production match **28,826 returning/error
+records / 57,652 calls**, SHA-256
+`e66348bd94ed11482b88a9abc8ad371e80ff29b60487793ba2aee6f68abfadc4`.
+
+Direct/static/interface readers cover V4/V5 BGR/BGRA images, every prefix of
+retained examples, detector bytes, ignored offsets/masks/padding, zero/odd extents,
+initial discard, repeated reads and validation order. File capacities match
+40/108/124-byte info headers and 128/256; smaller capacities are isolated failures.
+Direct negative reads omit private unwritten pixels while retaining public headers
+and storage length. Writers cover bounded memory/file buffers 0, 1, 3, 4, 8, 13,
+14, 40, 108, 122, 124, 128 and 256, supported/unsupported storage, all header arms,
+offsets 0/7, ignored direct metadata/interface options, signed/zero dimensions and
+maximal fitting image width. Descriptors begin at EOF independently of stream
+cursors; initialized writer files retain their original extent.
+
+**188 strict panic/state pairs**, SHA-256
+`4226d2b1d73e7da2d286f02ed7be91e64cfaede2dbd6b3652327d8a8c76b5b78`,
+cover undersized detector/file/info-header buffers, read arithmetic and dimension
+casts, short pixel arrays after emitted headers/pixels, direct minimum-height
+overflow and image-size/cast boundaries. Exact sole native messages, failed exits,
+no stdout and equal nonempty snapshots are required in both modes.
+
+Snapshots compare position, buffered/pending length, every initialized caller
+buffer byte, unchanged input/disk, initialized direct file/info headers and caller
+writer image/pixel state. Successful read pixels are compared before/after mutation.
+Private/default codec state, failed/freed/unwritten pixels, inactive capacity and
+pointer identities remain excluded; Source visibility and bodies are unchanged.
+
+Consumer regressions preserve native-observed 128-byte writer buffers: BGR retains
+its whole 125-byte file plus three untouched bytes, while BGRA retains the V5
+header and pixel after separately flushing the file header. Positional readback
+from offset seven with a 124-byte buffer returns at 132/149 with 121/107 bytes
+still buffered. Unsupported direct grayscale storage leaves 122 header bytes
+pending at position 129 and disk unchanged until explicit caller flush. Separate
+compiled Source/V controls compare all five writer/readback examples in both modes.
+
+All 61 image and 58 Vaxis test files pass, with production BMP/file tests,
+native/Linux application checks, three Windows libraries, Windows unit tests and
+fixtures in both modes, Linux library/fixture builds, formatting, diff and Python
+checks. Historical BMP returning, decoder/control and failure hashes and unchanged
+native assertions pass in both modes. Full Source/library/version, implementation,
+fixture, runner, helper and input hashes protect retained evidence.
+
+Custom/nonseekable readers, operating-system I/O failures, larger allocated extents,
+allocator/OOM/GC/lifetime, const/narrow/boxed representation, physical layouts,
+big-endian/32-bit runtime and portable ABI remain boundaries. Cross builds establish
+compilation coverage only. Task-owned RAM evidence is fully archived/read back on
+persistent storage before detaching. Reproduction and exact scope are in
+[the BMP stream proof](zigimg/reference_probes/bmp_streams/README.md).

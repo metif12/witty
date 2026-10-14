@@ -1004,3 +1004,9 @@ file decoding, planar palettes, partial RLE output and repeated failures. Both
 modes match 112,257 returning records / 224,514 calls and 367 exact panic/state
 pairs. Native-observed consumer regressions cover retained output and palette
 assignment boundaries; historical Raster hashes remain unchanged.
+
+The [BMP stream proof](reference_probes/bmp_streams/README.md) compares buffered
+file reads/writes, pending headers and retained caller buffers. Both modes match
+28,826 records / 57,652 calls and 188 exact panic/state pairs. Consumer regressions
+pin BGR/BGRA writer layouts, positional read-ahead and caller flush after errors;
+historical BMP hashes remain unchanged.

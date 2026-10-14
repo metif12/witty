@@ -93,10 +93,14 @@ The runner imports public codec/storage/stream interfaces from unchanged Source
 files. Defined header constructors are tested; Source's default BMP codec has
 undefined headers and is not inspected. Fixture enum values are all valid Source
 tags. V sum-type boxing/copy behavior, enum/const typing, GC versus explicit
-allocator ownership, OOM/lifetime, file streams, allocated extents beyond V's array
+allocator ownership, OOM/lifetime, custom file streams, allocated extents beyond V's array
 carrier and portable ABI remain boundaries. Cross-target compilation does not
 establish runtime parity. The unchanged historical native BMP harness also passes
 Debug and ReleaseSafe; existing V BMP tests cover its defined fixtures.
+
+The later [positional stream proof](../bmp_streams/README.md) adds buffered file
+reads/writes, pending-header errors, caller buffers, retries and exact panic state.
+This proof's returning, decoder/control and retained-state hashes remain unchanged.
 
 The runner verifies full Source-tree SHA-256
 `ca759a44a902143a60f42f0810dc90df7250c0f92804cf201353f0141650eb6b`, selected Zig
