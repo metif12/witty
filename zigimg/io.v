@@ -570,7 +570,7 @@ pub fn (mut stream WriteStream) seek_to(offset u64) ! {
 			if stream.file_seek_error != '' { return error(stream.file_seek_error) }
 			file := stream.file or { return error('Unexpected') }
 			result := C.witty_image_file_seek(file.fd, offset)
-			if result == 4 { panic('Stream seek used a closed file descriptor') }
+			if result == 4 { panic('reached unreachable code') }
 			if result != 0 {
 				stream.file_seek_error = match result {
 					1 { 'Unseekable' }

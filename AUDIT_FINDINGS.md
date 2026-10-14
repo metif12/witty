@@ -7329,3 +7329,77 @@ other CPU/vector selections, const/narrow/enum/boxed representations, physical
 layouts, big-endian/32-bit runtime and portable ABI remain boundaries. Cross builds
 establish compilation only. Scope and reproduction are in
 [the reader discard proof](zigimg/reference_probes/stream_discard/README.md).
+
+### Writer seek failures, flush precedence and cached state — 2026-10-14
+
+An uncached streaming writer seek on an invalidated owned descriptor reaches
+Source's `reached unreachable code` panic. V used a different message. The exact
+native diagnostic now survives production builds. Original production/binaries,
+all matching returning records and the differing diagnostic with equal initialized
+panic state remain retained. No other production behavior changed.
+
+Both Debug/ordinary and ReleaseSafe/production match **6,912 returning records /
+34,560 primary writer operations**, SHA-256
+`d699081654bf91d58ed1b37d948405fc432272988d3e3bef8c01202ff3bc277a`.
+Three equal groups of 2,304 records keep an owned pipe descriptor, restore a regular
+file before the first seek or restore it between seeks. Cases cover write/writeAll,
+positional/streaming constructors, capacities 0/1/8/32, initial offsets 0/1/7,
+first write lengths 0/1/7/33, first targets 0/1/7/32 and second targets 0/1/7.
+Each record counts two writes, two seeks and one final flush; setup, initial seek,
+replacement and observers are excluded. Logical positions, counts/error order,
+complete initialized caller buffers, pending spans, regular-file contents,
+endpoint ownership and final delivered pipe bytes agree.
+
+**196 returning controls**, SHA-256
+`15eabc88c22536fbf718742ae2fd76bb2e61afcd3f0ebb351413dc40b752689b`,
+and **60 exact panic/state pairs**, SHA-256
+`37687c2f4d80e44ec97553c62627a60667b3e48ef1017963da213a196785dbd7`,
+classify 256 actual invalidations before either seek. Controls use both APIs and
+constructors, capacities 0/1/8, offsets 0/1, distinct lengths 0/1/capacity+1 and
+first targets 0/7. Source supplies every return/trap classification. Failed pairs
+require failed exits, no stdout, one exact diagnostic and equal nonempty state:
+target invalid and only two keeper pipe endpoints live. Buffered writes, failed
+flushes, positional seeks and cached errors can return normally after invalidation.
+
+Public seekTo flushes before seeking. A failed flush returns Unexpected, retains
+pending bytes and prevents the native seek. A successful flush can deliver output
+before a pipe seek fails. Its cached Unseekable remains after restoring a regular
+file, while later seeks still flush before returning that cache. Restored streaming
+writes use the live descriptor's offset zero even when the writer's logical counter
+differs; positional writes retain their logical offset. Failed nonzero positional
+transitions remain sticky after restoration. Buffered writes can still append
+pending bytes in failure mode; subsequent flushing fails. These returning contracts
+already matched V and need no further implementation changes.
+
+C creates/unlinks initialized private O_EXCL/CLOEXEC regular files, creates
+nonblocking pipe endpoints, replaces/closes only the owned target and observes
+file/pipe bytes. Restored files contain 32 initialized bytes at physical offset
+zero. File observations use pread without changing that offset. No Source body,
+visibility or stream syscall is changed/intercepted. Endpoint references count
+matching descriptors 0–127 across both owned identities; raw identities, private
+mode/error/cursors, inactive storage and allocator effects are excluded. Observers
+snapshot before opening state files. No case paths survive; controlled replacement
+establishes no concurrent race equivalence. The original fixture's V variable
+redefinition failure remains retained separately.
+
+Three consumer regressions and nine compiled records / 45 operations per mode pin
+flush precedence, delivered bytes, cached errors after restoration and sticky
+failure with retained pending bytes. All 66 image and 58 Vaxis test files pass,
+with 34 production/application/platform/unit/fixture checks. Historical full-stream,
+baseline and 171-streaming hashes remain unchanged; seventeen historical trap pairs
+and four compile boundaries still pass. Discard, absolute-seek, transition and guard matrices
+retain prior return/control/panic-state hashes in both actual Source modes.
+Formatting/diff/Python checks pass. Complete Source/selected compiler libraries,
+math/SIMD/fs.Dir/libc/version and before/after implementation/fixture/runner/helper/
+input hashes protect comparisons. Only golden assignments change after ordinary
+discovery. Independent replay checks native classifications, exact failures, the
+original diagnostic mismatch, ownership and actual modes. Persistent archives are
+read back member by member.
+
+Larger offsets/writes, full-pipe backpressure and partial native writes, other
+devices/error caches, original-file pending data before replacement, additional
+constructor/copy/seek sequences, concurrent reuse races, syscall counts, timing,
+signals, injected errors, OOM/quotas/durability, Windows runtime, other CPU/vector
+selections, V representation/layout limits, big-endian/32-bit runtime and portable
+ABI remain boundaries. Cross builds establish compilation only. Scope and
+reproduction are in [the writer seek proof](zigimg/reference_probes/writer_seek/README.md).

@@ -1136,3 +1136,10 @@ pass the replacement file's EOF as pinned Zig does. Historical stream, guard,
 transition and absolute-seek hashes remain unchanged. A supplemental native case
 and consumer regression confirm that a nonregular size query preserves an already
 failed reader, leaving subsequently queued bytes untouched.
+
+The [writer seek proof](reference_probes/writer_seek/README.md) preserves the exact
+native BADF seek panic in production and checks flush precedence, cached seek
+failures after descriptor restoration and sticky writer failures with pending
+bytes. Both modes match 6,912 records / 34,560 primary operations, 196 returning
+controls and sixty exact panic/state pairs. Historical stream matrices retain
+their previous hashes.
