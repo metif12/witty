@@ -5900,3 +5900,62 @@ Source/library/version and before/after implementation, fixture, runner, helper
 and input hashes protect evidence. Source visibility/bodies remain unchanged.
 Reproduction and exact scope are in
 [the Netpbm stream proof](zigimg/reference_probes/netpbm_streams/README.md).
+
+## QOI and Farbfeld positional file-stream coverage — 2026-10-14
+
+The QOI and Farbfeld audits previously covered memory streams and left positional
+file streams unverified. Their existing codec/stream code matches the new compiled
+unchanged-Source comparison; no implementation change is needed. This checkpoint
+adds the file proof, a native-observed regression and documented scope.
+
+`verify_binary_codecs_reference.py` pairs Source Debug with ordinary V and Source
+ReleaseSafe with production V. Both pass **106,592 returning records**, containing
+**213,234 read/write/detection calls**, SHA-256
+`7abf69c3eda1b41dd0a66979fe7272843274074faf1f2ceab98e069bd97a268d`, and
+**168 exact panic/state pairs**, SHA-256
+`1495d4ae12287494280220e6c8ef80f4dde127b7a8d5fb4161a1ed4707f3fad4`.
+
+Direct, static image and format-interface reads cover memory and positional file
+buffers 8/16/32/64 for Farbfeld and 10/16/32/64 for QOI. Every Farbfeld prefix,
+QOI opcode/header prefixes, diff/luma/index/run controls, trailing bytes,
+discarded prefixes, repeated detection and retry consumption retain Source state.
+Writes cover all 24 storage tags, zero/inconsistent dimensions, initial offsets
+0/7, zero/one/two pixels, QOI/BMP option tags and both colorspaces, repeated writes
+and final flush through buffers 0/1/2/3/4/8/10/14/16/32/64/128. Encoder controls
+include zero/high/mixed values and counts through 126 around the 62-pixel run
+boundary. Wide QOI image dimensions retain Source's u32 truncation. Descriptors
+begin at EOF to verify the independent positional stream cursor.
+
+Twenty-four undersized-magic, nine QOI-header-buffer, 45 parsed-QOI-enum and ninety
+Farbfeld-dimension-cast failures require the exact sole message from compiled
+Source, failing exit, no stdout and equal nonempty snapshots. QOI enums are
+checked after consuming the complete header and before replacing the public
+header. Farbfeld casts precede storage validation and output, including unsupported
+storage and zero-byte file buffers.
+
+Snapshots compare logical position, buffered/pending length, every initialized
+caller buffer byte, unchanged input, actual disk contents, direct public headers
+and caller image/pixel state. Successful reads compare complete pixel/image values;
+failed/freed decoder storage, default undefined QOI headers, unsupported palettes
+and pointer identities remain unobserved. Grayscale1 uses semantic values to
+exclude narrow-field padding. Visibility and bodies of Source remain unchanged.
+
+The module regression checks native-observed complete file bytes, the final
+big-endian Farbfeld pixel and QOI marker in eight-byte caller buffers, independent
+descriptor positions, and a ten-byte QOI reader at position 19 with five marker
+bytes still buffered. The end marker remains unread and unvalidated. All 61 image
+and 58 Vaxis test files pass, along with production codec/file-stream tests,
+native/Linux application checks, three Windows libraries, Windows codec tests and
+stream fixtures in both modes, and Linux library/fixture builds. Historical QOI
+and Farbfeld returning/failure hashes remain unchanged in both modes. Formatting,
+diff and Python checks pass.
+
+Custom/nonseekable readers, streaming pipes, descriptor/short operating-system
+I/O failures, arbitrary larger allocations, allocator/OOM/GC/lifetime,
+const/narrow/boxed representation, physical layouts, big-endian bulk writing and
+portable ABI remain boundaries. Cross builds do not establish other-target runtime
+parity. Full Source/library/version and before/after implementation, fixture,
+runner, helper and input hashes protect retained evidence. Proof/build artifacts
+and temporaries use a task-owned RAM disk; a verified archive is preserved before
+detaching it. Reproduction and exact scope are in
+[the QOI/Farbfeld stream proof](zigimg/reference_probes/binary_codecs/README.md).

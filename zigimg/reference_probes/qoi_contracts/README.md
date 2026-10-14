@@ -84,12 +84,15 @@ omissions, default codec acceptance, mutable options and const-option rejection.
 Actual compiler error lines are required; crashes or unrelated errors do not
 count as rejection. Generated consumer hashes are checked before completion.
 
+File buffering and retained caller bytes are checked separately by the
+[QOI/Farbfeld stream proof](../binary_codecs/README.md); this fixture uses memory streams.
+
 Source's default QOI header is undefined. V uses an initialized placeholder so
 the default codec remains constructible with required header fields; its contents
 are outside the parity claim and are never compared. Direct invalid typed enum
 values, big-endian runtime behavior, allocator/OOM/GC/lifetime, wider allocated
 pixel counts, boxed storage copies, pointer/slice layout, const/narrow typing,
-file streams and portable ABI remain boundaries. Cross builds do not establish
+portable ABI remain boundaries. Cross builds do not establish
 runtime parity. Source visibility and implementation are unchanged.
 
 Full Source-tree SHA-256 is

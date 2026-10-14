@@ -1,5 +1,64 @@
 module zigimg
 
+import os
+
+fn test_binary_codecs_file_buffers_preserve_pixels_and_unread_qoi_marker() {
+	path := os.join_path(os.temp_dir(), 'witty-binary-codecs-${os.getpid()}')
+	defer { os.rm(path) or {} }
+	for kind in 0 .. 2 {
+		os.write_file_array(path, []u8{len: 256, init: 165})!
+		mut file := os.open_file(path, 'r+')!
+		file.seek(256, .start)!
+		mut output := []u8{len: 8, init: 165}
+		mut writer := WriteStream.init_file(file, mut output)
+		mut expected := []u8{}
+		if kind == 0 {
+			image := ImageUnmanaged{
+				width:  1
+				height: 1
+				pixels: Rgba64Pixels{
+					data: [Rgba64{ r: 0x3813, g: 0x825d, b: 0xcca7, a: 0x16f1 }]
+				}
+			}
+			Farbfeld.write_image(mut writer, image)!
+			expected = 'farbfeld'.bytes()
+			expected << [u8(0), 0, 0, 1, 0, 0, 0, 1, 0x38, 0x13, 0x82, 0x5d, 0xcc, 0xa7, 0x16,
+				0xf1]
+			assert output == expected[16..]
+		} else {
+			image := ImageUnmanaged{
+				width:  1
+				height: 1
+				pixels: Rgba32Pixels{
+					data: [Rgba32{ r: 19, g: 56, b: 93, a: 130 }]
+				}
+			}
+			QOI.write_image(mut writer, image, QoiEncoderOptions{ colorspace: .linear })!
+			expected = 'qoif'.bytes()
+			expected << [u8(0), 0, 0, 1, 0, 0, 0, 1, 4, 1, 0xff, 19, 56, 93, 130, 0, 0, 0, 0, 0,
+				0, 0, 1]
+			assert output == [u8(0), 0, 0, 0, 0, 0, 0, 1]
+		}
+		assert writer.get_pos() == u64(expected.len)
+		assert writer.buffered().len == 0
+		bytes := os.read_bytes(path)!
+		assert bytes[..expected.len] == expected
+		assert bytes[expected.len..] == []u8{len: 256 - expected.len, init: 165}
+		mut input := []u8{len: if kind == 0 { 8 } else { 10 }, init: 165}
+		mut reader := ReadStream.init_file(file, mut input)
+		if kind == 0 {
+			image := Farbfeld.read_image(mut reader)!
+			assert image.raw_bytes() == [u8(0x13), 0x38, 0x5d, 0x82, 0xa7, 0xcc, 0xf1, 0x16]
+			assert reader.get_pos() == 24 && reader.buffered_len() == 0
+		} else {
+			image := QOI.read_image(mut reader)!
+			assert image.raw_bytes() == [u8(19), 56, 93, 130]
+			assert reader.get_pos() == 19 && reader.buffered_len() == 5
+		}
+		file.close()
+	}
+}
+
 fn qoi_test_bytes(width u32, format u8, ops []u8) []u8 {
 	mut bytes := 'qoif'.bytes()
 	append_be_u32(mut bytes, width)

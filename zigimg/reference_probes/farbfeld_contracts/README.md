@@ -65,8 +65,11 @@ no unexpected return and no core dump are required. Names, exact panic text and
 state are included in the locked failure SHA-256:
 `ac87959369cc8d77564382026061029c1d58bce6f7c6266cdd616e6a9ee5b287`.
 
+File buffering and retained caller bytes are checked separately by the
+[QOI/Farbfeld stream proof](../binary_codecs/README.md); this fixture uses memory streams.
+
 Allocator/OOM/GC/lifetime, wider allocated pixel counts, pointer/slice layout,
-boxed storage copies, file streams, big-endian bulk writes, Source allocator and
+boxed storage copies, big-endian bulk writes, Source allocator and
 ignored encoder-options arguments, and portable ABI remain boundaries. The
 native header byte check does not establish portable record layout. Cross builds
 do not establish runtime parity. No Source visibility or implementation changes

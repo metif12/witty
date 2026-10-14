@@ -11,6 +11,11 @@ diagnostics, the pinned PNG writer, and the public SIMD lane helpers. Vaxis now
 uses these loaders. The complete library and its allocator/representation
 contracts remain open.
 
+QOI and Farbfeld positional file streams retain header/pixel consumption,
+caller-buffer bytes, pending output, and the unconsumed QOI end marker. The
+[file-stream comparison](reference_probes/binary_codecs/README.md) covers 106,592
+records and 168 exact failure states in ordinary and production builds.
+
 The lane helpers are `simd_load`, `simd_load_bytes`, `simd_store`,
 `simd_int_to_float`, `simd_float_to_int`, and `simd_vpermd`. Output lanes use a
 directly named fixed-array type, such as `type FourWords = [4]u16`; a load or
