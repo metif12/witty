@@ -193,7 +193,7 @@ pub fn PNG.write_image(mut stream WriteStream, image ImageUnmanaged, options Png
 		color_type:       PngColorType.from_pixel_format(image.pixel_format())!
 		interlace_method: if options.interlaced { .adam7 } else { .none }
 	}
-	if !header.is_valid() { panic('Assertion failed') }
+	if !header.is_valid() { panic('reached unreachable code') }
 	PNG.write(mut stream, image.pixels, header, options.filter_choice)!
 }
 

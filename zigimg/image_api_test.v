@@ -2,6 +2,95 @@ module zigimg
 
 import os
 
+fn test_image_file_routes_restart_png_at_zero_and_keep_borrowed_descriptor() {
+	path := os.join_path(os.temp_dir(), 'zigimg-image-api-png-${os.getpid()}.bin')
+	defer { os.rm(path) or {} }
+	mut raw := []u8{len: 24}
+	for i in 0 .. raw.len {
+		raw[i] = u8(i * 37 + 19)
+	}
+	image := ImageUnmanaged.from_raw_pixels(4, 2, raw, .rgb24)!
+	managed := image.to_managed()
+	for route in 0 .. 4 {
+		os.write_file_array(path, []u8{len: 256, init: 165})!
+		mut file := os.open_file(path, 'r+')!
+		file.seek(256, .start)!
+		mut buffer := []u8{len: 8, init: 165}
+		for _ in 0 .. 2 {
+			match route {
+				0 { image.write_to_file(file, mut buffer, PngEncoderOptions{})! }
+				1 { managed.write_to_file(file, mut buffer, PngEncoderOptions{})! }
+				2 { image.write_to_file_path(path, mut buffer, PngEncoderOptions{})! }
+				else { managed.write_to_file_path(path, mut buffer, PngEncoderOptions{})! }
+			}
+
+			assert file.tell()! == 256
+			assert buffer == png_magic_header[..]
+			disk := os.read_bytes(path)!
+			assert disk[..8] == png_magic_header[..]
+			if route < 2 {
+				assert disk.len == 256 && disk[8..] == []u8{len: 248, init: 165}
+			} else {
+				assert disk.len == 8
+			}
+		}
+		file.close()
+	}
+	assert image.raw_bytes() == raw
+}
+
+fn test_image_path_truncation_precedes_noop_and_unsupported_encoding() {
+	path := os.join_path(os.temp_dir(), 'zigimg-image-api-truncate-${os.getpid()}.bin')
+	defer { os.rm(path) or {} }
+	mut raw := []u8{len: 24}
+	for i in 0 .. raw.len {
+		raw[i] = u8(i * 37 + 57)
+	}
+	image := ImageUnmanaged.from_raw_pixels(4, 2, raw, .bgr24)!
+	managed := image.to_managed()
+	for route in 0 .. 4 {
+		for option in [EncoderOptions(GifEncoderOptions{}), PngEncoderOptions{}] {
+			os.write_file_array(path, []u8{len: 256, init: 165})!
+			mut file := os.open_file(path, 'r+')!
+			file.seek(256, .start)!
+			mut buffer := []u8{len: 8, init: 165}
+			for _ in 0 .. 2 {
+				mut status := 'ok'
+				match route {
+					0 {
+						image.write_to_file(file, mut buffer, option) or { status = err.msg() }
+					}
+					1 {
+						managed.write_to_file(file, mut buffer, option) or { status = err.msg() }
+					}
+					2 {
+						image.write_to_file_path(path, mut buffer, option) or { status = err.msg() }
+					}
+					else {
+						managed.write_to_file_path(path, mut buffer, option) or {
+							status = err.msg()
+						}
+					}
+				}
+
+				assert status == if option.format() == .png {
+					'Unsupported'
+				} else {
+					'ok'
+				}
+				assert file.tell()! == 256 && buffer == []u8{len: 8, init: 165}
+				assert os.read_bytes(path)! == if route < 2 {
+					[]u8{len: 256, init: 165}
+				} else {
+					[]u8{}
+				}
+			}
+			file.close()
+		}
+	}
+	assert image.raw_bytes() == raw
+}
+
 fn test_managed_image_defaults_creation_and_raw_copy() {
 	mut empty := Image.init()
 	assert empty.width == 0 && empty.height == 0

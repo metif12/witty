@@ -6486,3 +6486,57 @@ OS failures/short writes, allocator/OOM/GC/lifetime, const/narrow/enum/boxed typ
 physical layouts, big-endian/32-bit runtime and portable ABI remain boundaries.
 Cross builds establish compilation only. Scope and reproduction are in
 [the TGA writer proof](zigimg/reference_probes/tga_writer/README.md).
+
+### Public image file/path encoding checkpoint — 2026-10-14
+
+Extended the historical memory-only public encoder matrix to Image and
+ImageUnmanaged file handles and paths. The first invalid zero-width PNG header
+reported Source's `reached unreachable code` while V reported `Assertion failed`;
+initialized retained state matched. The explicit PNG guard now preserves the
+exact native message and failure order in ordinary and production builds.
+
+Both Debug/ordinary and ReleaseSafe/production match **19,584 returning records /
+39,168 encoder calls**, SHA-256
+`ad1f0e53dca0a11ea96483157a8438c253b65ca3ecde6156fd4bda3c6fe5847e`.
+All seventeen encoder arms, eight initialized 4×2 storage profiles, three option
+variants, twelve capacities from zero through 1024 and four public routes are
+compared. Files begin with 256 bytes of 165, borrowed descriptors at EOF, and
+calls repeat twice. Each wrapper creates a positional writer at zero; handle
+writes preserve tails while path writes truncate before codec validation.
+Borrowed descriptors remain live at EOF through both routes.
+
+**768 returning controls**, SHA-256
+`c2e3b0f27c5ceedd1d717adacd1c5b20e93772792838156dd47f73cec624e0a8`,
+and **384 exact panic/state pairs**, SHA-256
+`a9d18603fd04734b446831e29cdbeaaef434718b07b8f13b0d5367f4d8a9f3f3`,
+cover zero extents and one-pixel storage through PNG/TGA, four RGB/BGR storage
+profiles, all routes, three option variants and capacities 0/1/8/32. Source supplies
+each return/failure classification. The failures comprise 192 invalid PNG headers
+and 192 short TGA pixel/row accesses. Earlier unsupported returns and whole-slice
+raw writing retain Source order. Panic checks require failed exits, no stdout,
+the sole exact native message and equal nonempty initialized snapshots.
+
+Snapshots include every caller buffer byte, originating image dimensions/storage/
+pixels/active palette, borrowed descriptor position and actual disk bytes/extent.
+Wrapper-private cursors/pending length, codec state, private managed views,
+pointer identities, inactive backing and allocator effects remain unobserved.
+Source algorithms and visibility stay unchanged. The pinned no-op encoders stay
+no-ops; PNG flushes only its eight-byte signature. Consumer regressions pin repeated
+PNG writes and truncation before no-op/unsupported encoding through all routes.
+
+All 61 image and 58 Vaxis test files pass, along with production image/PNG tests
+and nineteen application/platform/unit/fixture checks. Historical interface record,
+option-failure and memory-writer hashes and native image API assertions remain
+unchanged in both modes. Formatting, diff and Python checks pass. The original
+mismatch, corrected fixture exit-observer error and a historical run rejected by
+the implementation freeze check are retained separately; final inputs are frozen.
+Full Source/library/math/SIMD/version and before/after implementation/fixture/
+runner/helper/input hashes protect evidence, independently replayed and fully
+read back from its persistent archive before RAM detachment.
+
+Read/detect wrappers, custom/nonseekable streams, OS failures/short writes, file
+creation permissions, path races/symlinks, allocator/OOM/GC/lifetime, larger extents,
+other CPU vector selections, const/narrow/enum/boxed representations, physical
+layouts, big-endian/32-bit runtime and portable ABI remain boundaries. Cross builds
+establish compilation only. Scope and reproduction are in
+[the public image file proof](zigimg/reference_probes/image_files/README.md).

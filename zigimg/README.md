@@ -1043,3 +1043,10 @@ pairs in both modes. Explicit writer guards preserve Source diagnostics after
 partial output, including full usize row indices. Consumer regressions pin
 extension offsets, retained buffer tails and header retries before caller flush;
 historical TGA hashes remain unchanged.
+
+The [public image file proof](reference_probes/image_files/README.md) compares
+managed/unmanaged handle/path writes across all seventeen encoders, including
+repeated positional writes, path truncation, live borrowed descriptors and
+initialized caller buffers. PNG invalid-header failures preserve the exact native
+panic in production. The proof matches 19,584 returning records, 768 returning
+controls and 384 exact panic/state pairs in both compiler modes.
