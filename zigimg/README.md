@@ -1164,4 +1164,12 @@ The [exclusive delimiter comparison](reference_probes/reader_exclusive/README.md
 covers 22,244 returning records / 79,212 calls per mode, plus 264 returning
 controls and 216 exact position-panic/state pairs. Initialized buffers, copied
 results, pending bytes, failure order and controlled pipe ownership match the
-pinned Source. The nullable `takeDelimiter` API remains outside this checkpoint.
+pinned Source. The subsequent nullable delimiter checkpoint below adds `takeDelimiter`.
+
+`take_delimiter` consumes a found delimiter and returns `!DelimiterResult` with
+an optional `line` field. A present empty line differs from absent input; a final
+nonempty EOF tail is returned once. ReadFailed and StreamTooLong remain errors.
+The [nullable delimiter comparison](reference_probes/reader_delimited/README.md)
+covers 25,052 returning records / 90,444 calls per mode, plus returning and exact
+failure controls. The result record adapts Source's error-union/optional-slice
+type; the proof documents V's mutable-alias extraction rule.

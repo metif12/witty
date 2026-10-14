@@ -372,6 +372,31 @@ pub fn (mut stream ReadStream) take_delimiter_exclusive(delimiter u8) ![]u8 {
 	return line
 }
 
+// V represents Source's error union containing an optional slice with a
+// result record. A present empty line differs from the absent line at EOF.
+pub struct DelimiterResult {
+pub:
+	line ?[]u8
+}
+
+// Omit the delimiter from the borrowed result, but consume it when present.
+// A nonempty EOF tail is returned once; subsequent EOF returns an absent line.
+pub fn (mut stream ReadStream) take_delimiter(delimiter u8) !DelimiterResult {
+	line := stream.peek_delimiter_inclusive(delimiter) or {
+		if err.msg() != 'EndOfStream' { return err }
+		if stream.position == stream.end { return DelimiterResult{} }
+		remaining := unsafe { stream.buffer[stream.position..stream.end] }
+		stream.position += remaining.len
+		return DelimiterResult{
+			line: unsafe { remaining }
+		}
+	}
+	stream.position += line.len
+	return DelimiterResult{
+		line: unsafe { line[..line.len - 1] }
+	}
+}
+
 // std.Io.Reader.readVec with one destination vector, and File.Reader's
 // positional/streaming native scatter read including buffered read-ahead.
 fn (mut stream ReadStream) read_vec(mut destination []u8) !int {

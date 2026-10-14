@@ -142,3 +142,59 @@ fn test_exclusive_file_delimiters_distinguish_eof_tail_and_full_capacity() {
 		}
 	}
 }
+
+fn test_nullable_delimiter_consumes_separators_and_returns_eof_tail_once() {
+	mut data := '\nA\n\nlast'.bytes()
+	mut reader := ReadStream.init_memory(data)
+	mut adapter := reader.reader()
+	first := reader.take_delimiter(`\n`)!
+	empty := first.line or { panic('Expected a present empty line') }
+	assert empty.len == 0 && reader.get_pos() == 1
+	second := adapter.take_delimiter(`\n`)!
+	line := second.line or { panic('Expected the first text line') }
+	before := line.clone()
+	assert line == 'A'.bytes() && reader.get_pos() == 3
+	data[1] = `B`
+	assert line == 'B'.bytes() && before == 'A'.bytes()
+	third := reader.take_delimiter(`\n`)!
+	another_empty := third.line or { panic('Expected a second present empty line') }
+	assert another_empty.len == 0 && reader.get_pos() == 4
+	fourth := adapter.take_delimiter(`\n`)!
+	tail := fourth.line or { panic('Expected the final EOF tail') }
+	assert tail == 'last'.bytes() && reader.get_pos() == 8
+	for _ in 0 .. 2 {
+		eof := adapter.take_delimiter(`\n`)!
+		assert eof.line == none && reader.get_pos() == 8
+	}
+}
+
+fn test_nullable_file_delimiter_distinguishes_capacity_failure_from_eof() {
+	$if !windows {
+		path := os.join_path(os.temp_dir(), 'witty-delimited-eof-${os.getpid()}.owned')
+		os.write_file(path, 'abc')!
+		defer { os.rm(path) or {} }
+		for capacity in [3, 8] {
+			mut file := os.open(path)!
+			defer { file.close() }
+			mut buffer := []u8{len: capacity, init: 165}
+			mut reader := ReadStream.init_file(file, mut buffer)
+			mut status := 'ok'
+			result := reader.take_delimiter(`\n`) or {
+				status = err.msg()
+				DelimiterResult{}
+			}
+			if capacity == 3 {
+				assert status == 'StreamTooLong' && result.line == none
+				assert reader.get_pos() == 0 && reader.buffered_len() == 3
+			} else {
+				assert status == 'ok'
+				line := result.line or { panic('Expected a file EOF tail') }
+				assert line == 'abc'.bytes() && reader.get_pos() == 3
+				buffer[0] = `A`
+				assert line == 'Abc'.bytes()
+				eof := reader.take_delimiter(`\n`)!
+				assert eof.line == none && reader.get_pos() == 3
+			}
+		}
+	}
+}

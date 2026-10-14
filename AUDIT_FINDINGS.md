@@ -7635,3 +7635,84 @@ portable ABI, V representation limits, Windows runtime, other CPU selections and
 big-endian/32-bit runtime remain boundaries. Cross builds establish compilation
 only. Reproduction and detailed scope are in
 [the exclusive delimiter proof](zigimg/reference_probes/reader_exclusive/README.md).
+
+### Nullable delimiter line results — 2026-10-14
+
+The reader adapter now translates pinned takeDelimiter as take_delimiter. A
+found delimiter is consumed and omitted from the borrowed result. Present empty
+lines advance over consecutive delimiters. A nonempty EOF tail is returned once;
+later EOF calls return an absent line. ReadFailed and StreamTooLong remain
+errors, including StreamTooLong for a full file buffer at actual EOF. This closes
+the nullable takeDelimiter gap recorded by the exclusive-delimiter checkpoint.
+All existing reader bodies are unchanged.
+
+V 0.5.2 rejects direct !?[]u8 syntax. The new !DelimiterResult return has a public
+readonly line ?[]u8 field, preserving error, absent and present-empty outcomes.
+A separate compiler control retains that direct-signature rejection. Both modes
+accept the record representation and distinguish none/empty/nonempty values with
+live borrowing. Source error-union/option type identity and layout remain
+adaptations. Extracting a mutable alias from the readonly optional field requires
+explicit unsafe in pinned V; the original ordinary compiler rejection is retained
+separately. Readonly line extraction uses normal V syntax.
+
+Debug/ordinary and ReleaseSafe/production match **25,052 returning records /
+90,444 primary calls** per mode. **15,288 memory/positional-file/streaming-file
+records** perform three takes and one relative seek. The prior 12,480 axis
+profiles plus 2,808 adjacent-delimiter/EOF-tail profiles compare capacities
+0/1/2/4/8/32, arithmetic payload lengths 0/1/7/8/9/31/32/33/64, empty input,
+newline-only/leading/trailing/consecutive delimiters, unterminated text, distinct
+zero/one/half-length/end offsets, all delimiter bytes and relative offsets -1/0/1.
+Both direct V calls and the borrowed reader() adapter map to the public Source
+reader API. Memory uses its full input; capacity repeats those memory cases.
+Initialized caller buffers, copied results, pending bytes, positions, size/error
+outcomes and ordered ok/none/error statuses match. SHA-256:
+`c515a79be9e86bda0a1e8c84455f8343f99c78128d3b356fc656a65c36ab326b`.
+
+The **9,764 replacement records** compare two takes and one relative seek:
+7,740 ordinary-transition, 756 failed-pending, 756 failed-consumed and 512
+every-delimiter profiles retain original bytes, sticky failures, EOF/WouldBlock,
+optional reseeding, normalized ownership and queued input. SHA-256:
+`0bcfe7c177570bee75574d1160eaa4298e24e0cea0ff04c57163b3be74007441`.
+**264 additional returning controls** retain
+`e953ff96c5268780593e0fe6c4cb318a897ad823e9ce45f3527aa234c80f9b4a`.
+**216 exact position-panic/state pairs** retain
+`87f6fa3b0a377a66c68d279ebaee77ae5448782e91bdfdbf94d73dae93f8a6c0`.
+Source classifies subsequent getPos overflow after ReadFailed separately from
+nullable delimiter outcomes. Observers omit getPos, record the preceding status
+before opening output files and require equal initialized state, failed exits,
+empty stdout and one exact diagnostic.
+
+A further **1,024 borrowed-slice records / 1,024 calls** per mode compare both
+caller forms, memory/positional files and all delimiter bytes. A caller backing
+mutation changes the result, and a subsequent mutable result mutation changes
+caller storage, while saved copies retain their prior bytes. Complete initialized
+backing spans and positions match. V uses the explicit mutable-alias extraction
+requested by its compiler. SHA-256:
+`9bd964bc7e08795f686f3d2ffbf9c4a6ed34e552182536fe5ae514e81ecffeb9`.
+Two unit regressions cover empty lines, consumed delimiters, a single EOF tail,
+repeated absent results, borrowing and capacity failures. All **68 image and 58
+Vaxis test files** pass, with **40 production/application/platform/unit/fixture
+checks**. Historical exclusive/inclusive delimiter and full stream hashes remain
+unchanged in both modes.
+
+The probe wrapper reuses separately copied/hashed exclusive payload and delimiter
+replacement headers. C creates initialized unlinked O_EXCL/CLOEXEC files, resets
+owned payload offsets before construction and operates only on owned nonblocking
+pipes and descriptors. No Source body, visibility or reader syscall is changed
+or intercepted. Full Source, selected compiler libraries/versions, implementation,
+probes, shared headers, direct imported helpers and inputs are checked before/after
+comparison. Only golden assignments change after ordinary discovery. Large logs
+use lossless parent-side compression with raw-byte and compressed-file hashes.
+Failed fixture development and compiler controls remain separate from final
+comparisons. Independent replay checks output, classification, exact failure
+states, borrowing, provenance and actual modes. The previous checkpoint archive
+was fully read back before removing identical expanded proof copies; its evidence
+remains archived. The new archive is also read back member by member.
+
+Additional delimiter streaming/discard callbacks, arbitrary carrier construction,
+copy and callback sequences, other devices, larger requests/buffers/offsets,
+concurrent reuse, syscall counts, timing/signals, injected errors, OOM/quotas,
+allocator lifetime, portable ABI, V representation limits, Windows runtime, other
+CPU selections and big-endian/32-bit runtime remain boundaries. Cross builds
+establish compilation only. Reproduction and exact scope are in
+[the nullable delimiter proof](zigimg/reference_probes/reader_delimited/README.md).
