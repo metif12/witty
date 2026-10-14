@@ -268,15 +268,7 @@ pub fn (mut stream ReadStream) peek(count int) ![]u8 {
 	if count < 0 { panic('Stream byte count must be nonnegative') }
 	if count > stream.end - stream.position {
 		if stream.file == none { return error('EndOfStream') }
-		if stream.buffer.len - stream.position < count {
-			remaining := stream.end - stream.position
-			for i in 0 .. remaining {
-				stream.buffer[i] = stream.buffer[stream.position + i]
-			}
-			stream.position = 0
-			stream.end = remaining
-			if count > stream.buffer.len { panic('reached unreachable code') }
-		}
+		stream.rebase(usize(count))!
 		for stream.end - stream.position < count {
 			// File.Reader's native refill reuses the whole buffer after consuming it.
 			if stream.position == stream.end && stream.streaming >= 0 {
@@ -299,15 +291,7 @@ pub fn (mut stream ReadStream) fill(count int) ! {
 // positional to streaming IO may succeed without adding any buffered bytes.
 pub fn (mut stream ReadStream) fill_more() ! {
 	if stream.file == none { return error('EndOfStream') }
-	if stream.end == stream.buffer.len {
-		remaining := stream.end - stream.position
-		for i in 0 .. remaining {
-			stream.buffer[i] = stream.buffer[stream.position + i]
-		}
-		stream.position = 0
-		stream.end = remaining
-		if remaining == stream.buffer.len { panic('reached unreachable code') }
-	}
+	stream.rebase(usize(stream.end - stream.position) + 1)!
 	if stream.position == stream.end && stream.streaming >= 0 {
 		stream.position = 0
 		stream.end = 0
@@ -335,6 +319,20 @@ pub fn (mut stream ReadStream) fill_more() ! {
 pub fn (mut stream ReadStream) peek_greedy(count int) ![]u8 {
 	stream.fill(count)!
 	return stream.buffered()
+}
+
+// Ensure room from the current cursor without reading or consuming input.
+// Fixed memory cannot move; file buffers compact before the capacity assertion.
+pub fn (mut stream ReadStream) rebase(capacity usize) ! {
+	if usize(stream.buffer.len - stream.position) >= capacity { return }
+	if stream.file == none { return error('EndOfStream') }
+	remaining := stream.end - stream.position
+	for i in 0 .. remaining {
+		stream.buffer[i] = stream.buffer[stream.position + i]
+	}
+	stream.position = 0
+	stream.end = remaining
+	if capacity > usize(stream.buffer.len) { panic('reached unreachable code') }
 }
 
 pub fn (mut stream ReadStream) peek_byte() !u8 {

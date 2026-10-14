@@ -1270,3 +1270,11 @@ byte. Taking an empty prefix consumes that sentinel. The
 records, 3,120 mutation/alias records, 132 controls and 23 consumers per mode.
 V uses a runtime marker and an opaque record; comptime typing and oversized
 literal conversion differences are documented separately.
+
+`rebase(capacity)` makes room from the current cursor without reading or
+consuming input. File readers move pending bytes only when necessary; fixed
+memory returns `EndOfStream` when the remaining span is too small. File capacity
+traps follow compaction, including in production. `peek` and `fill_more` share
+this operation. The [rebase comparison](reference_probes/reader_rebase/README.md)
+covers 13,626 records and 110 controls per mode, including EOF, failed streaming
+transitions, retained buffer state and unread pipe data.

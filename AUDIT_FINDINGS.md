@@ -8691,3 +8691,69 @@ V representation limits are boundaries. Runtime uses little-endian 64-bit macOS;
 Windows/Linux and other CPU, big-endian and 32-bit runtime remain outside the
 proof. Cross builds establish compilation only. Reproduction and scope are in
 [the sentinel reader proof](zigimg/reference_probes/reader_sentinel/README.md).
+
+### Public reader buffer rebasing — 2026-10-15
+
+`ReadStream.rebase(capacity usize)` translates pinned Reader.rebase for fixed
+memory and file readers. It does nothing when the cursor already leaves enough
+room. Fixed memory otherwise returns EndOfStream without moving its bytes. File
+readers compact pending bytes to the beginning and reset cursor/end before the
+capacity assertion. The explicit panic remains active in production. Rebasing
+does not consume input or refill, including after EOF/ReadFailed and sticky
+streaming-transition failure. Existing peek/fill_more share the public method.
+
+Debug/ordinary and ReleaseSafe/production each match **13,626 returning records /
+40,878 rebases / 95,382 primary calls**, SHA-256
+`e6efc4fa8584b25d60117d83fef6c5c076feab4ccde687d1cc988e8043ef6ca0`.
+Three rebases, three caller tosses and one relative seek run per record;
+setup/priming/observations are separate. Groups contain 12,690 basic, 72 prefilled
+and 864 replacement records, covering memory/positional/streaming readers,
+empty buffers, capacities 0/1/4/8, partial/full consumption, short/EOF input,
+relative seeks, zero/exact/oversize and maximum 64-bit usize requests. Open and
+closed owned nonblocking pipes cover cached failures and initialized pending
+bytes. Without replacement priming, all seeded wire data remains unread.
+
+The independent model checks exact buffer movement, untouched suffixes, physical
+cursor/end through pointer offsets, pending input, retained output, logical
+position, size/errors and descriptor ownership. Rebase preserves pending input
+and position even when the requested capacity is greater than pending length.
+Fixed failures retain earlier successful output and all buffer bytes.
+
+Forty returning controls match SHA-256
+`cf834fc7c956bcea92c0dbd4ab5564a5f1e5d1e9aa98cb2967fa575597b1d963`.
+Seventy exact panic/state pairs match SHA-256
+`f286aebbca3601dba4a2d5021693ab2f2c2de02f83c0372dd6cdae259bd5cd4b`:
+54 capacity assertions retain already compacted bytes/reset cursor/end, and 16
+getPos integer-overflow observations fail after priming before rebase. Both
+failed exits have empty stdout, one exact message and identical initialized
+state. Observers omit getPos, capture bytes before opening output files and
+clean up owned resources through Source FullPanic or V at_exit.
+
+Three regressions check memory EOF/no movement, conditional file compaction with
+subsequent reads, and sticky failure rebasing without consuming pipe data.
+All 78 image test files pass in three batches. Seventeen focused checks cover
+production tests, native/Linux applications, three Windows dependency libraries,
+the new Windows unit and comparison executables in both modes, and Linux shared
+libraries/comparison compilation. Vaxis runtime tests are not rerun; its source
+is unchanged and dependency builds pass. Historical buffered-reader, fill-more,
+sentinel and full-stream matrices retain their hashes in both modes.
+
+Full unchanged Source, compiler versions/selected libraries, implementation,
+probes, directly imported helpers, shared fixtures and inputs are pinned before /
+after comparison. Source bodies/visibility and reader syscalls are untouched.
+Initialized unlinked owned files have reset offsets; replacement pipes/keepers
+are owned. Final production/probe/runner/helper bodies remain frozen; only
+expected assignments change after ordinary discovery. Independent replay checks
+records, models, classifications, exact state, ownership, binaries, modes and
+provenance. Parent-side lossless compression pins raw/compressed output. Evidence
+is persisted from an owned RAM workspace and every retained archive member is
+read back before commit and release.
+
+Custom vtables/direct defaultRebase calls, invalidated views, arbitrary record
+construction/mutation, concurrent reuse, other devices, larger buffers/offsets,
+syscall counts, injected errors, timing/signals, OOM/quotas, allocator lifetime,
+integer argument coercions, portable ABI and remaining V representation limits
+are boundaries. Runtime uses little-endian 64-bit macOS; Windows/Linux and other
+CPU, big-endian and 32-bit runtime remain outside the proof. Cross builds
+establish compilation only. Reproduction and scope are in
+[the rebase comparison](zigimg/reference_probes/reader_rebase/README.md).
