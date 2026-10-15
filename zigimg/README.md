@@ -1309,3 +1309,10 @@ accepts u64 maximum; unsigned encoding traps on negative values before IO.
 The [LEB128 writer comparison](reference_probes/writer_leb128/README.md) covers
 24,072 records and 840 exact panic/state pairs per mode. Literal inference and
 Source's wider integer carriers remain separately documented boundaries.
+
+`unused_capacity_slice` and `unused_capacity_len` expose borrowed output space
+without reserving it. `advance` commits caller-initialized bytes; `undo` rewinds
+pending output while preserving stored bytes. Cursor checks trap before mutation,
+including in production. The [writer buffer comparison](reference_probes/writer_buffer/README.md)
+covers 18,780 records and 308 exact panic/state pairs per mode, including saved
+view aliasing, closed descriptors and output after cursor updates.

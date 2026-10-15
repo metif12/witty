@@ -1188,6 +1188,28 @@ pub fn (stream WriteStream) buffered() []u8 {
 	return unsafe { stream.buffer[..stream.position] }
 }
 
+// Borrow the remaining output space without reserving or draining it.
+pub fn (stream WriteStream) unused_capacity_slice() []u8 {
+	return unsafe { stream.buffer[stream.position..] }
+}
+
+pub fn (stream WriteStream) unused_capacity_len() usize {
+	return usize(stream.buffer.len - stream.position)
+}
+
+// Keep Source's checked addition and capacity assertion before cursor mutation.
+pub fn (mut stream WriteStream) advance(count usize) {
+	if count > ~usize(0) - usize(stream.position) { panic('integer overflow') }
+	end := usize(stream.position) + count
+	if end > usize(stream.buffer.len) { panic('reached unreachable code') }
+	stream.position = int(end)
+}
+
+pub fn (mut stream WriteStream) undo(count usize) {
+	if count > usize(stream.position) { panic('integer overflow') }
+	stream.position -= int(count)
+}
+
 pub fn (mut stream WriteStream) seek_to(offset u64) ! {
 	if stream.file != none {
 		stream.flush() or { return error('Unexpected') }

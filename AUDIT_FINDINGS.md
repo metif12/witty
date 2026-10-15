@@ -9108,3 +9108,86 @@ uses little-endian 64-bit macOS; Windows/Linux, other CPU, big-endian and 32-bit
 runtime remain outside the proof. Remaining reader/writer APIs are unported.
 Reproduction and scope are in
 [the LEB128 writer comparison](zigimg/reference_probes/writer_leb128/README.md).
+
+### Writer buffer access and cursor tracking — 2026-10-15
+
+`WriteStream.unused_capacity_slice`, `unused_capacity_len`, `advance` and `undo`
+map pinned Writer buffer-access/cursor methods. Unused bytes are borrowed without
+reserving space or draining. Advance commits caller-initialized bytes, while undo
+rewinds the cursor without changing stored bytes. Saved view headers retain their
+original offsets/lengths and continue to alias backing bytes across cursor changes.
+The writer and backing storage must stay alive; later IO can overwrite views.
+
+Advance checks usize addition overflow, then capacity, before cursor mutation.
+Undo checks subtraction underflow first. Explicit checks preserve Source's exact
+integer-overflow and capacity traps in production. Zero updates work with empty,
+full and closed-descriptor writers. These four methods invoke no drain/rebase
+callback. Existing reader/writer/C helper bodies remain unchanged.
+
+Debug/ordinary and ReleaseSafe/production each match **18,780 returning records**,
+SHA-256 `ffd1e1efba45cba2338d104b5c38056127462b68fceb276955f8b302a0ed36e4`.
+Each record performs two slice borrows, one capacity query, an advance and an
+undo: 37,560 slice borrows / 18,780 capacity queries / 37,560 cursor updates per
+mode. Another 12,492 write/flush calls follow. Setup, prefix writes, initial
+seeking and observation getters are separate. Groups contain 14,184 buffer and
+4,596 every-byte mutation profiles, retaining duplicate inputs once.
+
+Memory, positional/streaming files, capacities 0/1/8/16, starts 0/1/7, empty /
+partial/full prefixes, zero/intermediate/full cursor changes, head/tail mutations,
+all XOR byte values and owned pipe/closed-descriptor replacements retain complete
+initialized buffers, spare/pending spans, saved view offsets/bytes, logical
+position, ownership, file contents and pipe data. Caller, saved-view and current
+spare-view mutations reach the same backing storage. Writes/flushes verify that
+committed output is emitted and rewound bytes are excluded. Closed-descriptor
+profiles exercise these methods without subsequent IO.
+
+An independent model checks every buffer-only phase for every record and 15,396
+complete records, including ordinary file output, memory partial failures, flushes,
+macOS positional first-vector behavior and closed-descriptor buffer operations.
+For 3,384 pipe-output records, phases before output are modeled and subsequent
+full states/wire bytes compare to Source with general span/ownership checks.
+Saved spans are checked against their original offset and current backing bytes.
+Empty-buffer offsets are normalized to zero; absolute addresses are not compared.
+
+The **308 exact panic/state pairs** retain SHA-256
+`4d07ca84c311b5dee2c4966301333f4e6778ccccacecea15a6577f15351446d3`:
+111 capacity checks and 197 integer overflows. Oversized advances, usize maximum,
+subtraction past zero and undo after filling to capacity fail at the same phase
+without cursor or byte mutation. Failed processes have empty stdout, one exact
+message and identical initialized state. Independent reconstruction checks the
+full pre-call state, including saved views and ownership. Observers capture bytes
+before opening output and clean up owned resources through FullPanic/at_exit.
+
+Six paired compile rejections per mode cover negative, boolean and oversized
+literal counts for both methods. An external aliased-usize consumer builds/runs
+in both languages and checks borrowed bytes and positions. General argument
+coercions remain outside this finite proof.
+
+Three regressions cover two-way borrowing through the adapter, empty/full /
+rewound cursors and caller-written file output. All 83 image test files and 17
+focused production/application/Windows/Linux checks pass. Historical writer
+seeks (6,912 records, 196 returns, 60 exact failures), LEB128 writes (24,072
+records, 840 exact failures) and full/streaming IO (37,133 records, 17 generic
+traps, four compile boundaries) retain their hashes in both modes. Historical
+generic traps do not establish exact state. Vaxis runtime tests are not rerun;
+its source is unchanged and dependency builds pass. Cross builds establish
+compilation only.
+
+Full unchanged Source, versions/selected libraries, implementation, probes,
+directly imported helpers, shared writer fixtures and inputs are pinned
+before/after. Source bodies/visibility/syscalls are untouched. Initialized,
+unlinked files with reset offsets, pipes and keepers are owned. Final bodies
+stay frozen; only expected assignments change after ordinary discovery.
+Independent replay checks records, models, aliases, exact failures, compile
+controls, ownership, binaries, modes and provenance. Lossless parent compression
+pins raw/compressed output. Evidence is persisted from an owned RAM workspace and
+every retained archive member is read back before commit and release.
+
+Arbitrary record states, uninitialized bytes, expired backing storage, custom
+vtables, caller coercions outside retained controls, larger buffers/offsets,
+syscall counts, other devices, concurrent reuse, timing/signals, injected errors,
+OOM/quotas, allocator lifetime, layout/ABI and remaining V representation limits
+remain boundaries. Runtime uses little-endian 64-bit macOS; Windows/Linux, other
+CPU, big-endian and 32-bit runtime remain outside the proof. Writable reservation /
+rebase and other reader/writer APIs remain unported. Reproduction and scope are in
+[the writer buffer comparison](zigimg/reference_probes/writer_buffer/README.md).
