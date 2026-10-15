@@ -9912,3 +9912,92 @@ invalid/concurrently changed headers, portable ABI and remaining V representatio
 limits are boundaries. Other unported IO APIs are outside this checkpoint.
 Reproduction and scope are in
 [the header-write comparison](zigimg/reference_probes/writer_header/README.md).
+
+
+### Integer slice writes and byte swapping — 2026-10-15
+
+`write_slice_endian[T,E]` and `write_slice_swap[T]` implement the native integer
+portion of pinned Writer.writeSliceEndian / writeSliceSwap. Endian markers and
+integer carriers accept the directly aliased types exercised by the probes.
+The ten carriers map u8/u16/u32/u64/usize/i8/i16/i32/i64/isize to the corresponding
+V types (int for i32). Existing IO/C helper bodies remain byte-identical. No
+Source bodies, visibility or syscalls change.
+
+Native-endian input is passed as one borrowed byte span to write_all. Swapped
+input is copied and byte-reversed one element at a time, calling write_all for
+each element, including one-byte types. Pending buffer contents and partial
+failure states can differ between those paths despite equal successful output.
+Inputs and guards remain unchanged; fixed output keeps any copied prefix after
+WriteFailed. Empty input performs no IO even with a closed descriptor. The V
+native-span path checks its signed array byte-length limit before IO; the
+swapped path uses only bounded element views. Huge spans/allocations and the
+length guard's runtime failure are not established by valid bounded fixtures.
+
+Debug/ordinary and ReleaseSafe/production match **25,740 complete
+returning records**, SHA-256
+`f06bcdf9eead5f6decc922a0e71609c608ab7f3b5edbb6c3defc6f9a114eed3d`,
+and **756 returning controls**, SHA-256
+`c94e4f0ecdb9a4f52ad7233cc2513598235b4768084b7dbf7bc6711a99f5a7b0`.
+Caught WriteFailed is included in returning observations. This new suite makes
+no runtime trap claim. Every record/control independently models all five
+snapshots: initialized backing, pending bytes, unused-view bytes/lengths/offsets,
+logical position, descriptor validity/reference observations, complete input
+with initialized guards and relative typed byte-span header, caller changes,
+flush results and complete file/pipe output. The model separately reconstructs
+one-span/per-element writes, positional/streaming drains, pipe mode transitions
+and cached failure behavior. Absolute addresses and syscall counts are excluded.
+
+The four groups contain 12,600 integer-slice, 3,600 IO-failure-order, 9,180
+every-byte and 360 input-guard records after deduplication. The matrix covers all
+ten carriers and direct aliases, both endian markers and their aliases, direct
+swap, counts 0/1/3/9, typed offsets 0/1/2, every byte value, capacities
+0/1/3/8/17, starts zero/three, empty/full pending buffers, memory/positional /
+streaming writers, regular/replaced-pipe/closed descriptors and later buffer
+changes/flushes. Initialized valid input stays alive during each call.
+
+Seven paired compiler rejections per mode cover invalid order/slice types and
+swapped float/bool/string types. Three Source-return / V-reject boundaries
+explicitly retain the unported capabilities: native float output and native /
+foreign extern-struct output. These lie outside the integer equivalence claim.
+The native boundary programs assert actual defined bytes; V rejects through the
+integer constraint. External consumers verify both methods with integer/endian
+aliases, empty slices, counts, bytes and unchanged inputs. General coercions,
+wider Source integers, aggregates, pointers, enum/native layouts and other
+Source capabilities remain outside this checkpoint.
+
+Three public regressions, **92 image test files** and **17 focused production /
+application / Windows / Linux checks** pass. Historical header writes retain
+16,178 records, 774 controls and 276 exact panic/state pairs per mode. Full /
+streaming IO retains 37,133 records, 17 generic traps and four compile boundaries
+per mode. Prior hashes are unchanged. Generic traps do not establish exact
+state. Vaxis runtime tests are not rerun; source is unchanged and dependency
+builds pass. Cross builds establish compilation only.
+
+The native probe calls std.Io.Writer through the unchanged locked zigimg stream
+wrapper. The complete locked tree and compiler-library pins remain unchanged,
+with extra whole Io.zig SHA
+`09df1114cba703f824337f20489c7df5294db9f07961d4ac46abbbbf9c7ecaef`
+checked before/after. Versions, path/encoder dependencies, implementation,
+probes, direct helpers and inputs are pinned too. Final runtime bodies are frozen
+before discovery; only EXPECTED assignments change afterward. Initial feasibility
+commands lacked the pinned deployment target and failed to link; corrected
+commands compile and run. An initial observer used std.mem.sliceAsBytes(empty)
+and exposed its undefined empty pointer. The final observer casts the valid
+typed input pointer, preserving its defined empty offset without changing the
+API call. The corrected 201-record preflight and full final matrices match;
+development evidence is retained separately, with no undefined Source pointers
+in final comparisons.
+
+Independent replay checks every full record/model, compiler control, actual
+mode, binary, provenance pin and unchanged old IO/C body. Lossless parent
+compression pins raw/compressed bytes. Recorded local jobs run across headless
+input turns. Checks use an owned RAM workspace; every retained archive member
+is read back before committing exact reviewed hashes and releasing resources.
+
+Runtime remains little-endian 64-bit macOS. Windows/Linux/other CPU runtime,
+big-endian/32-bit runtime, arbitrary devices/short drains, injected errors and
+signals, syscall counts, timing, huge storage/OOM, allocator lifetime,
+input/output overlap, invalid/concurrently changed headers, portable ABI and
+remaining V representation limits are boundaries. Other IO APIs remain outside
+this checkpoint. Reproduction and scope are in
+[the integer slice writer comparison](zigimg/reference_probes/writer_slice_endian/README.md).

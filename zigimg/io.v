@@ -1888,6 +1888,45 @@ pub fn (mut stream WriteStream) splat_byte_preserve(preserve usize, byte u8, cou
 	}
 }
 
+// Swapped slices write each element separately, retaining partial-write order.
+pub fn (mut stream WriteStream) write_slice_swap[T](values []T) ! {
+	$if T.unaliased_typ is $int {
+		for value in values {
+			mut copy := value
+			mut bytes := unsafe { (&u8(&copy)).vbytes(int(sizeof(T))) }
+			for i in 0 .. bytes.len / 2 {
+				bytes[i], bytes[bytes.len - 1 - i] = bytes[bytes.len - 1 - i], bytes[i]
+			}
+			stream.write_all(bytes)!
+		}
+	} $else {
+		$compile_error('write_slice_swap requires a native integer type')
+	}
+}
+
+pub fn (mut stream WriteStream) write_slice_endian[T, E](values []T, endian E) ! {
+	$if T.unaliased_typ is $int {
+		$if E.unaliased_typ is BigEndian || E.unaliased_typ is LittleEndian {
+			mut swap := false
+			$if E.unaliased_typ is BigEndian {
+				$if little_endian { swap = true }
+			} $else {
+				$if big_endian { swap = true }
+			}
+			if swap { return stream.write_slice_swap[T](values) }
+			if values.len > 0x7fffffff / int(sizeof(T)) {
+				panic('Writer byte span exceeds V array length')
+			}
+			bytes := unsafe { values.data.vbytes(values.len * int(sizeof(T))) }
+			stream.write_all(bytes)!
+		} $else {
+			$compile_error('write_slice_endian requires BigEndian or LittleEndian')
+		}
+	} $else {
+		$compile_error('write_slice_endian requires a native integer type')
+	}
+}
+
 pub fn (mut stream WriteStream) write_byte(byte u8) ! {
 	stream.write_all([byte])!
 }

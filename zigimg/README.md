@@ -1383,3 +1383,12 @@ writes preserve the pinned helper's eight-vector batching, direct-drain failures
 and limit-accounting quirks; whole prefixes can exceed the stated limit.
 The [header-write comparison](reference_probes/writer_header/README.md) covers
 16,178 records, 774 returning controls and 276 exact panic/state pairs per mode.
+
+
+`write_slice_endian[T,E]` and `write_slice_swap[T]` write borrowed native integer
+slices without changing their elements. Native-endian output uses one byte span;
+swapped output preserves per-element write order and partial failures.
+The [integer slice writer comparison](reference_probes/writer_slice_endian/README.md)
+covers 25,740 records and 756 returning controls per mode. Source's additional
+native-layout and aggregate capabilities remain unported and are measured
+separately from the integer cases.
