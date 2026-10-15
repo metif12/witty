@@ -1490,3 +1490,12 @@ integer-to-float rounding and exact suffix/precision traps. The
 records, 529 returning controls and 188 exact panic/state pairs per mode. Source's
 comptime-only units versus V's runtime enum remains a measured boundary. The
 existing PNG information helper remains unchanged.
+
+
+`print_address(value)` now formats pointers, single optional pointers and slices
+of native scalar types and aliases, plus plain opaque pointers. It preserves
+Source builtin names, lowercase hex and separate prefix/address failures. The
+[address comparison](reference_probes/writer_address/README.md) covers 33,451
+returning observations per mode, including 11,460 exact WriteFailed states.
+Compound/qualified type names and optional const spelling remain measured
+boundaries. Formatting dispatch and custom formatter APIs remain unported.

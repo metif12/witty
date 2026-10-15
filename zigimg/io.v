@@ -2060,6 +2060,101 @@ pub fn (mut stream WriteStream) print_float[T](value T, options NumberFormat) ! 
 		options.fill)
 }
 
+fn io_address_integer(mut stream WriteStream, address usize) ! {
+	mut value := address
+	mut bytes := [16]u8{}
+	mut index := bytes.len
+	for {
+		index--
+		bytes[index] = '0123456789abcdef'[int(value & 15)]
+		value >>= 4
+		if value == 0 { break
+		 }
+	}
+	return stream.write_all(bytes[index..])
+}
+
+fn io_address_type_name[T]() string {
+	$if T is $option {
+		$compile_error('print_address does not represent optional pointees')
+	} $else $if T.unaliased_typ is voidptr {
+		return '*anyopaque'
+	} $else $if T.indirections > 0 || ((int(T.unaliased_typ) >> 16) & 0xff) > 0 {
+		$compile_error('print_address does not represent nested pointees')
+	} $else $if T.unaliased_typ is int {
+		return 'i32'
+	} $else $if T.unaliased_typ is u8 {
+		return 'u8'
+	} $else $if T.unaliased_typ is u16 {
+		return 'u16'
+	} $else $if T.unaliased_typ is u32 {
+		return 'u32'
+	} $else $if T.unaliased_typ is u64 {
+		return 'u64'
+	} $else $if T.unaliased_typ is usize {
+		return 'usize'
+	} $else $if T.unaliased_typ is i8 {
+		return 'i8'
+	} $else $if T.unaliased_typ is i16 {
+		return 'i16'
+	} $else $if T.unaliased_typ is i64 {
+		return 'i64'
+	} $else $if T.unaliased_typ is isize {
+		return 'isize'
+	} $else $if T.unaliased_typ is f32 {
+		return 'f32'
+	} $else $if T.unaliased_typ is f64 {
+		return 'f64'
+	} $else $if T.unaliased_typ is bool {
+		return 'bool'
+	} $else {
+		$compile_error('print_address requires native scalar or pointer pointees')
+	}
+}
+
+fn io_address_pointer[T](mut stream WriteStream, value &T) ! {
+	stream.write_all((io_address_type_name[T]() + '@').bytes())!
+	return io_address_integer(mut stream, usize(voidptr(value)))
+}
+
+fn io_address_optional[T](mut stream WriteStream, value ?&T) ! {
+	stream.write_all(('*' + io_address_type_name[T]() + '@').bytes())!
+	address := unsafe { usize(voidptr(value or { nil })) }
+	return io_address_integer(mut stream, address)
+}
+
+fn io_address_slice[T](mut stream WriteStream, value []T) ! {
+	stream.write_all((io_address_type_name[T]() + '@').bytes())!
+	return io_address_integer(mut stream, usize(value.data))
+}
+
+// Type prefix and hexadecimal address are separate Source writes; never dereference.
+pub fn (mut stream WriteStream) print_address[P](value P) ! {
+	$if P is $option {
+		$if P.indirections != 1 && ((int(P.unaliased_typ) >> 16) & 0xff) != 1 {
+			$compile_error('print_address requires a single optional pointer')
+		}
+		return io_address_optional(mut stream, value)
+	} $else $if P.unaliased_typ is voidptr {
+		stream.write_all('anyopaque@'.bytes())!
+		return io_address_integer(mut stream, usize(value))
+	} $else $if P.unaliased_typ is $array_fixed {
+		$compile_error('print_address requires a pointer or slice')
+	} $else $if P.unaliased_typ is $array {
+		return io_address_slice(mut stream, value)
+	} $else $if P.indirections > 0 || ((int(P.unaliased_typ) >> 16) & 0xff) > 0 {
+		$if P is $alias {
+			mut normalized := $zero(P.unaliased_typ)
+			unsafe { vmemcpy(&normalized, &value, int(sizeof(P))) }
+			return stream.print_address(normalized)
+		} $else {
+			return io_address_pointer(mut stream, value)
+		}
+	} $else {
+		$compile_error('print_address requires a pointer or slice')
+	}
+}
+
 pub enum ByteSizeUnits {
 	decimal
 	binary

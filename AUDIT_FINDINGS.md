@@ -10828,3 +10828,76 @@ ldexp. The byte-size matrices and compiler controls were rerun with that pin
 checked before/after; output and failure hashes remain unchanged. Runtime files
 and module/platform checks are unchanged. The earlier artifact is retained in
 `before-isfinite/verified-proofs.tar.gz` beside the refreshed final archive.
+
+
+### Native pointer address formatting — 2026-10-15
+
+`WriteStream.print_address` translates the represented pointer/slice/optional paths
+of pinned Writer.printAddress. Native scalar pointees and their aliases retain
+Source builtin names, including int -> i32 and usize/isize. Plain opaque pointers
+print `anyopaque@...`; optional scalar pointers print `*type@...`, with zero for
+none. Slices print their data address regardless of length. Type prefix plus @
+and unpadded lowercase hexadecimal are separate writes; targets are never read.
+A private 16-byte integer helper supplies Source's exact native address digits,
+avoiding V's indirect generic FormatCase reachability problem. Physical allocation
+and stack/GC storage are not claimed equivalent.
+
+The Source reference bodies and visibility remain unchanged. Deterministic
+non-dereferenced synthetic pointer bits cover zero, maximal and every binary
+exponent edge/neighbor. Optional addresses are naturally aligned or null;
+non-optional Source pointers/slices use allowzero/align(1). This does not prove
+allocation validity. An accepted live-slice consumer independently checks its
+printed data pointer. A string/integer model computes type prefixes and hex, then
+models both write boundaries, retained argument/descriptor bytes and parent IO.
+
+Debug/ordinary and ReleaseSafe/production each match:
+
+| Observations | Count | SHA-256 |
+| --- | ---: | --- |
+| Complete returning records | 30,217 | `a2aefc70efc8bdc2c5dbf7892897e1676ce1952a2e6dba77026f263a67211dc5` |
+| Isolated returning controls | 3,234 | `8af6ead77a0b0a4b3784ac1677e9c67f67226b9fa53037e6307b3cc1be55422e` |
+
+These total **33,451 returning observations per mode**, including **11,460 exact
+primary WriteFailed states** (10,115 corpus plus 1,345 isolated controls). No valid
+represented input is expected to panic. Five groups cover seven pointer/alias /
+slice forms, 13 native scalar types, every prefix/digit capacity 0..24, all caller
+masks, seeded addresses and failure contexts. Five snapshots retain full backing,
+pending/unused spans and headers, position, descriptor ownership, raw argument
+bits/type/length and file/wire bytes through caller mutation and flush. Memory,
+positional/streaming files, replaced pipes and closed descriptors are represented;
+controls confirm behavior in fresh processes. Owned resources are cleaned up.
+
+A 125-record preflight and 16 external compiler pairs pass in both modes. Four
+common accepted consumers cover native/alias/optional pointers and live borrowed
+slices; six paired rejections cover direct invalid values. Six separate boundaries
+measure fixed-array/wide/string pointees, nested pointers and nested optionals,
+and Source's `*const u8` optional prefix versus V's unqualified `*u8`. Compound /
+nominal type names, qualifiers, sentinel and function carriers remain outside the
+claim; the tested unsupported pointees are rejected. Source constness/reflection and broader
+coercions are not equivalent. Source fixed-array pointers are distinct from slices.
+
+Three public regressions, **103 image test files** and **17 focused production /
+application / Windows / Linux checks** pass. Historical byte-size formatting
+retains 26,852 records, 529 controls and 188 exact panic/state pairs per mode.
+Full/streaming IO retains 37,133 records, 17 generic traps and four compiler
+boundaries; all hashes remain unchanged. Generic traps do not prove exact state.
+Vaxis source is unchanged; dependencies build and runtime tests are not rerun.
+Cross builds establish compilation only.
+
+Complete Source, selected compiler libraries and whole Io/fmt/math/meta/time pins
+remain unchanged. Versions, implementation, fixtures/shared C helpers, inputs and
+consumers are checked before/after. Existing runtime bodies differ only by the
+address IO block; C is unchanged. Runtime/probe/model bodies freeze before final
+comparisons; only EXPECTED assignments change afterward. Development evidence
+retains corrected generic helper inference/type-access, optional codegen, alias
+reachability, fixture construction and concrete-slice errors separately. They do
+not satisfy green checks. Independent replay verifies every observation/model,
+compiler outcome, mode, binary and provenance record. Every retained archive
+member is read back before committing exact reviewed hashes and releasing owned
+RAM/reserves.
+
+Evidence remains the pinned compilers on little-endian 64-bit macOS. Other runtime
+platforms/widths, valid allocation/dereference/lifetime, private allocation/OOM,
+portable ABI/type reflection, arbitrary/injected short devices and concurrent
+headers remain boundaries. Formatting dispatch/custom formatters remain unported.
+Scope and reproduction are in the [address comparison](zigimg/reference_probes/writer_address/README.md).
