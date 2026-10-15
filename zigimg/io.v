@@ -13,6 +13,7 @@ fn C.witty_image_file_read_once(int, u64, &u8, usize, &int) isize
 fn C.witty_image_file_read_vec(int, u64, &u8, usize, &u8, usize, &int) isize
 fn C.witty_image_file_read_vectors(int, u64, &voidptr, &usize, int, &int) isize
 fn C.witty_image_file_write(int, u64, &u8, usize, &u8, usize, &int) isize
+fn C.witty_image_file_write_vectors(int, u64, &voidptr, &usize, int, &int) isize
 
 pub const default_buffer_size = 4096
 
@@ -1397,6 +1398,88 @@ pub fn (mut stream WriteStream) write_all(bytes []u8) ! {
 	for index < bytes.len {
 		index += int(stream.write(bytes[index..])!)
 	}
+}
+
+// Count all prefix vectors and repeat only the last vector.
+pub fn count_splat(data [][]u8, splat usize) usize {
+	if data.len == 0 { panic('integer overflow') }
+	mut total := usize(0)
+	for bytes in data[..data.len - 1] {
+		if usize(bytes.len) > ~usize(0) - total { panic('integer overflow') }
+		total += usize(bytes.len)
+	}
+	pattern_len := usize(data[data.len - 1].len)
+	if pattern_len != 0 && splat > ~usize(0) / pattern_len { panic('integer overflow') }
+	last := pattern_len * splat
+	if last > ~usize(0) - total { panic('integer overflow') }
+	return total + last
+}
+
+// Make one drain at most; pending output occupies the first of 16 file slots.
+pub fn (mut stream WriteStream) write_vec(data [][]u8) !usize {
+	if data.len == 0 { panic('reached unreachable code') }
+	count := count_splat(data, 1)
+	if count > ~usize(0) - usize(stream.position) { panic('integer overflow') }
+	if usize(stream.position) + count <= usize(stream.buffer.len) {
+		for bytes in data {
+			for i, byte in bytes {
+				stream.buffer[stream.position + i] = byte
+			}
+			stream.position += bytes.len
+		}
+		return count
+	}
+	if file := stream.file {
+		mut pointers := unsafe { [16]voidptr{} }
+		mut lengths := [16]usize{}
+		mut slots := 0
+		if stream.position > 0 {
+			pointers[slots] = stream.buffer.data
+			lengths[slots] = usize(stream.position)
+			slots++
+		}
+		for bytes in data {
+			if bytes.len == 0 { continue
+			 }
+			if slots == pointers.len { break
+			 }
+			pointers[slots] = bytes.data
+			lengths[slots] = usize(bytes.len)
+			slots++
+		}
+		n := C.witty_image_file_write_vectors(file.fd, stream.file_pos, &pointers[0], &lengths[0],
+			slots, &stream.streaming)
+		if n < 0 {
+			if stream.streaming < 0 {
+				stream.file_pos = 0
+				stream.file_seek_error = 'Unseekable'
+			}
+			return error('WriteFailed')
+		}
+		if u64(n) > u64(0xffffffffffffffff) - stream.file_pos { panic('integer overflow') }
+		stream.file_pos += u64(n)
+		if n < stream.position {
+			remaining := stream.position - int(n)
+			for i in 0 .. remaining {
+				stream.buffer[i] = stream.buffer[int(n) + i]
+			}
+			stream.position = remaining
+			return 0
+		}
+		consumed := usize(n) - usize(stream.position)
+		stream.position = 0
+		return consumed
+	}
+	for bytes in data {
+		space := stream.buffer.len - stream.position
+		len := if bytes.len < space { bytes.len } else { space }
+		for i in 0 .. len {
+			stream.buffer[stream.position + i] = bytes[i]
+		}
+		stream.position += len
+		if bytes.len > space { return error('WriteFailed') }
+	}
+	panic('reached unreachable code')
 }
 
 pub fn (mut stream WriteStream) write_byte(byte u8) ! {

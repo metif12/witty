@@ -9369,3 +9369,91 @@ uses little-endian 64-bit macOS; Windows/Linux, other CPU, big-endian and 32-bit
 runtime remain outside the proof. Other reader/writer APIs remain unported.
 Reproduction and scope are in
 [the fixed-array writer comparison](zigimg/reference_probes/writer_array/README.md).
+
+
+### Vector output and repeated-tail counting — 2026-10-15
+
+`WriteStream.write_vec(data)` maps pinned Writer.writeVec, returning the number
+of input bytes consumed. Fully buffered writes consume every vector without IO,
+including closed-descriptor paths and more than 16 vectors. Fixed writers retain
+partial buffered output on `WriteFailed`. File writers drain at most once; pending
+bytes occupy the first of 16 nonempty vector slots, while empty vectors take no
+slots. Successful output can consume zero input bytes when only pending output
+is drained or a positional pipe changes mode. Caller retries use the consumed
+input count. Shared/overlapping input vectors retain their headers and bytes.
+Inputs may not alias writer backing storage because Source uses memcpy.
+
+Module function `count_splat(data, splat)` maps Writer.countSplat: prefixes count
+once and only the final vector repeats. Zero repeat retains prefix counts and
+no IO occurs. Empty data causes checked subtraction overflow; write_vec asserts
+nonempty data first. Prefix addition, final multiplication/addition and cursor
+addition preserve Source order and exact production traps. Repeated output APIs
+remain unported. Existing reader/writer/C helper bodies are unchanged; one new C
+helper adds scatter output with the pinned macOS/Haiku positional fallback,
+POSIX writev/pwritev and Windows first-nonempty-vector behavior.
+
+Debug/ordinary and ReleaseSafe/production each match **19,836 returning records**,
+SHA-256 `f702612e7973a7c50e899bb9bef2a148ebe0c23c1edf903c38d1aa19f00cf3ee`.
+There are 19,773 counts and 19,773 writes: 39,546 primary calls per mode.
+Setup/observation/optional flushes are separate. Groups contain 15,120 vector,
+126 single-API and 4,590 every-byte profiles, retaining duplicates once. Twenty-two
+profiles cover empty/all-empty/shared/overlapping/interleaved-empty inputs,
+lengths through 255 and vector counts around the 16-slot boundary, up to 33.
+
+Memory and positional/streaming files cover capacities 0/1/8/64/128, starts 0/3,
+empty/partial/full prefixes, repeats from zero through usize maximum, every byte
+value and owned regular/pipe/closed descriptor bindings. All returning records
+have complete independent models of counts, initialized backing/pending/spare
+bytes, logical position, input payload and offsets/lengths, ownership, file
+contents and pipe data. Models include partial fixed-buffer failure, positional
+first-vector output, slot truncation, mode transitions and failed position resets.
+Input offsets are relative; absolute addresses are not compared.
+
+The **126 returning controls** retain SHA-256
+`a708c7f056987a49b4131ecddc15b9e193da647063a6022e812f7f1f046ba019`.
+The **378 exact panic/state pairs** retain SHA-256
+`e6696a294ef29f105c2e796e3014ed61f647db47e6a614302baae6aeac3c2f4f`:
+336 counting overflows and 42 empty-vector assertions. Empty-count subtraction,
+last-vector multiplication and total addition fail before IO, with empty stdout,
+one exact message and identical retained state. Independent reconstruction
+checks phase, complete initialized state, input headers/bytes and ownership.
+Observers capture state before opening output and clean up owned resources via
+FullPanic/at_exit. Returning controls include valid usize-maximum counts and
+ordinary write results.
+
+Nine paired compile rejections per mode cover negative/boolean/above-usize repeat
+arguments and flat/string/wider-element vector inputs for both APIs. External
+consumers in both languages/modes check aliased-usize repeat, shared inputs,
+zero repeats, returned counts, partial fixed-buffer failure and an all-empty
+write to a full writer. Arbitrary caller coercions remain outside these controls.
+
+Three public regressions pass. All 86 image test files and 17 focused production /
+application/Windows/Linux checks pass. Historical array/byte output (13,358
+records, 525 returns, 385 exact failures) and full/streaming IO (37,133 records,
+17 generic traps, four compile boundaries) retain their hashes in both modes.
+Generic traps do not establish exact state. Vaxis runtime tests are not rerun;
+its source is unchanged and dependency builds pass. Cross builds establish
+compilation only.
+
+Full unchanged Source, versions/selected libraries, implementation, probes,
+directly imported helpers, shared writer fixture and inputs are pinned
+before/after. Source bodies/visibility/syscalls are untouched. Initialized,
+unlinked files with reset offsets, pipes and keepers are owned. Final
+implementation/probe/runtime-runner/direct-helper bodies stay frozen; only
+runtime-runner EXPECTED assignments change after ordinary discovery. The pointer
+initializer and consumer-syntax diagnostics remain separate from passing gates;
+final compiler controls are frozen and run in both modes. Independent replay
+checks records, models, failures, compiler controls, ownership, binaries, modes
+and provenance. Lossless parent compression pins raw/compressed output. Proofs
+are archived from an owned RAM workspace; every retained member is read back
+before commit and release.
+
+Input/output aliasing, invalid/concurrently mutated headers, custom/growing
+vtables, arbitrary states, larger lengths/offsets, usize totals beyond V's array
+carrier, partial native drains, syscall counts, other devices, injected errors,
+timing/signals, OOM/quotas, allocator lifetime, portable ABI and remaining V
+representation limits remain boundaries. Runtime uses little-endian 64-bit macOS;
+Windows/Linux, other CPU, big-endian and 32-bit runtime remain outside the proof.
+Remaining repeated/header/other reader and writer APIs remain unported.
+Reproduction and scope are in
+[the vector output comparison](zigimg/reference_probes/writer_vectors/README.md).

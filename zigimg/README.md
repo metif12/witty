@@ -1335,3 +1335,12 @@ rebases. The [fixed-array writer comparison](reference_probes/writer_array/READM
 covers 13,358 records, 525 returning controls and 385 exact panic/state pairs per
 mode. Zero/chained-array limits and mode-dependent byte-literal coercion are
 recorded separately.
+
+
+`write_vec` writes borrowed input vectors and returns their consumed byte count.
+Buffered writes can accept every vector; file drains use at most 16 nonempty
+slots, including pending output. `count_splat` counts all prefixes and a repeated
+final vector without IO. The [vector output comparison](reference_probes/writer_vectors/README.md)
+covers 19,836 records, 126 returning controls and 378 exact panic/state pairs per
+mode, including preserved input headers, partial fixed-buffer failure and pipe
+mode transitions. Repeated output methods remain unported.

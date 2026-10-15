@@ -51,6 +51,14 @@ static intptr_t witty_image_file_write(int fd, uint64_t pos, const unsigned char
     if (!WriteFile((HANDLE)_get_osfhandle(fd), bytes, count > UINT32_MAX ? UINT32_MAX : (DWORD)count, &n, *streaming ? NULL : &overlap)) return -1;
     return n;
 }
+/* Scatter output uses the first nonempty vector on Windows. */
+static intptr_t witty_image_file_write_vectors(int fd, uint64_t pos, const void *const *buffers, const size_t *lengths, int count, int *streaming) {
+    if (*streaming < 0) return -1;
+    for (int i = 0; i < count; i++) {
+        if (lengths[i]) return witty_image_file_write(fd, pos, buffers[i], lengths[i], NULL, 0, streaming);
+    }
+    return 0;
+}
 #else
 #include <unistd.h>
 #include <sys/stat.h>
@@ -227,6 +235,36 @@ static intptr_t witty_image_file_write(int fd, uint64_t pos, const unsigned char
             return -1;
         }
         /* The source exposes this zero-progress mode transition to write(). */
+        return 0;
+    }
+    return n;
+}
+/* Scatter output keeps pinned posix.pwritev's macOS/Haiku first-vector rule. */
+static intptr_t witty_image_file_write_vectors(int fd, uint64_t pos, const void *const *buffers, const size_t *lengths, int count, int *streaming) {
+    if (*streaming < 0) return -1;
+    struct iovec vectors[16];
+    for (int i = 0; i < count; i++) {
+        vectors[i].iov_base = (void *)buffers[i];
+        vectors[i].iov_len = lengths[i];
+    }
+    ssize_t n;
+    do {
+        if (*streaming) {
+            n = writev(fd, vectors, count);
+        } else {
+#if defined(__APPLE__) || defined(__HAIKU__)
+            n = pwrite(fd, buffers[0], lengths[0], (off_t)pos);
+#else
+            n = pwritev(fd, vectors, count, (off_t)pos);
+#endif
+        }
+    } while (n < 0 && errno == EINTR);
+    if (n < 0 && witty_image_file_unseekable(errno) && !*streaming) {
+        *streaming = 1;
+        if (pos != 0 && lseek(fd, (off_t)pos, SEEK_SET) < 0) {
+            *streaming = -1;
+            return -1;
+        }
         return 0;
     }
     return n;
