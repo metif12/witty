@@ -10505,3 +10505,76 @@ reflection, allocation/lifetime and remaining V representation limits remain
 boundaries. The existing oversized-fill literal behavior remains separately
 measured. Float rendering and byte-size formatters remain unported. Reproduction
 and scope are in [the numeric format record comparison](zigimg/reference_probes/format_number/README.md).
+
+
+### Hexadecimal float formatting — 2026-10-15
+
+Pinned Writer.printFloatHex and printFloatHexOptions translate through
+`print_float_hex[T]` and `print_float_hex_options[T]` for explicit f32/f64 and
+aliases. The direct method retains sign bits, negative zero/NaNs, upper/lower
+fraction and special-value case, lower-case 0x/p markers, adjusted subnormal
+exponents, nearest/even rounding, carry normalization and precision zero padding.
+Absent precision trims fractional zeros, except zero retains '.0'. The options
+method takes NumberFormat, renders into Source's private 50-byte fixed writer,
+then aligns. Decimal/scientific modes panic 'reached unreachable code'; binary /
+octal modes retain pinned Source's 'TODO' panic. Excessive precision can exhaust
+the temporary and panic 'attempt to unwrap error: WriteFailed'; enormous padding
+can instead overflow. Mode/private failures precede parent IO/alignment. Direct
+writes retain partial output and their distinct failure order. Existing IO/C
+bodies, Source visibility, implementations and syscalls remain unchanged.
+
+Debug/ordinary and ReleaseSafe/production each match **18,492 complete returning
+records** (`40940467b0c4025e61f4905771c4810d420ff81bf5835fbdf4d459bd9596b70d`),
+**288 returning controls**
+(`03acfd647a36adc653242af869f0edcde560e6e3c23c7ebc8022f2782154629f`) and **312 exact
+panic/state pairs** (`5a7f1e06714fe2444cde2d09c8e808786056f5517070e3cb918f351fcc581424`).
+Every return has five full snapshots of borrowed/backing/pending/unused state,
+position, raw argument carrier/type/options, descriptor state, caller changes,
+flushes and complete output. The independent integer/divmod model rounds through
+quotient/remainder ties, then models each write, padding scratch, private failure
+and pipe transition. Traps have one exact diagnostic, empty stdout and identical
+retained parent state matching the model before observer IO. Trap cases have no
+prior pipe output. The four categories comprise 80 decimal/scientific mode
+traps, 80 binary/octal traps, 120 private-buffer failures and 32 overflows.
+Production retains every trap.
+
+Seven deduplicated groups cover native/alias boundaries, all exponent-field
+values, rounding ties/neighbors, write order/failure, precision/options, every
+fill byte and 1,024 deterministic bit patterns. Contexts include memory /
+positional / streaming writers, zero/short/50/65-byte buffers, starts zero/three,
+empty/full pending data, regular/replaced-pipe/closed descriptors, later caller
+changes and flushes. Huge successful padding remains excluded. External
+compiler controls exercise common native/alias/literal consumers and eleven
+paired ordinary rejections per mode. Source also formats f16/f80/f128 while V
+carrier declarations reject. Untyped 1.1 preserves Source comptime f128 precision
+but V uses f64 and prints different digits; exact 1.5 agrees. Explicit native
+types define the runtime-equivalence claim. Broader coercions remain boundaries.
+
+Three public regressions, **99 image test files** and **17 focused production /
+application / Windows / Linux checks** pass. Historical duration formatting keeps
+38,653 records, 598 returning controls and 288 exact panic/state pairs per mode.
+Full/streaming IO keeps 37,133 records, 17 generic traps and four compile boundaries
+per mode, with hashes unchanged. Generic traps do not prove exact state. Vaxis
+runtime tests are not rerun; source is unchanged and dependency builds pass.
+Cross builds establish compilation only.
+
+Complete Source, selected libraries and whole Io.zig/fmt.zig/math.zig/meta.zig /
+time.zig retain their pins. Newly invoked math/float.zig, math/isnan.zig,
+math/isinf.zig and math/signbit.zig are pinned whole before/after runtime and
+compiler controls, alongside versions, implementation, fixtures, helpers, inputs
+and consumers. A 175-record / 20-panic preflight and both-mode compiler controls
+pass before final comparisons. Development evidence retains the corrected
+private-buffer panic category and a carrier fixture corrected from an unknown
+function call to an explicit missing-type declaration. Runtime/probe/model
+bodies freeze before discovery; only EXPECTED assignments change afterward.
+Independent replay checks all records/models, failures, compiler outcomes, modes,
+binaries, provenance and byte-identical old bodies. All retained archive members
+are read back before committing exact reviewed hashes and releasing owned RAM.
+
+Evidence remains little-endian 64-bit macOS. Other CPUs/platform runtimes, big /
+32-bit execution, arbitrary devices/short drains, injected errors/signals,
+syscall counts/timing, invalid/concurrent header/tag changes, huge successful
+padding/storage, OOM/lifetime, portable ABI, floating-point exception flags,
+reflection and remaining V representation limits remain boundaries. Decimal /
+scientific rendering and byte-size formatters remain unported. Reproduction,
+helper pins and scope are in [the hex float comparison](zigimg/reference_probes/writer_float_hex/README.md).

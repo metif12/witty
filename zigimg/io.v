@@ -2042,6 +2042,115 @@ pub fn (mut stream WriteStream) print_int[T](value T, base u8, letter_case Forma
 	return stream.print_int_any[T](value, base, letter_case, options)
 }
 
+// Hex floats retain Source's rounding and separate sign/fraction/exponent writes.
+pub fn (mut stream WriteStream) print_float_hex[T](value T, letter_case FormatCase, precision ?usize) ! {
+	$if T.unaliased_typ is f32 || T.unaliased_typ is f64 {
+		mut raw := u64(0)
+		mut fractional_bits := 52
+		mut exponent_bits := 11
+		$if T.unaliased_typ is f32 {
+			raw = u64(unsafe { *(&u32(&value)) })
+			fractional_bits = 23
+			exponent_bits = 8
+		} $else {
+			raw = unsafe { *(&u64(&value)) }
+		}
+		if raw >> (fractional_bits + exponent_bits) != 0 { stream.write_byte(`-`)! }
+		mut mantissa := raw & ((u64(1) << fractional_bits) - 1)
+		exponent_mask := (1 << exponent_bits) - 1
+		mut exponent := int((raw >> fractional_bits) & u64(exponent_mask))
+		if exponent == exponent_mask {
+			if mantissa != 0 {
+				return stream.write_all(if letter_case == .upper {
+					'NAN'.bytes()
+				} else {
+					'nan'.bytes()
+				})
+			}
+			return stream.write_all(if letter_case == .upper { 'INF'.bytes() } else { 'inf'.bytes() })
+		}
+		if exponent == 0 && mantissa == 0 {
+			stream.write_all('0x0'.bytes())!
+			if digits := precision {
+				if digits > 0 {
+					stream.write_byte(`.`)!
+					stream.splat_byte_all(`0`, digits)!
+				}
+			} else {
+				stream.write_all('.0'.bytes())!
+			}
+			return stream.write_all('p0'.bytes())
+		}
+		if exponent == 0 {
+			exponent++
+		} else {
+			mantissa |= u64(1) << fractional_bits
+		}
+		mantissa_digits := (fractional_bits + 3) / 4
+		mantissa <<= mantissa_digits * 4 - fractional_bits
+		if digits := precision {
+			if digits < usize(mantissa_digits) {
+				shift := (mantissa_digits - int(digits)) * 4
+				mut extra_bits := shift
+				for extra_bits > 2 {
+					mantissa = (mantissa >> 1) | (mantissa & 1)
+					extra_bits--
+				}
+				if mantissa & 4 != 0 { mantissa |= 1 }
+				mantissa++
+				mantissa = (mantissa >> 2) << shift
+				if mantissa & (u64(1) << (1 + mantissa_digits * 4)) != 0 {
+					mantissa >>= 1
+					exponent++
+				}
+			}
+		}
+		alphabet := if letter_case == .upper { '0123456789ABCDEF' } else { '0123456789abcdef' }
+		mut buffer := [14]u8{}
+		for i in 0 .. mantissa_digits + 1 {
+			buffer[mantissa_digits - i] = alphabet[int((mantissa >> (i * 4)) & 15)]
+		}
+		mut end := mantissa_digits + 1
+		for end > 1 && buffer[end - 1] == `0` {
+			end--
+		}
+		stream.write_all('0x'.bytes())!
+		stream.write_byte(buffer[0])!
+		if digits := precision {
+			if digits > 0 { stream.write_byte(`.`)! }
+		} else if end > 1 {
+			stream.write_byte(`.`)!
+		}
+		stream.write_all(buffer[1..end])!
+		if digits := precision {
+			if digits > usize(end - 1) { stream.splat_byte_all(`0`, digits - usize(end - 1))! }
+		}
+		stream.write_byte(`p`)!
+		return stream.print_int[int](exponent - ((1 << (exponent_bits - 1)) - 1), 10, letter_case, FormatOptions{})
+	} $else {
+		$compile_error('print_float_hex requires f32 or f64')
+	}
+}
+
+// Source renders into fifty bytes before alignment; private failures are traps.
+pub fn (mut stream WriteStream) print_float_hex_options[T](value T, options NumberFormat) ! {
+	match options.mode {
+		.decimal, .scientific { panic('reached unreachable code') }
+		.binary, .octal { panic('TODO') }
+		.hex {}
+	}
+
+	mut storage := [50]u8{}
+	mut bytes := unsafe { storage[..] }
+	mut inner := WriteStream.init_memory(mut bytes)
+	inner.print_float_hex[T](value, options.letter_case, options.precision) or {
+		panic('attempt to unwrap error: ${err.msg()}')
+	}
+	printed := inner.buffered()
+	return stream.align_buffer(printed, options.width or { usize(printed.len) }, options.alignment,
+		options.fill)
+}
+
 // Direct duration output retains separate sign, integer, fraction and unit writes.
 pub fn (mut stream WriteStream) print_duration_signed(nanoseconds i64) ! {
 	if nanoseconds < 0 {

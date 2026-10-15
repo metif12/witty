@@ -1448,5 +1448,15 @@ coercions and non-native integer carriers remain separate boundaries.
 and fill. Mode `base()` returns 10/2/8/16 or `none` for scientific formatting.
 Copies preserve absent/zero/maximal optional values independently. The
 [numeric format record comparison](reference_probes/format_number/README.md)
-covers 25,480 records and 25 compiler consumer pairs per mode. Float rendering
-and byte-size formatting remain unported.
+covers 25,480 records and 25 compiler consumer pairs per mode. Decimal/scientific
+float rendering and byte-size formatting remain unported.
+
+
+`print_float_hex[T]` and `print_float_hex_options[T]` format explicit f32/f64 values
+and aliases with nearest/even precision rounding, signed zero, NaN/infinity and
+subnormal output. The options method takes `NumberFormat` with mode `.hex` and
+aligns a completed private 50-byte representation. Pinned mode traps and private
+buffer failures are retained. The [hex float comparison](reference_probes/writer_float_hex/README.md)
+covers 18,492 records, 288 returning controls and 312 exact panic/state pairs per
+mode. Untyped literal precision and wider float carriers remain separate
+boundaries. Decimal/scientific rendering and byte-size formatting remain unported.
