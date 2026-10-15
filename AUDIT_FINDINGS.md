@@ -9825,3 +9825,90 @@ allocator lifetime, arbitrary coercions, portable ABI and remaining V
 representation limits remain boundaries.
 Reproduction and scope are in
 [the IO limit comparison](zigimg/reference_probes/io_limit/README.md).
+
+
+### Header writes and typed limits — 2026-10-15
+
+`write_splat_header` and `write_splat_header_limit` now translate the two pinned
+Writer methods through the existing WriteStream adapter. The first delegates
+with `Limit.unlimited()`; the second takes the typed limit added in the prior
+checkpoint. Existing IO methods and C helpers are byte-identical. Only the new
+public methods, their eight-slot collector and direct fixed-drain adapter are
+added. File output reuses the proven private file_write_splat drain.
+
+The implementation deliberately retains the pinned helper's use of header.len
+for prefix accounting, while passing entire nonempty prefix vectors. Thus the
+stated limit can be exceeded: header `a`, data `[bcdef,g]`, repeat one, limit
+three and an unbuffered streaming file return seven and emit `abcdefg`.
+Filling eight helper slots finishes this short write before remaining vectors
+or repeats. Fast buffering still copies complete headers/prefixes only when
+they fit available space and remaining limit. Helper calls bypass the public
+write_splat checks and buffering path, preserving direct-drain behavior.
+
+Empty data underflows after earlier buffered header copies, unless the helper's
+nonempty header exhausts the limit first. Empty repeated patterns can divide by
+zero in the helper for repeats other than one. Fixed direct drains can return
+zero despite copying prefixes, fail partially, assert on insufficient byte
+repeats, or reach unreachable after fitting a limited multibyte pattern.
+Checked pattern multiplication occurs after preceding header/prefix copies.
+These failures and mutation order remain active in production. The V fast path
+skips no-op iterations for an empty pattern; timing / unbounded empty loops are
+outside the proof. Borrowed input bytes and headers stay unchanged.
+
+Both modes pass **16,178 returning records**, SHA-256
+`1e0679205ce4588b29831b2d82123193e83484e18d0ab64c01cb32ac45d446df`;
+**774 returning controls**, SHA-256
+`f8e1a498bb355c9003f1557b2fb24c1cd8061ad91bf64659be0ff48915bc098d`; and **276 exact panic/state pairs**,
+SHA-256 `e58c3d07ad1dd7b624ca38493980756c5b0ef602a30e27cfe85370ba84acacf9`.
+The failures comprise 196 integer overflow, 56 division by zero and 24 unreachable
+pairs per mode. Each has empty stdout, one exact message and identical retained
+state, modeled after any partial copy. Native FullPanic and V at_exit observe
+before opening the state artifact. Every returning record independently models
+all five snapshots: initialized backing, pending bytes, unused-view bytes and
+offsets, logical position, descriptor validity/reference observations, complete
+input payload/relative header and vector spans, caller writes, flush results and
+file/pipe output. Absolute addresses are excluded.
+
+The finite matrix covers memory/positional/streaming writers, regular/replaced
+pipe/closed descriptors, start zero/three, empty/full and partially pending
+buffers, headers zero/one/three/nine bytes, vector profiles through 16 vectors,
+shared/overlapping inputs, patterns through 255 bytes, repeat zero/one/several
+and usize maximum controls, limits through unlimited, scratch capacities
+63/64/65/128, every byte value, and post-call changes/flushes. Input/output
+aliasing and invalid headers are excluded. Fourteen paired compile rejections
+per mode cover wrong repeat/header/vector/Limit types and private-helper access.
+External consumers call both APIs with aliases/typed limits and verify bytes /
+counts / unchanged inputs. General coercions and existing Limit representation
+limits are not enlarged into API parity claims.
+
+Three public regressions, **91 image test files** and **17 platform checks**
+pass. Historical complete vector/repeated-output checks retain 32,016 records,
+1,176 controls and 770 exact failures per mode. Full/streaming IO retains 37,133
+records, 17 generic traps and four compile boundaries per mode, with prior hashes.
+Generic traps do not establish exact failure state. Vaxis runtime tests are not
+rerun; its source is unchanged and dependency builds pass. Cross builds establish
+compilation only.
+
+Complete locked zigimg Source remains pinned and untouched. The native probe
+calls std.Io.Writer through its unchanged io.WriteStream wrapper. Existing
+selected compiler-library pins are retained, including extra whole Io.zig SHA
+`09df1114cba703f824337f20489c7df5294db9f07961d4ac46abbbbf9c7ecaef`
+before/after in runtime and compiler controls. Source bodies/visibility/syscalls,
+path/encoder dependencies, implementation, probes, direct helpers, inputs and
+versions are pinned. Runtime bodies are frozen before discovery; only EXPECTED
+assignments change afterward. A preliminary public test expected six consumed
+bytes instead of Source's seven; its failed log is retained separately. Final
+independent replay validates every full record, model, failure, compiler control,
+mode, binary and provenance pin, and checks all old IO/C bodies unchanged.
+Lossless parent compression pins raw/compressed outputs. An owned RAM workspace
+holds finite checks; every retained archive member is read back before committing
+exact reviewed file hashes and releasing owned temporary resources. Jobs run in
+recorded local sessions across headless input turns.
+
+Runtime proof remains little-endian 64-bit macOS. Windows/Linux and other CPUs,
+big-endian/32-bit runtime, native drains/syscall counts, other devices, injected
+errors/signals, timing, huge storage/OOM, allocator lifetime, arbitrary coercions,
+invalid/concurrently changed headers, portable ABI and remaining V representation
+limits are boundaries. Other unported IO APIs are outside this checkpoint.
+Reproduction and scope are in
+[the header-write comparison](zigimg/reference_probes/writer_header/README.md).

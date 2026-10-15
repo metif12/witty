@@ -1359,7 +1359,7 @@ and `splat_bytes_all` retry until complete or WriteFailed. Vector headers are
 restored after success/ordinary failure, while partial output is retained.
 The [complete output comparison](reference_probes/writer_all/README.md) covers
 32,016 records, 1,176 returning controls and 770 exact panic/state pairs per mode.
-Preserved repetition is covered below; header variants remain unported.
+Preserved repetition and header variants are covered below.
 
 
 `splat_byte_preserve(preserve, byte, count)` retains the pinned writer's repeat /
@@ -1374,4 +1374,12 @@ vector counting and borrowed slices. `nothing()` and `unlimited()` construct
 its boundary values. The [IO limit comparison](reference_probes/io_limit/README.md)
 covers 20,100 records, 240 returning controls and 240 exact assertion/state pairs
 per mode. V cannot enforce the returned slice_const view's element constness.
-The remaining header-write methods can now use a typed limit.
+Header-write methods use this typed limit.
+
+
+`write_splat_header` and `write_splat_header_limit` consume a header, prefix
+vectors and a repeated final vector. The second accepts `Limit`. Their short
+writes preserve the pinned helper's eight-vector batching, direct-drain failures
+and limit-accounting quirks; whole prefixes can exceed the stated limit.
+The [header-write comparison](reference_probes/writer_header/README.md) covers
+16,178 records, 774 returning controls and 276 exact panic/state pairs per mode.

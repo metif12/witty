@@ -1635,6 +1635,130 @@ fn (mut stream WriteStream) file_write_splat(data [][]u8, splat usize) !usize {
 	return consumed
 }
 
+// Consume a header followed by prefix vectors and a repeated final vector.
+pub fn (mut stream WriteStream) write_splat_header(header []u8, data [][]u8, splat usize) !usize {
+	return stream.write_splat_header_limit(header, data, splat, Limit.unlimited())
+}
+
+pub fn (mut stream WriteStream) write_splat_header_limit(header []u8, data [][]u8, splat usize, limit Limit) !usize {
+	mut remaining := limit.value
+	mut len := int(Limit.limited(remaining).min_int(usize(header.len)))
+	if len > stream.buffer.len - stream.position { len = stream.buffer.len - stream.position }
+	if header.len != len {
+		return stream.write_splat_header_limit_finish(header, data, splat, remaining)
+	}
+	for i in 0 .. len {
+		stream.buffer[stream.position + i] = header[i]
+	}
+	stream.position += len
+	remaining -= usize(len)
+	if data.len == 0 { panic('integer overflow') }
+	for index, bytes in data[..data.len - 1] {
+		len = int(Limit.limited(remaining).min_int(usize(bytes.len)))
+		if len > stream.buffer.len - stream.position { len = stream.buffer.len - stream.position }
+		if bytes.len != len {
+			written := stream.write_splat_header_limit_finish([]u8{}, data[index..], splat,
+				remaining)!
+			buffered := limit.value - remaining
+			if written > ~usize(0) - buffered { panic('integer overflow') }
+			return buffered + written
+		}
+		for i in 0 .. len {
+			stream.buffer[stream.position + i] = bytes[i]
+		}
+		stream.position += len
+		remaining -= usize(len)
+	}
+	pattern := data[data.len - 1]
+	if pattern.len != 0 && splat > ~usize(0) / usize(pattern.len) { panic('integer overflow') }
+	count := usize(pattern.len) * splat
+	if count > Limit.limited(remaining).min_int(usize(stream.buffer.len - stream.position)) {
+		buffered := limit.value - remaining
+		written := stream.write_splat_header_limit_finish([]u8{}, data[data.len - 1..], splat,
+			remaining)!
+		if written > ~usize(0) - buffered { panic('integer overflow') }
+		return buffered + written
+	}
+	if pattern.len > 0 {
+		for _ in 0 .. int(splat) {
+			for i, byte in pattern {
+				stream.buffer[stream.position + i] = byte
+			}
+			stream.position += pattern.len
+		}
+	}
+	remaining -= count
+	return limit.value - remaining
+}
+
+fn (mut stream WriteStream) write_splat_header_limit_finish(header []u8, data [][]u8, splat usize, limit usize) !usize {
+	mut remaining := limit
+	mut vecs := [][]u8{cap: 8}
+	if header.len != 0 {
+		len := int(Limit.limited(remaining).min_int(usize(header.len)))
+		vecs << unsafe { header[..len] }
+		remaining -= usize(len)
+		if remaining == 0 { return stream.header_drain(vecs, 1) }
+	}
+	if data.len == 0 { panic('integer overflow') }
+	for bytes in data[..data.len - 1] {
+		if bytes.len == 0 { continue
+		 }
+		// The pinned Writer uses header.len here and passes the entire prefix.
+		len := Limit.limited(remaining).min_int(usize(header.len))
+		vecs << unsafe { bytes }
+		remaining -= len
+		if remaining == 0 || vecs.len == 8 { return stream.header_drain(vecs, 1) }
+	}
+	pattern := data[data.len - 1]
+	if splat == 1 {
+		len := int(Limit.limited(remaining).min_int(usize(pattern.len)))
+		vecs << unsafe { pattern[..len] }
+		return stream.header_drain(vecs, 1)
+	}
+	vecs << unsafe { pattern }
+	if pattern.len == 0 { panic('division by zero') }
+	return stream.header_drain(vecs, Limit.limited(remaining / usize(pattern.len)).min_int(splat))
+}
+
+// Call drain directly: its fixed-buffer behavior differs from write_splat's fast path.
+fn (mut stream WriteStream) header_drain(data [][]u8, splat usize) !usize {
+	if stream.file != none { return stream.file_write_splat(data, splat) }
+	if data.len == 0 { return 0 }
+	for bytes in data[..data.len - 1] {
+		space := stream.buffer.len - stream.position
+		len := if bytes.len < space { bytes.len } else { space }
+		for i in 0 .. len {
+			stream.buffer[stream.position + i] = bytes[i]
+		}
+		stream.position += len
+		if bytes.len > space { return error('WriteFailed') }
+	}
+	pattern := data[data.len - 1]
+	if pattern.len == 0 { return 0 }
+	if pattern.len == 1 {
+		space := stream.buffer.len - stream.position
+		if splat < usize(space) { panic('reached unreachable code') }
+		for i in 0 .. space {
+			stream.buffer[stream.position + i] = pattern[0]
+		}
+		stream.position += space
+		return error('WriteFailed')
+	}
+	mut remaining := splat
+	for remaining > 0 {
+		space := stream.buffer.len - stream.position
+		len := if pattern.len < space { pattern.len } else { space }
+		for i in 0 .. len {
+			stream.buffer[stream.position + i] = pattern[i]
+		}
+		stream.position += len
+		if pattern.len > space { return error('WriteFailed') }
+		remaining--
+	}
+	panic('reached unreachable code')
+}
+
 pub fn (mut stream WriteStream) splat_byte(byte u8, count usize) !usize {
 	return stream.write_splat([[byte]], count)
 }
