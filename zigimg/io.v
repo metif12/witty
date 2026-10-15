@@ -1643,6 +1643,88 @@ pub fn (mut stream WriteStream) splat_bytes(bytes []u8, count usize) !usize {
 	return stream.write_splat([bytes], count)
 }
 
+// Restore each borrowed input header after retrying a partial vector write.
+pub fn (mut stream WriteStream) write_vec_all(mut data [][]u8) ! {
+	mut index := 0
+	mut truncate := usize(0)
+	for index < data.len {
+		{
+			untruncated := data[index]
+			data[index] = unsafe { untruncated[int(truncate)..] }
+			defer { data[index] = untruncated }
+			n := stream.write_vec(data[index..])!
+			if n > ~usize(0) - truncate { panic('integer overflow') }
+			truncate += n
+		}
+		for index < data.len && truncate >= usize(data[index].len) {
+			truncate -= usize(data[index].len)
+			index++
+		}
+	}
+}
+
+pub fn (mut stream WriteStream) write_splat_all(mut data [][]u8, splat usize) ! {
+	mut index := 0
+	mut truncate := usize(0)
+	for index + 1 < data.len {
+		{
+			untruncated := data[index]
+			data[index] = unsafe { untruncated[int(truncate)..] }
+			defer { data[index] = untruncated }
+			n := stream.write_splat(data[index..], splat)!
+			if n > ~usize(0) - truncate { panic('integer overflow') }
+			truncate += n
+		}
+		for truncate >= usize(data[index].len) && index + 1 < data.len {
+			truncate -= usize(data[index].len)
+			index++
+		}
+	}
+	if data.len == 0 { return }
+	pattern := data[index]
+	if pattern.len != 0 && splat > ~usize(0) / usize(pattern.len) { panic('integer overflow') }
+	if truncate < usize(pattern.len) * splat {
+		if index != data.len - 1 { panic('reached unreachable code') }
+		mut remaining := splat
+		for {
+			used := truncate / usize(pattern.len)
+			if used > remaining { panic('integer overflow') }
+			remaining -= used
+			truncate %= usize(pattern.len)
+			if remaining == 0 { break
+			 }
+			n := stream.write_splat([unsafe { pattern[int(truncate)..] }, pattern], remaining - 1)!
+			if n > ~usize(0) - truncate { panic('integer overflow') }
+			truncate += n
+		}
+	}
+}
+
+pub fn (mut stream WriteStream) splat_byte_all(byte u8, count usize) ! {
+	mut remaining := count
+	for remaining > 0 {
+		n := stream.splat_byte(byte, remaining)!
+		if n > remaining { panic('integer overflow') }
+		remaining -= n
+	}
+}
+
+pub fn (mut stream WriteStream) splat_bytes_all(bytes []u8, splat usize) ! {
+	if bytes.len != 0 && splat > ~usize(0) / usize(bytes.len) { panic('integer overflow') }
+	mut remaining := usize(bytes.len) * splat
+	first := stream.splat_bytes(bytes, splat)!
+	if first > remaining { panic('integer overflow') }
+	remaining -= first
+	for remaining > 0 {
+		leftover_splat := remaining / usize(bytes.len)
+		leftover_bytes := remaining % usize(bytes.len)
+		n := stream.write_splat([unsafe { bytes[bytes.len - int(leftover_bytes)..] }, bytes],
+			leftover_splat)!
+		if n > remaining { panic('integer overflow') }
+		remaining -= n
+	}
+}
+
 pub fn (mut stream WriteStream) write_byte(byte u8) ! {
 	stream.write_all([byte])!
 }

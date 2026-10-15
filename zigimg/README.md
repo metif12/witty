@@ -1351,4 +1351,12 @@ Only the final vector repeats; zero repetitions still copy vector prefixes.
 File drains retain the 16-slot limit and byte-block preparation effects, including
 spare-buffer changes before IO failure. The [repetition comparison](reference_probes/writer_splat/README.md)
 covers 21,738 records, 770 returning controls and 910 exact panic/state pairs per
-mode. All/preserve/header variants remain unported.
+mode. Complete-output variants are covered below.
+
+
+`write_vec_all(mut data)`, `write_splat_all(mut data, splat)`, `splat_byte_all`
+and `splat_bytes_all` retry until complete or WriteFailed. Vector headers are
+restored after success/ordinary failure, while partial output is retained.
+The [complete output comparison](reference_probes/writer_all/README.md) covers
+32,016 records, 1,176 returning controls and 770 exact panic/state pairs per mode.
+Preserved repetition and header variants remain unported.
