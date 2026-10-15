@@ -10185,3 +10185,85 @@ tags, input/output overlap, huge storage/OOM, allocator lifetime, portable ABI a
 remaining V representation limits are boundaries. Other IO/fmt APIs remain
 outside this checkpoint. Reproduction and scope are in
 [the aligned writer comparison](zigimg/reference_probes/writer_align/README.md).
+
+
+### Byte, Unicode, hex and Base64 formatting — 2026-10-15
+
+Five pinned std.Io.Writer helpers now translate through WriteStream:
+`print_ascii_char`, `print_ascii`, `print_unicode_codepoint`, `print_hex` and
+`print_base64`. `FormatCase` supplies lower/upper. ASCII helpers accept raw bytes
+and delegate unchanged options to alignment, including ignored precision.
+Unicode writes a single encoded UTF-8 sequence, replacing surrogate halves and
+values above U+10FFFF with U+FFFD within Source's u21 domain. Hex writes each
+nibble separately; Base64 uses the standard alphabet and '=' padding and writes
+each three-byte input window separately. This retains buffering and partial-error
+order. Empty hex/Base64 input performs no writes. Old IO/C bodies, locked Source
+bodies, visibility and syscalls remain unchanged.
+
+Debug/ordinary and ReleaseSafe/production each match **36,852 complete
+returning records** (`58e0014715351e78da9be5515aa662042b5b5427cca2615a171a5f707e8b18f1`),
+**512 returning controls**
+(`f44ede993d6d5eda6c01e71998feb8bc24724e3c5c68cccbb7b8086bc16d787f`) and **188
+exact panic/state pairs** (`e197512268320b43d73ad4686c4deabf926ba1bb794865ef14e62cc9d977937a`).
+The exact pairs comprise 104 padding overflows and 84 checked u21 conversions.
+Five snapshots model backing, pending state, logical position, unused views,
+unchanged input/header/options, descriptor validity/references, caller changes,
+flushes and complete file/pipe output. The independent model uses Python's text
+encoders and reconstructs each native write boundary, padding/scratch preparation,
+file drain and pipe transition. Trap snapshots match both implementations and the
+model before opening a retained state file.
+
+The deduplicated corpus covers all five APIs, all alignments and omitted/explicit widths,
+every input byte, both hex cases, every Base64 remainder length, long input,
+UTF-8 boundaries, all 2,048 surrogate halves, plane samples/noncharacters,
+maximum Unicode/u21 values, memory/positional/streaming writers, zero/short/large
+buffers, starts zero/three, empty/full pending output, regular/replaced-pipe /
+closed descriptors, caller changes and flushes. Maximum-width controls retain
+finite failure/trap/bypass paths; huge successful padding runs are excluded.
+
+V carries Source's u21 argument in u32 and checks values above 0x1FFFFF before
+writer effects in both modes. Exact runtime controls compare this adaptation with
+a checked Source conversion at the probe's call boundary, not with an internal
+printUnicodeCodepoint panic. Source rejects a direct 0x200000 literal; V accepts
+it statically and checks at runtime. A compiler fixture proves the acceptance
+without executing that invalid call, while runtime probes prove actual behavior.
+Ten paired compiler rejections per mode cover wrong byte/options/codepoint /
+hex-case/buffer types, negative codepoints and bool option fields. Separate byte
+256 / u32-overflow 4294967296 fixtures retain Source rejection, V ordinary warnings
+and actual zero-byte output, and V production rejection. External consumers use
+all methods and FormatCase aliases and check output. Other coercions, invalid
+tags and native enum layout remain boundaries.
+
+Four public regressions, **95 image test files** and **17 focused production /
+application / Windows / Linux checks** pass. Historical alignment retains 17,712
+records, 1,058 returning controls and 384 exact overflow/state pairs per mode.
+Full/streaming IO retains 37,133 records, 17 generic traps and four compile
+boundaries per mode. Their hashes remain unchanged. Generic traps do not prove
+exact state. Vaxis runtime tests are not rerun; its source is unchanged and
+dependency builds pass. Cross builds establish compilation only.
+
+Existing complete Source, selected compiler-library, Io.zig and fmt.zig pins
+remain unchanged. Whole unicode.zig is additionally pinned at
+`541dbd778c2765ea7c6479a873c234f32ad5ca4b7a96252410bea075a71c8348`
+and whole base64.zig at
+`f506bb85c053a0bda914258c3c295107e9987c48674c2addf57ffecd5dddca8d`.
+Both runtime and compiler controls check them before/after. Versions, path/encoder
+libraries, implementation, probes, direct helpers and inputs are pinned too.
+Final runtime bodies stay frozen before discovery; only EXPECTED assignments
+change afterward. Preliminary evidence retains a u21 panic-message mismatch;
+the corrected 161-record / nine-trap preflight and compiler controls pass before
+final comparisons start. Final old IO/C bodies are checked byte-for-byte.
+
+Independent replay checks all records/models, exact failures, compiler controls,
+actual modes, binaries and provenance. Lossless parent compression pins raw and
+compressed bytes. Recorded jobs survive headless input turns. Every retained
+archive member is read back before committing exact reviewed hashes and releasing
+owned temporary resources.
+
+Runtime remains little-endian 64-bit macOS. Other platforms/CPUs, big-endian /
+32-bit runtime, arbitrary devices/short drains, injected errors/signals,
+syscall counts/timing, invalid/concurrently changed headers/tags, overlapping
+input/output, huge storage/OOM, allocator lifetime, portable ABI and remaining
+V representation limits are boundaries. Other formatting APIs remain outside
+this checkpoint. Reproduction and scope are in
+[the text formatting comparison](zigimg/reference_probes/writer_text/README.md).

@@ -1951,6 +1951,79 @@ pub fn (mut stream WriteStream) align_buffer_options(buffer []u8, options Format
 	return stream.align_buffer(buffer, width, options.alignment, options.fill)
 }
 
+// ASCII formatting accepts arbitrary bytes; precision is ignored by alignment.
+pub fn (mut stream WriteStream) print_ascii_char(byte u8, options FormatOptions) ! {
+	return stream.align_buffer_options([byte], options)
+}
+
+pub fn (mut stream WriteStream) print_ascii(bytes []u8, options FormatOptions) ! {
+	return stream.align_buffer_options(bytes, options)
+}
+
+// u32 carries Source's u21 parameter. Check its range before any writer effects.
+pub fn (mut stream WriteStream) print_unicode_codepoint(codepoint u32) ! {
+	if codepoint > 0x1fffff { panic('integer does not fit in destination type') }
+	c := if codepoint > 0x10ffff || (codepoint >= 0xd800 && codepoint <= 0xdfff) {
+		u32(0xfffd)
+	} else {
+		codepoint
+	}
+	mut bytes := [4]u8{}
+	mut len := 1
+	if c < 0x80 {
+		bytes[0] = u8(c)
+	} else if c < 0x800 {
+		len = 2
+		bytes[0] = u8(0xc0 | (c >> 6))
+		bytes[1] = u8(0x80 | (c & 0x3f))
+	} else if c < 0x10000 {
+		len = 3
+		bytes[0] = u8(0xe0 | (c >> 12))
+		bytes[1] = u8(0x80 | ((c >> 6) & 0x3f))
+		bytes[2] = u8(0x80 | (c & 0x3f))
+	} else {
+		len = 4
+		bytes[0] = u8(0xf0 | (c >> 18))
+		bytes[1] = u8(0x80 | ((c >> 12) & 0x3f))
+		bytes[2] = u8(0x80 | ((c >> 6) & 0x3f))
+		bytes[3] = u8(0x80 | (c & 0x3f))
+	}
+	return stream.write_all(bytes[..len])
+}
+
+pub enum FormatCase {
+	lower
+	upper
+}
+
+// Keep each nibble as a separate byte write, including partial-write failures.
+pub fn (mut stream WriteStream) print_hex(bytes []u8, letter_case FormatCase) ! {
+	charset := if letter_case == .upper { '0123456789ABCDEF' } else { '0123456789abcdef' }
+	for byte in bytes {
+		stream.write_byte(charset[byte >> 4])!
+		stream.write_byte(charset[byte & 15])!
+	}
+}
+
+// Source encodes each three-byte window separately, then writes its four bytes.
+pub fn (mut stream WriteStream) print_base64(bytes []u8) ! {
+	charset := 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+	mut offset := 0
+	for offset < bytes.len {
+		count := if bytes.len - offset < 3 { bytes.len - offset } else { 3 }
+		chunk := bytes[offset..offset + count]
+		mut encoded := [4]u8{init: `=`}
+		encoded[0] = charset[chunk[0] >> 2]
+		encoded[1] = charset[(chunk[0] & 3) << 4 | if count > 1 { chunk[1] >> 4 } else { u8(0) }]
+		if count > 1 {
+			encoded[2] = charset[(chunk[1] & 15) << 2 | if count > 2 { chunk[2] >> 6 } else { u8(0) }]
+		}
+		if count > 2 { encoded[3] = charset[chunk[2] & 63] }
+		stream.write_all(encoded[..])!
+		offset += count
+	}
+}
+
 // Swapped slices write each element separately, retaining partial-write order.
 pub fn (mut stream WriteStream) write_slice_swap[T](values []T) ! {
 	$if T.unaliased_typ is $int {

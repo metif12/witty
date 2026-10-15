@@ -1410,3 +1410,13 @@ The [aligned writer comparison](reference_probes/writer_align/README.md) covers
 17,712 records, 1,058 returning controls and 384 exact overflow/state pairs per
 mode, including padding order and pre-failure scratch effects. Format-record ABI
 and V's mode-dependent fill-literal coercion remain separate boundaries.
+
+
+`print_ascii_char`, `print_ascii`, `print_unicode_codepoint`, `print_hex` and
+`print_base64` format bytes through the writer. ASCII preserves options and raw
+bytes; Unicode replaces invalid scalar values with U+FFFD within its checked u21
+range. `FormatCase` selects hex letter case. Hex nibble writes and Base64 group
+writes preserve partial failures. The [text formatting comparison](reference_probes/writer_text/README.md)
+covers 36,852 records, 512 returning controls and 188 exact panic/state pairs
+per mode. V's wider Unicode carrier and mode-dependent literal coercions are
+measured separately from Source's static argument constraints.
