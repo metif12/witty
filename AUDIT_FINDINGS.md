@@ -10953,3 +10953,61 @@ unsafe writes, concurrent mutation and physical allocation remain boundaries.
 Compile-time Placeholder.parse, Writer print/printValue and custom formatter
 reflection remain unported. Scope and reproduction are in the
 [parser comparison](zigimg/reference_probes/format_parser/README.md).
+
+
+### Placeholder grammar and returned records — 2026-10-15
+
+`FormatPlaceholder.parse` translates pinned std.fmt.Placeholder.parse's inner-byte
+grammar and record values: optional positional/named arguments, specifier bytes,
+fill/alignment, zero-prefixed width, precision, defaults and public fields. All
+six constructor fields are required. V owns its result storage; caller mutation
+preserves returned contents. Existing runtime and C files are byte-identical.
+
+Source parsing is compile-time-only. The V runtime result API is an explicit
+boundary: malformed names/separators/trailing bytes reject Source compilation
+but return V errors; overflowing decimal arguments/widths/precisions reject
+Source compilation but panic in V. Timing, error kinds and failure states are
+not equivalent. V overflow checks remain active in production. Source const views,
+V mutable views, physical allocation/lifetime/OOM, ABI/layout and copied boxed
+specifier payloads remain separate boundaries. Whole-choice replacement retains
+ordinary record copy behavior. Formatter names/full Writer strings are not
+validated by this inner-placeholder parser.
+
+The native fixture generates constant inputs and evaluates the unchanged public
+Source parser. It compares every field, then mutates a separate runtime input
+copy and checks stable result contents. V mutates its actual caller argument.
+This demonstrates contents and independence, not storage topology equivalence.
+An independent byte grammar model supplies valid records and error messages.
+Debug/ordinary and ReleaseSafe/production each pass **10,918 native-compared valid
+records**, SHA `8f5fd91c4614457eb85890f7111ebeb87c48c6dff447a497f9f18bc11a63fe46`,
+and **1,983 V-only model error records**, SHA
+`c6e777b0567af3a85f111b04a271bd3cff4f1aacd7aa2abbfb7a2abf3b2a6bd8`.
+Five deduplicated groups cover exhaustive short grammar strings, every byte in
+five contexts, field combinations, native usize edges and seeded byte strings.
+
+Thirteen malformed examples per mode reject Source compilation at its original
+visibility; ten V counterparts return the same diagnostic bytes and three
+counterparts panic on overflow. These are compiler/runtime boundaries, not paired
+runtime failure-state proofs. The V-only error matrix is not a native comparison.
+Fourteen external compiler pairs include four common accepted contracts, seven
+paired ordinary rejections and three measured runtime-input / boxed-copy / const
+boundaries. Source compile-time parse enforcement remains unported in V.
+
+Three public regressions, **105 image test files** and **17 focused production /
+application / Windows / Linux commands** pass. The historical parser/argument
+suite retains 40,127 records, 57 controls and 56 exact panic/state pairs per mode
+with unchanged hashes. Vaxis source is unchanged; dependencies build and runtime
+tests are not rerun. Cross builds prove compilation. Complete Source, selected
+compiler-library and fmt/mem/simd/math/meta/Io/time pins, versions, generated
+inputs, implementations, fixtures and helpers are checked before/after.
+Runtime/test/fixture bodies freeze before final comparisons; only EXPECTED
+assignments change later. A corrected external Source consumer initially omitted
+comptime evaluation; failed/superseded evidence is retained separately and does
+not satisfy successful checks. Independent replay verifies every field/error,
+selected compiler outcome, mode, binary and provenance pin. Every retained archive
+member is read back before committing reviewed hashes and releasing owned RAM /
+reserves. Evidence remains pinned little-endian 64-bit macOS. Other runtime widths /
+platforms, invalid descriptors, concurrent mutation and physical allocation remain
+boundaries. Writer print/printValue and custom formatter reflection are unported.
+Scope/reproduction are in the
+[placeholder comparison](zigimg/reference_probes/format_placeholder/README.md).

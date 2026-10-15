@@ -1508,3 +1508,12 @@ The [parser comparison](reference_probes/format_parser/README.md) covers 40,184
 returning observations and 56 exact panic/state pairs per mode. Shared boxed
 specifier payloads and mutable V views remain measured representation boundaries.
 Compile-time placeholders and Writer formatting dispatch remain unported.
+
+
+`FormatPlaceholder.parse(bytes)` now parses inner-placeholder arguments, specifier
+bytes, fill/alignment, width and precision into an owned record. The
+[placeholder comparison](reference_probes/format_placeholder/README.md) matches
+10,918 valid Source records and checks 1,983 V errors against an independent model
+per mode. Source compile-time rejection versus V runtime errors/panics, copied
+boxed payloads and mutable byte views remain measured boundaries. Writer dispatch
+and Source compile-time placeholder enforcement remain unported.
