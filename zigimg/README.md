@@ -1294,3 +1294,11 @@ read error. Normal and error returns restore temporary slice headers. The
 10,476 records, 480 controls and 48 additional partial-header failure controls
 per mode. POSIX vector limits, read-ahead, zero-progress pipe transitions and
 the pinned Source's 16-slot panic boundary are preserved.
+
+`take_enum_nonexhaustive[T, E]` accepts every native-width tag bit pattern for
+enums marked `@[nonexhaustive]`, including direct aliases and PNG method types.
+Its [nonexhaustive enum comparison](reference_probes/reader_enum_nonexhaustive/README.md)
+covers 20,544 records and 278 controls per mode. Source rejects exhaustive types
+at compile time; V checks the marker before input and traps for an unmarked enum.
+This constraint difference and the retained enum representation limits are
+measured separately from matching reads.

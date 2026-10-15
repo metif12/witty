@@ -95,9 +95,10 @@ python3 zigimg/verify_reader_enum_reference.py /path/to/locked/zigimg /path/to/z
 python3 zigimg/verify_reader_enum_reference.py /path/to/locked/zigimg /path/to/zig-0.15.2 /path/to/v-0.5.2 --v-prod --workdir /empty/proof/production
 ```
 
-Runtime comparison uses little-endian 64-bit macOS. Source's separate
-takeEnumNonexhaustive entry point and compile-time nonexhaustive enforcement
-remain unported. Arbitrary Source integer widths, chained aliases, enum
+Runtime comparison uses little-endian 64-bit macOS. The separate
+[takeEnumNonexhaustive mapping](../reader_enum_nonexhaustive/README.md) now checks
+the explicit marker before input at runtime. Compile-time nonexhaustive
+enforcement remains a boundary. Arbitrary Source integer widths, chained aliases, enum
 construction/constant conversions, positive-only int enum widening, layout/ABI,
 custom Reader vtables, larger buffers/offsets, concurrent reuse, other devices,
 syscall counts, injected errors,

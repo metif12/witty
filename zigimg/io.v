@@ -403,6 +403,21 @@ pub fn (mut stream ReadStream) take_enum[T, E](endian E) !T {
 	}
 }
 
+// Source requires a nonexhaustive enum at compile time. V's explicit marker
+// is checked before any input is touched; type/endian checks remain static.
+pub fn (mut stream ReadStream) take_enum_nonexhaustive[T, E](endian E) !T {
+	$if T.unaliased_typ is $enum {
+		mut nonexhaustive := false
+		$for attribute in T.attributes {
+			if attribute.name == 'nonexhaustive' { nonexhaustive = true }
+		}
+		if !nonexhaustive { panic('take_enum_nonexhaustive requires @[nonexhaustive]') }
+		return stream.take_enum[T, E](endian)
+	} $else {
+		$compile_error('take_enum_nonexhaustive requires an enum type')
+	}
+}
+
 // Read an integer without consuming its bytes, retaining any file read-ahead.
 pub fn (mut stream ReadStream) peek_int[T, E](endian E) !T {
 	$if T.unaliased_typ is $int {
