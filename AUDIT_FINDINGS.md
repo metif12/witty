@@ -10701,7 +10701,7 @@ retain parent backing/pending/unused headers, position, descriptor ownership,
 arguments/options and file/wire bytes. Writer traps comprise 60 invalid-mode
 assertions and 83 overflows, all before parent output. Returning controls also
 cover partial WriteFailed. All traps retain one exact diagnostic, empty stdout
-and state observed before observer IO; production retains them.
+and state observed before writing the observer file; production retains them.
 
 A 301-record / 20-trap combined preflight and 15 external compiler pairs pass in
 both modes before final comparisons. Four common accepted consumers cover options
@@ -10783,7 +10783,7 @@ pending/unused bytes and headers, argument/options and file/wire bytes through
 caller mutation and flush. Positional/streaming files, replaced pipes and closed
 descriptors are represented. Traps comprise 78 overflows, 60 private render unwraps
 and 50 exact suffix bounds failures per mode. Each retains one exact diagnostic,
-empty stdout and matching parent/argument state observed before observer IO.
+empty stdout and matching parent/argument state observed before writing the observer file.
 All traps remain active in production. Returning controls include precision
 bypasses and partial WriteFailed. Huge successful padding/storage is excluded.
 
@@ -10923,7 +10923,7 @@ are respectively `a0d015042f05d976b96b1145e5887dde34d69b8c9ccc0cbe58a8981855ca47
 Six groups cover all bytes, exhaustive short grammar strings, decimal edges,
 borrowed mutation, argument-state combinations and 2,048 seeded sequences.
 46 overflow, four exact slice and six u5 conversion traps preserve diagnostics,
-empty stdout and exact state before observer IO; all remain active in production.
+empty stdout and exact state before writing the observer file; all remain active in production.
 
 Thirteen external compiler pairs per mode include four accepted contracts, six
 paired ordinary rejections and three separately measured boundaries. Parser and
@@ -11011,3 +11011,63 @@ platforms, invalid descriptors, concurrent mutation and physical allocation rema
 boundaries. Writer print/printValue and custom formatter reflection are unported.
 Scope/reproduction are in the
 [placeholder comparison](zigimg/reference_probes/format_placeholder/README.md).
+
+
+### Primitive Writer value dispatch — 2026-10-15
+
+`WriteStream.print_value` translates the represented printValue branches for native
+integer/alias bases, bool/alias text and dynamic byte-slice/alias text, hex, base64
+and lists. Empty/any integer formatting, decimal/binary/octal/hex bases, signs,
+alignment and padding retain Source behavior. Byte lists preserve depth-zero
+elision/option bypass, element options and separate punctuation writes. Encoded
+byte formats assert absent precision/width before IO, including empty inputs and
+zero-valued present options. Old runtime and C files remain byte-identical.
+
+An independent integer/string/base64/write-boundary model checks five snapshots
+of full backing, position, pending/unused bytes/headers, descriptors, raw argument
+bytes/spans, options/type/format/depth and file/wire contents through mutation and
+flush. Memory, positional/streaming files, replaced pipes and closed descriptors
+are represented. Public Source bodies and visibility remain unchanged.
+Debug/ordinary and ReleaseSafe/production each match **16,308 returning records**,
+**343 isolated returning controls** and **159 exact panic/state pairs**. Hashes are
+`8203d42a2752f0c7daac29017063580b2d879a46202c3a892942147be3dd84f2`,
+`ec1d20cfe4a1437308688a9aee18632a44969dfa289d93851e93fb9940aab9cd` and
+`da189ef20c753df024c44d68ecb519f3dee1f6d2cd1bf459555e08ef4af65eb1`.
+Six groups cover native extrema/aliases, booleans/options, lengths/depth, failure
+order, all bytes and ignored options. Controls retain 144 option assertions and
+15 overflows, huge-width failures, empty-text center overflow and depth-zero
+bypasses. Each paired trap retains one exact diagnostic, empty stdout and matching
+state before writing the observer file; all remain active in production. WriteFailed retains
+exact state. Huge successful output/storage is excluded.
+
+Sixteen external compiler pairs per mode include four common accepted consumers,
+six paired ordinary rejections and six boundaries. Source's comptime format is a
+V runtime string; invalid/unrepresented V formats return unsupported-format errors
+before IO. Those errors are not Source compile errors. Source also supports
+carriers/formats not represented here: float/character/unicode/duration/byte-size,
+pointers/arrays/optionals/error unions, aggregates, vectors and custom reflection.
+No equivalence is claimed for these paths, Source compile-time enforcement,
+general coercions, V string carriers, ABI/layout or physical allocation/lifetime.
+Non-generic integer helpers preserve pinned V standalone consumer reachability.
+
+Three public regressions, **106 image test files** and **17 focused production /
+application / Windows / Linux commands** pass. Historical placeholders retain
+10,918 native records, 1,983 V-only model errors and 13 compiler/runtime boundaries
+per mode with unchanged hashes/results. Vaxis source is unchanged and dependencies
+build; runtime tests are not rerun. Cross builds establish compilation only.
+Whole Source/selected library pins plus fmt/Io/math/meta/mem/simd and base64.zig,
+previous path/encoder dependencies, versions, implementation, shared C helpers,
+fixtures and inputs are checked before/after. Runtime/test/fixture bodies freeze
+before final comparisons; only EXPECTED assignments change later.
+
+Failed/superseded development evidence retains an observer-only narrowed depth,
+consumer backing-name collisions and an unwrapped-optional assertion. It does not
+satisfy successful checks. Independent replay verifies every observation/failure,
+consumer result, mode, binary and provenance pin. Every retained archive member
+is read back before committing reviewed hashes and releasing owned RAM/reserves.
+Evidence remains pinned little-endian 64-bit macOS. Other runtime widths/platforms,
+invalid descriptors, arbitrary/injected short devices, concurrent mutation, huge
+successful padding and private allocation remain boundaries. Further printValue
+formats/carriers, full Writer.print and custom formatter reflection are unported.
+Scope/reproduction are in the
+[value comparison](zigimg/reference_probes/writer_value/README.md).

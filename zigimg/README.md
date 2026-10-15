@@ -1517,3 +1517,13 @@ bytes, fill/alignment, width and precision into an owned record. The
 per mode. Source compile-time rejection versus V runtime errors/panics, copied
 boxed payloads and mutable byte views remain measured boundaries. Writer dispatch
 and Source compile-time placeholder enforcement remain unported.
+
+
+`WriteStream.print_value(format, options, value, max_depth)` now dispatches native
+integer bases, boolean text and byte-slice text/hex/base64/list formatting, including
+aliases and list depth limits. The
+[value comparison](reference_probes/writer_value/README.md) covers 16,651 returning
+observations and 159 exact panic/state pairs per mode. Source compile-time format
+validation versus V runtime errors, unrepresented carriers/formats and broader
+coercions remain boundaries. Further value dispatch and full Writer.print are
+unported.
