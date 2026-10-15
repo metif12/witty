@@ -10449,3 +10449,59 @@ syscall counts/timing, invalid/concurrently changed headers/tags, huge storage /
 OOM, allocator lifetime, portable ABI and remaining V representation limits
 remain boundaries. Other formatters remain outside this checkpoint. Reproduction
 and scope are in [the duration comparison](zigimg/reference_probes/writer_duration/README.md).
+
+
+### Numeric format records — 2026-10-15
+
+Pinned std.fmt.Number, Number.Mode and Options.toNumber translate as mutable
+`NumberFormat`, `NumberMode` and `FormatOptions.to_number`. Source's case field
+uses the V spelling `letter_case`. Defaults remain decimal/lower, absent
+precision/width, right alignment and space fill. The five modes retain declaration
+order and base lookup: decimal 10, binary 2, octal 8, hex 16 and scientific none.
+Conversion copies the four options and supplies mode/case. Copies and by-value
+returns retain independent optional integers, including present zero and usize
+maximum. Existing IO/C bodies remain byte-identical.
+
+Debug/ordinary and ReleaseSafe/production each match **25,480 complete records**
+(`cce7031efc0a921872f0c3c3d655676ecdaee0d02e878b02451ba770c08c83e1`) against
+unchanged public compiler-library declarations and an independent Python value
+model. Five construction forms and seven mutation/conversion operations cover
+all six fields, initial/final source options, three retained number records and
+every optional base. The matrix covers every mode/case/alignment/fill byte,
+absent/zero/maximal and high-bit option values and 1,000 seeded random records.
+This is a record-only proof with no application traps or width-sized allocations.
+
+Per mode, two accepted external consumers execute exact output/assertions, and
+23 ordinary compiler rejection pairs cover direct/converted immutable fields,
+wrong field/conversion types, unknown tags and an unwrapped optional base.
+A 185-record stratified preflight plus consumers passes in both modes before
+final comparisons. Development failures retain a V strings.Builder interpolation
+optimization that prints high-bit unsigned values as signed. Explicit u64.str()
+corrects the observer; native/model values and production implementation bodies
+remain unchanged. Failed probes and the accepted pre-format preflight remain
+separate from final evidence.
+
+Two public regressions, **98 image test files** and **17 focused production /
+application / Windows / Linux checks** pass. Historical duration formatting keeps
+38,653 records, 598 returning controls and 288 exact panic/state pairs per mode.
+Full/streaming IO retains 37,133 records, 17 generic traps and four compiler
+boundaries per mode; all historical hashes remain unchanged. Generic traps do
+not prove exact state. Vaxis runtime tests are not rerun; source is unchanged and
+dependency builds pass. Cross builds establish compilation only.
+
+Complete Source, selected compiler libraries and whole fmt.zig/Io.zig /
+math.zig/meta.zig pins remain unchanged. Before/after checks retain
+implementation, fixture, direct-helper,
+input, consumer and compiler-version provenance. The probe invokes the public
+compiler-library records directly; the complete unchanged Source tree remains
+retained for provenance. Runtime/probe/model bodies freeze before final runs.
+Independent replay verifies observations, models, compiler outcomes, modes,
+binaries, historical failures and old-body identity. All retained archive members
+are read back before committing exact reviewed hashes and releasing owned RAM.
+
+Runtime evidence remains little-endian 64-bit macOS. Portable ABI, other widths /
+platform runtimes, invalid raw enum tags, broader literal/coercion rules,
+reflection, allocation/lifetime and remaining V representation limits remain
+boundaries. The existing oversized-fill literal behavior remains separately
+measured. Float rendering and byte-size formatters remain unported. Reproduction
+and scope are in [the numeric format record comparison](zigimg/reference_probes/format_number/README.md).

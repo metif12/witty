@@ -1922,6 +1922,45 @@ pub mut:
 	fill      u8        = ` `
 }
 
+pub enum NumberMode {
+	decimal
+	binary
+	octal
+	hex
+	scientific
+}
+
+pub fn (mode NumberMode) base() ?u8 {
+	return match mode {
+		.decimal { u8(10) }
+		.binary { u8(2) }
+		.octal { u8(8) }
+		.hex { u8(16) }
+		.scientific { none }
+	}
+}
+
+pub struct NumberFormat {
+pub mut:
+	mode        NumberMode = .decimal
+	letter_case FormatCase = .lower
+	precision   ?usize
+	width       ?usize
+	alignment   Alignment = .right
+	fill        u8        = ` `
+}
+
+pub fn (options FormatOptions) to_number(mode NumberMode, letter_case FormatCase) NumberFormat {
+	return NumberFormat{
+		mode:        mode
+		letter_case: letter_case
+		precision:   options.precision
+		width:       options.width
+		alignment:   options.alignment
+		fill:        options.fill
+	}
+}
+
 // Retain Source's separate payload and padding writes, including failure order.
 pub fn (mut stream WriteStream) align_buffer(buffer []u8, width usize, alignment Alignment, fill u8) ! {
 	padding := if usize(buffer.len) < width { width - usize(buffer.len) } else { usize(0) }

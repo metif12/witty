@@ -1441,3 +1441,12 @@ covers 38,653 records, 598 returning controls and 288 exact panic/state
 pairs per mode, including native aliases, partial writes and Source's generic
 24-byte temporary overflow for some 25-byte signed durations. General
 coercions and non-native integer carriers remain separate boundaries.
+
+
+`NumberFormat` and `NumberMode` supply numeric format options with Source defaults.
+`FormatOptions.to_number(mode, letter_case)` copies precision, width, alignment
+and fill. Mode `base()` returns 10/2/8/16 or `none` for scientific formatting.
+Copies preserve absent/zero/maximal optional values independently. The
+[numeric format record comparison](reference_probes/format_number/README.md)
+covers 25,480 records and 25 compiler consumer pairs per mode. Float rendering
+and byte-size formatting remain unported.
