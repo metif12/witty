@@ -1448,9 +1448,8 @@ coercions and non-native integer carriers remain separate boundaries.
 and fill. Mode `base()` returns 10/2/8/16 or `none` for scientific formatting.
 Copies preserve absent/zero/maximal optional values independently. The
 [numeric format record comparison](reference_probes/format_number/README.md)
-covers 25,480 records and 25 compiler consumer pairs per mode. Binary float
-conversion for decimal/scientific rendering and byte-size formatting remain
-unported.
+covers 25,480 records and 25 compiler consumer pairs per mode. Byte-size formatting
+remains unported.
 
 
 `print_float_hex[T]` and `print_float_hex_options[T]` format explicit f32/f64 values
@@ -1460,8 +1459,7 @@ aligns a completed private 50-byte representation. Pinned mode traps and private
 buffer failures are retained. The [hex float comparison](reference_probes/writer_float_hex/README.md)
 covers 18,492 records, 288 returning controls and 312 exact panic/state pairs per
 mode. Untyped literal precision and wider float carriers remain separate
-boundaries. Binary float conversion for decimal/scientific rendering and byte-size
-formatting remain unported.
+boundaries. Byte-size formatting remains unported.
 
 
 `FloatDecimal64`, `format_float_scientific` and `format_float_decimal` provide the
@@ -1470,5 +1468,16 @@ rounding, borrowed output, scratch writes, checked arithmetic and the 53-byte
 minimum-buffer contract. The [decimal record comparison](reference_probes/float_decimal/README.md)
 covers 11,922 records, 502 returning controls and 480 exact panic/state pairs per
 mode. V's returned-view constness, required-field aliases and u128 carrier limits
-are measured separately. Binary float conversion and the remaining writer float /
-byte-size methods remain unported.
+are measured separately. Byte-size and remaining writer formatters remain unported.
+
+
+`float_to_decimal[T]`, `render_float[T]` and `print_float[T]` now cover explicit
+f32/f64 values and aliases through the pinned full-table Ryu backend. Rendering
+preserves shortest-decimal selection, signed special values, borrowed output,
+precision, scratch writes and failure order. Writer output preserves alignment,
+case ignoring and the private-buffer `(float)` fallback. The
+[buffer rendering comparison](reference_probes/float_render/README.md) and
+[writer comparison](reference_probes/writer_float/README.md) jointly cover 42,809
+returning observations and 289 exact panic/state pairs per mode. All 1,336 table
+limbs match Source. Other float/literal carriers, comptime sizing, const output and
+allocation/ABI remain measured boundaries. Byte-size formatters remain unported.

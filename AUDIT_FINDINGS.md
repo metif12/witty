@@ -10650,3 +10650,94 @@ concurrently changed headers, allocator lifetime/OOM, huge buffers and
 unrepresented consumers remain boundaries. Generic u128 formatting and the
 remaining Ryu/writer stages remain unported. Reproduction, limits and scope are
 in [the decimal record comparison](zigimg/reference_probes/float_decimal/README.md).
+
+
+### Native binary float rendering and Writer.printFloat — 2026-10-15
+
+`float_to_decimal[T]` translates the pinned Backend64_TablesFull Ryu path for
+explicit f32/f64 values and aliases. `FloatRenderOptions`, `FloatRenderMode`,
+`float_format_buffer_size[T]` and `render_float[T]` supply native conversion and
+buffer rendering. Scientific sizing is 53; decimal sizing is 55/347. Exact
+32-bit partial products supply two u64 limbs for Source's u128 intermediates.
+The 326 power-of-five and 342 inverse pairs (1,336 limbs) match original Source
+constants before/after and during independent replay. Binary endpoint inclusion,
+trailing zero removal, nearest/even shortest selection and the pinned lower-bound
+exponent-one convention remain intact. Decimal precision then uses the prior
+record formatter, preserving its scratch stores, conservative errors and checked
+arithmetic. NaN payload/sign and signed zero retain their records.
+
+`WriteStream.print_float[T]` renders in Source's fixed 347-byte scratch even for
+f32, substitutes `(float)` on BufferTooSmall, then aligns/writes. Case is ignored.
+Binary/octal/hex modes panic before rendering or parent output; arithmetic panics
+remain traps instead of fallback. BufferTooSmall can precede a visibly fitting
+string. Partial memory/file alignment and drain failures retain parent state.
+
+An independent exact rational model searches shortest decimal candidates inside
+the pinned legal interval, including endpoint/even ties. It uses neither table
+approximations nor host float text. The prior independent store model supplies
+rounding, scratch bytes and error order; a separate stream model supplies writes.
+Every finite native conversion record is reconstructed from the original public
+scientific render; V reports its record directly. Original binaryToDecimal runs
+zero/special early returns with a fixture backend that traps any table access.
+Original render always selects its unchanged private tables. Source bodies and
+visibility remain unchanged. This finite corpus does not exhaust float space.
+
+Debug/ordinary and ReleaseSafe/production each match:
+
+| Proof | Records / SHA-256 | Returning controls / SHA-256 | Exact traps / SHA-256 |
+| --- | --- | --- | --- |
+| Buffer rendering | 28,340 / `c20232f55f25e1f8389ec824430e05ecda9de8ecc1ba8cf1ec78284ca12387c8` | 184 / `b8d4b40ae6921c25b6fff0292df05e28609f99e5e9d0f05a4e0695f55c84cfc5` | 146 / `a778191c50a02c212278e602f0b821edb57a69ead075fa3089e76a12461fe06d` |
+| Writer formatting | 13,976 / `94d8a1b0be822bd6fedc88965d5070b34e387338cebc2709e99f8102aa06a7a7` | 309 / `b2ab1802865e39103abe8715305ed2a5863ff424faf19cb69847d94e557904de` | 143 / `72c6c1a9f5058ad2d62a1e7a9133d377afb5f7d03f8ee7da3b8ad6ee935ee96c` |
+
+These total **42,809 returning observations and 289 exact panic/state pairs per
+mode**. Rendering covers every binary exponent with four significand variants,
+aliases/specials, decimal-power neighbors, seeded raw bits, buffer/precision
+thresholds and every caller mask. Four snapshots retain backing, borrowed result
+header/text and original/copy conversion records through caller/argument mutation.
+Rendering controls retain 106 short-buffer assertions and 40 arithmetic overflows.
+Writer cases cover every exponent, aliases, precision/fallback/options, all fills,
+all alignments, prefixes and file/pipe/closed-descriptor contexts. Five snapshots
+retain parent backing/pending/unused headers, position, descriptor ownership,
+arguments/options and file/wire bytes. Writer traps comprise 60 invalid-mode
+assertions and 83 overflows, all before parent output. Returning controls also
+cover partial WriteFailed. All traps retain one exact diagnostic, empty stdout
+and state observed before observer IO; production retains them.
+
+A 301-record / 20-trap combined preflight and 15 external compiler pairs pass in
+both modes before final comparisons. Four common accepted consumers cover options
+copies, aliases, sizes and borrowed output; six paired rejections cover types and
+immutability. Five separate boundaries retain Source const output versus V mutable
+bytes, Source f16/f80/f128 versus absent V types, and Source comptime sizes versus
+V runtime results rejected as fixed-array lengths. A V const may call the size
+function during initialization; it does not become an evaluable array length.
+Untyped literals and generalized coercions remain outside the explicit-type claim.
+
+Three public regressions, **101 image test files** and **17 focused production /
+application / Windows / Linux checks** pass. The historical decimal-record proof
+keeps 11,922 records, 502 return controls and 480 exact trap/state pairs per mode.
+Full/streaming IO keeps 37,133 records, 17 generic traps and four compiler boundaries;
+all historical hashes remain unchanged. Generic stream traps do not prove exact
+state. Vaxis source is unchanged and dependencies build; runtime tests are not
+rerun. Cross builds establish compilation only.
+
+Complete Source, selected compiler libraries and whole fmt/float.zig and all
+previous invoked library pins remain unchanged. Versions, bodies, fixtures,
+helpers, inputs and consumers are checked before/after. All prior runtime bodies
+are byte-identical except the added print_float block in IO; C is unchanged.
+Runtime/probe/model bodies freeze before discovery; only EXPECTED assignments are
+filled later. Development evidence retains corrected V generic-expression syntax,
+fixture tail/include/backend visibility errors, a premature preflight launch and
+an incorrect assumption about V constant initialization; none satisfies green
+checks. Independent replay checks all observations/models, exact failure state,
+compiler outcomes, modes, binaries, table limbs and provenance. Every retained
+archive member is read back before committing exact reviewed hashes and releasing
+owned RAM/reserves.
+
+Evidence remains the pinned compilers on little-endian 64-bit macOS. Other runtime
+platforms/widths, ReleaseSmall's alternate tables, wider carriers and generic u128
+formatting, literal precision, constness, comptime execution, portable ABI /
+reflection, allocation/lifetime/OOM, floating exception flags and invalid/concurrent
+headers remain boundaries. Private V fixed-array slicing copies; physical
+allocation is unmeasured. Byte-size and remaining writer formatters remain
+unported. Reproduction and scope are in the [buffer rendering proof](zigimg/reference_probes/float_render/README.md)
+and [writer proof](zigimg/reference_probes/writer_float/README.md).

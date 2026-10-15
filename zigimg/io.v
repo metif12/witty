@@ -2042,6 +2042,24 @@ pub fn (mut stream WriteStream) print_int[T](value T, base u8, letter_case Forma
 	return stream.print_int_any[T](value, base, letter_case, options)
 }
 
+// Render completely in Source's f64-sized scratch buffer before parent output.
+pub fn (mut stream WriteStream) print_float[T](value T, options NumberFormat) ! {
+	mode := match options.mode {
+		.decimal { FloatRenderMode.decimal }
+		.scientific { FloatRenderMode.scientific }
+		.binary, .octal, .hex { panic('reached unreachable code') }
+	}
+
+	mut storage := [347]u8{}
+	mut bytes := unsafe { storage[..] }
+	printed := render_float[T](mut bytes, value, FloatRenderOptions{
+		mode:      mode
+		precision: options.precision
+	}) or { '(float)'.bytes() }
+	return stream.align_buffer(printed, options.width or { usize(printed.len) }, options.alignment,
+		options.fill)
+}
+
 // Hex floats retain Source's rounding and separate sign/fraction/exponent writes.
 pub fn (mut stream WriteStream) print_float_hex[T](value T, letter_case FormatCase, precision ?usize) ! {
 	$if T.unaliased_typ is f32 || T.unaliased_typ is f64 {

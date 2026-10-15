@@ -5,8 +5,10 @@
 required in ordinary direct construction. `format_float_scientific(mut buffer,
 value, precision)` and `format_float_decimal(...)` translate formatScientific /
 formatDecimal for that carrier. They accept an already-decimal significand and
-exponent; binary float conversion, Writer.printFloat and byte-size formatting
-remain unported. `float_format_min_buffer_size` is 53.
+exponent. Binary conversion and Writer.printFloat are covered by the later
+[rendering](../float_render/README.md) and [writer](../writer_float/README.md)
+comparisons; byte-size formatting remains unported.
+`float_format_min_buffer_size` is 53.
 
 Both helpers require at least 53 input bytes, including special-value calls.
 Normal mantissas must be below 10^17; Source asserts this during digit counting.
