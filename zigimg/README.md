@@ -1401,3 +1401,12 @@ The [writer consumption comparison](reference_probes/writer_consume/README.md)
 covers 29,078 records and 366 returning controls per mode, including saved views
 and later output. Pinned V's immutable-copy mutation constraint differs from
 Source and is measured separately.
+
+
+`align_buffer` and `align_buffer_options` write left, center or right padding
+without truncating input. `Alignment` and mutable `FormatOptions` provide typed
+choices and Source defaults; precision is stored and ignored by these methods.
+The [aligned writer comparison](reference_probes/writer_align/README.md) covers
+17,712 records, 1,058 returning controls and 384 exact overflow/state pairs per
+mode, including padding order and pre-failure scratch effects. Format-record ABI
+and V's mode-dependent fill-literal coercion remain separate boundaries.

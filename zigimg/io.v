@@ -1908,6 +1908,49 @@ pub fn (mut stream WriteStream) splat_byte_preserve(preserve usize, byte u8, cou
 	}
 }
 
+pub enum Alignment {
+	left
+	center
+	right
+}
+
+pub struct FormatOptions {
+pub mut:
+	precision ?usize
+	width     ?usize
+	alignment Alignment = .right
+	fill      u8        = ` `
+}
+
+// Retain Source's separate payload and padding writes, including failure order.
+pub fn (mut stream WriteStream) align_buffer(buffer []u8, width usize, alignment Alignment, fill u8) ! {
+	padding := if usize(buffer.len) < width { width - usize(buffer.len) } else { usize(0) }
+	if padding == 0 { return stream.write_all(buffer) }
+	match alignment {
+		.left {
+			stream.write_all(buffer)!
+			stream.splat_byte_all(fill, padding)!
+		}
+		.center {
+			left := padding / 2
+			if padding == ~usize(0) { panic('integer overflow') }
+			right := (padding + 1) / 2
+			stream.splat_byte_all(fill, left)!
+			stream.write_all(buffer)!
+			stream.splat_byte_all(fill, right)!
+		}
+		.right {
+			stream.splat_byte_all(fill, padding)!
+			stream.write_all(buffer)!
+		}
+	}
+}
+
+pub fn (mut stream WriteStream) align_buffer_options(buffer []u8, options FormatOptions) ! {
+	width := options.width or { usize(buffer.len) }
+	return stream.align_buffer(buffer, width, options.alignment, options.fill)
+}
+
 // Swapped slices write each element separately, retaining partial-write order.
 pub fn (mut stream WriteStream) write_slice_swap[T](values []T) ! {
 	$if T.unaliased_typ is $int {

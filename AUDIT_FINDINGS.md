@@ -10094,3 +10094,94 @@ huge storage/OOM, allocator lifetime, portable ABI and remaining V representatio
 limits are boundaries. Custom vtables/native drain integration and other IO
 APIs remain outside this checkpoint. Reproduction and scope are in
 [the writer consumption comparison](zigimg/reference_probes/writer_consume/README.md).
+
+
+### Aligned writes and formatting options — 2026-10-15
+
+`align_buffer` and `align_buffer_options` translate the pinned Writer alignment
+methods through WriteStream. Alignment has left/center/right choices.
+FormatOptions represents std.fmt.Options' four public mutable fields: optional
+usize precision/width, alignment and u8 fill. Defaults retain none/none/right /
+ASCII space. Omitted width selects input length. Explicit zero or smaller widths
+do not truncate the payload. Precision is retained but ignored by these APIs.
+Other formatting APIs, including Options.toNumber, remain outside this scope.
+Existing IO/C helper bodies are byte-identical; Source bodies, visibility and
+syscalls are untouched.
+
+Left emits payload before padding, right emits padding before payload, and center
+emits floor(padding/2), payload, then ceil(padding/2). Payload uses write_all and
+padding uses splat_byte_all, preserving their distinct partial-write and file /
+scratch effects. Center checks padding-plus-one before its first write. A maximum
+padding count therefore traps before output; later byte-repeat overflow can
+follow earlier payload copies. All checks remain active in production. Inputs,
+headers and option fields stay unchanged during calls.
+
+Debug/ordinary and ReleaseSafe/production each match **17,712 complete
+returning records**, SHA-256
+`05553be00a26d477c186c81aa962ac35b6c14fc8d1c812893fb6abd52368b840`;
+**1,058 returning controls**, SHA-256
+`cac234dca7aff931d66263018693aea20fd67ccf98821cd632f6ef548ae5060e`; and **384 exact overflow/state pairs**,
+SHA-256 `1342787ab85c855d688e4e7cc6b12e39c17daadfae074f10cf2a838e2d9a0bb2`.
+Returning records include caught WriteFailed. Every record/control independently
+models all five snapshots: initialized backing, pending bytes/length, logical
+position, unused-view bytes/length/offset, input payload and relative span, all
+four option values, descriptor validity/reference observations, caller changes,
+flush results and complete file/pipe output. The model distinguishes payload /
+byte-repetition calls, positional/streaming drains and pipe transitions, including
+scratch preparation before failed IO. Each trap has empty stdout, one exact
+message and identical retained state, reconstructed after any earlier copies.
+Native FullPanic / V at_exit capture before opening retained output.
+
+The groups contain 12,348 alignment, 216 option, 4,608 every-byte and 540 scratch /
+retry records after exact specification deduplication. Both APIs, all alignments,
+empty/short/long input, omitted/explicit widths, zero/equal/smaller/larger widths,
+odd/even padding, none/zero/maximum precision, every fill byte, memory/positional /
+streaming writers, capacities around the 64-byte scratch boundary, starts
+zero/three, empty/full pending buffers, regular/replaced-pipe/closed descriptors,
+caller mutations and flushes are covered. Maximum-width controls retain only
+finite failure/trap/bypass paths. Unbounded successful padding runs are excluded
+by the bounded model and are not executed or claimed.
+
+Ten paired compiler rejections per mode cover invalid buffer/width/alignment /
+fill/options types, bool option fields and unknown fields. The fill-256 boundary
+retains Source rejection, V ordinary warning / emitted zero byte and V production
+rejection. External consumers verify type aliases, defaults, mutable fields,
+independent option copies, omitted width, ignored precision and actual bytes.
+General coercions, invalid alignment tags, native enum/optional/record layouts
+and other fmt contracts are outside the equivalence claim.
+
+Three public regressions, **94 image test files** and **17 focused production /
+application / Windows / Linux checks** pass. Historical buffer consumption
+retains 29,078 records and 366 returning controls per mode. Full/streaming IO
+retains 37,133 records, 17 generic traps and four compile boundaries per mode.
+Their hashes remain unchanged. Generic traps do not establish exact state.
+Vaxis runtime tests are not rerun; its source is unchanged and dependency builds
+pass. Cross builds establish compilation only.
+
+The native probe uses std.Io.Writer through the unchanged locked zigimg stream
+wrapper. Complete Source and selected compiler-library pins remain unchanged.
+In addition to whole Io.zig, whole fmt.zig is pinned before/after at
+`667eac6285e472b5516ebebf8a6e69959a171be4fb97cac1e56419ffec20d500`.
+Both runtime and compiler controls check it. Versions, path/encoder libraries,
+implementation, probes, direct helpers and inputs are pinned too. Final runtime
+bodies stay frozen before discovery; only EXPECTED assignments change afterward.
+Development evidence retains a missing unsafe enum conversion in the V probe and
+an absent-precision marker incorrectly parsed as an integer by the checker. The
+initial pipeline was stopped by its verified owned process group before fixing
+the parser; its logs/runner/termination receipt remain separate. No implementation
+body changes during either correction. The corrected 162-record / eight-trap
+preflight passes before fresh final comparisons.
+
+Independent replay checks every full record/model, exact failure, compiler
+control, actual mode, binary, provenance pin and old IO/C body. Lossless parent
+compression pins raw/compressed outputs. Recorded local jobs survive headless
+input turns. Checks run in an owned RAM workspace; every retained archive member
+is read back before committing exact reviewed hashes and releasing resources.
+
+Runtime remains little-endian 64-bit macOS. Windows/Linux/other CPU runtime,
+big-endian/32-bit runtime, arbitrary devices/short drains, injected errors and
+signals, syscall counts/timing, invalid/concurrently changed headers or alignment
+tags, input/output overlap, huge storage/OOM, allocator lifetime, portable ABI and
+remaining V representation limits are boundaries. Other IO/fmt APIs remain
+outside this checkpoint. Reproduction and scope are in
+[the aligned writer comparison](zigimg/reference_probes/writer_align/README.md).
