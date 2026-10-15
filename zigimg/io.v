@@ -1951,6 +1951,58 @@ pub fn (mut stream WriteStream) align_buffer_options(buffer []u8, options Format
 	return stream.align_buffer(buffer, width, options.alignment, options.fill)
 }
 
+// Native-width integers retain Source's sign rules and complete-before-write order.
+pub fn (mut stream WriteStream) print_int_any[T](value T, base u8, letter_case FormatCase, options FormatOptions) ! {
+	$if T.unaliased_typ is $int {
+		if base < 2 { panic('reached unreachable code') }
+		mut magnitude := u64(0)
+		mut sign := u8(0)
+		$if T.unaliased_typ is i8 || T.unaliased_typ is i16 || T.unaliased_typ is int
+			|| T.unaliased_typ is i64 || T.unaliased_typ is isize {
+			n := i64(value)
+			if n < 0 {
+				magnitude = u64(-(n + 1)) + 1
+				sign = `-`
+			} else {
+				magnitude = u64(n)
+				if width := options.width {
+					if width != 0 { sign = `+` }
+				}
+			}
+		} $else {
+			magnitude = u64(value)
+		}
+		mut bytes := [65]u8{}
+		mut index := bytes.len
+		alphabet := if letter_case == .upper {
+			'0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+		} else {
+			'0123456789abcdefghijklmnopqrstuvwxyz'
+		}
+		for {
+			digit := magnitude % u64(base)
+			if digit >= 36 { panic('reached unreachable code') }
+			index--
+			bytes[index] = alphabet[int(digit)]
+			magnitude /= u64(base)
+			if magnitude == 0 { break
+			 }
+		}
+		if sign != 0 {
+			index--
+			bytes[index] = sign
+		}
+		return stream.align_buffer_options(bytes[index..], options)
+	} $else {
+		$compile_error('print_int_any requires a native integer type')
+	}
+}
+
+// Source widens native integers before printing; their observable bytes agree.
+pub fn (mut stream WriteStream) print_int[T](value T, base u8, letter_case FormatCase, options FormatOptions) ! {
+	return stream.print_int_any[T](value, base, letter_case, options)
+}
+
 // ASCII formatting accepts arbitrary bytes; precision is ignored by alignment.
 pub fn (mut stream WriteStream) print_ascii_char(byte u8, options FormatOptions) ! {
 	return stream.align_buffer_options([byte], options)

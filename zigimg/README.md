@@ -1420,3 +1420,13 @@ writes preserve partial failures. The [text formatting comparison](reference_pro
 covers 36,852 records, 512 returning controls and 188 exact panic/state pairs
 per mode. V's wider Unicode carrier and mode-dependent literal coercions are
 measured separately from Source's static argument constraints.
+
+
+`print_int_any[T]` and `print_int[T]` format native integer types and direct aliases
+with a byte-sized base, `FormatCase` and `FormatOptions`. Signed nonnegative values
+get '+' when width is present/nonzero; precision is ignored. Digits are completed
+before alignment/output. The [integer formatting comparison](reference_probes/writer_int/README.md)
+covers 30,856 records, 720 returning controls and 742 exact panic/state pairs
+per mode. Use explicit native integer types for Source-compatible literal
+signedness. Wider/unusual integer carriers and a pinned V generic-type compiler
+crash are measured separately.

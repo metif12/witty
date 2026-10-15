@@ -10267,3 +10267,94 @@ input/output, huge storage/OOM, allocator lifetime, portable ABI and remaining
 V representation limits are boundaries. Other formatting APIs remain outside
 this checkpoint. Reproduction and scope are in
 [the text formatting comparison](zigimg/reference_probes/writer_text/README.md).
+
+
+### Native integer formatting — 2026-10-15
+
+`print_int_any[T]` and `print_int[T]` translate pinned std.Io.Writer integer
+formatting for ten V native integer types and ten direct aliases. FormatCase
+selects letter case, and FormatOptions supplies padding/alignment; precision is
+ignored. Negative values get '-', nonnegative signed values get '+' exactly when
+width is present/nonzero, and unsigned values omit '+'. Padding surrounds the
+whole representation, including its sign. Signed minima avoid signed-abs
+overflow. The formatter completes digits/sign before output. Source's native
+widening wrapper has the same observable bytes in this domain. Generic codegen
+costs are outside the claim. Old IO/C bodies and Source bodies, visibility and
+syscalls remain unchanged.
+
+Bases zero/one panic before writer effects. Bases 2..255 can return when every
+generated digit is below 36; a larger remainder traps before alignment/output.
+255 in base 255 writes '10'; 254 in that base traps. These checks remain active
+in production, including when the writer could otherwise buffer or fail IO.
+
+Debug/ordinary and ReleaseSafe/production each match **30,856 complete
+returning records** (`c0860bc0ab3e4e8edb62f9ed02e9a3f6f0ea428c5c9f5e5686edd9232528fc9e`),
+**720 returning controls**
+(`83626d714d8d42ef1d6431d77d7d74f4c366dec670ba21834b9ae3d1b977eb94`) and **742
+exact panic/state pairs** (`c17a2c69e5484247097c0a743263c4b83f0d91cb4679b78a60a6486e38ed526c`).
+The exact pairs comprise 678 base/digit precondition failures and 64 padding
+overflows. Five independently modeled snapshots cover backing/pending state,
+logical position, unused views, raw argument carrier/type/base/case/options,
+descriptor validity/references, caller changes, flushes and complete file/pipe
+output. Python integer formatting/divmod reconstruct digits and native sign
+rules; a separate writer model reconstructs padding, scratch preparation and
+drain/pipe transitions. Every trap has one exact diagnostic and retained state
+matching both implementations and the model before opening its state file.
+
+The deduplicated corpus covers both APIs, all native/alias types, extrema and
+every 8-bit value, both letter cases, all 256 byte-sized bases, all alignments,
+omitted/zero/short/long widths, ignored precision, memory/positional/streaming
+writers, empty/full pending output, zero/short/65-byte capacity, starts zero/three,
+regular/replaced-pipe/closed descriptors, caller changes and flushes. Maximum
+width controls retain finite failures/traps/bypasses and exclude huge successful
+padding runs.
+
+Twenty paired compiler rejections per mode cover invalid values and base/case /
+option types, including bool width/precision. Beyond-u64 literals reject in both
+compilers/modes. Fill 256 retains Source rejection, V ordinary warning and actual
+NUL padding, and V production rejection. Explicit native types define the runtime
+equivalence domain: Source printInt(1) with width 3/fill '_' writes '__1', while
+V's signed untyped literal writes '_+1'. Source printIntAny(1) rejects comptime_int;
+V accepts it and writes '+1' with width 1. External consumers verify both methods
+with every native/alias type, a FormatCase alias and actual output.
+
+Source controls also successfully print u128, i128, u7 and i65 values. V carrier
+declarations for those types reject. A direct unknown-u128 generic argument
+causes a type-resolver compiler panic in both modes; it is independently recorded
+as a compiler crash, separate from ordinary rejections and application traps.
+Broader numeric/coercion/comptime/width and ABI contracts remain boundaries.
+
+Three public regressions, **96 image test files** and **17 focused production /
+application / Windows / Linux checks** pass. Historical text formatting retains
+36,852 records, 512 returning controls and 188 exact panic/state pairs per mode.
+Full/streaming IO retains 37,133 records, 17 generic traps and four compile
+boundaries per mode. Their hashes remain unchanged. Generic traps do not prove
+exact state. Vaxis runtime tests are not rerun; its source is unchanged and
+dependency builds pass. Cross builds establish compilation only.
+
+Existing complete Source, selected compiler-library, Io.zig and fmt.zig pins
+remain unchanged. Whole math.zig is additionally pinned at
+`65645001357d5f78cbf646485e009a048b828680bb1b47fb3de0fd8617d91af1`
+and whole meta.zig at
+`3cf9b3eb6c6b6f9b101f06f0562a4071c81a5fbc6de63d8197e837e10cedfc40`.
+Runtime and compiler controls check pins before/after, plus versions,
+path/encoder libraries, implementation, probes, direct helpers and inputs. Final
+runtime bodies freeze before discovery; only EXPECTED assignments change later.
+Preflight passes 161 records/nine exact traps. Separate preliminary compiler
+records retain corrected expectations about a beyond-u64 literal rejection and
+an unknown-u128 generic compiler panic. Implementation/probe/model bodies stay
+unchanged through those corrections; final compiler controls pass before runtime
+comparisons start.
+
+Independent replay checks all records/models, exact failures, compiler outcomes,
+actual modes, binaries, provenance and byte-identical old IO/C bodies. Lossless
+parent compression pins raw/compressed outputs. Recorded jobs survive headless
+input turns. Every retained archive member is read back before committing exact
+reviewed hashes and releasing owned resources.
+
+Runtime remains little-endian 64-bit macOS. Other platforms/CPUs, big-endian /
+32-bit runtime, arbitrary devices/short drains, injected errors/signals,
+syscall counts/timing, invalid/concurrently changed headers/tags, huge storage /
+OOM, allocator lifetime, portable ABI and remaining V representation limits
+remain boundaries. Other formatters remain outside this checkpoint. Reproduction
+and scope are in [the integer formatting comparison](zigimg/reference_probes/writer_int/README.md).
