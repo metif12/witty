@@ -9191,3 +9191,89 @@ remain boundaries. Runtime uses little-endian 64-bit macOS; Windows/Linux, other
 CPU, big-endian and 32-bit runtime remain outside the proof. Writable reservation /
 rebase and other reader/writer APIs remain unported. Reproduction and scope are in
 [the writer buffer comparison](zigimg/reference_probes/writer_buffer/README.md).
+
+
+### Writable writer reservations and rebase — 2026-10-15
+
+Six new `WriteStream` methods translate pinned Writer.rebase, writableSlice,
+writableSlicePreserve, writableSliceGreedy, writableSliceGreedyPreserve and
+ensureUnusedCapacity. Exact slices reserve/advance; greedy slices borrow the
+whole available span without advancing. Returned slices and caller storage alias.
+Saved view headers retain their offsets/lengths across later rebases; keep backing
+storage and writer alive and initialize exact reservations before IO.
+
+Fast paths ignore preserve whenever sufficient space exists, including zero
+requests on empty/full/closed writers. Fixed writers use failingRebase and return
+`WriteFailed` without mutation. File writers use defaultRebase: temporarily hide
+the tail, drain once, move it with overlap-safe semantics and restore its length.
+Normal drain errors restore the hidden length. Positional pipes retain Source's
+zero-progress transition and nonzero-position failure/reset. One private helper
+supports this drain; existing reader/writer/C helper bodies remain unchanged.
+
+Checked subtraction/capacity validation follows the drain and restored length.
+An oversized file request may emit bytes before trapping; preserve above total
+capacity overflows at that phase. Post-rebase greedy addition/capacity checks
+retain Source order. Explicit checks preserve the same traps in production.
+
+Debug/ordinary and ReleaseSafe/production each match **10,818 returning records**,
+SHA-256 `f34b9fbd77dc63c6c68894affbeaadb1855435bc3e13414ad215d31c7f149afb`.
+There is one reservation invocation per record; setup/observation are separate.
+The groups contain 7,746 reservation and 3,072 every-byte mutation profiles.
+Memory and positional/streaming files cover capacities 0/1/8/16, starts 0/3,
+empty/partial/full prefixes, zero/fit/oversized counts, preservation through
+usize maximum and owned regular/pipe/closed descriptor bindings. Caller and
+saved-view mutations and optional flushes verify live aliases and emitted data.
+
+A complete independent model checks every returning record: initialized backing
+bytes, pending/spare spans, logical position, saved-view offsets/lengths/bytes,
+ownership, file contents and pipe data. It includes drains, tail
+moves, failure restoration, zero-progress transitions and position resets.
+Empty-buffer offsets are normalized to zero; absolute addresses are not compared.
+
+A separate **48-record overlapping-tail corpus** per mode uses the same frozen
+probe binaries and matches Source and the model, SHA-256
+`fe4524c21e484d60cfd9b409b4322bc71ed602d519fe1889b78b2b4022874cbe`. Four/five preserved
+bytes from a six-byte prefix cover all three preservation methods, caller/view
+mutations and optional flushes.
+
+The **318 returning controls** retain SHA-256
+`c87d75747b74c4728d76b6da0af797f1476ce5e717dc571cf10b249cd7184d5c`.
+The **690 exact panic/state pairs** retain SHA-256
+`411d6eb7ca06c8222fad9d120e9e42c8b76702a1e30300635f2a5a9303c47cab`:
+504 subtraction overflows and 186 capacity failures. Both failed processes have
+empty stdout, one exact message and identical initialized state. Independent
+reconstruction includes emitted regular-file bytes and restored lengths. Pipe
+output before a panic is not observed. Observers capture
+state before opening output and clean up owned resources via FullPanic/at_exit.
+
+Twenty-seven paired compile rejections per mode cover negative, boolean and
+above-usize literals in every argument position. An external aliased-usize
+consumer builds/runs all six methods and checks pending bytes and position.
+These finite controls do not claim all caller coercions are equivalent.
+
+Three focused regressions pass. All 84 image test files and 17 focused
+production/application/Windows/Linux checks pass. Historical writer buffer
+(18,780 records, 308 exact failures), writer seek (6,912 records, 196 returns,
+60 exact failures) and full/streaming IO (37,133 records, 17 generic traps,
+four compile boundaries) retain their hashes in both modes. Generic traps do not
+establish exact state. Vaxis runtime tests are not rerun; its source is unchanged
+and dependency builds pass. Cross builds establish compilation only.
+
+Full unchanged Source, versions/selected libraries, implementation, probes,
+directly imported helpers, shared writer fixture and inputs are pinned
+before/after. Source bodies/visibility/syscalls are untouched. Initialized,
+unlinked files with reset offsets, pipes and keepers are owned. Final bodies stay
+frozen; only EXPECTED assignments change after ordinary discovery. Independent
+replay checks records, complete models, aliases, failures, compile controls,
+ownership, binaries, actual modes and provenance. Lossless parent compression
+pins raw/compressed output. Proofs are persisted from an owned RAM workspace and
+every retained archive member is read back before commit and release.
+
+Custom/growing vtables, arbitrary constructed states, larger buffers/offsets,
+partial native drains, syscall counts, other devices, injected errors, concurrent
+reuse, timing/signals, expired storage, OOM/quotas, allocator lifetime, portable ABI
+and remaining V representation limits remain boundaries. Runtime uses
+little-endian 64-bit macOS; Windows/Linux, other CPU, big-endian and 32-bit runtime
+remain outside the proof. Fixed-array reservations and other reader/writer APIs
+remain unported. Reproduction and scope are in
+[the writable reservation comparison](zigimg/reference_probes/writer_reserve/README.md).

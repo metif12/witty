@@ -1210,6 +1210,80 @@ pub fn (mut stream WriteStream) undo(count usize) {
 	stream.position -= int(count)
 }
 
+// Drain once while default rebase temporarily hides its preserved tail.
+fn (mut stream WriteStream) drain_buffer_once() ! {
+	if stream.position == 0 { return }
+	if stream.streaming < 0 { return error('WriteFailed') }
+	file := stream.file or { return error('WriteFailed') }
+	n := C.witty_image_file_write(file.fd, stream.file_pos, stream.buffer.data,
+		usize(stream.position), unsafe { nil }, 0, &stream.streaming)
+	if n < 0 {
+		if stream.streaming < 0 {
+			stream.file_pos = 0
+			stream.file_seek_error = 'Unseekable'
+		}
+		return error('WriteFailed')
+	}
+	stream.file_pos += u64(n)
+	remaining := stream.position - int(n)
+	for i in 0 .. remaining {
+		stream.buffer[i] = stream.buffer[int(n) + i]
+	}
+	stream.position = remaining
+}
+
+pub fn (mut stream WriteStream) rebase(preserve usize, minimum_len usize) ! {
+	if stream.unused_capacity_len() >= minimum_len { return }
+	// The fixed writer uses failingRebase, without changing its buffer.
+	if stream.file == none { return error('WriteFailed') }
+	for stream.unused_capacity_len() < minimum_len {
+		preserved_len := int(if preserve < usize(stream.position) {
+			preserve
+		} else {
+			usize(stream.position)
+		})
+		preserved_head := stream.position - preserved_len
+		{
+			stream.position = preserved_head
+			defer { stream.position += preserved_len }
+			stream.drain_buffer_once()!
+			if stream.position > preserved_head + preserved_len { panic('reached unreachable code') }
+			// The destination precedes the source, including overlapping tails.
+			for i in 0 .. preserved_len {
+				stream.buffer[stream.position + i] = stream.buffer[preserved_head + i]
+			}
+		}
+		if preserve > usize(stream.buffer.len) { panic('integer overflow') }
+		if usize(stream.buffer.len) - preserve < minimum_len { panic('reached unreachable code') }
+	}
+}
+
+pub fn (mut stream WriteStream) writable_slice_greedy_preserve(preserve usize, minimum_len usize) ![]u8 {
+	if stream.unused_capacity_len() >= minimum_len { return stream.unused_capacity_slice() }
+	stream.rebase(preserve, minimum_len)!
+	if minimum_len > ~usize(0) - preserve { panic('integer overflow') }
+	if usize(stream.buffer.len) < preserve + minimum_len { panic('reached unreachable code') }
+	return stream.unused_capacity_slice()
+}
+
+pub fn (mut stream WriteStream) writable_slice_greedy(minimum_len usize) ![]u8 {
+	return stream.writable_slice_greedy_preserve(0, minimum_len)
+}
+
+pub fn (mut stream WriteStream) writable_slice_preserve(preserve usize, len usize) ![]u8 {
+	bytes := stream.writable_slice_greedy_preserve(preserve, len)!
+	stream.advance(len)
+	return unsafe { bytes[..int(len)] }
+}
+
+pub fn (mut stream WriteStream) writable_slice(len usize) ![]u8 {
+	return stream.writable_slice_preserve(0, len)
+}
+
+pub fn (mut stream WriteStream) ensure_unused_capacity(count usize) ! {
+	stream.writable_slice_greedy(count)!
+}
+
 pub fn (mut stream WriteStream) seek_to(offset u64) ! {
 	if stream.file != none {
 		stream.flush() or { return error('Unexpected') }

@@ -1316,3 +1316,13 @@ pending output while preserving stored bytes. Cursor checks trap before mutation
 including in production. The [writer buffer comparison](reference_probes/writer_buffer/README.md)
 covers 18,780 records and 308 exact panic/state pairs per mode, including saved
 view aliasing, closed descriptors and output after cursor updates.
+
+
+`rebase`, `writable_slice`, `writable_slice_preserve`, `writable_slice_greedy`,
+`writable_slice_greedy_preserve` and `ensure_unused_capacity` provide aliased
+output reservations. File drains preserve buffered tails; exact slices advance
+the cursor, while greedy slices and capacity checks leave it unadvanced.
+Fixed-buffer failure and file drain/error/trap order follow the pinned writer,
+including in production. The [reservation comparison](reference_probes/writer_reserve/README.md)
+covers 10,818 records, 318 returning controls and 690 exact panic/state pairs per
+mode, with complete independent models of buffers, aliases and output.
