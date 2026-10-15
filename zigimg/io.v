@@ -1725,6 +1725,45 @@ pub fn (mut stream WriteStream) splat_bytes_all(bytes []u8, splat usize) ! {
 	}
 }
 
+// Keep Source's buffered-tail compaction and short-write order.
+pub fn (mut stream WriteStream) splat_byte_preserve(preserve usize, byte u8, count usize) ! {
+	if count > ~usize(0) - usize(stream.position) { panic('integer overflow') }
+	new_end := usize(stream.position) + count
+	if new_end <= usize(stream.buffer.len) {
+		for i in 0 .. int(count) {
+			stream.buffer[stream.position + i] = byte
+		}
+		stream.position = int(new_end)
+		return
+	}
+	mut remaining := count
+	for remaining > preserve {
+		if remaining == 0 { panic('reached unreachable code') }
+		n := stream.splat_byte(byte, remaining - preserve)!
+		if n > remaining { panic('integer overflow') }
+		remaining -= n
+		if remaining > ~usize(0) - usize(stream.position) { panic('integer overflow') }
+		if usize(stream.position) + remaining <= usize(stream.buffer.len) {
+			for i in 0 .. int(remaining) {
+				stream.buffer[stream.position + i] = byte
+			}
+			stream.position += int(remaining)
+			return
+		}
+	}
+	if preserve < usize(stream.position) {
+		for i in 0 .. int(preserve) {
+			stream.buffer[i] = stream.buffer[stream.position - int(preserve) + i]
+		}
+		stream.position = int(preserve)
+	}
+	for remaining > 0 {
+		n := stream.splat_byte(byte, remaining)!
+		if n > remaining { panic('integer overflow') }
+		remaining -= n
+	}
+}
+
 pub fn (mut stream WriteStream) write_byte(byte u8) ! {
 	stream.write_all([byte])!
 }

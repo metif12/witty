@@ -1359,4 +1359,11 @@ and `splat_bytes_all` retry until complete or WriteFailed. Vector headers are
 restored after success/ordinary failure, while partial output is retained.
 The [complete output comparison](reference_probes/writer_all/README.md) covers
 32,016 records, 1,176 returning controls and 770 exact panic/state pairs per mode.
-Preserved repetition and header variants remain unported.
+Preserved repetition is covered below; header variants remain unported.
+
+
+`splat_byte_preserve(preserve, byte, count)` retains the pinned writer's repeat /
+compaction order, including fixed-buffer failures before compaction and buffered
+head removal without IO. The [preserved repetition comparison](reference_probes/writer_preserve/README.md)
+covers 18,079 records, 984 returning controls and 360 exact panic/state pairs per
+mode. Large preserve values and zero counts follow Source's behavior.
