@@ -1326,3 +1326,12 @@ Fixed-buffer failure and file drain/error/trap order follow the pinned writer,
 including in production. The [reservation comparison](reference_probes/writer_reserve/README.md)
 covers 10,818 records, 318 returning controls and 690 exact panic/state pairs per
 mode, with complete independent models of buffers, aliases and output.
+
+
+`writable_array[A]` reserves a fixed byte array and returns its borrowed pointer
+in `WriterArray[A].value`, using the existing reader-array record pattern.
+`write_byte_preserve` writes a byte while retaining a buffered tail during file
+rebases. The [fixed-array writer comparison](reference_probes/writer_array/README.md)
+covers 13,358 records, 525 returning controls and 385 exact panic/state pairs per
+mode. Zero/chained-array limits and mode-dependent byte-literal coercion are
+recorded separately.

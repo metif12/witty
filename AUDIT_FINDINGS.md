@@ -9277,3 +9277,95 @@ little-endian 64-bit macOS; Windows/Linux, other CPU, big-endian and 32-bit runt
 remain outside the proof. Fixed-array reservations and other reader/writer APIs
 remain unported. Reproduction and scope are in
 [the writable reservation comparison](zigimg/reference_probes/writer_reserve/README.md).
+
+
+### Fixed-array reservations and preserved byte writes — 2026-10-15
+
+`WriteStream.writable_array[A]()` translates pinned Writer.writableArray. It
+makes space, advances by the fixed byte-array length and returns a borrowed
+pointer in `WriterArray[A].value`. This uses the existing reader-array record
+adaptation for V's fallible pointer return. Inline/named byte arrays and directly
+aliased byte elements are supported. Caller storage and pointer writes alias;
+record copies share that pointer. Saved pointers keep their offsets after cursor
+changes/drains, which can overwrite bytes. Keep backing storage/writer alive and
+initialize reserved bytes before IO. The generic shape is initialized to derive
+its type/length; larger shapes and scratch storage remain boundaries.
+
+`write_byte_preserve(preserve, byte)` translates Writer.writeBytePreserve.
+Unused space bypasses preserve entirely. Full fixed writers fail without
+mutation; full file writers rebase, retain their tail and store/advance only on
+success. Drain errors restore hidden tail lengths while retaining IO progress.
+Capacity/overflow checks follow draining and stay active in production.
+Existing reader/writer/C helper bodies remain unchanged.
+
+Debug/ordinary and ReleaseSafe/production each match **13,358 returning records**,
+SHA-256 `e5db48f196afa5bcc2d45ee0e0a0ebc5d342d0bc6d6b6cef6ebe06c50b8ee038`.
+Each record invokes one new method: 8,456 array reservations and 4,902 byte
+writes. Setup/observation are separate. Groups contain 3,101 array, 4,134 byte,
+5,355 every-byte alias and 768 every-byte write profiles, retaining duplicates
+once. Thirteen array selections cover inline/named lengths 1/2/4/8/16/32 and
+a two-byte element alias. Every byte runs through all writer kinds; every XOR
+byte mutates selected saved arrays.
+
+Memory and positional/streaming files cover capacities 0/1/8/16/32, starts 0/3,
+empty/one-byte/partial/full prefixes, fit/oversized arrays, preserve through usize
+maximum, overlapping tail moves and owned regular/pipe/closed bindings. Complete
+independent models check every returning record: initialized storage, pending /
+spare spans, logical position, saved offsets/lengths/bytes, ownership, file
+contents and pipe output. They include rebasing, failure restoration and mode
+transitions. Empty-buffer offsets are normalized; absolute addresses are not
+compared. Caller/saved-pointer mutation and optional flushes verify live aliases.
+
+The **525 returning controls** retain SHA-256
+`02a353de2b7abfa8168fb9da5701109078266178a08522585ef38a085262a798`.
+The **385 exact panic/state pairs** retain SHA-256
+`1f4939e19df4fa48761377959820224c67e63314c8a91f9a8629626c437bc5a3`:
+253 capacity traps and 132 subtraction overflows. Failed processes have empty
+stdout, one exact message and identical retained state. Independent reconstruction
+includes emitted regular-file bytes and restored pending lengths. Pipe output
+before panic is not observed. Observers capture bytes before opening output and
+clean up owned resources through FullPanic/at_exit.
+
+Five paired compile rejections per mode cover negative/boolean arguments and
+above-usize preserve. Byte literal 256 is a separate boundary: Zig rejects it;
+V ordinary warns and writes zero; V production rejects it. Final mode-specific
+controls verify both the range diagnostic and ordinary output. Earlier compiler
+expectations and logs remain separate development diagnostics.
+
+Ten V type rejections cover dynamic/scalar/string/wider/pointer-element/nested /
+pointer-array/len-field-struct/zero-length/chained-array shapes. Source acceptance
+and run controls separately establish a zero-length reservation on an empty
+fixed writer and a chained array alias. Pinned V has no zero-length fixed arrays
+and one-level reflection rejects chained aliases. External consumers in both
+languages/modes check inline/named/element-aliased arrays, copied pointers,
+two-way mutation, aliased preserve/byte arguments and stored bytes/positions.
+These finite controls do not establish arbitrary caller coercions or identical
+representations.
+
+Three public regressions pass. All 85 image test files and 17 focused
+production/application/Windows/Linux checks pass. Historical reservations
+(10,818 records, 318 returns, 690 exact failures) and full/streaming IO (37,133
+records, 17 generic traps, four compile boundaries) retain their hashes in both
+modes. Generic traps do not establish exact state. Vaxis runtime tests are not
+rerun; its source is unchanged and dependency builds pass. Cross builds establish
+compilation only.
+
+Full unchanged Source, versions/selected libraries, implementation, probes,
+directly imported helpers, shared writer fixture and inputs are pinned
+before/after. Source bodies/visibility/syscalls are untouched. Initialized,
+unlinked files with reset offsets, pipes and keepers are owned. Final implementation/probe/runtime-runner/direct-helper bodies remain frozen;
+only runtime-runner EXPECTED assignments change after ordinary discovery. The
+final compiler driver is frozen and rerun in both modes after its diagnostics.
+Independent replay checks records, models, aliases, failures, type/literal
+controls, ownership, binaries, modes and provenance. Lossless parent compression
+pins raw/compressed output. Proofs are archived from an owned RAM workspace and
+every retained archive member is read back before commit and release.
+
+Custom/growing vtables, arbitrary record states, larger shapes/buffers/offsets,
+uninitialized/expired bytes, partial native drains, syscall counts, other devices,
+injected errors, concurrent reuse, timing/signals, OOM/quotas, allocator lifetime,
+portable ABI and remaining V representation limits remain boundaries. Runtime
+uses little-endian 64-bit macOS; Windows/Linux, other CPU, big-endian and 32-bit
+runtime remain outside the proof. Other reader/writer APIs remain unported.
+Reproduction and scope are in
+[the fixed-array writer comparison](zigimg/reference_probes/writer_array/README.md).

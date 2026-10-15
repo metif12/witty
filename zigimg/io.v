@@ -1284,6 +1284,49 @@ pub fn (mut stream WriteStream) ensure_unused_capacity(count usize) ! {
 	stream.writable_slice_greedy(count)!
 }
 
+fn writer_array_length[A](value A) int {
+	$if A.indirections > 0 || ((int(A.unaliased_typ) >> 16) & 0xff) > 0 {
+		$compile_error('Writer array requires an inline fixed byte array')
+	} $else $if A.unaliased_typ is $array_fixed {
+		writer_array_byte(value[0])
+		return value.len
+	} $else {
+		$compile_error('Writer array requires an inline fixed byte array')
+	}
+}
+
+fn writer_array_byte[T](value T) {
+	$if T.indirections > 0 || ((int(T.unaliased_typ) >> 16) & 0xff) > 0 {
+		$compile_error('Writer array requires byte elements')
+	} $else $if T.unaliased_typ is u8 {
+		_ = value
+	} $else {
+		$compile_error('Writer array requires byte elements')
+	}
+}
+
+// Carry a borrowed fixed-array pointer through V's fallible return machinery.
+pub struct WriterArray[A] {
+pub mut:
+	value &A
+}
+
+pub fn (mut stream WriteStream) writable_array[A]() !WriterArray[A] {
+	shape := A{}
+	len := writer_array_length(shape)
+	bytes := stream.writable_slice_greedy(usize(len))!
+	stream.advance(usize(len))
+	return WriterArray[A]{
+		value: unsafe { voidptr(bytes.data) }
+	}
+}
+
+pub fn (mut stream WriteStream) write_byte_preserve(preserve usize, byte u8) ! {
+	if stream.unused_capacity_len() == 0 { stream.rebase(preserve, 1)! }
+	stream.buffer[stream.position] = byte
+	stream.position++
+}
+
 pub fn (mut stream WriteStream) seek_to(offset u64) ! {
 	if stream.file != none {
 		stream.flush() or { return error('Unexpected') }
