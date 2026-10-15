@@ -10358,3 +10358,94 @@ syscall counts/timing, invalid/concurrently changed headers/tags, huge storage /
 OOM, allocator lifetime, portable ABI and remaining V representation limits
 remain boundaries. Other formatters remain outside this checkpoint. Reproduction
 and scope are in [the integer formatting comparison](zigimg/reference_probes/writer_int/README.md).
+
+
+### Duration formatting — 2026-10-15
+
+Three pinned Writer helpers translate through WriteStream:
+`print_duration_unsigned(u64)`, `print_duration_signed(i64)` and
+`print_duration[T](value, options)` for ten native integer types and ten aliases.
+Units are fixed 365-day years/seven-day weeks, days, hours, minutes and s/ms/us/ns.
+Subsecond fractions truncate to three places and trim trailing zeros. Zero is
+'0ns'; exact larger units return immediately. Signed negative output writes '-'
+first and handles signed minima through their unsigned magnitude. Direct methods
+retain separate sign, digit, fraction and unit writes; the options variant renders
+fully into a private 24-byte writer before alignment. Precision is ignored.
+This preserves their distinct partial failures. Old IO/C bodies, Source bodies,
+visibility and syscalls remain unchanged.
+
+Debug/ordinary and ReleaseSafe/production each match **38,653 complete
+returning records** (`a3bde2e30b52f05830955a26b88c6e4ab91777b3888ce47b104aeb9165662ec1`),
+**598 returning controls**
+(`babed571c162e6585daa27be296f0f7303bb817ece029c1753cd4937553aeb8c`) and **288 exact
+panic/state pairs** (`9b01a092f2612575570e56d7522ce47407b4e4f5ad23ab761a6ca142e03fcf0a`).
+Every complete record/control has five independent snapshots of backing/pending
+state, logical position, unused views, raw argument carrier/type/options,
+descriptor validity/references, caller changes, flushes and complete file/pipe
+output. The model builds separate digit/unit/fraction pieces using divmod,
+then models each direct write or generic alignment, including scratch effects
+and pipe transitions. Every trap has one exact diagnostic and a retained state
+matching both implementations and the model before opening the state file.
+Modeled trap cases have no prior pipe output. The pairs comprise 60 padding
+overflows and 228 private-rendering failures. Production retains the traps.
+
+The eight deduplicated groups cover all three APIs, native/alias boundaries,
+every fractional thousandth for s/ms/us (9,000 records), large combinations,
+all alignments, omitted/zero/short/long widths, ignored precision, every fill byte,
+memory/positional/streaming writers, zero/short/24/65-byte capacity, starts
+zero/three, empty/full pending output, regular/replaced-pipe/closed descriptors,
+caller changes and flushes. Maximum-width controls keep finite failures/traps /
+bypasses and exclude huge successful padding. For valid 64-bit input, reducing
+through minutes bounds the remaining nanoseconds below 60 billion; multiplying
+by 1000 is safe. Some signed representations need 25 bytes, including
+'-101y11w1d11h11m123.456ms'. Direct output can write those bytes. Source's generic
+24-byte temporary instead panics with 'attempt to unwrap error: WriteFailed'
+before touching the destination, which V preserves exactly. Boundary controls
+cover ms/us, zero trimming and 24/25-byte lengths, i64/isize/aliases, all writer
+kinds, pending output, unavailable IO and maximum/omitted widths. The private
+failure precedes parent alignment, padding overflow and IO.
+
+Compiler controls compare invalid values/options, negative unsigned input and
+beyond-u64 literals. Fill 256 retains Source rejection, V ordinary warning /
+actual NUL padding, and V production rejection. Source can also format u7/i7
+values, while V carrier declarations reject. Source's u128 narrowing case and
+the corresponding V carrier declaration both reject. External consumers exercise
+all methods with untyped positive/negative generic literals, extrema and ignored
+precision, checking actual output. Other coercions, widths and ABI contracts
+remain boundaries.
+
+Four public regressions, **97 image test files** and **17 focused production /
+application / Windows / Linux checks** pass. Historical integer formatting retains
+30,856 records, 720 returning controls and 742 exact panic/state pairs per mode.
+Full/streaming IO retains 37,133 records, 17 generic traps and four compile
+boundaries per mode. Their hashes remain unchanged. Generic traps do not prove
+exact state. Vaxis runtime tests are not rerun; its source is unchanged and
+dependency builds pass. Cross builds establish compilation only.
+
+Existing complete Source, selected compiler-library and whole Io.zig/fmt.zig /
+math.zig/meta.zig pins remain unchanged. Whole time.zig is additionally pinned at
+`b8b686d5ecaa81cb25b3234229a85cf0ff99c5bd6153283b272fe586c558d7f1`.
+Runtime and compiler controls check it before/after, plus versions, path/encoder
+libraries, implementation, probes, direct helpers and inputs. Final runtime bodies
+freeze before discovery; only EXPECTED assignments change later. A 161-record /
+8-panic preflight and compiler controls pass before fresh final comparisons.
+Preliminary regressions retain a fixed-array slice copy in V's fractional scratch
+buffer, corrected with an explicit borrowed span, and an erroneous extra-day
+expectation for u64-max output. Corrected regressions pass in both modes before
+preflight. An earlier full pipeline exposed Source's private-buffer failure;
+its implementation/runner, fixtures and logs remain separate. The final
+implementation/model preserve the Source failure; final preflight covers both
+panic categories before fresh comparisons. Final old IO/C bodies stay identical.
+
+Independent replay checks all records/models, exact failures, compiler outcomes,
+actual modes, binaries and provenance. Lossless parent compression pins raw /
+compressed outputs. Recorded jobs survive headless input turns. Every retained
+archive member is read back before committing exact reviewed hashes and releasing
+owned resources.
+
+Runtime remains little-endian 64-bit macOS. Other platforms/CPUs, big-endian /
+32-bit runtime, arbitrary devices/short drains, injected errors/signals,
+syscall counts/timing, invalid/concurrently changed headers/tags, huge storage /
+OOM, allocator lifetime, portable ABI and remaining V representation limits
+remain boundaries. Other formatters remain outside this checkpoint. Reproduction
+and scope are in [the duration comparison](zigimg/reference_probes/writer_duration/README.md).

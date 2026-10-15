@@ -2003,6 +2003,81 @@ pub fn (mut stream WriteStream) print_int[T](value T, base u8, letter_case Forma
 	return stream.print_int_any[T](value, base, letter_case, options)
 }
 
+// Direct duration output retains separate sign, integer, fraction and unit writes.
+pub fn (mut stream WriteStream) print_duration_signed(nanoseconds i64) ! {
+	if nanoseconds < 0 {
+		stream.write_byte(`-`)!
+		return stream.print_duration_unsigned(u64(-(nanoseconds + 1)) + 1)
+	}
+	return stream.print_duration_unsigned(u64(nanoseconds))
+}
+
+pub fn (mut stream WriteStream) print_duration_unsigned(nanoseconds u64) ! {
+	mut remaining := nanoseconds
+	for i, unit in [u64(31536000000000000), 604800000000000, 86400000000000, 3600000000000,
+		60000000000] {
+		if remaining >= unit {
+			count := remaining / unit
+			stream.print_int[u64](count, 10, .lower, FormatOptions{})!
+			stream.write_byte('ywdhm'[i])!
+			remaining -= count * unit
+			if remaining == 0 { return }
+		}
+	}
+	for i, unit in [u64(1000000000), 1000000, 1000] {
+		thousandths := remaining * 1000 / unit
+		if thousandths >= 1000 {
+			stream.print_int[u64](thousandths / 1000, 10, .lower, FormatOptions{})!
+			fraction := thousandths % 1000
+			if fraction > 0 {
+				mut decimal := [u8(`.`), 0, 0, 0]!
+				mut digits := unsafe { (&u8(&decimal[1])).vbytes(3) }
+				mut inner := WriteStream.init_memory(mut digits)
+				inner.print_int[u64](fraction, 10, .lower, FormatOptions{ width: usize(3), fill: `0` }) or {
+					panic('reached unreachable code')
+				}
+				mut end := 4
+				for end > 1 && decimal[end - 1] == `0` {
+					end--
+				}
+				stream.write_all(decimal[..end])!
+			}
+			suffix := if i == 0 {
+				's'
+			} else if i == 1 {
+				'ms'
+			} else {
+				'us'
+			}
+			return stream.write_all(suffix.bytes())
+		}
+	}
+	stream.print_int[u64](remaining, 10, .lower, FormatOptions{})!
+	return stream.write_all('ns'.bytes())
+}
+
+// The options variant renders fully before touching the destination writer.
+pub fn (mut stream WriteStream) print_duration[T](nanoseconds T, options FormatOptions) ! {
+	$if T.unaliased_typ is $int {
+		mut storage := [24]u8{}
+		mut bytes := unsafe { storage[..] }
+		mut inner := WriteStream.init_memory(mut bytes)
+		$if T.unaliased_typ is i8 || T.unaliased_typ is i16 || T.unaliased_typ is int
+			|| T.unaliased_typ is i64 || T.unaliased_typ is isize {
+			inner.print_duration_signed(i64(nanoseconds)) or {
+				panic('attempt to unwrap error: ${err.msg()}')
+			}
+		} $else {
+			inner.print_duration_unsigned(u64(nanoseconds)) or {
+				panic('attempt to unwrap error: ${err.msg()}')
+			}
+		}
+		return stream.align_buffer_options(inner.buffered(), options)
+	} $else {
+		$compile_error('print_duration requires a native integer type')
+	}
+}
+
 // ASCII formatting accepts arbitrary bytes; precision is ignored by alignment.
 pub fn (mut stream WriteStream) print_ascii_char(byte u8, options FormatOptions) ! {
 	return stream.align_buffer_options([byte], options)

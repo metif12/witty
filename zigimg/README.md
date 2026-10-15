@@ -1430,3 +1430,14 @@ covers 30,856 records, 720 returning controls and 742 exact panic/state pairs
 per mode. Use explicit native integer types for Source-compatible literal
 signedness. Wider/unusual integer carriers and a pinned V generic-type compiler
 crash are measured separately.
+
+
+`print_duration_unsigned`, `print_duration_signed` and `print_duration[T]` format
+nanoseconds into fixed year/week/day/hour/minute and subsecond units. Direct
+methods preserve separate writes; the generic method aligns a completed temporary
+representation. Fractions truncate to three places and trim trailing zeros;
+precision is ignored. The [duration comparison](reference_probes/writer_duration/README.md)
+covers 38,653 records, 598 returning controls and 288 exact panic/state
+pairs per mode, including native aliases, partial writes and Source's generic
+24-byte temporary overflow for some 25-byte signed durations. General
+coercions and non-native integer carriers remain separate boundaries.
