@@ -22,6 +22,32 @@ fn io_value_signed(mut stream WriteStream, format string, options FormatOptions,
 	return stream.print_int[i64](value, base, letter_case, options)
 }
 
+fn io_value_float[T](mut stream WriteStream, format string, options FormatOptions, value T) ! {
+	match format {
+		'', 'any', 'd' {
+			return stream.print_float[T](value, options.to_number(NumberMode.decimal,
+				FormatCase.lower))
+		}
+		'e', 'E' {
+			return stream.print_float[T](value, options.to_number(NumberMode.scientific, if format == 'E' {
+				FormatCase.upper
+			} else {
+				FormatCase.lower
+			}))
+		}
+		'x', 'X' {
+			return stream.print_float_hex_options[T](value, options.to_number(NumberMode.hex, if format == 'X' {
+				FormatCase.upper
+			} else {
+				FormatCase.lower
+			}))
+		}
+		else {
+			return error('unsupported print_value float format')
+		}
+	}
+}
+
 fn io_value_bytes(mut stream WriteStream, format string, options FormatOptions, bytes []u8, max_depth usize) ! {
 	match format {
 		's' {
@@ -61,6 +87,8 @@ pub fn (mut stream WriteStream) print_value[T](format string, options FormatOpti
 		} $else {
 			return io_value_unsigned(mut stream, format, options, u64(value))
 		}
+	} $else $if T.unaliased_typ is f32 || T.unaliased_typ is f64 {
+		return io_value_float[T](mut stream, format, options, value)
 	} $else $if T.unaliased_typ is bool {
 		if format != '' && format != 'any' { return error('unsupported print_value boolean format') }
 		return stream.align_buffer_options(if bool(value) { 'true'.bytes() } else { 'false'.bytes() },
@@ -68,6 +96,6 @@ pub fn (mut stream WriteStream) print_value[T](format string, options FormatOpti
 	} $else $if T.unaliased_typ is []u8 {
 		return io_value_bytes(mut stream, format, options, value, max_depth)
 	} $else {
-		$compile_error('print_value currently requires native integers, bool or a byte slice')
+		$compile_error('print_value currently requires native integers, f32/f64, bool or a byte slice')
 	}
 }

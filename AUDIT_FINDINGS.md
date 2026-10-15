@@ -11071,3 +11071,60 @@ successful padding and private allocation remain boundaries. Further printValue
 formats/carriers, full Writer.print and custom formatter reflection are unported.
 Scope/reproduction are in the
 [value comparison](zigimg/reference_probes/writer_value/README.md).
+
+
+### Float Writer value dispatch — 2026-10-15
+
+`WriteStream.print_value` now dispatches explicit f32/f64 values and aliases to
+pinned decimal (empty/any/d), scientific (e/E) and hexadecimal (x/X) formatters.
+Native width and copied options are preserved; scalar depth is ignored, including
+zero/usize.max. Scientific uppercase remains ignored by Source's renderer;
+hexadecimal uppercase affects digits/special values. The 347-byte decimal buffer
+retains `(float)` fallback before alignment, while hexadecimal's private 50-byte
+buffer retains its failures before parent IO. Only the float helper/branch and
+unsupported-carrier diagnostic change in writer_value.v. All preexisting dispatch
+bodies and other runtime/C files remain byte-identical.
+
+The unchanged public Source method is checked against independent rational
+shortest-decimal / decimal-record and bitwise hex models, with modeled write
+boundaries. Five snapshots retain full backing, positions, pending/unused bytes
+and headers, descriptor state, raw argument bits/span, options/type/format/depth
+and file/wire contents through mutation/flush. Private renderer stack buffers are
+not observed. Debug/ordinary and ReleaseSafe/production each match **34,661
+returning records**, **999 returning controls** and **505 exact panic/state pairs**.
+Hashes are `9b1be2318fe7eaecb3cb3bfd15be586a88ee6706ba3001660808812bf52bc609`,
+`b242db94e195b810ec1280bed4661a74357720c752b6b00f95f7de3b0dcce6c6` and
+`acf103a3ab3f7bd38253490c4deaad6473f23057ea3028b968573e50b7cdfa7e`.
+Fourteen groups cover native/alias extrema, every exponent field, hex rounding
+ties/neighbors, precision/fallback boundaries, fills, raw bits, IO failures and
+all formats/depths. Controls retain overflow, buffer failures, huge option edges
+and exact WriteFailed state. Each panic has one exact diagnostic, empty stdout
+and matching retained observer state; all remain active in production.
+
+Sixteen external compiler pairs per mode include four common accepted consumers,
+six paired ordinary rejections and six measured runtime-input / invalid-format /
+f16 / fixed-array / optional-float boundaries. V runtime unsupported-format errors
+are distinct from Source compile-time rejection. This checkpoint supersedes the
+previous float-unrepresented boundary for explicit f32/f64 and aliases only.
+Wider/literal carriers, general coercions, compile-time enforcement, ABI/layout,
+allocation/lifetime and private stack storage remain outside the equivalence claim.
+
+Three public regressions, **107 image test files** and **17 production/application /
+Windows/Linux commands** pass. Historical primitive value dispatch retains 16,308
+records, 343 returning controls and 159 exact panic/state pairs per mode with
+unchanged hashes. Vaxis source is unchanged and dependencies build; its runtime
+tests are not rerun. Cross builds establish compilation only. Whole Source,
+selected libraries and float/fmt/Io/math/meta/time/path/encoder pins, all 1,336 Ryu
+table limbs, versions, inputs, shared models/helpers, implementations and fixtures
+are checked before/after. Bodies freeze before final comparisons; only EXPECTED
+assignments change later. Independent replay checks all observations/failures,
+compiler results, modes, binaries and provenance. Superseded development evidence
+is retained separately. All retained archive members are read back before commit
+and owned RAM/reserve release. A manifest records stale Zig tmp cache cleanup.
+
+Evidence remains pinned little-endian 64-bit macOS. Other runtime widths/platforms,
+invalid descriptors, injected short devices, concurrent mutation, huge successful
+output/storage and private allocation remain boundaries. Further printValue
+formats/carriers, full Writer.print and custom reflection remain unported.
+Scope/reproduction are in the
+[float value comparison](zigimg/reference_probes/writer_value_float/README.md).

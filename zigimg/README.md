@@ -1527,3 +1527,14 @@ observations and 159 exact panic/state pairs per mode. Source compile-time forma
 validation versus V runtime errors, unrepresented carriers/formats and broader
 coercions remain boundaries. Further value dispatch and full Writer.print are
 unported.
+
+
+`print_value` also dispatches explicit f32/f64 values and aliases for empty/`any`/
+`d`, `e`/`E` and `x`/`X`. Native width, ignored scalar depth, precision, padding,
+scientific case ignoring, hexadecimal case and private-buffer fallback/failures
+retain pinned Source behavior. The
+[float value comparison](reference_probes/writer_value_float/README.md) covers
+35,660 returning observations and 505 exact panic/state pairs per mode. Runtime
+format validation, wider/literal carriers and compile-time enforcement remain
+boundaries. Further value dispatch, full Writer.print and custom reflection remain
+unported.

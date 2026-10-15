@@ -1,5 +1,9 @@
 # Primitive Writer value dispatch
 
+This is the primitive checkpoint. The subsequent
+[float value checkpoint](../writer_value_float/README.md) adds f32/f64 dispatch;
+its proof supersedes the float-unrepresented boundary described below.
+
 `WriteStream.print_value(format, options, value, max_depth)` translates the
 represented branches of pinned `std.Io.Writer.printValue`:
 
