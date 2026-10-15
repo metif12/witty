@@ -1448,8 +1448,7 @@ coercions and non-native integer carriers remain separate boundaries.
 and fill. Mode `base()` returns 10/2/8/16 or `none` for scientific formatting.
 Copies preserve absent/zero/maximal optional values independently. The
 [numeric format record comparison](reference_probes/format_number/README.md)
-covers 25,480 records and 25 compiler consumer pairs per mode. Byte-size formatting
-remains unported.
+covers 25,480 records and 25 compiler consumer pairs per mode. Byte-size formatting is covered below.
 
 
 `print_float_hex[T]` and `print_float_hex_options[T]` format explicit f32/f64 values
@@ -1459,7 +1458,7 @@ aligns a completed private 50-byte representation. Pinned mode traps and private
 buffer failures are retained. The [hex float comparison](reference_probes/writer_float_hex/README.md)
 covers 18,492 records, 288 returning controls and 312 exact panic/state pairs per
 mode. Untyped literal precision and wider float carriers remain separate
-boundaries. Byte-size formatting remains unported.
+boundaries. Byte-size formatting is covered below.
 
 
 `FloatDecimal64`, `format_float_scientific` and `format_float_decimal` provide the
@@ -1468,7 +1467,7 @@ rounding, borrowed output, scratch writes, checked arithmetic and the 53-byte
 minimum-buffer contract. The [decimal record comparison](reference_probes/float_decimal/README.md)
 covers 11,922 records, 502 returning controls and 480 exact panic/state pairs per
 mode. V's returned-view constness, required-field aliases and u128 carrier limits
-are measured separately. Byte-size and remaining writer formatters remain unported.
+are measured separately. The remaining formatting dispatcher and custom formatter APIs remain unported.
 
 
 `float_to_decimal[T]`, `render_float[T]` and `print_float[T]` now cover explicit
@@ -1480,4 +1479,14 @@ case ignoring and the private-buffer `(float)` fallback. The
 [writer comparison](reference_probes/writer_float/README.md) jointly cover 42,809
 returning observations and 289 exact panic/state pairs per mode. All 1,336 table
 limbs match Source. Other float/literal carriers, comptime sizing, const output and
-allocation/ABI remain measured boundaries. Byte-size formatters remain unported.
+allocation/ABI remain measured boundaries. The remaining formatting dispatcher remains unported.
+
+
+`ByteSizeUnits` and `print_byte_size(value, units, options)` now supply decimal
+and binary byte-size output with precision, alignment and retained failure order.
+They preserve the pinned integer-logarithm SI thresholds, 56-byte private buffer,
+integer-to-float rounding and exact suffix/precision traps. The
+[byte-size comparison](reference_probes/writer_byte_size/README.md) covers 26,852
+records, 529 returning controls and 188 exact panic/state pairs per mode. Source's
+comptime-only units versus V's runtime enum remains a measured boundary. The
+existing PNG information helper remains unchanged.

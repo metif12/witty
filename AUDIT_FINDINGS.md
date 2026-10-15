@@ -10741,3 +10741,90 @@ headers remain boundaries. Private V fixed-array slicing copies; physical
 allocation is unmeasured. Byte-size and remaining writer formatters remain
 unported. Reproduction and scope are in the [buffer rendering proof](zigimg/reference_probes/float_render/README.md)
 and [writer proof](zigimg/reference_probes/writer_float/README.md).
+
+
+### Byte-size writer formatting — 2026-10-15
+
+`ByteSizeUnits` and `WriteStream.print_byte_size` translate pinned Writer.printByteSize
+for u64, decimal/binary units and FormatOptions. The complete representation is
+prepared in a private 56-byte buffer before alignment and parent output. Zero
+returns `0B` before scaling. Source magnitude is integer log2 divided by 9 for
+SI, 10 for IEC: decimal 512 prints `0.512kB`, 262144 prints `0.262144MB`, and
+u64.max prints `0.01844674407370955ZB`. Precision bypasses only zero/magnitude-zero
+values, not every value below 1kB as the source comment suggests. Binary u64.max
+rounds through f64 to `16EiB`. These behaviors remain unchanged.
+
+Reachable general-pow arguments reduce to exact binary64 integers 1000^0..7 and
+1024^0..6. The port uses those exact scales. Integer conversion and division each
+round before Ryu decimal rendering; the independent integer-fraction model
+computes both nearest/even binary64 results without host floating arithmetic.
+The prior shortest-decimal/store model supplies text, conservative guards and
+rounding; a separate stream model supplies alignment and memory/file effects.
+
+Private BufferTooSmall retains `attempt to unwrap error: BufferTooSmall`, not the
+float writer's fallback. Precision arithmetic still overflows first where Source
+does. A rendered number can fit while its suffix cannot. The compiler's fixed-array
+slice checks report absolute end 57/58 against length 56; both diagnostics are
+preserved. All formatting traps precede parent output. Memory failures and file
+splat/drain effects retain partial padding/payload and parent state.
+
+Debug/ordinary and ReleaseSafe/production each match:
+
+| Observations | Count | SHA-256 |
+| --- | ---: | --- |
+| Complete returning records | 26,852 | `695d9fd9a35408f76d5c3596e20117380d1a7d6afe701ccf815e0794800888e3` |
+| Returning controls | 529 | `656d59be5013bf4529d54f2c87f90aa0845940cd4944f4b2c8e8a9b8a3990e0b` |
+| Exact panic/state pairs | 188 | `761bb009c1af43804015165e29134a4916b887b29206fb9cf576a043f668eb4d` |
+
+Six deduplicated groups cover binary exponent/magnitude/rounding edges, every value
+0..1049, private buffer/precision/options, write/failure order, every fill and
+seeded u64s. Five snapshots retain position, descriptor ownership, complete backing,
+pending/unused bytes and headers, argument/options and file/wire bytes through
+caller mutation and flush. Positional/streaming files, replaced pipes and closed
+descriptors are represented. Traps comprise 78 overflows, 60 private render unwraps
+and 50 exact suffix bounds failures per mode. Each retains one exact diagnostic,
+empty stdout and matching parent/argument state observed before observer IO.
+All traps remain active in production. Returning controls include precision
+bypasses and partial WriteFailed. Huge successful padding/storage is excluded.
+
+A 150-record / 20-trap preflight and 15 external compiler pairs pass per mode
+before final comparisons. Four common accepted consumers cover options copies,
+enum order, precision bypasses and unsigned/alias coercions. Ten paired ordinary
+rejections cover values, units and option types. One separate boundary measures
+Source's comptime-only units versus V's accepted runtime enum. General coercions,
+comptime evaluation and representation contracts remain outside the claim.
+
+Three public regressions, **102 image test files** and **17 focused production /
+application / Windows / Linux checks** pass. Historical native-float writer output
+keeps 13,976 records, 309 returning controls and 143 exact trap/state pairs per mode.
+Full/streaming IO keeps 37,133 records, 17 generic traps and four compiler boundaries;
+all hashes remain unchanged. Generic traps do not prove exact state. Vaxis source
+is unchanged; dependencies build, runtime tests are not rerun. Cross builds
+establish compilation only. The existing PNG information helper is unchanged.
+
+Source bodies/visibility remain unchanged, with complete Source and selected
+compiler-library pins retained. Newly invoked log2/pow/modf/frexp/scalbn/ldexp /
+copysign files are pinned whole, alongside previous math and float dependencies.
+Runtime and compiler controls check versions, Source, implementation, helpers,
+fixtures, inputs and consumers before/after. Old runtime bodies differ only by
+the byte-size IO block; C and previous formatters remain byte-identical.
+Runtime/probe/model bodies freeze before discovery; only EXPECTED assignments
+change later. Development evidence separately retains corrected suffix diagnostics
+and render-error panic assumptions. Independent replay checks every observation,
+exact failure state, compiler outcome, mode, binary and provenance record. Every
+retained archive member is read back before committing exact reviewed files and
+releasing owned RAM/reserves.
+
+Evidence remains the pinned compilers on little-endian 64-bit macOS. Other runtime
+platforms/widths, arbitrary devices and injected short drains, huge successful
+output/storage, allocation/lifetime/OOM, portable ABI/reflection, floating exception
+flags and invalid/concurrent headers remain boundaries. Private V array slicing
+copies and physical allocation is unmeasured. General pow, formatting dispatch and
+custom formatter APIs remain unported. Reproduction and full scope are in the
+[byte-size comparison](zigimg/reference_probes/writer_byte_size/README.md).
+
+The final dependency review also pins transitive math/isfinite.zig, reached by
+ldexp. The byte-size matrices and compiler controls were rerun with that pin
+checked before/after; output and failure hashes remain unchanged. Runtime files
+and module/platform checks are unchanged. The earlier artifact is retained in
+`before-isfinite/verified-proofs.tar.gz` beside the refreshed final archive.

@@ -2060,6 +2060,59 @@ pub fn (mut stream WriteStream) print_float[T](value T, options NumberFormat) ! 
 		options.fill)
 }
 
+pub enum ByteSizeUnits {
+	decimal
+	binary
+}
+
+// Source chooses magnitudes from an integer logarithm, including its SI thresholds.
+pub fn (mut stream WriteStream) print_byte_size(value u64, units ByteSizeUnits, options FormatOptions) ! {
+	if value == 0 { return stream.align_buffer_options('0B'.bytes(), options) }
+	mut reduced := value
+	mut log2 := 0
+	for reduced > 1 {
+		reduced >>= 1
+		log2++
+	}
+	magnitude := log2 / if units == .decimal { 9 } else { 10 }
+	// Every reachable Source pow result is an exactly representable f64 integer.
+	divisor := if units == .decimal {
+		[f64(1), 1e3, 1e6, 1e9, 1e12, 1e15, 1e18, 1e21][magnitude]
+	} else {
+		f64(u64(1) << (10 * magnitude))
+	}
+	mut storage := [56]u8{}
+	mut bytes := unsafe { storage[..] }
+	mut index := 0
+	if magnitude == 0 {
+		mut integer := WriteStream.init_memory(mut bytes)
+		integer.print_int[u64](value, 10, .lower, FormatOptions{}) or {
+			panic('reached unreachable code')
+		}
+		index = integer.buffered().len
+	} else {
+		text := render_float[f64](mut bytes, f64(value) / divisor, FloatRenderOptions{
+			mode:      .decimal
+			precision: options.precision
+		}) or { panic('attempt to unwrap error: ${err.msg()}') }
+		index = text.len
+	}
+	suffix := if magnitude == 0 {
+		'B'.bytes()
+	} else if units == .decimal {
+		['kB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB'][magnitude - 1].bytes()
+	} else {
+		['KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB'][magnitude - 1].bytes()
+	}
+	if suffix.len > bytes.len - index {
+		panic('index out of bounds: index ${index + suffix.len}, len ${bytes.len}')
+	}
+	for i, byte in suffix {
+		bytes[index + i] = byte
+	}
+	return stream.align_buffer_options(bytes[..index + suffix.len], options)
+}
+
 // Hex floats retain Source's rounding and separate sign/fraction/exponent writes.
 pub fn (mut stream WriteStream) print_float_hex[T](value T, letter_case FormatCase, precision ?usize) ! {
 	$if T.unaliased_typ is f32 || T.unaliased_typ is f64 {
