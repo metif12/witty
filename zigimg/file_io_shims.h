@@ -177,6 +177,32 @@ static intptr_t witty_image_file_read_vec(int fd, uint64_t pos, unsigned char *a
     }
     return n;
 }
+/* One File.Reader callback with its bounded writableVectorPosix result.
+   Positional fallback reports zero progress even at offset zero. */
+static intptr_t witty_image_file_read_vectors(int fd, uint64_t pos, void *const *bases, const size_t *lengths, int count, int *streaming) {
+    struct iovec vectors[16];
+    for (int i = 0; i < count; i++) {
+        vectors[i].iov_base = bases[i];
+        vectors[i].iov_len = lengths[i];
+    }
+    ssize_t n;
+    do {
+        if (*streaming) {
+            n = readv(fd, vectors, count);
+        } else {
+#if defined(__APPLE__) || defined(__HAIKU__) || defined(__serenity__)
+            n = pread(fd, bases[0], lengths[0], (off_t)pos);
+#else
+            n = preadv(fd, vectors, count, (off_t)pos);
+#endif
+        }
+    } while (n < 0 && errno == EINTR);
+    if (n < 0 && witty_image_file_unseekable(errno) && !*streaming) {
+        *streaming = 1;
+        return pos ? -3 : -4;
+    }
+    return n;
+}
 static intptr_t witty_image_file_write(int fd, uint64_t pos, const unsigned char *a, size_t alen, const unsigned char *b, size_t blen, int *streaming) {
     if (*streaming < 0) return -1;
     struct iovec vectors[2] = {{(void *)a, alen}, {(void *)b, blen}};

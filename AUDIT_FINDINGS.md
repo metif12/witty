@@ -8841,3 +8841,97 @@ timing/signals, OOM/quotas, allocator lifetime and remaining V representation
 limits are boundaries. Runtime uses little-endian 64-bit macOS; Windows/Linux,
 other CPU, big-endian and 32-bit runtime remain outside the proof. Reproduction
 and scope are in [the enum comparison](zigimg/reference_probes/reader_enum/README.md).
+
+### Scatter reader vectors — 2026-10-15
+
+`ReadStream.read_vec` and `read_vec_all` translate pinned Reader.readVec/readVecAll
+using borrowed `[][]u8` destinations. Pending bytes are copied first; read_vec
+then invokes at most one reader callback. EOF after copied input returns the
+copied count, while ReadFailed remains an error with the copied prefix retained.
+read_vec_all loops through partial reads. Empty destinations avoid IO, and both
+methods restore temporary headers on ordinary and IO-error returns.
+
+POSIX file callbacks build at most sixteen nonempty vectors, appending the
+reader buffer for read-ahead when space remains. macOS positional reads use the
+first vector, while streaming readv scatters across the set. Windows delegates
+the first destination to the existing scalar path. Positional-to-streaming
+transitions expose zero progress even at offset zero. The original private
+single-destination helper is renamed read_vec_one; its body and two-vector C
+helper stay unchanged for existing looping slice, flate and TGA callers.
+
+Pinned writableVectorPosix resets the internal cursor/end and then traps if
+exactly sixteen nonempty destinations leave no slot for a nonempty reader
+buffer. A further destination, even an empty one, stops vector construction
+before that append. Explicit production checks preserve this Source boundary.
+Panic does not unwind header defers: a first destination partially filled from
+pending input can retain its shortened header at the trap. Returning paths
+restore the original pointer/length.
+
+Debug/ordinary and ReleaseSafe/production each match **10,476 returning records /
+31,428 vector reads / 73,332 primary calls**, SHA-256
+`69dc9cba6c055b4eb57ffcbbf7a5deb1df8f8bae431d2eaef2fd917247062856`.
+Each record attempts three reads, three caller tosses and one relative seek;
+setup/priming/observations are separate. Groups contain 9,216 basic, 108 relative
+seek and 1,152 replacement records. Layouts cover empty/zero-length entries,
+gaps, overlapping destinations and 15/16/17-vector boundaries. Memory,
+positional/streaming files, buffered input, short/complete reads and owned
+open/closed replacement pipes preserve output, read-ahead and failure state.
+
+The independent model checks every nonreplacement memory/positional record and
+streaming-file record with zero relative delta, including aliased destination
+writes, guards, vector limits, read-ahead and EOF progress. Other streaming
+seeks and replacement behavior compare full Source records. General checks
+cover all returning ownership, initialized spans, header restoration, result
+bounds, empty-vector operations and caller consumption.
+
+The **370 returning controls** retain SHA-256
+`6ee504eef56d51ea0a87055fa830b6b16c70c13fcff1d799ace488cb1d764225`.
+The **110 exact panic/state pairs** retain SHA-256
+`c6b0b03d6bba78dfae2e0f72e63e85f248fe10d6ce24eeca4cdd9153e913c12f`:
+62 slot-capacity failures and 48 getPos overflow observations after priming before
+the vector call. Additional cache-side controls reuse the frozen binaries for
+**48 partial-header panic/state pairs**, SHA-256
+`8e13c34a4296a6e50b0cf3af2621e8df73bb54a1dfb18b78c6fd63f28e877599`.
+Their twelve-byte first destination preserves shortened headers after 1/7/8
+copied bytes, or the original header after fully consumed input. Independent
+expected-state calculations check every destination byte/header, unchanged
+reader backing, cursor/end reset, retained result and descriptor ownership.
+Failed exits have empty stdout, one exact message and identical initialized
+state. Observers omit getPos, capture state before opening output and clean up
+owned resources through FullPanic/at_exit.
+
+Three regressions cover memory partial EOF/header restoration, streaming scatter
+read-ahead through the adapter and a zero-progress pipe transition. All 80 image
+test files and 17 focused production/application/Windows/Linux checks pass.
+Historical allocated reads (27,585 records, 96 returns, 168 exact failures) and
+full/streaming reads (37,133 records, 17 generic trap controls, four compile
+boundaries) retain their previous hashes in both modes. Generic historical
+traps do not establish exact state. Vaxis runtime tests are not rerun; its source
+is unchanged and dependency builds pass. Cross builds establish compilation only.
+
+The first production regression build required explicit unsafe initialization
+of a fixed pointer array in pinned V. Original bodies/diagnostics and interrupted
+concurrent checks are preserved separately. Ordinary discovery was rerun on the
+final frozen production/probe/runner/helper bodies; only expected assignments
+changed afterward. The initial disk reservation failure and this task's reserve
+recovery are retained separately from passing gates.
+
+Full unchanged Source, versions/selected libraries, implementation, probes,
+direct verification helpers, shared fixtures and inputs are pinned before/after.
+Source bodies/visibility/syscalls are untouched. Files/pipes/keepers are owned,
+file offsets reset and observed bytes initialized. Independent replay checks
+records, models, classifications, exact state, ownership, binaries, modes and
+provenance. Parent-side lossless compression pins raw/compressed output. Evidence
+is persisted from an owned RAM workspace and every retained archive member is
+read back before commit and release.
+
+Destination vectors may overlap each other; reader-input/destination overlap is
+excluded because Source uses nonoverlapping memcpy. Invalid/concurrent headers,
+custom vtables, arbitrary record construction, larger lengths/offsets, usize
+totals beyond V's array carrier, syscall counts, injected errors, other devices,
+timing/signals, OOM/quotas, allocator lifetime, layout/ABI and remaining V
+representation limits are boundaries. Runtime uses little-endian 64-bit macOS;
+Linux native preadv, Windows scalar behavior, other CPU, big-endian and 32-bit
+runtime remain outside the proof. Remaining reader/writer methods are unported.
+Reproduction and scope are in
+[the vector comparison](zigimg/reference_probes/reader_vectors/README.md).

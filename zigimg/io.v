@@ -11,6 +11,7 @@ fn C.witty_image_file_seek_by(int, u64) int
 fn C.witty_image_file_read(int, u64, &u8, usize, &int) isize
 fn C.witty_image_file_read_once(int, u64, &u8, usize, &int) isize
 fn C.witty_image_file_read_vec(int, u64, &u8, usize, &u8, usize, &int) isize
+fn C.witty_image_file_read_vectors(int, u64, &voidptr, &usize, int, &int) isize
 fn C.witty_image_file_write(int, u64, &u8, usize, &u8, usize, &int) isize
 
 pub const default_buffer_size = 4096
@@ -670,7 +671,7 @@ pub fn (mut stream ReadStream) take_delimiter(delimiter u8) !DelimiterResult {
 
 // std.Io.Reader.readVec with one destination vector, and File.Reader's
 // positional/streaming native scatter read including buffered read-ahead.
-fn (mut stream ReadStream) read_vec(mut destination []u8) !int {
+fn (mut stream ReadStream) read_vec_one(mut destination []u8) !int {
 	remaining := stream.end - stream.position
 	count := if destination.len < remaining { destination.len } else { remaining }
 	copy(mut destination, stream.take(count)!)
@@ -722,11 +723,114 @@ fn (mut stream ReadStream) read_vec(mut destination []u8) !int {
 	return count + int(n)
 }
 
+// Transfer pending bytes before invoking one native scatter-read callback.
+// Restore a temporarily shortened destination header on returns and IO errors.
+pub fn (mut stream ReadStream) read_vec(mut destinations [][]u8) !usize {
+	mut seek := stream.position
+	for i in 0 .. destinations.len {
+		mut destination := unsafe { destinations[i] }
+		remaining := stream.end - seek
+		count := if remaining < destination.len { remaining } else { destination.len }
+		mut target := unsafe { destination[..count] }
+		copy(mut target, unsafe { stream.buffer[seek..seek + count] })
+		seek += count
+		if count == destination.len { continue
+		 }
+		copied := usize(seek - stream.position)
+		stream.position = seek
+		destinations[i] = unsafe { destination[count..] }
+		defer { destinations[i] = unsafe { destination } }
+		mut tail := unsafe { destinations[i..] }
+		read := stream.file_read_vectors(mut tail) or {
+			if err.msg() == 'EndOfStream' && copied != 0 { return copied }
+			return err
+		}
+		return copied + read
+	}
+	count := usize(seek - stream.position)
+	stream.position = seek
+	return count
+}
+
+fn (mut stream ReadStream) file_read_vectors(mut destinations [][]u8) !usize {
+	if stream.file == none { return error('EndOfStream') }
+	if stream.streaming < 0 { return error('ReadFailed') }
+	$if windows {
+		mut first := unsafe { destinations[0] }
+		return usize(stream.read_vec_one(mut first)!)
+	} $else {
+		file := stream.file or { return error('ReadFailed') }
+		mut bases := unsafe { [16]voidptr{} }
+		mut lengths := [16]usize{}
+		mut count := 0
+		mut data_size := usize(0)
+		mut full := false
+		for destination in destinations {
+			if count == 16 {
+				full = true
+				break
+			}
+			if destination.len == 0 { continue
+			 }
+			bases[count] = destination.data
+			lengths[count] = usize(destination.len)
+			data_size += usize(destination.len)
+			count++
+		}
+		if !full && stream.buffer.len != 0 {
+			stream.position = 0
+			stream.end = 0
+			// Pinned writableVectorPosix appends before checking this last slot.
+			if count == 16 { panic('index out of bounds: index 16, len 16') }
+			bases[count] = stream.buffer.data
+			lengths[count] = usize(stream.buffer.len)
+			count++
+		}
+		n := C.witty_image_file_read_vectors(file.fd, stream.file_pos, &bases[0], &lengths[0],
+			count, &stream.streaming)
+		if n == -3 {
+			stream.file_prepare_streaming()!
+			return 0
+		}
+		if n == -4 { return 0 }
+		if n < 0 { return error('ReadFailed') }
+		if n == 0 {
+			stream.file_size = stream.file_pos
+			return error('EndOfStream')
+		}
+		stream.file_pos += u64(n)
+		if usize(n) > data_size {
+			stream.end += int(usize(n) - data_size)
+			return data_size
+		}
+		return usize(n)
+	}
+}
+
+// Fill every destination, retaining partial writes if a later read fails.
+pub fn (mut stream ReadStream) read_vec_all(mut destinations [][]u8) ! {
+	mut index := 0
+	mut truncate := usize(0)
+	for index < destinations.len {
+		{
+			original := unsafe { destinations[index] }
+			destinations[index] = unsafe { original[int(truncate)..] }
+			defer { destinations[index] = unsafe { original } }
+			mut tail := unsafe { destinations[index..] }
+			truncate += stream.read_vec(mut tail)!
+		}
+		for index < destinations.len && truncate >= usize(destinations[index].len) {
+			truncate -= usize(destinations[index].len)
+			index++
+		}
+	}
+}
+
 pub fn (mut stream ReadStream) read_slice_short(mut destination []u8) !usize {
 	mut filled := 0
 	for filled < destination.len {
 		mut target := unsafe { destination[filled..] }
-		filled += stream.read_vec(mut target) or {
+		filled += stream.read_vec_one(mut target) or {
 			if err.msg() == 'EndOfStream' { return usize(filled) }
 			return err
 		}
@@ -807,7 +911,7 @@ fn (stream ReadStream) flate_buffered_len() int {
 }
 
 fn (mut stream ReadStream) flate_read_vec(mut destination []u8) !int {
-	return stream.read_vec(mut destination)
+	return stream.read_vec_one(mut destination)
 }
 
 // Reader.stream into TargaRLEDecoder's fixed output writer. Unlike readVec,
@@ -828,7 +932,7 @@ fn (mut stream ReadStream) tga_stream(limit int) ![]u8 {
 	// limiting its slice. Writer exhaustion reaches defaultReadVec's trap.
 	if limit == 0 { panic('reached unreachable code') }
 	mut destination := []u8{len: limit}
-	read := stream.read_vec(mut destination)!
+	read := stream.read_vec_one(mut destination)!
 	return destination[..read]
 }
 

@@ -1286,3 +1286,11 @@ enums marked `@[nonexhaustive]`, including PNG compression/filter methods.
 The [enum comparison](reference_probes/reader_enum/README.md) covers 33,504
 records and 352 controls per mode. Compiler declaration, alias and constant-cast
 differences are documented separately.
+
+`read_vec` transfers input across borrowed destination slices and returns its
+byte count; `read_vec_all` fills every slice or retains partial progress on a
+read error. Normal and error returns restore temporary slice headers. The
+[scatter reader comparison](reference_probes/reader_vectors/README.md) covers
+10,476 records, 480 controls and 48 additional partial-header failure controls
+per mode. POSIX vector limits, read-ahead, zero-progress pipe transitions and
+the pinned Source's 16-slot panic boundary are preserved.
