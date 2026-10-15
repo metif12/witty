@@ -5,7 +5,9 @@ This is the primitive checkpoint. The subsequent
 its proof supersedes the float-unrepresented boundary described below. The
 [duration/byte-size checkpoint](../writer_value_units/README.md) also adds `D` for
 native integers and `B`/`Bi` for unsigned integers, superseding that duration
-boundary.
+boundary. The
+[character/codepoint checkpoint](../writer_value_text/README.md) adds byte `c` and
+Unicode `u`, with an explicit u32-for-u21 carrier adaptation.
 
 `WriteStream.print_value(format, options, value, max_depth)` translates the
 represented branches of pinned `std.Io.Writer.printValue`:

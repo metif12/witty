@@ -1548,3 +1548,13 @@ padding and ignored scalar depth. The
 covers 60,249 returning observations and 476 exact panic/state pairs per mode.
 Signed byte-size carriers remain a Source compile-time / V runtime-error boundary.
 Further value dispatch, full Writer.print and custom reflection remain unported.
+
+
+`print_value` now dispatches `c` for u8 byte characters and `u` for u8/u16 Unicode
+codepoints, including aliases. Its u32 Unicode carrier adapts Source u21 using the
+existing checked range rule; Source rejects a direct u32 argument. Byte padding,
+ignored precision/depth, UTF-8 replacement and ignored Unicode options are retained.
+The [character/codepoint comparison](reference_probes/writer_value_text/README.md)
+covers 39,809 returning observations, 32 formatter-body panic/state pairs and 336
+separate u21 conversion/state pairs per mode. Compile-time acceptance and general
+coercions remain boundaries. Further value dispatch and Writer.print are unported.

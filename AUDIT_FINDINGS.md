@@ -11186,3 +11186,65 @@ invalid descriptors, injected short devices, concurrent mutation, huge successfu
 output/storage, general coercions, ABI/layout and allocation/lifetime remain
 boundaries. Scope/reproduction are in the
 [duration/byte-size comparison](zigimg/reference_probes/writer_value_units/README.md).
+
+
+### Character and codepoint Writer value dispatch — 2026-10-15
+
+`WriteStream.print_value` now dispatches `c` for u8/aliases and `u` for u8/u16 and
+aliases, using unchanged text helpers before the existing integer widening.
+Characters preserve all 256 bytes, width/alignment/fill and ignored precision /
+depth. Unicode preserves UTF-8, surrogate/out-of-Unicode replacement and ignored
+options/depth. Other dispatch paths, formatter bodies, IO and C remain byte-identical.
+
+V u32/aliases additionally carry Source u21, following the existing direct Unicode
+helper adaptation. Source rejects a direct u32 argument to printValue("u"). The
+native runtime fixture performs a checked u32-to-u21 conversion before calling
+the unchanged Source method. V checks the same range before writer effects inside
+its helper. Conversion traps establish that adaptation and retained state, not a
+panic inside Source's formatter body or identical static carrier acceptance.
+Other unsupported integer character/codepoint carriers return V runtime errors
+before IO where Source rejects compilation. General coercions, untyped literals,
+non-native carriers, signed characters/codepoints and ABI/layout remain boundaries.
+
+An independent Python UTF-8/replacement/write-boundary model checks five complete
+snapshots through caller mutation and flush: backing, position, pending/unused
+bytes and headers, descriptors, raw argument bits/span, options/type/format/depth
+and file/wire contents. Debug/ordinary and ReleaseSafe/production each match
+**39,449 returning records**, **360 returning controls** and **368 exact panic/state
+pairs**. The latter comprise **32 formatter-body padding overflows** and **336
+separate u21 conversion checks**. All remain active in production. Each requires
+one exact diagnostic, empty stdout and matching independently predicted retained
+state. Returning WriteFailed retains exact state. Hashes are
+`06c81d54a106939938cbb5465d8ad1f1cf7aa6bf9ffabcdb03dab7efa00bcb74`,
+`b78a3c828e0f7d3c301a60f4b5cd320814a421faa98debe49ad17904c0b6a727` and
+`31833d2705234a3eae9fe4bf4fa5dd27fc8b198099bc208ad38517cf24b00568`.
+Nine groups cover every character byte, independent padding/fills, UTF-8 edges,
+every surrogate half, plane samples, stride-17 u16 samples, aliases/depth, ignored
+options, memory/positional/streaming files, replaced pipes and closed descriptors.
+
+Sixteen external compiler pairs per mode include four common accepted consumers,
+six paired ordinary rejections and six measured runtime-format / unsupported
+carrier / u32 extension / u21 adaptation / invalid-specifier boundaries. Source
+compile errors and V runtime errors are distinct. Accepted pairs using different
+carriers are distinguished from common identical-carrier consumers.
+
+Three public regressions, **109 image test files** and **17 production/application /
+Windows/Linux commands** pass. Historical primitive dispatch retains 16,308 records,
+343 controls and 159 panic pairs per mode. Duration/byte-size dispatch retains
+59,122 records, 1,127 controls and 476 panic pairs per mode. Their hashes are
+unchanged. Existing float dispatch is unchanged. Vaxis source is unchanged and
+dependencies build; its runtime tests are not rerun. Cross builds prove compilation.
+Whole Source/selected libraries and unicode/base64/fmt/Io/math/meta/time/float/path/
+encoder pins, versions, implementations, shared helpers/models, fixtures and inputs
+are checked before/after. Bodies freeze before final comparisons; only EXPECTED
+assignments change later. Independent replay verifies every record/failure,
+conversion classification, compiler result, mode, binary and provenance pin.
+Superseded development evidence remains separate. Every retained archive member
+is read back before commit and owned RAM/reserve release.
+
+Evidence remains pinned little-endian 64-bit macOS. Other runtime widths/platforms,
+invalid descriptors, injected short devices, concurrent mutation, huge successful
+output/storage and private allocation remain boundaries. Further printValue
+formats/carriers, full Writer.print and custom formatter reflection remain unported.
+Scope/reproduction are in the
+[character/codepoint comparison](zigimg/reference_probes/writer_value_text/README.md).

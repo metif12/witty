@@ -85,6 +85,20 @@ fn io_value_bytes(mut stream WriteStream, format string, options FormatOptions, 
 // The represented printValue branches; format is a runtime string in V.
 pub fn (mut stream WriteStream) print_value[T](format string, options FormatOptions, value T, max_depth usize) ! {
 	$if T.unaliased_typ is $int {
+		if format == 'c' {
+			$if T.unaliased_typ is u8 {
+				return stream.print_ascii_char(u8(value), options)
+			} $else {
+				return error('unsupported print_value character carrier')
+			}
+		}
+		if format == 'u' {
+			$if T.unaliased_typ is u8 || T.unaliased_typ is u16 || T.unaliased_typ is u32 {
+				return stream.print_unicode_codepoint(u32(value))
+			} $else {
+				return error('unsupported print_value codepoint carrier')
+			}
+		}
 		$if T.unaliased_typ is i8 || T.unaliased_typ is i16 || T.unaliased_typ is int
 			|| T.unaliased_typ is i64 || T.unaliased_typ is isize {
 			return io_value_signed(mut stream, format, options, i64(value))
