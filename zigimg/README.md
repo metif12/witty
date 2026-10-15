@@ -1302,3 +1302,10 @@ covers 20,544 records and 278 controls per mode. Source rejects exhaustive types
 at compile time; V checks the marker before input and traps for an unmarked enum.
 This constraint difference and the retained enum representation limits are
 measured separately from matching reads.
+
+`write_leb128`, `write_uleb128` and `write_sleb128` emit minimal native-integer
+LEB128 representations through the existing complete-write path. Signed encoding
+accepts u64 maximum; unsigned encoding traps on negative values before IO.
+The [LEB128 writer comparison](reference_probes/writer_leb128/README.md) covers
+24,072 records and 840 exact panic/state pairs per mode. Literal inference and
+Source's wider integer carriers remain separately documented boundaries.

@@ -9019,3 +9019,92 @@ Runtime uses little-endian 64-bit macOS; Windows/Linux, other CPU, big-endian an
 32-bit runtime remain outside the proof. Remaining reader/writer methods are
 unported. Reproduction and scope are in
 [the nonexhaustive enum comparison](zigimg/reference_probes/reader_enum_nonexhaustive/README.md).
+
+### LEB128 writer methods — 2026-10-15
+
+`WriteStream.write_leb128[T]`, `write_uleb128[T]` and `write_sleb128[T]` map
+pinned Writer.writeLeb128/writeUleb128/writeSleb128 for native integers and direct
+aliases. Generic writes follow input signedness; explicit methods select the
+encoding. The complete minimal representation is built in a ten-byte local array
+before one unchanged write_all call, preserving buffering and partial-failure
+order. Existing writer and C helper bodies remain byte-for-byte unchanged.
+
+Unsigned writes accept nonnegative signed values. Negative signed input traps
+before IO with Source's narrowed unsigned-cast diagnostic, including in production.
+Signed writes accept the entire unsigned u64 range; the algorithm preserves
+Source's promoted i65 encoding without introducing a V i65 carrier.
+
+Debug/ordinary and ReleaseSafe/production each match **24,072 returning records /
+72,216 encoding calls / 144,432 primary calls**, SHA-256
+`a1336a859f9a6a5f0320c187b0fd83492efe76ad8c796b7fc6e5a719995bb784`.
+Each record attempts three encoding writes, one seek and two flushes; setup,
+prefill, initial seeking and observations are separate. Groups contain 11,712
+basic, 8,184 every-byte, 3,600 seven-bit-boundary and 576 replacement records,
+retaining duplicate inputs once. Twenty bindings cover signed/unsigned
+8/16/32/64-bit and pointer-width carriers and their direct aliases.
+
+Zero, signed endpoints, high bits, named native types, aliases, boundaries near
+powers of 128 and all byte patterns cover all three encoders. Memory,
+positional/streaming files, capacities 0/1/8/16, prefills, seeks, repeated writes
+and owned nonblocking replacement pipes preserve full initialized storage,
+pending output, logical position, file contents, descriptor ownership and wire
+bytes. Memory failure retains the encoded prefix. File-to-pipe transitions and
+sticky failures follow the existing complete-write path.
+
+The independent model derives minimal encodings from bit lengths and a closed
+form for seven-bit groups. Complete nonreplacement records model memory prefix
+failures, macOS positional first-vector behavior, streaming writes, flushes and
+seeks. Replacement records compare full Source observations with general span,
+status, pending-prefix and ownership checks.
+
+The **840 exact negative-cast panic/state pairs** retain SHA-256
+`04447613b0255c370ff3ff2cb68aeb35249788fe2e8456becf77c68ae1414d2a`.
+Every negative control fails before the encoding write, including with pending
+output, a failed memory prefill, pipe replacement or a closed descriptor.
+Independent reconstruction checks the complete pre-call state. Failed processes
+have empty stdout, one exact message and identical initialized state. Observers
+capture bytes before opening state output and clean up owned resources through
+FullPanic/at_exit.
+
+Eighteen paired compile rejections per mode cover float, float alias, bool,
+record, pointer and enum arguments to all three methods. Source rejects an
+untyped writeLeb128 literal; V infers int. Source rejects a negative writeUleb128
+literal at compile time; V compiles it and traps before IO. Positive unsigned /
+negative signed literal controls produce matching bytes. Source's u128 encoding
+of 2^100 produces fifteen bytes; V has no u128 carrier and rejects it. These
+width/inference boundaries are retained separately from native write equivalence.
+
+Three regressions cover classic encodings, signedness, 64-bit limits, aliases,
+partial memory writes and file flushing. All 82 image test files and 17 focused
+production/application/Windows/Linux checks pass. Historical writer seeks
+(6,912 records, 196 returns, 60 exact failures) and full/streaming reads/writes
+(37,133 records, 17 generic trap controls, four compile boundaries) retain their
+hashes in both modes. Generic historical traps do not establish exact state.
+Vaxis runtime tests are not rerun; its source is unchanged and dependency builds
+pass. Cross builds establish compilation only.
+
+The initial returning comparison passed, then an incorrect V negative-cast panic
+text was caught. Original implementation/runner/logs/states and interrupted
+checks are preserved separately; ordinary discovery and all final gates reran
+after correction. A compile-control label assertion initially parsed an alias
+case name incorrectly; its original script/bodies/diagnostics are retained
+outside passing gates. Final implementation/probe/runner/direct-helper bodies
+stay frozen; only expected assignments change after final ordinary discovery.
+
+Full unchanged Source, versions/selected libraries, implementation, probes,
+directly imported helpers, shared writer fixtures and inputs are pinned
+before/after. Source bodies/visibility/syscalls are untouched. Initialized,
+unlinked files with reset offsets, pipes and keepers are owned. Independent
+replay checks records, models, exact failures, compile/literal controls, ownership,
+binaries, modes and provenance. Lossless parent compression pins raw/compressed
+output. Evidence is persisted from an owned RAM workspace and every retained
+archive member is read back before commit and release.
+
+Arbitrary Source widths, comptime_int/literal inference, chained aliases, custom
+vtables, arbitrary records, larger buffers/offsets, syscall counts, other devices,
+concurrent reuse, timing/signals, injected errors, OOM/quotas, allocator lifetime,
+portable ABI and remaining V representation limits remain boundaries. Runtime
+uses little-endian 64-bit macOS; Windows/Linux, other CPU, big-endian and 32-bit
+runtime remain outside the proof. Remaining reader/writer APIs are unported.
+Reproduction and scope are in
+[the LEB128 writer comparison](zigimg/reference_probes/writer_leb128/README.md).

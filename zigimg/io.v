@@ -1285,6 +1285,80 @@ pub fn (mut stream WriteStream) write_int[T, E](value T, endian E) ! {
 	}
 }
 
+// Encode the complete representation before write_all, preserving its native
+// buffering and partial-error behavior. Unsigned inputs may need a signed u65.
+fn (mut stream WriteStream) write_leb128_unsigned(value u64, signed bool) ! {
+	mut bytes := [10]u8{}
+	mut count := 0
+	mut remaining := value
+	for {
+		mut byte := u8(remaining & 0x7f)
+		remaining >>= 7
+		more := remaining != 0 || (signed && byte & 0x40 != 0)
+		if more { byte |= 0x80 }
+		bytes[count] = byte
+		count++
+		if !more { break
+		 }
+	}
+	stream.write_all(bytes[..count])!
+}
+
+fn (mut stream WriteStream) write_leb128_signed(value i64) ! {
+	mut bytes := [10]u8{}
+	mut count := 0
+	mut remaining := value
+	for {
+		mut byte := u8(u64(remaining) & 0x7f)
+		remaining >>= 7
+		more := !((remaining == 0 && byte & 0x40 == 0) || (remaining == -1 && byte & 0x40 != 0))
+		if more { byte |= 0x80 }
+		bytes[count] = byte
+		count++
+		if !more { break
+		 }
+	}
+	stream.write_all(bytes[..count])!
+}
+
+pub fn (mut stream WriteStream) write_leb128[T](value T) ! {
+	$if T.unaliased_typ is $int {
+		$if T.unaliased_typ is i8 || T.unaliased_typ is i16 || T.unaliased_typ is int
+			|| T.unaliased_typ is i64 || T.unaliased_typ is isize {
+			stream.write_leb128_signed(i64(value))!
+		} $else {
+			stream.write_leb128_unsigned(u64(value), false)!
+		}
+	} $else {
+		$compile_error('write_leb128 requires a native integer type')
+	}
+}
+
+pub fn (mut stream WriteStream) write_uleb128[T](value T) ! {
+	$if T.unaliased_typ is $int {
+		$if T.unaliased_typ is i8 || T.unaliased_typ is i16 || T.unaliased_typ is int
+			|| T.unaliased_typ is i64 || T.unaliased_typ is isize {
+			if i64(value) < 0 { panic('integer does not fit in destination type') }
+		}
+		stream.write_leb128_unsigned(u64(value), false)!
+	} $else {
+		$compile_error('write_uleb128 requires a native integer type')
+	}
+}
+
+pub fn (mut stream WriteStream) write_sleb128[T](value T) ! {
+	$if T.unaliased_typ is $int {
+		$if T.unaliased_typ is i8 || T.unaliased_typ is i16 || T.unaliased_typ is int
+			|| T.unaliased_typ is i64 || T.unaliased_typ is isize {
+			stream.write_leb128_signed(i64(value))!
+		} $else {
+			stream.write_leb128_unsigned(u64(value), true)!
+		}
+	} $else {
+		$compile_error('write_sleb128 requires a native integer type')
+	}
+}
+
 pub fn (mut stream WriteStream) flush() ! {
 	if stream.file == none { return }
 	file := stream.file or { return }
