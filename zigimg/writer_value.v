@@ -11,12 +11,16 @@ fn io_value_base(format string) ?u8 {
 }
 
 fn io_value_unsigned(mut stream WriteStream, format string, options FormatOptions, value u64) ! {
+	if format == 'D' { return stream.print_duration[u64](value, options) }
+	if format == 'B' { return stream.print_byte_size(value, .decimal, options) }
+	if format == 'Bi' { return stream.print_byte_size(value, .binary, options) }
 	base := io_value_base(format) or { return error('unsupported print_value integer format') }
 	letter_case := if format == 'X' { FormatCase.upper } else { FormatCase.lower }
 	return stream.print_int[u64](value, base, letter_case, options)
 }
 
 fn io_value_signed(mut stream WriteStream, format string, options FormatOptions, value i64) ! {
+	if format == 'D' { return stream.print_duration[i64](value, options) }
 	base := io_value_base(format) or { return error('unsupported print_value integer format') }
 	letter_case := if format == 'X' { FormatCase.upper } else { FormatCase.lower }
 	return stream.print_int[i64](value, base, letter_case, options)

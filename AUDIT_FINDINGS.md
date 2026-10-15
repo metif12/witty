@@ -11128,3 +11128,61 @@ output/storage and private allocation remain boundaries. Further printValue
 formats/carriers, full Writer.print and custom reflection remain unported.
 Scope/reproduction are in the
 [float value comparison](zigimg/reference_probes/writer_value_float/README.md).
+
+
+### Duration and byte-size Writer value dispatch — 2026-10-15
+
+`WriteStream.print_value` adds `D` for native signed/unsigned integers and aliases,
+and `B`/`Bi` for native unsigned integers and aliases. Four dispatch lines forward
+to existing formatters. Duration sign/units/truncated fractions, ignored precision,
+24-byte private buffer failures and subsequent alignment retain Source behavior.
+Byte-size SI/IEC thresholds, u64-to-f64 rounding, precision bypasses, suffixes,
+56-byte private buffer failures and alignment retain Source behavior. Scalar depth
+is ignored. Other dispatch bodies, formatter implementations, IO and C remain
+byte-identical. Private stack buffers are not observed.
+
+The unchanged public Source dispatcher is compared against independent duration,
+rational binary64/decimal rendering and write-boundary models. Five snapshots
+retain full backing, position, pending/unused bytes and headers, descriptors, raw
+argument bits/span, options/type/format/depth and file/wire contents through caller
+mutation/flush. Debug/ordinary and ReleaseSafe/production each match **59,122
+returning records**, **1,127 returning controls** and **476 exact panic/state pairs**.
+Hashes are `591dd92bc2f3c00f8490fa87c78b82b917ead851dfde7d301223554ea1b7aa9f`,
+`f1e054f6157516bf322846930d93b0be366153a05d03b4d23b8d74be063501b0` and
+`90720fdc8a87c4f9292451b108ac8c357a17e116696b4f46afe6283dc29c7bbb`.
+Fourteen groups cover native/alias extrema, unit/magnitude edges, every fractional
+thousandth, precision/private-buffer boundaries, fills, seeded values, IO failures
+and unsigned carrier/depth combinations. Exact WriteFailed state and huge-option /
+overflow / private-buffer traps remain active in production. Every paired trap
+has one exact diagnostic, empty stdout and matching retained observer state.
+
+Sixteen external compiler pairs per mode include four common accepted consumers,
+six paired ordinary rejections and six measured runtime-format / signed-byte-size /
+invalid-format / non-native-integer / custom-duration / optional boundaries.
+Source rejects signed byte-size carriers through its implicit u64 coercion;
+V returns an unsupported integer format error before output. This boundary
+includes positive signed values. Source compile-time errors are distinct from
+V runtime errors. The previous duration-unrepresented boundary is superseded only
+for explicit native integers and aliases. Character/codepoint dispatch, further
+carriers/formats, full Writer.print and custom reflection remain unported.
+
+Three public regressions, **108 image test files** and **17 production/application /
+Windows/Linux commands** pass. Historical primitive dispatch retains 16,308 records,
+343 controls and 159 panic/state pairs per mode; float dispatch retains 34,661
+records, 999 controls and 505 panic/state pairs per mode. All hashes are unchanged.
+Vaxis source is unchanged and dependencies build; its runtime tests are not rerun.
+Cross builds establish compilation only. Whole Source, selected libraries and
+float/math/fmt/Io/time/path/encoder pins, all 1,336 Ryu table limbs, versions, shared
+models/helpers, fixtures, inputs and implementations are checked before/after.
+Bodies freeze before final comparisons; only EXPECTED assignments change later.
+
+A development consumer incorrectly expected compile-time validation for an already
+represented V byte slice. Its failed evidence is retained separately; the corrected
+paired rejection uses an unrepresented u16 slice. Independent replay checks every
+observation/failure, compiler outcome, mode, binary and provenance pin. Every
+retained archive member is read back before commit and owned RAM/reserve release.
+Evidence remains pinned little-endian 64-bit macOS. Other runtime widths/platforms,
+invalid descriptors, injected short devices, concurrent mutation, huge successful
+output/storage, general coercions, ABI/layout and allocation/lifetime remain
+boundaries. Scope/reproduction are in the
+[duration/byte-size comparison](zigimg/reference_probes/writer_value_units/README.md).

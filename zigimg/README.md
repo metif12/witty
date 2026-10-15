@@ -1538,3 +1538,13 @@ retain pinned Source behavior. The
 format validation, wider/literal carriers and compile-time enforcement remain
 boundaries. Further value dispatch, full Writer.print and custom reflection remain
 unported.
+
+
+`print_value` now dispatches `D` for native signed/unsigned integers and aliases,
+and `B`/`Bi` for native unsigned integers and aliases. The existing duration and
+byte-size formatters preserve private-buffer failures, precision/unit rules,
+padding and ignored scalar depth. The
+[duration/byte-size value comparison](reference_probes/writer_value_units/README.md)
+covers 60,249 returning observations and 476 exact panic/state pairs per mode.
+Signed byte-size carriers remain a Source compile-time / V runtime-error boundary.
+Further value dispatch, full Writer.print and custom reflection remain unported.

@@ -2,7 +2,10 @@
 
 This is the primitive checkpoint. The subsequent
 [float value checkpoint](../writer_value_float/README.md) adds f32/f64 dispatch;
-its proof supersedes the float-unrepresented boundary described below.
+its proof supersedes the float-unrepresented boundary described below. The
+[duration/byte-size checkpoint](../writer_value_units/README.md) also adds `D` for
+native integers and `B`/`Bi` for unsigned integers, superseding that duration
+boundary.
 
 `WriteStream.print_value(format, options, value, max_depth)` translates the
 represented branches of pinned `std.Io.Writer.printValue`:
