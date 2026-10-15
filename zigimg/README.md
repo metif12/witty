@@ -1367,3 +1367,11 @@ compaction order, including fixed-buffer failures before compaction and buffered
 head removal without IO. The [preserved repetition comparison](reference_probes/writer_preserve/README.md)
 covers 18,079 records, 984 returning controls and 360 exact panic/state pairs per
 mode. Large preserve values and zero counts follow Source's behavior.
+
+
+`Limit` supplies typed IO limits, minima, subtraction, optional conversion,
+vector counting and borrowed slices. `nothing()` and `unlimited()` construct
+its boundary values. The [IO limit comparison](reference_probes/io_limit/README.md)
+covers 20,100 records, 240 returning controls and 240 exact assertion/state pairs
+per mode. V cannot enforce the returned slice_const view's element constness.
+The remaining header-write methods can now use a typed limit.
