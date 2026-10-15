@@ -1343,4 +1343,12 @@ slots, including pending output. `count_splat` counts all prefixes and a repeate
 final vector without IO. The [vector output comparison](reference_probes/writer_vectors/README.md)
 covers 19,836 records, 126 returning controls and 378 exact panic/state pairs per
 mode, including preserved input headers, partial fixed-buffer failure and pipe
-mode transitions. Repeated output methods remain unported.
+mode transitions. Short repeated output is covered below.
+
+
+`write_splat`, `splat_byte` and `splat_bytes` provide short repeated-output writes.
+Only the final vector repeats; zero repetitions still copy vector prefixes.
+File drains retain the 16-slot limit and byte-block preparation effects, including
+spare-buffer changes before IO failure. The [repetition comparison](reference_probes/writer_splat/README.md)
+covers 21,738 records, 770 returning controls and 910 exact panic/state pairs per
+mode. All/preserve/header variants remain unported.

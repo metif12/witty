@@ -1482,6 +1482,167 @@ pub fn (mut stream WriteStream) write_vec(data [][]u8) !usize {
 	panic('reached unreachable code')
 }
 
+// Repeat the final vector while copying every prefix once, with one drain at most.
+pub fn (mut stream WriteStream) write_splat(data [][]u8, splat usize) !usize {
+	if data.len == 0 { panic('reached unreachable code') }
+	count := count_splat(data, splat)
+	if count > ~usize(0) - usize(stream.position) { panic('integer overflow') }
+	pattern := data[data.len - 1]
+	if usize(stream.position) + count <= usize(stream.buffer.len) {
+		for bytes in data[..data.len - 1] {
+			for i, byte in bytes {
+				stream.buffer[stream.position + i] = byte
+			}
+			stream.position += bytes.len
+		}
+		if pattern.len == 1 {
+			for i in 0 .. int(splat) {
+				stream.buffer[stream.position + i] = pattern[0]
+			}
+			stream.position += int(splat)
+		} else if pattern.len > 1 {
+			for _ in 0 .. int(splat) {
+				for i, byte in pattern {
+					stream.buffer[stream.position + i] = byte
+				}
+				stream.position += pattern.len
+			}
+		}
+		return count
+	}
+	if stream.file != none { return stream.file_write_splat(data, splat) }
+	for bytes in data[..data.len - 1] {
+		space := stream.buffer.len - stream.position
+		len := if bytes.len < space { bytes.len } else { space }
+		for i in 0 .. len {
+			stream.buffer[stream.position + i] = bytes[i]
+		}
+		stream.position += len
+		if bytes.len > space { return error('WriteFailed') }
+	}
+	if pattern.len == 0 { return 0 }
+	if pattern.len == 1 {
+		space := stream.buffer.len - stream.position
+		if splat < usize(space) { panic('reached unreachable code') }
+		for i in 0 .. space {
+			stream.buffer[stream.position + i] = pattern[0]
+		}
+		stream.position += space
+		return error('WriteFailed')
+	}
+	mut remaining := splat
+	for remaining > 0 {
+		space := stream.buffer.len - stream.position
+		len := if pattern.len < space { pattern.len } else { space }
+		for i in 0 .. len {
+			stream.buffer[stream.position + i] = pattern[i]
+		}
+		stream.position += len
+		if pattern.len > space { return error('WriteFailed') }
+		remaining--
+	}
+	panic('reached unreachable code')
+}
+
+fn (mut stream WriteStream) file_write_splat(data [][]u8, splat usize) !usize {
+	file := stream.file or { return error('WriteFailed') }
+	mut pointers := unsafe { [16]voidptr{} }
+	mut lengths := [16]usize{}
+	mut slots := 0
+	if stream.position > 0 {
+		pointers[slots] = stream.buffer.data
+		lengths[slots] = usize(stream.position)
+		slots++
+	}
+	for bytes in data[..data.len - 1] {
+		if bytes.len == 0 { continue
+		 }
+		pointers[slots] = bytes.data
+		lengths[slots] = usize(bytes.len)
+		slots++
+		if slots == pointers.len { break
+		 }
+	}
+	pattern := data[data.len - 1]
+	mut backup := [64]u8{}
+	if slots < pointers.len && splat > 0 && pattern.len > 0 {
+		$if windows {
+			pointers[slots] = pattern.data
+			lengths[slots] = usize(pattern.len)
+			slots++
+		} $else {
+			if splat == 1 {
+				pointers[slots] = pattern.data
+				lengths[slots] = usize(pattern.len)
+				slots++
+			} else if pattern.len == 1 {
+				mut scratch := unsafe { backup[..] }
+				if stream.buffer.len - stream.position >= backup.len {
+					scratch = unsafe { stream.buffer[stream.position..] }
+				}
+				len := if splat < usize(scratch.len) { int(splat) } else { scratch.len }
+				for i in 0 .. len {
+					scratch[i] = pattern[0]
+				}
+				pointers[slots] = scratch.data
+				lengths[slots] = usize(len)
+				slots++
+				mut remaining := splat - usize(len)
+				for remaining > usize(scratch.len) && slots < pointers.len {
+					pointers[slots] = scratch.data
+					lengths[slots] = usize(scratch.len)
+					slots++
+					remaining -= usize(scratch.len)
+				}
+				if remaining > 0 && slots < pointers.len {
+					pointers[slots] = scratch.data
+					lengths[slots] = remaining
+					slots++
+				}
+			} else {
+				mut remaining := splat
+				for remaining > 0 && slots < pointers.len {
+					pointers[slots] = pattern.data
+					lengths[slots] = usize(pattern.len)
+					slots++
+					remaining--
+				}
+			}
+		}
+	}
+	if slots == 0 { return 0 }
+	n := C.witty_image_file_write_vectors(file.fd, stream.file_pos, &pointers[0], &lengths[0],
+		slots, &stream.streaming)
+	if n < 0 {
+		if stream.streaming < 0 {
+			stream.file_pos = 0
+			stream.file_seek_error = 'Unseekable'
+		}
+		return error('WriteFailed')
+	}
+	if u64(n) > u64(0xffffffffffffffff) - stream.file_pos { panic('integer overflow') }
+	stream.file_pos += u64(n)
+	if n < stream.position {
+		remaining := stream.position - int(n)
+		for i in 0 .. remaining {
+			stream.buffer[i] = stream.buffer[int(n) + i]
+		}
+		stream.position = remaining
+		return 0
+	}
+	consumed := usize(n) - usize(stream.position)
+	stream.position = 0
+	return consumed
+}
+
+pub fn (mut stream WriteStream) splat_byte(byte u8, count usize) !usize {
+	return stream.write_splat([[byte]], count)
+}
+
+pub fn (mut stream WriteStream) splat_bytes(bytes []u8, count usize) !usize {
+	return stream.write_splat([bytes], count)
+}
+
 pub fn (mut stream WriteStream) write_byte(byte u8) ! {
 	stream.write_all([byte])!
 }
