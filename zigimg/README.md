@@ -1499,3 +1499,12 @@ Source builtin names, lowercase hex and separate prefix/address failures. The
 returning observations per mode, including 11,460 exact WriteFailed states.
 Compound/qualified type names and optional const spelling remain measured
 boundaries. Formatting dispatch and custom formatter APIs remain unported.
+
+
+`FormatParser` and `FormatArgState` now provide the public runtime format parsing
+and argument-selection records. Decimal parsing, borrowed names, missing-bracket
+errors, cursor/bitmap mutation and exact overflow/index traps match pinned Source.
+The [parser comparison](reference_probes/format_parser/README.md) covers 40,184
+returning observations and 56 exact panic/state pairs per mode. Shared boxed
+specifier payloads and mutable V views remain measured representation boundaries.
+Compile-time placeholders and Writer formatting dispatch remain unported.

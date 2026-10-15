@@ -10901,3 +10901,55 @@ platforms/widths, valid allocation/dereference/lifetime, private allocation/OOM,
 portable ABI/type reflection, arbitrary/injected short devices and concurrent
 headers remain boundaries. Formatting dispatch/custom formatters remain unported.
 Scope and reproduction are in the [address comparison](zigimg/reference_probes/writer_address/README.md).
+
+
+### Runtime format parser and argument tracker — 2026-10-15
+
+`FormatParser` translates public std.fmt.Parser peek/char/maybe/number/until /
+specifier; `FormatArgState` translates ArgState argument selection and used-bit
+tracking. Required constructor fields, public state mutation, decimal accumulation,
+delimiter position, empty reads, missing-bracket errors and borrowed names retain
+Source behavior. Automatic argument selection advances before missing-index / u5
+failures; explicit indices preserve its cursor. Unusual public bitmap/count values
+retain the Source popcount comparison. Old runtime and C files are byte-identical.
+
+An independent byte/cursor/bitmap model checks every action's complete carrier,
+parser index, argument fields and result tag/value or borrowed offset/length/bytes.
+Debug/ordinary and ReleaseSafe/production each pass **40,127 returning records**,
+**57 isolated returning controls** and **56 exact panic/state pairs**. Their hashes
+are respectively `a0d015042f05d976b96b1145e5887dde34d69b8c9ccc0cbe58a8981855ca47b5`,
+`43ed26f0bcf4183f93cd6864a1067cedd436869794c856919576243dd8fe5ff2` and
+`761a3e280f84db4d7ebca88bd190e12a98e35b53a7cba2c74ba0650c2763d6f7`.
+Six groups cover all bytes, exhaustive short grammar strings, decimal edges,
+borrowed mutation, argument-state combinations and 2,048 seeded sequences.
+46 overflow, four exact slice and six u5 conversion traps preserve diagnostics,
+empty stdout and exact state before observer IO; all remain active in production.
+
+Thirteen external compiler pairs per mode include four accepted contracts, six
+paired ordinary rejections and three separately measured boundaries. Parser and
+argument records copy by value, with shared borrowed bytes. Copied V sum-type
+number payloads and name descriptors share boxed storage; Source copies them by
+value. Whole-choice replacement is distinct. Source const views require a cast
+for result mutation, while V views are mutable. These representation, constness,
+layout/ABI, allocation/lifetime/OOM and zero-initialization differences are not
+claimed equivalent. The fixtures use owned storage and explicit borrowed slices.
+
+Three public regressions, **104 image test files** and **17 focused production /
+application / Windows / Linux commands** pass. The prior address comparison keeps
+30,217 records and 3,234 controls per mode with unchanged hashes. Vaxis source is
+unchanged and dependencies build; runtime tests are not rerun. Cross builds prove
+compilation. Whole Source/selected compiler-library pins plus fmt/mem/simd/math /
+meta/Io/time pins, versions, helpers, inputs and fixtures are checked before/after.
+Public Source bodies and visibility remain unchanged. Runtime/test/fixture bodies
+freeze before final comparisons; only EXPECTED assignments change later.
+
+Failed/superseded development fixture, Python-version, panic-diagnostic and
+consumer-main checks are retained separately. Independent replay verifies every
+record, exact failure, compiler outcome, mode, binary and provenance pin. Every
+retained archive member is read back before committing exact reviewed hashes and
+releasing owned RAM/reserves. Evidence remains little-endian 64-bit macOS using
+pinned compilers. Other runtime widths/platforms, invalid descriptors, arbitrary
+unsafe writes, concurrent mutation and physical allocation remain boundaries.
+Compile-time Placeholder.parse, Writer print/printValue and custom formatter
+reflection remain unported. Scope and reproduction are in the
+[parser comparison](zigimg/reference_probes/format_parser/README.md).
