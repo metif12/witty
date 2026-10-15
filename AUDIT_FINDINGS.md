@@ -8757,3 +8757,87 @@ are boundaries. Runtime uses little-endian 64-bit macOS; Windows/Linux and other
 CPU, big-endian and 32-bit runtime remain outside the proof. Cross builds
 establish compilation only. Reproduction and scope are in
 [the rebase comparison](zigimg/reference_probes/reader_rebase/README.md).
+
+### Checked enum tag reads — 2026-10-15
+
+`ReadStream.take_enum[T, E]` translates pinned Reader.takeEnum using the enum's
+declared native width and endian marker. Validation follows the complete integer
+read. An unknown exhaustive tag consumes that integer before InvalidEnumTag;
+an incomplete tag stays pending. File refill/failure state follows take.
+
+The explicit `@[nonexhaustive]` attribute carries acceptance of unnamed tag bit
+patterns for this method. PNG compression/filter method types now carry it;
+their earlier utility-reader behavior is unchanged. The attribute is interpreted
+by take_enum, without adding compiler-wide enum construction/exhaustiveness rules.
+
+Debug/ordinary and ReleaseSafe/production each match **33,504 returning records /
+100,512 tag reads / 234,528 primary calls**, SHA-256
+`afa3ea7a87cb13544863b2957f1c31b1af7d211b98704b7845e1451a359be955`.
+Three enum reads, three caller tosses and one relative seek run per record;
+setup/priming/observations are separate. Groups contain 8,928 basic, 3,840 tag
+boundary, 18,432 every-byte and 2,304 replacement records. Thirty-six enum
+bindings cover signed/unsigned 8/16/32/64-bit exhaustive/nonexhaustive types,
+their direct aliases, both PNG method types and their aliases. Four endian
+bindings cover direct/aliased markers. Memory/positional/streaming readers,
+complete/truncated input, repeated reads, named/unnamed tags, signed endpoints,
+high bits and owned open/closed replacement pipes preserve their defined state.
+
+The independent model checks signed values/bit representations, tag membership,
+validation/consumption order, ordinary file and buffered input, retained output,
+pending bytes, logical position, caller tosses and descriptor ownership. Full
+replacement refill/failure/wire state also compares byte-for-byte to Source.
+There are **160 returning controls**, SHA-256
+`483ff19b2f300d286be8c7310b561a4f7ca1b1f285422957d7687ce7fc7c4f3d`.
+The **192 exact panic/state pairs** match SHA-256
+`3cef7fe799e64aa751e283552ed5f446b810246a17241986874cfeb59e330c7f`:
+64 capacity checks precede tag validation, and 128 getPos integer-overflow
+observations fail after priming before the enum call. Both failed exits have
+empty stdout, one exact message and identical initialized state. Observers omit
+getPos, capture bytes before opening output files and clean up owned resources.
+
+Three paired compile rejections per mode cover integer/pointer tag types and
+invalid endian types. Source accepts chained enum aliases; pinned V rejects them
+through the one-level unaliased type check. Source accepts an i8 enum member
+with literal value 127; pinned V rejects that declaration in both modes. Source
+accepts a constant unnamed tag 3 in a nonexhaustive enum in both modes. V warns,
+builds/runs that constant cast in ordinary mode and rejects it in production,
+even inside unsafe. Dynamic unnamed tags returned by the method pass both modes.
+Compiler and construction differences remain separate from read equivalence.
+
+A separate positive-only `enum ... as int { zero }` control preserves bits
+0xffffffff, int(-1) and position 4 in both modes. Source widens its i32 tag to
+i64(-1); V widens that enum to i64(4294967295), because its C enum has an unsigned
+compatible type when every declared member is nonnegative. Conversion through
+int before widening preserves the signed interpretation. The main signed
+32-bit fixtures declare negative members and do not have this difference.
+This enum representation boundary is retained outside the matching read matrix.
+
+Initial declaration/constant-cast experiments and a compile-consumer fixture
+using reserved one-letter V type names retain original bodies/logs separately
+from passing gates. Three regressions cover consumed invalid tags, signed/endian
+and incomplete tags, and unnamed custom/PNG tags. All 79 image test files pass
+in three batches; 17 focused production/application/Windows/Linux checks pass.
+Historical integer and PNG header matrices retain their hashes in both modes.
+Vaxis runtime tests are not rerun; its source is unchanged and dependency builds
+pass. Cross builds establish compilation only.
+
+Full unchanged Source, versions/selected libraries (including meta.zig/enums.zig),
+implementation, probes, directly imported helpers, shared fixtures and inputs
+are pinned before/after comparison. Source bodies/visibility and reader syscalls
+are untouched. Files/pipes/keepers are owned and observations initialize every
+retained byte. Final production/probe/runner/direct-helper bodies remain frozen;
+only expected assignments change after ordinary discovery. Independent replay
+checks records, models, classifications, exact state, compiler controls, ownership,
+binaries, modes and provenance. Parent-side lossless compression pins raw and
+compressed output. Evidence is persisted from an owned RAM workspace and every
+retained archive member is read back before commit and release.
+
+The separate takeEnumNonexhaustive entry point and compile-time nonexhaustive
+enforcement remain unported. Arbitrary Source integer widths, chained aliases,
+construction/constant conversions, positive-only int enum widening, layout/ABI,
+custom callbacks, larger buffers /
+offsets, concurrent reuse, other devices, syscall counts, injected errors,
+timing/signals, OOM/quotas, allocator lifetime and remaining V representation
+limits are boundaries. Runtime uses little-endian 64-bit macOS; Windows/Linux,
+other CPU, big-endian and 32-bit runtime remain outside the proof. Reproduction
+and scope are in [the enum comparison](zigimg/reference_probes/reader_enum/README.md).

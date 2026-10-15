@@ -374,6 +374,34 @@ pub fn (mut stream ReadStream) take_int[T, E](endian E) !T {
 	}
 }
 
+// Read the enum's native-width tag before checking its declared values.
+// @[nonexhaustive] carries Source's acceptance of unnamed integer tags.
+pub fn (mut stream ReadStream) take_enum[T, E](endian E) !T {
+	$if T.unaliased_typ is $enum {
+		bytes := stream.take(int(sizeof(T)))!
+		mut word := u64(0)
+		for i, byte in bytes {
+			$if E.unaliased_typ is BigEndian {
+				word = word << 8 | u64(byte)
+			} $else $if E.unaliased_typ is LittleEndian {
+				word |= u64(byte) << (i * 8)
+			} $else {
+				$compile_error('take_enum requires BigEndian or LittleEndian')
+			}
+		}
+		value := unsafe { T(word) }
+		$for attribute in T.attributes {
+			if attribute.name == 'nonexhaustive' { return value }
+		}
+		$for entry in T.values {
+			if value == unsafe { T(entry.value) } { return value }
+		}
+		return error('InvalidEnumTag')
+	} $else {
+		$compile_error('take_enum requires an enum type')
+	}
+}
+
 // Read an integer without consuming its bytes, retaining any file read-ahead.
 pub fn (mut stream ReadStream) peek_int[T, E](endian E) !T {
 	$if T.unaliased_typ is $int {

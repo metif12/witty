@@ -1278,3 +1278,11 @@ traps follow compaction, including in production. `peek` and `fill_more` share
 this operation. The [rebase comparison](reference_probes/reader_rebase/README.md)
 covers 13,626 records and 110 controls per mode, including EOF, failed streaming
 transitions, retained buffer state and unread pipe data.
+
+`take_enum[T, E]` reads an enum tag with its declared native width and byte
+order. Unknown exhaustive tags return `InvalidEnumTag` after consuming the
+integer; incomplete tags remain pending. The method accepts unnamed values for
+enums marked `@[nonexhaustive]`, including PNG compression/filter methods.
+The [enum comparison](reference_probes/reader_enum/README.md) covers 33,504
+records and 352 controls per mode. Compiler declaration, alias and constant-cast
+differences are documented separately.

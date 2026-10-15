@@ -20,9 +20,11 @@ pub enum PngInterlaceMethod as u8 {
 	none  = 0
 	adam7 = 1
 }
+@[nonexhaustive]
 pub enum PngCompressionMethod as u8 {
 	deflate = 0
 }
+@[nonexhaustive]
 pub enum PngFilterMethod as u8 {
 	adaptive = 0
 }
