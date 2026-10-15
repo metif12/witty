@@ -10578,3 +10578,75 @@ padding/storage, OOM/lifetime, portable ABI, floating-point exception flags,
 reflection and remaining V representation limits remain boundaries. Decimal /
 scientific rendering and byte-size formatters remain unported. Reproduction,
 helper pins and scope are in [the hex float comparison](zigimg/reference_probes/writer_float_hex/README.md).
+
+
+### Decimal-record buffer formatting — 2026-10-15
+
+The represented u64 specialization of pinned std.fmt.float.FloatDecimal translates
+as `FloatDecimal64`, with required mutable mantissa/exponent/sign fields.
+`format_float_scientific` and `format_float_decimal` translate its public buffer
+formatters; `float_format_min_buffer_size` is 53. They consume already-decimal
+records. Binary float conversion, Ryu tables and remaining writer float/byte-size
+methods are not yet translated. Minimum buffer assertions precede special-value
+bypasses. Mantissas below 10^17 format normally; other normal mantissas assert.
+The special exponent i32-max selects signed inf/nan, ignoring precision and the
+mantissa limit. Precision preserves pinned rounding up for discarded digits >=5,
+checked arithmetic, conservative BufferTooSmall checks and write order. Returned
+views borrow the beginning of the supplied span. Complete backing, including
+scratch beyond the returned text, stays observable. Pinned isPowerOf10 returns
+true only for zero, so its commented carry-normalization branch is not taken
+after rounding up; the port preserves that behavior and overflow order.
+
+Debug/ordinary and ReleaseSafe/production each match **11,922 complete returning
+records** (`406ad01113cd33d0fbc8e666d47e2ee81a41b494dff304a5505c0b43e3c4242c`),
+**502 returning controls**
+(`e5f56f06ea471e70433a8259183a2cb403ae1571907f11ff15710011af524508`) and **480 exact
+panic/state pairs** (`0f0a5720b6566a040a684b9aad2036dcd3d742077e0872aa9bf4332a1bf83ebc`).
+The independent string/integer model computes rounding/text, then models paired
+digit stores, provisional points, truncation/zeroes, buffer guards and arithmetic.
+Four return snapshots retain full backing, output header/bytes, configuration,
+original/copy records, caller backing mutation and later argument mutation.
+Ordinary BufferTooSmall failures leave backing unchanged. Traps preserve exact
+partial backing/records, one diagnostic and empty stdout before observer IO:
+334 overflows, 130 assertions and 16 bounds checks with exact index/lengths.
+Production retains all traps.
+
+Six deduplicated groups cover mantissa/digit/carry boundaries, buffer/precision
+thresholds, every exponent -324..308, 1,024 deterministic mantissas, every caller
+mask and special bypasses. Borrowed subspans retain guards. Controls cover all
+short extents 0..52, usize precision maxima and i32 exponent extrema. A 157-record /
+26-panic preflight passes before final runs. Three common accepted external
+consumers and eleven paired ordinary compiler rejections pass per mode. Separate
+controls measure Source's const returned elements versus V's mutable view, V
+record-alias required-field bypass versus Source rejection, and Source's u128
+record formatting versus V's missing u128 carrier. These remain representation
+limits, along with broader coercions and ABI contracts.
+
+Three public regressions, **100 image test files** and **17 focused production /
+application / Windows / Linux checks** pass. The historical hex float suite keeps
+18,492 records, 288 returning controls and 312 exact panic/state pairs per mode.
+Full/streaming IO retains 37,133 records, 17 generic traps and four compiler
+boundaries per mode; all hashes remain unchanged. Generic traps do not prove
+exact state. Vaxis runtime tests are not rerun; source is unchanged and dependency
+builds pass. Cross builds establish compilation only.
+
+The public compiler-library bodies execute unchanged at original visibility;
+complete Source is retained unchanged for provenance. Complete Source, selected
+compiler libraries and whole fmt.zig/math.zig/meta.zig/Io.zig retain their pins.
+Whole fmt/float.zig is newly pinned at
+`c660e0ba8697da2d832ecf0cd90ab39aceac7f0ac5c1173d139ce0b66392be12`, before/after
+runtime and compiler controls, with versions, implementation, fixtures, helpers,
+inputs and consumers retained. All prior module bodies, including IO/C, remain
+byte-identical. Implementation/probe/model bodies freeze before discovery; only
+EXPECTED assignments change afterward. Development evidence retains a fixture
+exit-hook namespace error, corrected before preflight. Independent replay checks
+all observations/models, exact failures, consumer outcomes, modes, binaries and
+provenance. Every retained archive member is read back before committing exact
+reviewed hashes and releasing owned RAM.
+
+Evidence remains little-endian 64-bit macOS. Other platform/width runtimes,
+portable record/optional/array ABI, reflection, generalized coercions, invalid /
+concurrently changed headers, allocator lifetime/OOM, huge buffers and
+unrepresented consumers remain boundaries. Generic u128 formatting and the
+remaining Ryu/writer stages remain unported. Reproduction, limits and scope are
+in [the decimal record comparison](zigimg/reference_probes/float_decimal/README.md).

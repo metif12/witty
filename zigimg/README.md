@@ -1448,8 +1448,9 @@ coercions and non-native integer carriers remain separate boundaries.
 and fill. Mode `base()` returns 10/2/8/16 or `none` for scientific formatting.
 Copies preserve absent/zero/maximal optional values independently. The
 [numeric format record comparison](reference_probes/format_number/README.md)
-covers 25,480 records and 25 compiler consumer pairs per mode. Decimal/scientific
-float rendering and byte-size formatting remain unported.
+covers 25,480 records and 25 compiler consumer pairs per mode. Binary float
+conversion for decimal/scientific rendering and byte-size formatting remain
+unported.
 
 
 `print_float_hex[T]` and `print_float_hex_options[T]` format explicit f32/f64 values
@@ -1459,4 +1460,15 @@ aligns a completed private 50-byte representation. Pinned mode traps and private
 buffer failures are retained. The [hex float comparison](reference_probes/writer_float_hex/README.md)
 covers 18,492 records, 288 returning controls and 312 exact panic/state pairs per
 mode. Untyped literal precision and wider float carriers remain separate
-boundaries. Decimal/scientific rendering and byte-size formatting remain unported.
+boundaries. Binary float conversion for decimal/scientific rendering and byte-size
+formatting remain unported.
+
+
+`FloatDecimal64`, `format_float_scientific` and `format_float_decimal` provide the
+u64 decimal-record output stage used by the pinned float renderer. They preserve
+rounding, borrowed output, scratch writes, checked arithmetic and the 53-byte
+minimum-buffer contract. The [decimal record comparison](reference_probes/float_decimal/README.md)
+covers 11,922 records, 502 returning controls and 480 exact panic/state pairs per
+mode. V's returned-view constness, required-field aliases and u128 carrier limits
+are measured separately. Binary float conversion and the remaining writer float /
+byte-size methods remain unported.
