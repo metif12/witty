@@ -1392,3 +1392,12 @@ The [integer slice writer comparison](reference_probes/writer_slice_endian/READM
 covers 25,740 records and 756 returning controls per mode. Source's additional
 native-layout and aggregate capabilities remain unported and are measured
 separately from the integer cases.
+
+
+`consume(count)` compacts pending output or clears it and returns any excess
+count. `consume_all()` clears pending length and returns zero. Both operate on
+borrowed backing without doing IO or advancing the underlying file position.
+The [writer consumption comparison](reference_probes/writer_consume/README.md)
+covers 29,078 records and 366 returning controls per mode, including saved views
+and later output. Pinned V's immutable-copy mutation constraint differs from
+Source and is measured separately.

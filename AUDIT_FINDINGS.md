@@ -10001,3 +10001,96 @@ input/output overlap, invalid/concurrently changed headers, portable ABI and
 remaining V representation limits are boundaries. Other IO APIs remain outside
 this checkpoint. Reproduction and scope are in
 [the integer slice writer comparison](zigimg/reference_probes/writer_slice_endian/README.md).
+
+
+### Writer buffer consumption — 2026-10-15
+
+`consume(count)` and `consume_all()` translate the corresponding pinned Writer
+helpers through WriteStream. consume shifts the unconsumed pending tail toward
+the beginning and returns zero when count is smaller than pending length.
+Otherwise it clears pending length and returns count minus the old length.
+consume_all clears pending length and returns zero without changing stored bytes.
+They neither perform IO nor advance the underlying file position. Drain callers
+remain responsible for output and external position accounting. Invoking these
+helpers alone can drop pending output; get_pos changes with the pending length.
+All old IO and C helper bodies remain byte-identical. Source bodies, visibility
+and syscalls are untouched.
+
+Saved buffered/unused views retain their original lengths and offsets. Their
+bytes observe overlapping compaction, mutations through borrowed views, caller
+writes and later refills. Only the moved destination changes during partial
+consumption; bytes beyond it stay intact. Counts may exceed both pending length
+and capacity, including usize maximum, without an overflow or IO operation.
+
+Debug/ordinary and ReleaseSafe/production each match **29,078 complete
+returning records**, SHA-256
+`d2d163291c934845b3c6383a9dc78fc583a9ab352f969f8b486cb97b66e302ca`,
+and **366 returning controls**, SHA-256
+`f74c68332a27cd56879be6ae686f07e935469693aecf38f2e52ee9b69a5a1673`.
+The main records make **58,156 helper calls** per mode: 43,617
+consume and 14,539 consume_all calls. Caught WriteFailed from later
+writes/flushes is included in returning records. This valid-buffer suite asserts
+no runtime trap cases.
+
+The matrix contains 4,080 consume-and-clear, 24,576 every-byte and 422 saved-view
+records after exact specification deduplication. It covers zero/one/interior /
+equal/excess/maximum counts, maximum-minus-one controls, repeated helpers,
+memory/positional/streaming writers, capacities 0/1/8/17, starts zero/three,
+empty/full/partially pending buffers, regular/replaced-pipe/closed descriptors,
+every byte value, mutations through saved/fresh views, caller changes, later
+refills and flushes. Every record/control independently reconstructs all nine
+snapshots: initialized backing, pending bytes/length, logical position, fresh
+unused-view lengths/offsets/bytes, both saved-view lengths/offsets/bytes,
+descriptor validity/reference observations, count results, write/flush outcomes
+and complete file/pipe output. It models overlapping moves and retained bytes,
+then positional/streaming output and pipe transitions. Absolute addresses and
+syscall counts are excluded. Nonempty backing observes actual empty/nonempty
+view offsets; empty backing normalizes offsets.
+
+Five paired compiler rejections per mode check invalid count types/ranges and
+extra consume_all arguments. A separate Source-reject / V-return boundary
+measures immutable-copy mutation: Source rejects consume on a const Writer copy;
+pinned V allows the call on its immutable copy. The V program checks that the
+copy cursor changes, the original cursor stays unchanged and shared backing
+shows compaction. These constness constraints are not equivalent. External
+consumers in both languages/modes verify aliases, counts, saved views, partial
+compaction, excess/maximum values and repeated consume_all calls. General
+coercions and remaining V representation differences stay outside the claim.
+
+Three public regressions, **93 image test files** and **17 focused production /
+application / Windows / Linux checks** pass. Historical integer slice writes
+retain 25,740 records and 756 returning controls per mode. Full/streaming IO
+retains 37,133 records, 17 generic traps and four compile boundaries per mode.
+Their hashes stay unchanged. Generic traps do not establish exact state. Vaxis
+runtime tests are not rerun; its source is unchanged and dependency builds pass.
+Cross builds establish compilation only.
+
+Complete locked zigimg Source and selected compiler-library pins remain unchanged.
+The native probe uses std.Io.Writer through its unchanged stream wrapper. Extra
+whole Io.zig SHA
+`09df1114cba703f824337f20489c7df5294db9f07961d4ac46abbbbf9c7ecaef`
+is checked before/after. Versions, path/encoder dependencies, implementation,
+probes, direct helpers and inputs are pinned too. Final runtime bodies are
+frozen before discovery; only EXPECTED assignments change afterward. A corrected
+181-record preflight passes; preliminary compilation before adding actual saved
+pending-offset observation is retained separately. The first compiler fixture
+incorrectly expected V's immutable-copy call to reject. Its accepted compile,
+fixture and logs are retained and independently checked; a final constraint
+boundary validates actual copy/shared-buffer effects. Runtime implementations,
+probes and models stay unchanged during that correction. Original comparison /
+historical jobs stay intact; final support checks run under separately pinned
+recorded drivers. Final compiler fixtures/runners are checked before/after.
+
+Independent replay checks every full record/model, compiler control, actual
+mode, binary, provenance pin and old IO/C body. Lossless parent compression pins
+raw/compressed bytes. Recorded local jobs survive headless input turns. An owned
+RAM workspace holds checks; every retained archive member is read back before
+committing exact reviewed hashes and releasing owned temporary resources.
+
+Runtime remains little-endian 64-bit macOS. Windows/Linux/other CPU runtime,
+big-endian/32-bit runtime, arbitrary devices/short drains, injected errors and
+signals, syscall counts/timing, invalid/concurrently changed headers/cursors,
+huge storage/OOM, allocator lifetime, portable ABI and remaining V representation
+limits are boundaries. Custom vtables/native drain integration and other IO
+APIs remain outside this checkpoint. Reproduction and scope are in
+[the writer consumption comparison](zigimg/reference_probes/writer_consume/README.md).

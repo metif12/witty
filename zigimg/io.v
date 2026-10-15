@@ -1211,6 +1211,26 @@ pub fn (mut stream WriteStream) undo(count usize) {
 	stream.position -= int(count)
 }
 
+// Account for drained bytes by shifting pending output; return any excess count.
+pub fn (mut stream WriteStream) consume(count usize) usize {
+	if count < usize(stream.position) {
+		remaining := stream.position - int(count)
+		for i in 0 .. remaining {
+			stream.buffer[i] = stream.buffer[int(count) + i]
+		}
+		stream.position = remaining
+		return 0
+	}
+	remaining := count - usize(stream.position)
+	stream.position = 0
+	return remaining
+}
+
+pub fn (mut stream WriteStream) consume_all() usize {
+	stream.position = 0
+	return 0
+}
+
 // Drain once while default rebase temporarily hides its preserved tail.
 fn (mut stream WriteStream) drain_buffer_once() ! {
 	if stream.position == 0 { return }
