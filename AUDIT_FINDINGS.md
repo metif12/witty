@@ -11369,3 +11369,71 @@ invalid descriptors, injected short devices, concurrent mutation, huge successfu
 output/storage, private allocation, nested descriptors/layout and lifetimes remain
 boundaries. Scope/reproduction are in the
 [recursive slice value comparison](zigimg/reference_probes/writer_value_slice/README.md).
+
+
+### Fixed-array Writer value dispatch — 2026-10-23
+
+`WriteStream.print_value("any", options, value, max_depth)` now recursively formats
+fixed arrays of all 13 native scalar types and their V aliases, including nested
+arrays and mixtures with dynamic slices. Byte arrays also dispatch `s`, `x`, `X`
+and `b64`. The implementation passes fixed-array views through existing byte and
+recursive slice helpers, preserving depth cutoffs, scalar leaf options and
+separate opening, element, separator and closing writes. Other formatter bodies,
+IO and C remain unchanged. This supersedes the earlier fixed-array rejection
+only for the represented positive-length arrays.
+
+The native fixture calls the original public Writer.printValue body without
+changing Source or visibility. Six shapes cover fixed length three, fixed 2×3,
+fixed 2×2×3, singleton arrays, dynamic slices of fixed rows and fixed arrays of
+dynamic slices. An independent Python model predicts recursive writes, byte
+encodings and scalar formatting. Five complete snapshots through caller mutation
+and flush retain backing, position, pending/unused bytes and headers, descriptors,
+input payload/spans, options, actual typed leaf bytes and file/wire contents.
+The shape string specifies fixture construction; nested descriptor layout and
+every copied array are not observed. Memory, positional/streaming files, replaced
+pipes and closed descriptors are covered.
+
+Debug/ordinary and ReleaseSafe/production each match **17,688 returning records**,
+**65 isolated returning controls** and **127 exact panic/state pairs**. The main
+corpus contains **5,608 independently predicted WriteFailed states**. Controls
+add 41 WriteFailed states; seven integer-overflow and 120 forbidden-option
+panics remain active in production. Additional controls exercise maximal options
+with depth cutoffs and forbidden byte-format options.
+Panics require one exact diagnostic, empty stdout and matching retained state,
+including production. Five groups cover type/bits/shape/depth edges, write order /
+failure, every capacity through 65 bytes, byte formats and byte padding. Golden
+hashes are in the linked comparison below.
+
+Seventeen external compiler pairs per mode cover five accepted consumers, three
+paired ordinary argument rejections and nine measured boundaries. Source requires
+compile-time formats; V accepts runtime strings. Unsupported array formats and
+array `*` are Source static rejections versus V errors before writer effects.
+Zero-length fixed arrays, records and optional elements remain unrepresented.
+Pointer elements with `any` return a V error after opening bytes. The pinned V
+compiler rejects zero-length declarations. Named row/grid locals and the measured
+nested nominal-array alias literal work in both modes. Generic fixture-local
+`[N]T` constructors retain the first element specialization, so
+concrete constructors cover every scalar/alias type while the public formatter
+remains generic. These boundaries are explicitly non-equivalent to Source.
+Qualifiers, sentinels, arbitrary nominal names, broader coercions and ABI/layout
+remain boundaries. Full Writer.print and custom reflection remain unported.
+
+Four public regressions, **112 image test files** and **17 production/application /
+Windows/Linux commands** pass. Historical primitive dispatch retains 16,308 records,
+343 returning controls and 159 panic/state pairs per mode; recursive slices retain
+17,232 records, 186 returning controls and six panic/state pairs per mode. Their
+hashes are unchanged. Vaxis source is unchanged and dependencies build; its runtime
+tests are not rerun. Cross builds establish compilation only. Whole Source/selected
+libraries, Io/fmt/math/meta/base64/float/path/encoder pins, versions, implementation,
+shared helpers/models, fixtures and inputs are checked before/after. The unchanged
+Ryu tables retain all 1,336 limbs. Bodies freeze before final comparisons; only six
+EXPECTED assignments change afterward.
+
+Independent replay verifies every observation/failure, compiler outcome, build
+mode, binary and provenance pin. Superseded development evidence remains separate.
+Every retained archive member is read back before commit. Evidence remains pinned
+little-endian 64-bit macOS. Other runtime widths/platforms, invalid descriptors,
+injected short devices, concurrent mutation, huge successful output/storage,
+private allocation, nested descriptors/layout and lifetimes remain boundaries.
+Scope/reproduction are in the
+[fixed-array value comparison](zigimg/reference_probes/writer_value_array/README.md).

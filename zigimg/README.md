@@ -1575,6 +1575,18 @@ slices of native integers, f32/f64 and bool, including nested slices and aliases
 It preserves depth cutoffs, leaf options and separate opening/element/separator /
 closing failures. The [slice value comparison](reference_probes/writer_value_slice/README.md)
 covers 17,418 returning observations and six panic/state pairs per mode.
-Fixed arrays, record/optional/pointer elements and nested-slice addresses retain
+Record/optional/pointer elements and nested-slice addresses retain
 the documented representation boundaries. Further dispatch and Writer.print
 remain unported.
+
+
+`print_value` now recursively formats fixed arrays of native scalars and aliases,
+including nested fixed arrays and mixed dynamic slices. Byte arrays also retain
+`s`/`x`/`X`/`b64` dispatch. Depth, leaf options and separate recursive write
+failures preserve pinned Source behavior. The
+[fixed-array value comparison](reference_probes/writer_value_array/README.md)
+covers 17,753 returning observations and 127 panic/state pairs per mode. This
+supersedes the earlier fixed-array rejection for represented positive lengths.
+Zero-length declarations, generic array construction and record/optional/pointer
+elements retain the documented boundaries. Further dispatch, full Writer.print
+and custom reflection remain unported.

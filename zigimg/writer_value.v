@@ -138,10 +138,15 @@ pub fn (mut stream WriteStream) print_value[T](format string, options FormatOpti
 		if format == '*' { return stream.print_address(value) }
 		return io_value_bytes(mut stream, format, options, value, max_depth)
 	} $else $if T.unaliased_typ is $array_fixed {
-		$compile_error('print_value fixed arrays are not represented')
+		$if typeof(value[0]).unaliased_typ is u8 {
+			return io_value_bytes(mut stream, format, options, value[..], max_depth)
+		} $else {
+			if format != 'any' { return error('unsupported print_value array format') }
+			return io_value_slice(mut stream, format, options, value[..], max_depth)
+		}
 	} $else $if T.unaliased_typ is $array {
 		return io_value_slice(mut stream, format, options, value, max_depth)
 	} $else {
-		$compile_error('print_value currently requires native scalars, pointers or slices')
+		$compile_error('print_value currently requires native scalars, pointers or arrays')
 	}
 }
