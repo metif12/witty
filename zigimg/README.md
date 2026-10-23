@@ -1601,3 +1601,15 @@ integer carriers. This extends the earlier scalar/array carrier coverage.
 Pointer-sized enum declarations, a signed-maximum declaration, flags, broader
 tag spelling/coercions and compile-time format enforcement retain the documented
 boundaries. Further dispatch and Writer.print remain unported.
+
+
+`print_value` now formats ordinary records and aliases with empty/`any` formats,
+field declaration order, recursive depth and unchanged leaf options. Separate
+separator/name/value writes preserve partial-write state. The
+[record value comparison](reference_probes/writer_value_struct/README.md) covers
+12,516 returning observations and 72 panic/state pairs per mode, including
+nested records, slices, fixed-array fields and custom declarations under `any`.
+Custom-method ambiguity and unsupported formats produce V errors before writes;
+Source checks them statically. Custom invocation, tuples, unsupported field
+carriers and documented V reflection/construction limits remain boundaries.
+Further dispatch and full Writer.print remain unported.

@@ -11498,3 +11498,58 @@ invalid descriptors, injected short devices, concurrent mutation, huge successfu
 output/storage, private allocation, nested descriptor layout and lifetimes remain
 boundaries. Scope/reproduction are in the
 [enum value comparison](zigimg/reference_probes/writer_value_enum/README.md).
+
+
+## Ordinary record Writer value dispatch (2026-10-23)
+
+`WriteStream.print_value` now handles ordinary records and aliases with empty or
+`any` formats. Fields retain declaration order, unchanged options and one depth
+level per record/array. Opening, field separator, field name, assignment text,
+recursive value and closing writes remain distinct. Depth zero emits
+`.{ ... }`; positive-depth empty records emit `.{ }`. Empty format on a custom
+`format` declaration is ambiguous even at depth zero; `any` reflects fields.
+Unsupported and ambiguous formats return V errors before writer effects versus
+Source static rejection. Calling custom formatters remains unported.
+
+The unmodified pinned public Source body and an independent Python model agree
+in ordinary/Debug and production/ReleaseSafe on **12,156 complete records + 360
+isolated returning controls + 72 exact panic/state pairs per mode**. Records
+cover six shapes plus aliases, empty/nested records, borrowed byte slices,
+fixed-array fields, enum fields, scalar/dynamic/nested dynamic forms, leaf
+options, signed/unsigned extrema and every capacity through 192 bytes. Five
+snapshots observe buffer backing/views, positions, descriptor state, file/wire,
+arguments/options and actual scalar leaf bytes. There are **3,867** modeled
+WriteFailed results and **270** additional failing controls per mode. All 72
+traps enforce enum option restrictions only when field traversal reaches them.
+Retained output/control/state hashes are `50f15d99…e6bcc8d`,
+`f750932b…bcb2dc` and `6ac47dc8…403e9` in both modes.
+
+**30 external compiler pairs per mode** cover six accepted consumers, three
+paired ordinary argument rejections and measured boundaries. V accepts runtime
+formats. String fields and direct error/interface dispatch remain unported.
+An inline alias cast around a record/fixed-array literal fails V C generation;
+named locals work. V 0.5.2 also checks unused IError specializations for reflected
+field calls: a private helper guards that path without accepting direct public
+interface dispatch. Actual IError fields remain outside the native matrix and
+return a field-carrier error if reached. Tuples, comptime fields/defaults,
+arbitrary names/attributes, self-reference, broader coercions and ABI/layout
+remain unproven. Other formatter bodies, IO and C are unchanged.
+
+Four public regressions, **114 image test files** and **21 production/application /
+Windows/Linux commands** pass. Portable record consumers run natively in both
+modes and compile for Windows in both modes and Linux. Historical primitive,
+recursive slice, fixed-array and enum comparisons retain their previous hashes
+in both modes. Cross builds establish compilation only. Vaxis source is unchanged
+and dependencies build; its runtime tests are not rerun. Source/library,
+implementation, model/helper, fixture and input pins are checked before/after.
+Ryu tables retain all 1,336 limbs. Runtime, fixtures and model bodies freeze
+before final comparisons, with six EXPECTED assignments populated from discovery.
+Independent replay checks observations, failures, compiler outcomes, modes,
+compressed logs and provenance. Every archive member is read back before commit.
+Development evidence stays separate from final proofs.
+
+Evidence remains pinned little-endian 64-bit macOS. Other runtime widths/platforms,
+invalid descriptors, injected short devices, concurrent mutation, huge successful
+output/storage, private allocation, nested descriptor layout and lifetimes remain
+boundaries. Scope/reproduction are in the
+[record value comparison](zigimg/reference_probes/writer_value_struct/README.md).

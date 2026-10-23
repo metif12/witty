@@ -144,6 +144,42 @@ fn io_value_slice[T](mut stream WriteStream, format string, options FormatOption
 	return stream.write_all(' }'.bytes())
 }
 
+fn io_value_field[F](mut stream WriteStream, options FormatOptions, value F, max_depth usize) ! {
+	// V 0.5.2 also checks an unused IError specialization for reflected calls.
+	// Keep that path out of the public generic dispatcher.
+	$if F is IError {
+		return error('unsupported print_value field carrier')
+	} $else {
+		return stream.print_value('any', options, value, max_depth)
+	}
+}
+
+fn io_value_struct[T](mut stream WriteStream, format string, options FormatOptions, value T, max_depth usize) ! {
+	$if T.unaliased_typ is $struct {
+		if format != '' && format != 'any' {
+			return error('unsupported print_value struct format')
+		}
+		if format == '' {
+			$for method in T.methods {
+				if method.name == 'format' { return error('ambiguous print_value struct format') }
+			}
+		}
+		if max_depth == 0 { return stream.write_all('.{ ... }'.bytes()) }
+		stream.write_all('.{'.bytes())!
+		mut first := true
+		$for field in T.fields {
+			stream.write_all(if first { ' .'.bytes() } else { ', .'.bytes() })!
+			first = false
+			stream.write_all(field.name.bytes())!
+			stream.write_all(' = '.bytes())!
+			io_value_field(mut stream, options, value.$(field.name), max_depth - 1)!
+		}
+		return stream.write_all(' }'.bytes())
+	} $else {
+		return error('unsupported print_value struct carrier')
+	}
+}
+
 // The represented printValue branches; format is a runtime string in V.
 pub fn (mut stream WriteStream) print_value[T](format string, options FormatOptions, value T, max_depth usize) ! {
 	$if T is $option || T.unaliased_typ is voidptr || T.indirections > 0
@@ -191,7 +227,9 @@ pub fn (mut stream WriteStream) print_value[T](format string, options FormatOpti
 		return io_value_slice(mut stream, format, options, value, max_depth)
 	} $else $if T.unaliased_typ is $enum {
 		return io_value_enum[T](mut stream, format, options, value)
+	} $else $if T.unaliased_typ is $struct {
+		return io_value_struct[T](mut stream, format, options, value, max_depth)
 	} $else {
-		$compile_error('print_value currently requires native scalars, enums, pointers or arrays')
+		$compile_error('print_value supports native scalars, enums, pointers, arrays and records')
 	}
 }
