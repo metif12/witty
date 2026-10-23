@@ -11310,3 +11310,62 @@ Other runtime widths/platforms, invalid descriptors, injected short devices,
 concurrent mutation, huge successful output/storage, allocation and lifetimes
 remain boundaries. Scope/reproduction are in the
 [pointer address value comparison](zigimg/reference_probes/writer_value_address/README.md).
+
+
+### Recursive slice Writer value dispatch — 2026-10-23
+
+`WriteStream.print_value("any", options, value, max_depth)` now recursively formats
+dynamic slices of all 13 native scalar types and their V aliases, including nested
+slices. It preserves depth cutoffs, scalar leaf options and separate opening,
+element, separator and closing writes. Empty slices and depth cutoffs bypass
+options. Scalar slice `*` retains the existing address path. Fixed arrays remain
+explicitly rejected before V's broader array classification can coerce them into
+dynamic slices. Other formatter bodies, IO and C remain unchanged.
+
+The native fixture calls the original public Writer.printValue("any") body without
+changing Source or visibility. Flat, nested and triple slices cover raw-bit edges,
+empty/singleton inputs, depths zero through three and maximal depth. An independent
+Python model predicts recursive writes and scalar formatting. Five complete
+snapshots through caller mutation and flush retain backing, position, pending /
+unused bytes and headers, descriptors, input payload/spans, options, actual typed
+leaf bytes and file/wire contents. The recorded shape string specifies fixture
+construction; it does not observe nested descriptor layout. Memory, positional /
+streaming files, replaced pipes and closed descriptors are covered.
+
+Debug/ordinary and ReleaseSafe/production each match **17,232 returning records**,
+**186 isolated returning controls** and **six exact panic/state pairs**. Returning
+observations include **4,530 independently predicted WriteFailed states**. The
+six integer-overflow controls remain active in production and require one exact
+diagnostic, empty stdout and matching retained state. Four groups cover
+type/bits/shape/depth edges, write order/failure, empty/singleton options and every
+capacity through 65 bytes. Golden hashes are in the linked comparison below.
+
+Sixteen external compiler pairs per mode cover four common accepted consumers,
+four paired ordinary rejections and eight boundaries. Source requires compile-time
+formats; V accepts runtime strings. Source statically rejects unsupported non-byte
+slice formats where V returns errors before writer effects. Fixed arrays and
+record/optional elements remain unrepresented. Pointer elements with `any` return
+a V error after opening bytes; nested-slice `*` returns an error before writes.
+These are explicitly non-equivalent to Source's supported formatting. Qualifiers,
+sentinels, arbitrary nominal type names, general coercions and ABI/layout remain
+boundaries. Full Writer.print and custom formatter reflection remain unported.
+
+Four public regressions, **111 image test files** and **17 production/application /
+Windows/Linux commands** pass. Historical primitive dispatch retains 16,308 records,
+343 returning controls and 159 panic/state pairs per mode. Pointer address dispatch
+retains 39,484 records and 3,234 returning controls per mode without panics. Their
+hashes are unchanged. Vaxis source is unchanged and dependencies build; its runtime
+tests are not rerun. Cross builds establish compilation only. Whole Source/selected
+libraries, Io/fmt/math/meta/base64/float/path/encoder pins, versions, implementations,
+shared helpers/models, fixtures and inputs are checked before/after. The unchanged
+Ryu tables retain all 1,336 limbs. Bodies freeze before final comparisons; only six
+EXPECTED assignments change afterward.
+
+Independent replay verifies every observation/failure, compiler outcome, build
+mode, binary and provenance pin. Superseded development evidence remains separate.
+Every retained archive member is read back before commit and owned RAM release.
+Evidence remains pinned little-endian 64-bit macOS. Other runtime widths/platforms,
+invalid descriptors, injected short devices, concurrent mutation, huge successful
+output/storage, private allocation, nested descriptors/layout and lifetimes remain
+boundaries. Scope/reproduction are in the
+[recursive slice value comparison](zigimg/reference_probes/writer_value_slice/README.md).

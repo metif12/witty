@@ -1568,3 +1568,13 @@ ignored options/depth and separate prefix/digit failures. The
 42,718 returning observations per mode, including 12,939 exact WriteFailed states.
 Compound/qualified type names and optional const spelling remain boundaries.
 Further value dispatch, full Writer.print and custom reflection remain unported.
+
+
+`print_value("any", options, value, max_depth)` now recursively formats dynamic
+slices of native integers, f32/f64 and bool, including nested slices and aliases.
+It preserves depth cutoffs, leaf options and separate opening/element/separator /
+closing failures. The [slice value comparison](reference_probes/writer_value_slice/README.md)
+covers 17,418 returning observations and six panic/state pairs per mode.
+Fixed arrays, record/optional/pointer elements and nested-slice addresses retain
+the documented representation boundaries. Further dispatch and Writer.print
+remain unported.

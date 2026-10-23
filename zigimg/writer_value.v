@@ -82,6 +82,25 @@ fn io_value_bytes(mut stream WriteStream, format string, options FormatOptions, 
 	}
 }
 
+fn io_value_slice[T](mut stream WriteStream, format string, options FormatOptions, value []T, max_depth usize) ! {
+	if format == '*' {
+		$if T.unaliased_typ is $int || T.unaliased_typ is f32 || T.unaliased_typ is f64
+			|| T.unaliased_typ is bool {
+			return stream.print_address(value)
+		} $else {
+			return error('unsupported print_value pointer format')
+		}
+	}
+	if format != 'any' { return error('unsupported print_value slice format') }
+	if max_depth == 0 { return stream.write_all('{ ... }'.bytes()) }
+	stream.write_all('{ '.bytes())!
+	for i, element in value {
+		stream.print_value(format, options, element, max_depth - 1)!
+		if i != value.len - 1 { stream.write_all(', '.bytes())! }
+	}
+	return stream.write_all(' }'.bytes())
+}
+
 // The represented printValue branches; format is a runtime string in V.
 pub fn (mut stream WriteStream) print_value[T](format string, options FormatOptions, value T, max_depth usize) ! {
 	$if T is $option || T.unaliased_typ is voidptr || T.indirections > 0
@@ -118,9 +137,10 @@ pub fn (mut stream WriteStream) print_value[T](format string, options FormatOpti
 	} $else $if T.unaliased_typ is []u8 {
 		if format == '*' { return stream.print_address(value) }
 		return io_value_bytes(mut stream, format, options, value, max_depth)
+	} $else $if T.unaliased_typ is $array_fixed {
+		$compile_error('print_value fixed arrays are not represented')
 	} $else $if T.unaliased_typ is $array {
-		if format != '*' { return error('unsupported print_value pointer format') }
-		return stream.print_address(value)
+		return io_value_slice(mut stream, format, options, value, max_depth)
 	} $else {
 		$compile_error('print_value currently requires native scalars, pointers or slices')
 	}
