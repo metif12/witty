@@ -1590,3 +1590,14 @@ supersedes the earlier fixed-array rejection for represented positive lengths.
 Zero-length declarations, generic array construction and record/optional/pointer
 elements retain the documented boundaries. Further dispatch, full Writer.print
 and custom reflection remain unported.
+
+
+`print_value` now formats enums and aliases with numeric bases, aligned tag names
+and default dotted names. Nonexhaustive unnamed values use `@enumFromInt(number)`;
+recursive arrays retain depth and leaf-option rules. The
+[enum value comparison](reference_probes/writer_value_enum/README.md) covers
+11,464 returning observations and 208 panic/state pairs per mode across eight
+integer carriers. This extends the earlier scalar/array carrier coverage.
+Pointer-sized enum declarations, a signed-maximum declaration, flags, broader
+tag spelling/coercions and compile-time format enforcement retain the documented
+boundaries. Further dispatch and Writer.print remain unported.

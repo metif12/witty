@@ -52,6 +52,49 @@ fn io_value_float[T](mut stream WriteStream, format string, options FormatOption
 	}
 }
 
+fn io_value_enum[T](mut stream WriteStream, format string, options FormatOptions, value T) ! {
+	$if T.unaliased_typ is $enum {
+		if format in ['d', 'b', 'o', 'x', 'X'] {
+			// Comparing converted values also recognizes signed enums with no negative tags.
+			minus_one, zero := i64(-1), i64(0)
+			if unsafe { T(minus_one) < T(zero) } {
+				return io_value_signed(mut stream, format, options, i64(value))
+			}
+			return io_value_unsigned(mut stream, format, options, u64(value))
+		}
+		if format != '' && format != 'any' && format != 't' {
+			return error('unsupported print_value enum format')
+		}
+		if format != 't' {
+			if options.precision != none { panic('reached unreachable code') }
+			if options.width != none { panic('reached unreachable code') }
+		}
+		$for entry in T.values {
+			if value == unsafe { T(entry.value) } {
+				if format == 't' { return stream.align_buffer_options(entry.name.bytes(), options) }
+				mut vectors := ['.'.bytes(), entry.name.bytes()]
+				return stream.write_vec_all(mut vectors)
+			}
+		}
+		if format == 't' { panic('invalid enum value') }
+		$for attribute in T.attributes {
+			if attribute.name == 'nonexhaustive' {
+				stream.write_all('@enumFromInt('.bytes())!
+				minus_one, zero := i64(-1), i64(0)
+				if unsafe { T(minus_one) < T(zero) } {
+					stream.print_int[i64](i64(value), 10, .lower, FormatOptions{})!
+				} else {
+					stream.print_int[u64](u64(value), 10, .lower, FormatOptions{})!
+				}
+				return stream.write_byte(`)`)
+			}
+		}
+		panic('invalid enum value')
+	} $else {
+		return error('unsupported print_value enum carrier')
+	}
+}
+
 fn io_value_bytes(mut stream WriteStream, format string, options FormatOptions, bytes []u8, max_depth usize) ! {
 	match format {
 		's' {
@@ -146,7 +189,9 @@ pub fn (mut stream WriteStream) print_value[T](format string, options FormatOpti
 		}
 	} $else $if T.unaliased_typ is $array {
 		return io_value_slice(mut stream, format, options, value, max_depth)
+	} $else $if T.unaliased_typ is $enum {
+		return io_value_enum[T](mut stream, format, options, value)
 	} $else {
-		$compile_error('print_value currently requires native scalars, pointers or arrays')
+		$compile_error('print_value currently requires native scalars, enums, pointers or arrays')
 	}
 }

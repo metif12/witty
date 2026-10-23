@@ -11437,3 +11437,64 @@ injected short devices, concurrent mutation, huge successful output/storage,
 private allocation, nested descriptors/layout and lifetimes remain boundaries.
 Scope/reproduction are in the
 [fixed-array value comparison](zigimg/reference_probes/writer_value_array/README.md).
+
+
+### Enum Writer value dispatch — 2026-10-23
+
+`WriteStream.print_value` now dispatches enum values and aliases to numeric
+`d`/`b`/`o`/`x`/`X`, aligned `t` names and empty/`any` dotted names.
+`@[nonexhaustive]` enums use `@enumFromInt(number)` for unnamed values.
+Signed carriers retain signed integer formatting even without negative declared
+tags. Default precision/width checks precede writes. Named defaults preserve
+vectored dot/name writes; unnamed defaults preserve separate prefix, integer
+and closing writes. Existing array helpers provide recursive formatting and
+depth cutoffs. Other formatter bodies, IO and C remain unchanged.
+
+The fixture calls the original public Writer.printValue body without Source or
+visibility changes. Eight integer carriers each have exhaustive, nonexhaustive
+and aliased forms, totaling 32 types. Scalars and dynamic/nested dynamic slices
+have five complete snapshots through caller mutation and flush. These retain
+writer backing, position, pending/unused views and headers, descriptors, input
+payload/spans, options, actual typed leaf bytes and file/wire contents. An
+independent model predicts enum/vector/recursive writes and exact state across
+memory, positional/streaming files, replaced pipes and closed descriptors.
+Fixed arrays additionally have regressions, compiler consumers and portable
+build/run coverage, outside this suite's complete retained-state matrix.
+
+Debug/ordinary and ReleaseSafe/production each match **11,256 returning records**,
+**208 isolated returning controls** and **208 exact panic/state pairs**. The main
+corpus contains **2,511 WriteFailed states**; all returning controls add WriteFailed
+states. The 192 forbidden-option and 16 invalid unnamed-tag panics remain active
+in production, with one exact diagnostic, empty stdout and matching state.
+The five groups and golden hashes are documented in the linked comparison.
+
+Nineteen external compiler pairs per mode cover five accepted consumers, three
+paired ordinary argument rejections and eleven boundaries. V accepts runtime
+formats where Source requires compile-time formats. Unsupported enum formats
+return V errors before writer effects versus Source static rejection. The pinned
+V compiler rejects `usize`/`isize` enum carriers and an explicit `i8` tag of 127;
+Source accepts them. Unnamed nonexhaustive signed maxima remain covered.
+The V helper guards its generic body to accommodate unused compiler-generated
+array specializations. Flags, escaped/keyword tag names, arbitrary attributes,
+unsafe invalid exhaustive values, broader coercions and ABI/layout remain
+unproven. Full Writer.print and custom reflection remain unported.
+
+Four public regressions, **113 image test files** and **21 production/application /
+Windows/Linux commands** pass. Portable enum consumers run natively in both modes
+and compile for Windows in both modes and Linux. Historical primitive, recursive
+slice and fixed-array comparisons retain their previous hashes in both modes.
+Vaxis source is unchanged and dependencies build; its runtime tests are not rerun.
+Cross builds establish compilation only. Whole Source/selected libraries,
+Io/fmt/math/meta/enums/base64/float/path/encoder pins, versions, implementation,
+models/helpers, fixtures and inputs are checked before/after. Ryu tables retain
+all 1,336 limbs. Runtime and comparison bodies freeze before final comparisons;
+the portable fixture is pinned before final platform checks. Only six EXPECTED
+assignments change afterward. Independent replay verifies all observations,
+failure states, compiler outcomes, modes and provenance. Every retained archive
+member is read back before commit; development evidence remains separate.
+
+Evidence remains pinned little-endian 64-bit macOS. Other runtime widths/platforms,
+invalid descriptors, injected short devices, concurrent mutation, huge successful
+output/storage, private allocation, nested descriptor layout and lifetimes remain
+boundaries. Scope/reproduction are in the
+[enum value comparison](zigimg/reference_probes/writer_value_enum/README.md).
