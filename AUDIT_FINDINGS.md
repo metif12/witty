@@ -11723,3 +11723,55 @@ observations, failures, compiler outcomes, modes, compressed logs and provenance
 Every retained archive member is read back before commit; development evidence
 stays separate. Scope, runtime boundaries and reproduction are in the
 [tagged union value comparison](zigimg/reference_probes/writer_value_union/README.md).
+
+## Custom Writer value formatting (2026-10-23)
+
+`WriteStream.print_value('f', options, value, max_depth)` now invokes the concrete
+carrier's `format(mut stream WriteStream) !` method. A structural interface selects
+the branch without converting the value to an interface. Options and depth never
+reach the method, including maximal options and zero depth. Method writes and
+errors propagate directly. Optional `?f` unwraps present values; absent values
+retain aligned `null`. Empty ambiguity and `any`/`t` bypass remain unchanged.
+
+The unmodified pinned public Source body and independent Python model agree in
+ordinary/Debug and production/ReleaseSafe on **6,125 complete records + 106
+isolated returning controls + two exact panic/state pairs per mode**. Six carriers
+cover records, aliases, present/absent optionals, sum types and concrete errors.
+Separate formatter writes and injected errors cover capacities, file modes,
+descriptor replacement/closure, options and depth. Five snapshots retain backing,
+views/headers, inputs/options, canonical payload, method entry/completed-step
+counts and file/wire contents. There are **4,086** modeled main-corpus WriteFailed
+results; all 106 isolated returns fail. Absent optional alignment retains exact
+overflow/failure order. Output, control and state hashes are `722ae4a3…fbe9a0`,
+`ac3c5bf0…73468` and `36d4f88f…338f3`.
+
+**17 external compiler pairs per mode** cover seven accepted consumers, three
+paired argument rejections and seven method/format/carrier boundary controls.
+Source enforces valid formats/methods statically; V accepts runtime formats and
+reports unsupported/ambiguous formats without writes. Source accepts a nonfallible
+void formatter; V requires a fallible method. Record pointers and interface
+carriers remain compiler limits from other generic dispatcher specializations.
+Mutable receivers, custom scalar/array carriers, unsupported field types, broader
+pointer recursion/coercions, arbitrary interfaces, first-class error unions,
+general copy/mutation equivalence and full Writer.print remain unproven/unported.
+
+Four public regressions, **118 image test files** and **21 successful production /
+application / Windows / Linux commands** pass. Portable consumers run natively in
+both modes and compile for Windows in both modes and Linux. A rejected standalone
+fixture lacking Result declarations is retained separately from the corrected
+consumer's successful checks. Historical primitive, slice, fixed-array, enum,
+record, address, optional, error and tagged-union hashes remain unchanged in both
+modes. Cross builds establish compilation only. Vaxis source is unchanged; runtime
+tests are not rerun. Other formatter helpers, IO and C are unchanged; Ryu retains
+all 1,336 limbs.
+
+Source/library, implementation, model/helper, fixture and input pins are checked
+before/after. Runtime/native fixtures/model bodies freeze before final comparisons;
+only six EXPECTED assignments change from discovery. The standalone correction
+has separate hashes. Formatting uses V 0.5.2 d1df2de with an unchanged-baseline
+comparison; semantic proofs use the pinned fallback compiler. Interrupted checks
+resume only identical logged commands with pinned retained evidence. Independent
+replay checks observations, failures, compiler outcomes, modes and provenance.
+Every retained archive member is read back before commit; development evidence
+stays separate. Scope and reproduction are in the
+[custom value comparison](zigimg/reference_probes/writer_value_custom/README.md).

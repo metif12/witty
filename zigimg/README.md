@@ -1624,3 +1624,15 @@ Source checks child formats statically even for absent values; V checks formats
 at runtime when visited. Optional pointer `*` and `?*` address forms are covered;
 pointer `any`, error unions, custom invocation and full Writer.print remain
 documented translation boundaries.
+
+
+`print_value('f', options, value, max_depth)` now calls a concrete carrier's
+`format(mut stream WriteStream) !` method, preserving its writes and errors.
+Options and depth are ignored by this call; optional `?f` unwraps present values
+and retains aligned `null` for absent values. Empty-format ambiguity and `any`/`t`
+bypass behavior are unchanged. The
+[custom value comparison](reference_probes/writer_value_custom/README.md) covers
+6,231 returning observations and two panic/state pairs per mode. This extends
+the earlier custom-invocation boundaries for the represented concrete carriers.
+Record pointers, interface carriers, nonfallible methods and broader reflection
+retain documented V limits. Full Writer.print remains unported.

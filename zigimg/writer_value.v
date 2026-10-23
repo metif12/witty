@@ -260,8 +260,18 @@ fn io_value_optional[T](mut stream WriteStream, format string, options FormatOpt
 	}
 }
 
+interface IoValueFormatter {
+	format(mut stream WriteStream) !
+}
+
 // The represented printValue branches; format is a runtime string in V.
 pub fn (mut stream WriteStream) print_value[T](format string, options FormatOptions, value T, max_depth usize) ! {
+	$if T !is $option {
+		$if T is IoValueFormatter {
+			// Invoke on the concrete carrier; options and depth never reach format.
+			if format == 'f' { return value.format(mut stream) }
+		}
+	}
 	$if T is $option {
 		if format == '*' {
 			$if T.indirections == 1 || ((int(T.unaliased_typ) >> 16) & 0xff) == 1 {
