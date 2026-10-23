@@ -127,7 +127,9 @@ fn io_value_bytes(mut stream WriteStream, format string, options FormatOptions, 
 
 fn io_value_slice[T](mut stream WriteStream, format string, options FormatOptions, value []T, max_depth usize) ! {
 	if format == '*' {
-		$if T.unaliased_typ is $int || T.unaliased_typ is f32 || T.unaliased_typ is f64
+		$if T is $option {
+			return error('unsupported print_value pointer format')
+		} $else $if T.unaliased_typ is $int || T.unaliased_typ is f32 || T.unaliased_typ is f64
 			|| T.unaliased_typ is bool {
 			return stream.print_address(value)
 		} $else {
@@ -137,11 +139,24 @@ fn io_value_slice[T](mut stream WriteStream, format string, options FormatOption
 	if format != 'any' { return error('unsupported print_value slice format') }
 	if max_depth == 0 { return stream.write_all('{ ... }'.bytes()) }
 	stream.write_all('{ '.bytes())!
-	for i, element in value {
-		stream.print_value(format, options, element, max_depth - 1)!
+	for i in 0 .. value.len {
+		stream.print_value[T](format, options, value[i], max_depth - 1)!
 		if i != value.len - 1 { stream.write_all(', '.bytes())! }
 	}
 	return stream.write_all(' }'.bytes())
+}
+
+fn io_value_array[T](mut stream WriteStream, format string, options FormatOptions, value []T, max_depth usize) ! {
+	// Inspect the element generic directly: typeof(value[0]) strips its option flag in V.
+	$if T is $option {
+		if format != 'any' { return error('unsupported print_value array format') }
+		return io_value_slice(mut stream, format, options, value, max_depth)
+	} $else $if T.unaliased_typ is u8 {
+		return io_value_bytes(mut stream, format, options, value, max_depth)
+	} $else {
+		if format != 'any' { return error('unsupported print_value array format') }
+		return io_value_slice(mut stream, format, options, value, max_depth)
+	}
 }
 
 fn io_value_field[F](mut stream WriteStream, options FormatOptions, value F, max_depth usize) ! {
@@ -180,9 +195,43 @@ fn io_value_struct[T](mut stream WriteStream, format string, options FormatOptio
 	}
 }
 
+fn io_value_optional_address[T](mut stream WriteStream, value ?&T) ! {
+	stream.write_all((io_address_type_name[T]() + '@').bytes())!
+	address := unsafe { usize(voidptr(value or { nil })) }
+	return io_address_integer(mut stream, address)
+}
+
+fn io_value_optional[T](mut stream WriteStream, format string, options FormatOptions, value ?T, max_depth usize) ! {
+	remaining := if format.starts_with('?') {
+		format[1..]
+	} else if format == 'any' {
+		'any'
+	} else {
+		return error('unsupported print_value optional format')
+	}
+	// An or-block preserves each payload type in V's generic specializations.
+	payload := value or { return stream.align_buffer_options('null'.bytes(), options) }
+	$if T.indirections > 0 || ((int(T.unaliased_typ) >> 16) & 0xff) > 0 {
+		if remaining != '*' { return error('unsupported print_value pointer format') }
+		// Keep the optional carrier: forwarding a generic pointer takes its address in V.
+		return io_value_optional_address(mut stream, value)
+	} $else {
+		return stream.print_value[T](remaining, options, payload, max_depth)
+	}
+}
+
 // The represented printValue branches; format is a runtime string in V.
 pub fn (mut stream WriteStream) print_value[T](format string, options FormatOptions, value T, max_depth usize) ! {
-	$if T is $option || T.unaliased_typ is voidptr || T.indirections > 0
+	$if T is $option {
+		if format == '*' {
+			$if T.indirections == 1 || ((int(T.unaliased_typ) >> 16) & 0xff) == 1 {
+				return stream.print_address(value)
+			} $else {
+				return error('unsupported print_value pointer carrier')
+			}
+		}
+		return io_value_optional(mut stream, format, options, value, max_depth)
+	} $else $if T.unaliased_typ is voidptr || T.indirections > 0
 		|| ((int(T.unaliased_typ) >> 16) & 0xff) > 0 {
 		if format != '*' { return error('unsupported print_value pointer format') }
 		return stream.print_address(value)
@@ -217,12 +266,7 @@ pub fn (mut stream WriteStream) print_value[T](format string, options FormatOpti
 		if format == '*' { return stream.print_address(value) }
 		return io_value_bytes(mut stream, format, options, value, max_depth)
 	} $else $if T.unaliased_typ is $array_fixed {
-		$if typeof(value[0]).unaliased_typ is u8 {
-			return io_value_bytes(mut stream, format, options, value[..], max_depth)
-		} $else {
-			if format != 'any' { return error('unsupported print_value array format') }
-			return io_value_slice(mut stream, format, options, value[..], max_depth)
-		}
+		return io_value_array(mut stream, format, options, value[..], max_depth)
 	} $else $if T.unaliased_typ is $array {
 		return io_value_slice(mut stream, format, options, value, max_depth)
 	} $else $if T.unaliased_typ is $enum {
@@ -230,6 +274,6 @@ pub fn (mut stream WriteStream) print_value[T](format string, options FormatOpti
 	} $else $if T.unaliased_typ is $struct {
 		return io_value_struct[T](mut stream, format, options, value, max_depth)
 	} $else {
-		$compile_error('print_value supports native scalars, enums, pointers, arrays and records')
+		$compile_error('print_value supports native scalars, enums, pointers, arrays, records and optionals')
 	}
 }

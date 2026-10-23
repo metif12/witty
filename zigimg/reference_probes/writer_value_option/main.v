@@ -1,0 +1,484 @@
+module main
+
+import os
+import zigimg
+
+#flag -I @DIR
+#flag -I @DIR/..
+#include "fixture_shims.h"
+
+fn C.witty_writer_seek_setup(&char) int
+fn C.witty_writer_seek_replace(int) int
+fn C.witty_writer_seek_restore(&char, usize) int
+fn C.witty_writer_seek_close() int
+fn C.witty_writer_seek_cleanup() int
+fn C.witty_writer_seek_valid() int
+fn C.witty_writer_seek_refs() int
+fn C.witty_writer_seek_view(&u8, usize) isize
+fn C.witty_writer_seek_drain(&u8, usize) isize
+
+__global (
+	observed_path     string
+	observed_writer   = &zigimg.WriteStream(unsafe { nil })
+	observed_buffer   []u8
+	observed_file     bool
+	observed_status   string
+	observed_payload  []u8
+	observed_vectors  [][]u8
+	observed_options  zigimg.FormatOptions
+	observed_base     u8
+	observed_case     usize
+	observed_tag      int
+	observed_length   int
+	observed_elements []u8
+	observed_shape    string
+)
+
+fn state(writer zigimg.WriteStream, buffer []u8) string {
+	mut contents := []u8{len: 4096}
+	n := if observed_file {
+		C.witty_writer_seek_view(contents.data, usize(contents.len))
+	} else {
+		isize(0)
+	}
+	if n < 0 { panic('Writer observer failed') }
+	valid := if observed_file { C.witty_writer_seek_valid() } else { 0 }
+	refs := if observed_file { C.witty_writer_seek_refs() } else { 0 }
+	unused := writer.unused_capacity_slice()
+	offset := if buffer.len == 0 { usize(0) } else { usize(unused.data) - usize(buffer.data) }
+	mut headers := []string{}
+	for bytes in observed_vectors {
+		headers << '${usize(bytes.data) - usize(observed_payload.data)},${bytes.len}'
+	}
+	precision := if value := observed_options.precision { '${value}' } else { '-' }
+	width := if value := observed_options.width { '${value}' } else { '-' }
+	inputs := observed_payload.hex() + '#' + headers.join(';') +
+		'#${precision}:${width}:${int(observed_options.alignment)}:${observed_options.fill}:${observed_base}:${observed_case}:${observed_tag}:${observed_length}#${observed_elements.hex()}#${observed_shape}'
+	return '${writer.get_pos()}:${writer.unused_capacity_len()}:${writer.buffered().len}:${offset}:${valid}:${refs}|${buffer.hex()}|${writer.buffered().hex()}|${unused.hex()}|${inputs}|${contents[..int(n)].hex()}'
+}
+
+fn observe() {
+	if observed_path == '' { return }
+	retained := observed_status + '|' + state(*observed_writer, observed_buffer)
+	os.write_file(observed_path, retained) or { eprintln('OBSERVER ERROR: ${err}') }
+	if observed_file { C.witty_writer_seek_cleanup() }
+}
+
+fn change(mut bytes []u8, mode int, mask u8) {
+	if mode == 0 || bytes.len == 0 { return }
+	index := if mode == 1 { 0 } else { bytes.len - 1 }
+	bytes[index] ^= mask
+}
+
+enum Tag {
+	zero
+	high
+}
+struct OptionalRecord {
+	head ?int
+	tail ?[]u8
+}
+
+type AliasSigned = i64
+type AliasUnsigned = u64
+type AliasBool = bool
+type AliasBytes = []u8
+type AliasTag = Tag
+type AliasRecord = OptionalRecord
+
+fn make[T](raw u64, payload []u8) T {
+	$if T.unaliased_typ is i64 || T.unaliased_typ is u64 {
+		return unsafe { T(raw) }
+	} $else $if T.unaliased_typ is bool {
+		return T(raw & 1 != 0)
+	} $else $if T.unaliased_typ is []u8 {
+		return T(payload[8..11])
+	} $else $if T.unaliased_typ is Tag {
+		return unsafe { T(int(raw & 1)) }
+	} $else {
+		head := if raw & 1 == 0 { ?int(none) } else { ?int(int(raw)) }
+		tail := if raw & 2 == 0 { ?[]u8(none) } else { ?[]u8(payload[8..11]) }
+		value := OptionalRecord{head, tail}
+		return T(value)
+	}
+}
+
+fn maybe[T](present bool, value T) ?T {
+	if present { return value }
+	return none
+}
+
+fn leaf[T](value T) []u8 {
+	return unsafe { (&u8(&value)).vbytes(int(sizeof(T))).clone() }
+}
+
+fn leaves[T](value T) []u8 {
+	$if T.unaliased_typ is []u8 {
+		return []u8(value).clone()
+	} $else $if T.unaliased_typ is OptionalRecord {
+		mut out := optional_leaves(value.head)
+		out << optional_leaves(value.tail)
+		return out
+	} $else {
+		return leaf(value)
+	}
+}
+
+// Concrete option unwrapping avoids V's cached generic optional payload types.
+fn observe_signed(values []?i64) []u8 {
+	mut out := []u8{}
+	for value in values {
+		payload := value or {
+			out << u8(0)
+			continue
+		}
+
+		out << u8(1)
+		out << leaves(payload)
+	}
+	return out
+}
+
+fn observe_unsigned(values []?u64) []u8 {
+	mut out := []u8{}
+	for value in values {
+		payload := value or {
+			out << u8(0)
+			continue
+		}
+
+		out << u8(1)
+		out << leaves(payload)
+	}
+	return out
+}
+
+fn observe_bool(values []?bool) []u8 {
+	mut out := []u8{}
+	for value in values {
+		payload := value or {
+			out << u8(0)
+			continue
+		}
+
+		out << u8(1)
+		out << leaves(payload)
+	}
+	return out
+}
+
+fn observe_bytes(values []?[]u8) []u8 {
+	mut out := []u8{}
+	for value in values {
+		payload := value or {
+			out << u8(0)
+			continue
+		}
+
+		out << u8(1)
+		out << leaves(payload)
+	}
+	return out
+}
+
+fn observe_tag(values []?Tag) []u8 {
+	mut out := []u8{}
+	for value in values {
+		payload := value or {
+			out << u8(0)
+			continue
+		}
+
+		out << u8(1)
+		out << leaves(payload)
+	}
+	return out
+}
+
+fn observe_record(values []?OptionalRecord) []u8 {
+	mut out := []u8{}
+	for value in values {
+		payload := value or {
+			out << u8(0)
+			continue
+		}
+
+		out << u8(1)
+		out << leaves(payload)
+	}
+	return out
+}
+
+fn observe_alias_signed(values []?AliasSigned) []u8 {
+	mut out := []u8{}
+	for value in values {
+		payload := value or {
+			out << u8(0)
+			continue
+		}
+
+		out << u8(1)
+		out << leaves(payload)
+	}
+	return out
+}
+
+fn observe_alias_unsigned(values []?AliasUnsigned) []u8 {
+	mut out := []u8{}
+	for value in values {
+		payload := value or {
+			out << u8(0)
+			continue
+		}
+
+		out << u8(1)
+		out << leaves(payload)
+	}
+	return out
+}
+
+fn observe_alias_bool(values []?AliasBool) []u8 {
+	mut out := []u8{}
+	for value in values {
+		payload := value or {
+			out << u8(0)
+			continue
+		}
+
+		out << u8(1)
+		out << leaves(payload)
+	}
+	return out
+}
+
+fn observe_alias_bytes(values []?AliasBytes) []u8 {
+	mut out := []u8{}
+	for value in values {
+		payload := value or {
+			out << u8(0)
+			continue
+		}
+
+		out << u8(1)
+		out << leaves(payload)
+	}
+	return out
+}
+
+fn observe_alias_tag(values []?AliasTag) []u8 {
+	mut out := []u8{}
+	for value in values {
+		payload := value or {
+			out << u8(0)
+			continue
+		}
+
+		out << u8(1)
+		out << leaves(payload)
+	}
+	return out
+}
+
+fn observe_alias_record(values []?AliasRecord) []u8 {
+	mut out := []u8{}
+	for value in values {
+		payload := value or {
+			out << u8(0)
+			continue
+		}
+
+		out << u8(1)
+		out << leaves(payload)
+	}
+	return out
+}
+
+fn observe_values[T](values []?T) []u8 {
+	$if T is AliasSigned {
+		return observe_alias_signed(values)
+	} $else $if T is AliasUnsigned {
+		return observe_alias_unsigned(values)
+	} $else $if T is AliasBool {
+		return observe_alias_bool(values)
+	} $else $if T is AliasBytes {
+		return observe_alias_bytes(values)
+	} $else $if T is AliasTag {
+		return observe_alias_tag(values)
+	} $else $if T is AliasRecord {
+		return observe_alias_record(values)
+	} $else $if T is i64 {
+		return observe_signed(values)
+	} $else $if T is u64 {
+		return observe_unsigned(values)
+	} $else $if T is bool {
+		return observe_bool(values)
+	} $else $if T is []u8 {
+		return observe_bytes(values)
+	} $else $if T is Tag {
+		return observe_tag(values)
+	} $else {
+		return observe_record(values)
+	}
+}
+
+fn optional_leaves[T](value ?T) []u8 {
+	payload := value or { return [u8(0)] }
+	mut out := [u8(1)]
+	out << leaves[T](payload)
+	return out
+}
+
+fn special_format[T]() string {
+	$if T.unaliased_typ is i64 {
+		return '?x'
+	} $else $if T.unaliased_typ is u64 {
+		return '?X'
+	} $else $if T.unaliased_typ is bool {
+		return '?'
+	} $else $if T.unaliased_typ is []u8 {
+		return '?b64'
+	} $else $if T.unaliased_typ is Tag {
+		return '?t'
+	} $else {
+		return '?any'
+	}
+}
+
+fn operate[T](mut writer zigimg.WriteStream, value ?T, values []?T, nested [][]?T, shape int, options zigimg.FormatOptions, depth usize, format int) string {
+	if shape == 0 {
+		plain := $if T.unaliased_typ is []u8 { '?s' } $else { '?' }
+		formats := ['?any', 'any', plain, special_format[T](), '?any']
+		writer.print_value(formats[format], options, value, depth) or { return err.msg() }
+	} else if shape == 1 {
+		writer.print_value('any', options, values, depth) or { return err.msg() }
+	} else {
+		writer.print_value('any', options, nested, depth) or { return err.msg() }
+	}
+	return 'ok'
+}
+
+// kind|capacity|start|prefix-length|format|width|binding|finish|shape|fill|alignment|width-present|precision|rawbits|type|depth
+fn typed_record[T](line string, path string) string {
+	f := line.split('|')
+	kind, cap, start := f[0].int(), f[1].int(), f[2].u64()
+	mut buffer := []u8{len: cap, init: u8(index * 17 + 165)}
+	mut writer := zigimg.WriteStream.init_memory(mut buffer)
+	if kind > 0 {
+		fd := C.witty_writer_seek_setup(path.str)
+		restored := path + '.restored'
+		if fd < 0 || C.witty_writer_seek_restore(restored.str, 32) != 0 {
+			panic('Writer setup failed')
+		}
+		writer = if kind == 1 { zigimg.WriteStream.init_file(os.File{ fd: fd }, mut buffer) } else { zigimg.WriteStream.init_file_streaming(os.File{
+				fd: fd
+			}, mut buffer) }
+	}
+	defer {
+		if kind > 0 && C.witty_writer_seek_cleanup() != 0 { panic('Writer cleanup failed') }
+	}
+	observed_writer = unsafe { &writer }
+	observed_buffer = unsafe { buffer }
+	observed_file = kind > 0
+	raw := f[13].u64()
+	mut payload := []u8{len: 8, init: u8(raw >> (index * 8))}
+	payload << []u8{len: 256, init: u8(index * 23 + f[9].int())}
+	data := unsafe { payload[..8] }
+	observed_length = f[8].int()
+	observed_base = u8(f[4].int())
+	observed_case = usize(f[15].u64())
+	observed_tag = f[14].int()
+	precision := if f[12] == '-' { ?usize(none) } else { ?usize(usize(f[12].u64())) }
+	width := if f[11] == '1' { ?usize(usize(f[5].u64())) } else { ?usize(none) }
+	options := zigimg.FormatOptions{
+		precision: precision
+		width:     width
+		alignment: unsafe { zigimg.Alignment(f[10].int()) }
+		fill:      u8(f[9].int())
+	}
+	observed_options = options
+	observed_payload = unsafe { payload }
+	observed_vectors = [][]u8{}
+	observed_vectors << unsafe { data }
+	observed_vectors << unsafe { payload[10..10 + observed_length] }
+
+	unwrapped := make[T](raw, payload)
+	value := maybe[T](observed_tag % 12 < 6, unwrapped)
+	value_count := if observed_length == 0 { 1 } else { 3 }
+	mut values := []?T{}
+	for _ in 0 .. value_count {
+		values << maybe[T](observed_tag % 12 < 6, unwrapped)
+	}
+	nested := [values[..1], values[1..], []?T{}]
+	observed_elements = observe_values[T](values)
+	observed_shape = ['scalar', 'slice:3', 'nested:1,2,0'][observed_length]
+	observed_status = 'setup'
+	writer.seek_to(start) or {}
+	writer.write_all([]u8{len: f[3].int(), init: u8(index * 31 + 7)}) or {
+		panic('Prefix failed: ${err}')
+	}
+	if kind > 0 {
+		if f[6] == '1' && C.witty_writer_seek_replace(1) != 0 { panic('Writer replacement failed') }
+		if f[6] == '2' && C.witty_writer_seek_close() != 0 { panic('Writer close failed') }
+	}
+	mut out := 'setup|' + state(writer, buffer) + '~'
+	mut adapter := writer.writer()
+	out += 'ready|' + state(writer, buffer) + '~'
+	observed_status = 'write'
+	mut status := 'skip'
+	status = operate(mut adapter, value, values, nested, observed_length, options,
+		usize(f[15].u64()), f[4].int())
+	if status == 'skip' { status = 'ok' }
+	out += status + '|' + state(writer, buffer) + '~'
+	change(mut buffer, 1, u8(f[9].int()))
+	out += 'caller|' + state(writer, buffer) + '~'
+	status = 'skip'
+	if f[7] == '1' {
+		status = 'ok'
+		writer.flush() or { status = err.msg() }
+	}
+	out += status + '|' + state(writer, buffer) + '~'
+	mut drain := isize(-3)
+	mut wire := []u8{}
+	if kind > 0 && f[6] == '1' {
+		for {
+			mut bytes := []u8{len: 4096}
+			drain = C.witty_writer_seek_drain(bytes.data, usize(bytes.len))
+			if drain <= 0 { break
+			 }
+			wire << bytes[..int(drain)]
+		}
+	}
+	return out + '${drain}:${wire.hex()}'
+}
+
+fn record(line string, path string) string {
+	return match line.split('|')[14].int() / 12 * 6 + line.split('|')[14].int() % 6 {
+		0 { typed_record[i64](line, path) }
+		1 { typed_record[u64](line, path) }
+		2 { typed_record[bool](line, path) }
+		3 { typed_record[[]u8](line, path) }
+		4 { typed_record[Tag](line, path) }
+		5 { typed_record[OptionalRecord](line, path) }
+		6 { typed_record[AliasSigned](line, path) }
+		7 { typed_record[AliasUnsigned](line, path) }
+		8 { typed_record[AliasBool](line, path) }
+		9 { typed_record[AliasBytes](line, path) }
+		10 { typed_record[AliasTag](line, path) }
+		11 { typed_record[AliasRecord](line, path) }
+		else { panic('Invalid tag') }
+	}
+}
+
+fn main() {
+	if os.args[1] == '--trap' {
+		observed_path = os.args[2]
+		at_exit(observe) or { panic(err) }
+		result := record(os.args[3], os.args[2] + '.owned')
+		observed_path = ''
+		println(result)
+		return
+	}
+	for i, line in (os.read_lines(os.args[1]) or { panic(err) }) {
+		println(record(line, os.args[1] + '.${i}.owned'))
+	}
+}

@@ -11553,3 +11553,63 @@ invalid descriptors, injected short devices, concurrent mutation, huge successfu
 output/storage, private allocation, nested descriptor layout and lifetimes remain
 boundaries. Scope/reproduction are in the
 [record value comparison](zigimg/reference_probes/writer_value_struct/README.md).
+
+
+## Optional Writer value dispatch (2026-10-23)
+
+`WriteStream.print_value` now handles present/absent optional payloads with a
+leading `?` format or `any`. Present values preserve options and depth; absence
+writes aligned `null`, ignores precision and skips the child. Optional record
+fields and array elements retain recursive write boundaries. The `*` optional
+pointer prefix and `?*` present pointer address forms are covered separately.
+
+The unmodified pinned public Source body and independent Python model agree in
+ordinary/Debug and production/ReleaseSafe on **18,735 complete records + 342
+isolated returning controls + 90 exact panic/state pairs per mode**. Present and
+absent signed/unsigned integers, bool, borrowed bytes, enums, optional record
+fields and aliases run in scalar/dynamic/nested dynamic forms. Five snapshots
+retain backing/views, position, descriptor state, arguments/options, actual
+present scalar bytes and file/wire. There are **5,362** modeled WriteFailed
+results and **206** failing isolated controls per mode. All 90 traps enforce
+present enum/base64 option restrictions when traversal reaches them. Output,
+control and state hashes are `bc7578b6…cfd581f`, `529c4e62…0178338` and
+`db0eb864…3fa5c4` in both modes.
+
+**21 external compiler pairs per mode** include eight accepted consumers and
+three paired argument rejections. Source requires static formats and validates
+child formats even when absent; V uses runtime strings and visits the child only
+when present. Absent `?q` therefore writes `null` in V versus a Source rejection.
+Optional pointer `any` at depth zero produces an address in Source versus a V
+pointer-format error. Broader pointer recursion/coercions, optional void pointers,
+nested optional representations, error unions, custom invocation, unsupported
+field carriers, tuples and full Writer.print remain unported or unproven.
+
+V 0.5.2 needs explicit indexed generic forwarding for mixed optional arrays,
+an or-block for payload unwrapping and a helper preserving the optional pointer
+carrier. The fixture uses concrete optional array observers and appends values
+from a generic optional-returning helper: generic optional loop locals and array
+initializers can otherwise generate invalid C or copy from the wrong offset.
+Fixed optional byte elements are dispatched before the raw-byte trait, which
+otherwise strips their optional flag and causes a compile error. The regression
+checks every output capacity. Actual presence/leaf bytes are observed without
+reading private optional layout. Leaf formatter helpers, IO and C are unchanged.
+
+Six public regressions, **115 image test files** and **21 production/application /
+Windows/Linux commands** pass. Portable consumers add floats, fixed arrays
+(including optional byte elements), optional slices and pointers, run natively
+in both modes and compile for Windows in both modes and Linux. Historical
+primitive, recursive slice, fixed-array,
+enum, record and address comparisons retain their hashes in both modes. Cross
+builds establish compilation only. Vaxis source is unchanged and dependencies
+build; its runtime tests are not rerun. Ryu tables retain all 1,336 limbs.
+
+Source/library, implementation, model/helper, fixture and input pins are checked
+before/after. Runtime, fixtures and model bodies freeze before final comparisons;
+only six EXPECTED assignments change from discovery. Independent replay checks
+observations, failures, compiler outcomes, modes, compressed logs and provenance.
+Every retained archive member is read back before commit; development evidence
+stays separate. Evidence remains pinned little-endian 64-bit macOS. Other runtime
+widths/platforms, invalid descriptors, injected short devices, concurrent mutation,
+huge successful output/storage, private allocation, nested descriptor layout and
+lifetimes remain boundaries. Scope/reproduction are in the
+[optional value comparison](zigimg/reference_probes/writer_value_option/README.md).

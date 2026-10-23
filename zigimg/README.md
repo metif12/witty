@@ -1613,3 +1613,14 @@ Custom-method ambiguity and unsupported formats produce V errors before writes;
 Source checks them statically. Custom invocation, tuples, unsupported field
 carriers and documented V reflection/construction limits remain boundaries.
 Further dispatch and full Writer.print remain unported.
+
+
+`print_value` now unwraps optional payloads with a leading `?` format or `any`,
+preserving options and depth. Absent payloads write aligned `null` without
+visiting the child. Optional fields and array elements retain recursive write
+boundaries. The [optional value comparison](reference_probes/writer_value_option/README.md)
+covers 19,077 returning observations and 90 panic/state pairs per mode.
+Source checks child formats statically even for absent values; V checks formats
+at runtime when visited. Optional pointer `*` and `?*` address forms are covered;
+pointer `any`, error unions, custom invocation and full Writer.print remain
+documented translation boundaries.
