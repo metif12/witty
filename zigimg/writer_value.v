@@ -125,6 +125,17 @@ fn io_value_bytes(mut stream WriteStream, format string, options FormatOptions, 
 	}
 }
 
+// Preserve the concrete generic: an IError coercion here makes V heap-lift
+// unrelated fixed-array specializations of the public dispatcher.
+fn io_value_error[E](mut stream WriteStream, format string, options FormatOptions, value E) ! {
+	if format == 't' { return stream.align_buffer_options(value.msg().bytes(), options) }
+	if format != '' && format != 'any' { return error('unsupported print_value error format') }
+	if options.precision != none { panic('reached unreachable code') }
+	if options.width != none { panic('reached unreachable code') }
+	mut vectors := ['error.'.bytes(), value.msg().bytes()]
+	return stream.write_vec_all(mut vectors)
+}
+
 fn io_value_slice[T](mut stream WriteStream, format string, options FormatOptions, value []T, max_depth usize) ! {
 	if format == '*' {
 		$if T is $option {
@@ -159,11 +170,10 @@ fn io_value_array[T](mut stream WriteStream, format string, options FormatOption
 	}
 }
 
+// V also checks an unused IError specialization for reflected field calls.
 fn io_value_field[F](mut stream WriteStream, options FormatOptions, value F, max_depth usize) ! {
-	// V 0.5.2 also checks an unused IError specialization for reflected calls.
-	// Keep that path out of the public generic dispatcher.
 	$if F is IError {
-		return error('unsupported print_value field carrier')
+		return io_value_error(mut stream, 'any', options, value)
 	} $else {
 		return stream.print_value('any', options, value, max_depth)
 	}
@@ -235,6 +245,8 @@ pub fn (mut stream WriteStream) print_value[T](format string, options FormatOpti
 		|| ((int(T.unaliased_typ) >> 16) & 0xff) > 0 {
 		if format != '*' { return error('unsupported print_value pointer format') }
 		return stream.print_address(value)
+	} $else $if T is IError {
+		return io_value_error(mut stream, format, options, value)
 	} $else $if T.unaliased_typ is $int {
 		if format == 'c' {
 			$if T.unaliased_typ is u8 {
@@ -274,6 +286,6 @@ pub fn (mut stream WriteStream) print_value[T](format string, options FormatOpti
 	} $else $if T.unaliased_typ is $struct {
 		return io_value_struct[T](mut stream, format, options, value, max_depth)
 	} $else {
-		$compile_error('print_value supports native scalars, enums, pointers, arrays, records and optionals')
+		$compile_error('print_value supports native scalars, enums, errors, pointers, arrays, records and optionals')
 	}
 }

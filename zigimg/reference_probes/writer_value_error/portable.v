@@ -1,0 +1,90 @@
+module main
+
+import zigimg
+
+struct ValueNamedError {
+	name string
+}
+
+pub fn (e ValueNamedError) msg() string {
+	return e.name
+}
+
+pub fn (e ValueNamedError) code() int {
+	panic('error formatting must not read the code')
+}
+
+struct ValueErrorRecord {
+	problem IError
+}
+
+fn test_value_error_names_and_alignment() ! {
+	mut buffer := []u8{len: 256}
+	mut writer := zigimg.WriteStream.init_memory(mut buffer)
+	writer.print_value('', zigimg.FormatOptions{}, error_with_code('Alpha', 17), 0)!
+	writer.write_byte(`|`)!
+	writer.print_value('any', zigimg.FormatOptions{}, ValueNamedError{'Bad Name'}, ~usize(0))!
+	writer.write_byte(`|`)!
+	writer.print_value('t', zigimg.FormatOptions{
+		width:     usize(10)
+		precision: usize(0)
+		fill:      `_`
+		alignment: .center
+	}, ValueNamedError{'échec'}, 0)!
+	writer.write_byte(`|`)!
+	writer.print_value('any', zigimg.FormatOptions{}, error(''), 0)!
+	assert writer.buffered().bytestr() == 'error.Alpha|error.Bad Name|__échec__|error.'
+}
+
+fn test_value_error_arrays_and_record_fields() ! {
+	mut buffer := []u8{len: 512}
+	mut writer := zigimg.WriteStream.init_memory(mut buffer)
+	values := [IError(error('Alpha')), IError(error('Beta'))]
+	writer.print_value('any', zigimg.FormatOptions{}, values, 1)!
+	writer.write_byte(`|`)!
+	fixed := [ValueNamedError{'Alpha'}, ValueNamedError{'Beta'}]!
+	writer.print_value('any', zigimg.FormatOptions{}, fixed, 1)!
+	writer.write_byte(`|`)!
+	writer.print_value('any', zigimg.FormatOptions{}, [values, []IError{}], 1)!
+	writer.write_byte(`|`)!
+	writer.print_value('any', zigimg.FormatOptions{}, ValueErrorRecord{values[0]}, 1)!
+	assert writer.buffered().bytestr() == '{ error.Alpha, error.Beta }|{ error.Alpha, error.Beta }|{ { ... }, { ... } }|.{ .problem = error.Alpha }'
+}
+
+fn test_value_error_every_capacity_and_invalid_formats() ! {
+	expected := 'error.LongerFailureName'.bytes()
+	for cap in 0 .. expected.len + 2 {
+		mut buffer := []u8{len: cap, init: 0xa5}
+		mut writer := zigimg.WriteStream.init_memory(mut buffer)
+		mut status := 'ok'
+		writer.print_value('any', zigimg.FormatOptions{}, error('LongerFailureName'), 0) or {
+			status = err.msg()
+		}
+		assert status == if cap < expected.len {
+			'WriteFailed'
+		} else {
+			'ok'
+		}
+		assert writer.buffered() == expected[..if cap < expected.len {
+			cap
+		} else {
+			expected.len
+		}]
+	}
+	for format in ['d', 's', 'x', 'b64', '*', '?', 'bogus'] {
+		mut buffer := []u8{len: 16, init: 0xa5}
+		mut writer := zigimg.WriteStream.init_memory(mut buffer)
+		mut status := 'ok'
+		writer.print_value(format, zigimg.FormatOptions{ width: usize(0), precision: usize(0) }, ValueNamedError{'Alpha'},
+			0) or { status = err.msg() }
+		assert status == 'unsupported print_value error format'
+		assert writer.buffered().len == 0
+		assert buffer == []u8{len: 16, init: 0xa5}
+	}
+}
+
+fn main() {
+	test_value_error_names_and_alignment() or { panic(err) }
+	test_value_error_arrays_and_record_fields() or { panic(err) }
+	test_value_error_every_capacity_and_invalid_formats() or { panic(err) }
+}

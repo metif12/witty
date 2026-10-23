@@ -11613,3 +11613,57 @@ widths/platforms, invalid descriptors, injected short devices, concurrent mutati
 huge successful output/storage, private allocation, nested descriptor layout and
 lifetimes remain boundaries. Scope/reproduction are in the
 [optional value comparison](zigimg/reference_probes/writer_value_option/README.md).
+
+## Error Writer value dispatch (2026-10-23)
+
+`WriteStream.print_value` now formats concrete V errors and `IError`: empty and
+`any` formats emit `error.` plus the message as two vectors; `t` aligns the
+message without a prefix. Precision and width are forbidden for ordinary error
+formatting, including zero, in production too. Tag formatting ignores precision.
+Error fields/elements preserve recursive write boundaries and depth cutoffs;
+optional concrete/interface errors are accepted.
+
+The unmodified pinned public Source body and independent Python model agree in
+ordinary/Debug and production/ReleaseSafe on **7,140 complete records + 164
+isolated returning controls + 100 exact panic/state pairs per mode**. Bounded
+error sets and `anyerror` map to concrete/interface errors with six names,
+including spaces and UTF-8, in scalar/dynamic/nested/record forms. Five snapshots
+retain writer/backing/views, descriptor state, arguments/options, constructed
+names and file/wire contents. There are **1,087** modeled WriteFailed results
+and **164** failing isolated controls per mode. Exact retained-state traps cover
+forbidden options and huge-width overflow order. Output, control and state
+hashes are `c33a4052…2b8b13`, `b34d5434…24d7d` and `a13d0630…f39f63`.
+
+**21 external compiler pairs per mode** include eight accepted consumers, three
+paired argument rejections, seven unsupported formats, a runtime format and two
+alias limits. Source requires static formats and compile-time validity; V accepts
+runtime strings and rejects unsupported formats before writer effects. Concrete
+methods used across modules must be public. Aliases of concrete errors and of
+`IError` still fail V 0.5.2 C generation. A generic helper preserves the concrete
+carrier: coercion to `IError` in the public dispatcher otherwise makes V heap-lift
+unrelated fixed-array specializations and copy from the wrong offset. Fixed-array
+regressions and portable consumers check the corrected output.
+
+Messages stand in for Zig names only in the common tested domain; arbitrary or
+empty V messages, dynamic method behavior, numeric codes and interned Zig error
+identities remain representation differences. Regressions verify empty-message
+output and that formatting never calls `code()`. Private error layouts are not
+observed. First-class error unions, broader pointer recursion/coercions, custom
+invocation, unsupported field carriers, tuples and full Writer.print remain
+unported or unproven.
+
+Three public regressions, **116 image test files** and **21 production/application /
+Windows/Linux commands** pass. Portable consumers run natively in both modes and
+compile for Windows in both modes and Linux. Historical primitive, recursive
+slice, fixed-array, enum, record, address and optional comparisons retain their
+hashes in both modes. Cross builds establish compilation only. Vaxis source is
+unchanged and dependencies build; its runtime tests are not rerun. Other formatter
+helpers, IO and C are unchanged; Ryu tables retain all 1,336 limbs.
+
+Source/library, implementation, model/helper, fixture and input pins are checked
+before/after. Runtime, fixtures and model bodies freeze before final comparisons;
+only six EXPECTED assignments change from discovery. Independent replay checks
+observations, failures, compiler outcomes, modes, compressed logs and provenance.
+Every retained archive member is read back before commit; development evidence
+stays separate. Scope, runtime boundaries and reproduction are in the
+[error value comparison](zigimg/reference_probes/writer_value_error/README.md).
