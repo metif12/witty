@@ -11667,3 +11667,59 @@ observations, failures, compiler outcomes, modes, compressed logs and provenance
 Every retained archive member is read back before commit; development evidence
 stays separate. Scope, runtime boundaries and reproduction are in the
 [error value comparison](zigimg/reference_probes/writer_value_error/README.md).
+
+## Tagged union Writer value dispatch (2026-10-23)
+
+`WriteStream.print_value` now formats V sum types and aliases. Empty and `any`
+formats emit `.{ .Tag = payload }` with Source's individual write boundaries,
+using the reflected variant type spelling as the tag. Payloads consume one
+depth; depth zero emits `.{ ... }`. The `t` format aligns the tag, ignores
+precision and depth, and bypasses custom methods. Unsupported formats and empty
+formats with a `format` method return an error before writing or depth cutoff.
+
+The unmodified pinned public Source body and independent Python model agree in
+ordinary/Debug and production/ReleaseSafe on **16,812 complete records + 424
+isolated returning controls + 96 exact panic/state pairs per mode**. Signed and
+boolean aliases, byte slices, records, error payloads and nested integer unions
+cover scalar/dynamic/nested/record forms, aliases, options, depth, capacities and
+descriptor states. Five snapshots retain writer/backing/views, inputs/options,
+canonical tag/payload bytes and file/wire contents. There are **2,509** modeled
+WriteFailed results and **373** failing isolated controls per mode; 51 controls
+return through traversal cutoffs. Error-option checks follow union prefixes and
+can be suppressed by earlier failures/cutoffs. Exact traps also check huge-width
+overflow order. Output, control and state hashes are `248f572d…101b1a`,
+`4f1b8fdd…486b7` and `321f7465…c0245`.
+
+**22 external compiler pairs per mode** include nine accepted consumers, three
+paired argument rejections, seven unsupported formats, a runtime format,
+custom-method ambiguity and an overlapping-alias limit. Source requires static
+valid formats; V accepts runtime strings and rejects unsupported/ambiguous
+formats without writing. V 0.5.2 generates a wrong active-tag check when a sum
+type combines a boolean alias with a nested boolean variant. An isolated valid
+alias consumer reaches `invalid sum type` in both modes; the parity corpus uses
+disjoint nested integer variants.
+
+V tags identify types; Zig field names and payload types are independent. V also
+allows flattened nested construction and shares boxed payload storage on copies.
+Tag identity, module qualification, nested construction, copy/mutation behavior,
+unsupported payload specializations and private layouts are not generally
+equivalent. Runtime format/depth cannot suppress compilation of unsupported
+payloads. Untagged auto/extern/packed unions, first-class error unions, custom
+invocation, broader pointer recursion/coercions, tuples and full Writer.print
+remain unported or unproven.
+
+Four public regressions, **117 image test files** and **21 production/application /
+Windows/Linux commands** pass. Portable consumers run natively in both modes and
+compile for Windows in both modes and Linux. Historical primitive, recursive
+slice, fixed-array, enum, record, address, optional and error comparisons retain
+their hashes in both modes. Cross builds establish compilation only. Vaxis source
+is unchanged and dependencies build; its runtime tests are not rerun. Other
+formatter helpers, IO and C are unchanged; Ryu tables retain all 1,336 limbs.
+
+Source/library, implementation, model/helper, fixture and input pins are checked
+before/after. Runtime, fixtures and model bodies freeze before final comparisons;
+only six EXPECTED assignments change from discovery. Independent replay checks
+observations, failures, compiler outcomes, modes, compressed logs and provenance.
+Every retained archive member is read back before commit; development evidence
+stays separate. Scope, runtime boundaries and reproduction are in the
+[tagged union value comparison](zigimg/reference_probes/writer_value_union/README.md).

@@ -205,6 +205,36 @@ fn io_value_struct[T](mut stream WriteStream, format string, options FormatOptio
 	}
 }
 
+fn io_value_union[T](mut stream WriteStream, format string, options FormatOptions, value T, max_depth usize) ! {
+	$if T.unaliased_typ is $sumtype {
+		if format != '' && format != 'any' && format != 't' {
+			return error('unsupported print_value union format')
+		}
+		if format == '' {
+			$for method in T.methods {
+				if method.name == 'format' { return error('ambiguous print_value union format') }
+			}
+		}
+		if format != 't' && max_depth == 0 { return stream.write_all('.{ ... }'.bytes()) }
+		$for variant in T.variants {
+			if value is variant {
+				// V tags are types; use their reflected spelling as the Zig field name.
+				tag := typeof(variant.typ).name
+				if format == 't' { return stream.align_buffer_options(tag.bytes(), options) }
+				stream.write_all('.{ .'.bytes())!
+				stream.write_all(tag.bytes())!
+				stream.write_all(' = '.bytes())!
+				payload := value
+				io_value_field(mut stream, options, payload, max_depth - 1)!
+				return stream.write_all(' }'.bytes())
+			}
+		}
+		panic('invalid sum type')
+	} $else {
+		return error('unsupported print_value union carrier')
+	}
+}
+
 fn io_value_optional_address[T](mut stream WriteStream, value ?&T) ! {
 	stream.write_all((io_address_type_name[T]() + '@').bytes())!
 	address := unsafe { usize(voidptr(value or { nil })) }
@@ -283,9 +313,11 @@ pub fn (mut stream WriteStream) print_value[T](format string, options FormatOpti
 		return io_value_slice(mut stream, format, options, value, max_depth)
 	} $else $if T.unaliased_typ is $enum {
 		return io_value_enum[T](mut stream, format, options, value)
+	} $else $if T.unaliased_typ is $sumtype {
+		return io_value_union[T](mut stream, format, options, value, max_depth)
 	} $else $if T.unaliased_typ is $struct {
 		return io_value_struct[T](mut stream, format, options, value, max_depth)
 	} $else {
-		$compile_error('print_value supports native scalars, enums, errors, pointers, arrays, records and optionals')
+		$compile_error('print_value supports native scalars, enums, errors, pointers, arrays, records, sum types and optionals')
 	}
 }
