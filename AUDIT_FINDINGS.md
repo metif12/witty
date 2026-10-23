@@ -11248,3 +11248,65 @@ output/storage and private allocation remain boundaries. Further printValue
 formats/carriers, full Writer.print and custom formatter reflection remain unported.
 Scope/reproduction are in the
 [character/codepoint comparison](zigimg/reference_probes/writer_value_text/README.md).
+
+
+### Pointer address Writer value dispatch — 2026-10-23
+
+`WriteStream.print_value("*", options, value, max_depth)` now forwards represented
+native scalar pointers, single optional pointers, dynamic slices and aliases,
+plus opaque pointers, to the unchanged address formatter. It preserves Source
+type names, lowercase hex, separate prefix/digit writes and ignored precision,
+width, alignment, fill and depth. Byte slices bypass their encoded-format option
+assertions. Option/pointer detection precedes scalar dispatch because V can
+classify optional float/bool pointers by their scalar payload. All other dispatch
+paths, formatter bodies, IO and C remain byte-identical to the previous checkpoint.
+
+The native fixture calls the original public printValue("*") body without changing
+Source or visibility. Seven forms and 13 native scalar types cover address bits,
+aliases, null, slice length and ignored options/depth. Synthetic addresses are
+never dereferenced. A separate consumer checks a live borrowed slice's actual
+address and unchanged bytes. An independent Python model checks five complete
+snapshots through caller mutation and flush: backing, position, pending/unused
+views and headers, descriptors, raw argument bits/span, options/type/length/depth
+and file/wire contents. Memory, positional/streaming files, replaced pipes and
+closed descriptors are covered.
+
+Debug/ordinary and ReleaseSafe/production each match **39,484 returning records**
+and **3,234 isolated returning controls**, totaling **42,718 observations** per
+mode, including **12,939 exact WriteFailed states**. No valid represented address
+case panics. Six groups cover type/alias/address-bit edges, write order/failure,
+every prefix/digit capacity, every caller mask, seeded addresses and ignored
+options/depth. Golden hashes are recorded in the linked comparison below.
+
+Sixteen external compiler pairs per mode cover four commonly accepted consumers,
+six paired ordinary rejections and six measured boundaries. Source requires a
+compile-time format where V accepts a runtime string. Source statically rejects
+non-pointer `*` and unsupported pointer `d`; V returns errors before writer effects.
+Compound/nested pointees remain unrepresented. Optional const pointers print
+`*const u8` in Source and `*u8` in V; this pair is explicitly non-equivalent.
+Qualifiers, sentinels, arbitrary nominal type names, general coercions and ABI/layout
+remain boundaries. The earlier pointer-unrepresented dispatch boundary is
+superseded only for the represented carriers. Full Writer.print and custom
+formatter reflection remain unported.
+
+Three public regressions, **110 image test files** and **17 production/application /
+Windows/Linux commands** pass. Historical primitive dispatch retains 16,308 records,
+343 returning controls and 159 panic/state pairs per mode; character/codepoint
+dispatch retains 39,449 records, 360 returning controls and 368 panic/state pairs
+per mode. Their hashes are unchanged. Vaxis source is unchanged and dependencies
+build; its runtime tests are not rerun. Cross builds establish compilation only.
+Whole Source/selected libraries, Io/fmt/math/meta/time/path/encoder pins, versions,
+implementation, shared helpers/models, fixtures and inputs are checked before/after.
+The unchanged Ryu tables retain all 1,336 limbs. Runtime/test/fixture/model bodies
+freeze before final comparisons; only six EXPECTED assignments change afterward.
+
+The earlier RAM workspace was unavailable on resumption; its transient proofs are
+not claimed retained or successful. Surviving SSD logs and current superseded
+development evidence remain separate. Fresh final proofs are independently
+replayed for every observation/failure, compiler outcome, mode, binary and
+provenance pin. Every retained archive member is read back before commit and
+owned RAM/reserve release. Evidence remains pinned little-endian 64-bit macOS.
+Other runtime widths/platforms, invalid descriptors, injected short devices,
+concurrent mutation, huge successful output/storage, allocation and lifetimes
+remain boundaries. Scope/reproduction are in the
+[pointer address value comparison](zigimg/reference_probes/writer_value_address/README.md).

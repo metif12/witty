@@ -1558,3 +1558,13 @@ The [character/codepoint comparison](reference_probes/writer_value_text/README.m
 covers 39,809 returning observations, 32 formatter-body panic/state pairs and 336
 separate u21 conversion/state pairs per mode. Compile-time acceptance and general
 coercions remain boundaries. Further value dispatch and Writer.print are unported.
+
+
+`print_value("*", options, value, max_depth)` now dispatches native scalar pointers,
+single optional pointers, dynamic slices and aliases, plus opaque pointers, through
+the existing address formatter. It preserves type names, lowercase hexadecimal,
+ignored options/depth and separate prefix/digit failures. The
+[address value comparison](reference_probes/writer_value_address/README.md) covers
+42,718 returning observations per mode, including 12,939 exact WriteFailed states.
+Compound/qualified type names and optional const spelling remain boundaries.
+Further value dispatch, full Writer.print and custom reflection remain unported.

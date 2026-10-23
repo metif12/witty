@@ -8,6 +8,9 @@ native integers and `B`/`Bi` for unsigned integers, superseding that duration
 boundary. The
 [character/codepoint checkpoint](../writer_value_text/README.md) adds byte `c` and
 Unicode `u`, with an explicit u32-for-u21 carrier adaptation.
+The [pointer address checkpoint](../writer_value_address/README.md) adds `*` for
+native scalar pointers, optional pointers, slices and aliases, plus opaque
+pointers, superseding the corresponding unrepresented boundary below.
 
 `WriteStream.print_value(format, options, value, max_depth)` translates the
 represented branches of pinned `std.Io.Writer.printValue`:

@@ -84,7 +84,11 @@ fn io_value_bytes(mut stream WriteStream, format string, options FormatOptions, 
 
 // The represented printValue branches; format is a runtime string in V.
 pub fn (mut stream WriteStream) print_value[T](format string, options FormatOptions, value T, max_depth usize) ! {
-	$if T.unaliased_typ is $int {
+	$if T is $option || T.unaliased_typ is voidptr || T.indirections > 0
+		|| ((int(T.unaliased_typ) >> 16) & 0xff) > 0 {
+		if format != '*' { return error('unsupported print_value pointer format') }
+		return stream.print_address(value)
+	} $else $if T.unaliased_typ is $int {
 		if format == 'c' {
 			$if T.unaliased_typ is u8 {
 				return stream.print_ascii_char(u8(value), options)
@@ -112,8 +116,12 @@ pub fn (mut stream WriteStream) print_value[T](format string, options FormatOpti
 		return stream.align_buffer_options(if bool(value) { 'true'.bytes() } else { 'false'.bytes() },
 			options)
 	} $else $if T.unaliased_typ is []u8 {
+		if format == '*' { return stream.print_address(value) }
 		return io_value_bytes(mut stream, format, options, value, max_depth)
+	} $else $if T.unaliased_typ is $array {
+		if format != '*' { return error('unsupported print_value pointer format') }
+		return stream.print_address(value)
 	} $else {
-		$compile_error('print_value currently requires native integers, f32/f64, bool or a byte slice')
+		$compile_error('print_value currently requires native scalars, pointers or slices')
 	}
 }
