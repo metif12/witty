@@ -9,7 +9,12 @@ fn io_value_pointer_bits(mut stream WriteStream, options FormatOptions, name str
 
 fn io_value_pointer[T](mut stream WriteStream, format string, options FormatOptions, value &T, max_depth usize) ! {
 	$if T.unaliased_typ is $array_fixed {
-		if format == '*' { return error('unsupported print_value array-pointer address') }
+		if format == '*' {
+			witness := T{}
+			name := io_value_array_address_name(witness)!
+			stream.write_all((name + '@').bytes())!
+			return io_address_integer(mut stream, usize(voidptr(value)))
+		}
 		// A zero witness binds the element generic without reading or copying the pointee.
 		zero := T{}
 		view := io_value_array_view(zero[0], voidptr(value), value.len)
@@ -33,6 +38,21 @@ fn io_value_pointer[T](mut stream WriteStream, format string, options FormatOpti
 			return error('unsupported print_value pointer format')
 		}
 		return io_value_pointer_bits(mut stream, options, io_address_type_name[T](), usize(voidptr(value)))
+	}
+}
+
+// Bind through concrete witnesses: V can reuse element-type metadata across generics.
+fn io_value_array_address_name[A](_ A) !string {
+	$if A.unaliased_typ is $array_fixed {
+		zero := A{}
+		element := io_value_array_address_name(zero[0])!
+		return '[${zero.len}]' + element
+	} $else $if A is $option || A.indirections > 0 || ((int(A.unaliased_typ) >> 16) &0xff) > 0 {
+		return error('unsupported print_value array-pointer address element')
+	} $else $if A.unaliased_typ is u8 || A.unaliased_typ is u16 || A.unaliased_typ is u32 || A.unaliased_typ is u64 || A.unaliased_typ is usize || A.unaliased_typ is i8 || A.unaliased_typ is i16 || A.unaliased_typ is int || A.unaliased_typ is i64 || A.unaliased_typ is isize || A.unaliased_typ is f32 || A.unaliased_typ is f64 || A.unaliased_typ is bool {
+		return io_address_type_name[A]()
+	} $else {
+		return error('unsupported print_value array-pointer address element')
 	}
 }
 

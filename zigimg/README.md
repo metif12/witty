@@ -1728,3 +1728,12 @@ comparison](reference_probes/writer_array_pointer/README.md) covers 6,673 record
 Present optional whole-array pointers remain a measured V compiler boundary;
 absence retains aligned `null`. Explicit array addresses, zero-length arrays
 and general ownership/layout/lifetime contracts remain boundaries.
+
+
+Explicit `*` formatting now supports nonoptional fixed-array pointers with native
+scalar elements, aliases and nested arrays. It writes the canonical type prefix
+and address separately, ignores options/depth and never reads the pointee. The
+[array-address comparison](reference_probes/writer_array_address/README.md) covers
+11,510 records, 16 compiler pairs and 45 isolated returns per mode. Optional
+array addresses, named/optional/pointer elements and direct `print_address` array
+carriers remain documented boundaries.

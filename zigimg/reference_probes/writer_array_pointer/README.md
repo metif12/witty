@@ -41,8 +41,8 @@ production and Zig ReleaseSafe.
 
 Twenty external compiler pairs cover byte encodings, pointee aliases, signed
 extrema, boolean/optional/nested/record/enum/sum elements, print composition,
-absence, invalid formats, explicit addresses, optional construction, empty arrays
-and runtime format strings. Source requires static formats; V accepts runtime
+absence, invalid formats, native array addresses, optional construction, empty
+arrays and runtime format strings. Source requires static formats; V accepts runtime
 strings and reports unsupported formats at runtime.
 
 Present optional pointers to whole fixed arrays remain unsupported. Inline V
@@ -52,9 +52,11 @@ construction can copy pointee bytes into the optional payload. The dispatcher
 rejects that present carrier before V's invalid generic unwrap, without writes;
 absence still produces aligned `null`, including optional pointer aliases. No
 private optional layout is read or fabricated. Source supports present optional
-array pointers. Explicit array-pointer `*`/`?*` addresses also remain rejected in
-V, where Source supports qualified array type prefixes. Zero-length arrays,
-whole pointer alias construction, sentinel/qualifier adaptations, arbitrary
+array pointers. Nonoptional native scalar-array `*` addresses are now covered by
+the [array-address comparison](../writer_array_address/README.md); the retained
+address compiler control succeeds in both languages. Optional array-address and
+broader qualified element type prefixes remain unsupported in V. Zero-length
+arrays, whole pointer alias construction, sentinel/qualifier adaptations, arbitrary
 nested pointers, invalid pointers, overlapping input/output, concurrency and
 huge successful output remain outside the supported claim.
 

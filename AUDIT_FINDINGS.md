@@ -12238,3 +12238,57 @@ concurrency, huge successful output and general allocation/layout/ownership /
 lifetime/copy equivalence remain boundaries. Runtime evidence is little-endian
 64-bit macOS. Scope and reproduction are in the
 [array-pointer comparison](zigimg/reference_probes/writer_array_pointer/README.md).
+
+
+## Native fixed-array pointer Writer addresses (2026-11-04)
+
+`WriteStream.print_value('*', ...)` now formats nonoptional pointers to fixed
+arrays of the 13 supported native scalar types. Pointee/element aliases and
+nested fixed arrays use canonical Source spellings, including `int` as `i32`.
+The complete type plus `@` is one write; lowercase hexadecimal digits are the
+next. Options/depth are ignored even at maximal width/precision and zero depth.
+Concrete named zero witnesses bind element types without reading input memory
+and avoid V's metadata reuse and inline array-initializer code-generation bugs.
+
+The unchanged public Source body and independent writer-state model agree on
+**11,510 complete records per mode**, including **4,364 WriteFailed records**,
+plus **45 isolated returning controls per mode**. Four snapshots retain backing,
+pending/unused bytes, position, descriptor/file state and address bits through
+caller mutation and flush. All native element types, aliases, nested/single
+arrays, 190 address samples, prefix/digit capacities, maximal ignored options
+and memory/file/pipe/closed-descriptor states are covered. Explicit addresses
+never read the target, including zero and synthetic pointer values. The same
+checks pass in production/ReleaseSafe without arithmetic traps. Output SHA-256
+is `61591c5e…5e86aeb0`.
+
+**16 external compiler pairs per mode** cover native types, nesting, aliases,
+owned addresses, zero, print composition, byte encoding and remaining language
+boundaries. Owned consumers compare with their own addresses. Four regressions
+and a portable consumer additionally check canonical names, no-read behavior,
+partial writes and unsupported element rejection before effects. The earlier
+borrowed-array comparison's address control now accepts V; its returning/state
+hashes remain unchanged.
+
+All 128 image test files and 24 additional production/application/platform
+commands pass. Portable consumers run natively in both modes and compile for
+Windows/Linux; cross builds establish compilation only. Historical borrowed-array
+and scalar-pointer comparisons retain their record/state hashes in both modes.
+Vaxis runtime tests are not rerun.
+
+Only the fixed-array pointer `*` branch and its name helper change the runtime.
+Other dispatch, leaf formatters and IO/C remain byte-identical. Whole Source /
+library, executable, implementation, fixture/model/helper and input pins are
+checked before/after; expected outputs and bodies freeze before both-mode runs.
+Independent replay checks observations, failure state, compiler outcomes and
+provenance; every retained archive member is read back before committing.
+
+Optional array addresses, named/optional/pointer elements, the direct
+`print_address` array API, zero-length arrays, broader qualifiers/sentinels,
+whole pointer alias construction and arbitrary named element types remain
+boundaries. Present optional whole-array construction retains its exact V
+C-generation failure, classified separately from ordinary rejection. The zero
+witness can use stack space proportional to the array type in ordinary builds.
+Synthetic addresses prove formatting only. General layout/ownership/lifetime
+contracts, overlapping input/output, concurrency and huge successful output are
+outside the claim. Runtime evidence is little-endian 64-bit macOS. Scope and
+reproduction are in the [array-address comparison](zigimg/reference_probes/writer_array_address/README.md).

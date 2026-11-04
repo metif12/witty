@@ -70,9 +70,9 @@ fn test_array_pointer_partial_writes_keep_slice_boundaries() ! {
 	}
 }
 
-fn test_array_pointer_invalid_default_and_address_leave_writer_untouched() ! {
+fn test_array_pointer_invalid_default_formats_leave_writer_untouched() ! {
 	bytes := [u8(0), 255, 65]!
-	for format in ['', '*', 'd'] {
+	for format in ['', 't', 'd'] {
 		mut buffer := []u8{len: 128, init: 0xa5}
 		before := buffer.clone()
 		mut writer := WriteStream.init_memory(mut buffer)
