@@ -11989,3 +11989,51 @@ Broader pointer recursion, function/nested pointees, optional opaque carriers,
 qualifier/type spelling, allocation and layout/lifetime/copy/mutation contracts
 retain documented limits. Runtime evidence is little-endian 64-bit macOS. Scope
 and reproduction are in the [pointer value comparison](zigimg/reference_probes/writer_pointer_value/README.md).
+
+
+## Pointer lanes in public Writer.printVector (2026-11-04)
+
+`WriteStream.print_vector` now accepts native scalar/opaque pointers, pointer and
+pointee aliases and optional scalar pointer lanes. It preserves the outer vector
+writes, depth cutoff, unchanged leaf options and one-less depth. Optional presence,
+null alignment, digit-only pointer padding and explicit `*`/`?*` spelling follow
+the existing scalar dispatcher. Ordinary arrays and leaf formatters are unchanged.
+
+A nonoptional pointer alias is normalized before dispatch to avoid V merging it
+with an optional-pointer generic specialization. Indexed lane access preserves
+option carriers. Named optional locals avoid invalid C for inline array literals;
+optional whole pointer alias arrays remain a measured C-generation boundary.
+
+The unchanged public Source body and independent writer-state model agree on
+**13,851 records per mode**, including **9,540 WriteFailed records**. Nineteen
+carriers, all native scalar pointees, opaque pointers, aliases, three optional
+pointees, lengths one/three/eight, options, depth, address bits and memory/file /
+pipe/closed-descriptor states are covered. Four snapshots retain backing/views,
+position, file/descriptor state and constructed lane bits through caller mutation
+and flush. Synthetic addresses are never dereferenced. Output SHA-256 is
+`79f97523…a522a0`.
+
+**13 external compiler pairs per mode** add all 13 optional pointee widths,
+alias/optional coexistence, explicit addresses, invalid/runtime formats and
+unsupported optional carriers. **Fifteen paired overflow traps and 85 returning
+controls per mode** retain exact outer/leaf prefix, digit and padding state,
+depth bypass, absent-first behavior and explicit-address option bypass. Both
+modes retain the exact `integer overflow` panic. Five unit regressions and a
+portable consumer additionally cover partial writes and mixed specializations.
+
+All 123 image test files and 24 additional production/application/platform
+commands pass. Portable consumers run natively in both modes and compile for
+Windows/Linux; cross builds establish compilation only. Vaxis runtime tests
+are not rerun. Historical numeric-vector and scalar-pointer comparisons retain
+their record/state hashes in both modes; the old vector pointer compiler control
+now accepts the V implementation.
+
+Source/library, compiler executable, implementation, fixture, model/helper and
+input pins freeze before final proofs and are checked before/after. Independent
+replay checks records, compiler outcomes, failure state and provenance. Every
+archive member is read back before committing.
+
+Optional opaque/whole-alias arrays, broader aggregate/nested/function pointees,
+qualifiers, zero-length arrays and allocation/layout/lifetime/copy/mutation
+contracts retain documented limits. Runtime evidence is little-endian 64-bit
+macOS. Scope and reproduction are in the [pointer-lane comparison](zigimg/reference_probes/writer_vector_pointer/README.md).

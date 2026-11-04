@@ -197,7 +197,7 @@ def compiler_cases():
   vb=(f"w.print_vector('{fmt}',p.FormatOptions{{}},{vv},{depth}) or {{require(err.msg()=='unsupported print_value {error} format')\nrequire(w.buffered().bytestr()=='{{ ')\nprint('rejected')\nreturn}}\npanic('unexpected success')") if depth else f"w.print_vector('{fmt}',p.FormatOptions{{}},{vv},0)!"
   rows.append((name,zb,vb,None,b'rejected' if depth else b'{ ... }'))
  rows.append(('runtime-format','const args=try std.process.argsAlloc(std.heap.page_allocator);try w.printVector(args[0],.{},@as(@Vector(2,u8),.{1,2}),1);',"format:=if os.args.len>0 {'d'} else {'any'}\nw.print_vector(format,p.FormatOptions{},[u8(1),2]!,1)!",None,b'{ 1, 2 }'))
- rows.append(('pointer-limit','var value:u8=1;try w.printVector("*",.{},@as(@Vector(2,*u8),.{&value,&value}),1);std.debug.assert(std.mem.startsWith(u8,w.buffered(),"{ u8@"));w.end=0;',"mut value:=u8(1)\nw.print_vector('*',p.FormatOptions{},[&value,&value]!,1)!",b'',None))
+ rows.append(('pointer-lanes','var value:u8=1;try w.printVector("*",.{},@as(@Vector(2,*u8),.{&value,&value}),1);std.debug.assert(std.mem.startsWith(u8,w.buffered(),"{ u8@"));w.end=0;',"mut value:=u8(1)\nw.print_vector('*',p.FormatOptions{},[&value,&value]!,1)!\nrequire(w.buffered().bytestr().starts_with('{ u8@'))\nw.seek_to(0)!",b'',b''))
  return rows
 
 def compiler_controls(proof,root,repo,zig,v,args,env):

@@ -1670,7 +1670,7 @@ opening/leaf/separator/closing failures follow the pinned writer. This explicit
 helper preserves ordinary array dispatch, including its different byte encoding.
 The [vector helper comparison](reference_probes/writer_vector/README.md) covers
 7,048 records, 15 compiler pairs, 16 isolated returns and eight panic/state pairs
-per mode. Runtime format validation, pointer lanes, native SIMD layout and other
+per mode. Runtime format validation, native SIMD layout and other
 existing carrier limits remain documented boundaries.
 
 
@@ -1682,3 +1682,12 @@ values retain aligned `null`. Explicit `*` keeps its separate spelling and ignor
 options. The [pointer value comparison](reference_probes/writer_pointer_value/README.md)
 covers 9,013 records, 11 compiler pairs, 38 isolated returns and ten panic/state
 pairs per mode. Broader pointer recursion and representation limits remain.
+
+
+`print_vector` also accepts native scalar and opaque pointer lanes, aliases and
+optional scalar pointers. It preserves outer depth/separator writes and the
+leaf pointer/null/address formats. Alias normalization avoids V conflating
+pointer and optional-pointer specializations. The [pointer-lane comparison](reference_probes/writer_vector_pointer/README.md)
+covers 13,851 records, 13 compiler pairs, 85 isolated returns and 15 panic/state
+pairs per mode. Optional whole-alias arrays and broader pointer/ABI contracts
+remain compiler or representation boundaries.

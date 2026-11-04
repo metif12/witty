@@ -26,9 +26,11 @@ float rendering and writer-state models.
 Each build mode compares 7,048 records, including 2,992 records containing
 `WriteFailed`. Fifteen external compiler pairs add all native scalar widths,
 direct character/Unicode/unit formats, invalid carriers and leaf formats, runtime
-formats and the pointer-lane boundary. Source accepts pointer lanes; the V helper
-currently rejects them at compile time. Unsupported scalar/aggregate/optional
-lane carriers are rejected before depth can bypass their validation.
+formats and pointer lanes. That compiler control now accepts both implementations;
+the original checkpoint rejected V pointer lanes. The later
+[pointer-lane comparison](../writer_vector_pointer/README.md) records the extended
+carrier support and compiler limits. Unsupported scalars, aggregates and optional
+nonpointer lanes are rejected before depth can bypass their validation.
 
 Eight paired traps per mode retain the exact outer writer state when a float
 lane exceeds the existing hexadecimal formatter's 50-byte scratch buffer. Both
@@ -45,10 +47,10 @@ Source formats are static and leaf validity is checked even with zero depth.
 V validates visited leaf formats at runtime: an invalid format can leave the
 opening write, or be bypassed at zero depth. The fixed-array adaptation establishes
 lane values and formatting, not native vector ABI, packing, alignment, copying
-or mutation equivalence. Zero-length array declarations, pointer/optional-pointer
-lanes, nonnative integer/float widths and other existing scalar boundaries remain
-unrepresented or unproven. Runtime evidence is little-endian 64-bit macOS; cross
-builds establish compilation only.
+or mutation equivalence. Zero-length array declarations, nonnative integer/float
+widths and other existing scalar boundaries remain unrepresented or unproven.
+Pointer/optional-pointer lanes have a separate comparison linked above. Runtime
+evidence is little-endian 64-bit macOS; cross builds establish compilation only.
 
 Five public regressions and a portable consumer cover aliases, per-lane padding,
 byte-array distinction, bool/float/character formats, partial writes and V runtime
