@@ -12184,3 +12184,57 @@ layout/ownership/lifetime/copy equivalence, concurrency and huge successful outp
 remain boundaries. Existing aggregate-address and broader pointer limits remain.
 Runtime evidence is little-endian 64-bit macOS. Scope and reproduction are in the
 [optional pointer custom comparison](zigimg/reference_probes/writer_pointer_custom/README.md).
+
+
+## Borrowed fixed-array pointer Writer values (2026-11-04)
+
+`WriteStream.print_value` now coerces nonoptional fixed-array pointers to borrowed
+slices without consuming a depth level. Byte arrays preserve `s`, `x`, `X`, `b64`
+and `any`; recursive signed, boolean, optional-element, nested and record arrays
+use the existing leaf formatters. Pointee aliases, enum/sum elements and
+`Writer.print` composition are also checked. A concrete zero witness binds the
+correct element generic, avoiding V's cross-specialization type-metadata bug.
+The temporary array header reuses caller storage with the correct stride and
+`nofree` flag. `T{}` avoids V's invalid `$zero(T)` array initializer under Windows
+GCC. Unit checks confirm byte/integer storage identity and mutation/stride.
+
+The unchanged public Source body and independent writer-state model agree on
+**6,673 complete records per mode**, including **2,267 WriteFailed records**, plus
+**39 isolated returns and 27 exact panic/state pairs per mode**. Four snapshots
+retain backing/pending/unused bytes, position, descriptor/file state and binary
+input through caller mutation and flush. All byte values, seven array/presence
+forms, depth, options and memory/file/pipe/closed-descriptor states are covered.
+Forbidden encoding options retain their pre-write traps in production; failed
+writes and depth cutoffs preserve failure order. Output SHA-256 is
+`78323191…6b9f35f`.
+
+**20 external compiler pairs per mode** cover aliases, signed extrema,
+boolean/optional/nested/record/enum/sum elements, print, absence and language
+boundaries. V emits invalid C for inline optional fixed-array pointer
+construction; named construction can box pointee bytes instead of the pointer.
+The dispatcher rejects present optional array pointers before the invalid
+unwrap and without writes. Absent values, including pointer aliases, still
+produce aligned `null`. The expected C-generation failure is classified
+separately from ordinary rejection. Source supports present optional array
+pointers and qualified array-address `*` formatting; those remain V boundaries.
+
+All 127 image test files and 24 additional production/application/platform
+commands pass. Portable consumers run natively in both modes and compile for
+Windows/Linux; cross builds establish compilation only. Historical fixed-array,
+optional-value, aggregate-pointer and optional-pointer custom comparisons retain
+their record/state hashes in both modes. Vaxis runtime tests are not rerun.
+
+The runtime diff is confined to array-pointer dispatch, its borrowed view and
+optional/address boundaries. Other leaves and IO/C remain byte-identical. Whole
+Source/library, executable, implementation, fixture/model/helper and input pins
+are checked before/after; expected results and bodies freeze before final runs.
+Independent replay checks observations, failure state, compiler outcomes and
+provenance; every retained archive member is read back before committing.
+
+The zero witness can use stack space proportional to the fixed-array type in
+ordinary builds. Zero-length arrays, whole pointer alias construction, sentinels,
+broader qualifiers/nested pointers, invalid pointers, overlapping input/output,
+concurrency, huge successful output and general allocation/layout/ownership /
+lifetime/copy equivalence remain boundaries. Runtime evidence is little-endian
+64-bit macOS. Scope and reproduction are in the
+[array-pointer comparison](zigimg/reference_probes/writer_array_pointer/README.md).

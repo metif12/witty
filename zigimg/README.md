@@ -1718,3 +1718,13 @@ prints aligned `null`. The [optional pointer custom comparison](reference_probes
 covers 6,125 records, 12 compiler pairs, 106 isolated returns and two panic/state
 pairs per mode. Fallible public methods are required; mutable/interface receivers
 and invalid pointer/layout/lifetime contracts remain boundaries.
+
+
+Nonoptional fixed-array pointers now borrow slices for `print_value`, preserving
+depth, byte encodings and recursive array-element formatting. Pointee aliases,
+optional elements and `Writer.print` compose with this route. The [array-pointer
+comparison](reference_probes/writer_array_pointer/README.md) covers 6,673 records,
+20 compiler pairs, 39 isolated returns and 27 panic/state pairs per mode.
+Present optional whole-array pointers remain a measured V compiler boundary;
+absence retains aligned `null`. Explicit array addresses, zero-length arrays
+and general ownership/layout/lifetime contracts remain boundaries.

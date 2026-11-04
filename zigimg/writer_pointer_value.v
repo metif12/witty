@@ -8,7 +8,13 @@ fn io_value_pointer_bits(mut stream WriteStream, options FormatOptions, name str
 }
 
 fn io_value_pointer[T](mut stream WriteStream, format string, options FormatOptions, value &T, max_depth usize) ! {
-	$if T.unaliased_typ is $struct || T.unaliased_typ is $enum || T.unaliased_typ is $sumtype {
+	$if T.unaliased_typ is $array_fixed {
+		if format == '*' { return error('unsupported print_value array-pointer address') }
+		// A zero witness binds the element generic without reading or copying the pointee.
+		zero := T{}
+		view := io_value_array_view(zero[0], voidptr(value), value.len)
+		return io_value_array(mut stream, format, options, view, max_depth)
+	} $else $if T.unaliased_typ is $struct || T.unaliased_typ is $enum || T.unaliased_typ is $sumtype {
 		if format != '' && format != 'any' {
 			return error('unsupported print_value aggregate-pointer format')
 		}
@@ -30,6 +36,11 @@ fn io_value_pointer[T](mut stream WriteStream, format string, options FormatOpti
 	}
 }
 
+// The array header borrows caller storage only for the synchronous formatter call.
+fn io_value_array_view[E](_ E, address voidptr, len int) []E {
+	return unsafe { array{ data: address, len: len, cap: len, flags: .nofree, element_size: int(sizeof(E)) } }
+}
+
 fn io_value_optional_pointer[T](mut stream WriteStream, format string, options FormatOptions, value ?&T, max_depth usize) ! {
 	// Extract before pointee reflection: V cannot parse this unwrap inside that branch.
 	address := unsafe { usize(voidptr(value or { nil })) }
@@ -39,7 +50,9 @@ fn io_value_optional_pointer[T](mut stream WriteStream, format string, options F
 			return pointer.format(mut stream)
 		}
 	}
-	$if T.unaliased_typ is $struct || T.unaliased_typ is $enum || T.unaliased_typ is $sumtype {
+	$if T.unaliased_typ is $array_fixed {
+		return error('unsupported print_value optional array-pointer carrier')
+	} $else $if T.unaliased_typ is $struct || T.unaliased_typ is $enum || T.unaliased_typ is $sumtype {
 		if format != '' && format != 'any' {
 			return error('unsupported print_value aggregate-pointer format')
 		}
@@ -88,7 +101,9 @@ fn io_value_pointed_union[T](mut stream WriteStream, format string, options Form
 }
 
 fn io_value_normalized_optional_address[T](mut stream WriteStream, value &T) ! {
-	$if T.unaliased_typ is $struct || T.unaliased_typ is $enum || T.unaliased_typ is $sumtype {
+	$if T.unaliased_typ is $array_fixed {
+		return error('unsupported print_value array-pointer address')
+	} $else $if T.unaliased_typ is $struct || T.unaliased_typ is $enum || T.unaliased_typ is $sumtype {
 		return error('unsupported print_value aggregate-pointer format')
 	} $else {
 		stream.write_all(('*' + io_address_type_name[T]() + '@').bytes())!
@@ -97,7 +112,9 @@ fn io_value_normalized_optional_address[T](mut stream WriteStream, value &T) ! {
 }
 
 fn io_value_optional_direct_address[T](mut stream WriteStream, value ?&T) ! {
-	$if T.unaliased_typ is $struct || T.unaliased_typ is $enum || T.unaliased_typ is $sumtype {
+	$if T.unaliased_typ is $array_fixed {
+		return error('unsupported print_value array-pointer address')
+	} $else $if T.unaliased_typ is $struct || T.unaliased_typ is $enum || T.unaliased_typ is $sumtype {
 		return error('unsupported print_value aggregate-pointer format')
 	} $else {
 		return stream.print_address(value)
@@ -105,6 +122,9 @@ fn io_value_optional_direct_address[T](mut stream WriteStream, value ?&T) ! {
 }
 
 fn io_value_optional_address_dispatch[P](mut stream WriteStream, value ?P) ! {
+	$if P.pointee_type is $array_fixed {
+		return error('unsupported print_value array-pointer address')
+	}
 	// Keep optional unwrapping outside reflected branches in V's generic parser.
 	payload := value or { $zero(P) }
 	$if P.indirections == 0 && ((int(P.unaliased_typ) >> 16) &0xff) == 0 {

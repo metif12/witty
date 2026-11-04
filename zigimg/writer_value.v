@@ -284,6 +284,12 @@ fn io_value_optional[T](mut stream WriteStream, format string, options FormatOpt
 	} else {
 		return error('unsupported print_value optional format')
 	}
+	$if T.pointee_type is $array_fixed {
+		// V generates an invalid copy when unwrapping optional fixed-array pointers.
+		missing := value == none
+		if missing { return stream.align_buffer_options('null'.bytes(), options) }
+		return error('unsupported print_value optional array-pointer carrier')
+	}
 	// An or-block preserves each payload type in V's generic specializations.
 	payload := value or { return stream.align_buffer_options('null'.bytes(), options) }
 	$if T.indirections > 0 || ((int(T.unaliased_typ) >> 16) & 0xff) > 0 {
