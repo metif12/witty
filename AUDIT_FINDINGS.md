@@ -13237,3 +13237,65 @@ boundaries. Synthetic addresses establish formatting only; zero witnesses can us
 stack space proportional to array types. Runtime evidence is little-endian
 64-bit macOS. Scope and reproduction are in the [slice descriptor pointer
 comparison](zigimg/reference_probes/writer_slice_pointer/README.md).
+
+
+## Fixed-array pointees in Writer address element names (2026-11-05)
+
+Address element names now admit pointers to represented fixed arrays, including
+nested pointees and aliases. An outer array pointer can print `[3]*[3]u8@…`.
+A zero pointee witness binds the existing recursive array-name helper. A pointer
+to locally created zero storage, cast through `P`, avoids GCC array-copy
+initialization and preserves each pointee specialization in V. Scalar pointees
+keep their existing value-witness path. The value guard keeps pointer carriers on pointer dispatch before array
+indexing. Caller elements and pointed storage are not read.
+
+Direct addresses and explicit `*` preserve original storage bits and separate
+prefix/digit writes across array-pointer and slice carriers, whole-container /
+pointer aliases, optional outer slices and named print arguments. Present address
+options and depth are ignored; absent outer slices align `null`. Existing direct
+fixed-array pointer contents formatting remains unchanged.
+
+Unchanged public Source methods and an independent writer-state model agree on
+**14,308 full records per mode**, including **7,997 WriteFailed records**. Four
+byte/integer/nested/boolean pointee shapes, three outer shapes, four APIs,
+190 address patterns, lengths, capacities, maximal options and memory/file/pipe /
+closed-descriptor states preserve four snapshots through caller-buffer mutation
+and flush. **120 isolated returning controls per mode** preserve prefix/digit/null
+failure state, unused bytes, zero/maximal addresses and outer optionals. No
+controls panic. Output SHA-256 is `d8edc81a…cb0252a5`.
+
+**Nine external compiler pairs per mode** cover all thirteen native scalar
+pointee element types, owned storage and mutation, print/outer optionals, flat
+pointer slices, unchanged byte contents, unsupported indirection and runtime /
+static formats. The existing optional-alias declaration-order boundary is
+retained: V emits `[2]?&Base0` optional wrappers before the named array pointee's
+typedef, causing an undeclared-alias C failure in both modes; Source returns its
+length. Native optional array-pointer syntax also remains restricted by V's
+parser. Optional outer slices work through their existing route. Optional pointer
+elements whose alias declarations cannot compile remain outside the claim.
+
+Four public regressions and a portable consumer verify no-read names, exact
+partial writes, preserved pointer bytes and slice pointer/length, storage and
+target mutation,
+original storage addresses and nulls. All 145 image test files and 24 additional
+production/application/platform commands pass. Portable consumers run natively in
+both modes and compile for Windows/Linux; cross builds establish compilation
+only. Historical scalar-pointee-alias and slice-descriptor-pointer suites retain
+record/control/state hashes in both modes. Vaxis runtime tests are not rerun.
+
+Reversing fixed-array naming, its pointer-witness binding and the value guard
+reconstructs the previous runtime exactly; other bodies, parsing and C remain byte-identical. Source/library,
+executable, implementation, fixture/model/helper and input pins are checked
+before/after; expected outputs freeze before final runs. Independent replay
+verifies observations, failure state, compiler outcomes and provenance; every
+retained archive member is read back before commit. Completed regenerable caches
+and verified archive-backed generated artifacts were reclaimed, with archives
+retained.
+
+Unsupported inner names, deeper pointer indirection, aggregate/function pointees,
+unrepresented qualifiers and broader layout/allocation/ownership/lifetime
+contracts remain boundaries. Compiler GC traversal, overlapping input/output,
+concurrency and huge successful output remain outside the claim. Zero witnesses
+may use stack space proportional to array types. Synthetic addresses establish
+formatting only. Runtime evidence is little-endian 64-bit macOS. Scope and
+reproduction are in the [array pointee address comparison](zigimg/reference_probes/writer_array_pointee/README.md).

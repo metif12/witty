@@ -57,7 +57,7 @@ fn io_value_pointer[T](mut stream WriteStream, format string, options FormatOpti
 fn io_value_array_address_name[A](value A) !string {
 	$if A is $option {
 		return io_value_optional_address_name(value)
-	} $else $if A.unaliased_typ is $array_fixed {
+	} $else $if A.unaliased_typ is $array_fixed && A.indirections == 0 && ((int(A.unaliased_typ) >> 16) &0xff) == 0 {
 		zero := A{}
 		element := io_value_array_address_name(zero[0])!
 		return '[${zero.len}]' + element
@@ -89,11 +89,27 @@ fn io_value_array_pointer_address_name[P](_ P) !string {
 		normalized := $zero(P.unaliased_typ)
 		return io_value_array_pointer_address_name(normalized)
 	} $else $if P.indirections == 1 {
-		zero := $zero(P.pointee_type)
-		name := io_value_pointer_pointee_address_name(zero)!
-		return '*' + name
+		$if P.unaliased_typ is $array_fixed {
+			zero := unsafe { P(&$zero(P.pointee_type)) }
+			name := io_value_fixed_array_pointee_address_name(zero)!
+			return '*' + name
+		} $else {
+			zero := $zero(P.pointee_type)
+			name := io_value_pointer_pointee_address_name(zero)!
+			return '*' + name
+		}
 	}
 	return error('unsupported print_value array-pointer address element')
+}
+
+// The pointer references a local zero witness, never caller-owned storage.
+fn io_value_fixed_array_pointee_address_name[T](witness &T) !string {
+	$if T.unaliased_typ is $array_fixed {
+		element := io_value_array_address_name(unsafe { (*witness)[0] })!
+		return '[${witness.len}]' + element
+	} $else {
+		return error('unsupported print_value array-pointer address element')
+	}
 }
 
 fn io_value_pointer_pointee_address_name[T](_ T) !string {
