@@ -77,3 +77,10 @@ python3 zigimg/verify_writer_slice_array_address_reference.py /path/to/locked/zi
 
 Session evidence: `/Users/alex/.cache/witty-writer-slice-array-address-20261104/verified-proofs.tar.gz`,
 with a per-file manifest and full member readback. Regenerable caches are excluded.
+
+
+Native optional scalar array elements are now covered by the
+[optional-element address comparison](../writer_optional_array_address/README.md).
+The retained optional-element compiler control succeeds in both languages;
+its earlier rejection is superseded. Record/pointer payloads and the documented
+construction/qualification limits remain boundaries.

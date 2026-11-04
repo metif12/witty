@@ -147,7 +147,8 @@ def compiler_cases():
  for name,zb,vb in (
   ('optional-elements','const value:[2]?i32=.{7,null};',"value:=[?int(7),?int(none)]!\n"),
   ('pointer-elements','const value:[1]*allowzero u8=.{@ptrFromInt(0)};',"value:=[unsafe{&u8(usize(0))}]!\n")):
-  rows.append((name,zb+'try w.printAddress(&value);'+zverify,vb+'w.print_address(&value)'+reject,b'address-ok',b'rejected'))
+  if name=='optional-elements':rows.append((name,zb+'try w.printAddress(&value);'+zverify,vb+"w.print_address(&value)!\naddress:=unsafe{usize(voidptr(&value))}\nrequire(w.buffered().bytestr()=='[2]?i32@${address:x}')\nw.seek_to(0)!\nw.write_all('address-ok'.bytes())!",b'address-ok',b'address-ok'))
+  else:rows.append((name,zb+'try w.printAddress(&value);'+zverify,vb+'w.print_address(&value)'+reject,b'address-ok',b'rejected'))
  return rows
 
 def compiler_controls(proof,root,repo,zig,v,args,env):

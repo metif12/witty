@@ -65,11 +65,4 @@ fn test_unsupported_array_address_elements_fail_before_writes() ! {
 		rejected = true
 	}
 	assert rejected && writer.buffered().len == 0 && buffer == before
-	optionals := [?int(7), ?int(none)]!
-	rejected = false
-	writer.print_value('*', FormatOptions{}, &optionals, 0) or {
-		assert err.msg() == 'unsupported print_value array-pointer address element'
-		rejected = true
-	}
-	assert rejected && writer.buffered().len == 0 && buffer == before
 }

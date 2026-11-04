@@ -171,7 +171,8 @@ def compiler_cases():
   ('record','const R=struct{value:i32};var items:[1][1]R=.{.{.{.value=7}}};const value:[][1]R=&items;',"value:=[[Record{7}]!]\n"),
   ('optional-elements','var items:[1][2]?i32=.{.{7,null}};const value:[][2]?i32=&items;',"value:=[[?int(7),?int(none)]!]\n")):
   zv='const expected=try std.fmt.allocPrint(std.heap.page_allocator,"{s}@{x}",.{@typeName(@typeInfo(@TypeOf(value)).pointer.child),@intFromPtr(value.ptr)});if(!std.mem.eql(u8,w.buffered(),expected))return error.BadAddress;w.end=0;try w.writeAll("address-ok");'
-  rows.append((name,zb1+'try w.printValue("*",.{},value,0);'+zv,vb1+"w.print_value('*',p.FormatOptions{},value,0)"+reject,b'address-ok',b'rejected'))
+  if name=='optional-elements':rows.append((name,zb1+'try w.printValue("*",.{},value,0);'+zv,vb1+"w.print_value('*',p.FormatOptions{},value,0)!\nrequire(w.buffered().bytestr()=='[2]?i32@${usize(value.data):x}')\nw.seek_to(0)!\nw.write_all('address-ok'.bytes())!",b'address-ok',b'address-ok'))
+  else:rows.append((name,zb1+'try w.printValue("*",.{},value,0);'+zv,vb1+"w.print_value('*',p.FormatOptions{},value,0)"+reject,b'address-ok',b'rejected'))
  rows.append(('option-scalar-slice','var items:[2]?i32=.{7,null};const value:[]?i32=&items;try w.printValue("*",.{},value,0);const expected=try std.fmt.allocPrint(std.heap.page_allocator,"?i32@{x}",.{@intFromPtr(value.ptr)});if(!std.mem.eql(u8,w.buffered(),expected))return error.BadAddress;w.end=0;try w.writeAll("address-ok");',"value:=[?int(7),?int(none)]\nw.print_value('*',p.FormatOptions{},value,0)"+reject,b'address-ok',b'rejected'))
  rows.append(('fixed-array-value','try w.printValue("*",.{},[1][3]u8{.{0,1,2}},0);',"value:=[[u8(0),1,2]!]!\nw.print_value('*',p.FormatOptions{},value,0)"+reject,None,b'rejected'))
  rows.append(('bare-optional','try w.printValue("*",.{},@as(?[]allowzero align(1) [3]u8,null),0);',"w.print_value('*',p.FormatOptions{},?[]Bytes(none),0)"+reject,None,b'rejected'))

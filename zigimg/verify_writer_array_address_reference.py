@@ -138,7 +138,8 @@ def compiler_cases():
   ('record','const R=struct{value:i32};const value:[1]R=.{.{.value=7}};',"value:=[Record{7}]!\n"),
   ('option-elements','const value:[2]?i32=.{7,null};',"value:=[?int(7),?int(none)]!\n"),
   ('pointer-elements','const value:[1]*allowzero u8=.{@ptrFromInt(0)};',"value:=[unsafe{&u8(usize(0))}]!\n")):
-  rows.append((name,zb+'try w.printValue("*",.{},&value,0);'+zverify,vb+"w.print_value('*',p.FormatOptions{},&value,0)"+reject,b'address-ok',b'rejected'))
+  if name=='option-elements':rows.append((name,zb+'try w.printValue("*",.{},&value,0);'+zverify,vb+"w.print_value('*',p.FormatOptions{},&value,0)!\naddress:=unsafe{usize(voidptr(&value))}\nrequire(w.buffered().bytestr()=='[2]?i32@${address:x}')\nw.seek_to(0)!\nw.write_all('address-ok'.bytes())!",b'address-ok',b'address-ok'))
+  else:rows.append((name,zb+'try w.printValue("*",.{},&value,0);'+zverify,vb+"w.print_value('*',p.FormatOptions{},&value,0)"+reject,b'address-ok',b'rejected'))
  rows.append(('optional-present','const value:[3]u8=.{0,255,65};try w.printValue("?x",.{},@as(?*const [3]u8,&value),0);',"value:=[u8(0),255,65]!\nw.print_value('?x',p.FormatOptions{},?&[3]u8(&value),0)!",b'00ff41',None))
  rows.append(('optional-none-address','try w.printValue("*",.{},@as(?*[3]u8,null),0);',"w.print_value('*',p.FormatOptions{},?&[3]u8(none),0)"+reject,b'*[3]u8@0',b'rejected'))
  rows.append(('direct-api','try w.printAddress(@as(*allowzero align(1) [3]u8,@ptrFromInt(0x1234)));',"w.print_address(unsafe{&Bytes(voidptr(usize(0x1234)))})!",b'[3]u8@1234',b'[3]u8@1234'))

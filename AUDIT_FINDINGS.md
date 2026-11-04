@@ -12399,3 +12399,61 @@ claim. Witnesses can use stack space proportional to the array type. Synthetic
 addresses prove formatting only. Runtime evidence is little-endian 64-bit macOS.
 Scope and reproduction are in the
 [slice value-address comparison](zigimg/reference_probes/writer_slice_array_address/README.md).
+
+
+## Optional scalar array elements in Writer address names (2026-11-04)
+
+Writer address names now include optional native scalar elements, for example
+`[3]?i32` and `[2][3]?bool`, through direct/value pointer and slice routes. All
+13 supported native scalar payload types use canonical spellings. A zero witness
+binds the optional payload generic; the helper never unwraps a value, reads its
+private layout or examines caller elements. Some/absent contents do not affect
+the name. Original addresses, separate name/digit writes and ignored value-format
+options/depth are preserved. Nesting, array aliases, print composition and
+optional outer slices use the same route.
+
+The unchanged public Source bodies and independent writer-state model agree on
+**43,218 complete records per mode**, including **23,550 WriteFailed records**,
+plus **90 isolated returning controls per mode**. Four routes, three array shapes,
+all native payloads, 190 addresses, empty/nonempty headers, options and memory /
+file/pipe/closed-descriptor states retain four snapshots through caller mutation
+and flush. Failure controls cover prefix/digit boundaries, nesting, zero and
+maximal ignored options. Both modes pass without panics. Output SHA-256 is
+`0a918dca…f8f0784`.
+
+**20 external compiler pairs per mode** cover native routes, nesting, owned
+addresses, print, optional outer slices, element-presence changes, unchanged `any`
+contents, format enforcement and unsupported carriers. Owned consumers compare
+with their own inputs. Four regressions and a portable consumer check unchanged
+caller bytes, storage identity, mutation independent of names, failure boundaries
+and optional null alignment.
+
+An optional payload alias declaration reproduces a V C-generation ordering error
+without any formatter call; its exact diagnostic is classified separately from
+ordinary rejection. Raw optional fixed-array declarations compile, but their
+address payload names remain unsupported. Inline optional-pointer array literals
+can double-box; a zero-array witness reaches the intended unsupported-payload
+rejection. No private optional layout is interpreted or fabricated.
+
+All 131 image test files and 24 additional production/application/platform
+commands pass. Portable consumers run natively in both modes and compile for
+Windows/Linux; cross builds establish compilation only. Historical array-pointer,
+direct array-address and slice value-address record/state hashes remain unchanged
+in both modes; their optional-element compiler controls now accept V. Vaxis runtime
+tests are not rerun.
+
+Only optional dispatch and its payload-name helper in `io_value_array_address_name`
+change the runtime. Other formatter bodies, dispatch/IO and C remain byte-identical.
+Whole Source/library, executable, implementation, fixture/model/helper and input
+pins are checked before/after; expected results and bodies freeze before final
+runs. Independent replay checks observations, failures, compiler outcomes and
+provenance; every retained archive member is read back before committing.
+
+Optional aliased/array/record/pointer payloads, optional whole-array pointers,
+whole pointer aliases, nested optionals, qualifiers/sentinels and arbitrary named
+types remain boundaries. Source supports broader names. General allocation /
+layout/ownership/lifetime contracts, overlapping input/output, concurrency and
+huge successful output remain outside the claim. Witnesses can use stack space
+proportional to the array type. Synthetic addresses prove formatting only. Runtime
+evidence is little-endian 64-bit macOS. Scope and reproduction are in the
+[optional-element comparison](zigimg/reference_probes/writer_optional_array_address/README.md).

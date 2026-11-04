@@ -1755,3 +1755,11 @@ aligned nulls. The [slice value-address comparison](reference_probes/writer_slic
 covers 37,551 records, 20 compiler pairs and 135 isolated returns per mode.
 Broader element types, bare optional addresses and general representation
 contracts remain documented boundaries.
+
+
+Array address names now support optional native scalar elements, such as
+`[3]?i32`, through direct/value pointer and slice routes. Presence never affects
+the name and elements are not read. The [optional-element address comparison](reference_probes/writer_optional_array_address/README.md)
+covers 43,218 records, 20 compiler pairs and 90 isolated returns per mode.
+Optional payload aliases and broader array/record/pointer payloads retain measured
+compiler or representation boundaries.

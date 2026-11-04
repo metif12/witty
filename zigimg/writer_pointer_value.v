@@ -42,15 +42,28 @@ fn io_value_pointer[T](mut stream WriteStream, format string, options FormatOpti
 }
 
 // Bind through concrete witnesses: V can reuse element-type metadata across generics.
-fn io_value_array_address_name[A](_ A) !string {
-	$if A.unaliased_typ is $array_fixed {
+fn io_value_array_address_name[A](value A) !string {
+	$if A is $option {
+		return io_value_optional_address_name(value)
+	} $else $if A.unaliased_typ is $array_fixed {
 		zero := A{}
 		element := io_value_array_address_name(zero[0])!
 		return '[${zero.len}]' + element
-	} $else $if A is $option || A.indirections > 0 || ((int(A.unaliased_typ) >> 16) &0xff) > 0 {
+	} $else $if A.indirections > 0 || ((int(A.unaliased_typ) >> 16) &0xff) > 0 {
 		return error('unsupported print_value array-pointer address element')
 	} $else $if A.unaliased_typ is u8 || A.unaliased_typ is u16 || A.unaliased_typ is u32 || A.unaliased_typ is u64 || A.unaliased_typ is usize || A.unaliased_typ is i8 || A.unaliased_typ is i16 || A.unaliased_typ is int || A.unaliased_typ is i64 || A.unaliased_typ is isize || A.unaliased_typ is f32 || A.unaliased_typ is f64 || A.unaliased_typ is bool {
 		return io_address_type_name[A]()
+	} $else {
+		return error('unsupported print_value array-pointer address element')
+	}
+}
+
+// Name the optional payload type without unwrapping its value or inspecting its layout.
+fn io_value_optional_address_name[T](_ ?T) !string {
+	$if T is $option || T.indirections > 0 || ((int(T.unaliased_typ) >> 16) &0xff) > 0 {
+		return error('unsupported print_value array-pointer address element')
+	} $else $if T.unaliased_typ is u8 || T.unaliased_typ is u16 || T.unaliased_typ is u32 || T.unaliased_typ is u64 || T.unaliased_typ is usize || T.unaliased_typ is i8 || T.unaliased_typ is i16 || T.unaliased_typ is int || T.unaliased_typ is i64 || T.unaliased_typ is isize || T.unaliased_typ is f32 || T.unaliased_typ is f64 || T.unaliased_typ is bool {
+		return '?' + io_address_type_name[T]()
 	} $else {
 		return error('unsupported print_value array-pointer address element')
 	}
