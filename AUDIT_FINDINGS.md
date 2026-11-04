@@ -12635,3 +12635,63 @@ successful output remain outside the claim. Address witnesses can use stack spac
 proportional to the array type. Synthetic addresses prove formatting only. Runtime
 evidence is little-endian 64-bit macOS. Scope and reproduction are in the
 [nested optional-array comparison](zigimg/reference_probes/writer_nested_optional_array_value/README.md).
+
+
+## Native pointer array element Writer addresses (2026-11-04)
+
+Writer address names now include native pointer array elements, for example
+`[3]*u8`, `[2][3]*i32` and `[1]*anyopaque`. The 13 native scalar pointees, opaque
+pointers, nested arrays, array aliases and whole-pointer element aliases are
+covered through direct/value pointer and slice routes. Optional outer `?*` and
+named print arguments compose with that route. Pure type reflection and zero
+witnesses avoid reading caller elements or their targets. Original addresses,
+separate prefix/digit writes, ignored present options/depth and aligned nulls
+are preserved.
+
+The unchanged public Source methods and independent writer-state model agree on
+**46,648 full records per mode**, including **25,541 WriteFailed records**. Four
+routes, 14 pointer kinds, flat/nested/aliased payloads, 190 addresses, capacities,
+maximal options and memory/file/pipe/closed-descriptor states retain four snapshots
+through caller-buffer mutation and flush. **120 isolated returning controls per
+mode** preserve prefix/digit failures, nested names, zero/maximal addresses and
+optional outer nulls. No controls panic. Output SHA-256 is `af5874c7…2d069a27`.
+
+**11 external compiler pairs per mode** cover all native kinds/routes, owned
+addresses and mutations, print/optionals, unchanged default pointer-element
+contents, unsupported carriers and runtime/static formats. Four public regressions
+and a portable consumer additionally verify unchanged caller bytes/storage,
+changed pointer order and target values, no-read behavior and partial failures.
+Generic `&T` rebinding and chained reflected properties reproduce metadata limits;
+the implementation uses direct pointee reflection. Whole-pointer aliases normalize
+zero witnesses; aliases of pointee types remain unsupported by this name helper.
+
+All 135 image test files and 24 additional production/application/platform
+commands pass. Portable consumers run natively in both modes and compile for
+Windows/Linux; cross builds establish compilation only. Historical value-array
+address and direct-array address record/state hashes remain unchanged in both
+modes; their pointer-element compiler controls now check V's own canonical address.
+Source retains its own qualifier spelling checks. The returning corpus uses
+nonqualified element pointer types. Vaxis runtime tests are not rerun.
+
+A full disk interrupted a Windows dependency build. Saved validation inputs,
+commands and output hashes were checked before resuming that command. Regenerable
+caches and archive-backed duplicate outputs from completed checkpoints were
+reclaimed with verified archives retained; cleanup/resumption receipts accompany
+the evidence.
+
+The runtime diff is confined to pointer/opaque name dispatch and the private
+pointer-name helper. Removing those changes reconstructs the old implementation
+exactly; other bodies, dispatcher/IO and C remain byte-identical. Whole Source /
+library, executable, implementation, fixture/model/helper and input pins are
+checked before/after; expected bodies and outputs freeze before final runs.
+Independent replay checks observations, failures, compiler outcomes and provenance;
+every retained archive member is read back before commit.
+
+Optional pointer elements, pointee aliases, deeper indirection, record/enum /
+function/array pointees, flat pointer-slice value addresses, broader optional
+compositions and qualifiers/sentinels remain outside the comparison. General
+allocation/layout/ownership/lifetime contracts, overlapping input/output,
+concurrency and huge successful output remain outside the claim. Zero witnesses
+can use stack space proportional to the array type. Synthetic addresses prove
+formatting only. Runtime evidence is little-endian 64-bit macOS. Scope and
+reproduction are in the [pointer-element address comparison](zigimg/reference_probes/writer_pointer_element_address/README.md).

@@ -49,13 +49,52 @@ fn io_value_array_address_name[A](value A) !string {
 		zero := A{}
 		element := io_value_array_address_name(zero[0])!
 		return '[${zero.len}]' + element
+	} $else $if A.unaliased_typ is voidptr {
+		return '*anyopaque'
 	} $else $if A.indirections > 0 || ((int(A.unaliased_typ) >> 16) &0xff) > 0 {
-		return error('unsupported print_value array-pointer address element')
+		return io_value_array_pointer_address_name(value)
 	} $else $if A.unaliased_typ is u8 || A.unaliased_typ is u16 || A.unaliased_typ is u32 || A.unaliased_typ is u64 || A.unaliased_typ is usize || A.unaliased_typ is i8 || A.unaliased_typ is i16 || A.unaliased_typ is int || A.unaliased_typ is i64 || A.unaliased_typ is isize || A.unaliased_typ is f32 || A.unaliased_typ is f64 || A.unaliased_typ is bool {
 		return io_address_type_name[A]()
 	} $else {
 		return error('unsupported print_value array-pointer address element')
 	}
+}
+
+// Inspect the pointer type directly: generic &T rebinding can lose its pointee metadata.
+fn io_value_array_pointer_address_name[P](_ P) !string {
+	$if P is $alias {
+		normalized := $zero(P.unaliased_typ)
+		return io_value_array_pointer_address_name(normalized)
+	} $else $if P.indirections == 1 {
+		$if P.pointee_type is u8 {
+			return '*u8'
+		} $else $if P.pointee_type is u16 {
+			return '*u16'
+		} $else $if P.pointee_type is u32 {
+			return '*u32'
+		} $else $if P.pointee_type is u64 {
+			return '*u64'
+		} $else $if P.pointee_type is usize {
+			return '*usize'
+		} $else $if P.pointee_type is i8 {
+			return '*i8'
+		} $else $if P.pointee_type is i16 {
+			return '*i16'
+		} $else $if P.pointee_type is int {
+			return '*i32'
+		} $else $if P.pointee_type is i64 {
+			return '*i64'
+		} $else $if P.pointee_type is isize {
+			return '*isize'
+		} $else $if P.pointee_type is f32 {
+			return '*f32'
+		} $else $if P.pointee_type is f64 {
+			return '*f64'
+		} $else $if P.pointee_type is bool {
+			return '*bool'
+		}
+	}
+	return error('unsupported print_value array-pointer address element')
 }
 
 // Name the optional payload type without unwrapping its value or inspecting its layout.

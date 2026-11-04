@@ -1789,3 +1789,11 @@ mixed address routes compile without reading elements. The [nested optional-arra
 comparison](reference_probes/writer_nested_optional_array_value/README.md) covers
 36,729 records, 23 compiler pairs and 176 isolated returns per mode. Raw declaration
 reflection and element-assignment compiler limits remain documented separately.
+
+
+Array address names now support native scalar/opaque pointer elements, nested
+arrays and whole-pointer element aliases without reading arrays or their targets.
+Direct/value pointer and slice routes, optional outer slices and print compose
+through the same helper. The [pointer-element address comparison](reference_probes/writer_pointer_element_address/README.md)
+covers 46,648 records, 11 compiler pairs and 120 isolated returns per mode.
+Optional pointer elements, pointee aliases and deeper indirection remain boundaries.

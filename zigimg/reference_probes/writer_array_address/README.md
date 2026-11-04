@@ -83,3 +83,10 @@ Native optional scalar array elements are now covered by the
 The retained optional-element compiler control succeeds in both languages;
 its earlier rejection is superseded. Record/pointer payloads and the documented
 construction/qualification limits remain boundaries.
+
+
+The later [pointer-element address checkpoint](../writer_pointer_element_address/README.md)
+extends names to native scalar/opaque pointer elements and whole-pointer aliases.
+The former `pointer-elements` rejection now verifies V's own canonical address
+and returns `address-ok`; Source retains its own allowzero spelling check. The
+original returning corpus and retained-state hashes above are unchanged.
