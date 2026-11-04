@@ -1661,3 +1661,14 @@ Optionals and `Writer.print` use the same hooks; default reflection and enum
 numeric formatting bypass them. The [hook comparison](reference_probes/writer_value_hooks/README.md)
 covers 6,850 records and 19 external compiler pairs per mode. Nonfallible methods,
 mutable receivers and existing pointer/interface/carrier limits remain boundaries.
+
+
+`WriteStream.print_vector(format, options, lanes, max_depth)` now exposes the
+public vector helper using inline fixed-array lanes and aliases of native
+integers, f32/f64 and bool. Depth, per-lane formats/options and separate
+opening/leaf/separator/closing failures follow the pinned writer. This explicit
+helper preserves ordinary array dispatch, including its different byte encoding.
+The [vector helper comparison](reference_probes/writer_vector/README.md) covers
+7,048 records, 15 compiler pairs, 16 isolated returns and eight panic/state pairs
+per mode. Runtime format validation, pointer lanes, native SIMD layout and other
+existing carrier limits remain documented boundaries.

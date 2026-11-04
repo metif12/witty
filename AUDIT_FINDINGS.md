@@ -11886,3 +11886,57 @@ interfaces, broader pointers, Source comptime coercions and allocation/layout /
 lifetime/copy contracts retain documented limits. Other runtime platforms/widths
 and arbitrary user-method behavior remain unproven. Scope and reproduction are
 in the [hook comparison](zigimg/reference_probes/writer_value_hooks/README.md).
+
+## Public Writer.printVector helper (2026-11-04)
+
+`WriteStream.print_vector(format, options, lanes, max_depth)` now translates the
+pinned public vector formatter for inline fixed-array lanes and aliases of native
+integers, f32/f64 and bool. It preserves depth-zero output, individual opening,
+leaf, separator and closing writes, and unchanged per-lane format/options at one
+less depth. Scalar byte formatting remains distinct from ordinary byte-array
+encoding. Valid direct character/Unicode/duration/byte-size formats also work.
+Existing `print_value` array dispatch is unchanged; fixed arrays do not become
+implicit vector carriers.
+
+The unchanged public Source body and independent scalar/writer-state model agree
+on **7,048 records per mode**, including **2,992 WriteFailed records**. Seven
+carriers, lengths one/three/eight, numeric formats, lane bits, special floats,
+options, depth, capacities and memory/positional/streaming/pipe/closed-descriptor
+states are covered. Four snapshots retain writer/backing/views, lane bits and
+file contents through caller mutation and flush. Output SHA-256 is `0dd0cd34…54f32b`.
+
+**15 external compiler pairs per mode** cover all native scalar widths, direct
+character/Unicode/unit formats, invalid carriers and leaf formats, runtime formats
+and pointer lanes. Source supports pointer lanes; V currently rejects them.
+Source validates static leaf formats even at depth zero. V checks visited leaves
+at runtime, after the opening write; zero depth can bypass format rejection.
+Unsupported V lane/carrier types are rejected before depth cutoff.
+
+**Eight paired traps and 16 isolated returns per mode** retain exact backing /
+pending / unused bytes for the inherited float hexadecimal scratch-buffer failure.
+Both modes keep the exact `attempt to unwrap error: WriteFailed` diagnostic.
+Opening-write failure and depth zero suppress the private-rendering trap in
+Source order. Five regressions additionally cover aliases, per-lane padding,
+array/vector byte distinction, direct char/float/bool formats and partial output.
+
+All **121 image test files** and **23 additional production/application/platform
+commands** pass. Focused production tests cover vectors, arrays, floats and struct
+hooks. Native/Linux application checks, three Windows dependency libraries,
+ordinary/production Windows unit builds, two Linux shared libraries and portable
+consumers pass. Portable consumers run natively in both modes and compile for
+Windows and Linux; cross builds establish compilation only. Historical fixed-array
+and floating-point comparisons retain their hashes in both modes. Vaxis runtime
+tests are not rerun.
+
+The runtime addition is isolated in a new file; existing scalar formatters, IO/C
+and array dispatch remain byte-identical. Whole Source, selected compiler/float
+libraries, executables, implementation, fixtures, models/helpers and inputs are
+pinned before/after; all 1,336 Ryu limbs retain their source values. Final bodies
+and hashes freeze before both-mode proofs. Replay verifies observations, controls,
+compiler outcomes and provenance; every retained archive member is read back.
+
+Fixed-array lanes do not establish native SIMD layout, packing, alignment,
+copy/mutation behavior or lifetime contracts. Zero-length V array declarations,
+pointer/optional-pointer lanes, nonnative widths and existing unsupported scalar
+formats remain boundaries. Other runtime platforms/widths remain unproven. Scope
+and reproduction are in the [vector helper comparison](zigimg/reference_probes/writer_vector/README.md).
