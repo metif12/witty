@@ -80,3 +80,11 @@ python3 zigimg/verify_writer_nested_optional_array_value_reference.py /path/to/l
 
 Session evidence: `/Users/alex/.cache/witty-writer-nested-optional-array-value-20261104/verified-proofs.tar.gz`,
 with a per-file manifest and full member readback. Regenerable caches are excluded.
+
+
+The subsequent [optional-pointer element checkpoint](../writer_optional_pointer_address/README.md)
+adds native/opaque optional pointer element names to slices and concrete fixed
+arrays. This driver's former optional-pointer rejection control now checks the
+positive canonical V address. Its returning corpus and state hashes are unchanged.
+Fixed arrays of optional whole-pointer aliases retain a measured V C-generation
+limit; aliases in dynamic slices work.

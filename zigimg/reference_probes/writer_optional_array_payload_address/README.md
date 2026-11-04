@@ -88,3 +88,11 @@ clone. `optional-elements-value` is now a positive V check, and native/value/out
 compiler consumers cover all three payload shapes. The original returning corpus
 and retained-state hashes above are unchanged. Raw declaration reflection and
 element-assignment controls remain separate compiler limits.
+
+
+The subsequent [optional-pointer element checkpoint](../writer_optional_pointer_address/README.md)
+adds native/opaque optional pointer element names to slices and concrete fixed
+arrays. This driver's former optional-pointer rejection control now checks the
+positive canonical V address. Its returning corpus and state hashes are unchanged.
+Fixed arrays of optional whole-pointer aliases retain a measured V C-generation
+limit; aliases in dynamic slices work.

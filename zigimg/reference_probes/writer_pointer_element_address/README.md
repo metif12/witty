@@ -87,3 +87,11 @@ extends direct/value address routes to slices of native scalar pointers and
 whole-pointer aliases, and value-format `*` to opaque pointer slices. The former
 `flat-pointer-slice` rejection control now returns the canonical `*u8@1234`.
 The array corpus and retained-state hashes above remain unchanged.
+
+
+The subsequent [optional-pointer element checkpoint](../writer_optional_pointer_address/README.md)
+adds native/opaque optional pointer element names to slices and concrete fixed
+arrays. This driver's former optional-pointer rejection control now checks the
+positive canonical V address. Its returning corpus and state hashes are unchanged.
+Fixed arrays of optional whole-pointer aliases retain a measured V C-generation
+limit; aliases in dynamic slices work.

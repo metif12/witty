@@ -99,8 +99,14 @@ fn io_value_array_pointer_address_name[P](_ P) !string {
 
 // Name the optional payload type without unwrapping its value or inspecting its layout.
 fn io_value_optional_address_name[T](_ ?T) !string {
-	$if T is $option || T.indirections > 0 || ((int(T.unaliased_typ) >> 16) &0xff) > 0 {
+	$if T is $option {
 		return error('unsupported print_value array-pointer address element')
+	} $else $if T.unaliased_typ is voidptr {
+		return '?*anyopaque'
+	} $else $if T.indirections > 0 || ((int(T.unaliased_typ) >> 16) &0xff) > 0 {
+		zero := $zero(T)
+		name := io_value_array_pointer_address_name(zero)!
+		return '?' + name
 	} $else $if T.unaliased_typ is $array_fixed {
 		zero := T{}
 		name := io_value_array_address_name(zero)!

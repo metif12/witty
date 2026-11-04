@@ -234,7 +234,7 @@ def compiler_cases():
  reject=" or {require(backing==before && w.buffered().len==0)\nprint('rejected')\nreturn}\npanic('unexpected success')"
  zv='const expected=try std.fmt.allocPrint(std.heap.page_allocator,"{s}@{x}",.{@typeName(@typeInfo(@TypeOf(value)).pointer.child),@intFromPtr(value.ptr)});if(!std.mem.eql(u8,w.buffered(),expected))return error.BadAddress;w.end=0;try w.writeAll("address-ok");'
  rows.append(('optional-record','const R=struct{value:i32};var items:[1]?R=.{null};const value:[]?R=&items;try w.printAddress(value);'+zv,"value:=[?Record(none)]\nw.print_address(value)"+reject,b'address-ok',b'rejected'))
- rows.append(('optional-pointer','var items:[1]?*u8=.{null};const value:[]?*u8=&items;try w.printValue("*",.{},value,0);'+zv,"value:=unsafe{[]?&u8{len:1}}\nw.print_value('*',p.FormatOptions{},value,0)"+reject,b'address-ok',b'rejected'))
+ rows.append(('optional-pointer','var items:[1]?*u8=.{null};const value:[]?*u8=&items;try w.printValue("*",.{},value,0);'+zv,"value:=unsafe{[]?&u8{len:1}}\nw.print_value('*',p.FormatOptions{},value,0)!\nrequire(w.buffered().bytestr()=='?*u8@${usize(value.data):x}')\nw.seek_to(0)!\nw.write_all('address-ok'.bytes())!",b'address-ok',b'address-ok'))
  zs='const value:[]allowzero align(1) ?[2][]const u8=@as([*]allowzero align(1) ?[2][]const u8,@ptrFromInt(0x1234))[0..0];'
  rows.append(('array-string-payload',zs+'try w.printAddress(value);'+zv,"zero:=[2]string{}\nvalue:=borrowed(zero,usize(0x1234),0)\nw.print_address(value)"+reject,b'address-ok',b'rejected'))
  rows.append(('bare-optional',zb+'try w.printValue("*",.{},@as(?[]allowzero align(1) ?[2]i32,view),0);',vb+"w.print_value('*',p.FormatOptions{},?Values(view),0)"+reject,None,b'rejected'))

@@ -1805,3 +1805,12 @@ including whole-pointer aliases. Opaque pointer slices also support value-format
 composition are preserved. The [pointer-slice address comparison](reference_probes/writer_pointer_slice_address/README.md)
 covers 29,708 records, 11 compiler pairs and 90 isolated returns per mode.
 Optional pointer elements, pointee aliases and deeper indirection remain boundaries.
+
+
+Address names now support optional native scalar/opaque pointer elements in
+slices and concrete fixed arrays, without unwrapping elements or reading targets.
+Aliases in dynamic slices, optional outer slices and print compose through the
+same helper. The [optional-pointer element comparison](reference_probes/writer_optional_pointer_address/README.md)
+covers 29,708 records, 13 compiler pairs and 120 isolated returns per mode.
+Fixed arrays of optional whole-pointer aliases retain a measured V C-generation
+limit; pointee aliases and deeper indirection remain boundaries.

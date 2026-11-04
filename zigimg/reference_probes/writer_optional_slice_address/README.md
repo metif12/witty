@@ -77,3 +77,11 @@ extends the helper to represented `[]?[N]T` payloads with native scalar leaves.
 Named payload aliases and explicit generic slice returns retain the optional;
 raw declarations and some value-format combinations have separately measured
 V compiler limits. The scalar corpus and retained-state hashes above are unchanged.
+
+
+The subsequent [optional-pointer element checkpoint](../writer_optional_pointer_address/README.md)
+adds native/opaque optional pointer element names to slices and concrete fixed
+arrays. This driver's former optional-pointer rejection control now checks the
+positive canonical V address. Its returning corpus and state hashes are unchanged.
+Fixed arrays of optional whole-pointer aliases retain a measured V C-generation
+limit; aliases in dynamic slices work.

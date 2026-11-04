@@ -166,7 +166,7 @@ def compiler_cases():
  rows.append(('array-payload-baseline','const value:[3]?[2]i16=.{null,null,null};try w.printInt(value.len,10,.lower,.{});',"value:=[3]?[2]i16{}\nprint(value.len)",b'3',b'3'))
  reject=" or {require(backing==before && w.buffered().len==0)\nprint('rejected')\nreturn}\npanic('unexpected success')"
  zv='const expected=try std.fmt.allocPrint(std.heap.page_allocator,"{s}@{x}",.{@typeName(@TypeOf(value)),@intFromPtr(&value)});if(!std.mem.eql(u8,w.buffered(),expected))return error.BadAddress;w.end=0;try w.writeAll("address-ok");'
- rows.append(('optional-pointer-element','const value:[2]?*u8=.{null,null};try w.printAddress(&value);'+zv,"value:=unsafe{[2]?&u8{}}\nw.print_address(&value)"+reject,b'address-ok',b'rejected'))
+ rows.append(('optional-pointer-element','const value:[2]?*u8=.{null,null};try w.printAddress(&value);'+zv,"value:=unsafe{[2]?&u8{}}\nw.print_address(&value)!\nrequire(w.buffered().bytestr()=='[2]?*u8@${usize(voidptr(&value)):x}')\nw.seek_to(0)!\nw.write_all('address-ok'.bytes())!",b'address-ok',b'address-ok'))
  rows.append(('record','const R=struct{value:i32};const value:[1]R=.{.{.value=7}};try w.printAddress(&value);'+zv,"value:=[Record{7}]!\nw.print_address(&value)"+reject,b'address-ok',b'rejected'))
  rows.append(('array-by-value','try w.printAddress([3]?i32{null,null,null});',"value:=Numbers{}\nw.print_address(value)!",None,None))
  rows.append(('optional-whole-pointer','try w.printAddress(@as(?*[3]?i32,null));',"w.print_address(?&Numbers(none))!",b'*[3]?i32@0',None))

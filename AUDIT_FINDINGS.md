@@ -12747,3 +12747,62 @@ allocation/layout/ownership/lifetime contracts, overlapping input/output,
 concurrency and huge successful output remain outside the claim. Synthetic
 addresses prove formatting only. Runtime evidence is little-endian 64-bit macOS.
 Scope and reproduction are in the [pointer-slice address comparison](zigimg/reference_probes/writer_pointer_slice_address/README.md).
+
+
+## Optional pointer element Writer addresses (2026-11-04)
+
+`print_address` and value-format `*` now accept optional native scalar/opaque
+pointer elements in slices and concrete fixed arrays. Canonical names such as
+`?*u8@1234` and `[2]?*i32@1234`, original storage addresses, separate prefix/digit
+writes and ignored present options/depth follow pinned Source. No optional
+payload is unwrapped and no element or target is read. Whole-pointer aliases in
+slices, whole-slice/array aliases, nested array names, optional outer slices and
+named print arguments compose through the existing routes.
+
+Unchanged public Source methods and the independent writer-state model agree on
+**29,708 full records per mode**, including **17,788 WriteFailed records**. All
+13 native scalar pointees plus opaque pointers, three routes, aliases, 190
+addresses, three lengths, capacities, maximal options and memory/file/pipe/closed
+descriptor states retain four snapshots through caller-buffer mutation and flush.
+**120 isolated returning controls per mode** preserve prefix/digit failures for
+slices and arrays, maximal addresses and null padding. No controls panic. Output
+SHA-256 is `486a7844…4fb8c5d6`.
+
+**13 external compiler pairs per mode** verify native/opaque slice and array
+names, nested arrays, owned addresses/mutations, aliases, print/optionals,
+unchanged default contents, unsupported names and runtime/static formats. Four
+public regressions and a portable consumer check caller storage, target and
+pointer-order changes, no-read behavior and partial writes. Owned consumers
+compare their own addresses, not raw addresses across processes.
+
+V 0.5.2 emits optional fixed-array element declarations before the whole-pointer
+alias they use (`[2]?Element`, `type Element = &u8`). That isolated compiler pair
+retains the C-generation failure in both modes. Concrete pointer elements in
+fixed arrays and optional whole-pointer aliases in dynamic slices pass. Named
+array aliases and local unwrapped pointer variables avoid fixture parser and
+assertion-rendering compiler limits respectively.
+
+All 137 image test files and 24 additional production/application/platform
+commands pass. Portable consumers run natively in both modes and compile for
+Windows/Linux; cross builds establish compilation only. Historical pointer-slice
+and optional-scalar-array address record/control/state hashes remain unchanged
+in both modes. Six affected historical drivers promote optional-pointer rejection
+controls to positive canonical-address checks. Vaxis runtime tests are not rerun.
+
+The runtime diff is confined to the private optional-name helper. Removing the
+two branches and restoring its guard reconstructs the old implementation exactly;
+other bodies and C remain byte-identical. Source/library, executable,
+implementation, fixture/model/helper and input pins are checked before/after;
+expected bodies and outputs freeze before final runs. Independent replay checks
+observations, failures, compiler outcomes and provenance; every retained archive
+member is read back before commit. Regenerable caches and verified archive-backed
+duplicates from completed checkpoints were reclaimed while retaining their archives.
+
+Aliases of pointee types, deeper indirection, aggregate/function/array pointees,
+optional whole-array pointers, bare optional addresses, qualifiers/sentinels and
+broader representation contracts remain boundaries. Source requires static
+formats; V accepts runtime strings. General allocation/layout/ownership/lifetime
+contracts, overlapping input/output, concurrency and huge successful output are
+outside the claim. Zero witnesses can use stack space proportional to array types.
+Synthetic addresses prove formatting only. Runtime evidence is little-endian
+64-bit macOS. Scope and reproduction are in the [optional-pointer element comparison](zigimg/reference_probes/writer_optional_pointer_address/README.md).
