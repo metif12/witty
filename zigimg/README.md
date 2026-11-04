@@ -1780,3 +1780,12 @@ value-format calls for that shape retain a measured V C-generation limit. The
 [optional-array payload comparison](reference_probes/writer_optional_array_payload_address/README.md)
 covers 24,496 records, 19 compiler pairs and 105 isolated returns per mode.
 Raw declaration reflection and element-assignment limits are documented separately.
+
+
+Optional slice elements now bind their concrete type before value dispatch,
+avoiding V's incorrect argument clone for optional arrays containing optional
+scalars. Recursive contents, leaf options/depth and `Writer.print` work, and all
+mixed address routes compile without reading elements. The [nested optional-array
+comparison](reference_probes/writer_nested_optional_array_value/README.md) covers
+36,729 records, 23 compiler pairs and 176 isolated returns per mode. Raw declaration
+reflection and element-assignment compiler limits remain documented separately.

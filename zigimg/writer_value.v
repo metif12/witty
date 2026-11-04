@@ -153,7 +153,13 @@ fn io_value_slice[T](mut stream WriteStream, format string, options FormatOption
 	if max_depth == 0 { return stream.write_all('{ ... }'.bytes()) }
 	stream.write_all('{ '.bytes())!
 	for i in 0 .. value.len {
-		stream.print_value[T](format, options, value[i], max_depth - 1)!
+		$if T is $option {
+			// Binding the element avoids V cloning optional array payloads as a leaf option.
+			element := value[i]
+			stream.print_value[T](format, options, element, max_depth - 1)!
+		} $else {
+			stream.print_value[T](format, options, value[i], max_depth - 1)!
+		}
 		if i != value.len - 1 { stream.write_all(', '.bytes())! }
 	}
 	return stream.write_all(' }'.bytes())

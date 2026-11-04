@@ -80,3 +80,11 @@ python3 zigimg/verify_writer_optional_array_payload_address_reference.py /path/t
 
 Session evidence: `/Users/alex/.cache/witty-writer-optional-array-payload-address-20261104/verified-proofs.tar.gz`,
 with a per-file manifest and full member readback. Regenerable caches are excluded.
+
+
+The subsequent [nested optional-array value checkpoint](../writer_nested_optional_array_value/README.md)
+binds optional slice elements before dispatch, avoiding the incorrect leaf-option
+clone. `optional-elements-value` is now a positive V check, and native/value/outer
+compiler consumers cover all three payload shapes. The original returning corpus
+and retained-state hashes above are unchanged. Raw declaration reflection and
+element-assignment controls remain separate compiler limits.

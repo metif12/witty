@@ -130,7 +130,6 @@ def compiler_cases():
   zb='';vb='';expected=b''
   for i,(zt,vt) in enumerate(zip(TYPE_NAMES,vtypes)):
    for shape,payload in enumerate(('[2]'+zt,'[2][3]'+zt,'[3]?'+zt)):
-    if shape==2 and api!='direct':continue
     name=f'view{i}_{shape}';zb+=f'const {name}:[]allowzero align(1) ?{payload}=@as([*]allowzero align(1) ?{payload},@ptrFromInt(0x1234))[0..0];'
     if api=='direct':zb+=f'try w.printAddress({name});'
     elif api=='value':zb+=f'try w.printValue("*",.{{.width=std.math.maxInt(usize),.precision=std.math.maxInt(usize)}},{name},0);'
@@ -152,7 +151,7 @@ def compiler_cases():
  ok('content-any',zo+'try w.printValue("any",.{},value,2);',vo+"w.print_value('any',p.FormatOptions{},value,2)!",b'{ { 7, 8 }, null }')
  rows.append(('raw-array-declaration-baseline','const value:[3]?[2]i16=.{null,null,null};try w.writeAll(@typeName(@TypeOf(value)));',"value:=[3]?[2]i16{}\nprint(typeof(value).name)",b'[3]?[2]i16',b'[3][2]i16'))
  rows.append(('array-assignment-baseline','var items:[2]?[2]i32=.{.{7,8},null};items[0]=null;try w.printInt(items.len,10,.lower,.{});',"payload:=Pair([int(7),8]!)\npresent:=?Pair(payload)\nmut value:=[present,?Pair(none)]\nvalue[0]=none\nprint(value.len)",b'2',None))
- rows.append(('optional-elements-value','const value:[]allowzero align(1) ?[3]?bool=@as([*]allowzero align(1) ?[3]?bool,@ptrFromInt(0x1234))[0..0];try w.printValue("*",.{},value,0);',"zero:=Payload12_2{}\nvalue:=borrowed(zero,usize(0x1234),0)\nw.print_value('*',p.FormatOptions{},value,0)!",b'?[3]?bool@1234',None))
+ rows.append(('optional-elements-value','const value:[]allowzero align(1) ?[3]?bool=@as([*]allowzero align(1) ?[3]?bool,@ptrFromInt(0x1234))[0..0];try w.printValue("*",.{},value,0);',"zero:=Payload12_2{}\nvalue:=borrowed(zero,usize(0x1234),0)\nw.print_value('*',p.FormatOptions{},value,0)!",b'?[3]?bool@1234',b'?[3]?bool@1234'))
  reject=" or {require(backing==before && w.buffered().len==0)\nprint('rejected')\nreturn}\npanic('unexpected success')"
  zv='const expected=try std.fmt.allocPrint(std.heap.page_allocator,"{s}@{x}",.{@typeName(@typeInfo(@TypeOf(value)).pointer.child),@intFromPtr(value.ptr)});if(!std.mem.eql(u8,w.buffered(),expected))return error.BadAddress;w.end=0;try w.writeAll("address-ok");'
  rows.append(('optional-record','const R=struct{value:i32};var items:[1]?R=.{null};const value:[]?R=&items;try w.printAddress(value);'+zv,"value:=[?Record(none)]\nw.print_address(value)"+reject,b'address-ok',b'rejected'))
@@ -177,11 +176,10 @@ def compiler_controls(proof,root,repo,zig,v,args,env):
    command=([str(zig),'build-exe','-target',args.target,'-lc','-O','ReleaseSafe' if args.v_prod else 'Debug','--global-cache-dir',str(root.parent/'zig-global'),'--cache-dir',str(root/'zig-cache'),'-femit-bin='+str(binary),str(path)] if lang=='native' else [str(v),'-enable-globals',*(['-prod'] if args.v_prod else []),'-path',f'{repo}|@vlib|@vmodules','-o',str(binary),str(path)])
    label=name+'-'+lang;result=proof.run(command,label+'-compile',env=env,timeout=args.timeout,check=False)
    if expected is None:
-    if name in ('array-assignment-baseline','optional-elements-value') and lang=='translated':
+    if name=='array-assignment-baseline' and lang=='translated':
      diagnostic=result.stdout+result.stderr
      assert result.returncode==1 and b'C compilation error' in diagnostic,label
-     if name=='array-assignment-baseline':assert b"error: expected ')'" in diagnostic and b'builtin__array_set' in diagnostic,label
-     else:assert b'incompatible type' in diagnostic and b'_option_bool' in diagnostic and b'builtin___option_clone' in diagnostic,label
+     assert b"error: expected ')'" in diagnostic and b'builtin__array_set' in diagnostic,label
      outcomes[name][lang]='cgen-reject'
     else:ordinary_rejection(result,label);outcomes[name][lang]='reject'
    else:

@@ -12574,3 +12574,64 @@ concurrency and huge successful output remain outside the claim. Zero witnesses
 can use stack space proportional to the array type. Synthetic addresses prove
 formatting only. Runtime evidence is little-endian 64-bit macOS. Scope and
 reproduction are in the [optional-array payload comparison](zigimg/reference_probes/writer_optional_array_payload_address/README.md).
+
+
+## Nested optional-array Writer value dispatch (2026-11-04)
+
+`io_value_slice` now binds optional elements to a concrete local before dispatch.
+This avoids V 0.5.2 generating an incorrect leaf-option argument clone for slices
+of optional fixed arrays containing optional scalars. The unused `any` path
+previously prevented address-only calls from compiling too. All mixed native
+address routes now compile; recursive contents, depth/leaf options and named
+print arguments preserve pinned Source behavior. Nonoptional elements retain
+the previous forwarding call.
+
+The unchanged public Source methods and independent writer-state model agree on
+**36,729 full records per mode**, including **18,148 WriteFailed records**. Address
+cases cover all 13 native scalar leaves, flat/nested/optional-element payloads,
+three routes, 190 addresses, empty/nonempty slices and maximal ignored options.
+Owned content cases cover boolean/signed/unsigned/byte leaves, outer/inner
+presence, nested arrays, depth, width/precision/alignment/binary fill, print,
+capacities and memory/file/pipe/closed-descriptor states. Four snapshots retain
+writer/backing/file state through caller mutation and flush. Public logical input
+observers agree before/after formatting without interpreting private optional
+layout. Optional bytes retain numeric formatting. Output SHA-256 is
+`b99642f7…9446a40`.
+
+**176 isolated returning controls per mode** preserve address prefix/digit
+failures, recursive boolean/signed output, leaf padding, nulls and print literals.
+Maximal null width fails in finite memory after retaining the fill prefix. No
+new controls panic. **23 external compiler pairs per mode** cover mixed native
+routes, aliases, owned addresses, reversal, recursive contents, outer optionals,
+print, formats and retained compiler boundaries. The former
+`optional-elements-value` C-generation rejection is now a positive check;
+native/value/outer compiler consumers cover the full payload matrix. Four public
+regressions and a portable consumer additionally verify no-read addresses,
+unchanged caller bytes/storage, numeric bytes, nested arrays, options/depth and
+partial writes.
+
+All 134 image test files and 24 additional production/application/platform
+commands pass. Portable consumers run natively in both modes and compile for
+Windows/Linux; cross builds establish compilation only. Historical fixed-array
+values, optional values and optional-array payload addresses retain record /
+control/state hashes in both modes, including older panic/state pairs. Vaxis
+runtime tests are not rerun.
+
+The runtime diff is confined to the optional element branch in `io_value_slice`.
+Substituting the original forwarding call reconstructs the previous implementation
+exactly; nonoptional forwarding, other formatters, IO and C retain their bodies.
+Whole Source/library, executable, implementation, fixture/model/helper and input
+pins are checked before/after; expected bodies and outputs freeze before final
+runs. Independent replay checks observations, failure states, compiler outcomes
+and provenance; every retained archive member is read back before commit.
+
+Raw `[3]?[2]i16{}` declarations still lose the optional marker in V reflection;
+optional fixed-array element assignment still emits invalid C without formatting.
+Independent controls retain those limits. Named locals avoid inline array argument
+limits. Existing unsupported carriers, format validation differences, qualifiers /
+sentinels and representation boundaries remain. General allocation/layout /
+ownership/lifetime contracts, overlapping input/output, concurrency and huge
+successful output remain outside the claim. Address witnesses can use stack space
+proportional to the array type. Synthetic addresses prove formatting only. Runtime
+evidence is little-endian 64-bit macOS. Scope and reproduction are in the
+[nested optional-array comparison](zigimg/reference_probes/writer_nested_optional_array_value/README.md).
