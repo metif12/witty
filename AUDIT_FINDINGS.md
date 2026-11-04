@@ -12806,3 +12806,67 @@ contracts, overlapping input/output, concurrency and huge successful output are
 outside the claim. Zero witnesses can use stack space proportional to array types.
 Synthetic addresses prove formatting only. Runtime evidence is little-endian
 64-bit macOS. Scope and reproduction are in the [optional-pointer element comparison](zigimg/reference_probes/writer_optional_pointer_address/README.md).
+
+
+## Scalar pointee aliases in Writer addresses (2026-11-04)
+
+Array/slice address names now accept aliases of all 13 native scalar pointees.
+For `type Number = int`, `[]&Number` prints `*i32@...` and a pointer to
+`[3]&Number` prints `[3]*i32@...`. Whole-pointer aliases, nested arrays, whole
+array/slice aliases, optional pointer slice elements, optional outer slices and
+named print arguments compose with these names. Opaque pointer spelling is
+unchanged. The helper binds a zero pointee witness to a separate scalar generic,
+checks the native whitelist and reuses the canonical name function. It does not
+read elements or targets, and retains the single-indirection limit.
+
+Unchanged public Source methods and the independent writer-state model agree on
+**46,648 full records per mode**, including **25,541 WriteFailed records**. Four
+routes, native aliases plus an opaque control, flat/nested/whole-pointer aliases,
+190 addresses, lengths zero/one/three, capacities, maximal options and memory /
+file/pipe/closed-descriptor states retain four snapshots through caller-buffer
+mutation and flush. **120 isolated returning controls per mode** preserve prefix
+and digit failures, nested names, zero/maximal addresses and optional nulls. No
+controls panic. Output SHA-256 is `af5874c7…2d069a27`.
+
+**14 external compiler pairs per mode** check native matrices, owned array/slice
+storage and mutation, print/optionals, native default contents, scalar/optional
+pointer slices, unsupported names and runtime/static formats. Five public
+regressions and a portable consumer check caller storage, target/pointer-order
+changes, no-read behavior and partial writes. Owned consumers compare their own
+addresses, not raw addresses across processes.
+
+V still emits optional fixed-array element declarations before the scalar
+pointee alias they use (`[2]?&Number`). An isolated length-only consumer reproduces
+that C-generation failure without calling the formatter. Optional pointer slices
+with aliased pointees pass; the prior optional whole-pointer alias array limit
+also remains. Broader aliased-pointer array contents retain an existing mismatch:
+`any` formats two `&Byte` elements with address bits `0x1234`/`0x5678` as
+`{ 52, 18 }`. Identical consumers reproduce that output on the previous and current
+implementations in both modes. Address formatting does not inspect those contents.
+Generic `&T` rebinding, chained reflected properties and recursive pointee
+reflection retain measured metadata/C-generation limits; the separate scalar
+generic avoids those forms.
+
+All 138 image test files and 24 additional production/application/platform
+commands pass. Portable consumers run natively in both modes and compile for
+Windows/Linux; cross builds establish compilation only. Historical native
+pointer-slice and optional-pointer address suites retain record/control/state
+hashes in both modes. Three historical drivers promote their former pointee-alias
+rejection controls to positive results. Vaxis runtime tests are not rerun.
+
+The runtime diff is confined to the private pointer-name helper and its scalar
+helper. Restoring that section reconstructs the previous implementation exactly;
+other bodies and C remain byte-identical. Source/library, executable,
+implementation, fixture/model/helper and input pins are checked before/after;
+expected bodies and outputs freeze before final runs. Independent replay checks
+observations, failure states, compiler outcomes and provenance; every retained
+archive member is read back before commit.
+
+Deeper indirection, aggregate/function/array pointees, optional whole-array
+pointers, bare optional addresses, qualifiers/sentinels and broader representation
+contracts remain boundaries. Source requires static formats; V accepts runtime
+strings. General allocation/layout/ownership/lifetime contracts, overlapping
+input/output, concurrency and huge successful output remain outside the claim.
+Zero witnesses can use stack space proportional to array types. Synthetic
+addresses prove formatting only. Runtime evidence is little-endian 64-bit macOS.
+Scope and reproduction are in the [pointee-alias address comparison](zigimg/reference_probes/writer_pointer_pointee_address/README.md).

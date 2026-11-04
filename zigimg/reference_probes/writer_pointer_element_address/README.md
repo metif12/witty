@@ -95,3 +95,10 @@ arrays. This driver's former optional-pointer rejection control now checks the
 positive canonical V address. Its returning corpus and state hashes are unchanged.
 Fixed arrays of optional whole-pointer aliases retain a measured V C-generation
 limit; aliases in dynamic slices work.
+
+
+The subsequent [scalar pointee-alias checkpoint](../writer_pointer_pointee_address/README.md)
+adds aliases of native scalar pointee types to array/slice address names. This
+driver's former pointee-alias rejection control now checks the canonical V address;
+its returning corpus and state hashes are unchanged. Optional fixed-array element
+declaration limits and broader aliased-pointer content mismatches remain separate.

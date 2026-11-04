@@ -1814,3 +1814,12 @@ same helper. The [optional-pointer element comparison](reference_probes/writer_o
 covers 29,708 records, 13 compiler pairs and 120 isolated returns per mode.
 Fixed arrays of optional whole-pointer aliases retain a measured V C-generation
 limit; pointee aliases and deeper indirection remain boundaries.
+
+
+Address names now support aliases of native scalar pointees in pointer array and
+slice elements, including optional pointer slices and nested array names. Separate
+typed zero witnesses preserve V's unaliased metadata without reading targets.
+The [pointee-alias address comparison](reference_probes/writer_pointer_pointee_address/README.md)
+covers 46,648 records, 14 compiler pairs and 120 isolated returns per mode.
+Optional fixed-array declarations and broader aliased-pointer contents retain
+measured limits; deeper indirection and aggregate pointees remain unsupported.

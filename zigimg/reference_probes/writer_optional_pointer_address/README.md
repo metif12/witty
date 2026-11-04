@@ -77,3 +77,10 @@ python3 zigimg/verify_writer_optional_pointer_address_reference.py /path/to/lock
 
 Session evidence: `/Users/alex/.cache/witty-writer-optional-pointer-address-20261104/verified-proofs.tar.gz`,
 with a per-file manifest and full member readback. Regenerable caches are excluded.
+
+
+The subsequent [scalar pointee-alias checkpoint](../writer_pointer_pointee_address/README.md)
+adds aliases of native scalar pointee types to array/slice address names. This
+driver's former pointee-alias rejection control now checks the canonical V address;
+its returning corpus and state hashes are unchanged. Optional fixed-array element
+declaration limits and broader aliased-pointer content mismatches remain separate.

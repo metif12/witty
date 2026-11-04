@@ -151,7 +151,7 @@ def compiler_cases():
  vb='zero:=?&u8(none)\nview:=borrowed(zero,usize(0x1234),0)\nalias_view:=Values(view)\n_ = alias_view\n'
  reject=" or {require(backing==before && w.buffered().len==0)\nprint('rejected')\nreturn}\npanic('unexpected success')"
  zv='const expected=try std.fmt.allocPrint(std.heap.page_allocator,"{s}@{x}",.{@typeName(@typeInfo(@TypeOf(value)).pointer.child),@intFromPtr(value.ptr)});if(!std.mem.eql(u8,w.buffered(),expected))return error.BadAddress;w.end=0;try w.writeAll("address-ok");'
- rows.append(('pointee-alias','var number:i32=7;var items:[1]*i32=.{&number};const value:[]*i32=&items;try w.printAddress(value);'+zv,"value:=unsafe{[]&Number{len:1}}\nw.print_address(value)"+reject,b'address-ok',b'rejected'))
+ rows.append(('pointee-alias','var number:i32=7;var items:[1]*i32=.{&number};const value:[]*i32=&items;try w.printAddress(value);'+zv,"value:=unsafe{[]&Number{len:1}}\nw.print_address(value)!\nrequire(w.buffered().bytestr()=='*i32@${usize(value.data):x}')\nw.seek_to(0)!\nw.write_all('address-ok'.bytes())!",b'address-ok',b'address-ok'))
  rows.append(('nested-pointer','var number:u8=7;var pointer:*u8=&number;var items:[1]**u8=.{&pointer};const value:[]**u8=&items;try w.printAddress(value);'+zv,"value:=unsafe{[]&&u8{len:1}}\nw.print_address(value)"+reject,b'address-ok',b'rejected'))
  rows.append(('bare-optional',zb+'try w.printValue("*",.{},@as(?[]allowzero align(1) ?*u8,view),0);',vb+"w.print_value('*',p.FormatOptions{},?Values(alias_view),0)"+reject,None,b'rejected'))
  rows.append(('invalid-format',zb+'try w.printValue("d",.{},view,0);',vb+"w.print_value('d',p.FormatOptions{},view,0)"+reject,None,b'rejected'))

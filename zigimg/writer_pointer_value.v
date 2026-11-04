@@ -60,41 +60,27 @@ fn io_value_array_address_name[A](value A) !string {
 	}
 }
 
-// Inspect the pointer type directly: generic &T rebinding can lose its pointee metadata.
+// Bind a separate scalar generic so aliases retain their unaliased pointee type.
 fn io_value_array_pointer_address_name[P](_ P) !string {
 	$if P is $alias {
 		normalized := $zero(P.unaliased_typ)
 		return io_value_array_pointer_address_name(normalized)
 	} $else $if P.indirections == 1 {
-		$if P.pointee_type is u8 {
-			return '*u8'
-		} $else $if P.pointee_type is u16 {
-			return '*u16'
-		} $else $if P.pointee_type is u32 {
-			return '*u32'
-		} $else $if P.pointee_type is u64 {
-			return '*u64'
-		} $else $if P.pointee_type is usize {
-			return '*usize'
-		} $else $if P.pointee_type is i8 {
-			return '*i8'
-		} $else $if P.pointee_type is i16 {
-			return '*i16'
-		} $else $if P.pointee_type is int {
-			return '*i32'
-		} $else $if P.pointee_type is i64 {
-			return '*i64'
-		} $else $if P.pointee_type is isize {
-			return '*isize'
-		} $else $if P.pointee_type is f32 {
-			return '*f32'
-		} $else $if P.pointee_type is f64 {
-			return '*f64'
-		} $else $if P.pointee_type is bool {
-			return '*bool'
-		}
+		zero := $zero(P.pointee_type)
+		name := io_value_pointer_pointee_address_name(zero)!
+		return '*' + name
 	}
 	return error('unsupported print_value array-pointer address element')
+}
+
+fn io_value_pointer_pointee_address_name[T](_ T) !string {
+	$if T is $option || T.indirections > 0 || ((int(T.unaliased_typ) >> 16) &0xff) > 0 {
+		return error('unsupported print_value array-pointer address element')
+	} $else $if T.unaliased_typ is u8 || T.unaliased_typ is u16 || T.unaliased_typ is u32 || T.unaliased_typ is u64 || T.unaliased_typ is usize || T.unaliased_typ is i8 || T.unaliased_typ is i16 || T.unaliased_typ is int || T.unaliased_typ is i64 || T.unaliased_typ is isize || T.unaliased_typ is f32 || T.unaliased_typ is f64 || T.unaliased_typ is bool {
+		return io_address_type_name[T]()
+	} $else {
+		return error('unsupported print_value array-pointer address element')
+	}
 }
 
 // Name the optional payload type without unwrapping its value or inspecting its layout.
