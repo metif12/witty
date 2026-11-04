@@ -1737,3 +1737,12 @@ and address separately, ignores options/depth and never reads the pointee. The
 11,510 records, 16 compiler pairs and 45 isolated returns per mode. Optional
 array addresses, named/optional/pointer elements and direct `print_address` array
 carriers remain documented boundaries.
+
+
+The direct `print_address` API now accepts native fixed-array pointers and
+slices of fixed arrays, including aliases, nesting and empty slices. It prints
+canonical type names and original storage addresses without reading elements.
+The [direct array-address comparison](reference_probes/writer_array_address_api/README.md)
+covers 20,115 records, 17 compiler pairs and 90 isolated returns per mode.
+Optional array addresses, broader element names and `print_value('*', ...)` for
+slices of fixed arrays remain documented boundaries.

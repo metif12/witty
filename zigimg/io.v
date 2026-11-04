@@ -2113,7 +2113,13 @@ fn io_address_type_name[T]() string {
 }
 
 fn io_address_pointer[T](mut stream WriteStream, value &T) ! {
-	stream.write_all((io_address_type_name[T]() + '@').bytes())!
+	$if T.unaliased_typ is $array_fixed {
+		witness := T{}
+		name := io_value_array_address_name(witness)!
+		stream.write_all((name + '@').bytes())!
+	} $else {
+		stream.write_all((io_address_type_name[T]() + '@').bytes())!
+	}
 	return io_address_integer(mut stream, usize(voidptr(value)))
 }
 
@@ -2124,7 +2130,13 @@ fn io_address_optional[T](mut stream WriteStream, value ?&T) ! {
 }
 
 fn io_address_slice[T](mut stream WriteStream, value []T) ! {
-	stream.write_all((io_address_type_name[T]() + '@').bytes())!
+	$if T.unaliased_typ is $array_fixed {
+		witness := T{}
+		name := io_value_array_address_name(witness)!
+		stream.write_all((name + '@').bytes())!
+	} $else {
+		stream.write_all((io_address_type_name[T]() + '@').bytes())!
+	}
 	return io_address_integer(mut stream, usize(value.data))
 }
 
@@ -2139,7 +2151,11 @@ pub fn (mut stream WriteStream) print_address[P](value P) ! {
 		stream.write_all('anyopaque@'.bytes())!
 		return io_address_integer(mut stream, usize(value))
 	} $else $if P.unaliased_typ is $array_fixed {
-		$compile_error('print_address requires a pointer or slice')
+		$if P.indirections == 1 || ((int(P.unaliased_typ) >> 16) & 0xff) == 1 {
+			return io_address_pointer(mut stream, value)
+		} $else {
+			$compile_error('print_address requires a pointer or slice')
+		}
 	} $else $if P.unaliased_typ is $array {
 		return io_address_slice(mut stream, value)
 	} $else $if P.indirections > 0 || ((int(P.unaliased_typ) >> 16) & 0xff) > 0 {

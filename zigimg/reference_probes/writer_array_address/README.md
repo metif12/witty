@@ -47,10 +47,11 @@ Source supports qualified names for records and other elements. This V branch
 rejects arrays with record, optional or pointer elements before writes. Present
 optional whole-array pointers still hit V's construction/unwrap limits; inline
 construction is retained as an exact C-generation rejection, separately from
-ordinary checker rejection. Optional array-address formatting, the direct
-`print_address` API for arrays, zero-length arrays, broader qualifiers/sentinels,
-whole pointer alias construction and arbitrary named element types remain
-boundaries. Source requires static formats; V accepts runtime strings and reports
+ordinary checker rejection. The direct native array-pointer/slice API is now
+covered by the [direct API comparison](../writer_array_address_api/README.md);
+the retained `direct-api` compiler control succeeds in both languages. Optional
+array-address formatting, zero-length arrays, broader qualifiers/sentinels, whole
+pointer alias construction and arbitrary named element types remain boundaries. Source requires static formats; V accepts runtime strings and reports
 unsupported formats at runtime. Layout/ownership/lifetime equivalence, overlapping
 input/output, concurrency and huge successful output are outside the claim.
 

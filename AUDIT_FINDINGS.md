@@ -12292,3 +12292,55 @@ Synthetic addresses prove formatting only. General layout/ownership/lifetime
 contracts, overlapping input/output, concurrency and huge successful output are
 outside the claim. Runtime evidence is little-endian 64-bit macOS. Scope and
 reproduction are in the [array-address comparison](zigimg/reference_probes/writer_array_address/README.md).
+
+
+## Direct fixed-array pointer and slice Writer addresses (2026-11-04)
+
+`WriteStream.print_address` now accepts nonoptional native fixed-array pointers
+and slices of fixed arrays. The 13 supported native scalar elements, pointee /
+element aliases and nested arrays use the verified canonical type-name helper.
+V `int` is spelled `i32`. The complete type plus `@` is one write, followed by
+lowercase hexadecimal digits. The formatter uses the original pointer or slice
+data address, ignores slice length and never reads the target. Fixed-array values
+remain rejected unless their reflected indirection identifies a single pointer.
+
+The unchanged public Source body and independent writer-state model agree on
+**20,115 complete records per mode**, including **12,276 WriteFailed records**,
+plus **90 isolated returning controls per mode**. Eight pointer/slice forms,
+all native element types, 190 address samples, empty/nonempty headers, capacities
+and memory/file/pipe/closed-descriptor states retain four snapshots through
+caller mutation and flush. The failure controls verify type/digit boundaries
+for both direct carriers. The same checks pass in production/ReleaseSafe without
+panics. Output SHA-256 is `ba880bbd…3126b59c`.
+
+**17 external compiler pairs per mode** cover native types, aliases, nesting,
+owned addresses, empty zero-address slices, scalar regressions and unsupported
+carriers. Owned consumers compare with their own inputs. Explicit Source slice
+types prevent compile-time slice bounds from changing the operand into an array
+pointer. Four regressions and a portable consumer additionally check no-read
+behavior, storage/header identity, partial failures and unsupported element
+rejection before writes. The earlier value-address `direct-api` compiler control
+now accepts V; its record/state hashes remain unchanged.
+
+All 129 image test files and 24 additional production/application/platform
+commands pass. Portable consumers run natively in both modes and compile for
+Windows/Linux; cross builds establish compilation only. Historical value-address
+and direct scalar-address/units comparisons retain their record/state hashes in
+both modes. Vaxis runtime tests are not rerun.
+
+Only the two array-name branches and fixed-array pointer dispatch guard in
+`io.v` change the runtime. Other bodies, dispatcher branches and C remain
+byte-identical. Whole Source/library, executable, implementation, fixture/model /
+helper and input pins are checked before/after; expected outputs and bodies freeze
+before final runs. Independent replay checks observations, failures, compiler
+outcomes and provenance; every retained archive member is read back before commit.
+
+Optional whole-array addresses, record/optional/pointer elements, pointers to
+array pointers, by-value arrays, zero-length array types and whole pointer alias
+construction remain boundaries. Value-format `*` on slices of fixed arrays is
+still unsupported. Source supports broader named/qualified types. The witnesses
+can use stack space proportional to the fixed-array type. Synthetic addresses
+prove formatting only. General allocation/layout/ownership/lifetime contracts,
+overlapping input/output, concurrency and huge successful output remain outside
+the claim. Runtime evidence is little-endian 64-bit macOS. Scope and reproduction
+are in the [direct array-address comparison](zigimg/reference_probes/writer_array_address_api/README.md).
