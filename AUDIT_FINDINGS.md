@@ -11775,3 +11775,62 @@ replay checks observations, failures, compiler outcomes, modes and provenance.
 Every retained archive member is read back before commit; development evidence
 stays separate. Scope and reproduction are in the
 [custom value comparison](zigimg/reference_probes/writer_value_custom/README.md).
+
+## Writer.print composition (2026-11-04)
+
+`WriteStream.print(format, args)` now translates the pinned writer's composition
+loop for V record arguments and aliases. It merges escaped braces into literal
+writes, resolves implicit/indexed/named arguments, marks named width/precision
+fields as used, permits reuse and enforces the 32-argument limit. Explicit
+selection leaves the implicit cursor unchanged. Values use `print_value` with
+the pinned default depth of three. Reflected error fields preserve their concrete
+carrier, including custom `f` methods, avoiding the earlier generic compiler
+heap-lifting issue.
+
+Unsigned size fields may widen to `usize`; optional unsigned fields must have
+`usize`'s width even when absent. Narrower optional and signed size fields are
+rejected. The same Source rules were checked with concrete records: anonymous
+Source tuples can retain comptime-known fields and allow additional coercions.
+V parses and validates syntax/argument use/size types before writing, while
+Source does so at compile time. Unsupported value formats are checked when
+visited in V, after preceding literal writes. Numeric parser overflow remains a
+runtime panic instead of a Source compile error.
+
+The unchanged public Source `Writer.print` body and independent Python write/state
+model agree on **13,286 records per mode**, including **4,193 WriteFailed records**.
+Four snapshots retain writer position, backing/pending/unused bytes, custom method
+entry counts and file contents through caller mutation and flush. Binary literals,
+escaped-brace runs, selection/reuse, optional sizes, custom failures, memory,
+positional/streaming files, replaced pipes and closed descriptors are covered.
+Output SHA-256 is `f86f839c…19b99`. Separate controls pair **nine isolated returns
+and nine exact panic/state checks per mode**, including suppression of option
+traps by earlier literal-write failures.
+
+**26 external compiler pairs per mode** cover aliases, optional sizes, fixed-array/
+error/optional/nested-slice fields, default depth, scalar pointers, the 32/33-field
+boundary, malformed templates, missing/unused arguments, invalid size types,
+unsupported value formats and runtime strings. Public regressions and the portable
+consumer also retain arbitrary custom error messages/codes and partial writes.
+
+All **119 image test files** and **26 additional production/application/platform
+commands** pass. Seven production test files cover composition, recursive arrays,
+errors, custom formatters, optionals, unions and parser state. Native/Linux
+application checks, three Windows dependency libraries, ordinary/production
+Windows unit builds, two Linux shared libraries and portable consumers pass.
+Portable consumers run natively in both modes; cross builds establish compilation
+only. Historical parser, placeholder, fixed-array and custom-format comparisons
+retain their hashes in both modes. Existing formatter helpers and IO/C are
+unchanged; Vaxis runtime tests are not rerun.
+
+Full Source/library, compiler executable, implementation, fixture, runner/helper
+and input pins are retained and checked. Runtime and proof bodies freeze before
+the final ordinary/production comparisons. A separate replay verifies observations,
+compiler outcomes, retained failure states and provenance. Every retained archive
+member is read back before commit; development evidence stays separate.
+
+Source tuples, root overrides of `fmt_max_depth`, comptime coercions, allocation
+contracts and existing unsupported value carriers remain boundaries. Record
+pointers and arbitrary interfaces retain the dispatcher compiler limits. The
+results are pinned to little-endian 64-bit macOS and do not establish other runtime
+platforms, private layout, lifetimes or general copy/mutation equivalence. Scope
+and reproduction are in the [print comparison](zigimg/reference_probes/writer_print/README.md).

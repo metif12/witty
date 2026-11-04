@@ -1636,3 +1636,17 @@ bypass behavior are unchanged. The
 the earlier custom-invocation boundaries for the represented concrete carriers.
 Record pointers, interface carriers, nonfallible methods and broader reflection
 retain documented V limits. Full Writer.print remains unported.
+
+
+`WriteStream.print(format, args)` now composes literals and placeholders for V
+record arguments and aliases. Escaped braces, implicit/indexed/named arguments,
+named width/precision fields, argument reuse and the 32-field limit follow the
+pinned writer. Values use the existing dispatcher at default depth three, with
+partial writes and formatter errors preserved. The
+[print comparison](reference_probes/writer_print/README.md) covers 13,286 records,
+nine returning failure controls and nine panic/state pairs per build mode, plus
+26 external compiler pairs. V accepts runtime formats and validates template
+syntax and argument use before writing; value-format errors remain runtime
+checks. Source tuples, comptime coercions, root depth overrides and existing
+unsupported dispatcher carriers remain boundaries. This supersedes the earlier
+full-Writer.print gap for the represented record API.
