@@ -84,3 +84,10 @@ Native optional scalar array elements are now covered by the
 The retained optional-element compiler control succeeds in both languages;
 its earlier rejection is superseded. Record/pointer payloads and the documented
 construction/qualification limits remain boundaries.
+
+
+The subsequent [optional-scalar slice checkpoint](../writer_optional_slice_address/README.md)
+accepts `[]?T` for native scalar payloads and aliases through direct/value address
+routes. The former `option-scalar-slice` rejection control now verifies V's own
+address and returns `address-ok`; the corpus and retained-state hashes above are
+unchanged.

@@ -1763,3 +1763,11 @@ the name and elements are not read. The [optional-element address comparison](re
 covers 43,218 records, 20 compiler pairs and 90 isolated returns per mode.
 Optional payload aliases and broader array/record/pointer payloads retain measured
 compiler or representation boundaries.
+
+
+Slices of native optional scalars and payload aliases now support `print_address`
+and value-format `*`. Whole-slice aliases, optional `?*` and `Writer.print` compose
+without reading elements or changing storage addresses. The [optional-slice
+address comparison](reference_probes/writer_optional_slice_address/README.md)
+covers 27,460 records, 17 compiler pairs and 90 isolated returns per mode.
+Broader payload types and bare optional addresses remain documented boundaries.
