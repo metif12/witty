@@ -55,6 +55,8 @@ fn io_value_array_address_name[A](value A) !string {
 		return '*anyopaque'
 	} $else $if A.indirections > 0 || ((int(A.unaliased_typ) >> 16) &0xff) > 0 {
 		return io_value_array_pointer_address_name(value)
+	} $else $if A.unaliased_typ is string {
+		return '[]const u8'
 	} $else $if A.unaliased_typ is u8 || A.unaliased_typ is u16 || A.unaliased_typ is u32 || A.unaliased_typ is u64 || A.unaliased_typ is usize || A.unaliased_typ is i8 || A.unaliased_typ is i16 || A.unaliased_typ is int || A.unaliased_typ is i64 || A.unaliased_typ is isize || A.unaliased_typ is f32 || A.unaliased_typ is f64 || A.unaliased_typ is bool {
 		return io_address_type_name[A]()
 	} $else {
@@ -102,6 +104,8 @@ fn io_value_optional_address_name[T](_ ?T) !string {
 		zero := $zero(T)
 		name := io_value_array_pointer_address_name(zero)!
 		return '?' + name
+	} $else $if T.unaliased_typ is string {
+		return '?[]const u8'
 	} $else $if T.unaliased_typ is $array_fixed || T.unaliased_typ is $array {
 		zero := T{}
 		name := io_value_array_address_name(zero)!

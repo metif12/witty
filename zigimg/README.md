@@ -1839,3 +1839,11 @@ storage address without inspecting inner headers. The [slice-element address
 comparison](reference_probes/writer_slice_element_address/README.md) covers 46,648
 records, 14 compiler pairs and 120 isolated returns per mode. Separate controls
 record generic alias reflection and generated GC traversal limits.
+
+
+String element address names now map to Source's `[]const u8`, including aliases,
+nested arrays, optional string elements and optional array payloads. Original
+outer addresses and write boundaries are retained without reading text headers.
+The [string-element address comparison](reference_probes/writer_string_element_address/README.md)
+covers 8,568 records, 12 compiler pairs and 120 isolated returns per mode.
+String alias declaration and general representation limits are documented.

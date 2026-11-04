@@ -2134,7 +2134,7 @@ fn io_address_slice[T](mut stream WriteStream, value []T) ! {
 		witness := $zero(T)
 		name := io_value_optional_address_name(witness)!
 		stream.write_all((name + '@').bytes())!
-	} $else $if T.unaliased_typ is $array_fixed || T.unaliased_typ is $array {
+	} $else $if T.unaliased_typ is $array_fixed || T.unaliased_typ is $array || T.unaliased_typ is string {
 		witness := T{}
 		name := io_value_array_address_name(witness)!
 		stream.write_all((name + '@').bytes())!

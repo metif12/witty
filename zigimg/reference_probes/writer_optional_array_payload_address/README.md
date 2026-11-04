@@ -96,3 +96,10 @@ arrays. This driver's former optional-pointer rejection control now checks the
 positive canonical V address. Its returning corpus and state hashes are unchanged.
 Fixed arrays of optional whole-pointer aliases retain a measured V C-generation
 limit; aliases in dynamic slices work.
+
+
+The [string-element address checkpoint](../writer_string_element_address/README.md)
+adds the read-only byte-slice name for V string payloads. The string-array control
+now constructs the actual optional array carrier through named aliases and checks
+`?[2][]const u8@1234`; its former V fixture omitted that option layer. The returning
+corpus and state hashes are unchanged.

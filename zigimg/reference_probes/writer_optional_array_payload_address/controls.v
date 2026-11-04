@@ -82,6 +82,8 @@ type Slice12_1 = []?Payload12_1
 type Payload12_2 = [3]?bool
 type Slice12_2 = []?Payload12_2
 type Pair = [2]int
+type StringPair = [2]string
+type OptionalStringPairs = []?StringPair
 type Values = []?Pair
 
 struct Record {

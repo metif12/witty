@@ -12992,3 +12992,61 @@ contracts, overlapping input/output, concurrency and huge successful output are
 outside the claim. Zero witnesses may use stack space proportional to array types.
 Synthetic addresses prove formatting only. Runtime evidence is little-endian
 64-bit macOS. Scope and reproduction are in the [slice-element address comparison](zigimg/reference_probes/writer_slice_element_address/README.md).
+
+
+## String element Writer address names (2026-11-04)
+
+Array/slice address names now map V string elements to pinned Source read-only
+byte slices, `[]const u8`. Aliases, nested arrays, optional string elements,
+optional fixed-array payloads, optional outer slices and named print arguments
+compose through the existing helpers. This is a represented type-name mapping,
+not a layout/ownership/lifetime equivalence. The formatter does not read string
+headers or bytes. Outer storage bits, separate prefix/digit writes, ignored
+present options/depth and aligned absent outer nulls are retained.
+
+Unchanged public Source methods and an independent writer-state model agree on
+**8,568 full records per mode**, including **5,028 WriteFailed records**. Four
+routes, native/aliased/nested/optional-element arrays, 190 addresses, three lengths,
+capacities, maximal options and memory/file/pipe/closed-descriptor states retain
+four snapshots through caller-buffer mutation and flush. **120 isolated returning
+controls per mode** preserve prefix/digit failures, nested names, zero/maximal
+addresses and optional nulls. No parity controls panic. Output SHA-256 is
+`5bf1c860…33b17e8a`.
+
+**12 external compiler pairs per mode** check array/slice routes, optional string
+elements, optional fixed-array payloads, print/optionals, preserved contents and
+invalid/runtime formats. Five public regressions and a portable consumer check
+owned headers, content/header-order mutation, partial writes and nulls. Owned
+checks compare their own addresses, not raw addresses across processes.
+
+V still emits optional fixed-array element declarations before a string payload
+alias (`[3]?Text`, `type Text = string`). An independent length-only consumer
+reproduces that C-generation error in both modes. Native optional strings and
+named optional string-array payloads pass. Existing generic array-kind reflection
+and generated GC traversal limits remain separate; named aliases and empty
+synthetic views avoid those forms, alongside nonempty owned checks. No-read claims
+describe the formatter, not generated GC/lifetime code.
+
+All 141 image test files and 24 additional production/application/platform
+commands pass. Portable consumers run natively in both modes and compile for
+Windows/Linux; cross builds establish compilation only. Historical optional-array
+payload and slice-element address suites retain record/control/state hashes in
+both modes. The former string-array rejection now builds the actual optional
+carrier through named aliases and checks `?[2][]const u8@1234`; its previous V
+fixture omitted that option layer. Vaxis runtime tests are not rerun.
+
+Removing the two string-name branches and two widened type conditions reconstructs
+the prior runtime exactly; other bodies and C remain byte-identical. Source /
+library, executable, implementation, fixture/model/helper and input pins are
+checked before/after; expected outputs freeze before final runs. Independent
+replay checks observations, failure states, compiler outcomes and provenance;
+every retained archive member is read back before commit.
+
+Direct string carriers in `print_address`, pointer-to-string payload names,
+unsupported inner types, qualifiers beyond the read-only string mapping and
+broader representation contracts remain boundaries. Source requires static
+formats; V accepts runtime strings. Allocation/layout/ownership/lifetime contracts,
+overlapping input/output, concurrency and huge successful output are outside the
+claim. Zero witnesses may use stack space proportional to array types. Synthetic
+addresses prove formatting only. Runtime evidence is little-endian 64-bit macOS.
+Scope and reproduction are in the [string-element address comparison](zigimg/reference_probes/writer_string_element_address/README.md).
