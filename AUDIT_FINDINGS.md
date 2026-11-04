@@ -12085,3 +12085,53 @@ copy, ownership, private layout or lifetime equivalence. Invalid headers,
 overlapping input/output storage, concurrent mutation, huge output/storage and
 broader pointer/comptime coercions remain limits. Runtime evidence is little-endian
 64-bit macOS. Scope and reproduction are in the [string comparison](zigimg/reference_probes/writer_string/README.md).
+
+
+## Dereferenced aggregate Writer values (2026-11-04)
+
+`WriteStream.print_value` now dereferences record, enum and sum-type pointers
+under default/`any` formats, retaining options and the same depth. Optional
+pointers and record/enum aliases use the same route; absent values remain aligned
+`null`. Valid nonoptional concrete pointer `f` methods run before depth cutoffs. V's generic
+sum forwarding reboxes a dereferenced value under its first variant, so a private
+helper reflects the active sum directly before forwarding its payload. Nested
+sums and cycles bounded by record depth retain the expected formatting.
+
+The unchanged public Source body and independent writer-state model agree on
+**9,414 records per mode**, including **4,171 WriteFailed records**. Six shapes,
+record/enum aliases, optional pointer aliases, active/nested tags, signed extrema,
+options, depth and memory/file/pipe/closed-descriptor states are covered. Four
+snapshots retain backing/views, position, descriptor/file state and captured
+logical pointee values through caller-buffer mutation and flush. Pointees are
+valid objects throughout each call. Output SHA-256 is `7ea238f9…b0f24e`.
+
+**15 external compiler pairs per mode** cover supported consumers, custom pointer
+methods, print composition, invalid/runtime formats and the remaining explicit
+address boundary. **42 exact panic/state pairs and 66 returning controls per mode**
+preserve enum restrictions, recursive depth bypass, earlier writer failures and
+signed-field padding overflow after its prefix and digits. Both diagnostics
+remain exact in production. Five regressions and a portable consumer additionally
+cover aliases, active tags, optional values, cycles and partial writes.
+
+All 125 image test files and 24 additional production/application/platform
+commands pass. Portable consumers run natively in both modes and compile for
+Windows/Linux; cross builds establish compilation only. Historical scalar
+address/default-pointer and direct-union comparisons retain their hashes in both
+modes. Vaxis runtime tests are not rerun.
+
+The dispatcher diff is restricted to pointer handling. Existing scalar/record /
+union leaf formatters and IO/C are unchanged. Source/library, compiler executable,
+implementation, fixture, model/helper and input pins are checked before/after.
+Bodies and expected results freeze before final comparisons. Independent replay
+checks records, failures, compiler outcomes and provenance; every retained archive
+member is read back before committing.
+
+Direct optional aggregate-pointer `?f` remains unsupported without writes;
+nonoptional concrete pointer custom methods are covered. Explicit aggregate
+address formats remain a V runtime error without writes;
+Source accepts qualified type prefixes, including optional-pointer qualification.
+Direct `print_address` remains unchanged. Pointer-to-array/string/interface /
+function and nested-pointer support, overlapping alias variants, broader qualifiers,
+invalid pointers, unbounded successful cycles and layout/ABI/ownership/copy /
+lifetime equivalence remain boundaries. Runtime evidence is little-endian 64-bit
+macOS. Scope and reproduction are in the [aggregate pointer comparison](zigimg/reference_probes/writer_aggregate_pointer/README.md).

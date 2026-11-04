@@ -1700,3 +1700,13 @@ the same rules. The [string comparison](reference_probes/writer_string/README.md
 covers 15,609 records, 12 compiler pairs, 33 isolated returns and 33 panic/state
 pairs per mode. Unicode text semantics and general string ownership/layout /
 lifetime contracts remain outside this byte-slice adaptation.
+
+
+Default/`any` formatting now dereferences record, enum and sum-type pointers
+without consuming another depth level. Optional pointers, record/enum aliases,
+nested sums and bounded cycles use the same recursive formatting rules. Direct
+sum reflection avoids V reboxing a dereferenced generic value under the wrong tag.
+The [aggregate pointer comparison](reference_probes/writer_aggregate_pointer/README.md)
+covers 9,414 records, 15 compiler pairs, 66 isolated returns and 42 panic/state
+pairs per mode. Explicit aggregate addresses and broader pointer/representation
+contracts remain documented boundaries.

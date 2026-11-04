@@ -276,12 +276,6 @@ fn io_value_union[T](mut stream WriteStream, format string, options FormatOption
 	}
 }
 
-fn io_value_optional_address[T](mut stream WriteStream, value ?&T) ! {
-	stream.write_all((io_address_type_name[T]() + '@').bytes())!
-	address := unsafe { usize(voidptr(value or { nil })) }
-	return io_address_integer(mut stream, address)
-}
-
 fn io_value_optional[T](mut stream WriteStream, format string, options FormatOptions, value ?T, max_depth usize) ! {
 	remaining := if format.starts_with('?') {
 		format[1..]
@@ -300,11 +294,7 @@ fn io_value_optional[T](mut stream WriteStream, format string, options FormatOpt
 			return stream.print_value(remaining, options, normalized, max_depth)
 		} $else {
 			// Keep the optional carrier: forwarding a generic pointer takes its address in V.
-			if remaining == '*' { return io_value_optional_address(mut stream, value) }
-			if remaining == '' || remaining == 'any' {
-				return io_value_optional_pointer(mut stream, options, value)
-			}
-			return error('unsupported print_value pointer format')
+			return io_value_optional_pointer(mut stream, remaining, options, value, max_depth)
 		}
 	} $else {
 		return stream.print_value[T](remaining, options, payload, max_depth)
@@ -334,16 +324,16 @@ pub fn (mut stream WriteStream) print_value[T](format string, options FormatOpti
 		return io_value_optional(mut stream, format, options, value, max_depth)
 	} $else $if T.unaliased_typ is voidptr || T.indirections > 0
 		|| ((int(T.unaliased_typ) >> 16) & 0xff) > 0 {
-		if format == '*' { return stream.print_address(value) }
-		if format != '' && format != 'any' { return error('unsupported print_value pointer format') }
 		$if T.unaliased_typ is voidptr {
+			if format == '*' { return stream.print_address(value) }
+			if format != '' && format != 'any' { return error('unsupported print_value pointer format') }
 			return io_value_pointer_bits(mut stream, options, 'anyopaque', usize(value))
 		} $else $if T is $alias {
 			mut normalized := $zero(T.unaliased_typ)
 			unsafe { vmemcpy(&normalized, &value, int(sizeof(T))) }
 			return stream.print_value(format, options, normalized, max_depth)
 		} $else {
-			return io_value_pointer(mut stream, options, value)
+			return io_value_pointer(mut stream, format, options, value, max_depth)
 		}
 	} $else $if T is IError {
 		return io_value_error(mut stream, format, options, value)
