@@ -1823,3 +1823,11 @@ The [pointee-alias address comparison](reference_probes/writer_pointer_pointee_a
 covers 46,648 records, 14 compiler pairs and 120 isolated returns per mode.
 Optional fixed-array declarations and broader aliased-pointer contents retain
 measured limits; deeper indirection and aggregate pointees remain unsupported.
+
+
+Fixed arrays of pointers to byte aliases now preserve pointer names under `any`,
+instead of formatting bytes from pointer storage. Whole-pointer aliases, nesting,
+pointed arrays and print compose with existing depth/options and partial writes.
+The [aliased pointer array contents comparison](reference_probes/writer_alias_array_value/README.md)
+covers 27,776 records, 14 compiler pairs and 72 isolated returns per mode.
+Real scalar byte aliases retain their byte formats.

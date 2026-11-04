@@ -173,6 +173,9 @@ fn io_value_array[T](mut stream WriteStream, format string, options FormatOption
 	$if T is $option {
 		if format != 'any' { return error('unsupported print_value array format') }
 		return io_value_slice(mut stream, format, options, value, max_depth)
+	} $else $if T is $pointer {
+		if format != 'any' { return error('unsupported print_value array format') }
+		return io_value_slice(mut stream, format, options, value, max_depth)
 	} $else $if T.unaliased_typ is u8 {
 		return io_value_bytes(mut stream, format, options, value, max_depth)
 	} $else {

@@ -84,3 +84,10 @@ python3 zigimg/verify_writer_pointer_pointee_address_reference.py /path/to/locke
 
 Session evidence: `/Users/alex/.cache/witty-writer-pointer-pointee-address-20261104/verified-proofs.tar.gz`,
 with a per-file manifest and full member readback. Regenerable caches are excluded.
+
+
+The subsequent [aliased pointer array contents fix](../writer_alias_array_value/README.md)
+resolves the recorded `any` mismatch by checking pointer elements before byte
+aliases. Its fresh before/after consumers also correct the module-selection
+ambiguity in this checkpoint's standalone `current` baseline consumer; see that
+comparison for import identity and validation details. Address hashes are unchanged.

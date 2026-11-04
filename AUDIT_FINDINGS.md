@@ -12870,3 +12870,61 @@ input/output, concurrency and huge successful output remain outside the claim.
 Zero witnesses can use stack space proportional to array types. Synthetic
 addresses prove formatting only. Runtime evidence is little-endian 64-bit macOS.
 Scope and reproduction are in the [pointee-alias address comparison](zigimg/reference_probes/writer_pointer_pointee_address/README.md).
+
+
+## Aliased pointer array contents (2026-11-04)
+
+Fixed arrays of pointers to byte aliases now format pointer names and bits under
+`any`. With `Byte = u8` and two `&Byte` elements carrying `0x1234`/`0x5678`, output
+changes from `{ 52, 18 }` to `{ u8@1234, u8@5678 }`. `io_value_array` checks
+`$pointer` before the unaliased byte test, which also matches pointers to byte
+aliases in V 0.5.2. The three-line branch delegates to the existing slice route
+and requires `any`. Whole-pointer aliases, nested/pointed arrays and named print
+arguments compose with it. Actual scalar byte aliases keep byte formatting.
+Elements are read from valid array storage; scalar pointer targets are never read.
+
+Unchanged public Source methods and an independent writer-state model agree on
+**27,776 full records per mode**, including **16,491 WriteFailed records**.
+Thirteen native scalar pointees plus opaque controls, six carrier forms, flat /
+nested/whole-pointer aliases, 190 pointer bit patterns, depth and leaf options,
+and memory/file/pipe/closed-descriptor states retain four snapshots through caller
+buffer mutation and flush. **72 isolated returning controls per mode** preserve
+failures between braces, type vectors, digits, separators and padding. No controls
+panic. Output SHA-256 is `40cf7300…48ef6136`.
+
+**14 external compiler pairs per mode** cover native aliases, the original
+mismatch, nested/pointed/slice carriers, print, scalar byte formats and invalid /
+runtime formats. Five public regressions and a portable consumer check caller
+storage, target/pointer-order changes, partial writes and rejection before writes.
+Fresh before/after consumers import either the parent-commit snapshot or current
+repository from an external fixture directory and verify source paths in compiler
+output. Both modes reproduce the old bytes and corrected pointer names.
+
+The previous checkpoint's standalone content consumer labeled `current` lived
+beside its baseline module and resolved that neighboring library. That receipt
+is not used as evidence of current-code behavior here. The fresh consumer and
+comparison fixtures have no neighboring `zigimg` module, and retain their import
+identity checks. The original mismatch was independently exposed by that prior
+checkpoint's separately located native-comparison fixture.
+
+All 139 image test files and 24 additional production/application/platform
+commands pass. Portable consumers run natively in both modes and compile for
+Windows/Linux; cross builds establish compilation only. Historical fixed scalar
+array values and scalar pointee-alias addresses retain record/control/state hashes
+in both modes. Vaxis runtime tests are not rerun.
+
+Removing the new pointer branch reconstructs the previous runtime exactly; other
+bodies and C remain byte-identical. Source/library, executable, implementation,
+fixture/model/helper and input pins are checked before/after; expected outputs
+freeze before final runs. Independent replay checks observations, failures,
+compiler outcomes, before/after library identity and provenance; every retained
+archive member is read back before commit. Completed regenerable caches and
+verified archive-backed duplicates were reclaimed with their archives retained.
+
+Optional fixed-array element declaration limits, deeper indirection, aggregate /
+function/array pointees, qualifiers/sentinels and broader representation contracts
+remain boundaries. Source requires static formats; V accepts runtime strings.
+Allocation/layout/ownership/lifetime contracts, overlapping input/output,
+concurrency and huge successful output remain outside the claim. Synthetic
+pointer bits prove formatting only. Runtime evidence is little-endian 64-bit
+macOS. Scope and reproduction are in the [aliased pointer array comparison](zigimg/reference_probes/writer_alias_array_value/README.md).
