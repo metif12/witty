@@ -7,6 +7,16 @@ fn io_value_pointer_bits(mut stream WriteStream, options FormatOptions, name str
 	return stream.print_int[usize](address, 16, .lower, options)
 }
 
+// A slice pointee names its descriptor type; only a zero witness is inspected.
+fn io_value_pointer_address_name[T]() !string {
+	$if T.unaliased_typ is $array {
+		witness := T{}
+		return io_value_array_address_name(witness)
+	} $else {
+		return io_address_type_name[T]()
+	}
+}
+
 fn io_value_pointer[T](mut stream WriteStream, format string, options FormatOptions, value &T, max_depth usize) ! {
 	$if T.unaliased_typ is $array_fixed {
 		if format == '*' {
@@ -31,13 +41,15 @@ fn io_value_pointer[T](mut stream WriteStream, format string, options FormatOpti
 		}
 	} $else {
 		if format == '*' {
-			stream.write_all((io_address_type_name[T]() + '@').bytes())!
+			name := io_value_pointer_address_name[T]()!
+			stream.write_all((name + '@').bytes())!
 			return io_address_integer(mut stream, unsafe { usize(voidptr(value)) })
 		}
 		if format != '' && format != 'any' {
 			return error('unsupported print_value pointer format')
 		}
-		return io_value_pointer_bits(mut stream, options, io_address_type_name[T](), unsafe { usize(voidptr(value)) })
+		name := io_value_pointer_address_name[T]()!
+		return io_value_pointer_bits(mut stream, options, name, unsafe { usize(voidptr(value)) })
 	}
 }
 
@@ -87,8 +99,8 @@ fn io_value_array_pointer_address_name[P](_ P) !string {
 fn io_value_pointer_pointee_address_name[T](_ T) !string {
 	$if T is $option || T.indirections > 0 || ((int(T.unaliased_typ) >> 16) &0xff) > 0 {
 		return error('unsupported print_value array-pointer address element')
-	} $else $if T.unaliased_typ is u8 || T.unaliased_typ is u16 || T.unaliased_typ is u32 || T.unaliased_typ is u64 || T.unaliased_typ is usize || T.unaliased_typ is i8 || T.unaliased_typ is i16 || T.unaliased_typ is int || T.unaliased_typ is i64 || T.unaliased_typ is isize || T.unaliased_typ is f32 || T.unaliased_typ is f64 || T.unaliased_typ is bool || T.unaliased_typ is string {
-		return io_address_type_name[T]()
+	} $else $if T.unaliased_typ is $array || T.unaliased_typ is u8 || T.unaliased_typ is u16 || T.unaliased_typ is u32 || T.unaliased_typ is u64 || T.unaliased_typ is usize || T.unaliased_typ is i8 || T.unaliased_typ is i16 || T.unaliased_typ is int || T.unaliased_typ is i64 || T.unaliased_typ is isize || T.unaliased_typ is f32 || T.unaliased_typ is f64 || T.unaliased_typ is bool || T.unaliased_typ is string {
+		return io_value_pointer_address_name[T]()
 	} $else {
 		return error('unsupported print_value array-pointer address element')
 	}
@@ -146,13 +158,15 @@ fn io_value_optional_pointer[T](mut stream WriteStream, format string, options F
 		}
 	} $else {
 		if format == '*' {
-			stream.write_all((io_address_type_name[T]() + '@').bytes())!
+			name := io_value_pointer_address_name[T]()!
+			stream.write_all((name + '@').bytes())!
 			return io_address_integer(mut stream, address)
 		}
 		if format != '' && format != 'any' {
 			return error('unsupported print_value pointer format')
 		}
-		return io_value_pointer_bits(mut stream, options, io_address_type_name[T](), address)
+		name := io_value_pointer_address_name[T]()!
+		return io_value_pointer_bits(mut stream, options, name, address)
 	}
 }
 
@@ -187,7 +201,8 @@ fn io_value_normalized_optional_address[T](mut stream WriteStream, value &T) ! {
 	} $else $if T.unaliased_typ is $struct || T.unaliased_typ is $enum || T.unaliased_typ is $sumtype {
 		return error('unsupported print_value aggregate-pointer format')
 	} $else {
-		stream.write_all(('*' + io_address_type_name[T]() + '@').bytes())!
+		name := io_value_pointer_address_name[T]()!
+		stream.write_all(('*' + name + '@').bytes())!
 		return io_address_integer(mut stream, unsafe { usize(voidptr(value)) })
 	}
 }

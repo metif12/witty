@@ -13172,3 +13172,68 @@ the claim. Synthetic addresses establish formatting only; zero witnesses may use
 stack space proportional to array types. Runtime evidence is little-endian
 64-bit macOS. Scope and reproduction are in the [string descriptor pointer
 comparison](zigimg/reference_probes/writer_string_pointer/README.md).
+
+
+## Slice descriptor pointer Writer addresses (2026-11-05)
+
+Pointers to represented V slice descriptors now use Source pointee names such as
+`[]u8`, `[]i32`, `[][]u8` and `[][]const u8`. A zero witness binds the existing
+recursive element-name helper without reading caller descriptors or elements.
+Direct/explicit addresses retain separate prefix/digit writes; default/`any`
+retains type/`@` vectors followed by aligned hex digits. Direct options and depth
+are ignored. Native slice data addresses and contents formatting are preserved.
+
+Native pointers, pointers to slice aliases, pointer aliases and optionals compose
+with the existing routes. Present `?*` optionals use the descriptor address;
+absence aligns `null`. Direct optional addresses and bare `*` retain the leading
+pointer name, including `*[]u8@0`. Pointer array/slice element names also accept
+represented slice-descriptor pointees.
+
+Unchanged public Source methods and an independent writer-state model agree on
+**21,920 full records per mode**, including **6,790 WriteFailed records**. Flat
+byte/integer descriptor pointers, seven native/alias/present/absent carriers,
+190 input addresses, capacities, options and memory/file/pipe/closed-descriptor
+states preserve four snapshots through caller-buffer mutation and flush. Present
+optional addresses are nonzero and aligned to eight bytes for Source's natural
+pointer type; plain pointers cover all bits. **77 isolated returning controls per
+mode** preserve partial prefix/digit/null writes and unused bytes. No parity
+controls panic. Output SHA-256 is `66689221…97570b72`.
+
+**15 external compiler pairs per mode** cover routes, aliases, owned replacement,
+optionals, pointer elements, print, all thirteen native scalar element names,
+composite optional/array/nested/string element names, unsupported formats and
+runtime formats. V rejects an explicit `[2]&[]u8` declaration; the equivalent
+named pointer-alias consumer passes. Production V generates invalid GC helper C
+for a pointer alias with a nested slice pointee, treating an alias of `array*` as
+an array value. The standalone control returns `[][]u8@1234` in ordinary mode and
+rejects production compilation with the GC diagnostic. Nested/string names are
+covered by inline callers; owned consumers check flat descriptors. The cross-mode
+state corpus uses flat byte/integer descriptors. Earlier four-family ordinary records and the production
+C failure remain in verified superseded archives. No-read claims describe the
+formatter, without promising that compiler-generated lifetime code ignores
+invalid synthetic storage.
+
+Five public regressions and a portable consumer check raw/owned pointers,
+aliases, zero/optionals, exact partial writes, composite names, preserved header
+bytes, address stability across replacement and unchanged contents formatting.
+All 144 image test files and 24 additional production/application/platform
+commands pass. Portable consumers run natively in both modes and compile for
+Windows/Linux; cross builds establish compilation only. Historical string-pointer
+and slice-element address suites retain record/control/state hashes in both modes.
+Vaxis runtime tests are not rerun.
+
+Only slice descriptor naming/routing and its shared fallible name calls change;
+every other runtime body, parsing and C remains byte-identical. Source/library,
+executable, implementation, fixture/model/helper and input pins are checked
+before/after; expected outputs freeze before final runs. Independent replay
+verifies observations, failures, compiler outcomes and provenance; every retained
+archive member is read back before commit. Completed regenerable caches and
+verified archive-backed duplicates were reclaimed with archives retained.
+
+The Source mapping does not equate descriptor layouts, allocation, ownership or
+lifetime. Unsupported inner names, deeper indirection, qualifiers, compiler GC
+traversal, overlapping input/output, concurrency and huge successful output remain
+boundaries. Synthetic addresses establish formatting only; zero witnesses can use
+stack space proportional to array types. Runtime evidence is little-endian
+64-bit macOS. Scope and reproduction are in the [slice descriptor pointer
+comparison](zigimg/reference_probes/writer_slice_pointer/README.md).
