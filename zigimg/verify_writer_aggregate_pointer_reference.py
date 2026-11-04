@@ -203,7 +203,7 @@ def compiler_cases():
  ok('optional-none',rec+'_ = value;try w.printValue("any",.{.width=6,.fill=95},@as(?*const Record,null),0);',"w.print_value('any',p.FormatOptions{width:usize(6),fill:`_`},?&Record(none),0)!",b'__null')
  ok('custom','const C=struct{value:i32,pub fn format(self:@This(),writer:*std.Io.Writer) !void {try writer.printInt(self.value,10,.lower,.{});}};const value:C=.{.value=9};try w.printValue("f",.{.width=std.math.maxInt(usize)},&value,0);',"value:=Custom{9}\nw.print_value('f',p.FormatOptions{width:~usize(0)},&value,0)!",b'9')
  custom_source=next(row[1] for row in rows if row[0]=='custom').replace('printValue("f"','printValue("?f"').replace(',&value,0);',',@as(?*const C,&value),0);')
- rows.append(('optional-custom-limit',custom_source,"value:=Custom{9}\nw.print_value('?f',p.FormatOptions{width:~usize(0)},?&Custom(&value),0) or {require(err.msg()=='unsupported print_value aggregate-pointer format')\nrequire(w.buffered().len==0 && backing==before)\nprint('rejected')\nreturn}\npanic('unexpected success')",b'9',b'rejected'))
+ ok('optional-custom',custom_source,"value:=Custom{9}\nw.print_value('?f',p.FormatOptions{width:~usize(0)},?&Custom(&value),0)!",b'9')
  ok('print',rec+'try w.print("a{any}b",.{&value});',"value:=Record{7}\nw.print('a{any}b',Args{&value})!",b'a.{ .value = 7 }b')
  for fmt in ('d','t','s','x'):
   rows.append(('invalid-'+fmt,rec+f'try w.printValue("{fmt}",.{{}},&value,0);',f"value:=Record{{7}}\nw.print_value('{fmt}',p.FormatOptions{{}},&value,0) or {{require(err.msg()=='unsupported print_value aggregate-pointer format')\nrequire(w.buffered().len==0 && backing==before)\nprint('rejected')\nreturn}}\npanic('unexpected success')",None,b'rejected'))

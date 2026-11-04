@@ -54,8 +54,8 @@ active/nested sum tags, cycles, partial writes and custom methods. External
 formatter methods must be public. Source formats are static; V validates visited
 formats at runtime. Invalid aggregate-pointer formats return before writer effects.
 
-Direct optional aggregate-pointer `?f` remains unsupported without writes; the
-custom-method consumer covers nonoptional pointers. Explicit aggregate `*`/`?*`
+The optional `?f` compiler control now accepts both languages; its original V
+rejection is superseded by the [optional pointer custom comparison](../writer_pointer_custom/README.md). Explicit aggregate `*`/`?*`
 addresses remain unsupported in this V dispatcher,
 returning a runtime error without writes; Source accepts them with qualified
 pointee or optional-pointer type prefixes. Direct `print_address` still rejects

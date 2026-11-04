@@ -1710,3 +1710,11 @@ The [aggregate pointer comparison](reference_probes/writer_aggregate_pointer/REA
 covers 9,414 records, 15 compiler pairs, 66 isolated returns and 42 panic/state
 pairs per mode. Explicit aggregate addresses and broader pointer/representation
 contracts remain documented boundaries.
+
+
+Optional pointer `?f` now calls the present pointee's custom formatter, ignoring
+options/depth and preserving method errors and partial writes. Absence still
+prints aligned `null`. The [optional pointer custom comparison](reference_probes/writer_pointer_custom/README.md)
+covers 6,125 records, 12 compiler pairs, 106 isolated returns and two panic/state
+pairs per mode. Fallible public methods are required; mutable/interface receivers
+and invalid pointer/layout/lifetime contracts remain boundaries.

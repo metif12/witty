@@ -12135,3 +12135,52 @@ function and nested-pointer support, overlapping alias variants, broader qualifi
 invalid pointers, unbounded successful cycles and layout/ABI/ownership/copy /
 lifetime equivalence remain boundaries. Runtime evidence is little-endian 64-bit
 macOS. Scope and reproduction are in the [aggregate pointer comparison](zigimg/reference_probes/writer_aggregate_pointer/README.md).
+
+
+## Custom formatting through optional pointers (2026-11-04)
+
+`WriteStream.print_value('?f', ...)` now dispatches present optional pointers to
+concrete fallible `format(mut writer WriteStream) !` methods before ordinary
+pointer handling. Options/depth stay outside the callback. Absence retains
+aligned `null` without method entry. Record/pointee/pointer aliases, enum and sum
+receivers and explicit print composition are covered. An unused V address
+specialization can lose a custom alias's pointer flag; a static guard now rejects
+that specialization before normalization without changing valid address cases.
+
+The unchanged public Source body and independent writer-state model agree on
+**6,125 records per mode**, including **4,086 WriteFailed records**, plus **106
+returning controls and two exact panic/state pairs per mode**. Six optional
+pointer carriers, binary borrowed data, injected method errors, maximal ignored
+options, zero depth, all capacities through 39 bytes and memory/file/pipe /
+closed-descriptor states retain method-entry/completed-step counts and five
+writer/input snapshots through caller-buffer mutation and flush. Absence retains
+its exact `integer overflow` checks in production. Output SHA-256 is
+`cca41b43…7467612`.
+
+**12 external compiler pairs per mode** cover aliases, enum/sum receiver values,
+print composition, absent pointers, method failures and static/runtime method
+limits. Three regressions and a portable consumer additionally check arbitrary V
+error messages/codes and fixed arrays beside the pointer specializations. The
+aggregate-pointer `optional-custom` compiler control now accepts both languages;
+its earlier V rejection is superseded.
+
+All 126 image test files and 24 additional production/application/platform
+commands pass. Portable consumers run natively in both modes and compile for
+Windows/Linux; cross builds establish compilation only. Historical scalar-address,
+nonpointer custom and aggregate-pointer comparisons retain their record/state
+hashes in both modes; the updated optional-custom compiler control now succeeds.
+Vaxis runtime tests are not rerun.
+
+The runtime diff is confined to optional-pointer custom dispatch and the unused
+address-specialization guard. Existing leaf/IO/C and other runtime sources are
+unchanged. Whole Source/library, executable, implementation, fixture, model/helper
+and input pins are checked before/after; bodies/results freeze before final
+proofs. Independent replay checks observations, failure state, compiler outcomes
+and provenance; every retained archive member is read back before committing.
+
+Source accepts nonfallible methods; V requires a fallible public method. Mutable
+receivers, arbitrary interface dispatch, present null/invalid pointers, private
+layout/ownership/lifetime/copy equivalence, concurrency and huge successful output
+remain boundaries. Existing aggregate-address and broader pointer limits remain.
+Runtime evidence is little-endian 64-bit macOS. Scope and reproduction are in the
+[optional pointer custom comparison](zigimg/reference_probes/writer_pointer_custom/README.md).

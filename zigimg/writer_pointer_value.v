@@ -33,6 +33,12 @@ fn io_value_pointer[T](mut stream WriteStream, format string, options FormatOpti
 fn io_value_optional_pointer[T](mut stream WriteStream, format string, options FormatOptions, value ?&T, max_depth usize) ! {
 	// Extract before pointee reflection: V cannot parse this unwrap inside that branch.
 	address := unsafe { usize(voidptr(value or { nil })) }
+	$if T is IoValueFormatter {
+		if format == 'f' {
+			pointer := unsafe { &T(voidptr(address)) }
+			return pointer.format(mut stream)
+		}
+	}
 	$if T.unaliased_typ is $struct || T.unaliased_typ is $enum || T.unaliased_typ is $sumtype {
 		if format != '' && format != 'any' {
 			return error('unsupported print_value aggregate-pointer format')
@@ -99,12 +105,15 @@ fn io_value_optional_direct_address[T](mut stream WriteStream, value ?&T) ! {
 }
 
 fn io_value_optional_address_dispatch[P](mut stream WriteStream, value ?P) ! {
-	$if P !is $alias {
+	// Keep optional unwrapping outside reflected branches in V's generic parser.
+	payload := value or { $zero(P) }
+	$if P.indirections == 0 && ((int(P.unaliased_typ) >> 16) &0xff) == 0 {
+		return error('unsupported print_value pointer carrier')
+	} $else $if P !is $alias {
 		return io_value_optional_direct_address(mut stream, value)
+	} $else {
+		mut normalized := $zero(P.unaliased_typ)
+		unsafe { vmemcpy(&normalized, &payload, int(sizeof(P))) }
+		return io_value_normalized_optional_address(mut stream, normalized)
 	}
-	mut normalized := $zero(P.unaliased_typ)
-	// An or-block avoids V caching the last optional type across specializations.
-	payload := value or { return io_value_normalized_optional_address(mut stream, normalized) }
-	unsafe { vmemcpy(&normalized, &payload, int(sizeof(P))) }
-	return io_value_normalized_optional_address(mut stream, normalized)
 }
