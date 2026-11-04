@@ -12037,3 +12037,51 @@ Optional opaque/whole-alias arrays, broader aggregate/nested/function pointees,
 qualifiers, zero-length arrays and allocation/layout/lifetime/copy/mutation
 contracts retain documented limits. Runtime evidence is little-endian 64-bit
 macOS. Scope and reproduction are in the [pointer-lane comparison](zigimg/reference_probes/writer_vector_pointer/README.md).
+
+
+## Native V string Writer values (2026-11-04)
+
+`WriteStream.print_value` now maps native strings and aliases to Source byte
+slices for `s`/`x`/`X`/`b64`/`any`. A borrowed view preserves original storage;
+explicit `*` prints that storage address without copying or applying options.
+Present optional strings/aliases, recursive record/array fields and `Writer.print`
+use the same dispatcher. Empty format remains unsupported for string/slice
+values. The helper does not reinterpret bytes as Unicode characters.
+
+The unchanged public Source body and independent writer-state model agree on
+**15,609 records per mode**, including **6,681 WriteFailed records**. Nine carrier
+forms, all 256 byte values, embedded NUL, invalid UTF-8, empty/UTF-8 examples,
+options, depth, capacities and memory/file/pipe/closed-descriptor states are
+covered. Four snapshots retain backing/views, position, descriptor/file state,
+input bytes and header identity through caller mutation and flush. Inputs are
+never changed by formatting. Output SHA-256 is `516b19e8…bd2cab`.
+
+**12 external compiler pairs per mode** verify encodings, optional aliases,
+record/array fields, print composition, storage addresses and invalid/runtime
+formats. Each address consumer compares with its own input pointer, including
+empty storage and optional unwrapping. **33 exact panic/state pairs per mode**
+cover forbidden encoding options and inherited padding overflow after outer
+prefixes. Thirty-three returning controls cover earlier writer failures, absent
+optional bypass and depth/option handling. Diagnostics remain exact in production.
+Five unit regressions and a portable consumer additionally cover binary data,
+address identity, recursive strings and partial writes.
+
+All 124 image test files and 24 additional production/application/platform
+commands pass. Portable consumers run natively in both modes and compile for
+Windows/Linux; cross builds establish compilation only. Historical record and
+print comparisons retain their hashes in both modes. Vaxis runtime tests are
+not rerun.
+
+The runtime addition is a private borrowed-byte helper and one dispatch branch;
+removing that branch and diagnostic update reconstructs the previous dispatcher.
+Existing leaf formatters and IO/C are unchanged. Source/library/base64, compiler
+executable, implementation, fixture, model/helper and input pins are checked
+before/after. Bodies and expected results freeze before final comparisons.
+Independent replay verifies records, failures, compiler outcomes and provenance;
+every retained archive member is read back before committing.
+
+This maps V strings to byte slices without establishing native type, allocation,
+copy, ownership, private layout or lifetime equivalence. Invalid headers,
+overlapping input/output storage, concurrent mutation, huge output/storage and
+broader pointer/comptime coercions remain limits. Runtime evidence is little-endian
+64-bit macOS. Scope and reproduction are in the [string comparison](zigimg/reference_probes/writer_string/README.md).

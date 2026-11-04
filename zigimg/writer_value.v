@@ -374,6 +374,8 @@ pub fn (mut stream WriteStream) print_value[T](format string, options FormatOpti
 		if format != '' && format != 'any' { return error('unsupported print_value boolean format') }
 		return stream.align_buffer_options(if bool(value) { 'true'.bytes() } else { 'false'.bytes() },
 			options)
+	} $else $if T.unaliased_typ is string {
+		return io_value_string(mut stream, format, options, string(value), max_depth)
 	} $else $if T.unaliased_typ is []u8 {
 		if format == '*' { return stream.print_address(value) }
 		return io_value_bytes(mut stream, format, options, value, max_depth)
@@ -388,6 +390,6 @@ pub fn (mut stream WriteStream) print_value[T](format string, options FormatOpti
 	} $else $if T.unaliased_typ is $struct {
 		return io_value_struct[T](mut stream, format, options, value, max_depth)
 	} $else {
-		$compile_error('print_value supports native scalars, enums, errors, pointers, arrays, records, sum types and optionals')
+		$compile_error('print_value supports native scalars, strings, enums, errors, pointers, arrays, records, sum types and optionals')
 	}
 }

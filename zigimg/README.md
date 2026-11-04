@@ -1691,3 +1691,12 @@ pointer and optional-pointer specializations. The [pointer-lane comparison](refe
 covers 13,851 records, 13 compiler pairs, 85 isolated returns and 15 panic/state
 pairs per mode. Optional whole-alias arrays and broader pointer/ABI contracts
 remain compiler or representation boundaries.
+
+
+Native `string` values and aliases now follow byte-slice `print_value` formatting:
+`s`, `x`, `X`, `b64`, `any` and explicit `*`. The helper borrows original storage;
+optional strings, reflected fields, string arrays and `Writer.print` compose with
+the same rules. The [string comparison](reference_probes/writer_string/README.md)
+covers 15,609 records, 12 compiler pairs, 33 isolated returns and 33 panic/state
+pairs per mode. Unicode text semantics and general string ownership/layout /
+lifetime contracts remain outside this byte-slice adaptation.
