@@ -49,6 +49,8 @@ fn io_value_array_address_name[A](value A) !string {
 		zero := A{}
 		element := io_value_array_address_name(zero[0])!
 		return '[${zero.len}]' + element
+	} $else $if A.unaliased_typ is $array && A.indirections == 0 && ((int(A.unaliased_typ) >> 16) &0xff) == 0 {
+		return io_value_slice_address_name(value)
 	} $else $if A.unaliased_typ is voidptr {
 		return '*anyopaque'
 	} $else $if A.indirections > 0 || ((int(A.unaliased_typ) >> 16) &0xff) > 0 {
@@ -58,6 +60,13 @@ fn io_value_array_address_name[A](value A) !string {
 	} $else {
 		return error('unsupported print_value array-pointer address element')
 	}
+}
+
+// Bind the element type through an empty witness; never index the caller's slice.
+fn io_value_slice_address_name[E](_ []E) !string {
+	zero := $zero(E)
+	name := io_value_array_address_name(zero)!
+	return '[]' + name
 }
 
 // Bind a separate scalar generic so aliases retain their unaliased pointee type.
@@ -93,7 +102,7 @@ fn io_value_optional_address_name[T](_ ?T) !string {
 		zero := $zero(T)
 		name := io_value_array_pointer_address_name(zero)!
 		return '?' + name
-	} $else $if T.unaliased_typ is $array_fixed {
+	} $else $if T.unaliased_typ is $array_fixed || T.unaliased_typ is $array {
 		zero := T{}
 		name := io_value_array_address_name(zero)!
 		return '?' + name

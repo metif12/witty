@@ -12928,3 +12928,67 @@ Allocation/layout/ownership/lifetime contracts, overlapping input/output,
 concurrency and huge successful output remain outside the claim. Synthetic
 pointer bits prove formatting only. Runtime evidence is little-endian 64-bit
 macOS. Scope and reproduction are in the [aliased pointer array comparison](zigimg/reference_probes/writer_alias_array_value/README.md).
+
+
+## Slice element Writer address names (2026-11-04)
+
+Address names now recurse into represented slice elements: `[][]int` can name its
+inner type as `[]i32`, a pointer to `[3][]u8` names `[3][]u8`, and optional slice
+elements name `?[]i32`. Direct addresses and value-format `*`, nested slice/array
+names, aliases, optional outer slices and named print arguments compose through
+empty type witnesses. The formatter does not index caller inner headers or read
+their targets. It retains outer storage bits, separate prefix/digit writes and
+ignored present options/depth.
+
+Unchanged public Source methods and an independent writer-state model agree on
+**46,648 full records per mode**, including **25,907 WriteFailed records**.
+Thirteen native scalar types plus opaque-pointer controls, four routes, flat /
+nested/aliased shapes, 190 addresses, three lengths, capacities, maximal options
+and memory/file/pipe/closed-descriptor states retain four snapshots through caller
+buffer mutation and flush. **120 isolated returning controls per mode** retain
+prefix/digit failures, nested names, zero/maximal addresses and optional nulls.
+No parity controls panic. Output SHA-256 is `87e39caa…444fbb57`.
+
+**14 external compiler pairs per mode** check native array/slice/optional-element
+matrices, nested slices, print/optionals, unchanged contents/pointer addresses,
+unsupported names and runtime/static formats. Five public regressions and a
+portable consumer check caller headers, target/header-order mutation, no-read
+formatting and partial writes. Owned checks compare their own addresses.
+
+V can lose reflected array-kind information for generic-returned slices whose
+elements are slice aliases. In a mixed consumer this produces empty dispatcher
+bodies; casting to a named outer alias preserves the needed type information.
+Separate raw/named consumers retain those outcomes in both modes. The parity
+corpus uses represented aliases.
+
+Production V also emits GC keepalive walkers that traverse nested `usize` slice
+headers when values stay live across calls. A combined matrix with invalid
+synthetic nonempty storage crashed in generated caller code. Its source,
+command/failure receipts and generated GC code are retained separately. The final
+flat slice compiler matrix uses empty synthetic views, alongside owned nonempty
+checks and the four-route returning corpus. No-read claims describe the formatter;
+generated GC/lifetime code may traverse valid caller elements. General GC and
+lifetime representation contracts remain outside the comparison.
+
+All 140 image test files and 24 additional production/application/platform
+commands pass. Portable consumers run natively in both modes and compile for
+Windows/Linux; cross builds establish compilation only. Historical optional-array
+payload addresses and aliased pointer-array values retain record/control/state
+hashes in both modes. Vaxis runtime tests are not rerun.
+
+Removing the slice-name helper/dispatch and the three widened type conditions
+reconstructs the previous runtime exactly; other bodies and C remain byte-identical.
+Source/library, executable, implementation, fixture/model/helper and input pins
+are checked before/after; returning outputs freeze before final runs. Independent
+replay checks observations, failure states, compiler outcomes, separate reflection /
+GC evidence and provenance; every retained archive member is read back before
+commit. Completed proof extras were archived and read back before removing their
+unpacked duplicates to recover disk space.
+
+Strings, aggregate/function pointees, unsupported inner names, qualifiers /
+sentinels and broader representation contracts remain boundaries. Source requires
+static formats; V accepts runtime strings. Allocation/layout/ownership/lifetime
+contracts, overlapping input/output, concurrency and huge successful output are
+outside the claim. Zero witnesses may use stack space proportional to array types.
+Synthetic addresses prove formatting only. Runtime evidence is little-endian
+64-bit macOS. Scope and reproduction are in the [slice-element address comparison](zigimg/reference_probes/writer_slice_element_address/README.md).

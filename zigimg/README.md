@@ -1831,3 +1831,11 @@ pointed arrays and print compose with existing depth/options and partial writes.
 The [aliased pointer array contents comparison](reference_probes/writer_alias_array_value/README.md)
 covers 27,776 records, 14 compiler pairs and 72 isolated returns per mode.
 Real scalar byte aliases retain their byte formats.
+
+
+Address names now recurse into represented slice elements, including arrays,
+optional elements and nested slice names. Empty type witnesses preserve the outer
+storage address without inspecting inner headers. The [slice-element address
+comparison](reference_probes/writer_slice_element_address/README.md) covers 46,648
+records, 14 compiler pairs and 120 isolated returns per mode. Separate controls
+record generic alias reflection and generated GC traversal limits.
