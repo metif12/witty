@@ -12695,3 +12695,55 @@ concurrency and huge successful output remain outside the claim. Zero witnesses
 can use stack space proportional to the array type. Synthetic addresses prove
 formatting only. Runtime evidence is little-endian 64-bit macOS. Scope and
 reproduction are in the [pointer-element address comparison](zigimg/reference_probes/writer_pointer_element_address/README.md).
+
+
+## Flat native pointer-slice Writer addresses (2026-11-04)
+
+`print_address` and value-format `*` now accept flat slices of native scalar
+pointers and whole-pointer element aliases. Opaque pointer slices additionally
+accept value-format `*`, retaining their existing direct spelling. Canonical names
+such as `*u8@1234`, original data addresses, separate prefix/digit writes, ignored
+present options/depth and no-read behavior follow pinned Source. Whole-slice
+aliases, optional outer `?*` and named print arguments compose with the same
+route; absent outer slices retain aligned nulls.
+
+Unchanged public Source methods and the independent writer-state model agree on
+**29,708 full records per mode**, including **17,608 WriteFailed records**. The
+13 native scalar pointees plus opaque pointers, three routes, aliases, 190 addresses,
+three lengths, capacities, maximal options and memory/file/pipe/closed-descriptor
+states retain four snapshots through caller-buffer mutation and flush.
+**90 isolated returning controls per mode** preserve prefix/digit failures,
+maximal addresses and null padding, including maximal null width in finite memory.
+No controls panic. Output SHA-256 is `d3121578…e21203f2`.
+
+**11 external compiler pairs per mode** verify native/opaque routes, pointer /
+whole-slice aliases, owned addresses/mutations, print, optionals, unchanged default
+contents, unsupported carriers and static/runtime formats. Owned consumers compare
+with their own addresses. Four public regressions and a portable consumer check
+unchanged caller bytes/storage, target and pointer-order changes, no-read behavior,
+aliases, partial writes and aligned nulls.
+
+All 136 image test files and 24 additional production/application/platform
+commands pass. Portable consumers run natively in both modes and compile for
+Windows/Linux; cross builds establish compilation only. Historical pointer-element
+array addresses and scalar-pointer value record/control/state hashes remain
+unchanged in both modes. The former flat-pointer-slice compiler rejection is now
+a positive V check. Vaxis runtime tests are not rerun.
+
+Only the pointer-element branch in `io_address_slice` and pointer/opaque dispatch
+in `io_value_slice` change the runtime. Removing them reconstructs the previous
+implementation exactly; other bodies and C remain byte-identical. Source/library,
+executable, implementation, fixture/model/helper and input pins are checked
+before/after; expected bodies and outputs freeze before final runs. Independent
+replay checks observations, failure states, compiler outcomes and provenance;
+every retained archive member is read back before commit.
+
+Optional pointer elements, aliases of pointee types, deeper indirection,
+aggregate/function/array pointees, bare optional addresses, qualifiers/sentinels
+and broader representation contracts remain boundaries. Source requires static
+formats; V accepts runtime strings and rejects unsupported represented names
+before writes. Named aliases avoid inline optional constructor limits. General
+allocation/layout/ownership/lifetime contracts, overlapping input/output,
+concurrency and huge successful output remain outside the claim. Synthetic
+addresses prove formatting only. Runtime evidence is little-endian 64-bit macOS.
+Scope and reproduction are in the [pointer-slice address comparison](zigimg/reference_probes/writer_pointer_slice_address/README.md).

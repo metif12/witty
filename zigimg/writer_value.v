@@ -145,6 +145,9 @@ fn io_value_slice[T](mut stream WriteStream, format string, options FormatOption
 		} $else $if T.unaliased_typ is $int || T.unaliased_typ is f32 || T.unaliased_typ is f64
 			|| T.unaliased_typ is bool {
 			return stream.print_address(value)
+		} $else $if T.unaliased_typ is voidptr || T.indirections > 0
+			|| ((int(T.unaliased_typ) >> 16) & 0xff) > 0 {
+			return stream.print_address(value)
 		} $else {
 			return error('unsupported print_value pointer format')
 		}

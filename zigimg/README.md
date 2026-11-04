@@ -1797,3 +1797,11 @@ Direct/value pointer and slice routes, optional outer slices and print compose
 through the same helper. The [pointer-element address comparison](reference_probes/writer_pointer_element_address/README.md)
 covers 46,648 records, 11 compiler pairs and 120 isolated returns per mode.
 Optional pointer elements, pointee aliases and deeper indirection remain boundaries.
+
+
+Flat native pointer slices now support direct and value-format `*` addresses,
+including whole-pointer aliases. Opaque pointer slices also support value-format
+`*`. Original data addresses, no-read behavior, optional outer nulls and print
+composition are preserved. The [pointer-slice address comparison](reference_probes/writer_pointer_slice_address/README.md)
+covers 29,708 records, 11 compiler pairs and 90 isolated returns per mode.
+Optional pointer elements, pointee aliases and deeper indirection remain boundaries.

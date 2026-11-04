@@ -2138,6 +2138,10 @@ fn io_address_slice[T](mut stream WriteStream, value []T) ! {
 		witness := T{}
 		name := io_value_array_address_name(witness)!
 		stream.write_all((name + '@').bytes())!
+	} $else $if T.indirections > 0 || ((int(T.unaliased_typ) >> 16) & 0xff) > 0 {
+		witness := $zero(T)
+		name := io_value_array_address_name(witness)!
+		stream.write_all((name + '@').bytes())!
 	} $else {
 		stream.write_all((io_address_type_name[T]() + '@').bytes())!
 	}

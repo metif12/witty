@@ -80,3 +80,10 @@ python3 zigimg/verify_writer_pointer_element_address_reference.py /path/to/locke
 
 Session evidence: `/Users/alex/.cache/witty-writer-pointer-element-address-20261104/verified-proofs.tar.gz`,
 with a per-file manifest and full member readback. Regenerable caches are excluded.
+
+
+The later [flat pointer-slice checkpoint](../writer_pointer_slice_address/README.md)
+extends direct/value address routes to slices of native scalar pointers and
+whole-pointer aliases, and value-format `*` to opaque pointer slices. The former
+`flat-pointer-slice` rejection control now returns the canonical `*u8@1234`.
+The array corpus and retained-state hashes above remain unchanged.
