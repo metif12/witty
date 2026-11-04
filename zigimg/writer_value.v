@@ -179,8 +179,49 @@ fn io_value_field[F](mut stream WriteStream, options FormatOptions, value F, max
 	}
 }
 
+interface IoNumberFormatter {
+	format_number(mut stream WriteStream, options NumberFormat) !
+}
+
+interface IoByteSizeFormatter {
+	format_byte_size(mut stream WriteStream, units ByteSizeUnits) !
+}
+
+interface IoDurationFormatter {
+	format_duration(mut stream WriteStream) !
+}
+
 fn io_value_struct[T](mut stream WriteStream, format string, options FormatOptions, value T, max_depth usize) ! {
 	$if T.unaliased_typ is $struct {
+		$if T is IoNumberFormatter {
+			if format in ['d', 'b', 'o', 'x', 'X', 'e', 'E'] {
+				mode := match format {
+					'b' { NumberMode.binary }
+					'o' { NumberMode.octal }
+					'x', 'X' { NumberMode.hex }
+					'e', 'E' { NumberMode.scientific }
+					else { NumberMode.decimal }
+				}
+				letter_case := if format == 'X' || format == 'E' {
+					FormatCase.upper
+				} else {
+					FormatCase.lower
+				}
+				return value.format_number(mut stream, options.to_number(mode, letter_case))
+			}
+		}
+		$if T is IoByteSizeFormatter {
+			if format == 'B' || format == 'Bi' {
+				return value.format_byte_size(mut stream, if format == 'Bi' {
+					ByteSizeUnits.binary
+				} else {
+					ByteSizeUnits.decimal
+				})
+			}
+		}
+		$if T is IoDurationFormatter {
+			if format == 'D' { return value.format_duration(mut stream) }
+		}
 		if format != '' && format != 'any' {
 			return error('unsupported print_value struct format')
 		}

@@ -1650,3 +1650,14 @@ syntax and argument use before writing; value-format errors remain runtime
 checks. Source tuples, comptime coercions, root depth overrides and existing
 unsupported dispatcher carriers remain boundaries. This supersedes the earlier
 full-Writer.print gap for the represented record API.
+
+
+Ordinary record values and aliases now support `format_number(mut writer
+WriteStream, options NumberFormat) !` for numeric formats,
+`format_byte_size(mut writer WriteStream, units ByteSizeUnits) !` for `B`/`Bi`,
+and `format_duration(mut writer WriteStream) !` for `D`. These calls preserve
+options/unit selection, ignore depth and propagate partial writes and errors.
+Optionals and `Writer.print` use the same hooks; default reflection and enum
+numeric formatting bypass them. The [hook comparison](reference_probes/writer_value_hooks/README.md)
+covers 6,850 records and 19 external compiler pairs per mode. Nonfallible methods,
+mutable receivers and existing pointer/interface/carrier limits remain boundaries.

@@ -11834,3 +11834,55 @@ pointers and arbitrary interfaces retain the dispatcher compiler limits. The
 results are pinned to little-endian 64-bit macOS and do not establish other runtime
 platforms, private layout, lifetimes or general copy/mutation equivalence. Scope
 and reproduction are in the [print comparison](zigimg/reference_probes/writer_print/README.md).
+
+## Struct number and unit Writer hooks (2026-11-04)
+
+`WriteStream.print_value` now calls ordinary record/alias methods
+`format_number(mut writer WriteStream, options NumberFormat) !` for
+`d`/`b`/`o`/`x`/`X`/`e`/`E`, `format_byte_size(mut writer WriteStream, units ByteSizeUnits) !`
+for `B`/`Bi`, and `format_duration(mut writer WriteStream) !` for `D`. Number
+conversion preserves mode/case, optional precision/width, alignment and fill.
+Unit/duration hooks ignore options. Calls precede depth cutoffs, preserve individual
+method writes and propagate errors. Optional values and `Writer.print` use the
+same dispatch. `any`/default reflection and enum numeric behavior are unchanged.
+The concrete receiver is not converted to an interface.
+
+The unchanged pinned public Source body and independent writer-state model agree
+on **6,850 records per mode**, including **3,790 WriteFailed records**. Four
+snapshots retain writer/backing/views, descriptor/file state, method entry and
+completed-write counts and received options/units, through caller-buffer mutation
+and flush. All ten formats, record aliases, present/absent optionals, options,
+depth, capacities, binary payloads, signed extrema, method errors, positional /
+streaming files, replaced pipes and closed descriptors are covered. Output SHA-256
+is `e69f1543…eb1f7`.
+
+**19 external compiler pairs per mode** cover independent methods, aliases,
+optionals, print composition, default/enum bypass, missing/wrong signatures,
+nonfallible hooks and runtime formats. Source enforces static validity and accepts
+nonfallible hooks. V requires fallible methods and reports unsupported formats
+without writes for missing/wrong signatures; runtime strings are accepted.
+External V methods must be public. Six regressions also check arbitrary V error
+message/code propagation and fixed arrays beside the new specializations.
+
+All **120 image test files** and **24 additional production/application/platform
+commands** pass. Focused production checks cover hooks, print composition,
+records, custom formatters and fixed arrays. Native/Linux application checks,
+three Windows dependency libraries, Windows unit builds in both modes, two Linux
+shared libraries and portable consumers pass. Portable consumers run natively in
+both modes and compile for Windows and Linux; cross builds establish compilation
+only. Historical record, custom, fixed-array and print comparisons retain their
+hashes in both modes. Vaxis runtime tests are not rerun.
+
+The runtime diff contains only the new interfaces and struct dispatch branch;
+removing them reconstructs the previous formatter exactly. Existing IO/C and leaf
+formatters are unchanged. Source/library, compiler executable, implementation,
+fixture, runner/helper and input pins are checked before/after. Proof bodies and
+expected results freeze before the final ordinary/production comparisons.
+Observations, compiler outcomes and provenance are replayed separately, and all
+archive members are read back before commit.
+
+IError carriers retain error dispatch. Nonfallible/mutable receivers, arbitrary
+interfaces, broader pointers, Source comptime coercions and allocation/layout /
+lifetime/copy contracts retain documented limits. Other runtime platforms/widths
+and arbitrary user-method behavior remain unproven. Scope and reproduction are
+in the [hook comparison](zigimg/reference_probes/writer_value_hooks/README.md).
