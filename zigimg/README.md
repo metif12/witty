@@ -1746,3 +1746,12 @@ The [direct array-address comparison](reference_probes/writer_array_address_api/
 covers 20,115 records, 17 compiler pairs and 90 isolated returns per mode.
 Optional array addresses, broader element names and `print_value('*', ...)` for
 slices of fixed arrays remain documented boundaries.
+
+
+Value-format `*` now accepts slices of native fixed arrays, reusing the direct
+address API without reading elements or applying options/depth. Whole slice
+aliases, optional `?*` and `Writer.print` composition preserve addresses and
+aligned nulls. The [slice value-address comparison](reference_probes/writer_slice_array_address/README.md)
+covers 37,551 records, 20 compiler pairs and 135 isolated returns per mode.
+Broader element types, bare optional addresses and general representation
+contracts remain documented boundaries.

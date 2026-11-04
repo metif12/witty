@@ -12344,3 +12344,58 @@ prove formatting only. General allocation/layout/ownership/lifetime contracts,
 overlapping input/output, concurrency and huge successful output remain outside
 the claim. Runtime evidence is little-endian 64-bit macOS. Scope and reproduction
 are in the [direct array-address comparison](zigimg/reference_probes/writer_array_address_api/README.md).
+
+
+## Slice-of-fixed-array Writer value addresses (2026-11-04)
+
+`WriteStream.print_value('*', ...)` now accepts slices of fixed arrays with the
+13 supported native scalar element types. A two-line dispatch routes those
+slices to the verified direct address API. Canonical type names, original storage
+addresses, separate type/digit writes and no-read behavior are preserved. Options
+and depth are ignored for present values. Nested arrays, element/whole-slice
+aliases, optional `?*` and named `Writer.print` composition are covered. Absence
+retains aligned `null` and its padding/failure order.
+
+The unchanged public Source body and independent writer-state model agree on
+**37,551 complete records per mode**, including **16,067 WriteFailed records**,
+plus **135 isolated returning controls per mode**. Nine carrier forms, all native
+elements, 190 addresses, empty/nonempty headers, options, depth and memory/file /
+pipe/closed-descriptor states retain four snapshots through caller mutation and
+flush. Controls verify type/digit boundaries, maximal ignored present options,
+binary null fill and maximal-width null failures in finite memory. The same
+checks pass in production/ReleaseSafe without panics. Output SHA-256 is
+`88b5d86c…bea0a9db`.
+
+**20 external compiler pairs per mode** cover native types, aliases, nesting,
+owned addresses, empty/zero-data slices, print, optional construction and return
+values, direct API agreement and language boundaries. Owned consumers compare
+with their own inputs. Five regressions and a portable consumer additionally
+verify storage/header identity, no-read behavior, partial writes and unsupported
+elements before effects. V's inline `?[][N]T(...)` syntax hits a parser limit;
+named element types and functions returning raw optional slices work. Concrete
+fixtures avoid constructor temporary-type reuse, and named array locals avoid
+inline Result parsing. Source slice types are explicit. No private optional
+layout is used.
+
+All 130 image test files and 24 additional production/application/platform
+commands pass. Portable consumers run natively in both modes and compile for
+Windows/Linux; cross builds establish compilation only. Historical direct
+array-address, recursive scalar-slice and optional-value comparisons retain their
+record/state hashes in both modes. Vaxis runtime tests are not rerun.
+
+Only the two-line fixed-array element dispatch in `io_value_slice` changes the
+runtime. The direct API, other branches, leaf formatters and IO/C remain
+byte-identical. Whole Source/library, executable, implementation, fixture/model /
+helper and input pins are checked before/after; expected results and bodies freeze
+before final runs. Independent replay checks observations, failures, compiler
+outcomes and provenance; every retained archive member is read back before commit.
+
+Record/optional/pointer array elements, slices of optional scalars, by-value fixed
+arrays, bare optional addresses, whole optional-array pointers and broader
+named/qualified types remain boundaries. Source requires static formats; V
+accepts runtime strings. General allocation/layout/ownership/lifetime contracts,
+overlapping input/output, concurrency and huge successful output are outside the
+claim. Witnesses can use stack space proportional to the array type. Synthetic
+addresses prove formatting only. Runtime evidence is little-endian 64-bit macOS.
+Scope and reproduction are in the
+[slice value-address comparison](zigimg/reference_probes/writer_slice_array_address/README.md).

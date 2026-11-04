@@ -140,6 +140,8 @@ fn io_value_slice[T](mut stream WriteStream, format string, options FormatOption
 	if format == '*' {
 		$if T is $option {
 			return error('unsupported print_value pointer format')
+		} $else $if T.unaliased_typ is $array_fixed {
+			return stream.print_address(value)
 		} $else $if T.unaliased_typ is $int || T.unaliased_typ is f32 || T.unaliased_typ is f64
 			|| T.unaliased_typ is bool {
 			return stream.print_address(value)

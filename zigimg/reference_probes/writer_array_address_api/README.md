@@ -60,9 +60,10 @@ every retained archive member is read back before committing.
 
 Optional whole-array addresses, record/optional/pointer elements, pointers to
 array pointers, by-value arrays, zero-length array types and whole pointer alias
-construction remain boundaries. `print_value('*', ...)` for slices of fixed
-arrays remains unsupported; this checkpoint adds the direct API. Source supports
-broader named and qualified types. General allocation/layout/ownership/lifetime
+construction remain boundaries. Value-format `*` for native fixed-array slices
+and optional `?*` are now covered by the
+[slice value-address comparison](../writer_slice_array_address/README.md).
+Source supports broader named and qualified types. General allocation/layout/ownership/lifetime
 contracts, overlapping input/output, concurrent mutation and huge successful
 output are outside the claim. The witnesses can use stack space proportional to
 the fixed-array type. Synthetic addresses prove formatting only. Runtime evidence
