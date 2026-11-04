@@ -1672,3 +1672,13 @@ The [vector helper comparison](reference_probes/writer_vector/README.md) covers
 7,048 records, 15 compiler pairs, 16 isolated returns and eight panic/state pairs
 per mode. Runtime format validation, pointer lanes, native SIMD layout and other
 existing carrier limits remain documented boundaries.
+
+
+Empty and `any` `print_value` formats now render native scalar and opaque pointers
+without dereferencing. The type/`@` prefix precedes hexadecimal address digits;
+width/alignment/fill apply only to digits, while precision and depth are ignored.
+Present optional pointers and aliases retain their bits when unwrapped; absent
+values retain aligned `null`. Explicit `*` keeps its separate spelling and ignored
+options. The [pointer value comparison](reference_probes/writer_pointer_value/README.md)
+covers 9,013 records, 11 compiler pairs, 38 isolated returns and ten panic/state
+pairs per mode. Broader pointer recursion and representation limits remain.

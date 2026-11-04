@@ -293,9 +293,19 @@ fn io_value_optional[T](mut stream WriteStream, format string, options FormatOpt
 	// An or-block preserves each payload type in V's generic specializations.
 	payload := value or { return stream.align_buffer_options('null'.bytes(), options) }
 	$if T.indirections > 0 || ((int(T.unaliased_typ) >> 16) & 0xff) > 0 {
-		if remaining != '*' { return error('unsupported print_value pointer format') }
-		// Keep the optional carrier: forwarding a generic pointer takes its address in V.
-		return io_value_optional_address(mut stream, value)
+		$if T is $alias {
+			// Normalize the unwrapped alias without interpreting V's optional layout.
+			mut normalized := $zero(T.unaliased_typ)
+			unsafe { vmemcpy(&normalized, &payload, int(sizeof(T))) }
+			return stream.print_value(remaining, options, normalized, max_depth)
+		} $else {
+			// Keep the optional carrier: forwarding a generic pointer takes its address in V.
+			if remaining == '*' { return io_value_optional_address(mut stream, value) }
+			if remaining == '' || remaining == 'any' {
+				return io_value_optional_pointer(mut stream, options, value)
+			}
+			return error('unsupported print_value pointer format')
+		}
 	} $else {
 		return stream.print_value[T](remaining, options, payload, max_depth)
 	}
@@ -316,7 +326,7 @@ pub fn (mut stream WriteStream) print_value[T](format string, options FormatOpti
 	$if T is $option {
 		if format == '*' {
 			$if T.indirections == 1 || ((int(T.unaliased_typ) >> 16) & 0xff) == 1 {
-				return stream.print_address(value)
+				return io_value_optional_address_dispatch(mut stream, value)
 			} $else {
 				return error('unsupported print_value pointer carrier')
 			}
@@ -324,8 +334,17 @@ pub fn (mut stream WriteStream) print_value[T](format string, options FormatOpti
 		return io_value_optional(mut stream, format, options, value, max_depth)
 	} $else $if T.unaliased_typ is voidptr || T.indirections > 0
 		|| ((int(T.unaliased_typ) >> 16) & 0xff) > 0 {
-		if format != '*' { return error('unsupported print_value pointer format') }
-		return stream.print_address(value)
+		if format == '*' { return stream.print_address(value) }
+		if format != '' && format != 'any' { return error('unsupported print_value pointer format') }
+		$if T.unaliased_typ is voidptr {
+			return io_value_pointer_bits(mut stream, options, 'anyopaque', usize(value))
+		} $else $if T is $alias {
+			mut normalized := $zero(T.unaliased_typ)
+			unsafe { vmemcpy(&normalized, &value, int(sizeof(T))) }
+			return stream.print_value(format, options, normalized, max_depth)
+		} $else {
+			return io_value_pointer(mut stream, options, value)
+		}
 	} $else $if T is IError {
 		return io_value_error(mut stream, format, options, value)
 	} $else $if T.unaliased_typ is $int {
