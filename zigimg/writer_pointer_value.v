@@ -62,6 +62,10 @@ fn io_value_array_address_name[A](value A) !string {
 fn io_value_optional_address_name[T](_ ?T) !string {
 	$if T is $option || T.indirections > 0 || ((int(T.unaliased_typ) >> 16) &0xff) > 0 {
 		return error('unsupported print_value array-pointer address element')
+	} $else $if T.unaliased_typ is $array_fixed {
+		zero := T{}
+		name := io_value_array_address_name(zero)!
+		return '?' + name
 	} $else $if T.unaliased_typ is u8 || T.unaliased_typ is u16 || T.unaliased_typ is u32 || T.unaliased_typ is u64 || T.unaliased_typ is usize || T.unaliased_typ is i8 || T.unaliased_typ is i16 || T.unaliased_typ is int || T.unaliased_typ is i64 || T.unaliased_typ is isize || T.unaliased_typ is f32 || T.unaliased_typ is f64 || T.unaliased_typ is bool {
 		return '?' + io_address_type_name[T]()
 	} $else {

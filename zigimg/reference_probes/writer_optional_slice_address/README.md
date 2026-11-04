@@ -70,3 +70,10 @@ python3 zigimg/verify_writer_optional_slice_address_reference.py /path/to/locked
 
 Session evidence: `/Users/alex/.cache/witty-writer-optional-slice-address-20261104/verified-proofs.tar.gz`,
 with a per-file manifest and full member readback. Regenerable caches are excluded.
+
+
+The subsequent [optional fixed-array payload comparison](../writer_optional_array_payload_address/README.md)
+extends the helper to represented `[]?[N]T` payloads with native scalar leaves.
+Named payload aliases and explicit generic slice returns retain the optional;
+raw declarations and some value-format combinations have separately measured
+V compiler limits. The scalar corpus and retained-state hashes above are unchanged.

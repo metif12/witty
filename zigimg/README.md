@@ -1771,3 +1771,12 @@ without reading elements or changing storage addresses. The [optional-slice
 address comparison](reference_probes/writer_optional_slice_address/README.md)
 covers 27,460 records, 17 compiler pairs and 90 isolated returns per mode.
 Broader payload types and bare optional addresses remain documented boundaries.
+
+
+Address names now recurse into represented optional fixed-array slice elements,
+such as `[]?[2]int`, including nested arrays, aliases and optional outer slices.
+Direct addresses also handle array payloads with optional native scalar elements;
+value-format calls for that shape retain a measured V C-generation limit. The
+[optional-array payload comparison](reference_probes/writer_optional_array_payload_address/README.md)
+covers 24,496 records, 19 compiler pairs and 105 isolated returns per mode.
+Raw declaration reflection and element-assignment limits are documented separately.

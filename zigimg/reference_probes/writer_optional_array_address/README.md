@@ -76,3 +76,11 @@ python3 zigimg/verify_writer_optional_array_address_reference.py /path/to/locked
 
 Session evidence: `/Users/alex/.cache/witty-writer-optional-array-address-20261104/verified-proofs.tar.gz`,
 with a per-file manifest and full member readback. Regenerable caches are excluded.
+
+
+The later [optional fixed-array payload checkpoint](../writer_optional_array_payload_address/README.md)
+names those payloads through represented slice carriers. Raw `[3]?[2]i16{}`
+declarations lose their optional marker in V reflection, and element assignment
+has a separate C-generation limit. The earlier length-only declaration baseline
+still passes; it does not establish optional element representation. The corpus
+and retained-state hashes above are unchanged.

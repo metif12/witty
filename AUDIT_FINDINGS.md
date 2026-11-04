@@ -12511,3 +12511,66 @@ input/output, concurrency and huge successful output remain outside the claim.
 Synthetic addresses prove formatting only. Runtime evidence is little-endian
 64-bit macOS. Scope and reproduction are in the
 [optional-slice address comparison](zigimg/reference_probes/writer_optional_slice_address/README.md).
+
+
+## Optional fixed-array payload Writer addresses (2026-11-04)
+
+Writer address names now recurse into represented optional fixed-array slice
+elements, for example `?[2]i32@1234` for `[]?[2]int`. All native scalar leaves,
+nested arrays, payload/whole-slice aliases, direct/value calls, optional outer
+`?*` and named print arguments are covered. Direct addresses additionally name
+arrays containing optional scalar elements; their value-format calls retain a
+measured V compiler limit. Original storage addresses, separate prefix/digit
+writes, ignored present options/depth and aligned absent outer nulls are preserved.
+A zero concrete witness binds recursion without reading or unwrapping caller
+elements or interpreting private optional layout.
+
+The unchanged public Source methods and independent writer-state model agree on
+**24,496 full records per mode**, including **12,920 WriteFailed records**, plus
+**105 isolated returning controls per mode**. Native leaves, flat/nested payloads,
+direct addresses of payloads with optional elements, 190 addresses, empty/nonempty
+slices, capacities, maximal ignored options and memory/file/pipe/closed-descriptor
+states retain four snapshots through caller-buffer mutation and flush. Failure
+controls include maximal-width nulls in finite memory. No controls panic. Output
+SHA-256 is `174bfa9d…010d248`.
+
+**19 external compiler pairs per mode** cover routes, aliases, owned addresses,
+present/absent element reversal, print, nulls, unchanged `any` contents, formats,
+unsupported leaves and compiler boundaries. Four public regressions and a
+portable consumer additionally verify unchanged caller bytes, storage identity,
+no-read behavior, recursive names and partial failures. Named zero locals avoid
+V's inline fixed-array argument C-generation issue.
+
+Independent controls distinguish representation/compiler limits from parity.
+Raw `[3]?[2]i16{}` declarations reflect as `[3][2]i16` in V, losing the optional
+marker before formatting. Optional fixed-array element assignment produces
+invalid C without an address-formatting call. An isolated value-format consumer
+for `[]?[3]?bool` emits an incorrect `_option_bool` argument clone in the unused
+`any` path; its exact C-generation diagnostic is required. Direct addresses for
+those represented payloads compile and match. None of these controls count as
+returning-record parity.
+
+All 133 image test files and 24 additional production/application/platform
+commands pass. Portable consumers run natively in both modes and compile for
+Windows/Linux; cross builds establish compilation only. Historical optional-array
+and optional-scalar-slice address record/state hashes remain unchanged in both
+modes. Vaxis runtime tests are not rerun.
+
+The runtime diff is confined to four recursive-name lines in the optional helper;
+removing them reconstructs the previous implementation exactly. Other bodies,
+dispatcher/IO and C remain byte-identical. Whole Source/library, executable,
+implementation, fixture/model/helper and input pins are checked before/after;
+expected outputs and bodies freeze before final runs. Independent replay checks
+records, failure states, compiler outcomes and provenance; every retained archive
+member is read back before commit.
+
+Optional pointer/record/string leaves, unsupported declaration/assignment forms,
+value-format calls on optional arrays containing optional elements, bare optional
+addresses, whole optional-array pointers, qualifiers/sentinels and arbitrary named
+types remain boundaries. Source supports broader names and requires static formats;
+V accepts runtime strings and rejects unsupported represented leaves before writes.
+General allocation/layout/ownership/lifetime contracts, overlapping input/output,
+concurrency and huge successful output remain outside the claim. Zero witnesses
+can use stack space proportional to the array type. Synthetic addresses prove
+formatting only. Runtime evidence is little-endian 64-bit macOS. Scope and
+reproduction are in the [optional-array payload comparison](zigimg/reference_probes/writer_optional_array_payload_address/README.md).
