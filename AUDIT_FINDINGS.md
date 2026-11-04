@@ -13050,3 +13050,63 @@ overlapping input/output, concurrency and huge successful output are outside the
 claim. Zero witnesses may use stack space proportional to array types. Synthetic
 addresses prove formatting only. Runtime evidence is little-endian 64-bit macOS.
 Scope and reproduction are in the [string-element address comparison](zigimg/reference_probes/writer_string_element_address/README.md).
+
+
+## Direct native string Writer addresses (2026-11-05)
+
+`print_address` now accepts native V strings and aliases, writing `u8@…` with the
+same byte pointer and separate prefix/digit boundaries as existing value-format
+`*`. The representation maps strings to typed Source `[]const u8` payloads. Source
+literal array/sentinel pointers are outside that mapping. The new branch follows
+pointer dispatch, so pointer-to-string behavior remains unchanged. A named string
+local avoids V 0.5.2's invalid C for an inline cast followed by field access. No
+private layout is decoded and no characters are read.
+
+Unchanged public Source methods and an independent writer-state model agree on
+**5,984 full records per mode**, including **2,811 WriteFailed records**. Native /
+alias direct calls, existing native/alias `*`, present/absent optional values,
+190 addresses, three lengths, capacities, ignored present options and memory /
+file/pipe/closed-descriptor states retain four snapshots through caller-buffer
+mutation and flush. **90 isolated returning controls per mode** preserve prefix /
+digit failures, maximal addresses, null padding and maximal null width in finite
+memory. No controls panic. Output SHA-256 is `3dae8e7c…b841cc99`.
+
+**10 external compiler pairs per mode** check present routes, owned storage and
+mutation, print, empty strings, unsupported carriers, runtime/static formats,
+preserved contents and element-address regression. Five public regressions and a
+portable consumer check original pointers/storage, length independence, arbitrary
+bits, partial writes and nulls. Owned checks compare their own addresses, not raw
+literal pointers across processes.
+
+All 142 image test files and 24 additional production/application/platform
+commands pass. Portable consumers run natively in both modes and compile for
+Windows/Linux; cross builds establish compilation only. Historical string values
+and string-element addresses retain record/control/state hashes in both modes.
+Vaxis runtime tests are not rerun.
+
+Removing the direct string branch reconstructs the previous runtime exactly;
+value formatting, parsing, element naming, other bodies and C remain byte-identical.
+Source/library, executable, implementation, fixture/model/helper and input pins
+are checked before/after; returning outputs freeze before final runs. Independent
+replay checks observations, failures, compiler outcomes and provenance; every
+retained archive member is read back before commit. Completed regenerable caches
+and verified archive-backed inactive extras were reclaimed with archives retained.
+
+Direct optional strings and pointer-to-string payload names remain boundaries;
+optionals preserve the existing `?*` value route. String layouts, allocation,
+ownership and lifetime contracts are not equated by the Source mapping. General
+allocation/layout/ownership/lifetime contracts, generated GC traversal, overlapping
+input/output, concurrency and huge successful output remain outside the claim.
+Synthetic strings use the pinned public unsafe `vstring_with_len` constructor to
+preserve pointer bits without a character scan and prove formatting only. Runtime
+evidence is little-endian 64-bit macOS. Scope and reproduction are in the [direct
+string address comparison](zigimg/reference_probes/writer_string_address_api/README.md).
+
+
+Disk exhaustion interrupted the final production historical compiler controls.
+Before resuming, the saved returning corpus was replayed against Source/V and the
+model, and implementation, source, fixture, helper and compiler pins were checked.
+Completed command outputs and executables were pinned through the resume. The
+remaining controls passed; independent audit also verifies the retained prefix.
+Inactive completed proof extras were archived and read back before removing their
+unpacked duplicates. The resume and cleanup receipts accompany this checkpoint.

@@ -1847,3 +1847,10 @@ outer addresses and write boundaries are retained without reading text headers.
 The [string-element address comparison](reference_probes/writer_string_element_address/README.md)
 covers 8,568 records, 12 compiler pairs and 120 isolated returns per mode.
 String alias declaration and general representation limits are documented.
+
+
+`print_address` now accepts native strings and aliases, preserving the original
+byte pointer and existing value-format `*` spelling without reading characters.
+The [direct string address comparison](reference_probes/writer_string_address_api/README.md)
+covers 5,984 records, 10 compiler pairs and 90 isolated returns per mode. Direct
+optional strings and pointer-to-string payload names remain boundaries.

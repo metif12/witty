@@ -73,3 +73,9 @@ python3 zigimg/verify_writer_string_element_address_reference.py /path/to/locked
 
 Session evidence: `/Users/alex/.cache/witty-writer-string-element-address-20261104/verified-proofs.tar.gz`,
 with a per-file manifest and full member readback. Regenerable caches are excluded.
+
+
+The subsequent [direct string address checkpoint](../writer_string_address_api/README.md)
+adds `print_address(string)` and string aliases with the existing value-format
+`*` spelling, `u8@…`. Direct optional strings and pointer-to-string descriptors
+remain separate boundaries. This comparison's hashes are unchanged.

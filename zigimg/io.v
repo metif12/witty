@@ -2174,6 +2174,10 @@ pub fn (mut stream WriteStream) print_address[P](value P) ! {
 		} $else {
 			return io_address_pointer(mut stream, value)
 		}
+	} $else $if P.unaliased_typ is string {
+		stream.write_all('u8@'.bytes())!
+		text := string(value)
+		return io_address_integer(mut stream, usize(text.str))
 	} $else {
 		$compile_error('print_address requires a pointer or slice')
 	}
