@@ -13299,3 +13299,69 @@ concurrency and huge successful output remain outside the claim. Zero witnesses
 may use stack space proportional to array types. Synthetic addresses establish
 formatting only. Runtime evidence is little-endian 64-bit macOS. Scope and
 reproduction are in the [array pointee address comparison](zigimg/reference_probes/writer_array_pointee/README.md).
+
+
+## Multi-level pointer Writer address element names (2026-11-05)
+
+Address element names now recurse through additional pointer levels, including
+aliases and represented fixed-array pointees. Each step binds a zero pointer of
+the next type and prefixes `*`, without reading caller chains or outer storage.
+Examples include `[3]**u8@…`, `[2][3]***i32@…` and `[3]**[2][3]u16@…`.
+The existing single-pointer path remains unchanged.
+
+The value-pointee helper also names pointer children through that recursion. A
+fixed-array value guard excludes pointer carriers so generic value dispatch can
+compile address-only containers with pointer/array pointees. Direct multi-level
+pointer carriers in `print_address` remain unported; the primary parity claim
+covers element names in array-pointer and slice address carriers.
+
+Unchanged public Source methods and an independent writer-state model agree on
+**14,308 full records per mode**, including **7,985 WriteFailed records**. Two-,
+three- and four-level scalar/pointee-array shapes, three outer shapes, four APIs,
+aliases, 190 address patterns, lengths, capacities, maximal options and memory /
+file/pipe/closed-descriptor states preserve four snapshots through caller-buffer
+mutation and flush. Present options/depth are ignored; prefix/digit writes and
+optional outer-slice address/null routes are preserved. **120 isolated returning
+controls per mode** preserve failure state, unused bytes and zero/maximal
+addresses. No controls panic. Output SHA-256 is `515223bf…0b14dfb8`.
+
+**17 external compiler pairs per mode** cover thirteen native scalar pointees,
+owned chains and target mutation, print/outer optionals, flat pointer slices,
+native optional pointer elements, six pointer levels, scalar pointer-value
+leaves, unchanged byte-array contents, runtime/static formats and retained
+boundaries. Five former nested-pointer rejection controls now verify owned
+addresses and return `address-ok`; their updated runners are provenance inputs
+and their cases are also replayed in the new compiler matrix.
+
+Native `[2]?&&u8` address elements work. Optional pointers to named pointee aliases
+still reproduce V's declaration-order C failure with an undeclared `Base0` in
+both modes. Direct multi-level `print_address` carriers remain a measured V
+rejection against Source's returning control. General default formatting of
+arbitrary chains and aggregate/function pointees remains outside the claim.
+Pointer-value controls use naturally aligned synthetic addresses; owned callers
+compare their own process addresses.
+
+Four public regressions and a portable consumer verify no-read names, aliases,
+optional elements, nulls, exact partial writes, storage bits, preserved pointer
+bytes and mutations to elements, intermediate pointers and final targets. All
+146 image test files and 24 additional production/application/platform commands
+pass. Portable consumers run natively in both modes and compile for Windows/Linux;
+cross builds establish compilation only. Historical scalar-pointee-alias and
+array-pointee suites retain record/control/state hashes in both modes; promoted
+compiler outcomes are recorded separately. Vaxis runtime tests are not rerun.
+
+Removing the recursive element/value-pointee branches and value guard reconstructs
+the previous runtime exactly; other bodies, parsing and C remain byte-identical.
+Source/library, executable, implementation, fixture/model/helper and input pins
+are checked before/after; expected outputs freeze before final runs. Independent
+replay verifies observations, failures, compiler outcomes and provenance; every
+retained archive member is read back before commit. Completed regenerable caches
+and verified archive-backed duplicates were reclaimed with archives retained.
+
+Unrepresented inner types/qualifiers, general layout/allocation/ownership/lifetime
+contracts, compiler GC traversal, overlapping input/output, concurrency and huge
+successful output remain boundaries. Zero array witnesses may use stack space
+proportional to their types; recursive naming is subject to compiler limits.
+Synthetic addresses establish formatting only. Runtime evidence is little-endian
+64-bit macOS. Scope and reproduction are in the [multi-level pointer element
+comparison](zigimg/reference_probes/writer_multi_pointer_element/README.md).

@@ -140,7 +140,7 @@ def compiler_cases():
  ok('contents','var value:[3]u8=.{65,0,66};try w.printValue("s",.{},&value,0);',"value:=[u8(65),0,66]!\nw.print_value('s',p.FormatOptions{},&value,0)!",b'A\x00B')
  rows.append(('optional-pointee-baseline','const value:[2]?*[3]u8=.{null,null};try w.printInt(value.len,10,.lower,.{});',"value:=OptionalNumbers{}\nprint(value.len)",b'2',None))
  reject=" or {require(backing==before && w.buffered().len==0)\nprint('rejected')\nreturn}\npanic('unexpected success')"
- rows.append(('nested-pointer','try w.printAddress(@as(*allowzero align(1) [1]**u8,@ptrFromInt(0x1234)));',"value:=unsafe{[1]&&u8{}}\nw.print_address(&value)"+reject,b'[1]**u8@1234',b'rejected'))
+ rows.append(('nested-pointer', 'try w.printAddress(@as(*allowzero align(1) [1]**u8,@ptrFromInt(0x1234)));if(!std.mem.eql(u8,w.buffered(),"[1]**u8@1234"))return error.BadAddress;w.end=0;try w.writeAll("address-ok");', "value:=unsafe{[1]&&u8{}}\nw.print_address(&value)!\naddress:=unsafe{usize(voidptr(&value))}\nrequire(w.buffered().bytestr()=='[1]**u8@${address:x}')\nw.seek_to(0)!\nw.write_all('address-ok'.bytes())!", b'address-ok', b'address-ok'))
  rows.append(('runtime-format','const args=try std.process.argsAlloc(std.heap.page_allocator);try w.printValue(args[0],.{},@as(*allowzero align(1) [3]*[3]u8,@ptrFromInt(0x1234)),0);',"format:=if os.args.len>0 {'*'} else {'d'}\nw.print_value(format,p.FormatOptions{},unsafe{&Flat0(voidptr(usize(0x1234)))},0)!",None,b'[3]*[3]u8@1234'))
  rows.append(('invalid-format','try w.printValue("d",.{},@as(*allowzero align(1) [3]*[3]u8,@ptrFromInt(0x1234)),0);',"w.print_value('d',p.FormatOptions{},unsafe{&Flat0(voidptr(usize(0x1234)))},0)"+reject,None,b'rejected'))
  return rows

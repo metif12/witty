@@ -12,13 +12,16 @@ fn io_value_pointer_address_name[T]() !string {
 	$if T.unaliased_typ is $array {
 		witness := T{}
 		return io_value_array_address_name(witness)
+	} $else $if T.indirections > 0 || ((int(T.unaliased_typ) >> 16) &0xff) > 0 {
+		witness := $zero(T)
+		return io_value_array_address_name(witness)
 	} $else {
 		return io_address_type_name[T]()
 	}
 }
 
 fn io_value_pointer[T](mut stream WriteStream, format string, options FormatOptions, value &T, max_depth usize) ! {
-	$if T.unaliased_typ is $array_fixed {
+	$if T.unaliased_typ is $array_fixed && T.indirections == 0 && ((int(T.unaliased_typ) >> 16) &0xff) == 0 {
 		if format == '*' {
 			witness := T{}
 			name := io_value_array_address_name(witness)!
@@ -98,6 +101,10 @@ fn io_value_array_pointer_address_name[P](_ P) !string {
 			name := io_value_pointer_pointee_address_name(zero)!
 			return '*' + name
 		}
+	} $else $if P.indirections > 1 {
+		zero := $zero(P.pointee_type)
+		name := io_value_array_pointer_address_name(zero)!
+		return '*' + name
 	}
 	return error('unsupported print_value array-pointer address element')
 }
