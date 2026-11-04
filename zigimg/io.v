@@ -2107,6 +2107,8 @@ fn io_address_type_name[T]() string {
 		return 'f64'
 	} $else $if T.unaliased_typ is bool {
 		return 'bool'
+	} $else $if T.unaliased_typ is string {
+		return '[]const u8'
 	} $else {
 		$compile_error('print_address requires native scalar or pointer pointees')
 	}
@@ -2120,10 +2122,19 @@ fn io_address_pointer[T](mut stream WriteStream, value &T) ! {
 	} $else {
 		stream.write_all((io_address_type_name[T]() + '@').bytes())!
 	}
-	return io_address_integer(mut stream, usize(voidptr(value)))
+	return io_address_integer(mut stream, unsafe { usize(voidptr(value)) })
 }
 
-fn io_address_optional[T](mut stream WriteStream, value ?&T) ! {
+// Bind the payload separately so an optional pointer alias can be normalized.
+fn io_address_optional[P](mut stream WriteStream, value ?P) ! {
+	$if P is $alias {
+		return io_value_optional_address_dispatch(mut stream, value)
+	} $else {
+		return io_address_optional_pointer(mut stream, value)
+	}
+}
+
+fn io_address_optional_pointer[T](mut stream WriteStream, value ?&T) ! {
 	stream.write_all(('*' + io_address_type_name[T]() + '@').bytes())!
 	address := unsafe { usize(voidptr(value or { nil })) }
 	return io_address_integer(mut stream, address)

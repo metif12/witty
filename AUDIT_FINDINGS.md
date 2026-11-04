@@ -13110,3 +13110,65 @@ Completed command outputs and executables were pinned through the resume. The
 remaining controls passed; independent audit also verifies the retained prefix.
 Inactive completed proof extras were archived and read back before removing their
 unpacked duplicates. The resume and cleanup receipts accompany this checkpoint.
+
+
+## String descriptor pointer Writer addresses (2026-11-05)
+
+Native `&string`, pointers to string aliases and pointer aliases now use the
+Source pointee name `[]const u8`. Direct `print_address`, explicit `*` and default
+pointer formatting preserve the descriptor address without inspecting its header
+or characters. Default/`any` keeps type/`@` vector output followed by aligned hex
+digits; explicit address formats ignore width, precision and depth. Pointer
+array/slice element names compose with this pointee, including optional pointers.
+
+Present `?*` optionals use the descriptor address and absent values align `null`.
+Bare `*` and direct optional addresses retain `*[]const u8@…`. Direct optional
+calls now bind payload types before invoking the existing pointer-alias
+normalization helper. Generic native-pointer casts need `unsafe` for V's string
+pointee checker; they convert bits without dereferencing. A caller's raw
+`voidptr` cast to `&Text` (`Text = string`) generates invalid C in V 0.5.2. The
+synthetic fixture initializes a zero pointer and copies native pointer bits;
+owned descriptors and pointer aliases also exercise ordinary construction. That
+construction diagnostic is retained outside the parity corpus.
+
+Unchanged public Source methods and an independent writer-state model agree on
+**10,960 full records per mode**, including **4,426 WriteFailed records**. Seven
+native/alias/present/absent carriers, 190 input addresses, capacities, options,
+digit alignment and memory/file/pipe/closed-descriptor states preserve four
+snapshots through caller-buffer mutation and flush. Some optional addresses are
+aligned to eight bytes for Source's natural pointer type; plain pointers cover
+all address bits. **77 isolated returning controls per mode** retain partial
+prefix/digit/null writes and unused bytes. No controls panic. Output SHA-256 is
+`9b0ab14a…1fa5ab8`.
+
+**11 external compiler pairs per mode** check routes, aliases, owned descriptor
+replacement, optionals, element names, print, unsupported formats and runtime
+formats. The previous direct-string suite's pointer-to-string rejection is now a
+positive owned-address control. Six public regression functions and a portable
+consumer verify raw/owned descriptors, aliases, zero/optional pointers, exact
+partial writes, pointer elements, preserved header bytes and address stability
+across replacement.
+
+All 143 image test files and 24 additional production/application/platform
+commands pass. Portable consumers run natively in both modes and compile for
+Windows/Linux; cross builds establish compilation only. Historical scalar-pointer
+and direct-string suites retain record/control/state hashes in both modes.
+Vaxis runtime tests are not rerun.
+
+Reversing the string name, raw casts and optional alias binding reconstructs the
+previous runtime exactly; other runtime bodies, parsing, direct string byte
+addresses and C remain byte-identical. Source/library, executable,
+implementation, fixture/model/helper and input pins are checked before/after;
+expected outputs freeze before final runs. Independent replay verifies recorded
+observations, failure state, compiler outcomes and provenance; every retained
+archive member is read back before commit.
+
+This supersedes prior pointer-to-string name boundaries for the represented
+carriers. It does not equate V/Source descriptor layouts, allocation, ownership or
+lifetime. Direct optional strings, deeper pointer indirection, unsupported
+pointees and unrepresented qualifiers remain boundaries. Generated GC traversal,
+overlapping input/output, concurrency and huge successful output remain outside
+the claim. Synthetic addresses establish formatting only; zero witnesses may use
+stack space proportional to array types. Runtime evidence is little-endian
+64-bit macOS. Scope and reproduction are in the [string descriptor pointer
+comparison](zigimg/reference_probes/writer_string_pointer/README.md).
