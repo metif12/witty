@@ -10,6 +10,12 @@ pub:
 	musl          bool
 	glslang       bool = true
 	spirv_cross   bool = true
+	// Archive directory; defaults to the host's .witty-build/native.
+	native_dir string
+}
+
+fn output_dir(repo_root string, options Options) string {
+	return if options.native_dir.len > 0 { options.native_dir } else { os.join_path(repo_root, '.witty-build', 'native') }
 }
 
 pub fn archive_path(repo_root string, library string) string {
@@ -26,7 +32,7 @@ pub fn build(repo_root string, options Options) ![]string {
 		if library == 'spirv_cross' && !options.spirv_cross { continue
 		 }
 		root := os.join_path(repo_root, 'thirdparty', library.replace('_', '-'))
-		out := os.join_path(repo_root, '.witty-build', 'native', library + '-objects')
+		out := os.join_path(output_dir(repo_root, options), library + '-objects')
 		os.mkdir_all(out)!
 		mut sources := if library == 'glslang' {
 			glslang_sources[..].clone()
@@ -55,7 +61,7 @@ pub fn build(repo_root string, options Options) ![]string {
 			run(options.compiler, args)!
 			objects << object
 		}
-		archive := archive_path(repo_root, library)
+		archive := os.join_path(output_dir(repo_root, options), 'lib${library}.a')
 		if os.exists(archive) { os.rm(archive)! }
 		mut args := ['rcs', archive]
 		args << objects

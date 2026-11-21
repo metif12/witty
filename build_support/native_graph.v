@@ -108,6 +108,7 @@ pub fn (d Driver) build_native_dependencies(vt_only bool) !NativeDeps {
 			cpp_compiler:  cxx.compiler
 			compiler_args: cc.arguments
 			os_tag:        d.cfg.target.os
+			native_dir:    d.native_dir()
 		})!
 	}
 
@@ -159,6 +160,7 @@ pub fn (d Driver) build_native_dependencies(vt_only bool) !NativeDeps {
 		musl:          d.cfg.target.abi == 'musl'
 		glslang:       !d.cfg.system_libraries['glslang']
 		spirv_cross:   !d.cfg.system_libraries['spirv-cross']
+		native_dir:    d.native_dir()
 	})!
 	for name, packages in {
 		'glslang':     ['glslang', 'glslang-default-resource-limits']
@@ -173,7 +175,7 @@ pub fn (d Driver) build_native_dependencies(vt_only bool) !NativeDeps {
 		}
 	}
 	if d.cfg.target.darwin() && d.cfg.i18n {
-		deps.archives << native_libintl.build(d.cfg.root, cc.compiler, cc.arguments)!
+		deps.archives << native_libintl.build(d.cfg.root, cc.compiler, cc.arguments, d.native_dir())!
 	}
 	// The helpgen host tool is built without -d managed_native, so it links the
 	// glslang, spirv-cross and Sentry archives above and, for GTK, the generated

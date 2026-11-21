@@ -14,8 +14,11 @@ const sentry_enabled = $if no_sentry ? { false } $else $if windows { false } $el
 #include "sentry.h"
 
 $if !no_sentry ?&& !windows && ( sentry ?|| macos || ios ) {
-	#flag @VMODROOT/.witty-build/native/libsentry.a
-	#flag @VMODROOT/.witty-build/native/libbreakpad.a
+	// Managed builds link the per-target archives from the native graph.
+	$if !managed_native ? {
+		#flag @VMODROOT/.witty-build/native/libsentry.a
+		#flag @VMODROOT/.witty-build/native/libbreakpad.a
+	}
 	#flag darwin -lc++
 	#flag darwin -lobjc
 	#flag darwin -framework Foundation

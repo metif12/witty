@@ -22,9 +22,11 @@ pub fn archive_path(repo_root string) string {
 	return os.join_path(repo_root, '.witty-build', 'native', 'libintl.a')
 }
 
-pub fn build(repo_root string, compiler string, compiler_args []string) !string {
+// native_dir is the archive directory; empty selects the host's .witty-build/native.
+pub fn build(repo_root string, compiler string, compiler_args []string, native_dir string) !string {
 	root := os.join_path(repo_root, 'thirdparty', 'libintl')
-	output := os.join_path(repo_root, '.witty-build', 'native', 'intl-objects')
+	directory := if native_dir.len > 0 { native_dir } else { os.join_path(repo_root, '.witty-build', 'native') }
+	output := os.join_path(directory, 'intl-objects')
 	os.mkdir_all(output)!
 	mut objects := []string{cap: sources.len}
 	for source in sources {
@@ -35,7 +37,7 @@ pub fn build(repo_root string, compiler string, compiler_args []string) !string 
 		run(compiler, args)!
 		objects << object
 	}
-	archive := archive_path(repo_root)
+	archive := os.join_path(directory, 'libintl.a')
 	if os.exists(archive) { os.rm(archive)! }
 	mut archive_args := ['rcs', archive]
 	archive_args << objects

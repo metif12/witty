@@ -53,7 +53,7 @@ pub:
 }
 
 pub fn (d Driver) compile_native(name string, root string, sources []string, options NativeCompileOptions, flags []string) !string {
-	dir := d.cache_path('native', name + '-objects')
+	dir := os.join_path(d.native_dir(), name + '-objects')
 	os.mkdir_all(dir)!
 	mut objects := []string{}
 	for source in sources {
@@ -76,7 +76,7 @@ pub fn (d Driver) compile_native(name string, root string, sources []string, opt
 		checked_process(d.cfg.root, args)!
 		objects << output
 	}
-	archive := d.cache_path('native', 'lib${name}.a')
+	archive := os.join_path(d.native_dir(), 'lib${name}.a')
 	// ar rcs replaces named members but retains removed members. Retargeted
 	// builds must begin with a fresh archive, as std.Build's library step does.
 	if os.exists(archive) { os.rm(archive)! }

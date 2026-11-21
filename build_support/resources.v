@@ -7,6 +7,20 @@ pub:
 	cfg Config
 }
 
+// native_dir holds compiled native archives. Host-target builds use the
+// shared `native` directory that host tools link; other targets (the second
+// architecture of a universal build, iOS slices, cross builds) get their own
+// so their archives never overwrite the host's.
+pub fn (d Driver) native_dir() string {
+	host := host_target()
+	if d.cfg.target.arch == host.arch && d.cfg.target.os == host.os && d.cfg.target.abi == host.abi {
+		return d.cache_path('native')
+	}
+	mut name := 'native-${d.cfg.target.arch}-${d.cfg.target.os}'
+	if d.cfg.target.abi.len > 0 { name += '-${d.cfg.target.abi}' }
+	return d.cache_path(name)
+}
+
 pub fn (d Driver) cache_path(parts ...string) string {
 	mut path := os.join_path(d.cfg.root, '.witty-build')
 	for part in parts { path = os.join_path(path, part) }

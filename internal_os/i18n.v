@@ -40,7 +40,10 @@ pub const supported_locales = [
 ]!
 
 $if !no_i18n ? {
-	#flag darwin @VMODROOT/.witty-build/native/libintl.a
+	// Managed builds link the per-target archive from the native graph.
+	$if !managed_native ? {
+		#flag darwin @VMODROOT/.witty-build/native/libintl.a
+	}
 	#flag freebsd -lintl
 }
 

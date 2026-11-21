@@ -8,6 +8,12 @@ pub:
 	cpp_compiler  string = 'c++'
 	compiler_args []string
 	os_tag        string = os.user_os()
+	// Archive directory; defaults to the host's .witty-build/native.
+	native_dir string
+}
+
+fn output_dir(repo_root string, options Options) string {
+	return if options.native_dir.len > 0 { options.native_dir } else { os.join_path(repo_root, '.witty-build', 'native') }
 }
 
 pub fn archive_path(repo_root string, name string) string {
@@ -54,7 +60,7 @@ pub fn build(repo_root string, options Options) ![]string {
 }
 
 fn compile_archive(repo_root string, name string, source_root string, sources []string, flags []string, options Options) !string {
-	output := os.join_path(repo_root, '.witty-build', 'native', name + '-objects')
+	output := os.join_path(output_dir(repo_root, options), name + '-objects')
 	os.mkdir_all(output)!
 	mut objects := []string{cap: sources.len}
 	for source in sources {
@@ -67,7 +73,7 @@ fn compile_archive(repo_root string, name string, source_root string, sources []
 		run(if cpp { options.cpp_compiler } else { options.c_compiler }, args)!
 		objects << object
 	}
-	archive := archive_path(repo_root, name)
+	archive := os.join_path(output_dir(repo_root, options), 'lib${name}.a')
 	if os.exists(archive) { os.rm(archive)! }
 	mut args := ['rcs', archive]
 	args << objects
