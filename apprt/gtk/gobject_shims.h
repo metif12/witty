@@ -99,3 +99,14 @@ static inline void witty_dialog_class_set_response(
         (void (*)(AdwMessageDialog *, const char *))callback;
   }
 }
+
+// gtk_css_section_get_bytes is GTK 4.16+. Callers already gate it with
+// gtk_at_least, but builds against older GTK headers must still compile/link.
+static inline GBytes *witty_gtk_css_section_get_bytes(GtkCssSection *section) {
+#if GTK_CHECK_VERSION(4, 16, 0)
+  return gtk_css_section_get_bytes(section);
+#else
+  (void)section;
+  return NULL;
+#endif
+}

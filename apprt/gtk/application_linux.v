@@ -95,7 +95,7 @@ fn C.gtk_css_provider_load_from_data(provider GtkCssProvider, data &char, length
 
 fn C.gtk_css_section_to_string(section voidptr) &char
 
-fn C.gtk_css_section_get_bytes(section voidptr) GBytes
+fn C.witty_gtk_css_section_get_bytes(section voidptr) GBytes
 
 fn C.g_bytes_get_data(bytes GBytes, size &usize) voidptr
 
@@ -1149,7 +1149,7 @@ fn application_css_parsing_error_cb(provider GtkCssProvider, section voidptr, er
 		}
 	}
 	if gtk_at_least(4, 16, 0) && !isnil(section) {
-		bytes := C.gtk_css_section_get_bytes(section)
+		bytes := C.witty_gtk_css_section_get_bytes(section)
 		if !isnil(bytes) {
 			mut length := usize(0)
 			ptr := C.g_bytes_get_data(bytes, &length)
