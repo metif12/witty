@@ -97,11 +97,14 @@ jobs:
   windows:
     runs-on: windows-2022
     timeout-minutes: 120
-    # V's clang C backend on Windows hits MSVC-only intrinsics (_udiv128); use MinGW gcc throughout.
     env:
+      # tools/build itself is compiled with MinGW gcc: clang's default MSVC
+      # target hits MSVC-only intrinsics (_udiv128) in V's runtime.
       VFLAGS: -cc gcc
-      CC: gcc
-      CXX: g++
+      # The build driver passes clang target triples (x86_64-w64-windows-gnu)
+      # to the native and VT compiles, so those need clang.
+      CC: clang
+      CXX: clang++
     defaults:
       run:
         shell: bash
