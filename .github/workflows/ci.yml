@@ -36,8 +36,9 @@ jobs:
       - name: Check
         run: v -check .
       - name: Build
-        # Universal (arm64 + x86_64) app, as released.
-        run: v -path "$PWD|@vlib|@vmodules" run tools/build install --prefix "$RUNNER_TEMP/witty"
+        # Universal (arm64 + x86_64) app, as released. The standalone XCFramework
+        # is skipped: its iOS slices need a V whose iOS C output compiles.
+        run: v -path "$PWD|@vlib|@vmodules" run tools/build install -Demit-xcframework=false -Demit-macos-app=true --prefix "$RUNNER_TEMP/witty"
       - uses: actions/upload-artifact@v4
         with:
           name: witty-macos
