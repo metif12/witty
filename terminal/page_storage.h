@@ -2,8 +2,12 @@
 #define WITTY_TERMINAL_PAGE_STORAGE_H
 #include <stdint.h>
 #include <stddef.h>
+#if defined(_WIN32)
+#include <windows.h>
+#else
 #include <sys/mman.h>
 #include <unistd.h>
+#endif
 // page.zig Cell's u2 tag, u24 content, u16 style, u2 width, two
 // flags, u2 semantics and u16 padding. Only the active payload is stored.
 typedef struct WittyPageCell {
@@ -25,9 +29,19 @@ typedef struct WittyPageRow {
 } WittyPageRow;
 _Static_assert(sizeof(WittyPageCell)==8,"Cell must be packed u64");
 _Static_assert(sizeof(WittyPageRow)==8,"Row must be packed u64");
+#if defined(_WIN32)
+static inline void *witty_page_mmap(size_t length) {
+    return VirtualAlloc(NULL,length,MEM_COMMIT|MEM_RESERVE,PAGE_READWRITE);
+}
+static inline void witty_page_munmap(void *memory,size_t length) {
+    (void)length;
+    VirtualFree(memory,0,MEM_RELEASE);
+}
+#else
 static inline void *witty_page_mmap(size_t length) {
     void *memory=mmap(NULL,length,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANON,-1,0);
     return memory==MAP_FAILED ? NULL : memory;
 }
 static inline void witty_page_munmap(void *memory,size_t length) { munmap(memory,length); }
+#endif
 #endif

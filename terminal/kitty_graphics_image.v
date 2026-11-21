@@ -120,13 +120,12 @@ import wuffs.png as wuffs_png
 // POSIX shared-memory / mmap bindings, required for the shared_memory
 // medium (t=s). shm_open needs libc; these map directly to the Zig
 // std.c.shm_open / posix.fstat / posix.mmap calls.
-#include <sys/mman.h>
-
-#include <sys/stat.h>
-
-#include <fcntl.h>
-
-#include <unistd.h>
+$if !windows {
+	#include <sys/mman.h>
+	#include <sys/stat.h>
+	#include <fcntl.h>
+	#include <unistd.h>
+}
 
 fn C.shm_open(name &char, oflag int, mode u32) int
 
@@ -305,86 +304,91 @@ pub fn LoadingImage.init_from_cmd(cmd &Command) !LoadingImage {
 
 // Reads the data from a shared memory segment.
 fn (mut self LoadingImage) read_shared_memory(t Transmission, path string) ! {
-	// shm_open requires a NUL-terminated path. Since we only support posix
-	// here, a stack C string is sufficient.
-	pathz := &char(path.str)
+	// POSIX shared memory (shm_open/mmap) is unavailable on Windows.
+	$if windows {
+		return error('unsupported medium')
+	} $else {
+		// shm_open requires a NUL-terminated path. Since we only support posix
+		// here, a stack C string is sufficient.
+		pathz := &char(path.str)
 
-	fd := C.shm_open(pathz, C.O_RDONLY, 0)
-	if fd < 0 {
-		return error('invalid data: unable to open shared memory ${path}')
-	}
-	// Always close and unlink the shm object when we're done, matching
-	// the Zig `defer` cleanup order (close then unlink).
-	defer {
-		C.close(fd)
-		C.shm_unlink(pathz)
-	}
-
-	// The size from stat may be larger than our expected size because
-	// shared memory has to be a multiple of the page size.
-	st := C.stat{}
-	if C.fstat(fd, &st) != 0 {
-		return error('invalid data: unable to fstat shared memory ${path}')
-	}
-	if st.st_size <= 0 {
-		return error('invalid data: shared memory empty')
-	}
-	stat_size := usize(st.st_size)
-
-	expected_size := match self.image.format {
-		// Png we decode the full data size because later decoding will
-		// get the proper dimensions and assert validity.
-		.png {
-			stat_size
+		fd := C.shm_open(pathz, C.O_RDONLY, 0)
+		if fd < 0 {
+			return error('invalid data: unable to open shared memory ${path}')
 		}
-		// For these formats we have a size we must have.
-		.gray, .gray_alpha, .rgb, .rgba {
-			bpp := usize(self.image.format.bpp())
-			usize(self.image.width) * usize(self.image.height) * bpp
+		// Always close and unlink the shm object when we're done, matching
+		// the Zig `defer` cleanup order (close then unlink).
+		defer {
+			C.close(fd)
+			C.shm_unlink(pathz)
 		}
-	}
 
-	// Our stat size must be at least the expected size otherwise
-	// the shared memory data is invalid.
-	if stat_size < expected_size {
-		return error('invalid data: shared memory size too small expected=${expected_size} actual=${stat_size}')
-	}
+		// The size from stat may be larger than our expected size because
+		// shared memory has to be a multiple of the page size.
+		st := C.stat{}
+		if C.fstat(fd, &st) != 0 {
+			return error('invalid data: unable to fstat shared memory ${path}')
+		}
+		if st.st_size <= 0 {
+			return error('invalid data: shared memory empty')
+		}
+		stat_size := usize(st.st_size)
 
-	// mmap always uses the stat size.
-	map_ptr := C.mmap(unsafe { nil }, stat_size, C.PROT_READ, C.MAP_SHARED, fd, 0)
-	if map_ptr == voidptr(C.MAP_FAILED) || map_ptr == unsafe { nil } {
-		return error('invalid data: unable to mmap shared memory ${path}')
-	}
-	defer {
-		C.munmap(map_ptr, stat_size)
-	}
+		expected_size := match self.image.format {
+			// Png we decode the full data size because later decoding will
+			// get the proper dimensions and assert validity.
+			.png {
+				stat_size
+			}
+			// For these formats we have a size we must have.
+			.gray, .gray_alpha, .rgb, .rgba {
+				bpp := usize(self.image.format.bpp())
+				usize(self.image.width) * usize(self.image.height) * bpp
+			}
+		}
 
-	// Our end size always uses the expected size so we cut off the
-	// padding for mmap alignment.
-	start := usize(t.offset)
-	end := if t.size > 0 {
-		e := usize(t.offset) + usize(t.size)
-		if e < expected_size {
-			e
+		// Our stat size must be at least the expected size otherwise
+		// the shared memory data is invalid.
+		if stat_size < expected_size {
+			return error('invalid data: shared memory size too small expected=${expected_size} actual=${stat_size}')
+		}
+
+		// mmap always uses the stat size.
+		map_ptr := C.mmap(unsafe { nil }, stat_size, C.PROT_READ, C.MAP_SHARED, fd, 0)
+		if map_ptr == voidptr(C.MAP_FAILED) || map_ptr == unsafe { nil } {
+			return error('invalid data: unable to mmap shared memory ${path}')
+		}
+		defer {
+			C.munmap(map_ptr, stat_size)
+		}
+
+		// Our end size always uses the expected size so we cut off the
+		// padding for mmap alignment.
+		start := usize(t.offset)
+		end := if t.size > 0 {
+			e := usize(t.offset) + usize(t.size)
+			if e < expected_size {
+				e
+			} else {
+				expected_size
+			}
 		} else {
 			expected_size
 		}
-	} else {
-		expected_size
-	}
-	if start > end || end > stat_size {
-		return error('invalid data: shared memory offset out of bounds')
-	}
-
-	// Copy the mapped region into our data buffer (the mapping is freed
-	// by the deferred munmap above).
-	n := int(end - start)
-	if n > 0 {
-		mut buf := []u8{len: n}
-		unsafe {
-			C.memcpy(buf.data, voidptr(usize(map_ptr) + start), usize(n))
+		if start > end || end > stat_size {
+			return error('invalid data: shared memory offset out of bounds')
 		}
-		self.data << buf
+
+		// Copy the mapped region into our data buffer (the mapping is freed
+		// by the deferred munmap above).
+		n := int(end - start)
+		if n > 0 {
+			mut buf := []u8{len: n}
+			unsafe {
+				C.memcpy(buf.data, voidptr(usize(map_ptr) + start), usize(n))
+			}
+			self.data << buf
+		}
 	}
 }
 

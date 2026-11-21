@@ -67,6 +67,8 @@ pub fn (d Driver) build_native_dependencies(vt_only bool) !NativeDeps {
 		}
 		deps.link_flags << if d.cfg.target.darwin() { '-lc++' } else { '-lstdc++' }
 	}
+	// terminal/page_pool_allocator.h reserves pages with NtAllocateVirtualMemory.
+	if d.cfg.target.os == 'windows' { deps.link_flags << '-lntdll' }
 	if vt_only {
 		// terminal/string_map imports oniguruma, whose bridge includes
 		// oniguruma.h even under -d no_oniguruma; stage the pinned headers.

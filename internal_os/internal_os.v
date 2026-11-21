@@ -12,13 +12,15 @@ import buildcfg
 pub type OpenType = openurl.Kind
 
 // C interop declarations for pipes and resource limits.
-#include <unistd.h>
-
-#include <fcntl.h>
-
-#include <sys/resource.h>
-
-#include <pwd.h>
+$if windows {
+	#include <io.h>
+	#include <fcntl.h>
+} $else {
+	#include <unistd.h>
+	#include <fcntl.h>
+	#include <sys/resource.h>
+	#include <pwd.h>
+}
 
 fn C.pipe(fds &int) int
 

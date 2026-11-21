@@ -3,6 +3,89 @@
 
 #include <stdint.h>
 #include <stddef.h>
+
+static inline size_t witty_tagged_page_align_forward(size_t value, size_t alignment) {
+    const size_t remainder = value % alignment;
+    return remainder == 0 ? value : value + alignment - remainder;
+}
+
+#if defined(_WIN32)
+#include <windows.h>
+
+// Windows has no mmap tags and cannot release part of a reservation, so this
+// follows Zig's Windows PageAllocator: over-reserve to find an aligned
+// address, release, re-reserve exactly there, and decommit tails on shrink.
+static inline size_t witty_tagged_page_size(void) {
+    SYSTEM_INFO info;
+    GetSystemInfo(&info);
+    return info.dwPageSize > 0 ? (size_t)info.dwPageSize : (size_t)4096;
+}
+
+static inline void *witty_tagged_page_map(
+    size_t length,
+    size_t alignment,
+    int32_t tag,
+    size_t *mapped_length
+) {
+    (void)tag;
+    const size_t page_size = witty_tagged_page_size();
+    if (length == 0 || length > SIZE_MAX - page_size) return NULL;
+    if (alignment < page_size) alignment = page_size;
+    if ((alignment & (alignment - 1)) != 0) return NULL;
+    const size_t aligned_length = witty_tagged_page_align_forward(length, page_size);
+
+    void *base = VirtualAlloc(NULL, aligned_length, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    if (base == NULL) return NULL;
+    if (((uintptr_t)base & (alignment - 1)) == 0) {
+        *mapped_length = aligned_length;
+        return base;
+    }
+    VirtualFree(base, 0, MEM_RELEASE);
+
+    if (aligned_length > SIZE_MAX - alignment) return NULL;
+    for (int attempt = 0; attempt < 16; attempt++) {
+        void *const probe = VirtualAlloc(NULL, aligned_length + alignment, MEM_RESERVE, PAGE_NOACCESS);
+        if (probe == NULL) return NULL;
+        const uintptr_t aligned = ((uintptr_t)probe + alignment - 1) & ~(uintptr_t)(alignment - 1);
+        VirtualFree(probe, 0, MEM_RELEASE);
+        void *const result = VirtualAlloc((void *)aligned, aligned_length, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+        if (result != NULL) {
+            *mapped_length = aligned_length;
+            return result;
+        }
+    }
+    return NULL;
+}
+
+static inline void *witty_tagged_page_realloc(
+    void *memory,
+    size_t old_mapped_length,
+    size_t new_length,
+    int may_move,
+    size_t *new_mapped_length
+) {
+    (void)may_move;
+    const size_t page_size = witty_tagged_page_size();
+    const size_t aligned_new = witty_tagged_page_align_forward(new_length, page_size);
+    if (aligned_new == old_mapped_length) {
+        *new_mapped_length = old_mapped_length;
+        return memory;
+    }
+    if (aligned_new < old_mapped_length) {
+        void *const tail = (void *)((uintptr_t)memory + aligned_new);
+        if (!VirtualFree(tail, old_mapped_length - aligned_new, MEM_DECOMMIT)) return NULL;
+        // The reservation keeps its original size; unmap releases all of it.
+        *new_mapped_length = aligned_new;
+        return memory;
+    }
+    return NULL;
+}
+
+static inline void witty_tagged_page_unmap(void *memory, size_t mapped_length) {
+    if (memory != NULL && mapped_length != 0) VirtualFree(memory, 0, MEM_RELEASE);
+}
+
+#else
 #include <sys/mman.h>
 #include <unistd.h>
 
@@ -13,11 +96,6 @@
 static inline size_t witty_tagged_page_size(void) {
     const long value = sysconf(_SC_PAGESIZE);
     return value > 0 ? (size_t)value : (size_t)4096;
-}
-
-static inline size_t witty_tagged_page_align_forward(size_t value, size_t alignment) {
-    const size_t remainder = value % alignment;
-    return remainder == 0 ? value : value + alignment - remainder;
 }
 
 static inline void *witty_tagged_page_map(
@@ -99,5 +177,7 @@ static inline void *witty_tagged_page_realloc(
 static inline void witty_tagged_page_unmap(void *memory, size_t mapped_length) {
     if (memory != NULL && mapped_length != 0) munmap(memory, mapped_length);
 }
+
+#endif // _WIN32
 
 #endif
