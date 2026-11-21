@@ -1,5 +1,8 @@
 #ifndef WITTY_NOTIFICATION_BRIDGE_H
 #define WITTY_NOTIFICATION_BRIDGE_H
+#include <stdbool.h>
+#include <objc/runtime.h>
+#include <objc/message.h>
 /* Block ABI adapters. The notification policy and lifecycle are translated in V. */
 extern void* _NSConcreteStackBlock[32];
 typedef void (*witty_action_callback)(void*,void*,long long,bool);

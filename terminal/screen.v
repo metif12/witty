@@ -2935,7 +2935,7 @@ pub fn (mut self Screen) cursor_copy(other Cursor, opts CursorCopyOptions) ! {
 	if opts.hyperlink && other.hyperlink_id != 0 {
 		// Get the hyperlink from the other cursor's page.
 		other_page := &other.page_pin.node.data
-		other_link := other_page.hyperlink_set.get(other.hyperlink_id)
+		other_link := other_page.hyperlink_set.get(HyperlinkId(other.hyperlink_id))
 
 		uri := other_link.uri
 		id_ := match other_link.id {
@@ -3001,7 +3001,7 @@ fn (mut self Screen) cursor_change_pin(new Pin) {
 	// If we have a hyperlink then we need to release it from the old page.
 	if self.cursor.hyperlink_state != none {
 		mut old_page := &self.cursor.page_pin.node.data
-		old_page.hyperlink_set.release(self.cursor.hyperlink_id)
+		old_page.hyperlink_set.release(HyperlinkId(self.cursor.hyperlink_id))
 	}
 
 	// Update our pin to the new page
@@ -3477,7 +3477,7 @@ pub fn (mut self Screen) resize(opts ScreenResize) ! {
 		// Note we do NOT use endHyperlink because we want to keep
 		// our allocated self.cursor.hyperlink valid.
 		mut page := &self.cursor.page_pin.node.data
-		page.hyperlink_set.release(self.cursor.hyperlink_id)
+		page.hyperlink_set.release(HyperlinkId(self.cursor.hyperlink_id))
 		self.cursor.hyperlink_id = 0
 		self.cursor.hyperlink_state = none
 	}
@@ -4019,7 +4019,7 @@ pub fn (mut self Screen) end_hyperlink() {
 	// is fine because if it is ever pruned the context deleted callback
 	// will be called.
 	mut page := &self.cursor.page_pin.node.data
-	page.hyperlink_set.release(self.cursor.hyperlink_id)
+	page.hyperlink_set.release(HyperlinkId(self.cursor.hyperlink_id))
 	self.cursor.hyperlink_id = 0
 	self.cursor.hyperlink_state = none
 }
@@ -4031,7 +4031,7 @@ pub fn (mut self Screen) cursor_set_hyperlink() ! {
 	mut page := &self.cursor.page_pin.node.data
 	row_idx := page.row_index(self.cursor.page_row)
 	col_idx := cell_index(self.cursor.page_row, self.cursor.page_cell)
-	page.set_hyperlink(row_idx, col_idx, self.cursor.hyperlink_id) or {
+	page.set_hyperlink(row_idx, col_idx, HyperlinkId(self.cursor.hyperlink_id)) or {
 		if err.msg() != 'HyperlinkMapOutOfMemory' {
 			return err
 		}
@@ -4071,7 +4071,7 @@ pub fn (mut self Screen) cursor_set_hyperlink() ! {
 	}
 
 	// Success, increase the refcount for the hyperlink.
-	page.hyperlink_set.use_link(self.cursor.hyperlink_id)
+	page.hyperlink_set.use_link(HyperlinkId(self.cursor.hyperlink_id))
 }
 
 pub enum SemanticInputClear as u8 {

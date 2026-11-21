@@ -1,3 +1,7 @@
+#include <stdbool.h>
+#include <objc/runtime.h>
+#include <objc/message.h>
+#include <CoreGraphics/CoreGraphics.h>
 /* Objective-C ABI adapters only; translated action logic lives in V. */
 static inline void* witty_action_timer(double interval, void* target, void* selector, void* info, bool repeats) {
  return ((id(*)(id,SEL,double,id,SEL,id,bool))objc_msgSend)((id)objc_getClass("NSTimer"),sel_registerName("scheduledTimerWithTimeInterval:target:selector:userInfo:repeats:"),interval,(id)target,(SEL)selector,(id)info,repeats);

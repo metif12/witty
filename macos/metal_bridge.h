@@ -1,3 +1,5 @@
+#ifndef WITTY_METAL_BRIDGE_H
+#define WITTY_METAL_BRIDGE_H
 #pragma once
 #include <objc_bridge.h>
 #include <Foundation/Foundation.h>
@@ -741,3 +743,4 @@ static inline bool witty_metal_iosurface_layer_set_surface(void* layer, void* su
 	}
 	return true;
 }
+#endif

@@ -302,7 +302,9 @@ fn encode_metadata[T](mut metadata map[string]string, value T) {
 			}
 		}
 	} $else {
-		$compile_error('unsupported OSC metadata payload')
+		// A runtime panic, not $compile_error: V 0.5.2 master reaches this branch
+		// while checking the generic body, even though no OSC variant does.
+		panic('unsupported OSC metadata payload')
 	}
 }
 

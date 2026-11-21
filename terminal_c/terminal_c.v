@@ -499,7 +499,7 @@ pub fn (mut self SgrParser) set_params_raw(params &u16, separators &u8, len usiz
 			return .out_of_memory
 		}
 		unsafe {
-			vmemcpy(next_ptr, params, len * sizeof(u16))
+			vmemcpy(next_ptr, params, int(len * sizeof(u16)))
 		}
 	}
 

@@ -44,7 +44,7 @@ pub fn Tick.less_than(lhs Tick, rhs Tick) bool {
 	return lhs.deadline_ms > rhs.deadline_ms
 }
 
-pub fn Tick.@in(ms u32, widget Widget) Command {
+pub fn Tick.after(ms u32, widget Widget) Command {
 	return Command(Tick{
 		deadline_ms: time.now().unix_milli() + i64(ms)
 		widget:      widget
@@ -115,7 +115,7 @@ pub fn (mut ctx EventContext) add_cmd(cmd Command) {
 }
 
 pub fn (mut ctx EventContext) tick(ms u32, widget Widget) {
-	ctx.add_cmd(Tick.@in(ms, widget))
+	ctx.add_cmd(Tick.after(ms, widget))
 }
 
 pub fn (mut ctx EventContext) consume_and_redraw() {

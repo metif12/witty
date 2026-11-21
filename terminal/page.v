@@ -1492,7 +1492,7 @@ pub fn (self &Page) verify_integrity() ?IntegrityError {
 
 	// Verify all our hyperlinks have the correct ref count.
 	for hl_id, count in hyperlinks_seen {
-		rc := self.hyperlink_set.ref_count(hl_id)
+		rc := self.hyperlink_set.ref_count(HyperlinkId(hl_id))
 		if rc < count {
 			return IntegrityError.mismatched_hyperlink_ref
 		}

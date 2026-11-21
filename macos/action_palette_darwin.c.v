@@ -119,10 +119,14 @@ pub fn filtered_command_options(options []NativeCommandOption, query string) []N
 		score := palette_color_score(value.leading_color, query)
 		mut j := i
 		for j > 0 && palette_color_score(result[j - 1].leading_color, query) < score {
-			result[j] = result[j - 1]
+			unsafe {
+				result[j] = result[j - 1]
+			}
 			j--
 		}
-		result[j] = value
+		unsafe {
+			result[j] = value
+		}
 	}
 	return result
 }

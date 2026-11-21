@@ -23,93 +23,95 @@ import input
 
 // Re-export key terminal types.
 // In Zig these are pub const aliases; in V we use type aliases where
-// possible and wrapper functions where needed.
+// possible and wrapper functions where needed. The terminal aliases carry a
+// `Vt` prefix because unprefixed main-module names (`Parser`, `Point`, ...)
+// shadow same-named types in other modules on newer V compilers.
 
 // Core terminal types
-pub type Terminal = terminal.Terminal
+pub type VtTerminal = terminal.Terminal
 
-pub type Screen = terminal.Screen
+pub type VtScreen = terminal.Screen
 
-pub type Selection = terminal.Selection
+pub type VtSelection = terminal.Selection
 
-pub type RenderState = terminal.RenderState
+pub type VtRenderState = terminal.RenderState
 
 // Page types
-pub type Page = terminal.Page
+pub type VtPage = terminal.Page
 
-pub type PageList = terminal.PageList
+pub type VtPageList = terminal.PageList
 
 // Cell and style types
-pub type CellData = terminal.CellData
+pub type VtCellData = terminal.CellData
 
-pub type Cell = terminal.Cell
+pub type VtCell = terminal.Cell
 
-pub type Charset = terminal.Charset
+pub type VtCharset = terminal.Charset
 
-pub type CharsetSlot = terminal.CharsetSlot
+pub type VtCharsetSlot = terminal.CharsetSlot
 
-pub type CharsetActiveSlot = terminal.CharsetActiveSlot
+pub type VtCharsetActiveSlot = terminal.CharsetActiveSlot
 
-pub type Coordinate = terminal.Coordinate
+pub type VtCoordinate = terminal.Coordinate
 
-pub type CSI = terminal.CSI
+pub type VtCSI = terminal.CSI
 
-pub type DCS = terminal.DCS
+pub type VtDCS = terminal.DCS
 
-pub type Parser = terminal.Parser
+pub type VtParser = terminal.Parser
 
-pub type Pin = terminal.Pin
+pub type VtPin = terminal.Pin
 
-pub type Point = terminal.Point
+pub type VtPoint = terminal.Point
 
-pub type ScreenSet = terminal.ScreenSet
+pub type VtScreenSet = terminal.ScreenSet
 
-pub type SizeReportStyle = terminal.SizeReportStyle
+pub type VtSizeReportStyle = terminal.SizeReportStyle
 
-pub type StringMap = terminal.StringMap
+pub type VtStringMap = terminal.StringMap
 
-pub type Style = terminal.Style
+pub type VtStyle = terminal.Style
 
 // `Stream` is the generic `terminal.Stream[H]`. V does not implement generic
 // type aliases, so consumers name `terminal.Stream[H]` directly.
 
-pub type StreamAction = terminal.StreamAction
+pub type VtStreamAction = terminal.StreamAction
 
-pub type Cursor = terminal.Cursor
+pub type VtCursor = terminal.Cursor
 
-pub type CursorStyle = terminal.CursorStyle
+pub type VtCursorStyle = terminal.CursorStyle
 
-pub type CursorStyleReq = terminal.CursorStyleReq
+pub type VtCursorStyleReq = terminal.CursorStyleReq
 
-pub type DeviceAttributeReq = terminal.DeviceAttributeReq
+pub type VtDeviceAttributeReq = terminal.DeviceAttributeReq
 
-pub type Mode = terminal.Mode
+pub type VtMode = terminal.Mode
 
-pub type ModePacked = terminal.ModePacked
+pub type VtModePacked = terminal.ModePacked
 
-pub type ModifyKeyFormat = terminal.ModifyKeyFormat
+pub type VtModifyKeyFormat = terminal.ModifyKeyFormat
 
-pub type MouseShape = terminal.MouseShape
+pub type VtMouseShape = terminal.MouseShape
 
-pub type ProtectedMode = terminal.ProtectedMode
+pub type VtProtectedMode = terminal.ProtectedMode
 
-pub type StatusLineType = terminal.StatusLineType
+pub type VtStatusLineType = terminal.StatusLineType
 
-pub type StatusDisplay = terminal.StatusDisplay
+pub type VtStatusDisplay = terminal.StatusDisplay
 
-pub type EraseDisplay = terminal.EraseDisplay
+pub type VtEraseDisplay = terminal.EraseDisplay
 
-pub type EraseLine = terminal.EraseLine
+pub type VtEraseLine = terminal.EraseLine
 
-pub type TabClear = terminal.TabClear
+pub type VtTabClear = terminal.TabClear
 
-pub type Attribute = terminal.Attribute
+pub type VtAttribute = terminal.Attribute
 
-pub type ReadonlyHandler = terminal.ReadonlyHandler
+pub type VtReadonlyHandler = terminal.ReadonlyHandler
 
-pub type ReadonlyStream = terminal.ReadonlyStream
+pub type VtReadonlyStream = terminal.ReadonlyStream
 
-pub type Scrollbar = terminal.Scrollbar
+pub type VtScrollbar = terminal.Scrollbar
 
 // V has no nested public module declarations, so the APIs under Zig's
 // `lib_vt.input` namespace use an Input prefix at this module boundary.

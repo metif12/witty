@@ -547,7 +547,7 @@ fn (mut self App) redraw_surface(mut rt_app apprt.RuntimeApp, surface &Surface) 
 	if !self.has_surface(surface) {
 		return
 	}
-	rt_app.perform_action(apprt.Target(apprt.SurfaceTarget{ surface: surface }), .render,
+	rt_app.perform_action(apprt.Target(apprt.SurfaceTarget{ surface: unsafe { surface } }), .render,
 		apprt.ActionVoid{})!
 }
 

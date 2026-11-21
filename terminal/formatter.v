@@ -1594,17 +1594,14 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 			page_cols
 		}
 
-		row_start_x := if start_x > 0 && (self.rectangle || y == start_y) {
+		mut row_start_x := u32(0)
+		if start_x > 0 && (self.rectangle || y == start_y) {
 			// Check if our start X falls on the tail of a wide character.
 			match cells[int(start_x)].wide {
-				.spacer_tail { start_x - 1 }
-				.spacer_head {
-					continue
-				}
-				else { start_x }
+				.spacer_tail { row_start_x = start_x - 1 }
+				.spacer_head { continue }
+				else { row_start_x = start_x }
 			}
-		} else {
-			u32(0)
 		}
 
 		// Get the subset of cells for this row

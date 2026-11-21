@@ -395,9 +395,9 @@ pub fn (self &SplitTree[T]) iterator() SplitTreeIterator[T] {
 // next returns the next ViewEntry from the iterator, or none.
 pub fn (mut self SplitTreeIterator[T]) next() ?ViewEntry[T] {
 	// Skip split nodes, only return leaves.
-	for self.i.idx() < self.nodes.len {
+	for Handle(self.i).idx() < self.nodes.len {
 		handle := self.i
-		node := self.nodes[self.i.idx()]
+		node := self.nodes[Handle(self.i).idx()]
 		// The iterator is allowed to advance to the reserved maximum value as
 		// its end sentinel; Handle.offset intentionally rejects that value.
 		self.i = Handle(u16(self.i) + 1)
@@ -862,7 +862,7 @@ pub fn (self &SplitTree[T]) equalize() SplitTree[T] {
 			total_f16 := Float16.from_f32(total_f)
 			nodes[i] = Node[T](Split{
 				layout: node.layout
-				ratio:  weight_left_f.div(total_f16)
+				ratio:  Float16(weight_left_f).div(total_f16)
 				left:   node.left
 				right:  node.right
 			})
@@ -912,7 +912,7 @@ fn (self &SplitTree[T]) weight(from Handle, layout Layout, acc usize) usize {
 // still return a cloned tree.
 pub fn (self &SplitTree[T]) resize(from Handle, layout Layout, ratio f32) SplitTree[T] {
 	ratio_f16 := Float16.from_f32(ratio)
-	ratio_value := ratio_f16.f32()
+	ratio_value := Float16(ratio_f16).f32()
 	assert(ratio_value >= -1 && ratio_value <= 1)
 	assert(!math.is_nan(f64(ratio_value)))
 	assert(!math.is_inf(f64(ratio_value), 0))
@@ -943,17 +943,17 @@ pub fn (self &SplitTree[T]) resize(from Handle, layout Layout, ratio f32) SplitT
 	// own but I'm trying to avoid that word: it's the ratio of
 	// our spatial width/height to the total.
 	scale := match layout {
-		.horizontal { sp.slots[parent_handle.idx()].width.div(sp.slots[0].width) }
-		.vertical { sp.slots[parent_handle.idx()].height.div(sp.slots[0].height) }
+		.horizontal { sp.slots[Handle(parent_handle).idx()].width.div(sp.slots[0].width) }
+		.vertical { sp.slots[Handle(parent_handle).idx()].height.div(sp.slots[0].height) }
 	}
 
-	parent_node := result.nodes[parent_handle.idx()]
+	parent_node := result.nodes[Handle(parent_handle).idx()]
 	current_ratio := if parent_node is Split {
 		parent_node.ratio
 	} else {
 		Float16.from_f32(0.5) // should not happen
 	}
-	full_ratio := current_ratio.mul(scale)
+	full_ratio := Float16(current_ratio).mul(scale)
 
 	// Set the final new ratio, clamping it to [0, 1]
 	new_ratio := math.min(math.max(full_ratio.add(ratio_f16).f32(), f32(0)), f32(1))

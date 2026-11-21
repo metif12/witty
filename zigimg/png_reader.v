@@ -166,7 +166,7 @@ pub fn png_load(mut stream ReadStream, options PngReaderOptions) !ImageUnmanaged
 
 pub fn PNG.read_image(mut stream ReadStream) !ImageUnmanaged {
 	mut options := PngDefaultOptions.init(PngTrnsProcessor{})
-	return png_load(mut stream, options.get())
+	return png_load(mut stream, options.get[PngTrnsProcessor]())
 }
 
 pub fn png_load_with_header(mut stream ReadStream, header &PngHeaderData, options PngReaderOptions) !PixelStorage {

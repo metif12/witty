@@ -163,7 +163,7 @@ pub fn (mut self CommandParser) complete() !Command {
 
 	// Determine our action, which is always a single character.
 	action := if `a` in self.kv {
-		v := self.kv[`a`]
+		v := self.kv[u8(`a`)]
 		if v > 255 {
 			return error('InvalidFormat: action out of range')
 		}
@@ -201,7 +201,7 @@ pub fn (mut self CommandParser) complete() !Command {
 
 	// Determine our quiet value
 	quiet := if `q` in self.kv {
-		v := self.kv[`q`]
+		v := self.kv[u8(`q`)]
 		match v {
 			0 { Quiet.no }
 			1 { Quiet.ok }
@@ -510,7 +510,7 @@ fn Transmission.parse(kv map[u8]u32) !Transmission {
 	mut result := Transmission{}
 
 	if `f` in kv {
-		v := kv[`f`]
+		v := kv[u8(`f`)]
 		result.format_ = match v {
 			24 { TransmissionFormat.rgb }
 			32 { TransmissionFormat.rgba }
@@ -522,7 +522,7 @@ fn Transmission.parse(kv map[u8]u32) !Transmission {
 	}
 
 	if `t` in kv {
-		v := kv[`t`]
+		v := kv[u8(`t`)]
 		if v > 255 {
 			return error('InvalidFormat: medium out of range')
 		}
@@ -539,29 +539,29 @@ fn Transmission.parse(kv map[u8]u32) !Transmission {
 	}
 
 	if `s` in kv {
-		result.width = kv[`s`]
+		result.width = kv[u8(`s`)]
 	}
 	if `v` in kv {
-		result.height = kv[`v`]
+		result.height = kv[u8(`v`)]
 	}
 	if `S` in kv {
-		result.size = kv[`S`]
+		result.size = kv[u8(`S`)]
 	}
 	if `O` in kv {
-		result.offset = kv[`O`]
+		result.offset = kv[u8(`O`)]
 	}
 	if `i` in kv {
-		result.image_id = kv[`i`]
+		result.image_id = kv[u8(`i`)]
 	}
 	if `I` in kv {
-		result.image_number = kv[`I`]
+		result.image_number = kv[u8(`I`)]
 	}
 	if `p` in kv {
-		result.placement_id = kv[`p`]
+		result.placement_id = kv[u8(`p`)]
 	}
 
 	if `o` in kv {
-		v := kv[`o`]
+		v := kv[u8(`o`)]
 		if v > 255 {
 			return error('InvalidFormat: compression out of range')
 		}
@@ -585,7 +585,7 @@ fn Transmission.parse(kv map[u8]u32) !Transmission {
 	// https://github.com/kovidgoyal/kitty/blob/ccc3bee9af794f332b4e9adcd714a649f639c397/kitty/graphics.c#L547-L592
 	if result.medium == .direct {
 		if `m` in kv {
-			v := kv[`m`]
+			v := kv[u8(`m`)]
 			result.more_chunks = v > 0
 		}
 	}
@@ -628,40 +628,40 @@ fn Display.parse(kv map[u8]u32) !Display {
 	mut result := Display{}
 
 	if `i` in kv {
-		result.image_id = kv[`i`]
+		result.image_id = kv[u8(`i`)]
 	}
 	if `I` in kv {
-		result.image_number = kv[`I`]
+		result.image_number = kv[u8(`I`)]
 	}
 	if `p` in kv {
-		result.placement_id = kv[`p`]
+		result.placement_id = kv[u8(`p`)]
 	}
 	if `x` in kv {
-		result.x = kv[`x`]
+		result.x = kv[u8(`x`)]
 	}
 	if `y` in kv {
-		result.y = kv[`y`]
+		result.y = kv[u8(`y`)]
 	}
 	if `w` in kv {
-		result.width = kv[`w`]
+		result.width = kv[u8(`w`)]
 	}
 	if `h` in kv {
-		result.height = kv[`h`]
+		result.height = kv[u8(`h`)]
 	}
 	if `X` in kv {
-		result.x_offset = kv[`X`]
+		result.x_offset = kv[u8(`X`)]
 	}
 	if `Y` in kv {
-		result.y_offset = kv[`Y`]
+		result.y_offset = kv[u8(`Y`)]
 	}
 	if `c` in kv {
-		result.columns = kv[`c`]
+		result.columns = kv[u8(`c`)]
 	}
 	if `r` in kv {
-		result.rows = kv[`r`]
+		result.rows = kv[u8(`r`)]
 	}
 	if `C` in kv {
-		v := kv[`C`]
+		v := kv[u8(`C`)]
 		result.cursor_movement = match v {
 			0 { CursorMovement.after }
 			1 { CursorMovement.none_ }
@@ -671,7 +671,7 @@ fn Display.parse(kv map[u8]u32) !Display {
 		}
 	}
 	if `U` in kv {
-		v := kv[`U`]
+		v := kv[u8(`U`)]
 		result.virtual_placement = match v {
 			0 { false }
 			1 { true }
@@ -681,23 +681,23 @@ fn Display.parse(kv map[u8]u32) !Display {
 		}
 	}
 	if `z` in kv {
-		v := kv[`z`]
+		v := kv[u8(`z`)]
 		// We can bitcast here because of how we parse it earlier.
 		result.z = unsafe { *(&i32(&v)) }
 	}
 	if `P` in kv {
-		result.parent_id = kv[`P`]
+		result.parent_id = kv[u8(`P`)]
 	}
 	if `Q` in kv {
-		result.parent_placement_id = kv[`Q`]
+		result.parent_placement_id = kv[u8(`Q`)]
 	}
 	if `H` in kv {
-		v := kv[`H`]
+		v := kv[u8(`H`)]
 		// We can bitcast here because of how we parse it earlier.
 		result.horizontal_offset = unsafe { *(&i32(&v)) }
 	}
 	if `V` in kv {
-		v := kv[`V`]
+		v := kv[u8(`V`)]
 		// We can bitcast here because of how we parse it earlier.
 		result.vertical_offset = unsafe { *(&i32(&v)) }
 	}
@@ -752,22 +752,22 @@ fn AnimationFrameLoading.parse(kv map[u8]u32) !AnimationFrameLoading {
 	mut result := AnimationFrameLoading{}
 
 	if `x` in kv {
-		result.x = kv[`x`]
+		result.x = kv[u8(`x`)]
 	}
 	if `y` in kv {
-		result.y = kv[`y`]
+		result.y = kv[u8(`y`)]
 	}
 	if `c` in kv {
-		result.create_frame = kv[`c`]
+		result.create_frame = kv[u8(`c`)]
 	}
 	if `r` in kv {
-		result.edit_frame = kv[`r`]
+		result.edit_frame = kv[u8(`r`)]
 	}
 	if `z` in kv {
-		result.gap_ms = kv[`z`]
+		result.gap_ms = kv[u8(`z`)]
 	}
 	if `X` in kv {
-		v := kv[`X`]
+		v := kv[u8(`X`)]
 		result.composition_mode = match v {
 			0 { CompositionMode.alpha_blend }
 			1 { CompositionMode.overwrite }
@@ -777,7 +777,7 @@ fn AnimationFrameLoading.parse(kv map[u8]u32) !AnimationFrameLoading {
 		}
 	}
 	if `Y` in kv {
-		result.background = AnimBackground.from_int(kv[`Y`])
+		result.background = AnimBackground.from_int(kv[u8(`Y`)])
 	}
 
 	return result
@@ -804,31 +804,31 @@ fn AnimationFrameComposition.parse(kv map[u8]u32) !AnimationFrameComposition {
 	mut result := AnimationFrameComposition{}
 
 	if `c` in kv {
-		result.frame = kv[`c`]
+		result.frame = kv[u8(`c`)]
 	}
 	if `r` in kv {
-		result.edit_frame = kv[`r`]
+		result.edit_frame = kv[u8(`r`)]
 	}
 	if `x` in kv {
-		result.x = kv[`x`]
+		result.x = kv[u8(`x`)]
 	}
 	if `y` in kv {
-		result.y = kv[`y`]
+		result.y = kv[u8(`y`)]
 	}
 	if `w` in kv {
-		result.width = kv[`w`]
+		result.width = kv[u8(`w`)]
 	}
 	if `h` in kv {
-		result.height = kv[`h`]
+		result.height = kv[u8(`h`)]
 	}
 	if `X` in kv {
-		result.left_edge = kv[`X`]
+		result.left_edge = kv[u8(`X`)]
 	}
 	if `Y` in kv {
-		result.top_edge = kv[`Y`]
+		result.top_edge = kv[u8(`Y`)]
 	}
 	if `C` in kv {
-		v := kv[`C`]
+		v := kv[u8(`C`)]
 		result.composition_mode = match v {
 			0 { CompositionMode.alpha_blend }
 			1 { CompositionMode.overwrite }
@@ -865,7 +865,7 @@ fn AnimationControl.parse(kv map[u8]u32) !AnimationControl {
 	mut result := AnimationControl{}
 
 	if `s` in kv {
-		v := kv[`s`]
+		v := kv[u8(`s`)]
 		result.action = match v {
 			0 { AnimationAction.invalid }
 			1 { AnimationAction.stop }
@@ -877,16 +877,16 @@ fn AnimationControl.parse(kv map[u8]u32) !AnimationControl {
 		}
 	}
 	if `r` in kv {
-		result.frame = kv[`r`]
+		result.frame = kv[u8(`r`)]
 	}
 	if `z` in kv {
-		result.gap_ms = kv[`z`]
+		result.gap_ms = kv[u8(`z`)]
 	}
 	if `c` in kv {
-		result.current_frame = kv[`c`]
+		result.current_frame = kv[u8(`c`)]
 	}
 	if `v` in kv {
-		result.loops = kv[`v`]
+		result.loops = kv[u8(`v`)]
 	}
 
 	return result
@@ -979,7 +979,7 @@ pub type Delete = DeleteAll
 
 fn Delete.parse(kv map[u8]u32) !Delete {
 	what := if `d` in kv {
-		v := kv[`d`]
+		v := kv[u8(`d`)]
 		if v > 255 {
 			return error('InvalidFormat: delete kind out of range')
 		}
@@ -997,13 +997,13 @@ fn Delete.parse(kv map[u8]u32) !Delete {
 			if `i` in kv {
 				r = DeleteById{
 					...r
-					image_id: kv[`i`]
+					image_id: kv[u8(`i`)]
 				}
 			}
 			if `p` in kv {
 				r = DeleteById{
 					...r
-					placement_id: kv[`p`]
+					placement_id: kv[u8(`p`)]
 				}
 			}
 			r
@@ -1013,13 +1013,13 @@ fn Delete.parse(kv map[u8]u32) !Delete {
 			if `I` in kv {
 				r = DeleteByNewest{
 					...r
-					image_number: kv[`I`]
+					image_number: kv[u8(`I`)]
 				}
 			}
 			if `p` in kv {
 				r = DeleteByNewest{
 					...r
-					placement_id: kv[`p`]
+					placement_id: kv[u8(`p`)]
 				}
 			}
 			r
@@ -1035,13 +1035,13 @@ fn Delete.parse(kv map[u8]u32) !Delete {
 			if `x` in kv {
 				r = DeleteIntersectCell{
 					...r
-					x: kv[`x`]
+					x: kv[u8(`x`)]
 				}
 			}
 			if `y` in kv {
 				r = DeleteIntersectCell{
 					...r
-					y: kv[`y`]
+					y: kv[u8(`y`)]
 				}
 			}
 			r
@@ -1051,17 +1051,17 @@ fn Delete.parse(kv map[u8]u32) !Delete {
 			if `x` in kv {
 				r = DeleteIntersectCellZ{
 					...r
-					x: kv[`x`]
+					x: kv[u8(`x`)]
 				}
 			}
 			if `y` in kv {
 				r = DeleteIntersectCellZ{
 					...r
-					y: kv[`y`]
+					y: kv[u8(`y`)]
 				}
 			}
 			if `z` in kv {
-				v := kv[`z`]
+				v := kv[u8(`z`)]
 				r = DeleteIntersectCellZ{
 					...r
 					z: unsafe { *(&i32(&v)) }
@@ -1073,8 +1073,8 @@ fn Delete.parse(kv map[u8]u32) !Delete {
 			if `x` !in kv || `y` !in kv {
 				return error('InvalidFormat: range delete requires x and y')
 			}
-			x := kv[`x`]
-			y := kv[`y`]
+			x := kv[u8(`x`)]
+			y := kv[u8(`y`)]
 			if x > y {
 				return error('InvalidFormat: range x > y')
 			}
@@ -1089,7 +1089,7 @@ fn Delete.parse(kv map[u8]u32) !Delete {
 			if `x` in kv {
 				r = DeleteColumn{
 					...r
-					x: kv[`x`]
+					x: kv[u8(`x`)]
 				}
 			}
 			r
@@ -1099,7 +1099,7 @@ fn Delete.parse(kv map[u8]u32) !Delete {
 			if `y` in kv {
 				r = DeleteRow{
 					...r
-					y: kv[`y`]
+					y: kv[u8(`y`)]
 				}
 			}
 			r
@@ -1107,7 +1107,7 @@ fn Delete.parse(kv map[u8]u32) !Delete {
 		`z`, `Z` {
 			mut r := DeleteZ{ delete: what == `Z` }
 			if `z` in kv {
-				v := kv[`z`]
+				v := kv[u8(`z`)]
 				r = DeleteZ{
 					...r
 					z: unsafe { *(&i32(&v)) }

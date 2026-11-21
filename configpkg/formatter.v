@@ -184,8 +184,14 @@ pub fn (c &Config) changed(new &Config, key string) bool {
 	if key == 'link' {
 		return !c.link.equal(new.link)
 	}
+	// deep_equal would use RepeatableCommand.equal too, but V 0.5.2 master
+	// still validates its field-wise fallback and rejects the
+	// `[]input.Command` items as `[]inputpkg.Command`.
+	if key == 'command-palette-entry' {
+		return !c.command_palette_entry.equal(new.command_palette_entry)
+	}
 	$for field in Config.fields {
-		$if !field.is_map {
+		$if !field.is_map && field.name != 'command_palette_entry' {
 			if field.name !in ['diagnostics', 'conditional_state', 'link', 'replay_steps',
 				'xdg_terminal_exec'] && field.name.replace('_', '-') == key {
 				return !comparison.deep_equal(c.$(field.name), new.$(field.name))
@@ -220,7 +226,8 @@ fn config_entry_groups(c Config) []ConfigEntryGroup {
 	$for field in Config.fields {
 		$if !field.is_map {
 			$if field.name != 'diagnostics' && field.name != 'xdg_terminal_exec' && field.name != 'conditional_state' && field.name != 'replay_steps' {
-				add_value(mut result, field.name.replace('_', '-'), c.$(field.name))
+				value := c.$(field.name)
+				add_value(mut result, field.name.replace('_', '-'), value)
 			}
 		}
 	}

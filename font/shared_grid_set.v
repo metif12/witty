@@ -717,8 +717,10 @@ pub fn (self &Key) hash(mut hasher SourceHash) {
 	// Hash metric modifier values
 	if self.metric_modifiers.count() > 0 {
 		$for enum_value in MetricsKey.values {
-			mk := enum_value.value
-			if m := self.metric_modifiers.get(mk) {
+			mk := MetricsKey(enum_value.value)
+			// Index the map directly: V 0.5.2 master does not unwrap the
+			// ?MetricsModifier from get() inside this $for.
+			if m := self.metric_modifiers.entries[int(mk)] {
 				hasher.put_u8(u8(mk))
 				m.hash(mut hasher)
 			}

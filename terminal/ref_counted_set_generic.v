@@ -118,7 +118,9 @@ pub fn (mut self GenericRefCountedSet[T, I, R, X]) add(base &u8, value T) !I {
 	}
 
 	// If the item already exists, return it.
-	if id := self.lookup(base, value) {
+	if found := self.lookup(base, value) {
+		// V 0.5.2 master keeps the generic ?I type on the unwrapped value.
+		id := I(found)
 		self.deleted_value(value)
 		items[id].meta.ref_count = ref_set_add_checked(items[id].meta.ref_count, R(1))
 		return id

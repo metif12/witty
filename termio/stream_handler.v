@@ -1798,7 +1798,7 @@ fn (mut self StreamHandler) progress_report(report osc.ProgressReport) {
 // management to the terminal module's implementation.
 pub struct DcsHandler {
 mut:
-	handler terminal.DcsHandler = terminal.DcsHandler{}
+	handler terminal.DcsHandler
 }
 
 pub fn (mut self DcsHandler) deinit() {

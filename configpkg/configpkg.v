@@ -5627,6 +5627,17 @@ pub fn (r RepeatableReadableIO) format_entry() []string {
 	return r.items.map(it.format_entry())
 }
 
+// clone_commands deep-copies commands. V 0.5.2 master types
+// `.map(it.clone())` on them as `[]input.Command`, which it then refuses to
+// assign to the `[]inputpkg.Command` field.
+fn clone_commands(items []inputpkg.Command) []inputpkg.Command {
+	mut result := []inputpkg.Command{cap: items.len}
+	for item in items {
+		result << item.clone()
+	}
+	return result
+}
+
 // RepeatableCommand is the configured list of command-palette entries.
 pub struct RepeatableCommand {
 pub mut:
@@ -5636,7 +5647,10 @@ pub mut:
 
 // init installs Ghostty's built-in command palette entries.
 pub fn (mut r RepeatableCommand) init() {
-	r.items = inputpkg.command_defaults.map(it.clone())
+	r.items = []inputpkg.Command{cap: inputpkg.command_defaults.len}
+	for item in inputpkg.command_defaults {
+		r.items << item.clone()
+	}
 	r.items_c = inputpkg.command_defaults_c.clone()
 }
 
@@ -5704,7 +5718,7 @@ pub fn (mut r RepeatableCommand) parse_cli(input ?string) ! {
 
 pub fn (r RepeatableCommand) clone() RepeatableCommand {
 	return RepeatableCommand{
-		items: r.items.map(it.clone())
+		items: clone_commands(r.items)
 		items_c: r.items_c.clone()
 	}
 }
@@ -9469,7 +9483,13 @@ fn (mut c Config) reset_empty_config_value(key string) bool {
 
 	normalized_key := key.replace('-', '_')
 	defaults := Config.default_config()
-	$for field in Config.fields {
+	return reset_config_field(mut c, defaults, normalized_key)
+}
+
+// reset_config_field is generic over the config type because V 0.5.2 master
+// rejects comptime enum field assignment in non-generic functions.
+fn reset_config_field[T](mut c T, defaults T, normalized_key string) bool {
+	$for field in T.fields {
 		$if !field.is_map {
 			if field.name == normalized_key
 				&& field.name !in ['diagnostics', 'conditional_state', 'replay_steps',

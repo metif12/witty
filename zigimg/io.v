@@ -2417,7 +2417,9 @@ pub fn (mut stream WriteStream) print_duration_unsigned(nanoseconds u64) ! {
 
 // The options variant renders fully before touching the destination writer.
 pub fn (mut stream WriteStream) print_duration[T](nanoseconds T, options FormatOptions) ! {
-	$if T.unaliased_typ is $int {
+	// `T is $int` is checked first: V 0.5.2 master evaluates the unaliased
+	// form as false for explicit print_duration[u64]/[i64] instantiations.
+	$if T is $int || T.unaliased_typ is $int {
 		mut storage := [24]u8{}
 		mut bytes := unsafe { storage[..] }
 		mut inner := WriteStream.init_memory(mut bytes)

@@ -250,7 +250,7 @@ fn c_write_value[T](ptr voidptr, value T) {
 @[markused]
 fn c_write_cstring(ptr voidptr, value &char) {
 	unsafe {
-		vmemcpy(ptr, &value, sizeof(voidptr))
+		vmemcpy(ptr, &value, int(sizeof(voidptr)))
 	}
 }
 

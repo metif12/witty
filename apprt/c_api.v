@@ -327,8 +327,9 @@ fn optional_count_capi(value ?usize) isize {
 
 fn capi_action_payload[T](tag int, value T) CAPIAction {
 	mut result := CAPIAction{ tag: tag }
-	$if sizeof ( T ) > 24 {
-		$compile_error('C action payload exceeds ghostty_action_u')
+	// V 0.5.2 master cannot evaluate sizeof in a comptime $if.
+	if sizeof(T) > 24 {
+		panic('C action payload exceeds ghostty_action_u')
 	}
 	unsafe {
 		vmemcpy(&result.action[0], &value, sizeof(T))

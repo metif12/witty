@@ -26,7 +26,7 @@ pub fn (spinner &Spinner) widget() Widget {
 
 pub fn (mut spinner Spinner) start() ?Command {
 	spinner.was_spinning.store(true)
-	if spinner.count.add(1) == 0 { return Tick.@in(spinner_time_lapse, spinner.widget()) }
+	if spinner.count.add(1) == 0 { return Tick.after(spinner_time_lapse, spinner.widget()) }
 	return none
 }
 

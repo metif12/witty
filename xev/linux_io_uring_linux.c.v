@@ -739,14 +739,14 @@ fn (mut self LinuxIoUring) copy_cqes_ready(cqes &IoUringCqe, cqes_len usize) u32
 	// before wrapping
 	n := usize_min(self.cq.cqes_len - usize(head), usize(count))
 	unsafe {
-		vmemcpy(cqes, &self.cq.cqes[head], isize(n * sizeof(IoUringCqe)))
+		vmemcpy(cqes, &self.cq.cqes[head], int(n * sizeof(IoUringCqe)))
 	}
 
 	if usize(count) > n {
 		// wrap self.cq.cqes
 		w := usize(count) - n
 		unsafe {
-			vmemcpy(&cqes[n], &self.cq.cqes[0], isize(w * sizeof(IoUringCqe)))
+			vmemcpy(&cqes[n], &self.cq.cqes[0], int(w * sizeof(IoUringCqe)))
 		}
 	}
 

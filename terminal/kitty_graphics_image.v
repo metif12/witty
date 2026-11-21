@@ -352,7 +352,7 @@ fn (mut self LoadingImage) read_shared_memory(t Transmission, path string) ! {
 
 	// mmap always uses the stat size.
 	map_ptr := C.mmap(unsafe { nil }, stat_size, C.PROT_READ, C.MAP_SHARED, fd, 0)
-	if map_ptr == C.MAP_FAILED || map_ptr == unsafe { nil } {
+	if map_ptr == voidptr(C.MAP_FAILED) || map_ptr == unsafe { nil } {
 		return error('invalid data: unable to mmap shared memory ${path}')
 	}
 	defer {

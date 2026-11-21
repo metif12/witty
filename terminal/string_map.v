@@ -22,6 +22,12 @@ pub fn (mut self StringMap) deinit() {
 	self.map = []
 }
 
+// text returns the mapped string. V 0.5.2 master reads a `.string` field
+// followed by indexing as the `string` type, so slicing goes through here.
+fn (self StringMap) text() string {
+	return self.string
+}
+
 // search_iterator returns an iterator for an already compiled expression.
 pub fn (self StringMap) search_iterator(regex oniguruma.Regex) SearchIterator {
 	return SearchIterator{
@@ -45,7 +51,7 @@ pub fn (mut self SearchIterator) next() !MatchValue {
 		return MatchValue{}
 	}
 
-	mut region := self.regex.search(self.map.string[self.offset..], oniguruma.Options{}) or {
+	mut region := self.regex.search(self.map.text()[self.offset..], oniguruma.Options{}) or {
 		if oniguruma.is_error(err, .mismatch) {
 			self.offset = usize(self.map.string.len)
 			return MatchValue{}

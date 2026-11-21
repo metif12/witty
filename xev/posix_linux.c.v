@@ -305,7 +305,7 @@ pub fn linux_timerfd_settime(fd i32, flags LinuxTfdTimer, new_value &C.itimerspe
 // (MAP_FAILED and errno) is used. The returned slice aliases the mapping.
 pub fn posix_mmap(ptr voidptr, length usize, prot u32, flags u32, fd int, offset u64) ![]u8 {
 	rc := unsafe { C.mmap(ptr, length, int(prot), int(flags), fd, isize(offset)) }
-	if rc != C.MAP_FAILED {
+	if rc != voidptr(C.MAP_FAILED) {
 		return unsafe { (&u8(rc)).vbytes(int(length)) }
 	}
 	err := C.errno

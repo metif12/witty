@@ -19,8 +19,8 @@ fn test_lib_vt_input_paste_api() ! {
 }
 
 fn test_lib_vt_exports_complete_mouse_shapes() {
-	assert MouseShape.context_menu != MouseShape.default_
-	assert MouseShape.zoom_out != MouseShape.zoom_in
+	assert VtMouseShape.context_menu != VtMouseShape.default_
+	assert VtMouseShape.zoom_out != VtMouseShape.zoom_in
 }
 
 fn test_lib_vt_native_key_event_and_encoder_exports() {

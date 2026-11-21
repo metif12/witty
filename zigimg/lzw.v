@@ -80,20 +80,18 @@ pub fn (mut decoder LzwDecoder[E]) decode[E](mut reader ReadStream, mut writer W
 	if remaining_data := decoder.remaining_data {
 		rest := lzw_read_bits(mut bit_reader, decoder.remaining_bits, &read_size)!
 		if read_size > 0 {
-			$if E.unaliased_typ is LittleEndian {
+			if !endian_is_big[E]() {
 				if bits_to_read < decoder.remaining_bits { panic('integer overflow') }
 				shift := bits_to_read - decoder.remaining_bits
 				if shift > 15 { panic('integer does not fit in destination type') }
 				if shift >= 13 { panic('shift amount is greater than the type size') }
 				read_code = (remaining_data | (rest << shift)) & 0x1fff
-			} $else $if E.unaliased_typ is BigEndian {
+			} else {
 				if decoder.remaining_bits > 15 { panic('integer does not fit in destination type') }
 				if decoder.remaining_bits >= 13 {
 					panic('shift amount is greater than the type size')
 				}
 				read_code = ((remaining_data << decoder.remaining_bits) | rest) & 0x1fff
-			} $else {
-				$compile_error('LzwDecoder requires BigEndian or LittleEndian')
 			}
 		}
 		decoder.remaining_data = none
@@ -164,14 +162,12 @@ fn lzw_read_bits[E](mut bits BitReader[E], num u16, out_bits &u16) !u16 {
 			}
 			return err
 		}
-		$if E.unaliased_typ is BigEndian {
+		if endian_is_big[E]() {
 			value = ((value << 8) | byte) & 0x1fff
-		} $else $if E.unaliased_typ is LittleEndian {
+		} else {
 			if count > 15 { panic('integer does not fit in destination type') }
 			if count >= 13 { panic('shift amount is greater than the type size') }
 			value = (value | (u16(byte) << count)) & 0x1fff
-		} $else {
-			$compile_error('LzwDecoder requires BigEndian or LittleEndian')
 		}
 		count += 8
 	}
@@ -188,10 +184,10 @@ fn lzw_read_bits[E](mut bits BitReader[E], num u16, out_bits &u16) !u16 {
 		return err
 	}
 	keep := u8(8 - left)
-	$if E.unaliased_typ is BigEndian {
+	if endian_is_big[E]() {
 		value = ((value << left) | (byte >> keep)) & 0x1fff
 		bits.bits = byte & bit_mask(keep)
-	} $else $if E.unaliased_typ is LittleEndian {
+	} else {
 		if count > 15 { panic('integer does not fit in destination type') }
 		if count >= 13 { panic('shift amount is greater than the type size') }
 		value = (value | (u16(byte & bit_mask(u8(left))) << count)) & 0x1fff

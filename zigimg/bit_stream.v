@@ -6,13 +6,23 @@ pub struct BigEndian {}
 pub struct LittleEndian {}
 
 fn bit_check_endian[E]() {
-	$if E.indirections > 0 || ((int(E.unaliased_typ) >> 16) & 0xff) > 0 {
-		$compile_error('Bit streams require BigEndian or LittleEndian')
-	} $else $if E.unaliased_typ is BigEndian || E.unaliased_typ is LittleEndian {
-		// Real aliases of the two marker types preserve the Source choices.
+	// Real aliases of the two marker types preserve the Source choices;
+	// endian_is_big rejects every other type, including pointers to them.
+	_ = endian_is_big[E]()
+}
+
+// endian_is_big selects the byte order at runtime. V 0.5.2 master misresolves
+// `$if E.unaliased_typ is ...` when E comes from a generic struct (BitReader[E],
+// LzwDecoder[E]), but resolves it correctly in a free generic function.
+fn endian_is_big[E]() bool {
+	$if E.unaliased_typ is BigEndian {
+		return true
+	} $else $if E.unaliased_typ is LittleEndian {
+		return false
 	} $else {
 		$compile_error('Bit streams require BigEndian or LittleEndian')
 	}
+	return false
 }
 
 pub struct BitReader[E] {
@@ -47,18 +57,16 @@ pub fn (mut stream BitReader[E]) read_bits_tuple[E, T](num u16) !(T, u16) {
 			if err.msg() == 'EndOfStream' { return bit_value_from_bits[T](out), out_count }
 			return err
 		}
-		$if E.unaliased_typ is BigEndian {
+		if endian_is_big[E]() {
 			if sizeof(T) == 1 {
 				out = 0
 			} else {
 				out <<= 8
 			}
 			out |= byte
-		} $else $if E.unaliased_typ is LittleEndian {
+		} else {
 			bit_check_shift[T](out_count)
 			out |= u64(byte) << out_count
-		} $else {
-			$compile_error('BitReader requires BigEndian or LittleEndian')
 		}
 		out = bit_working_value[T](out)
 		out_count += 8
@@ -70,12 +78,12 @@ pub fn (mut stream BitReader[E]) read_bits_tuple[E, T](num u16) !(T, u16) {
 		if err.msg() == 'EndOfStream' { return bit_value_from_bits[T](out), out_count }
 		return err
 	}
-	$if E.unaliased_typ is BigEndian {
+	if endian_is_big[E]() {
 		bit_check_shift[T](bits_left)
 		out <<= bits_left
 		out |= final_byte >> keep
 		stream.bits = final_byte & bit_mask(keep)
-	} $else $if E.unaliased_typ is LittleEndian {
+	} else {
 		bit_check_shift[T](out_count)
 		out |= u64(final_byte & bit_mask(u8(bits_left))) << out_count
 		stream.bits = final_byte >> bits_left
@@ -92,11 +100,11 @@ fn (mut stream BitReader[E]) remove_bits[E](num u8) u8 {
 	}
 	keep := stream.count - num
 	mut bits := u8(0)
-	$if E.unaliased_typ is BigEndian {
+	if endian_is_big[E]() {
 		if keep >= 8 { panic('integer does not fit in destination type') }
 		bits = stream.bits >> keep
 		stream.bits &= bit_mask(keep)
-	} $else $if E.unaliased_typ is LittleEndian {
+	} else {
 		bits = stream.bits & bit_mask(num)
 		if num >= 8 { panic('integer does not fit in destination type') }
 		stream.bits >>= num
@@ -134,25 +142,23 @@ pub fn (mut stream BitWriter[E]) write_bits[E, T](value T, num u16) ! {
 			stream.add_bits(u8(input), u8(num))
 			return stream.flush_bits()
 		}
-		$if E.unaliased_typ is BigEndian {
+		if endian_is_big[E]() {
 			bit_check_shift[T](in_count - bits_free)
 			stream.add_bits(u8(input >> (in_count - bits_free)), bits_free)
-		} $else $if E.unaliased_typ is LittleEndian {
+		} else {
 			stream.add_bits(u8(input), bits_free)
 			bit_check_shift[T](u16(bits_free))
 			input >>= bits_free
-		} $else {
-			$compile_error('BitWriter requires BigEndian or LittleEndian')
 		}
 		in_count -= bits_free
 		stream.flush_bits()!
 	}
 	full_bytes_left := in_count / 8
 	for _ in 0 .. full_bytes_left {
-		$if E.unaliased_typ is BigEndian {
+		if endian_is_big[E]() {
 			bit_check_shift[T](in_count - 8)
 			stream.writer.write_byte(u8(input >> (in_count - 8)))!
-		} $else $if E.unaliased_typ is LittleEndian {
+		} else {
 			stream.writer.write_byte(u8(input))!
 			if sizeof(T) == 1 {
 				input = 0
@@ -169,11 +175,11 @@ fn (mut stream BitWriter[E]) add_bits[E](bits u8, num u8) {
 	if num == 8 {
 		stream.bits = bits
 	} else {
-		$if E.unaliased_typ is BigEndian {
+		if endian_is_big[E]() {
 			if num >= 8 { panic('integer does not fit in destination type') }
 			stream.bits <<= num
 			stream.bits |= bits & bit_mask(num)
-		} $else $if E.unaliased_typ is LittleEndian {
+		} else {
 			// The source deliberately does not mask the provided value here.
 			if stream.count >= 8 { panic('integer does not fit in destination type') }
 			stream.bits |= u8(bits << stream.count)
@@ -186,7 +192,7 @@ fn (mut stream BitWriter[E]) add_bits[E](bits u8, num u8) {
 pub fn (mut stream BitWriter[E]) flush_bits[E]() ! {
 	bit_check_endian[E]()
 	if stream.count == 0 { return }
-	$if E.unaliased_typ is BigEndian {
+	if endian_is_big[E]() {
 		if stream.count > 8 { panic('integer overflow') }
 		stream.bits <<= 8 - stream.count
 	}

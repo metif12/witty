@@ -397,7 +397,7 @@ fn draw_terminal_modes(context cimgui.Context, term &terminal.Terminal) {
 	context.table_headers_row()
 
 	$for enum_value in terminal.Mode.values {
-		mode := enum_value.value
+		mode := terminal.Mode(enum_value.value)
 		context.table_next_row()
 		context.push_id_int(int(mode))
 		context.table_set_column(0)
