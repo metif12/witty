@@ -37,6 +37,14 @@ pub fn (d Driver) v_arguments(artifact Artifact, deps NativeDeps) ![]string {
 			args << ['-cflags', compiler_argument(argument)]
 		}
 	}
+	if d.cfg.target.os == 'ios' {
+		// V's builtin adds the bundled libgc include and defines only for
+		// macOS/Linux; iOS slices compile against the same gc.c that
+		// runtime_archive links, with its flags.
+		gc_include := os.join_path(os.dir(os.real_path(d.cfg.compiler)), 'thirdparty', 'libgc', 'include')
+		args << ['-cflags', compiler_argument('-I' + gc_include), '-cflags', '-DGC_BUILTIN_ATOMIC=1',
+			'-cflags', '-DALL_INTERIOR_POINTERS=1']
+	}
 	if d.cfg.target.abi == 'gnu' { args << '-glibc' }
 	if d.cfg.target.abi == 'musl' { args << '-musl' }
 	for argument in deps.compiler_flags {
