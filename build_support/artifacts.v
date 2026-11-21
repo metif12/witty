@@ -5,6 +5,12 @@ import os
 fn compiler_argument(value string) string {
 	// V accepts a string of C flags; its C compiler command still needs shell
 	// quoting even though the outer build invocation uses structured argv.
+	$if windows {
+		// Windows C compiles read flags with Windows quoting rules, where single
+		// quotes are literal characters; double-quote only when needed.
+		if !value.contains_any(' \t"') { return value }
+		return '"' + value.replace('"', '\\"') + '"'
+	}
 	return "'" + value.replace("'", "'\\''") + "'"
 }
 
