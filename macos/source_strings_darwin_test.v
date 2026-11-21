@@ -1,6 +1,6 @@
 module macos
 
-import json
+import json2
 import os
 
 struct SourceStringInput {
@@ -64,5 +64,5 @@ fn test_original_swift_string_boundary_and_invalid_subpart_rules() {
 	assert records[20].key_table == 'table'
 	assert records[20].search? == 'table�'
 	assert records[20].c_strict == none
-	if path := os.getenv_opt('WITTY_STRING_MODEL_OUTPUT') { os.write_file(path, json.encode(records))! }
+	if path := os.getenv_opt('WITTY_STRING_MODEL_OUTPUT') { os.write_file(path, json2.encode(records, escape_unicode: true, time_as_unix: true))! }
 }

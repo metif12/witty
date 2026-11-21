@@ -1,7 +1,7 @@
 @[has_globals]
 module macos
 
-import json
+import json2
 import os
 
 __global (
@@ -103,7 +103,7 @@ fn test_source_url_editor_selection_and_real_native_workspace_selectors() {
 			if file_url.len > 0 { g_url_probe_target } else { '' },
 			if file_url.len > 0 { g_url_probe_application } else { '' }}
 	}
-	if path := os.getenv_opt('WITTY_URL_MODEL_OUTPUT') { os.write_file(path, json.encode(records))! }
+	if path := os.getenv_opt('WITTY_URL_MODEL_OUTPUT') { os.write_file(path, json2.encode(records, escape_unicode: true, time_as_unix: true))! }
 }
 fn test_source_config_open_path_conversion() {
 	assert source_config_file_url('/tmp/witty config.ghostty') == 'file:///tmp/witty%20config.ghostty'

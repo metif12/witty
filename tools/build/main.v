@@ -1,7 +1,7 @@
 module main
 
 import build_support
-import json
+import json2
 import os
 
 fn main() {
@@ -29,7 +29,7 @@ fn main() {
 			'unicode-tables' { driver.generate_unicode_tables() or { eprintln(err); exit(1) } }
 			'helpgen' { driver.install_help_generator() or { eprintln(err); exit(1) } }
 			'xcframework' { driver.build_xcframework(false) or { eprintln(err); exit(1) } }
-			'config' { println(json.encode(cfg)) }
+			'config' { println(json2.encode(cfg, escape_unicode: true, time_as_unix: true)) }
 			'resources' { driver.install_resources() or { eprintln(err); exit(1) } }
 			'docs' { driver.install_docs() or { eprintln(err); exit(1) } }
 			'locales' { driver.install_locales() or { eprintln(err); exit(1) } }

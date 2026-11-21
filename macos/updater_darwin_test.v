@@ -2,7 +2,7 @@
 module macos
 
 import os
-import json
+import json2
 
 #insert "@VMODROOT/macos/updater_test_abi.h"
 fn C.witty_update_test_block(kind int) voidptr
@@ -46,7 +46,7 @@ fn test_original_swift_view_model_records() {
 	]
 	mut records := []UpdateProbeRecord{}
 	for state in states { records << UpdateProbeRecord{state.text(), state.max_width_text(), state.icon_name(), state.badge(), state.is_installable()} }
-	if path := os.getenv_opt('WITTY_UPDATER_MODEL_OUTPUT') { os.write_file(path, json.encode(records))! }
+	if path := os.getenv_opt('WITTY_UPDATER_MODEL_OUTPUT') { os.write_file(path, json2.encode(records, escape_unicode: true, time_as_unix: true))! }
 }
 
 fn test_original_update_state_text_equality_and_cancel_rules() {

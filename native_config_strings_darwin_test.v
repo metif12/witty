@@ -3,7 +3,7 @@ module main
 import configpkg
 import apprt
 import input as inputpkg
-import json
+import json2
 import macos
 import os
 
@@ -80,7 +80,7 @@ fn test_native_config_string_getters_preserve_swift_c_string_rules() {
 	assert projection.window_title_font_family == none
 	records << NativeConfigStringRecord{input: 'nil', title: projection.title, family: projection.window_title_font_family}
 	if path := os.getenv_opt('WITTY_CONFIG_STRING_MODEL_OUTPUT') {
-		os.write_file(path, json.encode(records))!
+		os.write_file(path, json2.encode(records, escape_unicode: true, time_as_unix: true))!
 	}
 }
 

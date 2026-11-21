@@ -1,6 +1,6 @@
 module build_support
 
-import json
+import json2
 import os
 
 fn (d Driver) macos_configuration() string {
@@ -13,7 +13,7 @@ fn (d Driver) macos_configuration() string {
 pub fn (d Driver) write_macos_plist(output string) ! {
 	configuration := d.macos_configuration()
 	asset_root := os.join_path(d.cfg.root, 'build_assets', 'macos')
-	all_settings := json.decode(map[string]map[string]string,
+	all_settings := json2.decode[map[string]map[string]string](
 		os.read_file(os.join_path(asset_root, 'project-plist-settings.json'))!)!
 	settings := all_settings[configuration].clone()
 	text := os.read_file(os.join_path(asset_root, 'Ghostty-Info.plist'))!

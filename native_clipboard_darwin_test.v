@@ -3,7 +3,7 @@ module main
 
 import apprt
 import core
-import json
+import json2
 import macos
 import os
 
@@ -142,6 +142,6 @@ fn test_native_clipboard_source_consumers_and_isolated_pasteboard() {
 	assert clipboard_completed.last().confirmed
 	records << ClipboardProbeRecord{ name: 'read-denied', confirmed: true }
 	if output := os.getenv_opt('WITTY_CLIPBOARD_MODEL_OUTPUT') {
-		os.write_file(output, json.encode(records)) or { panic(err) }
+		os.write_file(output, json2.encode(records, escape_unicode: true, time_as_unix: true)) or { panic(err) }
 	}
 }

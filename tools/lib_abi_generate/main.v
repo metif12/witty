@@ -1,6 +1,6 @@
 module main
 
-import json
+import json2
 import os
 import lib_abi
 
@@ -9,7 +9,7 @@ fn main() {
 		eprintln('usage: lib_abi_generate schema.json output-directory')
 		exit(1)
 	}
-	schema := json.decode(lib_abi.Schema, os.read_file(os.args[1]) or { panic(err) }) or {
+	schema := json2.decode[lib_abi.Schema](os.read_file(os.args[1]) or { panic(err) }) or {
 		panic(err)
 	}
 	output := os.real_path(os.args[2])

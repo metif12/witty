@@ -1,7 +1,7 @@
 @[has_globals]
 module macos
 
-import json
+import json2
 import os
 
 #insert "@VMODROOT/macos/window_tahoe_test_abi.h"
@@ -180,7 +180,7 @@ fn test_selected_tahoe_toolbar_preserves_source_async_title_font_and_main_model(
 	assert is_nil(data.tahoe_title_font)
 	records << tahoe_test_record('no-font', data, item)
 	assert g_tahoe_window_tasks.len == 0
-	if path := os.getenv_opt('WITTY_TAHOE_MODEL_OUTPUT') { os.write_file(path, json.encode(records))! }
+	if path := os.getenv_opt('WITTY_TAHOE_MODEL_OUTPUT') { os.write_file(path, json2.encode(records, escape_unicode: true, time_as_unix: true))! }
 }
 
 fn test_tahoe_tab_constraints_observer_reset_event_forwarding_and_appearance() {
