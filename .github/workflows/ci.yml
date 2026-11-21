@@ -36,9 +36,8 @@ jobs:
       - name: Check
         run: v -check .
       - name: Build
-        # Native arch only: universal builds share .witty-build/native archives
-        # between architectures, so arm64 host tools would link x86_64 objects.
-        run: v -path "$PWD|@vlib|@vmodules" run tools/build install -Dxcframework-target=native --prefix "$RUNNER_TEMP/witty"
+        # Universal (arm64 + x86_64) app, as released.
+        run: v -path "$PWD|@vlib|@vmodules" run tools/build install --prefix "$RUNNER_TEMP/witty"
       - uses: actions/upload-artifact@v4
         with:
           name: witty-macos
@@ -97,9 +96,6 @@ jobs:
   windows:
     runs-on: windows-2022
     timeout-minutes: 120
-    # Non-blocking until the VT library's sources are ported to Windows:
-    # internal_os still uses POSIX-only APIs (sys/resource.h, fork, pwd).
-    continue-on-error: true
     env:
       # tools/build itself is compiled with MinGW gcc: clang's default MSVC
       # target hits MSVC-only intrinsics (_udiv128) in V's runtime.
