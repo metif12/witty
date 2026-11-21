@@ -209,7 +209,10 @@ pub fn (d Driver) build_executable(deps NativeDeps) !string {
 		// only the host architecture (and ties the app to V's install path).
 		// Link the per-target GC built from V's own gc.c, and drop the dylib
 		// dependency once nothing uses it.
-		args << ['-ldflags', compiler_argument(d.runtime_archive()!), '-ldflags', '-Wl,-dead_strip_dylibs']
+		// Pass the archive to the linker itself: V's clang command uses `-x`,
+		// which would otherwise compile the archive as source.
+		args << ['-ldflags', compiler_argument('-Wl,' + d.runtime_archive()!), '-ldflags',
+			'-Wl,-dead_strip_dylibs']
 	}
 	if d.cfg.target.os == 'windows' {
 		resource := d.cache_path('artifacts', 'ghostty-resource.o')
