@@ -64,6 +64,9 @@ jobs:
           meson setup build --prefix=/usr -Dintrospection=false -Dvapi=false -Ddocs=false -Dexamples=false -Dtests=false
           ninja -C build
           sudo ninja -C build install
+      - name: Build host cimgui archive
+        # Host generator tools link cimgui/lib/libdcimgui_linux.a, which is not committed.
+        run: CXX=clang++ sh cimgui/build.sh
       - name: Install V
         # Prebuilt release: building the tag from source pulls a newer vc bootstrap.
         run: |
