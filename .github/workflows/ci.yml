@@ -77,6 +77,11 @@ jobs:
   windows:
     runs-on: windows-2022
     timeout-minutes: 120
+    # V's clang bootstrap on Windows fails (_udiv128 is MSVC-only), so use MinGW gcc throughout.
+    env:
+      VFLAGS: -cc gcc
+      CC: gcc
+      CXX: g++
     defaults:
       run:
         shell: bash
@@ -86,7 +91,7 @@ jobs:
         shell: cmd
         run: |
           git clone --depth 1 https://github.com/vlang/v "%RUNNER_TEMP%\v"
-          cd /d "%RUNNER_TEMP%\v" && makev.bat -clang
+          cd /d "%RUNNER_TEMP%\v" && makev.bat -gcc
           echo VEXE=%RUNNER_TEMP%\v\v.exe>> "%GITHUB_ENV%"
           echo %RUNNER_TEMP%\v>> "%GITHUB_PATH%"
       - name: Build libghostty-vt
