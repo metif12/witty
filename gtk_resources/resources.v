@@ -135,29 +135,34 @@ mut:
 // accumulated stream separately after each poll. Preserve that algorithm and
 // its 65535-byte bound rather than slurping an unbounded process stream.
 fn collect_output(mut process os.Process) !(string, string) {
-	mut stdout := []u8{}
-	mut stderr := []u8{}
-	mut fds := [ResourcePollFd{fd: process.stdio_fd[1], events: i16(C.POLLIN)}, ResourcePollFd{fd: process.stdio_fd[2], events: i16(C.POLLIN)}]!
-	mut buffer := []u8{len: 4096}
-	for fds[0].fd >= 0 || fds[1].fd >= 0 {
-		if C.poll(&fds[0], 2, -1) < 0 {
-			if C.errno == C.EINTR { continue }
-			return os.error_posix()
-		}
-		for index in 0 .. 2 {
-			if fds[index].fd < 0 || fds[index].revents == 0 { continue }
-			count := C.read(fds[index].fd, buffer.data, usize(buffer.len))
-			if count < 0 {
-				if C.errno in [C.EINTR, C.EAGAIN] { continue }
+	// GTK resources are only built for GTK targets; Windows has no poll(2).
+	$if windows {
+		return error('GTK resource compilation is not supported on Windows')
+	} $else {
+		mut stdout := []u8{}
+		mut stderr := []u8{}
+		mut fds := [ResourcePollFd{fd: process.stdio_fd[1], events: i16(C.POLLIN)}, ResourcePollFd{fd: process.stdio_fd[2], events: i16(C.POLLIN)}]!
+		mut buffer := []u8{len: 4096}
+		for fds[0].fd >= 0 || fds[1].fd >= 0 {
+			if C.poll(&fds[0], 2, -1) < 0 {
+				if C.errno == C.EINTR { continue }
 				return os.error_posix()
 			}
-			if count == 0 { fds[index].fd = -1; continue }
-			if index == 0 { stdout << buffer[..int(count)] } else { stderr << buffer[..int(count)] }
+			for index in 0 .. 2 {
+				if fds[index].fd < 0 || fds[index].revents == 0 { continue }
+				count := C.read(fds[index].fd, buffer.data, usize(buffer.len))
+				if count < 0 {
+					if C.errno in [C.EINTR, C.EAGAIN] { continue }
+					return os.error_posix()
+				}
+				if count == 0 { fds[index].fd = -1; continue }
+				if index == 0 { stdout << buffer[..int(count)] } else { stderr << buffer[..int(count)] }
+			}
+			if stdout.len > 65535 { return error('StdoutStreamTooLong') }
+			if stderr.len > 65535 { return error('StderrStreamTooLong') }
 		}
-		if stdout.len > 65535 { return error('StdoutStreamTooLong') }
-		if stderr.len > 65535 { return error('StderrStreamTooLong') }
+		return stdout.bytestr(), stderr.bytestr()
 	}
-	return stdout.bytestr(), stderr.bytestr()
 }
 
 fn run(executable string, args []string) !string {
