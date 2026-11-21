@@ -204,6 +204,13 @@ pub fn (d Driver) build_executable(deps NativeDeps) !string {
 		return error('Detected building on and for NixOS outside of the Nix shell environment. Run nix develop -c v run tools/build.')
 	}
 	mut args := d.v_arguments(.exe, deps)!
+	if d.cfg.target.darwin() {
+		// Non-prod macOS builds link V's prebuilt host libgc.dylib, which has
+		// only the host architecture (and ties the app to V's install path).
+		// Link the per-target GC built from V's own gc.c, and drop the dylib
+		// dependency once nothing uses it.
+		args << ['-ldflags', compiler_argument(d.runtime_archive()!), '-ldflags', '-Wl,-dead_strip_dylibs']
+	}
 	if d.cfg.target.os == 'windows' {
 		resource := d.cache_path('artifacts', 'ghostty-resource.o')
 		os.mkdir_all(os.dir(resource))!
