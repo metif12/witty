@@ -48,7 +48,7 @@ pub fn (d Driver) build_macos_app(native_only bool) !string {
 
 fn (d Driver) build_macos_app_with_framework(native_only bool, framework_ready bool) !string {
 	if d.cfg.target.os != 'macos' { return error('macOS app requires a macOS target') }
-	if !framework_ready { d.build_xcframework(native_only)! }
+	if !framework_ready { d.build_xcframework_slices(native_only, false)! }
 	d.install_resources()!
 	d.install_locales()!
 	// Xcodebuild always depends on the source placeholder, even when docs

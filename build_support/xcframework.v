@@ -15,6 +15,13 @@ fn (d Driver) xcframework_slice(target Target, name string) !string {
 }
 
 pub fn (d Driver) build_xcframework(native_only bool) !string {
+	return d.build_xcframework_slices(native_only, true)
+}
+
+// build_xcframework_slices optionally omits the iOS slices. The macOS app links
+// only the macOS slice, so building it alone does not need them; V 0.5.2 also
+// cannot compile iOS slices (its C output redeclares posix_spawn).
+fn (d Driver) build_xcframework_slices(native_only bool, include_ios bool) !string {
 	if !d.cfg.target.darwin() { return error('XCFramework requires a Darwin target') }
 	mut libraries := []string{}
 	macos_target := Target{arch: host_target().arch, os: 'macos', minimum: '13.0'}
@@ -27,10 +34,12 @@ pub fn (d Driver) build_xcframework(native_only bool) !string {
 		os.mkdir_all(os.dir(universal))!
 		checked_process(d.cfg.root, ['lipo', '-create', arm, x86, '-output', universal])!
 		libraries << universal
-		libraries << d.xcframework_slice(Target{arch: 'aarch64', os: 'ios', minimum: '17.0'}, 'ios-arm64')!
-		// Preserve the source's Apple A17 simulator override.
-		libraries << d.xcframework_slice(Target{arch: 'aarch64', os: 'ios', minimum: '17.0',
-			abi: 'simulator', cpu: 'apple_a17'}, 'ios-simulator-arm64')!
+		if include_ios {
+			libraries << d.xcframework_slice(Target{arch: 'aarch64', os: 'ios', minimum: '17.0'}, 'ios-arm64')!
+			// Preserve the source's Apple A17 simulator override.
+			libraries << d.xcframework_slice(Target{arch: 'aarch64', os: 'ios', minimum: '17.0',
+				abi: 'simulator', cpu: 'apple_a17'}, 'ios-simulator-arm64')!
+		}
 	}
 	output := os.join_path(d.cfg.root, 'macos', 'GhosttyKit.xcframework')
 	if os.exists(output) { os.rmdir_all(output)! }
