@@ -58,7 +58,8 @@ fn (d Driver) stage_sources(name string, filenames []string) !string {
 		 }
 		text := os.read_file(os.join_path(d.cfg.root, filename))!
 		mut body := []string{}
-		for line in text.split('\n') {
+		// Windows checkouts may use CRLF; `module main\r` must still be dropped.
+		for line in text.replace('\r\n', '\n').split('\n') {
 			if line == 'module main' { continue
 			 }
 			if line.starts_with('import ') {
