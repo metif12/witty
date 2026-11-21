@@ -2,6 +2,21 @@ module build_support
 
 import os
 
+// Paths are used as given; only bare names are searched in PATH. On Windows,
+// os.find_abs_path_of_executable appends .exe to absolute paths without
+// checking them (VEXE=v.exe became v.exe.exe), and os.Process does not search
+// PATH itself.
+pub fn resolve_executable(name string) !string {
+	if os.is_abs_path(name) || name.contains('/') || name.contains(os.path_separator) {
+		if os.is_file(name) { return os.real_path(name) }
+		$if windows {
+			if os.is_file(name + '.exe') { return os.real_path(name + '.exe') }
+		}
+		return error('executable not found: ${name}')
+	}
+	return os.find_abs_path_of_executable(name) or { error('executable not found in PATH: ${name}') }
+}
+
 // Structured argv is required: build options and paths can contain spaces,
 // shell metacharacters, and newlines. No command passes through a shell.
 pub fn run_process(root string, args []string) !os.Result {
@@ -10,10 +25,7 @@ pub fn run_process(root string, args []string) !os.Result {
 
 pub fn run_process_env(root string, args []string, environment map[string]string, clear bool) !os.Result {
 	if args.len == 0 { return error('empty command') }
-	exe := os.find_abs_path_of_executable(args[0])!
-	// Absolute paths come back unchecked; name the missing file instead of
-	// letting process creation fail without context.
-	if !os.exists(exe) { return error('executable not found: ${exe}') }
+	exe := resolve_executable(args[0])!
 	mut process := os.new_process(exe)
 	process.set_args(args[1..])
 	process.set_work_folder(root)
@@ -62,8 +74,7 @@ pub fn checked_process(root string, args []string) !string {
 // and generator subprocesses use run_process instead.
 pub fn run_foreground(root string, args []string, environment map[string]string) ! {
 	if args.len == 0 { return error('empty command') }
-	executable := os.find_abs_path_of_executable(args[0])!
-	if !os.exists(executable) { return error('executable not found: ${executable}') }
+	executable := resolve_executable(args[0])!
 	mut process := os.new_process(executable)
 	process.set_args(args[1..])
 	process.set_work_folder(root)

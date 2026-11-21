@@ -114,7 +114,7 @@ pub fn init_config(root string, args []string) !Config {
 	mut system_libraries := map[string]bool{}
 	mut prefix := os.join_path(root, 'v-out')
 	mut compiler := os.getenv('VEXE')
-	if compiler == '' { compiler = os.find_abs_path_of_executable('v')! }
+	if compiler == '' { compiler = resolve_executable('v')! }
 	mut system_package := false
 	mut i := 0
 	for i < args.len {

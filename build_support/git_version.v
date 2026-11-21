@@ -14,7 +14,7 @@ pub:
 
 fn git_run(root string, args []string) !os.Result {
 	// Spawn the resolved path: Windows process creation does not search PATH.
-	git := os.find_abs_path_of_executable('git') or { return error('GitNotFound') }
+	git := resolve_executable('git') or { return error('GitNotFound') }
 	mut command := [git, '-C', root]
 	command << args
 	mut process := os.new_process(command[0])
