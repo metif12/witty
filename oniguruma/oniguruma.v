@@ -11,6 +11,9 @@ $if managed_native ? {
 	#flag linux -I/usr/include
 	#flag -lonig
 }
+$if no_oniguruma ? {
+	#flag -DWITTY_NO_ONIGURUMA
+}
 
 #include "bridge.h"
 

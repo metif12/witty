@@ -4,8 +4,19 @@
 #include <stddef.h>
 #include <oniguruma.h>
 
+// lib-vt builds (-d no_oniguruma) still compile this module, but never call
+// it. Stub every entry point so nothing references the oniguruma library,
+// which those builds do not link; only its header types and constants remain.
+#ifdef WITTY_NO_ONIGURUMA
+#define WITTY_ONIG_GET_ENCODING(name, value) \
+    static inline void *witty_onig_encoding_##name(void) { return NULL; }
+#define onig_end() (0)
+#define onig_free(regex) ((void)(regex))
+#define onig_region_free(region, free_self) ((void)(region), (void)(free_self))
+#else
 #define WITTY_ONIG_GET_ENCODING(name, value) \
     static inline void *witty_onig_encoding_##name(void) { return (void *)(value); }
+#endif
 
 WITTY_ONIG_GET_ENCODING(ascii, ONIG_ENCODING_ASCII)
 WITTY_ONIG_GET_ENCODING(iso_8859_1, ONIG_ENCODING_ISO_8859_1)
@@ -41,8 +52,13 @@ WITTY_ONIG_GET_ENCODING(gb18030, ONIG_ENCODING_GB18030)
 
 #undef WITTY_ONIG_GET_ENCODING
 
+#ifdef WITTY_NO_ONIGURUMA
+#define WITTY_ONIG_GET_SYNTAX(name, value) \
+    static inline void *witty_onig_syntax_##name(void) { return NULL; }
+#else
 #define WITTY_ONIG_GET_SYNTAX(name, value) \
     static inline void *witty_onig_syntax_##name(void) { return (void *)(value); }
+#endif
 
 WITTY_ONIG_GET_SYNTAX(default_, ONIG_SYNTAX_ONIGURUMA)
 WITTY_ONIG_GET_SYNTAX(asis, ONIG_SYNTAX_ASIS)
@@ -59,6 +75,41 @@ WITTY_ONIG_GET_SYNTAX(oniguruma, ONIG_SYNTAX_ONIGURUMA)
 
 #undef WITTY_ONIG_GET_SYNTAX
 
+#ifdef WITTY_NO_ONIGURUMA
+static inline int witty_onig_initialize(void *const *encodings, size_t count) {
+    (void)encodings;
+    (void)count;
+    return ONIGERR_LIBRARY_IS_NOT_INITIALIZED;
+}
+
+static inline int witty_onig_new(
+    void **out,
+    const unsigned char *pattern,
+    size_t pattern_len,
+    unsigned int options,
+    void *encoding,
+    void *syntax,
+    void **error_par,
+    void **error_par_end
+) {
+    (void)pattern;
+    (void)pattern_len;
+    (void)options;
+    (void)encoding;
+    (void)syntax;
+    (void)error_par;
+    (void)error_par_end;
+    *out = NULL;
+    return ONIGERR_LIBRARY_IS_NOT_INITIALIZED;
+}
+
+static inline int witty_onig_error_string(unsigned char *error_message, int code) {
+    static const char message[] = "oniguruma is not available in this build";
+    (void)code;
+    for (size_t i = 0; i < sizeof(message); i++) error_message[i] = (unsigned char)message[i];
+    return (int)(sizeof(message) - 1);
+}
+#else
 static inline int witty_onig_initialize(void *const *encodings, size_t count) {
     return onig_initialize((OnigEncoding *)encodings, (int)count);
 }
@@ -96,6 +147,7 @@ static inline int witty_onig_new(
 static inline int witty_onig_error_string(unsigned char *error_message, int code) {
     return onig_error_code_to_str(error_message, code);
 }
+#endif
 
 // The return values match ErrorKind in errors.v. This is the direct C-macro
 // equivalent of pkg/oniguruma/errors.zig:error_code_map.
@@ -194,6 +246,16 @@ static inline int witty_onig_search(
     void *region,
     unsigned int options
 ) {
+#ifdef WITTY_NO_ONIGURUMA
+    (void)regex;
+    (void)string;
+    (void)string_len;
+    (void)start;
+    (void)end;
+    (void)region;
+    (void)options;
+    return ONIGERR_LIBRARY_IS_NOT_INITIALIZED;
+#endif
     return onig_search(
         (OnigRegex)regex,
         string,
