@@ -1,7 +1,6 @@
 module cli
 
 import internal_os
-import net
 import os
 import math
 import os.filelock
@@ -232,7 +231,80 @@ fn valid_ssh_host(host string) bool {
 	if internal_os.is_valid(host) {
 		return true
 	}
-	_ := net.canonical_ipv6(host) or { return false }
+	return valid_ipv6_literal(host)
+}
+
+// valid_ipv6_literal accepts exactly the RFC 4291 text forms V's
+// net.canonical_ipv6 parses (full, `::`-compressed, dotted-quad tail). It is
+// local because V 0.5.2's net module does not compile for iOS targets.
+fn valid_ipv6_literal(s string) bool {
+	if s.len == 0 || s.count('::') > 1 {
+		return false
+	}
+	compressed := s.contains('::')
+	head := if compressed { s.all_before('::') } else { s }
+	tail := if compressed { s.all_after('::') } else { '' }
+	mut head_groups := if head.len == 0 { []string{} } else { head.split(':') }
+	mut tail_groups := if tail.len == 0 { []string{} } else { tail.split(':') }
+	mut words := 0
+	// A dotted quad may only be the final group and counts as two words.
+	if compressed && tail_groups.len > 0 && tail_groups.last().contains('.') {
+		if !valid_dotted_quad(tail_groups.last()) {
+			return false
+		}
+		tail_groups = tail_groups[..tail_groups.len - 1].clone()
+		words += 2
+	} else if !compressed && head_groups.len > 0 && head_groups.last().contains('.') {
+		if !valid_dotted_quad(head_groups.last()) {
+			return false
+		}
+		head_groups = head_groups[..head_groups.len - 1].clone()
+		words += 2
+	}
+	for group in head_groups {
+		if !valid_hex_group(group) {
+			return false
+		}
+	}
+	for group in tail_groups {
+		if !valid_hex_group(group) {
+			return false
+		}
+	}
+	words += head_groups.len + tail_groups.len
+	return if compressed { words < 8 } else { words == 8 }
+}
+
+fn valid_hex_group(group string) bool {
+	if group.len == 0 || group.len > 4 {
+		return false
+	}
+	for c in group {
+		if !c.is_hex_digit() {
+			return false
+		}
+	}
+	return true
+}
+
+fn valid_dotted_quad(quad string) bool {
+	parts := quad.split('.')
+	if parts.len != 4 {
+		return false
+	}
+	for part in parts {
+		if part.len == 0 || part.len > 3 {
+			return false
+		}
+		for c in part {
+			if !c.is_digit() {
+				return false
+			}
+		}
+		if part.int() > 255 {
+			return false
+		}
+	}
 	return true
 }
 
