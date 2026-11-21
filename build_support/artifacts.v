@@ -184,7 +184,6 @@ pub fn (d Driver) build_library(deps NativeDeps, static_ bool) !string {
 }
 
 pub fn (d Driver) build_executable(deps NativeDeps) !string {
-	d.prepare_gtk_resources()!
 	if d.cfg.target.os == 'linux' && d.cfg.target.arch == host_target().arch
 		&& os.exists('/etc/NIXOS') && os.getenv_opt('IN_NIX_SHELL') == none {
 		return error('Detected building on and for NixOS outside of the Nix shell environment. Run nix develop -c v run tools/build.')

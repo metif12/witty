@@ -174,7 +174,9 @@ pub fn (d Driver) build_native_dependencies(vt_only bool) !NativeDeps {
 		deps.archives << native_libintl.build(d.cfg.root, cc.compiler, cc.arguments)!
 	}
 	// The helpgen host tool is built without -d managed_native, so it links the
-	// glslang, spirv-cross and Sentry archives above; generate after they exist.
+	// glslang, spirv-cross and Sentry archives above and, for GTK, the generated
+	// resource bundle; generate after they exist.
+	d.prepare_gtk_resources()!
 	d.generate_help_strings()!
 	deps.defines << 'generated_help_strings'
 	return deps
