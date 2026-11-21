@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  V_C_ERROR_BUG_REPORT_DISABLED: '1'
+  VFLAGS: -cc clang
+
+jobs:
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: brew install freetype harfbuzz fontconfig oniguruma pkg-config gettext
+      - name: Install V
+        run: |
+          git clone --depth 1 https://github.com/vlang/v "$RUNNER_TEMP/v"
+          make -C "$RUNNER_TEMP/v"
+          echo "VEXE=$RUNNER_TEMP/v/v" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/v" >> "$GITHUB_PATH"
+      - name: Check
+        run: v -check .
+      - name: Build
+        run: v -path "$PWD|@vlib|@vmodules" run tools/build install --prefix "$RUNNER_TEMP/witty"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: witty-macos
+          path: ${{ runner.temp }}/witty
+          if-no-files-found: warn
+
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang pkg-config gettext blueprint-compiler \
+            libgtk-4-dev libadwaita-1-dev libgtk4-layer-shell-dev \
+            libfreetype-dev libharfbuzz-dev libfontconfig-dev libonig-dev \
+            libx11-dev libwayland-dev wayland-protocols libgl-dev
+      - name: Install V
+        run: |
+          git clone --depth 1 https://github.com/vlang/v "$RUNNER_TEMP/v"
+          make -C "$RUNNER_TEMP/v"
+          echo "VEXE=$RUNNER_TEMP/v/v" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/v" >> "$GITHUB_PATH"
+      - name: Check
+        run: v -check .
+      - name: Build
+        run: v -path "$PWD|@vlib|@vmodules" run tools/build install --prefix "$RUNNER_TEMP/witty"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: witty-linux
+          path: ${{ runner.temp }}/witty
+          if-no-files-found: warn
+
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install V
+        shell: cmd
+        run: |
+          git clone --depth 1 https://github.com/vlang/v "%RUNNER_TEMP%\v"
+          cd /d "%RUNNER_TEMP%\v" && make.bat -clang
+          echo VEXE=%RUNNER_TEMP%\v\v.exe>> "%GITHUB_ENV%"
+          echo %RUNNER_TEMP%\v>> "%GITHUB_PATH%"
+      - name: Build libghostty-vt
+        run: v -path "$PWD|@vlib|@vmodules" run tools/build lib-vt --prefix "$RUNNER_TEMP/witty"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: witty-vt-windows
+          path: ${{ runner.temp }}/witty
+          if-no-files-found: warn
