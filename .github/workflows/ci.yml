@@ -10,6 +10,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  # Witty is developed against V 0.5.2; newer V master rejects parts of the tree.
+  V_VERSION: '0.5.2'
   V_C_ERROR_BUG_REPORT_DISABLED: '1'
   VFLAGS: -cc clang
 
@@ -23,7 +25,7 @@ jobs:
         run: brew install freetype harfbuzz fontconfig oniguruma pkg-config gettext
       - name: Install V
         run: |
-          git clone --depth 1 https://github.com/vlang/v "$RUNNER_TEMP/v"
+          git clone --depth 1 --branch ${{ env.V_VERSION }} https://github.com/vlang/v "$RUNNER_TEMP/v"
           make -C "$RUNNER_TEMP/v"
           echo "VEXE=$RUNNER_TEMP/v/v" >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/v" >> "$GITHUB_PATH"
@@ -60,7 +62,7 @@ jobs:
           sudo ninja -C build install
       - name: Install V
         run: |
-          git clone --depth 1 https://github.com/vlang/v "$RUNNER_TEMP/v"
+          git clone --depth 1 --branch ${{ env.V_VERSION }} https://github.com/vlang/v "$RUNNER_TEMP/v"
           make -C "$RUNNER_TEMP/v"
           echo "VEXE=$RUNNER_TEMP/v/v" >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/v" >> "$GITHUB_PATH"
@@ -90,8 +92,9 @@ jobs:
       - name: Install V
         shell: cmd
         run: |
-          git clone --depth 1 https://github.com/vlang/v "%RUNNER_TEMP%\v"
-          cd /d "%RUNNER_TEMP%\v" && makev.bat -gcc
+          git clone --depth 1 --branch ${{ env.V_VERSION }} https://github.com/vlang/v "%RUNNER_TEMP%\v"
+          cd /d "%RUNNER_TEMP%\v"
+          call makev.bat -gcc
           echo VEXE=%RUNNER_TEMP%\v\v.exe>> "%GITHUB_ENV%"
           echo %RUNNER_TEMP%\v>> "%GITHUB_PATH%"
       - name: Build libghostty-vt
