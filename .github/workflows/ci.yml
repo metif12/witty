@@ -97,6 +97,9 @@ jobs:
   windows:
     runs-on: windows-2022
     timeout-minutes: 120
+    # Non-blocking until the VT library's sources are ported to Windows:
+    # internal_os still uses POSIX-only APIs (sys/resource.h, fork, pwd).
+    continue-on-error: true
     env:
       # tools/build itself is compiled with MinGW gcc: clang's default MSVC
       # target hits MSVC-only intrinsics (_udiv128) in V's runtime.
