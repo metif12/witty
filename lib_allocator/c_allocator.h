@@ -3,11 +3,6 @@
 #define WITTY_LIB_C_ALLOCATOR_H
 #include <stdlib.h>
 #include <stdint.h>
-#if defined(_MSC_VER)
-#define witty_c_type_alignment(value) __alignof(*(value))
-#else
-#define witty_c_type_alignment(value) __alignof__(__typeof__(*(value)))
-#endif
 #if defined(__APPLE__)
 #include <malloc/malloc.h>
 #elif defined(__linux__) || defined(__FreeBSD__) || defined(_WIN32)

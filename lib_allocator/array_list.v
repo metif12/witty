@@ -13,11 +13,14 @@ pub fn unregister_value_storage(ptr voidptr, bytes uint) {
 	$if gcboehm ? { C.GC_remove_roots(ptr, unsafe { &u8(ptr) + bytes }) }
 }
 
-fn C.witty_c_type_alignment(voidptr) uint
+// AlignProbe places a T after one byte, so the offset of `value` is T's alignment.
+struct AlignProbe[T] {
+	pad   u8
+	value T
+}
 
 pub fn alignment_log[T]() u8 {
-	value := T{}
-	bytes := C.witty_c_type_alignment(&value)
+	bytes := uint(__offsetof(AlignProbe[T], value))
 	mut result := u8(0)
 	for (uint(1) << result) < bytes {
 		result++
