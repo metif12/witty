@@ -47,9 +47,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             clang pkg-config gettext blueprint-compiler \
-            libgtk-4-dev libadwaita-1-dev libgtk4-layer-shell-dev \
+            libgtk-4-dev libadwaita-1-dev meson ninja-build \
             libfreetype-dev libharfbuzz-dev libfontconfig-dev libonig-dev \
             libx11-dev libwayland-dev wayland-protocols libgl-dev
+      - name: Build gtk4-layer-shell
+        # Ubuntu 24.04 does not package it; 1.1.0 is the version Ghostty pins.
+        run: |
+          git clone --depth 1 --branch v1.1.0 https://github.com/wmww/gtk4-layer-shell "$RUNNER_TEMP/gtk4-layer-shell"
+          cd "$RUNNER_TEMP/gtk4-layer-shell"
+          meson setup build --prefix=/usr -Dintrospection=false -Dvapi=false -Ddocs=false -Dexamples=false -Dtests=false
+          ninja -C build
+          sudo ninja -C build install
       - name: Install V
         run: |
           git clone --depth 1 https://github.com/vlang/v "$RUNNER_TEMP/v"
@@ -78,7 +86,7 @@ jobs:
         shell: cmd
         run: |
           git clone --depth 1 https://github.com/vlang/v "%RUNNER_TEMP%\v"
-          cd /d "%RUNNER_TEMP%\v" && make.bat -clang
+          cd /d "%RUNNER_TEMP%\v" && makev.bat -clang
           echo VEXE=%RUNNER_TEMP%\v\v.exe>> "%GITHUB_ENV%"
           echo %RUNNER_TEMP%\v>> "%GITHUB_PATH%"
       - name: Build libghostty-vt
