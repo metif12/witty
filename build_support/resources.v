@@ -25,8 +25,14 @@ pub fn (d Driver) install_file(source string, relative string) ! {
 	os.cp(source, path)!
 }
 
+// Compilers append .exe to Windows executables; host tools must be invoked
+// by that name because absolute paths are not resolved further.
+pub fn host_executable(name string) string {
+	return $if windows { name + '.exe' } $else { name }
+}
+
 pub fn (d Driver) host_tool(name string, folder string) !string {
-	output := d.cache_path('host', name)
+	output := d.cache_path('host', host_executable(name))
 	os.mkdir_all(os.dir(output))!
 	// The source host generators do not initialize crash, SIMD, or gettext.
 	mut args := [d.cfg.compiler, '-path', d.compiler_module_path()!, '-d', 'no_i18n']

@@ -4,7 +4,7 @@ import os
 
 pub fn (d Driver) install_help_generator() ! {
 	d.generate_help_strings()!
-	d.install_file(d.cache_path('host', 'helpgen'), 'bin/helpgen')!
+	d.install_file(d.cache_path('host', host_executable('helpgen')), 'bin/' + host_executable('helpgen'))!
 }
 
 pub fn (d Driver) generate_help_strings() !string {
@@ -40,5 +40,5 @@ pub fn (d Driver) generate_unicode_tables() ![]string {
 
 pub fn (d Driver) install_unicode_generators() ! {
 	d.generate_unicode_tables()!
-	for name in ['props-unigen', 'symbols-unigen'] { d.install_file(d.cache_path('host', name), 'bin/' + name)! }
+	for name in ['props-unigen', 'symbols-unigen'] { d.install_file(d.cache_path('host', host_executable(name)), 'bin/' + host_executable(name))! }
 }

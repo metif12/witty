@@ -14,7 +14,7 @@ pub fn (d Driver) generate_frame_data() !string {
 	}
 	mut command := [os.getenv_opt('CC') or { 'clang' }]
 	command << host.cfg.sdk_arguments()!
-	exe := d.cache_path('host', 'framegen')
+	exe := d.cache_path('host', host_executable('framegen'))
 	os.mkdir_all(os.dir(exe))!
 	command << [os.join_path(d.cfg.root, 'build_assets', 'framegen', 'main.c')]
 	if d.cfg.system_libraries['zlib'] {
