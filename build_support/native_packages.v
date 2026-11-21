@@ -109,9 +109,16 @@ pub fn (d Driver) build_zlib(options NativeCompileOptions) !string {
 		['-I' + root, '-DHAVE_SYS_TYPES_H', '-DHAVE_STDINT_H', '-DHAVE_STDDEF_H', '-DZ_HAVE_UNISTD_H'])
 }
 
-pub fn (d Driver) build_png(options NativeCompileOptions) !string {
+// libpng's png.h requires the configured pnglibconf.h. FreeType's PNG shim
+// includes png.h too, so stage it for whichever is compiled first.
+fn (d Driver) libpng_source() !string {
 	root := d.native_package('libpng')!
 	os.cp(os.join_path(d.cfg.root, 'build_assets', 'native', 'pnglibconf.h'), os.join_path(root, 'pnglibconf.h'))!
+	return root
+}
+
+pub fn (d Driver) build_png(options NativeCompileOptions) !string {
+	root := d.libpng_source()!
 	mut flags := ['-I' + root, '-DPNG_ARM_NEON_OPT=0', '-DPNG_POWERPC_VSX_OPT=0',
 		'-DPNG_INTEL_SSE_OPT=0', '-DPNG_MIPS_MSA_OPT=0']
 	if !d.cfg.system_libraries['zlib'] { flags << '-I' + d.native_package('zlib')! }
@@ -137,7 +144,7 @@ pub fn (d Driver) build_freetype(options NativeCompileOptions) !string {
 		'-DHAVE_FCNTL_H', '-fno-sanitize=undefined']
 	if d.cfg.target.os == 'freebsd' || d.cfg.target.abi == 'musl' { flags << '-fPIC' }
 	if !d.cfg.system_libraries['zlib'] { flags << '-I' + d.native_package('zlib')! }
-	if !d.cfg.system_libraries['libpng'] { flags << '-I' + d.native_package('libpng')! }
+	if !d.cfg.system_libraries['libpng'] { flags << '-I' + d.libpng_source()! }
 	return d.compile_native('freetype', root, sources, options, flags)
 }
 
