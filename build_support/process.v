@@ -11,6 +11,9 @@ pub fn run_process(root string, args []string) !os.Result {
 pub fn run_process_env(root string, args []string, environment map[string]string, clear bool) !os.Result {
 	if args.len == 0 { return error('empty command') }
 	exe := os.find_abs_path_of_executable(args[0])!
+	// Absolute paths come back unchecked; name the missing file instead of
+	// letting process creation fail without context.
+	if !os.exists(exe) { return error('executable not found: ${exe}') }
 	mut process := os.new_process(exe)
 	process.set_args(args[1..])
 	process.set_work_folder(root)
@@ -60,6 +63,7 @@ pub fn checked_process(root string, args []string) !string {
 pub fn run_foreground(root string, args []string, environment map[string]string) ! {
 	if args.len == 0 { return error('empty command') }
 	executable := os.find_abs_path_of_executable(args[0])!
+	if !os.exists(executable) { return error('executable not found: ${executable}') }
 	mut process := os.new_process(executable)
 	process.set_args(args[1..])
 	process.set_work_folder(root)
