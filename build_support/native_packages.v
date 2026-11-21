@@ -1,7 +1,7 @@
 module build_support
 
 import crypto.sha256
-import json2
+import x.json2
 import os
 
 pub struct NativePackage {
