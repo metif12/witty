@@ -32,6 +32,11 @@ $if !js && !wasm32 && !no_simd ? {
 		#flag @VMODROOT/simd/native/timer.o
 		#flag @VMODROOT/simd/native/highway_bridge.o
 	}
+	// GCC notes that passing 64-byte AVX-512 vectors changed ABI in GCC 4.6.
+	// Highway's per-target functions are internal, so the note is noise; it
+	// also makes cc1plus report V's clang-only -Wno-incompatible-function-pointer-types.
+	#flag linux -Wno-psabi
+	#flag freebsd -Wno-psabi
 	#flag darwin -lc++
 	#flag linux -lstdc++
 	#flag freebsd -lstdc++

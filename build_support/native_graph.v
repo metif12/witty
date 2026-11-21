@@ -229,7 +229,7 @@ pub fn (d Driver) build_simd(options NativeCompileOptions) ![]string {
 		'-I' + os.join_path(root, 'simdutf'), '-I' + os.join_path(root, 'utfcpp', 'source')]
 	mut flags := include.clone()
 	flags << '-std=c++17'
-	if d.cfg.target.arch == 'x86_64' { flags << '-DHWY_DISABLED_TARGETS=472' }
+	if d.cfg.target.arch == 'x86_64' { flags << ['-DHWY_DISABLED_TARGETS=472', '-Wno-psabi'] }
 	mut result := [
 		d.compile_native('ghostty-simd', root, ['simd/base64.cpp', 'simd/codepoint_width.cpp',
 			'simd/index_of.cpp', 'simd/vt.cpp'], options, flags)!,
