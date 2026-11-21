@@ -37,7 +37,10 @@ pub fn (d Driver) native_package(name string) !string {
 	path := d.cache_path('deps', name)
 	if !os.exists(os.join_path(path, '.source-checksum')) {
 		os.mkdir_all(path)!
-		checked_process(d.cfg.root, ['tar', 'xf', archive, '--strip-components=1', '-C', path])!
+		// tar runs from the repo root; relative paths keep GNU tar (Git for
+		// Windows) from reading a `D:` drive prefix as a remote host.
+		checked_process(d.cfg.root, ['tar', 'xf', repo_relative(d.cfg.root, archive),
+			'--strip-components=1', '-C', repo_relative(d.cfg.root, path)])!
 		os.write_file(os.join_path(path, '.source-checksum'), spec.sha256)!
 	}
 	return path
@@ -306,4 +309,9 @@ pub fn (d Driver) build_fontconfig(options NativeCompileOptions) !string {
 		]
 	}
 	return d.compile_native('fontconfig', root, native_sources('fontconfig')!, options, flags)
+}
+
+fn repo_relative(root string, path string) string {
+	prefix := root.trim_right('/\\') + os.path_separator
+	return if path.starts_with(prefix) { path[prefix.len..] } else { path }
 }
