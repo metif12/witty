@@ -19,13 +19,13 @@ mut:
 	sun_path   [systemd_unix_path_len]char
 }
 
-fn C.socket(domain i32, typ i32, protocol i32) i32
+fn C.socket(domain int, typ int, protocol int) int
 
-fn C.connect(sockfd i32, addr voidptr, addrlen u32) i32
+fn C.connect(sockfd int, addr voidptr, addrlen u32) int
 
-fn C.write(fd i32, buf voidptr, count usize) int
+fn C.write(fd int, buf voidptr, count usize) isize
 
-fn C.close(fd i32) i32
+fn C.close(fd int) int
 
 fn launched_by_systemd_linux() bool {
 	if os.getenv_opt('INVOCATION_ID') == none || os.getenv_opt('JOURNAL_STREAM') == none {
@@ -93,7 +93,7 @@ fn systemd_notify_send(message string) {
 		log.warn('unable to write to notify socket: ${os.last_error()}')
 		return
 	}
-	if written < message.len {
+	if written < isize(message.len) {
 		log.warn('short write to notify socket: ${written} < ${message.len}')
 	}
 }

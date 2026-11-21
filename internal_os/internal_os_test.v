@@ -77,7 +77,7 @@ fn test_open_process_inherits_stdin_and_redirects_output() {
 	$if !windows {
 		input_pipe := pipe()!
 		input := 'inherited-stdin-policy'
-		assert C.write(i32(input_pipe[1]), input.str, usize(input.len)) == input.len
+		assert C.write(input_pipe[1], input.str, usize(input.len)) == isize(input.len)
 		os.fd_close(input_pipe[1])
 		saved_stdin := C.dup(0)
 		assert saved_stdin >= 0

@@ -25,7 +25,7 @@ fn C.witty_read_retry(fd int, buf voidptr, count usize) int
 
 fn C.witty_read_error_kind() int
 
-fn C.write(fd int, buf voidptr, count usize) int
+fn C.write(fd int, buf voidptr, count usize) isize
 
 fn C.poll(fds voidptr, nfds u32, timeout int) int
 

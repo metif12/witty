@@ -38,7 +38,7 @@ fn C._exit(status int)
 
 fn C.read(fd int, buf voidptr, count usize) isize
 
-fn C.write(fd i32, buf voidptr, count usize) int
+fn C.write(fd int, buf voidptr, count usize) isize
 
 fn C.waitpid(pid int, status &int, options int) int
 
@@ -202,7 +202,7 @@ fn spawn_open_process(mut process os.Process) ! {
 fn open_child_report_error(fd int) {
 	errno_code := i32(C.errno)
 	for {
-		result := C.write(i32(fd), &errno_code, sizeof(i32))
+		result := C.write(fd, &errno_code, sizeof(i32))
 		if result >= 0 || C.errno != C.EINTR {
 			break
 		}
