@@ -52,7 +52,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            clang pkg-config gettext blueprint-compiler \
+            clang pkg-config gettext python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 \
             libgtk-4-dev libadwaita-1-dev meson ninja-build \
             libfreetype-dev libharfbuzz-dev libfontconfig-dev libonig-dev \
             libx11-dev libwayland-dev wayland-protocols libgl-dev
@@ -64,6 +64,14 @@ jobs:
           meson setup build --prefix=/usr -Dintrospection=false -Dvapi=false -Ddocs=false -Dexamples=false -Dtests=false
           ninja -C build
           sudo ninja -C build install
+      - name: Install blueprint-compiler
+        # Ghostty's UI files need 0.16.0+; Ubuntu 24.04's package is older.
+        run: |
+          git clone --depth 1 --branch v0.16.0 https://gitlab.gnome.org/GNOME/blueprint-compiler.git "$RUNNER_TEMP/blueprint-compiler"
+          cd "$RUNNER_TEMP/blueprint-compiler"
+          meson setup build --prefix=/usr
+          sudo ninja -C build install
+          blueprint-compiler --version
       - name: Build host cimgui archive
         # Host generator tools link cimgui/lib/libdcimgui_linux.a, which is not committed.
         run: CXX=clang++ sh cimgui/build.sh
