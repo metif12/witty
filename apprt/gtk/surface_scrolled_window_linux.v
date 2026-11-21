@@ -308,11 +308,12 @@ fn surface_scrolled_window_set_property(obj voidptr, property_id u32, value void
 				self.set_config_reference(none)
 			} else {
 				config_private := config_priv(config_obj)
-				self.set_config_reference(if isnil(config_private.wrapper) {
-					none
+				// V 0.5.2 miscompiles `if` expressions yielding ?&T arguments.
+				if isnil(config_private.wrapper) {
+					self.set_config_reference(none)
 				} else {
-					unsafe { &Config(config_private.wrapper) }
-				})
+					self.set_config_reference(unsafe { &Config(config_private.wrapper) })
+				}
 			}
 		}
 		surface_scrolled_window_prop_surface {
@@ -321,11 +322,12 @@ fn surface_scrolled_window_set_property(obj voidptr, property_id u32, value void
 				self.set_surface(none)
 			} else {
 				surface_private := terminal_surface_priv(surface_obj)
-				self.set_surface(if isnil(surface_private.wrapper) {
-					none
+				// V 0.5.2 miscompiles `if` expressions yielding ?&T arguments.
+				if isnil(surface_private.wrapper) {
+					self.set_surface(none)
 				} else {
-					unsafe { &SurfaceWidget(surface_private.wrapper) }
-				})
+					self.set_surface(unsafe { &SurfaceWidget(surface_private.wrapper) })
+				}
 			}
 		}
 		else {}

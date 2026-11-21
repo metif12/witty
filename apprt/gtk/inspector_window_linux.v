@@ -57,7 +57,10 @@ fn inspector_native_get_property(obj voidptr, id u32, value voidptr, _ voidptr) 
 	if id != 1 { return }
 	imgui := imgui_native_wrapper(obj) or { C.g_value_set_object(value, unsafe { nil }); return }
 	self := unsafe { &InspectorWidget(imgui.user_data) }
-	C.g_value_set_object(value, if isnil(self.surface) { unsafe { nil } } else { voidptr(self.surface.widget) })
+	// V 0.5.2 emits `if` expressions inside C call arguments as statements.
+	mut surface := unsafe { nil }
+	if !isnil(self.surface) { surface = voidptr(self.surface.widget) }
+	C.g_value_set_object(value, surface)
 }
 fn inspector_native_set_property(obj voidptr, id u32, value voidptr, _ voidptr) {
 	if id != 1 { return }

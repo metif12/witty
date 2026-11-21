@@ -617,11 +617,10 @@ fn command_palette_from_child(obj GObject) ?&CommandPalette {
 // of the commands rebuilt by prop_config.
 pub fn (mut self CommandPalette) set_config(config &Config) {
 	if !isnil(self.widget) {
-		C.g_object_set(GObject(self.widget), c'config', if isnil(config) {
-			voidptr(unsafe { nil })
-		} else {
-			voidptr(config.obj)
-		}, unsafe { nil })
+		// V 0.5.2 emits `if` expressions inside C call arguments as statements.
+		mut config_obj := unsafe { nil }
+		if !isnil(config) { config_obj = voidptr(config.obj) }
+		C.g_object_set(GObject(self.widget), c'config', config_obj, unsafe { nil })
 		return
 	}
 	self.set_config_reference(config)

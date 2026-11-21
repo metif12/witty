@@ -187,11 +187,12 @@ fn global_shortcuts_set_property(obj voidptr, property_id u32, value voidptr, ps
 				self.set_config_reference(none)
 			} else {
 				config_private := config_priv(config_obj)
-				self.set_config_reference(if isnil(config_private.wrapper) {
-					none
+				// V 0.5.2 miscompiles `if` expressions yielding ?&T arguments.
+				if isnil(config_private.wrapper) {
+					self.set_config_reference(none)
 				} else {
-					unsafe { &Config(config_private.wrapper) }
-				})
+					self.set_config_reference(unsafe { &Config(config_private.wrapper) })
+				}
 			}
 		}
 		global_shortcuts_prop_dbus_connection {
