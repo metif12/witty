@@ -212,7 +212,7 @@ fn tga_rle_simd(data []u8, bpp int, vector_length int, mut writer WriteStream) !
 			total = similar
 		}
 		index += similar * bpp
-		source.discard_all(usize((similar - 1) * bpp))!
+		source.discard_all(uint((similar - 1) * bpp))!
 	}
 	tga_rle_flush(compared, total, mut writer)!
 	if index < data.len { tga_rle_simple(data[index..], bpp, mut writer)! }

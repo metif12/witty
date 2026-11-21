@@ -7,14 +7,14 @@ fn test_writer_reservations_alias_and_advance_only_exact_slices() {
 	mut writer := WriteStream.init_memory(mut bytes)
 	writer.write_all('ab'.bytes())!
 	mut adapter := writer.writer()
-	mut greedy := adapter.writable_slice_greedy_preserve(~usize(0), 2)!
+	mut greedy := adapter.writable_slice_greedy_preserve(~uint(0), 2)!
 	assert greedy.len == 6 && writer.get_pos() == 2
 	greedy[0] = `c`
 	mut exact := adapter.writable_slice(2)!
 	exact[1] = `d`
 	assert writer.buffered() == 'abcd'.bytes() && greedy[..2] == 'cd'.bytes()
 	writer.ensure_unused_capacity(4)!
-	writer.rebase(~usize(0), 0)!
+	writer.rebase(~uint(0), 0)!
 	assert writer.get_pos() == 4 && bytes[..4] == 'abcd'.bytes()
 }
 

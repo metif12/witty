@@ -90,7 +90,7 @@ pub mut:
 
 	// The number of active completions. This DOES NOT include completions that
 	// are queued in the submissions queue.
-	active usize
+	active uint
 
 	// Our queue of submissions that failed to enqueue.
 	submissions IntrusiveQueue[IoUringCompletion]
@@ -244,7 +244,7 @@ fn (mut self IoUringLoop) tick_(mode RunMode) ! {
 		}
 
 		// Wait for completions...
-		count := self.ring.copy_cqes(&cqes[0], usize(cqes.len), wait) or {
+		count := self.ring.copy_cqes(&cqes[0], uint(cqes.len), wait) or {
 			// EINTR means our blocking syscall was interrupted by some
 			// process signal. We just retry when we can. See signal(7).
 			if error_kind(err) == .signal_interrupt {
@@ -259,7 +259,7 @@ fn (mut self IoUringLoop) tick_(mode RunMode) ! {
 			if cqe.user_data == 0 {
 				continue
 			}
-			mut c := unsafe { &IoUringCompletion(voidptr(usize(cqe.user_data))) }
+			mut c := unsafe { &IoUringCompletion(voidptr(uint(cqe.user_data))) }
 			self.active -= 1
 			c.flags.set_state(.dead)
 			match c.invoke(mut self, cqe.res) {
@@ -520,7 +520,7 @@ fn (mut self IoUringLoop) add_(completion &IoUringCompletion, try_submit bool) {
 			sqe.prep_timeout(&c.op.next, 0, ioring_timeout_abs)
 		}
 		IoUringTimerRemoveOp {
-			sqe.prep_timeout_remove(u64(usize(voidptr(c.op.timer))), 0)
+			sqe.prep_timeout_remove(u64(uint(voidptr(c.op.timer))), 0)
 		}
 		IoUringWriteOp {
 			// Both buffer kinds resolve to the payload the kernel reads or writes.
@@ -534,14 +534,14 @@ fn (mut self IoUringLoop) add_(completion &IoUringCompletion, try_submit bool) {
 			sqe.prep_write(c.op.fd, c.op.buffer.bytes(), c.op.offset)
 		}
 		IoUringCancelOp {
-			sqe.prep_cancel(u64(usize(voidptr(c.op.c))), 0)
+			sqe.prep_cancel(u64(uint(voidptr(c.op.c))), 0)
 		}
 	}
 
 	// Our sqe user data always points back to the completion.
 	// The prep functions above reset the user data so we have to do this
 	// here.
-	sqe.user_data = u64(usize(voidptr(c)))
+	sqe.user_data = u64(uint(voidptr(c)))
 }
 
 // Submits a completion cancelation request.
@@ -688,7 +688,7 @@ fn (mut self IoUringCompletion) invoke(mut loop IoUringLoop, res i32) CallbackAc
 		}
 		.send, .sendmsg {
 			if res >= 0 {
-				result = io_uring_result_n(tag, usize(res))
+				result = io_uring_result_n(tag, uint(res))
 			} else {
 				match errno {
 					C.ECANCELED { result = io_uring_result_kind(tag, .canceled) }
@@ -760,7 +760,7 @@ fn (mut self IoUringCompletion) invoke(mut loop IoUringLoop, res i32) CallbackAc
 		}
 		.write {
 			if res >= 0 {
-				result = io_uring_result_n(tag, usize(res))
+				result = io_uring_result_n(tag, uint(res))
 			} else {
 				match errno {
 					C.ECANCELED {
@@ -778,7 +778,7 @@ fn (mut self IoUringCompletion) invoke(mut loop IoUringLoop, res i32) CallbackAc
 		}
 		.pwrite {
 			if res >= 0 {
-				result = io_uring_result_n(tag, usize(res))
+				result = io_uring_result_n(tag, uint(res))
 			} else {
 				match errno {
 					C.ECANCELED { result = io_uring_result_kind(tag, .canceled) }
@@ -804,7 +804,7 @@ fn (mut self IoUringCompletion) invoke(mut loop IoUringLoop, res i32) CallbackAc
 // the source.
 fn (self &IoUringCompletion) read_result(op IoUringOperationType, res i32) IoUringResult {
 	if res > 0 {
-		return io_uring_result_n(op, usize(res))
+		return io_uring_result_n(op, uint(res))
 	}
 
 	if res == 0 {
@@ -949,37 +949,37 @@ pub mut:
 pub struct IoUringReadResult {
 pub mut:
 	err ?ErrorKind
-	n usize
+	n uint
 }
 
 pub struct IoUringPReadResult {
 pub mut:
 	err ?ErrorKind
-	n usize
+	n uint
 }
 
 pub struct IoUringRecvResult {
 pub mut:
 	err ?ErrorKind
-	n usize
+	n uint
 }
 
 pub struct IoUringSendResult {
 pub mut:
 	err ?ErrorKind
-	n usize
+	n uint
 }
 
 pub struct IoUringSendMsgResult {
 pub mut:
 	err ?ErrorKind
-	n usize
+	n uint
 }
 
 pub struct IoUringRecvMsgResult {
 pub mut:
 	err ?ErrorKind
-	n usize
+	n uint
 }
 
 pub struct IoUringShutdownResult {
@@ -990,13 +990,13 @@ pub mut:
 pub struct IoUringPWriteResult {
 pub mut:
 	err ?ErrorKind
-	n usize
+	n uint
 }
 
 pub struct IoUringWriteResult {
 pub mut:
 	err ?ErrorKind
-	n usize
+	n uint
 }
 
 pub struct IoUringTimerResult {
@@ -1192,7 +1192,7 @@ fn io_uring_result_err(tag IoUringOperationType, err IError) IoUringResult {
 }
 
 // io_uring_result_n builds the byte-count result variant for `tag`.
-fn io_uring_result_n(tag IoUringOperationType, n usize) IoUringResult {
+fn io_uring_result_n(tag IoUringOperationType, n uint) IoUringResult {
 	match tag {
 		.read {
 			return IoUringReadResult{
@@ -1241,7 +1241,7 @@ fn io_uring_result_n(tag IoUringOperationType, n usize) IoUringResult {
 }
 
 // io_uring_result_bytes returns the byte count of a read or write result.
-fn io_uring_result_bytes(r IoUringResult) usize {
+fn io_uring_result_bytes(r IoUringResult) uint {
 	return match r {
 		IoUringReadResult { r.n }
 		IoUringPReadResult { r.n }

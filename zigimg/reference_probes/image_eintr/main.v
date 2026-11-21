@@ -8,7 +8,7 @@ import zigimg
 #include "fixture_shims.h"
 
 fn C.witty_image_eintr_create(&char) int
-fn C.witty_image_eintr_begin(&char, int, &u8, usize) int
+fn C.witty_image_eintr_begin(&char, int, &u8, uint) int
 fn C.witty_image_eintr_finish() int
 fn C.witty_image_eintr_metric(int) int
 fn C.witty_image_eintr_raw(&char, int) int
@@ -18,7 +18,7 @@ fn C.witty_image_eintr_kind(&char) int
 fn C.witty_image_eintr_refs(int) int
 fn C.witty_image_eintr_close(int) int
 fn C.witty_image_eintr_valid(int) int
-fn C.witty_image_eintr_read(int, &u8, usize) isize
+fn C.witty_image_eintr_read(int, &u8, uint) int
 
 __global (
 	observed_path    string
@@ -150,7 +150,7 @@ fn snapshot(drain bool) string {
 	if drain {
 		mut bytes := []u8{len: 4096}
 		for {
-			n := C.witty_image_eintr_read(observed_fd, bytes.data, usize(bytes.len))
+			n := C.witty_image_eintr_read(observed_fd, bytes.data, uint(bytes.len))
 			if n <= 0 {
 				observed_drain = int(n)
 				break
@@ -215,7 +215,7 @@ fn record(line string) string {
 	}
 	out += '||0:0:0:0:0:0~'
 	for _ in 0 .. f[7].int() {
-		if C.witty_image_eintr_begin(observed_fifo.str, f[9].int(), seed.data, usize(seed.len)) != 0 {
+		if C.witty_image_eintr_begin(observed_fifo.str, f[9].int(), seed.data, uint(seed.len)) != 0 {
 			panic('Signal setup failed')
 		}
 		observed_pending = true

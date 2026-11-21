@@ -11,7 +11,7 @@ fn test_byte_array_pointers_keep_encodings_and_alignment() ! {
 	mut writer := WriteStream.init_memory(mut buffer)
 	value := [u8(0), 255, 65]!
 	alias_value := ArrayPointerBytes(value)
-	writer.print_value('s', FormatOptions{ width: usize(5), precision: ~usize(0), alignment: .center, fill: `_` }, &value, 0)!
+	writer.print_value('s', FormatOptions{ width: uint(5), precision: ~uint(0), alignment: .center, fill: `_` }, &value, 0)!
 	writer.write_byte(`|`)!
 	writer.print_value('x', FormatOptions{}, &alias_value, 0)!
 	writer.write_byte(`|`)!
@@ -41,7 +41,7 @@ fn test_array_pointers_compose_in_print_and_absent_optionals_bypass_encoding_opt
 	mut writer := WriteStream.init_memory(mut buffer)
 	bytes := [u8(0), 255, 65]!
 	writer.print('a{x}b', ArrayPointerArgs{unsafe { &bytes }})!
-	writer.print_value('?x', FormatOptions{ width: usize(6), precision: usize(0), fill: `_` }, ?&[3]u8(none), 0)!
+	writer.print_value('?x', FormatOptions{ width: uint(6), precision: uint(0), fill: `_` }, ?&[3]u8(none), 0)!
 	assert writer.buffered().bytestr() == 'a00ff41b__null'
 }
 

@@ -57,7 +57,7 @@ fn C.ReadConsoleInputW(handle voidptr, record &C.INPUT_RECORD, count u32, receiv
 struct WindowsInputState {
 mut:
 	ansi_buf   [128]u8
-	ansi_idx   usize
+	ansi_idx   uint
 	utf16_high u16
 	utf16_half bool
 }

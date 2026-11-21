@@ -16,7 +16,7 @@ struct EmbeddedClipboardCapture {
 mut:
 	read_clipboard int
 	read_state     &ClipboardRequest = unsafe { nil }
-	write_count    usize
+	write_count    uint
 	write_mime     string
 	write_data     string
 	write_confirm  bool
@@ -39,7 +39,7 @@ fn embedded_read_clipboard_test_callback(userdata voidptr, clipboard int, state 
 	unsafe { capture.read_state = state }
 }
 
-fn embedded_write_clipboard_c_test_callback(userdata voidptr, _ int, contents &CAPIClipboardContentC, count usize, confirm bool) {
+fn embedded_write_clipboard_c_test_callback(userdata voidptr, _ int, contents &CAPIClipboardContentC, count uint, confirm bool) {
 	mut capture := unsafe { &EmbeddedClipboardCapture(userdata) }
 	capture.write_count = count
 	capture.write_confirm = confirm
@@ -575,7 +575,7 @@ fn test_platform_tag_values() {
 
 // Test platform_init with macOS.
 fn test_platform_init_macos() {
-	dummy_view := voidptr(usize(0xDEAD))
+	dummy_view := voidptr(uint(0xDEAD))
 	p := platform_init(1, PlatformC{ nsview: dummy_view }) or {
 		$if !macos && !ios {
 			assert err.msg() == 'UnsupportedPlatform'
@@ -631,7 +631,7 @@ fn test_surface_init_preserves_explicit_scale_factor() {
 		mut surface := Surface{}
 		surface.init(mut app, SurfaceOptions{
 			platform_tag: int(PlatformTag.macos)
-			platform: PlatformC{ nsview: voidptr(usize(0xDEAD)) }
+			platform: PlatformC{ nsview: voidptr(uint(0xDEAD)) }
 			scale_factor: -2.25
 		})!
 		defer {
@@ -668,7 +668,7 @@ fn test_surface_init_present_empty_input_clears_configured_input() {
 		mut surface := Surface{}
 		surface.init(mut app, SurfaceOptions{
 			platform_tag: int(PlatformTag.macos)
-			platform: PlatformC{ nsview: voidptr(usize(0xDEAD)) }
+			platform: PlatformC{ nsview: voidptr(uint(0xDEAD)) }
 			initial_input: ''
 		})!
 		defer {
@@ -698,7 +698,7 @@ fn test_capi_text_deinit() {
 }
 
 fn test_capi_text_length_is_pointer_width() {
-	max_len := ~usize(0)
+	max_len := ~uint(0)
 	mut text := CAPIText{ text_len: max_len }
 	assert text.text_len == max_len
 	text.deinit()

@@ -14,18 +14,18 @@ struct PointeeAddressArgs {
 	value []PointeePointerItems
 }
 
-fn pointee_address_view[E](_ E, address usize, length int) []E {
+fn pointee_address_view[E](_ E, address uint, length int) []E {
 	return unsafe { array{ data: voidptr(address), len: length, cap: length, flags: .nofree, element_size: int(sizeof(E)) } }
 }
 
 fn test_pointee_address_names_do_not_read_arrays_or_targets() ! {
 	mut buffer := []u8{len: 256}
 	mut writer := WriteStream.init_memory(mut buffer)
-	writer.print_address(unsafe { &PointeePointerItems(voidptr(usize(0x1234))) })!
-	writer.print_value('*', FormatOptions{ width: ~usize(0), precision: ~usize(0) }, unsafe { &PointeePointerAliases(voidptr(usize(0))) }, ~usize(0))!
+	writer.print_address(unsafe { &PointeePointerItems(voidptr(uint(0x1234))) })!
+	writer.print_value('*', FormatOptions{ width: ~uint(0), precision: ~uint(0) }, unsafe { &PointeePointerAliases(voidptr(uint(0))) }, ~uint(0))!
 	zero := unsafe { PointeePointerNested{} }
-	writer.print_value('*', FormatOptions{}, pointee_address_view(zero, ~usize(0), 3), 0)!
-	writer.print_address(unsafe { &PointeeOpaqueItems(voidptr(usize(1))) })!
+	writer.print_value('*', FormatOptions{}, pointee_address_view(zero, ~uint(0), 3), 0)!
+	writer.print_address(unsafe { &PointeeOpaqueItems(voidptr(uint(1))) })!
 	assert writer.buffered().bytestr() == '[3]*u8@1234[3]*u8@0[2][3]*i32@ffffffffffffffff[1]*anyopaque@1'
 }
 
@@ -35,7 +35,7 @@ fn test_pointee_addresses_keep_storage_and_ignore_target_values() ! {
 	mut first := PointeeByte(7)
 	mut second := PointeeByte(8)
 	mut values := [&first, &second, &second]!
-	address := unsafe { usize(voidptr(&values)) }
+	address := unsafe { uint(voidptr(&values)) }
 	before := unsafe { (&u8(voidptr(&values))).vbytes(int(sizeof(values))).clone() }
 	writer.print_address(&values)!
 	assert writer.buffered().bytestr() == '[3]*u8@${address:x}'
@@ -50,7 +50,7 @@ fn test_pointee_addresses_keep_storage_and_ignore_target_values() ! {
 	arrays := [values]
 	writer.seek_to(0)!
 	writer.print_value('*', FormatOptions{}, arrays, 0)!
-	assert writer.buffered().bytestr() == '[3]*u8@${usize(arrays.data):x}'
+	assert writer.buffered().bytestr() == '[3]*u8@${uint(arrays.data):x}'
 }
 
 fn test_pointee_address_failures_keep_prefix_and_digit_writes() ! {
@@ -62,16 +62,16 @@ fn test_pointee_address_failures_keep_prefix_and_digit_writes() ! {
 			mut writer := WriteStream.init_memory(mut buffer)
 			mut status := 'ok'
 			if api == 0 {
-				writer.print_address(unsafe { &PointeePointerItems(voidptr(usize(0x1234))) }) or { status = err.msg() }
+				writer.print_address(unsafe { &PointeePointerItems(voidptr(uint(0x1234))) }) or { status = err.msg() }
 			}
 			if api == 1 {
-				writer.print_value('*', FormatOptions{ width: ~usize(0) }, unsafe { &PointeePointerItems(voidptr(usize(0x1234))) }, 0) or { status = err.msg() }
+				writer.print_value('*', FormatOptions{ width: ~uint(0) }, unsafe { &PointeePointerItems(voidptr(uint(0x1234))) }, 0) or { status = err.msg() }
 			}
 			if api == 2 {
-				writer.print_address(pointee_address_view(zero, usize(0x1234), 0)) or { status = err.msg() }
+				writer.print_address(pointee_address_view(zero, uint(0x1234), 0)) or { status = err.msg() }
 			}
 			if api == 3 {
-				writer.print_value('*', FormatOptions{ width: ~usize(0) }, pointee_address_view(zero, usize(0x1234), 3), 0) or { status = err.msg() }
+				writer.print_value('*', FormatOptions{ width: ~uint(0) }, pointee_address_view(zero, uint(0x1234), 3), 0) or { status = err.msg() }
 			}
 			end := if capacity < expected.len { capacity } else { expected.len }
 			assert status == if capacity < expected.len { 'WriteFailed' } else { 'ok' }
@@ -85,9 +85,9 @@ fn test_pointee_addresses_compose_with_print_and_outer_optionals() ! {
 	mut buffer := []u8{len: 256}
 	mut writer := WriteStream.init_memory(mut buffer)
 	zero := unsafe { PointeePointerItems{} }
-	view := pointee_address_view(zero, usize(0x1234), 0)
+	view := pointee_address_view(zero, uint(0x1234), 0)
 	writer.print('L{[value]*}R', PointeeAddressArgs{view})!
-	writer.print_value('?*', FormatOptions{ width: ~usize(0) }, ?PointeePointerValues(view), 0)!
+	writer.print_value('?*', FormatOptions{ width: ~uint(0) }, ?PointeePointerValues(view), 0)!
 	writer.print_value('?*', FormatOptions{ width: 6, fill: `_` }, ?PointeePointerValues(none), 0)!
 	assert writer.buffered().bytestr() == 'L[3]*u8@1234R[3]*u8@1234__null'
 }
@@ -96,13 +96,13 @@ fn test_pointee_address_slice_and_optional_names_preserve_original_addresses() !
 	mut buffer := []u8{len: 256}
 	mut writer := WriteStream.init_memory(mut buffer)
 	zero := unsafe { &PointeeNumber(voidptr(0)) }
-	view := pointee_address_view(zero, usize(0x1234), 3)
+	view := pointee_address_view(zero, uint(0x1234), 3)
 	writer.print_address(view)!
-	writer.print_value('*', FormatOptions{ width: ~usize(0), precision: ~usize(0) }, view, ~usize(0))!
-	optional_view := pointee_address_view(?&PointeeNumber(none), usize(0), 0)
+	writer.print_value('*', FormatOptions{ width: ~uint(0), precision: ~uint(0) }, view, ~uint(0))!
+	optional_view := pointee_address_view(?&PointeeNumber(none), uint(0), 0)
 	writer.print_address(optional_view)!
 	writer.print_value('*', FormatOptions{}, optional_view, 0)!
-	flag_view := pointee_address_view(unsafe { &PointeeFlag(voidptr(0)) }, ~usize(0), 0)
+	flag_view := pointee_address_view(unsafe { &PointeeFlag(voidptr(0)) }, ~uint(0), 0)
 	writer.print_value('*', FormatOptions{}, flag_view, 0)!
 	assert writer.buffered().bytestr() == '*i32@1234*i32@1234?*i32@0?*i32@0*bool@ffffffffffffffff'
 }

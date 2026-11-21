@@ -3,8 +3,8 @@ module zigimg
 struct PrintArgs {
 	value     int
 	text      []u8
-	width     usize
-	precision ?usize
+	width     uint
+	precision ?uint
 }
 
 struct PrintEmpty {}
@@ -17,7 +17,7 @@ struct PrintPair {
 fn test_print_literals_named_sizes_and_argument_reuse() {
 	mut buffer := []u8{len: 128}
 	mut writer := WriteStream.init_memory(mut buffer)
-	args := PrintArgs{-17, 'hello'.bytes(), 7, ?usize(3)}
+	args := PrintArgs{-17, 'hello'.bytes(), 7, ?uint(3)}
 	writer.print('a{{b}}{[value]d:0>[width]}:{[text]s:.<8}:{[value]d:.[precision]}!', args)!
 	assert writer.buffered().bytestr() == 'a{b}0000-17:hello...:-17!'
 }
@@ -123,7 +123,7 @@ type PrintWidth = u16
 struct PrintAliasSizes {
 	value     int
 	width     PrintWidth
-	precision ?usize
+	precision ?uint
 }
 
 type PrintArgsAlias = PrintAliasSizes
@@ -131,7 +131,7 @@ type PrintArgsAlias = PrintAliasSizes
 fn test_print_record_alias_and_unsigned_size_fields() {
 	mut buffer := []u8{len: 128}
 	mut writer := WriteStream.init_memory(mut buffer)
-	writer.print('{d:_>[width].[precision]}', PrintArgsAlias(PrintAliasSizes{7, PrintWidth(5), ?usize(2)}))!
+	writer.print('{d:_>[width].[precision]}', PrintArgsAlias(PrintAliasSizes{7, PrintWidth(5), ?uint(2)}))!
 	assert writer.buffered().bytestr() == '___+7'
 }
 

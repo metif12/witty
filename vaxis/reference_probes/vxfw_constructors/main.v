@@ -10,7 +10,7 @@ fn click(_ voidptr, mut ctx vxfw.EventContext) ! {
 	_ = ctx
 }
 
-fn build(_ voidptr, _ usize, _ usize) ?vxfw.Widget {
+fn build(_ voidptr, _ uint, _ uint) ?vxfw.Widget {
 	return none
 }
 

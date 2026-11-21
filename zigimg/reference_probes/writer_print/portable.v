@@ -8,7 +8,7 @@ struct Args {
 	value     int
 	text      []u8
 	width     Width
-	precision ?usize
+	precision ?uint
 }
 
 type ArgsAlias = Args
@@ -41,7 +41,7 @@ fn run() ! {
 	mut buffer := []u8{len: 128}
 	mut writer := zigimg.WriteStream.init_memory(mut buffer)
 	writer.print('a{{b}}{[value]d:0>[width]}:{[text]s:.<8}:{[value]d:.[precision]}!',
-		ArgsAlias(Args{-17, 'hello'.bytes(), Width(7), ?usize(3)}))!
+		ArgsAlias(Args{-17, 'hello'.bytes(), Width(7), ?uint(3)}))!
 	assert writer.buffered().bytestr() == 'a{b}0000-17:hello...:-17!'
 	writer = zigimg.WriteStream.init_memory(mut buffer)
 	writer.print('{any}|{}|{?d}|{any}', Mixed{[u8(1), 255]!, PrintError{}, ?int(-7), [[[[1]]]]})!

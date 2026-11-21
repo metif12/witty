@@ -9,13 +9,13 @@ import zigimg
 
 fn C.witty_writer_seek_setup(&char) int
 fn C.witty_writer_seek_replace(int) int
-fn C.witty_writer_seek_restore(&char, usize) int
+fn C.witty_writer_seek_restore(&char, uint) int
 fn C.witty_writer_seek_close() int
 fn C.witty_writer_seek_cleanup() int
 fn C.witty_writer_seek_valid() int
 fn C.witty_writer_seek_refs() int
-fn C.witty_writer_seek_view(&u8, usize) isize
-fn C.witty_writer_seek_drain(&u8, usize) isize
+fn C.witty_writer_seek_view(&u8, uint) int
+fn C.witty_writer_seek_drain(&u8, uint) int
 
 __global (
 	observed_path    string
@@ -29,24 +29,24 @@ __global (
 	observed_length  int
 	observed_tag     int
 	observed_options zigimg.FormatOptions
-	observed_depth   usize
+	observed_depth   uint
 )
 
 fn state(writer zigimg.WriteStream, buffer []u8) string {
 	mut contents := []u8{len: 4096}
 	n := if observed_file {
-		C.witty_writer_seek_view(contents.data, usize(contents.len))
+		C.witty_writer_seek_view(contents.data, uint(contents.len))
 	} else {
-		isize(0)
+		int(0)
 	}
 	if n < 0 { panic('Writer observer failed') }
 	valid := if observed_file { C.witty_writer_seek_valid() } else { 0 }
 	refs := if observed_file { C.witty_writer_seek_refs() } else { 0 }
 	unused := writer.unused_capacity_slice()
-	offset := if buffer.len == 0 { usize(0) } else { usize(unused.data) - usize(buffer.data) }
+	offset := if buffer.len == 0 { uint(0) } else { uint(unused.data) - uint(buffer.data) }
 	mut headers := []string{}
 	for bytes in observed_vectors {
-		headers << '${usize(bytes.data) - usize(observed_payload.data)},${bytes.len}'
+		headers << '${uint(bytes.data) - uint(observed_payload.data)},${bytes.len}'
 	}
 	precision := if value := observed_options.precision { '${value}' } else { '-' }
 	width := if value := observed_options.width { '${value}' } else { '-' }
@@ -80,7 +80,7 @@ type Slice2 = []Word2
 type Word3 = u64
 type Pointer3 = &Word3
 type Slice3 = []Word3
-type Word4 = usize
+type Word4 = uint
 type Pointer4 = &Word4
 type Slice4 = []Word4
 type Word5 = i8
@@ -95,7 +95,7 @@ type Slice7 = []Word7
 type Word8 = i64
 type Pointer8 = &Word8
 type Slice8 = []Word8
-type Word9 = isize
+type Word9 = int
 type Pointer9 = &Word9
 type Slice9 = []Word9
 type Word10 = f32
@@ -108,8 +108,8 @@ type Word12 = bool
 type Pointer12 = &Word12
 type Slice12 = []Word12
 
-fn typed_native_0(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth usize) string {
-	pointer := unsafe { &u8(voidptr(usize(raw))) }
+fn typed_native_0(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth uint) string {
+	pointer := unsafe { &u8(voidptr(uint(raw))) }
 	if op == 1 {
 		mut optional := ?&u8(none)
 		if raw != 0 { optional = pointer }
@@ -117,7 +117,7 @@ fn typed_native_0(mut writer zigimg.WriteStream, raw u64, op int, count int, opt
 	} else if op == 2 || op == 5 {
 		mut values := []u8{}
 		unsafe {
-			values.data = voidptr(usize(raw))
+			values.data = voidptr(uint(raw))
 			values.len = count
 			values.cap = count
 		}
@@ -128,8 +128,8 @@ fn typed_native_0(mut writer zigimg.WriteStream, raw u64, op int, count int, opt
 	return 'ok'
 }
 
-fn typed_alias_0(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth usize) string {
-	pointer := unsafe { &Word0(voidptr(usize(raw))) }
+fn typed_alias_0(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth uint) string {
+	pointer := unsafe { &Word0(voidptr(uint(raw))) }
 	if op == 1 {
 		mut optional := ?&Word0(none)
 		if raw != 0 { optional = pointer }
@@ -137,7 +137,7 @@ fn typed_alias_0(mut writer zigimg.WriteStream, raw u64, op int, count int, opti
 	} else if op == 2 || op == 5 {
 		mut values := []Word0{}
 		unsafe {
-			values.data = voidptr(usize(raw))
+			values.data = voidptr(uint(raw))
 			values.len = count
 			values.cap = count
 		}
@@ -148,8 +148,8 @@ fn typed_alias_0(mut writer zigimg.WriteStream, raw u64, op int, count int, opti
 	return 'ok'
 }
 
-fn typed_native_1(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth usize) string {
-	pointer := unsafe { &u16(voidptr(usize(raw))) }
+fn typed_native_1(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth uint) string {
+	pointer := unsafe { &u16(voidptr(uint(raw))) }
 	if op == 1 {
 		mut optional := ?&u16(none)
 		if raw != 0 { optional = pointer }
@@ -157,7 +157,7 @@ fn typed_native_1(mut writer zigimg.WriteStream, raw u64, op int, count int, opt
 	} else if op == 2 || op == 5 {
 		mut values := []u16{}
 		unsafe {
-			values.data = voidptr(usize(raw))
+			values.data = voidptr(uint(raw))
 			values.len = count
 			values.cap = count
 		}
@@ -168,8 +168,8 @@ fn typed_native_1(mut writer zigimg.WriteStream, raw u64, op int, count int, opt
 	return 'ok'
 }
 
-fn typed_alias_1(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth usize) string {
-	pointer := unsafe { &Word1(voidptr(usize(raw))) }
+fn typed_alias_1(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth uint) string {
+	pointer := unsafe { &Word1(voidptr(uint(raw))) }
 	if op == 1 {
 		mut optional := ?&Word1(none)
 		if raw != 0 { optional = pointer }
@@ -177,7 +177,7 @@ fn typed_alias_1(mut writer zigimg.WriteStream, raw u64, op int, count int, opti
 	} else if op == 2 || op == 5 {
 		mut values := []Word1{}
 		unsafe {
-			values.data = voidptr(usize(raw))
+			values.data = voidptr(uint(raw))
 			values.len = count
 			values.cap = count
 		}
@@ -188,8 +188,8 @@ fn typed_alias_1(mut writer zigimg.WriteStream, raw u64, op int, count int, opti
 	return 'ok'
 }
 
-fn typed_native_2(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth usize) string {
-	pointer := unsafe { &u32(voidptr(usize(raw))) }
+fn typed_native_2(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth uint) string {
+	pointer := unsafe { &u32(voidptr(uint(raw))) }
 	if op == 1 {
 		mut optional := ?&u32(none)
 		if raw != 0 { optional = pointer }
@@ -197,7 +197,7 @@ fn typed_native_2(mut writer zigimg.WriteStream, raw u64, op int, count int, opt
 	} else if op == 2 || op == 5 {
 		mut values := []u32{}
 		unsafe {
-			values.data = voidptr(usize(raw))
+			values.data = voidptr(uint(raw))
 			values.len = count
 			values.cap = count
 		}
@@ -208,8 +208,8 @@ fn typed_native_2(mut writer zigimg.WriteStream, raw u64, op int, count int, opt
 	return 'ok'
 }
 
-fn typed_alias_2(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth usize) string {
-	pointer := unsafe { &Word2(voidptr(usize(raw))) }
+fn typed_alias_2(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth uint) string {
+	pointer := unsafe { &Word2(voidptr(uint(raw))) }
 	if op == 1 {
 		mut optional := ?&Word2(none)
 		if raw != 0 { optional = pointer }
@@ -217,7 +217,7 @@ fn typed_alias_2(mut writer zigimg.WriteStream, raw u64, op int, count int, opti
 	} else if op == 2 || op == 5 {
 		mut values := []Word2{}
 		unsafe {
-			values.data = voidptr(usize(raw))
+			values.data = voidptr(uint(raw))
 			values.len = count
 			values.cap = count
 		}
@@ -228,8 +228,8 @@ fn typed_alias_2(mut writer zigimg.WriteStream, raw u64, op int, count int, opti
 	return 'ok'
 }
 
-fn typed_native_3(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth usize) string {
-	pointer := unsafe { &u64(voidptr(usize(raw))) }
+fn typed_native_3(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth uint) string {
+	pointer := unsafe { &u64(voidptr(uint(raw))) }
 	if op == 1 {
 		mut optional := ?&u64(none)
 		if raw != 0 { optional = pointer }
@@ -237,7 +237,7 @@ fn typed_native_3(mut writer zigimg.WriteStream, raw u64, op int, count int, opt
 	} else if op == 2 || op == 5 {
 		mut values := []u64{}
 		unsafe {
-			values.data = voidptr(usize(raw))
+			values.data = voidptr(uint(raw))
 			values.len = count
 			values.cap = count
 		}
@@ -248,8 +248,8 @@ fn typed_native_3(mut writer zigimg.WriteStream, raw u64, op int, count int, opt
 	return 'ok'
 }
 
-fn typed_alias_3(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth usize) string {
-	pointer := unsafe { &Word3(voidptr(usize(raw))) }
+fn typed_alias_3(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth uint) string {
+	pointer := unsafe { &Word3(voidptr(uint(raw))) }
 	if op == 1 {
 		mut optional := ?&Word3(none)
 		if raw != 0 { optional = pointer }
@@ -257,7 +257,7 @@ fn typed_alias_3(mut writer zigimg.WriteStream, raw u64, op int, count int, opti
 	} else if op == 2 || op == 5 {
 		mut values := []Word3{}
 		unsafe {
-			values.data = voidptr(usize(raw))
+			values.data = voidptr(uint(raw))
 			values.len = count
 			values.cap = count
 		}
@@ -268,16 +268,16 @@ fn typed_alias_3(mut writer zigimg.WriteStream, raw u64, op int, count int, opti
 	return 'ok'
 }
 
-fn typed_native_4(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth usize) string {
-	pointer := unsafe { &usize(voidptr(usize(raw))) }
+fn typed_native_4(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth uint) string {
+	pointer := unsafe { &uint(voidptr(uint(raw))) }
 	if op == 1 {
-		mut optional := ?&usize(none)
+		mut optional := ?&uint(none)
 		if raw != 0 { optional = pointer }
 		writer.print_value('*', options, optional, depth) or { return err.msg() }
 	} else if op == 2 || op == 5 {
-		mut values := []usize{}
+		mut values := []uint{}
 		unsafe {
-			values.data = voidptr(usize(raw))
+			values.data = voidptr(uint(raw))
 			values.len = count
 			values.cap = count
 		}
@@ -288,8 +288,8 @@ fn typed_native_4(mut writer zigimg.WriteStream, raw u64, op int, count int, opt
 	return 'ok'
 }
 
-fn typed_alias_4(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth usize) string {
-	pointer := unsafe { &Word4(voidptr(usize(raw))) }
+fn typed_alias_4(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth uint) string {
+	pointer := unsafe { &Word4(voidptr(uint(raw))) }
 	if op == 1 {
 		mut optional := ?&Word4(none)
 		if raw != 0 { optional = pointer }
@@ -297,7 +297,7 @@ fn typed_alias_4(mut writer zigimg.WriteStream, raw u64, op int, count int, opti
 	} else if op == 2 || op == 5 {
 		mut values := []Word4{}
 		unsafe {
-			values.data = voidptr(usize(raw))
+			values.data = voidptr(uint(raw))
 			values.len = count
 			values.cap = count
 		}
@@ -308,8 +308,8 @@ fn typed_alias_4(mut writer zigimg.WriteStream, raw u64, op int, count int, opti
 	return 'ok'
 }
 
-fn typed_native_5(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth usize) string {
-	pointer := unsafe { &i8(voidptr(usize(raw))) }
+fn typed_native_5(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth uint) string {
+	pointer := unsafe { &i8(voidptr(uint(raw))) }
 	if op == 1 {
 		mut optional := ?&i8(none)
 		if raw != 0 { optional = pointer }
@@ -317,7 +317,7 @@ fn typed_native_5(mut writer zigimg.WriteStream, raw u64, op int, count int, opt
 	} else if op == 2 || op == 5 {
 		mut values := []i8{}
 		unsafe {
-			values.data = voidptr(usize(raw))
+			values.data = voidptr(uint(raw))
 			values.len = count
 			values.cap = count
 		}
@@ -328,8 +328,8 @@ fn typed_native_5(mut writer zigimg.WriteStream, raw u64, op int, count int, opt
 	return 'ok'
 }
 
-fn typed_alias_5(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth usize) string {
-	pointer := unsafe { &Word5(voidptr(usize(raw))) }
+fn typed_alias_5(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth uint) string {
+	pointer := unsafe { &Word5(voidptr(uint(raw))) }
 	if op == 1 {
 		mut optional := ?&Word5(none)
 		if raw != 0 { optional = pointer }
@@ -337,7 +337,7 @@ fn typed_alias_5(mut writer zigimg.WriteStream, raw u64, op int, count int, opti
 	} else if op == 2 || op == 5 {
 		mut values := []Word5{}
 		unsafe {
-			values.data = voidptr(usize(raw))
+			values.data = voidptr(uint(raw))
 			values.len = count
 			values.cap = count
 		}
@@ -348,8 +348,8 @@ fn typed_alias_5(mut writer zigimg.WriteStream, raw u64, op int, count int, opti
 	return 'ok'
 }
 
-fn typed_native_6(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth usize) string {
-	pointer := unsafe { &i16(voidptr(usize(raw))) }
+fn typed_native_6(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth uint) string {
+	pointer := unsafe { &i16(voidptr(uint(raw))) }
 	if op == 1 {
 		mut optional := ?&i16(none)
 		if raw != 0 { optional = pointer }
@@ -357,7 +357,7 @@ fn typed_native_6(mut writer zigimg.WriteStream, raw u64, op int, count int, opt
 	} else if op == 2 || op == 5 {
 		mut values := []i16{}
 		unsafe {
-			values.data = voidptr(usize(raw))
+			values.data = voidptr(uint(raw))
 			values.len = count
 			values.cap = count
 		}
@@ -368,8 +368,8 @@ fn typed_native_6(mut writer zigimg.WriteStream, raw u64, op int, count int, opt
 	return 'ok'
 }
 
-fn typed_alias_6(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth usize) string {
-	pointer := unsafe { &Word6(voidptr(usize(raw))) }
+fn typed_alias_6(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth uint) string {
+	pointer := unsafe { &Word6(voidptr(uint(raw))) }
 	if op == 1 {
 		mut optional := ?&Word6(none)
 		if raw != 0 { optional = pointer }
@@ -377,7 +377,7 @@ fn typed_alias_6(mut writer zigimg.WriteStream, raw u64, op int, count int, opti
 	} else if op == 2 || op == 5 {
 		mut values := []Word6{}
 		unsafe {
-			values.data = voidptr(usize(raw))
+			values.data = voidptr(uint(raw))
 			values.len = count
 			values.cap = count
 		}
@@ -388,8 +388,8 @@ fn typed_alias_6(mut writer zigimg.WriteStream, raw u64, op int, count int, opti
 	return 'ok'
 }
 
-fn typed_native_7(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth usize) string {
-	pointer := unsafe { &int(voidptr(usize(raw))) }
+fn typed_native_7(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth uint) string {
+	pointer := unsafe { &int(voidptr(uint(raw))) }
 	if op == 1 {
 		mut optional := ?&int(none)
 		if raw != 0 { optional = pointer }
@@ -397,7 +397,7 @@ fn typed_native_7(mut writer zigimg.WriteStream, raw u64, op int, count int, opt
 	} else if op == 2 || op == 5 {
 		mut values := []int{}
 		unsafe {
-			values.data = voidptr(usize(raw))
+			values.data = voidptr(uint(raw))
 			values.len = count
 			values.cap = count
 		}
@@ -408,8 +408,8 @@ fn typed_native_7(mut writer zigimg.WriteStream, raw u64, op int, count int, opt
 	return 'ok'
 }
 
-fn typed_alias_7(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth usize) string {
-	pointer := unsafe { &Word7(voidptr(usize(raw))) }
+fn typed_alias_7(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth uint) string {
+	pointer := unsafe { &Word7(voidptr(uint(raw))) }
 	if op == 1 {
 		mut optional := ?&Word7(none)
 		if raw != 0 { optional = pointer }
@@ -417,7 +417,7 @@ fn typed_alias_7(mut writer zigimg.WriteStream, raw u64, op int, count int, opti
 	} else if op == 2 || op == 5 {
 		mut values := []Word7{}
 		unsafe {
-			values.data = voidptr(usize(raw))
+			values.data = voidptr(uint(raw))
 			values.len = count
 			values.cap = count
 		}
@@ -428,8 +428,8 @@ fn typed_alias_7(mut writer zigimg.WriteStream, raw u64, op int, count int, opti
 	return 'ok'
 }
 
-fn typed_native_8(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth usize) string {
-	pointer := unsafe { &i64(voidptr(usize(raw))) }
+fn typed_native_8(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth uint) string {
+	pointer := unsafe { &i64(voidptr(uint(raw))) }
 	if op == 1 {
 		mut optional := ?&i64(none)
 		if raw != 0 { optional = pointer }
@@ -437,7 +437,7 @@ fn typed_native_8(mut writer zigimg.WriteStream, raw u64, op int, count int, opt
 	} else if op == 2 || op == 5 {
 		mut values := []i64{}
 		unsafe {
-			values.data = voidptr(usize(raw))
+			values.data = voidptr(uint(raw))
 			values.len = count
 			values.cap = count
 		}
@@ -448,8 +448,8 @@ fn typed_native_8(mut writer zigimg.WriteStream, raw u64, op int, count int, opt
 	return 'ok'
 }
 
-fn typed_alias_8(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth usize) string {
-	pointer := unsafe { &Word8(voidptr(usize(raw))) }
+fn typed_alias_8(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth uint) string {
+	pointer := unsafe { &Word8(voidptr(uint(raw))) }
 	if op == 1 {
 		mut optional := ?&Word8(none)
 		if raw != 0 { optional = pointer }
@@ -457,7 +457,7 @@ fn typed_alias_8(mut writer zigimg.WriteStream, raw u64, op int, count int, opti
 	} else if op == 2 || op == 5 {
 		mut values := []Word8{}
 		unsafe {
-			values.data = voidptr(usize(raw))
+			values.data = voidptr(uint(raw))
 			values.len = count
 			values.cap = count
 		}
@@ -468,16 +468,16 @@ fn typed_alias_8(mut writer zigimg.WriteStream, raw u64, op int, count int, opti
 	return 'ok'
 }
 
-fn typed_native_9(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth usize) string {
-	pointer := unsafe { &isize(voidptr(usize(raw))) }
+fn typed_native_9(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth uint) string {
+	pointer := unsafe { &int(voidptr(uint(raw))) }
 	if op == 1 {
-		mut optional := ?&isize(none)
+		mut optional := ?&int(none)
 		if raw != 0 { optional = pointer }
 		writer.print_value('*', options, optional, depth) or { return err.msg() }
 	} else if op == 2 || op == 5 {
-		mut values := []isize{}
+		mut values := []int{}
 		unsafe {
-			values.data = voidptr(usize(raw))
+			values.data = voidptr(uint(raw))
 			values.len = count
 			values.cap = count
 		}
@@ -488,8 +488,8 @@ fn typed_native_9(mut writer zigimg.WriteStream, raw u64, op int, count int, opt
 	return 'ok'
 }
 
-fn typed_alias_9(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth usize) string {
-	pointer := unsafe { &Word9(voidptr(usize(raw))) }
+fn typed_alias_9(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth uint) string {
+	pointer := unsafe { &Word9(voidptr(uint(raw))) }
 	if op == 1 {
 		mut optional := ?&Word9(none)
 		if raw != 0 { optional = pointer }
@@ -497,7 +497,7 @@ fn typed_alias_9(mut writer zigimg.WriteStream, raw u64, op int, count int, opti
 	} else if op == 2 || op == 5 {
 		mut values := []Word9{}
 		unsafe {
-			values.data = voidptr(usize(raw))
+			values.data = voidptr(uint(raw))
 			values.len = count
 			values.cap = count
 		}
@@ -508,8 +508,8 @@ fn typed_alias_9(mut writer zigimg.WriteStream, raw u64, op int, count int, opti
 	return 'ok'
 }
 
-fn typed_native_10(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth usize) string {
-	pointer := unsafe { &f32(voidptr(usize(raw))) }
+fn typed_native_10(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth uint) string {
+	pointer := unsafe { &f32(voidptr(uint(raw))) }
 	if op == 1 {
 		mut optional := ?&f32(none)
 		if raw != 0 { optional = pointer }
@@ -517,7 +517,7 @@ fn typed_native_10(mut writer zigimg.WriteStream, raw u64, op int, count int, op
 	} else if op == 2 || op == 5 {
 		mut values := []f32{}
 		unsafe {
-			values.data = voidptr(usize(raw))
+			values.data = voidptr(uint(raw))
 			values.len = count
 			values.cap = count
 		}
@@ -528,8 +528,8 @@ fn typed_native_10(mut writer zigimg.WriteStream, raw u64, op int, count int, op
 	return 'ok'
 }
 
-fn typed_alias_10(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth usize) string {
-	pointer := unsafe { &Word10(voidptr(usize(raw))) }
+fn typed_alias_10(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth uint) string {
+	pointer := unsafe { &Word10(voidptr(uint(raw))) }
 	if op == 1 {
 		mut optional := ?&Word10(none)
 		if raw != 0 { optional = pointer }
@@ -537,7 +537,7 @@ fn typed_alias_10(mut writer zigimg.WriteStream, raw u64, op int, count int, opt
 	} else if op == 2 || op == 5 {
 		mut values := []Word10{}
 		unsafe {
-			values.data = voidptr(usize(raw))
+			values.data = voidptr(uint(raw))
 			values.len = count
 			values.cap = count
 		}
@@ -548,8 +548,8 @@ fn typed_alias_10(mut writer zigimg.WriteStream, raw u64, op int, count int, opt
 	return 'ok'
 }
 
-fn typed_native_11(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth usize) string {
-	pointer := unsafe { &f64(voidptr(usize(raw))) }
+fn typed_native_11(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth uint) string {
+	pointer := unsafe { &f64(voidptr(uint(raw))) }
 	if op == 1 {
 		mut optional := ?&f64(none)
 		if raw != 0 { optional = pointer }
@@ -557,7 +557,7 @@ fn typed_native_11(mut writer zigimg.WriteStream, raw u64, op int, count int, op
 	} else if op == 2 || op == 5 {
 		mut values := []f64{}
 		unsafe {
-			values.data = voidptr(usize(raw))
+			values.data = voidptr(uint(raw))
 			values.len = count
 			values.cap = count
 		}
@@ -568,8 +568,8 @@ fn typed_native_11(mut writer zigimg.WriteStream, raw u64, op int, count int, op
 	return 'ok'
 }
 
-fn typed_alias_11(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth usize) string {
-	pointer := unsafe { &Word11(voidptr(usize(raw))) }
+fn typed_alias_11(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth uint) string {
+	pointer := unsafe { &Word11(voidptr(uint(raw))) }
 	if op == 1 {
 		mut optional := ?&Word11(none)
 		if raw != 0 { optional = pointer }
@@ -577,7 +577,7 @@ fn typed_alias_11(mut writer zigimg.WriteStream, raw u64, op int, count int, opt
 	} else if op == 2 || op == 5 {
 		mut values := []Word11{}
 		unsafe {
-			values.data = voidptr(usize(raw))
+			values.data = voidptr(uint(raw))
 			values.len = count
 			values.cap = count
 		}
@@ -588,8 +588,8 @@ fn typed_alias_11(mut writer zigimg.WriteStream, raw u64, op int, count int, opt
 	return 'ok'
 }
 
-fn typed_native_12(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth usize) string {
-	pointer := unsafe { &bool(voidptr(usize(raw))) }
+fn typed_native_12(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth uint) string {
+	pointer := unsafe { &bool(voidptr(uint(raw))) }
 	if op == 1 {
 		mut optional := ?&bool(none)
 		if raw != 0 { optional = pointer }
@@ -597,7 +597,7 @@ fn typed_native_12(mut writer zigimg.WriteStream, raw u64, op int, count int, op
 	} else if op == 2 || op == 5 {
 		mut values := []bool{}
 		unsafe {
-			values.data = voidptr(usize(raw))
+			values.data = voidptr(uint(raw))
 			values.len = count
 			values.cap = count
 		}
@@ -608,8 +608,8 @@ fn typed_native_12(mut writer zigimg.WriteStream, raw u64, op int, count int, op
 	return 'ok'
 }
 
-fn typed_alias_12(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth usize) string {
-	pointer := unsafe { &Word12(voidptr(usize(raw))) }
+fn typed_alias_12(mut writer zigimg.WriteStream, raw u64, op int, count int, options zigimg.FormatOptions, depth uint) string {
+	pointer := unsafe { &Word12(voidptr(uint(raw))) }
 	if op == 1 {
 		mut optional := ?&Word12(none)
 		if raw != 0 { optional = pointer }
@@ -617,7 +617,7 @@ fn typed_alias_12(mut writer zigimg.WriteStream, raw u64, op int, count int, opt
 	} else if op == 2 || op == 5 {
 		mut values := []Word12{}
 		unsafe {
-			values.data = voidptr(usize(raw))
+			values.data = voidptr(uint(raw))
 			values.len = count
 			values.cap = count
 		}
@@ -628,9 +628,9 @@ fn typed_alias_12(mut writer zigimg.WriteStream, raw u64, op int, count int, opt
 	return 'ok'
 }
 
-fn operate(mut writer zigimg.WriteStream, raw u64, tag int, op int, count int, options zigimg.FormatOptions, depth usize) string {
+fn operate(mut writer zigimg.WriteStream, raw u64, tag int, op int, count int, options zigimg.FormatOptions, depth uint) string {
 	if op == 8 {
-		writer.print_value('*', options, unsafe { voidptr(usize(raw)) }, depth) or {
+		writer.print_value('*', options, unsafe { voidptr(uint(raw)) }, depth) or {
 			return err.msg()
 		}
 		return 'ok'
@@ -640,13 +640,13 @@ fn operate(mut writer zigimg.WriteStream, raw u64, tag int, op int, count int, o
 			if op == 3 {
 				typed_alias_0(mut writer, raw, op, count, options, depth)
 			} else if op == 4 {
-				writer.print_value('*', options, Pointer0(unsafe { &Word0(voidptr(usize(raw))) }),
+				writer.print_value('*', options, Pointer0(unsafe { &Word0(voidptr(uint(raw))) }),
 					depth) or { return err.msg() }
 				'ok'
 			} else if op == 5 {
 				mut values := []Word0{}
 				unsafe {
-					values.data = voidptr(usize(raw))
+					values.data = voidptr(uint(raw))
 					values.len = count
 					values.cap = count
 				}
@@ -660,13 +660,13 @@ fn operate(mut writer zigimg.WriteStream, raw u64, tag int, op int, count int, o
 			if op == 3 {
 				typed_alias_1(mut writer, raw, op, count, options, depth)
 			} else if op == 4 {
-				writer.print_value('*', options, Pointer1(unsafe { &Word1(voidptr(usize(raw))) }),
+				writer.print_value('*', options, Pointer1(unsafe { &Word1(voidptr(uint(raw))) }),
 					depth) or { return err.msg() }
 				'ok'
 			} else if op == 5 {
 				mut values := []Word1{}
 				unsafe {
-					values.data = voidptr(usize(raw))
+					values.data = voidptr(uint(raw))
 					values.len = count
 					values.cap = count
 				}
@@ -680,13 +680,13 @@ fn operate(mut writer zigimg.WriteStream, raw u64, tag int, op int, count int, o
 			if op == 3 {
 				typed_alias_2(mut writer, raw, op, count, options, depth)
 			} else if op == 4 {
-				writer.print_value('*', options, Pointer2(unsafe { &Word2(voidptr(usize(raw))) }),
+				writer.print_value('*', options, Pointer2(unsafe { &Word2(voidptr(uint(raw))) }),
 					depth) or { return err.msg() }
 				'ok'
 			} else if op == 5 {
 				mut values := []Word2{}
 				unsafe {
-					values.data = voidptr(usize(raw))
+					values.data = voidptr(uint(raw))
 					values.len = count
 					values.cap = count
 				}
@@ -700,13 +700,13 @@ fn operate(mut writer zigimg.WriteStream, raw u64, tag int, op int, count int, o
 			if op == 3 {
 				typed_alias_3(mut writer, raw, op, count, options, depth)
 			} else if op == 4 {
-				writer.print_value('*', options, Pointer3(unsafe { &Word3(voidptr(usize(raw))) }),
+				writer.print_value('*', options, Pointer3(unsafe { &Word3(voidptr(uint(raw))) }),
 					depth) or { return err.msg() }
 				'ok'
 			} else if op == 5 {
 				mut values := []Word3{}
 				unsafe {
-					values.data = voidptr(usize(raw))
+					values.data = voidptr(uint(raw))
 					values.len = count
 					values.cap = count
 				}
@@ -720,13 +720,13 @@ fn operate(mut writer zigimg.WriteStream, raw u64, tag int, op int, count int, o
 			if op == 3 {
 				typed_alias_4(mut writer, raw, op, count, options, depth)
 			} else if op == 4 {
-				writer.print_value('*', options, Pointer4(unsafe { &Word4(voidptr(usize(raw))) }),
+				writer.print_value('*', options, Pointer4(unsafe { &Word4(voidptr(uint(raw))) }),
 					depth) or { return err.msg() }
 				'ok'
 			} else if op == 5 {
 				mut values := []Word4{}
 				unsafe {
-					values.data = voidptr(usize(raw))
+					values.data = voidptr(uint(raw))
 					values.len = count
 					values.cap = count
 				}
@@ -740,13 +740,13 @@ fn operate(mut writer zigimg.WriteStream, raw u64, tag int, op int, count int, o
 			if op == 3 {
 				typed_alias_5(mut writer, raw, op, count, options, depth)
 			} else if op == 4 {
-				writer.print_value('*', options, Pointer5(unsafe { &Word5(voidptr(usize(raw))) }),
+				writer.print_value('*', options, Pointer5(unsafe { &Word5(voidptr(uint(raw))) }),
 					depth) or { return err.msg() }
 				'ok'
 			} else if op == 5 {
 				mut values := []Word5{}
 				unsafe {
-					values.data = voidptr(usize(raw))
+					values.data = voidptr(uint(raw))
 					values.len = count
 					values.cap = count
 				}
@@ -760,13 +760,13 @@ fn operate(mut writer zigimg.WriteStream, raw u64, tag int, op int, count int, o
 			if op == 3 {
 				typed_alias_6(mut writer, raw, op, count, options, depth)
 			} else if op == 4 {
-				writer.print_value('*', options, Pointer6(unsafe { &Word6(voidptr(usize(raw))) }),
+				writer.print_value('*', options, Pointer6(unsafe { &Word6(voidptr(uint(raw))) }),
 					depth) or { return err.msg() }
 				'ok'
 			} else if op == 5 {
 				mut values := []Word6{}
 				unsafe {
-					values.data = voidptr(usize(raw))
+					values.data = voidptr(uint(raw))
 					values.len = count
 					values.cap = count
 				}
@@ -780,13 +780,13 @@ fn operate(mut writer zigimg.WriteStream, raw u64, tag int, op int, count int, o
 			if op == 3 {
 				typed_alias_7(mut writer, raw, op, count, options, depth)
 			} else if op == 4 {
-				writer.print_value('*', options, Pointer7(unsafe { &Word7(voidptr(usize(raw))) }),
+				writer.print_value('*', options, Pointer7(unsafe { &Word7(voidptr(uint(raw))) }),
 					depth) or { return err.msg() }
 				'ok'
 			} else if op == 5 {
 				mut values := []Word7{}
 				unsafe {
-					values.data = voidptr(usize(raw))
+					values.data = voidptr(uint(raw))
 					values.len = count
 					values.cap = count
 				}
@@ -800,13 +800,13 @@ fn operate(mut writer zigimg.WriteStream, raw u64, tag int, op int, count int, o
 			if op == 3 {
 				typed_alias_8(mut writer, raw, op, count, options, depth)
 			} else if op == 4 {
-				writer.print_value('*', options, Pointer8(unsafe { &Word8(voidptr(usize(raw))) }),
+				writer.print_value('*', options, Pointer8(unsafe { &Word8(voidptr(uint(raw))) }),
 					depth) or { return err.msg() }
 				'ok'
 			} else if op == 5 {
 				mut values := []Word8{}
 				unsafe {
-					values.data = voidptr(usize(raw))
+					values.data = voidptr(uint(raw))
 					values.len = count
 					values.cap = count
 				}
@@ -820,13 +820,13 @@ fn operate(mut writer zigimg.WriteStream, raw u64, tag int, op int, count int, o
 			if op == 3 {
 				typed_alias_9(mut writer, raw, op, count, options, depth)
 			} else if op == 4 {
-				writer.print_value('*', options, Pointer9(unsafe { &Word9(voidptr(usize(raw))) }),
+				writer.print_value('*', options, Pointer9(unsafe { &Word9(voidptr(uint(raw))) }),
 					depth) or { return err.msg() }
 				'ok'
 			} else if op == 5 {
 				mut values := []Word9{}
 				unsafe {
-					values.data = voidptr(usize(raw))
+					values.data = voidptr(uint(raw))
 					values.len = count
 					values.cap = count
 				}
@@ -841,14 +841,14 @@ fn operate(mut writer zigimg.WriteStream, raw u64, tag int, op int, count int, o
 				typed_alias_10(mut writer, raw, op, count, options, depth)
 			} else if op == 4 {
 				writer.print_value('*', options,
-					Pointer10(unsafe { &Word10(voidptr(usize(raw))) }), depth) or {
+					Pointer10(unsafe { &Word10(voidptr(uint(raw))) }), depth) or {
 					return err.msg()
 				}
 				'ok'
 			} else if op == 5 {
 				mut values := []Word10{}
 				unsafe {
-					values.data = voidptr(usize(raw))
+					values.data = voidptr(uint(raw))
 					values.len = count
 					values.cap = count
 				}
@@ -863,14 +863,14 @@ fn operate(mut writer zigimg.WriteStream, raw u64, tag int, op int, count int, o
 				typed_alias_11(mut writer, raw, op, count, options, depth)
 			} else if op == 4 {
 				writer.print_value('*', options,
-					Pointer11(unsafe { &Word11(voidptr(usize(raw))) }), depth) or {
+					Pointer11(unsafe { &Word11(voidptr(uint(raw))) }), depth) or {
 					return err.msg()
 				}
 				'ok'
 			} else if op == 5 {
 				mut values := []Word11{}
 				unsafe {
-					values.data = voidptr(usize(raw))
+					values.data = voidptr(uint(raw))
 					values.len = count
 					values.cap = count
 				}
@@ -885,14 +885,14 @@ fn operate(mut writer zigimg.WriteStream, raw u64, tag int, op int, count int, o
 				typed_alias_12(mut writer, raw, op, count, options, depth)
 			} else if op == 4 {
 				writer.print_value('*', options,
-					Pointer12(unsafe { &Word12(voidptr(usize(raw))) }), depth) or {
+					Pointer12(unsafe { &Word12(voidptr(uint(raw))) }), depth) or {
 					return err.msg()
 				}
 				'ok'
 			} else if op == 5 {
 				mut values := []Word12{}
 				unsafe {
-					values.data = voidptr(usize(raw))
+					values.data = voidptr(uint(raw))
 					values.len = count
 					values.cap = count
 				}
@@ -939,10 +939,10 @@ fn record(line string, path string) string {
 	observed_options = zigimg.FormatOptions{
 		alignment: unsafe { zigimg.Alignment(f[11].int()) }
 		fill:      u8(f[7].int())
-		width:     if f[13] == '1' { ?usize(usize(f[12].u64())) } else { ?usize(none) }
-		precision: if f[14] == '-' { ?usize(none) } else { ?usize(usize(f[14].u64())) }
+		width:     if f[13] == '1' { ?uint(uint(f[12].u64())) } else { ?uint(none) }
+		precision: if f[14] == '-' { ?uint(none) } else { ?uint(uint(f[14].u64())) }
 	}
-	observed_depth = usize(f[15].u64())
+	observed_depth = uint(f[15].u64())
 	observed_payload = unsafe { payload }
 	observed_vectors = [][]u8{}
 	observed_vectors << unsafe { data }
@@ -974,12 +974,12 @@ fn record(line string, path string) string {
 		writer.flush() or { status = err.msg() }
 	}
 	out += status + '|' + state(writer, buffer) + '~'
-	mut drain := isize(-3)
+	mut drain := int(-3)
 	mut wire := []u8{}
 	if kind > 0 && f[4] == '1' {
 		for {
 			mut bytes := []u8{len: 4096}
-			drain = C.witty_writer_seek_drain(bytes.data, usize(bytes.len))
+			drain = C.witty_writer_seek_drain(bytes.data, uint(bytes.len))
 			if drain <= 0 { break
 			 }
 			wire << bytes[..int(drain)]

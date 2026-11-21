@@ -7,10 +7,10 @@ import os
 
 fn C.witty_reader_delimiter_setup(&char) int
 fn C.witty_reader_delimiter_replace(int) int
-fn C.witty_reader_delimiter_seed(usize, usize) int
+fn C.witty_reader_delimiter_seed(uint, uint) int
 fn C.witty_reader_delimiter_shutdown() int
 fn C.witty_reader_delimiter_cleanup() int
-fn C.witty_reader_delimiter_drain(&u8, usize) isize
+fn C.witty_reader_delimiter_drain(&u8, uint) int
 
 fn delimiter_failed_cursor_case(closed bool) ! {
 	path := os.join_path(os.temp_dir(), 'witty-delimiter-cursor-${os.getpid()}.owned')
@@ -29,7 +29,7 @@ fn delimiter_failed_cursor_case(closed bool) ! {
 	mut status := 'ok'
 	reader.peek(8) or { status = err.msg() }
 	assert status == 'ReadFailed'
-	reader.toss(usize(reader.buffered_len()))
+	reader.toss(uint(reader.buffered_len()))
 	assert reader.get_pos() == 7 && reader.buffered_len() == 0
 	before := buffer.clone()
 	status = 'ok'
@@ -48,7 +48,7 @@ fn delimiter_failed_cursor_case(closed bool) ! {
 	reader.peek_delimiter_inclusive(224) or { status = err.msg() }
 	assert status == 'ReadFailed' && reader.get_pos() == 7
 	mut queued := []u8{len: 64}
-	n := C.witty_reader_delimiter_drain(queued.data, usize(queued.len))
+	n := C.witty_reader_delimiter_drain(queued.data, uint(queued.len))
 	assert n == if closed {
 		0
 	} else {
@@ -84,7 +84,7 @@ fn test_full_original_buffer_reports_stream_too_long_without_consuming_pipe_inpu
 		assert status == 'StreamTooLong' && reader.get_pos() == 0
 		assert reader.buffered_len() == 8 && buffer == before
 		mut queued := []u8{len: 64}
-		assert C.witty_reader_delimiter_drain(queued.data, usize(queued.len)) == 32
+		assert C.witty_reader_delimiter_drain(queued.data, uint(queued.len)) == 32
 		assert queued[..32] == []u8{len: 32, init: u8(index * 31 + 7)}
 	}
 }

@@ -47,10 +47,10 @@ fn grayscale_default_alpha[T](_ T) T {
 	$if T.unaliased_typ is f32 || T.unaliased_typ is f64 {
 		return T(1)
 	} $else $if T.unaliased_typ is u8 || T.unaliased_typ is u16 || T.unaliased_typ is u32
-		|| T.unaliased_typ is u64 || T.unaliased_typ is usize {
+		|| T.unaliased_typ is u64 || T.unaliased_typ is uint {
 		return T(~u64(0) >> (64 - sizeof(T) * 8))
 	} $else $if T.unaliased_typ is i8 || T.unaliased_typ is i16 || T.unaliased_typ is int
-		|| T.unaliased_typ is i64 || T.unaliased_typ is isize {
+		|| T.unaliased_typ is i64 || T.unaliased_typ is int {
 		return T((u64(1) << (sizeof(T) * 8 - 1)) - 1)
 	} $else {
 		$compile_error('GrayscaleAlpha default alpha requires an integer or floating point type')

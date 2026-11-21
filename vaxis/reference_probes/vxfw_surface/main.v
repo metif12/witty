@@ -8,14 +8,14 @@ import vaxis
 import vaxis.vxfw as fw
 
 fn surface_probe_draw(ptr voidptr, ctx fw.DrawContext) !fw.Surface {
-	return fw.Surface.empty(widget(unsafe { int(usize(ptr)) - 1 }))
+	return fw.Surface.empty(widget(unsafe { int(uint(ptr)) - 1 }))
 }
 
 fn surface_probe_event(ptr voidptr, mut ctx fw.EventContext, event fw.Event) ! {}
 
 fn widget(index int) fw.Widget {
 	mut value := fw.Widget{
-		userdata: unsafe { voidptr(usize(index + 1)) }
+		userdata: unsafe { voidptr(uint(index + 1)) }
 		draw_fn:  surface_probe_draw
 	}
 	if index & 1 != 0 { value.event_handler = surface_probe_event }
@@ -24,7 +24,7 @@ fn widget(index int) fw.Widget {
 }
 
 fn id(value fw.Widget) int {
-	return unsafe { int(usize(value.userdata)) - 1 }
+	return unsafe { int(uint(value.userdata)) - 1 }
 }
 
 fn cell(index int) vaxis.Cell {
@@ -365,7 +365,7 @@ fn main() {
 				shape: .beam
 			}
 			surface.write_cell(unsigned(p, 3), unsigned(p, 4), cell(2))
-			cell_value(mut out, surface.read_cell(usize(unsigned(p, 5)), usize(unsigned(p, 6))))
+			cell_value(mut out, surface.read_cell(uint(unsigned(p, 5)), uint(unsigned(p, 6))))
 			trimmed := surface.trim_height(unsigned(p, 7))
 			out.write_string('|${trimmed.size.height},${trimmed.buffer.len},${int(trimmed.cursor == none)},${int(trimmed.buffer.data == surface.buffer.data)},${int(trimmed.children.data == surface.children.data)},${int(trimmed.widget.eql(surface.widget))}|')
 			if trimmed.buffer.len > 0 { trimmed.write_cell(0, 0, cell(3)) }

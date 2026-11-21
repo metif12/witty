@@ -9,7 +9,7 @@ pub mut:
 }
 
 // init creates list_count empty arrays, each reserving initial_capacity.
-pub fn ArrayListCollection.init[T](list_count usize, initial_capacity usize) ArrayListCollection[T] {
+pub fn ArrayListCollection.init[T](list_count uint, initial_capacity uint) ArrayListCollection[T] {
 	mut lists := [][]T{len: int(list_count)}
 	for i in 0 .. lists.len {
 		lists[i] = []T{cap: int(initial_capacity)}

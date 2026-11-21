@@ -36,11 +36,11 @@ struct ScrollFidelityBuilder {
 	child &ScrollFidelityChild
 mut:
 	view    &ScrollView = unsafe { nil }
-	indexes []usize
+	indexes []uint
 	replace bool
 }
 
-fn scroll_fidelity_build(ptr voidptr, index usize, _ usize) ?Widget {
+fn scroll_fidelity_build(ptr voidptr, index uint, _ uint) ?Widget {
 	mut builder := unsafe { &ScrollFidelityBuilder(ptr) }
 	builder.indexes << index
 	if builder.replace {
@@ -134,7 +134,7 @@ fn test_scroll_view_builder_value_survives_callback_replacing_source() {
 		redraw: false
 	}
 	view.next_item(mut event_ctx)
-	assert builder.indexes == [usize(1), 0]
+	assert builder.indexes == [uint(1), 0]
 	assert view.cursor == 0
 	assert event_ctx.consume_event && !event_ctx.redraw
 	assert view.children is ScrollSlice
@@ -145,7 +145,7 @@ fn test_scroll_view_builder_value_survives_callback_replacing_source() {
 		build_fn: scroll_fidelity_build
 	}
 	surface := view.widget().draw(scroll_fidelity_context(3, 1))!
-	assert builder.indexes == [usize(0), 1]
+	assert builder.indexes == [uint(0), 1]
 	assert surface.children.len == 1
 	assert !view.scroll.has_more_vertical
 	assert view.item_count == none

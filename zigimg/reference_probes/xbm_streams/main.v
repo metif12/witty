@@ -46,7 +46,7 @@ fn record(line string, path string, ready bool) string {
 			file.seek(i64(data.len), .start) or { panic(err) }
 			reader = p.ReadStream.init_file(file, mut buffer)
 		}
-		if start > 0 { reader.discard_all(usize(start)) or { panic(err) } }
+		if start > 0 { reader.discard_all(uint(start)) or { panic(err) } }
 		mut codec := p.XBM{
 			width:     97
 			height:    89
@@ -80,8 +80,8 @@ fn record(line string, path string, ready bool) string {
 						continue
 					}
 					image = p.ImageUnmanaged{
-						width:  usize(codec.width)
-						height: usize(codec.height)
+						width:  uint(codec.width)
+						height: uint(codec.height)
 						pixels: pixels
 					}
 				} else if op == 3 {
@@ -124,8 +124,8 @@ fn record(line string, path string, ready bool) string {
 	mut bytes := pixels.as_bytes()
 	copy(mut bytes, [u8(19), 56, 93, 130])
 	image := p.ImageUnmanaged{
-		width:  usize(f[4].u64())
-		height: usize(f[5].u64())
+		width:  uint(f[4].u64())
+		height: uint(f[5].u64())
 		pixels: pixels
 	}
 	options := if op == 7 {

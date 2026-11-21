@@ -259,7 +259,7 @@ pub enum ResizeSplitDirection as i32 {
 // MoveTab holds the relative offset to move a tab by.
 pub struct MoveTab {
 pub:
-	amount isize
+	amount int
 }
 
 // GotoTab is the tab to jump to. Positive values represent the index
@@ -502,11 +502,11 @@ pub:
 // SearchTotal holds the total number of matches found by the search.
 pub struct SearchTotal {
 pub:
-	total ?usize
+	total ?uint
 }
 
 // SearchSelected holds the currently selected search match index (1-based).
 pub struct SearchSelected {
 pub:
-	selected ?usize
+	selected ?uint
 }

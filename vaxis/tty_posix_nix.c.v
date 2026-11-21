@@ -15,9 +15,9 @@ import term.termios
 
 fn C.poll(fds voidptr, nfds u32, timeout int) int
 
-fn C.read(fd int, buf voidptr, count usize) isize
+fn C.read(fd int, buf voidptr, count uint) int
 
-fn C.write(fd int, buf voidptr, count usize) isize
+fn C.write(fd int, buf voidptr, count uint) int
 
 fn C.witty_vaxis_install_winch()
 
@@ -115,7 +115,7 @@ pub fn (tty &Tty) get_winsize() !Winsize {
 pub fn (tty &Tty) write(bytes string) ! {
 	mut written := 0
 	for written < bytes.len {
-		count := C.write(tty.fd, unsafe { bytes.str + written }, usize(bytes.len - written))
+		count := C.write(tty.fd, unsafe { bytes.str + written }, uint(bytes.len - written))
 		if count < 0 {
 			if C.errno == C.EINTR {
 				continue
@@ -130,16 +130,16 @@ pub fn (tty &Tty) write(bytes string) ! {
 }
 
 // PosixTty.read: return after each raw read, including ignored parser reports.
-pub fn (tty &Tty) read(mut buf []u8) !usize {
+pub fn (tty &Tty) read(mut buf []u8) !uint {
 	for {
-		count := C.read(tty.fd, buf.data, usize(buf.len))
+		count := C.read(tty.fd, buf.data, uint(buf.len))
 		if count < 0 {
 			if C.errno == C.EINTR {
 				continue
 			}
 			return error('read /dev/tty failed')
 		}
-		return usize(count)
+		return uint(count)
 	}
 	panic('unreachable')
 }
@@ -151,7 +151,7 @@ fn (mut tty Tty) poll_posix() {
 	}
 	for C.poll(&pfd, 1, 0) > 0 && pfd.revents & i16(C.POLLIN) != 0 {
 		mut buf := [1024]u8{}
-		count := C.read(tty.fd, &buf[0], usize(buf.len))
+		count := C.read(tty.fd, &buf[0], uint(buf.len))
 		if count <= 0 {
 			break
 		}
@@ -168,7 +168,7 @@ pub fn (mut tty Tty) next_input() !InputEvent {
 			return event
 		}
 		mut buf := [1024]u8{}
-		count := C.read(tty.fd, &buf[0], usize(buf.len))
+		count := C.read(tty.fd, &buf[0], uint(buf.len))
 		if count < 0 {
 			if C.errno == C.EINTR {
 				continue

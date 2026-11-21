@@ -22,22 +22,22 @@ mut:
 	fail_at int = -1
 }
 
-fn pointer_map_test_alloc(ctx voidptr, length usize, alignment u8, _ usize) voidptr {
+fn pointer_map_test_alloc(ctx voidptr, length uint, alignment u8, _ uint) voidptr {
 	mut state := unsafe { &PointerMapFailState(ctx) }
 	state.calls++
 	if state.calls == state.fail_at { return unsafe { nil } }
 	return c_allocator.alloc_bytes(length, alignment, 0)
 }
 
-fn pointer_map_test_resize(_ voidptr, _ voidptr, _ usize, _ u8, _ usize, _ usize) bool {
+fn pointer_map_test_resize(_ voidptr, _ voidptr, _ uint, _ u8, _ uint, _ uint) bool {
 	return false
 }
 
-fn pointer_map_test_remap(_ voidptr, _ voidptr, _ usize, _ u8, _ usize, _ usize) voidptr {
+fn pointer_map_test_remap(_ voidptr, _ voidptr, _ uint, _ u8, _ uint, _ uint) voidptr {
 	return unsafe { nil }
 }
 
-fn pointer_map_test_free(ctx voidptr, memory voidptr, length usize, alignment u8, _ usize) {
+fn pointer_map_test_free(ctx voidptr, memory voidptr, length uint, alignment u8, _ uint) {
 	mut state := unsafe { &PointerMapFailState(ctx) }
 	state.frees++
 	c_allocator.free_bytes(memory, length, alignment, 0)

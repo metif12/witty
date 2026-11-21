@@ -73,7 +73,7 @@ pub fn set_native_window_title_font(view voidptr, family ?string) {
 	if is_nil(window) || !msg_bool1(window, 'isKindOfClass:', get_class('VTTerminalWindow')) { return }
 	size := msg_f64(get_class('NSFont'), 'systemFontSize')
 	font := if name := family { C.witty_macos_msg_id_obj_f64(get_class('NSFont'), sel('fontWithName:size:'), nsstring(name), size) } else { nil_obj() }
-	C.macos_set_associated_object(window, voidptr(&native_title_font_key), font, usize(1))
+	C.macos_set_associated_object(window, voidptr(&native_title_font_key), font, uint(1))
 	display_font := if is_nil(font) { msg_id_f64(get_class('NSFont'), 'titleBarFontOfSize:', size) } else { font }
 	msg_void1(window_font_title_field(window), 'setFont:', display_font)
 	// TitlebarTabsVenturaTerminalWindow.titlebarFont also projects the font to

@@ -196,7 +196,7 @@ pub fn (self &Placement) rect(image Image, t &Terminal) ?Rect {
 		PlacementVirtual { return none }
 	}
 
-	overflow := pin.down_overflow(usize(grid_rows) - 1)
+	overflow := pin.down_overflow(uint(grid_rows) - 1)
 	mut br := match overflow {
 		DownOverflowOffset { overflow.pin }
 		DownOverflowOverflow { overflow.end }
@@ -260,8 +260,8 @@ pub mut:
 	// The total bytes of image data that have been loaded and the limit.
 	// If the limit is reached, the oldest images will be evicted to make
 	// space. Unused images take priority.
-	total_bytes usize
-	total_limit usize = 320 * 1000 * 1000 // 320MB
+	total_bytes uint
+	total_limit uint = 320 * 1000 * 1000 // 320MB
 }
 
 // Deinitialize the storage, freeing all images and placements.
@@ -288,7 +288,7 @@ pub fn (self &ImageStorage) enabled() bool {
 // can be loaded. If this limit is lower, this will do an eviction
 // if necessary. If the value is zero, then Kitty image protocol will
 // be disabled.
-pub fn (mut self ImageStorage) set_limit(mut s Screen, limit usize) {
+pub fn (mut self ImageStorage) set_limit(mut s Screen, limit uint) {
 	// Special case disabling by quickly deleting all
 	if limit == 0 {
 		self.deinit(mut s)
@@ -316,12 +316,12 @@ pub fn (mut self ImageStorage) set_limit(mut s Screen, limit usize) {
 // free any existing image with the same ID.
 pub fn (mut self ImageStorage) add_image(img Image) ! {
 	// If the image itself is over the limit, then error immediately
-	if usize(img.data.len) > self.total_limit {
+	if uint(img.data.len) > self.total_limit {
 		return error('OutOfMemory: image exceeds total limit')
 	}
 
 	// If this would put us over the limit, then evict.
-	total_bytes := self.total_bytes + usize(img.data.len)
+	total_bytes := self.total_bytes + uint(img.data.len)
 	if total_bytes > self.total_limit {
 		req_bytes := total_bytes - self.total_limit
 		if !self.evict_image(req_bytes) {
@@ -332,13 +332,13 @@ pub fn (mut self ImageStorage) add_image(img Image) ! {
 	// Check if image with this ID already exists
 	if img.id in self.images {
 		old := self.images[img.id]
-		self.total_bytes -= usize(old.data.len)
+		self.total_bytes -= uint(old.data.len)
 		mut old_mut := self.images[img.id]
 		old_mut.deinit()
 	}
 
 	self.images[img.id] = img
-	self.total_bytes += usize(img.data.len)
+	self.total_bytes += uint(img.data.len)
 	self.dirty = true
 }
 
@@ -665,7 +665,7 @@ fn (mut self ImageStorage) delete_if_unused(image_id u32) {
 	// If we get here, we can delete the image.
 	if image_id in self.images {
 		img := self.images[image_id]
-		self.total_bytes -= usize(img.data.len)
+		self.total_bytes -= uint(img.data.len)
 		mut img_mut := self.images[image_id]
 		img_mut.deinit()
 		self.images.delete(image_id)
@@ -717,7 +717,7 @@ fn (mut self ImageStorage) delete_intersecting(mut t Terminal, p Point, delete_u
 //
 // This will evict as many images as necessary to make space for
 // req bytes.
-fn (mut self ImageStorage) evict_image(req usize) bool {
+fn (mut self ImageStorage) evict_image(req uint) bool {
 	// Build candidate list
 	mut candidates := []EvictCandidate{cap: self.images.len}
 
@@ -763,7 +763,7 @@ fn (mut self ImageStorage) evict_image(req usize) bool {
 	})
 
 	// They're in order of best to evict.
-	mut evicted := usize(0)
+	mut evicted := uint(0)
 	for c in candidates {
 		// Delete all the placements for this image and the image.
 		mut i := 0
@@ -777,8 +777,8 @@ fn (mut self ImageStorage) evict_image(req usize) bool {
 
 		if c.id in self.images {
 			img := self.images[c.id]
-			evicted += usize(img.data.len)
-			self.total_bytes -= usize(img.data.len)
+			evicted += uint(img.data.len)
+			self.total_bytes -= uint(img.data.len)
 			mut img_mut := self.images[c.id]
 			img_mut.deinit()
 			self.images.delete(c.id)

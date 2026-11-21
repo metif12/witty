@@ -22,8 +22,8 @@ fn test_internal_screen_owns_caller_text_to_detect_later_frame_changes() {
 	s.write_cell(0, 0, value)
 	read := s.read_cell(0, 0) or { panic('missing') }
 	assert s.buf[0].eql(value)
-	assert usize(read.char_.grapheme.str) != usize(data.data)
-	assert usize(read.link.uri.str) != usize(data.data) + 3
+	assert uint(read.char_.grapheme.str) != uint(data.data)
+	assert uint(read.link.uri.str) != uint(data.data) + 3
 	data[0] = 88
 	data[3] = 89
 	data[6] = 90
@@ -143,7 +143,7 @@ fn test_internal_screen_old_views_follow_same_capacity_writes() {
 	})
 	current := s.read_cell(0, 0) or { panic('missing') }
 	assert old.char_.grapheme == 'def' && old.link.uri == 'NEW' && old.link.params == 'id1'
-	assert usize(old.char_.grapheme.str) == usize(current.char_.grapheme.str)
+	assert uint(old.char_.grapheme.str) == uint(current.char_.grapheme.str)
 	s.write_cell(0, 0, Cell{
 		char_: CellCharacter{
 			grapheme: 'x'
@@ -157,7 +157,7 @@ fn test_internal_screen_initialized_spaces_have_independent_owned_buffers() {
 	mut s := InternalScreen.new(2, 1)
 	a := s.read_cell(0, 0) or { panic('missing') }
 	b := s.read_cell(1, 0) or { panic('missing') }
-	assert usize(a.char_.grapheme.str) != usize(b.char_.grapheme.str)
+	assert uint(a.char_.grapheme.str) != uint(b.char_.grapheme.str)
 	unsafe {
 		a.char_.grapheme.str[0] = 88
 	}

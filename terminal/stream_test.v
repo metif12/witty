@@ -1254,9 +1254,9 @@ fn test_stream_print_repeat_carries_source_usize_count() ! {
 
 	s.next_slice('x\x1b[65535b'.bytes())!
 	count := s.handler.last(.print_repeat)?
-	assert count is usize
-	if count is usize {
-		assert count == usize(65535)
+	assert count is uint
+	if count is uint {
+		assert count == uint(65535)
 	}
 }
 

@@ -9,8 +9,8 @@ struct AliasArrayValueArgs {
 }
 
 fn alias_array_value_sample() ValueAliasArray {
-	return [unsafe { &ValueAliasByte(voidptr(usize(0x1234))) },
-		unsafe { &ValueAliasByte(voidptr(usize(0x5678))) }]!
+	return [unsafe { &ValueAliasByte(voidptr(uint(0x1234))) },
+		unsafe { &ValueAliasByte(voidptr(uint(0x5678))) }]!
 }
 
 fn test_alias_pointer_array_values_preserve_pointer_names_and_depth() ! {
@@ -34,7 +34,7 @@ fn test_alias_pointer_array_value_failures_keep_exact_prefix() ! {
 		mut buffer := []u8{len: capacity, init: 0xa5}
 		mut writer := WriteStream.init_memory(mut buffer)
 		mut status := 'ok'
-		writer.print_value('any', FormatOptions{ width: 6, alignment: .left, fill: `_`, precision: ~usize(0) }, value, 1) or { status = err.msg() }
+		writer.print_value('any', FormatOptions{ width: 6, alignment: .left, fill: `_`, precision: ~uint(0) }, value, 1) or { status = err.msg() }
 		end := if capacity < expected.len { capacity } else { expected.len }
 		assert status == if capacity < expected.len { 'WriteFailed' } else { 'ok' }
 		assert writer.buffered().bytestr() == expected[..end]
@@ -73,12 +73,12 @@ fn test_alias_pointer_array_values_compose_with_print_and_preserve_storage() ! {
 	mut buffer := []u8{len: 128}
 	mut writer := WriteStream.init_memory(mut buffer)
 	writer.print('L{[value]any}R', AliasArrayValueArgs{value})!
-	assert writer.buffered().bytestr() == 'L{ u8@${usize(voidptr(&first)):x}, u8@${usize(voidptr(&second)):x} }R'
+	assert writer.buffered().bytestr() == 'L{ u8@${uint(voidptr(&first)):x}, u8@${uint(voidptr(&second)):x} }R'
 	assert unsafe { (&u8(voidptr(&value))).vbytes(int(sizeof(value))) } == before
 	first = 9
 	second = 10
 	value.reverse_in_place()
 	writer.seek_to(0)!
 	writer.print_value('any', FormatOptions{}, value, 1)!
-	assert writer.buffered().bytestr() == '{ u8@${usize(voidptr(&second)):x}, u8@${usize(voidptr(&first)):x} }'
+	assert writer.buffered().bytestr() == '{ u8@${uint(voidptr(&second)):x}, u8@${uint(voidptr(&first)):x} }'
 }

@@ -159,8 +159,8 @@ fn source_from_spv(spv []u8, target Target) !string {
 	C.spvc_context_set_error_callback(context, spirv_cross_error, unsafe { nil })
 	mut ir := voidptr(unsafe { nil })
 	// Source @alignCast checks the u32 alignment in runtime-safe builds.
-	assert usize(spv.data) % 4 == 0
-	if C.spvc_context_parse_spirv(context, &u32(spv.data), usize(spv.len / 4), &ir) != C.SPVC_SUCCESS {
+	assert uint(spv.data) % 4 == 0
+	if C.spvc_context_parse_spirv(context, &u32(spv.data), uint(spv.len / 4), &ir) != C.SPVC_SUCCESS {
 		return error('SpvcFailed')
 	}
 	mut compiler := voidptr(unsafe { nil })

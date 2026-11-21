@@ -58,10 +58,10 @@ fn (mut self IoUringStreamTestPty) deinit() {
 
 struct IoUringStreamTestLen {
 mut:
-	value ?usize
+	value ?uint
 }
 
-fn io_uring_stream_test_read(ud voidptr, _ &IoUringLoop, _ &IoUringCompletion, _ IoUringStream, _ IoUringReadBuffer, r ?ErrorKind, n usize) CallbackAction {
+fn io_uring_stream_test_read(ud voidptr, _ &IoUringLoop, _ &IoUringCompletion, _ IoUringStream, _ IoUringReadBuffer, r ?ErrorKind, n uint) CallbackAction {
 	if _ := r {
 		panic('unreachable')
 	}
@@ -70,7 +70,7 @@ fn io_uring_stream_test_read(ud voidptr, _ &IoUringLoop, _ &IoUringCompletion, _
 	return .disarm
 }
 
-fn io_uring_stream_test_write(_ voidptr, _ &IoUringLoop, _ &IoUringCompletion, _ IoUringStream, _ IoUringWriteBuffer, r ?ErrorKind, _ usize) CallbackAction {
+fn io_uring_stream_test_write(_ voidptr, _ &IoUringLoop, _ &IoUringCompletion, _ IoUringStream, _ IoUringWriteBuffer, r ?ErrorKind, _ uint) CallbackAction {
 	if _ := r {
 		panic('unreachable')
 	}
@@ -82,7 +82,7 @@ mut:
 	value &IoUringCompletion = unsafe { nil }
 }
 
-fn io_uring_stream_test_write_record(ud voidptr, _ &IoUringLoop, c &IoUringCompletion, _ IoUringStream, _ IoUringWriteBuffer, r ?ErrorKind, _ usize) CallbackAction {
+fn io_uring_stream_test_write_record(ud voidptr, _ &IoUringLoop, c &IoUringCompletion, _ IoUringStream, _ IoUringWriteBuffer, r ?ErrorKind, _ uint) CallbackAction {
 	if _ := r {
 		panic('unreachable')
 	}

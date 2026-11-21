@@ -88,8 +88,8 @@ fn test_bytes_generator_preserves_pointer_width_limits() {
 	mut rng := rand.new_default(seed_: [u32(2), 0])
 	defer { rng.free() }
 	mut bytes := Bytes.init(rng)
-	assert bytes.max_len == ~usize(0)
-	bytes.min_len = usize(2147483647) + 1
+	assert bytes.max_len == ~uint(0)
+	bytes.min_len = uint(2147483647) + 1
 	mut generator := bytes.generator()
 	assert generator.next(8)!.len == 8
 }

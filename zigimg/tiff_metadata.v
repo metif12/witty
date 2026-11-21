@@ -16,11 +16,11 @@ pub mut:
 	bitmap TiffBitmapDescriptor
 }
 
-pub fn (codec TIFF) width() usize {
+pub fn (codec TIFF) width() uint {
 	return codec.bitmap.image_width
 }
 
-pub fn (codec TIFF) height() usize {
+pub fn (codec TIFF) height() uint {
 	return codec.bitmap.image_height
 }
 
@@ -61,11 +61,11 @@ pub fn (mut codec TIFF) decode_bitmap(mut stream ReadStream) ! {
 				bits := bitmap.bits_per_sample.data[0]
 				if bits >= 16 { panic('attempt to unwrap error: Overflow') }
 				colors := u16(1) << bits
-				bitmap.color_map.resize(usize(colors))
+				bitmap.color_map.resize(uint(colors))
 				for index in 0 .. int(colors) {
-					tiff_check_index(usize(index), palette.len)
-					tiff_check_index(usize(index) + usize(colors), palette.len)
-					tiff_check_index(usize(index) + usize(colors) * 2, palette.len)
+					tiff_check_index(uint(index), palette.len)
+					tiff_check_index(uint(index) + uint(colors), palette.len)
+					tiff_check_index(uint(index) + uint(colors) * 2, palette.len)
 					bitmap.color_map.data[index] = Rgba32{
 						r: u8(palette[index] / 256)
 						g: u8(palette[index + int(colors)] / 256)
@@ -96,7 +96,7 @@ pub fn (mut codec TIFF) decode_bitmap(mut stream ReadStream) ! {
 				bitmap.new_subfile_type = tag.to_long()
 			}
 			.bits_per_sample {
-				bitmap.bits_per_sample.resize(usize(tag.data_count))
+				bitmap.bits_per_sample.resize(uint(tag.data_count))
 				match tag.data_count {
 					1 {
 						bitmap.bits_per_sample.data[0] = tag.to_short(endianess)
@@ -113,7 +113,7 @@ pub fn (mut codec TIFF) decode_bitmap(mut stream ReadStream) ! {
 				}
 			}
 			.extra_samples {
-				bitmap.extra_samples.resize(usize(tag.data_count))
+				bitmap.extra_samples.resize(uint(tag.data_count))
 				if tag.data_count != 1 { return error('Unsupported') }
 				bitmap.extra_samples.data[0] = tag.to_short(endianess)
 			}
@@ -134,17 +134,17 @@ pub fn (mut codec TIFF) decode_bitmap(mut stream ReadStream) ! {
 	}
 }
 
-pub fn (codec TIFF) cal_row_byte_size() !usize {
-	mut bits := usize(0)
+pub fn (codec TIFF) cal_row_byte_size() !uint {
+	mut bits := uint(0)
 	for index in 0 .. int(codec.bitmap.samples_per_pixel) {
-		tiff_check_index(usize(index), codec.bitmap.bits_per_sample.data.len)
-		value := usize(codec.bitmap.bits_per_sample.data[index])
-		if bits > ~usize(0) - value { panic('integer overflow') }
+		tiff_check_index(uint(index), codec.bitmap.bits_per_sample.data.len)
+		value := uint(codec.bitmap.bits_per_sample.data[index])
+		if bits > ~uint(0) - value { panic('integer overflow') }
 		bits += value
 	}
-	if bits == 1 { return usize(codec.bitmap.image_width >> 3) }
+	if bits == 1 { return uint(codec.bitmap.image_width >> 3) }
 	if bits >= 8 {
-		return image_pixel_count(usize(codec.bitmap.image_width), bits / 8)
+		return image_pixel_count(uint(codec.bitmap.image_width), bits / 8)
 	}
 	return error('Unsupported')
 }

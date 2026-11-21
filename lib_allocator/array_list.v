@@ -5,21 +5,21 @@ fn C.GC_remove_roots(voidptr, voidptr)
 
 // Source values are inline. V sum types contain GC pointers, so allocator-
 // owned containers must register their backing ranges with V's collector.
-pub fn register_value_storage(ptr voidptr, bytes usize) {
+pub fn register_value_storage(ptr voidptr, bytes uint) {
 	$if gcboehm ? { C.GC_add_roots(ptr, unsafe { &u8(ptr) + bytes }) }
 }
 
-pub fn unregister_value_storage(ptr voidptr, bytes usize) {
+pub fn unregister_value_storage(ptr voidptr, bytes uint) {
 	$if gcboehm ? { C.GC_remove_roots(ptr, unsafe { &u8(ptr) + bytes }) }
 }
 
-fn C.witty_c_type_alignment(voidptr) usize
+fn C.witty_c_type_alignment(voidptr) uint
 
 pub fn alignment_log[T]() u8 {
 	value := T{}
 	bytes := C.witty_c_type_alignment(&value)
 	mut result := u8(0)
-	for (usize(1) << result) < bytes {
+	for (uint(1) << result) < bytes {
 		result++
 	}
 	return result
@@ -30,19 +30,19 @@ pub fn alignment_log[T]() u8 {
 pub struct ArrayList[T] {
 pub mut:
 	items    []T
-	capacity usize
+	capacity uint
 }
 
-pub fn (mut self ArrayList[T]) ensure_total_capacity(allocator Allocator, minimum usize) ! {
+pub fn (mut self ArrayList[T]) ensure_total_capacity(allocator Allocator, minimum uint) ! {
 	if self.capacity >= minimum { return }
 	mut capacity := self.capacity
-	mut initial := usize(1)
+	mut initial := uint(1)
 	if sizeof(T) < 64 { initial = 64 / sizeof(T) }
 	for capacity < minimum {
 		increment := capacity / 2 + initial
-		capacity = if capacity > ~usize(0) - increment { ~usize(0) } else { capacity + increment }
+		capacity = if capacity > ~uint(0) - increment { ~uint(0) } else { capacity + increment }
 	}
-	if capacity > ~usize(0) / sizeof(T) { return error('OutOfMemory') }
+	if capacity > ~uint(0) / sizeof(T) { return error('OutOfMemory') }
 	old := self.items.data
 	mut raw := unsafe { nil }
 	if self.capacity > 0 {
@@ -67,7 +67,7 @@ pub fn (mut self ArrayList[T]) ensure_total_capacity(allocator Allocator, minimu
 }
 
 pub fn (mut self ArrayList[T]) append(allocator Allocator, value T) ! {
-	self.ensure_total_capacity(allocator, usize(self.items.len) + 1)!
+	self.ensure_total_capacity(allocator, uint(self.items.len) + 1)!
 	length := self.items.len
 	self.items = borrowed_array[T](self.items.data, length + 1, int(self.capacity))
 	self.items[length] = value

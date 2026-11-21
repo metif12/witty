@@ -129,7 +129,7 @@ fn record(line string, path string) string {
 			observed_disk = path
 		}
 		observed_reader = &reader
-		if start > 0 { reader.discard_all(usize(start)) or { panic(err) } }
+		if start > 0 { reader.discard_all(uint(start)) or { panic(err) } }
 		for _ in 0 .. attempts {
 			if op == 3 || op == 4 {
 				mut status := 'ok'
@@ -153,8 +153,8 @@ fn record(line string, path string) string {
 						continue
 					}
 					image = p.ImageUnmanaged{
-						width:  if bmp.width() < 0 { usize(0) } else { usize(bmp.width()) }
-						height: if bmp.height() < 0 { usize(0) } else { usize(bmp.height()) }
+						width:  if bmp.width() < 0 { uint(0) } else { uint(bmp.width()) }
+						height: if bmp.height() < 0 { uint(0) } else { uint(bmp.height()) }
 						pixels: pixels
 					}
 				} else if op == 2 {
@@ -193,7 +193,7 @@ fn record(line string, path string) string {
 	}
 	observed_writer = &writer
 	if start > 0 { writer.seek_to(start) or { panic(err) } }
-	pixels := p.PixelStorage.init(unsafe { p.PixelFormat(f[5].u32()) }, usize(f[6].u64())) or {
+	pixels := p.PixelStorage.init(unsafe { p.PixelFormat(f[5].u32()) }, uint(f[6].u64())) or {
 		panic(err)
 	}
 	mut raw := pixels.as_bytes()
@@ -207,8 +207,8 @@ fn record(line string, path string) string {
 		}
 	}
 	mut image := p.ImageUnmanaged{
-		width:  if op == 5 { usize(17) } else { usize(f[3].u64()) }
-		height: if op == 5 { usize(19) } else { usize(f[4].u64()) }
+		width:  if op == 5 { uint(17) } else { uint(f[3].u64()) }
+		height: if op == 5 { uint(19) } else { uint(f[4].u64()) }
 		pixels: pixels
 	}
 	observed_image = &image

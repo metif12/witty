@@ -4,14 +4,14 @@ module vaxis
 // owned by the caller, as it does for the source's []const u8 slices.
 pub struct Grapheme {
 pub mut:
-	start usize @[required]
-	len   usize @[required]
+	start uint @[required]
+	len   uint @[required]
 }
 
 pub fn (grapheme Grapheme) bytes(text string) string {
-	if grapheme.len > ~usize(0) - grapheme.start { panic('integer overflow') }
+	if grapheme.len > ~uint(0) - grapheme.start { panic('integer overflow') }
 	byte_limit := grapheme.start + grapheme.len
-	if byte_limit > usize(text.len) { panic('index out of bounds') }
+	if byte_limit > uint(text.len) { panic('index out of bounds') }
 	return text.substr_unsafe(int(grapheme.start), int(byte_limit))
 }
 
@@ -36,7 +36,7 @@ pub fn grapheme_iterator(text string) GraphemeIterator {
 pub fn (mut iter GraphemeIterator) next() ?Grapheme {
 	span := iter.inner.next() or { return none }
 	return Grapheme{
-		start: usize(span.start)
-		len:   usize(span.limit - span.start)
+		start: uint(span.start)
+		len:   uint(span.limit - span.start)
 	}
 }

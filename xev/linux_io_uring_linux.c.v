@@ -147,7 +147,7 @@ pub mut:
 	resv         u64
 }
 
-pub fn (mut sqe IoUringSqe) prep_rw(op IoringOp, fd int, addr u64, len usize, offset u64) {
+pub fn (mut sqe IoUringSqe) prep_rw(op IoringOp, fd int, addr u64, len uint, offset u64) {
 	assert len <= max_u32 // @intCast safety check
 	unsafe {
 		*sqe = IoUringSqe{
@@ -170,42 +170,42 @@ pub fn (mut sqe IoUringSqe) prep_rw(op IoringOp, fd int, addr u64, len usize, of
 }
 
 pub fn (mut sqe IoUringSqe) prep_read(fd int, buffer []u8, offset u64) {
-	sqe.prep_rw(.read, fd, u64(usize(buffer.data)), usize(buffer.len), offset)
+	sqe.prep_rw(.read, fd, u64(uint(buffer.data)), uint(buffer.len), offset)
 }
 
 pub fn (mut sqe IoUringSqe) prep_write(fd int, buffer []u8, offset u64) {
-	sqe.prep_rw(.write, fd, u64(usize(buffer.data)), usize(buffer.len), offset)
+	sqe.prep_rw(.write, fd, u64(uint(buffer.data)), uint(buffer.len), offset)
 }
 
 pub fn (mut sqe IoUringSqe) prep_accept(fd int, addr voidptr, addrlen &u32, flags u32) {
 	// `addr` holds a pointer to `sockaddr`, and `addr2` holds a pointer to socklen_t`.
 	// `addr2` maps to `sqe.off` (u64) instead of `sqe.len` (which is only a u32).
-	sqe.prep_rw(.accept, fd, u64(usize(addr)), 0, u64(usize(addrlen)))
+	sqe.prep_rw(.accept, fd, u64(uint(addr)), 0, u64(uint(addrlen)))
 	sqe.rw_flags = flags
 }
 
 pub fn (mut sqe IoUringSqe) prep_connect(fd int, addr voidptr, addrlen u32) {
 	// `addrlen` maps to `sqe.off` (u64) instead of `sqe.len` (which is only a u32).
-	sqe.prep_rw(.connect, fd, u64(usize(addr)), 0, u64(addrlen))
+	sqe.prep_rw(.connect, fd, u64(uint(addr)), 0, u64(addrlen))
 }
 
 pub fn (mut sqe IoUringSqe) prep_recv(fd int, buffer []u8, flags u32) {
-	sqe.prep_rw(.recv, fd, u64(usize(buffer.data)), usize(buffer.len), 0)
+	sqe.prep_rw(.recv, fd, u64(uint(buffer.data)), uint(buffer.len), 0)
 	sqe.rw_flags = flags
 }
 
 pub fn (mut sqe IoUringSqe) prep_recvmsg(fd int, msg &C.msghdr, flags u32) {
-	sqe.prep_rw(.recvmsg, fd, u64(usize(msg)), 1, 0)
+	sqe.prep_rw(.recvmsg, fd, u64(uint(msg)), 1, 0)
 	sqe.rw_flags = flags
 }
 
 pub fn (mut sqe IoUringSqe) prep_send(fd int, buffer []u8, flags u32) {
-	sqe.prep_rw(.send, fd, u64(usize(buffer.data)), usize(buffer.len), 0)
+	sqe.prep_rw(.send, fd, u64(uint(buffer.data)), uint(buffer.len), 0)
 	sqe.rw_flags = flags
 }
 
 pub fn (mut sqe IoUringSqe) prep_sendmsg(fd int, msg &C.msghdr, flags u32) {
-	sqe.prep_rw(.sendmsg, fd, u64(usize(msg)), 1, 0)
+	sqe.prep_rw(.sendmsg, fd, u64(uint(msg)), 1, 0)
 	sqe.rw_flags = flags
 }
 
@@ -231,7 +231,7 @@ pub fn (mut sqe IoUringSqe) prep_close(fd int) {
 }
 
 pub fn (mut sqe IoUringSqe) prep_timeout(ts &LinuxKernelTimespec, count u32, flags u32) {
-	sqe.prep_rw(.timeout, -1, u64(usize(ts)), 1, u64(count))
+	sqe.prep_rw(.timeout, -1, u64(uint(ts)), 1, u64(count))
 	sqe.rw_flags = flags
 }
 
@@ -257,7 +257,7 @@ pub fn (mut sqe IoUringSqe) prep_timeout_remove(timeout_user_data u64, flags u32
 }
 
 pub fn (mut sqe IoUringSqe) prep_poll_add(fd int, poll_mask u32) {
-	sqe.prep_rw(.poll_add, fd, u64(usize(unsafe { nil })), 0, 0)
+	sqe.prep_rw(.poll_add, fd, u64(uint(unsafe { nil })), 0, 0)
 	// Poll masks previously used to comprise of 16 bits in the flags union of
 	// a SQE, but were then extended to comprise of 32 bits in order to make
 	// room for additional option flags. To ensure that the correct bits of
@@ -355,17 +355,17 @@ pub mut:
 }
 
 // Translation of std.os.linux.io_uring_setup.
-pub fn linux_io_uring_setup(entries u32, p &IoUringParams) usize {
+pub fn linux_io_uring_setup(entries u32, p &IoUringParams) uint {
 	return linux_syscall_result(unsafe {
-		C.syscall(C.SYS_io_uring_setup, voidptr(usize(entries)), voidptr(p))
+		C.syscall(C.SYS_io_uring_setup, voidptr(uint(entries)), voidptr(p))
 	})
 }
 
 // Translation of std.os.linux.io_uring_enter.
-pub fn linux_io_uring_enter(fd int, to_submit u32, min_complete u32, flags u32, sig voidptr) usize {
+pub fn linux_io_uring_enter(fd int, to_submit u32, min_complete u32, flags u32, sig voidptr) uint {
 	return linux_syscall_result(unsafe {
-		C.syscall(C.SYS_io_uring_enter, voidptr(usize(isize(fd))), voidptr(usize(to_submit)),
-			voidptr(usize(min_complete)), voidptr(usize(flags)), sig, voidptr(usize(linux_nsig / 8)))
+		C.syscall(C.SYS_io_uring_enter, voidptr(uint(int(fd))), voidptr(uint(to_submit)),
+			voidptr(uint(min_complete)), voidptr(uint(flags)), sig, voidptr(uint(linux_nsig / 8)))
 	})
 }
 
@@ -515,8 +515,8 @@ pub fn LinuxIoUring.init_params(entries u16, mut p IoUringParams) !LinuxIoUring 
 	assert sq.mask == p.sq_entries - 1
 	// Allow flags.* to be non-zero, since the kernel may set IORING_SQ_NEED_WAKEUP at any time.
 	assert unsafe { *sq.dropped } == 0
-	assert sq.array_len == usize(p.sq_entries)
-	assert sq.sqes_len == usize(p.sq_entries)
+	assert sq.array_len == uint(p.sq_entries)
+	assert sq.sqes_len == uint(p.sq_entries)
 	assert sq.sqe_head == 0
 	assert sq.sqe_tail == 0
 
@@ -524,7 +524,7 @@ pub fn LinuxIoUring.init_params(entries u16, mut p IoUringParams) !LinuxIoUring 
 	assert unsafe { *cq.tail } == 0
 	assert cq.mask == p.cq_entries - 1
 	assert unsafe { *cq.overflow } == 0
-	assert cq.cqes_len == usize(p.cq_entries)
+	assert cq.cqes_len == uint(p.cq_entries)
 
 	ok = true
 	return LinuxIoUring{
@@ -557,7 +557,7 @@ pub fn (mut self LinuxIoUring) get_sqe() !&IoUringSqe {
 	// Remember that these head and tail offsets wrap around every four billion operations.
 	// We must therefore use wrapping addition and subtraction to avoid a runtime crash.
 	next := self.sq.sqe_tail + 1
-	if usize(next - head) > self.sq.sqes_len {
+	if uint(next - head) > self.sq.sqes_len {
 		return new_error(.submission_queue_full)
 	}
 	sqe := unsafe { &self.sq.sqes[self.sq.sqe_tail & self.sq.mask] }
@@ -657,8 +657,8 @@ pub fn (mut self LinuxIoUring) flush_sq() u32 {
 		// Fill in SQEs that we have queued up, adding them to the kernel ring.
 		to_submit := self.sq.sqe_tail - self.sq.sqe_head
 		mut tail := unsafe { *self.sq.tail }
-		mut i := usize(0)
-		for i < usize(to_submit) {
+		mut i := uint(0)
+		for i < uint(to_submit) {
 			unsafe {
 				self.sq.array[tail & self.sq.mask] = self.sq.sqe_head & self.sq.mask
 			}
@@ -719,7 +719,7 @@ pub fn (mut self LinuxIoUring) cq_ready() u32 {
 // Matches the implementation of io_uring_peek_batch_cqe() in liburing, but supports waiting.
 //
 // The `cqes` slice is passed as a pointer and a length.
-pub fn (mut self LinuxIoUring) copy_cqes(cqes &IoUringCqe, cqes_len usize, wait_nr u32) !u32 {
+pub fn (mut self LinuxIoUring) copy_cqes(cqes &IoUringCqe, cqes_len uint, wait_nr u32) !u32 {
 	count := self.copy_cqes_ready(cqes, cqes_len)
 	if count > 0 {
 		return count
@@ -731,20 +731,20 @@ pub fn (mut self LinuxIoUring) copy_cqes(cqes &IoUringCqe, cqes_len usize, wait_
 	return 0
 }
 
-fn (mut self LinuxIoUring) copy_cqes_ready(cqes &IoUringCqe, cqes_len usize) u32 {
+fn (mut self LinuxIoUring) copy_cqes_ready(cqes &IoUringCqe, cqes_len uint) u32 {
 	ready := self.cq_ready()
-	count := u32(usize_min(cqes_len, usize(ready)))
+	count := u32(usize_min(cqes_len, uint(ready)))
 	head := unsafe { *self.cq.head } & self.cq.mask
 
 	// before wrapping
-	n := usize_min(self.cq.cqes_len - usize(head), usize(count))
+	n := usize_min(self.cq.cqes_len - uint(head), uint(count))
 	unsafe {
 		vmemcpy(cqes, &self.cq.cqes[head], int(n * sizeof(IoUringCqe)))
 	}
 
-	if usize(count) > n {
+	if uint(count) > n {
 		// wrap self.cq.cqes
-		w := usize(count) - n
+		w := uint(count) - n
 		unsafe {
 			vmemcpy(&cqes[n], &self.cq.cqes[0], int(w * sizeof(IoUringCqe)))
 		}
@@ -776,9 +776,9 @@ pub mut:
 	flags     &u32 = unsafe { nil }
 	dropped   &u32 = unsafe { nil }
 	array     &u32 = unsafe { nil }
-	array_len usize
+	array_len uint
 	sqes      &IoUringSqe = unsafe { nil }
-	sqes_len  usize
+	sqes_len  uint
 	mmap      []u8
 	mmap_sqes []u8
 
@@ -801,7 +801,7 @@ pub fn LinuxIoUringSq.init(fd int, p IoUringParams) !LinuxIoUringSq {
 	assert (p.features & ioring_feat_single_mmap) != 0
 	size := u32_max(p.sq_off.array + p.sq_entries * u32(sizeof(u32)), p.cq_off.cqes +
 		p.cq_entries * u32(sizeof(IoUringCqe)))
-	mmap := posix_mmap(unsafe { nil }, usize(size), u32(int(C.PROT_READ)) | u32(int(C.PROT_WRITE)),
+	mmap := posix_mmap(unsafe { nil }, uint(size), u32(int(C.PROT_READ)) | u32(int(C.PROT_WRITE)),
 		u32(int(C.MAP_SHARED)) | u32(int(C.MAP_POPULATE)), fd, ioring_off_sq_ring)!
 	// errdefer posix.munmap(mmap)
 	mut ok := false
@@ -810,12 +810,12 @@ pub fn LinuxIoUringSq.init(fd int, p IoUringParams) !LinuxIoUringSq {
 			posix_munmap(mmap)
 		}
 	}
-	assert usize(mmap.len) == usize(size)
+	assert uint(mmap.len) == uint(size)
 
 	// The motivation for the `sqes` and `array` indirection is to make it possible for the
 	// application to preallocate static linux.io_uring_sqe entries and then replay them when needed.
 	size_sqes := p.sq_entries * u32(sizeof(IoUringSqe))
-	mmap_sqes := posix_mmap(unsafe { nil }, usize(size_sqes), u32(int(C.PROT_READ)) | u32(int(C.PROT_WRITE)),
+	mmap_sqes := posix_mmap(unsafe { nil }, uint(size_sqes), u32(int(C.PROT_READ)) | u32(int(C.PROT_WRITE)),
 		u32(int(C.MAP_SHARED)) | u32(int(C.MAP_POPULATE)), fd, ioring_off_sqes)!
 	// errdefer posix.munmap(mmap_sqes)
 	defer {
@@ -823,7 +823,7 @@ pub fn LinuxIoUringSq.init(fd int, p IoUringParams) !LinuxIoUringSq {
 			posix_munmap(mmap_sqes)
 		}
 	}
-	assert usize(mmap_sqes.len) == usize(size_sqes)
+	assert uint(mmap_sqes.len) == uint(size_sqes)
 
 	array := unsafe { &u32(io_uring_mmap_ptr(mmap, p.sq_off.array)) }
 	sqes := unsafe { &IoUringSqe(mmap_sqes.data) }
@@ -838,9 +838,9 @@ pub fn LinuxIoUringSq.init(fd int, p IoUringParams) !LinuxIoUringSq {
 		flags: unsafe { &u32(io_uring_mmap_ptr(mmap, p.sq_off.flags)) }
 		dropped: unsafe { &u32(io_uring_mmap_ptr(mmap, p.sq_off.dropped)) }
 		array: array
-		array_len: usize(p.sq_entries)
+		array_len: uint(p.sq_entries)
 		sqes: sqes
-		sqes_len: usize(p.sq_entries)
+		sqes_len: uint(p.sq_entries)
 		mmap: mmap
 		mmap_sqes: mmap_sqes
 	}
@@ -858,7 +858,7 @@ pub mut:
 	mask     u32
 	overflow &u32 = unsafe { nil }
 	cqes     &IoUringCqe = unsafe { nil }
-	cqes_len usize
+	cqes_len uint
 }
 
 pub fn LinuxIoUringCq.init(fd int, p IoUringParams, sq LinuxIoUringSq) !LinuxIoUringCq {
@@ -873,7 +873,7 @@ pub fn LinuxIoUringCq.init(fd int, p IoUringParams, sq LinuxIoUringSq) !LinuxIoU
 		mask: unsafe { *(&u32(io_uring_mmap_ptr(mmap, p.cq_off.ring_mask))) }
 		overflow: unsafe { &u32(io_uring_mmap_ptr(mmap, p.cq_off.overflow)) }
 		cqes: cqes
-		cqes_len: usize(p.cq_entries)
+		cqes_len: uint(p.cq_entries)
 	}
 }
 

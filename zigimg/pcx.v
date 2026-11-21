@@ -42,16 +42,16 @@ pub mut:
 	header PCXHeader
 }
 
-pub fn (codec PCX) width() usize {
+pub fn (codec PCX) width() uint {
 	if codec.header.xmax < codec.header.xmin { panic('integer overflow') }
 	if codec.header.xmax - codec.header.xmin == 65535 { panic('integer overflow') }
-	return usize(u16(codec.header.xmax - codec.header.xmin + 1))
+	return uint(u16(codec.header.xmax - codec.header.xmin + 1))
 }
 
-pub fn (codec PCX) height() usize {
+pub fn (codec PCX) height() uint {
 	if codec.header.ymax < codec.header.ymin { panic('integer overflow') }
 	if codec.header.ymax - codec.header.ymin == 65535 { panic('integer overflow') }
-	return usize(u16(codec.header.ymax - codec.header.ymin + 1))
+	return uint(u16(codec.header.ymax - codec.header.ymin + 1))
 }
 
 pub fn PCX.format_detect(mut stream ReadStream) !bool {
@@ -150,7 +150,7 @@ struct PcxRleDecoder {
 mut:
 	reader    &ReadStream = unsafe { nil }
 	value     u8
-	remaining usize
+	remaining uint
 }
 
 fn (mut decoder PcxRleDecoder) read_byte() !u8 {
@@ -166,7 +166,7 @@ fn (mut decoder PcxRleDecoder) read_byte() !u8 {
 			count := byte & 0x3f
 			value := decoder.reader.take_byte()!
 			decoder.value = value
-			decoder.remaining = usize(count - 1)
+			decoder.remaining = uint(count - 1)
 			return value
 		}
 		return byte
@@ -192,7 +192,7 @@ pub fn (mut codec PCX) read(mut stream ReadStream) !PixelStorage {
 	} else {
 		int(codec.header.stride)
 	}
-	has_dummy_byte := isize(signed_stride) - isize(width) == 1
+	has_dummy_byte := int(signed_stride) - int(width) == 1
 	actual_width := if has_dummy_byte { width + 1 } else { width }
 	mut pixels := PixelStorage.init(format, width * height)!
 	mut decoder := PcxRleDecoder{
@@ -200,9 +200,9 @@ pub fn (mut codec PCX) read(mut stream ReadStream) !PixelStorage {
 	}
 	if u32(codec.header.stride) * codec.header.planes > 65535 { panic('integer overflow') }
 	scanline_length := u16(codec.header.stride * codec.header.planes)
-	for y := usize(0); y < height; y++ {
-		mut offset := usize(0)
-		mut x := usize(0)
+	for y := uint(0); y < height; y++ {
+		mut offset := uint(0)
+		mut x := uint(0)
 		y_stride := y * width
 		for offset < scanline_length && x < width {
 			byte := decoder.read_byte()!
@@ -237,7 +237,7 @@ pub fn (mut codec PCX) read(mut stream ReadStream) !PixelStorage {
 					// Source checks the destination after decoding the byte, and
 					// only for one of the three component assignments.
 					index := y_stride + pixel_x
-					if current_color < 3 && index >= usize(pixels.data.len) {
+					if current_color < 3 && index >= uint(pixels.data.len) {
 						panic('index out of bounds: index ${index}, len ${pixels.data.len}')
 					}
 					match current_color {
@@ -297,10 +297,10 @@ fn pcx_read_palette(mut stream ReadStream, mut palette []Rgba32, header PCXHeade
 	}
 }
 
-fn pcx_flush_rle(mut stream WriteStream, value u8, count usize) ! {
+fn pcx_flush_rle(mut stream WriteStream, value u8, count uint) ! {
 	mut remaining := count
 	for remaining > 0 {
-		length := if remaining < 63 { remaining } else { usize(63) }
+		length := if remaining < 63 { remaining } else { uint(63) }
 		if length >= 2 || value & 0xc0 == 0xc0 {
 			stream.write_byte(0xc0 | u8(length))!
 			stream.write_byte(value)!
@@ -314,7 +314,7 @@ fn pcx_flush_rle(mut stream WriteStream, value u8, count usize) ! {
 struct PcxRleStreamEncoder {
 mut:
 	rle_byte ?u8
-	length   usize
+	length   uint
 }
 
 fn (mut encoder PcxRleStreamEncoder) encode_byte(mut stream WriteStream, byte u8) ! {
@@ -347,7 +347,7 @@ fn (mut encoder PcxRleStreamEncoder) flush(mut stream WriteStream) ! {
 fn pcx_rle_fast_encode(source []u8, mut stream WriteStream) ! {
 	if source.len == 0 { return }
 	mut index := 0
-	mut total := usize(0)
+	mut total := uint(0)
 	mut current := u8(0)
 	for index < source.len && index + 16 <= source.len {
 		current = source[index]
@@ -355,7 +355,7 @@ fn pcx_rle_fast_encode(source []u8, mut stream WriteStream) ! {
 		for similar < 16 && source[index + similar] == current {
 			similar++
 		}
-		total += usize(similar)
+		total += uint(similar)
 		if similar != 16 {
 			pcx_flush_rle(mut stream, current, total)!
 			total = 0
@@ -432,8 +432,8 @@ fn (mut codec PCX) fill_palette(palette []Rgba32) {
 	}
 }
 
-fn pcx_write_index(index usize, length int) int {
-	if index >= usize(length) {
+fn pcx_write_index(index uint, length int) int {
+	if index >= uint(length) {
 		panic('index out of bounds: index ${index}, len ${length}')
 	}
 	return int(index)
@@ -449,13 +449,13 @@ pub fn (codec PCX) write(mut stream WriteStream, pixels PixelStorage) ! {
 	even := width & 1 == 0
 	// The source's even indexed8 path reads the whole slice and never evaluates
 	// the header's height, including an invalid vertical coordinate range.
-	height := if pixels is IndexedStorage8 && even { usize(0) } else { codec.height() }
+	height := if pixels is IndexedStorage8 && even { uint(0) } else { codec.height() }
 	mut encoder := PcxRleStreamEncoder{}
 	match pixels {
 		IndexedStorage1 {
-			for y := usize(0); y < height; y++ {
+			for y := uint(0); y < height; y++ {
 				mut byte := u8(0)
-				for x := usize(0); x < width; x++ {
+				for x := uint(0); x < width; x++ {
 					pixel := pixels.indices[pcx_write_index(y * width + x, pixels.indices.len)]
 					assert pixel <= 1
 					bit := u8(7 - (x % 8))
@@ -471,8 +471,8 @@ pub fn (codec PCX) write(mut stream WriteStream, pixels PixelStorage) ! {
 		}
 		IndexedStorage4 {
 			mut byte := u8(0)
-			for y := usize(0); y < height; y++ {
-				for x := usize(0); x < width; x++ {
+			for y := uint(0); y < height; y++ {
+				for x := uint(0); x < width; x++ {
 					pixel := pixels.indices[pcx_write_index(y * width + x, pixels.indices.len)]
 					assert pixel <= 15
 					if x & 1 == 1 {
@@ -490,9 +490,9 @@ pub fn (codec PCX) write(mut stream WriteStream, pixels PixelStorage) ! {
 			if even {
 				pcx_rle_fast_encode(pixels.indices, mut stream)!
 			} else {
-				for y := usize(0); y < height; y++ {
+				for y := uint(0); y < height; y++ {
 					end := (y + 1) * width
-					if end > usize(pixels.indices.len) {
+					if end > uint(pixels.indices.len) {
 						panic('index out of bounds: index ${end}, len ${pixels.indices.len}')
 					}
 					encoder.encode(mut stream, pixels.indices[int(y * width)..int(end)])!
@@ -506,9 +506,9 @@ pub fn (codec PCX) write(mut stream WriteStream, pixels PixelStorage) ! {
 			}
 		}
 		Rgb24Pixels {
-			for y := usize(0); y < height; y++ {
+			for y := uint(0); y < height; y++ {
 				for plane in 0 .. 3 {
-					for x := usize(0); x < width; x++ {
+					for x := uint(0); x < width; x++ {
 						pixel := pixels.data[pcx_write_index(y * width + x, pixels.data.len)]
 						byte := match plane {
 							0 { pixel.r }

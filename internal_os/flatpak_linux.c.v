@@ -40,23 +40,23 @@ fn C.g_variant_builder_new(vtype voidptr) voidptr
 fn C.g_variant_builder_unref(builder voidptr)
 fn C.g_variant_builder_add_value(builder voidptr, value voidptr)
 fn C.g_variant_builder_end(builder voidptr) voidptr
-fn C.g_variant_new_tuple(children &voidptr, n_children usize) voidptr
+fn C.g_variant_new_tuple(children &voidptr, n_children uint) voidptr
 fn C.g_variant_new_dict_entry(key voidptr, value voidptr) voidptr
 fn C.g_variant_new_uint32(value u32) voidptr
 fn C.g_variant_new_boolean(value int) voidptr
 fn C.g_variant_new_string(str &char) voidptr
 fn C.g_variant_new_handle(value int) voidptr
 fn C.g_variant_new_bytestring(str &char) voidptr
-fn C.g_variant_new_bytestring_array(strv &&char, length isize) voidptr
+fn C.g_variant_new_bytestring_array(strv &&char, length int) voidptr
 fn C.g_variant_ref_sink(value voidptr) voidptr
 fn C.g_variant_unref(value voidptr)
-fn C.g_variant_get_child_value(value voidptr, index usize) voidptr
+fn C.g_variant_get_child_value(value voidptr, index uint) voidptr
 fn C.g_variant_get_uint32(value voidptr) u32
 fn C.g_dbus_connection_signal_subscribe(connection voidptr, sender &char, interface_name &char, member &char, object_path &char, arg0 &char, flags int, callback voidptr, user_data voidptr, user_data_free_func voidptr) u32
 fn C.g_dbus_connection_signal_unsubscribe(connection voidptr, subscription_id u32)
 fn C.g_dbus_connection_call_sync(connection voidptr, bus_name &char, object_path &char, interface_name &char, method_name &char, parameters voidptr, reply_type voidptr, flags int, timeout_msec int, cancellable voidptr, error &voidptr) voidptr
 fn C.g_dbus_connection_call_with_unix_fd_list_sync(connection voidptr, bus_name &char, object_path &char, interface_name &char, method_name &char, parameters voidptr, reply_type voidptr, flags int, timeout_msec int, fd_list voidptr, out_fd_list &voidptr, cancellable voidptr, error &voidptr) voidptr
-fn C.read(fd int, buf voidptr, count usize) isize
+fn C.read(fd int, buf voidptr, count uint) int
 
 fn gerror_message(err voidptr) string {
 	if isnil(err) {
@@ -66,7 +66,7 @@ fn gerror_message(err voidptr) string {
 }
 
 // g_variant_get(value, "(u...)") for the uint32 child at index.
-fn flatpak_variant_get_uint32(value voidptr, index usize) u32 {
+fn flatpak_variant_get_uint32(value voidptr, index uint) u32 {
 	child := C.g_variant_get_child_value(value, index)
 	defer {
 		C.g_variant_unref(child)
@@ -96,7 +96,7 @@ fn flatpak_host_command_signal_linux(pid u32, sig u8, pg bool) ! {
 		C.g_variant_new_boolean(if pg { 1 } else { 0 })]
 	reply := C.g_dbus_connection_call_sync(bus, c'org.freedesktop.Flatpak', c'/org/freedesktop/Flatpak/Development',
 		c'org.freedesktop.Flatpak.Development', c'HostCommandSignal', C.g_variant_new_tuple(params.data,
-		usize(params.len)), C.G_VARIANT_TYPE(c'()'), C.G_DBUS_CALL_FLAGS_NONE, C.G_MAXINT,
+		uint(params.len)), C.G_VARIANT_TYPE(c'()'), C.G_DBUS_CALL_FLAGS_NONE, C.G_MAXINT,
 		unsafe { nil }, &g_err)
 	if !isnil(g_err) {
 		log.warn('signal send error: ${gerror_message(g_err)}')
@@ -228,7 +228,7 @@ fn (mut self FlatpakHostCommand) start(bus voidptr, loop voidptr) ! {
 	children := [C.g_variant_new_bytestring(cwd_ptr), C.g_variant_new_bytestring_array(args.data,
 		-1), C.g_variant_builder_end(fd_builder), C.g_variant_builder_end(env_builder),
 		C.g_variant_new_uint32(0)]
-	params := C.g_variant_new_tuple(children.data, usize(children.len))
+	params := C.g_variant_new_tuple(children.data, uint(children.len))
 	_ = C.g_variant_ref_sink(params) // take ownership
 	defer {
 		C.g_variant_unref(params)
@@ -335,7 +335,7 @@ fn get_passwd_flatpak(username string) !Entry {
 	mut output := []u8{}
 	mut buf := [1024]u8{}
 	for {
-		n := C.read(pseudoterminal.master, &buf[0], usize(buf.len))
+		n := C.read(pseudoterminal.master, &buf[0], uint(buf.len))
 		if n < 0 {
 			if C.errno == C.EIO {
 				break

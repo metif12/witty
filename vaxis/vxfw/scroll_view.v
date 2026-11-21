@@ -3,7 +3,7 @@ module vxfw
 import math
 import vaxis
 
-pub type ScrollBuildFn = fn (voidptr, usize, usize) ?Widget
+pub type ScrollBuildFn = fn (voidptr, uint, uint) ?Widget
 
 pub struct ScrollBuilder {
 pub mut:
@@ -11,7 +11,7 @@ pub mut:
 	build_fn ScrollBuildFn @[required]
 }
 
-pub fn (builder ScrollBuilder) item_at_idx(index usize, cursor usize) ?Widget {
+pub fn (builder ScrollBuilder) item_at_idx(index uint, cursor uint) ?Widget {
 	return builder.build_fn(builder.userdata, index, cursor)
 }
 
@@ -178,9 +178,9 @@ pub fn (mut view ScrollView) draw(ctx DrawContext) !Surface {
 	}
 }
 
-fn scroll_slice_build(ptr voidptr, index usize, _ usize) ?Widget {
+fn scroll_slice_build(ptr voidptr, index uint, _ uint) ?Widget {
 	slice := unsafe { &ScrollSlice(ptr) }
-	if index >= usize(slice.widgets.len) { return none }
+	if index >= uint(slice.widgets.len) { return none }
 	return slice.widgets[int(index)]
 }
 
@@ -195,7 +195,7 @@ pub fn (mut view ScrollView) next_item(mut ctx EventContext) {
 		match view.children {
 			ScrollSlice {
 				view.item_count = vxfw_u32_cast(u64(view.children.widgets.len))
-				if usize(view.cursor) == vxfw_usize_sub(usize(view.children.widgets.len), 1) {
+				if uint(view.cursor) == vxfw_usize_sub(uint(view.children.widgets.len), 1) {
 					ctx.consume_event()
 					return
 				}
@@ -230,8 +230,8 @@ pub fn (mut view ScrollView) prev_item(mut ctx EventContext) {
 		match view.children {
 			ScrollSlice {
 				view.item_count = vxfw_u32_cast(u64(view.children.widgets.len))
-				view.cursor = vxfw_u32_cast(u64(math.min(usize(vxfw_u32_sub(view.cursor, 1)),
-					vxfw_usize_sub(usize(view.children.widgets.len), 1))))
+				view.cursor = vxfw_u32_cast(u64(math.min(uint(vxfw_u32_sub(view.cursor, 1)),
+					vxfw_usize_sub(uint(view.children.widgets.len), 1))))
 			}
 			ScrollBuilder {
 				builder := view.children
@@ -309,14 +309,14 @@ fn (mut view ScrollView) draw_builder(ctx DrawContext, builder ScrollBuilder) !S
 	mut height := vxfw_i17_sub(0, vxfw_i17_add(view.scroll.vertical_offset,
 		view.scroll.pending_lines))
 	view.scroll.pending_lines = 0
-	mut index := usize(view.scroll.top)
+	mut index := uint(view.scroll.top)
 	if height > 0 && view.scroll.top == 0 {
 		view.scroll.vertical_offset = 0
 		height = 0
 	}
 	if height > 0 {
 		view.insert_children(ctx, builder, mut children, height)!
-		last := children[int(vxfw_usize_sub(usize(children.len), 1))]
+		last := children[int(vxfw_usize_sub(uint(children.len), 1))]
 		height = vxfw_i17_add(last.origin.row, i32(last.surface.size.height))
 	}
 	offset := if view.draw_cursor { u16(2) } else { u16(0) }
@@ -351,13 +351,13 @@ fn (mut view ScrollView) draw_builder(ctx DrawContext, builder ScrollBuilder) !S
 	}
 	mut content_height := scroll_total_height(children)
 	if !view.scroll.has_more_vertical && content_height < size.height && view.scroll.top > 0 {
-		view.insert_children(ctx, builder, mut children, vxfw_i17_cast(i64(vxfw_usize_sub(usize(size.height),
+		view.insert_children(ctx, builder, mut children, vxfw_i17_cast(i64(vxfw_usize_sub(uint(size.height),
 			content_height))))!
 		content_height = scroll_total_height(children)
 	}
 	if view.draw_cursor && view.cursor >= view.scroll.top {
 		cursor_index := vxfw_u32_sub(view.cursor, view.scroll.top)
-		if usize(cursor_index) < usize(children.len) {
+		if uint(cursor_index) < uint(children.len) {
 			child := children[int(cursor_index)]
 			cursor_surface := Surface.init_with_children(view.widget(), Size{
 				width:  offset
@@ -385,12 +385,12 @@ fn (mut view ScrollView) draw_builder(ctx DrawContext, builder ScrollBuilder) !S
 	}
 	if view.scroll.wants_cursor {
 		cursor_index := vxfw_u32_sub(view.cursor, view.scroll.top)
-		if usize(cursor_index) >= usize(children.len) { panic('index out of bounds') }
+		if uint(cursor_index) >= uint(children.len) { panic('index out of bounds') }
 		sub := children[int(cursor_index)]
 		bottom := vxfw_i17_add(sub.origin.row, i32(sub.surface.size.height))
 		if bottom > size.height {
 			mut origin := i32(size.height)
-			mut idx := usize(vxfw_u32_add(cursor_index, 1))
+			mut idx := uint(vxfw_u32_add(cursor_index, 1))
 			for idx > 0 {
 				item := int(vxfw_usize_sub(idx, 1))
 				origin = vxfw_i17_sub(origin, i32(children[item].surface.size.height))
@@ -422,7 +422,7 @@ fn (mut view ScrollView) draw_builder(ctx DrawContext, builder ScrollBuilder) !S
 		}
 	} else if !view.scroll.has_more_vertical {
 		mut origin := i32(size.height)
-		mut idx := usize(children.len)
+		mut idx := uint(children.len)
 		for idx > 0 {
 			item := int(vxfw_usize_sub(idx, 1))
 			origin = vxfw_i17_sub(origin, i32(children[item].surface.size.height))
@@ -455,14 +455,14 @@ fn (mut view ScrollView) draw_builder(ctx DrawContext, builder ScrollBuilder) !S
 	_ = start
 	_ = end
 	surface.children = children
-	view.last_height = u8(math.min(content_height, usize(255)))
+	view.last_height = u8(math.min(content_height, uint(255)))
 	return surface
 }
 
-fn scroll_total_height(children []SubSurface) usize {
-	mut result := usize(0)
+fn scroll_total_height(children []SubSurface) uint {
+	mut result := uint(0)
 	for child in children {
-		result = vxfw_usize_add(result, usize(child.surface.size.height))
+		result = vxfw_usize_add(result, uint(child.surface.size.height))
 	}
 	return result
 }

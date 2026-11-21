@@ -22,16 +22,16 @@ type ValueEnumAlias = ValueOpenEnum
 fn test_value_enums_preserve_signedness_tag_names_and_aliases() {
 	mut buffer := []u8{len: 256}
 	mut writer := WriteStream.init_memory(mut buffer)
-	writer.print_value('d', FormatOptions{ width: usize(5), fill: `_` }, ValueClosedEnum.long_tag,
+	writer.print_value('d', FormatOptions{ width: uint(5), fill: `_` }, ValueClosedEnum.long_tag,
 		0)!
 	writer.write_byte(`|`)!
 	writer.print_value('X', FormatOptions{}, ValueEnumAlias(ValueOpenEnum.high), 0)!
 	writer.write_byte(`|`)!
 	writer.print_value('t', FormatOptions{
-		width:     usize(12)
+		width:     uint(12)
 		alignment: .center
 		fill:      `_`
-		precision: usize(0)
+		precision: uint(0)
 	}, ValueClosedEnum.long_tag, 0)!
 	writer.write_byte(`|`)!
 	writer.print_value('', FormatOptions{}, ValueSignedEnum.low, 0)!
@@ -50,7 +50,7 @@ fn test_value_enum_arrays_recurse_and_depth_zero_bypasses_options() {
 	writer.print_value('any', FormatOptions{}, [[ValueEnumAlias(ValueOpenEnum.high)],
 		[ValueEnumAlias(ValueOpenEnum.zero)]], 2)!
 	writer.write_byte(`|`)!
-	writer.print_value('any', FormatOptions{ width: ~usize(0), precision: ~usize(0) }, [
+	writer.print_value('any', FormatOptions{ width: ~uint(0), precision: ~uint(0) }, [
 		ValueOpenEnum.high,
 	], 0)!
 	assert writer.buffered().bytestr() == '{ .zero, .long_tag }|{ { .high }, { .zero } }|{ ... }'
@@ -92,7 +92,7 @@ fn test_value_enum_invalid_format_preserves_writer_state() {
 	writer.write_byte(`!`)!
 	before := buffer.clone()
 	for format in ['*', 's', 'c', 'u', 'D', 'B', 'Bi', 'e', 'b64'] {
-		writer.print_value(format, FormatOptions{ width: usize(0), precision: usize(0) },
+		writer.print_value(format, FormatOptions{ width: uint(0), precision: uint(0) },
 			ValueOpenEnum.high, 2) or {
 			assert err.msg() == 'unsupported print_value enum format'
 			assert buffer == before && writer.buffered() == [u8(`!`)]

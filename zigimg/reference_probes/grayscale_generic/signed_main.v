@@ -28,9 +28,9 @@ fn main() {
 		println('${x.value},${x.alpha};${copy.value},${copy.alpha}')
 	}
 	{
-		x := c.GrayscaleAlpha.init(isize(-1))
+		x := c.GrayscaleAlpha.init(int(-1))
 		mut copy := x
-		copy.alpha = isize(-1)
+		copy.alpha = int(-1)
 		println('${x.value},${x.alpha};${copy.value},${copy.alpha}')
 	}
 }

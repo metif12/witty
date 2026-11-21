@@ -7,7 +7,7 @@ pub fn packbits_decode(mut stream ReadStream, mut destination []u8, length u32) 
 	mut output_offset := u32(0)
 	mut input_offset := u32(0)
 	for input_offset < length - 1 {
-		control := usize(stream.take_byte()!)
+		control := uint(stream.take_byte()!)
 		input_offset++
 		if control < 128 {
 			for _ in 0 .. int(control + 1) {
@@ -31,7 +31,7 @@ pub fn packbits_decode(mut stream ReadStream, mut destination []u8, length u32) 
 }
 
 fn packbits_check_index(index u32, length int) {
-	if usize(index) >= usize(length) {
+	if uint(index) >= uint(length) {
 		panic('index out of bounds: index ${index}, len ${length}')
 	}
 }

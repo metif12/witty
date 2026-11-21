@@ -9,7 +9,7 @@ pub fn (event &KeyEvent) render(context cimgui.Context) {
 	defer { context.end_table() }
 	if event.binding.len > 0 {
 		detail_row(context, 'Triggered Binding')
-		if context.begin_bindings_list('##bindings', usize(event.binding.len)) {
+		if context.begin_bindings_list('##bindings', uint(event.binding.len)) {
 			for action in event.binding {
 				_ = context.selectable(action.tag().str(), false)
 			}

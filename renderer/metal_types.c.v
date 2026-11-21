@@ -26,7 +26,7 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 		// The options this buffer was initialized with.
 		opts MetalBufferOptions
 		// The number of elements currently stored in the buffer.
-		len usize
+		len uint
 	}
 
 	// MetalBufferOptions configures how a buffer is created.
@@ -38,7 +38,7 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 	}
 
 	// Initialize a buffer with the given length pre-allocated.
-	pub fn MetalBuffer.init(opts MetalBufferOptions, len usize) !MetalBuffer {
+	pub fn MetalBuffer.init(opts MetalBufferOptions, len uint) !MetalBuffer {
 		handle := macos.metal_new_buffer_length(opts.device, len, opts.resource_options.int_val())
 		if handle == unsafe { nil } {
 			return error('Metal buffer allocation failed')
@@ -52,7 +52,7 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 
 	// Init the buffer filled with the given data.
 	pub fn MetalBuffer.init_fill[T](opts MetalBufferOptions, data []T) !MetalBuffer {
-		byte_len := usize(data.len) * usize($sizeof(T))
+		byte_len := uint(data.len) * uint($sizeof(T))
 		mut ptr := voidptr(unsafe { nil })
 		if data.len > 0 {
 			ptr = voidptr(data.data)
@@ -64,7 +64,7 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 		return MetalBuffer{
 			handle: handle
 			opts:   opts
-			len:    usize(data.len)
+			len:    uint(data.len)
 		}
 	}
 
@@ -83,7 +83,7 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 		if data.len > 0 {
 			ptr = voidptr(data.data)
 		}
-		self.sync_raw(ptr, usize(data.len), 1)!
+		self.sync_raw(ptr, uint(data.len), 1)!
 	}
 
 	pub fn (mut self MetalBuffer) sync_values[T](values []T) ! {
@@ -91,19 +91,19 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 		if values.len > 0 {
 			ptr = voidptr(values.data)
 		}
-		self.sync_raw(ptr, usize(values.len) * usize($sizeof(T)), usize($sizeof(T)))!
+		self.sync_raw(ptr, uint(values.len) * uint($sizeof(T)), uint($sizeof(T)))!
 	}
 
 	// Like MetalBuffer.sync but takes data from an array of lists, rather than a
 	// single array. Returns the number of items synced.
-	pub fn (mut self MetalBuffer) sync_from_array_lists[T](lists [][]T) !usize {
-		mut total_len := usize(0)
+	pub fn (mut self MetalBuffer) sync_from_array_lists[T](lists [][]T) !uint {
+		mut total_len := uint(0)
 		for list in lists {
-			total_len += usize(list.len)
+			total_len += uint(list.len)
 		}
 
 		// If we need more bytes than our buffer has, we need to reallocate.
-		req_bytes := total_len * usize($sizeof(T))
+		req_bytes := total_len * uint($sizeof(T))
 		available_bytes := macos.metal_buffer_length(self.handle)
 		if req_bytes > available_bytes {
 			// Deallocate previous buffer.
@@ -112,7 +112,7 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 			// Allocate a new buffer with enough to hold double what we require.
 			// Preserve the pinned Buffer(T) expression: it doubles the required byte
 			// count and multiplies by the element size a second time.
-			new_len := req_bytes * 2 * usize($sizeof(T))
+			new_len := req_bytes * 2 * uint($sizeof(T))
 			self.handle = macos.metal_new_buffer_length(self.opts.device, new_len,
 				self.opts.resource_options.int_val())
 			if self.handle == unsafe { nil } {
@@ -128,12 +128,12 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 		if dst == unsafe { nil } {
 			return error('Metal buffer contents pointer is null')
 		}
-		mut i := usize(0)
+		mut i := uint(0)
 		for list in lists {
 			if list.len == 0 {
 				continue
 			}
-			bytes := usize(list.len) * usize($sizeof(T))
+			bytes := uint(list.len) * uint($sizeof(T))
 			unsafe { vmemcpy(voidptr(&u8(dst) + i), voidptr(list.data), int(bytes)) }
 			i += bytes
 		}
@@ -149,7 +149,7 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 		return total_len
 	}
 
-	fn (mut self MetalBuffer) sync_raw(data voidptr, req_bytes usize, element_size usize) ! {
+	fn (mut self MetalBuffer) sync_raw(data voidptr, req_bytes uint, element_size uint) ! {
 		available_bytes := macos.metal_buffer_length(self.handle)
 		if req_bytes > available_bytes {
 			macos.metal_release(self.handle)
@@ -274,8 +274,8 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 	pub struct MetalRenderDraw {
 	pub:
 		draw_type      MetalPrimitiveType @[required]
-		vertex_count   usize              @[required]
-		instance_count usize = 1
+		vertex_count   uint              @[required]
+		instance_count uint = 1
 	}
 
 	pub type MetalRenderAttachmentTarget = MetalTarget | MetalTexture
@@ -299,7 +299,7 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 				MetalTarget { attachment.target.texture }
 				MetalTexture { attachment.target.handle }
 			}
-			macos.metal_render_pass_set_attachment(descriptor, usize(index), target,
+			macos.metal_render_pass_set_attachment(descriptor, uint(index), target,
 				attachment.clear_color)
 		}
 		return MetalRenderPass{
@@ -318,7 +318,7 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 			}
 			for index in 1 .. s.buffers.len {
 				if buffer := s.buffers[index] {
-					macos.metal_encoder_set_buffer(self.encoder, buffer.handle, usize(index + 1))
+					macos.metal_encoder_set_buffer(self.encoder, buffer.handle, uint(index + 1))
 				}
 			}
 		}
@@ -327,12 +327,12 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 		}
 		for index, texture in s.textures {
 			if value := texture {
-				macos.metal_encoder_set_texture(self.encoder, value.handle, usize(index))
+				macos.metal_encoder_set_texture(self.encoder, value.handle, uint(index))
 			}
 		}
 		for index, sampler in s.samplers {
 			if value := sampler {
-				macos.metal_encoder_set_sampler(self.encoder, value.handle, usize(index))
+				macos.metal_encoder_set_sampler(self.encoder, value.handle, uint(index))
 			}
 		}
 		macos.metal_encoder_draw(self.encoder, u64(s.draw.draw_type), s.draw.vertex_count, s.draw.instance_count)
@@ -356,7 +356,7 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 	pub struct MetalVertexAttribute {
 	pub:
 		format MetalVertexFormat
-		offset usize
+		offset uint
 	}
 
 	pub enum MetalVertexStepFunction as u64 {
@@ -375,7 +375,7 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 		vertex_library   voidptr @[required]
 		fragment_library voidptr @[required]
 		attributes       []MetalVertexAttribute
-		vertex_stride    usize
+		vertex_stride    uint
 		step_fn          MetalVertexStepFunction = .per_vertex
 		attachments      []MetalPipelineAttachment @[required]
 	}
@@ -463,8 +463,8 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 		// The texture handle.
 		texture voidptr = unsafe { nil }
 		// Width and height of the target.
-		width  usize
-		height usize
+		width  uint
+		height uint
 	}
 
 	pub struct MetalTargetOptions {
@@ -472,9 +472,9 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 		// MTLDevice
 		device voidptr @[required]
 		// Desired width.
-		width usize @[required]
+		width uint @[required]
 		// Desired height.
-		height usize @[required]
+		height uint @[required]
 		// Pixel format for the MTLTexture.
 		pixel_format MetalPixelFormat @[required]
 		// Storage mode for the MTLTexture.
@@ -529,10 +529,10 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 		// The texture handle.
 		handle voidptr = unsafe { nil }
 		// Width and height.
-		width  usize
-		height usize
+		width  uint
+		height uint
 		// Bytes per pixel for this texture.
-		bpp usize
+		bpp uint
 	}
 
 	// MetalTextureOptions configures texture creation.
@@ -547,7 +547,7 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 
 	// Initialize a texture. If data is provided, it is uploaded starting at the
 	// top-left (0, 0) origin.
-	pub fn MetalTexture.init(opts MetalTextureOptions, width usize, height usize, data ?[]u8) !MetalTexture {
+	pub fn MetalTexture.init(opts MetalTextureOptions, width uint, height uint, data ?[]u8) !MetalTexture {
 		bpp := bpp_of(opts.pixel_format)
 		handle := macos.metal_new_texture(opts.device, u64(opts.pixel_format), width, height, opts.resource_options.int_val(), opts.usage.int_val())
 		if handle == unsafe { nil } {
@@ -569,7 +569,7 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 	}
 
 	// bpp_of returns the bytes per pixel for the provided pixel format.
-	fn bpp_of(pixel_format MetalPixelFormat) usize {
+	fn bpp_of(pixel_format MetalPixelFormat) uint {
 		return match pixel_format {
 			.invalid {
 				panic('invalid pixel format')
@@ -578,14 +578,14 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 			// 8-bit pixel formats.
 			.a8unorm, .r8unorm, .r8unorm_srgb, .r8snorm, .r8uint, .r8sint, .rg8unorm,
 			.rg8unorm_srgb, .rg8snorm, .rg8uint, .rg8sint, .stencil8 {
-				usize(1)
+				uint(1)
 			}
 
 			// 16-bit pixel formats.
 			.r16unorm, .r16snorm, .r16uint, .r16sint, .r16float, .rg16unorm, .rg16snorm, .rg16uint,
 			.rg16sint, .rg16float, .b5g6r5unorm, .a1bgr5unorm, .abgr4unorm, .bgr5a1unorm,
 			.depth16unorm {
-				usize(2)
+				uint(2)
 			}
 
 			// 32-bit pixel formats.
@@ -593,18 +593,18 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 			.bgra8unorm_srgb, .rgb10a2unorm, .rgb10a2uint, .rg11b10float, .rgb9e5float,
 			.bgr10a2unorm, .bgr10_xr, .bgr10_xr_srgb, .r32uint, .r32sint, .r32float, .depth32float,
 			.depth24unorm_stencil8 {
-				usize(4)
+				uint(4)
 			}
 
 			// 64-bit pixel formats.
 			.rg32uint, .rg32sint, .rg32float, .rgba16unorm, .rgba16snorm, .rgba16uint, .rgba16sint,
 			.rgba16float, .bgra10_xr, .bgra10_xr_srgb {
-				usize(8)
+				uint(8)
 			}
 
 			// 128-bit pixel formats.
 			.rgba32uint, .rgba32sint, .rgba32float {
-				usize(128)
+				uint(128)
 			}
 			else {
 				panic('pixel format size unknown (unlikely that this format was actually used, could be memory corruption)')
@@ -623,7 +623,7 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 	// data is laid out with a stride of `width * bpp` (the region width), and is
 	// written into the texture using the texture's own row stride of
 	// `self.width * bpp`.
-	pub fn (self MetalTexture) replace_region(x usize, y usize, width usize, height usize, data []u8) {
+	pub fn (self MetalTexture) replace_region(x uint, y uint, width uint, height uint, data []u8) {
 		macos.metal_texture_replace_region(self.handle, x, y, width, height, data, width * self.bpp)
 	}
 
@@ -759,27 +759,27 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 		cells_bg                 MetalBuffer
 		bg_image_buffer          MetalBuffer
 		grayscale                MetalTexture
-		grayscale_modified       usize
+		grayscale_modified       uint
 		color                    MetalTexture
-		color_modified           usize
+		color_modified           uint
 		target                   MetalTarget
-		target_config_modified   usize
-		bg_image_buffer_modified usize
+		target_config_modified   uint
+		bg_image_buffer_modified uint
 		custom_shader_state      ?MetalCustomShaderState
 	}
 
 	pub fn MetalFrameState.init(api &MetalAPI, custom_shaders bool) !MetalFrameState {
-		mut uniforms := MetalBuffer.init(api.buffer_options(), usize($sizeof(MetalUniforms)))!
-		mut cells := MetalBuffer.init(api.buffer_options(), usize($sizeof(CellText))) or {
+		mut uniforms := MetalBuffer.init(api.buffer_options(), uint($sizeof(MetalUniforms)))!
+		mut cells := MetalBuffer.init(api.buffer_options(), uint($sizeof(CellText))) or {
 			uniforms.deinit()
 			return err
 		}
-		mut cells_bg := MetalBuffer.init(api.buffer_options(), usize($sizeof(CellBg))) or {
+		mut cells_bg := MetalBuffer.init(api.buffer_options(), uint($sizeof(CellBg))) or {
 			cells.deinit()
 			uniforms.deinit()
 			return err
 		}
-		mut bg_image_buffer := MetalBuffer.init(api.buffer_options(), usize($sizeof(BgImageBuffer))) or {
+		mut bg_image_buffer := MetalBuffer.init(api.buffer_options(), uint($sizeof(BgImageBuffer))) or {
 			cells_bg.deinit()
 			cells.deinit()
 			uniforms.deinit()
@@ -857,7 +857,7 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 		self.custom_shader_state = none
 	}
 
-	pub fn (mut self MetalFrameState) resize_target(api &MetalAPI, width usize, height usize) ! {
+	pub fn (mut self MetalFrameState) resize_target(api &MetalAPI, width uint, height uint) ! {
 		if mut state := self.custom_shader_state {
 			state.resize(api, width, height)!
 			self.custom_shader_state = state
@@ -878,7 +878,7 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 	}
 
 	pub fn MetalCustomShaderState.init(api &MetalAPI) !MetalCustomShaderState {
-		mut uniforms := MetalBuffer.init(api.buffer_options(), usize($sizeof(CustomShaderUniforms)))!
+		mut uniforms := MetalBuffer.init(api.buffer_options(), uint($sizeof(CustomShaderUniforms)))!
 		mut front_texture := MetalTexture.init(api.texture_options(), 1, 1, none) or {
 			uniforms.deinit()
 			return err
@@ -915,7 +915,7 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 		self.back_texture = front
 	}
 
-	pub fn (mut self MetalCustomShaderState) resize(api &MetalAPI, width usize, height usize) ! {
+	pub fn (mut self MetalCustomShaderState) resize(api &MetalAPI, width uint, height uint) ! {
 		mut front_texture := MetalTexture.init(api.texture_options(), width, height, none)!
 		back_texture := MetalTexture.init(api.texture_options(), width, height, none) or {
 			front_texture.deinit()

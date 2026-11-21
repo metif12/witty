@@ -8,7 +8,7 @@ fn test_value_float_dispatch_preserves_native_width_and_hex_case() {
 	mut writer := WriteStream.init_memory(mut bytes)
 	writer.print_value('d', FormatOptions{}, ValueFloat32(1.5), 0)!
 	writer.write_byte(`|`)!
-	writer.print_value('E', FormatOptions{}, ValueFloat64(1.5), ~usize(0))!
+	writer.print_value('E', FormatOptions{}, ValueFloat64(1.5), ~uint(0))!
 	writer.write_byte(`|`)!
 	writer.print_value('X', FormatOptions{}, ValueFloat32(1.5), 0)!
 	assert writer.buffered().bytestr() == '1.5|1.5e0|0x1.8p0'
@@ -17,7 +17,7 @@ fn test_value_float_dispatch_preserves_native_width_and_hex_case() {
 fn test_value_float_dispatch_preserves_fallback_before_padding() {
 	mut bytes := []u8{len: 32}
 	mut writer := WriteStream.init_memory(mut bytes)
-	writer.print_value('d', FormatOptions{ precision: usize(346), width: usize(9), fill: `_` },
+	writer.print_value('d', FormatOptions{ precision: uint(346), width: uint(9), fill: `_` },
 		f64(1.5), 1)!
 	assert writer.buffered().bytestr() == '__(float)'
 }

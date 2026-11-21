@@ -1513,15 +1513,15 @@ enum KeySequenceMemory as u8 {
 // negative is down/left and positive is up/right.
 struct ScrollAmount {
 mut:
-	delta isize
+	delta int
 }
 
 fn (s ScrollAmount) direction() ScrollDirection {
 	return if s.delta < 0 { ScrollDirection.down_left } else { ScrollDirection.up_right }
 }
 
-fn (s ScrollAmount) magnitude() usize {
-	return if s.delta < 0 { usize(-s.delta) } else { usize(s.delta) }
+fn (s ScrollAmount) magnitude() uint {
+	return if s.delta < 0 { uint(-s.delta) } else { uint(s.delta) }
 }
 
 enum ScrollDirection as u8 {
@@ -1715,7 +1715,7 @@ fn (mut surface Surface) search_callback_(event searchpkg.Event) ! {
 			surface.renderer_thread.wakeup.notify()!
 		}
 		searchpkg.EventSelectedMatch {
-			selected := if value := event.selected { ?usize(value.idx) } else { none }
+			selected := if value := event.selected { ?uint(value.idx) } else { none }
 			match_ := if value := event.selected {
 				?highlight.Flattened(value.highlight.clone())
 			} else {
@@ -3373,14 +3373,14 @@ pub fn (mut self Surface) scroll_callback(xoff f64, yoff f64, scroll_mods input.
 		} else {
 			amount := poff / cell_size
 			self.mouse.pending_scroll_y = poff - (amount * cell_size)
-			y.delta = isize(amount)
+			y.delta = int(amount)
 		}
 	}
 
 	mut x := ScrollAmount{}
 	if xoff != 0 {
 		if !scroll_mods.precision() {
-			x.delta = isize(math.round(xoff))
+			x.delta = int(math.round(xoff))
 		} else {
 			poff := self.mouse.pending_scroll_x + xoff
 			cell_size := f64(self.size.cell.width)
@@ -3389,7 +3389,7 @@ pub fn (mut self Surface) scroll_callback(xoff f64, yoff f64, scroll_mods input.
 			} else {
 				amount := poff / cell_size
 				self.mouse.pending_scroll_x = poff - (amount * cell_size)
-				x.delta = isize(amount)
+				x.delta = int(amount)
 			}
 		}
 	}
@@ -3414,7 +3414,7 @@ pub fn (mut self Surface) scroll_callback(xoff f64, yoff f64, scroll_mods input.
 				} else {
 					if y.direction() == .up_right { '\x1b[A' } else { '\x1b[B' }
 				}
-				for _ in usize(0) .. y.magnitude() {
+				for _ in uint(0) .. y.magnitude() {
 					self.queue_io(termiopkg.MessageWriteStable{ data: seq }, .locked)
 				}
 			}
@@ -3422,7 +3422,7 @@ pub fn (mut self Surface) scroll_callback(xoff f64, yoff f64, scroll_mods input.
 		}
 
 		if self.is_mouse_reporting() {
-			for _ in usize(0) .. y.magnitude() {
+			for _ in uint(0) .. y.magnitude() {
 				pos := self.rt_surface.get_cursor_pos()!
 				button := if y.direction() == .up_right {
 					input.MouseButton.four
@@ -3431,7 +3431,7 @@ pub fn (mut self Surface) scroll_callback(xoff f64, yoff f64, scroll_mods input.
 				}
 				self.mouse_report(button, .press, self.mouse.mods, pos)!
 			}
-			for _ in usize(0) .. x.magnitude() {
+			for _ in uint(0) .. x.magnitude() {
 				pos := self.rt_surface.get_cursor_pos()!
 				button := if x.direction() == .up_right {
 					input.MouseButton.six
@@ -4341,7 +4341,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 		input.ActionScrollToRow {
 			self.renderer_state.mutex.lock()
 			self.renderer_state.terminal_.screens.active.scroll(terminal.ScrollRow{
-				n: usize(action.value)
+				n: uint(action.value)
 			})
 			self.renderer_state.mutex.unlock()
 			self.queue_render()!
@@ -4359,23 +4359,23 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			self.queue_render()!
 		}
 		input.ActionScrollPageUp {
-			rows := isize(self.size.grid().rows)
+			rows := int(self.size.grid().rows)
 			self.queue_io(termiopkg.MessageScrollViewport{ scroll: terminal.ScrollViewport.from_delta(-rows) }, .unlocked)
 		}
 		input.ActionScrollPageDown {
-			rows := isize(self.size.grid().rows)
+			rows := int(self.size.grid().rows)
 			self.queue_io(termiopkg.MessageScrollViewport{ scroll: terminal.ScrollViewport.from_delta(rows) }, .unlocked)
 		}
 		input.ActionScrollPageFractional {
 			rows := f32(self.size.grid().rows)
-			delta := isize(action.value * rows)
+			delta := int(action.value * rows)
 			self.queue_io(termiopkg.MessageScrollViewport{ scroll: terminal.ScrollViewport.from_delta(delta) }, .unlocked)
 		}
 		input.ActionScrollPageLines {
-			self.queue_io(termiopkg.MessageScrollViewport{ scroll: terminal.ScrollViewport.from_delta(isize(action.value)) }, .unlocked)
+			self.queue_io(termiopkg.MessageScrollViewport{ scroll: terminal.ScrollViewport.from_delta(int(action.value)) }, .unlocked)
 		}
 		input.ActionJumpToPrompt {
-			self.queue_io(termiopkg.MessageJumpToPrompt{ delta: isize(action.value) }, .unlocked)
+			self.queue_io(termiopkg.MessageJumpToPrompt{ delta: int(action.value) }, .unlocked)
 		}
 		input.ActionWriteScreenFile {
 			self.write_screen_file(.screen, action.value)!
@@ -4416,7 +4416,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 			return self.rt_app.perform_action(
 				apprt.Target(apprt.SurfaceTarget{ surface: voidptr(&self) }),
 				.move_tab,
-				apprt.ActionValue(apprt.MoveTab{ amount: isize(action.value) }),
+				apprt.ActionValue(apprt.MoveTab{ amount: int(action.value) }),
 			)!
 		}
 		input.ActionNewSplit {
@@ -4637,7 +4637,7 @@ pub fn (mut self Surface) perform_binding_action(action input.Action) !bool {
 				target := if sel.end().before(viewport_tl) {
 					sel.end()
 				} else {
-					sel.end().up(usize(screen.pages.rows) - 1) or { sel.end() }
+					sel.end().up(uint(screen.pages.rows) - 1) or { sel.end() }
 				}
 
 				screen.scroll(terminal.ScrollPin{
@@ -5852,7 +5852,7 @@ fn (mut self Surface) selection_scroll_tick() ! {
 
 	pos := self.rt_surface.get_cursor_pos()!
 	pos_vp := self.pos_to_viewport(f64(pos.x), f64(pos.y))
-	delta := if pos.y < 0 { isize(-1) } else { isize(1) }
+	delta := if pos.y < 0 { int(-1) } else { int(1) }
 	self.renderer_state.mutex.lock()
 	defer {
 		self.renderer_state.mutex.unlock()

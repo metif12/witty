@@ -26,8 +26,8 @@ pub fn (mut self Preview) draw_window(mut vx vaxis.Vaxis) ! {
 			if mouse.button == .wheel_down { self.down(1) }
 			if local_mouse := theme_list.has_mouse(mouse) {
 				if mouse.button == .left && mouse.type_ == .release {
-					selection := self.window + usize(local_mouse.row)
-					if selection < usize(self.filtered.len) {
+					selection := self.window + uint(local_mouse.row)
+					if selection < uint(self.filtered.len) {
 						self.current = selection
 					}
 				}
@@ -40,23 +40,23 @@ pub fn (mut self Preview) draw_window(mut vx vaxis.Vaxis) ! {
 		self.window = 0
 	} else {
 		start := self.window
-		last_index := self.window + usize(theme_list.height) - 1
+		last_index := self.window + uint(theme_list.height) - 1
 		if self.current > last_index {
-			self.window = self.current - usize(theme_list.height) + 1
+			self.window = self.current - uint(theme_list.height) + 1
 		}
 		if self.current < start {
 			self.window = self.current
 		}
-		if self.window >= usize(self.filtered.len) {
-			self.window = usize(self.filtered.len - 1)
+		if self.window >= uint(self.filtered.len) {
+			self.window = uint(self.filtered.len - 1)
 		}
 	}
 	theme_list.fill(vaxis.Cell{
 		style: self.ui_standard()
 	})
 	for row := u16(0); row < theme_list.height; row++ {
-		index := self.window + usize(row)
-		if index >= usize(self.filtered.len) { break }
+		index := self.window + uint(row)
+		if index >= uint(self.filtered.len) { break }
 		theme := self.themes[self.filtered[index]]
 		selected := index == self.current
 		style := if selected {

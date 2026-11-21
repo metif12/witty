@@ -76,7 +76,7 @@ fn test_table_multilist_renderer_preserves_repeated_columns_and_collection_bound
 	unsupported = false
 	table_draw_table(true, Window.new(&screen), u32(1), mut context) or { unsupported = true; assert err.msg() == 'UnsupportedTableDataType' }
 	assert unsupported
-	context.col_indexes = TableColumnsByIndex{ indexes: [usize(1), 0] }
+	context.col_indexes = TableColumnsByIndex{ indexes: [uint(1), 0] }
 	screen.clear()
 	table_draw_table(true, Window.new(&screen), data, mut context)!
 	assert (screen.read_cell(0, 1) or { panic('missing cell') }).char_.grapheme == 'R'

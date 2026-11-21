@@ -25,10 +25,10 @@ fn flags(s vaxis.Style) u8 {
 
 fn cells(mut out strings.Builder, s &fw.Surface, data []u8) {
 	for c in s.buffer {
-		pointer := usize(c.char_.grapheme.str)
-		base := usize(data.data)
-		offset := if pointer >= base && pointer <= base + usize(data.len)
-			&& usize(c.char_.grapheme.len) <= base + usize(data.len) - pointer {
+		pointer := uint(c.char_.grapheme.str)
+		base := uint(data.data)
+		offset := if pointer >= base && pointer <= base + uint(data.len)
+			&& uint(c.char_.grapheme.len) <= base + uint(data.len) - pointer {
 			i64(pointer - base)
 		} else {
 			i64(-1)

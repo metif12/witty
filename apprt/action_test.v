@@ -158,7 +158,7 @@ fn test_move_tab() {
 
 	mt2 := MoveTab{ amount: 1 }
 	assert mt2.amount == 1
-	assert sizeof(MoveTab) == sizeof(isize)
+	assert sizeof(MoveTab) == sizeof(int)
 }
 
 // Test SizeLimit struct creation.

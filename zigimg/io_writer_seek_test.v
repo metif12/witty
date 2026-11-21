@@ -7,11 +7,11 @@ import os
 
 fn C.witty_writer_seek_setup(&char) int
 fn C.witty_writer_seek_replace(int) int
-fn C.witty_writer_seek_restore(&char, usize) int
+fn C.witty_writer_seek_restore(&char, uint) int
 fn C.witty_writer_seek_close() int
 fn C.witty_writer_seek_cleanup() int
-fn C.witty_writer_seek_drain(&u8, usize) isize
-fn C.witty_writer_seek_view(&u8, usize) isize
+fn C.witty_writer_seek_drain(&u8, uint) int
+fn C.witty_writer_seek_view(&u8, uint) int
 
 fn test_writer_seek_flushes_before_caching_error_and_retains_it_after_replacement() {
 	$if !windows {
@@ -28,7 +28,7 @@ fn test_writer_seek_flushes_before_caching_error_and_retains_it_after_replacemen
 		writer.seek_to(7) or { status = err.msg() }
 		assert status == 'Unseekable' && writer.get_pos() == 1 && writer.buffered().len == 0
 		mut delivered := []u8{len: 16}
-		assert C.witty_writer_seek_drain(delivered.data, usize(delivered.len)) == 1
+		assert C.witty_writer_seek_drain(delivered.data, uint(delivered.len)) == 1
 		assert delivered[0] == 7
 		restored := path + '.restored'
 		assert C.witty_writer_seek_restore(restored.str, 32) == 0
@@ -38,7 +38,7 @@ fn test_writer_seek_flushes_before_caching_error_and_retains_it_after_replacemen
 		assert status == 'Unseekable' && writer.get_pos() == 4 && writer.buffered().len == 0
 		assert buffer[..3] == [u8(209), 210, 211]
 		mut contents := []u8{len: 64}
-		assert C.witty_writer_seek_view(contents.data, usize(contents.len)) == 32
+		assert C.witty_writer_seek_view(contents.data, uint(contents.len)) == 32
 		assert contents[..3] == [u8(209), 210, 211]
 		assert contents[3..32] == []u8{len: 29, init: u8((index + 3) * 37 + 19)}
 	}
@@ -67,7 +67,7 @@ fn test_writer_failed_positional_transition_retains_pending_bytes_after_restore(
 		assert status == 'Unexpected' && writer.get_pos() == 4
 		assert writer.buffered() == [u8(7), 209, 210, 211]
 		mut contents := []u8{len: 64}
-		assert C.witty_writer_seek_view(contents.data, usize(contents.len)) == 32
+		assert C.witty_writer_seek_view(contents.data, uint(contents.len)) == 32
 		assert contents[..32] == []u8{len: 32, init: u8(index * 37 + 19)}
 	}
 }

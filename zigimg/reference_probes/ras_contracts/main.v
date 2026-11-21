@@ -54,7 +54,7 @@ fn observe() {
 }
 
 fn make_pixels(format p.PixelFormat, count int) p.PixelStorage {
-	mut pixels := p.PixelStorage.init(format, usize(count)) or { panic(err) }
+	mut pixels := p.PixelStorage.init(format, uint(count)) or { panic(err) }
 	mut bytes := pixels.as_bytes()
 	for i in 0 .. bytes.len {
 		bytes[i] = u8(i * 37 + 19)
@@ -152,8 +152,8 @@ fn run_case(op int, kind u32, map_kind u32, length u32, capacity int, start int,
 	mut raw := result.pixels.as_bytes()
 	mut separate := '-'
 	if raw.len > 0 {
-		ptr := usize(raw.data)
-		separate = if ptr < usize(data.data) || ptr >= usize(data.data) + usize(data.len) {
+		ptr := uint(raw.data)
+		separate = if ptr < uint(data.data) || ptr >= uint(data.data) + uint(data.len) {
 			'1'
 		} else {
 			'0'
@@ -164,7 +164,7 @@ fn run_case(op int, kind u32, map_kind u32, length u32, capacity int, start int,
 	if pal := result.pixels.get_palette() {
 		if pal.len > 0 {
 			mut active := unsafe { pal }
-			pal_separate = if op == 0 && usize(pal.data) == usize(codec.palette.data.data) {
+			pal_separate = if op == 0 && uint(pal.data) == uint(codec.palette.data.data) {
 				'0'
 			} else {
 				'1'
@@ -237,8 +237,8 @@ fn main() {
 	for format in formats {
 		for count in 0 .. 3 {
 			pixels := make_pixels(format, count)
-			for dims in [[usize(0), 0], [usize(1), 2],
-				[usize(0xffffffffffffffff), 0xffffffffffffffff]] {
+			for dims in [[uint(0), 0], [uint(1), 2],
+				[uint(0xffffffffffffffff), 0xffffffffffffffff]] {
 				for capacity in [0, 1, 8, 16] {
 					for entry in 0 .. 2 {
 						mut buffer := []u8{len: capacity, init: 165}

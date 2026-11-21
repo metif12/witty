@@ -6,15 +6,15 @@ fn app_contract_draw(_ voidptr, _ DrawContext) !Surface {
 	return error('OutOfMemory')
 }
 
-fn app_contract_widget(id usize) Widget {
+fn app_contract_widget(id uint) Widget {
 	return Widget{
 		userdata: voidptr(id)
 		draw_fn:  app_contract_draw
 	}
 }
 
-fn app_contract_focus_id(value ?Widget) usize {
-	return if focused := value { usize(focused.userdata) } else { usize(0) }
+fn app_contract_focus_id(value ?Widget) uint {
+	return if focused := value { uint(focused.userdata) } else { uint(0) }
 }
 
 fn test_app_options_remain_mutable_and_copy_by_value() {

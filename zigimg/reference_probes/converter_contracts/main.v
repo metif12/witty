@@ -51,13 +51,13 @@ fn make_pixels(format p.PixelFormat, count int, offset int, owned bool) p.PixelS
 	if format == .float32 && !owned {
 		length := if count == 0 { 16 } else { count * 16 }
 		data := []u8{len: length + 32}
-		base := if usize(data.data) % 16 == 0 { 0 } else { int(16 - usize(data.data) % 16) }
+		base := if uint(data.data) % 16 == 0 { 0 } else { int(16 - uint(data.data) % 16) }
 		all := p.PixelStorage.init_raw_pixels(data[base + offset..base + offset + length], format) or {
 			panic(err)
 		}
-		pixels = all.slice(0, usize(count))
+		pixels = all.slice(0, uint(count))
 	} else {
-		pixels = p.PixelStorage.init(format, usize(count)) or { panic(err) }
+		pixels = p.PixelStorage.init(format, uint(count)) or { panic(err) }
 	}
 	mut raw := pixels.as_bytes()
 	for i in 0 .. raw.len {

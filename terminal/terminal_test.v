@@ -16,7 +16,7 @@ fn test_mouse_mode_storage() {
 fn test_scroll_viewport_source_layout_and_payload() {
 	assert scroll_viewport_top is ScrollViewportTop
 	assert scroll_viewport_bottom is ScrollViewportBottom
-	wide_delta := isize(1_099_511_627_776)
+	wide_delta := int(1_099_511_627_776)
 	delta := ScrollViewport.from_delta(wide_delta)
 	assert delta is ScrollViewportDelta
 	assert (delta as ScrollViewportDelta).delta == wide_delta
@@ -396,9 +396,9 @@ fn test_horizontal_tabs_starting_on_tabstop() {
 	}
 	defer { t.deinit() }
 
-	t.set_cursor_pos(usize(t.screens.active.cursor.y), 9)
+	t.set_cursor_pos(uint(t.screens.active.cursor.y), 9)
 	t.print(u32(`X`)) or { assert false }
-	t.set_cursor_pos(usize(t.screens.active.cursor.y), 9)
+	t.set_cursor_pos(uint(t.screens.active.cursor.y), 9)
 	t.horizontal_tab()
 	t.print(u32(`A`)) or { assert false }
 
@@ -418,7 +418,7 @@ fn test_horizontal_tabs_with_right_margin() {
 
 	t.scrolling_region.left = 2
 	t.scrolling_region.right = 5
-	t.set_cursor_pos(usize(t.screens.active.cursor.y), 1)
+	t.set_cursor_pos(uint(t.screens.active.cursor.y), 1)
 	t.print(u32(`X`)) or { assert false }
 	t.horizontal_tab()
 	t.print(u32(`A`)) or { assert false }
@@ -438,7 +438,7 @@ fn test_horizontal_tabs_back() {
 	defer { t.deinit() }
 
 	// Edge of screen
-	t.set_cursor_pos(usize(t.screens.active.cursor.y), 20)
+	t.set_cursor_pos(uint(t.screens.active.cursor.y), 20)
 
 	// HT back
 	t.horizontal_tab_back()
@@ -462,9 +462,9 @@ fn test_horizontal_tabs_back_starting_on_tabstop() {
 	}
 	defer { t.deinit() }
 
-	t.set_cursor_pos(usize(t.screens.active.cursor.y), 9)
+	t.set_cursor_pos(uint(t.screens.active.cursor.y), 9)
 	t.print(u32(`X`)) or { assert false }
-	t.set_cursor_pos(usize(t.screens.active.cursor.y), 9)
+	t.set_cursor_pos(uint(t.screens.active.cursor.y), 9)
 	t.horizontal_tab_back()
 	t.print(u32(`A`)) or { assert false }
 
@@ -1056,7 +1056,7 @@ fn test_delete_chars_more_than_line_width() {
 
 	// The source accepts usize and clamps to the remaining columns before any
 	// narrowing. Keep this above V's signed 32-bit int range.
-	t.delete_chars(usize(3_000_000_000))
+	t.delete_chars(uint(3_000_000_000))
 
 	str := t.plain_string() or {
 		assert false
@@ -1128,7 +1128,7 @@ fn test_erase_chars_beyond_screen_edge() {
 	t.print_string('123456789A') or { assert false }
 	t.set_cursor_pos(1, 8)
 
-	t.erase_chars(usize(3_000_000_000))
+	t.erase_chars(uint(3_000_000_000))
 
 	str := t.plain_string() or {
 		assert false
@@ -1593,7 +1593,7 @@ fn test_cursor_operations_clamp_pointer_width_inputs_before_narrowing() {
 	}
 	defer { t.deinit() }
 
-	large := usize(65_536)
+	large := uint(65_536)
 	t.set_cursor_pos(3, 3)
 	t.cursor_up(large)
 	assert t.screens.active.cursor.y == 0
@@ -1606,7 +1606,7 @@ fn test_cursor_operations_clamp_pointer_width_inputs_before_narrowing() {
 
 	// Positioning accepts the source's full usize domain and clamps before
 	// converting to the terminal's compact row/column representation.
-	t.set_cursor_pos(~usize(0), ~usize(0))
+	t.set_cursor_pos(~uint(0), ~uint(0))
 	assert t.screens.active.cursor.x == 4
 	assert t.screens.active.cursor.y == 4
 }
@@ -4059,7 +4059,7 @@ fn test_set_cursor_pos_original() {
 	assert t.screens.active.cursor.y == 79
 
 	// Set the scroll region
-	t.set_top_and_bottom_margin(10, usize(t.rows))
+	t.set_top_and_bottom_margin(10, uint(t.rows))
 	t.set_cursor_pos(0, 0)
 	assert t.screens.active.cursor.x == 0
 	assert t.screens.active.cursor.y == 9
@@ -4289,7 +4289,7 @@ fn test_cursor_left_extended_reverse_wrap_bottom_wraparound() {
 	t.carriage_return()
 	t.linefeed() or { assert false }
 	t.print(u32(`1`)) or { assert false }
-	t.cursor_left(1 + usize(t.cols) + 1)
+	t.cursor_left(1 + uint(t.cols) + 1)
 	t.print(u32(`X`)) or { assert false }
 
 	str := t.plain_string() or {
@@ -4314,7 +4314,7 @@ fn test_cursor_left_extended_reverse_wrap_is_priority_if_both_set() {
 	t.carriage_return()
 	t.linefeed() or { assert false }
 	t.print(u32(`1`)) or { assert false }
-	t.cursor_left(1 + usize(t.cols) + 1)
+	t.cursor_left(1 + uint(t.cols) + 1)
 	t.print(u32(`X`)) or { assert false }
 
 	str := t.plain_string() or {
@@ -6235,10 +6235,10 @@ fn test_delete_chars_split_wide_character_tail() {
 	}
 	defer { t.deinit() }
 
-	t.set_cursor_pos(1, usize(t.cols) - 1)
+	t.set_cursor_pos(1, uint(t.cols) - 1)
 	t.print(0x6A4B) or { assert false }
 	t.carriage_return()
-	t.delete_chars(usize(t.cols) - 1)
+	t.delete_chars(uint(t.cols) - 1)
 	t.print(u32(`0`)) or { assert false }
 
 	assert t.plain_string() or { '' } == '0'

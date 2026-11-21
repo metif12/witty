@@ -8,15 +8,15 @@ fn draw(_ voidptr, _ vxfw.DrawContext) !vxfw.Surface {
 	return error('OutOfMemory')
 }
 
-fn widget(id usize) vxfw.Widget {
+fn widget(id uint) vxfw.Widget {
 	return vxfw.Widget{
 		userdata: voidptr(id)
 		draw_fn:  draw
 	}
 }
 
-fn focus_id(value ?vxfw.Widget) usize {
-	return if w := value { usize(w.userdata) } else { usize(0) }
+fn focus_id(value ?vxfw.Widget) uint {
+	return if w := value { uint(w.userdata) } else { uint(0) }
 }
 
 fn main() {
@@ -59,7 +59,7 @@ fn main() {
 							wants_focus: if focus == 0 {
 								none
 							} else {
-								?vxfw.Widget(widget(usize(focus)))
+								?vxfw.Widget(widget(uint(focus)))
 							}
 						}
 						app.vx.screen.width = width

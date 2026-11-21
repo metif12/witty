@@ -396,7 +396,7 @@ fn surface_scrolled_window_finalize(obj voidptr) {
 // ghostty `Class.init`.
 fn surface_scrolled_window_class_init(klass voidptr, class_data voidptr) {
 	C.g_type_class_adjust_private_offset(klass, &g_surface_scrolled_window_priv_offset)
-	bytes := C.g_bytes_new_static(surface_scrolled_window_ui.str, usize(surface_scrolled_window_ui.len))
+	bytes := C.g_bytes_new_static(surface_scrolled_window_ui.str, uint(surface_scrolled_window_ui.len))
 	C.gtk_widget_class_set_template(klass, bytes)
 	C.g_bytes_unref(bytes)
 

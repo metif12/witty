@@ -7,8 +7,8 @@ import os
 
 fn C.witty_stream_discard_setup(&char) int
 fn C.witty_stream_discard_replace(int) int
-fn C.witty_stream_discard_restore(&char, usize) int
-fn C.witty_stream_discard_seed(usize, usize) int
+fn C.witty_stream_discard_restore(&char, uint) int
+fn C.witty_stream_discard_seed(uint, uint) int
 fn C.witty_stream_discard_shutdown() int
 fn C.witty_stream_discard_close() int
 fn C.witty_stream_discard_cleanup() int

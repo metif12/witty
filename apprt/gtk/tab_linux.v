@@ -381,7 +381,7 @@ fn tab_action_close_cb(action GSimpleAction, parameter GVariant, data voidptr) {
 		log.warn('tab.close-tab called without a parameter')
 		return
 	}
-	mut length := usize(0)
+	mut length := uint(0)
 	value := C.g_variant_get_string(parameter, &length)
 	mut self := unsafe { &Tab(data) }
 	self.action_close(if isnil(value) {

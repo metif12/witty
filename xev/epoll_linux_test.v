@@ -66,7 +66,7 @@ fn test_epoll_completion_size() {
 	// The Zig Completion is 208 bytes with its Operation and Result unions
 	// inline. V sum types store the active payload out of line, so the V
 	// completion's own size is tracked.
-	assert usize(104) == sizeof(EpollCompletion)
+	assert uint(104) == sizeof(EpollCompletion)
 }
 
 fn test_epoll_default_completion() ! {
@@ -314,7 +314,7 @@ fn epoll_test_recv(ud voidptr, _ &EpollLoop, _ &EpollCompletion, r EpollResult) 
 	if _ := r.err {
 		panic('unreachable')
 	}
-	mut ptr := unsafe { &usize(ud) }
+	mut ptr := unsafe { &uint(ud) }
 	unsafe {
 		*ptr = (r as EpollRecvResult).n
 	}
@@ -421,7 +421,7 @@ fn test_epoll_socket_accept_connect_send_recv_close() ! {
 
 	// Receive
 	mut recv_buf := []u8{len: 128}
-	mut recv_len := usize(0)
+	mut recv_len := uint(0)
 	mut c_recv := &EpollCompletion{
 		op:       EpollRecvOp{
 			fd:     server_conn

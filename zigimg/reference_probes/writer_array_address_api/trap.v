@@ -14,7 +14,7 @@ fn observe() {
 	os.write_file(observed_path, '${w.buffered().len}|${observed_buffer.hex()}|${w.buffered().hex()}|${w.unused_capacity_slice().hex()}') or { panic(err) }
 }
 
-fn borrowed[E](_ E, raw usize, length int) []E {
+fn borrowed[E](_ E, raw uint, length int) []E {
 	return unsafe { array{ data: voidptr(raw), len: length, cap: length, flags: .nofree, element_size: int(sizeof(E)) } }
 }
 
@@ -30,12 +30,12 @@ fn run() ! {
 	nested := [[int(0), 0, 0]!, [int(0), 0, 0]!]!
 	single := [f64(0)]!
 	match os.args[3] {
-		'0' { w.print_address(unsafe { &[3]u8(usize(0x1234)) }) or { status = err.msg() } }
-		'1' { w.print_address(unsafe { &[2][3]int(usize(0)) }) or { status = err.msg() } }
-		'2' { w.print_address(unsafe { &[1]f64(~usize(0)) }) or { status = err.msg() } }
-		'3' { w.print_address(borrowed(witness, usize(0x1234), 0)) or { status = err.msg() } }
-		'4' { w.print_address(borrowed(nested, usize(0), 3)) or { status = err.msg() } }
-		'5' { w.print_address(borrowed(single, ~usize(0), 2)) or { status = err.msg() } }
+		'0' { w.print_address(unsafe { &[3]u8(uint(0x1234)) }) or { status = err.msg() } }
+		'1' { w.print_address(unsafe { &[2][3]int(uint(0)) }) or { status = err.msg() } }
+		'2' { w.print_address(unsafe { &[1]f64(~uint(0)) }) or { status = err.msg() } }
+		'3' { w.print_address(borrowed(witness, uint(0x1234), 0)) or { status = err.msg() } }
+		'4' { w.print_address(borrowed(nested, uint(0), 3)) or { status = err.msg() } }
+		'5' { w.print_address(borrowed(single, ~uint(0), 2)) or { status = err.msg() } }
 		else { panic('invalid control') }
 	}
 	println(status)

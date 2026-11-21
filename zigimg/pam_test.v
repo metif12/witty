@@ -54,7 +54,7 @@ fn test_pam_file_header_preserves_pending_tail_and_caller_buffer() {
 	}
 }
 
-fn pam_fixture(width usize, height usize, depth usize, maxval u16, tuple string, data []u8) []u8 {
+fn pam_fixture(width uint, height uint, depth uint, maxval u16, tuple string, data []u8) []u8 {
 	mut bytes := 'P7\nWIDTH ${width}\nHEIGHT ${height}\nDEPTH ${depth}\nMAXVAL ${maxval}\n'.bytes()
 	if tuple != '' { bytes << 'TUPLTYPE ${tuple}\n'.bytes() }
 	bytes << 'ENDHDR\n'.bytes()
@@ -75,7 +75,7 @@ fn test_pam_header_comments_duplicates_whitespace_and_tuple_inference() {
 	header.write(mut writer)!
 	assert writer.buffered().bytestr() == 'P7\n#one\r\n#two\nWIDTH 2\nHEIGHT 1\nDEPTH 3\n' +
 		'MAXVAL 31\nTUPLTYPE RGB\nENDHDR\n'
-	for depth in [usize(1), usize(2), usize(3), usize(4)] {
+	for depth in [uint(1), uint(2), uint(3), uint(4)] {
 		for maxval in [u16(1), u16(255), u16(256)] {
 			mut stream := ReadStream.init_memory(pam_fixture(1, 1, depth, maxval, '', []))
 			stream.take(3)!
@@ -115,7 +115,7 @@ fn test_pam_magic_and_short_trailing_bytes_preserve_source_consumption() {
 }
 
 struct PamDecodeCase {
-	depth  usize
+	depth  uint
 	maxval u16
 	tuple  string
 	data   []u8
@@ -286,7 +286,7 @@ fn test_pam_sequences_keep_only_subsequent_frames_and_compare_storage_tags() {
 
 struct PamWriteCase {
 	pixels PixelStorage
-	depth  usize
+	depth  uint
 	maxval u16
 	tuple  string
 	data   []u8

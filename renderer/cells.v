@@ -257,7 +257,7 @@ pub fn (mut c CellContents) resize(size GridSize) ! {
 	// Ghostty keeps two extra lists around the screen rows so cursor ordering
 	// is represented by the container itself rather than reconstructed by each
 	// renderer backend.
-	mut fg_rows := datastruct.ArrayListCollection.init[CellText](usize(size.rows) + 2, usize(size.columns) * 3)
+	mut fg_rows := datastruct.ArrayListCollection.init[CellText](uint(size.rows) + 2, uint(size.columns) * 3)
 	fg_rows.lists[0] = []CellText{cap: 1}
 	fg_rows.lists[int(size.rows) + 1] = []CellText{cap: 1}
 	c.fg_rows = fg_rows
@@ -292,8 +292,8 @@ pub fn (mut c CellContents) clear(row u16) {
 // The opaque pointer is a V binding adaptation: the fallback compiler emits a
 // fixed array by value when a function returns `&CellBg`, even though CellBg
 // aliases Ghostty's `[4]u8` GPU value.
-pub fn (mut c CellContents) bg_cell(row usize, col usize) voidptr {
-	return voidptr(&c.bg_cells[row * usize(c.size.columns) + col])
+pub fn (mut c CellContents) bg_cell(row uint, col uint) voidptr {
+	return voidptr(&c.bg_cells[row * uint(c.size.columns) + col])
 }
 
 // Add a foreground cell to the given layer.

@@ -33,7 +33,7 @@ $if macos || ios || freebsd {
 	// originally is from a write request. This is useful for getting
 	// the WriteRequest back in a callback from queuedWrite.
 	pub fn KqueueWriteRequest.from(c &KqueueCompletion) &KqueueWriteRequest {
-		return unsafe { &KqueueWriteRequest(voidptr(usize(c) - __offsetof(KqueueWriteRequest, completion))) }
+		return unsafe { &KqueueWriteRequest(voidptr(uint(c) - __offsetof(KqueueWriteRequest, completion))) }
 	}
 
 	// Events that can be polled for using the high level streams.
@@ -57,11 +57,11 @@ $if macos || ios || freebsd {
 
 	// The callback of Stream.read. The error is a ReadError; on success the byte
 	// count is supplied.
-	pub type KqueueStreamReadCallback = fn (ud voidptr, l &KqueueLoop, c &KqueueCompletion, s KqueueStream, b KqueueReadBuffer, r ?ErrorKind, n usize) CallbackAction
+	pub type KqueueStreamReadCallback = fn (ud voidptr, l &KqueueLoop, c &KqueueCompletion, s KqueueStream, b KqueueReadBuffer, r ?ErrorKind, n uint) CallbackAction
 
 	// The callback of Stream.write and Stream.queueWrite. The error is a
 	// WriteError; on success the byte count is supplied.
-	pub type KqueueStreamWriteCallback = fn (ud voidptr, l &KqueueLoop, c &KqueueCompletion, s KqueueStream, b KqueueWriteBuffer, r ?ErrorKind, n usize) CallbackAction
+	pub type KqueueStreamWriteCallback = fn (ud voidptr, l &KqueueLoop, c &KqueueCompletion, s KqueueStream, b KqueueWriteBuffer, r ?ErrorKind, n uint) CallbackAction
 
 	// Creates a generic stream type that supports read, write, close, poll. This
 	// can be used for any file descriptor that would exhibit normal blocking
@@ -293,7 +293,7 @@ $if macos || ios || freebsd {
 
 	// Extracts the result from a completion for a write callback.
 	@[inline]
-	fn kqueue_stream_write_result(c &KqueueCompletion, r KqueueResult) (KqueueStream, KqueueWriteBuffer, ?ErrorKind, usize) {
+	fn kqueue_stream_write_result(c &KqueueCompletion, r KqueueResult) (KqueueStream, KqueueWriteBuffer, ?ErrorKind, uint) {
 		return KqueueStream.init_fd((c.op as KqueueWriteOp).fd), (c.op as KqueueWriteOp).buffer, r.err, kqueue_result_bytes(r)
 	}
 
@@ -314,19 +314,19 @@ $if macos || ios || freebsd {
 	}
 
 	// Returns the length of the write buffer
-	fn kqueue_write_buffer_length(buf KqueueWriteBuffer) usize {
+	fn kqueue_write_buffer_length(buf KqueueWriteBuffer) uint {
 		return match buf {
-			WriteBufferSlice { usize(buf.slice.len) }
+			WriteBufferSlice { uint(buf.slice.len) }
 			WriteBufferArray { buf.len }
 		}
 	}
 
 	// Given a `WriteBuffer` and number of bytes written during the previous
 	// write operation, returns a new `WriteBuffer` with remaining data.
-	fn kqueue_write_buffer_remainder(buf KqueueWriteBuffer, offset usize) KqueueWriteBuffer {
+	fn kqueue_write_buffer_remainder(buf KqueueWriteBuffer, offset uint) KqueueWriteBuffer {
 		match buf {
 			WriteBufferSlice {
-				assert offset <= usize(buf.slice.len)
+				assert offset <= uint(buf.slice.len)
 				return KqueueWriteBuffer(WriteBufferSlice{
 					slice: buf.slice[int(offset)..]
 				})

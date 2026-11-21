@@ -42,11 +42,11 @@ fn test_binary_float_rendering_defaults_precision_and_borrowing() {
 	assert view.bytestr() == '9e-1'
 	assert render_float[f64](mut bytes, 123.125, FloatRenderOptions{
 		mode:      .decimal
-		precision: usize(2)
+		precision: uint(2)
 	})!.bytestr() == '123.13'
 	assert render_float[f64](mut bytes, -0.0, FloatRenderOptions{
 		mode:      .decimal
-		precision: usize(2)
+		precision: uint(2)
 	})!.bytestr() == '-0.00'
 }
 
@@ -55,12 +55,12 @@ fn test_float_writer_ignores_case_and_preserves_fallback_and_partial_output() {
 	mut writer := WriteStream.init_memory(mut bytes)
 	writer.print_float[f32](f32(1.5), NumberFormat{ mode: .scientific, letter_case: .upper })!
 	writer.write_byte(`|`)!
-	writer.print_float[f64](1.5, NumberFormat{ precision: usize(346), width: usize(9), fill: `_` })!
+	writer.print_float[f64](1.5, NumberFormat{ precision: uint(346), width: uint(9), fill: `_` })!
 	assert writer.buffered() == '1.5e0|__(float)'.bytes()
 	mut short := []u8{len: 4}
 	mut failing := WriteStream.init_memory(mut short)
 	mut status := 'ok'
-	failing.print_float[f64](1.5, NumberFormat{ width: usize(8), fill: `_` }) or {
+	failing.print_float[f64](1.5, NumberFormat{ width: uint(8), fill: `_` }) or {
 		status = err.msg()
 	}
 	assert status == 'WriteFailed' && failing.buffered() == '____'.bytes()

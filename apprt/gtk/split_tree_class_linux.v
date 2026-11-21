@@ -360,7 +360,7 @@ fn split_tree_action_new_split_cb(action GSimpleAction, parameter GVariant, data
 		log.warn('split-tree.new-split called without a parameter')
 		return
 	}
-	mut length := usize(0)
+	mut length := uint(0)
 	value := C.g_variant_get_string(parameter, &length)
 	if isnil(value) {
 		return

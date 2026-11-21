@@ -27,7 +27,7 @@ pub fn native_window_tabs(view voidptr) []voidptr {
 	return result
 }
 
-pub fn move_native_tab(view voidptr, amount isize) bool {
+pub fn move_native_tab(view voidptr, amount int) bool {
 	window := view_window(view)
 	group := msg_id(window, 'tabGroup')
 	tabs := native_window_tabs(view)
@@ -37,12 +37,12 @@ pub fn move_native_tab(view voidptr, amount isize) bool {
 	index := tabs.index(selected)
 	if index < 0 { return true }
 	final_index := if amount < 0 {
-		index - int(if -amount < index { -amount } else { isize(index) })
+		index - int(if -amount < index { -amount } else { int(index) })
 	} else {
 		index + int(if amount < tabs.len - 1 - index {
 			amount
 		} else {
-			isize(tabs.len - 1 -
+			int(tabs.len - 1 -
 				index)
 		})
 	}

@@ -3,7 +3,7 @@ module vxfw
 import math
 import vaxis
 
-pub type ListBuildFn = fn (voidptr, usize, usize) ?Widget
+pub type ListBuildFn = fn (voidptr, uint, uint) ?Widget
 
 pub struct ListBuilder {
 pub mut:
@@ -11,7 +11,7 @@ pub mut:
 	build_fn ListBuildFn @[required]
 }
 
-pub fn (builder ListBuilder) item_at_idx(index usize, cursor usize) ?Widget {
+pub fn (builder ListBuilder) item_at_idx(index uint, cursor uint) ?Widget {
 	return builder.build_fn(builder.userdata, index, cursor)
 }
 
@@ -119,9 +119,9 @@ pub fn (mut view ListView) draw(ctx DrawContext) !Surface {
 	}
 }
 
-fn list_slice_build(ptr voidptr, index usize, _ usize) ?Widget {
+fn list_slice_build(ptr voidptr, index uint, _ uint) ?Widget {
 	slice := unsafe { &ListSlice(ptr) }
-	if index >= usize(slice.widgets.len) { return none }
+	if index >= uint(slice.widgets.len) { return none }
 	return slice.widgets[int(index)]
 }
 
@@ -141,7 +141,7 @@ pub fn (mut view ListView) next_item(mut ctx EventContext) {
 			ListSlice {
 				view.item_count = vxfw_u32_cast(u64(view.children.widgets.len))
 				if view.children.widgets.len == 0 { panic('integer overflow') }
-				if usize(view.cursor) == usize(view.children.widgets.len) - 1 {
+				if uint(view.cursor) == uint(view.children.widgets.len) - 1 {
 					ctx.consume_event()
 					return
 				}
@@ -177,7 +177,7 @@ pub fn (mut view ListView) prev_item(mut ctx EventContext) {
 				view.item_count = vxfw_u32_cast(u64(view.children.widgets.len))
 				previous := vxfw_u32_sub(view.cursor, 1)
 				if view.children.widgets.len == 0 { panic('integer overflow') }
-				view.cursor = u32(math.min(usize(previous), usize(view.children.widgets.len) - 1))
+				view.cursor = u32(math.min(uint(previous), uint(view.children.widgets.len) - 1))
 			}
 			ListBuilder {
 				previous := view.cursor
@@ -241,10 +241,10 @@ fn (mut view ListView) insert_children(ctx DrawContext, builder ListBuilder, mut
 	view.scroll.offset = upheight
 }
 
-fn total_height(children []SubSurface) usize {
-	mut height := usize(0)
+fn total_height(children []SubSurface) uint {
+	mut height := uint(0)
 	for child in children {
-		height = vxfw_usize_add(height, usize(child.surface.size.height))
+		height = vxfw_usize_add(height, uint(child.surface.size.height))
 	}
 	return height
 }
@@ -263,14 +263,14 @@ fn (mut view ListView) draw_builder(ctx DrawContext, builder ListBuilder) !Surfa
 	mut children := []SubSurface{}
 	mut height := vxfw_i17_sub(0, vxfw_i17_add(view.scroll.offset, view.scroll.pending_lines))
 	view.scroll.pending_lines = 0
-	mut index := usize(view.scroll.top)
+	mut index := uint(view.scroll.top)
 	if height > 0 && view.scroll.top == 0 {
 		view.scroll.offset = 0
 		height = 0
 	}
 	if height > 0 {
 		view.insert_children(ctx, builder, mut children, height)!
-		last_index := vxfw_usize_sub(usize(children.len), 1)
+		last_index := vxfw_usize_sub(uint(children.len), 1)
 		last := children[int(last_index)]
 		height = vxfw_i17_add(last.origin.row, i32(last.surface.size.height))
 	}
@@ -307,12 +307,12 @@ fn (mut view ListView) draw_builder(ctx DrawContext, builder ListBuilder) !Surfa
 	mut content_height := total_height(children)
 	if !view.scroll.has_more && content_height < size.height && view.scroll.top > 0 {
 		view.insert_children(ctx, builder, mut children,
-			vxfw_i17_cast(i64(usize(size.height) - content_height)))!
+			vxfw_i17_cast(i64(uint(size.height) - content_height)))!
 		content_height = total_height(children)
 	}
 	if view.draw_cursor && view.cursor >= view.scroll.top {
-		cursor_index := usize(vxfw_u32_sub(view.cursor, view.scroll.top))
-		if cursor_index < usize(children.len) {
+		cursor_index := uint(vxfw_u32_sub(view.cursor, view.scroll.top))
+		if cursor_index < uint(children.len) {
 			child := children[int(cursor_index)]
 			cursor_surface := Surface.init_with_children(view.widget(), Size{
 				width:  vxfw_u16_add(offset, child.surface.size.width)
@@ -344,8 +344,8 @@ fn (mut view ListView) draw_builder(ctx DrawContext, builder ListBuilder) !Surfa
 		}
 	}
 	if view.scroll.wants_cursor {
-		cursor_index := usize(vxfw_u32_sub(view.cursor, view.scroll.top))
-		if cursor_index >= usize(children.len) { panic('index out of bounds') }
+		cursor_index := uint(vxfw_u32_sub(view.cursor, view.scroll.top))
+		if cursor_index >= uint(children.len) { panic('index out of bounds') }
 		sub := children[int(cursor_index)]
 		bottom := vxfw_i17_add(sub.origin.row, i32(sub.surface.size.height))
 		if bottom > size.height {

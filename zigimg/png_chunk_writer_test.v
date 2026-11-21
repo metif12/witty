@@ -80,8 +80,8 @@ fn png_chunk_test_capacity[B](buffer B, capacity int) ! {
 		WriteStream.init_memory(mut destination), [u8(`I`), `D`, `A`, `T`]!)
 	payload := []u8{len: capacity, init: u8(index + 1)}
 	count := writer.write(payload)!
-	assert count == usize(capacity)
-	assert writer.end == usize(capacity)
+	assert count == uint(capacity)
+	assert writer.end == uint(capacity)
 	writer.flush()!
 	assert writer.unbuffered_writer.buffered() == png_chunk_test_bytes(payload)
 }

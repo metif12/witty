@@ -13,7 +13,7 @@ mut:
 struct ListFidelityFixture {
 mut:
 	items       []ListFidelityItem
-	build_calls []usize
+	build_calls []uint
 	draw_calls  []int
 	holes       u64
 	fail        int = -1
@@ -54,10 +54,10 @@ fn list_fidelity_draw(ptr voidptr, ctx DrawContext) !Surface {
 	}
 }
 
-fn list_fidelity_build(ptr voidptr, index usize, _ usize) ?Widget {
+fn list_fidelity_build(ptr voidptr, index uint, _ uint) ?Widget {
 	mut fixture := unsafe { &ListFidelityFixture(ptr) }
 	fixture.build_calls << index
-	if index >= usize(fixture.items.len) || fixture.holes & (u64(1) << index) != 0 {
+	if index >= uint(fixture.items.len) || fixture.holes & (u64(1) << index) != 0 {
 		return none
 	}
 	return list_fidelity_widget(&fixture.items[int(index)])
@@ -177,7 +177,7 @@ fn test_list_view_builder_backtracks_and_known_end_consumes_without_redraw() {
 		redraw: false
 	}
 	list.next_item(mut ctx)
-	assert fixture.build_calls == [usize(2), 1]
+	assert fixture.build_calls == [uint(2), 1]
 	assert list.cursor == 1
 	assert ctx.consume_event && !ctx.redraw
 	list.cursor = 0

@@ -2,13 +2,13 @@ module internal_os
 
 #include "@VMODROOT/internal_os/mach_memory.h"
 
-fn C.witty_tagged_page_size() usize
+fn C.witty_tagged_page_size() uint
 
-fn C.witty_tagged_page_map(length usize, alignment usize, tag i32, mapped_length &usize) voidptr
+fn C.witty_tagged_page_map(length uint, alignment uint, tag i32, mapped_length &uint) voidptr
 
-fn C.witty_tagged_page_realloc(memory voidptr, old_mapped_length usize, new_length usize, may_move int, new_mapped_length &usize) voidptr
+fn C.witty_tagged_page_realloc(memory voidptr, old_mapped_length uint, new_length uint, may_move int, new_mapped_length &uint) voidptr
 
-fn C.witty_tagged_page_unmap(memory voidptr, mapped_length usize)
+fn C.witty_tagged_page_unmap(memory voidptr, mapped_length uint)
 
 // VMTag contains macOS application-specific virtual-memory tags. They identify
 // Ghostty allocations in vmmap and Instruments.
@@ -56,13 +56,13 @@ pub fn tagged_page_allocator(tag VMTag) TaggedPageAllocator {
 pub struct TaggedPageMemory {
 pub mut:
 	ptr        voidptr
-	len        usize
-	mapped_len usize
+	len        uint
+	mapped_len uint
 }
 
-pub fn (self TaggedPageAllocator) alloc(length usize, alignment usize) ?TaggedPageMemory {
+pub fn (self TaggedPageAllocator) alloc(length uint, alignment uint) ?TaggedPageMemory {
 	assert length > 0
-	mut mapped_len := usize(0)
+	mut mapped_len := uint(0)
 	ptr := C.witty_tagged_page_map(length, alignment, self.tag.make(), &mapped_len)
 	if isnil(ptr) {
 		return none
@@ -77,21 +77,21 @@ pub fn (self TaggedPageAllocator) alloc(length usize, alignment usize) ?TaggedPa
 // resize changes the logical length without moving the mapping. Like the
 // pinned allocator, equal page-rounded sizes succeed and shrinking releases
 // trailing pages; growth fails on platforms without mremap.
-pub fn (mut self TaggedPageMemory) resize(new_len usize) bool {
+pub fn (mut self TaggedPageMemory) resize(new_len uint) bool {
 	return self.realloc(new_len, false)
 }
 
 // remap permits the platform to move the allocation. Darwin has no mremap,
 // so its behavior is the same as resize; the separate method preserves the
 // source allocator contract.
-pub fn (mut self TaggedPageMemory) remap(new_len usize) bool {
+pub fn (mut self TaggedPageMemory) remap(new_len uint) bool {
 	return self.realloc(new_len, true)
 }
 
 // realloc changes the page-rounded mapping size, optionally permitting the
 // platform to move it. The owned V value retains the returned pointer in place.
-pub fn (mut self TaggedPageMemory) realloc(new_len usize, may_move bool) bool {
-	mut mapped_len := usize(0)
+pub fn (mut self TaggedPageMemory) realloc(new_len uint, may_move bool) bool {
+	mut mapped_len := uint(0)
 	ptr := C.witty_tagged_page_realloc(self.ptr, self.mapped_len, new_len, int(may_move),
 		&mapped_len)
 	if isnil(ptr) {
@@ -111,6 +111,6 @@ pub fn (mut self TaggedPageMemory) unmap() {
 	self.mapped_len = 0
 }
 
-fn tagged_page_size() usize {
+fn tagged_page_size() uint {
 	return C.witty_tagged_page_size()
 }

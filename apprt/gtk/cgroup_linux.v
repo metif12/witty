@@ -111,14 +111,14 @@ pub fn cgroup_init(dbus GDBusConnection, opts Options) !string {
 	// Configure the "high" (soft) memory limit if requested.
 	if limit := opts.memory_high {
 		internal_os.configure_limit(surfaces, internal_os.CgroupLimitMemoryHigh{
-			value: usize(limit)
+			value: uint(limit)
 		})!
 	}
 
 	// Configure the "max" (hard) pids limit if requested.
 	if limit := opts.pids_max {
 		internal_os.configure_limit(surfaces, internal_os.CgroupLimitPidsMax{
-			value: usize(limit)
+			value: uint(limit)
 		})!
 	}
 
@@ -206,7 +206,7 @@ fn add_sv(builder GVariantBuilder, key string, value GVariant) {
 		C.g_variant_new_string(&char(key.str)),
 		C.g_variant_new_variant(value),
 	]
-	tuple := C.g_variant_new_tuple(unsafe { &children[0] }, usize(children.len))
+	tuple := C.g_variant_new_tuple(unsafe { &children[0] }, uint(children.len))
 	C.g_variant_builder_add_value(builder, tuple)
 }
 

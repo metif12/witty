@@ -12,7 +12,7 @@ fn test_value_fixed_arrays_recurse_with_aliases_and_leaf_options() {
 	mut values := ValueArrayGrid{}
 	values[0] = ValueArrayRow([ValueArrayElement(-12), 3]!)
 	values[1] = ValueArrayRow([ValueArrayElement(0), -4]!)
-	writer.print_value('any', FormatOptions{ width: usize(4), fill: `_` }, values, 2)!
+	writer.print_value('any', FormatOptions{ width: uint(4), fill: `_` }, values, 2)!
 	assert writer.buffered().bytestr() == '{ { _-12, __+3 }, { __+0, __-4 } }'
 }
 
@@ -20,7 +20,7 @@ fn test_value_byte_arrays_use_byte_formats_even_at_depth_zero() {
 	mut bytes := []u8{len: 128}
 	mut writer := WriteStream.init_memory(mut bytes)
 	value := ValueByteArray([ValueArrayByte(0), 127, 255]!)
-	writer.print_value('s', FormatOptions{ width: usize(5), fill: `_`, precision: usize(0) },
+	writer.print_value('s', FormatOptions{ width: uint(5), fill: `_`, precision: uint(0) },
 		value, 0)!
 	for format in ['x', 'X', 'b64'] {
 		writer.write_byte(`|`)!
@@ -34,8 +34,8 @@ fn test_value_fixed_array_depth_and_mixed_dynamic_arrays() {
 	mut bytes := []u8{len: 256}
 	mut writer := WriteStream.init_memory(mut bytes)
 	options := FormatOptions{
-		width:     ~usize(0)
-		precision: ~usize(0)
+		width:     ~uint(0)
+		precision: ~uint(0)
 		alignment: .center
 	}
 	writer.print_value('any', options, [[true, false]!, [false, true]!]!, 1)!
@@ -44,7 +44,7 @@ fn test_value_fixed_array_depth_and_mixed_dynamic_arrays() {
 	writer.write_byte(`|`)!
 	writer.print_value('any', options, [2][]bool{}, 3)!
 	writer.write_byte(`|`)!
-	writer.print_value('any', FormatOptions{ precision: usize(1) }, [
+	writer.print_value('any', FormatOptions{ precision: uint(1) }, [
 		[f32(1.25), -2.5]!,
 		[f32(3), 4]!,
 	], 2)!

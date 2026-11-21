@@ -16,7 +16,7 @@ __global (
 fn state() string {
 	mut headers := []string{}
 	for bytes in observed_vectors {
-		headers << '${usize(bytes.data) - usize(observed_payload.data)},${bytes.len}'
+		headers << '${uint(bytes.data) - uint(observed_payload.data)},${bytes.len}'
 	}
 	return observed_scalar + '|' + observed_buffer.hex() + '|' + observed_payload.hex() + '#' +
 		headers.join(';')
@@ -59,7 +59,7 @@ fn vectors(mut payload []u8, profile int) [][]u8 {
 }
 
 fn view(bytes []u8, buffer []u8) string {
-	offset := if buffer.len == 0 { usize(0) } else { usize(bytes.data) - usize(buffer.data) }
+	offset := if buffer.len == 0 { uint(0) } else { uint(bytes.data) - uint(buffer.data) }
 	return '${bytes.len}:${offset}:${bytes.hex()}'
 }
 
@@ -74,7 +74,7 @@ fn views(prefix []u8, constant []u8, one []u8, buffer []u8, has_one bool) string
 // limit|other-limit|u64-count|length|profile|mask|force-slice1
 fn record(line string) string {
 	f := line.split('|')
-	a, b, n := usize(f[0].u64()), usize(f[1].u64()), f[2].u64()
+	a, b, n := uint(f[0].u64()), uint(f[1].u64()), f[2].u64()
 	limit := zigimg.Limit.limited(a)
 	mut buffer := []u8{len: f[3].int(), init: u8(index * 17 + 165)}
 	mut payload := []u8{len: 256, init: u8(index * 23 + f[5].int())}

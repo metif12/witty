@@ -11,9 +11,9 @@ mut:
  document ObjId
  cell_height f64
  has_scrollbar bool
- total usize
- offset usize
- len usize
+ total uint
+ offset uint
+ len uint
  live bool
  last_row ?int
  inspector ObjId
@@ -146,7 +146,7 @@ fn (state &NativeSurfaceScroll) synchronize_core() {
   if state.surface.callbacks.size != unsafe { nil } { state.surface.callbacks.size(state.surface.userdata,width,height) }
  }
 }
-pub fn (mut surface NativeActionSurface) set_scrollbar(total usize,offset usize,len usize) {
+pub fn (mut surface NativeActionSurface) set_scrollbar(total uint,offset uint,len uint) {
  if surface.scroll == unsafe { nil } { return }
  surface.scroll.has_scrollbar = true
  surface.scroll.total = total

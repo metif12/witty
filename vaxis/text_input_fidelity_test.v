@@ -103,7 +103,7 @@ fn test_text_input_caller_buffer_keeps_tail_and_borrows_returned_prefix() {
 	mut bytes := []u8{len: 9, init: 0xa5}
 	mut prefix := input.slice_to_cursor_into(mut bytes)
 	assert prefix.bytestr() == 'ab界'
-	assert usize(prefix.data) == usize(bytes.data)
+	assert uint(prefix.data) == uint(bytes.data)
 	assert bytes[5..] == [u8(0xa5), 0xa5, 0xa5, 0xa5]
 	prefix[0] = `X`
 	assert bytes[0] == `X` && input.get_text() == 'ab界c'

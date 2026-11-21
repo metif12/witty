@@ -23,14 +23,14 @@ fn run() ! {
 	observed_buffer = unsafe { buffer }
 	at_exit(observe)!
 	mut status := 'ok'
-	depth := usize(os.args[4].u64())
+	depth := uint(os.args[4].u64())
 	if os.args[3] == '0' {
-		writer.print_vector('x', zigimg.FormatOptions{ precision: usize(64) }, [
+		writer.print_vector('x', zigimg.FormatOptions{ precision: uint(64) }, [
 			f32(1.5),
 			2.5,
 		]!, depth) or { status = err.msg() }
 	} else {
-		writer.print_vector('x', zigimg.FormatOptions{ precision: usize(64) }, [
+		writer.print_vector('x', zigimg.FormatOptions{ precision: uint(64) }, [
 			f64(1.5),
 			2.5,
 		]!, depth) or { status = err.msg() }

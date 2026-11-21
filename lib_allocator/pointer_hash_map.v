@@ -29,7 +29,7 @@ pub fn PointerHashMap.init[K, V](allocator Allocator) PointerHashMap[K, V] {
 }
 
 fn (table &PointerHashMap[K, V]) header() &PointerMapHeader {
-	return unsafe { &PointerMapHeader(usize(table.metadata) - sizeof(PointerMapHeader)) }
+	return unsafe { &PointerMapHeader(uint(table.metadata) - sizeof(PointerMapHeader)) }
 }
 
 pub fn (table &PointerHashMap[K, V]) capacity() u32 {
@@ -45,19 +45,19 @@ fn pointer_map_hash[K](key K) u64 {
 	return internal_hash.wyhash(unsafe { (&u8(&key)).vbytes(int(sizeof(K))) }, 0)
 }
 
-fn pointer_map_align(n usize, alignment usize) usize {
+fn pointer_map_align(n uint, alignment uint) uint {
 	return (n + alignment - 1) & ~(alignment - 1)
 }
 
-fn pointer_map_layout[K, V](capacity u32) (usize, usize, usize, u8) {
-	key_align := usize(1) << alignment_log[K]()
-	val_align := usize(1) << alignment_log[V]()
+fn pointer_map_layout[K, V](capacity u32) (uint, uint, uint, u8) {
+	key_align := uint(1) << alignment_log[K]()
+	val_align := uint(1) << alignment_log[V]()
 	mut alignment := alignment_log[PointerMapHeader]()
 	if alignment < alignment_log[K]() { alignment = alignment_log[K]() }
 	if alignment < alignment_log[V]() { alignment = alignment_log[V]() }
-	keys_start := pointer_map_align(sizeof(PointerMapHeader) + usize(capacity), key_align)
-	values_start := pointer_map_align(keys_start + usize(capacity) * sizeof(K), val_align)
-	total := pointer_map_align(values_start + usize(capacity) * sizeof(V), usize(1) << alignment)
+	keys_start := pointer_map_align(sizeof(PointerMapHeader) + uint(capacity), key_align)
+	values_start := pointer_map_align(keys_start + uint(capacity) * sizeof(K), val_align)
+	total := pointer_map_align(values_start + uint(capacity) * sizeof(V), uint(1) << alignment)
 	return keys_start, values_start, total, alignment
 }
 
@@ -68,12 +68,12 @@ fn (mut table PointerHashMap[K, V]) allocate(capacity u32) ! {
 	register_value_storage(raw, total)
 	unsafe {
 		*(&PointerMapHeader(raw)) = PointerMapHeader{
-			keys:     voidptr(usize(raw) + keys_start)
-			values:   voidptr(usize(raw) + values_start)
+			keys:     voidptr(uint(raw) + keys_start)
+			values:   voidptr(uint(raw) + values_start)
 			capacity: capacity
 		}
 	}
-	table.metadata = unsafe { &u8(usize(raw) + sizeof(PointerMapHeader)) }
+	table.metadata = unsafe { &u8(uint(raw) + sizeof(PointerMapHeader)) }
 }
 
 fn (mut table PointerHashMap[K, V]) deallocate() {
@@ -90,13 +90,13 @@ pub fn (mut table PointerHashMap[K, V]) deinit() {
 	table.deallocate()
 }
 
-fn (table &PointerHashMap[K, V]) get_index(key K) ?usize {
+fn (table &PointerHashMap[K, V]) get_index(key K) ?uint {
 	if table.size == 0 { return none }
 	hash := pointer_map_hash(key)
-	mask := usize(table.capacity() - 1)
+	mask := uint(table.capacity() - 1)
 	fingerprint := u8(hash >> 57)
 	mut limit := table.capacity()
-	mut index := usize(hash & u64(mask))
+	mut index := uint(hash & u64(mask))
 	keys := unsafe { &K(table.header().keys) }
 	for unsafe { table.metadata[index] != 0 } && limit != 0 {
 		meta := unsafe { table.metadata[index] }
@@ -118,8 +118,8 @@ fn (mut table PointerHashMap[K, V]) put_assume_capacity_no_clobber(key K, value 
 	if buildcfg.runtime_safety { assert table.get_index(key) == none
 	 }
 	hash := pointer_map_hash(key)
-	mask := usize(table.capacity() - 1)
-	mut index := usize(hash & u64(mask))
+	mask := uint(table.capacity() - 1)
+	mut index := uint(hash & u64(mask))
 	for unsafe { table.metadata[index] & 0x80 != 0 } {
 		index = (index + 1) & mask
 	}

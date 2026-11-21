@@ -50,7 +50,7 @@ fn specs(index u8) []vxfw.Size {
 
 struct Child {
 	spy   &Spy
-	index usize
+	index uint
 mut:
 	size vxfw.Size
 }
@@ -87,7 +87,7 @@ fn child_draw(ptr voidptr, ctx vxfw.DrawContext) !vxfw.Surface {
 				return error('OutOfMemory')
 			}
 			5 {
-				if child.index + 1 < usize(spy.children.len) {
+				if child.index + 1 < uint(spy.children.len) {
 					spy.children[int(child.index + 1)].size.height = 4
 				}
 			}
@@ -109,9 +109,9 @@ mut:
 	widgets     []vxfw.Widget
 	build_mode  u8
 	draw_mode   u8
-	build_calls usize
-	draw_calls  usize
-	base        usize
+	build_calls uint
+	draw_calls  uint
+	base        uint
 	trace       []string
 }
 
@@ -119,7 +119,7 @@ fn (mut spy Spy) init(dataset u8) {
 	for index, size in specs(dataset) {
 		spy.children << Child{
 			spy:   unsafe { &spy }
-			index: usize(index)
+			index: uint(index)
 			size:  size
 		}
 	}
@@ -132,7 +132,7 @@ fn optional(value ?u16) i32 {
 	return if n := value { i32(n) } else { -1 }
 }
 
-fn (mut spy Spy) log(kind string, index usize, cursor usize, ctx ?vxfw.DrawContext) {
+fn (mut spy Spy) log(kind string, index uint, cursor uint, ctx ?vxfw.DrawContext) {
 	if spy.build_calls + spy.draw_calls > 128 { return }
 	v := spy.view
 	min_w := if c := ctx { i32(c.min.width) } else { -1 }
@@ -142,7 +142,7 @@ fn (mut spy Spy) log(kind string, index usize, cursor usize, ctx ?vxfw.DrawConte
 	spy.trace << '${kind}${index},${cursor},${v.cursor},${v.scroll.top},${v.scroll.vertical_offset},${v.scroll.pending_lines},${v.scroll.left},${u8(v.scroll.wants_cursor)},${u8(v.scroll.has_more_vertical)},${min_w},${min_h},${max_w},${max_h};'
 }
 
-fn build(ptr voidptr, index usize, cursor usize) ?vxfw.Widget {
+fn build(ptr voidptr, index uint, cursor uint) ?vxfw.Widget {
 	mut spy := unsafe { &Spy(ptr) }
 	spy.log('B', index, cursor, none)
 	first := spy.build_calls == 0
@@ -166,7 +166,7 @@ fn build(ptr voidptr, index usize, cursor usize) ?vxfw.Widget {
 		}
 	}
 	relative := if spy.build_mode == 6 { index - spy.base } else { index }
-	if relative >= usize(spy.widgets.len) {
+	if relative >= uint(spy.widgets.len) {
 		if spy.build_mode == 4 {
 			spy.view.scroll.pending_lines = 1
 			spy.view.scroll.left = 65536
@@ -185,7 +185,7 @@ fn state(mut out strings.Builder, view vxfw.ScrollView) {
 
 fn surface_value(mut out strings.Builder, surface vxfw.Surface, view &vxfw.ScrollView) {
 	index := if surface.widget.userdata == unsafe { voidptr(view) } {
-		usize(0)
+		uint(0)
 	} else {
 		child := unsafe { &Child(surface.widget.userdata) }
 		child.index + 1

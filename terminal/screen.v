@@ -1953,10 +1953,10 @@ pub:
 	rows u32 = 24
 	// The maximum size of scrollback in bytes. Zero means unlimited. Any
 	// other value will be clamped to support a minimum of the active area.
-	max_scrollback usize
+	max_scrollback uint
 	// The total storage limit for Kitty images in bytes for this
 	// screen. Kitty image storage is per-screen.
-	kitty_image_storage_limit usize = 320 * 1000 * 1000 // 320MB
+	kitty_image_storage_limit uint = 320 * 1000 * 1000 // 320MB
 }
 
 // Options for scrolling the viewport of the terminal grid. The reason
@@ -1973,17 +1973,17 @@ pub:
 
 pub struct ScrollRow {
 pub:
-	n usize
+	n uint
 }
 
 pub struct ScrollDeltaRow {
 pub:
-	delta isize
+	delta int
 }
 
 pub struct ScrollDeltaPrompt {
 pub:
-	delta isize
+	delta int
 }
 
 // For all of these, see PageList.Scroll.
@@ -2074,8 +2074,8 @@ pub fn (mut self LineIterator) next() ?Selection {
 
 pub struct PromptClickMove {
 pub:
-	left  usize
-	right usize
+	left  uint
+	right uint
 }
 
 pub const prompt_click_move_zero = PromptClickMove{
@@ -2134,11 +2134,11 @@ pub mut:
 // size is that anyways.
 //
 // If max scrollback is 0, then no scrollback is kept at all.
-pub fn Screen.init(cols u32, rows u32, max_scrollback usize) !Screen {
+pub fn Screen.init(cols u32, rows u32, max_scrollback uint) !Screen {
 	return Screen.init_alloc(lib_allocator.c_allocator_value(), cols, rows, max_scrollback)
 }
 
-pub fn Screen.init_alloc(allocator lib_allocator.Allocator, cols u32, rows u32, max_scrollback usize) !Screen {
+pub fn Screen.init_alloc(allocator lib_allocator.Allocator, cols u32, rows u32, max_scrollback uint) !Screen {
 	// Initialize our backing pages.
 	mut pages := PageList.init_alloc(allocator, page_list_page_allocator(), u16(cols), u16(rows), max_scrollback)!
 
@@ -2467,12 +2467,12 @@ pub fn (mut self Screen) increase_capacity(node &PageNode, adjustment ?IncreaseC
 
 pub fn (mut self Screen) cursor_cell_right(n u32) &CellData {
 	assert self.cursor.x + n < u32(self.pages.cols)
-	return unsafe { &CellData(&u8(self.cursor.page_cell) + usize(n) * sizeof(CellData)) }
+	return unsafe { &CellData(&u8(self.cursor.page_cell) + uint(n) * sizeof(CellData)) }
 }
 
 pub fn (mut self Screen) cursor_cell_left(n u32) &CellData {
 	assert self.cursor.x >= n
-	return unsafe { &CellData(&u8(self.cursor.page_cell) - usize(n) * sizeof(CellData)) }
+	return unsafe { &CellData(&u8(self.cursor.page_cell) - uint(n) * sizeof(CellData)) }
 }
 
 pub fn (mut self Screen) cursor_cell_end_of_prev() &CellData {
@@ -2490,7 +2490,7 @@ pub fn (mut self Screen) cursor_right(n u32) {
 	assert self.cursor.x + n < u32(self.pages.cols)
 	defer { self.assert_integrity() }
 
-	self.cursor.page_cell = unsafe { &CellData(&u8(self.cursor.page_cell) + usize(n) * sizeof(CellData)) }
+	self.cursor.page_cell = unsafe { &CellData(&u8(self.cursor.page_cell) + uint(n) * sizeof(CellData)) }
 	self.cursor.page_pin.x += u16(n)
 	self.cursor.x += n
 }
@@ -2500,7 +2500,7 @@ pub fn (mut self Screen) cursor_left(n u32) {
 	assert self.cursor.x >= n
 	defer { self.assert_integrity() }
 
-	self.cursor.page_cell = unsafe { &CellData(&u8(self.cursor.page_cell) - usize(n) * sizeof(CellData)) }
+	self.cursor.page_cell = unsafe { &CellData(&u8(self.cursor.page_cell) - uint(n) * sizeof(CellData)) }
 	self.cursor.page_pin.x -= u16(n)
 	self.cursor.x -= n
 }
@@ -2725,10 +2725,10 @@ pub fn (mut self Screen) cursor_down_scroll() ! {
 // @memset(cells[0..cols], blank_cell) over the cursor row, starting from
 // the cursor cell minus the cursor x as the source does.
 fn (mut self Screen) cursor_row_memset(blank_cell CellData) {
-	cells := unsafe { &CellData(&u8(self.cursor.page_cell) - usize(self.cursor.x) * sizeof(CellData)) }
+	cells := unsafe { &CellData(&u8(self.cursor.page_cell) - uint(self.cursor.x) * sizeof(CellData)) }
 	for x in 0 .. u32(self.pages.cols) {
 		unsafe {
-			*(&CellData(&u8(cells) + usize(x) * sizeof(CellData))) = blank_cell
+			*(&CellData(&u8(cells) + uint(x) * sizeof(CellData))) = blank_cell
 		}
 	}
 }
@@ -3198,8 +3198,8 @@ pub fn (mut self Screen) clear_cells(mut page Page, mut row RowData, mut cells [
 
 	$if !prod {
 		// Our row and cells should be within the page.
-		assert row_idx < usize(page.size.rows)
-		assert left + usize(cells.len) <= usize(page.get_cells(row).len)
+		assert row_idx < uint(page.size.rows)
+		assert left + uint(cells.len) <= uint(page.get_cells(row).len)
 	}
 
 	// If we have managed memory (styles, graphemes, or hyperlinks)
@@ -3207,7 +3207,7 @@ pub fn (mut self Screen) clear_cells(mut page Page, mut row RowData, mut cells [
 	if row.header.grapheme {
 		for i, cell in cells {
 			if cell.has_grapheme() {
-				page.clear_grapheme(row_idx, left + usize(i))
+				page.clear_grapheme(row_idx, left + uint(i))
 			}
 		}
 
@@ -3224,7 +3224,7 @@ pub fn (mut self Screen) clear_cells(mut page Page, mut row RowData, mut cells [
 	if row.header.hyperlink {
 		for i, cell in cells {
 			if cell.has_hyperlink {
-				page.clear_hyperlink(row_idx, left + usize(i))
+				page.clear_hyperlink(row_idx, left + uint(i))
 			}
 		}
 
@@ -3839,8 +3839,8 @@ pub fn (mut self Screen) manual_style_update() ! {
 fn (mut self Screen) split_for_capacity(pin Pin) ! {
 	// Get our capacities. We include our target row because its
 	// capacity will be preserved.
-	bytes_above := Page.layout(pin.node.data.exact_row_capacity(0, usize(pin.y) + 1)).total_size
-	bytes_below := Page.layout(pin.node.data.exact_row_capacity(usize(pin.y), usize(pin.node.data.size.rows))).total_size
+	bytes_above := Page.layout(pin.node.data.exact_row_capacity(0, uint(pin.y) + 1)).total_size
+	bytes_below := Page.layout(pin.node.data.exact_row_capacity(uint(pin.y), uint(pin.node.data.size.rows))).total_size
 
 	// We need to track the old cursor pin because if our split
 	// moves the cursor pin we need to update our accounting.
@@ -3890,9 +3890,9 @@ pub fn (mut self Screen) append_grapheme(cell &CellData, cp u32) ! {
 
 		// The cell pointer is now invalid, so we need to get it from
 		// the reloaded cursor pointers.
-		reloaded_cell := if cell_idx == usize(self.cursor.x) {
+		reloaded_cell := if cell_idx == uint(self.cursor.x) {
 			self.cursor.page_cell
-		} else if cell_idx < usize(self.cursor.x) {
+		} else if cell_idx < uint(self.cursor.x) {
 			self.cursor_cell_left(self.cursor.x - u32(cell_idx))
 		} else {
 			self.cursor_cell_right(u32(cell_idx) - self.cursor.x)
@@ -4047,7 +4047,7 @@ pub fn (mut self Screen) cursor_set_hyperlink() ! {
 		// FIXME: increaseCapacity should not do this.
 		for {
 			link := self.cursor.hyperlink_state or { break }
-			if page.hyperlink_set.can_allocate_string_bytes(usize(link.uri.len)) {
+			if page.hyperlink_set.can_allocate_string_bytes(uint(link.uri.len)) {
 				break
 			}
 
@@ -4655,7 +4655,7 @@ fn (mut self Screen) prompt_click_line(click_pin Pin) PromptClickMove {
 
 	// If our cursor is before our click, we're only emitting right inputs.
 	if cursor_pin.before(click_pin) {
-		mut count := usize(0)
+		mut count := uint(0)
 
 		// We go row-by-row because soft-wrapped rows are still a single
 		// line to a shell, so we can't just look at our page row.
@@ -4722,7 +4722,7 @@ fn (mut self Screen) prompt_click_line(click_pin Pin) PromptClickMove {
 	}
 
 	// Otherwise, cursor is after click, so we're emitting left inputs.
-	mut count := usize(0)
+	mut count := uint(0)
 
 	// We go row-by-row because soft-wrapped rows are still a single
 	// line to a shell, so we can't just look at our page row.

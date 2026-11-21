@@ -417,12 +417,12 @@ pub fn TGA.format_detect(mut stream ReadStream) !bool {
 	return false
 }
 
-pub fn (codec TGA) width() usize {
-	return usize(codec.header.image_spec.width)
+pub fn (codec TGA) width() uint {
+	return uint(codec.header.image_spec.width)
 }
 
-pub fn (codec TGA) height() usize {
-	return usize(codec.header.image_spec.height)
+pub fn (codec TGA) height() uint {
+	return uint(codec.header.image_spec.height)
 }
 
 pub fn (codec TGA) pixel_format() !PixelFormat {
@@ -475,7 +475,7 @@ pub fn (mut codec TGA) read(mut stream ReadStream) !PixelStorage {
 	codec.header = tga_header_read(stream.take(18)!)
 	if !codec.header.is_valid() { return error('InvalidData') }
 	if codec.header.id_length > 0 {
-		codec.id.resize(usize(codec.header.id_length))
+		codec.id.resize(uint(codec.header.id_length))
 		stream.read_slice_all(mut codec.id.data) or { return error('InvalidData') }
 	}
 	format := codec.pixel_format()!
@@ -492,7 +492,7 @@ pub fn (mut codec TGA) read(mut stream ReadStream) !PixelStorage {
 		IndexedStorage8 {
 			depth := codec.header.color_map_spec.bit_depth
 			if depth !in [u8(15), 16, 24] { return error('Unsupported') }
-			pixels.resize_palette(usize(codec.header.color_map_spec.length))
+			pixels.resize_palette(uint(codec.header.color_map_spec.length))
 			for index in int(codec.header.color_map_spec.first_entry_index) .. codec.palette_end() {
 				if depth == 24 {
 					// Source forms the palette destination before reading its byte.
@@ -573,7 +573,7 @@ pub fn TGA.write_image(mut stream WriteStream, image ImageUnmanaged, options Tga
 	if options.image_id.len > 0 {
 		if options.image_id.len > 256 { return error('Unsupported') }
 		codec.header.id_length = u8(options.image_id.len)
-		codec.id.resize(usize(options.image_id.len))
+		codec.id.resize(uint(options.image_id.len))
 		copy(mut codec.id.data, options.image_id)
 	}
 	if options.author_name.len >= 40 || options.job_id.len >= 40 || options.software_id.len >= 40 {
@@ -643,7 +643,7 @@ pub fn (codec TGA) write(mut stream WriteStream, pixels PixelStorage) ! {
 			depth := codec.header.color_map_spec.bit_depth
 			if depth !in [u8(15), 16, 24] { return error('Unsupported') }
 			for i in int(codec.header.color_map_spec.first_entry_index) .. codec.palette_end() {
-				tga_writer_check_index(usize(i), pixels.palette.len)
+				tga_writer_check_index(uint(i), pixels.palette.len)
 				color := pixels.palette[i]
 				if depth == 24 {
 					stream.write_all([color.b, color.g, color.r])!
@@ -689,10 +689,10 @@ fn (codec TGA) write_pixels(mut stream WriteStream, pixels PixelStorage) ! {
 	}
 	for y in 0 .. int(codec.height()) {
 		row := if top { y } else { int(codec.height()) - y - 1 }
-		start := usize(row) * usize(stride)
-		end := (usize(row) + 1) * usize(stride)
+		start := uint(row) * uint(stride)
+		end := (uint(row) + 1) * uint(stride)
 		// Source validates the complete byte range before entering the encoder.
-		if end > usize(bytes.len) {
+		if end > uint(bytes.len) {
 			panic('index out of bounds: index ${end}, len ${bytes.len}')
 		}
 		line := bytes[int(start)..int(end)]
@@ -717,7 +717,7 @@ fn (codec TGA) write_converted(mut stream WriteStream, pixels PixelStorage) ! {
 			int(codec.height()) - y - 1
 		}
 		for x in 0 .. width {
-			i := usize(row) * usize(width) + usize(x)
+			i := uint(row) * uint(width) + uint(x)
 			tga_writer_check_index(i, int(pixels.len()))
 			mut bytes := []u8{}
 			match pixels {
@@ -746,8 +746,8 @@ fn (codec TGA) write_converted(mut stream WriteStream, pixels PixelStorage) ! {
 	if compressed { rle.flush(mut stream)! }
 }
 
-fn tga_writer_check_index(index usize, length int) {
-	if index >= usize(length) {
+fn tga_writer_check_index(index uint, length int) {
+	if index >= uint(length) {
 		panic('index out of bounds: index ${index}, len ${length}')
 	}
 }

@@ -58,17 +58,17 @@ fn vxfw_u8_cast(value u64) u8 {
 	return u8(value)
 }
 
-fn vxfw_usize_add(first usize, second usize) usize {
-	if second > ~usize(0) - first { panic('integer overflow') }
+fn vxfw_usize_add(first uint, second uint) uint {
+	if second > ~uint(0) - first { panic('integer overflow') }
 	return first + second
 }
 
-fn vxfw_usize_sub(first usize, second usize) usize {
+fn vxfw_usize_sub(first uint, second uint) uint {
 	if second > first { panic('integer overflow') }
 	return first - second
 }
 
-fn vxfw_usize_mul(first usize, second usize) usize {
-	if first != 0 && second > ~usize(0) / first { panic('integer overflow') }
+fn vxfw_usize_mul(first uint, second uint) uint {
+	if first != 0 && second > ~uint(0) / first { panic('integer overflow') }
 	return first * second
 }

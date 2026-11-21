@@ -26,24 +26,24 @@ fn run() ! {
 	observed_buffer = unsafe { buffer }
 	at_exit(observe)!
 	mut status := 'ok'
-	value := unsafe { &string(voidptr(usize(0x1234))) }
+	value := unsafe { &string(voidptr(uint(0x1234))) }
 	match os.args[3] {
 		'0' {
 			writer.print_value('any', zigimg.FormatOptions{}, value, 0) or { status = err.msg() }
 		}
 		'1' { writer.print_address(value) or { status = err.msg() } }
 		'2' {
-			writer.print_value('*', zigimg.FormatOptions{ width: ~usize(0) }, unsafe { &string(nil) }, 0) or { status = err.msg() }
+			writer.print_value('*', zigimg.FormatOptions{ width: ~uint(0) }, unsafe { &string(nil) }, 0) or { status = err.msg() }
 		}
 		'3' {
-			writer.print_value('?*', zigimg.FormatOptions{}, ?&string(unsafe { &string(voidptr(usize(0x1000))) }), 0) or { status = err.msg() }
+			writer.print_value('?*', zigimg.FormatOptions{}, ?&string(unsafe { &string(voidptr(uint(0x1000))) }), 0) or { status = err.msg() }
 		}
 		'4' {
 			writer.print_value('?*', zigimg.FormatOptions{ width: 6, fill: `_` }, ?&string(none), 0) or { status = err.msg() }
 		}
 		'5' { writer.print_address(?&string(none)) or { status = err.msg() } }
 		'6' {
-			writer.print_address(unsafe { &Elements(voidptr(usize(0x1234))) }) or { status = err.msg() }
+			writer.print_address(unsafe { &Elements(voidptr(uint(0x1234))) }) or { status = err.msg() }
 		}
 		else { panic('invalid control') }
 	}

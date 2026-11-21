@@ -11,7 +11,7 @@ import time
 
 #include "imgui_native_shims.h"
 
-fn C.witty_imgui_class_size() usize
+fn C.witty_imgui_class_size() uint
 fn C.witty_imgui_class_set_setup(voidptr, voidptr)
 fn C.witty_imgui_class_set_render(voidptr, voidptr)
 fn C.witty_imgui_call_setup(voidptr)

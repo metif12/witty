@@ -17,12 +17,12 @@ pub struct CcittDecoder {
 pub mut:
 	current_color  CcittColor = .white
 	should_reverse bool
-	width          usize
-	num_rows       usize
+	width          uint
+	num_rows       uint
 	white_value    u8
 }
 
-pub fn CcittDecoder.init(width usize, num_rows usize, white_value u8) !CcittDecoder {
+pub fn CcittDecoder.init(width uint, num_rows uint, white_value u8) !CcittDecoder {
 	if white_value > 1 { panic('integer does not fit in destination type') }
 	return CcittDecoder{
 		width:       width
@@ -85,7 +85,7 @@ pub fn (mut decoder CcittDecoder) decode(mut reader ReadStream, mut writer Write
 	mut decoded_bits := u16(0)
 	mut bits_read := u16(0)
 	rows := decoder.num_rows
-	for row := usize(0); row < rows; row++ {
+	for row := uint(0); row < rows; row++ {
 		mut pixels_to_decode := decoder.width
 		for pixels_to_decode > 0 && code_length < 14 {
 			code = (code << 1) & 0x1fff

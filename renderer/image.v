@@ -288,7 +288,7 @@ pub enum PixelFormat as u8 {
 }
 
 // Get bytes per pixel for this format.
-pub fn (f PixelFormat) bpp() usize {
+pub fn (f PixelFormat) bpp() uint {
 	return match f {
 		.gray { 1 }
 		.gray_alpha { 2 }
@@ -310,12 +310,12 @@ pub mut:
 }
 
 // Returns the expected data length.
-pub fn (p &PendingImage) data_len() usize {
-	return usize(p.width) * usize(p.height) * p.pixel_format.bpp()
+pub fn (p &PendingImage) data_len() uint {
+	return uint(p.width) * uint(p.height) * p.pixel_format.bpp()
 }
 
 // Returns the expected data length as an array index.
-pub fn (p &PendingImage) len() usize {
+pub fn (p &PendingImage) len() uint {
 	return p.data_len()
 }
 

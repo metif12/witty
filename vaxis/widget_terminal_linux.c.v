@@ -13,7 +13,7 @@ fn C.witty_terminal_setsid() int
 fn C.witty_terminal_dup2(from int, to int) int
 fn C.witty_terminal_chdir(path &char) int
 fn C.witty_terminal_exec(argv &&char, envp &&char)
-fn C.witty_terminal_cwd_path(bytes &u8, length usize) isize
+fn C.witty_terminal_cwd_path(bytes &u8, length uint) int
 
 pub fn TerminalPty.init() !TerminalPty {
 	master := C.witty_terminal_open(c'/dev/ptmx')
@@ -134,7 +134,7 @@ pub fn (mut terminal Terminal) spawn() ! {
 		terminal.working_directory << path.bytes()
 	} else {
 		mut path := []u8{len: 4096}
-		len := C.witty_terminal_cwd_path(path.data, usize(path.len))
+		len := C.witty_terminal_cwd_path(path.data, uint(path.len))
 		if len < 0 {
 			code := C.witty_terminal_errno()
 			if code == C.ENOENT { return error('FileNotFound') }

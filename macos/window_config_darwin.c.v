@@ -11,7 +11,7 @@ fn C.witty_macos_msg_id_obj_f64(obj ObjId, selector Sel, value ObjId, amount f64
 fn C.witty_macos_msg_super_void_u64(obj ObjId, selector Sel, value u64)
 fn C.witty_macos_window_super_void0(obj ObjId, selector Sel)
 fn C.witty_macos_window_super_void1(obj ObjId, selector Sel, value ObjId)
-fn C.witty_macos_array(objects &voidptr, count usize) ObjId
+fn C.witty_macos_array(objects &voidptr, count uint) ObjId
 
 @[heap]
 struct NativeWindowData {
@@ -342,7 +342,7 @@ pub fn apply_native_window_config(view voidptr, config NativeWindowConfig, initi
 fn save_native_window_position(self ObjId) {
 	frame := msg_rect(self, 'frame')
 	points := [voidptr(msg_id_f64(get_class('NSNumber'), 'numberWithDouble:', frame.x)), voidptr(msg_id_f64(get_class('NSNumber'), 'numberWithDouble:', frame.y))]
-	array := C.witty_macos_array(points.data, usize(points.len))
+	array := C.witty_macos_array(points.data, uint(points.len))
 	msg_void2(msg_id(get_class('NSUserDefaults'), 'standardUserDefaults'), 'setObject:forKey:', array, nsstring('NSWindowLastPosition'))
 }
 fn native_window_did_move(_self ObjId,_cmd Sel,notification ObjId) { window:=msg_id(notification,'object'); if msg_bool1(window,'isKindOfClass:',get_class('VTTerminalWindow')) { save_native_window_position(window) } }
@@ -394,7 +394,7 @@ fn native_title_label_draw(self ObjId, _cmd Sel, _dirty ObjCRect) {
 fn toolbar_array(names []string) ObjId {
 	mut objects := []voidptr{}
 	for name in names { objects << voidptr(nsstring(name)) }
-	return C.witty_macos_array(objects.data, usize(objects.len))
+	return C.witty_macos_array(objects.data, uint(objects.len))
 }
 fn native_toolbar_allowed(self ObjId, _cmd Sel, _toolbar ObjId) ObjId {
 	if window := g_toolbar_windows[u64(self)] { if data := native_window_data(window) { if data.tabs_tahoe { return toolbar_array(['Title', 'NSToolbarFlexibleSpaceItem', 'NSToolbarSpaceItem']) } } }

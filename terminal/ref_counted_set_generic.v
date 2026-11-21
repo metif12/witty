@@ -20,21 +20,21 @@ pub mut:
 
 pub struct GenericRefSetLayout[I] {
 pub:
-	cap         usize
-	table_cap   usize
+	cap         uint
+	table_cap   uint
 	table_mask  I
-	table_start usize
-	items_start usize
-	total_size  usize
+	table_start uint
+	items_start uint
+	total_size  uint
 }
 
-pub fn generic_ref_set_layout[T, I, R](capacity usize) GenericRefSetLayout[I] {
-	assert capacity <= usize(I(~u64(0))) + 1
+pub fn generic_ref_set_layout[T, I, R](capacity uint) GenericRefSetLayout[I] {
+	assert capacity <= uint(I(~u64(0))) + 1
 	if capacity == 0 { return GenericRefSetLayout[I]{} }
 	table_capacity := rcs_ceil_power_of_two(capacity)
 	item_capacity := table_capacity * 13 / 16
 	start := rcs_align_forward(table_capacity * sizeof(I),
-		usize(1) << lib_allocator.alignment_log[GenericRefSetItem[T, I, R]]())
+		uint(1) << lib_allocator.alignment_log[GenericRefSetItem[T, I, R]]())
 	return GenericRefSetLayout[I]{
 		cap:         item_capacity
 		table_cap:   table_capacity
@@ -50,7 +50,7 @@ pub mut:
 	items_offset Offset
 	max_psl      I
 	psl_stats    [32]I
-	living       usize
+	living       uint
 	next_id      I
 	layout       GenericRefSetLayout[I]
 	context      X
@@ -139,7 +139,7 @@ pub fn (mut self GenericRefCountedSet[T, I, R, X]) add(base &u8, value T) !I {
 		// If less than 90% of currently allocated IDs
 		// correspond to living items, we should rehash.
 		rehash_threshold := 0.9
-		if self.living < usize(f64(self.layout.cap) * rehash_threshold) {
+		if self.living < uint(f64(self.layout.cap) * rehash_threshold) {
 			return error('needs rehash')
 		}
 		return error('out of memory')
@@ -270,7 +270,7 @@ pub fn (self &GenericRefCountedSet[T, I, R, X]) ref_count(base &u8, id I) R {
 }
 
 // Get the current number of non-dead items in the set.
-pub fn (self &GenericRefCountedSet[T, I, R, X]) count() usize {
+pub fn (self &GenericRefCountedSet[T, I, R, X]) count() uint {
 	return self.living
 }
 
@@ -331,7 +331,7 @@ fn (mut self GenericRefCountedSet[T, I, R, X]) delete_item(base &u8, id I) {
 	mut buckets := self.table_view(base)
 	item := items[id]
 
-	if usize(item.meta.bucket) > self.layout.table_cap {
+	if uint(item.meta.bucket) > self.layout.table_cap {
 		return
 	}
 	assert buckets[item.meta.bucket] == id

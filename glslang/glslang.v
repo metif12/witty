@@ -45,7 +45,7 @@ pub fn C.glslang_program_delete(program voidptr)
 pub fn C.glslang_program_add_shader(program voidptr, shader voidptr)
 pub fn C.glslang_program_link(program voidptr, messages int) int
 pub fn C.glslang_program_SPIRV_generate(program voidptr, stage int)
-pub fn C.glslang_program_SPIRV_get_size(program voidptr) usize
+pub fn C.glslang_program_SPIRV_get_size(program voidptr) uint
 pub fn C.glslang_program_SPIRV_get_ptr(program voidptr) &u32
 pub fn C.glslang_program_get_info_log(program voidptr) &char
 pub fn C.glslang_program_get_info_debug_log(program voidptr) &char

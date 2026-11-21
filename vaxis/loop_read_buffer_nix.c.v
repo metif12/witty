@@ -16,7 +16,7 @@ fn (mut reader LoopReadBuffer) read_buffer() []u8 {
 	return unsafe { (&reader.buf[0] + reader.read_start).vbytes(reader.buf.len - reader.read_start) }
 }
 
-fn (mut reader LoopReadBuffer) begin_read(count usize) {
+fn (mut reader LoopReadBuffer) begin_read(count uint) {
 	reader.count = int(count)
 	reader.seq_start = 0
 }

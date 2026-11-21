@@ -6,7 +6,7 @@ import rand
 fn read_thread_state(result chan ThreadState) {
 	set_thread_state(ThreadState{
 		kind:    .io
-		surface: voidptr(usize(0x5678))
+		surface: voidptr(uint(0x5678))
 	})
 	state := thread_state() or { ThreadState{} }
 	result <- state
@@ -16,7 +16,7 @@ fn read_thread_state(result chan ThreadState) {
 fn test_thread_state_is_installed_and_cleared() {
 	state := ThreadState{
 		kind:    .renderer
-		surface: voidptr(usize(0x1234))
+		surface: voidptr(uint(0x1234))
 	}
 	set_thread_state(state)
 	stored := thread_state() or {
@@ -32,7 +32,7 @@ fn test_thread_state_is_installed_and_cleared() {
 fn test_thread_state_is_thread_local() {
 	set_thread_state(ThreadState{
 		kind:    .main
-		surface: voidptr(usize(0x1234))
+		surface: voidptr(uint(0x1234))
 	})
 	result := chan ThreadState{cap: 1}
 	worker := spawn read_thread_state(result)
@@ -40,13 +40,13 @@ fn test_thread_state_is_thread_local() {
 	worker.wait()
 
 	assert worker_state.kind == .io
-	assert worker_state.surface == voidptr(usize(0x5678))
+	assert worker_state.surface == voidptr(uint(0x5678))
 	main_state := thread_state() or {
 		assert false, 'expected main thread state'
 		return
 	}
 	assert main_state.kind == .main
-	assert main_state.surface == voidptr(usize(0x1234))
+	assert main_state.surface == voidptr(uint(0x1234))
 	clear_thread_state()
 }
 

@@ -2,7 +2,7 @@ module xev
 
 struct HeapTestElem {
 mut:
-	value usize
+	value uint
 	heap  IntrusiveHeapField[HeapTestElem]
 }
 
@@ -10,7 +10,7 @@ fn heap_test_less(a &HeapTestElem, b &HeapTestElem) bool {
 	return a.value < b.value
 }
 
-fn heap_test_elem(value usize) &HeapTestElem {
+fn heap_test_elem(value uint) &HeapTestElem {
 	return &HeapTestElem{
 		value: value
 	}
@@ -97,10 +97,10 @@ fn test_heap_equal_values() {
 
 // Translated from libxev src/heap.zig `test "heap: million values"`.
 fn test_heap_million_values() {
-	num_timers := usize(1000 * 1000)
+	num_timers := uint(1000 * 1000)
 	mut elems := []HeapTestElem{len: int(num_timers)}
 
-	mut value := usize(0)
+	mut value := uint(0)
 	for i in 0 .. elems.len {
 		if i % 100 == 0 {
 			value += 1
@@ -117,8 +117,8 @@ fn test_heap_million_values() {
 		h.insert(unsafe { &elems[i] })
 	}
 
-	mut count := usize(0)
-	mut last := usize(0)
+	mut count := uint(0)
+	mut last := uint(0)
 	for {
 		elem := h.delete_min() or { break }
 		count += 1

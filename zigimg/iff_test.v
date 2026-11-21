@@ -331,9 +331,9 @@ fn test_iff_ham6_ham8_palette_reduction_and_ehb() {
 		}
 		reducer.palette.resize(256)
 		reducer.reduce_ham_palette()
-		shift := (planes - 2) & u8(sizeof(usize) * 8 - 1)
+		shift := (planes - 2) & u8(sizeof(uint) * 8 - 1)
 		assert reducer.cmap_bits == planes - 2
-			&& reducer.palette.data.len == int(usize(256) >> shift)
+			&& reducer.palette.data.len == int(uint(256) >> shift)
 	}
 	codec.palette.resize(32)
 	for i in 0 .. 32 {

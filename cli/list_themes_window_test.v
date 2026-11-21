@@ -43,7 +43,7 @@ fn test_preview_window_draws_theme_list_and_load_error() {
 			theme: 'Missing'
 			path:  missing
 		}]
-		filtered:   [usize(0)]
+		filtered:   [uint(0)]
 		text_input: vaxis.TextInput.new()
 	}
 	mut vx := vaxis.Vaxis.new(vaxis.VaxisOptions{})
@@ -91,7 +91,7 @@ fn test_preview_window_mouse_selection_and_highlight() {
 			theme: 'Two'
 			path:  '/missing/two'
 		}, ThemeListElement{ theme: 'Three', path: '/missing/three' }]
-		filtered:   [usize(0), 1, 2]
+		filtered:   [uint(0), 1, 2]
 		text_input: vaxis.TextInput.new()
 	}
 	mut vx := vaxis.Vaxis.new(vaxis.VaxisOptions{})
@@ -155,7 +155,7 @@ fn test_preview_window_segments_wrap_with_reported_width() {
 fn test_preview_window_help_and_save_modals() {
 	mut p := Preview{
 		themes: [ThemeListElement{ theme: 'Theme A', path: '/missing/theme-a' }]
-		filtered: [usize(0)]
+		filtered: [uint(0)]
 		text_input: vaxis.TextInput.new()
 	}
 	mut vx := vaxis.Vaxis.new(vaxis.VaxisOptions{})

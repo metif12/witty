@@ -95,14 +95,14 @@ fn test_osc_cli_parser_output_has_native_length_prefix() {
 		implementation.destroy()
 	}
 	implementation.run(mut writer, rng)!
-	assert writer.data.len > int(sizeof(usize))
-	length := if sizeof(usize) == 8 {
-		usize(binary.little_endian_u64(writer.data[..8]))
+	assert writer.data.len > int(sizeof(uint))
+	length := if sizeof(uint) == 8 {
+		uint(binary.little_endian_u64(writer.data[..8]))
 	} else {
-		usize(binary.little_endian_u32(writer.data[..4]))
+		uint(binary.little_endian_u32(writer.data[..4]))
 	}
 	assert length > 0
-	assert int(sizeof(usize)) + int(length) <= writer.data.len
+	assert int(sizeof(uint)) + int(length) <= writer.data.len
 }
 
 fn test_synthetic_main_action_retains_source_argument_variants() {

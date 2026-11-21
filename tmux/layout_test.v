@@ -57,10 +57,10 @@ fn test_single_pane_values_above_i32() {
 		assert false, 'parse failed: ${err}'
 		return
 	}
-	assert layout.width == usize(4294967295)
-	assert layout.x == usize(2147483648)
+	assert layout.width == uint(4294967295)
+	assert layout.x == uint(2147483648)
 	assert layout.content is ContentPane
-	assert layout.content.pane_id == usize(4294967295)
+	assert layout.content.pane_id == uint(4294967295)
 }
 
 fn test_horizontal_split_two_panes() {

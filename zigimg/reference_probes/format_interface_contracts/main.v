@@ -44,7 +44,7 @@ fn r0(mut r p.ReadStream) !p.ImageUnmanaged {
 	trace = trace * 10 + 1
 	return p.ImageUnmanaged{
 		width:  1
-		height: usize(r.take_byte()!)
+		height: uint(r.take_byte()!)
 	}
 }
 
@@ -53,7 +53,7 @@ fn r1(mut r p.ReadStream) !p.ImageUnmanaged {
 	bytes := r.take(2)!
 	return p.ImageUnmanaged{
 		width:  2
-		height: usize(bytes[1])
+		height: uint(bytes[1])
 	}
 }
 
@@ -160,12 +160,12 @@ fn trap_case(line string) {
 	f := line.split('|')
 	profile := f[2].int()
 	formats := [p.PixelFormat.invalid, .rgb24, .grayscale8, .rgb24]
-	mut img := p.ImageUnmanaged.create(if profile == 0 { usize(4) } else { usize(1) }, if profile == 0 {
-		usize(2)
+	mut img := p.ImageUnmanaged.create(if profile == 0 { uint(4) } else { uint(1) }, if profile == 0 {
+		uint(2)
 	} else if profile == 3 {
-		usize(0)
+		uint(0)
 	} else {
-		usize(1)
+		uint(1)
 	}, formats[profile]) or { panic(err) }
 	mut bytes := img.raw_bytes()
 	for i in 0 .. bytes.len {

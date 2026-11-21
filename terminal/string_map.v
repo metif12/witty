@@ -41,7 +41,7 @@ pub struct SearchIterator {
 pub mut:
 	map    StringMap
 	regex  oniguruma.Regex
-	offset usize
+	offset uint
 }
 
 // next returns the next regular expression match or none if there are
@@ -53,12 +53,12 @@ pub fn (mut self SearchIterator) next() !MatchValue {
 
 	mut region := self.regex.search(self.map.text()[self.offset..], oniguruma.Options{}) or {
 		if oniguruma.is_error(err, .mismatch) {
-			self.offset = usize(self.map.string.len)
+			self.offset = uint(self.map.string.len)
 			return MatchValue{}
 		}
 		return err
 	}
-	end_idx := usize(region.ends()[0])
+	end_idx := uint(region.ends()[0])
 	match_offset := self.offset
 	self.offset += end_idx
 	return MatchValue{
@@ -92,7 +92,7 @@ pub fn (v MatchValue) get() ?Match {
 pub struct Match {
 pub mut:
 	map    StringMap
-	offset usize
+	offset uint
 mut:
 	region oniguruma.Region
 }
@@ -107,7 +107,7 @@ pub fn (mut self Match) deinit() {
 pub fn (self Match) selection() Selection {
 	starts := self.region.starts()
 	ends := self.region.ends()
-	start_idx := usize(starts[0])
-	end_idx := usize(ends[0] - 1)
+	start_idx := uint(starts[0])
+	end_idx := uint(ends[0] - 1)
 	return Selection.init(self.map.map[self.offset + start_idx], self.map.map[self.offset + end_idx], false)
 }

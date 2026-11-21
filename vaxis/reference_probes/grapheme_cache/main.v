@@ -36,8 +36,8 @@ fn pattern(mut cache v.GraphemeCache, seed u8) {
 	}
 }
 
-fn num(p []string, index int) usize {
-	return usize(p[index].u64())
+fn num(p []string, index int) uint {
+	return uint(p[index].u64())
 }
 
 fn trap(name string, path string) {
@@ -49,11 +49,11 @@ fn trap(name string, path string) {
 	external := []u8{len: 8193, init: 99}
 	match name {
 		'trap_overflow1' {
-			cache.idx = ~usize(0)
+			cache.idx = ~uint(0)
 			cache.put(external[..1])
 		}
 		'trap_overflow2' {
-			cache.idx = ~usize(0) - 1
+			cache.idx = ~uint(0) - 1
 			cache.put(external[..2])
 		}
 		'trap_large' {
@@ -121,21 +121,21 @@ fn main() {
 					unsafe { external[..length] }
 				}
 				result := cache.put(source)
-				offset := usize(result.data) - usize(&cache.buf[0])
+				offset := uint(result.data) - uint(&cache.buf[0])
 				h := hash(result)
 				buf_hash := hash(view(&cache, 0, 8192))
 				out.write_string('${p[0]}|${u64(start).str()},${u64(cache.idx).str()},${u64(offset).str()}|${h:x}|${buf_hash:x}\n')
 			}
 			'B' {
 				old := cache.put('abc'.bytes())
-				old_offset := usize(old.data) - usize(&cache.buf[0])
+				old_offset := uint(old.data) - uint(&cache.buf[0])
 				unsafe {
 					old[1] = `Q`
 				}
 				first_hash := hash(old)
 				cache.idx = 8192
 				wrapped := cache.put('Z'.bytes())
-				wrapped_offset := usize(wrapped.data) - usize(&cache.buf[0])
+				wrapped_offset := uint(wrapped.data) - uint(&cache.buf[0])
 				h := hash(old)
 				buf_hash := hash(view(&cache, 0, 8192))
 				out.write_string('B|${u64(old_offset).str()},${u64(cache.idx).str()},${u64(wrapped_offset).str()}|${first_hash:x}|${h:x}|${buf_hash:x}\n')
@@ -144,7 +144,7 @@ fn main() {
 				mut copied := cache
 				result := copied.put('xy'.bytes())
 				cache.buf[0] = 42
-				offset := usize(result.data) - usize(&copied.buf[0])
+				offset := uint(result.data) - uint(&copied.buf[0])
 				h := hash(result)
 				old_hash := hash(view(&cache, 0, 8192))
 				copy_hash := hash(view(&copied, 0, 8192))

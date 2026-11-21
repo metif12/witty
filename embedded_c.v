@@ -17,7 +17,7 @@ pub:
 	action_cb                    fn (voidptr, apprt.CAPITarget, apprt.CAPIAction) bool = unsafe { nil }
 	read_clipboard_cb            fn (voidptr, int, &apprt.ClipboardRequest) = unsafe { nil }
 	confirm_read_clipboard_cb    fn (voidptr, &char, &apprt.ClipboardRequest, int) = unsafe { nil }
-	write_clipboard_cb           fn (voidptr, int, &apprt.CAPIClipboardContentC, usize, bool) = unsafe { nil }
+	write_clipboard_cb           fn (voidptr, int, &apprt.CAPIClipboardContentC, uint, bool) = unsafe { nil }
 	close_surface_cb             fn (voidptr, bool) = unsafe { nil }
 }
 
@@ -48,7 +48,7 @@ pub mut:
 	working_directory  &char = unsafe { nil }
 	command            &char = unsafe { nil }
 	env_vars           &EnvVarC = unsafe { nil }
-	env_var_count      usize
+	env_var_count      uint
 	initial_input      &char = unsafe { nil }
 	wait_after_command bool
 	context            int
@@ -61,7 +61,7 @@ pub mut:
 	offset_start u32
 	offset_len   u32
 	text         &char = unsafe { nil }
-	text_len     usize
+	text_len     uint
 }
 
 pub struct PointC {
@@ -477,7 +477,7 @@ fn ghostty_surface_key_is_binding_c(raw voidptr, event InputKeyC, flags &u32) bo
 }
 
 @[export: 'ghostty_surface_text']
-fn ghostty_surface_text_c(raw voidptr, ptr &u8, len usize) {
+fn ghostty_surface_text_c(raw voidptr, ptr &u8, len uint) {
 	if isnil(raw) || (isnil(ptr) && len > 0) {
 		return
 	}
@@ -490,7 +490,7 @@ fn ghostty_surface_text_c(raw voidptr, ptr &u8, len usize) {
 }
 
 @[export: 'ghostty_surface_preedit']
-fn ghostty_surface_preedit_c(raw voidptr, ptr &u8, len usize) {
+fn ghostty_surface_preedit_c(raw voidptr, ptr &u8, len uint) {
 	if isnil(raw) || (isnil(ptr) && len > 0) {
 		return
 	}
@@ -594,7 +594,7 @@ fn ghostty_surface_split_equalize_c(raw voidptr) {
 }
 
 @[export: 'ghostty_surface_binding_action']
-fn ghostty_surface_binding_action_c(raw voidptr, ptr &u8, len usize) bool {
+fn ghostty_surface_binding_action_c(raw voidptr, ptr &u8, len uint) bool {
 	if isnil(raw) || (isnil(ptr) && len > 0) {
 		return false
 	}
@@ -631,7 +631,7 @@ fn text_to_c(value apprt.CAPIText, mut result TextC) bool {
 	result.offset_start = value.offset_start
 	result.offset_len = value.offset_len
 	result.text = unsafe { &char(raw) }
-	result.text_len = usize(text_value.len)
+	result.text_len = uint(text_value.len)
 	return true
 }
 

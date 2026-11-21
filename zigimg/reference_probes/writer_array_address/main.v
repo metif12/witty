@@ -9,12 +9,12 @@ import zigimg
 
 fn C.witty_writer_seek_setup(&char) int
 fn C.witty_writer_seek_replace(int) int
-fn C.witty_writer_seek_restore(&char, usize) int
+fn C.witty_writer_seek_restore(&char, uint) int
 fn C.witty_writer_seek_close() int
 fn C.witty_writer_seek_cleanup() int
 fn C.witty_writer_seek_valid() int
-fn C.witty_writer_seek_view(&u8, usize) isize
-fn C.witty_writer_seek_drain(&u8, usize) isize
+fn C.witty_writer_seek_view(&u8, uint) int
+fn C.witty_writer_seek_drain(&u8, uint) int
 
 __global (
 	seen string
@@ -28,7 +28,7 @@ type Word2 = u32
 type Array2 = [3]Word2
 type Word3 = u64
 type Array3 = [3]Word3
-type Word4 = usize
+type Word4 = uint
 type Array4 = [3]Word4
 type Word5 = i8
 type Array5 = [3]Word5
@@ -38,7 +38,7 @@ type Word7 = int
 type Array7 = [3]Word7
 type Word8 = i64
 type Array8 = [3]Word8
-type Word9 = isize
+type Word9 = int
 type Array9 = [3]Word9
 type Word10 = f32
 type Array10 = [3]Word10
@@ -49,18 +49,18 @@ type Array12 = [3]Word12
 
 fn operate(mut writer zigimg.WriteStream, f []string) ! {
 	format := (hex.decode(f[1])!).bytestr()
-	raw := usize(f[8].u64())
+	raw := uint(f[8].u64())
 	options := zigimg.FormatOptions{
 		width:     if f[10] == '-' {
-			?usize(none)
+			?uint(none)
 		} else {
-			?usize(usize(f[10].u64()))
+			?uint(uint(f[10].u64()))
 		}
-		precision: if f[11] == '-' { ?usize(none) } else { ?usize(usize(f[11].u64())) }
+		precision: if f[11] == '-' { ?uint(none) } else { ?uint(uint(f[11].u64())) }
 		alignment: unsafe { zigimg.Alignment(f[14].int()) }
 		fill:      u8(f[15].int())
 	}
-	depth := usize(f[13].u64())
+	depth := uint(f[13].u64())
 	seen = raw.str()
 	match f[0].int() {
 		0 {
@@ -110,14 +110,14 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 		4 {
 			match f[12].int() {
 				0 {
-					writer.print_value(format, options, unsafe { &[3]usize(voidptr(raw)) }, depth)!
+					writer.print_value(format, options, unsafe { &[3]uint(voidptr(raw)) }, depth)!
 				}
 				1 { writer.print_value(format, options, unsafe { &Array4(voidptr(raw)) }, depth)! }
 				2 {
-					writer.print_value(format, options, unsafe { &[2][3]usize(voidptr(raw)) }, depth)!
+					writer.print_value(format, options, unsafe { &[2][3]uint(voidptr(raw)) }, depth)!
 				}
 				3 {
-					writer.print_value(format, options, unsafe { &[1]usize(voidptr(raw)) }, depth)!
+					writer.print_value(format, options, unsafe { &[1]uint(voidptr(raw)) }, depth)!
 				}
 				else { panic('invalid form') }
 			}
@@ -169,14 +169,14 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 		9 {
 			match f[12].int() {
 				0 {
-					writer.print_value(format, options, unsafe { &[3]isize(voidptr(raw)) }, depth)!
+					writer.print_value(format, options, unsafe { &[3]int(voidptr(raw)) }, depth)!
 				}
 				1 { writer.print_value(format, options, unsafe { &Array9(voidptr(raw)) }, depth)! }
 				2 {
-					writer.print_value(format, options, unsafe { &[2][3]isize(voidptr(raw)) }, depth)!
+					writer.print_value(format, options, unsafe { &[2][3]int(voidptr(raw)) }, depth)!
 				}
 				3 {
-					writer.print_value(format, options, unsafe { &[1]isize(voidptr(raw)) }, depth)!
+					writer.print_value(format, options, unsafe { &[1]int(voidptr(raw)) }, depth)!
 				}
 				else { panic('invalid form') }
 			}
@@ -220,11 +220,11 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 
 fn snapshot(status string, writer zigimg.WriteStream, buffer []u8, file bool) string {
 	mut contents := []u8{len: 4096}
-	n := if file { C.witty_writer_seek_view(contents.data, usize(contents.len)) } else { isize(0) }
+	n := if file { C.witty_writer_seek_view(contents.data, uint(contents.len)) } else { int(0) }
 	if n < 0 { panic('observer failed') }
 	valid := if file { C.witty_writer_seek_valid() } else { 0 }
 	unused := writer.unused_capacity_slice()
-	offset := if buffer.len == 0 { usize(0) } else { usize(unused.data) - usize(buffer.data) }
+	offset := if buffer.len == 0 { uint(0) } else { uint(unused.data) - uint(buffer.data) }
 	return '${status}|${writer.get_pos()}:${writer.unused_capacity_len()}:${writer.buffered().len}:${offset}:${valid}|${buffer.hex()}|${writer.buffered().hex()}|${unused.hex()}|${seen}|${contents[..int(n)].hex()}'
 }
 
@@ -265,12 +265,12 @@ fn record(line string, path string) string {
 		writer.flush() or { status = err.msg() }
 	}
 	out += snapshot(status, writer, buffer, kind > 0) + '~'
-	mut drain := isize(-3)
+	mut drain := int(-3)
 	mut wire := []u8{}
 	if kind > 0 && binding == 1 {
 		for {
 			mut bytes := []u8{len: 4096}
-			drain = C.witty_writer_seek_drain(bytes.data, usize(bytes.len))
+			drain = C.witty_writer_seek_drain(bytes.data, uint(bytes.len))
 			if drain <= 0 { break }
 			wire << bytes[..int(drain)]
 		}

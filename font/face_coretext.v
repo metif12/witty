@@ -511,14 +511,14 @@ pub fn (self CoreTextFace) render_glyph(mut atlas Atlas, glyph_index u32, opts R
 		}
 		defer { color_space.release() }
 
-		mut pixels := []u8{len: int(usize(layout.px_width) * usize(layout.px_height) * usize(depth))}
+		mut pixels := []u8{len: int(uint(layout.px_width) * uint(layout.px_height) * uint(depth))}
 		context_opts := if is_color {
 			u32(macos.CGBitmapInfo.byte_order_32_little) | u32(macos.CGImageAlphaInfo.premultiplied_first)
 		} else {
 			u32(macos.CGImageAlphaInfo.only)
 		}
-		bitmap := macos.CGBitmapContext.create(pixels, usize(layout.px_width),
-			usize(layout.px_height), 8, usize(layout.px_width * depth), color_space, context_opts)!
+		bitmap := macos.CGBitmapContext.create(pixels, uint(layout.px_width),
+			uint(layout.px_height), 8, uint(layout.px_width * depth), color_space, context_opts)!
 		context := bitmap.as_context()
 		defer { context.release() }
 

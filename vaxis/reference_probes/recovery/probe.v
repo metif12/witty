@@ -82,7 +82,7 @@ fn test_recovery_reference_consumer() {
 		println('READY')
 		C.fflush(C.stdout)
 		if mode == 'panic_call' { Panic.call('recovery-proof', unsafe { nil }, none) }
-		if mode == 'panic_trace' { panic_handler('recovery-proof', voidptr(1), usize(0)) }
+		if mode == 'panic_trace' { panic_handler('recovery-proof', voidptr(1), uint(0)) }
 		panic_handler('recovery-proof', unsafe { nil }, none)
 	}
 	for _ in 0 .. count {

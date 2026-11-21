@@ -1716,7 +1716,7 @@ pub struct Options {
 pub:
 	cols           u16
 	rows           u16
-	max_scrollback usize  = 10_000
+	max_scrollback uint  = 10_000
 	colors         Colors = terminal.colors_default
 
 	// The default mode state. When the terminal gets a reset, it
@@ -1860,7 +1860,7 @@ pub struct ScrollViewportBottom {}
 
 pub struct ScrollViewportDelta {
 pub:
-	delta isize
+	delta int
 }
 
 pub type ScrollViewport = ScrollViewportBottom | ScrollViewportDelta | ScrollViewportTop
@@ -1868,7 +1868,7 @@ pub type ScrollViewport = ScrollViewportBottom | ScrollViewportDelta | ScrollVie
 pub const scroll_viewport_top = ScrollViewport(ScrollViewportTop{})
 pub const scroll_viewport_bottom = ScrollViewport(ScrollViewportBottom{})
 
-pub fn ScrollViewport.from_delta(delta isize) ScrollViewport {
+pub fn ScrollViewport.from_delta(delta int) ScrollViewport {
 	return ScrollViewportDelta{
 		delta: delta
 	}
@@ -1914,7 +1914,7 @@ pub fn Terminal.init(opts Options) !Terminal {
 		max_scrollback: opts.max_scrollback
 	})!
 
-	tabstops := Tabstops.init(usize(cols), terminal.tabstop_interval) or {
+	tabstops := Tabstops.init(uint(cols), terminal.tabstop_interval) or {
 		screen_set.deinit()
 		return err
 	}
@@ -1975,10 +1975,10 @@ pub fn (mut self Terminal) print_string(str string) ! {
 }
 
 // Print the previous printed character a repeated amount of times.
-pub fn (mut self Terminal) print_repeat(count_req usize) ! {
+pub fn (mut self Terminal) print_repeat(count_req uint) ! {
 	if c := self.previous_char {
-		count := if count_req < 1 { usize(1) } else { count_req }
-		for _ in usize(0) .. count {
+		count := if count_req < 1 { uint(1) } else { count_req }
+		for _ in uint(0) .. count {
 			self.print(c)!
 		}
 	}
@@ -2079,7 +2079,7 @@ pub fn (mut self Terminal) print(c u32) ! {
 	// If we have insert mode enabled then we need to handle that. We
 	// only do insert mode if we're not at the end of the line.
 	if self.modes.get(.insert) && self.screens.active.cursor.x + width < self.cols {
-		self.insert_blanks(usize(width))
+		self.insert_blanks(uint(width))
 	}
 
 	match width {
@@ -2552,7 +2552,7 @@ pub fn (mut self Terminal) backspace() {
 // Move the cursor up amount lines. If amount is greater than the maximum
 // move distance then it is internally adjusted to the maximum. If amount is
 // 0, adjust it to 1.
-pub fn (mut self Terminal) cursor_up(count_req usize) {
+pub fn (mut self Terminal) cursor_up(count_req uint) {
 	// Always resets pending wrap
 	self.screens.active.cursor.pending_wrap = false
 
@@ -2562,8 +2562,8 @@ pub fn (mut self Terminal) cursor_up(count_req usize) {
 	} else {
 		self.screens.active.cursor.y
 	}
-	requested := if count_req < 1 { usize(1) } else { count_req }
-	count := if usize(max) < requested { max } else { u16(requested) }
+	requested := if count_req < 1 { uint(1) } else { count_req }
+	count := if uint(max) < requested { max } else { u16(requested) }
 
 	if count > 0 {
 		self.screens.active.cursor_up(u32(count))
@@ -2573,7 +2573,7 @@ pub fn (mut self Terminal) cursor_up(count_req usize) {
 // Move the cursor down amount lines. If amount is greater than the maximum
 // move distance then it is internally adjusted to the maximum. This sequence
 // will not scroll the screen or scroll region. If amount is 0, adjust it to 1.
-pub fn (mut self Terminal) cursor_down(count_req usize) {
+pub fn (mut self Terminal) cursor_down(count_req uint) {
 	// Always resets pending wrap
 	self.screens.active.cursor.pending_wrap = false
 
@@ -2583,8 +2583,8 @@ pub fn (mut self Terminal) cursor_down(count_req usize) {
 	} else {
 		u16(self.rows - self.screens.active.cursor.y - 1)
 	}
-	requested := if count_req < 1 { usize(1) } else { count_req }
-	count := if usize(max) < requested { max } else { u16(requested) }
+	requested := if count_req < 1 { uint(1) } else { count_req }
+	count := if uint(max) < requested { max } else { u16(requested) }
 
 	if count > 0 {
 		self.screens.active.cursor_down(u32(count))
@@ -2595,7 +2595,7 @@ pub fn (mut self Terminal) cursor_down(count_req usize) {
 // maximum move distance then it is internally adjusted to the maximum.
 // This sequence will not scroll the screen or scroll region. If amount is
 // 0, adjust it to 1.
-pub fn (mut self Terminal) cursor_right(count_req usize) {
+pub fn (mut self Terminal) cursor_right(count_req uint) {
 	// Always resets pending wrap
 	self.screens.active.cursor.pending_wrap = false
 
@@ -2605,8 +2605,8 @@ pub fn (mut self Terminal) cursor_right(count_req usize) {
 	} else {
 		u16(self.cols - self.screens.active.cursor.x - 1)
 	}
-	requested := if count_req < 1 { usize(1) } else { count_req }
-	count := if usize(max) < requested { max } else { u16(requested) }
+	requested := if count_req < 1 { uint(1) } else { count_req }
+	count := if uint(max) < requested { max } else { u16(requested) }
 
 	if count > 0 {
 		self.screens.active.cursor_right(u32(count))
@@ -2614,7 +2614,7 @@ pub fn (mut self Terminal) cursor_right(count_req usize) {
 }
 
 // Move the cursor to the left amount cells. If amount is 0, adjust it to 1.
-pub fn (mut self Terminal) cursor_left(count_req usize) {
+pub fn (mut self Terminal) cursor_left(count_req uint) {
 	// Wrapping behavior depends on various terminal modes
 	wrap_mode := if !self.modes.get(.wraparound) {
 		WrapMode.none
@@ -2626,12 +2626,12 @@ pub fn (mut self Terminal) cursor_left(count_req usize) {
 		WrapMode.none
 	}
 
-	mut count := if count_req < 1 { usize(1) } else { count_req }
+	mut count := if count_req < 1 { uint(1) } else { count_req }
 
 	// If we are in no wrap mode, then we move the cursor left and exit
 	// since this is the fastest and most typical path.
 	if wrap_mode == .none {
-		move_amt := if count < usize(self.screens.active.cursor.x) {
+		move_amt := if count < uint(self.screens.active.cursor.x) {
 			u32(count)
 		} else {
 			u32(self.screens.active.cursor.x)
@@ -2682,7 +2682,7 @@ pub fn (mut self Terminal) cursor_left(count_req usize) {
 
 	for {
 		// We can move at most to the left margin.
-		max := usize(self.screens.active.cursor.x - left_margin)
+		max := uint(self.screens.active.cursor.x - left_margin)
 
 		// We want to move at most the number of columns we have left
 		// or our remaining count.
@@ -2847,7 +2847,7 @@ pub fn (mut self Terminal) horizontal_tab() {
 		self.screens.active.cursor_right(1)
 
 		// If the last cursor position was a tabstop we return.
-		if self.tabstops.get(usize(self.screens.active.cursor.x)) {
+		if self.tabstops.get(uint(self.screens.active.cursor.x)) {
 			return
 		}
 	}
@@ -2870,7 +2870,7 @@ pub fn (mut self Terminal) horizontal_tab_back() {
 
 		// Move the cursor left
 		self.screens.active.cursor_left(1)
-		if self.tabstops.get(usize(self.screens.active.cursor.x)) {
+		if self.tabstops.get(uint(self.screens.active.cursor.x)) {
 			return
 		}
 	}
@@ -2879,14 +2879,14 @@ pub fn (mut self Terminal) horizontal_tab_back() {
 // Clear tab stops.
 pub fn (mut self Terminal) tab_clear(cmd TabClear) {
 	match cmd {
-		.current { self.tabstops.unset(usize(self.screens.active.cursor.x)) }
+		.current { self.tabstops.unset(uint(self.screens.active.cursor.x)) }
 		.all { self.tabstops.reset(0) }
 	}
 }
 
 // Set a tab stop on the current cursor.
 pub fn (mut self Terminal) tab_set() {
-	self.tabstops.set(usize(self.screens.active.cursor.x))
+	self.tabstops.set(uint(self.screens.active.cursor.x))
 }
 
 // Reset tab stops to default interval.
@@ -2993,7 +2993,7 @@ pub fn (mut self Terminal) index() ! {
 
 		screen.pages.erase_row_bounded(Point.new(.active, Coordinate{
 			y: self.scrolling_region.top
-		}), usize(self.scrolling_region.bottom - self.scrolling_region.top))!
+		}), uint(self.scrolling_region.bottom - self.scrolling_region.top))!
 
 		// eraseRow and eraseRowBounded will end up moving the cursor pin
 		// up by 1, so we need to move it back down. A `cursorReload`
@@ -3050,7 +3050,7 @@ pub fn (mut self Terminal) reverse_index() {
 // If column is greater than the right-most column it is adjusted to
 // the right-most column. If row is 0, it is adjusted to 1. If row is
 // greater than the bottom-most row it is adjusted to the bottom-most row.
-pub fn (mut self Terminal) set_cursor_pos(row_req usize, col_req usize) {
+pub fn (mut self Terminal) set_cursor_pos(row_req uint, col_req uint) {
 	// If cursor origin mode is set the cursor row will be moved relative to
 	// the top margin row.
 	x_offset, y_offset, x_max, y_max := if self.modes.get(.origin) {
@@ -3066,12 +3066,12 @@ pub fn (mut self Terminal) set_cursor_pos(row_req usize, col_req usize) {
 	row := if row_req == 0 { 1 } else { row_req }
 	col := if col_req == 0 { 1 } else { col_req }
 
-	x_with_offset := if col > usize(x_max - x_offset) {
+	x_with_offset := if col > uint(x_max - x_offset) {
 		x_max
 	} else {
 		u16(col) + x_offset
 	}
-	y_with_offset := if row > usize(y_max - y_offset) {
+	y_with_offset := if row > uint(y_max - y_offset) {
 		y_max
 	} else {
 		u16(row) + y_offset
@@ -3098,10 +3098,10 @@ pub fn (mut self Terminal) set_cursor_pos(row_req usize, col_req usize) {
 // ============================================================
 
 // Set Top and Bottom Margins. Top and bottom are 1-indexed.
-pub fn (mut self Terminal) set_top_and_bottom_margin(top_req usize, bottom_req usize) {
-	top := if top_req < 1 { usize(1) } else { top_req }
-	bottom_limit := if bottom_req == 0 { usize(self.rows) } else { bottom_req }
-	bottom := if bottom_limit > usize(self.rows) { usize(self.rows) } else { bottom_limit }
+pub fn (mut self Terminal) set_top_and_bottom_margin(top_req uint, bottom_req uint) {
+	top := if top_req < 1 { uint(1) } else { top_req }
+	bottom_limit := if bottom_req == 0 { uint(self.rows) } else { bottom_req }
+	bottom := if bottom_limit > uint(self.rows) { uint(self.rows) } else { bottom_limit }
 	if top >= bottom {
 		return
 	}
@@ -3111,15 +3111,15 @@ pub fn (mut self Terminal) set_top_and_bottom_margin(top_req usize, bottom_req u
 }
 
 // DECSLRM - Set Left and Right Margin
-pub fn (mut self Terminal) set_left_and_right_margin(left_req usize, right_req usize) {
+pub fn (mut self Terminal) set_left_and_right_margin(left_req uint, right_req uint) {
 	// We must have this mode enabled to do anything
 	if !self.modes.get(.enable_left_and_right_margin) {
 		return
 	}
 
-	left := if left_req < 1 { usize(1) } else { left_req }
-	right_limit := if right_req == 0 { usize(self.cols) } else { right_req }
-	right := if right_limit > usize(self.cols) { usize(self.cols) } else { right_limit }
+	left := if left_req < 1 { uint(1) } else { left_req }
+	right_limit := if right_req == 0 { uint(self.cols) } else { right_req }
+	right := if right_limit > uint(self.cols) { uint(self.cols) } else { right_limit }
 	if left >= right {
 		return
 	}
@@ -3133,7 +3133,7 @@ pub fn (mut self Terminal) set_left_and_right_margin(left_req usize, right_req u
 // ============================================================
 
 // Scroll the text down by one row.
-pub fn (mut self Terminal) scroll_down(count usize) {
+pub fn (mut self Terminal) scroll_down(count uint) {
 	// Preserve our x/y to restore.
 	old_x := self.screens.active.cursor.x
 	old_y := self.screens.active.cursor.y
@@ -3155,7 +3155,7 @@ pub fn (mut self Terminal) scroll_down(count usize) {
 // The new lines are created according to the current SGR state.
 //
 // Does not change the (absolute) cursor position.
-pub fn (mut self Terminal) scroll_up(count usize) ! {
+pub fn (mut self Terminal) scroll_up(count uint) ! {
 	// Preserve our x/y to restore.
 	old_x := self.screens.active.cursor.x
 	old_y := self.screens.active.cursor.y
@@ -3166,12 +3166,12 @@ pub fn (mut self Terminal) scroll_up(count usize) ! {
 	if self.scrolling_region.top == 0 && self.scrolling_region.left == 0
 		&& self.scrolling_region.right == self.cols - 1 {
 		// Clamp count to the scroll region height.
-		region_height := usize(self.scrolling_region.bottom) + 1
+		region_height := uint(self.scrolling_region.bottom) + 1
 		adjusted_count := if count < region_height { count } else { region_height }
 
 		// Move cursor to bottom and scroll
 		self.screens.active.cursor_absolute(0, u32(self.scrolling_region.bottom))
-		for _ in usize(0) .. adjusted_count {
+		for _ in uint(0) .. adjusted_count {
 			self.screens.active.cursor_scroll_above()!
 		}
 
@@ -3239,7 +3239,7 @@ fn (mut self Terminal) row_will_be_shifted(mut page Page, mut row RowData) {
 	if cells[left].wide == .spacer_tail {
 		wide := left - 1
 		if cells[wide].has_grapheme() {
-			page.clear_grapheme(page.row_index(row), usize(wide))
+			page.clear_grapheme(page.row_index(row), uint(wide))
 			page.update_row_grapheme_flag(row)
 		}
 		cells[wide].codepoint = 0
@@ -3250,7 +3250,7 @@ fn (mut self Terminal) row_will_be_shifted(mut page Page, mut row RowData) {
 	if cells[right].wide == .wide {
 		tail := right + 1
 		if cells[right].has_grapheme() {
-			page.clear_grapheme(page.row_index(row), usize(right))
+			page.clear_grapheme(page.row_index(row), uint(right))
 			page.update_row_grapheme_flag(row)
 		}
 		cells[right].codepoint = 0
@@ -3299,7 +3299,7 @@ fn clone_error_capacity(err PageCloneError) ?IncreaseCapacity {
 // All cleared space is colored according to the current SGR state.
 //
 // Moves the cursor to the left margin.
-pub fn (mut self Terminal) insert_lines(count usize) {
+pub fn (mut self Terminal) insert_lines(count uint) {
 	// Rare, but happens
 	if count == 0 {
 		return
@@ -3329,7 +3329,7 @@ pub fn (mut self Terminal) insert_lines(count usize) {
 	left_right := self.scrolling_region.left > 0 || self.scrolling_region.right < self.cols - 1
 
 	// Remaining rows from our cursor to the bottom of the scroll region.
-	rem := usize(self.scrolling_region.bottom - self.screens.active.cursor.y + 1)
+	rem := uint(self.scrolling_region.bottom - self.screens.active.cursor.y + 1)
 
 	// We can only insert lines up to our remaining lines in the scroll
 	// region. So we take whichever is smaller.
@@ -3407,7 +3407,7 @@ fn (mut self Terminal) shift_row(src_p Pin, src_row &RowData, dst_p Pin, dst_row
 		mut dst_page := &dst_p.node.data
 		src_page := &src_p.node.data
 		if err := dst_page.try_clone_partial_row_from(src_page, dst_page.row_index(dst_row),
-			src_page.row_index(src_row), usize(self.scrolling_region.left), usize(self.scrolling_region.right) + 1)
+			src_page.row_index(src_row), uint(self.scrolling_region.left), uint(self.scrolling_region.right) + 1)
 		{
 			// Adjust our page capacity to make
 			// room for we didn't have space for
@@ -3446,8 +3446,8 @@ fn (mut self Terminal) shift_row(src_p Pin, src_row &RowData, dst_p Pin, dst_row
 		// Left/right scroll margins we have to
 		// copy cells, which is much slower...
 		mut page := &dst_p.node.data
-		page.move_cells(page.row_index(src_row), usize(self.scrolling_region.left), page.row_index(dst_row),
-			usize(self.scrolling_region.left), usize(self.scrolling_region.right - self.scrolling_region.left) + 1)
+		page.move_cells(page.row_index(src_row), uint(self.scrolling_region.left), page.row_index(dst_row),
+			uint(self.scrolling_region.left), uint(self.scrolling_region.right - self.scrolling_region.left) + 1)
 	}
 	return true
 }
@@ -3468,7 +3468,7 @@ fn (mut self Terminal) shift_row(src_p Pin, src_row &RowData, dst_p Pin, dst_row
 // cleared space is colored according to the current SGR state.
 //
 // Moves the cursor to the left margin.
-pub fn (mut self Terminal) delete_lines(count usize) {
+pub fn (mut self Terminal) delete_lines(count uint) {
 	// Rare, but happens
 	if count == 0 {
 		return
@@ -3497,7 +3497,7 @@ pub fn (mut self Terminal) delete_lines(count usize) {
 	left_right := self.scrolling_region.left > 0 || self.scrolling_region.right < self.cols - 1
 
 	// Remaining rows from our cursor to the bottom of the scroll region.
-	rem := usize(self.scrolling_region.bottom - self.screens.active.cursor.y + 1)
+	rem := uint(self.scrolling_region.bottom - self.screens.active.cursor.y + 1)
 
 	// We can only insert lines up to our remaining lines in the scroll
 	// region. So we take whichever is smaller.
@@ -3512,7 +3512,7 @@ pub fn (mut self Terminal) delete_lines(count usize) {
 	defer { self.screens.active.pages.untrack_pin(cur_p) }
 
 	// Our current y position relative to the cursor
-	mut y := usize(0)
+	mut y := uint(0)
 
 	// Traverse from the top down
 	for y < rem {
@@ -3574,7 +3574,7 @@ pub fn (mut self Terminal) delete_lines(count usize) {
 // This unsets the pending wrap state without wrapping.
 //
 // The inserted cells are colored according to the current SGR state.
-pub fn (mut self Terminal) insert_blanks(count usize) {
+pub fn (mut self Terminal) insert_blanks(count uint) {
 	// Unset pending wrap state without wrapping. Note: this purposely
 	// happens BEFORE the scroll region check below, because that's what
 	// xterm does.
@@ -3611,7 +3611,7 @@ pub fn (mut self Terminal) insert_blanks(count usize) {
 	}
 
 	// Remaining cols from our cursor to the right margin.
-	rem := usize(self.scrolling_region.right - self.screens.active.cursor.x + 1)
+	rem := uint(self.scrolling_region.right - self.screens.active.cursor.x + 1)
 
 	// We can only insert blanks up to our remaining cols
 	adjusted_count := if count < rem { count } else { rem }
@@ -3636,7 +3636,7 @@ pub fn (mut self Terminal) insert_blanks(count usize) {
 
 		// We work backwards so we don't overwrite data.
 		for x >= left {
-			page.swap_cells(row_idx, usize(x), usize(x) + adjusted_count)
+			page.swap_cells(row_idx, uint(x), uint(x) + adjusted_count)
 			x -= 1
 		}
 	}
@@ -3657,7 +3657,7 @@ pub fn (mut self Terminal) insert_blanks(count usize) {
 // scrolling region, it is adjusted down.
 //
 // Does not change the cursor position.
-pub fn (mut self Terminal) delete_chars(count_req usize) {
+pub fn (mut self Terminal) delete_chars(count_req uint) {
 	if count_req == 0 {
 		return
 	}
@@ -3676,7 +3676,7 @@ pub fn (mut self Terminal) delete_chars(count_req usize) {
 	row_idx := page.row_index(row)
 
 	// Remaining cols from our cursor to the right margin.
-	rem := usize(self.scrolling_region.right - self.screens.active.cursor.x + 1)
+	rem := uint(self.scrolling_region.right - self.screens.active.cursor.x + 1)
 
 	// We can only insert blanks up to our remaining cols
 	count := if count_req < rem { count_req } else { rem }
@@ -3697,7 +3697,7 @@ pub fn (mut self Terminal) delete_chars(count_req usize) {
 		right := left + int(scroll_amount) - 1
 
 		for x <= right {
-			page.swap_cells(row_idx, usize(x) + count, usize(x))
+			page.swap_cells(row_idx, uint(x) + count, uint(x))
 			x += 1
 		}
 	}
@@ -3713,8 +3713,8 @@ pub fn (mut self Terminal) delete_chars(count_req usize) {
 	self.screens.active.cursor_mark_dirty()
 }
 
-pub fn (mut self Terminal) erase_chars(count_req usize) {
-	remaining := usize(self.cols - self.screens.active.cursor.x)
+pub fn (mut self Terminal) erase_chars(count_req uint) {
+	remaining := uint(self.cols - self.screens.active.cursor.x)
 	mut count := if remaining < count_req { remaining } else { count_req }
 	if count < 1 {
 		count = if remaining < 1 { remaining } else { 1 }
@@ -4121,7 +4121,7 @@ pub fn (mut self Terminal) resize(cols u16, rows u16) ! {
 	// Resize our tabstops
 	if self.cols != cols {
 		self.tabstops.deinit()
-		self.tabstops = Tabstops.init(usize(cols), 8)!
+		self.tabstops = Tabstops.init(uint(cols), 8)!
 	}
 
 	// Resize primary screen, which supports reflow.

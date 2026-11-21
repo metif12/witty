@@ -252,8 +252,8 @@ pub fn GIF.read_image(mut stream ReadStream) !ImageUnmanaged {
 	frames := codec.read(mut stream)!
 	if frames.len == 0 { return error('InvalidData') }
 	return ImageUnmanaged{
-		width:     usize(codec.header.width)
-		height:    usize(codec.header.height)
+		width:     uint(codec.header.width)
+		height:    uint(codec.header.height)
 		pixels:    frames[0].pixels
 		animation: Animation{
 			frames:     frames
@@ -336,7 +336,7 @@ pub fn (mut codec GIF) read(mut stream ReadStream) ![]AnimationFrame {
 		|| codec.header.version[..].bytestr() !in ['87a', '89a'] {
 		return error('InvalidData')
 	}
-	count := usize(1) << (codec.header.flags.global_color_table_size() + 1)
+	count := uint(1) << (codec.header.flags.global_color_table_size() + 1)
 	codec.global_color_table.resize(count)
 	if codec.header.flags.use_global_color_table() {
 		for i in 0 .. int(count) {
@@ -444,10 +444,10 @@ fn (mut codec GIF) read_graphic_rendering_block(mut stream ReadStream, mut conte
 
 			if kind != 1 { return error('InvalidData') }
 			size := stream.take_byte()!
-			stream.discard_all(usize(size))!
+			stream.discard_all(uint(size))!
 			sub_size := stream.take_byte()!
 			if sub_size == 255 { panic('integer overflow') }
-			stream.discard_all(usize(sub_size + 1))!
+			stream.discard_all(uint(sub_size + 1))!
 		}
 		0x3b {}
 		else {
@@ -505,14 +505,14 @@ fn (mut codec GIF) read_image_descriptor_and_data(mut stream ReadStream, mut con
 		image.image_descriptor = gif_read_descriptor(mut stream)!
 		descriptor := image.image_descriptor
 		if descriptor.width == 0 || descriptor.height == 0 { return }
-		count := usize(1) << (descriptor.flags.local_color_table_size() + 1)
+		count := uint(1) << (descriptor.flags.local_color_table_size() + 1)
 		image.local_color_table.resize(count)
 		if descriptor.flags.has_local_color_table() {
 			for i in 0 .. int(count) {
 				image.local_color_table.data[i] = gif_read_color(mut stream)!
 			}
 		}
-		image.pixels = []u8{len: int(usize(descriptor.height) * descriptor.width)}
+		image.pixels = []u8{len: int(uint(descriptor.height) * descriptor.width)}
 		mut writer := WriteStream.init_memory(mut image.pixels)
 		code_size := stream.take_byte()!
 		if code_size == 0x3b { return error('InvalidData') }
@@ -532,7 +532,7 @@ fn (mut codec GIF) read_image_descriptor_and_data(mut stream ReadStream, mut con
 }
 
 fn (codec &GIF) create_new_animation_frame(format PixelFormat) !AnimationFrame {
-	mut pixels := PixelStorage.init(format, usize(codec.header.width) * codec.header.height)!
+	mut pixels := PixelStorage.init(format, uint(codec.header.width) * codec.header.height)!
 	if format !in [.indexed1, .indexed2, .indexed4, .indexed8, .rgb24, .rgba32] {
 		panic('Pixel format ${format} not supported')
 	}
@@ -550,20 +550,20 @@ fn (codec &GIF) create_new_animation_frame(format PixelFormat) !AnimationFrame {
 }
 
 fn (codec &GIF) find_best_pixel_format() PixelFormat {
-	mut total := usize(0)
+	mut total := uint(0)
 	if codec.header.flags.use_global_color_table() {
-		total = usize(1) << (codec.header.flags.global_color_table_size() + 1)
+		total = uint(1) << (codec.header.flags.global_color_table_size() + 1)
 	}
 	mut transparent := false
-	mut max_colors := usize(0)
+	mut max_colors := uint(0)
 	for frame in codec.frames {
 		if control := frame.graphics_control {
 			if control.flags.has_transparent_color() { transparent = true }
 		}
-		mut colors := usize(0)
+		mut colors := uint(0)
 		for image in frame.sub_images {
 			if image.image_descriptor.flags.has_local_color_table() {
-				colors += usize(1) << (image.image_descriptor.flags.local_color_table_size() + 1)
+				colors += uint(1) << (image.image_descriptor.flags.local_color_table_size() + 1)
 			}
 		}
 		if colors > max_colors { max_colors = colors }
@@ -596,7 +596,7 @@ fn gif_fill_background(mut frame AnimationFrame, colors []Rgb24, index u8) {
 	mut bytes := frame.pixels.as_bytes()
 	match mut frame.pixels {
 		IndexedStorage1, IndexedStorage2, IndexedStorage4, IndexedStorage8 {
-			if usize(index) >= usize(1) << format.bits_per_channel() {
+			if uint(index) >= uint(1) << format.bits_per_channel() {
 				panic('integer does not fit in destination type')
 			}
 			for i in 0 .. bytes.len {
@@ -636,7 +636,7 @@ fn gif_copy_frame(source &AnimationFrame, mut target AnimationFrame) {
 	copy(mut destination, bytes)
 }
 
-fn gif_store_index(mut frame AnimationFrame, target usize, index u8, checked bool) {
+fn gif_store_index(mut frame AnimationFrame, target uint, index u8, checked bool) {
 	bits := frame.pixels.pixel_format().bits_per_channel()
 	mask := u8((u16(1) << bits) - 1)
 	if checked && index > mask { panic('integer does not fit in destination type') }
@@ -644,8 +644,8 @@ fn gif_store_index(mut frame AnimationFrame, target usize, index u8, checked boo
 	bytes[int(target)] = index & mask
 }
 
-fn gif_plot_pixel(image &GifSubImage, mut frame AnimationFrame, colors []Rgb24, transparent ?u8, source usize, target usize) {
-	if source >= usize(image.pixels.len) || target >= frame.pixels.len() { return }
+fn gif_plot_pixel(image &GifSubImage, mut frame AnimationFrame, colors []Rgb24, transparent ?u8, source uint, target uint) {
+	if source >= uint(image.pixels.len) || target >= frame.pixels.len() { return }
 	index := image.pixels[int(source)]
 	if transparency := transparent {
 		if index == transparency { return }
@@ -676,11 +676,11 @@ fn gif_plot_pixel(image &GifSubImage, mut frame AnimationFrame, colors []Rgb24, 
 fn (codec &GIF) render_sub_image(image &GifSubImage, mut frame AnimationFrame, colors []Rgb24, transparent ?u8) {
 	descriptor := image.image_descriptor
 	if descriptor.flags.is_interlaced() {
-		mut source_y := usize(0)
-		for pass in [[usize(0), 8], [usize(4), 8], [usize(2), 4],
-			[usize(1), 2]] {
+		mut source_y := uint(0)
+		for pass in [[uint(0), 8], [uint(4), 8], [uint(2), 4],
+			[uint(1), 2]] {
 			for target_y := pass[0] + descriptor.top_position; target_y < codec.header.height; target_y += pass[1] {
-				for x := usize(0); x < descriptor.width; x++ {
+				for x := uint(0); x < descriptor.width; x++ {
 					gif_plot_pixel(image, mut frame, colors, transparent,
 
 						source_y * descriptor.width + x, target_y * codec.header.width + x +
@@ -690,8 +690,8 @@ fn (codec &GIF) render_sub_image(image &GifSubImage, mut frame AnimationFrame, c
 			}
 		}
 	} else {
-		for y := usize(0); y < descriptor.height; y++ {
-			for x := usize(0); x < descriptor.width; x++ {
+		for y := uint(0); y < descriptor.height; y++ {
+			for x := uint(0); x < descriptor.width; x++ {
 				gif_plot_pixel(image, mut frame, colors, transparent, y * descriptor.width + x,
 					(y + descriptor.top_position) * codec.header.width + x +
 					descriptor.left_position)
@@ -703,9 +703,9 @@ fn (codec &GIF) render_sub_image(image &GifSubImage, mut frame AnimationFrame, c
 fn (codec &GIF) replace_with_background(image &GifSubImage, mut frame AnimationFrame, colors []Rgb24, transparent ?u8) {
 	index := transparent or { codec.header.background_color_index }
 	descriptor := image.image_descriptor
-	for y := usize(0); y < descriptor.height; y++ {
-		for x := usize(0); x < descriptor.width; x++ {
-			if y * descriptor.width + x >= usize(image.pixels.len) { continue
+	for y := uint(0); y < descriptor.height; y++ {
+		for x := uint(0); x < descriptor.width; x++ {
+			if y * descriptor.width + x >= uint(image.pixels.len) { continue
 			 }
 			target := (y + descriptor.top_position) * codec.header.width + x +
 				descriptor.left_position

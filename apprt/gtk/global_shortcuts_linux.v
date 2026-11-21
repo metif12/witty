@@ -59,11 +59,11 @@ fn C.g_dbus_connection_call_finish(connection GDBusConnection, result GAsyncResu
 // payloads and signal callbacks.
 fn C.g_variant_new_object_path(path &char) GVariant
 
-fn C.g_variant_get_child_value(value GVariant, index usize) GVariant
+fn C.g_variant_get_child_value(value GVariant, index uint) GVariant
 
 fn C.g_variant_get_uint32(value GVariant) u32
 
-fn C.g_variant_get_string(value GVariant, length &usize) &char
+fn C.g_variant_get_string(value GVariant, length &uint) &char
 
 fn C.g_variant_lookup_value(dictionary GVariant, key &char, expected_type GVariantType) GVariant
 
@@ -531,7 +531,7 @@ fn (mut self GlobalShortcuts) make_payload(method Method, request_token string) 
 				},
 			])
 			mut children := [options]
-			return C.g_variant_new_tuple(unsafe { &children[0] }, usize(children.len))
+			return C.g_variant_new_tuple(unsafe { &children[0] }, uint(children.len))
 		}
 		.bind_shortcuts {
 			// Requires an existing session handle.
@@ -563,7 +563,7 @@ fn (mut self GlobalShortcuts) make_payload(method Method, request_token string) 
 					},
 				])
 				mut bind_children := [C.g_variant_new_string(&char(id.str)), details]
-				bind := C.g_variant_new_tuple(unsafe { &bind_children[0] }, usize(bind_children.len))
+				bind := C.g_variant_new_tuple(unsafe { &bind_children[0] }, uint(bind_children.len))
 				C.g_variant_builder_add_value(binds, bind)
 			}
 			bind_values := C.g_variant_builder_end(binds)
@@ -581,7 +581,7 @@ fn (mut self GlobalShortcuts) make_payload(method Method, request_token string) 
 				C.g_variant_new_string(c''),
 				options,
 			]
-			return C.g_variant_new_tuple(unsafe { &children[0] }, usize(children.len))
+			return C.g_variant_new_tuple(unsafe { &children[0] }, uint(children.len))
 		}
 	}
 }
@@ -648,7 +648,7 @@ fn (self &GlobalShortcuts) lookup_session_handle(vardict GVariant) ?string {
 	defer {
 		C.g_variant_unref(value)
 	}
-	mut length := usize(0)
+	mut length := uint(0)
 	handle := C.g_variant_get_string(value, &length)
 	if isnil(handle) || length == 0 {
 		return none
@@ -770,7 +770,7 @@ fn global_shortcuts_activated_cb(dbus GDBusConnection, sender_name &char, object
 	defer {
 		C.g_variant_unref(id_value)
 	}
-	mut length := usize(0)
+	mut length := uint(0)
 	id_c := C.g_variant_get_string(id_value, &length)
 	if isnil(id_c) || length == 0 {
 		return

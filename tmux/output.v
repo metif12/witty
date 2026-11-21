@@ -132,14 +132,14 @@ pub fn (self Variable) name() string {
 
 // Parse an unsigned integer with Zig's `std.fmt.parseInt(usize, value, 10)`
 // semantics.
-pub fn parse_usize(value string) !usize {
-	result := zig_fmt.parse_int_unsigned(value, int(sizeof(usize) * 8), 10) or {
+pub fn parse_usize(value string) !uint {
+	result := zig_fmt.parse_int_unsigned(value, int(sizeof(uint) * 8), 10) or {
 		if err.msg() == 'overflow' {
 			return error('Overflow')
 		}
 		return error('InvalidCharacter')
 	}
-	return usize(result)
+	return uint(result)
 }
 
 // ============================================================
@@ -148,7 +148,7 @@ pub fn parse_usize(value string) !usize {
 
 // VariableValue holds the parsed result of a tmux format variable.
 // Depending on the variable type, it is either a bool, usize, or string.
-pub type VariableValue = bool | string | usize
+pub type VariableValue = bool | string | uint
 
 // Returns true if this variable type produces a boolean value.
 pub fn (self Variable) is_bool() bool {
@@ -275,9 +275,9 @@ pub fn (self &FormatResult) get_bool(v Variable) ?bool {
 }
 
 // Get an integer value for a specific variable.
-pub fn (self &FormatResult) get_int(v Variable) ?usize {
+pub fn (self &FormatResult) get_int(v Variable) ?uint {
 	val := self.get(v) or { return none }
-	if val is usize {
+	if val is uint {
 		return val
 	}
 	return none

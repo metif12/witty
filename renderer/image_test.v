@@ -49,7 +49,7 @@ fn test_pending_image_length_uses_source_usize_contract() {
 		height: 70_000
 		pixel_format: .gray
 	}
-	assert p.len() == usize(4_900_000_000)
+	assert p.len() == uint(4_900_000_000)
 }
 
 fn test_pending_image_data_slice() {

@@ -9,11 +9,11 @@ const glyphs = ['▐', '░', 'X', '界', '']
 const codes = [vaxis.right, vaxis.left, vaxis.up, vaxis.down, vaxis.page_up, vaxis.page_down, vaxis.end,
 	vaxis.home, u32(`a`)]
 
-fn uint(parts []string, index int) usize {
-	return usize(strconv.parse_uint(parts[index], 10, 64) or { panic(err) })
+fn uint(parts []string, index int) uint {
+	return uint(strconv.parse_uint(parts[index], 10, 64) or { panic(err) })
 }
 
-fn style(index usize) vaxis.Style {
+fn style(index uint) vaxis.Style {
 	return match index {
 		1 {
 			vaxis.Style{
@@ -90,7 +90,7 @@ fn key(parts []string, code_index int, mods_index int) vaxis.Key {
 fn trap(mode string) {
 	mut screen := vaxis.Screen.new(vaxis.Winsize{ cols: 1, rows: 2 })
 	win := vaxis.Window.new(&screen)
-	maximum := ~usize(0)
+	maximum := ~uint(0)
 	bar := if mode == 'overflow_view' {
 		vaxis.Scrollbar{
 			total:     maximum

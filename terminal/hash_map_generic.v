@@ -50,7 +50,7 @@ fn auto_hash_eql[K](a K, b K) bool {
 	} $else $if K.unaliased_typ is IError {
 		return a.code() == b.code()
 	} $else $if K.unaliased_typ is $pointer || K.unaliased_typ is $function {
-		return usize(voidptr(a)) == usize(voidptr(b))
+		return uint(voidptr(a)) == uint(voidptr(b))
 	} $else $if K.unaliased_typ is string {
 		return a.str == b.str && a.len == b.len
 	} $else $if K.unaliased_typ is $array_fixed {
@@ -103,7 +103,7 @@ fn auto_hash_has_unique_representation[K](key K) bool {
 		$for method in K.methods {
 			$if method.name == 'source_auto_hash_bytes' { return false }
 		}
-		mut sum_size := usize(0)
+		mut sum_size := uint(0)
 		$for field in K.fields {
 			if !auto_hash_has_unique_representation(key.$(field.name)) { return false }
 			sum_size += sizeof(field.typ)
@@ -126,17 +126,17 @@ fn auto_hash_bytes[K](key K) []u8 {
 	$if K is $option {
 		return auto_hash_direct_optional_bytes(key)
 	} $else $if K.unaliased_typ is $pointer || K.unaliased_typ is $function {
-		address := usize(voidptr(key))
+		address := uint(voidptr(key))
 		return auto_hash_bytes(address)
 	} $else $if K.unaliased_typ is string {
-		mut bytes := auto_hash_bytes(usize(key.str))
-		bytes << auto_hash_bytes(usize(key.len))
+		mut bytes := auto_hash_bytes(uint(key.str))
+		bytes << auto_hash_bytes(uint(key.len))
 		return bytes
 	} $else $if K.unaliased_typ is $array_fixed {
 		return auto_hash_fixed_array_bytes(key[..])
 	} $else $if K.unaliased_typ is $array {
-		mut bytes := auto_hash_bytes(usize(key.data))
-		bytes << auto_hash_bytes(usize(key.len))
+		mut bytes := auto_hash_bytes(uint(key.data))
+		bytes << auto_hash_bytes(uint(key.len))
 		return bytes
 	} $else $if K.unaliased_typ is $struct {
 		$for method in K.methods {
@@ -148,11 +148,11 @@ fn auto_hash_bytes[K](key K) []u8 {
 		}
 		return bytes
 	} $else $if K.unaliased_typ is $sumtype {
-		mut count := usize(0)
+		mut count := uint(0)
 		$for _ in K.variants {
 			count++
 		}
-		mut index := usize(0)
+		mut index := uint(0)
 		$for variant in K.variants {
 			if key is variant {
 				mut tag := []u8{}
@@ -185,8 +185,8 @@ fn auto_hash_bytes[K](key K) []u8 {
 
 fn auto_hash_direct_optional_bytes[T](key ?T) []u8 {
 	$if T.unaliased_typ is $pointer {
-		if key != none { return auto_hash_bytes(usize(key)) }
-		return auto_hash_bytes(usize(0))
+		if key != none { return auto_hash_bytes(uint(key)) }
+		return auto_hash_bytes(uint(0))
 	} $else {
 		if key != none { return auto_hash_bytes[T](key) }
 		return []u8{}
@@ -231,8 +231,8 @@ pub fn source_hash_optional[T](value ?T) SourceHashOptional[T] {
 
 fn (key SourceHashOptional[T]) source_auto_hash_bytes() []u8 {
 	$if T.unaliased_typ is $pointer {
-		if key.is_some { return auto_hash_bytes(usize(key.value)) }
-		return auto_hash_bytes(usize(0))
+		if key.is_some { return auto_hash_bytes(uint(key.value)) }
+		return auto_hash_bytes(uint(0))
 	} $else {
 		if key.is_some { return auto_hash_bytes(key.value) }
 		return []u8{}
@@ -294,14 +294,14 @@ pub:
 	metadata_offset Offset
 }
 
-pub fn generic_hash_map_align[K, V]() usize {
-	return hash_max(usize(4), hash_max(usize(1) << lib_allocator.alignment_log[K](),
-		usize(1) << lib_allocator.alignment_log[V]()))
+pub fn generic_hash_map_align[K, V]() uint {
+	return hash_max(uint(4), hash_max(uint(1) << lib_allocator.alignment_log[K](),
+		uint(1) << lib_allocator.alignment_log[V]()))
 }
 
 pub fn generic_hash_map_layout[K, V](capacity u32) HashMapLayout {
 	return layout_for_capacity(capacity, sizeof(K), sizeof(V),
-		usize(1) << lib_allocator.alignment_log[K](), usize(1) << lib_allocator.alignment_log[V]())
+		uint(1) << lib_allocator.alignment_log[K](), uint(1) << lib_allocator.alignment_log[V]())
 }
 
 pub fn generic_offset_hash_map_init[K, V, X](buf OffsetBuf, layout HashMapLayout, context X) GenericOffsetHashMap[K, V, X] {
@@ -347,7 +347,7 @@ pub:
 // map.values[idx] to access/modify the entry.
 pub struct GenericGetOrPutResult[K, V] {
 pub mut:
-	idx            usize
+	idx            uint
 	key_ptr        &K = unsafe { nil }
 	value_ptr      &V = unsafe { nil }
 	found_existing bool
@@ -395,8 +395,8 @@ pub struct GenericHashMapKeyIter[K, V] {
 	metadata []HashSlotMetadata
 	keys     []K
 mut:
-	len   usize
-	index usize
+	len   uint
+	index uint
 }
 
 // next returns the next key, or none if iteration is complete.
@@ -417,8 +417,8 @@ pub struct GenericHashMapValueIter[K, V] {
 	metadata []HashSlotMetadata
 	values   []V
 mut:
-	len   usize
-	index usize
+	len   uint
+	index uint
 }
 
 // next returns the next value, or none if iteration is complete.
@@ -452,7 +452,7 @@ pub mut:
 // init creates a new hash map with the given capacity.
 // Capacity should be a power of two (or zero).
 pub fn generic_hash_map_init[K, V, X](buf OffsetBuf, layout HashMapLayout, context X) GenericHashMap[K, V, X] {
-	assert usize(buf.start()) % generic_hash_map_align[K, V]() == 0
+	assert uint(buf.start()) % generic_hash_map_align[K, V]() == 0
 	metadata := unsafe { buf.start() + sizeof(OffsetMapHeader) }
 	mut header := unsafe { &OffsetMapHeader(buf.start()) }
 	header.keys_offset = u32(layout.keys_start)
@@ -499,10 +499,10 @@ pub fn (mut self GenericHashMap[K, V, X]) put_assume_capacity_no_clobber(key K, 
 	assert !self.contains(key)
 	hash := self.context.hash(key)
 	mask := u64(self.header.capacity - 1)
-	mut idx := usize(hash & mask)
+	mut idx := uint(hash & mask)
 
 	for self.metadata[idx].is_used() {
-		idx = (idx + 1) & usize(mask)
+		idx = (idx + 1) & uint(mask)
 	}
 
 	fp := take_fingerprint(hash)
@@ -532,7 +532,7 @@ pub fn (self &GenericHashMap[K, V, X]) get_key_ptr(key K) ?&K {
 }
 
 // get_key_index returns the slot index for a key, or none.
-pub fn (self &GenericHashMap[K, V, X]) get_key_index(key K) ?usize {
+pub fn (self &GenericHashMap[K, V, X]) get_key_index(key K) ?uint {
 	return self.get_index(key)
 }
 
@@ -639,7 +639,7 @@ pub fn (mut self GenericHashMap[K, V, X]) remove(key K) bool {
 }
 
 // remove_by_index removes the entry at the given slot index.
-pub fn (mut self GenericHashMap[K, V, X]) remove_by_index(idx usize) {
+pub fn (mut self GenericHashMap[K, V, X]) remove_by_index(idx uint) {
 	self.metadata[idx].mark_removed()
 	self.keys[idx] = K{}
 	self.values[idx] = V{}
@@ -648,8 +648,8 @@ pub fn (mut self GenericHashMap[K, V, X]) remove_by_index(idx usize) {
 
 // remove_by_ptr removes the key at a slot returned by get_key_ptr.
 pub fn (mut self GenericHashMap[K, V, X]) remove_by_ptr(key_ptr &K) {
-	index := (usize(key_ptr) - usize(self.keys.data)) / sizeof(K)
-	assert index < usize(self.header.capacity)
+	index := (uint(key_ptr) - uint(self.keys.data)) / sizeof(K)
+	assert index < uint(self.header.capacity)
 	assert self.metadata[index].is_used()
 	self.remove_by_index(index)
 }
@@ -689,7 +689,7 @@ pub fn (self &GenericHashMap[K, V, X]) key_iterator() GenericHashMapKeyIter[K, V
 	return GenericHashMapKeyIter[K, V]{
 		metadata: self.metadata
 		keys:     self.keys
-		len:      usize(self.header.capacity)
+		len:      uint(self.header.capacity)
 	}
 }
 
@@ -698,7 +698,7 @@ pub fn (self &GenericHashMap[K, V, X]) value_iterator() GenericHashMapValueIter[
 	return GenericHashMapValueIter[K, V]{
 		metadata: self.metadata
 		values:   self.values
-		len:      usize(self.header.capacity)
+		len:      uint(self.header.capacity)
 	}
 }
 
@@ -707,7 +707,7 @@ pub fn (self &GenericHashMap[K, V, X]) value_iterator() GenericHashMapValueIter[
 // ============================================================
 
 // get_index finds the slot index for a key, or returns none.
-fn (self &GenericHashMap[K, V, X]) get_index(key K) ?usize {
+fn (self &GenericHashMap[K, V, X]) get_index(key K) ?uint {
 	if self.header.size == 0 {
 		return none
 	}
@@ -716,7 +716,7 @@ fn (self &GenericHashMap[K, V, X]) get_index(key K) ?usize {
 	mask := u64(self.header.capacity - 1)
 	fp := take_fingerprint(hash)
 	mut limit := self.header.capacity
-	mut idx := usize(hash & mask)
+	mut idx := uint(hash & mask)
 
 	for !self.metadata[idx].is_free() && limit > 0 {
 		if self.metadata[idx].is_used() && self.metadata[idx].fingerprint() == fp {
@@ -725,7 +725,7 @@ fn (self &GenericHashMap[K, V, X]) get_index(key K) ?usize {
 			}
 		}
 		limit--
-		idx = (idx + 1) & usize(mask)
+		idx = (idx + 1) & uint(mask)
 	}
 	return none
 }
@@ -754,8 +754,8 @@ pub fn (mut self GenericHashMap[K, V, X]) get_or_put_assume_capacity(key K) Gene
 	mask := u64(self.header.capacity - 1)
 	fp := take_fingerprint(hash)
 	mut limit := self.header.capacity
-	mut idx := usize(hash & mask)
-	mut first_tombstone := usize(self.header.capacity) // invalid sentinel
+	mut idx := uint(hash & mask)
+	mut first_tombstone := uint(self.header.capacity) // invalid sentinel
 
 	for !self.metadata[idx].is_free() && limit > 0 {
 		if self.metadata[idx].is_used() && self.metadata[idx].fingerprint() == fp {
@@ -767,16 +767,16 @@ pub fn (mut self GenericHashMap[K, V, X]) get_or_put_assume_capacity(key K) Gene
 					found_existing: true
 				}
 			}
-		} else if first_tombstone == usize(self.header.capacity)
+		} else if first_tombstone == uint(self.header.capacity)
 			&& self.metadata[idx].is_tombstone() {
 			first_tombstone = idx
 		}
 		limit--
-		idx = (idx + 1) & usize(mask)
+		idx = (idx + 1) & uint(mask)
 	}
 
 	// Reuse tombstone slot if available (reduces probing lengths after deletions).
-	if first_tombstone < usize(self.header.capacity) {
+	if first_tombstone < uint(self.header.capacity) {
 		idx = first_tombstone
 	}
 
@@ -915,19 +915,19 @@ pub fn (self &GenericHashMap[K, V, X]) contains_context(key K, context X) bool {
 	return view.contains(key)
 }
 
-pub fn (self &GenericHashMap[K, V, X]) get_index_adapted[A, Y](key A, context Y) ?usize {
+pub fn (self &GenericHashMap[K, V, X]) get_index_adapted[A, Y](key A, context Y) ?uint {
 	if self.header.size == 0 { return none }
 	hash := context.hash(key)
 	mask := u64(self.header.capacity - 1)
 	fingerprint := take_fingerprint(hash)
-	mut index := usize(hash & mask)
+	mut index := uint(hash & mask)
 	mut limit := self.header.capacity
 	for !self.metadata[index].is_free() && limit > 0 {
 		if self.metadata[index].is_used() && self.metadata[index].fingerprint() == fingerprint
 			&& context.eql(key, self.keys[index]) {
 			return index
 		}
-		index = (index + 1) & usize(mask)
+		index = (index + 1) & uint(mask)
 		limit--
 	}
 	return none
@@ -952,9 +952,9 @@ pub fn (mut self GenericHashMap[K, V, X]) get_or_put_assume_capacity_context_ada
 	hash := context.hash(key)
 	mask := u64(self.header.capacity - 1)
 	fingerprint := take_fingerprint(hash)
-	mut index := usize(hash & mask)
+	mut index := uint(hash & mask)
 	mut limit := self.header.capacity
-	mut tombstone := usize(self.header.capacity)
+	mut tombstone := uint(self.header.capacity)
 	for !self.metadata[index].is_free() && limit > 0 {
 		if self.metadata[index].is_used() && self.metadata[index].fingerprint() == fingerprint {
 			if context.eql(key, self.keys[index]) {
@@ -965,13 +965,13 @@ pub fn (mut self GenericHashMap[K, V, X]) get_or_put_assume_capacity_context_ada
 					found_existing: true
 				}
 			}
-		} else if tombstone == usize(self.header.capacity) && self.metadata[index].is_tombstone() {
+		} else if tombstone == uint(self.header.capacity) && self.metadata[index].is_tombstone() {
 			tombstone = index
 		}
-		index = (index + 1) & usize(mask)
+		index = (index + 1) & uint(mask)
 		limit--
 	}
-	if tombstone < usize(self.header.capacity) { index = tombstone }
+	if tombstone < uint(self.header.capacity) { index = tombstone }
 	self.metadata[index].fill(fingerprint)
 	self.header.size++
 	return GenericGetOrPutResult[K, V]{

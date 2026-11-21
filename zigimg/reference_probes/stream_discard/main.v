@@ -8,14 +8,14 @@ import zigimg
 
 fn C.witty_stream_discard_setup(&char) int
 fn C.witty_stream_discard_replace(int) int
-fn C.witty_stream_discard_seed(usize, usize) int
+fn C.witty_stream_discard_seed(uint, uint) int
 fn C.witty_stream_discard_shutdown() int
 fn C.witty_stream_discard_cleanup() int
 fn C.witty_stream_discard_close() int
-fn C.witty_stream_discard_restore(&char, usize) int
+fn C.witty_stream_discard_restore(&char, uint) int
 fn C.witty_stream_discard_valid() int
 fn C.witty_stream_discard_refs() int
-fn C.witty_stream_discard_drain(&u8, usize) isize
+fn C.witty_stream_discard_drain(&u8, uint) int
 
 __global (
 	observed_path   string
@@ -51,7 +51,7 @@ fn record(line string, path string) string {
 	observed_output = unsafe { output }
 	reader.seek_to(f[2].u64()) or { panic(err) }
 	if C.witty_stream_discard_replace(0) != 0 { panic('Discard replacement failed') }
-	if C.witty_stream_discard_seed(0, usize(f[4].int())) != 0 { panic('Discard seed failed') }
+	if C.witty_stream_discard_seed(0, uint(f[4].int())) != 0 { panic('Discard seed failed') }
 	if f[5] == '1' && C.witty_stream_discard_shutdown() != 0 { panic('Discard shutdown failed') }
 	mut out := snapshot(mut reader, buffer, output) + '~'
 	mut status := 'ok'
@@ -73,21 +73,21 @@ fn record(line string, path string) string {
 		if C.witty_stream_discard_close() != 0 { panic('Discard invalidation failed') }
 	} else if f[8].int() >= 0 {
 		restored := path + '.restored'
-		if C.witty_stream_discard_restore(restored.str, usize(f[8].int())) != 0 {
+		if C.witty_stream_discard_restore(restored.str, uint(f[8].int())) != 0 {
 			panic('Discard restore failed')
 		}
 	}
 	out += 'rebound|' + snapshot(mut reader, buffer, output) + '~'
 	for attempt in 0 .. 2 {
 		if attempt == 1 && f[5] == '0' && f[6].int() > 0 {
-			if C.witty_stream_discard_seed(usize(f[4].int()), usize(f[6].int())) != 0 {
+			if C.witty_stream_discard_seed(uint(f[4].int()), uint(f[6].int())) != 0 {
 				panic('Discard reseed failed')
 			}
 		}
 		status = 'ok'
 		// A second positive discard after a cached EOF can be a native zero-progress
 		// loop. Restored-file rows use zero for their second discard.
-		count := if attempt == 1 && f[8].int() >= 0 { usize(0) } else { usize(f[7].int()) }
+		count := if attempt == 1 && f[8].int() >= 0 { uint(0) } else { uint(f[7].int()) }
 		reader.discard_all(count) or { status = err.msg() }
 		out += '${status}|' + snapshot(mut reader, buffer, output) + '~'
 		status = 'ok'
@@ -107,10 +107,10 @@ fn record(line string, path string) string {
 		out += '${status}|' + snapshot(mut reader, buffer, output) + '~'
 	}
 	mut wire := []u8{}
-	mut drain := isize(-3)
+	mut drain := int(-3)
 	for {
 		mut bytes := []u8{len: 4096}
-		drain = C.witty_stream_discard_drain(bytes.data, usize(bytes.len))
+		drain = C.witty_stream_discard_drain(bytes.data, uint(bytes.len))
 		if drain <= 0 { break
 		 }
 		wire << bytes[..int(drain)]

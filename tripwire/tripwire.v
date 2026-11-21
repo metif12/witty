@@ -11,8 +11,8 @@ pub enum ResetMode as u8 {
 struct Tripwire {
 mut:
 	err     IError
-	reached usize
-	min     usize
+	reached uint
+	min     uint
 	tripped bool
 }
 
@@ -58,7 +58,7 @@ pub fn (mut self TripwireModule[P]) error_always(point P, err IError) {
 }
 
 // error_after marks point to fail after it has been reached min times.
-pub fn (mut self TripwireModule[P]) error_after(point P, err IError, min usize) {
+pub fn (mut self TripwireModule[P]) error_after(point P, err IError, min uint) {
 	self.tripwires[point] = Tripwire{
 		err: err
 		min: min

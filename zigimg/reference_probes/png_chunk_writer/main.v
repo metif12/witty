@@ -35,7 +35,7 @@ pub fn (mut adapter Adapter) write_all(bytes []u8) ! {
 	adapter.output.stream.write_all(bytes)!
 }
 
-pub fn (mut adapter Adapter) write(bytes []u8) !usize {
+pub fn (mut adapter Adapter) write(bytes []u8) !uint {
 	mix(mut adapter.output.trace, 3)
 	mix(mut adapter.output.trace, u64(bytes.len))
 	count := if adapter.output.max_write > 0 && adapter.output.max_write < bytes.len {
@@ -60,7 +60,7 @@ fn run[B](buffer B, fields []string) {
 	]!)
 	mut states := []string{}
 	if fields[3] in ['overflow', 'bounds'] {
-		writer.end = if fields[3] == 'overflow' { ~usize(0) } else { usize(fields[0].int()) + 1 }
+		writer.end = if fields[3] == 'overflow' { ~uint(0) } else { uint(fields[0].int()) + 1 }
 		if fields[3] == 'overflow' {
 			_ = writer.write([u8(1)]) or {
 				eprintln('UNEXPECTED ${err}')
@@ -77,13 +77,13 @@ fn run[B](buffer B, fields []string) {
 	}
 	for operation in fields[3].split(',') {
 		mut status := 'ok'
-		mut count := usize(0)
+		mut count := uint(0)
 		if operation == 'F' {
 			writer.flush() or { status = err.msg() }
 		} else {
 			count = writer.write(hex.decode(operation[1..]) or { panic(err) }) or {
 				status = err.msg()
-				usize(0)
+				uint(0)
 			}
 		}
 		mut active := [u64(14695981039346656037)]
@@ -113,28 +113,28 @@ fn extended(name string, capacity int) {
 		`T`,
 	]!)
 	mut status := 'ok'
-	mut count := usize(0)
+	mut count := uint(0)
 	match name {
 		'overflow' {
-			writer.end = ~usize(0)
+			writer.end = ~uint(0)
 			count = writer.write([u8(1)]) or {
 				status = err.msg()
-				usize(0)
+				uint(0)
 			}
 		}
 		'bounds', 'corrupt_error', 'max_flush' {
-			writer.end = if name == 'max_flush' { ~usize(0) } else { usize(5) }
+			writer.end = if name == 'max_flush' { ~uint(0) } else { uint(5) }
 			writer.flush() or { status = err.msg() }
 		}
 		'overlap', 'same', 'adjacent', 'empty', 'empty_full', 'overlap_flush', 'overlap_error' {
 			writer.end = if name == 'overlap' {
-				usize(1)
+				uint(1)
 			} else if name == 'adjacent' {
-				usize(2)
+				uint(2)
 			} else if name in ['empty_full', 'overlap_flush', 'overlap_error'] {
-				usize(4)
+				uint(4)
 			} else {
-				usize(0)
+				uint(0)
 			}
 			mut storage := unsafe { (&u8(&writer.buf)).vbytes(4) }
 			input := if name in ['empty', 'empty_full'] {
@@ -144,7 +144,7 @@ fn extended(name string, capacity int) {
 			}
 			count = writer.write(input) or {
 				status = err.msg()
-				usize(0)
+				uint(0)
 			}
 		}
 		'copy' {

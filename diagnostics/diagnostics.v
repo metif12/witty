@@ -56,14 +56,14 @@ pub struct NoneLocation {}
 // A CLI argument index (1-indexed).
 pub struct CliLocation {
 pub:
-	index usize
+	index uint
 }
 
 // A file path and line number.
 pub struct FileLocation {
 pub:
 	path string
-	line usize
+	line uint
 }
 
 // LocationKind is the tag type for Location.

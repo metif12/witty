@@ -2,8 +2,8 @@ module vaxis
 
 pub struct LineNumbers {
 pub mut:
-	num_lines         usize = ~usize(0)
-	highlighted_line  usize
+	num_lines         uint = ~uint(0)
+	highlighted_line  uint
 	style             Style = Style{
 		dim: true
 	}
@@ -15,16 +15,16 @@ pub mut:
 	}
 }
 
-pub fn LineNumbers.extract_digit(value usize, n usize) usize {
-	mut divisor := usize(1)
-	for i := usize(0); i < n; i++ {
-		if divisor > ~usize(0) / 10 { panic('attempt to unwrap error: Overflow') }
+pub fn LineNumbers.extract_digit(value uint, n uint) uint {
+	mut divisor := uint(1)
+	for i := uint(0); i < n; i++ {
+		if divisor > ~uint(0) / 10 { panic('attempt to unwrap error: Overflow') }
 		divisor *= 10
 	}
 	return (value / divisor) % 10
 }
 
-pub fn LineNumbers.num_digits(value usize) u8 {
+pub fn LineNumbers.num_digits(value uint) u8 {
 	return match true {
 		value <= 9 { 1 }
 		value <= 99 { 2 }
@@ -38,19 +38,19 @@ pub fn LineNumbers.num_digits(value usize) u8 {
 	}
 }
 
-pub fn (numbers LineNumbers) draw(win Window, y_scroll usize) {
+pub fn (numbers LineNumbers) draw(win Window, y_scroll uint) {
 	start := widget_checked_add(1, y_scroll)
 	if start > numbers.num_lines { panic('integer overflow') }
 	for line := start; line < numbers.num_lines; line++ {
-		if line - 1 >= widget_saturating_add(y_scroll, usize(win.height)) {
+		if line - 1 >= widget_saturating_add(y_scroll, uint(win.height)) {
 			break
 		}
 		highlighted := line == numbers.highlighted_line
 		digits := LineNumbers.num_digits(line)
 		style := if highlighted { numbers.highlighted_style } else { numbers.style }
 		for i in 0 .. int(digits) {
-			digit := int(LineNumbers.extract_digit(line, usize(i)))
-			win.write_cell(widget_checked_u16(widget_saturating_sub(usize(win.width), usize(i + 2))), widget_checked_u16(widget_saturating_sub(line, widget_saturating_add(y_scroll,
+			digit := int(LineNumbers.extract_digit(line, uint(i)))
+			win.write_cell(widget_checked_u16(widget_saturating_sub(uint(win.width), uint(i + 2))), widget_checked_u16(widget_saturating_sub(line, widget_saturating_add(y_scroll,
 				1))), Cell{
 				char_: CellCharacter{
 					grapheme: '0123456789'[digit..digit + 1]

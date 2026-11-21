@@ -2,11 +2,11 @@ module vaxis
 
 pub struct ScrollViewScroll {
 pub mut:
-	x usize
-	y usize
+	x uint
+	y uint
 }
 
-pub fn (mut scroll ScrollViewScroll) restrict_to(width usize, height usize) {
+pub fn (mut scroll ScrollViewScroll) restrict_to(width uint, height uint) {
 	if scroll.x > width { scroll.x = width }
 	if scroll.y > height { scroll.y = height }
 }
@@ -27,8 +27,8 @@ pub mut:
 
 pub struct ScrollViewContentSize {
 pub:
-	cols usize @[required]
-	rows usize @[required]
+	cols uint @[required]
+	rows uint @[required]
 }
 
 // Window-based widgets/ScrollView.zig, distinct from the vxfw widget.
@@ -58,7 +58,7 @@ pub fn (mut view ScrollView) input(key Key) {
 	} else if key.matches(page_down, plain) {
 		view.scroll.y = widget_saturating_add(view.scroll.y, 32)
 	} else if key.matches(end, plain) {
-		view.scroll.y = ~usize(0)
+		view.scroll.y = ~uint(0)
 	} else if key.matches(home, plain) {
 		view.scroll.y = 0
 	}
@@ -70,19 +70,19 @@ pub fn (mut view ScrollView) draw(parent Window, content_size ScrollViewContentS
 	} else {
 		content_size.cols
 	}
-	max_scroll_x := widget_saturating_sub(content_cols, usize(parent.width))
-	max_scroll_y := widget_saturating_sub(content_size.rows, usize(parent.height))
+	max_scroll_x := widget_saturating_sub(content_cols, uint(parent.width))
+	max_scroll_y := widget_saturating_sub(content_size.rows, uint(parent.height))
 	view.scroll.restrict_to(max_scroll_x, max_scroll_y)
 	if opts := view.vertical_scrollbar {
 		bar := Scrollbar{
 			character: opts.character
 			style:     opts.fg
 			total:     content_size.rows
-			view_size: usize(parent.height)
+			view_size: uint(parent.height)
 			top:       view.scroll.y
 		}
 		background := parent.child(WindowChildOptions{
-			x_off:  int(widget_saturating_sub(usize(parent.width), usize(opts.character.width)))
+			x_off:  int(widget_saturating_sub(uint(parent.width), uint(opts.character.width)))
 			width:  u16(opts.character.width)
 			height: parent.height
 		})
@@ -93,44 +93,44 @@ pub fn (mut view ScrollView) draw(parent Window, content_size ScrollViewContentS
 
 pub struct ScrollViewBoundingBox {
 pub:
-	x1 usize @[required]
-	y1 usize @[required]
-	x2 usize @[required]
-	y2 usize @[required]
+	x1 uint @[required]
+	y1 uint @[required]
+	x2 uint @[required]
+	y2 uint @[required]
 }
 
-pub fn (box ScrollViewBoundingBox) below(row usize) bool {
+pub fn (box ScrollViewBoundingBox) below(row uint) bool {
 	return row < box.y1
 }
 
-pub fn (box ScrollViewBoundingBox) above(row usize) bool {
+pub fn (box ScrollViewBoundingBox) above(row uint) bool {
 	return row >= box.y2
 }
 
-pub fn (box ScrollViewBoundingBox) row_inside(row usize) bool {
+pub fn (box ScrollViewBoundingBox) row_inside(row uint) bool {
 	return row >= box.y1 && row < box.y2
 }
 
-pub fn (box ScrollViewBoundingBox) col_inside(col usize) bool {
+pub fn (box ScrollViewBoundingBox) col_inside(col uint) bool {
 	return col >= box.x1 && col < box.x2
 }
 
-pub fn (box ScrollViewBoundingBox) inside(col usize, row usize) bool {
+pub fn (box ScrollViewBoundingBox) inside(col uint, row uint) bool {
 	return box.row_inside(row) && box.col_inside(col)
 }
 
 pub fn (view &ScrollView) bounds(parent Window) ScrollViewBoundingBox {
-	right_pad := if view.vertical_scrollbar != none { usize(1) } else { usize(0) }
+	right_pad := if view.vertical_scrollbar != none { uint(1) } else { uint(0) }
 	return ScrollViewBoundingBox{
 		x1: view.scroll.x
 		y1: view.scroll.y
-		x2: widget_saturating_sub(widget_saturating_add(view.scroll.x, usize(parent.width)),
+		x2: widget_saturating_sub(widget_saturating_add(view.scroll.x, uint(parent.width)),
 			right_pad)
-		y2: widget_saturating_add(view.scroll.y, usize(parent.height))
+		y2: widget_saturating_add(view.scroll.y, uint(parent.height))
 	}
 }
 
-pub fn (view &ScrollView) write_cell(parent Window, col usize, row usize, cell Cell) {
+pub fn (view &ScrollView) write_cell(parent Window, col uint, row uint, cell Cell) {
 	box := view.bounds(parent)
 	if !box.inside(col, row) { return }
 	win := parent.child(WindowChildOptions{

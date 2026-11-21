@@ -5,7 +5,7 @@ import zigimg
 struct Output {
 mut:
 	stream zigimg.WriteStream
-	calls  usize
+	calls  uint
 }
 
 struct Adapter {
@@ -24,7 +24,7 @@ pub fn (mut adapter Adapter) write_all(bytes []u8) ! {
 	adapter.output.stream.write_all(bytes)!
 }
 
-pub fn (mut adapter Adapter) write(bytes []u8) !usize {
+pub fn (mut adapter Adapter) write(bytes []u8) !uint {
 	adapter.output.calls++
 	return adapter.output.stream.write(bytes)
 }
@@ -79,7 +79,7 @@ fn run[B, W](buffer B, underlying W, mut output Output, mut destination []u8, se
 	}
 	size := bytes.len
 	initial_end := writer.end
-	writer.end = usize(size)
+	writer.end = uint(size)
 	mut copied := writer
 	copied.unbuffered_writer.label = 17
 	copied.section_id = [u8(`t`), `E`, `X`, `t`]!

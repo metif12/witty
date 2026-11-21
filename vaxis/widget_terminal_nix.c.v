@@ -12,7 +12,7 @@ fn C.witty_terminal_globals_set(ptr voidptr)
 fn C.witty_terminal_errno() int
 fn C.witty_terminal_close(fd int) int
 fn C.witty_terminal_kill(pid int) int
-fn C.witty_terminal_eot(fd int) isize
+fn C.witty_terminal_eot(fd int) int
 fn C.witty_terminal_waitpid() int
 fn C.witty_terminal_sigchild(entry voidptr) int
 fn C.witty_terminal_thread_start(entry voidptr, context voidptr, result &int) voidptr
@@ -26,7 +26,7 @@ pub mut:
 	mutex              &sync.Mutex = sync.new_mutex()
 	vts                ?map[int]&Terminal
 	sigchild_installed bool
-	count              usize
+	count              uint
 }
 
 pub fn terminal_global_state() &TerminalGlobalState {

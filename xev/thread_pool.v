@@ -166,7 +166,7 @@ pub mut:
 // An unordered collection of Tasks which can be submitted for scheduling as a group.
 pub struct ThreadPoolBatch {
 pub mut:
-	len  usize
+	len  uint
 	head &ThreadPoolTask = unsafe { nil }
 	tail &ThreadPoolTask = unsafe { nil }
 }
@@ -493,7 +493,7 @@ fn ThreadPoolThread.run(mut thread_pool ThreadPool) {
 
 			// @fieldParentPtr("node", result.node)
 			task := unsafe {
-				&ThreadPoolTask(voidptr(usize(result.node) - __offsetof(ThreadPoolTask, node)))
+				&ThreadPoolTask(voidptr(uint(result.node) - __offsetof(ThreadPoolTask, node)))
 			}
 			task.callback(task)
 		}
@@ -660,12 +660,12 @@ mut:
 // An unbounded multi-producer-(non blocking)-multi-consumer queue of Node pointers.
 struct ThreadPoolNodeQueue {
 mut:
-	stack ThreadPoolAtomic[usize]
+	stack ThreadPoolAtomic[uint]
 	cache &ThreadPoolNode = unsafe { nil }
 }
 
-const thread_pool_node_queue_has_cache = usize(0b01)
-const thread_pool_node_queue_is_consuming = usize(0b10)
+const thread_pool_node_queue_has_cache = uint(0b01)
+const thread_pool_node_queue_is_consuming = uint(0b10)
 const thread_pool_node_queue_ptr_mask = ~(thread_pool_node_queue_has_cache | thread_pool_node_queue_is_consuming)
 
 // comptime { assert(@alignOf(Node) >= ((IS_CONSUMING | HAS_CACHE) + 1)); }
@@ -680,7 +680,7 @@ fn (mut self ThreadPoolNodeQueue) push(list ThreadPoolNodeList) {
 
 		// Update the stack with the list (pt. 2).
 		// Don't change the HAS_CACHE and IS_CONSUMING bits of the consumer.
-		mut new_stack := usize(voidptr(list.head))
+		mut new_stack := uint(voidptr(list.head))
 		assert new_stack & ~thread_pool_node_queue_ptr_mask == 0
 		new_stack |= (stack & ~thread_pool_node_queue_ptr_mask)
 
@@ -1139,7 +1139,7 @@ fn thread_pool_futex_wait(ptr &ThreadPoolAtomic[u32], expect u32) {
 	} $else $if linux {
 		rc := unsafe {
 			C.syscall(C.SYS_futex, voidptr(&ptr.raw),
-				voidptr(usize(thread_pool_futex_wait_private)), voidptr(usize(expect)), nil)
+				voidptr(uint(thread_pool_futex_wait_private)), voidptr(uint(expect)), nil)
 		}
 		if rc == 0 {
 			// notified by `wake()`
@@ -1192,7 +1192,7 @@ fn thread_pool_futex_wake(ptr &ThreadPoolAtomic[u32], max_waiters u32) {
 		n := if max_waiters > u32(max_i32) { u32(max_i32) } else { max_waiters }
 		rc := unsafe {
 			C.syscall(C.SYS_futex, voidptr(&ptr.raw),
-				voidptr(usize(thread_pool_futex_wake_private)), voidptr(usize(n)))
+				voidptr(uint(thread_pool_futex_wake_private)), voidptr(uint(n)))
 		}
 		if rc >= 0 {
 			// successful wake up

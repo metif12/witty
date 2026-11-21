@@ -45,7 +45,7 @@ $if macos || ios {
 		cached_fonts []?&macos.CFDictionary
 		// The grid that our cached fonts correspond to.
 		// If the grid changes then we need to reset our cache.
-		cached_font_grid usize
+		cached_font_grid uint
 		// The list of CoreFoundation objects to release on the dedicated
 		// release thread. This is built up over the course of shaping and
 		// sent to the release thread when end_frame is called.
@@ -511,7 +511,7 @@ $if macos || ios {
 		if run.grid == unsafe { nil } {
 			return error('CoreText shaper has no font grid')
 		}
-		grid_id := usize(voidptr(run.grid))
+		grid_id := uint(voidptr(run.grid))
 		if grid_id != self.cached_font_grid {
 			if self.cached_font_grid > 0 {
 				// Put all the currently cached fonts in to

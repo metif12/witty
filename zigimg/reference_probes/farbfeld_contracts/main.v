@@ -31,7 +31,7 @@ fn observe() {
 }
 
 fn make_pixels(format p.PixelFormat, count int) p.PixelStorage {
-	mut pixels := p.PixelStorage.init(format, usize(count)) or { panic(err) }
+	mut pixels := p.PixelStorage.init(format, uint(count)) or { panic(err) }
 	mut bytes := pixels.as_bytes()
 	for i in 0 .. bytes.len {
 		bytes[i] = u8(i * 37 + 19)
@@ -87,8 +87,8 @@ fn read_case() {
 			return
 		}
 		result = p.ImageUnmanaged{
-			width:  usize(codec.header.width)
-			height: usize(codec.header.height)
+			width:  uint(codec.header.width)
+			height: uint(codec.header.height)
 			pixels: pixels
 		}
 	} else {
@@ -106,8 +106,8 @@ fn read_case() {
 	mut raw := result.pixels.as_bytes()
 	mut separate := '-'
 	if raw.len > 0 {
-		pointer := usize(raw.data)
-		separate = if pointer < usize(data.data) || pointer >= usize(data.data) + usize(data.len) {
+		pointer := uint(raw.data)
+		separate = if pointer < uint(data.data) || pointer >= uint(data.data) + uint(data.len) {
 			'1'
 		} else {
 			'0'
@@ -126,8 +126,8 @@ fn main() {
 		observed_path = os.args[2]
 		at_exit(observe) or { panic(err) }
 		mut image := p.ImageUnmanaged{
-			width:  usize(os.args[3].u64())
-			height: usize(os.args[4].u64())
+			width:  uint(os.args[3].u64())
+			height: uint(os.args[4].u64())
 			pixels: make_pixels(unsafe { p.PixelFormat(os.args[5].u32()) }, 2)
 		}
 		mut buffer := []u8{len: os.args[6].int(), init: 165}
@@ -181,8 +181,8 @@ fn main() {
 								codec.write(mut writer, pixels) or { status = err.msg() }
 							} else {
 								p.Farbfeld.write_image(mut writer, p.ImageUnmanaged{
-									width:  usize(width)
-									height: usize(height)
+									width:  uint(width)
+									height: uint(height)
 									pixels: pixels
 								}) or { status = err.msg() }
 							}

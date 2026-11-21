@@ -4,8 +4,8 @@ module zigimg
 // layout is not an ABI alias of ImageUnmanaged; wrappers delegate explicitly.
 pub struct Image {
 pub mut:
-	width     usize
-	height    usize
+	width     uint
+	height    uint
 	pixels    PixelStorage = InvalidPixels{}
 	animation Animation
 }
@@ -19,11 +19,11 @@ pub fn (mut image Image) deinit() {
 	image.animation.deinit()
 }
 
-pub fn Image.from_raw_pixels(width usize, height usize, bytes []u8, format PixelFormat) !Image {
+pub fn Image.from_raw_pixels(width uint, height uint, bytes []u8, format PixelFormat) !Image {
 	return (ImageUnmanaged.from_raw_pixels(width, height, bytes, format)!).to_managed()
 }
 
-pub fn Image.create(width usize, height usize, format PixelFormat) !Image {
+pub fn Image.create(width uint, height uint, format PixelFormat) !Image {
 	return (ImageUnmanaged.create(width, height, format)!).to_managed()
 }
 
@@ -35,14 +35,14 @@ pub fn (image Image) raw_bytes() []u8 {
 	return image.pixels.as_bytes()
 }
 
-pub fn (image Image) row_byte_size() usize {
+pub fn (image Image) row_byte_size() uint {
 	size := image.image_byte_size()
 	if image.height == 0 { panic('division by zero') }
 	return size / image.height
 }
 
-pub fn (image Image) image_byte_size() usize {
-	return usize(image.raw_bytes().len)
+pub fn (image Image) image_byte_size() uint {
+	return uint(image.raw_bytes().len)
 }
 
 pub fn (image Image) is_animation() bool {

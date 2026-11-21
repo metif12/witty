@@ -6,11 +6,11 @@ import strconv
 import strings
 import vaxis
 
-fn uint(parts []string, i int) usize {
-	return usize(strconv.parse_uint(parts[i], 10, 64) or { panic(err) })
+fn uint(parts []string, i int) uint {
+	return uint(strconv.parse_uint(parts[i], 10, 64) or { panic(err) })
 }
 
-fn style(index usize) vaxis.Style {
+fn style(index uint) vaxis.Style {
 	return match index {
 		1 {
 			vaxis.Style{
@@ -115,7 +115,7 @@ fn seed(mut screen vaxis.TerminalScreen, offset int) {
 			char_:   '${i + offset}'.clone()
 			uri:     'u${i + offset}'.clone()
 			uri_id:  'i${i + offset}'.clone()
-			style:   style(usize((i + offset) % 4))
+			style:   style(uint((i + offset) % 4))
 			width:   u8(i % 3)
 			wrapped: i % 2 == 0
 			dirty:   i % 3 != 0
@@ -142,13 +142,13 @@ fn trap(mode string) {
 		if mode == 'trap_read' {
 			screen.read_cell(0, 2)
 		} else if mode == 'trap_read_add' {
-			screen.read_cell(~usize(0), 0)
+			screen.read_cell(~uint(0), 0)
 		} else if mode == 'trap_right' {
 			screen.cursor.col = 65535
 			screen.cursor_right(1)
 		} else if mode == 'trap_down' {
 			screen.cursor.row = 1
-			screen.cursor_down(~usize(0))
+			screen.cursor_down(~uint(0))
 		} else if mode == 'trap_index' {
 			screen.cursor.row = 65535
 			screen.index() or { panic(err) }
@@ -288,7 +288,7 @@ fn main() {
 				screen.buf[0].erase(screen.cursor.style.bg)
 			}
 			20 {
-				screen.buf[0].copy_from(screen.buf[int(n % usize(screen.buf.len))]) or {
+				screen.buf[0].copy_from(screen.buf[int(n % uint(screen.buf.len))]) or {
 					panic(err)
 				}
 			}

@@ -15,12 +15,12 @@ module xev
 #include <time.h>
 #include <unistd.h>
 
-fn C.pread(fd int, buf voidptr, count usize, offset i64) isize
-fn C.pwrite(fd int, buf voidptr, count usize, offset i64) isize
+fn C.pread(fd int, buf voidptr, count uint, offset i64) int
+fn C.pwrite(fd int, buf voidptr, count uint, offset i64) int
 // vlib net declares recvfrom/sendto with an int result and V keeps one
 // declaration per C function, so these match it (ssize_t fits: buffers < 2 GiB).
-fn C.recvfrom(sockfd int, buf voidptr, len usize, flags int, src_addr voidptr, addrlen &u32) int
-fn C.sendto(sockfd int, buf voidptr, len usize, flags int, dest_addr voidptr, addrlen u32) int
+fn C.recvfrom(sockfd int, buf voidptr, len uint, flags int, src_addr voidptr, addrlen &u32) int
+fn C.sendto(sockfd int, buf voidptr, len uint, flags int, dest_addr voidptr, addrlen u32) int
 fn C.accept(sockfd int, addr voidptr, addrlen &u32) int
 fn C.getsockopt(sockfd int, level int, optname int, optval voidptr, optlen &u32) int
 fn C.fcntl(fd int, cmd int, arg ...voidptr) int
@@ -54,25 +54,25 @@ fn unexpected_errno(err int) IError {
 	return new_error(.unexpected)
 }
 
-fn posix_max_count() usize {
+fn posix_max_count() uint {
 	$if linux {
 		return 0x7ffff000
 	} $else $if macos || ios {
-		return usize(max_i32)
+		return uint(max_i32)
 	} $else {
-		return usize(max_i64)
+		return uint(max_i64)
 	}
 }
 
 // Translation of std.posix.read.
-pub fn posix_read(fd int, buf []u8) !usize {
+pub fn posix_read(fd int, buf []u8) !uint {
 	if buf.len == 0 {
 		return 0
 	}
 	for {
-		rc := C.read(fd, buf.data, usize_min(usize(buf.len), posix_max_count()))
+		rc := C.read(fd, buf.data, usize_min(uint(buf.len), posix_max_count()))
 		match posix_errno(rc) {
-			0 { return usize(rc) }
+			0 { return uint(rc) }
 			C.EINTR { continue }
 			C.EINVAL { posix_unreachable() }
 			C.EFAULT { posix_unreachable() }
@@ -94,14 +94,14 @@ pub fn posix_read(fd int, buf []u8) !usize {
 }
 
 // Translation of std.posix.pread.
-pub fn posix_pread(fd int, buf []u8, offset u64) !usize {
+pub fn posix_pread(fd int, buf []u8, offset u64) !uint {
 	if buf.len == 0 {
 		return 0
 	}
 	for {
-		rc := C.pread(fd, buf.data, usize_min(usize(buf.len), posix_max_count()), i64(offset))
+		rc := C.pread(fd, buf.data, usize_min(uint(buf.len), posix_max_count()), i64(offset))
 		match posix_errno(rc) {
-			0 { return usize(rc) }
+			0 { return uint(rc) }
 			C.EINTR { continue }
 			C.EINVAL { posix_unreachable() }
 			C.EFAULT { posix_unreachable() }
@@ -125,14 +125,14 @@ pub fn posix_pread(fd int, buf []u8, offset u64) !usize {
 }
 
 // Translation of std.posix.write.
-pub fn posix_write(fd int, bytes []u8) !usize {
+pub fn posix_write(fd int, bytes []u8) !uint {
 	if bytes.len == 0 {
 		return 0
 	}
 	for {
-		rc := C.write(fd, bytes.data, usize_min(usize(bytes.len), posix_max_count()))
+		rc := C.write(fd, bytes.data, usize_min(uint(bytes.len), posix_max_count()))
 		match posix_errno(rc) {
-			0 { return usize(rc) }
+			0 { return uint(rc) }
 			C.EINTR { continue }
 			C.EINVAL { return new_error(.invalid_argument) }
 			C.EFAULT { posix_unreachable() }
@@ -158,14 +158,14 @@ pub fn posix_write(fd int, bytes []u8) !usize {
 }
 
 // Translation of std.posix.pwrite.
-pub fn posix_pwrite(fd int, bytes []u8, offset u64) !usize {
+pub fn posix_pwrite(fd int, bytes []u8, offset u64) !uint {
 	if bytes.len == 0 {
 		return 0
 	}
 	for {
-		rc := C.pwrite(fd, bytes.data, usize_min(usize(bytes.len), posix_max_count()), i64(offset))
+		rc := C.pwrite(fd, bytes.data, usize_min(uint(bytes.len), posix_max_count()), i64(offset))
 		match posix_errno(rc) {
-			0 { return usize(rc) }
+			0 { return uint(rc) }
 			C.EINTR { continue }
 			C.EINVAL { return new_error(.invalid_argument) }
 			C.EFAULT { posix_unreachable() }
@@ -190,11 +190,11 @@ pub fn posix_pwrite(fd int, bytes []u8, offset u64) !usize {
 }
 
 // Translation of std.posix.recvfrom.
-pub fn posix_recvfrom(sockfd int, buf []u8, flags u32, src_addr voidptr, addrlen &u32) !usize {
+pub fn posix_recvfrom(sockfd int, buf []u8, flags u32, src_addr voidptr, addrlen &u32) !uint {
 	for {
-		rc := C.recvfrom(sockfd, buf.data, usize(buf.len), int(flags), src_addr, addrlen)
+		rc := C.recvfrom(sockfd, buf.data, uint(buf.len), int(flags), src_addr, addrlen)
 		match posix_errno(rc) {
-			0 { return usize(rc) }
+			0 { return uint(rc) }
 			C.EBADF { posix_unreachable() } // always a race condition
 			C.EFAULT { posix_unreachable() }
 			C.EINVAL { posix_unreachable() }
@@ -213,16 +213,16 @@ pub fn posix_recvfrom(sockfd int, buf []u8, flags u32, src_addr voidptr, addrlen
 }
 
 // Translation of std.posix.recv.
-pub fn posix_recv(sock int, buf []u8, flags u32) !usize {
+pub fn posix_recv(sock int, buf []u8, flags u32) !uint {
 	return posix_recvfrom(sock, buf, flags, unsafe { nil }, unsafe { nil })
 }
 
 // Translation of std.posix.sendto.
-pub fn posix_sendto(sockfd int, buf []u8, flags u32, dest_addr voidptr, addrlen u32) !usize {
+pub fn posix_sendto(sockfd int, buf []u8, flags u32, dest_addr voidptr, addrlen u32) !uint {
 	for {
-		rc := C.sendto(sockfd, buf.data, usize(buf.len), int(flags), dest_addr, addrlen)
+		rc := C.sendto(sockfd, buf.data, uint(buf.len), int(flags), dest_addr, addrlen)
 		match posix_errno(rc) {
-			0 { return usize(rc) }
+			0 { return uint(rc) }
 			C.EACCES { return new_error(.access_denied) }
 			C.EAGAIN { return new_error(.would_block) }
 			C.EALREADY { return new_error(.fast_open_already_in_progress) }
@@ -256,7 +256,7 @@ pub fn posix_sendto(sockfd int, buf []u8, flags u32, dest_addr voidptr, addrlen 
 }
 
 // Translation of std.posix.send.
-pub fn posix_send(sockfd int, buf []u8, flags u32) !usize {
+pub fn posix_send(sockfd int, buf []u8, flags u32) !uint {
 	return posix_sendto(sockfd, buf, flags, unsafe { nil }, 0) or {
 		match error_kind(err) {
 			.address_family_not_supported, .sym_link_loop, .name_too_long, .file_not_found,
@@ -272,11 +272,11 @@ pub fn posix_send(sockfd int, buf []u8, flags u32) !usize {
 }
 
 // Translation of std.posix.fcntl.
-fn posix_fcntl(fd int, cmd int, arg usize) !usize {
+fn posix_fcntl(fd int, cmd int, arg uint) !uint {
 	for {
 		rc := C.fcntl(fd, cmd, voidptr(arg))
 		match posix_errno(rc) {
-			0 { return usize(rc) }
+			0 { return uint(rc) }
 			C.EINTR { continue }
 			// Zig maps these to Locked, FileBusy, PermissionDenied, DeadLock,
 			// and LockedRegionLimitExceeded. Every libxev caller treats them as
@@ -296,12 +296,12 @@ fn posix_fcntl(fd int, cmd int, arg usize) !usize {
 fn posix_set_sock_flags(sock int, flags u32) ! {
 	if flags & sock_cloexec != 0 {
 		mut fd_flags := posix_fcntl(sock, C.F_GETFD, 0)!
-		fd_flags |= usize(int(C.FD_CLOEXEC))
+		fd_flags |= uint(int(C.FD_CLOEXEC))
 		_ = posix_fcntl(sock, C.F_SETFD, fd_flags)!
 	}
 	if flags & sock_nonblock != 0 {
 		mut fl_flags := posix_fcntl(sock, C.F_GETFL, 0)!
-		fl_flags |= usize(int(C.O_NONBLOCK))
+		fl_flags |= uint(int(C.O_NONBLOCK))
 		_ = posix_fcntl(sock, C.F_SETFL, fl_flags)!
 	}
 }
@@ -483,7 +483,7 @@ pub fn posix_listen(sock int, backlog u32) ! {
 fn C.connect(socket int, address voidptr, address_len u32) int
 fn C.shutdown(socket int, how int) int
 fn C.dup(fd int) int
-fn C.sendmsg(sockfd int, msg voidptr, flags int) isize
+fn C.sendmsg(sockfd int, msg voidptr, flags int) int
 
 // Translation of std.posix.connect (non-Windows branch).
 // Initiate a connection on a socket.
@@ -565,11 +565,11 @@ pub struct C.msghdr {}
 pub struct C.iovec {}
 
 // Translation of std.posix.sendmsg (non-Windows branch).
-pub fn posix_sendmsg(sockfd int, msg &C.msghdr, flags u32) !usize {
+pub fn posix_sendmsg(sockfd int, msg &C.msghdr, flags u32) !uint {
 	for {
 		rc := C.sendmsg(sockfd, msg, int(flags))
 		match posix_errno(rc) {
-			0 { return usize(rc) }
+			0 { return uint(rc) }
 			C.EACCES { return new_error(.access_denied) }
 			C.EAGAIN { return new_error(.would_block) }
 			C.EALREADY { return new_error(.fast_open_already_in_progress) }
@@ -661,6 +661,6 @@ pub fn posix_clock_gettime(clock_id int) !Timespec {
 }
 
 @[inline]
-fn usize_min(a usize, b usize) usize {
+fn usize_min(a uint, b uint) uint {
 	return if a < b { a } else { b }
 }

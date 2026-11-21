@@ -100,10 +100,10 @@ pub fn (self &RenderPreedit) clone() RenderPreedit {
 }
 
 // The width in cells of all codepoints in the preedit.
-pub fn (self &RenderPreedit) width() usize {
-	mut result := usize(0)
+pub fn (self &RenderPreedit) width() uint {
+	mut result := uint(0)
 	for cp in self.codepoints {
-		result += if cp.wide { usize(2) } else { usize(1) }
+		result += if cp.wide { uint(2) } else { uint(1) }
 	}
 	return result
 }
@@ -111,7 +111,7 @@ pub fn (self &RenderPreedit) width() usize {
 // Range returns the start and end x position of the preedit text
 // along with any codepoint offset necessary to fit the preedit
 // into the available space.
-pub fn (self &RenderPreedit) range(start u16, max u16) (u16, u16, usize) {
+pub fn (self &RenderPreedit) range(start u16, max u16) (u16, u16, uint) {
 	// If our width is greater than the number of cells we have
 	// then we need to adjust our codepoint start to a point where
 	// our width would be less than the number of cells we have.
@@ -121,12 +121,12 @@ pub fn (self &RenderPreedit) range(start u16, max u16) (u16, u16, usize) {
 
 	// Rebuild our width in reverse order.
 	mut w := u16(0)
-	mut cp_offset := usize(0)
+	mut cp_offset := uint(0)
 	for i := self.codepoints.len - 1; i >= 0; i-- {
 		cp := self.codepoints[i]
 		w += if cp.wide { u16(2) } else { u16(1) }
 		if w > max_width {
-			cp_offset = usize(i)
+			cp_offset = uint(i)
 			break
 		}
 	}

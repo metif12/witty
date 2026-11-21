@@ -9,8 +9,8 @@ fn test_action_name_validation_matches_gio_contract() {
 
 fn test_action_initializers_preserve_descriptor_fields() {
 	callback := GCallback(unsafe { nil })
-	parameter_type := GVariantType(voidptr(usize(1)))
-	state := GVariant(voidptr(usize(2)))
+	parameter_type := GVariantType(voidptr(uint(1)))
+	state := GVariant(voidptr(uint(2)))
 
 	plain := Action.init('plain', callback, parameter_type)
 	assert plain.name == 'plain'

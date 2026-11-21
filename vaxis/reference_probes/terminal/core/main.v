@@ -28,7 +28,7 @@ fn control(p []string) !string {
 	t.back_screen.cursor.pending_wrap = true
 	t.back_screen.scrolling_region.left = u16(p[3].int())
 	t.mode.origin = p[4] == '1'
-	n := usize(p[6].u64())
+	n := uint(p[6].u64())
 	match p[5] {
 		'c' { t.carriage_return() }
 		't' { t.horizontal_tab(n) }
@@ -79,7 +79,7 @@ fn update(p []string, path string) !string {
 	return '${result}/${hex.encode(os.read_bytes(path)!)}/${writer.buffered().len}'
 }
 
-fn C.read(fd int, buf voidptr, count usize) isize
+fn C.read(fd int, buf voidptr, count uint) int
 
 fn cleanup(p []string) !string {
 	first := os.open_file('/dev/null', 'r+')!

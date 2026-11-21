@@ -58,15 +58,15 @@ fn (mut self DynamicStreamTestPty) deinit() {
 
 struct DynamicStreamTestLen {
 mut:
-	value ?usize
+	value ?uint
 }
 
 // Zig's `.?`: `?` propagation needs an option-returning function.
-fn dynamic_stream_test_unwrap(v ?usize) usize {
+fn dynamic_stream_test_unwrap(v ?uint) uint {
 	return v or { panic('attempt to use null value') }
 }
 
-fn dynamic_stream_test_read(ud voidptr, _ &Loop, _ &Completion, _ Stream, _ ReadBuffer, r ?ErrorKind, n usize) CallbackAction {
+fn dynamic_stream_test_read(ud voidptr, _ &Loop, _ &Completion, _ Stream, _ ReadBuffer, r ?ErrorKind, n uint) CallbackAction {
 	if _ := r {
 		panic('unreachable')
 	}
@@ -75,7 +75,7 @@ fn dynamic_stream_test_read(ud voidptr, _ &Loop, _ &Completion, _ Stream, _ Read
 	return .disarm
 }
 
-fn dynamic_stream_test_write(_ voidptr, _ &Loop, _ &Completion, _ Stream, _ WriteBuffer, r ?ErrorKind, _ usize) CallbackAction {
+fn dynamic_stream_test_write(_ voidptr, _ &Loop, _ &Completion, _ Stream, _ WriteBuffer, r ?ErrorKind, _ uint) CallbackAction {
 	if _ := r {
 		panic('unreachable')
 	}
@@ -87,7 +87,7 @@ mut:
 	value &Completion = unsafe { nil }
 }
 
-fn dynamic_stream_test_write_record(ud voidptr, _ &Loop, c &Completion, _ Stream, _ WriteBuffer, r ?ErrorKind, _ usize) CallbackAction {
+fn dynamic_stream_test_write_record(ud voidptr, _ &Loop, c &Completion, _ Stream, _ WriteBuffer, r ?ErrorKind, _ uint) CallbackAction {
 	if _ := r {
 		panic('unreachable')
 	}

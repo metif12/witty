@@ -109,12 +109,12 @@ pub fn (img Image) draw(win Window, opts ImageDrawOptions) ! {
 			if screen.width == 0 || screen.height == 0 {
 				return error('DivisionByZero')
 			}
-			pix_per_col := (usize(screen.width_pix) + usize(screen.width) - 1) / usize(screen.width)
-			pix_per_row := (usize(screen.height_pix) + usize(screen.height) - 1) / usize(screen.height)
-			win_width_pix := pix_per_col * usize(win.width)
-			win_height_pix := pix_per_row * usize(win.height)
-			fit_x := win_width_pix >= usize(img.width)
-			fit_y := win_height_pix >= usize(img.height)
+			pix_per_col := (uint(screen.width_pix) + uint(screen.width) - 1) / uint(screen.width)
+			pix_per_row := (uint(screen.height_pix) + uint(screen.height) - 1) / uint(screen.height)
+			win_width_pix := pix_per_col * uint(win.width)
+			win_height_pix := pix_per_row * uint(win.height)
+			fit_x := win_width_pix >= uint(img.width)
+			fit_y := win_height_pix >= uint(img.height)
 			if !(opts.scale == .contain && fit_x && fit_y) {
 				if fit_x && !fit_y {
 					placed.size = ImageCellSize{
@@ -125,7 +125,7 @@ pub fn (img Image) draw(win Window, opts ImageDrawOptions) ! {
 						cols: win.width
 					}
 				} else if !fit_x && !fit_y {
-					if usize(img.width) - win_width_pix > usize(img.height) - win_height_pix {
+					if uint(img.width) - win_width_pix > uint(img.height) - win_height_pix {
 						placed.size = ImageCellSize{
 							cols: win.width
 						}
@@ -136,7 +136,7 @@ pub fn (img Image) draw(win Window, opts ImageDrawOptions) ! {
 					}
 				} else {
 					if opts.scale != .fit { panic('Assertion failed') }
-					if win_width_pix - usize(img.width) < win_height_pix - usize(img.height) {
+					if win_width_pix - uint(img.width) < win_height_pix - uint(img.height) {
 						placed.size = ImageCellSize{
 							cols: win.width
 						}
@@ -185,7 +185,7 @@ pub fn (mut vx Vaxis) transmit_local_image_path(payload string, width u16, heigh
 	}
 	id := vx.next_img_id
 	defer { vx.advance_image_id() }
-	if ((usize(payload.len) + 2) / 3) * 4 >= 4096 {
+	if ((uint(payload.len) + 2) / 3) * 4 >= 4096 {
 		return error('PathTooLong')
 	}
 	encoded := base64.encode_str(payload)

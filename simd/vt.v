@@ -4,26 +4,26 @@ module simd
 // Unicode codepoints were written.
 pub struct DecodeResult {
 pub:
-	consumed usize
-	decoded  usize
+	consumed uint
+	decoded  uint
 }
 
 // utf8_sequence_length matches std.unicode.utf8ByteSequenceLength: it only
 // classifies the leading-byte shape. Full scalar validity is checked while
 // decoding the selected sequence.
 @[inline]
-fn utf8_sequence_length(lead u8) ?usize {
+fn utf8_sequence_length(lead u8) ?uint {
 	if lead < 0x80 {
-		return usize(1)
+		return uint(1)
 	}
 	if lead & 0xe0 == 0xc0 {
-		return usize(2)
+		return uint(2)
 	}
 	if lead & 0xf0 == 0xe0 {
-		return usize(3)
+		return uint(3)
 	}
 	if lead & 0xf8 == 0xf0 {
-		return usize(4)
+		return uint(4)
 	}
 	return none
 }
@@ -80,23 +80,23 @@ fn utf8_decode_sequence(bytes []u8) ?u32 {
 pub fn utf8_decode_until_control_seq(input []u8, mut output []u32) DecodeResult {
 	assert output.len >= input.len
 	$if !js && !wasm32 && !no_simd ? {
-		mut decoded := usize(0)
-		consumed := C.ghostty_simd_decode_utf8_until_control_seq(input.data, usize(input.len),
+		mut decoded := uint(0)
+		consumed := C.ghostty_simd_decode_utf8_until_control_seq(input.data, uint(input.len),
 			output.data, &decoded)
 		return DecodeResult{
 			consumed: consumed
 			decoded:  decoded
 		}
 	}
-	escape_idx := index_of(input, 0x1b) or { usize(input.len) }
+	escape_idx := index_of(input, 0x1b) or { uint(input.len) }
 	decode_input := input[..escape_idx]
 
-	mut decode_offset := usize(0)
-	mut decode_count := usize(0)
-	for decode_offset < usize(decode_input.len) {
+	mut decode_offset := uint(0)
+	mut decode_count := uint(0)
+	for decode_offset < uint(decode_input.len) {
 		remaining := decode_input[int(decode_offset)..]
 		cp_len := utf8_sequence_length(remaining[0]) or { break }
-		if usize(remaining.len) < cp_len {
+		if uint(remaining.len) < cp_len {
 			break
 		}
 

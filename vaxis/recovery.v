@@ -30,7 +30,7 @@ pub fn recover() {
 // Source StackTrace and return-address data have no V panic-runtime equivalent.
 // Recovery runs before the V runtime reports the supplied panic message.
 @[noreturn]
-pub fn panic_handler(message string, trace voidptr, ret_addr ?usize) {
+pub fn panic_handler(message string, trace voidptr, ret_addr ?uint) {
 	_ = trace
 	_ = ret_addr
 	recover()
@@ -40,6 +40,6 @@ pub fn panic_handler(message string, trace voidptr, ret_addr ?usize) {
 pub struct Panic {}
 
 @[noreturn]
-pub fn Panic.call(message string, trace voidptr, ret_addr ?usize) {
+pub fn Panic.call(message string, trace voidptr, ret_addr ?uint) {
 	panic_handler(message, trace, ret_addr)
 }

@@ -7,15 +7,15 @@ import strings
 import vaxis
 import vaxis.vxfw
 
-fn uint(parts []string, index int) usize {
-	return usize(strconv.parse_uint(parts[index], 10, 64) or { panic(err) })
+fn uint(parts []string, index int) uint {
+	return uint(strconv.parse_uint(parts[index], 10, 64) or { panic(err) })
 }
 
 fn bytes(value string) string {
 	return (hex.decode(value) or { panic(err) }).bytestr()
 }
 
-fn style(index usize) vaxis.Style {
+fn style(index uint) vaxis.Style {
 	return match index {
 		1 {
 			vaxis.Style{
@@ -87,7 +87,7 @@ fn cell(mut output strings.Builder, value vaxis.Cell) {
 fn state(mut output strings.Builder, input vxfw.TextField) {
 	b := input.buf
 	output.write_string('${b.buffer.len},${u64(b.cursor).str()},${u64(b.gap_size).str()};')
-	if b.cursor <= usize(b.buffer.len) && b.gap_size <= usize(b.buffer.len) - b.cursor {
+	if b.cursor <= uint(b.buffer.len) && b.gap_size <= uint(b.buffer.len) - b.cursor {
 		output.write_string('${hex.encode(b.first_half())}/${hex.encode(b.second_half())}')
 	} else { output.write_string('invalid') }
 	output.write_string(';${input.draw_offset},${input.prev_cursor_col},${input.prev_cursor_idx},${input.scroll_offset},${input.prev_width};${hex.encode(input.previous_val.bytes())};')
@@ -102,8 +102,8 @@ struct Observation {
 	value string
 	current string
 	previous string
-	cursor usize
-	gap usize
+	cursor uint
+	gap uint
 	offset u16
 	col u16
 	index u16
@@ -114,7 +114,7 @@ struct Observation {
 struct Spy {
 mut:
 	field &vxfw.TextField = unsafe { nil }
-	mode usize
+	mode uint
 	observations []Observation
 }
 
@@ -157,7 +157,7 @@ fn trap(mode string) {
 		input.width_to_cursor(context(u16(1), 1))
 	} else if mode == 'trap_grapheme_width' {
 		input.buf.insert_slice_at_cursor('👍' + '🏽'.repeat(128))
-		input.buf.move_gap_left(usize(input.buf.cursor))
+		input.buf.move_gap_left(uint(input.buf.cursor))
 		vxfw.DrawContext.init(.wcwidth)
 		input.draw(context(u16(512), 1)) or { panic(err) }
 	} else if mode == 'trap_surface_size' {
@@ -236,12 +236,12 @@ fn main() {
 					output.write_string('${surface.size.width},${surface.size.height};')
 					if cursor := surface.cursor { output.write_string('${cursor.col},${cursor.row},${u8(cursor.shape)};') } else { output.write_string('none;') }
 					if parts[0] == 'P' {
-						base := usize(input.buf.buffer.data)
-						limit := base + usize(input.buf.buffer.len)
+						base := uint(input.buf.buffer.data)
+						limit := base + uint(input.buf.buffer.len)
 						for value in surface.buffer {
-							address := usize(value.char_.grapheme.str)
+							address := uint(value.char_.grapheme.str)
 							if value.char_.grapheme.len == 0 { output.write_string('empty,') }
-							else if address >= base && address <= limit && usize(value.char_.grapheme.len) <= limit - address { output.write_string('${address - base},') }
+							else if address >= base && address <= limit && uint(value.char_.grapheme.len) <= limit - address { output.write_string('${address - base},') }
 							else { output.write_string('external,') }
 						}
 						output.write_string(';')
@@ -258,8 +258,8 @@ fn main() {
 				input.previous_val = bytes(parts[8])
 				mut spy := Spy{field: &input, mode: uint(parts, 7)}
 				input.userdata = &spy
-				if spy.mode in [usize(1), 3, 4, 6, 7, 8, 9] { input.on_change = change }
-				if spy.mode in [usize(2), 3, 5, 6, 7, 8, 9] { input.on_submit = submit }
+				if spy.mode in [uint(1), 3, 4, 6, 7, 8, 9] { input.on_change = change }
+				if spy.mode in [uint(2), 3, 5, 6, 7, 8, 9] { input.on_submit = submit }
 				flags := uint(parts, 9)
 				mut ctx := vxfw.EventContext{
 cmds: []vxfw.Command{}

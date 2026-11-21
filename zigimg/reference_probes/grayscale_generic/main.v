@@ -149,7 +149,7 @@ fn main() {
 			output.write_string('\n')
 		}
 		{
-			value := p.GrayscaleAlpha[usize]{
+			value := p.GrayscaleAlpha[uint]{
 				value: 0
 			}
 			observe_alpha(mut output, value)
@@ -243,9 +243,9 @@ fn main() {
 				}
 			}
 			4 {
-				value := scalar(usize(0), args[3])
+				value := scalar(uint(0), args[3])
 				if alpha == 0 {
-					input := p.Grayscale[usize]{
+					input := p.Grayscale[uint]{
 						value: value
 					}
 					run_plain(mut output, input, args)

@@ -39,7 +39,7 @@ fn observe() {
 }
 
 fn make_pixels(format p.PixelFormat, count int, pattern int) p.PixelStorage {
-	mut pixels := p.PixelStorage.init(format, usize(count)) or { panic(err) }
+	mut pixels := p.PixelStorage.init(format, uint(count)) or { panic(err) }
 	mut bytes := pixels.as_bytes()
 	for i in 0 .. bytes.len {
 		bytes[i] = u8(i * 37 + 19)
@@ -176,8 +176,8 @@ fn read_case(entry int, start int, data []u8) {
 	mut raw := result.pixels.as_bytes()
 	mut separate := '-'
 	if raw.len > 0 {
-		ptr := usize(raw.data)
-		separate = if ptr < usize(data.data) || ptr >= usize(data.data) + usize(data.len) {
+		ptr := uint(raw.data)
+		separate = if ptr < uint(data.data) || ptr >= uint(data.data) + uint(data.len) {
 			'1'
 		} else {
 			'0'
@@ -188,7 +188,7 @@ fn read_case(entry int, start int, data []u8) {
 		'|${result.width}|${result.height}|${u32(result.pixels.pixel_format())}|${result.pixels.len()}|${before}|${separate}|${raw.hex()}')
 }
 
-fn write_case(format p.PixelFormat, count int, pattern int, width usize, height usize, space p.QoiColorspace, capacity int, entry int) {
+fn write_case(format p.PixelFormat, count int, pattern int, width uint, height uint, space p.QoiColorspace, capacity int, entry int) {
 	pixels := make_pixels(format, count, pattern)
 	codec := p.QOI{
 		header: p.QoiHeader{
@@ -340,8 +340,8 @@ fn main() {
 	}
 	for format in formats {
 		for count in 0 .. 3 {
-			for dim in [[usize(0), 0], [usize(1), 2], [usize(0xffffffff), 0],
-				[usize(0x100000001), 0x100000002], [usize(0xffffffffffffffff), 0xffffffffffffffff]] {
+			for dim in [[uint(0), 0], [uint(1), 2], [uint(0xffffffff), 0],
+				[uint(0x100000001), 0x100000002], [uint(0xffffffffffffffff), 0xffffffffffffffff]] {
 				for space in [p.QoiColorspace.srgb, .linear] {
 					for capacity in [0, 3, 4, 13, 14, 15, 21, 22, 23, 32] {
 						for entry in 0 .. 3 {
@@ -358,7 +358,7 @@ fn main() {
 				for space in [p.QoiColorspace.srgb, .linear] {
 					for capacity in [0, 14, 15, 16, 17, 21, 22, 23, 31, 32, 64, 256, 1024] {
 						for entry in 0 .. 2 {
-							write_case(format, count, pattern, 1, usize(count), space, capacity,
+							write_case(format, count, pattern, 1, uint(count), space, capacity,
 								entry)
 						}
 					}

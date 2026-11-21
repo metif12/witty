@@ -27,9 +27,9 @@ type Nested3 = [2][3][]u64
 type Single3 = [3]Element3
 type Outer3 = []Element3
 type OptionalOuter3 = []?Element3
-type Element4 = []usize
-type Flat4 = [3][]usize
-type Nested4 = [2][3][]usize
+type Element4 = []uint
+type Flat4 = [3][]uint
+type Nested4 = [2][3][]uint
 type Single4 = [3]Element4
 type Outer4 = []Element4
 type OptionalOuter4 = []?Element4
@@ -57,9 +57,9 @@ type Nested8 = [2][3][]i64
 type Single8 = [3]Element8
 type Outer8 = []Element8
 type OptionalOuter8 = []?Element8
-type Element9 = []isize
-type Flat9 = [3][]isize
-type Nested9 = [2][3][]isize
+type Element9 = []int
+type Flat9 = [3][]int
+type Nested9 = [2][3][]int
 type Single9 = [3]Element9
 type Outer9 = []Element9
 type OptionalOuter9 = []?Element9
@@ -104,7 +104,7 @@ struct Args {
 	value Outer0
 }
 
-fn borrowed[E](_ E, raw usize, length int) []E {
+fn borrowed[E](_ E, raw uint, length int) []E {
 	return unsafe { array{ data: voidptr(raw), len: length, cap: length, flags: .nofree, element_size: int(sizeof(E)) } }
 }
 

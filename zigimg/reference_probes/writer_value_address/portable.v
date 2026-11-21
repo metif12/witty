@@ -10,7 +10,7 @@ fn main() {
 	}
 	writer.write_byte(`|`) or { panic(err) }
 	optional := ?&int(none)
-	writer.print_value('*', zigimg.FormatOptions{ width: ~usize(0) }, optional, ~usize(0)) or {
+	writer.print_value('*', zigimg.FormatOptions{ width: ~uint(0) }, optional, ~uint(0)) or {
 		panic(err)
 	}
 	assert writer.buffered().bytestr() == 'u8@1234|*i32@0'

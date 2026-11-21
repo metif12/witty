@@ -12,7 +12,7 @@ fn test_grapheme_cache_public_inline_storage_and_successful_index_state() {
 	empty := cache.put([]u8{})
 	assert empty.len == 0 && empty.data == unsafe { &cache.buf[0] + 8192 }
 	assert cache.idx == 8192
-	cache.idx = ~usize(0)
+	cache.idx = ~uint(0)
 	wrapped_empty := cache.put([]u8{})
 	assert wrapped_empty.len == 0 && wrapped_empty.data == &cache.buf[0]
 	assert cache.idx == 0
@@ -46,7 +46,7 @@ fn test_grapheme_cache_value_copy_has_independent_inline_bytes() {
 	cache.buf[0] = 99
 	assert copied.buf[0] == 42
 	assert cache.buf[1] == 17 && copied.buf[1] == `x`
-	assert sizeof(GraphemeCache) == 8192 + sizeof(usize)
+	assert sizeof(GraphemeCache) == 8192 + sizeof(uint)
 }
 
 fn test_grapheme_cache_disjoint_adjacent_views_copy_without_alias_trap() {

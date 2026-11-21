@@ -18,11 +18,11 @@ fn C.CGColorEqualToColor(first voidptr, second voidptr) bool
 fn C.object_setClass(object ObjId, cls ObjId) ObjId
 
 __global g_tahoe_test_right_clicks = 0
-__global g_tahoe_test_tab_userdata = usize(0)
+__global g_tahoe_test_tab_userdata = uint(0)
 
 fn tahoe_test_new_tab(userdata voidptr, action string) bool {
 	assert action == 'new_tab'
-	g_tahoe_test_tab_userdata = usize(userdata)
+	g_tahoe_test_tab_userdata = uint(userdata)
 	return true
 }
 
@@ -301,8 +301,8 @@ fn test_native_new_tab_button_uses_remembered_focused_surface_core_binding() {
 	window := msg_id(view, 'window')
 	mut host := create_split_host(view)
 	other := create_split_surface_view(host)
-	mut first := new_action_surface(view, voidptr(usize(1)), ActionCallbacks{binding: tahoe_test_new_tab})
-	mut second := new_action_surface(other, voidptr(usize(2)), ActionCallbacks{binding: tahoe_test_new_tab})
+	mut first := new_action_surface(view, voidptr(uint(1)), ActionCallbacks{binding: tahoe_test_new_tab})
+	mut second := new_action_surface(other, voidptr(uint(2)), ActionCallbacks{binding: tahoe_test_new_tab})
 	host.replace_tree(host.tree.inserting(other, view, .right) or { panic(err) })
 	defer {
 		first.deinit(); second.deinit()

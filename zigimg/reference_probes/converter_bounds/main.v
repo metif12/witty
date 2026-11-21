@@ -51,7 +51,7 @@ fn main() {
 		}
 	} else if name == 'unaligned_float' {
 		mut bytes := []u8{len: 17}
-		assert usize(bytes.data) % 4 == 0
+		assert uint(bytes.data) % 4 == 0
 		source = zigimg.PixelStorage.init_raw_pixels(unsafe { bytes[1..] }, .float32) or {
 			panic(err)
 		}

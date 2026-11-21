@@ -111,7 +111,7 @@ fn test_overlay_rejects_dimensions_outside_source_raster_range() {
 fn test_overlay_grid_rectangle_rejects_coordinate_overflow() {
 	mut overlay := overlay_for_grid(1, 1, 1, 1)
 	overlay.cell_size.width = 2
-	overlay.highlight_grid_rect(usize(2147483647), 0, 1, 1, .hyperlink) or {
+	overlay.highlight_grid_rect(uint(2147483647), 0, 1, 1, .hyperlink) or {
 		assert err.msg() == 'overlay coordinate overflow'
 		assert overlay.pixels == []u8{len: 4}
 		return

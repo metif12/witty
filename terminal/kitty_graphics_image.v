@@ -135,11 +135,11 @@ fn C.close(fd int) int
 
 fn C.fstat(fd int, buf &C.stat) int
 
-fn C.mmap(addr voidptr, length usize, prot int, flags int, fd int, offset i64) voidptr
+fn C.mmap(addr voidptr, length uint, prot int, flags int, fd int, offset i64) voidptr
 
-fn C.munmap(addr voidptr, length usize) int
+fn C.munmap(addr voidptr, length uint) int
 
-fn C.memcpy(dest voidptr, src voidptr, n usize) voidptr
+fn C.memcpy(dest voidptr, src voidptr, n uint) voidptr
 
 // mmap protection / flag constants from <sys/mman.h> and <fcntl.h>.
 // These are C macros; we reference them directly (C.PROT_READ etc.).
@@ -332,7 +332,7 @@ fn (mut self LoadingImage) read_shared_memory(t Transmission, path string) ! {
 		if st.st_size <= 0 {
 			return error('invalid data: shared memory empty')
 		}
-		stat_size := usize(st.st_size)
+		stat_size := uint(st.st_size)
 
 		expected_size := match self.image.format {
 			// Png we decode the full data size because later decoding will
@@ -342,8 +342,8 @@ fn (mut self LoadingImage) read_shared_memory(t Transmission, path string) ! {
 			}
 			// For these formats we have a size we must have.
 			.gray, .gray_alpha, .rgb, .rgba {
-				bpp := usize(self.image.format.bpp())
-				usize(self.image.width) * usize(self.image.height) * bpp
+				bpp := uint(self.image.format.bpp())
+				uint(self.image.width) * uint(self.image.height) * bpp
 			}
 		}
 
@@ -364,9 +364,9 @@ fn (mut self LoadingImage) read_shared_memory(t Transmission, path string) ! {
 
 		// Our end size always uses the expected size so we cut off the
 		// padding for mmap alignment.
-		start := usize(t.offset)
+		start := uint(t.offset)
 		end := if t.size > 0 {
-			e := usize(t.offset) + usize(t.size)
+			e := uint(t.offset) + uint(t.size)
 			if e < expected_size {
 				e
 			} else {
@@ -385,7 +385,7 @@ fn (mut self LoadingImage) read_shared_memory(t Transmission, path string) ! {
 		if n > 0 {
 			mut buf := []u8{len: n}
 			unsafe {
-				C.memcpy(buf.data, voidptr(usize(map_ptr) + start), usize(n))
+				C.memcpy(buf.data, voidptr(uint(map_ptr) + start), uint(n))
 			}
 			self.data << buf
 		}
@@ -428,7 +428,7 @@ fn (mut self LoadingImage) read_file(medium TransmissionMedium, t Transmission, 
 	// Mirror the source file.reader buffer and appendRemaining(.limited(size)).
 	// Reaching the limit is StreamTooLong even when it coincides with EOF.
 	size := if t.size > 0 {
-		if usize(t.size) < usize(max_image_size) { int(t.size) } else { max_image_size }
+		if uint(t.size) < uint(max_image_size) { int(t.size) } else { max_image_size }
 	} else {
 		max_image_size
 	}
@@ -532,7 +532,7 @@ fn (mut self LoadingImage) decompress() ! {
 }
 
 fn (mut self LoadingImage) decompress_zlib() ! {
-	decompressed := zigimg.decode_zlib_bounded(self.data, usize(max_image_size)) or {
+	decompressed := zigimg.decode_zlib_bounded(self.data, uint(max_image_size)) or {
 		log.warn('failed to read decompressed data: ${err}')
 		return error('DecompressionFailed')
 	}

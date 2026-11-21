@@ -7,12 +7,12 @@ import zigimg
 #flag -I @DIR
 #include "fixture_shims.h"
 
-fn C.witty_image_open_setup(&char, int, &u8, usize) int
+fn C.witty_image_open_setup(&char, int, &u8, uint) int
 fn C.witty_image_open_cleanup(&char) int
 fn C.witty_image_open_mask(int) int
 fn C.witty_image_open_mode(&char) int
 fn C.witty_image_open_kind(&char) int
-fn C.witty_image_open_bytes(&char, &u8, usize) isize
+fn C.witty_image_open_bytes(&char, &u8, uint) int
 fn C.witty_image_open_find(&char) int
 fn C.witty_image_open_flag(int, int) int
 fn C.witty_image_open_exec(&char, int) int
@@ -135,7 +135,7 @@ fn source(profile int) !zigimg.ImageUnmanaged {
 
 fn disk(path string) string {
 	mut bytes := []u8{len: 4096}
-	n := C.witty_image_open_bytes(path.str, bytes.data, usize(bytes.len))
+	n := C.witty_image_open_bytes(path.str, bytes.data, uint(bytes.len))
 	return if n < 0 { '-' } else { bytes[..int(n)].hex() }
 }
 
@@ -175,7 +175,7 @@ fn record(line string, ready string) string {
 	mut buffer := []u8{len: f[3].int(), init: 165}
 	observed_buffer = unsafe { buffer }
 	seed := if op == 0 { []u8{len: 256, init: 165} } else { '#define w 8\n'.bytes() }
-	if C.witty_image_open_setup(observed_root.str, f[5].int(), seed.data, usize(seed.len)) != 0 {
+	if C.witty_image_open_setup(observed_root.str, f[5].int(), seed.data, uint(seed.len)) != 0 {
 		panic('open fixture setup failed')
 	}
 	observed_target = observed_root + '/target'

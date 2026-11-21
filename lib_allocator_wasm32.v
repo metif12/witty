@@ -14,22 +14,22 @@ fn ghostty_wasm_free_opaque_export(raw voidptr) {
 }
 
 @[export: 'ghostty_wasm_alloc_u8_array']
-fn ghostty_wasm_alloc_u8_array_export(len usize) voidptr {
+fn ghostty_wasm_alloc_u8_array_export(len uint) voidptr {
 	return voidptr(lib_allocator.alloc_u8_array(len))
 }
 
 @[export: 'ghostty_wasm_free_u8_array']
-fn ghostty_wasm_free_u8_array_export(raw voidptr, len usize) {
+fn ghostty_wasm_free_u8_array_export(raw voidptr, len uint) {
 	lib_allocator.free_u8_array(unsafe { &u8(raw) }, len)
 }
 
 @[export: 'ghostty_wasm_alloc_u16_array']
-fn ghostty_wasm_alloc_u16_array_export(len usize) voidptr {
+fn ghostty_wasm_alloc_u16_array_export(len uint) voidptr {
 	return voidptr(lib_allocator.alloc_u16_array(len))
 }
 
 @[export: 'ghostty_wasm_free_u16_array']
-fn ghostty_wasm_free_u16_array_export(raw voidptr, len usize) {
+fn ghostty_wasm_free_u16_array_export(raw voidptr, len uint) {
 	lib_allocator.free_u16_array(unsafe { &u16(raw) }, len)
 }
 
@@ -50,7 +50,7 @@ fn ghostty_wasm_alloc_usize_export() voidptr {
 
 @[export: 'ghostty_wasm_free_usize']
 fn ghostty_wasm_free_usize_export(raw voidptr) {
-	lib_allocator.free_usize(unsafe { &usize(raw) })
+	lib_allocator.free_usize(unsafe { &uint(raw) })
 }
 
 @[export: 'ghostty_wasm_alloc_sgr_attribute']

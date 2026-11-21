@@ -8,12 +8,12 @@ import zigimg
 
 fn C.witty_reader_delimiter_setup(&char) int
 fn C.witty_reader_delimiter_replace(int) int
-fn C.witty_reader_delimiter_seed(usize, usize) int
+fn C.witty_reader_delimiter_seed(uint, uint) int
 fn C.witty_reader_delimiter_shutdown() int
 fn C.witty_reader_delimiter_cleanup() int
 fn C.witty_reader_delimiter_valid() int
 fn C.witty_reader_delimiter_refs() int
-fn C.witty_reader_delimiter_drain(&u8, usize) isize
+fn C.witty_reader_delimiter_drain(&u8, uint) int
 
 __global (
 	observed_path   string
@@ -67,16 +67,16 @@ fn record(line string, path string) string {
 	observed_output = unsafe { output }
 	reader.seek_to(f[2].u64()) or { panic(err) }
 	reader.peek(buffer.len) or { panic(err) }
-	reader.toss(usize(f[3].int()))
+	reader.toss(uint(f[3].int()))
 	mut out := snapshot(mut reader, buffer, output) + '~'
 	if C.witty_reader_delimiter_replace(0) != 0 { panic('Delimiter replacement failed') }
-	if C.witty_reader_delimiter_seed(0, usize(f[5].int())) != 0 { panic('Delimiter seed failed') }
+	if C.witty_reader_delimiter_seed(0, uint(f[5].int())) != 0 { panic('Delimiter seed failed') }
 	if f[6] == '1' && C.witty_reader_delimiter_shutdown() != 0 { panic('Delimiter shutdown failed') }
 	out += 'rebound|' + snapshot(mut reader, buffer, output) + '~'
 	if f[9] == '1' {
 		observed_status = 'ok'
 		reader.peek(buffer.len) or { observed_status = err.msg() }
-		if f[10] == '1' { reader.toss(usize(reader.buffered_len())) }
+		if f[10] == '1' { reader.toss(uint(reader.buffered_len())) }
 		out += 'primed-${observed_status}|' + snapshot(mut reader, buffer, output) + '~'
 	} else {
 		out += 'primed-skip|' + snapshot(mut reader, buffer, output) + '~'
@@ -89,7 +89,7 @@ fn record(line string, path string) string {
 	observed_output = unsafe { output }
 	out += '${observed_status}|' + snapshot(mut reader, buffer, output) + '~'
 	if f[6] == '0' && f[7].int() > 0 {
-		if C.witty_reader_delimiter_seed(usize(f[5].int()), usize(f[7].int())) != 0 {
+		if C.witty_reader_delimiter_seed(uint(f[5].int()), uint(f[7].int())) != 0 {
 			panic('Delimiter reseed failed')
 		}
 	}
@@ -97,10 +97,10 @@ fn record(line string, path string) string {
 	observed_output = unsafe { output }
 	out += '${observed_status}|' + snapshot(mut reader, buffer, output) + '~'
 	mut wire := []u8{}
-	mut drain := isize(-3)
+	mut drain := int(-3)
 	for {
 		mut bytes := []u8{len: 4096}
-		drain = C.witty_reader_delimiter_drain(bytes.data, usize(bytes.len))
+		drain = C.witty_reader_delimiter_drain(bytes.data, uint(bytes.len))
 		if drain <= 0 { break
 		 }
 		wire << bytes[..int(drain)]

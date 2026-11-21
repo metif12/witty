@@ -140,7 +140,7 @@ fn close_confirmation_dialog_class_init(klass voidptr, class_data voidptr) {
 	dialog_get_type()
 
 	// Template.
-	bytes := C.g_bytes_new_static(close_confirmation_dialog_ui.str, usize(close_confirmation_dialog_ui.len))
+	bytes := C.g_bytes_new_static(close_confirmation_dialog_ui.str, uint(close_confirmation_dialog_ui.len))
 	C.gtk_widget_class_set_template(klass, bytes)
 	C.g_bytes_unref(bytes)
 

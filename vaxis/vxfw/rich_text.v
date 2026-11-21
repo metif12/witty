@@ -178,12 +178,12 @@ pub mut:
 	ctx        DrawContext  @[required]
 	text       []vaxis.Cell @[required]
 	line       []vaxis.Cell @[required]
-	index      usize
-	hard_index usize
+	index      uint
+	hard_index uint
 }
 
-fn rich_cells_slice(cells []vaxis.Cell, start usize, end usize) []vaxis.Cell {
-	if start > end || end > usize(cells.len) { panic('index out of bounds') }
+fn rich_cells_slice(cells []vaxis.Cell, start uint, end uint) []vaxis.Cell {
+	if start > end || end > uint(cells.len) { panic('index out of bounds') }
 	return cells[int(start)..int(end)]
 }
 
@@ -231,15 +231,15 @@ pub fn (mut iter RichSoftwrapIterator) reset() {
 }
 
 pub fn (mut iter RichSoftwrapIterator) next_hard_break() ?[]vaxis.Cell {
-	if iter.hard_index >= usize(iter.text.len) { return none }
+	if iter.hard_index >= uint(iter.text.len) { return none }
 	start := iter.hard_index
 	mut saw_cr := false
-	for iter.hard_index < usize(iter.text.len) {
+	for iter.hard_index < uint(iter.text.len) {
 		cell := iter.text[int(iter.hard_index)]
 		if cell.char_.grapheme == '\r' { saw_cr = true }
 		if cell.char_.grapheme == '\n' {
 			iter.hard_index = vxfw_usize_add(iter.hard_index, 1)
-			end := vxfw_usize_sub(iter.hard_index, if saw_cr { usize(2) } else { usize(1) })
+			end := vxfw_usize_sub(iter.hard_index, if saw_cr { uint(2) } else { uint(1) })
 			if start > end { panic('index out of bounds') }
 			return rich_cells_slice(iter.text, start, end)
 		}
@@ -251,7 +251,7 @@ pub fn (mut iter RichSoftwrapIterator) next_hard_break() ?[]vaxis.Cell {
 		}
 		iter.hard_index = vxfw_usize_add(iter.hard_index, 1)
 	}
-	return rich_cells_slice(iter.text, start, usize(iter.text.len))
+	return rich_cells_slice(iter.text, start, uint(iter.text.len))
 }
 
 fn rich_whitespace(cell vaxis.Cell) bool {
@@ -259,7 +259,7 @@ fn rich_whitespace(cell vaxis.Cell) bool {
 }
 
 pub fn (mut iter RichSoftwrapIterator) next() ?RichWrappedLine {
-	if iter.index == usize(iter.line.len) {
+	if iter.index == uint(iter.line.len) {
 		iter.line = iter.next_hard_break() or { return none }
 		mut end := iter.line.len
 		for end > 0 && rich_whitespace(iter.line[end - 1]) {
@@ -270,7 +270,7 @@ pub fn (mut iter RichSoftwrapIterator) next() ?RichWrappedLine {
 	}
 	max_width := iter.ctx.max.width or {
 		width := rich_line_width(iter.line, false)
-		iter.index = usize(iter.line.len)
+		iter.index = uint(iter.line.len)
 		return RichWrappedLine{
 			width: width
 			cells: iter.line
@@ -279,22 +279,22 @@ pub fn (mut iter RichSoftwrapIterator) next() ?RichWrappedLine {
 
 	start := iter.index
 	mut width := u16(0)
-	for iter.index < usize(iter.line.len) {
+	for iter.index < uint(iter.line.len) {
 		idx := iter.next_wrap()
 		word := rich_cells_slice(iter.line, iter.index, idx)
-		mut next_width := usize(0)
+		mut next_width := uint(0)
 		for cell in word {
-			next_width = vxfw_usize_add(next_width, usize(cell.char_.width))
+			next_width = vxfw_usize_add(next_width, uint(cell.char_.width))
 		}
-		if vxfw_usize_add(usize(width), next_width) > usize(max_width) {
+		if vxfw_usize_add(uint(width), next_width) > uint(max_width) {
 			mut trim := 0
 			for trim < word.len && rich_whitespace(word[trim]) {
 				trim++
 			}
-			trimmed_width := if next_width > usize(trim) {
-				next_width - usize(trim)
+			trimmed_width := if next_width > uint(trim) {
+				next_width - uint(trim)
 			} else {
-				usize(0)
+				uint(0)
 			}
 			if trimmed_width > max_width {
 				for cell in word {
@@ -307,7 +307,7 @@ pub fn (mut iter RichSoftwrapIterator) next() ?RichWrappedLine {
 				}
 			}
 			end := iter.index
-			iter.index = vxfw_usize_add(iter.index, usize(trim))
+			iter.index = vxfw_usize_add(iter.index, uint(trim))
 			return RichWrappedLine{
 				width: width
 				cells: rich_cells_slice(iter.line, start, end)
@@ -318,16 +318,16 @@ pub fn (mut iter RichSoftwrapIterator) next() ?RichWrappedLine {
 	}
 	return RichWrappedLine{
 		width: width
-		cells: rich_cells_slice(iter.line, start, usize(iter.line.len))
+		cells: rich_cells_slice(iter.line, start, uint(iter.line.len))
 	}
 }
 
-fn (iter RichSoftwrapIterator) next_wrap() usize {
+fn (iter RichSoftwrapIterator) next_wrap() uint {
 	mut i := iter.index
-	for i < usize(iter.line.len) && rich_whitespace(iter.line[int(i)]) {
+	for i < uint(iter.line.len) && rich_whitespace(iter.line[int(i)]) {
 		i = vxfw_usize_add(i, 1)
 	}
-	for i < usize(iter.line.len) && !rich_whitespace(iter.line[int(i)]) {
+	for i < uint(iter.line.len) && !rich_whitespace(iter.line[int(i)]) {
 		i = vxfw_usize_add(i, 1)
 	}
 	return i

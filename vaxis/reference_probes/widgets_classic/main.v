@@ -9,11 +9,11 @@ import vaxis
 const codes = [vaxis.right, vaxis.left, vaxis.up, vaxis.down, vaxis.page_up, vaxis.page_down, vaxis.end,
 	vaxis.home, u32(`a`)]
 
-fn uint(parts []string, index int) usize {
-	return usize(strconv.parse_uint(parts[index], 10, 64) or { panic(err) })
+fn uint(parts []string, index int) uint {
+	return uint(strconv.parse_uint(parts[index], 10, 64) or { panic(err) })
 }
 
-fn style(index usize) vaxis.Style {
+fn style(index uint) vaxis.Style {
 	return match index {
 		1 {
 			vaxis.Style{
@@ -121,7 +121,7 @@ fn trap(mode string) {
 				cols:     256
 				rows:     1
 			}
-			if mode == 'trap_style_index' { buffer.style_map[u64(0)] = ~usize(0) }
+			if mode == 'trap_style_index' { buffer.style_map[u64(0)] = ~uint(0) }
 			mut text := vaxis.TextView{
 				scroll_view: vaxis.ScrollView{
 					vertical_scrollbar: none
@@ -190,7 +190,7 @@ fn trap(mode string) {
 			}.draw(vaxis.Window{ ...win, width: 0 }, 0)
 		}
 		'trap_scroll' {
-			vaxis.LineNumbers{}.draw(win, ~usize(0))
+			vaxis.LineNumbers{}.draw(win, ~uint(0))
 		}
 		'trap_digit' {
 			println(vaxis.LineNumbers.extract_digit(0, 20))
@@ -235,7 +235,7 @@ fn main() {
 							grapheme: clusters[index % 5]
 							width:    u8(index % 3)
 						}
-						style:    style(usize(index % 4))
+						style:    style(uint(index % 4))
 						link:     vaxis.CellHyperlink{
 							uri:    'uri'
 							params: 'id=x'
@@ -337,7 +337,7 @@ fn main() {
 			}
 			'T' {
 				mut buffer := vaxis.TextViewBuffer{}
-				mut x := usize(0)
+				mut x := uint(0)
 				for raw in parts[1].split(',') {
 					cluster := clusters[raw.int()]
 					buffer.grapheme << vaxis.TextViewGrapheme{
@@ -350,7 +350,7 @@ fn main() {
 						x = 0
 						buffer.rows++
 					} else {
-						x += usize(vaxis.gwidth(cluster, .unicode))
+						x += uint(vaxis.gwidth(cluster, .unicode))
 					}
 				}
 				adapter := buffer.writer()
@@ -359,9 +359,9 @@ fn main() {
 				if x > buffer.cols { buffer.cols = x }
 				for i in 0 .. 3 {
 					buffer.update_style(vaxis.TextViewBufferStyle{
-						begin: usize(i)
-						end:   usize(buffer.content.len + i)
-						style: style(usize(i % 2 + 1))
+						begin: uint(i)
+						end:   uint(buffer.content.len + i)
+						style: style(uint(i % 2 + 1))
 					}) or { panic(err) }
 				}
 				output.write_string('${buffer.style_list.len},${buffer.style_map.len};${u64(buffer.rows).str()},${u64(buffer.cols).str()},${u64(buffer.last_cols).str()};')

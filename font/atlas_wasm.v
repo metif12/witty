@@ -34,7 +34,7 @@ pub fn atlas_reserve(mut self Atlas, width u32, height u32) ?&AtlasRegion {
 	return result
 }
 
-pub fn atlas_set(mut self Atlas, reg &AtlasRegion, data &u8, len usize) {
+pub fn atlas_set(mut self Atlas, reg &AtlasRegion, data &u8, len uint) {
 	bytes := unsafe { data.vbytes(int(len)) }
 	self.set(*reg, bytes)
 }

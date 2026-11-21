@@ -27,12 +27,12 @@ pub enum CgroupLimitKind as u8 {
 
 pub struct CgroupLimitMemoryHigh {
 pub:
-	value usize
+	value uint
 }
 
 pub struct CgroupLimitPidsMax {
 pub:
-	value usize
+	value uint
 }
 
 // CgroupLimit retains only the payload for the selected cgroup control file,

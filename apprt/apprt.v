@@ -510,7 +510,7 @@ fn (mut c CoreApp) perform_all_action(mut app App, action input.Action) ! {
 		}
 		mut surface := unsafe { &Surface(surface_ptr) }
 		surface.core_surface.perform_binding_action(action) or {
-			log.warn('error performing binding action on surface ptr=${usize(surface_ptr):X} err=${err}')
+			log.warn('error performing binding action on surface ptr=${uint(surface_ptr):X} err=${err}')
 		}
 	}
 }

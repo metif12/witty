@@ -108,12 +108,12 @@ pub fn posix_epoll_ctl(epfd int, op u32, fd int, event &C.epoll_event) ! {
 // Waits for an I/O event on an epoll file descriptor.
 // Returns the number of file descriptors ready for the requested I/O,
 // or zero if no file descriptor became ready during the requested timeout milliseconds.
-pub fn posix_epoll_wait(epfd int, events &C.epoll_event, events_len usize, timeout i32) usize {
+pub fn posix_epoll_wait(epfd int, events &C.epoll_event, events_len uint, timeout i32) uint {
 	for {
 		// TODO get rid of the @intCast
 		rc := C.epoll_wait(epfd, events, int(events_len), timeout)
 		match posix_errno(rc) {
-			0 { return usize(rc) }
+			0 { return uint(rc) }
 			C.EINTR { continue }
 			C.EBADF { posix_unreachable() }
 			C.EFAULT { posix_unreachable() }
@@ -142,24 +142,24 @@ pub fn posix_eventfd(initval u32, flags u32) !int {
 // raw std.os.linux system call: the kernel reports failure as -errno. Zig's
 // libc branch of posix.errno only recognizes a `-1` result, which such a
 // usize result never compares equal to, so the raw branch is used here.
-fn linux_errno(rc usize) int {
-	signed := isize(rc)
+fn linux_errno(rc uint) int {
+	signed := int(rc)
 	return if signed > -4096 && signed < 0 { int(-signed) } else { 0 }
 }
 
 // std.os.linux issues system calls directly and returns the kernel result.
 // glibc's syscall(2) reports failure as -1 with errno set instead, so the
 // kernel's -errno result is restored from errno.
-fn linux_syscall_result(rc i64) usize {
+fn linux_syscall_result(rc i64) uint {
 	if rc == -1 {
-		return usize(-i64(C.errno))
+		return uint(-i64(C.errno))
 	}
-	return usize(rc)
+	return uint(rc)
 }
 
 // Translation of std.os.linux.pidfd_open.
-pub fn linux_pidfd_open(pid int, flags u32) usize {
-	rc := unsafe { C.syscall(C.SYS_pidfd_open, voidptr(usize(isize(pid))), voidptr(usize(flags))) }
+pub fn linux_pidfd_open(pid int, flags u32) uint {
+	rc := unsafe { C.syscall(C.SYS_pidfd_open, voidptr(uint(int(pid))), voidptr(uint(flags))) }
 	return linux_syscall_result(rc)
 }
 
@@ -180,18 +180,18 @@ pub mut:
 }
 
 // Translation of std.os.linux.waitid.
-pub fn linux_waitid(id_type LinuxP, id int, infop &C.siginfo_t, flags u32) usize {
+pub fn linux_waitid(id_type LinuxP, id int, infop &C.siginfo_t, flags u32) uint {
 	rc := unsafe {
-		C.syscall(C.SYS_waitid, voidptr(usize(u32(id_type))), voidptr(usize(isize(id))), voidptr(infop),
-			voidptr(usize(flags)), nil)
+		C.syscall(C.SYS_waitid, voidptr(uint(u32(id_type))), voidptr(uint(int(id))), voidptr(infop),
+			voidptr(uint(flags)), nil)
 	}
 	return linux_syscall_result(rc)
 }
 
 // Translation of std.os.linux.recvmsg (the non-x86 branch, which issues the
 // recvmsg system call directly).
-pub fn linux_recvmsg(fd int, msg &C.msghdr, flags u32) usize {
-	rc := unsafe { C.syscall(C.SYS_recvmsg, voidptr(usize(isize(fd))), voidptr(msg), voidptr(usize(flags))) }
+pub fn linux_recvmsg(fd int, msg &C.msghdr, flags u32) uint {
+	rc := unsafe { C.syscall(C.SYS_recvmsg, voidptr(uint(int(fd))), voidptr(msg), voidptr(uint(flags))) }
 	return linux_syscall_result(rc)
 }
 
@@ -271,26 +271,26 @@ pub fn (mut f LinuxTfdTimer) set_cancel_on_set(v bool) {
 pub struct C.itimerspec {}
 
 // Translation of std.os.linux.timerfd_create.
-pub fn linux_timerfd_create(clockid LinuxTimerfdClockid, flags LinuxTfd) usize {
+pub fn linux_timerfd_create(clockid LinuxTimerfdClockid, flags LinuxTfd) uint {
 	rc := unsafe {
-		C.syscall(C.SYS_timerfd_create, voidptr(usize(u32(clockid))), voidptr(usize(flags.value)))
+		C.syscall(C.SYS_timerfd_create, voidptr(uint(u32(clockid))), voidptr(uint(flags.value)))
 	}
 	return linux_syscall_result(rc)
 }
 
 // Translation of std.os.linux.timerfd_gettime. Witty's Linux targets all have
 // the timerfd_gettime system call (not only timerfd_gettime64).
-pub fn linux_timerfd_gettime(fd i32, curr_value &C.itimerspec) usize {
-	rc := unsafe { C.syscall(C.SYS_timerfd_gettime, voidptr(usize(isize(fd))), voidptr(curr_value)) }
+pub fn linux_timerfd_gettime(fd i32, curr_value &C.itimerspec) uint {
+	rc := unsafe { C.syscall(C.SYS_timerfd_gettime, voidptr(uint(int(fd))), voidptr(curr_value)) }
 	return linux_syscall_result(rc)
 }
 
 // Translation of std.os.linux.timerfd_settime. Witty's Linux targets all have
 // the timerfd_settime system call (not only timerfd_settime64). A null
 // old_value is passed as nil.
-pub fn linux_timerfd_settime(fd i32, flags LinuxTfdTimer, new_value &C.itimerspec, old_value &C.itimerspec) usize {
+pub fn linux_timerfd_settime(fd i32, flags LinuxTfdTimer, new_value &C.itimerspec, old_value &C.itimerspec) uint {
 	rc := unsafe {
-		C.syscall(C.SYS_timerfd_settime, voidptr(usize(isize(fd))), voidptr(usize(flags.value)),
+		C.syscall(C.SYS_timerfd_settime, voidptr(uint(int(fd))), voidptr(uint(flags.value)),
 			voidptr(new_value), voidptr(old_value))
 	}
 	return linux_syscall_result(rc)
@@ -303,8 +303,8 @@ pub fn linux_timerfd_settime(fd i32, flags LinuxTfdTimer, new_value &C.itimerspe
 
 // Translation of std.posix.mmap. libc is linked, so the libc branch
 // (MAP_FAILED and errno) is used. The returned slice aliases the mapping.
-pub fn posix_mmap(ptr voidptr, length usize, prot u32, flags u32, fd int, offset u64) ![]u8 {
-	rc := unsafe { C.mmap(ptr, length, int(prot), int(flags), fd, isize(offset)) }
+pub fn posix_mmap(ptr voidptr, length uint, prot u32, flags u32, fd int, offset u64) ![]u8 {
+	rc := unsafe { C.mmap(ptr, length, int(prot), int(flags), fd, int(offset)) }
 	if rc != voidptr(C.MAP_FAILED) {
 		return unsafe { (&u8(rc)).vbytes(int(length)) }
 	}
@@ -335,7 +335,7 @@ pub fn posix_mmap(ptr voidptr, length usize, prot u32, flags u32, fd int, offset
 // * It violates the Zig principle that resource deallocation must succeed.
 // * The Windows function, VirtualFree, has this restriction.
 pub fn posix_munmap(memory []u8) {
-	match posix_errno(unsafe { C.munmap(memory.data, usize(memory.len)) }) {
+	match posix_errno(unsafe { C.munmap(memory.data, uint(memory.len)) }) {
 		0 { return }
 		C.EINVAL { posix_unreachable() } // Invalid parameters.
 		C.ENOMEM { posix_unreachable() } // Attempted to unmap a region in the middle of an existing mapping.

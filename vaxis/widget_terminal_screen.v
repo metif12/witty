@@ -70,7 +70,7 @@ pub mut:
 	right  u16 @[required]
 }
 
-pub fn (region TerminalScrollingRegion) contains(col usize, row usize) bool {
+pub fn (region TerminalScrollingRegion) contains(col uint, row uint) bool {
 	return col >= region.left && col <= region.right && row >= region.top && row <= region.bottom
 }
 
@@ -85,7 +85,7 @@ pub mut:
 }
 
 pub fn TerminalScreen.new(w u16, h u16) !TerminalScreen {
-	size := widget_checked_mul(usize(w), usize(h))
+	size := widget_checked_mul(uint(w), uint(h))
 	if size > 0x7fffffff { panic('terminal screen exceeds V array capacity') }
 	mut cells := []TerminalScreenCell{len: int(size)}
 	if h == 0 || w == 0 { panic('integer overflow') }
@@ -129,10 +129,10 @@ pub fn (mut screen TerminalScreen) copy_to(mut dst TerminalScreen) ! {
 	}
 }
 
-pub fn (screen &TerminalScreen) read_cell(col usize, row usize) ?Cell {
-	if usize(screen.width) < col || usize(screen.height) < row { return none }
-	i := widget_checked_add(widget_checked_mul(row, usize(screen.width)), col)
-	if i >= usize(screen.buf.len) { panic('reached unreachable code') }
+pub fn (screen &TerminalScreen) read_cell(col uint, row uint) ?Cell {
+	if uint(screen.width) < col || uint(screen.height) < row { return none }
+	i := widget_checked_add(widget_checked_mul(row, uint(screen.width)), col)
+	if i >= uint(screen.buf.len) { panic('reached unreachable code') }
 	value := screen.buf[int(i)]
 	return Cell{
 		char_: CellCharacter{
@@ -144,7 +144,7 @@ pub fn (screen &TerminalScreen) read_cell(col usize, row usize) ?Cell {
 }
 
 pub fn (screen TerminalScreen) within_scrolling_region() bool {
-	return screen.scrolling_region.contains(usize(screen.cursor.col), usize(screen.cursor.row))
+	return screen.scrolling_region.contains(uint(screen.cursor.col), uint(screen.cursor.row))
 }
 
 pub fn (mut screen TerminalScreen) print(grapheme string, width u8, wrap bool) ! {
@@ -212,15 +212,15 @@ pub fn (mut screen TerminalScreen) cursor_right(n u16) {
 	})
 }
 
-pub fn (mut screen TerminalScreen) cursor_down(n usize) {
+pub fn (mut screen TerminalScreen) cursor_down(n uint) {
 	screen.cursor.pending_wrap = false
-	delta := widget_checked_add(usize(screen.cursor.row), n)
+	delta := widget_checked_add(uint(screen.cursor.row), n)
 	maximum := if screen.within_scrolling_region() {
 		screen.scrolling_region.bottom
 	} else {
 		if screen.height == 0 { u16(0) } else { screen.height - 1 }
 	}
-	screen.cursor.row = u16(math.min(usize(maximum), delta))
+	screen.cursor.row = u16(math.min(uint(maximum), delta))
 }
 
 pub fn (mut screen TerminalScreen) erase_right() {
@@ -257,18 +257,18 @@ pub fn (mut screen TerminalScreen) erase_line() {
 	}
 }
 
-pub fn (mut screen TerminalScreen) delete_line(n usize) ! {
+pub fn (mut screen TerminalScreen) delete_line(n uint) ! {
 	if n == 0 || !screen.within_scrolling_region() { return }
 	screen.cursor.pending_wrap = false
-	count := math.min(usize(terminal_screen_add16(terminal_screen_sub16(screen.scrolling_region.bottom,
+	count := math.min(uint(terminal_screen_add16(terminal_screen_sub16(screen.scrolling_region.bottom,
 		screen.cursor.row), 1)), n)
-	stride := widget_checked_mul(usize(screen.width), count)
-	mut row := usize(screen.scrolling_region.top)
-	for row <= usize(screen.scrolling_region.bottom) {
-		mut col := usize(screen.scrolling_region.left)
-		for col <= usize(screen.scrolling_region.right) {
-			i := widget_checked_add(widget_checked_mul(row, usize(screen.width)), col)
-			if widget_checked_add(row, count) > usize(screen.scrolling_region.bottom) {
+	stride := widget_checked_mul(uint(screen.width), count)
+	mut row := uint(screen.scrolling_region.top)
+	for row <= uint(screen.scrolling_region.bottom) {
+		mut col := uint(screen.scrolling_region.left)
+		for col <= uint(screen.scrolling_region.right) {
+			i := widget_checked_add(widget_checked_mul(row, uint(screen.width)), col)
+			if widget_checked_add(row, count) > uint(screen.scrolling_region.bottom) {
 				screen.buf[int(i)].erase(screen.cursor.style.bg)
 			} else {
 				screen.buf[int(i)].copy_from(screen.buf[int(widget_checked_add(i, stride))])!
@@ -279,28 +279,28 @@ pub fn (mut screen TerminalScreen) delete_line(n usize) ! {
 	}
 }
 
-pub fn (mut screen TerminalScreen) insert_line(n usize) ! {
+pub fn (mut screen TerminalScreen) insert_line(n uint) ! {
 	if n == 0 { return }
 	screen.cursor.pending_wrap = false
 	if !screen.within_scrolling_region() { return }
-	count := math.min(usize(screen.scrolling_region.bottom) - usize(screen.cursor.row), n)
-	stride := widget_checked_mul(usize(screen.width), count)
-	mut row := usize(screen.scrolling_region.bottom)
-	for row >= widget_checked_add(usize(screen.scrolling_region.top), count) {
-		mut col := usize(screen.scrolling_region.left)
-		for col <= usize(screen.scrolling_region.right) {
-			i := widget_checked_add(widget_checked_mul(row, usize(screen.width)), col)
+	count := math.min(uint(screen.scrolling_region.bottom) - uint(screen.cursor.row), n)
+	stride := widget_checked_mul(uint(screen.width), count)
+	mut row := uint(screen.scrolling_region.bottom)
+	for row >= widget_checked_add(uint(screen.scrolling_region.top), count) {
+		mut col := uint(screen.scrolling_region.left)
+		for col <= uint(screen.scrolling_region.right) {
+			i := widget_checked_add(widget_checked_mul(row, uint(screen.width)), col)
 			if i < stride { panic('integer overflow') }
 			screen.buf[int(i)].copy_from(screen.buf[int(i - stride)])!
 			col = widget_checked_add(col, 1)
 		}
 		row = widget_saturating_sub(row, 1)
 	}
-	row = usize(screen.scrolling_region.top)
-	for row < widget_checked_add(usize(screen.scrolling_region.top), count) {
-		mut col := usize(screen.scrolling_region.left)
-		for col <= usize(screen.scrolling_region.right) {
-			i := widget_checked_add(widget_checked_mul(row, usize(screen.width)), col)
+	row = uint(screen.scrolling_region.top)
+	for row < widget_checked_add(uint(screen.scrolling_region.top), count) {
+		mut col := uint(screen.scrolling_region.left)
+		for col <= uint(screen.scrolling_region.right) {
+			i := widget_checked_add(widget_checked_mul(row, uint(screen.width)), col)
 			screen.buf[int(i)].erase(screen.cursor.style.bg)
 			col = widget_checked_add(col, 1)
 		}
@@ -321,8 +321,8 @@ pub fn (mut screen TerminalScreen) erase_below() {
 pub fn (mut screen TerminalScreen) erase_above() {
 	screen.erase_left()
 	limit := terminal_screen_mul16(screen.cursor.row, screen.width)
-	mut i := usize(0)
-	for i < usize(limit) {
+	mut i := uint(0)
+	for i < uint(limit) {
 		screen.buf[int(i)].erase(screen.cursor.style.bg)
 		i = widget_checked_add(i, 1)
 	}
@@ -334,13 +334,13 @@ pub fn (mut screen TerminalScreen) erase_all() {
 	}
 }
 
-pub fn (mut screen TerminalScreen) delete_characters(n usize) ! {
+pub fn (mut screen TerminalScreen) delete_characters(n uint) ! {
 	if !screen.within_scrolling_region() { return }
 	screen.cursor.pending_wrap = false
 	mut col := screen.cursor.col
 	for col <= screen.scrolling_region.right {
-		next := widget_checked_add(usize(col), n)
-		if next <= usize(screen.scrolling_region.right) {
+		next := widget_checked_add(uint(col), n)
+		if next <= uint(screen.scrolling_region.right) {
 			screen.buf[int(col)].copy_from(screen.buf[int(next)])!
 		} else {
 			screen.buf[int(col)].erase(screen.cursor.style.bg)
@@ -359,7 +359,7 @@ pub fn (mut screen TerminalScreen) reverse_index() ! {
 	}
 }
 
-pub fn (mut screen TerminalScreen) scroll_down(n usize) ! {
+pub fn (mut screen TerminalScreen) scroll_down(n uint) ! {
 	row := screen.cursor.row
 	col := screen.cursor.col
 	wrap := screen.cursor.pending_wrap

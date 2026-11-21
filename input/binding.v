@@ -1581,7 +1581,7 @@ pub struct ActionScrollToSelection {}
 // Scroll to the given absolute row.
 pub struct ActionScrollToRow {
 pub:
-	value usize
+	value uint
 }
 
 // Scroll the screen up by one page.
@@ -1650,13 +1650,13 @@ pub struct ActionLastTab {}
 // Go to the tab with the specific index.
 pub struct ActionGotoTab {
 pub:
-	value usize
+	value uint
 }
 
 // Moves a tab by a relative offset.
 pub struct ActionMoveTab {
 pub:
-	value isize
+	value int
 }
 
 // Toggle the tab overview.
@@ -2570,7 +2570,7 @@ pub fn Action.parse(input_str string) !Action {
 		}
 		.scroll_to_row {
 			return ActionScrollToRow{
-				value: usize(strconv_parse_usize(param)!)
+				value: uint(strconv_parse_usize(param)!)
 			}
 		}
 		.scroll_page_fractional {
@@ -2610,12 +2610,12 @@ pub fn Action.parse(input_str string) !Action {
 		}
 		.goto_tab {
 			return ActionGotoTab{
-				value: usize(strconv_parse_usize(param)!)
+				value: uint(strconv_parse_usize(param)!)
 			}
 		}
 		.move_tab {
 			return ActionMoveTab{
-				value: isize(strconv_parse_isize(param)!)
+				value: int(strconv_parse_isize(param)!)
 			}
 		}
 		.new_split {

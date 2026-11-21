@@ -49,7 +49,7 @@ pub:
 // order of priority.
 pub struct LocationIterator {
 mut:
-	i usize
+	i uint
 }
 
 pub fn LocationIterator.new() LocationIterator {
@@ -58,7 +58,7 @@ pub fn LocationIterator.new() LocationIterator {
 
 pub fn (mut self LocationIterator) next() ?LocationEntry {
 	locations := [Location.user, Location.resources]
-	for self.i < usize(locations.len) {
+	for self.i < uint(locations.len) {
 		loc := locations[int(self.i)]
 		self.i += 1
 		d := loc.dir() or { continue }

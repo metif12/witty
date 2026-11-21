@@ -30,25 +30,25 @@ fn run() ! {
 	at_exit(observe)!
 	mut status := 'ok'
 	text := [u8(65)]!
-	options := zigimg.FormatOptions{ width: ~usize(0), alignment: .left, fill: `_` }
+	options := zigimg.FormatOptions{ width: ~uint(0), alignment: .left, fill: `_` }
 	match os.args[3] {
 		'0' {
-			writer.print_value('x', zigimg.FormatOptions{ width: usize(0) }, &text, 0) or { status = err.msg() }
+			writer.print_value('x', zigimg.FormatOptions{ width: uint(0) }, &text, 0) or { status = err.msg() }
 		}
 		'1' {
-			writer.print_value('x', zigimg.FormatOptions{ precision: usize(0) }, &text, 0) or { status = err.msg() }
+			writer.print_value('x', zigimg.FormatOptions{ precision: uint(0) }, &text, 0) or { status = err.msg() }
 		}
 		'2' {
-			writer.print_value('X', zigimg.FormatOptions{ width: usize(0), precision: usize(0) }, &text, 0) or { status = err.msg() }
+			writer.print_value('X', zigimg.FormatOptions{ width: uint(0), precision: uint(0) }, &text, 0) or { status = err.msg() }
 		}
 		'3' {
-			writer.print_value('b64', zigimg.FormatOptions{ width: usize(0) }, &text, 0) or { status = err.msg() }
+			writer.print_value('b64', zigimg.FormatOptions{ width: uint(0) }, &text, 0) or { status = err.msg() }
 		}
 		'4' {
-			writer.print_value('?x', zigimg.FormatOptions{ width: usize(0) }, ?&[1]u8(none), 0) or { status = err.msg() }
+			writer.print_value('?x', zigimg.FormatOptions{ width: uint(0) }, ?&[1]u8(none), 0) or { status = err.msg() }
 		}
 		'5' {
-			writer.print_value('?x', zigimg.FormatOptions{ width: usize(0) }, ?&[1]u8(none), 0) or { status = err.msg() }
+			writer.print_value('?x', zigimg.FormatOptions{ width: uint(0) }, ?&[1]u8(none), 0) or { status = err.msg() }
 		}
 		'6' { writer.print_value('any', options, &text, 1) or { status = err.msg() } }
 		'7' {

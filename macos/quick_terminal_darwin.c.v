@@ -10,7 +10,7 @@ pub mut:
 	config NativeQuickConfig
 	visible bool
 	previous_app voidptr
-	previous_space usize
+	previous_space uint
 	cache QuickScreenCache
 	pending_fullscreen bool
 mut:

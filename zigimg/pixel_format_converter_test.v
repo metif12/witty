@@ -18,7 +18,7 @@ mut:
 }
 
 fn converter_test_pixels(format PixelFormat, count int, seed int, ordinal int) !PixelStorage {
-	mut result := PixelStorage.init(format, usize(count))!
+	mut result := PixelStorage.init(format, uint(count))!
 	mut bytes := result.as_bytes()
 	for i in 0 .. bytes.len {
 		bytes[i] = u8(i * 73 + ordinal * 19 + seed * 29)
@@ -27,7 +27,7 @@ fn converter_test_pixels(format PixelFormat, count int, seed int, ordinal int) !
 	if format.is_indexed() {
 		capacity := int(u32(1) << format.info().bits_per_channel())
 		active := if capacity < 11 { capacity } else { 11 }
-		result.resize_palette(usize(active))
+		result.resize_palette(uint(active))
 		mut palette := result.get_palette() or { panic('missing palette') }
 		for i in 0 .. active {
 			palette[i] = Rgba32{
@@ -210,7 +210,7 @@ fn test_converter_native_precision() {
 		} else {
 			65536
 		}
-		source := PixelStorage.init(format, usize(count))!
+		source := PixelStorage.init(format, uint(count))!
 		mut bytes := source.as_bytes()
 		for i in 0 .. count {
 			if format in [.rgb332, .rgb555, .bgr555, .rgb565] {
@@ -306,7 +306,7 @@ fn test_converter_image_replacement_and_same_format() {
 
 fn test_converter_checks_dispatch_before_float_alignment() {
 	bytes := []u8{len: 32}
-	misaligned := if usize(bytes.data) % 4 == 0 { 1 } else { int(4 - usize(bytes.data) % 4) + 1 }
+	misaligned := if uint(bytes.data) % 4 == 0 { 1 } else { int(4 - uint(bytes.data) % 4) + 1 }
 	source := PixelStorage.init_raw_pixels(bytes[misaligned..misaligned + 16], .float32)!
 	for destination in [PixelFormat.float32, .grayscale16] {
 		PixelFormatConverter.convert(&source, destination) or {

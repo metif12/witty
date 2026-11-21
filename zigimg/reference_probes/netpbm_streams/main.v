@@ -51,7 +51,7 @@ fn observe() {
 }
 
 fn pixels(format p.PixelFormat, count int) p.PixelStorage {
-	mut result := p.PixelStorage.init(format, usize(count)) or { panic(err) }
+	mut result := p.PixelStorage.init(format, uint(count)) or { panic(err) }
 	mut bytes := result.as_bytes()
 	for i in 0 .. bytes.len {
 		bytes[i] = u8(i * 37 + 19)
@@ -121,9 +121,9 @@ fn codec_record[T](f []string, path string) string {
 		header: p.NetpbmHeader{
 			format:    unsafe { p.NetpbmFormat(f[5].int()) }
 			binary:    f[6] == '1'
-			width:     usize(f[7].u64())
-			height:    usize(f[8].u64())
-			max_value: usize(f[9].u64())
+			width:     uint(f[7].u64())
+			height:    uint(f[8].u64())
+			max_value: uint(f[9].u64())
 		}
 	}
 	observed_reader = unsafe { nil }
@@ -149,7 +149,7 @@ fn codec_record[T](f []string, path string) string {
 			observed_disk = path
 		}
 		observed_reader = &reader
-		if start > 0 { reader.discard_all(usize(start)) or { panic(err) } }
+		if start > 0 { reader.discard_all(uint(start)) or { panic(err) } }
 		for _ in 0 .. attempts {
 			if op == 2 {
 				mut status := 'ok'

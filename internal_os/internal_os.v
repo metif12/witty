@@ -38,9 +38,9 @@ fn C.execvp(file &char, argv &&char) int
 
 fn C._exit(status int)
 
-fn C.read(fd int, buf voidptr, count usize) isize
+fn C.read(fd int, buf voidptr, count uint) int
 
-fn C.write(fd int, buf voidptr, count usize) isize
+fn C.write(fd int, buf voidptr, count uint) int
 
 fn C.waitpid(pid int, status &int, options int) int
 
@@ -54,7 +54,7 @@ fn C.getppid() int
 
 fn C.getuid() int
 
-fn C.getpwuid_r(uid int, pwd &C.passwd, buf &char, buflen usize, result &&C.passwd) int
+fn C.getpwuid_r(uid int, pwd &C.passwd, buf &char, buflen uint, result &&C.passwd) int
 
 fn C.ReadFile(handle voidptr, buffer voidptr, bytes_to_read u32, bytes_read &u32, overlapped voidptr) bool
 
@@ -219,7 +219,7 @@ fn read_open_spawn_error(fd int) !int {
 		if count == 0 {
 			return 0
 		}
-		if count == isize(sizeof(i32)) {
+		if count == int(sizeof(i32)) {
 			return int(errno_code)
 		}
 		if count < 0 && C.errno == C.EINTR {
@@ -397,7 +397,7 @@ pub fn get_env_map() !map[string]string {
 pub struct ArgIterator {
 mut:
 	args  []string
-	index usize
+	index uint
 }
 
 // init_with_allocator is the V-owned counterpart of
@@ -419,7 +419,7 @@ pub fn (mut self ArgIterator) deinit() {
 }
 
 pub fn (mut self ArgIterator) next() ?string {
-	if self.index >= usize(self.args.len) {
+	if self.index >= uint(self.args.len) {
 		return none
 	}
 	result := self.args[self.index]
@@ -428,7 +428,7 @@ pub fn (mut self ArgIterator) next() ?string {
 }
 
 pub fn (mut self ArgIterator) skip() bool {
-	if self.index >= usize(self.args.len) {
+	if self.index >= uint(self.args.len) {
 		return false
 	}
 	self.index++
@@ -712,7 +712,7 @@ pub fn get() !Entry {
 	mut buf := []u8{len: 1024}
 	mut pw := C.passwd{}
 	mut pw_result := &C.passwd(unsafe { nil })
-	result := C.getpwuid_r(C.getuid(), &pw, unsafe { &char(buf.data) }, usize(buf.len), &pw_result)
+	result := C.getpwuid_r(C.getuid(), &pw, unsafe { &char(buf.data) }, uint(buf.len), &pw_result)
 	if result != 0 {
 		log.warn('error retrieving pw entry code=${result}')
 		return Entry{}

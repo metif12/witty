@@ -373,7 +373,7 @@ fn resize_overlay_finalize(obj voidptr) {
 // vfuncs. Mirrors the ghostty `Class.init`.
 fn resize_overlay_class_init(klass voidptr, class_data voidptr) {
 	C.g_type_class_adjust_private_offset(klass, &g_resize_overlay_priv_offset)
-	bytes := C.g_bytes_new_static(resize_overlay_ui.str, usize(resize_overlay_ui.len))
+	bytes := C.g_bytes_new_static(resize_overlay_ui.str, uint(resize_overlay_ui.len))
 	C.gtk_widget_class_set_template(klass, bytes)
 	C.g_bytes_unref(bytes)
 

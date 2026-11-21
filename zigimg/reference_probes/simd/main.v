@@ -57,8 +57,8 @@ type Lane1U32 = [1]u32
 type Lane1I32 = [1]int
 type Lane1U64 = [1]u64
 type Lane1I64 = [1]i64
-type Lane1Usize = [1]usize
-type Lane1Isize = [1]isize
+type Lane1Usize = [1]uint
+type Lane1Isize = [1]int
 type Lane1F32 = [1]f32
 type Lane1F64 = [1]f64
 type Lane2U8 = [2]u8
@@ -69,8 +69,8 @@ type Lane2U32 = [2]u32
 type Lane2I32 = [2]int
 type Lane2U64 = [2]u64
 type Lane2I64 = [2]i64
-type Lane2Usize = [2]usize
-type Lane2Isize = [2]isize
+type Lane2Usize = [2]uint
+type Lane2Isize = [2]int
 type Lane2F32 = [2]f32
 type Lane2F64 = [2]f64
 type Lane4U8 = [4]u8
@@ -81,8 +81,8 @@ type Lane4U32 = [4]u32
 type Lane4I32 = [4]int
 type Lane4U64 = [4]u64
 type Lane4I64 = [4]i64
-type Lane4Usize = [4]usize
-type Lane4Isize = [4]isize
+type Lane4Usize = [4]uint
+type Lane4Isize = [4]int
 type Lane4F32 = [4]f32
 type Lane4F64 = [4]f64
 type Lane8U8 = [8]u8
@@ -93,8 +93,8 @@ type Lane8U32 = [8]u32
 type Lane8I32 = [8]int
 type Lane8U64 = [8]u64
 type Lane8I64 = [8]i64
-type Lane8Usize = [8]usize
-type Lane8Isize = [8]isize
+type Lane8Usize = [8]uint
+type Lane8Isize = [8]int
 type Lane8F32 = [8]f32
 type Lane8F64 = [8]f64
 type Lane16U8 = [16]u8
@@ -105,8 +105,8 @@ type Lane16U32 = [16]u32
 type Lane16I32 = [16]int
 type Lane16U64 = [16]u64
 type Lane16I64 = [16]i64
-type Lane16Usize = [16]usize
-type Lane16Isize = [16]isize
+type Lane16Usize = [16]uint
+type Lane16Isize = [16]int
 type Lane16F32 = [16]f32
 type Lane16F64 = [16]f64
 
@@ -148,12 +148,12 @@ fn record(parts []string) string {
 					return to_float[Lane1F64, i64](parts[4])
 				}
 				'usize' {
-					if parts[1] == 'f32' { return to_float[Lane1F32, usize](parts[4]) }
-					return to_float[Lane1F64, usize](parts[4])
+					if parts[1] == 'f32' { return to_float[Lane1F32, uint](parts[4]) }
+					return to_float[Lane1F64, uint](parts[4])
 				}
 				'isize' {
-					if parts[1] == 'f32' { return to_float[Lane1F32, isize](parts[4]) }
-					return to_float[Lane1F64, isize](parts[4])
+					if parts[1] == 'f32' { return to_float[Lane1F32, int](parts[4]) }
+					return to_float[Lane1F64, int](parts[4])
 				}
 				else {
 					panic('unknown input integer')
@@ -215,8 +215,8 @@ fn record(parts []string) string {
 				'i32' { return operations[Lane1I32, int](parts) }
 				'u64' { return operations[Lane1U64, u64](parts) }
 				'i64' { return operations[Lane1I64, i64](parts) }
-				'usize' { return operations[Lane1Usize, usize](parts) }
-				'isize' { return operations[Lane1Isize, isize](parts) }
+				'usize' { return operations[Lane1Usize, uint](parts) }
+				'isize' { return operations[Lane1Isize, int](parts) }
 				'f32' { return operations[Lane1F32, f32](parts) }
 				'f64' { return operations[Lane1F64, f64](parts) }
 				else { panic('unknown type') }
@@ -259,12 +259,12 @@ fn record(parts []string) string {
 					return to_float[Lane2F64, i64](parts[4])
 				}
 				'usize' {
-					if parts[1] == 'f32' { return to_float[Lane2F32, usize](parts[4]) }
-					return to_float[Lane2F64, usize](parts[4])
+					if parts[1] == 'f32' { return to_float[Lane2F32, uint](parts[4]) }
+					return to_float[Lane2F64, uint](parts[4])
 				}
 				'isize' {
-					if parts[1] == 'f32' { return to_float[Lane2F32, isize](parts[4]) }
-					return to_float[Lane2F64, isize](parts[4])
+					if parts[1] == 'f32' { return to_float[Lane2F32, int](parts[4]) }
+					return to_float[Lane2F64, int](parts[4])
 				}
 				else {
 					panic('unknown input integer')
@@ -326,8 +326,8 @@ fn record(parts []string) string {
 				'i32' { return operations[Lane2I32, int](parts) }
 				'u64' { return operations[Lane2U64, u64](parts) }
 				'i64' { return operations[Lane2I64, i64](parts) }
-				'usize' { return operations[Lane2Usize, usize](parts) }
-				'isize' { return operations[Lane2Isize, isize](parts) }
+				'usize' { return operations[Lane2Usize, uint](parts) }
+				'isize' { return operations[Lane2Isize, int](parts) }
 				'f32' { return operations[Lane2F32, f32](parts) }
 				'f64' { return operations[Lane2F64, f64](parts) }
 				else { panic('unknown type') }
@@ -370,12 +370,12 @@ fn record(parts []string) string {
 					return to_float[Lane4F64, i64](parts[4])
 				}
 				'usize' {
-					if parts[1] == 'f32' { return to_float[Lane4F32, usize](parts[4]) }
-					return to_float[Lane4F64, usize](parts[4])
+					if parts[1] == 'f32' { return to_float[Lane4F32, uint](parts[4]) }
+					return to_float[Lane4F64, uint](parts[4])
 				}
 				'isize' {
-					if parts[1] == 'f32' { return to_float[Lane4F32, isize](parts[4]) }
-					return to_float[Lane4F64, isize](parts[4])
+					if parts[1] == 'f32' { return to_float[Lane4F32, int](parts[4]) }
+					return to_float[Lane4F64, int](parts[4])
 				}
 				else {
 					panic('unknown input integer')
@@ -437,8 +437,8 @@ fn record(parts []string) string {
 				'i32' { return operations[Lane4I32, int](parts) }
 				'u64' { return operations[Lane4U64, u64](parts) }
 				'i64' { return operations[Lane4I64, i64](parts) }
-				'usize' { return operations[Lane4Usize, usize](parts) }
-				'isize' { return operations[Lane4Isize, isize](parts) }
+				'usize' { return operations[Lane4Usize, uint](parts) }
+				'isize' { return operations[Lane4Isize, int](parts) }
 				'f32' { return operations[Lane4F32, f32](parts) }
 				'f64' { return operations[Lane4F64, f64](parts) }
 				else { panic('unknown type') }
@@ -481,12 +481,12 @@ fn record(parts []string) string {
 					return to_float[Lane8F64, i64](parts[4])
 				}
 				'usize' {
-					if parts[1] == 'f32' { return to_float[Lane8F32, usize](parts[4]) }
-					return to_float[Lane8F64, usize](parts[4])
+					if parts[1] == 'f32' { return to_float[Lane8F32, uint](parts[4]) }
+					return to_float[Lane8F64, uint](parts[4])
 				}
 				'isize' {
-					if parts[1] == 'f32' { return to_float[Lane8F32, isize](parts[4]) }
-					return to_float[Lane8F64, isize](parts[4])
+					if parts[1] == 'f32' { return to_float[Lane8F32, int](parts[4]) }
+					return to_float[Lane8F64, int](parts[4])
 				}
 				else {
 					panic('unknown input integer')
@@ -548,8 +548,8 @@ fn record(parts []string) string {
 				'i32' { return operations[Lane8I32, int](parts) }
 				'u64' { return operations[Lane8U64, u64](parts) }
 				'i64' { return operations[Lane8I64, i64](parts) }
-				'usize' { return operations[Lane8Usize, usize](parts) }
-				'isize' { return operations[Lane8Isize, isize](parts) }
+				'usize' { return operations[Lane8Usize, uint](parts) }
+				'isize' { return operations[Lane8Isize, int](parts) }
 				'f32' { return operations[Lane8F32, f32](parts) }
 				'f64' { return operations[Lane8F64, f64](parts) }
 				else { panic('unknown type') }
@@ -592,12 +592,12 @@ fn record(parts []string) string {
 					return to_float[Lane16F64, i64](parts[4])
 				}
 				'usize' {
-					if parts[1] == 'f32' { return to_float[Lane16F32, usize](parts[4]) }
-					return to_float[Lane16F64, usize](parts[4])
+					if parts[1] == 'f32' { return to_float[Lane16F32, uint](parts[4]) }
+					return to_float[Lane16F64, uint](parts[4])
 				}
 				'isize' {
-					if parts[1] == 'f32' { return to_float[Lane16F32, isize](parts[4]) }
-					return to_float[Lane16F64, isize](parts[4])
+					if parts[1] == 'f32' { return to_float[Lane16F32, int](parts[4]) }
+					return to_float[Lane16F64, int](parts[4])
 				}
 				else {
 					panic('unknown input integer')
@@ -659,8 +659,8 @@ fn record(parts []string) string {
 				'i32' { return operations[Lane16I32, int](parts) }
 				'u64' { return operations[Lane16U64, u64](parts) }
 				'i64' { return operations[Lane16I64, i64](parts) }
-				'usize' { return operations[Lane16Usize, usize](parts) }
-				'isize' { return operations[Lane16Isize, isize](parts) }
+				'usize' { return operations[Lane16Usize, uint](parts) }
+				'isize' { return operations[Lane16Isize, int](parts) }
 				'f32' { return operations[Lane16F32, f32](parts) }
 				'f64' { return operations[Lane16F64, f64](parts) }
 				else { panic('unknown type') }
@@ -672,7 +672,7 @@ fn record(parts []string) string {
 
 type AliasU16 = u16
 type AliasI32 = int
-type AliasUsize = usize
+type AliasUsize = uint
 type AliasF32 = f32
 type AliasF64 = f64
 type AliasFourU16 = [4]AliasU16
@@ -711,7 +711,7 @@ type AliasPointerI64 = &AliasI64
 type AliasArrayPointerI64 = &AliasFourI64
 type AliasPointerUsize = &AliasUsize
 type AliasArrayPointerUsize = &AliasFourUsize
-type AliasIsize = isize
+type AliasIsize = int
 type AliasFourIsize = [4]AliasIsize
 type AliasPointerIsize = &AliasIsize
 type AliasArrayPointerIsize = &AliasFourIsize
@@ -833,15 +833,15 @@ fn pointers(p []string) string {
 			}
 			'usize' {
 				if p[1] == 'f32' {
-					return pointer_to_float[Lane4F32, Lane4Usize, usize](p[4], kind)
+					return pointer_to_float[Lane4F32, Lane4Usize, uint](p[4], kind)
 				}
-				return pointer_to_float[Lane4F64, Lane4Usize, usize](p[4], kind)
+				return pointer_to_float[Lane4F64, Lane4Usize, uint](p[4], kind)
 			}
 			'isize' {
 				if p[1] == 'f32' {
-					return pointer_to_float[Lane4F32, Lane4Isize, isize](p[4], kind)
+					return pointer_to_float[Lane4F32, Lane4Isize, int](p[4], kind)
 				}
-				return pointer_to_float[Lane4F64, Lane4Isize, isize](p[4], kind)
+				return pointer_to_float[Lane4F64, Lane4Isize, int](p[4], kind)
 			}
 			else {
 				panic('unknown pointer source')
@@ -1259,13 +1259,13 @@ fn trap(name string) {
 		}
 		'box_x_add' {
 			_ := zigimg.Box{
-				x:     ~usize(0)
+				x:     ~uint(0)
 				width: 2
 			}.clamp(8, 8)
 		}
 		'box_y_add' {
 			_ := zigimg.Box{
-				y:      ~usize(0)
+				y:      ~uint(0)
 				height: 2
 			}.clamp(8, 8)
 		}
@@ -1282,31 +1282,31 @@ fn trap(name string) {
 			}.clamp(8, 8)
 		}
 		'managed_create' {
-			_ := zigimg.Image.create(~usize(0), 2, .invalid) or {
+			_ := zigimg.Image.create(~uint(0), 2, .invalid) or {
 				println('UNEXPECTED: error ' + err.str())
 				return
 			}
 		}
 		'unmanaged_create' {
-			_ := zigimg.ImageUnmanaged.create(~usize(0), 2, .invalid) or {
+			_ := zigimg.ImageUnmanaged.create(~uint(0), 2, .invalid) or {
 				println('UNEXPECTED: error ' + err.str())
 				return
 			}
 		}
 		'managed_crop' {
 			mut image := zigimg.Image.init()
-			image.width = ~usize(0)
+			image.width = ~uint(0)
 			image.height = 2
-			_ := image.crop(zigimg.Box{ width: ~usize(0), height: 2 }) or {
+			_ := image.crop(zigimg.Box{ width: ~uint(0), height: 2 }) or {
 				println('UNEXPECTED: error ' + err.str())
 				return
 			}
 		}
 		'unmanaged_crop' {
 			mut image := zigimg.ImageUnmanaged{}
-			image.width = ~usize(0)
+			image.width = ~uint(0)
 			image.height = 2
-			_ := image.crop(zigimg.Box{ width: ~usize(0), height: 2 }) or {
+			_ := image.crop(zigimg.Box{ width: ~uint(0), height: 2 }) or {
 				println('UNEXPECTED: error ' + err.str())
 				return
 			}
@@ -1332,16 +1332,16 @@ fn main() {
 		p := line.split('|')
 		if p[0] == 'C' {
 			area := zigimg.Box{
-				x:      usize(p[3].u64())
-				y:      usize(p[4].u64())
-				width:  usize(p[5].u64())
-				height: usize(p[6].u64())
+				x:      uint(p[3].u64())
+				y:      uint(p[4].u64())
+				width:  uint(p[5].u64())
+				height: uint(p[6].u64())
 			}
-			box := area.clamp(usize(p[1].u64()), usize(p[2].u64()))
+			box := area.clamp(uint(p[1].u64()), uint(p[2].u64()))
 			println(fixed_hex(Lane4Usize([box.x, box.y, box.width, box.height]!)))
 		} else if p[0] == 'Z' {
-			width := usize(p[2].u64())
-			height := usize(p[3].u64())
+			width := uint(p[2].u64())
+			height := uint(p[3].u64())
 			if p[1] == 'managed' {
 				mut image := zigimg.Image.create(width, height, .invalid) or { panic(err) }
 				println(fixed_hex(Lane4Usize([image.width, image.height, image.image_byte_size(),

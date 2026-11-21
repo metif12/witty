@@ -61,7 +61,7 @@ fn test_view_copies_retained_cells_and_bounds_render_origin() {
 fn test_line_numbers_retains_source_digit_limits_and_highlight_fill_order() {
 	assert LineNumbers.num_digits(0) == 1 && LineNumbers.num_digits(99999999) == 8
 	assert LineNumbers.num_digits(100000000) == 0
-	assert LineNumbers.extract_digit(~usize(0), 19) == 1
+	assert LineNumbers.extract_digit(~uint(0), 19) == 1
 	mut screen := Screen.new(Winsize{ cols: 6, rows: 3 })
 
 	LineNumbers{

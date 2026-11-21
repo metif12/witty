@@ -7,7 +7,7 @@ struct C.pthread_t {}
 struct C.pthread_attr_t {}
 
 fn C.pthread_detach(thread C.pthread_t) i32
-fn C.pthread_attr_setguardsize(attr voidptr, guardsize usize) i32
+fn C.pthread_attr_setguardsize(attr voidptr, guardsize uint) i32
 fn C.getpagesize() int
 
 // Minimal translation of `std.Thread.spawn(config, Thread.run, .{thread_pool})`
@@ -34,10 +34,10 @@ fn thread_pool_spawn(config ThreadPoolSpawnConfig, thread_pool &ThreadPool) !C.p
 	// Use the same set of parameters used by the libc-less impl.
 	stack_size := if config.stack_size > 16 * 1024 { config.stack_size } else { 16 * 1024 }
 	// (Not inside `assert`: V drops asserts, and their side effects, in -prod builds.)
-	setstacksize_rc := C.pthread_attr_setstacksize(&attr, usize(stack_size))
+	setstacksize_rc := C.pthread_attr_setstacksize(&attr, uint(stack_size))
 	assert setstacksize_rc == 0
 	// std.heap.pageSize()
-	setguardsize_rc := C.pthread_attr_setguardsize(&attr, usize(C.getpagesize()))
+	setguardsize_rc := C.pthread_attr_setguardsize(&attr, uint(C.getpagesize()))
 	assert setguardsize_rc == 0
 
 	mut handle := C.pthread_t{}

@@ -10,7 +10,7 @@ pub mut:
 pub struct ParserResult {
 pub mut:
 	event ?InputEvent @[required]
-	n     usize       @[required]
+	n     uint       @[required]
 }
 
 // clipboard represents the source's optional paste allocator. Allocation
@@ -24,7 +24,7 @@ pub fn (mut parser Parser) parse(input []u8, clipboard bool) !ParserResult {
 	}
 	return ParserResult{
 		event: parsed.event
-		n:     usize(parsed.consumed)
+		n:     uint(parsed.consumed)
 	}
 }
 

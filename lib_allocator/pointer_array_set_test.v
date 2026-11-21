@@ -7,7 +7,7 @@ mut:
 	fail_at     int = -1
 }
 
-fn array_set_test_alloc(ctx voidptr, len usize, alignment u8, _ usize) voidptr {
+fn array_set_test_alloc(ctx voidptr, len uint, alignment u8, _ uint) voidptr {
 	mut state := unsafe { &ArraySetTestState(ctx) }
 	call := state.allocations
 	state.allocations++
@@ -15,15 +15,15 @@ fn array_set_test_alloc(ctx voidptr, len usize, alignment u8, _ usize) voidptr {
 	return c_allocator.alloc_bytes(len, alignment, 0)
 }
 
-fn array_set_test_resize(_ voidptr, _ voidptr, _ usize, _ u8, _ usize, _ usize) bool {
+fn array_set_test_resize(_ voidptr, _ voidptr, _ uint, _ u8, _ uint, _ uint) bool {
 	return false
 }
 
-fn array_set_test_remap(_ voidptr, _ voidptr, _ usize, _ u8, _ usize, _ usize) voidptr {
+fn array_set_test_remap(_ voidptr, _ voidptr, _ uint, _ u8, _ uint, _ uint) voidptr {
 	return unsafe { nil }
 }
 
-fn array_set_test_free(ctx voidptr, ptr voidptr, len usize, alignment u8, _ usize) {
+fn array_set_test_free(ctx voidptr, ptr voidptr, len uint, alignment u8, _ uint) {
 	mut state := unsafe { &ArraySetTestState(ctx) }
 	state.frees++
 	c_allocator.free_bytes(ptr, len, alignment, 0)
@@ -42,15 +42,15 @@ fn test_pointer_array_set_index_width_growth_and_swap_removal() ! {
 	mut set := PointerArraySet[voidptr]{}
 	defer { set.deinit(c_allocator) }
 	for i in 1 .. 300 {
-		set.put_no_clobber(c_allocator, unsafe { voidptr(usize(i) * 16) })!
-		assert set.get_index(unsafe { voidptr(usize(i) * 16) })? == usize(i - 1)
+		set.put_no_clobber(c_allocator, unsafe { voidptr(uint(i) * 16) })!
+		assert set.get_index(unsafe { voidptr(uint(i) * 16) })? == uint(i - 1)
 	}
 	assert set.bit_index == 9
 	for i in 1 .. 300 {
-		assert set.swap_remove(unsafe { voidptr(usize(i) * 16) })
-		assert set.get_index(unsafe { voidptr(usize(i) * 16) }) == none
+		assert set.swap_remove(unsafe { voidptr(uint(i) * 16) })
+		assert set.get_index(unsafe { voidptr(uint(i) * 16) }) == none
 		for remaining in i + 1 .. 300 {
-			assert set.get_index(unsafe { voidptr(usize(remaining) * 16) }) != none
+			assert set.get_index(unsafe { voidptr(uint(remaining) * 16) }) != none
 		}
 	}
 	assert set.keys.len == 0
@@ -69,14 +69,14 @@ fn test_pointer_array_set_failure_retains_existing_entries() ! {
 	mut set := PointerArraySet[voidptr]{}
 	defer { set.deinit(allocator) }
 	for i in 1 .. 17 {
-		set.put_no_clobber(allocator, unsafe { voidptr(usize(i)) })!
+		set.put_no_clobber(allocator, unsafe { voidptr(uint(i)) })!
 	}
 	state.fail_at = state.allocations + 1
-	set.put_no_clobber(allocator, unsafe { voidptr(usize(17)) }) or {
+	set.put_no_clobber(allocator, unsafe { voidptr(uint(17)) }) or {
 		assert err.msg() == 'OutOfMemory'
 		assert set.keys.len == 16
 		for i in 1 .. 17 {
-			assert set.get_index(unsafe { voidptr(usize(i)) })? == usize(i - 1)
+			assert set.get_index(unsafe { voidptr(uint(i)) })? == uint(i - 1)
 		}
 		return
 	}

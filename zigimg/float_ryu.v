@@ -8,7 +8,7 @@ pub enum FloatRenderMode {
 pub struct FloatRenderOptions {
 pub mut:
 	mode      FloatRenderMode = .scientific
-	precision ?usize
+	precision ?uint
 }
 
 pub fn float_format_buffer_size[T](mode FloatRenderMode) int {

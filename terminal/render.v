@@ -677,7 +677,7 @@ pub fn (self &RenderState) link_cells(viewport_point Coordinate) CellSet {
 	// Grab our link ID
 	link_pin := self.row_data[int(viewport_point.y)].pin
 	mut link_page := &link_pin.node.data
-	rac := link_page.get_row_and_cell(usize(viewport_point.x), usize(link_pin.y))
+	rac := link_page.get_row_and_cell(uint(viewport_point.x), uint(link_pin.y))
 
 	// The likely scenario is that our mouse isn't even over a link.
 	if !rac.cell.has_hyperlink {
@@ -695,7 +695,7 @@ pub fn (self &RenderState) link_cells(viewport_point Coordinate) CellSet {
 			}
 
 			mut other_page := &pin.node.data
-			other_rac := other_page.get_row_and_cell(usize(x), usize(pin.y))
+			other_rac := other_page.get_row_and_cell(uint(x), uint(pin.y))
 			other_id := other_page.lookup_hyperlink(other_rac.cell) or { continue }
 			other := other_page.hyperlink_set.get(other_id)
 

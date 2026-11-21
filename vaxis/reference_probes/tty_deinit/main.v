@@ -7,7 +7,7 @@ import term.termios
 #include <unistd.h>
 #include <termios.h>
 
-fn C.read(fd int, bytes voidptr, size usize) isize
+fn C.read(fd int, bytes voidptr, size uint) int
 fn same(a termios.Termios, b termios.Termios) bool {
 	return a.c_iflag == b.c_iflag && a.c_oflag == b.c_oflag && a.c_cflag == b.c_cflag
 		&& a.c_lflag == b.c_lflag && a.c_cc == b.c_cc && a.c_ispeed == b.c_ispeed

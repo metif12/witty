@@ -425,7 +425,7 @@ fn clipboard_confirmation_dialog_class_init(klass voidptr, class_data voidptr) {
 		clipboard_confirmation_dialog_ui.replace(clipboard_confirmation_dialog_switch_row_ui,
 			'')
 	}
-	bytes := C.g_bytes_new(template_ui.str, usize(template_ui.len))
+	bytes := C.g_bytes_new(template_ui.str, uint(template_ui.len))
 	C.gtk_widget_class_set_template(klass, bytes)
 	C.g_bytes_unref(bytes)
 

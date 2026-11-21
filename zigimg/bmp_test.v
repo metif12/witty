@@ -105,8 +105,8 @@ fn test_bmp_unsupported_pixels_precede_size_arithmetic() {
 	mut output := []u8{len: 138, init: 165}
 	mut writer := WriteStream.init_memory(mut output)
 	image := ImageUnmanaged{
-		width:  ~usize(0)
-		height: ~usize(0)
+		width:  ~uint(0)
+		height: ~uint(0)
 		pixels: InvalidPixels{}
 	}
 	BMP.write_image(mut writer, image, BmpEncoderOptions{}) or {
@@ -358,7 +358,7 @@ fn test_bmp_writers_emit_exact_source_headers_masks_and_unpadded_bottom_up_pixel
 
 fn test_bmp_zero_sized_images_and_signed_dimensions_follow_source_header_paths() {
 	mut output := []u8{len: 200}
-	for dims in [[usize(0), usize(0)], [usize(0), usize(1)], [usize(1), usize(0)]] {
+	for dims in [[uint(0), uint(0)], [uint(0), uint(1)], [uint(1), uint(0)]] {
 		mut writer := WriteStream.init_memory(mut output)
 		BMP.write_image(mut writer, ImageUnmanaged{
 			width:  dims[0]

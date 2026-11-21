@@ -72,13 +72,13 @@ fn test_scroll_view_input_saturates_and_draw_restricts_before_content_io() {
 	win := Window.new(&screen)
 	mut view := ScrollView{
 		scroll: ScrollViewScroll{
-			x: ~usize(0)
-			y: ~usize(0)
+			x: ~uint(0)
+			y: ~uint(0)
 		}
 	}
 	view.input(Key{ codepoint: right, mods: Modifiers.from_int(1) })
 	view.input(Key{ codepoint: down })
-	assert view.scroll.x == ~usize(0) && view.scroll.y == ~usize(0)
+	assert view.scroll.x == ~uint(0) && view.scroll.y == ~uint(0)
 	view.draw(win, ScrollViewContentSize{ cols: 12, rows: 10 })
 	assert view.scroll == ScrollViewScroll{
 		x: 7

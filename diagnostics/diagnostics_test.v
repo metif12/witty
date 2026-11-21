@@ -18,7 +18,7 @@ fn test_location_from_iter_uses_optional_location_contract() {
 }
 
 fn test_diagnostic_location_width_and_format() {
-	large := usize(usize(-1) >> 1) + 1
+	large := uint(uint(-1) >> 1) + 1
 	cli := Diagnostic{
 		location: CliLocation{
 			index: large
@@ -66,7 +66,7 @@ fn test_diagnostic_list_contains_location() {
 }
 
 fn test_diagnostic_clone_preserves_pointer_width_locations() {
-	large := usize(usize(-1) >> 1) + 1
+	large := uint(uint(-1) >> 1) + 1
 	for location in [Location(CliLocation{
 		index: large
 	}), Location(FileLocation{

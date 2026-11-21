@@ -387,14 +387,14 @@ pub fn (mut self Selection) adjust(s &Screen, adjustment SelectionAdjustment) {
 			}
 		}
 		.page_up {
-			if new_end := end_pin.up(usize(s.pages.rows)) {
+			if new_end := end_pin.up(uint(s.pages.rows)) {
 				unsafe { *end_pin = new_end }
 			} else {
 				self.adjust(s, .home)
 			}
 		}
 		.page_down {
-			if new_end := end_pin.down(usize(s.pages.rows)) {
+			if new_end := end_pin.down(uint(s.pages.rows)) {
 				unsafe { *end_pin = new_end }
 			} else {
 				self.adjust(s, .end_)

@@ -58,11 +58,11 @@ fn test_native_search_editor_and_timer_consumers() {
 	surface.start_search('')
 	assert surface.search_needle == 'abc'
 	assert audit_native_actions == ['search:abc']
-	surface.search_counts(usize(2), usize(5))
+	surface.search_counts(uint(2), uint(5))
 	assert objc_utf8_string(msg_id(surface.search_count, 'stringValue')) == '3/5'
-	surface.search_counts(none, usize(0))
+	surface.search_counts(none, uint(0))
 	assert objc_utf8_string(msg_id(surface.search_count, 'stringValue')) == '-/0'
-	surface.search_counts(usize(0), none)
+	surface.search_counts(uint(0), none)
 	assert objc_utf8_string(msg_id(surface.search_count, 'stringValue')) == '1/?'
 	// Native control notifications update state through the registered delegate.
 	msg_void1(surface.search_field, 'setStringValue:', nsstring('x'))

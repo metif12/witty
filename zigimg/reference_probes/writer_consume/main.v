@@ -10,13 +10,13 @@ import encoding.hex
 
 fn C.witty_writer_seek_setup(&char) int
 fn C.witty_writer_seek_replace(int) int
-fn C.witty_writer_seek_restore(&char, usize) int
+fn C.witty_writer_seek_restore(&char, uint) int
 fn C.witty_writer_seek_close() int
 fn C.witty_writer_seek_cleanup() int
 fn C.witty_writer_seek_valid() int
 fn C.witty_writer_seek_refs() int
-fn C.witty_writer_seek_view(&u8, usize) isize
-fn C.witty_writer_seek_drain(&u8, usize) isize
+fn C.witty_writer_seek_view(&u8, uint) int
+fn C.witty_writer_seek_drain(&u8, uint) int
 
 __global (
 	observed_path     string
@@ -32,26 +32,26 @@ __global (
 fn state(writer zigimg.WriteStream, buffer []u8) string {
 	mut contents := []u8{len: 4096}
 	n := if observed_file {
-		C.witty_writer_seek_view(contents.data, usize(contents.len))
+		C.witty_writer_seek_view(contents.data, uint(contents.len))
 	} else {
-		isize(0)
+		int(0)
 	}
 	if n < 0 { panic('Writer observer failed') }
 	valid := if observed_file { C.witty_writer_seek_valid() } else { 0 }
 	refs := if observed_file { C.witty_writer_seek_refs() } else { 0 }
 	unused := writer.unused_capacity_slice()
-	offset := if buffer.len == 0 { usize(0) } else { usize(unused.data) - usize(buffer.data) }
+	offset := if buffer.len == 0 { uint(0) } else { uint(unused.data) - uint(buffer.data) }
 	mut saved := '-'
 	if observed_borrowed {
 		saved_offset := if buffer.len == 0 {
-			usize(0)
+			uint(0)
 		} else {
-			usize(observed_saved.data) - usize(buffer.data)
+			uint(observed_saved.data) - uint(buffer.data)
 		}
 		pending_offset := if buffer.len == 0 {
-			usize(0)
+			uint(0)
 		} else {
-			usize(observed_pending.data) - usize(buffer.data)
+			uint(observed_pending.data) - uint(buffer.data)
 		}
 		saved = '${pending_offset}:${observed_pending.len}:${observed_pending.hex()}#${saved_offset}:${observed_saved.len}:${observed_saved.hex()}'
 	}
@@ -110,7 +110,7 @@ fn record(line string, path string) string {
 	mut saved_pending := adapter.buffered()
 	mut saved := adapter.unused_capacity_slice()
 	count := adapter.unused_capacity_len()
-	if usize(saved.len) != count { panic('Unused span differs') }
+	if uint(saved.len) != count { panic('Unused span differs') }
 	observed_saved = unsafe { saved }
 	observed_pending = unsafe { saved_pending }
 	observed_borrowed = true
@@ -121,10 +121,10 @@ fn record(line string, path string) string {
 	if f[12] == '2' || f[12] == '3' { change(mut saved, f[8].int(), u8(f[9].int())) }
 	out += 'saved|' + state(writer, buffer) + '~'
 	observed_status = 'consume'
-	consumed := adapter.consume(usize(f[4].u64()))
+	consumed := adapter.consume(uint(f[4].u64()))
 	out += 'consume=${consumed}|' + state(writer, buffer) + '~'
 	observed_status = 'second'
-	second := if f[5] == '1' { adapter.consume_all() } else { adapter.consume(usize(f[10].u64())) }
+	second := if f[5] == '1' { adapter.consume_all() } else { adapter.consume(uint(f[10].u64())) }
 	out += 'second=${second}|' + state(writer, buffer) + '~'
 	mut unused := adapter.unused_capacity_slice()
 	change(mut unused, f[8].int(), u8(f[9].int()))
@@ -143,12 +143,12 @@ fn record(line string, path string) string {
 		writer.flush() or { status = err.msg() }
 	}
 	out += status + '|' + state(writer, buffer) + '~'
-	mut drain := isize(-3)
+	mut drain := int(-3)
 	mut wire := []u8{}
 	if kind > 0 && f[6] == '1' {
 		for {
 			mut bytes := []u8{len: 4096}
-			drain = C.witty_writer_seek_drain(bytes.data, usize(bytes.len))
+			drain = C.witty_writer_seek_drain(bytes.data, uint(bytes.len))
 			if drain <= 0 { break
 			 }
 			wire << bytes[..int(drain)]

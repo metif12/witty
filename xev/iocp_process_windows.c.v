@@ -67,7 +67,7 @@ pub fn (self &IocpProcess) wait(mut loop IocpLoop, c_ &IocpCompletion, userdata 
 						if result.value.type_ != 7 && result.value.type_ != 8 { return .rearm }
 						pid := C.GetProcessId(process)
 						if pid == 0 { return cb(ud, l, c, ErrorKind.unexpected, 0) }
-						if result.value.value != usize(pid) { return .rearm }
+						if result.value.value != uint(pid) { return .rearm }
 						mut code := u32(0)
 						has_code := C.GetExitCodeProcess(process, &code)
 						if !has_code {

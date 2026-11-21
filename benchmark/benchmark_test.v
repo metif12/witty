@@ -4,9 +4,9 @@ import os
 
 struct BenchmarkTestState {
 mut:
-	setup_count    usize
-	step_count     usize
-	teardown_count usize
+	setup_count    uint
+	step_count     uint
+	teardown_count uint
 	fail_setup     bool
 	fail_step      bool
 }
@@ -227,11 +227,11 @@ fn test_data_benchmarks_process_input() {
 
 fn test_osc_parser_benchmark_processes_length_prefixed_input() {
 	path := os.join_path(os.temp_dir(), 'witty-benchmark-osc-${os.getpid()}')
-	mut data := []u8{len: int(sizeof(usize)) + 3}
+	mut data := []u8{len: int(sizeof(uint)) + 3}
 	data[0] = 3
-	data[int(sizeof(usize))] = `0`
-	data[int(sizeof(usize)) + 1] = `;`
-	data[int(sizeof(usize)) + 2] = `x`
+	data[int(sizeof(uint))] = `0`
+	data[int(sizeof(uint)) + 1] = `;`
+	data[int(sizeof(uint)) + 2] = `x`
 	os.write_bytes(path, data)!
 	defer {
 		os.rm(path) or {}
@@ -250,10 +250,10 @@ fn test_osc_parser_benchmark_treats_truncated_input_as_eof() {
 	os.write_bytes(path, [u8(3)])!
 	run_cli('osc-parser', '--data="${path}"')!
 
-	mut data := []u8{len: int(sizeof(usize)) + 2}
+	mut data := []u8{len: int(sizeof(uint)) + 2}
 	data[0] = 3
-	data[int(sizeof(usize))] = `0`
-	data[int(sizeof(usize)) + 1] = `;`
+	data[int(sizeof(uint))] = `0`
+	data[int(sizeof(uint)) + 1] = `;`
 	os.write_bytes(path, data)!
 	run_cli('osc-parser', '--data="${path}"')!
 }

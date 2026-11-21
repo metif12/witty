@@ -903,17 +903,17 @@ fn osc_parser_step(ptr voidptr) ! {
 		return
 	}
 
-	mut length_bytes := []u8{len: int(sizeof(usize))}
+	mut length_bytes := []u8{len: int(sizeof(uint))}
 	mut osc_buf := []u8{len: 4096}
 	for {
 		if !read_exact(mut self.data, mut length_bytes)! {
 			return
 		}
-		mut length := usize(0)
+		mut length := uint(0)
 		for index, value in length_bytes {
-			length |= usize(value) << u32(index * 8)
+			length |= uint(value) << u32(index * 8)
 		}
-		if length > usize(osc_buf.len) {
+		if length > uint(osc_buf.len) {
 			return error('OSC payload exceeds buffer')
 		}
 		if !read_exact(mut self.data, mut osc_buf[..int(length)])! {

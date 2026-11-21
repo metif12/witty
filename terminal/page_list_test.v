@@ -106,9 +106,9 @@ fn assert_page_list_semantic_highlight(pl &PageList, at Pin, content SemanticCon
 	assert end_point.coord().y == end.y
 }
 
-fn grow_page_list_to_second_page(mut pl PageList, extra_rows usize) {
+fn grow_page_list_to_second_page(mut pl PageList, extra_rows uint) {
 	first := pl.pages.first or { return }
-	remaining := usize(first.data.capacity.rows - first.data.size.rows)
+	remaining := uint(first.data.capacity.rows - first.data.size.rows)
 	pl.grow_rows(remaining) or { panic(err) }
 	assert pl.total_pages() == 1
 	pl.grow_rows(extra_rows) or { panic(err) }
@@ -170,7 +170,7 @@ fn test_page_list_init_tripwire_layouts_and_cleanup() ! {
 }
 
 fn test_page_list_init() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	assert s.cols == 80
@@ -190,7 +190,7 @@ fn test_page_list_init_without_limit_uses_max_usize() ! {
 	mut s := PageList.init(80, 24, none)!
 	defer { s.deinit() }
 
-	assert s.explicit_max_size == ~usize(0)
+	assert s.explicit_max_size == ~uint(0)
 }
 
 fn test_page_list_scrollbar_cval() ! {
@@ -201,7 +201,7 @@ fn test_page_list_scrollbar_cval() ! {
 }
 
 fn test_page_list_increase_capacity_rejects_layout_over_max_page_size() ! {
-	mut s := PageList.init(2, 2, usize(0))!
+	mut s := PageList.init(2, 2, uint(0))!
 	defer { s.deinit() }
 
 	mut first := s.pages.first or {
@@ -225,7 +225,7 @@ fn test_page_list_increase_capacity_rejects_layout_over_max_page_size() ! {
 }
 
 fn test_page_list_increase_capacity_rehashes_without_growing() ! {
-	mut s := PageList.init(2, 2, usize(0))!
+	mut s := PageList.init(2, 2, uint(0))!
 	defer { s.deinit() }
 
 	mut first := s.pages.first or {
@@ -246,7 +246,7 @@ fn test_page_list_increase_capacity_rehashes_without_growing() ! {
 }
 
 fn test_page_list_increase_capacity_to_increase_styles() ! {
-	mut s := PageList.init(2, 2, usize(0))!
+	mut s := PageList.init(2, 2, uint(0))!
 	defer { s.deinit() }
 
 	mut first := s.pages.first or {
@@ -271,7 +271,7 @@ fn test_page_list_increase_capacity_to_increase_styles() ! {
 }
 
 fn test_page_list_increase_capacity_to_increase_graphemes() ! {
-	mut s := PageList.init(2, 2, usize(0))!
+	mut s := PageList.init(2, 2, uint(0))!
 	defer { s.deinit() }
 
 	mut first := s.pages.first or {
@@ -296,7 +296,7 @@ fn test_page_list_increase_capacity_to_increase_graphemes() ! {
 }
 
 fn test_page_list_increase_capacity_to_increase_hyperlinks() ! {
-	mut s := PageList.init(2, 2, usize(0))!
+	mut s := PageList.init(2, 2, uint(0))!
 	defer { s.deinit() }
 
 	mut first := s.pages.first or {
@@ -321,7 +321,7 @@ fn test_page_list_increase_capacity_to_increase_hyperlinks() ! {
 }
 
 fn test_page_list_increase_capacity_to_increase_string_bytes() ! {
-	mut s := PageList.init(2, 2, usize(0))!
+	mut s := PageList.init(2, 2, uint(0))!
 	defer { s.deinit() }
 
 	mut first := s.pages.first or {
@@ -346,7 +346,7 @@ fn test_page_list_increase_capacity_to_increase_string_bytes() ! {
 }
 
 fn test_page_list_increase_capacity_tracked_pins() ! {
-	mut s := PageList.init(2, 2, usize(0))!
+	mut s := PageList.init(2, 2, uint(0))!
 	defer { s.deinit() }
 
 	old_node := s.pages.first or {
@@ -366,7 +366,7 @@ fn test_page_list_increase_capacity_tracked_pins() ! {
 }
 
 fn test_page_list_increase_capacity_returns_out_of_space_at_max_capacity() ! {
-	mut s := PageList.init(2, 2, usize(0))!
+	mut s := PageList.init(2, 2, uint(0))!
 	defer { s.deinit() }
 
 	for {
@@ -387,7 +387,7 @@ fn test_page_list_increase_capacity_returns_out_of_space_at_max_capacity() ! {
 }
 
 fn test_page_list_increase_capacity_after_col_shrink() ! {
-	mut s := PageList.init(10, 2, usize(0))!
+	mut s := PageList.init(10, 2, uint(0))!
 	defer { s.deinit() }
 
 	s.resize(PageResizeOpts{
@@ -435,7 +435,7 @@ fn test_page_list_increase_capacity_multi_page() ! {
 }
 
 fn test_page_list_increase_capacity_preserves_dirty_flag() ! {
-	mut s := PageList.init(2, 4, usize(0))!
+	mut s := PageList.init(2, 4, uint(0))!
 	defer { s.deinit() }
 
 	mut first := s.pages.first or {
@@ -458,9 +458,9 @@ fn test_page_list_increase_capacity_preserves_dirty_flag() ! {
 
 fn test_page_list_grow_allows_exceeding_max_size_for_active_area() ! {
 	cap := initial_capacity(5)
-	mut s := PageList.init(5, cap.rows, usize(0))!
+	mut s := PageList.init(5, cap.rows, uint(0))!
 	defer { s.deinit() }
-	assert s.count_total_rows() == usize(s.rows)
+	assert s.count_total_rows() == uint(s.rows)
 
 	_ = s.grow()!
 	start_pages := s.total_pages()
@@ -514,13 +514,13 @@ fn test_page_list_grow_prune_required_with_a_single_page() ! {
 	assert voidptr(new_node) != voidptr(current_first)
 	assert s.scrollbar().eql(Scrollbar{
 		total:  s.count_total_rows()
-		offset: s.total_rows - usize(s.rows)
-		len:    usize(s.rows)
+		offset: s.total_rows - uint(s.rows)
+		len:    uint(s.rows)
 	})
 }
 
 fn test_page_list_compact_standard_size_page_returns_none() ! {
-	mut s := PageList.init(80, 24, usize(0))!
+	mut s := PageList.init(80, 24, uint(0))!
 	defer { s.deinit() }
 
 	node := s.pages.first or {
@@ -604,7 +604,7 @@ fn test_page_list_compact_oversized_page() ! {
 }
 
 fn test_page_list_compact_insufficient_savings_returns_none() ! {
-	mut s := PageList.init(80, 24, usize(0))!
+	mut s := PageList.init(80, 24, uint(0))!
 	defer { s.deinit() }
 
 	mut node := s.pages.first or {
@@ -622,7 +622,7 @@ fn test_page_list_compact_insufficient_savings_returns_none() ! {
 }
 
 fn test_page_chunk_rows_full_page_and_overlap() ! {
-	mut s := PageList.init(3, 3, usize(0))!
+	mut s := PageList.init(3, 3, uint(0))!
 	defer { s.deinit() }
 	mut first := s.pages.first or {
 		assert false
@@ -647,7 +647,7 @@ fn test_page_chunk_rows_full_page_and_overlap() ! {
 }
 
 fn test_reflow_cursor_count_trailing_empty_cells() ! {
-	mut s := PageList.init(5, 1, usize(0))!
+	mut s := PageList.init(5, 1, uint(0))!
 	defer { s.deinit() }
 	mut first := s.pages.first or {
 		assert false
@@ -668,7 +668,7 @@ fn test_reflow_cursor_count_trailing_empty_cells() ! {
 }
 
 fn test_page_list_tracked_pin_accessors_and_diagram() ! {
-	mut s := PageList.init(3, 2, usize(0))!
+	mut s := PageList.init(3, 2, uint(0))!
 	defer { s.deinit() }
 
 	// The viewport pin is permanently tracked.
@@ -699,7 +699,7 @@ fn test_page_list_tracked_pin_accessors_and_diagram() ! {
 }
 
 fn test_page_pin_row_cell_grapheme_and_style_accessors() ! {
-	mut s := PageList.init(4, 3, usize(0))!
+	mut s := PageList.init(4, 3, uint(0))!
 	defer { s.deinit() }
 
 	mut pin := s.pin(Point.new(.screen, Coordinate{ x: 1, y: 1 })) or {
@@ -718,7 +718,7 @@ fn test_page_pin_row_cell_grapheme_and_style_accessors() ! {
 		style_id:    style_id
 	}
 	page.rows[int(pin.y)].header.styled = true
-	page.set_graphemes(usize(pin.y), usize(pin.x), [u32(0x0301)]) or { panic(err) }
+	page.set_graphemes(uint(pin.y), uint(pin.x), [u32(0x0301)]) or { panic(err) }
 
 	rac := pin.row_and_cell()
 	assert voidptr(rac.row) == voidptr(pin.row_data())
@@ -749,7 +749,7 @@ fn test_page_pin_row_cell_grapheme_and_style_accessors() ! {
 }
 
 fn test_page_pin_left_right_wrap() ! {
-	mut s := PageList.init(4, 4, usize(0))!
+	mut s := PageList.init(4, 4, uint(0))!
 	defer { s.deinit() }
 
 	pin := s.pin(Point.new(.screen, Coordinate{ x: 1, y: 2 })) or {
@@ -774,7 +774,7 @@ fn test_page_pin_left_right_wrap() ! {
 
 fn test_page_list_pause_integrity_checks_is_nested() ! {
 	if !buildcfg.slow_runtime_safety { return }
-	mut s := PageList.init(3, 2, usize(0))!
+	mut s := PageList.init(3, 2, uint(0))!
 	defer { s.deinit() }
 	original_total := s.total_rows
 	s.total_rows += 1
@@ -793,10 +793,10 @@ fn test_page_list_init_rows_across_two_pages() ! {
 	// Use enough rows to require two pages
 	cap := initial_capacity(80)
 	rows := u16(cap.rows * 2 + 10)
-	mut s := PageList.init(80, rows, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, rows, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
-	assert s.total_rows == usize(rows)
+	assert s.total_rows == uint(rows)
 	assert s.total_pages() >= 2
 }
 
@@ -804,7 +804,7 @@ fn test_page_list_init_rows_across_two_pages() ! {
 // `std.heap.page_size_min` is 16 KiB. Elsewhere it is 4 KiB, so the page's
 // total size (and everything derived from it) is the same end offset aligned
 // to 4 KiB instead.
-fn page_list_page_size_min_reference(darwin_arm64 usize, other usize) usize {
+fn page_list_page_size_min_reference(darwin_arm64 uint, other uint) uint {
 	$if macos && arm64 {
 		return darwin_arm64
 	} $else {
@@ -825,7 +825,7 @@ fn test_page_list_uses_pinned_standard_page_byte_accounting() ! {
 
 fn test_page_list_init_more_than_max_cols() ! {
 	// Test large column count triggers capacity adjustment
-	mut s := PageList.init(500, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(500, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	assert s.cols == 500
@@ -834,7 +834,7 @@ fn test_page_list_init_more_than_max_cols() ! {
 }
 
 fn test_page_list_reflow_grows_style_capacity_without_losing_styles() ! {
-	mut list := PageList.init(60, 2, usize(0x7FFFFFFFFFFFFFFF))!
+	mut list := PageList.init(60, 2, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { list.deinit() }
 	first := list.pages.first or {
 		assert false, 'missing first page'
@@ -903,7 +903,7 @@ fn test_page_list_reflow_grows_style_capacity_without_losing_styles() ! {
 }
 
 fn test_page_list_erase_row_propagates_style_capacity_error_across_pages() ! {
-	mut list := PageList.init(60, 3, usize(0x7FFFFFFFFFFFFFFF))!
+	mut list := PageList.init(60, 3, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { list.deinit() }
 	first := list.pages.first or {
 		assert false, 'missing first page'
@@ -966,7 +966,7 @@ fn test_page_list_erase_row_propagates_style_capacity_error_across_pages() ! {
 // ============================================================
 
 fn test_page_list_point_from_pin_active_no_history() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// With no history, active pin at (0,0) should be at screen (0,0)
@@ -995,7 +995,7 @@ fn test_page_list_point_from_pin_active_no_history() ! {
 }
 
 fn test_page_list_point_from_pin_active_with_history() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Grow to create scrollback
@@ -1022,12 +1022,12 @@ fn test_page_list_point_from_pin_active_with_history() ! {
 }
 
 fn test_page_list_point_from_pin_traverse_pages() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Grow enough to span multiple pages
 	cap := initial_capacity(80)
-	s.grow_rows(usize(cap.rows) * 3)!
+	s.grow_rows(uint(cap.rows) * 3)!
 
 	// Get a pin in the active area and convert
 	p := s.pin(Point.new(.active, Coordinate{ x: 5, y: 10 })) or {
@@ -1047,7 +1047,7 @@ fn test_page_list_point_from_pin_traverse_pages() ! {
 // ============================================================
 
 fn test_page_list_grow_fit_in_capacity() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	initial_pages := s.total_pages()
@@ -1060,12 +1060,12 @@ fn test_page_list_grow_fit_in_capacity() ! {
 }
 
 fn test_page_list_grow_allocate() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Fill the first page
 	cap := initial_capacity(80)
-	remaining := usize(cap.rows) - s.total_rows
+	remaining := uint(cap.rows) - s.total_rows
 	s.grow_rows(remaining)!
 
 	initial_pages := s.total_pages()
@@ -1076,7 +1076,7 @@ fn test_page_list_grow_allocate() ! {
 }
 
 fn test_page_list_active_after_grow() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Write to first active row
@@ -1096,7 +1096,7 @@ fn test_page_list_active_after_grow() ! {
 fn test_page_list_grow_prune_scrollback() ! {
 	// Use limited max_size to force pruning
 	cap := initial_capacity(80)
-	page_bytes := usize(cap.cols) * usize(cap.rows) * 16
+	page_bytes := uint(cap.cols) * uint(cap.rows) * 16
 	max_sz := page_bytes * 2 // Only room for ~2 pages
 
 	mut s := PageList.init(80, 24, max_sz)!
@@ -1108,13 +1108,13 @@ fn test_page_list_grow_prune_scrollback() ! {
 	}
 
 	// Total rows should still be valid
-	assert s.total_rows >= usize(s.rows)
+	assert s.total_rows >= uint(s.rows)
 	s.assert_integrity()
 }
 
 fn test_page_list_grow_prune_with_viewport_pin() ! {
 	cap := initial_capacity(80)
-	page_bytes := usize(cap.cols) * usize(cap.rows) * 16
+	page_bytes := uint(cap.cols) * uint(cap.rows) * 16
 	max_sz := page_bytes * 3
 
 	mut s := PageList.init(80, 24, max_sz)!
@@ -1133,7 +1133,7 @@ fn test_page_list_grow_prune_with_viewport_pin() ! {
 	}
 
 	// Should still be valid
-	assert s.total_rows >= usize(s.rows)
+	assert s.total_rows >= uint(s.rows)
 	s.assert_integrity()
 }
 
@@ -1170,7 +1170,7 @@ fn test_page_list_grow_prune_scrollback_with_viewport_pin_not_in_pruned_page() !
 	s.scroll(PageScrollPin{ pin: viewport_pin })
 	assert s.viewport == .pin
 	assert voidptr(s.viewport_pin.node) == voidptr(page2_node)
-	assert s.scrollbar().offset == usize(pin_y)
+	assert s.scrollbar().offset == uint(pin_y)
 
 	new_node := s.grow()!.node or {
 		assert false, 'pruned page was not reused'
@@ -1180,7 +1180,7 @@ fn test_page_list_grow_prune_scrollback_with_viewport_pin_not_in_pruned_page() !
 	assert s.page_size == old_page_size
 	assert voidptr(s.pages.first or { return }) == voidptr(page2_node)
 	assert voidptr(s.viewport_pin.node) == voidptr(page2_node)
-	assert s.scrollbar().offset == usize(pin_y - page1_rows)
+	assert s.scrollbar().offset == uint(pin_y - page1_rows)
 }
 
 fn test_page_list_grow_reuses_non_standard_page_without_leak() ! {
@@ -1213,7 +1213,7 @@ fn test_page_list_grow_reuses_non_standard_page_without_leak() ! {
 		_ = s.grow()!
 	}
 	assert voidptr(s.pages.first or { return }) == voidptr(first_page)
-	assert s.total_rows >= usize(s.rows)
+	assert s.total_rows >= uint(s.rows)
 	last := s.pages.last or { return }
 	assert last.data.size.rows == last.data.capacity.rows
 
@@ -1254,22 +1254,22 @@ fn test_page_list_grow_non_standard_page_prune_protection() ! {
 		_ = s.grow()!
 	}
 
-	would_remain := s.total_rows - usize(first_page_rows) + 1
-	assert would_remain < usize(s.rows)
+	would_remain := s.total_rows - uint(first_page_rows) + 1
+	assert would_remain < uint(s.rows)
 	assert s.page_size + standard_page_size() > s.max_size()
 	_ = s.grow()!
-	assert s.total_rows >= usize(s.rows)
+	assert s.total_rows >= uint(s.rows)
 }
 
 fn test_page_list_scrollbar_with_max_size_0_after_grow() ! {
-	mut s := PageList.init(80, 24, usize(0))!
+	mut s := PageList.init(80, 24, uint(0))!
 	defer { s.deinit() }
 
 	s.grow_rows(10)!
 
 	sb := s.scrollbar()
-	assert sb.total == usize(s.rows)
-	assert sb.len == usize(s.rows)
+	assert sb.total == uint(s.rows)
+	assert sb.len == uint(s.rows)
 }
 
 // ============================================================
@@ -1277,7 +1277,7 @@ fn test_page_list_scrollbar_with_max_size_0_after_grow() ! {
 // ============================================================
 
 fn test_page_list_scroll_with_max_size_0_no_history() ! {
-	mut s := PageList.init(80, 24, usize(0))!
+	mut s := PageList.init(80, 24, uint(0))!
 	defer { s.deinit() }
 
 	s.scroll(PageScrollDeltaRow{ delta: -1 })
@@ -1288,7 +1288,7 @@ fn test_page_list_scroll_with_max_size_0_no_history() ! {
 }
 
 fn test_page_list_scroll_top() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Create scrollback
@@ -1306,7 +1306,7 @@ fn test_page_list_scroll_top() ! {
 }
 
 fn test_page_list_scroll_delta_row_back() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Create scrollback
@@ -1319,12 +1319,12 @@ fn test_page_list_scroll_delta_row_back() ! {
 	assert s.viewport != .active
 
 	sb := s.scrollbar()
-	expected_offset := s.total_rows - usize(s.rows) - 10
+	expected_offset := s.total_rows - uint(s.rows) - 10
 	assert sb.offset == expected_offset
 }
 
 fn test_page_list_scroll_delta_row_back_overflow() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Create some scrollback
@@ -1341,7 +1341,7 @@ fn test_page_list_scroll_delta_row_back_overflow() ! {
 }
 
 fn test_page_list_scroll_delta_row_forward() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Create scrollback and scroll to top
@@ -1356,7 +1356,7 @@ fn test_page_list_scroll_delta_row_forward() ! {
 }
 
 fn test_page_list_scroll_delta_row_forward_into_active() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Create scrollback and scroll to top
@@ -1371,7 +1371,7 @@ fn test_page_list_scroll_delta_row_forward_into_active() ! {
 }
 
 fn test_page_list_scroll_to_pin() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Create scrollback
@@ -1388,7 +1388,7 @@ fn test_page_list_scroll_to_pin() ! {
 }
 
 fn test_page_list_scroll_to_pin_in_active() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Create scrollback
@@ -1406,7 +1406,7 @@ fn test_page_list_scroll_to_pin_in_active() ! {
 }
 
 fn test_page_list_scroll_to_pin_at_top() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Create scrollback
@@ -1423,7 +1423,7 @@ fn test_page_list_scroll_to_pin_at_top() ! {
 }
 
 fn test_page_list_scroll_to_row_0() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Create scrollback
@@ -1437,7 +1437,7 @@ fn test_page_list_scroll_to_row_0() ! {
 }
 
 fn test_page_list_scroll_to_row_in_scrollback() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Create scrollback
@@ -1451,7 +1451,7 @@ fn test_page_list_scroll_to_row_in_scrollback() ! {
 }
 
 fn test_page_list_scroll_to_row_in_middle() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Create scrollback
@@ -1466,13 +1466,13 @@ fn test_page_list_scroll_to_row_in_middle() ! {
 }
 
 fn test_page_list_scroll_to_row_at_active_boundary() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Create scrollback
 	s.grow_rows(100)!
 
-	boundary := s.total_rows - usize(s.rows)
+	boundary := s.total_rows - uint(s.rows)
 	s.scroll(PageScrollRow{ n: boundary })
 
 	// Should be at active since this is the active boundary
@@ -1480,7 +1480,7 @@ fn test_page_list_scroll_to_row_at_active_boundary() ! {
 }
 
 fn test_page_list_scroll_to_row_beyond_active() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Create scrollback
@@ -1493,7 +1493,7 @@ fn test_page_list_scroll_to_row_beyond_active() ! {
 }
 
 fn test_page_list_scroll_to_row_without_scrollback() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// No scrollback, any scroll should stay active
@@ -1505,7 +1505,7 @@ fn test_page_list_scroll_to_row_without_scrollback() ! {
 }
 
 fn test_page_list_scroll_to_row_then_delta() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Create scrollback
@@ -1526,7 +1526,7 @@ fn test_page_list_scroll_to_row_then_delta() ! {
 }
 
 fn test_page_list_scroll_clear() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Write to a few rows
@@ -1547,7 +1547,7 @@ fn test_page_list_scroll_clear() ! {
 }
 
 fn test_page_list_scroll_clear_empty_active_area() ! {
-	mut s := PageList.init(5, 5, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(5, 5, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 	initial_rows := s.total_rows
 
@@ -1557,7 +1557,7 @@ fn test_page_list_scroll_clear_empty_active_area() ! {
 }
 
 fn test_page_list_scroll_clear_counts_background_only_cell() ! {
-	mut s := PageList.init(5, 5, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(5, 5, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 	p := s.pin(Point.new(.active, Coordinate{ y: 1 })) or {
 		assert false, 'active pin missing'
@@ -1575,7 +1575,7 @@ fn test_page_list_scroll_clear_counts_background_only_cell() ! {
 }
 
 fn test_page_list_scroll_clear_includes_internal_blank_rows() ! {
-	mut s := PageList.init(5, 5, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(5, 5, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 	set_active_cell(mut s, 0, 0, u32(`A`))
 	set_active_cell(mut s, 0, 4, u32(`B`))
@@ -1587,7 +1587,7 @@ fn test_page_list_scroll_clear_includes_internal_blank_rows() ! {
 }
 
 fn test_page_list_scroll_clear_counts_trailing_rows_across_pages() ! {
-	mut s := PageList.init(80, 600, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 600, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 	assert s.total_pages() > 1
 	set_active_cell(mut s, 0, 580, u32(`A`))
@@ -1603,7 +1603,7 @@ fn test_page_list_scroll_clear_counts_trailing_rows_across_pages() ! {
 // ============================================================
 
 fn test_page_list_total_pages() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	initial := s.total_pages()
@@ -1611,13 +1611,13 @@ fn test_page_list_total_pages() ! {
 
 	// Grow enough to create new pages
 	cap := initial_capacity(80)
-	s.grow_rows(usize(cap.rows) * 3)!
+	s.grow_rows(uint(cap.rows) * 3)!
 
 	assert s.total_pages() > initial
 }
 
 fn test_page_list_count_total_rows() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	assert s.count_total_rows() == s.total_rows
@@ -1632,7 +1632,7 @@ fn test_page_list_count_total_rows() ! {
 // ============================================================
 
 fn test_page_list_get_top_left_screen() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	tl := s.get_top_left(.screen)
@@ -1641,7 +1641,7 @@ fn test_page_list_get_top_left_screen() ! {
 }
 
 fn test_page_list_get_top_left_active_no_history() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	tl_screen := s.get_top_left(.screen)
@@ -1652,7 +1652,7 @@ fn test_page_list_get_top_left_active_no_history() ! {
 }
 
 fn test_page_list_get_top_left_active_with_history() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	s.grow_rows(50)!
@@ -1665,7 +1665,7 @@ fn test_page_list_get_top_left_active_with_history() ! {
 }
 
 fn test_page_list_get_top_left_pinned_viewport_preserves_pin() ! {
-	mut s := PageList.init(10, 3, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(10, 3, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 	s.grow_rows(3)!
 
@@ -1678,11 +1678,11 @@ fn test_page_list_get_top_left_pinned_viewport_preserves_pin() ! {
 	assert s.get_top_left(.viewport).eql(p)
 	assert s.viewport_pin_row_offset == none
 	assert s.scrollbar().offset == 1
-	assert s.viewport_pin_row_offset or { usize(max_usize) } == 1
+	assert s.viewport_pin_row_offset or { uint(max_usize) } == 1
 }
 
 fn test_page_list_get_bottom_right() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	br := s.get_bottom_right(.active) or {
@@ -1693,7 +1693,7 @@ fn test_page_list_get_bottom_right() ! {
 }
 
 fn test_page_list_get_bottom_right_uses_owning_page_width() ! {
-	mut s := PageList.init(10, 3, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(10, 3, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	mut last := s.pages.last or {
@@ -1713,7 +1713,7 @@ fn test_page_list_get_bottom_right_uses_owning_page_width() ! {
 // ============================================================
 
 fn test_page_list_track_pin() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	p := s.pin(Point.new(.active, Coordinate{ x: 5, y: 10 })) or {
@@ -1729,7 +1729,7 @@ fn test_page_list_track_pin() ! {
 }
 
 fn test_page_list_pin_is_valid() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	p := s.pin(Point.new(.active, Coordinate{ x: 0, y: 0 })) or {
@@ -1752,7 +1752,7 @@ fn test_page_list_pin_is_valid() ! {
 }
 
 fn test_page_list_pin_is_active() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Create history
@@ -1778,43 +1778,43 @@ fn test_page_list_pin_is_active() ! {
 // ============================================================
 
 fn test_page_list_erase() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	assert s.total_pages() >= 1
 
 	// Grow to 5+ pages
 	cap := initial_capacity(80)
-	s.grow_rows(usize(cap.rows) * 5)!
+	s.grow_rows(uint(cap.rows) * 5)!
 
 	assert s.total_pages() >= 5
-	assert s.total_rows > usize(s.rows)
+	assert s.total_rows > uint(s.rows)
 
 	// Erase entire history
 	s.erase_rows(Point.new(.history, Coordinate{}), none)
-	assert s.total_rows == usize(s.rows)
+	assert s.total_rows == uint(s.rows)
 	// Should be back to 1 page (or close)
 	assert s.total_pages() <= 2
 }
 
 fn test_page_list_erase_active_regrows_automatically() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
-	assert s.total_rows == usize(s.rows)
+	assert s.total_rows == uint(s.rows)
 
 	// Erase some active rows
 	s.erase_rows(Point.new(.active, Coordinate{}), none)
-	assert s.total_rows == usize(s.rows)
+	assert s.total_rows == uint(s.rows)
 }
 
 fn test_page_list_erase_resets_viewport_to_active() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Grow and scroll to top
 	cap := initial_capacity(80)
-	s.grow_rows(usize(cap.rows) * 5)!
+	s.grow_rows(uint(cap.rows) * 5)!
 
 	s.scroll(PageScrollTop{})
 	assert s.viewport == .top
@@ -1827,7 +1827,7 @@ fn test_page_list_erase_resets_viewport_to_active() ! {
 }
 
 fn test_page_list_erase_one_row_active() ! {
-	mut s := PageList.init(10, 1, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(10, 1, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	assert s.total_pages() >= 1
@@ -1844,7 +1844,7 @@ fn test_page_list_erase_one_row_active() ! {
 
 	// Erase active
 	s.erase_rows(Point.new(.active, Coordinate{}), none)
-	assert s.total_rows == usize(s.rows)
+	assert s.total_rows == uint(s.rows)
 
 	// Row should be empty
 	cell2 := s.get_cell(Point.new(.active, Coordinate{ x: 0, y: 0 })) or {
@@ -1855,7 +1855,7 @@ fn test_page_list_erase_one_row_active() ! {
 }
 
 fn test_page_list_point_pin_and_partial_active_erase() ! {
-	mut s := PageList.init(8, 6, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(8, 6, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	for y in 0 .. 6 {
@@ -1871,7 +1871,7 @@ fn test_page_list_point_pin_and_partial_active_erase() ! {
 	defer { s.untrack_pin(tracked_erased) }
 
 	s.erase_rows(Point.new(.active, Coordinate{}), Point.new(.active, Coordinate{ y: 3 }))
-	assert s.total_rows == usize(s.rows)
+	assert s.total_rows == uint(s.rows)
 	first := s.get_cell(Point.new(.active, Coordinate{ x: 0, y: 0 })) or { panic('missing first active cell') }
 	second := s.get_cell(Point.new(.active, Coordinate{ x: 0, y: 1 })) or { panic('missing second active cell') }
 	assert first.cell.codepoint == u32(`E`)
@@ -1883,7 +1883,7 @@ fn test_page_list_point_pin_and_partial_active_erase() ! {
 }
 
 fn test_page_list_erase_history_preserves_managed_survivor() ! {
-	mut s := PageList.init(6, 4, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(6, 4, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 	s.grow_rows(2)!
 	first := s.pages.first or {
@@ -1932,7 +1932,7 @@ fn test_page_list_erase_history_preserves_managed_survivor() ! {
 }
 
 fn test_page_list_erase_row() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Write codepoints to identify rows
@@ -1952,7 +1952,7 @@ fn test_page_list_erase_row() ! {
 }
 
 fn test_page_list_erase_row_preserves_rotated_row_metadata() ! {
-	mut s := PageList.init(4, 4, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(4, 4, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 	first := s.pages.first or { panic('no first page') }
 	mut page := &first.data
@@ -1975,7 +1975,7 @@ fn test_page_list_erase_row_preserves_rotated_row_metadata() ! {
 }
 
 fn test_page_list_erase_row_with_tracked_pin() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Track a pin at row 5
@@ -1995,7 +1995,7 @@ fn test_page_list_erase_row_with_tracked_pin() ! {
 }
 
 fn test_page_list_erase_row_preserves_managed_cell_data() ! {
-	mut s := PageList.init(8, 4, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(8, 4, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 	first := s.pages.first or {
 		assert false, 'no first page'
@@ -2046,7 +2046,7 @@ fn test_page_list_erase_row_preserves_managed_cell_data() ! {
 }
 
 fn test_page_list_erase_row_moves_managed_cell_and_pin_across_page_boundary() ! {
-	mut s := PageList.init(4, 4, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(4, 4, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 	first := s.pages.first or {
 		assert false, 'no first page'
@@ -2098,7 +2098,7 @@ fn test_page_list_erase_row_moves_managed_cell_and_pin_across_page_boundary() ! 
 // ============================================================
 
 fn test_page_list_split_at_middle_row() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 
 	// Write to identify rows
@@ -2136,7 +2136,7 @@ fn test_page_list_split_at_middle_row() ! {
 }
 
 fn test_page_list_split_at_row_0_noop() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -2159,7 +2159,7 @@ fn test_page_list_split_at_row_0_noop() ! {
 }
 
 fn test_page_list_split_at_last_row() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -2189,7 +2189,7 @@ fn test_page_list_split_at_last_row() ! {
 }
 
 fn test_page_list_split_moves_tracked_pins() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 
 	// Track a pin at row 7
@@ -2227,7 +2227,7 @@ fn test_page_list_split_moves_tracked_pins() ! {
 }
 
 fn test_page_list_split_tracked_pin_before_split_unchanged() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 
 	// Track a pin at row 2
@@ -2261,7 +2261,7 @@ fn test_page_list_split_tracked_pin_before_split_unchanged() ! {
 }
 
 fn test_page_list_split_tracked_pin_at_split_point() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 
 	// Track a pin at exactly row 5
@@ -2298,7 +2298,7 @@ fn test_page_list_split_tracked_pin_at_split_point() ! {
 }
 
 fn test_page_list_split_preserves_wrap_flags() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -2342,7 +2342,7 @@ fn test_page_list_split_preserves_wrap_flags() ! {
 }
 
 fn test_page_list_split_middle_page_preserves_order() ! {
-	mut s := PageList.init(10, 12, usize(0))!
+	mut s := PageList.init(10, 12, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -2404,7 +2404,7 @@ fn test_page_list_split_middle_page_preserves_order() ! {
 // ============================================================
 
 fn test_page_list_clone() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	mut c := s.clone(PageCloneOpts{ top: Point.new(.screen, Coordinate{}) }) or { panic(err) }
@@ -2416,7 +2416,7 @@ fn test_page_list_clone() ! {
 }
 
 fn test_page_list_clone_with_history() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	s.grow_rows(100)!
@@ -2576,7 +2576,7 @@ fn test_page_list_clone_full_dirty() ! {
 fn test_page_list_clone_restarts_page_serials() ! {
 	mut s := PageList.init(80, 24, none)!
 	defer { s.deinit() }
-	s.grow_rows(usize(initial_capacity(s.cols).rows))!
+	s.grow_rows(uint(initial_capacity(s.cols).rows))!
 
 	mut cloned := s.clone(PageCloneOpts{ top: Point.new(.screen, Coordinate{}) }) or { panic(err) }
 	defer { cloned.deinit() }
@@ -2592,7 +2592,7 @@ fn test_page_list_clone_restarts_page_serials() ! {
 }
 
 fn test_page_list_clone_active_only() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	s.grow_rows(100)!
@@ -2603,11 +2603,11 @@ fn test_page_list_clone_active_only() ! {
 	defer { c.deinit() }
 
 	// Clone of active should have at least 24 rows
-	assert c.total_rows >= usize(s.rows)
+	assert c.total_rows >= uint(s.rows)
 }
 
 fn test_page_list_clone_less_than_active() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	s.grow_rows(100)!
@@ -2618,7 +2618,7 @@ fn test_page_list_clone_less_than_active() ! {
 	}) or { panic(err) }
 	defer { c.deinit() }
 
-	assert c.total_rows >= usize(s.rows)
+	assert c.total_rows >= uint(s.rows)
 }
 
 // ============================================================
@@ -2626,7 +2626,7 @@ fn test_page_list_clone_less_than_active() ! {
 // ============================================================
 
 fn test_page_list_resize_no_reflow_more_rows() ! {
-	mut s := PageList.init(80, 3, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 3, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	assert s.total_rows == 3
@@ -2642,7 +2642,7 @@ fn test_page_list_resize_no_reflow_more_rows() ! {
 }
 
 fn test_page_list_resize_no_reflow_more_rows_with_history() ! {
-	mut s := PageList.init(80, 3, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 3, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Create history
@@ -2661,7 +2661,7 @@ fn test_page_list_resize_no_reflow_more_rows_with_history() ! {
 }
 
 fn test_page_list_resize_no_reflow_less_rows() ! {
-	mut s := PageList.init(80, 10, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 10, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Write to all rows
@@ -2679,7 +2679,7 @@ fn test_page_list_resize_no_reflow_less_rows() ! {
 }
 
 fn test_page_list_resize_no_reflow_one_row() ! {
-	mut s := PageList.init(80, 10, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 10, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Write to all rows
@@ -2697,7 +2697,7 @@ fn test_page_list_resize_no_reflow_one_row() ! {
 }
 
 fn test_page_list_resize_no_reflow_less_cols() ! {
-	mut s := PageList.init(10, 10, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(10, 10, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	s.resize(PageResizeOpts{
@@ -2721,7 +2721,7 @@ fn test_page_list_resize_no_reflow_less_cols() ! {
 }
 
 fn test_page_list_resize_no_reflow_less_cols_pin_in_trimmed() ! {
-	mut s := PageList.init(10, 10, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(10, 10, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Track a pin at x=8
@@ -2744,7 +2744,7 @@ fn test_page_list_resize_no_reflow_less_cols_pin_in_trimmed() ! {
 }
 
 fn test_page_list_resize_no_reflow_more_cols() ! {
-	mut s := PageList.init(5, 10, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(5, 10, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	s.resize(PageResizeOpts{
@@ -2767,7 +2767,7 @@ fn test_page_list_resize_no_reflow_more_cols() ! {
 }
 
 fn test_page_list_resize_no_reflow_less_cols_then_more() ! {
-	mut s := PageList.init(5, 10, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(5, 10, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	s.resize(PageResizeOpts{
@@ -2796,7 +2796,7 @@ fn test_page_list_resize_no_reflow_less_cols_then_more() ! {
 }
 
 fn test_page_list_resize_no_reflow_less_rows_and_cols() ! {
-	mut s := PageList.init(10, 10, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(10, 10, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	s.resize(PageResizeOpts{
@@ -2810,7 +2810,7 @@ fn test_page_list_resize_no_reflow_less_rows_and_cols() ! {
 }
 
 fn test_page_list_resize_no_reflow_more_rows_and_less_cols() ! {
-	mut s := PageList.init(10, 10, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(10, 10, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	s.resize(PageResizeOpts{
@@ -2825,7 +2825,7 @@ fn test_page_list_resize_no_reflow_more_rows_and_less_cols() ! {
 }
 
 fn test_page_list_resize_no_reflow_empty_screen() ! {
-	mut s := PageList.init(5, 5, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(5, 5, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	s.resize(PageResizeOpts{
@@ -2846,7 +2846,7 @@ fn test_page_list_resize_no_reflow_empty_screen() ! {
 }
 
 fn test_page_list_resize_more_rows_and_cols_large() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 
 	new_cols := u16(600)
@@ -2862,7 +2862,7 @@ fn test_page_list_resize_more_rows_and_cols_large() ! {
 
 	assert s.cols == new_cols
 	assert s.rows == new_rows
-	assert s.total_rows == usize(new_rows)
+	assert s.total_rows == uint(new_rows)
 }
 
 // ============================================================
@@ -2870,7 +2870,7 @@ fn test_page_list_resize_more_rows_and_cols_large() ! {
 // ============================================================
 
 fn test_page_list_reset() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Write something
@@ -2879,7 +2879,7 @@ fn test_page_list_reset() ! {
 	s.reset()
 
 	assert s.viewport == .active
-	assert s.total_rows == usize(s.rows)
+	assert s.total_rows == uint(s.rows)
 
 	// Content should be cleared
 	first := s.pages.first or {
@@ -2892,17 +2892,17 @@ fn test_page_list_reset() ! {
 fn test_page_list_reset_across_two_pages() ! {
 	cap := initial_capacity(80)
 	rows := u16(cap.rows + 10)
-	mut s := PageList.init(80, rows, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, rows, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	s.reset()
 
 	assert s.viewport == .active
-	assert s.total_rows == usize(rows)
+	assert s.total_rows == uint(rows)
 }
 
 fn test_page_list_reset_moves_tracked_pins() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Track a pin
@@ -2926,16 +2926,16 @@ fn test_page_list_reset_moves_tracked_pins() ! {
 }
 
 fn test_page_list_reset_clears_history() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Grow to create history
 	s.grow_rows(100)!
-	assert s.total_rows > usize(s.rows)
+	assert s.total_rows > uint(s.rows)
 
 	s.reset()
 
-	assert s.total_rows == usize(s.rows)
+	assert s.total_rows == uint(s.rows)
 }
 
 // ============================================================
@@ -2943,7 +2943,7 @@ fn test_page_list_reset_clears_history() ! {
 // ============================================================
 
 fn test_page_list_dirty() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Clear dirty
@@ -2965,7 +2965,7 @@ fn test_page_list_dirty() ! {
 // ============================================================
 
 fn test_page_list_page_iterator_single_page() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	mut it := s.page_iterator(.right_down, Point.new(.active, Coordinate{}), none)
@@ -2978,12 +2978,12 @@ fn test_page_list_page_iterator_single_page() ! {
 }
 
 fn test_page_list_page_iterator_two_pages() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Grow to create 2+ pages
 	cap := initial_capacity(80)
-	s.grow_rows(usize(cap.rows) * 2)!
+	s.grow_rows(uint(cap.rows) * 2)!
 
 	mut it := s.page_iterator(.right_down, Point.new(.screen, Coordinate{}), none)
 	mut count := 0
@@ -2995,11 +2995,11 @@ fn test_page_list_page_iterator_two_pages() ! {
 }
 
 fn test_page_list_page_iterator_reverse() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	cap := initial_capacity(80)
-	s.grow_rows(usize(cap.rows) * 2)!
+	s.grow_rows(uint(cap.rows) * 2)!
 
 	mut it := s.page_iterator(.left_up, Point.new(.screen, Coordinate{}), none)
 	mut count := 0
@@ -3011,36 +3011,36 @@ fn test_page_list_page_iterator_reverse() ! {
 }
 
 fn test_page_list_row_iterator() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	mut it := s.row_iterator(.right_down, Point.new(.active, Coordinate{}), none)
-	mut count := usize(0)
+	mut count := uint(0)
 	for {
 		_ := it.next() or { break }
 		count += 1
 	}
-	assert count == usize(s.rows)
+	assert count == uint(s.rows)
 }
 
 fn test_page_list_row_iterator_with_history() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	s.grow_rows(50)!
 
 	// Active iterator should still give rows count
 	mut it := s.row_iterator(.right_down, Point.new(.active, Coordinate{}), none)
-	mut count := usize(0)
+	mut count := uint(0)
 	for {
 		_ := it.next() or { break }
 		count += 1
 	}
-	assert count == usize(s.rows)
+	assert count == uint(s.rows)
 
 	// Screen iterator should give total_rows
 	mut it2 := s.row_iterator(.right_down, Point.new(.screen, Coordinate{}), none)
-	mut count2 := usize(0)
+	mut count2 := uint(0)
 	for {
 		_ := it2.next() or { break }
 		count2 += 1
@@ -3049,34 +3049,34 @@ fn test_page_list_row_iterator_with_history() ! {
 }
 
 fn test_page_list_cell_iterator() ! {
-	mut s := PageList.init(10, 5, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(10, 5, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	mut it := s.cell_iterator(.right_down, Point.new(.active, Coordinate{}), none)
-	mut count := usize(0)
+	mut count := uint(0)
 	for {
 		_ := it.next() or { break }
 		count += 1
 	}
 	// Should be cols * rows cells
-	assert count == usize(s.cols) * usize(s.rows)
+	assert count == uint(s.cols) * uint(s.rows)
 }
 
 fn test_page_list_cell_iterator_reverse() ! {
-	mut s := PageList.init(10, 5, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(10, 5, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	mut it := s.cell_iterator(.left_up, Point.new(.active, Coordinate{}), none)
-	mut count := usize(0)
+	mut count := uint(0)
 	for {
 		_ := it.next() or { break }
 		count += 1
 	}
-	assert count == usize(s.cols) * usize(s.rows)
+	assert count == uint(s.cols) * uint(s.rows)
 }
 
 fn test_page_list_cell_iterator_preserves_starting_column() ! {
-	mut s := PageList.init(5, 2, usize(0))!
+	mut s := PageList.init(5, 2, uint(0))!
 	defer { s.deinit() }
 
 	start := s.pin(Point.new(.screen, Coordinate{ x: 3, y: 0 })) or {
@@ -3101,7 +3101,7 @@ fn test_page_list_cell_iterator_preserves_starting_column() ! {
 }
 
 fn test_page_list_prompt_iterator() ! {
-	mut s := PageList.init(10, 20, usize(0))!
+	mut s := PageList.init(10, 20, uint(0))!
 	defer { s.deinit() }
 
 	// Set semantic prompts on some rows
@@ -3127,7 +3127,7 @@ fn test_page_list_prompt_iterator() ! {
 }
 
 fn test_page_list_prompt_iterator_reverse() ! {
-	mut s := PageList.init(10, 20, usize(0))!
+	mut s := PageList.init(10, 20, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -3155,7 +3155,7 @@ fn test_page_list_prompt_iterator_reverse() ! {
 }
 
 fn test_page_list_prompt_iterator_left_up() ! {
-	mut s := PageList.init(2, 20, usize(0))!
+	mut s := PageList.init(2, 20, uint(0))!
 	defer { s.deinit() }
 	mut first := s.pages.first or {
 		assert false
@@ -3184,7 +3184,7 @@ fn test_page_list_prompt_iterator_left_up() ! {
 }
 
 fn test_page_list_prompt_iterator_right_down() ! {
-	mut s := PageList.init(2, 20, usize(0))!
+	mut s := PageList.init(2, 20, uint(0))!
 	defer { s.deinit() }
 	mut first := s.pages.first or {
 		assert false
@@ -3213,7 +3213,7 @@ fn test_page_list_prompt_iterator_right_down() ! {
 }
 
 fn test_page_list_prompt_iterator_right_down_continuation_at_start() ! {
-	mut s := PageList.init(2, 20, usize(0))!
+	mut s := PageList.init(2, 20, uint(0))!
 	defer { s.deinit() }
 	mut first := s.pages.first or {
 		assert false
@@ -3240,7 +3240,7 @@ fn test_page_list_prompt_iterator_right_down_continuation_at_start() ! {
 }
 
 fn test_page_list_prompt_iterator_right_down_with_prompt_before_continuation() ! {
-	mut s := PageList.init(2, 20, usize(0))!
+	mut s := PageList.init(2, 20, uint(0))!
 	defer { s.deinit() }
 	mut first := s.pages.first or {
 		assert false
@@ -3264,7 +3264,7 @@ fn test_page_list_prompt_iterator_right_down_with_prompt_before_continuation() !
 }
 
 fn test_page_list_prompt_iterator_right_down_limit_inclusive() ! {
-	mut s := PageList.init(2, 20, usize(0))!
+	mut s := PageList.init(2, 20, uint(0))!
 	defer { s.deinit() }
 	mut first := s.pages.first or {
 		assert false
@@ -3288,7 +3288,7 @@ fn test_page_list_prompt_iterator_right_down_limit_inclusive() ! {
 }
 
 fn test_page_list_prompt_iterator_left_up_limit_inclusive() ! {
-	mut s := PageList.init(2, 20, usize(0))!
+	mut s := PageList.init(2, 20, uint(0))!
 	defer { s.deinit() }
 	mut first := s.pages.first or {
 		assert false
@@ -3312,7 +3312,7 @@ fn test_page_list_prompt_iterator_left_up_limit_inclusive() ! {
 }
 
 fn test_page_list_highlight_semantic_content() ! {
-	mut s := PageList.init(10, 8, usize(0))!
+	mut s := PageList.init(10, 8, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -3379,7 +3379,7 @@ fn test_page_list_highlight_semantic_content() ! {
 }
 
 fn test_page_list_highlight_semantic_content_missing_input_and_output() ! {
-	mut s := PageList.init(5, 3, usize(0))!
+	mut s := PageList.init(5, 3, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -3403,7 +3403,7 @@ fn test_page_list_highlight_semantic_content_missing_input_and_output() ! {
 }
 
 fn test_page_list_highlight_semantic_content_prompt() ! {
-	mut s := PageList.init(10, 20, usize(0))!
+	mut s := PageList.init(10, 20, uint(0))!
 	defer { s.deinit() }
 	mark_screen_prompt(mut s, 5)
 	set_screen_semantic_range(mut s, 5, 0, 5, u32(`A`), .prompt)
@@ -3413,7 +3413,7 @@ fn test_page_list_highlight_semantic_content_prompt() ! {
 }
 
 fn test_page_list_highlight_semantic_content_prompt_with_output() ! {
-	mut s := PageList.init(10, 20, usize(0))!
+	mut s := PageList.init(10, 20, uint(0))!
 	defer { s.deinit() }
 	mark_screen_prompt(mut s, 5)
 	set_screen_semantic_range(mut s, 5, 0, 3, u32(`$`), .prompt)
@@ -3424,7 +3424,7 @@ fn test_page_list_highlight_semantic_content_prompt_with_output() ! {
 }
 
 fn test_page_list_highlight_semantic_content_prompt_multiline() ! {
-	mut s := PageList.init(10, 20, usize(0))!
+	mut s := PageList.init(10, 20, uint(0))!
 	defer { s.deinit() }
 	mark_screen_prompt(mut s, 5)
 	set_screen_semantic_range(mut s, 5, 0, 10, u32(`$`), .prompt)
@@ -3434,7 +3434,7 @@ fn test_page_list_highlight_semantic_content_prompt_multiline() ! {
 }
 
 fn test_page_list_highlight_semantic_content_prompt_only() ! {
-	mut s := PageList.init(10, 20, usize(0))!
+	mut s := PageList.init(10, 20, uint(0))!
 	defer { s.deinit() }
 	mark_screen_prompt(mut s, 5)
 	set_screen_semantic_range(mut s, 5, 0, 5, u32(`$`), .prompt)
@@ -3443,7 +3443,7 @@ fn test_page_list_highlight_semantic_content_prompt_only() ! {
 }
 
 fn test_page_list_highlight_semantic_content_prompt_to_end_of_screen() ! {
-	mut s := PageList.init(10, 20, usize(0))!
+	mut s := PageList.init(10, 20, uint(0))!
 	defer { s.deinit() }
 	mark_screen_prompt(mut s, 15)
 	set_screen_semantic_range(mut s, 15, 0, 3, u32(`$`), .prompt)
@@ -3452,7 +3452,7 @@ fn test_page_list_highlight_semantic_content_prompt_to_end_of_screen() ! {
 }
 
 fn test_page_list_highlight_semantic_content_input_basic() ! {
-	mut s := PageList.init(10, 20, usize(0))!
+	mut s := PageList.init(10, 20, uint(0))!
 	defer { s.deinit() }
 	mark_screen_prompt(mut s, 5)
 	set_screen_semantic_range(mut s, 5, 0, 3, u32(`$`), .prompt)
@@ -3462,7 +3462,7 @@ fn test_page_list_highlight_semantic_content_input_basic() ! {
 }
 
 fn test_page_list_highlight_semantic_content_input_with_output() ! {
-	mut s := PageList.init(10, 20, usize(0))!
+	mut s := PageList.init(10, 20, uint(0))!
 	defer { s.deinit() }
 	mark_screen_prompt(mut s, 5)
 	set_screen_semantic_range(mut s, 5, 0, 2, u32(`$`), .prompt)
@@ -3473,7 +3473,7 @@ fn test_page_list_highlight_semantic_content_input_with_output() ! {
 }
 
 fn test_page_list_highlight_semantic_content_input_multiline_with_continuation() ! {
-	mut s := PageList.init(10, 20, usize(0))!
+	mut s := PageList.init(10, 20, uint(0))!
 	defer { s.deinit() }
 	mark_screen_prompt(mut s, 5)
 	set_screen_semantic_range(mut s, 5, 0, 2, u32(`$`), .prompt)
@@ -3485,7 +3485,7 @@ fn test_page_list_highlight_semantic_content_input_multiline_with_continuation()
 }
 
 fn test_page_list_highlight_semantic_content_input_no_input_returns_none() ! {
-	mut s := PageList.init(10, 20, usize(0))!
+	mut s := PageList.init(10, 20, uint(0))!
 	defer { s.deinit() }
 	mark_screen_prompt(mut s, 5)
 	set_screen_semantic_range(mut s, 5, 0, 3, u32(`$`), .prompt)
@@ -3499,7 +3499,7 @@ fn test_page_list_highlight_semantic_content_input_no_input_returns_none() ! {
 }
 
 fn test_page_list_highlight_semantic_content_input_to_end_of_screen() ! {
-	mut s := PageList.init(10, 20, usize(0))!
+	mut s := PageList.init(10, 20, uint(0))!
 	defer { s.deinit() }
 	mark_screen_prompt(mut s, 15)
 	set_screen_semantic_range(mut s, 15, 0, 2, u32(`$`), .prompt)
@@ -3508,7 +3508,7 @@ fn test_page_list_highlight_semantic_content_input_to_end_of_screen() ! {
 }
 
 fn test_page_list_highlight_semantic_content_input_prompt_only_returns_none() ! {
-	mut s := PageList.init(10, 20, usize(0))!
+	mut s := PageList.init(10, 20, uint(0))!
 	defer { s.deinit() }
 	mark_screen_prompt(mut s, 5)
 	set_screen_semantic_range(mut s, 5, 0, 10, u32(`$`), .prompt)
@@ -3524,7 +3524,7 @@ fn test_page_list_highlight_semantic_content_input_prompt_only_returns_none() ! 
 }
 
 fn test_page_list_highlight_semantic_content_output_basic() ! {
-	mut s := PageList.init(10, 20, usize(0))!
+	mut s := PageList.init(10, 20, uint(0))!
 	defer { s.deinit() }
 	mark_screen_prompt(mut s, 5)
 	set_screen_semantic_range(mut s, 5, 0, 2, u32(`$`), .prompt)
@@ -3536,7 +3536,7 @@ fn test_page_list_highlight_semantic_content_output_basic() ! {
 }
 
 fn test_page_list_highlight_semantic_content_output_multiline() ! {
-	mut s := PageList.init(10, 20, usize(0))!
+	mut s := PageList.init(10, 20, uint(0))!
 	defer { s.deinit() }
 	mark_screen_prompt(mut s, 5)
 	set_screen_semantic_range(mut s, 5, 0, 2, u32(`$`), .prompt)
@@ -3550,7 +3550,7 @@ fn test_page_list_highlight_semantic_content_output_multiline() ! {
 }
 
 fn test_page_list_highlight_semantic_content_output_stops_at_next_prompt() ! {
-	mut s := PageList.init(10, 20, usize(0))!
+	mut s := PageList.init(10, 20, uint(0))!
 	defer { s.deinit() }
 	mark_screen_prompt(mut s, 5)
 	set_screen_semantic_range(mut s, 5, 0, 2, u32(`$`), .prompt)
@@ -3563,7 +3563,7 @@ fn test_page_list_highlight_semantic_content_output_stops_at_next_prompt() ! {
 }
 
 fn test_page_list_highlight_semantic_content_output_to_end_of_screen() ! {
-	mut s := PageList.init(10, 20, usize(0))!
+	mut s := PageList.init(10, 20, uint(0))!
 	defer { s.deinit() }
 	mark_screen_prompt(mut s, 15)
 	set_screen_semantic_range(mut s, 15, 0, 2, u32(`$`), .prompt)
@@ -3575,7 +3575,7 @@ fn test_page_list_highlight_semantic_content_output_to_end_of_screen() ! {
 }
 
 fn test_page_list_highlight_semantic_content_output_no_output_returns_none() ! {
-	mut s := PageList.init(10, 20, usize(0))!
+	mut s := PageList.init(10, 20, uint(0))!
 	defer { s.deinit() }
 	mark_screen_prompt(mut s, 5)
 	set_screen_semantic_range(mut s, 5, 0, 3, u32(`$`), .prompt)
@@ -3592,7 +3592,7 @@ fn test_page_list_highlight_semantic_content_output_no_output_returns_none() ! {
 }
 
 fn test_page_list_highlight_semantic_content_output_skips_empty_cells() ! {
-	mut s := PageList.init(10, 20, usize(0))!
+	mut s := PageList.init(10, 20, uint(0))!
 	defer { s.deinit() }
 	mark_screen_prompt(mut s, 5)
 	set_screen_semantic_range(mut s, 5, 0, 3, u32(`$`), .prompt)
@@ -3609,7 +3609,7 @@ fn test_page_list_highlight_semantic_content_output_skips_empty_cells() ! {
 // ============================================================
 
 fn test_page_pin_left_right() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 
 	p := s.pin(Point.new(.active, Coordinate{ x: 5, y: 3 })) or {
@@ -3627,7 +3627,7 @@ fn test_page_pin_left_right() ! {
 }
 
 fn test_page_pin_left_clamp_right_clamp() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 
 	p := s.pin(Point.new(.active, Coordinate{ x: 2, y: 0 })) or {
@@ -3646,7 +3646,7 @@ fn test_page_pin_left_clamp_right_clamp() ! {
 }
 
 fn test_page_pin_horizontal_movement_preserves_garbage() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 
 	base := s.pin(Point.new(.active, Coordinate{ x: 5, y: 3 })) or {
@@ -3674,7 +3674,7 @@ fn test_page_pin_horizontal_movement_preserves_garbage() ! {
 }
 
 fn test_page_pin_down_up() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 
 	p := s.pin(Point.new(.active, Coordinate{ x: 0, y: 0 })) or {
@@ -3706,7 +3706,7 @@ fn test_page_pin_down_up() ! {
 }
 
 fn test_page_pin_down_overflow() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 
 	p := s.pin(Point.new(.active, Coordinate{ x: 0, y: 5 })) or {
@@ -3741,7 +3741,7 @@ fn test_page_pin_down_overflow() ! {
 	}
 
 	// Movement uses Ghostty's usize contract rather than narrowing at u32.
-	large := usize(max_u32) + 1
+	large := uint(max_u32) + 1
 	result3 := p.down_overflow(large)
 	match result3 {
 		DownOverflowOffset {
@@ -3754,7 +3754,7 @@ fn test_page_pin_down_overflow() ! {
 }
 
 fn test_page_pin_up_overflow() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 
 	p := s.pin(Point.new(.active, Coordinate{ x: 0, y: 5 })) or {
@@ -3788,7 +3788,7 @@ fn test_page_pin_up_overflow() ! {
 		}
 	}
 
-	large := usize(max_u32) + 1
+	large := uint(max_u32) + 1
 	result3 := p.up_overflow(large)
 	match result3 {
 		UpOverflowOffset {
@@ -3801,7 +3801,7 @@ fn test_page_pin_up_overflow() ! {
 }
 
 fn test_page_pin_before() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 
 	p1 := s.pin(Point.new(.active, Coordinate{ x: 0, y: 2 })) or {
@@ -3819,7 +3819,7 @@ fn test_page_pin_before() ! {
 }
 
 fn test_page_pin_eql() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 
 	p1 := s.pin(Point.new(.active, Coordinate{ x: 3, y: 5 })) or {
@@ -3840,7 +3840,7 @@ fn test_page_pin_eql() ! {
 }
 
 fn test_page_pin_is_between() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 
 	top := s.pin(Point.new(.active, Coordinate{ x: 0, y: 2 })) or {
@@ -3867,7 +3867,7 @@ fn test_page_pin_is_between() ! {
 // ============================================================
 
 fn test_page_list_assert_integrity() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	s.assert_integrity()
@@ -3878,7 +3878,7 @@ fn test_page_list_assert_integrity() ! {
 
 fn test_page_list_verify_integrity() ! {
 	if !buildcfg.slow_runtime_safety { return }
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	assert s.verify_integrity() == none
@@ -3937,29 +3937,29 @@ fn test_page_list_verify_integrity() ! {
 // ============================================================
 
 fn test_page_list_scrollbar_no_history() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	sb := s.scrollbar()
-	assert sb.total == usize(s.rows)
+	assert sb.total == uint(s.rows)
 	assert sb.offset == 0
-	assert sb.len == usize(s.rows)
+	assert sb.len == uint(s.rows)
 }
 
 fn test_page_list_scrollbar_with_history() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	s.grow_rows(100)!
 
 	sb := s.scrollbar()
 	assert sb.total == s.total_rows
-	assert sb.offset == s.total_rows - usize(s.rows)
-	assert sb.len == usize(s.rows)
+	assert sb.offset == s.total_rows - uint(s.rows)
+	assert sb.len == uint(s.rows)
 }
 
 fn test_page_list_scrollbar_at_top() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	s.grow_rows(100)!
@@ -3968,11 +3968,11 @@ fn test_page_list_scrollbar_at_top() ! {
 	sb := s.scrollbar()
 	assert sb.total == s.total_rows
 	assert sb.offset == 0
-	assert sb.len == usize(s.rows)
+	assert sb.len == uint(s.rows)
 }
 
 fn test_page_list_scrollbar_in_middle() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	s.grow_rows(100)!
@@ -3981,7 +3981,7 @@ fn test_page_list_scrollbar_in_middle() ! {
 	sb := s.scrollbar()
 	assert sb.total == s.total_rows
 	assert sb.offset == 50
-	assert sb.len == usize(s.rows)
+	assert sb.len == uint(s.rows)
 }
 
 // ============================================================
@@ -4163,12 +4163,12 @@ fn test_page_node_list_pop() ! {
 // ============================================================
 
 fn test_page_list_point_from_pin_active_from_prior_page() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Grow so we take up at least 5 pages.
 	cap := initial_capacity(80)
-	s.grow_rows(usize(cap.rows) * 5)!
+	s.grow_rows(uint(cap.rows) * 5)!
 
 	last := s.pages.last or {
 		assert false, 'no last page'
@@ -4194,7 +4194,7 @@ fn test_page_list_point_from_pin_active_from_prior_page() ! {
 }
 
 fn test_page_list_scroll_delta_row_back_without_space_preserves_active() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	s.scroll(PageScrollDeltaRow{ delta: -1 })
@@ -4211,8 +4211,8 @@ fn test_page_list_scroll_delta_row_back_without_space_preserves_active() ! {
 
 	sb := s.scrollbar()
 	assert sb.total == s.total_rows
-	assert sb.offset == s.total_rows - usize(s.rows)
-	assert sb.len == usize(s.rows)
+	assert sb.offset == s.total_rows - uint(s.rows)
+	assert sb.len == uint(s.rows)
 }
 
 fn test_page_list_jump_zero_prompts() ! {
@@ -4228,8 +4228,8 @@ fn test_page_list_jump_zero_prompts() ! {
 	assert s.viewport == .active
 	assert s.scrollbar() == Scrollbar{
 		total:  s.total_rows
-		offset: s.total_rows - usize(s.rows)
-		len:    usize(s.rows)
+		offset: s.total_rows - uint(s.rows)
+		len:    uint(s.rows)
 	}
 }
 
@@ -4249,7 +4249,7 @@ fn test_page_list_jump_back_one_prompt() ! {
 		x: 0
 		y: 1
 	})
-	assert s.scrollbar() == Scrollbar{ total: s.total_rows, offset: 1, len: usize(s.rows) }
+	assert s.scrollbar() == Scrollbar{ total: s.total_rows, offset: 1, len: uint(s.rows) }
 
 	s.scroll(PageScrollDeltaPrompt{ delta: -1 })
 	assert s.viewport == .pin
@@ -4259,13 +4259,13 @@ fn test_page_list_jump_back_one_prompt() ! {
 
 	s.scroll(PageScrollDeltaPrompt{ delta: 1 })
 	assert s.viewport == .active
-	assert s.scrollbar().offset == s.total_rows - usize(s.rows)
+	assert s.scrollbar().offset == s.total_rows - uint(s.rows)
 	s.scroll(PageScrollDeltaPrompt{ delta: 1 })
 	assert s.viewport == .active
 }
 
 fn test_page_list_scroll_to_row_with_cache_fast_path_down() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 	s.grow_rows(50)!
 
@@ -4274,7 +4274,7 @@ fn test_page_list_scroll_to_row_with_cache_fast_path_down() ! {
 	sb1 := s.scrollbar()
 	assert sb1.total == s.total_rows
 	assert sb1.offset == 10
-	assert sb1.len == usize(s.rows)
+	assert sb1.len == uint(s.rows)
 
 	pc1 := s.get_cell(Point.new(.viewport, Coordinate{ x: 0, y: 0 })) or {
 		assert false, 'get_cell failed'
@@ -4317,7 +4317,7 @@ fn test_page_list_scroll_to_row_with_cache_fast_path_down() ! {
 }
 
 fn test_page_list_scroll_to_row_with_cache_fast_path_up() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 	s.grow_rows(50)!
 
@@ -4362,7 +4362,7 @@ fn test_page_list_scroll_to_row_with_cache_fast_path_up() ! {
 }
 
 fn test_page_list_reset_moves_tracked_pins_and_marks_garbage() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	p := s.pin(Point.new(.active, Coordinate{ x: 42, y: 12 })) or {
@@ -4383,13 +4383,13 @@ fn test_page_list_reset_moves_tracked_pins_and_marks_garbage() ! {
 }
 
 fn test_page_list_clears_history() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 	s.grow_rows(30)!
 	s.reset()
 	assert s.viewport == .active
 	assert s.pages.first != none
-	assert s.total_rows == usize(s.rows)
+	assert s.total_rows == uint(s.rows)
 
 	// Active area should be the top.
 	first := s.pages.first or {
@@ -4407,7 +4407,7 @@ fn test_page_list_clears_history() ! {
 // ============================================================
 
 fn test_page_list_erase_row_bounded_less_than_full_row() ! {
-	mut s := PageList.init(80, 10, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 10, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	p_top := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 0, y: 5 })) or {
@@ -4425,7 +4425,7 @@ fn test_page_list_erase_row_bounded_less_than_full_row() ! {
 
 	// Erase only a few rows in our active.
 	s.erase_row_bounded(Point.new(.active, Coordinate{ y: 5 }), 3) or { panic(err) }
-	assert s.total_rows == usize(s.rows)
+	assert s.total_rows == uint(s.rows)
 
 	first := s.pages.first or {
 		assert false, 'no first page'
@@ -4449,7 +4449,7 @@ fn test_page_list_erase_row_bounded_less_than_full_row() ! {
 }
 
 fn test_page_list_erase_row_bounded_preserves_managed_cell_data() ! {
-	mut s := PageList.init(6, 4, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(6, 4, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 	first := s.pages.first or {
 		assert false, 'no first page'
@@ -4495,7 +4495,7 @@ fn test_page_list_erase_row_bounded_preserves_managed_cell_data() ! {
 }
 
 fn test_page_list_erase_row_bounded_exact_page_boundary() ! {
-	mut s := PageList.init(4, 4, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(4, 4, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 	first := s.pages.first or {
 		assert false, 'no first page'
@@ -4546,7 +4546,7 @@ fn test_page_list_erase_row_bounded_exact_page_boundary() ! {
 }
 
 fn test_page_list_erase_row_bounded_with_pin_at_top() ! {
-	mut s := PageList.init(80, 10, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 10, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	p_top := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 5, y: 0 })) or {
@@ -4555,7 +4555,7 @@ fn test_page_list_erase_row_bounded_with_pin_at_top() ! {
 	})!
 
 	s.erase_row_bounded(Point.new(.active, Coordinate{}), 3) or { panic(err) }
-	assert s.total_rows == usize(s.rows)
+	assert s.total_rows == uint(s.rows)
 
 	first := s.pages.first or {
 		assert false, 'no first page'
@@ -4569,7 +4569,7 @@ fn test_page_list_erase_row_bounded_with_pin_at_top() ! {
 }
 
 fn test_page_list_erase_row_bounded_full_rows_single_page() ! {
-	mut s := PageList.init(80, 10, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 10, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	p_in := s.track_pin(s.pin(Point.new(.active, Coordinate{ x: 0, y: 7 })) or {
@@ -4582,7 +4582,7 @@ fn test_page_list_erase_row_bounded_full_rows_single_page() ! {
 	})!
 
 	s.erase_row_bounded(Point.new(.active, Coordinate{ y: 5 }), 10) or { panic(err) }
-	assert s.total_rows == usize(s.rows)
+	assert s.total_rows == uint(s.rows)
 
 	first := s.pages.first or {
 		assert false, 'no first page'
@@ -4601,7 +4601,7 @@ fn test_page_list_erase_row_bounded_full_rows_single_page() ! {
 }
 
 fn test_page_list_erase_row_bounded_full_rows_two_pages() ! {
-	mut s := PageList.init(80, 10, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 10, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Grow to two pages so our active area straddles.
@@ -4609,7 +4609,7 @@ fn test_page_list_erase_row_bounded_full_rows_two_pages() ! {
 		assert false, 'no first page'
 		return
 	}
-	remaining := usize(first_page.data.capacity.rows) - usize(first_page.data.size.rows)
+	remaining := uint(first_page.data.capacity.rows) - uint(first_page.data.size.rows)
 	s.grow_rows(remaining)!
 	s.grow_rows(5)!
 	assert s.total_pages() == 2
@@ -4686,7 +4686,7 @@ fn test_page_list_erase_row_bounded_full_rows_two_pages() ! {
 // ============================================================
 
 fn test_page_list_resize_no_reflow_one_row_precise() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 	assert s.total_rows == 10
 
@@ -4717,7 +4717,7 @@ fn test_page_list_resize_no_reflow_one_row_precise() ! {
 }
 
 fn test_page_list_resize_no_reflow_less_rows_cursor_on_bottom() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 	assert s.total_rows == 10
 
@@ -4762,7 +4762,7 @@ fn test_page_list_resize_no_reflow_less_rows_cursor_on_bottom() ! {
 }
 
 fn test_page_list_resize_no_reflow_less_rows_cursor_in_scrollback() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 	assert s.total_rows == 10
 
@@ -4810,7 +4810,7 @@ fn test_page_list_resize_no_reflow_less_rows_cursor_in_scrollback() ! {
 }
 
 fn test_page_list_resize_no_reflow_more_rows_contains_viewport() ! {
-	mut s := PageList.init(5, 5, usize(1))!
+	mut s := PageList.init(5, 5, uint(1))!
 	defer { s.deinit() }
 
 	// Make it so we have scrollback.
@@ -4829,7 +4829,7 @@ fn test_page_list_resize_no_reflow_more_rows_contains_viewport() ! {
 }
 
 fn test_page_list_resize_no_reflow_more_rows_extends_blank_lines() ! {
-	mut s := PageList.init(10, 3, usize(0))!
+	mut s := PageList.init(10, 3, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -4862,7 +4862,7 @@ fn test_page_list_resize_no_reflow_more_rows_extends_blank_lines() ! {
 }
 
 fn test_page_list_resize_no_reflow_less_rows_trims_blank_lines() ! {
-	mut s := PageList.init(10, 5, usize(0))!
+	mut s := PageList.init(10, 5, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -4910,7 +4910,7 @@ fn test_page_list_resize_no_reflow_less_rows_trims_blank_lines() ! {
 }
 
 fn test_page_list_resize_no_reflow_less_cols_clears_graphemes() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -4939,7 +4939,7 @@ fn test_page_list_resize_no_reflow_less_cols_clears_graphemes() ! {
 }
 
 fn test_page_list_resize_no_reflow_preserves_hyperlink_key_stride() ! {
-	mut s := PageList.init(4, 3, usize(0))!
+	mut s := PageList.init(4, 3, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -4995,7 +4995,7 @@ fn test_page_list_resize_no_reflow_preserves_hyperlink_key_stride() ! {
 }
 
 fn test_page_list_resize_no_reflow_less_rows_trims_blank_lines_cursor_in_blank_line() ! {
-	mut s := PageList.init(10, 5, usize(0))!
+	mut s := PageList.init(10, 5, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -5034,7 +5034,7 @@ fn test_page_list_resize_no_reflow_less_rows_trims_blank_lines_cursor_in_blank_l
 }
 
 fn test_page_list_resize_no_reflow_less_rows_trims_blank_lines_erases_pages() ! {
-	mut s := PageList.init(100, 5, usize(0))!
+	mut s := PageList.init(100, 5, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -5063,7 +5063,7 @@ fn test_page_list_resize_no_reflow_less_rows_trims_blank_lines_erases_pages() ! 
 }
 
 fn test_page_list_resize_no_reflow_more_cols_with_spacer_head() ! {
-	mut s := PageList.init(2, 3, usize(0))!
+	mut s := PageList.init(2, 3, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -5121,7 +5121,7 @@ fn test_page_list_resize_no_reflow_more_cols_forces_smaller_cap() ! {
 	assert cap2.cols == 500
 	assert cap2.rows < cap.rows
 
-	mut s := PageList.init(cap.cols, u16(cap.rows), usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(cap.cols, u16(cap.rows), uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -5158,7 +5158,7 @@ fn test_page_list_resize_no_reflow_more_cols_forces_less_rows_per_page() ! {
 	initial := std_capacity.adjust(PageCapacityAdjustment{ cols: cols }) or { panic(err) }
 	assert initial.rows >= rows
 
-	mut s := PageList.init(cols, rows, usize(0))!
+	mut s := PageList.init(cols, rows, uint(0))!
 	defer { s.deinit() }
 
 	mut new_cols := u16(50)
@@ -5169,7 +5169,7 @@ fn test_page_list_resize_no_reflow_more_cols_forces_less_rows_per_page() ! {
 	}
 	s.resize(PageResizeOpts{ cols: new_cols, reflow: false }) or { panic(err) }
 	assert s.cols == new_cols
-	assert s.total_rows == usize(rows)
+	assert s.total_rows == uint(rows)
 	assert_all_but_last_page_full(&s)
 
 	first := s.pages.first or { return }
@@ -5182,7 +5182,7 @@ fn test_page_list_resize_no_reflow_more_cols_forces_less_rows_per_page() ! {
 	}
 	s.resize(PageResizeOpts{ cols: new_cols, reflow: false }) or { panic(err) }
 	assert s.cols == new_cols
-	assert s.total_rows == usize(rows)
+	assert s.total_rows == uint(rows)
 	assert_all_but_last_page_full(&s)
 }
 
@@ -5258,7 +5258,7 @@ fn test_page_list_resize_no_reflow_more_cols_remaps_pins_in_backfill_path() ! {
 }
 
 fn test_page_list_resize_no_reflow_more_rows_adds_blank_rows_if_cursor_at_bottom() ! {
-	mut s := PageList.init(5, 3, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(5, 3, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Grow to 5 total rows (3 active + 2 scrollback).
@@ -5330,7 +5330,7 @@ fn test_page_list_resize_no_reflow_more_rows_adds_blank_rows_if_cursor_at_bottom
 // ============================================================
 
 fn test_page_list_resize_reflow_more_cols_no_wrapped_rows() ! {
-	mut s := PageList.init(5, 3, usize(0))!
+	mut s := PageList.init(5, 3, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -5361,7 +5361,7 @@ fn test_page_list_resize_reflow_more_cols_no_wrapped_rows() ! {
 }
 
 fn test_page_list_resize_reflow_more_cols_wrapped_rows() ! {
-	mut s := PageList.init(2, 4, usize(0))!
+	mut s := PageList.init(2, 4, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -5411,7 +5411,7 @@ fn test_page_list_resize_reflow_more_cols_wrapped_rows() ! {
 }
 
 fn test_page_list_resize_reflow_invalidates_viewport_offset_cache() ! {
-	mut s := PageList.init(2, 4, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(2, 4, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 	s.grow_rows(20)!
 
@@ -5444,7 +5444,7 @@ fn test_page_list_resize_reflow_invalidates_viewport_offset_cache() ! {
 	sb1 := s.scrollbar()
 	assert sb1.total == s.total_rows
 	assert sb1.offset == 10
-	assert sb1.len == usize(s.rows)
+	assert sb1.len == uint(s.rows)
 
 	// Resize with reflow - unwrapping rows changes total_rows.
 	s.resize(PageResizeOpts{ cols: 4, reflow: true }) or { panic(err) }
@@ -5454,7 +5454,7 @@ fn test_page_list_resize_reflow_invalidates_viewport_offset_cache() ! {
 	sb2 := s.scrollbar()
 	assert sb2.total == s.total_rows
 	assert sb2.offset == 5
-	assert sb2.len == usize(s.rows)
+	assert sb2.len == uint(s.rows)
 }
 
 fn test_page_list_resize_reflow_more_cols_creates_multiple_pages() ! {
@@ -5466,7 +5466,7 @@ fn test_page_list_resize_reflow_more_cols_creates_multiple_pages() ! {
 		cap = initial_capacity(current)
 	}
 
-	mut s := PageList.init(cap.cols, u16(cap.rows), usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(cap.cols, u16(cap.rows), uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -5508,7 +5508,7 @@ fn test_page_list_resize_reflow_more_cols_creates_multiple_pages() ! {
 }
 
 fn test_page_list_resize_reflow_more_cols_wrap_across_page_boundary() ! {
-	mut s := PageList.init(2, 10, usize(0))!
+	mut s := PageList.init(2, 10, uint(0))!
 	defer { s.deinit() }
 	grow_page_list_to_second_page(mut s, 1)
 
@@ -5550,7 +5550,7 @@ fn test_page_list_resize_reflow_more_cols_wrap_across_page_boundary() ! {
 }
 
 fn test_page_list_resize_reflow_more_cols_wrap_across_page_boundary_cursor_in_second_page() ! {
-	mut s := PageList.init(2, 10, usize(0))!
+	mut s := PageList.init(2, 10, uint(0))!
 	defer { s.deinit() }
 	grow_page_list_to_second_page(mut s, 1)
 
@@ -5590,7 +5590,7 @@ fn test_page_list_resize_reflow_more_cols_wrap_across_page_boundary_cursor_in_se
 }
 
 fn test_page_list_resize_reflow_less_cols_wrap_across_page_boundary_cursor_in_second_page() ! {
-	mut s := PageList.init(5, 10, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(5, 10, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 	grow_page_list_to_second_page(mut s, 5)
 
@@ -5651,7 +5651,7 @@ fn test_page_list_resize_reflow_less_cols_wrap_across_page_boundary_cursor_in_se
 fn test_page_list_resize_grow_cols_with_unwrap_fixes_viewport_pin() ! {
 	// Regression: after resize/reflow, the viewport pin can end up where
 	// pin.y + rows > total_rows, causing get_bottom_right to fail.
-	mut s := PageList.init(2, 10, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(2, 10, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	s.grow_rows(30)!
@@ -5704,7 +5704,7 @@ fn test_page_list_resize_grow_cols_with_unwrap_fixes_viewport_pin() ! {
 }
 
 fn test_page_list_resize_reflow_more_cols_cursor_in_wrapped_row() ! {
-	mut s := PageList.init(2, 4, usize(0))!
+	mut s := PageList.init(2, 4, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -5750,7 +5750,7 @@ fn test_page_list_resize_reflow_more_cols_cursor_in_wrapped_row() ! {
 }
 
 fn test_page_list_resize_reflow_more_cols_cursor_in_not_wrapped_row() ! {
-	mut s := PageList.init(2, 4, usize(0))!
+	mut s := PageList.init(2, 4, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -5793,7 +5793,7 @@ fn test_page_list_resize_reflow_more_cols_cursor_in_not_wrapped_row() ! {
 }
 
 fn test_page_list_resize_reflow_more_cols_cursor_in_wrapped_row_that_isnt_unwrapped() ! {
-	mut s := PageList.init(2, 4, usize(0))!
+	mut s := PageList.init(2, 4, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -5847,7 +5847,7 @@ fn test_page_list_resize_reflow_more_cols_cursor_in_wrapped_row_that_isnt_unwrap
 }
 
 fn test_page_list_resize_reflow_more_cols_no_reflow_preserves_semantic_prompt() ! {
-	mut s := PageList.init(2, 4, usize(0))!
+	mut s := PageList.init(2, 4, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -5871,7 +5871,7 @@ fn test_page_list_resize_reflow_more_cols_no_reflow_preserves_semantic_prompt() 
 }
 
 fn test_page_list_resize_reflow_less_cols_no_reflow_preserves_semantic_prompt() ! {
-	mut s := PageList.init(4, 4, usize(0))!
+	mut s := PageList.init(4, 4, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -5908,7 +5908,7 @@ fn test_page_list_resize_reflow_less_cols_no_reflow_preserves_semantic_prompt() 
 }
 
 fn test_page_list_resize_reflow_less_cols_no_reflow_preserves_semantic_prompt_on_first_line() ! {
-	mut s := PageList.init(4, 4, usize(0))!
+	mut s := PageList.init(4, 4, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -5932,7 +5932,7 @@ fn test_page_list_resize_reflow_less_cols_no_reflow_preserves_semantic_prompt_on
 }
 
 fn test_page_list_resize_reflow_less_cols_wrap_preserves_semantic_prompt() ! {
-	mut s := PageList.init(4, 4, usize(0))!
+	mut s := PageList.init(4, 4, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -5956,7 +5956,7 @@ fn test_page_list_resize_reflow_less_cols_wrap_preserves_semantic_prompt() ! {
 }
 
 fn test_page_list_resize_reflow_less_cols_no_wrapped_rows() ! {
-	mut s := PageList.init(10, 3, usize(0))!
+	mut s := PageList.init(10, 3, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -5989,7 +5989,7 @@ fn test_page_list_resize_reflow_less_cols_no_wrapped_rows() ! {
 }
 
 fn test_page_list_resize_reflow_less_cols_wrapped_rows() ! {
-	mut s := PageList.init(4, 2, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(4, 2, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -6049,7 +6049,7 @@ fn test_page_list_resize_reflow_less_cols_wrapped_rows() ! {
 }
 
 fn test_page_list_resize_reflow_preserves_hyperlink_mapping() ! {
-	mut s := PageList.init(4, 2, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(4, 2, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -6081,7 +6081,7 @@ fn test_page_list_resize_reflow_preserves_hyperlink_mapping() ! {
 				continue
 			}
 			assert cell.has_hyperlink
-			id := reflowed.lookup_hyperlink_at(usize(pin.y), usize(x)) or {
+			id := reflowed.lookup_hyperlink_at(uint(pin.y), uint(x)) or {
 				assert false, 'reflowed hyperlink mapping missing'
 				return
 			}
@@ -6102,7 +6102,7 @@ fn test_page_list_resize_reflow_preserves_hyperlink_mapping() ! {
 }
 
 fn test_page_list_resize_reflow_preserves_hyperlinks_across_source_pages() ! {
-	mut s := PageList.init(2, 4, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(2, 4, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -6159,7 +6159,7 @@ fn test_page_list_resize_reflow_preserves_hyperlinks_across_source_pages() ! {
 			if cell.codepoint != u32(`A`) && cell.codepoint != u32(`B`) {
 				continue
 			}
-			id := reflowed.lookup_hyperlink_at(usize(pin.y), usize(x)) or {
+			id := reflowed.lookup_hyperlink_at(uint(pin.y), uint(x)) or {
 				assert false, 'reflowed hyperlink mapping missing'
 				return
 			}
@@ -6171,15 +6171,15 @@ fn test_page_list_resize_reflow_preserves_hyperlinks_across_source_pages() ! {
 }
 
 fn test_page_list_resize_reflow_exceeds_hyperlink_memory_forcing_capacity_increase() ! {
-	mut s := PageList.init(2, 10, usize(0))!
+	mut s := PageList.init(2, 10, uint(0))!
 	defer { s.deinit() }
 	grow_page_list_to_second_page(mut s, 1)
 	uri := 'a'.repeat(int(string_bytes_default) - 1)
 
 	mut first := s.pages.first or { return }
 	mut page0 := &first.data
-	y0 := usize(page0.size.rows) - 1
-	x0 := usize(page0.size.cols) - 1
+	y0 := uint(page0.size.rows) - 1
+	x0 := uint(page0.size.cols) - 1
 	first_id := page0.insert_hyperlink(Hyperlink{
 		id:  HyperlinkImplicitId{ offset: 0 }
 		uri: uri
@@ -6227,7 +6227,7 @@ fn test_page_list_resize_reflow_exceeds_hyperlink_memory_forcing_capacity_increa
 }
 
 fn test_page_list_resize_reflow_exceeds_style_memory_forcing_capacity_increase() ! {
-	mut s := PageList.init(std_capacity.styles - 1, 10, usize(0))!
+	mut s := PageList.init(std_capacity.styles - 1, 10, uint(0))!
 	defer { s.deinit() }
 	grow_page_list_to_second_page(mut s, 1)
 
@@ -6281,7 +6281,7 @@ fn test_page_list_resize_reflow_exceeds_style_memory_forcing_capacity_increase()
 }
 
 fn test_page_list_resize_reflow_less_cols_cursor_in_wrapped_row() ! {
-	mut s := PageList.init(4, 2, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(4, 2, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -6318,7 +6318,7 @@ fn test_page_list_resize_reflow_less_cols_cursor_in_wrapped_row() ! {
 }
 
 fn reflow_cursor_cell_helper(init_cols u16, new_cols u16, pin_x u16, exp_x u32, exp_y u32) ! {
-	mut s := PageList.init(init_cols, 2, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(init_cols, 2, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	first := s.pages.first or { return }
@@ -6365,7 +6365,7 @@ fn test_page_list_resize_reflow_less_cols_cursor_in_wrapped_blank_cell() ! {
 }
 
 fn test_page_list_resize_reflow_less_cols_blank_lines() ! {
-	mut s := PageList.init(4, 3, usize(0))!
+	mut s := PageList.init(4, 3, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -6400,7 +6400,7 @@ fn test_page_list_resize_reflow_less_cols_blank_lines() ! {
 }
 
 fn test_page_list_resize_reflow_less_cols_wrapped_rows_with_graphemes() ! {
-	mut s := PageList.init(4, 2, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(4, 2, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -6450,7 +6450,7 @@ fn test_page_list_resize_reflow_less_cols_wrapped_rows_with_graphemes() ! {
 	assert !r1.row_data().header.wrap
 	assert r1.row_data().header.grapheme
 	assert r1.node.data.rows[int(r1.y)].cells[0].codepoint == 2
-	cps := r1.node.data.lookup_grapheme_at(usize(r1.y), 0) or {
+	cps := r1.node.data.lookup_grapheme_at(uint(r1.y), 0) or {
 		assert false, 'lookup_grapheme failed'
 		return
 	}
@@ -6459,7 +6459,7 @@ fn test_page_list_resize_reflow_less_cols_wrapped_rows_with_graphemes() ! {
 }
 
 fn test_page_list_resize_reflow_less_cols_cursor_goes_to_scrollback() ! {
-	mut s := PageList.init(4, 2, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(4, 2, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -6494,7 +6494,7 @@ fn test_page_list_resize_reflow_less_cols_cursor_goes_to_scrollback() ! {
 }
 
 fn test_page_list_resize_reflow_less_cols_copy_style() ! {
-	mut s := PageList.init(4, 2, usize(0))!
+	mut s := PageList.init(4, 2, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -6539,7 +6539,7 @@ fn test_page_list_resize_reflow_less_cols_copy_style() ! {
 }
 
 fn test_page_list_resize_reflow_less_cols_to_eliminate_a_wide_char() ! {
-	mut s := PageList.init(2, 1, usize(0))!
+	mut s := PageList.init(2, 1, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -6573,7 +6573,7 @@ fn test_page_list_resize_reflow_less_cols_to_eliminate_a_wide_char() ! {
 }
 
 fn test_page_list_resize_reflow_less_cols_to_wrap_a_wide_char() ! {
-	mut s := PageList.init(3, 1, usize(0))!
+	mut s := PageList.init(3, 1, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -6620,7 +6620,7 @@ fn test_page_list_resize_reflow_less_cols_to_wrap_a_wide_char() ! {
 }
 
 fn test_page_list_resize_reflow_less_cols_to_wrap_a_multicodepoint_grapheme_with_a_spacer_head() ! {
-	mut s := PageList.init(4, 2, usize(0))!
+	mut s := PageList.init(4, 2, uint(0))!
 	defer { s.deinit() }
 
 	mut first := s.pages.first or { return }
@@ -6674,7 +6674,7 @@ fn test_page_list_resize_reflow_less_cols_to_wrap_a_multicodepoint_grapheme_with
 }
 
 fn test_page_list_resize_reflow_more_cols_unwrap_wide_spacer_head() ! {
-	mut s := PageList.init(2, 2, usize(0))!
+	mut s := PageList.init(2, 2, uint(0))!
 	defer { s.deinit() }
 	mut node := s.pages.first or { return }
 	mut page := &node.data
@@ -6704,7 +6704,7 @@ fn test_page_list_resize_reflow_more_cols_unwrap_wide_spacer_head() ! {
 }
 
 fn test_page_list_resize_reflow_more_cols_unwrap_wide_spacer_head_across_two_rows() ! {
-	mut s := PageList.init(2, 3, usize(0))!
+	mut s := PageList.init(2, 3, uint(0))!
 	defer { s.deinit() }
 	mut node := s.pages.first or { return }
 	mut page := &node.data
@@ -6738,7 +6738,7 @@ fn test_page_list_resize_reflow_more_cols_unwrap_wide_spacer_head_across_two_row
 }
 
 fn test_page_list_resize_reflow_more_cols_unwrap_still_requires_wide_spacer_head() ! {
-	mut s := PageList.init(2, 2, usize(0))!
+	mut s := PageList.init(2, 2, uint(0))!
 	defer { s.deinit() }
 	mut node := s.pages.first or { return }
 	mut page := &node.data
@@ -6767,7 +6767,7 @@ fn test_page_list_resize_reflow_more_cols_unwrap_still_requires_wide_spacer_head
 }
 
 fn test_page_list_resize_reflow_less_cols_copy_kitty_placeholder() ! {
-	mut s := PageList.init(4, 2, usize(0))!
+	mut s := PageList.init(4, 2, uint(0))!
 	defer { s.deinit() }
 
 	mut first := s.pages.first or { return }
@@ -6787,7 +6787,7 @@ fn test_page_list_resize_reflow_less_cols_copy_kitty_placeholder() ! {
 }
 
 fn test_page_list_resize_reflow_more_cols_clears_kitty_placeholder() ! {
-	mut s := PageList.init(4, 2, usize(0))!
+	mut s := PageList.init(4, 2, uint(0))!
 	defer { s.deinit() }
 
 	mut first := s.pages.first or { return }
@@ -6809,7 +6809,7 @@ fn test_page_list_resize_reflow_more_cols_clears_kitty_placeholder() ! {
 }
 
 fn test_page_list_resize_reflow_wrap_moves_kitty_placeholder() ! {
-	mut s := PageList.init(4, 2, usize(0))!
+	mut s := PageList.init(4, 2, uint(0))!
 	defer { s.deinit() }
 
 	mut first := s.pages.first or { return }
@@ -6830,7 +6830,7 @@ fn test_page_list_resize_reflow_wrap_moves_kitty_placeholder() ! {
 }
 
 fn test_page_list_resize_reflow_grapheme_map_capacity_exceeded() ! {
-	mut s := PageList.init(4, 10, usize(0))!
+	mut s := PageList.init(4, 10, uint(0))!
 	defer { s.deinit() }
 	assert s.total_pages() == 1
 
@@ -6842,12 +6842,12 @@ fn test_page_list_resize_reflow_grapheme_map_capacity_exceeded() ! {
 		assert s.grow()!.node == none
 	}
 	assert s.total_pages() == 1
-	s.grow_rows(usize(graphemes_per_page))!
+	s.grow_rows(uint(graphemes_per_page))!
 	assert s.total_pages() == 2
 
 	mut page0_node := s.pages.first or { return }
 	mut page0 := &page0_node.data
-	start_row := usize(page0.size.rows) - graphemes_per_page
+	start_row := uint(page0.size.rows) - graphemes_per_page
 	for i in 0 .. graphemes_per_page {
 		y := start_row + i
 		page0.rows[y].cells[0] = CellData{
@@ -6859,10 +6859,10 @@ fn test_page_list_resize_reflow_grapheme_map_capacity_exceeded() ! {
 
 	mut page1_node := s.pages.last or { return }
 	mut page1 := &page1_node.data
-	count := if graphemes_per_page < usize(page1.size.rows) {
+	count := if graphemes_per_page < uint(page1.size.rows) {
 		graphemes_per_page
 	} else {
-		usize(page1.size.rows)
+		uint(page1.size.rows)
 	}
 	for y in 0 .. count {
 		page1.rows[y].cells[0] = CellData{
@@ -6877,7 +6877,7 @@ fn test_page_list_resize_reflow_grapheme_map_capacity_exceeded() ! {
 }
 
 fn test_page_list_resize_reflow_exceeds_grapheme_memory_forcing_capacity_increase() ! {
-	mut s := PageList.init(2, 10, usize(0))!
+	mut s := PageList.init(2, 10, uint(0))!
 	defer { s.deinit() }
 	assert s.total_pages() == 1
 
@@ -6892,8 +6892,8 @@ fn test_page_list_resize_reflow_exceeds_grapheme_memory_forcing_capacity_increas
 	cps := []u32{len: int(grapheme_bytes_default / sizeof(u32)) - 1, init: u32(`a`)}
 	mut page0_node := s.pages.first or { return }
 	mut page0 := &page0_node.data
-	y0 := usize(page0.size.rows) - 1
-	x0 := usize(page0.size.cols) - 1
+	y0 := uint(page0.size.rows) - 1
+	x0 := uint(page0.size.cols) - 1
 	page0.rows[y0].header.wrap = true
 	page0.rows[y0].cells[x0] = CellData{
 		content_tag: .codepoint
@@ -6915,7 +6915,7 @@ fn test_page_list_resize_reflow_exceeds_grapheme_memory_forcing_capacity_increas
 }
 
 fn test_page_list_resize_reflow_less_cols_blank_lines_between() ! {
-	mut s := PageList.init(4, 3, usize(0))!
+	mut s := PageList.init(4, 3, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -6959,7 +6959,7 @@ fn test_page_list_resize_reflow_less_cols_blank_lines_between() ! {
 }
 
 fn test_page_list_resize_reflow_less_cols_blank_lines_between_no_scrollback() ! {
-	mut s := PageList.init(5, 3, usize(0))!
+	mut s := PageList.init(5, 3, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -7001,7 +7001,7 @@ fn test_page_list_resize_reflow_less_cols_blank_lines_between_no_scrollback() ! 
 }
 
 fn test_page_list_resize_reflow_less_cols_cursor_not_on_last_line_preserves_location() ! {
-	mut s := PageList.init(5, 5, usize(1))!
+	mut s := PageList.init(5, 5, uint(1))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -7049,7 +7049,7 @@ fn test_page_list_resize_reflow_less_cols_cursor_not_on_last_line_preserves_loca
 }
 
 fn test_page_list_resize_reflow_less_cols_wraps_spacer_head() ! {
-	mut s := PageList.init(4, 3, usize(0))!
+	mut s := PageList.init(4, 3, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -7117,7 +7117,7 @@ fn test_page_list_resize_reflow_less_cols_wraps_spacer_head() ! {
 // ============================================================
 
 fn test_page_list_page_iterator_single_page_precise() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -7139,7 +7139,7 @@ fn test_page_list_page_iterator_single_page_precise() ! {
 }
 
 fn test_page_list_page_iterator_two_pages_precise() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Grow to fill page1 then one more to spill onto page2.
@@ -7147,7 +7147,7 @@ fn test_page_list_page_iterator_two_pages_precise() ! {
 		assert false, 'no first page'
 		return
 	}
-	remaining := usize(first.data.capacity.rows) - usize(first.data.size.rows)
+	remaining := uint(first.data.capacity.rows) - uint(first.data.size.rows)
 	s.grow_rows(remaining)!
 	s.grow_rows(1)!
 	assert s.total_pages() == 2
@@ -7178,14 +7178,14 @@ fn test_page_list_page_iterator_two_pages_precise() ! {
 }
 
 fn test_page_list_page_iterator_history_two_pages() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
 		assert false, 'no first page'
 		return
 	}
-	remaining := usize(first.data.capacity.rows) - usize(first.data.size.rows)
+	remaining := uint(first.data.capacity.rows) - uint(first.data.size.rows)
 	s.grow_rows(remaining)!
 	s.grow_rows(1)!
 	assert s.total_pages() == 2
@@ -7204,7 +7204,7 @@ fn test_page_list_page_iterator_history_two_pages() ! {
 }
 
 fn test_page_list_page_iterator_reverse_single_page() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -7226,14 +7226,14 @@ fn test_page_list_page_iterator_reverse_single_page() ! {
 }
 
 fn test_page_list_page_iterator_reverse_two_pages() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
 		assert false, 'no first page'
 		return
 	}
-	remaining := usize(first.data.capacity.rows) - usize(first.data.size.rows)
+	remaining := uint(first.data.capacity.rows) - uint(first.data.size.rows)
 	s.grow_rows(remaining)!
 	s.grow_rows(1)!
 	assert s.total_pages() == 2
@@ -7269,14 +7269,14 @@ fn test_page_list_page_iterator_reverse_two_pages() ! {
 }
 
 fn test_page_list_page_iterator_reverse_history_two_pages() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
 		assert false, 'no first page'
 		return
 	}
-	remaining := usize(first.data.capacity.rows) - usize(first.data.size.rows)
+	remaining := uint(first.data.capacity.rows) - uint(first.data.size.rows)
 	s.grow_rows(remaining)!
 	s.grow_rows(1)!
 	assert s.total_pages() == 2
@@ -7295,7 +7295,7 @@ fn test_page_list_page_iterator_reverse_history_two_pages() ! {
 }
 
 fn test_page_list_cell_iterator_precise() ! {
-	mut s := PageList.init(2, 2, usize(0))!
+	mut s := PageList.init(2, 2, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -7331,7 +7331,7 @@ fn test_page_list_cell_iterator_precise() ! {
 }
 
 fn test_page_list_cell_iterator_reverse_precise() ! {
-	mut s := PageList.init(2, 2, usize(0))!
+	mut s := PageList.init(2, 2, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -7370,13 +7370,13 @@ fn test_page_list_cell_iterator_reverse_precise() ! {
 // ============================================================
 
 fn test_page_list_erase_reaccounts_page_size() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 	start_size := s.page_size
 
 	// Grow so we take up at least 5 pages.
 	cap := initial_capacity(80)
-	s.grow_rows(usize(cap.rows) * 5)!
+	s.grow_rows(uint(cap.rows) * 5)!
 	assert s.page_size > start_size
 
 	// Erase the entire history; we should be back to just our active set.
@@ -7385,20 +7385,20 @@ fn test_page_list_erase_reaccounts_page_size() ! {
 }
 
 fn test_page_list_erase_row_with_tracked_pin_resets_to_top_left() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	// Grow so we take up at least 5 pages.
 	cap := initial_capacity(80)
-	s.grow_rows(usize(cap.rows) * 5)!
-	assert s.total_rows > usize(s.rows)
+	s.grow_rows(uint(cap.rows) * 5)!
+	assert s.total_rows > uint(s.rows)
 
 	// Put a tracked pin in the history.
 	p := s.track_pin(s.get_top_left(.history))!
 
 	// Erase the entire history; we should be back to just our active set.
 	s.erase_rows(Point.new(.history, Coordinate{}), none)
-	assert s.total_rows == usize(s.rows)
+	assert s.total_rows == uint(s.rows)
 
 	// Our pin should move to the first page.
 	first := s.pages.first or {
@@ -7413,7 +7413,7 @@ fn test_page_list_erase_row_with_tracked_pin_resets_to_top_left() ! {
 }
 
 fn test_page_list_erase_row_with_tracked_pin_shifts() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	pin := s.pin(Point.new(.active, Coordinate{ x: 2, y: 4 })) or {
@@ -7422,7 +7422,7 @@ fn test_page_list_erase_row_with_tracked_pin_shifts() ! {
 	}
 	p := s.track_pin(pin)!
 	s.erase_rows(Point.new(.active, Coordinate{}), Point.new(.active, Coordinate{ y: 3 }))
-	assert s.total_rows == usize(s.rows)
+	assert s.total_rows == uint(s.rows)
 	first := s.pages.first or {
 		assert false, 'no first page'
 		return
@@ -7434,7 +7434,7 @@ fn test_page_list_erase_row_with_tracked_pin_shifts() ! {
 }
 
 fn test_page_list_erase_row_with_tracked_pin_is_erased() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	pin := s.pin(Point.new(.active, Coordinate{ x: 2, y: 2 })) or {
@@ -7443,7 +7443,7 @@ fn test_page_list_erase_row_with_tracked_pin_is_erased() ! {
 	}
 	p := s.track_pin(pin)!
 	s.erase_rows(Point.new(.active, Coordinate{}), Point.new(.active, Coordinate{ y: 3 }))
-	assert s.total_rows == usize(s.rows)
+	assert s.total_rows == uint(s.rows)
 	first := s.pages.first or {
 		assert false, 'no first page'
 		return
@@ -7455,11 +7455,11 @@ fn test_page_list_erase_row_with_tracked_pin_is_erased() ! {
 }
 
 fn test_page_list_erase_resets_viewport_to_active_if_moves_within_active() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	cap := initial_capacity(80)
-	s.grow_rows(usize(cap.rows) * 5)!
+	s.grow_rows(uint(cap.rows) * 5)!
 
 	// Move our viewport to the top.
 	s.scroll(PageScrollDeltaRow{ delta: -int(s.total_rows) })
@@ -7471,11 +7471,11 @@ fn test_page_list_erase_resets_viewport_to_active_if_moves_within_active() ! {
 }
 
 fn test_page_list_erase_resets_viewport_if_inside_erased_page_but_not_active() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	cap := initial_capacity(80)
-	s.grow_rows(usize(cap.rows) * 5)!
+	s.grow_rows(uint(cap.rows) * 5)!
 	s.scroll(PageScrollDeltaRow{ delta: -int(s.total_rows) })
 	assert s.viewport == .top
 
@@ -7484,11 +7484,11 @@ fn test_page_list_erase_resets_viewport_if_inside_erased_page_but_not_active() !
 }
 
 fn test_page_list_erase_resets_viewport_to_active_if_top_is_inside_active() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 
 	cap := initial_capacity(80)
-	s.grow_rows(usize(cap.rows) * 5)!
+	s.grow_rows(uint(cap.rows) * 5)!
 
 	// Move our viewport to the top.
 	s.scroll(PageScrollTop{})
@@ -7499,14 +7499,14 @@ fn test_page_list_erase_resets_viewport_to_active_if_top_is_inside_active() ! {
 }
 
 fn test_page_list_erase_rows_invalidates_viewport_offset_cache() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 	cap := initial_capacity(80)
-	s.grow_rows(usize(cap.rows) * 3)!
+	s.grow_rows(uint(cap.rows) * 3)!
 	pin_y := cap.rows
 	viewport_pin := s.pin(Point.new(.screen, Coordinate{ x: 0, y: pin_y })) or { return }
 	s.scroll(PageScrollPin{ pin: viewport_pin })
-	assert s.scrollbar().offset == usize(pin_y)
+	assert s.scrollbar().offset == uint(pin_y)
 
 	rows_to_erase := cap.rows / 2
 	s.erase_rows(Point.new(.history, Coordinate{}), Point.new(.history, Coordinate{
@@ -7514,105 +7514,105 @@ fn test_page_list_erase_rows_invalidates_viewport_offset_cache() ! {
 	}))
 	assert s.scrollbar() == Scrollbar{
 		total:  s.total_rows
-		offset: usize(pin_y - rows_to_erase)
-		len:    usize(s.rows)
+		offset: uint(pin_y - rows_to_erase)
+		len:    uint(s.rows)
 	}
 }
 
 fn test_page_list_erase_row_invalidates_viewport_offset_cache() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 	cap := initial_capacity(80)
-	s.grow_rows(usize(cap.rows) * 3)!
+	s.grow_rows(uint(cap.rows) * 3)!
 	pin_y := cap.rows
 	viewport_pin := s.pin(Point.new(.screen, Coordinate{ x: 0, y: pin_y })) or { return }
 	s.scroll(PageScrollPin{ pin: viewport_pin })
-	assert s.scrollbar().offset == usize(pin_y)
+	assert s.scrollbar().offset == uint(pin_y)
 
 	s.erase_row(Point.new(.history, Coordinate{})) or { panic(err) }
 	assert s.scrollbar() == Scrollbar{
 		total:  s.total_rows
-		offset: usize(pin_y - 1)
-		len:    usize(s.rows)
+		offset: uint(pin_y - 1)
+		len:    uint(s.rows)
 	}
 }
 
 fn test_page_list_erase_row_bounded_invalidates_viewport_offset_cache() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 	cap := initial_capacity(80)
-	s.grow_rows(usize(cap.rows) * 3)!
+	s.grow_rows(uint(cap.rows) * 3)!
 	pin_y := u16(4)
 	viewport_pin := s.pin(Point.new(.screen, Coordinate{ x: 0, y: pin_y })) or { return }
 	s.scroll(PageScrollPin{ pin: viewport_pin })
-	assert s.scrollbar().offset == usize(pin_y)
+	assert s.scrollbar().offset == uint(pin_y)
 
 	s.erase_row_bounded(Point.new(.history, Coordinate{}), 10) or { panic(err) }
 	assert s.scrollbar() == Scrollbar{
 		total:  s.total_rows
-		offset: usize(pin_y - 1)
-		len:    usize(s.rows)
+		offset: uint(pin_y - 1)
+		len:    uint(s.rows)
 	}
 }
 
 fn test_page_list_erase_row_bounded_multi_page_invalidates_viewport_offset_cache() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 	cap := initial_capacity(80)
-	s.grow_rows(usize(cap.rows) * 3)!
+	s.grow_rows(uint(cap.rows) * 3)!
 	pin_y := u16(cap.rows + 1)
 	viewport_pin := s.pin(Point.new(.screen, Coordinate{ x: 0, y: pin_y })) or { return }
 	s.scroll(PageScrollPin{ pin: viewport_pin })
-	assert s.scrollbar().offset == usize(pin_y)
+	assert s.scrollbar().offset == uint(pin_y)
 
-	s.erase_row_bounded(Point.new(.history, Coordinate{}), usize(cap.rows) + 10) or {
+	s.erase_row_bounded(Point.new(.history, Coordinate{}), uint(cap.rows) + 10) or {
 		panic(err)
 	}
 	assert s.scrollbar() == Scrollbar{
 		total:  s.total_rows
-		offset: usize(pin_y - 1)
-		len:    usize(s.rows)
+		offset: uint(pin_y - 1)
+		len:    uint(s.rows)
 	}
 }
 
 fn test_page_list_erase_row_bounded_full_page_shift_invalidates_viewport_offset_cache() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 	cap := initial_capacity(80)
-	s.grow_rows(usize(cap.rows) * 4)!
+	s.grow_rows(uint(cap.rows) * 4)!
 	pin_y := u16(5)
 	viewport_pin := s.pin(Point.new(.screen, Coordinate{ x: 0, y: pin_y })) or { return }
 	s.scroll(PageScrollPin{ pin: viewport_pin })
-	assert s.scrollbar().offset == usize(pin_y)
+	assert s.scrollbar().offset == uint(pin_y)
 
-	s.erase_row_bounded(Point.new(.history, Coordinate{}), usize(cap.rows) * 2 + 10) or {
+	s.erase_row_bounded(Point.new(.history, Coordinate{}), uint(cap.rows) * 2 + 10) or {
 		panic(err)
 	}
 	assert s.scrollbar() == Scrollbar{
 		total:  s.total_rows
-		offset: usize(pin_y - 1)
-		len:    usize(s.rows)
+		offset: uint(pin_y - 1)
+		len:    uint(s.rows)
 	}
 }
 
 fn test_page_list_erase_row_bounded_exhausts_pages_invalidates_viewport_offset_cache() ! {
-	mut s := PageList.init(80, 24, usize(0x7FFFFFFFFFFFFFFF))!
+	mut s := PageList.init(80, 24, uint(0x7FFFFFFFFFFFFFFF))!
 	defer { s.deinit() }
 	cap := initial_capacity(80)
-	s.grow_rows(usize(cap.rows) * 3)!
+	s.grow_rows(uint(cap.rows) * 3)!
 	total_rows_before := s.total_rows
-	pin_y := u16(usize(cap.rows) * 2 + 10)
+	pin_y := u16(uint(cap.rows) * 2 + 10)
 	viewport_pin := s.pin(Point.new(.screen, Coordinate{ x: 0, y: pin_y })) or { return }
 	s.scroll(PageScrollPin{ pin: viewport_pin })
-	assert s.scrollbar().offset == usize(pin_y)
+	assert s.scrollbar().offset == uint(pin_y)
 
 	s.erase_row_bounded(Point.new(.history, Coordinate{}), total_rows_before * 2) or {
 		panic(err)
 	}
 	assert s.scrollbar() == Scrollbar{
 		total:  s.total_rows
-		offset: usize(pin_y - 1)
-		len:    usize(s.rows)
+		offset: uint(pin_y - 1)
+		len:    uint(s.rows)
 	}
 }
 
@@ -7621,7 +7621,7 @@ fn test_page_list_erase_row_bounded_exhausts_pages_invalidates_viewport_offset_c
 // ============================================================
 
 fn test_page_list_split_single_row_page_returns_out_of_space() ! {
-	mut s := PageList.init(10, 1, usize(0))!
+	mut s := PageList.init(10, 1, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -7640,7 +7640,7 @@ fn test_page_list_split_single_row_page_returns_out_of_space() ! {
 }
 
 fn test_page_list_split_multiple_tracked_pins_across_regions() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 
 	original := s.pages.first or {
@@ -7693,7 +7693,7 @@ fn test_page_list_split_multiple_tracked_pins_across_regions() ! {
 }
 
 fn test_page_list_split_tracked_viewport_pin_in_split_region_moves_correctly() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 
 	original := s.pages.first or {
@@ -7721,7 +7721,7 @@ fn test_page_list_split_tracked_viewport_pin_in_split_region_moves_correctly() !
 }
 
 fn test_page_list_split_last_page_makes_new_page_the_last() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 
 	first_node := s.pages.first or {
@@ -7761,7 +7761,7 @@ fn test_page_list_split_last_page_makes_new_page_the_last() ! {
 }
 
 fn test_page_list_split_first_page_keeps_original_as_first() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 
 	original_first := s.pages.first or {
@@ -7789,7 +7789,7 @@ fn test_page_list_split_first_page_keeps_original_as_first() ! {
 }
 
 fn test_page_list_split_preserves_styled_cells() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -7843,7 +7843,7 @@ fn test_page_list_split_preserves_styled_cells() ! {
 }
 
 fn test_page_list_split_preserves_grapheme_clusters() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {
@@ -7890,7 +7890,7 @@ fn test_page_list_split_preserves_grapheme_clusters() ! {
 }
 
 fn test_page_list_split_preserves_hyperlinks() ! {
-	mut s := PageList.init(10, 10, usize(0))!
+	mut s := PageList.init(10, 10, uint(0))!
 	defer { s.deinit() }
 
 	first := s.pages.first or {

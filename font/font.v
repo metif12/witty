@@ -888,9 +888,9 @@ mut:
 pub struct Atlas {
 pub mut:
 	// Modification counter, incremented on each atlas update.
-	modified stdatomic.AtomicVal[usize]
+	modified stdatomic.AtomicVal[uint]
 	// Resize counter, incremented on each atlas resize.
-	resized stdatomic.AtomicVal[usize]
+	resized stdatomic.AtomicVal[uint]
 	// The size of the atlas texture (width and height are equal).
 	size u32
 	// The pixel format of this atlas.

@@ -90,7 +90,7 @@ pub mut:
 
 	// The number of active completions. This DOES NOT include completions that
 	// are queued in the submissions queue.
-	active usize
+	active uint
 
 	// Our queue of submissions that we want to enqueue on the next tick.
 	submissions IntrusiveQueue[EpollCompletion]
@@ -373,7 +373,7 @@ pub fn (mut self EpollLoop) tick(wait u32) ! {
 
 	// Submit all the submissions. We copy the submission queue so that
 	// any resubmits don't cause an infinite loop.
-	mut wait_rem := usize(wait)
+	mut wait_rem := uint(wait)
 	mut queued := self.submissions
 	self.submissions = IntrusiveQueue[EpollCompletion]{}
 	for {
@@ -497,14 +497,14 @@ pub fn (mut self EpollLoop) tick(wait u32) ! {
 			}
 		}
 
-		n := posix_epoll_wait(self.fd, &events[0], usize(events.len), timeout)
+		n := posix_epoll_wait(self.fd, &events[0], uint(events.len), timeout)
 		// posix.epoll_wait returns an unsigned count (it retries EINTR and
 		// treats every other error as unreachable), so, as in the source,
 		// this branch never runs.
-		if isize(n) < 0 {
-			match posix_errno(i64(isize(n))) {
+		if int(n) < 0 {
+			match posix_errno(i64(int(n))) {
 				C.EINTR { continue }
-				else { return unexpected_errno(posix_errno(i64(isize(n)))) }
+				else { return unexpected_errno(posix_errno(i64(int(n)))) }
 			}
 		}
 
@@ -592,7 +592,7 @@ fn (mut self EpollLoop) thread_schedule(mut c EpollCompletion) ! {
 // This is the main callback for the threadpool to perform work
 // on completions for the loop.
 fn epoll_thread_perform(t &ThreadPoolTask) {
-	mut c := unsafe { &EpollCompletion(voidptr(usize(t) - __offsetof(EpollCompletion, task))) }
+	mut c := unsafe { &EpollCompletion(voidptr(uint(t) - __offsetof(EpollCompletion, task))) }
 
 	// Do our task
 	c.task_result = c.perform()
@@ -1255,49 +1255,49 @@ pub mut:
 pub struct EpollReadResult {
 pub mut:
 	err ?ErrorKind
-	n usize
+	n uint
 }
 
 pub struct EpollPReadResult {
 pub mut:
 	err ?ErrorKind
-	n usize
+	n uint
 }
 
 pub struct EpollWriteResult {
 pub mut:
 	err ?ErrorKind
-	n usize
+	n uint
 }
 
 pub struct EpollPWriteResult {
 pub mut:
 	err ?ErrorKind
-	n usize
+	n uint
 }
 
 pub struct EpollSendResult {
 pub mut:
 	err ?ErrorKind
-	n usize
+	n uint
 }
 
 pub struct EpollRecvResult {
 pub mut:
 	err ?ErrorKind
-	n usize
+	n uint
 }
 
 pub struct EpollSendMsgResult {
 pub mut:
 	err ?ErrorKind
-	n usize
+	n uint
 }
 
 pub struct EpollRecvMsgResult {
 pub mut:
 	err ?ErrorKind
-	n usize
+	n uint
 }
 
 pub struct EpollCloseResult {
@@ -1429,7 +1429,7 @@ fn epoll_result_err(tag EpollOperationType, err IError) EpollResult {
 }
 
 // epoll_result_n builds the byte-count result variant for `tag`.
-fn epoll_result_n(tag EpollOperationType, n usize) EpollResult {
+fn epoll_result_n(tag EpollOperationType, n uint) EpollResult {
 	match tag {
 		.read {
 			return EpollReadResult{
@@ -1478,7 +1478,7 @@ fn epoll_result_n(tag EpollOperationType, n usize) EpollResult {
 }
 
 // epoll_result_bytes returns the byte count of a read or write result.
-fn epoll_result_bytes(r EpollResult) usize {
+fn epoll_result_bytes(r EpollResult) uint {
 	return match r {
 		EpollReadResult { r.n }
 		EpollPReadResult { r.n }
@@ -1493,7 +1493,7 @@ fn epoll_result_bytes(r EpollResult) usize {
 }
 
 // Reads return EOF for a zero byte count.
-fn epoll_read_result(tag EpollOperationType, n usize) EpollResult {
+fn epoll_read_result(tag EpollOperationType, n uint) EpollResult {
 	if n == 0 {
 		return epoll_result_kind(tag, .eof)
 	}

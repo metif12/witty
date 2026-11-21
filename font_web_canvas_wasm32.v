@@ -6,7 +6,7 @@ import font
 import font.shaper
 
 @[export: 'deferred_face_new']
-fn deferred_face_new_wasm_export(ptr &u8, len usize, presentation u16) voidptr {
+fn deferred_face_new_wasm_export(ptr &u8, len uint, presentation u16) voidptr {
 	result := font.deferred_face_new(ptr, len, presentation) or { return unsafe { nil } }
 	return voidptr(result)
 }
@@ -26,7 +26,7 @@ fn deferred_face_load_wasm_export(raw voidptr, pts f32) {
 }
 
 @[export: 'face_new']
-fn face_new_wasm_export(ptr &u8, len usize, pts u16, presentation u16) voidptr {
+fn face_new_wasm_export(ptr &u8, len uint, pts u16, presentation u16) voidptr {
 	result := font.face_new(ptr, len, pts, presentation) or { return unsafe { nil } }
 	return voidptr(result)
 }
@@ -54,7 +54,7 @@ fn face_debug_canvas_wasm_export(raw voidptr) {
 }
 
 @[export: 'shaper_new']
-fn shaper_new_wasm_export(cap usize) voidptr {
+fn shaper_new_wasm_export(cap uint) voidptr {
 	result := shaper.shaper_new(cap) or { return unsafe { nil } }
 	return voidptr(result)
 }

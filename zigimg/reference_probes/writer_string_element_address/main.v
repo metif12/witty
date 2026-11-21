@@ -9,12 +9,12 @@ import zigimg
 
 fn C.witty_writer_seek_setup(&char) int
 fn C.witty_writer_seek_replace(int) int
-fn C.witty_writer_seek_restore(&char, usize) int
+fn C.witty_writer_seek_restore(&char, uint) int
 fn C.witty_writer_seek_close() int
 fn C.witty_writer_seek_cleanup() int
 fn C.witty_writer_seek_valid() int
-fn C.witty_writer_seek_view(&u8, usize) isize
-fn C.witty_writer_seek_drain(&u8, usize) isize
+fn C.witty_writer_seek_view(&u8, uint) int
+fn C.witty_writer_seek_drain(&u8, uint) int
 
 __global (
 	seen string
@@ -26,24 +26,24 @@ type Nested = [2][3]string
 type Aliased = [3]Text
 type Optional = [3]?string
 
-fn borrowed[E](_ E, raw usize, length int) []E {
+fn borrowed[E](_ E, raw uint, length int) []E {
 	return unsafe { array{ data: voidptr(raw), len: length, cap: length, flags: .nofree, element_size: int(sizeof(E)) } }
 }
 
 fn operate(mut writer zigimg.WriteStream, f []string) ! {
-	raw := usize(f[8].u64())
+	raw := uint(f[8].u64())
 	length := f[9].int()
 	api := (hex.decode(f[1])!).bytestr()
 	options := zigimg.FormatOptions{ width: if f[10] == '-' {
-		?usize(none)
+		?uint(none)
 	} else {
-		?usize(usize(f[10].u64()))
-	}, precision: if f[11] == '-' { ?usize(none) } else { ?usize(usize(f[11].u64())) }, alignment: unsafe { zigimg.Alignment(f[14].int()) }, fill: u8(f[15].int()) }
-	depth := usize(f[13].u64())
+		?uint(uint(f[10].u64()))
+	}, precision: if f[11] == '-' { ?uint(none) } else { ?uint(uint(f[11].u64())) }, alignment: unsafe { zigimg.Alignment(f[14].int()) }, fill: u8(f[15].int()) }
+	depth := uint(f[13].u64())
 	if f[12].int() == 0 {
 		if api == 'dp' || api == 'vp' {
 			pointer := unsafe { &Flat(voidptr(raw)) }
-			seen = '${usize(voidptr(pointer))}:-'
+			seen = '${uint(voidptr(pointer))}:-'
 			if api == 'dp' {
 				writer.print_address(pointer)!
 			} else {
@@ -52,7 +52,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 		} else {
 			zero := Flat{}
 			view := borrowed(zero, raw, length)
-			seen = '${usize(view.data)}:${view.len}'
+			seen = '${uint(view.data)}:${view.len}'
 			if api == 'ds' {
 				writer.print_address(view)!
 			} else {
@@ -64,7 +64,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 	if f[12].int() == 1 {
 		if api == 'dp' || api == 'vp' {
 			pointer := unsafe { &Nested(voidptr(raw)) }
-			seen = '${usize(voidptr(pointer))}:-'
+			seen = '${uint(voidptr(pointer))}:-'
 			if api == 'dp' {
 				writer.print_address(pointer)!
 			} else {
@@ -73,7 +73,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 		} else {
 			zero := Nested{}
 			view := borrowed(zero, raw, length)
-			seen = '${usize(view.data)}:${view.len}'
+			seen = '${uint(view.data)}:${view.len}'
 			if api == 'ds' {
 				writer.print_address(view)!
 			} else {
@@ -85,7 +85,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 	if f[12].int() == 2 {
 		if api == 'dp' || api == 'vp' {
 			pointer := unsafe { &Aliased(voidptr(raw)) }
-			seen = '${usize(voidptr(pointer))}:-'
+			seen = '${uint(voidptr(pointer))}:-'
 			if api == 'dp' {
 				writer.print_address(pointer)!
 			} else {
@@ -94,7 +94,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 		} else {
 			zero := Aliased{}
 			view := borrowed(zero, raw, length)
-			seen = '${usize(view.data)}:${view.len}'
+			seen = '${uint(view.data)}:${view.len}'
 			if api == 'ds' {
 				writer.print_address(view)!
 			} else {
@@ -106,7 +106,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 	if f[12].int() == 3 {
 		if api == 'dp' || api == 'vp' {
 			pointer := unsafe { &Optional(voidptr(raw)) }
-			seen = '${usize(voidptr(pointer))}:-'
+			seen = '${uint(voidptr(pointer))}:-'
 			if api == 'dp' {
 				writer.print_address(pointer)!
 			} else {
@@ -115,7 +115,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 		} else {
 			zero := Optional{}
 			view := borrowed(zero, raw, length)
-			seen = '${usize(view.data)}:${view.len}'
+			seen = '${uint(view.data)}:${view.len}'
 			if api == 'ds' {
 				writer.print_address(view)!
 			} else {
@@ -129,11 +129,11 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 
 fn snapshot(status string, writer zigimg.WriteStream, buffer []u8, file bool) string {
 	mut contents := []u8{len: 4096}
-	n := if file { C.witty_writer_seek_view(contents.data, usize(contents.len)) } else { isize(0) }
+	n := if file { C.witty_writer_seek_view(contents.data, uint(contents.len)) } else { int(0) }
 	if n < 0 { panic('observer failed') }
 	valid := if file { C.witty_writer_seek_valid() } else { 0 }
 	unused := writer.unused_capacity_slice()
-	offset := if buffer.len == 0 { usize(0) } else { usize(unused.data) - usize(buffer.data) }
+	offset := if buffer.len == 0 { uint(0) } else { uint(unused.data) - uint(buffer.data) }
 	return '${status}|${writer.get_pos()}:${writer.unused_capacity_len()}:${writer.buffered().len}:${offset}:${valid}|${buffer.hex()}|${writer.buffered().hex()}|${unused.hex()}|${seen}|${contents[..int(n)].hex()}'
 }
 
@@ -174,12 +174,12 @@ fn record(line string, path string) string {
 		writer.flush() or { status = err.msg() }
 	}
 	out += snapshot(status, writer, buffer, kind > 0) + '~'
-	mut drain := isize(-3)
+	mut drain := int(-3)
 	mut wire := []u8{}
 	if kind > 0 && binding == 1 {
 		for {
 			mut bytes := []u8{len: 4096}
-			drain = C.witty_writer_seek_drain(bytes.data, usize(bytes.len))
+			drain = C.witty_writer_seek_drain(bytes.data, uint(bytes.len))
 			if drain <= 0 { break }
 			wire << bytes[..int(drain)]
 		}

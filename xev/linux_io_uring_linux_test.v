@@ -5,9 +5,9 @@ module xev
 // that libxev does not reach and are not translated.
 
 fn test_linux_io_uring_structs_offsets_entries() {
-	assert usize(120) == sizeof(IoUringParams)
-	assert usize(64) == sizeof(IoUringSqe)
-	assert usize(16) == sizeof(IoUringCqe)
+	assert uint(120) == sizeof(IoUringParams)
+	assert uint(64) == sizeof(IoUringSqe)
+	assert uint(16) == sizeof(IoUringCqe)
 
 	assert 0 == ioring_off_sq_ring
 	assert 0x8000000 == ioring_off_cq_ring

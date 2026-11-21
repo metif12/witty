@@ -19,10 +19,10 @@ fn color(c vx.Color) u32 {
 }
 
 fn offset(value string, data []u8) i64 {
-	ptr := usize(value.str)
-	base := usize(data.data)
-	return if ptr >= base && ptr <= base + usize(data.len)
-		&& usize(value.len) <= base + usize(data.len) - ptr {
+	ptr := uint(value.str)
+	base := uint(data.data)
+	return if ptr >= base && ptr <= base + uint(data.len)
+		&& uint(value.len) <= base + uint(data.len) - ptr {
 		i64(ptr - base)
 	} else {
 		i64(-1)

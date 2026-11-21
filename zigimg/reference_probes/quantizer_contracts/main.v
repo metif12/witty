@@ -163,7 +163,7 @@ fn line_case(line string) {
 		6 {
 			value := q.root_node.get_palette_index(color, f[1].i32()) or {
 				status = err.msg()
-				usize(0)
+				uint(0)
 			}
 			if status == 'ok' { status = 'index:${value}' }
 		}

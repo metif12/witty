@@ -20,8 +20,8 @@ pub fn Farbfeld.read_image(mut stream ReadStream) !ImageUnmanaged {
 	mut codec := Farbfeld{}
 	pixels := codec.read(mut stream)!
 	return ImageUnmanaged{
-		width:  usize(codec.header.width)
-		height: usize(codec.header.height)
+		width:  uint(codec.header.width)
+		height: uint(codec.header.height)
 		pixels: pixels
 	}
 }
@@ -48,7 +48,7 @@ pub fn (mut codec Farbfeld) read(mut stream ReadStream) !PixelStorage {
 		width:  read_be_u32(bytes[..4])
 		height: read_be_u32(bytes[4..])
 	}
-	mut data := []Rgba64{len: int(usize(codec.header.width) * usize(codec.header.height))}
+	mut data := []Rgba64{len: int(uint(codec.header.width) * uint(codec.header.height))}
 	for i in 0 .. data.len {
 		pixel := stream.take(8) or { return error('InvalidData') }
 		data[i] = Rgba64{

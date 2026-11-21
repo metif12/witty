@@ -8,7 +8,7 @@ import apprt
 fn test_ghostty_info_exposes_stable_version_bytes() {
 	info := ghostty_info()
 	assert !isnil(info.version)
-	assert info.version_len == usize(version_string.len)
+	assert info.version_len == uint(version_string.len)
 	version := unsafe { info.version.vstring_with_len(int(info.version_len)) }
 	assert version == version_string
 }
@@ -135,7 +135,7 @@ fn test_config_c_api_gets_enum_color_duration_and_packed_values() {
 	assert color.g == 0x2c
 	assert color.b == 0x34
 
-	mut duration_ms := usize(0)
+	mut duration_ms := uint(0)
 	assert ghostty_config_get(mut config, voidptr(&duration_ms), 'undo-timeout')
 	assert duration_ms == 5000
 

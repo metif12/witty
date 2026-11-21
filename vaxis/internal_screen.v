@@ -42,8 +42,8 @@ pub mut:
 
 // Source allocates usize cells; V arrays use signed int lengths.
 fn internal_screen_cell_count(width u16, height u16) int {
-	count := usize(width) * usize(height)
-	if count > usize(2147483647) { panic('V array length limit') }
+	count := uint(width) * uint(height)
+	if count > uint(2147483647) { panic('V array length limit') }
 	return int(count)
 }
 
@@ -70,8 +70,8 @@ pub fn (mut s InternalScreen) write_cell(col u16, row u16, cell Cell) {
 	if s.width < col || s.height < row {
 		return
 	}
-	index := usize(row) * usize(s.width) + usize(col)
-	if index >= usize(s.buf.len) { panic('Assertion failed') }
+	index := uint(row) * uint(s.width) + uint(col)
+	if index >= uint(s.buf.len) { panic('Assertion failed') }
 	internal_screen_retained_write(mut s.buf[int(index)], 0, cell.char_.grapheme)
 	internal_screen_retained_write(mut s.buf[int(index)], 1, cell.link.uri)
 	internal_screen_retained_write(mut s.buf[int(index)], 2, cell.link.params)
@@ -87,7 +87,7 @@ pub fn (s &InternalScreen) read_cell(col u16, row u16) ?Cell {
 	if product > 65535 { panic('integer overflow') }
 	index := product + u32(col)
 	if index > 65535 { panic('integer overflow') }
-	if usize(index) >= usize(s.buf.len) { panic('Assertion failed') }
+	if uint(index) >= uint(s.buf.len) { panic('Assertion failed') }
 	cell := s.buf[int(index)]
 	return Cell{
 		char_:    CellCharacter{
@@ -104,7 +104,7 @@ pub fn (s &InternalScreen) read_cell(col u16, row u16) ?Cell {
 
 // Source ArrayList(u8).growCapacity uses std.atomic.cache_line as its byte
 // increment. This covers the native/cross targets supported by this port.
-fn internal_screen_growth_increment() usize {
+fn internal_screen_growth_increment() uint {
 	$if amd64 || arm64 { return 128 }
 	$if arm32 { return 32 }
 	return 64
@@ -137,10 +137,10 @@ fn internal_screen_retained_write(mut cell InternalCell, field int, text string)
 
 fn internal_screen_retained_prepare(mut storage []u8, length int) {
 	if storage.len < length {
-		mut capacity := usize(storage.len)
-		for capacity < usize(length) {
+		mut capacity := uint(storage.len)
+		for capacity < uint(length) {
 			capacity += capacity / 2 + internal_screen_growth_increment()
-			if capacity > usize(2147483647) { panic('V array length limit') }
+			if capacity > uint(2147483647) { panic('V array length limit') }
 		}
 		// Source has already cleared its old list length before growth; copying
 		// unused old bytes is unnecessary. Allocator remapping/address behavior
@@ -156,9 +156,9 @@ fn internal_screen_retained_view(storage []u8, length int) string {
 
 fn internal_screen_retained_copy(storage []u8, text string) {
 	if text.len > 0 {
-		dst := usize(storage.data)
-		src := usize(text.str)
-		length := usize(text.len)
+		dst := uint(storage.data)
+		src := uint(text.str)
+		length := uint(text.len)
 		if (dst <= src && src - dst < length) || (src < dst && dst - src < length) {
 			panic('@memcpy arguments alias')
 		}

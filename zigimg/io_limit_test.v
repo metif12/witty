@@ -9,7 +9,7 @@ fn test_limit_values_minimum_and_optional_subtraction() {
 	assert Limit.unlimited().to_int() == none
 	assert (Limit.limited(7).subtract(7) or { panic('missing zero') }).value == 0
 	assert Limit.limited(7).subtract(8) == none
-	assert (Limit.unlimited().subtract(~usize(0)) or { panic('missing unlimited') }) == Limit.unlimited()
+	assert (Limit.unlimited().subtract(~uint(0)) or { panic('missing unlimited') }) == Limit.unlimited()
 }
 
 fn test_limit_slices_borrow_and_slice1_saturates() {
@@ -22,7 +22,7 @@ fn test_limit_slices_borrow_and_slice1_saturates() {
 	first[0] = `y`
 	assert bytes == 'yxcdef'.bytes() && first.len == 1
 	assert Limit.unlimited().slice1(mut bytes) == bytes
-	assert Limit.limited(~usize(0) - 1).slice1(mut bytes) == bytes
+	assert Limit.limited(~uint(0) - 1).slice1(mut bytes) == bytes
 }
 
 fn test_limit_counts_shared_and_empty_vectors() {

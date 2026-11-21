@@ -132,7 +132,7 @@ pub fn parse_f64(raw string) !f64 {
 	if C.witty_zig_strtod(normalized.str, &end, &value) == 0 {
 		return error('invalid character')
 	}
-	if usize(end) != usize(normalized.str) + usize(normalized.len) {
+	if uint(end) != uint(normalized.str) + uint(normalized.len) {
 		return error('invalid character')
 	}
 	return value
@@ -150,7 +150,7 @@ pub fn parse_f32(raw string) !f32 {
 	if C.witty_zig_strtof(normalized.str, &end, &value) == 0 {
 		return error('invalid character')
 	}
-	if usize(end) != usize(normalized.str) + usize(normalized.len) {
+	if uint(end) != uint(normalized.str) + uint(normalized.len) {
 		return error('invalid character')
 	}
 	return value

@@ -556,7 +556,7 @@ pub type ActionValue = ActionClipboardContents
 	| osc.SemanticPrompt
 	| u16
 	| u8
-	| usize
+	| uint
 
 // The possible actions that can be emitted by the Stream function for
 // handling: the source's Action union, as its key and that key's value.
@@ -635,16 +635,16 @@ pub fn (mut self Stream[H]) next_slice(input []u8) ! {
 	mut cp_buf := []u32{len: 4096}
 
 	// Split the input into chunks that fit into cp_buf.
-	mut i := usize(0)
+	mut i := uint(0)
 	for {
-		len := if usize(cp_buf.len) < usize(input.len) - i {
-			usize(cp_buf.len)
+		len := if uint(cp_buf.len) < uint(input.len) - i {
+			uint(cp_buf.len)
 		} else {
-			usize(input.len) - i
+			uint(input.len) - i
 		}
 		self.next_slice_capped(input[i..i + len], mut cp_buf)!
 		i += len
-		if i >= usize(input.len) {
+		if i >= uint(input.len) {
 			break
 		}
 	}
@@ -653,18 +653,18 @@ pub fn (mut self Stream[H]) next_slice(input []u8) ! {
 fn (mut self Stream[H]) next_slice_capped(input []u8, mut cp_buf []u32) ! {
 	assert input.len <= cp_buf.len
 
-	mut offset := usize(0)
+	mut offset := uint(0)
 
 	// If the scalar UTF-8 decoder was in the middle of processing
 	// a code sequence, we continue until it's not.
 	for self.utf8decoder.state != 0 {
-		if offset >= usize(input.len) {
+		if offset >= uint(input.len) {
 			return
 		}
 		self.next_utf8(input[offset])!
 		offset += 1
 	}
-	if offset >= usize(input.len) {
+	if offset >= uint(input.len) {
 		return
 	}
 
@@ -672,7 +672,7 @@ fn (mut self Stream[H]) next_slice_capped(input []u8, mut cp_buf []u32) ! {
 	// we are. This can happen if the last chunk of input put us
 	// in the middle of a control sequence.
 	offset += self.consume_until_ground(input[offset..])!
-	if offset >= usize(input.len) {
+	if offset >= uint(input.len) {
 		return
 	}
 	offset += self.consume_all_escapes(input[offset..])!
@@ -680,7 +680,7 @@ fn (mut self Stream[H]) next_slice_capped(input []u8, mut cp_buf []u32) ! {
 	// If we're in the ground state then we can use SIMD to process
 	// input until we see an ESC (0x1B), since all other characters
 	// up to that point are just UTF-8.
-	for self.parser.state == .ground && offset < usize(input.len) {
+	for self.parser.state == .ground && offset < uint(input.len) {
 		res := simd.utf8_decode_until_control_seq(input[offset..], mut cp_buf)
 		for cp in cp_buf[..res.decoded] {
 			if cp <= 0xF {
@@ -692,7 +692,7 @@ fn (mut self Stream[H]) next_slice_capped(input []u8, mut cp_buf []u32) ! {
 		// Consume the bytes we just processed.
 		offset += res.consumed
 
-		if offset >= usize(input.len) {
+		if offset >= uint(input.len) {
 			return
 		}
 
@@ -717,15 +717,15 @@ fn (mut self Stream[H]) next_slice_capped(input []u8, mut cp_buf []u32) ! {
 //
 // Expects input to start with 0x1B, use consume_until_ground first
 // if the stream may be in the middle of an escape sequence.
-fn (mut self Stream[H]) consume_all_escapes(input []u8) !usize {
-	mut offset := usize(0)
+fn (mut self Stream[H]) consume_all_escapes(input []u8) !uint {
+	mut offset := uint(0)
 	for input[offset] == 0x1B {
 		self.parser.state = .escape
 		self.parser.clear()
 		offset += 1
 		offset += self.consume_until_ground(input[offset..])!
-		if offset >= usize(input.len) {
-			return usize(input.len)
+		if offset >= uint(input.len) {
+			return uint(input.len)
 		}
 	}
 	return offset
@@ -733,11 +733,11 @@ fn (mut self Stream[H]) consume_all_escapes(input []u8) !usize {
 
 // Parses escape sequences until the parser reaches the ground state.
 // Returns the number of bytes consumed from the provided input.
-fn (mut self Stream[H]) consume_until_ground(input []u8) !usize {
-	mut offset := usize(0)
+fn (mut self Stream[H]) consume_until_ground(input []u8) !uint {
+	mut offset := uint(0)
 	for self.parser.state != .ground {
-		if offset >= usize(input.len) {
-			return usize(input.len)
+		if offset >= uint(input.len) {
+			return uint(input.len)
 		}
 		self.next_non_utf8(input[offset])!
 		offset += 1
@@ -853,7 +853,7 @@ fn (mut self Stream[H]) next_non_utf8(c u8) ! {
 				if self.parser.params_idx < max_params {
 					self.parser.params[self.parser.params_idx] = self.parser.param_acc
 					if c == u8(`:`) {
-						self.parser.params_sep.set(usize(self.parser.params_idx))
+						self.parser.params_sep.set(uint(self.parser.params_idx))
 					}
 					self.parser.params_idx += 1
 
@@ -1371,10 +1371,10 @@ fn (mut self Stream[H]) csi_dispatch(input CSIAction) ! {
 				0 {
 					self.handler.vt(.insert_lines, match input.params.len {
 						0 {
-							usize(1)
+							uint(1)
 						}
 						1 {
-							usize(input.params[0])
+							uint(input.params[0])
 						}
 						else {
 							// invalid IL command
@@ -1395,10 +1395,10 @@ fn (mut self Stream[H]) csi_dispatch(input CSIAction) ! {
 				0 {
 					self.handler.vt(.delete_lines, match input.params.len {
 						0 {
-							usize(1)
+							uint(1)
 						}
 						1 {
-							usize(input.params[0])
+							uint(input.params[0])
 						}
 						else {
 							// invalid DL command
@@ -1418,10 +1418,10 @@ fn (mut self Stream[H]) csi_dispatch(input CSIAction) ! {
 				0 {
 					self.handler.vt(.delete_chars, match input.params.len {
 						0 {
-							usize(1)
+							uint(1)
 						}
 						1 {
-							usize(input.params[0])
+							uint(input.params[0])
 						}
 						else {
 							// invalid delete characters command
@@ -1441,10 +1441,10 @@ fn (mut self Stream[H]) csi_dispatch(input CSIAction) ! {
 				0 {
 					self.handler.vt(.scroll_up, match input.params.len {
 						0 {
-							usize(1)
+							uint(1)
 						}
 						1 {
-							usize(input.params[0])
+							uint(input.params[0])
 						}
 						else {
 							// invalid scroll up command
@@ -1464,10 +1464,10 @@ fn (mut self Stream[H]) csi_dispatch(input CSIAction) ! {
 				0 {
 					self.handler.vt(.scroll_down, match input.params.len {
 						0 {
-							usize(1)
+							uint(1)
 						}
 						1 {
-							usize(input.params[0])
+							uint(input.params[0])
 						}
 						else {
 							// invalid scroll down command
@@ -1527,10 +1527,10 @@ fn (mut self Stream[H]) csi_dispatch(input CSIAction) ! {
 				0 {
 					self.handler.vt(.erase_chars, match input.params.len {
 						0 {
-							usize(1)
+							uint(1)
 						}
 						1 {
-							usize(input.params[0])
+							uint(input.params[0])
 						}
 						else {
 							// invalid erase characters command
@@ -1598,10 +1598,10 @@ fn (mut self Stream[H]) csi_dispatch(input CSIAction) ! {
 				0 {
 					self.handler.vt(.print_repeat, match input.params.len {
 						0 {
-							usize(1)
+							uint(1)
 						}
 						1 {
-							usize(input.params[0])
+							uint(input.params[0])
 						}
 						else {
 							// invalid print repeat command
@@ -2228,10 +2228,10 @@ fn (mut self Stream[H]) csi_dispatch(input CSIAction) ! {
 				0 {
 					self.handler.vt(.insert_blanks, match input.params.len {
 						0 {
-							usize(1)
+							uint(1)
 						}
 						1 {
-							usize(input.params[0])
+							uint(input.params[0])
 						}
 						else {
 							// invalid ICH command

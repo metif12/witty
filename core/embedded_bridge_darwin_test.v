@@ -70,7 +70,7 @@ fn test_embedded_bridge_does_not_retarget_stale_surface_actions_to_app() {
 	bridge := EmbeddedAppCore{}
 	assert bridge_apprt_target(&bridge, apprt.Target(apprt.AppTarget{}))? is apprt.AppTarget
 	assert bridge_apprt_target(&bridge, apprt.Target(apprt.SurfaceTarget{
-		surface: voidptr(usize(1))
+		surface: voidptr(uint(1))
 	})) == none
 }
 

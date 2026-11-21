@@ -6,9 +6,9 @@ import os
 #flag -I @VMODROOT/zigimg/reference_probes
 #include "reference_probes/reader_exclusive/fixture_shims.h"
 
-fn C.witty_reader_exclusive_payload(&char, &u8, usize) int
+fn C.witty_reader_exclusive_payload(&char, &u8, uint) int
 fn C.witty_reader_delimiter_replace(int) int
-fn C.witty_reader_delimiter_seed(usize, usize) int
+fn C.witty_reader_delimiter_seed(uint, uint) int
 fn C.witty_reader_delimiter_cleanup() int
 
 fn test_memory_vectors_keep_slice_headers_and_partial_eof_writes() {
@@ -64,7 +64,7 @@ fn test_read_vec_exposes_zero_progress_when_a_file_becomes_a_pipe() {
 	$if !windows {
 		path := os.join_path(os.temp_dir(), 'witty-vector-pipe-${os.getpid()}.owned')
 		data := 'abcdefghi'.bytes()
-		fd := C.witty_reader_exclusive_payload(path.str, data.data, usize(data.len))
+		fd := C.witty_reader_exclusive_payload(path.str, data.data, uint(data.len))
 		assert fd >= 0
 		defer { assert C.witty_reader_delimiter_cleanup() == 0 }
 		mut buffer := []u8{len: 4, init: 165}

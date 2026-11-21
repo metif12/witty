@@ -21,11 +21,11 @@ fn C.close(fd int) int
 
 fn C.access(path &char, mode int) int
 
-fn C.witty_read_retry(fd int, buf voidptr, count usize) int
+fn C.witty_read_retry(fd int, buf voidptr, count uint) int
 
 fn C.witty_read_error_kind() int
 
-fn C.write(fd int, buf voidptr, count usize) isize
+fn C.write(fd int, buf voidptr, count uint) int
 
 fn C.poll(fds voidptr, nfds u32, timeout int) int
 

@@ -11,7 +11,7 @@ struct C.pthread_t {}
 @[typedef]
 struct C.pthread_attr_t {}
 
-fn C.pthread_attr_setguardsize(attr voidptr, size usize) int
+fn C.pthread_attr_setguardsize(attr voidptr, size uint) int
 fn C.getpagesize() int
 fn C.witty_vaxis_pthread_join(handle C.pthread_t) int
 
@@ -38,9 +38,9 @@ fn loop_thread_start[T](context voidptr) !LoopThread {
 		result := C.pthread_attr_destroy(&attr)
 		assert result == 0
 	}
-	stack_result := C.pthread_attr_setstacksize(&attr, usize(16 * 1024 * 1024))
+	stack_result := C.pthread_attr_setstacksize(&attr, uint(16 * 1024 * 1024))
 	assert stack_result == 0
-	guard_result := C.pthread_attr_setguardsize(&attr, usize(C.getpagesize()))
+	guard_result := C.pthread_attr_setguardsize(&attr, uint(C.getpagesize()))
 	assert guard_result == 0
 	mut handle := C.pthread_t{}
 	result := C.pthread_create(&handle, &attr, voidptr(loop_thread_entry[T]), args)

@@ -41,12 +41,12 @@ pub mut:
 	palette FixedStorage256[Rgba32]
 }
 
-pub fn (codec &SGI) width() usize {
-	return usize(codec.header.x_size)
+pub fn (codec &SGI) width() uint {
+	return uint(codec.header.x_size)
 }
 
-pub fn (codec &SGI) height() usize {
-	return usize(codec.header.y_size)
+pub fn (codec &SGI) height() uint {
+	return uint(codec.header.y_size)
 }
 
 pub fn SGI.format_detect(mut stream ReadStream) !bool {
@@ -111,26 +111,26 @@ pub fn (mut codec SGI) uncompress_bitmap(mut stream ReadStream, mut buffer []u8)
 			height := codec.height()
 			// Source evaluates the table allocation's products in u16.
 			if u32(codec.header.y_size) * codec.header.z_size > 8191 { panic('integer overflow') }
-			rows := height * usize(codec.header.z_size)
+			rows := height * uint(codec.header.z_size)
 			mut tables := []u8{len: int(rows * 8)}
 			stream.read_slice_all(mut tables)!
 			mut data := []u8{len: int(stream.get_end_pos()! - stream.get_pos())}
-			data_start := usize(512 + tables.len)
+			data_start := uint(512 + tables.len)
 			stream.read_slice_all(mut data)!
 			// Table offsets are absolute file offsets, even when reading from
 			// a stream whose initial position was not zero.
-			for index := usize(0); index < rows; index++ {
+			for index := uint(0); index < rows; index++ {
 				at := int(index * 4)
-				offset := usize(read_be_u32(tables[at..at + 4]))
+				offset := uint(read_be_u32(tables[at..at + 4]))
 				size_at := int(rows * 4) + at
-				scanline_size := usize(read_be_u32(tables[size_at..size_at + 4]))
+				scanline_size := uint(read_be_u32(tables[size_at..size_at + 4]))
 				if offset < data_start { panic('integer overflow') }
 				mut scanline_offset := offset - data_start
 				max_offset := scanline_offset + scanline_size
 				channel_bytes := if codec.header.bytes_per_channel == 1 {
-					usize(1)
+					uint(1)
 				} else {
-					usize(2)
+					uint(2)
 				}
 				mut pixel_pos := index * width * channel_bytes
 				for scanline_offset < max_offset {
@@ -139,7 +139,7 @@ pub fn (mut codec SGI) uncompress_bitmap(mut stream ReadStream, mut buffer []u8)
 					scanline_offset += channel_bytes
 					if run_count & 128 == 128 {
 						for _ in 0 .. int(run_count & 127) {
-							for byte := usize(0); byte < channel_bytes; byte++ {
+							for byte := uint(0); byte < channel_bytes; byte++ {
 								sgi_check_index(pixel_pos + byte, buffer.len)
 								buffer[int(pixel_pos + byte)] = sgi_buffer_byte(data,
 
@@ -158,7 +158,7 @@ pub fn (mut codec SGI) uncompress_bitmap(mut stream ReadStream, mut buffer []u8)
 						}
 						scanline_offset += channel_bytes
 						for _ in 0 .. int(run_count) {
-							for byte := usize(0); byte < channel_bytes; byte++ {
+							for byte := uint(0); byte < channel_bytes; byte++ {
 								sgi_check_index(pixel_pos + byte, buffer.len)
 								buffer[int(pixel_pos + byte)] = if byte == 0 {
 									hi_byte
@@ -217,11 +217,11 @@ pub fn (mut codec SGI) read(mut stream ReadStream) !PixelStorage {
 	}
 	pixel_size := u16(codec.header.z_size * codec.header.bytes_per_channel)
 	mut pixels := PixelStorage.init(format, width * height)!
-	mut buffer := []u8{len: int(usize(pixel_size) * width * height)}
+	mut buffer := []u8{len: int(uint(pixel_size) * width * height)}
 	codec.uncompress_bitmap(mut stream, mut buffer)!
 	channel_size := width * height
-	for y := usize(0); y < height; y++ {
-		for x := usize(0); x < width; x++ {
+	for y := uint(0); y < height; y++ {
+		for x := uint(0); x < width; x++ {
 			offset := (height - y - 1) * width + x
 			index := int(y * width + x)
 			match mut pixels {
@@ -268,20 +268,20 @@ pub fn (mut codec SGI) read(mut stream ReadStream) !PixelStorage {
 }
 
 fn sgi_read_be_u16(bytes []u8, offset int) u16 {
-	return u16(sgi_buffer_byte(bytes, usize(offset))) << 8 | sgi_buffer_byte(bytes, usize(offset) +
+	return u16(sgi_buffer_byte(bytes, uint(offset))) << 8 | sgi_buffer_byte(bytes, uint(offset) +
 		1)
 }
 
-fn sgi_check_index(index usize, length int) {
-	if index >= usize(length) { panic('index out of bounds: index ${index}, len ${length}') }
+fn sgi_check_index(index uint, length int) {
+	if index >= uint(length) { panic('index out of bounds: index ${index}, len ${length}') }
 }
 
-fn sgi_buffer_byte(bytes []u8, index usize) u8 {
+fn sgi_buffer_byte(bytes []u8, index uint) u8 {
 	sgi_check_index(index, bytes.len)
 	return bytes[int(index)]
 }
 
-fn sgi_source_be_word(bytes []u8, index usize) u16 {
+fn sgi_source_be_word(bytes []u8, index uint) u16 {
 	// Source reinterprets the byte slice descriptor without dividing its length.
 	sgi_check_index(index, bytes.len)
 	return sgi_read_be_u16(bytes, int(index * 2))

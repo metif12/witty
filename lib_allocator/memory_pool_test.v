@@ -7,7 +7,7 @@ mut:
 	fail_at     int = -1
 }
 
-fn pool_test_alloc(ctx voidptr, len usize, alignment u8, _ usize) voidptr {
+fn pool_test_alloc(ctx voidptr, len uint, alignment u8, _ uint) voidptr {
 	mut state := unsafe { &PoolTestState(ctx) }
 	call := state.allocations
 	state.allocations++
@@ -15,15 +15,15 @@ fn pool_test_alloc(ctx voidptr, len usize, alignment u8, _ usize) voidptr {
 	return c_allocator.alloc_bytes(len, alignment, 0)
 }
 
-fn pool_test_resize(_ voidptr, _ voidptr, _ usize, _ u8, _ usize, _ usize) bool {
+fn pool_test_resize(_ voidptr, _ voidptr, _ uint, _ u8, _ uint, _ uint) bool {
 	return false
 }
 
-fn pool_test_remap(_ voidptr, _ voidptr, _ usize, _ u8, _ usize, _ usize) voidptr {
+fn pool_test_remap(_ voidptr, _ voidptr, _ uint, _ u8, _ uint, _ uint) voidptr {
 	return unsafe { nil }
 }
 
-fn pool_test_free(ctx voidptr, ptr voidptr, len usize, alignment u8, _ usize) {
+fn pool_test_free(ctx voidptr, ptr voidptr, len uint, alignment u8, _ uint) {
 	mut state := unsafe { &PoolTestState(ctx) }
 	state.frees++
 	c_allocator.free_bytes(ptr, len, alignment, 0)
@@ -76,7 +76,7 @@ fn test_memory_pool_nongrowable_and_aligned_items() ! {
 	defer { pool.deinit() }
 	for _ in 0 .. 4 {
 		ptr := pool.create()!
-		assert usize(ptr) % 256 == 0
+		assert uint(ptr) % 256 == 0
 	}
 	pool.create() or {
 		assert err.msg() == 'OutOfMemory'

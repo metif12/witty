@@ -319,15 +319,15 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 	// init_atlas_texture initializes an empty texture matching the atlas. Atlas
 	// bytes are synchronized separately by the renderer.
 	pub fn (self &MetalAPI) init_atlas_texture(atlas &font.Atlas) !MetalTexture {
-		return MetalTexture.init(self.atlas_texture_options(atlas.format)!, usize(atlas.size),
-			usize(atlas.size), none)
+		return MetalTexture.init(self.atlas_texture_options(atlas.format)!, uint(atlas.size),
+			uint(atlas.size), none)
 	}
 
 	pub fn (self &MetalAPI) target_pixel_format() MetalPixelFormat {
 		return if self.blending.is_linear() { .bgra8unorm_srgb } else { .bgra8unorm }
 	}
 
-	pub fn (self &MetalAPI) init_target(width usize, height usize) !MetalTarget {
+	pub fn (self &MetalAPI) init_target(width uint, height uint) !MetalTarget {
 		return MetalTarget.init(MetalTargetOptions{
 			device:       self.device
 			width:        width

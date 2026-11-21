@@ -23,7 +23,7 @@ fn appearance_app_published(_backend voidptr, _app &apprt.App, scheme apprt.Colo
 }
 
 fn appearance_surface_published(backend voidptr, scheme apprt.ColorScheme) ! {
-	appearance_surface_calls << int(usize(backend))
+	appearance_surface_calls << int(uint(backend))
 	appearance_surface_scheme = scheme
 }
 
@@ -42,7 +42,7 @@ fn test_native_application_and_controller_appearance_publication_and_cache() {
 	appearance_surface_calls.clear()
 	native_application_appearance_changed(true)
 	assert appearance_app_calls == 0
-	runtime.app = &apprt.App{ core_app: &apprt.CoreApp{ backend: voidptr(usize(1)) } }
+	runtime.app = &apprt.App{ core_app: &apprt.CoreApp{ backend: voidptr(uint(1)) } }
 	macos.sync_native_application_appearance(macos.NativeWindowConfig{ theme: 2 })
 	macos.set_application_appearance_callback(native_application_appearance_changed)
 	defer {
@@ -58,12 +58,12 @@ fn test_native_application_and_controller_appearance_publication_and_cache() {
 
 	view := macos.create_restorable_window(300, 200, 'appearance publication')
 	window := macos.view_window(view)
-	mut first := &TermState{ view: view, native_config: macos.NativeWindowConfig{ theme: 2 }, surface: &apprt.Surface{ core_surface: apprt.CoreSurface{ backend: voidptr(usize(2)) } } }
+	mut first := &TermState{ view: view, native_config: macos.NativeWindowConfig{ theme: 2 }, surface: &apprt.Surface{ core_surface: apprt.CoreSurface{ backend: voidptr(uint(2)) } } }
 	macos.view_set_userdata(view, voidptr(first))
 	mut controller := &TerminalController{ host: macos.create_split_host(view), focused: first }
 	first.controller = controller
 	second_view := macos.create_split_surface_view(controller.host)
-	mut second := &TermState{ view: second_view, surface: &apprt.Surface{ core_surface: apprt.CoreSurface{ backend: voidptr(usize(3)) } } }
+	mut second := &TermState{ view: second_view, surface: &apprt.Surface{ core_surface: apprt.CoreSurface{ backend: voidptr(uint(3)) } } }
 	macos.view_set_userdata(second_view, voidptr(second))
 	second.controller = controller
 	controller.host.replace_tree(controller.host.tree.inserting(second_view, view, .right) or { panic(err) })

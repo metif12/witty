@@ -52,12 +52,12 @@ pub mut:
 	palette FixedStorage256[Rgba32]
 }
 
-pub fn (codec &RAS) width() usize {
-	return usize(codec.header.width)
+pub fn (codec &RAS) width() uint {
+	return uint(codec.header.width)
 }
 
-pub fn (codec &RAS) height() usize {
-	return usize(codec.header.height)
+pub fn (codec &RAS) height() uint {
+	return uint(codec.header.height)
 }
 
 pub fn RAS.format_detect(mut stream ReadStream) !bool {
@@ -143,7 +143,7 @@ pub fn (mut codec RAS) uncompress_bitmap(mut stream ReadStream, mut buffer []u8)
 
 pub fn (mut codec RAS) read_palette(mut stream ReadStream) ! {
 	if codec.header.color_map_type != .rgb_color_map { return error('Unsupported') }
-	colors := usize(codec.header.color_map_length / 3)
+	colors := uint(codec.header.color_map_length / 3)
 	// FixedStorage's source slice checks the requested end before resizing.
 	if colors > 256 { panic('index out of bounds: index ${colors}, len 256') }
 	codec.palette.resize(colors)
@@ -187,7 +187,7 @@ pub fn (mut codec RAS) read(mut stream ReadStream) !PixelStorage {
 		codec.read_palette(mut stream)!
 	}
 	mut pixels := PixelStorage.init(format, width * height)!
-	pixel_size := if codec.header.depth < 8 { usize(1) } else { usize(codec.header.depth / 8) }
+	pixel_size := if codec.header.depth < 8 { uint(1) } else { uint(codec.header.depth / 8) }
 	// Only the one-bit path rounds rows to sixteen bits in the pinned source.
 	bytes_needed := (width + 7) / 8
 	line_size := if codec.header.depth == 1 { bytes_needed + (bytes_needed & 1) } else { width }
@@ -196,8 +196,8 @@ pub fn (mut codec RAS) read(mut stream ReadStream) !PixelStorage {
 	mut pixel_bytes := pixels.as_bytes()
 	match mut pixels {
 		Grayscale1Pixels {
-			for y := usize(0); y < height; y++ {
-				for x := usize(0); x < width; x++ {
+			for y := uint(0); y < height; y++ {
+				for x := uint(0); x < width; x++ {
 					offset := y * line_size + x / 8
 					mask := u8(1) << u8(7 - x % 8)
 					pixels.data[int(y * width + x)].value = if buffer[int(offset)] & mask != 0 {
@@ -218,7 +218,7 @@ pub fn (mut codec RAS) read(mut stream ReadStream) !PixelStorage {
 				panic('index out of bounds: index ${pixels.indices.len}, len ${buffer.len}')
 			}
 			copy(mut pixels.indices, buffer[..pixels.indices.len])
-			pixels.resize_palette(usize(codec.palette.data.len))
+			pixels.resize_palette(uint(codec.palette.data.len))
 			for i, color in codec.palette.data {
 				pixels.palette[i] = color
 			}

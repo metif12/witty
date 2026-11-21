@@ -22,7 +22,7 @@ fn optional[T](value T) ?T {
 	return value
 }
 
-fn check[T](value ?T, format string, depth usize, expected string) ! {
+fn check[T](value ?T, format string, depth uint, expected string) ! {
 	mut bytes := []u8{len: 512}
 	mut writer := zigimg.WriteStream.init_memory(mut bytes)
 	writer.print_value(format, zigimg.FormatOptions{}, value, depth)!
@@ -30,10 +30,10 @@ fn check[T](value ?T, format string, depth usize, expected string) ! {
 	mut absent := []u8{len: 16}
 	mut out := zigimg.WriteStream.init_memory(mut absent)
 	out.print_value(format, zigimg.FormatOptions{
-		width:     usize(8)
+		width:     uint(8)
 		alignment: .center
 		fill:      `_`
-		precision: usize(99)
+		precision: uint(99)
 	}, ?T(none), depth)!
 	assert out.buffered().bytestr() == '__null__'
 }
@@ -58,7 +58,7 @@ fn main() {
 	check[AliasRecord](AliasRecord(record), 'any', 0, '.{ ... }') or { panic(err) }
 	items := OptionalItems([?int(7), ?int(none)])
 	check[OptionalItems](items, '?any', 1, '{ 7, null }') or { panic(err) }
-	address := unsafe { &u32(usize(40)) }
+	address := unsafe { &u32(uint(40)) }
 	check[&u32](address, '?*', 0, 'u32@28') or { panic(err) }
 	mut bytes := []u8{len: 64}
 	mut writer := zigimg.WriteStream.init_memory(mut bytes)

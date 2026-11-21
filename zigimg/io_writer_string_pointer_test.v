@@ -5,19 +5,19 @@ type DescriptorPointer = &DescriptorText
 type DescriptorPointers = [2]&string
 
 fn test_string_descriptor_pointer_addresses_do_not_read_descriptor_or_text() ! {
-	value := unsafe { &string(voidptr(usize(0x1234))) }
-	alias := unsafe { DescriptorPointer(voidptr(usize(0x1234))) }
+	value := unsafe { &string(voidptr(uint(0x1234))) }
+	alias := unsafe { DescriptorPointer(voidptr(uint(0x1234))) }
 	mut buffer := []u8{len: 256}
 	mut writer := WriteStream.init_memory(mut buffer)
 	writer.print_address(value)!
-	writer.print_value('*', FormatOptions{ width: ~usize(0), precision: ~usize(0) }, alias, ~usize(0))!
+	writer.print_value('*', FormatOptions{ width: ~uint(0), precision: ~uint(0) }, alias, ~uint(0))!
 	writer.print_value('any', FormatOptions{ width: 6, alignment: .left, fill: `_` }, value, 0)!
-	writer.print_address(unsafe { &string(voidptr(usize(0))) })!
+	writer.print_address(unsafe { &string(voidptr(uint(0))) })!
 	assert writer.buffered().bytestr() == '[]const u8@1234[]const u8@1234[]const u8@1234__[]const u8@0'
 }
 
 fn test_string_descriptor_pointer_optionals_keep_address_and_null_routes() ! {
-	value := unsafe { &string(voidptr(usize(0x1000))) }
+	value := unsafe { &string(voidptr(uint(0x1000))) }
 	mut buffer := []u8{len: 256}
 	mut writer := WriteStream.init_memory(mut buffer)
 	writer.print_address(?&string(value))!
@@ -28,7 +28,7 @@ fn test_string_descriptor_pointer_optionals_keep_address_and_null_routes() ! {
 }
 
 fn test_string_descriptor_optional_pointer_aliases_keep_raw_bits() ! {
-	pointer := unsafe { DescriptorPointer(voidptr(usize(0x1000))) }
+	pointer := unsafe { DescriptorPointer(voidptr(uint(0x1000))) }
 	mut buffer := []u8{len: 128}
 	mut writer := WriteStream.init_memory(mut buffer)
 	writer.print_address(?DescriptorPointer(pointer))!
@@ -39,7 +39,7 @@ fn test_string_descriptor_optional_pointer_aliases_keep_raw_bits() ! {
 }
 
 fn test_string_descriptor_pointer_failures_keep_exact_prefix_and_digits() ! {
-	value := unsafe { &string(voidptr(usize(0x1234))) }
+	value := unsafe { &string(voidptr(uint(0x1234))) }
 	expected := '[]const u8@1234'
 	for capacity in 0 .. expected.len + 2 {
 		for direct in [true, false] {
@@ -60,7 +60,7 @@ fn test_string_descriptor_pointer_failures_keep_exact_prefix_and_digits() ! {
 }
 
 fn test_string_descriptor_pointer_elements_name_the_pointer_type() ! {
-	value := unsafe { &DescriptorPointers(voidptr(usize(0x1234))) }
+	value := unsafe { &DescriptorPointers(voidptr(uint(0x1234))) }
 	mut buffer := []u8{len: 128}
 	mut writer := WriteStream.init_memory(mut buffer)
 	writer.print_address(value)!
@@ -70,7 +70,7 @@ fn test_string_descriptor_pointer_elements_name_the_pointer_type() ! {
 
 fn test_string_descriptor_addresses_preserve_owned_headers_and_ignore_replacement() ! {
 	mut value := 'first'
-	address := unsafe { usize(voidptr(&value)) }
+	address := unsafe { uint(voidptr(&value)) }
 	before := unsafe { (&u8(voidptr(&value))).vbytes(int(sizeof(value))).clone() }
 	mut buffer := []u8{len: 128}
 	mut writer := WriteStream.init_memory(mut buffer)

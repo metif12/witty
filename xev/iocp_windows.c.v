@@ -15,8 +15,8 @@ import sync.stdatomic as _
 @[typedef]
 pub struct C.OVERLAPPED {
 pub mut:
-	Internal     usize
-	InternalHigh usize
+	Internal     uint
+	InternalHigh uint
 	Offset       u32
 	OffsetHigh   u32
 	hEvent       voidptr
@@ -25,9 +25,9 @@ pub mut:
 @[typedef]
 pub struct C.OVERLAPPED_ENTRY {
 pub mut:
-	lpCompletionKey            usize
+	lpCompletionKey            uint
 	lpOverlapped               &C.OVERLAPPED
-	Internal                   usize
+	Internal                   uint
 	dwNumberOfBytesTransferred u32
 }
 
@@ -45,9 +45,9 @@ mut:
 	CompletionPort voidptr
 }
 
-fn C.CreateIoCompletionPort(fd voidptr, existing voidptr, key usize, concurrency u32) voidptr
+fn C.CreateIoCompletionPort(fd voidptr, existing voidptr, key uint, concurrency u32) voidptr
 fn C.GetQueuedCompletionStatusEx(port voidptr, entries &C.OVERLAPPED_ENTRY, count u32, removed &u32, timeout u32, alertable int) bool
-fn C.PostQueuedCompletionStatus(port voidptr, bytes u32, key usize, overlapped &C.OVERLAPPED) bool
+fn C.PostQueuedCompletionStatus(port voidptr, bytes u32, key uint, overlapped &C.OVERLAPPED) bool
 fn C.QueryPerformanceFrequency(frequency &i64) int
 fn C.QueryPerformanceCounter(counter &i64) int
 fn C.GetLastError() u32
@@ -58,17 +58,17 @@ fn C.CancelIoEx(handle voidptr, overlapped voidptr) bool
 fn C.GetOverlappedResult(handle voidptr, overlapped &C.OVERLAPPED, count &u32, wait int) bool
 fn C.SetInformationJobObject(job voidptr, class_ int, info voidptr, size u32) bool
 fn C.WSAGetLastError() int
-fn C.WSASocketW(af int, type_ int, protocol int, info voidptr, group u32, flags u32) usize
-fn C.WSASend(socket usize, buffers &C.WSABUF, count u32, sent &u32, flags u32, overlapped &C.OVERLAPPED, callback voidptr) int
-fn C.WSARecv(socket usize, buffers &C.WSABUF, count u32, received &u32, flags &u32, overlapped &C.OVERLAPPED, callback voidptr) int
-fn C.WSASendTo(socket usize, buffers &C.WSABUF, count u32, sent &u32, flags u32, addr voidptr, addr_len int, overlapped &C.OVERLAPPED, callback voidptr) int
-fn C.WSARecvFrom(socket usize, buffers &C.WSABUF, count u32, received &u32, flags &u32, addr voidptr, addr_len &int, overlapped &C.OVERLAPPED, callback voidptr) int
-fn C.WSAGetOverlappedResult(socket usize, overlapped &C.OVERLAPPED, count &u32, wait int, flags &u32) int
-fn C.AcceptEx(listener usize, socket usize, output voidptr, data_len u32, local_len u32, remote_len u32, received &u32, overlapped &C.OVERLAPPED) int
-fn C.getsockname(socket usize, address voidptr, address_len &int) int
-fn C.getsockopt(socket usize, level int, name int, value voidptr, size &int) int
-fn C.connect(socket usize, address voidptr, address_len int) int
-fn C.shutdown(socket usize, how int) int
+fn C.WSASocketW(af int, type_ int, protocol int, info voidptr, group u32, flags u32) uint
+fn C.WSASend(socket uint, buffers &C.WSABUF, count u32, sent &u32, flags u32, overlapped &C.OVERLAPPED, callback voidptr) int
+fn C.WSARecv(socket uint, buffers &C.WSABUF, count u32, received &u32, flags &u32, overlapped &C.OVERLAPPED, callback voidptr) int
+fn C.WSASendTo(socket uint, buffers &C.WSABUF, count u32, sent &u32, flags u32, addr voidptr, addr_len int, overlapped &C.OVERLAPPED, callback voidptr) int
+fn C.WSARecvFrom(socket uint, buffers &C.WSABUF, count u32, received &u32, flags &u32, addr voidptr, addr_len &int, overlapped &C.OVERLAPPED, callback voidptr) int
+fn C.WSAGetOverlappedResult(socket uint, overlapped &C.OVERLAPPED, count &u32, wait int, flags &u32) int
+fn C.AcceptEx(listener uint, socket uint, output voidptr, data_len u32, local_len u32, remote_len u32, received &u32, overlapped &C.OVERLAPPED) int
+fn C.getsockname(socket uint, address voidptr, address_len &int) int
+fn C.getsockopt(socket uint, level int, name int, value voidptr, size &int) int
+fn C.connect(socket uint, address voidptr, address_len int) int
+fn C.shutdown(socket uint, how int) int
 
 pub type IocpCallback = fn (userdata voidptr, loop &IocpLoop, completion &IocpCompletion, result IocpResult) CallbackAction
 
@@ -111,7 +111,7 @@ pub struct IocpJobObjectAssociated {}
 pub struct IocpJobObjectMessage {
 pub mut:
 	type_ u32
-	value usize
+	value uint
 }
 
 pub type IocpJobObjectValue = IocpJobObjectAssociated | IocpJobObjectMessage
@@ -343,13 +343,13 @@ pub mut:
 pub struct IocpReadResult {
 pub mut:
 	err ?ErrorKind
-	n   usize
+	n   uint
 }
 
 pub struct IocpPReadResult {
 pub mut:
 	err ?ErrorKind
-	n   usize
+	n   uint
 }
 
 pub struct IocpShutdownResult {
@@ -360,37 +360,37 @@ pub mut:
 pub struct IocpWriteResult {
 pub mut:
 	err ?ErrorKind
-	n   usize
+	n   uint
 }
 
 pub struct IocpPWriteResult {
 pub mut:
 	err ?ErrorKind
-	n   usize
+	n   uint
 }
 
 pub struct IocpSendResult {
 pub mut:
 	err ?ErrorKind
-	n   usize
+	n   uint
 }
 
 pub struct IocpRecvResult {
 pub mut:
 	err ?ErrorKind
-	n   usize
+	n   uint
 }
 
 pub struct IocpSendToResult {
 pub mut:
 	err ?ErrorKind
-	n   usize
+	n   uint
 }
 
 pub struct IocpRecvFromResult {
 pub mut:
 	err ?ErrorKind
-	n   usize
+	n   uint
 }
 
 pub struct IocpTimerResult {
@@ -459,7 +459,7 @@ fn iocp_result_kind(tag IocpOperationType, kind ErrorKind) IocpResult {
 	}
 }
 
-fn iocp_result_n(tag IocpOperationType, n usize) IocpResult {
+fn iocp_result_n(tag IocpOperationType, n uint) IocpResult {
 	return match tag {
 		.read { IocpReadResult{ n: n } }
 		.pread { IocpPReadResult{ n: n } }
@@ -473,7 +473,7 @@ fn iocp_result_n(tag IocpOperationType, n usize) IocpResult {
 	}
 }
 
-fn iocp_result_bytes(r IocpResult) usize {
+fn iocp_result_bytes(r IocpResult) uint {
 	return match r {
 		IocpReadResult { r.n }
 		IocpPReadResult { r.n }
@@ -528,8 +528,8 @@ fn iocp_timer_less(a &IocpHeapTimer, b &IocpHeapTimer) bool { return a.next < b.
 @[heap]
 pub struct IocpLoop {
 pub mut:
-	iocp_handle   voidptr = voidptr(usize(-1))
-	active        usize
+	iocp_handle   voidptr = voidptr(uint(-1))
+	active        uint
 	submissions   IntrusiveQueue[IocpCompletion]
 	cancellations IntrusiveQueue[IocpCompletion]
 	completions   IntrusiveQueue[IocpCompletion]
@@ -548,7 +548,7 @@ pub fn IocpLoop.init(options Options) !IocpLoop {
 		panic('unreachable QueryPerformanceFrequency')
 	}
 	qpc_duration := u64(1_000_000_000) / u64(frequency)
-	handle := C.CreateIoCompletionPort(voidptr(usize(-1)), unsafe { nil }, 0, 1)
+	handle := C.CreateIoCompletionPort(voidptr(uint(-1)), unsafe { nil }, 0, 1)
 	if handle == unsafe { nil } { return new_error(.unexpected) }
 	mut result := IocpLoop{ iocp_handle: handle, qpc_duration: qpc_duration }
 	result.update_now()
@@ -620,7 +620,7 @@ pub fn (mut self IocpLoop) tick(wait u32) ! {
 	self.in_run = true
 	defer { self.in_run = false }
 	mut entries := [128]C.OVERLAPPED_ENTRY{}
-	mut wait_rem := usize(wait)
+	mut wait_rem := uint(wait)
 	self.process_cancellations()
 	self.submit()!
 	for {
@@ -692,10 +692,10 @@ pub fn (mut self IocpLoop) tick(wait u32) ! {
 			mut c := &IocpCompletion(unsafe { nil })
 			if entry.lpCompletionKey == 0 {
 				if entry.lpOverlapped == unsafe { nil } { continue }
-				c = unsafe { &IocpCompletion(voidptr(usize(entry.lpOverlapped) - __offsetof(IocpCompletion, overlapped))) }
+				c = unsafe { &IocpCompletion(voidptr(uint(entry.lpOverlapped) - __offsetof(IocpCompletion, overlapped))) }
 			} else {
 				c = unsafe { &IocpCompletion(voidptr(entry.lpCompletionKey)) }
-				c.result = IocpJobObjectResult{ value: IocpJobObjectMessage{ type_: entry.dwNumberOfBytesTransferred, value: usize(entry.lpOverlapped) } }
+				c.result = IocpJobObjectResult{ value: IocpJobObjectMessage{ type_: entry.dwNumberOfBytesTransferred, value: uint(entry.lpOverlapped) } }
 			}
 			if wait_rem > 0 { wait_rem -= 1 }
 			self.active -= 1
@@ -761,7 +761,7 @@ pub fn (mut self IocpLoop) timer_reset(c_ &IocpCompletion, c_cancel_ &IocpComple
 }
 
 pub fn (self &IocpLoop) associate_fd(fd voidptr) ! {
-	if fd == voidptr(usize(-1)) || self.iocp_handle == voidptr(usize(-1)) {
+	if fd == voidptr(uint(-1)) || self.iocp_handle == voidptr(uint(-1)) {
 		return new_error(.invalid_parameter)
 	}
 	// Repeated association can fail with INVALID_PARAMETER; the source ignores it.
@@ -794,15 +794,15 @@ fn (mut self IocpLoop) start_completion(c_ &IocpCompletion) {
 			if c.op.internal_accept_socket == none {
 				mut addr := [128]u8{}
 				mut addr_len := 128
-				name_result := C.getsockname(usize(c.op.socket), &addr[0], &addr_len)
+				name_result := C.getsockname(uint(c.op.socket), &addr[0], &addr_len)
 				assert name_result == 0
 				mut socket_type := 0
 				mut opt_len := 4
-				option_result := C.getsockopt(usize(c.op.socket), 0xffff, 0x1008, &socket_type, &opt_len)
+				option_result := C.getsockopt(uint(c.op.socket), 0xffff, 0x1008, &socket_type, &opt_len)
 				assert option_result == 0
 				family := unsafe { *(&u16(&addr[0])) }
 				socket := C.WSASocketW(int(family), socket_type, 0, unsafe { nil }, 0, 1)
-				if socket == usize(-1) {
+				if socket == uint(-1) {
 					kind := match C.WSAGetLastError() {
 						10047 { ErrorKind.address_family_not_supported }
 						10024 { ErrorKind.process_fd_quota_exceeded }
@@ -819,7 +819,7 @@ fn (mut self IocpLoop) start_completion(c_ &IocpCompletion) {
 				self.associate_fd(c.handle() or { panic('unreachable') }) or { panic('unreachable association') }
 				mut discard := u32(0)
 				accepted := c.op.internal_accept_socket or { panic('unreachable') }
-				rc := C.AcceptEx(usize(c.op.socket), usize(accepted), &c.op.storage[0], 0, 0, 128,
+				rc := C.AcceptEx(uint(c.op.socket), uint(accepted), &c.op.storage[0], 0, 0, 128,
 					&discard, &c.overlapped)
 				if rc != 1 && C.WSAGetLastError() != 997 {
 					C.CloseHandle(accepted)
@@ -834,7 +834,7 @@ fn (mut self IocpLoop) start_completion(c_ &IocpCompletion) {
 			immediate = IocpCloseResult{}
 		}
 		IocpConnectOp {
-			rc := C.connect(usize(c.op.socket), c.op.addr.any(), int(c.op.addr.get_os_sock_len()))
+			rc := C.connect(uint(c.op.socket), c.op.addr.any(), int(c.op.addr.get_os_sock_len()))
 			immediate = if rc != 0 {
 				IocpResult(IocpConnectResult{ err: .unexpected })
 			} else {
@@ -866,7 +866,7 @@ fn (mut self IocpLoop) start_completion(c_ &IocpCompletion) {
 			}
 		}
 		IocpShutdownOp {
-			rc := C.shutdown(usize(c.op.socket), int(c.op.how))
+			rc := C.shutdown(uint(c.op.socket), int(c.op.how))
 			if rc == 0 {
 				immediate = IocpShutdownResult{}
 			} else {
@@ -909,7 +909,7 @@ fn (mut self IocpLoop) start_completion(c_ &IocpCompletion) {
 			assert u64(buf.len) <= 0xffffffff
 			c.op.wsa_buffer.len = u32(buf.len)
 			c.op.wsa_buffer.buf = &char(buf.data)
-			rc := C.WSASend(usize(c.op.fd), &c.op.wsa_buffer, 1, unsafe { nil }, 0, &c.overlapped, unsafe { nil })
+			rc := C.WSASend(uint(c.op.fd), &c.op.wsa_buffer, 1, unsafe { nil }, 0, &c.overlapped, unsafe { nil })
 			if rc != 0 {
 				code := C.WSAGetLastError()
 				if code != 997 { immediate = iocp_result_kind(tag, iocp_socket_error(code)) }
@@ -922,7 +922,7 @@ fn (mut self IocpLoop) start_completion(c_ &IocpCompletion) {
 			c.op.wsa_buffer.len = u32(buf.len)
 			c.op.wsa_buffer.buf = &char(buf.data)
 			mut flags := u32(0)
-			rc := C.WSARecv(usize(c.op.fd), &c.op.wsa_buffer, 1, unsafe { nil }, &flags, &c.overlapped, unsafe { nil })
+			rc := C.WSARecv(uint(c.op.fd), &c.op.wsa_buffer, 1, unsafe { nil }, &flags, &c.overlapped, unsafe { nil })
 			if rc != 0 {
 				code := C.WSAGetLastError()
 				if code != 997 { immediate = iocp_result_kind(tag, iocp_socket_error(code)) }
@@ -934,7 +934,7 @@ fn (mut self IocpLoop) start_completion(c_ &IocpCompletion) {
 			assert u64(buf.len) <= 0xffffffff
 			c.op.wsa_buffer.len = u32(buf.len)
 			c.op.wsa_buffer.buf = &char(buf.data)
-			rc := C.WSASendTo(usize(c.op.fd), &c.op.wsa_buffer, 1, unsafe { nil }, 0, c.op.addr.any(), int(c.op.addr.get_os_sock_len()), &c.overlapped, unsafe { nil })
+			rc := C.WSASendTo(uint(c.op.fd), &c.op.wsa_buffer, 1, unsafe { nil }, 0, c.op.addr.any(), int(c.op.addr.get_os_sock_len()), &c.overlapped, unsafe { nil })
 			if rc != 0 {
 				code := C.WSAGetLastError()
 				if code != 997 { immediate = iocp_result_kind(tag, iocp_socket_error(code)) }
@@ -947,7 +947,7 @@ fn (mut self IocpLoop) start_completion(c_ &IocpCompletion) {
 			c.op.wsa_buffer.len = u32(buf.len)
 			c.op.wsa_buffer.buf = &char(buf.data)
 			mut flags := u32(0)
-			rc := C.WSARecvFrom(usize(c.op.fd), &c.op.wsa_buffer, 1, unsafe { nil }, &flags, &c.op.addr, unsafe { &int(&c.op.addr_size) }, &c.overlapped, unsafe { nil })
+			rc := C.WSARecvFrom(uint(c.op.fd), &c.op.wsa_buffer, 1, unsafe { nil }, &flags, &c.op.addr, unsafe { &int(&c.op.addr_size) }, &c.overlapped, unsafe { nil })
 			if rc != 0 {
 				code := C.WSAGetLastError()
 				if code != 997 { immediate = iocp_result_kind(tag, iocp_socket_error(code)) }
@@ -1037,7 +1037,7 @@ pub fn (mut self IocpCompletion) perform() IocpResult {
 		IocpAcceptOp {
 			mut n := u32(0)
 			mut flags := u32(0)
-			if C.WSAGetOverlappedResult(usize(self.op.socket), &self.overlapped, &n, 0, &flags) != 1 {
+			if C.WSAGetOverlappedResult(uint(self.op.socket), &self.overlapped, &n, 0, &flags) != 1 {
 				kind := if C.WSAGetLastError() == 995 {
 					ErrorKind.canceled
 				} else {
@@ -1066,22 +1066,22 @@ pub fn (mut self IocpCompletion) perform() IocpResult {
 				}
 				return iocp_result_kind(result_tag, kind)
 			}
-			return iocp_result_n(tag, usize(n))
+			return iocp_result_n(tag, uint(n))
 		}
 		IocpSendOp, IocpRecvOp, IocpSendToOp, IocpRecvFromOp {
 			mut n := u32(0)
 			mut flags := u32(0)
-			if C.WSAGetOverlappedResult(usize(self.op.fd), &self.overlapped, &n, 0, &flags) != 1 {
+			if C.WSAGetOverlappedResult(uint(self.op.fd), &self.overlapped, &n, 0, &flags) != 1 {
 				return iocp_result_kind(tag, iocp_socket_error(C.WSAGetLastError()))
 			}
 			if tag == .recv {
 				mut socket_type := u32(0)
 				mut opt_len := 4
-				rc := C.getsockopt(usize(self.op.fd), 0xffff, 0x1008, &socket_type, &opt_len)
+				rc := C.getsockopt(uint(self.op.fd), 0xffff, 0x1008, &socket_type, &opt_len)
 				assert rc == 0
 				if socket_type == 1 && n == 0 { return iocp_result_kind(.recv, .eof) }
 			}
-			return iocp_result_n(tag, usize(n))
+			return iocp_result_n(tag, uint(n))
 		}
 		IocpAsyncWaitOp { return IocpAsyncWaitResult{} }
 		IocpJobObjectOp { return self.result or { panic('job-object result is missing') } }

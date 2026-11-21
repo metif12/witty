@@ -10,17 +10,17 @@ pub struct PointerArraySet[T] {
 pub mut:
 	keys []T
 mut:
-	capacity  usize
+	capacity  uint
 	header    voidptr
 	bit_index u8
 }
 
 struct ArraySetSlot {
-	entry    usize
-	distance usize
+	entry    uint
+	distance uint
 }
 
-fn array_set_cache_line() usize {
+fn array_set_cache_line() uint {
 	$if arm64 || amd64 {
 		return 128
 	} $else {
@@ -32,58 +32,58 @@ fn array_set_hash[T](key T) u32 {
 	return u32(internal_hash.wyhash(unsafe { (&u8(&key)).vbytes(int(sizeof(T))) }, 0))
 }
 
-fn (set &PointerArraySet[T]) index_len() usize {
-	return usize(1) << set.bit_index
+fn (set &PointerArraySet[T]) index_len() uint {
+	return uint(1) << set.bit_index
 }
 
-fn (set &PointerArraySet[T]) width() usize {
+fn (set &PointerArraySet[T]) width() uint {
 	return if set.bit_index <= 8 {
-		usize(1)
+		uint(1)
 	} else if set.bit_index <= 16 {
-		usize(2)
+		uint(2)
 	} else {
-		usize(4)
+		uint(4)
 	}
 }
 
-fn (set &PointerArraySet[T]) sentinel() usize {
+fn (set &PointerArraySet[T]) sentinel() uint {
 	return if set.bit_index <= 8 {
-		usize(0xff)
+		uint(0xff)
 	} else if set.bit_index <= 16 {
-		usize(0xffff)
+		uint(0xffff)
 	} else {
-		usize(0xffffffff)
+		uint(0xffffffff)
 	}
 }
 
-fn (set &PointerArraySet[T]) index_capacity() usize {
-	return if set.bit_index == 32 { usize(0xffffffff) } else { set.index_len() * 3 / 5 }
+fn (set &PointerArraySet[T]) index_capacity() uint {
+	return if set.bit_index == 32 { uint(0xffffffff) } else { set.index_len() * 3 / 5 }
 }
 
-fn (set &PointerArraySet[T]) slot(index usize) ArraySetSlot {
-	ptr := unsafe { &u8(usize(set.header) + 4 + (index & (set.index_len() - 1)) * set.width() * 2) }
+fn (set &PointerArraySet[T]) slot(index uint) ArraySetSlot {
+	ptr := unsafe { &u8(uint(set.header) + 4 + (index & (set.index_len() - 1)) * set.width() * 2) }
 	return if set.bit_index <= 8 {
 		unsafe {
 			ArraySetSlot{
-				entry:    usize(ptr[0])
-				distance: usize(ptr[1])
+				entry:    uint(ptr[0])
+				distance: uint(ptr[1])
 			}
 		}
 	} else if set.bit_index <= 16 {
 		ArraySetSlot{
-			entry:    usize(unsafe { *(&u16(ptr)) })
-			distance: usize(unsafe { *(&u16(ptr + 2)) })
+			entry:    uint(unsafe { *(&u16(ptr)) })
+			distance: uint(unsafe { *(&u16(ptr + 2)) })
 		}
 	} else {
 		ArraySetSlot{
-			entry:    usize(unsafe { *(&u32(ptr)) })
-			distance: usize(unsafe { *(&u32(ptr + 4)) })
+			entry:    uint(unsafe { *(&u32(ptr)) })
+			distance: uint(unsafe { *(&u32(ptr + 4)) })
 		}
 	}
 }
 
-fn (mut set PointerArraySet[T]) set_slot(index usize, slot ArraySetSlot) {
-	ptr := unsafe { &u8(usize(set.header) + 4 + (index & (set.index_len() - 1)) * set.width() * 2) }
+fn (mut set PointerArraySet[T]) set_slot(index uint, slot ArraySetSlot) {
+	ptr := unsafe { &u8(uint(set.header) + 4 + (index & (set.index_len() - 1)) * set.width() * 2) }
 	unsafe {
 		if set.bit_index <= 8 {
 			ptr[0] = u8(slot.entry)
@@ -98,10 +98,10 @@ fn (mut set PointerArraySet[T]) set_slot(index usize, slot ArraySetSlot) {
 	}
 }
 
-fn (mut set PointerArraySet[T]) insert_index(key T, entry usize) {
-	mut index := usize(array_set_hash(key))
+fn (mut set PointerArraySet[T]) insert_index(key T, entry uint) {
+	mut index := uint(array_set_hash(key))
 	mut displaced := entry
-	mut distance := usize(0)
+	mut distance := uint(0)
 	for _ in 0 .. set.index_len() {
 		slot := set.slot(index)
 		if slot.entry == set.sentinel() {
@@ -119,21 +119,21 @@ fn (mut set PointerArraySet[T]) insert_index(key T, entry usize) {
 	panic('unreachable full array hash map index')
 }
 
-fn (mut set PointerArraySet[T]) ensure_capacity(allocator Allocator, minimum usize) ! {
+fn (mut set PointerArraySet[T]) ensure_capacity(allocator Allocator, minimum uint) ! {
 	if set.capacity < minimum {
 		mut capacity := set.capacity
 		initial := array_set_cache_line() / sizeof(T)
 		for {
 			increment := capacity / 2 + initial
-			capacity = if capacity > ~usize(0) - increment {
-				~usize(0)
+			capacity = if capacity > ~uint(0) - increment {
+				~uint(0)
 			} else {
 				capacity + increment
 			}
 			if capacity >= minimum { break
 			 }
 		}
-		if capacity > ~usize(0) / sizeof(T) { return error('OutOfMemory') }
+		if capacity > ~uint(0) / sizeof(T) { return error('OutOfMemory') }
 		bytes := capacity * sizeof(T)
 		raw := allocator.alloc_bytes(bytes, alignment_log[T](), 0)
 		if isnil(raw) { return error('OutOfMemory') }
@@ -148,26 +148,26 @@ fn (mut set PointerArraySet[T]) ensure_capacity(allocator Allocator, minimum usi
 	}
 	if minimum <= array_set_cache_line() / sizeof(T) { return }
 	if !isnil(set.header) && minimum <= set.index_capacity() { return }
-	if minimum > usize(0xffffffff) { return error('OutOfMemory') }
+	if minimum > uint(0xffffffff) { return error('OutOfMemory') }
 	mut bit := u8(0)
-	for (usize(1) << bit) < minimum {
+	for (uint(1) << bit) < minimum {
 		bit++
 	}
-	if minimum > (usize(1) << bit) * 3 / 5 && bit < 32 { bit++ }
+	if minimum > (uint(1) << bit) * 3 / 5 && bit < 32 { bit++ }
 	if bit < 5 { bit = 5 }
 	width := if bit <= 8 {
-		usize(1)
+		uint(1)
 	} else if bit <= 16 {
-		usize(2)
+		uint(2)
 	} else {
-		usize(4)
+		uint(4)
 	}
-	len := usize(1) << bit
+	len := uint(1) << bit
 	bytes := 4 + len * width * 2
 	header := allocator.alloc_bytes(bytes, 2, 0)
 	if isnil(header) { return error('OutOfMemory') }
 	unsafe {
-		vmemset(voidptr(usize(header) + 4), 0xff, int(bytes - 4))
+		vmemset(voidptr(uint(header) + 4), 0xff, int(bytes - 4))
 		*(&u8(header)) = bit
 	}
 	if !isnil(set.header) {
@@ -176,13 +176,13 @@ fn (mut set PointerArraySet[T]) ensure_capacity(allocator Allocator, minimum usi
 	set.header = header
 	set.bit_index = bit
 	for i, key in set.keys {
-		set.insert_index(key, usize(i))
+		set.insert_index(key, uint(i))
 	}
 }
 
-fn (set &PointerArraySet[T]) find_slot(key T) ?usize {
-	mut index := usize(array_set_hash(key))
-	mut distance := usize(0)
+fn (set &PointerArraySet[T]) find_slot(key T) ?uint {
+	mut index := uint(array_set_hash(key))
+	mut distance := uint(0)
 	for _ in 0 .. set.index_len() {
 		slot := set.slot(index)
 		if slot.entry == set.sentinel() || slot.distance < distance { return none }
@@ -195,10 +195,10 @@ fn (set &PointerArraySet[T]) find_slot(key T) ?usize {
 	panic('unreachable array hash map lookup')
 }
 
-pub fn (set &PointerArraySet[T]) get_index(key T) ?usize {
+pub fn (set &PointerArraySet[T]) get_index(key T) ?uint {
 	if isnil(set.header) {
 		for i, existing in set.keys {
-			if voidptr(existing) == voidptr(key) { return usize(i) }
+			if voidptr(existing) == voidptr(key) { return uint(i) }
 		}
 		return none
 	}
@@ -206,7 +206,7 @@ pub fn (set &PointerArraySet[T]) get_index(key T) ?usize {
 }
 
 pub fn (mut set PointerArraySet[T]) put_no_clobber(allocator Allocator, key T) ! {
-	set.ensure_capacity(allocator, usize(set.keys.len) + 1) or {
+	set.ensure_capacity(allocator, uint(set.keys.len) + 1) or {
 		// getOrPut may not fail for an existing key, even if growth fails.
 		if set.get_index(key) != none {
 			assert false, 'putNoClobber existing key'
@@ -218,11 +218,11 @@ pub fn (mut set PointerArraySet[T]) put_no_clobber(allocator Allocator, key T) !
 	entry := set.keys.len
 	set.keys = borrowed_array[T](set.keys.data, entry + 1, int(set.capacity))
 	set.keys[entry] = key
-	if !isnil(set.header) { set.insert_index(key, usize(entry)) }
+	if !isnil(set.header) { set.insert_index(key, uint(entry)) }
 }
 
 pub fn (mut set PointerArraySet[T]) swap_remove(key T) bool {
-	mut entry := usize(0)
+	mut entry := uint(0)
 	if isnil(set.header) {
 		entry = set.get_index(key) or { return false }
 	} else {
@@ -240,7 +240,7 @@ pub fn (mut set PointerArraySet[T]) swap_remove(key T) bool {
 			last_slot = index & (set.index_len() - 1)
 			index++
 		}
-		last := usize(set.keys.len - 1)
+		last := uint(set.keys.len - 1)
 		if last != entry {
 			slot := set.find_slot(set.keys[int(last)]) or {
 				panic('unreachable moved array hash entry')

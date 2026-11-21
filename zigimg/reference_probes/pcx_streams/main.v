@@ -45,7 +45,7 @@ fn record(line string, path string) string {
 	w := f[2].u64()
 	h := f[3].u64()
 	format := unsafe { p.PixelFormat(f[4].u32()) }
-	mut pixels := p.PixelStorage.init(format, usize(f[5].u64())) or { panic(err) }
+	mut pixels := p.PixelStorage.init(format, uint(f[5].u64())) or { panic(err) }
 	mut raw := pixels.as_bytes()
 	for i in 0 .. raw.len {
 		raw[i] = u8(match f[6].int() {
@@ -61,7 +61,7 @@ fn record(line string, path string) string {
 	}
 	if pal := pixels.get_palette() {
 		length := if f[7].int() < pal.len { f[7].int() } else { pal.len }
-		pixels.resize_palette(usize(length))
+		pixels.resize_palette(uint(length))
 		mut active := pixels.get_palette() or { panic('missing palette') }
 		for i in 0 .. active.len {
 			active[i] = p.Rgba32{
@@ -73,8 +73,8 @@ fn record(line string, path string) string {
 		}
 	}
 	mut image := p.ImageUnmanaged{
-		width:  usize(w)
-		height: usize(h)
+		width:  uint(w)
+		height: uint(h)
 		pixels: pixels
 	}
 	observed_image = &image

@@ -7,8 +7,8 @@ import io
 pub struct Bytes {
 pub mut:
 	rng      &rand.PRNG = unsafe { nil }
-	min_len  usize      = 1
-	max_len  usize      = ~usize(0)
+	min_len  uint      = 1
+	max_len  uint      = ~uint(0)
 	alphabet ?[]u8
 }
 
@@ -46,7 +46,7 @@ pub fn (self &Bytes) new_alphabet(alphabet ?[]u8) Bytes {
 	}
 }
 
-pub fn (self &Bytes) at_least(new_min_len usize) Bytes {
+pub fn (self &Bytes) at_least(new_min_len uint) Bytes {
 	return Bytes{
 		rng:      self.rng
 		min_len:  synthetic_min_usize(self.max_len, new_min_len)
@@ -55,7 +55,7 @@ pub fn (self &Bytes) at_least(new_min_len usize) Bytes {
 	}
 }
 
-pub fn (self &Bytes) at_most(new_max_len usize) Bytes {
+pub fn (self &Bytes) at_most(new_max_len uint) Bytes {
 	max_len := synthetic_min_usize(self.max_len, new_max_len)
 	return Bytes{
 		rng:      self.rng
@@ -66,13 +66,13 @@ pub fn (self &Bytes) at_most(new_max_len usize) Bytes {
 }
 
 // Owned-slice compatibility entry points delegate to the source writer API.
-pub fn (mut self Bytes) next(max_len usize) ![]u8 {
+pub fn (mut self Bytes) next(max_len uint) ![]u8 {
 	mut writer := CollectingWriter{}
 	self.next_writer(mut writer, max_len)!
 	return writer.data
 }
 
-pub fn (mut self Bytes) next_writer(mut writer io.Writer, max_len usize) ! {
+pub fn (mut self Bytes) next_writer(mut writer io.Writer, max_len uint) ! {
 	mut bounded := self.at_most(max_len)
 	bounded.write_writer(mut writer)!
 }
@@ -93,15 +93,15 @@ pub fn (mut self Bytes) write() ![]u8 {
 
 // src/synthetic/Bytes.zig write: choose biased length even for equal endpoints,
 // fill exactly eight-byte chunks, map the alphabet, and write before continuing.
-pub fn (mut self Bytes) write_writer(mut writer io.Writer) !usize {
+pub fn (mut self Bytes) write_writer(mut writer io.Writer) !uint {
 	assert self.min_len >= 1
 	assert self.max_len >= self.min_len
-	len := usize(source_range_biased(mut self.rng, u64(self.min_len), u64(self.max_len),
-		int(sizeof(usize) * 8)))
+	len := uint(source_range_biased(mut self.rng, u64(self.min_len), u64(self.max_len),
+		int(sizeof(uint) * 8)))
 	mut buffer := []u8{len: 8}
 	mut remaining := len
 	for remaining > 0 {
-		count := int(synthetic_min_usize(remaining, usize(buffer.len)))
+		count := int(synthetic_min_usize(remaining, uint(buffer.len)))
 		mut data := unsafe { buffer[..count] }
 		source_random_fill(mut self.rng, mut data)
 		if alphabet := self.alphabet {
@@ -110,16 +110,16 @@ pub fn (mut self Bytes) write_writer(mut writer io.Writer) !usize {
 			}
 		}
 		source_write_all(mut writer, data)!
-		remaining -= usize(count)
+		remaining -= uint(count)
 	}
 	return len
 }
 
-fn synthetic_random_inclusive(mut rng rand.PRNG, min_value usize, max_value usize) !usize {
-	return usize(source_range_biased(mut rng, u64(min_value), u64(max_value),
-		int(sizeof(usize) * 8)))
+fn synthetic_random_inclusive(mut rng rand.PRNG, min_value uint, max_value uint) !uint {
+	return uint(source_range_biased(mut rng, u64(min_value), u64(max_value),
+		int(sizeof(uint) * 8)))
 }
 
-fn synthetic_min_usize(a usize, b usize) usize {
+fn synthetic_min_usize(a uint, b uint) uint {
 	return if a < b { a } else { b }
 }

@@ -8,7 +8,7 @@ import encoding.hex
 
 fn C.witty_stream_probe_pipe(&int) int
 fn C.witty_stream_probe_close(int) int
-fn C.witty_stream_probe_read(int, &u8, usize) isize
+fn C.witty_stream_probe_read(int, &u8, uint) int
 
 #flag -I @VMODROOT/zigimg
 #include "reference_probes/image_pipe/fixture_shims.h"
@@ -16,8 +16,8 @@ fn C.witty_stream_probe_read(int, &u8, usize) isize
 fn C.witty_image_pipe_open(&int) int
 fn C.witty_image_pipe_close(int) int
 fn C.witty_image_pipe_valid(int) int
-fn C.witty_image_pipe_write(int, &u8, usize) isize
-fn C.witty_image_pipe_read(int, &u8, usize) isize
+fn C.witty_image_pipe_write(int, &u8, uint) int
+fn C.witty_image_pipe_read(int, &u8, uint) int
 
 #include "reference_probes/image_fifo/fixture_shims.h"
 
@@ -26,8 +26,8 @@ fn C.witty_image_fifo_close(int) int
 fn C.witty_image_fifo_remove(&char) int
 fn C.witty_image_fifo_kind(&char) int
 fn C.witty_image_fifo_refs(int) int
-fn C.witty_image_fifo_write(int, &u8, usize) isize
-fn C.witty_image_fifo_read(int, &u8, usize) isize
+fn C.witty_image_fifo_write(int, &u8, uint) int
+fn C.witty_image_fifo_read(int, &u8, uint) int
 
 fn test_private_image_close_preserves_pending_bytes_without_flushing() {
 	$if !windows {
@@ -85,7 +85,7 @@ fn test_private_image_close_preserves_read_ahead_after_closing_a_copy() {
 #include "reference_probes/image_eintr/fixture_shims.h"
 
 fn C.witty_image_eintr_create(&char) int
-fn C.witty_image_eintr_begin(&char, int, &u8, usize) int
+fn C.witty_image_eintr_begin(&char, int, &u8, uint) int
 fn C.witty_image_eintr_finish() int
 fn C.witty_image_eintr_metric(int) int
 fn C.witty_image_eintr_raw(&char, int) int
@@ -116,7 +116,7 @@ fn image_eintr_check_public_path(op int, managed bool, signals int) ! {
 	}
 	mut buffer := []u8{len: 8, init: 165}
 	for attempt in 0 .. 2 {
-		assert C.witty_image_eintr_begin(path.str, signals, seed.data, usize(seed.len)) == 0
+		assert C.witty_image_eintr_begin(path.str, signals, seed.data, uint(seed.len)) == 0
 		mut status := 'ok'
 		if op < 2 {
 			if managed {
@@ -157,13 +157,13 @@ fn image_eintr_check_public_path(op int, managed bool, signals int) ! {
 		}
 		assert image.raw_bytes() == raw
 		mut bytes := []u8{len: 32}
-		n := C.witty_image_fifo_read(keeper, bytes.data, usize(bytes.len))
+		n := C.witty_image_fifo_read(keeper, bytes.data, uint(bytes.len))
 		if op == 1 {
 			assert n == -1
 		} else {
 			assert n == 8 && bytes[..int(n)] == png_magic_header[..]
 		}
-		assert C.witty_image_fifo_read(keeper, bytes.data, usize(bytes.len)) == -1
+		assert C.witty_image_fifo_read(keeper, bytes.data, uint(bytes.len)) == -1
 		assert C.witty_image_fifo_close(keeper) == 0
 	}
 }
@@ -207,7 +207,7 @@ fn image_fifo_check_public_reader(managed bool, decode bool) ! {
 		C.witty_image_fifo_remove(path.str)
 	}
 	data := hex.decode('6661726266656c64000000010000000100130038005dffff')!
-	assert C.witty_image_fifo_write(keeper, data.data, usize(data.len)) == data.len
+	assert C.witty_image_fifo_write(keeper, data.data, uint(data.len)) == data.len
 	mut buffer := []u8{len: 8, init: 165}
 	for attempt in 0 .. 2 {
 		mut status := 'ok'
@@ -229,7 +229,7 @@ fn image_fifo_check_public_reader(managed bool, decode bool) ! {
 		assert status == 'Unseekable' && buffer == []u8{len: 8, init: 165}
 		assert C.witty_image_fifo_kind(path.str) == 1 && C.witty_image_fifo_refs(keeper) == 1
 		mut remaining := []u8{len: 32}
-		n := C.witty_image_fifo_read(keeper, remaining.data, usize(remaining.len))
+		n := C.witty_image_fifo_read(keeper, remaining.data, uint(remaining.len))
 		if attempt == 0 {
 			assert n == data.len && remaining[..int(n)] == data
 		} else {
@@ -257,7 +257,7 @@ fn image_fifo_check_public_writer(managed bool, noop bool) ! {
 		C.witty_image_fifo_remove(path.str)
 	}
 	prefix := 'xyz'.bytes()
-	assert C.witty_image_fifo_write(keeper, prefix.data, usize(prefix.len)) == prefix.len
+	assert C.witty_image_fifo_write(keeper, prefix.data, uint(prefix.len)) == prefix.len
 	mut raw := []u8{len: 24}
 	for i in 0 .. raw.len {
 		raw[i] = u8(i * 37 + 19)
@@ -278,7 +278,7 @@ fn image_fifo_check_public_writer(managed bool, noop bool) ! {
 		assert C.witty_image_fifo_kind(path.str) == 1 && C.witty_image_fifo_refs(keeper) == 1
 		assert image.raw_bytes() == raw
 		mut wire := []u8{len: 32}
-		n := C.witty_image_fifo_read(keeper, wire.data, usize(wire.len))
+		n := C.witty_image_fifo_read(keeper, wire.data, uint(wire.len))
 		if noop {
 			assert buffer == []u8{len: 8, init: 165}
 			if attempt == 0 {
@@ -294,7 +294,7 @@ fn image_fifo_check_public_writer(managed bool, noop bool) ! {
 				assert n == 8 && wire[..8] == png_magic_header[..]
 			}
 		}
-		assert C.witty_image_fifo_read(keeper, wire.data, usize(wire.len)) == -1
+		assert C.witty_image_fifo_read(keeper, wire.data, uint(wire.len)) == -1
 	}
 }
 
@@ -316,7 +316,7 @@ fn image_pipe_check_public_reader(managed bool, decode bool) ! {
 		C.witty_image_pipe_close(fds[1])
 	}
 	data := hex.decode('6661726266656c64000000010000000100130038005dffff')!
-	assert C.witty_image_pipe_write(fds[1], data.data, usize(data.len)) == data.len
+	assert C.witty_image_pipe_write(fds[1], data.data, uint(data.len)) == data.len
 	file := os.File{
 		fd: fds[0]
 	}
@@ -339,7 +339,7 @@ fn image_pipe_check_public_reader(managed bool, decode bool) ! {
 		assert status == 'Unseekable' && buffer == []u8{len: 8, init: 165}
 		assert C.witty_image_pipe_valid(fds[0]) == 1 && C.witty_image_pipe_valid(fds[1]) == 1
 		mut remaining := []u8{len: 32}
-		n := C.witty_image_pipe_read(fds[0], remaining.data, usize(remaining.len))
+		n := C.witty_image_pipe_read(fds[0], remaining.data, uint(remaining.len))
 		if attempt == 0 {
 			assert n == data.len && remaining[..int(n)] == data
 		} else {
@@ -370,7 +370,7 @@ fn test_public_image_pipe_png_retries_streaming_transition_each_call() {
 			mut fds := [2]int{}
 			assert C.witty_image_pipe_open(&fds[0]) == 0
 			prefix := 'xyz'.bytes()
-			assert C.witty_image_pipe_write(fds[1], prefix.data, usize(prefix.len)) == prefix.len
+			assert C.witty_image_pipe_write(fds[1], prefix.data, uint(prefix.len)) == prefix.len
 			file := os.File{
 				fd: fds[1]
 			}
@@ -385,13 +385,13 @@ fn test_public_image_pipe_png_retries_streaming_transition_each_call() {
 				assert C.witty_image_pipe_valid(fds[0]) == 1
 					&& C.witty_image_pipe_valid(fds[1]) == 1
 				mut wire := []u8{len: 32}
-				n := C.witty_image_pipe_read(fds[0], wire.data, usize(wire.len))
+				n := C.witty_image_pipe_read(fds[0], wire.data, uint(wire.len))
 				if attempt == 0 {
 					assert n == 11 && wire[..3] == prefix && wire[3..11] == png_magic_header[..]
 				} else {
 					assert n == 8 && wire[..8] == png_magic_header[..]
 				}
-				assert C.witty_image_pipe_read(fds[0], wire.data, usize(wire.len)) == -1
+				assert C.witty_image_pipe_read(fds[0], wire.data, uint(wire.len)) == -1
 			}
 			C.witty_image_pipe_close(fds[0])
 			C.witty_image_pipe_close(fds[1])

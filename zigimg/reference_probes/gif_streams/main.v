@@ -128,7 +128,7 @@ fn record(line string, path string) string {
 	observed_buffer = unsafe { buffer }
 	observed_private = op == 1 || op == 2
 	observed_comments = false
-	if f[2] != '0' { reader.discard_all(usize(f[2].u64())) or { panic(err) } }
+	if f[2] != '0' { reader.discard_all(uint(f[2].u64())) or { panic(err) } }
 	if observed_ready != '' { os.write_file(observed_ready, snapshot()) or { panic(err) } }
 	iface := p.GIF.format_interface()
 	mut out := ''

@@ -10,8 +10,8 @@ import zigimg
 fn C.witty_image_pipe_open(&int) int
 fn C.witty_image_pipe_close(int) int
 fn C.witty_image_pipe_valid(int) int
-fn C.witty_image_pipe_write(int, &u8, usize) isize
-fn C.witty_image_pipe_read(int, &u8, usize) isize
+fn C.witty_image_pipe_write(int, &u8, uint) int
+fn C.witty_image_pipe_read(int, &u8, uint) int
 
 __global (
 	observed_path     string
@@ -132,7 +132,7 @@ fn snapshot(drain bool) string {
 	if drain {
 		mut bytes := []u8{len: 4096}
 		for {
-			n := C.witty_image_pipe_read(observed_read, bytes.data, usize(bytes.len))
+			n := C.witty_image_pipe_read(observed_read, bytes.data, uint(bytes.len))
 			if n <= 0 {
 				observed_drain = int(n)
 				break
@@ -187,7 +187,7 @@ fn record(line string) string {
 		C.witty_image_pipe_close(fds[1])
 	}
 	seed := hex.decode(f[9]) or { panic(err) }
-	if seed.len > 0 && C.witty_image_pipe_write(fds[1], seed.data, usize(seed.len)) != seed.len {
+	if seed.len > 0 && C.witty_image_pipe_write(fds[1], seed.data, uint(seed.len)) != seed.len {
 		panic('pipe seed failed')
 	}
 	observed_read = fds[0]

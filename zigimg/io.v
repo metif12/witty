@@ -8,12 +8,12 @@ import os
 fn C.witty_image_file_size(int, &u64) int
 fn C.witty_image_file_seek(int, u64) int
 fn C.witty_image_file_seek_by(int, u64) int
-fn C.witty_image_file_read(int, u64, &u8, usize, &int) isize
-fn C.witty_image_file_read_once(int, u64, &u8, usize, &int) isize
-fn C.witty_image_file_read_vec(int, u64, &u8, usize, &u8, usize, &int) isize
-fn C.witty_image_file_read_vectors(int, u64, &voidptr, &usize, int, &int) isize
-fn C.witty_image_file_write(int, u64, &u8, usize, &u8, usize, &int) isize
-fn C.witty_image_file_write_vectors(int, u64, &voidptr, &usize, int, &int) isize
+fn C.witty_image_file_read(int, u64, &u8, uint, &int) int
+fn C.witty_image_file_read_once(int, u64, &u8, uint, &int) int
+fn C.witty_image_file_read_vec(int, u64, &u8, uint, &u8, uint, &int) int
+fn C.witty_image_file_read_vectors(int, u64, &voidptr, &uint, int, &int) int
+fn C.witty_image_file_write(int, u64, &u8, uint, &u8, uint, &int) int
+fn C.witty_image_file_write_vectors(int, u64, &voidptr, &uint, int, &int) int
 
 pub const default_buffer_size = 4096
 
@@ -252,7 +252,7 @@ fn (mut stream ReadStream) file_read(mut destination []u8) !int {
 	if stream.streaming < 0 { return error('ReadFailed') }
 	file := stream.file or { return error('ReadFailed') }
 	count := C.witty_image_file_read(file.fd, stream.file_pos, destination.data,
-		usize(destination.len), &stream.streaming)
+		uint(destination.len), &stream.streaming)
 	if count == -3 {
 		stream.file_prepare_streaming()!
 		return 0
@@ -270,7 +270,7 @@ pub fn (mut stream ReadStream) peek(count int) ![]u8 {
 	if count < 0 { panic('Stream byte count must be nonnegative') }
 	if count > stream.end - stream.position {
 		if stream.file == none { return error('EndOfStream') }
-		stream.rebase(usize(count))!
+		stream.rebase(uint(count))!
 		for stream.end - stream.position < count {
 			// File.Reader's native refill reuses the whole buffer after consuming it.
 			if stream.position == stream.end && stream.streaming >= 0 {
@@ -293,7 +293,7 @@ pub fn (mut stream ReadStream) fill(count int) ! {
 // positional to streaming IO may succeed without adding any buffered bytes.
 pub fn (mut stream ReadStream) fill_more() ! {
 	if stream.file == none { return error('EndOfStream') }
-	stream.rebase(usize(stream.end - stream.position) + 1)!
+	stream.rebase(uint(stream.end - stream.position) + 1)!
 	if stream.position == stream.end && stream.streaming >= 0 {
 		stream.position = 0
 		stream.end = 0
@@ -301,7 +301,7 @@ pub fn (mut stream ReadStream) fill_more() ! {
 	mut target := unsafe { stream.buffer[stream.end..] }
 	if stream.streaming < 0 { return error('ReadFailed') }
 	file := stream.file or { return error('ReadFailed') }
-	read := C.witty_image_file_read_once(file.fd, stream.file_pos, target.data, usize(target.len),
+	read := C.witty_image_file_read_once(file.fd, stream.file_pos, target.data, uint(target.len),
 		&stream.streaming)
 	if read == -4 { return }
 	if read == -3 {
@@ -325,8 +325,8 @@ pub fn (mut stream ReadStream) peek_greedy(count int) ![]u8 {
 
 // Ensure room from the current cursor without reading or consuming input.
 // Fixed memory cannot move; file buffers compact before the capacity assertion.
-pub fn (mut stream ReadStream) rebase(capacity usize) ! {
-	if usize(stream.buffer.len - stream.position) >= capacity { return }
+pub fn (mut stream ReadStream) rebase(capacity uint) ! {
+	if uint(stream.buffer.len - stream.position) >= capacity { return }
 	if stream.file == none { return error('EndOfStream') }
 	remaining := stream.end - stream.position
 	for i in 0 .. remaining {
@@ -334,7 +334,7 @@ pub fn (mut stream ReadStream) rebase(capacity usize) ! {
 	}
 	stream.position = 0
 	stream.end = remaining
-	if capacity > usize(stream.buffer.len) { panic('reached unreachable code') }
+	if capacity > uint(stream.buffer.len) { panic('reached unreachable code') }
 }
 
 pub fn (mut stream ReadStream) peek_byte() !u8 {
@@ -441,9 +441,9 @@ pub fn (mut stream ReadStream) peek_int[T, E](endian E) !T {
 
 // Short representations are zero-extended, including into signed types. Only
 // a representation occupying the full target width sets its signed high bit.
-pub fn (mut stream ReadStream) take_var_int[T, E](endian E, count usize) !T {
+pub fn (mut stream ReadStream) take_var_int[T, E](endian E, count uint) !T {
 	$if T.unaliased_typ is $int {
-		if count > usize(sizeof(T)) { panic('reached unreachable code') }
+		if count > uint(sizeof(T)) { panic('reached unreachable code') }
 		bytes := stream.take(int(count))!
 		mut word := u64(0)
 		for i, byte in bytes {
@@ -487,7 +487,7 @@ pub fn (mut stream ReadStream) take_leb128[T]() !T {
 					groups++
 				} else if fits {
 					$if T.unaliased_typ is i8 || T.unaliased_typ is i16 || T.unaliased_typ is int
-						|| T.unaliased_typ is i64 || T.unaliased_typ is isize {
+						|| T.unaliased_typ is i64 || T.unaliased_typ is int {
 						fits = payload == if negative { u8(0x7f) } else { u8(0) }
 					} $else {
 						fits = payload == 0
@@ -495,10 +495,10 @@ pub fn (mut stream ReadStream) take_leb128[T]() !T {
 				}
 				if byte & 0x80 != 0 { continue
 				 }
-				stream.toss(usize(index + 1))
+				stream.toss(uint(index + 1))
 				if !fits { return error('Overflow') }
 				$if T.unaliased_typ is i8 || T.unaliased_typ is i16 || T.unaliased_typ is int
-					|| T.unaliased_typ is i64 || T.unaliased_typ is isize {
+					|| T.unaliased_typ is i64 || T.unaliased_typ is int {
 					bits := groups * 7
 					if bits > 64 {
 						expected_high := if negative { u8(0x3f) } else { u8(0) }
@@ -517,7 +517,7 @@ pub fn (mut stream ReadStream) take_leb128[T]() !T {
 					return value
 				}
 			}
-			stream.toss(usize(bytes.len))
+			stream.toss(uint(bytes.len))
 		}
 	} $else {
 		$compile_error('take_leb128 requires a native integer type')
@@ -630,7 +630,7 @@ pub fn (mut stream ReadStream) peek_sentinel(sentinel u8) !SentinelSlice {
 
 pub fn (mut stream ReadStream) take_sentinel(sentinel u8) !SentinelSlice {
 	line := stream.peek_delimiter_inclusive(sentinel)!
-	stream.toss(usize(line.len))
+	stream.toss(uint(line.len))
 	return SentinelSlice{
 		storage: unsafe { line }
 	}
@@ -700,26 +700,26 @@ fn (mut stream ReadStream) read_vec_one(mut destination []u8) !int {
 	file := stream.file or { return error('ReadFailed') }
 	mut target := unsafe { destination[count..] }
 	mut data_size := target.len
-	mut n := isize(0)
+	mut n := int(0)
 	$if windows {
 		if stream.position == stream.end {
 			stream.position = 0
 			stream.end = 0
 		}
 		if target.len >= stream.buffer.len - stream.end {
-			n = C.witty_image_file_read(file.fd, stream.file_pos, target.data, usize(target.len),
+			n = C.witty_image_file_read(file.fd, stream.file_pos, target.data, uint(target.len),
 				&stream.streaming)
 		} else {
 			mut tail := unsafe { stream.buffer[stream.end..] }
 			data_size = 0
-			n = C.witty_image_file_read(file.fd, stream.file_pos, tail.data, usize(tail.len),
+			n = C.witty_image_file_read(file.fd, stream.file_pos, tail.data, uint(tail.len),
 				&stream.streaming)
 		}
 	} $else {
 		stream.position = 0
 		stream.end = 0
-		n = C.witty_image_file_read_vec(file.fd, stream.file_pos, target.data, usize(target.len),
-			stream.buffer.data, usize(stream.buffer.len), &stream.streaming)
+		n = C.witty_image_file_read_vec(file.fd, stream.file_pos, target.data, uint(target.len),
+			stream.buffer.data, uint(stream.buffer.len), &stream.streaming)
 	}
 	if n == -3 {
 		stream.file_prepare_streaming()!
@@ -741,7 +741,7 @@ fn (mut stream ReadStream) read_vec_one(mut destination []u8) !int {
 
 // Transfer pending bytes before invoking one native scatter-read callback.
 // Restore a temporarily shortened destination header on returns and IO errors.
-pub fn (mut stream ReadStream) read_vec(mut destinations [][]u8) !usize {
+pub fn (mut stream ReadStream) read_vec(mut destinations [][]u8) !uint {
 	mut seek := stream.position
 	for i in 0 .. destinations.len {
 		mut destination := unsafe { destinations[i] }
@@ -752,7 +752,7 @@ pub fn (mut stream ReadStream) read_vec(mut destinations [][]u8) !usize {
 		seek += count
 		if count == destination.len { continue
 		 }
-		copied := usize(seek - stream.position)
+		copied := uint(seek - stream.position)
 		stream.position = seek
 		destinations[i] = unsafe { destination[count..] }
 		defer { destinations[i] = unsafe { destination } }
@@ -763,23 +763,23 @@ pub fn (mut stream ReadStream) read_vec(mut destinations [][]u8) !usize {
 		}
 		return copied + read
 	}
-	count := usize(seek - stream.position)
+	count := uint(seek - stream.position)
 	stream.position = seek
 	return count
 }
 
-fn (mut stream ReadStream) file_read_vectors(mut destinations [][]u8) !usize {
+fn (mut stream ReadStream) file_read_vectors(mut destinations [][]u8) !uint {
 	if stream.file == none { return error('EndOfStream') }
 	if stream.streaming < 0 { return error('ReadFailed') }
 	$if windows {
 		mut first := unsafe { destinations[0] }
-		return usize(stream.read_vec_one(mut first)!)
+		return uint(stream.read_vec_one(mut first)!)
 	} $else {
 		file := stream.file or { return error('ReadFailed') }
 		mut bases := unsafe { [16]voidptr{} }
-		mut lengths := [16]usize{}
+		mut lengths := [16]uint{}
 		mut count := 0
-		mut data_size := usize(0)
+		mut data_size := uint(0)
 		mut full := false
 		for destination in destinations {
 			if count == 16 {
@@ -789,8 +789,8 @@ fn (mut stream ReadStream) file_read_vectors(mut destinations [][]u8) !usize {
 			if destination.len == 0 { continue
 			 }
 			bases[count] = destination.data
-			lengths[count] = usize(destination.len)
-			data_size += usize(destination.len)
+			lengths[count] = uint(destination.len)
+			data_size += uint(destination.len)
 			count++
 		}
 		if !full && stream.buffer.len != 0 {
@@ -799,7 +799,7 @@ fn (mut stream ReadStream) file_read_vectors(mut destinations [][]u8) !usize {
 			// Pinned writableVectorPosix appends before checking this last slot.
 			if count == 16 { panic('index out of bounds: index 16, len 16') }
 			bases[count] = stream.buffer.data
-			lengths[count] = usize(stream.buffer.len)
+			lengths[count] = uint(stream.buffer.len)
 			count++
 		}
 		n := C.witty_image_file_read_vectors(file.fd, stream.file_pos, &bases[0], &lengths[0],
@@ -815,18 +815,18 @@ fn (mut stream ReadStream) file_read_vectors(mut destinations [][]u8) !usize {
 			return error('EndOfStream')
 		}
 		stream.file_pos += u64(n)
-		if usize(n) > data_size {
-			stream.end += int(usize(n) - data_size)
+		if uint(n) > data_size {
+			stream.end += int(uint(n) - data_size)
 			return data_size
 		}
-		return usize(n)
+		return uint(n)
 	}
 }
 
 // Fill every destination, retaining partial writes if a later read fails.
 pub fn (mut stream ReadStream) read_vec_all(mut destinations [][]u8) ! {
 	mut index := 0
-	mut truncate := usize(0)
+	mut truncate := uint(0)
 	for index < destinations.len {
 		{
 			original := unsafe { destinations[index] }
@@ -835,28 +835,28 @@ pub fn (mut stream ReadStream) read_vec_all(mut destinations [][]u8) ! {
 			mut tail := unsafe { destinations[index..] }
 			truncate += stream.read_vec(mut tail)!
 		}
-		for index < destinations.len && truncate >= usize(destinations[index].len) {
-			truncate -= usize(destinations[index].len)
+		for index < destinations.len && truncate >= uint(destinations[index].len) {
+			truncate -= uint(destinations[index].len)
 			index++
 		}
 	}
 }
 
-pub fn (mut stream ReadStream) read_slice_short(mut destination []u8) !usize {
+pub fn (mut stream ReadStream) read_slice_short(mut destination []u8) !uint {
 	mut filled := 0
 	for filled < destination.len {
 		mut target := unsafe { destination[filled..] }
 		filled += stream.read_vec_one(mut target) or {
-			if err.msg() == 'EndOfStream' { return usize(filled) }
+			if err.msg() == 'EndOfStream' { return uint(filled) }
 			return err
 		}
 	}
-	return usize(filled)
+	return uint(filled)
 }
 
 pub fn (mut stream ReadStream) read_slice_all(mut destination []u8) ! {
 	count := stream.read_slice_short(mut destination)!
-	if count < usize(destination.len) { return error('EndOfStream') }
+	if count < uint(destination.len) { return error('EndOfStream') }
 }
 
 // Read the whole integer slice before converting byte order. A failed read
@@ -894,17 +894,17 @@ pub fn (mut stream ReadStream) read_slice_endian[T, E](mut destination []T, endi
 
 // GC owns the returned allocation. Read failure retains reader progress and
 // leaves the incomplete allocation unreachable rather than returning its prefix.
-pub fn (mut stream ReadStream) read_alloc(count usize) ![]u8 {
-	if count > usize(0x7fffffff) { panic('Reader allocation exceeds V array length') }
+pub fn (mut stream ReadStream) read_alloc(count uint) ![]u8 {
+	if count > uint(0x7fffffff) { panic('Reader allocation exceeds V array length') }
 	mut destination := []u8{len: int(count)}
 	stream.read_slice_all(mut destination)!
 	return destination
 }
 
-pub fn (mut stream ReadStream) read_slice_endian_alloc[T, E](count usize, endian E) ![]T {
+pub fn (mut stream ReadStream) read_slice_endian_alloc[T, E](count uint, endian E) ![]T {
 	$if T.unaliased_typ is $int {
 		$if E.unaliased_typ is BigEndian || E.unaliased_typ is LittleEndian {
-			if count > usize(0x7fffffff) / usize(sizeof(T)) {
+			if count > uint(0x7fffffff) / uint(sizeof(T)) {
 				panic('Reader allocation exceeds V array length')
 			}
 			mut destination := []T{len: int(count)}
@@ -919,7 +919,7 @@ pub fn (mut stream ReadStream) read_slice_endian_alloc[T, E](count usize, endian
 }
 
 fn (mut stream ReadStream) flate_fill_word() ! {
-	stream.peek(int(sizeof(usize)))!
+	stream.peek(int(sizeof(uint)))!
 }
 
 fn (stream ReadStream) flate_buffered_len() int {
@@ -989,19 +989,19 @@ fn (mut stream ReadStream) file_discard(count u64) !u64 {
 
 // Scan every available buffered byte after filling to at least one byte.
 // Reaching the limit fails even if EOF or a delimiter is exactly next.
-pub fn (mut stream ReadStream) discard_delimiter_limit(delimiter u8, limit usize) !usize {
+pub fn (mut stream ReadStream) discard_delimiter_limit(delimiter u8, limit uint) !uint {
 	mut remaining := limit
 	for remaining != 0 {
 		stream.peek(1) or {
 			if err.msg() == 'EndOfStream' { return limit - remaining }
 			return err
 		}
-		available := usize(stream.end - stream.position)
+		available := uint(stream.end - stream.position)
 		count := if remaining < available { remaining } else { available }
 		for index in 0 .. int(count) {
 			if stream.buffer[stream.position + index] == delimiter {
-				stream.toss(usize(index))
-				remaining -= usize(index)
+				stream.toss(uint(index))
+				remaining -= uint(index)
 				return limit - remaining
 			}
 		}
@@ -1012,8 +1012,8 @@ pub fn (mut stream ReadStream) discard_delimiter_limit(delimiter u8, limit usize
 }
 
 // EOF succeeds with the discarded prefix; a found delimiter stays unread.
-pub fn (mut stream ReadStream) discard_delimiter_exclusive(delimiter u8) !usize {
-	return stream.discard_delimiter_limit(delimiter, ~usize(0)) or {
+pub fn (mut stream ReadStream) discard_delimiter_exclusive(delimiter u8) !uint {
+	return stream.discard_delimiter_limit(delimiter, ~uint(0)) or {
 		if err.msg() == 'StreamTooLong' { panic('reached unreachable code') }
 		return err
 	}
@@ -1021,31 +1021,31 @@ pub fn (mut stream ReadStream) discard_delimiter_exclusive(delimiter u8) !usize 
 
 // Unlike exclusive discard, absence of a delimiter fails after consuming the
 // EOF prefix. A found delimiter is counted and consumed.
-pub fn (mut stream ReadStream) discard_delimiter_inclusive(delimiter u8) !usize {
+pub fn (mut stream ReadStream) discard_delimiter_inclusive(delimiter u8) !uint {
 	count := stream.discard_delimiter_exclusive(delimiter)!
 	if stream.position == stream.end { return error('EndOfStream') }
 	if stream.buffer[stream.position] != delimiter { panic('reached unreachable code') }
 	stream.toss(1)
-	if count == ~usize(0) { panic('integer overflow') }
+	if count == ~uint(0) { panic('integer overflow') }
 	return count + 1
 }
 
 // Each span is consumed only after write_all succeeds. A failing writer may
 // retain a partial span while the same bytes remain buffered in the reader.
-pub fn (mut stream ReadStream) stream_delimiter_limit(mut writer WriteStream, delimiter u8, limit usize) !usize {
+pub fn (mut stream ReadStream) stream_delimiter_limit(mut writer WriteStream, delimiter u8, limit uint) !uint {
 	mut remaining := limit
 	for remaining != 0 {
 		stream.peek(1) or {
 			if err.msg() == 'EndOfStream' { return limit - remaining }
 			return err
 		}
-		available := usize(stream.end - stream.position)
+		available := uint(stream.end - stream.position)
 		count := if remaining < available { remaining } else { available }
 		for index in 0 .. int(count) {
 			if stream.buffer[stream.position + index] == delimiter {
 				writer.write_all(stream.buffer[stream.position..stream.position + index])!
-				stream.toss(usize(index))
-				remaining -= usize(index)
+				stream.toss(uint(index))
+				remaining -= uint(index)
 				return limit - remaining
 			}
 		}
@@ -1056,14 +1056,14 @@ pub fn (mut stream ReadStream) stream_delimiter_limit(mut writer WriteStream, de
 	return error('StreamTooLong')
 }
 
-pub fn (mut stream ReadStream) stream_delimiter_ending(mut writer WriteStream, delimiter u8) !usize {
-	return stream.stream_delimiter_limit(mut writer, delimiter, ~usize(0)) or {
+pub fn (mut stream ReadStream) stream_delimiter_ending(mut writer WriteStream, delimiter u8) !uint {
+	return stream.stream_delimiter_limit(mut writer, delimiter, ~uint(0)) or {
 		if err.msg() == 'StreamTooLong' { panic('reached unreachable code') }
 		return err
 	}
 }
 
-pub fn (mut stream ReadStream) stream_delimiter(mut writer WriteStream, delimiter u8) !usize {
+pub fn (mut stream ReadStream) stream_delimiter(mut writer WriteStream, delimiter u8) !uint {
 	count := stream.stream_delimiter_ending(mut writer, delimiter)!
 	if stream.position == stream.end { return error('EndOfStream') }
 	return count
@@ -1071,21 +1071,21 @@ pub fn (mut stream ReadStream) stream_delimiter(mut writer WriteStream, delimite
 
 // Consume up to count bytes; EOF returns the consumed prefix, while read errors
 // retain progress and propagate. Source checks the proposed seek before mutation.
-pub fn (mut stream ReadStream) discard_short(count usize) !usize {
-	if count > ~usize(0) - usize(stream.position) { panic('integer overflow') }
-	proposed := usize(stream.position) + count
-	if proposed <= usize(stream.end) {
+pub fn (mut stream ReadStream) discard_short(count uint) !uint {
+	if count > ~uint(0) - uint(stream.position) { panic('integer overflow') }
+	proposed := uint(stream.position) + count
+	if proposed <= uint(stream.end) {
 		stream.position = int(proposed)
 		return count
 	}
-	mut remaining := count - usize(stream.end - stream.position)
+	mut remaining := count - uint(stream.end - stream.position)
 	stream.position = stream.end
 	for {
 		discarded := stream.file_discard(u64(remaining)) or {
 			if err.msg() == 'EndOfStream' { return count - remaining }
 			return err
 		}
-		remaining -= usize(discarded)
+		remaining -= uint(discarded)
 		if remaining == 0 { return count }
 	}
 	panic('reached unreachable code')
@@ -1093,16 +1093,16 @@ pub fn (mut stream ReadStream) discard_short(count usize) !usize {
 
 // Drain pending bytes and then the callback until it discovers EOF. Preserve
 // Source's zero-progress loop when a cached positional size is exhausted.
-pub fn (mut stream ReadStream) discard_remaining() !usize {
-	mut offset := usize(stream.end - stream.position)
+pub fn (mut stream ReadStream) discard_remaining() !uint {
+	mut offset := uint(stream.end - stream.position)
 	stream.position = stream.end
 	for {
-		discarded := stream.file_discard(u64(~usize(0))) or {
+		discarded := stream.file_discard(u64(~uint(0))) or {
 			if err.msg() == 'EndOfStream' { return offset }
 			return err
 		}
-		if discarded > u64(~usize(0) - offset) { panic('integer overflow') }
-		offset += usize(discarded)
+		if discarded > u64(~uint(0) - offset) { panic('integer overflow') }
+		offset += uint(discarded)
 	}
 	panic('reached unreachable code')
 }
@@ -1110,14 +1110,14 @@ pub fn (mut stream ReadStream) discard_remaining() !usize {
 pub fn (mut stream ReadStream) discard_all64(count u64) ! {
 	mut remaining := count
 	for remaining > 0 {
-		chunk := if remaining < u64(~usize(0)) { usize(remaining) } else { ~usize(0) }
+		chunk := if remaining < u64(~uint(0)) { uint(remaining) } else { ~uint(0) }
 		if stream.discard_short(chunk)! != chunk { return error('EndOfStream') }
 		remaining -= u64(chunk)
 	}
 }
 
-pub fn (mut stream ReadStream) discard_all(count usize) ! {
-	buffered := usize(stream.end - stream.position)
+pub fn (mut stream ReadStream) discard_all(count uint) ! {
+	buffered := uint(stream.end - stream.position)
 	if count <= buffered {
 		stream.position += int(count)
 		return
@@ -1125,17 +1125,17 @@ pub fn (mut stream ReadStream) discard_all(count usize) ! {
 	mut remaining := count - buffered
 	stream.position = stream.end
 	for remaining > 0 {
-		remaining -= usize(stream.file_discard(u64(remaining))!)
+		remaining -= uint(stream.file_discard(u64(remaining))!)
 		// Preserve Source's zero-progress loop when the positional/cached size
 		// is exhausted without a native read discovering end-of-stream.
 	}
 }
 
-pub fn (mut stream ReadStream) toss(count usize) {
+pub fn (mut stream ReadStream) toss(count uint) {
 	// Source updates seek before its end assertion. V array cursors use int;
 	// a failed offset beyond that carrier remains a representation boundary.
-	if count > ~usize(0) - usize(stream.position) { panic('integer overflow') }
-	if count > usize(0x7fffffff - stream.position) {
+	if count > ~uint(0) - uint(stream.position) { panic('integer overflow') }
+	if count > uint(0x7fffffff - stream.position) {
 		panic('reached unreachable code')
 	}
 	stream.position += int(count)
@@ -1194,26 +1194,26 @@ pub fn (stream WriteStream) unused_capacity_slice() []u8 {
 	return unsafe { stream.buffer[stream.position..] }
 }
 
-pub fn (stream WriteStream) unused_capacity_len() usize {
-	return usize(stream.buffer.len - stream.position)
+pub fn (stream WriteStream) unused_capacity_len() uint {
+	return uint(stream.buffer.len - stream.position)
 }
 
 // Keep Source's checked addition and capacity assertion before cursor mutation.
-pub fn (mut stream WriteStream) advance(count usize) {
-	if count > ~usize(0) - usize(stream.position) { panic('integer overflow') }
-	end := usize(stream.position) + count
-	if end > usize(stream.buffer.len) { panic('reached unreachable code') }
+pub fn (mut stream WriteStream) advance(count uint) {
+	if count > ~uint(0) - uint(stream.position) { panic('integer overflow') }
+	end := uint(stream.position) + count
+	if end > uint(stream.buffer.len) { panic('reached unreachable code') }
 	stream.position = int(end)
 }
 
-pub fn (mut stream WriteStream) undo(count usize) {
-	if count > usize(stream.position) { panic('integer overflow') }
+pub fn (mut stream WriteStream) undo(count uint) {
+	if count > uint(stream.position) { panic('integer overflow') }
 	stream.position -= int(count)
 }
 
 // Account for drained bytes by shifting pending output; return any excess count.
-pub fn (mut stream WriteStream) consume(count usize) usize {
-	if count < usize(stream.position) {
+pub fn (mut stream WriteStream) consume(count uint) uint {
+	if count < uint(stream.position) {
 		remaining := stream.position - int(count)
 		for i in 0 .. remaining {
 			stream.buffer[i] = stream.buffer[int(count) + i]
@@ -1221,12 +1221,12 @@ pub fn (mut stream WriteStream) consume(count usize) usize {
 		stream.position = remaining
 		return 0
 	}
-	remaining := count - usize(stream.position)
+	remaining := count - uint(stream.position)
 	stream.position = 0
 	return remaining
 }
 
-pub fn (mut stream WriteStream) consume_all() usize {
+pub fn (mut stream WriteStream) consume_all() uint {
 	stream.position = 0
 	return 0
 }
@@ -1237,7 +1237,7 @@ fn (mut stream WriteStream) drain_buffer_once() ! {
 	if stream.streaming < 0 { return error('WriteFailed') }
 	file := stream.file or { return error('WriteFailed') }
 	n := C.witty_image_file_write(file.fd, stream.file_pos, stream.buffer.data,
-		usize(stream.position), unsafe { nil }, 0, &stream.streaming)
+		uint(stream.position), unsafe { nil }, 0, &stream.streaming)
 	if n < 0 {
 		if stream.streaming < 0 {
 			stream.file_pos = 0
@@ -1253,15 +1253,15 @@ fn (mut stream WriteStream) drain_buffer_once() ! {
 	stream.position = remaining
 }
 
-pub fn (mut stream WriteStream) rebase(preserve usize, minimum_len usize) ! {
+pub fn (mut stream WriteStream) rebase(preserve uint, minimum_len uint) ! {
 	if stream.unused_capacity_len() >= minimum_len { return }
 	// The fixed writer uses failingRebase, without changing its buffer.
 	if stream.file == none { return error('WriteFailed') }
 	for stream.unused_capacity_len() < minimum_len {
-		preserved_len := int(if preserve < usize(stream.position) {
+		preserved_len := int(if preserve < uint(stream.position) {
 			preserve
 		} else {
-			usize(stream.position)
+			uint(stream.position)
 		})
 		preserved_head := stream.position - preserved_len
 		{
@@ -1274,34 +1274,34 @@ pub fn (mut stream WriteStream) rebase(preserve usize, minimum_len usize) ! {
 				stream.buffer[stream.position + i] = stream.buffer[preserved_head + i]
 			}
 		}
-		if preserve > usize(stream.buffer.len) { panic('integer overflow') }
-		if usize(stream.buffer.len) - preserve < minimum_len { panic('reached unreachable code') }
+		if preserve > uint(stream.buffer.len) { panic('integer overflow') }
+		if uint(stream.buffer.len) - preserve < minimum_len { panic('reached unreachable code') }
 	}
 }
 
-pub fn (mut stream WriteStream) writable_slice_greedy_preserve(preserve usize, minimum_len usize) ![]u8 {
+pub fn (mut stream WriteStream) writable_slice_greedy_preserve(preserve uint, minimum_len uint) ![]u8 {
 	if stream.unused_capacity_len() >= minimum_len { return stream.unused_capacity_slice() }
 	stream.rebase(preserve, minimum_len)!
-	if minimum_len > ~usize(0) - preserve { panic('integer overflow') }
-	if usize(stream.buffer.len) < preserve + minimum_len { panic('reached unreachable code') }
+	if minimum_len > ~uint(0) - preserve { panic('integer overflow') }
+	if uint(stream.buffer.len) < preserve + minimum_len { panic('reached unreachable code') }
 	return stream.unused_capacity_slice()
 }
 
-pub fn (mut stream WriteStream) writable_slice_greedy(minimum_len usize) ![]u8 {
+pub fn (mut stream WriteStream) writable_slice_greedy(minimum_len uint) ![]u8 {
 	return stream.writable_slice_greedy_preserve(0, minimum_len)
 }
 
-pub fn (mut stream WriteStream) writable_slice_preserve(preserve usize, len usize) ![]u8 {
+pub fn (mut stream WriteStream) writable_slice_preserve(preserve uint, len uint) ![]u8 {
 	bytes := stream.writable_slice_greedy_preserve(preserve, len)!
 	stream.advance(len)
 	return unsafe { bytes[..int(len)] }
 }
 
-pub fn (mut stream WriteStream) writable_slice(len usize) ![]u8 {
+pub fn (mut stream WriteStream) writable_slice(len uint) ![]u8 {
 	return stream.writable_slice_preserve(0, len)
 }
 
-pub fn (mut stream WriteStream) ensure_unused_capacity(count usize) ! {
+pub fn (mut stream WriteStream) ensure_unused_capacity(count uint) ! {
 	stream.writable_slice_greedy(count)!
 }
 
@@ -1335,14 +1335,14 @@ pub mut:
 pub fn (mut stream WriteStream) writable_array[A]() !WriterArray[A] {
 	shape := A{}
 	len := writer_array_length(shape)
-	bytes := stream.writable_slice_greedy(usize(len))!
-	stream.advance(usize(len))
+	bytes := stream.writable_slice_greedy(uint(len))!
+	stream.advance(uint(len))
 	return WriterArray[A]{
 		value: unsafe { voidptr(bytes.data) }
 	}
 }
 
-pub fn (mut stream WriteStream) write_byte_preserve(preserve usize, byte u8) ! {
+pub fn (mut stream WriteStream) write_byte_preserve(preserve uint, byte u8) ! {
 	if stream.unused_capacity_len() == 0 { stream.rebase(preserve, 1)! }
 	stream.buffer[stream.position] = byte
 	stream.position++
@@ -1374,17 +1374,17 @@ pub fn (mut stream WriteStream) seek_to(offset u64) ! {
 	stream.position = int(offset)
 }
 
-pub fn (mut stream WriteStream) write(bytes []u8) !usize {
+pub fn (mut stream WriteStream) write(bytes []u8) !uint {
 	if bytes.len <= stream.buffer.len - stream.position {
 		for i, byte in bytes {
 			stream.buffer[stream.position + i] = byte
 		}
 		stream.position += bytes.len
-		return usize(bytes.len)
+		return uint(bytes.len)
 	}
 	if file := stream.file {
 		n := C.witty_image_file_write(file.fd, stream.file_pos, stream.buffer.data,
-			usize(stream.position), bytes.data, usize(bytes.len), &stream.streaming)
+			uint(stream.position), bytes.data, uint(bytes.len), &stream.streaming)
 		if n < 0 {
 			if stream.streaming < 0 {
 				stream.file_pos = 0
@@ -1401,7 +1401,7 @@ pub fn (mut stream WriteStream) write(bytes []u8) !usize {
 			stream.position = remaining
 			return 0
 		}
-		consumed := usize(n) - usize(stream.position)
+		consumed := uint(n) - uint(stream.position)
 		stream.position = 0
 		return consumed
 	}
@@ -1421,26 +1421,26 @@ pub fn (mut stream WriteStream) write_all(bytes []u8) ! {
 }
 
 // Count all prefix vectors and repeat only the last vector.
-pub fn count_splat(data [][]u8, splat usize) usize {
+pub fn count_splat(data [][]u8, splat uint) uint {
 	if data.len == 0 { panic('integer overflow') }
-	mut total := usize(0)
+	mut total := uint(0)
 	for bytes in data[..data.len - 1] {
-		if usize(bytes.len) > ~usize(0) - total { panic('integer overflow') }
-		total += usize(bytes.len)
+		if uint(bytes.len) > ~uint(0) - total { panic('integer overflow') }
+		total += uint(bytes.len)
 	}
-	pattern_len := usize(data[data.len - 1].len)
-	if pattern_len != 0 && splat > ~usize(0) / pattern_len { panic('integer overflow') }
+	pattern_len := uint(data[data.len - 1].len)
+	if pattern_len != 0 && splat > ~uint(0) / pattern_len { panic('integer overflow') }
 	last := pattern_len * splat
-	if last > ~usize(0) - total { panic('integer overflow') }
+	if last > ~uint(0) - total { panic('integer overflow') }
 	return total + last
 }
 
 // Make one drain at most; pending output occupies the first of 16 file slots.
-pub fn (mut stream WriteStream) write_vec(data [][]u8) !usize {
+pub fn (mut stream WriteStream) write_vec(data [][]u8) !uint {
 	if data.len == 0 { panic('reached unreachable code') }
 	count := count_splat(data, 1)
-	if count > ~usize(0) - usize(stream.position) { panic('integer overflow') }
-	if usize(stream.position) + count <= usize(stream.buffer.len) {
+	if count > ~uint(0) - uint(stream.position) { panic('integer overflow') }
+	if uint(stream.position) + count <= uint(stream.buffer.len) {
 		for bytes in data {
 			for i, byte in bytes {
 				stream.buffer[stream.position + i] = byte
@@ -1451,11 +1451,11 @@ pub fn (mut stream WriteStream) write_vec(data [][]u8) !usize {
 	}
 	if file := stream.file {
 		mut pointers := unsafe { [16]voidptr{} }
-		mut lengths := [16]usize{}
+		mut lengths := [16]uint{}
 		mut slots := 0
 		if stream.position > 0 {
 			pointers[slots] = stream.buffer.data
-			lengths[slots] = usize(stream.position)
+			lengths[slots] = uint(stream.position)
 			slots++
 		}
 		for bytes in data {
@@ -1464,7 +1464,7 @@ pub fn (mut stream WriteStream) write_vec(data [][]u8) !usize {
 			if slots == pointers.len { break
 			 }
 			pointers[slots] = bytes.data
-			lengths[slots] = usize(bytes.len)
+			lengths[slots] = uint(bytes.len)
 			slots++
 		}
 		n := C.witty_image_file_write_vectors(file.fd, stream.file_pos, &pointers[0], &lengths[0],
@@ -1486,7 +1486,7 @@ pub fn (mut stream WriteStream) write_vec(data [][]u8) !usize {
 			stream.position = remaining
 			return 0
 		}
-		consumed := usize(n) - usize(stream.position)
+		consumed := uint(n) - uint(stream.position)
 		stream.position = 0
 		return consumed
 	}
@@ -1503,12 +1503,12 @@ pub fn (mut stream WriteStream) write_vec(data [][]u8) !usize {
 }
 
 // Repeat the final vector while copying every prefix once, with one drain at most.
-pub fn (mut stream WriteStream) write_splat(data [][]u8, splat usize) !usize {
+pub fn (mut stream WriteStream) write_splat(data [][]u8, splat uint) !uint {
 	if data.len == 0 { panic('reached unreachable code') }
 	count := count_splat(data, splat)
-	if count > ~usize(0) - usize(stream.position) { panic('integer overflow') }
+	if count > ~uint(0) - uint(stream.position) { panic('integer overflow') }
 	pattern := data[data.len - 1]
-	if usize(stream.position) + count <= usize(stream.buffer.len) {
+	if uint(stream.position) + count <= uint(stream.buffer.len) {
 		for bytes in data[..data.len - 1] {
 			for i, byte in bytes {
 				stream.buffer[stream.position + i] = byte
@@ -1543,7 +1543,7 @@ pub fn (mut stream WriteStream) write_splat(data [][]u8, splat usize) !usize {
 	if pattern.len == 0 { return 0 }
 	if pattern.len == 1 {
 		space := stream.buffer.len - stream.position
-		if splat < usize(space) { panic('reached unreachable code') }
+		if splat < uint(space) { panic('reached unreachable code') }
 		for i in 0 .. space {
 			stream.buffer[stream.position + i] = pattern[0]
 		}
@@ -1564,21 +1564,21 @@ pub fn (mut stream WriteStream) write_splat(data [][]u8, splat usize) !usize {
 	panic('reached unreachable code')
 }
 
-fn (mut stream WriteStream) file_write_splat(data [][]u8, splat usize) !usize {
+fn (mut stream WriteStream) file_write_splat(data [][]u8, splat uint) !uint {
 	file := stream.file or { return error('WriteFailed') }
 	mut pointers := unsafe { [16]voidptr{} }
-	mut lengths := [16]usize{}
+	mut lengths := [16]uint{}
 	mut slots := 0
 	if stream.position > 0 {
 		pointers[slots] = stream.buffer.data
-		lengths[slots] = usize(stream.position)
+		lengths[slots] = uint(stream.position)
 		slots++
 	}
 	for bytes in data[..data.len - 1] {
 		if bytes.len == 0 { continue
 		 }
 		pointers[slots] = bytes.data
-		lengths[slots] = usize(bytes.len)
+		lengths[slots] = uint(bytes.len)
 		slots++
 		if slots == pointers.len { break
 		 }
@@ -1588,31 +1588,31 @@ fn (mut stream WriteStream) file_write_splat(data [][]u8, splat usize) !usize {
 	if slots < pointers.len && splat > 0 && pattern.len > 0 {
 		$if windows {
 			pointers[slots] = pattern.data
-			lengths[slots] = usize(pattern.len)
+			lengths[slots] = uint(pattern.len)
 			slots++
 		} $else {
 			if splat == 1 {
 				pointers[slots] = pattern.data
-				lengths[slots] = usize(pattern.len)
+				lengths[slots] = uint(pattern.len)
 				slots++
 			} else if pattern.len == 1 {
 				mut scratch := unsafe { backup[..] }
 				if stream.buffer.len - stream.position >= backup.len {
 					scratch = unsafe { stream.buffer[stream.position..] }
 				}
-				len := if splat < usize(scratch.len) { int(splat) } else { scratch.len }
+				len := if splat < uint(scratch.len) { int(splat) } else { scratch.len }
 				for i in 0 .. len {
 					scratch[i] = pattern[0]
 				}
 				pointers[slots] = scratch.data
-				lengths[slots] = usize(len)
+				lengths[slots] = uint(len)
 				slots++
-				mut remaining := splat - usize(len)
-				for remaining > usize(scratch.len) && slots < pointers.len {
+				mut remaining := splat - uint(len)
+				for remaining > uint(scratch.len) && slots < pointers.len {
 					pointers[slots] = scratch.data
-					lengths[slots] = usize(scratch.len)
+					lengths[slots] = uint(scratch.len)
 					slots++
-					remaining -= usize(scratch.len)
+					remaining -= uint(scratch.len)
 				}
 				if remaining > 0 && slots < pointers.len {
 					pointers[slots] = scratch.data
@@ -1623,7 +1623,7 @@ fn (mut stream WriteStream) file_write_splat(data [][]u8, splat usize) !usize {
 				mut remaining := splat
 				for remaining > 0 && slots < pointers.len {
 					pointers[slots] = pattern.data
-					lengths[slots] = usize(pattern.len)
+					lengths[slots] = uint(pattern.len)
 					slots++
 					remaining--
 				}
@@ -1650,19 +1650,19 @@ fn (mut stream WriteStream) file_write_splat(data [][]u8, splat usize) !usize {
 		stream.position = remaining
 		return 0
 	}
-	consumed := usize(n) - usize(stream.position)
+	consumed := uint(n) - uint(stream.position)
 	stream.position = 0
 	return consumed
 }
 
 // Consume a header followed by prefix vectors and a repeated final vector.
-pub fn (mut stream WriteStream) write_splat_header(header []u8, data [][]u8, splat usize) !usize {
+pub fn (mut stream WriteStream) write_splat_header(header []u8, data [][]u8, splat uint) !uint {
 	return stream.write_splat_header_limit(header, data, splat, Limit.unlimited())
 }
 
-pub fn (mut stream WriteStream) write_splat_header_limit(header []u8, data [][]u8, splat usize, limit Limit) !usize {
+pub fn (mut stream WriteStream) write_splat_header_limit(header []u8, data [][]u8, splat uint, limit Limit) !uint {
 	mut remaining := limit.value
-	mut len := int(Limit.limited(remaining).min_int(usize(header.len)))
+	mut len := int(Limit.limited(remaining).min_int(uint(header.len)))
 	if len > stream.buffer.len - stream.position { len = stream.buffer.len - stream.position }
 	if header.len != len {
 		return stream.write_splat_header_limit_finish(header, data, splat, remaining)
@@ -1671,32 +1671,32 @@ pub fn (mut stream WriteStream) write_splat_header_limit(header []u8, data [][]u
 		stream.buffer[stream.position + i] = header[i]
 	}
 	stream.position += len
-	remaining -= usize(len)
+	remaining -= uint(len)
 	if data.len == 0 { panic('integer overflow') }
 	for index, bytes in data[..data.len - 1] {
-		len = int(Limit.limited(remaining).min_int(usize(bytes.len)))
+		len = int(Limit.limited(remaining).min_int(uint(bytes.len)))
 		if len > stream.buffer.len - stream.position { len = stream.buffer.len - stream.position }
 		if bytes.len != len {
 			written := stream.write_splat_header_limit_finish([]u8{}, data[index..], splat,
 				remaining)!
 			buffered := limit.value - remaining
-			if written > ~usize(0) - buffered { panic('integer overflow') }
+			if written > ~uint(0) - buffered { panic('integer overflow') }
 			return buffered + written
 		}
 		for i in 0 .. len {
 			stream.buffer[stream.position + i] = bytes[i]
 		}
 		stream.position += len
-		remaining -= usize(len)
+		remaining -= uint(len)
 	}
 	pattern := data[data.len - 1]
-	if pattern.len != 0 && splat > ~usize(0) / usize(pattern.len) { panic('integer overflow') }
-	count := usize(pattern.len) * splat
-	if count > Limit.limited(remaining).min_int(usize(stream.buffer.len - stream.position)) {
+	if pattern.len != 0 && splat > ~uint(0) / uint(pattern.len) { panic('integer overflow') }
+	count := uint(pattern.len) * splat
+	if count > Limit.limited(remaining).min_int(uint(stream.buffer.len - stream.position)) {
 		buffered := limit.value - remaining
 		written := stream.write_splat_header_limit_finish([]u8{}, data[data.len - 1..], splat,
 			remaining)!
-		if written > ~usize(0) - buffered { panic('integer overflow') }
+		if written > ~uint(0) - buffered { panic('integer overflow') }
 		return buffered + written
 	}
 	if pattern.len > 0 {
@@ -1711,13 +1711,13 @@ pub fn (mut stream WriteStream) write_splat_header_limit(header []u8, data [][]u
 	return limit.value - remaining
 }
 
-fn (mut stream WriteStream) write_splat_header_limit_finish(header []u8, data [][]u8, splat usize, limit usize) !usize {
+fn (mut stream WriteStream) write_splat_header_limit_finish(header []u8, data [][]u8, splat uint, limit uint) !uint {
 	mut remaining := limit
 	mut vecs := [][]u8{cap: 8}
 	if header.len != 0 {
-		len := int(Limit.limited(remaining).min_int(usize(header.len)))
+		len := int(Limit.limited(remaining).min_int(uint(header.len)))
 		vecs << unsafe { header[..len] }
-		remaining -= usize(len)
+		remaining -= uint(len)
 		if remaining == 0 { return stream.header_drain(vecs, 1) }
 	}
 	if data.len == 0 { panic('integer overflow') }
@@ -1725,24 +1725,24 @@ fn (mut stream WriteStream) write_splat_header_limit_finish(header []u8, data []
 		if bytes.len == 0 { continue
 		 }
 		// The pinned Writer uses header.len here and passes the entire prefix.
-		len := Limit.limited(remaining).min_int(usize(header.len))
+		len := Limit.limited(remaining).min_int(uint(header.len))
 		vecs << unsafe { bytes }
 		remaining -= len
 		if remaining == 0 || vecs.len == 8 { return stream.header_drain(vecs, 1) }
 	}
 	pattern := data[data.len - 1]
 	if splat == 1 {
-		len := int(Limit.limited(remaining).min_int(usize(pattern.len)))
+		len := int(Limit.limited(remaining).min_int(uint(pattern.len)))
 		vecs << unsafe { pattern[..len] }
 		return stream.header_drain(vecs, 1)
 	}
 	vecs << unsafe { pattern }
 	if pattern.len == 0 { panic('division by zero') }
-	return stream.header_drain(vecs, Limit.limited(remaining / usize(pattern.len)).min_int(splat))
+	return stream.header_drain(vecs, Limit.limited(remaining / uint(pattern.len)).min_int(splat))
 }
 
 // Call drain directly: its fixed-buffer behavior differs from write_splat's fast path.
-fn (mut stream WriteStream) header_drain(data [][]u8, splat usize) !usize {
+fn (mut stream WriteStream) header_drain(data [][]u8, splat uint) !uint {
 	if stream.file != none { return stream.file_write_splat(data, splat) }
 	if data.len == 0 { return 0 }
 	for bytes in data[..data.len - 1] {
@@ -1758,7 +1758,7 @@ fn (mut stream WriteStream) header_drain(data [][]u8, splat usize) !usize {
 	if pattern.len == 0 { return 0 }
 	if pattern.len == 1 {
 		space := stream.buffer.len - stream.position
-		if splat < usize(space) { panic('reached unreachable code') }
+		if splat < uint(space) { panic('reached unreachable code') }
 		for i in 0 .. space {
 			stream.buffer[stream.position + i] = pattern[0]
 		}
@@ -1779,72 +1779,72 @@ fn (mut stream WriteStream) header_drain(data [][]u8, splat usize) !usize {
 	panic('reached unreachable code')
 }
 
-pub fn (mut stream WriteStream) splat_byte(byte u8, count usize) !usize {
+pub fn (mut stream WriteStream) splat_byte(byte u8, count uint) !uint {
 	return stream.write_splat([[byte]], count)
 }
 
-pub fn (mut stream WriteStream) splat_bytes(bytes []u8, count usize) !usize {
+pub fn (mut stream WriteStream) splat_bytes(bytes []u8, count uint) !uint {
 	return stream.write_splat([bytes], count)
 }
 
 // Restore each borrowed input header after retrying a partial vector write.
 pub fn (mut stream WriteStream) write_vec_all(mut data [][]u8) ! {
 	mut index := 0
-	mut truncate := usize(0)
+	mut truncate := uint(0)
 	for index < data.len {
 		{
 			untruncated := data[index]
 			data[index] = unsafe { untruncated[int(truncate)..] }
 			defer { data[index] = untruncated }
 			n := stream.write_vec(data[index..])!
-			if n > ~usize(0) - truncate { panic('integer overflow') }
+			if n > ~uint(0) - truncate { panic('integer overflow') }
 			truncate += n
 		}
-		for index < data.len && truncate >= usize(data[index].len) {
-			truncate -= usize(data[index].len)
+		for index < data.len && truncate >= uint(data[index].len) {
+			truncate -= uint(data[index].len)
 			index++
 		}
 	}
 }
 
-pub fn (mut stream WriteStream) write_splat_all(mut data [][]u8, splat usize) ! {
+pub fn (mut stream WriteStream) write_splat_all(mut data [][]u8, splat uint) ! {
 	mut index := 0
-	mut truncate := usize(0)
+	mut truncate := uint(0)
 	for index + 1 < data.len {
 		{
 			untruncated := data[index]
 			data[index] = unsafe { untruncated[int(truncate)..] }
 			defer { data[index] = untruncated }
 			n := stream.write_splat(data[index..], splat)!
-			if n > ~usize(0) - truncate { panic('integer overflow') }
+			if n > ~uint(0) - truncate { panic('integer overflow') }
 			truncate += n
 		}
-		for truncate >= usize(data[index].len) && index + 1 < data.len {
-			truncate -= usize(data[index].len)
+		for truncate >= uint(data[index].len) && index + 1 < data.len {
+			truncate -= uint(data[index].len)
 			index++
 		}
 	}
 	if data.len == 0 { return }
 	pattern := data[index]
-	if pattern.len != 0 && splat > ~usize(0) / usize(pattern.len) { panic('integer overflow') }
-	if truncate < usize(pattern.len) * splat {
+	if pattern.len != 0 && splat > ~uint(0) / uint(pattern.len) { panic('integer overflow') }
+	if truncate < uint(pattern.len) * splat {
 		if index != data.len - 1 { panic('reached unreachable code') }
 		mut remaining := splat
 		for {
-			used := truncate / usize(pattern.len)
+			used := truncate / uint(pattern.len)
 			if used > remaining { panic('integer overflow') }
 			remaining -= used
-			truncate %= usize(pattern.len)
+			truncate %= uint(pattern.len)
 			if remaining == 0 { break
 			 }
 			n := stream.write_splat([unsafe { pattern[int(truncate)..] }, pattern], remaining - 1)!
-			if n > ~usize(0) - truncate { panic('integer overflow') }
+			if n > ~uint(0) - truncate { panic('integer overflow') }
 			truncate += n
 		}
 	}
 }
 
-pub fn (mut stream WriteStream) splat_byte_all(byte u8, count usize) ! {
+pub fn (mut stream WriteStream) splat_byte_all(byte u8, count uint) ! {
 	mut remaining := count
 	for remaining > 0 {
 		n := stream.splat_byte(byte, remaining)!
@@ -1853,15 +1853,15 @@ pub fn (mut stream WriteStream) splat_byte_all(byte u8, count usize) ! {
 	}
 }
 
-pub fn (mut stream WriteStream) splat_bytes_all(bytes []u8, splat usize) ! {
-	if bytes.len != 0 && splat > ~usize(0) / usize(bytes.len) { panic('integer overflow') }
-	mut remaining := usize(bytes.len) * splat
+pub fn (mut stream WriteStream) splat_bytes_all(bytes []u8, splat uint) ! {
+	if bytes.len != 0 && splat > ~uint(0) / uint(bytes.len) { panic('integer overflow') }
+	mut remaining := uint(bytes.len) * splat
 	first := stream.splat_bytes(bytes, splat)!
 	if first > remaining { panic('integer overflow') }
 	remaining -= first
 	for remaining > 0 {
-		leftover_splat := remaining / usize(bytes.len)
-		leftover_bytes := remaining % usize(bytes.len)
+		leftover_splat := remaining / uint(bytes.len)
+		leftover_bytes := remaining % uint(bytes.len)
 		n := stream.write_splat([unsafe { bytes[bytes.len - int(leftover_bytes)..] }, bytes],
 			leftover_splat)!
 		if n > remaining { panic('integer overflow') }
@@ -1870,10 +1870,10 @@ pub fn (mut stream WriteStream) splat_bytes_all(bytes []u8, splat usize) ! {
 }
 
 // Keep Source's buffered-tail compaction and short-write order.
-pub fn (mut stream WriteStream) splat_byte_preserve(preserve usize, byte u8, count usize) ! {
-	if count > ~usize(0) - usize(stream.position) { panic('integer overflow') }
-	new_end := usize(stream.position) + count
-	if new_end <= usize(stream.buffer.len) {
+pub fn (mut stream WriteStream) splat_byte_preserve(preserve uint, byte u8, count uint) ! {
+	if count > ~uint(0) - uint(stream.position) { panic('integer overflow') }
+	new_end := uint(stream.position) + count
+	if new_end <= uint(stream.buffer.len) {
 		for i in 0 .. int(count) {
 			stream.buffer[stream.position + i] = byte
 		}
@@ -1886,8 +1886,8 @@ pub fn (mut stream WriteStream) splat_byte_preserve(preserve usize, byte u8, cou
 		n := stream.splat_byte(byte, remaining - preserve)!
 		if n > remaining { panic('integer overflow') }
 		remaining -= n
-		if remaining > ~usize(0) - usize(stream.position) { panic('integer overflow') }
-		if usize(stream.position) + remaining <= usize(stream.buffer.len) {
+		if remaining > ~uint(0) - uint(stream.position) { panic('integer overflow') }
+		if uint(stream.position) + remaining <= uint(stream.buffer.len) {
 			for i in 0 .. int(remaining) {
 				stream.buffer[stream.position + i] = byte
 			}
@@ -1895,7 +1895,7 @@ pub fn (mut stream WriteStream) splat_byte_preserve(preserve usize, byte u8, cou
 			return
 		}
 	}
-	if preserve < usize(stream.position) {
+	if preserve < uint(stream.position) {
 		for i in 0 .. int(preserve) {
 			stream.buffer[i] = stream.buffer[stream.position - int(preserve) + i]
 		}
@@ -1916,8 +1916,8 @@ pub enum Alignment {
 
 pub struct FormatOptions {
 pub mut:
-	precision ?usize
-	width     ?usize
+	precision ?uint
+	width     ?uint
 	alignment Alignment = .right
 	fill      u8        = ` `
 }
@@ -1944,8 +1944,8 @@ pub struct NumberFormat {
 pub mut:
 	mode        NumberMode = .decimal
 	letter_case FormatCase = .lower
-	precision   ?usize
-	width       ?usize
+	precision   ?uint
+	width       ?uint
 	alignment   Alignment = .right
 	fill        u8        = ` `
 }
@@ -1962,8 +1962,8 @@ pub fn (options FormatOptions) to_number(mode NumberMode, letter_case FormatCase
 }
 
 // Retain Source's separate payload and padding writes, including failure order.
-pub fn (mut stream WriteStream) align_buffer(buffer []u8, width usize, alignment Alignment, fill u8) ! {
-	padding := if usize(buffer.len) < width { width - usize(buffer.len) } else { usize(0) }
+pub fn (mut stream WriteStream) align_buffer(buffer []u8, width uint, alignment Alignment, fill u8) ! {
+	padding := if uint(buffer.len) < width { width - uint(buffer.len) } else { uint(0) }
 	if padding == 0 { return stream.write_all(buffer) }
 	match alignment {
 		.left {
@@ -1972,7 +1972,7 @@ pub fn (mut stream WriteStream) align_buffer(buffer []u8, width usize, alignment
 		}
 		.center {
 			left := padding / 2
-			if padding == ~usize(0) { panic('integer overflow') }
+			if padding == ~uint(0) { panic('integer overflow') }
 			right := (padding + 1) / 2
 			stream.splat_byte_all(fill, left)!
 			stream.write_all(buffer)!
@@ -1986,7 +1986,7 @@ pub fn (mut stream WriteStream) align_buffer(buffer []u8, width usize, alignment
 }
 
 pub fn (mut stream WriteStream) align_buffer_options(buffer []u8, options FormatOptions) ! {
-	width := options.width or { usize(buffer.len) }
+	width := options.width or { uint(buffer.len) }
 	return stream.align_buffer(buffer, width, options.alignment, options.fill)
 }
 
@@ -1997,7 +1997,7 @@ pub fn (mut stream WriteStream) print_int_any[T](value T, base u8, letter_case F
 		mut magnitude := u64(0)
 		mut sign := u8(0)
 		$if T.unaliased_typ is i8 || T.unaliased_typ is i16 || T.unaliased_typ is int
-			|| T.unaliased_typ is i64 || T.unaliased_typ is isize {
+			|| T.unaliased_typ is i64 || T.unaliased_typ is int {
 			n := i64(value)
 			if n < 0 {
 				magnitude = u64(-(n + 1)) + 1
@@ -2056,11 +2056,11 @@ pub fn (mut stream WriteStream) print_float[T](value T, options NumberFormat) ! 
 		mode:      mode
 		precision: options.precision
 	}) or { '(float)'.bytes() }
-	return stream.align_buffer(printed, options.width or { usize(printed.len) }, options.alignment,
+	return stream.align_buffer(printed, options.width or { uint(printed.len) }, options.alignment,
 		options.fill)
 }
 
-fn io_address_integer(mut stream WriteStream, address usize) ! {
+fn io_address_integer(mut stream WriteStream, address uint) ! {
 	mut value := address
 	mut bytes := [16]u8{}
 	mut index := bytes.len
@@ -2091,7 +2091,7 @@ fn io_address_type_name[T]() string {
 		return 'u32'
 	} $else $if T.unaliased_typ is u64 {
 		return 'u64'
-	} $else $if T.unaliased_typ is usize {
+	} $else $if T.unaliased_typ is uint {
 		return 'usize'
 	} $else $if T.unaliased_typ is i8 {
 		return 'i8'
@@ -2099,7 +2099,7 @@ fn io_address_type_name[T]() string {
 		return 'i16'
 	} $else $if T.unaliased_typ is i64 {
 		return 'i64'
-	} $else $if T.unaliased_typ is isize {
+	} $else $if T.unaliased_typ is int {
 		return 'isize'
 	} $else $if T.unaliased_typ is f32 {
 		return 'f32'
@@ -2123,7 +2123,7 @@ fn io_address_pointer[T](mut stream WriteStream, value &T) ! {
 		name := io_value_pointer_address_name[T]()!
 		stream.write_all((name + '@').bytes())!
 	}
-	return io_address_integer(mut stream, unsafe { usize(voidptr(value)) })
+	return io_address_integer(mut stream, unsafe { uint(voidptr(value)) })
 }
 
 // Bind the payload separately so an optional pointer alias can be normalized.
@@ -2138,7 +2138,7 @@ fn io_address_optional[P](mut stream WriteStream, value ?P) ! {
 fn io_address_optional_pointer[T](mut stream WriteStream, value ?&T) ! {
 	name := io_value_pointer_address_name[T]()!
 	stream.write_all(('*' + name + '@').bytes())!
-	address := unsafe { usize(voidptr(value or { nil })) }
+	address := unsafe { uint(voidptr(value or { nil })) }
 	return io_address_integer(mut stream, address)
 }
 
@@ -2158,7 +2158,7 @@ fn io_address_slice[T](mut stream WriteStream, value []T) ! {
 	} $else {
 		stream.write_all((io_address_type_name[T]() + '@').bytes())!
 	}
-	return io_address_integer(mut stream, usize(value.data))
+	return io_address_integer(mut stream, uint(value.data))
 }
 
 // Type prefix and hexadecimal address are separate Source writes; never dereference.
@@ -2170,7 +2170,7 @@ pub fn (mut stream WriteStream) print_address[P](value P) ! {
 		return io_address_optional(mut stream, value)
 	} $else $if P.unaliased_typ is voidptr {
 		stream.write_all('anyopaque@'.bytes())!
-		return io_address_integer(mut stream, usize(value))
+		return io_address_integer(mut stream, uint(value))
 	} $else $if P.unaliased_typ is $array_fixed {
 		$if P.indirections > 0 || ((int(P.unaliased_typ) >> 16) & 0xff) > 0 {
 			return io_address_pointer(mut stream, value)
@@ -2194,7 +2194,7 @@ pub fn (mut stream WriteStream) print_address[P](value P) ! {
 	} $else $if P.unaliased_typ is string {
 		stream.write_all('u8@'.bytes())!
 		text := string(value)
-		return io_address_integer(mut stream, usize(text.str))
+		return io_address_integer(mut stream, uint(text.str))
 	} $else {
 		$compile_error('print_address requires a pointer or slice')
 	}
@@ -2254,7 +2254,7 @@ pub fn (mut stream WriteStream) print_byte_size(value u64, units ByteSizeUnits, 
 }
 
 // Hex floats retain Source's rounding and separate sign/fraction/exponent writes.
-pub fn (mut stream WriteStream) print_float_hex[T](value T, letter_case FormatCase, precision ?usize) ! {
+pub fn (mut stream WriteStream) print_float_hex[T](value T, letter_case FormatCase, precision ?uint) ! {
 	$if T.unaliased_typ is f32 || T.unaliased_typ is f64 {
 		mut raw := u64(0)
 		mut fractional_bits := 52
@@ -2300,7 +2300,7 @@ pub fn (mut stream WriteStream) print_float_hex[T](value T, letter_case FormatCa
 		mantissa_digits := (fractional_bits + 3) / 4
 		mantissa <<= mantissa_digits * 4 - fractional_bits
 		if digits := precision {
-			if digits < usize(mantissa_digits) {
+			if digits < uint(mantissa_digits) {
 				shift := (mantissa_digits - int(digits)) * 4
 				mut extra_bits := shift
 				for extra_bits > 2 {
@@ -2334,7 +2334,7 @@ pub fn (mut stream WriteStream) print_float_hex[T](value T, letter_case FormatCa
 		}
 		stream.write_all(buffer[1..end])!
 		if digits := precision {
-			if digits > usize(end - 1) { stream.splat_byte_all(`0`, digits - usize(end - 1))! }
+			if digits > uint(end - 1) { stream.splat_byte_all(`0`, digits - uint(end - 1))! }
 		}
 		stream.write_byte(`p`)!
 		return stream.print_int[int](exponent - ((1 << (exponent_bits - 1)) - 1), 10, letter_case, FormatOptions{})
@@ -2358,7 +2358,7 @@ pub fn (mut stream WriteStream) print_float_hex_options[T](value T, options Numb
 		panic('attempt to unwrap error: ${err.msg()}')
 	}
 	printed := inner.buffered()
-	return stream.align_buffer(printed, options.width or { usize(printed.len) }, options.alignment,
+	return stream.align_buffer(printed, options.width or { uint(printed.len) }, options.alignment,
 		options.fill)
 }
 
@@ -2392,7 +2392,7 @@ pub fn (mut stream WriteStream) print_duration_unsigned(nanoseconds u64) ! {
 				mut decimal := [u8(`.`), 0, 0, 0]!
 				mut digits := unsafe { (&u8(&decimal[1])).vbytes(3) }
 				mut inner := WriteStream.init_memory(mut digits)
-				inner.print_int[u64](fraction, 10, .lower, FormatOptions{ width: usize(3), fill: `0` }) or {
+				inner.print_int[u64](fraction, 10, .lower, FormatOptions{ width: uint(3), fill: `0` }) or {
 					panic('reached unreachable code')
 				}
 				mut end := 4
@@ -2424,7 +2424,7 @@ pub fn (mut stream WriteStream) print_duration[T](nanoseconds T, options FormatO
 		mut bytes := unsafe { storage[..] }
 		mut inner := WriteStream.init_memory(mut bytes)
 		$if T.unaliased_typ is i8 || T.unaliased_typ is i16 || T.unaliased_typ is int
-			|| T.unaliased_typ is i64 || T.unaliased_typ is isize {
+			|| T.unaliased_typ is i64 || T.unaliased_typ is int {
 			inner.print_duration_signed(i64(nanoseconds)) or {
 				panic('attempt to unwrap error: ${err.msg()}')
 			}
@@ -2615,7 +2615,7 @@ fn (mut stream WriteStream) write_leb128_signed(value i64) ! {
 pub fn (mut stream WriteStream) write_leb128[T](value T) ! {
 	$if T.unaliased_typ is $int {
 		$if T.unaliased_typ is i8 || T.unaliased_typ is i16 || T.unaliased_typ is int
-			|| T.unaliased_typ is i64 || T.unaliased_typ is isize {
+			|| T.unaliased_typ is i64 || T.unaliased_typ is int {
 			stream.write_leb128_signed(i64(value))!
 		} $else {
 			stream.write_leb128_unsigned(u64(value), false)!
@@ -2628,7 +2628,7 @@ pub fn (mut stream WriteStream) write_leb128[T](value T) ! {
 pub fn (mut stream WriteStream) write_uleb128[T](value T) ! {
 	$if T.unaliased_typ is $int {
 		$if T.unaliased_typ is i8 || T.unaliased_typ is i16 || T.unaliased_typ is int
-			|| T.unaliased_typ is i64 || T.unaliased_typ is isize {
+			|| T.unaliased_typ is i64 || T.unaliased_typ is int {
 			if i64(value) < 0 { panic('integer does not fit in destination type') }
 		}
 		stream.write_leb128_unsigned(u64(value), false)!
@@ -2640,7 +2640,7 @@ pub fn (mut stream WriteStream) write_uleb128[T](value T) ! {
 pub fn (mut stream WriteStream) write_sleb128[T](value T) ! {
 	$if T.unaliased_typ is $int {
 		$if T.unaliased_typ is i8 || T.unaliased_typ is i16 || T.unaliased_typ is int
-			|| T.unaliased_typ is i64 || T.unaliased_typ is isize {
+			|| T.unaliased_typ is i64 || T.unaliased_typ is int {
 			stream.write_leb128_signed(i64(value))!
 		} $else {
 			stream.write_leb128_unsigned(u64(value), true)!
@@ -2656,7 +2656,7 @@ pub fn (mut stream WriteStream) flush() ! {
 	for stream.position != 0 {
 		previous_mode := stream.streaming
 		n := C.witty_image_file_write(file.fd, stream.file_pos, stream.buffer.data,
-			usize(stream.position), unsafe { nil }, 0, &stream.streaming)
+			uint(stream.position), unsafe { nil }, 0, &stream.streaming)
 		if n == 0 && previous_mode == 0 && stream.streaming == 1 {
 			continue
 		}

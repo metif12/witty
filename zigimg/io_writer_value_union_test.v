@@ -38,8 +38,8 @@ fn test_union_tags_payloads_and_aliases() ! {
 	writer.print_value('any', FormatOptions{}, UnionChoice([u8(1), 255]), 2)!
 	writer.write_byte(`|`)!
 	writer.print_value('t', FormatOptions{
-		width:     usize(12)
-		precision: ~usize(0)
+		width:     uint(12)
+		precision: ~uint(0)
 		fill:      `_`
 		alignment: .center
 	}, UnionChoice(UnionCount(5)), 0)!
@@ -51,7 +51,7 @@ fn test_union_depth_optional_and_recursive_containers() ! {
 	for depth, expected in ['.{ ... }', '.{ .[]u8 = { ... } }', '.{ .[]u8 = { 1, 255 } }'] {
 		mut buffer := []u8{len: 512}
 		mut writer := WriteStream.init_memory(mut buffer)
-		writer.print_value('any', FormatOptions{}, value, usize(depth))!
+		writer.print_value('any', FormatOptions{}, value, uint(depth))!
 		assert writer.buffered().bytestr() == expected
 	}
 	mut buffer := []u8{len: 512}
@@ -91,7 +91,7 @@ fn test_union_partial_writes_and_error_payloads() ! {
 	mut buffer := []u8{len: 128}
 	mut writer := WriteStream.init_memory(mut buffer)
 	writer.print_value('any', FormatOptions{}, [u8(1), 255]!, 1)!
-	writer.print_value('any', FormatOptions{ width: usize(0), precision: usize(0) },
+	writer.print_value('any', FormatOptions{ width: uint(0), precision: uint(0) },
 		UnionFailure(UnionProblem{'Alpha'}), 0)!
 	assert writer.buffered().bytestr() == '{ 1, 255 }.{ ... }'
 }
@@ -103,7 +103,7 @@ fn test_union_invalid_and_ambiguous_formats_preserve_writer_state() ! {
 		writer.write_byte(`!`)!
 		before := buffer.clone()
 		mut status := 'ok'
-		writer.print_value(format, FormatOptions{ width: usize(0), precision: usize(0) },
+		writer.print_value(format, FormatOptions{ width: uint(0), precision: uint(0) },
 			UnionCustom(true), 0) or { status = err.msg() }
 		assert status == if format == '' {
 			'ambiguous print_value union format'

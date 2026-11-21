@@ -11,7 +11,7 @@ mut:
 	page    bool
 }
 
-fn page_pool_test_alloc(ctx voidptr, length usize, alignment u8, _ usize) voidptr {
+fn page_pool_test_alloc(ctx voidptr, length uint, alignment u8, _ uint) voidptr {
 	mut state := unsafe { &PagePoolTestState(ctx) }
 	call := state.calls
 	state.calls++
@@ -22,19 +22,19 @@ fn page_pool_test_alloc(ctx voidptr, length usize, alignment u8, _ usize) voidpt
 	return ptr
 }
 
-fn page_pool_test_resize(ctx voidptr, memory voidptr, old usize, alignment u8, length usize, _ usize) bool {
+fn page_pool_test_resize(ctx voidptr, memory voidptr, old uint, alignment u8, length uint, _ uint) bool {
 	state := unsafe { &PagePoolTestState(ctx) }
 	child := if state.page { page_list_page_allocator() } else { lib_allocator.c_allocator_value() }
 	return child.resize_bytes(memory, old, alignment, length, 0)
 }
 
-fn page_pool_test_remap(ctx voidptr, memory voidptr, old usize, alignment u8, length usize, _ usize) voidptr {
+fn page_pool_test_remap(ctx voidptr, memory voidptr, old uint, alignment u8, length uint, _ uint) voidptr {
 	state := unsafe { &PagePoolTestState(ctx) }
 	child := if state.page { page_list_page_allocator() } else { lib_allocator.c_allocator_value() }
 	return child.remap_bytes(memory, old, alignment, length, 0)
 }
 
-fn page_pool_test_free(ctx voidptr, memory voidptr, length usize, alignment u8, _ usize) {
+fn page_pool_test_free(ctx voidptr, memory voidptr, length uint, alignment u8, _ uint) {
 	mut state := unsafe { &PagePoolTestState(ctx) }
 	state.frees++
 	state.live--
@@ -87,8 +87,8 @@ fn test_page_list_pool_returns_actual_standard_block_and_reuses_zeroed_memory() 
 	defer { list.deinit() }
 	before := list.page_size
 	mut node := list.create_page(PageCapacity{ cols: 4, rows: 2, styles: 16 })!
-	assert usize(node.data.memory.len) == standard_page_size()
-	assert usize(node.data.memory.data) % page_memory_alignment() == 0
+	assert uint(node.data.memory.len) == standard_page_size()
+	assert uint(node.data.memory.data) % page_memory_alignment() == 0
 	pointer := node.data.memory.data
 	serial := node.serial
 	node.data.memory[100] = 99
@@ -118,7 +118,7 @@ fn test_page_list_pool_nonstandard_pages_are_freed_outside_arena() ! {
 	mut cap := std_capacity
 	cap.cols = (std_capacity.max_cols() or { panic('standard capacity max columns') }) + 1
 	node := list.create_page(cap)!
-	assert usize(node.data.memory.len) > standard_page_size()
+	assert uint(node.data.memory.len) > standard_page_size()
 	assert page_state.live == initial_live + 1
 	list.destroy_node(node)
 	assert page_state.live == initial_live
@@ -140,7 +140,7 @@ fn test_page_list_reset_preserves_pin_addresses_and_clears_retained_pages() ! {
 	assert pin.x == 0 && pin.y == 0 && pin.garbage
 	assert !viewport.garbage
 	assert list.page_serial > serial
-	assert list.total_rows == usize(list.rows)
+	assert list.total_rows == uint(list.rows)
 	assert list.pages.first?.data.rows[0].cells[0].codepoint == 0
 	list.untrack_pin(pin)
 	pin2 := list.track_pin(list.pin(Point.new(.active, Coordinate{ x: 1, y: 1 }))?)!

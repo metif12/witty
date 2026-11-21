@@ -91,13 +91,13 @@ pub type GtkCssProvider = voidptr
 
 fn C.gtk_css_provider_new() GtkCssProvider
 
-fn C.gtk_css_provider_load_from_data(provider GtkCssProvider, data &char, length isize)
+fn C.gtk_css_provider_load_from_data(provider GtkCssProvider, data &char, length int)
 
 fn C.gtk_css_section_to_string(section voidptr) &char
 
 fn C.witty_gtk_css_section_get_bytes(section voidptr) GBytes
 
-fn C.g_bytes_get_data(bytes GBytes, size &usize) voidptr
+fn C.g_bytes_get_data(bytes GBytes, size &uint) voidptr
 
 fn C.g_quark_to_string(quark u32) &char
 
@@ -124,11 +124,11 @@ fn C.g_unix_signal_add(signum int, handler voidptr, user_data voidptr) u32
 
 fn C.g_log_set_writer_func(function voidptr, user_data voidptr, user_data_free voidptr)
 
-fn C.witty_glog_field_key(fields voidptr, index usize) &char
+fn C.witty_glog_field_key(fields voidptr, index uint) &char
 
-fn C.witty_glog_field_value(fields voidptr, index usize) voidptr
+fn C.witty_glog_field_value(fields voidptr, index uint) voidptr
 
-fn C.witty_glog_field_length(fields voidptr, index usize) isize
+fn C.witty_glog_field_length(fields voidptr, index uint) int
 
 // GTK window helpers.
 // NOTE: gtk_window_present / gtk_window_destroy / gtk_window_is_active are
@@ -191,7 +191,7 @@ const g_log_level_debug = u32(1 << 7)
 const g_log_writer_handled = 1
 const g_log_writer_unhandled = 0
 
-fn glib_log_field_string(fields voidptr, index usize) ?string {
+fn glib_log_field_string(fields voidptr, index uint) ?string {
 	value := C.witty_glog_field_value(fields, index)
 	if isnil(value) {
 		return none
@@ -205,11 +205,11 @@ fn glib_log_field_string(fields voidptr, index usize) ?string {
 
 // glib_log_writer_function funnels structured GLib/GObject/GTK messages into
 // the same severity buckets used by Witty. Mirrors glibLogWriterFunction.
-fn glib_log_writer_function(level u32, fields voidptr, n_fields usize, user_data voidptr) int {
+fn glib_log_writer_function(level u32, fields voidptr, n_fields uint, user_data voidptr) int {
 	_ = user_data
 	mut message := ?string(none)
 	mut domain := ?string(none)
-	for i in usize(0) .. n_fields {
+	for i in uint(0) .. n_fields {
 		key_ptr := C.witty_glog_field_key(fields, i)
 		if isnil(key_ptr) {
 			continue
@@ -1071,7 +1071,7 @@ fn (mut self Application) load_runtime_css() {
 		return
 	}
 	css := application_runtime_css(&self.config, gtk_runtime_at_least(4, 16, 0))
-	C.gtk_css_provider_load_from_data(self.css_provider, &char(css.str), isize(css.len))
+	C.gtk_css_provider_load_from_data(self.css_provider, &char(css.str), int(css.len))
 }
 
 fn (mut self Application) load_custom_css() {
@@ -1116,7 +1116,7 @@ fn (mut self Application) load_custom_css() {
 		}
 		C.g_signal_connect_data(provider, c'parsing-error', GCallback(voidptr(application_css_parsing_error_cb)), voidptr(self), unsafe { nil }, 0)
 		self.custom_css_providers << provider
-		C.gtk_css_provider_load_from_data(provider, &char(contents.data), isize(contents.len))
+		C.gtk_css_provider_load_from_data(provider, &char(contents.data), int(contents.len))
 		C.gtk_style_context_add_provider_for_display(display, provider, gtk_style_provider_priority_user)
 	}
 }
@@ -1151,9 +1151,9 @@ fn application_css_parsing_error_cb(provider GtkCssProvider, section voidptr, er
 	if gtk_at_least(4, 16, 0) && !isnil(section) {
 		bytes := C.witty_gtk_css_section_get_bytes(section)
 		if !isnil(bytes) {
-			mut length := usize(0)
+			mut length := uint(0)
 			ptr := C.g_bytes_get_data(bytes, &length)
-			if !isnil(ptr) && length <= usize(max_int) {
+			if !isnil(ptr) && length <= uint(max_int) {
 				contents := unsafe { tos(&u8(ptr), int(length)) }.clone()
 				log.warn('css parsing failed at ${location}: ${domain} ${c_err.code} ${message}\n${contents}')
 				return
@@ -1415,7 +1415,7 @@ pub fn (mut self Application) action_new_window(action GSimpleAction, parameter 
 				// The outer `as` check guarantees this, but retain Ghostty's
 				// defensive element check at the native boundary.
 				if C.g_variant_is_of_type(value, string_variant_type) {
-					mut length := usize(0)
+					mut length := uint(0)
 					argument := C.g_variant_get_string(value, &length)
 					if !isnil(argument) {
 						log.debug('new-window command argument: ${unsafe { tos(&u8(argument), int(length)) }}')
@@ -1469,7 +1469,7 @@ fn application_action_present_surface_cb(action GSimpleAction, parameter GVarian
 	if ptr_int == 0 {
 		return
 	}
-	surface := unsafe { &core.Surface(voidptr(usize(ptr_int))) }
+	surface := unsafe { &core.Surface(voidptr(uint(ptr_int))) }
 
 	// Send a message through the core app mailbox rather than presenting the
 	// surface directly so that it can validate that the surface pointer is
@@ -1809,7 +1809,7 @@ pub fn (mut self Application) perform_action(target apprt.Target, action apprt.A
 				} else if raw == int(apprt.GotoTab.last) {
 					SelectTab(SelectTabLast{})
 				} else if raw >= 0 {
-					SelectTab(SelectTabN{ n: usize(raw) })
+					SelectTab(SelectTabN{ n: uint(raw) })
 				} else {
 					return false
 				}

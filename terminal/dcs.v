@@ -84,7 +84,7 @@ fn dcs_state_deinit(mut state DcsState) {
 pub struct DcsXtgettcap {
 pub mut:
 	data []u8
-	i    usize
+	i    uint
 }
 
 // next returns the next terminfo key being requested, or none when
@@ -107,7 +107,7 @@ pub fn (mut self DcsXtgettcap) next() ?string {
 	// Note that if we're at the end, idx + 1 is len + 1 so we're over
 	// the end but that's okay because our check above is >= so we'll
 	// never read.
-	self.i += usize(idx + 1)
+	self.i += uint(idx + 1)
 
 	return rem[0..idx].bytestr()
 }
@@ -168,7 +168,7 @@ mut:
 	// Maximum bytes any DCS command can take. This is to prevent
 	// malicious input from causing us to allocate too much memory.
 	// This is arbitrarily set to 1MB today, increase if needed.
-	max_bytes usize = 1024 * 1024
+	max_bytes uint = 1024 * 1024
 
 	// Pending tmux notification produced by the last put() call.
 	// This is needed because try_put returns `!` (not `?DcsCommand`)
@@ -332,7 +332,7 @@ fn (mut self DcsHandler) try_put(byte u8) ! {
 			}
 		}
 		DcsStateXtgettcap {
-			if usize(self.state.data.len) >= self.max_bytes {
+			if uint(self.state.data.len) >= self.max_bytes {
 				return error('DCS xtgettcap buffer exceeded max_bytes')
 			}
 			self.state.data << byte

@@ -264,11 +264,11 @@ pub fn (mut m HashSlotMetadata) mark_removed() {
 pub struct HashMapLayout {
 pub:
 	// Total buffer size in bytes (aligned to base alignment).
-	total_size usize
+	total_size uint
 	// Byte offset from metadata start to keys array.
-	keys_start usize
+	keys_start uint
 	// Byte offset from metadata start to values array.
-	vals_start usize
+	vals_start uint
 	// The capacity (always a power of two).
 	capacity u32
 }
@@ -276,21 +276,21 @@ pub:
 // layout_for_capacity computes the memory layout for a hash map.
 // Capacity must be 0 or a power of two.
 // key_size/val_size are element sizes in bytes; key_align/val_align are alignments.
-pub fn layout_for_capacity(new_capacity u32, key_size usize, val_size usize, key_align usize, val_align usize) HashMapLayout {
+pub fn layout_for_capacity(new_capacity u32, key_size uint, val_size uint, key_align uint, val_align uint) HashMapLayout {
 	assert new_capacity == 0 || (new_capacity & (new_capacity - 1)) == 0
 
-	header_size := usize(16) // two Offsets (u32 each) + two u32 (capacity, size)
-	cap := usize(new_capacity)
+	header_size := uint(16) // two Offsets (u32 each) + two u32 (capacity, size)
+	cap := uint(new_capacity)
 
 	meta_end := header_size + cap
-	ka := if key_size == 0 { usize(1) } else { key_align }
-	va := if val_size == 0 { usize(1) } else { val_align }
+	ka := if key_size == 0 { uint(1) } else { key_align }
+	va := if val_size == 0 { uint(1) } else { val_align }
 	keys_start := hash_align_forward(meta_end, ka)
 	keys_end := keys_start + cap * key_size
 	vals_start := hash_align_forward(keys_end, va)
 	vals_end := vals_start + cap * val_size
 
-	base_align := hash_max(usize(4), hash_max(ka, va))
+	base_align := hash_max(uint(4), hash_max(ka, va))
 	total_size := hash_align_forward(vals_end, base_align)
 
 	// Offsets are from metadata pointer, so subtract header size.
@@ -302,14 +302,14 @@ pub fn layout_for_capacity(new_capacity u32, key_size usize, val_size usize, key
 	}
 }
 
-fn hash_align_forward(addr usize, alignment usize) usize {
+fn hash_align_forward(addr uint, alignment uint) uint {
 	if alignment == 0 {
 		return addr
 	}
 	return (addr + alignment - 1) & ~(alignment - 1)
 }
 
-fn hash_max(a usize, b usize) usize {
+fn hash_max(a uint, b uint) uint {
 	if a > b {
 		return a
 	}
@@ -334,7 +334,7 @@ pub mut:
 }
 
 pub fn OffsetHashMap.layout(cap u32) HashMapLayout {
-	return layout_for_capacity(cap, usize(sizeof(u64)), usize(sizeof(u64)), usize(sizeof(u64)), usize(sizeof(u64)))
+	return layout_for_capacity(cap, uint(sizeof(u64)), uint(sizeof(u64)), uint(sizeof(u64)), uint(sizeof(u64)))
 }
 
 pub fn OffsetHashMap.init(buf OffsetBuf, layout HashMapLayout) OffsetHashMap {
@@ -374,7 +374,7 @@ pub:
 // map.values[idx] to access/modify the entry.
 pub struct GetOrPutResult {
 pub:
-	idx            usize
+	idx            uint
 	found_existing bool
 }
 
@@ -416,8 +416,8 @@ pub struct HashMapKeyIter {
 	metadata []HashSlotMetadata
 	keys     []u64
 mut:
-	len   usize
-	index usize
+	len   uint
+	index uint
 }
 
 // next returns the next key, or none if iteration is complete.
@@ -438,8 +438,8 @@ pub struct HashMapValueIter {
 	metadata []HashSlotMetadata
 	values   []u64
 mut:
-	len   usize
-	index usize
+	len   uint
+	index uint
 }
 
 // next returns the next value, or none if iteration is complete.
@@ -527,10 +527,10 @@ pub fn (mut self HashMapUnmanaged) put_assume_capacity_no_clobber(key u64, value
 	assert !self.contains(key)
 	hash := hash_key(key)
 	mask := u64(self.cap_ - 1)
-	mut idx := usize(hash & mask)
+	mut idx := uint(hash & mask)
 
 	for self.metadata[idx].is_used() {
-		idx = (idx + 1) & usize(mask)
+		idx = (idx + 1) & uint(mask)
 	}
 
 	fp := take_fingerprint(hash)
@@ -554,18 +554,18 @@ pub fn (self &HashMapUnmanaged) get_key(key u64) ?u64 {
 
 // get_key_ptr returns the slot index for the stored key, or none. Slot indices
 // are the stable V representation used in place of pointers into backing arrays.
-pub fn (self &HashMapUnmanaged) get_key_ptr(key u64) ?usize {
+pub fn (self &HashMapUnmanaged) get_key_ptr(key u64) ?uint {
 	return self.get_index(key)
 }
 
 // get_key_index returns the slot index for a key, or none.
-pub fn (self &HashMapUnmanaged) get_key_index(key u64) ?usize {
+pub fn (self &HashMapUnmanaged) get_key_index(key u64) ?uint {
 	return self.get_index(key)
 }
 
 // get_ptr returns the slot index for a key's value, or none.
 // Use map.values[idx] to read/write the value.
-pub fn (self &HashMapUnmanaged) get_ptr(key u64) ?usize {
+pub fn (self &HashMapUnmanaged) get_ptr(key u64) ?uint {
 	return self.get_index(key)
 }
 
@@ -660,7 +660,7 @@ pub fn (mut self HashMapUnmanaged) remove(key u64) bool {
 }
 
 // remove_by_index removes the entry at the given slot index.
-pub fn (mut self HashMapUnmanaged) remove_by_index(idx usize) {
+pub fn (mut self HashMapUnmanaged) remove_by_index(idx uint) {
 	self.metadata[idx].mark_removed()
 	self.keys[idx] = 0
 	self.values[idx] = 0
@@ -668,8 +668,8 @@ pub fn (mut self HashMapUnmanaged) remove_by_index(idx usize) {
 }
 
 // remove_by_ptr removes the key at a slot returned by get_key_ptr.
-pub fn (mut self HashMapUnmanaged) remove_by_ptr(key_ptr usize) {
-	assert key_ptr < usize(self.cap_)
+pub fn (mut self HashMapUnmanaged) remove_by_ptr(key_ptr uint) {
+	assert key_ptr < uint(self.cap_)
 	assert self.metadata[key_ptr].is_used()
 	self.remove_by_index(key_ptr)
 }
@@ -709,7 +709,7 @@ pub fn (self &HashMapUnmanaged) key_iterator() HashMapKeyIter {
 	return HashMapKeyIter{
 		metadata: self.metadata
 		keys: self.keys
-		len: usize(self.cap_)
+		len: uint(self.cap_)
 	}
 }
 
@@ -718,7 +718,7 @@ pub fn (self &HashMapUnmanaged) value_iterator() HashMapValueIter {
 	return HashMapValueIter{
 		metadata: self.metadata
 		values: self.values
-		len: usize(self.cap_)
+		len: uint(self.cap_)
 	}
 }
 
@@ -727,7 +727,7 @@ pub fn (self &HashMapUnmanaged) value_iterator() HashMapValueIter {
 // ============================================================
 
 // get_index finds the slot index for a key, or returns none.
-fn (self &HashMapUnmanaged) get_index(key u64) ?usize {
+fn (self &HashMapUnmanaged) get_index(key u64) ?uint {
 	if self.size_ == 0 {
 		return none
 	}
@@ -736,7 +736,7 @@ fn (self &HashMapUnmanaged) get_index(key u64) ?usize {
 	mask := u64(self.cap_ - 1)
 	fp := take_fingerprint(hash)
 	mut limit := self.cap_
-	mut idx := usize(hash & mask)
+	mut idx := uint(hash & mask)
 
 	for !self.metadata[idx].is_free() && limit > 0 {
 		if self.metadata[idx].is_used() && self.metadata[idx].fingerprint() == fp {
@@ -745,7 +745,7 @@ fn (self &HashMapUnmanaged) get_index(key u64) ?usize {
 			}
 		}
 		limit--
-		idx = (idx + 1) & usize(mask)
+		idx = (idx + 1) & uint(mask)
 	}
 	return none
 }
@@ -772,8 +772,8 @@ pub fn (mut self HashMapUnmanaged) get_or_put_assume_capacity(key u64) GetOrPutR
 	mask := u64(self.cap_ - 1)
 	fp := take_fingerprint(hash)
 	mut limit := self.cap_
-	mut idx := usize(hash & mask)
-	mut first_tombstone := usize(self.cap_) // invalid sentinel
+	mut idx := uint(hash & mask)
+	mut first_tombstone := uint(self.cap_) // invalid sentinel
 
 	for !self.metadata[idx].is_free() && limit > 0 {
 		if self.metadata[idx].is_used() && self.metadata[idx].fingerprint() == fp {
@@ -783,15 +783,15 @@ pub fn (mut self HashMapUnmanaged) get_or_put_assume_capacity(key u64) GetOrPutR
 					found_existing: true
 				}
 			}
-		} else if first_tombstone == usize(self.cap_) && self.metadata[idx].is_tombstone() {
+		} else if first_tombstone == uint(self.cap_) && self.metadata[idx].is_tombstone() {
 			first_tombstone = idx
 		}
 		limit--
-		idx = (idx + 1) & usize(mask)
+		idx = (idx + 1) & uint(mask)
 	}
 
 	// Reuse tombstone slot if available (reduces probing lengths after deletions).
-	if first_tombstone < usize(self.cap_) {
+	if first_tombstone < uint(self.cap_) {
 		idx = first_tombstone
 	}
 

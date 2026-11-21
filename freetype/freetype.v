@@ -1194,12 +1194,12 @@ pub fn (f Face) set_transform(matrix ?&Matrix, delta ?&Vector) {
 }
 
 // get_sfnt_name_count returns the number of name table entries.
-pub fn (f Face) get_sfnt_name_count() usize {
-	return usize(C.FT_Get_Sfnt_Name_Count(f.handle))
+pub fn (f Face) get_sfnt_name_count() uint {
+	return uint(C.FT_Get_Sfnt_Name_Count(f.handle))
 }
 
 // get_sfnt_name returns the name table entry at the given index.
-pub fn (f Face) get_sfnt_name(index usize) !SfntName {
+pub fn (f Face) get_sfnt_name(index uint) !SfntName {
 	mut name_id := u16(0)
 	mut platform_id := u16(0)
 	mut encoding_id := u16(0)

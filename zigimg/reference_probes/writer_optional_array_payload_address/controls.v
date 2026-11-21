@@ -27,11 +27,11 @@ type Payload3_1 = [2][3]u64
 type Slice3_1 = []?Payload3_1
 type Payload3_2 = [3]?u64
 type Slice3_2 = []?Payload3_2
-type Payload4_0 = [2]usize
+type Payload4_0 = [2]uint
 type Slice4_0 = []?Payload4_0
-type Payload4_1 = [2][3]usize
+type Payload4_1 = [2][3]uint
 type Slice4_1 = []?Payload4_1
-type Payload4_2 = [3]?usize
+type Payload4_2 = [3]?uint
 type Slice4_2 = []?Payload4_2
 type Payload5_0 = [2]i8
 type Slice5_0 = []?Payload5_0
@@ -57,11 +57,11 @@ type Payload8_1 = [2][3]i64
 type Slice8_1 = []?Payload8_1
 type Payload8_2 = [3]?i64
 type Slice8_2 = []?Payload8_2
-type Payload9_0 = [2]isize
+type Payload9_0 = [2]int
 type Slice9_0 = []?Payload9_0
-type Payload9_1 = [2][3]isize
+type Payload9_1 = [2][3]int
 type Slice9_1 = []?Payload9_1
-type Payload9_2 = [3]?isize
+type Payload9_2 = [3]?int
 type Slice9_2 = []?Payload9_2
 type Payload10_0 = [2]f32
 type Slice10_0 = []?Payload10_0
@@ -94,7 +94,7 @@ struct Args {
 	value []?Pair
 }
 
-fn borrowed[E](_ E, raw usize, length int) []?E {
+fn borrowed[E](_ E, raw uint, length int) []?E {
 	return unsafe { array{ data: voidptr(raw), len: length, cap: length, flags: .nofree, element_size: int(sizeof(?E)) } }
 }
 

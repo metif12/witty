@@ -61,7 +61,7 @@ fn test_pcx_dimension_arithmetic_preserves_u16_boundaries() {
 }
 
 fn test_pcx_oversized_dimension_rejection_precedes_zero_dimension_arithmetic() {
-	for dims in [[usize(0), 65536], [usize(65536), 0]] {
+	for dims in [[uint(0), 65536], [uint(65536), 0]] {
 		mut bytes := []u8{len: 128, init: 165}
 		mut stream := WriteStream.init_memory(mut bytes)
 		image := ImageUnmanaged{
@@ -248,8 +248,8 @@ fn test_pcx_rgb_planes_dummy_bytes_and_source_scanline_discard_boundary() {
 }
 
 struct PcxWriteCase {
-	width  usize
-	height usize = 1
+	width  uint
+	height uint = 1
 	pixels PixelStorage
 	bpp    u8
 	planes u8 = 1

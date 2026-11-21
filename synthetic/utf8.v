@@ -15,8 +15,8 @@ pub enum Utf8Len as u8 {
 pub struct Utf8 {
 pub mut:
 	rng      &rand.PRNG = unsafe { nil }
-	min_len  usize      = 1
-	max_len  usize      = ~usize(0)
+	min_len  uint      = 1
+	max_len  uint      = ~uint(0)
 	p_length [4]f64     = [f64(1), 1, 1, 1]!
 }
 
@@ -30,7 +30,7 @@ pub fn (mut self Utf8) generator() Generator {
 	return self
 }
 
-pub fn (mut self Utf8) next(max_len usize) ![]u8 {
+pub fn (mut self Utf8) next(max_len uint) ![]u8 {
 	mut writer := CollectingWriter{}
 	self.next_writer(mut writer, max_len)!
 	return writer.data
@@ -38,13 +38,13 @@ pub fn (mut self Utf8) next(max_len usize) ![]u8 {
 
 // src/synthetic/Utf8.zig next. A surrogate retries without writing or reducing
 // remaining length; the next random operation remains in the same order.
-pub fn (mut self Utf8) next_writer(mut writer io.Writer, max_len usize) ! {
-	len := synthetic_min_usize(usize(source_range_biased(mut self.rng, u64(self.min_len),
-		u64(self.max_len), int(sizeof(usize) * 8))), max_len)
+pub fn (mut self Utf8) next_writer(mut writer io.Writer, max_len uint) ! {
+	len := synthetic_min_usize(uint(source_range_biased(mut self.rng, u64(self.min_len),
+		u64(self.max_len), int(sizeof(uint) * 8))), max_len)
 	mut remaining := len
 	for remaining > 0 {
 		mut utf8_len := self.choose_length()!
-		for usize(utf8_len) > remaining {
+		for uint(utf8_len) > remaining {
 			utf8_len = unsafe { Utf8Len(int(utf8_len) - 1) }
 		}
 		cp := match utf8_len {
@@ -59,7 +59,7 @@ pub fn (mut self Utf8) next_writer(mut writer io.Writer, max_len usize) ! {
 		encoded := rune(cp).str().bytes()
 		assert encoded.len == int(utf8_len)
 		source_write_all(mut writer, encoded)!
-		remaining -= usize(encoded.len)
+		remaining -= uint(encoded.len)
 	}
 }
 

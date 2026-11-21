@@ -8,7 +8,7 @@ fn test_splat_byte_preserve_compacts_buffered_tail() {
 	writer.advance(8)
 	writer.splat_byte_preserve(5, `x`, 3)!
 	assert writer.buffered() == 'defghxxx'.bytes() && bytes == 'defghxxx'.bytes()
-	writer.splat_byte_preserve(~usize(0), `y`, 0)!
+	writer.splat_byte_preserve(~uint(0), `y`, 0)!
 	assert writer.buffered() == 'defghxxx'.bytes()
 }
 

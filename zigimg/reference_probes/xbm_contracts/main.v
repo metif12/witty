@@ -49,7 +49,7 @@ fn line_case(line string) {
 			println('${err.msg()}|' + state(codec, &reader, data, op))
 			return
 		}
-		p.ImageUnmanaged{ width: usize(codec.width), height: usize(codec.height), pixels: pixels }
+		p.ImageUnmanaged{ width: uint(codec.width), height: uint(codec.height), pixels: pixels }
 	} else {
 		p.XBM.read_image(mut reader) or {
 			println('${err.msg()}|' + state(codec, &reader, data, op))
@@ -60,7 +60,7 @@ fn line_case(line string) {
 	before := raw.hex()
 	mut independent := '-'
 	if raw.len > 0 {
-		independent = if usize(raw.data) < usize(data.data) || usize(raw.data) >= usize(data.data) + usize(data.len) {
+		independent = if uint(raw.data) < uint(data.data) || uint(raw.data) >= uint(data.data) + uint(data.len) {
 			'1'
 		} else {
 			'0'

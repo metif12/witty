@@ -12,14 +12,14 @@ fn C.witty_image_tty_state() int
 fn C.witty_image_tty_session() int
 fn C.witty_image_tty_refs() int
 fn C.witty_image_tty_keeper_fd() int
-fn C.witty_image_tty_seed(&u8, usize) isize
-fn C.witty_image_tty_read(int, &u8, usize) isize
+fn C.witty_image_tty_seed(&u8, uint) int
+fn C.witty_image_tty_read(int, &u8, uint) int
 
 fn image_tty_check_direct_reader(buffered bool) ! {
 	assert C.witty_image_tty_setup() == 0
 	defer { assert C.witty_image_tty_cleanup() == 0 }
 	seed := png_magic_header[..]
-	assert C.witty_image_tty_seed(seed.data, usize(seed.len)) == seed.len
+	assert C.witty_image_tty_seed(seed.data, uint(seed.len)) == seed.len
 	file := os.File{
 		fd: C.witty_image_tty_keeper_fd()
 	}
@@ -40,7 +40,7 @@ fn image_tty_check_direct_reader(buffered bool) ! {
 		0
 	}
 	mut remaining := []u8{len: 32}
-	n := C.witty_image_tty_read(1, remaining.data, usize(remaining.len))
+	n := C.witty_image_tty_read(1, remaining.data, uint(remaining.len))
 	if buffered {
 		assert n == -1 && buffer == seed
 	} else {
@@ -53,7 +53,7 @@ fn image_tty_check_reader(managed bool, decode bool) ! {
 	defer { assert C.witty_image_tty_cleanup() == 0 }
 	path := unsafe { cstring_to_vstring(C.witty_image_tty_path()) }
 	seed := png_magic_header[..]
-	assert C.witty_image_tty_seed(seed.data, usize(seed.len)) == seed.len
+	assert C.witty_image_tty_seed(seed.data, uint(seed.len)) == seed.len
 	assert C.witty_image_tty_state() == 0 && C.witty_image_tty_session() == 1
 	mut buffer := []u8{len: 8, init: 165}
 	for _ in 0 .. 2 {
@@ -77,10 +77,10 @@ fn image_tty_check_reader(managed bool, decode bool) ! {
 		assert C.witty_image_tty_state() == 0 && C.witty_image_tty_refs() == 1
 	}
 	mut bytes := []u8{len: 32}
-	n := C.witty_image_tty_read(1, bytes.data, usize(bytes.len))
+	n := C.witty_image_tty_read(1, bytes.data, uint(bytes.len))
 	assert n == 8 && bytes[..int(n)] == seed
-	assert C.witty_image_tty_read(1, bytes.data, usize(bytes.len)) == -1
-	assert C.witty_image_tty_read(0, bytes.data, usize(bytes.len)) == -1
+	assert C.witty_image_tty_read(1, bytes.data, uint(bytes.len)) == -1
+	assert C.witty_image_tty_read(0, bytes.data, uint(bytes.len)) == -1
 }
 
 fn image_tty_check_writers() ! {
@@ -110,14 +110,14 @@ fn image_tty_check_writers() ! {
 				assert C.witty_image_tty_state() == 1 && C.witty_image_tty_refs() == 1
 				assert image.raw_bytes() == raw
 				mut bytes := []u8{len: 32}
-				n := C.witty_image_tty_read(0, bytes.data, usize(bytes.len))
+				n := C.witty_image_tty_read(0, bytes.data, uint(bytes.len))
 				if noop {
 					assert n == -1 && buffer == []u8{len: 8, init: 165}
 				} else {
 					assert n == 8 && bytes[..int(n)] == png_magic_header[..]
 						&& buffer == png_magic_header[..]
 				}
-				assert C.witty_image_tty_read(0, bytes.data, usize(bytes.len)) == -1
+				assert C.witty_image_tty_read(0, bytes.data, uint(bytes.len)) == -1
 			}
 		}
 	}

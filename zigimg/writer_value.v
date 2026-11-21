@@ -95,7 +95,7 @@ fn io_value_enum[T](mut stream WriteStream, format string, options FormatOptions
 	}
 }
 
-fn io_value_bytes(mut stream WriteStream, format string, options FormatOptions, bytes []u8, max_depth usize) ! {
+fn io_value_bytes(mut stream WriteStream, format string, options FormatOptions, bytes []u8, max_depth uint) ! {
 	match format {
 		's' {
 			return stream.align_buffer_options(bytes, options)
@@ -136,7 +136,7 @@ fn io_value_error[E](mut stream WriteStream, format string, options FormatOption
 	return stream.write_vec_all(mut vectors)
 }
 
-fn io_value_slice[T](mut stream WriteStream, format string, options FormatOptions, value []T, max_depth usize) ! {
+fn io_value_slice[T](mut stream WriteStream, format string, options FormatOptions, value []T, max_depth uint) ! {
 	if format == '*' {
 		$if T is $option {
 			return stream.print_address(value)
@@ -168,7 +168,7 @@ fn io_value_slice[T](mut stream WriteStream, format string, options FormatOption
 	return stream.write_all(' }'.bytes())
 }
 
-fn io_value_array[T](mut stream WriteStream, format string, options FormatOptions, value []T, max_depth usize) ! {
+fn io_value_array[T](mut stream WriteStream, format string, options FormatOptions, value []T, max_depth uint) ! {
 	// Inspect the element generic directly: typeof(value[0]) strips its option flag in V.
 	$if T is $option {
 		if format != 'any' { return error('unsupported print_value array format') }
@@ -185,7 +185,7 @@ fn io_value_array[T](mut stream WriteStream, format string, options FormatOption
 }
 
 // V also checks an unused IError specialization for reflected field calls.
-fn io_value_field[F](mut stream WriteStream, options FormatOptions, value F, max_depth usize) ! {
+fn io_value_field[F](mut stream WriteStream, options FormatOptions, value F, max_depth uint) ! {
 	$if F is IError {
 		return io_value_error(mut stream, 'any', options, value)
 	} $else {
@@ -205,7 +205,7 @@ interface IoDurationFormatter {
 	format_duration(mut stream WriteStream) !
 }
 
-fn io_value_struct[T](mut stream WriteStream, format string, options FormatOptions, value T, max_depth usize) ! {
+fn io_value_struct[T](mut stream WriteStream, format string, options FormatOptions, value T, max_depth uint) ! {
 	$if T.unaliased_typ is $struct {
 		$if T is IoNumberFormatter {
 			if format in ['d', 'b', 'o', 'x', 'X', 'e', 'E'] {
@@ -260,7 +260,7 @@ fn io_value_struct[T](mut stream WriteStream, format string, options FormatOptio
 	}
 }
 
-fn io_value_union[T](mut stream WriteStream, format string, options FormatOptions, value T, max_depth usize) ! {
+fn io_value_union[T](mut stream WriteStream, format string, options FormatOptions, value T, max_depth uint) ! {
 	$if T.unaliased_typ is $sumtype {
 		if format != '' && format != 'any' && format != 't' {
 			return error('unsupported print_value union format')
@@ -290,7 +290,7 @@ fn io_value_union[T](mut stream WriteStream, format string, options FormatOption
 	}
 }
 
-fn io_value_optional[T](mut stream WriteStream, format string, options FormatOptions, value ?T, max_depth usize) ! {
+fn io_value_optional[T](mut stream WriteStream, format string, options FormatOptions, value ?T, max_depth uint) ! {
 	remaining := if format.starts_with('?') {
 		format[1..]
 	} else if format == 'any' {
@@ -326,7 +326,7 @@ interface IoValueFormatter {
 }
 
 // The represented printValue branches; format is a runtime string in V.
-pub fn (mut stream WriteStream) print_value[T](format string, options FormatOptions, value T, max_depth usize) ! {
+pub fn (mut stream WriteStream) print_value[T](format string, options FormatOptions, value T, max_depth uint) ! {
 	$if T !is $option {
 		$if T is IoValueFormatter {
 			// Invoke on the concrete carrier; options and depth never reach format.
@@ -347,7 +347,7 @@ pub fn (mut stream WriteStream) print_value[T](format string, options FormatOpti
 		$if T.unaliased_typ is voidptr {
 			if format == '*' { return stream.print_address(value) }
 			if format != '' && format != 'any' { return error('unsupported print_value pointer format') }
-			return io_value_pointer_bits(mut stream, options, 'anyopaque', usize(value))
+			return io_value_pointer_bits(mut stream, options, 'anyopaque', uint(value))
 		} $else $if T is $alias {
 			mut normalized := $zero(T.unaliased_typ)
 			unsafe { vmemcpy(&normalized, &value, int(sizeof(T))) }
@@ -373,7 +373,7 @@ pub fn (mut stream WriteStream) print_value[T](format string, options FormatOpti
 			}
 		}
 		$if T.unaliased_typ is i8 || T.unaliased_typ is i16 || T.unaliased_typ is int
-			|| T.unaliased_typ is i64 || T.unaliased_typ is isize {
+			|| T.unaliased_typ is i64 || T.unaliased_typ is int {
 			return io_value_signed(mut stream, format, options, i64(value))
 		} $else {
 			return io_value_unsigned(mut stream, format, options, u64(value))

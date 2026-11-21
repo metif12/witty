@@ -5,7 +5,7 @@ module vaxis
 #include "loop_thread_shims.h"
 
 fn C.GetProcessHeap() voidptr
-fn C.HeapAlloc(heap voidptr, flags u32, size usize) voidptr
+fn C.HeapAlloc(heap voidptr, flags u32, size uint) voidptr
 fn C.HeapFree(heap voidptr, flags u32, memory voidptr) bool
 fn C.witty_vaxis_create_thread(entry voidptr, context voidptr) voidptr
 fn C.WaitForSingleObjectEx(handle voidptr, milliseconds u32, alertable bool) u32
@@ -26,7 +26,7 @@ fn loop_thread_start[T](context voidptr) !LoopThread {
 	heap := C.GetProcessHeap()
 	if isnil(heap) { return error('OutOfMemory') }
 	mut args := unsafe {
-		&LoopThreadArgs(C.HeapAlloc(heap, 0, usize(sizeof(LoopThreadArgs) + sizeof(voidptr))))
+		&LoopThreadArgs(C.HeapAlloc(heap, 0, uint(sizeof(LoopThreadArgs) + sizeof(voidptr))))
 	}
 	if isnil(args) { return error('OutOfMemory') }
 	args.context = context

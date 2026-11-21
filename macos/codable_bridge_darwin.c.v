@@ -35,7 +35,7 @@ pub fn codable_is_array(object voidptr) bool { return !is_nil(object) && msg_boo
 pub fn retain_native_object(object voidptr) { msg_void(object,'retain') }
 fn codable_classes() ObjId {
 	classes := [get_class('NSDictionary'),get_class('NSArray'),get_class('NSString'),get_class('NSNumber'),get_class('NSNull'),get_class('NSDate'),get_class('NSData')]
-	return msg_id1(get_class('NSSet'),'setWithArray:',C.witty_macos_array(classes.data,usize(classes.len)))
+	return msg_id1(get_class('NSSet'),'setWithArray:',C.witty_macos_array(classes.data,uint(classes.len)))
 }
 fn bridge_supports_secure_coding(_self ObjId,_cmd Sel) bool { return true }
 fn bridge_encode(self ObjId,_cmd Sel,coder ObjId) {

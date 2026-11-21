@@ -61,10 +61,10 @@ fn dataset(id u8) []vxfw.Size {
 
 struct Child {
 	spy   &Spy
-	index usize
+	index uint
 mut:
 	size  vxfw.Size
-	calls usize
+	calls uint
 }
 
 fn (child &Child) widget() vxfw.Widget {
@@ -135,7 +135,7 @@ fn draw(ptr voidptr, ctx vxfw.DrawContext) !vxfw.Surface {
 			s.changed = true
 		}
 	}
-	if s.fail_at >= 0 && call == usize(s.fail_at) { return error('OutOfMemory') }
+	if s.fail_at >= 0 && call == uint(s.fail_at) { return error('OutOfMemory') }
 	mut size := child.size
 	match s.reply {
 		1 {
@@ -178,7 +178,7 @@ mut:
 	reply      u8
 	mutation   u8
 	fail_at    i64
-	calls      usize
+	calls      uint
 	changed    bool
 	trace      []string
 	owner      voidptr
@@ -241,7 +241,7 @@ fn cells_hash(surface vxfw.Surface) u64 {
 
 fn surface(mut out strings.Builder, surf vxfw.Surface, s &Spy) {
 	id := if surf.widget.userdata == s.owner {
-		usize(0)
+		uint(0)
 	} else {
 		child := unsafe { &Child(surf.widget.userdata) }
 		child.index + 1
@@ -262,11 +262,11 @@ fn record(mut out strings.Builder, p []string) {
 		alt_labels: [vxfw.BorderLabel{ text: 'm', alignment: .bottom_left }]
 		bytes:      label_bytes(u8(num(p, 14)))
 	}
-	weight := usize(num(p, 6))
+	weight := uint(num(p, 6))
 	for i, size in dataset(u8(num(p, 5))) {
 		s.children << Child{
 			spy:   &s
-			index: usize(i)
+			index: uint(i)
 			size:  size
 		}
 	}
@@ -387,10 +387,10 @@ fn record(mut out strings.Builder, p []string) {
 			status = err.msg()
 		}
 		if surf := result {
-			mut found := usize(0)
+			mut found := uint(0)
 			for cell in surf.buffer {
-				ptr := usize(cell.char_.grapheme.str)
-				if ptr >= usize(s.bytes.data) && ptr < usize(s.bytes.data) + usize(s.bytes.len) {
+				ptr := uint(cell.char_.grapheme.str)
+				if ptr >= uint(s.bytes.data) && ptr < uint(s.bytes.data) + uint(s.bytes.len) {
 					found++
 				}
 			}

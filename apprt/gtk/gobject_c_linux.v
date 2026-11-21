@@ -71,7 +71,7 @@ fn C.g_type_register_static(parent_type GType, type_name &char, info &C.GTypeInf
 
 fn C.g_type_query(type GType, query &C.GTypeQuery)
 
-fn C.g_type_add_instance_private(type GType, private_size usize) int
+fn C.g_type_add_instance_private(type GType, private_size uint) int
 
 fn C.g_type_add_interface_static(instance_type GType, interface_type GType, info &C.GInterfaceInfo)
 
@@ -127,7 +127,7 @@ fn C.gtk_window_get_type() GType
 // ghostty uses setTemplateFromResource against a compiled gresource; witty
 // loads the equivalent .ui bytes directly via set_template.
 
-fn C.g_bytes_new_static(data voidptr, size usize) GBytes
+fn C.g_bytes_new_static(data voidptr, size uint) GBytes
 
 fn C.gtk_widget_class_set_template(widget_class voidptr, template_bytes GBytes)
 

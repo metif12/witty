@@ -529,7 +529,7 @@ pub mut:
 	allocator lib_allocator.Allocator
 	fixed [2048]u8
 	allocated_buffer voidptr
-	allocated_capacity usize
+	allocated_capacity uint
 
 	// Current state of the parser.
 	state OscParserState = .start
@@ -549,7 +549,7 @@ pub mut:
 // C entry points use init_allocator and pass the actual selected allocator.
 pub fn Parser.init(allocator voidptr) Parser {
 	if isnil(allocator) { return Parser{} }
-	if usize(allocator) == 1 { return Parser.init_allocator(lib_allocator.default(none)) }
+	if uint(allocator) == 1 { return Parser.init_allocator(lib_allocator.default(none)) }
 	return Parser.init_allocator(unsafe { *(&lib_allocator.Allocator(allocator)) })
 }
 
@@ -903,11 +903,11 @@ pub fn (mut self Parser) write_byte(b u8) {
 		self.buf = lib_allocator.borrowed_array[u8](&self.fixed[0], length + 1, max_buf)
 		return
 	}
-	if usize(length) == self.allocated_capacity {
+	if uint(length) == self.allocated_capacity {
 		// Writer.Allocating.drain calls ensureUnusedCapacity(bytes.len +
 		// splat_len + 1): writing one byte needs length + 3 capacity.
 		mut capacity := self.allocated_capacity
-		for capacity < usize(length) + 3 { capacity += capacity / 2 + 64 }
+		for capacity < uint(length) + 3 { capacity += capacity / 2 + 64 }
 		mut raw := self.allocator.remap_bytes(self.allocated_buffer, self.allocated_capacity, 0, capacity, 0)
 		if isnil(raw) {
 			raw = self.allocator.alloc_bytes(capacity, 0, 0)

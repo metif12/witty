@@ -3,14 +3,14 @@ module fastmem
 // move is the same as memmove and prefers the linked libc implementation.
 pub fn move[T](mut dest []T, source []T) {
 	unsafe {
-		C.memmove(dest.data, source.data, usize(source.len) * usize(sizeof(T)))
+		C.memmove(dest.data, source.data, uint(source.len) * uint(sizeof(T)))
 	}
 }
 
 // copy is the same as memcpy and prefers the linked libc implementation.
 pub fn copy[T](mut dest []T, source []T) {
 	unsafe {
-		C.memcpy(dest.data, source.data, usize(source.len) * usize(sizeof(T)))
+		C.memcpy(dest.data, source.data, uint(source.len) * uint(sizeof(T)))
 	}
 }
 
@@ -52,6 +52,6 @@ pub fn rotate_in_r[T](mut items []T, item T) T {
 	return removed
 }
 
-fn C.memmove(dest voidptr, source voidptr, length usize) voidptr
+fn C.memmove(dest voidptr, source voidptr, length uint) voidptr
 
-fn C.memcpy(dest voidptr, source voidptr, length usize) voidptr
+fn C.memcpy(dest voidptr, source voidptr, length uint) voidptr

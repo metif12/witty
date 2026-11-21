@@ -40,8 +40,8 @@ pub mut:
 	block_width                    u32
 	block_width_actual             u32
 	block_height_actual            u32
-	horizontal_sampling_factor_max usize
-	vertical_sampling_factor_max   usize
+	horizontal_sampling_factor_max uint
+	vertical_sampling_factor_max   uint
 }
 
 pub fn JpegFrame.read(frame_type u16, quantization_tables &JpegQuantizationTables,
@@ -53,8 +53,8 @@ pub fn JpegFrame.read(frame_type u16, quantization_tables &JpegQuantizationTable
 	vertical := header.max_vertical_sampling_factor()
 	mcu_width := 8 * horizontal
 	mcu_height := 8 * vertical
-	width_actual := ((usize(header.width) + mcu_width - 1) / mcu_width) * mcu_width
-	height_actual := ((usize(header.height) + mcu_height - 1) / mcu_height) * mcu_height
+	width_actual := ((uint(header.width) + mcu_width - 1) / mcu_width) * mcu_width
+	height_actual := ((uint(header.height) + mcu_height - 1) / mcu_height) * mcu_height
 	storage := []JpegBlockComponents{len: int(width_actual * height_actual / 64)}
 	// These source additions use the header's u16, after allocating storage.
 	if header.height > 65528 { panic('integer overflow') }
@@ -81,23 +81,23 @@ pub fn (mut frame JpegFrame) deinit() {
 	frame.frame_header.deinit()
 }
 
-fn jpeg_add_usize(a usize, b usize) usize {
-	if b > ~usize(0) - a { panic('integer overflow') }
+fn jpeg_add_usize(a uint, b uint) uint {
+	if b > ~uint(0) - a { panic('integer overflow') }
 	return a + b
 }
 
-fn jpeg_mul_usize(a usize, b usize) usize {
-	if b != 0 && a > ~usize(0) / b { panic('integer overflow') }
+fn jpeg_mul_usize(a uint, b uint) uint {
+	if b != 0 && a > ~uint(0) / b { panic('integer overflow') }
 	return a * b
 }
 
-fn jpeg_div_usize(a usize, b usize) usize {
+fn jpeg_div_usize(a uint, b uint) uint {
 	if b == 0 { panic('division by zero') }
 	return a / b
 }
 
-fn jpeg_index(index usize, length int) int {
-	if index >= usize(length) { panic('index out of bounds: index ${index}, len ${length}') }
+fn jpeg_index(index uint, length int) int {
+	if index >= uint(length) { panic('index out of bounds: index ${index}, len ${length}') }
 	return int(index)
 }
 
@@ -150,23 +150,23 @@ pub fn (mut frame JpegFrame) render_to_pixels(mut pixels PixelStorage) ! {
 }
 
 fn (mut frame JpegFrame) render_to_pixels_grayscale(mut pixels []Grayscale8) ! {
-	mut by := usize(0)
-	for by < usize(frame.block_height) {
+	mut by := uint(0)
+	for by < uint(frame.block_height) {
 		py := jpeg_mul_usize(by, 8)
-		mut bx := usize(0)
-		for bx < usize(frame.block_width) {
-			block_index := jpeg_add_usize(jpeg_mul_usize(by, usize(frame.block_width_actual)), bx)
+		mut bx := uint(0)
+		for bx < uint(frame.block_width) {
+			block_index := jpeg_add_usize(jpeg_mul_usize(by, uint(frame.block_width_actual)), bx)
 			px := jpeg_mul_usize(bx, 8)
 			for y in 0 .. 8 {
 				for x in 0 .. 8 {
-					pixel_y := jpeg_add_usize(py, usize(y))
-					if pixel_y >= usize(frame.frame_header.height) { continue
+					pixel_y := jpeg_add_usize(py, uint(y))
+					if pixel_y >= uint(frame.frame_header.height) { continue
 					 }
-					pixel_x := jpeg_add_usize(px, usize(x))
-					if pixel_x >= usize(frame.frame_header.width) { continue
+					pixel_x := jpeg_add_usize(px, uint(x))
+					if pixel_x >= uint(frame.frame_header.width) { continue
 					 }
 					pixel_index := jpeg_add_usize(jpeg_mul_usize(pixel_y,
-						usize(frame.frame_header.width)), pixel_x)
+						uint(frame.frame_header.width)), pixel_x)
 					value := frame.block_storage[jpeg_index(block_index, frame.block_storage.len)].blocks[0].values[
 						y * 8 + x]
 					target := jpeg_index(pixel_index, pixels.len)
@@ -183,23 +183,23 @@ fn (mut frame JpegFrame) render_to_pixels_grayscale(mut pixels []Grayscale8) ! {
 }
 
 pub fn (mut frame JpegFrame) render_to_pixels_rgb(mut pixels []Rgb24) ! {
-	mut by := usize(0)
-	for by < usize(frame.block_height) {
+	mut by := uint(0)
+	for by < uint(frame.block_height) {
 		py := jpeg_mul_usize(by, 8)
-		mut bx := usize(0)
-		for bx < usize(frame.block_width) {
-			block_index := jpeg_add_usize(jpeg_mul_usize(by, usize(frame.block_width_actual)), bx)
+		mut bx := uint(0)
+		for bx < uint(frame.block_width) {
+			block_index := jpeg_add_usize(jpeg_mul_usize(by, uint(frame.block_width_actual)), bx)
 			px := jpeg_mul_usize(bx, 8)
 			for y in 0 .. 8 {
 				for x in 0 .. 8 {
-					pixel_y := jpeg_add_usize(py, usize(y))
-					if pixel_y >= usize(frame.frame_header.height) { continue
+					pixel_y := jpeg_add_usize(py, uint(y))
+					if pixel_y >= uint(frame.frame_header.height) { continue
 					 }
-					pixel_x := jpeg_add_usize(px, usize(x))
-					if pixel_x >= usize(frame.frame_header.width) { continue
+					pixel_x := jpeg_add_usize(px, uint(x))
+					if pixel_x >= uint(frame.frame_header.width) { continue
 					 }
 					pixel_index := jpeg_add_usize(jpeg_mul_usize(pixel_y,
-						usize(frame.frame_header.width)), pixel_x)
+						uint(frame.frame_header.width)), pixel_x)
 					target := jpeg_index(pixel_index, pixels.len)
 					b := jpeg_index(block_index, frame.block_storage.len)
 					// Zig lowers this struct assignment to ordered field stores. A bad
@@ -219,17 +219,17 @@ pub fn (mut frame JpegFrame) render_to_pixels_rgb(mut pixels []Rgb24) ! {
 }
 
 pub fn (mut frame JpegFrame) ycbcr_to_rgb_block(mut y_block JpegBlockComponents,
-	cbcr_block &JpegBlockComponents, v usize, h usize) {
+	cbcr_block &JpegBlockComponents, v uint, h uint) {
 	y_step := frame.vertical_sampling_factor_max
 	x_step := frame.horizontal_sampling_factor_max
-	if x_step > usize(2147483647) { panic('integer does not fit in destination type') }
+	if x_step > uint(2147483647) { panic('integer does not fit in destination type') }
 	offset := jpeg_mul_usize(jpeg_div_usize(8, x_step), h)
-	if offset > usize(2147483647) { panic('integer does not fit in destination type') }
+	if offset > uint(2147483647) { panic('integer does not fit in destination type') }
 	mut mask := [8]int{}
 	for lane in 0 .. 8 {
 		mask[lane] = jpeg_add_i32(lane / int(x_step), int(offset))
 	}
-	mut y := usize(8)
+	mut y := uint(8)
 	for y > 0 {
 		y--
 		mut ys := [8]f32{}
@@ -247,7 +247,7 @@ pub fn (mut frame JpegFrame) ycbcr_to_rgb_block(mut y_block JpegBlockComponents,
 		}
 		mut cbs := [8]f32{}
 		for lane in 0 .. 8 {
-			cbs[lane] = f32(cb[jpeg_index(usize(mask[lane]), 8)])
+			cbs[lane] = f32(cb[jpeg_index(uint(mask[lane]), 8)])
 		}
 		mut cr := [8]int{}
 		for lane in 0 .. 8 {
@@ -255,7 +255,7 @@ pub fn (mut frame JpegFrame) ycbcr_to_rgb_block(mut y_block JpegBlockComponents,
 		}
 		mut crs := [8]f32{}
 		for lane in 0 .. 8 {
-			crs[lane] = f32(cr[jpeg_index(usize(mask[lane]), 8)])
+			crs[lane] = f32(cr[jpeg_index(uint(mask[lane]), 8)])
 		}
 		mut rs := [8]int{}
 		mut gs := [8]int{}
@@ -281,12 +281,12 @@ pub fn (mut frame JpegFrame) ycbcr_to_rgb_block(mut y_block JpegBlockComponents,
 }
 
 pub fn (mut frame JpegFrame) ycbcr_to_rgb() ! {
-	mut y := usize(0)
-	for y < usize(frame.block_height) {
-		mut x := usize(0)
-		for x < usize(frame.block_width) {
+	mut y := uint(0)
+	for y < uint(frame.block_height) {
+		mut x := uint(0)
+		for x < uint(frame.block_width) {
 			cbcr_index := jpeg_index(jpeg_add_usize(jpeg_mul_usize(y,
-				usize(frame.block_width_actual)), x), frame.block_storage.len)
+				uint(frame.block_width_actual)), x), frame.block_storage.len)
 			mut v := frame.vertical_sampling_factor_max
 			for v > 0 {
 				v--
@@ -294,13 +294,13 @@ pub fn (mut frame JpegFrame) ycbcr_to_rgb() ! {
 				for h > 0 {
 					h--
 					block_y := jpeg_add_usize(y, v)
-					if block_y >= usize(frame.block_height) { continue
+					if block_y >= uint(frame.block_height) { continue
 					 }
 					block_x := jpeg_add_usize(x, h)
-					if block_x >= usize(frame.block_width) { continue
+					if block_x >= uint(frame.block_width) { continue
 					 }
 					index := jpeg_index(jpeg_add_usize(jpeg_mul_usize(block_y,
-						usize(frame.block_width_actual)), block_x), frame.block_storage.len)
+						uint(frame.block_width_actual)), block_x), frame.block_storage.len)
 					frame.ycbcr_to_rgb_block(mut frame.block_storage[index],
 						&frame.block_storage[cbcr_index], v, h)
 				}
@@ -313,26 +313,26 @@ pub fn (mut frame JpegFrame) ycbcr_to_rgb() ! {
 
 pub fn (mut frame JpegFrame) dequantize_blocks() ! {
 	for component in frame.frame_header.components {
-		if frame.quantization_tables.values[jpeg_index(usize(component.quantization_table_id), 4)] == none {
+		if frame.quantization_tables.values[jpeg_index(uint(component.quantization_table_id), 4)] == none {
 			return error('InvalidData')
 		}
 	}
-	mut y := usize(0)
-	for y < usize(frame.block_height) {
-		mut x := usize(0)
-		for x < usize(frame.block_width) {
+	mut y := uint(0)
+	for y < uint(frame.block_height) {
+		mut x := uint(0)
+		for x < uint(frame.block_width) {
 			for ci, component in frame.frame_header.components {
-				entry := frame.quantization_tables.values[jpeg_index(usize(component.quantization_table_id), 4)]
+				entry := frame.quantization_tables.values[jpeg_index(uint(component.quantization_table_id), 4)]
 				table := entry or { panic('attempt to use null value') }
 				for v in 0 .. int(component.vertical_sampling_factor) {
 					for h in 0 .. int(component.horizontal_sampling_factor) {
-						block_y := jpeg_add_usize(y, usize(v))
-						block_x := jpeg_add_usize(x, usize(h))
+						block_y := jpeg_add_usize(y, uint(v))
+						block_x := jpeg_add_usize(x, uint(h))
 						id := jpeg_add_usize(jpeg_mul_usize(block_y,
-							usize(frame.block_width_actual)), block_x)
+							uint(frame.block_width_actual)), block_x)
 						index := jpeg_index(id, frame.block_storage.len)
 						if ci >= 3 { panic('index out of bounds: index ${ci}, len 3') }
-						if block_y >= usize(frame.block_height) {
+						if block_y >= uint(frame.block_height) {
 							frame.block_storage[index].blocks[ci].values = [64]int{}
 						} else {
 							for si in 0 .. 64 {
@@ -354,15 +354,15 @@ pub fn (mut frame JpegFrame) dequantize_blocks() ! {
 }
 
 pub fn (mut frame JpegFrame) idct_blocks() {
-	mut y := usize(0)
-	for y < usize(frame.block_height) {
-		mut x := usize(0)
-		for x < usize(frame.block_width) {
+	mut y := uint(0)
+	for y < uint(frame.block_height) {
+		mut x := uint(0)
+		for x < uint(frame.block_width) {
 			for ci, component in frame.frame_header.components {
 				for v in 0 .. int(component.vertical_sampling_factor) {
 					for h in 0 .. int(component.horizontal_sampling_factor) {
-						id := jpeg_add_usize(jpeg_mul_usize(jpeg_add_usize(y, usize(v)),
-							usize(frame.block_width_actual)), jpeg_add_usize(x, usize(h)))
+						id := jpeg_add_usize(jpeg_mul_usize(jpeg_add_usize(y, uint(v)),
+							uint(frame.block_width_actual)), jpeg_add_usize(x, uint(h)))
 						index := jpeg_index(id, frame.block_storage.len)
 						if ci >= 3 { panic('index out of bounds: index ${ci}, len 3') }
 						jpeg_idct_block(mut frame.block_storage[index].blocks[ci])

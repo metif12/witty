@@ -171,7 +171,7 @@ $if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 	}
 
 	// init_target creates an off-screen render target suitable for presentation.
-	pub fn (self &OpenGLAPI) init_target(width usize, height usize) !GLTarget {
+	pub fn (self &OpenGLAPI) init_target(width uint, height uint) !GLTarget {
 		return GLTarget.init(GLTargetOptions{
 			width:           width
 			height:          height

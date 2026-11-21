@@ -20,7 +20,7 @@ pub fn Timerfd.init(clock LinuxTimerfdClockid, flags LinuxTfd) !Timerfd {
 	res := linux_timerfd_create(clock, flags)
 	match linux_errno(res) {
 		0 {
-			assert res <= usize(max_i32) // @intCast safety check
+			assert res <= uint(max_i32) // @intCast safety check
 			return Timerfd{
 				fd: i32(res)
 			}
@@ -65,6 +65,6 @@ pub mut:
 // timespec
 pub struct TimerfdTimeSpec {
 pub mut:
-	seconds     isize
-	nanoseconds isize
+	seconds     int
+	nanoseconds int
 }

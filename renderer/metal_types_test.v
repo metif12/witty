@@ -47,7 +47,7 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 	}
 
 	fn test_metal_render_step_counts_retain_source_pointer_width() {
-		max_count := ~usize(0)
+		max_count := ~uint(0)
 		buffer := MetalBuffer{
 			opts: MetalBufferOptions{
 				device:           unsafe { nil }
@@ -252,7 +252,7 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 
 	fn read_metal_texture(texture MetalTexture) []u8 {
 		mut result := []u8{len: int(texture.width * texture.height * texture.bpp)}
-		macos.metal_texture_get_bytes(texture.handle, mut result, usize(texture.width * texture.bpp), 0, 0, usize(texture.width), usize(texture.height))
+		macos.metal_texture_get_bytes(texture.handle, mut result, uint(texture.width * texture.bpp), 0, 0, uint(texture.width), uint(texture.height))
 		return result
 	}
 
@@ -532,7 +532,7 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 			api.deinit()
 		}
 
-		mut values_buffer := MetalBuffer.init(api.buffer_options(), usize($sizeof(u32)))!
+		mut values_buffer := MetalBuffer.init(api.buffer_options(), uint($sizeof(u32)))!
 		defer {
 			values_buffer.deinit()
 		}
@@ -540,7 +540,7 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 		// req_bytes (8) * 2 * sizeof(u32) (4), exactly as Buffer(u32).sync.
 		assert macos.metal_buffer_length(values_buffer.handle) == 64
 
-		mut lists_buffer := MetalBuffer.init(api.buffer_options(), usize($sizeof(u32)))!
+		mut lists_buffer := MetalBuffer.init(api.buffer_options(), uint($sizeof(u32)))!
 		defer {
 			lists_buffer.deinit()
 		}

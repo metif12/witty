@@ -48,8 +48,8 @@ pub mut:
 	focused                  bool = true
 	search_active            bool
 	search_needle            string
-	search_selected          ?usize
-	search_total             ?usize
+	search_selected          ?uint
+	search_total             ?uint
 	search_corner            SearchCorner = .top_right
 	key_sequence             []string
 	key_tables               []string
@@ -394,7 +394,7 @@ fn (mut state NativeActionSurface) set_search_needle(needle string) {
 	}
 }
 
-pub fn (mut state NativeActionSurface) search_counts(selected ?usize, total ?usize) {
+pub fn (mut state NativeActionSurface) search_counts(selected ?uint, total ?uint) {
 	if !state.search_active { return }
 	state.search_selected = selected
 	state.search_total = total

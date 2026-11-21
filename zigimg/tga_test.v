@@ -643,7 +643,7 @@ fn test_tga_encoder_hash_matches_unchanged_locked_source() {
 	mut output := []u8{len: 20000}
 	for format in [PixelFormat.grayscale8, .indexed8, .rgb555, .rgb24, .bgr24, .rgba32, .bgra32] {
 		for width in [0, 1, 2, 3, 4, 7, 8, 9, 15, 16, 17, 31, 32, 33, 127, 128, 129, 255] {
-			mut pixels := PixelStorage.init(format, usize(width * 3))!
+			mut pixels := PixelStorage.init(format, uint(width * 3))!
 			match mut pixels {
 				IndexedStorage8 {
 					pixels.resize_palette(32)
@@ -679,7 +679,7 @@ fn test_tga_encoder_hash_matches_unchanged_locked_source() {
 					for top in [true, false] {
 						mut writer := WriteStream.init_memory(mut output)
 						image := ImageUnmanaged{
-							width:  usize(width)
+							width:  uint(width)
 							height: 3
 							pixels: pixels
 						}
@@ -827,7 +827,7 @@ fn test_tga_indexed_palette_file_refills_match_defined_memory_pixels() {
 				}
 			}
 
-			assert codec.header == header && stream.get_pos() == usize(18 + body.len)
+			assert codec.header == header && stream.get_pos() == uint(18 + body.len)
 		}
 	}
 }

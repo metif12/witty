@@ -62,7 +62,7 @@ $if macos || ios {
 	}
 
 	pub fn get_kern_error(err i32) KernE {
-		return unsafe { KernE(u32(usize(err))) }
+		return unsafe { KernE(u32(uint(err))) }
 	}
 
 	pub enum KernE as u32 {
@@ -227,7 +227,7 @@ $if macos || ios {
 	}
 
 	pub fn get_mach_msg_error(err i32) MachMsgE {
-		return unsafe { MachMsgE(u32(usize(err))) }
+		return unsafe { MachMsgE(u32(uint(err))) }
 	}
 
 	// Mach msg return values

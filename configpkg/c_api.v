@@ -22,14 +22,14 @@ pub:
 pub struct CConfigColorList {
 pub:
 	colors &CConfigColor = unsafe { nil }
-	len    usize
+	len    uint
 }
 
 // CConfigCommandList mirrors ghostty_config_command_list_s.
 pub struct CConfigCommandList {
 pub:
 	commands &inputpkg.CCommand = unsafe { nil }
-	len      usize
+	len      uint
 }
 
 // CConfigPalette mirrors ghostty_config_palette_s.
@@ -160,7 +160,7 @@ pub fn (mut c Config) c_get(key string, ptr voidptr) bool {
 					if c.$(field.name) == none {
 						return false
 					}
-					c_write_value[usize](ptr, c.$(field.name)?.cval())
+					c_write_value[uint](ptr, c.$(field.name)?.cval())
 					return true
 				} $else $if field.unaliased_typ is ?AutoUpdate {
 					if c.$(field.name) == none {
@@ -199,7 +199,7 @@ pub fn (mut c Config) c_get(key string, ptr voidptr) bool {
 					c_write_value[i16](ptr, c.$(field.name).cval())
 					return true
 				} $else $if field.unaliased_typ is Duration {
-					c_write_value[usize](ptr, c.$(field.name).cval())
+					c_write_value[uint](ptr, c.$(field.name).cval())
 					return true
 				} $else $if field.unaliased_typ is fontpkg.FontSyntheticStyle {
 					c_write_value[u32](ptr, u32(c.$(field.name).int_val()))

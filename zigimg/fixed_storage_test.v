@@ -25,7 +25,7 @@ fn fixed_storage_test_size[T, B](storage B, value T) {
 	mut buffer := FixedStorage[T, B]{
 		storage: storage
 	}
-	capacity := usize(sizeof(B) / sizeof(T))
+	capacity := uint(sizeof(B) / sizeof(T))
 	buffer.resize(capacity)
 	assert buffer.data.len == int(capacity)
 	buffer.data[int(capacity) - 1] = value

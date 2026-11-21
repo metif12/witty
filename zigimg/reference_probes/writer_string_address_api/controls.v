@@ -10,7 +10,7 @@ struct Args {
 	value string
 }
 
-fn borrowed(bits usize, length int) string {
+fn borrowed(bits uint, length int) string {
 	return unsafe { (&u8(voidptr(bits))).vstring_with_len(length) }
 }
 

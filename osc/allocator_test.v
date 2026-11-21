@@ -11,7 +11,7 @@ mut:
 	live int
 }
 
-fn limited_alloc(ctx voidptr, len usize, alignment u8, ret_addr usize) voidptr {
+fn limited_alloc(ctx voidptr, len uint, alignment u8, ret_addr uint) voidptr {
 	mut state := unsafe { &LimitedAllocator(ctx) }
 	state.allocations++
 	if state.remaining == 0 { return unsafe { nil } }
@@ -20,9 +20,9 @@ fn limited_alloc(ctx voidptr, len usize, alignment u8, ret_addr usize) voidptr {
 	return lib_allocator.default(none).alloc_bytes(len, alignment, ret_addr)
 }
 
-fn limited_resize(_ voidptr, _ voidptr, _ usize, _ u8, _ usize, _ usize) bool { return false }
-fn limited_remap(_ voidptr, _ voidptr, _ usize, _ u8, _ usize, _ usize) voidptr { return unsafe { nil } }
-fn limited_free(ctx voidptr, memory voidptr, len usize, alignment u8, ret_addr usize) {
+fn limited_resize(_ voidptr, _ voidptr, _ uint, _ u8, _ uint, _ uint) bool { return false }
+fn limited_remap(_ voidptr, _ voidptr, _ uint, _ u8, _ uint, _ uint) voidptr { return unsafe { nil } }
+fn limited_free(ctx voidptr, memory voidptr, len uint, alignment u8, ret_addr uint) {
 	mut state := unsafe { &LimitedAllocator(ctx) }
 	state.frees++
 	state.live--

@@ -170,13 +170,13 @@ fn test_screen_cursor_copy_style_deref() ! {
 
 	// Bold should create our style
 	s2.set_attribute(SgrBold{})!
-	assert page.styles.count() == usize(1)
+	assert page.styles.count() == uint(1)
 	assert s2.cursor.style.flags.bold()
 
 	// Copy default style, should release our style
 	s2.cursor_copy(s.cursor, CursorCopyOptions{})!
 	assert !s2.cursor.style.flags.bold()
-	assert page.styles.count() == usize(0)
+	assert page.styles.count() == uint(0)
 }
 
 fn test_screen_cursor_copy_style_deref_new_page() ! {
@@ -235,14 +235,14 @@ fn test_screen_cursor_copy_style_deref_new_page() ! {
 
 	// Bold should create our style in page 1.
 	s2.set_attribute(SgrBold{})!
-	assert page.styles.count() == usize(1)
+	assert page.styles.count() == uint(1)
 	assert s2.cursor.style.flags.bold()
 
 	// Copy the cursor for the first screen. This should release
 	// the style from page 1 and move the cursor back to page 0.
 	s2.cursor_copy(s.cursor, CursorCopyOptions{})!
 	assert !s2.cursor.style.flags.bold()
-	assert page.styles.count() == usize(0)
+	assert page.styles.count() == uint(0)
 	// The page after the page the cursor is now in should be page 1.
 	next := s2.cursor.page_pin.node.next or { panic('cursor page has no next page') }
 	assert same_page(page, &next.data)
@@ -261,7 +261,7 @@ fn test_screen_cursor_copy_style_copy() ! {
 	page := &s2.cursor.page_pin.node.data
 	s2.cursor_copy(s.cursor, CursorCopyOptions{})!
 	assert s2.cursor.style.flags.bold()
-	assert page.styles.count() == usize(1)
+	assert page.styles.count() == uint(1)
 }
 
 fn test_screen_cursor_copy_hyperlink_deref() ! {
@@ -274,12 +274,12 @@ fn test_screen_cursor_copy_hyperlink_deref() ! {
 
 	// Create a hyperlink for the cursor.
 	s2.start_hyperlink('https://example.com/', none)!
-	assert page.hyperlink_set.count() == usize(1)
+	assert page.hyperlink_set.count() == uint(1)
 	assert s2.cursor.hyperlink_id != 0
 
 	// Copy a cursor with no hyperlink, should release our hyperlink.
 	s2.cursor_copy(s.cursor, CursorCopyOptions{})!
-	assert page.hyperlink_set.count() == usize(0)
+	assert page.hyperlink_set.count() == uint(0)
 	assert s2.cursor.hyperlink_id == 0
 }
 
@@ -339,13 +339,13 @@ fn test_screen_cursor_copy_hyperlink_deref_new_page() ! {
 
 	// Create a hyperlink for the cursor, should be in page 1.
 	s2.start_hyperlink('https://example.com/', none)!
-	assert page.hyperlink_set.count() == usize(1)
+	assert page.hyperlink_set.count() == uint(1)
 	assert s2.cursor.hyperlink_id != 0
 
 	// Copy the cursor for the first screen. This should release
 	// the hyperlink from page 1 and move the cursor back to page 0.
 	s2.cursor_copy(s.cursor, CursorCopyOptions{})!
-	assert page.hyperlink_set.count() == usize(0)
+	assert page.hyperlink_set.count() == uint(0)
 	assert s2.cursor.hyperlink_id == 0
 	// The page after the page the cursor is now in should be page 1.
 	next := s2.cursor.page_pin.node.next or { panic('cursor page has no next page') }
@@ -361,19 +361,19 @@ fn test_screen_cursor_copy_hyperlink_copy() ! {
 
 	// Create a hyperlink for the cursor.
 	s.start_hyperlink('https://example.com/', none)!
-	assert s.cursor.page_pin.node.data.hyperlink_set.count() == usize(1)
+	assert s.cursor.page_pin.node.data.hyperlink_set.count() == uint(1)
 	assert s.cursor.hyperlink_id != 0
 
 	mut s2 := Screen.init(10, 10, 0)!
 	defer { s2.deinit() }
 	page := &s2.cursor.page_pin.node.data
 
-	assert page.hyperlink_set.count() == usize(0)
+	assert page.hyperlink_set.count() == uint(0)
 	assert s2.cursor.hyperlink_id == 0
 
 	// Copy the cursor with the hyperlink.
 	s2.cursor_copy(s.cursor, CursorCopyOptions{})!
-	assert page.hyperlink_set.count() == usize(1)
+	assert page.hyperlink_set.count() == uint(1)
 	assert s2.cursor.hyperlink_id != 0
 }
 
@@ -383,19 +383,19 @@ fn test_screen_cursor_copy_hyperlink_copy_disabled() ! {
 
 	// Create a hyperlink for the cursor.
 	s.start_hyperlink('https://example.com/', none)!
-	assert s.cursor.page_pin.node.data.hyperlink_set.count() == usize(1)
+	assert s.cursor.page_pin.node.data.hyperlink_set.count() == uint(1)
 	assert s.cursor.hyperlink_id != 0
 
 	mut s2 := Screen.init(10, 10, 0)!
 	defer { s2.deinit() }
 	page := &s2.cursor.page_pin.node.data
 
-	assert page.hyperlink_set.count() == usize(0)
+	assert page.hyperlink_set.count() == uint(0)
 	assert s2.cursor.hyperlink_id == 0
 
 	// Copy the cursor with the hyperlink.
 	s2.cursor_copy(s.cursor, CursorCopyOptions{ hyperlink: false })!
-	assert page.hyperlink_set.count() == usize(0)
+	assert page.hyperlink_set.count() == uint(0)
 	assert s2.cursor.hyperlink_id == 0
 }
 
@@ -403,18 +403,18 @@ fn test_screen_style_basics() ! {
 	mut s := Screen.init(80, 24, 1000)!
 	defer { s.deinit() }
 	page := &s.cursor.page_pin.node.data
-	assert page.styles.count() == usize(0)
+	assert page.styles.count() == uint(0)
 
 	// Set a new style
 	s.set_attribute(SgrBold{})!
 	assert s.cursor.style_id != 0
-	assert page.styles.count() == usize(1)
+	assert page.styles.count() == uint(1)
 	assert s.cursor.style.flags.bold()
 
 	// Set another style, we should still only have one since it was unused
 	s.set_attribute(SgrItalic{})!
 	assert s.cursor.style_id != 0
-	assert page.styles.count() == usize(1)
+	assert page.styles.count() == uint(1)
 	assert s.cursor.style.flags.italic()
 }
 
@@ -422,34 +422,34 @@ fn test_screen_style_reset_to_default() ! {
 	mut s := Screen.init(80, 24, 1000)!
 	defer { s.deinit() }
 	page := &s.cursor.page_pin.node.data
-	assert page.styles.count() == usize(0)
+	assert page.styles.count() == uint(0)
 
 	// Set a new style
 	s.set_attribute(SgrBold{})!
 	assert s.cursor.style_id != 0
-	assert page.styles.count() == usize(1)
+	assert page.styles.count() == uint(1)
 
 	// Reset to default
 	s.set_attribute(SgrResetBold{})!
 	assert s.cursor.style_id == 0
-	assert page.styles.count() == usize(0)
+	assert page.styles.count() == uint(0)
 }
 
 fn test_screen_style_reset_with_unset() ! {
 	mut s := Screen.init(80, 24, 1000)!
 	defer { s.deinit() }
 	page := &s.cursor.page_pin.node.data
-	assert page.styles.count() == usize(0)
+	assert page.styles.count() == uint(0)
 
 	// Set a new style
 	s.set_attribute(SgrBold{})!
 	assert s.cursor.style_id != 0
-	assert page.styles.count() == usize(1)
+	assert page.styles.count() == uint(1)
 
 	// Reset to default
 	s.set_attribute(SgrUnset{})!
 	assert s.cursor.style_id == 0
-	assert page.styles.count() == usize(0)
+	assert page.styles.count() == uint(0)
 }
 
 fn test_screen_clear_rows_active_one_line() ! {
@@ -485,12 +485,12 @@ fn test_screen_clear_rows_active_styled_line() ! {
 
 	// We should have one style
 	page := &s.cursor.page_pin.node.data
-	assert page.styles.count() == usize(1)
+	assert page.styles.count() == uint(1)
 
 	s.clear_rows(active_pt(0, 0), none, false)
 
 	// We should have none because active cleared it
-	assert page.styles.count() == usize(0)
+	assert page.styles.count() == uint(0)
 
 	str := s.dump_string_alloc(.screen)!
 	assert str == ''
@@ -4661,21 +4661,21 @@ fn test_screen_hyperlink_start_end() ! {
 	assert s.cursor.hyperlink_id == 0
 	if true {
 		page := &s.cursor.page_pin.node.data
-		assert page.hyperlink_set.count() == usize(0)
+		assert page.hyperlink_set.count() == uint(0)
 	}
 
 	s.start_hyperlink('http://example.com', none)!
 	assert s.cursor.hyperlink_id != 0
 	if true {
 		page := &s.cursor.page_pin.node.data
-		assert page.hyperlink_set.count() == usize(1)
+		assert page.hyperlink_set.count() == uint(1)
 	}
 
 	s.end_hyperlink()
 	assert s.cursor.hyperlink_id == 0
 	if true {
 		page := &s.cursor.page_pin.node.data
-		assert page.hyperlink_set.count() == usize(0)
+		assert page.hyperlink_set.count() == uint(0)
 	}
 }
 
@@ -4686,7 +4686,7 @@ fn test_screen_hyperlink_reuse() ! {
 	assert s.cursor.hyperlink_id == 0
 	if true {
 		page := &s.cursor.page_pin.node.data
-		assert page.hyperlink_set.count() == usize(0)
+		assert page.hyperlink_set.count() == uint(0)
 	}
 
 	// Use it for the first time
@@ -4699,14 +4699,14 @@ fn test_screen_hyperlink_reuse() ! {
 	assert s.cursor.hyperlink_id == id
 	if true {
 		page := &s.cursor.page_pin.node.data
-		assert page.hyperlink_set.count() == usize(1)
+		assert page.hyperlink_set.count() == uint(1)
 	}
 
 	s.end_hyperlink()
 	assert s.cursor.hyperlink_id == 0
 	if true {
 		page := &s.cursor.page_pin.node.data
-		assert page.hyperlink_set.count() == usize(0)
+		assert page.hyperlink_set.count() == uint(0)
 	}
 }
 
@@ -4723,7 +4723,7 @@ fn test_screen_hyperlink_cursor_state_on_resize() ! {
 	assert s.cursor.hyperlink_id != 0
 	if true {
 		page := &s.cursor.page_pin.node.data
-		assert page.hyperlink_set.count() == usize(1)
+		assert page.hyperlink_set.count() == uint(1)
 	}
 
 	// Resize. Any column growth will trigger a page to be reallocated.
@@ -4731,14 +4731,14 @@ fn test_screen_hyperlink_cursor_state_on_resize() ! {
 	assert s.cursor.hyperlink_id != 0
 	if true {
 		page := &s.cursor.page_pin.node.data
-		assert page.hyperlink_set.count() == usize(1)
+		assert page.hyperlink_set.count() == uint(1)
 	}
 
 	s.end_hyperlink()
 	assert s.cursor.hyperlink_id == 0
 	if true {
 		page := &s.cursor.page_pin.node.data
-		assert page.hyperlink_set.count() == usize(0)
+		assert page.hyperlink_set.count() == uint(0)
 	}
 }
 
@@ -4828,7 +4828,7 @@ fn test_screen_increase_capacity_cursor_hyperlink_ref_count_preserved() ! {
 	if true {
 		page := &last_node(s).data
 		// Cursor has the hyperlink active = 1 count in hyperlink_set
-		assert page.hyperlink_set.count() == usize(1)
+		assert page.hyperlink_set.count() == uint(1)
 		assert s.cursor.hyperlink_id != 0
 		assert s.cursor.hyperlink_state != none
 	}
@@ -4845,7 +4845,7 @@ fn test_screen_increase_capacity_cursor_hyperlink_ref_count_preserved() ! {
 	// After increaseCapacity, the hyperlink is re-added to the new page.
 	if true {
 		page := &last_node(s).data
-		assert page.hyperlink_set.count() == usize(1)
+		assert page.hyperlink_set.count() == uint(1)
 	}
 }
 
@@ -4871,7 +4871,7 @@ fn test_screen_increase_capacity_cursor_with_both_style_and_hyperlink_preserved(
 		// 5 chars + cursor = 6 refs for bold style
 		assert page.styles.ref_count(s.cursor.style_id) == u16(6)
 		// Cursor has the hyperlink active = 1 count in hyperlink_set
-		assert page.hyperlink_set.count() == usize(1)
+		assert page.hyperlink_set.count() == uint(1)
 		assert s.cursor.style_id != default_style_id
 		assert s.cursor.hyperlink_id != 0
 		assert s.cursor.hyperlink_state != none
@@ -4895,7 +4895,7 @@ fn test_screen_increase_capacity_cursor_with_both_style_and_hyperlink_preserved(
 		page := &last_node(s).data
 		ref_count := page.styles.ref_count(s.cursor.style_id)
 		assert ref_count == u16(6)
-		assert page.hyperlink_set.count() == usize(1)
+		assert page.hyperlink_set.count() == uint(1)
 	}
 }
 
@@ -5084,7 +5084,7 @@ fn test_screen_set_attribute_increases_capacity_when_style_map_is_full() ! {
 		defer { page.assert_integrity() }
 
 		max_items := page.styles.set.layout.cap
-		mut n := usize(1)
+		mut n := uint(1)
 		for n < max_items {
 			page.styles.add(CellStyle{
 				bg_color: StyleColorRgb{
@@ -5145,7 +5145,7 @@ fn test_screen_set_attribute_splits_page_on_out_of_space_at_max_styles() ! {
 		defer { page.assert_integrity() }
 
 		max_items := page.styles.set.layout.cap
-		mut n := usize(1)
+		mut n := uint(1)
 		for n < max_items {
 			page.styles.add(CellStyle{
 				bg_color: StyleColorRgb{
@@ -5200,8 +5200,8 @@ fn test_screen_prompt_click_move_line_right_basic() ! {
 	click_pin := must_pin(s, active_pt(4, 0))
 	result := s.prompt_click_move(click_pin)
 
-	assert result.right == usize(2)
-	assert result.left == usize(0)
+	assert result.right == uint(2)
+	assert result.left == uint(0)
 }
 
 fn test_screen_prompt_click_move_line_right_cursor_not_on_input() ! {
@@ -5276,8 +5276,8 @@ fn test_screen_prompt_click_move_line_right_skips_non_input_cells() ! {
 	click_pin := must_pin(s, active_pt(5, 0))
 	result := s.prompt_click_move(click_pin)
 
-	assert result.right == usize(2)
-	assert result.left == usize(0)
+	assert result.right == uint(2)
+	assert result.left == uint(0)
 }
 
 fn test_screen_prompt_click_move_line_right_soft_wrapped_line() ! {
@@ -5310,8 +5310,8 @@ fn test_screen_prompt_click_move_line_right_soft_wrapped_line() ! {
 	click_pin := must_pin(s, active_pt(1, 1))
 	result := s.prompt_click_move(click_pin)
 
-	assert result.right == usize(9)
-	assert result.left == usize(0)
+	assert result.right == uint(9)
+	assert result.left == uint(0)
 }
 
 fn test_screen_prompt_click_move_disabled_when_click_is_none() ! {
@@ -5362,8 +5362,8 @@ fn test_screen_prompt_click_move_line_right_stops_at_hard_wrap() ! {
 	result := s.prompt_click_move(click_pin)
 
 	// Should stop at end of first line, not cross hard wrap
-	assert result.right == usize(5)
-	assert result.left == usize(0)
+	assert result.right == uint(5)
+	assert result.left == uint(0)
 }
 
 fn test_screen_prompt_click_move_line_right_stops_at_non_continuation_row() ! {
@@ -5405,8 +5405,8 @@ fn test_screen_prompt_click_move_line_right_stops_at_non_continuation_row() ! {
 	result := s.prompt_click_move(click_pin)
 
 	// Should stop at 'd' (end of world), not cross to new prompt
-	assert result.right == usize(5)
-	assert result.left == usize(0)
+	assert result.right == uint(5)
+	assert result.left == uint(0)
 }
 
 fn test_screen_prompt_click_move_line_left_basic() ! {
@@ -5429,8 +5429,8 @@ fn test_screen_prompt_click_move_line_left_basic() ! {
 	click_pin := must_pin(s, active_pt(2, 0))
 	result := s.prompt_click_move(click_pin)
 
-	assert result.left == usize(4)
-	assert result.right == usize(0)
+	assert result.left == uint(4)
+	assert result.right == uint(0)
 }
 
 fn test_screen_prompt_click_move_line_left_skips_non_input_cells() ! {
@@ -5458,8 +5458,8 @@ fn test_screen_prompt_click_move_line_left_skips_non_input_cells() ! {
 	click_pin := must_pin(s, active_pt(2, 0))
 	result := s.prompt_click_move(click_pin)
 
-	assert result.left == usize(3)
-	assert result.right == usize(0)
+	assert result.left == uint(3)
+	assert result.right == uint(0)
 }
 
 fn test_screen_prompt_click_move_line_left_soft_wrapped_line() ! {
@@ -5492,8 +5492,8 @@ fn test_screen_prompt_click_move_line_left_soft_wrapped_line() ! {
 	click_pin := must_pin(s, active_pt(2, 0))
 	result := s.prompt_click_move(click_pin)
 
-	assert result.left == usize(9)
-	assert result.right == usize(0)
+	assert result.left == uint(9)
+	assert result.right == uint(0)
 }
 
 fn test_screen_prompt_click_move_line_left_stops_at_hard_wrap() ! {
@@ -5521,8 +5521,8 @@ fn test_screen_prompt_click_move_line_left_stops_at_hard_wrap() ! {
 	result := s.prompt_click_move(click_pin)
 
 	// Should stop at start of second line: d->l->r->o->w = 4 movements
-	assert result.left == usize(4)
-	assert result.right == usize(0)
+	assert result.left == uint(4)
+	assert result.right == uint(0)
 }
 
 fn test_screen_prompt_click_move_click_right_of_input_same_line() ! {
@@ -5548,8 +5548,8 @@ fn test_screen_prompt_click_move_click_right_of_input_same_line() ! {
 	click_pin := must_pin(s, active_pt(15, 0))
 	result := s.prompt_click_move(click_pin)
 
-	assert result.right == usize(5)
-	assert result.left == usize(0)
+	assert result.right == uint(5)
+	assert result.left == uint(0)
 }
 
 fn test_screen_prompt_click_move_click_right_of_input_cursor_at_end() ! {
@@ -5571,8 +5571,8 @@ fn test_screen_prompt_click_move_click_right_of_input_cursor_at_end() ! {
 	click_pin := must_pin(s, active_pt(15, 0))
 	result := s.prompt_click_move(click_pin)
 
-	assert result.right == usize(0)
-	assert result.left == usize(0)
+	assert result.right == uint(0)
+	assert result.left == uint(0)
 }
 
 fn test_screen_prompt_click_move_click_right_of_input_on_lower_line() ! {
@@ -5597,8 +5597,8 @@ fn test_screen_prompt_click_move_click_right_of_input_on_lower_line() ! {
 	result := s.prompt_click_move(click_pin)
 
 	// From 'h', we need to pass e, l, l, o (4 cells) + 1 past end = 5
-	assert result.right == usize(5)
-	assert result.left == usize(0)
+	assert result.right == uint(5)
+	assert result.left == uint(0)
 }
 
 fn test_screen_prompt_click_move_click_right_of_input_cursor_at_end_lower_line() ! {
@@ -5619,8 +5619,8 @@ fn test_screen_prompt_click_move_click_right_of_input_cursor_at_end_lower_line()
 	click_pin := must_pin(s, active_pt(5, 1))
 	result := s.prompt_click_move(click_pin)
 
-	assert result.right == usize(0)
-	assert result.left == usize(0)
+	assert result.right == uint(0)
+	assert result.left == uint(0)
 }
 
 fn test_screen_prompt_click_move_click_right_of_input_cursor_on_last_char() ! {
@@ -5643,8 +5643,8 @@ fn test_screen_prompt_click_move_click_right_of_input_cursor_on_last_char() ! {
 	click_pin := must_pin(s, active_pt(15, 0))
 	result := s.prompt_click_move(click_pin)
 
-	assert result.right == usize(1)
-	assert result.left == usize(0)
+	assert result.right == uint(1)
+	assert result.left == uint(0)
 }
 
 // ============================================================

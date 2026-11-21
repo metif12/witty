@@ -33,7 +33,7 @@ $if !windows {
 	// originally is from a write request. This is useful for getting
 	// the WriteRequest back in a callback from queuedWrite.
 	pub fn WasiWriteRequest.from(c &WasiCompletion) &WasiWriteRequest {
-		return unsafe { &WasiWriteRequest(voidptr(usize(c) - __offsetof(WasiWriteRequest, completion))) }
+		return unsafe { &WasiWriteRequest(voidptr(uint(c) - __offsetof(WasiWriteRequest, completion))) }
 	}
 
 	// Events that can be polled for using the high level streams.
@@ -46,11 +46,11 @@ $if !windows {
 
 	// The callback of Stream.read. The error is a ReadError; on success the byte
 	// count is supplied.
-	pub type WasiStreamReadCallback = fn (ud voidptr, l &WasiLoop, c &WasiCompletion, s WasiStream, b WasiReadBuffer, r ?ErrorKind, n usize) CallbackAction
+	pub type WasiStreamReadCallback = fn (ud voidptr, l &WasiLoop, c &WasiCompletion, s WasiStream, b WasiReadBuffer, r ?ErrorKind, n uint) CallbackAction
 
 	// The callback of Stream.write and Stream.queueWrite. The error is a
 	// WriteError; on success the byte count is supplied.
-	pub type WasiStreamWriteCallback = fn (ud voidptr, l &WasiLoop, c &WasiCompletion, s WasiStream, b WasiWriteBuffer, r ?ErrorKind, n usize) CallbackAction
+	pub type WasiStreamWriteCallback = fn (ud voidptr, l &WasiLoop, c &WasiCompletion, s WasiStream, b WasiWriteBuffer, r ?ErrorKind, n uint) CallbackAction
 
 	// Creates a generic stream type that supports read, write, close. This
 	// can be used for any file descriptor that would exhibit normal blocking
@@ -256,7 +256,7 @@ $if !windows {
 
 	// Extracts the result from a completion for a write callback.
 	@[inline]
-	fn wasi_stream_write_result(c &WasiCompletion, r WasiResult) (WasiStream, WasiWriteBuffer, ?ErrorKind, usize) {
+	fn wasi_stream_write_result(c &WasiCompletion, r WasiResult) (WasiStream, WasiWriteBuffer, ?ErrorKind, uint) {
 		return WasiStream.init_fd((c.op as WasiWriteOp).fd), (c.op as WasiWriteOp).buffer, r.err, wasi_result_bytes(r)
 	}
 
@@ -278,19 +278,19 @@ $if !windows {
 	}
 
 	// Returns the length of the write buffer
-	fn wasi_write_buffer_length(buf WasiWriteBuffer) usize {
+	fn wasi_write_buffer_length(buf WasiWriteBuffer) uint {
 		return match buf {
-			WriteBufferSlice { usize(buf.slice.len) }
+			WriteBufferSlice { uint(buf.slice.len) }
 			WriteBufferArray { buf.len }
 		}
 	}
 
 	// Given a `WriteBuffer` and number of bytes written during the previous
 	// write operation, returns a new `WriteBuffer` with remaining data.
-	fn wasi_write_buffer_remainder(buf WasiWriteBuffer, offset usize) WasiWriteBuffer {
+	fn wasi_write_buffer_remainder(buf WasiWriteBuffer, offset uint) WasiWriteBuffer {
 		match buf {
 			WriteBufferSlice {
-				assert offset <= usize(buf.slice.len)
+				assert offset <= uint(buf.slice.len)
 				return WasiWriteBuffer(WriteBufferSlice{ slice: buf.slice[int(offset)..] })
 			}
 			WriteBufferArray {

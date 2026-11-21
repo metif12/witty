@@ -9,12 +9,12 @@ import zigimg
 
 fn C.witty_writer_seek_setup(&char) int
 fn C.witty_writer_seek_replace(int) int
-fn C.witty_writer_seek_restore(&char, usize) int
+fn C.witty_writer_seek_restore(&char, uint) int
 fn C.witty_writer_seek_close() int
 fn C.witty_writer_seek_cleanup() int
 fn C.witty_writer_seek_valid() int
-fn C.witty_writer_seek_view(&u8, usize) isize
-fn C.witty_writer_seek_drain(&u8, usize) isize
+fn C.witty_writer_seek_view(&u8, uint) int
+fn C.witty_writer_seek_drain(&u8, uint) int
 
 __global (
 	seen string
@@ -32,7 +32,7 @@ type Views2 = []Array2
 type Word3 = u64
 type Array3 = [3]Word3
 type Views3 = []Array3
-type Word4 = usize
+type Word4 = uint
 type Array4 = [3]Word4
 type Views4 = []Array4
 type Word5 = i8
@@ -47,7 +47,7 @@ type Views7 = []Array7
 type Word8 = i64
 type Array8 = [3]Word8
 type Views8 = []Array8
-type Word9 = isize
+type Word9 = int
 type Array9 = [3]Word9
 type Views9 = []Array9
 type Word10 = f32
@@ -60,24 +60,24 @@ type Word12 = bool
 type Array12 = [3]Word12
 type Views12 = []Array12
 
-fn borrowed[E](_ E, raw usize, length int) []E {
+fn borrowed[E](_ E, raw uint, length int) []E {
 	return unsafe { array{ data: voidptr(raw), len: length, cap: length, flags: .nofree, element_size: int(sizeof(E)) } }
 }
 
 fn operate(mut writer zigimg.WriteStream, f []string) ! {
-	raw := usize(f[8].u64())
+	raw := uint(f[8].u64())
 	length := f[9].int()
 	options := zigimg.FormatOptions{
 		width:     if f[10] == '-' {
-			?usize(none)
+			?uint(none)
 		} else {
-			?usize(usize(f[10].u64()))
+			?uint(uint(f[10].u64()))
 		}
-		precision: if f[11] == '-' { ?usize(none) } else { ?usize(usize(f[11].u64())) }
+		precision: if f[11] == '-' { ?uint(none) } else { ?uint(uint(f[11].u64())) }
 		alignment: unsafe { zigimg.Alignment(f[14].int()) }
 		fill:      u8(f[15].int())
 	}
-	depth := usize(f[13].u64())
+	depth := uint(f[13].u64())
 	format := (hex.decode(f[1])!).bytestr()
 	match f[0].int() {
 		0 {
@@ -85,57 +85,57 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				0 {
 					witness := [3]u8{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				1 {
 					witness := Array0{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				2 {
 					witness := [2][3]u8{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				3 {
 					witness := [1]u8{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				4 {
 					witness := Array0{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					alias_view := Views0(view)
 					writer.print_value(format, options, alias_view, depth)!
 				}
 				5 {
 					witness := Array0{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?[]Array0(view), depth)!
 				}
 				6 {
 					witness := Array0{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?[]Array0(none), depth)!
 				}
 				7 {
 					witness := Array0{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					alias_view := Views0(view)
 					writer.print_value(format, options, ?Views0(alias_view), depth)!
 				}
 				8 {
 					witness := Array0{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?Views0(none), depth)!
 				}
 				else { panic('invalid form') }
@@ -146,57 +146,57 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				0 {
 					witness := [3]u16{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				1 {
 					witness := Array1{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				2 {
 					witness := [2][3]u16{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				3 {
 					witness := [1]u16{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				4 {
 					witness := Array1{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					alias_view := Views1(view)
 					writer.print_value(format, options, alias_view, depth)!
 				}
 				5 {
 					witness := Array1{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?[]Array1(view), depth)!
 				}
 				6 {
 					witness := Array1{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?[]Array1(none), depth)!
 				}
 				7 {
 					witness := Array1{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					alias_view := Views1(view)
 					writer.print_value(format, options, ?Views1(alias_view), depth)!
 				}
 				8 {
 					witness := Array1{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?Views1(none), depth)!
 				}
 				else { panic('invalid form') }
@@ -207,57 +207,57 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				0 {
 					witness := [3]u32{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				1 {
 					witness := Array2{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				2 {
 					witness := [2][3]u32{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				3 {
 					witness := [1]u32{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				4 {
 					witness := Array2{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					alias_view := Views2(view)
 					writer.print_value(format, options, alias_view, depth)!
 				}
 				5 {
 					witness := Array2{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?[]Array2(view), depth)!
 				}
 				6 {
 					witness := Array2{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?[]Array2(none), depth)!
 				}
 				7 {
 					witness := Array2{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					alias_view := Views2(view)
 					writer.print_value(format, options, ?Views2(alias_view), depth)!
 				}
 				8 {
 					witness := Array2{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?Views2(none), depth)!
 				}
 				else { panic('invalid form') }
@@ -268,57 +268,57 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				0 {
 					witness := [3]u64{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				1 {
 					witness := Array3{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				2 {
 					witness := [2][3]u64{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				3 {
 					witness := [1]u64{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				4 {
 					witness := Array3{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					alias_view := Views3(view)
 					writer.print_value(format, options, alias_view, depth)!
 				}
 				5 {
 					witness := Array3{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?[]Array3(view), depth)!
 				}
 				6 {
 					witness := Array3{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?[]Array3(none), depth)!
 				}
 				7 {
 					witness := Array3{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					alias_view := Views3(view)
 					writer.print_value(format, options, ?Views3(alias_view), depth)!
 				}
 				8 {
 					witness := Array3{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?Views3(none), depth)!
 				}
 				else { panic('invalid form') }
@@ -327,59 +327,59 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 		4 {
 			match f[12].int() {
 				0 {
-					witness := [3]usize{}
+					witness := [3]uint{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				1 {
 					witness := Array4{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				2 {
-					witness := [2][3]usize{}
+					witness := [2][3]uint{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				3 {
-					witness := [1]usize{}
+					witness := [1]uint{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				4 {
 					witness := Array4{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					alias_view := Views4(view)
 					writer.print_value(format, options, alias_view, depth)!
 				}
 				5 {
 					witness := Array4{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?[]Array4(view), depth)!
 				}
 				6 {
 					witness := Array4{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?[]Array4(none), depth)!
 				}
 				7 {
 					witness := Array4{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					alias_view := Views4(view)
 					writer.print_value(format, options, ?Views4(alias_view), depth)!
 				}
 				8 {
 					witness := Array4{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?Views4(none), depth)!
 				}
 				else { panic('invalid form') }
@@ -390,57 +390,57 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				0 {
 					witness := [3]i8{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				1 {
 					witness := Array5{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				2 {
 					witness := [2][3]i8{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				3 {
 					witness := [1]i8{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				4 {
 					witness := Array5{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					alias_view := Views5(view)
 					writer.print_value(format, options, alias_view, depth)!
 				}
 				5 {
 					witness := Array5{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?[]Array5(view), depth)!
 				}
 				6 {
 					witness := Array5{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?[]Array5(none), depth)!
 				}
 				7 {
 					witness := Array5{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					alias_view := Views5(view)
 					writer.print_value(format, options, ?Views5(alias_view), depth)!
 				}
 				8 {
 					witness := Array5{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?Views5(none), depth)!
 				}
 				else { panic('invalid form') }
@@ -451,57 +451,57 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				0 {
 					witness := [3]i16{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				1 {
 					witness := Array6{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				2 {
 					witness := [2][3]i16{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				3 {
 					witness := [1]i16{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				4 {
 					witness := Array6{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					alias_view := Views6(view)
 					writer.print_value(format, options, alias_view, depth)!
 				}
 				5 {
 					witness := Array6{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?[]Array6(view), depth)!
 				}
 				6 {
 					witness := Array6{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?[]Array6(none), depth)!
 				}
 				7 {
 					witness := Array6{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					alias_view := Views6(view)
 					writer.print_value(format, options, ?Views6(alias_view), depth)!
 				}
 				8 {
 					witness := Array6{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?Views6(none), depth)!
 				}
 				else { panic('invalid form') }
@@ -512,57 +512,57 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				0 {
 					witness := [3]int{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				1 {
 					witness := Array7{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				2 {
 					witness := [2][3]int{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				3 {
 					witness := [1]int{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				4 {
 					witness := Array7{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					alias_view := Views7(view)
 					writer.print_value(format, options, alias_view, depth)!
 				}
 				5 {
 					witness := Array7{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?[]Array7(view), depth)!
 				}
 				6 {
 					witness := Array7{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?[]Array7(none), depth)!
 				}
 				7 {
 					witness := Array7{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					alias_view := Views7(view)
 					writer.print_value(format, options, ?Views7(alias_view), depth)!
 				}
 				8 {
 					witness := Array7{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?Views7(none), depth)!
 				}
 				else { panic('invalid form') }
@@ -573,57 +573,57 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				0 {
 					witness := [3]i64{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				1 {
 					witness := Array8{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				2 {
 					witness := [2][3]i64{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				3 {
 					witness := [1]i64{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				4 {
 					witness := Array8{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					alias_view := Views8(view)
 					writer.print_value(format, options, alias_view, depth)!
 				}
 				5 {
 					witness := Array8{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?[]Array8(view), depth)!
 				}
 				6 {
 					witness := Array8{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?[]Array8(none), depth)!
 				}
 				7 {
 					witness := Array8{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					alias_view := Views8(view)
 					writer.print_value(format, options, ?Views8(alias_view), depth)!
 				}
 				8 {
 					witness := Array8{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?Views8(none), depth)!
 				}
 				else { panic('invalid form') }
@@ -632,59 +632,59 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 		9 {
 			match f[12].int() {
 				0 {
-					witness := [3]isize{}
+					witness := [3]int{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				1 {
 					witness := Array9{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				2 {
-					witness := [2][3]isize{}
+					witness := [2][3]int{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				3 {
-					witness := [1]isize{}
+					witness := [1]int{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				4 {
 					witness := Array9{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					alias_view := Views9(view)
 					writer.print_value(format, options, alias_view, depth)!
 				}
 				5 {
 					witness := Array9{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?[]Array9(view), depth)!
 				}
 				6 {
 					witness := Array9{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?[]Array9(none), depth)!
 				}
 				7 {
 					witness := Array9{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					alias_view := Views9(view)
 					writer.print_value(format, options, ?Views9(alias_view), depth)!
 				}
 				8 {
 					witness := Array9{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?Views9(none), depth)!
 				}
 				else { panic('invalid form') }
@@ -695,57 +695,57 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				0 {
 					witness := [3]f32{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				1 {
 					witness := Array10{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				2 {
 					witness := [2][3]f32{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				3 {
 					witness := [1]f32{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				4 {
 					witness := Array10{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					alias_view := Views10(view)
 					writer.print_value(format, options, alias_view, depth)!
 				}
 				5 {
 					witness := Array10{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?[]Array10(view), depth)!
 				}
 				6 {
 					witness := Array10{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?[]Array10(none), depth)!
 				}
 				7 {
 					witness := Array10{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					alias_view := Views10(view)
 					writer.print_value(format, options, ?Views10(alias_view), depth)!
 				}
 				8 {
 					witness := Array10{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?Views10(none), depth)!
 				}
 				else { panic('invalid form') }
@@ -756,57 +756,57 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				0 {
 					witness := [3]f64{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				1 {
 					witness := Array11{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				2 {
 					witness := [2][3]f64{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				3 {
 					witness := [1]f64{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				4 {
 					witness := Array11{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					alias_view := Views11(view)
 					writer.print_value(format, options, alias_view, depth)!
 				}
 				5 {
 					witness := Array11{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?[]Array11(view), depth)!
 				}
 				6 {
 					witness := Array11{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?[]Array11(none), depth)!
 				}
 				7 {
 					witness := Array11{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					alias_view := Views11(view)
 					writer.print_value(format, options, ?Views11(alias_view), depth)!
 				}
 				8 {
 					witness := Array11{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?Views11(none), depth)!
 				}
 				else { panic('invalid form') }
@@ -817,57 +817,57 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				0 {
 					witness := [3]bool{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				1 {
 					witness := Array12{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				2 {
 					witness := [2][3]bool{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				3 {
 					witness := [1]bool{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, view, depth)!
 				}
 				4 {
 					witness := Array12{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					alias_view := Views12(view)
 					writer.print_value(format, options, alias_view, depth)!
 				}
 				5 {
 					witness := Array12{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?[]Array12(view), depth)!
 				}
 				6 {
 					witness := Array12{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?[]Array12(none), depth)!
 				}
 				7 {
 					witness := Array12{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					alias_view := Views12(view)
 					writer.print_value(format, options, ?Views12(alias_view), depth)!
 				}
 				8 {
 					witness := Array12{}
 					view := borrowed(witness, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					writer.print_value(format, options, ?Views12(none), depth)!
 				}
 				else { panic('invalid form') }
@@ -879,11 +879,11 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 
 fn snapshot(status string, writer zigimg.WriteStream, buffer []u8, file bool) string {
 	mut contents := []u8{len: 4096}
-	n := if file { C.witty_writer_seek_view(contents.data, usize(contents.len)) } else { isize(0) }
+	n := if file { C.witty_writer_seek_view(contents.data, uint(contents.len)) } else { int(0) }
 	if n < 0 { panic('observer failed') }
 	valid := if file { C.witty_writer_seek_valid() } else { 0 }
 	unused := writer.unused_capacity_slice()
-	offset := if buffer.len == 0 { usize(0) } else { usize(unused.data) - usize(buffer.data) }
+	offset := if buffer.len == 0 { uint(0) } else { uint(unused.data) - uint(buffer.data) }
 	return '${status}|${writer.get_pos()}:${writer.unused_capacity_len()}:${writer.buffered().len}:${offset}:${valid}|${buffer.hex()}|${writer.buffered().hex()}|${unused.hex()}|${seen}|${contents[..int(n)].hex()}'
 }
 
@@ -924,12 +924,12 @@ fn record(line string, path string) string {
 		writer.flush() or { status = err.msg() }
 	}
 	out += snapshot(status, writer, buffer, kind > 0) + '~'
-	mut drain := isize(-3)
+	mut drain := int(-3)
 	mut wire := []u8{}
 	if kind > 0 && binding == 1 {
 		for {
 			mut bytes := []u8{len: 4096}
-			drain = C.witty_writer_seek_drain(bytes.data, usize(bytes.len))
+			drain = C.witty_writer_seek_drain(bytes.data, uint(bytes.len))
 			if drain <= 0 { break }
 			wire << bytes[..int(drain)]
 		}

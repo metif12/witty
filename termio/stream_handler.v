@@ -186,7 +186,7 @@ pub fn (mut self StreamHandler) vt(action terminal.ActionKey, value terminal.Act
 			}
 		}
 		.print_repeat {
-			if value is usize {
+			if value is uint {
 				self.terminal.print_repeat(value)!
 			}
 		}
@@ -247,7 +247,7 @@ pub fn (mut self StreamHandler) vt(action terminal.ActionKey, value terminal.Act
 		}
 		.cursor_col {
 			if value is terminal.ActionCursorMovement {
-				self.terminal.set_cursor_pos(usize(self.terminal.screens.active.cursor.y) + 1,
+				self.terminal.set_cursor_pos(uint(self.terminal.screens.active.cursor.y) + 1,
 					value.value)
 			}
 		}
@@ -255,7 +255,7 @@ pub fn (mut self StreamHandler) vt(action terminal.ActionKey, value terminal.Act
 			if value is terminal.ActionCursorMovement {
 				self.terminal.set_cursor_pos(value.value,
 
-					usize(self.terminal.screens.active.cursor.x) + 1)
+					uint(self.terminal.screens.active.cursor.x) + 1)
 			}
 		}
 		.cursor_col_relative {
@@ -266,7 +266,7 @@ pub fn (mut self StreamHandler) vt(action terminal.ActionKey, value terminal.Act
 				} else {
 					base + u32(value.value)
 				}
-				self.terminal.set_cursor_pos(usize(self.terminal.screens.active.cursor.y) + 1, col)
+				self.terminal.set_cursor_pos(uint(self.terminal.screens.active.cursor.y) + 1, col)
 			}
 		}
 		.cursor_row_relative {
@@ -277,7 +277,7 @@ pub fn (mut self StreamHandler) vt(action terminal.ActionKey, value terminal.Act
 				} else {
 					base + u32(value.value)
 				}
-				self.terminal.set_cursor_pos(row, usize(self.terminal.screens.active.cursor.x) + 1)
+				self.terminal.set_cursor_pos(row, uint(self.terminal.screens.active.cursor.x) + 1)
 			}
 		}
 		.cursor_style {
@@ -332,37 +332,37 @@ pub fn (mut self StreamHandler) vt(action terminal.ActionKey, value terminal.Act
 			}
 		}
 		.delete_chars {
-			if value is usize {
+			if value is uint {
 				self.terminal.delete_chars(value)
 			}
 		}
 		.erase_chars {
-			if value is usize {
+			if value is uint {
 				self.terminal.erase_chars(value)
 			}
 		}
 		.insert_lines {
-			if value is usize {
+			if value is uint {
 				self.terminal.insert_lines(value)
 			}
 		}
 		.insert_blanks {
-			if value is usize {
+			if value is uint {
 				self.terminal.insert_blanks(value)
 			}
 		}
 		.delete_lines {
-			if value is usize {
+			if value is uint {
 				self.terminal.delete_lines(value)
 			}
 		}
 		.scroll_up {
-			if value is usize {
+			if value is uint {
 				self.terminal.scroll_up(value)!
 			}
 		}
 		.scroll_down {
-			if value is usize {
+			if value is uint {
 				self.terminal.scroll_down(value)
 			}
 		}
@@ -500,7 +500,7 @@ pub fn (mut self StreamHandler) vt(action terminal.ActionKey, value terminal.Act
 		.kitty_keyboard_pop {
 			if value is u16 {
 				log.debug('popping kitty keyboard mode n=${value}')
-				self.terminal.screens.active.kitty_keyboard.pop(usize(value))
+				self.terminal.screens.active.kitty_keyboard.pop(uint(value))
 			}
 		}
 		.kitty_keyboard_set {

@@ -2,29 +2,29 @@ module lib_allocator
 
 struct NativeTraceState {
 mut:
-	calls   usize
-	fail_at usize = ~usize(0)
+	calls   uint
+	fail_at uint = ~uint(0)
 }
 
-fn native_trace_alloc(ctx voidptr, n usize, alignment u8, _ usize) voidptr {
+fn native_trace_alloc(ctx voidptr, n uint, alignment u8, _ uint) voidptr {
 	mut state := unsafe { &NativeTraceState(ctx) }
 	call := state.calls
 	state.calls++
-	println('alloc ${call} ${n} ${usize(1) << alignment}')
+	println('alloc ${call} ${n} ${uint(1) << alignment}')
 	if call == state.fail_at { return unsafe { nil } }
 	return c_allocator.alloc_bytes(n, 12, 0)
 }
 
-fn native_trace_resize(_ voidptr, _ voidptr, _ usize, _ u8, _ usize, _ usize) bool {
+fn native_trace_resize(_ voidptr, _ voidptr, _ uint, _ u8, _ uint, _ uint) bool {
 	return false
 }
 
-fn native_trace_remap(_ voidptr, _ voidptr, _ usize, _ u8, _ usize, _ usize) voidptr {
+fn native_trace_remap(_ voidptr, _ voidptr, _ uint, _ u8, _ uint, _ uint) voidptr {
 	return unsafe { nil }
 }
 
-fn native_trace_free(_ voidptr, ptr voidptr, n usize, alignment u8, _ usize) {
-	println('free ${n} ${usize(1) << alignment}')
+fn native_trace_free(_ voidptr, ptr voidptr, n uint, alignment u8, _ uint) {
+	println('free ${n} ${uint(1) << alignment}')
 	c_allocator.free_bytes(ptr, n, 12, 0)
 }
 
@@ -57,7 +57,7 @@ fn test_original_pool_arena_and_pin_map_trace() ! {
 	state.fail_at = state.calls
 	println('reset ${int(arena.reset(ArenaResetMode{ kind: .retain_capacity }))}')
 	println('capacity ${arena.query_capacity()}')
-	state.fail_at = ~usize(0)
+	state.fail_at = ~uint(0)
 	println('limit ${int(arena.reset(ArenaResetMode{ kind: .retain_with_limit, limit: 1 }))}')
 	arena.deinit()
 	mut set := PointerArraySet[voidptr]{}
@@ -69,7 +69,7 @@ fn test_original_pool_arena_and_pin_map_trace() ! {
 	}
 	mut digest := u64(0)
 	for i, key in set.keys {
-		digest += u64(usize(key)) * u64(i + 1)
+		digest += u64(uint(key)) * u64(i + 1)
 	}
 	println('set ${set.keys.len} ${digest}')
 	set.deinit(allocator)
@@ -79,7 +79,7 @@ fn test_original_pool_arena_and_pin_map_trace() ! {
 	}
 	digest = 0
 	for i in 1 .. 300 {
-		digest += u64(usize(table.get(unsafe { voidptr(i * 16) })?))
+		digest += u64(uint(table.get(unsafe { voidptr(i * 16) })?))
 	}
 	println('map ${table.count()} ${table.capacity()} ${digest}')
 	table.deinit()

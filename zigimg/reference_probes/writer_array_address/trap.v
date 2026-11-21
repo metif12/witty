@@ -22,16 +22,16 @@ fn run() ! {
 	observed_buffer = unsafe { buffer }
 	at_exit(observe)!
 	mut status := 'ok'
-	options := p.FormatOptions{ width: ~usize(0), precision: ~usize(0) }
+	options := p.FormatOptions{ width: ~uint(0), precision: ~uint(0) }
 	match os.args[3] {
 		'0' {
-			w.print_value('*', options, unsafe { &[3]u8(usize(0x1234)) }, 0) or { status = err.msg() }
+			w.print_value('*', options, unsafe { &[3]u8(uint(0x1234)) }, 0) or { status = err.msg() }
 		}
 		'1' {
-			w.print_value('*', options, unsafe { &[2][3]int(usize(0)) }, ~usize(0)) or { status = err.msg() }
+			w.print_value('*', options, unsafe { &[2][3]int(uint(0)) }, ~uint(0)) or { status = err.msg() }
 		}
 		'2' {
-			w.print_value('*', options, unsafe { &[1]f64(~usize(0)) }, 0) or { status = err.msg() }
+			w.print_value('*', options, unsafe { &[1]f64(~uint(0)) }, 0) or { status = err.msg() }
 		}
 		else { panic('invalid control') }
 	}

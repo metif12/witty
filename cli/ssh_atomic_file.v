@@ -21,9 +21,9 @@ $if windows {
 
 fn C.open(&char, int, ...int) int
 fn C.close(int) int
-fn C.write(int, voidptr, usize) isize
-fn C.read(int, voidptr, usize) isize
-fn C.memcpy(voidptr, voidptr, usize) voidptr
+fn C.write(int, voidptr, uint) int
+fn C.read(int, voidptr, uint) int
+fn C.memcpy(voidptr, voidptr, uint) voidptr
 fn C._read(int, voidptr, u32) int
 fn C.openat(int, &char, int, ...int) int
 fn C.renameat(int, &char, int, &char) int
@@ -90,7 +90,7 @@ fn (mut file SshAtomicFile) write(data string) ! {
 	for offset < data.len {
 		if file.end == file.buffer.len { file.flush()! }
 		count := math.min(file.buffer.len - file.end, data.len - offset)
-		unsafe { C.memcpy(&file.buffer[file.end], data.str + offset, usize(count)) }
+		unsafe { C.memcpy(&file.buffer[file.end], data.str + offset, uint(count)) }
 		file.end += count
 		offset += count
 	}
@@ -100,9 +100,9 @@ fn (mut file SshAtomicFile) flush() ! {
 	mut offset := 0
 	for offset < file.end {
 		written := $if windows {
-			isize(C._write(file.fd, unsafe { &file.buffer[offset] }, u32(file.end - offset)))
+			int(C._write(file.fd, unsafe { &file.buffer[offset] }, u32(file.end - offset)))
 		} $else {
-			C.write(file.fd, unsafe { &file.buffer[offset] }, usize(file.end - offset))
+			C.write(file.fd, unsafe { &file.buffer[offset] }, uint(file.end - offset))
 		}
 		if written < 0 {
 			if C.errno == C.EINTR { continue }

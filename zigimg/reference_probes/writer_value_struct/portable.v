@@ -81,7 +81,7 @@ fn check[T](expected string) ! {
 	assert writer.buffered().bytestr() == expected
 	mut cutoff := []u8{len: 16}
 	mut out := zigimg.WriteStream.init_memory(mut cutoff)
-	out.print_value('any', zigimg.FormatOptions{ width: ~usize(0), precision: ~usize(0) }, value, 0)!
+	out.print_value('any', zigimg.FormatOptions{ width: ~uint(0), precision: ~uint(0) }, value, 0)!
 	assert out.buffered().bytestr() == '.{ ... }'
 	mut nested_buffer := []u8{len: 64}
 	mut nested_writer := zigimg.WriteStream.init_memory(mut nested_buffer)

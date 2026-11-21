@@ -85,7 +85,7 @@ fn record(line string, path string) string {
 	observed_buffer = unsafe { buffer }
 	observed_output = unsafe { output }
 	observed_data = unsafe { data }
-	if f[6].u64() > 0 { reader.discard_all(usize(f[6].u64())) or { panic(err) } }
+	if f[6].u64() > 0 { reader.discard_all(uint(f[6].u64())) or { panic(err) } }
 	iface := p.RAS.format_interface()
 	mut out := ''
 	for _ in 0 .. f[7].int() {

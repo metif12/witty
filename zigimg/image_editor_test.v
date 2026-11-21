@@ -17,11 +17,11 @@ fn test_empty_crop_skips_wide_offsets_after_copying_the_active_palette() {
 		a: 99
 	}
 	image := ImageUnmanaged{
-		width:  ~usize(0)
-		height: ~usize(0)
+		width:  ~uint(0)
+		height: ~uint(0)
 		pixels: indexed
 	}
-	cropped := image.crop(Box{ x: ~usize(0), y: ~usize(0) })!
+	cropped := image.crop(Box{ x: ~uint(0), y: ~uint(0) })!
 	assert cropped.width == 0 && cropped.height == 0 && cropped.pixels.len() == 0
 	palette := cropped.pixels.get_palette() or { panic('missing palette') }
 	assert palette == indexed.palette
@@ -31,8 +31,8 @@ fn test_empty_crop_skips_wide_offsets_after_copying_the_active_palette() {
 
 fn test_crop_box_and_zero_pixel_dimensions_keep_native_usize_boundaries() {
 	assert Box{
-		width:  ~usize(0)
-		height: ~usize(0)
+		width:  ~uint(0)
+		height: ~uint(0)
 	}.clamp(8, 9) == Box{
 		width:  8
 		height: 9
@@ -47,17 +47,17 @@ fn test_crop_box_and_zero_pixel_dimensions_keep_native_usize_boundaries() {
 		y: 9
 	}
 	assert Box{
-		x: ~usize(0)
-		y: ~usize(0)
-	}.clamp(~usize(0), ~usize(0)) == Box{
-		x: ~usize(0)
-		y: ~usize(0)
+		x: ~uint(0)
+		y: ~uint(0)
+	}.clamp(~uint(0), ~uint(0)) == Box{
+		x: ~uint(0)
+		y: ~uint(0)
 	}
-	wide := ImageUnmanaged.create(~usize(0), 0, .invalid)!
-	assert wide.width == ~usize(0) && wide.height == 0
+	wide := ImageUnmanaged.create(~uint(0), 0, .invalid)!
+	assert wide.width == ~uint(0) && wide.height == 0
 	assert wide.pixels.len() == 0
-	tall := Image.create(0, ~usize(0), .invalid)!
-	assert tall.width == 0 && tall.height == ~usize(0)
+	tall := Image.create(0, ~uint(0), .invalid)!
+	assert tall.width == 0 && tall.height == ~uint(0)
 	assert tall.pixels.len() == 0
 }
 

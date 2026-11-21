@@ -29,7 +29,7 @@ fn run() ! {
 	observed_buffer = unsafe { buffer }
 	at_exit(observe)!
 	mut status := 'ok'
-	value := [unsafe { &Byte(voidptr(usize(0x1234))) }, unsafe { &Byte(voidptr(usize(0x5678))) }]!
+	value := [unsafe { &Byte(voidptr(uint(0x1234))) }, unsafe { &Byte(voidptr(uint(0x5678))) }]!
 	match os.args[3] {
 		'0' {
 			writer.print_value('any', zigimg.FormatOptions{}, value, 1) or { status = err.msg() }
@@ -49,7 +49,7 @@ fn run() ! {
 			writer.print_value('any', zigimg.FormatOptions{}, value, 0) or { status = err.msg() }
 		}
 		'5' {
-			writer.print_value('any', zigimg.FormatOptions{ width: 6, alignment: .left, fill: `_`, precision: ~usize(0) }, value, 1) or { status = err.msg() }
+			writer.print_value('any', zigimg.FormatOptions{ width: 6, alignment: .left, fill: `_`, precision: ~uint(0) }, value, 1) or { status = err.msg() }
 		}
 		else { panic('invalid control') }
 	}

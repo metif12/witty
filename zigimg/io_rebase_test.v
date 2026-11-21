@@ -6,11 +6,11 @@ import os
 #flag -I @VMODROOT/zigimg/reference_probes
 #include "reference_probes/reader_exclusive/fixture_shims.h"
 
-fn C.witty_reader_exclusive_payload(&char, &u8, usize) int
+fn C.witty_reader_exclusive_payload(&char, &u8, uint) int
 fn C.witty_reader_delimiter_replace(int) int
-fn C.witty_reader_delimiter_seed(usize, usize) int
+fn C.witty_reader_delimiter_seed(uint, uint) int
 fn C.witty_reader_delimiter_cleanup() int
-fn C.witty_reader_delimiter_drain(&u8, usize) isize
+fn C.witty_reader_delimiter_drain(&u8, uint) int
 
 fn test_memory_rebase_keeps_the_original_buffer_and_cursor() {
 	mut bytes := 'abcdef'.bytes()
@@ -62,7 +62,7 @@ fn test_rebase_after_a_failed_streaming_transition_does_not_read_the_pipe() {
 	$if !windows {
 		path := os.join_path(os.temp_dir(), 'witty-rebase-pipe-${os.getpid()}.owned')
 		data := []u8{len: 16, init: u8(index * 37 + 19)}
-		fd := C.witty_reader_exclusive_payload(path.str, data.data, usize(data.len))
+		fd := C.witty_reader_exclusive_payload(path.str, data.data, uint(data.len))
 		assert fd >= 0
 		defer { assert C.witty_reader_delimiter_cleanup() == 0 }
 		mut buffer := []u8{len: 8, init: 165}
@@ -80,7 +80,7 @@ fn test_rebase_after_a_failed_streaming_transition_does_not_read_the_pipe() {
 		assert reader.get_pos() == 1 && reader.buffered() == data[2..8]
 		assert buffer[..6] == data[2..8]
 		mut wire := []u8{len: 8}
-		assert C.witty_reader_delimiter_drain(wire.data, usize(wire.len)) == 3
+		assert C.witty_reader_delimiter_drain(wire.data, uint(wire.len)) == 3
 		assert wire[..3] == []u8{len: 3, init: u8((index + 7) * 31 + 7)}
 	}
 }

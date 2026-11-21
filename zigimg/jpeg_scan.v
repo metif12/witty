@@ -88,16 +88,16 @@ pub fn JpegScan.perform_scan(frame &JpegFrame, restart_interval u16, mut stream 
 	entry := scan.components[0]
 	first := entry or { panic('attempt to use null value') }
 	noninterleaved := scan.component_count == 1 && first.component_id == 1
-	y_step := if noninterleaved { usize(1) } else { frame.vertical_sampling_factor_max }
-	x_step := if noninterleaved { usize(1) } else { frame.horizontal_sampling_factor_max }
-	mut y := usize(0)
-	for y < usize(frame.block_height) {
-		mut x := usize(0)
-		for x < usize(frame.block_width) {
-			mcu_id := jpeg_add_usize(jpeg_mul_usize(y, usize(frame.block_width_actual)), x)
+	y_step := if noninterleaved { uint(1) } else { frame.vertical_sampling_factor_max }
+	x_step := if noninterleaved { uint(1) } else { frame.horizontal_sampling_factor_max }
+	mut y := uint(0)
+	for y < uint(frame.block_height) {
+		mut x := uint(0)
+		for x < uint(frame.block_width) {
+			mcu_id := jpeg_add_usize(jpeg_mul_usize(y, uint(frame.block_width_actual)), x)
 			mut restart := false
 			if restart_interval != 0 {
-				interval := jpeg_mul_usize(jpeg_mul_usize(usize(restart_interval), y_step), x_step)
+				interval := jpeg_mul_usize(jpeg_mul_usize(uint(restart_interval), y_step), x_step)
 				if interval == 0 { panic('division by zero') }
 				restart = mcu_id % interval == 0
 			}
@@ -125,8 +125,8 @@ pub fn JpegScan.perform_scan(frame &JpegFrame, restart_interval u16, mut stream 
 				if component_index < 0 { panic('undefined JPEG scan component') }
 				for v in 0 .. v_max {
 					for h in 0 .. h_max {
-						id := jpeg_add_usize(jpeg_mul_usize(jpeg_add_usize(y, usize(v)),
-							usize(frame.block_width_actual)), jpeg_add_usize(x, usize(h)))
+						id := jpeg_add_usize(jpeg_mul_usize(jpeg_add_usize(y, uint(v)),
+							uint(frame.block_width_actual)), jpeg_add_usize(x, uint(h)))
 						block_index := jpeg_index(id, frame.block_storage.len)
 						if component_index >= 3 {
 							panic('index out of bounds: index ${component_index}, len 3')
@@ -152,14 +152,14 @@ pub fn JpegScan.perform_scan(frame &JpegFrame, restart_interval u16, mut stream 
 }
 
 fn (mut scan JpegScan) dc_table(component JpegScanComponentSpec) {
-	entry := scan.frame.dc_huffman_tables.values[jpeg_index(usize(component.dc_table_selector), 4)]
+	entry := scan.frame.dc_huffman_tables.values[jpeg_index(uint(component.dc_table_selector), 4)]
 	table := entry or { panic('attempt to use null value') }
 
 	scan.reader.set_huffman_table(table)
 }
 
 fn (mut scan JpegScan) ac_table(component JpegScanComponentSpec) {
-	entry := scan.frame.ac_huffman_tables.values[jpeg_index(usize(component.ac_table_selector), 4)]
+	entry := scan.frame.ac_huffman_tables.values[jpeg_index(uint(component.ac_table_selector), 4)]
 	table := entry or { panic('attempt to use null value') }
 
 	scan.reader.set_huffman_table(table)

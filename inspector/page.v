@@ -9,8 +9,8 @@ import terminal
 pub struct PageTreeNodeState {
 pub:
 	page      &terminal.Page
-	index     usize
-	row_range [2]usize
+	index     uint
+	row_range [2]uint
 	active    bool
 	viewport  bool
 }
@@ -76,9 +76,9 @@ pub fn managed_memory(context cimgui.Context, page &terminal.Page) {
 	context.table_setup_column('Capacity', cimgui.table_column_width_fixed, 0)
 	context.table_headers_row()
 	managed_memory_row(context, 'Columns', 'Number of columns in the terminal grid.',
-		usize(page.size.cols), usize(page.capacity.cols))
-	managed_memory_row(context, 'Rows', 'Number of rows in this page.', usize(page.size.rows),
-		usize(page.capacity.rows))
+		uint(page.size.cols), uint(page.capacity.cols))
+	managed_memory_row(context, 'Rows', 'Number of rows in this page.', uint(page.size.rows),
+		uint(page.capacity.rows))
 	managed_memory_row(context, 'Styles', 'Unique text styles (colors, attributes) currently in use.',
 		page.styles.count(), page.styles.capacity())
 	managed_memory_row(context, 'Graphemes', 'Extended grapheme clusters for multi-codepoint characters.',
@@ -91,7 +91,7 @@ pub fn managed_memory(context cimgui.Context, page &terminal.Page) {
 		page.hyperlink_set.count(), page.hyperlink_set.layout.cap)
 }
 
-fn managed_memory_row(context cimgui.Context, label string, help string, used usize, capacity usize) {
+fn managed_memory_row(context cimgui.Context, label string, help string, used uint, capacity uint) {
 	context.table_next_row()
 	context.table_set_column(0)
 	context.text(label)

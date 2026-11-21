@@ -13,8 +13,8 @@ pub:
 
 pub struct TextViewBufferStyle {
 pub:
-	begin usize @[required]
-	end   usize @[required]
+	begin uint @[required]
+	end   uint @[required]
 	style Style @[required]
 }
 
@@ -24,10 +24,10 @@ pub mut:
 	grapheme   []TextViewGrapheme
 	content    string
 	style_list []Style
-	style_map  map[u64]usize
-	rows       usize
-	cols       usize
-	last_cols  usize
+	style_map  map[u64]uint
+	rows       uint
+	cols       uint
+	last_cols  uint
 }
 
 pub fn (mut buffer TextViewBuffer) deinit() {
@@ -45,7 +45,7 @@ pub fn (mut buffer TextViewBuffer) clear() {
 // collections without resetting them; subsequent source reuse is undefined.
 pub fn (mut buffer TextViewBuffer) clear_style() {
 	buffer.style_list = []
-	buffer.style_map = map[u64]usize{}
+	buffer.style_map = map[u64]uint{}
 }
 
 pub fn (mut buffer TextViewBuffer) update_style(style TextViewBufferStyle) ! {
@@ -59,7 +59,7 @@ pub fn (mut buffer TextViewBuffer) update_style(style TextViewBufferStyle) ! {
 	if index == buffer.style_list.len { buffer.style_list << style.style }
 	if style.begin > style.end { panic('integer overflow') }
 	for i := style.begin; i < style.end; i++ {
-		buffer.style_map[u64(i)] = usize(index)
+		buffer.style_map[u64(i)] = uint(index)
 	}
 }
 
@@ -91,22 +91,22 @@ pub fn (mut view TextView) input(key Key) {
 
 pub fn (mut view TextView) draw(win Window, buffer TextViewBuffer) {
 	view.scroll_view.draw(win, ScrollViewContentSize{ cols: buffer.cols, rows: buffer.rows })
-	mut x := usize(0)
-	mut y := usize(0)
-	mut byte_index := usize(0)
+	mut x := uint(0)
+	mut y := uint(0)
+	mut byte_index := uint(0)
 	bounds := view.scroll_view.bounds(win)
 	for index, grapheme in buffer.grapheme {
 		if bounds.above(y) {
 			break
 		}
-		offset := usize(grapheme.offset)
-		length := usize(grapheme.len)
-		if offset > usize(buffer.content.len) || length > usize(buffer.content.len) - offset {
+		offset := uint(grapheme.offset)
+		length := uint(grapheme.len)
+		if offset > uint(buffer.content.len) || length > uint(buffer.content.len) - offset {
 			panic('index out of bounds')
 		}
 		cluster := buffer.content[int(offset)..int(offset + length)]
 		style_byte_index := byte_index
-		byte_index = widget_checked_add(byte_index, usize(cluster.len))
+		byte_index = widget_checked_add(byte_index, uint(cluster.len))
 		if cluster == '\n' {
 			if index == buffer.grapheme.len - 1 {
 				break
@@ -119,13 +119,13 @@ pub fn (mut view TextView) draw(win Window, buffer TextViewBuffer) {
 		}
 		width := win.gwidth(cluster)
 		col := x
-		x = widget_saturating_add(x, usize(width))
+		x = widget_saturating_add(x, uint(width))
 		if !bounds.col_inside(col) {
 			continue
 		}
 		style := if u64(style_byte_index) in buffer.style_map {
 			style_index := buffer.style_map[u64(style_byte_index)]
-			if style_index >= usize(buffer.style_list.len) { panic('index out of bounds') }
+			if style_index >= uint(buffer.style_list.len) { panic('index out of bounds') }
 			buffer.style_list[int(style_index)]
 		} else {
 			Style{}

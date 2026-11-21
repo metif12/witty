@@ -41,7 +41,7 @@ fn trap(mode string) {
 		vaxis.gwidth('a'.repeat(32768) + '\u200d' + 'a'.repeat(32768), .no_zwj)
 	} else if mode == 'trap_span_add' {
 		vaxis.Grapheme{
-			start: ~usize(0)
+			start: ~uint(0)
 			len:   1
 		}.bytes('')
 	} else if mode == 'trap_span_bound' {
@@ -51,7 +51,7 @@ fn trap(mode string) {
 		}.bytes('ab')
 	} else if mode == 'trap_span_start' {
 		vaxis.Grapheme{
-			start: ~usize(0)
+			start: ~uint(0)
 			len:   0
 		}.bytes('ab')
 	} else {
@@ -72,7 +72,7 @@ fn mutate(mut text []u8, spec string) {
 
 fn view(mut out strings.Builder, bytes ?string, text string) {
 	if value := bytes {
-		start := unsafe { usize(value.str) - usize(text.str) }
+		start := unsafe { uint(value.str) - uint(text.str) }
 		out.write_string('${start},${value.len}:${hex.encode(value.bytes())}')
 	} else {
 		out.write_string('none')
@@ -147,13 +147,13 @@ fn main() {
 		mut framework := context.grapheme_iterator(text)
 		for method in [vaxis.GWidthMethod.unicode, .wcwidth, .no_zwj] {
 			vxfw.DrawContext.init(method)
-			if context.string_width(text) != usize(vaxis.gwidth(text, method)) {
+			if context.string_width(text) != uint(vaxis.gwidth(text, method)) {
 				panic('ContextWidthMismatch')
 			}
 		}
 		mut count := 0
-		mut first := usize(0)
-		mut last := usize(0)
+		mut first := uint(0)
+		mut last := uint(0)
 		for {
 			span := iter.next() or { break }
 			alt := other.next() or { panic('FactoryMismatch') }
@@ -164,7 +164,7 @@ fn main() {
 			bytes := span.bytes(text)
 			fw := framework.next() or { panic('ContextIteratorMismatch') }
 			if fw != bytes || unsafe { fw.str != bytes.str } { panic('ContextIteratorMismatch') }
-			borrowed := unsafe { usize(bytes.str) == usize(text.str) + span.start }
+			borrowed := unsafe { uint(bytes.str) == uint(text.str) + span.start }
 			if parts[0] == 'S' {
 				out.write_string('${span.start},${span.len},${int(borrowed)}:${hex.encode(bytes.bytes())};')
 			} else if !borrowed {
@@ -179,11 +179,11 @@ fn main() {
 		}
 		if parts[0] == 'B' {
 			span := vaxis.Grapheme{
-				start: usize(strconv.parse_uint(parts[3], 10, 64) or { panic(err) })
-				len:   usize(strconv.parse_uint(parts[4], 10, 64) or { panic(err) })
+				start: uint(strconv.parse_uint(parts[3], 10, 64) or { panic(err) })
+				len:   uint(strconv.parse_uint(parts[4], 10, 64) or { panic(err) })
 			}
 			bytes := span.bytes(text)
-			borrowed := unsafe { usize(bytes.str) == usize(text.str) + span.start }
+			borrowed := unsafe { uint(bytes.str) == uint(text.str) + span.start }
 			out.write_string('${span.start},${span.len},${int(borrowed)}:${hex.encode(bytes.bytes())}')
 		}
 		if vaxis.first_grapheme_byte_length(text) != int(first) { panic('FirstLengthMismatch') }

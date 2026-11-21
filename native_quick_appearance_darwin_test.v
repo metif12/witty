@@ -54,7 +54,7 @@ fn test_hidden_quick_config_appearance_without_focus_or_tree() {
 	C.witty_config_scope_drain_main()
 	assert (controller.applied_color_scheme or { panic('empty Quick tree did not cache scheme') }) == .light
 	assert quick_appearance_calls == 0
-	mut state := &TermState{ view: quick.view, controller: controller, surface: &apprt.Surface{ core_surface: apprt.CoreSurface{ backend: voidptr(usize(1)) } } }
+	mut state := &TermState{ view: quick.view, controller: controller, surface: &apprt.Surface{ core_surface: apprt.CoreSurface{ backend: voidptr(uint(1)) } } }
 	macos.view_set_userdata(quick.view, voidptr(state))
 	controller.host.replace_tree(macos.NativeSplitTree{ root: macos.native_split_leaf(quick.view) })
 	config.window_theme = .dark

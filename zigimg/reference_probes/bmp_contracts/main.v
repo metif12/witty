@@ -83,7 +83,7 @@ fn make_codec(kind int, width i32, height i32) p.BMP {
 }
 
 fn pixels(format p.PixelFormat, count int, seed int) p.PixelStorage {
-	mut result := p.PixelStorage.init(format, usize(count)) or { panic(err) }
+	mut result := p.PixelStorage.init(format, uint(count)) or { panic(err) }
 	mut raw := result.as_bytes()
 	for i in 0 .. raw.len {
 		raw[i] = u8(if seed == 0 {
@@ -105,8 +105,8 @@ fn write_case(kind int, format p.PixelFormat, width int, height int, seed int, c
 	mut status := 'ok'
 	if kind == 0 {
 		p.BMP.write_image(mut writer, p.ImageUnmanaged{
-			width:  usize(width)
-			height: usize(height)
+			width:  uint(width)
+			height: uint(height)
 			pixels: data
 		}, p.BmpEncoderOptions{}) or { status = err.msg() }
 	} else {
@@ -172,8 +172,8 @@ fn main() {
 			mut status := 'ok'
 			if os.args[1] == '--image' {
 				p.BMP.write_image(mut writer, p.ImageUnmanaged{
-					width:  usize(os.args[4].u64())
-					height: usize(os.args[5].u64())
+					width:  uint(os.args[4].u64())
+					height: uint(os.args[5].u64())
 					pixels: data
 				}, p.BmpEncoderOptions{}) or { status = err.msg() }
 			} else {

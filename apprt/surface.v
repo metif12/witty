@@ -142,13 +142,13 @@ pub:
 // Search progress update
 pub struct SurfaceMessageSearchTotal {
 pub:
-	total ?usize
+	total ?uint
 }
 
 // Selected search index change
 pub struct SurfaceMessageSearchSelected {
 pub:
-	selected ?usize
+	selected ?uint
 }
 
 // The message types that can be sent to a single surface: the source's

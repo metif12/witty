@@ -58,7 +58,7 @@ fn test_parser_uses_pinned_utf8_replacement_and_byte_consumption() {
 	for bytes in [[u8(0x80)], [u8(0xe2), 0x82], [u8(0xe2), `x`],
 		[u8(0xed), 0xa0]] {
 		result := parser.parse(bytes, false)!
-		assert result.n == usize(bytes.len)
+		assert result.n == uint(bytes.len)
 		key := parser_key(result)
 		assert key.codepoint == 0xfffd
 		assert (key.text or { '' }).bytes() == bytes

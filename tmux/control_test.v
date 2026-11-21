@@ -128,7 +128,7 @@ fn test_tmux_output_pane_id_above_i32() {
 	feed_string_none(mut c, '%output %4294967295 data')
 	if n := put_byte(mut c, `\n`) {
 		if n is NotifOutput {
-			assert n.pane_id == usize(4294967295)
+			assert n.pane_id == uint(4294967295)
 			assert n.data == 'data'
 			return
 		}

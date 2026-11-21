@@ -9,7 +9,7 @@ fn test_original_page_list_pool_trace() ! {
 		buffers << pool.pages.create()!
 	}
 	pool.pages.destroy(buffers[2])
-	println('reuse=${int(pool.pages.create()! == buffers[2])} aligned=${int(usize(buffers[0]) % page_memory_alignment() == 0)}')
+	println('reuse=${int(pool.pages.create()! == buffers[2])} aligned=${int(uint(buffers[0]) % page_memory_alignment() == 0)}')
 	println('capacity=${pool.pages.arena.query_capacity()}')
 	pool.deinit()
 	mut list := PageList.init(80, 24, none)!

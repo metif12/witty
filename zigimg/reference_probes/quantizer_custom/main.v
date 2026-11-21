@@ -142,7 +142,7 @@ fn node_run[T](mut out strings.Builder, value T, f []string) {
 	} else {
 		index := q.root_node.get_palette_index(value, f[5].i32()) or {
 			status = err.msg()
-			usize(0)
+			uint(0)
 		}
 		if status == 'ok' { status = 'index:${index}' }
 	}

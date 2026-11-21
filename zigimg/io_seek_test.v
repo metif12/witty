@@ -7,10 +7,10 @@ import os
 
 fn C.witty_stream_seek_setup(&char) int
 fn C.witty_stream_seek_replace(int) int
-fn C.witty_stream_seek_seed(usize, usize) int
+fn C.witty_stream_seek_seed(uint, uint) int
 fn C.witty_stream_seek_shutdown() int
 fn C.witty_stream_seek_cleanup() int
-fn C.witty_stream_seek_drain(&u8, usize) isize
+fn C.witty_stream_seek_drain(&u8, uint) int
 
 fn seek_reader_success_case(target u64) ! {
 	path := os.join_path(os.temp_dir(), 'witty-seek-${os.getpid()}.owned')
@@ -32,7 +32,7 @@ fn seek_reader_success_case(target u64) ! {
 	assert reader.take_byte()! == u8(expected * 31 + 7)
 	assert reader.get_pos() == expected + 1 && reader.buffered_len() == 7
 	mut queued := []u8{len: 64}
-	n := C.witty_stream_seek_drain(queued.data, usize(queued.len))
+	n := C.witty_stream_seek_drain(queued.data, uint(queued.len))
 	assert n == 32 - int(expected) - 8
 	assert queued[..int(n)] == []u8{len: int(n), init: u8((index + int(expected) + 8) * 31 + 7)}
 }
@@ -69,7 +69,7 @@ fn seek_reader_incomplete_case(closed bool) ! {
 	if !closed { assert C.witty_stream_seek_seed(9, 4) == 0
 	 }
 	mut queued := []u8{len: 64}
-	n := C.witty_stream_seek_drain(queued.data, usize(queued.len))
+	n := C.witty_stream_seek_drain(queued.data, uint(queued.len))
 	assert n == if closed {
 		0
 	} else {

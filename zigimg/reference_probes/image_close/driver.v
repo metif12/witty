@@ -13,7 +13,7 @@ fn C.witty_image_close_valid(int) int
 fn C.witty_image_close_refs(int) int
 fn C.witty_image_close_kind(int) int
 fn C.witty_image_close_flags(int) int
-fn C.witty_image_close_bytes(int, int, &u8, usize) isize
+fn C.witty_image_close_bytes(int, int, &u8, uint) int
 
 __global (
 	close_state   string
@@ -36,7 +36,7 @@ fn close_snapshot(drain bool) string {
 		if close_kind == 1 {
 			for {
 				n := C.witty_image_close_bytes(close_keeper, close_kind, bytes.data,
-					usize(bytes.len))
+					uint(bytes.len))
 				if n <= 0 {
 					close_drain = int(n)
 					break
@@ -44,7 +44,7 @@ fn close_snapshot(drain bool) string {
 				close_wire << bytes[..int(n)]
 			}
 		} else {
-			n := C.witty_image_close_bytes(close_keeper, close_kind, bytes.data, usize(bytes.len))
+			n := C.witty_image_close_bytes(close_keeper, close_kind, bytes.data, uint(bytes.len))
 			if n < 0 { panic('Observer read failed') }
 			close_wire = bytes[..int(n)].clone()
 			close_drain = 0

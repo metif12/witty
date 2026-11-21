@@ -469,7 +469,7 @@ pub struct SelectTabLast {}
 
 pub struct SelectTabN {
 pub:
-	n usize
+	n uint
 }
 
 pub type SelectTab = SelectTabLast | SelectTabN | SelectTabNext | SelectTabPrevious
@@ -1218,7 +1218,7 @@ fn window_action_cb(action GSimpleAction, parameter GVariant, data voidptr) {
 				log.warn('win.close-tab called without a parameter')
 				return
 			}
-			mut length := usize(0)
+			mut length := uint(0)
 			value := C.g_variant_get_string(parameter, &length)
 			if isnil(value) {
 				log.warn('invalid mode provided to win.close-tab')
@@ -1619,7 +1619,7 @@ pub fn (mut self Window) select_tab(selection SelectTab) bool {
 			if selection.n == 0 {
 				return false
 			}
-			if selection.n > usize(2147483647) {
+			if selection.n > uint(2147483647) {
 				return false
 			}
 			n_int := int(selection.n)
@@ -1648,7 +1648,7 @@ pub fn (mut self Window) select_tab(selection SelectTab) bool {
 // move_tab moves the tab containing the given surface by the given amount.
 // Returns whether this affected any tab positioning. Mirrors `moveTab`. The
 // wrap-around position arithmetic is fully translated.
-pub fn (mut self Window) move_tab(surface &Surface, amount isize) bool {
+pub fn (mut self Window) move_tab(surface &Surface, amount int) bool {
 	tab_view := self.tab_view
 
 	// If we have one tab we never move.
@@ -1670,7 +1670,7 @@ pub fn (mut self Window) move_tab(surface &Surface, amount isize) bool {
 	pos := adw_tab_view_get_page_position(tab_view, page)
 
 	// Move it (with wrap-around).
-	initial := int(isize(pos) + amount)
+	initial := int(int(pos) + amount)
 	max := total - 1
 	desired_pos := if initial < 0 {
 		max + initial + 1

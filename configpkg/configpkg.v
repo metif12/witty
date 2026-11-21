@@ -4368,7 +4368,7 @@ pub fn (c ColorList) cval() CConfigColorList {
 		} else {
 			unsafe { &CConfigColor(c.colors_c.data) }
 		}
-		len: usize(c.colors_c.len)
+		len: uint(c.colors_c.len)
 	}
 }
 
@@ -4840,11 +4840,11 @@ pub fn (mut k Keybinds) init() {
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKeyPhysical{ key: key }
 			mods: index_mods
-		}, inputpkg.ActionGotoTab{ value: usize(u64(i + 1)) }, flags)
+		}, inputpkg.ActionGotoTab{ value: uint(u64(i + 1)) }, flags)
 		k.set.put_flags(inputpkg.Trigger{
 			key: inputpkg.TriggerKeyUnicode{ codepoint: u32(`1`) + u32(i) }
 			mods: index_mods
-		}, inputpkg.ActionGotoTab{ value: usize(u64(i + 1)) }, flags)
+		}, inputpkg.ActionGotoTab{ value: uint(u64(i + 1)) }, flags)
 	}
 	last_tab_performable := $if macos { false } $else { true }
 	k.set.put_flags(inputpkg.Trigger{
@@ -5743,7 +5743,7 @@ pub fn (r RepeatableCommand) cval() CConfigCommandList {
 		} else {
 			unsafe { &inputpkg.CCommand(r.items_c.data) }
 		}
-		len: usize(r.items_c.len)
+		len: uint(r.items_c.len)
 	}
 }
 
@@ -7084,8 +7084,8 @@ pub fn (d Duration) as_milliseconds() u32 {
 }
 
 @[markused]
-pub fn (d Duration) cval() usize {
-	return usize(d.as_milliseconds())
+pub fn (d Duration) cval() uint {
+	return uint(d.as_milliseconds())
 }
 
 // NotifyOnCommandFinish controls when command-finished notifications are sent.

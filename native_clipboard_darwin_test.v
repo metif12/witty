@@ -12,7 +12,7 @@ import os
 fn C.witty_clipboard_begin()
 fn C.witty_clipboard_end()
 fn C.witty_clipboard_clear()
-fn C.witty_clipboard_text(bytes &char, length usize)
+fn C.witty_clipboard_text(bytes &char, length uint)
 fn C.witty_clipboard_urls(scenario int)
 fn C.witty_clipboard_type() &char
 fn C.witty_clipboard_has_type(type_ &char) bool
@@ -47,7 +47,7 @@ fn clipboard_c_string(value &char) string {
 }
 
 fn clipboard_fixture_text(value string) {
-	C.witty_clipboard_text(&char(value.str), usize(value.len))
+	C.witty_clipboard_text(&char(value.str), uint(value.len))
 }
 
 fn test_native_clipboard_source_consumers_and_isolated_pasteboard() {
@@ -58,7 +58,7 @@ fn test_native_clipboard_source_consumers_and_isolated_pasteboard() {
 		core.install_embedded_bridge()
 		C.witty_clipboard_end()
 	}
-	mut state := &TermState{ surface: &apprt.Surface{ app: &apprt.App{}, core_surface: apprt.CoreSurface{ backend: voidptr(usize(1)) } } }
+	mut state := &TermState{ surface: &apprt.Surface{ app: &apprt.App{}, core_surface: apprt.CoreSurface{ backend: voidptr(uint(1)) } } }
 	mut records := []ClipboardProbeRecord{}
 	for scenario, name in ['empty', 'text', 'file', 'file-and-text', 'web', 'mixed'] {
 		C.witty_clipboard_clear()

@@ -30,8 +30,8 @@ pub fn (mut animation Animation) deinit() {
 
 pub struct ImageUnmanaged {
 pub mut:
-	width     usize
-	height    usize
+	width     uint
+	height    uint
 	pixels    PixelStorage = InvalidPixels{}
 	animation Animation
 }
@@ -51,7 +51,7 @@ pub fn (image ImageUnmanaged) to_managed() Image {
 	}
 }
 
-pub fn ImageUnmanaged.from_raw_pixels_owned(width usize, height usize, bytes []u8, format PixelFormat) !ImageUnmanaged {
+pub fn ImageUnmanaged.from_raw_pixels_owned(width uint, height uint, bytes []u8, format PixelFormat) !ImageUnmanaged {
 	return ImageUnmanaged{
 		width:  width
 		height: height
@@ -59,11 +59,11 @@ pub fn ImageUnmanaged.from_raw_pixels_owned(width usize, height usize, bytes []u
 	}
 }
 
-pub fn ImageUnmanaged.from_raw_pixels(width usize, height usize, bytes []u8, format PixelFormat) !ImageUnmanaged {
+pub fn ImageUnmanaged.from_raw_pixels(width uint, height uint, bytes []u8, format PixelFormat) !ImageUnmanaged {
 	return ImageUnmanaged.from_raw_pixels_owned(width, height, bytes.clone(), format)
 }
 
-pub fn ImageUnmanaged.create(width usize, height usize, format PixelFormat) !ImageUnmanaged {
+pub fn ImageUnmanaged.create(width uint, height uint, format PixelFormat) !ImageUnmanaged {
 	return ImageUnmanaged{
 		width:  width
 		height: height
@@ -71,8 +71,8 @@ pub fn ImageUnmanaged.create(width usize, height usize, format PixelFormat) !Ima
 	}
 }
 
-fn image_pixel_count(width usize, height usize) usize {
-	if height != 0 && width > ~usize(0) / height {
+fn image_pixel_count(width uint, height uint) uint {
+	if height != 0 && width > ~uint(0) / height {
 		panic('integer overflow')
 	}
 	return width * height
@@ -86,11 +86,11 @@ pub fn (image ImageUnmanaged) raw_bytes() []u8 {
 	return image.pixels.as_bytes()
 }
 
-pub fn (image ImageUnmanaged) image_byte_size() usize {
-	return usize(image.raw_bytes().len)
+pub fn (image ImageUnmanaged) image_byte_size() uint {
+	return uint(image.raw_bytes().len)
 }
 
-pub fn (image ImageUnmanaged) row_byte_size() usize {
+pub fn (image ImageUnmanaged) row_byte_size() uint {
 	size := image.image_byte_size()
 	if image.height == 0 { panic('division by zero') }
 	return size / image.height

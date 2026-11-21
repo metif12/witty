@@ -123,18 +123,18 @@ fn window_u8_cast(value u16) u8 {
 	return u8(value)
 }
 
-fn window_usize_add(first usize, second usize) usize {
-	if second > ~usize(0) - first { panic('integer overflow') }
+fn window_usize_add(first uint, second uint) uint {
+	if second > ~uint(0) - first { panic('integer overflow') }
 	return first + second
 }
 
-fn window_usize_sub(first usize, second usize) usize {
+fn window_usize_sub(first uint, second uint) uint {
 	if second > first { panic('integer overflow') }
 	return first - second
 }
 
-fn window_usize_mul(first usize, second usize) usize {
-	if first != 0 && second > ~usize(0) / first { panic('integer overflow') }
+fn window_usize_mul(first uint, second uint) uint {
+	if first != 0 && second > ~uint(0) / first { panic('integer overflow') }
 	return first * second
 }
 
@@ -314,22 +314,22 @@ pub fn (w Window) fill(cell Cell) {
 		return
 	}
 	mut screen := unsafe { w.screen }
-	first_row := usize(max_int(w.y_off, 0))
-	buffer_len := usize(w.screen.buf.len)
+	first_row := uint(max_int(w.y_off, 0))
+	buffer_len := uint(w.screen.buf.len)
 	if w.x_off == 0 && w.width == w.screen.width {
-		start := min_usize(window_usize_mul(first_row, usize(w.width)), buffer_len)
-		fill_end := min_usize(window_usize_add(start, window_usize_mul(usize(w.height),
-			usize(w.width))), buffer_len)
+		start := min_usize(window_usize_mul(first_row, uint(w.width)), buffer_len)
+		fill_end := min_usize(window_usize_add(start, window_usize_mul(uint(w.height),
+			uint(w.width))), buffer_len)
 		for i in int(start) .. int(fill_end) {
 			screen.buf[i] = cell
 		}
 	} else {
-		first_col := usize(max_int(w.x_off, 0))
+		first_col := uint(max_int(w.x_off, 0))
 		last_row := min_int(window_i17_add(int(w.height), w.y_off), int(w.screen.height))
-		for row := first_row; row < usize(last_row); row++ {
+		for row := first_row; row < uint(last_row); row++ {
 			start := min_usize(window_usize_add(first_col, window_usize_mul(row,
-				usize(w.screen.width))), buffer_len)
-			mut fill_end := min_usize(window_usize_add(start, usize(w.width)), window_usize_add(start, window_usize_sub(usize(w.screen.width),
+				uint(w.screen.width))), buffer_len)
+			mut fill_end := min_usize(window_usize_add(start, uint(w.width)), window_usize_add(start, window_usize_sub(uint(w.screen.width),
 				first_col)))
 			fill_end = min_usize(fill_end, buffer_len)
 			for i in int(start) .. int(fill_end) {
@@ -339,7 +339,7 @@ pub fn (w Window) fill(cell Cell) {
 	}
 }
 
-fn min_usize(first usize, second usize) usize {
+fn min_usize(first uint, second uint) uint {
 	return if first < second { first } else { second }
 }
 

@@ -117,7 +117,7 @@ type HashUnion = HashNoPayload | HashPayload
 fn test_auto_hash_source_categories() {
 	value := u32(0x11223344)
 	ptr := &value
-	assert auto_hash_bytes(ptr) == auto_hash_bytes(usize(ptr))
+	assert auto_hash_bytes(ptr) == auto_hash_bytes(uint(ptr))
 	fixed := [u16(0x1122), u16(0x3344)]!
 	assert auto_hash_bytes(fixed) == [u8(0x22), 0x11, 0x44, 0x33]
 	present := ?u32(value)
@@ -229,7 +229,7 @@ type SourceHashFunction = fn (u32) u32
 fn test_auto_hash_function_addresses_and_shallow_nested_slices() {
 	first := SourceHashFunction(hash_function_first)
 	second := SourceHashFunction(hash_function_second)
-	assert auto_hash_bytes(first) == auto_hash_bytes(usize(voidptr(first)))
+	assert auto_hash_bytes(first) == auto_hash_bytes(uint(voidptr(first)))
 	assert auto_hash_eql(first, first)
 	assert !auto_hash_eql(first, second)
 	text := 'identity'

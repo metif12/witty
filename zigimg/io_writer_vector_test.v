@@ -6,7 +6,7 @@ type VectorWords = [3]VectorByte
 fn test_vector_forwards_numeric_formats_and_leaf_options() {
 	mut buffer := []u8{len: 256}
 	mut writer := WriteStream.init_memory(mut buffer)
-	writer.print_vector('X', FormatOptions{ width: usize(4), fill: `_` }, VectorWords([
+	writer.print_vector('X', FormatOptions{ width: uint(4), fill: `_` }, VectorWords([
 		VectorByte(1),
 		127,
 		255,
@@ -28,7 +28,7 @@ fn test_vector_bytes_are_lanes_and_do_not_change_array_formatting() {
 fn test_vector_depth_cutoff_ignores_format_and_options_at_runtime() {
 	mut buffer := []u8{len: 128}
 	mut writer := WriteStream.init_memory(mut buffer)
-	writer.print_vector('unsupported', FormatOptions{ width: ~usize(0), precision: ~usize(0) }, [
+	writer.print_vector('unsupported', FormatOptions{ width: ~uint(0), precision: ~uint(0) }, [
 		true,
 		false,
 	]!, 0)!
@@ -45,9 +45,9 @@ fn test_vector_depth_cutoff_ignores_format_and_options_at_runtime() {
 fn test_vector_boolean_float_and_direct_character_formats() {
 	mut buffer := []u8{len: 256}
 	mut writer := WriteStream.init_memory(mut buffer)
-	writer.print_vector('any', FormatOptions{ width: usize(6), fill: `_` }, [true, false]!, 1)!
+	writer.print_vector('any', FormatOptions{ width: uint(6), fill: `_` }, [true, false]!, 1)!
 	writer.write_byte(`|`)!
-	writer.print_vector('d', FormatOptions{ precision: usize(1) }, [f32(1.25), -2.5]!, 1)!
+	writer.print_vector('d', FormatOptions{ precision: uint(1) }, [f32(1.25), -2.5]!, 1)!
 	writer.write_byte(`|`)!
 	writer.print_vector('X', FormatOptions{}, [f64(1.5), -2.5]!, 1)!
 	writer.write_byte(`|`)!

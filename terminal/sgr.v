@@ -346,12 +346,12 @@ pub struct SgrParser {
 pub mut:
 	params     []u16
 	params_sep SepList
-	idx        usize
+	idx        uint
 }
 
 // next returns the next attribute or none if there are no more attributes.
 pub fn (mut self SgrParser) next() ?SgrAttribute {
-	if self.idx >= usize(self.params.len) {
+	if self.idx >= uint(self.params.len) {
 		// Add one to ensure we don't loop on unset
 		defer {
 			self.idx += 1
@@ -388,10 +388,10 @@ pub fn (mut self SgrParser) next() ?SgrAttribute {
 					self.idx += 1
 				}
 				self.idx += 1
-				partial_len := if self.idx - start + 1 < usize(slice.len) {
+				partial_len := if self.idx - start + 1 < uint(slice.len) {
 					self.idx - start + 1
 				} else {
-					usize(slice.len)
+					uint(slice.len)
 				}
 				return SgrUnknown{
 					full:    self.params
@@ -668,10 +668,10 @@ fn (self &SgrParser) is_colon() bool {
 	return self.params_sep.is_set(self.idx)
 }
 
-fn (self &SgrParser) count_colon() usize {
-	mut count := usize(0)
+fn (self &SgrParser) count_colon() uint {
+	mut count := uint(0)
 	mut idx := self.idx
-	for idx < usize(self.params.len - 1) && self.params_sep.is_set(idx) {
+	for idx < uint(self.params.len - 1) && self.params_sep.is_set(idx) {
 		count += 1
 		idx += 1
 	}

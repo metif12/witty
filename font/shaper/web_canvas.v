@@ -178,7 +178,7 @@ pub fn (self WebCanvasRunIteratorHook) finalize() {
 }
 
 // shaper_new creates an owned shaper for browser hosts.
-pub fn shaper_new(cap usize) ?&WebCanvasShaper {
+pub fn shaper_new(cap uint) ?&WebCanvasShaper {
 	mut shaper := WebCanvasShaper.init(font.ShaperOptions{}) or { return none }
 	shaper.cell_buf = []font.ShapeCell{cap: int(cap)}
 	mut result := &WebCanvasShaper{}

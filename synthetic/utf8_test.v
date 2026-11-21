@@ -72,8 +72,8 @@ fn test_utf8_generator_preserves_pointer_width_limits() {
 	mut rng := rand.new_default(seed_: [u32(8), 0])
 	defer { rng.free() }
 	mut value := Utf8.init(rng)
-	assert value.max_len == ~usize(0)
-	value.min_len = usize(2147483647) + 1
+	assert value.max_len == ~uint(0)
+	value.min_len = uint(2147483647) + 1
 	result := value.next(8)!
 	assert result.len == 8
 	assert validate.utf8_data(result.data, result.len)

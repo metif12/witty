@@ -49,7 +49,7 @@ fn test_search_thread_processes_messages_asynchronously() ! {
 
 	_ = worker.mailbox.push(MessageChangeNeedle{ needle: datastruct.MessageData.init[u8](255, 'world'.bytes()) }, datastruct.blocking_queue_forever)
 	worker.wakeup.notify()!
-	mut total := usize(0)
+	mut total := uint(0)
 	mut complete := false
 	for !complete {
 		select {

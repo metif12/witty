@@ -7,7 +7,7 @@ fn test_page_caller_buffer_and_memcpy_relocation_own_all_storage() ! {
 	cap := PageCapacity{ cols: 4, rows: 2, styles: 16 }
 	layout := Page.layout(cap)
 	mut alignment := u8(0)
-	for (usize(1) << alignment) < page_memory_alignment() { alignment++ }
+	for (uint(1) << alignment) < page_memory_alignment() { alignment++ }
 	backing := allocator.alloc_bytes(layout.total_size, alignment, 0)
 	assert !isnil(backing)
 	defer { allocator.free_bytes(backing, layout.total_size, alignment, 0) }
@@ -30,9 +30,9 @@ fn test_page_caller_buffer_and_memcpy_relocation_own_all_storage() ! {
 	source.append_grapheme(0, 0, 0x301)!
 	link_id := source.insert_hyperlink(Hyperlink{ id: HyperlinkImplicitId{ offset: 0x11223344 }, uri: 'https://example.com' })!
 	source.set_hyperlink(0, 0, link_id)!
-	assert usize(source.styles.set.items_offset.ptr(source.styles.base)) >= usize(backing)
-	assert usize(source.hyperlink_set.string_alloc.chunks.data) < usize(backing) + layout.total_size
-	assert usize(source.grapheme_alloc.chunks.data) < usize(backing) + layout.total_size
+	assert uint(source.styles.set.items_offset.ptr(source.styles.base)) >= uint(backing)
+	assert uint(source.hyperlink_set.string_alloc.chunks.data) < uint(backing) + layout.total_size
+	assert uint(source.grapheme_alloc.chunks.data) < uint(backing) + layout.total_size
 	clone_backing := allocator.alloc_bytes(layout.total_size, alignment, 0)
 	assert !isnil(clone_backing)
 	defer { allocator.free_bytes(clone_backing, layout.total_size, alignment, 0) }
@@ -67,7 +67,7 @@ fn test_page_native_mmap_error_and_packed_sizes() {
 	assert sizeof(StoredHyperlink) == 40
 	assert sizeof(GenericRefSetItem[StoredStyle, u16, u16]) == 36
 	assert sizeof(GenericRefSetItem[StoredHyperlink, u16, u16]) == 48
-	assert isnil(C.witty_page_mmap(~usize(0)))
+	assert isnil(C.witty_page_mmap(~uint(0)))
 }
 
 fn test_page_cell_union_members_have_original_bit_widths() {

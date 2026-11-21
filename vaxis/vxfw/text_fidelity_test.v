@@ -10,18 +10,18 @@ fn test_text_line_adapter_keeps_borrowed_views_and_usize_state() {
 	}
 	first := iter.next() or { panic('first line') }
 	assert first == 'a'
-	assert usize(first.str) == usize(data.data)
+	assert uint(first.str) == uint(data.data)
 	assert iter.index == 3
 	data[0] = `x`
 	data[3] = `y`
 	assert first == 'x'
 	second := iter.next() or { panic('second line') }
 	assert second == 'y'
-	assert usize(second.str) == usize(data.data) + 3
+	assert uint(second.str) == uint(data.data) + 3
 	assert iter.next() or { panic('third line') } == 'c'
 	assert iter.next() == none
 	assert iter.next() == none
-	iter.index = ~usize(0)
+	iter.index = ~uint(0)
 	assert iter.next() == none
 }
 
@@ -37,13 +37,13 @@ fn test_text_softwrap_adapter_borrows_trimmed_words_and_public_state() {
 		cell_size: Size{}
 	}
 	mut iter := SoftwrapIterator.new(input, ctx)
-	assert usize(iter.hard_iter.buf.str) == usize(data.data)
+	assert uint(iter.hard_iter.buf.str) == uint(data.data)
 	first := iter.next() or { panic('first line') }
 	assert first == WrappedLine{
 		width: 2
 		bytes: 'ab'
 	}
-	assert usize(first.bytes.str) == usize(data.data)
+	assert uint(first.bytes.str) == uint(data.data)
 	assert iter.index == 3
 	assert iter.line == 'ab cd'
 	data[0] = `x`
@@ -54,7 +54,7 @@ fn test_text_softwrap_adapter_borrows_trimmed_words_and_public_state() {
 		width: 2
 		bytes: 'yd'
 	}
-	assert usize(second.bytes.str) == usize(data.data) + 3
+	assert uint(second.bytes.str) == uint(data.data) + 3
 	assert iter.next() == none
 	assert iter.next() == none
 }
@@ -83,8 +83,8 @@ fn test_text_public_draw_keeps_cell_graphemes_borrowed() {
 		height: 2
 	}
 	assert surface.widget.eql(text.widget())
-	assert usize(surface.read_cell(0, 0).char_.grapheme.str) == usize(data.data)
-	assert usize(surface.read_cell(0, 1).char_.grapheme.str) == usize(data.data) + 3
+	assert uint(surface.read_cell(0, 0).char_.grapheme.str) == uint(data.data)
+	assert uint(surface.read_cell(0, 1).char_.grapheme.str) == uint(data.data) + 3
 	data[0] = `x`
 	data[3] = `y`
 	assert surface.read_cell(0, 0).char_.grapheme == 'x'

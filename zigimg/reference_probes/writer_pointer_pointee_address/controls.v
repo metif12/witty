@@ -31,7 +31,7 @@ type Nested3 = [2][3]&Base3
 type Single3 = [3]Element3
 type Slice3 = []Element3
 type OptionalSlice3 = []?&Base3
-type Base4 = usize
+type Base4 = uint
 type Element4 = &Base4
 type Flat4 = [3]&Base4
 type Nested4 = [2][3]&Base4
@@ -66,7 +66,7 @@ type Nested8 = [2][3]&Base8
 type Single8 = [3]Element8
 type Slice8 = []Element8
 type OptionalSlice8 = []?&Base8
-type Base9 = isize
+type Base9 = int
 type Element9 = &Base9
 type Flat9 = [3]&Base9
 type Nested9 = [2][3]&Base9
@@ -110,7 +110,7 @@ struct Args {
 	value []Flat0
 }
 
-fn borrowed[E](_ E, raw usize, length int) []E {
+fn borrowed[E](_ E, raw uint, length int) []E {
 	return unsafe { array{ data: voidptr(raw), len: length, cap: length, flags: .nofree, element_size: int(sizeof(E)) } }
 }
 

@@ -20,11 +20,11 @@ pub fn IndexedStorage.palette_size[T]() u64 {
 	}
 }
 
-pub fn IndexedStorage.init[T](pixel_count usize) IndexedStorage[T] {
-	return IndexedStorage.init_palette_size[T](pixel_count, usize(IndexedStorage.palette_size[T]()))
+pub fn IndexedStorage.init[T](pixel_count uint) IndexedStorage[T] {
+	return IndexedStorage.init_palette_size[T](pixel_count, uint(IndexedStorage.palette_size[T]()))
 }
 
-pub fn IndexedStorage.init_palette_size[T](pixel_count usize, palette_size usize) IndexedStorage[T] {
+pub fn IndexedStorage.init_palette_size[T](pixel_count uint, palette_size uint) IndexedStorage[T] {
 	capacity := IndexedStorage.palette_size[T]()
 	if u64(palette_size) > capacity { panic('reached unreachable code') }
 	// Source can describe allocations beyond V's signed array-length carrier.
@@ -45,7 +45,7 @@ pub fn IndexedStorage.init_palette_size[T](pixel_count usize, palette_size usize
 
 // Static calls let records with other index types exist without instantiating
 // palette arithmetic in V's eagerly checked generic receiver methods.
-pub fn IndexedStorage.resize_palette[T](mut storage IndexedStorage[T], size usize) {
+pub fn IndexedStorage.resize_palette[T](mut storage IndexedStorage[T], size uint) {
 	if u64(size) > IndexedStorage.palette_size[T]() { panic('reached unreachable code') }
 	if size > 0x7fffffff { panic('indexed storage exceeds V array length') }
 	unsafe {
@@ -58,23 +58,23 @@ pub fn (storage IndexedStorage[T]) deinit() {
 	// V's GC owns those allocations.
 }
 
-pub fn IndexedStorage1.palette_size() usize {
+pub fn IndexedStorage1.palette_size() uint {
 	return 2
 }
 
-pub fn IndexedStorage2.palette_size() usize {
+pub fn IndexedStorage2.palette_size() uint {
 	return 4
 }
 
-pub fn IndexedStorage4.palette_size() usize {
+pub fn IndexedStorage4.palette_size() uint {
 	return 16
 }
 
-pub fn IndexedStorage8.palette_size() usize {
+pub fn IndexedStorage8.palette_size() uint {
 	return 256
 }
 
-pub fn IndexedStorage16.palette_size() usize {
+pub fn IndexedStorage16.palette_size() uint {
 	return 65536
 }
 

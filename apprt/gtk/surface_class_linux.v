@@ -155,7 +155,7 @@ struct C.GSList {
 
 fn C.gtk_drop_target_new(type_ GType, actions u32) GtkDropTarget
 
-fn C.gtk_drop_target_set_gtypes(target GtkDropTarget, types &GType, n_types usize)
+fn C.gtk_drop_target_set_gtypes(target GtkDropTarget, types &GType, n_types uint)
 
 fn C.gdk_file_list_get_type() GType
 
@@ -302,7 +302,7 @@ fn C.gdk_content_formats_contain_gtype(formats GdkContentFormats, type_ GType) b
 
 fn C.gdk_content_provider_new_for_bytes(mime_type &char, bytes GBytes) GdkContentProvider
 
-fn C.gdk_content_provider_new_union(providers &GdkContentProvider, n_providers usize) GdkContentProvider
+fn C.gdk_content_provider_new_union(providers &GdkContentProvider, n_providers uint) GdkContentProvider
 
 fn C.adw_bin_new() AdwBin
 
@@ -1696,7 +1696,7 @@ pub fn (self &SurfaceWidget) send_desktop_notification(title string, body string
 		object_unref(GObject(icon))
 	}
 
-	pointer := C.g_variant_new_uint64(u64(usize(voidptr(self.core_surface))))
+	pointer := C.g_variant_new_uint64(u64(uint(voidptr(self.core_surface))))
 	C.g_notification_set_default_action_and_target_value(notification, c'app.present-surface', pointer)
 	C.g_application_send_notification(self.app.obj, &char(body.str), notification)
 }
@@ -1849,7 +1849,7 @@ fn (mut self SurfaceWidget) init_cgroup() {
 		return
 	}
 	base := self.app.cgroup_base() or { return }
-	name := 'surfaces/${usize(voidptr(self)):X}.scope'
+	name := 'surfaces/${uint(voidptr(self)):X}.scope'
 	internal_os.create(base, name, none) or {
 		log.warn('failed to create surface cgroup err=${err}')
 		return
@@ -2784,7 +2784,7 @@ pub fn (mut self SurfaceWidget) set_clipboard(clipboard_type apprt.Clipboard, co
 
 		mut providers := []GdkContentProvider{cap: contents.len}
 		for content in contents {
-			bytes := C.g_bytes_new(content.data.str, usize(content.data.len))
+			bytes := C.g_bytes_new(content.data.str, uint(content.data.len))
 			if content.mime == 'text/plain' {
 				mut text_providers := [
 					C.gdk_content_provider_new_for_bytes(c'text/plain;charset=utf-8', bytes),
@@ -3098,7 +3098,7 @@ fn surface_vadjustment_changed_cb(adj GtkAdjustment, data voidptr) {
 	value := C.gtk_adjustment_get_value(adj)
 	row := if value <= 0 { u64(0) } else { u64(value + 0.5) }
 	mut surface := self.core_surface
-	surface.perform_binding_action(input.ActionScrollToRow{ value: usize(row) }) or {
+	surface.perform_binding_action(input.ActionScrollToRow{ value: uint(row) }) or {
 		log.error('error performing scroll_to_row action err=${err}')
 	}
 }
@@ -3143,14 +3143,14 @@ pub fn (mut self SurfaceWidget) set_search_active(active bool, needle string) {
 	}
 }
 
-pub fn (mut self SurfaceWidget) set_search_total(total ?usize) {
+pub fn (mut self SurfaceWidget) set_search_total(total ?uint) {
 	if isnil(self.search_overlay) {
 		return
 	}
 	self.search_overlay.set_search_total(total)
 }
 
-pub fn (mut self SurfaceWidget) set_search_selected(selected ?usize) {
+pub fn (mut self SurfaceWidget) set_search_selected(selected ?uint) {
 	if isnil(self.search_overlay) {
 		return
 	}
@@ -3631,7 +3631,7 @@ pub fn new_surface_widget(window &Window, split_tree &SplitTreeWidget, config &C
 		C.g_file_get_type(),
 		g_type_string,
 	]
-	C.gtk_drop_target_set_gtypes(drop_target, unsafe { &drop_target_types[0] }, usize(drop_target_types.len))
+	C.gtk_drop_target_set_gtypes(drop_target, unsafe { &drop_target_types[0] }, uint(drop_target_types.len))
 	C.g_signal_connect_data(drop_target, c'drop', GCallback(voidptr(surface_drop_target_drop_cb)),
 		voidptr(w), unsafe { nil }, 0)
 	C.gtk_widget_add_controller(box, drop_target)

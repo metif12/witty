@@ -430,7 +430,7 @@ pub fn (mut self Exec) queue_write(mut td ThreadData, data []u8, linefeed bool) 
 	}
 }
 
-fn exec_tty_write(td_ voidptr, _ &xev.Loop, _ &xev.Completion, _ xev.Stream, _ xev.WriteBuffer, r ?xev.ErrorKind, n usize) xev.CallbackAction {
+fn exec_tty_write(td_ voidptr, _ &xev.Loop, _ &xev.Completion, _ xev.Stream, _ xev.WriteBuffer, r ?xev.ErrorKind, n uint) xev.CallbackAction {
 	mut td := unsafe { &ExecThreadData(td_) }
 	td.write_req_pool.put()
 	td.write_buf_pool.put()

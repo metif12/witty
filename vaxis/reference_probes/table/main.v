@@ -128,7 +128,7 @@ fn main() {
 		ctx.selected_bg = vaxis.ColorIndex{ index: 3 }; ctx.selected_fg = vaxis.ColorIndex{ index: 4 }; ctx.active_bg = vaxis.ColorIndex{ index: 5 }; ctx.active_fg = vaxis.ColorIndex{ index: 6 }
 		ctx.col_width = width_style(number(p, 10), number(p, 11), 6); ctx.header_align = unsafe { vaxis.TableHorizontalAlignment(number(p, 12)) }; ctx.col_align = vaxis.TableColumnAlignmentAll{ alignment: unsafe { vaxis.TableHorizontalAlignment(number(p, 13)) } }
 		if number(p, 14) != 0 { ctx.sel_rows = [u16(0), 2, 5] }
-		if number(p, 15) != 0 { ctx.col_indexes = vaxis.TableColumnsByIndex{ indexes: [usize(3), 1] } }
+		if number(p, 15) != 0 { ctx.col_indexes = vaxis.TableColumnsByIndex{ indexes: [uint(3), 1] } }
 		if number(p, 16) != 0 { ctx.header_names = vaxis.TableHeaderCustom{ names: ['Long heading', 'N', 'Enabled', 'Tag', 'Ratio', 'Optional tag'] } }
 		ctx.cell_x_off = number(p, 17); ctx.header_borders = number(p, 18) & 1 != 0; ctx.col_borders = number(p, 18) & 2 != 0; ctx.y_off = number(p, 19)
 		mut data := vaxis.TableMultiArrayList[Item]{}

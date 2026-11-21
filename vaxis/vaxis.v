@@ -1694,8 +1694,8 @@ fn parsed_key_text(codepoint u32, text string, mods Modifiers, consumed int) Par
 pub struct TextInputBuffer {
 pub mut:
 	buffer   []u8  @[required]
-	cursor   usize @[required]
-	gap_size usize @[required]
+	cursor   uint @[required]
+	gap_size uint @[required]
 }
 
 pub fn TextInputBuffer.new() TextInputBuffer {
@@ -1711,7 +1711,7 @@ pub fn (mut b TextInputBuffer) deinit() {
 }
 
 pub fn (b &TextInputBuffer) first_half() []u8 {
-	if b.cursor > usize(b.buffer.len) {
+	if b.cursor > uint(b.buffer.len) {
 		panic('index out of bounds')
 	}
 	return b.buffer[..int(b.cursor)]
@@ -1719,15 +1719,15 @@ pub fn (b &TextInputBuffer) first_half() []u8 {
 
 pub fn (b &TextInputBuffer) second_half() []u8 {
 	start := widget_checked_add(b.cursor, b.gap_size)
-	if start > usize(b.buffer.len) {
+	if start > uint(b.buffer.len) {
 		panic('index out of bounds')
 	}
 	return b.buffer[int(start)..]
 }
 
-pub fn (mut b TextInputBuffer) grow(n usize) {
-	new_length := widget_checked_add(widget_checked_add(usize(b.buffer.len), n), 512)
-	if new_length > usize(0x7fffffff) {
+pub fn (mut b TextInputBuffer) grow(n uint) {
+	new_length := widget_checked_add(widget_checked_add(uint(b.buffer.len), n), 512)
+	if new_length > uint(0x7fffffff) {
 		panic('TextInputBuffer allocation exceeds V array capacity')
 	}
 	new_size := int(new_length)
@@ -1737,7 +1737,7 @@ pub fn (mut b TextInputBuffer) grow(n usize) {
 	copy(mut new_memory[..first.len], first)
 	copy(mut new_memory[new_size - second.len..], second)
 	b.buffer = new_memory
-	remaining := usize(new_size - second.len)
+	remaining := uint(new_size - second.len)
 	if b.cursor > remaining {
 		panic('integer overflow')
 	}
@@ -1748,29 +1748,29 @@ pub fn (mut b TextInputBuffer) insert_slice_at_cursor(data string) {
 	if data.len == 0 {
 		return
 	}
-	if b.gap_size <= usize(data.len) {
-		b.grow(usize(data.len))
+	if b.gap_size <= uint(data.len) {
+		b.grow(uint(data.len))
 	}
-	limit := widget_checked_add(b.cursor, usize(data.len))
-	if limit > usize(b.buffer.len) {
+	limit := widget_checked_add(b.cursor, uint(data.len))
+	if limit > uint(b.buffer.len) {
 		panic('index out of bounds')
 	}
 	copy(mut b.buffer[int(b.cursor)..int(limit)], data.bytes())
 	b.cursor = limit
-	if b.gap_size < usize(data.len) {
+	if b.gap_size < uint(data.len) {
 		panic('integer overflow')
 	}
-	b.gap_size -= usize(data.len)
+	b.gap_size -= uint(data.len)
 }
 
-pub fn (mut b TextInputBuffer) move_gap_left(n usize) {
-	new_index := if n > b.cursor { usize(0) } else { b.cursor - n }
+pub fn (mut b TextInputBuffer) move_gap_left(n uint) {
+	new_index := if n > b.cursor { uint(0) } else { b.cursor - n }
 	destination := widget_checked_add(new_index, b.gap_size)
-	if destination > usize(b.buffer.len) || b.cursor > usize(b.buffer.len) {
+	if destination > uint(b.buffer.len) || b.cursor > uint(b.buffer.len) {
 		panic('index out of bounds')
 	}
 	count := b.cursor - new_index
-	if count > usize(b.buffer.len) - destination {
+	if count > uint(b.buffer.len) - destination {
 		panic('index out of bounds')
 	}
 	for i in 0 .. int(count) {
@@ -1779,14 +1779,14 @@ pub fn (mut b TextInputBuffer) move_gap_left(n usize) {
 	b.cursor = new_index
 }
 
-pub fn (mut b TextInputBuffer) move_gap_right(n usize) {
+pub fn (mut b TextInputBuffer) move_gap_right(n uint) {
 	new_index := widget_checked_add(b.cursor, n)
-	if b.cursor > usize(b.buffer.len) {
+	if b.cursor > uint(b.buffer.len) {
 		panic('start index ${u64(b.cursor).str()} is larger than end index ${b.buffer.len}')
 	}
 	source := widget_checked_add(b.cursor, b.gap_size)
 	limit := widget_checked_add(new_index, b.gap_size)
-	if source > limit || limit > usize(b.buffer.len) {
+	if source > limit || limit > uint(b.buffer.len) {
 		panic('index out of bounds')
 	}
 	for i in 0 .. int(n) {
@@ -1795,17 +1795,17 @@ pub fn (mut b TextInputBuffer) move_gap_right(n usize) {
 	b.cursor = new_index
 }
 
-pub fn (mut b TextInputBuffer) grow_gap_left(n usize) {
+pub fn (mut b TextInputBuffer) grow_gap_left(n uint) {
 	b.gap_size = widget_checked_add(b.gap_size, n)
 	b.cursor = widget_saturating_sub(b.cursor, n)
 }
 
-pub fn (mut b TextInputBuffer) grow_gap_right(n usize) {
+pub fn (mut b TextInputBuffer) grow_gap_right(n uint) {
 	new_gap := widget_checked_add(b.gap_size, n)
-	if b.cursor > usize(b.buffer.len) {
+	if b.cursor > uint(b.buffer.len) {
 		panic('integer overflow')
 	}
-	maximum := usize(b.buffer.len) - b.cursor
+	maximum := uint(b.buffer.len) - b.cursor
 	b.gap_size = if new_gap > maximum { maximum } else { new_gap }
 }
 
@@ -1817,7 +1817,7 @@ pub fn (mut b TextInputBuffer) clear_and_free() {
 
 pub fn (mut b TextInputBuffer) clear_retaining_capacity() {
 	b.cursor = 0
-	b.gap_size = usize(b.buffer.len)
+	b.gap_size = uint(b.buffer.len)
 }
 
 pub fn (mut b TextInputBuffer) to_owned_slice() string {
@@ -1826,8 +1826,8 @@ pub fn (mut b TextInputBuffer) to_owned_slice() string {
 	return result
 }
 
-pub fn (b &TextInputBuffer) real_length() usize {
-	return usize(b.first_half().len + b.second_half().len)
+pub fn (b &TextInputBuffer) real_length() uint {
+	return uint(b.first_half().len + b.second_half().len)
 }
 
 pub fn (b &TextInputBuffer) string() string {
@@ -1859,7 +1859,7 @@ pub fn (mut t TextInput) deinit() {
 	t.buf.deinit()
 }
 
-pub fn (t &TextInput) real_length() usize {
+pub fn (t &TextInput) real_length() uint {
 	return t.buf.real_length()
 }
 
@@ -1879,9 +1879,9 @@ pub fn (mut t TextInput) update(key Key) {
 	} else if key.matches(right, Modifiers{}) || key.matches(u32(`f`), ctrl) {
 		t.cursor_right()
 	} else if key.matches(u32(`a`), ctrl) || key.matches(home, Modifiers{}) {
-		t.buf.move_gap_left(usize(t.buf.first_half().len))
+		t.buf.move_gap_left(uint(t.buf.first_half().len))
 	} else if key.matches(u32(`e`), ctrl) || key.matches(end, Modifiers{}) {
-		t.buf.move_gap_right(usize(t.buf.second_half().len))
+		t.buf.move_gap_right(uint(t.buf.second_half().len))
 	} else if key.matches(u32(`k`), ctrl) {
 		t.delete_to_end()
 	} else if key.matches(u32(`u`), ctrl) {
@@ -1913,11 +1913,11 @@ pub fn (t &TextInput) slice_to_cursor() string {
 
 // Source sliceToCursor copies into caller storage and returns its borrowed prefix.
 pub fn (t &TextInput) slice_to_cursor_into(mut bytes []u8) []u8 {
-	if usize(bytes.len) < t.buf.cursor { panic('Assertion failed') }
+	if uint(bytes.len) < t.buf.cursor { panic('Assertion failed') }
 	first := t.buf.first_half()
-	span := usize(first.len)
-	source_address := usize(first.data)
-	destination_address := usize(bytes.data)
+	span := uint(first.len)
+	source_address := uint(first.data)
+	destination_address := uint(bytes.data)
 	if span > 0 && source_address < destination_address + span
 		&& destination_address < source_address + span {
 		panic('@memcpy arguments alias')
@@ -1928,12 +1928,12 @@ pub fn (t &TextInput) slice_to_cursor_into(mut bytes []u8) []u8 {
 
 pub fn (mut t TextInput) cursor_left() {
 	length := text_input_last_grapheme_byte_length(t.buf.first_half().bytestr())
-	t.buf.move_gap_left(usize(length))
+	t.buf.move_gap_left(uint(length))
 }
 
 pub fn (mut t TextInput) cursor_right() {
 	length := text_input_first_grapheme_byte_length(t.buf.second_half().bytestr())
-	t.buf.move_gap_right(usize(length))
+	t.buf.move_gap_right(uint(length))
 }
 
 pub fn (t &TextInput) graphemes_before_cursor() u16 {
@@ -2174,12 +2174,12 @@ pub fn (mut t TextInput) reset() {
 	t.prev_cursor_idx = 0
 }
 
-pub fn (t &TextInput) byte_offset_to_cursor() usize {
+pub fn (t &TextInput) byte_offset_to_cursor() uint {
 	return t.buf.cursor
 }
 
 pub fn (mut t TextInput) delete_to_end() {
-	t.buf.grow_gap_right(usize(t.buf.second_half().len))
+	t.buf.grow_gap_right(uint(t.buf.second_half().len))
 }
 
 pub fn (mut t TextInput) delete_to_start() {
@@ -2188,19 +2188,19 @@ pub fn (mut t TextInput) delete_to_start() {
 
 pub fn (mut t TextInput) delete_before_cursor() {
 	length := text_input_last_grapheme_byte_length(t.buf.first_half().bytestr())
-	t.buf.grow_gap_left(usize(length))
+	t.buf.grow_gap_left(uint(length))
 }
 
 pub fn (mut t TextInput) delete_after_cursor() {
 	length := text_input_first_grapheme_byte_length(t.buf.second_half().bytestr())
-	t.buf.grow_gap_right(usize(length))
+	t.buf.grow_gap_right(uint(length))
 }
 
 pub fn (mut t TextInput) move_backward_wordwise() {
 	first := t.buf.first_half().bytestr()
 	trimmed := first.trim_right(' ')
 	index := trimmed.last_index(' ') or { -1 }
-	destination := if index < 0 { usize(0) } else { usize(index + 1) }
+	destination := if index < 0 { uint(0) } else { uint(index + 1) }
 	t.buf.move_gap_left(t.buf.cursor - destination)
 }
 
@@ -2217,7 +2217,7 @@ pub fn (mut t TextInput) move_forward_wordwise() {
 			break
 		}
 	}
-	t.buf.move_gap_right(usize(index))
+	t.buf.move_gap_right(uint(index))
 }
 
 pub fn (mut t TextInput) delete_word_before() {
@@ -2239,7 +2239,7 @@ pub fn (mut t TextInput) delete_word_after() {
 			break
 		}
 	}
-	t.buf.grow_gap_right(usize(index))
+	t.buf.grow_gap_right(uint(index))
 }
 
 pub fn first_grapheme_byte_length(text string) int {

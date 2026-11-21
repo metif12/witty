@@ -10,7 +10,7 @@ fn C.ubrk_open(type_ int, locale &char, text &u16, length int, status &int) void
 fn C.ubrk_first(iterator voidptr) int
 fn C.ubrk_next(iterator voidptr) int
 fn C.ubrk_close(iterator voidptr)
-fn C.witty_macos_copy_characters(text voidptr, output &u16, length usize)
+fn C.witty_macos_copy_characters(text voidptr, output &u16, length uint)
 fn C.witty_macos_msg_super_id2(obj voidptr, selector voidptr, a voidptr, b voidptr) voidptr
 fn C.witty_macos_cache_timer(duration u64, callback voidptr, context voidptr) voidptr
 fn C.witty_macos_cancel_timer(timer voidptr)
@@ -162,66 +162,66 @@ fn terminal_accessibility_selected(self ObjId, _cmd Sel) ObjId {
 // Swift String.count/prefix use extended grapheme clusters (UAX #29). The
 // legacy NSString composed-character API differs for CRLF and Prepend; use
 // the macOS Unicode character-break iterator for those standard-library ops.
-fn native_character_prefix(text ObjId, count isize) usize {
+fn native_character_prefix(text ObjId, count int) uint {
 	if count < 0 { panic('String.prefix requires a nonnegative length') }
 	length := int(msg_u64(text, 'length'))
 	characters := []u16{len: length}
-	C.witty_macos_copy_characters(voidptr(text), characters.data, usize(length))
+	C.witty_macos_copy_characters(voidptr(text), characters.data, uint(length))
 	mut status := 0
 	iterator := C.ubrk_open(0, unsafe { nil }, characters.data, length, &status)
 	if iterator == unsafe { nil } || status > 0 { panic('Unicode character-break iterator initialization failed') }
 	defer { C.ubrk_close(iterator) }
 	C.ubrk_first(iterator)
 	mut offset := 0
-	mut n := isize(0)
+	mut n := int(0)
 	for n < count {
 		next := C.ubrk_next(iterator)
 		if next < 0 { break }
 		offset = next
 		n++
 	}
-	return usize(offset)
+	return uint(offset)
 }
-fn native_character_count(text ObjId) isize {
+fn native_character_count(text ObjId) int {
 	length := int(msg_u64(text, 'length'))
 	characters := []u16{len: length}
-	C.witty_macos_copy_characters(voidptr(text), characters.data, usize(length))
+	C.witty_macos_copy_characters(voidptr(text), characters.data, uint(length))
 	mut status := 0
 	iterator := C.ubrk_open(0, unsafe { nil }, characters.data, length, &status)
 	if iterator == unsafe { nil } || status > 0 { panic('Unicode character-break iterator initialization failed') }
 	defer { C.ubrk_close(iterator) }
 	C.ubrk_first(iterator)
-	mut count := isize(0)
+	mut count := int(0)
 	for C.ubrk_next(iterator) >= 0 { count++ }
 	return count
 }
-fn terminal_accessibility_count(self ObjId, _cmd Sel) isize { return native_character_count(nsstring(terminal_screen_contents(self))) }
-fn terminal_accessibility_visible(self ObjId, _cmd Sel) C.witty_macos_range { return C.witty_macos_range{length: usize(terminal_accessibility_count(self, nil_obj()))} }
-fn terminal_accessibility_line(self ObjId, _cmd Sel, index isize) isize {
+fn terminal_accessibility_count(self ObjId, _cmd Sel) int { return native_character_count(nsstring(terminal_screen_contents(self))) }
+fn terminal_accessibility_visible(self ObjId, _cmd Sel) C.witty_macos_range { return C.witty_macos_range{length: uint(terminal_accessibility_count(self, nil_obj()))} }
+fn terminal_accessibility_line(self ObjId, _cmd Sel, index int) int {
 	text := nsstring(terminal_screen_contents(self))
 	length := native_character_prefix(text, index)
 	prefix := ObjId(C.witty_macos_msg_id_range(voidptr(text), voidptr(sel('substringWithRange:')), C.witty_macos_range{length: length}))
-	mut lines := isize(0)
+	mut lines := int(0)
 	for scalar in objc_utf8_string(prefix).runes() { if scalar in [`\n`, `\r`, `\u0085`, `\u2028`, `\u2029`, `\v`, `\f`] { lines++ } }
 	return lines
 }
 struct TextRange {
-	location usize
-	length usize
+	location uint
+	length uint
 }
 
 fn native_text_range(text ObjId, range C.witty_macos_range) ?TextRange {
-	length := usize(msg_u64(text, 'length'))
+	length := uint(msg_u64(text, 'length'))
 	if range.location > length || range.length > length - range.location { return none }
 	// Swift Range(NSRange, in: String) accepts UTF-16 positions within a
 	// surrogate pair. String(substring) rounds both endpoints down to the
 	// scalar boundary. Preserve that behavior instead of NSString's isolated
 	// surrogate substring; verified against the original Swift operations.
-	mut start := usize(0)
-	mut end := usize(0)
-	mut offset := usize(0)
+	mut start := uint(0)
+	mut end := uint(0)
+	mut offset := uint(0)
 	for scalar in objc_utf8_string(text).runes() {
-		offset += if scalar > 0xffff { usize(2) } else { usize(1) }
+		offset += if scalar > 0xffff { uint(2) } else { uint(1) }
 		if offset <= range.location { start = offset }
 		if offset <= range.location + range.length { end = offset }
 	}

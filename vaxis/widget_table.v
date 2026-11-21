@@ -28,7 +28,7 @@ pub struct TableColumnsAll {}
 
 pub struct TableColumnsByIndex {
 pub:
-	indexes []usize
+	indexes []uint
 }
 
 pub type TableColumnIndexes = TableColumnsAll | TableColumnsByIndex
@@ -102,19 +102,19 @@ pub mut:
 pub fn table_calc_col_width(col u16, headers []string, style TableWidthStyle, table_win Window) !u16 {
 	match style {
 		TableWidthDynamicFill {
-			count := widget_checked_u16(usize(headers.len))
+			count := widget_checked_u16(uint(headers.len))
 			if count == 0 { panic('division by zero') }
 			mut width := table_win.width / count
 			if width % 2 != 0 { width = table_saturating_add_u16(width, 1) }
 			if table_win.width == 0 { panic('integer overflow') }
-			for usize(width) * usize(headers.len) < usize(table_win.width - 1) {
+			for uint(width) * uint(headers.len) < uint(table_win.width - 1) {
 				width = table_saturating_add_u16(width, 1)
 			}
 			return width
 		}
 		TableWidthDynamicHeaderLen {
 			if int(col) >= headers.len { return error('NotEnoughStaticWidthsProvided') }
-			length := widget_checked_u16(usize(headers[int(col)].len))
+			length := widget_checked_u16(uint(headers[int(col)].len))
 			if style.padding > 32767 { panic('integer overflow') }
 			padding := style.padding * u16(2)
 			if length > 65535 - padding { panic('integer overflow') }
@@ -172,7 +172,7 @@ fn table_add_u16(a u16, b u16) u16 {
 
 fn table_sub_u16(a u16, b u16) u16 { return if a < b { u16(0) } else { a - b } }
 
-fn usize_min(a usize, b usize) usize { return if a < b { a } else { b } }
+fn usize_min(a uint, b uint) uint { return if a < b { a } else { b } }
 
 fn table_text[T](value T) string {
 	$if T.unaliased_typ is string { return value }
@@ -182,8 +182,8 @@ fn table_text[T](value T) string {
 	}
 	$else $if T.unaliased_typ is f32 { return table_float_text(strconv.f32_to_str_l(value)) }
 	$else $if T.unaliased_typ is f64 { return table_float_text(f64(value).strlong()) }
-	$else $if T.unaliased_typ is u8 || T.unaliased_typ is u16 || T.unaliased_typ is u32 || T.unaliased_typ is u64 || T.unaliased_typ is usize { return u64(value).str() }
-	$else $if T.unaliased_typ is i8 || T.unaliased_typ is i16 || T.unaliased_typ is int || T.unaliased_typ is i64 || T.unaliased_typ is isize { return i64(value).str() }
+	$else $if T.unaliased_typ is u8 || T.unaliased_typ is u16 || T.unaliased_typ is u32 || T.unaliased_typ is u64 || T.unaliased_typ is uint { return u64(value).str() }
+	$else $if T.unaliased_typ is i8 || T.unaliased_typ is i16 || T.unaliased_typ is int || T.unaliased_typ is i64 || T.unaliased_typ is int { return i64(value).str() }
 	$else $if T.unaliased_typ is bool { return bool(value).str() }
 	$else $if T.unaliased_typ is []u8 {
 		mut parts := []string{cap: value.len}
@@ -215,7 +215,7 @@ fn table_draw_rows[T](win Window, rows []T, mut context TableContext) ! {
 		mut fields := []string{}
 		$for field in T.fields { fields << field.name }
 		indexes := match context.col_indexes {
-			TableColumnsAll { []usize{len: fields.len, init: usize(index)} }
+			TableColumnsAll { []uint{len: fields.len, init: uint(index)} }
 			TableColumnsByIndex { context.col_indexes.indexes }
 		}
 		mut headers := []string{len: fields.len}
@@ -223,7 +223,7 @@ fn table_draw_rows[T](win Window, rows []T, mut context TableContext) ! {
 			TableHeaderFieldNames {
 				mut initialized := []bool{len: fields.len}
 				for index in indexes {
-					if index < usize(fields.len) { headers[int(index)] = fields[int(index)]; initialized[int(index)] = true }
+					if index < uint(fields.len) { headers[int(index)] = fields[int(index)]; initialized[int(index)] = true }
 				}
 				for value in initialized { if !value { panic('uninitialized source Table header') } }
 			}
@@ -231,49 +231,49 @@ fn table_draw_rows[T](win Window, rows []T, mut context TableContext) ! {
 		}
 		table_win := win.child(WindowChildOptions{ y_off: int(context.y_off), width: win.width, height: win.height })
 		if headers.len == 0 { panic('integer overflow') }
-		if usize(context.col) > usize(headers.len - 1) { context.col = widget_checked_u16(usize(headers.len - 1)) }
+		if uint(context.col) > uint(headers.len - 1) { context.col = widget_checked_u16(uint(headers.len - 1)) }
 		mut col_start := u16(0)
 		for index, text in headers {
-			width := table_calc_col_width(widget_checked_u16(usize(index)), headers, context.col_width, table_win)!
+			width := table_calc_col_width(widget_checked_u16(uint(index)), headers, context.col_width, table_win)!
 			mut fg := Color(ColorDefault{})
 			mut bg := if index % 2 == 0 { context.hdr_bg_1 } else { context.hdr_bg_2 }
-			if context.active && usize(index) == usize(context.col) { fg = context.active_fg; bg = context.active_bg }
+			if context.active && uint(index) == uint(context.col) { fg = context.active_fg; bg = context.active_bg }
 			hdr_win := table_win.child(WindowChildOptions{ x_off: int(col_start), width: width, height: 1,
 				border: WindowBorderOptions{ where_: if context.header_borders && index > 0 { BorderWhere(BorderLeft{}) } else { BorderWhere(BorderNone{}) } } })
-			hdr := if context.header_align == .left { hdr_win } else { alignment_center(hdr_win, u16(usize_min(usize(table_sub_u16(width, 1)), widget_saturating_add(usize(text.len), 1))), 1) }
+			hdr := if context.header_align == .left { hdr_win } else { alignment_center(hdr_win, u16(usize_min(uint(table_sub_u16(width, 1)), widget_saturating_add(uint(text.len), 1))), 1) }
 			hdr_win.fill(Cell{ style: Style{ bg: bg } })
-			hdr.print([CellSegment{ text: table_truncate(text, width), style: Style{ fg: fg, bg: bg, bold: true, ul_style: if usize(index) == usize(context.col) { .single } else { .dotted } } }], PrintOptions{ wrap: .word })
+			hdr.print([CellSegment{ text: table_truncate(text, width), style: Style{ fg: fg, bg: bg, bold: true, ul_style: if uint(index) == uint(context.col) { .single } else { .dotted } } }], PrintOptions{ wrap: .word })
 			col_start = table_add_u16(col_start, width)
 		}
 		if context.active_content_fn == none { context.active_y_off = 0 }
-		max_items := if usize(rows.len) > usize(table_sub_u16(table_win.height, 1)) { table_sub_u16(table_win.height, 1) } else { widget_checked_u16(usize(rows.len)) }
+		max_items := if uint(rows.len) > uint(table_sub_u16(table_win.height, 1)) { table_sub_u16(table_win.height, 1) } else { widget_checked_u16(uint(rows.len)) }
 		mut table_end := table_add_u16(context.start, max_items)
 		if table_add_u16(context.row, context.active_y_off) >= table_sub_u16(win.height, 2) { table_end = table_sub_u16(table_end, context.active_y_off) }
-		if usize(table_end) > usize(rows.len) { table_end = widget_checked_u16(usize(rows.len)) }
+		if uint(table_end) > uint(rows.len) { table_end = widget_checked_u16(uint(rows.len)) }
 		if context.row == 0 { context.start = 0 }
 		else if context.row < context.start { context.start = context.row }
 		else {
 			if rows.len == 0 { panic('integer overflow') }
-			if usize(context.row) >= usize(rows.len - 1) { context.row = widget_checked_u16(usize(rows.len - 1)) }
+			if uint(context.row) >= uint(rows.len - 1) { context.row = widget_checked_u16(uint(rows.len - 1)) }
 			if context.row >= table_end { context.start = table_add_u16(context.start, table_add_u16(context.row - table_end, 1)) }
 		}
 		table_end = table_add_u16(context.start, max_items)
 		if table_add_u16(context.row, context.active_y_off) >= table_sub_u16(win.height, 2) { table_end = table_sub_u16(table_end, context.active_y_off) }
-		if usize(table_end) > usize(rows.len) { table_end = widget_checked_u16(usize(rows.len)) }
-		context.start = u16(usize_min(usize(context.start), usize(table_end)))
+		if uint(table_end) > uint(rows.len) { table_end = widget_checked_u16(uint(rows.len)) }
+		context.start = u16(usize_min(uint(context.start), uint(table_end)))
 		context.active_y_off = 0
 		for row, data in rows[int(context.start)..int(table_end)] {
-			absolute_row := widget_checked_add(usize(context.start), usize(row))
+			absolute_row := widget_checked_add(uint(context.start), uint(row))
 			mut fg := Color(ColorDefault{})
 			mut bg := if row % 2 == 0 { context.row_bg_1 } else { context.row_bg_2 }
-			if context.active && absolute_row == usize(context.row) { fg = context.active_fg; bg = context.active_bg }
+			if context.active && absolute_row == uint(context.row) { fg = context.active_fg; bg = context.active_bg }
 			else if selected := context.sel_rows { if widget_checked_u16(absolute_row) in selected { fg = context.selected_fg; bg = context.selected_bg } }
-			mut row_win := table_win.child(WindowChildOptions{ y_off: int(widget_checked_u16(widget_checked_add(widget_checked_add(1, usize(row)), usize(context.active_y_off)))), width: table_win.width, height: 1 })
-			if absolute_row == usize(context.row) { if callback := context.active_content_fn { context.active_y_off = callback(mut row_win, context.active_ctx)! } }
+			mut row_win := table_win.child(WindowChildOptions{ y_off: int(widget_checked_u16(widget_checked_add(widget_checked_add(1, uint(row)), uint(context.active_y_off)))), width: table_win.width, height: 1 })
+			if absolute_row == uint(context.row) { if callback := context.active_content_fn { context.active_y_off = callback(mut row_win, context.active_ctx)! } }
 			col_start = 0
-			mut col_index := usize(0)
+			mut col_index := uint(0)
 			for field_index in indexes {
-				mut item_index := usize(0)
+				mut item_index := uint(0)
 				$for field in T.fields {
 					if context.col_indexes is TableColumnsAll || item_index == field_index {
 						width := table_calc_col_width(widget_checked_u16(item_index), headers, context.col_width, table_win)!
@@ -287,9 +287,9 @@ fn table_draw_rows[T](win Window, rows []T, mut context TableContext) ! {
 						item_win.fill(Cell{ style: Style{ bg: bg } })
 						alignment := match context.col_align {
 							TableColumnAlignmentAll { context.col_align.alignment }
-							TableColumnAlignmentByIndex { if col_index >= usize(context.col_align.alignments.len) { panic('Table alignment index out of bounds') }; context.col_align.alignments[int(col_index)] }
+							TableColumnAlignmentByIndex { if col_index >= uint(context.col_align.alignments.len) { panic('Table alignment index out of bounds') }; context.col_align.alignments[int(col_index)] }
 						}
-						align_win := if alignment == .left { item_win } else { alignment_center(item_win, u16(usize_min(usize(table_sub_u16(width, 1)), widget_saturating_add(usize(text.len), 1))), 1) }
+						align_win := if alignment == .left { item_win } else { alignment_center(item_win, u16(usize_min(uint(table_sub_u16(width, 1)), widget_saturating_add(uint(text.len), 1))), 1) }
 						if alignment == .center { align_win.fill(Cell{ style: Style{ bg: bg } }) }
 						align_win.print([CellSegment{ text: table_truncate(text, width), style: Style{ fg: fg, bg: bg } }], PrintOptions{ wrap: .word, col_offset: context.cell_x_off })
 						col_index = widget_checked_add(col_index, 1)

@@ -23,7 +23,7 @@ fn C.socket(domain int, typ int, protocol int) int
 
 fn C.connect(sockfd int, addr voidptr, addrlen u32) int
 
-fn C.write(fd int, buf voidptr, count usize) isize
+fn C.write(fd int, buf voidptr, count uint) int
 
 fn C.close(fd int) int
 
@@ -88,12 +88,12 @@ fn systemd_notify_send(message string) {
 		return
 	}
 
-	written := C.write(socket_fd, message.str, usize(message.len))
+	written := C.write(socket_fd, message.str, uint(message.len))
 	if written < 0 {
 		log.warn('unable to write to notify socket: ${os.last_error()}')
 		return
 	}
-	if written < isize(message.len) {
+	if written < int(message.len) {
 		log.warn('short write to notify socket: ${written} < ${message.len}')
 	}
 }

@@ -1007,7 +1007,7 @@ pub fn (self TerminalFormatter) format() string {
 			sb.write_string('\x1b[3g')
 			// Set each configured tabstop by moving cursor and using HTS
 			for col in 0 .. int(self.terminal.cols) {
-				if self.terminal.tabstops.get(usize(col)) {
+				if self.terminal.tabstops.get(uint(col)) {
 					// Move cursor to the column (1-indexed)
 					sb.write_string('\x1b[${col + 1}G')
 					// Set tab (HTS)
@@ -1450,8 +1450,8 @@ pub mut:
 // Trailing state for cross-page continuation.
 pub struct TrailingState {
 pub mut:
-	rows  usize
-	cells usize
+	rows  uint
+	cells uint
 }
 
 pub const trailing_state_empty = TrailingState{ rows: 0, cells: 0 }
@@ -1482,8 +1482,8 @@ pub fn (self PageFormatter) format() string {
 }
 
 pub fn (self PageFormatter) format_with_state() FormatResult {
-	mut blank_rows := usize(0)
-	mut blank_cells := usize(0)
+	mut blank_rows := uint(0)
+	mut blank_cells := uint(0)
 
 	// Continue our prior trailing state if we have it, but only if we're
 	// starting from the beginning (start_y and start_x are both 0).
@@ -1642,7 +1642,7 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 			} else {
 				Coordinate{}
 			}
-			for row_offset in usize(0) .. blank_rows {
+			for row_offset in uint(0) .. blank_rows {
 				sb.write_string(newline)
 				point := if row_offset == 0 {
 					map_start
@@ -1698,7 +1698,7 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 				mut blank_x := x
 				mut blank_y := y
 				mut blank_points := []Coordinate{cap: int(blank_cells)}
-				for _ in usize(0) .. blank_cells {
+				for _ in uint(0) .. blank_cells {
 					if blank_x > 0 {
 						blank_x--
 					} else if blank_y > 0 {
@@ -1769,7 +1769,7 @@ pub fn (self PageFormatter) format_with_state() FormatResult {
 					} else {
 						self.write_codepoint_with_replacement(mut sb, cell.codepoint)
 						if cell.content_tag == .codepoint_grapheme {
-							cps := self.page.lookup_grapheme_at(usize(y_int), usize(x)) or {
+							cps := self.page.lookup_grapheme_at(uint(y_int), uint(x)) or {
 								panic('grapheme cell is missing its page mapping')
 							}
 							for cp in cps {

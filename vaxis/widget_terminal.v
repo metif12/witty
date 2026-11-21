@@ -82,7 +82,7 @@ pub mut:
 	back_screen       &TerminalScreen = unsafe { nil }
 	back_screen_pri   TerminalScreen @[required]
 	back_screen_alt   TerminalScreen @[required]
-	scroll_offset     usize
+	scroll_offset     uint
 	back_mutex        &sync.Mutex = sync.new_mutex()
 	dirty             bool
 	should_quit       bool
@@ -108,7 +108,7 @@ pub fn (mut terminal Terminal) draw(win Window) ! {
 	for row := u16(0); row < terminal.front_screen.height; row++ {
 		mut col := u16(0)
 		for col < terminal.front_screen.width {
-			cell := terminal.front_screen.read_cell(usize(col), usize(row)) or { continue }
+			cell := terminal.front_screen.read_cell(uint(col), uint(row)) or { continue }
 			win.write_cell(col, row, cell)
 			col = terminal_add_u16(col, if cell.char_.width > 0 {
 				u16(cell.char_.width)
@@ -172,9 +172,9 @@ pub fn (mut terminal Terminal) carriage_return() {
 	}
 }
 
-pub fn (mut terminal Terminal) horizontal_tab(count usize) {
+pub fn (mut terminal Terminal) horizontal_tab(count uint) {
 	col := terminal.back_screen.cursor.col
-	mut seen := usize(0)
+	mut seen := uint(0)
 	mut final := u16(0)
 	mut found := false
 	for stop in terminal.tab_stops {
@@ -192,25 +192,25 @@ pub fn (mut terminal Terminal) horizontal_tab(count usize) {
 	terminal.back_screen.cursor_right(if final < col { u16(0) } else { final - col })
 }
 
-pub fn (mut terminal Terminal) horizontal_back_tab(count usize) {
+pub fn (mut terminal Terminal) horizontal_back_tab(count uint) {
 	col := terminal.back_screen.cursor.col
-	mut index := usize(0)
+	mut index := uint(0)
 	mut found := false
 	for i, stop in terminal.tab_stops {
 		if stop <= col {
 			continue
 		}
-		index = usize(i)
+		index = uint(i)
 		found = true
 		break
 	}
 	if !found {
 		if terminal.tab_stops.len == 0 { panic('integer overflow') }
-		index = usize(terminal.tab_stops.len - 1)
+		index = uint(terminal.tab_stops.len - 1)
 	}
-	delta := if count == 0 { usize(0) } else { count - 1 }
-	index = if index < delta { usize(0) } else { index - delta }
-	if index >= usize(terminal.tab_stops.len) { panic('index out of bounds') }
+	delta := if count == 0 { uint(0) } else { count - 1 }
+	index = if index < delta { uint(0) } else { index - delta }
+	if index >= uint(terminal.tab_stops.len) { panic('index out of bounds') }
 	mut final := terminal.tab_stops[int(index)]
 	if terminal.mode.origin && final < terminal.back_screen.scrolling_region.left {
 		final = terminal.back_screen.scrolling_region.left
@@ -338,7 +338,7 @@ fn (mut terminal Terminal) handle_csi(seq TerminalCsi) ! {
 		}
 		`B` {
 			mut iter := seq.iterator[u16]()
-			terminal.back_screen.cursor_down(usize(iter.next() or { u16(1) }))
+			terminal.back_screen.cursor_down(uint(iter.next() or { u16(1) }))
 		}
 		`C` {
 			mut iter := seq.iterator[u16]()
@@ -350,7 +350,7 @@ fn (mut terminal Terminal) handle_csi(seq TerminalCsi) ! {
 		}
 		`E` {
 			mut iter := seq.iterator[u16]()
-			terminal.back_screen.cursor_down(usize(iter.next() or { u16(1) }))
+			terminal.back_screen.cursor_down(uint(iter.next() or { u16(1) }))
 			terminal.carriage_return()
 		}
 		`F` {
@@ -380,7 +380,7 @@ fn (mut terminal Terminal) handle_csi(seq TerminalCsi) ! {
 		}
 		`I` {
 			mut iter := seq.iterator[u16]()
-			terminal.horizontal_tab(usize(iter.next() or { u16(1) }))
+			terminal.horizontal_tab(uint(iter.next() or { u16(1) }))
 		}
 		`J` {
 			mut iter := seq.iterator[u16]()
@@ -404,15 +404,15 @@ fn (mut terminal Terminal) handle_csi(seq TerminalCsi) ! {
 		}
 		`L` {
 			mut iter := seq.iterator[u16]()
-			terminal.back_screen.insert_line(usize(iter.next() or { u16(1) }))!
+			terminal.back_screen.insert_line(uint(iter.next() or { u16(1) }))!
 		}
 		`M` {
 			mut iter := seq.iterator[u16]()
-			terminal.back_screen.delete_line(usize(iter.next() or { u16(1) }))!
+			terminal.back_screen.delete_line(uint(iter.next() or { u16(1) }))!
 		}
 		`P` {
 			mut iter := seq.iterator[u16]()
-			terminal.back_screen.delete_characters(usize(iter.next() or { u16(1) }))!
+			terminal.back_screen.delete_characters(uint(iter.next() or { u16(1) }))!
 		}
 		`S` {
 			mut iter := seq.iterator[u16]()
@@ -427,11 +427,11 @@ fn (mut terminal Terminal) handle_csi(seq TerminalCsi) ! {
 			}
 			terminal.back_screen.cursor.row = terminal.back_screen.scrolling_region.top
 			terminal.back_screen.cursor.col = terminal.back_screen.scrolling_region.left
-			terminal.back_screen.delete_line(usize(count))!
+			terminal.back_screen.delete_line(uint(count))!
 		}
 		`T` {
 			mut iter := seq.iterator[u16]()
-			terminal.back_screen.scroll_down(usize(iter.next() or { u16(1) }))!
+			terminal.back_screen.scroll_down(uint(iter.next() or { u16(1) }))!
 		}
 		`W` {
 			if marker := seq.private_marker {
@@ -468,7 +468,7 @@ fn (mut terminal Terminal) handle_csi(seq TerminalCsi) ! {
 		}
 		`Z` {
 			mut iter := seq.iterator[u16]()
-			terminal.horizontal_back_tab(usize(iter.next() or { u16(1) }))
+			terminal.horizontal_back_tab(uint(iter.next() or { u16(1) }))
 		}
 		`a` {
 			mut iter := seq.iterator[u16]()

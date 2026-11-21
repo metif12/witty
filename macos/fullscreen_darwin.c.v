@@ -10,8 +10,8 @@ struct C.witty_macos_edge_insets { top f64 left f64 bottom f64 right f64 }
 fn C.witty_fullscreen_msg_rect_rect(obj voidptr, selector voidptr, value ObjCRect) ObjCRect
 fn C.witty_macos_msg_void_rect_bool(obj voidptr, selector voidptr, value ObjCRect, display bool)
 fn C.CGSMainConnectionID() i32
-fn C.CGSGetActiveSpace(connection i32) usize
-fn C.CGSSpaceGetType(connection i32, space usize) u32
+fn C.CGSGetActiveSpace(connection i32) uint
+fn C.CGSSpaceGetType(connection i32, space uint) u32
 fn C.CGSCopySpacesForWindows(connection i32, mask u32, windows voidptr) voidptr
 
 @[heap]
@@ -75,7 +75,7 @@ fn window_can_hide_menu(window ObjId) bool {
 	active := C.CGSGetActiveSpace(connection)
 	mut no_fullscreen := true
 	for i in 0 .. count {
-		space := usize(msg_u64(msg_id_u64(spaces, 'objectAtIndex:', u64(i)), 'unsignedLongLongValue'))
+		space := uint(msg_u64(msg_id_u64(spaces, 'objectAtIndex:', u64(i)), 'unsignedLongLongValue'))
 		kind := C.CGSSpaceGetType(connection, space)
 		if space == active { msg_void(spaces, 'release'); return kind != 4 }
 		if kind == 4 { no_fullscreen = false }

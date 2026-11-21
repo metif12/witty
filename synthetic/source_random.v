@@ -185,7 +185,7 @@ fn source_weighted_index(mut rng rand.PRNG, weights []f64) int {
 }
 
 // Zig checked unsigned subtraction at OSC nominal-limit boundaries.
-fn source_sub(value usize, amount usize) usize {
+fn source_sub(value uint, amount uint) uint {
 	if buildcfg.runtime_safety && value < amount { panic('integer overflow') }
 	return value - amount
 }

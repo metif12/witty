@@ -41,11 +41,11 @@ fn base64_decoder_init(alphabet []u8, pad_char ?u8) ScalarBase64Decoder {
 	return result
 }
 
-pub fn calc_size_upper_bound(source_len usize) !usize {
+pub fn calc_size_upper_bound(source_len uint) !uint {
 	return scalar_decoder.calc_size_upper_bound(source_len)
 }
 
-fn (decoder &ScalarBase64Decoder) calc_size_upper_bound(source_len usize) !usize {
+fn (decoder &ScalarBase64Decoder) calc_size_upper_bound(source_len uint) !uint {
 	mut result := source_len / 4 * 3
 	leftover := source_len % 4
 	if _ := decoder.pad_char {
@@ -57,12 +57,12 @@ fn (decoder &ScalarBase64Decoder) calc_size_upper_bound(source_len usize) !usize
 	return result
 }
 
-pub fn calc_size_for_slice(source []u8) !usize {
+pub fn calc_size_for_slice(source []u8) !uint {
 	return scalar_decoder.calc_size_for_slice(source)
 }
 
-fn (decoder &ScalarBase64Decoder) calc_size_for_slice(source []u8) !usize {
-	mut result := decoder.calc_size_upper_bound(usize(source.len))!
+fn (decoder &ScalarBase64Decoder) calc_size_for_slice(source []u8) !uint {
+	mut result := decoder.calc_size_upper_bound(uint(source.len))!
 	if pad := decoder.pad_char {
 		if source.len >= 1 && source[source.len - 1] == pad { result-- }
 		if source.len >= 2 && source[source.len - 2] == pad { result-- }

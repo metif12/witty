@@ -3,7 +3,7 @@ module renderer
 import log
 import terminal
 
-const overlay_max_i32 = usize(2147483647)
+const overlay_max_i32 = uint(2147483647)
 
 // The debug overlay that can be drawn on top of the terminal
 // during the rendering process.
@@ -124,7 +124,7 @@ pub fn Overlay.init(sz Size) !Overlay {
 	term_size := sz.terminal()
 	w := term_size.width
 	h := term_size.height
-	if w == 0 || h == 0 || usize(w) > overlay_max_i32 || usize(h) > overlay_max_i32 {
+	if w == 0 || h == 0 || uint(w) > overlay_max_i32 || uint(h) > overlay_max_i32 {
 		return error('invalid dimensions for overlay')
 	}
 	// V arrays use an `int` length, so reject surfaces whose backing store
@@ -199,7 +199,7 @@ fn (mut self Overlay) highlight_hyperlinks(state &terminal.RenderState) {
 			for x < row.cells.len && row.cells[x].raw.has_hyperlink {
 				x++
 			}
-			self.highlight_grid_rect(usize(start_x), usize(y), usize(x - start_x), 1, .hyperlink) or {
+			self.highlight_grid_rect(uint(start_x), uint(y), uint(x - start_x), 1, .hyperlink) or {
 				log.warn('Error drawing hyperlink border: ${err}')
 			}
 		}
@@ -223,7 +223,7 @@ fn (mut self Overlay) highlight_semantic_prompts(state &terminal.RenderState) {
 			y++
 		}
 		bar_width := if self.cell_size.width < 5 { int(self.cell_size.width) } else { 5 }
-		self.highlight_pixel_rect(0, usize(start_y), usize(bar_width), usize(y - start_y), .semantic_prompt) or {
+		self.highlight_pixel_rect(0, uint(start_y), uint(bar_width), uint(y - start_y), .semantic_prompt) or {
 			log.warn('Error drawing semantic prompt bar: ${err}')
 		}
 	}
@@ -249,7 +249,7 @@ fn (mut self Overlay) highlight_semantic_prompts(state &terminal.RenderState) {
 			} else {
 				OverlayColor.semantic_input
 			}
-			self.highlight_grid_rect(usize(start_x), usize(row_y), usize(x - start_x), 1, color) or {
+			self.highlight_grid_rect(uint(start_x), uint(row_y), uint(x - start_x), 1, color) or {
 				log.warn('Error drawing semantic content highlight: ${err}')
 			}
 		}
@@ -258,7 +258,7 @@ fn (mut self Overlay) highlight_semantic_prompts(state &terminal.RenderState) {
 
 // Draw a filled and bordered rectangle at grid coordinates.
 // x/y/width/height are all in grid cells.
-fn (mut self Overlay) highlight_grid_rect(x usize, y usize, width usize, height usize, color OverlayColor) ! {
+fn (mut self Overlay) highlight_grid_rect(x uint, y uint, width uint, height uint, color OverlayColor) ! {
 	// All grid-to-pixel products use the same checked i32 boundary as z2d.
 	px_x := overlay_mul_i32(x, self.cell_size.width)!
 	px_y := overlay_mul_i32(y, self.cell_size.height)!
@@ -271,7 +271,7 @@ fn (mut self Overlay) highlight_grid_rect(x usize, y usize, width usize, height 
 
 // Draw a filled and bordered rectangle where x/y are grid cells and
 // width_px/height are pixels.
-fn (mut self Overlay) highlight_pixel_rect(x usize, y usize, width_px usize, height usize, color OverlayColor) ! {
+fn (mut self Overlay) highlight_pixel_rect(x uint, y uint, width_px uint, height uint, color OverlayColor) ! {
 	px_x := overlay_mul_i32(x, self.cell_size.width)!
 	px_y := overlay_mul_i32(y, self.cell_size.height)!
 	if width_px > overlay_max_i32 {
@@ -349,11 +349,11 @@ fn (mut self Overlay) z2d_hairline(x0 int, y0 int, x1 int, y1 int, pixel Overlay
 
 // Multiply a grid coordinate by a cell dimension and cast it to the signed
 // coordinate range accepted by the source rasterizer.
-fn overlay_mul_i32(value usize, scale u32) !int {
-	if scale != 0 && value > overlay_max_i32 / usize(scale) {
+fn overlay_mul_i32(value uint, scale u32) !int {
+	if scale != 0 && value > overlay_max_i32 / uint(scale) {
 		return error('overlay coordinate overflow')
 	}
-	return int(value * usize(scale))
+	return int(value * uint(scale))
 }
 
 fn (mut self Overlay) composite_xy(x int, y int, pixel OverlayPixel) {

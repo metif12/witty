@@ -76,10 +76,10 @@ fn render_case(id int, line string) {
 		win.scroll(word(p, 10))
 		out.write_string('${id}|S|${screen.cursor_col},${screen.cursor_row},${int(screen.cursor_vis)}|')
 		for cell in screen.buf {
-			ptr := unsafe { usize(cell.char_.grapheme.str) }
-			start := unsafe { usize(original.str) }
+			ptr := unsafe { uint(cell.char_.grapheme.str) }
+			start := unsafe { uint(original.str) }
 			offset := if cell.char_.grapheme.len > 0 && ptr >= start
-				&& ptr + usize(cell.char_.grapheme.len) <= start + usize(original.len) {
+				&& ptr + uint(cell.char_.grapheme.len) <= start + uint(original.len) {
 				i64(ptr - start)
 			} else {
 				i64(-1)

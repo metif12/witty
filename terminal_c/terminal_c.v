@@ -288,7 +288,7 @@ pub fn (mut self KeyEncoder) setopt(option KeyEncoderOption, value KeyEncoderOpt
 // encode writes into the caller's fixed buffer. The returned byte count is
 // the bytes written on success or the required size when the buffer is too
 // small, matching ghostty_key_encoder_encode.
-pub fn (self &KeyEncoder) encode(event &KeyEvent, mut out []u8) (Result, usize) {
+pub fn (self &KeyEncoder) encode(event &KeyEvent, mut out []u8) (Result, uint) {
 	mut writer := KeyFixedWriter{
 		buffer: out
 	}
@@ -297,7 +297,7 @@ pub fn (self &KeyEncoder) encode(event &KeyEvent, mut out []u8) (Result, usize) 
 		input.encode_writer(mut discarding, event.event, self.opts) or { panic(err) }
 		return Result.out_of_memory, discarding.count
 	}
-	return Result.success, usize(writer.end)
+	return Result.success, uint(writer.end)
 }
 
 // ============================================================
@@ -420,7 +420,7 @@ mut:
 	allocator  lib_allocator.Allocator
 	allocated  bool
 	params_ptr voidptr
-	params_len usize
+	params_len uint
 }
 
 pub fn sgr_new() &SgrParser {
@@ -467,7 +467,7 @@ pub fn (mut self SgrParser) reset() {
 	self.parser.idx = 0
 }
 
-fn u16_array_view(data voidptr, len usize) []u16 {
+fn u16_array_view(data voidptr, len uint) []u16 {
 	mut result := []u16{}
 	unsafe {
 		mut header := &array(&result)
@@ -484,8 +484,8 @@ fn u16_array_view(data voidptr, len usize) []u16 {
 // parameter list through the allocator retained by the parser, releases the
 // previous list only after the new allocation succeeds, and then parses from
 // that owned storage.
-pub fn (mut self SgrParser) set_params_raw(params &u16, separators &u8, len usize) Result {
-	if len > usize(max_int) || len > ~usize(0) / sizeof(u16) {
+pub fn (mut self SgrParser) set_params_raw(params &u16, separators &u8, len uint) Result {
+	if len > uint(max_int) || len > ~uint(0) / sizeof(u16) {
 		return .out_of_memory
 	}
 
@@ -514,14 +514,14 @@ pub fn (mut self SgrParser) set_params_raw(params &u16, separators &u8, len usiz
 	// reporting an overlong separator list. Preserve that observable ordering.
 	self.parser.params_sep = terminal.SepList.init_empty()
 	if !isnil(separators) {
-		if len > usize(terminal.max_params) {
+		if len > uint(terminal.max_params) {
 			message := 'ghostty_sgr_set_params: separators length ${len} exceeds max supported length ${terminal.max_params}'
 			$if ghostty_wasm_module ? { wasm_log.write(.warn, 'sgr', message) } $else { log.warn(message) }
 			return .invalid_value
 		}
 		for i in 0 .. int(len) {
 			if unsafe { separators[i] } == `:` {
-				self.parser.params_sep.set(usize(i))
+				self.parser.params_sep.set(uint(i))
 			}
 		}
 	}
@@ -539,9 +539,9 @@ pub fn (mut self SgrParser) set_params(params []u16, separators ?[]u8) Result {
 			return .invalid_value
 		}
 		seps_ptr := if seps.len == 0 { &u8(unsafe { nil }) } else { &seps[0] }
-		return self.set_params_raw(params_ptr, seps_ptr, usize(params.len))
+		return self.set_params_raw(params_ptr, seps_ptr, uint(params.len))
 	}
-	return self.set_params_raw(params_ptr, &u8(unsafe { nil }), usize(params.len))
+	return self.set_params_raw(params_ptr, &u8(unsafe { nil }), uint(params.len))
 }
 
 pub fn (mut self SgrParser) next() ?terminal.SgrAttribute {
@@ -569,9 +569,9 @@ pub fn attribute_value(attr terminal.SgrAttribute) terminal.SgrAttribute {
 pub struct SgrUnknownC {
 pub mut:
 	full_ptr    &u16 = unsafe { nil }
-	full_len    usize
+	full_len    uint
 	partial_ptr &u16 = unsafe { nil }
-	partial_len usize
+	partial_len uint
 }
 
 // SgrAttributeValueC is the fixed 64-byte C union storage. The active member
@@ -606,13 +606,13 @@ pub fn sgr_attribute_cval(attr terminal.SgrAttribute) SgrAttributeC {
 				} else {
 					&attr.full[0]
 				}
-				unknown.full_len = usize(attr.full.len)
+				unknown.full_len = uint(attr.full.len)
 				unknown.partial_ptr = if attr.partial.len == 0 {
 					&u16(nil)
 				} else {
 					&attr.partial[0]
 				}
-				unknown.partial_len = usize(attr.partial.len)
+				unknown.partial_len = uint(attr.partial.len)
 			}
 			terminal.SgrUnderline {
 				*(&i32(value)) = i32(attr.style)
@@ -634,11 +634,11 @@ pub fn sgr_attribute_cval(attr terminal.SgrAttribute) SgrAttributeC {
 	return result
 }
 
-pub fn sgr_unknown_full(unknown SgrUnknownC) (&u16, usize) {
+pub fn sgr_unknown_full(unknown SgrUnknownC) (&u16, uint) {
 	return unknown.full_ptr, unknown.full_len
 }
 
-pub fn sgr_unknown_partial(unknown SgrUnknownC) (&u16, usize) {
+pub fn sgr_unknown_partial(unknown SgrUnknownC) (&u16, uint) {
 	return unknown.partial_ptr, unknown.partial_len
 }
 
@@ -693,11 +693,11 @@ fn (mut writer KeyFixedWriter) write(data []u8) !int {
 
 struct KeyDiscardingWriter {
 mut:
-	count usize
+	count uint
 }
 
 fn (mut writer KeyDiscardingWriter) write(data []u8) !int {
-	writer.count += usize(data.len)
+	writer.count += uint(data.len)
 	return data.len
 }
 

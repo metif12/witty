@@ -13,9 +13,9 @@ pub struct NetpbmHeader {
 pub mut:
 	format    NetpbmFormat @[required]
 	binary    bool         @[required]
-	width     usize        @[required]
-	height    usize        @[required]
-	max_value usize        @[required]
+	width     uint        @[required]
+	height    uint        @[required]
+	max_value uint        @[required]
 }
 
 pub struct PbmKind {}
@@ -120,9 +120,9 @@ pub fn Netpbm.write_image[T](mut stream WriteStream, image ImageUnmanaged, optio
 	}
 
 	max_value := match image.pixels {
-		Grayscale16Pixels { usize(65535) }
-		Grayscale1Pixels { usize(1) }
-		else { usize(255) }
+		Grayscale16Pixels { uint(65535) }
+		Grayscale1Pixels { uint(1) }
+		else { uint(255) }
 	}
 
 	mut codec := Netpbm[T]{
@@ -167,7 +167,7 @@ pub fn (mut codec Netpbm[T]) read[T](mut stream ReadStream) !PixelStorage {
 				mut bits := BitReader[BigEndian]{
 					reader: unsafe { &stream }
 				}
-				for row := usize(0); row < header.height; row++ {
+				for row := uint(0); row < header.height; row++ {
 					for i := row * header.width; i < (row + 1) * header.width; i++ {
 						pixels.data[int(i)].value = 1 - bits.read_bits_no_eof[BigEndian, u8](1)!
 					}
@@ -254,11 +254,11 @@ pub fn (mut codec Netpbm[T]) write[T](mut stream WriteStream, pixels PixelStorag
 				mut bits := BitWriter[BigEndian]{
 					writer: unsafe { &stream }
 				}
-				for row := usize(0); row < header.height; row++ {
+				for row := uint(0); row < header.height; row++ {
 					// Source checks both slices for the complete row before writing
 					// any of its bits, including zero-width rows after the end.
 					start := netpbm_multiply(row, header.width)
-					length := usize(samples.data.len)
+					length := uint(samples.data.len)
 					if start > length {
 						panic('start index ${start} is larger than end index ${length}')
 					}
@@ -268,7 +268,7 @@ pub fn (mut codec Netpbm[T]) write[T](mut stream WriteStream, pixels PixelStorag
 						// the end relative to the complete sample buffer.
 						panic('index out of bounds: index ${start + header.width}, len ${length}')
 					}
-					for i := usize(0); i < header.width; i++ {
+					for i := uint(0); i < header.width; i++ {
 						value := samples.data[int(start + i)].value
 						assert value <= 1
 						bits.write_bits[BigEndian, u8](1 - value, 1)!
@@ -362,7 +362,7 @@ fn read_netpbm_next(mut stream ReadStream) !u8 {
 	return error('unreachable')
 }
 
-fn parse_netpbm_number(mut stream ReadStream) !usize {
+fn parse_netpbm_number(mut stream ReadStream) !uint {
 	mut buffer := [16]u8{}
 	mut length := 0
 	for {
@@ -378,21 +378,21 @@ fn parse_netpbm_number(mut stream ReadStream) !usize {
 	return error('unreachable')
 }
 
-fn parse_netpbm_decimal(bytes []u8) !usize {
+fn parse_netpbm_decimal(bytes []u8) !uint {
 	mut start := 0
 	negative := bytes[0] == `-`
 	if bytes[0] in [u8(`+`), `-`] { start++ }
 	if start == bytes.len || bytes[start] == `_` || bytes.last() == `_` {
 		return error('InvalidData')
 	}
-	mut value := usize(0)
+	mut value := uint(0)
 	for byte in bytes[start..] {
 		if byte == `_` { continue
 		 }
 		if byte < `0` || byte > `9` { return error('InvalidData') }
-		digit := usize(byte - `0`)
+		digit := uint(byte - `0`)
 		if negative && digit != 0 { return error('InvalidData') }
-		if value > (~usize(0) - digit) / 10 { return error('InvalidData') }
+		if value > (~uint(0) - digit) / 10 { return error('InvalidData') }
 		value = value * 10 + digit
 	}
 	return value
@@ -403,21 +403,21 @@ fn read_netpbm_u16(mut stream ReadStream) !u16 {
 	return u16(bytes[0]) << 8 | u16(bytes[1])
 }
 
-fn read_netpbm_linearized(mut stream ReadStream, max_value usize) !u8 {
+fn read_netpbm_linearized(mut stream ReadStream, max_value uint) !u8 {
 	value := if max_value > 255 {
-		usize(read_netpbm_u16(mut stream)!)
+		uint(read_netpbm_u16(mut stream)!)
 	} else {
-		usize(stream.take_byte()!)
+		uint(stream.take_byte()!)
 	}
 	return netpbm_linearize(value, max_value)
 }
 
-fn netpbm_multiply(left usize, right usize) usize {
-	if right != 0 && left > ~usize(0) / right { panic('integer overflow') }
+fn netpbm_multiply(left uint, right uint) uint {
+	if right != 0 && left > ~uint(0) / right { panic('integer overflow') }
 	return left * right
 }
 
-fn netpbm_linearize(value usize, max_value usize) u8 {
+fn netpbm_linearize(value uint, max_value uint) u8 {
 	numerator := netpbm_multiply(255, value)
 	if max_value == 0 { panic('division by zero') }
 	return u8(numerator / max_value)

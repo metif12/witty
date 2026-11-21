@@ -27,7 +27,7 @@ fn atlas_reserve_wasm_export(raw voidptr, width u32, height u32) voidptr {
 }
 
 @[export: 'atlas_set']
-fn atlas_set_wasm_export(raw voidptr, region_raw voidptr, data &u8, len usize) {
+fn atlas_set_wasm_export(raw voidptr, region_raw voidptr, data &u8, len uint) {
 	mut atlas := unsafe { &font.Atlas(raw) }
 	region := unsafe { &font.AtlasRegion(region_raw) }
 	font.atlas_set(mut atlas, region, data, len)

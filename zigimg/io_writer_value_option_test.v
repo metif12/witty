@@ -12,19 +12,19 @@ fn test_value_optional_payloads_and_null_alignment() ! {
 	mut buffer := []u8{len: 512}
 	mut writer := WriteStream.init_memory(mut buffer)
 	options := FormatOptions{
-		width:     usize(6)
+		width:     uint(6)
 		fill:      `_`
 		alignment: .center
 	}
 	writer.print_value('?X', options, ?ValueOptionalInteger(ValueOptionalInteger(42)), 0)!
 	writer.write_byte(`|`)!
-	writer.print_value('?X', options, ?ValueOptionalInteger(none), ~usize(0))!
+	writer.print_value('?X', options, ?ValueOptionalInteger(none), ~uint(0))!
 	writer.write_byte(`|`)!
 	writer.print_value('?s', FormatOptions{}, ?[]u8([u8(0), 255]), 0)!
 	writer.write_byte(`|`)!
 	writer.print_value('any', FormatOptions{}, ?bool(true), 0)!
 	writer.write_byte(`|`)!
-	writer.print_value('?e', FormatOptions{ precision: usize(1) }, ?f32(1.25), 0)!
+	writer.print_value('?e', FormatOptions{ precision: uint(1) }, ?f32(1.25), 0)!
 	assert writer.buffered() == [u8(95), `+`, `2`, `A`, 95, 95, `|`, 95, `n`, `u`, `l`, `l`, 95,
 		`|`, 0, 255, `|`, `t`, `r`, `u`, `e`, `|`, `1`, `.`, `3`, `e`, `0`]
 }
@@ -93,7 +93,7 @@ fn test_value_optional_distinct_array_specializations_and_pointer() ! {
 	writer.write_byte(`|`)!
 	writer.print_value('any', FormatOptions{}, [?u64(~u64(0)), ?u64(none)], 1)!
 	writer.write_byte(`|`)!
-	address := unsafe { &u32(usize(40)) }
+	address := unsafe { &u32(uint(40)) }
 	writer.print_value('?*', FormatOptions{}, ?&u32(address), 0)!
 	writer.write_byte(`|`)!
 	writer.print_value('*', FormatOptions{}, ?&u32(address), 0)!

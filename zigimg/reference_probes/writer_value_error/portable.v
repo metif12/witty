@@ -23,11 +23,11 @@ fn test_value_error_names_and_alignment() ! {
 	mut writer := zigimg.WriteStream.init_memory(mut buffer)
 	writer.print_value('', zigimg.FormatOptions{}, error_with_code('Alpha', 17), 0)!
 	writer.write_byte(`|`)!
-	writer.print_value('any', zigimg.FormatOptions{}, ValueNamedError{'Bad Name'}, ~usize(0))!
+	writer.print_value('any', zigimg.FormatOptions{}, ValueNamedError{'Bad Name'}, ~uint(0))!
 	writer.write_byte(`|`)!
 	writer.print_value('t', zigimg.FormatOptions{
-		width:     usize(10)
-		precision: usize(0)
+		width:     uint(10)
+		precision: uint(0)
 		fill:      `_`
 		alignment: .center
 	}, ValueNamedError{'échec'}, 0)!
@@ -75,7 +75,7 @@ fn test_value_error_every_capacity_and_invalid_formats() ! {
 		mut buffer := []u8{len: 16, init: 0xa5}
 		mut writer := zigimg.WriteStream.init_memory(mut buffer)
 		mut status := 'ok'
-		writer.print_value(format, zigimg.FormatOptions{ width: usize(0), precision: usize(0) }, ValueNamedError{'Alpha'},
+		writer.print_value(format, zigimg.FormatOptions{ width: uint(0), precision: uint(0) }, ValueNamedError{'Alpha'},
 			0) or { status = err.msg() }
 		assert status == 'unsupported print_value error format'
 		assert writer.buffered().len == 0

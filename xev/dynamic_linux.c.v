@@ -117,7 +117,7 @@ pub fn (mut self DynamicLoop) run(mode RunMode) ! {
 // @fieldParentPtr("backend", @as(*Loop.Union, @fieldParentPtr("io_uring", l)))
 fn DynamicLoop.from_io_uring(l &IoUringLoop) &DynamicLoop {
 	return unsafe {
-		&DynamicLoop(voidptr(usize(l) - __offsetof(DynamicLoopUnion, io_uring) -
+		&DynamicLoop(voidptr(uint(l) - __offsetof(DynamicLoopUnion, io_uring) -
 			__offsetof(DynamicLoop, backend)))
 	}
 }
@@ -125,7 +125,7 @@ fn DynamicLoop.from_io_uring(l &IoUringLoop) &DynamicLoop {
 // @fieldParentPtr("backend", @as(*Loop.Union, @fieldParentPtr("epoll", l)))
 fn DynamicLoop.from_epoll(l &EpollLoop) &DynamicLoop {
 	return unsafe {
-		&DynamicLoop(voidptr(usize(l) - __offsetof(DynamicLoopUnion, epoll) -
+		&DynamicLoop(voidptr(uint(l) - __offsetof(DynamicLoopUnion, epoll) -
 			__offsetof(DynamicLoop, backend)))
 	}
 }
@@ -221,7 +221,7 @@ pub fn (mut self DynamicCompletion) ensure_tag(tag DynamicBackend) {
 // @fieldParentPtr("value", @as(*Completion.Union, @fieldParentPtr("io_uring", c)))
 fn DynamicCompletion.from_io_uring(c &IoUringCompletion) &DynamicCompletion {
 	return unsafe {
-		&DynamicCompletion(voidptr(usize(c) - __offsetof(DynamicCompletionUnion, io_uring) -
+		&DynamicCompletion(voidptr(uint(c) - __offsetof(DynamicCompletionUnion, io_uring) -
 			__offsetof(DynamicCompletion, value)))
 	}
 }
@@ -229,7 +229,7 @@ fn DynamicCompletion.from_io_uring(c &IoUringCompletion) &DynamicCompletion {
 // @fieldParentPtr("value", @as(*Completion.Union, @fieldParentPtr("epoll", c)))
 fn DynamicCompletion.from_epoll(c &EpollCompletion) &DynamicCompletion {
 	return unsafe {
-		&DynamicCompletion(voidptr(usize(c) - __offsetof(DynamicCompletionUnion, epoll) -
+		&DynamicCompletion(voidptr(uint(c) - __offsetof(DynamicCompletionUnion, epoll) -
 			__offsetof(DynamicCompletion, value)))
 	}
 }

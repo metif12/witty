@@ -236,7 +236,7 @@ fn flatpak_completion_run(mut loop xev.Loop, c &FlatpakCompletion) {
 }
 
 fn flatpak_completion_timer_callback(ud voidptr, l_inner &xev.Loop, c_inner &xev.Completion, r ?xev.ErrorKind) xev.CallbackAction {
-	mut c_outer := unsafe { &FlatpakCompletion(voidptr(usize(c_inner) - __offsetof(FlatpakCompletion, c_xev))) }
+	mut c_outer := unsafe { &FlatpakCompletion(voidptr(uint(c_inner) - __offsetof(FlatpakCompletion, c_xev))) }
 	defer {
 		if mut t := c_outer.timer {
 			t.deinit()

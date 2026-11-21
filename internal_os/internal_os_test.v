@@ -77,7 +77,7 @@ fn test_open_process_inherits_stdin_and_redirects_output() {
 	$if !windows {
 		input_pipe := pipe()!
 		input := 'inherited-stdin-policy'
-		assert C.write(input_pipe[1], input.str, usize(input.len)) == isize(input.len)
+		assert C.write(input_pipe[1], input.str, uint(input.len)) == int(input.len)
 		os.fd_close(input_pipe[1])
 		saved_stdin := C.dup(0)
 		assert saved_stdin >= 0
@@ -685,10 +685,10 @@ fn test_cgroup_path_from_contents() {
 
 fn test_cgroup_limit_uses_pointer_width_payload() {
 	assert sizeof(CgroupLimitKind) == 1
-	assert sizeof(CgroupLimitMemoryHigh) == sizeof(usize)
-	assert sizeof(CgroupLimitPidsMax) == sizeof(usize)
+	assert sizeof(CgroupLimitMemoryHigh) == sizeof(uint)
+	assert sizeof(CgroupLimitPidsMax) == sizeof(uint)
 	memory := CgroupLimit(CgroupLimitMemoryHigh{
-		value: usize(1) << 40
+		value: uint(1) << 40
 	})
 	assert memory is CgroupLimitMemoryHigh
 	assert memory.kind() == .memory_high

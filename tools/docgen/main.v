@@ -14,5 +14,5 @@ fn main() {
 		else { eprintln('InvalidAction'); exit(1) }
 	}
 	mut stdout := os.stdout()
-	stdout.write_full_buffer(text.str, usize(text.len)) or { eprintln(err); exit(1) }
+	stdout.write_full_buffer(text.str, uint(text.len)) or { eprintln(err); exit(1) }
 }

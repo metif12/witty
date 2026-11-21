@@ -81,10 +81,10 @@ fn cgroup_write_existing(path string, value string) ! {
 		os.fd_close(fd)
 	}
 
-	mut offset := usize(0)
-	for offset < usize(value.len) {
-		ptr := unsafe { voidptr(usize(value.str) + offset) }
-		written := C.write(fd, ptr, usize(value.len) - offset)
+	mut offset := uint(0)
+	for offset < uint(value.len) {
+		ptr := unsafe { voidptr(uint(value.str) + offset) }
+		written := C.write(fd, ptr, uint(value.len) - offset)
 		if written < 0 {
 			if C.errno == C.EINTR {
 				continue
@@ -94,7 +94,7 @@ fn cgroup_write_existing(path string, value string) ! {
 		if written == 0 {
 			return error('short write to cgroup control file')
 		}
-		offset += usize(written)
+		offset += uint(written)
 	}
 }
 

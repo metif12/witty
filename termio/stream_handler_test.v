@@ -492,7 +492,7 @@ fn test_stream_handler_erase_display() ! {
 fn test_stream_handler_scroll_up() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
-	handler.vt(.scroll_up, usize(1))!
+	handler.vt(.scroll_up, uint(1))!
 	// Should not crash
 }
 
@@ -500,35 +500,35 @@ fn test_stream_handler_scroll_up() ! {
 fn test_stream_handler_erase_chars() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
-	handler.vt(.erase_chars, usize(5))!
+	handler.vt(.erase_chars, uint(5))!
 }
 
 // Test insert_lines dispatching.
 fn test_stream_handler_insert_lines() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
-	handler.vt(.insert_lines, usize(2))!
+	handler.vt(.insert_lines, uint(2))!
 }
 
 // Test delete_lines dispatching.
 fn test_stream_handler_delete_lines() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
-	handler.vt(.delete_lines, usize(1))!
+	handler.vt(.delete_lines, uint(1))!
 }
 
 // Test insert_blanks dispatching.
 fn test_stream_handler_insert_blanks() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
-	handler.vt(.insert_blanks, usize(3))!
+	handler.vt(.insert_blanks, uint(3))!
 }
 
 // Test delete_chars dispatching.
 fn test_stream_handler_delete_chars() ! {
 	mut handler, mut ctx := make_test_handler()
 	defer { ctx.t.deinit() }
-	handler.vt(.delete_chars, usize(2))!
+	handler.vt(.delete_chars, uint(2))!
 }
 
 // Test tab_set and tab_clear_current dispatching.

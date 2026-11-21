@@ -8,7 +8,7 @@ import buildcfg
 pub struct RawMemoryPool {
 pub mut:
 	arena          ArenaAllocator
-	item_size      usize
+	item_size      uint
 	item_alignment u8
 	growable       bool = true
 mut:
@@ -20,7 +20,7 @@ mut:
 	next voidptr
 }
 
-pub fn RawMemoryPool.init(allocator Allocator, item_size usize, alignment u8, growable bool, scanned bool) RawMemoryPool {
+pub fn RawMemoryPool.init(allocator Allocator, item_size uint, alignment u8, growable bool, scanned bool) RawMemoryPool {
 	pointer_alignment := alignment_log[voidptr]()
 	return RawMemoryPool{
 		arena:          ArenaAllocator.init(allocator, scanned)
@@ -34,7 +34,7 @@ pub fn RawMemoryPool.init(allocator Allocator, item_size usize, alignment u8, gr
 	}
 }
 
-pub fn RawMemoryPool.init_preheated(allocator Allocator, item_size usize, alignment u8, growable bool, scanned bool, initial_size usize) !RawMemoryPool {
+pub fn RawMemoryPool.init_preheated(allocator Allocator, item_size uint, alignment u8, growable bool, scanned bool, initial_size uint) !RawMemoryPool {
 	mut pool := RawMemoryPool.init(allocator, item_size, alignment, growable, scanned)
 	mut ready := false
 	defer {
@@ -50,7 +50,7 @@ pub fn (mut pool RawMemoryPool) deinit() {
 	pool = RawMemoryPool{}
 }
 
-pub fn (mut pool RawMemoryPool) preheat(size usize) ! {
+pub fn (mut pool RawMemoryPool) preheat(size uint) ! {
 	for _ in 0 .. size {
 		ptr := pool.alloc_new()!
 		mut node := unsafe { &MemoryPoolFreeNode(ptr) }
@@ -110,7 +110,7 @@ pub fn MemoryPool.init[T](allocator Allocator) MemoryPool[T] {
 	}
 }
 
-pub fn MemoryPool.init_preheated[T](allocator Allocator, initial_size usize) !MemoryPool[T] {
+pub fn MemoryPool.init_preheated[T](allocator Allocator, initial_size uint) !MemoryPool[T] {
 	return MemoryPool[T]{
 		raw: RawMemoryPool.init_preheated(allocator, sizeof(T), alignment_log[T](), true, true,
 			initial_size)!

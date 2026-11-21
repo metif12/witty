@@ -39,12 +39,12 @@ mut:
 	u16_value   u16
 	u32_value   u32
 	u64_value   u64
-	usize_value usize
+	usize_value uint
 	i8_value    i8
 	i16_value   i16
 	i32_value   i32
 	i64_value   i64
-	isize_value isize
+	isize_value int
 }
 
 struct FloatTestData {

@@ -73,7 +73,7 @@ fn run_case(fields []string, mut data []u8) {
 			a: 99
 		}
 	}
-	codec.palette.resize(usize(fields[9].u64()))
+	codec.palette.resize(uint(fields[9].u64()))
 	mut reader := p.ReadStream.init_memory(data)
 	start := fields[11].int()
 	if start > 0 { reader.take(start) or { panic(err) } }
@@ -186,8 +186,8 @@ fn run_case(fields []string, mut data []u8) {
 	before := raw.hex()
 	mut independent := '-'
 	if raw.len > 0 {
-		ptr := usize(raw.data)
-		independent = if ptr < usize(data.data) || ptr >= usize(data.data) + usize(data.len) {
+		ptr := uint(raw.data)
+		independent = if ptr < uint(data.data) || ptr >= uint(data.data) + uint(data.len) {
 			'1'
 		} else {
 			'0'
@@ -201,7 +201,7 @@ fn run_case(fields []string, mut data []u8) {
 		mut view := unsafe { pal }
 		palette_before = unsafe { (&u8(view.data)).vbytes(view.len * 4).hex() }
 		if view.len > 0 {
-			separate = if op == 2 && usize(view.data) == usize(codec.palette.data.data) {
+			separate = if op == 2 && uint(view.data) == uint(codec.palette.data.data) {
 				'0'
 			} else {
 				'1'

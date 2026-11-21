@@ -74,8 +74,8 @@ fn line_case(line string) {
 	if f[0] == '7' {
 		mut original := p.CcittDecoder{}
 		mut copied := original
-		copied.width = usize(f[1].u64())
-		copied.num_rows = usize(f[2].u64())
+		copied.width = uint(f[1].u64())
+		copied.num_rows = uint(f[2].u64())
 		copied.white_value = f[3].u8()
 		copied.current_color = if f[4] == '0' { p.CcittColor.black } else { p.CcittColor.white }
 		copied.should_reverse = f[5] == '1'
@@ -91,7 +91,7 @@ fn line_case(line string) {
 	observed_writer = &writer
 	observed_output = unsafe { output[..] }
 	if f[11].u64() > 0 { writer.seek_to(f[11].u64()) or { panic(err) } }
-	mut codec := p.CcittDecoder.init(usize(f[1].u64()), usize(f[2].u64()), f[3].u8()) or {
+	mut codec := p.CcittDecoder.init(uint(f[1].u64()), uint(f[2].u64()), f[3].u8()) or {
 		panic(err)
 	}
 	observed_codec = &codec

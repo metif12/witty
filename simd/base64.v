@@ -17,14 +17,14 @@ fn base64_scalar_input(input []u8) []u8 {
 
 // max_len returns the exact decoded length, or zero for an invalid input
 // length. This is Ghostty's maxLen entry point.
-pub fn max_len(input []u8) usize {
+pub fn max_len(input []u8) uint {
 	$if !js && !wasm32 && !no_simd ? {
-		return C.ghostty_simd_base64_max_length(input.data, usize(input.len))
+		return C.ghostty_simd_base64_max_length(input.data, uint(input.len))
 	}
 	return max_len_scalar(input)
 }
 
-fn max_len_scalar(input []u8) usize {
+fn max_len_scalar(input []u8) uint {
 	scalar := base64_scalar_input(input)
 	return calc_size_for_slice(scalar) or {
 		$if ghostty_wasm_module ? { wasm_log.write(.warn, 'simd_base64', 'failed to calculate base64 size for payload: ${err}') } $else { log.warn('failed to calculate base64 size for payload: ${err}') }
@@ -36,7 +36,7 @@ fn max_len_scalar(input []u8) usize {
 // Invalid alphabet characters produce Base64Invalid.
 pub fn decode(input []u8, mut output []u8) ![]u8 {
 	$if !js && !wasm32 && !no_simd ? {
-		result := isize(C.ghostty_simd_base64_decode(input.data, usize(input.len), output.data))
+		result := int(C.ghostty_simd_base64_decode(input.data, uint(input.len), output.data))
 		if result < 0 {
 			return error('Base64Invalid')
 		}
@@ -51,7 +51,7 @@ fn decode_scalar(input []u8, mut output []u8) ![]u8 {
 	if size == 0 {
 		return output[..0]
 	}
-	assert usize(output.len) >= size
+	assert uint(output.len) >= size
 	scalar_base64_decode(scalar, mut output) or { return error('Base64Invalid') }
 	return output[..size]
 }

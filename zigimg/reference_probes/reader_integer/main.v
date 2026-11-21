@@ -8,14 +8,14 @@ import zigimg
 #flag -I @DIR/..
 #include "fixture_shims.h"
 
-fn C.witty_reader_exclusive_payload(&char, &u8, usize) int
+fn C.witty_reader_exclusive_payload(&char, &u8, uint) int
 fn C.witty_reader_delimiter_replace(int) int
-fn C.witty_reader_delimiter_seed(usize, usize) int
+fn C.witty_reader_delimiter_seed(uint, uint) int
 fn C.witty_reader_delimiter_shutdown() int
 fn C.witty_reader_delimiter_cleanup() int
 fn C.witty_reader_delimiter_valid() int
 fn C.witty_reader_delimiter_refs() int
-fn C.witty_reader_delimiter_drain(&u8, usize) isize
+fn C.witty_reader_delimiter_drain(&u8, uint) int
 
 __global (
 	observed_path   string
@@ -58,12 +58,12 @@ type AliasI8 = i8
 type AliasI16 = i16
 type AliasInt = int
 type AliasI64 = i64
-type AliasUsize = usize
-type AliasIsize = isize
+type AliasUsize = uint
+type AliasIsize = int
 type AliasBig = zigimg.BigEndian
 type AliasLittle = zigimg.LittleEndian
 
-fn number_read[T, E](mut reader zigimg.ReadStream, mut output []u8, op int, order E, n usize) string {
+fn number_read[T, E](mut reader zigimg.ReadStream, mut output []u8, op int, order E, n uint) string {
 	mut adapter := reader.reader()
 	mut value := T(0)
 	if op == 0 {
@@ -77,7 +77,7 @@ fn number_read[T, E](mut reader zigimg.ReadStream, mut output []u8, op int, orde
 	return 'ok'
 }
 
-fn endian_read[T](mut reader zigimg.ReadStream, mut output []u8, op int, order int, n usize) string {
+fn endian_read[T](mut reader zigimg.ReadStream, mut output []u8, op int, order int, n uint) string {
 	return match order {
 		0 {
 			number_read[T, zigimg.BigEndian](mut reader, mut output, op, zigimg.BigEndian{}, n)
@@ -95,7 +95,7 @@ fn endian_read[T](mut reader zigimg.ReadStream, mut output []u8, op int, order i
 	}
 }
 
-fn operate(mut reader zigimg.ReadStream, mut output []u8, op int, tag int, order int, n usize) string {
+fn operate(mut reader zigimg.ReadStream, mut output []u8, op int, tag int, order int, n uint) string {
 	return match tag {
 		0 { endian_read[u8](mut reader, mut output, op, order, n) }
 		1 { endian_read[u16](mut reader, mut output, op, order, n) }
@@ -105,8 +105,8 @@ fn operate(mut reader zigimg.ReadStream, mut output []u8, op int, tag int, order
 		5 { endian_read[i16](mut reader, mut output, op, order, n) }
 		6 { endian_read[int](mut reader, mut output, op, order, n) }
 		7 { endian_read[i64](mut reader, mut output, op, order, n) }
-		8 { endian_read[usize](mut reader, mut output, op, order, n) }
-		9 { endian_read[isize](mut reader, mut output, op, order, n) }
+		8 { endian_read[uint](mut reader, mut output, op, order, n) }
+		9 { endian_read[int](mut reader, mut output, op, order, n) }
 		10 { endian_read[AliasU8](mut reader, mut output, op, order, n) }
 		11 { endian_read[AliasU16](mut reader, mut output, op, order, n) }
 		12 { endian_read[AliasU32](mut reader, mut output, op, order, n) }
@@ -132,7 +132,7 @@ fn record(line string, path string) string {
 	if kind == 0 {
 		buffer = unsafe { data }
 	} else {
-		fd := C.witty_reader_exclusive_payload(path.str, data.data, usize(data.len))
+		fd := C.witty_reader_exclusive_payload(path.str, data.data, uint(data.len))
 		if fd < 0 { panic('Reader setup failed') }
 		reader = if kind == 1 { zigimg.ReadStream.init_file(os.File{ fd: fd }, mut buffer) } else { zigimg.ReadStream.init_file_streaming(os.File{
 				fd: fd
@@ -151,12 +151,12 @@ fn record(line string, path string) string {
 	if start > 0 { reader.seek_to(u64(start)) or { status = err.msg() } }
 	if replacement > 0 && api == 1 {
 		reader.peek(capacity) or { panic(err) }
-		reader.toss(usize(consumed))
+		reader.toss(uint(consumed))
 	}
 	mut out := '${status}|' + snapshot(mut reader, buffer, output) + '~'
 	if replacement > 0 {
 		if C.witty_reader_delimiter_replace(0) != 0
-			|| C.witty_reader_delimiter_seed(0, usize(seed)) != 0 {
+			|| C.witty_reader_delimiter_seed(0, uint(seed)) != 0 {
 			panic('Reader replacement failed')
 		}
 		if replacement == 2 && C.witty_reader_delimiter_shutdown() != 0 {
@@ -173,7 +173,7 @@ fn record(line string, path string) string {
 	for attempt in 0 .. 3 {
 		observed_status = 'calling'
 		status = operate(mut reader, mut output, f[11].int(), f[12].int(), f[13].int(),
-			usize(f[14].u64()))
+			uint(f[14].u64()))
 		observed_status = status
 		observed_output = unsafe { output }
 		out += '${status}|' + snapshot(mut reader, buffer, output) + '~'
@@ -193,24 +193,24 @@ fn record(line string, path string) string {
 			}
 		}
 
-		reader.toss(usize(consume))
+		reader.toss(uint(consume))
 		out += 'consumed-${consume}|' + snapshot(mut reader, buffer, output) + '~'
 		if attempt == 0 {
 			status = 'ok'
 			reader.seek_by(delta) or { status = err.msg() }
 			out += '${status}|' + snapshot(mut reader, buffer, output) + '~'
 			if api == 2 && replacement == 1
-				&& C.witty_reader_delimiter_seed(0, usize(consumed)) != 0 {
+				&& C.witty_reader_delimiter_seed(0, uint(consumed)) != 0 {
 				panic('Reader reseed failed')
 			}
 		}
 	}
 	mut wire := []u8{}
-	mut drain := isize(-3)
+	mut drain := int(-3)
 	if replacement > 0 {
 		for {
 			mut bytes := []u8{len: 4096}
-			drain = C.witty_reader_delimiter_drain(bytes.data, usize(bytes.len))
+			drain = C.witty_reader_delimiter_drain(bytes.data, uint(bytes.len))
 			if drain <= 0 { break
 			 }
 			wire << bytes[..int(drain)]

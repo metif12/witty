@@ -8,14 +8,14 @@ import zigimg
 #flag -I @DIR/..
 #include "fixture_shims.h"
 
-fn C.witty_reader_exclusive_payload(&char, &u8, usize) int
+fn C.witty_reader_exclusive_payload(&char, &u8, uint) int
 fn C.witty_reader_delimiter_replace(int) int
-fn C.witty_reader_delimiter_seed(usize, usize) int
+fn C.witty_reader_delimiter_seed(uint, uint) int
 fn C.witty_reader_delimiter_shutdown() int
 fn C.witty_reader_delimiter_cleanup() int
 fn C.witty_reader_delimiter_valid() int
 fn C.witty_reader_delimiter_refs() int
-fn C.witty_reader_delimiter_drain(&u8, usize) isize
+fn C.witty_reader_delimiter_drain(&u8, uint) int
 
 __global (
 	observed_path   string
@@ -67,12 +67,12 @@ type AliasI8 = i8
 type AliasI16 = i16
 type AliasInt = int
 type AliasI64 = i64
-type AliasUsize = usize
-type AliasIsize = isize
+type AliasUsize = uint
+type AliasIsize = int
 type AliasBig = zigimg.BigEndian
 type AliasLittle = zigimg.LittleEndian
 
-fn number_read_0(mut reader zigimg.ReadStream, mut output []u8, order int, n usize) string {
+fn number_read_0(mut reader zigimg.ReadStream, mut output []u8, order int, n uint) string {
 	mut adapter := reader.reader()
 	values := match order {
 		0 {
@@ -99,7 +99,7 @@ fn number_read_0(mut reader zigimg.ReadStream, mut output []u8, order int, n usi
 	return 'ok'
 }
 
-fn number_read_1(mut reader zigimg.ReadStream, mut output []u8, order int, n usize) string {
+fn number_read_1(mut reader zigimg.ReadStream, mut output []u8, order int, n uint) string {
 	mut adapter := reader.reader()
 	values := match order {
 		0 {
@@ -126,7 +126,7 @@ fn number_read_1(mut reader zigimg.ReadStream, mut output []u8, order int, n usi
 	return 'ok'
 }
 
-fn number_read_2(mut reader zigimg.ReadStream, mut output []u8, order int, n usize) string {
+fn number_read_2(mut reader zigimg.ReadStream, mut output []u8, order int, n uint) string {
 	mut adapter := reader.reader()
 	values := match order {
 		0 {
@@ -153,7 +153,7 @@ fn number_read_2(mut reader zigimg.ReadStream, mut output []u8, order int, n usi
 	return 'ok'
 }
 
-fn number_read_3(mut reader zigimg.ReadStream, mut output []u8, order int, n usize) string {
+fn number_read_3(mut reader zigimg.ReadStream, mut output []u8, order int, n uint) string {
 	mut adapter := reader.reader()
 	values := match order {
 		0 {
@@ -180,7 +180,7 @@ fn number_read_3(mut reader zigimg.ReadStream, mut output []u8, order int, n usi
 	return 'ok'
 }
 
-fn number_read_4(mut reader zigimg.ReadStream, mut output []u8, order int, n usize) string {
+fn number_read_4(mut reader zigimg.ReadStream, mut output []u8, order int, n uint) string {
 	mut adapter := reader.reader()
 	values := match order {
 		0 {
@@ -207,7 +207,7 @@ fn number_read_4(mut reader zigimg.ReadStream, mut output []u8, order int, n usi
 	return 'ok'
 }
 
-fn number_read_5(mut reader zigimg.ReadStream, mut output []u8, order int, n usize) string {
+fn number_read_5(mut reader zigimg.ReadStream, mut output []u8, order int, n uint) string {
 	mut adapter := reader.reader()
 	values := match order {
 		0 {
@@ -234,7 +234,7 @@ fn number_read_5(mut reader zigimg.ReadStream, mut output []u8, order int, n usi
 	return 'ok'
 }
 
-fn number_read_6(mut reader zigimg.ReadStream, mut output []u8, order int, n usize) string {
+fn number_read_6(mut reader zigimg.ReadStream, mut output []u8, order int, n uint) string {
 	mut adapter := reader.reader()
 	values := match order {
 		0 {
@@ -261,7 +261,7 @@ fn number_read_6(mut reader zigimg.ReadStream, mut output []u8, order int, n usi
 	return 'ok'
 }
 
-fn number_read_7(mut reader zigimg.ReadStream, mut output []u8, order int, n usize) string {
+fn number_read_7(mut reader zigimg.ReadStream, mut output []u8, order int, n uint) string {
 	mut adapter := reader.reader()
 	values := match order {
 		0 {
@@ -288,61 +288,61 @@ fn number_read_7(mut reader zigimg.ReadStream, mut output []u8, order int, n usi
 	return 'ok'
 }
 
-fn number_read_8(mut reader zigimg.ReadStream, mut output []u8, order int, n usize) string {
+fn number_read_8(mut reader zigimg.ReadStream, mut output []u8, order int, n uint) string {
 	mut adapter := reader.reader()
 	values := match order {
 		0 {
-			adapter.read_slice_endian_alloc[usize, zigimg.BigEndian](n, zigimg.BigEndian{}) or {
+			adapter.read_slice_endian_alloc[uint, zigimg.BigEndian](n, zigimg.BigEndian{}) or {
 				return err.msg()
 			}
 		}
 		1 {
-			adapter.read_slice_endian_alloc[usize, zigimg.LittleEndian](n, zigimg.LittleEndian{}) or {
+			adapter.read_slice_endian_alloc[uint, zigimg.LittleEndian](n, zigimg.LittleEndian{}) or {
 				return err.msg()
 			}
 		}
 		2 {
-			adapter.read_slice_endian_alloc[usize, AliasBig](n, AliasBig{}) or { return err.msg() }
+			adapter.read_slice_endian_alloc[uint, AliasBig](n, AliasBig{}) or { return err.msg() }
 		}
 		else {
-			adapter.read_slice_endian_alloc[usize, AliasLittle](n, AliasLittle{}) or {
+			adapter.read_slice_endian_alloc[uint, AliasLittle](n, AliasLittle{}) or {
 				return err.msg()
 			}
 		}
 	}
 
-	output = unsafe { values.data.vbytes(values.len * int(sizeof(usize))) }
+	output = unsafe { values.data.vbytes(values.len * int(sizeof(uint))) }
 	return 'ok'
 }
 
-fn number_read_9(mut reader zigimg.ReadStream, mut output []u8, order int, n usize) string {
+fn number_read_9(mut reader zigimg.ReadStream, mut output []u8, order int, n uint) string {
 	mut adapter := reader.reader()
 	values := match order {
 		0 {
-			adapter.read_slice_endian_alloc[isize, zigimg.BigEndian](n, zigimg.BigEndian{}) or {
+			adapter.read_slice_endian_alloc[int, zigimg.BigEndian](n, zigimg.BigEndian{}) or {
 				return err.msg()
 			}
 		}
 		1 {
-			adapter.read_slice_endian_alloc[isize, zigimg.LittleEndian](n, zigimg.LittleEndian{}) or {
+			adapter.read_slice_endian_alloc[int, zigimg.LittleEndian](n, zigimg.LittleEndian{}) or {
 				return err.msg()
 			}
 		}
 		2 {
-			adapter.read_slice_endian_alloc[isize, AliasBig](n, AliasBig{}) or { return err.msg() }
+			adapter.read_slice_endian_alloc[int, AliasBig](n, AliasBig{}) or { return err.msg() }
 		}
 		else {
-			adapter.read_slice_endian_alloc[isize, AliasLittle](n, AliasLittle{}) or {
+			adapter.read_slice_endian_alloc[int, AliasLittle](n, AliasLittle{}) or {
 				return err.msg()
 			}
 		}
 	}
 
-	output = unsafe { values.data.vbytes(values.len * int(sizeof(isize))) }
+	output = unsafe { values.data.vbytes(values.len * int(sizeof(int))) }
 	return 'ok'
 }
 
-fn number_read_10(mut reader zigimg.ReadStream, mut output []u8, order int, n usize) string {
+fn number_read_10(mut reader zigimg.ReadStream, mut output []u8, order int, n uint) string {
 	mut adapter := reader.reader()
 	values := match order {
 		0 {
@@ -371,7 +371,7 @@ fn number_read_10(mut reader zigimg.ReadStream, mut output []u8, order int, n us
 	return 'ok'
 }
 
-fn number_read_11(mut reader zigimg.ReadStream, mut output []u8, order int, n usize) string {
+fn number_read_11(mut reader zigimg.ReadStream, mut output []u8, order int, n uint) string {
 	mut adapter := reader.reader()
 	values := match order {
 		0 {
@@ -400,7 +400,7 @@ fn number_read_11(mut reader zigimg.ReadStream, mut output []u8, order int, n us
 	return 'ok'
 }
 
-fn number_read_12(mut reader zigimg.ReadStream, mut output []u8, order int, n usize) string {
+fn number_read_12(mut reader zigimg.ReadStream, mut output []u8, order int, n uint) string {
 	mut adapter := reader.reader()
 	values := match order {
 		0 {
@@ -429,7 +429,7 @@ fn number_read_12(mut reader zigimg.ReadStream, mut output []u8, order int, n us
 	return 'ok'
 }
 
-fn number_read_13(mut reader zigimg.ReadStream, mut output []u8, order int, n usize) string {
+fn number_read_13(mut reader zigimg.ReadStream, mut output []u8, order int, n uint) string {
 	mut adapter := reader.reader()
 	values := match order {
 		0 {
@@ -458,7 +458,7 @@ fn number_read_13(mut reader zigimg.ReadStream, mut output []u8, order int, n us
 	return 'ok'
 }
 
-fn number_read_14(mut reader zigimg.ReadStream, mut output []u8, order int, n usize) string {
+fn number_read_14(mut reader zigimg.ReadStream, mut output []u8, order int, n uint) string {
 	mut adapter := reader.reader()
 	values := match order {
 		0 {
@@ -487,7 +487,7 @@ fn number_read_14(mut reader zigimg.ReadStream, mut output []u8, order int, n us
 	return 'ok'
 }
 
-fn number_read_15(mut reader zigimg.ReadStream, mut output []u8, order int, n usize) string {
+fn number_read_15(mut reader zigimg.ReadStream, mut output []u8, order int, n uint) string {
 	mut adapter := reader.reader()
 	values := match order {
 		0 {
@@ -516,7 +516,7 @@ fn number_read_15(mut reader zigimg.ReadStream, mut output []u8, order int, n us
 	return 'ok'
 }
 
-fn number_read_16(mut reader zigimg.ReadStream, mut output []u8, order int, n usize) string {
+fn number_read_16(mut reader zigimg.ReadStream, mut output []u8, order int, n uint) string {
 	mut adapter := reader.reader()
 	values := match order {
 		0 {
@@ -545,7 +545,7 @@ fn number_read_16(mut reader zigimg.ReadStream, mut output []u8, order int, n us
 	return 'ok'
 }
 
-fn number_read_17(mut reader zigimg.ReadStream, mut output []u8, order int, n usize) string {
+fn number_read_17(mut reader zigimg.ReadStream, mut output []u8, order int, n uint) string {
 	mut adapter := reader.reader()
 	values := match order {
 		0 {
@@ -574,7 +574,7 @@ fn number_read_17(mut reader zigimg.ReadStream, mut output []u8, order int, n us
 	return 'ok'
 }
 
-fn number_read_18(mut reader zigimg.ReadStream, mut output []u8, order int, n usize) string {
+fn number_read_18(mut reader zigimg.ReadStream, mut output []u8, order int, n uint) string {
 	mut adapter := reader.reader()
 	values := match order {
 		0 {
@@ -603,7 +603,7 @@ fn number_read_18(mut reader zigimg.ReadStream, mut output []u8, order int, n us
 	return 'ok'
 }
 
-fn number_read_19(mut reader zigimg.ReadStream, mut output []u8, order int, n usize) string {
+fn number_read_19(mut reader zigimg.ReadStream, mut output []u8, order int, n uint) string {
 	mut adapter := reader.reader()
 	values := match order {
 		0 {
@@ -632,7 +632,7 @@ fn number_read_19(mut reader zigimg.ReadStream, mut output []u8, order int, n us
 	return 'ok'
 }
 
-fn operate(mut reader zigimg.ReadStream, mut output []u8, op int, tag int, order int, n usize) string {
+fn operate(mut reader zigimg.ReadStream, mut output []u8, op int, tag int, order int, n uint) string {
 	if op % 2 == 0 {
 		output = reader.read_alloc(n) or { return err.msg() }
 		return 'ok'
@@ -673,7 +673,7 @@ fn record(line string, path string) string {
 	if kind == 0 {
 		buffer = unsafe { data }
 	} else {
-		fd := C.witty_reader_exclusive_payload(path.str, data.data, usize(data.len))
+		fd := C.witty_reader_exclusive_payload(path.str, data.data, uint(data.len))
 		if fd < 0 { panic('Reader setup failed') }
 		reader = if kind == 1 { zigimg.ReadStream.init_file(os.File{ fd: fd }, mut buffer) } else { zigimg.ReadStream.init_file_streaming(os.File{
 				fd: fd
@@ -694,12 +694,12 @@ fn record(line string, path string) string {
 	if start > 0 { reader.seek_to(u64(start)) or { status = err.msg() } }
 	if replacement > 0 && api == 1 {
 		reader.peek(capacity) or { panic(err) }
-		reader.toss(usize(consumed))
+		reader.toss(uint(consumed))
 	}
 	mut out := '${status}|' + snapshot(mut reader, buffer, output, held) + '~'
 	if replacement > 0 {
 		if C.witty_reader_delimiter_replace(0) != 0
-			|| C.witty_reader_delimiter_seed(0, usize(seed)) != 0 {
+			|| C.witty_reader_delimiter_seed(0, uint(seed)) != 0 {
 			panic('Reader replacement failed')
 		}
 		if replacement == 2 && C.witty_reader_delimiter_shutdown() != 0 {
@@ -716,7 +716,7 @@ fn record(line string, path string) string {
 	for attempt in 0 .. 3 {
 		observed_status = 'calling'
 		status = operate(mut reader, mut output, f[11].int(), f[12].int(), f[13].int(),
-			usize(f[14].u64()))
+			uint(f[14].u64()))
 		if status == 'ok' && held.len == 0 && output.len > 0 { held = unsafe { output } }
 		observed_status = status
 		observed_output = unsafe { output }
@@ -738,7 +738,7 @@ fn record(line string, path string) string {
 			}
 		}
 
-		reader.toss(usize(consume))
+		reader.toss(uint(consume))
 		if f[11].int() >= 2 && output.len > 0 { output[0] ^= 90 }
 		out += 'consumed-${consume}|' + snapshot(mut reader, buffer, output, held) + '~'
 		if attempt == 0 {
@@ -746,17 +746,17 @@ fn record(line string, path string) string {
 			reader.seek_by(delta) or { status = err.msg() }
 			out += '${status}|' + snapshot(mut reader, buffer, output, held) + '~'
 			if api == 2 && replacement == 1
-				&& C.witty_reader_delimiter_seed(0, usize(consumed)) != 0 {
+				&& C.witty_reader_delimiter_seed(0, uint(consumed)) != 0 {
 				panic('Reader reseed failed')
 			}
 		}
 	}
 	mut wire := []u8{}
-	mut drain := isize(-3)
+	mut drain := int(-3)
 	if replacement > 0 {
 		for {
 			mut bytes := []u8{len: 4096}
-			drain = C.witty_reader_delimiter_drain(bytes.data, usize(bytes.len))
+			drain = C.witty_reader_delimiter_drain(bytes.data, uint(bytes.len))
 			if drain <= 0 { break
 			 }
 			wire << bytes[..int(drain)]

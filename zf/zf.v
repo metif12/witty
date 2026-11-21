@@ -23,11 +23,11 @@ pub:
 struct PathIterator {
 	str string
 mut:
-	index usize
+	index uint
 }
 
 fn (mut iter PathIterator) next() ?string {
-	if iter.index >= usize(iter.str.len) {
+	if iter.index >= uint(iter.str.len) {
 		return none
 	}
 
@@ -37,7 +37,7 @@ fn (mut iter PathIterator) next() ?string {
 		return iter.str[start..iter.index]
 	}
 
-	for iter.index < usize(iter.str.len) {
+	for iter.index < uint(iter.str.len) {
 		if is_separator(iter.str[iter.index]) {
 			return iter.str[start..iter.index]
 		}
@@ -48,7 +48,7 @@ fn (mut iter PathIterator) next() ?string {
 
 struct ScanResult {
 	rank  f64
-	index usize
+	index uint
 }
 
 fn is_separator(byte u8) bool {
@@ -70,7 +70,7 @@ pub fn has_separator(str string) bool {
 }
 
 // segment_len scans left and right for the length of the path segment at index.
-pub fn segment_len(str string, index usize) usize {
+pub fn segment_len(str string, index uint) uint {
 	if is_separator(str[index]) {
 		return 1
 	}
@@ -82,7 +82,7 @@ pub fn segment_len(str string, index usize) usize {
 		}
 		start--
 	}
-	for end < usize(str.len) && !is_separator(str[end]) {
+	for end < uint(str.len) && !is_separator(str[end]) {
 		end++
 	}
 	return end - start
@@ -97,9 +97,9 @@ fn ascii_lower(byte u8) u8 {
 
 // index_of mirrors zf's byte search: in insensitive mode only the candidate
 // is folded, because the public API requires callers to lowercase tokens.
-fn index_of(str string, start_index usize, value u8, case_sensitive bool) ?usize {
+fn index_of(str string, start_index uint, value u8, case_sensitive bool) ?uint {
 	mut i := start_index
-	for i < usize(str.len) {
+	for i < uint(str.len) {
 		matches := if case_sensitive { str[i] == value } else { ascii_lower(str[i]) == value }
 		if matches {
 			return i
@@ -114,7 +114,7 @@ fn is_start_of_word(byte u8) bool {
 }
 
 // scan_to_end is the core zf ranking algorithm.
-fn scan_to_end(str string, token string, start_index usize, case_sensitive bool, strict_path bool) ?ScanResult {
+fn scan_to_end(str string, token string, start_index uint, case_sensitive bool, strict_path bool) ?ScanResult {
 	mut rank_value := 1.0
 	mut last_index := start_index
 	mut last_sequential := false
@@ -215,7 +215,7 @@ fn rank_token_impl(str string, filename ?string, token string, case_sensitive bo
 		mut iter := PathIterator{
 			str: token
 		}
-		mut start := usize(0)
+		mut start := uint(0)
 		for {
 			segment := iter.next() or { break }
 			mut search_index := start
@@ -246,7 +246,7 @@ fn rank_token_impl(str string, filename ?string, token string, case_sensitive bo
 	}
 
 	if filename_value := filename {
-		mut search_index := usize(0)
+		mut search_index := uint(0)
 		for {
 			start_index := index_of(filename_value, search_index, token[0], case_sensitive) or {
 				break
@@ -274,7 +274,7 @@ fn rank_token_impl(str string, filename ?string, token string, case_sensitive bo
 		}
 	}
 
-	mut search_index := usize(0)
+	mut search_index := uint(0)
 	for {
 		start_index := index_of(str, search_index, token[0], case_sensitive) or { break }
 		search_index = start_index + 1
@@ -310,19 +310,19 @@ pub fn rank_token(str string, token string, opts RankTokenOptions) ?f64 {
 	return rank_token_impl(str, opts.filename, token, !opts.to_lower, opts.strict_path)
 }
 
-fn append_bounded(mut values []usize, value usize, limit int) {
+fn append_bounded(mut values []uint, value uint, limit int) {
 	if values.len < limit {
 		values << value
 	}
 }
 
-fn append_all_bounded(mut values []usize, source []usize, limit int) {
+fn append_all_bounded(mut values []uint, source []uint, limit int) {
 	for value in source {
 		append_bounded(mut values, value, limit)
 	}
 }
 
-fn scan_to_end_highlight(str string, token string, start_index usize, offset usize, mut matched []usize, case_sensitive bool, strict_path bool) ?ScanResult {
+fn scan_to_end_highlight(str string, token string, start_index uint, offset uint, mut matched []uint, case_sensitive bool, strict_path bool) ?ScanResult {
 	mut rank_value := 1.0
 	mut last_index := start_index
 	mut last_sequential := false
@@ -359,20 +359,20 @@ fn scan_to_end_highlight(str string, token string, start_index usize, offset usi
 	}
 }
 
-fn highlight_token_impl(str string, filename ?string, token string, case_sensitive bool, strict_path bool, max_matches int) []usize {
+fn highlight_token_impl(str string, filename ?string, token string, case_sensitive bool, strict_path bool, max_matches int) []uint {
 	if str.len == 0 || token.len == 0 {
 		return []
 	}
 
 	mut best_rank := ?f64(none)
-	mut matched := []usize{cap: if token.len < 1024 { token.len } else { 1024 }}
-	mut best_matched := []usize{cap: max_matches}
+	mut matched := []uint{cap: if token.len < 1024 { token.len } else { 1024 }}
+	mut best_matched := []uint{cap: max_matches}
 
 	if strict_path {
 		mut iter := PathIterator{
 			str: token
 		}
-		mut start := usize(0)
+		mut start := uint(0)
 		for {
 			segment := iter.next() or { break }
 			mut search_index := start
@@ -407,8 +407,8 @@ fn highlight_token_impl(str string, filename ?string, token string, case_sensiti
 	}
 
 	if filename_value := filename {
-		offset := usize(str.len - filename_value.len - if is_separator(str[str.len - 1]) { 1 } else { 0 })
-		mut search_index := usize(0)
+		offset := uint(str.len - filename_value.len - if is_separator(str[str.len - 1]) { 1 } else { 0 })
+		mut search_index := uint(0)
 		for {
 			start_index := index_of(filename_value, search_index, token[0], case_sensitive) or {
 				break
@@ -434,7 +434,7 @@ fn highlight_token_impl(str string, filename ?string, token string, case_sensiti
 	}
 
 	matched.clear()
-	mut search_index := usize(0)
+	mut search_index := uint(0)
 	for {
 		start_index := index_of(str, search_index, token[0], case_sensitive) or { break }
 		search_index = start_index + 1
@@ -456,7 +456,7 @@ fn highlight_token_impl(str string, filename ?string, token string, case_sensiti
 }
 
 // highlight writes match indices into matches and returns the populated slice.
-pub fn highlight(str string, tokens []string, mut matches []usize, opts RankOptions) []usize {
+pub fn highlight(str string, tokens []string, mut matches []uint, opts RankOptions) []uint {
 	filename := if opts.plain { ?string(none) } else { ?string(basename(str)) }
 	mut index := 0
 	for token in tokens {
@@ -471,7 +471,7 @@ pub fn highlight(str string, tokens []string, mut matches []usize, opts RankOpti
 }
 
 // highlight_token writes match indices for one token into matches.
-pub fn highlight_token(str string, token string, mut matches []usize, opts RankTokenOptions) []usize {
+pub fn highlight_token(str string, token string, mut matches []uint, opts RankTokenOptions) []uint {
 	matched := highlight_token_impl(str, opts.filename, token, !opts.to_lower, opts.strict_path, matches.len)
 	for i, value in matched {
 		matches[i] = value

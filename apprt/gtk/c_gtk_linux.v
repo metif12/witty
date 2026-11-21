@@ -32,7 +32,7 @@ module gtk
 
 // GObject core
 pub type GObject = voidptr
-pub type GType = usize
+pub type GType = uint
 pub type GVariant = voidptr
 pub type GError = voidptr
 

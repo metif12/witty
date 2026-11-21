@@ -3,8 +3,8 @@ module zigimg
 pub struct PixelStorageIterator {
 pub mut:
 	pixels        &PixelStorage = unsafe { nil }
-	current_index usize
-	end           usize
+	current_index uint
+	end           uint
 }
 
 pub fn PixelStorageIterator.init(pixels &PixelStorage) PixelStorageIterator {
@@ -30,19 +30,19 @@ pub fn (mut iter PixelStorageIterator) next() ?Colorf32 {
 			Colorf32{}
 		}
 		IndexedStorage1 {
-			pixel_iterator_palette_color(pixels.palette, usize(pixels.indices[index]))
+			pixel_iterator_palette_color(pixels.palette, uint(pixels.indices[index]))
 		}
 		IndexedStorage2 {
-			pixel_iterator_palette_color(pixels.palette, usize(pixels.indices[index]))
+			pixel_iterator_palette_color(pixels.palette, uint(pixels.indices[index]))
 		}
 		IndexedStorage4 {
-			pixel_iterator_palette_color(pixels.palette, usize(pixels.indices[index]))
+			pixel_iterator_palette_color(pixels.palette, uint(pixels.indices[index]))
 		}
 		IndexedStorage8 {
-			pixel_iterator_palette_color(pixels.palette, usize(pixels.indices[index]))
+			pixel_iterator_palette_color(pixels.palette, uint(pixels.indices[index]))
 		}
 		IndexedStorage16 {
-			pixel_iterator_palette_color(pixels.palette, usize(pixels.indices[index]))
+			pixel_iterator_palette_color(pixels.palette, uint(pixels.indices[index]))
 		}
 		Grayscale1Pixels {
 			pixels.data[index].to_colorf32()
@@ -104,8 +104,8 @@ pub fn (mut iter PixelStorageIterator) next() ?Colorf32 {
 	return result
 }
 
-fn pixel_iterator_palette_color(palette []Rgba32, index usize) Colorf32 {
-	if index >= usize(palette.len) {
+fn pixel_iterator_palette_color(palette []Rgba32, index uint) Colorf32 {
+	if index >= uint(palette.len) {
 		panic('index out of bounds: index ${index}, len ${palette.len}')
 	}
 	return palette[int(index)].to_colorf32()

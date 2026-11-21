@@ -25,7 +25,7 @@ fn make_test_app() App {
 // fake_surface returns a distinct surface identity for queue-order tests. The
 // app mailbox stores the pointer without dereferencing it.
 fn fake_surface(id int) &Surface {
-	return unsafe { &Surface(voidptr(usize(id + 1))) }
+	return unsafe { &Surface(voidptr(uint(id + 1))) }
 }
 
 fn redraw_target(msg Message) &Surface {
@@ -177,7 +177,7 @@ fn test_app_mailbox_blocking_push_waits_for_capacity() {
 fn test_app_present_surface_message_ignores_stale_pointer() ! {
 	mut app := make_test_app()
 	mut runtime := apprt.RuntimeApp{}
-	stale := unsafe { &Surface(voidptr(usize(0xdeadbeef))) }
+	stale := unsafe { &Surface(voidptr(uint(0xdeadbeef))) }
 	_ = app.mailbox.push(Message(SurfaceMessageMsg{
 		surface: stale
 		message: apprt.SurfaceMessagePresentSurface{}

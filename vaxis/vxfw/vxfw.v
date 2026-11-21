@@ -209,8 +209,8 @@ pub fn DrawContext.init(method vaxis.GWidthMethod) {
 	draw_width_method = method
 }
 
-pub fn (ctx DrawContext) string_width(text string) usize {
-	return usize(vaxis.gwidth(text, draw_width_method))
+pub fn (ctx DrawContext) string_width(text string) uint {
+	return uint(vaxis.gwidth(text, draw_width_method))
 }
 
 pub fn (ctx DrawContext) grapheme_iterator(text string) GraphemeIterator {
@@ -367,12 +367,12 @@ pub fn (surface Surface) write_cell(col u16, row u16, cell vaxis.Cell) {
 	}
 }
 
-pub fn (surface Surface) read_cell(col usize, row usize) vaxis.Cell {
-	if col >= usize(surface.size.width) || row >= usize(surface.size.height) {
+pub fn (surface Surface) read_cell(col uint, row uint) vaxis.Cell {
+	if col >= uint(surface.size.width) || row >= uint(surface.size.height) {
 		panic('Assertion failed')
 	}
-	index := row * usize(surface.size.width) + col
-	if index >= usize(surface.buffer.len) { panic('Assertion failed') }
+	index := row * uint(surface.size.width) + col
+	if index >= uint(surface.buffer.len) { panic('Assertion failed') }
 	return surface.buffer[int(index)]
 }
 

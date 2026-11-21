@@ -30,7 +30,7 @@ $if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 		assert u8(GLVertexStepFunction.per_vertex) == 1
 		assert u8(GLVertexStepFunction.per_instance) == 2
 
-		max_count := ~usize(0)
+		max_count := ~uint(0)
 		buffer := GLBuffer{
 			len: max_count
 		}

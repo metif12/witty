@@ -142,13 +142,13 @@ mut:
 	bits u32
 }
 
-pub fn (self SepList) is_set(idx usize) bool {
-	assert idx < usize(max_params), 'CSI separator index exceeds MAX_PARAMS'
+pub fn (self SepList) is_set(idx uint) bool {
+	assert idx < uint(max_params), 'CSI separator index exceeds MAX_PARAMS'
 	return (self.bits & (u32(1) << u32(idx))) != 0
 }
 
-pub fn (mut self SepList) set(idx usize) {
-	assert idx < usize(max_params), 'CSI separator index exceeds MAX_PARAMS'
+pub fn (mut self SepList) set(idx uint) {
+	assert idx < uint(max_params), 'CSI separator index exceeds MAX_PARAMS'
 	self.bits |= u32(1) << u32(idx)
 }
 
@@ -165,8 +165,8 @@ pub fn SepList.init_empty() SepList {
 // count returns the number of set bits, i.e. how many colon (:) separators
 // were used. A non-zero count means at least one colon/mixed separator was
 // present in the CSI parameters.
-pub fn (self SepList) count() usize {
-	mut c := usize(0)
+pub fn (self SepList) count() uint {
+	mut c := uint(0)
 	mut v := self.bits
 	for v != 0 {
 		v &= v - 1
@@ -483,7 +483,7 @@ fn (mut self Parser) process_csi_param_byte(c u8) {
 		if self.params_idx < max_params {
 			self.params[self.params_idx] = self.param_acc
 			if c == 0x3A {
-				self.params_sep.set(usize(self.params_idx))
+				self.params_sep.set(uint(self.params_idx))
 			}
 			self.params_idx += 1
 			self.param_acc = 0

@@ -60,7 +60,7 @@ fn test_writer_preserved_byte_and_array_file_output() {
 				(*reserved.value)[i] = byte
 			}
 		}
-		writer.write_byte_preserve(~usize(0), `n`)!
+		writer.write_byte_preserve(~uint(0), `n`)!
 		writer.flush()!
 		file.close()
 		assert os.read_bytes(path)! == 'abcdefghijklmn'.bytes()

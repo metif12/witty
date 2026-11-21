@@ -41,7 +41,7 @@ fn test_format_argument_tracker_explicit_indices_leave_automatic_cursor() {
 	mut state := FormatArgState{
 		args_len: 3
 	}
-	assert state.next_arg(usize(2))? == 2
+	assert state.next_arg(uint(2))? == 2
 	assert state.next_arg == 0
 	assert state.next_arg(none)? == 0
 	assert state.has_unused_args()

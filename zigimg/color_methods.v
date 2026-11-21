@@ -50,7 +50,7 @@ fn color_method_channel[V](value V) ColorMethodChannel {
 			floating: value
 		}
 	} $else $if V.unaliased_typ is u8 || V.unaliased_typ is u16 || V.unaliased_typ is u32
-		|| V.unaliased_typ is u64 || V.unaliased_typ is usize {
+		|| V.unaliased_typ is u64 || V.unaliased_typ is uint {
 		return color_method_integer(u64(value), u8(sizeof(V) * 8))
 	} $else {
 		$compile_error('ScaleValue requires an unsigned integer or floating point type')
@@ -114,7 +114,7 @@ fn color_method_cast[O](channel ColorMethodChannel) O {
 		if channel.kind == .float32 { return O(channel.float32) }
 		return O(channel.floating)
 	} $else $if O.unaliased_typ is u8 || O.unaliased_typ is u16 || O.unaliased_typ is u32
-		|| O.unaliased_typ is u64 || O.unaliased_typ is usize {
+		|| O.unaliased_typ is u64 || O.unaliased_typ is uint {
 		return O(channel.scaled_integer(u8(sizeof(O) * 8)))
 	} $else {
 		$compile_error('ScaleValue requires an unsigned integer or floating point type')
@@ -129,7 +129,7 @@ fn color_method_assign[O](_ O, channel ColorMethodChannel) O {
 // generic arguments after an explicit output type.
 fn color_method_scale_constraint[O, I](_ O, _ I) {
 	$if O.unaliased_typ is u8 || O.unaliased_typ is u16 || O.unaliased_typ is u32
-		|| O.unaliased_typ is u64 || O.unaliased_typ is usize {
+		|| O.unaliased_typ is u64 || O.unaliased_typ is uint {
 		$if I.unaliased_typ is f32 {
 			$if sizeof(O) >= 4 {
 				$compile_error('ScaleValue source clamp cannot represent the output integer maximum in this float type')

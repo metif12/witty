@@ -140,8 +140,8 @@ fn record(a []string) string {
 		block_height:                   u32(a[10].u64())
 		block_width_actual:             u32(a[11].u64())
 		block_height_actual:            u32(a[12].u64())
-		horizontal_sampling_factor_max: usize(a[6].u64())
-		vertical_sampling_factor_max:   usize(a[7].u64())
+		horizontal_sampling_factor_max: uint(a[6].u64())
+		vertical_sampling_factor_max:   uint(a[7].u64())
 	}
 	if observed_path != '' { observed_frame = &f }
 	mut pixels := Pixels{
@@ -164,10 +164,10 @@ fn record(a []string) string {
 		'B' {
 			if a[15] == '1' {
 				f.ycbcr_to_rgb_block(mut f.block_storage[0], &f.block_storage[0],
-					usize(a[13].u64()), usize(a[14].u64()))
+					uint(a[13].u64()), uint(a[14].u64()))
 			} else {
 				f.ycbcr_to_rgb_block(mut f.block_storage[0], &f.block_storage[1],
-					usize(a[13].u64()), usize(a[14].u64()))
+					uint(a[13].u64()), uint(a[14].u64()))
 			}
 		}
 		'C' {

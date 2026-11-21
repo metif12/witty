@@ -41,7 +41,7 @@ fn test_aggregate_pointer_record_aliases_and_optionals_keep_pointee_depth() {
 	writer.write_byte(`|`)!
 	writer.print_value('any', FormatOptions{}, ?PointedRecordPointer(pointer), 1)!
 	writer.write_byte(`|`)!
-	writer.print_value('any', FormatOptions{ width: usize(6), fill: `_` }, ?&PointedRecord(none), 0)!
+	writer.print_value('any', FormatOptions{ width: uint(6), fill: `_` }, ?&PointedRecord(none), 0)!
 	assert writer.buffered().bytestr() == '.{ ... }|.{ .value = 7 }|.{ .value = 7 }|__null'
 }
 
@@ -91,7 +91,7 @@ fn test_aggregate_pointer_custom_format_and_rejected_address_precede_depth() {
 	mut buffer := []u8{len: 128}
 	mut writer := WriteStream.init_memory(mut buffer)
 	value := PointedCustom{9}
-	writer.print_value('f', FormatOptions{ width: ~usize(0) }, &value, 0)!
+	writer.print_value('f', FormatOptions{ width: ~uint(0) }, &value, 0)!
 	assert writer.buffered().bytestr() == '9'
 	writer.seek_to(0)!
 	writer.print_value('*', FormatOptions{}, ?&PointedCustom(&value), 0) or {

@@ -43,8 +43,8 @@ $if !js && !wasm32 && !no_simd ? {
 	#include "ghostty_simd.h"
 }
 
-fn C.ghostty_simd_base64_max_length(&u8, usize) usize
-fn C.ghostty_simd_base64_decode(&u8, usize, &u8) usize
-fn C.ghostty_simd_index_of(u8, &u8, usize) usize
+fn C.ghostty_simd_base64_max_length(&u8, uint) uint
+fn C.ghostty_simd_base64_decode(&u8, uint, &u8) uint
+fn C.ghostty_simd_index_of(u8, &u8, uint) uint
 fn C.ghostty_simd_codepoint_width(u32) i8
-fn C.ghostty_simd_decode_utf8_until_control_seq(&u8, usize, &u32, &usize) usize
+fn C.ghostty_simd_decode_utf8_until_control_seq(&u8, uint, &u32, &uint) uint

@@ -9,12 +9,12 @@ module datastruct
 // This is not thread safe.
 pub struct SegmentedPool[T] {
 mut:
-	i         usize
-	available usize
+	i         uint
+	available uint
 	values    []&T
 }
 
-pub fn SegmentedPool.init[T](prealloc usize) SegmentedPool[T] {
+pub fn SegmentedPool.init[T](prealloc uint) SegmentedPool[T] {
 	mut values := []&T{cap: int(prealloc)}
 	for _ in 0 .. int(prealloc) {
 		values << $new(T)
@@ -36,8 +36,8 @@ pub fn (mut self SegmentedPool[T]) get() !&T {
 	if self.available == 0 {
 		return error('OutOfValues')
 	}
-	idx := self.i % usize(self.values.len)
-	self.i = if self.i == ~usize(0) { usize(0) } else { self.i + usize(1) }
+	idx := self.i % uint(self.values.len)
+	self.i = if self.i == ~uint(0) { uint(0) } else { self.i + uint(1) }
 	self.available--
 	return self.values[int(idx)]
 }
@@ -55,13 +55,13 @@ fn (mut self SegmentedPool[T]) grow() {
 	for _ in 0 .. old_len {
 		self.values << $new(T)
 	}
-	self.i = usize(old_len)
-	self.available = usize(old_len)
+	self.i = uint(old_len)
+	self.available = uint(old_len)
 }
 
 // put returns the oldest outstanding value to the available pool. Callers
 // must return values in acquisition order, as in Ghostty's implementation.
 pub fn (mut self SegmentedPool[T]) put() {
 	self.available++
-	assert self.available <= usize(self.values.len)
+	assert self.available <= uint(self.values.len)
 }

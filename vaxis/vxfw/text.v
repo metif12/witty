@@ -78,7 +78,7 @@ pub fn (text &Text) draw(ctx DrawContext) !Surface {
 				grapheme := chars.next() or { break }
 				if grapheme == '\t' {
 					for i in 0 .. 8 {
-						surface.write_cell(vxfw_u16_cast(u64(vxfw_usize_add(usize(col), usize(i)))),
+						surface.write_cell(vxfw_u16_cast(u64(vxfw_usize_add(uint(col), uint(i)))),
 							row, vaxis.Cell{
 							char_: vaxis.CellCharacter{
 								grapheme: ' '
@@ -112,8 +112,8 @@ pub fn (text &Text) draw(ctx DrawContext) !Surface {
 				break
 			}
 			line_width := vxfw_usize_add(ctx.string_width(line), vxfw_usize_mul(7,
-				usize(line.count('\t'))))
-			mut col := text.start_col(size.width, u16(math.min(usize(size.width), line_width)))
+				uint(line.count('\t'))))
+			mut col := text.start_col(size.width, u16(math.min(uint(size.width), line_width)))
 			mut chars := ctx.grapheme_iterator(line)
 			for {
 				grapheme := chars.next() or { break }
@@ -204,23 +204,23 @@ fn (text Text) find_container_size(ctx DrawContext) Size {
 pub struct LineIterator {
 pub mut:
 	buf   string @[required]
-	index usize
+	index uint
 }
 
 // Source exposes these payload types, but its iterator methods are private.
 // The existing V iterator methods remain public adapters used by Text.draw.
 pub fn (mut iter LineIterator) next() ?string {
-	if iter.index >= usize(iter.buf.len) { return none }
+	if iter.index >= uint(iter.buf.len) { return none }
 	start := iter.index
-	for iter.index < usize(iter.buf.len) && iter.buf[int(iter.index)] != `\r`
+	for iter.index < uint(iter.buf.len) && iter.buf[int(iter.index)] != `\r`
 		&& iter.buf[int(iter.index)] != `\n` {
 		iter.index = vxfw_usize_add(iter.index, 1)
 	}
 	end := iter.index
-	if iter.index < usize(iter.buf.len) && iter.buf[int(iter.index)] == `\r` {
+	if iter.index < uint(iter.buf.len) && iter.buf[int(iter.index)] == `\r` {
 		iter.index = vxfw_usize_add(iter.index, 1)
 	}
-	if iter.index < usize(iter.buf.len) && iter.buf[int(iter.index)] == `\n` {
+	if iter.index < uint(iter.buf.len) && iter.buf[int(iter.index)] == `\n` {
 		iter.index = vxfw_usize_add(iter.index, 1)
 	}
 	return text_borrowed_slice(iter.buf, start, end)
@@ -236,7 +236,7 @@ pub struct SoftwrapIterator {
 pub mut:
 	ctx       DrawContext @[required]
 	line      string
-	index     usize
+	index     uint
 	hard_iter LineIterator @[required]
 }
 
@@ -250,35 +250,35 @@ pub fn SoftwrapIterator.new(text string, ctx DrawContext) SoftwrapIterator {
 }
 
 pub fn (mut iter SoftwrapIterator) next() ?WrappedLine {
-	if iter.index == usize(iter.line.len) {
+	if iter.index == uint(iter.line.len) {
 		iter.line = text_trim_right(iter.hard_iter.next() or { return none })
 		iter.index = 0
 	}
 	start := iter.index
 	mut width := u16(0)
-	for iter.index < usize(iter.line.len) {
+	for iter.index < uint(iter.line.len) {
 		idx := iter.next_wrap()
 		word := text_borrowed_slice(iter.line, iter.index, idx)
 		next_width := iter.ctx.string_width(word)
 		if max_width := iter.ctx.max.width {
-			if vxfw_usize_add(usize(width), next_width) > max_width {
+			if vxfw_usize_add(uint(width), next_width) > max_width {
 				trimmed := text_trim_left(word)
-				trimmed_width := vxfw_usize_sub(next_width, usize(word.len - trimmed.len))
+				trimmed_width := vxfw_usize_sub(next_width, uint(word.len - trimmed.len))
 				if trimmed_width > max_width {
 					mut chars := iter.ctx.grapheme_iterator(word)
 					for {
 						grapheme := chars.next() or { break }
 						w := iter.ctx.string_width(grapheme)
-						if vxfw_usize_add(usize(width), w) > max_width { return WrappedLine{
+						if vxfw_usize_add(uint(width), w) > max_width { return WrappedLine{
 								width: width
 								bytes: text_borrowed_slice(iter.line, start, iter.index)
 							} }
 						width = vxfw_u16_add(width, vxfw_u16_cast(u64(w)))
-						iter.index = vxfw_usize_add(iter.index, usize(grapheme.len))
+						iter.index = vxfw_usize_add(iter.index, uint(grapheme.len))
 					}
 				}
 				end := iter.index
-				for iter.index < usize(iter.line.len) && iter.line[int(iter.index)] in [` `, `\t`] {
+				for iter.index < uint(iter.line.len) && iter.line[int(iter.index)] in [` `, `\t`] {
 					iter.index = vxfw_usize_add(iter.index, 1)
 				}
 				return WrappedLine{
@@ -292,24 +292,24 @@ pub fn (mut iter SoftwrapIterator) next() ?WrappedLine {
 	}
 	return WrappedLine{
 		width: width
-		bytes: text_borrowed_slice(iter.line, start, usize(iter.line.len))
+		bytes: text_borrowed_slice(iter.line, start, uint(iter.line.len))
 	}
 }
 
-fn (iter SoftwrapIterator) next_wrap() usize {
+fn (iter SoftwrapIterator) next_wrap() uint {
 	mut index := iter.index
-	for index < usize(iter.line.len) && iter.line[int(index)] in [` `, `\t`] {
+	for index < uint(iter.line.len) && iter.line[int(index)] in [` `, `\t`] {
 		index = vxfw_usize_add(index, 1)
 	}
-	for index < usize(iter.line.len) && iter.line[int(index)] !in [` `, `\t`] {
+	for index < uint(iter.line.len) && iter.line[int(index)] !in [` `, `\t`] {
 		index = vxfw_usize_add(index, 1)
 	}
 	return index
 }
 
 // Source slices borrow caller storage, including zero-length views.
-fn text_borrowed_slice(value string, start usize, end usize) string {
-	if start > end || end > usize(value.len) { panic('index out of bounds') }
+fn text_borrowed_slice(value string, start uint, end uint) string {
+	if start > end || end > uint(value.len) { panic('index out of bounds') }
 	return unsafe { tos(value.str + int(start), int(end - start)) }
 }
 
@@ -318,7 +318,7 @@ fn text_trim_right(value string) string {
 	for end > 0 && value[end - 1] in [` `, `\t`] {
 		end--
 	}
-	return text_borrowed_slice(value, 0, usize(end))
+	return text_borrowed_slice(value, 0, uint(end))
 }
 
 fn text_trim_left(value string) string {
@@ -326,5 +326,5 @@ fn text_trim_left(value string) string {
 	for start < value.len && value[start] in [` `, `\t`] {
 		start++
 	}
-	return text_borrowed_slice(value, usize(start), usize(value.len))
+	return text_borrowed_slice(value, uint(start), uint(value.len))
 }

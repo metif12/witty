@@ -6,26 +6,26 @@ import encoding.hex
 #flag -I @VMODROOT/zigimg/reference_probes/image_path
 #include "fixture_shims.h"
 
-fn C.witty_image_path_setup(&char, int, &u8, usize) int
+fn C.witty_image_path_setup(&char, int, &u8, uint) int
 fn C.witty_image_path_permissions() int
 fn C.witty_image_path_count() int
 fn C.witty_image_path_mode(int) int
-fn C.witty_image_path_bytes(int, &u8, usize) isize
+fn C.witty_image_path_bytes(int, &u8, uint) int
 fn C.witty_image_path_cleanup(&char, int) int
 
 #include "../image_open/fixture_shims.h"
 
-fn C.witty_image_open_setup(&char, int, &u8, usize) int
+fn C.witty_image_open_setup(&char, int, &u8, uint) int
 fn C.witty_image_open_cleanup(&char) int
 fn C.witty_image_open_mask(int) int
 fn C.witty_image_open_mode(&char) int
-fn C.witty_image_open_bytes(&char, &u8, usize) isize
+fn C.witty_image_open_bytes(&char, &u8, uint) int
 fn C.witty_image_open_flag(int, int) int
 
 fn image_open_check_descriptor_and_mode(kind int, mask int) ! {
 	root := os.join_path(os.temp_dir(), 'witty-zigimg-open-${os.getpid()}')
 	seed := 'old bytes'.bytes()
-	assert C.witty_image_open_setup(root.str, kind, seed.data, usize(seed.len)) == 0
+	assert C.witty_image_open_setup(root.str, kind, seed.data, uint(seed.len)) == 0
 	original := C.witty_image_open_mask(mask)
 	defer {
 		C.witty_image_open_mask(original)
@@ -48,7 +48,7 @@ fn image_open_check_descriptor_and_mode(kind int, mask int) ! {
 		416
 	}
 	mut bytes := []u8{len: 32}
-	n := C.witty_image_open_bytes(path.str, bytes.data, usize(bytes.len))
+	n := C.witty_image_open_bytes(path.str, bytes.data, uint(bytes.len))
 	assert n == 3 && bytes[..int(n)].bytestr() == 'abc'
 	file = image_open_file(path, false)!
 	assert C.witty_image_open_flag(file.fd, 0) == 1
@@ -73,7 +73,7 @@ fn test_image_path_opener_keeps_flags_modes_and_raw_descriptor_io() {
 fn image_path_check_open_failure(kind int, writer_error string, reader_error string) ! {
 	root := os.join_path(os.temp_dir(), 'witty-zigimg-path-${os.getpid()}')
 	seed := hex.decode('6661726266656c64000000010000000100130038005dffff')!
-	keeper := C.witty_image_path_setup(root.str, kind, seed.data, usize(seed.len))
+	keeper := C.witty_image_path_setup(root.str, kind, seed.data, uint(seed.len))
 	assert keeper >= 0
 	defer { assert C.witty_image_path_cleanup(root.str, keeper) == 0 }
 	count := C.witty_image_path_count()
@@ -134,7 +134,7 @@ fn image_path_check_open_failure(kind int, writer_error string, reader_error str
 				384
 			}
 			mut disk := []u8{len: 32}
-			n := C.witty_image_path_bytes(keeper, disk.data, usize(disk.len))
+			n := C.witty_image_path_bytes(keeper, disk.data, uint(disk.len))
 			assert n == seed.len && disk[..int(n)] == seed
 		}
 	}
@@ -350,12 +350,12 @@ fn test_managed_image_defaults_creation_and_raw_copy() {
 		assert image.width == 3 && image.height == 2
 		assert image.pixel_format() == format
 		assert image.pixels.len() == if format == .invalid {
-			usize(0)
+			uint(0)
 		} else {
-			usize(6)
+			uint(6)
 		}
-		assert image.image_byte_size() == usize(6 * format.pixel_stride())
-		assert image.row_byte_size() == usize(3 * format.pixel_stride())
+		assert image.image_byte_size() == uint(6 * format.pixel_stride())
+		assert image.row_byte_size() == uint(3 * format.pixel_stride())
 		image.deinit()
 	}
 	mut bytes := [u8(10), 20, 30, 40, 50, 60]
@@ -631,8 +631,8 @@ fn test_image_memory_write_borrows_output_and_preserves_partial_prefix() {
 
 fn test_source_noop_writers_accept_invalid_images_and_empty_buffer() {
 	image := ImageUnmanaged{
-		width:  ~usize(0)
-		height: ~usize(0)
+		width:  ~uint(0)
+		height: ~uint(0)
 	}
 	for format in [Format.gif, .iff, .jpeg, .ras, .sgi, .tiff, .xbm] {
 		mut buffer := []u8{}

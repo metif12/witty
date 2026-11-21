@@ -170,7 +170,7 @@ pub fn parse[T](mut dst T, args []string) ! {
 		// values set with spaces so this is an error.
 		if !arg.starts_with('--') {
 			if append_diagnostic[T](mut dst, arg, 'invalid field', diagnostics.CliLocation{
-				index: usize(iter.idx)
+				index: uint(iter.idx)
 			})
 			{
 				continue
@@ -210,7 +210,7 @@ pub fn parse[T](mut dst T, args []string) ! {
 				message = format_invalid_value[T](key, value)
 			}
 			if append_diagnostic[T](mut dst, key, message, diagnostics.CliLocation{
-				index: usize(iter.idx)
+				index: uint(iter.idx)
 			})
 			{
 				continue
@@ -376,11 +376,11 @@ pub fn parse_into_field[T](mut dst T, key string, value ?string) ! {
 				}
 				dst.$(field.name) = parse_unsigned_int(raw, 64) or { return error('invalid value') }
 				return
-			} $else $if field.unaliased_typ is usize || field.unaliased_typ is ?usize {
+			} $else $if field.unaliased_typ is uint || field.unaliased_typ is ?uint {
 				if !has_value {
 					return error('value required')
 				}
-				dst.$(field.name) = usize(parse_unsigned_int(raw, int(sizeof(usize) * 8)) or {
+				dst.$(field.name) = uint(parse_unsigned_int(raw, int(sizeof(uint) * 8)) or {
 					return error('invalid value')
 				})
 				return
@@ -420,11 +420,11 @@ pub fn parse_into_field[T](mut dst T, key string, value ?string) ! {
 				}
 				dst.$(field.name) = parse_signed_int(raw, 64) or { return error('invalid value') }
 				return
-			} $else $if field.unaliased_typ is isize || field.unaliased_typ is ?isize {
+			} $else $if field.unaliased_typ is int || field.unaliased_typ is ?int {
 				if !has_value {
 					return error('value required')
 				}
-				dst.$(field.name) = parse_signed_int(raw, int(sizeof(isize) * 8)) or {
+				dst.$(field.name) = parse_signed_int(raw, int(sizeof(int) * 8)) or {
 					return error('invalid value')
 				}
 				return
@@ -757,7 +757,7 @@ mut:
 	// Our current index into the iterator. This is 1-indexed.
 	// The 0 value is used to indicate that we haven't read any
 	// values yet.
-	index usize
+	index uint
 }
 
 // deinit mirrors ArgsIterator.deinit. The wrapped strings are owned by V's
@@ -788,7 +788,7 @@ pub fn args_iterator() ArgsIterator {
 }
 
 pub fn (mut self ArgsIterator) next() ?string {
-	for self.index < usize(self.args.len) {
+	for self.index < uint(self.args.len) {
 		value := self.args[int(self.index)]
 		self.index += 1
 		// We ignore any argument that starts with "+". This is used
@@ -822,7 +822,7 @@ pub mut:
 	// The current line that we're on. This is 1-indexed because
 	// lines are generally 1-indexed in the real world. The value
 	// can be zero if we haven't read any lines yet.
-	line usize
+	line uint
 mut:
 	// The lines of input data.
 	lines []string

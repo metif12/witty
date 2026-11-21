@@ -7,7 +7,7 @@ import buildcfg
 import lib_allocator
 
 #include "@VMODROOT/wasm_log/host.h"
-fn C.ghostty_wasm_host_log(&u8, usize)
+fn C.ghostty_wasm_host_log(&u8, uint)
 
 pub enum Level {
 	err
@@ -31,12 +31,12 @@ pub fn write(level Level, scope string, message string) {
 	allocator := lib_allocator.default(none)
 	mut buffer := unsafe { &stack[0] }
 	if length > stack.len {
-		buffer = &u8(allocator.alloc_bytes(usize(length), 0, 0))
+		buffer = &u8(allocator.alloc_bytes(uint(length), 0, 0))
 		if isnil(buffer) { return }
 		allocated = true
 	}
 	defer {
-		if allocated { allocator.free_bytes(buffer, usize(length), 0, 0) }
+		if allocated { allocator.free_bytes(buffer, uint(length), 0, 0) }
 	}
 	unsafe {
 		vmemcpy(buffer, level_text.str, level_text.len)
@@ -50,6 +50,6 @@ pub fn write(level Level, scope string, message string) {
 		vmemcpy(buffer + offset, separator.str, separator.len)
 		offset += separator.len
 		vmemcpy(buffer + offset, message.str, message.len)
-		C.ghostty_wasm_host_log(buffer, usize(length))
+		C.ghostty_wasm_host_log(buffer, uint(length))
 	}
 }

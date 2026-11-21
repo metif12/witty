@@ -137,7 +137,7 @@ fn C.witty_cimgui_set_next_item_open(context voidptr, open bool)
 
 fn C.witty_cimgui_checkbox(context voidptr, label &char, value &bool) bool
 
-fn C.witty_cimgui_input_text(context voidptr, label &char, value &char, capacity usize) bool
+fn C.witty_cimgui_input_text(context voidptr, label &char, value &char, capacity uint) bool
 
 fn C.witty_cimgui_input_u16(context voidptr, label &char, value &u16) bool
 
@@ -245,7 +245,7 @@ fn C.witty_cimgui_pop_item_width(context voidptr)
 
 fn C.witty_cimgui_align_text_to_frame_padding(context voidptr)
 
-fn C.witty_cimgui_pagelist_scrollbar(context voidptr, total usize, offset usize, len usize) i64
+fn C.witty_cimgui_pagelist_scrollbar(context voidptr, total uint, offset uint, len uint) i64
 
 fn C.witty_cimgui_tooltip(context voidptr, value &char)
 
@@ -703,7 +703,7 @@ pub fn (ctx Context) align_text_to_frame_padding() {
 	C.witty_cimgui_align_text_to_frame_padding(ctx.handle)
 }
 
-pub fn (ctx Context) pagelist_scrollbar(total usize, offset usize, len usize) i64 {
+pub fn (ctx Context) pagelist_scrollbar(total uint, offset uint, len uint) i64 {
 	return C.witty_cimgui_pagelist_scrollbar(ctx.handle, total, offset, len)
 }
 

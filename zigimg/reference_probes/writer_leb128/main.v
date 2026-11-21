@@ -10,13 +10,13 @@ import encoding.hex
 
 fn C.witty_writer_seek_setup(&char) int
 fn C.witty_writer_seek_replace(int) int
-fn C.witty_writer_seek_restore(&char, usize) int
+fn C.witty_writer_seek_restore(&char, uint) int
 fn C.witty_writer_seek_close() int
 fn C.witty_writer_seek_cleanup() int
 fn C.witty_writer_seek_valid() int
 fn C.witty_writer_seek_refs() int
-fn C.witty_writer_seek_view(&u8, usize) isize
-fn C.witty_writer_seek_drain(&u8, usize) isize
+fn C.witty_writer_seek_view(&u8, uint) int
+fn C.witty_writer_seek_drain(&u8, uint) int
 
 __global (
 	observed_path   string
@@ -29,9 +29,9 @@ __global (
 fn snapshot(writer zigimg.WriteStream, buffer []u8) string {
 	mut contents := []u8{len: 4096}
 	n := if observed_file {
-		C.witty_writer_seek_view(contents.data, usize(contents.len))
+		C.witty_writer_seek_view(contents.data, uint(contents.len))
 	} else {
-		isize(0)
+		int(0)
 	}
 	if n < 0 { panic('Writer observer failed') }
 	valid := if observed_file { C.witty_writer_seek_valid() } else { 0 }
@@ -50,12 +50,12 @@ type Alias0 = u8
 type Alias1 = u16
 type Alias2 = u32
 type Alias3 = u64
-type Alias4 = usize
+type Alias4 = uint
 type Alias5 = i8
 type Alias6 = i16
 type Alias7 = int
 type Alias8 = i64
-type Alias9 = isize
+type Alias9 = int
 
 fn typed_write[T](mut writer zigimg.WriteStream, raw u64, op int) string {
 	value := T(raw)
@@ -76,12 +76,12 @@ fn operate(mut writer zigimg.WriteStream, raw u64, tag int, op int) string {
 		1 { typed_write[u16](mut writer, raw, op) }
 		2 { typed_write[u32](mut writer, raw, op) }
 		3 { typed_write[u64](mut writer, raw, op) }
-		4 { typed_write[usize](mut writer, raw, op) }
+		4 { typed_write[uint](mut writer, raw, op) }
 		5 { typed_write[i8](mut writer, raw, op) }
 		6 { typed_write[i16](mut writer, raw, op) }
 		7 { typed_write[int](mut writer, raw, op) }
 		8 { typed_write[i64](mut writer, raw, op) }
-		9 { typed_write[isize](mut writer, raw, op) }
+		9 { typed_write[int](mut writer, raw, op) }
 		10 { typed_write[Alias0](mut writer, raw, op) }
 		11 { typed_write[Alias1](mut writer, raw, op) }
 		12 { typed_write[Alias2](mut writer, raw, op) }
@@ -146,11 +146,11 @@ fn record(line string, path string) string {
 		}
 	}
 	mut wire := []u8{}
-	mut drain := isize(-3)
+	mut drain := int(-3)
 	if kind > 0 && f[7] == '1' {
 		for {
 			mut bytes := []u8{len: 4096}
-			drain = C.witty_writer_seek_drain(bytes.data, usize(bytes.len))
+			drain = C.witty_writer_seek_drain(bytes.data, uint(bytes.len))
 			if drain <= 0 { break
 			 }
 			wire << bytes[..int(drain)]

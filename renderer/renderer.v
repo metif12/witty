@@ -936,8 +936,8 @@ pub mut:
 
 	// Background image vertex buffer.
 	bg_image_buffer          BgImageBuffer
-	bg_image_buffer_modified usize
-	target_config_modified   usize
+	bg_image_buffer_modified uint
+	target_config_modified   uint
 
 	// Health of the most recently completed frame.
 	health Health = .healthy
@@ -1870,7 +1870,7 @@ fn (mut self Renderer) update_custom_shader_uniforms_for_frame() ! {
 struct PreeditRange {
 	y         u16
 	x         [2]u16
-	cp_offset usize
+	cp_offset uint
 }
 
 // Compute the CellSet key matching terminal.cell_set_key: (y << 32) | x.
@@ -2310,7 +2310,7 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 			// configured then this is dynamic depending on some situations.
 			bg_alpha := self.compute_bg_alpha(selected, cell_style, bg_style_opt)
 
-			mut bg_cell := unsafe { &CellBg(self.cells.bg_cell(usize(y), usize(x))) }
+			mut bg_cell := unsafe { &CellBg(self.cells.bg_cell(uint(y), uint(x))) }
 			unsafe {
 				*bg_cell = CellBg([rgb.r, rgb.g, rgb.b, bg_alpha]!)
 			}
@@ -2686,13 +2686,13 @@ fn (mut self Renderer) add_preedit_cell(cp PreeditCodepoint, coord terminal.View
 	render := value.render
 
 	// Add our opaque background cell
-	mut bg_cell := unsafe { &CellBg(self.cells.bg_cell(usize(coord.y), usize(coord.x))) }
+	mut bg_cell := unsafe { &CellBg(self.cells.bg_cell(uint(coord.y), uint(coord.x))) }
 	unsafe {
 		*bg_cell = CellBg([screen_bg.r, screen_bg.g, screen_bg.b, u8(255)]!)
 	}
 	if cp.wide && coord.x < u16(self.cells.size.columns) - 1 {
 		mut wide_bg_cell := unsafe {
-			&CellBg(self.cells.bg_cell(usize(coord.y), usize(coord.x + 1)))
+			&CellBg(self.cells.bg_cell(uint(coord.y), uint(coord.x + 1)))
 		}
 		unsafe {
 			*wide_bg_cell = CellBg([screen_bg.r, screen_bg.g, screen_bg.b, u8(255)]!)

@@ -4,12 +4,12 @@ import os
 import strings
 import zigimg as p
 
-fn optional(text string) ?usize {
+fn optional(text string) ?uint {
 	if text == '-' { return none }
-	return usize(text.u64())
+	return uint(text.u64())
 }
 
-fn emit_optional(mut out strings.Builder, value ?usize) {
+fn emit_optional(mut out strings.Builder, value ?uint) {
 	if n := value {
 		out.write_string(u64(n).str())
 	} else {
@@ -38,13 +38,13 @@ fn emit_options(mut out strings.Builder, o p.FormatOptions) {
 	out.write_string(',${int(o.alignment)},${o.fill};')
 }
 
-fn changed(n p.NumberFormat, field u8, seed usize) p.NumberFormat {
+fn changed(n p.NumberFormat, field u8, seed uint) p.NumberFormat {
 	mut result := n
 	match field {
 		0 { result.mode = unsafe { p.NumberMode(seed % 5) } }
 		1 { result.letter_case = unsafe { p.FormatCase(seed % 2) } }
-		2 { result.precision = if seed % 3 == 0 { none } else { ?usize(seed) } }
-		3 { result.width = if seed % 4 == 0 { none } else { ?usize(~usize(0) - seed) } }
+		2 { result.precision = if seed % 3 == 0 { none } else { ?uint(seed) } }
+		3 { result.width = if seed % 4 == 0 { none } else { ?uint(~uint(0) - seed) } }
 		4 { result.alignment = unsafe { p.Alignment(seed % 3) } }
 		5 { result.fill = u8(seed) }
 		else { panic('invalid field') }
@@ -53,11 +53,11 @@ fn changed(n p.NumberFormat, field u8, seed usize) p.NumberFormat {
 	return result
 }
 
-fn changed_options(o p.FormatOptions, field u8, seed usize) p.FormatOptions {
+fn changed_options(o p.FormatOptions, field u8, seed uint) p.FormatOptions {
 	mut result := o
 	match field % 4 {
-		0 { result.precision = if seed % 3 == 0 { none } else { ?usize(seed) } }
-		1 { result.width = if seed % 4 == 0 { none } else { ?usize(~usize(0) - seed) } }
+		0 { result.precision = if seed % 3 == 0 { none } else { ?uint(seed) } }
+		1 { result.width = if seed % 4 == 0 { none } else { ?uint(~uint(0) - seed) } }
 		2 { result.alignment = unsafe { p.Alignment(seed % 3) } }
 		3 { result.fill = u8(seed) }
 		else { panic('invalid field') }
@@ -81,7 +81,7 @@ fn main() {
 			alignment: unsafe { p.Alignment(f[7].int()) }
 			fill:      u8(f[8].int())
 		}
-		seed := usize(f[9].u64())
+		seed := uint(f[9].u64())
 		mut original := match form {
 			0 {
 				p.NumberFormat{}

@@ -4,7 +4,7 @@ module source_file_writer
 #include "file_writer_shims.h"
 
 fn C.witty_synthetic_seek(int, u64) int
-fn C.witty_synthetic_file_drain(int, int, u64, voidptr, usize, voidptr, usize, &int) isize
+fn C.witty_synthetic_file_drain(int, int, u64, voidptr, uint, voidptr, uint, &int) int
 
 // Zig 0.15.2 fs.File.Writer, restricted to the write/flush operations used by
 // src/synthetic/cli.zig and src/crash/sentry.zig. Vectors, positional fallback, and consume are source
@@ -38,7 +38,7 @@ fn (mut writer FileWriter) drain(data []u8) !int {
 	if writer.failed { return error('WriteFailed') }
 	mut unseekable := 0
 	count := C.witty_synthetic_file_drain(writer.fd, int(!writer.streaming), writer.position,
-		writer.buffer.data, usize(writer.end), data.data, usize(data.len), &unseekable)
+		writer.buffer.data, uint(writer.end), data.data, uint(data.len), &unseekable)
 	if count < 0 {
 		if !writer.streaming && unseekable != 0 {
 			writer.streaming = true

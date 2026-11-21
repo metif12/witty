@@ -51,7 +51,7 @@ fn case_comments(variant int) []string {
 	}
 }
 
-fn pixels(format p.PixelFormat, count usize) p.PixelStorage {
+fn pixels(format p.PixelFormat, count uint) p.PixelStorage {
 	mut result := p.PixelStorage.init(format, count) or { panic(err) }
 	mut raw := result.as_bytes()
 	for i in 0 .. raw.len {
@@ -147,8 +147,8 @@ fn image_record(mut image p.ImageUnmanaged, data []u8) string {
 	mut raw := image.raw_bytes()
 	mut separate := '-'
 	if raw.len > 0 {
-		ptr := usize(raw.data)
-		separate = if ptr < usize(data.data) || ptr >= usize(data.data) + usize(data.len) {
+		ptr := uint(raw.data)
+		separate = if ptr < uint(data.data) || ptr >= uint(data.data) + uint(data.len) {
 			'1'
 		} else {
 			'0'
@@ -159,7 +159,7 @@ fn image_record(mut image p.ImageUnmanaged, data []u8) string {
 	for frame in image.animation.frames {
 		mut bytes := frame.pixels.as_bytes()
 		if bytes.len > 0 {
-			if usize(bytes.data) == usize(raw.data) { independent = '0' }
+			if uint(bytes.data) == uint(raw.data) { independent = '0' }
 			bytes[0] ^= 1
 		}
 	}
@@ -198,16 +198,16 @@ fn line_case(line string) {
 	}
 	if op >= 3 {
 		mut image := p.ImageUnmanaged{
-			width:  usize(f[3].u64())
-			height: usize(f[4].u64())
-			pixels: pixels(unsafe { p.PixelFormat(f[1].u32()) }, usize(f[2].u64()))
+			width:  uint(f[3].u64())
+			height: uint(f[4].u64())
+			pixels: pixels(unsafe { p.PixelFormat(f[1].u32()) }, uint(f[2].u64()))
 		}
 		image.animation.loop_count = f[13].i32()
 		duration_bits := f[14].u32()
 		duration := unsafe { *(&f32(&duration_bits)) }
 		for _ in 0 .. f[12].int() {
 			image.animation.frames << p.AnimationFrame{
-				pixels:   pixels(unsafe { p.PixelFormat(f[10].u32()) }, usize(f[11].u64()))
+				pixels:   pixels(unsafe { p.PixelFormat(f[10].u32()) }, uint(f[11].u64()))
 				duration: duration
 			}
 		}

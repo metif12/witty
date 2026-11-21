@@ -165,7 +165,7 @@ fn test_page_append_grapheme_larger_than_chunk() ! {
 	for i in 0 .. count {
 		assert cps[i] == u32(0x0A + i)
 	}
-	assert page.grapheme_alloc.used_bytes() == usize(count) * usize(sizeof(u32))
+	assert page.grapheme_alloc.used_bytes() == uint(count) * uint(sizeof(u32))
 }
 
 // Test clearing graphemes when not all cells have them.
@@ -851,7 +851,7 @@ fn test_page_move_cells_text_only() ! {
 		}
 	}
 
-	page.move_cells(0, 0, 1, 0, usize(page.capacity.cols))
+	page.move_cells(0, 0, 1, 0, uint(page.capacity.cols))
 
 	// New row should have text.
 	for x in 0 .. int(page.capacity.cols) {
@@ -889,7 +889,7 @@ fn test_page_move_cells_graphemes() ! {
 	}
 	original_count := page.grapheme_count()
 
-	page.move_cells(0, 0, 1, 0, usize(page.size.cols))
+	page.move_cells(0, 0, 1, 0, uint(page.size.cols))
 	assert page.grapheme_count() == original_count
 
 	// New row should have text and graphemes.
@@ -953,7 +953,7 @@ fn test_page_move_cells_marks_kitty_virtual_placeholder() ! {
 	page.set_graphemes(0, 1, [u32(0x0305)]) or { panic(err) }
 	page.rows[0].header.kitty_virtual_placeholder = true
 
-	page.move_cells(0, 0, 1, 0, usize(page.size.cols))
+	page.move_cells(0, 0, 1, 0, uint(page.size.cols))
 
 	assert !page.rows[0].header.kitty_virtual_placeholder
 	assert page.rows[1].cells[1].codepoint == kitty_unicode_placeholder
@@ -1432,7 +1432,7 @@ fn test_page_exact_row_capacity_grapheme_bytes_larger_than_chunk() ! {
 // `std.heap.page_size_min` is 16 KiB. Elsewhere it is 4 KiB, so the page's
 // total size (and everything derived from it) is the same end offset aligned
 // to 4 KiB instead.
-fn page_size_min_reference(darwin_arm64 usize, other usize) usize {
+fn page_size_min_reference(darwin_arm64 uint, other uint) uint {
 	$if macos && arm64 {
 		return darwin_arm64
 	} $else {
@@ -1619,7 +1619,7 @@ fn test_page_set_graphemes_enforces_allocator_capacity() ! {
 	page.set_graphemes(0, 0, []u32{len: int(grapheme_bytes_default / 4) - 1, init: u32(`x`)}) or {
 		panic(err)
 	}
-	assert page.grapheme_alloc.used_bytes() == usize(grapheme_bytes_default)
+	assert page.grapheme_alloc.used_bytes() == uint(grapheme_bytes_default)
 
 	mut error_message := ''
 	page.append_grapheme(0, 1, 0x0301) or { error_message = err.msg() }
@@ -1639,8 +1639,8 @@ fn test_page_set_hyperlink_reports_full_map_without_mutating_cell() ! {
 		uri: 'https://example.com/full'
 	}) or { panic(err) }
 	for key in 0 .. page.hyperlink_capacity() {
-		y := key / usize(page.size.cols)
-		x := key % usize(page.size.cols)
+		y := key / uint(page.size.cols)
+		x := key % uint(page.size.cols)
 		if key > 0 {
 			page.hyperlink_set.use_link(id)
 		}
@@ -1712,7 +1712,7 @@ fn test_page_insert_hyperlink_enforces_string_allocator_capacity() ! {
 		id:  HyperlinkImplicitId{}
 		uri: 'a'.repeat(int(string_bytes_default) - 1)
 	}) or { panic(err) }
-	assert page.hyperlink_set.string_used() == usize(string_bytes_default)
+	assert page.hyperlink_set.string_used() == uint(string_bytes_default)
 
 	mut error_message := ''
 	_ := page.insert_hyperlink(Hyperlink{
@@ -1723,7 +1723,7 @@ fn test_page_insert_hyperlink_enforces_string_allocator_capacity() ! {
 		u32(0)
 	}
 	assert error_message == 'strings out of memory'
-	assert page.hyperlink_set.string_used() == usize(string_bytes_default)
+	assert page.hyperlink_set.string_used() == uint(string_bytes_default)
 }
 
 fn test_page_capacity_adjust_no_columns_request() ! {
@@ -1778,9 +1778,9 @@ fn test_page_capacity_adjust_cols_down() ! {
 	// The packed row metadata is part of the budget. The result consumes the
 	// greatest whole number of rows that fits the original allocation.
 	budget := original.available_bits_for_grid()
-	used := usize(adjusted.rows) * (row_bit_size + cell_bit_size * usize(adjusted.cols))
+	used := uint(adjusted.rows) * (row_bit_size + cell_bit_size * uint(adjusted.cols))
 	assert used <= budget
-	assert used + row_bit_size + cell_bit_size * usize(adjusted.cols) > budget
+	assert used + row_bit_size + cell_bit_size * uint(adjusted.cols) > budget
 }
 
 // Test capacity adjust cols down to 1.
@@ -1947,7 +1947,7 @@ fn test_page_clear_cells() ! {
 	}
 	page.styles.release(id) // balance the initial add
 
-	assert page.grapheme_count() == usize(page.size.cols)
+	assert page.grapheme_count() == uint(page.size.cols)
 
 	// Clear all cells.
 	page.clear_cells(0, 0, page.size.cols)
@@ -2148,7 +2148,7 @@ fn test_page_capacity_adjust() ! {
 	}
 	assert adj.cols == 80
 	assert adj.rows >= 128
-	used := usize(adj.rows) * (row_bit_size + cell_bit_size * usize(adj.cols))
+	used := uint(adj.rows) * (row_bit_size + cell_bit_size * uint(adj.cols))
 	assert used <= cap.available_bits_for_grid()
 
 	// Very large cols - rows should reduce
@@ -2469,7 +2469,7 @@ fn test_page_exact_row_capacity_styles_max_single_row() ! {
 
 	// Fill cells with styles until we get OOM, but limit to a reasonable count
 	// to avoid overflow when computing capacity_for_count near maxInt.
-	mut count := usize(0)
+	mut count := uint(0)
 	max_count := 1000 // Limit to avoid overflow in capacity calculation.
 	for i in 0 .. int(page.size.cols) {
 		if count >= max_count {

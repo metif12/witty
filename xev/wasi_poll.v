@@ -11,15 +11,15 @@ $if wasm32_wasi {
 
 $if !windows {
 	fn C.__wasi_clock_time_get(id u32, precision u64, timestamp &u64) u16
-	fn C.__wasi_poll_oneoff(subscriptions voidptr, events voidptr, count usize, event_count &usize) u16
+	fn C.__wasi_poll_oneoff(subscriptions voidptr, events voidptr, count uint, event_count &uint) u16
 	fn C.__wasi_sock_shutdown(socket u32, how u8) u16
 	fn C.__wasi_sock_accept(socket u32, flags u16, accepted &u32) u16
-	fn C.__wasi_sock_recv(socket u32, iovs voidptr, iov_count usize, flags u16, received &usize, returned_flags &u16) u16
-	fn C.__wasi_sock_send(socket u32, iovs voidptr, iov_count usize, flags u16, sent &usize) u16
-	fn C.__wasi_fd_read(fd u32, iovs voidptr, count usize, received &usize) u16
-	fn C.__wasi_fd_pread(fd u32, iovs voidptr, count usize, offset u64, received &usize) u16
-	fn C.__wasi_fd_write(fd u32, iovs voidptr, count usize, sent &usize) u16
-	fn C.__wasi_fd_pwrite(fd u32, iovs voidptr, count usize, offset u64, sent &usize) u16
+	fn C.__wasi_sock_recv(socket u32, iovs voidptr, iov_count uint, flags u16, received &uint, returned_flags &u16) u16
+	fn C.__wasi_sock_send(socket u32, iovs voidptr, iov_count uint, flags u16, sent &uint) u16
+	fn C.__wasi_fd_read(fd u32, iovs voidptr, count uint, received &uint) u16
+	fn C.__wasi_fd_pread(fd u32, iovs voidptr, count uint, offset u64, received &uint) u16
+	fn C.__wasi_fd_write(fd u32, iovs voidptr, count uint, sent &uint) u16
+	fn C.__wasi_fd_pwrite(fd u32, iovs voidptr, count uint, offset u64, sent &uint) u16
 	fn C.__wasi_fd_close(fd u32) u16
 
 	// std.os.wasi extern ABI. The union keeps the alignment and clock/FD overlap.
@@ -71,7 +71,7 @@ $if !windows {
 
 	struct WasiIovec {
 		base voidptr
-		len  usize
+		len  uint
 	}
 
 	pub const wasi_threaded = $if wasm_threads ? { true } $else { false }
@@ -283,37 +283,37 @@ $if !windows {
 	pub struct WasiReadResult {
 	pub mut:
 		err ?ErrorKind
-		n   usize
+		n   uint
 	}
 
 	pub struct WasiPReadResult {
 	pub mut:
 		err ?ErrorKind
-		n   usize
+		n   uint
 	}
 
 	pub struct WasiWriteResult {
 	pub mut:
 		err ?ErrorKind
-		n   usize
+		n   uint
 	}
 
 	pub struct WasiPWriteResult {
 	pub mut:
 		err ?ErrorKind
-		n   usize
+		n   uint
 	}
 
 	pub struct WasiSendResult {
 	pub mut:
 		err ?ErrorKind
-		n   usize
+		n   uint
 	}
 
 	pub struct WasiRecvResult {
 	pub mut:
 		err ?ErrorKind
-		n   usize
+		n   uint
 	}
 
 	pub struct WasiShutdownResult {
@@ -373,7 +373,7 @@ $if !windows {
 		}
 	}
 
-	fn wasi_result_n(tag WasiOperationType, n usize) WasiResult {
+	fn wasi_result_n(tag WasiOperationType, n uint) WasiResult {
 		return match tag {
 			.read { WasiReadResult{ n: n } }
 			.pread { WasiPReadResult{ n: n } }
@@ -385,7 +385,7 @@ $if !windows {
 		}
 	}
 
-	fn wasi_result_bytes(r WasiResult) usize {
+	fn wasi_result_bytes(r WasiResult) uint {
 		return match r {
 			WasiReadResult { r.n }
 			WasiPReadResult { r.n }
@@ -405,7 +405,7 @@ $if !windows {
 		callback  WasiCallback = wasi_noop_callback
 		flags     WasiCompletionFlags
 		next      &WasiCompletion = unsafe { nil }
-		batch_idx usize
+		batch_idx uint
 	}
 
 	pub fn (self &WasiCompletion) state() CompletionState {
@@ -422,11 +422,11 @@ $if !windows {
 	pub struct WasiBatch {
 	pub mut:
 		array [wasi_batch_capacity]WasiSubscription
-		len   usize = 1
+		len   uint = 1
 	}
 
 	pub fn (mut self WasiBatch) get(c_ &WasiCompletion) !&WasiSubscription {
-		if self.len >= usize(self.array.len) { return new_error(.batch_full) }
+		if self.len >= uint(self.array.len) { return new_error(.batch_full) }
 		mut c := unsafe { c_ }
 		c.batch_idx = self.len
 		self.len += 1
@@ -444,14 +444,14 @@ $if !windows {
 		// timeout slot means its last-user-slot case still performs the swap.
 		if self.len == 0 { return }
 		self.array[int(old_idx)] = self.array[int(self.len)]
-		mut swapped := unsafe { &WasiCompletion(voidptr(usize(self.array[int(old_idx)].userdata))) }
+		mut swapped := unsafe { &WasiCompletion(voidptr(uint(self.array[int(old_idx)].userdata))) }
 		swapped.batch_idx = old_idx
 	}
 
 	@[heap]
 	pub struct WasiLoop {
 	pub mut:
-		active      usize
+		active      uint
 		submissions IntrusiveQueue[WasiCompletion]
 		asyncs      IntrusiveQueue[WasiCompletion]
 		batch       WasiBatch
@@ -518,7 +518,7 @@ $if !windows {
 			if c.flags.state() != .adding { continue }
 			self.start(c)
 		}
-		mut wait_rem := usize(wait)
+		mut wait_rem := uint(wait)
 		for {
 			if self.is_stopped { return }
 			self.update_now()
@@ -576,15 +576,15 @@ $if !windows {
 			unsafe { subscription.u.u.clock = WasiSubscriptionClock{ id: 1, timeout: timeout, precision: 1_000_000, flags: 1 } }
 			self.batch.array[0] = subscription
 			mut events := [wasi_batch_capacity]WasiEvent{}
-			assert usize(events.len) >= self.batch.len
-			mut n := usize(0)
+			assert uint(events.len) >= self.batch.len
+			mut n := uint(0)
 			if C.__wasi_poll_oneoff(voidptr(&self.batch.array[0]), voidptr(&events[0]), self.batch.len, &n) != 0 {
 				return new_error(.unexpected)
 			}
 			for event in events[..int(n)] {
 				if event.userdata == 0 { continue }
-				assert event.userdata <= u64(usize(-1))
-				mut c := unsafe { &WasiCompletion(voidptr(usize(event.userdata))) }
+				assert event.userdata <= u64(uint(-1))
+				mut c := unsafe { &WasiCompletion(voidptr(uint(event.userdata))) }
 				c.flags.set_state(.dead)
 				self.batch.put(c)
 				self.active -= 1
@@ -739,7 +739,7 @@ $if !windows {
 	}
 
 	fn (self &WasiCompletion) subscription() WasiSubscription {
-		mut result := WasiSubscription{ userdata: u64(usize(self)) }
+		mut result := WasiSubscription{ userdata: u64(uint(self)) }
 		match self.op {
 			WasiReadOp, WasiPReadOp, WasiRecvOp {
 				result.u.tag = 1
@@ -787,8 +787,8 @@ $if !windows {
 			}
 			WasiRecvOp {
 				buf := self.op.buffer.slice_ptr()
-				iov := WasiIovec{ base: buf.data, len: usize(buf.len) }
-				mut n := usize(0)
+				iov := WasiIovec{ base: buf.data, len: uint(buf.len) }
+				mut n := uint(0)
 				mut roflags := u16(0)
 				if C.__wasi_sock_recv(u32(self.op.fd), voidptr(&iov), 1, 0, &n, &roflags) != 0 {
 					return wasi_result_kind(.recv, .unexpected)
@@ -797,8 +797,8 @@ $if !windows {
 			}
 			WasiSendOp {
 				buf := self.op.buffer.bytes()
-				iov := WasiIovec{ base: buf.data, len: usize(buf.len) }
-				mut n := usize(0)
+				iov := WasiIovec{ base: buf.data, len: uint(buf.len) }
+				mut n := uint(0)
 				if C.__wasi_sock_send(u32(self.op.fd), voidptr(&iov), 1, 0, &n) != 0 {
 					return wasi_result_kind(.send, .unexpected)
 				}

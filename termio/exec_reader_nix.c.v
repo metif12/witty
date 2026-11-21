@@ -70,7 +70,7 @@ pub fn thread_main_posix(fd int, quit int, io &Termio) {
 		// for the realistic scenario that data will eventually stop while
 		// we're trying to quit.
 		for {
-			n := C.witty_read_retry(fd, &buf[0], usize(1024))
+			n := C.witty_read_retry(fd, &buf[0], uint(1024))
 			if n < 0 {
 				match C.witty_read_error_kind() {
 					// No more data, fall back to poll and check for exit

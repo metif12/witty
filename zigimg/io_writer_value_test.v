@@ -7,7 +7,7 @@ type ValueBool = bool
 fn test_value_dispatch_preserves_signed_padding_and_aliases() {
 	mut bytes := []u8{len: 128}
 	mut writer := WriteStream.init_memory(mut bytes)
-	writer.print_value('X', FormatOptions{ width: usize(6), fill: `0` }, ValueInteger(42), 0)!
+	writer.print_value('X', FormatOptions{ width: uint(6), fill: `0` }, ValueInteger(42), 0)!
 	writer.write_byte(`|`)!
 	writer.print_value('any', FormatOptions{}, ValueBool(true), 0)!
 	writer.write_byte(`|`)!
@@ -18,9 +18,9 @@ fn test_value_dispatch_preserves_signed_padding_and_aliases() {
 fn test_value_byte_lists_preserve_depth_and_element_padding() {
 	mut bytes := []u8{len: 128}
 	mut writer := WriteStream.init_memory(mut bytes)
-	writer.print_value('any', FormatOptions{ width: usize(3), fill: `_` }, [u8(1), 255], 1)!
+	writer.print_value('any', FormatOptions{ width: uint(3), fill: `_` }, [u8(1), 255], 1)!
 	writer.write_byte(`|`)!
-	writer.print_value('any', FormatOptions{ width: usize(99) }, []u8{}, 0)!
+	writer.print_value('any', FormatOptions{ width: uint(99) }, []u8{}, 0)!
 	assert writer.buffered().bytestr() == '{ __1, 255 }|{ ... }'
 }
 

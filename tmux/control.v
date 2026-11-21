@@ -63,7 +63,7 @@ pub:
 // Raw output from a pane.
 pub struct NotifOutput {
 pub:
-	pane_id usize
+	pane_id uint
 	data    string // unescaped
 }
 
@@ -71,7 +71,7 @@ pub:
 // named name.
 pub struct NotifSessionChanged {
 pub:
-	id   usize
+	id   uint
 	name string
 }
 
@@ -81,7 +81,7 @@ pub struct NotifSessionsChanged {}
 // The layout of the window with ID window-id changed.
 pub struct NotifLayoutChange {
 pub:
-	window_id      usize
+	window_id      uint
 	layout         string
 	visible_layout string
 	raw_flags      string
@@ -90,13 +90,13 @@ pub:
 // The window with ID window-id was linked to the current session.
 pub struct NotifWindowAdd {
 pub:
-	id usize
+	id uint
 }
 
 // The window with ID window-id was renamed to name.
 pub struct NotifWindowRenamed {
 pub:
-	id   usize
+	id   uint
 	name string
 }
 
@@ -104,8 +104,8 @@ pub:
 // with ID pane-id.
 pub struct NotifWindowPaneChanged {
 pub:
-	window_id usize
-	pane_id   usize
+	window_id uint
+	pane_id   uint
 }
 
 // The client has detached.
@@ -119,7 +119,7 @@ pub:
 pub struct NotifClientSessionChanged {
 pub:
 	client     string
-	session_id usize
+	session_id uint
 	name       string
 }
 
@@ -187,7 +187,7 @@ pub mut:
 	// memory usage. If the buffer exceeds this size, the client will
 	// enter a broken state (the control mode session will be forcibly
 	// exited and future data dropped).
-	max_bytes usize = 1024 * 1024
+	max_bytes uint = 1024 * 1024
 }
 
 pub fn (mut self ControlParser) deinit() {
@@ -220,7 +220,7 @@ pub fn (mut self ControlParser) put(byte u8) !ControlParserPutValue {
 		return ControlParserPutValue{}
 	}
 
-	if usize(self.buffer.len) >= self.max_bytes {
+	if uint(self.buffer.len) >= self.max_bytes {
 		self.set_broken()
 		return error('tmux control parser exceeded max_bytes')
 	}

@@ -59,7 +59,7 @@ pub fn ipc_new_window(target apprt.IpcTarget, value apprt.IpcNewWindow) !bool {
 
 		for argument in arguments {
 			// arg.len + 1 to include the terminating NUL, like ghostty.
-			bytes := C.g_bytes_new(argument.str, usize(argument.len + 1))
+			bytes := C.g_bytes_new(argument.str, uint(argument.len + 1))
 			string_variant := C.g_variant_new_from_bytes(s_variant_type, bytes, true)
 			C.g_bytes_unref(bytes)
 			C.g_variant_builder_add_value(command, string_variant)

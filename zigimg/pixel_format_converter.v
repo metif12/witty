@@ -28,10 +28,10 @@ pub fn PixelFormatConverter.convert(source &PixelStorage, destination_format Pix
 	// an aligned pointer; allocated empties retain Zig's sentinel. Raw empty
 	// pointers remain an undefined-Source representation boundary.
 	if source_format == .float32 && destination_format in [.rgba32, .bgra32] {
-		if usize(source_bytes.data) % 4 != 0 { panic('incorrect alignment') }
+		if uint(source_bytes.data) % 4 != 0 { panic('incorrect alignment') }
 	}
 	if source_format in [.rgba32, .bgra32] && destination_format == .float32 {
-		if usize(destination_bytes.data) % 4 != 0 { panic('incorrect alignment') }
+		if uint(destination_bytes.data) % 4 != 0 { panic('incorrect alignment') }
 	}
 	for index in 0 .. int(source.len()) {
 		color := converter_read(source, source_bytes, index)

@@ -88,7 +88,7 @@ pub mut:
 
 	// Write the clipboard value.
 	write_clipboard_cb   fn (voidptr, int, []ClipboardContent, bool) = unsafe { nil }
-	c_write_clipboard_cb fn (voidptr, int, &CAPIClipboardContentC, usize, bool) = unsafe { nil }
+	c_write_clipboard_cb fn (voidptr, int, &CAPIClipboardContentC, uint, bool) = unsafe { nil }
 
 	// Close the current surface given by this function.
 	close_surface_cb fn (voidptr, bool) = unsafe { nil }
@@ -779,7 +779,7 @@ pub fn (self &Surface) set_clipboard(clipboard_type Clipboard, contents []Clipbo
 			self.userdata,
 			int(clipboard_type),
 			ptr,
-			usize(values.len),
+			uint(values.len),
 			confirm,
 		)
 	}
@@ -1235,7 +1235,7 @@ pub mut:
 	offset_start u32
 	offset_len   u32
 	text         ?string
-	text_len     usize
+	text_len     uint
 }
 
 // deinit frees the text buffer.
@@ -1553,7 +1553,7 @@ fn read_text_locked(mut surface Surface, core_sel voidptr, mut result CAPIText) 
 	result.offset_start = offset_start
 	result.offset_len = offset_len
 	result.text = dumped.text
-	result.text_len = usize(dumped.text.len)
+	result.text_len = uint(dumped.text.len)
 	return true
 }
 

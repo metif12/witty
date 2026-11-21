@@ -163,8 +163,8 @@ pub fn (self &DynamicPalette) mask_is_set(idx u8) bool {
 }
 
 // mask_count returns the number of set bits in the bitmask.
-pub fn (self &DynamicPalette) mask_count() usize {
-	mut count := usize(0)
+pub fn (self &DynamicPalette) mask_count() uint {
+	mut count := uint(0)
 	for w in self.mask {
 		mut v := w
 		for v != 0 {

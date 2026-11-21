@@ -123,7 +123,7 @@ fn record(p []string, id int) string {
 				v.ImageTransmission{}
 			}
 		} else if p[0] == 'M' {
-			mut img := z.Image.from_raw_pixels(usize(p[3].u64()), usize(p[4].u64()), payload,
+			mut img := z.Image.from_raw_pixels(uint(p[3].u64()), uint(p[4].u64()), payload,
 				.rgb24) or { panic(err) }
 			packet := vx.transmit_image(mut img, format) or {
 				out += 'E${err.msg()}'
@@ -165,7 +165,7 @@ fn trap(name string, path string) {
 		vx.transmit_pre_encoded_image('x', 1, 1, .png) or { panic(err) }
 	} else {
 		vx.next_img_id = 17
-		image := z.Image.from_raw_pixels(usize(if name == 'height_cast' { 1 } else { 65536 }), usize(if name == 'height_cast' {
+		image := z.Image.from_raw_pixels(uint(if name == 'height_cast' { 1 } else { 65536 }), uint(if name == 'height_cast' {
 			65536
 		} else if name == 'png_header' {
 			0

@@ -48,7 +48,7 @@ fn observe() {
 }
 
 fn pixels(format p.PixelFormat, count int) p.PixelStorage {
-	mut result := p.PixelStorage.init(format, usize(count)) or { panic(err) }
+	mut result := p.PixelStorage.init(format, uint(count)) or { panic(err) }
 	mut bytes := result.as_bytes()
 	for i in 0 .. bytes.len {
 		bytes[i] = u8(i * 37 + 19)
@@ -109,7 +109,7 @@ fn record(line string, path string) string {
 			observed_disk = path
 		}
 		observed_reader = &reader
-		if start > 0 { reader.discard_all(usize(start)) or { panic(err) } }
+		if start > 0 { reader.discard_all(uint(start)) or { panic(err) } }
 		for _ in 0 .. attempts {
 			if op == 2 {
 				mut status := 'ok'
@@ -158,8 +158,8 @@ fn record(line string, path string) string {
 	if start > 0 { writer.seek_to(start) or { panic(err) } }
 	mut image := p.ImageUnmanaged{
 		pixels: pixels(unsafe { p.PixelFormat(f[4].u32()) }, f[5].int())
-		width:  usize(f[6].u64())
-		height: usize(f[7].u64())
+		width:  uint(f[6].u64())
+		height: uint(f[7].u64())
 	}
 	observed_image = &image
 	comments := match f[8].int() {

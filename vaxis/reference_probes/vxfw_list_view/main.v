@@ -26,10 +26,10 @@ mut:
 	trace    []string
 }
 
-fn build(ptr voidptr, index usize, cursor usize) ?fw.Widget {
+fn build(ptr voidptr, index uint, cursor uint) ?fw.Widget {
 	mut f := unsafe { &Fixture(ptr) }
 	if !f.silent { f.trace << 'b${index},${cursor};' }
-	if index >= usize(f.items.len) || (index < 64 && f.holes & (u64(1) << index) != 0) {
+	if index >= uint(f.items.len) || (index < 64 && f.holes & (u64(1) << index) != 0) {
 		return none
 	}
 	return item_widget(&f.items[int(index)])

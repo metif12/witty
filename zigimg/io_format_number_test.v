@@ -14,29 +14,29 @@ fn test_number_format_defaults_and_mode_bases() {
 
 fn test_number_conversion_and_copies_preserve_optional_values() {
 	mut options := FormatOptions{
-		precision: usize(0)
-		width:     ~usize(0)
+		precision: uint(0)
+		width:     ~uint(0)
 		alignment: .center
 		fill:      u8(255)
 	}
 	mut number := options.to_number(.scientific, .upper)
 	mut copy := number
 	options.precision = none
-	options.width = usize(0)
+	options.width = uint(0)
 	options.fill = 0
 	number.mode = .hex
 	number.precision = none
-	number.width = usize(1)
+	number.width = uint(1)
 	number.alignment = .left
 	assert copy.mode == .scientific && copy.letter_case == .upper
-	assert copy.precision? == usize(0) && copy.width? == ~usize(0)
+	assert copy.precision? == uint(0) && copy.width? == ~uint(0)
 	assert copy.alignment == .center && copy.fill == u8(255)
-	copy.precision = ~usize(0)
+	copy.precision = ~uint(0)
 	copy.width = none
 	copy.letter_case = .lower
-	assert number.precision == none && number.width? == usize(1)
+	assert number.precision == none && number.width? == uint(1)
 	assert number.mode.base()? == u8(16) && number.letter_case == .upper
-	assert options.precision == none && options.width? == usize(0)
+	assert options.precision == none && options.width? == uint(0)
 	assert options.fill == 0
 	defaults := FormatOptions{}.to_number(.binary, .upper)
 	assert defaults.mode == .binary && defaults.letter_case == .upper

@@ -8,12 +8,12 @@ import zigimg
 
 fn C.witty_stream_transition_setup(&char) int
 fn C.witty_stream_transition_replace(int) int
-fn C.witty_stream_transition_seed(usize, usize) int
+fn C.witty_stream_transition_seed(uint, uint) int
 fn C.witty_stream_transition_shutdown() int
 fn C.witty_stream_transition_cleanup() int
 fn C.witty_stream_transition_valid() int
 fn C.witty_stream_transition_refs() int
-fn C.witty_stream_transition_drain(&u8, usize) isize
+fn C.witty_stream_transition_drain(&u8, uint) int
 
 fn snapshot(mut reader zigimg.ReadStream, writer zigimg.WriteStream, buffer []u8, output []u8, writing bool) string {
 	position := if writing { writer.get_pos() } else { reader.get_pos() }
@@ -51,7 +51,7 @@ fn record(line string, path string) string {
 	if C.witty_stream_transition_replace(int(writing)) != 0 {
 		panic('Transition replacement failed')
 	}
-	if !writing && C.witty_stream_transition_seed(0, usize(f[4].int())) != 0 {
+	if !writing && C.witty_stream_transition_seed(0, uint(f[4].int())) != 0 {
 		panic('Transition seed failed')
 	}
 	if f[5] == '1' && C.witty_stream_transition_shutdown() != 0 {
@@ -61,7 +61,7 @@ fn record(line string, path string) string {
 	payload := []u8{len: output.len, init: u8(index * 17 + 11)}
 	for attempt in 0 .. 2 {
 		if attempt == 1 && !writing && f[5] == '0' && f[6].int() > 0 {
-			if C.witty_stream_transition_seed(usize(f[4].int()), usize(f[6].int())) != 0 {
+			if C.witty_stream_transition_seed(uint(f[4].int()), uint(f[6].int())) != 0 {
 				panic('Transition reseed failed')
 			}
 		}
@@ -82,7 +82,7 @@ fn record(line string, path string) string {
 		} else if op == 2 {
 			n := writer.write(payload) or {
 				status = err.msg()
-				usize(0)
+				uint(0)
 			}
 			if status == 'ok' { result = n.str() }
 		} else {
@@ -92,10 +92,10 @@ fn record(line string, path string) string {
 		out += '${status}:${result}|' + snapshot(mut reader, writer, buffer, output, writing) + '~'
 	}
 	mut wire := []u8{}
-	mut drain := isize(-3)
+	mut drain := int(-3)
 	for {
 		mut bytes := []u8{len: 4096}
-		drain = C.witty_stream_transition_drain(bytes.data, usize(bytes.len))
+		drain = C.witty_stream_transition_drain(bytes.data, uint(bytes.len))
 		if drain <= 0 { break
 		 }
 		wire << bytes[..int(drain)]

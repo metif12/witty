@@ -8,7 +8,7 @@ pub fn (mut vx Vaxis) render() string {
 	defer {
 		vx.refresh = false
 	}
-	if usize(vx.screen.buf.len) != usize(vx.screen.width) * usize(vx.screen.height) {
+	if uint(vx.screen.buf.len) != uint(vx.screen.width) * uint(vx.screen.height) {
 		panic('Assertion failed')
 	}
 	if vx.screen.buf.len != vx.screen_last.buf.len { panic('Assertion failed') }
@@ -36,8 +36,8 @@ pub fn (mut vx Vaxis) render() string {
 	for mut last_cell in vx.screen_last.buf {
 		last_cell.skip = false
 	}
-	mut i := usize(0)
-	for i < usize(vx.screen.buf.len) {
+	mut i := uint(0)
+	for i < uint(vx.screen.buf.len) {
 		cell := vx.screen.buf[int(i)]
 		w := if cell.char_.width != 0 {
 			u16(cell.char_.width)
@@ -70,10 +70,10 @@ pub fn (mut vx Vaxis) render() string {
 						if skipped_row == 0 && skipped_col == 0 {
 							continue
 						}
-						skipped_i := session_usize_add(session_usize_mul(session_usize_add(usize(skipped_row),
-							usize(row)), usize(vx.screen_last.width)), session_usize_add(usize(skipped_col),
-							usize(col)))
-						if skipped_i >= usize(vx.screen_last.buf.len) {
+						skipped_i := session_usize_add(session_usize_mul(session_usize_add(uint(skipped_row),
+							uint(row)), uint(vx.screen_last.width)), session_usize_add(uint(skipped_col),
+							uint(col)))
+						if skipped_i >= uint(vx.screen_last.buf.len) {
 							panic('index out of bounds')
 						}
 						vx.screen_last.buf[int(skipped_i)].skip = true
@@ -133,15 +133,15 @@ pub fn (mut vx Vaxis) render() string {
 			link = cell.link
 		}
 		mut j := session_usize_add(i, 1)
-		for j < session_usize_add(i, usize(w)) {
-			if j >= usize(vx.screen_last.buf.len) {
+		for j < session_usize_add(i, uint(w)) {
+			if j >= uint(vx.screen_last.buf.len) {
 				break
 			}
 			vx.screen_last.buf[int(j)].skipped = true
 			j = session_usize_add(j, 1)
 		}
 		col = session_u16_add(col, w)
-		i = session_usize_add(i, usize(w))
+		i = session_usize_add(i, uint(w))
 	}
 	if vx.screen.cursor_vis {
 		if vx.state.alt_screen {

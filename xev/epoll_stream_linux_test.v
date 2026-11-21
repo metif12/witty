@@ -56,10 +56,10 @@ fn (mut self EpollStreamTestPty) deinit() {
 
 struct EpollStreamTestLen {
 mut:
-	value ?usize
+	value ?uint
 }
 
-fn epoll_stream_test_read(ud voidptr, _ &EpollLoop, _ &EpollCompletion, _ EpollStream, _ EpollReadBuffer, r ?ErrorKind, n usize) CallbackAction {
+fn epoll_stream_test_read(ud voidptr, _ &EpollLoop, _ &EpollCompletion, _ EpollStream, _ EpollReadBuffer, r ?ErrorKind, n uint) CallbackAction {
 	if _ := r {
 		panic('unreachable')
 	}
@@ -68,7 +68,7 @@ fn epoll_stream_test_read(ud voidptr, _ &EpollLoop, _ &EpollCompletion, _ EpollS
 	return .disarm
 }
 
-fn epoll_stream_test_write(_ voidptr, _ &EpollLoop, _ &EpollCompletion, _ EpollStream, _ EpollWriteBuffer, r ?ErrorKind, _ usize) CallbackAction {
+fn epoll_stream_test_write(_ voidptr, _ &EpollLoop, _ &EpollCompletion, _ EpollStream, _ EpollWriteBuffer, r ?ErrorKind, _ uint) CallbackAction {
 	if _ := r {
 		panic('unreachable')
 	}
@@ -80,7 +80,7 @@ mut:
 	value &EpollCompletion = unsafe { nil }
 }
 
-fn epoll_stream_test_write_record(ud voidptr, _ &EpollLoop, c &EpollCompletion, _ EpollStream, _ EpollWriteBuffer, r ?ErrorKind, _ usize) CallbackAction {
+fn epoll_stream_test_write_record(ud voidptr, _ &EpollLoop, c &EpollCompletion, _ EpollStream, _ EpollWriteBuffer, r ?ErrorKind, _ uint) CallbackAction {
 	if _ := r {
 		panic('unreachable')
 	}

@@ -15,7 +15,7 @@ pub:
 // bucket_size are immutable runtime fields initialized by cache_table.
 pub struct CacheTable[K, V, X] {
 pub:
-	bucket_count usize
+	bucket_count uint
 	bucket_size  u8
 pub mut:
 	context X
@@ -25,7 +25,7 @@ mut:
 
 // cache_table translates Ghostty's CacheTable type factory. Context provides
 // hash(key) u64 and eql(a, b) bool, and may provide evicted(key, value).
-pub fn cache_table[K, V, X](context X, bucket_count usize, bucket_size u8) CacheTable[K, V, X] {
+pub fn cache_table[K, V, X](context X, bucket_count uint, bucket_size u8) CacheTable[K, V, X] {
 	assert bucket_count > 0 && bucket_count & (bucket_count - 1) == 0
 	return CacheTable[K, V, X]{
 		context:      context

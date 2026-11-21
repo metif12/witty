@@ -393,7 +393,7 @@ fn main() {
 		before := buffer_hash(screen.buf, &borrowed, glyph_mode >= 2)
 		if n(parts, 16) != 0 {
 			for bytes in owned {
-				unsafe { C.memset(bytes.data, `Z`, usize(bytes.len)) }
+				unsafe { C.memset(bytes.data, `Z`, uint(bytes.len)) }
 			}
 			opts = v.WindowChildOptions{
 				...opts

@@ -3,10 +3,10 @@ module zigimg
 fn test_text_writer_raw_bytes_and_ignored_precision() {
 	mut bytes := []u8{len: 16}
 	mut writer := WriteStream.init_memory(mut bytes)
-	writer.print_ascii_char(255, FormatOptions{ width: usize(3), fill: `.` })!
+	writer.print_ascii_char(255, FormatOptions{ width: uint(3), fill: `.` })!
 	writer.print_ascii([u8(0), 128], FormatOptions{
-		precision: usize(0)
-		width:     usize(4)
+		precision: uint(0)
+		width:     uint(4)
 		alignment: .left
 		fill:      `_`
 	})!

@@ -17,9 +17,9 @@ fn test_complete_pixel_format_words_and_strides() {
 		storage := PixelStorage.init(format, 3)!
 		assert storage.pixel_format() == format
 		assert storage.len() == if format == .invalid {
-			usize(0)
+			uint(0)
 		} else {
-			usize(3)
+			uint(3)
 		}
 		assert storage.as_bytes().len == int(strides[i]) * 3
 	}
@@ -60,7 +60,7 @@ fn test_raw_storage_borrows_and_slices_native_channel_bytes() {
 
 fn test_empty_raw_storage_accepts_misaligned_input_pointer() {
 	bytes := []u8{len: 32}
-	odd := if usize(bytes.data) % 2 == 0 { 1 } else { 0 }
+	odd := if uint(bytes.data) % 2 == 0 { 1 } else { 0 }
 	for format in [PixelFormat.grayscale16_alpha, .rgb555, .rgb565, .bgr555] {
 		storage := PixelStorage.init_raw_pixels(bytes[odd..odd], format)!
 		assert storage.len() == 0
@@ -105,8 +105,8 @@ fn test_image_raw_pixel_copy_and_owned_initialization_do_not_infer_dimensions() 
 
 fn test_invalid_storage_slice_ignores_all_bounds() {
 	invalid := PixelStorage(InvalidPixels{})
-	for begin in [usize(0), 1, ~usize(0)] {
-		for end in [usize(0), 1, ~usize(0)] {
+	for begin in [uint(0), 1, ~uint(0)] {
+		for end in [uint(0), 1, ~uint(0)] {
 			view := invalid.slice(begin, end)
 			assert view.pixel_format() == .invalid
 			assert view.len() == 0

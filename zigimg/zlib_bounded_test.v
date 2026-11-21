@@ -5,17 +5,17 @@ import compress.zlib
 fn test_bounded_zlib_uses_source_limit_and_header_contract() {
 	plain := 'bounded source reader'.bytes()
 	mut compressed := zlib.compress(plain)!
-	assert decode_zlib_bounded(compressed, usize(plain.len + 1))! == plain
-	decode_zlib_bounded(compressed, usize(plain.len)) or { assert err.msg() == 'StreamTooLong' }
+	assert decode_zlib_bounded(compressed, uint(plain.len + 1))! == plain
+	decode_zlib_bounded(compressed, uint(plain.len)) or { assert err.msg() == 'StreamTooLong' }
 	decode_zlib_bounded(compressed, 1) or { assert err.msg() == 'StreamTooLong' }
 	decode_zlib_bounded(compressed, 0) or { assert err.msg() == 'StreamTooLong' }
 	// Container.Header checks CM/CINFO, but deliberately ignores FCHECK/FDICT
 	// and the footer checksum, unlike V's zlib implementation.
 	compressed[1] = 0xff
 	compressed[compressed.len - 1] ^= 0xff
-	assert decode_zlib_bounded(compressed, usize(plain.len + 1))! == plain
+	assert decode_zlib_bounded(compressed, uint(plain.len + 1))! == plain
 	compressed[0] = 0x79
-	decode_zlib_bounded(compressed, usize(plain.len + 1)) or { assert err.msg() == 'ReadFailed' }
+	decode_zlib_bounded(compressed, uint(plain.len + 1)) or { assert err.msg() == 'ReadFailed' }
 }
 
 fn test_bounded_zlib_does_not_decode_unbounded_output() {
@@ -34,5 +34,5 @@ fn test_bounded_zlib_does_not_decode_unbounded_output() {
 	}
 	compressed << [u8(0), 0, 0, 0]
 	decode_zlib_bounded(compressed, 32) or { assert err.msg() == 'StreamTooLong' }
-	assert decode_zlib_bounded(compressed, usize(plain.len + 1))! == plain
+	assert decode_zlib_bounded(compressed, uint(plain.len + 1))! == plain
 }

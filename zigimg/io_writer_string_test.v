@@ -10,11 +10,11 @@ fn test_string_bytes_preserve_binary_encoding_and_alignment() {
 	mut buffer := []u8{len: 256}
 	mut writer := WriteStream.init_memory(mut buffer)
 	text := [u8(0), 255, 65].bytestr()
-	writer.print_value('s', FormatOptions{ width: usize(5), precision: ~usize(0), alignment: .center, fill: `_` }, WriterText(text), 0)!
+	writer.print_value('s', FormatOptions{ width: uint(5), precision: ~uint(0), alignment: .center, fill: `_` }, WriterText(text), 0)!
 	writer.write_byte(`|`)!
 	writer.print_value('x', FormatOptions{}, text, 0)!
 	writer.write_byte(`|`)!
-	writer.print_value('X', FormatOptions{}, text, ~usize(0))!
+	writer.print_value('X', FormatOptions{}, text, ~uint(0))!
 	writer.write_byte(`|`)!
 	writer.print_value('b64', FormatOptions{}, text, 1)!
 	assert writer.buffered().hex() == '5f00ff415f7c3030666634317c3030464634317c41503942'
@@ -23,7 +23,7 @@ fn test_string_bytes_preserve_binary_encoding_and_alignment() {
 fn test_string_any_uses_byte_lanes_and_recursive_depth() {
 	mut buffer := []u8{len: 256}
 	mut writer := WriteStream.init_memory(mut buffer)
-	writer.print_value('any', FormatOptions{ width: usize(3), fill: `_` }, 'A\x00', 1)!
+	writer.print_value('any', FormatOptions{ width: uint(3), fill: `_` }, 'A\x00', 1)!
 	writer.write_byte(`|`)!
 	writer.print_value('any', FormatOptions{}, WriterTextRecord{'A'}, 2)!
 	writer.write_byte(`|`)!
@@ -36,7 +36,7 @@ fn test_string_optionals_and_print_use_the_same_dispatch() {
 	mut writer := WriteStream.init_memory(mut buffer)
 	writer.print_value('?s', FormatOptions{}, ?WriterText(WriterText('A')), 0)!
 	writer.write_byte(`|`)!
-	writer.print_value('any', FormatOptions{ width: usize(6), fill: `_` }, ?string(none), 0)!
+	writer.print_value('any', FormatOptions{ width: uint(6), fill: `_` }, ?string(none), 0)!
 	writer.write_byte(`|`)!
 	writer.print('{[text]s}/{[text]x}', WriterTextRecord{'AB'})!
 	assert writer.buffered().bytestr() == 'A|__null|AB/4142'
@@ -71,8 +71,8 @@ fn test_string_address_uses_original_storage_and_ignores_options() {
 	mut buffer := []u8{len: 256}
 	mut writer := WriteStream.init_memory(mut buffer)
 	for text in ['', 'address'] {
-		writer.print_value('*', FormatOptions{ width: ~usize(0), precision: ~usize(0) }, WriterText(text), 0)!
-		assert writer.buffered().bytestr() == 'u8@${usize(text.str):x}'
+		writer.print_value('*', FormatOptions{ width: ~uint(0), precision: ~uint(0) }, WriterText(text), 0)!
+		assert writer.buffered().bytestr() == 'u8@${uint(text.str):x}'
 		writer.seek_to(0)!
 	}
 	writer.print_value('', FormatOptions{}, 'invalid', 0) or {

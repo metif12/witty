@@ -14,12 +14,12 @@ fn main() {
 	mut grid := Grid{}
 	grid[0] = Row([Element(-12), 3]!)
 	grid[1] = Row([Element(0), -4]!)
-	writer.print_value('any', zigimg.FormatOptions{ width: usize(4), fill: `_` }, grid, 2)!
+	writer.print_value('any', zigimg.FormatOptions{ width: uint(4), fill: `_` }, grid, 2)!
 	writer.write_byte(`|`)!
 	value := Bytes([Byte(0), 127, 255]!)
 	writer.print_value('b64', zigimg.FormatOptions{}, value, 0)!
 	writer.write_byte(`|`)!
-	writer.print_value('any', zigimg.FormatOptions{ width: ~usize(0), precision: ~usize(0) }, [
+	writer.print_value('any', zigimg.FormatOptions{ width: ~uint(0), precision: ~uint(0) }, [
 		[true, false]!,
 		[false, true]!,
 	]!, 1)!

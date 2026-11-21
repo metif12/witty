@@ -330,7 +330,7 @@ fn kqueue_test_recv(ud voidptr, _ &KqueueLoop, _ &KqueueCompletion, r KqueueResu
 	if _ := r.err {
 		panic('unreachable')
 	}
-	mut ptr := unsafe { &usize(ud) }
+	mut ptr := unsafe { &uint(ud) }
 	unsafe {
 		*ptr = (r as KqueueRecvResult).n
 	}
@@ -341,7 +341,7 @@ fn kqueue_test_read(ud voidptr, _ &KqueueLoop, _ &KqueueCompletion, r KqueueResu
 	if _ := r.err {
 		panic('unreachable')
 	}
-	mut ptr := unsafe { &usize(ud) }
+	mut ptr := unsafe { &uint(ud) }
 	unsafe {
 		*ptr = (r as KqueueReadResult).n
 	}
@@ -448,7 +448,7 @@ fn test_kqueue_socket_accept_connect_send_recv_close() ! {
 
 	// Receive
 	mut recv_buf := []u8{len: 128}
-	mut recv_len := usize(0)
+	mut recv_len := uint(0)
 	mut c_recv := &KqueueCompletion{
 		op: KqueueRecvOp{
 			fd: server_conn
@@ -568,7 +568,7 @@ fn test_kqueue_file_io_on_thread_pool() ! {
 
 	// Read
 	mut read_buf := []u8{len: 128}
-	mut read_len := usize(0)
+	mut read_len := uint(0)
 	mut c_read := &KqueueCompletion{
 		op: KqueueReadOp{
 			fd: f2.fd
@@ -675,7 +675,7 @@ fn test_kqueue_socket_accept_cancel_cancellation_should_decrease_active_count() 
 	}
 	loop.add(c_accept)
 	loop.run(.no_wait)!
-	assert usize(1) == loop.active
+	assert uint(1) == loop.active
 
 	mut cancel_called := false
 	mut c_cancel := &KqueueCompletion{
@@ -687,12 +687,12 @@ fn test_kqueue_socket_accept_cancel_cancellation_should_decrease_active_count() 
 	}
 	loop.add(c_cancel)
 
-	assert usize(2) == loop.active
+	assert uint(2) == loop.active
 	loop.run(.once)!
 	assert cancel_called
 
 	// Both callbacks are called active count should be 0
-	assert usize(0) == loop.active
+	assert uint(0) == loop.active
 
 	mut c_server_close := &KqueueCompletion{
 		op: KqueueCloseOp{

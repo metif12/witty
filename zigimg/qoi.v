@@ -117,12 +117,12 @@ pub fn QOI.write_image(mut stream WriteStream, image ImageUnmanaged, options Qoi
 	codec.write(mut stream, image.pixels)!
 }
 
-pub fn (codec QOI) width() usize {
-	return usize(codec.header.width)
+pub fn (codec QOI) width() uint {
+	return uint(codec.header.width)
 }
 
-pub fn (codec QOI) height() usize {
-	return usize(codec.header.height)
+pub fn (codec QOI) height() uint {
+	return uint(codec.header.height)
 }
 
 pub fn (codec QOI) pixel_format() !PixelFormat {
@@ -160,11 +160,11 @@ pub fn (mut codec QOI) read(mut stream ReadStream) !PixelStorage {
 		b: 0
 		a: 0
 	}}
-	mut index := usize(0)
+	mut index := uint(0)
 	for index < count {
 		byte := stream.take_byte()!
 		mut color := current
-		mut run := usize(1)
+		mut run := uint(1)
 		if byte == 0xfe {
 			color.r = stream.take_byte()!
 			color.g = stream.take_byte()!
@@ -192,7 +192,7 @@ pub fn (mut codec QOI) read(mut stream ReadStream) !PixelStorage {
 					color.b = u8(int(color.b) + green + int(diff & 15) - 8)
 				}
 				else {
-					run = usize(byte & 63) + 1
+					run = uint(byte & 63) + 1
 				}
 			}
 		}

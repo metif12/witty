@@ -8,14 +8,14 @@ import zigimg
 #flag -I @DIR/..
 #include "fixture_shims.h"
 
-fn C.witty_reader_exclusive_payload(&char, &u8, usize) int
+fn C.witty_reader_exclusive_payload(&char, &u8, uint) int
 fn C.witty_reader_delimiter_replace(int) int
-fn C.witty_reader_delimiter_seed(usize, usize) int
+fn C.witty_reader_delimiter_seed(uint, uint) int
 fn C.witty_reader_delimiter_shutdown() int
 fn C.witty_reader_delimiter_cleanup() int
 fn C.witty_reader_delimiter_valid() int
 fn C.witty_reader_delimiter_refs() int
-fn C.witty_reader_delimiter_drain(&u8, usize) isize
+fn C.witty_reader_delimiter_drain(&u8, uint) int
 
 __global (
 	observed_path   string
@@ -175,7 +175,7 @@ fn record(line string, path string) string {
 	if kind == 0 {
 		buffer = unsafe { data }
 	} else {
-		fd := C.witty_reader_exclusive_payload(path.str, data.data, usize(data.len))
+		fd := C.witty_reader_exclusive_payload(path.str, data.data, uint(data.len))
 		if fd < 0 { panic('Reader setup failed') }
 		reader = if kind == 1 { zigimg.ReadStream.init_file(os.File{ fd: fd }, mut buffer) } else { zigimg.ReadStream.init_file_streaming(os.File{
 				fd: fd
@@ -194,12 +194,12 @@ fn record(line string, path string) string {
 	if start > 0 { reader.seek_to(u64(start)) or { status = err.msg() } }
 	if replacement > 0 && api == 1 {
 		reader.peek(capacity) or { panic(err) }
-		reader.toss(usize(consumed))
+		reader.toss(uint(consumed))
 	}
 	mut out := '${status}|' + snapshot(mut reader, buffer, output) + '~'
 	if replacement > 0 {
 		if C.witty_reader_delimiter_replace(0) != 0
-			|| C.witty_reader_delimiter_seed(0, usize(seed)) != 0 {
+			|| C.witty_reader_delimiter_seed(0, uint(seed)) != 0 {
 			panic('Reader replacement failed')
 		}
 		if replacement == 2 && C.witty_reader_delimiter_shutdown() != 0 {
@@ -235,24 +235,24 @@ fn record(line string, path string) string {
 			}
 		}
 
-		reader.toss(usize(consume))
+		reader.toss(uint(consume))
 		out += 'consumed-${consume}|' + snapshot(mut reader, buffer, output) + '~'
 		if attempt == 0 {
 			status = 'ok'
 			reader.seek_by(delta) or { status = err.msg() }
 			out += '${status}|' + snapshot(mut reader, buffer, output) + '~'
 			if api == 2 && replacement == 1
-				&& C.witty_reader_delimiter_seed(0, usize(consumed)) != 0 {
+				&& C.witty_reader_delimiter_seed(0, uint(consumed)) != 0 {
 				panic('Reader reseed failed')
 			}
 		}
 	}
 	mut wire := []u8{}
-	mut drain := isize(-3)
+	mut drain := int(-3)
 	if replacement > 0 {
 		for {
 			mut bytes := []u8{len: 4096}
-			drain = C.witty_reader_delimiter_drain(bytes.data, usize(bytes.len))
+			drain = C.witty_reader_delimiter_drain(bytes.data, uint(bytes.len))
 			if drain <= 0 { break
 			 }
 			wire << bytes[..int(drain)]

@@ -8,22 +8,22 @@ import zigimg
 #flag -I @DIR/..
 #include "fixture_shims.h"
 
-fn C.witty_reader_exclusive_payload(&char, &u8, usize) int
+fn C.witty_reader_exclusive_payload(&char, &u8, uint) int
 fn C.witty_reader_delimiter_replace(int) int
-fn C.witty_reader_delimiter_seed(usize, usize) int
+fn C.witty_reader_delimiter_seed(uint, uint) int
 fn C.witty_reader_delimiter_shutdown() int
 fn C.witty_reader_delimiter_cleanup() int
 fn C.witty_reader_delimiter_valid() int
 fn C.witty_reader_delimiter_refs() int
-fn C.witty_reader_delimiter_drain(&u8, usize) isize
+fn C.witty_reader_delimiter_drain(&u8, uint) int
 fn C.witty_delimiter_stream_writer(&char) int
-fn C.witty_delimiter_stream_fill() isize
+fn C.witty_delimiter_stream_fill() int
 fn C.witty_writer_seek_replace(int) int
 fn C.witty_writer_seek_cleanup() int
 fn C.witty_writer_seek_valid() int
 fn C.witty_writer_seek_refs() int
-fn C.witty_writer_seek_view(&u8, usize) isize
-fn C.witty_writer_seek_drain(&u8, usize) isize
+fn C.witty_writer_seek_view(&u8, uint) int
+fn C.witty_writer_seek_drain(&u8, uint) int
 
 __global (
 	observed_path       string
@@ -48,9 +48,9 @@ fn state(mut reader zigimg.ReadStream, writer zigimg.WriteStream, input []u8, ou
 	if size == '' { size = length.str() }
 	mut actual := []u8{len: 4096}
 	n := if observed_write_file {
-		C.witty_writer_seek_view(actual.data, usize(actual.len))
+		C.witty_writer_seek_view(actual.data, uint(actual.len))
 	} else {
-		isize(0)
+		int(0)
 	}
 	if n < 0 { panic('Writer view failed') }
 	read_valid := if observed_read_file { C.witty_reader_delimiter_valid() } else { 0 }
@@ -73,7 +73,7 @@ fn observe() {
 	C.witty_writer_seek_cleanup()
 }
 
-fn read(mut reader zigimg.ReadStream, mut writer zigimg.WriteStream, api int, delimiter u8, limit usize) string {
+fn read(mut reader zigimg.ReadStream, mut writer zigimg.WriteStream, api int, delimiter u8, limit uint) string {
 	mut adapter := reader.reader()
 	mut sink := writer.writer()
 	count := match api {
@@ -86,16 +86,16 @@ fn read(mut reader zigimg.ReadStream, mut writer zigimg.WriteStream, api int, de
 	return 'ok'
 }
 
-fn drain(writing bool, filled isize) string {
+fn drain(writing bool, filled int) string {
 	mut wire := []u8{}
 	mut prefix := filled
-	mut status := isize(-3)
+	mut status := int(-3)
 	for {
 		mut bytes := []u8{len: 4096}
 		status = if writing {
-			C.witty_writer_seek_drain(bytes.data, usize(bytes.len))
+			C.witty_writer_seek_drain(bytes.data, uint(bytes.len))
 		} else {
-			C.witty_reader_delimiter_drain(bytes.data, usize(bytes.len))
+			C.witty_reader_delimiter_drain(bytes.data, uint(bytes.len))
 		}
 		if status <= 0 { break
 		 }
@@ -115,7 +115,7 @@ fn drain(writing bool, filled isize) string {
 fn record(line string, path string) string {
 	f := line.split('|')
 	rkind, api, rcap, wkind, wcap, prefill, start, delimiter := f[0].int(), f[1].int(), f[2].int(), f[3].int(), f[4].int(), f[5].int(), f[6].int(), f[7].int()
-	limit := usize(f[8].u64())
+	limit := uint(f[8].u64())
 	data := hex.decode(f[9]) or { panic(err) }
 	replace, consumed, seed, prime, delta := f[10].int(), f[11].int(), f[12].int(), f[13].int(), f[14].i64()
 	mut input := []u8{len: rcap, init: 165}
@@ -123,7 +123,7 @@ fn record(line string, path string) string {
 	if rkind == 0 {
 		input = unsafe { data }
 	} else {
-		fd := C.witty_reader_exclusive_payload(path.str, data.data, usize(data.len))
+		fd := C.witty_reader_exclusive_payload(path.str, data.data, uint(data.len))
 		if fd < 0 { panic('Reader setup failed') }
 		reader = if rkind == 1 { zigimg.ReadStream.init_file(os.File{ fd: fd }, mut input) } else { zigimg.ReadStream.init_file_streaming(os.File{
 				fd: fd
@@ -131,7 +131,7 @@ fn record(line string, path string) string {
 	}
 	mut output := []u8{len: wcap, init: 90}
 	mut writer := zigimg.WriteStream.init_memory(mut output)
-	mut filled := isize(0)
+	mut filled := int(0)
 	if wkind > 0 {
 		fd := C.witty_delimiter_stream_writer((path + '.writer').str)
 		if fd < 0 { panic('Writer setup failed') }
@@ -161,12 +161,12 @@ fn record(line string, path string) string {
 	if start > 0 { reader.seek_to(u64(start)) or { status = err.msg() } }
 	if replace > 0 {
 		reader.peek(rcap) or { panic(err) }
-		reader.toss(usize(consumed))
+		reader.toss(uint(consumed))
 	}
 	mut out := '${status}|' + snapshot(mut reader, writer, input, output) + '~'
 	if replace > 0 {
 		if C.witty_reader_delimiter_replace(0) != 0
-			|| C.witty_reader_delimiter_seed(0, usize(seed)) != 0 {
+			|| C.witty_reader_delimiter_seed(0, uint(seed)) != 0 {
 			panic('Reader replacement failed')
 		}
 		if replace == 2 && C.witty_reader_delimiter_shutdown() != 0 {
@@ -177,7 +177,7 @@ fn record(line string, path string) string {
 	if prime > 0 {
 		status = 'ok'
 		reader.peek(rcap) or { status = err.msg() }
-		if prime == 2 { reader.toss(usize(reader.buffered_len())) }
+		if prime == 2 { reader.toss(uint(reader.buffered_len())) }
 	}
 	out += '${status}|' + snapshot(mut reader, writer, input, output) + '~'
 	for attempt in 0 .. 3 {

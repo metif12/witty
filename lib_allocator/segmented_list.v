@@ -17,27 +17,27 @@ pub fn (mut self SegmentedList[T]) append(allocator Allocator, value T) ! {
 	mut capacity := 2
 	for capacity < new_length { capacity += 4 << count; count++ }
 	if count > self.segments.len {
-		raw := allocator.alloc_bytes(usize(count) * sizeof(voidptr), alignment_log[voidptr](), 0)
+		raw := allocator.alloc_bytes(uint(count) * sizeof(voidptr), alignment_log[voidptr](), 0)
 		if isnil(raw) { return error('OutOfMemory') }
 		mut segments := borrowed_array[voidptr](raw, count, count)
 		for i in 0 .. self.segments.len { segments[i] = self.segments[i] }
 		mut allocated := self.segments.len
 		for i in self.segments.len .. count {
-			size := usize(4) << i
+			size := uint(4) << i
 			segment := allocator.alloc_bytes(size * sizeof(T), alignment_log[T](), 0)
 			if isnil(segment) {
 				for j in self.segments.len .. allocated {
-					unregister_value_storage(segments[j], (usize(4) << j) * sizeof(T))
-					allocator.free_bytes(segments[j], (usize(4) << j) * sizeof(T), alignment_log[T](), 0)
+					unregister_value_storage(segments[j], (uint(4) << j) * sizeof(T))
+					allocator.free_bytes(segments[j], (uint(4) << j) * sizeof(T), alignment_log[T](), 0)
 				}
-				allocator.free_bytes(raw, usize(count) * sizeof(voidptr), alignment_log[voidptr](), 0)
+				allocator.free_bytes(raw, uint(count) * sizeof(voidptr), alignment_log[voidptr](), 0)
 				return error('OutOfMemory')
 			}
 			segments[i] = segment
 			register_value_storage(segment, size * sizeof(T))
 			allocated++
 		}
-		if self.segments.len > 0 { allocator.free_bytes(self.segments.data, usize(self.segments.len) * sizeof(voidptr), alignment_log[voidptr](), 0) }
+		if self.segments.len > 0 { allocator.free_bytes(self.segments.data, uint(self.segments.len) * sizeof(voidptr), alignment_log[voidptr](), 0) }
 		self.segments = segments
 	}
 	if self.len < 2 { self.prealloc[self.len] = value } else {
@@ -65,10 +65,10 @@ pub fn (self &SegmentedList[T]) at(index int) T {
 
 pub fn (mut self SegmentedList[T]) deinit(allocator Allocator) {
 	for i in 0 .. self.segments.len {
-		unregister_value_storage(self.segments[i], (usize(4) << i) * sizeof(T))
-		allocator.free_bytes(self.segments[i], (usize(4) << i) * sizeof(T), alignment_log[T](), 0)
+		unregister_value_storage(self.segments[i], (uint(4) << i) * sizeof(T))
+		allocator.free_bytes(self.segments[i], (uint(4) << i) * sizeof(T), alignment_log[T](), 0)
 	}
-	if self.segments.len > 0 { allocator.free_bytes(self.segments.data, usize(self.segments.len) * sizeof(voidptr), alignment_log[voidptr](), 0) }
+	if self.segments.len > 0 { allocator.free_bytes(self.segments.data, uint(self.segments.len) * sizeof(voidptr), alignment_log[voidptr](), 0) }
 	self.segments = []voidptr{}
 	self.len = 0
 }

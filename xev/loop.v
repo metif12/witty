@@ -114,5 +114,5 @@ pub mut:
 pub struct WriteBufferArray {
 pub mut:
 	array [32]u8
-	len   usize
+	len   uint
 }

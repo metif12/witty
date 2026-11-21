@@ -174,9 +174,9 @@ fn (cache SshDiskCache) read_entries() !map[string]SshCacheEntry {
 	for bytes.len < max_ssh_cache_size {
 		count := math.min(chunk.len, max_ssh_cache_size - bytes.len)
 		read := $if windows {
-			isize(C._read(file.fd, chunk.data, u32(count)))
+			int(C._read(file.fd, chunk.data, u32(count)))
 		} $else {
-			C.read(file.fd, chunk.data, usize(count))
+			C.read(file.fd, chunk.data, uint(count))
 		}
 		if read < 0 {
 			if C.errno == C.EINTR { continue }

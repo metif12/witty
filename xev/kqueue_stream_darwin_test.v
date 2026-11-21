@@ -56,10 +56,10 @@ fn (mut self StreamTestPty) deinit() {
 
 struct StreamTestLen {
 mut:
-	value ?usize
+	value ?uint
 }
 
-fn kqueue_stream_test_read(ud voidptr, _ &KqueueLoop, _ &KqueueCompletion, _ KqueueStream, _ KqueueReadBuffer, r ?ErrorKind, n usize) CallbackAction {
+fn kqueue_stream_test_read(ud voidptr, _ &KqueueLoop, _ &KqueueCompletion, _ KqueueStream, _ KqueueReadBuffer, r ?ErrorKind, n uint) CallbackAction {
 	if _ := r {
 		panic('unreachable')
 	}
@@ -68,7 +68,7 @@ fn kqueue_stream_test_read(ud voidptr, _ &KqueueLoop, _ &KqueueCompletion, _ Kqu
 	return .disarm
 }
 
-fn kqueue_stream_test_write(_ voidptr, _ &KqueueLoop, _ &KqueueCompletion, _ KqueueStream, _ KqueueWriteBuffer, r ?ErrorKind, _ usize) CallbackAction {
+fn kqueue_stream_test_write(_ voidptr, _ &KqueueLoop, _ &KqueueCompletion, _ KqueueStream, _ KqueueWriteBuffer, r ?ErrorKind, _ uint) CallbackAction {
 	if _ := r {
 		panic('unreachable')
 	}
@@ -80,7 +80,7 @@ mut:
 	value &KqueueCompletion = unsafe { nil }
 }
 
-fn kqueue_stream_test_write_record(ud voidptr, _ &KqueueLoop, c &KqueueCompletion, _ KqueueStream, _ KqueueWriteBuffer, r ?ErrorKind, _ usize) CallbackAction {
+fn kqueue_stream_test_write_record(ud voidptr, _ &KqueueLoop, c &KqueueCompletion, _ KqueueStream, _ KqueueWriteBuffer, r ?ErrorKind, _ uint) CallbackAction {
 	if _ := r {
 		panic('unreachable')
 	}

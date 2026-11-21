@@ -2,7 +2,7 @@ module crash
 
 import os
 
-fn C.sentry_value_new_message_event_n(level int, logger &char, logger_len usize, message &char, message_len usize) C.sentry_value_t
+fn C.sentry_value_new_message_event_n(level int, logger &char, logger_len uint, message &char, message_len uint) C.sentry_value_t
 fn C.sentry_capture_event(event C.sentry_value_t) C.sentry_uuid_t
 fn C.sentry_value_to_json(event C.sentry_value_t) &char
 
@@ -71,7 +71,7 @@ fn test_native_sentry_sdk_capture_uses_local_envelope_transport() {
 		state.init_thread = none
 		defer { _ = C.sentry_close() }
 		message := 'source local native capture'
-		event := C.sentry_value_new_message_event_n(2, unsafe { nil }, 0, &char(message.str), usize(message.len))
+		event := C.sentry_value_new_message_event_n(2, unsafe { nil }, 0, &char(message.str), uint(message.len))
 		_ = C.sentry_capture_event(event)
 		directory := default_dir()!
 		reports := os.ls(directory.path)!

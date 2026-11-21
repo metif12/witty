@@ -32,7 +32,7 @@ pub mut:
 // originally is from a write request. This is useful for getting
 // the WriteRequest back in a callback from queuedWrite.
 pub fn IoUringWriteRequest.from(c &IoUringCompletion) &IoUringWriteRequest {
-	return unsafe { &IoUringWriteRequest(voidptr(usize(c) - __offsetof(IoUringWriteRequest, completion))) }
+	return unsafe { &IoUringWriteRequest(voidptr(uint(c) - __offsetof(IoUringWriteRequest, completion))) }
 }
 
 // Errors that can be returned from polling are xev.Sys.PollError for io_uring.
@@ -58,11 +58,11 @@ pub type IoUringStreamPollCallback = fn (ud voidptr, l &IoUringLoop, c &IoUringC
 
 // The callback of Stream.read. The error is a ReadError; on success the byte
 // count is supplied.
-pub type IoUringStreamReadCallback = fn (ud voidptr, l &IoUringLoop, c &IoUringCompletion, s IoUringStream, b IoUringReadBuffer, r ?ErrorKind, n usize) CallbackAction
+pub type IoUringStreamReadCallback = fn (ud voidptr, l &IoUringLoop, c &IoUringCompletion, s IoUringStream, b IoUringReadBuffer, r ?ErrorKind, n uint) CallbackAction
 
 // The callback of Stream.write and Stream.queueWrite. The error is a
 // WriteError; on success the byte count is supplied.
-pub type IoUringStreamWriteCallback = fn (ud voidptr, l &IoUringLoop, c &IoUringCompletion, s IoUringStream, b IoUringWriteBuffer, r ?ErrorKind, n usize) CallbackAction
+pub type IoUringStreamWriteCallback = fn (ud voidptr, l &IoUringLoop, c &IoUringCompletion, s IoUringStream, b IoUringWriteBuffer, r ?ErrorKind, n uint) CallbackAction
 
 // Creates a generic stream type that supports read, write, close, poll. This
 // can be used for any file descriptor that would exhibit normal blocking
@@ -294,7 +294,7 @@ pub fn (self IoUringStream) write(mut loop IoUringLoop, c &IoUringCompletion, bu
 
 // Extracts the result from a completion for a write callback.
 @[inline]
-fn io_uring_stream_write_result(c &IoUringCompletion, r IoUringResult) (IoUringStream, IoUringWriteBuffer, ?ErrorKind, usize) {
+fn io_uring_stream_write_result(c &IoUringCompletion, r IoUringResult) (IoUringStream, IoUringWriteBuffer, ?ErrorKind, uint) {
 	return IoUringStream.init_fd((c.op as IoUringWriteOp).fd), (c.op as IoUringWriteOp).buffer, r.err, io_uring_result_bytes(r)
 }
 
@@ -316,19 +316,19 @@ pub fn (self IoUringStream) write_init(c &IoUringCompletion, buf IoUringWriteBuf
 }
 
 // Returns the length of the write buffer
-fn io_uring_write_buffer_length(buf IoUringWriteBuffer) usize {
+fn io_uring_write_buffer_length(buf IoUringWriteBuffer) uint {
 	return match buf {
-		WriteBufferSlice { usize(buf.slice.len) }
+		WriteBufferSlice { uint(buf.slice.len) }
 		WriteBufferArray { buf.len }
 	}
 }
 
 // Given a `WriteBuffer` and number of bytes written during the previous
 // write operation, returns a new `WriteBuffer` with remaining data.
-fn io_uring_write_buffer_remainder(buf IoUringWriteBuffer, offset usize) IoUringWriteBuffer {
+fn io_uring_write_buffer_remainder(buf IoUringWriteBuffer, offset uint) IoUringWriteBuffer {
 	match buf {
 		WriteBufferSlice {
-			assert offset <= usize(buf.slice.len)
+			assert offset <= uint(buf.slice.len)
 			return IoUringWriteBuffer(WriteBufferSlice{ slice: buf.slice[int(offset)..] })
 		}
 		WriteBufferArray {

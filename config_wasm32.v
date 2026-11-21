@@ -25,7 +25,7 @@ fn config_free_wasm_export(raw voidptr) {
 
 // Load configuration from the desktop file syntax stored in a byte slice.
 @[export: 'config_load_string']
-fn config_load_string_wasm_export(raw voidptr, str &u8, len usize) {
+fn config_load_string_wasm_export(raw voidptr, str &u8, len uint) {
 	mut config := unsafe { &configpkg.Config(raw) }
 	content := unsafe { tos(str, int(len)) }
 	config.load_string(content)

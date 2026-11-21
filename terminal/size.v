@@ -75,7 +75,7 @@ pub fn (self Offset) ptr(base &u8) &u8 {
 pub struct OffsetSlice {
 pub mut:
 	offset Offset
-	len    usize
+	len    uint
 }
 
 // slice returns a view of the offset bytes without copying them.
@@ -110,7 +110,7 @@ pub mut:
 	// structure is located. We use this so that we can slowly
 	// build up a chain of offset-based structures but always
 	// have the base pointer sent into functions be the true base.
-	offset usize
+	offset uint
 }
 
 // Initialize a zero-offset buffer from a base pointer.
@@ -124,7 +124,7 @@ pub fn OffsetBuf.init(base &u8) OffsetBuf {
 }
 
 // Initialize from some base pointer and offset.
-pub fn OffsetBuf.init_offset(base &u8, offset usize) OffsetBuf {
+pub fn OffsetBuf.init_offset(base &u8, offset uint) OffsetBuf {
 	return unsafe {
 		OffsetBuf{
 			base: base
@@ -144,15 +144,15 @@ pub fn (self OffsetBuf) start() &u8 {
 // Returns an Offset calculation for some child member of
 // your struct. The offset is against the true base pointer
 // so that future callers can pass that in as the base.
-pub fn (self OffsetBuf) member(len usize) Offset {
-	assert self.offset + len <= usize(max_page_size)
+pub fn (self OffsetBuf) member(len uint) Offset {
+	assert self.offset + len <= uint(max_page_size)
 	return Offset{
 		offset: OffsetInt(self.offset + len)
 	}
 }
 
 // Add an offset to the current offset.
-pub fn (self OffsetBuf) add(extra usize) OffsetBuf {
+pub fn (self OffsetBuf) add(extra uint) OffsetBuf {
 	return OffsetBuf{
 		base: self.base
 		offset: self.offset + extra
@@ -161,7 +161,7 @@ pub fn (self OffsetBuf) add(extra usize) OffsetBuf {
 
 // Rebase the offset to have a zero offset by rebasing onto start.
 // This is similar to `add` but all of the offsets are merged into base.
-pub fn (self OffsetBuf) rebase(extra usize) OffsetBuf {
+pub fn (self OffsetBuf) rebase(extra uint) OffsetBuf {
 	return OffsetBuf{
 		base: unsafe { self.start() + extra }
 		offset: 0

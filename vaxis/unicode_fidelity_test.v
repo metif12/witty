@@ -10,7 +10,7 @@ fn test_unicode_iterator_borrows_complete_clusters_and_exhausts() {
 		assert span == alt
 		bytes := span.bytes(text)
 		assert bytes == expected
-		assert unsafe { usize(bytes.str) == usize(text.str) + span.start }
+		assert unsafe { uint(bytes.str) == uint(text.str) + span.start }
 	}
 	for _ in 0 .. 3 {
 		assert iter.next() == none
@@ -58,12 +58,12 @@ fn test_grapheme_bytes_accepts_arbitrary_borrowed_spans() {
 	for start in 0 .. text.len + 1 {
 		for length in 0 .. text.len - start + 1 {
 			span := Grapheme{
-				start: usize(start)
-				len:   usize(length)
+				start: uint(start)
+				len:   uint(length)
 			}
 			bytes := span.bytes(text)
 			assert bytes == text[start..start + length]
-			assert unsafe { usize(bytes.str) == usize(text.str) + span.start }
+			assert unsafe { uint(bytes.str) == uint(text.str) + span.start }
 		}
 	}
 }

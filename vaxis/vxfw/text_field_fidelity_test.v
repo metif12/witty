@@ -178,7 +178,7 @@ fn test_text_field_draw_borrows_buffer_graphemes() {
 		}
 	})!
 	assert surface.buffer[0].char_.grapheme.str == field.buf.buffer.data
-	assert usize(surface.buffer[2].char_.grapheme.str) == usize(field.buf.buffer.data) +
+	assert uint(surface.buffer[2].char_.grapheme.str) == uint(field.buf.buffer.data) +
 		field.buf.cursor + field.buf.gap_size
 	field.buf.buffer[0] = `A`
 	field.buf.buffer[int(field.buf.cursor + field.buf.gap_size)] = `C`

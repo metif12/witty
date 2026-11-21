@@ -34,7 +34,7 @@ pub enum MessageDataKind as u8 {
 
 // init copies data, selecting small when it fits and alloc otherwise. It can
 // never infer caller-stable storage, matching the source constructor.
-pub fn MessageData.init[T](small_size usize, data []T) MessageData[T] {
+pub fn MessageData.init[T](small_size uint, data []T) MessageData[T] {
 	if data.len <= int(small_size) {
 		return MessageData[T](MessageDataSmall[T]{
 			data: data.clone()

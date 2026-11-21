@@ -28,37 +28,37 @@ fn observe() {
 	os.write_file(observed_path, out) or { eprintln('OBSERVER ERROR: ${err}') }
 }
 
-fn typed_pointer(pixels p.PixelStorage) usize {
+fn typed_pointer(pixels p.PixelStorage) uint {
 	return match pixels {
-		p.InvalidPixels { usize(0) }
-		p.IndexedStorage1 { usize(pixels.indices.data) }
-		p.IndexedStorage2 { usize(pixels.indices.data) }
-		p.IndexedStorage4 { usize(pixels.indices.data) }
-		p.IndexedStorage8 { usize(pixels.indices.data) }
-		p.IndexedStorage16 { usize(pixels.indices.data) }
-		p.Grayscale1Pixels { usize(pixels.data.data) }
-		p.Grayscale2Pixels { usize(pixels.data.data) }
-		p.Grayscale4Pixels { usize(pixels.data.data) }
-		p.Grayscale8Pixels { usize(pixels.data.data) }
-		p.Grayscale16Pixels { usize(pixels.data.data) }
-		p.Grayscale8AlphaPixels { usize(pixels.data.data) }
-		p.Grayscale16AlphaPixels { usize(pixels.data.data) }
-		p.Rgb332Pixels { usize(pixels.data.data) }
-		p.Rgb555Pixels { usize(pixels.data.data) }
-		p.Rgb565Pixels { usize(pixels.data.data) }
-		p.Rgb24Pixels { usize(pixels.data.data) }
-		p.Rgba32Pixels { usize(pixels.data.data) }
-		p.Bgr555Pixels { usize(pixels.data.data) }
-		p.Bgr24Pixels { usize(pixels.data.data) }
-		p.Bgra32Pixels { usize(pixels.data.data) }
-		p.Rgb48Pixels { usize(pixels.data.data) }
-		p.Rgba64Pixels { usize(pixels.data.data) }
-		p.Colorf32Pixels { usize(pixels.data.data) }
+		p.InvalidPixels { uint(0) }
+		p.IndexedStorage1 { uint(pixels.indices.data) }
+		p.IndexedStorage2 { uint(pixels.indices.data) }
+		p.IndexedStorage4 { uint(pixels.indices.data) }
+		p.IndexedStorage8 { uint(pixels.indices.data) }
+		p.IndexedStorage16 { uint(pixels.indices.data) }
+		p.Grayscale1Pixels { uint(pixels.data.data) }
+		p.Grayscale2Pixels { uint(pixels.data.data) }
+		p.Grayscale4Pixels { uint(pixels.data.data) }
+		p.Grayscale8Pixels { uint(pixels.data.data) }
+		p.Grayscale16Pixels { uint(pixels.data.data) }
+		p.Grayscale8AlphaPixels { uint(pixels.data.data) }
+		p.Grayscale16AlphaPixels { uint(pixels.data.data) }
+		p.Rgb332Pixels { uint(pixels.data.data) }
+		p.Rgb555Pixels { uint(pixels.data.data) }
+		p.Rgb565Pixels { uint(pixels.data.data) }
+		p.Rgb24Pixels { uint(pixels.data.data) }
+		p.Rgba32Pixels { uint(pixels.data.data) }
+		p.Bgr555Pixels { uint(pixels.data.data) }
+		p.Bgr24Pixels { uint(pixels.data.data) }
+		p.Bgra32Pixels { uint(pixels.data.data) }
+		p.Rgb48Pixels { uint(pixels.data.data) }
+		p.Rgba64Pixels { uint(pixels.data.data) }
+		p.Colorf32Pixels { uint(pixels.data.data) }
 	}
 }
 
 fn make_pixels(format p.PixelFormat, count int, seed int) p.PixelStorage {
-	mut pixels := p.PixelStorage.init(format, usize(count)) or { panic(err) }
+	mut pixels := p.PixelStorage.init(format, uint(count)) or { panic(err) }
 	if format == .invalid { return pixels }
 	mut raw := pixels.as_bytes()
 	for i in 0 .. raw.len {
@@ -75,7 +75,7 @@ fn make_pixels(format p.PixelFormat, count int, seed int) p.PixelStorage {
 				a: u8(i * 31 + seed * 17)
 			}
 		}
-		pixels.resize_palette(usize(length))
+		pixels.resize_palette(uint(length))
 		stride := int(format.pixel_stride())
 		for i in 0 .. count {
 			value := (i + seed) % length
@@ -136,13 +136,13 @@ fn main() {
 		observed_pixels = &pixels
 		at_exit(observe) or { panic(err) }
 		if os.args[1] == '--slice' {
-			_ = pixels.slice(usize(os.args[5].u64()), usize(os.args[6].u64()))
+			_ = pixels.slice(uint(os.args[5].u64()), uint(os.args[6].u64()))
 		} else {
 			mut iter := p.PixelStorageIterator.init(&pixels)
 			observed_iter = &iter
-			iter.current_index = usize(os.args[5].u64())
-			iter.end = usize(os.args[6].u64())
-			if os.args[1] == '--palette' { pixels.resize_palette(usize(os.args[7].u64())) }
+			iter.current_index = uint(os.args[5].u64())
+			iter.end = uint(os.args[6].u64())
+			if os.args[1] == '--palette' { pixels.resize_palette(uint(os.args[7].u64())) }
 			if os.args[1] == '--replace' { pixels = make_pixels(.rgb24, 1, 2) }
 			_ = iter.next()
 		}
@@ -155,12 +155,12 @@ fn main() {
 				pixels := make_pixels(format, count, seed)
 				for begin in 0 .. count + 1 {
 					for end in begin .. count + 1 {
-						view := pixels.slice(usize(begin), usize(end))
+						view := pixels.slice(uint(begin), uint(end))
 						pointer_ok := format == .invalid || count == 0
-							|| typed_pointer(view) == typed_pointer(pixels) + usize(begin) * usize(format.pixel_stride())
+							|| typed_pointer(view) == typed_pointer(pixels) + uint(begin) * uint(format.pixel_stride())
 						palette_ok := if pal := view.get_palette() {
 							original := pixels.get_palette() or { panic('missing palette') }
-							usize(pal.data) == usize(original.data)
+							uint(pal.data) == uint(original.data)
 						} else {
 							true
 						}
@@ -177,7 +177,7 @@ fn main() {
 				mut iter := p.PixelStorageIterator.init(&pixels)
 				mut copied := iter
 				_ = iter.next()
-				prefix := 'C|${u32(format)}|${count}|${seed}|${iter.current_index}|${copied.current_index}|${usize(iter.pixels) == usize(copied.pixels)}|'
+				prefix := 'C|${u32(format)}|${count}|${seed}|${iter.current_index}|${copied.current_index}|${uint(iter.pixels) == uint(copied.pixels)}|'
 				converted := colors(mut copied)
 				println(prefix + converted + '|${iter.current_index}|${copied.current_index}')
 			}
@@ -185,7 +185,7 @@ fn main() {
 	}
 	for initial in formats {
 		for replacement in formats {
-			for start in [usize(0), 2] {
+			for start in [uint(0), 2] {
 				mut pixels := make_pixels(initial, 4, 0)
 				mut iter := p.PixelStorageIterator.init(&pixels)
 				iter.current_index = start
@@ -193,15 +193,15 @@ fn main() {
 				prefix := 'L|${u32(initial)}|${u32(replacement)}|${start}|${iter.end}|'
 				converted := colors(mut iter)
 				println(prefix + converted +
-					'|${iter.current_index}|${usize(iter.pixels) == usize(&pixels)}')
+					'|${iter.current_index}|${uint(iter.pixels) == uint(&pixels)}')
 			}
 		}
 	}
 	for format in formats {
 		pixels := make_pixels(format, 4, 1)
-		for bounds in [[usize(4), 4], [usize(5), 4], [~usize(0), ~usize(0)],
-			[~usize(0), 0], [usize(0x100000000), 0x80000000],
-			[usize(0), 0]] {
+		for bounds in [[uint(4), 4], [uint(5), 4], [~uint(0), ~uint(0)],
+			[~uint(0), 0], [uint(0x100000000), 0x80000000],
+			[uint(0), 0]] {
 			mut iter := p.PixelStorageIterator.init(&pixels)
 			iter.current_index = bounds[0]
 			iter.end = bounds[1]
@@ -210,8 +210,8 @@ fn main() {
 		}
 	}
 	invalid := p.PixelStorage(p.InvalidPixels{})
-	for begin in [usize(0), 1, 0x80000000, 0x100000000, ~usize(0)] {
-		for end in [usize(0), 1, 0x80000000, 0x100000000, ~usize(0)] {
+	for begin in [uint(0), 1, 0x80000000, 0x100000000, ~uint(0)] {
+		for end in [uint(0), 1, 0x80000000, 0x100000000, ~uint(0)] {
 			view := invalid.slice(begin, end)
 			println('B|${begin}|${end}|${u32(view.pixel_format())}|${view.len()}')
 		}
@@ -219,13 +219,13 @@ fn main() {
 	mut defaults := p.PixelStorageIterator{}
 	none_first := defaults.next() == none
 	println('D|${none_first}|${defaults.current_index}|${defaults.end}')
-	defaults.current_index = ~usize(0)
-	defaults.end = ~usize(0)
+	defaults.current_index = ~uint(0)
+	defaults.end = ~uint(0)
 	none_last := defaults.next() == none
 	println('D|${none_last}|${defaults.current_index}|${defaults.end}')
 	mut wide := p.PixelStorageIterator.init(&invalid)
-	wide.current_index = ~usize(0) - 1
-	wide.end = ~usize(0)
+	wide.current_index = ~uint(0) - 1
+	wide.end = ~uint(0)
 	converted := colors(mut wide)
 	println('W|' + converted + '|${wide.current_index}|${wide.end}')
 }

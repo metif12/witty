@@ -63,7 +63,7 @@ fn C.g_variant_builder_end(builder GVariantBuilder) GVariant
 
 fn C.g_variant_new_variant(value GVariant) GVariant
 
-fn C.g_variant_new_tuple(children &GVariant, n_children usize) GVariant
+fn C.g_variant_new_tuple(children &GVariant, n_children uint) GVariant
 
 fn C.g_variant_new_string(str &char) GVariant
 
@@ -84,7 +84,7 @@ fn C.g_dbus_connection_call_sync(connection GDBusConnection, bus_name &char, obj
 fn C.g_variant_unref(value GVariant)
 
 // GBytes + GVariant-from-bytes.
-fn C.g_bytes_new(data voidptr, size usize) GBytes
+fn C.g_bytes_new(data voidptr, size uint) GBytes
 
 fn C.g_bytes_unref(bytes GBytes)
 
@@ -194,7 +194,7 @@ pub fn dbus_init(target apprt.IpcTarget, action string) !DBus {
 			C.g_variant_type_free(s_variant_type)
 		}
 		// action.len + 1 to include the terminating NUL, like ghostty.
-		bytes := C.g_bytes_new(action.str, usize(action.len + 1))
+		bytes := C.g_bytes_new(action.str, uint(action.len + 1))
 		defer {
 			C.g_bytes_unref(bytes)
 		}

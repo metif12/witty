@@ -8,11 +8,11 @@ import zigimg
 #include "fixture_shims.h"
 
 fn C.witty_image_path_permissions() int
-fn C.witty_image_path_setup(&char, int, &u8, usize) int
+fn C.witty_image_path_setup(&char, int, &u8, uint) int
 fn C.witty_image_path_count() int
 fn C.witty_image_path_valid(int) int
 fn C.witty_image_path_mode(int) int
-fn C.witty_image_path_bytes(int, &u8, usize) isize
+fn C.witty_image_path_bytes(int, &u8, uint) int
 fn C.witty_image_path_cleanup(&char, int) int
 
 __global (
@@ -130,7 +130,7 @@ fn source(profile int) !zigimg.ImageUnmanaged {
 
 fn snapshot() string {
 	mut bytes := []u8{len: 4096}
-	n := C.witty_image_path_bytes(observed_fd, bytes.data, usize(bytes.len))
+	n := C.witty_image_path_bytes(observed_fd, bytes.data, uint(bytes.len))
 	if n < 0 { panic('path observer read failed') }
 	image := observed_image
 	mut out := '${C.witty_image_path_valid(observed_fd)}:${C.witty_image_path_count() - observed_count}:${C.witty_image_path_mode(observed_fd)}|${observed_buffer.hex()}|${image.width}:${image.height}:${u32(image.pixel_format())}:${image.pixels.len()}:${image.raw_bytes().hex()}|'
@@ -199,7 +199,7 @@ fn record(line string) string {
 	observed_buffer = unsafe { buffer }
 	kind := f[5].int()
 	seed := hex.decode('6661726266656c64000000010000000100130038005dffff') or { panic(err) }
-	observed_fd = C.witty_image_path_setup(observed_root.str, kind, seed.data, usize(seed.len))
+	observed_fd = C.witty_image_path_setup(observed_root.str, kind, seed.data, uint(seed.len))
 	if observed_fd < 0 { panic('path setup failed') }
 	observed_count = C.witty_image_path_count()
 	defer {

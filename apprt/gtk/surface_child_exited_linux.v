@@ -37,7 +37,7 @@ fn C.adw_banner_set_title(banner AdwBanner, title &char)
 // adw_banner_get_type binds the `banner` template child.
 fn C.adw_banner_get_type() GType
 
-fn C.g_malloc0(n_bytes usize) voidptr
+fn C.g_malloc0(n_bytes uint) voidptr
 
 struct C.GhosttyApprtChildExited {
 mut:
@@ -301,7 +301,7 @@ fn surface_child_exited_class_init(klass voidptr, class_data voidptr) {
 	C.witty_gobject_class_set_finalize(klass, voidptr(surface_child_exited_finalize))
 
 	if supports_banner() {
-		bytes := C.g_bytes_new_static(surface_child_exited_ui.str, usize(surface_child_exited_ui.len))
+		bytes := C.g_bytes_new_static(surface_child_exited_ui.str, uint(surface_child_exited_ui.len))
 		C.gtk_widget_class_set_template(klass, bytes)
 		C.g_bytes_unref(bytes)
 

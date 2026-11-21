@@ -84,7 +84,7 @@ const ns_tracking_active_always = u64(0x80)
 const ns_tracking_in_visible_rect = u64(0x200)
 const ns_alert_style_warning = u64(2)
 const ns_alert_first_button_return = i64(1000)
-const objc_assoc_copy_nonatomic = usize(3)
+const objc_assoc_copy_nonatomic = uint(3)
 const mtl_pixel_format_bgra8unorm = u64(80)
 
 __global (
@@ -127,7 +127,7 @@ fn add_method(cls ObjId, name string, imp voidptr, types string) {
 }
 
 fn add_ptr_ivar(cls ObjId, name string) {
-	C.macos_class_add_ivar(cls, cstr(name), usize(8), u8(3), cstr('^v'))
+	C.macos_class_add_ivar(cls, cstr(name), uint(8), u8(3), cstr('^v'))
 }
 
 fn register_classes() {

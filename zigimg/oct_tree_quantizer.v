@@ -48,7 +48,7 @@ pub fn (mut quantizer OctTreeQuantizer) add_color[T](color T) ! {
 	quantizer.root_node.add_color(color, 0, mut quantizer)!
 }
 
-pub fn (quantizer &OctTreeQuantizer) get_palette_index[T](color T) !usize {
+pub fn (quantizer &OctTreeQuantizer) get_palette_index[T](color T) !uint {
 	return quantizer.root_node.get_palette_index(color, 0)
 }
 
@@ -61,14 +61,14 @@ pub fn (mut quantizer OctTreeQuantizer) make_palette(color_count u32, mut palett
 			removed := node.remove_leaves()
 			// @intCast(i32 -> usize), followed by checked unsigned subtraction.
 			if removed < 0 { panic('integer does not fit in destination type') }
-			if usize(removed) > leaf_count { panic('integer overflow') }
-			leaf_count -= usize(removed)
-			if leaf_count <= usize(color_count) {
+			if uint(removed) > leaf_count { panic('integer overflow') }
+			leaf_count -= uint(removed)
+			if leaf_count <= uint(color_count) {
 				break
 			}
 			node = node.level_next
 		}
-		if leaf_count <= usize(color_count) {
+		if leaf_count <= uint(color_count) {
 			break
 		}
 		level--
@@ -173,8 +173,8 @@ fn (mut node OctTreeNode) add_rgb(color Rgb24, level i32, mut parent OctTreeQuan
 	}
 }
 
-pub fn (node &OctTreeNode) get_palette_index[T](color T, level i32) !usize {
-	if node.is_leaf() { return usize(node.palette_index) }
+pub fn (node &OctTreeNode) get_palette_index[T](color T, level i32) !uint {
+	if node.is_leaf() { return uint(node.palette_index) }
 	$if T.unaliased_typ is Rgb24 || T.unaliased_typ is Bgr24 || T.unaliased_typ is Rgb48
 		|| T.unaliased_typ is Rgb332 || T.unaliased_typ is Rgb555 || T.unaliased_typ is Bgr555
 		|| T.unaliased_typ is Rgb565 || T.unaliased_typ is Rgba32 || T.unaliased_typ is Bgra32
@@ -193,8 +193,8 @@ pub fn (node &OctTreeNode) get_palette_index[T](color T, level i32) !usize {
 	}
 }
 
-fn (node &OctTreeNode) get_rgb_index(color Rgb24, level i32) !usize {
-	if node.is_leaf() { return usize(node.palette_index) }
+fn (node &OctTreeNode) get_rgb_index(color Rgb24, level i32) !uint {
+	if node.is_leaf() { return uint(node.palette_index) }
 	index := OctTreeNode.get_color_index(color, level)
 	child := node.children[index]
 	if child != unsafe { nil } { return child.get_rgb_index(color, level + 1) }
@@ -204,13 +204,13 @@ fn (node &OctTreeNode) get_rgb_index(color Rgb24, level i32) !usize {
 	return error('ColorNotFound')
 }
 
-pub fn (node &OctTreeNode) count_leaf_nodes() usize {
+pub fn (node &OctTreeNode) count_leaf_nodes() uint {
 	if node.is_leaf() { return 1 }
-	mut count := usize(0)
+	mut count := uint(0)
 	for child in node.children {
 		if child != unsafe { nil } {
 			child_count := child.count_leaf_nodes()
-			if child_count > ~usize(0) - count { panic('integer overflow') }
+			if child_count > ~uint(0) - count { panic('integer overflow') }
 			count += child_count
 		}
 	}
@@ -220,7 +220,7 @@ pub fn (node &OctTreeNode) count_leaf_nodes() usize {
 pub fn (mut node OctTreeNode) make_palette(mut context OctTreePaletteContext) {
 	if node.is_leaf() {
 		if context.palette_index >= context.color_count { return }
-		if usize(context.palette_index) >= usize(context.palette.len) {
+		if uint(context.palette_index) >= uint(context.palette.len) {
 			panic('index out of bounds: index ${context.palette_index}, len ${context.palette.len}')
 		}
 		context.palette[context.palette_index] = node.get_color()
@@ -249,11 +249,11 @@ pub fn (mut node OctTreeNode) remove_leaves() i32 {
 	return removed - 1
 }
 
-fn OctTreeNode.get_color_index[T](color T, level i32) usize {
+fn OctTreeNode.get_color_index[T](color T, level i32) uint {
 	rgb := quantizer_rgb24(color)
 	if level < 0 || level >= 8 { panic('integer does not fit in destination type') }
 	mask := u8(128 >> level)
-	mut index := usize(0)
+	mut index := uint(0)
 	if rgb.r & mask != 0 { index |= 4 }
 	if rgb.g & mask != 0 { index |= 2 }
 	if rgb.b & mask != 0 { index |= 1 }

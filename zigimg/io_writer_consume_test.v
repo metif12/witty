@@ -12,7 +12,7 @@ fn test_writer_consume_compacts_pending_bytes_and_saved_views() {
 	assert saved == 'cdefef'.bytes() && writer.get_pos() == 4
 	assert writer.consume(7) == 3 && writer.buffered().len == 0
 	assert writer.get_pos() == 0 && bytes == 'cdefefgh'.bytes()
-	assert writer.consume(~usize(0)) == ~usize(0)
+	assert writer.consume(~uint(0)) == ~uint(0)
 }
 
 fn test_writer_consume_all_drops_pending_without_changing_backing() {

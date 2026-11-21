@@ -38,23 +38,23 @@ struct C.sentry_uuid_t {
 
 fn C.sentry_options_new() voidptr
 fn C.sentry_options_free(options voidptr)
-fn C.sentry_options_set_release_n(options voidptr, release &char, length usize)
+fn C.sentry_options_set_release_n(options voidptr, release &char, length uint)
 fn C.sentry_transport_new(callback fn (voidptr, voidptr)) voidptr
 fn C.sentry_options_set_transport(options voidptr, transport voidptr)
 fn C.sentry_options_set_before_send(options voidptr, callback fn (C.sentry_value_t, voidptr, voidptr) C.sentry_value_t, userdata voidptr)
-fn C.sentry_options_set_database_path_n(options voidptr, path &char, length usize)
+fn C.sentry_options_set_database_path_n(options voidptr, path &char, length uint)
 fn C.sentry_options_set_debug(options voidptr, debug int)
 fn C.sentry_init(options voidptr) int
 fn C.sentry_close() int
-fn C.sentry_set_tag_n(key &char, key_len usize, value &char, value_len usize)
+fn C.sentry_set_tag_n(key &char, key_len uint, value &char, value_len uint)
 fn C.sentry_value_new_object() C.sentry_value_t
-fn C.sentry_value_new_string_n(data &char, length usize) C.sentry_value_t
+fn C.sentry_value_new_string_n(data &char, length uint) C.sentry_value_t
 fn C.sentry_value_new_int32(value i32) C.sentry_value_t
-fn C.sentry_value_get_by_key_n(value C.sentry_value_t, key &char, length usize) C.sentry_value_t
-fn C.sentry_value_set_by_key_n(value C.sentry_value_t, key &char, length usize, item C.sentry_value_t) int
+fn C.sentry_value_get_by_key_n(value C.sentry_value_t, key &char, length uint) C.sentry_value_t
+fn C.sentry_value_set_by_key_n(value C.sentry_value_t, key &char, length uint, item C.sentry_value_t) int
 fn C.sentry_value_is_null(value C.sentry_value_t) int
 fn C.sentry_value_decref(value C.sentry_value_t)
-fn C.sentry_envelope_serialize(envelope voidptr, length &usize) &char
+fn C.sentry_envelope_serialize(envelope voidptr, length &uint) &char
 fn C.sentry_envelope_free(envelope voidptr)
 fn C.sentry_free(data voidptr)
 fn C.sentry_uuid_new_v4() C.sentry_uuid_t
@@ -133,7 +133,7 @@ fn sentry_init_thread_internal() ! {
 		mut initialized := false
 		defer { if !initialized { C.sentry_options_free(opts) } }
 		info := sentry_state.info
-		C.sentry_options_set_release_n(opts, &char(info.release.str), usize(info.release.len))
+		C.sentry_options_set_release_n(opts, &char(info.release.str), uint(info.release.len))
 		C.sentry_options_set_transport(opts, transport)
 		C.sentry_options_set_before_send(opts, sentry_before_send, unsafe { nil })
 		mut cache := ''
@@ -143,7 +143,7 @@ fn sentry_init_thread_internal() ! {
 		if cache.len == 0 {
 			cache = internal_os.cache(internal_os.Options{ subdir: 'ghostty/sentry' })!
 		}
-		C.sentry_options_set_database_path_n(opts, &char(cache.str), usize(cache.len))
+		C.sentry_options_set_database_path_n(opts, &char(cache.str), uint(cache.len))
 		if buildcfg.slow_runtime_safety { C.sentry_options_set_debug(opts, 1) }
 		if C.sentry_init(opts) != 0 { return error('SentryInitFailed') }
 		initialized = true
@@ -153,7 +153,7 @@ fn sentry_init_thread_internal() ! {
 			'font-backend': info.font_backend
 			'renderer':     info.renderer
 		} {
-			C.sentry_set_tag_n(&char(key.str), usize(key.len), &char(value.str), usize(value.len))
+			C.sentry_set_tag_n(&char(key.str), uint(key.len), &char(value.str), uint(value.len))
 		}
 		log.debug('sentry initialized database=${cache}')
 	}
@@ -170,13 +170,13 @@ fn sentry_shutdown() {
 
 fn set_value(object C.sentry_value_t, key string, value C.sentry_value_t) {
 	$if !no_sentry ?&& !windows && ( sentry ?|| macos || ios ) {
-		_ = C.sentry_value_set_by_key_n(object, &char(key.str), usize(key.len), value)
+		_ = C.sentry_value_set_by_key_n(object, &char(key.str), uint(key.len), value)
 	}
 }
 
 fn object_value(event C.sentry_value_t, key string) C.sentry_value_t {
 	$if !no_sentry ?&& !windows && ( sentry ?|| macos || ios ) {
-		value := C.sentry_value_get_by_key_n(event, &char(key.str), usize(key.len))
+		value := C.sentry_value_get_by_key_n(event, &char(key.str), uint(key.len))
 		if C.sentry_value_is_null(value) == 0 { return value }
 		object := C.sentry_value_new_object()
 		set_value(event, key, object)
@@ -195,7 +195,7 @@ fn sentry_before_send(event C.sentry_value_t, _ voidptr, _ voidptr) C.sentry_val
 		contexts := object_value(event, 'contexts')
 		tags := object_value(event, 'tags')
 		kind := state.kind.str()
-		set_value(tags, 'thread-type', C.sentry_value_new_string_n(&char(kind.str), usize(kind.len)))
+		set_value(tags, 'thread-type', C.sentry_value_new_string_n(&char(kind.str), uint(kind.len)))
 		assert sentry_state.dimensions_reader != unsafe { nil }
 		dimensions := sentry_state.dimensions_reader(state.surface)
 		object := C.sentry_value_new_object()
@@ -224,7 +224,7 @@ fn sentry_transport_send(envelope voidptr, _ voidptr) {
 
 fn sentry_transport_send_internal(envelope voidptr) ! {
 	$if !no_sentry ?&& !windows && ( sentry ?|| macos || ios ) {
-		mut length := usize(0)
+		mut length := uint(0)
 		serialized := C.sentry_envelope_serialize(envelope, &length)
 		defer { C.sentry_free(serialized) }
 		bytes := unsafe { (&u8(serialized)).vbytes(int(length)) }

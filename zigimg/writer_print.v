@@ -1,18 +1,18 @@
 module zigimg
 
 struct IoPrintSize {
-	value ?usize
+	value ?uint
 }
 
 struct IoPrintPart {
 	literal   []u8
-	index     ?usize
+	index     ?uint
 	specifier string
 	options   FormatOptions
 }
 
-fn io_print_field_index[T](name string) !usize {
-	mut index := usize(0)
+fn io_print_field_index[T](name string) !uint {
+	mut index := uint(0)
 	$for field in T.fields {
 		if field.name == name { return index }
 		index++
@@ -30,10 +30,10 @@ fn io_print_arg_index[T](specifier FormatSpecifier) !IoPrintSize {
 
 fn io_print_optional_size[T](value ?T) !IoPrintSize {
 	// Zig can coerce an optional only when its integer child has usize's width.
-	if sizeof(T) != sizeof(usize) {
+	if sizeof(T) != sizeof(uint) {
 		return error('named format size requires an unsigned integer or usize-sized optional unsigned integer')
 	}
-	$if T.unaliased_typ !is u8 && T.unaliased_typ !is u16 && T.unaliased_typ !is u32 && T.unaliased_typ !is u64 && T.unaliased_typ !is usize {
+	$if T.unaliased_typ !is u8 && T.unaliased_typ !is u16 && T.unaliased_typ !is u32 && T.unaliased_typ !is u64 && T.unaliased_typ !is uint {
 		return error('named format size requires an unsigned integer or usize-sized optional unsigned integer')
 	}
 	payload := value or { return IoPrintSize{} }
@@ -43,9 +43,9 @@ fn io_print_optional_size[T](value ?T) !IoPrintSize {
 fn io_print_size_value[T](value T) !IoPrintSize {
 	$if T is $option {
 		return io_print_optional_size(value)
-	} $else $if T.unaliased_typ is u8 || T.unaliased_typ is u16 || T.unaliased_typ is u32 || T.unaliased_typ is u64 || T.unaliased_typ is usize {
-		if u64(value) > u64(~usize(0)) { return error('format size exceeds usize') }
-		return IoPrintSize{ value: usize(value) }
+	} $else $if T.unaliased_typ is u8 || T.unaliased_typ is u16 || T.unaliased_typ is u32 || T.unaliased_typ is u64 || T.unaliased_typ is uint {
+		if u64(value) > u64(~uint(0)) { return error('format size exceeds usize') }
+		return IoPrintSize{ value: uint(value) }
 	} $else {
 		return error('named format size requires an unsigned integer or usize-sized optional unsigned integer')
 	}
@@ -58,7 +58,7 @@ fn io_print_size[T](args T, specifier FormatSpecifier, mut state FormatArgState)
 		FormatNamed {
 			index := io_print_field_index[T](specifier.bytes.bytestr())!
 			state.next_arg(index) or { return error('too few arguments') }
-			mut current := usize(0)
+			mut current := uint(0)
 			$for field in T.fields {
 				if current == index { return io_print_size_value(args.$(field.name)) }
 				current++
@@ -70,7 +70,7 @@ fn io_print_size[T](args T, specifier FormatSpecifier, mut state FormatArgState)
 
 fn io_print_value[T](mut stream WriteStream, args T, part IoPrintPart) ! {
 	index := part.index or { return stream.write_all(part.literal) }
-	mut current := usize(0)
+	mut current := uint(0)
 	$for field in T.fields {
 		if current == index {
 			return io_print_field(mut stream, part, args.$(field.name))
@@ -95,7 +95,7 @@ fn io_print_field[F](mut stream WriteStream, part IoPrintPart, value F) ! {
 // Writer.print's record argument form. V validates the format at runtime.
 pub fn (mut stream WriteStream) print[T](format string, args T) ! {
 	$if T.unaliased_typ is $struct {
-		mut count := usize(0)
+		mut count := uint(0)
 		$for field in T.fields {
 			_ = field.name
 			count++

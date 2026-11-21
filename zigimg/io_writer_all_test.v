@@ -18,12 +18,12 @@ fn test_writer_all_repetitions_and_empty_vectors() {
 	mut writer := WriteStream.init_memory(mut bytes)
 	mut empty := [][]u8{}
 	writer.write_vec_all(mut empty)!
-	writer.write_splat_all(mut empty, ~usize(0))!
+	writer.write_splat_all(mut empty, ~uint(0))!
 	mut data := ['ba'.bytes(), 'na'.bytes()]
 	writer.write_splat_all(mut data, 2)!
 	writer.splat_byte_all(`!`, 2)!
 	writer.splat_bytes_all('xy'.bytes(), 3)!
-	writer.splat_bytes_all([]u8{}, ~usize(0))!
+	writer.splat_bytes_all([]u8{}, ~uint(0))!
 	assert writer.buffered() == 'banana!!xyxyxy'.bytes()
 	assert data == ['ba'.bytes(), 'na'.bytes()]
 }

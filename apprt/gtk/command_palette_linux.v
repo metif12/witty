@@ -273,7 +273,7 @@ pub mut:
 	surface_ptr &SurfaceWidget = unsafe { nil }
 	title       string
 	description string
-	sort_key    usize
+	sort_key    uint
 }
 
 pub type CommandData = JumpData | RegularData
@@ -313,7 +313,7 @@ pub fn Command.new_jump(config &Config, surface &SurfaceWidget) &Command {
 	mut jump := JumpData{
 		// TODO: replace with a surface id once Ghostty adds one (matches the
 		// source `@intFromPtr(surface)`).
-		sort_key:    usize(voidptr(surface))
+		sort_key:    uint(voidptr(surface))
 		surface_ptr: unsafe { surface }
 	}
 	jump.surface.set(GObject(surface.widget))

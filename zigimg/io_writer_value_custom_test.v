@@ -28,11 +28,11 @@ fn (value ValueFormatterEnum) format(mut stream WriteStream) ! {
 }
 
 fn test_value_custom_formats_ignore_options_and_depth() {
-	options := FormatOptions{ width: ~usize(0), precision: ~usize(0), fill: 255 }
+	options := FormatOptions{ width: ~uint(0), precision: ~uint(0), fill: 255 }
 	mut buffer := []u8{len: 128}
 	mut writer := WriteStream.init_memory(mut buffer)
 	writer.print_value('f', options, ValueFormatter{-7, false}, 0)!
-	writer.print_value('f', options, ValueFormatterAlias(ValueFormatter{8, false}), ~usize(0))!
+	writer.print_value('f', options, ValueFormatterAlias(ValueFormatter{8, false}), ~uint(0))!
 	writer.print_value('f', options, ValueFormatterUnion(true), 0)!
 	writer.print_value('f', options, ValueFormatterEnum.beta, 0)!
 	writer.print_value('?f', options, ?ValueFormatter(ValueFormatter{9, false}), 0)!
@@ -71,7 +71,7 @@ fn test_value_custom_format_bypass_and_absent_optional() {
 	writer.print_value('any', FormatOptions{}, ValueFormatter{7, true}, 1)!
 	writer.print_value('any', FormatOptions{}, ValueFormatterUnion(true), 0)!
 	writer.print_value('t', FormatOptions{}, ValueFormatterEnum.beta, 0)!
-	writer.print_value('?f', FormatOptions{ width: usize(6), fill: `_` }, ?ValueFormatter(none),
+	writer.print_value('?f', FormatOptions{ width: uint(6), fill: `_` }, ?ValueFormatter(none),
 		0)!
 	assert writer.buffered().bytestr() == '.{ .value = 7, .stop = true }.{ ... }beta__null'
 	// Keep fixed arrays beside custom specializations to catch compiler heap-lifting regressions.

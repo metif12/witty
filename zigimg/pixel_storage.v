@@ -99,11 +99,11 @@ pub mut:
 	indices []u8     @[required]
 }
 
-pub fn IndexedStorage1.init(pixel_count usize) IndexedStorage1 {
+pub fn IndexedStorage1.init(pixel_count uint) IndexedStorage1 {
 	return IndexedStorage1.init_palette_size(pixel_count, 2)
 }
 
-pub fn IndexedStorage1.init_palette_size(pixel_count usize, palette_size usize) IndexedStorage1 {
+pub fn IndexedStorage1.init_palette_size(pixel_count uint, palette_size uint) IndexedStorage1 {
 	if palette_size > 2 { panic('reached unreachable code') }
 	mut palette := []Rgba32{len: 2}
 	for i in 0 .. int(palette_size) {
@@ -117,7 +117,7 @@ pub fn IndexedStorage1.init_palette_size(pixel_count usize, palette_size usize) 
 	}
 }
 
-pub fn (mut storage IndexedStorage1) resize_palette(size usize) {
+pub fn (mut storage IndexedStorage1) resize_palette(size uint) {
 	if size > 2 { panic('reached unreachable code') }
 	// Source resizes the slice, retaining the full original allocation.
 	unsafe {
@@ -131,11 +131,11 @@ pub mut:
 	indices []u8     @[required]
 }
 
-pub fn IndexedStorage2.init(pixel_count usize) IndexedStorage2 {
+pub fn IndexedStorage2.init(pixel_count uint) IndexedStorage2 {
 	return IndexedStorage2.init_palette_size(pixel_count, 4)
 }
 
-pub fn IndexedStorage2.init_palette_size(pixel_count usize, palette_size usize) IndexedStorage2 {
+pub fn IndexedStorage2.init_palette_size(pixel_count uint, palette_size uint) IndexedStorage2 {
 	if palette_size > 4 { panic('reached unreachable code') }
 	mut palette := []Rgba32{len: 4}
 	for i in 0 .. int(palette_size) {
@@ -149,7 +149,7 @@ pub fn IndexedStorage2.init_palette_size(pixel_count usize, palette_size usize) 
 	}
 }
 
-pub fn (mut storage IndexedStorage2) resize_palette(size usize) {
+pub fn (mut storage IndexedStorage2) resize_palette(size uint) {
 	if size > 4 { panic('reached unreachable code') }
 	// Source resizes the slice, retaining the full original allocation.
 	unsafe {
@@ -163,11 +163,11 @@ pub mut:
 	indices []u8     @[required]
 }
 
-pub fn IndexedStorage4.init(pixel_count usize) IndexedStorage4 {
+pub fn IndexedStorage4.init(pixel_count uint) IndexedStorage4 {
 	return IndexedStorage4.init_palette_size(pixel_count, 16)
 }
 
-pub fn IndexedStorage4.init_palette_size(pixel_count usize, palette_size usize) IndexedStorage4 {
+pub fn IndexedStorage4.init_palette_size(pixel_count uint, palette_size uint) IndexedStorage4 {
 	if palette_size > 16 { panic('reached unreachable code') }
 	mut palette := []Rgba32{len: 16}
 	for i in 0 .. int(palette_size) {
@@ -181,7 +181,7 @@ pub fn IndexedStorage4.init_palette_size(pixel_count usize, palette_size usize) 
 	}
 }
 
-pub fn (mut storage IndexedStorage4) resize_palette(size usize) {
+pub fn (mut storage IndexedStorage4) resize_palette(size uint) {
 	if size > 16 { panic('reached unreachable code') }
 	// Source resizes the slice, retaining the full original allocation.
 	unsafe {
@@ -195,11 +195,11 @@ pub mut:
 	indices []u8     @[required]
 }
 
-pub fn IndexedStorage8.init(pixel_count usize) IndexedStorage8 {
+pub fn IndexedStorage8.init(pixel_count uint) IndexedStorage8 {
 	return IndexedStorage8.init_palette_size(pixel_count, 256)
 }
 
-pub fn IndexedStorage8.init_palette_size(pixel_count usize, palette_size usize) IndexedStorage8 {
+pub fn IndexedStorage8.init_palette_size(pixel_count uint, palette_size uint) IndexedStorage8 {
 	if palette_size > 256 { panic('reached unreachable code') }
 	mut palette := []Rgba32{len: 256}
 	for i in 0 .. int(palette_size) {
@@ -213,7 +213,7 @@ pub fn IndexedStorage8.init_palette_size(pixel_count usize, palette_size usize) 
 	}
 }
 
-pub fn (mut storage IndexedStorage8) resize_palette(size usize) {
+pub fn (mut storage IndexedStorage8) resize_palette(size uint) {
 	if size > 256 { panic('reached unreachable code') }
 	// Source resizes the slice, retaining the full original allocation.
 	unsafe {
@@ -227,11 +227,11 @@ pub mut:
 	indices []u16    @[required]
 }
 
-pub fn IndexedStorage16.init(pixel_count usize) IndexedStorage16 {
+pub fn IndexedStorage16.init(pixel_count uint) IndexedStorage16 {
 	return IndexedStorage16.init_palette_size(pixel_count, 65536)
 }
 
-pub fn IndexedStorage16.init_palette_size(pixel_count usize, palette_size usize) IndexedStorage16 {
+pub fn IndexedStorage16.init_palette_size(pixel_count uint, palette_size uint) IndexedStorage16 {
 	if palette_size > 65536 { panic('reached unreachable code') }
 	mut palette := []Rgba32{len: 65536}
 	for i in 0 .. int(palette_size) {
@@ -245,7 +245,7 @@ pub fn IndexedStorage16.init_palette_size(pixel_count usize, palette_size usize)
 	}
 }
 
-pub fn (mut storage IndexedStorage16) resize_palette(size usize) {
+pub fn (mut storage IndexedStorage16) resize_palette(size uint) {
 	if size > 65536 { panic('reached unreachable code') }
 	// Source resizes the slice, retaining the full original allocation.
 	unsafe {
@@ -278,7 +278,7 @@ pub type PixelStorage = InvalidPixels
 	| Rgba64Pixels
 	| Colorf32Pixels
 
-pub fn PixelStorage.init(format PixelFormat, pixel_count usize) !PixelStorage {
+pub fn PixelStorage.init(format PixelFormat, pixel_count uint) !PixelStorage {
 	return match format {
 		.invalid {
 			PixelStorage(InvalidPixels{})
@@ -389,7 +389,7 @@ pub fn PixelStorage.init(format PixelFormat, pixel_count usize) !PixelStorage {
 				// Allocator.alloc with align(1) and zero bytes returns maxInt(usize).
 				// The converter's unconditional f32 alignCast observes this pointer.
 				unsafe {
-					data.data = voidptr(~usize(0))
+					data.data = voidptr(~uint(0))
 					data.flags = .nofree
 				}
 			}
@@ -499,8 +499,8 @@ pub fn PixelStorage.init_raw_pixels(bytes []u8, format PixelFormat) !PixelStorag
 }
 
 fn pixel_array_view[T](bytes []u8, check_alignment bool) []T {
-	if usize(bytes.len) % sizeof(T) != 0 { panic('exact division produced remainder') }
-	if bytes.len != 0 && check_alignment && usize(bytes.data) % 2 != 0 {
+	if uint(bytes.len) % sizeof(T) != 0 { panic('exact division produced remainder') }
+	if bytes.len != 0 && check_alignment && uint(bytes.data) % 2 != 0 {
 		panic('incorrect alignment')
 	}
 	mut result := []T{}
@@ -509,9 +509,9 @@ fn pixel_array_view[T](bytes []u8, check_alignment bool) []T {
 		$if T is Colorf32 {
 			// Empty Source slices carry an undefined pointer; retain the existing
 			// deterministic sentinel adaptation for the float converter.
-			if bytes.len == 0 { result.data = voidptr(~usize(0)) }
+			if bytes.len == 0 { result.data = voidptr(~uint(0)) }
 		}
-		result.len = int(usize(bytes.len) / sizeof(T))
+		result.len = int(uint(bytes.len) / sizeof(T))
 		result.cap = result.len
 		result.flags = .nofree
 	}
@@ -547,32 +547,32 @@ pub fn (storage PixelStorage) pixel_format() PixelFormat {
 	}
 }
 
-pub fn (storage PixelStorage) len() usize {
+pub fn (storage PixelStorage) len() uint {
 	return match storage {
-		InvalidPixels { usize(0) }
-		IndexedStorage1 { usize(storage.indices.len) }
-		IndexedStorage2 { usize(storage.indices.len) }
-		IndexedStorage4 { usize(storage.indices.len) }
-		IndexedStorage8 { usize(storage.indices.len) }
-		IndexedStorage16 { usize(storage.indices.len) }
-		Grayscale1Pixels { usize(storage.data.len) }
-		Grayscale2Pixels { usize(storage.data.len) }
-		Grayscale4Pixels { usize(storage.data.len) }
-		Grayscale8Pixels { usize(storage.data.len) }
-		Grayscale16Pixels { usize(storage.data.len) }
-		Grayscale8AlphaPixels { usize(storage.data.len) }
-		Grayscale16AlphaPixels { usize(storage.data.len) }
-		Rgb332Pixels { usize(storage.data.len) }
-		Rgb555Pixels { usize(storage.data.len) }
-		Rgb565Pixels { usize(storage.data.len) }
-		Rgb24Pixels { usize(storage.data.len) }
-		Rgba32Pixels { usize(storage.data.len) }
-		Bgr555Pixels { usize(storage.data.len) }
-		Bgr24Pixels { usize(storage.data.len) }
-		Bgra32Pixels { usize(storage.data.len) }
-		Rgb48Pixels { usize(storage.data.len) }
-		Rgba64Pixels { usize(storage.data.len) }
-		Colorf32Pixels { usize(storage.data.len) }
+		InvalidPixels { uint(0) }
+		IndexedStorage1 { uint(storage.indices.len) }
+		IndexedStorage2 { uint(storage.indices.len) }
+		IndexedStorage4 { uint(storage.indices.len) }
+		IndexedStorage8 { uint(storage.indices.len) }
+		IndexedStorage16 { uint(storage.indices.len) }
+		Grayscale1Pixels { uint(storage.data.len) }
+		Grayscale2Pixels { uint(storage.data.len) }
+		Grayscale4Pixels { uint(storage.data.len) }
+		Grayscale8Pixels { uint(storage.data.len) }
+		Grayscale16Pixels { uint(storage.data.len) }
+		Grayscale8AlphaPixels { uint(storage.data.len) }
+		Grayscale16AlphaPixels { uint(storage.data.len) }
+		Rgb332Pixels { uint(storage.data.len) }
+		Rgb555Pixels { uint(storage.data.len) }
+		Rgb565Pixels { uint(storage.data.len) }
+		Rgb24Pixels { uint(storage.data.len) }
+		Rgba32Pixels { uint(storage.data.len) }
+		Bgr555Pixels { uint(storage.data.len) }
+		Bgr24Pixels { uint(storage.data.len) }
+		Bgra32Pixels { uint(storage.data.len) }
+		Rgb48Pixels { uint(storage.data.len) }
+		Rgba64Pixels { uint(storage.data.len) }
+		Colorf32Pixels { uint(storage.data.len) }
 	}
 }
 
@@ -667,7 +667,7 @@ pub fn (storage PixelStorage) as_const_bytes() []u8 {
 	return storage.as_bytes()
 }
 
-pub fn (mut storage PixelStorage) resize_palette(size usize) {
+pub fn (mut storage PixelStorage) resize_palette(size uint) {
 	match mut storage {
 		IndexedStorage1 { storage.resize_palette(size) }
 		IndexedStorage2 { storage.resize_palette(size) }
@@ -678,7 +678,7 @@ pub fn (mut storage PixelStorage) resize_palette(size usize) {
 	}
 }
 
-pub fn (storage PixelStorage) slice(begin usize, end usize) PixelStorage {
+pub fn (storage PixelStorage) slice(begin uint, end uint) PixelStorage {
 	if storage !is InvalidPixels {
 		// Source checks the range order before checking its end, using usize.
 		if begin > end { panic('start index ${begin} is larger than end index ${end}') }

@@ -19,12 +19,12 @@ fn view(bytes []u8, len int, bases [][]u8, stride int) string {
 	mut origin := 0
 	mut offset := 0
 	if bytes.len > 0 {
-		ptr := usize(bytes.data)
+		ptr := uint(bytes.data)
 		for index, base in bases {
-			start := usize(base.data)
-			if ptr >= start && bytes.len <= base.len && ptr - start <= usize(base.len - bytes.len) {
+			start := uint(base.data)
+			if ptr >= start && bytes.len <= base.len && ptr - start <= uint(base.len - bytes.len) {
 				origin = index + 1
-				offset = int((ptr - start) / usize(stride))
+				offset = int((ptr - start) / uint(stride))
 				break
 			}
 		}
@@ -58,7 +58,7 @@ fn observe() {
 			eprintln('OBSERVER ERROR: ${err}')} }
 }
 
-fn run_0_0(f []usize) {
+fn run_0_0(f []uint) {
 	mut x := make_fixed([]u8{}, u8(0))
 
 	mut external := []u8{len: 4}
@@ -133,7 +133,7 @@ fn run_0_0(f []usize) {
 	println(snapshot())
 }
 
-fn run_0_1(f []usize) {
+fn run_0_1(f []uint) {
 	mut x := make_fixed([1]u8{}, u8(0))
 
 	mut initial_bytes := unsafe {
@@ -237,7 +237,7 @@ fn run_0_1(f []usize) {
 	println(snapshot())
 }
 
-fn run_0_2(f []usize) {
+fn run_0_2(f []uint) {
 	mut x := make_fixed([7]u8{}, u8(0))
 
 	mut initial_bytes := unsafe {
@@ -341,7 +341,7 @@ fn run_0_2(f []usize) {
 	println(snapshot())
 }
 
-fn run_0_3(f []usize) {
+fn run_0_3(f []uint) {
 	mut x := make_fixed([8]u8{}, u8(0))
 
 	mut initial_bytes := unsafe {
@@ -445,7 +445,7 @@ fn run_0_3(f []usize) {
 	println(snapshot())
 }
 
-fn run_0_4(f []usize) {
+fn run_0_4(f []uint) {
 	mut x := make_fixed([256]u8{}, u8(0))
 
 	mut initial_bytes := unsafe {
@@ -549,7 +549,7 @@ fn run_0_4(f []usize) {
 	println(snapshot())
 }
 
-fn run_0_5(f []usize) {
+fn run_0_5(f []uint) {
 	mut x := make_fixed([513]u8{}, u8(0))
 
 	mut initial_bytes := unsafe {
@@ -653,7 +653,7 @@ fn run_0_5(f []usize) {
 	println(snapshot())
 }
 
-fn run_0_6(f []usize) {
+fn run_0_6(f []uint) {
 	mut x := p.FixedStorage8[u8]{}
 
 	mut initial_bytes := unsafe {
@@ -757,7 +757,7 @@ fn run_0_6(f []usize) {
 	println(snapshot())
 }
 
-fn run_0_7(f []usize) {
+fn run_0_7(f []uint) {
 	mut x := p.FixedStorage256[u8]{}
 
 	mut initial_bytes := unsafe {
@@ -861,7 +861,7 @@ fn run_0_7(f []usize) {
 	println(snapshot())
 }
 
-fn run_1_0(f []usize) {
+fn run_1_0(f []uint) {
 	mut x := make_fixed([]u16{}, u16(0))
 
 	mut external := []u16{len: 4}
@@ -936,7 +936,7 @@ fn run_1_0(f []usize) {
 	println(snapshot())
 }
 
-fn run_1_1(f []usize) {
+fn run_1_1(f []uint) {
 	mut x := make_fixed([1]u16{}, u16(0))
 
 	mut initial_bytes := unsafe {
@@ -1040,7 +1040,7 @@ fn run_1_1(f []usize) {
 	println(snapshot())
 }
 
-fn run_1_2(f []usize) {
+fn run_1_2(f []uint) {
 	mut x := make_fixed([7]u16{}, u16(0))
 
 	mut initial_bytes := unsafe {
@@ -1144,7 +1144,7 @@ fn run_1_2(f []usize) {
 	println(snapshot())
 }
 
-fn run_1_3(f []usize) {
+fn run_1_3(f []uint) {
 	mut x := make_fixed([8]u16{}, u16(0))
 
 	mut initial_bytes := unsafe {
@@ -1248,7 +1248,7 @@ fn run_1_3(f []usize) {
 	println(snapshot())
 }
 
-fn run_1_4(f []usize) {
+fn run_1_4(f []uint) {
 	mut x := make_fixed([256]u16{}, u16(0))
 
 	mut initial_bytes := unsafe {
@@ -1352,7 +1352,7 @@ fn run_1_4(f []usize) {
 	println(snapshot())
 }
 
-fn run_1_5(f []usize) {
+fn run_1_5(f []uint) {
 	mut x := make_fixed([513]u16{}, u16(0))
 
 	mut initial_bytes := unsafe {
@@ -1456,7 +1456,7 @@ fn run_1_5(f []usize) {
 	println(snapshot())
 }
 
-fn run_1_6(f []usize) {
+fn run_1_6(f []uint) {
 	mut x := p.FixedStorage8[u16]{}
 
 	mut initial_bytes := unsafe {
@@ -1560,7 +1560,7 @@ fn run_1_6(f []usize) {
 	println(snapshot())
 }
 
-fn run_1_7(f []usize) {
+fn run_1_7(f []uint) {
 	mut x := p.FixedStorage256[u16]{}
 
 	mut initial_bytes := unsafe {
@@ -1664,7 +1664,7 @@ fn run_1_7(f []usize) {
 	println(snapshot())
 }
 
-fn run_2_0(f []usize) {
+fn run_2_0(f []uint) {
 	mut x := make_fixed([]p.Rgba32{}, p.Rgba32{})
 
 	mut external := []p.Rgba32{len: 4}
@@ -1739,7 +1739,7 @@ fn run_2_0(f []usize) {
 	println(snapshot())
 }
 
-fn run_2_1(f []usize) {
+fn run_2_1(f []uint) {
 	mut x := make_fixed([1]p.Rgba32{}, p.Rgba32{})
 
 	mut initial_bytes := unsafe {
@@ -1843,7 +1843,7 @@ fn run_2_1(f []usize) {
 	println(snapshot())
 }
 
-fn run_2_2(f []usize) {
+fn run_2_2(f []uint) {
 	mut x := make_fixed([7]p.Rgba32{}, p.Rgba32{})
 
 	mut initial_bytes := unsafe {
@@ -1947,7 +1947,7 @@ fn run_2_2(f []usize) {
 	println(snapshot())
 }
 
-fn run_2_3(f []usize) {
+fn run_2_3(f []uint) {
 	mut x := make_fixed([8]p.Rgba32{}, p.Rgba32{})
 
 	mut initial_bytes := unsafe {
@@ -2051,7 +2051,7 @@ fn run_2_3(f []usize) {
 	println(snapshot())
 }
 
-fn run_2_4(f []usize) {
+fn run_2_4(f []uint) {
 	mut x := make_fixed([256]p.Rgba32{}, p.Rgba32{})
 
 	mut initial_bytes := unsafe {
@@ -2155,7 +2155,7 @@ fn run_2_4(f []usize) {
 	println(snapshot())
 }
 
-fn run_2_5(f []usize) {
+fn run_2_5(f []uint) {
 	mut x := make_fixed([513]p.Rgba32{}, p.Rgba32{})
 
 	mut initial_bytes := unsafe {
@@ -2259,7 +2259,7 @@ fn run_2_5(f []usize) {
 	println(snapshot())
 }
 
-fn run_2_6(f []usize) {
+fn run_2_6(f []uint) {
 	mut x := p.FixedStorage8[p.Rgba32]{}
 
 	mut initial_bytes := unsafe {
@@ -2363,7 +2363,7 @@ fn run_2_6(f []usize) {
 	println(snapshot())
 }
 
-fn run_2_7(f []usize) {
+fn run_2_7(f []uint) {
 	mut x := p.FixedStorage256[p.Rgba32]{}
 
 	mut initial_bytes := unsafe {
@@ -2468,7 +2468,7 @@ fn run_2_7(f []usize) {
 }
 
 fn line_case(line string) {
-	f := line.split('|').map(usize(it.u64()))
+	f := line.split('|').map(uint(it.u64()))
 	selected_kind = int(f[0])
 	selected_form = int(f[1])
 	match selected_kind {

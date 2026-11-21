@@ -36,7 +36,7 @@ fn test_rich_iterator_expands_tabs_retains_styles_and_reset_state() {
 		}
 	}
 	assert lines.join('|') == 'a|b|| c'
-	assert iter.hard_index == usize(iter.text.len)
+	assert iter.hard_index == uint(iter.text.len)
 	iter.reset()
 	assert iter.index == 0 && iter.hard_index == 0 && iter.line.len == 0
 	assert (iter.next() or { panic('first') }).cells.map(it.char_.grapheme).join('') == 'a'
@@ -177,6 +177,6 @@ fn test_rich_public_iterator_payload_uses_usize_state_and_borrowed_arrays() {
 	assert line.width == 1 && iter.index == 1
 	cells[0].char_.width = 2
 	assert line.cells[0].char_.width == 2 && iter.text[0].char_.width == 2
-	iter.hard_index = ~usize(0)
+	iter.hard_index = ~uint(0)
 	assert iter.next_hard_break() == none
 }

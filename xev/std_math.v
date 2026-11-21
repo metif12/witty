@@ -6,7 +6,7 @@ module xev
 
 // Zig `a -| b` on usize.
 @[inline]
-fn sat_sub(a usize, b usize) usize {
+fn sat_sub(a uint, b uint) uint {
 	return if a > b { a - b } else { 0 }
 }
 
@@ -76,8 +76,8 @@ fn cast_i64(v u64) ?i64 {
 }
 
 // std.math.cast(c_int, v)
-fn cast_c_int(v usize) ?int {
-	if v > usize(max_i32) {
+fn cast_c_int(v uint) ?int {
+	if v > uint(max_i32) {
 		return none
 	}
 	return int(v)

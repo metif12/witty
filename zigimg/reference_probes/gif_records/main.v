@@ -124,7 +124,7 @@ fn main() {
 			stream.seek_to(os.args[3].u64()) or { panic(err) }
 			observed_stream = &stream
 			observed_toss = true
-			stream.toss(usize(os.args[4].u64()))
+			stream.toss(uint(os.args[4].u64()))
 			eprintln('UNEXPECTED: toss returned')
 			return
 		}

@@ -3,8 +3,8 @@ module terminal
 import lib_allocator
 import fastmem
 
-fn C.witty_page_mmap(usize) voidptr
-fn C.witty_page_munmap(voidptr, usize)
+fn C.witty_page_mmap(uint) voidptr
+fn C.witty_page_munmap(voidptr, uint)
 
 // Inline tagged colors retain source Style.Color's 4-byte payload alignment
 // and 8-byte storage, without V sum-type pointers in the page buffer.
@@ -85,15 +85,15 @@ fn (mut self PageOffsetMap[V]) delete(key u32) {
 	view.remove(key)
 }
 
-fn (self &PageOffsetMap[V]) count() usize {
-	return usize(self.offset.map(self.base, AutoHashContext[u32]{}).count())
+fn (self &PageOffsetMap[V]) count() uint {
+	return uint(self.offset.map(self.base, AutoHashContext[u32]{}).count())
 }
 
 // Rotate packed headers using the original fastmem algorithm, then rebind the
 // transient cell slices. Row view addresses stay stable for cached cursor rows.
 fn rotate_row_views(mut rows []RowData, reverse bool) {
 	if rows.len < 2 { return }
-	base := unsafe { &u8(usize(rows[0].cells.data) - usize(rows[0].header.cells_offset)) }
+	base := unsafe { &u8(uint(rows[0].cells.data) - uint(rows[0].header.cells_offset)) }
 	cols := rows[0].cells.len
 	mut headers := lib_allocator.borrowed_array[PageRowHeader](rows[0].header, rows.len, rows.len)
 	if reverse { fastmem.rotate_once_r(mut headers) } else { fastmem.rotate_once(mut headers) }

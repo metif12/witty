@@ -4,15 +4,15 @@ module zigimg
 // clamp only reduces the width and height at the right and bottom boundaries.
 pub struct Box {
 pub mut:
-	x      usize
-	y      usize
-	width  usize
-	height usize
+	x      uint
+	y      uint
+	width  uint
+	height uint
 }
 
-pub fn (area Box) clamp(image_width usize, image_height usize) Box {
+pub fn (area Box) clamp(image_width uint, image_height uint) Box {
 	mut box := area
-	if box.width > ~usize(0) - box.x {
+	if box.width > ~uint(0) - box.x {
 		panic('integer overflow')
 	}
 	if box.x + box.width > image_width {
@@ -21,7 +21,7 @@ pub fn (area Box) clamp(image_width usize, image_height usize) Box {
 		}
 		box.width = image_width - box.x
 	}
-	if box.height > ~usize(0) - box.y {
+	if box.height > ~uint(0) - box.y {
 		panic('integer overflow')
 	}
 	if box.y + box.height > image_height {
@@ -33,10 +33,10 @@ pub fn (area Box) clamp(image_width usize, image_height usize) Box {
 	return box
 }
 
-pub fn flip_vertically(pixels &PixelStorage, height usize) ! {
+pub fn flip_vertically(pixels &PixelStorage, height uint) ! {
 	mut image_data := pixels.as_bytes()
 	if height == 0 { panic('division by zero') }
-	row_size := int(usize(image_data.len) / height)
+	row_size := int(uint(image_data.len) / height)
 	mut temp := []u8{len: row_size}
 	for image_data.len > row_size {
 		mut row1 := unsafe { image_data[..row_size] }
@@ -49,19 +49,19 @@ pub fn flip_vertically(pixels &PixelStorage, height usize) ! {
 	}
 }
 
-fn editor_byte_product(a usize, b usize) usize {
-	if b != 0 && a > ~usize(0) / b { panic('integer overflow') }
+fn editor_byte_product(a uint, b uint) uint {
+	if b != 0 && a > ~uint(0) / b { panic('integer overflow') }
 	return a * b
 }
 
-fn editor_byte_sum(a usize, b usize) usize {
-	if b > ~usize(0) - a { panic('integer overflow') }
+fn editor_byte_sum(a uint, b uint) uint {
+	if b > ~uint(0) - a { panic('integer overflow') }
 	return a + b
 }
 
-fn editor_byte_range(begin usize, end usize, length int) {
+fn editor_byte_range(begin uint, end uint, length int) {
 	if begin > end { panic('start index ${begin} is larger than end index ${end}') }
-	if end > usize(length) { panic('index out of bounds: index ${end}, len ${length}') }
+	if end > uint(length) { panic('index out of bounds: index ${end}, len ${length}') }
 }
 
 pub fn crop(image &ImageUnmanaged, area Box) !ImageUnmanaged {
@@ -69,7 +69,7 @@ pub fn crop(image &ImageUnmanaged, area Box) !ImageUnmanaged {
 	mut pixels := PixelStorage.init(image.pixel_format(), image_pixel_count(box.width, box.height))!
 	if image.pixel_format().is_indexed() {
 		palette := image.pixels.get_palette() or { panic('attempt to use null value') }
-		pixels.resize_palette(usize(palette.len))
+		pixels.resize_palette(uint(palette.len))
 		mut destination := pixels.get_palette() or { panic('attempt to use null value') }
 		assert destination.len == palette.len
 		for i, color in palette {
@@ -79,10 +79,10 @@ pub fn crop(image &ImageUnmanaged, area Box) !ImageUnmanaged {
 	if box.width != 0 && box.height != 0 && image.width != 0 && image.height != 0 {
 		original_data := image.pixels.as_bytes()
 		mut cropped_data := pixels.as_bytes()
-		pixel_size := usize(image.pixel_format().pixel_stride())
-		assert usize(cropped_data.len) == box.width * box.height * pixel_size
+		pixel_size := uint(image.pixel_format().pixel_stride())
+		assert uint(cropped_data.len) == box.width * box.height * pixel_size
 		row_byte_width := editor_byte_product(box.width, pixel_size)
-		for y := usize(0); y < box.height; y++ {
+		for y := uint(0); y < box.height; y++ {
 			x_bytes := editor_byte_product(box.x, pixel_size)
 			row := editor_byte_sum(y, box.y)
 			row_pixels := editor_byte_product(row, image.width)

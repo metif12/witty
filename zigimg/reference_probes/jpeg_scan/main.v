@@ -100,8 +100,8 @@ fn record(a []string) string {
 		block_height:                   u32(a[8].u64())
 		block_width_actual:             u32(a[9].u64())
 		block_height_actual:            4
-		horizontal_sampling_factor_max: usize(a[5].u64())
-		vertical_sampling_factor_max:   usize(a[6].u64())
+		horizontal_sampling_factor_max: uint(a[5].u64())
+		vertical_sampling_factor_max:   uint(a[6].u64())
 	}
 	for bi in 0 .. frame.block_storage.len {
 		for ci in 0 .. 3 {

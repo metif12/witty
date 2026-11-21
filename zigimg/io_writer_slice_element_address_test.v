@@ -12,18 +12,18 @@ struct SliceElementAddressArgs {
 	value SliceAddressOuter
 }
 
-fn slice_element_address_view[E](_ E, address usize, length int) []E {
+fn slice_element_address_view[E](_ E, address uint, length int) []E {
 	return unsafe { array{ data: voidptr(address), len: length, cap: length, flags: .nofree, element_size: int(sizeof(E)) } }
 }
 
 fn test_slice_element_addresses_do_not_read_inner_headers() ! {
 	row := SliceAddressRow{}
-	view := SliceAddressOuter(slice_element_address_view(row, usize(0x1234), 3))
-	fixed := unsafe { &SliceAddressFixed(voidptr(usize(0))) }
+	view := SliceAddressOuter(slice_element_address_view(row, uint(0x1234), 3))
+	fixed := unsafe { &SliceAddressFixed(voidptr(uint(0))) }
 	mut buffer := []u8{len: 256}
 	mut writer := WriteStream.init_memory(mut buffer)
 	writer.print_address(view)!
-	writer.print_value('*', FormatOptions{ width: ~usize(0), precision: ~usize(0) }, view, ~usize(0))!
+	writer.print_value('*', FormatOptions{ width: ~uint(0), precision: ~uint(0) }, view, ~uint(0))!
 	writer.print_address(fixed)!
 	writer.print_value('*', FormatOptions{}, fixed, 0)!
 	assert writer.buffered().bytestr() == '[]i32@1234[]i32@1234[2][]i32@0[2][]i32@0'
@@ -31,9 +31,9 @@ fn test_slice_element_addresses_do_not_read_inner_headers() ! {
 
 fn test_slice_element_names_compose_with_nesting_and_optionals() ! {
 	nested := SliceAddressNestedRow{}
-	view := SliceAddressNestedOuter(slice_element_address_view(nested, ~usize(0), 0))
+	view := SliceAddressNestedOuter(slice_element_address_view(nested, ~uint(0), 0))
 	optional := ?SliceAddressRow(none)
-	optional_view := SliceAddressOptionalOuter(slice_element_address_view(optional, usize(0), 3))
+	optional_view := SliceAddressOptionalOuter(slice_element_address_view(optional, uint(0), 3))
 	mut buffer := []u8{len: 256}
 	mut writer := WriteStream.init_memory(mut buffer)
 	writer.print_address(view)!
@@ -43,8 +43,8 @@ fn test_slice_element_names_compose_with_nesting_and_optionals() ! {
 
 fn test_slice_element_address_failures_preserve_exact_prefixes() ! {
 	row := SliceAddressRow{}
-	view := SliceAddressOuter(slice_element_address_view(row, usize(0x1234), 0))
-	fixed := unsafe { &SliceAddressFixed(voidptr(usize(0x1234))) }
+	view := SliceAddressOuter(slice_element_address_view(row, uint(0x1234), 0))
+	fixed := unsafe { &SliceAddressFixed(voidptr(uint(0x1234))) }
 	for api in 0 .. 4 {
 		expected := if api < 2 { '[]i32@1234' } else { '[2][]i32@1234' }
 		for capacity in 0 .. expected.len + 2 {
@@ -71,7 +71,7 @@ fn test_slice_element_addresses_keep_owned_headers_and_targets() ! {
 	mut first := [SliceAddressScalar(7), 8]
 	mut second := [SliceAddressScalar(9)]
 	mut value := [SliceAddressRow(first), SliceAddressRow(second)]!
-	address := unsafe { usize(voidptr(&value)) }
+	address := unsafe { uint(voidptr(&value)) }
 	before := unsafe { (&u8(voidptr(&value))).vbytes(int(sizeof(value))).clone() }
 	mut buffer := []u8{len: 128}
 	mut writer := WriteStream.init_memory(mut buffer)
@@ -89,11 +89,11 @@ fn test_slice_element_addresses_keep_owned_headers_and_targets() ! {
 
 fn test_slice_element_addresses_compose_with_print_and_outer_optionals() ! {
 	row := SliceAddressRow{}
-	view := SliceAddressOuter(slice_element_address_view(row, usize(0x1234), 3))
+	view := SliceAddressOuter(slice_element_address_view(row, uint(0x1234), 3))
 	mut buffer := []u8{len: 128}
 	mut writer := WriteStream.init_memory(mut buffer)
 	writer.print('L{[value]*}R', SliceElementAddressArgs{view})!
-	writer.print_value('?*', FormatOptions{ width: ~usize(0) }, ?SliceAddressOuter(view), 0)!
+	writer.print_value('?*', FormatOptions{ width: ~uint(0) }, ?SliceAddressOuter(view), 0)!
 	writer.print_value('?*', FormatOptions{ width: 6, fill: `_` }, ?SliceAddressOuter(none), 0)!
 	assert writer.buffered().bytestr() == 'L[]i32@1234R[]i32@1234__null'
 }

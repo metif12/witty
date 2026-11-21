@@ -68,10 +68,10 @@ pub fn (mut self SharedGridSet) deinit() {
 }
 
 // Returns the number of cached grids.
-pub fn (self &SharedGridSet) count() usize {
+pub fn (self &SharedGridSet) count() uint {
 	self.lock.lock()
 	defer { self.lock.unlock() }
-	return usize(self.grids.len)
+	return uint(self.grids.len)
 }
 
 // Initialize a SharedGrid for the given font configuration. If the
@@ -527,7 +527,7 @@ pub mut:
 	// each style. For example, bold is from
 	// offsets[int(Style.bold) - 1] to
 	// offsets[int(Style.bold)].
-	style_offsets [4]usize
+	style_offsets [4]uint
 
 	// The codepoint map configuration.
 	codepoint_map CodepointMap
@@ -655,10 +655,10 @@ pub fn Key.init(config_src &DerivedConfig, font_size DesiredSize) !Key {
 		metric_modifiers.put(.icon_height, m)
 	}
 
-	regular_offset := usize(config_src.font_family.len)
-	bold_offset := regular_offset + usize(config_src.font_family_bold.len)
-	italic_offset := bold_offset + usize(config_src.font_family_italic.len)
-	bold_italic_offset := italic_offset + usize(config_src.font_family_bold_italic.len)
+	regular_offset := uint(config_src.font_family.len)
+	bold_offset := regular_offset + uint(config_src.font_family_bold.len)
+	italic_offset := bold_offset + uint(config_src.font_family_italic.len)
+	bold_italic_offset := italic_offset + uint(config_src.font_family_bold_italic.len)
 
 	return Key{
 		descriptors:         descriptors
@@ -681,7 +681,7 @@ pub fn (mut self Key) deinit() {
 // used with discovery.
 pub fn (self &Key) descriptors_for_style(style Style) []Descriptor {
 	idx := int(style)
-	start := if idx == 0 { usize(0) } else { self.style_offsets[idx - 1] }
+	start := if idx == 0 { uint(0) } else { self.style_offsets[idx - 1] }
 	end := self.style_offsets[idx]
 	return self.descriptors[start..end]
 }
@@ -885,8 +885,8 @@ pub fn (self &MetricsModifierSet) get(key MetricsKey) ?MetricsModifier {
 }
 
 // count returns the number of modifiers in the set.
-pub fn (self &MetricsModifierSet) count() usize {
-	return usize(self.entries.len)
+pub fn (self &MetricsModifierSet) count() uint {
+	return uint(self.entries.len)
 }
 
 // deinit releases the modifier map.

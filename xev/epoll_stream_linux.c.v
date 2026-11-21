@@ -32,7 +32,7 @@ pub mut:
 // originally is from a write request. This is useful for getting
 // the WriteRequest back in a callback from queuedWrite.
 pub fn EpollWriteRequest.from(c &EpollCompletion) &EpollWriteRequest {
-	return unsafe { &EpollWriteRequest(voidptr(usize(c) - __offsetof(EpollWriteRequest, completion))) }
+	return unsafe { &EpollWriteRequest(voidptr(uint(c) - __offsetof(EpollWriteRequest, completion))) }
 }
 
 // Events that can be polled for using the high level streams.
@@ -58,11 +58,11 @@ pub type EpollStreamPollCallback = fn (ud voidptr, l &EpollLoop, c &EpollComplet
 
 // The callback of Stream.read. The error is a ReadError; on success the byte
 // count is supplied.
-pub type EpollStreamReadCallback = fn (ud voidptr, l &EpollLoop, c &EpollCompletion, s EpollStream, b EpollReadBuffer, r ?ErrorKind, n usize) CallbackAction
+pub type EpollStreamReadCallback = fn (ud voidptr, l &EpollLoop, c &EpollCompletion, s EpollStream, b EpollReadBuffer, r ?ErrorKind, n uint) CallbackAction
 
 // The callback of Stream.write and Stream.queueWrite. The error is a
 // WriteError; on success the byte count is supplied.
-pub type EpollStreamWriteCallback = fn (ud voidptr, l &EpollLoop, c &EpollCompletion, s EpollStream, b EpollWriteBuffer, r ?ErrorKind, n usize) CallbackAction
+pub type EpollStreamWriteCallback = fn (ud voidptr, l &EpollLoop, c &EpollCompletion, s EpollStream, b EpollWriteBuffer, r ?ErrorKind, n uint) CallbackAction
 
 // Creates a generic stream type that supports read, write, close, poll. This
 // can be used for any file descriptor that would exhibit normal blocking
@@ -295,7 +295,7 @@ pub fn (self EpollStream) write(mut loop EpollLoop, c &EpollCompletion, buf Epol
 
 // Extracts the result from a completion for a write callback.
 @[inline]
-fn epoll_stream_write_result(c &EpollCompletion, r EpollResult) (EpollStream, EpollWriteBuffer, ?ErrorKind, usize) {
+fn epoll_stream_write_result(c &EpollCompletion, r EpollResult) (EpollStream, EpollWriteBuffer, ?ErrorKind, uint) {
 	return EpollStream.init_fd((c.op as EpollWriteOp).fd), (c.op as EpollWriteOp).buffer, r.err, epoll_result_bytes(r)
 }
 
@@ -318,19 +318,19 @@ pub fn (self EpollStream) write_init(c &EpollCompletion, buf EpollWriteBuffer) {
 }
 
 // Returns the length of the write buffer
-fn epoll_write_buffer_length(buf EpollWriteBuffer) usize {
+fn epoll_write_buffer_length(buf EpollWriteBuffer) uint {
 	return match buf {
-		WriteBufferSlice { usize(buf.slice.len) }
+		WriteBufferSlice { uint(buf.slice.len) }
 		WriteBufferArray { buf.len }
 	}
 }
 
 // Given a `WriteBuffer` and number of bytes written during the previous
 // write operation, returns a new `WriteBuffer` with remaining data.
-fn epoll_write_buffer_remainder(buf EpollWriteBuffer, offset usize) EpollWriteBuffer {
+fn epoll_write_buffer_remainder(buf EpollWriteBuffer, offset uint) EpollWriteBuffer {
 	match buf {
 		WriteBufferSlice {
-			assert offset <= usize(buf.slice.len)
+			assert offset <= uint(buf.slice.len)
 			return EpollWriteBuffer(WriteBufferSlice{ slice: buf.slice[int(offset)..] })
 		}
 		WriteBufferArray {

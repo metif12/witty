@@ -20,7 +20,7 @@ fn scalar(value p.FloatDecimal64) string {
 
 fn state() string {
 	view := if observed_has_view {
-		'${observed_view.len}:${usize(observed_view.data) - usize(observed_buffer.data)}:${observed_view.hex()}'
+		'${observed_view.len}:${uint(observed_view.data) - uint(observed_buffer.data)}:${observed_view.hex()}'
 	} else {
 		'-'
 	}
@@ -77,7 +77,7 @@ fn record(line string) string {
 		else { panic('Invalid float type') }
 	}
 
-	precision := if f[6] == '-' { ?usize(none) } else { ?usize(usize(f[6].u64())) }
+	precision := if f[6] == '-' { ?uint(none) } else { ?uint(uint(f[6].u64())) }
 	options := p.FloatRenderOptions{
 		mode:      unsafe { p.FloatRenderMode(api) }
 		precision: precision

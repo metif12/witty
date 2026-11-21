@@ -11,7 +11,7 @@ struct NestedOptionalValueArgs {
 	value []?NestedOptionalBoolItems
 }
 
-fn nested_optional_value_view[E](_ E, address usize, length int) []?E {
+fn nested_optional_value_view[E](_ E, address uint, length int) []?E {
 	return unsafe { array{ data: voidptr(address), len: length, cap: length, flags: .nofree, element_size: int(sizeof(?E)) } }
 }
 
@@ -19,9 +19,9 @@ fn test_nested_optional_array_addresses_compile_without_reading_elements() ! {
 	mut buffer := []u8{len: 128}
 	mut writer := p.WriteStream.init_memory(mut buffer)
 	zero := NestedOptionalBoolItems{}
-	view := nested_optional_value_view(zero, usize(0x1234), 3)
-	writer.print_value('*', p.FormatOptions{ width: ~usize(0), precision: ~usize(0) }, view, 0)!
-	writer.print_value('?*', p.FormatOptions{ width: ~usize(0) }, ?NestedOptionalBoolValues(view), ~usize(0))!
+	view := nested_optional_value_view(zero, uint(0x1234), 3)
+	writer.print_value('*', p.FormatOptions{ width: ~uint(0), precision: ~uint(0) }, view, 0)!
+	writer.print_value('?*', p.FormatOptions{ width: ~uint(0) }, ?NestedOptionalBoolValues(view), ~uint(0))!
 	writer.print_value('?*', p.FormatOptions{ width: 6, fill: `_` }, ?NestedOptionalBoolValues(none), 0)!
 	assert writer.buffered().bytestr() == '?[3]?bool@1234?[3]?bool@1234__null'
 }
@@ -33,12 +33,12 @@ fn test_nested_optional_array_values_preserve_depth_and_leaf_options() ! {
 	for depth, expected in ['{ ... }', '{ { ... }, null }', '{ { true, null, false }, null }'] {
 		mut buffer := []u8{len: 128}
 		mut writer := p.WriteStream.init_memory(mut buffer)
-		writer.print_value('any', p.FormatOptions{}, values, usize(depth))!
+		writer.print_value('any', p.FormatOptions{}, values, uint(depth))!
 		assert writer.buffered().bytestr() == expected
 	}
 	mut buffer := []u8{len: 128}
 	mut writer := p.WriteStream.init_memory(mut buffer)
-	writer.print_value('any', p.FormatOptions{ width: 6, precision: ~usize(0), fill: `_` }, values, 2)!
+	writer.print_value('any', p.FormatOptions{ width: 6, precision: ~uint(0), fill: `_` }, values, 2)!
 	assert writer.buffered().bytestr() == '{ { __true, __null, _false }, __null }'
 }
 
@@ -62,7 +62,7 @@ fn test_nested_optional_array_partial_writes_and_print_keep_caller_values() ! {
 	payload := NestedOptionalBoolItems([?bool(true), ?bool(none), ?bool(false)]!)
 	present := ?NestedOptionalBoolItems(payload)
 	mut values := [present, ?NestedOptionalBoolItems(none)]
-	address := usize(values.data)
+	address := uint(values.data)
 	before := unsafe { (&u8(values.data)).vbytes(values.len * int(sizeof(?NestedOptionalBoolItems))).clone() }
 	expected := '{ { true, null, false }, null }'
 	for capacity in 0 .. expected.len + 2 {
@@ -83,7 +83,7 @@ fn test_nested_optional_array_partial_writes_and_print_keep_caller_values() ! {
 			assert status == if capacity < expected.len { 'WriteFailed' } else { 'ok' }
 			assert writer.buffered().bytestr() == expected[..end]
 			assert buffer[end..].all(it == 0xa5)
-			assert usize(values.data) == address
+			assert uint(values.data) == address
 			assert unsafe { (&u8(values.data)).vbytes(values.len * int(sizeof(?NestedOptionalBoolItems))) } == before
 		}
 	}
@@ -92,7 +92,7 @@ fn test_nested_optional_array_partial_writes_and_print_keep_caller_values() ! {
 	mut writer := p.WriteStream.init_memory(mut buffer)
 	writer.print_value('any', p.FormatOptions{}, values, 2)!
 	assert writer.buffered().bytestr() == '{ null, { true, null, false } }'
-	assert usize(values.data) == address
+	assert uint(values.data) == address
 }
 
 fn main() {

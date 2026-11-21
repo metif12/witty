@@ -295,7 +295,7 @@ pub fn (mut t Termio) init(opts TermioOpts) ! {
 	mut term := terminal.Terminal.init(terminal.Options{
 		cols: u16(grid.columns)
 		rows: u16(grid.rows)
-		max_scrollback: usize(opts.full_config.scrollback_limit)
+		max_scrollback: uint(opts.full_config.scrollback_limit)
 		colors: terminal.Colors{
 			background: terminal.DynamicRGB.init(opts.config.background)
 			foreground: terminal.DynamicRGB.init(opts.config.foreground)
@@ -317,7 +317,7 @@ pub fn (mut t Termio) init(opts TermioOpts) ! {
 	// Set the image size limits
 	for key in [terminal.ScreenKey.primary, .alternate] {
 		if mut screen := term.screens.get(key) {
-			screen.kitty_images.set_limit(mut screen, usize(opts.config.image_storage_limit))
+			screen.kitty_images.set_limit(mut screen, uint(opts.config.image_storage_limit))
 		}
 	}
 
@@ -650,7 +650,7 @@ pub fn (mut t Termio) change_config(mut td ThreadData, config &DerivedConfig) ! 
 	// Set the image size limits
 	for key in [terminal.ScreenKey.primary, .alternate] {
 		if mut screen := t.terminal.screens.get(key) {
-			screen.kitty_images.set_limit(mut screen, usize(config.image_storage_limit))
+			screen.kitty_images.set_limit(mut screen, uint(config.image_storage_limit))
 		}
 	}
 }
@@ -794,7 +794,7 @@ pub fn (mut t Termio) scroll_viewport(scroll terminal.ScrollViewport) ! {
 }
 
 // jump_to_prompt jumps the viewport to the prompt.
-pub fn (mut t Termio) jump_to_prompt(delta isize) ! {
+pub fn (mut t Termio) jump_to_prompt(delta int) ! {
 	{
 		t.renderer_state.mutex.lock()
 		defer {
@@ -1519,7 +1519,7 @@ pub:
 // Jump forward/backward n prompts.
 pub struct MessageJumpToPrompt {
 pub:
-	delta isize
+	delta int
 }
 
 // Send this when a synchronized output mode is started. This will

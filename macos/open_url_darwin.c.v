@@ -3,7 +3,7 @@ module macos
 #flag darwin -framework CoreServices
 #flag darwin -framework UniformTypeIdentifiers
 #insert "@VMODROOT/macos/open_url_abi.h"
-fn C.witty_open_url_utf8_string(bytes &u8, length usize) ObjId
+fn C.witty_open_url_utf8_string(bytes &u8, length uint) ObjId
 fn C.witty_open_url_plain_text_type() ObjId
 fn C.witty_open_url_decoded_path(path ObjId) ObjId
 fn C.witty_open_url_default_application(identifier ObjId) ObjId
@@ -39,7 +39,7 @@ fn source_file_url(path ObjId) ObjId {
 fn source_url(value string) ObjId {
 	// Ghostty.Action.OpenURL decodes all c.len bytes and maps invalid UTF-8 to
 	// "". NSString's explicit byte length preserves embedded NUL characters.
-	decoded := C.witty_open_url_utf8_string(value.str, usize(value.len))
+	decoded := C.witty_open_url_utf8_string(value.str, uint(value.len))
 	text := if is_nil(decoded) { nsstring('') } else { decoded }
 	candidate := msg_id1(get_class('NSURL'), 'URLWithString:', text)
 	if !is_nil(candidate) && !is_nil(msg_id(candidate, 'scheme')) { return candidate }
@@ -101,7 +101,7 @@ pub fn source_open_url(value string, kind i32) bool {
 pub fn source_config_file_url(path string) string {
 	// AllocatedString.string decodes the entire byte slice; openConfig skips
 	// invalid UTF-8 (decoded as "") as well as genuinely empty paths.
-	text := C.witty_open_url_utf8_string(path.str, usize(path.len))
+	text := C.witty_open_url_utf8_string(path.str, uint(path.len))
 	if is_nil(text) || msg_u64(text, 'length') == 0 { return '' }
 	return objc_utf8_string(msg_id(source_file_url(text), 'absoluteString'))
 }

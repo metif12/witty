@@ -92,8 +92,8 @@ pub fn (mut value IpcNewWindowC) deinit() {
 // cval creates the null-terminated argv projection used by the C ABI.
 pub fn (value &IpcNewWindow) cval() !IpcNewWindowC {
 	arguments := value.arguments or { return IpcNewWindowC{} }
-	pointer_count := usize(arguments.len) + 1
-	if pointer_count > ~usize(0) / sizeof(voidptr) {
+	pointer_count := uint(arguments.len) + 1
+	if pointer_count > ~uint(0) / sizeof(voidptr) {
 		return error('allocation failed')
 	}
 	bytes := pointer_count * sizeof(voidptr)

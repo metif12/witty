@@ -178,7 +178,7 @@ fn inspector_flags(self ObjId,_cmd Sel,event ObjId) {
  inspector_key_action(self,event,if event_mods(voidptr(event)) & mask != 0 { .press } else { .release })
 }
 fn inspector_has_marked(self ObjId,_cmd Sel) bool { if state := inspector_state(self) { return msg_u64(state.marked,'length') > 0 }; return false }
-fn inspector_marked_range(self ObjId,_cmd Sel) NativeRange { if state := inspector_state(self) { return NativeRange{length:usize(msg_u64(state.marked,'length'))} }; return NativeRange{} }
+fn inspector_marked_range(self ObjId,_cmd Sel) NativeRange { if state := inspector_state(self) { return NativeRange{length:uint(msg_u64(state.marked,'length'))} }; return NativeRange{} }
 fn inspector_selected_range(_self ObjId,_cmd Sel) NativeRange { return NativeRange{} }
 fn inspector_set_marked(self ObjId,_cmd Sel,value ObjId,_selected NativeRange,_replacement NativeRange) {
  mut state := inspector_state(self) or{return}
@@ -189,7 +189,7 @@ fn inspector_set_marked(self ObjId,_cmd Sel,value ObjId,_selected NativeRange,_r
 fn inspector_unmark(self ObjId,_cmd Sel) { if state := inspector_state(self) { msg_void1(msg_id(state.marked,'mutableString'),'setString:',nsstring('')) } }
 fn inspector_attributes(_self ObjId,_cmd Sel) ObjId { return msg_id(get_class('NSArray'),'array') }
 fn inspector_substring(_self ObjId,_cmd Sel,_range NativeRange,_actual voidptr) ObjId { return nil_obj() }
-fn inspector_character(_self ObjId,_cmd Sel,_point ObjCPoint) usize { return 0 }
+fn inspector_character(_self ObjId,_cmd Sel,_point ObjCPoint) uint { return 0 }
 fn inspector_first_rect(self ObjId,_cmd Sel,_range NativeRange,_actual voidptr) ObjCRect { frame := msg_rect(self,'frame'); return objc_rect(frame.x,frame.y,0,0) }
 fn inspector_insert(self ObjId,_cmd Sel,value ObjId,_replacement NativeRange) {
  state := inspector_state(self) or{return}; if is_nil(msg_id(shared_app(),'currentEvent')) || !state.valid() || state.surface.callbacks.inspector.text == unsafe{nil} { return }

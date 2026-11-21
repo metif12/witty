@@ -47,8 +47,8 @@ fn (mut decoder LzwDecoder[E]) reset_dictionary[E]() ! {
 	if decoder.initial_code_size > 15 { panic('integer does not fit in destination type') }
 	if decoder.initial_code_size >= 13 { panic('shift amount is greater than the type size') }
 	decoder.next_code = ((u16(1) << decoder.initial_code_size) & 0x1fff) + 2
-	roots_size := usize(1) << decoder.code_size
-	for index := usize(0); index < roots_size; index++ {
+	roots_size := uint(1) << decoder.code_size
+	for index := uint(0); index < roots_size; index++ {
 		decoder.dictionary[u16(index)] = [u8(index)]
 	}
 	// The pinned reset leaves previous_code and the partial-input fields alone.

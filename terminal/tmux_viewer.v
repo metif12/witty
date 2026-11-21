@@ -8,7 +8,7 @@ import tmux
 pub struct TmuxViewer {
 pub mut:
 	state         TmuxViewerState = .startup_block
-	session_id    usize
+	session_id    uint
 	tmux_version  string
 	command_queue []TmuxViewerCommand
 	windows       []TmuxViewerWindow
@@ -53,9 +53,9 @@ pub fn tmux_viewer_input(notification tmux.Notification) TmuxViewerInput {
 
 pub struct TmuxViewerWindow {
 pub:
-	id     usize
-	width  usize
-	height usize
+	id     uint
+	width  uint
+	height uint
 	layout tmux.Layout
 }
 
@@ -76,13 +76,13 @@ pub struct TmuxViewerListWindows {}
 
 pub struct TmuxViewerPaneHistory {
 pub:
-	id         usize
+	id         uint
 	screen_key ScreenKey
 }
 
 pub struct TmuxViewerPaneVisible {
 pub:
-	id         usize
+	id         uint
 	screen_key ScreenKey
 }
 
@@ -253,7 +253,7 @@ fn (mut self TmuxViewer) next_command(notification tmux.Notification) []TmuxView
 	return actions
 }
 
-fn (mut self TmuxViewer) layout_changed(mut actions []TmuxViewerAction, window_id usize, layout_str string) ! {
+fn (mut self TmuxViewer) layout_changed(mut actions []TmuxViewerAction, window_id uint, layout_str string) ! {
 	mut found := -1
 	for i, window in self.windows {
 		if window.id == window_id {
@@ -275,20 +275,20 @@ fn (mut self TmuxViewer) layout_changed(mut actions []TmuxViewerAction, window_i
 	self.sync_layouts(self.windows, false)!
 }
 
-fn (mut self TmuxViewer) window_add(window_id usize) {
+fn (mut self TmuxViewer) window_add(window_id uint) {
 	_ = window_id
 	self.queue_commands([TmuxViewerCommand(TmuxViewerListWindows{})])
 }
 
 fn (mut self TmuxViewer) sync_layouts(windows []TmuxViewerWindow, replace_windows bool) ! {
 	mut pane_layouts := map[u64]tmux.Layout{}
-	mut pane_order := []usize{}
+	mut pane_order := []uint{}
 	for window in windows {
 		collect_tmux_pane_layouts(window.layout, mut pane_layouts, mut pane_order)
 	}
 
 	mut replacement := map[u64]&TmuxViewerPane{}
-	mut added := []usize{}
+	mut added := []uint{}
 	for id in pane_order {
 		layout := pane_layouts[u64(id)]
 		if pane := self.panes[u64(id)] {
@@ -331,7 +331,7 @@ fn (mut self TmuxViewer) sync_layouts(windows []TmuxViewerWindow, replace_window
 	}
 }
 
-fn collect_tmux_pane_layouts(layout tmux.Layout, mut panes map[u64]tmux.Layout, mut order []usize) {
+fn collect_tmux_pane_layouts(layout tmux.Layout, mut panes map[u64]tmux.Layout, mut order []uint) {
 	match layout.content {
 		tmux.ContentPane {
 			id := layout.content.pane_id
@@ -353,7 +353,7 @@ fn collect_tmux_pane_layouts(layout tmux.Layout, mut panes map[u64]tmux.Layout, 
 	}
 }
 
-fn (mut self TmuxViewer) session_changed(mut actions []TmuxViewerAction, session_id usize) ! {
+fn (mut self TmuxViewer) session_changed(mut actions []TmuxViewerAction, session_id uint) ! {
 	version := self.tmux_version
 	self.deinit()
 	self.state = .command_queue
@@ -439,7 +439,7 @@ fn (mut self TmuxViewer) received_pane_state(content string) ! {
 		if mut screen := terminal_.screens.get(screen_key) {
 			x := data.get_int(.cursor_x) or { return error('missing cursor_x') }
 			y := data.get_int(.cursor_y) or { return error('missing cursor_y') }
-			if x < usize(terminal_.cols) && y < usize(terminal_.rows) {
+			if x < uint(terminal_.cols) && y < uint(terminal_.rows) {
 				screen.cursor_absolute(u32(x), u32(y))
 			}
 			shape := data.get_string(.cursor_shape) or { return error('missing cursor_shape') }
@@ -460,7 +460,7 @@ fn (mut self TmuxViewer) received_pane_state(content string) ! {
 		if mut alternate := terminal_.screens.get(.alternate) {
 			x := data.get_int(.alternate_saved_x) or { return error('missing alternate_saved_x') }
 			y := data.get_int(.alternate_saved_y) or { return error('missing alternate_saved_y') }
-			if x < usize(terminal_.cols) && y < usize(terminal_.rows) {
+			if x < uint(terminal_.cols) && y < uint(terminal_.rows) {
 				alternate.cursor_absolute(u32(x), u32(y))
 			}
 		}
@@ -513,7 +513,7 @@ fn (mut self TmuxViewer) received_pane_state(content string) ! {
 
 		top := data.get_int(.scroll_region_upper) or { return error('missing scroll region') }
 		bottom := data.get_int(.scroll_region_lower) or { return error('missing scroll region') }
-		if top <= usize(65535) && bottom <= usize(65535) {
+		if top <= uint(65535) && bottom <= uint(65535) {
 			terminal_.scrolling_region.top = u16(top)
 			terminal_.scrolling_region.bottom = u16(bottom)
 		}
@@ -522,14 +522,14 @@ fn (mut self TmuxViewer) received_pane_state(content string) ! {
 		tabs := data.get_string(.pane_tabs) or { return error('missing pane tabs') }
 		for tab in tabs.split(',') {
 			col := tmux.parse_usize(tab) or { continue }
-			if col < usize(terminal_.cols) {
-				terminal_.tabstops.set(usize(col))
+			if col < uint(terminal_.cols) {
+				terminal_.tabstops.set(uint(col))
 			}
 		}
 	}
 }
 
-fn (mut self TmuxViewer) received_pane_history(screen_key ScreenKey, id usize, content string) ! {
+fn (mut self TmuxViewer) received_pane_history(screen_key ScreenKey, id uint, content string) ! {
 	mut pane := self.panes[u64(id)] or { return }
 	mut terminal_ := &pane.terminal
 	terminal_.switch_screen(screen_key)!
@@ -543,7 +543,7 @@ fn (mut self TmuxViewer) received_pane_history(screen_key ScreenKey, id usize, c
 	terminal_.set_cursor_pos(1, 1)
 }
 
-fn (mut self TmuxViewer) received_pane_visible(screen_key ScreenKey, id usize, content string) ! {
+fn (mut self TmuxViewer) received_pane_visible(screen_key ScreenKey, id uint, content string) ! {
 	mut pane := self.panes[u64(id)] or { return }
 	mut terminal_ := &pane.terminal
 	terminal_.switch_screen(screen_key)!
@@ -554,7 +554,7 @@ fn (mut self TmuxViewer) received_pane_visible(screen_key ScreenKey, id usize, c
 	stream.next_slice(content.bytes())!
 }
 
-fn (mut self TmuxViewer) received_output(id usize, data string) ! {
+fn (mut self TmuxViewer) received_output(id uint, data string) ! {
 	mut pane := self.panes[u64(id)] or { return }
 	mut stream := pane.terminal.vt_stream()
 	defer { stream.deinit() }

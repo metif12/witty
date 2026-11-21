@@ -58,7 +58,7 @@ fn test_segmented_pool_zero_preallocation() {
 fn test_segmented_pool_index_wraps() {
 	mut pool := SegmentedPool.init[u8](2)
 	defer { pool.deinit() }
-	pool.i = ~usize(0)
+	pool.i = ~uint(0)
 	pool.available = 1
 
 	value := pool.get()!

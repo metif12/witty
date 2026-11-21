@@ -164,8 +164,8 @@ pub fn (mut self OscCli) run(mut writer io.Writer, rng &rand.PRNG) ! {
 				}
 			}
 			.parser {
-				mut length := []u8{len: int(sizeof(usize))}
-				payload_len := usize(data.len - 3)
+				mut length := []u8{len: int(sizeof(uint))}
+				payload_len := uint(data.len - 3)
 				for i in 0 .. length.len {
 					length[i] = u8(payload_len >> (i * 8))
 				}

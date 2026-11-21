@@ -8,13 +8,13 @@ import zigimg
 
 fn C.witty_writer_seek_setup(&char) int
 fn C.witty_writer_seek_replace(int) int
-fn C.witty_writer_seek_restore(&char, usize) int
+fn C.witty_writer_seek_restore(&char, uint) int
 fn C.witty_writer_seek_close() int
 fn C.witty_writer_seek_cleanup() int
 fn C.witty_writer_seek_valid() int
 fn C.witty_writer_seek_refs() int
-fn C.witty_writer_seek_view(&u8, usize) isize
-fn C.witty_writer_seek_drain(&u8, usize) isize
+fn C.witty_writer_seek_view(&u8, uint) int
+fn C.witty_writer_seek_drain(&u8, uint) int
 
 __global (
 	observed_path   string
@@ -24,7 +24,7 @@ __global (
 
 fn snapshot(writer zigimg.WriteStream, buffer []u8) string {
 	mut contents := []u8{len: 4096}
-	n := C.witty_writer_seek_view(contents.data, usize(contents.len))
+	n := C.witty_writer_seek_view(contents.data, uint(contents.len))
 	if n < 0 { panic('Writer observer failed') }
 	return '${writer.get_pos()}:${C.witty_writer_seek_valid()}:${C.witty_writer_seek_refs()}|${buffer.hex()}|${writer.buffered().hex()}|${contents[..int(n)].hex()}'
 }
@@ -95,10 +95,10 @@ fn record(line string, path string) string {
 	writer.flush() or { status = err.msg() }
 	out += '${status}|' + snapshot(writer, buffer) + '~'
 	mut wire := []u8{}
-	mut drain := isize(-3)
+	mut drain := int(-3)
 	for {
 		mut bytes_out := []u8{len: 4096}
-		drain = C.witty_writer_seek_drain(bytes_out.data, usize(bytes_out.len))
+		drain = C.witty_writer_seek_drain(bytes_out.data, uint(bytes_out.len))
 		if drain <= 0 { break
 		 }
 		wire << bytes_out[..int(drain)]

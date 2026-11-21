@@ -49,13 +49,13 @@ struct CActionTwoStrings {
 
 struct CActionSlice {
 	ptr &u8
-	len usize
+	len uint
 }
 
 struct CActionTaggedSlice {
 	tag int
 	ptr &u8
-	len usize
+	len uint
 }
 
 struct CActionResizeSplit {
@@ -64,7 +64,7 @@ struct CActionResizeSplit {
 }
 
 struct CActionMoveTab {
-	amount isize
+	amount int
 }
 
 struct CActionSizeLimit {
@@ -126,7 +126,7 @@ struct CActionCommandFinished {
 }
 
 struct CActionCount {
-	value isize
+	value int
 }
 
 // capi converts an internal action target to the public C target. Surface
@@ -162,7 +162,7 @@ pub fn (runtime_action RuntimeAction) capi() CAPIAction {
 		SplitDirection { capi_action_payload(tag, int(data)) }
 		Fullscreen { capi_action_payload(tag, int(data)) }
 		MoveTab {
-			capi_action_payload(tag, CActionMoveTab{ amount: isize(data.amount) })
+			capi_action_payload(tag, CActionMoveTab{ amount: int(data.amount) })
 		}
 		GotoTab { capi_action_payload(tag, int(data)) }
 		GotoSplit { capi_action_payload(tag, int(data)) }
@@ -217,7 +217,7 @@ pub fn (runtime_action RuntimeAction) capi() CAPIAction {
 		MouseOverLink {
 			capi_action_payload(tag, CActionSlice{
 				ptr: data.url.str
-				len: usize(data.url.len)
+				len: uint(data.url.len)
 			})
 		}
 		renderer.Health { capi_action_payload(tag, int(data)) }
@@ -247,7 +247,7 @@ pub fn (runtime_action RuntimeAction) capi() CAPIAction {
 				tag: int(data.tag())
 				value: CActionSlice{
 					ptr: name.str
-					len: usize(name.len)
+					len: uint(name.len)
 				}
 			})
 		}
@@ -269,7 +269,7 @@ pub fn (runtime_action RuntimeAction) capi() CAPIAction {
 			capi_action_payload(tag, CActionTaggedSlice{
 				tag: int(data.kind)
 				ptr: data.url.str
-				len: usize(data.url.len)
+				len: uint(data.url.len)
 			})
 		}
 		ChildExited {
@@ -317,10 +317,10 @@ pub fn (runtime_action RuntimeAction) capi() CAPIAction {
 // Ghostty uses @intCast for present search counts, so values outside the
 // signed pointer-width C representation are a checked-cast failure rather
 // than wrapping into a negative sentinel.
-fn optional_count_capi(value ?usize) isize {
+fn optional_count_capi(value ?uint) int {
 	if count := value {
-		assert count <= (~usize(0) >> 1)
-		return isize(count)
+		assert count <= (~uint(0) >> 1)
+		return int(count)
 	}
 	return -1
 }

@@ -83,16 +83,16 @@ fn simd_check_assignment[D, S](target []D, source []S) {
 	} $else $if D.unaliased_typ is $int {
 		$if S.unaliased_typ is $int {
 			$if D.unaliased_typ is u8 || D.unaliased_typ is u16 || D.unaliased_typ is u32
-				|| D.unaliased_typ is u64 || D.unaliased_typ is usize {
+				|| D.unaliased_typ is u64 || D.unaliased_typ is uint {
 				$if S.unaliased_typ is u8 || S.unaliased_typ is u16 || S.unaliased_typ is u32
-					|| S.unaliased_typ is u64 || S.unaliased_typ is usize {
+					|| S.unaliased_typ is u64 || S.unaliased_typ is uint {
 					simd_check_width[D, S]()
 				} $else {
 					$compile_error('SIMD assignment cannot assign signed lanes to unsigned lanes')
 				}
 			} $else {
 				$if S.unaliased_typ is u8 || S.unaliased_typ is u16 || S.unaliased_typ is u32
-					|| S.unaliased_typ is u64 || S.unaliased_typ is usize {
+					|| S.unaliased_typ is u64 || S.unaliased_typ is uint {
 					simd_check_unsigned_signed_width[D, S]()
 				} $else {
 					simd_check_width[D, S]()
@@ -130,7 +130,7 @@ pub fn simd_load_bytes[B](source []u8, length u32) B {
 	if source.len % stride != 0 { panic('exact division produced remainder') }
 	count := if length == 0 { u32(capacity) } else { length }
 	for index := u32(0); index < count; index++ {
-		if index >= u32(capacity) || usize(index) >= usize(source.len / stride) {
+		if index >= u32(capacity) || uint(index) >= uint(source.len / stride) {
 			panic('index out of bounds')
 		}
 		unsafe { vmemcpy(&result[int(index)], &source[int(index) * stride], stride) }
@@ -177,7 +177,7 @@ fn simd_float_lane_to_int[D, S](value S, zero D) D {
 			}
 			width := int(sizeof(D)) * 8
 			$if D.unaliased_typ is u8 || D.unaliased_typ is u16 || D.unaliased_typ is u32
-				|| D.unaliased_typ is u64 || D.unaliased_typ is usize {
+				|| D.unaliased_typ is u64 || D.unaliased_typ is uint {
 				upper := if width == 64 {
 					f64(18446744073709551616.0)
 				} else {

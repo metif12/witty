@@ -7,10 +7,10 @@ import os
 
 fn C.witty_stream_transition_setup(&char) int
 fn C.witty_stream_transition_replace(int) int
-fn C.witty_stream_transition_seed(usize, usize) int
+fn C.witty_stream_transition_seed(uint, uint) int
 fn C.witty_stream_transition_shutdown() int
 fn C.witty_stream_transition_cleanup() int
-fn C.witty_stream_transition_drain(&u8, usize) isize
+fn C.witty_stream_transition_drain(&u8, uint) int
 fn C.witty_stream_transition_valid() int
 fn C.witty_stream_transition_refs() int
 
@@ -24,7 +24,7 @@ fn transition_reader_case(buffered bool, incomplete bool, closed bool) ! {
 	reader.seek_to(7)!
 	assert C.witty_stream_transition_replace(0) == 0
 	seed_count := if incomplete { 3 } else { 24 }
-	assert C.witty_stream_transition_seed(0, usize(seed_count)) == 0
+	assert C.witty_stream_transition_seed(0, uint(seed_count)) == 0
 	if closed { assert C.witty_stream_transition_shutdown() == 0
 	 }
 	mut output := []u8{len: 1, init: 182}
@@ -67,7 +67,7 @@ fn transition_reader_case(buffered bool, incomplete bool, closed bool) ! {
 		}
 	}
 	mut queued := []u8{len: 64}
-	n := C.witty_stream_transition_drain(queued.data, usize(queued.len))
+	n := C.witty_stream_transition_drain(queued.data, uint(queued.len))
 	if incomplete {
 		assert n == if closed {
 			0
@@ -111,7 +111,7 @@ fn test_stream_refills_entire_buffer_after_consuming_short_input() {
 		assert reader.get_pos() == 2 && reader.buffered_len() == 7
 		assert buffer == [u8(38), 69, 100, 131, 162, 193, 224, 255]
 		mut queued := []u8{len: 64}
-		assert C.witty_stream_transition_drain(queued.data, usize(queued.len)) == 5
+		assert C.witty_stream_transition_drain(queued.data, uint(queued.len)) == 5
 		assert queued[..5] == [u8(30), 61, 92, 123, 154]
 	}
 }

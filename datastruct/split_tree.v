@@ -54,9 +54,9 @@ pub fn (handle Handle) idx() int {
 }
 
 // offset advances a handle while retaining Ghostty's reserved maximum value.
-pub fn (handle Handle) offset(value usize) Handle {
-	final := usize(u16(handle)) + value
-	assert final < usize(65535)
+pub fn (handle Handle) offset(value uint) Handle {
+	final := uint(u16(handle)) + value
+	assert final < uint(65535)
 	return Handle(final)
 }
 
@@ -659,8 +659,8 @@ pub fn (self &SplitTree[T]) split_(at Handle, direction Direction, ratio f32, in
 			nodes << Node[T](Split{
 				layout: node.layout
 				ratio:  node.ratio
-				left:   node.left.offset(usize(self.nodes.len))
-				right:  node.right.offset(usize(self.nodes.len))
+				left:   node.left.offset(uint(self.nodes.len))
+				right:  node.right.offset(uint(self.nodes.len))
 			})
 		} else {
 			nodes << node
@@ -742,7 +742,7 @@ pub fn (self &SplitTree[T]) remove(at Handle) SplitTree[T] {
 	return result
 }
 
-fn remove_node_impl[T](old &SplitTree[T], mut new_tree SplitTree[T], new_offset usize, current Handle, target Handle) usize {
+fn remove_node_impl[T](old &SplitTree[T], mut new_tree SplitTree[T], new_offset uint, current Handle, target Handle) uint {
 	assert(current != target)
 
 	// If we have a zoomed node and this is it then we migrate it.
@@ -790,7 +790,7 @@ fn remove_node_impl[T](old &SplitTree[T], mut new_tree SplitTree[T], new_offset 
 
 // count_after_removal returns the number of nodes that would be needed
 // to store the tree if the target node is removed.
-fn (self &SplitTree[T]) count_after_removal(current Handle, target Handle, acc usize) usize {
+fn (self &SplitTree[T]) count_after_removal(current Handle, target Handle, acc uint) uint {
 	assert(current != target)
 
 	node := self.nodes[current.idx()]
@@ -878,7 +878,7 @@ pub fn (self &SplitTree[T]) equalize() SplitTree[T] {
 	}
 }
 
-fn (self &SplitTree[T]) weight(from Handle, layout Layout, acc usize) usize {
+fn (self &SplitTree[T]) weight(from Handle, layout Layout, acc uint) uint {
 	node := self.nodes[from.idx()]
 	if node is Leaf[T] {
 		return acc + 1
@@ -1123,7 +1123,7 @@ pub fn (self &SplitTree[T]) format_text() string {
 	return sb.str()
 }
 
-fn (self &SplitTree[T]) format_text_inner(mut sb strings.Builder, current Handle, depth usize) {
+fn (self &SplitTree[T]) format_text_inner(mut sb strings.Builder, current Handle, depth uint) {
 	for _ in 0 .. depth {
 		sb.write_string('  ')
 	}

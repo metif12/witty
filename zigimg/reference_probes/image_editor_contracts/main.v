@@ -44,7 +44,7 @@ fn observe() {
 }
 
 fn make_pixels(format p.PixelFormat, count int, seed int) p.PixelStorage {
-	mut result := p.PixelStorage.init(format, usize(count)) or { panic(err) }
+	mut result := p.PixelStorage.init(format, uint(count)) or { panic(err) }
 	mut raw := result.as_bytes()
 	for i in 0 .. raw.len {
 		raw[i] = u8(i * 37 + seed * 19)
@@ -76,7 +76,7 @@ fn make_pixels(format p.PixelFormat, count int, seed int) p.PixelStorage {
 	if _ := result.get_palette() {
 		mut pal := result.get_palette() or { panic('missing palette') }
 		length := if pal.len < 4 { pal.len } else { 4 }
-		result.resize_palette(usize(length))
+		result.resize_palette(uint(length))
 		for i in 0 .. length {
 			pal[i] = p.Rgba32{
 				r: u8(i * 31 + seed)
@@ -89,7 +89,7 @@ fn make_pixels(format p.PixelFormat, count int, seed int) p.PixelStorage {
 	return result
 }
 
-fn make_image(format p.PixelFormat, count int, width usize, height usize, seed int) p.ImageUnmanaged {
+fn make_image(format p.PixelFormat, count int, width uint, height uint, seed int) p.ImageUnmanaged {
 	pixels := make_pixels(format, count, seed)
 	return p.ImageUnmanaged{
 		width:     width
@@ -141,8 +141,8 @@ fn main() {
 		api := os.args[3].int()
 		format := unsafe { p.PixelFormat(os.args[4].u32()) }
 		count := os.args[5].int()
-		width := usize(os.args[6].u64())
-		height := usize(os.args[7].u64())
+		width := uint(os.args[6].u64())
+		height := uint(os.args[7].u64())
 		mut image := make_image(format, count, width, height, 1)
 		observed_image = &image
 		if os.args[1] == '--row' {
@@ -151,10 +151,10 @@ fn main() {
 			flip(&image, api)
 		} else {
 			mut box := p.Box{
-				x:      usize(os.args[8].u64())
-				y:      usize(os.args[9].u64())
-				width:  usize(os.args[10].u64())
-				height: usize(os.args[11].u64())
+				x:      uint(os.args[8].u64())
+				y:      uint(os.args[9].u64())
+				width:  uint(os.args[10].u64())
+				height: uint(os.args[11].u64())
 			}
 			observed_box = &box
 			if os.args[1] == '--clamp' {
@@ -176,7 +176,7 @@ fn main() {
 	}
 	original := p.Box{}
 	mut copied := original
-	copied.x = ~usize(0)
+	copied.x = ~uint(0)
 	copied.height = 9
 	println('H|' + box_state(original) + '|' + box_state(copied))
 	for width in 0 .. 5 {
@@ -186,13 +186,13 @@ fn main() {
 					for w in 0 .. 6 {
 						for h in 0 .. 6 {
 							box := p.Box{
-								x:      usize(x)
-								y:      usize(y)
-								width:  usize(w)
-								height: usize(h)
+								x:      uint(x)
+								y:      uint(y)
+								width:  uint(w)
+								height: uint(h)
 							}
 							println('B|${width}|${height}|' + box_state(box) + '|' +
-								box_state(box.clamp(usize(width), usize(height))))
+								box_state(box.clamp(uint(width), uint(height))))
 						}
 					}
 				}
@@ -202,7 +202,7 @@ fn main() {
 	for format in formats {
 		for count in 0 .. 10 {
 			for v in 1 .. 14 {
-				height := if v == 13 { ~usize(0) } else { usize(v) }
+				height := if v == 13 { ~uint(0) } else { uint(v) }
 				image := make_image(format, count, 99, height, 1)
 				println(
 					'R|${u32(format)}|${count}|${height}|${image.row_byte_size()}|${image.to_managed().row_byte_size()}|' +
@@ -213,7 +213,7 @@ fn main() {
 				 }
 				for seed in 0 .. 3 {
 					for api in 0 .. 3 {
-						image := make_image(format, count, 99, usize(height), seed)
+						image := make_image(format, count, 99, uint(height), seed)
 						flip(&image, api)
 						first := image_state(image)
 						flip(&image, api)
@@ -227,14 +227,14 @@ fn main() {
 		 }
 		for width in 0 .. 4 {
 			for height in 0 .. 4 {
-				boxes := [p.Box{}, p.Box{ width: usize(width), height: usize(height) },
-					p.Box{ x: usize(width), y: usize(height), width: 1, height: 1 },
-					p.Box{ x: usize(width / 2), y: usize(height / 2), width: 5, height: 5 },
-					p.Box{ width: 1, height: 1 }, p.Box{ x: usize(width), width: 1, height: 5 },
-					p.Box{ y: usize(height), width: 5, height: 1 },
+				boxes := [p.Box{}, p.Box{ width: uint(width), height: uint(height) },
+					p.Box{ x: uint(width), y: uint(height), width: 1, height: 1 },
+					p.Box{ x: uint(width / 2), y: uint(height / 2), width: 5, height: 5 },
+					p.Box{ width: 1, height: 1 }, p.Box{ x: uint(width), width: 1, height: 5 },
+					p.Box{ y: uint(height), width: 5, height: 1 },
 					p.Box{
-						x:      usize(if width == 0 { 0 } else { width - 1 })
-						y:      usize(if height == 0 {
+						x:      uint(if width == 0 { 0 } else { width - 1 })
+						y:      uint(if height == 0 {
 							0
 						} else {
 							height - 1
@@ -245,14 +245,14 @@ fn main() {
 				for b, box in boxes {
 					for seed in 0 .. 2 {
 						for api in 0 .. 3 {
-							image := make_image(format, width * height, usize(width),
-								usize(height), seed)
+							image := make_image(format, width * height, uint(width),
+								uint(height), seed)
 							mut result := crop(&image, box, api)
 							mut out := 'C|${u32(format)}|${width}|${height}|${b}|${seed}|${api}|' +
 								image_state(result)
 							mut raw := result.pixels.as_bytes()
 							if raw.len != 0 {
-								out += '|${usize(raw.data) != usize(image.raw_bytes().data)}'
+								out += '|${uint(raw.data) != uint(image.raw_bytes().data)}'
 								raw[0] ^= 1
 							} else {
 								out += '|-'
@@ -262,7 +262,7 @@ fn main() {
 									panic('missing palette')
 								}
 								source := image.pixels.get_palette() or { panic('missing palette') }
-								out += '|${usize(pal.data) != usize(source.data)}'
+								out += '|${uint(pal.data) != uint(source.data)}'
 								pal[0].r ^= 1
 							} else {
 								out += '|-'

@@ -11,7 +11,7 @@ type Element2 = &u32
 type Slice2 = []Element2
 type Element3 = &u64
 type Slice3 = []Element3
-type Element4 = &usize
+type Element4 = &uint
 type Slice4 = []Element4
 type Element5 = &i8
 type Slice5 = []Element5
@@ -21,7 +21,7 @@ type Element7 = &int
 type Slice7 = []Element7
 type Element8 = &i64
 type Slice8 = []Element8
-type Element9 = &isize
+type Element9 = &int
 type Slice9 = []Element9
 type Element10 = &f32
 type Slice10 = []Element10
@@ -42,7 +42,7 @@ struct Args {
 	value []&u8
 }
 
-fn borrowed[E](_ E, raw usize, length int) []E {
+fn borrowed[E](_ E, raw uint, length int) []E {
 	return unsafe { array{ data: voidptr(raw), len: length, cap: length, flags: .nofree, element_size: int(sizeof(E)) } }
 }
 

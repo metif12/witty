@@ -11,17 +11,17 @@ module lib_allocator
 
 #include "@VMODROOT/lib_allocator/c_allocator.h"
 
-fn C.witty_c_aligned_alloc(usize, u8) voidptr
+fn C.witty_c_aligned_alloc(uint, u8) voidptr
 fn C.witty_c_aligned_free(voidptr)
-fn C.witty_c_aligned_size(voidptr) usize
+fn C.witty_c_aligned_size(voidptr) uint
 
-pub type AllocFn = fn (ctx voidptr, len usize, alignment u8, ret_addr usize) voidptr
+pub type AllocFn = fn (ctx voidptr, len uint, alignment u8, ret_addr uint) voidptr
 
-pub type ResizeFn = fn (ctx voidptr, memory voidptr, memory_len usize, alignment u8, new_len usize, ret_addr usize) bool
+pub type ResizeFn = fn (ctx voidptr, memory voidptr, memory_len uint, alignment u8, new_len uint, ret_addr uint) bool
 
-pub type RemapFn = fn (ctx voidptr, memory voidptr, memory_len usize, alignment u8, new_len usize, ret_addr usize) voidptr
+pub type RemapFn = fn (ctx voidptr, memory voidptr, memory_len uint, alignment u8, new_len uint, ret_addr uint) voidptr
 
-pub type FreeFn = fn (ctx voidptr, memory voidptr, memory_len usize, alignment u8, ret_addr usize)
+pub type FreeFn = fn (ctx voidptr, memory voidptr, memory_len uint, alignment u8, ret_addr uint)
 
 // VTable is the exact operation table exposed as GhosttyAllocatorVtable.
 pub struct VTable {
@@ -57,7 +57,7 @@ pub fn (self &Allocator) zig() Allocator {
 }
 
 // alloc_bytes allocates len bytes or returns none on allocation failure.
-pub fn (self &Allocator) alloc_bytes(len usize, alignment u8, ret_addr usize) voidptr {
+pub fn (self &Allocator) alloc_bytes(len uint, alignment u8, ret_addr uint) voidptr {
 	if isnil(self.vtable) {
 		return unsafe { nil }
 	}
@@ -69,7 +69,7 @@ pub fn (self &Allocator) alloc_bytes(len usize, alignment u8, ret_addr usize) vo
 }
 
 // resize_bytes attempts to resize an allocation without moving it.
-pub fn (self &Allocator) resize_bytes(memory voidptr, memory_len usize, alignment u8, new_len usize, ret_addr usize) bool {
+pub fn (self &Allocator) resize_bytes(memory voidptr, memory_len uint, alignment u8, new_len uint, ret_addr uint) bool {
 	if isnil(self.vtable) || isnil(memory) || new_len == 0 {
 		return false
 	}
@@ -77,7 +77,7 @@ pub fn (self &Allocator) resize_bytes(memory voidptr, memory_len usize, alignmen
 }
 
 // remap_bytes attempts to resize an allocation and may relocate it.
-pub fn (self &Allocator) remap_bytes(memory voidptr, memory_len usize, alignment u8, new_len usize, ret_addr usize) voidptr {
+pub fn (self &Allocator) remap_bytes(memory voidptr, memory_len uint, alignment u8, new_len uint, ret_addr uint) voidptr {
 	if isnil(self.vtable) || isnil(memory) || new_len == 0 {
 		return unsafe { nil }
 	}
@@ -90,7 +90,7 @@ pub fn (self &Allocator) remap_bytes(memory voidptr, memory_len usize, alignment
 
 // free_bytes releases an allocation. A null pointer is accepted by the V
 // boundary so destructors can retain Ghostty's nullable-object convention.
-pub fn (self &Allocator) free_bytes(memory voidptr, memory_len usize, alignment u8, ret_addr usize) {
+pub fn (self &Allocator) free_bytes(memory voidptr, memory_len uint, alignment u8, ret_addr uint) {
 	if isnil(self.vtable) || isnil(memory) {
 		return
 	}
@@ -105,16 +105,16 @@ pub fn default(allocator ?&Allocator) Allocator {
 	return c_allocator
 }
 
-fn c_alloc(_ voidptr, len usize, alignment u8, _ usize) voidptr {
+fn c_alloc(_ voidptr, len uint, alignment u8, _ uint) voidptr {
 	assert len > 0
 	return C.witty_c_aligned_alloc(len, alignment)
 }
 
-fn c_resize(_ voidptr, memory voidptr, memory_len usize, _ u8, new_len usize, _ usize) bool {
+fn c_resize(_ voidptr, memory voidptr, memory_len uint, _ u8, new_len uint, _ uint) bool {
 	return new_len <= memory_len || new_len <= C.witty_c_aligned_size(memory)
 }
 
-fn c_remap(ctx voidptr, memory voidptr, memory_len usize, alignment u8, new_len usize, ret_addr usize) voidptr {
+fn c_remap(ctx voidptr, memory voidptr, memory_len uint, alignment u8, new_len uint, ret_addr uint) voidptr {
 	// Source CAllocator never calls realloc: it would lose the alignment.
 	if c_resize(ctx, memory, memory_len, alignment, new_len, ret_addr) {
 		return memory
@@ -122,7 +122,7 @@ fn c_remap(ctx voidptr, memory voidptr, memory_len usize, alignment u8, new_len 
 	return unsafe { nil }
 }
 
-fn c_free(_ voidptr, memory voidptr, _ usize, _ u8, _ usize) {
+fn c_free(_ voidptr, memory voidptr, _ uint, _ u8, _ uint) {
 	if !isnil(memory) {
 		C.witty_c_aligned_free(memory)
 	}

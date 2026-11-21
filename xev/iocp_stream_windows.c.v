@@ -32,7 +32,7 @@ pub mut:
 // originally is from a write request. This is useful for getting
 // the WriteRequest back in a callback from queuedWrite.
 pub fn IocpWriteRequest.from(c &IocpCompletion) &IocpWriteRequest {
-	return unsafe { &IocpWriteRequest(voidptr(usize(c) - __offsetof(IocpWriteRequest, completion))) }
+	return unsafe { &IocpWriteRequest(voidptr(uint(c) - __offsetof(IocpWriteRequest, completion))) }
 }
 
 // Events that can be polled for using the high level streams.
@@ -45,11 +45,11 @@ pub type IocpStreamCloseCallback = fn (ud voidptr, l &IocpLoop, c &IocpCompletio
 
 // The callback of Stream.read. The error is a ReadError; on success the byte
 // count is supplied.
-pub type IocpStreamReadCallback = fn (ud voidptr, l &IocpLoop, c &IocpCompletion, s IocpStream, b IocpReadBuffer, r ?ErrorKind, n usize) CallbackAction
+pub type IocpStreamReadCallback = fn (ud voidptr, l &IocpLoop, c &IocpCompletion, s IocpStream, b IocpReadBuffer, r ?ErrorKind, n uint) CallbackAction
 
 // The callback of Stream.write and Stream.queueWrite. The error is a
 // WriteError; on success the byte count is supplied.
-pub type IocpStreamWriteCallback = fn (ud voidptr, l &IocpLoop, c &IocpCompletion, s IocpStream, b IocpWriteBuffer, r ?ErrorKind, n usize) CallbackAction
+pub type IocpStreamWriteCallback = fn (ud voidptr, l &IocpLoop, c &IocpCompletion, s IocpStream, b IocpWriteBuffer, r ?ErrorKind, n uint) CallbackAction
 
 // Creates a generic stream type that supports read, write, close. This
 // can be used for any file descriptor that would exhibit normal blocking
@@ -255,7 +255,7 @@ pub fn (self IocpStream) write(mut loop IocpLoop, c &IocpCompletion, buf IocpWri
 
 // Extracts the result from a completion for a write callback.
 @[inline]
-fn iocp_stream_write_result(c &IocpCompletion, r IocpResult) (IocpStream, IocpWriteBuffer, ?ErrorKind, usize) {
+fn iocp_stream_write_result(c &IocpCompletion, r IocpResult) (IocpStream, IocpWriteBuffer, ?ErrorKind, uint) {
 	return IocpStream.init_fd((c.op as IocpWriteOp).fd), (c.op as IocpWriteOp).buffer, r.err, iocp_result_bytes(r)
 }
 
@@ -277,19 +277,19 @@ pub fn (self IocpStream) write_init(c &IocpCompletion, buf IocpWriteBuffer) {
 }
 
 // Returns the length of the write buffer
-fn iocp_write_buffer_length(buf IocpWriteBuffer) usize {
+fn iocp_write_buffer_length(buf IocpWriteBuffer) uint {
 	return match buf {
-		WriteBufferSlice { usize(buf.slice.len) }
+		WriteBufferSlice { uint(buf.slice.len) }
 		WriteBufferArray { buf.len }
 	}
 }
 
 // Given a `WriteBuffer` and number of bytes written during the previous
 // write operation, returns a new `WriteBuffer` with remaining data.
-fn iocp_write_buffer_remainder(buf IocpWriteBuffer, offset usize) IocpWriteBuffer {
+fn iocp_write_buffer_remainder(buf IocpWriteBuffer, offset uint) IocpWriteBuffer {
 	match buf {
 		WriteBufferSlice {
-			assert offset <= usize(buf.slice.len)
+			assert offset <= uint(buf.slice.len)
 			return IocpWriteBuffer(WriteBufferSlice{ slice: buf.slice[int(offset)..] })
 		}
 		WriteBufferArray {

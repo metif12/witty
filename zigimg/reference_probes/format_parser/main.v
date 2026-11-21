@@ -15,7 +15,7 @@ __global (
 	carrier       []u8
 	observed_path string
 	result_kind   string
-	result_value  ?usize
+	result_value  ?uint
 	result_span   []u8
 	step          int
 )
@@ -24,7 +24,7 @@ fn state() string {
 	if result_kind in ['c', 'n', 'a', 'number', 'h', 'b'] {
 		result += ':' + if n := result_value { n.str() } else { '-' }
 	} else if result_kind in ['u', 'named'] {
-		result += ':${usize(result_span.data) - usize(carrier.data)}:${result_span.len}:' +
+		result += ':${uint(result_span.data) - uint(carrier.data)}:${result_span.len}:' +
 			result_span.hex()
 	}
 	return '${step}|${parser.i}:${args_state.next_arg}:${args_state.used_args}:${args_state.args_len}|${carrier.hex()}|${result}'
@@ -34,8 +34,8 @@ fn observe() {
 	if observed_path != '' { os.write_file(observed_path, state()) or { eprintln(err) } }
 }
 
-fn number(text string) ?usize {
-	return if text == '-' { none } else { usize(text.u64()) }
+fn number(text string) ?uint {
+	return if text == '-' { none } else { uint(text.u64()) }
 }
 
 fn run(line string) string {
@@ -46,12 +46,12 @@ fn run(line string) string {
 	}
 	parser = p.FormatParser{
 		bytes: unsafe { carrier }
-		i:     usize(f[1].u64())
+		i:     uint(f[1].u64())
 	}
 	args_state = p.FormatArgState{
-		next_arg:  usize(f[2].u64())
+		next_arg:  uint(f[2].u64())
 		used_args: u32(f[3].u64())
-		args_len:  usize(f[4].u64())
+		args_len:  uint(f[4].u64())
 	}
 	result_kind = '-'
 	result_value = none
@@ -64,19 +64,19 @@ fn run(line string) string {
 		mut status := 'ok'
 		match a[0] {
 			'p' {
-				n := parser.peek(usize(a[1].u64()))
+				n := parser.peek(uint(a[1].u64()))
 				result_kind = 'c'
-				result_value = if v := n { usize(v) } else { none }
+				result_value = if v := n { uint(v) } else { none }
 			}
 			'c' {
 				n := parser.char()
 				result_kind = 'c'
-				result_value = if v := n { usize(v) } else { none }
+				result_value = if v := n { uint(v) } else { none }
 			}
 			'm' {
 				n := parser.maybe(u8(a[1].int()))
 				result_kind = 'b'
-				result_value = usize(int(n))
+				result_value = uint(int(n))
 			}
 			'n' {
 				result_value = parser.number()
@@ -113,7 +113,7 @@ fn run(line string) string {
 			}
 			'h' {
 				result_kind = 'h'
-				result_value = usize(int(args_state.has_unused_args()))
+				result_value = uint(int(args_state.has_unused_args()))
 			}
 			'x' {
 				carrier[a[1].int()] ^= u8(a[2].int())

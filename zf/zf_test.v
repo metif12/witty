@@ -134,13 +134,13 @@ fn test_rank_strict_path() {
 }
 
 fn test_highlight_library_interface() {
-	mut matches := []usize{len: 128}
-	assert highlight('abcdef', ['a', 'f'], mut matches, RankOptions{}) == [usize(0), 5]
+	mut matches := []uint{len: 128}
+	assert highlight('abcdef', ['a', 'f'], mut matches, RankOptions{}) == [uint(0), 5]
 	assert highlight('abcdeF', ['a', 'F'], mut matches, RankOptions{
 		to_lower: false
-	}) == [usize(0), 5]
+	}) == [uint(0), 5]
 	assert highlight('a/path/to/file', ['path', 'file'], mut matches, RankOptions{}) == [
-		usize(2),
+		uint(2),
 		3,
 		4,
 		5,
@@ -150,7 +150,7 @@ fn test_highlight_library_interface() {
 		13,
 	]
 	assert highlight('lib/ziglyph/zig.mod', ['ziglyph'], mut matches, RankOptions{}) == [
-		usize(4),
+		uint(4),
 		5,
 		6,
 		7,
@@ -159,31 +159,31 @@ fn test_highlight_library_interface() {
 		10,
 	]
 
-	assert highlight_token('abcdef', 'a', mut matches, RankTokenOptions{}) == [usize(0)]
+	assert highlight_token('abcdef', 'a', mut matches, RankTokenOptions{}) == [uint(0)]
 	assert highlight_token('abcdeF', 'F', mut matches, RankTokenOptions{
 		to_lower: false
-	}) == [usize(5)]
+	}) == [uint(5)]
 	assert highlight_token('a/path/to/file', 'file', mut matches, RankTokenOptions{
 		filename: 'file'
-	}) == [usize(10), 11, 12, 13]
+	}) == [uint(10), 11, 12, 13]
 	assert highlight_token('s/', 's', mut matches, RankTokenOptions{
 		filename: 's'
-	}) == [usize(0)]
+	}) == [uint(0)]
 	assert highlight_token('/this/is/path/not/a/file/', 'file', mut matches, RankTokenOptions{
 		filename: 'file'
-	}) == [usize(20), 21, 22, 23]
+	}) == [uint(20), 21, 22, 23]
 
-	assert highlight('ababab', ['aab'], mut matches, RankOptions{}) == [usize(0), 2, 3]
-	assert highlight('abbbbbabab', ['aab'], mut matches, RankOptions{}) == [usize(6), 8, 9]
-	assert highlight('abcdefg', ['acg'], mut matches, RankOptions{}) == [usize(0), 2, 6]
-	assert highlight('__init__.py', ['initpy'], mut matches, RankOptions{}) == [usize(2), 3, 4,
+	assert highlight('ababab', ['aab'], mut matches, RankOptions{}) == [uint(0), 2, 3]
+	assert highlight('abbbbbabab', ['aab'], mut matches, RankOptions{}) == [uint(6), 8, 9]
+	assert highlight('abcdefg', ['acg'], mut matches, RankOptions{}) == [uint(0), 2, 6]
+	assert highlight('__init__.py', ['initpy'], mut matches, RankOptions{}) == [uint(2), 3, 4,
 		5, 9, 10]
 }
 
 fn test_highlight_respects_output_buffer() {
-	mut matches := []usize{len: 4}
-	assert highlight('abcd', ['ab', 'cd', 'abcd'], mut matches, RankOptions{}) == [usize(0),
+	mut matches := []uint{len: 4}
+	assert highlight('abcd', ['ab', 'cd', 'abcd'], mut matches, RankOptions{}) == [uint(0),
 		1, 2, 3]
-	assert highlight('wxyz', ['wxy', 'xyz'], mut matches, RankOptions{}) == [usize(0), 1,
+	assert highlight('wxyz', ['wxy', 'xyz'], mut matches, RankOptions{}) == [uint(0), 1,
 		2, 1]
 }

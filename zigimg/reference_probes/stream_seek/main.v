@@ -8,13 +8,13 @@ import zigimg
 
 fn C.witty_stream_seek_setup(&char) int
 fn C.witty_stream_seek_replace(int) int
-fn C.witty_stream_seek_seed(usize, usize) int
+fn C.witty_stream_seek_seed(uint, uint) int
 fn C.witty_stream_seek_shutdown() int
 fn C.witty_stream_seek_cleanup() int
 fn C.witty_stream_seek_close() int
 fn C.witty_stream_seek_valid() int
 fn C.witty_stream_seek_refs() int
-fn C.witty_stream_seek_drain(&u8, usize) isize
+fn C.witty_stream_seek_drain(&u8, uint) int
 
 __global (
 	observed_path   string
@@ -50,12 +50,12 @@ fn record(line string, path string) string {
 	observed_output = unsafe { output }
 	reader.seek_to(f[2].u64()) or { panic(err) }
 	if C.witty_stream_seek_replace(0) != 0 { panic('Seek replacement failed') }
-	if C.witty_stream_seek_seed(0, usize(f[4].int())) != 0 { panic('Seek seed failed') }
+	if C.witty_stream_seek_seed(0, uint(f[4].int())) != 0 { panic('Seek seed failed') }
 	if f[5] == '1' && C.witty_stream_seek_shutdown() != 0 { panic('Seek shutdown failed') }
 	mut out := snapshot(mut reader, buffer, output) + '~'
 	for attempt in 0 .. 2 {
 		if attempt == 1 && f[5] == '0' && f[6].int() > 0 {
-			if C.witty_stream_seek_seed(usize(f[4].int()), usize(f[6].int())) != 0 {
+			if C.witty_stream_seek_seed(uint(f[4].int()), uint(f[6].int())) != 0 {
 				panic('Seek reseed failed')
 			}
 		}
@@ -99,10 +99,10 @@ fn record(line string, path string) string {
 		out += '${status}|' + snapshot(mut reader, buffer, output) + '~'
 	}
 	mut wire := []u8{}
-	mut drain := isize(-3)
+	mut drain := int(-3)
 	for {
 		mut bytes := []u8{len: 4096}
-		drain = C.witty_stream_seek_drain(bytes.data, usize(bytes.len))
+		drain = C.witty_stream_seek_drain(bytes.data, uint(bytes.len))
 		if drain <= 0 { break
 		 }
 		wire << bytes[..int(drain)]

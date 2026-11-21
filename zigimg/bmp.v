@@ -301,7 +301,7 @@ fn bmp_checked_index(scanline i32, x i32, length int) int {
 	index := i64(scanline) + x
 	if index < -2147483648 || index > 2147483647 { panic('integer overflow') }
 	if index < 0 { panic('integer does not fit in destination type') }
-	if usize(index) >= usize(length) {
+	if uint(index) >= uint(length) {
 		panic('index out of bounds: index ${index}, len ${length}')
 	}
 	return int(index)
@@ -323,7 +323,7 @@ pub fn (mut codec BMP) read(mut stream ReadStream) !PixelStorage {
 	height := codec.height()
 	count := bmp_checked_product(width, height)
 	if count < 0 { panic('integer does not fit in destination type') }
-	mut pixels := PixelStorage.init(format, usize(count))!
+	mut pixels := PixelStorage.init(format, uint(count))!
 	// The pinned reader ignores pixel_offset, color masks, and row padding.
 	if height == -2147483648 { panic('integer overflow') }
 	for y := height - 1; y >= 0; y-- {
@@ -362,18 +362,18 @@ pub fn BMP.read_image(mut stream ReadStream) !ImageUnmanaged {
 	pixels := codec.read(mut stream)!
 	if codec.width() < 0 || codec.height() < 0 { panic('integer does not fit in destination type') }
 	return ImageUnmanaged{
-		width:  usize(codec.width())
-		height: usize(codec.height())
+		width:  uint(codec.width())
+		height: uint(codec.height())
 		pixels: pixels
 	}
 }
 
-fn bmp_image_sizes(image ImageUnmanaged, channels usize, header_size usize) (u32, u32) {
-	if image.width != 0 && image.height > ~usize(0) / image.width { panic('integer overflow') }
+fn bmp_image_sizes(image ImageUnmanaged, channels uint, header_size uint) (u32, u32) {
+	if image.width != 0 && image.height > ~uint(0) / image.width { panic('integer overflow') }
 	pixels := image.width * image.height
-	if pixels > ~usize(0) / channels { panic('integer overflow') }
+	if pixels > ~uint(0) / channels { panic('integer overflow') }
 	bytes := pixels * channels
-	if bytes > ~usize(0) - header_size { panic('integer overflow') }
+	if bytes > ~uint(0) - header_size { panic('integer overflow') }
 	if bytes + header_size > 0xffffffff { panic('integer does not fit in destination type') }
 	return u32(bytes), u32(bytes + header_size)
 }

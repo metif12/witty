@@ -9,12 +9,12 @@ import zigimg
 
 fn C.witty_writer_seek_setup(&char) int
 fn C.witty_writer_seek_replace(int) int
-fn C.witty_writer_seek_restore(&char, usize) int
+fn C.witty_writer_seek_restore(&char, uint) int
 fn C.witty_writer_seek_close() int
 fn C.witty_writer_seek_cleanup() int
 fn C.witty_writer_seek_valid() int
-fn C.witty_writer_seek_view(&u8, usize) isize
-fn C.witty_writer_seek_drain(&u8, usize) isize
+fn C.witty_writer_seek_view(&u8, uint) int
+fn C.witty_writer_seek_drain(&u8, uint) int
 
 __global (
 	seen string
@@ -44,11 +44,11 @@ type Payload3_1 = [2][3]u64
 type Slice3_1 = []?Payload3_1
 type Payload3_2 = [3]?u64
 type Slice3_2 = []?Payload3_2
-type Payload4_0 = [2]usize
+type Payload4_0 = [2]uint
 type Slice4_0 = []?Payload4_0
-type Payload4_1 = [2][3]usize
+type Payload4_1 = [2][3]uint
 type Slice4_1 = []?Payload4_1
-type Payload4_2 = [3]?usize
+type Payload4_2 = [3]?uint
 type Slice4_2 = []?Payload4_2
 type Payload5_0 = [2]i8
 type Slice5_0 = []?Payload5_0
@@ -74,11 +74,11 @@ type Payload8_1 = [2][3]i64
 type Slice8_1 = []?Payload8_1
 type Payload8_2 = [3]?i64
 type Slice8_2 = []?Payload8_2
-type Payload9_0 = [2]isize
+type Payload9_0 = [2]int
 type Slice9_0 = []?Payload9_0
-type Payload9_1 = [2][3]isize
+type Payload9_1 = [2][3]int
 type Slice9_1 = []?Payload9_1
-type Payload9_2 = [3]?isize
+type Payload9_2 = [3]?int
 type Slice9_2 = []?Payload9_2
 type Payload10_0 = [2]f32
 type Slice10_0 = []?Payload10_0
@@ -228,8 +228,8 @@ fn describe4(values []?Content4) string {
 	return out + ']'
 }
 
-fn content_operate(mut writer zigimg.WriteStream, f []string, api string, options zigimg.FormatOptions, depth usize) ! {
-	mask := usize(f[8].u64())
+fn content_operate(mut writer zigimg.WriteStream, f []string, api string, options zigimg.FormatOptions, depth uint) ! {
+	mask := uint(f[8].u64())
 	match f[0].int() {
 		0 {
 			row0 := [if mask & 8 != 0 { ?bool(true) } else { ?bool(none) },
@@ -358,25 +358,25 @@ fn content_operate(mut writer zigimg.WriteStream, f []string, api string, option
 	}
 }
 
-fn borrowed[E](_ E, raw usize, length int) []?E {
+fn borrowed[E](_ E, raw uint, length int) []?E {
 	return unsafe { array{ data: voidptr(raw), len: length, cap: length, flags: .nofree, element_size: int(sizeof(?E)) } }
 }
 
 fn operate(mut writer zigimg.WriteStream, f []string) ! {
-	raw := usize(f[8].u64())
+	raw := uint(f[8].u64())
 	length := f[9].int()
 	api := (hex.decode(f[1])!).bytestr()
 	options := zigimg.FormatOptions{
 		width:     if f[10] == '-' {
-			?usize(none)
+			?uint(none)
 		} else {
-			?usize(usize(f[10].u64()))
+			?uint(uint(f[10].u64()))
 		}
-		precision: if f[11] == '-' { ?usize(none) } else { ?usize(usize(f[11].u64())) }
+		precision: if f[11] == '-' { ?uint(none) } else { ?uint(uint(f[11].u64())) }
 		alignment: unsafe { zigimg.Alignment(f[14].int()) }
 		fill:      u8(f[15].int())
 	}
-	depth := usize(f[13].u64())
+	depth := uint(f[13].u64())
 	if api == 'ca' || api == 'co' || api == 'cp' {
 		return content_operate(mut writer, f, api, options, depth)
 	}
@@ -386,7 +386,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				0 {
 					zero := Payload0_0{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -398,7 +398,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				1 {
 					zero := Payload0_1{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -410,7 +410,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				2 {
 					zero := Payload0_2{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -427,7 +427,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				0 {
 					zero := Payload1_0{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -439,7 +439,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				1 {
 					zero := Payload1_1{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -451,7 +451,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				2 {
 					zero := Payload1_2{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -468,7 +468,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				0 {
 					zero := Payload2_0{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -480,7 +480,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				1 {
 					zero := Payload2_1{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -492,7 +492,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				2 {
 					zero := Payload2_2{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -509,7 +509,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				0 {
 					zero := Payload3_0{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -521,7 +521,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				1 {
 					zero := Payload3_1{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -533,7 +533,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				2 {
 					zero := Payload3_2{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -550,7 +550,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				0 {
 					zero := Payload4_0{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -562,7 +562,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				1 {
 					zero := Payload4_1{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -574,7 +574,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				2 {
 					zero := Payload4_2{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -591,7 +591,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				0 {
 					zero := Payload5_0{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -603,7 +603,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				1 {
 					zero := Payload5_1{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -615,7 +615,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				2 {
 					zero := Payload5_2{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -632,7 +632,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				0 {
 					zero := Payload6_0{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -644,7 +644,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				1 {
 					zero := Payload6_1{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -656,7 +656,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				2 {
 					zero := Payload6_2{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -673,7 +673,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				0 {
 					zero := Payload7_0{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -685,7 +685,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				1 {
 					zero := Payload7_1{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -697,7 +697,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				2 {
 					zero := Payload7_2{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -714,7 +714,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				0 {
 					zero := Payload8_0{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -726,7 +726,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				1 {
 					zero := Payload8_1{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -738,7 +738,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				2 {
 					zero := Payload8_2{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -755,7 +755,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				0 {
 					zero := Payload9_0{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -767,7 +767,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				1 {
 					zero := Payload9_1{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -779,7 +779,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				2 {
 					zero := Payload9_2{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -796,7 +796,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				0 {
 					zero := Payload10_0{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -808,7 +808,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				1 {
 					zero := Payload10_1{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -820,7 +820,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				2 {
 					zero := Payload10_2{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -837,7 +837,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				0 {
 					zero := Payload11_0{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -849,7 +849,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				1 {
 					zero := Payload11_1{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -861,7 +861,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				2 {
 					zero := Payload11_2{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -878,7 +878,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				0 {
 					zero := Payload12_0{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -890,7 +890,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				1 {
 					zero := Payload12_1{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -902,7 +902,7 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 				2 {
 					zero := Payload12_2{}
 					view := borrowed(zero, raw, length)
-					seen = '${usize(view.data)}:${view.len}'
+					seen = '${uint(view.data)}:${view.len}'
 					if api == 'ds' {
 						writer.print_address(view)!
 					} else if api == 'os' {
@@ -920,11 +920,11 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 
 fn snapshot(status string, writer zigimg.WriteStream, buffer []u8, file bool) string {
 	mut contents := []u8{len: 4096}
-	n := if file { C.witty_writer_seek_view(contents.data, usize(contents.len)) } else { isize(0) }
+	n := if file { C.witty_writer_seek_view(contents.data, uint(contents.len)) } else { int(0) }
 	if n < 0 { panic('observer failed') }
 	valid := if file { C.witty_writer_seek_valid() } else { 0 }
 	unused := writer.unused_capacity_slice()
-	offset := if buffer.len == 0 { usize(0) } else { usize(unused.data) - usize(buffer.data) }
+	offset := if buffer.len == 0 { uint(0) } else { uint(unused.data) - uint(buffer.data) }
 	return '${status}|${writer.get_pos()}:${writer.unused_capacity_len()}:${writer.buffered().len}:${offset}:${valid}|${buffer.hex()}|${writer.buffered().hex()}|${unused.hex()}|${seen}|${contents[..int(n)].hex()}'
 }
 
@@ -965,12 +965,12 @@ fn record(line string, path string) string {
 		writer.flush() or { status = err.msg() }
 	}
 	out += snapshot(status, writer, buffer, kind > 0) + '~'
-	mut drain := isize(-3)
+	mut drain := int(-3)
 	mut wire := []u8{}
 	if kind > 0 && binding == 1 {
 		for {
 			mut bytes := []u8{len: 4096}
-			drain = C.witty_writer_seek_drain(bytes.data, usize(bytes.len))
+			drain = C.witty_writer_seek_drain(bytes.data, uint(bytes.len))
 			if drain <= 0 { break }
 			wire << bytes[..int(drain)]
 		}

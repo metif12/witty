@@ -17,11 +17,11 @@ $if no_oniguruma ? {
 
 #include "bridge.h"
 
-fn C.witty_onig_initialize(encodings &voidptr, count usize) int
+fn C.witty_onig_initialize(encodings &voidptr, count uint) int
 
 fn C.onig_end() int
 
-fn C.witty_onig_new(out &voidptr, pattern &u8, pattern_len usize, options u32, encoding voidptr, syntax voidptr, error_par &voidptr, error_par_end &voidptr) int
+fn C.witty_onig_new(out &voidptr, pattern &u8, pattern_len uint, options u32, encoding voidptr, syntax voidptr, error_par &voidptr, error_par_end &voidptr) int
 
 fn C.witty_onig_encoding_ascii() voidptr
 fn C.witty_onig_encoding_iso_8859_1() voidptr
@@ -74,7 +74,7 @@ fn C.onig_region_free(region voidptr, free_self int)
 
 fn C.witty_onig_error_string(error_message &u8, code int) int
 
-fn C.witty_onig_search(regex voidptr, string &u8, string_len usize, start usize, end usize, region voidptr, options u32) int
+fn C.witty_onig_search(regex voidptr, string &u8, string_len uint, start uint, end uint, region voidptr, options u32) int
 
 pub const max_error_len = 90
 pub const mismatch_error = 'oniguruma mismatch'
@@ -381,7 +381,7 @@ pub fn init(encodings []Encoding) ! {
 	result := if values.len == 0 {
 		C.witty_onig_initialize(unsafe { nil }, 0)
 	} else {
-		unsafe { C.witty_onig_initialize(&values[0], usize(values.len)) }
+		unsafe { C.witty_onig_initialize(&values[0], uint(values.len)) }
 	}
 	_ = convert_error(result)!
 }
@@ -408,7 +408,7 @@ pub fn Regex.init(pattern string, options Options, encoding Encoding, syntax Syn
 	mut error_par := voidptr(unsafe { nil })
 	mut error_par_end := voidptr(unsafe { nil })
 	result := unsafe {
-		C.witty_onig_new(&value, pattern.str, usize(pattern.len), options.int(), encoding.handle,
+		C.witty_onig_new(&value, pattern.str, uint(pattern.len), options.int(), encoding.handle,
 			syntax.handle, &error_par, &error_par_end)
 	}
 	if result < 0 {
@@ -432,17 +432,17 @@ pub fn (mut r Regex) deinit() {
 
 pub fn (r &Regex) search(str string, options Options) !Region {
 	mut region := Region{}
-	r.search_advanced(str, 0, usize(str.len), mut region, options) or {
+	r.search_advanced(str, 0, uint(str.len), mut region, options) or {
 		region.deinit()
 		return err
 	}
 	return region
 }
 
-pub fn (r &Regex) search_advanced(str string, start usize, end usize, mut region Region, options Options) !usize {
-	result := C.witty_onig_search(r.value, str.str, usize(str.len), start, end, voidptr(&region),
+pub fn (r &Regex) search_advanced(str string, start uint, end uint, mut region Region, options Options) !uint {
+	result := C.witty_onig_search(r.value, str.str, uint(str.len), start, end, voidptr(&region),
 		options.int())
-	return usize(convert_error(result)!)
+	return uint(convert_error(result)!)
 }
 
 pub struct Region {
@@ -458,8 +458,8 @@ pub fn (mut r Region) deinit() {
 	C.onig_region_free(voidptr(&r), 0)
 }
 
-pub fn (r &Region) count() usize {
-	return usize(r.num_regs)
+pub fn (r &Region) count() uint {
+	return uint(r.num_regs)
 }
 
 pub fn (r &Region) starts() []int {
@@ -502,7 +502,7 @@ mut:
 	index int
 }
 
-pub fn (mut it RegionIterator) next() ?[2]usize {
+pub fn (mut it RegionIterator) next() ?[2]uint {
 	if it.index >= int(it.region.count()) {
 		return none
 	}
@@ -511,7 +511,7 @@ pub fn (mut it RegionIterator) next() ?[2]usize {
 	if start < 0 || end < 0 {
 		panic('negative Oniguruma capture boundary')
 	}
-	result := [usize(start), usize(end)]!
+	result := [uint(start), uint(end)]!
 	it.index++
 	return result
 }

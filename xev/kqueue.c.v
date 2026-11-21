@@ -30,7 +30,7 @@ $if macos || ios || freebsd {
 		// std.c.Kevent on FreeBSD has four extension words and pointer udata.
 		pub struct C.kevent {
 		mut:
-			ident  usize
+			ident  uint
 			filter i16
 			flags  u16
 			fflags u32
@@ -120,7 +120,7 @@ $if macos || ios || freebsd {
 
 		// The number of active completions. This DOES NOT include completions that
 		// are queued in the submissions queue.
-		active usize
+		active uint
 
 		// Our queue of submissions that we want to enqueue on the next tick.
 		// These are NOT started, they are NOT submitted to kqueue. They are
@@ -293,8 +293,8 @@ $if macos || ios || freebsd {
 
 			// Zero timeout so that kevent returns immediately.
 			mut timeout := Timespec{}
-			completed := kevent_syscall(self.kqueue_fd, &events[0], usize(events_len), &events[0],
-				usize(events.len), &timeout) or {
+			completed := kevent_syscall(self.kqueue_fd, &events[0], uint(events_len), &events[0],
+				uint(events.len), &timeout) or {
 				// On error, we have to restore the queue because we may be batching.
 				self.submissions = queued
 				return err
@@ -319,7 +319,7 @@ $if macos || ios || freebsd {
 					continue
 				}
 
-				mut c := unsafe { &KqueueCompletion(voidptr(usize(ev.udata))) }
+				mut c := unsafe { &KqueueCompletion(voidptr(uint(ev.udata))) }
 
 				// If EV_ERROR is set, then submission failed for this
 				// completion. We get the syscall errorcode from data and
@@ -425,7 +425,7 @@ $if macos || ios || freebsd {
 		// on repeat ticks. Used mostly for efficient disarm.
 		mut changes := 0
 
-		mut wait_rem := usize(wait)
+		mut wait_rem := uint(wait)
 
 		// Handle all of our cancellations first because we may be able
 		// to stop submissions from even happening if its still queued.
@@ -605,8 +605,8 @@ $if macos || ios || freebsd {
 			if has_timeout {
 				timeout = &timeout_value
 			}
-			completed := kevent_syscall(self.kqueue_fd, &events[0], usize(changes), &events[0],
-				usize(events.len), timeout) or {
+			completed := kevent_syscall(self.kqueue_fd, &events[0], uint(changes), &events[0],
+				uint(events.len), timeout) or {
 				match error_kind(err) {
 					// This should never happen because we always have
 					// space in our event list. If I'm reading the BSD source
@@ -654,7 +654,7 @@ $if macos || ios || freebsd {
 				}
 				wait_rem = sat_sub(wait_rem, 1)
 
-				mut c := unsafe { &KqueueCompletion(voidptr(usize(ev.udata))) }
+				mut c := unsafe { &KqueueCompletion(voidptr(uint(ev.udata))) }
 
 				// c is ready to be reused rigt away if we're dearming
 				// so we mark it as dead.
@@ -1034,7 +1034,7 @@ $if macos || ios || freebsd {
 	// This is the main callback for the threadpool to perform work
 	// on completions for the loop.
 	fn kqueue_thread_perform(t &ThreadPoolTask) {
-		mut c := unsafe { &KqueueCompletion(voidptr(usize(t) - __offsetof(KqueueCompletion, task))) }
+		mut c := unsafe { &KqueueCompletion(voidptr(uint(t) - __offsetof(KqueueCompletion, task))) }
 
 		// Do our task
 		c.result = c.perform(unsafe { nil })
@@ -1153,7 +1153,7 @@ $if macos || ios || freebsd {
 	// kevent isn't immediately useful for all event types. For example,
 	// "connect" requires you to initiate the connection first.
 	fn (self &KqueueCompletion) kevent() ?Kevent {
-		udata := u64(usize(voidptr(self)))
+		udata := u64(uint(voidptr(self)))
 		match self.op {
 			KqueueNoopOp {
 				panic('unreachable')
@@ -1182,7 +1182,7 @@ $if macos || ios || freebsd {
 						fflags: mach_rcv_msg
 						data:   0
 						udata:  udata
-						ext:    [u64(usize(slice.data)), u64(slice.len)]!
+						ext:    [u64(uint(slice.data)), u64(slice.len)]!
 					}
 				} $else {
 					// The pinned source returns null outside macOS, including iOS.
@@ -1279,7 +1279,7 @@ $if macos || ios || freebsd {
 					if isnil(ev_) {
 						return kqueue_result_kind(.read, .missing_kevent)
 					}
-					return kqueue_read_result(.read, usize(ev_.data))
+					return kqueue_read_result(.read, uint(ev_.data))
 				}
 				n := posix_read(self.op.fd, self.op.buffer.slice_ptr()) or {
 					return kqueue_result_err(.read, err)
@@ -1293,7 +1293,7 @@ $if macos || ios || freebsd {
 					if isnil(ev_) {
 						return kqueue_result_kind(.read, .missing_kevent)
 					}
-					return kqueue_read_result(.pread, usize(ev_.data))
+					return kqueue_read_result(.pread, uint(ev_.data))
 				}
 				n := posix_pread(self.op.fd, self.op.buffer.slice_ptr(), self.op.offset) or {
 					return kqueue_result_err(.pread, err)
@@ -1305,7 +1305,7 @@ $if macos || ios || freebsd {
 					if isnil(ev_) {
 						return kqueue_result_kind(.read, .missing_kevent)
 					}
-					return kqueue_read_result(.recv, usize(ev_.data))
+					return kqueue_read_result(.recv, uint(ev_.data))
 				}
 				n := posix_recv(self.op.fd, self.op.buffer.slice_ptr(), 0) or {
 					return kqueue_result_err(.recv, err)
@@ -1317,7 +1317,7 @@ $if macos || ios || freebsd {
 					if isnil(ev_) {
 						return kqueue_result_kind(.read, .missing_kevent)
 					}
-					return kqueue_read_result(.recvfrom, usize(ev_.data))
+					return kqueue_read_result(.recvfrom, uint(ev_.data))
 				}
 				n := posix_recvfrom(self.op.fd, self.op.buffer.slice_ptr(), 0, &self.op.addr,
 					&self.op.addr_size) or { return kqueue_result_err(.recvfrom, err) }
@@ -1395,7 +1395,7 @@ $if macos || ios || freebsd {
 			.write {
 				match errno {
 					0 {
-						return kqueue_result_n(tag, usize(r))
+						return kqueue_result_n(tag, uint(r))
 					}
 					C.ECANCELED {
 						return kqueue_result_kind(tag, .canceled)
@@ -1411,7 +1411,7 @@ $if macos || ios || freebsd {
 			.pwrite, .send, .sendto, .recvfrom {
 				match errno {
 					0 {
-						return kqueue_result_n(tag, usize(r))
+						return kqueue_result_n(tag, uint(r))
 					}
 					C.ECANCELED {
 						return kqueue_result_kind(tag, .canceled)
@@ -1424,7 +1424,7 @@ $if macos || ios || freebsd {
 			.read {
 				match errno {
 					0 {
-						return kqueue_read_result(tag, usize(r))
+						return kqueue_read_result(tag, uint(r))
 					}
 					C.ECANCELED {
 						return kqueue_result_kind(tag, .canceled)
@@ -1440,7 +1440,7 @@ $if macos || ios || freebsd {
 			.pread, .recv {
 				match errno {
 					0 {
-						return kqueue_read_result(tag, usize(r))
+						return kqueue_read_result(tag, uint(r))
 					}
 					C.ECANCELED {
 						return kqueue_result_kind(tag, .canceled)
@@ -1557,49 +1557,49 @@ $if macos || ios || freebsd {
 	pub struct KqueueReadResult {
 	pub mut:
 		err ?ErrorKind
-		n   usize
+		n   uint
 	}
 
 	pub struct KqueueWriteResult {
 	pub mut:
 		err ?ErrorKind
-		n   usize
+		n   uint
 	}
 
 	pub struct KqueuePReadResult {
 	pub mut:
 		err ?ErrorKind
-		n   usize
+		n   uint
 	}
 
 	pub struct KqueuePWriteResult {
 	pub mut:
 		err ?ErrorKind
-		n   usize
+		n   uint
 	}
 
 	pub struct KqueueSendResult {
 	pub mut:
 		err ?ErrorKind
-		n   usize
+		n   uint
 	}
 
 	pub struct KqueueRecvResult {
 	pub mut:
 		err ?ErrorKind
-		n   usize
+		n   uint
 	}
 
 	pub struct KqueueSendToResult {
 	pub mut:
 		err ?ErrorKind
-		n   usize
+		n   uint
 	}
 
 	pub struct KqueueRecvFromResult {
 	pub mut:
 		err ?ErrorKind
-		n   usize
+		n   uint
 	}
 
 	pub struct KqueueCloseResult {
@@ -1777,7 +1777,7 @@ $if macos || ios || freebsd {
 	}
 
 	// kqueue_result_n builds the byte-count result variant for `tag`.
-	fn kqueue_result_n(tag KqueueOperationType, n usize) KqueueResult {
+	fn kqueue_result_n(tag KqueueOperationType, n uint) KqueueResult {
 		match tag {
 			.read {
 				return KqueueReadResult{
@@ -1826,7 +1826,7 @@ $if macos || ios || freebsd {
 	}
 
 	// The zero-length read path returns EOF for a zero byte count.
-	fn kqueue_read_result(tag KqueueOperationType, n usize) KqueueResult {
+	fn kqueue_read_result(tag KqueueOperationType, n uint) KqueueResult {
 		if n == 0 {
 			return kqueue_result_kind(tag, .eof)
 		}
@@ -1834,7 +1834,7 @@ $if macos || ios || freebsd {
 	}
 
 	// kqueue_result_bytes returns the byte count of a read or write result.
-	fn kqueue_result_bytes(r KqueueResult) usize {
+	fn kqueue_result_bytes(r KqueueResult) uint {
 		return match r {
 			KqueueReadResult { r.n }
 			KqueueWriteResult { r.n }
@@ -1880,10 +1880,10 @@ $if macos || ios || freebsd {
 					fflags: mach_rcv_msg
 					data:   0
 					udata:  0
-					ext:    [u64(usize(&self.mach_port_buffer[0])), u64(self.mach_port_buffer.len)]!
+					ext:    [u64(uint(&self.mach_port_buffer[0])), u64(self.mach_port_buffer.len)]!
 				},
 			]!
-			n := kevent_syscall(kqueue_fd, &events[0], usize(events.len), &events[0], 0,
+			n := kevent_syscall(kqueue_fd, &events[0], uint(events.len), &events[0], 0,
 				unsafe { nil })!
 			assert n == 0
 		}
@@ -2155,7 +2155,7 @@ $if macos || ios || freebsd {
 
 	// kevent calls either kevent or kevent64 depending on the
 	// target platform.
-	fn kevent_syscall(kq int, changelist &Kevent, changelist_len usize, eventlist &Kevent, eventlist_len usize, timeout &Timespec) !usize {
+	fn kevent_syscall(kq int, changelist &Kevent, changelist_len uint, eventlist &Kevent, eventlist_len uint, timeout &Timespec) !uint {
 		// Otherwise, we have to call the kevent64 variant.
 		nchanges := cast_c_int(changelist_len) or { return new_error(.overflow) }
 		nevents := cast_c_int(eventlist_len) or { return new_error(.overflow) }
@@ -2170,7 +2170,7 @@ $if macos || ios || freebsd {
 					&C.timespec(timeout))
 			}
 			match posix_errno(rc) {
-				0 { return usize(rc) }
+				0 { return uint(rc) }
 				C.EACCES { return new_error(.access_denied) }
 				C.EFAULT { panic('unreachable') }
 				C.EBADF { panic('unreachable') } // Always a race condition.
@@ -2200,12 +2200,12 @@ $if macos || ios || freebsd {
 	fn kevent_init(ident u64, filter i16, flags u16, fflags u32, udata u64) Kevent {
 		$if freebsd {
 			return Kevent{
-				ident:  usize(ident)
+				ident:  uint(ident)
 				filter: filter
 				flags:  flags
 				fflags: fflags
 				data:   0
-				udata:  voidptr(usize(udata))
+				udata:  voidptr(uint(udata))
 			}
 		} $else {
 			return Kevent{

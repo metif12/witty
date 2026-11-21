@@ -39,7 +39,7 @@ pub struct Info {
 pub:
 	mode        BuildMode
 	version     &u8 = unsafe { nil }
-	version_len usize
+	version_len uint
 }
 
 // GhosttyString corresponds to ghostty_string_s. A string type used
@@ -47,7 +47,7 @@ pub:
 pub struct GhosttyString {
 pub:
 	ptr      &u8 = unsafe { nil }
-	len      usize
+	len      uint
 	sentinel bool
 }
 
@@ -72,7 +72,7 @@ pub fn GhosttyString.from_string(s string) GhosttyString {
 	}
 	return GhosttyString{
 		ptr:      &u8(ptr)
-		len:      usize(s.len)
+		len:      uint(s.len)
 		sentinel: true
 	}
 }
@@ -90,7 +90,7 @@ pub fn GhosttyString.from_slice(b []u8) GhosttyString {
 	}
 	return GhosttyString{
 		ptr:      &u8(ptr)
-		len:      usize(b.len)
+		len:      uint(b.len)
 		sentinel: false
 	}
 }
@@ -190,7 +190,7 @@ pub fn ghostty_info() Info {
 			else { .debug }
 		}
 		version:     version_string.str
-		version_len: usize(version_string.len)
+		version_len: uint(version_string.len)
 	}
 }
 
@@ -216,7 +216,7 @@ fn min_int(a int, b int) int {
 // C ABI entrypoints. The V-facing helpers above remain convenient for tests
 // and native callers while these wrappers preserve Ghostty's public symbols.
 @[export: 'ghostty_init']
-fn ghostty_init_export(argc usize, argv &&char) int {
+fn ghostty_init_export(argc uint, argv &&char) int {
 	mut args := []string{cap: int(argc)}
 	unsafe {
 		for i in 0 .. int(argc) {

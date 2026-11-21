@@ -48,8 +48,8 @@ fn test_ccitt_all_locked_code_tables_and_lookup_color_state() {
 }
 
 struct CcittCase {
-	width    usize
-	rows     usize = 1
+	width    uint
+	rows     uint = 1
 	input    []u8
 	expected []u8
 	color    CcittColor = .black
@@ -142,7 +142,7 @@ fn test_ccitt_decoder_reuse_preserves_color_and_zero_dimensions_write_no_bytes()
 	reader = ReadStream.init_memory([u8(0x14)])
 	decoder.decode(mut reader, mut writer)!
 	assert writer.buffered() == [u8(255), 0] && decoder.current_color == .white
-	for dims in [[usize(0), usize(1)], [usize(8), usize(0)]] {
+	for dims in [[uint(0), uint(1)], [uint(8), uint(0)]] {
 		reader = ReadStream.init_memory([])
 		writer.seek_to(0)!
 		decoder = CcittDecoder.init(dims[0], dims[1], 1)!

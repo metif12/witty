@@ -35,7 +35,7 @@ fn test_lib_vt_native_key_event_and_encoder_exports() {
 	ghostty_key_event_set_consumed_mods_export(event, 0x0001)
 	ghostty_key_event_set_composing_export(event, true)
 	text := 'a'
-	ghostty_key_event_set_utf8_export(event, text.str, usize(text.len))
+	ghostty_key_event_set_utf8_export(event, text.str, uint(text.len))
 	ghostty_key_event_set_unshifted_codepoint_export(event, u32(`a`))
 
 	assert ghostty_key_event_get_action_export(event) == .press
@@ -43,7 +43,7 @@ fn test_lib_vt_native_key_event_and_encoder_exports() {
 	assert ghostty_key_event_get_mods_export(event) == 0x0205
 	assert ghostty_key_event_get_consumed_mods_export(event) == 1
 	assert ghostty_key_event_get_composing_export(event)
-	mut text_len := usize(0)
+	mut text_len := uint(0)
 	text_ptr := ghostty_key_event_get_utf8_export(event, &text_len)
 	assert text_len == 1
 	assert unsafe { tos(&u8(text_ptr), int(text_len)) } == 'a'
@@ -57,9 +57,9 @@ fn test_lib_vt_native_key_event_and_encoder_exports() {
 	assert !isnil(encoder)
 	defer { ghostty_key_encoder_free_export(encoder) }
 	mut out := []u8{len: 8}
-	mut written := usize(0)
+	mut written := uint(0)
 	out_ptr := unsafe { &out[0] }
-	assert ghostty_key_encoder_encode_export(encoder, event, out_ptr, usize(out.len), &written) == .success
+	assert ghostty_key_encoder_encode_export(encoder, event, out_ptr, uint(out.len), &written) == .success
 	assert out[..int(written)].bytestr() == 'a'
 
 	mut application_cursor := true
@@ -84,8 +84,8 @@ fn test_lib_vt_native_osc_paste_and_color_exports() {
 
 	safe := 'echo hello'
 	unsafe_text := 'echo hello\n'
-	assert ghostty_paste_is_safe_export(safe.str, usize(safe.len))
-	assert !ghostty_paste_is_safe_export(unsafe_text.str, usize(unsafe_text.len))
+	assert ghostty_paste_is_safe_export(safe.str, uint(safe.len))
+	assert !ghostty_paste_is_safe_export(unsafe_text.str, uint(unsafe_text.len))
 
 	mut red := u8(0)
 	mut green := u8(0)
@@ -101,7 +101,7 @@ fn test_lib_vt_native_sgr_exports_and_c_projection() {
 	defer { ghostty_sgr_free_export(parser) }
 
 	params := [u16(1), 38, 2, 0x12, 0x34, 0x56]
-	assert ghostty_sgr_set_params_export(parser, &params[0], unsafe { nil }, usize(params.len)) == .success
+	assert ghostty_sgr_set_params_export(parser, &params[0], unsafe { nil }, uint(params.len)) == .success
 	mut attr := terminal_c.SgrAttributeC{}
 	assert ghostty_sgr_next_export(parser, &attr)
 	assert ghostty_sgr_attribute_tag_export(attr) == terminal.SgrAttributeTag.bold
@@ -117,7 +117,7 @@ fn test_lib_vt_native_sgr_exports_and_c_projection() {
 	assert ghostty_sgr_next_export(parser, &attr)
 
 	unknown_params := [u16(38), 7, 1]
-	assert ghostty_sgr_set_params_export(parser, &unknown_params[0], unsafe { nil }, usize(unknown_params.len)) == .success
+	assert ghostty_sgr_set_params_export(parser, &unknown_params[0], unsafe { nil }, uint(unknown_params.len)) == .success
 	assert ghostty_sgr_next_export(parser, &attr)
 	assert attr.tag == .unknown
 	unknown := unsafe { *(&terminal_c.SgrUnknownC(&attr.value)) }

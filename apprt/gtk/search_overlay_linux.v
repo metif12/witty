@@ -141,7 +141,7 @@ pub fn (mut self SearchOverlay) set_search_contents(content string) {
 // set_search_total sets the total number of matches, notifying property changes
 // only when the value (or its presence) actually changes. Mirrors
 // `setSearchTotal`.
-pub fn (mut self SearchOverlay) set_search_total(total ?usize) {
+pub fn (mut self SearchOverlay) set_search_total(total ?uint) {
 	if isnil(self.widget) {
 		return
 	}
@@ -171,7 +171,7 @@ pub fn (mut self SearchOverlay) set_search_total(total ?usize) {
 
 // set_search_selected sets the currently selected match index. Mirrors
 // `setSearchSelected`.
-pub fn (mut self SearchOverlay) set_search_selected(selected ?usize) {
+pub fn (mut self SearchOverlay) set_search_selected(selected ?uint) {
 	if isnil(self.widget) {
 		return
 	}
@@ -663,7 +663,7 @@ fn search_on_drag_end_cb(gesture voidptr, offset_x f64, offset_y f64, instance v
 // ghostty `Class.init`.
 fn search_overlay_class_init(klass voidptr, class_data voidptr) {
 	C.g_type_class_adjust_private_offset(klass, &g_search_overlay_priv_offset)
-	bytes := C.g_bytes_new_static(search_overlay_ui.str, usize(search_overlay_ui.len))
+	bytes := C.g_bytes_new_static(search_overlay_ui.str, uint(search_overlay_ui.len))
 	C.gtk_widget_class_set_template(klass, bytes)
 	C.g_bytes_unref(bytes)
 

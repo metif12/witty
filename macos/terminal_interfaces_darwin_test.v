@@ -102,6 +102,6 @@ fn test_swift_extended_grapheme_fixtures_match_native_unicode_iterator() {
 		'👩‍💻': 1
 	} {
 		assert native_character_count(nsstring(text)) == expected
-		assert native_character_prefix(nsstring(text), expected) == usize(msg_u64(nsstring(text), 'length'))
+		assert native_character_prefix(nsstring(text), expected) == uint(msg_u64(nsstring(text), 'length'))
 	}
 }

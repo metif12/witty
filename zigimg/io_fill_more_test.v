@@ -6,11 +6,11 @@ import os
 #flag -I @VMODROOT/zigimg/reference_probes
 #include "reference_probes/reader_exclusive/fixture_shims.h"
 
-fn C.witty_reader_exclusive_payload(&char, &u8, usize) int
+fn C.witty_reader_exclusive_payload(&char, &u8, uint) int
 fn C.witty_reader_delimiter_replace(int) int
-fn C.witty_reader_delimiter_seed(usize, usize) int
+fn C.witty_reader_delimiter_seed(uint, uint) int
 fn C.witty_reader_delimiter_cleanup() int
-fn C.witty_reader_delimiter_drain(&u8, usize) isize
+fn C.witty_reader_delimiter_drain(&u8, uint) int
 
 fn test_memory_fill_more_reports_eof_without_consuming_pending_bytes() {
 	for bytes in [[]u8{}, 'abc'.bytes()] {
@@ -51,7 +51,7 @@ fn test_fill_more_mode_transition_returns_zero_progress_before_streaming_read() 
 	$if !windows {
 		path := os.join_path(os.temp_dir(), 'witty-fill-more-transition-${os.getpid()}.owned')
 		data := []u8{len: 16, init: u8(index * 37 + 19)}
-		fd := C.witty_reader_exclusive_payload(path.str, data.data, usize(data.len))
+		fd := C.witty_reader_exclusive_payload(path.str, data.data, uint(data.len))
 		assert fd >= 0
 		defer { assert C.witty_reader_delimiter_cleanup() == 0 }
 		mut buffer := []u8{len: 8, init: 165}
@@ -63,7 +63,7 @@ fn test_fill_more_mode_transition_returns_zero_progress_before_streaming_read() 
 		assert reader.get_pos() == 0 && reader.buffered().len == 0
 		assert buffer == []u8{len: 8, init: 165}
 		mut wire := []u8{len: 8}
-		assert C.witty_reader_delimiter_drain(wire.data, usize(wire.len)) == 8
+		assert C.witty_reader_delimiter_drain(wire.data, uint(wire.len)) == 8
 		assert wire == []u8{len: 8, init: u8(index * 31 + 7)}
 		assert C.witty_reader_delimiter_seed(8, 8) == 0
 		reader.fill_more()!
@@ -84,7 +84,7 @@ fn test_fill_more_sticky_failure_retains_pending_and_consumed_cursors() {
 	$if !windows {
 		path := os.join_path(os.temp_dir(), 'witty-fill-more-sticky-${os.getpid()}.owned')
 		data := []u8{len: 16, init: u8(index * 37 + 19)}
-		fd := C.witty_reader_exclusive_payload(path.str, data.data, usize(data.len))
+		fd := C.witty_reader_exclusive_payload(path.str, data.data, uint(data.len))
 		assert fd >= 0
 		defer { assert C.witty_reader_delimiter_cleanup() == 0 }
 		mut buffer := []u8{len: 8, init: 165}

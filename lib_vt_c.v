@@ -103,7 +103,7 @@ fn ghostty_key_event_get_composing_export(raw voidptr) bool {
 }
 
 @[export: 'ghostty_key_event_set_utf8']
-fn ghostty_key_event_set_utf8_export(raw voidptr, utf8 &char, len usize) {
+fn ghostty_key_event_set_utf8_export(raw voidptr, utf8 &char, len uint) {
 	mut event := unsafe { &terminal_c.KeyEvent(raw) }
 	// The C API borrows this buffer. `tos` constructs the matching non-owning V
 	// string view; callers must keep it alive for the event's lifetime.
@@ -111,11 +111,11 @@ fn ghostty_key_event_set_utf8_export(raw voidptr, utf8 &char, len usize) {
 }
 
 @[export: 'ghostty_key_event_get_utf8']
-fn ghostty_key_event_get_utf8_export(raw voidptr, len &usize) &char {
+fn ghostty_key_event_get_utf8_export(raw voidptr, len &uint) &char {
 	event := unsafe { &terminal_c.KeyEvent(raw) }
 	if !isnil(len) {
 		unsafe {
-			*len = usize(event.event.utf8.len)
+			*len = uint(event.event.utf8.len)
 		}
 	}
 	if event.event.utf8.len == 0 {
@@ -180,7 +180,7 @@ fn ghostty_key_encoder_setopt_export(raw voidptr, option terminal_c.KeyEncoderOp
 }
 
 @[export: 'ghostty_key_encoder_encode']
-fn ghostty_key_encoder_encode_export(encoder_raw voidptr, event_raw voidptr, out &u8, out_len usize, written &usize) terminal_c.Result {
+fn ghostty_key_encoder_encode_export(encoder_raw voidptr, event_raw voidptr, out &u8, out_len uint, written &uint) terminal_c.Result {
 	if isnil(encoder_raw) || isnil(event_raw) || isnil(written) {
 		return .invalid_value
 	}
@@ -267,7 +267,7 @@ fn ghostty_osc_command_data_export(raw voidptr, data terminal_c.CommandData, out
 }
 
 @[export: 'ghostty_paste_is_safe']
-fn ghostty_paste_is_safe_export(data &char, len usize) bool {
+fn ghostty_paste_is_safe_export(data &char, len uint) bool {
 	value := if isnil(data) { '' } else { unsafe { tos(&u8(data), int(len)) } }
 	return terminal_c.paste_is_safe(value)
 }
@@ -310,7 +310,7 @@ fn ghostty_sgr_reset_export(raw voidptr) {
 }
 
 @[export: 'ghostty_sgr_set_params']
-fn ghostty_sgr_set_params_export(raw voidptr, params &u16, separators &u8, len usize) terminal_c.Result {
+fn ghostty_sgr_set_params_export(raw voidptr, params &u16, separators &u8, len uint) terminal_c.Result {
 	if isnil(raw) || (isnil(params) && len > 0) {
 		return .invalid_value
 	}
@@ -332,7 +332,7 @@ fn ghostty_sgr_next_export(raw voidptr, out &terminal_c.SgrAttributeC) bool {
 }
 
 @[export: 'ghostty_sgr_unknown_full']
-fn ghostty_sgr_unknown_full_export(unknown terminal_c.SgrUnknownC, out &voidptr) usize {
+fn ghostty_sgr_unknown_full_export(unknown terminal_c.SgrUnknownC, out &voidptr) uint {
 	ptr, len := terminal_c.sgr_unknown_full(unknown)
 	if !isnil(out) {
 		unsafe {
@@ -343,7 +343,7 @@ fn ghostty_sgr_unknown_full_export(unknown terminal_c.SgrUnknownC, out &voidptr)
 }
 
 @[export: 'ghostty_sgr_unknown_partial']
-fn ghostty_sgr_unknown_partial_export(unknown terminal_c.SgrUnknownC, out &voidptr) usize {
+fn ghostty_sgr_unknown_partial_export(unknown terminal_c.SgrUnknownC, out &voidptr) uint {
 	ptr, len := terminal_c.sgr_unknown_partial(unknown)
 	if !isnil(out) {
 		unsafe {

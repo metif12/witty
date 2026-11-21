@@ -162,7 +162,7 @@ fn test_message_discriminants_match_source_declaration_order() {
 }
 
 fn test_scroll_viewport_message_preserves_source_payload() {
-	wide_delta := isize(1_099_511_627_776)
+	wide_delta := int(1_099_511_627_776)
 	msg := Message(MessageScrollViewport{ scroll: terminal.ScrollViewport.from_delta(wide_delta) })
 	assert msg.kind() == .scroll_viewport
 	scroll := (msg as MessageScrollViewport).scroll

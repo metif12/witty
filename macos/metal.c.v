@@ -55,8 +55,8 @@ $if macos || ios {
 	fn C.macos_objc_msg_id0(obj ObjId, selector Sel) ObjId
 
 	fn C.macos_objc_msg_id1(obj ObjId, selector Sel, a0 voidptr) ObjId
-	fn C.witty_macos_nsstring(bytes &u8, length usize) ObjId
-	fn C.witty_macos_utf8_length(value ObjId) usize
+	fn C.witty_macos_nsstring(bytes &u8, length uint) ObjId
+	fn C.witty_macos_utf8_length(value ObjId) uint
 
 	fn C.macos_objc_msg_id2(obj ObjId, selector Sel, a0 voidptr, a1 voidptr) ObjId
 
@@ -104,13 +104,13 @@ $if macos || ios {
 
 	fn C.macos_sel_register_name(name &char) Sel
 
-	fn C.macos_objc_allocate_class_pair(superclass ObjId, name &char, extra_bytes usize) ObjId
+	fn C.macos_objc_allocate_class_pair(superclass ObjId, name &char, extra_bytes uint) ObjId
 
 	fn C.macos_objc_register_class_pair(cls ObjId)
 
 	fn C.macos_class_add_method(cls ObjId, name Sel, imp voidptr, types &char) bool
 
-	fn C.macos_class_add_ivar(cls ObjId, name &char, size usize, alignment u8, types &char) bool
+	fn C.macos_class_add_ivar(cls ObjId, name &char, size uint, alignment u8, types &char) bool
 
 	fn C.macos_class_add_protocol(cls ObjId, protocol ObjId) bool
 
@@ -118,7 +118,7 @@ $if macos || ios {
 
 	fn C.macos_objc_get_ptr_ivar(obj ObjId, name &char) voidptr
 
-	fn C.macos_set_associated_object(obj ObjId, key voidptr, value ObjId, policy usize)
+	fn C.macos_set_associated_object(obj ObjId, key voidptr, value ObjId, policy uint)
 
 	fn C.macos_get_associated_object(obj ObjId, key voidptr) ObjId
 
@@ -147,21 +147,21 @@ $if macos || ios {
 	fn C.witty_macos_observe(center voidptr, observer voidptr, selector voidptr, name voidptr, object voidptr)
 	fn C.witty_macos_dispatch_main_weak(view voidptr, callback voidptr)
 
-	fn C.witty_metal_new_buffer_length(device voidptr, length usize, options u64) voidptr
+	fn C.witty_metal_new_buffer_length(device voidptr, length uint, options u64) voidptr
 
-	fn C.witty_metal_new_buffer_bytes(device voidptr, bytes voidptr, length usize, options u64) voidptr
+	fn C.witty_metal_new_buffer_bytes(device voidptr, bytes voidptr, length uint, options u64) voidptr
 
-	fn C.witty_metal_buffer_length(buffer voidptr) usize
+	fn C.witty_metal_buffer_length(buffer voidptr) uint
 
 	fn C.witty_metal_buffer_contents(buffer voidptr) voidptr
 
-	fn C.witty_metal_buffer_did_modify(buffer voidptr, length usize)
+	fn C.witty_metal_buffer_did_modify(buffer voidptr, length uint)
 
-	fn C.witty_metal_new_texture(device voidptr, pixel_format u64, width usize, height usize, resource_options u64, usage u64) voidptr
+	fn C.witty_metal_new_texture(device voidptr, pixel_format u64, width uint, height uint, resource_options u64, usage u64) voidptr
 
-	fn C.witty_metal_texture_replace_region(texture voidptr, x usize, y usize, width usize, height usize, bytes voidptr, bytes_per_row usize)
+	fn C.witty_metal_texture_replace_region(texture voidptr, x uint, y uint, width uint, height uint, bytes voidptr, bytes_per_row uint)
 
-	fn C.witty_metal_texture_get_bytes(texture voidptr, bytes voidptr, bytes_per_row usize, x usize, y usize, width usize, height usize)
+	fn C.witty_metal_texture_get_bytes(texture voidptr, bytes voidptr, bytes_per_row uint, x uint, y uint, width uint, height uint)
 
 	fn C.witty_metal_command_buffer_commit(command_buffer voidptr)
 
@@ -175,30 +175,30 @@ $if macos || ios {
 
 	fn C.witty_metal_render_pass_descriptor() voidptr
 
-	fn C.witty_metal_render_pass_set_attachment(descriptor voidptr, index usize, texture voidptr, has_clear_color bool, color MetalClearColor)
+	fn C.witty_metal_render_pass_set_attachment(descriptor voidptr, index uint, texture voidptr, has_clear_color bool, color MetalClearColor)
 
 	fn C.witty_metal_encoder_set_pipeline(encoder voidptr, pipeline voidptr)
 
-	fn C.witty_metal_encoder_set_buffer(encoder voidptr, buffer voidptr, index usize)
+	fn C.witty_metal_encoder_set_buffer(encoder voidptr, buffer voidptr, index uint)
 
-	fn C.witty_metal_encoder_set_texture(encoder voidptr, texture voidptr, index usize)
+	fn C.witty_metal_encoder_set_texture(encoder voidptr, texture voidptr, index uint)
 
-	fn C.witty_metal_encoder_set_sampler(encoder voidptr, sampler voidptr, index usize)
+	fn C.witty_metal_encoder_set_sampler(encoder voidptr, sampler voidptr, index uint)
 
-	fn C.witty_metal_encoder_draw(encoder voidptr, primitive u64, vertex_count usize, instance_count usize)
+	fn C.witty_metal_encoder_draw(encoder voidptr, primitive u64, vertex_count uint, instance_count uint)
 
 	fn C.witty_metal_new_sampler(device voidptr, min_filter u64, mag_filter u64, s_address_mode u64, t_address_mode u64) voidptr
 
-	fn C.witty_metal_new_iosurface_texture(device voidptr, surface voidptr, pixel_format u64, width usize, height usize, resource_options u64, usage u64) voidptr
+	fn C.witty_metal_new_iosurface_texture(device voidptr, surface voidptr, pixel_format u64, width uint, height uint, resource_options u64, usage u64) voidptr
 
 	fn C.witty_metal_library_data(device voidptr, data voidptr, error &voidptr) voidptr
-	fn C.witty_metal_dispatch_data(data voidptr, length usize) voidptr
+	fn C.witty_metal_dispatch_data(data voidptr, length uint) voidptr
 	fn C.witty_metal_dispatch_release(data voidptr)
 	fn C.witty_metal_error_description(error voidptr) &char
 
-	fn C.witty_metal_new_library_source(device voidptr, source &char, length usize) voidptr
+	fn C.witty_metal_new_library_source(device voidptr, source &char, length uint) voidptr
 
-	fn C.witty_metal_new_pipeline(device voidptr, vertex_library voidptr, fragment_library voidptr, vertex_name &char, vertex_name_length usize, fragment_name &char, fragment_name_length usize, attributes &C.witty_metal_vertex_attribute, attribute_count usize, vertex_stride usize, step_function u64, attachments &C.witty_metal_pipeline_attachment, attachment_count usize) voidptr
+	fn C.witty_metal_new_pipeline(device voidptr, vertex_library voidptr, fragment_library voidptr, vertex_name &char, vertex_name_length uint, fragment_name &char, fragment_name_length uint, attributes &C.witty_metal_vertex_attribute, attribute_count uint, vertex_stride uint, step_function u64, attachments &C.witty_metal_pipeline_attachment, attachment_count uint) voidptr
 
 	fn C.witty_metal_iosurface_layer_new() voidptr
 
@@ -228,7 +228,7 @@ $if macos || ios {
 	pub struct C.witty_metal_vertex_attribute {
 	pub mut:
 		format u64
-		offset usize
+		offset uint
 	}
 
 	pub struct C.witty_metal_pipeline_attachment {
@@ -240,7 +240,7 @@ $if macos || ios {
 	pub struct MetalVertexAttribute {
 	pub:
 		format u64
-		offset usize
+		offset uint
 	}
 
 	pub struct MetalPipelineAttachment {
@@ -547,7 +547,7 @@ $if macos || ios {
 
 	@[inline]
 	fn nsstring(s string) ObjId {
-		return C.witty_macos_nsstring(s.str, usize(s.len))
+		return C.witty_macos_nsstring(s.str, uint(s.len))
 	}
 
 	fn objc_utf8_string(obj ObjId) string {
@@ -615,9 +615,9 @@ $if macos || ios {
 		if is_nil(values) {
 			return []string{}
 		}
-		count := usize(msg_u64(values, 'count'))
+		count := uint(msg_u64(values, 'count'))
 		mut result := []string{cap: int(count)}
-		for i in usize(0) .. count {
+		for i in uint(0) .. count {
 			value := msg_id_u64(values, 'objectAtIndex:', u64(i))
 			result << if is_nil(value) { '' } else { objc_utf8_string(value) }
 		}
@@ -734,7 +734,7 @@ $if macos || ios {
 		return msg_id(ObjId(device), 'newCommandQueue')
 	}
 
-	pub fn metal_new_buffer_length(device voidptr, length usize, options u64) voidptr {
+	pub fn metal_new_buffer_length(device voidptr, length uint, options u64) voidptr {
 		return C.witty_metal_new_buffer_length(device, length, options)
 	}
 
@@ -743,14 +743,14 @@ $if macos || ios {
 		if data.len > 0 {
 			bytes = voidptr(data.data)
 		}
-		return C.witty_metal_new_buffer_bytes(device, bytes, usize(data.len), options)
+		return C.witty_metal_new_buffer_bytes(device, bytes, uint(data.len), options)
 	}
 
-	pub fn metal_new_buffer_raw(device voidptr, data voidptr, length usize, options u64) voidptr {
+	pub fn metal_new_buffer_raw(device voidptr, data voidptr, length uint, options u64) voidptr {
 		return C.witty_metal_new_buffer_bytes(device, data, length, options)
 	}
 
-	pub fn metal_buffer_length(buffer voidptr) usize {
+	pub fn metal_buffer_length(buffer voidptr) uint {
 		return C.witty_metal_buffer_length(buffer)
 	}
 
@@ -758,22 +758,22 @@ $if macos || ios {
 		return C.witty_metal_buffer_contents(buffer)
 	}
 
-	pub fn metal_buffer_did_modify(buffer voidptr, length usize) {
+	pub fn metal_buffer_did_modify(buffer voidptr, length uint) {
 		C.witty_metal_buffer_did_modify(buffer, length)
 	}
 
-	pub fn metal_new_texture(device voidptr, pixel_format u64, width usize, height usize, resource_options u64, usage u64) voidptr {
+	pub fn metal_new_texture(device voidptr, pixel_format u64, width uint, height uint, resource_options u64, usage u64) voidptr {
 		return C.witty_metal_new_texture(device, pixel_format, width, height, resource_options, usage)
 	}
 
-	pub fn metal_texture_replace_region(texture voidptr, x usize, y usize, width usize, height usize, data []u8, bytes_per_row usize) {
+	pub fn metal_texture_replace_region(texture voidptr, x uint, y uint, width uint, height uint, data []u8, bytes_per_row uint) {
 		if data.len == 0 {
 			return
 		}
 		C.witty_metal_texture_replace_region(texture, x, y, width, height, voidptr(data.data), bytes_per_row)
 	}
 
-	pub fn metal_texture_get_bytes(texture voidptr, mut data []u8, bytes_per_row usize, x usize, y usize, width usize, height usize) {
+	pub fn metal_texture_get_bytes(texture voidptr, mut data []u8, bytes_per_row uint, x uint, y uint, width uint, height uint) {
 		if data.len == 0 {
 			return
 		}
@@ -806,7 +806,7 @@ $if macos || ios {
 		return C.witty_metal_render_pass_descriptor()
 	}
 
-	pub fn metal_render_pass_set_attachment(descriptor voidptr, index usize, texture voidptr, clear_color ?[4]f64) {
+	pub fn metal_render_pass_set_attachment(descriptor voidptr, index uint, texture voidptr, clear_color ?[4]f64) {
 		if color := clear_color {
 			C.witty_metal_render_pass_set_attachment(descriptor, index, texture, true, MetalClearColor{
 				red:   color[0]
@@ -823,19 +823,19 @@ $if macos || ios {
 		C.witty_metal_encoder_set_pipeline(encoder, pipeline)
 	}
 
-	pub fn metal_encoder_set_buffer(encoder voidptr, buffer voidptr, index usize) {
+	pub fn metal_encoder_set_buffer(encoder voidptr, buffer voidptr, index uint) {
 		C.witty_metal_encoder_set_buffer(encoder, buffer, index)
 	}
 
-	pub fn metal_encoder_set_texture(encoder voidptr, texture voidptr, index usize) {
+	pub fn metal_encoder_set_texture(encoder voidptr, texture voidptr, index uint) {
 		C.witty_metal_encoder_set_texture(encoder, texture, index)
 	}
 
-	pub fn metal_encoder_set_sampler(encoder voidptr, sampler voidptr, index usize) {
+	pub fn metal_encoder_set_sampler(encoder voidptr, sampler voidptr, index uint) {
 		C.witty_metal_encoder_set_sampler(encoder, sampler, index)
 	}
 
-	pub fn metal_encoder_draw(encoder voidptr, primitive u64, vertex_count usize, instance_count usize) {
+	pub fn metal_encoder_draw(encoder voidptr, primitive u64, vertex_count uint, instance_count uint) {
 		C.witty_metal_encoder_draw(encoder, primitive, vertex_count, instance_count)
 	}
 
@@ -843,15 +843,15 @@ $if macos || ios {
 		return C.witty_metal_new_sampler(device, min_filter, mag_filter, s_address_mode, t_address_mode)
 	}
 
-	pub fn metal_new_iosurface_texture(device voidptr, surface voidptr, pixel_format u64, width usize, height usize, resource_options u64, usage u64) voidptr {
+	pub fn metal_new_iosurface_texture(device voidptr, surface voidptr, pixel_format u64, width uint, height uint, resource_options u64, usage u64) voidptr {
 		return C.witty_metal_new_iosurface_texture(device, surface, pixel_format, width, height, resource_options, usage)
 	}
 
 	pub fn metal_new_library_source(device voidptr, source string) voidptr {
-		return C.witty_metal_new_library_source(device, &char(source.str), usize(source.len))
+		return C.witty_metal_new_library_source(device, &char(source.str), uint(source.len))
 	}
 
-	pub fn metal_new_pipeline(device voidptr, vertex_library voidptr, fragment_library voidptr, vertex_name string, fragment_name string, attributes []MetalVertexAttribute, vertex_stride usize, step_function u64, attachments []MetalPipelineAttachment) voidptr {
+	pub fn metal_new_pipeline(device voidptr, vertex_library voidptr, fragment_library voidptr, vertex_name string, fragment_name string, attributes []MetalVertexAttribute, vertex_stride uint, step_function u64, attachments []MetalPipelineAttachment) voidptr {
 		mut c_attributes := []C.witty_metal_vertex_attribute{cap: attributes.len}
 		for attribute in attributes {
 			c_attributes << C.witty_metal_vertex_attribute{
@@ -878,7 +878,7 @@ $if macos || ios {
 				attachment_ptr = &c_attachments[0]
 			}
 		}
-		return C.witty_metal_new_pipeline(device, vertex_library, fragment_library, &char(vertex_name.str), usize(vertex_name.len), &char(fragment_name.str), usize(fragment_name.len), attrs, usize(attributes.len), vertex_stride, step_function, attachment_ptr, usize(attachments.len))
+		return C.witty_metal_new_pipeline(device, vertex_library, fragment_library, &char(vertex_name.str), uint(vertex_name.len), &char(fragment_name.str), uint(fragment_name.len), attrs, uint(attributes.len), vertex_stride, step_function, attachment_ptr, uint(attachments.len))
 	}
 
 	pub fn metal_iosurface_layer_new() voidptr {
@@ -939,7 +939,7 @@ $if macos || ios {
 	// Built-in shaders use compiled library data. Custom ShaderToy shaders retain
 	// their separate source-compilation API, as in the original renderer.
 	pub fn metal_new_library_data(device voidptr, bytes []u8) !voidptr {
-		data := C.witty_metal_dispatch_data(bytes.data, usize(bytes.len))
+		data := C.witty_metal_dispatch_data(bytes.data, uint(bytes.len))
 		if isnil(data) { return error('OutOfMemory') }
 		defer { C.witty_metal_dispatch_release(data) }
 		mut native_error := voidptr(unsafe { nil })

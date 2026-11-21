@@ -55,7 +55,7 @@ fn iterator_case[T](parts []string) string {
 		value := if operation[0] == `n` {
 			if result := iter.next() { 'v${u64(result)}' } else { '-' }
 		} else {
-			'h${int(iter.has_at_least(usize(operation[1..].u64())))}'
+			'h${int(iter.has_at_least(uint(operation[1..].u64())))}'
 		}
 		output << '${value}/${iter.idx}/${int(iter.next_is_sub)}/${int(iter.is_empty)}'
 	}
@@ -99,7 +99,7 @@ fn main() {
 			8 { trap[int]('2147483648', false) } 9 { trap[int]('2147483650', true) }
 			10 { trap[u64]('18446744073709551616', false) } 11 { trap[u64]('18446744073709551620', true) }
 			12 { trap[i64]('9223372036854775808', false) } 13 { trap[i64]('9223372036854775810', true) }
-			14 { trap[usize]('18446744073709551616', false) } 15 { trap[isize]('9223372036854775810', true) }
+			14 { trap[uint]('18446744073709551616', false) } 15 { trap[int]('9223372036854775810', true) }
 			else { panic('invalid trap') }
 		}
 		return
@@ -114,7 +114,7 @@ fn main() {
 			'I' { match parts[1].int() {
 				0 { iterator_case[u8](parts) } 1 { iterator_case[u16](parts) } 2 { iterator_case[i16](parts) }
 				3 { iterator_case[u32](parts) } 4 { iterator_case[int](parts) } 5 { iterator_case[u64](parts) }
-				6 { iterator_case[i64](parts) } 7 { iterator_case[usize](parts) } 8 { iterator_case[isize](parts) }
+				6 { iterator_case[i64](parts) } 7 { iterator_case[uint](parts) } 8 { iterator_case[int](parts) }
 				9 { iterator_case[ParamAlias](parts) }
 				else { panic('invalid integer type') }
 			} }

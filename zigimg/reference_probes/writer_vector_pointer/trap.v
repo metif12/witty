@@ -23,9 +23,9 @@ fn run() ! {
 	observed_buffer = unsafe { buffer }
 	at_exit(observe)!
 	mut status := 'ok'
-	options := zigimg.FormatOptions{ width: ~usize(0), precision: ~usize(0), alignment: .left, fill: `_` }
-	depth := usize(os.args[4].u64())
-	pointer := unsafe { &u8(usize(0x12)) }
+	options := zigimg.FormatOptions{ width: ~uint(0), precision: ~uint(0), alignment: .left, fill: `_` }
+	depth := uint(os.args[4].u64())
+	pointer := unsafe { &u8(uint(0x12)) }
 	present := ?&u8(pointer)
 	absent := ?&u8(none)
 	match os.args[3] {
@@ -36,7 +36,7 @@ fn run() ! {
 			writer.print_vector('any', options, [present, present]!, depth) or { status = err.msg() }
 		}
 		'2' {
-			writer.print_vector('any', options, [voidptr(usize(0x12)), voidptr(usize(0x12))]!, depth) or { status = err.msg() }
+			writer.print_vector('any', options, [voidptr(uint(0x12)), voidptr(uint(0x12))]!, depth) or { status = err.msg() }
 		}
 		'3' {
 			writer.print_vector('any', options, [absent, present]!, depth) or { status = err.msg() }

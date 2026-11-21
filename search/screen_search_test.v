@@ -3,7 +3,7 @@ module search
 import highlight
 import terminal
 
-const screen_search_test_max_scrollback = usize(0xffffffffffffffff)
+const screen_search_test_max_scrollback = uint(0xffffffffffffffff)
 
 fn screen_pt(x u16, y u32) terminal.Point {
 	return terminal.Point.new(.screen, terminal.Coordinate{ x: x, y: y })
@@ -27,7 +27,7 @@ fn selected_untracked(searcher &ScreenSearch) highlight.Untracked {
 // Feed newlines until the page list has `pages` pages and then scroll a
 // full screen, like the `while (list.totalPages() < n)` setup loops in the
 // upstream tests.
-fn grow_to_pages(mut t terminal.Terminal, mut s terminal.ReadonlyStream, pages usize) ! {
+fn grow_to_pages(mut t terminal.Terminal, mut s terminal.ReadonlyStream, pages uint) ! {
 	for t.screens.active.pages.total_pages() < pages {
 		s.next_slice('\r\n'.bytes())!
 	}

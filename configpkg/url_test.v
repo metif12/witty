@@ -5,7 +5,7 @@ import oniguruma
 struct UrlRegexCase {
 	input       string
 	expect      string
-	num_matches usize = 1
+	num_matches uint = 1
 }
 
 fn test_default_url_regex_matches_pinned_oniguruma_cases() {

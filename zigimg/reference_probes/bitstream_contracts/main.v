@@ -31,8 +31,8 @@ type Alias4 = i8
 type Alias5 = i16
 type Alias6 = int
 type Alias7 = i64
-type Alias8 = usize
-type Alias9 = isize
+type Alias8 = uint
+type Alias9 = int
 type Alias10 = f32
 type Alias11 = f64
 type AliasBool = bool
@@ -253,8 +253,8 @@ fn dispatch[E](f []string) {
 		5 { run[E, i16](f) }
 		6 { run[E, int](f) }
 		7 { run[E, i64](f) }
-		8 { run[E, usize](f) }
-		9 { run[E, isize](f) }
+		8 { run[E, uint](f) }
+		9 { run[E, int](f) }
 		10 { run[E, f32](f) }
 		11 { run[E, f64](f) }
 		12 { run[E, Alias0](f) }

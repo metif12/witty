@@ -271,8 +271,8 @@ fn main() {
 				}
 				2 {
 					codec.bitmap.photometric_interpretation = fields[3].u16()
-					codec.uncompress_ccitt(mut stream, mut destination, usize(fields[5].u64()),
-						usize(fields[6].u64())) or { status = err.msg() }
+					codec.uncompress_ccitt(mut stream, mut destination, uint(fields[5].u64()),
+						uint(fields[6].u64())) or { status = err.msg() }
 				}
 				else {}
 			}
@@ -291,7 +291,7 @@ fn main() {
 			codec.bitmap.rows_per_strip = fields[7].u32()
 			bits := numbers(fields[9])
 			codec.bitmap.samples_per_pixel = u16(bits.len)
-			codec.bitmap.bits_per_sample.resize(usize(bits.len))
+			codec.bitmap.bits_per_sample.resize(uint(bits.len))
 			for index, value in bits {
 				codec.bitmap.bits_per_sample.data[index] = u16(value)
 			}
@@ -306,7 +306,7 @@ fn main() {
 					a: 255
 				}
 			}
-			mut pixels := zigimg.PixelStorage.init(formats[fields[1].int()], usize(fields[8].u64())) or {
+			mut pixels := zigimg.PixelStorage.init(formats[fields[1].int()], uint(fields[8].u64())) or {
 				panic(err)
 			}
 			initialize(mut pixels)

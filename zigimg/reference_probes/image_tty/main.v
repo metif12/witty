@@ -17,8 +17,8 @@ fn C.witty_image_tty_session() int
 fn C.witty_image_tty_refs() int
 fn C.witty_image_tty_raw(int, int) int
 fn C.witty_image_tty_raw_close(int) int
-fn C.witty_image_tty_seed(&u8, usize) isize
-fn C.witty_image_tty_read(int, &u8, usize) isize
+fn C.witty_image_tty_seed(&u8, uint) int
+fn C.witty_image_tty_read(int, &u8, uint) int
 
 __global (
 	observed_path        string
@@ -142,7 +142,7 @@ fn snapshot(drain bool) string {
 	if drain {
 		mut bytes := []u8{len: 4096}
 		for {
-			n := C.witty_image_tty_read(0, bytes.data, usize(bytes.len))
+			n := C.witty_image_tty_read(0, bytes.data, uint(bytes.len))
 			if n <= 0 {
 				observed_drain = int(n)
 				break
@@ -150,7 +150,7 @@ fn snapshot(drain bool) string {
 			observed_wire << bytes[..int(n)]
 		}
 		for {
-			n := C.witty_image_tty_read(1, bytes.data, usize(bytes.len))
+			n := C.witty_image_tty_read(1, bytes.data, uint(bytes.len))
 			if n <= 0 {
 				observed_drain_input = int(n)
 				break
@@ -206,7 +206,7 @@ fn record(line string) string {
 		if C.witty_image_tty_cleanup() != 0 { panic('PTY cleanup failed') }
 	}
 	seed := hex.decode(f[8]) or { panic(err) }
-	if seed.len > 0 && C.witty_image_tty_seed(seed.data, usize(seed.len)) != seed.len {
+	if seed.len > 0 && C.witty_image_tty_seed(seed.data, uint(seed.len)) != seed.len {
 		panic('PTY seed failed')
 	}
 	observed_wire = []u8{}

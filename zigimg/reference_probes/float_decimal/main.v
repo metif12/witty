@@ -20,7 +20,7 @@ fn scalar(value p.FloatDecimal64) string {
 
 fn state() string {
 	view := if observed_has_view {
-		'${observed_view.len}:${usize(observed_view.data) - usize(observed_buffer.data)}:${observed_view.hex()}'
+		'${observed_view.len}:${uint(observed_view.data) - uint(observed_buffer.data)}:${observed_view.hex()}'
 	} else {
 		'-'
 	}
@@ -47,7 +47,7 @@ fn record(line string) string {
 		exponent: f[5].int()
 		sign:     f[6] == '1'
 	}
-	precision := if f[7] == '-' { ?usize(none) } else { ?usize(usize(f[7].u64())) }
+	precision := if f[7] == '-' { ?uint(none) } else { ?uint(uint(f[7].u64())) }
 	observed_config = line.replace('|', ',')
 	observed_value = value
 	observed_copy = value

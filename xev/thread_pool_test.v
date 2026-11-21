@@ -120,7 +120,7 @@ mut:
 
 // @fieldParentPtr("task", t)
 fn thread_pool_test_parent(t &ThreadPoolTask) &ThreadPoolTestTask {
-	return unsafe { &ThreadPoolTestTask(voidptr(usize(t) - __offsetof(ThreadPoolTestTask, task))) }
+	return unsafe { &ThreadPoolTestTask(voidptr(uint(t) - __offsetof(ThreadPoolTestTask, task))) }
 }
 
 fn thread_pool_test_callback(t &ThreadPoolTask) {
@@ -213,7 +213,7 @@ fn thread_pool_test_run_batch(max_threads u32, n int) {
 	for i in 0 .. tasks.len {
 		batch.push(ThreadPoolBatch.from(&tasks[i].task))
 	}
-	assert batch.len == usize(n)
+	assert batch.len == uint(n)
 	pool.schedule(batch)
 	wg.wait()
 	for t in tasks {

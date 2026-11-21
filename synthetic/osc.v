@@ -49,26 +49,26 @@ pub fn (mut self Osc) generator() Generator {
 	return self
 }
 
-pub fn (mut self Osc) next(max_len usize) ![]u8 {
+pub fn (mut self Osc) next(max_len uint) ![]u8 {
 	mut writer := CollectingWriter{}
 	self.next_writer(mut writer, max_len)!
 	return writer.data
 }
 
-pub fn (mut self Osc) next_writer(mut writer io.Writer, max_len usize) ! {
+pub fn (mut self Osc) next_writer(mut writer io.Writer, max_len uint) ! {
 	assert max_len >= 3
 	source_write_all(mut writer, [u8(0x1b), `]`])!
 	self.next_unwrapped_writer(mut writer, max_len - 3)!
 	source_write_all(mut writer, [u8(7)])!
 }
 
-fn (mut self Osc) next_unwrapped(max_len usize) ![]u8 {
+fn (mut self Osc) next_unwrapped(max_len uint) ![]u8 {
 	mut writer := CollectingWriter{}
 	self.next_unwrapped_writer(mut writer, max_len)!
 	return writer.data
 }
 
-fn (mut self Osc) next_unwrapped_writer(mut writer io.Writer, max_len usize) ! {
+fn (mut self Osc) next_unwrapped_writer(mut writer io.Writer, max_len uint) ! {
 	match self.choose_validity() {
 		.valid {
 			idx := source_weighted_index(mut self.rng, self.p_valid_kind[..])
@@ -81,13 +81,13 @@ fn (mut self Osc) next_unwrapped_writer(mut writer io.Writer, max_len usize) ! {
 	}
 }
 
-fn (mut self Osc) next_unwrapped_valid_exact(kind OscValidKind, max_len usize) ![]u8 {
+fn (mut self Osc) next_unwrapped_valid_exact(kind OscValidKind, max_len uint) ![]u8 {
 	mut writer := CollectingWriter{}
 	self.next_unwrapped_valid_writer(mut writer, kind, max_len)!
 	return writer.data
 }
 
-fn (mut self Osc) next_unwrapped_valid_writer(mut writer io.Writer, kind OscValidKind, max_len usize) ! {
+fn (mut self Osc) next_unwrapped_valid_writer(mut writer io.Writer, kind OscValidKind, max_len uint) ! {
 	match kind {
 		.change_window_title {
 			if max_len < 3 { return }
@@ -130,15 +130,15 @@ fn (mut self Osc) next_unwrapped_valid_writer(mut writer io.Writer, kind OscVali
 			remaining -= 5
 			if self.random_bool() {
 				prefix := ';cmdline_url='
-				if remaining < usize(prefix.len + 1) { return }
+				if remaining < uint(prefix.len + 1) { return }
 				source_write_all(mut writer, prefix.bytes())!
-				remaining -= usize(prefix.len)
+				remaining -= uint(prefix.len)
 				mut fixed := FixedWriter{
 					buffer: []u8{len: 128}
 				}
 				self.write_bytes(mut fixed, synthetic_min_usize(remaining, 128), osc_ascii_alphabet)!
 				source_url_percent_encode(mut writer, fixed.buffer[..fixed.end])!
-				remaining -= usize(fixed.end)
+				remaining -= uint(fixed.end)
 			}
 		}
 		.end_of_command {
@@ -158,10 +158,10 @@ fn (mut self Osc) next_unwrapped_valid_writer(mut writer io.Writer, kind OscVali
 		}
 		.rxvt_notify {
 			prefix := '777;notify;'
-			if max_len < usize(prefix.len) { return }
+			if max_len < uint(prefix.len) { return }
 			mut remaining := max_len
 			source_write_all(mut writer, prefix.bytes())!
-			remaining -= usize(prefix.len)
+			remaining -= uint(prefix.len)
 			remaining -= self.write_bytes(mut writer,
 				synthetic_min_usize(source_sub(remaining, 2), 32), osc_kv_alphabet)!
 			source_write_all(mut writer, ';'.bytes())!
@@ -182,11 +182,11 @@ fn (mut self Osc) next_unwrapped_valid_writer(mut writer io.Writer, kind OscVali
 		}
 		.report_pwd {
 			prefix := '7;file://localhost'
-			if max_len < usize(prefix.len) { return }
+			if max_len < uint(prefix.len) { return }
 			mut remaining := max_len
 			source_write_all(mut writer, prefix.bytes())!
-			remaining -= usize(prefix.len)
-			count := source_range(mut self.rng, 2, 5, int(sizeof(usize) * 8))
+			remaining -= uint(prefix.len)
+			count := source_range(mut self.rng, 2, 5, int(sizeof(uint) * 8))
 			for _ in u64(0) .. count {
 				source_write_all(mut writer, '/'.bytes())!
 				remaining = source_sub(remaining, 1)
@@ -201,7 +201,7 @@ fn (mut self Osc) next_unwrapped_valid_writer(mut writer io.Writer, kind OscVali
 				self.write_bytes(mut writer, 16, osc_alphanumeric_alphabet)!
 			}
 			source_write_all(mut writer, ';https://localhost'.bytes())!
-			count := source_range(mut self.rng, 2, 5, int(sizeof(usize) * 8))
+			count := source_range(mut self.rng, 2, 5, int(sizeof(uint) * 8))
 			for _ in u64(0) .. count {
 				source_write_all(mut writer, '/'.bytes())!
 				self.write_bytes(mut writer, 16, osc_alphanumeric_alphabet)!
@@ -231,13 +231,13 @@ fn (mut self Osc) next_unwrapped_valid_writer(mut writer io.Writer, kind OscVali
 	}
 }
 
-fn (mut self Osc) next_unwrapped_invalid_exact(kind OscInvalidKind, max_len usize) ![]u8 {
+fn (mut self Osc) next_unwrapped_invalid_exact(kind OscInvalidKind, max_len uint) ![]u8 {
 	mut writer := CollectingWriter{}
 	self.next_unwrapped_invalid_writer(mut writer, kind, max_len)!
 	return writer.data
 }
 
-fn (mut self Osc) next_unwrapped_invalid_writer(mut writer io.Writer, kind OscInvalidKind, max_len usize) ! {
+fn (mut self Osc) next_unwrapped_invalid_writer(mut writer io.Writer, kind OscInvalidKind, max_len uint) ! {
 	match kind {
 		.random {
 			self.write_bytes(mut writer, max_len, osc_alphabet)!
@@ -249,7 +249,7 @@ fn (mut self Osc) next_unwrapped_invalid_writer(mut writer io.Writer, kind OscIn
 	}
 }
 
-fn (mut self Osc) write_bytes(mut writer io.Writer, max_len usize, alphabet []u8) !usize {
+fn (mut self Osc) write_bytes(mut writer io.Writer, max_len uint, alphabet []u8) !uint {
 	mut bytes := self.bytes().new_alphabet(alphabet).at_most(max_len)
 	return bytes.write_writer(mut writer)
 }

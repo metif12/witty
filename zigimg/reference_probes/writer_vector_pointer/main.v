@@ -9,12 +9,12 @@ import zigimg
 
 fn C.witty_writer_seek_setup(&char) int
 fn C.witty_writer_seek_replace(int) int
-fn C.witty_writer_seek_restore(&char, usize) int
+fn C.witty_writer_seek_restore(&char, uint) int
 fn C.witty_writer_seek_close() int
 fn C.witty_writer_seek_cleanup() int
 fn C.witty_writer_seek_valid() int
-fn C.witty_writer_seek_view(&u8, usize) isize
-fn C.witty_writer_seek_drain(&u8, usize) isize
+fn C.witty_writer_seek_view(&u8, uint) int
+fn C.witty_writer_seek_drain(&u8, uint) int
 
 __global (
 	seen string
@@ -30,48 +30,48 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 	raw := f[8].u64()
 	options := zigimg.FormatOptions{
 		width:     if f[10] == '-' {
-			?usize(none)
+			?uint(none)
 		} else {
-			?usize(usize(f[10].u64()))
+			?uint(uint(f[10].u64()))
 		}
-		precision: if f[11] == '-' { ?usize(none) } else { ?usize(usize(f[11].u64())) }
+		precision: if f[11] == '-' { ?uint(none) } else { ?uint(uint(f[11].u64())) }
 		alignment: unsafe { zigimg.Alignment(f[14].int()) }
 		fill:      u8(f[15].int())
 	}
-	depth := usize(f[13].u64())
+	depth := uint(f[13].u64())
 	match f[0].int() {
 		0 {
 			match f[12].int() {
 				1 {
-					lane0 := unsafe { &u8(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &u8(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				3 {
-					lane0 := unsafe { &u8(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &u8(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &u8(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &u8(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &u8(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &u8(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				8 {
-					lane0 := unsafe { &u8(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &u8(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &u8(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
-					lane3 := unsafe { &u8(voidptr(usize((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
-					lane4 := unsafe { &u8(voidptr(usize((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
-					lane5 := unsafe { &u8(voidptr(usize((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
-					lane6 := unsafe { &u8(voidptr(usize((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
-					lane7 := unsafe { &u8(voidptr(usize((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &u8(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &u8(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &u8(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane3 := unsafe { &u8(voidptr(uint((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
+					lane4 := unsafe { &u8(voidptr(uint((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
+					lane5 := unsafe { &u8(voidptr(uint((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
+					lane6 := unsafe { &u8(voidptr(uint((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
+					lane7 := unsafe { &u8(voidptr(uint((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
@@ -81,35 +81,35 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 		1 {
 			match f[12].int() {
 				1 {
-					lane0 := unsafe { &u16(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &u16(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				3 {
-					lane0 := unsafe { &u16(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &u16(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &u16(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &u16(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &u16(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &u16(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				8 {
-					lane0 := unsafe { &u16(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &u16(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &u16(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
-					lane3 := unsafe { &u16(voidptr(usize((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
-					lane4 := unsafe { &u16(voidptr(usize((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
-					lane5 := unsafe { &u16(voidptr(usize((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
-					lane6 := unsafe { &u16(voidptr(usize((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
-					lane7 := unsafe { &u16(voidptr(usize((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &u16(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &u16(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &u16(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane3 := unsafe { &u16(voidptr(uint((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
+					lane4 := unsafe { &u16(voidptr(uint((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
+					lane5 := unsafe { &u16(voidptr(uint((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
+					lane6 := unsafe { &u16(voidptr(uint((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
+					lane7 := unsafe { &u16(voidptr(uint((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
@@ -119,35 +119,35 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 		2 {
 			match f[12].int() {
 				1 {
-					lane0 := unsafe { &u32(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &u32(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				3 {
-					lane0 := unsafe { &u32(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &u32(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &u32(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &u32(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &u32(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &u32(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				8 {
-					lane0 := unsafe { &u32(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &u32(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &u32(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
-					lane3 := unsafe { &u32(voidptr(usize((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
-					lane4 := unsafe { &u32(voidptr(usize((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
-					lane5 := unsafe { &u32(voidptr(usize((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
-					lane6 := unsafe { &u32(voidptr(usize((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
-					lane7 := unsafe { &u32(voidptr(usize((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &u32(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &u32(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &u32(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane3 := unsafe { &u32(voidptr(uint((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
+					lane4 := unsafe { &u32(voidptr(uint((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
+					lane5 := unsafe { &u32(voidptr(uint((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
+					lane6 := unsafe { &u32(voidptr(uint((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
+					lane7 := unsafe { &u32(voidptr(uint((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
@@ -157,35 +157,35 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 		3 {
 			match f[12].int() {
 				1 {
-					lane0 := unsafe { &u64(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &u64(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				3 {
-					lane0 := unsafe { &u64(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &u64(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &u64(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &u64(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &u64(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &u64(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				8 {
-					lane0 := unsafe { &u64(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &u64(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &u64(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
-					lane3 := unsafe { &u64(voidptr(usize((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
-					lane4 := unsafe { &u64(voidptr(usize((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
-					lane5 := unsafe { &u64(voidptr(usize((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
-					lane6 := unsafe { &u64(voidptr(usize((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
-					lane7 := unsafe { &u64(voidptr(usize((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &u64(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &u64(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &u64(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane3 := unsafe { &u64(voidptr(uint((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
+					lane4 := unsafe { &u64(voidptr(uint((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
+					lane5 := unsafe { &u64(voidptr(uint((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
+					lane6 := unsafe { &u64(voidptr(uint((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
+					lane7 := unsafe { &u64(voidptr(uint((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
@@ -195,35 +195,35 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 		4 {
 			match f[12].int() {
 				1 {
-					lane0 := unsafe { &usize(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &uint(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				3 {
-					lane0 := unsafe { &usize(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &usize(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &usize(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &uint(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &uint(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &uint(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				8 {
-					lane0 := unsafe { &usize(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &usize(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &usize(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
-					lane3 := unsafe { &usize(voidptr(usize((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
-					lane4 := unsafe { &usize(voidptr(usize((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
-					lane5 := unsafe { &usize(voidptr(usize((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
-					lane6 := unsafe { &usize(voidptr(usize((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
-					lane7 := unsafe { &usize(voidptr(usize((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &uint(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &uint(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &uint(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane3 := unsafe { &uint(voidptr(uint((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
+					lane4 := unsafe { &uint(voidptr(uint((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
+					lane5 := unsafe { &uint(voidptr(uint((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
+					lane6 := unsafe { &uint(voidptr(uint((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
+					lane7 := unsafe { &uint(voidptr(uint((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
@@ -233,35 +233,35 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 		5 {
 			match f[12].int() {
 				1 {
-					lane0 := unsafe { &i8(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &i8(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				3 {
-					lane0 := unsafe { &i8(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &i8(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &i8(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &i8(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &i8(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &i8(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				8 {
-					lane0 := unsafe { &i8(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &i8(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &i8(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
-					lane3 := unsafe { &i8(voidptr(usize((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
-					lane4 := unsafe { &i8(voidptr(usize((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
-					lane5 := unsafe { &i8(voidptr(usize((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
-					lane6 := unsafe { &i8(voidptr(usize((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
-					lane7 := unsafe { &i8(voidptr(usize((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &i8(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &i8(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &i8(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane3 := unsafe { &i8(voidptr(uint((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
+					lane4 := unsafe { &i8(voidptr(uint((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
+					lane5 := unsafe { &i8(voidptr(uint((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
+					lane6 := unsafe { &i8(voidptr(uint((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
+					lane7 := unsafe { &i8(voidptr(uint((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
@@ -271,35 +271,35 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 		6 {
 			match f[12].int() {
 				1 {
-					lane0 := unsafe { &i16(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &i16(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				3 {
-					lane0 := unsafe { &i16(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &i16(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &i16(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &i16(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &i16(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &i16(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				8 {
-					lane0 := unsafe { &i16(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &i16(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &i16(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
-					lane3 := unsafe { &i16(voidptr(usize((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
-					lane4 := unsafe { &i16(voidptr(usize((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
-					lane5 := unsafe { &i16(voidptr(usize((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
-					lane6 := unsafe { &i16(voidptr(usize((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
-					lane7 := unsafe { &i16(voidptr(usize((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &i16(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &i16(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &i16(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane3 := unsafe { &i16(voidptr(uint((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
+					lane4 := unsafe { &i16(voidptr(uint((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
+					lane5 := unsafe { &i16(voidptr(uint((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
+					lane6 := unsafe { &i16(voidptr(uint((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
+					lane7 := unsafe { &i16(voidptr(uint((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
@@ -309,35 +309,35 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 		7 {
 			match f[12].int() {
 				1 {
-					lane0 := unsafe { &int(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &int(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				3 {
-					lane0 := unsafe { &int(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &int(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &int(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &int(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &int(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &int(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				8 {
-					lane0 := unsafe { &int(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &int(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &int(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
-					lane3 := unsafe { &int(voidptr(usize((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
-					lane4 := unsafe { &int(voidptr(usize((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
-					lane5 := unsafe { &int(voidptr(usize((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
-					lane6 := unsafe { &int(voidptr(usize((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
-					lane7 := unsafe { &int(voidptr(usize((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &int(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &int(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &int(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane3 := unsafe { &int(voidptr(uint((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
+					lane4 := unsafe { &int(voidptr(uint((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
+					lane5 := unsafe { &int(voidptr(uint((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
+					lane6 := unsafe { &int(voidptr(uint((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
+					lane7 := unsafe { &int(voidptr(uint((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
@@ -347,35 +347,35 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 		8 {
 			match f[12].int() {
 				1 {
-					lane0 := unsafe { &i64(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &i64(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				3 {
-					lane0 := unsafe { &i64(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &i64(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &i64(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &i64(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &i64(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &i64(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				8 {
-					lane0 := unsafe { &i64(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &i64(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &i64(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
-					lane3 := unsafe { &i64(voidptr(usize((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
-					lane4 := unsafe { &i64(voidptr(usize((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
-					lane5 := unsafe { &i64(voidptr(usize((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
-					lane6 := unsafe { &i64(voidptr(usize((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
-					lane7 := unsafe { &i64(voidptr(usize((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &i64(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &i64(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &i64(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane3 := unsafe { &i64(voidptr(uint((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
+					lane4 := unsafe { &i64(voidptr(uint((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
+					lane5 := unsafe { &i64(voidptr(uint((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
+					lane6 := unsafe { &i64(voidptr(uint((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
+					lane7 := unsafe { &i64(voidptr(uint((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
@@ -385,35 +385,35 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 		9 {
 			match f[12].int() {
 				1 {
-					lane0 := unsafe { &isize(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &int(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				3 {
-					lane0 := unsafe { &isize(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &isize(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &isize(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &int(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &int(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &int(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				8 {
-					lane0 := unsafe { &isize(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &isize(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &isize(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
-					lane3 := unsafe { &isize(voidptr(usize((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
-					lane4 := unsafe { &isize(voidptr(usize((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
-					lane5 := unsafe { &isize(voidptr(usize((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
-					lane6 := unsafe { &isize(voidptr(usize((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
-					lane7 := unsafe { &isize(voidptr(usize((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &int(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &int(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &int(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane3 := unsafe { &int(voidptr(uint((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
+					lane4 := unsafe { &int(voidptr(uint((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
+					lane5 := unsafe { &int(voidptr(uint((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
+					lane6 := unsafe { &int(voidptr(uint((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
+					lane7 := unsafe { &int(voidptr(uint((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
@@ -423,35 +423,35 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 		10 {
 			match f[12].int() {
 				1 {
-					lane0 := unsafe { &f32(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &f32(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				3 {
-					lane0 := unsafe { &f32(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &f32(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &f32(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &f32(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &f32(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &f32(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				8 {
-					lane0 := unsafe { &f32(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &f32(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &f32(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
-					lane3 := unsafe { &f32(voidptr(usize((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
-					lane4 := unsafe { &f32(voidptr(usize((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
-					lane5 := unsafe { &f32(voidptr(usize((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
-					lane6 := unsafe { &f32(voidptr(usize((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
-					lane7 := unsafe { &f32(voidptr(usize((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &f32(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &f32(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &f32(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane3 := unsafe { &f32(voidptr(uint((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
+					lane4 := unsafe { &f32(voidptr(uint((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
+					lane5 := unsafe { &f32(voidptr(uint((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
+					lane6 := unsafe { &f32(voidptr(uint((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
+					lane7 := unsafe { &f32(voidptr(uint((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
@@ -461,35 +461,35 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 		11 {
 			match f[12].int() {
 				1 {
-					lane0 := unsafe { &f64(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &f64(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				3 {
-					lane0 := unsafe { &f64(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &f64(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &f64(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &f64(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &f64(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &f64(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				8 {
-					lane0 := unsafe { &f64(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &f64(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &f64(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
-					lane3 := unsafe { &f64(voidptr(usize((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
-					lane4 := unsafe { &f64(voidptr(usize((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
-					lane5 := unsafe { &f64(voidptr(usize((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
-					lane6 := unsafe { &f64(voidptr(usize((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
-					lane7 := unsafe { &f64(voidptr(usize((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &f64(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &f64(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &f64(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane3 := unsafe { &f64(voidptr(uint((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
+					lane4 := unsafe { &f64(voidptr(uint((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
+					lane5 := unsafe { &f64(voidptr(uint((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
+					lane6 := unsafe { &f64(voidptr(uint((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
+					lane7 := unsafe { &f64(voidptr(uint((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
@@ -499,35 +499,35 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 		12 {
 			match f[12].int() {
 				1 {
-					lane0 := unsafe { &bool(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &bool(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				3 {
-					lane0 := unsafe { &bool(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &bool(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &bool(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &bool(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &bool(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &bool(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				8 {
-					lane0 := unsafe { &bool(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &bool(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &bool(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
-					lane3 := unsafe { &bool(voidptr(usize((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
-					lane4 := unsafe { &bool(voidptr(usize((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
-					lane5 := unsafe { &bool(voidptr(usize((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
-					lane6 := unsafe { &bool(voidptr(usize((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
-					lane7 := unsafe { &bool(voidptr(usize((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &bool(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &bool(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &bool(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane3 := unsafe { &bool(voidptr(uint((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
+					lane4 := unsafe { &bool(voidptr(uint((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
+					lane5 := unsafe { &bool(voidptr(uint((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
+					lane6 := unsafe { &bool(voidptr(uint((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
+					lane7 := unsafe { &bool(voidptr(uint((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
@@ -537,35 +537,35 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 		13 {
 			match f[12].int() {
 				1 {
-					lane0 := voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))
+					lane0 := voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))
 					lanes := [lane0]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				3 {
-					lane0 := voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))
-					lane1 := voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))
-					lane2 := voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))
+					lane0 := voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))
+					lane1 := voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))
+					lane2 := voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))
 					lanes := [lane0, lane1, lane2]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				8 {
-					lane0 := voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))
-					lane1 := voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))
-					lane2 := voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))
-					lane3 := voidptr(usize((raw + u64(3) * u64(0x9e3779b97f4a7c15))))
-					lane4 := voidptr(usize((raw + u64(4) * u64(0x9e3779b97f4a7c15))))
-					lane5 := voidptr(usize((raw + u64(5) * u64(0x9e3779b97f4a7c15))))
-					lane6 := voidptr(usize((raw + u64(6) * u64(0x9e3779b97f4a7c15))))
-					lane7 := voidptr(usize((raw + u64(7) * u64(0x9e3779b97f4a7c15))))
+					lane0 := voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))
+					lane1 := voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))
+					lane2 := voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))
+					lane3 := voidptr(uint((raw + u64(3) * u64(0x9e3779b97f4a7c15))))
+					lane4 := voidptr(uint((raw + u64(4) * u64(0x9e3779b97f4a7c15))))
+					lane5 := voidptr(uint((raw + u64(5) * u64(0x9e3779b97f4a7c15))))
+					lane6 := voidptr(uint((raw + u64(6) * u64(0x9e3779b97f4a7c15))))
+					lane7 := voidptr(uint((raw + u64(7) * u64(0x9e3779b97f4a7c15))))
 					lanes := [lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
@@ -575,35 +575,35 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 		14 {
 			match f[12].int() {
 				1 {
-					lane0 := LanePointer(unsafe { &LaneBase(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) })
+					lane0 := LanePointer(unsafe { &LaneBase(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) })
 					lanes := [lane0]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				3 {
-					lane0 := LanePointer(unsafe { &LaneBase(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) })
-					lane1 := LanePointer(unsafe { &LaneBase(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) })
-					lane2 := LanePointer(unsafe { &LaneBase(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) })
+					lane0 := LanePointer(unsafe { &LaneBase(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) })
+					lane1 := LanePointer(unsafe { &LaneBase(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) })
+					lane2 := LanePointer(unsafe { &LaneBase(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) })
 					lanes := LaneArray([lane0, lane1, lane2]!)
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				8 {
-					lane0 := LanePointer(unsafe { &LaneBase(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) })
-					lane1 := LanePointer(unsafe { &LaneBase(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) })
-					lane2 := LanePointer(unsafe { &LaneBase(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) })
-					lane3 := LanePointer(unsafe { &LaneBase(voidptr(usize((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) })
-					lane4 := LanePointer(unsafe { &LaneBase(voidptr(usize((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) })
-					lane5 := LanePointer(unsafe { &LaneBase(voidptr(usize((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) })
-					lane6 := LanePointer(unsafe { &LaneBase(voidptr(usize((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) })
-					lane7 := LanePointer(unsafe { &LaneBase(voidptr(usize((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) })
+					lane0 := LanePointer(unsafe { &LaneBase(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) })
+					lane1 := LanePointer(unsafe { &LaneBase(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) })
+					lane2 := LanePointer(unsafe { &LaneBase(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) })
+					lane3 := LanePointer(unsafe { &LaneBase(voidptr(uint((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) })
+					lane4 := LanePointer(unsafe { &LaneBase(voidptr(uint((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) })
+					lane5 := LanePointer(unsafe { &LaneBase(voidptr(uint((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) })
+					lane6 := LanePointer(unsafe { &LaneBase(voidptr(uint((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) })
+					lane7 := LanePointer(unsafe { &LaneBase(voidptr(uint((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) })
 					lanes := [lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
@@ -613,35 +613,35 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 		15 {
 			match f[12].int() {
 				1 {
-					lane0 := unsafe { &LaneWord(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &LaneWord(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				3 {
-					lane0 := unsafe { &LaneWord(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &LaneWord(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &LaneWord(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &LaneWord(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &LaneWord(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &LaneWord(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				8 {
-					lane0 := unsafe { &LaneWord(voidptr(usize((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
-					lane1 := unsafe { &LaneWord(voidptr(usize((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
-					lane2 := unsafe { &LaneWord(voidptr(usize((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
-					lane3 := unsafe { &LaneWord(voidptr(usize((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
-					lane4 := unsafe { &LaneWord(voidptr(usize((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
-					lane5 := unsafe { &LaneWord(voidptr(usize((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
-					lane6 := unsafe { &LaneWord(voidptr(usize((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
-					lane7 := unsafe { &LaneWord(voidptr(usize((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
+					lane0 := unsafe { &LaneWord(voidptr(uint((raw + u64(0) * u64(0x9e3779b97f4a7c15))))) }
+					lane1 := unsafe { &LaneWord(voidptr(uint((raw + u64(1) * u64(0x9e3779b97f4a7c15))))) }
+					lane2 := unsafe { &LaneWord(voidptr(uint((raw + u64(2) * u64(0x9e3779b97f4a7c15))))) }
+					lane3 := unsafe { &LaneWord(voidptr(uint((raw + u64(3) * u64(0x9e3779b97f4a7c15))))) }
+					lane4 := unsafe { &LaneWord(voidptr(uint((raw + u64(4) * u64(0x9e3779b97f4a7c15))))) }
+					lane5 := unsafe { &LaneWord(voidptr(uint((raw + u64(5) * u64(0x9e3779b97f4a7c15))))) }
+					lane6 := unsafe { &LaneWord(voidptr(uint((raw + u64(6) * u64(0x9e3779b97f4a7c15))))) }
+					lane7 := unsafe { &LaneWord(voidptr(uint((raw + u64(7) * u64(0x9e3779b97f4a7c15))))) }
 					lanes := [lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
@@ -651,35 +651,35 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 		16 {
 			match f[12].int() {
 				1 {
-					lane0 := ?&u8(unsafe { &u8(voidptr(usize((((raw + u64(0) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
+					lane0 := ?&u8(unsafe { &u8(voidptr(uint((((raw + u64(0) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
 					lanes := [lane0]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane or { unsafe { nil } }))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane or { unsafe { nil } }))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				3 {
-					lane0 := ?&u8(unsafe { &u8(voidptr(usize((((raw + u64(0) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
+					lane0 := ?&u8(unsafe { &u8(voidptr(uint((((raw + u64(0) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
 					lane1 := ?&u8(none)
-					lane2 := ?&u8(unsafe { &u8(voidptr(usize((((raw + u64(2) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
+					lane2 := ?&u8(unsafe { &u8(voidptr(uint((((raw + u64(2) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
 					lanes := [lane0, lane1, lane2]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane or { unsafe { nil } }))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane or { unsafe { nil } }))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				8 {
-					lane0 := ?&u8(unsafe { &u8(voidptr(usize((((raw + u64(0) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
+					lane0 := ?&u8(unsafe { &u8(voidptr(uint((((raw + u64(0) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
 					lane1 := ?&u8(none)
-					lane2 := ?&u8(unsafe { &u8(voidptr(usize((((raw + u64(2) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
-					lane3 := ?&u8(unsafe { &u8(voidptr(usize((((raw + u64(3) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
+					lane2 := ?&u8(unsafe { &u8(voidptr(uint((((raw + u64(2) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
+					lane3 := ?&u8(unsafe { &u8(voidptr(uint((((raw + u64(3) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
 					lane4 := ?&u8(none)
-					lane5 := ?&u8(unsafe { &u8(voidptr(usize((((raw + u64(5) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
-					lane6 := ?&u8(unsafe { &u8(voidptr(usize((((raw + u64(6) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
+					lane5 := ?&u8(unsafe { &u8(voidptr(uint((((raw + u64(5) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
+					lane6 := ?&u8(unsafe { &u8(voidptr(uint((((raw + u64(6) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
 					lane7 := ?&u8(none)
 					lanes := [lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane or { unsafe { nil } }))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane or { unsafe { nil } }))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
@@ -689,35 +689,35 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 		17 {
 			match f[12].int() {
 				1 {
-					lane0 := ?&f64(unsafe { &f64(voidptr(usize((((raw + u64(0) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
+					lane0 := ?&f64(unsafe { &f64(voidptr(uint((((raw + u64(0) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
 					lanes := [lane0]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane or { unsafe { nil } }))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane or { unsafe { nil } }))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				3 {
-					lane0 := ?&f64(unsafe { &f64(voidptr(usize((((raw + u64(0) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
+					lane0 := ?&f64(unsafe { &f64(voidptr(uint((((raw + u64(0) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
 					lane1 := ?&f64(none)
-					lane2 := ?&f64(unsafe { &f64(voidptr(usize((((raw + u64(2) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
+					lane2 := ?&f64(unsafe { &f64(voidptr(uint((((raw + u64(2) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
 					lanes := [lane0, lane1, lane2]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane or { unsafe { nil } }))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane or { unsafe { nil } }))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				8 {
-					lane0 := ?&f64(unsafe { &f64(voidptr(usize((((raw + u64(0) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
+					lane0 := ?&f64(unsafe { &f64(voidptr(uint((((raw + u64(0) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
 					lane1 := ?&f64(none)
-					lane2 := ?&f64(unsafe { &f64(voidptr(usize((((raw + u64(2) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
-					lane3 := ?&f64(unsafe { &f64(voidptr(usize((((raw + u64(3) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
+					lane2 := ?&f64(unsafe { &f64(voidptr(uint((((raw + u64(2) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
+					lane3 := ?&f64(unsafe { &f64(voidptr(uint((((raw + u64(3) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
 					lane4 := ?&f64(none)
-					lane5 := ?&f64(unsafe { &f64(voidptr(usize((((raw + u64(5) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
-					lane6 := ?&f64(unsafe { &f64(voidptr(usize((((raw + u64(6) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
+					lane5 := ?&f64(unsafe { &f64(voidptr(uint((((raw + u64(5) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
+					lane6 := ?&f64(unsafe { &f64(voidptr(uint((((raw + u64(6) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
 					lane7 := ?&f64(none)
 					lanes := [lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane or { unsafe { nil } }))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane or { unsafe { nil } }))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
@@ -727,35 +727,35 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 		18 {
 			match f[12].int() {
 				1 {
-					lane0 := ?&bool(unsafe { &bool(voidptr(usize((((raw + u64(0) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
+					lane0 := ?&bool(unsafe { &bool(voidptr(uint((((raw + u64(0) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
 					lanes := [lane0]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane or { unsafe { nil } }))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane or { unsafe { nil } }))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				3 {
-					lane0 := ?&bool(unsafe { &bool(voidptr(usize((((raw + u64(0) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
+					lane0 := ?&bool(unsafe { &bool(voidptr(uint((((raw + u64(0) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
 					lane1 := ?&bool(none)
-					lane2 := ?&bool(unsafe { &bool(voidptr(usize((((raw + u64(2) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
+					lane2 := ?&bool(unsafe { &bool(voidptr(uint((((raw + u64(2) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
 					lanes := [lane0, lane1, lane2]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane or { unsafe { nil } }))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane or { unsafe { nil } }))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
 				8 {
-					lane0 := ?&bool(unsafe { &bool(voidptr(usize((((raw + u64(0) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
+					lane0 := ?&bool(unsafe { &bool(voidptr(uint((((raw + u64(0) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
 					lane1 := ?&bool(none)
-					lane2 := ?&bool(unsafe { &bool(voidptr(usize((((raw + u64(2) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
-					lane3 := ?&bool(unsafe { &bool(voidptr(usize((((raw + u64(3) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
+					lane2 := ?&bool(unsafe { &bool(voidptr(uint((((raw + u64(2) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
+					lane3 := ?&bool(unsafe { &bool(voidptr(uint((((raw + u64(3) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
 					lane4 := ?&bool(none)
-					lane5 := ?&bool(unsafe { &bool(voidptr(usize((((raw + u64(5) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
-					lane6 := ?&bool(unsafe { &bool(voidptr(usize((((raw + u64(6) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
+					lane5 := ?&bool(unsafe { &bool(voidptr(uint((((raw + u64(5) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
+					lane6 := ?&bool(unsafe { &bool(voidptr(uint((((raw + u64(6) * u64(0x9e3779b97f4a7c15)) & ~u64(7)) | u64(8))))) })
 					lane7 := ?&bool(none)
 					lanes := [lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7]!
 					mut parts := []string{}
-					for lane in lanes { parts << '${usize(voidptr(lane or { unsafe { nil } }))}' }
+					for lane in lanes { parts << '${uint(voidptr(lane or { unsafe { nil } }))}' }
 					seen = parts.join(',')
 					writer.print_vector(format, options, lanes, depth)!
 				}
@@ -768,11 +768,11 @@ fn operate(mut writer zigimg.WriteStream, f []string) ! {
 
 fn snapshot(status string, writer zigimg.WriteStream, buffer []u8, file bool) string {
 	mut contents := []u8{len: 4096}
-	n := if file { C.witty_writer_seek_view(contents.data, usize(contents.len)) } else { isize(0) }
+	n := if file { C.witty_writer_seek_view(contents.data, uint(contents.len)) } else { int(0) }
 	if n < 0 { panic('observer failed') }
 	valid := if file { C.witty_writer_seek_valid() } else { 0 }
 	unused := writer.unused_capacity_slice()
-	offset := if buffer.len == 0 { usize(0) } else { usize(unused.data) - usize(buffer.data) }
+	offset := if buffer.len == 0 { uint(0) } else { uint(unused.data) - uint(buffer.data) }
 	return '${status}|${writer.get_pos()}:${writer.unused_capacity_len()}:${writer.buffered().len}:${offset}:${valid}|${buffer.hex()}|${writer.buffered().hex()}|${unused.hex()}|${seen}|${contents[..int(n)].hex()}'
 }
 
@@ -813,12 +813,12 @@ fn record(line string, path string) string {
 		writer.flush() or { status = err.msg() }
 	}
 	out += snapshot(status, writer, buffer, kind > 0) + '~'
-	mut drain := isize(-3)
+	mut drain := int(-3)
 	mut wire := []u8{}
 	if kind > 0 && binding == 1 {
 		for {
 			mut bytes := []u8{len: 4096}
-			drain = C.witty_writer_seek_drain(bytes.data, usize(bytes.len))
+			drain = C.witty_writer_seek_drain(bytes.data, uint(bytes.len))
 			if drain <= 0 { break }
 			wire << bytes[..int(drain)]
 		}

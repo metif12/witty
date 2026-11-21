@@ -16,11 +16,11 @@ pub type DynamicStreamPollCallback = fn (ud voidptr, l &DynamicLoop, c &DynamicC
 
 // The callback of Stream.read. The error is a ReadError; on success the byte
 // count is supplied.
-pub type DynamicStreamReadCallback = fn (ud voidptr, l &DynamicLoop, c &DynamicCompletion, s DynamicStream, b DynamicReadBuffer, r ?ErrorKind, n usize) CallbackAction
+pub type DynamicStreamReadCallback = fn (ud voidptr, l &DynamicLoop, c &DynamicCompletion, s DynamicStream, b DynamicReadBuffer, r ?ErrorKind, n uint) CallbackAction
 
 // The callback of Stream.write and Stream.queueWrite. The error is a
 // WriteError; on success the byte count is supplied.
-pub type DynamicStreamWriteCallback = fn (ud voidptr, l &DynamicLoop, c &DynamicCompletion, s DynamicStream, b DynamicWriteBuffer, r ?ErrorKind, n usize) CallbackAction
+pub type DynamicStreamWriteCallback = fn (ud voidptr, l &DynamicLoop, c &DynamicCompletion, s DynamicStream, b DynamicWriteBuffer, r ?ErrorKind, n uint) CallbackAction
 
 // Creates a generic stream type that supports read, write, close, poll. This
 // can be used for any file descriptor that would exhibit normal blocking
@@ -147,7 +147,7 @@ pub fn (self DynamicStream) read(mut loop DynamicLoop, c &DynamicCompletion, buf
 		.io_uring {
 			completion.ensure_tag(.io_uring)
 
-			api_cb := fn [cb] (ud_inner voidptr, l_inner &IoUringLoop, c_inner &IoUringCompletion, s_inner IoUringStream, b_inner IoUringReadBuffer, r_inner ?ErrorKind, n_inner usize) CallbackAction {
+			api_cb := fn [cb] (ud_inner voidptr, l_inner &IoUringLoop, c_inner &IoUringCompletion, s_inner IoUringStream, b_inner IoUringReadBuffer, r_inner ?ErrorKind, n_inner uint) CallbackAction {
 				return cb(ud_inner, DynamicLoop.from_io_uring(l_inner),
 					DynamicCompletion.from_io_uring(c_inner), DynamicStream.init_fd(s_inner.fd),
 					DynamicReadBuffer.from_io_uring(b_inner), r_inner, n_inner)
@@ -161,7 +161,7 @@ pub fn (self DynamicStream) read(mut loop DynamicLoop, c &DynamicCompletion, buf
 		.epoll {
 			completion.ensure_tag(.epoll)
 
-			api_cb := fn [cb] (ud_inner voidptr, l_inner &EpollLoop, c_inner &EpollCompletion, s_inner EpollStream, b_inner EpollReadBuffer, r_inner ?ErrorKind, n_inner usize) CallbackAction {
+			api_cb := fn [cb] (ud_inner voidptr, l_inner &EpollLoop, c_inner &EpollCompletion, s_inner EpollStream, b_inner EpollReadBuffer, r_inner ?ErrorKind, n_inner uint) CallbackAction {
 				return cb(ud_inner, DynamicLoop.from_epoll(l_inner),
 					DynamicCompletion.from_epoll(c_inner), DynamicStream.init_fd(s_inner.fd),
 					DynamicReadBuffer.from_epoll(b_inner), r_inner, n_inner)
@@ -181,7 +181,7 @@ pub fn (self DynamicStream) write(mut loop DynamicLoop, c &DynamicCompletion, bu
 		.io_uring {
 			completion.ensure_tag(.io_uring)
 
-			api_cb := fn [cb] (ud_inner voidptr, l_inner &IoUringLoop, c_inner &IoUringCompletion, s_inner IoUringStream, b_inner IoUringWriteBuffer, r_inner ?ErrorKind, n_inner usize) CallbackAction {
+			api_cb := fn [cb] (ud_inner voidptr, l_inner &IoUringLoop, c_inner &IoUringCompletion, s_inner IoUringStream, b_inner IoUringWriteBuffer, r_inner ?ErrorKind, n_inner uint) CallbackAction {
 				return cb(ud_inner, DynamicLoop.from_io_uring(l_inner),
 					DynamicCompletion.from_io_uring(c_inner), DynamicStream.init_fd(s_inner.fd),
 					DynamicWriteBuffer.from_io_uring(b_inner), r_inner, n_inner)
@@ -195,7 +195,7 @@ pub fn (self DynamicStream) write(mut loop DynamicLoop, c &DynamicCompletion, bu
 		.epoll {
 			completion.ensure_tag(.epoll)
 
-			api_cb := fn [cb] (ud_inner voidptr, l_inner &EpollLoop, c_inner &EpollCompletion, s_inner EpollStream, b_inner EpollWriteBuffer, r_inner ?ErrorKind, n_inner usize) CallbackAction {
+			api_cb := fn [cb] (ud_inner voidptr, l_inner &EpollLoop, c_inner &EpollCompletion, s_inner EpollStream, b_inner EpollWriteBuffer, r_inner ?ErrorKind, n_inner uint) CallbackAction {
 				return cb(ud_inner, DynamicLoop.from_epoll(l_inner),
 					DynamicCompletion.from_epoll(c_inner), DynamicStream.init_fd(s_inner.fd),
 					DynamicWriteBuffer.from_epoll(b_inner), r_inner, n_inner)
@@ -217,7 +217,7 @@ pub fn (self DynamicStream) queue_write(mut loop DynamicLoop, q &DynamicWriteQue
 	mut request := unsafe { req }
 	match backend() {
 		.io_uring {
-			api_cb := fn [cb] (ud_inner voidptr, l_inner &IoUringLoop, c_inner &IoUringCompletion, s_inner IoUringStream, b_inner IoUringWriteBuffer, r_inner ?ErrorKind, n_inner usize) CallbackAction {
+			api_cb := fn [cb] (ud_inner voidptr, l_inner &IoUringLoop, c_inner &IoUringCompletion, s_inner IoUringStream, b_inner IoUringWriteBuffer, r_inner ?ErrorKind, n_inner uint) CallbackAction {
 				return cb(ud_inner, DynamicLoop.from_io_uring(l_inner),
 					DynamicCompletion.from_io_uring(c_inner), DynamicStream.init_fd(s_inner.fd),
 					DynamicWriteBuffer.from_io_uring(b_inner), r_inner, n_inner)
@@ -242,7 +242,7 @@ pub fn (self DynamicStream) queue_write(mut loop DynamicLoop, q &DynamicWriteQue
 			}
 		}
 		.epoll {
-			api_cb := fn [cb] (ud_inner voidptr, l_inner &EpollLoop, c_inner &EpollCompletion, s_inner EpollStream, b_inner EpollWriteBuffer, r_inner ?ErrorKind, n_inner usize) CallbackAction {
+			api_cb := fn [cb] (ud_inner voidptr, l_inner &EpollLoop, c_inner &EpollCompletion, s_inner EpollStream, b_inner EpollWriteBuffer, r_inner ?ErrorKind, n_inner uint) CallbackAction {
 				return cb(ud_inner, DynamicLoop.from_epoll(l_inner),
 					DynamicCompletion.from_epoll(c_inner), DynamicStream.init_fd(s_inner.fd),
 					DynamicWriteBuffer.from_epoll(b_inner), r_inner, n_inner)

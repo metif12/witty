@@ -364,7 +364,7 @@ fn exec_display(mut t Terminal, cmd &Command) Response {
 		for _ in 0 .. rows {
 			t.index() or { break }
 		}
-		t.set_cursor_pos(usize(t.screens.active.cursor.y), usize(pin.x + cols + 1))
+		t.set_cursor_pos(uint(t.screens.active.cursor.y), uint(pin.x + cols + 1))
 	}
 
 	return result

@@ -119,7 +119,7 @@ fn test_hyperlink_set_release_and_reuse() {
 
 fn test_hyperlink_set_reports_out_of_memory_and_needs_rehash() {
 	layout := page_set_layout(4, hyperlink_set_item_size, 8)
-	mut full := HyperlinkSet.init_bounded(layout, bitmap_allocator_layout(usize(string_bytes_default), string_chunk))
+	mut full := HyperlinkSet.init_bounded(layout, bitmap_allocator_layout(uint(string_bytes_default), string_chunk))
 	assert full.capacity() == 2
 	first := full.add(implicit_link(1, 'https://one.example')) or { panic(err) }
 	_ := full.add(implicit_link(2, 'https://two.example')) or { panic(err) }

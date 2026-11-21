@@ -161,8 +161,8 @@ fn main() {
 				unsafe { voidptr(&tracker) }, track_chunk, track_palette, track_row)
 		}
 		mut status := 'ok'
-		mut width := usize(0)
-		mut height := usize(0)
+		mut width := uint(0)
+		mut height := uint(0)
 		mut hash := u64(0)
 		if mode in [6, 7] {
 			mut header := zigimg.png_load_header(mut stream) or {
@@ -178,8 +178,8 @@ fn main() {
 				}
 			}
 			if status == 'ok' {
-				width = usize(header.width)
-				height = usize(header.height)
+				width = uint(header.width)
+				height = uint(header.height)
 				pixels := zigimg.png_load_with_header(mut stream, &header, options) or {
 					status = err.msg()
 					zigimg.PixelStorage(zigimg.InvalidPixels{})

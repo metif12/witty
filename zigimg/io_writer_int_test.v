@@ -3,14 +3,14 @@ module zigimg
 fn test_integer_writer_signs_padding_and_ignored_precision() {
 	mut bytes := []u8{len: 64}
 	mut writer := WriteStream.init_memory(mut bytes)
-	writer.print_int_any[i64](-12, 10, .lower, FormatOptions{ width: usize(5), fill: `0` })!
+	writer.print_int_any[i64](-12, 10, .lower, FormatOptions{ width: uint(5), fill: `0` })!
 	writer.print_int[int](12, 10, .lower, FormatOptions{
-		width:     usize(5)
+		width:     uint(5)
 		fill:      `0`
-		precision: usize(0)
+		precision: uint(0)
 	})!
-	writer.print_int[u32](12, 10, .lower, FormatOptions{ width: usize(5), fill: `0` })!
-	writer.print_int[int](0, 10, .lower, FormatOptions{ width: usize(1) })!
+	writer.print_int[u32](12, 10, .lower, FormatOptions{ width: uint(5), fill: `0` })!
+	writer.print_int[int](0, 10, .lower, FormatOptions{ width: uint(1) })!
 	writer.print_int[int](12, 10, .lower, FormatOptions{})!
 	assert writer.buffered().bytestr() == '00-1200+1200012+012'
 }
@@ -31,7 +31,7 @@ fn test_integer_writer_failure_preserves_alignment_order() {
 	mut writer := WriteStream.init_memory(mut bytes)
 	mut status := 'ok'
 	writer.print_int_any[int](-12, 10, .lower, FormatOptions{
-		width:     usize(6)
+		width:     uint(6)
 		alignment: .center
 		fill:      `.`
 	}) or { status = err.msg() }
@@ -39,7 +39,7 @@ fn test_integer_writer_failure_preserves_alignment_order() {
 	writer.seek_to(0)!
 	status = 'ok'
 	writer.print_int[u64](65535, 16, .upper, FormatOptions{
-		width:     usize(6)
+		width:     uint(6)
 		alignment: .left
 		fill:      `_`
 	}) or { status = err.msg() }

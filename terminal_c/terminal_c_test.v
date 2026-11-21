@@ -14,21 +14,21 @@ mut:
 	frees  int
 }
 
-fn c_api_test_alloc(ctx voidptr, len usize, _ u8, _ usize) voidptr {
+fn c_api_test_alloc(ctx voidptr, len uint, _ u8, _ uint) voidptr {
 	mut state := unsafe { &CApiAllocatorState(ctx) }
 	state.allocs++
-	return unsafe { malloc(if len == 0 { usize(1) } else { len }) }
+	return unsafe { malloc(if len == 0 { uint(1) } else { len }) }
 }
 
-fn c_api_test_resize(_ voidptr, _ voidptr, _ usize, _ u8, _ usize, _ usize) bool {
+fn c_api_test_resize(_ voidptr, _ voidptr, _ uint, _ u8, _ uint, _ uint) bool {
 	return false
 }
 
-fn c_api_test_remap(_ voidptr, _ voidptr, _ usize, _ u8, _ usize, _ usize) voidptr {
+fn c_api_test_remap(_ voidptr, _ voidptr, _ uint, _ u8, _ uint, _ uint) voidptr {
 	return unsafe { nil }
 }
 
-fn c_api_test_free(ctx voidptr, memory voidptr, _ usize, _ u8, _ usize) {
+fn c_api_test_free(ctx voidptr, memory voidptr, _ uint, _ u8, _ uint) {
 	mut state := unsafe { &CApiAllocatorState(ctx) }
 	state.frees++
 	unsafe { free(memory) }
@@ -425,7 +425,7 @@ fn test_key_encoder_short_buffers_keep_source_emitted_prefix() {
 		for capacity in 0 .. expected.len + 2 {
 			mut out := []u8{len: capacity, init: 0x7e}
 			result, needed := encoder.encode(event, mut out)
-			assert needed == usize(expected.len)
+			assert needed == uint(expected.len)
 			if capacity < expected.len {
 				assert result == .out_of_memory
 				assert out == expected[..capacity]

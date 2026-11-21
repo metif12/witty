@@ -86,9 +86,9 @@ fn C.glDeleteBuffers(n int, buffers &u32)
 
 fn C.glBindBufferBase(target u32, index u32, buffer u32)
 
-fn C.glBufferData(target u32, size isize, data voidptr, usage u32)
+fn C.glBufferData(target u32, size int, data voidptr, usage u32)
 
-fn C.glBufferSubData(target u32, offset isize, size isize, data voidptr)
+fn C.glBufferSubData(target u32, offset int, size int, data voidptr)
 
 fn C.glVertexAttribPointer(index u32, size int, typ u32, normalized u8, stride int, pointer voidptr)
 
@@ -108,7 +108,7 @@ fn C.witty_glVertexAttribIFormat(attribindex u32, size int, typ u32, relativeoff
 
 fn C.witty_glVertexAttribLFormat(attribindex u32, size int, typ u32, relativeoffset u32) int
 
-fn C.witty_glBindVertexBuffer(bindingindex u32, buffer u32, offset isize, stride int) int
+fn C.witty_glBindVertexBuffer(bindingindex u32, buffer u32, offset int, stride int) int
 
 fn C.glActiveTexture(texture u32)
 
@@ -350,7 +350,7 @@ pub fn draw_arrays_instanced(mode Primitive, first int, count int, primcount int
 	get_error()!
 }
 
-pub fn draw_elements(mode u32, count int, typ u32, offset usize) ! {
+pub fn draw_elements(mode u32, count int, typ u32, offset uint) ! {
 	mut ptr := voidptr(unsafe { nil })
 	if offset > 0 {
 		ptr = voidptr(offset)
@@ -522,7 +522,7 @@ pub fn (b BufferBinding) unbind() {
 }
 
 struct BufferDataInfo {
-	size isize
+	size int
 	ptr  voidptr
 }
 
@@ -533,12 +533,12 @@ fn buffer_data_info[T](data T) BufferDataInfo {
 			ptr = voidptr(data.data)
 		}
 		return BufferDataInfo{
-			size: isize(usize(data.len) * usize(sizeof(data[0])))
+			size: int(uint(data.len) * uint(sizeof(data[0])))
 			ptr:  ptr
 		}
 	} $else $if T is $pointer {
 		return BufferDataInfo{
-			size: isize(sizeof(*data))
+			size: int(sizeof(*data))
 			ptr:  voidptr(data)
 		}
 	} $else {
@@ -552,19 +552,19 @@ pub fn (b BufferBinding) set_data[T](data T, usage BufferUsage) ! {
 	get_error()!
 }
 
-pub fn (b BufferBinding) set_sub_data[T](offset usize, data T) ! {
+pub fn (b BufferBinding) set_sub_data[T](offset uint, data T) ! {
 	info := buffer_data_info(data)
-	C.glBufferSubData(u32(b.target), isize(offset), info.size, info.ptr)
+	C.glBufferSubData(u32(b.target), int(offset), info.size, info.ptr)
 	get_error()!
 }
 
 pub fn (b BufferBinding) set_data_null[T](usage BufferUsage) ! {
-	C.glBufferData(u32(b.target), isize(sizeof(T)), unsafe { nil }, u32(usage))
+	C.glBufferData(u32(b.target), int(sizeof(T)), unsafe { nil }, u32(usage))
 	get_error()!
 }
 
-pub fn (b BufferBinding) set_data_null_manual(size usize, usage BufferUsage) ! {
-	C.glBufferData(u32(b.target), isize(size), unsafe { nil }, u32(usage))
+pub fn (b BufferBinding) set_data_null_manual(size uint, usage BufferUsage) ! {
+	C.glBufferData(u32(b.target), int(size), unsafe { nil }, u32(usage))
 	get_error()!
 }
 
@@ -575,7 +575,7 @@ pub fn (b BufferBinding) enable_attrib_array(idx u32) ! {
 
 // attribute is the common homogeneous fixed-array shorthand from Buffer.zig.
 // The pinned Ghostty implementation only accepts fixed arrays of f32.
-pub fn (b BufferBinding) attribute[T](idx u32, size int, offset usize) ! {
+pub fn (b BufferBinding) attribute[T](idx u32, size int, offset uint) ! {
 	$if T is $array_fixed {
 		value := T{}
 		component_size := buffer_attribute_component_size(value[0])
@@ -586,10 +586,10 @@ pub fn (b BufferBinding) attribute[T](idx u32, size int, offset usize) ! {
 	}
 }
 
-fn buffer_attribute_component_size[T](value T) usize {
+fn buffer_attribute_component_size[T](value T) uint {
 	_ = value
 	$if T is f32 {
-		return usize(sizeof(T))
+		return uint(sizeof(T))
 	} $else {
 		$compile_error('BufferBinding.attribute only supports f32 array components')
 	}
@@ -601,13 +601,13 @@ pub fn (b BufferBinding) attribute_divisor(idx u32, divisor u32) ! {
 	get_error()!
 }
 
-pub fn (b BufferBinding) attribute_advanced(idx u32, size int, typ u32, normalized bool, stride int, offset usize) ! {
+pub fn (b BufferBinding) attribute_advanced(idx u32, size int, typ u32, normalized bool, stride int, offset uint) ! {
 	_ = b
 	C.glVertexAttribPointer(idx, size, typ, if normalized { u8(C.GL_TRUE) } else { u8(C.GL_FALSE) }, stride, voidptr(offset))
 	get_error()!
 }
 
-pub fn (b BufferBinding) attribute_i_advanced(idx u32, size int, typ u32, stride int, offset usize) ! {
+pub fn (b BufferBinding) attribute_i_advanced(idx u32, size int, typ u32, stride int, offset uint) ! {
 	_ = b
 	C.glVertexAttribIPointer(idx, size, typ, stride, voidptr(offset))
 	get_error()!
@@ -842,7 +842,7 @@ pub fn (b VertexArrayBinding) attribute_l_format(idx u32, size int, offset u32) 
 	get_error()!
 }
 
-pub fn (b VertexArrayBinding) bind_vertex_buffer(idx u32, buffer u32, offset isize, stride int) ! {
+pub fn (b VertexArrayBinding) bind_vertex_buffer(idx u32, buffer u32, offset int, stride int) ! {
 	_ = b
 	if C.witty_glBindVertexBuffer(idx, buffer, offset, stride) == 0 {
 		return error('glBindVertexBuffer unavailable')

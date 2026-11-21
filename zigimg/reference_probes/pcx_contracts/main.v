@@ -25,7 +25,7 @@ fn observe() {
 }
 
 fn pixels(format p.PixelFormat, count int, seed int) p.PixelStorage {
-	mut result := p.PixelStorage.init(format, usize(count)) or { panic(err) }
+	mut result := p.PixelStorage.init(format, uint(count)) or { panic(err) }
 	mut raw := result.as_bytes()
 	for i in 0 .. raw.len {
 		raw[i] = u8(if seed == 0 {
@@ -41,7 +41,7 @@ fn pixels(format p.PixelFormat, count int, seed int) p.PixelStorage {
 	if _ := result.get_palette() {
 		mut pal := result.get_palette() or { panic('missing palette') }
 		length := if pal.len < 4 { pal.len } else { 4 }
-		result.resize_palette(usize(length))
+		result.resize_palette(uint(length))
 		for i in 0 .. length {
 			pal[i] = p.Rgba32{
 				r: u8(i * 31)
@@ -89,8 +89,8 @@ fn write_case(format p.PixelFormat, width int, height int, seed int, capacity in
 		codec.write(mut writer, data) or { status = err.msg() }
 	} else {
 		p.PCX.write_image(mut writer, p.ImageUnmanaged{
-			width:  usize(width)
-			height: usize(height)
+			width:  uint(width)
+			height: uint(height)
 			pixels: data
 		}, p.PcxEncoderOptions{}) or { status = err.msg() }
 	}
@@ -155,8 +155,8 @@ fn main() {
 			mut writer := p.WriteStream.init_memory(mut section)
 			observed_writer = &writer
 			observed_output = unsafe { output[..capacity] }
-			width := usize(os.args[4].u64())
-			height := usize(os.args[5].u64())
+			width := uint(os.args[4].u64())
+			height := uint(os.args[5].u64())
 			format := unsafe { p.PixelFormat(os.args[6].u32()) }
 			data := pixels(format, 4, 1)
 			mut status := 'ok'

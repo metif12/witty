@@ -65,9 +65,9 @@ pub fn (view &View) draw(win Window, opts ViewDrawOptions) {
 		if src + int(width) > view.screen.buf.len || dst + int(width) > win.screen.buf.len {
 			panic('index out of bounds')
 		}
-		src_address := usize(view.screen.buf.data) + usize(src) * sizeof(Cell)
-		dst_address := usize(win.screen.buf.data) + usize(dst) * sizeof(Cell)
-		span := usize(width) * sizeof(Cell)
+		src_address := uint(view.screen.buf.data) + uint(src) * sizeof(Cell)
+		dst_address := uint(win.screen.buf.data) + uint(dst) * sizeof(Cell)
+		span := uint(width) * sizeof(Cell)
 		if width > 0 && src_address < dst_address + span && dst_address < src_address + span {
 			panic('@memcpy arguments alias')
 		}

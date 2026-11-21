@@ -306,7 +306,7 @@ fn io_uring_test_recv(ud voidptr, _ &IoUringLoop, _ &IoUringCompletion, r IoUrin
 	if _ := r.err {
 		panic('unreachable')
 	}
-	mut ptr := unsafe { &usize(ud) }
+	mut ptr := unsafe { &uint(ud) }
 	unsafe {
 		*ptr = (r as IoUringRecvResult).n
 	}
@@ -317,7 +317,7 @@ fn io_uring_test_recvmsg(ud voidptr, _ &IoUringLoop, _ &IoUringCompletion, r IoU
 	if _ := r.err {
 		panic('unreachable')
 	}
-	mut ptr := unsafe { &usize(ud) }
+	mut ptr := unsafe { &uint(ud) }
 	unsafe {
 		*ptr = (r as IoUringRecvMsgResult).n
 	}
@@ -417,7 +417,7 @@ fn test_io_uring_socket_accept_connect_send_recv_close() ! {
 
 	// Receive
 	mut recv_buf := []u8{len: 128}
-	mut recv_len := usize(0)
+	mut recv_len := uint(0)
 	mut c_recv := &IoUringCompletion{
 		op: IoUringRecvOp{
 			fd: server_conn
@@ -491,7 +491,7 @@ fn test_io_uring_socket_accept_connect_send_recv_close() ! {
 // build the Zig extern struct.
 struct IoUringTestIovec {
 	base voidptr
-	len  usize
+	len  uint
 }
 
 // std.os.linux.msghdr / msghdr_const. C.msghdr declares no fields, so the
@@ -500,9 +500,9 @@ struct IoUringTestMsghdr {
 	name       voidptr
 	namelen    u32
 	iov        voidptr
-	iovlen     usize
+	iovlen     uint
 	control    voidptr
-	controllen usize
+	controllen uint
 	flags      u32
 }
 
@@ -534,7 +534,7 @@ fn test_io_uring_sendmsg_recvmsg() ! {
 	iovecs_send := [
 		IoUringTestIovec{
 			base: buffer_send.data
-			len: usize(buffer_send.len)
+			len: uint(buffer_send.len)
 		},
 	]!
 	mut msg_send := IoUringTestMsghdr{
@@ -561,7 +561,7 @@ fn test_io_uring_sendmsg_recvmsg() ! {
 	mut iovecs_recv := [
 		IoUringTestIovec{
 			base: buffer_recv.data
-			len: usize(buffer_recv.len)
+			len: uint(buffer_recv.len)
 		},
 	]!
 	mut address_recv := NetAddress.init_ip4([u8(0), 0, 0, 0]!, 0)
@@ -574,7 +574,7 @@ fn test_io_uring_sendmsg_recvmsg() ! {
 		controllen: 0
 		flags: 0
 	}
-	mut recv_size := usize(0)
+	mut recv_size := uint(0)
 	mut c_recvmsg := &IoUringCompletion{
 		op: IoUringRecvMsgOp{
 			fd: server
@@ -587,7 +587,7 @@ fn test_io_uring_sendmsg_recvmsg() ! {
 
 	// Wait for the sockets to close
 	loop.run(.until_done)!
-	assert recv_size == usize(buffer_recv.len)
+	assert recv_size == uint(buffer_recv.len)
 	assert buffer_send[..buffer_recv.len] == buffer_recv
 }
 

@@ -328,7 +328,7 @@ import highlight
 pub struct SelectedMatch {
 pub mut:
 	// Index from the end of the match list (0 = most recent match).
-	idx usize
+	idx uint
 
 	// Tracked highlight so we can detect movement.
 	highlight highlight.Tracked
@@ -505,8 +505,8 @@ pub fn (self &ScreenSearch) needle() []u8 {
 }
 
 // Returns the total number of matches found so far.
-pub fn (self &ScreenSearch) matches_len() usize {
-	return usize(self.active_results.len + self.history_results.len)
+pub fn (self &ScreenSearch) matches_len() uint {
+	return uint(self.active_results.len + self.history_results.len)
 }
 
 // Returns all matches as a slice. The matches are ordered from
@@ -774,7 +774,7 @@ pub fn (mut self ScreenSearch) reload_active() ! {
 		// move it to the end of the active area.
 		if mut m := self.selected {
 			active_len := self.active_results.len
-			if m.idx >= usize(active_len) {
+			if m.idx >= uint(active_len) {
 				m.deinit(mut self.screen.pages)
 				self.selected = none
 				self.do_select(.prev) or {
@@ -788,9 +788,9 @@ pub fn (mut self ScreenSearch) reload_active() ! {
 	// it was in the active area.
 	old_active_len := self.active_results.len
 	old_selection_idx := if m := self.selected {
-		?usize(m.idx)
+		?uint(m.idx)
 	} else {
-		?usize(none)
+		?uint(none)
 	}
 
 	// Reset our active search results and search again.
@@ -828,11 +828,11 @@ pub fn (mut self ScreenSearch) reload_active() ! {
 	// Now we have to fixup our selection if we had one.
 	if old_idx := old_selection_idx {
 		if mut m := self.selected {
-			if old_idx >= usize(old_active_len) {
+			if old_idx >= uint(old_active_len) {
 				// If our old selection wasn't in the active area, then we
 				// need to fix up our offsets.
-				m.idx -= usize(old_active_len)
-				m.idx += usize(self.active_results.len)
+				m.idx -= uint(old_active_len)
+				m.idx += uint(self.active_results.len)
 				self.selected = m
 			} else {
 				// We search for the matching highlight in the new
@@ -843,7 +843,7 @@ pub fn (mut self ScreenSearch) reload_active() ! {
 					if m.highlight.start.eql(untracked.start)
 						&& m.highlight.end.eql(untracked.end) {
 						// Found it! Update our index.
-						m.idx = usize(self.active_results.len - 1 - i)
+						m.idx = uint(self.active_results.len - 1 - i)
 						self.selected = m
 						found = true
 						break
@@ -987,8 +987,8 @@ fn (mut self ScreenSearch) reload_active_history(history_node &terminal.PageNode
 	// If our prior selection was in the history area, update the offset.
 	if mut m := self.selected {
 		active_len := self.active_results.len
-		if m.idx >= usize(active_len) {
-			m.idx += usize(added_len)
+		if m.idx >= uint(active_len) {
+			m.idx += uint(added_len)
 			self.selected = m
 		}
 	}
@@ -1044,12 +1044,12 @@ fn (self &ScreenSearch) active_top_left() ?terminal.Pin {
 pub fn (self &ScreenSearch) selected_match() ?highlight.Flattened {
 	sel := self.selected or { return none }
 	active_len := self.active_results.len
-	if sel.idx < usize(active_len) {
+	if sel.idx < uint(active_len) {
 		return self.active_results[active_len - 1 - int(sel.idx)]
 	}
 
 	history_len := self.history_results.len
-	if sel.idx < usize(active_len + history_len) {
+	if sel.idx < uint(active_len + history_len) {
 		return self.history_results[int(sel.idx) - active_len]
 	}
 
@@ -1073,8 +1073,8 @@ fn (mut self ScreenSearch) select_next() !bool {
 	// prior match, we have the easy task of getting the first.
 	if mut prev := self.selected {
 		next_idx := prev.idx + 1
-		active_len := usize(self.active_results.len)
-		history_len := usize(self.history_results.len)
+		active_len := uint(self.active_results.len)
+		history_len := uint(self.history_results.len)
 		if next_idx >= active_len + history_len {
 			// No more matches. We don't wrap or reset the match currently.
 			return false
@@ -1131,7 +1131,7 @@ fn (mut self ScreenSearch) select_prev() !bool {
 		}
 
 		next_idx := prev.idx - 1
-		active_len := usize(self.active_results.len)
+		active_len := uint(self.active_results.len)
 		hl := if next_idx < active_len {
 			self.active_results[int(active_len - 1 - next_idx)]
 		} else {
@@ -1168,7 +1168,7 @@ fn (mut self ScreenSearch) select_prev() !bool {
 
 		// Our selection is the last index since we started from oldest.
 		self.selected = SelectedMatch{
-			idx:       usize(active_len + history_len - 1)
+			idx:       uint(active_len + history_len - 1)
 			highlight: tracked
 		}
 		return true

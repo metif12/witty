@@ -37,8 +37,8 @@ mut:
 	options   []NativeCommandOption
 	filtered  []NativeCommandOption
 	query     string
-	selected  ?usize
-	hovered   ?usize
+	selected  ?uint
+	hovered   ?uint
 }
 
 fn palette_state(self ObjId) ?&NativeCommandPalette {
@@ -272,10 +272,10 @@ fn (mut palette NativeCommandPalette) rebuild() {
 			msg_void1(msg_id(button, 'layer'), 'setBorderColor:', msg_id(msg_id_f64(msg_id(get_class('NSColor'), 'controlAccentColor'), 'colorWithAlphaComponent:', 0.3), 'CGColor'))
 		}
 		if selected := palette.selected {
-			if index == int(if selected < usize(palette.filtered.len) {
+			if index == int(if selected < uint(palette.filtered.len) {
 				selected
 			} else {
-				usize(palette.filtered.len - 1)
+				uint(palette.filtered.len - 1)
 			}) {
 				msg_void1(msg_id(button, 'layer'), 'setBackgroundColor:', msg_id(msg_id_f64(msg_id(get_class('NSColor'),
 					'controlAccentColor'), 'colorWithAlphaComponent:', 0.2), 'CGColor'))
@@ -335,10 +335,10 @@ fn (palette &NativeCommandPalette) repaint_rows() {
 		button := msg_id_u64(children, 'objectAtIndex:', u64(i))
 		if !msg_bool1(button, 'isKindOfClass:', get_class('NSButton')) { continue }
 		selected := if index := palette.selected {
-			i == int(if index < usize(palette.filtered.len) {
+			i == int(if index < uint(palette.filtered.len) {
 				index
 			} else {
-				usize(palette.filtered.len - 1)
+				uint(palette.filtered.len - 1)
 			})
 		} else {
 			false
@@ -364,7 +364,7 @@ fn (palette &NativeCommandPalette) repaint_rows() {
 
 fn palette_hover(self ObjId, cmd Sel, event ObjId) {
 	mut palette := palette_state(self) or { return }
-	index := usize(msg_u64(msg_id(msg_id(event, 'trackingArea'), 'userInfo'), 'unsignedIntegerValue'))
+	index := uint(msg_u64(msg_id(msg_id(event, 'trackingArea'), 'userInfo'), 'unsignedIntegerValue'))
 	if cmd == sel('mouseEntered:') {
 		palette.hovered = index
 	} else if previous := palette.hovered {
@@ -377,7 +377,7 @@ fn palette_edit(self ObjId, _cmd Sel, _notification ObjId) {
 	mut palette := palette_state(self) or { return }
 	palette.query = objc_utf8_string(msg_id(palette.field, 'stringValue'))
 	if palette.query.len > 0 {
-		if palette.selected == none { palette.selected = usize(0) }
+		if palette.selected == none { palette.selected = uint(0) }
 	} else if value := palette.selected {
 		if value == 0 { palette.selected = none }
 	}
@@ -398,15 +398,15 @@ fn palette_command(self ObjId, _cmd Sel, _control ObjId, _text ObjId, command Se
 		count := palette.filtered.len
 		if count == 0 { return true }
 		if command == sel('moveUp:') {
-			current := palette.selected or { usize(count) }
-			palette.selected = if current == 0 { usize(count - 1) } else { current - 1 }
+			current := palette.selected or { uint(count) }
+			palette.selected = if current == 0 { uint(count - 1) } else { current - 1 }
 		} else {
-			current := palette.selected or { ~usize(0) }
-			palette.selected = if current >= usize(count - 1) { usize(0) } else { current + 1 }
+			current := palette.selected or { ~uint(0) }
+			palette.selected = if current >= uint(count - 1) { uint(0) } else { current + 1 }
 		}
 		palette.rebuild()
 		if row := palette.selected {
-			if row < usize(count) {
+			if row < uint(count) {
 				C.witty_action_scroll_rect(palette.document, 0, f64(row) * 46 + 10, msg_rect(palette.scroll,
 					'bounds').width, 42)
 			}
@@ -421,14 +421,14 @@ fn palette_lost_focus(self ObjId, _cmd Sel, _notification ObjId) {
 }
 
 fn palette_submit(self ObjId, _cmd Sel, sender ObjId) {
-	if mut palette := palette_state(self) { palette.activate(usize(msg_u64(sender, 'tag'))) }
+	if mut palette := palette_state(self) { palette.activate(uint(msg_u64(sender, 'tag'))) }
 }
 
-fn (mut palette NativeCommandPalette) activate(selected ?usize) {
+fn (mut palette NativeCommandPalette) activate(selected ?uint) {
 	mut value := ?NativeCommandOption(none)
 	if index := selected {
 		if palette.filtered.len > 0 {
-			final_index := if index < usize(palette.filtered.len) {
+			final_index := if index < uint(palette.filtered.len) {
 				int(index)
 			} else {
 				palette.filtered.len - 1

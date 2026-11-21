@@ -1,6 +1,6 @@
 module osc
 
-const max_usize_value = u64(~usize(0))
+const max_usize_value = u64(~uint(0))
 
 // Parse OSC 9, which could be an iTerm2 notification or a ConEmu extension.
 fn parse_osc9(mut parser Parser, _ ?u8) ?Command {

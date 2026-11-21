@@ -39,7 +39,7 @@ struct PointerFormatArgs {
 fn test_optional_pointer_custom_calls_ignore_options_and_depth() {
 	mut buffer := []u8{len: 256}
 	mut writer := WriteStream.init_memory(mut buffer)
-	options := FormatOptions{ width: ~usize(0), precision: ~usize(0), fill: 255 }
+	options := FormatOptions{ width: ~uint(0), precision: ~uint(0), fill: 255 }
 	value := PointerFormatter{7, false}
 	aliasvalue := PointerFormatterAlias(value)
 	ptr := FormatterPointer(&aliasvalue)
@@ -84,7 +84,7 @@ fn test_optional_pointer_custom_partial_writes_keep_method_failures() {
 fn test_optional_pointer_custom_absence_and_print_composition() {
 	mut buffer := []u8{len: 128}
 	mut writer := WriteStream.init_memory(mut buffer)
-	writer.print_value('?f', FormatOptions{ width: usize(6), fill: `_` }, ?&PointerFormatter(none), 0)!
+	writer.print_value('?f', FormatOptions{ width: uint(6), fill: `_` }, ?&PointerFormatter(none), 0)!
 	value := PointerFormatter{3, false}
 	writer.print('|{?f}', PointerFormatArgs{?&PointerFormatter(&value)})!
 	writer.print_value('any', FormatOptions{}, [u8(1), 255]!, 1)!

@@ -19,9 +19,9 @@ type Element3 = &u64
 type Flat3 = [3]&u64
 type Nested3 = [2][3]&u64
 type Single3 = [3]Element3
-type Element4 = &usize
-type Flat4 = [3]&usize
-type Nested4 = [2][3]&usize
+type Element4 = &uint
+type Flat4 = [3]&uint
+type Nested4 = [2][3]&uint
 type Single4 = [3]Element4
 type Element5 = &i8
 type Flat5 = [3]&i8
@@ -39,9 +39,9 @@ type Element8 = &i64
 type Flat8 = [3]&i64
 type Nested8 = [2][3]&i64
 type Single8 = [3]Element8
-type Element9 = &isize
-type Flat9 = [3]&isize
-type Nested9 = [2][3]&isize
+type Element9 = &int
+type Flat9 = [3]&int
+type Nested9 = [2][3]&int
 type Single9 = [3]Element9
 type Element10 = &f32
 type Flat10 = [3]&f32
@@ -70,7 +70,7 @@ struct Args {
 	value []Flat0
 }
 
-fn borrowed[E](_ E, raw usize, length int) []E {
+fn borrowed[E](_ E, raw uint, length int) []E {
 	return unsafe { array{ data: voidptr(raw), len: length, cap: length, flags: .nofree, element_size: int(sizeof(E)) } }
 }
 

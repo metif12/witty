@@ -35,7 +35,7 @@ fn test_quantizer_primary_palette_order_missing_color_fallback_and_borrowed_outp
 	mut palette := quantizer.make_palette(256, mut storage)
 	assert palette == [Rgba32{ b: 255 }, Rgba32{ g: 255 }, Rgba32{ r: 255 }]
 	for i, color in colors {
-		assert quantizer.get_palette_index(color)! == usize(2 - i)
+		assert quantizer.get_palette_index(color)! == uint(2 - i)
 	}
 	assert quantizer.get_palette_index(Rgb24{})! == 0
 	assert storage[3] == Rgba32{
@@ -282,7 +282,7 @@ fn test_quantizer_node_registration_floor_averaging_wrap_and_default_indices() {
 	}
 }
 
-fn quantizer_test_word_hash(current u64, value usize) u64 {
+fn quantizer_test_word_hash(current u64, value uint) u64 {
 	mut hash := current
 	mut word := u64(value)
 	for _ in 0 .. 8 {
@@ -351,7 +351,7 @@ fn quantizer_test_add(mut quantizer OctTreeQuantizer, kind int, pattern int, i i
 	}
 }
 
-fn quantizer_test_find(quantizer &OctTreeQuantizer, kind int, pattern int, i int) !usize {
+fn quantizer_test_find(quantizer &OctTreeQuantizer, kind int, pattern int, i int) !uint {
 	color := quantizer_test_sample(pattern, i)
 	return match kind {
 		0 {
@@ -375,7 +375,7 @@ fn quantizer_test_find(quantizer &OctTreeQuantizer, kind int, pattern int, i int
 			})!
 		}
 		else {
-			usize(0)
+			uint(0)
 		}
 	}
 }
@@ -398,7 +398,7 @@ fn test_quantizer_native_hash_of_palettes_indices_and_tree_counts() {
 						b: 19
 					}}
 					palette := quantizer.make_palette(count, mut storage)
-					hash = quantizer_test_word_hash(hash, usize(palette.len))
+					hash = quantizer_test_word_hash(hash, uint(palette.len))
 					for color in palette {
 						for byte in [color.r, color.g, color.b, color.a] {
 							hash ^= byte

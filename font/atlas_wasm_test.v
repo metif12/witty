@@ -19,7 +19,7 @@ fn test_atlas_wasm_api_happy_path() {
 
 	data := [u8(1), 2, 3, 4]
 	modified := atlas.modified.load()
-	atlas_set(mut atlas, region, data.data, usize(data.len))
+	atlas_set(mut atlas, region, data.data, uint(data.len))
 	assert atlas.modified.load() > modified
 	assert atlas.data[int(region.y * atlas.size + region.x)] == 1
 	assert atlas.data[int((region.y + 1) * atlas.size + region.x + 1)] == 4

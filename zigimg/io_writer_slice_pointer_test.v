@@ -5,20 +5,20 @@ type SliceDescriptorPointer = &SliceDescriptor
 type SliceDescriptorPointers = [2]SliceDescriptorPointer
 
 fn test_slice_descriptor_pointer_formats_do_not_read_descriptor_or_elements() ! {
-	value := unsafe { &[]u8(voidptr(usize(0x1234))) }
-	alias := unsafe { SliceDescriptorPointer(voidptr(usize(0x1234))) }
+	value := unsafe { &[]u8(voidptr(uint(0x1234))) }
+	alias := unsafe { SliceDescriptorPointer(voidptr(uint(0x1234))) }
 	mut buffer := []u8{len: 256}
 	mut writer := WriteStream.init_memory(mut buffer)
 	writer.print_address(value)!
-	writer.print_value('*', FormatOptions{ width: ~usize(0), precision: ~usize(0) }, alias, ~usize(0))!
+	writer.print_value('*', FormatOptions{ width: ~uint(0), precision: ~uint(0) }, alias, ~uint(0))!
 	writer.print_value('any', FormatOptions{ width: 6, alignment: .left, fill: `_` }, value, 0)!
 	writer.print_address(unsafe { &[]u8(nil) })!
 	assert writer.buffered().bytestr() == '[]u8@1234[]u8@1234[]u8@1234__[]u8@0'
 }
 
 fn test_slice_descriptor_pointer_optionals_preserve_aliases_and_null_routes() ! {
-	value := unsafe { &[]u8(voidptr(usize(0x1000))) }
-	alias := unsafe { SliceDescriptorPointer(voidptr(usize(0x1000))) }
+	value := unsafe { &[]u8(voidptr(uint(0x1000))) }
+	alias := unsafe { SliceDescriptorPointer(voidptr(uint(0x1000))) }
 	mut buffer := []u8{len: 256}
 	mut writer := WriteStream.init_memory(mut buffer)
 	writer.print_address(?&[]u8(value))!
@@ -30,7 +30,7 @@ fn test_slice_descriptor_pointer_optionals_preserve_aliases_and_null_routes() ! 
 }
 
 fn test_slice_descriptor_pointer_failures_keep_prefix_padding_digits_and_unused_bytes() ! {
-	value := unsafe { &[]u8(voidptr(usize(0x1234))) }
+	value := unsafe { &[]u8(voidptr(uint(0x1234))) }
 	for direct in [true, false] {
 		expected := if direct { '[]u8@1234' } else { '[]u8@__1234' }
 		for capacity in 0 .. expected.len + 2 {
@@ -53,15 +53,15 @@ fn test_slice_descriptor_pointer_failures_keep_prefix_padding_digits_and_unused_
 fn test_slice_descriptor_pointer_element_names_and_nested_descriptors() ! {
 	mut buffer := []u8{len: 256}
 	mut writer := WriteStream.init_memory(mut buffer)
-	writer.print_address(unsafe { &SliceDescriptorPointers(voidptr(usize(0x1234))) })!
-	writer.print_value('any', FormatOptions{}, unsafe { &[][]u8(voidptr(usize(0x1234))) }, 0)!
-	writer.print_value('*', FormatOptions{}, unsafe { &[]string(voidptr(usize(0x1234))) }, 0)!
+	writer.print_address(unsafe { &SliceDescriptorPointers(voidptr(uint(0x1234))) })!
+	writer.print_value('any', FormatOptions{}, unsafe { &[][]u8(voidptr(uint(0x1234))) }, 0)!
+	writer.print_value('*', FormatOptions{}, unsafe { &[]string(voidptr(uint(0x1234))) }, 0)!
 	assert writer.buffered().bytestr() == '[2]*[]u8@1234[][]u8@1234[][]const u8@1234'
 }
 
 fn test_slice_descriptor_pointer_uses_owned_header_address_and_preserves_contents() ! {
 	mut value := [u8(1), 2, 3]
-	address := usize(voidptr(&value))
+	address := uint(voidptr(&value))
 	before := unsafe { (&u8(voidptr(&value))).vbytes(int(sizeof(value))).clone() }
 	mut buffer := []u8{len: 128}
 	mut writer := WriteStream.init_memory(mut buffer)

@@ -26,8 +26,8 @@ fn png_filter_byte(filter PngFilterType, sample u8, previous u8, above u8, above
 
 fn png_filter_choice_heuristic(scanline []u8, previous_scanline []u8) PngFilterType {
 	mut previous_bytes := [5]u8{}
-	mut combos := [5]usize{}
-	mut scores := [5]usize{}
+	mut combos := [5]uint{}
+	mut scores := [5]uint{}
 	filters := [PngFilterType.none, .sub, .up, .average, .paeth]!
 	// The pinned heuristic uses scanline.len as pixel_len, so the horizontal
 	// neighbors are always zero. It does not score the final unfinished run.
@@ -36,13 +36,13 @@ fn png_filter_choice_heuristic(scanline []u8, previous_scanline []u8) PngFilterT
 		for filter_index, filter in filters {
 			byte := png_filter_byte(filter, sample, 0, above, 0)
 			if byte == previous_bytes[filter_index] {
-				if combos[filter_index] == ~usize(0) { panic('integer overflow') }
+				if combos[filter_index] == ~uint(0) { panic('integer overflow') }
 				combos[filter_index]++
 			} else {
 				combo := combos[filter_index]
-				if combo != 0 && combo > ~usize(0) / combo { panic('integer overflow') }
+				if combo != 0 && combo > ~uint(0) / combo { panic('integer overflow') }
 				score := combo * combo
-				if scores[filter_index] > ~usize(0) - score { panic('integer overflow') }
+				if scores[filter_index] > ~uint(0) - score { panic('integer overflow') }
 				scores[filter_index] += score
 				combos[filter_index] = 0
 				previous_bytes[filter_index] = byte
@@ -50,7 +50,7 @@ fn png_filter_choice_heuristic(scanline []u8, previous_scanline []u8) PngFilterT
 		}
 	}
 	mut best := PngFilterType.none
-	mut max_score := usize(0)
+	mut max_score := uint(0)
 	for index, score in scores {
 		if score > max_score {
 			max_score = score
@@ -60,9 +60,9 @@ fn png_filter_choice_heuristic(scanline []u8, previous_scanline []u8) PngFilterT
 	return best
 }
 
-fn png_fill_scanline(pixels PixelStorage, mut scanline []u8, y usize, width usize) {
+fn png_fill_scanline(pixels PixelStorage, mut scanline []u8, y uint, width uint) {
 	begin := image_pixel_count(y, width)
-	if y == ~usize(0) { panic('integer overflow') }
+	if y == ~uint(0) { panic('integer overflow') }
 	end := image_pixel_count(y + 1, width)
 	// PixelStorage.slice preserves Source's native-width range diagnostics.
 	source := pixels.slice(begin, end).as_const_bytes()
@@ -129,7 +129,7 @@ pub fn png_filter(mut writer WriteStream, pixels PixelStorage, choice PngFilterC
 	mut current := []u8{len: int(line_bytes)}
 	pixel_len := int(pixels.pixel_format().pixel_stride())
 	for y := u32(0); y < header.height; y++ {
-		png_fill_scanline(pixels, mut current, usize(y), usize(header.width))
+		png_fill_scanline(pixels, mut current, uint(y), uint(header.width))
 		filter := match choice {
 			PngTryAll { panic('Unimplemented') }
 			PngHeuristic { png_filter_choice_heuristic(current, previous) }

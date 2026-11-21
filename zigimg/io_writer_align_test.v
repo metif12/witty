@@ -15,8 +15,8 @@ fn test_aligned_writer_padding_and_default_options() {
 	writer.align_buffer_options('ef'.bytes(), options)!
 	assert writer.buffered() == 'a...-bc--__def'.bytes()
 	mut specified := FormatOptions{
-		width:     usize(5)
-		precision: ~usize(0)
+		width:     uint(5)
+		precision: ~uint(0)
 		alignment: .center
 		fill:      `+`
 	}
@@ -44,7 +44,7 @@ fn test_aligned_writer_file_output_uses_complete_padding_writes() {
 		mut bytes := []u8{len: 3, init: 165}
 		mut writer := WriteStream.init_file(file, mut bytes)
 		writer.align_buffer('ab'.bytes(), 7, .center, `.`)!
-		writer.align_buffer_options('c'.bytes(), FormatOptions{ width: usize(3), fill: `_` })!
+		writer.align_buffer_options('c'.bytes(), FormatOptions{ width: uint(3), fill: `_` })!
 		writer.flush()!
 		file.close()
 		assert os.read_bytes(path)! == '..ab...__c'.bytes()

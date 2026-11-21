@@ -37,9 +37,9 @@ pub fn (tuple PamTupleType) to_string() string {
 
 pub struct PamHeader {
 pub mut:
-	width      usize        @[required]
-	height     usize        @[required]
-	depth      usize        @[required]
+	width      uint        @[required]
+	height     uint        @[required]
+	depth      uint        @[required]
 	maxval     u16          @[required]
 	tuple_type PamTupleType @[required]
 	comments   []string     @[required]
@@ -113,21 +113,21 @@ pub fn PamHeader.read(mut stream ReadStream) !PamHeader {
 		}
 		second, _ := pam_next_token(line, index)
 		if second.len == 0 { return error('InvalidData') }
-		limit := if key == 'MAXVAL' { u64(65535) } else { u64(~usize(0)) }
+		limit := if key == 'MAXVAL' { u64(65535) } else { u64(~uint(0)) }
 		value := zig_fmt.parse_unsigned(second.bytestr(), limit, 10) or {
 			return error('InvalidData')
 		}
 		match key {
 			'WIDTH' {
-				header.width = usize(value)
+				header.width = uint(value)
 				has_width = true
 			}
 			'HEIGHT' {
-				header.height = usize(value)
+				header.height = uint(value)
 				has_height = true
 			}
 			'DEPTH' {
-				header.depth = usize(value)
+				header.depth = uint(value)
 				has_depth = true
 			}
 			'MAXVAL' {
@@ -475,13 +475,13 @@ pub fn PAM.write_frame(mut stream WriteStream, image ImageUnmanaged, options Enc
 	}
 	header.comments = (options as PamEncoderOptions).comments
 	header.write(mut stream)!
-	for row := usize(0); row < image.height; row++ {
-		if image.width != 0 && row > ~usize(0) / image.width { panic('integer overflow') }
+	for row := uint(0); row < image.height; row++ {
+		if image.width != 0 && row > ~uint(0) / image.width { panic('integer overflow') }
 		offset := row * image.width
-		for column := usize(0); column < image.width; column++ {
+		for column := uint(0); column < image.width; column++ {
 			// Source's omitted grayscale2 arm traps before any pixel indexing.
 			if image.pixels is Grayscale2Pixels { panic('reached unreachable code') }
-			if column > ~usize(0) - offset { panic('integer overflow') }
+			if column > ~uint(0) - offset { panic('integer overflow') }
 			position := offset + column
 			if position >= image.pixels.len() {
 				panic('index out of bounds: index ${position}, len ${image.pixels.len()}')

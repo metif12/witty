@@ -270,7 +270,7 @@ fn draw_pagelist_inspector(context cimgui.Context, mut pages terminal.PageList) 
 			page_node := node or { break }
 			node = page_node.prev
 			page := &page_node.data
-			row_offset -= usize(page.size.rows)
+			row_offset -= uint(page.size.rows)
 			index -= 1
 
 			// We use our location as the ID so that even if reallocations
@@ -279,7 +279,7 @@ fn draw_pagelist_inspector(context cimgui.Context, mut pages terminal.PageList) 
 			if tree_node(context, PageTreeNodeState{
 				page: page
 				index: index
-				row_range: [row_offset, row_offset + usize(page.size.rows) - 1]!
+				row_range: [row_offset, row_offset + uint(page.size.rows) - 1]!
 				active: voidptr(page_node) == voidptr(active_pin.node)
 				viewport: voidptr(page_node) == voidptr(viewport_pin.node)
 			}) {
@@ -313,7 +313,7 @@ fn draw_pagelist_scrollbar(context cimgui.Context, mut pages terminal.PageList) 
 		delta := context.pagelist_scrollbar(scrollbar.total, scrollbar.offset, scrollbar.len)
 		if delta != 0 {
 			pages.scroll(terminal.PageScrollDeltaRow{
-				delta: isize(delta)
+				delta: int(delta)
 			})
 		}
 	}

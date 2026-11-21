@@ -10,8 +10,8 @@ pub mut:
 	sign     bool @[required]
 }
 
-fn float_format_add(a usize, b usize) usize {
-	if b > ~usize(0) - a { panic('integer overflow') }
+fn float_format_add(a uint, b uint) uint {
+	if b > ~uint(0) - a { panic('integer overflow') }
 	return a + b
 }
 
@@ -26,10 +26,10 @@ fn float_format_neg(a int) int {
 	return -a
 }
 
-fn float_format_length(n u64) usize {
+fn float_format_length(n u64) uint {
 	if n >= 100000000000000000 { panic('reached unreachable code') }
 	mut value := n
-	mut length := usize(1)
+	mut length := uint(1)
 	for value >= 10 {
 		value /= 10
 		length++
@@ -37,28 +37,28 @@ fn float_format_length(n u64) usize {
 	return length
 }
 
-fn float_format_tail(mut buffer []u8, start usize) []u8 {
-	if start > usize(buffer.len) {
+fn float_format_tail(mut buffer []u8, start uint) []u8 {
+	if start > uint(buffer.len) {
 		panic('index out of bounds: index ${u64(start).str()}, len ${buffer.len}')
 	}
 	return unsafe { buffer[int(start)..] }
 }
 
-fn float_format_prefix(mut buffer []u8, count usize) []u8 {
-	if count > usize(buffer.len) {
+fn float_format_prefix(mut buffer []u8, count uint) []u8 {
+	if count > uint(buffer.len) {
 		panic('index out of bounds: index ${u64(count).str()}, len ${buffer.len}')
 	}
 	return unsafe { buffer[..int(count)] }
 }
 
-fn float_format_put(mut buffer []u8, index usize, byte u8) {
-	if index >= usize(buffer.len) {
+fn float_format_put(mut buffer []u8, index uint, byte u8) {
+	if index >= uint(buffer.len) {
 		panic('index out of bounds: index ${u64(index).str()}, len ${buffer.len}')
 	}
 	buffer[int(index)] = byte
 }
 
-fn float_format_zeros(mut buffer []u8, index usize, count usize) {
+fn float_format_zeros(mut buffer []u8, index uint, count uint) {
 	mut tail := float_format_tail(mut buffer, index)
 	mut span := float_format_prefix(mut tail, count)
 	for i in 0 .. span.len {
@@ -67,9 +67,9 @@ fn float_format_zeros(mut buffer []u8, index usize, count usize) {
 }
 
 // Keep Source's right-to-left pairs and writes beyond the eventual returned view.
-fn float_format_digits(mut buffer []u8, value &u64, count usize) {
+fn float_format_digits(mut buffer []u8, value &u64, count uint) {
 	mut remaining := unsafe { *value }
-	mut i := usize(0)
+	mut i := uint(0)
 	for i + 2 < count {
 		c := remaining % 100
 		remaining /= 100
@@ -88,17 +88,17 @@ fn float_format_digits(mut buffer []u8, value &u64, count usize) {
 	}
 }
 
-fn float_format_round(value FloatDecimal64, scientific bool, precision usize) FloatDecimal64 {
+fn float_format_round(value FloatDecimal64, scientific bool, precision uint) FloatDecimal64 {
 	mut output := value.mantissa
 	mut exponent := value.exponent
 	length := float_format_length(output)
-	mut round_digit := usize(0)
+	mut round_digit := uint(0)
 	if scientific {
 		round_digit = float_format_add(1, precision)
 	} else if exponent > 0 {
-		round_digit = float_format_add(float_format_add(length - 1, precision), usize(exponent))
+		round_digit = float_format_add(float_format_add(length - 1, precision), uint(exponent))
 	} else {
-		minimum := usize(float_format_neg(exponent))
+		minimum := uint(float_format_neg(exponent))
 		count := float_format_add(precision, length)
 		if count > minimum { round_digit = count - minimum }
 	}
@@ -139,19 +139,19 @@ fn float_format_special(mut buffer []u8, value FloatDecimal64) []u8 {
 	for i in 0 .. 3 {
 		buffer[offset + i] = word[i]
 	}
-	return float_format_prefix(mut buffer, usize(3 + offset))
+	return float_format_prefix(mut buffer, uint(3 + offset))
 }
 
-pub fn format_float_scientific(mut buffer []u8, value FloatDecimal64, precision ?usize) ![]u8 {
+pub fn format_float_scientific(mut buffer []u8, value FloatDecimal64, precision ?uint) ![]u8 {
 	if buffer.len < float_format_min_buffer_size { panic('reached unreachable code') }
 	if value.exponent == 2147483647 { return float_format_special(mut buffer, value) }
 	f := if digits := precision { float_format_round(value, true, digits) } else { value }
 	mut output := f.mantissa
 	length := float_format_length(output)
 	if digits := precision {
-		if usize(buffer.len) < float_format_add(8, digits) { return error('BufferTooSmall') }
+		if uint(buffer.len) < float_format_add(8, digits) { return error('BufferTooSmall') }
 	}
-	mut index := usize(0)
+	mut index := uint(0)
 	if f.sign {
 		float_format_put(mut buffer, 0, `-`)
 		index = 1
@@ -170,7 +170,7 @@ pub fn format_float_scientific(mut buffer []u8, value FloatDecimal64, precision 
 			float_format_zeros(mut buffer, index, count)
 			index += count
 		} else {
-			index = dp_index + digits - if digits == 0 { usize(1) } else { usize(0) }
+			index = dp_index + digits - if digits == 0 { uint(1) } else { uint(0) }
 		}
 	}
 	float_format_put(mut buffer, index, `e`)
@@ -189,22 +189,22 @@ pub fn format_float_scientific(mut buffer []u8, value FloatDecimal64, precision 
 	return float_format_prefix(mut buffer, index)
 }
 
-pub fn format_float_decimal(mut buffer []u8, value FloatDecimal64, precision ?usize) ![]u8 {
+pub fn format_float_decimal(mut buffer []u8, value FloatDecimal64, precision ?uint) ![]u8 {
 	if buffer.len < float_format_min_buffer_size { panic('reached unreachable code') }
 	if value.exponent == 2147483647 { return float_format_special(mut buffer, value) }
 	f := if digits := precision { float_format_round(value, false, digits) } else { value }
 	mut output := f.mantissa
 	length := float_format_length(output)
-	digits := precision or { usize(0) }
-	absolute := usize(if f.exponent < 0 { -i64(f.exponent) } else { i64(f.exponent) })
+	digits := precision or { uint(0) }
+	absolute := uint(if f.exponent < 0 { -i64(f.exponent) } else { i64(f.exponent) })
 	required := if f.exponent >= 0 {
 		float_format_add(float_format_add(float_format_add(2, absolute), length), digits)
 	} else {
 		count := float_format_add(absolute, length)
 		float_format_add(2, if count > digits { count } else { digits })
 	}
-	if usize(buffer.len) < required { return error('BufferTooSmall') }
-	mut index := usize(0)
+	if uint(buffer.len) < required { return error('BufferTooSmall') }
+	mut index := uint(0)
 	if f.sign {
 		float_format_put(mut buffer, index, `-`)
 		index++
@@ -215,7 +215,7 @@ pub fn format_float_decimal(mut buffer []u8, value FloatDecimal64, precision ?us
 		float_format_put(mut buffer, index + 1, `.`)
 		index += 2
 		dp_index := index
-		count := usize(float_format_neg(dp_offset))
+		count := uint(float_format_neg(dp_offset))
 		float_format_zeros(mut buffer, index, count)
 		index += count
 		mut tail := float_format_tail(mut buffer, index)
@@ -224,10 +224,10 @@ pub fn format_float_decimal(mut buffer []u8, value FloatDecimal64, precision ?us
 		if prec := precision {
 			written := index - dp_index
 			if prec > written { float_format_zeros(mut buffer, index, prec - written) }
-			index = dp_index + prec - if prec == 0 { usize(1) } else { usize(0) }
+			index = dp_index + prec - if prec == 0 { uint(1) } else { uint(0) }
 		}
 	} else {
-		offset := usize(dp_offset)
+		offset := uint(dp_offset)
 		if offset >= length {
 			mut tail := float_format_tail(mut buffer, index)
 			float_format_digits(mut tail, &output, length)
@@ -253,7 +253,7 @@ pub fn format_float_decimal(mut buffer []u8, value FloatDecimal64, precision ?us
 			if prec := precision {
 				written := length - offset
 				if prec > written { float_format_zeros(mut buffer, index, prec - written) }
-				index = dp_index + prec - if prec == 0 { usize(1) } else { usize(0) }
+				index = dp_index + prec - if prec == 0 { uint(1) } else { uint(0) }
 			}
 		}
 	}

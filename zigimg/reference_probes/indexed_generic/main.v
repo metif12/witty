@@ -42,13 +42,13 @@ fn emit[T](mut out strings.Builder, value T) {
 	out.write_string('|')
 }
 
-fn changed[T](value p.IndexedStorage[T], size usize) p.IndexedStorage[T] {
+fn changed[T](value p.IndexedStorage[T], size uint) p.IndexedStorage[T] {
 	mut result := value
 	p.IndexedStorage.resize_palette[T](mut result, size)
 	return result
 }
 
-fn run[T](mut out strings.Builder, count usize, size usize, new_size usize, seed u32) {
+fn run[T](mut out strings.Builder, count uint, size uint, new_size uint, seed u32) {
 	capacity := p.IndexedStorage.palette_size[T]()
 	mut x := p.IndexedStorage[T]{
 		palette: []p.Rgba32{}
@@ -64,7 +64,7 @@ fn run[T](mut out strings.Builder, count usize, size usize, new_size usize, seed
 	}
 	out.write_string('${capacity}|')
 	emit(mut out, x)
-	p.IndexedStorage.resize_palette[T](mut x, usize(capacity))
+	p.IndexedStorage.resize_palette[T](mut x, uint(capacity))
 	for i in 0 .. x.palette.len {
 		x.palette[i] = p.Rgba32{
 			r: u8(u32(i) + seed)
@@ -84,18 +84,18 @@ fn run[T](mut out strings.Builder, count usize, size usize, new_size usize, seed
 		} }
 	if returned.palette.len != 0 { returned.palette[0].a = 5 }
 	if count != 0 { copy.indices[0] = scalar[T](seed + 99) }
-	p.IndexedStorage.resize_palette[T](mut x, (size + new_size) % (usize(capacity) + 1))
+	p.IndexedStorage.resize_palette[T](mut x, (size + new_size) % (uint(capacity) + 1))
 	emit(mut out, x)
 	emit(mut out, copy)
 	emit(mut out, returned)
 	returned = copy
 	emit(mut out, returned)
-	p.IndexedStorage.resize_palette[T](mut x, usize(capacity))
+	p.IndexedStorage.resize_palette[T](mut x, uint(capacity))
 	emit(mut out, x)
 	x.deinit()
 }
 
-fn trap[T](mode u8, size usize) {
+fn trap[T](mode u8, size uint) {
 	if mode == 0 {
 		_ = p.IndexedStorage.init_palette_size[T](3, size)
 	} else {
@@ -116,7 +116,7 @@ fn main() {
 			'u32' { _ = p.IndexedStorage.init_palette_size[u32](0, 0) }
 			'int' { _ = p.IndexedStorage.init_palette_size[int](0, 0) }
 			'f32' { _ = p.IndexedStorage.init_palette_size[f32](0, 0) }
-			'count' { _ = p.IndexedStorage.init_palette_size[u8](~usize(0), 0) }
+			'count' { _ = p.IndexedStorage.init_palette_size[u8](~uint(0), 0) }
 			else { panic('invalid guard') }
 		}
 
@@ -127,7 +127,7 @@ fn main() {
 		at_exit(observe) or { panic(err) }
 		kind := os.args[3].int()
 		mode := u8(os.args[4].int())
-		size := usize(os.args[5].u64())
+		size := uint(os.args[5].u64())
 		match kind {
 			0 { trap[bool](mode, size) }
 			1 { trap[u8](mode, size) }
@@ -175,9 +175,9 @@ fn main() {
 		contents := os.read_file(os.args[1]) or { panic(err) }
 		for line in contents.split_into_lines() {
 			fields := line.split('|')
-			count := usize(fields[1].u64())
-			size := usize(fields[2].u64())
-			new_size := usize(fields[3].u64())
+			count := uint(fields[1].u64())
+			size := uint(fields[2].u64())
+			new_size := uint(fields[3].u64())
 			seed := u32(fields[4].u64())
 			match fields[0].int() {
 				0 { run[bool](mut out, count, size, new_size, seed) }

@@ -67,21 +67,21 @@ pub fn JpegFrameHeader.read(mut stream ReadStream) !JpegFrameHeader {
 // replace the caller's header or its slice descriptor.
 pub fn (mut header JpegFrameHeader) deinit() {}
 
-pub fn (header JpegFrameHeader) max_horizontal_sampling_factor() usize {
-	mut result := usize(0)
+pub fn (header JpegFrameHeader) max_horizontal_sampling_factor() uint {
+	mut result := uint(0)
 	for component in header.components {
-		if result < usize(component.horizontal_sampling_factor) {
-			result = usize(component.horizontal_sampling_factor)
+		if result < uint(component.horizontal_sampling_factor) {
+			result = uint(component.horizontal_sampling_factor)
 		}
 	}
 	return result
 }
 
-pub fn (header JpegFrameHeader) max_vertical_sampling_factor() usize {
-	mut result := usize(0)
+pub fn (header JpegFrameHeader) max_vertical_sampling_factor() uint {
+	mut result := uint(0)
 	for component in header.components {
-		if result < usize(component.vertical_sampling_factor) {
-			result = usize(component.vertical_sampling_factor)
+		if result < uint(component.vertical_sampling_factor) {
+			result = uint(component.vertical_sampling_factor)
 		}
 	}
 	return result

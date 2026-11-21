@@ -26,16 +26,16 @@ fn run() ! {
 	observed_buffer = unsafe { buffer }
 	at_exit(observe)!
 	mut status := 'ok'
-	options := zigimg.FormatOptions{ width: ~usize(0), precision: ~usize(0), alignment: .left, fill: `_` }
-	pointer := unsafe { &u8(usize(0x12)) }
+	options := zigimg.FormatOptions{ width: ~uint(0), precision: ~uint(0), alignment: .left, fill: `_` }
+	pointer := unsafe { &u8(uint(0x12)) }
 	match os.args[3] {
 		'0' { writer.print_value('any', options, pointer, 0) or { status = err.msg() } }
 		'1' { writer.print_value('any', options, ?&u8(pointer), 0) or { status = err.msg() } }
 		'2' {
-			writer.print_value('any', options, voidptr(usize(0x12)), 0) or { status = err.msg() }
+			writer.print_value('any', options, voidptr(uint(0x12)), 0) or { status = err.msg() }
 		}
 		'3' {
-			writer.print_value('any', options, ?TrapPointer(TrapPointer(unsafe { &TrapWord(usize(0x12)) })), 0) or { status = err.msg() }
+			writer.print_value('any', options, ?TrapPointer(TrapPointer(unsafe { &TrapWord(uint(0x12)) })), 0) or { status = err.msg() }
 		}
 		'4' { writer.print_value('any', options, ?&u8(none), 0) or { status = err.msg() } }
 		'5' { writer.print_value('*', options, pointer, 0) or { status = err.msg() } }

@@ -12,7 +12,7 @@ fn test_tagged_page_allocator_alignment_zeroing_resize_and_free() {
 		assert false, 'tagged page allocation failed'
 		return
 	}
-	assert usize(memory.ptr) % (page_size * 2) == 0
+	assert uint(memory.ptr) % (page_size * 2) == 0
 	assert memory.len == page_size * 3 - 7
 	assert memory.mapped_len == page_size * 3
 	unsafe {

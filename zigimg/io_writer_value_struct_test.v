@@ -29,7 +29,7 @@ fn test_value_records_preserve_field_order_aliases_and_recursive_depth() {
 		'.{ .number = -3, .active = true, .bytes = { 1, 255 } }'] {
 		mut buffer := []u8{len: 256}
 		mut writer := WriteStream.init_memory(mut buffer)
-		writer.print_value('', FormatOptions{}, ValueRecordAlias(value), usize(depth))!
+		writer.print_value('', FormatOptions{}, ValueRecordAlias(value), uint(depth))!
 		assert writer.buffered().bytestr() == expected
 	}
 	mut buffer := []u8{len: 256}
@@ -65,10 +65,10 @@ fn test_value_records_retain_partial_prefix_at_every_capacity() {
 fn test_value_records_empty_cutoff_and_custom_format_bypass() {
 	mut buffer := []u8{len: 128}
 	mut writer := WriteStream.init_memory(mut buffer)
-	writer.print_value('', FormatOptions{ width: ~usize(0), precision: ~usize(0) }, ValueEmptyRecord{},
+	writer.print_value('', FormatOptions{ width: ~uint(0), precision: ~uint(0) }, ValueEmptyRecord{},
 		1)!
 	writer.write_byte(`|`)!
-	writer.print_value('any', FormatOptions{ width: ~usize(0), precision: ~usize(0) }, ValueRecord{},
+	writer.print_value('any', FormatOptions{ width: ~uint(0), precision: ~uint(0) }, ValueRecord{},
 		0)!
 	writer.write_byte(`|`)!
 	writer.print_value('any', FormatOptions{}, ValueCustomRecord{7}, 1)!

@@ -8,12 +8,12 @@ import zigimg
 
 fn C.witty_reader_prefill_setup(&char) int
 fn C.witty_reader_prefill_replace(int) int
-fn C.witty_reader_prefill_seed(usize, usize) int
+fn C.witty_reader_prefill_seed(uint, uint) int
 fn C.witty_reader_prefill_shutdown() int
 fn C.witty_reader_prefill_cleanup() int
 fn C.witty_reader_prefill_valid() int
 fn C.witty_reader_prefill_refs() int
-fn C.witty_reader_prefill_drain(&u8, usize) isize
+fn C.witty_reader_prefill_drain(&u8, uint) int
 
 __global (
 	observed_path   string
@@ -73,10 +73,10 @@ fn record(line string, path string) string {
 	observed_output = unsafe { output }
 	reader.seek_to(f[2].u64()) or { panic(err) }
 	reader.peek(buffer.len) or { panic(err) }
-	reader.toss(usize(f[3].int()))
+	reader.toss(uint(f[3].int()))
 	mut out := snapshot(mut reader, buffer, output) + '~'
 	if C.witty_reader_prefill_replace(0) != 0 { panic('Prefill replacement failed') }
-	if C.witty_reader_prefill_seed(0, usize(f[5].int())) != 0 { panic('Prefill seed failed') }
+	if C.witty_reader_prefill_seed(0, uint(f[5].int())) != 0 { panic('Prefill seed failed') }
 	if f[6] == '1' && C.witty_reader_prefill_shutdown() != 0 { panic('Prefill shutdown failed') }
 	out += 'rebound|' + snapshot(mut reader, buffer, output) + '~'
 	observed_status = read(mut reader, mut output, f[0].int())
@@ -85,17 +85,17 @@ fn record(line string, path string) string {
 	reader.seek_by(f[8].i64()) or { observed_status = err.msg() }
 	out += '${observed_status}|' + snapshot(mut reader, buffer, output) + '~'
 	if f[6] == '0' && f[7].int() > 0 {
-		if C.witty_reader_prefill_seed(usize(f[5].int()), usize(f[7].int())) != 0 {
+		if C.witty_reader_prefill_seed(uint(f[5].int()), uint(f[7].int())) != 0 {
 			panic('Prefill reseed failed')
 		}
 	}
 	observed_status = read(mut reader, mut output, f[0].int())
 	out += '${observed_status}|' + snapshot(mut reader, buffer, output) + '~'
 	mut wire := []u8{}
-	mut drain := isize(-3)
+	mut drain := int(-3)
 	for {
 		mut bytes := []u8{len: 4096}
-		drain = C.witty_reader_prefill_drain(bytes.data, usize(bytes.len))
+		drain = C.witty_reader_prefill_drain(bytes.data, uint(bytes.len))
 		if drain <= 0 { break
 		 }
 		wire << bytes[..int(drain)]

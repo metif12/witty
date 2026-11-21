@@ -66,10 +66,10 @@ pub fn (mut field TextField) handle_event(mut ctx EventContext, event Event) ! {
 				field.cursor_right()
 				ctx.consume_and_redraw()
 			} else if event.matches(u32(`a`), ctrl) || event.matches(vaxis.home, vaxis.Modifiers{}) {
-				field.buf.move_gap_left(usize(field.buf.first_half().len))
+				field.buf.move_gap_left(uint(field.buf.first_half().len))
 				ctx.consume_and_redraw()
 			} else if event.matches(u32(`e`), ctrl) || event.matches(vaxis.end, vaxis.Modifiers{}) {
-				field.buf.move_gap_right(usize(field.buf.second_half().len))
+				field.buf.move_gap_right(uint(field.buf.second_half().len))
 				ctx.consume_and_redraw()
 			} else if event.matches(u32(`k`), ctrl) {
 				field.delete_to_end()
@@ -124,11 +124,11 @@ pub fn (mut field TextField) insert_slice_at_cursor(text string) {
 }
 
 pub fn (field &TextField) slice_to_cursor(mut bytes []u8) []u8 {
-	if usize(bytes.len) < field.buf.cursor { panic('Assertion failed') }
+	if uint(bytes.len) < field.buf.cursor { panic('Assertion failed') }
 	first := field.buf.first_half()
-	span := usize(first.len)
-	source_address := usize(first.data)
-	destination_address := usize(bytes.data)
+	span := uint(first.len)
+	source_address := uint(first.data)
+	destination_address := uint(bytes.data)
 	if span > 0 && source_address < destination_address + span
 		&& destination_address < source_address + span {
 		panic('@memcpy arguments alias')
@@ -142,7 +142,7 @@ fn text_field_checked_u16_add(value u16, extra int) u16 {
 	return value + u16(extra)
 }
 
-fn text_field_checked_u8(value usize) u8 {
+fn text_field_checked_u8(value uint) u8 {
 	if value > 0xff { panic('integer does not fit in destination type') }
 	return u8(value)
 }
@@ -152,7 +152,7 @@ pub fn (field &TextField) width_to_cursor(ctx DrawContext) u16 {
 	mut iter := GraphemeIterator{
 		text: field.buf.first_half().bytestr()
 	}
-	mut i := usize(0)
+	mut i := uint(0)
 	for {
 		grapheme := iter.next() or { break }
 		if i >= field.draw_offset {
@@ -164,11 +164,11 @@ pub fn (field &TextField) width_to_cursor(ctx DrawContext) u16 {
 }
 
 pub fn (mut field TextField) cursor_left() {
-	field.buf.move_gap_left(usize(field.last_grapheme_length()))
+	field.buf.move_gap_left(uint(field.last_grapheme_length()))
 }
 
 pub fn (mut field TextField) cursor_right() {
-	field.buf.move_gap_right(usize(vaxis.first_grapheme_byte_length(field.buf.second_half().bytestr())))
+	field.buf.move_gap_right(uint(vaxis.first_grapheme_byte_length(field.buf.second_half().bytestr())))
 }
 
 fn (field &TextField) last_grapheme_length() int {
@@ -300,12 +300,12 @@ pub fn (mut field TextField) reset() {
 	field.prev_cursor_idx = 0
 }
 
-pub fn (field &TextField) byte_offset_to_cursor() usize {
+pub fn (field &TextField) byte_offset_to_cursor() uint {
 	return field.buf.cursor
 }
 
 pub fn (mut field TextField) delete_to_end() {
-	field.buf.grow_gap_right(usize(field.buf.second_half().len))
+	field.buf.grow_gap_right(uint(field.buf.second_half().len))
 }
 
 pub fn (mut field TextField) delete_to_start() {
@@ -313,20 +313,20 @@ pub fn (mut field TextField) delete_to_start() {
 }
 
 pub fn (mut field TextField) delete_before_cursor() {
-	field.buf.grow_gap_left(usize(field.last_grapheme_length()))
+	field.buf.grow_gap_left(uint(field.last_grapheme_length()))
 }
 
 pub fn (mut field TextField) delete_after_cursor() {
-	field.buf.grow_gap_right(usize(vaxis.first_grapheme_byte_length(field.buf.second_half().bytestr())))
+	field.buf.grow_gap_right(uint(vaxis.first_grapheme_byte_length(field.buf.second_half().bytestr())))
 }
 
 pub fn (mut field TextField) move_backward_wordwise() {
 	trimmed := field.buf.first_half().bytestr().trim_right(' ')
 	idx := trimmed.last_index(' ') or { -1 }
-	field.buf.move_gap_left(field.buf.cursor - usize(idx + 1))
+	field.buf.move_gap_left(field.buf.cursor - uint(idx + 1))
 }
 
-fn (field &TextField) next_word_index() usize {
+fn (field &TextField) next_word_index() uint {
 	bytes := field.buf.second_half()
 	mut idx := 0
 	for idx < bytes.len && bytes[idx] == ` ` {
@@ -335,7 +335,7 @@ fn (field &TextField) next_word_index() usize {
 	for idx < bytes.len && bytes[idx] != ` ` {
 		idx++
 	}
-	return usize(idx)
+	return uint(idx)
 }
 
 pub fn (mut field TextField) move_forward_wordwise() {

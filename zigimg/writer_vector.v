@@ -1,6 +1,6 @@
 module zigimg
 
-fn io_vector_lanes[E](mut stream WriteStream, format string, options FormatOptions, lanes []E, max_depth usize) ! {
+fn io_vector_lanes[E](mut stream WriteStream, format string, options FormatOptions, lanes []E, max_depth uint) ! {
 	$if E is $option {
 		$if E.indirections != 1 && ((int(E.unaliased_typ) >> 16) &0xff) != 1 {
 			$compile_error('print_vector requires native numeric, boolean or pointer lanes')
@@ -28,7 +28,7 @@ fn io_vector_lanes[E](mut stream WriteStream, format string, options FormatOptio
 }
 
 // Fixed arrays carry Source SIMD lanes without changing ordinary array dispatch.
-pub fn (mut stream WriteStream) print_vector[A](format string, options FormatOptions, value A, max_depth usize) ! {
+pub fn (mut stream WriteStream) print_vector[A](format string, options FormatOptions, value A, max_depth uint) ! {
 	$if A.unaliased_typ is $array_fixed {
 		return io_vector_lanes(mut stream, format, options, value[..], max_depth)
 	} $else {

@@ -32,7 +32,7 @@ fn observe() {
 			eprintln('OBSERVER ERROR: ${err}')} }
 }
 
-fn pixels(format p.PixelFormat, count usize) p.PixelStorage {
+fn pixels(format p.PixelFormat, count uint) p.PixelStorage {
 	mut result := p.PixelStorage.init(format, count) or { panic(err) }
 	mut raw := result.as_bytes()
 	for i in 0 .. raw.len {
@@ -137,9 +137,9 @@ fn run_case[T](fields []string, data []u8) {
 		header: p.NetpbmHeader{
 			format:    unsafe { p.NetpbmFormat(fields[2].int()) }
 			binary:    binary
-			width:     usize(fields[4].u64())
-			height:    usize(fields[5].u64())
-			max_value: usize(fields[6].u64())
+			width:     uint(fields[4].u64())
+			height:    uint(fields[5].u64())
+			max_value: uint(fields[6].u64())
 		}
 	}
 	mut reader := p.ReadStream.init_memory(data)
@@ -163,7 +163,7 @@ fn run_case[T](fields []string, data []u8) {
 	if op == 6 {
 		format := codec.pixel_format() or { panic(err) }
 		mut copy := codec.header
-		copy.width ^= usize(0x12345678)
+		copy.width ^= uint(0x12345678)
 		copy.binary = !copy.binary
 		println('ok|${header_text(codec.header)}|${u32(format)}|${header_text(copy)}')
 		return
@@ -178,7 +178,7 @@ fn run_case[T](fields []string, data []u8) {
 		return
 	}
 	if op in [int(3), 4, 5] {
-		value := pixels(unsafe { p.PixelFormat(fields[7].u32()) }, usize(fields[8].u64()))
+		value := pixels(unsafe { p.PixelFormat(fields[7].u32()) }, uint(fields[8].u64()))
 		observed_pixels = value.as_bytes()
 		mut status := 'ok'
 		if op == 3 {
@@ -225,8 +225,8 @@ fn run_case[T](fields []string, data []u8) {
 	before := raw.hex()
 	mut separate := '-'
 	if raw.len > 0 {
-		ptr := usize(raw.data)
-		separate = if ptr < usize(data.data) || ptr >= usize(data.data) + usize(data.len) {
+		ptr := uint(raw.data)
+		separate = if ptr < uint(data.data) || ptr >= uint(data.data) + uint(data.len) {
 			'1'
 		} else {
 			'0'

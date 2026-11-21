@@ -18,7 +18,7 @@ pub fn (mut vx Vaxis) pretty_print() !string {
 	mut cursor_pos_row := u16(0)
 	mut cursor_pos_col := u16(0)
 	mut i := u16(0)
-	for usize(i) < usize(vx.screen.buf.len) {
+	for uint(i) < uint(vx.screen.buf.len) {
 		cell := vx.screen.buf[int(i)]
 		w := if cell.char_.width != 0 {
 			u16(cell.char_.width)
@@ -72,7 +72,7 @@ pub fn (mut vx Vaxis) pretty_print() !string {
 		}
 		mut j := session_u16_add(i, 1)
 		for j < session_u16_add(i, w) {
-			if usize(j) >= usize(vx.screen_last.buf.len) {
+			if uint(j) >= uint(vx.screen_last.buf.len) {
 				break
 			}
 			vx.screen_last.buf[int(j)].skipped = true

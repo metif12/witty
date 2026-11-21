@@ -219,7 +219,7 @@ fn (mut decoder TiffFlate) take_bits[R](mut input R, count int) !u64 {
 	input.flate_fill_word() or {
 		if err.msg() != 'EndOfStream' { return err }
 	}
-	word_size := int(sizeof(usize))
+	word_size := int(sizeof(uint))
 	available := input.flate_buffered_len()
 	read_size := if available >= word_size { word_size } else { available }
 	needed := count - decoder.remaining_bits
@@ -237,7 +237,7 @@ fn (decoder TiffFlate) peek_bits[R](mut input R, count int) !u64 {
 	input.flate_fill_word() or {
 		if err.msg() != 'EndOfStream' { return err }
 	}
-	word_size := int(sizeof(usize))
+	word_size := int(sizeof(uint))
 	available := input.flate_buffered_len()
 	mut read_size := word_size
 	if available < word_size {
@@ -258,7 +258,7 @@ fn (mut decoder TiffFlate) toss_bits[R](mut input R, count int) ! {
 	input.flate_fill_word() or {
 		if err.msg() != 'EndOfStream' { return err }
 	}
-	word_size := int(sizeof(usize))
+	word_size := int(sizeof(uint))
 	available := input.flate_buffered_len()
 	read_size := if available >= word_size { word_size } else { available }
 	if read_size == 0 { return error('EndOfStream') }
@@ -550,14 +550,14 @@ fn tiff_zlib_stream(mut input ReadStream, mut output WriteStream) ! {
 // limited allocating writer (Zig 0.15.2). The fixed history window may read
 // ahead, but the owned result never grows past limit. appendRemaining rejects
 // an exactly full limit without probing for EOF.
-pub fn decode_zlib_bounded(data []u8, limit usize) ![]u8 {
+pub fn decode_zlib_bounded(data []u8, limit uint) ![]u8 {
 	mut input := ReadStream.init_memory(data)
 	mut decoder := TiffFlate{}
 	mut result := []u8{}
 	mut remaining := limit
 	for remaining > 0 {
 		if decoder.end > decoder.seek {
-			available := usize(decoder.end - decoder.seek)
+			available := uint(decoder.end - decoder.seek)
 			count := if available < remaining { available } else { remaining }
 			result << decoder.window[decoder.seek..decoder.seek + int(count)]
 			decoder.seek += int(count)

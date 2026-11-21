@@ -295,7 +295,7 @@ pub type Message = MessageChangeNeedle | MessageSelect
 // Source: Thread.Event.SelectedMatch
 pub struct ThreadSelectedMatch {
 pub mut:
-	idx       usize
+	idx       uint
 	highlight highlight.Flattened
 }
 
@@ -308,7 +308,7 @@ pub struct EventComplete {}
 // Total matches on the current active screen have changed.
 pub struct EventTotalMatches {
 pub:
-	total usize
+	total uint
 }
 
 // Selected match changed.
@@ -788,7 +788,7 @@ mut:
 	// Last active screen key.
 	key terminal.ScreenKey = .primary
 	// Last notified total matches count.
-	total ?usize
+	total ?uint
 	// Last notified selected match index + highlight.
 	selected ?ScreenStateSelectedMatch
 }
@@ -799,7 +799,7 @@ mut:
 // Source: Search.ScreenState.SelectedMatch
 struct ScreenStateSelectedMatch {
 mut:
-	idx       usize
+	idx       uint
 	highlight highlight.Untracked
 }
 

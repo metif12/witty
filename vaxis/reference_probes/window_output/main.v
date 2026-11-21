@@ -48,10 +48,10 @@ fn cell(mut out strings.Builder, c v.Cell, original string) {
 		else { panic('unexpected color') }
 	}
 
-	pointer := usize(c.char_.grapheme.str)
-	start := usize(original.str)
+	pointer := uint(c.char_.grapheme.str)
+	start := uint(original.str)
 	offset := if c.char_.grapheme.len > 0 && pointer >= start
-		&& pointer + usize(c.char_.grapheme.len) <= start + usize(original.len) {
+		&& pointer + uint(c.char_.grapheme.len) <= start + uint(original.len) {
 		i64(pointer - start)
 	} else {
 		i64(-1)
@@ -238,7 +238,7 @@ fn main() {
 				cell(mut out, value, text)
 			}
 			out.write_string('|')
-			unsafe { C.memset(text.str, `Z`, usize(text.len)) }
+			unsafe { C.memset(text.str, `Z`, uint(text.len)) }
 			for value in screen.buf {
 				out.write_string(hex.encode(value.char_.grapheme.bytes()))
 			}

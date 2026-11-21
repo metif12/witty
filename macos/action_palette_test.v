@@ -34,9 +34,9 @@ fn test_native_palette_edit_and_wrapping_selection_consumers() {
 	assert msg_u64(msg_id(first_row, 'subviews'), 'count') == 2
 	assert palette_command(palette.owner, sel('control:textView:doCommandBySelector:'),
 		palette.field, nil_obj(), sel('moveDown:'))
-	assert (palette.selected or { usize(99) }) == 0
+	assert (palette.selected or { uint(99) }) == 0
 	palette_command(palette.owner, nil_obj(), palette.field, nil_obj(), sel('moveUp:'))
-	assert (palette.selected or { usize(99) }) == 1
+	assert (palette.selected or { uint(99) }) == 1
 	msg_void1(palette.field, 'setStringValue:', nsstring('one'))
 	palette_edit(palette.owner, nil_obj(), nil_obj())
 	assert palette.filtered.len == 1

@@ -94,21 +94,21 @@ $if macos || ios {
 
 	fn C.CFRetain(obj voidptr) voidptr
 
-	fn C.CFStringCreateWithBytes(alloc voidptr, bytes voidptr, bytes_len isize, encoding u32, external bool) voidptr
+	fn C.CFStringCreateWithBytes(alloc voidptr, bytes voidptr, bytes_len int, encoding u32, external bool) voidptr
 
-	fn C.CFStringCreateWithCharactersNoCopy(alloc voidptr, chars voidptr, chars_len isize, deallocator voidptr) voidptr
+	fn C.CFStringCreateWithCharactersNoCopy(alloc voidptr, chars voidptr, chars_len int, deallocator voidptr) voidptr
 
-	fn C.CFStringCreateMutable(alloc voidptr, max_len isize) voidptr
+	fn C.CFStringCreateMutable(alloc voidptr, max_len int) voidptr
 
-	fn C.CFStringAppendCharacters(str voidptr, chars voidptr, chars_len isize)
+	fn C.CFStringAppendCharacters(str voidptr, chars voidptr, chars_len int)
 
-	fn C.CFStringGetLength(str voidptr) isize
+	fn C.CFStringGetLength(str voidptr) int
 
 	fn C.CFStringHasPrefix(str voidptr, prefix voidptr) int
 
 	fn C.CFStringCompare(str voidptr, other voidptr, opts u32) int
 
-	fn C.CFStringGetCString(str voidptr, buffer &char, buffer_size isize, encoding u32) int
+	fn C.CFStringGetCString(str voidptr, buffer &char, buffer_size int, encoding u32) int
 
 	fn C.CFStringGetCStringPtr(str voidptr, encoding u32) &char
 
@@ -118,43 +118,43 @@ $if macos || ios {
 
 	fn C.CFNumberGetValue(number voidptr, number_type i64, value_ptr voidptr) int
 
-	fn C.CFDictionaryCreate(alloc voidptr, keys voidptr, values voidptr, count isize, key_cb voidptr, value_cb voidptr) voidptr
+	fn C.CFDictionaryCreate(alloc voidptr, keys voidptr, values voidptr, count int, key_cb voidptr, value_cb voidptr) voidptr
 
-	fn C.CFDictionaryCreateMutable(alloc voidptr, cap isize, key_cb voidptr, value_cb voidptr) voidptr
+	fn C.CFDictionaryCreateMutable(alloc voidptr, cap int, key_cb voidptr, value_cb voidptr) voidptr
 
-	fn C.CFDictionaryCreateMutableCopy(alloc voidptr, cap isize, src voidptr) voidptr
+	fn C.CFDictionaryCreateMutableCopy(alloc voidptr, cap int, src voidptr) voidptr
 
 	fn C.CFDictionarySetValue(dict voidptr, key voidptr, value voidptr)
 
-	fn C.CFDictionaryGetCount(dict voidptr) isize
+	fn C.CFDictionaryGetCount(dict voidptr) int
 
 	fn C.CFDictionaryGetValue(dict voidptr, key voidptr) voidptr
 
 	fn C.CFDictionaryGetKeysAndValues(dict voidptr, keys voidptr, values voidptr)
 
-	fn C.CFArrayCreate(alloc voidptr, values voidptr, count isize, callbacks voidptr) voidptr
+	fn C.CFArrayCreate(alloc voidptr, values voidptr, count int, callbacks voidptr) voidptr
 
-	fn C.CFArrayCreateMutable(alloc voidptr, cap isize, callbacks voidptr) voidptr
+	fn C.CFArrayCreateMutable(alloc voidptr, cap int, callbacks voidptr) voidptr
 
 	fn C.CFArrayAppendValue(arr voidptr, value voidptr)
 
-	fn C.CFArrayGetCount(arr voidptr) isize
+	fn C.CFArrayGetCount(arr voidptr) int
 
-	fn C.CFArrayGetValueAtIndex(arr voidptr, idx isize) voidptr
+	fn C.CFArrayGetValueAtIndex(arr voidptr, idx int) voidptr
 
 	fn C.CFAttributedStringCreate(alloc voidptr, str voidptr, attrs voidptr) voidptr
 
-	fn C.CFAttributedStringCreateMutable(alloc voidptr, max_len isize) voidptr
+	fn C.CFAttributedStringCreateMutable(alloc voidptr, max_len int) voidptr
 
-	fn C.CFAttributedStringGetLength(str voidptr) isize
+	fn C.CFAttributedStringGetLength(str voidptr) int
 
 	fn C.CFAttributedStringGetString(str voidptr) voidptr
 
-	fn C.CFDataCreateWithBytesNoCopy(alloc voidptr, bytes voidptr, bytes_len isize, deallocator voidptr) voidptr
+	fn C.CFDataCreateWithBytesNoCopy(alloc voidptr, bytes voidptr, bytes_len int, deallocator voidptr) voidptr
 
 	fn C.CFDataGetBytePtr(data voidptr) voidptr
 
-	fn C.CFDataGetLength(data voidptr) isize
+	fn C.CFDataGetLength(data voidptr) int
 
 	fn C.CFURLCreateWithString(alloc voidptr, url_string voidptr, base_url voidptr) voidptr
 
@@ -172,13 +172,13 @@ $if macos || ios {
 
 	fn C.CTFramesetterCreateWithAttributedString(str voidptr) voidptr
 
-	fn C.CTLineGetGlyphCount(line voidptr) isize
+	fn C.CTLineGetGlyphCount(line voidptr) int
 
 	fn C.CTLineGetGlyphRuns(line voidptr) voidptr
 
 	fn C.CTRunGetStatus(run voidptr) u32
 
-	fn C.CTRunGetGlyphCount(run voidptr) isize
+	fn C.CTRunGetGlyphCount(run voidptr) int
 
 	fn C.CGContextRelease(ctx voidptr)
 
@@ -238,7 +238,7 @@ $if macos || ios {
 
 	fn C.CTFontDescriptorCopyAttribute(desc voidptr, attribute voidptr) voidptr
 
-	fn C.CTFontGetGlyphCount(font voidptr) isize
+	fn C.CTFontGetGlyphCount(font voidptr) int
 
 	fn C.CTFontCreateWithFontDescriptor(desc voidptr, size f64, matrix voidptr) voidptr
 
@@ -258,9 +258,9 @@ $if macos || ios {
 
 	fn C.CTFontGetSymbolicTraits(font voidptr) u32
 
-	fn C.CTFontGetGlyphsForCharacters(font voidptr, characters &u16, glyphs &u16, count isize) bool
+	fn C.CTFontGetGlyphsForCharacters(font voidptr, characters &u16, glyphs &u16, count int) bool
 
-	fn C.CTFontGetAdvancesForGlyphs(font voidptr, orientation u32, glyphs &u16, advances voidptr, count isize) f64
+	fn C.CTFontGetAdvancesForGlyphs(font voidptr, orientation u32, glyphs &u16, advances voidptr, count int) f64
 
 	fn C.CTFontGetSize(font voidptr) f64
 
@@ -276,9 +276,9 @@ $if macos || ios {
 
 	fn C.CTFontGetUnitsPerEm(font voidptr) u32
 
-	fn C.CTFontDrawGlyphs(font voidptr, glyphs &u16, positions voidptr, count usize, context voidptr)
+	fn C.CTFontDrawGlyphs(font voidptr, glyphs &u16, positions voidptr, count uint, context voidptr)
 
-	fn C.vt_ct_typesetter_create_line(typesetter voidptr, location isize, length isize) voidptr
+	fn C.vt_ct_typesetter_create_line(typesetter voidptr, location int, length int) voidptr
 
 	fn C.vt_ctrun_get_glyphs_all(run voidptr, out_glyphs voidptr)
 
@@ -288,15 +288,15 @@ $if macos || ios {
 
 	fn C.vt_ctrun_get_string_indices_all(run voidptr, out_indices voidptr)
 
-	fn C.vt_ctfont_get_bounding_rects_for_glyphs(font voidptr, orientation u32, glyphs &u16, rects voidptr, count usize, x &f64, y &f64, width &f64, height &f64)
+	fn C.vt_ctfont_get_bounding_rects_for_glyphs(font voidptr, orientation u32, glyphs &u16, rects voidptr, count uint, x &f64, y &f64, width &f64, height &f64)
 
-	fn C.vt_ctfont_create_for_string(font voidptr, str voidptr, location isize, length isize) voidptr
+	fn C.vt_ctfont_create_for_string(font voidptr, str voidptr, location int, length int) voidptr
 
-	fn C.vt_ctparagraphstyle_create(settings_ptr voidptr, count usize) voidptr
+	fn C.vt_ctparagraphstyle_create(settings_ptr voidptr, count uint) voidptr
 
-	fn C.vt_ctframesetter_create_frame(framesetter_ptr voidptr, location isize, length isize, path_ptr voidptr, attrs_ptr voidptr) voidptr
+	fn C.vt_ctframesetter_create_frame(framesetter_ptr voidptr, location int, length int, path_ptr voidptr, attrs_ptr voidptr) voidptr
 
-	fn C.vt_ctframe_get_line_origins(frame_ptr voidptr, location isize, length isize, points_ptr voidptr)
+	fn C.vt_ctframe_get_line_origins(frame_ptr voidptr, location int, length int, points_ptr voidptr)
 
 	fn C.vt_cgrect_is_null(x f64, y f64, w f64, h f64) bool
 
@@ -316,7 +316,7 @@ $if macos || ios {
 
 	fn C.vt_cgcolorspace_release(space voidptr)
 
-	fn C.vt_cgbitmap_context_create(data voidptr, width usize, height usize, bits_per_component usize, bytes_per_row usize, space voidptr, opts u32) voidptr
+	fn C.vt_cgbitmap_context_create(data voidptr, width uint, height uint, bits_per_component uint, bytes_per_row uint, space voidptr, opts u32) voidptr
 
 	fn C.vt_cgcontext_set_text_matrix(ctx voidptr, a f64, b f64, c f64, d f64, tx f64, ty f64)
 
@@ -324,7 +324,7 @@ $if macos || ios {
 
 	fn C.vt_dispatch_get_main_queue() voidptr
 
-	fn C.vt_dispatch_data_create(data voidptr, len usize, queue voidptr) voidptr
+	fn C.vt_dispatch_data_create(data voidptr, len uint, queue voidptr) voidptr
 
 	fn C.vt_dispatch_release(obj voidptr)
 
@@ -370,21 +370,21 @@ $if macos || ios {
 
 	fn C.vt_iosurface_unlock(surface voidptr)
 
-	fn C.vt_iosurface_get_alloc_size(surface voidptr) usize
+	fn C.vt_iosurface_get_alloc_size(surface voidptr) uint
 
-	fn C.vt_iosurface_get_width(surface voidptr) usize
+	fn C.vt_iosurface_get_width(surface voidptr) uint
 
-	fn C.vt_iosurface_get_height(surface voidptr) usize
+	fn C.vt_iosurface_get_height(surface voidptr) uint
 
-	fn C.vt_iosurface_get_bytes_per_element(surface voidptr) usize
+	fn C.vt_iosurface_get_bytes_per_element(surface voidptr) uint
 
-	fn C.vt_iosurface_get_bytes_per_row(surface voidptr) usize
+	fn C.vt_iosurface_get_bytes_per_row(surface voidptr) uint
 
 	fn C.vt_iosurface_get_base_address(surface voidptr) voidptr
 
-	fn C.vt_iosurface_get_element_width(surface voidptr) usize
+	fn C.vt_iosurface_get_element_width(surface voidptr) uint
 
-	fn C.vt_iosurface_get_element_height(surface voidptr) usize
+	fn C.vt_iosurface_get_element_height(surface voidptr) uint
 
 	fn C.vt_iosurface_get_pixel_format(surface voidptr) u32
 
@@ -397,7 +397,7 @@ $if macos || ios {
 
 	fn C.vt_cf_type_array_callbacks() voidptr
 
-	fn C.vt_cf_character_set_create_with_range(location isize, length isize) voidptr
+	fn C.vt_cf_character_set_create_with_range(location int, length int) voidptr
 
 	fn C.vt_k_ct_font_open_type_feature_tag() voidptr
 
@@ -419,9 +419,9 @@ $if macos || ios {
 
 	fn C.vt_ct_font_variation_axis_key(key int) voidptr
 
-	fn C.vt_cfattributedstring_replace_string(str voidptr, location isize, length isize, replacement voidptr)
+	fn C.vt_cfattributedstring_replace_string(str voidptr, location int, length int, replacement voidptr)
 
-	fn C.vt_cfattributedstring_set_attribute(str voidptr, location isize, length isize, key voidptr, value voidptr)
+	fn C.vt_cfattributedstring_set_attribute(str voidptr, location int, length int, key voidptr, value voidptr)
 
 	@[inline]
 	fn cast_cf_ref[T](ptr voidptr) &T {
@@ -487,7 +487,7 @@ $if macos || ios {
 		if unichars.len > 0 {
 			chars_ptr = voidptr(unichars.data)
 		}
-		ptr := C.CFStringCreateWithCharactersNoCopy(unsafe { nil }, chars_ptr, isize(unichars.len), C.vt_cf_allocator_null())
+		ptr := C.CFStringCreateWithCharactersNoCopy(unsafe { nil }, chars_ptr, int(unichars.len), C.vt_cf_allocator_null())
 		if isnil(ptr) {
 			// Maintain prior non-error API: return a null-like pointer on failure.
 			return unsafe { &CFString(nil) }
@@ -501,7 +501,7 @@ $if macos || ios {
 		if bytes.len > 0 {
 			bytes_ptr = voidptr(bytes.data)
 		}
-		ptr := C.CFStringCreateWithBytes(unsafe { nil }, bytes_ptr, isize(bytes.len), u32(encoding), external_rep)
+		ptr := C.CFStringCreateWithBytes(unsafe { nil }, bytes_ptr, int(bytes.len), u32(encoding), external_rep)
 		return require_cf_ref[CFString](ptr, 'CFStringCreateWithBytes')
 	}
 
@@ -527,7 +527,7 @@ $if macos || ios {
 		}
 		mut ptr := unsafe { &char(nil) }
 		ptr = unsafe { &char(buf.data) }
-		if C.CFStringGetCString(voidptr(s), ptr, isize(buf.len), u32(encoding)) == 0 {
+		if C.CFStringGetCString(voidptr(s), ptr, int(buf.len), u32(encoding)) == 0 {
 			return none
 		}
 		return ptr
@@ -560,8 +560,8 @@ $if macos || ios {
 
 	pub struct CFMutableString {}
 
-	pub fn CFMutableString.create(cap usize) !&CFMutableString {
-		ptr := C.CFStringCreateMutable(unsafe { nil }, isize(cap))
+	pub fn CFMutableString.create(cap uint) !&CFMutableString {
+		ptr := C.CFStringCreateMutable(unsafe { nil }, int(cap))
 		return require_cf_ref[CFMutableString](ptr, 'CFStringCreateMutable')
 	}
 
@@ -578,7 +578,7 @@ $if macos || ios {
 		if chars.len > 0 {
 			chars_ptr = voidptr(chars.data)
 		}
-		C.CFStringAppendCharacters(voidptr(s), chars_ptr, isize(chars.len))
+		C.CFStringAppendCharacters(voidptr(s), chars_ptr, int(chars.len))
 	}
 
 	// SurrogatePair holds the result of UTF-16 surrogate pair encoding.
@@ -672,7 +672,7 @@ $if macos || ios {
 		if values.len > 0 {
 			values_ptr = voidptr(&values[0])
 		}
-		ptr := C.CFDictionaryCreate(unsafe { nil }, keys_ptr, values_ptr, isize(keys.len), C.vt_cf_type_dictionary_key_callbacks(), C.vt_cf_type_dictionary_value_callbacks())
+		ptr := C.CFDictionaryCreate(unsafe { nil }, keys_ptr, values_ptr, int(keys.len), C.vt_cf_type_dictionary_key_callbacks(), C.vt_cf_type_dictionary_value_callbacks())
 		return require_cf_ref[CFDictionary](ptr, 'CFDictionaryCreate')
 	}
 
@@ -707,13 +707,13 @@ $if macos || ios {
 
 	pub struct CFMutableDictionary {}
 
-	pub fn CFMutableDictionary.create(cap usize) !&CFMutableDictionary {
-		ptr := C.CFDictionaryCreateMutable(unsafe { nil }, isize(cap), C.vt_cf_type_dictionary_key_callbacks(), C.vt_cf_type_dictionary_value_callbacks())
+	pub fn CFMutableDictionary.create(cap uint) !&CFMutableDictionary {
+		ptr := C.CFDictionaryCreateMutable(unsafe { nil }, int(cap), C.vt_cf_type_dictionary_key_callbacks(), C.vt_cf_type_dictionary_value_callbacks())
 		return require_cf_ref[CFMutableDictionary](ptr, 'CFDictionaryCreateMutable')
 	}
 
-	pub fn CFMutableDictionary.create_mutable_copy(cap usize, src &CFDictionary) !&CFMutableDictionary {
-		ptr := C.CFDictionaryCreateMutableCopy(unsafe { nil }, isize(cap), voidptr(src))
+	pub fn CFMutableDictionary.create_mutable_copy(cap uint, src &CFDictionary) !&CFMutableDictionary {
+		ptr := C.CFDictionaryCreateMutableCopy(unsafe { nil }, int(cap), voidptr(src))
 		return require_cf_ref[CFMutableDictionary](ptr, 'CFDictionaryCreateMutableCopy')
 	}
 
@@ -740,7 +740,7 @@ $if macos || ios {
 		if data.len > 0 {
 			bytes_ptr = voidptr(data.data)
 		}
-		ptr := C.CFDataCreateWithBytesNoCopy(unsafe { nil }, bytes_ptr, isize(data.len), C.vt_cf_allocator_null())
+		ptr := C.CFDataCreateWithBytesNoCopy(unsafe { nil }, bytes_ptr, int(data.len), C.vt_cf_allocator_null())
 		return require_cf_ref[CFData](ptr, 'CFDataCreateWithBytesNoCopy')
 	}
 
@@ -862,8 +862,8 @@ $if macos || ios {
 
 	pub struct CFMutableAttributedString {}
 
-	pub fn CFMutableAttributedString.create(cap usize) !&CFMutableAttributedString {
-		ptr := C.CFAttributedStringCreateMutable(unsafe { nil }, isize(cap))
+	pub fn CFMutableAttributedString.create(cap uint) !&CFMutableAttributedString {
+		ptr := C.CFAttributedStringCreateMutable(unsafe { nil }, int(cap))
 		return require_cf_ref[CFMutableAttributedString](ptr, 'CFAttributedStringCreateMutable')
 	}
 
@@ -908,14 +908,14 @@ $if macos || ios {
 
 	pub struct CFRange {
 	pub:
-		location isize
-		length   isize
+		location int
+		length   int
 	}
 
 	pub fn CFRange.init(location int, length int) CFRange {
 		return CFRange{
-			location: isize(location)
-			length:   isize(length)
+			location: int(location)
+			length:   int(length)
 		}
 	}
 
@@ -928,7 +928,7 @@ $if macos || ios {
 	pub struct CTParagraphStyleSetting {
 	pub:
 		spec       CTParagraphStyleSpecifier
-		value_size usize
+		value_size uint
 		value      voidptr
 	}
 
@@ -1083,7 +1083,7 @@ $if macos || ios {
 		if count <= 0 {
 			return []int{}
 		}
-		mut tmp := []isize{len: count}
+		mut tmp := []int{len: count}
 		C.vt_ctrun_get_string_indices_all(voidptr(r), voidptr(tmp.data))
 		mut out := []int{len: count}
 		for i in 0 .. count {
@@ -1299,12 +1299,12 @@ $if macos || ios {
 	pub fn (f &CTFont) get_glyphs_for_characters(characters []u16, glyphs []CGGlyph) bool {
 		assert characters.len == glyphs.len
 		return C.CTFontGetGlyphsForCharacters(voidptr(f), characters.data, glyphs.data,
-			isize(characters.len))
+			int(characters.len))
 	}
 
 	pub fn (f &CTFont) get_advances_for_glyphs(orientation CTFontOrientation, glyphs []CGGlyph, advances voidptr) f64 {
 		return C.CTFontGetAdvancesForGlyphs(voidptr(f), u32(orientation), glyphs.data, advances,
-			isize(glyphs.len))
+			int(glyphs.len))
 	}
 
 	pub fn (f &CTFont) get_bounding_rects_for_glyphs(orientation CTFontOrientation, glyphs []CGGlyph, rects []CGRect) CGRect {
@@ -1315,7 +1315,7 @@ $if macos || ios {
 		}
 		mut result := CGRect{}
 		C.vt_ctfont_get_bounding_rects_for_glyphs(voidptr(f), u32(orientation), glyphs.data,
-			rects_ptr, usize(glyphs.len), &result.origin.x, &result.origin.y, &result.size.width,
+			rects_ptr, uint(glyphs.len), &result.origin.x, &result.origin.y, &result.size.width,
 			&result.size.height)
 		return result
 	}
@@ -1368,7 +1368,7 @@ $if macos || ios {
 
 	pub fn (f &CTFont) draw_glyphs(glyphs []CGGlyph, positions []CGPoint, context &CGContext) {
 		assert positions.len == glyphs.len
-		C.CTFontDrawGlyphs(voidptr(f), glyphs.data, voidptr(positions.data), usize(glyphs.len),
+		C.CTFontDrawGlyphs(voidptr(f), glyphs.data, voidptr(positions.data), uint(glyphs.len),
 			voidptr(context))
 	}
 
@@ -1677,7 +1677,7 @@ $if macos || ios {
 
 	pub struct CGBitmapContext {}
 
-	pub fn CGBitmapContext.create(data []u8, width usize, height usize, bits_per_component usize, bytes_per_row usize, space &CGColorSpace, opts u32) !&CGBitmapContext {
+	pub fn CGBitmapContext.create(data []u8, width uint, height uint, bits_per_component uint, bytes_per_row uint, space &CGColorSpace, opts u32) !&CGBitmapContext {
 		mut data_ptr := voidptr(unsafe { nil })
 		if data.len > 0 {
 			data_ptr = voidptr(data.data)
@@ -1786,7 +1786,7 @@ $if macos || ios {
 		if values.len > 0 {
 			values_ptr = voidptr(&values[0])
 		}
-		ptr := C.CFArrayCreate(unsafe { nil }, values_ptr, isize(values.len), C.vt_cf_type_array_callbacks())
+		ptr := C.CFArrayCreate(unsafe { nil }, values_ptr, int(values.len), C.vt_cf_type_array_callbacks())
 		return require_cf_ref[CFArray](ptr, 'CFArrayCreate')
 	}
 
@@ -1798,7 +1798,7 @@ $if macos || ios {
 		if idx < 0 || idx >= a.get_count() {
 			return unsafe { nil }
 		}
-		return C.CFArrayGetValueAtIndex(voidptr(a), isize(idx))
+		return C.CFArrayGetValueAtIndex(voidptr(a), int(idx))
 	}
 
 	pub fn (a &CFArray) release() {
@@ -2143,23 +2143,23 @@ $if macos || ios {
 		C.vt_iosurface_unlock(voidptr(s))
 	}
 
-	pub fn (s &IOSurface) get_alloc_size() usize {
+	pub fn (s &IOSurface) get_alloc_size() uint {
 		return C.vt_iosurface_get_alloc_size(voidptr(s))
 	}
 
-	pub fn (s &IOSurface) get_width() usize {
+	pub fn (s &IOSurface) get_width() uint {
 		return C.vt_iosurface_get_width(voidptr(s))
 	}
 
-	pub fn (s &IOSurface) get_height() usize {
+	pub fn (s &IOSurface) get_height() uint {
 		return C.vt_iosurface_get_height(voidptr(s))
 	}
 
-	pub fn (s &IOSurface) get_bytes_per_element() usize {
+	pub fn (s &IOSurface) get_bytes_per_element() uint {
 		return C.vt_iosurface_get_bytes_per_element(voidptr(s))
 	}
 
-	pub fn (s &IOSurface) get_bytes_per_row() usize {
+	pub fn (s &IOSurface) get_bytes_per_row() uint {
 		return C.vt_iosurface_get_bytes_per_row(voidptr(s))
 	}
 
@@ -2171,11 +2171,11 @@ $if macos || ios {
 		return unsafe { &u8(ptr) }
 	}
 
-	pub fn (s &IOSurface) get_element_width() usize {
+	pub fn (s &IOSurface) get_element_width() uint {
 		return C.vt_iosurface_get_element_width(voidptr(s))
 	}
 
-	pub fn (s &IOSurface) get_element_height() usize {
+	pub fn (s &IOSurface) get_element_height() uint {
 		return C.vt_iosurface_get_element_height(voidptr(s))
 	}
 

@@ -82,10 +82,10 @@ fn test_parser_source_limits_and_separator_list() {
 
 	mut sep := SepList.init_empty()
 	sep.set(0)
-	sep.set(usize(max_params - 1))
+	sep.set(uint(max_params - 1))
 	assert sep.is_set(0)
-	assert sep.is_set(usize(max_params - 1))
-	assert sep.count() == usize(2)
+	assert sep.is_set(uint(max_params - 1))
+	assert sep.count() == uint(2)
 }
 
 fn test_parser_init_and_collect_source_contract() {

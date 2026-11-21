@@ -6,14 +6,14 @@ import strings
 import zigimg
 
 fn C.witty_image_file_seek(int, u64) int
-fn C.witty_image_file_write(int, u64, &u8, usize, &u8, usize, &int) isize
+fn C.witty_image_file_write(int, u64, &u8, uint, &u8, uint, &int) int
 
 #flag -I @VMODROOT/zigimg/reference_probes/streams
 #include "fixture_shims.h"
 
 fn C.witty_stream_probe_pipe(&int) int
 fn C.witty_stream_probe_close(int) int
-fn C.witty_stream_probe_read(int, &u8, usize) isize
+fn C.witty_stream_probe_read(int, &u8, uint) int
 
 type AliasU8 = u8
 type AliasU16 = u16
@@ -25,8 +25,8 @@ type AliasInt = int
 type AliasI64 = i64
 type AliasFloat = f32
 type AliasDouble = f64
-type AliasUsize = usize
-type AliasIsize = isize
+type AliasUsize = uint
+type AliasIsize = int
 type AliasBig = zigimg.BigEndian
 type AliasLittle = zigimg.LittleEndian
 
@@ -185,8 +185,8 @@ fn dispatch_integer[E](mut out strings.Builder, kind int, data []u8, capacity in
 		5 { integer_case[E, i16](mut out, data, capacity, raw) }
 		6 { integer_case[E, int](mut out, data, capacity, raw) }
 		7 { integer_case[E, i64](mut out, data, capacity, raw) }
-		10 { integer_case[E, usize](mut out, data, capacity, raw) }
-		11 { integer_case[E, isize](mut out, data, capacity, raw) }
+		10 { integer_case[E, uint](mut out, data, capacity, raw) }
+		11 { integer_case[E, int](mut out, data, capacity, raw) }
 		12 { integer_case[E, AliasU8](mut out, data, capacity, raw) }
 		13 { integer_case[E, AliasU16](mut out, data, capacity, raw) }
 		14 { integer_case[E, AliasU32](mut out, data, capacity, raw) }
@@ -213,8 +213,8 @@ fn dispatch[E](mut out strings.Builder, mode int, kind int, data []u8, capacity 
 		7 { bit_case[E, i64](mut out, mode, data, capacity, actions) }
 		8 { bit_case[E, f32](mut out, mode, data, capacity, actions) }
 		9 { bit_case[E, f64](mut out, mode, data, capacity, actions) }
-		10 { bit_case[E, usize](mut out, mode, data, capacity, actions) }
-		11 { bit_case[E, isize](mut out, mode, data, capacity, actions) }
+		10 { bit_case[E, uint](mut out, mode, data, capacity, actions) }
+		11 { bit_case[E, int](mut out, mode, data, capacity, actions) }
 		12 { bit_case[E, AliasU8](mut out, mode, data, capacity, actions) }
 		13 { bit_case[E, AliasU16](mut out, mode, data, capacity, actions) }
 		14 { bit_case[E, AliasU32](mut out, mode, data, capacity, actions) }
@@ -302,7 +302,7 @@ fn byte_reads(mut out strings.Builder, mode int, data []u8, capacity int, action
 				if action[0] == `h` {
 					count := reader.read_slice_short(mut bytes) or {
 						status = err.msg()
-						usize(0)
+						uint(0)
 					}
 					out.write_string('${status}:${count}:${hex.encode(bytes)}')
 				} else {
@@ -319,11 +319,11 @@ fn byte_reads(mut out strings.Builder, mode int, data []u8, capacity int, action
 				out.write_string(status)
 			}
 			`x` {
-				reader.discard_all(usize(action[1..].u64())) or { status = err.msg() }
+				reader.discard_all(uint(action[1..].u64())) or { status = err.msg() }
 				out.write_string(status)
 			}
 			`o` {
-				reader.toss(usize(action[1..].u64()))
+				reader.toss(uint(action[1..].u64()))
 				out.write_string(status)
 			}
 			`z` {
@@ -381,7 +381,7 @@ fn byte_writes(mut out strings.Builder, mode int, capacity int, actions string, 
 			`w` {
 				count := writer.write(hex.decode(action[1..]) or { panic(err) }) or {
 					status = err.msg()
-					usize(0)
+					uint(0)
 				}
 				out.write_string('${status}:${count}')
 			}
@@ -444,7 +444,7 @@ fn pipe_writes(mut out strings.Builder, capacity int, actions string) {
 			`w` {
 				count := writer.write(hex.decode(action[1..]) or { panic(err) }) or {
 					status = err.msg()
-					usize(0)
+					uint(0)
 				}
 				out.write_string('${status}:${count}')
 			}
@@ -478,7 +478,7 @@ fn pipe_writes(mut out strings.Builder, capacity int, actions string) {
 
 		mut target := []u8{len: 128}
 		for {
-			n := C.witty_stream_probe_read(fds[0], target.data, usize(target.len))
+			n := C.witty_stream_probe_read(fds[0], target.data, uint(target.len))
 			if n <= 0 { break
 			 }
 			delivered << target[..int(n)]

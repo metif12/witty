@@ -122,7 +122,7 @@ $if !windows {
 	#include <errno.h>
 }
 fn C.poll(voidptr, u32, int) int
-fn C.read(int, voidptr, usize) isize
+fn C.read(int, voidptr, uint) int
 
 struct ResourcePollFd {
 mut:
@@ -150,7 +150,7 @@ fn collect_output(mut process os.Process) !(string, string) {
 			}
 			for index in 0 .. 2 {
 				if fds[index].fd < 0 || fds[index].revents == 0 { continue }
-				count := C.read(fds[index].fd, buffer.data, usize(buffer.len))
+				count := C.read(fds[index].fd, buffer.data, uint(buffer.len))
 				if count < 0 {
 					if C.errno in [C.EINTR, C.EAGAIN] { continue }
 					return os.error_posix()

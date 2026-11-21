@@ -128,11 +128,11 @@ fn record(line string, path string) string {
 		codec.bitmap.predictor = u16(tag.data_offset >> 16)
 		bits := numbers(fields[8])
 		extra := numbers(fields[9])
-		codec.bitmap.bits_per_sample.resize(usize(bits.len))
+		codec.bitmap.bits_per_sample.resize(uint(bits.len))
 		for i, v in bits {
 			codec.bitmap.bits_per_sample.data[i] = v
 		}
-		codec.bitmap.extra_samples.resize(usize(extra.len))
+		codec.bitmap.extra_samples.resize(uint(extra.len))
 		for i, v in extra {
 			codec.bitmap.extra_samples.data[i] = v
 		}

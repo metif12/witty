@@ -44,7 +44,7 @@ fn test_location_iterator_order_and_reset() {
 	os.setenv('XDG_CONFIG_HOME', '/tmp/witty-theme-iterator', true)
 
 	mut it := LocationIterator.new()
-	assert sizeof(LocationIterator) == sizeof(usize)
+	assert sizeof(LocationIterator) == sizeof(uint)
 	first := it.next() or { panic('missing user theme location') }
 	assert first.location == .user
 	assert first.dir == os.join_path('/tmp/witty-theme-iterator', 'ghostty', 'themes')

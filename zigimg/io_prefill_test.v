@@ -7,9 +7,9 @@ import os
 
 fn C.witty_reader_prefill_setup(&char) int
 fn C.witty_reader_prefill_replace(int) int
-fn C.witty_reader_prefill_seed(usize, usize) int
+fn C.witty_reader_prefill_seed(uint, uint) int
 fn C.witty_reader_prefill_cleanup() int
-fn C.witty_reader_prefill_drain(&u8, usize) isize
+fn C.witty_reader_prefill_drain(&u8, uint) int
 
 fn test_prefilled_slice_read_combines_original_bytes_with_pipe_input() {
 	$if !windows {
@@ -39,7 +39,7 @@ fn test_prefilled_slice_read_combines_original_bytes_with_pipe_input() {
 		assert next == 22
 		assert reader.get_pos() == 17
 		mut queued := []u8{len: 64}
-		assert C.witty_reader_prefill_drain(queued.data, usize(queued.len)) == 7
+		assert C.witty_reader_prefill_drain(queued.data, uint(queued.len)) == 7
 		assert queued[..7] == []u8{len: 7, init: u8((index + 25) * 31 + 7)}
 	}
 }
@@ -71,7 +71,7 @@ fn test_failed_prefilled_take_preserves_original_pending_bytes_and_sticky_failur
 		assert status == 'ReadFailed' && reader.get_pos() == 1
 		assert reader.buffered_len() == 6
 		mut queued := []u8{len: 64}
-		assert C.witty_reader_prefill_drain(queued.data, usize(queued.len)) == 7
+		assert C.witty_reader_prefill_drain(queued.data, uint(queued.len)) == 7
 		assert queued[..7] == []u8{len: 7, init: u8((index + 7) * 31 + 7)}
 	}
 }
@@ -97,7 +97,7 @@ fn test_fully_consumed_original_buffer_retains_a_valid_failed_reader_position() 
 		reader.take(1) or { status = err.msg() }
 		assert status == 'ReadFailed' && reader.get_pos() == 0
 		mut queued := []u8{len: 64}
-		assert C.witty_reader_prefill_drain(queued.data, usize(queued.len)) == 8
+		assert C.witty_reader_prefill_drain(queued.data, uint(queued.len)) == 8
 		assert queued[..8] == []u8{len: 8, init: u8(index * 31 + 7)}
 	}
 }

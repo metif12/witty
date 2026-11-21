@@ -101,10 +101,10 @@ pub fn (mut codec XBM) read(mut stream ReadStream) !PixelStorage {
 	codec.height = height or { panic('unreachable') }
 	codec.hotspot_x = hotspot_x
 	codec.hotspot_y = hotspot_y
-	if codec.width != 0 && usize(codec.height) > ~usize(0) / usize(codec.width) {
+	if codec.width != 0 && uint(codec.height) > ~uint(0) / uint(codec.width) {
 		panic('integer overflow')
 	}
-	pixel_count := usize(codec.width) * usize(codec.height)
+	pixel_count := uint(codec.width) * uint(codec.height)
 	mut pixels := PixelStorage.init(.indexed1, pixel_count)!
 	mut indexed := pixels as IndexedStorage1
 	indexed.palette[0] = Rgba32{
@@ -119,7 +119,7 @@ pub fn (mut codec XBM) read(mut stream ReadStream) !PixelStorage {
 		b: 0
 		a: 255
 	}
-	if pixel_count > ~usize(0) - 7 { panic('integer overflow') }
+	if pixel_count > ~uint(0) - 7 { panic('integer overflow') }
 	expected_bytes := (pixel_count + 7) / 8
 	mut bytes := []u8{cap: int(expected_bytes)}
 	if have_first_pixel_line { xbm_collect_hex_bytes(first_pixel_line, mut bytes) }
@@ -132,8 +132,8 @@ pub fn (mut codec XBM) read(mut stream ReadStream) !PixelStorage {
 		}
 		xbm_collect_hex_bytes(line, mut bytes)
 	}
-	if usize(bytes.len) < expected_bytes { return error('InvalidData') }
-	for index := usize(0); index < pixel_count; index++ {
+	if uint(bytes.len) < expected_bytes { return error('InvalidData') }
+	for index := uint(0); index < pixel_count; index++ {
 		indexed.indices[int(index)] = (bytes[int(index / 8)] >> u8(index & 7)) & 1
 	}
 	return pixels
@@ -143,8 +143,8 @@ pub fn XBM.read_image(mut stream ReadStream) !ImageUnmanaged {
 	mut codec := XBM{}
 	pixels := codec.read(mut stream)!
 	return ImageUnmanaged{
-		width:  usize(codec.width)
-		height: usize(codec.height)
+		width:  uint(codec.width)
+		height: uint(codec.height)
 		pixels: pixels
 	}
 }

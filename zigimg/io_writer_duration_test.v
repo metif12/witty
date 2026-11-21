@@ -27,10 +27,10 @@ fn test_duration_writer_options_and_partial_failures() {
 	mut bytes := []u8{len: 16}
 	mut writer := WriteStream.init_memory(mut bytes)
 	writer.print_duration[i64](-1000, FormatOptions{
-		width:     usize(8)
+		width:     uint(8)
 		alignment: .center
 		fill:      `.`
-		precision: usize(0)
+		precision: uint(0)
 	})!
 	assert writer.buffered().bytestr() == '..-1us..'
 	mut short := []u8{len: 3, init: 165}
@@ -40,7 +40,7 @@ fn test_duration_writer_options_and_partial_failures() {
 	assert status == 'WriteFailed' && direct.buffered().bytestr() == '-1.'
 	direct.seek_to(0)!
 	status = 'ok'
-	direct.print_duration[int](-1234567, FormatOptions{ width: usize(10), fill: `_` }) or {
+	direct.print_duration[int](-1234567, FormatOptions{ width: uint(10), fill: `_` }) or {
 		status = err.msg()
 	}
 	assert status == 'WriteFailed' && direct.buffered().bytestr() == '__-'

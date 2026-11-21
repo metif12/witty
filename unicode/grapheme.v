@@ -19,8 +19,8 @@ fn GraphemeKey.init(state BreakState, gb1 GraphemeBreak, gb2 GraphemeBreak) Grap
 	}
 }
 
-fn (key GraphemeKey) index() usize {
-	return usize(key.value)
+fn (key GraphemeKey) index() uint {
+	return uint(key.value)
 }
 
 struct GraphemeValue {

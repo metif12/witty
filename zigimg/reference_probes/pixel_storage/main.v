@@ -23,32 +23,32 @@ fn supported(format p.PixelFormat) bool {
 	return format !in [.invalid, .indexed1, .indexed2, .indexed4, .indexed8, .indexed16, .grayscale16]
 }
 
-fn typed_pointer(storage p.PixelStorage) usize {
+fn typed_pointer(storage p.PixelStorage) uint {
 	return match storage {
-		p.InvalidPixels { usize(0) }
-		p.IndexedStorage1 { usize(storage.indices.data) }
-		p.IndexedStorage2 { usize(storage.indices.data) }
-		p.IndexedStorage4 { usize(storage.indices.data) }
-		p.IndexedStorage8 { usize(storage.indices.data) }
-		p.IndexedStorage16 { usize(storage.indices.data) }
-		p.Grayscale1Pixels { usize(storage.data.data) }
-		p.Grayscale2Pixels { usize(storage.data.data) }
-		p.Grayscale4Pixels { usize(storage.data.data) }
-		p.Grayscale8Pixels { usize(storage.data.data) }
-		p.Grayscale16Pixels { usize(storage.data.data) }
-		p.Grayscale8AlphaPixels { usize(storage.data.data) }
-		p.Grayscale16AlphaPixels { usize(storage.data.data) }
-		p.Rgb332Pixels { usize(storage.data.data) }
-		p.Rgb555Pixels { usize(storage.data.data) }
-		p.Rgb565Pixels { usize(storage.data.data) }
-		p.Rgb24Pixels { usize(storage.data.data) }
-		p.Rgba32Pixels { usize(storage.data.data) }
-		p.Bgr555Pixels { usize(storage.data.data) }
-		p.Bgr24Pixels { usize(storage.data.data) }
-		p.Bgra32Pixels { usize(storage.data.data) }
-		p.Rgb48Pixels { usize(storage.data.data) }
-		p.Rgba64Pixels { usize(storage.data.data) }
-		p.Colorf32Pixels { usize(storage.data.data) }
+		p.InvalidPixels { uint(0) }
+		p.IndexedStorage1 { uint(storage.indices.data) }
+		p.IndexedStorage2 { uint(storage.indices.data) }
+		p.IndexedStorage4 { uint(storage.indices.data) }
+		p.IndexedStorage8 { uint(storage.indices.data) }
+		p.IndexedStorage16 { uint(storage.indices.data) }
+		p.Grayscale1Pixels { uint(storage.data.data) }
+		p.Grayscale2Pixels { uint(storage.data.data) }
+		p.Grayscale4Pixels { uint(storage.data.data) }
+		p.Grayscale8Pixels { uint(storage.data.data) }
+		p.Grayscale16Pixels { uint(storage.data.data) }
+		p.Grayscale8AlphaPixels { uint(storage.data.data) }
+		p.Grayscale16AlphaPixels { uint(storage.data.data) }
+		p.Rgb332Pixels { uint(storage.data.data) }
+		p.Rgb555Pixels { uint(storage.data.data) }
+		p.Rgb565Pixels { uint(storage.data.data) }
+		p.Rgb24Pixels { uint(storage.data.data) }
+		p.Rgba32Pixels { uint(storage.data.data) }
+		p.Bgr555Pixels { uint(storage.data.data) }
+		p.Bgr24Pixels { uint(storage.data.data) }
+		p.Bgra32Pixels { uint(storage.data.data) }
+		p.Rgb48Pixels { uint(storage.data.data) }
+		p.Rgba64Pixels { uint(storage.data.data) }
+		p.Colorf32Pixels { uint(storage.data.data) }
 	}
 }
 
@@ -56,7 +56,7 @@ fn indexed_1() {
 	sizes := []int{len: 3, init: index}
 	for size in sizes {
 		for count in [0, 1, 7, 31] {
-			mut x := p.IndexedStorage1.init_palette_size(usize(count), usize(size))
+			mut x := p.IndexedStorage1.init_palette_size(uint(count), uint(size))
 			mut black := true
 			for color in x.palette {
 				black = black && color.r == 0 && color.g == 0 && color.b == 0 && color.a == 255
@@ -83,9 +83,9 @@ fn indexed_1() {
 	copied := x
 	original := x.palette.data
 	for size in [0, 1, 1, 1, 2] {
-		x.resize_palette(usize(size))
+		x.resize_palette(uint(size))
 		mut storage := p.PixelStorage(x)
-		storage.resize_palette(usize(size))
+		storage.resize_palette(uint(size))
 		sub := storage.slice(1, 6)
 		mut pal := sub.get_palette() or { panic('missing palette') }
 		if pal.len != 0 { pal[0] = p.Rgba32{
@@ -99,7 +99,7 @@ fn indexed_1() {
 	}
 }
 
-fn trap_1(mode string, size usize) {
+fn trap_1(mode string, size uint) {
 	if mode == '--init' {
 		_ = p.IndexedStorage1.init_palette_size(7, size)
 	} else {
@@ -125,7 +125,7 @@ fn indexed_2() {
 	sizes := []int{len: 5, init: index}
 	for size in sizes {
 		for count in [0, 1, 7, 31] {
-			mut x := p.IndexedStorage2.init_palette_size(usize(count), usize(size))
+			mut x := p.IndexedStorage2.init_palette_size(uint(count), uint(size))
 			mut black := true
 			for color in x.palette {
 				black = black && color.r == 0 && color.g == 0 && color.b == 0 && color.a == 255
@@ -152,9 +152,9 @@ fn indexed_2() {
 	copied := x
 	original := x.palette.data
 	for size in [0, 1, 2, 3, 4] {
-		x.resize_palette(usize(size))
+		x.resize_palette(uint(size))
 		mut storage := p.PixelStorage(x)
-		storage.resize_palette(usize(size))
+		storage.resize_palette(uint(size))
 		sub := storage.slice(1, 6)
 		mut pal := sub.get_palette() or { panic('missing palette') }
 		if pal.len != 0 { pal[0] = p.Rgba32{
@@ -168,7 +168,7 @@ fn indexed_2() {
 	}
 }
 
-fn trap_2(mode string, size usize) {
+fn trap_2(mode string, size uint) {
 	if mode == '--init' {
 		_ = p.IndexedStorage2.init_palette_size(7, size)
 	} else {
@@ -194,7 +194,7 @@ fn indexed_4() {
 	sizes := []int{len: 17, init: index}
 	for size in sizes {
 		for count in [0, 1, 7, 31] {
-			mut x := p.IndexedStorage4.init_palette_size(usize(count), usize(size))
+			mut x := p.IndexedStorage4.init_palette_size(uint(count), uint(size))
 			mut black := true
 			for color in x.palette {
 				black = black && color.r == 0 && color.g == 0 && color.b == 0 && color.a == 255
@@ -221,9 +221,9 @@ fn indexed_4() {
 	copied := x
 	original := x.palette.data
 	for size in [0, 1, 8, 15, 16] {
-		x.resize_palette(usize(size))
+		x.resize_palette(uint(size))
 		mut storage := p.PixelStorage(x)
-		storage.resize_palette(usize(size))
+		storage.resize_palette(uint(size))
 		sub := storage.slice(1, 6)
 		mut pal := sub.get_palette() or { panic('missing palette') }
 		if pal.len != 0 { pal[0] = p.Rgba32{
@@ -237,7 +237,7 @@ fn indexed_4() {
 	}
 }
 
-fn trap_4(mode string, size usize) {
+fn trap_4(mode string, size uint) {
 	if mode == '--init' {
 		_ = p.IndexedStorage4.init_palette_size(7, size)
 	} else {
@@ -263,7 +263,7 @@ fn indexed_8() {
 	sizes := []int{len: 257, init: index}
 	for size in sizes {
 		for count in [0, 1, 7, 31] {
-			mut x := p.IndexedStorage8.init_palette_size(usize(count), usize(size))
+			mut x := p.IndexedStorage8.init_palette_size(uint(count), uint(size))
 			mut black := true
 			for color in x.palette {
 				black = black && color.r == 0 && color.g == 0 && color.b == 0 && color.a == 255
@@ -290,9 +290,9 @@ fn indexed_8() {
 	copied := x
 	original := x.palette.data
 	for size in [0, 1, 128, 255, 256] {
-		x.resize_palette(usize(size))
+		x.resize_palette(uint(size))
 		mut storage := p.PixelStorage(x)
-		storage.resize_palette(usize(size))
+		storage.resize_palette(uint(size))
 		sub := storage.slice(1, 6)
 		mut pal := sub.get_palette() or { panic('missing palette') }
 		if pal.len != 0 { pal[0] = p.Rgba32{
@@ -306,7 +306,7 @@ fn indexed_8() {
 	}
 }
 
-fn trap_8(mode string, size usize) {
+fn trap_8(mode string, size uint) {
 	if mode == '--init' {
 		_ = p.IndexedStorage8.init_palette_size(7, size)
 	} else {
@@ -332,7 +332,7 @@ fn indexed_16() {
 	sizes := [0, 1, 2, 15, 16, 255, 256, 32767, 65535, 65536]
 	for size in sizes {
 		for count in [0, 1, 7, 31] {
-			mut x := p.IndexedStorage16.init_palette_size(usize(count), usize(size))
+			mut x := p.IndexedStorage16.init_palette_size(uint(count), uint(size))
 			mut black := true
 			for color in x.palette {
 				black = black && color.r == 0 && color.g == 0 && color.b == 0 && color.a == 255
@@ -359,9 +359,9 @@ fn indexed_16() {
 	copied := x
 	original := x.palette.data
 	for size in [0, 1, 32768, 65535, 65536] {
-		x.resize_palette(usize(size))
+		x.resize_palette(uint(size))
 		mut storage := p.PixelStorage(x)
-		storage.resize_palette(usize(size))
+		storage.resize_palette(uint(size))
 		sub := storage.slice(1, 6)
 		mut pal := sub.get_palette() or { panic('missing palette') }
 		if pal.len != 0 { pal[0] = p.Rgba32{
@@ -375,7 +375,7 @@ fn indexed_16() {
 	}
 }
 
-fn trap_16(mode string, size usize) {
+fn trap_16(mode string, size uint) {
 	if mode == '--init' {
 		_ = p.IndexedStorage16.init_palette_size(7, size)
 	} else {
@@ -413,7 +413,7 @@ fn main() {
 		at_exit(observe) or { panic(err) }
 		if os.args[1] == '--raw' {
 			bytes := []u8{len: 160, init: 165}
-			base := if usize(bytes.data) % 16 == 0 { 0 } else { int(16 - usize(bytes.data) % 16) }
+			base := if uint(bytes.data) % 16 == 0 { 0 } else { int(16 - uint(bytes.data) % 16) }
 			observed_bytes = bytes[base..base + 64]
 			format := unsafe { p.PixelFormat(os.args[3].u32()) }
 			offset := os.args[4].int()
@@ -424,7 +424,7 @@ fn main() {
 			eprintln('UNEXPECTED: raw operation returned')
 		} else {
 			bits := os.args[3].int()
-			size := usize(os.args[4].u64())
+			size := uint(os.args[4].u64())
 			match bits {
 				1 { trap_1(os.args[1], size) }
 				2 { trap_2(os.args[1], size) }
@@ -452,10 +452,10 @@ fn main() {
 					if supported(format) && count != 0 && aligned(format) && offset % 2 != 0 { continue
 					 }
 					mut bytes := []u8{len: 192}
-					base := if usize(bytes.data) % 16 == 0 {
+					base := if uint(bytes.data) % 16 == 0 {
 						0
 					} else {
-						int(16 - usize(bytes.data) % 16)
+						int(16 - uint(bytes.data) % 16)
 					}
 					for i in 0 .. 160 {
 						bytes[base + i] = u8(i * 17 + seed * 61)
@@ -467,10 +467,10 @@ fn main() {
 						continue
 					}
 					// Source empty slice pointers are undefined, so observe only lengths.
-					pointer_ok := count == 0 || typed_pointer(result) == usize(input.data)
+					pointer_ok := count == 0 || typed_pointer(result) == uint(input.data)
 					mut raw := result.as_bytes()
 					if raw.len != 0 { raw[raw.len - 1] = u8(seed + 97) }
-					sub := result.slice(usize(count / 2), usize(count))
+					sub := result.slice(uint(count / 2), uint(count))
 					println('B|${u32(format)}|${offset}|${count}|${seed}|${result.len()}|${pointer_ok}|${raw.hex()}|${input.hex()}|${sub.as_bytes().hex()}')
 				}
 			}

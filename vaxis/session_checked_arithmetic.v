@@ -22,13 +22,13 @@ fn session_u8_mul(lhs u8, rhs u8) u8 {
 	return lhs * rhs
 }
 
-fn session_usize_add(lhs usize, rhs usize) usize {
-	if lhs > ~usize(0) - rhs { panic('integer overflow') }
+fn session_usize_add(lhs uint, rhs uint) uint {
+	if lhs > ~uint(0) - rhs { panic('integer overflow') }
 	return lhs + rhs
 }
 
-fn session_usize_mul(lhs usize, rhs usize) usize {
-	if rhs > 0 && lhs > ~usize(0) / rhs { panic('integer overflow') }
+fn session_usize_mul(lhs uint, rhs uint) uint {
+	if rhs > 0 && lhs > ~uint(0) / rhs { panic('integer overflow') }
 	return lhs * rhs
 }
 

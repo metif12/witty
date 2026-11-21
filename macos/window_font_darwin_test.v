@@ -55,7 +55,7 @@ fn test_source_window_title_font_and_native_tab_title_updates() {
 	probe := msg_id_rect_u64_u64_bool(msg_id(cls, 'alloc'), 'initWithContentRect:styleMask:backing:defer:', objc_rect(0, 0, 640, 480), ns_window_style_titled, ns_backing_store_buffered, false)
 	msg_void1(probe, 'setTitle:', nsstring('subclass title'))
 	assert objc_utf8_string(msg_id(probe, 'title')) == 'subclass title'
-	C.macos_set_associated_object(probe, voidptr(&native_title_font_key), font, usize(1))
+	C.macos_set_associated_object(probe, voidptr(&native_title_font_key), font, uint(1))
 	g_native_windows[u64(probe)] = &NativeWindowData{window:probe,config:NativeWindowConfig{titlebar_style:2}}
 	font_fixture_is_key = false
 	refresh_native_window_title_attributes(probe)

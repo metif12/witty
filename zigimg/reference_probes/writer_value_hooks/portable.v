@@ -39,20 +39,20 @@ fn test_numeric_hook_receives_exact_number_options_before_depth_cutoff() ! {
 	for i, format in formats {
 		mut buffer := []u8{len: 128}
 		mut writer := zigimg.WriteStream.init_memory(mut buffer)
-		options := zigimg.FormatOptions{ precision: ~usize(0), width: usize(0), alignment: .center, fill: 255 }
+		options := zigimg.FormatOptions{ precision: ~uint(0), width: uint(0), alignment: .center, fill: 255 }
 		writer.print_value(format, options, HookValue{-7, false}, 0)!
 		letter_case := if format in ['X', 'E'] { 1 } else { 0 }
-		assert writer.buffered().bytestr() == 'number:${modes[i]},${letter_case},${~usize(0)},0,1,255:-7'
-		assert options.width == ?usize(0) && options.precision == ?usize(~usize(0))
+		assert writer.buffered().bytestr() == 'number:${modes[i]},${letter_case},${~uint(0)},0,1,255:-7'
+		assert options.width == ?uint(0) && options.precision == ?uint(~uint(0))
 	}
 }
 
 fn test_unit_hooks_ignore_options_and_depth_and_forward_units() ! {
 	mut buffer := []u8{len: 128}
 	mut writer := zigimg.WriteStream.init_memory(mut buffer)
-	options := zigimg.FormatOptions{ precision: ~usize(0), width: ~usize(0), fill: 255 }
+	options := zigimg.FormatOptions{ precision: ~uint(0), width: ~uint(0), fill: 255 }
 	writer.print_value('B', options, HookValue{7, false}, 0)!
-	writer.print_value('Bi', options, HookValue{8, false}, ~usize(0))!
+	writer.print_value('Bi', options, HookValue{8, false}, ~uint(0))!
 	writer.print_value('D', options, HookValue{-9, false}, 0)!
 	assert writer.buffered().bytestr() == 'bytes:0:7bytes:1:8duration:-9'
 }

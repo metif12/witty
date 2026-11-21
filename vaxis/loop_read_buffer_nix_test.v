@@ -14,7 +14,7 @@ fn test_loop_read_buffer_handles_one_read_without_tty_pending_storage() {
 	assert bytes.data == &reader.buf[0]
 	input := 'a\x1b[5n\x1b[A'.bytes()
 	copy(mut bytes, input)
-	reader.begin_read(usize(input.len))
+	reader.begin_read(uint(input.len))
 	first := reader.parse_next(mut parser, false)!
 	assert first.n == 1
 	assert read_buffer_test_key(first).codepoint == `a`
@@ -63,7 +63,7 @@ fn test_loop_read_buffer_error_propagation_and_zero_read() {
 	mut bytes := reader.read_buffer()
 	input := '\x1b]11;invalid\x07'.bytes()
 	copy(mut bytes, input)
-	reader.begin_read(usize(input.len))
+	reader.begin_read(uint(input.len))
 	reader.parse_next(mut parser, false) or {
 		assert err.msg() == 'InvalidColorSpec'
 		return

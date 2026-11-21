@@ -33,7 +33,7 @@ enum VTKind as u8 {
 
 pub struct VTEvent {
 mut:
-	seq              usize = 1
+	seq              uint = 1
 	kind             VTKind
 	raw_description  string
 	cursor           terminal.Cursor
@@ -56,7 +56,7 @@ mut:
 	events                  []VTEvent
 	parser_stream           terminal.Stream[VTHandler]
 	paused                  bool
-	current_seq             usize = 1
+	current_seq             uint = 1
 	filter_exclude          [11]bool
 	filter_text             string
 	filter_native           cimgui.TextFilter

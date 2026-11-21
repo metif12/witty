@@ -9,13 +9,13 @@ import zigimg
 
 fn C.witty_writer_seek_setup(&char) int
 fn C.witty_writer_seek_replace(int) int
-fn C.witty_writer_seek_restore(&char, usize) int
+fn C.witty_writer_seek_restore(&char, uint) int
 fn C.witty_writer_seek_close() int
 fn C.witty_writer_seek_cleanup() int
 fn C.witty_writer_seek_valid() int
 fn C.witty_writer_seek_refs() int
-fn C.witty_writer_seek_view(&u8, usize) isize
-fn C.witty_writer_seek_drain(&u8, usize) isize
+fn C.witty_writer_seek_view(&u8, uint) int
+fn C.witty_writer_seek_drain(&u8, uint) int
 
 __global (
 	observed_path     string
@@ -27,7 +27,7 @@ __global (
 	observed_vectors  [][]u8
 	observed_options  zigimg.FormatOptions
 	observed_base     u8
-	observed_case     usize
+	observed_case     uint
 	observed_tag      int
 	observed_length   int
 	observed_elements []u8
@@ -37,18 +37,18 @@ __global (
 fn state(writer zigimg.WriteStream, buffer []u8) string {
 	mut contents := []u8{len: 4096}
 	n := if observed_file {
-		C.witty_writer_seek_view(contents.data, usize(contents.len))
+		C.witty_writer_seek_view(contents.data, uint(contents.len))
 	} else {
-		isize(0)
+		int(0)
 	}
 	if n < 0 { panic('Writer observer failed') }
 	valid := if observed_file { C.witty_writer_seek_valid() } else { 0 }
 	refs := if observed_file { C.witty_writer_seek_refs() } else { 0 }
 	unused := writer.unused_capacity_slice()
-	offset := if buffer.len == 0 { usize(0) } else { usize(unused.data) - usize(buffer.data) }
+	offset := if buffer.len == 0 { uint(0) } else { uint(unused.data) - uint(buffer.data) }
 	mut headers := []string{}
 	for bytes in observed_vectors {
-		headers << '${usize(bytes.data) - usize(observed_payload.data)},${bytes.len}'
+		headers << '${uint(bytes.data) - uint(observed_payload.data)},${bytes.len}'
 	}
 	precision := if value := observed_options.precision { '${value}' } else { '-' }
 	width := if value := observed_options.width { '${value}' } else { '-' }
@@ -74,12 +74,12 @@ type Alias0 = u8
 type Alias1 = u16
 type Alias2 = u32
 type Alias3 = u64
-type Alias4 = usize
+type Alias4 = uint
 type Alias5 = i8
 type Alias6 = i16
 type Alias7 = int
 type Alias8 = i64
-type Alias9 = isize
+type Alias9 = int
 type Alias10 = f32
 type Alias11 = f64
 type Alias12 = bool
@@ -97,7 +97,7 @@ fn element[T](raw u64) T {
 	}
 }
 
-fn operate[T](mut writer zigimg.WriteStream, values []T, nested [][]T, triple [][][]T, shape int, options zigimg.FormatOptions, depth usize) string {
+fn operate[T](mut writer zigimg.WriteStream, values []T, nested [][]T, triple [][][]T, shape int, options zigimg.FormatOptions, depth uint) string {
 	if shape == 0 {
 		writer.print_value('any', options, values, depth) or { return err.msg() }
 	} else if shape == 1 {
@@ -136,10 +136,10 @@ fn typed_record[T](line string, path string) string {
 	data := unsafe { payload[..8] }
 	observed_length = f[8].int()
 	observed_base = u8(f[4].int())
-	observed_case = usize(f[15].u64())
+	observed_case = uint(f[15].u64())
 	observed_tag = f[14].int()
-	precision := if f[12] == '-' { ?usize(none) } else { ?usize(usize(f[12].u64())) }
-	width := if f[11] == '1' { ?usize(usize(f[5].u64())) } else { ?usize(none) }
+	precision := if f[12] == '-' { ?uint(none) } else { ?uint(uint(f[12].u64())) }
+	width := if f[11] == '1' { ?uint(uint(f[5].u64())) } else { ?uint(none) }
 	options := zigimg.FormatOptions{
 		precision: precision
 		width:     width
@@ -173,7 +173,7 @@ fn typed_record[T](line string, path string) string {
 	out += 'ready|' + state(writer, buffer) + '~'
 	observed_status = 'write'
 	mut status := 'skip'
-	status = operate(mut adapter, values, nested, triple, f[4].int(), options, usize(f[15].u64()))
+	status = operate(mut adapter, values, nested, triple, f[4].int(), options, uint(f[15].u64()))
 	if status == 'skip' { status = 'ok' }
 	out += status + '|' + state(writer, buffer) + '~'
 	change(mut buffer, 1, u8(f[9].int()))
@@ -184,12 +184,12 @@ fn typed_record[T](line string, path string) string {
 		writer.flush() or { status = err.msg() }
 	}
 	out += status + '|' + state(writer, buffer) + '~'
-	mut drain := isize(-3)
+	mut drain := int(-3)
 	mut wire := []u8{}
 	if kind > 0 && f[6] == '1' {
 		for {
 			mut bytes := []u8{len: 4096}
-			drain = C.witty_writer_seek_drain(bytes.data, usize(bytes.len))
+			drain = C.witty_writer_seek_drain(bytes.data, uint(bytes.len))
 			if drain <= 0 { break
 			 }
 			wire << bytes[..int(drain)]
@@ -204,12 +204,12 @@ fn record(line string, path string) string {
 		1 { typed_record[u16](line, path) }
 		2 { typed_record[u32](line, path) }
 		3 { typed_record[u64](line, path) }
-		4 { typed_record[usize](line, path) }
+		4 { typed_record[uint](line, path) }
 		5 { typed_record[i8](line, path) }
 		6 { typed_record[i16](line, path) }
 		7 { typed_record[int](line, path) }
 		8 { typed_record[i64](line, path) }
-		9 { typed_record[isize](line, path) }
+		9 { typed_record[int](line, path) }
 		10 { typed_record[f32](line, path) }
 		11 { typed_record[f64](line, path) }
 		12 { typed_record[bool](line, path) }

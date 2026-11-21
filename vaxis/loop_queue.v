@@ -9,8 +9,8 @@ import sync
 pub struct EventQueue[T] {
 mut:
 	buf         []T
-	read_index  usize
-	write_index usize
+	read_index  uint
+	write_index uint
 	mutex       &sync.Mutex = unsafe { nil }
 	not_full    datastruct.Condition
 	not_empty   datastruct.Condition
@@ -118,8 +118,8 @@ pub fn (mut q EventQueue[T]) is_full() bool {
 	return q.is_full_lh()
 }
 
-pub fn (q &EventQueue[T]) len() usize {
-	wrap_offset := usize(2) * usize(q.buf.len) * usize(q.write_index < q.read_index)
+pub fn (q &EventQueue[T]) len() uint {
+	wrap_offset := uint(2) * uint(q.buf.len) * uint(q.write_index < q.read_index)
 	return q.write_index + wrap_offset - q.read_index
 }
 
@@ -128,15 +128,15 @@ fn (q &EventQueue[T]) is_empty_lh() bool {
 }
 
 fn (q &EventQueue[T]) is_full_lh() bool {
-	return q.mask2(q.write_index + usize(q.buf.len)) == q.read_index
+	return q.mask2(q.write_index + uint(q.buf.len)) == q.read_index
 }
 
-fn (q &EventQueue[T]) mask(index usize) usize {
-	return index % usize(q.buf.len)
+fn (q &EventQueue[T]) mask(index uint) uint {
+	return index % uint(q.buf.len)
 }
 
-fn (q &EventQueue[T]) mask2(index usize) usize {
-	return index % (2 * usize(q.buf.len))
+fn (q &EventQueue[T]) mask2(index uint) uint {
+	return index % (2 * uint(q.buf.len))
 }
 
 fn (mut q EventQueue[T]) pop_lh() T {

@@ -17,5 +17,5 @@ fn test_vaxis_grapheme_cache_wraps_and_returns_stable_slice() {
 }
 
 fn test_vaxis_grapheme_cache_retains_source_inline_storage() {
-	assert sizeof(GraphemeCache) == 8192 + sizeof(usize)
+	assert sizeof(GraphemeCache) == 8192 + sizeof(uint)
 }

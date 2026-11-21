@@ -21,12 +21,12 @@ fn reply_device_status_for_test(fd int) {
 	mut output := []u8{}
 	mut buf := [1024]u8{}
 	for !output.bytestr().contains('\x1b[5n') {
-		count := C.read(fd, &buf[0], usize(buf.len))
+		count := C.read(fd, &buf[0], uint(buf.len))
 		assert count > 0
 		output << buf[..int(count)]
 	}
 	response := '\x1b[0n'.bytes()
-	assert C.write(fd, response.data, usize(response.len)) == response.len
+	assert C.write(fd, response.data, uint(response.len)) == response.len
 }
 
 fn make_pty_noncanonical_for_test(fd int) {
@@ -41,7 +41,7 @@ fn make_pty_noncanonical_for_test(fd int) {
 fn reply_da1_for_test(fd int) {
 	time.sleep(30 * time.millisecond)
 	response := '\x1b[?1;2c\n'.bytes()
-	assert C.write(fd, response.data, usize(response.len)) == response.len
+	assert C.write(fd, response.data, uint(response.len)) == response.len
 }
 
 struct PtyCustomEvent {
@@ -77,7 +77,7 @@ fn test_generic_loop_reads_only_subscribed_events_and_intercepts_reports() {
 	vx.query_terminal_send()
 	// The initial and reported winsizes, focus event and DA1 must not be queued.
 	input := '\x1b[I\x1b[48;30;90t\x1b[?1;2cx\n'.bytes()
-	assert C.write(master, input.data, usize(input.len)) == input.len
+	assert C.write(master, input.data, uint(input.len)) == input.len
 	custom := loop.next_event()
 	assert custom is PtyCustomEvent
 	if custom is PtyCustomEvent {
@@ -151,7 +151,7 @@ fn test_input_loop_reads_and_queues_terminal_events() {
 	}
 	_ = loop.next_event() // the canonical PTY's newline
 	resize_report := '\x1b[48;30;90t\n'.bytes()
-	assert C.write(master, resize_report.data, usize(resize_report.len)) == resize_report.len
+	assert C.write(master, resize_report.data, uint(resize_report.len)) == resize_report.len
 	in_band := loop.next_event()
 	assert in_band is Winsize
 	if in_band is Winsize {

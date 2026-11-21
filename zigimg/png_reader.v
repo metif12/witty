@@ -106,7 +106,7 @@ fn (mut reader PngIDatReader) take(count int) ![]u8 {
 }
 
 fn (mut reader PngIDatReader) flate_fill_word() ! {
-	reader.peek(int(sizeof(usize)))!
+	reader.peek(int(sizeof(uint)))!
 }
 
 fn (reader PngIDatReader) flate_buffered_len() int {
@@ -158,8 +158,8 @@ pub fn png_load(mut stream ReadStream, options PngReaderOptions) !ImageUnmanaged
 	mut header := png_load_header(mut stream)!
 	pixels := png_load_with_header(mut stream, &header, options)!
 	return ImageUnmanaged{
-		width:  usize(header.width)
-		height: usize(header.height)
+		width:  uint(header.width)
+		height: uint(header.height)
 		pixels: pixels
 	}
 }
@@ -241,7 +241,7 @@ fn png_read_all_data(mut stream ReadStream, header &PngHeaderData, palette []Rgb
 	height := header.height
 	channels := header.channel_count()
 	format := data.current_format
-	mut result := PixelStorage.init(format, usize(png_reader_u32_mul(width, height)))!
+	mut result := PixelStorage.init(format, uint(png_reader_u32_mul(width, height)))!
 	mut input := PngIDatReader{
 		source:     unsafe { &stream }
 		processors: unsafe { options.processors }
@@ -253,7 +253,7 @@ fn png_read_all_data(mut stream ReadStream, header &PngHeaderData, palette []Rgb
 	if palette.len > 0 {
 		mut destination_palette := []Rgba32{}
 		if result.is_indexed() {
-			result.resize_palette(usize(palette.len))
+			result.resize_palette(uint(palette.len))
 			destination_palette = unsafe { result.get_palette() or { []Rgba32{} } }
 		} else {
 			destination_palette = []Rgba32{len: palette.len}
@@ -273,8 +273,8 @@ fn png_read_all_data(mut stream ReadStream, header &PngHeaderData, palette []Rgb
 	line_bytes := header.line_bytes()
 	virtual_bytes := png_reader_u32_add(line_bytes, filter_stride)
 	if height == 0 { panic('division by zero') }
-	result_bytes := usize(destination.len) / usize(height)
-	if result_bytes > usize(0xffffffff) { panic('integer cast truncated bits') }
+	result_bytes := uint(destination.len) / uint(height)
+	if result_bytes > uint(0xffffffff) { panic('integer cast truncated bits') }
 	result_line_bytes := u32(result_bytes)
 	mut temporary_bytes := png_reader_u32_mul(2, virtual_bytes)
 	if header.interlace_method == .adam7 {

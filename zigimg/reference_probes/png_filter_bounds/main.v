@@ -7,7 +7,7 @@ const formats = [zigimg.PixelFormat.indexed1, .indexed2, .indexed4, .indexed8, .
 	.grayscale2, .grayscale4, .grayscale8, .grayscale16, .grayscale8_alpha, .grayscale16_alpha,
 	.rgb24, .rgb48, .rgba32, .rgba64, .indexed16, .invalid, .rgb332, .rgb565]!
 
-fn pixels_for(format zigimg.PixelFormat, count usize, seed int) zigimg.PixelStorage {
+fn pixels_for(format zigimg.PixelFormat, count uint, seed int) zigimg.PixelStorage {
 	if format == .invalid { return zigimg.InvalidPixels{} }
 	pixels := zigimg.PixelStorage.init(format, count) or { panic(err) }
 	mut bytes := pixels.as_bytes()
@@ -45,7 +45,7 @@ fn observe() {
 
 fn record(line string) string {
 	p := line.split('|').map(it.u64())
-	pixels := pixels_for(formats[int(p[0])], usize(p[3]), int(p[6]))
+	pixels := pixels_for(formats[int(p[0])], uint(p[3]), int(p[6]))
 	header := zigimg.PngHeaderData{
 		compression_method: .deflate
 		filter_method:      .adaptive

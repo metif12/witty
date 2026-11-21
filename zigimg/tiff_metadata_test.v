@@ -317,7 +317,7 @@ fn test_tiff_bitmap_format_and_row_size_match_native_matrix() {
 							codec.bitmap.photometric_interpretation = u16(photo)
 							codec.bitmap.fill_order = u16(1 + (flags & 1))
 							codec.bitmap.predictor = u16(1 + (flags >> 1))
-							codec.bitmap.bits_per_sample.resize(usize(count))
+							codec.bitmap.bits_per_sample.resize(uint(count))
 							for i in 0 .. count {
 								codec.bitmap.bits_per_sample.data[i] = bits
 							}
@@ -337,10 +337,10 @@ fn test_tiff_bitmap_format_and_row_size_match_native_matrix() {
 								codec.bitmap.samples_per_pixel = u16(count)
 								row := codec.cal_row_byte_size() or {
 									assert err.msg() == 'Unsupported'
-									~usize(0)
+									~uint(0)
 								}
 								tiff_test_mix(mut hash, u64(row))
-								assert codec.width() == usize(width)
+								assert codec.width() == uint(width)
 							}
 						}
 					}

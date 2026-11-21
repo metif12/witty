@@ -13,7 +13,7 @@ fn run[T, B](storage B, value T, capacity int, trap bool) {
 		storage: storage
 	}
 	if trap {
-		buffer.resize(usize(capacity + 1))
+		buffer.resize(uint(capacity + 1))
 		eprintln('UNEXPECTED')
 		return
 	}
@@ -22,7 +22,7 @@ fn run[T, B](storage B, value T, capacity int, trap bool) {
 		bytes[i] = u8(i * 37 + 11)
 	}
 	for size in 0 .. capacity + 1 {
-		buffer.resize(usize(size))
+		buffer.resize(uint(size))
 		borrowed := size == 0 || buffer.data.data == voidptr(&buffer.storage)
 		old := buffer.data
 		buffer.resize(0)
@@ -30,7 +30,7 @@ fn run[T, B](storage B, value T, capacity int, trap bool) {
 			mut old_bytes := unsafe { (&u8(old.data)).vbytes(size * int(sizeof(T))) }
 			old_bytes[old_bytes.len - 1] ^= 0x5a
 		}
-		buffer.resize(usize(size))
+		buffer.resize(uint(size))
 		mut active := [u64(14695981039346656037)]
 		data := unsafe { (&u8(buffer.data.data)).vbytes(size * int(sizeof(T))) }
 		for byte in data {

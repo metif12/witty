@@ -13,8 +13,8 @@ fn C.witty_image_fifo_kind(&char) int
 fn C.witty_image_fifo_refs(int) int
 fn C.witty_image_fifo_close(int) int
 fn C.witty_image_fifo_valid(int) int
-fn C.witty_image_fifo_write(int, &u8, usize) isize
-fn C.witty_image_fifo_read(int, &u8, usize) isize
+fn C.witty_image_fifo_write(int, &u8, uint) int
+fn C.witty_image_fifo_read(int, &u8, uint) int
 
 __global (
 	observed_path   string
@@ -134,7 +134,7 @@ fn snapshot(drain bool) string {
 	if drain {
 		mut bytes := []u8{len: 4096}
 		for {
-			n := C.witty_image_fifo_read(observed_fd, bytes.data, usize(bytes.len))
+			n := C.witty_image_fifo_read(observed_fd, bytes.data, uint(bytes.len))
 			if n <= 0 {
 				observed_drain = int(n)
 				break
@@ -190,7 +190,7 @@ fn record(line string) string {
 		C.witty_image_fifo_remove(observed_fifo.str)
 	}
 	seed := hex.decode(f[8]) or { panic(err) }
-	if seed.len > 0 && C.witty_image_fifo_write(observed_fd, seed.data, usize(seed.len)) != seed.len {
+	if seed.len > 0 && C.witty_image_fifo_write(observed_fd, seed.data, uint(seed.len)) != seed.len {
 		panic('FIFO seed failed')
 	}
 	observed_wire = []u8{}

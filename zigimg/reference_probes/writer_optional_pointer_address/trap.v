@@ -17,7 +17,7 @@ fn save() {
 	os.write_file(path, '${w.buffered().len}|${backing.hex()}|${w.buffered().hex()}|${w.unused_capacity_slice().hex()}') or { panic(err) }
 }
 
-fn borrowed[E](_ E, raw usize, length int) []E {
+fn borrowed[E](_ E, raw uint, length int) []E {
 	return unsafe { array{ data: voidptr(raw), len: length, cap: length, flags: .nofree, element_size: int(sizeof(E)) } }
 }
 
@@ -30,23 +30,23 @@ fn run() ! {
 	at_exit(save)!
 	mut status := 'ok'
 	zero := ?&int(none)
-	view := borrowed(zero, usize(0x1234), 0)
-	options := p.FormatOptions{ width: ~usize(0), precision: ~usize(0) }
+	view := borrowed(zero, uint(0x1234), 0)
+	options := p.FormatOptions{ width: ~uint(0), precision: ~uint(0) }
 	match os.args[3] {
 		'0' { w.print_address(view) or { status = err.msg() } }
 		'1' { w.print_value('*', options, view, 0) or { status = err.msg() } }
 		'2' { w.print_value('?*', options, ?Values(view), 0) or { status = err.msg() } }
 		'3' {
-			w.print_address(borrowed(?&bool(none), ~usize(0), 3)) or { status = err.msg() }
+			w.print_address(borrowed(?&bool(none), ~uint(0), 3)) or { status = err.msg() }
 		}
 		'4' {
 			w.print_value('?*', p.FormatOptions{ width: 6, fill: `_` }, ?Values(none), 0) or { status = err.msg() }
 		}
 		'5' {
-			w.print_value('?*', p.FormatOptions{ width: ~usize(0), fill: `_` }, ?Values(none), 0) or { status = err.msg() }
+			w.print_value('?*', p.FormatOptions{ width: ~uint(0), fill: `_` }, ?Values(none), 0) or { status = err.msg() }
 		}
 		'6', '7' {
-			value := unsafe { &Fixed(voidptr(usize(0x1234))) }
+			value := unsafe { &Fixed(voidptr(uint(0x1234))) }
 			if os.args[3] == '6' {
 				w.print_address(value) or { status = err.msg() }
 			} else {

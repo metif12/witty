@@ -13,7 +13,7 @@ fn test_writer_splat_repeats_only_tail_and_preserves_inputs() {
 	assert writer.splat_byte(`e`, 2)! == 2
 	assert writer.splat_bytes('fg'.bytes(), 2)! == 4
 	assert writer.buffered() == 'abcbcbcdeefgfg'.bytes()
-	assert writer.splat_bytes([]u8{}, ~usize(0))! == 0
+	assert writer.splat_bytes([]u8{}, ~uint(0))! == 0
 }
 
 fn test_writer_splat_memory_failure_keeps_partial_pattern() {

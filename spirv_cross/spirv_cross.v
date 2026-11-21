@@ -14,7 +14,7 @@ $if !managed_native ? {
 pub fn C.spvc_context_create(context &voidptr) int
 pub fn C.spvc_context_destroy(context voidptr)
 pub fn C.spvc_context_set_error_callback(context voidptr, callback fn (voidptr, &char), userdata voidptr)
-pub fn C.spvc_context_parse_spirv(context voidptr, words &u32, count usize, ir &voidptr) int
+pub fn C.spvc_context_parse_spirv(context voidptr, words &u32, count uint, ir &voidptr) int
 pub fn C.spvc_context_create_compiler(context voidptr, backend int, ir voidptr, mode int, compiler &voidptr) int
 pub fn C.spvc_compiler_create_compiler_options(compiler voidptr, options &voidptr) int
 pub fn C.spvc_compiler_options_set_bool(options voidptr, option int, value bool) int

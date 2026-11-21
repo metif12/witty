@@ -16,7 +16,7 @@ $if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 	pub struct GLBuffer {
 	pub mut:
 		id     u32
-		len    usize
+		len    uint
 		target opengl.BufferTarget = .array
 		usage  opengl.BufferUsage  = .dynamic_draw
 	}
@@ -27,7 +27,7 @@ $if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 		usage  opengl.BufferUsage  = .dynamic_draw
 	}
 
-	pub fn GLBuffer.init(opts GLBufferOptions, len usize) !GLBuffer {
+	pub fn GLBuffer.init(opts GLBufferOptions, len uint) !GLBuffer {
 		buffer := opengl.Buffer.create()!
 		binding := buffer.bind(opts.target) or {
 			buffer.destroy()
@@ -67,7 +67,7 @@ $if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 		binding.unbind()
 		return GLBuffer{
 			id:     buffer.id
-			len:    usize(byte_len)
+			len:    uint(byte_len)
 			target: opts.target
 			usage:  opts.usage
 		}
@@ -91,7 +91,7 @@ $if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 		defer {
 			binding.unbind()
 		}
-		required := usize(data.len)
+		required := uint(data.len)
 		if required > self.len {
 			self.len = required * 2
 			binding.set_data_null_manual(self.len, self.usage)!
@@ -111,7 +111,7 @@ $if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 
 	// Like GLBuffer.sync but takes data from an array of lists, rather than a
 	// single array. Returns the number of items synced.
-	pub fn (mut self GLBuffer) sync_from_array_lists[T](lists [][]T) !usize {
+	pub fn (mut self GLBuffer) sync_from_array_lists[T](lists [][]T) !uint {
 		buffer := opengl.Buffer{
 			id: self.id
 		}
@@ -120,14 +120,14 @@ $if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 			binding.unbind()
 		}
 
-		mut total_len := usize(0)
+		mut total_len := uint(0)
 		for list in lists {
-			total_len += usize(list.len)
+			total_len += uint(list.len)
 		}
 
 		// If we need more space than our buffer has, we need to reallocate. This
 		// local specialization stores bytes, so `len` is a byte count.
-		req_bytes := total_len * usize($sizeof(T))
+		req_bytes := total_len * uint($sizeof(T))
 		if req_bytes > self.len {
 			// Reallocate the buffer to hold double what we require.
 			self.len = req_bytes * 2
@@ -135,7 +135,7 @@ $if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 		}
 
 		// We can fit within the buffer so we can just replace bytes.
-		mut i := usize(0)
+		mut i := uint(0)
 		for list in lists {
 			if list.len == 0 {
 				continue
@@ -143,7 +143,7 @@ $if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 			byte_len := list.len * int($sizeof(T))
 			bytes := unsafe { voidptr(list.data).vbytes(byte_len) }
 			binding.set_sub_data(i, bytes)!
-			i += usize(byte_len)
+			i += uint(byte_len)
 		}
 
 		return total_len
@@ -215,14 +215,14 @@ $if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 	pub struct GLRenderPass {
 	pub mut:
 		attachments []GLRenderAttachment
-		step_number usize
+		step_number uint
 	}
 
 	pub struct GLDraw {
 	pub:
 		primitive      opengl.Primitive @[required]
-		vertex_count   usize            @[required]
-		instance_count usize = 1
+		vertex_count   uint            @[required]
+		instance_count uint = 1
 	}
 
 	pub struct GLRenderStep {
@@ -373,7 +373,7 @@ $if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 		program          u32
 		fbo              u32
 		vao              u32
-		stride           usize
+		stride           uint
 		blending_enabled bool = true
 	}
 
@@ -381,7 +381,7 @@ $if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 	pub:
 		vertex_source    string @[required]
 		fragment_source  string @[required]
-		stride           usize
+		stride           uint
 		attributes       []GLVertexAttribute
 		step_function    GLVertexStepFunction = .per_vertex
 		blending_enabled bool                 = true
@@ -579,14 +579,14 @@ $if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 	pub mut:
 		fbo    u32
 		rbo    u32
-		width  usize
-		height usize
+		width  uint
+		height uint
 	}
 
 	pub struct GLTargetOptions {
 	pub:
-		width           usize                        @[required]
-		height          usize                        @[required]
+		width           uint                        @[required]
+		height          uint                        @[required]
 		internal_format opengl.TextureInternalFormat @[required]
 	}
 
@@ -635,8 +635,8 @@ $if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 	pub struct GLTexture {
 	pub mut:
 		id     u32
-		width  usize
-		height usize
+		width  uint
+		height uint
 		format opengl.TextureFormat = .rgba
 		target opengl.TextureTarget = .t2d
 	}
@@ -652,7 +652,7 @@ $if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 		wrap_t          opengl.TextureWrap           @[required]
 	}
 
-	pub fn GLTexture.init(opts GLTextureOptions, width usize, height usize, data ?[]u8) !GLTexture {
+	pub fn GLTexture.init(opts GLTextureOptions, width uint, height uint, data ?[]u8) !GLTexture {
 		texture := opengl.Texture.create()!
 		binding := texture.bind(opts.target) or {
 			texture.destroy()
@@ -708,7 +708,7 @@ $if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 		self.id = 0
 	}
 
-	pub fn (self GLTexture) replace_region(x usize, y usize, width usize, height usize, data []u8) ! {
+	pub fn (self GLTexture) replace_region(x uint, y uint, width uint, height uint, data []u8) ! {
 		mut ptr := voidptr(unsafe { nil })
 		if data.len > 0 {
 			ptr = voidptr(data.data)
@@ -736,27 +736,27 @@ $if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 		cells_bg                 GLBuffer
 		bg_image_buffer          GLBuffer
 		grayscale                GLTexture
-		grayscale_modified       usize
+		grayscale_modified       uint
 		color                    GLTexture
-		color_modified           usize
+		color_modified           uint
 		target                   GLTarget
-		target_config_modified   usize
-		bg_image_buffer_modified usize
+		target_config_modified   uint
+		bg_image_buffer_modified uint
 		custom_shader_state      ?GLCustomShaderState
 	}
 
 	pub fn GLFrameState.init(api &OpenGLAPI, custom_shaders bool) !GLFrameState {
-		mut uniforms := GLBuffer.init(api.uniform_buffer_options(), usize($sizeof(GLUniforms)))!
-		mut cells := GLBuffer.init(api.fg_buffer_options(), usize($sizeof(CellText))) or {
+		mut uniforms := GLBuffer.init(api.uniform_buffer_options(), uint($sizeof(GLUniforms)))!
+		mut cells := GLBuffer.init(api.fg_buffer_options(), uint($sizeof(CellText))) or {
 			uniforms.deinit()
 			return err
 		}
-		mut cells_bg := GLBuffer.init(api.bg_buffer_options(), usize($sizeof(CellBg))) or {
+		mut cells_bg := GLBuffer.init(api.bg_buffer_options(), uint($sizeof(CellBg))) or {
 			cells.deinit()
 			uniforms.deinit()
 			return err
 		}
-		mut bg_image_buffer := GLBuffer.init(api.bg_image_buffer_options(), usize($sizeof(BgImageBuffer))) or {
+		mut bg_image_buffer := GLBuffer.init(api.bg_image_buffer_options(), uint($sizeof(BgImageBuffer))) or {
 			cells_bg.deinit()
 			cells.deinit()
 			uniforms.deinit()
@@ -830,7 +830,7 @@ $if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 		self.custom_shader_state = none
 	}
 
-	pub fn (mut self GLFrameState) resize_target(api &OpenGLAPI, width usize, height usize) ! {
+	pub fn (mut self GLFrameState) resize_target(api &OpenGLAPI, width uint, height uint) ! {
 		if mut state := self.custom_shader_state {
 			state.resize(api, width, height)!
 			self.custom_shader_state = state
@@ -851,7 +851,7 @@ $if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 	}
 
 	pub fn GLCustomShaderState.init(api &OpenGLAPI) !GLCustomShaderState {
-		mut uniforms := GLBuffer.init(api.uniform_buffer_options(), usize($sizeof(CustomShaderUniforms)))!
+		mut uniforms := GLBuffer.init(api.uniform_buffer_options(), uint($sizeof(CustomShaderUniforms)))!
 		mut front_texture := GLTexture.init(api.texture_options(), 1, 1, none) or {
 			uniforms.deinit()
 			return err
@@ -888,7 +888,7 @@ $if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 		self.back_texture = front
 	}
 
-	pub fn (mut self GLCustomShaderState) resize(api &OpenGLAPI, width usize, height usize) ! {
+	pub fn (mut self GLCustomShaderState) resize(api &OpenGLAPI, width uint, height uint) ! {
 		mut front_texture := GLTexture.init(api.texture_options(), width, height, none)!
 		mut back_texture := GLTexture.init(api.texture_options(), width, height, none) or {
 			front_texture.deinit()
@@ -984,15 +984,15 @@ $if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 			shaders.deinit()
 			return err
 		}
-		shaders.cell_text = gl_builtin_pipeline(gl_cell_text_vertex_shader_raw, gl_cell_text_fragment_shader_raw, gl_text_cell_attributes(), usize($sizeof(CellText)), .per_instance, true) or {
+		shaders.cell_text = gl_builtin_pipeline(gl_cell_text_vertex_shader_raw, gl_cell_text_fragment_shader_raw, gl_text_cell_attributes(), uint($sizeof(CellText)), .per_instance, true) or {
 			shaders.deinit()
 			return err
 		}
-		shaders.image = gl_builtin_pipeline(gl_image_vertex_shader_raw, gl_image_fragment_shader_raw, gl_image_attributes(), usize($sizeof(ImageVertex)), .per_instance, true) or {
+		shaders.image = gl_builtin_pipeline(gl_image_vertex_shader_raw, gl_image_fragment_shader_raw, gl_image_attributes(), uint($sizeof(ImageVertex)), .per_instance, true) or {
 			shaders.deinit()
 			return err
 		}
-		shaders.bg_image = gl_builtin_pipeline(gl_bg_image_vertex_shader_raw, gl_bg_image_fragment_shader_raw, gl_bg_image_attributes(), usize($sizeof(BgImageBuffer)), .per_instance, true) or {
+		shaders.bg_image = gl_builtin_pipeline(gl_bg_image_vertex_shader_raw, gl_bg_image_fragment_shader_raw, gl_bg_image_attributes(), uint($sizeof(BgImageBuffer)), .per_instance, true) or {
 			shaders.deinit()
 			return err
 		}
@@ -1044,7 +1044,7 @@ $if renderer_opengl ?|| ( !renderer_metal ?&& !macos && !ios ) {
 		return source.replace('#include "common.glsl"', gl_common_shader)
 	}
 
-	fn gl_builtin_pipeline(vertex_source string, fragment_source string, attributes []GLVertexAttribute, stride usize, step_function GLVertexStepFunction, blending_enabled bool) !GLPipeline {
+	fn gl_builtin_pipeline(vertex_source string, fragment_source string, attributes []GLVertexAttribute, stride uint, step_function GLVertexStepFunction, blending_enabled bool) !GLPipeline {
 		return GLPipeline.init(GLPipelineOptions{
 			vertex_source:    expand_gl_shader(vertex_source)
 			fragment_source:  expand_gl_shader(fragment_source)

@@ -35,7 +35,7 @@ fn test_c_action_projects_enum_struct_and_pointer_payloads() {
 	}.capi()
 	url_value := unsafe { &CActionTaggedSlice(&url.action[0]) }
 	assert url_value.tag == int(OpenUrlKind.html)
-	assert url_value.len == usize(url_text.len)
+	assert url_value.len == uint(url_text.len)
 	assert unsafe { tos(url_value.ptr, int(url_value.len)) } == url_text
 
 	config := configpkg.Config.default_config()
@@ -75,12 +75,12 @@ fn test_c_action_projects_optional_and_clamped_payloads() {
 	}.capi()
 	assert unsafe { &CActionCount(&search.action[0]) }.value == -1
 
-	max_count := usize(~usize(0) >> 1)
+	max_count := uint(~uint(0) >> 1)
 	selected := RuntimeAction{
 		action: .search_selected
 		data: ActionValue(SearchSelected{ selected: max_count })
 	}.capi()
-	assert unsafe { &CActionCount(&selected.action[0]) }.value == isize(max_count)
+	assert unsafe { &CActionCount(&selected.action[0]) }.value == int(max_count)
 }
 
 fn test_c_action_key_sequence_end_zeros_ignored_trigger() {

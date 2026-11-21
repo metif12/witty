@@ -29,7 +29,7 @@ fn png_reference_header(format PixelFormat, width u32, height u32) !PngHeaderDat
 	}
 }
 
-fn png_reference_pixels(format PixelFormat, count usize, seed int) !PixelStorage {
+fn png_reference_pixels(format PixelFormat, count uint, seed int) !PixelStorage {
 	pixels := PixelStorage.init(format, count)!
 	mut bytes := pixels.as_bytes()
 	depth := format.bits_per_channel()
@@ -109,7 +109,7 @@ fn test_png_native_filtering_matrix() {
 		for width in [u32(1), 3, 9, 17] {
 			for height in [u32(0), 1, 3] {
 				for seed in 0 .. 8 {
-					pixels := png_reference_pixels(format, usize(width * height), seed)!
+					pixels := png_reference_pixels(format, uint(width * height), seed)!
 					header := png_reference_header(format, width, height)!
 					length := int((header.line_bytes() + 1) * height)
 					for choice in 0 .. 6 {
@@ -150,7 +150,7 @@ fn test_png_native_defilter_spread_through_full_source_reads() {
 			for height in [u32(1), 3] {
 				for seed in 0 .. 4 {
 					for filter in 0 .. 5 {
-						pixels := png_reference_pixels(format, usize(width * height), seed)!
+						pixels := png_reference_pixels(format, uint(width * height), seed)!
 						header := png_reference_header(format, width, height)!
 						line_bytes := int(header.line_bytes())
 						mut encoded := []u8{len: (line_bytes + 1) * int(height)}

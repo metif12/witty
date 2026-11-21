@@ -91,7 +91,7 @@ fn record(line string, path string) string {
 		codec.bitmap.bits_per_sample.data[i] = u16(100 + i)
 		codec.bitmap.extra_samples.data[i] = u16(200 + i)
 	}
-	codec.bitmap.bits_per_sample.resize(usize(bits.len))
+	codec.bitmap.bits_per_sample.resize(uint(bits.len))
 	for i, v in bits {
 		codec.bitmap.bits_per_sample.data[i] = u16(v)
 	}
@@ -104,9 +104,9 @@ fn record(line string, path string) string {
 			a: 201
 		}
 	}
-	codec.bitmap.color_map.resize(usize(a[7]))
+	codec.bitmap.color_map.resize(uint(a[7]))
 	formats := [p.PixelFormat.grayscale1, .grayscale8, .indexed8, .rgb24, .rgba32, .grayscale16]
-	mut pixels := p.PixelStorage.init(formats[int(a[1])], usize(a[5])) or { panic(err) }
+	mut pixels := p.PixelStorage.init(formats[int(a[1])], uint(a[5])) or { panic(err) }
 	mut bytes := pixels.as_bytes()
 	for i in 0 .. bytes.len {
 		bytes[i] = if a[1] == 0 { u8(1) } else { u8(165) }
@@ -123,7 +123,7 @@ fn record(line string, path string) string {
 				}
 			}
 			palette_bytes = unsafe { (&u8(pixels.palette.data)).vbytes(1024) }
-			pixels.resize_palette(usize(a[6]))
+			pixels.resize_palette(uint(a[6]))
 		}
 		else {}
 	}

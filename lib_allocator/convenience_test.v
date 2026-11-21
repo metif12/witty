@@ -5,8 +5,8 @@ fn test_scalar_convenience_allocations_are_writable_and_nullable_on_free() {
 	opaque := alloc_opaque()
 	assert !isnil(opaque)
 	unsafe {
-		opaque.value = voidptr(usize(0x1234))
-		assert usize(opaque.value) == usize(0x1234)
+		opaque.value = voidptr(uint(0x1234))
+		assert uint(opaque.value) == uint(0x1234)
 	}
 	free_opaque(opaque)
 	free_opaque(unsafe { nil })
@@ -23,8 +23,8 @@ fn test_scalar_convenience_allocations_are_writable_and_nullable_on_free() {
 	word := alloc_usize()
 	assert !isnil(word)
 	unsafe {
-		*word = usize(0x12345678)
-		assert *word == usize(0x12345678)
+		*word = uint(0x12345678)
+		assert *word == uint(0x12345678)
 	}
 	free_usize(word)
 	free_usize(unsafe { nil })

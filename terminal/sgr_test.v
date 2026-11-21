@@ -54,7 +54,7 @@ fn sgr_parse(params []u16) SgrAttribute {
 fn sgr_parse_colon(params []u16) SgrAttribute {
 	mut sep := SepList.init_empty()
 	for i in 0 .. params.len - 1 {
-		sep.set(usize(i))
+		sep.set(uint(i))
 	}
 	mut p := SgrParser{ params: params, params_sep: sep }
 	return p.next() or { SgrUnknown{} }
@@ -450,7 +450,7 @@ fn test_sgr_direct_fg_bg_underline_ignore_optional_color_space() {
 fn test_sgr_direct_fg_colon_with_too_many_colons() {
 	mut sep := SepList.init_empty()
 	for idx in 0 .. 6 {
-		sep.set(usize(idx))
+		sep.set(uint(idx))
 	}
 	mut p := SgrParser{
 		params: [u16(38), 2, 0, 1, 2, 3, 4, 1]
@@ -472,7 +472,7 @@ fn test_sgr_direct_fg_colon_with_too_many_colons() {
 fn test_sgr_direct_fg_colon_with_colorspace_and_extra_param() {
 	mut sep := SepList.init_empty()
 	for idx in 0 .. 5 {
-		sep.set(usize(idx))
+		sep.set(uint(idx))
 	}
 	mut p := SgrParser{
 		params: [u16(38), 2, 0, 1, 2, 3, 1]
@@ -498,7 +498,7 @@ fn test_sgr_direct_fg_colon_with_colorspace_and_extra_param() {
 fn test_sgr_direct_fg_colon_no_colorspace_and_extra_param() {
 	mut sep := SepList.init_empty()
 	for idx in 0 .. 4 {
-		sep.set(usize(idx))
+		sep.set(uint(idx))
 	}
 	mut p := SgrParser{
 		params: [u16(38), 2, 1, 2, 3, 1]

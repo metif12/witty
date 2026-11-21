@@ -105,9 +105,9 @@ pub struct Preview {
 mut:
 	should_quit  bool
 	themes       []ThemeListElement
-	filtered     []usize
-	current      usize
-	window       usize
+	filtered     []uint
+	current      uint
+	window       uint
 	hex          bool
 	mode         PreviewMode  = .normal
 	color_scheme vaxis.Scheme = .light
@@ -169,14 +169,14 @@ fn (mut self Preview) update_filtered() ! {
 			})
 			if r != none {
 				theme.rank = r
-				self.filtered << usize(i)
+				self.filtered << uint(i)
 			}
 		}
 	} else {
 		for i, mut theme in self.themes {
 			theme_config.load_file(theme.path)!
 			if should_include_theme(self.theme_filter, theme_config) {
-				self.filtered << usize(i)
+				self.filtered << uint(i)
 				theme.rank = none
 			}
 		}
@@ -197,13 +197,13 @@ fn (mut self Preview) update_filtered() ! {
 	if selected.len > 0 {
 		for idx, filt_idx in self.filtered {
 			if self.themes[filt_idx].theme == selected {
-				idx_usize := usize(idx)
+				idx_usize := uint(idx)
 				// Keep the relative position but ensure all search results are visible
-				new_window := if idx_usize > relative { idx_usize - relative } else { usize(0) }
+				new_window := if idx_usize > relative { idx_usize - relative } else { uint(0) }
 				// If the new window would hide some results at the top, adjust it
 				self.current = idx_usize
 				self.window = if self.filtered.len <= small_list_threshold {
-					usize(0)
+					uint(0)
 				} else {
 					new_window
 				}
@@ -217,7 +217,7 @@ fn (mut self Preview) update_filtered() ! {
 }
 
 // up moves the selection up by count items.
-fn (mut self Preview) up(count usize) {
+fn (mut self Preview) up(count uint) {
 	if self.filtered.len == 0 {
 		self.current = 0
 		return
@@ -226,14 +226,14 @@ fn (mut self Preview) up(count usize) {
 }
 
 // down moves the selection down by count items.
-fn (mut self Preview) down(count usize) {
+fn (mut self Preview) down(count uint) {
 	if self.filtered.len == 0 {
 		self.current = 0
 		return
 	}
 	self.current += count
-	if self.current >= usize(self.filtered.len) {
-		self.current = usize(self.filtered.len - 1)
+	if self.current >= uint(self.filtered.len) {
+		self.current = uint(self.filtered.len - 1)
 	}
 }
 
@@ -277,7 +277,7 @@ pub fn (mut self Preview) update(event Event) ! {
 					}
 					if key.matches_any([vaxis.end, vaxis.kp_end], vaxis.Modifiers{}) {
 						assert self.filtered.len > 0
-						self.current = usize(self.filtered.len - 1)
+						self.current = uint(self.filtered.len - 1)
 					}
 					if key.matches_any([u32(`j`), u32(`+`), vaxis.down, vaxis.kp_down, vaxis.kp_add], vaxis.Modifiers{}) {
 						self.down(1)

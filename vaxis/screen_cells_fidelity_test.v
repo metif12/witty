@@ -32,8 +32,8 @@ fn test_screen_cells_keep_borrowed_text_and_all_metadata() {
 	}
 	s.write_cell(0, 0, value)
 	read := s.read_cell(0, 0) or { panic('missing cell') }
-	assert usize(read.char_.grapheme.str) == usize(data.data)
-	assert usize(read.link.uri.str) == usize(data.data) + 3
+	assert uint(read.char_.grapheme.str) == uint(data.data)
+	assert uint(read.link.uri.str) == uint(data.data) + 3
 	assert read.style.eql(value.style)
 	assert read.char_.width == 2 && read.default_ && read.wrapped
 	assert read.scale.eql(value.scale)

@@ -55,7 +55,7 @@ fn test_web_canvas_face_wasm_free_accepts_none() {
 
 fn test_web_canvas_deferred_face_wasm_ownership_api() {
 	font_name := '12px monospace'.bytes()
-	deferred := deferred_face_new(font_name.data, usize(font_name.len), u16(Presentation.text)) or {
+	deferred := deferred_face_new(font_name.data, uint(font_name.len), u16(Presentation.text)) or {
 		assert false, 'deferred_face_new must allocate and copy the font string'
 		return
 	}

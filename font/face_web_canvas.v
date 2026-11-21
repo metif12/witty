@@ -319,7 +319,7 @@ pub fn (self WebCanvasDeferredFace) load(opts FaceOptions) !WebCanvasFace {
 // The wasm-compatible API for WebCanvasFace.
 // These are exported functions that the browser can call.
 
-pub fn deferred_face_new(ptr &u8, len usize, presentation_val u16) ?&WebCanvasDeferredFace {
+pub fn deferred_face_new(ptr &u8, len uint, presentation_val u16) ?&WebCanvasDeferredFace {
 	font_str := unsafe { tos(ptr, int(len)) }.clone()
 	presentation := unsafe { Presentation(presentation_val) }
 	return &WebCanvasDeferredFace{
@@ -347,7 +347,7 @@ pub fn deferred_face_load(self &WebCanvasDeferredFace, pts f32) {
 
 // face_new creates a new WebCanvasFace from a font string.
 // Returns a pointer to the face, or null on error.
-pub fn face_new(ptr &u8, len usize, pts u16, presentation_val u16) ?&WebCanvasFace {
+pub fn face_new(ptr &u8, len uint, pts u16, presentation_val u16) ?&WebCanvasFace {
 	font_str := unsafe { tos(ptr, int(len)) }
 	presentation := unsafe { Presentation(presentation_val) }
 	face := WebCanvasFace.init_named(font_str, DesiredSize{

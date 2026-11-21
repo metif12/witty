@@ -27,7 +27,7 @@ fn save() {
 	os.write_file(path, '${w.buffered().len}|${backing.hex()}|${w.buffered().hex()}|${w.unused_capacity_slice().hex()}') or { panic(err) }
 }
 
-fn borrowed[E](_ E, raw usize, length int) []?E {
+fn borrowed[E](_ E, raw uint, length int) []?E {
 	return unsafe { array{ data: voidptr(raw), len: length, cap: length, flags: .nofree, element_size: int(sizeof(?E)) } }
 }
 
@@ -42,8 +42,8 @@ fn run() ! {
 	zero := Pair{}
 	nested := Nested{}
 	items := OptionalItems{}
-	view := borrowed(zero, usize(0x1234), 0)
-	options := p.FormatOptions{ width: ~usize(0), precision: ~usize(0) }
+	view := borrowed(zero, uint(0x1234), 0)
+	options := p.FormatOptions{ width: ~uint(0), precision: ~uint(0) }
 	bool_row := [?bool(true), ?bool(none), ?bool(false)]!
 	bool_payload := BoolItems(bool_row)
 	bool_some := ?BoolItems(bool_payload)
@@ -56,14 +56,14 @@ fn run() ! {
 		'0' { w.print_address(view) or { status = err.msg() } }
 		'1' { w.print_value('*', options, view, 0) or { status = err.msg() } }
 		'2' { w.print_value('?*', options, ?Values(view), 0) or { status = err.msg() } }
-		'3' { w.print_address(borrowed(nested, ~usize(0), 3)) or { status = err.msg() } }
+		'3' { w.print_address(borrowed(nested, ~uint(0), 3)) or { status = err.msg() } }
 		'4' {
 			w.print_value('?*', p.FormatOptions{ width: 6, fill: `_` }, ?Values(none), 0) or { status = err.msg() }
 		}
 		'5' {
-			w.print_value('?*', p.FormatOptions{ width: ~usize(0), fill: `_` }, ?Values(none), 0) or { status = err.msg() }
+			w.print_value('?*', p.FormatOptions{ width: ~uint(0), fill: `_` }, ?Values(none), 0) or { status = err.msg() }
 		}
-		'6' { w.print_address(borrowed(items, usize(0), 0)) or { status = err.msg() } }
+		'6' { w.print_address(borrowed(items, uint(0), 0)) or { status = err.msg() } }
 		'7' { w.print_value('any', p.FormatOptions{}, bool_values, 2) or { status = err.msg() } }
 		'8' {
 			w.print_value('any', p.FormatOptions{ width: 4, fill: `_` }, int_values, 2) or { status = err.msg() }

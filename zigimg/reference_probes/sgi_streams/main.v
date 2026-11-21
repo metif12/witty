@@ -131,7 +131,7 @@ fn record(line string, path string) string {
 		observed_disk = path
 	}
 	observed_reader = &reader
-	if start > 0 { reader.discard_all(usize(start)) or { panic(err) } }
+	if start > 0 { reader.discard_all(uint(start)) or { panic(err) } }
 	for _ in 0 .. f[3].int() {
 		if op == 2 || op == 3 {
 			mut status := 'ok'

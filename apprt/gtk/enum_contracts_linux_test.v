@@ -54,9 +54,9 @@ fn test_select_tab_union_retains_only_the_active_payload() {
 	assert SelectTab(SelectTabPrevious{}) is SelectTabPrevious
 	assert SelectTab(SelectTabNext{}) is SelectTabNext
 	assert SelectTab(SelectTabLast{}) is SelectTabLast
-	selection := SelectTab(SelectTabN{ n: usize(1_099_511_627_776) })
+	selection := SelectTab(SelectTabN{ n: uint(1_099_511_627_776) })
 	assert selection is SelectTabN
-	assert (selection as SelectTabN).n == usize(1_099_511_627_776)
+	assert (selection as SelectTabN).n == uint(1_099_511_627_776)
 }
 
 fn test_winproto_unions_retain_only_the_active_backend() {

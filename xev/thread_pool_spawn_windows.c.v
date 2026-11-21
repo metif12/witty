@@ -4,10 +4,10 @@ module xev
 #flag windows -lntdll
 
 fn C.GetProcessHeap() voidptr
-fn C.HeapAlloc(heap voidptr, flags u32, size usize) voidptr
+fn C.HeapAlloc(heap voidptr, flags u32, size uint) voidptr
 fn C.HeapFree(heap voidptr, flags u32, ptr voidptr) bool
-fn C.CreateThread(attributes voidptr, stack_size usize, entry voidptr, arg voidptr, flags u32, id &u32) voidptr
-fn C.RtlWaitOnAddress(address voidptr, expected voidptr, size usize, timeout voidptr) int
+fn C.CreateThread(attributes voidptr, stack_size uint, entry voidptr, arg voidptr, flags u32, id &u32) voidptr
+fn C.RtlWaitOnAddress(address voidptr, expected voidptr, size uint, timeout voidptr) int
 fn C.RtlWakeAddressSingle(address voidptr)
 fn C.RtlWakeAddressAll(address voidptr)
 
@@ -26,13 +26,13 @@ fn thread_pool_spawn(config ThreadPoolSpawnConfig, pool &ThreadPool) !&ThreadPoo
 	heap := C.GetProcessHeap()
 	if heap == unsafe { nil } { return new_error(.out_of_memory) }
 	// HeapAlloc is aligned to MEMORY_ALLOCATION_ALIGNMENT (16 on Win64).
-	allocation := C.HeapAlloc(heap, 0, usize(sizeof(ThreadPoolWindowsInstance)) + 16)
+	allocation := C.HeapAlloc(heap, 0, uint(sizeof(ThreadPoolWindowsInstance)) + 16)
 	if allocation == unsafe { nil } { return new_error(.out_of_memory) }
-	aligned := (usize(allocation) + 15) & ~usize(15)
+	aligned := (uint(allocation) + 15) & ~uint(15)
 	mut instance := unsafe { &ThreadPoolWindowsInstance(voidptr(aligned)) }
 	unsafe { *instance = ThreadPoolWindowsInstance{ pool: pool, heap_ptr: allocation, heap_handle: heap } }
 	stack_size := if config.stack_size > 64 * 1024 { config.stack_size } else { u32(64 * 1024) }
-	instance.thread_handle = C.CreateThread(unsafe { nil }, usize(stack_size), voidptr(thread_pool_windows_entry), instance, 0, unsafe { nil })
+	instance.thread_handle = C.CreateThread(unsafe { nil }, uint(stack_size), voidptr(thread_pool_windows_entry), instance, 0, unsafe { nil })
 	if instance.thread_handle == unsafe { nil } {
 		C.HeapFree(heap, 0, allocation)
 		return thread_pool_error_unexpected

@@ -508,7 +508,7 @@ fn test_text_input_edits_by_grapheme_and_source_bindings() {
 		text:      '👩‍🚀'
 	})
 	assert input.get_text() == '👩‍🚀👩‍🚀'
-	assert input.real_length() == usize('👩‍🚀👩‍🚀'.len)
+	assert input.real_length() == uint('👩‍🚀👩‍🚀'.len)
 	assert input.graphemes_before_cursor() == 2
 	input.update(Key{ codepoint: backspace })
 	assert input.get_text() == '👩‍🚀'
@@ -526,7 +526,7 @@ fn test_text_input_edits_by_grapheme_and_source_bindings() {
 		codepoint: u32(`e`)
 		mods:      Modifiers.from_int(4)
 	})
-	assert input.byte_offset_to_cursor() == usize('hello world'.len)
+	assert input.byte_offset_to_cursor() == uint('hello world'.len)
 	input.update(Key{
 		codepoint: u32(`b`)
 		mods:      Modifiers.from_int(2)

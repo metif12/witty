@@ -216,12 +216,12 @@ fn test_source_no_alpha_targets_ignore_optional_alpha_fields() {
 	assert Bgr24.from_grayscale(gray) == Bgr24.rgb(128, 128, 128)
 }
 
-type ColorMethodsWord = usize
+type ColorMethodsWord = uint
 type ColorMethodsByte = u8
 type ColorMethodsFloat = f32
 
 fn test_source_scale_numeric_aliases() {
-	assert scale_value[ColorMethodsWord, ColorMethodsByte](ColorMethodsByte(1)) == ColorMethodsWord(~usize(0) / 255)
+	assert scale_value[ColorMethodsWord, ColorMethodsByte](ColorMethodsByte(1)) == ColorMethodsWord(~uint(0) / 255)
 	assert scale_value[ColorMethodsFloat, ColorMethodsByte](ColorMethodsByte(128)) == ColorMethodsFloat(f32(128) / 255)
 	assert scale_value[ColorMethodsByte, ColorMethodsFloat](ColorMethodsFloat(0.5)) == ColorMethodsByte(128)
 }

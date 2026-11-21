@@ -38,7 +38,7 @@ pub fn (mut self ActiveSearch) update(list &terminal.PageList) ?&terminal.PageNo
 
 	// Load the pages that cover the addressable active area, starting at the
 	// newest page as in Ghostty's active searcher.
-	mut remaining := usize(list.rows)
+	mut remaining := uint(list.rows)
 	mut node := list.pages.last
 	mut first_active := ?&terminal.PageNode(none)
 	for {
@@ -46,11 +46,11 @@ pub fn (mut self ActiveSearch) update(list &terminal.PageList) ?&terminal.PageNo
 		self.window.append(current)
 		first_active = unsafe { &terminal.PageNode(current) }
 
-		if remaining <= usize(current.data.size.rows) {
+		if remaining <= uint(current.data.size.rows) {
 			node = current.prev
 			break
 		}
-		remaining -= usize(current.data.size.rows)
+		remaining -= uint(current.data.size.rows)
 		node = current.prev
 	}
 
@@ -59,7 +59,7 @@ pub fn (mut self ActiveSearch) update(list &terminal.PageList) ?&terminal.PageNo
 	overlap_needed := self.window.needle.len - 1
 	for {
 		current := node or { break }
-		if !current.data.get_row(usize(current.data.size.rows - 1)).header.wrap {
+		if !current.data.get_row(uint(current.data.size.rows - 1)).header.wrap {
 			break
 		}
 		added := self.window.append(current)

@@ -7,8 +7,8 @@ import input
 
 pub struct C.witty_macos_range {
 pub:
-	location usize
-	length usize
+	location uint
+	length uint
 }
 
 pub type NativeRange = C.witty_macos_range
@@ -234,7 +234,7 @@ fn input_key_action(view ObjId, event ObjId, translation_event ObjId, action inp
 
 fn input_has_marked(self ObjId, _cmd Sel) bool { return has_marked_text(self) }
 fn input_marked_range(self ObjId, _cmd Sel) C.witty_macos_range {
-	return C.witty_macos_range{length: usize(msg_u64(input_view_state(self).marked, 'length'))}
+	return C.witty_macos_range{length: uint(msg_u64(input_view_state(self).marked, 'length'))}
 }
 fn input_selected_range(self ObjId, _cmd Sel) C.witty_macos_range {
 	if selection := input_selection(self) { return C.witty_macos_range{location: selection.offset_start, length: selection.offset_len} }
@@ -278,7 +278,7 @@ fn input_attributed_text(view ObjId, text string) ObjId {
 	}
 	return msg_id(msg_id2(alloc('NSAttributedString'), 'initWithString:attributes:', nsstring(text), attributes), 'autorelease')
 }
-fn input_character_index(_self ObjId, _cmd Sel, _point ObjCPoint) usize { return 0 }
+fn input_character_index(_self ObjId, _cmd Sel, _point ObjCPoint) uint { return 0 }
 fn input_first_rect(self ObjId, _cmd Sel, range C.witty_macos_range, _actual &C.witty_macos_range) ObjCRect {
 	frame := msg_rect(self, 'frame')
 	if g_input_callbacks.ime_rect == unsafe { nil } || is_nil(view_userdata(self)) { return objc_rect(frame.x, frame.y, 0, 0) }

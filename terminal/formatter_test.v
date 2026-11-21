@@ -77,8 +77,8 @@ fn test_page_plain_single_line() ! {
 	state := result.state
 	output := result.output
 	assert output == 'hello, world'
-	assert state.rows == usize(page.size.rows)
-	assert state.cells == usize(page.size.cols) - 12
+	assert state.rows == uint(page.size.rows)
+	assert state.cells == uint(page.size.cols) - 12
 
 	// Verify our point map
 	assert output.len == point_map.points.len
@@ -188,8 +188,8 @@ fn test_page_plain_single_wide_char() ! {
 		state := result.state
 		output := result.output
 		assert output == '1A⚡'
-		assert state.rows == usize(page.size.rows)
-		assert state.cells == usize(page.size.cols) - 4
+		assert state.rows == uint(page.size.rows)
+		assert state.cells == uint(page.size.cols) - 4
 
 		// Verify our point map
 		assert output.len == point_map.points.len
@@ -210,8 +210,8 @@ fn test_page_plain_single_wide_char() ! {
 		state := result.state
 		output := result.output
 		assert output == '⚡'
-		assert state.rows == usize(page.size.rows)
-		assert state.cells == usize(page.size.cols) - 4
+		assert state.rows == uint(page.size.rows)
+		assert state.cells == uint(page.size.cols) - 4
 
 		// Verify our point map
 		assert output.len == point_map.points.len
@@ -232,8 +232,8 @@ fn test_page_plain_single_wide_char() ! {
 		state := result.state
 		output := result.output
 		assert output == '⚡'
-		assert state.rows == usize(page.size.rows)
-		assert state.cells == usize(page.size.cols) - 4
+		assert state.rows == uint(page.size.rows)
+		assert state.cells == uint(page.size.cols) - 4
 
 		// Verify our point map
 		assert output.len == point_map.points.len
@@ -281,8 +281,8 @@ fn test_page_plain_single_wide_char_soft_wrapped_unwrapped() ! {
 		state := result.state
 		output := result.output
 		assert output == '1A⚡'
-		assert state.rows == usize(page.size.rows) - 1
-		assert state.cells == usize(page.size.cols) - 2
+		assert state.rows == uint(page.size.rows) - 1
+		assert state.cells == uint(page.size.cols) - 2
 
 		// Verify our point map
 		assert output.len == point_map.points.len
@@ -325,8 +325,8 @@ fn test_page_plain_single_wide_char_soft_wrapped_unwrapped() ! {
 		state := result.state
 		output := result.output
 		assert output == '⚡'
-		assert state.rows == usize(page.size.rows) - 1
-		assert state.cells == usize(page.size.cols) - 2
+		assert state.rows == uint(page.size.rows) - 1
+		assert state.cells == uint(page.size.cols) - 2
 
 		// Verify our point map
 		assert output.len == point_map.points.len
@@ -348,8 +348,8 @@ fn test_page_plain_single_wide_char_soft_wrapped_unwrapped() ! {
 		state := result.state
 		output := result.output
 		assert output == '⚡'
-		assert state.rows == usize(page.size.rows) - 1
-		assert state.cells == usize(page.size.cols) - 2
+		assert state.rows == uint(page.size.rows) - 1
+		assert state.cells == uint(page.size.cols) - 2
 
 		// Verify our point map
 		assert output.len == point_map.points.len
@@ -393,8 +393,8 @@ fn test_page_plain_multiline() ! {
 	state := result.state
 	output := result.output
 	assert output == 'hello\nworld'
-	assert state.rows == usize(page.size.rows) - 1
-	assert state.cells == usize(page.size.cols) - 5
+	assert state.rows == uint(page.size.rows) - 1
+	assert state.cells == uint(page.size.cols) - 5
 
 	// Verify point map
 	assert output.len == point_map.points.len
@@ -450,8 +450,8 @@ fn test_page_plain_multiline_rectangle() ! {
 	state := result.state
 	output := result.output
 	assert output == 'ell\norl'
-	assert state.rows == usize(page.size.rows) - 1
-	assert state.cells == usize(0)
+	assert state.rows == uint(page.size.rows) - 1
+	assert state.cells == uint(0)
 
 	// Verify point map
 	assert output.len == point_map.points.len
@@ -504,8 +504,8 @@ fn test_page_plain_multi_blank_lines() ! {
 	state := result.state
 	output := result.output
 	assert output == 'hello\n\n\nworld'
-	assert state.rows == usize(page.size.rows) - 3
-	assert state.cells == usize(page.size.cols) - 5
+	assert state.rows == uint(page.size.rows) - 3
+	assert state.cells == uint(page.size.cols) - 5
 
 	// Verify point map
 	assert output.len == point_map.points.len
@@ -568,8 +568,8 @@ fn test_page_plain_trailing_blank_lines() ! {
 	state := result.state
 	output := result.output
 	assert output == 'hello\nworld'
-	assert state.rows == usize(page.size.rows) - 1
-	assert state.cells == usize(page.size.cols) - 5
+	assert state.rows == uint(page.size.rows) - 1
+	assert state.cells == uint(page.size.cols) - 5
 
 	// Verify point map
 	assert output.len == point_map.points.len
@@ -624,8 +624,8 @@ fn test_page_plain_trailing_whitespace() ! {
 	state := result.state
 	output := result.output
 	assert output == 'hello\nworld'
-	assert state.rows == usize(page.size.rows) - 1
-	assert state.cells == usize(page.size.cols) - 5
+	assert state.rows == uint(page.size.rows) - 1
+	assert state.cells == uint(page.size.cols) - 5
 
 	// Verify point map
 	assert output.len == point_map.points.len
@@ -683,8 +683,8 @@ fn test_page_plain_trailing_whitespace_no_trim() ! {
 	state := result.state
 	output := result.output
 	assert output == 'hello   \nworld  '
-	assert state.rows == usize(page.size.rows) - 1
-	assert state.cells == usize(page.size.cols) - 7
+	assert state.rows == uint(page.size.rows) - 1
+	assert state.cells == uint(page.size.cols) - 7
 
 	// Verify point map
 	assert output.len == point_map.points.len
@@ -738,8 +738,8 @@ fn test_page_plain_with_prior_trailing_state_rows() ! {
 	state := result.state
 	output := result.output
 	assert output == '\n\nhello'
-	assert state.rows == usize(page.size.rows)
-	assert state.cells == usize(page.size.cols) - 5
+	assert state.rows == uint(page.size.rows)
+	assert state.cells == uint(page.size.cols) - 5
 
 	// Verify point map
 	assert output.len == point_map.points.len
@@ -792,8 +792,8 @@ fn test_page_plain_with_prior_trailing_state_cells_no_wrapped_line() ! {
 	output := result.output
 	// Blank cells are reset when row is not a wrap continuation
 	assert output == 'hello'
-	assert state.rows == usize(page.size.rows)
-	assert state.cells == usize(page.size.cols) - 5
+	assert state.rows == uint(page.size.rows)
+	assert state.cells == uint(page.size.cols) - 5
 
 	// Verify point map
 	assert output.len == point_map.points.len
@@ -846,8 +846,8 @@ fn test_page_plain_with_prior_trailing_state_cells_with_wrap_continuation() ! {
 	output := result.output
 	// Blank cells are preserved when row is a wrap continuation with unwrap enabled
 	assert output == '   world'
-	assert state.rows == usize(page.size.rows)
-	assert state.cells == usize(page.size.cols) - 5
+	assert state.rows == uint(page.size.rows)
+	assert state.cells == uint(page.size.cols) - 5
 
 	// Verify point map - 3 spaces from prior trailing state + "world"
 	assert output.len == point_map.points.len
@@ -901,8 +901,8 @@ fn test_page_plain_soft_wrapped_without_unwrap() ! {
 	output := result.output
 	// Without unwrap, wrapped lines show as separate lines
 	assert output == 'hello worl\nd test'
-	assert state.rows == usize(page.size.rows) - 1
-	assert state.cells == usize(page.size.cols) - 6
+	assert state.rows == uint(page.size.rows) - 1
+	assert state.cells == uint(page.size.cols) - 6
 
 	// Verify point map
 	assert output.len == point_map.points.len
@@ -956,8 +956,8 @@ fn test_page_plain_soft_wrapped_with_unwrap() ! {
 	output := result.output
 	// With unwrap, wrapped lines are joined together
 	assert output == 'hello world test'
-	assert state.rows == usize(page.size.rows) - 1
-	assert state.cells == usize(page.size.cols) - 6
+	assert state.rows == uint(page.size.rows) - 1
+	assert state.cells == uint(page.size.cols) - 6
 
 	// Verify point map
 	assert output.len == point_map.points.len
@@ -1004,8 +1004,8 @@ fn test_page_plain_soft_wrapped_3_lines_without_unwrap() ! {
 	output := result.output
 	// Without unwrap, wrapped lines show as separate lines
 	assert output == 'hello worl\nd this is\na test'
-	assert state.rows == usize(page.size.rows) - 2
-	assert state.cells == usize(page.size.cols) - 6
+	assert state.rows == uint(page.size.rows) - 2
+	assert state.cells == uint(page.size.cols) - 6
 
 	// Verify point map
 	assert output.len == point_map.points.len
@@ -1069,8 +1069,8 @@ fn test_page_plain_soft_wrapped_3_lines_with_unwrap() ! {
 	output := result.output
 	// With unwrap, wrapped lines are joined together
 	assert output == 'hello world this is a test'
-	assert state.rows == usize(page.size.rows) - 2
-	assert state.cells == usize(page.size.cols) - 6
+	assert state.rows == uint(page.size.rows) - 2
+	assert state.cells == uint(page.size.cols) - 6
 
 	// Verify point map - unwrapped text spans 3 rows
 	assert output.len == point_map.points.len
@@ -1121,8 +1121,8 @@ fn test_page_plain_start_y_subset() ! {
 	state := result.state
 	output := result.output
 	assert output == 'world\ntest'
-	assert state.rows == usize(page.size.rows) - 2
-	assert state.cells == usize(page.size.cols) - 4
+	assert state.rows == uint(page.size.rows) - 2
+	assert state.cells == uint(page.size.cols) - 4
 
 	// Verify point map
 	assert output.len == point_map.points.len
@@ -1171,8 +1171,8 @@ fn test_page_plain_end_y_subset() ! {
 	state := result.state
 	output := result.output
 	assert output == 'hello\nworld'
-	assert state.rows == usize(1)
-	assert state.cells == usize(page.size.cols) - 5
+	assert state.rows == uint(1)
+	assert state.cells == uint(page.size.cols) - 5
 
 	// Verify point map
 	assert output.len == point_map.points.len
@@ -1222,8 +1222,8 @@ fn test_page_plain_start_y_and_end_y_range() ! {
 	state := result.state
 	output := result.output
 	assert output == 'world\ntest'
-	assert state.rows == usize(1)
-	assert state.cells == usize(page.size.cols) - 4
+	assert state.rows == uint(1)
+	assert state.cells == uint(page.size.cols) - 4
 
 	// Verify point map
 	assert output.len == point_map.points.len
@@ -1272,8 +1272,8 @@ fn test_page_plain_start_y_out_of_bounds() ! {
 	state := result.state
 	output := result.output
 	assert output == ''
-	assert state.rows == usize(0)
-	assert state.cells == usize(0)
+	assert state.rows == uint(0)
+	assert state.cells == uint(0)
 
 	// Verify point map is empty
 	assert point_map.points.len == 0
@@ -1307,8 +1307,8 @@ fn test_page_plain_end_y_greater_than_rows() ! {
 	output := result.output
 	// Should clamp to page.size.rows and work normally
 	assert output == 'hello'
-	assert state.rows == usize(page.size.rows)
-	assert state.cells == usize(page.size.cols) - 5
+	assert state.rows == uint(page.size.rows)
+	assert state.cells == uint(page.size.cols) - 5
 
 	// Verify point map
 	assert output.len == point_map.points.len
@@ -1348,8 +1348,8 @@ fn test_page_plain_end_y_less_than_start_y() ! {
 	state := result.state
 	output := result.output
 	assert output == ''
-	assert state.rows == usize(0)
-	assert state.cells == usize(0)
+	assert state.rows == uint(0)
+	assert state.cells == uint(0)
 
 	// Verify point map is empty
 	assert point_map.points.len == 0
@@ -1382,8 +1382,8 @@ fn test_page_plain_start_x_on_first_row_only() ! {
 	state := result.state
 	output := result.output
 	assert output == 'world'
-	assert state.rows == usize(page.size.rows)
-	assert state.cells == usize(page.size.cols) - 11
+	assert state.rows == uint(page.size.rows)
+	assert state.cells == uint(page.size.cols) - 11
 
 	// Verify point map
 	assert output.len == point_map.points.len
@@ -1423,8 +1423,8 @@ fn test_page_plain_end_x_on_last_row_only() ! {
 	state := result.state
 	output := result.output
 	assert output == 'first line\nsecond line\nthird'
-	assert state.rows == usize(1)
-	assert state.cells == usize(0)
+	assert state.rows == uint(1)
+	assert state.cells == uint(0)
 
 	// Verify point map
 	assert output.len == point_map.points.len
@@ -1488,8 +1488,8 @@ fn test_page_plain_start_x_and_end_x_multiline() ! {
 	// Second row: "test case" (full row)
 	// Third row: "foo" (start to end_x=2, inclusive)
 	assert output == 'world\ntest case\nfoo'
-	assert state.rows == usize(1)
-	assert state.cells == usize(0)
+	assert state.rows == uint(1)
+	assert state.cells == uint(0)
 
 	// Verify point map
 	assert output.len == point_map.points.len
@@ -1548,8 +1548,8 @@ fn test_page_plain_start_x_out_of_bounds() ! {
 	state := result.state
 	output := result.output
 	assert output == ''
-	assert state.rows == usize(0)
-	assert state.cells == usize(0)
+	assert state.rows == uint(0)
+	assert state.cells == uint(0)
 
 	// Verify point map is empty
 	assert point_map.points.len == 0
@@ -1582,8 +1582,8 @@ fn test_page_plain_end_x_greater_than_cols() ! {
 	state := result.state
 	output := result.output
 	assert output == 'hello'
-	assert state.rows == usize(page.size.rows)
-	assert state.cells == usize(page.size.cols) - 5
+	assert state.rows == uint(page.size.rows)
+	assert state.cells == uint(page.size.cols) - 5
 
 	// Verify point map
 	assert output.len == point_map.points.len
@@ -1624,8 +1624,8 @@ fn test_page_plain_end_x_less_than_start_x_single_row() ! {
 	state := result.state
 	output := result.output
 	assert output == ''
-	assert state.rows == usize(0)
-	assert state.cells == usize(0)
+	assert state.rows == uint(0)
+	assert state.cells == uint(0)
 
 	// Verify point map is empty
 	assert point_map.points.len == 0
@@ -1663,8 +1663,8 @@ fn test_page_plain_start_y_non_zero_ignores_trailing_state() ! {
 	output := result.output
 	// Should NOT output the 5 newlines from trailing_state because start_y is non-zero
 	assert output == 'world'
-	assert state.rows == usize(page.size.rows) - 1
-	assert state.cells == usize(page.size.cols) - 5
+	assert state.rows == uint(page.size.rows) - 1
+	assert state.cells == uint(page.size.cols) - 5
 
 	// Verify point map
 	assert output.len == point_map.points.len
@@ -1708,8 +1708,8 @@ fn test_page_plain_start_x_non_zero_ignores_trailing_state() ! {
 	output := result.output
 	// Should NOT output the 2 newlines or 8 spaces from trailing_state because start_x is non-zero
 	assert output == 'world'
-	assert state.rows == usize(page.size.rows)
-	assert state.cells == usize(page.size.cols) - 11
+	assert state.rows == uint(page.size.rows)
+	assert state.cells == uint(page.size.cols) - 11
 
 	// Verify point map
 	assert output.len == point_map.points.len
@@ -1754,8 +1754,8 @@ fn test_page_plain_start_y_and_start_x_zero_uses_trailing_state() ! {
 	output := result.output
 	// SHOULD output the 2 newlines from trailing_state because both start_y and start_x are 0
 	assert output == '\n\nhello'
-	assert state.rows == usize(page.size.rows)
-	assert state.cells == usize(page.size.cols) - 5
+	assert state.rows == uint(page.size.rows)
+	assert state.cells == uint(page.size.cols) - 5
 
 	// Verify point map
 	assert output.len == point_map.points.len
@@ -1806,8 +1806,8 @@ fn test_page_plain_single_line_with_styling() ! {
 	state := result.state
 	output := result.output
 	assert output == 'hello, world'
-	assert state.rows == usize(page.size.rows)
-	assert state.cells == usize(page.size.cols) - 12
+	assert state.rows == uint(page.size.rows)
+	assert state.cells == uint(page.size.cols) - 12
 
 	// Verify point map
 	assert output.len == point_map.points.len
@@ -2327,8 +2327,8 @@ fn test_page_list_vt_spanning_two_pages() ! {
 	last_node := formatter_last_node(pages)
 
 	// Just verify we have entries for both pages in the pin map
-	mut first_count := usize(0)
-	mut last_count := usize(0)
+	mut first_count := uint(0)
+	mut last_count := uint(0)
 	for pin in pin_map.pins {
 		if voidptr(pin.node) == voidptr(first_node) {
 			first_count += 1

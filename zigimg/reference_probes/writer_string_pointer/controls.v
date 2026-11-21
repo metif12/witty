@@ -13,7 +13,7 @@ struct Args {
 }
 
 fn borrowed[E](_ E) []E {
-	return unsafe { array{ data: voidptr(usize(0x1234)), len: 0, cap: 0, flags: .nofree, element_size: int(sizeof(E)) } }
+	return unsafe { array{ data: voidptr(uint(0x1234)), len: 0, cap: 0, flags: .nofree, element_size: int(sizeof(E)) } }
 }
 
 fn require(ok bool) { if !ok { panic('control assertion failed') } }

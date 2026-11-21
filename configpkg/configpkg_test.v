@@ -742,7 +742,7 @@ fn test_duration_as_milliseconds_saturates() {
 	assert Duration{ duration: 999_999 }.as_milliseconds() == 0
 	assert Duration{ duration: 1_500_000 }.as_milliseconds() == 1
 	assert Duration{ duration: u64_max }.as_milliseconds() == u32(0xffff_ffff)
-	assert Duration{ duration: 1_500_000 }.cval() == usize(1)
+	assert Duration{ duration: 1_500_000 }.cval() == uint(1)
 }
 
 fn test_duration_round_and_lte() {
@@ -1176,7 +1176,7 @@ fn test_repeatable_command_parse_clear_clone_and_format() {
 	clone := commands.clone()
 	assert clone.equal(commands)
 	assert clone.items_c.len == clone.items.len
-	assert clone.cval().len == usize(clone.items.len)
+	assert clone.cval().len == uint(clone.items.len)
 	assert clone.format_entry() == [
 		'title:"Foo",action:"ignore"',
 		'title:"Bar, Baz",description:"line\\ntext",action:"text:hello, world"',

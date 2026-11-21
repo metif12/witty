@@ -6,7 +6,7 @@ import vaxis.vxfw
 
 #include <unistd.h>
 
-fn C.read(fd int, buf voidptr, count usize) isize
+fn C.read(fd int, buf voidptr, count uint) int
 fn C.fflush(stream voidptr) int
 
 struct Probe {

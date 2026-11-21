@@ -38,8 +38,8 @@ fn run() ! {
 	observed_buffer = unsafe { buffer }
 	at_exit(observe)!
 	mut status := 'ok'
-	options := zigimg.FormatOptions{ width: usize(0) }
-	depth := usize(os.args[4].u64())
+	options := zigimg.FormatOptions{ width: uint(0) }
+	depth := uint(os.args[4].u64())
 	value := Choice.high
 	match os.args[3] {
 		'0' { writer.print_value('any', options, &value, depth) or { status = err.msg() } }
@@ -57,7 +57,7 @@ fn run() ! {
 		}
 		'5' {
 			number := Number{7}
-			writer.print_value('any', zigimg.FormatOptions{ width: ~usize(0), alignment: .left, fill: `_` }, &number, depth) or { status = err.msg() }
+			writer.print_value('any', zigimg.FormatOptions{ width: ~uint(0), alignment: .left, fill: `_` }, &number, depth) or { status = err.msg() }
 		}
 		else { panic('invalid control') }
 	}

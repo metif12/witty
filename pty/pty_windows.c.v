@@ -68,25 +68,25 @@ pub fn Pty.open(size Winsize) !Pty {
 		if !success {
 			// Reverse the source errdefer registrations. A failed open never
 			// returns ownership and never closes an uninitialized handle.
-			if p.out_pipe != unsafe { nil } && p.out_pipe != voidptr(usize(-1)) {
+			if p.out_pipe != unsafe { nil } && p.out_pipe != voidptr(uint(-1)) {
 				C.CloseHandle(p.out_pipe)
 				C.CloseHandle(p.out_pipe_pty)
 			}
-			if p.in_pipe_pty != unsafe { nil } && p.in_pipe_pty != voidptr(usize(-1)) {
+			if p.in_pipe_pty != unsafe { nil } && p.in_pipe_pty != voidptr(uint(-1)) {
 				C.CloseHandle(p.in_pipe_pty)
 			}
-			if p.in_pipe != unsafe { nil } && p.in_pipe != voidptr(usize(-1)) {
+			if p.in_pipe != unsafe { nil } && p.in_pipe != voidptr(uint(-1)) {
 				C.CloseHandle(p.in_pipe)
 			}
 		}
 	}
 	p.in_pipe = C.CreateNamedPipeW(path_w, u32(0x00000002 | 0x00080000 | 0x40000000),
 		0, 1, 4096, 4096, 0, &attributes)
-	if p.in_pipe == voidptr(usize(-1)) { return error('Unexpected: ${C.GetLastError()}') }
+	if p.in_pipe == voidptr(uint(-1)) { return error('Unexpected: ${C.GetLastError()}') }
 	mut read_attributes := attributes
 	p.in_pipe_pty = C.CreateFileW(path_w, 0x80000000, 0, &read_attributes,
 		3, 0x00000080, unsafe { nil })
-	if p.in_pipe_pty == voidptr(usize(-1)) { return error('Unexpected: ${C.GetLastError()}') }
+	if p.in_pipe_pty == voidptr(uint(-1)) { return error('Unexpected: ${C.GetLastError()}') }
 	// The input uses an overlapped named pipe; anonymous pipes cannot be used
 	// with the libxev IOCP writer. The output reader remains blocking.
 	if !C.CreatePipe(&p.out_pipe, &p.out_pipe_pty, unsafe { nil }, 0) {

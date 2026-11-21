@@ -45,7 +45,7 @@ fn pixels(format p.PixelFormat, n int, seed int) p.PixelStorage {
 			}
 		}
 		else {
-			mut result := p.PixelStorage.init(format, usize(n)) or { panic(err) }
+			mut result := p.PixelStorage.init(format, uint(n)) or { panic(err) }
 			mut raw := result.as_bytes()
 			for i in 0 .. raw.len {
 				raw[i] = u8(i * 37 + seed)
@@ -189,9 +189,9 @@ fn line_case(line string) {
 			view.width = 23
 			view.animation.loop_count = ~loops
 			view.pixels = view.pixels.slice(0, if view.pixels.len() > 0 {
-				usize(1)
+				uint(1)
 			} else {
-				usize(0)
+				uint(0)
 			})
 			mutate(mut view.pixels)
 			if count > 0 { view.animation.frames[0].duration = float_word(word ^ 0x80000000) }
@@ -207,9 +207,9 @@ fn line_case(line string) {
 			view.height = 29
 			view.animation.loop_count = ~loops
 			view.pixels = view.pixels.slice(0, if view.pixels.len() > 0 {
-				usize(1)
+				uint(1)
 			} else {
-				usize(0)
+				uint(0)
 			})
 			mutate(mut view.pixels)
 			if count > 0 { view.animation.frames[0].pixels = pixels(.rgba32, 1, seed + 9) }

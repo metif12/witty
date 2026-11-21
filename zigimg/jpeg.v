@@ -104,7 +104,7 @@ pub fn (mut jpeg JPEG) read(mut stream ReadStream, mut pixels_opt JpegPixels) !J
 				}
 
 				pixels_opt.value = PixelStorage.init(format,
-					usize(frame.frame_header.width) * usize(frame.frame_header.height))!
+					uint(frame.frame_header.width) * uint(frame.frame_header.height))!
 			}
 			0xffc1, 0xffc3, 0xffc5, 0xffc6, 0xffc7, 0xffc9, 0xffca, 0xffcb, 0xffcd, 0xffce, 0xffcf {
 				return error('Unsupported')
@@ -168,8 +168,8 @@ pub fn JPEG.read_image(mut stream ReadStream) !ImageUnmanaged {
 		return err
 	}
 	return ImageUnmanaged{
-		width:  usize(frame.frame_header.width)
-		height: usize(frame.frame_header.height)
+		width:  uint(frame.frame_header.width)
+		height: uint(frame.frame_header.height)
 		pixels: pixels.value or { return error('InvalidData') }
 	}
 }

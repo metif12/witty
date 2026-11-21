@@ -6,15 +6,15 @@ import strconv
 import strings
 import vaxis
 
-fn uint(parts []string, index int) usize {
-	return usize(strconv.parse_uint(parts[index], 10, 64) or { panic(err) })
+fn uint(parts []string, index int) uint {
+	return uint(strconv.parse_uint(parts[index], 10, 64) or { panic(err) })
 }
 
 fn bytes(value string) string {
 	return (hex.decode(value) or { panic(err) }).bytestr()
 }
 
-fn style(index usize) vaxis.Style {
+fn style(index uint) vaxis.Style {
 	return match index {
 		1 {
 			vaxis.Style{
@@ -86,7 +86,7 @@ fn cell(mut output strings.Builder, value vaxis.Cell) {
 fn state(mut output strings.Builder, input vaxis.TextInput) {
 	b := input.buf
 	output.write_string('${b.buffer.len},${u64(b.cursor).str()},${u64(b.gap_size).str()};')
-	if b.cursor <= usize(b.buffer.len) && b.gap_size <= usize(b.buffer.len) - b.cursor {
+	if b.cursor <= uint(b.buffer.len) && b.gap_size <= uint(b.buffer.len) - b.cursor {
 		output.write_string('${hex.encode(b.first_half())}/${hex.encode(b.second_half())};')
 	} else {
 		output.write_string('invalid;')
@@ -126,43 +126,43 @@ fn trap(mode string) {
 	} else if mode == 'trap_right' {
 		input.buf.move_gap_right(1)
 	} else if mode == 'trap_right_order' {
-		input.buf.cursor = usize(input.buf.buffer.len + 1)
-		input.buf.gap_size = ~usize(0)
+		input.buf.cursor = uint(input.buf.buffer.len + 1)
+		input.buf.gap_size = ~uint(0)
 		input.buf.move_gap_right(0)
 	} else if mode == 'trap_right_add' {
-		input.buf.cursor = ~usize(0)
+		input.buf.cursor = ~uint(0)
 		input.buf.move_gap_right(1)
 	} else if mode == 'trap_right_end' {
-		input.buf.gap_size = ~usize(0)
+		input.buf.gap_size = ~uint(0)
 		input.buf.move_gap_right(1)
 	} else if mode == 'trap_gap_left' {
-		input.buf.gap_size = ~usize(0)
+		input.buf.gap_size = ~uint(0)
 		input.buf.grow_gap_left(1)
 	} else if mode == 'trap_grow' {
-		input.buf.grow(~usize(0))
+		input.buf.grow(~uint(0))
 	} else if mode == 'trap_first_half' {
-		input.buf.cursor = usize(1) << 32
+		input.buf.cursor = uint(1) << 32
 		input.buf.first_half()
 	} else if mode == 'trap_second_half' {
-		input.buf.cursor = ~usize(0)
+		input.buf.cursor = ~uint(0)
 		input.buf.gap_size = 1
 		input.buf.second_half()
 	} else if mode == 'trap_left_add' {
-		input.buf.cursor = ~usize(0)
-		input.buf.gap_size = ~usize(0)
+		input.buf.cursor = ~uint(0)
+		input.buf.gap_size = ~uint(0)
 		input.buf.move_gap_left(0)
 	} else if mode == 'trap_left_zero' {
-		input.buf.cursor = usize(input.buf.buffer.len + 1)
+		input.buf.cursor = uint(input.buf.buffer.len + 1)
 		input.buf.gap_size = 0
 		input.buf.move_gap_left(0)
 	} else if mode == 'trap_gap_right_add' {
-		input.buf.grow_gap_right(~usize(0))
+		input.buf.grow_gap_right(~uint(0))
 	} else if mode == 'trap_gap_right_sub' {
-		input.buf.cursor = usize(input.buf.buffer.len + 1)
+		input.buf.cursor = uint(input.buf.buffer.len + 1)
 		input.buf.gap_size = 0
 		input.buf.grow_gap_right(0)
 	} else if mode == 'trap_insert_add' {
-		input.buf.cursor = ~usize(0)
+		input.buf.cursor = ~uint(0)
 		input.buf.insert_slice_at_cursor('x')
 	} else if mode == 'trap_slice_short' {
 		mut output := []u8{len: 2}
@@ -204,7 +204,7 @@ fn main() {
 				input.buf.move_gap_left(uint(parts, 2))
 				mut buffer := []u8{len: int(input.buf.cursor + uint(parts, 3)), init: 0xa5}
 				prefix := input.slice_to_cursor_into(mut buffer)
-				output.write_string('${u8(usize(prefix.data) == usize(buffer.data))};${hex.encode(prefix)};${hex.encode(buffer)};')
+				output.write_string('${u8(uint(prefix.data) == uint(buffer.data))};${hex.encode(prefix)};${hex.encode(buffer)};')
 			}
 			'D' {
 				input.insert_slice_at_cursor(bytes(parts[1]))

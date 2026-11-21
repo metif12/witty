@@ -6,7 +6,7 @@ fn test_c_get_nullable_strings_write_null_and_succeed() {
 	config.title = none
 	config.window_title_font_family = none
 	for key in ['class', 'title', 'window-title-font-family'] {
-		mut output := unsafe { &char(usize(0x1234)) }
+		mut output := unsafe { &char(uint(0x1234)) }
 		assert config.c_get(key, voidptr(&output))
 		assert isnil(output)
 	}

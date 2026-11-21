@@ -4,7 +4,7 @@ module vaxis
 pub struct GraphemeCache {
 pub mut:
 	buf [8192]u8
-	idx usize
+	idx uint
 }
 
 pub fn GraphemeCache.new() GraphemeCache {
@@ -12,19 +12,19 @@ pub fn GraphemeCache.new() GraphemeCache {
 }
 
 pub fn (mut cache GraphemeCache) put(bytes []u8) []u8 {
-	length := usize(bytes.len)
-	if grapheme_cache_add(cache.idx, length) > usize(cache.buf.len) {
+	length := uint(bytes.len)
+	if grapheme_cache_add(cache.idx, length) > uint(cache.buf.len) {
 		cache.idx = 0
 	}
 	start := cache.idx
 	limit := grapheme_cache_add(start, length)
-	if start > usize(cache.buf.len) || limit > usize(cache.buf.len) {
+	if start > uint(cache.buf.len) || limit > uint(cache.buf.len) {
 		panic('index out of bounds')
 	}
 	destination := unsafe { &cache.buf[0] + int(start) }
 	if length > 0 {
-		source_address := usize(bytes.data)
-		destination_address := usize(destination)
+		source_address := uint(bytes.data)
+		destination_address := uint(destination)
 		if (destination_address <= source_address && source_address - destination_address < length)
 			|| (source_address < destination_address
 			&& destination_address - source_address < length) {
@@ -38,7 +38,7 @@ pub fn (mut cache GraphemeCache) put(bytes []u8) []u8 {
 	return unsafe { destination.vbytes(bytes.len) }
 }
 
-fn grapheme_cache_add(first usize, second usize) usize {
-	if second > ~usize(0) - first { panic('integer overflow') }
+fn grapheme_cache_add(first uint, second uint) uint {
+	if second > ~uint(0) - first { panic('integer overflow') }
 	return first + second
 }

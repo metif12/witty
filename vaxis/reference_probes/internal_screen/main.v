@@ -33,10 +33,10 @@ fn color(c vx.Color) u32 {
 }
 
 fn offset(value string, data []u8) i64 {
-	ptr := usize(value.str)
-	base := usize(data.data)
-	return if ptr >= base && ptr <= base + usize(data.len)
-		&& usize(value.len) <= base + usize(data.len) - ptr {
+	ptr := uint(value.str)
+	base := uint(data.data)
+	return if ptr >= base && ptr <= base + uint(data.len)
+		&& uint(value.len) <= base + uint(data.len) - ptr {
 		i64(ptr - base)
 	} else {
 		i64(-1)
@@ -198,7 +198,7 @@ fn fit_record(mut out strings.Builder, p []string, data []u8) {
 	cell_value(mut out, old, data)
 	out.write_string('|')
 	cell_value(mut out, current, data)
-	out.write_string('|${int(usize(old.char_.grapheme.str) == usize(current.char_.grapheme.str))},${int(usize(old.link.uri.str) == usize(current.link.uri.str))},${int(usize(old.link.params.str) == usize(current.link.params.str))}')
+	out.write_string('|${int(uint(old.char_.grapheme.str) == uint(current.char_.grapheme.str))},${int(uint(old.link.uri.str) == uint(current.link.uri.str))},${int(uint(old.link.params.str) == uint(current.link.params.str))}')
 	s.deinit()
 }
 

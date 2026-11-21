@@ -162,7 +162,7 @@ mut:
 	// A CV for being notified when the queue is no longer full. This is used
 	// for writing; consumers use external notifiers for non-empty queues.
 	cond_not_full    Condition
-	not_full_waiters usize
+	not_full_waiters uint
 }
 
 // create allocates a fixed-capacity queue.

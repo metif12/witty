@@ -225,7 +225,7 @@ fn ghostty_config_finalize_export(raw voidptr) {
 }
 
 @[export: 'ghostty_config_get']
-fn ghostty_config_get_export(raw voidptr, ptr voidptr, key_ptr &u8, key_len usize) bool {
+fn ghostty_config_get_export(raw voidptr, ptr voidptr, key_ptr &u8, key_len uint) bool {
 	if isnil(raw) || isnil(key_ptr) {
 		return false
 	}
@@ -235,7 +235,7 @@ fn ghostty_config_get_export(raw voidptr, ptr voidptr, key_ptr &u8, key_len usiz
 }
 
 @[export: 'ghostty_config_trigger']
-fn ghostty_config_trigger_export(raw voidptr, action_ptr &u8, action_len usize) InputTrigger {
+fn ghostty_config_trigger_export(raw voidptr, action_ptr &u8, action_len uint) InputTrigger {
 	if isnil(raw) || isnil(action_ptr) {
 		return InputTrigger{}
 	}

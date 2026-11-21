@@ -12,14 +12,14 @@ pub mut:
 	pins  lib_allocator.MemoryPool[Pin]
 }
 
-pub fn MemoryPool.init(gen_alloc lib_allocator.Allocator, page_alloc lib_allocator.Allocator, preheat usize) !MemoryPool {
+pub fn MemoryPool.init(gen_alloc lib_allocator.Allocator, page_alloc lib_allocator.Allocator, preheat uint) !MemoryPool {
 	mut nodes := lib_allocator.MemoryPool.init_preheated[PageNode](gen_alloc, preheat)!
 	mut nodes_ready := false
 	defer {
 		if !nodes_ready { nodes.deinit() }
 	}
 	mut alignment := u8(0)
-	for (usize(1) << alignment) < page_memory_alignment() {
+	for (uint(1) << alignment) < page_memory_alignment() {
 		alignment++
 	}
 	mut pages := lib_allocator.RawMemoryPool.init_preheated(page_alloc, standard_page_size(),
