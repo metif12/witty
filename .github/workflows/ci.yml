@@ -24,9 +24,10 @@ jobs:
       - name: Install dependencies
         run: brew install freetype harfbuzz fontconfig oniguruma pkg-config gettext
       - name: Install V
+        # Prebuilt release: building the tag from source pulls a newer vc bootstrap.
         run: |
-          git clone --depth 1 --branch ${{ env.V_VERSION }} https://github.com/vlang/v "$RUNNER_TEMP/v"
-          make -C "$RUNNER_TEMP/v"
+          curl -fsSL -o "$RUNNER_TEMP/v.zip" "https://github.com/vlang/v/releases/download/${{ env.V_VERSION }}/v_macos_arm64.zip"
+          unzip -q "$RUNNER_TEMP/v.zip" -d "$RUNNER_TEMP"
           echo "VEXE=$RUNNER_TEMP/v/v" >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/v" >> "$GITHUB_PATH"
       - name: Check
@@ -61,9 +62,10 @@ jobs:
           ninja -C build
           sudo ninja -C build install
       - name: Install V
+        # Prebuilt release: building the tag from source pulls a newer vc bootstrap.
         run: |
-          git clone --depth 1 --branch ${{ env.V_VERSION }} https://github.com/vlang/v "$RUNNER_TEMP/v"
-          make -C "$RUNNER_TEMP/v"
+          curl -fsSL -o "$RUNNER_TEMP/v.zip" "https://github.com/vlang/v/releases/download/${{ env.V_VERSION }}/v_linux.zip"
+          unzip -q "$RUNNER_TEMP/v.zip" -d "$RUNNER_TEMP"
           echo "VEXE=$RUNNER_TEMP/v/v" >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/v" >> "$GITHUB_PATH"
       - name: Check
@@ -79,7 +81,7 @@ jobs:
   windows:
     runs-on: windows-2022
     timeout-minutes: 120
-    # V's clang bootstrap on Windows fails (_udiv128 is MSVC-only), so use MinGW gcc throughout.
+    # V's clang C backend on Windows hits MSVC-only intrinsics (_udiv128); use MinGW gcc throughout.
     env:
       VFLAGS: -cc gcc
       CC: gcc
@@ -90,13 +92,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install V
-        shell: cmd
+        shell: pwsh
         run: |
-          git clone --depth 1 --branch ${{ env.V_VERSION }} https://github.com/vlang/v "%RUNNER_TEMP%\v"
-          cd /d "%RUNNER_TEMP%\v"
-          call makev.bat -gcc
-          echo VEXE=%RUNNER_TEMP%\v\v.exe>> "%GITHUB_ENV%"
-          echo %RUNNER_TEMP%\v>> "%GITHUB_PATH%"
+          Invoke-WebRequest "https://github.com/vlang/v/releases/download/${{ env.V_VERSION }}/v_windows.zip" -OutFile "$env:RUNNER_TEMP\v.zip"
+          Expand-Archive "$env:RUNNER_TEMP\v.zip" -DestinationPath $env:RUNNER_TEMP
+          "VEXE=$env:RUNNER_TEMP\v\v.exe" >> $env:GITHUB_ENV
+          "$env:RUNNER_TEMP\v" >> $env:GITHUB_PATH
       - name: Build libghostty-vt
         run: v -path "$PWD|@vlib|@vmodules" run tools/build lib-vt --prefix "$RUNNER_TEMP/witty"
       - uses: actions/upload-artifact@v4
