@@ -269,7 +269,9 @@ fn (d Driver) runtime_archive() !string {
 	root := os.join_path(os.dir(os.real_path(d.cfg.compiler)), 'thirdparty', 'libgc')
 	mut flags := ['-I' + os.join_path(root, 'include'), '-DGC_THREADS=1', '-DTHREAD_LOCAL_ALLOC=1',
 		'-DGC_BUILTIN_ATOMIC=1', '-DALL_INTERIOR_POINTERS=1', '-DNO_EXECUTE_PERMISSION=1', '-fPIC']
-	if d.cfg.target.darwin() { flags << '-DMPROTECT_VDB=1' }
+	// MPROTECT_VDB only serves incremental collection, which V never enables,
+	// and on Darwin it defines catch_exception_raise, which Breakpad also does.
+	if d.cfg.target.darwin() { flags << '-DNO_MPROTECT_VDB=1' }
 	if d.cfg.target.os == 'windows' { flags << ['-DGC_NOT_DLL=1', '-DGC_WIN32_THREADS=1'] }
 	if d.cfg.target.os == 'freebsd' { flags << ['-DBUS_PAGE_FAULT=T_PAGEFLT', '-DUSE_MMAP'] }
 	return d.compile_native('v-runtime-gc', root, ['gc.c'], NativeCompileOptions{
