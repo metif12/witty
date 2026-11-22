@@ -3,11 +3,14 @@
 #pragma push_macro("UChar")
 #undef UChar
 #include <unicode/ustring.h>
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 typedef UChar witty_source_icu_char;
+#endif
 #pragma pop_macro("UChar")
 
 // Native ICU performs Unicode's malformed UTF-8 substitution. No decoder is
 // implemented here. A -1 source length gives Swift String(cString:)'s boundary.
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void* witty_source_c_utf8_repair(const char* source) {
     UErrorCode error=U_ZERO_ERROR;
     int32_t length=0;
@@ -24,4 +27,5 @@ static inline void* witty_source_c_utf8_repair(const char* source) {
     free(characters);
     return ((id (*)(id,SEL))objc_msgSend)(string,sel_registerName("autorelease"));
 }
+#endif
 #endif

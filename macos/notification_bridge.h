@@ -1,9 +1,12 @@
 #ifndef WITTY_NOTIFICATION_BRIDGE_H
 #define WITTY_NOTIFICATION_BRIDGE_H
 #include <stdbool.h>
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 #include <objc/runtime.h>
 #include <objc/message.h>
+#endif
 /* Block ABI adapters. The notification policy and lifecycle are translated in V. */
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 extern void* _NSConcreteStackBlock[32];
 typedef void (*witty_action_callback)(void*,void*,long long,bool);
 typedef struct witty_action_block_descriptor { unsigned long reserved,size; } witty_action_block_descriptor;
@@ -43,11 +46,15 @@ static inline void* witty_action_notification_action(void* identifier,void* titl
 static inline void* witty_action_notification_category(void* identifier,void* actions,void* intents,unsigned long options) {
  return ((id(*)(id,SEL,id,id,id,unsigned long))objc_msgSend)((id)objc_getClass("UNNotificationCategory"),sel_registerName("categoryWithIdentifier:actions:intentIdentifiers:options:"),(id)identifier,(id)actions,(id)intents,options);
 }
+#endif
 
 // Retained Objective-C parameters cross the delegate's MainActor boundary.
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 extern void* _Block_copy(const void*);
 extern void _Block_release(const void*);
+#endif
 typedef struct witty_action_notification_delivery { void* object; void* completion; } witty_action_notification_delivery;
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void witty_action_notification_dispatch(void* object,void* completion,void* callback) {
  witty_action_notification_delivery* delivery=malloc(sizeof(*delivery));
  delivery->object=((id(*)(id,SEL))objc_msgSend)((id)object,sel_registerName("retain"));
@@ -58,5 +65,6 @@ static inline void witty_action_notification_delivery_free(witty_action_notifica
  ((void(*)(id,SEL))objc_msgSend)((id)delivery->object,sel_registerName("release"));
  _Block_release(delivery->completion); free(delivery);
 }
+#endif
 
 #endif

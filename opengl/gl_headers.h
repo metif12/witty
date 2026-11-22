@@ -13,10 +13,13 @@
  * can still compile on platforms whose link-time GL library lacks them.
  */
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 extern unsigned int glGetError(void);
 extern void glGetIntegerv(unsigned int pname, int *data);
 extern const unsigned char *glGetStringi(unsigned int name, unsigned int index);
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 extern void glClearColor(float red, float green, float blue, float alpha);
 extern void glClear(unsigned int mask);
 extern void glDrawArrays(unsigned int mode, int first, int count);
@@ -31,7 +34,9 @@ extern void glViewport(int x, int y, int width, int height);
 extern void glPixelStorei(unsigned int pname, int param);
 extern void glFinish(void);
 extern void glFlush(void);
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 extern void glGenBuffers(int n, unsigned int *buffers);
 extern void glBindBuffer(unsigned int target, unsigned int buffer);
 extern void glDeleteBuffers(int n, unsigned int *buffers);
@@ -42,7 +47,9 @@ extern void glVertexAttribPointer(unsigned int index, int size, unsigned int typ
 extern void glVertexAttribIPointer(unsigned int index, int size, unsigned int type, int stride, void *pointer);
 extern void glEnableVertexAttribArray(unsigned int index);
 extern void glVertexAttribDivisor(unsigned int index, unsigned int divisor);
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 extern void glActiveTexture(unsigned int texture);
 extern void glGenTextures(int n, unsigned int *textures);
 extern void glBindTexture(unsigned int target, unsigned int texture);
@@ -52,18 +59,24 @@ extern void glTexParameteri(unsigned int target, unsigned int pname, int param);
 extern void glTexImage2D(unsigned int target, int level, int internalformat, int width, int height, int border, unsigned int format, unsigned int type, void *pixels);
 extern void glTexSubImage2D(unsigned int target, int level, int xoffset, int yoffset, int width, int height, unsigned int format, unsigned int type, void *pixels);
 extern void glCopyTexSubImage2D(unsigned int target, int level, int xoffset, int yoffset, int x, int y, int width, int height);
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 extern void glGenVertexArrays(int n, unsigned int *arrays);
 extern void glBindVertexArray(unsigned int array);
 extern void glDeleteVertexArrays(int n, unsigned int *arrays);
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 extern unsigned int glCreateShader(unsigned int type);
 extern void glShaderSource(unsigned int shader, int count, unsigned char **string, int *length);
 extern void glCompileShader(unsigned int shader);
 extern void glGetShaderiv(unsigned int shader, unsigned int pname, int *params);
 extern void glGetShaderInfoLog(unsigned int shader, int maxLength, int *length, unsigned char *infoLog);
 extern void glDeleteShader(unsigned int shader);
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 extern unsigned int glCreateProgram(void);
 extern void glDeleteProgram(unsigned int program);
 extern void glAttachShader(unsigned int program, unsigned int shader);
@@ -79,7 +92,9 @@ extern void glUniform2f(int location, float v0, float v1);
 extern void glUniform3f(int location, float v0, float v1, float v2);
 extern void glUniform4f(int location, float v0, float v1, float v2, float v3);
 extern void glUniformMatrix4fv(int location, int count, unsigned char transpose, float *value);
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 extern void glGenFramebuffers(int n, unsigned int *ids);
 extern void glDeleteFramebuffers(int n, unsigned int *framebuffers);
 extern void glBindFramebuffer(unsigned int target, unsigned int framebuffer);
@@ -87,16 +102,21 @@ extern void glFramebufferTexture2D(unsigned int target, unsigned int attachment,
 extern void glFramebufferRenderbuffer(unsigned int target, unsigned int attachment, unsigned int renderbuffertarget, unsigned int renderbuffer);
 extern void glDrawBuffers(int n, unsigned int *bufs);
 extern unsigned int glCheckFramebufferStatus(unsigned int target);
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 extern void glGenRenderbuffers(int n, unsigned int *renderbuffers);
 extern void glDeleteRenderbuffers(int n, unsigned int *renderbuffers);
 extern void glBindRenderbuffer(unsigned int target, unsigned int renderbuffer);
 extern void glRenderbufferStorage(unsigned int target, unsigned int internalformat, int width, int height);
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 extern void glGenSamplers(int n, unsigned int *samplers);
 extern void glBindSampler(unsigned int unit, unsigned int sampler);
 extern void glSamplerParameteri(unsigned int sampler, unsigned int pname, int param);
 extern void glDeleteSamplers(int n, unsigned int *samplers);
+#endif
 
 #ifndef GL_NO_ERROR
 #define GL_NO_ERROR 0
@@ -477,20 +497,27 @@ extern void glDeleteSamplers(int n, unsigned int *samplers);
 #define WITTY_GL_THREAD_LOCAL _Thread_local
 #endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static WITTY_GL_THREAD_LOCAL GladGLContext witty_gl_context;
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static int witty_gl_load(void *get_proc_address) {
 	if (get_proc_address != 0) {
 		return gladLoadGLContext(&witty_gl_context, (GLADloadfunc)get_proc_address);
 	}
 	return gladLoaderLoadGLContext(&witty_gl_context);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static void witty_gl_unload(void) {
 	gladLoaderUnloadGLContext(&witty_gl_context);
 	memset(&witty_gl_context, 0, sizeof(witty_gl_context));
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static int witty_glVertexBindingDivisor(unsigned int bindingindex, unsigned int divisor) {
 	if (witty_gl_context.VertexBindingDivisor == 0) {
 		return 0;
@@ -498,7 +525,9 @@ static int witty_glVertexBindingDivisor(unsigned int bindingindex, unsigned int 
 	witty_gl_context.VertexBindingDivisor(bindingindex, divisor);
 	return 1;
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static int witty_glVertexAttribBinding(unsigned int attribindex, unsigned int bindingindex) {
 	if (witty_gl_context.VertexAttribBinding == 0) {
 		return 0;
@@ -506,7 +535,9 @@ static int witty_glVertexAttribBinding(unsigned int attribindex, unsigned int bi
 	witty_gl_context.VertexAttribBinding(attribindex, bindingindex);
 	return 1;
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static int witty_glVertexAttribFormat(
 	unsigned int attribindex,
 	int size,
@@ -520,7 +551,9 @@ static int witty_glVertexAttribFormat(
 	witty_gl_context.VertexAttribFormat(attribindex, size, type, normalized, relativeoffset);
 	return 1;
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static int witty_glVertexAttribIFormat(
 	unsigned int attribindex,
 	int size,
@@ -533,7 +566,9 @@ static int witty_glVertexAttribIFormat(
 	witty_gl_context.VertexAttribIFormat(attribindex, size, type, relativeoffset);
 	return 1;
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static int witty_glVertexAttribLFormat(
 	unsigned int attribindex,
 	int size,
@@ -546,7 +581,9 @@ static int witty_glVertexAttribLFormat(
 	witty_gl_context.VertexAttribLFormat(attribindex, size, type, relativeoffset);
 	return 1;
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static int witty_glBindVertexBuffer(
 	unsigned int bindingindex,
 	unsigned int buffer,
@@ -559,7 +596,9 @@ static int witty_glBindVertexBuffer(
 	witty_gl_context.BindVertexBuffer(bindingindex, buffer, offset, stride);
 	return 1;
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static int witty_glBlitFramebuffer(
 	int src_x0,
 	int src_y0,
@@ -578,7 +617,9 @@ static int witty_glBlitFramebuffer(
 	witty_gl_context.BlitFramebuffer(src_x0, src_y0, src_x1, src_y1, dst_x0, dst_y0, dst_x1, dst_y1, mask, filter);
 	return 1;
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 typedef void (*witty_gl_debug_callback)(
 	unsigned int,
 	unsigned int,
@@ -588,7 +629,9 @@ typedef void (*witty_gl_debug_callback)(
 	const unsigned char *,
 	const void *
 );
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static int witty_glDebugMessageCallback(void *callback, void *user_param) {
 	if (witty_gl_context.DebugMessageCallback == 0) {
 		return 0;
@@ -596,29 +639,39 @@ static int witty_glDebugMessageCallback(void *callback, void *user_param) {
 	witty_gl_context.DebugMessageCallback((GLDEBUGPROC)callback, user_param);
 	return 1;
 }
+#endif
 
 #ifdef _VTEST
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static const GLubyte *witty_gl_test_get_string(GLenum name) {
 	if (name == GL_VERSION) {
 		return (const GLubyte *)"4.3 Witty Glad test";
 	}
 	return (const GLubyte *)"";
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static void witty_gl_test_get_integerv(GLenum name, GLint *value) {
 	(void)name;
 	if (value != 0) {
 		*value = 0;
 	}
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static GLenum witty_gl_test_get_error(void) {
 	return GL_NO_ERROR;
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static void witty_gl_test_noop(void) {
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static GLADapiproc witty_gl_test_resolver(const char *name) {
 	if (strcmp(name, "glGetString") == 0) {
 		return (GLADapiproc)witty_gl_test_get_string;
@@ -631,16 +684,21 @@ static GLADapiproc witty_gl_test_resolver(const char *name) {
 	}
 	return (GLADapiproc)witty_gl_test_noop;
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static void *witty_gl_test_resolver_pointer(void) {
 	return (void *)witty_gl_test_resolver;
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static int witty_gl_test_context_loaded(void) {
 	return witty_gl_context.GetString != 0 &&
 		witty_gl_context.GetIntegerv != 0 &&
 		witty_gl_context.GetError != 0;
 }
+#endif
 #endif
 
 /*

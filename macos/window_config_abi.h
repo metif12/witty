@@ -1,3 +1,4 @@
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void* witty_macos_color_rgba(double r, double g, double b, double a) {
     return ((id (*)(id,SEL,double,double,double,double))objc_msgSend)((id)objc_getClass("NSColor"),sel_registerName("colorWithSRGBRed:green:blue:alpha:"),r,g,b,a);
 }
@@ -15,3 +16,4 @@ static inline void* witty_macos_array(void** objects, size_t count) { return ((i
 static inline witty_macos_size witty_macos_text_size(void* obj) { return ((witty_macos_size (*)(id, SEL))objc_msgSend)((id)obj,sel_registerName("size")); }
 static inline void witty_macos_priority(void* obj, void* selector, float priority, unsigned long long axis) { ((void (*)(id,SEL,float,unsigned long long))objc_msgSend)((id)obj,(SEL)selector,priority,axis); }
 static inline void witty_macos_msg_void_f32(void* obj, void* selector, float value) { ((void (*)(id,SEL,float))objc_msgSend)((id)obj,(SEL)selector,value); }
+#endif

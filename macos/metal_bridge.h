@@ -2,22 +2,28 @@
 #define WITTY_METAL_BRIDGE_H
 #pragma once
 #include <objc_bridge.h>
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 #include <Foundation/Foundation.h>
 #include <CoreGraphics/CoreGraphics.h>
+#endif
 #include <stdbool.h>
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 #include <dispatch/dispatch.h>
 #include <objc/message.h>
 #include <Metal/Metal.h>
 #include <QuartzCore/QuartzCore.h>
 #include <IOSurface/IOSurface.h>
 #include <objc/runtime.h>
+#endif
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void witty_macos_observe(void* center, void* observer, void* selector, void* name, void* object) {
 	((void (*)(id, SEL, id, SEL, id, id))objc_msgSend)((id)center, sel_registerName("addObserver:selector:name:object:"), (id)observer, (SEL)selector, (id)name, (id)object);
 }
+#endif
 
 typedef struct witty_macos_point {
 	double x;
@@ -51,14 +57,18 @@ typedef struct witty_metal_pipeline_attachment {
 	bool blending_enabled;
 } witty_metal_pipeline_attachment;
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 typedef void (*witty_metal_layer_display_callback)(void*);
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 typedef void (*witty_metal_command_buffer_completion_callback)(
 	void*,
 	void*,
 	unsigned long long,
 	bool
 );
+#endif
 
 /*
  * Minimal Objective-C block ABI used by MTLCommandBuffer's
@@ -66,11 +76,14 @@ typedef void (*witty_metal_command_buffer_completion_callback)(
  * copy/dispose helpers; Metal copies the stack block before this function
  * returns and releases that copy after invocation.
  */
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 typedef struct witty_block_descriptor {
 	unsigned long reserved;
 	unsigned long size;
 } witty_block_descriptor;
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 typedef struct witty_metal_completion_block {
 	void* isa;
 	int flags;
@@ -81,20 +94,28 @@ typedef struct witty_metal_completion_block {
 	void* renderer;
 	void* target;
 } witty_metal_completion_block;
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 extern void* _NSConcreteStackBlock[32];
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static const witty_block_descriptor witty_metal_completion_descriptor = {
 	0,
 	sizeof(witty_metal_completion_block),
 };
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 typedef struct witty_ns_operating_system_version {
 	long long major;
 	long long minor;
 	long long patch;
 } witty_ns_operating_system_version;
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline bool witty_macos_is_at_least_version(long long major, long long minor, long long patch) {
 	Class cls = objc_getClass("NSProcessInfo");
 	if (!cls) return false;
@@ -107,9 +128,11 @@ static inline bool witty_macos_is_at_least_version(long long major, long long mi
 		version
 	);
 }
+#endif
 
 // Returns an owned UTF-8 copy of NSFileManager's user-domain directory path.
 // The caller must release it with free().
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline char* witty_macos_user_directory(unsigned long directory) {
 	Class pool_cls = objc_getClass("NSAutoreleasePool");
 	id pool = pool_cls
@@ -143,16 +166,22 @@ static inline char* witty_macos_user_directory(unsigned long directory) {
 	if (pool) ((void (*)(id, SEL))objc_msgSend)(pool, sel_registerName("drain"));
 	return result;
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline bool witty_macos_is_main_thread(void) {
 	return pthread_main_np() != 0;
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void witty_macos_dispatch_main(void* fn, void* ctx) {
 	if (!fn) return;
 	dispatch_async_f(dispatch_get_main_queue(), ctx, (dispatch_function_t)fn);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline witty_macos_string_task* witty_macos_string_task_new(void* view, char* text) {
 	witty_macos_string_task* task = (witty_macos_string_task*)calloc(1, sizeof(witty_macos_string_task));
 	if (!task) return NULL;
@@ -168,29 +197,41 @@ static inline witty_macos_string_task* witty_macos_string_task_new(void* view, c
 	}
 	return task;
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void witty_macos_string_task_free(witty_macos_string_task* task) {
 	if (!task) return;
 	free(task->text);
 	free(task);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline witty_macos_point witty_macos_objc_msg_point0(void* obj, void* sel) {
 	return ((witty_macos_point (*)(void*, void*))objc_msgSend)(obj, sel);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline witty_macos_point witty_macos_objc_msg_point_point_obj(void* obj, void* sel, witty_macos_point point, void* a1) {
 	return ((witty_macos_point (*)(void*, void*, witty_macos_point, void*))objc_msgSend)(obj, sel, point, a1);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline bool witty_macos_objc_msg_bool2(void* obj, void* sel, void* a0, void* a1) {
 	return ((bool (*)(void*, void*, void*, void*))objc_msgSend)(obj, sel, a0, a1);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline bool witty_macos_objc_msg_bool_u64(void* obj, void* sel, unsigned long long a0) {
 	return ((bool (*)(void*, void*, unsigned long long))objc_msgSend)(obj, sel, a0);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void* witty_macos_objc_msg_id_rect_u64_obj_obj(
 	void* obj,
 	void* selector,
@@ -208,41 +249,55 @@ static inline void* witty_macos_objc_msg_id_rect_u64_obj_obj(
 		user_info
 	);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline Class witty_macos_objc_superclass(void* obj) {
 	if (!obj) return Nil;
 	return class_getSuperclass(object_getClass((id)obj));
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline bool witty_macos_objc_msg_super_bool0(void* obj, void* selector) {
 	Class superclass = witty_macos_objc_superclass(obj);
 	if (!superclass) return false;
 	struct objc_super info = { (id)obj, superclass };
 	return ((bool (*)(struct objc_super*, SEL))objc_msgSendSuper)(&info, (SEL)selector);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void witty_macos_objc_msg_super_void0(void* obj, void* selector) {
 	Class superclass = witty_macos_objc_superclass(obj);
 	if (!superclass) return;
 	struct objc_super info = { (id)obj, superclass };
 	((void (*)(struct objc_super*, SEL))objc_msgSendSuper)(&info, (SEL)selector);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void witty_macos_objc_msg_super_void1(void* obj, void* selector, void* value) {
 	Class superclass = witty_macos_objc_superclass(obj);
 	if (!superclass) return;
 	struct objc_super info = { (id)obj, superclass };
 	((void (*)(struct objc_super*, SEL, void*))objc_msgSendSuper)(&info, (SEL)selector, value);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void witty_macos_objc_msg_void_size(void* obj, void* sel, witty_macos_size size) {
 	((void (*)(void*, void*, witty_macos_size))objc_msgSend)(obj, sel, size);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void witty_macos_objc_msg_void_clear_color(void* obj, void* sel, witty_macos_clear_color color) {
 	((void (*)(void*, void*, witty_macos_clear_color))objc_msgSend)(obj, sel, color);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void* witty_metal_new_buffer_length(void* device, size_t length, unsigned long long options) {
 	if (!device) return NULL;
 	return ((void* (*)(void*, SEL, unsigned long, unsigned long long))objc_msgSend)(
@@ -252,7 +307,9 @@ static inline void* witty_metal_new_buffer_length(void* device, size_t length, u
 		options
 	);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void* witty_metal_new_buffer_bytes(void* device, const void* bytes, size_t length, unsigned long long options) {
 	if (!device || (!bytes && length != 0)) return NULL;
 	return ((void* (*)(void*, SEL, const void*, unsigned long, unsigned long long))objc_msgSend)(
@@ -263,23 +320,31 @@ static inline void* witty_metal_new_buffer_bytes(void* device, const void* bytes
 		options
 	);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline size_t witty_metal_buffer_length(void* buffer) {
 	if (!buffer) return 0;
 	return ((unsigned long (*)(void*, SEL))objc_msgSend)(buffer, sel_registerName("length"));
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void* witty_metal_buffer_contents(void* buffer) {
 	if (!buffer) return NULL;
 	return ((void* (*)(void*, SEL))objc_msgSend)(buffer, sel_registerName("contents"));
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void witty_metal_buffer_did_modify(void* buffer, size_t length) {
 	if (!buffer) return;
 	NSRange range = NSMakeRange(0, length);
 	((void (*)(void*, SEL, NSRange))objc_msgSend)(buffer, sel_registerName("didModifyRange:"), range);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void* witty_metal_new_texture(
 	void* device,
 	unsigned long long pixel_format,
@@ -303,7 +368,9 @@ static inline void* witty_metal_new_texture(
 	((void (*)(void*, SEL))objc_msgSend)(desc, sel_registerName("release"));
 	return texture;
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void witty_metal_texture_replace_region(
 	void* texture,
 	size_t x,
@@ -324,7 +391,9 @@ static inline void witty_metal_texture_replace_region(
 		(unsigned long)bytes_per_row
 	);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void witty_metal_texture_get_bytes(
 	void* texture,
 	void* bytes,
@@ -345,22 +414,30 @@ static inline void witty_metal_texture_get_bytes(
 		0
 	);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void witty_metal_command_buffer_commit(void* command_buffer) {
 	if (!command_buffer) return;
 	((void (*)(void*, SEL))objc_msgSend)(command_buffer, sel_registerName("commit"));
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void witty_metal_command_buffer_wait(void* command_buffer) {
 	if (!command_buffer) return;
 	((void (*)(void*, SEL))objc_msgSend)(command_buffer, sel_registerName("waitUntilCompleted"));
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline unsigned long long witty_metal_command_buffer_status(void* command_buffer) {
 	if (!command_buffer) return 5;
 	return ((unsigned long long (*)(void*, SEL))objc_msgSend)(command_buffer, sel_registerName("status"));
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void witty_metal_command_buffer_completion_invoke(
 	witty_metal_completion_block* block,
 	void* command_buffer
@@ -373,7 +450,9 @@ static inline void witty_metal_command_buffer_completion_invoke(
 		false
 	);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline bool witty_metal_command_buffer_add_completed_handler(
 	void* command_buffer,
 	witty_metal_command_buffer_completion_callback callback,
@@ -398,7 +477,9 @@ static inline bool witty_metal_command_buffer_add_completed_handler(
 	);
 	return true;
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void witty_metal_command_buffer_invoke_completion(
 	void* command_buffer,
 	witty_metal_command_buffer_completion_callback callback,
@@ -414,13 +495,17 @@ static inline void witty_metal_command_buffer_invoke_completion(
 		sync
 	);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void* witty_metal_render_pass_descriptor(void) {
 	Class cls = objc_getClass("MTLRenderPassDescriptor");
 	if (!cls) return NULL;
 	return ((void* (*)(void*, SEL))objc_msgSend)((void*)cls, sel_registerName("renderPassDescriptor"));
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void witty_metal_render_pass_set_attachment(
 	void* descriptor,
 	unsigned long index,
@@ -439,29 +524,39 @@ static inline void witty_metal_render_pass_set_attachment(
 		((void (*)(void*, SEL, MTLClearColor))objc_msgSend)(attachment, sel_registerName("setClearColor:"), clear);
 	}
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void witty_metal_encoder_set_pipeline(void* encoder, void* pipeline) {
 	if (!encoder || !pipeline) return;
 	((void (*)(void*, SEL, void*))objc_msgSend)(encoder, sel_registerName("setRenderPipelineState:"), pipeline);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void witty_metal_encoder_set_buffer(void* encoder, void* buffer, unsigned long index) {
 	if (!encoder || !buffer) return;
 	((void (*)(void*, SEL, void*, unsigned long, unsigned long))objc_msgSend)(encoder, sel_registerName("setVertexBuffer:offset:atIndex:"), buffer, 0, index);
 	((void (*)(void*, SEL, void*, unsigned long, unsigned long))objc_msgSend)(encoder, sel_registerName("setFragmentBuffer:offset:atIndex:"), buffer, 0, index);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void witty_metal_encoder_set_texture(void* encoder, void* texture, unsigned long index) {
 	if (!encoder || !texture) return;
 	((void (*)(void*, SEL, void*, unsigned long))objc_msgSend)(encoder, sel_registerName("setVertexTexture:atIndex:"), texture, index);
 	((void (*)(void*, SEL, void*, unsigned long))objc_msgSend)(encoder, sel_registerName("setFragmentTexture:atIndex:"), texture, index);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void witty_metal_encoder_set_sampler(void* encoder, void* sampler, unsigned long index) {
 	if (!encoder || !sampler) return;
 	((void (*)(void*, SEL, void*, unsigned long))objc_msgSend)(encoder, sel_registerName("setFragmentSamplerState:atIndex:"), sampler, index);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void witty_metal_encoder_draw(
 	void* encoder,
 	unsigned long long primitive,
@@ -478,7 +573,9 @@ static inline void witty_metal_encoder_draw(
 		instance_count
 	);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void* witty_metal_new_sampler(
 	void* device,
 	unsigned long long min_filter,
@@ -500,7 +597,9 @@ static inline void* witty_metal_new_sampler(
 	((void (*)(void*, SEL))objc_msgSend)(desc, sel_registerName("release"));
 	return sampler;
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void* witty_metal_new_iosurface_texture(
 	void* device,
 	void* surface,
@@ -525,7 +624,9 @@ static inline void* witty_metal_new_iosurface_texture(
 	((void (*)(void*, SEL))objc_msgSend)(desc, sel_registerName("release"));
 	return texture;
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void* witty_metal_nsstring(const char* bytes, size_t length) {
 	if (!bytes) return NULL;
 	Class cls = objc_getClass("NSString");
@@ -539,7 +640,9 @@ static inline void* witty_metal_nsstring(const char* bytes, size_t length) {
 		4
 	);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void* witty_metal_new_library_source(void* device, const char* source, size_t length) {
 	if (!device || !source) return NULL;
 	void* string = witty_metal_nsstring(source, length);
@@ -549,22 +652,32 @@ static inline void* witty_metal_new_library_source(void* device, const char* sou
 	((void (*)(void*, SEL))objc_msgSend)(string, sel_registerName("release"));
 	return library;
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void* witty_metal_library_data(void* device, void* data, void** error) {
 	return ((void* (*)(void*, SEL, void*, void**))objc_msgSend)(device, sel_registerName("newLibraryWithData:error:"), data, error);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void* witty_metal_dispatch_data(const void* bytes, size_t length) {
 	return (void*)dispatch_data_create(bytes, length, dispatch_get_main_queue(), DISPATCH_DATA_DESTRUCTOR_DEFAULT);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void witty_metal_dispatch_release(void* data) { dispatch_release((dispatch_data_t)data); }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline const char* witty_metal_error_description(void* error) {
 	void* description = ((void* (*)(void*, SEL))objc_msgSend)(error, sel_registerName("localizedDescription"));
 	return ((const char* (*)(void*, SEL, unsigned long))objc_msgSend)(description, sel_registerName("cStringUsingEncoding:"), 1);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void* witty_metal_new_pipeline(
 	void* device,
 	void* vertex_library,
@@ -646,7 +759,9 @@ static inline void* witty_metal_new_pipeline(
 	((void (*)(void*, SEL))objc_msgSend)(fragment_function, sel_registerName("release"));
 	return state;
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void witty_metal_iosurface_layer_display(void* target, SEL command) {
 	(void)command;
 	Ivar callback_ivar = class_getInstanceVariable(object_getClass(target), "display_cb");
@@ -655,7 +770,9 @@ static inline void witty_metal_iosurface_layer_display(void* target, SEL command
 	void* context = object_getIvar(target, context_ivar);
 	if (callback) callback(context);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void* witty_metal_iosurface_layer_action(void* target, SEL command, void* key) {
 	(void)target;
 	(void)command;
@@ -663,7 +780,9 @@ static inline void* witty_metal_iosurface_layer_action(void* target, SEL command
 	Class cls = objc_getClass("NSNull");
 	return cls ? ((void* (*)(void*, SEL))objc_msgSend)((void*)cls, sel_registerName("null")) : NULL;
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline Class witty_metal_iosurface_layer_class(void) {
 	static Class subclass = Nil;
 	static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
@@ -685,7 +804,9 @@ static inline Class witty_metal_iosurface_layer_class(void) {
 	pthread_mutex_unlock(&lock);
 	return subclass;
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void* witty_metal_iosurface_layer_new(void) {
 	Class cls = witty_metal_iosurface_layer_class();
 	if (!cls) return NULL;
@@ -697,7 +818,9 @@ static inline void* witty_metal_iosurface_layer_new(void) {
 	((void (*)(void*, SEL, void*))objc_msgSend)(layer, sel_registerName("setContentsGravity:"), gravity);
 	return layer;
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void witty_metal_iosurface_layer_set_display_callback(void* layer, witty_metal_layer_display_callback callback, void* context) {
 	if (!layer) return;
 	Ivar callback_ivar = class_getInstanceVariable(object_getClass(layer), "display_cb");
@@ -705,17 +828,23 @@ static inline void witty_metal_iosurface_layer_set_display_callback(void* layer,
 	object_setIvar(layer, callback_ivar, (void*)callback);
 	object_setIvar(layer, context_ivar, context);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void witty_metal_iosurface_layer_set_surface_sync(void* layer, void* surface) {
 	if (!layer || !surface) return;
 	((void (*)(void*, SEL, void*))objc_msgSend)(layer, sel_registerName("setContents:"), surface);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 typedef struct witty_metal_layer_surface_task {
 	void* layer;
 	IOSurfaceRef surface;
 } witty_metal_layer_surface_task;
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void witty_metal_iosurface_layer_set_surface_task(void* context) {
 	witty_metal_layer_surface_task* task = (witty_metal_layer_surface_task*)context;
 	CGRect bounds = ((CGRect (*)(void*, SEL))objc_msgSend)(task->layer, sel_registerName("bounds"));
@@ -729,7 +858,9 @@ static inline void witty_metal_iosurface_layer_set_surface_task(void* context) {
 	CFRelease(task->surface);
 	free(task);
 }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline bool witty_metal_iosurface_layer_set_surface(void* layer, void* surface) {
 	if (!layer || !surface) return false;
 	witty_metal_layer_surface_task* task = (witty_metal_layer_surface_task*)calloc(1, sizeof(witty_metal_layer_surface_task));
@@ -743,4 +874,5 @@ static inline bool witty_metal_iosurface_layer_set_surface(void* layer, void* su
 	}
 	return true;
 }
+#endif
 #endif

@@ -1,8 +1,11 @@
 #pragma once
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 #include <CoreServices/CoreServices.h>
 #include <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+#endif
 
 // ABI adapters; URL and editor selection remain in open_url_darwin.c.v.
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void* witty_open_url_utf8_string(void* bytes, unsigned long length) {
     id string = ((id (*)(id,SEL))objc_msgSend)((id)objc_getClass("NSString"),sel_registerName("alloc"));
     string = ((id (*)(id,SEL,void*,unsigned long,unsigned long))objc_msgSend)(string,
@@ -25,3 +28,4 @@ static inline void witty_open_urls_with_application(void* workspace, void* urls,
         sel_registerName("openURLs:withApplicationAtURL:configuration:completionHandler:"),
         (id)urls,(id)application,(id)configuration,nil);
 }
+#endif

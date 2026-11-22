@@ -1,6 +1,7 @@
 // Objective-C message/block ABI only. Update policy and transitions are in V.
 #include <Block.h>
 #include <math.h>
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 extern id objc_initWeak(id*,id);
 extern id objc_loadWeakRetained(id*);
 extern void objc_destroyWeak(id*);
@@ -50,3 +51,4 @@ static inline void witty_update_draw_text(void *text,void *color,double width) {
     id attributes=((id (*)(id,SEL,const id*,const id*,unsigned long))objc_msgSend)((id)objc_getClass("NSDictionary"),sel_registerName("dictionaryWithObjects:forKeys:count:"),values,keys,2);
     ((void (*)(id,SEL,CGRect,id))objc_msgSend)((id)text,sel_registerName("drawInRect:withAttributes:"),CGRectMake(28,6,width-36,16),attributes);
 }
+#endif

@@ -1,8 +1,11 @@
 #include <stdbool.h>
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 #include <objc/runtime.h>
 #include <objc/message.h>
 #include <CoreGraphics/CoreGraphics.h>
+#endif
 /* Objective-C ABI adapters only; translated action logic lives in V. */
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void* witty_action_timer(double interval, void* target, void* selector, void* info, bool repeats) {
  return ((id(*)(id,SEL,double,id,SEL,id,bool))objc_msgSend)((id)objc_getClass("NSTimer"),sel_registerName("scheduledTimerWithTimeInterval:target:selector:userInfo:repeats:"),interval,(id)target,(SEL)selector,(id)info,repeats);
 }
@@ -28,8 +31,10 @@ static inline long long witty_action_compare(void* a, void* b) {
 static inline void witty_action_scroll_rect(void* view,double x,double y,double width,double height) {
  ((void(*)(id,SEL,CGRect))objc_msgSend)((id)view,sel_registerName("scrollRectToVisible:"),(CGRect){{x,y},{width,height}});
 }
+#endif
 
 typedef struct witty_action_insets { double top,left,bottom,right; } witty_action_insets;
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 typedef struct witty_action_os_version { long major,minor,patch; } witty_action_os_version;
 static inline witty_action_os_version witty_action_os_current(void) {
  id info = ((id(*)(id,SEL))objc_msgSend)((id)objc_getClass("NSProcessInfo"),sel_registerName("processInfo"));
@@ -40,8 +45,10 @@ static inline long witty_action_os_minor(void) { return witty_action_os_current(
 static inline double witty_action_content_height(void* scroll) { return ((CGSize(*)(id,SEL))objc_msgSend)((id)scroll,sel_registerName("contentSize")).height; }
 static inline double witty_action_content_width(void* scroll) { return ((CGSize(*)(id,SEL))objc_msgSend)((id)scroll,sel_registerName("contentSize")).width; }
 static inline void witty_action_scroll_point(void* clip,double y) { ((void(*)(id,SEL,CGPoint))objc_msgSend)((id)clip,sel_registerName("scrollToPoint:"),(CGPoint){0,y}); }
+#endif
 
 typedef struct witty_action_inspector_size { double width,height; } witty_action_inspector_size;
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void* witty_action_inspector_new(void* cls,void* device,double width,double height) {
  id obj = ((id(*)(id,SEL))objc_msgSend)((id)cls,sel_registerName("alloc"));
  return ((id(*)(id,SEL,CGRect,id))objc_msgSend)(obj,sel_registerName("initWithFrame:device:"),(CGRect){{0,0},{width,height}},(id)device);
@@ -53,7 +60,12 @@ static inline void* witty_action_rounded_path(double width,double height,double 
 static inline void witty_action_path_release(void* path) { CGPathRelease((CGPathRef)path); }
 static inline void* witty_action_rect_path(double x,double y,double width,double height) { return CGPathCreateWithRect((CGRect){{x,y},{width,height}},NULL); }
 static inline void witty_action_point(void* obj,void* selector,double x,double y) { ((void(*)(id,SEL,CGPoint))objc_msgSend)((id)obj,(SEL)selector,(CGPoint){x,y}); }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void* witty_action_id_f64_f64(void* obj,void* selector,double a,double b) { return ((id(*)(id,SEL,double,double))objc_msgSend)((id)obj,(SEL)selector,a,b); }
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 static inline void witty_action_shadow_offset(void* obj,double x,double y) { ((void(*)(id,SEL,CGSize))objc_msgSend)((id)obj,sel_registerName("setShadowOffset:"),(CGSize){x,y}); }
+#endif

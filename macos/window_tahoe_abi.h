@@ -1,5 +1,8 @@
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 #include <AppKit/AppKit.h>
+#endif
 
+#if !defined(V3CACHE_NATIVE_INTERFACE) || defined(V3CACHE_NATIVE_OWNER)
 typedef void (*witty_tahoe_frame_callback)(void*);
 static inline void* witty_tahoe_observe_frame(void* view, void* context,
                                              witty_tahoe_frame_callback callback) {
@@ -25,3 +28,4 @@ static inline bool witty_tahoe_event_in_view(void* view, void* event) {
     NSPoint point = [target convertPoint:[(NSEvent*)event locationInWindow] fromView:nil];
     return CGRectContainsPoint(target.bounds, point);
 }
+#endif
