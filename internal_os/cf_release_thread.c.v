@@ -32,7 +32,7 @@ $if macos || ios {
 
 	// create allocates the mailbox with its fixed source capacity. V generics have
 	// no integer parameters, so the capacity is supplied here instead of the type.
-	pub fn CFReleaseMailbox.create() !&CFReleaseMailbox {
+	pub fn CFReleaseMailbox.create() !&datastruct.BlockingQueue[CFReleaseMessage] {
 		return datastruct.BlockingQueue.create[CFReleaseMessage](64)!
 	}
 
@@ -72,7 +72,7 @@ $if macos || ios {
 
 		// The mailbox that can be used to send this thread messages. Note
 		// this is a blocking queue so if it is full you will get errors (or block).
-		mailbox &CFReleaseMailbox = unsafe { nil }
+		mailbox &datastruct.BlockingQueue[CFReleaseMessage] = unsafe { nil }
 
 		flags CFReleaseThreadFlags
 	}
