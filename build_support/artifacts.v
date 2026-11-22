@@ -2,6 +2,10 @@ module build_support
 
 import os
 
+// Breakpad owns the Mach exception handler, which the collector only needs in
+// incremental mode. Build V's bundled collector with that handler disabled.
+const macos_bundled_gc_options = ['-d', 'use_bundled_libgc', '-cflags', '-DNO_MPROTECT_VDB=1']
+
 fn compiler_argument(value string) string {
 	// V accepts a string of C flags; its C compiler command still needs shell
 	// quoting even though the outer build invocation uses structured argv.
@@ -205,10 +209,8 @@ pub fn (d Driver) build_executable(deps NativeDeps) !string {
 	}
 	mut args := d.v_arguments(.exe, deps)!
 	if d.cfg.target.os == 'macos' {
-		// Build the bundled collector from source. Breakpad owns the Mach
-		// exception handler, which the collector only needs in incremental mode.
-		args << ['-d', 'use_bundled_libgc', '-cflags', '-DNO_MPROTECT_VDB=1', '-ldflags',
-			'-Wl,-dead_strip_dylibs']
+		args << macos_bundled_gc_options
+		args << ['-ldflags', '-Wl,-dead_strip_dylibs']
 	} else if d.cfg.target.darwin() {
 		args << ['-cflags', compiler_argument('-Wl,' + d.runtime_archive()!), '-ldflags',
 			'-Wl,-dead_strip_dylibs']
