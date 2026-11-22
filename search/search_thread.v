@@ -352,7 +352,7 @@ pub struct SearchThread {
 pub mut:
 	// The mailbox that can be used to send this thread messages. Note
 	// this is a blocking queue so if it is full you will get errors (or block).
-	mailbox &Mailbox = unsafe { nil }
+	mailbox &datastruct.BlockingQueue[SearchThreadMessage] = unsafe { nil }
 
 	// The event loop for the search thread.
 	loop xev.Loop
@@ -386,7 +386,7 @@ pub type Mailbox = datastruct.BlockingQueue[SearchThreadMessage]
 
 // create allocates the mailbox with its fixed source capacity. V generics have
 // no integer parameters, so the capacity is supplied here instead of the type.
-pub fn Mailbox.create() !&Mailbox {
+pub fn Mailbox.create() !&datastruct.BlockingQueue[SearchThreadMessage] {
 	return datastruct.BlockingQueue.create[SearchThreadMessage](64)!
 }
 

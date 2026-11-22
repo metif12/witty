@@ -294,7 +294,7 @@ pub mut:
 
 	// The mailbox that can be used to send this thread messages. Note
 	// this is a blocking queue so if it is full you will get errors (or block).
-	mailbox &MailboxQueue = unsafe { nil }
+	mailbox &datastruct.BlockingQueue[AppMailboxMessage] = unsafe { nil }
 
 	// The set of font GroupCache instances shared by surfaces with the
 	// same font configuration.
@@ -864,7 +864,7 @@ pub:
 pub struct Mailbox {
 pub mut:
 	rt_app  &apprt.RuntimeApp = unsafe { nil }
-	mailbox &MailboxQueue     = unsafe { nil }
+	mailbox &datastruct.BlockingQueue[AppMailboxMessage] = unsafe { nil }
 }
 
 const app_mailbox_capacity = 64
@@ -874,7 +874,7 @@ pub type MailboxQueue = datastruct.BlockingQueue[AppMailboxMessage]
 
 // create allocates the queue with its fixed source capacity. V generics have
 // no integer parameters, so the capacity is supplied here instead of the type.
-pub fn MailboxQueue.create() !&MailboxQueue {
+pub fn MailboxQueue.create() !&datastruct.BlockingQueue[AppMailboxMessage] {
 	return datastruct.BlockingQueue.create[AppMailboxMessage](app_mailbox_capacity)!
 }
 

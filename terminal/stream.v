@@ -763,7 +763,8 @@ pub fn (mut self Stream[H]) next(c u8) ! {
 // This assumes we're in the UTF-8 decoding state. If we may not
 // be in the UTF-8 decoding state call next_slice or next.
 fn (mut self Stream[H]) next_utf8(c u8) ! {
-	assert self.parser.state == .ground
+	at_ground := self.parser.state == .ground
+	assert at_ground
 
 	res := self.utf8decoder.next(c)
 	consumed := res.consumed
@@ -808,7 +809,8 @@ fn (mut self Stream[H]) handle_codepoint(c u32) ! {
 // This assumes that we're not in the UTF-8 decoding state. If
 // we may be in the UTF-8 decoding state call next_slice or next.
 fn (mut self Stream[H]) next_non_utf8(c u8) ! {
-	assert self.parser.state != .ground
+	at_ground := self.parser.state == .ground
+	assert !at_ground
 
 	// Fast path for CSI entry.
 	if self.parser.state == .escape && c == u8(`[`) {
@@ -1617,27 +1619,18 @@ fn (mut self Stream[H]) csi_dispatch(input CSIAction) ! {
 
 		// c - Device Attributes (DA1)
 		`c` {
-			mut req := ?DeviceAttributeReq(none)
-			match input.intermediates.len {
-				0 {
-					req = DeviceAttributeReq.primary
-				}
+			req := match input.intermediates.len {
+				0 { DeviceAttributeReq.primary }
 				1 {
 					match input.intermediates[0] {
-						`>` { req = DeviceAttributeReq.secondary }
-						`=` { req = DeviceAttributeReq.tertiary }
-						else {}
+						`>` { DeviceAttributeReq.secondary }
+						`=` { DeviceAttributeReq.tertiary }
+						else { return }
 					}
 				}
-				else {}
+				else { return }
 			}
-
-			if r := req {
-				self.handler.vt(.device_attributes, r)!
-			} else {
-				// invalid device attributes command
-				return
-			}
+			self.handler.vt(.device_attributes, req)!
 		}
 
 		// VPA - Cursor Vertical Position Absolute
@@ -1902,24 +1895,16 @@ fn (mut self Stream[H]) csi_dispatch(input CSIAction) ! {
 
 						// DECSCA
 						`"` {
-							mut mode_ := ?ProtectedMode(none)
-							match input.params.len {
-								0 {
-									mode_ = ProtectedMode.off
-								}
+							mode := match input.params.len {
+								0 { ProtectedMode.off }
 								1 {
 									match input.params[0] {
-										0, 2 { mode_ = ProtectedMode.off }
-										1 { mode_ = ProtectedMode.dec }
-										else {}
+										0, 2 { ProtectedMode.off }
+										1 { ProtectedMode.dec }
+										else { return }
 									}
 								}
-								else {}
-							}
-
-							mode := mode_ or {
-								// invalid set protected mode command
-								return
+								else { return }
 							}
 
 							match mode {

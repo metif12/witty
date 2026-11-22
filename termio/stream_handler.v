@@ -37,7 +37,7 @@ pub mut:
 	renderer_state &renderer.State = unsafe { nil }
 
 	// The mailbox for notifying the renderer of things.
-	renderer_mailbox &renderer.Mailbox = unsafe { nil }
+	renderer_mailbox &datastruct.BlockingQueue[renderer.RendererMessage] = unsafe { nil }
 
 	// A handle to wake up the renderer. This hints to the renderer that
 	// a repaint should happen.

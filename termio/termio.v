@@ -262,7 +262,7 @@ pub mut:
 	renderer_wakeup xev.Async
 
 	// The mailbox for notifying the renderer of things.
-	renderer_mailbox &renderer.Mailbox = unsafe { nil }
+	renderer_mailbox &datastruct.BlockingQueue[renderer.RendererMessage] = unsafe { nil }
 
 	// The mailbox for communicating with the surface.
 	surface_mailbox apprt.SurfaceMailbox
@@ -425,7 +425,7 @@ pub:
 	renderer_wakeup xev.Async
 
 	// The mailbox for renderer messages.
-	renderer_mailbox &renderer.Mailbox = unsafe { nil }
+	renderer_mailbox &datastruct.BlockingQueue[renderer.RendererMessage] = unsafe { nil }
 
 	// The mailbox for sending the surface messages.
 	surface_mailbox apprt.SurfaceMailbox

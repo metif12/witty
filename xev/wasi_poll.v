@@ -4,6 +4,7 @@ module xev
 // available for explicit API use on every host; the platform default API
 // selects them on wasm32_wasi. Kernel calls are emitted only when used.
 import sync.stdatomic as _
+import time
 
 $if wasm32_wasi {
 	#include <wasi/api.h>
@@ -725,17 +726,20 @@ $if !windows {
 	}
 
 	fn wasi_timer_next(next_ms u64) u64 {
-		mut timestamp := u64(0)
-		if C.__wasi_clock_time_get(1, 1, &timestamp) != 0 { panic('unreachable clock_time_get') }
+		timestamp := wasi_get_now() or { panic('unreachable clock_time_get') }
 		return timestamp + next_ms * 1_000_000
 	}
 
 	fn wasi_get_now() !u64 {
-		mut timestamp := u64(0)
-		code := C.__wasi_clock_time_get(1, 1, &timestamp)
-		if code == 0 { return timestamp }
-		if code == 28 { return new_error(.unsupported_clock) }
-		return new_error(.unexpected)
+		$if wasm32_wasi {
+			mut timestamp := u64(0)
+			code := C.__wasi_clock_time_get(1, 1, &timestamp)
+			if code == 0 { return timestamp }
+			if code == 28 { return new_error(.unsupported_clock) }
+			return new_error(.unexpected)
+		} $else {
+			return time.sys_mono_now()
+		}
 	}
 
 	fn (self &WasiCompletion) subscription() WasiSubscription {

@@ -2148,6 +2148,17 @@ enum CellSelected as u8 {
 	search_selected
 }
 
+fn (mut self Renderer) shape_text_run(run font.TextRun) ![]font.ShapeCell {
+	if cached := self.font_shaper_cache.get(run) {
+		return cached
+	}
+	cells := self.font_shaper.shape(run)!
+	self.font_shaper_cache.put(run, cells) or {
+		log.warn('error caching font shaping results err=${err}')
+	}
+	return cells
+}
+
 // Rebuild a single row's cells: shaping, selection/highlight classification,
 // color computation, glyph emission, and text decorations.
 fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range ?PreeditRange, links &terminal.CellSet) ! {
@@ -2229,16 +2240,9 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 						shaper_cells_i = 0
 					}
 					if run := shaper_run {
-						new_shaper_cells := shaper_cells or {
-							self.font_shaper_cache.get(run) or {
-								new_cells := self.font_shaper.shape(run)!
-								self.font_shaper_cache.put(run, new_cells) or {
-									log.warn('error caching font shaping results err=${err}')
-								}
-								new_cells
-							}
+						if shaper_cells == none {
+							shaper_cells = unsafe { self.shape_text_run(run)! }
 						}
-						shaper_cells = unsafe { new_shaper_cells }
 						shaped_cells := shaper_cells or { panic('preedit run was not shaped') }
 						for int(run.offset) + int(shaped_cells[shaper_cells_i].x) < x {
 							shaper_cells_i++
@@ -2351,16 +2355,9 @@ fn (mut self Renderer) rebuild_row(y u16, row &terminal.RenderRow, preedit_range
 			}
 		}
 		if run := shaper_run {
-			new_shaper_cells := shaper_cells or {
-				self.font_shaper_cache.get(run) or {
-					new_cells := self.font_shaper.shape(run)!
-					self.font_shaper_cache.put(run, new_cells) or {
-						log.warn('error caching font shaping results err=${err}')
-					}
-					new_cells
-				}
+			if shaper_cells == none {
+				shaper_cells = unsafe { self.shape_text_run(run)! }
 			}
-			shaper_cells = unsafe { new_shaper_cells }
 			if shaped_cells := shaper_cells {
 				if shaped_cells.len > 0 {
 					// This source invariant excludes moving backwards or splitting a

@@ -197,7 +197,7 @@ pub type Mailbox = datastruct.BlockingQueue[RendererMessage]
 
 // create allocates the mailbox with its fixed source capacity. V generics have
 // no integer parameters, so the capacity is supplied here instead of the type.
-pub fn Mailbox.create() !&Mailbox {
+pub fn Mailbox.create() !&datastruct.BlockingQueue[RendererMessage] {
 	return datastruct.BlockingQueue.create[RendererMessage](renderer_mailbox_capacity)!
 }
 
@@ -312,7 +312,7 @@ pub mut:
 
 	// The mailbox that can be used to send this thread messages. Note
 	// this is a blocking queue so if it is full you will get errors (or block).
-	mailbox &Mailbox = unsafe { nil }
+	mailbox &datastruct.BlockingQueue[RendererMessage] = unsafe { nil }
 
 	// Mailbox to send messages to the app thread. GTK requires GPU work on the
 	// application thread; this callback is the translated App.Mailbox
